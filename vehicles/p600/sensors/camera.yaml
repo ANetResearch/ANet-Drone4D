@@ -1,0 +1,21 @@
+# vehicles/p600/sensors/camera.yaml（awr.sensor.camera.v1；结构 AWR-16 §11.6，取值 M13 §6.6、§7.3；D1-core）
+# 像素约定 COLMAP（像素中心为 0.5）；光学帧 RDF；挂载父帧 base_link（FLU），rpy 按 ZYX（Rz·Ry·Rx）。
+# gimbal 的 rate_max_deg_s 与 default_* 以及 detector 为 16 §11.6 可选字段；detector 为 D1-ext（S3 Mock 检测器）。
+schema: awr.sensor.camera.v1
+sensor_id: camera
+model: pinhole
+width: 6000
+height: 4000
+fx: 5196.152
+fy: 5196.152
+cx: 3000.0
+cy: 2000.0
+distortion: {model: none, k: []}
+rate_hz: 30
+range_m: 300
+mount: {xyz_m: [0.12, 0.0, -0.08], rpy_deg: [0, 0, 0]}
+gimbal: {pitch_min_deg: -90, pitch_max_deg: 30, yaw_min_deg: -150, yaw_max_deg: 150,
+         rate_max_deg_s: 90, default_mode: fixed, default_yaw_deg: 0, default_pitch_deg: -15}
+detector: {capability: rgb.zoom, p0: 0.80, r_fp_m: 90, t_look_s: 1.0, pos_sigma_m: 2.0}
+conf: D
+src: "UrbanScene3D 采图相机 HFOV 60°、6000×4000（x01 §2.4）；云台 [-90, 30]（x01 §3.9）；挂载为机头下方吊舱（M13 设定）；P600 标定后替换"

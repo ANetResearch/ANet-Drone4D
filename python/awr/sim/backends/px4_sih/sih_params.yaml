@@ -1,0 +1,19 @@
+# PX4 SIH 容器注入参数（V0.2 px4-bridge 使用；g04 §6.3；M08-FR-069）。
+# 机型物理参数由 Vehicle Package 的 fidelity.sih_airframe 与限速配置 px4_params 合成（M08 §6.12 Planner）。
+params:
+  COM_OBL_RC_ACT: 5        # offboard 丢失后 Hold（不走 RC 失控逻辑）
+  NAV_DLL_ACT: 0           # 数据链丢失由网关策略处理（ADR-045）
+  COM_LOW_BAT_ACT: 3       # 低电量：Warning → RTL → Land
+  MIS_TAKEOFF_ALT: 2.5
+  RTL_RETURN_ALT: 30
+  RTL_DESCEND_ALT: 10
+  COM_DISARM_PRFLT: 10
+  COM_DISARM_LAND: 2
+message_intervals_ms:
+  CURRENT_MODE: 250
+  HEARTBEAT: 1000
+  EXTENDED_SYS_STATE: 250
+  LOCAL_POSITION_NED: 50
+  ATTITUDE_QUATERNION: 50
+  GLOBAL_POSITION_INT: 100
+  BATTERY_STATUS: 1000

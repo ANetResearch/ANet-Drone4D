@@ -1,0 +1,20 @@
+# vehicles/p600/sensors/mid360.yaml（awr.sensor.lidar_livox.v1；结构 AWR-16 §11.6，取值 r04 §3.1.7；D1 桩）
+# 花样为 r04 §3.1.3 的参数化模型（awr.sim.sensors.lidar.pattern，表驱动）；16 §11.6 冻结的 pattern.mode 取 non_repetitive。
+# frame_id 为驱动侧名称；lidar_frame 头部的 frame_id 写 uavNN/mid360（M13 §6.5.10）。imu.acc_unit 保持 g（网关换算）。
+schema: awr.sensor.lidar_livox.v1
+sensor: livox_mid360
+dev_type: 9
+frame_id: livox_frame
+pattern: {mode: non_repetitive, point_rate_hz: 200000, beams: 4}
+frame_rate_hz: 10
+fov: {h_deg: 360, v_min_deg: -7.2, v_max_deg: 52.2}
+range: {blind_m: 0.1, r_at_rho10_m: 40, r_at_rho80_m: 70, exponent: 0.269, hard_max_m: 70}
+noise: {range_sigma_far_m: 0.02, range_sigma_near_m: 0.03, angle_sigma_deg: 0.1, false_alarm: 1.0e-4}
+imu: {rate_hz: 200, acc_unit: g, gyro_unit: rad_s, lidar_in_imu: {t: [-0.011, -0.02329, 0.04412], rpy_deg: [0, 0, 0]}}
+mount: {preset: p600_prometheus_sim, xyz_m: [0.13, 0.0, 0.28], rpy_deg: [0, 20, 0]}
+mount_presets:
+  p600_prometheus_sim: {xyz_m: [0.13, 0.0, 0.28], rpy_deg: [0, 20, 0]}
+  inverted_mapping:    {xyz_m: [0.0, 0.0, -0.08], rpy_deg: [180, 0, 0]}
+output: {web_decimation_pts_per_frame: 4000}
+conf: C
+src: "r04 §3.1（mid360.csv 拟合、Livox 规格）；挂载取 Prometheus p600_mid360.sdf"

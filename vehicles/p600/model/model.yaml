@@ -1,0 +1,18 @@
+# vehicles/p600/model/model.yaml（awr.vehicle_model.v1；AWR-16 §11.5；M08-FR-048）
+# glb 为生成物：python tools/vehicles/stl2glb.py --copy-web && python tools/vehicles/lowpoly.py --copy-web（make vehicles-models）
+schema: awr.vehicle_model.v1
+source:
+  path: refs/sim/Prometheus/Simulator/gazebo_simulator/gazebo_models/uav_models/p600/meshes/p600.stl
+  sha256: 57dc2f163387f739ffda5dcd74436d15bd8d1fca9c9c0605f729fbb7fbb06164
+  triangles: 75152
+  units: m
+  frame: flu
+outputs:
+  - {name: hero, path: p600.glb, max_triangles: 5000, method: "gltf-transform simplify（meshoptimizer）", params: {error: 0.02}}
+  - {name: lowpoly, path: p600_lowpoly.glb, max_triangles: 300, method: "tools/vehicles/lowpoly.py（十字臂 + 机身盒 + 电机 + 桨盘）"}
+  - {name: lowpoly_s, path: p600_lowpoly.glb, max_triangles: 150, method: "tools/vehicles/lowpoly.py（同文件第二个 mesh，Tier S）"}
+axes:
+  gltf_from_flu: [[0, 1, 0], [0, 0, 1], [1, 0, 0]]
+origin: base_link
+material: {base_color_token: g300, rotor_color_token: g100}
+fallback: lowpoly_only

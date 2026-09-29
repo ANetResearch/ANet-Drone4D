@@ -1,0 +1,20 @@
+# vehicles/p600/sensors/thermal.yaml（awr.sensor.thermal.v1；结构 AWR-16 §11.6，取值 M13 §6.6、§7.3；D1-ext）
+# 640 级非制冷机芯：HFOV 50°（fx = 320 / tan 25° = 686.3）、NETD 50 mK；挂载与云台同相机。
+schema: awr.sensor.thermal.v1
+sensor_id: thermal
+model: pinhole
+width: 640
+height: 512
+fx: 686.3
+fy: 686.3
+cx: 320.0
+cy: 256.0
+netd_k: 0.05
+rate_hz: 30
+range_m: 400
+mount: {xyz_m: [0.12, 0.0, -0.08], rpy_deg: [0, 0, 0]}
+gimbal: {pitch_min_deg: -90, pitch_max_deg: 30, yaw_min_deg: -150, yaw_max_deg: 150, rate_max_deg_s: 90,
+         default_mode: fixed, default_yaw_deg: 0, default_pitch_deg: -15}
+detector: {capability: thermal.imaging, p0: 0.95, r_fp_m: 150, t_look_s: 1.0, pos_sigma_m: 0.5}
+conf: D
+src: "640 级非制冷机芯常见值；P0 取 x01 §3.11；R_fp 为 M13 设定（60 m 正下方 P_d = 0.81）"

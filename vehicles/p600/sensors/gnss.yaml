@@ -1,0 +1,22 @@
+# vehicles/p600/sensors/gnss.yaml（awr.sensor.gnss.v1；结构 AWR-16 §11.6，取值 M13 §6.5.5、§7.3；D1-ext）
+# 各 fix 档：gauss_markov 与顶层 sats、hdop 为 SINGLE 档；dgps、rtk.float、rtk.fixed 各自携带本档的 sats、hdop
+# （16 §11.6 冻结的 sats、hdop 为标量，按档的表放在各档对象内，见 M13 实现报告偏差表）。
+# rtk.sigma_h_m、rtk.sigma_v_m 为 16 §11.6 必填字段，即 RTK_FIXED 档的 σ；rtk.fixed 若写 σ 必须与之相等（加载校验）。
+schema: awr.sensor.gnss.v1
+rate_hz: 10
+fix_type: rtk_fixed
+warm_start: true
+antenna: {xyz_m: [-0.10, 0.0, 0.20]}
+timing: {t_acq_s: 1.0, t_float_s: 10.0, t_fixed_s: 30.0}
+gauss_markov: {sigma_h_m: 1.2, sigma_v_m: 2.0, tau_s: 60, white_h_m: 0.2, white_v_m: 0.4}
+sats: 14
+hdop: 1.2
+dgps: {enabled: false, sigma_h_m: 0.5, sigma_v_m: 0.8, tau_s: 60, white_h_m: 0.1, white_v_m: 0.2, sats: 16, hdop: 1.0}
+rtk:
+  enabled: true
+  sigma_h_m: 0.010
+  sigma_v_m: 0.015
+  float: {sigma_h_m: 0.25, sigma_v_m: 0.40, tau_s: 30, white_h_m: 0.03, white_v_m: 0.05, sats: 18, hdop: 0.9}
+  fixed: {tau_s: 30, white_h_m: 0.005, white_v_m: 0.010, sats: 22, hdop: 0.8}
+conf: D
+src: "r23 §3.10（σ_h 约 1.5 m、τ 约 60 s、RTK 0.02 m 量级）；其余 M13 设定，V0.5 以真机静态数据冻结（ADR-043）"

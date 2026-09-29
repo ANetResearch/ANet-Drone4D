@@ -1,0 +1,11 @@
+# vehicles/p600/sensors/imu.yaml（awr.sensor.imu.v1；结构 AWR-16 §11.6，取值 M13 §6.6、§7.3；D1-ext，V0.4 HIL 使用）
+# 单位：gyro noise_density rad/s/√Hz、random_walk rad/s²/√Hz、turn_on_sigma rad/s；accel 为 m/s²/√Hz、m/s³/√Hz、m/s²
+# （复合单位按 AWR-03 §5.4 例外表登记）。线上 IMU 一律 m/s²；只有 mid360.yaml 的 imu.acc_unit 保持 g。
+schema: awr.sensor.imu.v1
+rate_hz: 200
+frame: base_link
+gyro:  {noise_density: 3.39e-4, random_walk: 3.88e-5, bias_tau_s: 1000, turn_on_sigma: 8.73e-3}
+accel: {noise_density: 4.0e-3,  random_walk: 6.0e-3,  bias_tau_s: 300,  turn_on_sigma: 0.196}
+baro:  {rate_hz: 50, factor_sigma: 3.65e-4, factor_tau_s: 3600, white_pa: 2.7}
+conf: C
+src: "Pegasus imu.py 默认值（n03 §3.6，离散化按 M13 §6.5.6 自行实现）；气压计按 AirSim BarometerSimple 调整（r23 §3.10）"

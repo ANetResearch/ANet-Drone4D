@@ -1,0 +1,8 @@
+heartbeats: 3 / 3 after 1.2 s
+IDLE  N=3 px4 procs=3 cpu_cores=0.636 per_inst=0.212 rss_total_MB=30 rtf(min/mean)=0.95/0.96 host_load1=5.3
+armed: 3 / 3 in 6.0 s
+FLY   N=3 cpu_cores=0.645 per_inst=0.215 rss_total_MB=30 rtf(min/mean)=0.94/0.95 host_load1=5.3
+inst0 texts: ['Armed by external command\t', 'Takeoff detected\t']
+inst1 texts: ['Armed by external command\t', 'Takeoff detected\t']
+inst2 texts: ['Armed by external command\t', 'Takeoff detected\t']
+done

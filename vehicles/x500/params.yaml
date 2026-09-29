@@ -1,0 +1,45 @@
+# vehicles/x500/params.yaml —— profile x500（composite）与变体 x500_sih（linear）（awr.vehicle.v1；AWR-16 §11.4；M08 §6.7.1）
+# 回归机体：参数永远等于注入 PX4 SIH 黄金数据的值（r20 run_sih_x500.sh；tests/golden/sih_x500_px4-1.18rc1/README.md）。
+# 任何改动必须同时重录黄金数据（M08-FR-044；tools/vehicles/regen_sih_golden/）。
+schema: awr.vehicle.v1
+profile_version: 1.0.0
+id: x500
+display_name: "X500 (SIH 回归机体)"
+kind: uav
+status: regression
+frame: {type: quad_x, rotor_order: px4, body: frd}
+mass_kg: {value: 2.064, conf: A, src: "SIH_MASS（r20 run_sih_x500.sh 注入值）"}
+inertia_kgm2: {value: {xx: 0.0217, yy: 0.0217, zz: 0.040}, conf: A, src: "SIH 默认 SIH_IXX/SIH_IYY/SIH_IZZ"}
+geometry:
+  wheelbase_m: {value: 0.500, conf: B, src: "Holybro X500 对角轴距 500 mm"}
+  arm_xy_m: {value: 0.174, conf: A, src: "SIH_L_ROLL"}
+  collision_radius_m: {value: 0.386, conf: D, src: "派生：√2·arm_xy + prop.d/2"}
+motor:
+  n: 4
+  t_max_n: {value: 8.55, conf: A, src: "SIH_T_MAX"}
+  omega_max_rad_s: {value: 1000.0, conf: A, src: "gz x500 maxRotVelocity 1000（与 SIH_T_MAX 同一推力模型）"}
+  k_f: {value: 8.55e-6, conf: A, src: "派生：t_max_n / omega_max_rad_s^2"}
+  km_m: {value: 0.016, conf: C, src: "gz x500 momentConstant"}
+  tau_s: {value: 0.03, conf: A, src: "SIH_T_TAU"}
+prop:
+  d_m: {value: 0.279, conf: C, src: "gz x500 模型 1345 桨网格 × 0.846 缩放（约 11 in）"}
+  c_rd: {value: 8.06428e-5, conf: A, src: "以 8 m/s 风悬停俯仰等于 SIH（−7.85°）标定（g08 calib_g08.py，与 CdA 联合）"}
+aero:
+  model: composite
+  cda_m2: {value: 0.02065, conf: A, src: "以 8 m/s 风悬停俯仰等于 SIH（−7.85°）标定（g08 §6.2）"}
+  sih_kdv_equiv: {value: 0.35, conf: A, src: "SIH_KDV"}
+battery: null
+limits_profiles:
+  default: px4_default
+  px4_default: {px4_params: {MPC_XY_VEL_MAX: 12.0, MPC_XY_CRUISE: 5.0, MPC_ACC_HOR: 3.0, MC_YAWRATE_MAX: 200.0}, src: "PX4 v1.18 默认"}
+fidelity: {default: l1, supported: [l0, l1]}
+model: model/model.yaml
+sensors: {camera: sensors/camera.yaml}
+derived: {hover_thrust: 0.592, twr: 1.69, tilt_at_8mps_deg: 7.85, cda_per_mass_m2kg: 0.0100}
+variants:
+  x500_sih:
+    display_name: "X500 SIH（linear 气动）"
+    aero:
+      model: linear
+      k_dv_n_per_mps: {value: 0.35, conf: A, src: "SIH_KDV"}
+    derived: {hover_thrust: 0.592, twr: 1.69, tilt_at_8mps_deg: 7.88, cda_per_mass_m2kg: 0.0100}

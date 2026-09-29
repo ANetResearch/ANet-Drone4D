@@ -1,0 +1,59 @@
+# vehicles/p600/params.yaml —— profile p600_mid360（awr.vehicle.v1；AWR-16 §11.2、§11.4；M08 §6.7；ADR-022、ADR-043）
+# 由 g08 草稿 .cache/research/g08/vehicles/p600/params.yaml 按 AWR-16 键名规范化，取值不变。
+# 置信度：A 实测 > B 厂商规格 > C 同型号几何或执行器参数（通过自洽检查）> D 按 x500 标定缩放或经验推断；E 只进 rejected[]。
+# status = placeholder：UI 标注"参数未辨识"；V0.4 按 g08 §10.4 辨识后改为 identified 并递增 profile_version。
+schema: awr.vehicle.v1
+profile_version: 1.0.0
+id: p600_mid360
+display_name: "P600 (MID-360)"
+kind: uav
+status: placeholder
+frame: {type: quad_x, rotor_order: px4, body: frd}
+mass_kg: {value: 3.5, conf: B, src: "amovlab p600u-v2 规格 3.3 kg（含电池、G1 104 g、Allspark 213 g、RTK）；G1 换 MID-360 265 g 后约 3.46 kg", check: "<= mtow_kg"}
+mtow_kg: {value: 4.0, conf: B, src: "厂商规格：最大起飞重量 4 kg"}
+inertia_kgm2: {value: {xx: 0.0548, yy: 0.0548, zz: 0.101}, conf: D, src: "J_x500 × (m/2.064) × (0.300/0.246)^2"}
+geometry:
+  wheelbase_m: {value: 0.600, conf: B, src: "对角轴距 600 mm"}
+  arm_xy_m: {value: 0.2121, conf: B, src: "Prometheus p600.sdf 桨位 ±0.212132"}
+  rotor_z_m: {value: 0.243, conf: C, src: "Prometheus p600.sdf 桨位 z"}
+  collision_radius_m: {value: 0.49, conf: D, src: "派生：√2·arm_xy + prop.d/2"}
+motor:
+  n: 4
+  t_max_n: {value: 19.23, conf: C, src: "p600.sdf motorConstant 8.54858e-6 × maxRotVelocity 1500^2"}
+  omega_max_rad_s: {value: 1500.0, conf: C, src: "p600.sdf maxRotVelocity（rotorVelocitySlowdownSim 只影响可视关节）"}
+  k_f: {value: 8.54858e-6, conf: C, src: "p600.sdf motorConstant"}
+  km_m: {value: 0.016, conf: D, src: "x500 momentConstant（p600.sdf 的 0.06 为 Iris 模板值）"}
+  tau_s: {value: 0.04, conf: D, src: "r20 对 13–15 in 桨的估计 0.04–0.05 s"}
+prop:
+  d_m: {value: 0.381, conf: D, src: "r20 估计 13–15 in，取 15 in；V0.4 实测"}
+  c_rd: {value: 1.05e-4, conf: D, src: "k_rd/m = 0.120 1/s（x500 8.06428e-5 × 3077 rad/s / 2.064 kg）"}
+aero:
+  model: composite
+  cda_m2: {value: 0.035, conf: D, src: "CdA/m = 0.0100 m2/kg（x500 SIH 标定 0.02065/2.064）"}
+  sih_kdv_equiv: {value: 0.59, conf: D, src: "F(8 m/s)/8，供 SIH 机架文件（linear）"}
+battery:
+  cells: 6
+  capacity_ah: {value: 10.0, conf: B, src: "厂商：10000 mAh、1.2 kg、20–26.1 V"}
+  v_nominal_v: {value: 22.2, conf: B, src: "6S 标称电压"}
+  capacity_wh: {value: 222.0, conf: B, src: "派生：22.2 V × 10 Ah"}
+  usable_frac: {value: 0.85, conf: D, src: "g08 §10.4 反推 P_hover 所用系数"}
+  p_hover_w: {value: 515.0, conf: D, src: "0.85 × 22.2 V × 10 Ah / (22/60 h)"}
+  hover_endurance_s: {value: 1320, conf: B, src: "厂商：P600-MID360 定点悬停约 22 min"}
+limits_profiles:
+  default: prometheus_outdoor
+  px4_default: {px4_params: {MPC_XY_VEL_MAX: 12.0, MPC_XY_CRUISE: 5.0, MPC_ACC_HOR: 3.0, MC_YAWRATE_MAX: 200.0}, src: "PX4 v1.18 默认"}
+  prometheus_outdoor: {px4_params: {MPC_XY_VEL_MAX: 3.0, MPC_XY_CRUISE: 3.0, MPC_ACC_HOR: 3.0, MC_YAWRATE_MAX: 30.0}, src: "Prometheus uav_control_outdoor.yaml px4_params（VEL_MAX、ACC_HOR、YAWRATE_MAX）；该文件未设 MPC_XY_CRUISE，PX4 将其钳到 MPC_XY_VEL_MAX（MulticopterPositionControl.cpp）"}
+  prometheus_command: {px4_params: {MPC_XY_VEL_MAX: 1.0, MPC_XY_CRUISE: 1.0, MPC_ACC_HOR: 2.0, MC_YAWRATE_MAX: 30.0}, src: "同文件 COMMAND_MPC_XY_VEL_MAX、COMMAND_MPC_ACC_HOR；CRUISE 同上钳制，YAWRATE_MAX 沿用 px4_params"}
+wind_rating_mps: {value: 13.8, conf: B, src: "厂商：抗风 6 级（10.8–13.8 m/s）"}
+fidelity: {default: l1, supported: [l0, l1]}
+model: model/model.yaml
+sensors: {camera: sensors/camera.yaml, thermal: sensors/thermal.yaml, mid360: sensors/mid360.yaml, gnss: sensors/gnss.yaml, imu: sensors/imu.yaml}
+derived: {hover_thrust: 0.446, twr: 2.24, tilt_at_8mps_deg: 7.85, cda_per_mass_m2kg: 0.0100, endurance_check_s: 1319}
+rejected:
+  - {param: mass_kg, value: 1.505, src: "p600.sdf base 1.47 + imu 0.015 + 4×0.005", why: "Iris 模板；悬停 0.19、TWR 5.2，不过 VH-1、VH-2"}
+  - {param: mass_kg, value: 2.064, src: "x500（r20）", why: "不同机体；x500 保留为 SIH 回归机体"}
+  - {param: mass_kg, value: 2.0, src: "Prometheus P600_controller_params.yaml quad_mass", why: "控制器通用默认值"}
+  - {param: prop.c_rd, value: 8.06428e-4, src: "p600.sdf rotorDragCoefficient", why: "为 x500 的 10 倍；8 m/s 风中倾角约 49°，不过 VH-3"}
+  - {param: motor.km_m, value: 0.06, src: "p600.sdf momentConstant", why: "Iris 模板"}
+  - {param: inertia_kgm2, value: {xx: 0.011, yy: 0.015, zz: 0.021}, src: "p600.sdf base_link", why: "Iris 模板，对称 X 机架 J_xx ≠ J_yy，不过 VH-4"}
+  - {param: prop.d_m, value: 0.256, src: "p600.sdf rotor collision radius 0.128", why: "Iris 模板"}
