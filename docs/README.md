@@ -1,5 +1,7 @@
 # ANet Drone / World Runtime 文档体系
 
+项目首页、快速开始与许可摘要见仓库根目录的 README（[English](../README.md) · [简体中文](../README.zh-CN.md)）。
+
 | 项 | 内容 |
 |---|---|
 | 文档 | 文档体系总览与阅读指南（本页只做导航与摘要，不定义任何新事实） |

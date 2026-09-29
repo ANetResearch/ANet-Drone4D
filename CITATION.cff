@@ -1,0 +1,57 @@
+cff-version: 1.2.0
+message: "If you use ANet-Drone4D in your research, please cite it using the metadata below."
+type: software
+title: "ANet-Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones"
+abstract: >-
+  ANet-Drone4D is a real-world grounded digital twin and multi-agent simulation
+  platform for drones. It follows one chain, Reality to Reconstruction to World
+  to Environment to Simulation to Agent: captured or reconstructed point clouds
+  become versioned World Packages with geometry queries, an environment field
+  adds wind, turbulence and visibility, a vectorised fleet simulator steps a
+  fleet of drones (designed for up to 1,000) on one shared clock, and a browser
+  sandbox streams the world progressively while the server computes it. Drones
+  are the first kind of physical agent; they discover each other's
+  capabilities and delegate tasks through ANet (an in-process mock of the ANet
+  network in version 0.1).
+authors:
+  - name: "Agent Network Research"
+    website: "https://anet0.com"
+    email: "hi@anet0.com"
+version: "0.1.0"
+repository-code: "https://github.com/ANetResearch/ANet-Drone4D"
+url: "https://github.com/ANetResearch/ANet-Drone4D"
+license-url: "https://github.com/ANetResearch/ANet-Drone4D/blob/main/LICENSE"
+keywords:
+  - digital twin
+  - multi-agent systems
+  - drones
+  - UAV swarm simulation
+  - 4D world model
+  - point cloud streaming
+  - WebGPU
+  - agent network
+  - ANet
+references:
+  - type: software
+    title: "ANet"
+    authors:
+      - name: "Agent Network Research"
+    repository-code: "https://github.com/ANetResearch/ANet"
+  - type: conference-paper
+    title: "Capturing, Reconstructing, and Simulating: the UrbanScene3D Dataset"
+    authors:
+      - family-names: "Lin"
+        given-names: "Liqiang"
+      - family-names: "Liu"
+        given-names: "Yilin"
+      - family-names: "Hu"
+        given-names: "Yue"
+      - family-names: "Yan"
+        given-names: "Xingguang"
+      - family-names: "Xie"
+        given-names: "Ke"
+      - family-names: "Huang"
+        given-names: "Hui"
+    collection-title: "European Conference on Computer Vision (ECCV)"
+    year: 2022
+    url: "https://vcc.tech/UrbanScene3D"

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/ANetResearch/ANet-Drone4D/blob/main/SECURITY.md
+    about: Do not open a public issue. Email hi@anet0.com as described in SECURITY.md.
+  - name: Commercial license and license questions
+    url: https://github.com/ANetResearch/ANet-Drone4D/blob/main/LICENSE
+    about: Multi-tenant hosted services need written authorization. Email hi@anet0.com.

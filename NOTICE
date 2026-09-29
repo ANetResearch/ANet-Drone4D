@@ -1,0 +1,19 @@
+ANet-Drone4D
+Copyright (c) 2026 Agent Network Research (anet0.com)
+
+This product is licensed under the ANet Open Source License (ANet-Drone4D),
+a modified Apache License 2.0. See LICENSE.
+
+The ANet logo and the Agent Network Research avatar in
+apps/web/public/brand/ (with copies in docs/media/ for the README) are
+marks of Agent Network Research. They must stay in the user interfaces as
+LICENSE condition 1b requires; no trademark license is granted.
+
+This product includes and adapts third-party software and assets that
+remain under their own licenses. They are listed, with their copyright
+notices and license texts, in THIRD_PARTY_NOTICES.md.
+
+This product does not include the UrbanScene3D dataset or any World
+Package built from it. UrbanScene3D (Lin et al., ECCV 2022,
+https://vcc.tech/UrbanScene3D) is made available by its authors for
+non-commercial use only and may not be redistributed.
