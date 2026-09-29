@@ -1,0 +1,19 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "free-sanfrancisco",
+  "name": "Sanfrancisco free play",
+  "name_zh": "旧金山自由剧本",
+  "description": "Two P600 wait on a flat pad; no missions; the operator commands them from the UI.",
+  "world_id": "sanfrancisco",
+  "world_coordinate_sha256": "07dd653c320144ff31aa6259505f077e9e6fdb8b0882291dadd4045889a29e99",
+  "seed": 7,
+  "gcs_loss_policy": "ignore",
+  "on_complete": "continue",
+  "vehicles": [
+    {"vehicle_id": "p600-01", "profile_id": "p600_mid360", "home_enu_m": [236, 20, null]},
+    {"vehicle_id": "p600-02", "profile_id": "p600_mid360", "home_enu_m": [242, 20, null]}
+  ],
+  "success": {"all": [{"metric": "guard_events", "op": "==", "value": 0}]},
+  "tags": ["free"]
+}

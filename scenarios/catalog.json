@@ -1,0 +1,28 @@
+{
+  "schema": "awr.scenario_catalog.v1",
+  "schema_version": "1.0.0",
+  "worlds": {
+    "shenzhen": {
+      "default": "s1-shenzhen-facade",
+      "demo": ["s1-shenzhen-facade", "ladder-shenzhen", "free-shenzhen"],
+      "gate": true
+    },
+    "shanghai": {"default": "free-shanghai", "demo": ["s2-shanghai-formation"]},
+    "newyork": {"default": "free-newyork", "demo": ["s3-newyork-sar"]},
+    "sanfrancisco": {"default": "free-sanfrancisco", "demo": ["s5-sanfrancisco-terrain"]},
+    "suzhou": {"default": "free-suzhou", "demo": ["s6-suzhou-corridor"]},
+    "chicago": {"default": "free-chicago", "demo": ["s4-chicago-lakeshore"]}
+  },
+  "ui_profiles": {
+    "s1-shenzhen-facade": ["demo", "wx-fog", "wx-rain", "wx-storm"],
+    "ladder-shenzhen": ["n10", "n50", "n100", "n200", "n500", "n1000"]
+  },
+  "themes": {
+    "inspection": ["s1-shenzhen-facade", "s6-suzhou-corridor"],
+    "coverage": ["s2-shanghai-formation", "s4-chicago-lakeshore", "s5-sanfrancisco-terrain"],
+    "formation": ["s2-shanghai-formation", "s4-chicago-lakeshore"],
+    "search_thermal": ["s3-newyork-sar"],
+    "weather": ["s1-shenzhen-facade#wx-fog", "s1-shenzhen-facade#wx-rain", "s1-shenzhen-facade#wx-storm"],
+    "stress": ["ladder-shenzhen", "soak-shenzhen"]
+  }
+}

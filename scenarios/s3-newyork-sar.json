@@ -1,0 +1,176 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "s3-newyork-sar",
+  "name": "New York harbour search and thermal verification",
+  "name_zh": "纽约港口搜救与热成像复核",
+  "description": "An RGB searcher flies an expanding square; a first detection at 0.42 is delegated over Mock ANet to a thermal verifier that confirms it above 0.9.",
+  "world_id": "newyork",
+  "world_coordinate_sha256": "fa085ce97008ff87ce7d959e066f658bed5b667192ef1aae141c52dd58c5b384",
+  "seed": 7,
+  "rate": 1,
+  "gcs_loss_policy": "ignore",
+  "time_limit_s": 900,
+  "energy_precheck": "reject",
+  "env": {"preset": "partlyCloudy"},
+  "vehicles": [
+    {
+      "vehicle_id": "p600-a1",
+      "home_enu_m": [-58, -1515, null],
+      "speed_profile": "px4_default",
+      "sensors": ["camera"],
+      "caps": ["rgb.zoom"],
+      "marked": true
+    },
+    {
+      "vehicle_id": "p600-b1",
+      "home_enu_m": [-52, -1515, null],
+      "initial_soc": 0.8,
+      "caps": ["thermal.imaging"],
+      "marked": true
+    },
+    {"vehicle_id": "p600-b2", "home_enu_m": [-46, -1515, null], "initial_soc": 0.95, "caps": ["thermal.imaging"]},
+    {"vehicle_id": "p600-b3", "home_enu_m": [-40, -1515, null], "initial_soc": 0.26, "caps": ["thermal.imaging"]},
+    {"vehicle_id": "p600-c1", "home_enu_m": [-34, -1515, null], "caps": ["relay.communication"]}
+  ],
+  "missions": [
+    {
+      "mission_id": "m-search",
+      "vehicle_ids": ["p600-a1"],
+      "generator": "expanding_square",
+      "params": {
+        "datum_enu_m": [-64, -1283],
+        "z_m": 60,
+        "leg0_m": 55,
+        "legs": 12,
+        "first_heading_deg": 0,
+        "turn": "ccw",
+        "speed_mps": 5
+      },
+      "on_done": "rtl"
+    },
+    {
+      "mission_id": "m-standby-b1",
+      "vehicle_ids": ["p600-b1"],
+      "generator": "follow_path",
+      "params": {"waypoints_enu_m": [[-52, -1515, 80], [86, -1133, 80]], "speed_mps": 3},
+      "on_done": "hover"
+    },
+    {
+      "mission_id": "m-standby-b2",
+      "vehicle_ids": ["p600-b2"],
+      "generator": "follow_path",
+      "params": {"waypoints_enu_m": [[-46, -1515, 80], [-314, -1033, 80]], "speed_mps": 3},
+      "on_done": "hover"
+    },
+    {
+      "mission_id": "m-relay",
+      "vehicle_ids": ["p600-c1"],
+      "generator": "follow_path",
+      "params": {"waypoints_enu_m": [[-34, -1515, 150], [-64, -1283, 150]], "speed_mps": 5},
+      "on_done": "hover"
+    }
+  ],
+  "zones": {"active": ["border", "nofly-ny-70pine"]},
+  "events": [
+    {
+      "event_id": "spawn-t1",
+      "at_s": 0,
+      "action": "target.spawn",
+      "args": {
+        "target_id": "t1",
+        "pos_enu_m": [-24, -1253, 0],
+        "kind": "person",
+        "conf_first": 0.42,
+        "conf_confirm": 0.9
+      }
+    },
+    {
+      "event_id": "spawn-t2",
+      "at_s": 0,
+      "action": "target.spawn",
+      "args": {
+        "target_id": "t2",
+        "pos_enu_m": [160, -1060, 0],
+        "kind": "person",
+        "conf_first": 0.42,
+        "conf_confirm": 0.9
+      }
+    },
+    {
+      "event_id": "spawn-t3",
+      "at_s": 0,
+      "action": "target.spawn",
+      "args": {
+        "target_id": "t3",
+        "pos_enu_m": [-290, -1500, 0],
+        "kind": "person",
+        "conf_first": 0.42,
+        "conf_confirm": 0.9
+      }
+    },
+    {
+      "event_id": "home-b1",
+      "when": {"metric": "missions_done", "args": {"mission_ids": ["m-search"]}, "op": "==", "value": true},
+      "action": "cmd",
+      "args": {"vehicle_id": "p600-b1", "op": "rtl", "args": {}}
+    },
+    {
+      "event_id": "home-b2",
+      "when": {"metric": "missions_done", "args": {"mission_ids": ["m-search"]}, "op": "==", "value": true},
+      "action": "cmd",
+      "args": {"vehicle_id": "p600-b2", "op": "rtl", "args": {}}
+    },
+    {
+      "event_id": "home-c1",
+      "when": {"metric": "missions_done", "args": {"mission_ids": ["m-search"]}, "op": "==", "value": true},
+      "action": "cmd",
+      "args": {"vehicle_id": "p600-c1", "op": "rtl", "args": {}}
+    }
+  ],
+  "agents": {
+    "network": "mock",
+    "members": [
+      {"vehicle_id": "p600-a1", "capabilities": ["rgb.zoom"], "role": "searcher"},
+      {"vehicle_id": "p600-b1", "capabilities": ["thermal.imaging"], "role": "verifier"},
+      {"vehicle_id": "p600-b2", "capabilities": ["thermal.imaging"], "role": "verifier"},
+      {"vehicle_id": "p600-b3", "capabilities": ["thermal.imaging"], "role": "verifier"}
+    ],
+    "tasks": [
+      {
+        "template_id": "thermal-verify",
+        "trigger": {
+          "on": "detection",
+          "from_roles": ["searcher"],
+          "capability": "rgb.*",
+          "state": "suspect",
+          "conf_lt": 0.8,
+          "merge_radius_m": 30
+        },
+        "capability": "thermal.imaging",
+        "args": {"dwell_s": 10, "alt_agl_m": 60, "orbit_radius_m": 20},
+        "accept": {
+          "op": 1,
+          "children": [
+            {"op": 12, "thresh": {"metric": "confidence", "op": 4, "value": 0.8}},
+            {"op": 10, "artifact": {"path_glob": "thermal/**", "min_size_bytes": 1024}},
+            {"op": 11, "test": {"test_id": "station_reached", "expect": 1}}
+          ]
+        },
+        "strategy": "auction",
+        "max_retries": 2
+      }
+    ]
+  },
+  "success": {
+    "all": [
+      {"metric": "target_confidence", "args": {"target_id": "t1"}, "op": ">=", "value": 0.9},
+      {"metric": "t_conf_s", "args": {"target_id": "t1", "threshold": 0.9}, "op": "<=", "value": 300},
+      {"metric": "guard_events", "op": "==", "value": 0},
+      {"metric": "min_separation_m", "op": ">=", "value": 10},
+      {"metric": "landed_all", "op": "==", "value": true}
+    ]
+  },
+  "profiles": {"ci": {"rate": 10, "record": false}},
+  "tags": ["search_thermal", "agents", "ci"]
+}

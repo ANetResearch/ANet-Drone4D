@@ -1,0 +1,13 @@
+{
+  "type": "FeatureCollection",
+  "awr": {
+    "schema": "awr.zones.v1",
+    "schema_version": "1.0.0",
+    "world_id": "suzhou",
+    "frame": "world",
+    "units": "m",
+    "coordinate_sha256": "671320e34ec6fa57597c6a074ce5f1d5eddda5ccc95b16a567ba87b99d21d4b8",
+    "source_sha256": null
+  },
+  "features": []
+}

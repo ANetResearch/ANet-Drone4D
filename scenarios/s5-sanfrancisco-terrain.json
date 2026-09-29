@@ -1,0 +1,48 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "s5-sanfrancisco-terrain",
+  "name": "San Francisco hillside terrain following",
+  "name_zh": "旧金山丘陵地形跟随",
+  "description": "One P600 surveys a 300 m hillside box at 80 m above the terrain.",
+  "world_id": "sanfrancisco",
+  "world_coordinate_sha256": "07dd653c320144ff31aa6259505f077e9e6fdb8b0882291dadd4045889a29e99",
+  "seed": 7,
+  "gcs_loss_policy": "ignore",
+  "time_limit_s": 1800,
+  "energy_precheck": "reject",
+  "vehicles": [
+    {"vehicle_id": "p600-01", "home_enu_m": [-1895, -2262, null], "speed_profile": "px4_default", "sensors": ["camera"]}
+  ],
+  "missions": [
+    {
+      "mission_id": "m-survey",
+      "vehicle_ids": ["p600-01"],
+      "generator": "terrain_follow",
+      "params": {
+        "area": {
+          "polygon_enu_m": [[-2150, -2650], [-1850, -2650], [-1850, -2350], [-2150, -2350]],
+          "side_overlap": 0.6,
+          "front_overlap": 0.8,
+          "speed_mps": 5
+        },
+        "agl_m": 80,
+        "max_slope_deg": 15,
+        "clearance_m": 10
+      },
+      "on_done": "rtl"
+    }
+  ],
+  "zones": {"active": ["border", "nofly-sf-sutro"]},
+  "success": {
+    "all": [
+      {"metric": "agl_min_m", "args": {"mission_id": "m-survey"}, "op": ">=", "value": 60},
+      {"metric": "area_coverage", "args": {"mission_ids": ["m-survey"]}, "op": ">=", "value": 0.95},
+      {"metric": "guard_events", "op": "==", "value": 0},
+      {"metric": "landed_all", "op": "==", "value": true},
+      {"metric": "battery_soc_min", "op": ">=", "value": 0.25}
+    ]
+  },
+  "profiles": {"ci": {"rate": 10, "record": false}},
+  "tags": ["coverage", "terrain", "ci"]
+}

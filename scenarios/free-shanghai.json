@@ -1,0 +1,19 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "free-shanghai",
+  "name": "Shanghai free play",
+  "name_zh": "上海自由剧本",
+  "description": "Two P600 wait on a flat pad; no missions; the operator commands them from the UI.",
+  "world_id": "shanghai",
+  "world_coordinate_sha256": "e9e7d4b63faade01b98d54d94172fb28eb215c5783b9f9b65425d278b0d67cdc",
+  "seed": 7,
+  "gcs_loss_policy": "ignore",
+  "on_complete": "continue",
+  "vehicles": [
+    {"vehicle_id": "p600-01", "profile_id": "p600_mid360", "home_enu_m": [-784, -830, null]},
+    {"vehicle_id": "p600-02", "profile_id": "p600_mid360", "home_enu_m": [-778, -830, null]}
+  ],
+  "success": {"all": [{"metric": "guard_events", "op": "==", "value": 0}]},
+  "tags": ["free"]
+}

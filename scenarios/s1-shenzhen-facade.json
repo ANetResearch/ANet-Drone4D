@@ -1,0 +1,152 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "s1-shenzhen-facade",
+  "name": "Shenzhen facade helix duo",
+  "name_zh": "深圳超高层双机立面巡检",
+  "description": "Two P600 scan the 381 m tower facade top-down in two altitude bands; gust front at t = 420 s.",
+  "world_id": "shenzhen",
+  "world_coordinate_sha256": "dee2f5f16b6c8a68b4aa6dae98dd720f44282b97eefd920c45463936674af994",
+  "seed": 7,
+  "rate": 1,
+  "autoplay": true,
+  "gcs_loss_policy": "ignore",
+  "record": true,
+  "time_limit_s": 1800,
+  "on_complete": "pause",
+  "energy_precheck": "reject",
+  "env": {
+    "preset": "clear",
+    "patch": {"wind": {"speed_ref_mps": 6.0, "dir_from_deg": 135, "turb_sigma_u_ref_mps": 1.0}}
+  },
+  "vehicles": [
+    {
+      "vehicle_id": "p600-01",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-230, 20, null],
+      "yaw_rad": 0.0,
+      "initial_soc": 1.0,
+      "speed_profile": "px4_default",
+      "sensors": ["camera"],
+      "caps": ["rgb.zoom"],
+      "marked": true
+    },
+    {
+      "vehicle_id": "p600-02",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-230, 40, null],
+      "yaw_rad": 0.0,
+      "initial_soc": 1.0,
+      "speed_profile": "px4_default",
+      "sensors": ["camera", "mid360"],
+      "caps": ["rgb.zoom", "lidar.mapping"],
+      "marked": true
+    }
+  ],
+  "missions": [
+    {
+      "mission_id": "m-lower",
+      "vehicle_ids": ["p600-01"],
+      "generator": "helix_scan",
+      "params": {
+        "center_enu_m": [-162.2, 77.3],
+        "radius_m": 57,
+        "standoff_m": 30,
+        "z_range_m": [252, 50],
+        "dz_per_rev_m": 18.47,
+        "speed_mps": 6.0,
+        "gimbal": "look_at_axis",
+        "direction": "ccw",
+        "facade_z_range_m": [45, 374.1]
+      },
+      "sync_policy": "free",
+      "priority": 0,
+      "on_done": "rtl",
+      "on_abort": "hover"
+    },
+    {
+      "mission_id": "m-upper",
+      "vehicle_ids": ["p600-02"],
+      "generator": "helix_scan",
+      "params": {
+        "center_enu_m": [-162.2, 77.3],
+        "radius_m": 57,
+        "standoff_m": 30,
+        "z_range_m": [391, 248],
+        "dz_per_rev_m": 18.47,
+        "speed_mps": 6.0,
+        "gimbal": "look_at_axis",
+        "direction": "ccw",
+        "facade_z_range_m": [45, 374.1]
+      },
+      "sync_policy": "free",
+      "priority": 1,
+      "on_done": "rtl",
+      "on_abort": "hover"
+    }
+  ],
+  "transit": {"planner": "safe_transit", "margin_m": 5, "layer_dz_m": 4},
+  "zones": {"active": ["border", "nofly-sz-t2", "restricted-sz-t3"]},
+  "events": [
+    {"event_id": "gust-420", "at_s": 420, "action": "env.gust", "args": {"amp_mps": 6.0, "length_m": 120}},
+    {
+      "event_id": "soc-guard-01",
+      "when": {"metric": "battery_soc_min", "args": {"vehicle_ids": ["p600-01"]}, "op": "<", "value": 0.25},
+      "action": "cmd",
+      "args": {"vehicle_id": "p600-01", "op": "rtl", "args": {}}
+    },
+    {
+      "event_id": "soc-guard-02",
+      "when": {"metric": "battery_soc_min", "args": {"vehicle_ids": ["p600-02"]}, "op": "<", "value": 0.25},
+      "action": "cmd",
+      "args": {"vehicle_id": "p600-02", "op": "rtl", "args": {}}
+    },
+    {
+      "event_id": "mark-done",
+      "when": {"metric": "missions_done", "op": "==", "value": true},
+      "action": "mark",
+      "args": {"label": "scan complete"}
+    }
+  ],
+  "success": {
+    "all": [
+      {"metric": "missions_done", "op": "==", "value": true},
+      {"metric": "facade_coverage", "args": {"mission_ids": ["m-lower", "m-upper"]}, "op": ">=", "value": 0.9},
+      {"metric": "min_separation_m", "op": ">=", "value": 10},
+      {"metric": "guard_events", "op": "==", "value": 0},
+      {"metric": "pos_err_max_m", "args": {"window": "gust"}, "op": "<", "value": 3.0},
+      {"metric": "landed_all", "op": "==", "value": true},
+      {"metric": "battery_soc_min", "op": ">=", "value": 0.2},
+      {"metric": "energy_rtl_count", "op": "==", "value": 0},
+      {"metric": "landed_home_err_m", "op": "<", "value": 2.0}
+    ]
+  },
+  "profiles": {
+    "ci": {"rate": 10, "record": false},
+    "perf": {"rate": 1, "record": false},
+    "demo": {"rate": 1, "record": true, "on_complete": "continue"},
+    "wx-fog": {"env": {"preset": "fog"}},
+    "wx-rain": {
+      "energy_precheck": "warn",
+      "env": {"preset": "rain", "patch": {"wind": {"speed_ref_mps": 8.0, "turb_sigma_u_ref_mps": 2.0}}},
+      "success": {
+        "all": [
+          {"metric": "min_separation_m", "op": ">=", "value": 10},
+          {"metric": "guard_events", "args": {"level": "critical"}, "op": "==", "value": 0},
+          {"metric": "landed_all", "op": "==", "value": true}
+        ]
+      }
+    },
+    "wx-storm": {
+      "energy_precheck": "warn",
+      "env": {"preset": "thunderstorm", "patch": {"wind": {"speed_ref_mps": 14.0, "turb_sigma_u_ref_mps": 5.0}}},
+      "success": {
+        "all": [
+          {"metric": "min_separation_m", "op": ">=", "value": 10},
+          {"metric": "landed_all", "op": "==", "value": true}
+        ]
+      }
+    }
+  },
+  "tags": ["demo", "ci", "inspection"]
+}

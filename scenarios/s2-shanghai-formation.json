@@ -1,0 +1,184 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "s2-shanghai-formation",
+  "name": "Shanghai formation loop and park coverage",
+  "name_zh": "上海编队环绕与公园覆盖",
+  "description": "Five P600 fly a V formation around the three towers; three P600 mow the Century Park box.",
+  "world_id": "shanghai",
+  "world_coordinate_sha256": "e9e7d4b63faade01b98d54d94172fb28eb215c5783b9f9b65425d278b0d67cdc",
+  "seed": 7,
+  "gcs_loss_policy": "ignore",
+  "time_limit_s": 1800,
+  "energy_precheck": "reject",
+  "env": {"preset": "partlyCloudy"},
+  "vehicles": [
+    {
+      "vehicle_id": "p600-a-01",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-2841, 1398, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-a-02",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-2835, 1398, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-a-03",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-2829, 1398, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-a-04",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-2841, 1404, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-a-05",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-2835, 1404, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-b-01",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [1030, -1230, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-b-02",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [1036, -1230, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-b-03",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [1042, -1230, null],
+      "speed_profile": "px4_default"
+    }
+  ],
+  "missions": [
+    {
+      "mission_id": "m-formation",
+      "vehicle_ids": ["p600-a-01", "p600-a-02", "p600-a-03", "p600-a-04", "p600-a-05"],
+      "generator": "formation",
+      "params": {
+        "shape": "v",
+        "spacing_m": 12,
+        "half_angle_deg": 35,
+        "heading_mode": "filtered",
+        "tau_psi_s": 2,
+        "anchor_path_enu_m": [
+          [-2853, 1284],
+          [-2883.5, 1282.67],
+          [-2913.78, 1278.68],
+          [-2943.59, 1272.07],
+          [-2972.71, 1262.89],
+          [-3000.92, 1251.21],
+          [-3028, 1237.11],
+          [-3053.75, 1220.7],
+          [-3077.98, 1202.12],
+          [-3100.49, 1181.49],
+          [-3121.12, 1158.98],
+          [-3139.7, 1134.75],
+          [-3156.11, 1109],
+          [-3170.21, 1081.92],
+          [-3181.89, 1053.71],
+          [-3191.07, 1024.59],
+          [-3197.68, 994.78],
+          [-3201.67, 964.5],
+          [-3203, 934],
+          [-3201.67, 903.5],
+          [-3197.68, 873.22],
+          [-3191.07, 843.41],
+          [-3181.89, 814.29],
+          [-3170.21, 786.08],
+          [-3156.11, 759],
+          [-3139.7, 733.25],
+          [-3121.12, 709.02],
+          [-3100.49, 686.51],
+          [-3077.98, 665.88],
+          [-3053.75, 647.3],
+          [-3028, 630.89],
+          [-3000.92, 616.79],
+          [-2972.71, 605.11],
+          [-2943.59, 595.93],
+          [-2913.78, 589.32],
+          [-2883.5, 585.33],
+          [-2853, 584],
+          [-2822.5, 585.33],
+          [-2792.22, 589.32],
+          [-2762.41, 595.93],
+          [-2733.29, 605.11],
+          [-2705.08, 616.79],
+          [-2678, 630.89],
+          [-2652.25, 647.3],
+          [-2628.02, 665.88],
+          [-2605.51, 686.51],
+          [-2584.88, 709.02],
+          [-2566.3, 733.25],
+          [-2549.89, 759],
+          [-2535.79, 786.08],
+          [-2524.11, 814.29],
+          [-2514.93, 843.41],
+          [-2508.32, 873.22],
+          [-2504.33, 903.5],
+          [-2503, 934],
+          [-2504.33, 964.5],
+          [-2508.32, 994.78],
+          [-2514.93, 1024.59],
+          [-2524.11, 1053.71],
+          [-2535.79, 1081.92],
+          [-2549.89, 1109],
+          [-2566.3, 1134.75],
+          [-2584.88, 1158.98],
+          [-2605.51, 1181.49],
+          [-2628.02, 1202.12],
+          [-2652.25, 1220.7],
+          [-2678, 1237.11],
+          [-2705.08, 1251.21],
+          [-2733.29, 1262.89],
+          [-2762.41, 1272.07],
+          [-2792.22, 1278.68],
+          [-2822.5, 1282.67],
+          [-2853, 1284]
+        ],
+        "speed_mps": 6,
+        "corner_radius_m": 40,
+        "z_m": 250
+      },
+      "on_done": "rtl"
+    },
+    {
+      "mission_id": "m-coverage",
+      "vehicle_ids": ["p600-b-01", "p600-b-02", "p600-b-03"],
+      "generator": "lawnmower",
+      "params": {
+        "polygon_enu_m": [[1008, -1244], [1308, -1244], [1308, -944], [1008, -944]],
+        "altitude": {"mode": "fly_over", "agl_m": 120, "clearance_m": 10},
+        "side_overlap": 0.7,
+        "front_overlap": 0.8,
+        "speed_mps": 5
+      },
+      "on_done": "rtl"
+    }
+  ],
+  "zones": {"active": ["border", "nofly-sh-pearl"]},
+  "success": {
+    "all": [
+      {"metric": "formation_err_rms_m", "args": {"mission_id": "m-formation"}, "op": "<=", "value": 3},
+      {"metric": "min_separation_m", "op": ">=", "value": 10},
+      {"metric": "area_coverage", "args": {"mission_ids": ["m-coverage"]}, "op": ">=", "value": 0.95},
+      {"metric": "guard_events", "op": "==", "value": 0},
+      {"metric": "landed_all", "op": "==", "value": true},
+      {"metric": "battery_soc_min", "op": ">=", "value": 0.25}
+    ]
+  },
+  "profiles": {"ci": {"rate": 10, "record": false}},
+  "tags": ["formation", "coverage", "ci"]
+}

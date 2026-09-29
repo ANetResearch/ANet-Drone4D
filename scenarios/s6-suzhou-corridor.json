@@ -1,0 +1,79 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "s6-suzhou-corridor",
+  "name": "Suzhou corridor inspection with relay",
+  "name_zh": "苏州走廊巡检与中继",
+  "description": "Four P600 inspect both sides of a 4 km corridor in two halves while a relay holds station.",
+  "world_id": "suzhou",
+  "world_coordinate_sha256": "671320e34ec6fa57597c6a074ce5f1d5eddda5ccc95b16a567ba87b99d21d4b8",
+  "seed": 7,
+  "gcs_loss_policy": "ignore",
+  "time_limit_s": 1800,
+  "energy_precheck": "reject",
+  "vehicles": [
+    {"vehicle_id": "p600-i1", "home_enu_m": [-1000, 200, 0], "speed_profile": "px4_default", "sensors": ["camera"]},
+    {"vehicle_id": "p600-i2", "home_enu_m": [-1000, -200, 0], "speed_profile": "px4_default", "sensors": ["camera"]},
+    {"vehicle_id": "p600-i3", "home_enu_m": [1000, 200, 0], "speed_profile": "px4_default", "sensors": ["camera"]},
+    {"vehicle_id": "p600-i4", "home_enu_m": [1000, -200, 0], "speed_profile": "px4_default", "sensors": ["camera"]},
+    {"vehicle_id": "p600-r1", "home_enu_m": [0, 300, 0], "caps": ["relay.communication"]}
+  ],
+  "missions": [
+    {
+      "mission_id": "m-west",
+      "vehicle_ids": ["p600-i1", "p600-i2"],
+      "generator": "corridor",
+      "params": {
+        "polyline_enu_m": [[-2000, 0], [0, 0]],
+        "offset_m": 200,
+        "sides": "both",
+        "agl_m": 80,
+        "gimbal_tilt_deg": 45,
+        "terrain_follow": true,
+        "speed_mps": 10
+      },
+      "on_done": "rtl"
+    },
+    {
+      "mission_id": "m-east",
+      "vehicle_ids": ["p600-i3", "p600-i4"],
+      "generator": "corridor",
+      "params": {
+        "polyline_enu_m": [[0, 0], [2000, 0]],
+        "offset_m": 200,
+        "sides": "both",
+        "agl_m": 80,
+        "gimbal_tilt_deg": 45,
+        "terrain_follow": true,
+        "speed_mps": 10
+      },
+      "on_done": "rtl"
+    },
+    {
+      "mission_id": "m-relay",
+      "vehicle_ids": ["p600-r1"],
+      "generator": "follow_path",
+      "params": {"waypoints_enu_m": [[0, 300, 170], [0, 0, 170]], "speed_mps": 5},
+      "on_done": "hover"
+    }
+  ],
+  "events": [
+    {
+      "event_id": "relay-home",
+      "when": {"metric": "missions_done", "args": {"mission_ids": ["m-west", "m-east"]}, "op": "==", "value": true},
+      "action": "cmd",
+      "args": {"vehicle_id": "p600-r1", "op": "rtl", "args": {}}
+    }
+  ],
+  "success": {
+    "all": [
+      {"metric": "missions_done", "args": {"mission_ids": ["m-west", "m-east"]}, "op": "==", "value": true},
+      {"metric": "min_separation_m", "op": ">=", "value": 10},
+      {"metric": "guard_events", "op": "==", "value": 0},
+      {"metric": "landed_all", "op": "==", "value": true},
+      {"metric": "battery_soc_min", "op": ">=", "value": 0.25}
+    ]
+  },
+  "profiles": {"ci": {"rate": 10, "record": false}},
+  "tags": ["inspection", "relay", "ci"]
+}

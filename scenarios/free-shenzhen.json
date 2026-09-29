@@ -1,0 +1,19 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "free-shenzhen",
+  "name": "Shenzhen free play",
+  "name_zh": "深圳自由剧本",
+  "description": "Two P600 wait on a flat pad; no missions; the operator commands them from the UI.",
+  "world_id": "shenzhen",
+  "world_coordinate_sha256": "dee2f5f16b6c8a68b4aa6dae98dd720f44282b97eefd920c45463936674af994",
+  "seed": 7,
+  "gcs_loss_policy": "ignore",
+  "on_complete": "continue",
+  "vehicles": [
+    {"vehicle_id": "p600-01", "profile_id": "p600_mid360", "home_enu_m": [-38, -94, null]},
+    {"vehicle_id": "p600-02", "profile_id": "p600_mid360", "home_enu_m": [-32, -94, null]}
+  ],
+  "success": {"all": [{"metric": "guard_events", "op": "==", "value": 0}]},
+  "tags": ["free"]
+}

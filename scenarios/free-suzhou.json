@@ -1,0 +1,19 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "free-suzhou",
+  "name": "Suzhou free play",
+  "name_zh": "苏州自由剧本",
+  "description": "Two P600 wait on a flat pad; no missions; the operator commands them from the UI.",
+  "world_id": "suzhou",
+  "world_coordinate_sha256": "671320e34ec6fa57597c6a074ce5f1d5eddda5ccc95b16a567ba87b99d21d4b8",
+  "seed": 7,
+  "gcs_loss_policy": "ignore",
+  "on_complete": "continue",
+  "vehicles": [
+    {"vehicle_id": "p600-01", "profile_id": "p600_mid360", "home_enu_m": [-3, 300, 0.0]},
+    {"vehicle_id": "p600-02", "profile_id": "p600_mid360", "home_enu_m": [3, 300, 0.0]}
+  ],
+  "success": {"all": [{"metric": "guard_events", "op": "==", "value": 0}]},
+  "tags": ["free"]
+}

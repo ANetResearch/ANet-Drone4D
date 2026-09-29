@@ -1,0 +1,548 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "ladder-shenzhen",
+  "name": "Shenzhen fleet ladder",
+  "name_zh": "深圳机群阶梯",
+  "description": "Four altitude layers (60/75/90/105 m AGL) on a staggered 12 m grid take off top layer first and orbit their homes; profiles n10 to n1000 select the fleet size.",
+  "world_id": "shenzhen",
+  "world_coordinate_sha256": "dee2f5f16b6c8a68b4aa6dae98dd720f44282b97eefd920c45463936674af994",
+  "seed": 7,
+  "rate": 1,
+  "gcs_loss_policy": "ignore",
+  "record": false,
+  "energy_precheck": "warn",
+  "time_limit_s": 600,
+  "on_complete": "continue",
+  "env": {"preset": "partlyCloudy"},
+  "transit": {"planner": "direct", "margin_m": 5, "layer_dz_m": 4},
+  "vehicle_sets": [
+    {
+      "set_id": "l0",
+      "id_prefix": "sim",
+      "id_start": 1,
+      "id_digits": 4,
+      "count": 50,
+      "profile_id": "p600_mid360",
+      "layout": {"kind": "grid", "origin_enu_m": [-465, -58, null], "spacing_m": 24, "cols": 8},
+      "mission": {
+        "generator": "orbit",
+        "center": "home",
+        "start": {"at_s": 15},
+        "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+      }
+    },
+    {
+      "set_id": "l1",
+      "id_prefix": "sim",
+      "id_start": 51,
+      "id_digits": 4,
+      "count": 50,
+      "profile_id": "p600_mid360",
+      "layout": {"kind": "grid", "origin_enu_m": [-453, -58, null], "spacing_m": 24, "cols": 8},
+      "mission": {
+        "generator": "orbit",
+        "center": "home",
+        "start": {"at_s": 10},
+        "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+      }
+    },
+    {
+      "set_id": "l2",
+      "id_prefix": "sim",
+      "id_start": 101,
+      "id_digits": 4,
+      "count": 50,
+      "profile_id": "p600_mid360",
+      "layout": {"kind": "grid", "origin_enu_m": [-465, -46, null], "spacing_m": 24, "cols": 8},
+      "mission": {
+        "generator": "orbit",
+        "center": "home",
+        "start": {"at_s": 5},
+        "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+      }
+    },
+    {
+      "set_id": "l3",
+      "id_prefix": "sim",
+      "id_start": 151,
+      "id_digits": 4,
+      "count": 50,
+      "profile_id": "p600_mid360",
+      "layout": {"kind": "grid", "origin_enu_m": [-453, -46, null], "spacing_m": 24, "cols": 8},
+      "mission": {
+        "generator": "orbit",
+        "center": "home",
+        "start": {"at_s": 0},
+        "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+      }
+    }
+  ],
+  "events": [
+    {
+      "event_id": "steady",
+      "when": {"metric": "elapsed_s", "op": ">=", "value": 45},
+      "action": "mark",
+      "args": {"label": "ladder.steady"}
+    }
+  ],
+  "success": {
+    "all": [
+      {"metric": "missions_done", "op": "==", "value": true},
+      {"metric": "guard_events", "op": "==", "value": 0},
+      {"metric": "min_separation_m", "op": ">=", "value": 14},
+      {"metric": "landed_all", "op": "==", "value": true}
+    ]
+  },
+  "profiles": {
+    "n10": {
+      "vehicle_sets": [
+        {
+          "set_id": "l0",
+          "id_prefix": "sim",
+          "id_start": 1,
+          "id_digits": 4,
+          "count": 3,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-393, 2, null], "spacing_m": 24, "cols": 2},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 15},
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l1",
+          "id_prefix": "sim",
+          "id_start": 4,
+          "id_digits": 4,
+          "count": 3,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-381, 2, null], "spacing_m": 24, "cols": 2},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 10},
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l2",
+          "id_prefix": "sim",
+          "id_start": 7,
+          "id_digits": 4,
+          "count": 2,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-393, 14, null], "spacing_m": 24, "cols": 2},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 5},
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l3",
+          "id_prefix": "sim",
+          "id_start": 9,
+          "id_digits": 4,
+          "count": 2,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-381, 14, null], "spacing_m": 24, "cols": 2},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 0},
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        }
+      ]
+    },
+    "n50": {
+      "vehicle_sets": [
+        {
+          "set_id": "l0",
+          "id_prefix": "sim",
+          "id_start": 1,
+          "id_digits": 4,
+          "count": 13,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-417, -22, null], "spacing_m": 24, "cols": 4},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 15},
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l1",
+          "id_prefix": "sim",
+          "id_start": 14,
+          "id_digits": 4,
+          "count": 13,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-405, -22, null], "spacing_m": 24, "cols": 4},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 10},
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l2",
+          "id_prefix": "sim",
+          "id_start": 27,
+          "id_digits": 4,
+          "count": 12,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-417, -10, null], "spacing_m": 24, "cols": 4},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 5},
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l3",
+          "id_prefix": "sim",
+          "id_start": 39,
+          "id_digits": 4,
+          "count": 12,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-405, -10, null], "spacing_m": 24, "cols": 4},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 0},
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        }
+      ]
+    },
+    "n100": {
+      "vehicle_sets": [
+        {
+          "set_id": "l0",
+          "id_prefix": "sim",
+          "id_start": 1,
+          "id_digits": 4,
+          "count": 25,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-429, -34, null], "spacing_m": 24, "cols": 5},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 15},
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l1",
+          "id_prefix": "sim",
+          "id_start": 26,
+          "id_digits": 4,
+          "count": 25,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-417, -34, null], "spacing_m": 24, "cols": 5},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 10},
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l2",
+          "id_prefix": "sim",
+          "id_start": 51,
+          "id_digits": 4,
+          "count": 25,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-429, -22, null], "spacing_m": 24, "cols": 5},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 5},
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l3",
+          "id_prefix": "sim",
+          "id_start": 76,
+          "id_digits": 4,
+          "count": 25,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-417, -22, null], "spacing_m": 24, "cols": 5},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 0},
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        }
+      ]
+    },
+    "n200": {
+      "vehicle_sets": [
+        {
+          "set_id": "l0",
+          "id_prefix": "sim",
+          "id_start": 1,
+          "id_digits": 4,
+          "count": 50,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-465, -58, null], "spacing_m": 24, "cols": 8},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 15},
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l1",
+          "id_prefix": "sim",
+          "id_start": 51,
+          "id_digits": 4,
+          "count": 50,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-453, -58, null], "spacing_m": 24, "cols": 8},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 10},
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l2",
+          "id_prefix": "sim",
+          "id_start": 101,
+          "id_digits": 4,
+          "count": 50,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-465, -46, null], "spacing_m": 24, "cols": 8},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 5},
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l3",
+          "id_prefix": "sim",
+          "id_start": 151,
+          "id_digits": 4,
+          "count": 50,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-453, -46, null], "spacing_m": 24, "cols": 8},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 0},
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        }
+      ]
+    },
+    "n500": {
+      "vehicle_sets": [
+        {
+          "set_id": "l0",
+          "id_prefix": "sim",
+          "id_start": 1,
+          "id_digits": 4,
+          "count": 125,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-513, -106, null], "spacing_m": 24, "cols": 12},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 15},
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l1",
+          "id_prefix": "sim",
+          "id_start": 126,
+          "id_digits": 4,
+          "count": 125,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-501, -106, null], "spacing_m": 24, "cols": 12},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 10},
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l2",
+          "id_prefix": "sim",
+          "id_start": 251,
+          "id_digits": 4,
+          "count": 125,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-513, -94, null], "spacing_m": 24, "cols": 12},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 5},
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l3",
+          "id_prefix": "sim",
+          "id_start": 376,
+          "id_digits": 4,
+          "count": 125,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-501, -94, null], "spacing_m": 24, "cols": 12},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 0},
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        }
+      ]
+    },
+    "n1000": {
+      "vehicle_sets": [
+        {
+          "set_id": "l0",
+          "id_prefix": "sim",
+          "id_start": 1,
+          "id_digits": 4,
+          "count": 250,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-561, -166, null], "spacing_m": 24, "cols": 16},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 15},
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l1",
+          "id_prefix": "sim",
+          "id_start": 251,
+          "id_digits": 4,
+          "count": 250,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-549, -166, null], "spacing_m": 24, "cols": 16},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 10},
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l2",
+          "id_prefix": "sim",
+          "id_start": 501,
+          "id_digits": 4,
+          "count": 250,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-561, -154, null], "spacing_m": 24, "cols": 16},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 5},
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l3",
+          "id_prefix": "sim",
+          "id_start": 751,
+          "id_digits": 4,
+          "count": 250,
+          "profile_id": "p600_mid360",
+          "layout": {"kind": "grid", "origin_enu_m": [-549, -154, null], "spacing_m": 24, "cols": 16},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 0},
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        }
+      ]
+    },
+    "x500": {
+      "vehicle_sets": [
+        {
+          "set_id": "l0",
+          "id_prefix": "sim",
+          "id_start": 1,
+          "id_digits": 4,
+          "count": 50,
+          "profile_id": "x500",
+          "layout": {"kind": "grid", "origin_enu_m": [-465, -58, null], "spacing_m": 24, "cols": 8},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 15},
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l1",
+          "id_prefix": "sim",
+          "id_start": 51,
+          "id_digits": 4,
+          "count": 50,
+          "profile_id": "x500",
+          "layout": {"kind": "grid", "origin_enu_m": [-453, -58, null], "spacing_m": 24, "cols": 8},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 10},
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l2",
+          "id_prefix": "sim",
+          "id_start": 101,
+          "id_digits": 4,
+          "count": 50,
+          "profile_id": "x500",
+          "layout": {"kind": "grid", "origin_enu_m": [-465, -46, null], "spacing_m": 24, "cols": 8},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 5},
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        },
+        {
+          "set_id": "l3",
+          "id_prefix": "sim",
+          "id_start": 151,
+          "id_digits": 4,
+          "count": 50,
+          "profile_id": "x500",
+          "layout": {"kind": "grid", "origin_enu_m": [-453, -46, null], "spacing_m": 24, "cols": 8},
+          "mission": {
+            "generator": "orbit",
+            "center": "home",
+            "start": {"at_s": 0},
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+          }
+        }
+      ]
+    }
+  },
+  "tags": ["ladder", "ci", "stress"]
+}

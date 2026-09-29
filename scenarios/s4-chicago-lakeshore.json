@@ -1,0 +1,137 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "s4-chicago-lakeshore",
+  "name": "Chicago lakeshore formation and Loop coverage",
+  "name_zh": "芝加哥湖岸编队与 Loop 覆盖",
+  "description": "Five P600 fly a line abreast up the lake corridor and a V back; five P600 cover the Willis Tower box lane by lane at a safe altitude.",
+  "world_id": "chicago",
+  "world_coordinate_sha256": "89c4275fa3f096674f1cf1003a241c72ac23d70170245230ff2a38ccfa546101",
+  "seed": 7,
+  "gcs_loss_policy": "ignore",
+  "time_limit_s": 1800,
+  "energy_precheck": "reject",
+  "vehicles": [
+    {
+      "vehicle_id": "p600-a-01",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [573, -1174, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-a-02",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [579, -1174, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-a-03",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [585, -1174, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-a-04",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [591, -1174, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-a-05",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [597, -1174, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-b-01",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-1152, -665, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-b-02",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-1146, -665, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-b-03",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-1140, -665, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-b-04",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-1134, -665, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-b-05",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-1128, -665, null],
+      "speed_profile": "px4_default"
+    }
+  ],
+  "missions": [
+    {
+      "mission_id": "m-corridor-out",
+      "vehicle_ids": ["p600-a-01", "p600-a-02", "p600-a-03", "p600-a-04", "p600-a-05"],
+      "generator": "formation",
+      "params": {
+        "shape": "line",
+        "spacing_m": 12,
+        "heading_mode": "filtered",
+        "tau_psi_s": 2,
+        "speed_mps": 8,
+        "agl_m": 150,
+        "anchor_path_enu_m": [[800, -1200], [800, 600]]
+      },
+      "on_done": "hover"
+    },
+    {
+      "mission_id": "m-corridor-back",
+      "vehicle_ids": ["p600-a-01", "p600-a-02", "p600-a-03", "p600-a-04", "p600-a-05"],
+      "generator": "formation",
+      "params": {
+        "shape": "v",
+        "half_angle_deg": 35,
+        "spacing_m": 12,
+        "heading_mode": "filtered",
+        "tau_psi_s": 2,
+        "speed_mps": 8,
+        "agl_m": 150,
+        "anchor_path_enu_m": [[800, 600], [800, -1200]]
+      },
+      "start": {"after": "m-corridor-out"},
+      "on_done": "rtl"
+    },
+    {
+      "mission_id": "m-loop",
+      "vehicle_ids": ["p600-b-01", "p600-b-02", "p600-b-03", "p600-b-04", "p600-b-05"],
+      "generator": "lawnmower",
+      "params": {
+        "polygon_enu_m": [[-1401, -884], [-801, -884], [-801, -284], [-1401, -284]],
+        "altitude": {"mode": "per_lane", "agl_m": 150, "clearance_m": 10},
+        "side_overlap": 0.7,
+        "front_overlap": 0.8,
+        "speed_mps": 5
+      },
+      "on_done": "rtl"
+    }
+  ],
+  "zones": {"active": ["border", "nofly-chi-hancock"]},
+  "success": {
+    "all": [
+      {"metric": "formation_err_rms_m", "args": {"mission_id": "m-corridor-out"}, "op": "<=", "value": 3},
+      {"metric": "formation_err_rms_m", "args": {"mission_id": "m-corridor-back"}, "op": "<=", "value": 3},
+      {"metric": "min_separation_m", "op": ">=", "value": 10},
+      {"metric": "area_coverage", "args": {"mission_ids": ["m-loop"]}, "op": ">=", "value": 0.9},
+      {"metric": "guard_events", "op": "==", "value": 0},
+      {"metric": "landed_all", "op": "==", "value": true},
+      {"metric": "battery_soc_min", "op": ">=", "value": 0.25}
+    ]
+  },
+  "profiles": {"ci": {"rate": 10, "record": false}},
+  "tags": ["formation", "coverage", "ci"]
+}
