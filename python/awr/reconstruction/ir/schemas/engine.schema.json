@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/engine.schema.json",
+  "title": "Recon IR engine.json (awr.recon.engine.v1)",
+  "description": "M01 §6.3.3, M01-FR-008: engine, version, weights and licence (recorded, never restricting; ADR-034), raw convention, normalisation record with the pose self-check. Timing and host go to provenance.json in the job directory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ir_version",
+    "engine",
+    "variant",
+    "version",
+    "commit",
+    "weights",
+    "license",
+    "convention_raw",
+    "normalization",
+    "engine_scale",
+    "conditioning",
+    "params",
+    "runtime"
+  ],
+  "properties": {
+    "schema": {
+      "const": "awr.recon.engine.v1"
+    },
+    "ir_version": {
+      "const": "1.0.0"
+    },
+    "engine": {
+      "enum": [
+        "mock",
+        "da3",
+        "lingbot_map",
+        "vggt",
+        "mapanything",
+        "colmap"
+      ],
+      "description": "ReconEngine (rt/enums.json, proposed)"
+    },
+    "variant": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "commit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "weights": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repo": {
+              "type": "string"
+            },
+            "file": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            },
+            "license": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "description": "sha256 and license are required when weights is not null (semantic rule V08)."
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "weights"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "weights": {
+          "type": "string"
+        },
+        "notice": {
+          "type": "string"
+        }
+      }
+    },
+    "convention_raw": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pose_dir",
+        "quat_order",
+        "camera_axes",
+        "gauge",
+        "pixel_center",
+        "conf_kind"
+      ],
+      "properties": {
+        "pose_dir": {
+          "enum": [
+            "c2w",
+            "w2c"
+          ]
+        },
+        "quat_order": {
+          "enum": [
+            "xyzw",
+            "wxyz",
+            "matrix"
+          ]
+        },
+        "camera_axes": {
+          "const": "opencv_rdf"
+        },
+        "gauge": {
+          "enum": [
+            "frame0",
+            "scale_frames",
+            "ref_view",
+            "view0",
+            "world_prior",
+            "hidden_sim3"
+          ]
+        },
+        "pixel_center": {
+          "enum": [
+            "integer",
+            "half"
+          ]
+        },
+        "conf_kind": {
+          "enum": [
+            "expp1",
+            "sigmoid_logit",
+            "reproj_err",
+            "synthetic",
+            "none"
+          ]
+        }
+      }
+    },
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inverted",
+        "renormalized_to_frame0",
+        "T_frame0_raw",
+        "self_check"
+      ],
+      "properties": {
+        "inverted": {
+          "type": "boolean"
+        },
+        "renormalized_to_frame0": {
+          "type": "boolean"
+        },
+        "T_frame0_raw": {
+          "oneOf": [
+            {
+              "$ref": "../../world/1/common.schema.json#/$defs/mat4"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "self_check": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "votes",
+            "margins",
+            "pass"
+          ],
+          "properties": {
+            "method": {
+              "type": "string"
+            },
+            "votes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "c2w",
+                  "w2c"
+                ]
+              }
+            },
+            "margins": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "pass": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "engine_scale": {
+      "enum": [
+        "relative",
+        "metric_predicted",
+        "metric_conditioned"
+      ]
+    },
+    "conditioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intrinsics",
+        "poses",
+        "depth"
+      ],
+      "properties": {
+        "intrinsics": {
+          "type": "boolean"
+        },
+        "poses": {
+          "enum": [
+            "none",
+            "rtk",
+            "gnss",
+            "px4"
+          ]
+        },
+        "depth": {
+          "enum": [
+            "none",
+            "lidar_sparse"
+          ]
+        }
+      }
+    },
+    "params": {
+      "type": "object"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "threads",
+        "dtype"
+      ],
+      "properties": {
+        "device": {
+          "enum": [
+            "cpu",
+            "cuda"
+          ]
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "dtype": {
+          "enum": [
+            "float64",
+            "float32",
+            "float16",
+            "bfloat16"
+          ]
+        }
+      }
+    }
+  }
+}

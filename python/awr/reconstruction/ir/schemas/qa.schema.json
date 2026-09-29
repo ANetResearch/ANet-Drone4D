@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/qa.schema.json",
+  "title": "Recon IR qa.json (awr.recon.qa.v1)",
+  "description": "M01 §6.3.3, M01-FR-048: confidence histogram of the fused points (sum = counts.points_fused, V15), dedupe ratio, pose check, georef summary, Mock-only C2C to the source cloud. No wall-clock fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ir_version",
+    "status",
+    "conf_hist_u8",
+    "dedupe_ratio",
+    "vox_engine",
+    "pose_check",
+    "georef",
+    "c2c_to_source_m",
+    "gates"
+  ],
+  "properties": {
+    "schema": {
+      "const": "awr.recon.qa.v1"
+    },
+    "ir_version": {
+      "const": "1.0.0"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "warn",
+        "fail"
+      ]
+    },
+    "conf_hist_u8": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 256,
+      "maxItems": 256
+    },
+    "dedupe_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "vox_engine": {
+      "type": "number",
+      "minimum": 0
+    },
+    "pose_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "votes",
+        "margins",
+        "pass"
+      ],
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "votes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "c2w",
+              "w2c"
+            ]
+          }
+        },
+        "margins": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "pass": {
+          "type": "boolean"
+        }
+      }
+    },
+    "georef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "status"
+      ],
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "inlier_ratio": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rmse_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sv_ratio": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gravity_used": {
+          "type": "boolean"
+        }
+      }
+    },
+    "c2c_to_source_m": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "p50",
+            "p95"
+          ],
+          "properties": {
+            "p50": {
+              "type": "number",
+              "minimum": 0
+            },
+            "p95": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "value",
+          "result"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          },
+          "result": {
+            "enum": [
+              "pass",
+              "warn",
+              "reject",
+              "skip"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

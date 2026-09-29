@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/frame.schema.json",
+  "title": "Recon IR frames.jsonl row",
+  "description": "M01 §6.3.3: raw layer, T_engine_cam is C2W with an OpenCV RDF camera in engine units (read-only after INFERRING). frame_type 255 (sim) is accepted but never written by M01.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "frame_id",
+    "t_ns",
+    "camera_id",
+    "frame_type",
+    "T_engine_cam",
+    "pose_source"
+  ],
+  "properties": {
+    "frame_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "t_ns": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "camera_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "frame_type": {
+      "enum": [
+        0,
+        1,
+        2,
+        255
+      ]
+    },
+    "T_engine_cam": {
+      "$ref": "../../world/1/common.schema.json#/$defs/rigid"
+    },
+    "pose_source": {
+      "enum": [
+        "engine",
+        "rtk",
+        "gps",
+        "px4",
+        "fused",
+        "mock"
+      ]
+    },
+    "conf_mean_u8": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "valid_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "chunk": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "image": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "uri",
+            "name"
+          ],
+          "properties": {
+            "uri": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "gnss": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "lat_deg",
+            "lon_deg",
+            "h_ellipsoid_m",
+            "sigma_h_m",
+            "sigma_v_m",
+            "fix"
+          ],
+          "properties": {
+            "lat_deg": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "lon_deg": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "h_ellipsoid_m": {
+              "type": "number"
+            },
+            "sigma_h_m": {
+              "type": "number",
+              "minimum": 0
+            },
+            "sigma_v_m": {
+              "type": "number",
+              "minimum": 0
+            },
+            "fix": {
+              "enum": [
+                "none",
+                "gnss",
+                "dgps",
+                "rtk_float",
+                "rtk_fixed"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "gravity_cam": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        }
+      ],
+      "description": "unit 'down' vector in the camera frame"
+    },
+    "depth": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "w",
+            "h",
+            "K",
+            "units",
+            "uri"
+          ],
+          "properties": {
+            "w": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "h": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "K": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "units": {
+              "const": "engine"
+            },
+            "uri": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

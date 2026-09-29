@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/session.schema.json",
+  "title": "Recon IR session.json (awr.recon.session.v1)",
+  "description": "M01 §6.3.3 (recon-ir@1). No wall-clock, host, job id or target world id fields (V16, M01-NFR-008); the raw layer is always in the engine gauge.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ir_version",
+    "session_id",
+    "source_world",
+    "engine_ref",
+    "gauge",
+    "scale_status",
+    "time_base",
+    "input",
+    "counts",
+    "conf_source",
+    "origin_engine",
+    "files"
+  ],
+  "properties": {
+    "schema": {
+      "const": "awr.recon.session.v1"
+    },
+    "ir_version": {
+      "const": "1.0.0"
+    },
+    "session_id": {
+      "allOf": [
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/slug"
+        },
+        {
+          "type": "string",
+          "maxLength": 63
+        }
+      ],
+      "description": "Engine sessions: rs-<sha256[:12]> of the canonical inputs (M01 §6.3.2); capture sessions (M02 §6.3.3): s<YYYYMMDD>-<HHMMSS>-<tag>."
+    },
+    "source_world": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "content_version",
+            "coordinate_sha256"
+          ],
+          "properties": {
+            "id": {
+              "$ref": "../../world/1/common.schema.json#/$defs/id"
+            },
+            "content_version": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{12}$"
+            },
+            "coordinate_sha256": {
+              "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+            }
+          }
+        }
+      ]
+    },
+    "engine_ref": {
+      "const": "engine.json"
+    },
+    "gauge": {
+      "const": "engine"
+    },
+    "scale_status": {
+      "allOf": [
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/scaleStatus"
+        },
+        {
+          "enum": [
+            "relative",
+            "gnss",
+            "rtk",
+            "lidar"
+          ]
+        }
+      ],
+      "description": "ScaleStatus subset allowed for a reconstruction session (M01-FR-007); the enum itself is defined once in common.schema.json (rt/enums.json ScaleStatus)."
+    },
+    "time_base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "t0_ns",
+        "sync"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "session",
+            "gps",
+            "ptp"
+          ]
+        },
+        "t0_ns": {
+          "type": "string",
+          "pattern": "^-?[0-9]{1,19}$"
+        },
+        "sync": {
+          "enum": [
+            "none",
+            "gps_pps",
+            "ptp",
+            "px4_timesync"
+          ]
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "world_sample",
+            "video",
+            "images",
+            "rosbag"
+          ]
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frames",
+        "keyframes",
+        "points_raw",
+        "points_fused"
+      ],
+      "properties": {
+        "frames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "keyframes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "points_raw": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "points_fused": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "conf_source": {
+      "enum": [
+        "engine",
+        "synthetic",
+        "none"
+      ]
+    },
+    "origin_engine": {
+      "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "bytes",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))[A-Za-z0-9._/@-]+$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+          }
+        }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "description": "M02 §6.3.3 capture-session additions (V0.5a, optional)."
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/rig.schema.json",
+  "title": "Recon IR rig.json (awr.recon.rig.v1)",
+  "description": "M01 §6.3.1 (COLMAP 4 Rig/Sensor): rigid T_body_sensor (no scale, V17), integer time offsets; the GNSS lever arm is the translation of the GNSS sensor.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ir_version",
+    "rig_id",
+    "ref_sensor",
+    "sensors"
+  ],
+  "properties": {
+    "schema": {
+      "const": "awr.recon.rig.v1"
+    },
+    "ir_version": {
+      "const": "1.0.0"
+    },
+    "rig_id": {
+      "type": "string"
+    },
+    "ref_sensor": {
+      "type": "string"
+    },
+    "sensors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sensor_id",
+          "type",
+          "T_body_sensor",
+          "time_offset_ns"
+        ],
+        "properties": {
+          "sensor_id": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "CAMERA",
+              "IMU",
+              "GNSS",
+              "LIDAR"
+            ]
+          },
+          "camera_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "T_body_sensor": {
+            "$ref": "../../world/1/common.schema.json#/$defs/rigid"
+          },
+          "time_offset_ns": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "calib_ref": {
+      "type": "string",
+      "description": "M02 §6.3.3 (V0.5a, optional)"
+    },
+    "mount_preset": {
+      "type": "string",
+      "description": "M02 §6.3.3 (V0.5a, optional)"
+    }
+  }
+}

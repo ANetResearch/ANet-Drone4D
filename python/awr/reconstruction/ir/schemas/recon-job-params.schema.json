@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/recon-job-params.schema.json",
+  "title": "Reconstruction job parameters (POST /api/recon/jobs, recon-job-params)",
+  "description": "M01 §6.9, M01-FR-014; unknown fields are rejected (330). Defaults are applied by the job-worker (awr.reconstruction.jobs.params); target_world_id defaults to <source>-recon-<nn>.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "engine",
+    "source"
+  ],
+  "properties": {
+    "engine": {
+      "enum": [
+        "mock",
+        "da3",
+        "lingbot_map",
+        "vggt",
+        "mapanything",
+        "colmap"
+      ],
+      "default": "mock"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "world_sample",
+            "video",
+            "images",
+            "rosbag"
+          ],
+          "default": "world_sample"
+        },
+        "world_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,63}$"
+        },
+        "path": {
+          "enum": [
+            "helix",
+            "lawnmower"
+          ],
+          "default": "helix"
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 3000,
+          "default": 600
+        },
+        "uri": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "target_world_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,63}$"
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647,
+      "default": 1
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "camera": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fps": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30
+            },
+            "hfov_deg": {
+              "type": "number",
+              "minimum": 30,
+              "maximum": 90
+            },
+            "depth_res": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "enum": [
+                [
+                  128,
+                  72
+                ],
+                [
+                  256,
+                  144
+                ]
+              ]
+            },
+            "pitch_deg": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": -20
+            }
+          }
+        },
+        "path": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "alt_agl_m": {
+              "type": "number",
+              "minimum": 60,
+              "maximum": 400
+            },
+            "helix_radius_m": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number",
+                  "minimum": 50,
+                  "maximum": 2000
+                }
+              ]
+            },
+            "helix_turns": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6
+            },
+            "helix_climb_m": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "lawnmower_spacing_m": {
+              "type": "number",
+              "minimum": 40,
+              "maximum": 400
+            },
+            "lawnmower_legs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            }
+          }
+        },
+        "mock": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source_keep": {
+              "type": "number",
+              "minimum": 0.05,
+              "maximum": 1.0
+            },
+            "depth_noise_rel": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.05
+            },
+            "raw_pose_dir": {
+              "enum": [
+                "c2w",
+                "w2c"
+              ]
+            },
+            "keyframe_interval": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "drift": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "window_frames": {
+                      "type": "integer",
+                      "minimum": 10,
+                      "maximum": 3000
+                    },
+                    "scale_jitter": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 0.2
+                    },
+                    "yaw_jitter_deg": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10
+                    }
+                  }
+                }
+              ]
+            },
+            "gravity_noise_deg": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "gnss": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sigma_h_m": {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 10
+                },
+                "sigma_v_m": {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 10
+                },
+                "outlier_frac": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "dropout_frac": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "time_offset_s": {
+                  "type": "number",
+                  "minimum": -1,
+                  "maximum": 1
+                }
+              }
+            }
+          }
+        },
+        "fuse": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "conf_min_u8": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "conf_pct": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 99
+            },
+            "depth_pct": {
+              "type": "number",
+              "minimum": 50,
+              "maximum": 100
+            },
+            "stride": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            },
+            "jitter": {
+              "type": "boolean"
+            },
+            "voxel_k": {
+              "type": "number",
+              "minimum": 0.05,
+              "maximum": 5
+            },
+            "keyframes_only": {
+              "type": "boolean"
+            },
+            "min_points": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000000
+            }
+          }
+        },
+        "georef": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "gnss",
+                "none",
+                "rtk",
+                "lidar",
+                "auto"
+              ]
+            },
+            "gravity": {
+              "enum": [
+                "auto",
+                "always",
+                "never"
+              ]
+            },
+            "gravity_weight": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 10
+            },
+            "time_offset": {
+              "enum": [
+                "off",
+                "auto"
+              ]
+            },
+            "on_reject": {
+              "enum": [
+                "publish_relative",
+                "fail"
+              ]
+            }
+          }
+        },
+        "retain": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "raw_points": {
+              "type": "boolean"
+            },
+            "depth": {
+              "enum": [
+                "none",
+                "keyframes",
+                "all"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

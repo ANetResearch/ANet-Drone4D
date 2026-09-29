@@ -1,0 +1,6 @@
+# tools/anet/versions.lock（M14 §6.15、§9.4；d05 §6 第 1 条）：同一 wire 的 anet、ANetHub、ANetCore 版本组合。
+# V1.0 冻结；D1 只作参照。agent-runtime 启动时比对 daemon 的 X-ANet-Wire，不一致即拒绝（484 ANET_WIRE_MISMATCH）。
+wire = 1
+anet = 840b8ea
+anethub = c4d08da
+anetcore = v0.14.0

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/recon-ir.schema.json",
+  "title": "Recon IR recon-ir@1 (reconstruction/<session>/)",
+  "description": "Aggregate of the recon-ir@1 documents (M01 §6.3; AWR-16 §14.1 file layout). T_engine_cam is C2W with an OpenCV RDF camera; x_world = s*R(q)*x_engine + t. Each file validates against its own schema; this aggregate accepts any one of them.",
+  "$defs": {
+    "session": {
+      "$ref": "session.schema.json"
+    },
+    "engine": {
+      "$ref": "engine.schema.json"
+    },
+    "rig": {
+      "$ref": "rig.schema.json"
+    },
+    "cameras": {
+      "$ref": "cameras.schema.json"
+    },
+    "frame": {
+      "$ref": "frame.schema.json"
+    },
+    "alignment": {
+      "$ref": "alignment.schema.json"
+    },
+    "qa": {
+      "$ref": "qa.schema.json"
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/session"
+    },
+    {
+      "$ref": "#/$defs/engine"
+    },
+    {
+      "$ref": "#/$defs/rig"
+    },
+    {
+      "$ref": "#/$defs/cameras"
+    },
+    {
+      "$ref": "#/$defs/frame"
+    },
+    {
+      "$ref": "#/$defs/alignment"
+    },
+    {
+      "$ref": "#/$defs/qa"
+    }
+  ]
+}

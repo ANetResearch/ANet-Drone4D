@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/alignment.schema.json",
+  "title": "Recon IR alignment.json (awr.recon.alignment.v1)",
+  "description": "M01 §6.6.7: registered layer x_world = s R(q) x_engine + t; re-computable. method none <=> scale_status relative with status rejected or skipped (V10); identity is never written (M01 §6.3.5 item 5).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "ir_version",
+    "T_world_engine",
+    "method",
+    "scale_status",
+    "status",
+    "needs_review",
+    "n_sync",
+    "inliers",
+    "gates",
+    "time_offset_ns",
+    "lever_arm_m",
+    "chunks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "awr.recon.alignment.v1"
+    },
+    "ir_version": {
+      "const": "1.0.0"
+    },
+    "T_world_engine": {
+      "$ref": "../../world/1/common.schema.json#/$defs/sim3"
+    },
+    "method": {
+      "enum": [
+        "none",
+        "gnss-sim3",
+        "rtk-sim3",
+        "lidar-icp",
+        "pose-prior-ba",
+        "manual"
+      ]
+    },
+    "scale_status": {
+      "allOf": [
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/scaleStatus"
+        },
+        {
+          "enum": [
+            "relative",
+            "gnss",
+            "rtk",
+            "lidar"
+          ]
+        }
+      ],
+      "description": "ScaleStatus subset allowed for a reconstruction session (M01-FR-007); the enum itself is defined once in common.schema.json (rt/enums.json ScaleStatus)."
+    },
+    "status": {
+      "enum": [
+        "accepted",
+        "warn",
+        "rejected",
+        "skipped"
+      ]
+    },
+    "needs_review": {
+      "type": "boolean"
+    },
+    "reference": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "gnss",
+                "rtk",
+                "lidar",
+                "none"
+              ]
+            },
+            "origin": {
+              "enum": [
+                "mock",
+                "flight_log",
+                "rtk_base",
+                "ulog"
+              ]
+            },
+            "sigma_h_m": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "sigma_v_m": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "rtk_fixed_frac": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      ]
+    },
+    "n_sync": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inliers": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inlier_ratio": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "rmse_m": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "thr_m": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "rot_err_deg": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "gravity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "used"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "used": {
+          "type": "boolean"
+        },
+        "sv_ratio": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "virtual_len_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "weight": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "time_offset_ns": {
+      "type": "integer"
+    },
+    "time_offset_searched": {
+      "type": "boolean"
+    },
+    "lever_arm_m": {
+      "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "frame_range",
+          "s",
+          "q",
+          "t"
+        ],
+        "properties": {
+          "frame_range": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "s": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "q": {
+            "$ref": "../../world/1/common.schema.json#/$defs/quatXYZW"
+          },
+          "t": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+          }
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "value",
+          "result"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          },
+          "result": {
+            "enum": [
+              "pass",
+              "warn",
+              "reject",
+              "skip"
+            ]
+          }
+        }
+      }
+    },
+    "library": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "version"
+      ],
+      "properties": {
+        "module": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+ "schema": "awr.rec.markers.v1",
+ "version": 1,
+ "rules": [
+  {
+   "level_min": 3,
+   "class": "critical"
+  },
+  {
+   "level_min": 2,
+   "class": "warning"
+  },
+  {
+   "type": "uav.state",
+   "data.to": [
+    "TAKING_OFF",
+    "LANDED"
+   ],
+   "class": "lifecycle"
+  },
+  {
+   "type": "sim.vehicle.state",
+   "class": "lifecycle"
+  },
+  {
+   "type": "cmd.accepted",
+   "data.op": [
+    "goto",
+    "follow_path",
+    "orbit",
+    "rtl",
+    "land"
+   ],
+   "class": "route"
+  },
+  {
+   "type": "mission.state",
+   "class": "route"
+  },
+  {
+   "type_prefix": [
+    "sim.reset",
+    "sim.started",
+    "rec.",
+    "session.",
+    "scenario."
+   ],
+   "class": "system"
+  }
+ ],
+ "default": "none"
+}

@@ -1,0 +1,16 @@
+{
+ "schema": "awr.agent.score_vectors.v1",
+ "source": "M14 §6.10.3 与 .cache/research/m14/s3_quote_calc.py（S3 组：t_q = 100 s 快照；d05 组：原型参数复算）",
+ "groups": [
+  {"name": "s3", "norm": {"eta_s": 200.0, "energy_wh": 18.87}, "risk": 0.25,
+   "rows": [
+    {"aid": "p600-b1", "agent_no": 2, "feasible": true, "conf_expected": 0.8, "eta_s": 46.2, "energy_wh": 27.41, "load": 0.0, "expect": 0.101},
+    {"aid": "p600-b2", "agent_no": 3, "feasible": true, "conf_expected": 0.8, "eta_s": 63.8, "energy_wh": 29.91, "load": 0.0, "expect": 0.008},
+    {"aid": "p600-b3", "agent_no": 4, "feasible": false, "code": 119, "conf_expected": 0.8, "eta_s": 87.5, "energy_wh": 33.28, "load": 0.0, "expect": null}]},
+  {"name": "d05", "norm": {"eta_s": 120.0, "energy_wh": 10.0}, "risk": 0.1,
+   "rows": [
+    {"aid": "P600-02", "agent_no": 1, "feasible": true, "conf_expected": 0.95, "eta_s": 20.9, "energy_wh": 7.41, "load": 0.0, "expect": 0.573},
+    {"aid": "P600-03", "agent_no": 2, "feasible": true, "conf_expected": 0.95, "eta_s": 140.4, "energy_wh": 20.61, "load": 0.0, "expect": -0.42},
+    {"aid": "P600-05", "agent_no": 3, "feasible": false, "code": 119, "conf_expected": 0.95, "eta_s": 0.0, "energy_wh": 0.0, "load": 0.0, "expect": null}]}
+ ]
+}

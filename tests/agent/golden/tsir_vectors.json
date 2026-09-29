@@ -1,0 +1,2505 @@
+{
+ "schema": "awr.agent.tsir_vectors.v1",
+ "source_version": "ANetCore v0.14.0 (tsir/predicate.go, predicate_test.go)",
+ "vectors": [
+  {
+   "name": "artifact_green_at_floor",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "build/*.bin",
+     "min_size_bytes": 1024
+    }
+   },
+   "record": {
+    "artifacts": [
+     {
+      "path": "build/out.bin",
+      "size_bytes": 1024
+     }
+    ]
+   },
+   "expect": true,
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "artifact_red_one_below",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "build/*.bin",
+     "min_size_bytes": 1024
+    }
+   },
+   "record": {
+    "artifacts": [
+     {
+      "path": "build/out.bin",
+      "size_bytes": 1023
+     }
+    ]
+   },
+   "expect": false,
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "artifact_star_not_cross_slash",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "build/*.bin",
+     "min_size_bytes": 1024
+    }
+   },
+   "record": {
+    "artifacts": [
+     {
+      "path": "build/sub/out.bin",
+      "size_bytes": 4096
+     }
+    ]
+   },
+   "expect": false,
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "scope_delete_secrets_violation",
+   "kind": "scope",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 3,
+     "kind": 1,
+     "match": {
+      "kind": 1,
+      "val": "secrets/**"
+     }
+    }
+   },
+   "record": {
+    "effects": [
+     {
+      "verb": 3,
+      "resource": {
+       "kind": 1,
+       "id": "secrets/api/key.pem"
+      }
+     }
+    ]
+   },
+   "expect": "VIOLATION",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "scope_delete_outside_ok",
+   "kind": "scope",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 3,
+     "kind": 1,
+     "match": {
+      "kind": 1,
+      "val": "secrets/**"
+     }
+    }
+   },
+   "record": {
+    "effects": [
+     {
+      "verb": 3,
+      "resource": {
+       "kind": 1,
+       "id": "tmp/cache"
+      }
+     }
+    ]
+   },
+   "expect": "OK",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "scope_get_is_not_delete_ok",
+   "kind": "scope",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 3,
+     "kind": 1,
+     "match": {
+      "kind": 1,
+      "val": "secrets/**"
+     }
+    }
+   },
+   "record": {
+    "effects": [
+     {
+      "verb": 5,
+      "resource": {
+       "kind": 1,
+       "id": "secrets/api/key.pem"
+      }
+     }
+    ]
+   },
+   "expect": "OK",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "composite_good",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 1,
+    "children": [
+     {
+      "op": 11,
+      "test": {
+       "test_id": "unit",
+       "expect": 1
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "coverage",
+       "op": 4,
+       "value": 0.8
+      }
+     },
+     {
+      "op": 3,
+      "children": [
+       {
+        "op": 12,
+        "thresh": {
+         "metric": "errors",
+         "op": 5,
+         "value": 0
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "record": {
+    "tests": [
+     {
+      "id": "unit",
+      "status": 1
+     }
+    ],
+    "metrics": {
+     "coverage": 0.85,
+     "errors": 0
+    }
+   },
+   "expect": true,
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "composite_low_coverage",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 1,
+    "children": [
+     {
+      "op": 11,
+      "test": {
+       "test_id": "unit",
+       "expect": 1
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "coverage",
+       "op": 4,
+       "value": 0.8
+      }
+     },
+     {
+      "op": 3,
+      "children": [
+       {
+        "op": 12,
+        "thresh": {
+         "metric": "errors",
+         "op": 5,
+         "value": 0
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "record": {
+    "tests": [
+     {
+      "id": "unit",
+      "status": 1
+     }
+    ],
+    "metrics": {
+     "coverage": 0.5,
+     "errors": 0
+    }
+   },
+   "expect": false,
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "malformed_unknown_op_99",
+   "kind": "validate",
+   "predicate": {
+    "op": 99
+   },
+   "expect": "MALFORMED",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "malformed_not_without_child",
+   "kind": "validate",
+   "predicate": {
+    "op": 3
+   },
+   "expect": "MALFORMED",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "malformed_and_one_child",
+   "kind": "validate",
+   "predicate": {
+    "op": 1,
+    "children": [
+     {
+      "op": 11,
+      "test": {
+       "test_id": "x",
+       "expect": 1
+      }
+     }
+    ]
+   },
+   "expect": "MALFORMED",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "malformed_thresh_op_9",
+   "kind": "validate",
+   "predicate": {
+    "op": 12,
+    "thresh": {
+     "metric": "m",
+     "op": 9,
+     "value": 1
+    }
+   },
+   "expect": "MALFORMED",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "malformed_scope_verb_7",
+   "kind": "validate",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 7,
+     "kind": 1,
+     "match": {
+      "kind": 1,
+      "val": ""
+     }
+    }
+   },
+   "expect": "MALFORMED",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "malformed_artifact_schema_ref",
+   "kind": "validate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "doc/*.json",
+     "schema_ref": "cid:abc"
+    }
+   },
+   "expect": "MALFORMED",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "malformed_artifact_contains",
+   "kind": "validate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "doc/*.txt",
+     "contains": [
+      "TODO"
+     ]
+    }
+   },
+   "expect": "MALFORMED",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "malformed_over_depth_18",
+   "kind": "validate",
+   "predicate": {
+    "op": 3,
+    "children": [
+     {
+      "op": 3,
+      "children": [
+       {
+        "op": 3,
+        "children": [
+         {
+          "op": 3,
+          "children": [
+           {
+            "op": 3,
+            "children": [
+             {
+              "op": 3,
+              "children": [
+               {
+                "op": 3,
+                "children": [
+                 {
+                  "op": 3,
+                  "children": [
+                   {
+                    "op": 3,
+                    "children": [
+                     {
+                      "op": 3,
+                      "children": [
+                       {
+                        "op": 3,
+                        "children": [
+                         {
+                          "op": 3,
+                          "children": [
+                           {
+                            "op": 3,
+                            "children": [
+                             {
+                              "op": 3,
+                              "children": [
+                               {
+                                "op": 3,
+                                "children": [
+                                 {
+                                  "op": 3,
+                                  "children": [
+                                   {
+                                    "op": 3,
+                                    "children": [
+                                     {
+                                      "op": 3,
+                                      "children": [
+                                       {
+                                        "op": 3,
+                                        "children": [
+                                         {
+                                          "op": 11,
+                                          "test": {
+                                           "test_id": "x",
+                                           "expect": 1
+                                          }
+                                         }
+                                        ]
+                                       }
+                                      ]
+                                     }
+                                    ]
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         }
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": "MALFORMED",
+   "source": "ANetCore@v0.14.0 tsir/predicate_test.go"
+  },
+  {
+   "name": "threshold_missing_metric_false",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 12,
+    "thresh": {
+     "metric": "confidence",
+     "op": 4,
+     "value": 0.8
+    }
+   },
+   "record": {
+    "metrics": {}
+   },
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "threshold_ge_equal_true",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 12,
+    "thresh": {
+     "metric": "confidence",
+     "op": 4,
+     "value": 0.8
+    }
+   },
+   "record": {
+    "metrics": {
+     "confidence": 0.8
+    }
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "threshold_gt_equal_false",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 12,
+    "thresh": {
+     "metric": "confidence",
+     "op": 5,
+     "value": 0.8
+    }
+   },
+   "record": {
+    "metrics": {
+     "confidence": 0.8
+    }
+   },
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "threshold_eq_true",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 12,
+    "thresh": {
+     "metric": "n",
+     "op": 3,
+     "value": 4
+    }
+   },
+   "record": {
+    "metrics": {
+     "n": 4
+    }
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "threshold_lt_true",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 12,
+    "thresh": {
+     "metric": "d",
+     "op": 1,
+     "value": 3
+    }
+   },
+   "record": {
+    "metrics": {
+     "d": 2.9
+    }
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "threshold_le_false",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 12,
+    "thresh": {
+     "metric": "d",
+     "op": 2,
+     "value": 3
+    }
+   },
+   "record": {
+    "metrics": {
+     "d": 3.1
+    }
+   },
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "or_any_true",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 2,
+    "children": [
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "a",
+       "op": 4,
+       "value": 1
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "b",
+       "op": 4,
+       "value": 1
+      }
+     }
+    ]
+   },
+   "record": {
+    "metrics": {
+     "a": 0,
+     "b": 2
+    }
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "or_none_false",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 2,
+    "children": [
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "a",
+       "op": 4,
+       "value": 1
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "b",
+       "op": 4,
+       "value": 1
+      }
+     }
+    ]
+   },
+   "record": {
+    "metrics": {
+     "a": 0
+    }
+   },
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "not_missing_metric_true",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 3,
+    "children": [
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "x",
+       "op": 4,
+       "value": 1
+      }
+     }
+    ]
+   },
+   "record": {
+    "metrics": {}
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "glob_doublestar_crosses",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "thermal/**",
+     "min_size_bytes": 1024
+    }
+   },
+   "record": {
+    "artifacts": [
+     {
+      "path": "thermal/T-0001/41.pgm",
+      "size_bytes": 19215
+     }
+    ]
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "glob_doublestar_prefix",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "**/x.bin"
+    }
+   },
+   "record": {
+    "artifacts": [
+     {
+      "path": "a/b/x.bin",
+      "size_bytes": 1
+     }
+    ]
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "glob_star_segment_only",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "thermal/*.pgm"
+    }
+   },
+   "record": {
+    "artifacts": [
+     {
+      "path": "thermal/T-0001/1.pgm",
+      "size_bytes": 19215
+     }
+    ]
+   },
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "glob_wrong_family",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "thermal/**",
+     "min_size_bytes": 1024
+    }
+   },
+   "record": {
+    "artifacts": [
+     {
+      "path": "rgb/T-0001/1.pgm",
+      "size_bytes": 19215
+     }
+    ]
+   },
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "artifact_exists_false_skips",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "a/*",
+     "exists": false
+    }
+   },
+   "record": {
+    "artifacts": [
+     {
+      "path": "a/b",
+      "size_bytes": 10
+     }
+    ]
+   },
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "artifact_no_artifacts_false",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 10,
+    "artifact": {
+     "path_glob": "a/*"
+    }
+   },
+   "record": {},
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "test_pass_expected_pass",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 11,
+    "test": {
+     "test_id": "station_reached",
+     "expect": 1
+    }
+   },
+   "record": {
+    "tests": [
+     {
+      "id": "station_reached",
+      "status": 1
+     }
+    ]
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "test_absent_false",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 11,
+    "test": {
+     "test_id": "station_reached",
+     "expect": 1
+    }
+   },
+   "record": {
+    "tests": []
+   },
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "test_fail_expected_fail",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 11,
+    "test": {
+     "test_id": "t",
+     "expect": 2
+    }
+   },
+   "record": {
+    "tests": [
+     {
+      "id": "t",
+      "status": 2
+     }
+    ]
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "scope_prefix_match",
+   "kind": "scope",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 4,
+     "kind": 101,
+     "match": {
+      "kind": 3,
+      "val": "zone/nofly/"
+     }
+    }
+   },
+   "record": {
+    "effects": [
+     {
+      "verb": 4,
+      "resource": {
+       "kind": 101,
+       "id": "zone/nofly/z1"
+      }
+     }
+    ]
+   },
+   "expect": "VIOLATION",
+   "source": "m14"
+  },
+  {
+   "name": "scope_set_match",
+   "kind": "scope",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 4,
+     "kind": 102,
+     "match": {
+      "kind": 2,
+      "val": "uav/p600-b1,uav/p600-b2"
+     }
+    }
+   },
+   "record": {
+    "effects": [
+     {
+      "verb": 4,
+      "resource": {
+       "kind": 102,
+       "id": "uav/p600-b2"
+      }
+     }
+    ]
+   },
+   "expect": "VIOLATION",
+   "source": "m14"
+  },
+  {
+   "name": "scope_set_no_match",
+   "kind": "scope",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 4,
+     "kind": 102,
+     "match": {
+      "kind": 2,
+      "val": "uav/p600-b1"
+     }
+    }
+   },
+   "record": {
+    "effects": [
+     {
+      "verb": 4,
+      "resource": {
+       "kind": 102,
+       "id": "uav/p600-b10"
+      }
+     }
+    ]
+   },
+   "expect": "OK",
+   "source": "m14"
+  },
+  {
+   "name": "scope_kind_mismatch_ok",
+   "kind": "scope",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 4,
+     "kind": 101,
+     "match": {
+      "kind": 1,
+      "val": "zone/nofly/**"
+     }
+    }
+   },
+   "record": {
+    "effects": [
+     {
+      "verb": 4,
+      "resource": {
+       "kind": 102,
+       "id": "zone/nofly/z1"
+      }
+     }
+    ]
+   },
+   "expect": "OK",
+   "source": "m14"
+  },
+  {
+   "name": "default_nofly_violation",
+   "kind": "scope",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 4,
+     "kind": 101,
+     "match": {
+      "kind": 1,
+      "val": "zone/nofly/**"
+     }
+    }
+   },
+   "record": {
+    "effects": [
+     {
+      "verb": 4,
+      "resource": {
+       "kind": 102,
+       "id": "uav/p600-b1"
+      }
+     },
+     {
+      "verb": 4,
+      "resource": {
+       "kind": 101,
+       "id": "zone/nofly/harbor-1"
+      }
+     }
+    ]
+   },
+   "expect": "VIOLATION",
+   "source": "m14"
+  },
+  {
+   "name": "default_nofly_clean",
+   "kind": "scope",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 4,
+     "kind": 101,
+     "match": {
+      "kind": 1,
+      "val": "zone/nofly/**"
+     }
+    }
+   },
+   "record": {
+    "effects": [
+     {
+      "verb": 4,
+      "resource": {
+       "kind": 102,
+       "id": "uav/p600-b1"
+      }
+     }
+    ]
+   },
+   "expect": "OK",
+   "source": "m14"
+  },
+  {
+   "name": "depth_16_ok",
+   "kind": "validate",
+   "predicate": {
+    "op": 3,
+    "children": [
+     {
+      "op": 3,
+      "children": [
+       {
+        "op": 3,
+        "children": [
+         {
+          "op": 3,
+          "children": [
+           {
+            "op": 3,
+            "children": [
+             {
+              "op": 3,
+              "children": [
+               {
+                "op": 3,
+                "children": [
+                 {
+                  "op": 3,
+                  "children": [
+                   {
+                    "op": 3,
+                    "children": [
+                     {
+                      "op": 3,
+                      "children": [
+                       {
+                        "op": 3,
+                        "children": [
+                         {
+                          "op": 3,
+                          "children": [
+                           {
+                            "op": 3,
+                            "children": [
+                             {
+                              "op": 3,
+                              "children": [
+                               {
+                                "op": 3,
+                                "children": [
+                                 {
+                                  "op": 3,
+                                  "children": [
+                                   {
+                                    "op": 11,
+                                    "test": {
+                                     "test_id": "x",
+                                     "expect": 1
+                                    }
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         }
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": "OK",
+   "source": "m14"
+  },
+  {
+   "name": "malformed_depth_17",
+   "kind": "validate",
+   "predicate": {
+    "op": 3,
+    "children": [
+     {
+      "op": 3,
+      "children": [
+       {
+        "op": 3,
+        "children": [
+         {
+          "op": 3,
+          "children": [
+           {
+            "op": 3,
+            "children": [
+             {
+              "op": 3,
+              "children": [
+               {
+                "op": 3,
+                "children": [
+                 {
+                  "op": 3,
+                  "children": [
+                   {
+                    "op": 3,
+                    "children": [
+                     {
+                      "op": 3,
+                      "children": [
+                       {
+                        "op": 3,
+                        "children": [
+                         {
+                          "op": 3,
+                          "children": [
+                           {
+                            "op": 3,
+                            "children": [
+                             {
+                              "op": 3,
+                              "children": [
+                               {
+                                "op": 3,
+                                "children": [
+                                 {
+                                  "op": 3,
+                                  "children": [
+                                   {
+                                    "op": 3,
+                                    "children": [
+                                     {
+                                      "op": 11,
+                                      "test": {
+                                       "test_id": "x",
+                                       "expect": 1
+                                      }
+                                     }
+                                    ]
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         }
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "expect": "MALFORMED",
+   "source": "m14"
+  },
+  {
+   "name": "and_64_children_ok",
+   "kind": "validate",
+   "predicate": {
+    "op": 1,
+    "children": [
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     }
+    ]
+   },
+   "expect": "OK",
+   "source": "m14"
+  },
+  {
+   "name": "malformed_and_65_children",
+   "kind": "validate",
+   "predicate": {
+    "op": 1,
+    "children": [
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     }
+    ]
+   },
+   "expect": "MALFORMED",
+   "source": "m14"
+  },
+  {
+   "name": "malformed_not_two_children",
+   "kind": "validate",
+   "predicate": {
+    "op": 3,
+    "children": [
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     },
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "m",
+       "op": 4,
+       "value": 0
+      }
+     }
+    ]
+   },
+   "expect": "MALFORMED",
+   "source": "m14"
+  },
+  {
+   "name": "malformed_unknown_op_14",
+   "kind": "validate",
+   "predicate": {
+    "op": 14
+   },
+   "expect": "MALFORMED",
+   "source": "m14"
+  },
+  {
+   "name": "malformed_test_expect_3",
+   "kind": "validate",
+   "predicate": {
+    "op": 11,
+    "test": {
+     "test_id": "x",
+     "expect": 3
+    }
+   },
+   "expect": "MALFORMED",
+   "source": "m14"
+  },
+  {
+   "name": "malformed_scope_match_kind_4",
+   "kind": "validate",
+   "predicate": {
+    "op": 13,
+    "scope": {
+     "verb": 1,
+     "kind": 1,
+     "match": {
+      "kind": 4,
+      "val": "x"
+     }
+    }
+   },
+   "expect": "MALFORMED",
+   "source": "m14"
+  },
+  {
+   "name": "malformed_thresh_value_nan",
+   "kind": "validate",
+   "predicate": {
+    "op": 12,
+    "thresh": {
+     "metric": "m",
+     "op": 4,
+     "value": "NaN"
+    }
+   },
+   "expect": "MALFORMED",
+   "source": "m14"
+  },
+  {
+   "name": "s3_default_accept_true",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 1,
+    "children": [
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "confidence",
+       "op": 4,
+       "value": 0.8
+      }
+     },
+     {
+      "op": 10,
+      "artifact": {
+       "path_glob": "thermal/**",
+       "min_size_bytes": 1024
+      }
+     },
+     {
+      "op": 11,
+      "test": {
+       "test_id": "station_reached",
+       "expect": 1
+      }
+     }
+    ]
+   },
+   "record": {
+    "metrics": {
+     "confidence": 0.9,
+     "detections": 4,
+     "range_m": 63.2,
+     "dist_err_m": 0.4,
+     "t_exec_s": 78.3
+    },
+    "artifacts": [
+     {
+      "path": "thermal/T-0001/4187.pgm",
+      "size_bytes": 19215
+     }
+    ],
+    "tests": [
+     {
+      "id": "station_reached",
+      "status": 1
+     },
+     {
+      "id": "dwell_complete",
+      "status": 1
+     }
+    ]
+   },
+   "expect": true,
+   "source": "m14"
+  },
+  {
+   "name": "s3_default_accept_no_detection_false",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 1,
+    "children": [
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "confidence",
+       "op": 4,
+       "value": 0.8
+      }
+     },
+     {
+      "op": 10,
+      "artifact": {
+       "path_glob": "thermal/**",
+       "min_size_bytes": 1024
+      }
+     },
+     {
+      "op": 11,
+      "test": {
+       "test_id": "station_reached",
+       "expect": 1
+      }
+     }
+    ]
+   },
+   "record": {
+    "metrics": {
+     "confidence": 0.0,
+     "detections": 4,
+     "range_m": 63.2,
+     "dist_err_m": 0.4,
+     "t_exec_s": 78.3
+    },
+    "artifacts": [
+     {
+      "path": "thermal/T-0001/4187.pgm",
+      "size_bytes": 19215
+     }
+    ],
+    "tests": [
+     {
+      "id": "station_reached",
+      "status": 1
+     },
+     {
+      "id": "dwell_complete",
+      "status": 1
+     }
+    ]
+   },
+   "expect": false,
+   "source": "m14"
+  },
+  {
+   "name": "s3_default_accept_station_missed_false",
+   "kind": "evaluate",
+   "predicate": {
+    "op": 1,
+    "children": [
+     {
+      "op": 12,
+      "thresh": {
+       "metric": "confidence",
+       "op": 4,
+       "value": 0.8
+      }
+     },
+     {
+      "op": 10,
+      "artifact": {
+       "path_glob": "thermal/**",
+       "min_size_bytes": 1024
+      }
+     },
+     {
+      "op": 11,
+      "test": {
+       "test_id": "station_reached",
+       "expect": 1
+      }
+     }
+    ]
+   },
+   "record": {
+    "metrics": {
+     "confidence": 0.9,
+     "detections": 4,
+     "range_m": 63.2,
+     "dist_err_m": 0.4,
+     "t_exec_s": 78.3
+    },
+    "artifacts": [
+     {
+      "path": "thermal/T-0001/4187.pgm",
+      "size_bytes": 19215
+     }
+    ],
+    "tests": [
+     {
+      "id": "station_reached",
+      "status": 2
+     },
+     {
+      "id": "dwell_complete",
+      "status": 1
+     }
+    ]
+   },
+   "expect": false,
+   "source": "m14"
+  }
+ ]
+}
