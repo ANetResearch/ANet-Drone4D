@@ -1,0 +1,30 @@
+{
+  "name": "anet-drone",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ANet Drone / World Runtime（AWR）npm workspaces 根清单（M00）",
+  "workspaces": [
+    "apps/web",
+    "packages/contracts"
+  ],
+  "scripts": {
+    "build": "npm run build -w apps/web",
+    "dev": "npm run dev -w apps/web",
+    "perf:flight60": "npm run perf:flight60 -w apps/web --",
+    "perf:ladder": "npm run perf:ladder -w apps/web --",
+    "perf:layers": "npm run perf:layers -w apps/web --",
+    "perf:feat-matrix": "npm run perf:feat-matrix -w apps/web --"
+  },
+  "engines": {
+    "node": ">=22.12 <23"
+  },
+  "overrides": {
+    "@voxelkloud/react": {
+      "three": "0.186.1"
+    },
+    "@voxelkloud/view": {
+      "three": "0.186.1"
+    }
+  }
+}

@@ -1,0 +1,57 @@
+# configs/logging.yaml：日志字段、级别、按 logger 的级别覆盖、限速与掩码（M00；AWR-19 §6.1、§11.1）。
+# 由 awr.runtime 的日志初始化读取（M11 实现）；全局级别由环境变量 AWR_LOG_LEVEL 覆盖 level.default。
+# 键名 snake_case；时长与大小带单位后缀（AWR-03 §5.4）。
+
+version: 1
+
+output:
+  stream: stderr                  # 各进程只向 stderr 写 JSON 行；落盘与轮转由 supervisor 负责
+  format: jsonl
+  fields:                         # AWR-19 §11.1 字段表；msg 为固定模板文本，变量一律放 kv
+    required: [t_wall_ns, t_mono_ns, lvl, proc, pid, run, logger, msg]
+    optional: [t_sim_ns, epoch, kv, rep]
+
+level:
+  default: INFO                   # AWR_LOG_LEVEL 覆盖
+  allowed: [DEBUG, INFO, WARN, ERROR, FATAL]
+
+loggers:                          # 按 logger 名前缀覆盖级别（最长前缀优先）
+  awr: INFO
+  zenoh: WARN
+  uvicorn.error: INFO
+  uvicorn.access: WARN
+  asyncio: WARN
+  numba: WARN
+  httpx: WARN
+
+rate_limit:                       # 同一 (logger, msg) 每秒最多 1 条，其余累加到下一条的 rep
+  key: [logger, msg]
+  max_per_s: 1
+  suppressed_field: rep
+  per_uav_tick_logs: debug_sampled_only   # 逐机逐 tick 的日志只允许在 DEBUG 且带采样率
+
+non_blocking:                     # 不阻塞规则（g05 §4 第 3 条）
+  queue_handler_procs: [sim-core, api]
+  queue_max_records: 10000
+  on_pipe_full:
+    drop_levels: [DEBUG, INFO]
+    keep_levels: [WARN, ERROR, FATAL]
+    count_field: dropped
+
+mask:                             # OPS-FR-030：键名匹配或值前缀匹配时写为 ***
+  keys: [secret, admin_secret, token, authorization, "*_key"]
+  value_prefixes: ["bearer."]
+  replacement: "***"
+
+supervisor:                       # supervisor 持有子进程 stderr 管道
+  file_pattern: "runs/{run}/logs/{proc}.log"
+  rotate_bytes: 10485760          # 10 MB
+  rotate_keep: 5
+  tail_lines: 200                 # 内存保留末 200 行，供 /api/sys/procs 与进程面板
+  per_proc_run_budget_bytes: 62914560     # 每进程每运行 ≤ 60 MB（OPS-NFR-005）
+
+crash:
+  faulthandler: true
+  dir_pattern: "runs/{run}/crash"
+  file_pattern: "{proc}-{t_wall_ns}.txt"
+  tail_lines: 200

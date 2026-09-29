@@ -1,0 +1,13 @@
+# requirements.in（M00）：requirements.lock 的附加输入。
+# 运行时与测试依赖的唯一来源是 pyproject.toml（dependencies 与 optional-dependencies）；
+# 本文件只列出"不属于 awr 包、但必须与 .venv 一起锁定"的工具，
+# 否则 uv pip sync 会把它们当作多余的包卸载（uv 自身、pip、可编辑安装所需的 setuptools）。
+#
+# 生成锁文件（make lock，AWR-19 §7.4、AWR-11 §3.6）：
+#   .venv/bin/uv pip compile pyproject.toml requirements.in \
+#     --extra geo --extra tools --extra test --extra dev --extra fetch \
+#     --generate-hashes --python .venv/bin/python -o requirements.lock
+# geo-worker（open3d）与 px4（mavsdk）两个 extra 不进入 D1 锁文件。
+uv==0.12.19
+pip==26.2.1
+setuptools==84.0.0

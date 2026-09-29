@@ -1,0 +1,49 @@
+# AWR .gitignore（M00；AWR-03 §4.2 第 3 条、§4.5 第 1 条；AWR-19 §7.5 第 1 条、§8.2）
+
+# 生成物与运行产物（不入库）
+/worlds/
+/runs/
+/apps/web/dist/
+/apps/web/public/bench/
+/vehicles/*/model/*.glb
+/vehicles/*/model/src/
+
+# 参考仓库、研究产物、原始数据（只读，不参与构建）
+/refs/
+/.cache/
+/data/raw/
+
+# 依赖与环境
+node_modules/
+/.venv/
+.venv-*/
+.env.local
+/configs/secrets/
+
+# Python 构建与缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+/build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 前端工具缓存与测试输出
+*.tsbuildinfo
+.vite/
+.vitest-attachments/
+/apps/web/.vitest/
+test-results/
+playwright-report/
+blob-report/
+/apps/web/perf/results*/
+/apps/web/__screenshots__/
+coverage/
+
+# 编辑器与系统
+.idea/
+.vscode/
+*.swp
+.DS_Store
+*.log

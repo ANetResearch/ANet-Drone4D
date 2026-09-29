@@ -1,0 +1,16 @@
+# pre-commit（G0，AWR-18 §12.1；AWR-03 §4.5 第 2 条）：只跑快速子集，≤ 30 s。
+# 本机不访问外部 hook 仓库，全部用 repo: local 调用锁定在 .venv 与 node_modules 中的工具。
+# EMOJI-01、GLYPH-01、VIS-L-01（tools/lint/no-emoji.mjs、no-hex.mjs）由 M00 lint 工作包交付后在此追加。
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-quick
+        name: ruff check --select E,F（PY-RUFF-01 快速子集）
+        entry: .venv/bin/ruff check --select E,F
+        language: system
+        types: [python]
+      - id: oxlint-quick
+        name: oxlint（TS-BND-01 与 correctness 快速子集）
+        entry: bash -c 'cd apps/web && npx oxlint "${@#apps/web/}"' --
+        language: system
+        files: ^apps/web/.*\.(ts|tsx|js|mjs)$

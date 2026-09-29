@@ -1,0 +1,85 @@
+# AWR Python 包（M00 所有，AWR-03 §4.1、§4.3）。
+# 冻结片段（build-system、project 基本字段、scripts、packages.find、pytest 的 testpaths 与 addopts）见 AWR-03 §4.1；
+# 依赖版本见 AWR-11 §3.2、§3.6（ADR-038），精确锁定；依赖增删向 M00 提交请求，由 M00 重新生成 requirements.lock。
+# 锁文件：make lock（uv pip compile pyproject.toml requirements.in --extra ... --generate-hashes -o requirements.lock）。
+
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "awr"
+version = "0.1.0"
+description = "ANet Drone / World Runtime"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi==0.141.1",
+  "starlette==1.7.0",
+  "uvicorn==0.54.0",
+  "uvloop==0.22.1",
+  "websockets==17.1",
+  "numpy==2.5.3",
+  "numba==0.67.0",
+  "llvmlite==0.49.0",
+  "scipy==1.18.1",
+  "eclipse-zenoh==1.10.1",
+  "msgpack==1.2.2",
+  "mcap==1.5.0",
+  "zstandard==0.25.0",
+  "plyfile==1.1.5",
+  "laspy==2.7.0",
+  "jsonschema==4.26.0",
+  "pydantic==2.13.5",
+  "pyyaml==6.0.3",
+]
+
+[project.optional-dependencies]
+geo = ["pyproj==3.8.0", "cloth-simulation-filter==1.1.7"]
+tools = ["trimesh==5.1.0"]                                  # tools/vehicles/stl2glb
+test = ["pytest==9.1.1", "pymavlink==2.4.50", "pytest-asyncio==1.4.0", "httpx==0.28.1"]
+dev = ["ruff==0.16.9", "pre-commit==4.6.2"]
+fetch = ["py7zr==1.1.3"]                                    # make fetch-data 解压 7z（ADR-038 的 fetch 组；19 §8.2）
+geo-worker = ["open3d==0.20.0"]                             # V0.2 起；D1 不安装，不进入锁文件
+px4 = ["mavsdk==4.0.0"]                                     # V0.2 起；D1 不安装，不进入锁文件
+
+[project.scripts]
+worldpkg = "awr.world.package.cli:main"
+awr = "awr.runtime.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["awr*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+# 标记登记（AWR-18 §8.2）；strict_markers 使未登记的标记报错
+strict_markers = true
+markers = [
+  "slow: 单个用例 > 60 s",
+  "needs_data: 需要 data/raw/urbanscene3d/ 或已构建的 worlds/*；缺失时 skip（G1）或失败（G2）",
+  "perf: 带时间阈值，必须经 harness 与性能运行协议执行；G1 跳过",
+  "chaos: 杀进程或注入挂死；同时标 perf",
+  "ext: D1-ext 功能；失败走豁免流程",
+]
+faulthandler_timeout = 300
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+# 规则集 PY-RUFF-01（AWR-19 §7.4 第 6 条、AWR-18 §13.1）
+target-version = "py312"
+line-length = 120
+src = ["python", "tools", "tests"]
+extend-exclude = [".cache", "refs", "data", "worlds", "runs", "node_modules", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PERF"]
+ignore = ["E501"]
+# 中文注释与文档字符串使用全角标点，不视为易混淆字符（RUF001 至 RUF003）
+allowed-confusables = ["（", "）", "，", "：", "；", "！", "？", "｜", "～", "－", "＋", "＝", "＜", "＞", "／", "×", "∶", "‐", "–", "—", "−", "‘", "’"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["awr"]

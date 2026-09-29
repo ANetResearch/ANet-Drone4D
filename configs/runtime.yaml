@@ -1,0 +1,98 @@
+# configs/runtime.yaml（所有者 M11；运维语义见 AWR-19 §6.2，架构键见 AWR-10 §8.4）
+# 加载与校验：awr.runtime.config（未知键、类型错误、lan 模式缺 origins、profile = field、D1 中 real_ops.enabled = true
+# 一律以退出码 2 失败并指出键路径）。优先级：命令行 > AWR_* 环境变量 > profiles.<profile> > 本文件基础值 > 内置默认。
+# 生效配置写入 runs/<run>/effective-config.yaml（secret、admin_secret、token、*_key 掩码为 ***）。
+# 进程清单为 procs: 列表，各模块追加自己的条目（AWR-03 §4.3）；时长均为墙钟秒（ADR-045）。
+version: 1
+run:
+  id: auto                      # r<YYYYMMDD>-<HHMMSS>-<4hex>
+  world: shenzhen               # AWR_WORLD
+  scenario: s1-shenzhen-facade  # AWR_SCENARIO（剧本 id，scenarios/catalog.json）
+  scenario_profile: null        # AWR_SCENARIO_PROFILE（剧本 profile，例如 ci、demo、n1000；M16）
+  shm_root: /dev/shm/awr        # 实际目录 ${shm_root}/${run.id}
+  persist_root: runs            # AWR_RUNS_DIR；实际目录 ${persist_root}/${run.id}
+  keep_run_dir: false           # AWR_KEEP_RUN_DIR；true 时停机不删 tmpfs 目录（ci 默认 true）
+  resume_after_crash: play      # play | pause（D1-ext checkpoint 恢复后的时钟状态，g05 §7.4）
+net:
+  bind: 127.0.0.1               # AWR_BIND
+  port: 8000                    # AWR_PORT
+  port_offset: 0                # AWR_PORT_OFFSET（0–9），8000、7447、5173、4173、8001 统一加 10·k
+  static_port: 8001             # AWR_STATIC_PORT；只在静态拆分回退启用时监听（10 AD-07）
+  access_mode: auto             # AWR_ACCESS_MODE：auto | loopback | lan
+  origins: []                   # AWR_ORIGINS（逗号分隔）；回环 Origin 永远放行
+  allowed_hosts: []             # AWR_ALLOWED_HOSTS；空时由 origins 推导并加 localhost、127.0.0.1
+bus:
+  rendezvous: tcp/127.0.0.1:7447    # 端口随 port_offset 平移；主机部分不可改（只允许回环）
+  shm: false                        # zenoh SHM 一律关闭（g05 §0 第 9 条）
+  lease_ms: 3000
+quota:
+  runs_gb: 20                   # AWR_RUNS_QUOTA_GB
+  check_every_s: 600
+  disk_warn_gb: 10
+  disk_min_gb: 5
+cpu:
+  pin: auto                     # AWR_CPU_PIN：auto（≥ 8 核且 profile ≠ ci 时启用）| on | off
+defaults:
+  env: {OMP_NUM_THREADS: "1", OPENBLAS_NUM_THREADS: "1", MKL_NUM_THREADS: "1", PYTHONUNBUFFERED: "1"}
+  restart: {policy: always, backoff_s: [0.5, 1, 2, 4, 8], max: {count: 5, window_s: 60}}   # 窗口内第 6 次重启熔断（19 §4.2）
+  stop: {signal: SIGTERM, grace_s: 5}
+  log: {max_mb: 10, backups: 5, tail_lines: 200}
+real_ops:
+  enabled: false                # D1 恒为 false（OPS-FR-032）
+procs:
+  - name: sim-core
+    layer: core
+    cmd: [python, -m, awr.sim.runtime]
+    run_scoped: true            # run 切换时随旧 run 停止、随新 run 启动（10 AD-01）
+    plugins: [awr.environment.stage, awr.sim.safety, awr.sim.mission, awr.sim.sensors.plugin]   # 组合根（10 §3.3 规则 1；M13 入口为 .plugin，INT-1）
+    cpus: [1]
+    nice: -5                    # 需要 CAP_SYS_NICE，否则取 0 并告警
+    liveness: {ring: state.sim-core, stale_s: 2.0, startup_grace_s: 15}
+    id_range: [0, 1024]
+  - name: api
+    layer: core
+    cmd: [uvicorn, awr.api.main:app, --host, "${net.bind}", --port, "${net.port_effective}",
+          --loop, uvloop, --ws, websockets, --workers, "1",
+          --ws-per-message-deflate, "false", --ws-max-size, "262144", --ws-max-queue, "32"]   # 17 §3.4、M11-FR-028：uvicorn 0.54.0 默认 True 与 16 MiB
+    run_scoped: false           # 跨 run 存活，重开 zenoh 会话（10 AD-09）
+    cpus: [0]
+    start_after: [sim-core]     # 只是顺序，不是硬依赖：api 必须容忍 sim-core 缺席
+    liveness: {heartbeat: hb.api, stale_s: 5.0, startup_grace_s: 15}
+  - name: recorder
+    layer: ext
+    cmd: [python, -m, awr.recorder]
+    run_scoped: true
+    liveness: {heartbeat: hb.recorder, stale_s: 5.0, startup_grace_s: 15}
+  - name: replay-worker
+    layer: ext
+    on_demand: true             # 由 api 经 sys/start{name, args{run, segment}} 启动、sys/stop 停止（M11-FR-079）
+    cmd: [python, -m, awr.recorder.replay]
+    run_scoped: true
+    cpus: [7]
+    restart: {policy: on-failure}
+    liveness: {heartbeat: hb.replay-worker, stale_s: 5.0, startup_grace_s: 15}
+  - name: agent-runtime
+    layer: ext
+    cmd: [python, -m, awr.agent.runtime]
+    run_scoped: true
+    start_after: [sim-core]     # M14 §9.1、19 §6.2（M14-to-M11 第 1 条，INT-1）
+    liveness: {heartbeat: hb.agent-runtime, stale_s: 5.0, startup_grace_s: 15}
+  - name: job-worker
+    layer: ext
+    cmd: [python, -m, awr.jobs.worker]
+    run_scoped: false
+    nice: 10
+    restart: {policy: on-failure}
+    liveness: {heartbeat: hb.job-worker, stale_s: 120, startup_grace_s: 30}
+  - name: vite
+    layer: dev
+    cmd: [npx, vite, --port, "${net.vite_port_effective}", --strictPort, --host, 127.0.0.1]
+    cwd: apps/web
+    restart: {policy: on-failure}
+    liveness: {mode: exit_only}
+profiles:
+  dev:   {procs_enable: [core, ext, dev]}
+  demo:  {procs_enable: [core, ext], run: {resume_after_crash: play}}
+  ci:    {procs_enable: [core, ext], cpu: {pin: "off"}, run: {keep_run_dir: true}, quota: {runs_gb: 5}, net: {port_offset: 9}}   # 功能门禁（G1）
+  perf:  {procs_enable: [core, ext], cpu: {pin: "on"}, run: {keep_run_dir: true}, quota: {runs_gb: 5}, net: {port_offset: 9}}    # 性能用例（18 PR-6 要求钉核）
+  field: {}                     # V0.5 起定义；D1 中选择 field 即以退出码 2 拒绝

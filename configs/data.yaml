@@ -1,0 +1,63 @@
+# configs/data.yaml：原始数据与预构建制品的地址、字节数与 sha256 的唯一真源（入库）。
+# 所有者 M03（AWR-03 §4.3；M03 §6.17、F-05）；键结构见 M03 §6.17，运维语义见 AWR-19 §8.1–§8.2。
+# 初始值由 M00-A 于 2026-09-28 对本机 data/raw/urbanscene3d/ 以 sha256sum 实算，与 AWR-19 §8.1、AWR-16 §10.4 一致。
+# 每个 PLY 满足 bytes = header_bytes + points × 24（x01 §0 第 1 条）。
+# 读取：awr/world/ingest/manifest.py 以 yaml.safe_load 读取；未知顶层键忽略。
+
+urbanscene3d:
+  archive:
+    name: UrbanScene3D-virtual_cities-sampled.7z
+    bytes: 252857193
+    sha256: 3d0744fa8ff32d5f95d2e4e221794170f5dc36241287cc921178220d53e5753c
+    urls:                                   # AWR_DATA_MIRROR 非空时优先 ${AWR_DATA_MIRROR}/urbanscene3d/<name>
+      - "https://github.com/Linxius/UrbanScene3D/releases/download/v0.0.1/UrbanScene3D-virtual_cities-sampled.7z"
+  files:                                    # 六城；world_id 与文件名的映射只在此处与 awr/world/ingest/urbanscene3d.py 维护
+    - world_id: shenzhen
+      name: Shenzhen_sampled_5m.ply
+      bytes: 120003677
+      points: 5000141
+      header_bytes: 293
+      sha256: f531a9e4d28f409838a561b4569755c836d311f27f4b103a4ba3ac3f7bc0fba8
+    - world_id: shanghai
+      name: shanghai_sampled_5m.ply
+      bytes: 120005141
+      points: 5000202
+      header_bytes: 293
+      sha256: 5965d60ffe23a6145a9d8417c027580c96fb7018ae90c9d5a30c1be2dd2380ad
+    - world_id: newyork
+      name: "New York_sampled_5m.ply"
+      bytes: 120001853
+      points: 5000065
+      header_bytes: 293
+      sha256: 4636c885937a878cdccc3a47d0f04fdd4e55f7ba94b522b222951b22037eed53
+    - world_id: sanfrancisco
+      name: "San Francisco_sampled_5m.ply"
+      bytes: 120002477
+      points: 5000091
+      header_bytes: 293
+      sha256: a052e5f344718d4e311ab0f59f0932de3ee464e04a58f93c4df927f2a41fffcd
+    - world_id: suzhou
+      name: Suzhou_sampled_5m.ply
+      bytes: 119996861
+      points: 4999857
+      header_bytes: 293
+      sha256: 206ff7a025db1816ab758b2ba7fce97aaef0d20973d8d1fec47e4064eda3cbea
+    - world_id: chicago
+      name: Chicago_sampled_5m.ply
+      bytes: 120009677
+      points: 5000391
+      header_bytes: 293
+      sha256: ae4b67ba80c0fe105b46c31ed6337eb1a667d3f167a326ccd994d0847cd642df
+
+# AWR-19 §8.2 提请追加的键（M03 只负责解析与校验）
+assets:
+  p600_stl:                                 # P600 glb 的源（ADR-022）；字节数与 sha256 为 refs/sim/Prometheus（提交 5dcd8cfa）实测
+    dest: vehicles/p600/model/src/p600.stl
+    bytes: 3757684
+    sha256: 57dc2f163387f739ffda5dcd74436d15bd8d1fca9c9c0605f729fbb7fbb06164
+    urls:
+      - "https://raw.githubusercontent.com/amov-lab/Prometheus/5dcd8cfa764d558f3e15dcb88aa7d49e32c54cce/Simulator/gazebo_simulator/gazebo_models/uav_models/p600/meshes/p600.stl"
+
+worlds_prebuilt:                            # make fetch-worlds（P1）
+  base_url: null                            # 发布位置待定（AWR-19 §18 待决第 1 条）
+  cities: [shenzhen, shanghai, newyork, sanfrancisco, suzhou, chicago]

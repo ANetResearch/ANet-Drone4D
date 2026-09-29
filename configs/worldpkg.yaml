@@ -1,0 +1,15 @@
+# configs/worldpkg.yaml：worldpkg 派生器注册表与构建默认值。
+# 所有者 M03（AWR-03 §4.3；M03-FR-058、M03 §6.16）。M00-A 按 M03 §6.16 写入初始内容，由 M03 维护。
+# 派生器以字符串路径懒加载，M03 不静态 import 其他模块；签名 def derive(ctx: DeriveContext) -> list[LayerSpec]。
+
+derivers:                                   # 按顺序执行
+  - awr.world.semantic.zones:derive_zones           # D1，M03
+  - awr.world.package.env_world:derive_env_json     # D1，M03（取值读 contracts 默认值文件）
+  - awr.world.semantic.classes:copy_class_table     # D1，M03
+  # - awr.world.geometry.voxel:derive_voxel         # V0.3，M04 注册
+defaults:
+  dtm_cell_m: 10
+  dsm_cell_m: 2
+  border_inset_m: 20
+  border_headroom_m: 50
+  jobs: 3
