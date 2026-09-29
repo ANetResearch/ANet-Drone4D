@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/caps.schema.json",
+  "title": "Backend capability declaration (rt/caps/*.json)",
+  "description": "AWR-17 §7.7; ADR-045 caps.clock.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "backend": {
+      "enum": [
+        "mock",
+        "replay",
+        "px4_sih",
+        "prometheus"
+      ]
+    },
+    "version": {
+      "const": 1
+    },
+    "kinds": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "uav",
+          "ugv",
+          "robot",
+          "vehicle",
+          "sensor",
+          "human"
+        ]
+      }
+    },
+    "max_vehicles": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "stub": {
+      "type": "boolean"
+    },
+    "note": {
+      "type": "string"
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "lockstep",
+            "slaved_realtime",
+            "live"
+          ]
+        },
+        "pausable": {
+          "type": "boolean"
+        },
+        "max_speed": {
+          "type": "number"
+        },
+        "steppable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode",
+        "pausable",
+        "max_speed",
+        "steppable"
+      ]
+    },
+    "cmd": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "enum": [
+              "native",
+              "emulated",
+              "gateway",
+              "none"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "impl": {
+                "enum": [
+                  "native",
+                  "emulated",
+                  "gateway",
+                  "none"
+                ]
+              },
+              "speed": {
+                "type": "boolean"
+              },
+              "turns": {
+                "type": [
+                  "boolean",
+                  "string"
+                ]
+              },
+              "radius_m": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "vmax_mps": {
+                "type": "number"
+              },
+              "via": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "impl"
+            ]
+          }
+        ]
+      }
+    },
+    "ack": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "native": {
+          "type": "boolean"
+        },
+        "readback": {
+          "type": [
+            "string",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeout_s": {
+          "type": "number"
+        },
+        "retries": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "native",
+        "readback"
+      ]
+    },
+    "trust_ceiling": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "truth": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "backend",
+    "version",
+    "kinds",
+    "max_vehicles",
+    "clock",
+    "cmd",
+    "ack",
+    "trust_ceiling",
+    "truth"
+  ]
+}

@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/vehicle/1/model.schema.json",
+  "title": "Vehicle model model/model.yaml (awr.vehicle_model.v1)",
+  "description": "AWR-16 §11.5. glb files are build outputs; glTF (x,y,z) = (y_flu, z_flu, x_flu).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.vehicle_model.v1"
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+            },
+            "triangles": {
+              "type": "integer"
+            },
+            "units": {
+              "const": "m"
+            },
+            "frame": {
+              "enum": [
+                "flu",
+                "frd"
+              ]
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "triangles",
+            "units",
+            "frame"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "enum": [
+              "hero",
+              "lowpoly",
+              "lowpoly_s"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "max_triangles": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "method": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "max_triangles",
+          "method"
+        ]
+      }
+    },
+    "axes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gltf_from_flu": {
+          "const": [
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ],
+            [
+              1,
+              0,
+              0
+            ]
+          ]
+        }
+      },
+      "required": [
+        "gltf_from_flu"
+      ]
+    },
+    "origin": {
+      "const": "base_link"
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "base_color_token": {
+          "type": "string"
+        },
+        "rotor_color_token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_color_token"
+      ]
+    },
+    "fallback": {
+      "enum": [
+        "lowpoly_only"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "source",
+    "outputs",
+    "axes",
+    "origin",
+    "material",
+    "fallback"
+  ]
+}

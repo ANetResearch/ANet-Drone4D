@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rest/1/problem.schema.json",
+  "title": "REST error response (application/problem+json)",
+  "description": "AWR-17 §4.4: every REST error carries code from rt/reasons.json; HTTP status follows the reason table. The OpenAPI snapshot rest/openapi.snapshot.json is produced from the M11 app.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "type": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 400,
+      "maximum": 599
+    },
+    "code": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 999
+    },
+    "reason": {
+      "type": "string"
+    },
+    "detail": {
+      "type": [
+        "string",
+        "object",
+        "null"
+      ]
+    },
+    "remedy": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "instance": {
+      "type": "string"
+    },
+    "retry_after_ms": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "status",
+    "code",
+    "reason",
+    "message",
+    "request_id"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "default": {
+    "roughness": {
+      "z0_m": 0.5,
+      "d_m": 0.0,
+      "source": "default"
+    },
+    "profile": {
+      "kind": "log",
+      "z_ref_m": 10,
+      "alpha": 0.25,
+      "adv_height_m": 40
+    },
+    "default_preset": "clear",
+    "wind": {
+      "levels": [
+        0,
+        1
+      ],
+      "library": null
+    },
+    "streamlines": {
+      "analytic": true,
+      "library": null
+    }
+  }
+}

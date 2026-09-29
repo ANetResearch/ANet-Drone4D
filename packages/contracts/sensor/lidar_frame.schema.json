@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/lidar_frame.schema.json",
+  "title": "LiDAR frame header (awr.sensor.lidar_frame.v1)",
+  "description": "AWR-16 §14.3 (D1 stub): JSON header + SoA payload, 20 B/point: f32 x,y,z (sensor FLU, m), u32 offset_time (ns from timebase), u8 reflectivity, u8 tag, u8 line, u8 pad. Optional fields proposed by M02 §6.3.2.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.lidar_frame.v1"
+    },
+    "sensor_id": {
+      "type": "string"
+    },
+    "frame_id": {
+      "type": "string"
+    },
+    "timebase_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sync_type": {
+      "enum": [
+        "ptp",
+        "gps_pps",
+        "px4_timesync",
+        "none",
+        "sim"
+      ]
+    },
+    "point_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 22000
+    },
+    "T_world_sensor": {
+      "oneOf": [
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/mat4"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "frame_seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "model": {
+      "enum": [
+        "livox_mid360",
+        "livox_mid360s"
+      ]
+    },
+    "timescale": {
+      "enum": [
+        "tai",
+        "utc",
+        "gpst",
+        "host_mono"
+      ]
+    },
+    "raw_timebase_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "offset_est_ns": {
+      "type": "integer"
+    },
+    "frame_dur_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pattern_mode": {
+      "enum": [
+        0,
+        1,
+        2
+      ]
+    },
+    "extrinsic_ref": {
+      "type": "string"
+    },
+    "simulated": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema",
+    "sensor_id",
+    "frame_id",
+    "timebase_ns",
+    "sync_type",
+    "point_count"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sim/1/session_spec.schema.json",
+  "title": "Orchestrator SessionSpec (V0.2 stub)",
+  "description": "M08 §7 (stub): D1 freezes only the envelope.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "const": "awr.sim.session_spec.v1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "world_id": {
+      "type": "string"
+    },
+    "backends": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "backend": {
+            "enum": [
+              "mock",
+              "replay",
+              "px4_sih",
+              "prometheus"
+            ]
+          },
+          "vehicles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "backend"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "world_id"
+  ]
+}

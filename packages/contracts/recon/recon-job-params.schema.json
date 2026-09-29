@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/recon-job-params.schema.json",
+  "title": "Reconstruction job parameters (POST /api/recon/jobs)",
+  "description": "M01 §7 (drafted by M01; D1-ext Mock chain). Only the envelope is frozen here.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "engine": {
+      "enum": [
+        "mock",
+        "lingbot_map",
+        "da3_streaming",
+        "mapanything",
+        "vggt",
+        "colmap"
+      ]
+    },
+    "source_world_id": {
+      "type": "string"
+    },
+    "target_world_id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/id"
+    },
+    "trajectory": {
+      "enum": [
+        "helix",
+        "lawnmower"
+      ]
+    },
+    "frames": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "scale_error": {
+      "type": "number"
+    },
+    "on_reject": {
+      "enum": [
+        "fail",
+        "publish_relative"
+      ]
+    },
+    "seed": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "engine",
+    "target_world_id"
+  ]
+}

@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/uav_state_ext.schema.json",
+  "title": "awr.uav.state_ext.v1",
+  "description": "Topic uav/{id}/state_ext, 2 Hz self-contained (AWR-17 §6.5; semantics M08). px4 and prom carry raw native values for display only (V0.2).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "lifecycle": {
+      "enum": [
+        "PENDING",
+        "PROVISIONING",
+        "STARTING",
+        "BOOTED",
+        "READY",
+        "DEGRADED",
+        "LOST",
+        "RESTARTING",
+        "FAILED",
+        "DRAINING",
+        "STOPPED",
+        "REMOVED"
+      ]
+    },
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "owner": {
+          "enum": [
+            "NONE",
+            "OPERATOR",
+            "MISSION",
+            "AGENT",
+            "SWARM",
+            "SAFETY",
+            "PILOT",
+            "EXTERNAL"
+          ]
+        },
+        "holder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "ttl_ms": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "owner"
+      ]
+    },
+    "loc": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "status": {
+          "enum": [
+            "NO_MAP",
+            "WAIT_INIT",
+            "ALIGNING",
+            "TRACKING",
+            "DEGRADED",
+            "LOST",
+            "OUT_OF_MAP"
+          ]
+        },
+        "gnss_fix": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sats": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "eph_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "epv_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "hdop": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "err_enu_m": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "battery": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "voltage_v": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "current_a": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "soc_pct": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "t_remain_s": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "wh_used": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mission": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mid": {
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "IDLE",
+                "RUNNING",
+                "PAUSED",
+                "DONE",
+                "ABORTED"
+              ]
+            },
+            "item": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "total": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "mid",
+            "state"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "accel_mps2": {
+      "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+    },
+    "home_enu_m": {
+      "oneOf": [
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "frames": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "t_world_local": {
+          "oneOf": [
+            {
+              "$ref": "../../world/1/common.schema.json#/$defs/mat4"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "traj": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "traj_id": {
+              "type": "string"
+            },
+            "tau_s": {
+              "type": "number"
+            },
+            "rate": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "traj_id"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gcs_age_ms": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "fcu_age_ms": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "gcs_loss_policy": {
+      "enum": [
+        "hold_rtl",
+        "ignore"
+      ]
+    },
+    "px4": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "prom": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M08-FR-051: vehicle profile of this entity (optional, 1.x)",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "ctrl": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M08-FR-051: controller mode name and phase (optional, 1.x)",
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode"
+      ]
+    },
+    "thrust_frac": {
+      "type": "number",
+      "description": "M08-FR-051: collective thrust as a fraction of maximum (optional, 1.x)"
+    },
+    "tilt_deg": {
+      "type": "number",
+      "description": "M08-FR-051: tilt of the body z axis from vertical, deg (optional, 1.x)"
+    },
+    "pos_err_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "M08-FR-051: |pos_ref - pos| while a navigation mode is active, m (optional, 1.x)"
+    },
+    "wind_rel_mps": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "M08-FR-051: air-relative velocity (vel - wind), ENU m/s (optional, 1.x)"
+    },
+    "sens": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M13 §7.2.3: gimbal state per sensor and IMU sample (optional, 1.x)",
+      "properties": {
+        "gimbal": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sensor_no": {
+                "type": "integer"
+              },
+              "mode": {
+                "type": "string"
+              },
+              "az_rad": {
+                "type": "number"
+              },
+              "el_rad": {
+                "type": "number"
+              },
+              "limited": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "sensor_no"
+            ]
+          }
+        },
+        "imu": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "acc_mps2": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "gyro_rad_s": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "bias_acc_mps2": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "bias_gyro_rad_s": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "lifecycle",
+    "lease",
+    "loc",
+    "battery",
+    "mission",
+    "home_enu_m",
+    "link",
+    "gcs_loss_policy"
+  ]
+}

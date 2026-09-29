@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bus/1/event.schema.json",
+  "title": "awr.event.v1 bus event",
+  "description": "Event plane (AWR-17 §9.5): published as msgpack arrays on evt/<producer>/<category>; Gateway maps kind -> type and severity -> level for the WS event op (§6.12). known_kinds lists registered kinds (agent.* is owned by M14); new kinds are registered here first.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "producer": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+    },
+    "severity": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "t_sim_ns": {
+      "type": "integer"
+    },
+    "t_wall_ns": {
+      "type": "integer"
+    },
+    "uav": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cid": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "batch_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "batch call id for per-vehicle events of a fleet/cmd batch (M11 §6.4.12, M11-FR-061); optional"
+    },
+    "data": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "seq",
+    "epoch",
+    "producer",
+    "kind",
+    "severity",
+    "t_sim_ns",
+    "t_wall_ns",
+    "uav",
+    "cid",
+    "data"
+  ],
+  "$defs": {
+    "known_kinds": {
+      "enum": [
+        "sim.started",
+        "sim.reset",
+        "sim.stopped",
+        "sim.restarted",
+        "sim.clock",
+        "sim.vehicle.state",
+        "sim.frame.reset",
+        "roster.changed",
+        "uav.state",
+        "cmd.accepted",
+        "cmd.running",
+        "cmd.succeeded",
+        "cmd.failed",
+        "cmd.canceled",
+        "cmd.timeout",
+        "cmd.rejected",
+        "fleet.batch.progress",
+        "safety.geofence",
+        "safety.separation",
+        "safety.battery",
+        "safety.link",
+        "safety.fastguard",
+        "safety.fsm",
+        "safety.loc",
+        "safety.env",
+        "safety.fault",
+        "safety.health",
+        "mission.state",
+        "mission.item_reached",
+        "mission.energy_warning",
+        "mission.aborted",
+        "lease.acquired",
+        "lease.released",
+        "lease.preempted",
+        "lease.expired",
+        "seat.acquired",
+        "seat.released",
+        "seat.expired",
+        "seat.takeover",
+        "env.changed",
+        "env.warning",
+        "env.keyframe",
+        "env.presets_mismatch",
+        "proc.state",
+        "session.switching",
+        "session.switched",
+        "session.error",
+        "sys.shutting_down",
+        "rec.started",
+        "rec.stopped",
+        "recorder.gap",
+        "job.state",
+        "job.progress",
+        "world.added",
+        "world.updated",
+        "sensor.detect",
+        "sensor.gnss_fix",
+        "sensor.state",
+        "vehicle.added",
+        "vehicle.removed",
+        "vehicle.spawn_failed",
+        "scenario.agent_task",
+        "scenario.mark",
+        "sim.kernel.fallback",
+        "sim.stage.overbudget",
+        "sim.rtf_limited",
+        "sim.profile.loaded",
+        "sim.contact.collision",
+        "sim.contact.touchdown",
+        "cmd.progress",
+        "geo.ready",
+        "mission.created",
+        "mission.start_failed",
+        "mission.warning",
+        "track.state",
+        "track.lagging",
+        "plan.ready",
+        "plan.failed",
+        "plan.degraded",
+        "plan.warm",
+        "path.changed",
+        "coverage.progress",
+        "coverage.changed",
+        "scenario.loaded",
+        "scenario.event",
+        "scenario.result",
+        "scenario.invalid",
+        "formation.phase",
+        "formation.member_lost",
+        "formation.member_lagging",
+        "deconflict.result",
+        "deconflict.partial",
+        "rec.lineage",
+        "replay.opened",
+        "replay.closed",
+        "replay.error",
+        "job.log",
+        "agent.registered",
+        "agent.task.submitted",
+        "agent.task.find",
+        "agent.task.quote",
+        "agent.task.awarded",
+        "agent.task.state",
+        "agent.task.phase",
+        "agent.task.effect",
+        "agent.task.accepted",
+        "agent.task.rejected",
+        "agent.task.escalated",
+        "agent.board.unit",
+        "agent.board.incidental",
+        "agent.lease.acquired",
+        "agent.lease.released",
+        "agent.lease.preempted",
+        "agent.guard.rejected",
+        "agent.session.reset",
+        "anet.evidence.gap",
+        "agent.health",
+        "agent.runtime.state"
+      ]
+    }
+  }
+}

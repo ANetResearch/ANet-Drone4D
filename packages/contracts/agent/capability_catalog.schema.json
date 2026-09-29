@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/agent/1/capability_catalog.schema.json",
+  "title": "Capability catalogue",
+  "description": "M14 §6.4.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.agent.capability_catalog.v1"
+    },
+    "version": {
+      "type": "integer"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "$ref": "capability.schema.json"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "version",
+    "capabilities"
+  ]
+}

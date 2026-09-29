@@ -1,0 +1,687 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/pointcloud-metadata.schema.json",
+  "title": "Potree 2.0 metadata.json + ANET_Q16 v1 extension",
+  "description": "Container = Potree 2.0 (metadata.json + hierarchy.bin 22 B/record + octree.bin). encoding DEFAULT/BROTLI follow PotreeConverter 2.x exactly (Indexer::createMetadata). encoding ANET_Q16 adds the 'anet' object; Potree/potree-core/three-loader treat every non-BROTLI encoding as DEFAULT, so ANET_Q16 containers are NOT readable by them (use the DEFAULT twin for cross-checks).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "name",
+    "description",
+    "points",
+    "projection",
+    "hierarchy",
+    "offset",
+    "scale",
+    "spacing",
+    "boundingBox",
+    "encoding",
+    "attributes"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": "2.0"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "points": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "projection": {
+      "type": "string"
+    },
+    "hierarchy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "firstChunkSize",
+        "stepSize",
+        "depth"
+      ],
+      "properties": {
+        "firstChunkSize": {
+          "type": "integer",
+          "minimum": 22,
+          "multipleOf": 22
+        },
+        "stepSize": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        }
+      }
+    },
+    "offset": {
+      "$ref": "common.schema.json#/$defs/vec3"
+    },
+    "scale": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "spacing": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "boundingBox": {
+      "$ref": "common.schema.json#/$defs/aabb",
+      "description": "CUBE: max = min + cubeSize on all axes (Potree requirement)."
+    },
+    "encoding": {
+      "enum": [
+        "DEFAULT",
+        "BROTLI",
+        "ANET_Q16"
+      ]
+    },
+    "attributes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/attribute"
+      }
+    },
+    "anet": {
+      "$ref": "#/$defs/anetExt"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "encoding": {
+            "const": "ANET_Q16"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "required": [
+          "anet"
+        ],
+        "properties": {
+          "attributes": {
+            "prefixItems": [
+              {
+                "properties": {
+                  "name": {
+                    "const": "anet:pos"
+                  },
+                  "size": {
+                    "const": 8
+                  },
+                  "numElements": {
+                    "const": 4
+                  },
+                  "elementSize": {
+                    "const": 2
+                  },
+                  "type": {
+                    "const": "uint16"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "name": {
+                    "const": "anet:col"
+                  },
+                  "size": {
+                    "const": 4
+                  },
+                  "numElements": {
+                    "const": 4
+                  },
+                  "elementSize": {
+                    "const": 1
+                  },
+                  "type": {
+                    "const": "uint8"
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "maxItems": 3,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "else": {
+        "properties": {
+          "attributes": {
+            "prefixItems": [
+              {
+                "properties": {
+                  "name": {
+                    "const": "position"
+                  },
+                  "type": {
+                    "const": "int32"
+                  },
+                  "numElements": {
+                    "const": 3
+                  }
+                },
+                "type": "object"
+              }
+            ],
+            "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    }
+  ],
+  "$defs": {
+    "attribute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "description",
+        "size",
+        "numElements",
+        "elementSize",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "numElements": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "elementSize": {
+          "enum": [
+            1,
+            2,
+            4,
+            8
+          ]
+        },
+        "type": {
+          "enum": [
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "uint8",
+            "uint16",
+            "uint32",
+            "uint64",
+            "float",
+            "double"
+          ]
+        },
+        "min": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "max": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "scale": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "offset": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "histogram": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 256,
+          "maxItems": 256
+        }
+      }
+    },
+    "anetExt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formatVersion",
+        "frame",
+        "streams",
+        "bytesPerPoint",
+        "pos",
+        "col",
+        "compression",
+        "pointOrder",
+        "shuffleSeed",
+        "sampling",
+        "classTable",
+        "nodeCount",
+        "levelsByteEnd",
+        "levelsPoints",
+        "levelsNodes",
+        "firstScreenLevel",
+        "tightBounds",
+        "hierarchyExt",
+        "stats"
+      ],
+      "properties": {
+        "formatVersion": {
+          "const": 1
+        },
+        "frame": {
+          "const": "world",
+          "description": "Point coordinates (boundingBox, node cubes) are world ENU metres; a layer-level rigid T_world_layer in world.json may apply on top."
+        },
+        "streams": {
+          "description": "Per-node SoA payload order. pos and col are mandatory; ext optional.",
+          "oneOf": [
+            {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "pos"
+                },
+                {
+                  "const": "col"
+                }
+              ],
+              "minItems": 2,
+              "maxItems": 2
+            },
+            {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "pos"
+                },
+                {
+                  "const": "col"
+                },
+                {
+                  "const": "ext"
+                }
+              ],
+              "minItems": 3,
+              "maxItems": 3
+            }
+          ]
+        },
+        "bytesPerPoint": {
+          "enum": [
+            12,
+            16
+          ]
+        },
+        "pos": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "xyz",
+            "w"
+          ],
+          "properties": {
+            "format": {
+              "const": "unorm16x4"
+            },
+            "xyz": {
+              "const": "node-cube",
+              "description": "q = clamp(round((p - nodeMin)/nodeSize*65535),0,65535); p = nodeMin + q/65535*nodeSize"
+            },
+            "w": {
+              "enum": [
+                "oct16",
+                "zero"
+              ],
+              "description": "oct16: (u8 octU << 8) | u8 octV; value 0x0000 = 'no normal' (encoder remaps an exact 0x0000 to 0xFFFF, both decode to -Z). zero: whole dataset has no normals."
+            }
+          }
+        },
+        "col": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "rgb",
+            "a"
+          ],
+          "properties": {
+            "format": {
+              "const": "unorm8x4"
+            },
+            "rgb": {
+              "enum": [
+                "srgb",
+                "intensity-gray",
+                "baked-height",
+                "constant"
+              ],
+              "description": "Display albedo in sRGB, always. srgb = measured colour; intensity-gray = r=g=b=intensity; baked-height = Graphite ramp of z (x01 §3.7) without lighting; constant = 0x80."
+            },
+            "a": {
+              "const": "class-index",
+              "description": "Compact class index 0..31 into classTable (anet-classes@1 uses 0..15). Shader: cls = uint(a*255+0.5)."
+            }
+          }
+        },
+        "ext": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "comp"
+          ],
+          "properties": {
+            "format": {
+              "const": "unorm8x4"
+            },
+            "comp": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "const": "intensity"
+                },
+                {
+                  "const": "hagQ"
+                },
+                {
+                  "const": "returns"
+                },
+                {
+                  "const": "flags"
+                }
+              ],
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "hagScaleM": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "hag = hagQ * hagScaleM (default 0.5 m, range 0..127.5 m)"
+            }
+          }
+        },
+        "compression": {
+          "enum": [
+            "none",
+            "gzip"
+          ],
+          "description": "gzip: each node payload is one gzip member; byteSize = compressed size; inflated size must be numPoints*bytesPerPoint. Never use HTTP Content-Encoding together with Range."
+        },
+        "pointOrder": {
+          "const": "shuffled",
+          "description": "Seeded Fisher-Yates within each node: every prefix is a uniform subsample (drawRange density control, fade-in, partial last node). Implicit LOD rank = index within node."
+        },
+        "shuffleSeed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sampling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "G",
+            "leaf",
+            "B",
+            "seed"
+          ],
+          "properties": {
+            "method": {
+              "enum": [
+                "grid-center",
+                "grid-random",
+                "potree-poisson"
+              ]
+            },
+            "G": {
+              "enum": [
+                16,
+                32,
+                64,
+                128,
+                256
+              ]
+            },
+            "leaf": {
+              "type": "integer",
+              "minimum": 100
+            },
+            "minChild": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "B": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 21
+            },
+            "seed": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "classTable": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "const": "anet-classes@1"
+            },
+            "href": {
+              "$ref": "common.schema.json#/$defs/relHref"
+            }
+          }
+        },
+        "nodeCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of distinct nodes (hierarchy records excluding the duplicate PROXY records)."
+        },
+        "levelsByteEnd": {
+          "$ref": "#/$defs/levelArray",
+          "description": "levelsByteEnd[L] = exclusive end offset in octree.bin of the last node of level L (octree.bin is written level-major BFS). First screen = one Range [0, levelsByteEnd[firstScreenLevel])."
+        },
+        "levelsPoints": {
+          "$ref": "#/$defs/levelArray",
+          "description": "Cumulative points of levels 0..L (monotone non-decreasing)."
+        },
+        "levelsNodes": {
+          "$ref": "#/$defs/levelArray",
+          "description": "Nodes per level (not cumulative)."
+        },
+        "firstScreenLevel": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Generator reference value (rule G, AWR-16 §4.11): smallest L with levelsPoints[L] >= 1e5/k, stepping back while > 4.5e5/k. Not the runtime first screen."
+        },
+        "tightBounds": {
+          "$ref": "common.schema.json#/$defs/aabb"
+        },
+        "hierarchyExt": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "href",
+            "recordSize",
+            "content"
+          ],
+          "properties": {
+            "href": {
+              "const": "hierarchy_ext.bin"
+            },
+            "recordSize": {
+              "const": 12
+            },
+            "content": {
+              "const": "subtree-aabb-u16",
+              "description": "Record i <-> hierarchy.bin record i (byte 22*i <-> 12*i, proxies included). u16 minX,minY,minZ,maxX,maxY,maxZ relative to the node cube, min floored / max ceiled (conservative), covering the node AND all descendants."
+            }
+          }
+        },
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "zP1",
+            "zP99",
+            "nnMedianM",
+            "classHistogram"
+          ],
+          "properties": {
+            "zP1": {
+              "type": "number"
+            },
+            "zP99": {
+              "type": "number"
+            },
+            "hagP1": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "hagP99": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "nnMedianM": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Median nearest-neighbour distance of the full-res cloud; leaf point size = max(k*spacing_D, 1.6*nnMedianM)."
+            },
+            "nnSource": {
+              "enum": [
+                "knn",
+                "estimate"
+              ]
+            },
+            "normalsFlippedFrac": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "classHistogram": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^([0-9]|[12][0-9]|3[01])$"
+              },
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "root": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "forestIndex",
+            "forestSize"
+          ],
+          "properties": {
+            "forestIndex": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "forestSize": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "twin": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "relHref of a DEFAULT-encoded twin container with identical node set, for Potree viewer cross-checks."
+        },
+        "generator": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            },
+            "seconds": {
+              "type": "number"
+            }
+          },
+          "description": "Provenance only. v1.0 writes name and version; 'seconds' is accepted for prototype instances but never written (AWR-16 §4.9, DATA-NFR-006)."
+        }
+      }
+    },
+    "levelArray": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 1,
+      "maxItems": 21
+    }
+  }
+}

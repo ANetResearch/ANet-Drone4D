@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "anet-classes@1",
+  "description": "Runtime byte col.a stores `index`. Archives (LAS/COPC) and 3D Tiles export store `lasCode`. Resolves x01 (roof=65) vs n02 (roof=6, low object=65): ASPRS standard codes win, roof=6.",
+  "unmappedLasCodeIndex": 0,
+  "classes": [
+    { "index": 0,  "key": "unclassified",       "lasCode": 1,  "alsoFrom": [0, 8, 12], "name": "Unclassified / other", "nameZh": "未分类/其他", "colorToken": "g600", "defaultVisible": true,  "pseudoReflectance": 0.35 },
+    { "index": 1,  "key": "ground",             "lasCode": 2,  "name": "Ground",             "nameZh": "地面",     "colorToken": "g800", "defaultVisible": true,  "pseudoReflectance": 0.25 },
+    { "index": 2,  "key": "low_vegetation",     "lasCode": 3,  "name": "Low vegetation",     "nameZh": "低矮植被", "colorToken": "g700", "defaultVisible": true,  "pseudoReflectance": 0.30 },
+    { "index": 3,  "key": "medium_vegetation",  "lasCode": 4,  "name": "Medium vegetation",  "nameZh": "中等植被", "colorToken": "g600", "defaultVisible": true,  "pseudoReflectance": 0.32 },
+    { "index": 4,  "key": "high_vegetation",    "lasCode": 5,  "name": "High vegetation",    "nameZh": "高植被",   "colorToken": "g500", "defaultVisible": true,  "pseudoReflectance": 0.35 },
+    { "index": 5,  "key": "building_roof",      "lasCode": 6,  "name": "Building (roof)",    "nameZh": "建筑屋顶", "colorToken": "g100", "defaultVisible": true,  "pseudoReflectance": 0.60 },
+    { "index": 6,  "key": "building_facade",    "lasCode": 64, "name": "Building facade",    "nameZh": "建筑立面", "colorToken": "g400", "defaultVisible": true,  "pseudoReflectance": 0.45 },
+    { "index": 7,  "key": "low_object",         "lasCode": 65, "name": "Low object",         "nameZh": "低矮物",   "colorToken": "g500", "defaultVisible": true,  "pseudoReflectance": 0.40 },
+    { "index": 8,  "key": "water",              "lasCode": 9,  "name": "Water",              "nameZh": "水面",     "colorToken": "g900", "defaultVisible": true,  "pseudoReflectance": 0.05 },
+    { "index": 9,  "key": "road_surface",       "lasCode": 11, "name": "Road surface",       "nameZh": "路面",     "colorToken": "g700", "defaultVisible": true,  "pseudoReflectance": 0.20 },
+    { "index": 10, "key": "bridge_deck",        "lasCode": 17, "name": "Bridge deck",        "nameZh": "桥面",     "colorToken": "g300", "defaultVisible": true,  "pseudoReflectance": 0.40 },
+    { "index": 11, "key": "wire_conductor",     "lasCode": 14, "alsoFrom": [13, 16], "name": "Wire",  "nameZh": "电力线",   "colorToken": "r500", "defaultVisible": true,  "pseudoReflectance": 0.30 },
+    { "index": 12, "key": "transmission_tower", "lasCode": 15, "name": "Transmission tower", "nameZh": "输电塔",   "colorToken": "g200", "defaultVisible": true,  "pseudoReflectance": 0.50 },
+    { "index": 13, "key": "dynamic_object",     "lasCode": 66, "name": "Dynamic object / artifact", "nameZh": "动态物/伪影", "colorToken": "g500", "defaultVisible": false, "pseudoReflectance": 0.40 },
+    { "index": 14, "key": "noise",              "lasCode": 7,  "alsoFrom": [18], "name": "Noise",   "nameZh": "噪点",     "colorToken": "g900", "defaultVisible": false, "pseudoReflectance": 0.10 },
+    { "index": 15, "key": "reserved",           "lasCode": null, "name": "Reserved",         "nameZh": "保留",     "colorToken": "g600", "defaultVisible": false }
+  ]
+}

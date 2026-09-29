@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/agent/1/manifest.schema.json",
+  "title": "awr.agent.manifest.v1",
+  "description": "M14 §6.4.4; returned by agent.describe.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.agent.manifest.v1"
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aid": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "uav"
+        },
+        "model": {
+          "type": "string"
+        },
+        "profile_id": {
+          "type": "string"
+        },
+        "vehicle_id": {
+          "type": "string"
+        },
+        "world_id": {
+          "type": "string"
+        },
+        "network": {
+          "enum": [
+            "mock",
+            "anet"
+          ]
+        }
+      },
+      "required": [
+        "aid",
+        "name",
+        "kind",
+        "vehicle_id",
+        "world_id",
+        "network"
+      ]
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,2}$",
+            "maxLength": 64
+          },
+          "name_zh": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "input_schema": {
+            "type": "object"
+          },
+          "output_metrics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "output_artifacts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "physical": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "trust": {
+            "type": "object"
+          },
+          "requires_lease": {
+            "type": "boolean"
+          },
+          "long_running": {
+            "type": "boolean"
+          },
+          "timeout_s": {
+            "type": "number"
+          },
+          "max_concurrent": {
+            "type": "integer"
+          },
+          "price": {
+            "const": 0
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "state_capability": {
+      "const": "agent.state"
+    },
+    "manifest_sha256": {
+      "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+    }
+  },
+  "required": [
+    "schema",
+    "agent",
+    "skills",
+    "state_capability",
+    "manifest_sha256"
+  ]
+}

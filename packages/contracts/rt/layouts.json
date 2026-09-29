@@ -1,0 +1,363 @@
+{
+  "version": "1.0.0",
+  "enums": "awr.enums.v1",
+  "doc": "Byte layouts of awr.rt.v1 records and frame headers, recording, fixtures, IPC and asset headers (AWR-17 §6.4, §6.5, §9.2, §10.3; AWR-16 §8.3, §8.6, §13.4, §13.9, §14.1). Little endian, natural alignment, size % 8 == 0. layout_id = first 4 bytes (LE u32) of sha256 over the canonical JSON of this file; per-schema hash = first 8 hex of sha256 over the canonical JSON of the schema object.",
+  "schemas": [
+    {
+      "schemaName": "awr.DroneState64.v1",
+      "kind": "record",
+      "size": 64,
+      "doc": "Full64: single vehicle full-precision state (topic uav/{id}/state; StateRing full region).",
+      "fields": [
+        {"n": "agent_no", "t": "u16", "o": 0, "doc": "mapped to the vehicle id through fleet/roster"},
+        {"n": "flight_state", "t": "u8", "o": 2, "bits": {"state": [0, 5, "FlightState"], "sub": [5, 3, "FlightSub"]}},
+        {"n": "flags", "t": "u8", "o": 3, "bits": {"armed": [0, 1], "in_air": [1, 1], "loc_ok": [2, 1], "failsafe": [3, 1], "gcs_link": [4, 1], "fcu_link": [5, 1], "loc_degraded": [6, 1], "alert": [7, 1]}},
+        {"n": "mission_item", "t": "u16", "o": 4, "none": 65535},
+        {"n": "battery_pct", "t": "u8", "o": 6, "none": 255, "unit": "%"},
+        {"n": "ctrl", "t": "u8", "o": 7, "bits": {"owner": [0, 3, "Owner"], "locked": [3, 1], "native": [4, 2, "Native"], "pose_src": [6, 2, "PoseSrc"]}},
+        {"n": "pos", "t": "f32", "c": 3, "o": 8, "unit": "m", "frame": "world"},
+        {"n": "vel", "t": "f32", "c": 3, "o": 20, "unit": "m/s", "frame": "world"},
+        {"n": "q", "t": "f32", "c": 4, "o": 32, "doc": "xyzw, WORLD<-BODY(FLU)"},
+        {"n": "omega", "t": "f32", "c": 3, "o": 48, "unit": "rad/s", "frame": "body_flu"},
+        {"n": "dt_us", "t": "i32", "o": 60, "unit": "us", "doc": "row sample time minus record time"}
+      ]
+    },
+    {
+      "schemaName": "awr.SwarmLite32.v1",
+      "kind": "record",
+      "size": 32,
+      "doc": "Lite32: one row per vehicle, n rows back to back (topic swarm/uav/state; StateRing lite region).",
+      "fields": [
+        {"n": "agent_no", "t": "u16", "o": 0},
+        {"n": "flight_state", "t": "u8", "o": 2, "bits": {"state": [0, 5, "FlightState"], "sub": [5, 3, "FlightSub"]}},
+        {"n": "battery_pct", "t": "u8", "o": 3, "none": 255, "unit": "%"},
+        {"n": "pos", "t": "f32", "c": 3, "o": 4, "unit": "m", "frame": "world"},
+        {"n": "q_snorm", "t": "i16", "c": 4, "o": 16, "scale": 3.051850947599719e-05, "doc": "xyzw, WORLD<-BODY(FLU), value = raw / 32767"},
+        {"n": "vel_cms", "t": "i16", "c": 3, "o": 24, "scale": 0.01, "unit": "m/s", "frame": "world", "doc": "cm/s on the wire (+-327 m/s)"},
+        {"n": "flags", "t": "u8", "o": 30, "bits": {"armed": [0, 1], "in_air": [1, 1], "loc_ok": [2, 1], "failsafe": [3, 1], "gcs_link": [4, 1], "fcu_link": [5, 1], "loc_degraded": [6, 1], "alert": [7, 1]}},
+        {"n": "ctrl", "t": "u8", "o": 31, "bits": {"owner": [0, 3, "Owner"], "locked": [3, 1], "native": [4, 2, "Native"], "pose_src": [6, 2, "PoseSrc"]}}
+      ]
+    },
+    {
+      "schemaName": "awr.EnvSample32.v1",
+      "kind": "record",
+      "size": 32,
+      "doc": "Per-vehicle environment sample (topic uav/{id}/env; bus state/sim-core/detail).",
+      "fields": [
+        {"n": "wind", "t": "f32", "c": 3, "o": 0, "unit": "m/s", "frame": "world", "doc": "total wind at the vehicle (going-to vector)"},
+        {"n": "wind_mean", "t": "i16", "c": 3, "o": 12, "scale": 0.01, "unit": "m/s", "frame": "world"},
+        {"n": "turb_sigma_uw", "t": "u8", "c": 2, "o": 18, "scale": 0.05, "unit": "m/s", "doc": "longitudinal and vertical turbulence rms"},
+        {"n": "sigma_ext", "t": "f32", "o": 20, "unit": "1/m", "doc": "550 nm extinction coefficient"},
+        {"n": "rain_eff", "t": "u16", "o": 24, "scale": 0.01, "unit": "mm/h"},
+        {"n": "rho", "t": "u16", "o": 26, "scale": 3e-05, "unit": "kg/m^3"},
+        {"n": "flags", "t": "u8", "o": 28, "bits": {"valid": [0, 1], "in_solid": [1, 1], "outside_grid": [2, 1], "above_grid": [3, 1], "in_fog_layer": [4, 1], "below_cloud_precip": [5, 1], "calm": [6, 1]}},
+        {"n": "source_level", "t": "u8", "o": 29, "enum": "EnvSourceLevel"},
+        {"n": "gust", "t": "i16", "o": 30, "scale": 0.01, "unit": "m/s", "doc": "gust component along the mean wind direction"}
+      ]
+    },
+    {
+      "schemaName": "awr.VelSetpoint16.v1",
+      "kind": "record",
+      "size": 16,
+      "doc": "CLIENT_DATA payload for velocity teleoperation.",
+      "fields": [
+        {"n": "vel", "t": "f32", "c": 3, "o": 0, "unit": "m/s", "doc": "frame set by the velocity call (world = ENU, body = heading-aligned FLU); NaN = axis not controlled"},
+        {"n": "yaw_rate", "t": "f32", "o": 12, "unit": "rad/s", "doc": "psi_enu rate, CCW positive; NaN = hold heading"}
+      ]
+    },
+    {
+      "schemaName": "awr.SensorPose48.v1",
+      "kind": "record",
+      "size": 48,
+      "doc": "Sensor pose and field of view (topic uav/{id}/sensor/{name}/pose; bus state/sim-core/sensor).",
+      "fields": [
+        {"n": "agent_no", "t": "u16", "o": 0},
+        {"n": "sensor_no", "t": "u8", "o": 2, "doc": "index in roster sensors[]"},
+        {"n": "kind", "t": "u8", "o": 3, "enum": "SensorKind"},
+        {"n": "flags", "t": "u8", "o": 4, "bits": {"active": [0, 1], "fov_valid": [1, 1]}},
+        {"n": "_pad", "t": "u8", "c": 3, "o": 5},
+        {"n": "pos", "t": "f32", "c": 3, "o": 8, "unit": "m", "frame": "world"},
+        {"n": "q", "t": "f32", "c": 4, "o": 20, "doc": "xyzw, WORLD<-SENSOR (FLU sensor frame, x = optical axis)"},
+        {"n": "hfov_rad", "t": "f32", "o": 36, "unit": "rad"},
+        {"n": "vfov_rad", "t": "f32", "o": 40, "unit": "rad"},
+        {"n": "range_m", "t": "f32", "o": 44, "unit": "m", "doc": "NaN when unknown"}
+      ]
+    },
+    {
+      "schemaName": "awr.SwarmLite32Block.v1",
+      "kind": "header",
+      "size": 16,
+      "doc": "Recording block message header, followed by n awr.SwarmLite32.v1 rows sorted by agent_no (AWR-16 §13.4).",
+      "fields": [
+        {"n": "n", "t": "u32", "o": 0},
+        {"n": "roster_version", "t": "u32", "o": 4},
+        {"n": "reserved", "t": "u64", "o": 8}
+      ]
+    },
+    {
+      "schemaName": "awr.rt.BatchHeader.v1",
+      "kind": "header",
+      "size": 16,
+      "doc": "BATCH frame header (S->C, opcode 0x10), followed by records (AWR-17 §6.4).",
+      "fields": [
+        {"n": "op", "t": "u8", "o": 0, "const": 16},
+        {"n": "flags", "t": "u8", "o": 1, "bits": {"snapshot": [0, 1], "replay": [1, 1], "zstd": [2, 1], "gap": [3, 1]}},
+        {"n": "epoch", "t": "u16", "o": 2, "doc": "global epoch, equality only, wraps"},
+        {"n": "frame_seq", "t": "u32", "o": 4, "doc": "per connection, from 1"},
+        {"n": "t_sim_ns", "t": "i64", "o": 8, "unit": "ns"}
+      ]
+    },
+    {
+      "schemaName": "awr.rt.RecordHeader.v1",
+      "kind": "header",
+      "size": 16,
+      "doc": "BATCH record header; payload follows, zero padded to a multiple of 8 (AWR-17 §6.4).",
+      "fields": [
+        {"n": "channel_id", "t": "u16", "o": 0},
+        {"n": "encoding", "t": "u8", "o": 2, "enum": "Encoding"},
+        {"n": "rflags", "t": "u8", "o": 3, "bits": {"keyframe": [0, 1], "delta": [1, 1], "zstd": [2, 1], "reset": [3, 1]}},
+        {"n": "length", "t": "u32", "o": 4, "doc": "payload length without padding"},
+        {"n": "seq", "t": "u32", "o": 8},
+        {"n": "dt_us", "t": "i32", "o": 12, "unit": "us"}
+      ]
+    },
+    {
+      "schemaName": "awr.rt.Time.v1",
+      "kind": "header",
+      "size": 24,
+      "doc": "TIME frame (S->C, opcode 0x02). Readers mask bit7 before comparing the state; SimClockView advances only in PLAYING and LIVE (AWR-03 §5.2 rule 6).",
+      "fields": [
+        {"n": "op", "t": "u8", "o": 0, "const": 2},
+        {"n": "state", "t": "u8", "o": 1, "bits": {"state": [0, 4, "TimeState"], "replay": [7, 1]}},
+        {"n": "epoch", "t": "u16", "o": 2},
+        {"n": "rate", "t": "f32", "o": 4},
+        {"n": "t_sim_ns", "t": "i64", "o": 8, "unit": "ns"},
+        {"n": "t_srv_ns", "t": "i64", "o": 16, "unit": "ns", "doc": "Gateway monotonic clock relative to api start"}
+      ]
+    },
+    {
+      "schemaName": "awr.rt.ClientDataHeader.v1",
+      "kind": "header",
+      "size": 16,
+      "doc": "CLIENT_DATA frame header (C->S, opcode 0x20), followed by awr.VelSetpoint16.v1.",
+      "fields": [
+        {"n": "op", "t": "u8", "o": 0, "const": 32},
+        {"n": "flags", "t": "u8", "o": 1, "bits": {"final": [0, 1]}},
+        {"n": "channel_id", "t": "u16", "o": 2},
+        {"n": "seq", "t": "u32", "o": 4},
+        {"n": "t_client_sim_ns", "t": "i64", "o": 8, "unit": "ns"}
+      ]
+    },
+    {
+      "schemaName": "awr.bus.Setpoint32.v1",
+      "kind": "record",
+      "size": 32,
+      "doc": "Raw setpoint on bus key ctl/sim-core/setpoint (AWR-17 §9.4).",
+      "fields": [
+        {"n": "agent_no", "t": "u16", "o": 0},
+        {"n": "flags", "t": "u8", "o": 2, "bits": {"final": [0, 1]}},
+        {"n": "frame", "t": "u8", "o": 3, "enum": "SetpointFrame"},
+        {"n": "seq", "t": "u32", "o": 4},
+        {"n": "t_client_sim_ns", "t": "i64", "o": 8, "unit": "ns"},
+        {"n": "vel", "t": "f32", "c": 3, "o": 16, "unit": "m/s"},
+        {"n": "yaw_rate", "t": "f32", "o": 28, "unit": "rad/s"}
+      ]
+    },
+    {
+      "schemaName": "awr.rec.RecPrefix8.v1",
+      "kind": "header",
+      "size": 8,
+      "doc": "MCAP awr-raw / awr-msgpack message prefix; the untouched payload follows (AWR-16 §13.4).",
+      "fields": [
+        {"n": "epoch", "t": "u16", "o": 0, "doc": "producer epoch & 0xFFFF"},
+        {"n": "rflags", "t": "u8", "o": 2, "bits": {"keyframe": [0, 1], "delta": [1, 1], "zstd": [2, 1], "reset": [3, 1]}},
+        {"n": "prefix_version", "t": "u8", "o": 3, "const": 1},
+        {"n": "dt_us", "t": "i32", "o": 4, "unit": "us"}
+      ]
+    },
+    {
+      "schemaName": "awr.fixture.AwrtHeader.v1",
+      "kind": "header",
+      "size": 24,
+      "doc": ".awrrt protocol fixture file header; UTF-8 JSON header (header_json_len bytes, zero padded to 8) follows (AWR-16 §13.9).",
+      "fields": [
+        {"n": "magic", "t": "u32", "o": 0, "const": 1414682433, "doc": "'AWRT'"},
+        {"n": "version", "t": "u16", "o": 4, "const": 1},
+        {"n": "flags", "t": "u16", "o": 6, "bits": {"timed": [0, 1]}},
+        {"n": "header_json_len", "t": "u32", "o": 8},
+        {"n": "reserved", "t": "u32", "o": 12},
+        {"n": "t0_wall_ns", "t": "u64", "o": 16, "unit": "ns"}
+      ]
+    },
+    {
+      "schemaName": "awr.fixture.AwrtRecord.v1",
+      "kind": "header",
+      "size": 16,
+      "doc": ".awrrt record header; payload[len] follows, zero padded to 8.",
+      "fields": [
+        {"n": "dir", "t": "u8", "o": 0, "enum": "AwrtDir"},
+        {"n": "kind", "t": "u8", "o": 1, "enum": "AwrtKind"},
+        {"n": "reserved", "t": "u16", "o": 2},
+        {"n": "len", "t": "u32", "o": 4},
+        {"n": "t_rel_ns", "t": "u64", "o": 8, "unit": "ns", "doc": "monotonic time relative to the first record"}
+      ]
+    },
+    {
+      "schemaName": "awr.blob.Header.v1",
+      "kind": "header",
+      "size": 16,
+      "doc": "Generic blob header for encoding 3 records (uav/{id}/path, mission/{mid}/coverage); array follows (AWR-17 §6.5).",
+      "fields": [
+        {"n": "magic", "t": "u32", "o": 0, "const": 1112692545, "doc": "'AWRB'"},
+        {"n": "version", "t": "u16", "o": 4, "const": 1},
+        {"n": "dtype", "t": "u16", "o": 6, "enum": "BlobDtype"},
+        {"n": "count", "t": "u32", "o": 8},
+        {"n": "comp", "t": "u32", "o": 12}
+      ]
+    },
+    {
+      "schemaName": "awr.env.AwrvHeader.v1",
+      "kind": "header",
+      "size": 64,
+      "doc": "AWRV v1 volume header (file and typed blob); payload follows (AWR-16 §8.3).",
+      "fields": [
+        {"n": "magic", "t": "u32", "o": 0, "const": 1448236865, "doc": "'AWRV'"},
+        {"n": "version", "t": "u16", "o": 4, "const": 1},
+        {"n": "kind", "t": "u16", "o": 6, "enum": "AwrvKind"},
+        {"n": "nx", "t": "u16", "o": 8},
+        {"n": "ny", "t": "u16", "o": 10},
+        {"n": "nz", "t": "u16", "o": 12},
+        {"n": "comp", "t": "u16", "o": 14},
+        {"n": "dtype", "t": "u8", "o": 16, "enum": "AwrvDtype"},
+        {"n": "layout", "t": "u8", "o": 17, "doc": "0 = zyx C order, x fastest"},
+        {"n": "premultiplied", "t": "u8", "o": 18},
+        {"n": "alpha", "t": "u8", "o": 19, "enum": "AwrvAlpha"},
+        {"n": "origin_enu_m", "t": "f32", "c": 3, "o": 20, "unit": "m", "frame": "world", "doc": "min corner of cell (0,0,0)"},
+        {"n": "cell_m", "t": "f32", "c": 3, "o": 32, "unit": "m"},
+        {"n": "dir_from_deg", "t": "f32", "o": 44, "unit": "deg", "doc": "NaN when meaningless"},
+        {"n": "value_scale", "t": "f32", "o": 48},
+        {"n": "field_version", "t": "u32", "o": 52},
+        {"n": "payload_bytes", "t": "u32", "o": 56},
+        {"n": "crc32", "t": "u32", "o": 60}
+      ]
+    },
+    {
+      "schemaName": "awr.env.AwslHeader.v1",
+      "kind": "header",
+      "size": 48,
+      "doc": "AWSL v1 streamline file header; u32 line_offsets[n_lines + 1] (padded to 8) and f32 verts[n_verts][5] follow (AWR-16 §8.6).",
+      "fields": [
+        {"n": "magic", "t": "u32", "o": 0, "const": 1280530241, "doc": "'AWSL'"},
+        {"n": "version", "t": "u16", "o": 4, "const": 1},
+        {"n": "flags", "t": "u16", "o": 6, "bits": {"tau_normalized": [0, 1], "shuffled": [1, 1]}},
+        {"n": "n_lines", "t": "u32", "o": 8},
+        {"n": "n_verts", "t": "u32", "o": 12},
+        {"n": "dir_from_deg", "t": "f32", "o": 16, "unit": "deg"},
+        {"n": "ref_speed_mps", "t": "f32", "o": 20, "unit": "m/s"},
+        {"n": "field_version", "t": "u32", "o": 24},
+        {"n": "stride", "t": "u32", "o": 28, "doc": "20 bytes per vertex"},
+        {"n": "tau_hat_max_m", "t": "f32", "o": 32, "unit": "m"},
+        {"n": "s_hat_max", "t": "f32", "o": 36},
+        {"n": "seed", "t": "u32", "o": 40},
+        {"n": "reserved", "t": "u32", "o": 44}
+      ]
+    },
+    {
+      "schemaName": "awr.recon.AwtrHeader.v1",
+      "kind": "header",
+      "size": 32,
+      "doc": "trajectory.bin (AWTR v1) header; SoA arrays follow, each 8-byte aligned (AWR-16 §14.1).",
+      "fields": [
+        {"n": "magic", "t": "u32", "o": 0, "const": 1381259073, "doc": "'AWTR'"},
+        {"n": "version", "t": "u16", "o": 4, "const": 1},
+        {"n": "flags", "t": "u16", "o": 6, "bits": {"body_pose": [0, 1]}},
+        {"n": "n", "t": "u32", "o": 8},
+        {"n": "reserved", "t": "u32", "o": 12},
+        {"n": "t0_ns", "t": "i64", "o": 16, "unit": "ns"},
+        {"n": "reserved2", "t": "u64", "o": 24}
+      ]
+    },
+    {
+      "schemaName": "awr.ipc.RingHeader.v1",
+      "kind": "header",
+      "size": 256,
+      "doc": "StateRing file header /dev/shm/awr/<run>/state.<producer> (AWR-17 §9.2). The clock group is protected by clock_seq (odd while writing).",
+      "fields": [
+        {"n": "magic", "t": "u32", "o": 0, "const": 827479873, "doc": "'AWR1'"},
+        {"n": "version", "t": "u16", "o": 4, "const": 1},
+        {"n": "flags", "t": "u16", "o": 6, "bits": {"replay": [0, 1]}},
+        {"n": "slot_count", "t": "u32", "o": 8},
+        {"n": "slot_bytes", "t": "u32", "o": 12},
+        {"n": "capacity", "t": "u32", "o": 16},
+        {"n": "layout_id", "t": "u32", "o": 20},
+        {"n": "writer_pid", "t": "u32", "o": 24},
+        {"n": "epoch", "t": "u32", "o": 28, "doc": "producer epoch"},
+        {"n": "head", "t": "u64", "o": 32},
+        {"n": "heartbeat_ns", "t": "i64", "o": 40, "unit": "ns", "doc": "CLOCK_MONOTONIC, main loop only"},
+        {"n": "t_sim_ns", "t": "i64", "o": 48, "unit": "ns"},
+        {"n": "rate_milli", "t": "i32", "o": 56, "scale": 0.001},
+        {"n": "clock_state", "t": "u8", "o": 60, "bits": {"state": [0, 4, "TimeState"], "replay": [7, 1]}},
+        {"n": "_pad0", "t": "u8", "c": 3, "o": 61},
+        {"n": "roster_version", "t": "u32", "o": 64},
+        {"n": "segment", "t": "u32", "o": 68},
+        {"n": "created_ns", "t": "i64", "o": 72, "unit": "ns"},
+        {"n": "step_seq", "t": "u64", "o": 80},
+        {"n": "step_budget_us", "t": "u32", "o": 88, "unit": "us"},
+        {"n": "step_p99_us", "t": "u32", "o": 92, "unit": "us"},
+        {"n": "rtf_milli", "t": "u32", "o": 96, "scale": 0.001},
+        {"n": "id_base", "t": "u32", "o": 100},
+        {"n": "id_count", "t": "u32", "o": 104},
+        {"n": "step_max_us", "t": "u32", "o": 108, "unit": "us"},
+        {"n": "clock_seq", "t": "u64", "o": 112},
+        {"n": "step_p50_us", "t": "u32", "o": 120, "unit": "us"},
+        {"n": "catchup_saturated", "t": "u32", "o": 124},
+        {"n": "_reserved", "t": "u8", "c": 128, "o": 128}
+      ]
+    },
+    {
+      "schemaName": "awr.ipc.ReaderCursor.v1",
+      "kind": "header",
+      "size": 32,
+      "doc": "StateRing reader cursor row (8 rows at [256, 512)).",
+      "fields": [
+        {"n": "pid", "t": "u32", "o": 0},
+        {"n": "mode", "t": "u32", "o": 4, "enum": "CursorMode"},
+        {"n": "cursor", "t": "u64", "o": 8},
+        {"n": "heartbeat_ns", "t": "i64", "o": 16, "unit": "ns"},
+        {"n": "name_hash", "t": "u32", "o": 24},
+        {"n": "_pad", "t": "u32", "o": 28}
+      ]
+    },
+    {
+      "schemaName": "awr.ipc.SlotHeader.v1",
+      "kind": "header",
+      "size": 64,
+      "doc": "StateRing slot header; Full64[cap] and Lite32[cap] follow.",
+      "fields": [
+        {"n": "lock", "t": "u64", "o": 0, "doc": "seqlock: 2*fs-1 while writing, 2*fs committed"},
+        {"n": "frame_seq", "t": "u64", "o": 8},
+        {"n": "t_sim_ns", "t": "i64", "o": 16, "unit": "ns"},
+        {"n": "t_pub_ns", "t": "i64", "o": 24, "unit": "ns"},
+        {"n": "n_rows", "t": "u32", "o": 32},
+        {"n": "epoch", "t": "u32", "o": 36},
+        {"n": "roster_version", "t": "u32", "o": 40},
+        {"n": "flags", "t": "u32", "o": 44, "bits": {"reset": [0, 1], "fastfwd": [1, 1], "replay": [2, 1]}},
+        {"n": "full_off", "t": "u32", "o": 48},
+        {"n": "full_len", "t": "u32", "o": 52},
+        {"n": "lite_off", "t": "u32", "o": 56},
+        {"n": "lite_len", "t": "u32", "o": 60}
+      ]
+    },
+    {
+      "schemaName": "awr.ipc.Heartbeat16.v1",
+      "kind": "header",
+      "size": 16,
+      "doc": "Main-loop heartbeat file /dev/shm/awr/<run>/hb.<name> for processes other than sim-core (AWR-17 §9.6).",
+      "fields": [
+        {"n": "mono_ns", "t": "i64", "o": 0, "unit": "ns"},
+        {"n": "pid", "t": "u32", "o": 8},
+        {"n": "beat", "t": "u32", "o": 12}
+      ]
+    }
+  ]
+}

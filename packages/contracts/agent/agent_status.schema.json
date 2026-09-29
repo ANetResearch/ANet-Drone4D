@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/agent/1/agent_status.schema.json",
+  "title": "awr.agent.status.v1",
+  "description": "Topic agent/{aid}/status, 1 Hz self-contained (M14 §7.2.1).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "aid": {
+      "type": "string"
+    },
+    "vehicle_id": {
+      "type": "string"
+    },
+    "health": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "load": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "current_task": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "phase": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lease_owner": {
+      "enum": [
+        "NONE",
+        "OPERATOR",
+        "MISSION",
+        "AGENT",
+        "SWARM",
+        "SAFETY",
+        "PILOT",
+        "EXTERNAL"
+      ]
+    },
+    "soc_pct": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "verify_max": {
+          "type": "integer"
+        },
+        "auth": {
+          "type": "integer"
+        }
+      }
+    },
+    "t_sim_ns": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "aid",
+    "vehicle_id",
+    "health",
+    "load",
+    "current_task",
+    "phase",
+    "lease_owner",
+    "soc_pct",
+    "t_sim_ns"
+  ]
+}

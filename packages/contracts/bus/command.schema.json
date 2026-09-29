@@ -1,0 +1,635 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bus/1/command.schema.json",
+  "title": "Control-plane messages on ctl/<producer>/* (msgpack)",
+  "description": "AWR-17 §9.4: Command -> Admission (ctl/<producer>/cmd), ClockOp/ClockReply, LeaseOp/LeaseReply, EstimateReq/EstimateReply, QueryReq. Every message carries v = 1; principal is signed by the trusted entry.",
+  "$defs": {
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "principal_id": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "viewer",
+            "operator",
+            "admin",
+            "agent"
+          ]
+        },
+        "entry": {
+          "enum": [
+            "api",
+            "agent-runtime",
+            "scenario"
+          ]
+        },
+        "conn_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "seat": {
+          "type": "boolean"
+        },
+        "sig": {
+          "type": "string",
+          "description": "HMAC-SHA256(K_entry, msgpack(other fields) + cid); bytes on msgpack, base64 in JSON fixtures"
+        }
+      },
+      "required": [
+        "principal_id",
+        "role",
+        "entry",
+        "seat",
+        "sig"
+      ]
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "cid": {
+          "type": "string"
+        },
+        "op": {
+          "type": "string"
+        },
+        "uav": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "args": {
+          "type": "object"
+        },
+        "principal": {
+          "$ref": "#/$defs/principal"
+        },
+        "lease": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "t_wall_ns": {
+          "type": "integer"
+        },
+        "epoch_seen": {
+          "type": "integer"
+        },
+        "batch_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "v",
+        "cid",
+        "op",
+        "uav",
+        "args",
+        "principal"
+      ]
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "cid": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "duplicate"
+          ]
+        },
+        "code": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detail": {
+          "type": [
+            "object",
+            "string",
+            "null"
+          ]
+        },
+        "remedy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "t_sim_ns": {
+          "type": "integer"
+        },
+        "apply_tick": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "epoch": {
+          "type": "integer"
+        },
+        "segment": {
+          "type": "integer"
+        },
+        "dup_of": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "call_state": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "per_uav": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "accepted": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rejected": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "v",
+        "cid",
+        "status",
+        "code"
+      ]
+    },
+    "clockOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "cid": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "play",
+            "pause",
+            "step",
+            "speed",
+            "reset",
+            "checkpoint"
+          ]
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ticks": {
+              "type": "integer"
+            },
+            "rate": {
+              "type": "number"
+            },
+            "scenario_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "profile": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "principal": {
+          "$ref": "#/$defs/principal"
+        }
+      },
+      "required": [
+        "v",
+        "cid",
+        "op",
+        "principal"
+      ]
+    },
+    "clockReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "cid": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "duplicate"
+          ]
+        },
+        "code": {
+          "type": "integer"
+        },
+        "clock": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "enum": [
+                "STOPPED",
+                "PLAYING",
+                "PAUSED",
+                "STEPPING",
+                "BUFFERING",
+                "ENDED",
+                "STALLED",
+                "RESTARTING",
+                "FAILED",
+                "LIVE"
+              ]
+            },
+            "rate": {
+              "type": "number"
+            },
+            "t_sim_ns": {
+              "type": "integer"
+            },
+            "epoch": {
+              "type": "integer"
+            },
+            "segment": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "state",
+            "rate",
+            "t_sim_ns",
+            "epoch",
+            "segment"
+          ]
+        }
+      },
+      "required": [
+        "v",
+        "cid",
+        "status",
+        "code"
+      ]
+    },
+    "leaseOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "cid": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "acquire",
+            "renew",
+            "release",
+            "seat_claim",
+            "seat_grace",
+            "seat_resume",
+            "seat_expire",
+            "seat_release",
+            "seat_takeover"
+          ]
+        },
+        "uav": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "owner": {
+          "enum": [
+            "NONE",
+            "OPERATOR",
+            "MISSION",
+            "AGENT",
+            "SWARM",
+            "SAFETY",
+            "PILOT",
+            "EXTERNAL"
+          ]
+        },
+        "priority": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "return_to": {
+          "enum": [
+            "previous",
+            "none"
+          ]
+        },
+        "principal": {
+          "$ref": "#/$defs/principal"
+        },
+        "confirm_token": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "v",
+        "cid",
+        "op",
+        "principal"
+      ]
+    },
+    "leaseReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "cid": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "duplicate"
+          ]
+        },
+        "code": {
+          "type": "integer"
+        },
+        "lease": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "uav": {
+                  "type": "string"
+                },
+                "owner": {
+                  "enum": [
+                    "NONE",
+                    "OPERATOR",
+                    "MISSION",
+                    "AGENT",
+                    "SWARM",
+                    "SAFETY",
+                    "PILOT",
+                    "EXTERNAL"
+                  ]
+                },
+                "holder": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "priority": {
+                  "type": "integer"
+                },
+                "ttl_ms": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "token": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "uav",
+                "owner"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seat": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "state": {
+                  "enum": [
+                    "FREE",
+                    "HELD",
+                    "GRACE"
+                  ]
+                },
+                "holder": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "state"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "v",
+        "cid",
+        "status",
+        "code"
+      ]
+    },
+    "estimateReq": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "vehicle_id": {
+          "type": "string"
+        },
+        "target_enu_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "dwell_s": {
+          "type": "number"
+        },
+        "capability": {
+          "type": "string"
+        },
+        "speed_mps": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "v",
+        "vehicle_id",
+        "target_enu_m"
+      ]
+    },
+    "estimateReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "eta_s": {
+          "type": "number"
+        },
+        "energy_wh": {
+          "type": "number"
+        },
+        "soc_after_pct": {
+          "type": "number"
+        },
+        "feasible": {
+          "type": "boolean"
+        },
+        "code": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "v",
+        "feasible",
+        "code"
+      ]
+    },
+    "queryReq": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "op": {
+          "enum": [
+            "env/query",
+            "mission/preview"
+          ]
+        },
+        "args": {
+          "type": "object"
+        },
+        "principal": {
+          "$ref": "#/$defs/principal"
+        }
+      },
+      "required": [
+        "v",
+        "op",
+        "args"
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/command"
+    },
+    {
+      "$ref": "#/$defs/admission"
+    },
+    {
+      "$ref": "#/$defs/clockOp"
+    },
+    {
+      "$ref": "#/$defs/clockReply"
+    },
+    {
+      "$ref": "#/$defs/leaseOp"
+    },
+    {
+      "$ref": "#/$defs/leaseReply"
+    },
+    {
+      "$ref": "#/$defs/estimateReq"
+    },
+    {
+      "$ref": "#/$defs/estimateReply"
+    },
+    {
+      "$ref": "#/$defs/queryReq"
+    }
+  ]
+}

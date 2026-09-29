@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/fleet_roster.schema.json",
+  "title": "awr.fleet.roster.v1",
+  "description": "Topic fleet/roster (AWR-17 §6.5; semantics M08). Needed to decode Lite32 (agent_no to vehicle id).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "roster_version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "agent_no": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "id": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "kind": {
+            "enum": [
+              "uav",
+              "ugv",
+              "robot",
+              "vehicle",
+              "sensor",
+              "human"
+            ]
+          },
+          "model": {
+            "type": "string"
+          },
+          "profile_id": {
+            "type": "string"
+          },
+          "backend": {
+            "enum": [
+              "mock",
+              "replay",
+              "px4_sih",
+              "prometheus"
+            ]
+          },
+          "simulated": {
+            "type": "boolean"
+          },
+          "producer": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "enum": [
+              "PENDING",
+              "PROVISIONING",
+              "STARTING",
+              "BOOTED",
+              "READY",
+              "DEGRADED",
+              "LOST",
+              "RESTARTING",
+              "FAILED",
+              "DRAINING",
+              "STOPPED",
+              "REMOVED"
+            ]
+          },
+          "sensors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sensor_no": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "name": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "camera",
+                    "lidar",
+                    "thermal",
+                    "radar"
+                  ]
+                }
+              },
+              "required": [
+                "sensor_no",
+                "name",
+                "kind"
+              ]
+            }
+          },
+          "t_world_local": {
+            "oneOf": [
+              {
+                "$ref": "../../world/1/common.schema.json#/$defs/mat4"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "caps_ref": {
+            "type": "string"
+          },
+          "px4_origin": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "lat_deg": {
+                "type": "number"
+              },
+              "lon_deg": {
+                "type": "number"
+              },
+              "alt_msl_m": {
+                "type": "number"
+              },
+              "source": {
+                "enum": [
+                  "lpos_ref",
+                  "gps_global_origin",
+                  "sih_param"
+                ]
+              }
+            },
+            "required": [
+              "lat_deg",
+              "lon_deg",
+              "alt_msl_m"
+            ]
+          },
+          "sih_quant_offset_m": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+          }
+        },
+        "required": [
+          "agent_no",
+          "id",
+          "kind",
+          "model",
+          "profile_id",
+          "backend",
+          "simulated",
+          "producer",
+          "lifecycle",
+          "sensors",
+          "t_world_local",
+          "caps_ref"
+        ]
+      }
+    }
+  },
+  "required": [
+    "roster_version",
+    "entries"
+  ]
+}

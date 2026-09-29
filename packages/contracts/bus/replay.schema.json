@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bus/1/replay.schema.json",
+  "title": "Event replay request and reply (evt/<producer>/_replay) and replay-worker control",
+  "description": "AWR-17 §9.5; M12 drafts the ctl/replay-worker/* bodies.",
+  "$defs": {
+    "replayReq": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "since": {
+          "type": "integer"
+        },
+        "epoch": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "v",
+        "since",
+        "epoch"
+      ]
+    },
+    "replayRep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "event.schema.json"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "v",
+        "events",
+        "truncated"
+      ]
+    },
+    "workerCmd": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "cid": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "segment": {
+          "type": "integer"
+        },
+        "seek_ns": {
+          "type": "integer"
+        },
+        "speed": {
+          "type": "number"
+        },
+        "query": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "v",
+        "cid"
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/replayReq"
+    },
+    {
+      "$ref": "#/$defs/replayRep"
+    },
+    {
+      "$ref": "#/$defs/workerCmd"
+    }
+  ]
+}

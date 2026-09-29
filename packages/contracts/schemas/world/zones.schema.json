@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/zones.schema.json",
+  "title": "Semantic zones zones.geojson (awr.zones.v1)",
+  "description": "GeoJSON FeatureCollection in WORLD ENU metres (x = E, y = N), not RFC 7946 WGS84; self-described by the top-level 'awr' member (AWR-16 §7, snake_case properties). Exactly one border (derived); nofly + restricted <= 64.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "awr",
+    "features"
+  ],
+  "properties": {
+    "type": {
+      "const": "FeatureCollection"
+    },
+    "awr": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "awr.zones.v1"
+        },
+        "schema_version": {
+          "$ref": "common.schema.json#/$defs/semver"
+        },
+        "world_id": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "frame": {
+          "const": "world"
+        },
+        "units": {
+          "const": "m"
+        },
+        "coordinate_sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "source_sha256": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "sha256 of scenarios/zones/<world_id>.zones.geojson merged at build time, or null."
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "world_id",
+        "frame",
+        "units",
+        "coordinate_sha256",
+        "source_sha256"
+      ]
+    },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 65,
+      "items": {
+        "$ref": "#/$defs/feature"
+      }
+    }
+  },
+  "$defs": {
+    "feature": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "Feature"
+        },
+        "id": {
+          "$ref": "common.schema.json#/$defs/slug"
+        },
+        "geometry": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "Polygon"
+                },
+                "coordinates": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 1025,
+                    "items": {
+                      "$ref": "common.schema.json#/$defs/vec2"
+                    },
+                    "description": "Closed ring (first == last), <= 1024 distinct vertices; outer CCW, holes CW (V-Z-03)."
+                  }
+                }
+              },
+              "required": [
+                "type",
+                "coordinates"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "MultiPolygon"
+                },
+                "coordinates": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "array",
+                      "minItems": 4,
+                      "maxItems": 1025,
+                      "items": {
+                        "$ref": "common.schema.json#/$defs/vec2"
+                      },
+                      "description": "Closed ring (first == last), <= 1024 distinct vertices; outer CCW, holes CW (V-Z-03)."
+                    }
+                  }
+                }
+              },
+              "required": [
+                "type",
+                "coordinates"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "zone_id": {
+              "$ref": "common.schema.json#/$defs/slug"
+            },
+            "kind": {
+              "enum": [
+                "border",
+                "nofly",
+                "restricted"
+              ],
+              "description": "border: flyable prism; nofly: entry forbidden; restricted: entry only warns (AWR-12 §3.3.3)."
+            },
+            "min_z_m": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "world z, m; null = bounded by the ground (DSM clearance)."
+            },
+            "max_z_m": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "world z, m; null = unbounded."
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "label_zh": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "origin": {
+              "enum": [
+                "derived",
+                "curated",
+                "scenario"
+              ]
+            },
+            "editable": {
+              "type": "boolean"
+            },
+            "valid_from_s": {
+              "type": "number"
+            },
+            "valid_to_s": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "zone_id",
+            "kind",
+            "min_z_m",
+            "max_z_m",
+            "label",
+            "origin"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "geometry",
+        "properties"
+      ]
+    }
+  }
+}

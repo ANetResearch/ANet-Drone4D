@@ -1,0 +1,357 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/env/1/env_world.schema.json",
+  "title": "Per-world environment configuration environment/env.json (awr.env.world.v1)",
+  "description": "AWR-16 §8.2 (format awr-env-world@1, snake_case). coordinate_hash must equal the world coordinate.sha256 (V-E-01); default_preset must exist in presets.json (V-E-02).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.env.world.v1"
+    },
+    "schema_version": {
+      "$ref": "../../world/1/common.schema.json#/$defs/semver"
+    },
+    "world_id": {
+      "type": "string"
+    },
+    "coordinate_hash": {
+      "$ref": "../../world/1/common.schema.json#/$defs/sha256Prefixed"
+    },
+    "roughness": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "z0_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "d_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "source": {
+          "enum": [
+            "default",
+            "landcover",
+            "fitted"
+          ]
+        }
+      },
+      "required": [
+        "z0_m",
+        "d_m",
+        "source"
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "log",
+            "power"
+          ]
+        },
+        "z_ref_m": {
+          "type": "number"
+        },
+        "alpha": {
+          "type": "number"
+        },
+        "adv_height_m": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "z_ref_m",
+        "alpha",
+        "adv_height_m"
+      ]
+    },
+    "default_preset": {
+      "type": "string"
+    },
+    "wind": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          }
+        },
+        "library": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "manifest": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "id",
+                "manifest",
+                "sha256"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "levels",
+        "library"
+      ]
+    },
+    "streamlines": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "analytic": {
+          "type": "boolean"
+        },
+        "library": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "manifest": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "id",
+                "manifest",
+                "sha256"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "analytic",
+        "library"
+      ]
+    },
+    "ground": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "h_msl_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "z_base": {
+          "enum": [
+            "dtm",
+            "flat"
+          ]
+        }
+      },
+      "required": [
+        "h_msl_m",
+        "z_base"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "world_id",
+    "coordinate_hash",
+    "roughness",
+    "profile",
+    "ground",
+    "default_preset",
+    "wind",
+    "streamlines"
+  ],
+  "$defs": {
+    "defaultsItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roughness": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "z0_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "d_m": {
+              "type": "number",
+              "minimum": 0
+            },
+            "source": {
+              "enum": [
+                "default",
+                "landcover",
+                "fitted"
+              ]
+            }
+          },
+          "required": [
+            "z0_m",
+            "d_m",
+            "source"
+          ]
+        },
+        "profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "log",
+                "power"
+              ]
+            },
+            "z_ref_m": {
+              "type": "number"
+            },
+            "alpha": {
+              "type": "number"
+            },
+            "adv_height_m": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "z_ref_m",
+            "alpha",
+            "adv_height_m"
+          ]
+        },
+        "default_preset": {
+          "type": "string"
+        },
+        "wind": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "levels": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3
+              }
+            },
+            "library": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "manifest": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "manifest",
+                    "sha256"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "levels",
+            "library"
+          ]
+        },
+        "streamlines": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "analytic": {
+              "type": "boolean"
+            },
+            "library": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "manifest": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "manifest",
+                    "sha256"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "analytic",
+            "library"
+          ]
+        }
+      },
+      "required": [
+        "roughness",
+        "profile",
+        "default_preset",
+        "wind",
+        "streamlines"
+      ]
+    }
+  }
+}

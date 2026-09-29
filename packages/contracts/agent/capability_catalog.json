@@ -1,0 +1,642 @@
+{
+  "schema": "awr.agent.capability_catalog.v1",
+  "version": 1,
+  "doc": "Capability catalogue v1 (M14 §6.4.3; 24 entries). Content owned by M14, merged by M00.",
+  "capabilities": [
+    {
+      "id": "thermal.imaging",
+      "name_zh": "热成像复核",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "served",
+      "target_version": "V0.1",
+      "ops": [
+        "takeoff",
+        "goto",
+        "orbit",
+        "hover",
+        "land",
+        "rtl",
+        "acquire",
+        "release",
+        "cancel"
+      ],
+      "output_metrics": [
+        "confidence",
+        "detections",
+        "range_m",
+        "dist_err_m",
+        "t_exec_s"
+      ],
+      "output_artifacts": [
+        "thermal/**"
+      ],
+      "physical": {
+        "sensor": {
+          "type": "thermal",
+          "hfov_deg": 50,
+          "res_px": [
+            640,
+            512
+          ],
+          "range_m": 400,
+          "p0": 0.95,
+          "r_fp_m": 150
+        },
+        "alt_agl_m": [
+          30,
+          120
+        ],
+        "limits": {
+          "wind_mps": 12,
+          "rain_mmh": 10,
+          "visibility_m": 200
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "target_enu_m"
+        ],
+        "properties": {
+          "target_enu_m": {
+            "type": "array",
+            "items": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "dwell_s": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 120,
+            "default": 10
+          },
+          "alt_agl_m": {
+            "type": "number",
+            "minimum": 30,
+            "maximum": 120,
+            "default": 60
+          },
+          "orbit_radius_m": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 60,
+            "default": 20
+          }
+        }
+      },
+      "default_accept": {
+        "op": 1,
+        "children": [
+          {
+            "op": 12,
+            "thresh": {
+              "metric": "confidence",
+              "op": 4,
+              "value": 0.8
+            }
+          },
+          {
+            "op": 10,
+            "artifact": {
+              "path_glob": "thermal/**",
+              "min_size_bytes": 1024
+            }
+          },
+          {
+            "op": 11,
+            "test": {
+              "test_id": "station_reached",
+              "expect": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "rgb.zoom",
+      "name_zh": "变焦可见光观测",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "served",
+      "target_version": "V0.1",
+      "ops": [
+        "takeoff",
+        "goto",
+        "orbit",
+        "hover",
+        "land",
+        "rtl",
+        "acquire",
+        "release",
+        "cancel"
+      ],
+      "output_metrics": [
+        "confidence",
+        "detections",
+        "range_m",
+        "dist_err_m",
+        "t_exec_s"
+      ],
+      "output_artifacts": [
+        "rgb/**"
+      ],
+      "physical": {
+        "sensor": {
+          "type": "rgb",
+          "hfov_deg": 60,
+          "res_px": [
+            6000,
+            4000
+          ],
+          "range_m": 300,
+          "p0": 0.8,
+          "r_fp_m": 90
+        },
+        "alt_agl_m": [
+          30,
+          120
+        ],
+        "limits": {
+          "wind_mps": 12,
+          "rain_mmh": 10,
+          "visibility_m": 200
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "target_enu_m"
+        ],
+        "properties": {
+          "target_enu_m": {
+            "type": "array",
+            "items": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "dwell_s": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 120,
+            "default": 10
+          },
+          "alt_agl_m": {
+            "type": "number",
+            "minimum": 30,
+            "maximum": 120,
+            "default": 60
+          },
+          "orbit_radius_m": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 60,
+            "default": 20
+          }
+        }
+      }
+    },
+    {
+      "id": "relay.communication",
+      "name_zh": "通信中继",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "served",
+      "target_version": "V0.1",
+      "ops": [
+        "takeoff",
+        "goto",
+        "hover",
+        "land",
+        "rtl",
+        "acquire",
+        "release",
+        "cancel"
+      ],
+      "output_metrics": [
+        "hold_s",
+        "dist_err_m"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "lidar.mapping",
+      "name_zh": "激光雷达测图",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "future",
+      "target_version": "V0.4",
+      "ops": [
+        "takeoff",
+        "goto",
+        "orbit",
+        "hover",
+        "land",
+        "rtl",
+        "acquire",
+        "release",
+        "cancel"
+      ],
+      "output_metrics": [
+        "coverage_ratio",
+        "points"
+      ],
+      "output_artifacts": [
+        "lidar/**"
+      ],
+      "physical": null
+    },
+    {
+      "id": "lidar.scan",
+      "name_zh": "激光雷达扫描",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "future",
+      "target_version": "V0.2",
+      "ops": [
+        "takeoff",
+        "goto",
+        "orbit",
+        "hover",
+        "land",
+        "rtl",
+        "acquire",
+        "release",
+        "cancel"
+      ],
+      "output_metrics": [
+        "points"
+      ],
+      "output_artifacts": [
+        "lidar/**"
+      ],
+      "physical": null
+    },
+    {
+      "id": "rgb.capture",
+      "name_zh": "可见光拍照",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": false,
+      "d1": "future",
+      "target_version": "V0.8",
+      "ops": [
+        "takeoff",
+        "goto",
+        "orbit",
+        "hover",
+        "land",
+        "rtl",
+        "acquire",
+        "release",
+        "cancel"
+      ],
+      "output_metrics": [
+        "frames"
+      ],
+      "output_artifacts": [
+        "rgb/**"
+      ],
+      "physical": null
+    },
+    {
+      "id": "flight.takeoff",
+      "name_zh": "起飞",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": false,
+      "d1": "declared",
+      "target_version": "V1.0",
+      "ops": [
+        "takeoff"
+      ],
+      "output_metrics": [
+        "dist_err_m",
+        "t_exec_s"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "flight.land",
+      "name_zh": "降落",
+      "access": "set",
+      "requires_lease": false,
+      "long_running": false,
+      "d1": "declared",
+      "target_version": "V1.0",
+      "ops": [
+        "land"
+      ],
+      "output_metrics": [
+        "dist_err_m",
+        "t_exec_s"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "flight.goto",
+      "name_zh": "飞往目标点",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "declared",
+      "target_version": "V1.0",
+      "ops": [
+        "goto"
+      ],
+      "output_metrics": [
+        "dist_err_m",
+        "t_exec_s"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "flight.hover",
+      "name_zh": "悬停",
+      "access": "set",
+      "requires_lease": false,
+      "long_running": false,
+      "d1": "declared",
+      "target_version": "V1.0",
+      "ops": [
+        "hover"
+      ],
+      "output_metrics": [
+        "dist_err_m",
+        "t_exec_s"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "flight.orbit",
+      "name_zh": "环绕",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "declared",
+      "target_version": "V1.0",
+      "ops": [
+        "orbit"
+      ],
+      "output_metrics": [
+        "dist_err_m",
+        "t_exec_s"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "flight.rtl",
+      "name_zh": "返航",
+      "access": "set",
+      "requires_lease": false,
+      "long_running": true,
+      "d1": "declared",
+      "target_version": "V1.0",
+      "ops": [
+        "rtl"
+      ],
+      "output_metrics": [
+        "dist_err_m",
+        "t_exec_s"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "flight.follow_path",
+      "name_zh": "沿航线飞行",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "declared",
+      "target_version": "V1.0",
+      "ops": [
+        "follow_path"
+      ],
+      "output_metrics": [
+        "dist_err_m",
+        "t_exec_s"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "mission.coverage",
+      "name_zh": "区域覆盖",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "future",
+      "target_version": "V0.6",
+      "ops": [
+        "takeoff",
+        "goto",
+        "orbit",
+        "hover",
+        "land",
+        "rtl",
+        "acquire",
+        "release",
+        "cancel",
+        "follow_path"
+      ],
+      "output_metrics": [
+        "coverage_ratio"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "mission.search",
+      "name_zh": "区域搜索",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "future",
+      "target_version": "V0.6",
+      "ops": [
+        "takeoff",
+        "goto",
+        "orbit",
+        "hover",
+        "land",
+        "rtl",
+        "acquire",
+        "release",
+        "cancel",
+        "follow_path"
+      ],
+      "output_metrics": [
+        "coverage_ratio"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "mission.insert_leg",
+      "name_zh": "插入验证航段",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": true,
+      "d1": "future",
+      "target_version": "V0.6",
+      "ops": [
+        "goto",
+        "orbit",
+        "follow_path"
+      ],
+      "output_metrics": [
+        "dist_err_m"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "mission.abort",
+      "name_zh": "中止任务",
+      "access": "set",
+      "requires_lease": true,
+      "long_running": false,
+      "d1": "future",
+      "target_version": "V0.6",
+      "ops": [
+        "hover",
+        "rtl"
+      ],
+      "output_metrics": [],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "agent.describe",
+      "name_zh": "能力清单",
+      "access": "get",
+      "requires_lease": false,
+      "long_running": false,
+      "d1": "served",
+      "target_version": "V0.1",
+      "ops": [],
+      "output_metrics": [],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "agent.state",
+      "name_zh": "智能体状态",
+      "access": "get",
+      "requires_lease": false,
+      "long_running": false,
+      "d1": "served",
+      "target_version": "V0.1",
+      "ops": [],
+      "output_metrics": [
+        "soc_pct",
+        "load",
+        "flight_state",
+        "pos_enu_m"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "task.quote",
+      "name_zh": "任务报价",
+      "access": "get",
+      "requires_lease": false,
+      "long_running": false,
+      "d1": "served",
+      "target_version": "V0.1",
+      "ops": [],
+      "output_metrics": [
+        "eta_s",
+        "energy_wh",
+        "soc_after_pct",
+        "feasible",
+        "conf_expected",
+        "load",
+        "code"
+      ],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "task.result",
+      "name_zh": "任务结果",
+      "access": "get",
+      "requires_lease": false,
+      "long_running": false,
+      "d1": "declared",
+      "target_version": "V1.0",
+      "ops": [],
+      "output_metrics": [],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "blackboard.add",
+      "name_zh": "黑板写入",
+      "access": "set",
+      "requires_lease": false,
+      "long_running": false,
+      "d1": "served",
+      "target_version": "V0.1",
+      "ops": [],
+      "output_metrics": [],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "blackboard.snapshot",
+      "name_zh": "黑板快照",
+      "access": "get",
+      "requires_lease": false,
+      "long_running": false,
+      "d1": "served",
+      "target_version": "V0.1",
+      "ops": [],
+      "output_metrics": [],
+      "output_artifacts": [],
+      "physical": null
+    },
+    {
+      "id": "blackboard.conclude",
+      "name_zh": "黑板结论",
+      "access": "set",
+      "requires_lease": false,
+      "long_running": false,
+      "d1": "served",
+      "target_version": "V0.1",
+      "ops": [],
+      "output_metrics": [],
+      "output_artifacts": [],
+      "physical": null
+    }
+  ]
+}

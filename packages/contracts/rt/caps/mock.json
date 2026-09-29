@@ -1,0 +1,43 @@
+{
+  "backend": "mock",
+  "version": 1,
+  "kinds": [
+    "uav"
+  ],
+  "max_vehicles": 1000,
+  "clock": {
+    "mode": "lockstep",
+    "pausable": true,
+    "max_speed": 10,
+    "steppable": true
+  },
+  "cmd": {
+    "takeoff": "native",
+    "land": "native",
+    "goto": {
+      "impl": "native",
+      "speed": true
+    },
+    "follow_path": "native",
+    "orbit": {
+      "impl": "native",
+      "turns": true,
+      "radius_m": [
+        1,
+        1000
+      ]
+    },
+    "hover": "native",
+    "rtl": "native",
+    "velocity": "native",
+    "safety_stop": "native",
+    "pause": "native",
+    "kill": "native"
+  },
+  "ack": {
+    "native": true,
+    "readback": "fsm"
+  },
+  "trust_ceiling": 4,
+  "truth": true
+}

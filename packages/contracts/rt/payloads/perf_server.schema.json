@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/perf_server.schema.json",
+  "title": "awr.perf.server.v1",
+  "description": "Topic perf/server 1 Hz (AWR-17 §6.5; M11-FR-085). cpu_pct is per-core percent.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "api": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "cpu_pct": {
+          "type": "number"
+        },
+        "loop_lag_p99_ms": {
+          "type": "number"
+        },
+        "tick_age_p50_ms": {
+          "type": "number"
+        },
+        "tick_age_p99_ms": {
+          "type": "number"
+        },
+        "tick_overruns": {
+          "type": "integer"
+        },
+        "encodes_per_s": {
+          "type": "number"
+        },
+        "bytes_per_s": {
+          "type": "number"
+        },
+        "n_clients": {
+          "type": "integer"
+        }
+      }
+    },
+    "clients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "conn_id": {
+            "type": "string"
+          },
+          "fps": {
+            "type": "number"
+          },
+          "window": {
+            "type": "integer"
+          },
+          "credit_skips": {
+            "type": "integer"
+          },
+          "bucket_defers": {
+            "type": "integer"
+          },
+          "slot_overwrites": {
+            "type": "integer"
+          },
+          "ctrl_queue_hwm": {
+            "type": "integer"
+          },
+          "srtt_ms": {
+            "type": "number"
+          },
+          "kbps": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "conn_id"
+        ]
+      }
+    },
+    "sim": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "cpu_pct": {
+          "type": "number"
+        },
+        "rtf": {
+          "type": "number"
+        },
+        "step_p50_us": {
+          "type": "number"
+        },
+        "step_p99_us": {
+          "type": "number"
+        },
+        "step_max_us": {
+          "type": "number"
+        },
+        "catchup_saturated": {
+          "type": "integer"
+        },
+        "stage_ms_per_s": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "n_active": {
+          "type": "integer"
+        },
+        "kernel": {
+          "enum": [
+            "numba",
+            "numpy"
+          ]
+        }
+      }
+    },
+    "geo": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "probe_qps": {
+          "type": "number"
+        },
+        "probe_p95_ms": {
+          "type": "number"
+        },
+        "queue_len": {
+          "type": "integer"
+        },
+        "slice_us_p99": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "required": [
+    "api",
+    "clients",
+    "sim"
+  ]
+}

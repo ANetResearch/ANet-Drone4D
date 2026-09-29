@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bus/1/detail.schema.json",
+  "title": "Per-vehicle detail frames (state/sim-core/detail and state/<producer>/sensor)",
+  "description": "AWR-17 §9.3: detail = {v, t_sim_ns, agent_no: u16[n], rows: bin(n*32)} of awr.EnvSample32.v1; sensor = {v, t_sim_ns, rows: bin(n*48)} of awr.SensorPose48.v1 (rows carry agent_no). rows are raw bytes in msgpack.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "t_sim_ns": {
+          "type": "integer"
+        },
+        "agent_no": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "rows": {
+          "description": "msgpack bin, n*32 bytes"
+        }
+      },
+      "required": [
+        "v",
+        "t_sim_ns",
+        "agent_no",
+        "rows"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "t_sim_ns": {
+          "type": "integer"
+        },
+        "rows": {
+          "description": "msgpack bin, n*48 bytes"
+        }
+      },
+      "required": [
+        "v",
+        "t_sim_ns",
+        "rows"
+      ]
+    }
+  ]
+}

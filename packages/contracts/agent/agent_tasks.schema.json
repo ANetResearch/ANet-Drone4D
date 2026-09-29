@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/agent/1/agent_tasks.schema.json",
+  "title": "awr.agent.tasks.v1",
+  "description": "Topic agent/tasks (M14 §7.2.2): newest 64 tasks, frame <= 16 KiB.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "t_sim_ns": {
+      "type": "integer"
+    },
+    "tasks": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "task.schema.json#/$defs/statusLite"
+      }
+    }
+  },
+  "required": [
+    "version",
+    "t_sim_ns",
+    "tasks"
+  ]
+}

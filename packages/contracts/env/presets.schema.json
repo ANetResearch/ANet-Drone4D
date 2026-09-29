@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/env/1/presets.schema.json",
+  "title": "awr.env.presets.v1",
+  "description": "Environment presets and constants (AWR-16 §8.1 structure; values M07 §6.4, §6.5). The file bytes are copied verbatim into generated code; config.presets_sha256 = sha256(file bytes). fields[] order is the EnvKeyframe position encoding and may only grow at the tail.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.env.presets.v1"
+    },
+    "schema_version": {
+      "$ref": "../../world/1/common.schema.json#/$defs/semver"
+    },
+    "constants": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "number",
+          "array"
+        ],
+        "items": {
+          "type": "number"
+        }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "minItems": 21,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[a-z]+\\.[a-z0-9_]+$"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "group": {
+            "enum": [
+              "wind",
+              "cloud",
+              "precip",
+              "vis",
+              "misc"
+            ]
+          },
+          "space": {
+            "enum": [
+              "lin",
+              "log",
+              "arc"
+            ]
+          },
+          "min": {
+            "type": "number"
+          },
+          "max": {
+            "type": "number"
+          },
+          "default": {
+            "type": "number"
+          },
+          "user_axis": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "unit",
+          "group",
+          "space",
+          "min",
+          "max"
+        ]
+      }
+    },
+    "windows": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "wind": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "cloud": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "precip": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "vis": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "misc": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "required": [
+            "wind",
+            "cloud",
+            "precip",
+            "vis",
+            "misc"
+          ]
+        },
+        "leave": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "wind": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "cloud": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "precip": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "vis": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "misc": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "required": [
+            "wind",
+            "cloud",
+            "precip",
+            "vis",
+            "misc"
+          ]
+        }
+      },
+      "required": [
+        "enter",
+        "leave"
+      ]
+    },
+    "rates_per_s": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wind": {
+          "type": "number"
+        },
+        "cloud": {
+          "type": "number"
+        },
+        "precip": {
+          "type": "number"
+        },
+        "vis": {
+          "type": "number"
+        },
+        "misc": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "wind",
+        "cloud",
+        "precip",
+        "vis",
+        "misc"
+      ]
+    },
+    "durations_s": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preset": {
+          "type": "number"
+        },
+        "ui_edit": {
+          "type": "number"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "preset",
+        "ui_edit"
+      ]
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "via": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "via"
+        ]
+      }
+    },
+    "presets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][A-Za-z]*$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "name_zh": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "scalars": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            },
+            "propertyNames": {
+              "enum": [
+                "wind",
+                "cloud",
+                "precip",
+                "atmosphere",
+                "lightning",
+                "visual"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "name_zh",
+          "scalars"
+        ]
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scalars": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "propertyNames": {
+            "enum": [
+              "wind",
+              "cloud",
+              "precip",
+              "atmosphere",
+              "lightning",
+              "visual"
+            ]
+          }
+        },
+        "config": {
+          "type": "object"
+        }
+      }
+    },
+    "client": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "number",
+          "array"
+        ],
+        "items": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "constants",
+    "fields",
+    "windows",
+    "rates_per_s",
+    "durations_s",
+    "routes",
+    "presets"
+  ]
+}

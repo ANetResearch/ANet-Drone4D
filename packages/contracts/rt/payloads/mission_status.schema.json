@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/mission_status.schema.json",
+  "title": "awr.mission.status.v1",
+  "description": "Topic mission/{mid}/status (AWR-17 §6.5; M10 §7).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "mid": {
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "IDLE",
+        "RUNNING",
+        "PAUSED",
+        "DONE",
+        "ABORTED"
+      ]
+    },
+    "progress_pct": {
+      "type": "number"
+    },
+    "revision": {
+      "type": "integer"
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "vehicle_id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "PENDING",
+              "TRANSIT",
+              "WORKING",
+              "WAITING",
+              "RETURNING",
+              "SUSPENDED",
+              "DONE",
+              "DROPPED"
+            ]
+          },
+          "item": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "vehicle_id",
+          "state"
+        ]
+      }
+    },
+    "t_ns": {
+      "type": "integer"
+    },
+    "eta_s": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "metrics": {
+      "type": "object"
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pending": {
+          "type": "boolean"
+        },
+        "last_ms": {
+          "type": "number"
+        }
+      }
+    },
+    "formation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "type": "string"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "rms_m": {
+          "type": "number"
+        },
+        "heading_rad": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "required": [
+    "mid",
+    "state",
+    "progress_pct",
+    "revision",
+    "tracks",
+    "t_ns"
+  ]
+}

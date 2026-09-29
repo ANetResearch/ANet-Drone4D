@@ -1,0 +1,85 @@
+{
+ "schema": "awr.golden.batch.v1",
+ "generator": "tools/contracts/gen_golden.py",
+ "rule": "16 B frame header, 16 B record headers, payload padded to 8; payload_off % 8 == 0",
+ "frames": [
+  {
+   "hex": "1001070001000000009236bb1c000000010002012400000001000000000000007b22726f737465725f76657273696f6e223a20332c2022656e7472696573223a205b5d7d0000000002000000400000002a0000000000000000002500193e4c433eceaac32883d4c3000000000000ff7f000000000000000001000700ec1e46c34c2aeb438c30904300000000825a825a00000000000000000a000008400000002b00000060f0ffff0000250000000000193e4c433eceaac32883d4c30000000000000000000000000000000000000000000000000000803f00000000000000000000000000000000",
+   "flags": 1,
+   "epoch": 7,
+   "frame_seq": 1,
+   "t_sim_ns": 123400000000,
+   "records": [
+    {
+     "channel_id": 1,
+     "encoding": 2,
+     "rflags": 1,
+     "length": 36,
+     "seq": 1,
+     "dt_us": 0,
+     "payload_off": 32,
+     "payload_hex": "7b22726f737465725f76657273696f6e223a20332c2022656e7472696573223a205b5d7d"
+    },
+    {
+     "channel_id": 2,
+     "encoding": 0,
+     "rflags": 0,
+     "length": 64,
+     "seq": 42,
+     "dt_us": 0,
+     "payload_off": 88,
+     "payload_hex": "00002500193e4c433eceaac32883d4c3000000000000ff7f000000000000000001000700ec1e46c34c2aeb438c30904300000000825a825a0000000000000000"
+    },
+    {
+     "channel_id": 10,
+     "encoding": 0,
+     "rflags": 8,
+     "length": 64,
+     "seq": 43,
+     "dt_us": -4000,
+     "payload_off": 168,
+     "payload_hex": "0000250000000000193e4c433eceaac32883d4c30000000000000000000000000000000000000000000000000000803f00000000000000000000000000000000"
+    }
+   ]
+  },
+  {
+   "hex": "10faffff02000000ffffffffffff1f00030007f005000000050000000000000001020304050000000400030000000000060000000c000000ffff010104000000ffffffffffffff7f81a1760100000000",
+   "flags": 250,
+   "epoch": 65535,
+   "frame_seq": 2,
+   "t_sim_ns": 9007199254740991,
+   "records": [
+    {
+     "channel_id": 3,
+     "encoding": 7,
+     "rflags": 240,
+     "length": 5,
+     "seq": 5,
+     "dt_us": 0,
+     "payload_off": 32,
+     "payload_hex": "0102030405"
+    },
+    {
+     "channel_id": 4,
+     "encoding": 3,
+     "rflags": 0,
+     "length": 0,
+     "seq": 6,
+     "dt_us": 12,
+     "payload_off": 56,
+     "payload_hex": ""
+    },
+    {
+     "channel_id": 65535,
+     "encoding": 1,
+     "rflags": 1,
+     "length": 4,
+     "seq": 4294967295,
+     "dt_us": 2147483647,
+     "payload_off": 72,
+     "payload_hex": "81a17601"
+    }
+   ]
+  }
+ ]
+}

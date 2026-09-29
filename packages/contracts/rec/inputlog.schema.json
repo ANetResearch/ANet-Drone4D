@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rec/1/inputlog.schema.json",
+  "title": "Input log runs/<run>/inputs.msgpack (awr.inputlog.v1)",
+  "description": "AWR-16 §13.8 (D1-ext, ADR-049): header object followed by entries.",
+  "$defs": {
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "awr.inputlog.v1"
+        },
+        "schema_version": {
+          "$ref": "../../world/1/common.schema.json#/$defs/semver"
+        },
+        "run_id": {
+          "$ref": "../../world/1/common.schema.json#/$defs/runId"
+        },
+        "segment": {
+          "type": "integer"
+        },
+        "world_seed": {
+          "$ref": "../../world/1/common.schema.json#/$defs/int64"
+        },
+        "meta_sha256": {
+          "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "run_id",
+        "segment",
+        "world_seed",
+        "meta_sha256"
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tick": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "cmd",
+            "clock",
+            "lease",
+            "env_set",
+            "env_preset",
+            "fault",
+            "plan_result",
+            "geo_result",
+            "roster",
+            "scenario_event"
+          ]
+        },
+        "principal": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "entry": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "role",
+                "entry"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload_sha256": {
+          "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+        },
+        "payload": {
+          "description": "msgpack bin: original bus message bytes"
+        }
+      },
+      "required": [
+        "tick",
+        "kind",
+        "principal",
+        "cid",
+        "payload_sha256",
+        "payload"
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/header"
+    },
+    {
+      "$ref": "#/$defs/entry"
+    }
+  ]
+}

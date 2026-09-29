@@ -1,0 +1,157 @@
+{
+ "version": "2.0",
+ "name": "sanfrancisco",
+ "description": "",
+ "points": 5000091,
+ "projection": "",
+ "hierarchy": {
+  "firstChunkSize": 14476,
+  "stepSize": 5,
+  "depth": 5
+ },
+ "offset": [
+  -3638.786770629883,
+  -3756.033395385742,
+  -114.54921455383302
+ ],
+ "scale": [
+  0.001,
+  0.001,
+  0.001
+ ],
+ "spacing": 117.37604373880549,
+ "boundingBox": {
+  "min": [
+   -3638.786770629883,
+   -3756.033395385742,
+   -114.54921455383302
+  ],
+  "max": [
+   3873.2800286536685,
+   3756.0334038978094,
+   7397.517584729719
+  ]
+ },
+ "encoding": "ANET_Q16",
+ "attributes": [
+  {
+   "name": "anet:pos",
+   "description": "node-cube unorm16 xyz + oct16 normal (w)",
+   "size": 8,
+   "numElements": 4,
+   "elementSize": 2,
+   "type": "uint16"
+  },
+  {
+   "name": "anet:col",
+   "description": "sRGB display albedo + class index (a)",
+   "size": 4,
+   "numElements": 4,
+   "elementSize": 1,
+   "type": "uint8"
+  }
+ ],
+ "anet": {
+  "formatVersion": 1,
+  "frame": "world",
+  "streams": [
+   "pos",
+   "col"
+  ],
+  "bytesPerPoint": 12,
+  "pos": {
+   "format": "unorm16x4",
+   "xyz": "node-cube",
+   "w": "oct16"
+  },
+  "col": {
+   "format": "unorm8x4",
+   "rgb": "baked-height",
+   "a": "class-index"
+  },
+  "ext": null,
+  "compression": "none",
+  "pointOrder": "shuffled",
+  "shuffleSeed": 1,
+  "sampling": {
+   "method": "grid-center",
+   "G": 64,
+   "leaf": 20000,
+   "minChild": 0,
+   "B": 21,
+   "seed": 1
+  },
+  "classTable": {
+   "id": "anet-classes@1",
+   "href": "semantic/anet-classes@1.json"
+  },
+  "nodeCount": 658,
+  "levelsByteEnd": [
+   62436,
+   306708,
+   1299216,
+   5477460,
+   41407656,
+   60001092
+  ],
+  "levelsPoints": [
+   5203,
+   25559,
+   108268,
+   456455,
+   3450638,
+   5000091
+  ],
+  "levelsNodes": [
+   1,
+   4,
+   16,
+   64,
+   257,
+   316
+  ],
+  "firstScreenLevel": 2,
+  "tightBounds": {
+   "min": [
+    -3638.786770629883,
+    -3756.033395385742,
+    -114.54921455383302
+   ],
+   "max": [
+    3638.786770629883,
+    3756.033395385742,
+    443.19979801177976
+   ]
+  },
+  "hierarchyExt": {
+   "href": "hierarchy_ext.bin",
+   "recordSize": 12,
+   "content": "subtree-aabb-u16"
+  },
+  "stats": {
+   "zP1": -98.42,
+   "zP99": 161.26,
+   "hagP1": 0.0,
+   "hagP99": 83.67,
+   "nnMedianM": 1.887,
+   "nnSource": "knn",
+   "classHistogram": {
+    "0": 144283,
+    "1": 1769682,
+    "5": 1551630,
+    "6": 1163053,
+    "7": 371443
+   }
+  },
+  "root": {
+   "forestIndex": 0,
+   "forestSize": 1
+  },
+  "twin": null,
+  "generator": {
+   "name": "g03_build.py",
+   "version": "0.1.0",
+   "seconds": 16.72
+  }
+ }
+}

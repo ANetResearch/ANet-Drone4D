@@ -1,0 +1,896 @@
+{
+  "schema": "awr.env.presets.v1",
+  "schema_version": "1.0.0",
+  "constants": {
+    "k_mor": 2.995732273553991,
+    "k_v2": 3.912023005428146,
+    "haze_scale_h_m": 1500,
+    "mor_bg_min_m": 1,
+    "mor_bg_max_m": 50000,
+    "fog_fraction": 0.9,
+    "rain_sigma_coef": 0.00026,
+    "rain_sigma_exp": 0.63,
+    "snow_sigma_coef": 0.001,
+    "snow_sigma_exp": 0.8,
+    "precip_gate_cover": [
+      0.6,
+      0.85
+    ],
+    "turb_n": 64,
+    "turb_dx_m": 4,
+    "turb_l_m": 30,
+    "turb_period_m": 256,
+    "ground_fade_m": 2,
+    "dryden_min_airspeed_mps": 0.5,
+    "gust_length_default_m": 60,
+    "gust_interval_s": [
+      2,
+      600
+    ],
+    "gust_amp_factor": [
+      0.5,
+      1.0
+    ],
+    "gust_lead_s": 2,
+    "gust_buffer_m": 200,
+    "gust_max_active": 4,
+    "anchor_grid_ms": 20,
+    "wetness_tau_up_s": 7,
+    "wetness_tau_down_s": 70,
+    "puddle_tau_up_s": 32,
+    "puddle_tau_down_s": 150,
+    "wet_gain": 1.2,
+    "puddle_exp": 1.8,
+    "exp_settle": 12
+  },
+  "fields": [
+    {
+      "path": "wind.speed_ref_mps",
+      "unit": "m/s",
+      "group": "wind",
+      "space": "lin",
+      "min": 0,
+      "max": 40,
+      "default": 3
+    },
+    {
+      "path": "wind.dir_from_deg",
+      "unit": "deg",
+      "group": "wind",
+      "space": "arc",
+      "min": 0,
+      "max": 360,
+      "default": 270,
+      "user_axis": true
+    },
+    {
+      "path": "wind.w_mean_mps",
+      "unit": "m/s",
+      "group": "wind",
+      "space": "lin",
+      "min": -5,
+      "max": 5,
+      "default": 0,
+      "user_axis": true
+    },
+    {
+      "path": "wind.turb_sigma_u_ref_mps",
+      "unit": "m/s",
+      "group": "wind",
+      "space": "lin",
+      "min": 0,
+      "max": 8,
+      "default": 0.5
+    },
+    {
+      "path": "wind.gust_amp_mps",
+      "unit": "m/s",
+      "group": "wind",
+      "space": "lin",
+      "min": 0,
+      "max": 20,
+      "default": 0
+    },
+    {
+      "path": "wind.gust_rate_hz",
+      "unit": "1/s",
+      "group": "wind",
+      "space": "lin",
+      "min": 0,
+      "max": 0.2,
+      "default": 0
+    },
+    {
+      "path": "wind.gust_length_m",
+      "unit": "m",
+      "group": "wind",
+      "space": "lin",
+      "min": 10,
+      "max": 500,
+      "default": 60
+    },
+    {
+      "path": "cloud.cover",
+      "unit": "1",
+      "group": "cloud",
+      "space": "lin",
+      "min": 0,
+      "max": 1,
+      "default": 0.05
+    },
+    {
+      "path": "cloud.type",
+      "unit": "1",
+      "group": "cloud",
+      "space": "lin",
+      "min": 0,
+      "max": 1,
+      "default": 0.5
+    },
+    {
+      "path": "cloud.base_m",
+      "unit": "m AGL",
+      "group": "cloud",
+      "space": "lin",
+      "min": 100,
+      "max": 5000,
+      "default": 1500
+    },
+    {
+      "path": "cloud.top_m",
+      "unit": "m AGL",
+      "group": "cloud",
+      "space": "lin",
+      "min": 200,
+      "max": 15000,
+      "default": 2500
+    },
+    {
+      "path": "precip.rain_mmh",
+      "unit": "mm/h",
+      "group": "precip",
+      "space": "lin",
+      "min": 0,
+      "max": 150,
+      "default": 0
+    },
+    {
+      "path": "precip.snow_mmh",
+      "unit": "mm/h water equivalent",
+      "group": "precip",
+      "space": "lin",
+      "min": 0,
+      "max": 30,
+      "default": 0
+    },
+    {
+      "path": "atmosphere.mor_bg_m",
+      "unit": "m",
+      "group": "vis",
+      "space": "log",
+      "min": 1,
+      "max": 50000,
+      "default": 30000
+    },
+    {
+      "path": "atmosphere.fog_top_agl_m",
+      "unit": "m AGL",
+      "group": "vis",
+      "space": "lin",
+      "min": 0,
+      "max": 500,
+      "default": 0
+    },
+    {
+      "path": "atmosphere.dust",
+      "unit": "1",
+      "group": "vis",
+      "space": "lin",
+      "min": 0,
+      "max": 1,
+      "default": 0
+    },
+    {
+      "path": "atmosphere.isa_dt_c",
+      "unit": "K",
+      "group": "misc",
+      "space": "lin",
+      "min": -40,
+      "max": 40,
+      "default": 0,
+      "user_axis": true
+    },
+    {
+      "path": "atmosphere.rh",
+      "unit": "1",
+      "group": "misc",
+      "space": "lin",
+      "min": 0,
+      "max": 1,
+      "default": 0.5,
+      "user_axis": true
+    },
+    {
+      "path": "lightning.rate_per_min",
+      "unit": "1/min",
+      "group": "precip",
+      "space": "lin",
+      "min": 0,
+      "max": 30,
+      "default": 0
+    },
+    {
+      "path": "visual.horizon_step",
+      "unit": "1",
+      "group": "vis",
+      "space": "lin",
+      "min": 500,
+      "max": 850,
+      "default": 850
+    },
+    {
+      "path": "visual.cloud2d_alpha_max",
+      "unit": "1",
+      "group": "cloud",
+      "space": "lin",
+      "min": 0,
+      "max": 0.5,
+      "default": 0
+    }
+  ],
+  "windows": {
+    "enter": {
+      "wind": [
+        0,
+        0.8
+      ],
+      "cloud": [
+        0,
+        0.7
+      ],
+      "precip": [
+        0.3,
+        1
+      ],
+      "vis": [
+        0.2,
+        1
+      ],
+      "misc": [
+        0,
+        1
+      ]
+    },
+    "leave": {
+      "wind": [
+        0,
+        0.8
+      ],
+      "cloud": [
+        0.3,
+        1
+      ],
+      "precip": [
+        0,
+        0.6
+      ],
+      "vis": [
+        0,
+        0.8
+      ],
+      "misc": [
+        0,
+        1
+      ]
+    }
+  },
+  "rates_per_s": {
+    "cloud": 0.9,
+    "precip": 1.6,
+    "wind": 1.1,
+    "vis": 1.2,
+    "misc": 0.5
+  },
+  "durations_s": {
+    "preset": 30,
+    "ui_edit": 3,
+    "min": 0,
+    "max": 600
+  },
+  "routes": [
+    {
+      "from": "thunderstorm",
+      "to": "clear",
+      "via": [
+        "rain",
+        "overcast",
+        "partlyCloudy"
+      ]
+    },
+    {
+      "from": "clear",
+      "to": "thunderstorm",
+      "via": [
+        "partlyCloudy",
+        "overcast",
+        "rain",
+        "heavyRain"
+      ]
+    },
+    {
+      "from": "clear",
+      "to": "heavyRain",
+      "via": [
+        "overcast",
+        "rain"
+      ]
+    },
+    {
+      "from": "heavyRain",
+      "to": "clear",
+      "via": [
+        "rain",
+        "overcast"
+      ]
+    },
+    {
+      "from": "blizzard",
+      "to": "clear",
+      "via": [
+        "snow",
+        "overcast"
+      ]
+    },
+    {
+      "from": "clear",
+      "to": "blizzard",
+      "via": [
+        "overcast",
+        "snow"
+      ]
+    },
+    {
+      "from": "sandstorm",
+      "to": "rain",
+      "via": [
+        "haze",
+        "overcast"
+      ]
+    },
+    {
+      "from": "fog",
+      "to": "thunderstorm",
+      "via": [
+        "overcast",
+        "rain"
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "id": "clear",
+      "name": "Clear",
+      "name_zh": "晴",
+      "icon": "env.clear",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 3,
+          "turb_sigma_u_ref_mps": 0.5,
+          "gust_amp_mps": 0,
+          "gust_rate_hz": 0,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 0.05,
+          "type": 0.5,
+          "base_m": 1500,
+          "top_m": 2500
+        },
+        "precip": {
+          "rain_mmh": 0,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 30000,
+          "fog_top_agl_m": 0,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 850,
+          "cloud2d_alpha_max": 0
+        }
+      }
+    },
+    {
+      "id": "partlyCloudy",
+      "name": "Partly cloudy",
+      "name_zh": "少云",
+      "icon": "env.partly",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 5,
+          "turb_sigma_u_ref_mps": 1.0,
+          "gust_amp_mps": 0,
+          "gust_rate_hz": 0,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 0.35,
+          "type": 0.5,
+          "base_m": 1200,
+          "top_m": 2600
+        },
+        "precip": {
+          "rain_mmh": 0,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 20000,
+          "fog_top_agl_m": 0,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 850,
+          "cloud2d_alpha_max": 0.2
+        }
+      }
+    },
+    {
+      "id": "overcast",
+      "name": "Overcast",
+      "name_zh": "阴",
+      "icon": "env.overcast",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 6,
+          "turb_sigma_u_ref_mps": 1.2,
+          "gust_amp_mps": 0,
+          "gust_rate_hz": 0,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 0.9,
+          "type": 0.1,
+          "base_m": 700,
+          "top_m": 1500
+        },
+        "precip": {
+          "rain_mmh": 0,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 12000,
+          "fog_top_agl_m": 0,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 800,
+          "cloud2d_alpha_max": 0.45
+        }
+      }
+    },
+    {
+      "id": "lightRain",
+      "name": "Light rain",
+      "name_zh": "小雨",
+      "icon": "env.drizzle",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 5,
+          "turb_sigma_u_ref_mps": 1.2,
+          "gust_amp_mps": 0,
+          "gust_rate_hz": 0,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 0.9,
+          "type": 0.2,
+          "base_m": 600,
+          "top_m": 1800
+        },
+        "precip": {
+          "rain_mmh": 1.5,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 18309.1,
+          "fog_top_agl_m": 0,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 800,
+          "cloud2d_alpha_max": 0.45
+        }
+      }
+    },
+    {
+      "id": "rain",
+      "name": "Rain",
+      "name_zh": "中雨",
+      "icon": "env.rain",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 8,
+          "turb_sigma_u_ref_mps": 2.0,
+          "gust_amp_mps": 3,
+          "gust_rate_hz": 0.016667,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 0.95,
+          "type": 0.3,
+          "base_m": 500,
+          "top_m": 2500
+        },
+        "precip": {
+          "rain_mmh": 6,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 15389.2,
+          "fog_top_agl_m": 0,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 700,
+          "cloud2d_alpha_max": 0.5
+        }
+      }
+    },
+    {
+      "id": "heavyRain",
+      "name": "Heavy rain",
+      "name_zh": "大雨",
+      "icon": "env.storm",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 11,
+          "turb_sigma_u_ref_mps": 3.0,
+          "gust_amp_mps": 5,
+          "gust_rate_hz": 0.022222,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 1.0,
+          "type": 0.5,
+          "base_m": 450,
+          "top_m": 4000
+        },
+        "precip": {
+          "rain_mmh": 25,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 5750.5,
+          "fog_top_agl_m": 0,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 0.5
+        },
+        "visual": {
+          "horizon_step": 700,
+          "cloud2d_alpha_max": 0.5
+        }
+      }
+    },
+    {
+      "id": "thunderstorm",
+      "name": "Thunderstorm",
+      "name_zh": "雷雨",
+      "icon": "env.thunder",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 14,
+          "turb_sigma_u_ref_mps": 5.0,
+          "gust_amp_mps": 8,
+          "gust_rate_hz": 0.033333,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 1.0,
+          "type": 1.0,
+          "base_m": 800,
+          "top_m": 9000
+        },
+        "precip": {
+          "rain_mmh": 45,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 3389.6,
+          "fog_top_agl_m": 0,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 6
+        },
+        "visual": {
+          "horizon_step": 850,
+          "cloud2d_alpha_max": 0.5
+        }
+      }
+    },
+    {
+      "id": "fog",
+      "name": "Fog",
+      "name_zh": "雾",
+      "icon": "env.fog",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 1.5,
+          "turb_sigma_u_ref_mps": 0.3,
+          "gust_amp_mps": 0,
+          "gust_rate_hz": 0,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 0.5,
+          "type": 0.0,
+          "base_m": 300,
+          "top_m": 700
+        },
+        "precip": {
+          "rain_mmh": 0,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 150,
+          "fog_top_agl_m": 60,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 600,
+          "cloud2d_alpha_max": 0.25
+        }
+      }
+    },
+    {
+      "id": "haze",
+      "name": "Haze",
+      "name_zh": "霾",
+      "icon": "env.haze",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 2,
+          "turb_sigma_u_ref_mps": 0.4,
+          "gust_amp_mps": 0,
+          "gust_rate_hz": 0,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 0.2,
+          "type": 0.4,
+          "base_m": 1500,
+          "top_m": 2500
+        },
+        "precip": {
+          "rain_mmh": 0,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 3000,
+          "fog_top_agl_m": 0,
+          "dust": 0.15
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 700,
+          "cloud2d_alpha_max": 0.1
+        }
+      }
+    },
+    {
+      "id": "snow",
+      "name": "Snow",
+      "name_zh": "雪",
+      "icon": "env.snow",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 5,
+          "turb_sigma_u_ref_mps": 1.5,
+          "gust_amp_mps": 0,
+          "gust_rate_hz": 0,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 0.95,
+          "type": 0.2,
+          "base_m": 500,
+          "top_m": 2000
+        },
+        "precip": {
+          "rain_mmh": 0,
+          "snow_mmh": 2
+        },
+        "atmosphere": {
+          "mor_bg_m": 11699.6,
+          "fog_top_agl_m": 0,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 600,
+          "cloud2d_alpha_max": 0.5
+        }
+      }
+    },
+    {
+      "id": "blizzard",
+      "name": "Blizzard",
+      "name_zh": "暴风雪",
+      "icon": "env.blizzard",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 18,
+          "turb_sigma_u_ref_mps": 5.0,
+          "gust_amp_mps": 8,
+          "gust_rate_hz": 0.033333,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 1.0,
+          "type": 0.3,
+          "base_m": 400,
+          "top_m": 2500
+        },
+        "precip": {
+          "rain_mmh": 0,
+          "snow_mmh": 5
+        },
+        "atmosphere": {
+          "mor_bg_m": 183.3,
+          "fog_top_agl_m": 0,
+          "dust": 0
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 500,
+          "cloud2d_alpha_max": 0.5
+        }
+      }
+    },
+    {
+      "id": "sandstorm",
+      "name": "Sandstorm",
+      "name_zh": "沙尘暴",
+      "icon": "env.sand",
+      "scalars": {
+        "wind": {
+          "speed_ref_mps": 16,
+          "turb_sigma_u_ref_mps": 5.0,
+          "gust_amp_mps": 8,
+          "gust_rate_hz": 0.033333,
+          "gust_length_m": 60
+        },
+        "cloud": {
+          "cover": 0.3,
+          "type": 0.4,
+          "base_m": 2000,
+          "top_m": 3500
+        },
+        "precip": {
+          "rain_mmh": 0,
+          "snow_mmh": 0
+        },
+        "atmosphere": {
+          "mor_bg_m": 400,
+          "fog_top_agl_m": 0,
+          "dust": 1.0
+        },
+        "lightning": {
+          "rate_per_min": 0
+        },
+        "visual": {
+          "horizon_step": 600,
+          "cloud2d_alpha_max": 0.15
+        }
+      }
+    }
+  ],
+  "defaults": {
+    "scalars": {
+      "wind": {
+        "speed_ref_mps": 3,
+        "dir_from_deg": 270,
+        "w_mean_mps": 0,
+        "turb_sigma_u_ref_mps": 0.5,
+        "gust_amp_mps": 0,
+        "gust_rate_hz": 0,
+        "gust_length_m": 60
+      },
+      "cloud": {
+        "cover": 0.05,
+        "type": 0.5,
+        "base_m": 1500,
+        "top_m": 2500
+      },
+      "precip": {
+        "rain_mmh": 0,
+        "snow_mmh": 0
+      },
+      "atmosphere": {
+        "mor_bg_m": 30000,
+        "fog_top_agl_m": 0,
+        "dust": 0,
+        "isa_dt_c": 0,
+        "rh": 0.5
+      },
+      "lightning": {
+        "rate_per_min": 0
+      },
+      "visual": {
+        "horizon_step": 850,
+        "cloud2d_alpha_max": 0
+      }
+    },
+    "config": {
+      "wind": {
+        "level": 1,
+        "profile": {
+          "kind": "log",
+          "z_ref_m": 10,
+          "z0_m": 0.5,
+          "d_m": 0,
+          "alpha": 0.25,
+          "adv_height_m": 40
+        },
+        "library": null,
+        "turbulence": {
+          "model": "box",
+          "n": 64,
+          "dx_m": 4,
+          "l_m": 30
+        },
+        "gust": {
+          "model": "cos1_front",
+          "max_active": 4
+        }
+      },
+      "sun": {
+        "azimuth_deg": 150,
+        "elevation_deg": 50
+      },
+      "weather_map": {
+        "n": 512,
+        "scale_m": 24000
+      }
+    }
+  },
+  "client": {
+    "anchor_snap_m": 1,
+    "anchor_snap_wetness": 0.02,
+    "stale_wall_s": 3,
+    "wind_ramp_vmax_mps": 20,
+    "wind_ramp_steps_mps": [
+      4,
+      8,
+      12,
+      16
+    ]
+  }
+}

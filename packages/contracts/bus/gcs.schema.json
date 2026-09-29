@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bus/1/gcs.schema.json",
+  "title": "Gcs link heartbeat (ctl/sim-core/gcs)",
+  "description": "AWR-17 §9.4, §9.6: 5 Hz wall clock.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "principal_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "seat_state": {
+      "enum": [
+        "FREE",
+        "HELD",
+        "GRACE"
+      ]
+    },
+    "ping_age_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    }
+  },
+  "required": [
+    "v",
+    "seq",
+    "principal_id",
+    "seat_state",
+    "ping_age_ms"
+  ]
+}

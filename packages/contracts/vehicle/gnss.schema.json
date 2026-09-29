@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/vehicle/1/gnss.schema.json",
+  "title": "GNSS file sensors/gnss.yaml (awr.sensor.gnss.v1)",
+  "description": "AWR-16 §11.6 (D1-ext); values M13 §7.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.gnss.v1"
+    },
+    "rate_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "fix_type": {
+      "enum": [
+        "none",
+        "2d",
+        "3d",
+        "dgps",
+        "rtk_float",
+        "rtk_fixed"
+      ]
+    },
+    "gauss_markov": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sigma_h_m": {
+          "type": "number"
+        },
+        "sigma_v_m": {
+          "type": "number"
+        },
+        "tau_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "white_h_m": {
+          "type": "number"
+        },
+        "white_v_m": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sigma_h_m",
+        "sigma_v_m",
+        "tau_s"
+      ]
+    },
+    "rtk": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "sigma_h_m": {
+          "type": "number"
+        },
+        "sigma_v_m": {
+          "type": "number"
+        },
+        "float": {
+          "type": "object"
+        },
+        "fixed": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "antenna": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "xyz_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        }
+      },
+      "required": [
+        "xyz_m"
+      ]
+    },
+    "warm_start": {
+      "type": "boolean"
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "t_acq_s": {
+          "type": "number"
+        },
+        "t_float_s": {
+          "type": "number"
+        },
+        "t_fixed_s": {
+          "type": "number"
+        }
+      }
+    },
+    "dgps": {
+      "type": "object"
+    },
+    "sats": {
+      "type": "integer"
+    },
+    "hdop": {
+      "type": "number"
+    },
+    "conf": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "src": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "rate_hz",
+    "fix_type",
+    "gauss_markov",
+    "rtk",
+    "antenna"
+  ]
+}

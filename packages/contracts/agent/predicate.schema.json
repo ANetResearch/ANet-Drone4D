@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/agent/1/predicate.schema.json",
+  "title": "TSIR predicate (numeric form, ANetCore v0.14 tsir/predicate.go)",
+  "description": "M14 §6.7.1: op 1 AND, 2 OR, 3 NOT, 10 ARTIFACT, 11 TEST, 12 THRESHOLD, 13 SCOPE; depth <= 16, AND/OR children 2..64; validation failure = MALFORMED (fail closed). Private resource kinds: 101 zone, 102 vehicle, 103 capability.",
+  "$ref": "#/$defs/node",
+  "$defs": {
+    "node": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                1,
+                2
+              ]
+            },
+            "children": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 64,
+              "items": {
+                "$ref": "#/$defs/node"
+              }
+            }
+          },
+          "required": [
+            "op",
+            "children"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": 3
+            },
+            "children": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/node"
+              }
+            }
+          },
+          "required": [
+            "op",
+            "children"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": 10
+            },
+            "artifact": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path_glob": {
+                  "type": "string"
+                },
+                "exists": {
+                  "type": "boolean"
+                },
+                "min_size_bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "path_glob"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "artifact"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": 11
+            },
+            "test": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "test_id": {
+                  "type": "string"
+                },
+                "expect": {
+                  "enum": [
+                    1,
+                    2
+                  ]
+                }
+              },
+              "required": [
+                "test_id",
+                "expect"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "test"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": 12
+            },
+            "thresh": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "metric": {
+                  "type": "string"
+                },
+                "op": {
+                  "enum": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                  ]
+                },
+                "value": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "metric",
+                "op",
+                "value"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "thresh"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": 13
+            },
+            "scope": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "verb": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "kind": {
+                  "type": "integer"
+                },
+                "match": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        1,
+                        2,
+                        3
+                      ]
+                    },
+                    "val": {
+                      "type": [
+                        "string",
+                        "array"
+                      ],
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "val"
+                  ]
+                }
+              },
+              "required": [
+                "verb",
+                "kind",
+                "match"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "scope"
+          ]
+        }
+      ]
+    }
+  }
+}

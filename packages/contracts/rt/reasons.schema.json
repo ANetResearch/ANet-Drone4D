@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/reasons.schema.json",
+  "title": "reasons.json meta-schema",
+  "description": "AWR-17 §8.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.reasons.v1"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "ranges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "integer"
+          },
+          "to": {
+            "type": "integer"
+          },
+          "category": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "category"
+        ]
+      }
+    },
+    "detail_only": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]*$"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]*$"
+      }
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "http": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 100,
+            "maximum": 599
+          },
+          "category": {
+            "enum": [
+              "ok",
+              "native",
+              "call_control",
+              "admission",
+              "runtime",
+              "protocol",
+              "job",
+              "data",
+              "browser",
+              "module"
+            ]
+          },
+          "step": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message_zh": {
+            "type": "string",
+            "minLength": 1
+          },
+          "remedy_zh": {
+            "type": "string",
+            "minLength": 1
+          },
+          "d1": {
+            "enum": [
+              "core",
+              "ext",
+              "V0.2",
+              "V0.5",
+              "V1.0"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "http",
+          "category",
+          "step",
+          "message_zh",
+          "remedy_zh",
+          "d1"
+        ]
+      }
+    },
+    "ws_close_codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 4999
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "integer"
+          },
+          "client": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "client"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "ranges",
+    "reasons",
+    "ws_close_codes"
+  ]
+}

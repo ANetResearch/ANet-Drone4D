@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/env/1/env_state.schema.json",
+  "title": "awr.env.keyframe.v1 (EnvKeyframe)",
+  "description": "Self-contained environment keyframe (M07 §6.2.5; ADR-025). msgpack snake_case on env/state, evt/sim-core/env and state/sim-core/env; target < 1 KB. Integer-valued numbers use the shortest integer encoding, -0 normalises to 0.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.env.keyframe.v1"
+    },
+    "world_id": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "producer epoch of EnvironmentService, not the WS global epoch"
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "t_ns": {
+      "type": "integer"
+    },
+    "t_apply_ns": {
+      "type": "integer"
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wind": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "level": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            },
+            "profile": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "log",
+                    "power",
+                    "uniform"
+                  ]
+                },
+                "z_ref_m": {
+                  "type": "number"
+                },
+                "z0_m": {
+                  "type": "number"
+                },
+                "d_m": {
+                  "type": "number"
+                },
+                "alpha": {
+                  "type": "number"
+                },
+                "adv_height_m": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "kind",
+                "z_ref_m",
+                "z0_m",
+                "d_m",
+                "alpha",
+                "adv_height_m"
+              ]
+            },
+            "library": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "manifest": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "manifest",
+                    "sha256"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "turbulence": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "model": {
+                  "enum": [
+                    "box",
+                    "dryden",
+                    "off"
+                  ]
+                },
+                "n": {
+                  "type": "integer"
+                },
+                "dx_m": {
+                  "type": "number"
+                },
+                "l_m": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "model",
+                "n",
+                "dx_m",
+                "l_m"
+              ]
+            },
+            "gust": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "model": {
+                  "const": "cos1_front"
+                },
+                "max_active": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4
+                }
+              },
+              "required": [
+                "model",
+                "max_active"
+              ]
+            }
+          },
+          "required": [
+            "level",
+            "profile",
+            "library",
+            "turbulence",
+            "gust"
+          ]
+        },
+        "sun": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "azimuth_deg": {
+              "type": "number"
+            },
+            "elevation_deg": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "azimuth_deg",
+            "elevation_deg"
+          ]
+        },
+        "weather_map": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "n": {
+              "type": "integer"
+            },
+            "scale_m": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "n",
+            "scale_m"
+          ]
+        },
+        "presets_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "wind",
+        "sun",
+        "weather_map",
+        "presets_sha256"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "smooth",
+        "exp",
+        "step"
+      ]
+    },
+    "t0_ns": {
+      "type": "integer"
+    },
+    "t1_ns": {
+      "type": "integer"
+    },
+    "from": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 21,
+      "description": "position-encoded EnvScalars (order = presets.json fields[]); readers accept longer arrays (tail additions)"
+    },
+    "to": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 21,
+      "description": "position-encoded EnvScalars (order = presets.json fields[]); readers accept longer arrays (tail additions)"
+    },
+    "via": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "string"
+      }
+    },
+    "to_preset": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "anchors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "t_ns": {
+          "type": "integer"
+        },
+        "s_m": {
+          "type": "number"
+        },
+        "d_enu_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "fall_rain_m": {
+          "type": "number"
+        },
+        "fall_snow_m": {
+          "type": "number"
+        },
+        "wetness": {
+          "type": "number"
+        },
+        "puddle": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "t_ns",
+        "s_m",
+        "d_enu_m",
+        "fall_rain_m",
+        "fall_snow_m",
+        "wetness",
+        "puddle"
+      ]
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "array",
+        "minItems": 9,
+        "prefixItems": [
+          {
+            "enum": [
+              1,
+              2
+            ]
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "description": "[kind, id, t_create_ns, x0_m, s0_m, amp_mps, lam_m, dir_from_deg, s_span_m]; kind 1 gust (D1), 2 lightning (V0.3)"
+      }
+    },
+    "vis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "streamlines": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vmax_mps": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "streamlines",
+        "vmax_mps"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "world_id",
+    "version",
+    "epoch",
+    "seed",
+    "t_ns",
+    "t_apply_ns",
+    "config",
+    "mode",
+    "t0_ns",
+    "t1_ns",
+    "from",
+    "to",
+    "via",
+    "to_preset",
+    "anchors",
+    "events",
+    "vis"
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "schema": "awr.rng_streams.v1",
+  "doc": "PCG64(SeedSequence([world_seed, stream_id])), slots sampled in ascending order (g08 §2). Register before use (ADR-049). Stream 5 derives keyed children SeedSequence([world_seed, 5, k0, k1]).",
+  "streams": [
+    {
+      "stream_id": 1,
+      "name": "dryden",
+      "owner": "M07",
+      "purpose": "Dryden regression turbulence (box model seeds directly)",
+      "d1": "core"
+    },
+    {
+      "stream_id": 2,
+      "name": "faults",
+      "owner": "M09",
+      "purpose": "fault injection time and parameters",
+      "d1": "ext"
+    },
+    {
+      "stream_id": 3,
+      "name": "sensor_noise",
+      "owner": "M13",
+      "purpose": "GNSS Gauss-Markov and IMU noise",
+      "d1": "ext"
+    },
+    {
+      "stream_id": 4,
+      "name": "detector",
+      "owner": "M13",
+      "purpose": "S3 mock detector sampling",
+      "d1": "ext"
+    },
+    {
+      "stream_id": 5,
+      "name": "anet_mock_latency",
+      "owner": "M14",
+      "purpose": "Mock ANet round-trip latency (message-keyed child sequences)",
+      "d1": "ext"
+    },
+    {
+      "stream_id": 6,
+      "name": "gust_schedule",
+      "owner": "M07",
+      "purpose": "server-side gust front scheduling",
+      "d1": "core"
+    },
+    {
+      "stream_id": 8,
+      "name": "georef_ransac",
+      "owner": "M02",
+      "purpose": "traj_sim3 LO-RANSAC sampling",
+      "d1": "stub"
+    },
+    {
+      "stream_id": 9,
+      "name": "georef_mock_gnss",
+      "owner": "M02",
+      "purpose": "Mock GNSS noise, gaps and jumps",
+      "d1": "stub"
+    },
+    {
+      "stream_id": 10,
+      "name": "georef_subsample",
+      "owner": "M02",
+      "purpose": "Sim(3)-GICP and relocalisation subsampling",
+      "d1": "no"
+    },
+    {
+      "stream_id": 11,
+      "name": "recon_mock_subsample",
+      "owner": "M01",
+      "purpose": "Mock reconstruction frame and point subsampling",
+      "d1": "ext"
+    },
+    {
+      "stream_id": 12,
+      "name": "recon_mock_gauge",
+      "owner": "M01",
+      "purpose": "Mock reconstruction gauge (scale, rotation) perturbation",
+      "d1": "ext"
+    },
+    {
+      "stream_id": 13,
+      "name": "recon_mock_depth_noise",
+      "owner": "M01",
+      "purpose": "Mock reconstruction depth noise",
+      "d1": "ext"
+    },
+    {
+      "stream_id": 14,
+      "name": "recon_mock_gnss",
+      "owner": "M01",
+      "purpose": "reserved: Mock reconstruction GNSS (now uses stream 9)",
+      "d1": "ext"
+    },
+    {
+      "stream_id": 15,
+      "name": "recon_mock_gravity",
+      "owner": "M01",
+      "purpose": "Mock reconstruction gravity direction perturbation",
+      "d1": "ext"
+    },
+    {
+      "stream_id": 16,
+      "name": "recon_selfcheck",
+      "owner": "M01",
+      "purpose": "reconstruction self-check sampling",
+      "d1": "ext"
+    }
+  ],
+  "reserved": {
+    "from": 17,
+    "to": 63,
+    "note": "7 is unassigned; 11-16 M01 reconstruction (ext); 17-63 reserved"
+  }
+}

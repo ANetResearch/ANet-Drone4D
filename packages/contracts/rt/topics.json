@@ -1,0 +1,393 @@
+{
+  "schema": "awr.topics.v1",
+  "doc": "Topic table (AWR-17 §6.6). native_hz 0 = change driven. default_rate by device tier S, B, A. rate classes [1,2,5,10,15,20,30,60]; tick 60 Hz. Deprecated topics: env/weather, env/wind/field, log (AWR-03 appendix B.1).",
+  "rate_classes": [
+    1,
+    2,
+    5,
+    10,
+    15,
+    20,
+    30,
+    60
+  ],
+  "tick_hz": 60,
+  "chunk_pattern": "^[a-z0-9][a-z0-9_-]*$",
+  "default_subscriptions": [
+    "fleet/roster@10",
+    "swarm/uav/state@10|20",
+    "uav/{focus}/state@30",
+    "uav/{selected}/state@60",
+    "uav/{selected}/state_ext@2",
+    "uav/{selected}/safety@5",
+    "uav/{selected}/env@10",
+    "env/state@10",
+    "event@all",
+    "perf/server@1",
+    "sys/procs@1"
+  ],
+  "deprecated": [
+    {
+      "pattern": "env/weather",
+      "replaced_by": "env/state"
+    },
+    {
+      "pattern": "env/wind/field",
+      "replaced_by": "AWRV assets"
+    },
+    {
+      "pattern": "log",
+      "replaced_by": "event level 0"
+    }
+  ],
+  "topics": [
+    {
+      "pattern": "fleet/roster",
+      "kind": "roster",
+      "encoding": "msgpack",
+      "schemaName": "awr.fleet.roster.v1",
+      "native_hz": 0,
+      "default_rate": {
+        "S": 10,
+        "B": 10,
+        "A": 10
+      },
+      "mode": "latest",
+      "priority": 0,
+      "self_contained": true,
+      "owner": "M08",
+      "d1": "core",
+      "doc": "change driven"
+    },
+    {
+      "pattern": "swarm/uav/state",
+      "kind": "state",
+      "encoding": "raw",
+      "schemaName": "awr.SwarmLite32.v1",
+      "native_hz": 125,
+      "default_rate": {
+        "S": 10,
+        "B": 20,
+        "A": 20
+      },
+      "mode": "latest",
+      "priority": 1,
+      "self_contained": false,
+      "owner": "M08",
+      "d1": "core",
+      "aliases": [
+        "swarm/state"
+      ],
+      "clock": "sim",
+      "doc": "never below 10 Hz"
+    },
+    {
+      "pattern": "uav/{id}/state",
+      "kind": "state",
+      "encoding": "raw",
+      "schemaName": "awr.DroneState64.v1",
+      "native_hz": 125,
+      "default_rate": {
+        "S": 30,
+        "B": 30,
+        "A": 30
+      },
+      "mode": "latest",
+      "priority": 0,
+      "self_contained": false,
+      "owner": "M08",
+      "d1": "core",
+      "clock": "sim",
+      "doc": "focus set 30 Hz; selected or FPV 60 Hz"
+    },
+    {
+      "pattern": "uav/{id}/state_ext",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.uav.state_ext.v1",
+      "native_hz": 2,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M08",
+      "d1": "core"
+    },
+    {
+      "pattern": "uav/{id}/safety",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.uav.safety.v1",
+      "native_hz": 10,
+      "default_rate": {
+        "S": 5,
+        "B": 5,
+        "A": 5
+      },
+      "mode": "latest",
+      "priority": 1,
+      "self_contained": true,
+      "owner": "M09",
+      "d1": "core"
+    },
+    {
+      "pattern": "uav/{id}/env",
+      "kind": "state",
+      "encoding": "raw",
+      "schemaName": "awr.EnvSample32.v1",
+      "native_hz": 10,
+      "default_rate": {
+        "S": 10,
+        "B": 10,
+        "A": 10
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": false,
+      "owner": "M07",
+      "d1": "core",
+      "clock": "sim",
+      "doc": "selected vehicle only; produced for the interest set"
+    },
+    {
+      "pattern": "uav/{id}/sensor/{name}/pose",
+      "kind": "state",
+      "encoding": "raw",
+      "schemaName": "awr.SensorPose48.v1",
+      "native_hz": 10,
+      "default_rate": {
+        "S": 10,
+        "B": 10,
+        "A": 10
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": false,
+      "owner": "M13",
+      "d1": "core"
+    },
+    {
+      "pattern": "uav/{id}/path",
+      "kind": "blob",
+      "encoding": "blob",
+      "schemaName": "awr.blob.polyline4.v1",
+      "native_hz": 0,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M10",
+      "d1": "core"
+    },
+    {
+      "pattern": "mission/{mid}/status",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.mission.status.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M10",
+      "d1": "core",
+      "doc": "change driven + 1 Hz"
+    },
+    {
+      "pattern": "mission/{mid}/coverage",
+      "kind": "blob",
+      "encoding": "blob",
+      "schemaName": "awr.blob.grid_u8.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 3,
+      "self_contained": true,
+      "owner": "M10",
+      "d1": "ext"
+    },
+    {
+      "pattern": "env/state",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.env.keyframe.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 10,
+        "B": 10,
+        "A": 10
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M07",
+      "d1": "core",
+      "doc": "change driven + 1 Hz self-contained heartbeat"
+    },
+    {
+      "pattern": "event",
+      "kind": "event",
+      "encoding": "json",
+      "schemaName": "awr.event.v1",
+      "native_hz": 0,
+      "default_rate": {
+        "S": 0,
+        "B": 0,
+        "A": 0
+      },
+      "mode": "all",
+      "priority": 0,
+      "self_contained": false,
+      "owner": "M11",
+      "d1": "core",
+      "doc": "delivered as event and events ops"
+    },
+    {
+      "pattern": "perf/server",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.perf.server.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 3,
+      "self_contained": true,
+      "owner": "M11",
+      "d1": "core"
+    },
+    {
+      "pattern": "sys/procs",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.sys.procs.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 3,
+      "self_contained": true,
+      "owner": "M11",
+      "d1": "core"
+    },
+    {
+      "pattern": "perf/clients",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.perf.clients.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 3,
+      "self_contained": true,
+      "owner": "M11",
+      "d1": "ext",
+      "role": "admin"
+    },
+    {
+      "pattern": "agent/{aid}/status",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.agent.status.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M14",
+      "d1": "ext"
+    },
+    {
+      "pattern": "agent/tasks",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.agent.tasks.v1",
+      "native_hz": 0,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M14",
+      "d1": "ext"
+    },
+    {
+      "pattern": "uav/{id}/setpoint",
+      "kind": "client",
+      "encoding": "raw",
+      "schemaName": "awr.VelSetpoint16.v1",
+      "native_hz": 50,
+      "default_rate": null,
+      "mode": null,
+      "priority": null,
+      "self_contained": false,
+      "owner": "M08",
+      "d1": "core",
+      "doc": "client publish (CLIENT_DATA), 20-50 Hz"
+    },
+    {
+      "pattern": "uav/{id}/sensor/lidar/scan",
+      "kind": "state",
+      "encoding": "raw",
+      "schemaName": "awr.LidarScan8.v1",
+      "native_hz": 10,
+      "default_rate": {
+        "S": 5,
+        "B": 5,
+        "A": 5
+      },
+      "mode": "latest",
+      "priority": 3,
+      "self_contained": false,
+      "owner": "M13",
+      "d1": "V0.2"
+    },
+    {
+      "pattern": "env/wind/frame",
+      "kind": "blob",
+      "encoding": "blob",
+      "schemaName": "awr.env.AwrvHeader.v1",
+      "native_hz": 2,
+      "default_rate": null,
+      "mode": "latest",
+      "priority": 3,
+      "self_contained": true,
+      "owner": "M07",
+      "d1": "V0.4",
+      "doc": "AWRV kind 5 or URL"
+    }
+  ]
+}

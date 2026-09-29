@@ -1,0 +1,17 @@
+{
+ "schemaVersion": "1.0.0",
+ "kind": "dtm",
+ "dtype": "float32",
+ "href": "dtm_10m.f32",
+ "width": 728,
+ "height": 752,
+ "cellM": 10.0,
+ "originXY": [
+  -3638.787,
+  -3756.033
+ ],
+ "rowOrder": "south-to-north",
+ "nodata": null,
+ "valueFrame": "world-z-m",
+ "method": "10m min-z, 9x9 opening, nan-fill"
+}

@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/common.schema.json",
+  "title": "AWR common definitions (v1)",
+  "description": "Shared primitive types (AWR-16 §2.3; AWR-03 §5.1, §5.3, §5.6). Matrices are nested ROW-MAJOR 4x4 named T_<to>_<from> (p_to = T * [p_from; 1]); quaternions are [x,y,z,w]; Sim3 is x_to = s*R(q)*x_from + t (gtsam Similarity3 uses t_gtsam = t/s).",
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^1\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "description": "Document schema version. Readers accept any 1.x.y (AWR-16 §16.1)."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "World id; strict subset of AWR-03 §5.6 (no leading hyphen)."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Vehicle, zone, scenario, session and mission ids (AWR-03 §5.6)."
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^r[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$"
+    },
+    "layerId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)*$"
+    },
+    "relHref": {
+      "type": "string",
+      "description": "Path relative to the world root (worlds/<id>/). No leading slash, no '..', no backslash. A trailing '/' denotes a directory.",
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))[A-Za-z0-9._/@-]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha256Prefixed": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Environment asset binding style (AWR-16 §1.4 rule 7)."
+    },
+    "hash8": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}$"
+    },
+    "int64": {
+      "description": "int64 value: a JSON integer below 2^53 in magnitude, or a decimal string (AWR-16 §1.4 rule 5).",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "string",
+          "pattern": "^-?[0-9]{1,19}$"
+        }
+      ]
+    },
+    "vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "vec2": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "quatXYZW": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": -1.000001,
+        "maximum": 1.000001
+      },
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "mat4": {
+      "description": "Nested row-major 4x4 affine matrix. Last row must be [0,0,0,1] (semantic check V-C-01).",
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 4,
+        "maxItems": 4
+      }
+    },
+    "rigid": {
+      "description": "Rigid transform (no scale): x_to = R(q)*x_from + t.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "q",
+        "t"
+      ],
+      "properties": {
+        "q": {
+          "$ref": "#/$defs/quatXYZW"
+        },
+        "t": {
+          "$ref": "#/$defs/vec3"
+        }
+      }
+    },
+    "sim3": {
+      "description": "Similarity: x_to = s*R(q)*x_from + t.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "s",
+        "q",
+        "t"
+      ],
+      "properties": {
+        "s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "q": {
+          "$ref": "#/$defs/quatXYZW"
+        },
+        "t": {
+          "$ref": "#/$defs/vec3"
+        }
+      }
+    },
+    "aabb": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "$ref": "#/$defs/vec3"
+        },
+        "max": {
+          "$ref": "#/$defs/vec3"
+        }
+      }
+    },
+    "fileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relHref"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "hrefWithHash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "href"
+      ],
+      "properties": {
+        "href": {
+          "$ref": "#/$defs/relHref"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sourceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "scaleStatus": {
+      "description": "Confidence of metric scale, ordered weakest to strongest; shared with Recon IR scale_status (rt/enums.json ScaleStatus). UI must display it.",
+      "enum": [
+        "relative",
+        "assumed",
+        "landmark",
+        "gnss",
+        "lidar",
+        "rtk",
+        "survey"
+      ]
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/vehicle/1/imu.schema.json",
+  "title": "IMU file sensors/imu.yaml (awr.sensor.imu.v1)",
+  "description": "AWR-16 §11.6 (D1-ext structure; V0.4). Units of noise terms are registered in rt/units.json exceptions.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.imu.v1"
+    },
+    "rate_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "frame": {
+      "const": "base_link"
+    },
+    "gyro": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "noise_density": {
+          "type": "number"
+        },
+        "random_walk": {
+          "type": "number"
+        },
+        "bias_tau_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "turn_on_sigma": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "noise_density",
+        "random_walk",
+        "bias_tau_s",
+        "turn_on_sigma"
+      ]
+    },
+    "accel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "noise_density": {
+          "type": "number"
+        },
+        "random_walk": {
+          "type": "number"
+        },
+        "bias_tau_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "turn_on_sigma": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "noise_density",
+        "random_walk",
+        "bias_tau_s",
+        "turn_on_sigma"
+      ]
+    },
+    "baro": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rate_hz": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "factor_sigma": {
+          "type": "number"
+        },
+        "factor_tau_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "white_pa": {
+          "type": "number"
+        }
+      }
+    },
+    "conf": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "src": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "rate_hz",
+    "frame",
+    "gyro",
+    "accel"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/enums.schema.json",
+  "title": "enums.json meta-schema",
+  "description": "Enum name -> list (value = index; null = reserved) or object (explicit values) or object of lists (FlightSub, JobState).",
+  "type": "object",
+  "required": [
+    "schema",
+    "FlightState",
+    "FlightSub",
+    "TimeState"
+  ],
+  "properties": {
+    "schema": {
+      "const": "awr.enums.v1"
+    },
+    "doc": {
+      "type": "string"
+    }
+  },
+  "patternProperties": {
+    "^[A-Z][A-Za-z0-9]*$": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

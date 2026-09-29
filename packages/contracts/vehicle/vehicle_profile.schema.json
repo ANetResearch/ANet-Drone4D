@@ -1,0 +1,1100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/vehicle/1/vehicle_profile.schema.json",
+  "title": "Vehicle profile params.yaml (awr.vehicle.v1)",
+  "description": "AWR-16 §11.2: every identifiable parameter is {value, conf A-D, src}; conf E values live only in rejected[]. Loader runs VH-1..VH-7 and rejects on failure (353). Keys snake_case with unit suffix; px4_params keeps PX4 names.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.vehicle.v1"
+    },
+    "profile_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "const": "uav"
+    },
+    "status": {
+      "enum": [
+        "regression",
+        "placeholder",
+        "identified"
+      ]
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "quad_x",
+            "hex_x"
+          ]
+        },
+        "rotor_order": {
+          "const": "px4"
+        },
+        "body": {
+          "const": "frd"
+        }
+      },
+      "required": [
+        "type",
+        "rotor_order",
+        "body"
+      ]
+    },
+    "mass_kg": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "conf": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        "src": {
+          "type": "string",
+          "minLength": 1
+        },
+        "check": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "conf",
+        "src"
+      ],
+      "unit": "kg"
+    },
+    "mtow_kg": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "conf": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        "src": {
+          "type": "string",
+          "minLength": 1
+        },
+        "check": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "conf",
+        "src"
+      ],
+      "unit": "kg"
+    },
+    "inertia_kgm2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "xx": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "yy": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "zz": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "xx",
+            "yy",
+            "zz"
+          ]
+        },
+        "conf": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        "src": {
+          "type": "string",
+          "minLength": 1
+        },
+        "check": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "conf",
+        "src"
+      ],
+      "unit": "kg*m^2"
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wheelbase_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m"
+        },
+        "arm_xy_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m"
+        },
+        "rotor_z_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number"
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m"
+        },
+        "collision_radius_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m"
+        }
+      },
+      "required": [
+        "arm_xy_m",
+        "collision_radius_m"
+      ]
+    },
+    "motor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 8
+        },
+        "t_max_n": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "N"
+        },
+        "omega_max_rad_s": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "rad/s"
+        },
+        "k_f": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "N*s^2/rad^2"
+        },
+        "km_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m"
+        },
+        "tau_s": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "s"
+        }
+      },
+      "required": [
+        "n",
+        "t_max_n",
+        "omega_max_rad_s",
+        "tau_s"
+      ]
+    },
+    "prop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "d_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m"
+        },
+        "c_rd": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "minimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "N*s^2/(m*rad)"
+        }
+      },
+      "required": [
+        "d_m"
+      ]
+    },
+    "aero": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "enum": [
+            "linear",
+            "composite"
+          ]
+        },
+        "k_dv_n_per_mps": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "N/(m/s)"
+        },
+        "cda_m2": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m^2"
+        },
+        "sih_kdv_equiv": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "N/(m/s)"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "const": "linear"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "required": [
+              "k_dv_n_per_mps"
+            ]
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "const": "composite"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "required": [
+              "cda_m2"
+            ]
+          }
+        }
+      ]
+    },
+    "battery": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cells": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "capacity_ah": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ],
+              "unit": "Ah"
+            },
+            "v_nominal_v": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ],
+              "unit": "V"
+            },
+            "capacity_wh": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ],
+              "unit": "Wh"
+            },
+            "usable_frac": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 1
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            },
+            "p_hover_w": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ],
+              "unit": "W"
+            },
+            "hover_endurance_s": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ],
+              "unit": "s"
+            }
+          },
+          "required": [
+            "cells",
+            "capacity_ah",
+            "v_nominal_v",
+            "capacity_wh",
+            "usable_frac",
+            "p_hover_w"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "limits_profiles": {
+      "type": "object",
+      "required": [
+        "default"
+      ],
+      "properties": {
+        "default": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "px4_params": {
+            "type": "object",
+            "propertyNames": {
+              "pattern": "^[A-Z0-9_]+$"
+            },
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "src": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "px4_params",
+          "src"
+        ]
+      }
+    },
+    "wind_rating_mps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "conf": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        "src": {
+          "type": "string",
+          "minLength": 1
+        },
+        "check": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "conf",
+        "src"
+      ],
+      "unit": "m/s"
+    },
+    "fidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "enum": [
+            "l0",
+            "l1",
+            "sih"
+          ]
+        },
+        "supported": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "l0",
+              "l1",
+              "sih"
+            ]
+          }
+        },
+        "sih_airframe": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "default",
+        "supported"
+      ]
+    },
+    "model": {
+      "$ref": "../../world/1/common.schema.json#/$defs/relHref"
+    },
+    "sensors": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "../../world/1/common.schema.json#/$defs/relHref"
+      }
+    },
+    "payload": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "mass_kg": {
+            "type": "number"
+          },
+          "mount_xyz_m": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+          },
+          "capability_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "mass_kg"
+        ]
+      }
+    },
+    "derived": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hover_thrust": {
+          "type": "number"
+        },
+        "twr": {
+          "type": "number"
+        },
+        "tilt_at_8mps_deg": {
+          "type": "number"
+        },
+        "cda_per_mass_m2kg": {
+          "type": "number"
+        },
+        "endurance_check_s": {
+          "type": "number"
+        }
+      }
+    },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "param": {
+            "type": "string"
+          },
+          "value": {},
+          "src": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "param",
+          "value",
+          "src",
+          "why"
+        ]
+      }
+    },
+    "variants": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9_]+$"
+      },
+      "additionalProperties": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "profile_version",
+    "id",
+    "display_name",
+    "kind",
+    "status",
+    "frame",
+    "mass_kg",
+    "inertia_kgm2",
+    "geometry",
+    "motor",
+    "prop",
+    "aero",
+    "limits_profiles",
+    "fidelity",
+    "model"
+  ]
+}

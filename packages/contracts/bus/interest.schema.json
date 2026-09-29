@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bus/1/interest.schema.json",
+  "title": "Interest (ctl/sim-core/interest)",
+  "description": "AWR-17 §9.4, 10 AD-10: 250 ms debounce plus 1 s full resend.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "detail": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 65535
+      }
+    },
+    "marks": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 65535
+      }
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "state_ext",
+          "safety",
+          "sensor",
+          "env"
+        ]
+      }
+    }
+  },
+  "required": [
+    "v",
+    "seq",
+    "detail",
+    "marks",
+    "topics"
+  ]
+}

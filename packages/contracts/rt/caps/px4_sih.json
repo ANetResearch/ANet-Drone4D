@@ -1,0 +1,53 @@
+{
+  "backend": "px4_sih",
+  "version": 1,
+  "kinds": [
+    "uav"
+  ],
+  "max_vehicles": 16,
+  "stub": true,
+  "clock": {
+    "mode": "slaved_realtime",
+    "pausable": false,
+    "max_speed": 1,
+    "steppable": false
+  },
+  "cmd": {
+    "takeoff": "native",
+    "land": "native",
+    "goto": {
+      "impl": "native",
+      "speed": true
+    },
+    "follow_path": "native",
+    "orbit": {
+      "impl": "native",
+      "turns": "gateway",
+      "radius_m": [
+        1,
+        1000
+      ]
+    },
+    "hover": "native",
+    "rtl": "native",
+    "velocity": "native",
+    "safety_stop": "native",
+    "pause": {
+      "impl": "emulated",
+      "via": "AUTO_LOITER"
+    },
+    "kill": "native"
+  },
+  "ack": {
+    "native": true,
+    "timeout_s": 0.5,
+    "retries": 3,
+    "readback": [
+      "CURRENT_MODE",
+      "EXTENDED_SYS_STATE",
+      "HEARTBEAT"
+    ]
+  },
+  "trust_ceiling": 2,
+  "truth": false
+}

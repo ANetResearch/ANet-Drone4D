@@ -1,0 +1,397 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/perf/1/perf-report.schema.json",
+  "title": "awr.perf.report.v1",
+  "description": "AWR-18 §11.2 (snake_case; also the body of POST /api/sys/perf-report, <= 4 MiB).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.perf.report.v1"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[pb][0-9]{8}-[0-9]{6}-[0-9a-f]{4,12}$"
+    },
+    "gate": {
+      "enum": [
+        "G2",
+        "G3",
+        "G4",
+        "G5",
+        "bench"
+      ]
+    },
+    "kind": {
+      "enum": [
+        "bench",
+        "flight60",
+        "ladder",
+        "soak",
+        "latency",
+        "suite"
+      ]
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sha": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "dirty": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sha"
+      ]
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "production",
+            "test",
+            "profiling"
+          ]
+        },
+        "contracts": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "contracts"
+      ]
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu_model": {
+          "type": "string"
+        },
+        "cores": {
+          "type": "integer"
+        },
+        "chrome": {
+          "type": "string"
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "node": {
+          "type": "string"
+        },
+        "python": {
+          "type": "string"
+        },
+        "device_class": {
+          "enum": [
+            "software",
+            "igpu",
+            "dgpu"
+          ]
+        },
+        "backend_tier": {
+          "enum": [
+            "A",
+            "B",
+            "S"
+          ]
+        },
+        "renderer": {
+          "type": "string"
+        },
+        "adapter_info": {
+          "type": "object"
+        },
+        "dpr": {
+          "type": "number"
+        },
+        "canvas_css": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "cpu_model",
+        "cores",
+        "device_class",
+        "backend_tier"
+      ]
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ac_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "world_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scene": {
+            "enum": [
+              "pc",
+              "full",
+              null
+            ]
+          },
+          "priority": {
+            "enum": [
+              "P0",
+              "P1",
+              "P2"
+            ]
+          },
+          "layer": {
+            "enum": [
+              "core",
+              "ext"
+            ]
+          },
+          "repeats": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3
+          },
+          "status": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "ENV_UNMET",
+              "WARN",
+              "NA",
+              "WAIVED"
+            ]
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "runs": {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "median": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "threshold": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "op": {
+                          "enum": [
+                            "<",
+                            "<=",
+                            "==",
+                            ">=",
+                            ">"
+                          ]
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "value"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "PASS",
+                    "FAIL",
+                    "ENV_UNMET",
+                    "WARN",
+                    "NA",
+                    "WAIVED"
+                  ]
+                },
+                "baseline": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "delta": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "unit",
+                "runs",
+                "median",
+                "threshold",
+                "status"
+              ]
+            }
+          },
+          "load": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pre": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "max": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "mean": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "required": [
+              "pre",
+              "max",
+              "mean"
+            ]
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "ac_ids",
+          "priority",
+          "layer",
+          "status",
+          "metrics",
+          "load"
+        ]
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "p0_pass": {
+          "type": "integer"
+        },
+        "p0_total": {
+          "type": "integer"
+        },
+        "p1_pass": {
+          "type": "integer"
+        },
+        "p1_total": {
+          "type": "integer"
+        },
+        "p1_pass_rate_pct": {
+          "type": "number"
+        },
+        "regressions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "waivers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "p0_pass",
+        "p0_total",
+        "p1_pass",
+        "p1_total"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "run_id",
+    "gate",
+    "kind",
+    "git",
+    "build",
+    "env",
+    "cases",
+    "summary"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/env/1/env_world_defaults.schema.json",
+  "title": "env_world_defaults.json",
+  "description": "M07 §7.4: top-level keys are world ids plus 'default' (fallback when a world has no entry).",
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "env_world.schema.json#/$defs/defaultsItem"
+  },
+  "properties": {},
+  "required": [
+    "default"
+  ],
+  "propertyNames": {
+    "pattern": "^(default|[a-z0-9][a-z0-9-]{0,62})$"
+  }
+}

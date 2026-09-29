@@ -1,0 +1,630 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/coordinate.schema.json",
+  "title": "World Package coordinate.json (v1)",
+  "description": "The single metric frame of a World (AWR-16 §3.3, camelCase): 'world' = ENU tangent plane at anchor, metres, right-handed, Z up.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "worldId",
+    "frame",
+    "anchor",
+    "T_ecef_world",
+    "trueNorth",
+    "scaleStatus",
+    "source",
+    "ground",
+    "extent",
+    "precision"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "worldId": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "units",
+        "handedness",
+        "upAxis"
+      ],
+      "properties": {
+        "id": {
+          "const": "world"
+        },
+        "type": {
+          "const": "ENU"
+        },
+        "units": {
+          "const": "m"
+        },
+        "handedness": {
+          "const": "right"
+        },
+        "upAxis": {
+          "const": "+Z"
+        }
+      }
+    },
+    "anchor": {
+      "description": "Geodetic position of the world origin (0,0,0). For synthetic datasets it is an ILLUSTRATIVE anchor (georeferenced=false): good for sun/sky/UI lat-lon display, never for real navigation.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "georeferenced",
+        "datum",
+        "lonDeg",
+        "latDeg",
+        "hEllipsoidM"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "rtk",
+            "survey",
+            "gnss",
+            "synthetic"
+          ]
+        },
+        "georeferenced": {
+          "type": "boolean"
+        },
+        "datum": {
+          "enum": [
+            "WGS84",
+            "CGCS2000"
+          ]
+        },
+        "lonDeg": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "latDeg": {
+          "type": "number",
+          "minimum": -89.9,
+          "maximum": 89.9
+        },
+        "hEllipsoidM": {
+          "type": "number",
+          "minimum": -500,
+          "maximum": 9000
+        },
+        "hMslM": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "h_msl = h_ellipsoid - N. Used for air density (r23)."
+        },
+        "geoid": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "undulationM"
+          ],
+          "properties": {
+            "model": {
+              "enum": [
+                "EGM2008",
+                "EGM96",
+                "CQG2000",
+                "approx"
+              ]
+            },
+            "undulationM": {
+              "type": "number",
+              "minimum": -120,
+              "maximum": 100
+            }
+          }
+        },
+        "epoch": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Decimal year of the coordinate epoch (RTK cm-level work)."
+        },
+        "uncertaintyM": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "horizontal": {
+              "type": "number",
+              "minimum": 0
+            },
+            "vertical": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "label": {
+          "type": "string",
+          "description": "Human readable; synthetic anchors must start with 'illustrative:' (V-C-12) so the UI shows it as illustrative."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "synthetic"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "georeferenced": {
+                "const": false
+              },
+              "label": {
+                "type": "string",
+                "pattern": "^illustrative:"
+              }
+            },
+            "required": [
+              "label"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "rtk",
+                  "survey"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "georeferenced": {
+                "const": true
+              }
+            },
+            "required": [
+              "geoid",
+              "hMslM"
+            ],
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "T_ecef_world": {
+      "description": "Derived from anchor (Cesium eastNorthUpToFixedFrame). Validator recomputes it (rotation 1e-6, translation 1 cm, V-C-02). Export and validation only; NEVER on GPU.",
+      "$ref": "common.schema.json#/$defs/mat4"
+    },
+    "trueNorth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "yawOffsetDeg",
+        "confidence"
+      ],
+      "properties": {
+        "yawOffsetDeg": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Angle from world +Y to true north, CCW positive (seen from above). 0 for georeferenced worlds by construction."
+        },
+        "confidence": {
+          "enum": [
+            "exact",
+            "verified",
+            "assumed",
+            "unknown"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scaleStatus": {
+      "$ref": "common.schema.json#/$defs/scaleStatus"
+    },
+    "source": {
+      "description": "How the raw input was brought into 'world'. p_world = T_world_source * [p_source; 1]. Normals: n_world = normalize(R * n_source) with R = T[:3,:3]/unitsToMeters.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "crs",
+        "handedness",
+        "upAxis",
+        "unitsToMeters",
+        "T_world_source"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "dataset",
+            "reconstruction",
+            "lio-map",
+            "survey",
+            "simulation"
+          ]
+        },
+        "dataset": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "points": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              }
+            }
+          }
+        },
+        "crs": {
+          "type": "string",
+          "description": "'LOCAL' | 'EPSG:xxxx' (e.g. EPSG:4979, EPSG:32650, EPSG:4548)",
+          "pattern": "^(LOCAL|EPSG:[0-9]{4,6})$"
+        },
+        "projPipeline": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "PROJ pipeline to world when crs is geographic/projected (T_world_source is then null)."
+        },
+        "handedness": {
+          "enum": [
+            "right",
+            "left"
+          ]
+        },
+        "upAxis": {
+          "enum": [
+            "+x",
+            "-x",
+            "+y",
+            "-y",
+            "+z",
+            "-z"
+          ]
+        },
+        "unitsToMeters": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "leveledDeg": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "yawDeg": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 360
+        },
+        "T_world_source": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/mat4"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "registration": {
+      "description": "Only for worlds built from a reconstruction / LIO map: the frame the map was estimated in ('map' or 'engine') and its Sim3 into world. Per-session alignments live in reconstruction/<session>/alignment.json as T_world_engine.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "T_world_map"
+      ],
+      "properties": {
+        "method": {
+          "enum": [
+            "none",
+            "rtk-sim3",
+            "gnss-sim3",
+            "rtk-4dof",
+            "lidar-icp",
+            "pose-prior-ba",
+            "manual"
+          ]
+        },
+        "T_world_map": {
+          "$ref": "common.schema.json#/$defs/sim3"
+        },
+        "rmseM": {
+          "type": "number",
+          "minimum": 0
+        },
+        "inliers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "alignmentRef": {
+          "$ref": "common.schema.json#/$defs/relHref"
+        }
+      }
+    },
+    "ground": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "zM"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "dtm",
+            "flat",
+            "synthetic"
+          ]
+        },
+        "zM": {
+          "type": "number",
+          "description": "DTM median height in world; 0 by construction for synthetic data, computed by ingest for real data (AWR-03 §5.5)."
+        },
+        "dtm": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "href",
+            "cellM"
+          ],
+          "properties": {
+            "href": {
+              "$ref": "common.schema.json#/$defs/relHref"
+            },
+            "cellM": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "reliefP1P99M": {
+          "$ref": "common.schema.json#/$defs/vec2"
+        }
+      }
+    },
+    "extent": {
+      "$ref": "common.schema.json#/$defs/aabb",
+      "description": "Tight bounds of all geometry in world (m)."
+    },
+    "precision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxRadiusM",
+        "curvatureDropM",
+        "float32UlpMm"
+      ],
+      "properties": {
+        "maxRadiusM": {
+          "type": "number",
+          "minimum": 0,
+          "description": "max horizontal distance of extent corners from origin"
+        },
+        "curvatureDropM": {
+          "type": "number",
+          "minimum": 0,
+          "description": "d^2/(2R) at maxRadiusM (tangent plane vs ellipsoid height)"
+        },
+        "float32UlpMm": {
+          "type": "number",
+          "minimum": 0,
+          "description": "float32 ULP at max |coordinate|, mm (must stay < 1 mm; else split into zones)"
+        }
+      }
+    },
+    "conventions": {
+      "description": "Frozen global conventions, repeated for self-description. Values are const.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "matrix": {
+          "const": "row-major T_to_from"
+        },
+        "quaternion": {
+          "const": "xyzw, WORLD<-BODY(FLU)"
+        },
+        "heading": {
+          "const": "deg, north=0, clockwise"
+        },
+        "windDirection": {
+          "const": "meteorological-from"
+        },
+        "render": {
+          "const": "three Y-up: (x,y,z)=(E,U,-N)"
+        },
+        "px4Boundary": {
+          "const": "NED/FRD at PX4 adapter boundary only"
+        },
+        "time": {
+          "const": "int64 t_sim_ns"
+        }
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "warn",
+            "fail"
+          ]
+        },
+        "normalsFlippedFrac": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "zeroNormalsFrac": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "groundFrac": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "nnMedianM": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maxHeightM": {
+          "type": "number"
+        },
+        "tiltRawDeg": {
+          "type": "number"
+        },
+        "gates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "pass"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "value": {},
+              "limit": {},
+              "pass": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "anchor": {
+            "properties": {
+              "georeferenced": {
+                "const": true
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "trueNorth": {
+            "properties": {
+              "yawOffsetDeg": {
+                "const": 0
+              },
+              "confidence": {
+                "const": "exact"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "reconstruction",
+                  "lio-map"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "required": [
+          "registration"
+        ],
+        "properties": {
+          "registration": {
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    }
+  ]
+}

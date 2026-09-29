@@ -1,0 +1,73 @@
+{
+ "schema": "awr.golden.state_vectors.v1",
+ "source": "g04 \u00a75.5; AWR-17 \u00a76.5",
+ "vectors": [
+  {
+   "name": "sih_goto_arrived_operator_truth",
+   "flight_state": 5,
+   "state": 5,
+   "sub": 0,
+   "sub_name": "HOVER",
+   "flags": 55,
+   "ctrl": 97,
+   "owner": 1,
+   "locked": false,
+   "native": 2,
+   "pose_src": 1,
+   "full64_hex": "07000537ffffff610000f042000020420000704200000040000080bf0000003f0000000000000000ee83843eea46773f00000000000000000ad7233c00000000",
+   "lite32_hex": "070005ff0000f0420000204200007042000000002121a27bc8009cff32003761"
+  },
+  {
+   "name": "sih_link_loss_failsafe_hold",
+   "flight_state": 167,
+   "state": 7,
+   "sub": 5,
+   "sub_name": "AUTOPILOT",
+   "flags": 175,
+   "ctrl": 37,
+   "owner": 5,
+   "locked": false,
+   "native": 2,
+   "pose_src": 0,
+   "full64_hex": "0700a7afffffff250000f042000020420000704200000040000080bf0000003f0000000000000000ee83843eea46773f00000000000000000ad7233c00000000",
+   "lite32_hex": "0700a7ff0000f0420000204200007042000000002121a27bc8009cff3200af25"
+  },
+  {
+   "name": "prometheus_odom_invalid_quick_land",
+   "flight_state": 42,
+   "state": 10,
+   "sub": 1,
+   "sub_name": "NO_POSITION",
+   "flags": 187,
+   "ctrl": 53,
+   "owner": 5,
+   "locked": false,
+   "native": 3,
+   "pose_src": 0,
+   "full64_hex": "07002abbffffff350000f042000020420000704200000040000080bf0000003f0000000000000000ee83843eea46773f00000000000000000ad7233c00000000",
+   "lite32_hex": "07002aff0000f0420000204200007042000000002121a27bc8009cff3200bb35"
+  },
+  {
+   "name": "mock_safety_stop",
+   "flight_state": 7,
+   "state": 7,
+   "sub": 0,
+   "sub_name": "SAFETY_STOP",
+   "flags": 55,
+   "ctrl": 109,
+   "owner": 5,
+   "locked": true,
+   "native": 2,
+   "pose_src": 1,
+   "full64_hex": "07000737ffffff6d0000f042000020420000704200000040000080bf0000003f0000000000000000ee83843eea46773f00000000000000000ad7233c00000000",
+   "lite32_hex": "070007ff0000f0420000204200007042000000002121a27bc8009cff3200376d"
+  },
+  {
+   "name": "lifecycle_lost",
+   "flight_state": 64,
+   "state": 0,
+   "sub": 2,
+   "sub_name": "LINK_LOST"
+  }
+ ]
+}

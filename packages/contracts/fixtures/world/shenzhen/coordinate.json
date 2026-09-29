@@ -1,0 +1,169 @@
+{
+ "schemaVersion": "1.0.0",
+ "worldId": "shenzhen",
+ "frame": {
+  "id": "world",
+  "type": "ENU",
+  "units": "m",
+  "handedness": "right",
+  "upAxis": "+Z"
+ },
+ "anchor": {
+  "kind": "synthetic",
+  "georeferenced": false,
+  "datum": "WGS84",
+  "lonDeg": 113.9432472,
+  "latDeg": 22.5160584,
+  "hEllipsoidM": 12.2,
+  "hMslM": 12.2,
+  "geoid": null,
+  "epoch": null,
+  "uncertaintyM": {
+   "horizontal": 50.0,
+   "vertical": 40.0
+  },
+  "label": "illustrative: world origin placed by offset from China Resources HQ (tallest HAG peak at E=-162.3, N=97.6)"
+ },
+ "T_ecef_world": [
+  [
+   -0.913948,
+   0.15541,
+   -0.374896,
+   -2392316.698281
+  ],
+  [
+   -0.405832,
+   -0.349989,
+   0.84428,
+   5387586.971708
+  ],
+  [
+   0.0,
+   0.923772,
+   0.382942,
+   2427304.455107
+  ],
+  [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "trueNorth": {
+  "yawOffsetDeg": 0.0,
+  "confidence": "assumed",
+  "evidence": []
+ },
+ "scaleStatus": "assumed",
+ "source": {
+  "kind": "dataset",
+  "dataset": "UrbanScene3D (virtual cities, sampled 5M)",
+  "files": [
+   {
+    "name": "Shenzhen_sampled_5m.ply",
+    "bytes": 120003677,
+    "points": 5000141
+   }
+  ],
+  "crs": "LOCAL",
+  "projPipeline": null,
+  "handedness": "right",
+  "upAxis": "+z",
+  "unitsToMeters": 1.0,
+  "leveledDeg": 0.0,
+  "yawDeg": 0.0,
+  "T_world_source": [
+   [
+    1.0,
+    0.0,
+    0.0,
+    -318.431854
+   ],
+   [
+    0.0,
+    1.0,
+    0.0,
+    -250.993927
+   ],
+   [
+    0.0,
+    0.0,
+    1.0,
+    31.908033
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "evidence": []
+ },
+ "registration": null,
+ "ground": {
+  "type": "dtm",
+  "zM": 0.0,
+  "dtm": {
+   "href": "geometry/terrain/dtm_10m.json",
+   "cellM": 10.0
+  },
+  "reliefP1P99M": [
+   -9.36,
+   0.0
+  ]
+ },
+ "extent": {
+  "min": [
+   -924.019,
+   -999.523,
+   -16.925
+  ],
+  "max": [
+   924.019,
+   999.523,
+   374.046
+  ]
+ },
+ "precision": {
+  "maxRadiusM": 1361.2,
+  "curvatureDropM": 0.145,
+  "float32UlpMm": 0.061
+ },
+ "conventions": {
+  "matrix": "row-major T_to_from",
+  "quaternion": "xyzw, WORLD<-BODY(FLU)",
+  "heading": "deg, north=0, clockwise",
+  "windDirection": "meteorological-from",
+  "render": "three Y-up: (x,y,z)=(E,U,-N)",
+  "px4Boundary": "NED/FRD at PX4 adapter boundary only",
+  "time": "int64 t_sim_ns"
+ },
+ "qa": {
+  "status": "pass",
+  "normalsFlippedFrac": 0.1641,
+  "zeroNormalsFrac": 0.0,
+  "groundFrac": 0.357,
+  "nnMedianM": 0.526,
+  "maxHeightM": 374.0,
+  "tiltRawDeg": 0.092,
+  "gates": [
+   {
+    "name": "maxBuildingHeightM in [100,700]",
+    "value": 381.3,
+    "limit": [
+     100,
+     700
+    ],
+    "pass": true
+   },
+   {
+    "name": "float32UlpMm < 1",
+    "value": 0.061,
+    "limit": 1,
+    "pass": true
+   }
+  ]
+ }
+}

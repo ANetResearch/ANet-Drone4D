@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/export.schema.json",
+  "title": "World export manifest (V0.5 stub)",
+  "description": "Non-content export manifest under export/ (AWR-16 §17): 3dtiles@1.1 and copc@1.0. D1 freezes only the envelope.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "const": "awr.world.export.v1"
+    },
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "world_id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "content_version": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$"
+    },
+    "coordinate_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    },
+    "format": {
+      "enum": [
+        "3dtiles@1.1",
+        "copc@1.0"
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/fileRef"
+      }
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "params": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "world_id",
+    "content_version",
+    "coordinate_sha256",
+    "format",
+    "files"
+  ]
+}

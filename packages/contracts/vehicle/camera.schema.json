@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/vehicle/1/camera.schema.json",
+  "title": "Camera sensor file sensors/camera.yaml (awr.sensor.camera.v1)",
+  "description": "AWR-16 §11.6; values owned by M13. Pixel intrinsics follow the COLMAP convention; optical frame RDF.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.camera.v1"
+    },
+    "sensor_id": {
+      "type": "string"
+    },
+    "model": {
+      "const": "pinhole"
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "fx": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "fy": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "cx": {
+      "type": "number"
+    },
+    "cy": {
+      "type": "number"
+    },
+    "rate_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "mount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "xyz_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "rpy_deg": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "q_xyzw": {
+          "$ref": "../../world/1/common.schema.json#/$defs/quatXYZW"
+        },
+        "preset": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "xyz_m"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "rpy_deg"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "q_xyzw"
+          ]
+        }
+      ]
+    },
+    "gimbal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitch_min_deg": {
+          "type": "number"
+        },
+        "pitch_max_deg": {
+          "type": "number"
+        },
+        "yaw_min_deg": {
+          "type": "number"
+        },
+        "yaw_max_deg": {
+          "type": "number"
+        },
+        "rate_max_deg_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "default_mode": {
+          "enum": [
+            "fixed",
+            "look_at",
+            "stabilized"
+          ]
+        },
+        "default_yaw_deg": {
+          "type": "number"
+        },
+        "default_pitch_deg": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "pitch_min_deg",
+        "pitch_max_deg",
+        "yaw_min_deg",
+        "yaw_max_deg"
+      ]
+    },
+    "conf": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "src": {
+      "type": "string"
+    },
+    "range_m": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "detector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "type": "string"
+        },
+        "p0": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "r_fp_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "t_look_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pos_sigma_m": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "capability",
+        "p0",
+        "r_fp_m"
+      ]
+    },
+    "distortion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "enum": [
+            "none",
+            "opencv5"
+          ]
+        },
+        "k": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "required": [
+        "model"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "sensor_id",
+    "model",
+    "width",
+    "height",
+    "fx",
+    "fy",
+    "cx",
+    "cy",
+    "distortion",
+    "rate_hz",
+    "mount",
+    "gimbal",
+    "conf",
+    "src"
+  ]
+}

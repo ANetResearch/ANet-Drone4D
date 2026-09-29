@@ -1,0 +1,468 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/recon-ir.schema.json",
+  "title": "Recon IR recon-ir@1 (reconstruction/<session>/)",
+  "description": "AWR-16 §14.1; M01 drafts the details (session, engine, rig, cameras, frames.jsonl rows, alignment, qa). T_world_cam is C2W with an OpenCV RDF camera; x_world = s*R(q)*x_engine + t.",
+  "$defs": {
+    "session": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema": {
+          "const": "awr.recon.session.v1"
+        },
+        "ir_version": {
+          "const": "1.0.0"
+        },
+        "session_id": {
+          "$ref": "../../world/1/common.schema.json#/$defs/slug"
+        },
+        "world_id": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        "input": {
+          "type": "object"
+        },
+        "gauge": {
+          "enum": [
+            "engine",
+            "world"
+          ]
+        },
+        "scale_status": {
+          "enum": [
+            "relative",
+            "gnss",
+            "rtk",
+            "lidar"
+          ]
+        },
+        "time_base": {
+          "const": "session_ns"
+        },
+        "created_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "ir_version",
+        "session_id",
+        "world_id",
+        "engine",
+        "gauge",
+        "scale_status",
+        "time_base"
+      ]
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema": {
+          "const": "awr.recon.engine.v1"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "weights_sha256": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "params": {
+          "type": "object"
+        },
+        "license": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "name",
+        "version",
+        "license"
+      ]
+    },
+    "rig": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema": {
+          "const": "awr.recon.rig.v1"
+        },
+        "sensors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "sensor_id": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "CAMERA",
+                  "IMU",
+                  "LIDAR",
+                  "GNSS"
+                ]
+              },
+              "T_body_sensor": {
+                "$ref": "../../world/1/common.schema.json#/$defs/mat4"
+              },
+              "time_offset_ns": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "sensor_id",
+              "type",
+              "T_body_sensor"
+            ]
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "sensors"
+      ]
+    },
+    "cameras": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "awr.recon.cameras.v1"
+        },
+        "cameras": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "camera_id": {
+                "type": "integer"
+              },
+              "model": {
+                "enum": [
+                  "SIMPLE_PINHOLE",
+                  "PINHOLE",
+                  "SIMPLE_RADIAL",
+                  "RADIAL",
+                  "OPENCV",
+                  "OPENCV_FISHEYE",
+                  "FULL_OPENCV"
+                ]
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              },
+              "params": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "source": {
+                "enum": [
+                  "calibrated",
+                  "predicted"
+                ]
+              }
+            },
+            "required": [
+              "camera_id",
+              "model",
+              "width",
+              "height",
+              "params",
+              "source"
+            ]
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "cameras"
+      ]
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "frame_id": {
+          "type": "integer"
+        },
+        "t_ns": {
+          "type": "integer"
+        },
+        "camera_id": {
+          "type": "integer"
+        },
+        "T_world_cam": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "t": {
+              "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+            },
+            "q_xyzw": {
+              "$ref": "../../world/1/common.schema.json#/$defs/quatXYZW"
+            }
+          },
+          "required": [
+            "t",
+            "q_xyzw"
+          ]
+        },
+        "pose_source": {
+          "enum": [
+            "engine",
+            "rtk",
+            "gps",
+            "px4",
+            "fused",
+            "mock"
+          ]
+        },
+        "frame_type": {
+          "enum": [
+            0,
+            1,
+            2,
+            255
+          ]
+        },
+        "conf_mean_u8": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "image": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "uri": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uri",
+                "name"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gps": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "lat_deg": {
+                  "type": "number"
+                },
+                "lon_deg": {
+                  "type": "number"
+                },
+                "h_ell_m": {
+                  "type": "number"
+                },
+                "cov_m2": {
+                  "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+                }
+              },
+              "required": [
+                "lat_deg",
+                "lon_deg",
+                "h_ell_m"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "frame_id",
+        "t_ns",
+        "camera_id",
+        "T_world_cam",
+        "pose_source",
+        "frame_type"
+      ]
+    },
+    "alignment": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema": {
+          "const": "awr.recon.alignment.v1"
+        },
+        "T_world_engine": {
+          "$ref": "../../world/1/common.schema.json#/$defs/sim3"
+        },
+        "method": {
+          "enum": [
+            "rtk-sim3",
+            "gnss-sim3",
+            "lidar-icp",
+            "pose-prior-ba",
+            "manual",
+            "identity"
+          ]
+        },
+        "inliers": {
+          "type": "integer"
+        },
+        "rmse_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rot_err_deg": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "time_offset_ns": {
+          "type": "integer"
+        },
+        "lever_arm_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "chunks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "frame_range": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "s": {
+                "type": "number"
+              },
+              "q": {
+                "$ref": "../../world/1/common.schema.json#/$defs/quatXYZW"
+              },
+              "t": {
+                "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+              }
+            },
+            "required": [
+              "frame_range",
+              "s",
+              "q",
+              "t"
+            ]
+          }
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "needs_review",
+            "failed"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gates": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "T_world_engine",
+        "method"
+      ]
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "schema": {
+          "const": "awr.recon.qa.v1"
+        }
+      },
+      "required": [
+        "schema"
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/session"
+    },
+    {
+      "$ref": "#/$defs/engine"
+    },
+    {
+      "$ref": "#/$defs/rig"
+    },
+    {
+      "$ref": "#/$defs/cameras"
+    },
+    {
+      "$ref": "#/$defs/alignment"
+    },
+    {
+      "$ref": "#/$defs/qa"
+    }
+  ]
+}

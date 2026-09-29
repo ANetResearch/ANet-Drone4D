@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/agent/1/effect.schema.json",
+  "title": "Effect record (shared by command results and agent tasks)",
+  "description": "AWR-17 §7.3; M14-FR-005: flat structure. verified() = status OK and (verify_trust >= 2 or simulated). Trust can only be clamped, never raised.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "enum": [
+        "OK",
+        "UNVERIFIED",
+        "FAILED",
+        "UNAVAILABLE",
+        "PAYMENT_REQUIRED"
+      ]
+    },
+    "verify_trust": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "auth_trust": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "native_ack": {
+      "type": "boolean"
+    },
+    "protocol": {
+      "type": "string"
+    },
+    "requested": {
+      "type": "string"
+    },
+    "observed_state": {
+      "type": "string"
+    },
+    "latency_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "quirk": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "content_cid": {
+            "type": "string"
+          },
+          "media_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "size_bytes"
+        ]
+      }
+    }
+  },
+  "required": [
+    "status",
+    "verify_trust"
+  ]
+}

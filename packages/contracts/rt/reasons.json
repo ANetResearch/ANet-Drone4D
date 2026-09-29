@@ -1,0 +1,1648 @@
+{
+  "schema": "awr.reasons.v1",
+  "doc": "Reason codes (AWR-17 §8). Codes never change meaning; only additions. Ranges and module sub-ranges follow AWR-17 §8.1 and §8.4.",
+  "ranges": [
+    {
+      "from": 0,
+      "to": 10,
+      "category": "native",
+      "owner": "external autopilot (MAV_RESULT)"
+    },
+    {
+      "from": 100,
+      "to": 125,
+      "category": "admission",
+      "owner": "trusted entry, producer admission, planning precheck"
+    },
+    {
+      "from": 200,
+      "to": 214,
+      "category": "runtime",
+      "owner": "CommandEngine, sim-core, plan-pool"
+    },
+    {
+      "from": 300,
+      "to": 329,
+      "category": "protocol",
+      "owner": "Gateway, REST, static"
+    },
+    {
+      "from": 330,
+      "to": 349,
+      "category": "job",
+      "owner": "M01, M03, job-worker"
+    },
+    {
+      "from": 350,
+      "to": 369,
+      "category": "data",
+      "owner": "AWR-16, M08"
+    },
+    {
+      "from": 400,
+      "to": 419,
+      "category": "browser",
+      "owner": "M05 (browser-internal, never on the wire)"
+    },
+    {
+      "from": 420,
+      "to": 439,
+      "category": "module",
+      "owner": "M08, M09 (reserved)"
+    },
+    {
+      "from": 440,
+      "to": 459,
+      "category": "module",
+      "owner": "M07"
+    },
+    {
+      "from": 460,
+      "to": 469,
+      "category": "module",
+      "owner": "M12"
+    },
+    {
+      "from": 470,
+      "to": 489,
+      "category": "module",
+      "owner": "M14"
+    },
+    {
+      "from": 490,
+      "to": 499,
+      "category": "module",
+      "owner": "M02"
+    }
+  ],
+  "detail_only": [
+    "SENSOR_SPEC_INVALID",
+    "SENSOR_UNKNOWN",
+    "TARGET_TABLE_FULL",
+    "TARGET_ID_DUP",
+    "JOB_WORKER_UNAVAILABLE",
+    "PREVIEW_EXPIRED",
+    "PREDICATE_MALFORMED",
+    "KERNEL_LIMIT",
+    "WORLD_NOT_IN_SESSION",
+    "GEO_CEILING"
+  ],
+  "warnings": [
+    "SPEED_CLAMPED"
+  ],
+  "reasons": [
+    {
+      "code": 0,
+      "name": "OK",
+      "http": 200,
+      "category": "ok",
+      "step": null,
+      "message_zh": "成功",
+      "remedy_zh": "无需处理",
+      "d1": "core"
+    },
+    {
+      "code": 1,
+      "name": "TEMPORARILY_REJECTED",
+      "http": 409,
+      "category": "native",
+      "step": "native",
+      "message_zh": "外部飞控暂时拒绝",
+      "remedy_zh": "稍后重试",
+      "d1": "V0.2"
+    },
+    {
+      "code": 2,
+      "name": "DENIED",
+      "http": 409,
+      "category": "native",
+      "step": "native",
+      "message_zh": "外部飞控拒绝该命令",
+      "remedy_zh": "检查飞控状态与参数后重试",
+      "d1": "V0.2"
+    },
+    {
+      "code": 3,
+      "name": "UNSUPPORTED",
+      "http": 501,
+      "category": "native",
+      "step": "native",
+      "message_zh": "外部飞控不支持该命令",
+      "remedy_zh": "改用该后端支持的命令",
+      "d1": "V0.2"
+    },
+    {
+      "code": 4,
+      "name": "FAILED",
+      "http": 409,
+      "category": "native",
+      "step": "native",
+      "message_zh": "外部飞控执行失败",
+      "remedy_zh": "查看飞控日志后重试",
+      "d1": "V0.2"
+    },
+    {
+      "code": 5,
+      "name": "IN_PROGRESS",
+      "http": null,
+      "category": "native",
+      "step": "native",
+      "message_zh": "外部飞控执行中（仅作进度，不作终态）",
+      "remedy_zh": "等待终态结果",
+      "d1": "V0.2"
+    },
+    {
+      "code": 6,
+      "name": "CANCELLED",
+      "http": null,
+      "category": "call_control",
+      "step": "call_control",
+      "message_zh": "调用已取消（cancel、剧本重置或机体移除）",
+      "remedy_zh": "如需继续请重新下发",
+      "d1": "core"
+    },
+    {
+      "code": 7,
+      "name": "COMMAND_LONG_ONLY",
+      "http": 409,
+      "category": "native",
+      "step": "native",
+      "message_zh": "外部飞控只接受 COMMAND_LONG",
+      "remedy_zh": "由适配层改用 COMMAND_LONG",
+      "d1": "V0.2"
+    },
+    {
+      "code": 8,
+      "name": "COMMAND_INT_ONLY",
+      "http": 409,
+      "category": "native",
+      "step": "native",
+      "message_zh": "外部飞控只接受 COMMAND_INT",
+      "remedy_zh": "由适配层改用 COMMAND_INT",
+      "d1": "V0.2"
+    },
+    {
+      "code": 9,
+      "name": "COMMAND_UNSUPPORTED_MAV_FRAME",
+      "http": 409,
+      "category": "native",
+      "step": "native",
+      "message_zh": "外部飞控不支持该坐标帧",
+      "remedy_zh": "由适配层改用受支持的坐标帧",
+      "d1": "V0.2"
+    },
+    {
+      "code": 10,
+      "name": "NOT_IN_CONTROL",
+      "http": 409,
+      "category": "native",
+      "step": "native",
+      "message_zh": "遥控器或其他地面站持有控制",
+      "remedy_zh": "先收回飞控控制权",
+      "d1": "V0.2"
+    },
+    {
+      "code": 100,
+      "name": "LEASE_DENIED",
+      "http": 409,
+      "category": "admission",
+      "step": "5",
+      "message_zh": "未持有租约或优先级不够",
+      "remedy_zh": "先接管该机",
+      "d1": "core"
+    },
+    {
+      "code": 101,
+      "name": "SAFETY_ACTIVE",
+      "http": 409,
+      "category": "admission",
+      "step": "4",
+      "message_zh": "安全动作进行中，命令被拒绝",
+      "remedy_zh": "等待安全动作结束或原因解除",
+      "d1": "core"
+    },
+    {
+      "code": 102,
+      "name": "GEOFENCE_REJECT",
+      "http": 409,
+      "category": "admission",
+      "step": "8",
+      "message_zh": "目标越界、进入禁飞区或穿越建筑",
+      "remedy_zh": "在 border 内重新选点或改用 safe_transit",
+      "d1": "core"
+    },
+    {
+      "code": 103,
+      "name": "PREFLIGHT_FAILED",
+      "http": 409,
+      "category": "admission",
+      "step": "4",
+      "message_zh": "预检不通过",
+      "remedy_zh": "查看失败项并处理后重试",
+      "d1": "core"
+    },
+    {
+      "code": 104,
+      "name": "NOT_ARMED",
+      "http": 409,
+      "category": "admission",
+      "step": "4",
+      "message_zh": "未解锁且未要求自动解锁",
+      "remedy_zh": "先解锁或使用 auto_arm",
+      "d1": "core"
+    },
+    {
+      "code": 105,
+      "name": "STATE",
+      "http": 409,
+      "category": "admission",
+      "step": "4",
+      "message_zh": "当前状态或资源状态不允许该操作",
+      "remedy_zh": "查看准入矩阵，待状态变化后重试",
+      "d1": "core"
+    },
+    {
+      "code": 106,
+      "name": "DUPLICATE",
+      "http": 409,
+      "category": "admission",
+      "step": "4",
+      "message_zh": "同类命令正在执行",
+      "remedy_zh": "无需重复下发，关注正在执行的调用",
+      "d1": "core"
+    },
+    {
+      "code": 107,
+      "name": "NO_VEHICLE",
+      "http": 404,
+      "category": "admission",
+      "step": "route",
+      "message_zh": "机体不存在或已移除",
+      "remedy_zh": "刷新机群列表",
+      "d1": "core"
+    },
+    {
+      "code": 108,
+      "name": "LINK_ERROR",
+      "http": 503,
+      "category": "admission",
+      "step": "4",
+      "message_zh": "机体生命周期不在 READY",
+      "remedy_zh": "等待链路恢复",
+      "d1": "core"
+    },
+    {
+      "code": 109,
+      "name": "BACKEND_UNSUPPORTED",
+      "http": 501,
+      "category": "admission",
+      "step": "7",
+      "message_zh": "当前后端不支持该命令或参数",
+      "remedy_zh": "改用受支持的命令",
+      "d1": "core"
+    },
+    {
+      "code": 110,
+      "name": "PARAM_OUT_OF_RANGE",
+      "http": 422,
+      "category": "admission",
+      "step": "6",
+      "message_zh": "参数越界或超过上限",
+      "remedy_zh": "按取值范围修正参数",
+      "d1": "core"
+    },
+    {
+      "code": 111,
+      "name": "RATE_LIMITED",
+      "http": 429,
+      "category": "admission",
+      "step": "2",
+      "message_zh": "请求过于频繁",
+      "remedy_zh": "降低请求频率后重试",
+      "d1": "core"
+    },
+    {
+      "code": 112,
+      "name": "CONFIRM_REQUIRED",
+      "http": 428,
+      "category": "admission",
+      "step": "3",
+      "message_zh": "缺少或无效的确认令牌",
+      "remedy_zh": "重新确认后提交",
+      "d1": "core"
+    },
+    {
+      "code": 113,
+      "name": "LOC_NOT_READY",
+      "http": 409,
+      "category": "admission",
+      "step": "4",
+      "message_zh": "定位未就绪",
+      "remedy_zh": "等待定位就绪",
+      "d1": "core"
+    },
+    {
+      "code": 114,
+      "name": "LOCKED",
+      "http": 409,
+      "category": "admission",
+      "step": "4",
+      "message_zh": "SafetyStop 加锁期间只接受安全类命令",
+      "remedy_zh": "由席位持有者解除 SafetyStop",
+      "d1": "core"
+    },
+    {
+      "code": 115,
+      "name": "ROLE_FORBIDDEN",
+      "http": 403,
+      "category": "admission",
+      "step": "1",
+      "message_zh": "当前角色无权执行该操作",
+      "remedy_zh": "使用有权限的角色登录",
+      "d1": "core"
+    },
+    {
+      "code": 116,
+      "name": "SEAT_TAKEN",
+      "http": 409,
+      "category": "admission",
+      "step": "1",
+      "message_zh": "操作席位被他人持有",
+      "remedy_zh": "等待席位释放或申请接管",
+      "d1": "core"
+    },
+    {
+      "code": 117,
+      "name": "CLOCK_CONSTRAINT",
+      "http": 409,
+      "category": "admission",
+      "step": "4",
+      "message_zh": "时钟状态或倍率不允许该操作",
+      "remedy_zh": "调整倍率或时钟状态后重试",
+      "d1": "core"
+    },
+    {
+      "code": 118,
+      "name": "READ_ONLY_MODE",
+      "http": 409,
+      "category": "admission",
+      "step": "1",
+      "message_zh": "当前为只读模式（回放或关闭中）",
+      "remedy_zh": "退出回放后再操作",
+      "d1": "core"
+    },
+    {
+      "code": 119,
+      "name": "ENERGY_INFEASIBLE",
+      "http": 409,
+      "category": "admission",
+      "step": "estimate",
+      "message_zh": "能量不足，任务不可行",
+      "remedy_zh": "缩短航程或提高初始电量",
+      "d1": "core"
+    },
+    {
+      "code": 120,
+      "name": "ENV_LIMIT",
+      "http": 409,
+      "category": "admission",
+      "step": "estimate",
+      "message_zh": "环境条件超出机体能力",
+      "remedy_zh": "等待天气好转或调整任务",
+      "d1": "ext"
+    },
+    {
+      "code": 121,
+      "name": "SCENARIO_INVALID",
+      "http": 422,
+      "category": "admission",
+      "step": "scenario",
+      "message_zh": "剧本或谓词校验失败",
+      "remedy_zh": "按校验信息修正剧本",
+      "d1": "core"
+    },
+    {
+      "code": 122,
+      "name": "RECORDING_INCOMPATIBLE",
+      "http": 409,
+      "category": "admission",
+      "step": "playback",
+      "message_zh": "录制与当前世界或布局不一致",
+      "remedy_zh": "使用匹配版本回放",
+      "d1": "ext"
+    },
+    {
+      "code": 123,
+      "name": "WORLD_NOT_READY",
+      "http": 409,
+      "category": "admission",
+      "step": "session",
+      "message_zh": "世界未就绪或被会话绑定",
+      "remedy_zh": "等待世界就绪或结束当前会话",
+      "d1": "core"
+    },
+    {
+      "code": 124,
+      "name": "JOB_CONFLICT",
+      "http": 409,
+      "category": "admission",
+      "step": "job",
+      "message_zh": "同一目标已有进行中的任务",
+      "remedy_zh": "等待当前任务结束",
+      "d1": "ext"
+    },
+    {
+      "code": 125,
+      "name": "PLAN_FAILED",
+      "http": 422,
+      "category": "admission",
+      "step": "plan",
+      "message_zh": "规划无解或超时",
+      "remedy_zh": "调整目标或区域后重试",
+      "d1": "core"
+    },
+    {
+      "code": 200,
+      "name": "ACK_TIMEOUT",
+      "http": 504,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "外部飞控确认超时",
+      "remedy_zh": "检查链路后重试",
+      "d1": "V0.2"
+    },
+    {
+      "code": 201,
+      "name": "MODE_NOT_ENTERED",
+      "http": 409,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "飞控未进入意图模式",
+      "remedy_zh": "检查飞控模式与参数",
+      "d1": "V0.2"
+    },
+    {
+      "code": 202,
+      "name": "PROGRESS_TIMEOUT",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "超过完成截止时间",
+      "remedy_zh": "检查路径与环境后重试",
+      "d1": "core"
+    },
+    {
+      "code": 203,
+      "name": "STALLED",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "巡航停滞（5 s 前进不足 0.2 m）",
+      "remedy_zh": "检查风况与障碍后重试",
+      "d1": "core"
+    },
+    {
+      "code": 204,
+      "name": "PREEMPTED_BY_SAFETY",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "被自动安全动作抢占",
+      "remedy_zh": "待安全动作结束后重新下发",
+      "d1": "core"
+    },
+    {
+      "code": 205,
+      "name": "PREEMPTED_BY_PILOT",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "飞手或外部地面站接管",
+      "remedy_zh": "与现场协调控制权",
+      "d1": "V0.2"
+    },
+    {
+      "code": 206,
+      "name": "SUPERSEDED",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "被新的调用取代",
+      "remedy_zh": "无需处理",
+      "d1": "core"
+    },
+    {
+      "code": 207,
+      "name": "VEHICLE_LOST",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "机体失联",
+      "remedy_zh": "等待链路恢复",
+      "d1": "core"
+    },
+    {
+      "code": 208,
+      "name": "CRASHED",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "机体坠毁",
+      "remedy_zh": "移除机体或重置剧本",
+      "d1": "core"
+    },
+    {
+      "code": 209,
+      "name": "WATCHDOG",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "流式指令看门狗超时",
+      "remedy_zh": "保持遥操作输入或重新开始",
+      "d1": "core"
+    },
+    {
+      "code": 210,
+      "name": "LEASE_PREEMPTED",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "租约被更高优先级抢占",
+      "remedy_zh": "重新接管后下发",
+      "d1": "core"
+    },
+    {
+      "code": 211,
+      "name": "SIM_UNAVAILABLE",
+      "http": 503,
+      "category": "runtime",
+      "step": "entry",
+      "message_zh": "仿真进程无回复、准备中或恢复中",
+      "remedy_zh": "稍后重试",
+      "d1": "core"
+    },
+    {
+      "code": 212,
+      "name": "SIM_ROLLBACK",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "仿真回滚或重开，调用作废",
+      "remedy_zh": "重新下发",
+      "d1": "core"
+    },
+    {
+      "code": 213,
+      "name": "SERVICE_UNAVAILABLE",
+      "http": 503,
+      "category": "runtime",
+      "step": "entry",
+      "message_zh": "依赖服务不可用",
+      "remedy_zh": "稍后重试",
+      "d1": "core"
+    },
+    {
+      "code": 214,
+      "name": "PLANNER_CRASHED",
+      "http": null,
+      "category": "runtime",
+      "step": "exec",
+      "message_zh": "规划进程崩溃且重试失败",
+      "remedy_zh": "稍后重试",
+      "d1": "core"
+    },
+    {
+      "code": 300,
+      "name": "BAD_REQUEST",
+      "http": 400,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "请求格式或 schema 不合法",
+      "remedy_zh": "按接口文档修正请求",
+      "d1": "core"
+    },
+    {
+      "code": 301,
+      "name": "AUTH_REQUIRED",
+      "http": 401,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "缺少 token",
+      "remedy_zh": "先签发 token",
+      "d1": "core"
+    },
+    {
+      "code": 302,
+      "name": "TOKEN_INVALID",
+      "http": 401,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "token 签名错误、过期或不属于当前运行",
+      "remedy_zh": "重新签发 token",
+      "d1": "core"
+    },
+    {
+      "code": 303,
+      "name": "ORIGIN_FORBIDDEN",
+      "http": 403,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "Origin 不在白名单",
+      "remedy_zh": "从允许的地址访问",
+      "d1": "core"
+    },
+    {
+      "code": 304,
+      "name": "ADMIN_SECRET_REQUIRED",
+      "http": 401,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "需要管理口令或口令错误",
+      "remedy_zh": "提供正确的管理口令",
+      "d1": "core"
+    },
+    {
+      "code": 305,
+      "name": "NOT_FOUND",
+      "http": 404,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "资源不存在",
+      "remedy_zh": "检查资源标识",
+      "d1": "core"
+    },
+    {
+      "code": 306,
+      "name": "METHOD_NOT_ALLOWED",
+      "http": 405,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "方法不被允许",
+      "remedy_zh": "使用正确的 HTTP 方法",
+      "d1": "core"
+    },
+    {
+      "code": 307,
+      "name": "PAYLOAD_TOO_LARGE",
+      "http": 413,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "请求体超限",
+      "remedy_zh": "减小请求体",
+      "d1": "core"
+    },
+    {
+      "code": 308,
+      "name": "UNSUPPORTED_MEDIA_TYPE",
+      "http": 415,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "不支持的媒体类型",
+      "remedy_zh": "使用 application/json",
+      "d1": "core"
+    },
+    {
+      "code": 309,
+      "name": "RANGE_NOT_SATISFIABLE",
+      "http": 416,
+      "category": "protocol",
+      "step": "static",
+      "message_zh": "Range 越界",
+      "remedy_zh": "修正 Range 请求",
+      "d1": "core"
+    },
+    {
+      "code": 310,
+      "name": "CONTENT_VERSION_STALE",
+      "http": 409,
+      "category": "protocol",
+      "step": "static",
+      "message_zh": "内容版本已变化",
+      "remedy_zh": "重新打开世界",
+      "d1": "core"
+    },
+    {
+      "code": 311,
+      "name": "PROTOCOL_UNSUPPORTED",
+      "http": 426,
+      "category": "protocol",
+      "step": "ws",
+      "message_zh": "子协议或契约主版本不兼容",
+      "remedy_zh": "刷新页面",
+      "d1": "core"
+    },
+    {
+      "code": 312,
+      "name": "LAYOUT_MISMATCH",
+      "http": 409,
+      "category": "protocol",
+      "step": "ipc",
+      "message_zh": "二进制布局哈希不一致",
+      "remedy_zh": "重新构建前端或重启服务",
+      "d1": "core"
+    },
+    {
+      "code": 313,
+      "name": "UNKNOWN_OP",
+      "http": null,
+      "category": "protocol",
+      "step": "ws",
+      "message_zh": "不认识的 op",
+      "remedy_zh": "升级客户端",
+      "d1": "core"
+    },
+    {
+      "code": 314,
+      "name": "TOPIC_INVALID",
+      "http": null,
+      "category": "protocol",
+      "step": "ws",
+      "message_zh": "topic 或通配语法非法",
+      "remedy_zh": "修正订阅",
+      "d1": "core"
+    },
+    {
+      "code": 315,
+      "name": "SUB_LIMIT",
+      "http": null,
+      "category": "protocol",
+      "step": "ws",
+      "message_zh": "订阅数超过上限",
+      "remedy_zh": "减少订阅",
+      "d1": "core"
+    },
+    {
+      "code": 316,
+      "name": "CONN_LIMIT",
+      "http": null,
+      "category": "protocol",
+      "step": "ws",
+      "message_zh": "连接数超过上限",
+      "remedy_zh": "稍后重连",
+      "d1": "core"
+    },
+    {
+      "code": 317,
+      "name": "HELLO_TIMEOUT",
+      "http": null,
+      "category": "protocol",
+      "step": "ws",
+      "message_zh": "10 s 内未收到 hello",
+      "remedy_zh": "重新连接",
+      "d1": "core"
+    },
+    {
+      "code": 318,
+      "name": "CONTROL_BACKLOG",
+      "http": null,
+      "category": "protocol",
+      "step": "ws",
+      "message_zh": "控制面积压",
+      "remedy_zh": "降低发送频率后重连",
+      "d1": "core"
+    },
+    {
+      "code": 319,
+      "name": "EVENTS_TRUNCATED",
+      "http": 410,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "事件起点早于缓存范围",
+      "remedy_zh": "改用各自包含通道的最新值恢复",
+      "d1": "core"
+    },
+    {
+      "code": 320,
+      "name": "INTERNAL_ERROR",
+      "http": 500,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "服务内部错误",
+      "remedy_zh": "附 request_id 报告缺陷",
+      "d1": "core"
+    },
+    {
+      "code": 321,
+      "name": "IDEMPOTENCY_CONFLICT",
+      "http": 422,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "同一 Idempotency-Key 的请求体不同",
+      "remedy_zh": "使用新的 Idempotency-Key",
+      "d1": "core"
+    },
+    {
+      "code": 322,
+      "name": "CLIENT_PUBLISH_DENIED",
+      "http": null,
+      "category": "protocol",
+      "step": "ws",
+      "message_zh": "遥操作数据未声明或没有活动的 velocity 调用",
+      "remedy_zh": "先发起 velocity 调用",
+      "d1": "core"
+    },
+    {
+      "code": 323,
+      "name": "HOST_FORBIDDEN",
+      "http": 400,
+      "category": "protocol",
+      "step": "entry",
+      "message_zh": "Host 头不在白名单",
+      "remedy_zh": "使用允许的主机名访问",
+      "d1": "core"
+    },
+    {
+      "code": 330,
+      "name": "RECON_PARAMS_INVALID",
+      "http": 422,
+      "category": "job",
+      "step": "submit",
+      "message_zh": "重建参数校验失败",
+      "remedy_zh": "按表单提示修正参数",
+      "d1": "ext"
+    },
+    {
+      "code": 331,
+      "name": "RECON_ENGINE_UNAVAILABLE",
+      "http": 409,
+      "category": "job",
+      "step": "submit",
+      "message_zh": "重建引擎不可用",
+      "remedy_zh": "改用可用引擎",
+      "d1": "ext"
+    },
+    {
+      "code": 332,
+      "name": "RECON_TARGET_EXISTS",
+      "http": 409,
+      "category": "job",
+      "step": "submit",
+      "message_zh": "目标世界已存在或为内置世界",
+      "remedy_zh": "更换目标世界 id",
+      "d1": "ext"
+    },
+    {
+      "code": 333,
+      "name": "JOB_QUEUE_FULL",
+      "http": 429,
+      "category": "job",
+      "step": "submit",
+      "message_zh": "任务队列已满",
+      "remedy_zh": "等待队列空闲",
+      "d1": "ext"
+    },
+    {
+      "code": 334,
+      "name": "RECON_INPUT_INVALID",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "重建输入无效",
+      "remedy_zh": "检查输入数据",
+      "d1": "ext"
+    },
+    {
+      "code": 335,
+      "name": "RECON_OOM",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "内存超限",
+      "remedy_zh": "降低规模后重试",
+      "d1": "ext"
+    },
+    {
+      "code": 336,
+      "name": "RECON_POSE_CONVENTION",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "位姿方向自检不通过",
+      "remedy_zh": "检查引擎位姿约定",
+      "d1": "ext"
+    },
+    {
+      "code": 337,
+      "name": "RECON_POSE_COLLAPSE",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "位姿崩溃",
+      "remedy_zh": "更换输入或引擎",
+      "d1": "V0.5"
+    },
+    {
+      "code": 338,
+      "name": "RECON_NO_GNSS",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "GNSS 同步样本不足",
+      "remedy_zh": "补充 GNSS 或按相对尺度发布",
+      "d1": "ext"
+    },
+    {
+      "code": 339,
+      "name": "RECON_GEOREF_REJECTED",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "地理配准门禁拒绝",
+      "remedy_zh": "查看门禁表后人工复核",
+      "d1": "ext"
+    },
+    {
+      "code": 340,
+      "name": "RECON_IR_INVALID",
+      "http": 422,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "Recon IR 校验失败",
+      "remedy_zh": "查看校验错误",
+      "d1": "ext"
+    },
+    {
+      "code": 341,
+      "name": "RECON_EMPTY",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "融合点过少",
+      "remedy_zh": "增加输入帧",
+      "d1": "ext"
+    },
+    {
+      "code": 342,
+      "name": "RECON_TILING_FAILED",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "ingest 或切片失败",
+      "remedy_zh": "查看任务日志后重试",
+      "d1": "ext"
+    },
+    {
+      "code": 343,
+      "name": "RECON_PACKAGE_INVALID",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "世界包深校验失败",
+      "remedy_zh": "查看校验报告",
+      "d1": "ext"
+    },
+    {
+      "code": 344,
+      "name": "JOB_WORKER_CRASHED",
+      "http": null,
+      "category": "job",
+      "step": "stage",
+      "message_zh": "任务进程崩溃或挂死",
+      "remedy_zh": "重试任务",
+      "d1": "ext"
+    },
+    {
+      "code": 346,
+      "name": "RECON_DISK_QUOTA",
+      "http": 507,
+      "category": "job",
+      "step": "submit",
+      "message_zh": "磁盘配额不足",
+      "remedy_zh": "清理空间后重试",
+      "d1": "ext"
+    },
+    {
+      "code": 347,
+      "name": "JOB_NOT_FOUND",
+      "http": 404,
+      "category": "job",
+      "step": "submit",
+      "message_zh": "任务不存在",
+      "remedy_zh": "检查任务 id",
+      "d1": "ext"
+    },
+    {
+      "code": 348,
+      "name": "JOB_STATE_CONFLICT",
+      "http": 409,
+      "category": "job",
+      "step": "submit",
+      "message_zh": "任务状态不允许该操作",
+      "remedy_zh": "刷新任务状态",
+      "d1": "ext"
+    },
+    {
+      "code": 350,
+      "name": "WORLD_INVALID",
+      "http": 409,
+      "category": "data",
+      "step": "load",
+      "message_zh": "世界包语义校验失败",
+      "remedy_zh": "重建该世界",
+      "d1": "core"
+    },
+    {
+      "code": 351,
+      "name": "FORMAT_UNSUPPORTED",
+      "http": 415,
+      "category": "data",
+      "step": "load",
+      "message_zh": "未知的格式主版本或 formatVersion",
+      "remedy_zh": "升级软件或重建数据",
+      "d1": "core"
+    },
+    {
+      "code": 352,
+      "name": "COORDINATE_MISMATCH",
+      "http": 409,
+      "category": "data",
+      "step": "load",
+      "message_zh": "派生资产的坐标哈希与世界不一致",
+      "remedy_zh": "重建派生资产",
+      "d1": "core"
+    },
+    {
+      "code": 353,
+      "name": "VEHICLE_PROFILE_INVALID",
+      "http": 422,
+      "category": "data",
+      "step": "load",
+      "message_zh": "机型文件校验或自洽检查失败",
+      "remedy_zh": "修正机型参数文件",
+      "d1": "core"
+    },
+    {
+      "code": 354,
+      "name": "ASSET_MISSING",
+      "http": 404,
+      "category": "data",
+      "step": "load",
+      "message_zh": "清单引用的资产文件不存在",
+      "remedy_zh": "重建或重新获取资产",
+      "d1": "core"
+    },
+    {
+      "code": 355,
+      "name": "RESIM_INCOMPATIBLE",
+      "http": 409,
+      "category": "data",
+      "step": "load",
+      "message_zh": "输入日志与当前内核或版本不一致",
+      "remedy_zh": "使用匹配版本重仿真",
+      "d1": "ext"
+    },
+    {
+      "code": 356,
+      "name": "EXPORT_FAILED",
+      "http": 500,
+      "category": "data",
+      "step": "export",
+      "message_zh": "导出或其校验失败",
+      "remedy_zh": "查看导出日志",
+      "d1": "V0.5"
+    },
+    {
+      "code": 400,
+      "name": "PC_WORLD_NOT_FOUND",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "世界不存在",
+      "remedy_zh": "选择其他世界",
+      "d1": "core"
+    },
+    {
+      "code": 401,
+      "name": "PC_FORMAT_UNSUPPORTED",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "世界格式不受支持",
+      "remedy_zh": "升级前端或重建世界",
+      "d1": "core"
+    },
+    {
+      "code": 402,
+      "name": "PC_CONTENT_STALE",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "世界内容已更新",
+      "remedy_zh": "重新打开世界",
+      "d1": "core"
+    },
+    {
+      "code": 403,
+      "name": "PC_FIRST_SCREEN_FAILED",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "首屏数据加载失败",
+      "remedy_zh": "重试加载",
+      "d1": "core"
+    },
+    {
+      "code": 404,
+      "name": "PC_NODE_FAILED",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "节点加载失败",
+      "remedy_zh": "稍后自动重试",
+      "d1": "core"
+    },
+    {
+      "code": 405,
+      "name": "PC_RANGE_MISMATCH",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "Range 响应不符",
+      "remedy_zh": "检查静态服务",
+      "d1": "core"
+    },
+    {
+      "code": 406,
+      "name": "PC_POOL_STALL",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "点池分配失败",
+      "remedy_zh": "无需处理",
+      "d1": "core"
+    },
+    {
+      "code": 407,
+      "name": "PC_CAPACITY_CLAMPED",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "预算受点池容量限制",
+      "remedy_zh": "无需处理",
+      "d1": "core"
+    },
+    {
+      "code": 408,
+      "name": "PC_WORKER_CRASHED",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "解码 Worker 崩溃",
+      "remedy_zh": "已自动重建",
+      "d1": "core"
+    },
+    {
+      "code": 409,
+      "name": "PC_GPU_RESET",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "GPU 上下文丢失",
+      "remedy_zh": "等待自动恢复",
+      "d1": "core"
+    },
+    {
+      "code": 410,
+      "name": "PC_PICK_MISS",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "拾取窗口内无点",
+      "remedy_zh": "无需处理",
+      "d1": "core"
+    },
+    {
+      "code": 411,
+      "name": "PC_PICK_TIMEOUT",
+      "http": null,
+      "category": "browser",
+      "step": "pointcloud",
+      "message_zh": "拾取超时",
+      "remedy_zh": "重试拾取",
+      "d1": "core"
+    },
+    {
+      "code": 440,
+      "name": "ENV_PRESET_UNKNOWN",
+      "http": 422,
+      "category": "module",
+      "step": "env",
+      "message_zh": "未知的天气预设",
+      "remedy_zh": "选择已登记的预设",
+      "d1": "core"
+    },
+    {
+      "code": 441,
+      "name": "ENV_FIELD_UNKNOWN",
+      "http": 422,
+      "category": "module",
+      "step": "env",
+      "message_zh": "环境修改含未登记字段",
+      "remedy_zh": "按字段登记表修正",
+      "d1": "core"
+    },
+    {
+      "code": 442,
+      "name": "ENV_LEVEL_UNAVAILABLE",
+      "http": 409,
+      "category": "module",
+      "step": "env",
+      "message_zh": "请求的风等级或湍流模型本期不可用",
+      "remedy_zh": "改用可用等级",
+      "d1": "core"
+    },
+    {
+      "code": 443,
+      "name": "ENV_ASSET_INVALID",
+      "http": 500,
+      "category": "module",
+      "step": "env",
+      "message_zh": "环境资产校验失败",
+      "remedy_zh": "重新生成环境资产",
+      "d1": "core"
+    },
+    {
+      "code": 460,
+      "name": "REC_DISK_LOW",
+      "http": 507,
+      "category": "module",
+      "step": "rec",
+      "message_zh": "可用空间不足，拒绝开始录制",
+      "remedy_zh": "清理 runs 目录",
+      "d1": "ext"
+    },
+    {
+      "code": 461,
+      "name": "REC_SEGMENT_CORRUPT",
+      "http": 409,
+      "category": "module",
+      "step": "rec",
+      "message_zh": "录制段损坏且修复失败",
+      "remedy_zh": "选择其他录制段",
+      "d1": "ext"
+    },
+    {
+      "code": 462,
+      "name": "BOOKMARK_LIMIT",
+      "http": 409,
+      "category": "module",
+      "step": "rec",
+      "message_zh": "书签数量超过上限",
+      "remedy_zh": "删除部分书签",
+      "d1": "ext"
+    },
+    {
+      "code": 463,
+      "name": "REPLAY_NOT_OPEN",
+      "http": 409,
+      "category": "module",
+      "step": "rec",
+      "message_zh": "该运行未处于回放打开状态",
+      "remedy_zh": "先打开回放",
+      "d1": "ext"
+    },
+    {
+      "code": 470,
+      "name": "AGENT_GUARD_INTERNAL",
+      "http": 500,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "受信守卫内部异常",
+      "remedy_zh": "查看 agent-runtime 日志",
+      "d1": "ext"
+    },
+    {
+      "code": 471,
+      "name": "CAPABILITY_UNKNOWN",
+      "http": 422,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "能力 id 不合语法或不在目录",
+      "remedy_zh": "使用目录中的能力 id",
+      "d1": "ext"
+    },
+    {
+      "code": 472,
+      "name": "CAPABILITY_NOT_SERVED",
+      "http": 409,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "提供方不服务该能力",
+      "remedy_zh": "换能力或换提供方",
+      "d1": "ext"
+    },
+    {
+      "code": 473,
+      "name": "NO_CANDIDATE",
+      "http": 409,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "没有可用的候选提供方",
+      "remedy_zh": "稍后重试或增加提供方",
+      "d1": "ext"
+    },
+    {
+      "code": 474,
+      "name": "ALL_INFEASIBLE",
+      "http": 409,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "全部报价不可行",
+      "remedy_zh": "调整目标或补充电量",
+      "d1": "ext"
+    },
+    {
+      "code": 475,
+      "name": "QUOTE_TIMEOUT",
+      "http": 504,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "报价截止前无回复",
+      "remedy_zh": "检查 agent-runtime 与仿真进程",
+      "d1": "ext"
+    },
+    {
+      "code": 476,
+      "name": "DELEGATION_REJECTED",
+      "http": 409,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "提供方拒绝委派",
+      "remedy_zh": "自动更换候选",
+      "d1": "ext"
+    },
+    {
+      "code": 477,
+      "name": "EXEC_TIMEOUT",
+      "http": null,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "执行超时",
+      "remedy_zh": "重新提交任务",
+      "d1": "ext"
+    },
+    {
+      "code": 478,
+      "name": "ACCEPT_FALSE",
+      "http": null,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "验收谓词为假",
+      "remedy_zh": "自动更换候选",
+      "d1": "ext"
+    },
+    {
+      "code": 479,
+      "name": "EFFECT_UNVERIFIED",
+      "http": null,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "效果未验证",
+      "remedy_zh": "补充独立读回证据",
+      "d1": "ext"
+    },
+    {
+      "code": 480,
+      "name": "SCOPE_VIOLATION",
+      "http": null,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "违反负向范围",
+      "remedy_zh": "检查任务范围",
+      "d1": "ext"
+    },
+    {
+      "code": 481,
+      "name": "ESCALATION_TIMEOUT",
+      "http": null,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "升级等待超时",
+      "remedy_zh": "及时处理升级请求",
+      "d1": "ext"
+    },
+    {
+      "code": 482,
+      "name": "AGENT_SCOPE_FORBIDDEN",
+      "http": 403,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "命令超出智能体的授权范围",
+      "remedy_zh": "检查委派与能力范围",
+      "d1": "ext"
+    },
+    {
+      "code": 483,
+      "name": "TASK_INTERRUPTED",
+      "http": null,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "任务因进程重启中断",
+      "remedy_zh": "重新提交任务",
+      "d1": "ext"
+    },
+    {
+      "code": 484,
+      "name": "ANET_WIRE_MISMATCH",
+      "http": 409,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "ANet 协议版本不一致",
+      "remedy_zh": "按版本锁重建",
+      "d1": "V1.0"
+    },
+    {
+      "code": 485,
+      "name": "ANET_DAEMON_DOWN",
+      "http": 503,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "ANet 守护进程不可达",
+      "remedy_zh": "等待编排重启",
+      "d1": "V1.0"
+    },
+    {
+      "code": 486,
+      "name": "RECEIPT_INVALID",
+      "http": null,
+      "category": "module",
+      "step": "agent",
+      "message_zh": "回执绑定校验失败",
+      "remedy_zh": "检查回执来源",
+      "d1": "ext"
+    },
+    {
+      "code": 490,
+      "name": "TIME_UNSYNCED",
+      "http": 422,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "传感器流未对时",
+      "remedy_zh": "启用 PTP 或 GPS 授时",
+      "d1": "V0.5"
+    },
+    {
+      "code": 491,
+      "name": "UNIT_MISMATCH",
+      "http": 422,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "IMU 加速度单位不符",
+      "remedy_zh": "检查 IMU 来源与原始单位",
+      "d1": "V0.5"
+    },
+    {
+      "code": 492,
+      "name": "EXTRINSIC_NOT_IDENTITY",
+      "http": 422,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "驱动侧外参不是恒等",
+      "remedy_zh": "将驱动外参置零",
+      "d1": "V0.5"
+    },
+    {
+      "code": 493,
+      "name": "CALIB_MISSING",
+      "http": 409,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "引用的标定版本不存在",
+      "remedy_zh": "先完成标定",
+      "d1": "V0.5"
+    },
+    {
+      "code": 494,
+      "name": "GNSS_INSUFFICIENT",
+      "http": 409,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "GNSS 数据不足",
+      "remedy_zh": "延长采集或补充 RTK",
+      "d1": "V0.5"
+    },
+    {
+      "code": 495,
+      "name": "COLLINEAR_NO_GRAVITY",
+      "http": 409,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "航带共线且缺少重力信息",
+      "remedy_zh": "提供 IMU 姿态或人工复核",
+      "d1": "V0.5"
+    },
+    {
+      "code": 496,
+      "name": "SIM3_OUT_OF_BASIN",
+      "http": 409,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "配准门禁失败",
+      "remedy_zh": "人工粗对齐后重试",
+      "d1": "V0.5"
+    },
+    {
+      "code": 497,
+      "name": "QA_GATE_FAILED",
+      "http": 409,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "质量门禁未通过",
+      "remedy_zh": "查看报告后补飞或调参",
+      "d1": "V0.5"
+    },
+    {
+      "code": 498,
+      "name": "RELEASE_IMMUTABLE",
+      "http": 409,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "已发布版本不可修改",
+      "remedy_zh": "发布新版本",
+      "d1": "V0.5"
+    },
+    {
+      "code": 499,
+      "name": "RELEASE_INTEGRITY",
+      "http": 409,
+      "category": "module",
+      "step": "georef",
+      "message_zh": "发布包完整性校验失败",
+      "remedy_zh": "重新下发正确版本",
+      "d1": "V0.5"
+    }
+  ],
+  "ws_close_codes": [
+    {
+      "code": 1000,
+      "name": "NORMAL",
+      "client": "no reconnect"
+    },
+    {
+      "code": 1001,
+      "name": "GOING_AWAY",
+      "client": "reconnect with backoff"
+    },
+    {
+      "code": 1002,
+      "name": "PROTOCOL_ERROR",
+      "client": "reconnect; FATAL after 3 in a row"
+    },
+    {
+      "code": 1006,
+      "name": "ABNORMAL",
+      "client": "GET /api/auth/whoami to tell 401 from 403, else reconnect"
+    },
+    {
+      "code": 1008,
+      "name": "POLICY_VIOLATION",
+      "client": "FATAL"
+    },
+    {
+      "code": 1009,
+      "name": "MESSAGE_TOO_BIG",
+      "client": "reconnect and report a defect"
+    },
+    {
+      "code": 1011,
+      "name": "INTERNAL_ERROR",
+      "client": "reconnect"
+    },
+    {
+      "code": 1013,
+      "name": "CONTROL_BACKLOG",
+      "reason": 318,
+      "client": "reconnect"
+    },
+    {
+      "code": 4401,
+      "name": "AUTH",
+      "reason": 302,
+      "client": "reissue token and reconnect"
+    },
+    {
+      "code": 4403,
+      "name": "SEAT_REVOKED",
+      "reason": 116,
+      "client": "reconnect as viewer"
+    },
+    {
+      "code": 4408,
+      "name": "HELLO_TIMEOUT",
+      "reason": 317,
+      "client": "reconnect"
+    },
+    {
+      "code": 4426,
+      "name": "VERSION_MISMATCH",
+      "reason": 311,
+      "client": "FATAL, E-07 reload page"
+    },
+    {
+      "code": 4429,
+      "name": "CONN_LIMIT",
+      "reason": 316,
+      "client": "reconnect after 30 s"
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bus/1/geo.schema.json",
+  "title": "Geometry probe service (svc/geo/{height,ray_hit}; V0.2 raycast, los, lidar)",
+  "description": "AWR-17 §9.3; M04 §7.3 (drafted by M04). op names follow M04 §7.3: svc/geo/height serves height_dsm, ground_dtm, agl, clearance, probe, segment_los, path_coarse_check, heightmap_top, terrain_profile; svc/geo/ray_hit serves ray_hit; raycast, los and lidar are the V0.2 geo-worker ops. Failure replies may carry detail (the reason name).",
+  "$defs": {
+    "req": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "id": {
+          "type": "string"
+        },
+        "world_id": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "height_dsm",
+            "ground_dtm",
+            "agl",
+            "clearance",
+            "probe",
+            "segment_los",
+            "path_coarse_check",
+            "heightmap_top",
+            "terrain_profile",
+            "ray_hit",
+            "raycast",
+            "los",
+            "lidar"
+          ]
+        },
+        "args": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "v",
+        "id",
+        "world_id",
+        "op",
+        "args"
+      ]
+    },
+    "rep": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "id": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "code": {
+          "type": "integer"
+        },
+        "result": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "content_version": {
+          "type": "string"
+        },
+        "derive_sha8": {
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "dsm_2m",
+            "dtm_10m",
+            "heightmap_2m",
+            "zones",
+            "mesh"
+          ]
+        },
+        "t_proc_us": {
+          "type": "integer"
+        },
+        "detail": {
+          "type": "string",
+          "description": "failure reason name, e.g. GEO_QUEUE_FULL, UNKNOWN_OP, WORLD_NOT_IN_SESSION, GEO_NOT_READY"
+        }
+      },
+      "required": [
+        "v",
+        "id",
+        "ok",
+        "code"
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/req"
+    },
+    {
+      "$ref": "#/$defs/rep"
+    }
+  ]
+}

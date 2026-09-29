@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/qa-report.schema.json",
+  "title": "World QA report qa/report.json (awr.world.qa.v1)",
+  "description": "Non-content file written after validate --deep (AWR-16 §9, snake_case). world.json.qa is its summary.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.world.qa.v1"
+    },
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "world_id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "content_version": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "warn",
+        "fail"
+      ]
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "params": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/sourceFile"
+      }
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "enum": [
+              "read",
+              "ingest",
+              "dtm",
+              "normals",
+              "classify",
+              "tile",
+              "dsm",
+              "zones",
+              "hash",
+              "validate"
+            ]
+          },
+          "seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "peak_rss_mb": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "name",
+          "seconds"
+        ]
+      }
+    },
+    "ingest": {
+      "type": "object",
+      "description": "units_heuristic, units_applied, up_axis_scores, tilt_raw_deg, leveled_deg, yaw_deg, ground_frac, normals_flipped_frac, zero_normals_frac, nn_median_m, max_height_m, landmark{name, hag_m, expected_m, enu_m}, unmapped_las_codes"
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^G-[0-9]{2}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "value": {},
+          "limit": {},
+          "pass": {
+            "type": "boolean"
+          },
+          "severity": {
+            "enum": [
+              "error",
+              "warn",
+              "info"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "pass",
+          "severity"
+        ]
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "rule": {
+                "type": "string",
+                "pattern": "^V-[A-Z]{1,2}-[0-9]{2}$"
+              },
+              "where": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "rule",
+              "message"
+            ]
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "rule": {
+                "type": "string",
+                "pattern": "^V-[A-Z]{1,2}-[0-9]{2}$"
+              },
+              "where": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "rule",
+              "message"
+            ]
+          }
+        },
+        "rules_checked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deep": {
+          "type": "boolean"
+        },
+        "seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "errors",
+        "warnings",
+        "rules_checked",
+        "deep"
+      ]
+    },
+    "first_screen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rule_g": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "requests": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "points",
+            "bytes"
+          ]
+        },
+        "tier_s": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "level": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "level",
+            "points",
+            "bytes"
+          ]
+        },
+        "tier_ba": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "level": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "level",
+            "points",
+            "bytes"
+          ]
+        }
+      },
+      "required": [
+        "rule_g"
+      ]
+    },
+    "sizes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "octree_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hierarchy_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dsm_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dtm_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "world_id",
+    "content_version",
+    "status",
+    "generator",
+    "gates",
+    "validation"
+  ]
+}

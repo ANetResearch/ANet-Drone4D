@@ -1,0 +1,502 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/world.schema.json",
+  "title": "World Package manifest world.json (v1)",
+  "description": "Entry point of worlds/<id>/ (AWR-16 §3.2, camelCase). Served with Cache-Control: no-cache; every other file is immutable and requested with ?v=<contentVersion>. world.json, qa/report.json and export/** are non-content files.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "contentVersion",
+    "createdAt",
+    "generator",
+    "dataset",
+    "coordinate",
+    "scaleStatus",
+    "bounds",
+    "layers",
+    "lod",
+    "render"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nameZh": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$"
+      },
+      "description": "builtin, synthetic, urbanscene3d, real, recon (built-in cities: [urbanscene3d, synthetic, builtin])."
+    },
+    "contentVersion": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$",
+      "description": "First 12 hex of sha256(''.join(f'{path}:{sha256}\\n' for f in files)) over files[] sorted by path (AWR-16 §3.4). Cache key (?v=)."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339; not part of any hash."
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "worldpkg"
+        },
+        "version": {
+          "type": "string",
+          "description": "awr package version"
+        },
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "description": "G, leaf, compression, seed, forest, dtmCellM, dsmCellM, borderInsetM, borderHeadroomM"
+        }
+      }
+    },
+    "dataset": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "description": "Provenance and licence record (AWR-13 §13.3 DC-1). redistribution is a fact record only (ADR-034).",
+      "required": [
+        "name",
+        "version",
+        "license",
+        "redistribution",
+        "sourceFiles"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "citation": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        },
+        "redistribution": {
+          "type": "boolean",
+          "description": "Fact record only; readers must not restrict loading or demos by it (ADR-034)."
+        },
+        "notice": {
+          "type": "string"
+        },
+        "sourceFiles": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/sourceFile"
+          },
+          "description": "Raw inputs with sha256; must match data/raw/urbanscene3d/MANIFEST.json (AWR-16 §10.4)."
+        }
+      }
+    },
+    "coordinate": {
+      "$ref": "common.schema.json#/$defs/hrefWithHash",
+      "description": "Always {href: 'coordinate.json', sha256}; sha256 is the system-wide coordinate.sha256 (V-W-14)."
+    },
+    "scaleStatus": {
+      "$ref": "common.schema.json#/$defs/scaleStatus"
+    },
+    "bounds": {
+      "$ref": "common.schema.json#/$defs/aabb",
+      "description": "Tight world-ENU bounds of all layers (m)."
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/layer"
+      }
+    },
+    "lod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "errorTargetPx",
+        "firstScreen"
+      ],
+      "properties": {
+        "errorTargetPx": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Reference tau (1.35); runtime tau follows the M05 ladder (ADR-012)."
+        },
+        "firstScreen": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "points",
+            "bytes",
+            "requests"
+          ],
+          "properties": {
+            "points": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "requests": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "= number of roots (one Range per root)"
+            }
+          },
+          "description": "Generator reference first screen (rule G, Tier B/A); runtime uses rule R (ADR-013)."
+        },
+        "budgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "desktop": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "integrated": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "software": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "Deprecated: not written by generators since v1.0 (ADR-012); readers ignore (V-W-15 warns)."
+        }
+      }
+    },
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "defaultColorMode",
+        "zRangeM"
+      ],
+      "properties": {
+        "defaultColorMode": {
+          "enum": [
+            "rgb",
+            "height",
+            "hag",
+            "normal",
+            "class",
+            "intensity"
+          ]
+        },
+        "zRangeM": {
+          "$ref": "common.schema.json#/$defs/vec2"
+        },
+        "hagRangeM": {
+          "$ref": "common.schema.json#/$defs/vec2"
+        },
+        "nnMedianM": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pointSizeK": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Deprecated: not written since v1.0 (ADR-011)."
+        },
+        "edl": {
+          "type": "boolean",
+          "description": "Deprecated: not written since v1.0 (ADR-011)."
+        },
+        "syntheticGroundZ": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Draw a ground grid/plane at this z when the data has no ground (Suzhou)."
+        }
+      }
+    },
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "home": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "position",
+            "target"
+          ],
+          "properties": {
+            "position": {
+              "$ref": "common.schema.json#/$defs/vec3"
+            },
+            "target": {
+              "$ref": "common.schema.json#/$defs/vec3"
+            },
+            "fovDeg": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 120
+            }
+          }
+        }
+      }
+    },
+    "thumbnail": {
+      "$ref": "common.schema.json#/$defs/relHref"
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "points": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "extentM": {
+          "$ref": "common.schema.json#/$defs/vec3"
+        },
+        "areaKm2": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maxHeightM": {
+          "type": "number"
+        }
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "warn",
+            "fail"
+          ],
+          "description": "fail packages must never be published (AWR-16 §3.5)."
+        },
+        "href": {
+          "$ref": "common.schema.json#/$defs/relHref"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/fileRef"
+      },
+      "description": "Every content file (all files except world.json, qa/report.json and export/**), sorted by path (byte order)."
+    }
+  },
+  "$defs": {
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "role",
+        "format",
+        "href",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/layerId"
+        },
+        "type": {
+          "enum": [
+            "pointcloud",
+            "terrain",
+            "collision",
+            "voxel",
+            "sdf",
+            "semantic-zones",
+            "class-table",
+            "environment",
+            "reconstruction",
+            "gaussian",
+            "mesh",
+            "tiles3d",
+            "localization",
+            "missions",
+            "scenarios",
+            "recordings"
+          ]
+        },
+        "role": {
+          "enum": [
+            "visual",
+            "geometry",
+            "semantic",
+            "environment",
+            "reconstruction",
+            "localization",
+            "mission",
+            "archive",
+            "export",
+            "debug"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "description": "Registered format name <family>/<variant>@<ver> (AWR-16 §2.2): potree2/anet-q16@1, potree2/default, awr-pts@1, f32-grid@1, anet-classes@1, geojson/awr-zones@1, awr-env-world@1, awrv@1, anet-wind@1, awsl@1, recon-ir@1, 3dtiles@1.1, copc@1.0, spz@2",
+          "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)?(@[0-9.]+)?$"
+        },
+        "href": {
+          "$ref": "common.schema.json#/$defs/relHref"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "building",
+            "missing",
+            "stale"
+          ]
+        },
+        "default": {
+          "type": "boolean",
+          "description": "Loaded/visible at startup."
+        },
+        "T_world_layer": {
+          "$ref": "common.schema.json#/$defs/rigid",
+          "description": "Rigid only (no scale) - 3D Tiles 1.1/2.0 invariant (r10). Omitted = identity."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "points": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "common.schema.json#/$defs/sha256"
+        },
+        "roots": {
+          "description": "pointcloud only: multi-root forest. Each root is an independent Potree 2.0 container (metadata.json/hierarchy.bin/octree.bin[/hierarchy_ext.bin]) at href; the engine selects nodes of all roots against ONE shared budget/priority queue. Single-root worlds have exactly one entry.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "href",
+              "cubeMin",
+              "cubeSize",
+              "points",
+              "depth",
+              "firstScreenBytes"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^r[0-9]*$|^r-[0-9]+$"
+              },
+              "href": {
+                "$ref": "common.schema.json#/$defs/relHref"
+              },
+              "cubeMin": {
+                "$ref": "common.schema.json#/$defs/vec3"
+              },
+              "cubeSize": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "points": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "depth": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "firstScreenBytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "stats": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "pointcloud"
+              },
+              "role": {
+                "const": "visual"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "required": [
+              "roots",
+              "points"
+            ],
+            "type": "object"
+          }
+        }
+      ]
+    }
+  }
+}

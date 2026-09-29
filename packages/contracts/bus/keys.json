@@ -1,0 +1,608 @@
+{
+  "schema": "awr.bus.keys.v1",
+  "doc": "Zenoh key space relative to the namespace awr/<world>/<run> (AWR-17 §9.3; ADR-051). Code must build keys through the generated awr.contracts.bus_keys module; key literals elsewhere are rejected by lint (AWR-17 §10.6 rule 11). Placeholders: {producer}, {name}, {cat}, {op}, {what}.",
+  "namespace": "awr/{world}/{run}",
+  "chunk_pattern": "^[a-z0-9][a-z0-9_-]*$",
+  "event_categories": [
+    "cmd",
+    "safety",
+    "mission",
+    "sim",
+    "env",
+    "lease",
+    "proc",
+    "rec",
+    "job",
+    "world",
+    "sensor",
+    "agent",
+    "health"
+  ],
+  "producers": [
+    "sim-core",
+    "replay",
+    "api",
+    "supervisor",
+    "recorder",
+    "replay-worker",
+    "agent-runtime",
+    "job-worker",
+    "geo-worker"
+  ],
+  "keys": [
+    {
+      "name": "PROC_ALIVE",
+      "key": "proc/{name}/alive",
+      "type": "liveliness",
+      "producer": "every process",
+      "consumers": [
+        "all"
+      ],
+      "qos": null,
+      "payload": null,
+      "d1": "core"
+    },
+    {
+      "name": "PROC_READY",
+      "key": "proc/{name}/ready",
+      "type": "liveliness",
+      "producer": "every process",
+      "consumers": [
+        "all"
+      ],
+      "qos": null,
+      "payload": null,
+      "d1": "core"
+    },
+    {
+      "name": "CTL_CMD",
+      "key": "ctl/{producer}/cmd",
+      "type": "queryable",
+      "producer": "api, agent-runtime",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_HIGH",
+        "congestion": "DROP",
+        "express": true
+      },
+      "payload": "bus/command.schema.json#/$defs/command -> #/$defs/admission",
+      "d1": "core"
+    },
+    {
+      "name": "CTL_CLOCK",
+      "key": "ctl/sim-core/clock",
+      "type": "queryable",
+      "producer": "api",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_HIGH",
+        "congestion": "DROP",
+        "express": true
+      },
+      "payload": "bus/command.schema.json#/$defs/clockOp -> #/$defs/clockReply",
+      "d1": "core"
+    },
+    {
+      "name": "CTL_LEASE",
+      "key": "ctl/sim-core/lease",
+      "type": "queryable",
+      "producer": "api, agent-runtime",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_HIGH",
+        "congestion": "DROP",
+        "express": true
+      },
+      "payload": "bus/command.schema.json#/$defs/leaseOp -> #/$defs/leaseReply",
+      "d1": "core"
+    },
+    {
+      "name": "CTL_ROSTER",
+      "key": "ctl/{producer}/roster",
+      "type": "queryable",
+      "producer": "api, recorder, agent-runtime",
+      "consumers": [
+        "sim-core",
+        "replay"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/roster.schema.json",
+      "d1": "core"
+    },
+    {
+      "name": "CTL_ESTIMATE",
+      "key": "ctl/sim-core/estimate",
+      "type": "queryable",
+      "producer": "agent-runtime, mission engine",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/command.schema.json#/$defs/estimateReq -> #/$defs/estimateReply",
+      "d1": "core"
+    },
+    {
+      "name": "CTL_QUERY",
+      "key": "ctl/sim-core/query",
+      "type": "queryable",
+      "producer": "api, agent-runtime",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/command.schema.json#/$defs/queryReq -> msgpack SoA",
+      "d1": "core"
+    },
+    {
+      "name": "CTL_SETPOINT",
+      "key": "ctl/sim-core/setpoint",
+      "type": "pubsub",
+      "producer": "api",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "REAL_TIME",
+        "congestion": "DROP",
+        "express": true
+      },
+      "payload": "raw awr.bus.Setpoint32.v1",
+      "d1": "core"
+    },
+    {
+      "name": "CTL_GCS",
+      "key": "ctl/sim-core/gcs",
+      "type": "pubsub",
+      "producer": "api",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_HIGH",
+        "congestion": "DROP",
+        "express": true
+      },
+      "payload": "bus/gcs.schema.json",
+      "d1": "core",
+      "doc": "5 Hz wall clock"
+    },
+    {
+      "name": "CTL_INTEREST",
+      "key": "ctl/sim-core/interest",
+      "type": "pubsub",
+      "producer": "api",
+      "consumers": [
+        "sim-core",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/interest.schema.json",
+      "d1": "core"
+    },
+    {
+      "name": "EVT",
+      "key": "evt/{producer}/{cat}",
+      "type": "pubsub",
+      "producer": "producers",
+      "consumers": [
+        "api",
+        "recorder",
+        "agent-runtime"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "msgpack array of bus/event.schema.json",
+      "d1": "core",
+      "doc": "cat in cmd, safety, mission, sim, env, lease, proc, rec, job, world, sensor, agent (health from V0.2); safety uses INTERACTIVE_HIGH"
+    },
+    {
+      "name": "EVT_REPLAY",
+      "key": "evt/{producer}/_replay",
+      "type": "queryable",
+      "producer": "producers",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/replay.schema.json#/$defs/replayReq -> #/$defs/replayRep",
+      "d1": "core"
+    },
+    {
+      "name": "STATE_EXT",
+      "key": "state/{producer}/ext",
+      "type": "pubsub",
+      "producer": "producers",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "2 Hz batch of awr.uav.state_ext.v1",
+      "d1": "core"
+    },
+    {
+      "name": "STATE_SAFETY",
+      "key": "state/{producer}/safety",
+      "type": "pubsub",
+      "producer": "producers",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "10 Hz [[agent_no, row_bytes]] of awr.uav.safety.v1 for interest set and marks",
+      "d1": "core"
+    },
+    {
+      "name": "STATE_SENSOR",
+      "key": "state/{producer}/sensor",
+      "type": "pubsub",
+      "producer": "producers",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/detail.schema.json (SensorPose48 rows)",
+      "d1": "core"
+    },
+    {
+      "name": "STATE_DETAIL",
+      "key": "state/sim-core/detail",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/detail.schema.json (EnvSample32 rows)",
+      "d1": "core"
+    },
+    {
+      "name": "STATE_PERF",
+      "key": "state/sim-core/perf",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{stage_ms_per_s{}, n_active, kernel, cpu_pct}",
+      "d1": "core"
+    },
+    {
+      "name": "STATE_ENV",
+      "key": "state/sim-core/env",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "full awr.env.keyframe.v1, 1 Hz wall clock",
+      "d1": "core"
+    },
+    {
+      "name": "STATE_MISSION",
+      "key": "state/sim-core/mission",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "2 Hz awr.mission.status.v1 batch",
+      "d1": "core"
+    },
+    {
+      "name": "SYS_PROCS",
+      "key": "sys/procs",
+      "type": "queryable",
+      "producer": "supervisor",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "rt/payloads/sys_procs.schema.json",
+      "d1": "core"
+    },
+    {
+      "name": "SYS_RESTART",
+      "key": "sys/restart",
+      "type": "queryable",
+      "producer": "supervisor",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{cid, name}",
+      "d1": "core"
+    },
+    {
+      "name": "SYS_RUN",
+      "key": "sys/run",
+      "type": "queryable",
+      "producer": "supervisor",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{cid, world_id, scenario_id, principal} -> {status, code, run_id, world_id, scenario_id, segment}",
+      "d1": "ext",
+      "doc": "10 s timeout, no retry"
+    },
+    {
+      "name": "SYS_START",
+      "key": "sys/start",
+      "type": "queryable",
+      "producer": "supervisor",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{cid, name, args} -> {status, code, pid}",
+      "d1": "ext"
+    },
+    {
+      "name": "SYS_STOP",
+      "key": "sys/stop",
+      "type": "queryable",
+      "producer": "supervisor",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{cid, name, args} -> {status, code, pid}",
+      "d1": "ext"
+    },
+    {
+      "name": "SYS_INJECT",
+      "key": "sys/inject",
+      "type": "queryable",
+      "producer": "supervisor",
+      "consumers": [
+        "test harness"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{name, fault: kill|hang|stop_heartbeat}",
+      "d1": "test",
+      "doc": "registered only in the ci profile"
+    },
+    {
+      "name": "CTL_REPLAY_WORKER",
+      "key": "ctl/replay-worker/{op}",
+      "type": "queryable",
+      "producer": "api",
+      "consumers": [
+        "replay-worker"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_HIGH",
+        "congestion": "DROP",
+        "express": true
+      },
+      "payload": "bus/replay.schema.json#/$defs/workerCmd",
+      "d1": "ext",
+      "doc": "op in open, seek, play, pause, speed, close, query (query is INTERACTIVE_LOW)"
+    },
+    {
+      "name": "CTL_RECORDER",
+      "key": "ctl/recorder/{op}",
+      "type": "queryable",
+      "producer": "api",
+      "consumers": [
+        "recorder"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{cid}",
+      "d1": "ext",
+      "doc": "op in start, stop"
+    },
+    {
+      "name": "EVT_RECORDER",
+      "key": "evt/recorder/rec",
+      "type": "pubsub",
+      "producer": "recorder",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/event.schema.json array",
+      "d1": "ext"
+    },
+    {
+      "name": "CTL_AGENT",
+      "key": "ctl/agent-runtime/{op}",
+      "type": "queryable",
+      "producer": "api",
+      "consumers": [
+        "agent-runtime"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "M14 task, cancel, query",
+      "d1": "ext",
+      "doc": "op in task, cancel, query"
+    },
+    {
+      "name": "STATE_AGENT",
+      "key": "state/agent-runtime/{what}",
+      "type": "pubsub",
+      "producer": "agent-runtime",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "agents 1 Hz; tasks change driven + 1 Hz",
+      "d1": "ext",
+      "doc": "what in agents, tasks"
+    },
+    {
+      "name": "EVT_JOB",
+      "key": "evt/job-worker/{cat}",
+      "type": "pubsub",
+      "producer": "job-worker",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/event.schema.json array",
+      "d1": "ext",
+      "doc": "cat in job, world"
+    },
+    {
+      "name": "SVC_JOB",
+      "key": "svc/job/{op}",
+      "type": "queryable",
+      "producer": "api",
+      "consumers": [
+        "job-worker"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "M01, M03 job service",
+      "d1": "ext",
+      "doc": "op in submit, cancel, status, engines"
+    },
+    {
+      "name": "SVC_GEO",
+      "key": "svc/geo/{op}",
+      "type": "queryable",
+      "producer": "api, agent-runtime",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "bus/geo.schema.json",
+      "d1": "core",
+      "doc": "D1: op in height, ray_hit (served by sim-core); V0.2: raycast, los, lidar (geo-worker; lidar is BACKGROUND)"
+    },
+    {
+      "name": "STATE_FRAME",
+      "key": "state/{producer}/frame",
+      "type": "pubsub",
+      "producer": "remote producer",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "slot bytes (ZenohStateBus)",
+      "d1": "V0.5"
+    }
+  ]
+}

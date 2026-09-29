@@ -1,0 +1,170 @@
+{
+  "schema": "awr.rec.mcap_channels.v1",
+  "profile": "awr",
+  "doc": "MCAP channel and schema registry (AWR-16 §13.3). Topics are '/' + WS topic key; block channels are recording-only. Every awr-raw / awr-msgpack message starts with awr.rec.RecPrefix8.v1.",
+  "writer": {
+    "compression": "ZSTD",
+    "index_types": "ALL",
+    "use_chunking": true,
+    "chunk_size": 4194304,
+    "use_statistics": true,
+    "use_summary_offsets": true,
+    "enable_crcs": true,
+    "repeat_channels": true,
+    "repeat_schemas": true,
+    "flush_wall_s": 1
+  },
+  "schemas": [
+    {
+      "name": "awr.SwarmLite32Block.v1",
+      "encoding": "awr-layout",
+      "data": "rt/layouts.json"
+    },
+    {
+      "name": "awr.DroneState64.v1",
+      "encoding": "awr-layout",
+      "data": "rt/layouts.json"
+    },
+    {
+      "name": "awr.SensorPose48.v1",
+      "encoding": "awr-layout",
+      "data": "rt/layouts.json"
+    },
+    {
+      "name": "awr.env.keyframe.v1",
+      "encoding": "jsonschema",
+      "data": "env/env_state.schema.json"
+    },
+    {
+      "name": "awr.event.v1",
+      "encoding": "jsonschema",
+      "data": "bus/event.schema.json"
+    },
+    {
+      "name": "awr.StateExtBlock.v1",
+      "encoding": "jsonschema",
+      "data": "rec/blocks.schema.json#/$defs/stateExtBlock"
+    },
+    {
+      "name": "awr.SafetyBlock.v1",
+      "encoding": "jsonschema",
+      "data": "rec/blocks.schema.json#/$defs/safetyBlock"
+    },
+    {
+      "name": "awr.clock.v1",
+      "encoding": "jsonschema",
+      "data": "bus/command.schema.json#/$defs/clockReply"
+    },
+    {
+      "name": "awr.roster.v1",
+      "encoding": "jsonschema",
+      "data": "bus/roster.schema.json"
+    },
+    {
+      "name": "awr.mission.status.v1",
+      "encoding": "jsonschema",
+      "data": "rt/payloads/mission_status.schema.json"
+    },
+    {
+      "name": "awr.agent.v1",
+      "encoding": "jsonschema",
+      "data": "agent/agent_tasks.schema.json"
+    }
+  ],
+  "channels": [
+    {
+      "topic": "/swarm/uav/state_block",
+      "schema": "awr.SwarmLite32Block.v1",
+      "message_encoding": "awr-raw",
+      "record_policy": "producer tick, default 25 Hz sim time",
+      "backfill": "latest",
+      "group": "state"
+    },
+    {
+      "topic": "/uav/{id}/state",
+      "schema": "awr.DroneState64.v1",
+      "message_encoding": "awr-raw",
+      "record_policy": "marked vehicles (<= 16) at 125 Hz; all vehicles when N <= 50",
+      "backfill": "latest",
+      "group": "state"
+    },
+    {
+      "topic": "/uav/{id}/sensor/{name}/pose",
+      "schema": "awr.SensorPose48.v1",
+      "message_encoding": "awr-raw",
+      "record_policy": "marked vehicles, native 10 Hz",
+      "backfill": "latest",
+      "group": "state"
+    },
+    {
+      "topic": "/swarm/uav/state_ext_block",
+      "schema": "awr.StateExtBlock.v1",
+      "message_encoding": "awr-msgpack",
+      "record_policy": "2 Hz delta + keyframe block every 5 s sim time",
+      "backfill": "keyframe+delta",
+      "group": "state"
+    },
+    {
+      "topic": "/swarm/uav/safety_block",
+      "schema": "awr.SafetyBlock.v1",
+      "message_encoding": "awr-msgpack",
+      "record_policy": "5 Hz delta + keyframe block every 5 s sim time",
+      "backfill": "keyframe+delta",
+      "group": "state"
+    },
+    {
+      "topic": "/env/state",
+      "schema": "awr.env.keyframe.v1",
+      "message_encoding": "awr-msgpack",
+      "record_policy": "every reliable change + 1 Hz self-contained heartbeat",
+      "backfill": "latest",
+      "group": "env"
+    },
+    {
+      "topic": "/event",
+      "schema": "awr.event.v1",
+      "message_encoding": "awr-msgpack",
+      "record_policy": "all events, one per message",
+      "backfill": "none",
+      "group": "event"
+    },
+    {
+      "topic": "/sim/clock",
+      "schema": "awr.clock.v1",
+      "message_encoding": "awr-msgpack",
+      "record_policy": "on change (play, pause, speed, step)",
+      "backfill": "latest",
+      "group": "clock"
+    },
+    {
+      "topic": "/sim/roster",
+      "schema": "awr.roster.v1",
+      "message_encoding": "awr-msgpack",
+      "record_policy": "full roster at segment start and on every change",
+      "backfill": "latest",
+      "group": "roster"
+    },
+    {
+      "topic": "/mission/{mid}/status",
+      "schema": "awr.mission.status.v1",
+      "message_encoding": "awr-msgpack",
+      "record_policy": "on change",
+      "backfill": "latest",
+      "group": "mission"
+    },
+    {
+      "topic": "/agent/**",
+      "schema": "awr.agent.v1",
+      "message_encoding": "awr-msgpack",
+      "record_policy": "all (D1-ext S3)",
+      "backfill": "latest",
+      "group": "agent"
+    }
+  ],
+  "metadata": [
+    "awr.binding",
+    "awr.lineage",
+    "awr.segment_end",
+    "awr.marks"
+  ]
+}

@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/topics.schema.json",
+  "title": "topics.json meta-schema",
+  "description": "AWR-17 §6.6, §10.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.topics.v1"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "rate_classes": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "tick_hz": {
+      "type": "integer"
+    },
+    "chunk_pattern": {
+      "type": "string"
+    },
+    "default_subscriptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "deprecated": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pattern": {
+            "type": "string"
+          },
+          "replaced_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pattern",
+          "replaced_by"
+        ]
+      }
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_{}/-]*$"
+          },
+          "kind": {
+            "enum": [
+              "state",
+              "event",
+              "blob",
+              "roster",
+              "client"
+            ]
+          },
+          "encoding": {
+            "enum": [
+              "raw",
+              "msgpack",
+              "json",
+              "blob"
+            ]
+          },
+          "schemaName": {
+            "type": "string",
+            "pattern": "^awr\\."
+          },
+          "native_hz": {
+            "type": "number"
+          },
+          "default_rate": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "S": {
+                    "type": "integer"
+                  },
+                  "B": {
+                    "type": "integer"
+                  },
+                  "A": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "S",
+                  "B",
+                  "A"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "enum": [
+              "latest",
+              "all",
+              "m4",
+              null
+            ]
+          },
+          "priority": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 3
+          },
+          "self_contained": {
+            "type": "boolean"
+          },
+          "owner": {
+            "type": "string",
+            "pattern": "^M[0-9]{2}$"
+          },
+          "d1": {
+            "enum": [
+              "core",
+              "ext",
+              "V0.2",
+              "V0.3",
+              "V0.4"
+            ]
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "clock": {
+            "enum": [
+              "sim",
+              "wall"
+            ]
+          },
+          "doc": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "viewer",
+              "operator",
+              "admin"
+            ]
+          },
+          "deprecated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pattern",
+          "kind",
+          "encoding",
+          "schemaName",
+          "native_hz",
+          "default_rate",
+          "mode",
+          "priority",
+          "self_contained",
+          "owner",
+          "d1"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "rate_classes",
+    "tick_hz",
+    "topics"
+  ]
+}

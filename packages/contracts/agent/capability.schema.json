@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/agent/1/capability.schema.json",
+  "title": "Capability catalogue entry",
+  "description": "M14 §6.4.2. Capability ids: <family>.<action>[.<variant>], lowercase, <= 64 B, no '@' or device ids.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,2}$",
+      "maxLength": 64
+    },
+    "name_zh": {
+      "type": "string"
+    },
+    "description_zh": {
+      "type": "string"
+    },
+    "access": {
+      "enum": [
+        "get",
+        "set"
+      ]
+    },
+    "requires_lease": {
+      "type": "boolean"
+    },
+    "long_running": {
+      "type": "boolean",
+      "default": false
+    },
+    "timeout_s": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 60
+    },
+    "max_concurrent": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "input_schema": {
+      "type": "object"
+    },
+    "output_metrics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "output_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "physical": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sensor": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "enum": [
+                    "rgb",
+                    "thermal",
+                    "lidar"
+                  ]
+                },
+                "hfov_deg": {
+                  "type": "number"
+                },
+                "res_px": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "range_m": {
+                  "type": "number"
+                },
+                "p0": {
+                  "type": "number"
+                },
+                "r_fp_m": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "alt_agl_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "wind_mps": {
+                  "type": "number"
+                },
+                "rain_mmh": {
+                  "type": "number"
+                },
+                "visibility_m": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "verify_max": {
+          "type": "integer"
+        },
+        "auth": {
+          "type": "integer"
+        },
+        "simulated_verify": {
+          "type": "integer"
+        }
+      }
+    },
+    "ops": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "default_accept": {
+      "oneOf": [
+        {
+          "$ref": "predicate.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "r_env_m_max": {
+          "type": "number"
+        },
+        "speed_mps_max": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "d1": {
+      "enum": [
+        "served",
+        "declared",
+        "future"
+      ]
+    },
+    "target_version": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "name_zh",
+    "access",
+    "requires_lease",
+    "d1"
+  ]
+}

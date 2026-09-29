@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/pointcloud-source.schema.json",
+  "title": "Full-resolution source point cloud sidecar source.json (awr.pts.v1)",
+  "description": "Geometry World full-resolution cloud (AWR-16 §6.1, snake_case): float32 xyz world ENU, oct16 normals, class index; Morton-ordered (21 bits/axis) inside cube_min_m/cube_size_m.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.pts.v1"
+    },
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "world_id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "frame": {
+      "enum": [
+        "world",
+        "engine"
+      ]
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "order": {
+      "const": "morton-b21"
+    },
+    "cube_min_m": {
+      "$ref": "common.schema.json#/$defs/vec3"
+    },
+    "cube_size_m": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "streams": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "enum": [
+              "xyz",
+              "normal",
+              "class",
+              "intensity",
+              "conf"
+            ]
+          },
+          "href": {
+            "$ref": "common.schema.json#/$defs/relHref"
+          },
+          "dtype": {
+            "enum": [
+              "float32",
+              "uint16",
+              "uint8"
+            ]
+          },
+          "components": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4
+          },
+          "encoding": {
+            "type": "string",
+            "description": "e.g. oct16 for normal, anet-classes@1 index for class, conf_u8 for conf"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "href",
+          "dtype",
+          "components"
+        ]
+      },
+      "description": "xyz and class are required streams; byte size = count*components*itemsize (V-S-02)."
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nn_median_m": {
+          "type": "number"
+        },
+        "z_p1_m": {
+          "type": "number"
+        },
+        "z_p99_m": {
+          "type": "number"
+        },
+        "hag_p1_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "hag_p99_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "class_histogram": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^([0-9]|[12][0-9]|3[01])$"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "required": [
+        "nn_median_m",
+        "z_p1_m",
+        "z_p99_m",
+        "class_histogram"
+      ]
+    },
+    "coordinate_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "world_id",
+    "frame",
+    "count",
+    "order",
+    "cube_min_m",
+    "cube_size_m",
+    "streams",
+    "stats",
+    "coordinate_sha256"
+  ]
+}

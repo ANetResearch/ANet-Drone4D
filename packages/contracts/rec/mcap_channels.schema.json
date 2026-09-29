@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rec/1/mcap_channels.schema.json",
+  "title": "rec/mcap_channels.json meta-schema",
+  "description": "AWR-16 §13.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.rec.mcap_channels.v1"
+    },
+    "profile": {
+      "const": "awr"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "writer": {
+      "type": "object"
+    },
+    "schemas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "encoding": {
+            "enum": [
+              "awr-layout",
+              "jsonschema"
+            ]
+          },
+          "data": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "encoding",
+          "data"
+        ]
+      }
+    },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "topic": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "schema": {
+            "type": "string"
+          },
+          "message_encoding": {
+            "enum": [
+              "awr-raw",
+              "awr-msgpack"
+            ]
+          },
+          "record_policy": {
+            "type": "string"
+          },
+          "backfill": {
+            "enum": [
+              "latest",
+              "keyframe+delta",
+              "none"
+            ]
+          },
+          "group": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "schema",
+          "message_encoding",
+          "record_policy",
+          "backfill",
+          "group"
+        ]
+      }
+    },
+    "metadata": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "profile",
+    "schemas",
+    "channels"
+  ]
+}

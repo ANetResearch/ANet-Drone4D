@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bus/1/keys.schema.json",
+  "title": "bus/keys.json meta-schema",
+  "description": "AWR-17 §9.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "namespace",
+    "keys"
+  ],
+  "properties": {
+    "schema": {
+      "const": "awr.bus.keys.v1"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "namespace": {
+      "type": "string"
+    },
+    "chunk_pattern": {
+      "type": "string"
+    },
+    "event_categories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "producers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "keys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "key",
+          "type",
+          "producer",
+          "consumers",
+          "qos",
+          "payload",
+          "d1"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9{_][a-z0-9_{}/-]*$"
+          },
+          "type": {
+            "enum": [
+              "liveliness",
+              "queryable",
+              "pubsub"
+            ]
+          },
+          "producer": {
+            "type": "string"
+          },
+          "consumers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "qos": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "priority",
+                  "congestion",
+                  "express"
+                ],
+                "properties": {
+                  "priority": {
+                    "enum": [
+                      "REAL_TIME",
+                      "INTERACTIVE_HIGH",
+                      "INTERACTIVE_LOW",
+                      "DATA_HIGH",
+                      "DATA",
+                      "DATA_LOW",
+                      "BACKGROUND"
+                    ]
+                  },
+                  "congestion": {
+                    "enum": [
+                      "DROP",
+                      "BLOCK"
+                    ]
+                  },
+                  "express": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            ]
+          },
+          "payload": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "d1": {
+            "enum": [
+              "core",
+              "ext",
+              "test",
+              "V0.2",
+              "V0.5"
+            ]
+          },
+          "doc": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

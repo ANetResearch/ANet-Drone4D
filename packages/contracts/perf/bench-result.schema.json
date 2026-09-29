@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/perf/1/bench-result.schema.json",
+  "title": "awr.bench.result.v1",
+  "description": "AWR-18 §7.6 (fleet_ladder, bench_state, bench_cmd). records[].ipc is an optional addition (AWR-03 §5.11 rule 1) for the IPC benchmarks of M11 (tools/bench/ipc): a flat map of snake_case metric names with unit suffixes (AWR-03 §5.4, for example publish_p99_us, read_cpu_core, cmd_rtt_p99_ms, event_gaps, recover_max_ms) to numbers or null, so the M16 harness can aggregate them.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.bench.result.v1"
+    },
+    "tool": {
+      "enum": [
+        "fleet_ladder",
+        "bench_state",
+        "bench_cmd"
+      ]
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "git_sha": {
+      "type": "string"
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu_model": {
+          "type": "string"
+        },
+        "cores": {
+          "type": "integer"
+        },
+        "python": {
+          "type": "string"
+        },
+        "numba": {
+          "type": "string"
+        },
+        "numpy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cpu_model",
+        "cores",
+        "python"
+      ]
+    },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "n": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "rate": {
+            "type": "number",
+            "default": 1.0
+          },
+          "clients": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "with_flight60": {
+            "type": "boolean",
+            "default": false
+          },
+          "dur_s": {
+            "type": "number"
+          },
+          "rtf": {
+            "type": "number"
+          },
+          "cpu_core": {
+            "type": "number"
+          },
+          "api_cpu_core": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "recorder_cpu_core": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "rec_write_mb_per_min": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "step_us": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "p50": {
+                "type": "number"
+              },
+              "p99": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "p50",
+              "p99",
+              "max"
+            ]
+          },
+          "catchup_saturated": {
+            "type": "integer"
+          },
+          "stage_ms_per_s": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "tick_age_ms": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "p50": {
+                    "type": "number"
+                  },
+                  "p99": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "p50",
+                  "p99"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rss_mb": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "start": {
+                "type": "number"
+              },
+              "end": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ]
+          },
+          "kernel": {
+            "enum": [
+              "numba",
+              "numpy"
+            ]
+          },
+          "load": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "start": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "mean": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "start",
+              "max",
+              "mean"
+            ]
+          },
+          "ipc": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9_]*$"
+            }
+          }
+        },
+        "required": [
+          "n",
+          "dur_s",
+          "rtf",
+          "cpu_core",
+          "step_us",
+          "catchup_saturated",
+          "stage_ms_per_s",
+          "rss_mb",
+          "kernel",
+          "load"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "tool",
+    "run_id",
+    "git_sha",
+    "host",
+    "records"
+  ]
+}

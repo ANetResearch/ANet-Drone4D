@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/perf_clients.schema.json",
+  "title": "awr.perf.clients.v1",
+  "description": "Topic perf/clients (admin, ext): clientStats aggregated per connection.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "clients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "conn_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "conn_id"
+        ]
+      }
+    }
+  },
+  "required": [
+    "clients"
+  ]
+}

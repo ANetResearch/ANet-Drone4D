@@ -1,0 +1,202 @@
+{
+ "schemaVersion": "1.0.0",
+ "id": "shenzhen",
+ "name": "Shenzhen (UrbanScene3D)",
+ "nameZh": "深圳（UrbanScene3D）",
+ "description": "UrbanScene3D virtual city, sampled 5M points, normalised to world ENU (m, Z-up).",
+ "tags": [
+  "urbanscene3d",
+  "synthetic",
+  "builtin"
+ ],
+ "contentVersion": "a6acd6d923a2",
+ "createdAt": "2026-09-28T13:59:37+00:00",
+ "generator": {
+  "name": "worldpkg",
+  "version": "0.1.0-g03",
+  "commit": null,
+  "params": {
+   "G": 64,
+   "leaf": 20000,
+   "compression": "none"
+  }
+ },
+ "dataset": {
+  "name": "UrbanScene3D",
+  "url": "https://vcc.tech/UrbanScene3D",
+  "redistribution": false,
+  "citation": "Lin et al., Capturing, Reconstructing, and Simulating: the UrbanScene3D Dataset, ECCV 2022",
+  "notice": "Terms forbid redistribution: generate this package locally on first start.",
+  "version": "2022",
+  "license": "UrbanScene3D terms of use (research only, no redistribution)",
+  "sourceFiles": [
+   {
+    "name": "shenzhen.ply",
+    "bytes": 0,
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+   }
+  ]
+ },
+ "coordinate": {
+  "href": "coordinate.json",
+  "sha256": "a4bd3f0a18e5661986102898022bfb3d0c180d51ffc771c355488637b10da7e0"
+ },
+ "scaleStatus": "assumed",
+ "bounds": {
+  "min": [
+   -924.019,
+   -999.523,
+   -16.925
+  ],
+  "max": [
+   924.019,
+   999.523,
+   374.046
+  ]
+ },
+ "layers": [
+  {
+   "id": "pointcloud.visual",
+   "type": "pointcloud",
+   "role": "visual",
+   "format": "potree2/anet-q16@1",
+   "href": "visual/pointcloud/",
+   "status": "ready",
+   "default": true,
+   "bytes": 60027937,
+   "points": 5000141,
+   "roots": [
+    {
+     "name": "r",
+     "href": "visual/pointcloud/",
+     "cubeMin": [
+      -924.0189514160156,
+      -999.5227966308594,
+      -16.924943923950195
+     ],
+     "cubeSize": 1999.0455962607646,
+     "points": 5000141,
+     "depth": 5,
+     "firstScreenBytes": 1496076
+    }
+   ]
+  },
+  {
+   "id": "terrain.dtm",
+   "type": "terrain",
+   "role": "geometry",
+   "format": "f32-grid@1",
+   "href": "geometry/terrain/dtm_10m.json",
+   "status": "ready",
+   "default": false
+  },
+  {
+   "id": "semantic.classes",
+   "type": "class-table",
+   "role": "semantic",
+   "format": "anet-classes@1",
+   "href": "semantic/anet-classes@1.json",
+   "status": "ready",
+   "default": true
+  }
+ ],
+ "lod": {
+  "errorTargetPx": 1.35,
+  "firstScreen": {
+   "points": 124673,
+   "bytes": 1496076,
+   "requests": 1
+  },
+  "budgets": {
+   "desktop": 1500000,
+   "integrated": 800000,
+   "software": 250000
+  }
+ },
+ "render": {
+  "defaultColorMode": "height",
+  "zRangeM": [
+   -7.3,
+   124.71
+  ],
+  "hagRangeM": [
+   0.0,
+   130.04
+  ],
+  "nnMedianM": 0.526,
+  "pointSizeK": 1.2,
+  "edl": true,
+  "syntheticGroundZ": null
+ },
+ "camera": {
+  "home": {
+   "position": [
+    -831.6,
+    -1199.4,
+    899.6
+   ],
+   "target": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fovDeg": 50
+  }
+ },
+ "stats": {
+  "points": 5000141,
+  "extentM": [
+   1848.0,
+   1999.0,
+   391.0
+  ],
+  "areaKm2": 3.69,
+  "maxHeightM": 374.0
+ },
+ "qa": {
+  "status": "pass",
+  "messages": []
+ },
+ "files": [
+  {
+   "path": "coordinate.json",
+   "bytes": 2716,
+   "sha256": "cfc323e6df5f7373010f0f256efc7c5004995df492b17238d0b9d7b7d309bbbe"
+  },
+  {
+   "path": "geometry/terrain/dtm_10m.f32",
+   "bytes": 148000,
+   "sha256": "e5aca7bad049a87d88d20131c5c04b8d3eecfe6ce38cb1af9b735faa176b3cf0"
+  },
+  {
+   "path": "geometry/terrain/dtm_10m.json",
+   "bytes": 354,
+   "sha256": "0de21a553a6c0012eb79c4e24f44d7610a339580c9aa16b778f4886ac4874438"
+  },
+  {
+   "path": "semantic/anet-classes@1.json",
+   "bytes": 3826,
+   "sha256": "4827b4f7a5a90b0d3c05152a1843fcff09e39e66669c1b511fcb93a1569c8716"
+  },
+  {
+   "path": "visual/pointcloud/hierarchy.bin",
+   "bytes": 15312,
+   "sha256": "be354bd9491b1c9250553e980ae2c961a8b54d0e09d07fca0f8c88d106df11d2"
+  },
+  {
+   "path": "visual/pointcloud/hierarchy_ext.bin",
+   "bytes": 8352,
+   "sha256": "cc5628e1f98e7f0e63f96ae9ab7756107aaa54c696657c8f3cd5e5f7819dfebe"
+  },
+  {
+   "path": "visual/pointcloud/metadata.json",
+   "bytes": 2581,
+   "sha256": "05f701affaf60fb68704e541da1a37256cbcf87536b8be7f41e9f40208f79edf"
+  },
+  {
+   "path": "visual/pointcloud/octree.bin",
+   "bytes": 60001692,
+   "sha256": "b8d9526034d206aa18004c5fcfaa3ccad3d34170da803b60fba5ef6fd547dd86"
+  }
+ ]
+}

@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/uav_safety.schema.json",
+  "title": "awr.uav.safety.v1",
+  "description": "Topic uav/{id}/safety (AWR-17 §6.5; M09 §6.3.5). Only produced for the interest set.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "active": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "since_t_ns": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "level",
+          "since_t_ns"
+        ]
+      }
+    },
+    "fsm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "UNKNOWN",
+            "DISARMED",
+            "PREFLIGHT",
+            "READY",
+            "TAKING_OFF",
+            "FLYING",
+            "CORRECTING",
+            "HOLD",
+            "RTL",
+            "LANDING",
+            "ELAND",
+            "FAILSAFE",
+            "LANDED",
+            "CRASHED"
+          ]
+        },
+        "sub": {
+          "type": "string"
+        },
+        "latched": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "auto": {
+          "type": "boolean"
+        },
+        "since_t_ns": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "sub",
+        "latched"
+      ]
+    },
+    "geofence_margin_m": {
+      "type": "number"
+    },
+    "separation_m": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "battery_rtl": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "t_rem_s": {
+              "type": "number"
+            },
+            "t_rtl_s": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "t_rem_s",
+            "t_rtl_s"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "energy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "soc_pct": {
+          "type": "number"
+        },
+        "soc_rtl_pct": {
+          "type": "number"
+        },
+        "z_rtl_m": {
+          "type": "number"
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "src": {
+          "enum": [
+            "self",
+            "seat",
+            "agent"
+          ]
+        },
+        "policy": {
+          "enum": [
+            "hold_rtl",
+            "ignore"
+          ]
+        },
+        "state": {
+          "enum": [
+            "OK",
+            "DEGRADED",
+            "LOST_HOLD",
+            "LOST_RTL"
+          ]
+        },
+        "age_ms": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "zone_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "clearance_m": {
+      "type": "number"
+    },
+    "sep_mate": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "resume": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "blocked_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "ok"
+      ]
+    },
+    "correct_target_enu_m": {
+      "oneOf": [
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "faults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fault_id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "thrust_loss",
+              "motor_fail",
+              "link_drop",
+              "state_drop",
+              "gnss_denied",
+              "battery_drain"
+            ]
+          },
+          "since_t_ns": {
+            "type": "integer"
+          },
+          "params": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "fault_id",
+          "kind",
+          "since_t_ns"
+        ]
+      }
+    }
+  },
+  "required": [
+    "active",
+    "fsm",
+    "geofence_margin_m",
+    "separation_m",
+    "battery_rtl"
+  ]
+}

@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/env/1/wind_manifest.schema.json",
+  "title": "Wind library manifest environment/wind/l2/manifest.json (awr.env.wind_library.v1, anet-wind@1)",
+  "description": "AWR-16 §8.5; V0.3 (D1 ships the schema only). Must be computed on the normalised World ENU (units const m).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.env.wind_library.v1"
+    },
+    "level": {
+      "const": 2
+    },
+    "solver": {
+      "type": "string"
+    },
+    "alpha_h": {
+      "type": "number"
+    },
+    "alpha_v": {
+      "type": "number"
+    },
+    "coordinate_hash": {
+      "$ref": "../../world/1/common.schema.json#/$defs/sha256Prefixed"
+    },
+    "units": {
+      "const": "m"
+    },
+    "grid": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "origin_enu_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "cell_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "shape_zyx": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "cell_centered": {
+          "const": true
+        },
+        "z_base": {
+          "const": "dtm"
+        },
+        "dtype": {
+          "const": "f16"
+        },
+        "channels": {
+          "const": [
+            "u",
+            "v",
+            "w"
+          ]
+        }
+      },
+      "required": [
+        "origin_enu_m",
+        "cell_m",
+        "shape_zyx",
+        "cell_centered",
+        "z_base",
+        "dtype",
+        "channels"
+      ]
+    },
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "speed_mps": {
+          "type": "number"
+        },
+        "z_ref_m": {
+          "type": "number"
+        },
+        "z0_m": {
+          "type": "number"
+        },
+        "d_m": {
+          "type": "number"
+        },
+        "profile": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "speed_mps",
+        "z_ref_m",
+        "z0_m",
+        "d_m",
+        "profile"
+      ]
+    },
+    "sectors_deg": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "antisymmetric": {
+      "type": "boolean"
+    },
+    "speeds_mps": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "../../world/1/common.schema.json#/$defs/relHref"
+      }
+    },
+    "solid": {
+      "$ref": "../../world/1/common.schema.json#/$defs/relHref"
+    },
+    "vis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "downsample": {
+          "type": "integer"
+        },
+        "encoding": {
+          "type": "string"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "vmax_per_ref": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "downsample",
+        "encoding",
+        "files",
+        "vmax_per_ref"
+      ]
+    },
+    "edge_blend_cells": {
+      "type": "number"
+    },
+    "w_clip_p999_per_ref": {
+      "type": "number"
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "div_max": {
+          "type": "number"
+        },
+        "wall_flux_max": {
+          "type": "number"
+        },
+        "inlet_profile_rmse": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "div_max",
+        "wall_flux_max",
+        "inlet_profile_rmse"
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "level",
+    "solver",
+    "coordinate_hash",
+    "units",
+    "grid",
+    "ref",
+    "sectors_deg",
+    "antisymmetric",
+    "speeds_mps",
+    "files",
+    "solid",
+    "vis",
+    "stats"
+  ]
+}

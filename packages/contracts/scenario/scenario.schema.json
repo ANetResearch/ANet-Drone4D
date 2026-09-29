@@ -1,0 +1,1401 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/scenario/1/scenario.schema.json",
+  "title": "awr.scenario.v1 scenario file",
+  "description": "Scenario JSON (AWR-16 §12, snake_case). Files live in scenarios/<scenario_id>.json (M16); the loader is M10 (V-SC rules, failure 121). Generator parameter sub-schemas gen_<name> follow M10 §6.5.10.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.scenario.v1"
+    },
+    "schema_version": {
+      "$ref": "../../world/1/common.schema.json#/$defs/semver"
+    },
+    "scenario_id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name_zh": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "world_id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/id"
+    },
+    "world_coordinate_sha256": {
+      "oneOf": [
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615,
+      "default": 7
+    },
+    "rate": {
+      "enum": [
+        0.25,
+        0.5,
+        1,
+        2,
+        5,
+        10
+      ],
+      "default": 1
+    },
+    "autoplay": {
+      "type": "boolean",
+      "default": true
+    },
+    "gcs_loss_policy": {
+      "enum": [
+        "hold_rtl",
+        "ignore"
+      ]
+    },
+    "record": {
+      "type": "boolean",
+      "default": true
+    },
+    "time_limit_s": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 1800
+    },
+    "on_complete": {
+      "enum": [
+        "pause",
+        "continue",
+        "reset"
+      ],
+      "default": "pause"
+    },
+    "energy_precheck": {
+      "enum": [
+        "reject",
+        "warn"
+      ],
+      "default": "reject"
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preset": {
+          "type": "string",
+          "default": "clear"
+        },
+        "patch": {
+          "type": "object"
+        }
+      }
+    },
+    "vehicles": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "vehicle_id": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "kind": {
+            "const": "uav",
+            "default": "uav"
+          },
+          "profile_id": {
+            "enum": [
+              "p600_mid360",
+              "x500",
+              "x500_sih"
+            ],
+            "default": "p600_mid360"
+          },
+          "backend": {
+            "const": "mock",
+            "default": "mock"
+          },
+          "home_enu_m": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            ]
+          },
+          "yaw_rad": {
+            "type": "number",
+            "default": 0
+          },
+          "initial_soc": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 1.0
+          },
+          "speed_profile": {
+            "type": "string"
+          },
+          "sensors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "caps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "marked": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "vehicle_id",
+          "home_enu_m"
+        ]
+      }
+    },
+    "vehicle_sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "set_id": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "id_prefix": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "id_start": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1
+          },
+          "id_digits": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "default": 4
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "layout": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "grid",
+                  "ring"
+                ]
+              },
+              "origin_enu_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                ]
+              },
+              "spacing_m": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "cols": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "radius_m": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "z_m": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "layers": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "layer_dz_m": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "kind",
+              "origin_enu_m"
+            ]
+          },
+          "profile_id": {
+            "enum": [
+              "p600_mid360",
+              "x500",
+              "x500_sih"
+            ]
+          },
+          "backend": {
+            "const": "mock"
+          },
+          "initial_soc": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "speed_profile": {
+            "type": "string"
+          },
+          "mission": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "generator": {
+                    "enum": [
+                      "orbit",
+                      "lawnmower",
+                      "helix_scan",
+                      "expanding_square",
+                      "corridor",
+                      "terrain_follow"
+                    ]
+                  },
+                  "params": {
+                    "type": "object"
+                  },
+                  "center": {
+                    "const": "home"
+                  },
+                  "start": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "at_s": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    }
+                  },
+                  "on_done": {
+                    "enum": [
+                      "rtl",
+                      "hover",
+                      "land"
+                    ]
+                  }
+                },
+                "required": [
+                  "generator",
+                  "params"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "set_id",
+          "id_prefix",
+          "count",
+          "layout"
+        ]
+      }
+    },
+    "missions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mission_id": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "vehicle_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "../../world/1/common.schema.json#/$defs/slug"
+            }
+          },
+          "generator": {
+            "enum": [
+              "lawnmower",
+              "helix_scan",
+              "orbit",
+              "expanding_square",
+              "corridor",
+              "terrain_follow",
+              "formation",
+              "follow_path"
+            ]
+          },
+          "params": {
+            "type": "object"
+          },
+          "start": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "at_s": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "at_s"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "after": {
+                    "$ref": "../../world/1/common.schema.json#/$defs/slug"
+                  }
+                },
+                "required": [
+                  "after"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "on": {
+                    "const": "ready"
+                  }
+                },
+                "required": [
+                  "on"
+                ]
+              }
+            ]
+          },
+          "sync_policy": {
+            "enum": [
+              "free",
+              "barrier",
+              "timed"
+            ],
+            "default": "free"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9,
+            "default": 0
+          },
+          "on_done": {
+            "enum": [
+              "rtl",
+              "hover",
+              "land"
+            ],
+            "default": "rtl"
+          },
+          "on_abort": {
+            "enum": [
+              "rtl",
+              "hover",
+              "land"
+            ],
+            "default": "hover"
+          },
+          "resume_on_lease_return": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "mission_id",
+          "vehicle_ids",
+          "generator",
+          "params"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "generator": {
+                  "const": "lawnmower"
+                }
+              }
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "$ref": "#/$defs/gen_lawnmower"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "generator": {
+                  "const": "helix_scan"
+                }
+              }
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "$ref": "#/$defs/gen_helix_scan"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "generator": {
+                  "const": "orbit"
+                }
+              }
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "$ref": "#/$defs/gen_orbit"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "generator": {
+                  "const": "expanding_square"
+                }
+              }
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "$ref": "#/$defs/gen_expanding_square"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "generator": {
+                  "const": "corridor"
+                }
+              }
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "$ref": "#/$defs/gen_corridor"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "generator": {
+                  "const": "terrain_follow"
+                }
+              }
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "$ref": "#/$defs/gen_terrain_follow"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "generator": {
+                  "const": "formation"
+                }
+              }
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "$ref": "#/$defs/gen_formation"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "generator": {
+                  "const": "follow_path"
+                }
+              }
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "params": {
+                  "$ref": "#/$defs/gen_follow_path"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "transit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "planner": {
+          "enum": [
+            "safe_transit",
+            "astar25",
+            "direct"
+          ],
+          "default": "safe_transit"
+        },
+        "margin_m": {
+          "type": "number",
+          "minimum": 0,
+          "default": 5
+        },
+        "layer_dz_m": {
+          "type": "number",
+          "minimum": 0,
+          "default": 4
+        }
+      }
+    },
+    "zones": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "array",
+          "items": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "default": [
+            "border"
+          ]
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "at_s": {
+            "type": "number",
+            "minimum": 0
+          },
+          "when": {
+            "$ref": "#/$defs/predicate"
+          },
+          "delay_s": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0
+          },
+          "action": {
+            "enum": [
+              "env.preset",
+              "env.set",
+              "env.gust",
+              "vehicle.add",
+              "vehicle.remove",
+              "mission.start",
+              "mission.pause",
+              "mission.abort",
+              "cmd",
+              "mark",
+              "target.spawn",
+              "agent.task",
+              "fault.inject"
+            ]
+          },
+          "args": {
+            "type": "object"
+          },
+          "once": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "event_id",
+          "action",
+          "args"
+        ],
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "at_s"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "when"
+            ]
+          }
+        ]
+      }
+    },
+    "success": {
+      "$ref": "#/$defs/predicate"
+    },
+    "agents": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "S3 (D1-ext) agents block; accept and negative_scope use the M14 TSIR numeric form (agent/predicate.schema.json)"
+    },
+    "profiles": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "not": {
+          "required": [
+            "profiles"
+          ]
+        }
+      },
+      "description": "deep-merge overrides; arrays and scalars replace (vehicles, missions, events, success replace wholesale)"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "scenario_id",
+    "name",
+    "name_zh",
+    "world_id",
+    "gcs_loss_policy",
+    "success"
+  ],
+  "anyOf": [
+    {
+      "type": "object",
+      "required": [
+        "vehicles"
+      ],
+      "properties": {
+        "vehicles": {
+          "type": "array",
+          "minItems": 1
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "vehicle_sets"
+      ],
+      "properties": {
+        "vehicle_sets": {
+          "type": "array",
+          "minItems": 1
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "gen_lawnmower": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "polygon_enu_m": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 64,
+          "items": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+          }
+        },
+        "holes": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 64,
+            "items": {
+              "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+            }
+          }
+        },
+        "altitude": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "fly_over",
+                "fixed_agl",
+                "per_lane"
+              ],
+              "default": "fly_over"
+            },
+            "agl_m": {
+              "type": "number",
+              "minimum": 0,
+              "default": 60
+            },
+            "clearance_m": {
+              "type": "number",
+              "minimum": 0,
+              "default": 10
+            }
+          },
+          "required": [
+            "mode"
+          ]
+        },
+        "side_overlap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.95,
+          "default": 0.7
+        },
+        "front_overlap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.95,
+          "default": 0.8
+        },
+        "spacing_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "sweep_angle_deg": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "const": "auto"
+            }
+          ],
+          "default": "auto"
+        },
+        "speed_mps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 12
+        },
+        "min_lane_m": {
+          "type": "number",
+          "minimum": 0,
+          "default": 6
+        }
+      },
+      "required": [
+        "polygon_enu_m"
+      ]
+    },
+    "gen_helix_scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "center_enu_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+        },
+        "radius_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "standoff_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 30
+        },
+        "z_range_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec2",
+          "description": "[z0, z1] world z; z0 > z1 scans top-down"
+        },
+        "dz_per_rev_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "vertical_overlap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.95,
+          "default": 0.2
+        },
+        "speed_mps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 12
+        },
+        "gimbal": {
+          "enum": [
+            "look_at_axis",
+            "fixed"
+          ],
+          "default": "look_at_axis"
+        },
+        "entry_azimuth_deg": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "const": "auto"
+            }
+          ],
+          "default": "auto"
+        },
+        "direction": {
+          "enum": [
+            "ccw",
+            "cw"
+          ],
+          "default": "ccw"
+        },
+        "facade_z_range_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+        }
+      },
+      "required": [
+        "center_enu_m",
+        "radius_m",
+        "z_range_m"
+      ]
+    },
+    "gen_orbit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "center_enu_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+        },
+        "radius_m": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "z_m": {
+          "type": "number"
+        },
+        "agl_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "speed_mps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 12
+        },
+        "turns": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0
+        },
+        "cw": {
+          "type": "boolean",
+          "default": true
+        },
+        "yaw": {
+          "enum": [
+            "center",
+            "tangent",
+            "fixed"
+          ],
+          "default": "center"
+        },
+        "target_h_m": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "radius_m"
+      ]
+    },
+    "gen_expanding_square": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "datum_enu_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+        },
+        "z_m": {
+          "type": "number"
+        },
+        "agl_m": {
+          "type": "number",
+          "minimum": 0,
+          "default": 60
+        },
+        "leg0_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "max_extent_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "legs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "first_heading_deg": {
+          "type": "number",
+          "default": 0
+        },
+        "turn": {
+          "enum": [
+            "ccw",
+            "cw"
+          ],
+          "default": "ccw"
+        },
+        "speed_mps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 12
+        }
+      },
+      "required": [
+        "datum_enu_m"
+      ]
+    },
+    "gen_corridor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "polyline_enu_m": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+          }
+        },
+        "offset_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sides": {
+          "enum": [
+            "both",
+            "left",
+            "right"
+          ],
+          "default": "both"
+        },
+        "agl_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gimbal_tilt_deg": {
+          "type": "number",
+          "default": 45
+        },
+        "terrain_follow": {
+          "type": "boolean",
+          "default": true
+        },
+        "speed_mps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 12
+        }
+      },
+      "required": [
+        "polyline_enu_m",
+        "offset_m",
+        "agl_m"
+      ]
+    },
+    "gen_terrain_follow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path_enu_m": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+          }
+        },
+        "area": {
+          "$ref": "#/$defs/gen_lawnmower"
+        },
+        "agl_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_slope_deg": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 45,
+          "default": 15
+        },
+        "clearance_m": {
+          "type": "number",
+          "minimum": 0,
+          "default": 10
+        },
+        "speed_mps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 12
+        }
+      },
+      "required": [
+        "agl_m"
+      ]
+    },
+    "gen_formation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "members": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          }
+        },
+        "shape": {
+          "enum": [
+            "v",
+            "line",
+            "column",
+            "echelon",
+            "grid",
+            "circle"
+          ]
+        },
+        "spacing_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 12
+        },
+        "half_angle_deg": {
+          "type": "number",
+          "default": 35
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "heading_mode": {
+          "enum": [
+            "filtered",
+            "path",
+            "fixed"
+          ],
+          "default": "filtered"
+        },
+        "tau_psi_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 2
+        },
+        "anchor_path_enu_m": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+          }
+        },
+        "speed_mps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 12
+        },
+        "corner_radius_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "z_m": {
+          "type": "number"
+        },
+        "agl_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "turns": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "shape"
+      ]
+    },
+    "gen_follow_path": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "waypoints_enu_m": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 1000,
+          "items": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+          }
+        },
+        "speed_mps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 12
+        },
+        "yaw": {
+          "enum": [
+            "path",
+            "fixed",
+            "center"
+          ]
+        }
+      },
+      "required": [
+        "waypoints_enu_m"
+      ]
+    },
+    "leaf": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "enum": [
+            "elapsed_s",
+            "missions_done",
+            "mission_progress",
+            "facade_coverage",
+            "area_coverage",
+            "min_separation_m",
+            "guard_events",
+            "pos_err_max_m",
+            "energy_rtl_count",
+            "battery_soc_min",
+            "flight_state",
+            "agl_m",
+            "landed_all",
+            "landed_home_err_m",
+            "formation_err_rms_m",
+            "agl_min_m",
+            "agl_rms_err_m",
+            "target_confidence",
+            "t_conf_s",
+            "link_quality_min"
+          ]
+        },
+        "args": {
+          "type": "object"
+        },
+        "op": {
+          "enum": [
+            "<",
+            "<=",
+            "==",
+            "!=",
+            ">=",
+            ">"
+          ]
+        },
+        "value": {
+          "type": [
+            "number",
+            "boolean",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "metric",
+        "op",
+        "value"
+      ]
+    },
+    "predicate": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "items": {
+                "$ref": "#/$defs/predicate"
+              }
+            }
+          },
+          "required": [
+            "all"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "items": {
+                "$ref": "#/$defs/predicate"
+              }
+            }
+          },
+          "required": [
+            "any"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/predicate"
+            }
+          },
+          "required": [
+            "not"
+          ]
+        },
+        {
+          "$ref": "#/$defs/leaf"
+        }
+      ],
+      "description": "closed grammar; depth <= 16 checked by the loader (V-SC-10); bool metrics allow only == and !="
+    },
+    "metrics": {
+      "enum": [
+        "elapsed_s",
+        "missions_done",
+        "mission_progress",
+        "facade_coverage",
+        "area_coverage",
+        "min_separation_m",
+        "guard_events",
+        "pos_err_max_m",
+        "energy_rtl_count",
+        "battery_soc_min",
+        "flight_state",
+        "agl_m",
+        "landed_all",
+        "landed_home_err_m",
+        "formation_err_rms_m",
+        "agl_min_m",
+        "agl_rms_err_m",
+        "target_confidence",
+        "t_conf_s",
+        "link_quality_min"
+      ]
+    },
+    "bool_metrics": {
+      "enum": [
+        "missions_done",
+        "landed_all"
+      ]
+    },
+    "actions": {
+      "enum": [
+        "env.preset",
+        "env.set",
+        "env.gust",
+        "vehicle.add",
+        "vehicle.remove",
+        "mission.start",
+        "mission.pause",
+        "mission.abort",
+        "cmd",
+        "mark",
+        "target.spawn",
+        "agent.task",
+        "fault.inject"
+      ]
+    }
+  }
+}

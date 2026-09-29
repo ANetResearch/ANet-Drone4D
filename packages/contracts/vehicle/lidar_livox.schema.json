@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/vehicle/1/lidar_livox.schema.json",
+  "title": "Livox LiDAR file sensors/mid360.yaml (awr.sensor.lidar_livox.v1)",
+  "description": "AWR-16 §11.6 (D1 stub; r04 §3.1.7). imu.acc_unit stays g (converted at the gateway).",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.lidar_livox.v1"
+    },
+    "sensor": {
+      "type": "string"
+    },
+    "dev_type": {
+      "type": "integer"
+    },
+    "frame_id": {
+      "type": "string"
+    },
+    "pattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "non_repetitive",
+            "repetitive",
+            "repetitive_low"
+          ]
+        },
+        "point_rate_hz": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "beams": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "point_rate_hz",
+        "beams"
+      ]
+    },
+    "frame_rate_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "fov": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "h_deg": {
+          "type": "number"
+        },
+        "v_min_deg": {
+          "type": "number"
+        },
+        "v_max_deg": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "h_deg",
+        "v_min_deg",
+        "v_max_deg"
+      ]
+    },
+    "range": {
+      "type": "object"
+    },
+    "noise": {
+      "type": "object"
+    },
+    "imu": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rate_hz": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "acc_unit": {
+          "const": "g"
+        },
+        "gyro_unit": {
+          "type": "string"
+        },
+        "lidar_in_imu": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "rate_hz",
+        "acc_unit"
+      ]
+    },
+    "mount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "xyz_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "rpy_deg": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "q_xyzw": {
+          "$ref": "../../world/1/common.schema.json#/$defs/quatXYZW"
+        },
+        "preset": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "xyz_m"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "rpy_deg"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "q_xyzw"
+          ]
+        }
+      ]
+    },
+    "conf": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "src": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "sensor",
+    "frame_id",
+    "pattern",
+    "frame_rate_hz",
+    "fov",
+    "mount"
+  ]
+}

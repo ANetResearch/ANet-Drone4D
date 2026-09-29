@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/layouts.schema.json",
+  "title": "layouts.json meta-schema",
+  "description": "Structure of rt/layouts.json (AWR-17 §10.3). Semantic rules (no overlap, natural alignment, bits within the integer, enums exist, scale only on integers) are checked by tools/contracts/gen.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "$ref": "../../world/1/common.schema.json#/$defs/semver"
+    },
+    "enums": {
+      "const": "awr.enums.v1"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "schemas": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaName": {
+            "type": "string",
+            "pattern": "^awr\\.([a-z]+\\.)?[A-Z][A-Za-z0-9]*\\.v[0-9]+$"
+          },
+          "kind": {
+            "enum": [
+              "record",
+              "header"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 8,
+            "multipleOf": 8
+          },
+          "doc": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "n": {
+                  "type": "string",
+                  "pattern": "^_?[a-z][a-z0-9_]*$"
+                },
+                "t": {
+                  "enum": [
+                    "u8",
+                    "i8",
+                    "u16",
+                    "i16",
+                    "u32",
+                    "i32",
+                    "u64",
+                    "i64",
+                    "f32",
+                    "f64"
+                  ]
+                },
+                "o": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "c": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "scale": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "none": {
+                  "type": "integer"
+                },
+                "bits": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 3,
+                    "prefixItems": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 63
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 64
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "frame": {
+                  "enum": [
+                    "world",
+                    "body_flu",
+                    "sensor_flu"
+                  ]
+                },
+                "doc": {
+                  "type": "string"
+                },
+                "const": {
+                  "type": "integer"
+                },
+                "enum": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "n",
+                "t",
+                "o"
+              ]
+            }
+          }
+        },
+        "required": [
+          "schemaName",
+          "kind",
+          "size",
+          "fields"
+        ]
+      }
+    }
+  },
+  "required": [
+    "version",
+    "enums",
+    "schemas"
+  ]
+}

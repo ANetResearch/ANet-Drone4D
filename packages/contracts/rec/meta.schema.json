@@ -1,0 +1,348 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rec/1/meta.schema.json",
+  "title": "Run metadata runs/<run>/meta.json (awr.run.meta.v1)",
+  "description": "AWR-16 §13.7 (snake_case). McapSource rejects a recording whose binding differs (122); contracts minor differences only warn.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.run.meta.v1"
+    },
+    "schema_version": {
+      "$ref": "../../world/1/common.schema.json#/$defs/semver"
+    },
+    "run_id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/runId"
+    },
+    "created_wall_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "keep": {
+      "type": "boolean"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "world_id": {
+          "type": "string"
+        },
+        "content_version": {
+          "type": "string"
+        },
+        "coordinate_sha256": {
+          "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+        },
+        "layout_id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "contracts_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "world_id",
+        "content_version",
+        "coordinate_sha256",
+        "layout_id",
+        "contracts_version"
+      ]
+    },
+    "sim": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kernel": {
+          "enum": [
+            "numba",
+            "numpy"
+          ]
+        },
+        "kernel_version": {
+          "type": "string"
+        },
+        "numba_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "numpy_version": {
+          "type": "string"
+        },
+        "python_version": {
+          "type": "string"
+        },
+        "fastmath": {
+          "const": false
+        },
+        "fleet_config": {
+          "type": "object"
+        },
+        "world_seed": {
+          "$ref": "../../world/1/common.schema.json#/$defs/int64"
+        }
+      },
+      "required": [
+        "kernel",
+        "numpy_version",
+        "python_version",
+        "fastmath",
+        "world_seed"
+      ]
+    },
+    "scenario": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scenario_id": {
+              "type": "string"
+            },
+            "scenario_sha256": {
+              "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+            },
+            "profile": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "scenario_id",
+            "scenario_sha256"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "vehicles_profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profile_id": {
+            "type": "string"
+          },
+          "profile_version": {
+            "type": "string"
+          },
+          "sha256": {
+            "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+          }
+        },
+        "required": [
+          "profile_id",
+          "profile_version",
+          "sha256"
+        ]
+      }
+    },
+    "presets_sha256": {
+      "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+    },
+    "recording_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swarm_hz": {
+          "type": "number"
+        },
+        "full_hz": {
+          "type": "number"
+        },
+        "marked_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "full_all_if_n_le": {
+          "type": "integer"
+        },
+        "state_ext_hz": {
+          "type": "number"
+        },
+        "safety_hz": {
+          "type": "number"
+        },
+        "keyframe_every_s": {
+          "type": "number"
+        }
+      }
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "segment": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999
+          },
+          "file": {
+            "type": "string",
+            "pattern": "^rec-[0-9]{3}\\.mcap$"
+          },
+          "state": {
+            "enum": [
+              "OPEN",
+              "CLOSED",
+              "CORRUPT"
+            ]
+          },
+          "epoch_start": {
+            "type": "integer"
+          },
+          "t_start_ns": {
+            "type": "integer"
+          },
+          "t_end_ns": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "bytes_per_sim_s": {
+            "type": "number"
+          },
+          "decimation": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "rate_max": {
+                "type": "number"
+              },
+              "sim_resolution_s": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "active"
+            ]
+          },
+          "lineage": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "epoch": {
+                  "type": "integer"
+                },
+                "t_start_ns": {
+                  "type": "integer"
+                },
+                "t_end_ns": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "invalid": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                }
+              },
+              "required": [
+                "epoch",
+                "t_start_ns"
+              ]
+            }
+          }
+        },
+        "required": [
+          "segment",
+          "file",
+          "state",
+          "epoch_start",
+          "t_start_ns",
+          "t_end_ns",
+          "bytes"
+        ]
+      }
+    },
+    "inputs": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "file": {
+              "const": "inputs.msgpack"
+            },
+            "entries": {
+              "type": "integer"
+            },
+            "sha256": {
+              "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+            }
+          },
+          "required": [
+            "file",
+            "entries",
+            "sha256"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "events_per_sim_s": {
+      "type": "number"
+    },
+    "gaps": {
+      "type": "array"
+    },
+    "sidecars": {
+      "type": "object"
+    },
+    "speed_max": {
+      "type": "number"
+    },
+    "detail_coverage": {
+      "type": "object"
+    },
+    "source": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "created_wall_ns",
+    "keep",
+    "binding",
+    "sim",
+    "scenario",
+    "vehicles_profiles",
+    "presets_sha256",
+    "recording_policy",
+    "segments"
+  ]
+}

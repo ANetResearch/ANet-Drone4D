@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rec/1/blocks.schema.json",
+  "title": "Recording block messages (awr.StateExtBlock.v1, awr.SafetyBlock.v1)",
+  "description": "AWR-16 §13.4 (msgpack snake_case).",
+  "$defs": {
+    "stateExtBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roster_version": {
+          "type": "integer"
+        },
+        "keyframe": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "../../rt/1/uav_state_ext.schema.json"
+          }
+        }
+      },
+      "required": [
+        "roster_version",
+        "keyframe",
+        "items"
+      ]
+    },
+    "safetyBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roster_version": {
+          "type": "integer"
+        },
+        "keyframe": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "../../rt/1/uav_safety.schema.json"
+          }
+        }
+      },
+      "required": [
+        "roster_version",
+        "keyframe",
+        "items"
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/stateExtBlock"
+    },
+    {
+      "$ref": "#/$defs/safetyBlock"
+    }
+  ]
+}

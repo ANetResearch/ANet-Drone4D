@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/perf/1/perf-snapshot.schema.json",
+  "title": "awr.perf.v1 (window.__perf snapshot)",
+  "description": "AWR-18 §9.2: in-page TypeScript object snapshot, camelCase by exception (AWR-03 §5.6 rule 4); written only by the harness to runs/perf/. Rings are exported as arrays. 1.x adds optional fields only.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "const": "awr.perf.v1"
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "build": {
+          "type": "string"
+        },
+        "gitSha": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "production",
+            "test",
+            "profiling"
+          ]
+        },
+        "tier": {
+          "enum": [
+            "A",
+            "B",
+            "S"
+          ]
+        },
+        "deviceClass": {
+          "enum": [
+            "software",
+            "iGPU",
+            "dGPU"
+          ]
+        },
+        "renderer": {
+          "type": "string"
+        },
+        "adapterArch": {
+          "type": "string"
+        },
+        "crossOriginIsolated": {
+          "type": "boolean"
+        },
+        "canvasCss": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "drawingBuffer": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "dpr": {
+          "type": "number"
+        },
+        "renderScale": {
+          "type": "number"
+        },
+        "targetMs": {
+          "type": "number"
+        },
+        "tailK": {
+          "type": "number"
+        },
+        "worldId": {
+          "type": "string"
+        },
+        "contentVersion": {
+          "type": "string"
+        },
+        "scene": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "tier",
+        "deviceClass"
+      ]
+    },
+    "forced": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "interval": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "t": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "count": {
+          "type": "integer"
+        },
+        "lastNow": {
+          "type": "number"
+        }
+      }
+    },
+    "load": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "ttfp": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "ttfpFirstPixel": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "switchMs": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tti": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "revealAt": {
+          "type": "number"
+        },
+        "firstScreenBytes": {
+          "type": "number"
+        },
+        "warmupWaitMs": {
+          "type": "number"
+        }
+      }
+    },
+    "cas": {
+      "type": "object"
+    },
+    "pc": {
+      "type": "object"
+    },
+    "layers": {
+      "type": "object"
+    },
+    "gpu": {
+      "type": "object"
+    },
+    "latency": {
+      "type": "object"
+    },
+    "net": {
+      "type": "object"
+    },
+    "ui": {
+      "type": "object"
+    },
+    "loaf": {
+      "type": "object"
+    },
+    "governor": {
+      "type": "object"
+    },
+    "quality": {
+      "type": "object"
+    },
+    "bench": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "mode": {
+          "enum": [
+            "",
+            "flight60",
+            "layers",
+            "converge"
+          ]
+        },
+        "done": {
+          "type": "boolean"
+        },
+        "flightT": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "meta",
+    "frame",
+    "load"
+  ]
+}

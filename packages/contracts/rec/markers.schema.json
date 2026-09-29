@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rec/1/markers.schema.json",
+  "title": "Run markers and bookmarks (markers.json, bookmarks.json)",
+  "description": "AWR-16 §13.7 1.x additions; M12 §7.5 drafts the details.",
+  "$defs": {
+    "bookmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "segment": {
+          "type": "integer"
+        },
+        "t_sim_ns": {
+          "type": "integer"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "created_wall_ns": {
+          "type": "string"
+        },
+        "principal_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "segment",
+        "t_sim_ns",
+        "label"
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "enum": [
+        "awr.run.bookmarks.v1",
+        "awr.run.markers.v1"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "#/$defs/bookmark"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "items"
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/units.schema.json",
+  "title": "units.json meta-schema",
+  "description": "AWR-03 §5.4; AWR-17 §10.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.units.v1"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "suffixes": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^_[a-z0-9_]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "unit": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "quantity"
+        ]
+      }
+    },
+    "denied_suffixes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "denied_names": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "unit_like_tokens": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "where": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "unit",
+          "where"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "suffixes",
+    "exceptions"
+  ]
+}

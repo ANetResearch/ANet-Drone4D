@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/recon/1/engine.schema.json",
+  "title": "Recon engine.json",
+  "description": "AWR-16 §14.1 (licence text recorded per AWR-13 §13.3 DC-6).",
+  "$ref": "recon-ir.schema.json#/$defs/engine"
+}

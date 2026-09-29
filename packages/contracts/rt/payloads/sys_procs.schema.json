@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/sys_procs.schema.json",
+  "title": "awr.sys.procs.v1",
+  "description": "Topic sys/procs and GET /api/sys/procs items (AWR-17 §4.3.12, §6.5; M11). Field names and the state enum follow 17 §4.3.12 and 19 §4.2 (STOPPED, STARTING, RUNNING, STOPPING, BACKOFF, FAILED); log_tail only for admin. last_reason, on_demand, layer and since_wall_ns are optional supervisor additions (AWR-03 §5.11 rule 1).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "STOPPED",
+              "STARTING",
+              "RUNNING",
+              "STOPPING",
+              "BACKOFF",
+              "FAILED"
+            ]
+          },
+          "pid": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "restarts": {
+            "type": "integer"
+          },
+          "last_exit": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "uptime_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "hb_age_ms": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "cpu_pct": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "rss_mb": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "log_tail": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "last_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "on_demand": {
+            "type": "boolean"
+          },
+          "layer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "since_wall_ns": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "pid",
+          "state",
+          "restarts"
+        ]
+      }
+    }
+  },
+  "required": [
+    "items"
+  ]
+}

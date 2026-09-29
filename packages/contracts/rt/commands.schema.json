@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/commands.schema.json",
+  "title": "commands.json meta-schema",
+  "description": "AWR-17 §7.1, §10.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.commands.v1"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "admission_columns": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "flight_state": {
+            "type": "string"
+          },
+          "failsafe": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "flight_state"
+        ]
+      }
+    },
+    "admission_symbols": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "meaning": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      }
+    },
+    "admission_conditions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "doc": {
+            "type": "string"
+          },
+          "else": {
+            "enum": [
+              "Y",
+              "=",
+              "S",
+              "-",
+              "?"
+            ]
+          }
+        },
+        "required": [
+          "else"
+        ]
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/$defs/category"
+          },
+          "lease": {
+            "type": [
+              "boolean",
+              "string",
+              "null"
+            ]
+          },
+          "agent": {
+            "enum": [
+              "yes",
+              "no",
+              "own_lease",
+              "own_calls",
+              "non_unlock_only",
+              "agent_class"
+            ]
+          },
+          "d1": {
+            "enum": [
+              "core",
+              "ext",
+              "stub",
+              "V0.2"
+            ]
+          },
+          "args_schema": {
+            "type": "object"
+          },
+          "admission": {
+            "type": "object",
+            "additionalProperties": {
+              "enum": [
+                "Y",
+                "=",
+                "S",
+                "-",
+                "?"
+              ]
+            }
+          },
+          "admission_cond": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "batchable": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "done": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "running_expect": {
+                "type": "string"
+              },
+              "succeeded": {
+                "type": "string"
+              },
+              "metrics": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "deadline_expr": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "running_expect",
+              "succeeded"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "op",
+          "category",
+          "lease",
+          "agent",
+          "d1",
+          "args_schema"
+        ]
+      }
+    },
+    "bus_ops": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "op": {
+            "type": "string"
+          },
+          "doc": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "admission_columns",
+    "admission_symbols",
+    "services"
+  ],
+  "$defs": {
+    "category": {
+      "enum": [
+        "nav",
+        "nav_setup",
+        "nav_stream",
+        "safety",
+        "safety_light",
+        "safety_lock",
+        "mission",
+        "task_or_unlock",
+        "setup",
+        "call_control",
+        "lease",
+        "batch",
+        "clock",
+        "env",
+        "query",
+        "seat",
+        "confirm",
+        "rec",
+        "fleet"
+      ]
+    }
+  }
+}

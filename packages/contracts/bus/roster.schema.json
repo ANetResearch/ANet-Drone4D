@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bus/1/roster.schema.json",
+  "title": "Roster reply (ctl/<producer>/roster)",
+  "description": "AWR-17 §9.4; entries as awr.fleet.roster.v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "producer": {
+      "type": "string"
+    },
+    "roster_version": {
+      "type": "integer"
+    },
+    "id_base": {
+      "type": "integer"
+    },
+    "id_count": {
+      "type": "integer"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "../../rt/1/fleet_roster.schema.json#/properties/entries/items"
+      }
+    }
+  },
+  "required": [
+    "v",
+    "producer",
+    "roster_version",
+    "id_base",
+    "id_count",
+    "entries"
+  ]
+}

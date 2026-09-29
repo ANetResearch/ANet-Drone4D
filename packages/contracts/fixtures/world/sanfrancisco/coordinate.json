@@ -1,0 +1,175 @@
+{
+ "schemaVersion": "1.0.0",
+ "worldId": "sanfrancisco",
+ "frame": {
+  "id": "world",
+  "type": "ENU",
+  "units": "m",
+  "handedness": "right",
+  "upAxis": "+Z"
+ },
+ "anchor": {
+  "kind": "synthetic",
+  "georeferenced": false,
+  "datum": "WGS84",
+  "lonDeg": -122.4212116,
+  "latDeg": 37.7791216,
+  "hEllipsoidM": 39.5,
+  "hMslM": 39.5,
+  "geoid": null,
+  "epoch": null,
+  "uncertaintyM": {
+   "horizontal": 50.0,
+   "vertical": 40.0
+  },
+  "label": "illustrative: world origin placed by offset from Transamerica Pyramid (tallest HAG peak at E=1621.6, N=1784.7)"
+ },
+ "T_ecef_world": [
+  [
+   0.844129,
+   0.328449,
+   -0.423753,
+   -2706172.418859
+  ],
+  [
+   -0.536139,
+   0.51713,
+   -0.667182,
+   -4260757.978574
+  ],
+  [
+   0.0,
+   0.790378,
+   0.612619,
+   3886120.042606
+  ],
+  [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "trueNorth": {
+  "yawOffsetDeg": 0.0,
+  "confidence": "verified",
+  "evidence": [
+   "residual yaw about +1 deg after the applied +90"
+  ]
+ },
+ "scaleStatus": "landmark",
+ "source": {
+  "kind": "dataset",
+  "dataset": "UrbanScene3D (virtual cities, sampled 5M)",
+  "files": [
+   {
+    "name": "San Francisco_sampled_5m.ply",
+    "bytes": 120002477,
+    "points": 5000091
+   }
+  ],
+  "crs": "LOCAL",
+  "projPipeline": null,
+  "handedness": "right",
+  "upAxis": "+z",
+  "unitsToMeters": 10.15,
+  "leveledDeg": 0.0,
+  "yawDeg": 90.0,
+  "T_world_source": [
+   [
+    0.0,
+    -10.15,
+    0.0,
+    0.370465
+   ],
+   [
+    10.15,
+    0.0,
+    0.0,
+    0.425911
+   ],
+   [
+    0.0,
+    0.0,
+    10.15,
+    164.727487
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "evidence": [
+   "Transamerica->Sutro 6.25 km / 619 u (x10.10)",
+   "Transamerica->Oracle Park 2.19 km / 216 u (x10.15)",
+   "rotation +90.6/+91.5 deg measured, +90 applied"
+  ]
+ },
+ "registration": null,
+ "ground": {
+  "type": "dtm",
+  "zM": 0.0,
+  "dtm": {
+   "href": "geometry/terrain/dtm_10m.json",
+   "cellM": 10.0
+  },
+  "reliefP1P99M": [
+   -103.5,
+   165.37
+  ]
+ },
+ "extent": {
+  "min": [
+   -3638.787,
+   -3756.033,
+   -114.549
+  ],
+  "max": [
+   3638.787,
+   3756.033,
+   443.2
+  ]
+ },
+ "precision": {
+  "maxRadiusM": 5229.6,
+  "curvatureDropM": 2.146,
+  "float32UlpMm": 0.2441
+ },
+ "conventions": {
+  "matrix": "row-major T_to_from",
+  "quaternion": "xyzw, WORLD<-BODY(FLU)",
+  "heading": "deg, north=0, clockwise",
+  "windDirection": "meteorological-from",
+  "render": "three Y-up: (x,y,z)=(E,U,-N)",
+  "px4Boundary": "NED/FRD at PX4 adapter boundary only",
+  "time": "int64 t_sim_ns"
+ },
+ "qa": {
+  "status": "pass",
+  "normalsFlippedFrac": 0.0364,
+  "zeroNormalsFrac": 0.0,
+  "groundFrac": 0.385,
+  "nnMedianM": 1.887,
+  "maxHeightM": 443.2,
+  "tiltRawDeg": 0.822,
+  "gates": [
+   {
+    "name": "maxBuildingHeightM in [100,700]",
+    "value": 269.7,
+    "limit": [
+     100,
+     700
+    ],
+    "pass": true
+   },
+   {
+    "name": "float32UlpMm < 1",
+    "value": 0.2441,
+    "limit": 1,
+    "pass": true
+   }
+  ]
+ }
+}

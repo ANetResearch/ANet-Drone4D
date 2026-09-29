@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/ingest-config.schema.json",
+  "title": "Generic ingest configuration ingest.yaml",
+  "description": "M03 §6.17 (D1 freezes schema and load-time validation; generic ingest is V0.2).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "world_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,63}$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "name_zh": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "format": {
+            "enum": [
+              "ply",
+              "las",
+              "laz"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "format"
+        ]
+      }
+    },
+    "units_to_m": {
+      "oneOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "const": "auto"
+        }
+      ],
+      "default": "auto"
+    },
+    "up_axis": {
+      "enum": [
+        "+x",
+        "-x",
+        "+y",
+        "-y",
+        "+z",
+        "-z",
+        "auto"
+      ],
+      "default": "auto"
+    },
+    "level": {
+      "enum": [
+        "auto",
+        "true",
+        "false"
+      ],
+      "default": "auto"
+    },
+    "yaw_deg": {
+      "type": "number",
+      "default": 0
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "synthetic",
+            "rtk",
+            "survey",
+            "gnss"
+          ]
+        },
+        "lat_deg": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "lon_deg": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "h_msl_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "geoid_undulation_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "true_north": {
+      "enum": [
+        "exact",
+        "verified",
+        "assumed",
+        "unknown"
+      ],
+      "default": "unknown"
+    },
+    "scale_status": {
+      "$ref": "common.schema.json#/$defs/scaleStatus"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "semantic": {
+      "enum": [
+        "rules",
+        "csf",
+        "las"
+      ],
+      "default": "rules"
+    },
+    "dedupe": {
+      "enum": [
+        "off",
+        "exact"
+      ],
+      "default": "exact"
+    },
+    "dataset": {
+      "$ref": "world.schema.json#/properties/dataset"
+    }
+  },
+  "required": [
+    "world_id",
+    "name",
+    "inputs",
+    "dataset"
+  ]
+}

@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/faults.schema.json",
+  "title": "Fault injection request",
+  "description": "Mock-only fault injection (M09 §6.12; REST R16 POST /api/fleet/vehicles/{id}/faults; scenario action fault.inject). Out-of-range values return 422 110.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "thrust_loss"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "frac": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1,
+              "default": 0.45
+            }
+          }
+        },
+        "at_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "sim-time delay; null = next tick"
+        },
+        "duration_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "null = until cleared"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "motor_fail"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "motor": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "omega_fail_rad_s": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 20,
+              "default": 4.0,
+              "unit": "rad/s"
+            }
+          }
+        },
+        "at_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "sim-time delay; null = next tick"
+        },
+        "duration_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "null = until cleared"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "link_drop"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "side": {
+              "enum": [
+                "fcu"
+              ],
+              "default": "fcu"
+            }
+          }
+        },
+        "at_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "sim-time delay; null = next tick"
+        },
+        "duration_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "null = until cleared"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "state_drop"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "at_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "sim-time delay; null = next tick"
+        },
+        "duration_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "null = until cleared"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "gnss_denied"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "at_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "sim-time delay; null = next tick"
+        },
+        "duration_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "null = until cleared"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "battery_drain"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "rate_pct_s"
+              ],
+              "not": {
+                "required": [
+                  "set_soc"
+                ]
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "set_soc"
+              ],
+              "not": {
+                "required": [
+                  "rate_pct_s"
+                ]
+              }
+            },
+            {
+              "type": "object",
+              "maxProperties": 0
+            }
+          ],
+          "properties": {
+            "rate_pct_s": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 10,
+              "default": 0.5,
+              "unit": "%/s"
+            },
+            "set_soc": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "at_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "sim-time delay; null = next tick"
+        },
+        "duration_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 3600,
+          "default": null,
+          "unit": "s",
+          "description": "null = until cleared"
+        }
+      }
+    }
+  ]
+}

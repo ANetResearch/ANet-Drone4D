@@ -1,0 +1,464 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/agent/1/task.schema.json",
+  "title": "Agent task (TaskSpec, TaskStatus, TaskStatusLite)",
+  "description": "M14 §6.5, §6.6; AWR-12 §4.13 (A2A seven states).",
+  "$defs": {
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,2}$",
+          "maxLength": 64
+        },
+        "args": {
+          "type": "object"
+        },
+        "target_enu_m": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "accept": {
+          "$ref": "predicate.schema.json"
+        },
+        "negative_scope": {
+          "oneOf": [
+            {
+              "$ref": "predicate.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strategy": {
+          "enum": [
+            "auction",
+            "direct"
+          ],
+          "default": "auction"
+        },
+        "provider_aid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 2
+        },
+        "origin": {
+          "enum": [
+            "scenario",
+            "operator",
+            "agent",
+            "llm"
+          ],
+          "default": "scenario"
+        },
+        "requester_aid": {
+          "type": "string"
+        },
+        "principal_id": {
+          "type": "string"
+        },
+        "claim": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "conf": {
+                  "type": "number"
+                },
+                "sensor": {
+                  "type": "string"
+                },
+                "target_id": {
+                  "type": "string"
+                },
+                "t_sim_ns": {
+                  "type": "integer"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "capability",
+        "args",
+        "accept"
+      ]
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "capability": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,2}$",
+          "maxLength": 64
+        },
+        "state": {
+          "enum": [
+            "submitted",
+            "working",
+            "input-required",
+            "completed",
+            "canceled",
+            "failed",
+            "rejected"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "queued",
+            "lease",
+            "enroute",
+            "on_station",
+            "executing",
+            "returning"
+          ]
+        },
+        "alloc": {
+          "enum": [
+            "discovering",
+            "quoting",
+            "awarding",
+            "reassigning",
+            "done"
+          ]
+        },
+        "provider_aid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vehicle_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effect": {
+          "oneOf": [
+            {
+              "$ref": "effect.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "predicate_ok": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "scope_ok": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason_code": {
+          "type": "integer"
+        },
+        "retries_left": {
+          "type": "integer"
+        },
+        "conf_claim": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "conf_current": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "target_enu_m": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "origin": {
+          "type": "string"
+        },
+        "t_submit_ns": {
+          "type": "integer"
+        },
+        "t_update_ns": {
+          "type": "integer"
+        },
+        "args": {
+          "type": "object"
+        },
+        "accept": {
+          "$ref": "predicate.schema.json"
+        },
+        "negative_scope": {
+          "oneOf": [
+            {
+              "$ref": "predicate.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quotes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "aid": {
+                "type": "string"
+              },
+              "agent_no": {
+                "type": "integer"
+              },
+              "eta_s": {
+                "type": "number"
+              },
+              "energy_wh": {
+                "type": "number"
+              },
+              "soc_after_pct": {
+                "type": "number"
+              },
+              "feasible": {
+                "type": "boolean"
+              },
+              "code": {
+                "type": "integer"
+              },
+              "conf_expected": {
+                "type": "number"
+              },
+              "load": {
+                "type": "number"
+              },
+              "risk": {
+                "type": "number"
+              },
+              "score": {
+                "type": "number"
+              },
+              "t_quote_ns": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "aid",
+              "feasible",
+              "code"
+            ]
+          }
+        }
+      },
+      "required": [
+        "task_id",
+        "capability",
+        "state",
+        "phase",
+        "alloc",
+        "t_submit_ns",
+        "t_update_ns"
+      ]
+    },
+    "statusLite": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "capability": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,2}$",
+          "maxLength": 64
+        },
+        "state": {
+          "enum": [
+            "submitted",
+            "working",
+            "input-required",
+            "completed",
+            "canceled",
+            "failed",
+            "rejected"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "queued",
+            "lease",
+            "enroute",
+            "on_station",
+            "executing",
+            "returning"
+          ]
+        },
+        "alloc": {
+          "enum": [
+            "discovering",
+            "quoting",
+            "awarding",
+            "reassigning",
+            "done"
+          ]
+        },
+        "provider_aid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vehicle_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effect": {
+          "oneOf": [
+            {
+              "$ref": "effect.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "predicate_ok": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "scope_ok": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason_code": {
+          "type": "integer"
+        },
+        "retries_left": {
+          "type": "integer"
+        },
+        "conf_claim": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "conf_current": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "target_enu_m": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "origin": {
+          "type": "string"
+        },
+        "t_submit_ns": {
+          "type": "integer"
+        },
+        "t_update_ns": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "task_id",
+        "capability",
+        "state",
+        "phase",
+        "alloc",
+        "t_submit_ns",
+        "t_update_ns"
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/spec"
+    },
+    {
+      "$ref": "#/$defs/status"
+    }
+  ]
+}

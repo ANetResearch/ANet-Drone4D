@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/world/1/grid.schema.json",
+  "title": "Raster sidecar f32-grid@1 (DTM, DSM, HAG, Height_map, occupancy)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "dtype",
+    "href",
+    "width",
+    "height",
+    "cellM",
+    "originXY",
+    "rowOrder",
+    "valueFrame"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "kind": {
+      "enum": [
+        "dtm",
+        "dsm",
+        "hag",
+        "heightmap",
+        "occupancy",
+        "nofly",
+        "plan-cost"
+      ]
+    },
+    "dtype": {
+      "enum": [
+        "float32",
+        "float16",
+        "uint8",
+        "uint16"
+      ]
+    },
+    "href": {
+      "$ref": "common.schema.json#/$defs/relHref",
+      "description": "Raw little-endian row-major array, relative to this JSON file's directory."
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "cellM": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "originXY": {
+      "$ref": "common.schema.json#/$defs/vec2",
+      "description": "World ENU (E,N) of the lower-left CORNER of cell (row 0, col 0)."
+    },
+    "rowOrder": {
+      "const": "south-to-north"
+    },
+    "nodata": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "valueFrame": {
+      "enum": [
+        "world-z-m",
+        "height-m",
+        "unitless"
+      ]
+    },
+    "scale": {
+      "type": "number",
+      "description": "value = raw*scale + offset for integer dtypes"
+    },
+    "offset": {
+      "type": "number"
+    },
+    "method": {
+      "type": "string"
+    }
+  },
+  "description": "AWR-16 §6.2 (camelCase). Index: c = floor((x - originX)/cellM), r = floor((y - originY)/cellM), linear r*width + c; raw bytes = width*height*itemsize (V-G-02).",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "valueFrame": {
+            "const": "world-z-m"
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "properties": {
+          "dtype": {
+            "enum": [
+              "float32",
+              "uint8",
+              "uint16"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "description": "float16 must never store world z (V-G-04; AWR-03 §5.1 rule 4)."
+    },
+    {
+      "if": {
+        "properties": {
+          "dtype": {
+            "enum": [
+              "uint8",
+              "uint16"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "then": {
+        "required": [
+          "scale",
+          "offset"
+        ],
+        "type": "object"
+      }
+    }
+  ]
+}

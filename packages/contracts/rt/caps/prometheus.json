@@ -1,0 +1,45 @@
+{
+  "backend": "prometheus",
+  "version": 1,
+  "kinds": [
+    "uav"
+  ],
+  "max_vehicles": 8,
+  "stub": true,
+  "clock": {
+    "mode": "live",
+    "pausable": false,
+    "max_speed": 1,
+    "steppable": false
+  },
+  "cmd": {
+    "takeoff": "native",
+    "land": "native",
+    "goto": {
+      "impl": "native",
+      "speed": false,
+      "vmax_mps": 1.0
+    },
+    "follow_path": "gateway",
+    "orbit": {
+      "impl": "gateway",
+      "turns": true,
+      "radius_m": [
+        1,
+        1000
+      ]
+    },
+    "hover": "native",
+    "rtl": "gateway",
+    "velocity": "native",
+    "safety_stop": "native",
+    "pause": "gateway",
+    "kill": "none"
+  },
+  "ack": {
+    "native": false,
+    "readback": "command_id_echo"
+  },
+  "trust_ceiling": 2,
+  "truth": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "replay",
+  "version": 1,
+  "kinds": [
+    "uav"
+  ],
+  "max_vehicles": 1000,
+  "clock": {
+    "mode": "lockstep",
+    "pausable": true,
+    "max_speed": 10,
+    "steppable": true
+  },
+  "cmd": {
+    "takeoff": "none",
+    "land": "none",
+    "goto": "none",
+    "follow_path": "none",
+    "orbit": "none",
+    "hover": "none",
+    "rtl": "none",
+    "velocity": "none",
+    "safety_stop": "none",
+    "pause": "none",
+    "kill": "none"
+  },
+  "ack": {
+    "native": false,
+    "readback": "none"
+  },
+  "trust_ceiling": 0,
+  "truth": true,
+  "note": "L0 kinematic replay backend: every command returns 109 BACKEND_UNSUPPORTED (M08 §14 F-01)"
+}

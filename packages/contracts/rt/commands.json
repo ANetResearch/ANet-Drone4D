@@ -1,0 +1,1538 @@
+{
+  "schema": "awr.commands.v1",
+  "doc": "Service names, argument schemas (unit suffixes, AWR-03 §5.4), admission matrix and completion criteria (AWR-17 §7.1; AWR-12 §5.1-§5.4). The admission matrix is generated from state_model.admission_matrix() and equals AWR-12 §5.2 (BIZ-AC-002).",
+  "admission_columns": [
+    {
+      "id": "UNKNOWN",
+      "flight_state": "UNKNOWN"
+    },
+    {
+      "id": "DISARMED",
+      "flight_state": "DISARMED"
+    },
+    {
+      "id": "PREFLIGHT",
+      "flight_state": "PREFLIGHT"
+    },
+    {
+      "id": "READY",
+      "flight_state": "READY"
+    },
+    {
+      "id": "TAKING_OFF",
+      "flight_state": "TAKING_OFF"
+    },
+    {
+      "id": "FLYING",
+      "flight_state": "FLYING"
+    },
+    {
+      "id": "CORRECTING",
+      "flight_state": "CORRECTING"
+    },
+    {
+      "id": "HOLD",
+      "flight_state": "HOLD"
+    },
+    {
+      "id": "RTL_op",
+      "flight_state": "RTL",
+      "failsafe": false
+    },
+    {
+      "id": "RTL_auto",
+      "flight_state": "RTL",
+      "failsafe": true
+    },
+    {
+      "id": "LANDING_op",
+      "flight_state": "LANDING",
+      "failsafe": false
+    },
+    {
+      "id": "LANDING_auto",
+      "flight_state": "LANDING",
+      "failsafe": true
+    },
+    {
+      "id": "ELAND",
+      "flight_state": "ELAND"
+    },
+    {
+      "id": "FAILSAFE",
+      "flight_state": "FAILSAFE"
+    },
+    {
+      "id": "LANDED",
+      "flight_state": "LANDED"
+    },
+    {
+      "id": "CRASHED",
+      "flight_state": "CRASHED"
+    }
+  ],
+  "admission_symbols": {
+    "Y": {
+      "code": 0,
+      "meaning": "accept"
+    },
+    "=": {
+      "code": 106,
+      "meaning": "semantic duplicate, reply carries dup_of"
+    },
+    "S": {
+      "code": 101,
+      "meaning": "safety action active (114 LOCKED while locked)"
+    },
+    "-": {
+      "code": 105,
+      "meaning": "state"
+    }
+  },
+  "admission_conditions": {
+    "sub_ready_to_arm": {
+      "doc": "only when the sub-mode is READY_TO_ARM",
+      "else": "-"
+    },
+    "agl_ge_2m": {
+      "doc": "requires AGL >= 2 m, landing continues otherwise",
+      "else": "-"
+    },
+    "pause_active_nav": {
+      "doc": "sub-mode in GOTO, PATH, ORBIT, SWARM with an active Track or navigation call",
+      "else": "-"
+    },
+    "track_suspended": {
+      "doc": "the vehicle Track is SUSPENDED",
+      "else": "-"
+    },
+    "cause_cleared": {
+      "doc": "the cause of HOLD or automatic RTL has been cleared; energy RTL never (101, detail BATTERY)",
+      "else": "S"
+    },
+    "escalation_levels_failsafe": {
+      "doc": "escalation.levels contains FAILSAFE (default absent)",
+      "else": "-"
+    }
+  },
+  "services": [
+    {
+      "name": "uav/{id}/cmd/takeoff",
+      "op": "takeoff",
+      "category": "nav_setup",
+      "lease": true,
+      "agent": "own_lease",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "alt_m": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 120,
+            "default": 2.5,
+            "unit": "m",
+            "description": "AGL"
+          },
+          "auto_arm": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "Y",
+        "PREFLIGHT": "-",
+        "READY": "Y",
+        "TAKING_OFF": "=",
+        "FLYING": "-",
+        "CORRECTING": "-",
+        "HOLD": "-",
+        "RTL_op": "-",
+        "RTL_auto": "-",
+        "LANDING_op": "-",
+        "LANDING_auto": "-",
+        "ELAND": "-",
+        "FAILSAFE": "-",
+        "LANDED": "Y",
+        "CRASHED": "-"
+      },
+      "admission_cond": {
+        "DISARMED": "sub_ready_to_arm"
+      },
+      "done": {
+        "running_expect": "TAKING_OFF/*",
+        "succeeded": "FLYING and |z - z_t| < max(0.3, 0.05*alt) and |vz| < 0.3 for 1 s",
+        "metrics": [
+          "alt_err_m",
+          "t_exec_s"
+        ],
+        "deadline_expr": "alt_m/1.5*1.5 + 10 + 2"
+      },
+      "batchable": true
+    },
+    {
+      "name": "uav/{id}/cmd/land",
+      "op": "land",
+      "category": "safety",
+      "lease": false,
+      "agent": "own_lease",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "oneOf": [
+              {
+                "enum": [
+                  "here",
+                  "home"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "pos": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                },
+                "required": [
+                  "pos"
+                ]
+              }
+            ],
+            "default": "here"
+          }
+        }
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "Y",
+        "FLYING": "Y",
+        "CORRECTING": "Y",
+        "HOLD": "Y",
+        "RTL_op": "Y",
+        "RTL_auto": "Y",
+        "LANDING_op": "=",
+        "LANDING_auto": "=",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "=",
+        "CRASHED": "-"
+      },
+      "done": {
+        "running_expect": "LANDING/*",
+        "succeeded": "passed LANDED and reached DISARMED",
+        "metrics": [
+          "pos_err_m"
+        ],
+        "deadline_expr": "alt_m/0.7*1.5 + 10"
+      },
+      "batchable": true
+    },
+    {
+      "name": "uav/{id}/cmd/goto",
+      "op": "goto",
+      "category": "nav",
+      "lease": true,
+      "agent": "yes",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pos": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "unit": "m",
+            "description": "world ENU"
+          },
+          "yaw_rad": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -3.141592653589793,
+            "maximum": 3.141592653589793,
+            "default": null,
+            "unit": "rad"
+          },
+          "speed_mps": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 12,
+            "unit": "m/s",
+            "description": "default: cruise speed of the active limits profile; above the profile limit it is clamped with warnings [SPEED_CLAMPED]"
+          },
+          "tol_m": {
+            "type": "number",
+            "minimum": 0.2,
+            "maximum": 10,
+            "default": 0.5,
+            "unit": "m"
+          },
+          "route": {
+            "enum": [
+              "auto",
+              "direct",
+              "safe_transit"
+            ],
+            "default": "auto"
+          }
+        },
+        "required": [
+          "pos"
+        ]
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "-",
+        "FLYING": "Y",
+        "CORRECTING": "S",
+        "HOLD": "S",
+        "RTL_op": "Y",
+        "RTL_auto": "S",
+        "LANDING_op": "Y",
+        "LANDING_auto": "S",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "done": {
+        "running_expect": "FLYING/GOTO (direct) or FLYING/PATH (safe_transit)",
+        "succeeded": "|p - p_t| < tol and |v| < 0.5 for 1 s",
+        "metrics": [
+          "dist_err_m",
+          "t_exec_s"
+        ],
+        "deadline_expr": "1.5*ETA + 10, ETA = d/v + v/a"
+      }
+    },
+    {
+      "name": "uav/{id}/cmd/follow_path",
+      "op": "follow_path",
+      "category": "nav",
+      "lease": true,
+      "agent": "yes",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "waypoints": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 1000,
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "description": "total length <= 20 km"
+          },
+          "speed_mps": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 12,
+            "unit": "m/s",
+            "description": "default: cruise speed of the active limits profile; above the profile limit it is clamped with warnings [SPEED_CLAMPED]"
+          },
+          "mode": {
+            "enum": [
+              "auto",
+              "mission",
+              "offboard"
+            ],
+            "default": "auto"
+          },
+          "bspline": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "order": {
+                "const": 3
+              },
+              "ts_s": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "ctrl_pts": {
+                "type": "array",
+                "minItems": 4,
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                }
+              },
+              "t0_ns": {
+                "type": "integer"
+              },
+              "traj_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "order",
+              "ts_s",
+              "ctrl_pts"
+            ]
+          }
+        },
+        "required": [
+          "waypoints"
+        ]
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "-",
+        "FLYING": "Y",
+        "CORRECTING": "S",
+        "HOLD": "S",
+        "RTL_op": "Y",
+        "RTL_auto": "S",
+        "LANDING_op": "Y",
+        "LANDING_auto": "S",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "done": {
+        "running_expect": "FLYING/PATH",
+        "succeeded": "last point meets the arrival criterion",
+        "metrics": [
+          "path_len_m",
+          "max_dev_m"
+        ],
+        "deadline_expr": "1.5*sum(ETA) + 10"
+      },
+      "notes": [
+        "bspline is D1-ext (ADR-039)"
+      ]
+    },
+    {
+      "name": "uav/{id}/cmd/orbit",
+      "op": "orbit",
+      "category": "nav",
+      "lease": true,
+      "agent": "yes",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "center": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "radius_m": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000,
+            "unit": "m",
+            "description": "speed_mps^2/radius_m <= 3 m/s^2"
+          },
+          "speed_mps": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 12,
+            "unit": "m/s",
+            "description": "default: cruise speed of the active limits profile; above the profile limit it is clamped with warnings [SPEED_CLAMPED]"
+          },
+          "cw": {
+            "type": "boolean",
+            "default": true
+          },
+          "turns": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 0
+          },
+          "yaw_behavior": {
+            "enum": [
+              "center",
+              "tangent",
+              "fixed"
+            ],
+            "default": "center"
+          }
+        },
+        "required": [
+          "center",
+          "radius_m"
+        ]
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "-",
+        "FLYING": "Y",
+        "CORRECTING": "S",
+        "HOLD": "S",
+        "RTL_op": "Y",
+        "RTL_auto": "S",
+        "LANDING_op": "Y",
+        "LANDING_auto": "S",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "done": {
+        "running_expect": "FLYING/ORBIT",
+        "succeeded": "turns > 0: accumulated angle >= 2*pi*turns then hover; turns = 0: |r - R| < 1 and |v_t - v| < 0.5 for 3 s",
+        "metrics": [
+          "t_exec_s"
+        ],
+        "deadline_expr": "entry time + 10"
+      }
+    },
+    {
+      "name": "uav/{id}/cmd/hover",
+      "op": "hover",
+      "category": "safety_light",
+      "lease": false,
+      "agent": "own_lease",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "Y",
+        "FLYING": "Y",
+        "CORRECTING": "S",
+        "HOLD": "S",
+        "RTL_op": "Y",
+        "RTL_auto": "S",
+        "LANDING_op": "Y",
+        "LANDING_auto": "S",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "done": {
+        "running_expect": "FLYING/HOVER",
+        "succeeded": "|v| < 0.3 for 1 s",
+        "metrics": [
+          "t_exec_s"
+        ],
+        "deadline_expr": "10"
+      },
+      "aliases": [
+        "uav/{id}/cmd/hold"
+      ],
+      "batchable": true
+    },
+    {
+      "name": "uav/{id}/cmd/rtl",
+      "op": "rtl",
+      "category": "safety",
+      "lease": false,
+      "agent": "own_lease",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "land": {
+            "type": "boolean",
+            "default": true
+          },
+          "alt_m": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 10,
+            "maximum": 500,
+            "default": null,
+            "unit": "m",
+            "description": "relative to home; never below the AWR-12 §5.8.3 safe altitude"
+          }
+        }
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "-",
+        "FLYING": "Y",
+        "CORRECTING": "Y",
+        "HOLD": "Y",
+        "RTL_op": "=",
+        "RTL_auto": "=",
+        "LANDING_op": "Y",
+        "LANDING_auto": "S",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "done": {
+        "running_expect": "RTL/*",
+        "succeeded": "land: DISARMED and |p_xy - home| < 2 m; else z_rtl +- 1 m above home",
+        "metrics": [
+          "pos_err_m",
+          "t_exec_s"
+        ],
+        "deadline_expr": "1.5*t_rtl + 20"
+      },
+      "batchable": true
+    },
+    {
+      "name": "uav/{id}/cmd/velocity",
+      "op": "velocity",
+      "category": "nav_stream",
+      "lease": true,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "frame": {
+            "enum": [
+              "world",
+              "body"
+            ],
+            "default": "world"
+          },
+          "hold_alt": {
+            "type": "boolean",
+            "default": true
+          },
+          "vmax_mps": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "unit": "m/s",
+            "description": "default: limits profile maximum"
+          }
+        }
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "-",
+        "FLYING": "Y",
+        "CORRECTING": "S",
+        "HOLD": "S",
+        "RTL_op": "Y",
+        "RTL_auto": "S",
+        "LANDING_op": "Y",
+        "LANDING_auto": "S",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "done": {
+        "running_expect": "FLYING/VELOCITY",
+        "succeeded": "velocity_stop received and |v| < 0.3 for 1 s",
+        "metrics": [
+          "t_exec_s"
+        ],
+        "deadline_expr": null
+      },
+      "notes": [
+        "setpoints arrive only as WS CLIENT_DATA (awr.VelSetpoint16.v1); 250 ms watchdog ends the call with 209"
+      ]
+    },
+    {
+      "name": "uav/{id}/cmd/velocity_stop",
+      "op": "velocity_stop",
+      "category": "nav_stream",
+      "lease": true,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "-",
+        "FLYING": "Y",
+        "CORRECTING": "S",
+        "HOLD": "S",
+        "RTL_op": "Y",
+        "RTL_auto": "S",
+        "LANDING_op": "Y",
+        "LANDING_auto": "S",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "-",
+        "CRASHED": "-"
+      }
+    },
+    {
+      "name": "uav/{id}/cmd/safety_stop",
+      "op": "safety_stop",
+      "category": "safety_lock",
+      "lease": false,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "Y",
+        "FLYING": "Y",
+        "CORRECTING": "Y",
+        "HOLD": "=",
+        "RTL_op": "Y",
+        "RTL_auto": "Y",
+        "LANDING_op": "Y",
+        "LANDING_auto": "Y",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "admission_cond": {
+        "LANDING_op": "agl_ge_2m",
+        "LANDING_auto": "agl_ge_2m"
+      },
+      "done": {
+        "running_expect": "HOLD/SAFETY_STOP",
+        "succeeded": "|v| < 0.3 for 0.5 s",
+        "metrics": [
+          "t_exec_s"
+        ],
+        "deadline_expr": "5"
+      },
+      "batchable": true,
+      "notes": [
+        "HOLD column is evaluated at sub-mode SAFETY_STOP (=); other HOLD sub-modes accept (Y)"
+      ]
+    },
+    {
+      "name": "uav/{id}/cmd/pause",
+      "op": "pause",
+      "category": "mission",
+      "lease": true,
+      "agent": "own_lease",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "-",
+        "FLYING": "Y",
+        "CORRECTING": "-",
+        "HOLD": "-",
+        "RTL_op": "-",
+        "RTL_auto": "-",
+        "LANDING_op": "-",
+        "LANDING_auto": "-",
+        "ELAND": "-",
+        "FAILSAFE": "-",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "admission_cond": {
+        "FLYING": "pause_active_nav"
+      },
+      "done": {
+        "running_expect": "FLYING/HOVER and Track SUSPENDED",
+        "succeeded": "|v| < 0.3 for 1 s",
+        "metrics": [
+          "t_exec_s"
+        ],
+        "deadline_expr": "10"
+      },
+      "batchable": true
+    },
+    {
+      "name": "uav/{id}/cmd/resume",
+      "op": "resume",
+      "category": "task_or_unlock",
+      "lease": "unlock_exempt",
+      "agent": "non_unlock_only",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "-",
+        "FLYING": "Y",
+        "CORRECTING": "-",
+        "HOLD": "Y",
+        "RTL_op": "-",
+        "RTL_auto": "Y",
+        "LANDING_op": "-",
+        "LANDING_auto": "-",
+        "ELAND": "-",
+        "FAILSAFE": "-",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "admission_cond": {
+        "FLYING": "track_suspended",
+        "HOLD": "cause_cleared",
+        "RTL_auto": "cause_cleared"
+      },
+      "batchable": true,
+      "notes": [
+        "unlocking SAFETY_STOP needs the seat holder and no lease; energy RTL cannot be resumed (101, detail BATTERY)"
+      ]
+    },
+    {
+      "name": "uav/{id}/cmd/arm",
+      "op": "arm",
+      "category": "setup",
+      "lease": true,
+      "agent": "own_lease",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "default": false,
+            "description": "D1 accepts false only; true returns 109"
+          }
+        }
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "Y",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "-",
+        "FLYING": "-",
+        "CORRECTING": "-",
+        "HOLD": "-",
+        "RTL_op": "-",
+        "RTL_auto": "-",
+        "LANDING_op": "-",
+        "LANDING_auto": "-",
+        "ELAND": "-",
+        "FAILSAFE": "-",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "admission_cond": {
+        "DISARMED": "sub_ready_to_arm"
+      }
+    },
+    {
+      "name": "uav/{id}/cmd/disarm",
+      "op": "disarm",
+      "category": "setup",
+      "lease": true,
+      "agent": "own_lease",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "default": false,
+            "description": "D1 accepts false only; true returns 109"
+          }
+        }
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "Y",
+        "READY": "Y",
+        "TAKING_OFF": "-",
+        "FLYING": "-",
+        "CORRECTING": "-",
+        "HOLD": "-",
+        "RTL_op": "-",
+        "RTL_auto": "-",
+        "LANDING_op": "-",
+        "LANDING_auto": "-",
+        "ELAND": "-",
+        "FAILSAFE": "-",
+        "LANDED": "Y",
+        "CRASHED": "-"
+      }
+    },
+    {
+      "name": "uav/{id}/cmd/cancel",
+      "op": "cancel",
+      "category": "call_control",
+      "lease": false,
+      "agent": "own_calls",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "call_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "call_id"
+        ]
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "Y",
+        "FLYING": "Y",
+        "CORRECTING": "S",
+        "HOLD": "S",
+        "RTL_op": "Y",
+        "RTL_auto": "S",
+        "LANDING_op": "Y",
+        "LANDING_auto": "S",
+        "ELAND": "S",
+        "FAILSAFE": "S",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "notes": [
+        "hovers first, then ends the target call with canceled 6; a finished target returns 105"
+      ]
+    },
+    {
+      "name": "uav/{id}/cmd/acquire",
+      "op": "acquire",
+      "category": "lease",
+      "lease": null,
+      "agent": "agent_class",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "priority": {
+            "enum": [
+              "normal",
+              "override"
+            ],
+            "default": "normal"
+          },
+          "confirm_token": {
+            "type": "string"
+          }
+        }
+      },
+      "notes": [
+        "override needs confirm_token (ext); UNKNOWN and CRASHED return 105"
+      ]
+    },
+    {
+      "name": "uav/{id}/cmd/release",
+      "op": "release",
+      "category": "lease",
+      "lease": null,
+      "agent": "yes",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "return_to": {
+            "enum": [
+              "previous",
+              "none"
+            ],
+            "default": "previous"
+          }
+        }
+      },
+      "notes": [
+        "UNKNOWN and CRASHED return 105"
+      ]
+    },
+    {
+      "name": "uav/{id}/cmd/kill",
+      "op": "kill",
+      "category": "safety",
+      "lease": false,
+      "agent": "no",
+      "d1": "ext",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "confirm_token": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "confirm_token"
+        ]
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "Y",
+        "TAKING_OFF": "Y",
+        "FLYING": "Y",
+        "CORRECTING": "Y",
+        "HOLD": "Y",
+        "RTL_op": "Y",
+        "RTL_auto": "Y",
+        "LANDING_op": "Y",
+        "LANDING_auto": "Y",
+        "ELAND": "Y",
+        "FAILSAFE": "Y",
+        "LANDED": "Y",
+        "CRASHED": "-"
+      }
+    },
+    {
+      "name": "uav/{id}/cmd/escalate",
+      "op": "escalate",
+      "category": "safety",
+      "lease": false,
+      "agent": "no",
+      "d1": "ext",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "confirm_token": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "confirm_token"
+        ]
+      },
+      "admission": {
+        "UNKNOWN": "-",
+        "DISARMED": "-",
+        "PREFLIGHT": "-",
+        "READY": "-",
+        "TAKING_OFF": "Y",
+        "FLYING": "Y",
+        "CORRECTING": "Y",
+        "HOLD": "Y",
+        "RTL_op": "Y",
+        "RTL_auto": "Y",
+        "LANDING_op": "Y",
+        "LANDING_auto": "Y",
+        "ELAND": "Y",
+        "FAILSAFE": "-",
+        "LANDED": "-",
+        "CRASHED": "-"
+      },
+      "admission_cond": {
+        "ELAND": "escalation_levels_failsafe"
+      },
+      "notes": [
+        "interval >= 2 s between escalations"
+      ]
+    },
+    {
+      "name": "fleet/cmd/{op}",
+      "op": "fleet/cmd",
+      "category": "batch",
+      "lease": "per_vehicle",
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "vehicles": {
+            "oneOf": [
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1000,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+                }
+              },
+              {
+                "const": "*"
+              }
+            ]
+          },
+          "args": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "vehicles"
+        ]
+      },
+      "notes": [
+        "op in rtl, land, hover, safety_stop, pause, resume, takeoff; child call id <batch_id>:<vehicle_id>"
+      ]
+    },
+    {
+      "name": "mission/{mid}/start",
+      "op": "mission/start",
+      "category": "mission",
+      "lease": "engine",
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "mission/{mid}/pause",
+      "op": "mission/pause",
+      "category": "mission",
+      "lease": "engine",
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "mission/{mid}/resume",
+      "op": "mission/resume",
+      "category": "mission",
+      "lease": "engine",
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "mission/{mid}/abort",
+      "op": "mission/abort",
+      "category": "mission",
+      "lease": "engine",
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "sim/play",
+      "op": "sim/play",
+      "category": "clock",
+      "lease": null,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "sim/pause",
+      "op": "sim/pause",
+      "category": "clock",
+      "lease": null,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "sim/step",
+      "op": "sim/step",
+      "category": "clock",
+      "lease": null,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ticks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2500,
+            "default": 25,
+            "description": "4 ms per tick"
+          }
+        }
+      }
+    },
+    {
+      "name": "sim/speed",
+      "op": "sim/speed",
+      "category": "clock",
+      "lease": null,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rate": {
+            "enum": [
+              0.25,
+              0.5,
+              1,
+              2,
+              5,
+              10
+            ]
+          }
+        },
+        "required": [
+          "rate"
+        ]
+      },
+      "notes": [
+        "above caps.clock.max_speed returns 117"
+      ]
+    },
+    {
+      "name": "sim/reset",
+      "op": "sim/reset",
+      "category": "clock",
+      "lease": null,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scenario_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "profile": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          }
+        }
+      }
+    },
+    {
+      "name": "env/set",
+      "op": "env/set",
+      "category": "env",
+      "lease": null,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "patch": {
+            "type": "object",
+            "description": "partial EnvScalars or Config (field paths per env/presets.json fields[])"
+          },
+          "duration_s": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 600,
+            "default": 3,
+            "unit": "s"
+          },
+          "mode": {
+            "enum": [
+              "smooth",
+              "step",
+              "exp"
+            ],
+            "default": "smooth"
+          }
+        },
+        "required": [
+          "patch"
+        ]
+      }
+    },
+    {
+      "name": "env/preset",
+      "op": "env/preset",
+      "category": "env",
+      "lease": null,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "duration_s": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 600,
+            "default": 30,
+            "unit": "s"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "env/query",
+      "op": "env/query",
+      "category": "query",
+      "lease": null,
+      "agent": "yes",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "points": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          },
+          "t_ns": {
+            "type": "integer"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "WIND",
+                "WIND_PARTS",
+                "TURB_SPEC",
+                "OPTICS",
+                "PRECIP",
+                "THERMO"
+              ]
+            }
+          },
+          "frame": {
+            "enum": [
+              "global",
+              "local",
+              "add_velocity_global",
+              "add_velocity_local"
+            ],
+            "default": "global"
+          },
+          "vel_mps": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          },
+          "q_xyzw": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            }
+          }
+        },
+        "required": [
+          "points"
+        ]
+      }
+    },
+    {
+      "name": "seat/release",
+      "op": "seat/release",
+      "category": "seat",
+      "lease": null,
+      "agent": "no",
+      "d1": "core",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "seat/takeover",
+      "op": "seat/takeover",
+      "category": "seat",
+      "lease": null,
+      "agent": "no",
+      "d1": "ext",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "confirm_token": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "confirm_token"
+        ]
+      }
+    },
+    {
+      "name": "confirm/issue",
+      "op": "confirm/issue",
+      "category": "confirm",
+      "lease": null,
+      "agent": "no",
+      "d1": "ext",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "target"
+        ]
+      }
+    },
+    {
+      "name": "rec/start",
+      "op": "rec/start",
+      "category": "rec",
+      "lease": null,
+      "agent": "no",
+      "d1": "ext",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "name": "rec/stop",
+      "op": "rec/stop",
+      "category": "rec",
+      "lease": null,
+      "agent": "no",
+      "d1": "ext",
+      "args_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
+    }
+  ],
+  "bus_ops": [
+    {
+      "op": "fleet/add",
+      "doc": "POST /api/fleet/vehicles -> ctl/sim-core/cmd (AWR-12 §5.14.1)"
+    },
+    {
+      "op": "fleet/remove",
+      "doc": "DELETE /api/fleet/vehicles/{id} -> ctl/sim-core/cmd (AWR-12 §5.14.2)"
+    },
+    {
+      "op": "scenario/metric",
+      "doc": "agent-runtime metric read (M14 §7.3)"
+    }
+  ]
+}

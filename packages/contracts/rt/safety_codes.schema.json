@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/safety_codes.schema.json",
+  "title": "safety_codes.json meta-schema",
+  "description": "M09 §6.13.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.safety_codes.v1"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^(SAF|HLT)\\.[A-Z_]+\\.[A-Z_]+$"
+          },
+          "type": {
+            "type": "string",
+            "pattern": "^safety\\.[a-z]+$"
+          },
+          "cls": {
+            "enum": [
+              "info",
+              "warn",
+              "action",
+              "critical"
+            ]
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "fsm": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ui": {
+            "enum": [
+              "info",
+              "warning",
+              "critical"
+            ]
+          },
+          "icon": {
+            "type": "string"
+          },
+          "merge_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "d1": {
+            "enum": [
+              "core",
+              "ext",
+              "stub"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "type",
+          "cls",
+          "level",
+          "fsm",
+          "ui",
+          "icon",
+          "merge_key",
+          "d1"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "codes"
+  ]
+}

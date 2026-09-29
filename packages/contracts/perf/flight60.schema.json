@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/perf/1/flight60.schema.json",
+  "title": "awr.flight60.v1 (public/bench/flight60/<world>.json)",
+  "description": "AWR-18 §8.6: companion of the f32 [3601 x 6] .bin (eye xyz, target xyz, ENU, 60 Hz).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.flight60.v1"
+    },
+    "world_id": {
+      "type": "string"
+    },
+    "content_version": {
+      "type": "string"
+    },
+    "coordinate_sha256": {
+      "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+    },
+    "bin_sha256": {
+      "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+    },
+    "fps": {
+      "const": 60
+    },
+    "frames": {
+      "const": 3601
+    },
+    "fov_y_deg": {
+      "type": "number"
+    },
+    "width_px": {
+      "type": "integer"
+    },
+    "height_px": {
+      "type": "integer"
+    },
+    "near_m": {
+      "type": "number"
+    },
+    "far_m": {
+      "type": "number"
+    },
+    "peak": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x_m": {
+          "type": "number"
+        },
+        "y_m": {
+          "type": "number"
+        },
+        "h_m": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "x_m",
+        "y_m",
+        "h_m"
+      ]
+    },
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "t0_s": {
+            "type": "number"
+          },
+          "t1_s": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "t0_s",
+          "t1_s"
+        ]
+      }
+    },
+    "keyframes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "t_s": {
+            "type": "number"
+          },
+          "eye_m": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+          },
+          "yaw_deg": {
+            "type": "number"
+          },
+          "pitch_deg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "t_s",
+          "eye_m",
+          "yaw_deg",
+          "pitch_deg"
+        ]
+      }
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "speed_max_mps": {
+          "type": "number"
+        },
+        "speed_p50_mps": {
+          "type": "number"
+        },
+        "yawrate_max_dps": {
+          "type": "number"
+        },
+        "alt_min_m": {
+          "type": "number"
+        },
+        "alt_max_m": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "speed_max_mps",
+        "speed_p50_mps",
+        "yawrate_max_dps",
+        "alt_min_m",
+        "alt_max_m"
+      ]
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "git_sha": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "world_id",
+    "content_version",
+    "coordinate_sha256",
+    "bin_sha256",
+    "fps",
+    "frames",
+    "fov_y_deg",
+    "width_px",
+    "height_px",
+    "near_m",
+    "far_m",
+    "peak",
+    "segments",
+    "keyframes",
+    "stats",
+    "generator"
+  ]
+}
