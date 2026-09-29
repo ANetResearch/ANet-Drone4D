@@ -1,0 +1,25 @@
+/* Project extension motion tokens (ADR-029; AWR-15 §8.1, §13.3; d02 §3.1). The only source of these keys:
+   tools/shadcn/gen-theme-tokens.mjs exports them to lib/tokens/motion.gen.ts for TS, TSL and canvas code.
+   --duration-instant / --duration-epsilon are the zero and near-zero durations used by the motion layer
+   (Base UI parts at 0 s, JS recipes that rely on transitionend at 0.01 ms), so no literal time appears outside the
+   token files (MOT-01). */
+@layer theme {
+  :root {
+    --distance-drawer: 40px;              /* Sheet and rail slide distance */
+    --stagger-cap: 300ms;                 /* total stagger cap (lite 150ms, tiers.css) */
+    --duration-camera-min: 400ms;         /* camera flight lower bound */
+    --duration-camera-max: 1200ms;        /* camera flight upper bound */
+    --duration-lod-fade: 250ms;           /* point cloud node screen-door fade */
+    --telemetry-anim-interval: 500ms;     /* discrete telemetry animation min interval (<= 2 Hz) */
+    --telemetry-text-interval: 100ms;     /* continuous telemetry text interval (<= 10 Hz; Tier S below) */
+    --duration-chart-enter: 900ms;        /* editorial chart entrance (lieflat enter) */
+    --duration-chart-slow: 1200ms;        /* editorial large chart entrance (lieflat enterSlow) */
+    --duration-instant: 0s;               /* Base UI parts in reduced, off and data-instant */
+    --duration-epsilon: 0.01ms;           /* JS recipes in reduced (transitionend still fires) */
+  }
+  html[data-tier="S"] { --telemetry-text-interval: 250ms; }   /* Tier S text <= 4 Hz (ADR-029) */
+}
+@theme static {
+  --ease-spring-snappy: cubic-bezier(0.34, 1.36, 0.64, 1);   /* close to the morphicons snappy spring (d02 §3.2) */
+  --transition-duration-lod-fade: var(--duration-lod-fade);
+}

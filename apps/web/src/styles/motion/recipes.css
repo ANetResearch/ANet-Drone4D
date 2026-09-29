@@ -1,0 +1,22 @@
+/* JS recipe support (M15-FR-055; AWR-15 §8.3 rows 02, 04, 14, 15, 31; d02 §4.4). Durations and easings come from the
+   generated tokens; resident loops (.t-shimmer, .t-matrix) run only while ui/motion/budget.ts granted a loop slot
+   (data-loop="on"), at most 2 on screen (ADR-029). */
+@layer motion {
+  .t-shimmer[data-loop="on"] {
+    background-image: linear-gradient(90deg, var(--shimmer-base) 0%, var(--shimmer-highlight) 50%, var(--shimmer-base) 100%);
+    background-size: var(--shimmer-band) 100%;
+    background-clip: text; -webkit-background-clip: text; color: transparent;
+    animation: t-shimmer var(--shimmer-dur) var(--shimmer-ease) infinite;
+  }
+  .t-matrix { display: inline-grid; grid-template-columns: repeat(3, 3px); gap: 2px; }
+  .t-matrix > i { width: 3px; height: 3px; border-radius: 1px; background: var(--matrix-base); }
+  .t-matrix[data-loop="on"] > i { animation: t-matrix var(--matrix-cycle) var(--matrix-ease) infinite; animation-delay: calc(var(--i, 0) * var(--duration-stagger)); }
+  @keyframes t-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+  @keyframes t-matrix { 0%, 100% { background: var(--matrix-base); } 50% { background: var(--matrix-active); } }
+  /* 02 number pop-in: only the changed digits are wrapped in .t-digit and replayed with WAAPI (ui/motion/MotionNumber.tsx) */
+  .t-number { display: inline-flex; font-variant-numeric: tabular-nums lining-nums; white-space: pre; }
+  .t-digit { display: inline-block; }
+  /* 04 text swap: two stacked spans (ui/motion/SwapText.tsx) */
+  .t-swap { display: inline-grid; }
+  .t-swap > span { grid-area: 1 / 1; }
+}

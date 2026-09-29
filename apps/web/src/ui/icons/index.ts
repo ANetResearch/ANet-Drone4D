@@ -1,0 +1,10 @@
+// Icon system (M15 §7.1.5; ADR-030): semantic keys only in business code.
+export { ICONS, PARTNERS, ROTATE_KEYS, ICON_KEY_COUNT, ICON_GEOMETRY_COUNT, type IconKey } from './registry'
+export { Icon, IconSvg, iconD, resolveIcon, type IconProps } from './Icon'
+export { StateIcon, type StateIconProps } from './StateIcon'
+export { useBucketedIcon, nextLevel, bucketStep } from './bucket'
+export { prewarmIcons } from './prewarm'
+export { IconSprite } from './IconSprite'
+export { morphBudget } from './morphBudget'
+export { MORPH_PAIRS, morphSpring, type SpringName } from './whitelist'
+export type { IconNode } from './types'

@@ -1,0 +1,13 @@
+/* morphicons static and state icons (AWR-15 §7.2-§7.4; d03 §3.3; g07 §4.2). The root is always an <svg>, so shadcn's
+   [&_svg:not([class*='size-'])]:size-* sizing applies; stroke width is screen pixels via non-scaling-stroke. */
+@layer base {
+  :root { --icon-fg: var(--foreground); --icon-muted: var(--muted-foreground); --icon-active: var(--foreground);
+          --icon-alert: var(--brand-text); --icon-stroke: 1.5px; }
+  :where(svg[data-icon]) { width: 1rem; height: 1rem; flex-shrink: 0; }
+  svg[data-icon] { stroke-width: var(--icon-stroke); overflow: visible; }
+  svg[data-icon].size-12 { --icon-stroke: 2px; }
+  svg[data-icon] path { vector-effect: non-scaling-stroke; transform-box: view-box; transform-origin: 50% 50%; }
+  svg[data-icon][data-draw] path { vector-effect: none; }
+  /* continuous angles (heading, wind direction): the independent rotate property, never a morph (d03 §3.6) */
+  [data-rotate-icon] { transition: rotate var(--telemetry-text-interval) var(--ease-linear); }
+}

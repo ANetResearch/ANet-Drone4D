@@ -1,0 +1,21 @@
+/* Style entry (M15-FR-044; AWR-15 §13.1; g07 §3.5). Layer order puts `motion` after `utilities`, so the transitions.dev
+   mapping overrides tw-animate and duration utilities without !important. */
+@import "tailwindcss";
+@layer theme, base, components, utilities, motion;
+@import "tw-animate-css";
+@import "./shadcn-tailwind.css";
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "./theme.css";
+@import "./layout.css";
+@import "./motion/tokens.css";
+@import "./motion/ext-tokens.css";
+@import "./motion/base-ui.css";
+@import "./motion/recipes.css";
+@import "./motion/tiers.css";
+@import "./lf.css";
+@import "./icons.css";
+@import "./boot.css";
+
+@custom-variant dark (&:is(.dark *));
+@source not "../../public";

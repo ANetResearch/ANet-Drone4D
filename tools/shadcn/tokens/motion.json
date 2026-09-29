@@ -1,0 +1,5 @@
+{
+  "$comment": "Motion constants that are not CSS custom properties (AWR-15 §7.5; d03 §3.2, §3.4). Springs are morphicons k/c pairs; settle times are the StateIcon concurrency budget occupancy (M15-FR-063). shakeTotalMs is derived from the 12 error-shake recipe (2 x (a + b)).",
+  "springs": { "snappy": { "k": 420, "c": 30 }, "smooth": { "k": 170, "c": 26 }, "hud": { "k": 900, "c": 60 } },
+  "springSettleMs": { "snappy": 450, "smooth": 800, "hud": 380 }
+}

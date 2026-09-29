@@ -1,0 +1,129 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "anet-base",
+  "type": "registry:base",
+  "extends": "none",
+  "config": {
+    "style": "base-mira",
+    "iconLibrary": "lucide",
+    "rtl": false,
+    "menuColor": "default",
+    "menuAccent": "subtle",
+    "tailwind": {
+      "baseColor": "neutral"
+    }
+  },
+  "dependencies": [
+    "shadcn",
+    "class-variance-authority",
+    "cn",
+    "tw-animate-css",
+    "@base-ui/react",
+    "lucide",
+    "morphicons",
+    "@fontsource-variable/inter",
+    "@fontsource-variable/jetbrains-mono"
+  ],
+  "registryDependencies": [
+    "utils"
+  ],
+  "cssVars": {
+    "theme": {
+      "--font-sans": "'Inter Variable', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Zen Hei', sans-serif",
+      "--font-mono": "'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'WenQuanYi Zen Hei Mono', monospace",
+      "--font-heading": "var(--font-sans)"
+    },
+    "light": {
+      "background": "oklch(0.964 0.003 264.5)",
+      "foreground": "oklch(0.182 0.004 264.5)",
+      "card": "oklch(0.964 0.003 264.5)",
+      "card-foreground": "oklch(0.182 0.004 264.5)",
+      "popover": "oklch(0.988 0.001 286.4)",
+      "popover-foreground": "oklch(0.182 0.004 264.5)",
+      "primary": "oklch(0.182 0.004 264.5)",
+      "primary-foreground": "oklch(0.964 0.003 264.5)",
+      "secondary": "oklch(0.924 0.005 258.3)",
+      "secondary-foreground": "oklch(0.182 0.004 264.5)",
+      "muted": "oklch(0.924 0.005 258.3)",
+      "muted-foreground": "oklch(0.491 0.016 262.3)",
+      "accent": "oklch(0.924 0.005 258.3)",
+      "accent-foreground": "oklch(0.182 0.004 264.5)",
+      "destructive": "oklch(0.501 0.181 29.0)",
+      "border": "oklch(0.149 0.005 264.5 / 12%)",
+      "input": "oklch(0.149 0.005 264.5 / 16%)",
+      "ring": "oklch(0.619 0.015 262.4)",
+      "brand": "oklch(0.607 0.221 29.2)",
+      "brand-foreground": "oklch(0.988 0.001 286.4)",
+      "brand-solid": "oklch(0.559 0.203 29.0)",
+      "brand-text": "oklch(0.501 0.181 29.0)",
+      "chart-1": "oklch(0.182 0.004 264.5)",
+      "chart-2": "oklch(0.491 0.016 262.3)",
+      "chart-3": "oklch(0.619 0.015 262.4)",
+      "chart-4": "oklch(0.740 0.012 264.5)",
+      "chart-5": "oklch(0.607 0.221 29.2)",
+      "radius": "0.45rem",
+      "sidebar": "oklch(0.964 0.003 264.5)",
+      "sidebar-foreground": "oklch(0.182 0.004 264.5)",
+      "sidebar-primary": "oklch(0.182 0.004 264.5)",
+      "sidebar-primary-foreground": "oklch(0.964 0.003 264.5)",
+      "sidebar-accent": "oklch(0.924 0.005 258.3)",
+      "sidebar-accent-foreground": "oklch(0.182 0.004 264.5)",
+      "sidebar-border": "oklch(0.149 0.005 264.5 / 12%)",
+      "sidebar-ring": "oklch(0.619 0.015 262.4)"
+    },
+    "dark": {
+      "background": "oklch(0.149 0.005 264.5)",
+      "foreground": "oklch(0.964 0.003 264.5)",
+      "card": "oklch(0.182 0.004 264.5)",
+      "card-foreground": "oklch(0.964 0.003 264.5)",
+      "popover": "oklch(0.208 0.007 258.4)",
+      "popover-foreground": "oklch(0.964 0.003 264.5)",
+      "primary": "oklch(0.964 0.003 264.5)",
+      "primary-foreground": "oklch(0.182 0.004 264.5)",
+      "secondary": "oklch(0.239 0.008 264.4)",
+      "secondary-foreground": "oklch(0.964 0.003 264.5)",
+      "muted": "oklch(0.239 0.008 264.4)",
+      "muted-foreground": "oklch(0.740 0.012 264.5)",
+      "accent": "oklch(0.239 0.008 264.4)",
+      "accent-foreground": "oklch(0.964 0.003 264.5)",
+      "destructive": "oklch(0.677 0.212 29.1)",
+      "border": "oklch(1 0 0 / 8%)",
+      "input": "oklch(1 0 0 / 12%)",
+      "ring": "oklch(0.619 0.015 262.4)",
+      "brand": "oklch(0.607 0.221 29.2)",
+      "brand-foreground": "oklch(0.988 0.001 286.4)",
+      "brand-solid": "oklch(0.559 0.203 29.0)",
+      "brand-text": "oklch(0.677 0.212 29.1)",
+      "chart-1": "oklch(0.964 0.003 264.5)",
+      "chart-2": "oklch(0.740 0.012 264.5)",
+      "chart-3": "oklch(0.619 0.015 262.4)",
+      "chart-4": "oklch(0.491 0.016 262.3)",
+      "chart-5": "oklch(0.607 0.221 29.2)",
+      "sidebar": "oklch(0.182 0.004 264.5)",
+      "sidebar-foreground": "oklch(0.848 0.009 264.5)",
+      "sidebar-primary": "oklch(0.964 0.003 264.5)",
+      "sidebar-primary-foreground": "oklch(0.182 0.004 264.5)",
+      "sidebar-accent": "oklch(0.239 0.008 264.4)",
+      "sidebar-accent-foreground": "oklch(0.964 0.003 264.5)",
+      "sidebar-border": "oklch(1 0 0 / 8%)",
+      "sidebar-ring": "oklch(0.619 0.015 262.4)"
+    }
+  },
+  "css": {
+    "@import \"tw-animate-css\"": {},
+    "@import \"shadcn/tailwind.css\"": {},
+    "@import \"@fontsource-variable/inter\"": {},
+    "@import \"@fontsource-variable/jetbrains-mono\"": {},
+    "@layer base": {
+      "*": {
+        "@apply border-border outline-ring/50": {}
+      },
+      "body": {
+        "@apply bg-background text-foreground font-sans antialiased": {}
+      },
+      "html": {
+        "@apply font-sans": {}
+      }
+    }
+  }
+}

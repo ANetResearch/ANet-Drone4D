@@ -1,0 +1,50 @@
+/* ===== motion tiers: html[data-motion="full" | "lite" | "reduced" | "off"] (M15-FR-053; AWR-15 §8.4, §13.4; g07 §3.6) =====
+   effective = min(OS prefers-reduced-motion, user setting, PerfGovernor motionCap); written by ui/motion/tier.ts.
+   off exists only in dev/test builds (?motion=off) for deterministic screenshots and the "canvas only" baseline. */
+@layer motion {
+  /* lite: every blur is 0, stagger cap halves; distances, scales and durations are kept */
+  html[data-motion="lite"] {
+    --blur-small: 0px; --blur-medium: 0px; --blur-large: 0px;
+    --digit-blur: 0px; --badge-blur: 0px; --text-swap-blur: 0px; --panel-blur: 0px; --page-blur: 0px;
+    --icon-swap-blur: 0px; --check-blur-from: 0px; --clear-blur: 0px; --reveal-blur: 0px; --stagger-blur: 0px;
+    --morph-blur: 0px; --toast-blur: 0px; --reel-spin-blur: 0px; --think-blur: 0px; --stream-blur: 0px;
+    --stack-blur: 0px; --stack-depth1-blur: 0px; --stack-depth2-blur: 0px;
+    --stagger-cap: 150ms;
+  }
+  /* blur(0px) and none are different computed values and would still create a filter transition: lite goes to none */
+  html[data-motion="lite"] :is([data-starting-style], [data-ending-style], [data-starting-style] > *, [data-ending-style] > *) { filter: none; }
+
+  /* reduced: Base UI parts at 0 s (no animation, unmount on the next frame); JS recipes that rely on transitionend use
+     the epsilon duration; distances go to 0 so the end state is shown in place */
+  html[data-motion="reduced"] {
+    --digit-dur: var(--duration-epsilon); --text-swap-dur: var(--duration-epsilon); --page-slide-dur: var(--duration-epsilon);
+    --page-fade-dur: var(--duration-epsilon); --icon-swap-dur: var(--duration-epsilon); --check-opacity-dur: var(--duration-epsilon);
+    --check-rotate-dur: var(--duration-epsilon); --check-bob-dur: var(--duration-epsilon); --check-blur-dur: var(--duration-epsilon);
+    --check-path-dur: var(--duration-epsilon); --check-path-delay: var(--duration-instant); --reveal-dur: var(--duration-epsilon);
+    --stagger-dur: var(--duration-epsilon); --think-swap: var(--duration-epsilon); --stream-fade: var(--duration-epsilon);
+    --reel-dur: var(--duration-epsilon);
+    --digit-distance: 0px; --distance-drawer: 0px; --shake-distance: 0px; --shake-overshoot: 0px;
+  }
+  html:is([data-motion="reduced"], [data-motion="off"]) :is([data-slot$="-content"], [data-slot$="-overlay"], [data-slot="toast"],
+      [data-slot="toast-content"], [data-slot="tabs-indicator"], [data-slot="tabs-trigger"], [data-slot="toggle-group-indicator"],
+      [data-slot="toggle-group-item"], [data-slot="switch-thumb"], [data-slot="switch"], [data-slot="checkbox"],
+      [data-slot="checkbox-indicator"], [data-slot="checkbox-indicator"] path, [data-slot="accordion-trigger-icon"],
+      [data-slot="accordion-content-inner"], [data-slot="tooltip-positioner"], [data-slot="rail-host"]) {
+    transition-duration: var(--duration-instant);
+    transition-delay: var(--duration-instant);
+  }
+  html[data-motion="reduced"] :is([data-slot="spinner"], [data-slot="skeleton"], [data-slot="toast-icon"] svg, .t-shimmer, .t-matrix, .lf-pop, .lf-fade, .lf-draw) { animation: none; }
+  /* the boot mask exit fade (styles/boot.css) is instant as well (D1-AC-20 reduced: nothing animates; INT-1) */
+  html:is([data-motion="reduced"], [data-motion="off"]) #boot-mask { transition-duration: var(--duration-instant); }
+  html:is([data-motion="reduced"], [data-motion="off"]) .lf-draw { stroke-dashoffset: 0; }
+
+  /* off (dev/test only): as reduced, plus every loop and JS recipe frozen at its end state */
+  html[data-motion="off"] {
+    --default-transition-duration: var(--duration-instant);
+    --digit-dur: var(--duration-instant); --text-swap-dur: var(--duration-instant); --page-slide-dur: var(--duration-instant);
+    --page-fade-dur: var(--duration-instant); --icon-swap-dur: var(--duration-instant); --reveal-dur: var(--duration-instant);
+    --stagger-dur: var(--duration-instant); --duration-lod-fade: var(--duration-instant);
+    --distance-drawer: 0px; --digit-distance: 0px; --shake-distance: 0px; --shake-overshoot: 0px;
+  }
+  html[data-motion="off"] :is([data-slot="spinner"], [data-slot="skeleton"], [data-slot="toast-icon"] svg, .t-shimmer, .t-matrix, .lf-pop, .lf-fade, .lf-draw) { animation: none; }
+}

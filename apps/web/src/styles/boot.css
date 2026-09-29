@@ -1,0 +1,22 @@
+/* Boot mask (M15-FR-006, FR-110; AWR-15 §4.2, §4.6). index.html inlines the critical subset so the badge paints before any
+   JavaScript; app/boot/BootMask.tsx takes over the same node. Entrance: opacity + translateY(--distance-micro),
+   --duration-fast, --ease-smooth-out; exit: opacity, --duration-fast. */
+@layer components {
+  #boot-mask {
+    position: fixed; inset: 0; z-index: var(--z-mask); display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 1rem; background: var(--g950); color: var(--g300);
+    transition: opacity var(--duration-fast) var(--ease-smooth-out);
+  }
+  #boot-mask[data-state="revealed"] { opacity: 0; pointer-events: none; }
+  #boot-mask .boot-badge { width: 480px; max-width: calc(100vw - 2rem); height: auto; }
+  #boot-mask .boot-phase { font: 500 0.75rem/1.125rem var(--font-sans); letter-spacing: 0.02em; min-height: 1.125rem; }
+  #boot-mask .boot-progress { width: 320px; height: 2px; background: var(--lf-track); }
+  #boot-mask .boot-progress > i { display: block; height: 100%; width: var(--boot-p, 0%); background: var(--g50); }
+  @media (max-width: 1279px) { #boot-mask .boot-badge { width: 320px; } }
+}
+@layer motion {
+  /* brand entrance (AWR-15 §4.6): opacity + translateY(--distance-micro), --duration-fast, --ease-smooth-out */
+  .brand-enter { animation: brand-enter var(--duration-fast) var(--ease-smooth-out) backwards; }
+  @keyframes brand-enter { from { opacity: 0; transform: translateY(var(--distance-micro)); } }
+  html:is([data-motion="reduced"], [data-motion="off"]) .brand-enter { animation: none; }
+}

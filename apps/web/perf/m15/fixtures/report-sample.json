@@ -1,0 +1,26 @@
+{
+  "schema": "awr.perf.report.v1",
+  "run_id": "p20260929-043000-3f2a9c1",
+  "gate": "G3",
+  "kind": "suite",
+  "git": { "sha": "3f2a9c1d8e7b6a5f4e3d2c1b0a998877", "branch": "main", "dirty": false },
+  "build": { "id": "web-0.1.0", "mode": "production", "contracts": "1.0.0" },
+  "env": { "cpu_model": "Intel Xeon (8 vCPU)", "cores": 8, "chrome": "151.0.0.0", "flags": ["--use-angle=swiftshader"], "node": "22.12.0", "python": "3.12.3", "device_class": "software", "backend_tier": "S", "renderer": "ANGLE (SwiftShader)", "dpr": 1, "canvas_css": [1280, 720] },
+  "cases": [
+    { "id": "flight60.shenzhen.full", "ac_ids": ["D1-AC-03b"], "world_id": "shenzhen", "scene": "full", "priority": "P0", "layer": "core", "repeats": 3, "status": "PASS",
+      "metrics": [
+        { "key": "frame_p95_ms", "unit": "ms", "runs": [50.0, 50.1, 49.9], "median": 50.0, "threshold": { "op": "<=", "value": 66.7 }, "status": "PASS", "baseline": 48.2, "delta": 1.8 },
+        { "key": "over50_pct", "unit": "%", "runs": [4.1, 3.9, 4.4], "median": 4.1, "threshold": { "op": "<=", "value": 10 }, "status": "PASS" }
+      ], "load": { "pre": [2.1, 2.0, 2.2], "max": [5.5, 5.8, 5.2], "mean": [4.2, 4.3, 4.1] } },
+    { "id": "flight60.shenzhen.pc", "ac_ids": ["D1-AC-03a"], "world_id": "shenzhen", "scene": "pc", "priority": "P0", "layer": "core", "status": "FAIL",
+      "metrics": [
+        { "key": "frame_p95_ms", "unit": "ms", "runs": [66.7, 66.7, 50.0], "median": 66.7, "threshold": { "op": "<=", "value": 50 }, "status": "FAIL", "baseline": 50.0, "delta": 16.7 },
+        { "key": "ttfp_ms", "unit": "ms", "runs": [620, 640, 610], "median": 620, "threshold": { "op": "<=", "value": 1000 }, "status": "PASS" }
+      ], "load": { "pre": [2.0], "max": [6.1], "mean": [4.8] } },
+    { "id": "ttfp.newyork", "ac_ids": ["D1-AC-02"], "world_id": "newyork", "scene": "pc", "priority": "P0", "layer": "core", "status": "PASS",
+      "metrics": [{ "key": "ttfp_ms", "unit": "ms", "runs": [720, 700, 690], "median": 700, "threshold": { "op": "<=", "value": 1000 }, "status": "PASS" }], "load": { "pre": [1.9], "max": [4.1], "mean": [3.2] } },
+    { "id": "fleet_ladder.1000", "ac_ids": ["D1-AC-07"], "world_id": null, "scene": null, "priority": "P0", "layer": "core", "status": "WARN",
+      "metrics": [{ "key": "sim_cpu_core", "unit": "core", "runs": [0.55, 0.58, 0.61], "median": 0.58, "threshold": { "op": "<=", "value": 0.6 }, "status": "WARN" }], "load": { "pre": [1.5], "max": [3.0], "mean": [2.4] } }
+  ],
+  "summary": { "p0_pass": 2, "p0_total": 4, "p1_pass": 0, "p1_total": 0, "p1_pass_rate_pct": 0, "regressions": ["flight60.shenzhen.pc frame_p95_ms"], "waivers": [] }
+}

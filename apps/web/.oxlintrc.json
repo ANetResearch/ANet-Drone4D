@@ -1,0 +1,262 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "react",
+    "import"
+  ],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "react/rules-of-hooks": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "lucide-react",
+            "message": "TS-BND-01 / ICON-01: 全仓库禁止 lucide-react，图标一律经 ui/icons（ADR-030）"
+          }
+        ],
+        "patterns": [
+          {
+            "group": [
+              "lucide-react/*"
+            ],
+            "message": "TS-BND-01 / ICON-01: 全仓库禁止 lucide-react（ADR-030）"
+          },
+          {
+            "group": [
+              "@base-ui/react",
+              "@base-ui/react/*"
+            ],
+            "message": "TS-BND-01: 只有 ui/components/ui/** 可以 import @base-ui/react（AWR-03 §4.2）"
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/engine/**",
+        "src/net/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "lucide-react",
+                "message": "TS-BND-01: 全仓库禁止 lucide-react（ADR-030）"
+              },
+              {
+                "name": "zustand",
+                "message": "TS-BND-01: engine/ 与 net/ 不依赖 React 与 store（AWR-03 §4.2）"
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "react",
+                  "react/*",
+                  "react-dom",
+                  "react-dom/*",
+                  "@react-three/*",
+                  "zustand/*"
+                ],
+                "message": "TS-BND-01: engine/ 与 net/ 保持框架无关（AWR-03 §4.2、ADR-008）"
+              },
+              {
+                "group": [
+                  "@/ui",
+                  "@/ui/*",
+                  "@/viewport",
+                  "@/viewport/*",
+                  "@/stores",
+                  "@/stores/*",
+                  "**/ui/**",
+                  "**/viewport/**",
+                  "**/stores/**"
+                ],
+                "message": "TS-BND-01: engine/ 与 net/ 不得 import ui、viewport、stores（AWR-03 §4.2）"
+              },
+              {
+                "group": [
+                  "@base-ui/react",
+                  "@base-ui/react/*",
+                  "lucide-react/*"
+                ],
+                "message": "TS-BND-01: 受限依赖（AWR-03 §4.2）"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/engine/pointcloud/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "lucide-react",
+                "message": "TS-BND-01: 全仓库禁止 lucide-react（ADR-030）"
+              },
+              {
+                "name": "zustand",
+                "message": "TS-BND-01: engine/ 与 net/ 不依赖 React 与 store（AWR-03 §4.2）"
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "react",
+                  "react/*",
+                  "react-dom",
+                  "react-dom/*",
+                  "@react-three/*",
+                  "zustand/*"
+                ],
+                "message": "TS-BND-01: engine/ 与 net/ 保持框架无关（AWR-03 §4.2、ADR-008）"
+              },
+              {
+                "group": [
+                  "@/ui",
+                  "@/ui/*",
+                  "@/viewport",
+                  "@/viewport/*",
+                  "@/stores",
+                  "@/stores/*",
+                  "**/ui/**",
+                  "**/viewport/**",
+                  "**/stores/**"
+                ],
+                "message": "TS-BND-01: engine/ 与 net/ 不得 import ui、viewport、stores（AWR-03 §4.2）"
+              },
+              {
+                "group": [
+                  "@base-ui/react",
+                  "@base-ui/react/*",
+                  "lucide-react/*"
+                ],
+                "message": "TS-BND-01: 受限依赖（AWR-03 §4.2）"
+              },
+              {
+                "group": [
+                  "@/net",
+                  "@/net/*",
+                  "**/net/**"
+                ],
+                "message": "M05-AC-029: engine/pointcloud 不依赖网络层（M05-to-M00 第 4 条，INT-1）"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/engine/**",
+        "perf/**",
+        "tests/**"
+      ],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "Math",
+            "property": "random",
+            "message": "DET-01: engine、perf、tests 中禁止 Math.random，改用 lib/rng.ts 的可复现 RNG（AWR-18 §13.1）"
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/ui/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "lucide-react",
+                "message": "TS-BND-01 / ICON-01: 全仓库禁止 lucide-react（ADR-030）"
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "lucide-react/*"
+                ],
+                "message": "TS-BND-01 / ICON-01: 全仓库禁止 lucide-react（ADR-030）"
+              },
+              {
+                "group": [
+                  "@base-ui/react",
+                  "@base-ui/react/*"
+                ],
+                "message": "TS-BND-01: 只有 ui/components/ui/** 可以 import @base-ui/react（AWR-03 §4.2）"
+              },
+              {
+                "group": [
+                  "@/engine/*",
+                  "@/engine/**"
+                ],
+                "message": "TS-BND-01: ui/** 只能经 engine/index.ts 门面（import from '@/engine'）访问引擎（AWR-03 §4.2）"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/ui/components/ui/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "lucide-react",
+                "message": "TS-BND-01 / ICON-01: 全仓库禁止 lucide-react，经 @/ui/icons/lucide-compat（ADR-030）"
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "lucide-react/*"
+                ],
+                "message": "TS-BND-01 / ICON-01: 全仓库禁止 lucide-react（ADR-030）"
+              },
+              {
+                "group": [
+                  "@/engine/*",
+                  "@/engine/**"
+                ],
+                "message": "TS-BND-01: ui/** 只能经 engine/index.ts 门面访问引擎（AWR-03 §4.2）"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    "perf/results*/**",
+    "public/**"
+  ]
+}

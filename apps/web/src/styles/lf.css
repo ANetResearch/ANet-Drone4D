@@ -1,0 +1,60 @@
+/* lieflat role variables and mark classes (AWR-15 §3.4, §9, §13.5; d01 §3.2). No hex in this file: roles point at the
+   primitive layer of theme.css. Canvas charts read the computed roles through ui/lf/useLfTokens.ts. */
+@layer base {
+  :root {
+    --lf-bg: var(--card); --lf-txt: var(--g900);
+    --lf-lab: oklch(from var(--g950) l c h / 0.72); --lf-mut: oklch(from var(--g950) l c h / 0.60);
+    --lf-faint: oklch(from var(--g950) l c h / 0.32); --lf-floor: oklch(from var(--g950) l c h / 0.24);
+    --lf-grid: oklch(from var(--g950) l c h / 0.12); --lf-track: oklch(from var(--g950) l c h / 0.08);
+    --lf-data: var(--g900); --lf-data2: var(--g500); --lf-faintdata: var(--g300);
+    --lf-ramp-1: var(--g300); --lf-ramp-2: var(--g400); --lf-ramp-3: var(--g500); --lf-ramp-4: var(--g600); --lf-ramp-5: var(--g900);
+    --lf-hero: var(--r500); --lf-hero-text: var(--r700); --lf-halo: oklch(from var(--g50) l c h / 0.92);
+  }
+  .dark {
+    --lf-txt: var(--g50);
+    --lf-lab: oklch(1 0 0 / 0.72); --lf-mut: oklch(1 0 0 / 0.56); --lf-faint: oklch(1 0 0 / 0.24);
+    --lf-floor: oklch(1 0 0 / 0.16); --lf-grid: oklch(1 0 0 / 0.08); --lf-track: oklch(1 0 0 / 0.06);
+    --lf-data: var(--g50); --lf-data2: var(--g300); --lf-faintdata: var(--g500);
+    --lf-ramp-1: var(--g500); --lf-ramp-2: var(--g400); --lf-ramp-3: var(--g300); --lf-ramp-4: var(--g200); --lf-ramp-5: var(--g50);
+    --lf-hero: var(--r500); --lf-hero-text: var(--r400); --lf-halo: oklch(from var(--g900) l c h / 0.92);
+  }
+  /* layout containment only: size containment would collapse an SVG sized by its viewBox (width 100%, height auto) */
+  .lf-svg { display: block; contain: layout style; overflow: visible; }
+  .lf-svg text { font-family: var(--font-sans); font-variant-numeric: tabular-nums lining-nums; }
+  .lf-floor { stroke: var(--lf-floor); stroke-width: .6; }
+  .lf-grid { stroke: var(--lf-grid); stroke-width: 1; }
+  .lf-line { fill: none; stroke: var(--lf-data); stroke-width: 1.5; stroke-linejoin: round; }
+  .lf-line-faint { fill: none; stroke: var(--lf-faintdata); stroke-width: .65; }
+  .lf-solid { fill: var(--lf-data); }
+  .lf-solid2 { fill: var(--lf-data2); }
+  .lf-faintdata { fill: var(--lf-faintdata); }
+  .lf-track { fill: var(--lf-track); }
+  .lf-hollow { fill: var(--lf-bg); stroke: var(--lf-data); stroke-width: 1; }
+  .lf-hero { fill: var(--lf-hero); stroke: var(--lf-hero); }
+  .lf-value { font-weight: 800; fill: var(--lf-txt); }
+  .lf-label { fill: var(--lf-lab); }
+  .lf-axis { fill: var(--lf-mut); }
+  .lf-halo { paint-order: stroke; stroke: var(--lf-halo); stroke-width: 3px; stroke-linejoin: round; }
+  .lf-sel-bar[data-selected] { box-shadow: inset 2px 0 0 var(--foreground); }
+  .lf-canvas { display: block; contain: strict; }
+  /* editorial entrance (M15-FR-077): draw-in of hairline paths, fade and pop of marks; HUD charts never animate */
+  .lf-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: lf-draw var(--duration-chart-enter) var(--ease-smooth-out) forwards; }
+  .lf-fade { animation: lf-fade var(--duration-fast) var(--ease-smooth-out) backwards; }
+  .lf-pop { animation: lf-pop var(--duration-fast) var(--ease-bounce) backwards; transform-box: fill-box; transform-origin: center; }
+  @keyframes lf-draw { to { stroke-dashoffset: 0; } }
+  @keyframes lf-fade { from { opacity: 0; } }
+  @keyframes lf-pop { from { opacity: 0; transform: scale(0); } }
+  /* table.log skin on the shadcn Table (d01 §3.9; AWR-15 §9.6) */
+  [data-lf-table] [data-slot="table-head"] { border-bottom: 1px solid var(--foreground); }
+  [data-lf-table] [data-slot="table-row"] { border-bottom: 1px dotted var(--border); }
+  [data-lf-table] [data-slot="table-row"]:hover { background: transparent; }
+  [data-lf-table] [data-slot="table-row"][data-selected] { background: var(--muted); box-shadow: inset 2px 0 0 var(--foreground); }
+  [data-lf-table] [data-num] { text-align: right; font-variant-numeric: tabular-nums lining-nums; }
+  [data-lf-table] [data-hot] { color: var(--lf-hero-text); font-weight: 800; }
+  [data-lf-table] tfoot [data-slot="table-row"] { border-top: 1px solid var(--foreground); border-bottom: 0; font-weight: 700; }
+}
+@theme inline {
+  --color-lf-txt: var(--lf-txt); --color-lf-lab: var(--lf-lab); --color-lf-mut: var(--lf-mut); --color-lf-grid: var(--lf-grid);
+  --color-lf-data: var(--lf-data); --color-lf-data2: var(--lf-data2); --color-lf-faintdata: var(--lf-faintdata);
+  --color-lf-hero: var(--lf-hero); --color-lf-hero-text: var(--lf-hero-text); --color-lf-track: var(--lf-track);
+}

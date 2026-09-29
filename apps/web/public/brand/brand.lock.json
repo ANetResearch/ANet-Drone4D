@@ -1,0 +1,40 @@
+{
+  "$comment": "Brand asset lock (ADR-032; AWR-15 §4.1). Regenerate with tools/shadcn/brand/fetch-brand.sh or brand-lock.py.",
+  "files": [
+    {
+      "name": "anet-logo.svg",
+      "sha256": "c4734114fc61e9aed539d897316794e5c4976dea6b4b450245c27ef818c4d821",
+      "bytes": 16461,
+      "source": "refs/design/ANet/docs/media/anet-logo.svg",
+      "date": "2026-09-29"
+    },
+    {
+      "name": "avatar-96.png",
+      "sha256": "6dec5d63d03d60431cb4c0d9b4ebe39f9addfa85cd3a11bcc24bee4d3e330ed1",
+      "bytes": 9250,
+      "source": "https://avatars.githubusercontent.com/u/305781773?s=96&v=4",
+      "date": "2026-09-29"
+    },
+    {
+      "name": "avatar-460.png",
+      "sha256": "155979c0a846be055b8fa40ac9eff0d8fca0ef3e5bd725d86a228e4a425e41cf",
+      "bytes": 134157,
+      "source": "https://avatars.githubusercontent.com/u/305781773?s=460&v=4",
+      "date": "2026-09-29"
+    },
+    {
+      "name": "favicon-32.png",
+      "sha256": "5770da063a42330134e53e548797240ee23f35d4b898e1959bbfbaaf88e76b58",
+      "bytes": 1752,
+      "source": "avatar-96.png, 3x3 premultiplied box filter (tools/shadcn/brand/make-favicons.py)",
+      "date": "2026-09-29"
+    },
+    {
+      "name": "favicon-16.png",
+      "sha256": "0818976241cdcad03598b50bd0e255b84454454db13ac5b0ab30db8ea3f4ad28",
+      "bytes": 679,
+      "source": "avatar-96.png, 6x6 premultiplied box filter (tools/shadcn/brand/make-favicons.py)",
+      "date": "2026-09-29"
+    }
+  ]
+}

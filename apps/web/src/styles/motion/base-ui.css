@@ -1,0 +1,225 @@
+/* ===== transitions.dev recipes -> Base UI parts (shadcn base-mira) =====
+   M15-FR-051, AWR-15 §8.3; g07 §1-§2 (Base UI 1.8 source verified: useTransitionStatus, useAnimationsFinished).
+   Mapping: recipe "before" state -> [data-starting-style]; open end state -> default rule (open duration lives here);
+   closing state -> [data-ending-style] (close duration lives here); keyboard open, Esc and group switches carry
+   [data-instant] -> no transition.
+   Unmount: Base UI waits for Promise.all(el.getAnimations()) on the Popup (Toast: Root) element itself, not its subtree
+   nor pseudo-elements, so the longest closing transition must be on that element; backdrops are not awaited and close
+   no slower than their popup (150 <= 150, 150 <= 350).
+   Layer: @layer motion is declared after utilities (styles/index.css) and overrides the tw-animate and duration
+   utilities without !important. Never put !important on a transition: Base UI writes an inline `transition: none` on the
+   first frame of Popover, Menu, Combobox and every Positioner. Surfaces larger than 240 x 240 px or full height (rails,
+   Sheet, overlay pages, right-rail pages, Dock tabs) never animate a blur at any tier (ADR-029). */
+
+@layer motion {
+  /* 05 menu-dropdown: every anchored popup */
+  :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"],
+      [data-slot="context-menu-content"], [data-slot="context-menu-sub-content"],
+      [data-slot="menubar-content"], [data-slot="menubar-sub-content"],
+      [data-slot="popover-content"], [data-slot="hover-card-content"],
+      [data-slot="select-content"], [data-slot="combobox-content"]) {
+    animation: none;
+    transform-origin: var(--transform-origin);
+    transition-property: transform, opacity;
+    transition-duration: var(--dropdown-open-dur);
+    transition-timing-function: var(--dropdown-ease);
+    &[data-starting-style] { opacity: 0; transform: scale(var(--dropdown-pre-scale)); }
+    &[data-ending-style]   { opacity: 0; transform: scale(var(--dropdown-closing-scale)); transition-duration: var(--dropdown-close-dur); }
+    &[data-instant]        { transition-duration: var(--duration-instant); }
+  }
+  /* Select alignItemWithTrigger (side=none): fade only */
+  [data-slot="select-content"][data-side="none"]:is([data-starting-style], [data-ending-style]) { transform: none; }
+
+  /* 06 modal: Dialog, AlertDialog (CommandDialog and Settings are Dialogs) */
+  :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) {
+    animation: none;
+    transform-origin: center;
+    transition-property: transform, opacity;   /* centring uses the Tailwind v4 translate property, independent of transform */
+    transition-duration: var(--modal-open-dur);
+    transition-timing-function: var(--modal-ease);
+    &[data-starting-style] { opacity: 0; transform: scale(var(--modal-scale)); }
+    &[data-ending-style]   { opacity: 0; transform: scale(var(--modal-scale-close)); transition-duration: var(--modal-close-dur); }
+  }
+  /* backdrops: opacity only, never awaited, closing duration <= popup closing duration */
+  :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+    animation: none;
+    background-color: var(--overlay);
+    transition: opacity var(--duration-quick) var(--ease-smooth-out);
+    &:is([data-starting-style], [data-ending-style]) { opacity: 0; }
+  }
+
+  /* 07 panel-reveal: Sheet slides by data-side; full height surface, never blurred */
+  [data-slot="sheet-content"] {
+    --_tx: 0px; --_ty: 0px;
+    &[data-side="right"]  { --_tx: var(--distance-drawer); }
+    &[data-side="left"]   { --_tx: calc(var(--distance-drawer) * -1); }
+    &[data-side="bottom"] { --_ty: var(--distance-drawer); }
+    &[data-side="top"]    { --_ty: calc(var(--distance-drawer) * -1); }
+    transition-property: transform, opacity;
+    transition-duration: var(--panel-open-dur);
+    transition-timing-function: var(--panel-ease);
+    &:is([data-starting-style], [data-ending-style]) { opacity: 0; transform: translate3d(var(--_tx), var(--_ty), 0); }
+    &[data-ending-style] { transition-duration: var(--panel-close-dur); }
+  }
+
+  /* 07 panel-reveal on the floating rails and the Dock (ui/layout/RailHost.tsx): the whole host moves, the canvas never
+     resizes (ADR-028); the X axis for the rails, the Y axis for the Dock; closed hosts are inert (set after transitionend) */
+  [data-slot="rail-host"] {
+    transition-property: transform, opacity;
+    transition-duration: var(--panel-open-dur);
+    transition-timing-function: var(--panel-ease);
+    &[data-state="closed"] { opacity: 0; transition-duration: var(--panel-close-dur); }
+    &[data-side="left"][data-state="closed"]   { transform: translateX(calc(var(--distance-drawer) * -1)); }
+    &[data-side="right"][data-state="closed"]  { transform: translateX(var(--distance-drawer)); }
+    &[data-side="bottom"][data-state="closed"] { transform: translateY(var(--distance-drawer)); }
+    &[data-instant] { transition-duration: var(--duration-instant); }
+  }
+
+  /* 17 tooltip: intent delay comes from <TooltipProvider delay>, not transition-delay */
+  [data-slot="tooltip-content"] {
+    animation: none;
+    transform-origin: var(--transform-origin);
+    transition-property: transform, opacity;
+    transition-duration: var(--tt-in-dur);
+    transition-timing-function: var(--tt-in-ease);
+    &:is([data-starting-style], [data-ending-style]) { opacity: 0; transform: scale(var(--tt-scale)); }
+    &[data-ending-style] { transition-duration: var(--tt-out-dur); transition-timing-function: var(--tt-out-ease); }
+    &[data-instant]      { transition-duration: var(--duration-instant); }
+  }
+  /* 17 shared bubble travelling between triggers (Tooltip.createHandle); the Positioner uses transform: translate() */
+  [data-slot="tooltip-positioner"][data-shared] {
+    transition:
+      transform var(--tt-move-dur) var(--tt-move-ease),
+      top var(--tt-move-dur) var(--tt-move-ease), left var(--tt-move-dur) var(--tt-move-ease);
+    &[data-instant] { transition: none; }
+  }
+  [data-slot="tooltip-positioner"][data-shared] > [data-slot="tooltip-content"] {
+    width: var(--popup-width, auto); height: var(--popup-height, auto);
+    transition-property: transform, opacity, width, height;
+  }
+
+  /* 22 toast + 32 banner-stacking: Base UI Toast, limit 3 */
+  [data-slot="toast"] {
+    --peek: var(--stack-peek);
+    --scale: calc(max(0, 1 - (var(--toast-index) * var(--stack-depth-scale))));
+    transition:
+      transform var(--toast-open) var(--toast-ease),
+      opacity   var(--toast-open) var(--toast-ease),
+      filter    var(--toast-open) var(--toast-ease),
+      height    var(--duration-quick) var(--toast-ease);
+    &:not([data-expanded], [data-starting-style], [data-ending-style], [data-limited]) {
+      opacity: calc(1 - min(var(--toast-index), 2) * var(--stack-depth-fade) * 0.5);
+    }
+    &[data-limited] { opacity: 0; }
+    &[data-starting-style] {
+      opacity: 0; filter: blur(var(--toast-blur));
+      transform: translateY(var(--toast-distance)) scale(var(--toast-scale));
+    }
+    &[data-ending-style] { transition-duration: var(--toast-close); }
+    &[data-ending-style]:not([data-limited]):not([data-swipe-direction]) {
+      opacity: 0; filter: blur(var(--toast-blur));
+      transform: translateY(calc(var(--toast-distance) - (var(--toast-index) * var(--peek)) - (var(--shrink) * var(--height))))
+                 scale(calc(var(--scale) * var(--toast-scale)));
+    }
+    &[data-expanded][data-ending-style]:not([data-limited]):not([data-swipe-direction]) {
+      transform: translateY(calc(var(--offset-y) + var(--toast-distance))) scale(var(--toast-scale));
+    }
+  }
+  [data-slot="toast-content"] { transition-duration: var(--toast-close); transition-timing-function: var(--toast-ease); }
+
+  /* 21 accordion (and Collapsible panels): height variable, content fade, chevron scaleY(-1). No blur: left-rail groups
+     can exceed 240 x 240 px (ADR-029) */
+  :is([data-slot="accordion-content"], [data-slot="collapsible-content"]) {
+    animation: none;
+    overflow: hidden;
+    height: var(--accordion-panel-height, var(--collapsible-panel-height));
+    transition: height var(--acc-expand) var(--acc-ease);
+    &:is([data-starting-style], [data-ending-style]) { height: 0; }
+    &[data-ending-style] { transition-duration: var(--acc-collapse); }
+  }
+  [data-slot="accordion-content"] > [data-slot="accordion-content-inner"] { transition: opacity var(--acc-expand) var(--acc-ease); }
+  [data-slot="accordion-content"]:is([data-starting-style], [data-ending-style]) > [data-slot="accordion-content-inner"] { opacity: 0; }
+  [data-slot="accordion-trigger-icon"] {
+    transition: transform var(--acc-chevron) var(--acc-ease);
+    transform-origin: center;
+  }
+  [data-slot="accordion-trigger"][data-panel-open] > [data-slot="accordion-trigger-icon"] { transform: scaleY(-1); }
+
+  /* 16 tabs-sliding: Base UI Tabs.Indicator (--active-tab-*); default = pill, line = 2 px foreground underline */
+  [data-slot="tabs-indicator"] {
+    position: absolute; left: 0; top: 0; z-index: 0;
+    width: var(--active-tab-width); height: var(--active-tab-height);
+    translate: var(--active-tab-left) var(--active-tab-top);
+    border-radius: var(--radius-md);
+    background: var(--background);
+    transition: translate var(--tabs-dur) var(--tabs-ease), width var(--tabs-dur) var(--tabs-ease);
+  }
+  :where(.dark) [data-slot="tabs-indicator"]:not([data-variant="line"]) {
+    background: color-mix(in oklab, var(--input) 30%, transparent);
+    box-shadow: inset 0 0 0 1px var(--input);
+  }
+  [data-slot="tabs-indicator"][data-variant="line"] {
+    height: 2px; border-radius: 0; background: var(--foreground); box-shadow: none;
+    translate: var(--active-tab-left) calc(var(--active-tab-top) + var(--active-tab-height) + 3px);
+  }
+  [data-slot="tabs-list"]:has(> [data-slot="tabs-indicator"]) > [data-slot="tabs-trigger"] {
+    z-index: 1;
+    transition: color var(--tabs-dur) var(--tabs-ease);
+    &[data-active] { background: transparent; border-color: transparent; }
+  }
+
+  /* 16 on single-select ToggleGroup (tools/shadcn/codemods/toggle-group-indicator.mjs): only translate and width move */
+  [data-slot="toggle-group-indicator"] {
+    position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none;
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    transition: translate var(--tabs-dur) var(--tabs-ease), width var(--tabs-dur) var(--tabs-ease), height var(--tabs-dur) var(--tabs-ease);
+    &[data-hidden] { opacity: 0; }
+    &[data-instant] { transition-duration: var(--duration-instant); }
+  }
+  [data-slot="toggle-group"][data-indicator] > [data-slot="toggle-group-item"] {
+    z-index: 1;
+    transition: color var(--tabs-dur) var(--tabs-ease);
+    &[data-pressed] { background: transparent; }
+  }
+
+  /* 08 page-side-by-side: Tabs.Panel inside the single cell TabsPanels grid; large surfaces, never blurred */
+  [data-slot="tabs-panels"] { display: grid; }
+  [data-slot="tabs-panels"] > [data-slot="tabs-content"] { grid-area: 1 / 1; }
+  [data-slot="tabs-content"] {
+    transition:
+      opacity   var(--page-fade-dur)  var(--page-fade-ease),
+      transform var(--page-slide-dur) var(--page-slide-ease);
+    &:is([data-starting-style], [data-ending-style]) { opacity: 0; }
+    &[data-starting-style][data-activation-direction="right"] { transform: translateX(var(--page-slide-distance)); }
+    &[data-starting-style][data-activation-direction="left"]  { transform: translateX(calc(var(--page-slide-distance) * -1)); }
+    &[data-ending-style][data-activation-direction="right"]   { transform: translateX(calc(var(--page-slide-distance) * -1)); }
+    &[data-ending-style][data-activation-direction="left"]    { transform: translateX(var(--page-slide-distance)); }
+  }
+
+  /* 27 toggle: Switch thumb (Tailwind v4 translate-x-* writes the independent translate property) */
+  [data-slot="switch-thumb"] { transition: translate var(--toggle-dur) var(--toggle-ease), background-color var(--duration-quick) var(--ease-smooth-out); }
+  [data-slot="switch"]       { transition: background-color var(--duration-quick) var(--ease-smooth-out), box-shadow var(--duration-quick) var(--ease-smooth-out); }
+
+  /* 25 checkbox-check: the Indicator mounts and draws; unchecking fades the Indicator itself (awaited, 150 ms) */
+  [data-slot="checkbox"] { transition: background-color var(--check-box) var(--check-ease), border-color var(--check-box) var(--check-ease), box-shadow var(--check-box) var(--check-ease); }
+  [data-slot="checkbox-indicator"] {
+    transition: opacity var(--check-uncheck) var(--check-ease);
+    &[data-ending-style] { opacity: 0; }
+    & svg path {
+      stroke-dasharray: var(--check-len) var(--check-len);
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset var(--check-draw) var(--check-ease) var(--check-delay);
+    }
+    &[data-starting-style] svg path { stroke-dashoffset: var(--check-len); }
+  }
+
+  /* first-frame fallback for the OS setting; at runtime html[data-motion] (tiers.css) takes over */
+  @media (prefers-reduced-motion: reduce) {
+    :is([data-slot$="-content"], [data-slot$="-overlay"], [data-slot="toast"], [data-slot="tabs-indicator"],
+        [data-slot="toggle-group-indicator"], [data-slot="rail-host"], [data-slot="switch-thumb"], [data-slot="checkbox-indicator"],
+        [data-slot="accordion-trigger-icon"]) {
+      transition-duration: var(--duration-instant);
+    }
+  }
+}

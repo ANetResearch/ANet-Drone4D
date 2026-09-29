@@ -1,0 +1,152 @@
+/* ANet Graphite v1 (AWR-15 §3, §13.2; ADR-032). The only style file in which hex colours are allowed (D1-AC-20 exemption).
+   Changes must be made in AWR-15 §3 first and pass `node tools/lint/lint-lf.mjs --palette` (LF-PAL-01..05).
+   Dark is the product default (<html class="dark">); the light semantic layer (:root) is only for reports and exports (Q7).
+   Layer tokens (--z-*) live in styles/layout.css (AWR-14 §3.1 is the layout authority, AWR-03 C45). */
+@layer theme {
+  :root {
+    /* 1 primitive layer: cool gray, 13 steps (hue about 262) */
+    --g950: #0A0B0D; --g900: #111214; --g850: #16181B; --g800: #1D1F23; --g700: #2A2D32;
+    --g600: #3E4249; --g500: #5C616A; --g400: #81868F; --g300: #A7ABB3; --g200: #CACDD3;
+    --g100: #E4E6E9; --g50: #F2F3F5; --white: #FBFBFC;
+    /* 1 primitive layer: red, 5 steps (hue 29; r500 is the only brand red) */
+    --r700: #B4241B; --r600: #D12A20; --r500: #E93024; --r400: #FF5242; --r300: #FF8374;
+
+    /* 2 semantic layer: light (reports, exports) */
+    --background: var(--g50);   --foreground: var(--g900);
+    --card: var(--g50);         --card-foreground: var(--g900);
+    --popover: var(--white);    --popover-foreground: var(--g900);
+    --primary: var(--g900);     --primary-foreground: var(--g50);
+    --secondary: var(--g100);   --secondary-foreground: var(--g900);
+    --muted: var(--g100);       --muted-foreground: var(--g500);
+    --accent: var(--g100);      --accent-foreground: var(--g900);
+    --destructive: var(--r700);
+    --border: oklch(0.149 0.005 264.5 / 12%);
+    --input: oklch(0.149 0.005 264.5 / 16%);
+    --ring: var(--g400);
+    --chart-1: var(--g900); --chart-2: var(--g500); --chart-3: var(--g400); --chart-4: var(--g300); --chart-5: var(--r500);
+    --sidebar: var(--g50); --sidebar-foreground: var(--g900);
+    --sidebar-primary: var(--g900); --sidebar-primary-foreground: var(--g50);
+    --sidebar-accent: var(--g100); --sidebar-accent-foreground: var(--g900);
+    --sidebar-border: oklch(0.149 0.005 264.5 / 12%); --sidebar-ring: var(--g400);
+    --brand: var(--r500); --brand-foreground: var(--white); --brand-solid: var(--r600); --brand-text: var(--r700);
+    --overlay: oklch(0.149 0.005 264.5 / 32%);
+    --radius: 0.45rem;
+
+    /* 3 scene layer: independent of the UI theme, defined once (AWR-15 §10.2) */
+    --scene-clear: var(--g950);
+    --scene-sky-zenith: var(--g950);
+    --scene-sky-horizon: var(--g850);
+    --scene-horizon-clear: var(--g850); --scene-horizon-partly-cloudy: var(--g850); --scene-horizon-overcast: var(--g800);
+    --scene-horizon-light-rain: var(--g800); --scene-horizon-rain: var(--g700); --scene-horizon-heavy-rain: var(--g700);
+    --scene-horizon-thunderstorm: var(--g850); --scene-horizon-fog: var(--g600); --scene-horizon-haze: var(--g700);
+    --scene-horizon-snow: var(--g600); --scene-horizon-blizzard: var(--g500); --scene-horizon-sandstorm: var(--g600);
+    --scene-cloud-max-clear: 0; --scene-cloud-max-partly-cloudy: 0.2; --scene-cloud-max-overcast: 0.45;
+    --scene-cloud-max-light-rain: 0.45; --scene-cloud-max-rain: 0.5; --scene-cloud-max-heavy-rain: 0.5;
+    --scene-cloud-max-thunderstorm: 0.5; --scene-cloud-max-fog: 0.25; --scene-cloud-max-haze: 0.1;
+    --scene-cloud-max-snow: 0.5; --scene-cloud-max-blizzard: 0.5; --scene-cloud-max-sandstorm: 0.15;
+    --scene-grid-minor: oklch(from var(--g700) l c h / 0.5);
+    --scene-grid-major: oklch(from var(--g600) l c h / 0.8);
+    --pc-ramp-0: var(--g800); --pc-ramp-1: var(--g600); --pc-ramp-2: var(--g400); --pc-ramp-3: var(--g200); --pc-ramp-4: var(--g50);
+    --pc-hero: var(--r500);
+    --pc-gamma: 0.6; --pc-hero-mix: 0.85; --pc-edl-strength: 0.45; --pc-edl-radius: 1.4;
+    --drone-marker: var(--g50); --drone-halo: var(--g950); --drone-stale: var(--g500);
+    --drone-body: var(--g200); --drone-arm: var(--g400); --drone-arm-front: var(--g50); --drone-rotor: var(--g100);
+    --glyph-select: var(--g50); --glyph-hero: var(--r500); --glyph-alert: var(--r500);
+    --trail-default: var(--g400); --trail-selected: var(--g50);
+    --path-planned: var(--g300); --path-done: var(--g500);
+    --fov-edge: oklch(from var(--g300) l c h / 0.7); --fov-fill: oklch(from var(--g50) l c h / 0.05);
+    --wind-ramp-1: var(--g500); --wind-ramp-2: var(--g400); --wind-ramp-3: var(--g300); --wind-ramp-4: var(--g200); --wind-ramp-5: var(--g50);
+    --precip-rain: oklch(from var(--g200) l c h / 0.3);
+    --precip-snow: oklch(from var(--g50) l c h / 0.8);
+    --precip-dust: oklch(from var(--g300) l c h / 0.35);
+    --cloud-2d: var(--g500);
+    /* anet-classes@1 colours, index 0-15 (AWR-15 §10.3; 11 power line is red and yields to higher red owners; 15 reserved) */
+    --pc-class-0: var(--g600); --pc-class-1: var(--g800); --pc-class-2: var(--g700); --pc-class-3: var(--g600);
+    --pc-class-4: var(--g500); --pc-class-5: var(--g100); --pc-class-6: var(--g400); --pc-class-7: var(--g500);
+    --pc-class-8: var(--g900); --pc-class-9: var(--g700); --pc-class-10: var(--g300); --pc-class-11: var(--r500);
+    --pc-class-12: var(--g200); --pc-class-13: var(--g500); --pc-class-14: var(--g900); --pc-class-15: var(--g600);
+
+    /* component layer: spacing */
+    --space-hud-pad: 0.75rem; --space-hud-gap: 0.5rem; --space-panel-pad: 0.75rem; --space-section: 1rem;
+    --space-overlay-inset: 0.75rem; --space-label-offset: 0.75rem; --space-ed-pad: 1.5rem; --space-ed-gap: 1.25rem;
+  }
+
+  /* 2 semantic layer: dark (product default, <html class="dark">) */
+  .dark {
+    --background: var(--g950);  --foreground: var(--g50);
+    --card: var(--g900);        --card-foreground: var(--g50);
+    --popover: var(--g850);     --popover-foreground: var(--g50);
+    --primary: var(--g50);      --primary-foreground: var(--g900);
+    --secondary: var(--g800);   --secondary-foreground: var(--g50);
+    --muted: var(--g800);       --muted-foreground: var(--g300);
+    --accent: var(--g800);      --accent-foreground: var(--g50);
+    --destructive: var(--r400);
+    --border: oklch(1 0 0 / 8%);
+    --input: oklch(1 0 0 / 12%);
+    --ring: var(--g400);
+    --chart-1: var(--g50); --chart-2: var(--g300); --chart-3: var(--g400); --chart-4: var(--g500); --chart-5: var(--r500);
+    --sidebar: var(--g900); --sidebar-foreground: var(--g200);
+    --sidebar-primary: var(--g50); --sidebar-primary-foreground: var(--g900);
+    --sidebar-accent: var(--g800); --sidebar-accent-foreground: var(--g50);
+    --sidebar-border: oklch(1 0 0 / 8%); --sidebar-ring: var(--g400);
+    --brand: var(--r500); --brand-foreground: var(--white); --brand-solid: var(--r600); --brand-text: var(--r400);
+    --hud: oklch(from var(--g900) l c h / 0.92);
+    --label-bg: var(--hud);
+    --overlay: oklch(from var(--g950) l c h / 0.6);
+  }
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Zen Hei", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Menlo, Consolas, "WenQuanYi Zen Hei Mono", monospace;
+  --font-heading: var(--font-sans);
+  --color-background: var(--background); --color-foreground: var(--foreground);
+  --color-card: var(--card); --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive); --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1); --color-chart-2: var(--chart-2); --color-chart-3: var(--chart-3); --color-chart-4: var(--chart-4); --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar); --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary); --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent); --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border); --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand: var(--brand); --color-brand-foreground: var(--brand-foreground);
+  --color-brand-solid: var(--brand-solid); --color-brand-text: var(--brand-text);
+  --color-hud: var(--hud); --color-overlay: var(--overlay);
+  --radius-sm: calc(var(--radius) * 0.6);  --radius-md: calc(var(--radius) * 0.8);  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2); --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@theme {
+  /* type scale (AWR-15 §5.2); every new key must also be registered in lib/utils.ts createCn (lint CN-01) */
+  --text-hud-kpi: 1.375rem;    --text-hud-kpi--line-height: 1.75rem;    --text-hud-kpi--letter-spacing: -0.02em;
+  --text-hud-title: 0.8125rem; --text-hud-title--line-height: 1.125rem; --text-hud-title--letter-spacing: -0.01em;
+  --text-hud-sub: 0.6875rem;   --text-hud-sub--line-height: 1rem;
+  --text-hud-cap: 0.625rem;    --text-hud-cap--line-height: 0.75rem;    --text-hud-cap--letter-spacing: 0.08em;
+  --text-ed-title: 1rem;       --text-ed-title--line-height: 1.375rem;  --text-ed-title--letter-spacing: -0.02em;
+  --text-ed-hero: 1.1875rem;   --text-ed-hero--line-height: 1.625rem;   --text-ed-hero--letter-spacing: -0.02em;
+  --text-ed-sub: 0.75rem;      --text-ed-sub--line-height: 1.125rem;
+  --text-ed-axis: 0.65625rem;  --text-ed-axis--line-height: 0.875rem;   --text-ed-axis--letter-spacing: 0.08em;
+  --text-ed-value: 0.75rem;    --text-ed-value--line-height: 1rem;
+  --text-ed-kpi: 1.875rem;     --text-ed-kpi--line-height: 2.25rem;     --text-ed-kpi--letter-spacing: -0.02em;
+  --text-rep-h1: 1.625rem;     --text-rep-h1--line-height: 2rem;        --text-rep-h1--letter-spacing: -0.03em;
+  --text-rep-sect: 0.875rem;   --text-rep-sect--line-height: 1.25rem;   --text-rep-sect--letter-spacing: 0.2em;
+  /* shadows (AWR-15 §6.4): large surfaces carry none, popups use the pop shadow */
+  --shadow-pop: 0 4px 12px -2px rgb(0 0 0 / 0.45);
+  --shadow-sm: 0 0 0 0 transparent;
+  --shadow-md: var(--shadow-pop);
+  --shadow-lg: var(--shadow-pop);
+  --shadow-xl: var(--shadow-pop);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { @apply font-sans; color-scheme: dark; font-variant-numeric: tabular-nums lining-nums; }
+  html:not(.dark) { color-scheme: light; }
+  body { @apply bg-background text-foreground antialiased; }
+  .font-mono, code, kbd, samp { font-feature-settings: "zero" 1; }
+}

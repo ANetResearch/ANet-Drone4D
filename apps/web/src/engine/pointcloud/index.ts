@@ -1,0 +1,20 @@
+// engine/pointcloud facade (M05 §7.1), exported through engine/index.ts. Owner: M05.
+export { PointCloudEngine, activePointCloud, defaultTokens, type PointCloudEngineOptions, type PointCloudParams, type PointCloudTokens } from './PointCloudEngine'
+export type {
+  ColorMode, EnginePhase, FocusMode, GridSidecar, LimitedBy, OpenedWorldInfo, PointCloudEvents, PointCloudStats, PointPick, PotreeMeta, RungIndex, WorldJson,
+} from './types'
+export { COLOR_MODES } from './types'
+export { LADDER, PC, deviceParams, httpCapFor, isDegenerateRung, nonDegenerateAtOrBelow, poolRowsFor, type DeviceParams, type Rung } from './params'
+export { firstScreenLevel, firstScreenBytes } from './io/firstScreen'
+export { parseHierarchy, parseHierarchyExt, parseHierarchyPaged } from './io/hierarchy'
+export { packQ16, decodePoint, decodeOct16 } from './io/q16'
+export { DtmSampler } from './io/dtm'
+export { NodeStore, NS } from './core/NodeStore'
+export { selectVisible, newScratch, newSelection, keyPx, LIMITED } from './core/Selector'
+export { makeLodCamera, lodCameraLookAt, newLodCamera, classify } from './core/frustum'
+export { CascadeController, FREEZE_EXTERNAL, FREEZE_SHADER_COMPILE, FREEZE_WARMUP, type CasState as PcCasState } from './core/CascadeController'
+export { PageAllocator } from './gpu/PageAllocator'
+export { EdlCompositeMaterial, makeEdlCompositeMaterial } from './render/edlComposite'
+export { sampleFlight60, checkFlight60, FLIGHT60_BYTES, FLIGHT60_FRAMES } from './bench/flight60'
+export { PcError } from './io/meta'
+export { PointPicker, type PickTicket } from './pick/PointPicker'
