@@ -1,0 +1,21 @@
+// zenoh 会话配置模板（AWR-17 §9.3；M11 §6.8）。awr.runtime.bus 读取本文件后覆盖 namespace 与端点：
+// supervisor 监听汇合点 tcp/127.0.0.1:7447（随 port_offset 平移 10·k，主机部分只能是回环），子进程监听随机端口并连接汇合点。
+// 只在本机回环上通信；多播发现关闭、gossip 开启（发现其他 peer 后直连，汇合点死亡后 peer 仍可互通，g05 §3.6）。
+{
+  mode: "peer",
+  namespace: "awr/local/local",
+  listen: { endpoints: ["tcp/127.0.0.1:0"] },
+  connect: { endpoints: [] },
+  scouting: { multicast: { enabled: false }, gossip: { enabled: true } },
+  transport: {
+    link: {
+      tx: {
+        lease: 3000,
+        keep_alive: 4,
+        queue: { congestion_control: { drop: { wait_before_drop: 1000 } } },
+      },
+    },
+    // 关闭 SHM：每个发布会话默认 16 MiB 的 /dev/shm 池会占满容器默认 64 MiB（g05 §0 第 9 条）
+    shared_memory: { enabled: false },
+  },
+}
