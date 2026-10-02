@@ -1,15 +1,16 @@
 # mk/contracts.mk（M00-B）：契约生成物、golden 与夹具的生成、校验与测试。
 # 依据：AWR-03 §4.2 第 3 条、§5.10；AWR-17 §10；AWR-18 §8.3（CI 顺序：--check → pytest → vitest）；M07-FR-007。
-# 生成器：tools/contracts/{gen.py, gen.mjs, gen_golden.py, gen_frames_golden.py, gen_env_golden.py, gen_fixtures.py}。
+# 生成器：tools/contracts/{gen.py, gen.mjs, gen_golden.py, gen_frames_golden.py, gen_env_golden.py, gen_fixtures.py,
+# gen_openapi.py}。gen_openapi.py 写 REST 快照 packages/contracts/rest/openapi.snapshot.json（AWR-17 §10.6 第 9 条，FX-GW 交付）。
 
 .PHONY: contracts contracts-check test-contracts
 
-CONTRACT_PY_GENS := gen.py gen_golden.py gen_frames_golden.py gen_env_golden.py gen_fixtures.py
+CONTRACT_PY_GENS := gen.py gen_golden.py gen_frames_golden.py gen_env_golden.py gen_fixtures.py gen_openapi.py
 
-contracts: ## 重新生成契约生成物、golden 与夹具（python/awr/contracts、packages/contracts/gen/ts、golden、fixtures）
+contracts: ## 重新生成契约生成物、golden、夹具与 OpenAPI 快照（python/awr/contracts、packages/contracts/gen/ts、golden、fixtures、rest）
 	cd $(ROOT) && $(PY) tools/contracts/gen.py
 	cd $(ROOT) && node tools/contracts/gen.mjs
-	cd $(ROOT) && for g in gen_golden.py gen_frames_golden.py gen_env_golden.py gen_fixtures.py; do $(PY) tools/contracts/$$g || exit $$?; done
+	cd $(ROOT) && for g in gen_golden.py gen_frames_golden.py gen_env_golden.py gen_fixtures.py gen_openapi.py; do $(PY) tools/contracts/$$g || exit $$?; done
 
 contracts-check: ## 校验生成物、golden 与夹具和契约源一致（--check，不改写文件）
 	@cd $(ROOT) && for g in $(CONTRACT_PY_GENS); do $(PY) tools/contracts/$$g --check || \

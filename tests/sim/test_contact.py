@@ -146,3 +146,42 @@ def test_uav_collision(kernel: str) -> None:
         assert S.crash_sub[0] == 3 and S.crash_sub[1] == 3
     finally:
         rig.close()
+
+
+def test_uav_collider_kernel_matches_grid_pairing() -> None:
+    """大机群路径（numba 排序扫描 `kernels_contact.uav_hits`）与 8 套半格平移网格的排序配对给出同一组命中、同一顺序
+    （FX2-R2）。随机 600 架密集机群，含成团近碰撞（多机同格）与跨格边界的对。"""
+    from awr.sim.fleet.collide import UavCollider
+    from awr.sim.fleet.state import FleetState
+
+    if not K.HAVE_NUMBA:
+        pytest.skip("numba unavailable")
+    rng = np.random.default_rng(11)
+    for trial in range(6):
+        n = 600
+        S1, S2 = FleetState(1024), FleetState(1024)
+        idx = np.sort(rng.choice(1024, n, replace=False)).astype(np.int32)
+        p0 = rng.uniform(-60.0, 60.0, (1024, 3))
+        p0[:, 2] = rng.uniform(-40.0, -20.0, 1024)
+        clump = idx[: 40 + 10 * trial]
+        p0[clump] = p0[clump[0]] + rng.normal(0.0, 0.8, (clump.size, 3))
+        step = rng.normal(0.0, 0.3, (1024, 3))
+        rad = np.array([0.49, 0.6])
+        for S in (S1, S2):
+            S.p[:] = p0
+            S.profile_id[:] = rng.integers(0, 2, 1024) if S is S1 else S1.profile_id
+            S.landed[:] = False
+            S.crash_sub[:] = 0
+        c1, c2 = UavCollider(1024), UavCollider(1024)
+        c2.use_kernel = False
+        assert c1.use_kernel
+        g1 = c1.check(S1, idx, rad)
+        g2 = c2.check(S2, idx, rad)
+        assert g1 == g2, (trial, len(g1), len(g2))
+        for S in (S1, S2):
+            S.p[:] = p0 + step
+            S.crash_sub[:] = 0          # 第二次检查：线性运动段上的 CPA（全体重新参与）
+        h1 = c1.check(S1, idx, rad)
+        h2 = c2.check(S2, idx, rad)
+        assert h1 == h2 and len(g1) > 0 and len(h1) > 0, (trial, len(h1), len(h2))
+        assert np.array_equal(S1.crash_sub, S2.crash_sub) and np.array_equal(S1.ctrl_mode, S2.ctrl_mode)

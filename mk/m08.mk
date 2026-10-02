@@ -19,14 +19,14 @@ regress-sih: ## SIH 黄金数据回归 17 项 × 4 配置 + oracle + 反例，�
 bench-ladder: ## 机群阶梯（真实 supervisor + sim-core，性能运行协议；make bench-ladder LADDER_N=1000 LADDER_DUR=60）
 	@$(call with_lock_ex,$(PY) $(ROOT)/tools/bench/fleet_ladder/run.py --n $(LADDER_N) --dur $(LADDER_DUR))
 
-bench-ladder-smoke: ## 阶梯脚本功能自检（N = 4、8 s，不持锁，不作性能判定）
-	$(PY) $(ROOT)/tools/bench/fleet_ladder/run.py --n 4 --dur 8 --warm 6 --smoke
+bench-ladder-smoke: ## 阶梯脚本功能自检（骨架布设 N = 4、8 s，不持锁，不作性能判定）
+	$(PY) $(ROOT)/tools/bench/fleet_ladder/run.py --scenario none --n 4 --dur 8 --settle 2 --smoke
 
 vehicles-models: ## P600 高模（≤ 5k）与低模（≤ 300 / ≤ 150）glb，并复制到 apps/web/public/models/
 	$(PY) $(ROOT)/tools/vehicles/stl2glb.py --copy-web
 	$(PY) $(ROOT)/tools/vehicles/lowpoly.py --copy-web
 
-numba-warm: ## numba 预热（编译并写入 NUMBA_CACHE_DIR；make run 前置，FR-005）
-	$(PY) -c "import time; from awr.sim.fleet import kernels_l1 as K; t0 = time.perf_counter(); K.warmup(); print('numba warmup s', round(time.perf_counter() - t0, 2))"
+numba-warm: ## numba 预热：sim-core 全部插件的核按运行期签名编译并写入 NUMBA_CACHE_DIR（make run 前置，FR-005）
+	$(PY) -m awr.sim.runtime.warm
 
 RUN_PRE_TARGETS += numba-warm

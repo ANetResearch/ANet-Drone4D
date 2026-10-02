@@ -2,7 +2,7 @@
 
 覆盖：roster、`ctl/sim-core/estimate`、agent principal 的命令准入（K_entry 验签、隐式 AGENT 租约）与 `cmd.*` 结果事件、
 StateRing 行缓存与健康推导、伪造 principal 被生产者拒绝（115）、agent 发 safety_stop 被生产者防御性拒绝（115）。
-`ctl/sim-core/lease` 对 agent 角色的 acquire/release 尚未由 M08 支持（请求 M14-to-M08 第 1 条），以 xfail 记录现状。
+`ctl/sim-core/lease` 对 agent 角色的 acquire/release（M14-to-M08 第 1 条，FX-SIM2 交付）：acquire(AGENT) 与 release(previous)。
 """
 
 from __future__ import annotations
@@ -141,7 +141,6 @@ def test_agent_command_admission_and_result(rig: Rig) -> None:
     assert row.owner == "AGENT"  # 隐式 acquire(AGENT)（M08 LeaseManager.check）
 
 
-@pytest.mark.xfail(reason="M08 ctl/sim-core/lease 尚不接受 agent 角色的 acquire/release（请求 M14-to-M08 第 1 条）", strict=False)
 def test_agent_explicit_lease(rig: Rig) -> None:
     async def main():
         br = _bridge(rig, asyncio.get_running_loop())
@@ -149,7 +148,11 @@ def test_agent_explicit_lease(rig: Rig) -> None:
         g = TrustedGuard(bridge=br, k_entry=derive_key(rig.secret, rig.run_id, "entry"), sched=SimScheduler(0))
         aid = ID.aid("test", UAV)
         cid = g.next_cid(aid)
-        return await _call(rig, br.lease("acquire", UAV, g.principal(aid, cid), cid=cid))
+        acq = await _call(rig, br.lease("acquire", UAV, g.principal(aid, cid), cid=cid))
+        cid2 = g.next_cid(aid)
+        rel = await _call(rig, br.lease("release", UAV, g.principal(aid, cid2), cid=cid2, return_to="previous"))
+        return acq, rel
 
-    rep = asyncio.run(main())
-    assert rep["status"] == "accepted" and rep["lease"]["owner"] == "AGENT"
+    acq, rel = asyncio.run(main())
+    assert acq["status"] == "accepted" and acq["lease"]["owner"] == "AGENT", acq
+    assert rel["status"] == "accepted" and rel["lease"]["owner"] == "NONE", rel

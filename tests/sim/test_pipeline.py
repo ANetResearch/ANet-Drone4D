@@ -69,9 +69,10 @@ def test_state_block_allocation_and_checkpoint() -> None:
 
 def test_default_pipeline_order() -> None:
     with R.isolated_registry() as reg:
-        for kernel, names in (("numba", ["clock", "ingest", "l1", "kinematic", "contact", "fsm_min", "cmd_watch", "tap"]),
+        # collide：机间碰撞检查自 contact 拆出（25 Hz、奇数 tick，ADR-070）
+        for kernel, names in (("numba", ["clock", "ingest", "l1", "kinematic", "contact", "collide", "fsm_min", "cmd_watch", "tap"]),
                               ("numpy", ["clock", "ingest", "refgen", "pos_ctrl", "att_ctrl", "motor", "aero", "integrate",
-                                         "kinematic", "contact", "fsm_min", "cmd_watch", "tap"])):
+                                         "kinematic", "contact", "collide", "fsm_min", "cmd_watch", "tap"])):
             if kernel == "numba" and not KL.HAVE_NUMBA:
                 continue
             f = FleetSim(FleetConfig(kernel=kernel, path_capacity=1024), reg=reg)

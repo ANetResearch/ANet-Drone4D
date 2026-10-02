@@ -8,8 +8,13 @@ Gateway 模拟（本进程，uvloop）：以 `--cps` 条/s 串行 `bus.call(ctl/
 `EventSubscriber` 在 60 Hz tick 中 pump，按生产者序交付；`--drop-every k` 人为丢弃每第 k 条事件消息，验证 1 s 内经
 `_replay` 补齐且交付顺序不变。
 
+丢弃注入的口径（FX2-R2-gateway 修正）：只在 60 s 测量窗口内注入；窗口结束后停止注入，tick 与 pump 继续运行 `--drain` 秒
+（缺省 1.5 s，大于 1 s 补齐时限），之后仍未交付的丢弃事件才计为"未补齐"。此前注入一直持续到 pump 停止的那一刻，最后约
+70 ms 内被丢弃的消息来不及补拉，被误计为未补齐（ACC-1 第 1 轮 3 次中 2 次各 2、3 条，均为同一条尾部消息内的事件）。
+已经交付（例如被先到的补拉回复带回）的事件即使其原消息随后被丢弃，也不计入丢弃集合。
+
 门禁：命令失败 0；准入 RTT p99 ≤ 25 ms；事件未补齐缺口 0、乱序 0；（丢弃注入时）补齐时延最大值 ≤ 1000 ms。
-用法：python tools/bench/ipc/bench_cmd.py [--secs 60] [--cps 50] [--events 570] [--drop-every 0] [--runs 1] [--out DIR]
+用法：python tools/bench/ipc/bench_cmd.py [--secs 60] [--cps 50] [--events 570] [--drop-every 0] [--drain 1.5] [--runs 1] [--out DIR]
 """
 
 from __future__ import annotations
@@ -63,7 +68,7 @@ def sim(a: argparse.Namespace) -> None:
     print("READY", flush=True)
     hz = a.hz
     dt = 1.0 / hz
-    t_end = time.perf_counter() + WARMUP_S + a.secs + 3.0
+    t_end = time.perf_counter() + WARMUP_S + a.secs + max(3.0, a.drain + 1.5)  # 生产者持续到网关排空结束之后
     nxt = time.perf_counter()
     k = 0
     acc = 0.0
@@ -78,7 +83,7 @@ def sim(a: argparse.Namespace) -> None:
         sl = nxt - time.perf_counter()
         if sl > 0:
             time.sleep(sl)
-        if cpu0 is None and time.perf_counter() > t_end - a.secs - 3.0:
+        if cpu0 is None and time.perf_counter() > t_end - a.secs - max(3.0, a.drain + 1.5):
             cpu0, t0, k0 = time.process_time(), time.perf_counter(), k
             step_us.clear()
             drain_s = flush_s = pub_s = 0.0
@@ -140,7 +145,8 @@ async def gateway_run(a: argparse.Namespace) -> dict:
     ep = f"tcp/127.0.0.1:{_free_port()}"
     bus = ZenohBus.open("api", namespace=NS, listen=[ep], connect=[], loop=loop)
     proc = subprocess.Popen([sys.executable, __file__, "--role", "sim", "--endpoint", ep, "--secs", str(a.secs), "--events",
-                             str(a.events), "--n", str(a.n), "--hz", str(a.hz)], stdout=subprocess.PIPE, text=True)
+                             str(a.events), "--n", str(a.n), "--hz", str(a.hz), "--drain", str(a.drain)],
+                            stdout=subprocess.PIPE, text=True)
     try:
         assert proc.stdout is not None and proc.stdout.readline().strip() == "READY"
         order = {"delivered": 0, "reorders": 0, "last": {}}
@@ -169,16 +175,19 @@ async def gateway_run(a: argparse.Namespace) -> dict:
         sub = EventSubscriber(bus, on_events=on_events, on_gap=on_gap)
         n_msgs = [0]
         n_drops = [0]
+        inject = [False]  # 只在测量窗口内注入丢弃；排空阶段不注入（见模块说明）
         if a.drop_every > 0:
             import msgpack
 
             def flt(key: str, raw: bytes) -> bool:
                 n_msgs[0] += 1
-                if counting[0] and n_msgs[0] % a.drop_every == 0:
+                if inject[0] and n_msgs[0] % a.drop_every == 0:
                     n_drops[0] += 1
                     t = time.monotonic()
+                    producer = key.split("/")[1]
                     for e in msgpack.unpackb(raw):
-                        dropped[(key.split("/")[1], e["seq"])] = t
+                        if e["seq"] > order["last"].get((producer, e["epoch"]), 0):  # 已交付的不算丢弃
+                            dropped[(producer, e["seq"])] = t
                     return False
                 return True
 
@@ -199,6 +208,7 @@ async def gateway_run(a: argparse.Namespace) -> dict:
         await asyncio.sleep(WARMUP_S)
         lags.clear()
         counting[0] = True
+        inject[0] = True
         rtts, fails = [], 0
         cpu0, t0 = time.process_time(), time.perf_counter()
         kc = 0
@@ -213,18 +223,23 @@ async def gateway_run(a: argparse.Namespace) -> dict:
                 fails += 1
             await asyncio.sleep(max(0.0, 1.0 / a.cps - (time.perf_counter() - ts)))
         cpu = (time.process_time() - cpu0) / (time.perf_counter() - t0)
-        await asyncio.sleep(1.5)  # 让尾部事件与补拉完成
+        inject[0] = False
+        await asyncio.sleep(a.drain)  # 排空：tick 与 pump 继续，让窗口末尾的丢弃完成补拉（≥ 1 s 补齐时限）
         counting[0] = False
         stop[0] = True
         await tk
+        sub.pump()
+        now = time.monotonic()
+        oldest_unrec_ms = round(max((now - t for t in dropped.values()), default=0.0) * 1e3, 1)
         out = (await asyncio.to_thread(proc.communicate, timeout=60))[0]
         w = json.loads(next(line for line in out.splitlines() if line.startswith("RESULT "))[7:])
         res = {"cmds": len(rtts), "fails": fails, "rtt_ms": C.stats3(rtts) | {"p95": round(C.pct(rtts, 95), 3)},
                "api_cpu_core": cpu, "loop_lag_ms_p99": round(C.pct(lags, 99), 3),
-               "events_delivered": order["delivered"], "events_per_s": round(order["delivered"] / (a.secs + 1.5), 1),
+               "events_delivered": order["delivered"], "events_per_s": round(order["delivered"] / (a.secs + a.drain), 1),
                "reorders": order["reorders"], "gaps_unrecovered": len(gaps), "gap_list": gaps[:20],
                "drops_injected": n_drops[0],
                "recover_ms": C.stats3(recover_ms) if recover_ms else None, "unrecovered_after_drop": len(dropped),
+               "unrecovered_oldest_ms": oldest_unrec_ms, "drain_s": a.drain,
                "subscriber": dict(sub.stats), "sim": w}
         sub.close()
         return res
@@ -244,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--n", type=int, default=1000)
     ap.add_argument("--hz", type=float, default=250.0)
     ap.add_argument("--drop-every", type=int, default=0, help="人为丢弃每第 k 条事件消息（验证 _replay 补齐）")
+    ap.add_argument("--drain", type=float, default=1.5, help="窗口结束后停止注入、继续 pump 的排空秒数（须 > 1 s 补齐时限）")
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--no-lock", action="store_true")

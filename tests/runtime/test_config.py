@@ -30,7 +30,7 @@ def test_repo_config_loads_for_every_profile(profile: str) -> None:
     sim = c.proc("sim-core")
     assert sim.cpus == [1] and sim.nice == -5 and sim.liveness.mode == "ring" and sim.liveness.stale_s == 2.0
     assert c.proc("job-worker").nice == 10 and c.restart_for(c.proc("job-worker")).policy == "on-failure"
-    assert c.defaults.restart.backoff_s == [0.5, 1, 2, 4, 8] and c.defaults.restart.max.count == 5
+    assert c.defaults.restart.backoff_s == [0.1, 1, 2, 4, 8] and c.defaults.restart.max.count == 5   # ADR-061
     assert c.bus.shm is False and c.access_mode == "loopback"
     assert ("vite" in [p.name for p in c.enabled_procs()]) == (profile == "dev")
     if profile in ("ci", "perf"):
@@ -47,6 +47,8 @@ def test_precedence_argv_env_profile_base() -> None:
     assert c.net.port_offset == 3  # 环境变量 > profile
     c = load_runtime_config(profile="ci", env={"AWR_PORT_OFFSET": "3"}, argv=["net.port_offset=5"])
     assert c.net.port_offset == 5 and c.port_effective == 8050  # 命令行 > 环境变量
+    c = load_runtime_config(profile="dev", env={"AWR_PORT_OFFSET": "31"})  # 上限 31（ADR-055，并行 worktree）
+    assert c.port_effective == 8310 and c.rendezvous_effective == "tcp/127.0.0.1:7757" and c.vite_port_effective == 5483
     c = load_runtime_config(env={"AWR_PROFILE": "demo", "AWR_ORIGINS": "http://10.0.0.2:8000", "AWR_BIND": "0.0.0.0"})
     assert c.profile == "demo" and c.access_mode == "lan" and "10.0.0.2" in c.allowed_hosts
 
@@ -66,7 +68,7 @@ def test_precedence_argv_env_profile_base() -> None:
     (lambda d: d["procs"][1].update(start_after=["nope"]), {}, [], ""),
     (lambda d: d["procs"][1].update(id_range=[512, 16]), {}, [], ""),
     (lambda d: d["profiles"]["ci"].update(procs=[]), {}, [], "profiles.ci.procs"),
-    (lambda d: None, {}, ["net.port_offset=12"], "net.port_offset"),
+    (lambda d: None, {}, ["net.port_offset=32"], "net.port_offset"),  # 0–31（ADR-055）
 ])
 def test_invalid_configs_exit_2_with_key_path(tmp_path: Path, mutate, env, argv, path) -> None:
     p = write(tmp_path, mutate)

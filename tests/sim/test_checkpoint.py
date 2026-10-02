@@ -127,6 +127,40 @@ def test_capture_is_copy_safe() -> None:
             h.close()
 
 
+def test_cached_meta_encoding_matches_packb() -> None:
+    """调用表、幂等表、roster 与租约的编码缓存（`ck_pack_parts`，ADR-070）：M11 `pack_meta` 的输出与对同一元数据 `packb`
+    逐字节相同；第二代（缓存命中）与第一代之后又有新调用准入时同样成立，解码结果与普通列表、字典相同。"""
+    import msgpack
+
+    from awr.runtime.checkpoint import pack_meta
+
+    with R.isolated_registry() as reg:
+        h = CoreHarness(n=4, reg=reg, spacing=12.0)
+        try:
+            h.takeoff(5.0)
+            for k, vid in enumerate(h.ids()):
+                if k:
+                    assert h.cmd("takeoff", {"alt_m": 8.0}, uav=vid, cid=f"to-x{k}")["status"] == "accepted"
+            p0 = h.pos()
+            assert h.cmd("goto", {"pos": [p0[0] + 80.0, p0[1], 12.0]}, cid="g-0")["status"] == "accepted"
+            h.advance(0.3)
+            for gen in range(3):
+                _arrays, meta = capture(h.core)
+                assert meta["calls"] and meta["roster"] and meta["leases"]
+                ref = msgpack.packb(meta, use_bin_type=True)
+                assert pack_meta(meta) == ref
+                assert pack_meta(meta) == ref  # 缓存命中后再编码一次
+                assert msgpack.unpackb(ref, raw=False, strict_map_key=False)["calls"][0][1:] == list(meta["calls"][0][1:])
+                if gen == 0:
+                    h.advance(0.5)
+                else:
+                    for k, vid in enumerate(h.ids()[1:3]):
+                        h.cmd("goto", {"pos": [p0[0] - 30.0 * (k + 1), p0[1] + 40.0, 12.0]}, uav=vid, cid=f"g-{gen}-{k}")
+                    h.advance(0.3)
+        finally:
+            h.close()
+
+
 @pytest.mark.perf
 def test_checkpoint_copy_under_1ms() -> None:
     with R.isolated_registry() as reg:

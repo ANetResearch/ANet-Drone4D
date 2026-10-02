@@ -93,8 +93,13 @@ class FakeSim(SimBridge):
     """SimBridge 替身 + 最小 sim-core 行为；`step_to(t_ns)` 由锁步驱动每 tick 调用。"""
 
     def __init__(self, sched: Any, *, k_entry: bytes | None = None, seed: int = 7, mor_m: float = 20000.0, wind_mps: float = 6.0,
-                 nofly: Sequence[tuple[str, tuple[float, float], float]] = ()) -> None:
+                 nofly: Sequence[tuple[str, tuple[float, float], float]] = (), rtt_ns: int = 0, event_lag_ns: int = 0) -> None:
         self.sched = sched
+        # 多进程时序模型（D1-AC-16，FX2-R3）：rtt_ns 为一次 sim-core 往返折合的仿真时长（请求、回复各一半；命令在请求到达后
+        # 的下一 tick 锁存），event_lag_ns 为事件与命令终态从 sim-core 到 agent-runtime 的滞后（合批 + 事件泵）。×10 时实测
+        # 往返约 0.2–0.6 s、事件滞后约 0.1–0.3 s【仿真】；缺省 0 即锁步
+        self.rtt_ns = int(rtt_ns)
+        self.event_lag_ns = int(event_lag_ns)
         self.k_entry = k_entry
         self.seed = seed
         self.mor_m = mor_m
@@ -157,8 +162,23 @@ class FakeSim(SimBridge):
         self.ev_seq += 1
         ev = {"seq": self.ev_seq, "epoch": 1, "producer": "sim-core", "kind": kind, "severity": severity, "t_sim_ns": self.t_ns,
               "uav": uav, "cid": cid, "data": data}
+        self._later(lambda: self._deliver(ev))
+
+    def _deliver(self, ev: dict[str, Any]) -> None:
         for cb in list(self._cbs):
             cb(ev)
+
+    def _later(self, fn: Callable[[], Any]) -> None:
+        """事件与命令终态按 event_lag_ns 滞后交付（调度器定时回调，回调时刻即交付的仿真时刻）。"""
+        if self.event_lag_ns > 0:
+            self.sched.call_at(self.t_ns + self.event_lag_ns, fn)
+        else:
+            fn()
+
+    async def _hop(self) -> None:
+        """一次 sim-core 往返的一半（请求到达或回复返回）折合的仿真时长。"""
+        if self.rtt_ns > 0:
+            await self.sched.sleep_until(self.sched.now_ns() + self.rtt_ns // 2)
 
     # ------------------------------------------------------------ SimBridge
     def vehicle_row(self, vehicle_id: str) -> VehicleRow | None:
@@ -173,6 +193,12 @@ class FakeSim(SimBridge):
     async def estimate(self, vehicle_id: str, target_enu_m: Sequence[float], dwell_s: float, capability: str,
                        speed_mps: float | None = None) -> dict[str, Any]:
         self.counts["estimate"] += 1
+        await self._hop()
+        rep = self._estimate(vehicle_id, target_enu_m, dwell_s)
+        await self._hop()
+        return rep
+
+    def _estimate(self, vehicle_id: str, target_enu_m: Sequence[float], dwell_s: float) -> dict[str, Any]:
         v = self.vehicles.get(vehicle_id)
         if v is None:
             return {"v": 1, "feasible": False, "code": 102}
@@ -232,6 +258,12 @@ class FakeSim(SimBridge):
 
     async def lease(self, op: str, uav: str, principal: Mapping[str, Any], *, cid: str, return_to: str = "previous") -> dict[str, Any]:
         self.counts["lease"] += 1
+        await self._hop()
+        rep = self._lease(op, uav, principal, cid=cid, return_to=return_to)
+        await self._hop()
+        return rep
+
+    def _lease(self, op: str, uav: str, principal: Mapping[str, Any], *, cid: str, return_to: str) -> dict[str, Any]:
         if not self._verify(principal, cid):
             self.counts["forged"] += 1
             return {"v": 1, "cid": cid, "status": "rejected", "code": 115}
@@ -252,6 +284,12 @@ class FakeSim(SimBridge):
 
     async def command(self, msg: Mapping[str, Any]) -> dict[str, Any]:
         self.counts["command"] += 1
+        await self._hop()
+        rep = self._command(msg)
+        await self._hop()
+        return rep
+
+    def _command(self, msg: Mapping[str, Any]) -> dict[str, Any]:
         cid = str(msg.get("cid"))
         op = str(msg.get("op"))
         uav = str(msg.get("uav"))
@@ -306,9 +344,15 @@ class FakeSim(SimBridge):
         return await asyncio.shield(fut)
 
     async def geo_height(self, op: str, xy: Sequence[Sequence[float]]) -> list[float | None]:
+        self.counts["geo"] = self.counts.get("geo", 0) + 1
+        await self._hop()
+        await self._hop()
         return [0.0 for _ in xy]
 
     async def env_at(self, pos: Sequence[float]) -> EnvAtTarget | None:
+        self.counts["env"] = self.counts.get("env", 0) + 1
+        await self._hop()
+        await self._hop()
         return EnvAtTarget(self.wind_mps, 0.0, self.mor_m)
 
     async def report_metric(self, msg: Mapping[str, Any]) -> dict[str, Any]:
@@ -323,12 +367,16 @@ class FakeSim(SimBridge):
         eff = {"status": "OK" if status == "succeeded" else "UNVERIFIED", "verify_trust": 4 if status == "succeeded" else 1,
                "simulated": True, "metrics": {"t_exec_s": round((self.t_ns - call.t_accept_ns) / 1e9, 3), **metrics}}
         res = {"status": status, "code": code, "effect": eff, "op": call.op, "uav": call.uav, "t_sim_ns": self.t_ns}
-        self.results[call.cid] = res
         v.call = None
         self.emit(f"cmd.{status}", uav=call.uav, cid=call.cid, op=call.op, code=code, effect=eff)
-        fut = self._futs.pop(call.cid, None)
-        if fut is not None and not fut.done():
-            fut.set_result(res)
+
+        def deliver() -> None:
+            self.results[call.cid] = res
+            fut = self._futs.pop(call.cid, None)
+            if fut is not None and not fut.done():
+                fut.set_result(res)
+
+        self._later(deliver)
 
     def _apply(self, call: Call) -> None:
         v = self.vehicles[call.uav]

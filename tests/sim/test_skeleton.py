@@ -266,7 +266,7 @@ def test_takeoff_goto_land(h: Harness) -> None:
     # 幂等：同 cid 重发返回 duplicate 与终态
     dup = h.cmd("takeoff", {"alt_m": 5}, cid="c-takeoff")
     assert dup["status"] == "duplicate" and dup["call_state"]["status"] == "succeeded"
-    # D1-ext 未实现的命令：109
+    # 未装配 M09（兜底 FSM）时 escalate 无执行者：109
     esc = h.cmd("escalate", {"confirm_token": "x"})
     assert esc["code"] == int(Reason.BACKEND_UNSUPPORTED)
     # goto

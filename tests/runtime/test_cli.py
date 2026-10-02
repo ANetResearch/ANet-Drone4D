@@ -26,7 +26,7 @@ def awr(*args: str, env: dict | None = None, timeout: float = 60) -> subprocess.
 def _free_offset() -> int:
     import socket
 
-    for k in range(1, 9):
+    for k in (*range(1, 9), *range(10, 32)):  # 0–31，9 留给 CI 夹具（ADR-055）
         ok = True
         for port in (8000 + 10 * k, 7447 + 10 * k, 5173 + 10 * k):
             s = socket.socket()

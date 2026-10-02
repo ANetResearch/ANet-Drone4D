@@ -125,3 +125,57 @@ def test_wind_limit_ext() -> None:
     Env.w = np.array([5.0, 0.0, 0.0])
     r.rt.mg.step(r.ctx)
     assert not int(r.sb["cond"][0]) & (1 << 18)
+
+
+def test_fence_kernel_fast_path_equivalent(tiny_world, monkeypatch) -> None:
+    """MissionGuard._fence 的融合核快速路径（kernels.fence_core，FX2-R3，ADR-070）与原 numpy 实现等价：随机机体分布在
+    border、禁飞区、限制区、高楼附近与远处（含越界、越限、贴地、FLYING/CORRECTING/Velocity/起降豁免、各条件位与
+    near_ok_since 的组合），逐轮比较安全块全部字段与产生的安全事件。核判定"无事件"的轮次只走快速路径。"""
+    from safelib import UnitRig
+
+    from awr.sim.safety import kernels as KN
+    from awr.sim.safety.state import FS as FSE
+
+    if not KN.HAVE_NUMBA:
+        return
+    rng = np.random.default_rng(21)
+    fs_pool = [int(FSE.FLYING), int(FSE.FLYING), int(FSE.FLYING), int(FSE.CORRECTING), int(FSE.HOLD), int(FSE.RTL),
+               int(FSE.TAKING_OFF), int(FSE.LANDING)]
+    for rnd in range(212):
+        n = 40 if rnd < 12 else 1  # 后 200 轮单机随机状态：核判定"无事件"时必须与原实现逐字段相同（逐机覆盖判据）
+        xy = rng.uniform(-230.0, 230.0, (n, 2))
+        z = rng.uniform(1.0, 160.0, n)
+        fs = rng.choice(fs_pool, n)
+        sub = rng.integers(0, 4, n)
+        cond = rng.integers(0, 2, (n, 5))
+        if rnd % 3 == 0 and rnd < 12:  # 全部在内部开阔处、无事件（快速路径）
+            xy = rng.uniform(-60.0, -20.0, (n, 2))
+            z = rng.uniform(40.0, 90.0, n)
+            fs = rng.choice([int(FSE.FLYING), int(FSE.HOLD), int(FSE.RTL)], n)
+            sub = np.where(fs == int(FSE.FLYING), 0, rng.integers(0, 3, n))
+            cond[:] = 0
+        ns = np.where(rng.random(n) < 0.5, np.nan, rng.uniform(0.0, 5.0, n))
+        out = []
+        for use_nb in (False, True):
+            monkeypatch.setattr(KN, "HAVE_NUMBA", use_nb)
+            r = UnitRig(n=n, world=tiny_world)
+            r.ctx.tick = 1000
+            r.ctx.t_ns = 4_000_000_000
+            r.rt.begin(r.ctx)
+            for i in range(n):
+                r.set(i, int(fs[i]), int(sub[i]))
+                r.S.p[i] = enu_to_ned(np.array([xy[i, 0], xy[i, 1], z[i]]))
+                bits = 0
+                for j, b in enumerate((0, 1, 2, 3, 4)):
+                    bits |= int(cond[i, j]) << b
+                r.sb["cond"][i] = bits
+                r.sb["near_ok_since"][i] = ns[i]
+            r.S.touch()
+            r.rt.mg.step(r.ctx)
+            r.rt.sink.flush(r.ctx, r.S.ids)
+            out.append(({k: np.ascontiguousarray(v).tobytes() for k, v in r.sb.items()},
+                        [(e["kind"], e.get("uav"), e.get("code")) for e in r.ctx.events.items]))
+        monkeypatch.setattr(KN, "HAVE_NUMBA", True)
+        for k in out[0][0]:
+            assert out[0][0][k] == out[1][0][k], (rnd, k)
+        assert out[0][1] == out[1][1], rnd

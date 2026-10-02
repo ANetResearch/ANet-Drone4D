@@ -77,6 +77,7 @@ class FakeSim:
                                   "sensors": [{"sensor_no": 0, "name": "cam0", "kind": "camera"}] if sensors else [],
                                   "t_world_local": None, "caps_ref": "mock"})
         self.roster_version = 1
+        self.roster_delay_s = 0.0  # > 0：roster 回复延迟（FX-GW：回放 open 时实时 roster 查询在途的竞态）
         self.lock = threading.RLock()
         self.inbox: queue.SimpleQueue = queue.SimpleQueue()
         self.idem: dict[str, tuple[dict, Call | None]] = {}
@@ -222,8 +223,14 @@ class FakeSim:
             elif kind == "lease":
                 x.reply_msg(self._lease(x.msg()))
             elif kind == "roster":
-                x.reply_msg({"v": 1, "producer": PROD, "roster_version": self.roster_version, "id_base": 0,
-                             "id_count": 1024, "entries": [dict(v) for v in self.vehicles]})
+                rep = {"v": 1, "producer": PROD, "roster_version": self.roster_version, "id_base": 0,
+                       "id_count": 1024, "entries": [dict(v) for v in self.vehicles]}
+                if self.roster_delay_s > 0:
+                    t = threading.Timer(self.roster_delay_s, x.reply_msg, args=(rep,))
+                    t.daemon = True
+                    t.start()
+                else:
+                    x.reply_msg(rep)
             elif kind == "query":
                 m = x.msg() or {}
                 x.reply_msg({"v": 1, "wind_mps": [[1.0, 2.0, 0.0]] * len((m.get("args") or {}).get("points") or [])})
@@ -427,12 +434,53 @@ class FakeSupervisor:
         self.bus = LocalBus.open("supervisor", namespace=settings.namespace)
         self.events = EventPublisher(self.bus, "supervisor", 1)
         self.procs = {"sim-core": "RUNNING", "api": "RUNNING", "recorder": "RUNNING"}
+        self.proc_restarts: dict[str, int] = {}  # sys/procs 的 restarts（缺省 0；FX-GW 事件探测纪元用例）
         self.restarts: list[dict] = []
-        self.h = [self.bus.serve(bus_keys.SYS_PROCS, self._procs), self.bus.serve(bus_keys.SYS_RESTART, self._restart)]
+        # 按需进程（replay-worker）：worker_factory() 在 cold_start_s 之后构造替身（模拟冷启动：进程已拉起而 queryable 未声明）；
+        # sys/start 像真实 supervisor 一样在 spawn 后立即回复，进程在运行时回 105
+        self.worker_factory: Any = None
+        self.cold_start_s = 0.0
+        self.worker: Any = None
+        self.starts: list[dict] = []
+        self.stops: list[dict] = []
+        self.h = [self.bus.serve(bus_keys.SYS_PROCS, self._procs), self.bus.serve(bus_keys.SYS_RESTART, self._restart),
+                  self.bus.serve(bus_keys.SYS_START, self._start), self.bus.serve(bus_keys.SYS_STOP, self._stop)]
+        self._spawning = False
+        self._closed = False
+        self._timers: list[threading.Timer] = []
+
+    def _start(self, req: Any) -> None:
+        m = req.msg() or {}
+        self.starts.append(m)
+        if m.get("name") != "replay-worker" or self.worker_factory is None:
+            req.reply_msg({"v": 1, "cid": m.get("cid"), "status": "rejected", "code": 110})
+            return
+        if self.worker is not None or self._spawning:
+            req.reply_msg({"v": 1, "cid": m.get("cid"), "status": "rejected", "code": 105})
+            return
+        self._spawning = True
+
+        def spawn() -> None:
+            if not self._closed:
+                self.worker = self.worker_factory()
+            self._spawning = False
+
+        t = threading.Timer(self.cold_start_s, spawn)
+        t.daemon = True
+        self._timers.append(t)  # close() 取消未到期的拉起（不留游离的 replay-worker 替身占用 queryable）
+        t.start()
+        req.reply_msg({"v": 1, "cid": m.get("cid"), "status": "accepted", "code": 0, "pid": 4242})
+
+    def _stop(self, req: Any) -> None:
+        m = req.msg() or {}
+        self.stops.append(m)
+        req.reply_msg({"v": 1, "cid": m.get("cid"), "status": "accepted", "code": 0, "pid": 4242})
+        # 与真实 supervisor 一样停止进程；本替身保留进程（close 后空闲期内再次 open 走 105 分支）
 
     def _procs(self, req: Any) -> None:
         req.reply_msg({"v": 1, "run_id": "x", "t_wall_ns": time.time_ns(),
-                       "items": [{"name": n, "state": s, "pid": 1, "restarts": 0, "last_exit": None, "uptime_s": 1.0,
+                       "items": [{"name": n, "state": s, "pid": 1, "restarts": self.proc_restarts.get(n, 0),
+                                  "last_exit": None, "uptime_s": 1.0,
                                   "hb_age_ms": 1.0, "cpu_pct": 0.0, "rss_mb": 1.0, "on_demand": False}
                                  for n, s in self.procs.items()]})
 
@@ -450,6 +498,12 @@ class FakeSupervisor:
         self.events.flush()
 
     def close(self) -> None:
+        self._closed = True
+        for t in self._timers:
+            t.cancel()
+        if self.worker is not None:
+            self.worker.close()
+            self.worker = None
         for h in self.h:
             h.close()
         self.events.close()
@@ -552,12 +606,13 @@ class FakeReplayWorker:
     Lite32 n 行 + Full64 只含标记机 1 行），gen 写入环 segment 的时机在回复之后；seek 回复带 backfill 包（env、roster、
     state_ext、safety、missions、sensor）与新 gen。"""
 
-    def __init__(self, settings: Any, sim: FakeSim, *, reject_open: int = 0) -> None:
+    def __init__(self, settings: Any, sim: FakeSim, *, reject_open: int = 0, roster_prefix: str = "") -> None:
         from awr.runtime.statering import LocalRing as _LR
 
         self.settings = settings
         self.sim = sim
         self.reject_open = reject_open
+        self.roster_prefix = roster_prefix  # 非空：回放名册的机体 id 与实时不同（FX-GW：roster 竞态用例）
         self.ring_cls = _LR
         self.ring = None
         self.gen = 0
@@ -569,6 +624,7 @@ class FakeReplayWorker:
         self.h = [self.bus.serve(bus_keys.ctl_replay_worker(op), lambda r, op=op: self.inbox.put((op, r)))
                   for op in ("open", "seek", "play", "pause", "speed", "close")]
         self.h.append(self.bus.serve(bus_keys.ctl_roster("replay"), lambda r: self.inbox.put(("roster", r))))
+        self.h.append(self.bus.ready())  # 与真实 replay-worker 相同：全部 queryable 声明之后才 ready
         self.pending_segment: int | None = None
         self.stop_ev = threading.Event()
         self.thread = threading.Thread(target=self._loop, daemon=True)
@@ -610,7 +666,7 @@ class FakeReplayWorker:
         return {"env": msgpack.packb({"version": 1000 + self.gen, "epoch": 9, "t_ns": self.t_ns,
                                       "config": {"presets_sha256": PRESETS_SHA256}}, use_bin_type=True),
                 "roster": msgpack.packb({"v": 1, "producer": "replay", "roster_version": 7, "id_base": 0, "id_count": 1024,
-                                         "entries": [dict(v, producer="replay") for v in vs]}, use_bin_type=True),
+                                         "entries": self.entries()}, use_bin_type=True),
                 "clock": None,
                 "state_ext": msgpack.packb([[v["agent_no"], {"lifecycle": "READY", "replay_gen": self.gen}] for v in vs],
                                            use_bin_type=True),
@@ -618,11 +674,14 @@ class FakeReplayWorker:
                                                            use_bin_type=True)],
                 "sensor": msgpack.packb({"v": 1, "t_sim_ns": self.t_ns, "rows": rows.tobytes()}, use_bin_type=True)}
 
+    def entries(self) -> list[dict]:
+        return [dict(v, id=self.roster_prefix + v["id"], producer="replay") for v in self.sim.vehicles]
+
     def _handle(self, op: str, m: dict) -> dict:
         base = {"v": 1, "cid": m.get("cid"), "code": 0}
         if op == "roster":
             return {"v": 1, "producer": "replay", "roster_version": 7, "id_base": 0, "id_count": 1024,
-                    "entries": [dict(v, producer="replay") for v in self.sim.vehicles]}
+                    "entries": self.entries()}
         if op == "open":
             if self.reject_open:
                 return base | {"status": "rejected", "code": self.reject_open}

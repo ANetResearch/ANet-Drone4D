@@ -51,7 +51,7 @@ def test_lock_and_resume() -> None:
 
 def test_escalate_chain_unit() -> None:
     """M09-AC-024（ext，M09 侧）：FLYING → HOLD/ESCALATE → ELAND；间隔 < 2 s 拒绝；第 3 级默认关闭（105）。
-    M08 目前在第⑦步以 109 拒绝 escalate（D1_EXT），入口与确认令牌由 M08/M11 接通后端到端生效（见实现报告请求）。"""
+    经 CommandEngine 的端到端路径（确认令牌、apply 时调用 apply_operator）见 test_ext_wiring.py::test_escalate_end_to_end。"""
     from safelib import UnitRig
 
     from awr.contracts.enums import FlightState as FS

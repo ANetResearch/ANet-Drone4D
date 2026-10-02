@@ -116,3 +116,63 @@ def test_priority_order_in_thread_mode() -> None:
         pool.close()
     finally:
         os.environ.pop("AWR_PLAN_TEST_HOOKS", None)
+
+
+def test_worker_cpus_avoids_parent_pinning() -> None:
+    """worker 避开 sim-core 所钉的核（FX2-R3，ADR-070）：父进程钉单核时取其余核；父进程未钉核时保持继承。"""
+    from awr.sim.planning.worker import worker_cpus
+
+    assert worker_cpus((1,), 8) == {0, 2, 3, 4, 5, 6, 7}
+    assert worker_cpus(tuple(range(8)), 8) is None
+    assert worker_cpus(None, 8) is None
+    assert worker_cpus((0,), 1) is None
+
+
+def test_init_worker_exits_when_parent_already_gone() -> None:
+    """孤儿竞态（D1 验收第 2 轮 4.1b）：父进程在 worker 设置 PDEATHSIG 之前已死亡时，worker 的父进程 pid 已变化，init_worker
+    立即退出，而不是常驻。这里以"给出一个不是父进程的 pid"模拟。"""
+    import subprocess
+    import sys
+
+    code = ("import os\nfrom awr.sim.planning.worker import init_worker\n"
+            "init_worker(None, None, None, os.getppid() + 1, None)\nprint('alive')\n")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0 and "alive" not in r.stdout, (r.returncode, r.stdout, r.stderr)
+    code_ok = ("import os\nfrom awr.sim.planning.worker import init_worker\n"
+               "init_worker(None, None, None, os.getppid(), None)\nprint('alive')\n")
+    r = subprocess.run([sys.executable, "-c", code_ok], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0 and "alive" in r.stdout, (r.returncode, r.stdout, r.stderr)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not hasattr(os, "sched_setaffinity"), reason="needs sched_setaffinity")
+def test_process_worker_not_on_parent_cpu() -> None:
+    """进程模式：父进程钉在单核时，worker 的亲和性不含该核。"""
+    if (os.cpu_count() or 1) < 2:
+        pytest.skip("single cpu")
+    import subprocess
+    import sys
+
+    code = (
+        "import os, time\n"
+        "os.sched_setaffinity(0, {0})\n"
+        "import numpy as np\n"
+        "from awr.sim.planning.jobs import PlanRequest\n"
+        "from awr.sim.planning.pool import PlanPoolClient\n"
+        "pool = PlanPoolClient(None, mode='process')\n"
+        "pl = {'polyline': np.array([[0, 0, 10.0], [1, 0, 10.0]])}\n"
+        "got = []\n"
+        "pool.submit(PlanRequest('a', 'path_valid', None, (), pl, {}, 1, 0, 100, 'k'), lambda r, t: got.append(r))\n"
+        "t_end = time.monotonic() + 60\n"
+        "while not got and time.monotonic() < t_end:\n"
+        "    pool.drain(1); time.sleep(0.01)\n"
+        "pids = [p.pid for p in pool._exec._processes.values()]\n"
+        "print(sorted(os.sched_getaffinity(pids[0])))\n"
+        "pool.close()\n"
+    )
+    import ast
+
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    cpus = ast.literal_eval(r.stdout.strip().splitlines()[-1])
+    assert cpus and 0 not in cpus, cpus

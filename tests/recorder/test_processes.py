@@ -77,42 +77,6 @@ def sup(tmp_path_factory: pytest.TempPathFactory):
     logf.close()
 
 
-def _direct_replay(sup, run_id: str) -> None:
-    import threading
-
-    from awr.contracts import bus_keys
-    from awr.runtime.bus import ZenohBus
-
-    b = ZenohBus.open("m12-test", namespace=bus_keys.namespace("shenzhen", run_id), connect=[f"tcp/127.0.0.1:{sup.bus_port}"])
-    try:
-        end = time.monotonic() + 30
-        while not b.alive(bus_keys.proc_ready("replay-worker")) and time.monotonic() < end:
-            time.sleep(0.2)
-        assert b.alive(bus_keys.proc_ready("replay-worker")), "replay-worker not ready"
-
-        def call(op: str, msg: dict) -> dict:
-            ev = threading.Event()
-            box: dict = {}
-
-            def done(rep, err) -> None:
-                box["rep"], box["err"] = rep, err
-                ev.set()
-
-            b.call_cb(bus_keys.ctl_replay_worker(op), {"v": 1, "cid": f"t-{op}", **msg}, done, timeout=5.0)
-            assert ev.wait(15), op
-            assert box["err"] is None, box
-            return box["rep"]
-
-        rep = call("open", {"run": run_id, "segment": 0})
-        assert rep["status"] == "accepted" and rep["data_end_ns"] > rep["data_start_ns"], rep
-        mid = (rep["data_start_ns"] + rep["data_end_ns"]) // 2
-        sk = call("seek", {"t_ns": int(mid)})
-        assert sk["status"] == "accepted" and sk["gen"] == 2 and sk["t_sample_ns"] <= mid
-        assert call("close", {})["state"] == "idle"
-    finally:
-        b.close()
-
-
 def test_record_then_replay_with_real_processes(sup) -> None:
     tok = rtc.token(sup.base, "operator", rtc.hint_of("m12procs"))
     run_id = tok["run_id"]
@@ -152,16 +116,19 @@ def test_record_then_replay_with_real_processes(sup) -> None:
         await c.send({"op": "playback", "cmd": "open", "run": run_id, "segment": 0, "request_id": "po"})
         _, pb = await c.until(lambda k, x: k == "json" and x["op"] == "playbackState" and x.get("request_id") == "po"
                               and x["status"] in ("paused", "error"), 40)
-        if pb["status"] != "paused":
-            # 已知网关竞态（请求 M12-to-M11）：sys/start 之后没有等待 replay-worker 就绪就调用 open（213）；此时 replay-worker
-            # 进程已由 supervisor 拉起：以测试总线直接验证真实进程的 ctl/replay-worker/{open,seek,close}
-            assert pb.get("code") == 213, pb
-            _direct_replay(sup, run_id)
-            await c.ws.close()
-            return
+        # FX-GW：网关在 sys/start 之后等待 proc/replay-worker/ready 再 open（此前冷启动期间稳定 213）
+        assert pb["status"] == "paused", pb
         mid = (pb["dataStart_ns"] + pb["dataEnd_ns"]) // 2
+        e_open = pb["epoch"]
         await c.send({"op": "playback", "cmd": "seek", "seek_ns": int(mid), "request_id": "ps"})
-        await c.until(lambda k, x: k == "batch" and x.header.flags & F.BATCH_REPLAY and x.header.flags & F.BATCH_SNAPSHOT, 10)
+        # playback 命令串行（17 §6.11）：等本次 seek 的终态 did_seek 与新纪元的 SNAPSHOT，再发 close（否则 busy 105）
+        await c.until(lambda k, x: k == "json" and x["op"] == "playbackState" and x.get("request_id") == "ps"
+                      and (x.get("did_seek") or x["status"] == "error"), 15)
+        assert [m for m in c.texts if m["op"] == "playbackState" and m.get("request_id") == "ps"][-1].get("did_seek")
+        await c.until(lambda k, x: k == "batch" and x.header.flags & F.BATCH_REPLAY and x.header.flags & F.BATCH_SNAPSHOT
+                      and x.header.epoch != e_open, 10)
+        # 回放名册来自 replay-worker（open 时在途的实时 roster 回复被丢弃，FX-GW）
+        assert any(ch["topic"].startswith("uav/") and ch["topic"].endswith("/state") for ch in c.channels.values())
         await c.send({"op": "playback", "cmd": "close", "request_id": "pc"})
         await c.until(lambda k, x: k == "json" and x["op"] == "serverInfo" and x["mode"] == "live", 20)
         await c.ws.close()

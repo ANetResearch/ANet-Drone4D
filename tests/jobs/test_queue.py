@@ -49,7 +49,7 @@ def test_claim_cancel_and_crash_marking(q):
     q.update(j["job_id"], worker_pid=2**22 + 12345)                  # 不存在的进程
     assert q.mark_crashed() == 1
     row = q.get(j["job_id"])
-    assert row["state"] == "FAILED" and row["resumable"] == 1 and json.loads(row["error_json"])["code"] == "WORKER_CRASHED"
+    assert row["state"] == "FAILED" and row["resumable"] == 1 and json.loads(row["error_json"])["code"] == 344
 
 
 def test_world_build_registered():

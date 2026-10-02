@@ -148,33 +148,49 @@ def test_gcs_beacon_and_seat_grace(st) -> None:
     st.call_in_loop(setattr, st.gw, "seat_grace_s", 1.0)
     tok = rtc.token(st.base, "operator", hint)
 
+    async def poll(cond, timeout: float, cl: rtc.Client | None = None) -> bool:
+        # 负载敏感（INT-1 §7.11）：固定等待改为按条件轮询，上限只防挂死
+        end = time.monotonic() + timeout
+        while not cond():
+            if time.monotonic() > end:
+                return False
+            if cl is not None:
+                await cl.drain(0.05)
+            else:
+                await asyncio.sleep(0.05)
+        return True
+
     async def run() -> None:
         c = await rtc.open_client(st, tok["token"])
         n0 = len(st.sim.gcs)
+        t0 = time.monotonic()
         for _ in range(4):
             await c.send({"op": "ping", "t": 1.0, "srttMs": 1.0})
             await c.drain(0.25)
+        assert await poll(lambda: len(st.sim.gcs) - n0 >= 3, 5.0, c)  # 5 Hz：约 1 s 内 5 条
         beacons = st.sim.gcs[n0:]
-        assert 3 <= len(beacons) <= 8  # 5 Hz
+        assert len(beacons) <= 5 * (time.monotonic() - t0) + 3  # 不超过 5 Hz（加边界余量）
         b = beacons[-1]
         assert rtc.schema_errors("bus/gcs.schema.json", b) == []
-        assert b["principal_id"] == tok["principal_id"] and b["seat_state"] == "HELD" and b["ping_age_ms"] < 400
+        assert b["principal_id"] == tok["principal_id"] and b["seat_state"] == "HELD"
+        assert min(x["ping_age_ms"] for x in beacons) < 400
         assert [x["seq"] for x in beacons] == sorted(x["seq"] for x in beacons)
         await c.ws.close()
-        await asyncio.sleep(0.6)
-        g = st.sim.gcs[-1]
-        assert g["seat_state"] == "GRACE" and g["ping_age_ms"] >= 500  # 连接全部关闭后继续增长
+        # 连接全部关闭 → GRACE，ping 年龄继续增长
+        assert await poll(lambda: st.sim.gcs[-1]["seat_state"] == "GRACE" and st.sim.gcs[-1]["ping_age_ms"] >= 500, 5.0)
         r = httpx.post(f"{st.base}/api/auth/token", json={"role": "operator", "principal_hint": rtc.hint_of("other")},
                        timeout=5)
         assert r.status_code == 409 and r.json()["code"] == 116
+        # 宽限期（1 s）在负载下可能先到期：宽限内重连才断言 seat_resume
+        st.call_in_loop(setattr, st.gw, "seat_grace_s", 30.0)
         c2 = await rtc.open_client(st, tok["token"])  # 宽限内重连 → seat_resume
-        await c2.drain(0.2)
-        assert any(op["op"] == "seat_resume" for op in st.sim.lease_ops)
-        assert st.sim.gcs[-1]["seat_state"] == "HELD"
+        assert await poll(lambda: any(op["op"] == "seat_resume" for op in st.sim.lease_ops), 5.0, c2)
+        assert await poll(lambda: st.sim.gcs[-1]["seat_state"] == "HELD", 5.0, c2)
+        st.call_in_loop(setattr, st.gw, "seat_grace_s", 1.0)
         await c2.ws.close()
-        await asyncio.sleep(1.5)  # 宽限到期 → FREE
-        assert st.sim.seat["holder"] is None and st.sim.gcs[-1]["principal_id"] is None
-        assert st.sim.gcs[-1]["ping_age_ms"] == 0
+        # 宽限到期 → FREE
+        assert await poll(lambda: st.sim.seat["holder"] is None, 10.0)
+        assert await poll(lambda: st.sim.gcs[-1]["principal_id"] is None and st.sim.gcs[-1]["ping_age_ms"] == 0, 5.0)
 
     asyncio.run(run())
 
@@ -184,12 +200,15 @@ def test_unconnected_holder_enters_grace(st) -> None:
     st.call_in_loop(setattr, st.gw, "seat_grace_s", 0.3)
     tok = rtc.token(st.base, "operator", rtc.hint_of("unconnected"))
     assert tok["seat"] == "held"
+    n0 = len(st.sim.lease_ops)
     t0 = time.monotonic()
-    while st.sim.seat["holder"] is not None and time.monotonic() - t0 < 3:
+    # 按条件轮询（INT-1 §7.11）：0.3 s 未连接 → 宽限 0.3 s → 到期；负载下只放宽上限
+    while (st.sim.seat["holder"] is not None or "seat_expire" not in [op["op"] for op in st.sim.lease_ops[n0:]]) \
+            and time.monotonic() - t0 < 15:
         time.sleep(0.05)
     assert st.sim.seat["holder"] is None
-    ops = [op["op"] for op in st.sim.lease_ops[-3:]]
-    assert "seat_grace" in ops and "seat_expire" in ops
+    ops = [op["op"] for op in st.sim.lease_ops[n0:]]
+    assert "seat_grace" in ops and "seat_expire" in ops and ops.index("seat_grace") < ops.index("seat_expire")
 
 
 def test_path_blob_and_agent_topics(st) -> None:

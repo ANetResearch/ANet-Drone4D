@@ -95,6 +95,26 @@ def test_schema_every_profile(sid: str, profile: str | None) -> None:
         assert d["record"] is False                                                          # 16 §12.2
 
 
+@pytest.mark.parametrize("sid,profile", list(all_variants()))
+def test_orbit_params_pass_command_validation(sid: str, profile: str | None) -> None:
+    """剧本生成的 orbit 参数满足 sim-core 的命令校验（AWR-12 §5.3；M08 `CommandEngine` orbit 行）：radius ∈ [1, 1000]、
+    speed ∈ (0, 12] 且 speed²/radius ≤ MPC_ACC_HOR、turns ∈ [0, 100]。此前 soak 的 120 圈使 200 架的 orbit 全部以 110 被拒
+    （FX2-R3-gateway 8.1）。"""
+    from awr.sim.fleet import params_px4 as P
+
+    d = merged(DOCS[sid], profile)
+    _, missions = expand_vehicle_sets(d)
+    for m in missions:
+        if m.get("generator") != "orbit":
+            continue
+        p = m["params"]
+        r, sp, tr = float(p.get("radius_m", 0)), p.get("speed_mps"), p.get("turns", 0)
+        assert 1.0 <= r <= 1000.0, (m["mission_id"], r)
+        assert tr is None or 0 <= float(tr) <= 100, (m["mission_id"], tr)
+        if sp is not None:
+            assert 0 < float(sp) <= 12 and float(sp) ** 2 / r <= P.MPC_ACC_HOR + 1e-9, (m["mission_id"], sp, r)
+
+
 def test_names_and_determinism_fields() -> None:
     names = {}
     for sid, d in DOCS.items():
@@ -149,9 +169,9 @@ def test_s1_parameters_match_awr12_7_2() -> None:
     assert merged(d, "demo")["on_complete"] == "continue"
 
 
-LADDER_TABLE = {   # M16 §6.4.8：N → (每层机数, 每层列数, L0 起点)
-    10: ([3, 3, 2, 2], 2, (-393, 2)), 50: ([13, 13, 12, 12], 4, (-417, -22)), 100: ([25] * 4, 5, (-429, -34)),
-    200: ([50] * 4, 8, (-465, -58)), 500: ([125] * 4, 12, (-513, -106)), 1000: ([250] * 4, 16, (-561, -166)),
+LADDER_TABLE = {   # M16 §6.4.8（ADR-062）：N → (每层机数, 每层列数, L0 起点)
+    10: ([3, 3, 2, 2], 2, (-405, -10)), 50: ([13, 13, 12, 12], 4, (-445, -50)), 100: ([25] * 4, 5, (-465, -70)),
+    200: ([50] * 4, 8, (-585, -110)), 500: ([125] * 4, 12, (-740, -190)), 1000: ([250] * 4, 16, (-815, -355)),
 }
 
 
@@ -161,23 +181,33 @@ def test_ladder_layout_table(n: int) -> None:
     counts, cols, (x0, y0) = LADDER_TABLE[n]
     sets = d["vehicle_sets"]
     assert [s["count"] for s in sets] == counts and all(s["layout"]["cols"] == cols for s in sets)
-    offs = [(0, 0), (12, 0), (0, 12), (12, 12)]
+    offs = [(0, 0), (20, 0), (0, 20), (20, 20)]                                              # 20 m 交错格网（ADR-062）
     for L, s in enumerate(sets):
-        assert s["layout"]["origin_enu_m"][:2] == [x0 + offs[L][0], y0 + offs[L][1]]
+        assert s["layout"]["origin_enu_m"][:2] == [x0 + offs[L][0], y0 + offs[L][1]] and s["layout"]["spacing_m"] == 40
         assert s["mission"]["start"]["at_s"] == 15 - 5 * L                                    # 高层先飞
-        assert s["mission"]["params"]["agl_m"] == 60 + 15 * L and s["mission"]["params"]["radius_m"] == 3
+        p = s["mission"]["params"]
+        assert p["agl_m"] == 60 + 15 * L and p["radius_m"] == 3 and p["speed_mps"] == 1.2   # V-SC-15：v/R 22.9°/s
     v, _ = expand_vehicle_sets(d)
     assert len(v) == n and v[0]["vehicle_id"] == "sim-0001" and v[-1]["vehicle_id"] == f"sim-{n:04d}"
-    assert d["events"][0]["args"]["label"] == "ladder.steady" and d["events"][0]["when"]["value"] == 45
+    # 稳态标记：n10–n200 为 45 s，n500、n1000 为 75、110 s（全体入圆之后，ADR-070）
+    assert d["events"][0]["args"]["label"] == "ladder.steady"
+    assert d["events"][0]["when"]["value"] == {500: 75, 1000: 110}.get(n, 45) == A.LADDER_STEADY_S.get(n, 45)
 
 
 @pytest.mark.parametrize("n", sorted(LADDER_TABLE))
 def test_ladder_constructed_separation(n: int) -> None:
-    """SCN-E002：M16 §6.4.8 的阶段构造值（地面起飞的理想口径）：离地后任意阶段 ≥ 16.2 m，错时爬升 19.2 m。"""
-    r = GEO.ladder_min_separation(merged(DOCS["ladder-shenzhen"], f"n{n}")["vehicle_sets"])
-    assert r["ground"] == pytest.approx(12.0)
-    assert r["climb"] == pytest.approx(19.2, abs=0.05)
-    assert r["entry"] >= 16.15 and r["orbit"] >= 16.15 and r["any_phase"] >= 16.15
+    """SCN-E002：M16 §6.4.8 的阶段构造值（地面起飞的理想口径，ADR-062）：出生点两两 ≥ 20 m；错时爬升 25 m；入圆与环绕
+    ≥ 20.5 m。另以加载器 V-SC-14 的时序无关几何下界（竖直段与绕飞圆，错时失效时仍成立）复核：≥ 17 m ≥ 谓词 14 m。"""
+    from awr.sim.mission.scenario_loader import set_separation_violation
+
+    d = merged(DOCS["ladder-shenzhen"], f"n{n}")
+    r = GEO.ladder_min_separation(d["vehicle_sets"])
+    assert r["ground"] == pytest.approx(20.0)
+    assert r["climb"] == pytest.approx(25.0, abs=0.05)
+    assert r["entry"] >= 20.5 and r["orbit"] >= 20.5 and r["any_phase"] >= 20.5
+    v, m = expand_vehicle_sets(d)
+    assert set_separation_violation(v, m, 17.0) is None                                      # 20 − 3 m 的构造下界
+    assert set_separation_violation(v, m, 17.5) is not None
 
 
 def test_ladder_x500_profile() -> None:
@@ -196,11 +226,14 @@ def test_free_scenarios() -> None:
 
 
 def test_soak_composition_and_separation() -> None:
-    """§7.3.4：S1 两机、任务与事件原样保留，另加 ladder n200（x500、200 圈）；两组最小水平距离约 52 m。"""
+    """§7.3.4：S1 两机、任务与事件原样保留，另加 ladder n200（x500、100 圈、1.0 m/s）；两组最小水平距离约 52 m。"""
     soak, s1 = DOCS["soak-shenzhen"], DOCS["s1-shenzhen-facade"]
     assert soak["vehicles"] == s1["vehicles"] and soak["missions"] == s1["missions"] and soak["events"] == s1["events"]
     assert {s["profile_id"] for s in soak["vehicle_sets"]} == {"x500"}
-    assert all(s["mission"]["params"]["turns"] == 200 for s in soak["vehicle_sets"])
+    for s in soak["vehicle_sets"]:                                                            # orbit turns ≤ 100（AWR-12 §5.3）
+        p = s["mission"]["params"]
+        assert p["turns"] == 100 and p["speed_mps"] == 1.0
+        assert 2 * math.pi * p["radius_m"] * p["turns"] / p["speed_mps"] >= 1800.0              # 覆盖 30 min soak
     assert soak["time_limit_s"] == 2400 and soak["on_complete"] == "continue"
     v, _ = expand_vehicle_sets(soak)
     lad = np.array([x["home_enu_m"][:2] for x in v if x["vehicle_id"].startswith("sim-")], float)

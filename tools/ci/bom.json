@@ -1,0 +1,1589 @@
+{
+ "schemaVersion": "awr.bom.v1",
+ "generatedFrom": "AWR-11 v1.0（§3.2、§3.4、§4、§9.1、附录 A）",
+ "collectedAt": "2026-09-28",
+ "items": [
+  {
+   "id": "T01",
+   "upstream": "vitejs/vite",
+   "ecosystem": "npm",
+   "name": "@vitejs/plugin-react",
+   "version": "6.1.1",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "构建配置只放在 apps/web/vite.config.ts；Rolldown 回归时退到 Vite previous 标签 7.3.6，应用代码零改动（AWR-11 §4.1）",
+   "stars": 83062,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T01",
+   "upstream": "vitejs/vite",
+   "ecosystem": "npm",
+   "name": "vite",
+   "version": "8.3.1",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "构建配置只放在 apps/web/vite.config.ts；Rolldown 回归时退到 Vite previous 标签 7.3.6，应用代码零改动（AWR-11 §4.1）",
+   "stars": 83062,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "deviation": "未选 Next.js（142,847）：纯 SPA 不需要 SSR",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T02",
+   "upstream": "microsoft/TypeScript",
+   "ecosystem": "npm",
+   "name": "typescript",
+   "version": "7.0.2",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "需要 TS 编程 API 时经 @typescript/typescript6@6.0.2 别名引入，类型检查仍用 7.0.2 的 tsc；7.1 补上 API 后重新评估（§4.2，U-03）",
+   "stars": 111253,
+   "lastCommit": "2026-09-25",
+   "new2026": "capability",
+   "status": "WATCH"
+  },
+  {
+   "id": "T03",
+   "upstream": "oxc-project/oxc",
+   "ecosystem": "npm",
+   "name": "oxc-parser",
+   "version": "0.151.0",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "规则集写在 apps/web/.oxlintrc.json 与 pyproject.toml，版本随锁文件固定，升级走单独 PR（§4.2）",
+   "stars": 22904,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T03",
+   "upstream": "oxc-project/oxc",
+   "ecosystem": "npm",
+   "name": "oxlint",
+   "version": "1.86.0",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "规则集写在 apps/web/.oxlintrc.json 与 pyproject.toml，版本随锁文件固定，升级走单独 PR（§4.2）",
+   "stars": 22904,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "deviation": "未选 ESLint（27,522）+ typescript-eslint（16,403）：peer 要求 TS < 6.1，与 TS 7 ERESOLVE",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T03",
+   "upstream": "oxc-project/tsgolint",
+   "ecosystem": "npm",
+   "name": "oxlint-tsgolint",
+   "version": "7.0.2003",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "规则集写在 apps/web/.oxlintrc.json 与 pyproject.toml，版本随锁文件固定，升级走单独 PR（§4.2）",
+   "stars": 1446,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T04",
+   "upstream": "prettier/prettier",
+   "ecosystem": "npm",
+   "name": "prettier",
+   "version": "3.9.9",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "规则集写在 apps/web/.oxlintrc.json 与 pyproject.toml，版本随锁文件固定，升级走单独 PR（§4.2）",
+   "stars": 52317,
+   "lastCommit": "2026-09-24",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T04",
+   "upstream": "prettier/prettier",
+   "ecosystem": "npm",
+   "name": "prettier-plugin-tailwindcss",
+   "version": "0.8.1",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "规则集写在 apps/web/.oxlintrc.json 与 pyproject.toml，版本随锁文件固定，升级走单独 PR（§4.2）",
+   "stars": 52317,
+   "lastCommit": "2026-09-24",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T05",
+   "upstream": "facebook/react",
+   "ecosystem": "npm",
+   "name": "react",
+   "version": "19.3.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/app/**",
+    "apps/web/src/ui/**",
+    "apps/web/src/viewport/**",
+    "apps/web/src/stores/**",
+    "apps/web/src/lib/**",
+    "apps/web/src/main.tsx"
+   ],
+   "fallback": "store 形状由领域模块定义，面板只经 use<Domain> hook 读取，换库只改 stores 与 hook 层（§4.7）",
+   "stars": 250798,
+   "lastCommit": "2026-09-22",
+   "new2026": "capability",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T05",
+   "upstream": "facebook/react",
+   "ecosystem": "npm",
+   "name": "react-dom",
+   "version": "19.3.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/app/**",
+    "apps/web/src/ui/**",
+    "apps/web/src/viewport/**",
+    "apps/web/src/stores/**",
+    "apps/web/src/lib/**",
+    "apps/web/src/main.tsx"
+   ],
+   "fallback": "store 形状由领域模块定义，面板只经 use<Domain> hook 读取，换库只改 stores 与 hook 层（§4.7）",
+   "stars": 250798,
+   "lastCommit": "2026-09-22",
+   "new2026": "capability",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T06",
+   "upstream": "tailwindlabs/tailwindcss",
+   "ecosystem": "npm",
+   "name": "@tailwindcss/vite",
+   "version": "4.3.3",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "构建配置只放在 apps/web/vite.config.ts；Rolldown 回归时退到 Vite previous 标签 7.3.6，应用代码零改动（AWR-11 §4.1）",
+   "stars": 97728,
+   "lastCommit": "2026-09-25",
+   "new2026": "capability",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T06",
+   "upstream": "tailwindlabs/tailwindcss",
+   "ecosystem": "npm",
+   "name": "tailwindcss",
+   "version": "4.3.3",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "构建配置只放在 apps/web/vite.config.ts；Rolldown 回归时退到 Vite previous 标签 7.3.6，应用代码零改动（AWR-11 §4.1）",
+   "stars": 97728,
+   "lastCommit": "2026-09-25",
+   "new2026": "capability",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T07",
+   "upstream": "shadcn-ui/ui",
+   "ecosystem": "npm",
+   "name": "shadcn",
+   "version": "4.21.0",
+   "scope": "tool",
+   "d1": "core",
+   "fallback": "codemod 与补丁全部在 tools/shadcn/（可重放）；切换基座时只重生成 ui/components/ui（§4.3）",
+   "stars": 124753,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T08",
+   "upstream": "mui/base-ui",
+   "ecosystem": "npm",
+   "name": "@base-ui/react",
+   "version": "1.8.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/ui/components/ui/**"
+   ],
+   "fallback": "codemod 与补丁全部在 tools/shadcn/（可重放）；切换基座时只重生成 ui/components/ui（§4.3）",
+   "stars": 11015,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "deviation": "未选 Radix（19,341）：shadcn 4.13 起默认 Base UI，卸载等待 transition 已实测",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T09",
+   "upstream": "fontsource/fontsource",
+   "ecosystem": "npm",
+   "name": "@fontsource-variable/inter",
+   "version": "5.3.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/styles/**"
+   ],
+   "fallback": "字体经 styles 本地托管，替换字体包只改 styles 入口（§4.3）",
+   "stars": 6148,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T09",
+   "upstream": "fontsource/fontsource",
+   "ecosystem": "npm",
+   "name": "@fontsource-variable/jetbrains-mono",
+   "version": "5.3.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/styles/**"
+   ],
+   "fallback": "字体经 styles 本地托管，替换字体包只改 styles 入口（§4.3）",
+   "stars": 6148,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T09",
+   "upstream": "joe-bell/cva",
+   "ecosystem": "npm",
+   "name": "class-variance-authority",
+   "version": "0.7.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/ui/components/ui/**"
+   ],
+   "fallback": "codemod 与补丁全部在 tools/shadcn/（可重放）；切换基座时只重生成 ui/components/ui（§4.3）",
+   "stars": 6902,
+   "lastCommit": "2026-09-27",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T09",
+   "upstream": "pacocoursey/cmdk",
+   "ecosystem": "npm",
+   "name": "cmdk",
+   "version": "1.1.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/ui/components/ui/**"
+   ],
+   "fallback": "codemod 与补丁全部在 tools/shadcn/（可重放）；切换基座时只重生成 ui/components/ui（§4.3）",
+   "stars": 12993,
+   "lastCommit": "2025-10-29",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T09",
+   "upstream": "shadcn-ui/cn",
+   "ecosystem": "npm",
+   "name": "cn",
+   "version": "0.4.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/lib/**"
+   ],
+   "fallback": "codemod 与补丁全部在 tools/shadcn/（可重放）；切换基座时只重生成 ui/components/ui（§4.3）",
+   "stars": 1604,
+   "lastCommit": "2026-09-28",
+   "new2026": "yes",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T09",
+   "upstream": "bvaughn/react-resizable-panels",
+   "ecosystem": "npm",
+   "name": "react-resizable-panels",
+   "version": "4.14.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/ui/components/ui/**",
+    "apps/web/src/ui/layout/**"
+   ],
+   "fallback": "codemod 与补丁全部在 tools/shadcn/（可重放）；切换基座时只重生成 ui/components/ui（§4.3）",
+   "stars": 5379,
+   "lastCommit": "2026-09-27",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T09",
+   "upstream": "Wombosvideo/tw-animate-css",
+   "ecosystem": "npm",
+   "name": "tw-animate-css",
+   "version": "1.4.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/styles/**"
+   ],
+   "fallback": "codemod 与补丁全部在 tools/shadcn/（可重放）；切换基座时只重生成 ui/components/ui（§4.3）",
+   "stars": 807,
+   "lastCommit": "2026-02-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T10",
+   "upstream": "TanStack/table",
+   "ecosystem": "npm",
+   "name": "@tanstack/react-table",
+   "version": "9.2.4",
+   "scope": "runtime",
+   "d1": "ext",
+   "adapterBoundary": [
+    "apps/web/src/ui/**"
+   ],
+   "fallback": "store 形状由领域模块定义，面板只经 use<Domain> hook 读取，换库只改 stores 与 hook 层（§4.7）",
+   "stars": 28463,
+   "lastCommit": "2026-09-16",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T10",
+   "upstream": "TanStack/virtual",
+   "ecosystem": "npm",
+   "name": "@tanstack/react-virtual",
+   "version": "3.14.13",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/ui/**"
+   ],
+   "fallback": "store 形状由领域模块定义，面板只经 use<Domain> hook 读取，换库只改 stores 与 hook 层（§4.7）",
+   "stars": 7125,
+   "lastCommit": "2026-09-14",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T11",
+   "upstream": "mrdoob/three.js",
+   "ecosystem": "npm",
+   "name": "three",
+   "version": "0.186.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/viewport/**",
+    "apps/web/src/engine/**"
+   ],
+   "fallback": "锁定版本；handler 被移除时启用私有点径补丁（X13），升级单独 PR 并跑 D1-AC-14 与 flight60（§4.4、§4.5，U-04）",
+   "stars": 116014,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "status": "WATCH"
+  },
+  {
+   "id": "T12",
+   "upstream": "pmndrs/react-three-fiber",
+   "ecosystem": "npm",
+   "name": "@react-three/fiber",
+   "version": "9.8.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/viewport/**"
+   ],
+   "fallback": "loop.ts 的相位语义与 @pmndrs/scheduler 一致，迁移 R3F v10 只替换 loop 实现（§4.4，U-01）",
+   "stars": 32586,
+   "lastCommit": "2026-09-27",
+   "new2026": "no",
+   "deviation": "未选 2026 的 v10 alpha：peer react <19.3，alpha 阶段",
+   "status": "WATCH"
+  },
+  {
+   "id": "T13",
+   "upstream": "pmndrs/drei",
+   "ecosystem": "npm",
+   "name": "@react-three/drei",
+   "version": "10.7.9",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/viewport/**"
+   ],
+   "fallback": "loop.ts 的相位语义与 @pmndrs/scheduler 一致，迁移 R3F v10 只替换 loop 实现（§4.4，U-01）",
+   "stars": 9902,
+   "lastCommit": "2026-09-25",
+   "new2026": "no",
+   "deviation": "未选 v11 alpha：peer react <19.3；白名单不含 AdaptiveDpr、PerformanceMonitor、CameraControls",
+   "status": "WATCH"
+  },
+  {
+   "id": "T15",
+   "upstream": "mrdoob/three.js",
+   "ecosystem": "self",
+   "name": "AnetNodesHandler",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/viewport/anetNodesHandler.ts",
+    "apps/web/src/viewport/backend/**"
+   ],
+   "fallback": "RenderBackend 接口是唯一适配边界；three 移除 handler 时退到私有补丁（X13）并锁定 three（§4.5）",
+   "stars": 116014,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "deviation": "未把 2026 主推的 WebGPURenderer 设为默认：软件档固定开销 34–42 ms，点恒 1 px",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T18",
+   "upstream": "pmndrs/scheduler",
+   "ecosystem": "self",
+   "name": "engine/loop.ts",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/engine/loop.ts"
+   ],
+   "fallback": "loop.ts 的相位语义与 @pmndrs/scheduler 一致，迁移 R3F v10 只替换 loop 实现（§4.4，U-01）",
+   "stars": 8,
+   "lastCommit": "2026-09-27",
+   "new2026": "yes",
+   "deviation": "未采用 scheduler 0.2.0：缺 fixed step、8 star；V0.3 随 R3F v10 迁移",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T19",
+   "upstream": "voxelkloud/react",
+   "ecosystem": "npm",
+   "name": "@voxelkloud/react",
+   "version": "0.6.0",
+   "scope": "dev",
+   "d1": "ext",
+   "adapterBoundary": [
+    "apps/web/dev/oracles/**"
+   ],
+   "fallback": "选择器、控制器、池、格式四层接口分离，io/ 可换为 3DTilesRendererJS 的读取而不动选择器（§4.6，U-09）",
+   "stars": 0,
+   "lastCommit": "2026-09-24",
+   "new2026": "yes",
+   "deviation": "0 star 仍作 dev 对照：契合度与源码质量最高；peer three ^0.180.0 经根 overrides（§3.5）",
+   "status": "WATCH"
+  },
+  {
+   "id": "T19",
+   "upstream": "voxelkloud/core",
+   "ecosystem": "self",
+   "name": "PointCloudEngine",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/engine/pointcloud/**"
+   ],
+   "fallback": "选择器、控制器、池、格式四层接口分离，io/ 可换为 3DTilesRendererJS 的读取而不动选择器（§4.6，U-09）",
+   "stars": 0,
+   "lastCommit": "2026-09-24",
+   "new2026": "yes",
+   "deviation": "voxelkloud 0 star 仍列首位：契合度与源码质量最高；按 H6 只 port",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T19",
+   "upstream": "tentone/potree-core",
+   "ecosystem": "npm",
+   "name": "potree-core",
+   "version": "2.0.15",
+   "scope": "dev",
+   "d1": "ext",
+   "adapterBoundary": [
+    "apps/web/dev/oracles/**"
+   ],
+   "fallback": "选择器、控制器、池、格式四层接口分离，io/ 可换为 3DTilesRendererJS 的读取而不动选择器（§4.6，U-09）",
+   "stars": 255,
+   "lastCommit": "2026-09-14",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T20",
+   "upstream": "potree/PotreeConverter",
+   "ecosystem": "self",
+   "name": "potree2/anet-q16 运行时格式",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/engine/pointcloud/**",
+    "python/awr/world/pointcloud/**"
+   ],
+   "fallback": "选择器、控制器、池、格式四层接口分离，io/ 可换为 3DTilesRendererJS 的读取而不动选择器（§4.6，U-09）",
+   "stars": 818,
+   "lastCommit": "2026-09-23",
+   "new2026": "no",
+   "deviation": "未选 3D Tiles 1.1（2,612）作运行时：需解码、不能画前缀",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T21",
+   "upstream": "potree/PotreeConverter",
+   "ecosystem": "self",
+   "name": "worldpkg tile",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/world/pointcloud/**"
+   ],
+   "fallback": "worldpkg tile 输出与 PotreeConverter 兼容，超大数据走 PotreeConverter Docker；DSM 查询经 M04 WorldQuery 接口隔离（§4.11）",
+   "stars": 818,
+   "lastCommit": "2026-09-23",
+   "new2026": "no",
+   "deviation": "未直接用 PotreeConverter：master 需 C++23，本机 GCC 13.3 编译失败",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T22",
+   "upstream": "pmndrs/zustand",
+   "ecosystem": "npm",
+   "name": "zustand",
+   "version": "5.0.15",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/stores/**",
+    "apps/web/src/ui/**",
+    "apps/web/src/lib/**"
+   ],
+   "fallback": "store 形状由领域模块定义，面板只经 use<Domain> hook 读取，换库只改 stores 与 hook 层（§4.7）",
+   "stars": 58763,
+   "lastCommit": "2026-08-24",
+   "new2026": "no",
+   "deviation": "未选 jotai 3.0（21,284，2026-09 新大版本）：同职责不引入第二套",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T23",
+   "upstream": "TanStack/query",
+   "ecosystem": "npm",
+   "name": "@tanstack/react-query",
+   "version": "5.104.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/app/**",
+    "apps/web/src/ui/**"
+   ],
+   "fallback": "store 形状由领域模块定义，面板只经 use<Domain> hook 读取，换库只改 stores 与 hook 层（§4.7）",
+   "stars": 50371,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T24",
+   "upstream": "msgpack/msgpack-javascript",
+   "ecosystem": "npm",
+   "name": "@msgpack/msgpack",
+   "version": "3.1.3",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/net/**"
+   ],
+   "fallback": "编解码只在 net/，换库只改该目录（§4.7）",
+   "stars": 1558,
+   "lastCommit": "2026-07-13",
+   "new2026": "no",
+   "deviation": "未选 msgpackr（695）records：与 Python 不互通",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T25",
+   "upstream": "foxglove/ws-protocol",
+   "ecosystem": "self",
+   "name": "awr.rt.v1",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/api/rt/**",
+    "apps/web/src/net/rt/**",
+    "packages/contracts/rt/**"
+   ],
+   "fallback": "服务端 awr/api/rt/ws.py 是唯一 socket 适配点；客户端传输层按竞速接口设计，帧格式与传输解耦（§4.8）",
+   "stars": 150,
+   "lastCommit": "2025-08-05",
+   "new2026": "capability",
+   "deviation": "未选 rosbridge（1,246）、Foxglove 线格式：JSON 慢 2–3 个数量级、无 credit 背压",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T26",
+   "upstream": "python-websockets/websockets",
+   "ecosystem": "pypi",
+   "name": "websockets",
+   "version": "17.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/api/**"
+   ],
+   "fallback": "服务端 awr/api/rt/ws.py 是唯一 socket 适配点；客户端传输层按竞速接口设计，帧格式与传输解耦（§4.8）",
+   "stars": 5719,
+   "lastCommit": "2026-09-24",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T27",
+   "upstream": "fastapi/fastapi",
+   "ecosystem": "pypi",
+   "name": "fastapi",
+   "version": "0.141.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/api/**"
+   ],
+   "fallback": "ASGI 栈只在 awr/api 与其启动入口使用，服务端 awr/api/rt/ws.py 是唯一 socket 适配点（§4.8、§4.9）",
+   "stars": 102695,
+   "lastCommit": "2026-09-25",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T27",
+   "upstream": "Kludex/starlette",
+   "ecosystem": "pypi",
+   "name": "starlette",
+   "version": "1.7.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/api/**"
+   ],
+   "fallback": "ASGI 栈只在 awr/api 与其启动入口使用，服务端 awr/api/rt/ws.py 是唯一 socket 适配点（§4.8、§4.9）",
+   "stars": 12639,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "deviation": "静态与 Range 用 StaticFiles（T29），未选 nginx（31,742）：206 已实测，少一个进程",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T28",
+   "upstream": "Kludex/uvicorn",
+   "ecosystem": "pypi",
+   "name": "uvicorn",
+   "version": "0.54.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/api/**",
+    "python/awr/runtime/**"
+   ],
+   "fallback": "ASGI 栈只在 awr/api 与其启动入口使用，服务端 awr/api/rt/ws.py 是唯一 socket 适配点（§4.8、§4.9）",
+   "stars": 10993,
+   "lastCommit": "2026-09-27",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T28",
+   "upstream": "MagicStack/uvloop",
+   "ecosystem": "pypi",
+   "name": "uvloop",
+   "version": "0.22.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/api/**",
+    "python/awr/runtime/**"
+   ],
+   "fallback": "ASGI 栈只在 awr/api 与其启动入口使用，服务端 awr/api/rt/ws.py 是唯一 socket 适配点（§4.8、§4.9）",
+   "stars": 11907,
+   "lastCommit": "2026-07-14",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T30",
+   "upstream": "-",
+   "ecosystem": "self",
+   "name": "StateRing",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/runtime/statering.py"
+   ],
+   "fallback": "Bus、Source、StateRing 均为 M11 接口，LocalBus/LocalRing 用于 --inproc（§4.9）",
+   "stars": null,
+   "lastCommit": null,
+   "new2026": "no",
+   "deviation": "未选 Redis（76,518）、ZeroMQ（pyzmq 4,176）：多一跳且不满足永不阻塞",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T31",
+   "upstream": "eclipse-zenoh/zenoh",
+   "ecosystem": "pypi",
+   "name": "eclipse-zenoh",
+   "version": "1.10.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/runtime/bus.py"
+   ],
+   "fallback": "Bus、Source、StateRing 均为 M11 接口，LocalBus/LocalRing 用于 --inproc（§4.9）",
+   "stars": 3216,
+   "lastCommit": "2026-09-15",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T32",
+   "upstream": "-",
+   "ecosystem": "self",
+   "name": "awr-supervisor",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/runtime/supervisor.py"
+   ],
+   "fallback": "Bus、Source、StateRing 均为 M11 接口，LocalBus/LocalRing 用于 --inproc（§4.9）",
+   "stars": null,
+   "lastCommit": null,
+   "new2026": "no",
+   "deviation": "未选 supervisord（9,124）：检不出主循环挂死",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T33",
+   "upstream": "msgpack/msgpack-python",
+   "ecosystem": "pypi",
+   "name": "msgpack",
+   "version": "1.2.2",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/**"
+   ],
+   "fallback": "Bus、Source、StateRing 均为 M11 接口，LocalBus/LocalRing 用于 --inproc（§4.9）",
+   "stars": 2104,
+   "lastCommit": "2026-09-22",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T34",
+   "upstream": "foxglove/mcap",
+   "ecosystem": "pypi",
+   "name": "mcap",
+   "version": "1.5.0",
+   "scope": "runtime",
+   "d1": "ext",
+   "adapterBoundary": [
+    "python/awr/recorder/**"
+   ],
+   "fallback": "吞吐不达标时改为块消息降频加独立压缩线程，仍不达标换 foxglove-sdk 的 Rust writer（同为 MCAP，读端不变）（§4.9，U-10）",
+   "stars": 1102,
+   "lastCommit": "2026-09-25",
+   "new2026": "no",
+   "deviation": "未选 foxglove-sdk（311）作录制器：只作 V0.2 调试旁路",
+   "status": "WATCH"
+  },
+  {
+   "id": "T34",
+   "upstream": "indygreg/python-zstandard",
+   "ecosystem": "pypi",
+   "name": "zstandard",
+   "version": "0.25.0",
+   "scope": "runtime",
+   "d1": "ext",
+   "adapterBoundary": [
+    "python/awr/recorder/**"
+   ],
+   "fallback": "吞吐不达标时改为块消息降频加独立压缩线程，仍不达标换 foxglove-sdk 的 Rust writer（同为 MCAP，读端不变）（§4.9，U-10）",
+   "stars": 642,
+   "lastCommit": "2026-09-14",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T35",
+   "upstream": "numpy/numpy",
+   "ecosystem": "pypi",
+   "name": "numpy",
+   "version": "2.5.3",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/**"
+   ],
+   "fallback": "numba 不可用时自动退回 numpy oracle 并把机群上限钳到 300 架；numpy 与 numba 同步锁定（§4.10，U-11）",
+   "stars": 32867,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "WATCH"
+  },
+  {
+   "id": "T36",
+   "upstream": "numba/numba",
+   "ecosystem": "pypi",
+   "name": "llvmlite",
+   "version": "0.49.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/sim/**"
+   ],
+   "fallback": "numba 不可用时自动退回 numpy oracle 并把机群上限钳到 300 架；numpy 与 numba 同步锁定（§4.10，U-11）",
+   "stars": 11167,
+   "lastCommit": "2026-09-25",
+   "new2026": "no",
+   "status": "WATCH"
+  },
+  {
+   "id": "T36",
+   "upstream": "numba/numba",
+   "ecosystem": "pypi",
+   "name": "numba",
+   "version": "0.67.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/sim/**",
+    "python/awr/environment/**",
+    "python/awr/world/**"
+   ],
+   "fallback": "numba 不可用时自动退回 numpy oracle 并把机群上限钳到 300 架；numpy 与 numba 同步锁定（§4.10，U-11）",
+   "stars": 11167,
+   "lastCommit": "2026-09-25",
+   "new2026": "no",
+   "status": "WATCH"
+  },
+  {
+   "id": "T37",
+   "upstream": "scipy/scipy",
+   "ecosystem": "pypi",
+   "name": "scipy",
+   "version": "1.18.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/sim/**",
+    "python/awr/world/**",
+    "python/awr/environment/**",
+    "python/awr/reconstruction/**"
+   ],
+   "fallback": "规划算法经 plan-pool 请求 schema 调用，可替换为 V0.6 的 EGO ROS2 后端而不改 sim-core（§4.14）",
+   "stars": 15048,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T38",
+   "upstream": "PX4/PX4-Autopilot",
+   "ecosystem": "self",
+   "name": "FleetSim L1",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/sim/**"
+   ],
+   "fallback": "stage 注册表保证替换单个 stage 不动主循环；SIH 不达标时进入 V0.4 SITL-EXT（§4.10）",
+   "stars": 12708,
+   "lastCommit": "2026-09-27",
+   "new2026": "no",
+   "deviation": "未选 Genesis（29,992）、IsaacLab（8,240）、Gazebo（1,520）：需 GPU 或无法同钟跑 1000 架",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T41",
+   "upstream": "ArduPilot/pymavlink",
+   "ecosystem": "pypi",
+   "name": "pymavlink",
+   "version": "2.4.50",
+   "scope": "dev",
+   "d1": "stub",
+   "fallback": "测试入口统一 make test、make perf，工具替换不影响用例目录结构（§4.17）",
+   "stars": 733,
+   "lastCommit": "2026-09-26",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T42",
+   "upstream": "amov-lab/Prometheus",
+   "ecosystem": "self",
+   "name": "Prometheus codec",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "stub",
+   "adapterBoundary": [
+    "python/awr/sim/backends/prometheus/**"
+   ],
+   "fallback": "stage 注册表保证替换单个 stage 不动主循环；SIH 不达标时进入 V0.4 SITL-EXT（§4.10）",
+   "stars": 3265,
+   "lastCommit": "2025-11-21",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T43",
+   "upstream": "laspy/laspy",
+   "ecosystem": "pypi",
+   "name": "laspy",
+   "version": "2.7.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/world/**",
+    "python/awr/reconstruction/**"
+   ],
+   "fallback": "worldpkg tile 输出与 PotreeConverter 兼容，超大数据走 PotreeConverter Docker；DSM 查询经 M04 WorldQuery 接口隔离（§4.11）",
+   "stars": 508,
+   "lastCommit": "2026-05-30",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T43",
+   "upstream": "dranjan/python-plyfile",
+   "ecosystem": "pypi",
+   "name": "plyfile",
+   "version": "1.1.5",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/world/**",
+    "python/awr/reconstruction/**"
+   ],
+   "fallback": "worldpkg tile 输出与 PotreeConverter 兼容，超大数据走 PotreeConverter Docker；DSM 查询经 M04 WorldQuery 接口隔离（§4.11）",
+   "stars": 514,
+   "lastCommit": "2026-07-26",
+   "new2026": "no",
+   "deviation": "未选 Open3D 读写：D1 进程禁止 import Open3D",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T44",
+   "upstream": "ajv-validator/ajv",
+   "ecosystem": "npm",
+   "name": "ajv",
+   "version": "8.20.0",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "契约以 packages/contracts 的 schema 为唯一真源，校验库替换只改生成器与校验入口（AWR-03 §5.10）",
+   "stars": 14842,
+   "lastCommit": "2026-04-24",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T44",
+   "upstream": "python-jsonschema/jsonschema",
+   "ecosystem": "pypi",
+   "name": "jsonschema",
+   "version": "4.26.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/**"
+   ],
+   "fallback": "契约以 packages/contracts 的 schema 为唯一真源，校验库替换只改生成器与校验入口（AWR-03 §5.10）",
+   "stars": 4987,
+   "lastCommit": "2026-09-15",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T44",
+   "upstream": "pydantic/pydantic",
+   "ecosystem": "pypi",
+   "name": "pydantic",
+   "version": "2.13.5",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/**"
+   ],
+   "fallback": "契约以 packages/contracts 的 schema 为唯一真源，校验库替换只改生成器与校验入口（AWR-03 §5.10）",
+   "stars": 28892,
+   "lastCommit": "2026-09-25",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T45",
+   "upstream": "bcherny/json-schema-to-typescript",
+   "ecosystem": "npm",
+   "name": "json-schema-to-typescript",
+   "version": "16.0.0",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "契约以 packages/contracts 的 schema 为唯一真源，校验库替换只改生成器与校验入口（AWR-03 §5.10）",
+   "stars": 3347,
+   "lastCommit": "2026-09-06",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T46",
+   "upstream": "pyproj4/pyproj",
+   "ecosystem": "pypi",
+   "name": "pyproj",
+   "version": "3.8.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/world/**"
+   ],
+   "fallback": "worldpkg tile 输出与 PotreeConverter 兼容，超大数据走 PotreeConverter Docker；DSM 查询经 M04 WorldQuery 接口隔离（§4.11）",
+   "stars": 1228,
+   "lastCommit": "2026-09-16",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T47",
+   "upstream": "jianboqi/CSF",
+   "ecosystem": "pypi",
+   "name": "cloth-simulation-filter",
+   "version": "1.1.7",
+   "scope": "runtime",
+   "d1": "stub",
+   "adapterBoundary": [
+    "python/awr/world/**",
+    "python/awr/reconstruction/**"
+   ],
+   "fallback": "worldpkg tile 输出与 PotreeConverter 兼容，超大数据走 PotreeConverter Docker；DSM 查询经 M04 WorldQuery 接口隔离（§4.11）",
+   "stars": 649,
+   "lastCommit": "2026-09-12",
+   "new2026": "no",
+   "deviation": "未选 Pointcept（3,237）、Utonia（751）：需 GPU 与标注",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T56",
+   "upstream": "firelab/windninja",
+   "ecosystem": "self",
+   "name": "EnvironmentService",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/environment/**"
+   ],
+   "fallback": "视觉层只经 EnvStore 与 eval_env 取值，替换实现不影响物理（§4.13）",
+   "stars": 186,
+   "lastCommit": "2026-09-22",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T57",
+   "upstream": "Token-Gremlin/natural-disasters",
+   "ecosystem": "self",
+   "name": "天气视觉 TSL 图层",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/engine/environment/**"
+   ],
+   "fallback": "视觉层只经 EnvStore 与 eval_env 取值，替换实现不影响物理（§4.13）",
+   "stars": 273,
+   "lastCommit": "2026-08-31",
+   "new2026": "yes",
+   "deviation": "两者 star < 300：按 H6 只 port",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T59",
+   "upstream": "mapbox/webgl-wind",
+   "ecosystem": "self",
+   "name": "风场可视化（风箭头、AWSL）",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/engine/environment/**"
+   ],
+   "fallback": "视觉层只经 EnvStore 与 eval_env 取值，替换实现不影响物理（§4.13）",
+   "stars": 1108,
+   "lastCommit": "2026-06-18",
+   "new2026": "yes",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T61",
+   "upstream": "ZJU-FAST-Lab/ego-planner-swarm",
+   "ecosystem": "self",
+   "name": "safe_transit/path_valid 与 2.5D A*",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/sim/planning/**",
+    "python/awr/sim/mission/**"
+   ],
+   "fallback": "规划算法经 plan-pool 请求 schema 调用，可替换为 V0.6 的 EGO ROS2 后端而不改 sim-core（§4.14）",
+   "stars": 2193,
+   "lastCommit": "2025-03-08",
+   "new2026": "no",
+   "deviation": "未直接用 EGO-Swarm：ROS1、按局部未知地图设计",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T62",
+   "upstream": "artastier/PX4_Swarm_Controller",
+   "ecosystem": "self",
+   "name": "编队与覆盖",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "ext",
+   "adapterBoundary": [
+    "python/awr/sim/mission/**"
+   ],
+   "fallback": "规划算法经 plan-pool 请求 schema 调用，可替换为 V0.6 的 EGO ROS2 后端而不改 sim-core（§4.14）",
+   "stars": 97,
+   "lastCommit": "2024-03-02",
+   "new2026": "no",
+   "deviation": "上游两仓均停更且有缺陷：只取算法",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T64",
+   "upstream": "ANetResearch/ANet",
+   "ecosystem": "self",
+   "name": "agent-runtime 与 Mock ANet",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "ext",
+   "adapterBoundary": [
+    "python/awr/agent/**"
+   ],
+   "fallback": "anet_bridge 为 D1 桩接口，Mock 与真 ANet 共用同一能力、任务、效果 schema（§4.15）",
+   "stars": 6,
+   "lastCommit": "2026-09-06",
+   "new2026": "yes",
+   "deviation": "三者 star 均 < 300：按 H6 只 port",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T66",
+   "upstream": "Jakubantalik/transitions.dev",
+   "ecosystem": "vendor",
+   "name": "apps/web/src/styles/motion",
+   "version": "e2d5551656e4d3274e075d1cbd9a95af50f53225",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/styles/motion/**",
+    "apps/web/src/ui/motion/**"
+   ],
+   "fallback": "token 统一生成到 ui/motion 与 ui/lf，组件只引用 token；图标只经 ui/icons 注册表，替换图标引擎只改该目录（§4.16）",
+   "stars": 4383,
+   "lastCommit": "2026-09-21",
+   "new2026": "yes",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T67",
+   "upstream": "lucide-icons/lucide",
+   "ecosystem": "npm",
+   "name": "lucide",
+   "version": "1.48.0",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/ui/icons/**"
+   ],
+   "fallback": "token 统一生成到 ui/motion 与 ui/lf，组件只引用 token；图标只经 ui/icons 注册表，替换图标引擎只改该目录（§4.16）",
+   "stars": 24764,
+   "lastCommit": "2026-09-24",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T67",
+   "upstream": "guillermolg00/morphicons",
+   "ecosystem": "npm",
+   "name": "morphicons",
+   "version": "1.7.1",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/ui/icons/**"
+   ],
+   "fallback": "token 统一生成到 ui/motion 与 ui/lf，组件只引用 token；图标只经 ui/icons 注册表，替换图标引擎只改该目录（§4.16）",
+   "stars": 2709,
+   "lastCommit": "2026-08-28",
+   "new2026": "yes",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T68",
+   "upstream": "larashero3-dotcom/lieflat-charts",
+   "ecosystem": "self",
+   "name": "lieflat 图表组件",
+   "version": "-",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/ui/lf/**"
+   ],
+   "fallback": "token 统一生成到 ui/motion 与 ui/lf，组件只引用 token；图标只经 ui/icons 注册表，替换图标引擎只改该目录（§4.16）",
+   "stars": 5761,
+   "lastCommit": "2026-09-05",
+   "new2026": "yes",
+   "deviation": "未选 ECharts（67,408）、Chart.js（67,721）、Recharts（27,596）：R2 禁止默认样式，SVG 10 Hz 只有 4.7 fps",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T69",
+   "upstream": "vitest-dev/vitest",
+   "ecosystem": "npm",
+   "name": "@vitest/browser-playwright",
+   "version": "5.0.2",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "测试入口统一 make test、make perf，工具替换不影响用例目录结构（§4.17）",
+   "stars": 17167,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "status": "WATCH"
+  },
+  {
+   "id": "T69",
+   "upstream": "vitest-dev/vitest",
+   "ecosystem": "npm",
+   "name": "vitest",
+   "version": "5.0.2",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "测试入口统一 make test、make perf，工具替换不影响用例目录结构（§4.17）",
+   "stars": 17167,
+   "lastCommit": "2026-09-28",
+   "new2026": "capability",
+   "status": "WATCH"
+  },
+  {
+   "id": "T70",
+   "upstream": "microsoft/playwright",
+   "ecosystem": "npm",
+   "name": "@playwright/test",
+   "version": "1.63.0",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "测试入口统一 make test、make perf，工具替换不影响用例目录结构（§4.17）",
+   "stars": 96819,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "WATCH"
+  },
+  {
+   "id": "T71",
+   "upstream": "encode/httpx",
+   "ecosystem": "pypi",
+   "name": "httpx",
+   "version": "0.28.1",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "测试入口统一 make test、make perf，工具替换不影响用例目录结构（§4.17）",
+   "stars": 15524,
+   "lastCommit": "2026-02-23",
+   "new2026": "no",
+   "status": "LOCKED",
+   "collectedAt": "2026-10-01"
+  },
+  {
+   "id": "T71",
+   "upstream": "pytest-dev/pytest",
+   "ecosystem": "pypi",
+   "name": "pytest",
+   "version": "9.1.1",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "测试入口统一 make test、make perf，工具替换不影响用例目录结构（§4.17）",
+   "stars": 14545,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T71",
+   "upstream": "pytest-dev/pytest-asyncio",
+   "ecosystem": "pypi",
+   "name": "pytest-asyncio",
+   "version": "1.4.0",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "测试入口统一 make test、make perf，工具替换不影响用例目录结构（§4.17）",
+   "stars": 1664,
+   "lastCommit": "2026-09-30",
+   "new2026": "no",
+   "status": "LOCKED",
+   "collectedAt": "2026-10-01"
+  },
+  {
+   "id": "T72",
+   "upstream": "aidenybai/react-scan",
+   "ecosystem": "npm",
+   "name": "react-scan",
+   "version": "0.5.7",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "HUD 由界面自绘，只取 StatsProfiler 数据；替换数据源只改 engine/perf（§4.17）",
+   "stars": 21858,
+   "lastCommit": "2026-08-16",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T72",
+   "upstream": "RenaudRohlinger/stats-gl",
+   "ecosystem": "npm",
+   "name": "stats-gl",
+   "version": "4.2.3",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/engine/perf/**"
+   ],
+   "fallback": "HUD 由界面自绘，只取 StatsProfiler 数据；替换数据源只改 engine/perf（§4.17）",
+   "stars": 280,
+   "lastCommit": "2026-07-10",
+   "new2026": "no",
+   "deviation": "未选 r3f-perf（781）：2024-11 停更且只支持 WebGL",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T73",
+   "upstream": "pypa/pip",
+   "ecosystem": "pypi",
+   "name": "pip",
+   "version": "26.2.1",
+   "scope": "tool",
+   "d1": "core",
+   "fallback": "锁文件是唯一版本来源，换包管理器只改 make setup（§4.18）",
+   "stars": 10290,
+   "lastCommit": "2026-09-23",
+   "new2026": "no",
+   "status": "LOCKED",
+   "collectedAt": "2026-10-01"
+  },
+  {
+   "id": "T73",
+   "upstream": "pypa/setuptools",
+   "ecosystem": "pypi",
+   "name": "setuptools",
+   "version": "84.0.0",
+   "scope": "tool",
+   "d1": "core",
+   "fallback": "锁文件是唯一版本来源，换包管理器只改 make setup（§4.18）",
+   "stars": 2865,
+   "lastCommit": "2026-09-08",
+   "new2026": "no",
+   "status": "LOCKED",
+   "collectedAt": "2026-10-01"
+  },
+  {
+   "id": "T73",
+   "upstream": "astral-sh/uv",
+   "ecosystem": "pypi",
+   "name": "uv",
+   "version": "0.12.19",
+   "scope": "tool",
+   "d1": "core",
+   "fallback": "锁文件是唯一版本来源，换包管理器只改 make setup（§4.18）",
+   "stars": 90249,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T75",
+   "upstream": "donmccurdy/glTF-Transform",
+   "ecosystem": "npm",
+   "name": "@gltf-transform/cli",
+   "version": "4.5.0",
+   "scope": "tool",
+   "d1": "core",
+   "fallback": "worldpkg tile 输出与 PotreeConverter 兼容，超大数据走 PotreeConverter Docker；DSM 查询经 M04 WorldQuery 接口隔离（§4.11）",
+   "stars": 1976,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T75",
+   "upstream": "mikedh/trimesh",
+   "ecosystem": "pypi",
+   "name": "trimesh",
+   "version": "5.1.0",
+   "scope": "tool",
+   "d1": "core",
+   "fallback": "worldpkg tile 输出与 PotreeConverter 兼容，超大数据走 PotreeConverter Docker；DSM 查询经 M04 WorldQuery 接口隔离（§4.11）",
+   "stars": 3688,
+   "lastCommit": "2026-08-31",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T78",
+   "upstream": "yomotsu/camera-controls",
+   "ecosystem": "npm",
+   "name": "camera-controls",
+   "version": "3.1.2",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "apps/web/src/engine/camera/**"
+   ],
+   "fallback": "相机控制只在 engine/camera 的 camera 相位命令式驱动，替换时只改该目录（§1.2 适配边界；M06-FR-049）",
+   "stars": 2430,
+   "lastCommit": "2026-02-02",
+   "new2026": "no",
+   "deviation": "未用 drei CameraControls：它在 useFrame 中更新，无法保证相机先于点云选择",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T79",
+   "upstream": "DefinitelyTyped/DefinitelyTyped",
+   "ecosystem": "npm",
+   "name": "@types/node",
+   "version": "22.20.4",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "需要 TS 编程 API 时经 @typescript/typescript6@6.0.2 别名引入，类型检查仍用 7.0.2 的 tsc；7.1 补上 API 后重新评估（§4.2，U-03）",
+   "stars": 51444,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T79",
+   "upstream": "DefinitelyTyped/DefinitelyTyped",
+   "ecosystem": "npm",
+   "name": "@types/react",
+   "version": "19.3.0",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "需要 TS 编程 API 时经 @typescript/typescript6@6.0.2 别名引入，类型检查仍用 7.0.2 的 tsc；7.1 补上 API 后重新评估（§4.2，U-03）",
+   "stars": 51444,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T79",
+   "upstream": "DefinitelyTyped/DefinitelyTyped",
+   "ecosystem": "npm",
+   "name": "@types/react-dom",
+   "version": "19.3.0",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "需要 TS 编程 API 时经 @typescript/typescript6@6.0.2 别名引入，类型检查仍用 7.0.2 的 tsc；7.1 补上 API 后重新评估（§4.2，U-03）",
+   "stars": 51444,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T79",
+   "upstream": "three-types/three-ts-types",
+   "ecosystem": "npm",
+   "name": "@types/three",
+   "version": "0.186.0",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "锁定版本；handler 被移除时启用私有点径补丁（X13），升级单独 PR 并跑 D1-AC-14 与 flight60（§4.4、§4.5，U-04）",
+   "stars": 301,
+   "lastCommit": "2026-09-08",
+   "new2026": "no",
+   "status": "WATCH"
+  },
+  {
+   "id": "T80",
+   "upstream": "yaml/pyyaml",
+   "ecosystem": "pypi",
+   "name": "pyyaml",
+   "version": "6.0.3",
+   "scope": "runtime",
+   "d1": "core",
+   "adapterBoundary": [
+    "python/awr/**"
+   ],
+   "fallback": "只读 configs/*.yaml 等配置，经 safe_load 单一入口，替换解析库只改加载函数（§4.9）",
+   "stars": 2950,
+   "lastCommit": "2026-06-17",
+   "new2026": "no",
+   "deviation": "未选 ruamel.yaml：只读无需保留注释与往返",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T81",
+   "upstream": "pre-commit/pre-commit",
+   "ecosystem": "pypi",
+   "name": "pre-commit",
+   "version": "4.6.2",
+   "scope": "tool",
+   "d1": "core",
+   "fallback": "规则集写在 apps/web/.oxlintrc.json 与 pyproject.toml，版本随锁文件固定，升级走单独 PR（§4.2）",
+   "stars": 15600,
+   "lastCommit": "2026-08-17",
+   "new2026": "no",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T81",
+   "upstream": "astral-sh/ruff",
+   "ecosystem": "pypi",
+   "name": "ruff",
+   "version": "0.16.9",
+   "scope": "dev",
+   "d1": "core",
+   "fallback": "规则集写在 apps/web/.oxlintrc.json 与 pyproject.toml，版本随锁文件固定，升级走单独 PR（§4.2）",
+   "stars": 49825,
+   "lastCommit": "2026-09-28",
+   "new2026": "no",
+   "deviation": "未选 flake8 + black + isort：三个工具合一",
+   "status": "LOCKED"
+  },
+  {
+   "id": "T82",
+   "upstream": "miurahr/py7zr",
+   "ecosystem": "pypi",
+   "name": "py7zr",
+   "version": "1.1.3",
+   "scope": "tool",
+   "d1": "core",
+   "fallback": "锁文件是唯一版本来源，换包管理器只改 make setup（§4.18）",
+   "stars": 558,
+   "lastCommit": "2026-09-17",
+   "new2026": "no",
+   "status": "LOCKED",
+   "collectedAt": "2026-10-01"
+  }
+ ]
+}

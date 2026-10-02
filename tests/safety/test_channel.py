@@ -89,7 +89,8 @@ def test_safety_rows_schema_rate_and_payload() -> None:
         raw = rows.last_payload
         idx = parse_pairs(raw)
         for no, (a, b) in idx.items():
-            assert _close(msgpack.unpackb(raw[a:b], raw=False), rows.last_rows[no])  # float32 编码
+            # float32 编码；与同一次发布的行比较（last_rows 还包含量化后未变、因而未发布的最新快照，FX-SIM2）
+            assert _close(msgpack.unpackb(raw[a:b], raw=False), rows.last_pub_rows[no])
         # 事件文本
         for e in h.events:
             assert not EMOJI.search(json.dumps(e, ensure_ascii=False, default=str))

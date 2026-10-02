@@ -195,6 +195,37 @@ def test_s3(scenario_run) -> None:
     assert not out.kinds("agent.board.incidental")
 
 
+def _s3_starts(scenario_run, profile: str, d) -> dict[str, int]:
+    """S3 运行到 4 个开局任务都进入 RUNNING 为止，返回 {mid: 仿真时刻}。"""
+    seen: dict[str, int] = {}
+
+    def until(e: dict) -> bool:
+        data = e.get("data") or {}
+        if e.get("type") == "mission.state" and data.get("to") == "RUNNING":
+            seen.setdefault(str(data.get("mid")), int(e.get("t_sim_ns") or 0))
+        return len(seen) >= 4
+
+    scenario_run("s3-newyork-sar", profile, timeout_s=300, scenarios_dir=d, only=S3_PROCS, until=until)
+    return seen
+
+
+@full_only
+@pytest.mark.ext
+@pytest.mark.xfail(strict=False, reason="开局屏障待 M10、M08 实施（ADR-068 决策第 4 条、M14 §14 第 23 条）；实施后应通过")
+def test_s3_start_rate_invariant(scenario_run, tmp_path) -> None:
+    """D1-AC-16 的 sim 侧前提（ADR-068）：剧本开局任务的生效 tick 与倍速无关。第 2 轮验收 ×1 在 1.43 s、×10 在 10.33 s
+    生效（plan-pool 预热与 generator 作业按墙钟到达的 tick 生效），搜索机轨迹平移后首检与 accepted 时刻随之漂移约 10 s。
+    只运行到开局（×1 约 2 s 仿真），用于快速核对 sim 侧修复；完整判定仍是 `test_s3_rate_equivalence`。"""
+    doc = json.loads((SCENARIOS / "s3-newyork-sar.json").read_text(encoding="utf-8"))
+    v = copy.deepcopy(doc)
+    v["profiles"]["x1"] = {"rate": 1, "record": False}
+    d = write_variant(tmp_path, v)
+    a = _s3_starts(scenario_run, "ci", d)
+    b = _s3_starts(scenario_run, "x1", d)
+    assert sorted(a) == sorted(b) == ["m-relay", "m-search", "m-standby-b1", "m-standby-b2"], (a, b)
+    assert all(abs(a[m] - b[m]) <= 8_000_000 for m in a), (a, b)
+
+
 @full_only
 @pytest.mark.ext
 def test_s3_rate_equivalence(scenario_run, tmp_path) -> None:

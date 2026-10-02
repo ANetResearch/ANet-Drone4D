@@ -156,3 +156,49 @@ def test_scalar_and_numpy_paths_agree(bench_factory):
         res.append((blk["g_az"][:4].copy(), blk["g_el"][:4].copy(), dict(b.rt.gimbal.stats)))
     assert res[0][2]["scalar"] > 0 and res[1][2]["numpy"] > 0
     assert np.allclose(res[0][0], res[1][0], atol=1e-12) and np.allclose(res[0][1], res[1][1], atol=1e-12)
+
+
+@pytest.mark.parametrize("variant", ["vec", "numba", "scan"])
+def test_vector_path_matches_numpy_path(bench_factory, variant):
+    """大机群路径与逐对取参数的 `_step_numpy` 逐位相同：`GimbalBank._step_vec`（按 rig 分组取参数，FX2-R2）与融合核
+    `_step_nb`（kernels_gimbal，ADR-070）。同一初始状态各走 40 步（含 LOOK_AT、NADIR、FORWARD、FIXED 与越限钳位）。"""
+    from awr.sim.sensors import gimbal as GM
+    from awr.sim.sensors import kernels_gimbal as KG
+
+    if variant in ("numba", "scan") and not KG.HAVE_NUMBA:
+        pytest.skip("numba unavailable")
+    out = []
+    for path in ("numpy", variant):
+        b = bench_factory()
+        b.rt.gimbal.use_numba = path in ("numba", "scan")
+        b.rt.gimbal.scan = path == "scan"
+        rng = np.random.default_rng(9)
+        for s in range(20):
+            b.spawn(s, s + 1, pos=rng.uniform(-50, 50, 3) + np.array([0.0, 0.0, 60.0]), yaw_deg=float(rng.uniform(-180, 180)))
+        b.run(0.02)
+        modes = ["look_at", "nadir", "forward", "fixed", "look_at_axis"]
+        for s in range(20):
+            m = modes[s % 5]
+            args = ({"p_enu_m": [10.0 * s, -5.0, 0.0]} if m == "look_at" else
+                    {"center_enu_m": [4.0 * s, 7.0]} if m == "look_at_axis" else
+                    ({"az_rad": 3.5, "el_rad": -2.0} if m == "fixed" else {}))
+            b.rt.set_mode(s, None, m, args)
+        if path == "numpy":
+            orig = GM.GimbalBank._step_vec
+
+            def via_numpy(self, S, rows, S_, K_, ri, dt):
+                PQ = S.enu.pose_enu_flu(rows)
+                self._step_numpy([(int(s), int(k)) for s, k in zip(S_, K_, strict=True)], PQ,
+                                 {int(s): i for i, s in enumerate(rows)}, dt)
+
+            GM.GimbalBank._step_vec = via_numpy
+            try:
+                b.run(0.8)
+            finally:
+                GM.GimbalBank._step_vec = orig
+        else:
+            b.run(0.8)
+        blk = b.S.blocks["sensors"]
+        out.append({k: blk[k].copy() for k in ("g_az", "g_el", "g_lim", "g_dyn")} | {"limited": b.rt.gimbal.stats["limited"]})
+    for k in out[0]:
+        assert np.array_equal(out[0][k], out[1][k]), k

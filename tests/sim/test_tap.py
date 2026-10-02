@@ -155,3 +155,44 @@ def test_publish_p99_n1000() -> None:
             assert h.core.fleet.pipeline.p99_us("tap") <= 300.0
         finally:
             h.close()
+
+
+def test_tap_kernel_matches_numpy_path() -> None:
+    """融合核 `kernels_tap.tap_fill` 与 numpy 逐字段路径（fuser + ENU 视图 + `lite_from_full`）逐字节相同（FX2-R2）。
+    随机状态覆盖全部 FlightState、flag 组合、租约 owner、L0 幽灵机、四元数与速度的量化边界（±32767 钳位）。"""
+    from awr.sim.fleet.stages.tap import TapStage
+    from awr.sim.fleet.state import FALLBACK_BLOCKS
+
+    pytest.importorskip("numba")
+    rng = np.random.default_rng(3)
+    n = 300
+    S = FleetState(512, blocks=FALLBACK_BLOCKS)
+    idx = np.sort(rng.choice(512, n, replace=False)).astype(np.int32)
+    S.active[idx] = True
+    S.agent_no[:] = rng.integers(0, 1024, 512)
+    sb = S.blocks["safety"]
+    sb["fs"][:] = rng.integers(0, 14, 512)
+    sb["sub"][:] = rng.integers(0, 8, 512)
+    for f in ("flag_loc_ok", "flag_failsafe", "flag_gcs", "flag_fcu", "flag_loc_deg", "flag_alert", "locked"):
+        sb[f][:] = rng.random(512) < 0.4
+    S.in_air[:] = rng.random(512) < 0.5
+    S.fidelity[:] = rng.choice([1, 8, 9], 512)
+    S.blocks["mission"]["mission_item"][:] = rng.integers(0, 0xFFFF, 512)
+    S.blocks["battery"]["battery_pct"][:] = rng.integers(0, 256, 512)
+    S.p[:] = rng.normal(0, 300, (512, 3))
+    S.v[:] = rng.normal(0, 30, (512, 3))
+    S.v[:4] = [[400.0, -400.0, 327.67], [327.675, -327.675, 0.005], [-0.005, 0.015, 1e-9], [0.0, 0.0, 0.0]]
+    q = rng.normal(0, 1, (512, 4))
+    S.q[:] = q / np.linalg.norm(q, axis=1, keepdims=True)
+    S.q[:2] = [[1.0, 0.0, 0.0, 0.0], [0.70710678, 0.70710678, 0.0, 0.0]]
+    S.omega[:] = rng.normal(0, 2, (512, 3))
+    lo = rng.integers(0, 8, 512).astype(np.uint8)
+    S.touch()
+    tap = TapStage(None, lease_owner=lambda: lo, roster_version=lambda: 0)
+    assert tap.use_kernel and tap._kernel_ok(S)
+    f1, l1 = np.zeros(n, DRONE_STATE64), np.zeros(n, SWARM_LITE32)
+    f2, l2 = np.zeros(n, DRONE_STATE64), np.zeros(n, SWARM_LITE32)
+    tap.fill(S, f1, l1, idx)
+    tap.fill_numpy(S, f2, l2, idx)
+    assert f1.tobytes() == f2.tobytes()
+    assert l1.tobytes() == l2.tobytes()

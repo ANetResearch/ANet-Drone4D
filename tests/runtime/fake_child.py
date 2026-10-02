@@ -1,6 +1,7 @@
 """supervisor 测试用的假子进程（M11-AC-005）：经 init_child 启动，按参数模拟正常心跳、崩溃、挂死、忽略 SIGTERM 等行为。
 
 用法：python tests/runtime/fake_child.py --mode run|crash|hang|exit0|ignore-term|ring|spam [--after S] [--rc N]
+       [--grandchild PIDFILE [--grandchild-ignore-term]]（派生一个同进程组的后代并把 pid 写入 PIDFILE，模拟 plan-pool 工作进程）
 """
 
 from __future__ import annotations
@@ -27,8 +28,27 @@ def main() -> int:
     ap.add_argument("--run", default=None)
     ap.add_argument("--segment", default=None)
     ap.add_argument("--bus", action="store_true", help="经 ctx 打开 ZenohBus 并声明 proc/<name>/ready")
+    ap.add_argument("--grandchild", default=None, help="派生同进程组的后代（sleep），pid 写入该文件")
+    ap.add_argument("--grandchild-ignore-term", action="store_true")
     a = ap.parse_args()
+    if os.environ.get("AWR_STANDBY") == "1":  # supervisor 的热备用进程（ADR-070）：就绪后等接替指令
+        import json
+
+        print("AWR_STANDBY_READY", flush=True)
+        line = sys.stdin.readline()
+        if not line.strip():
+            return 0
+        os.environ.update({str(k): str(v) for k, v in (json.loads(line).get("env") or {}).items()})
+        os.environ.pop("AWR_STANDBY", None)
+        print(f"fake child promoted pid={os.getpid()}", flush=True)
     ctx = init_child(a.name)
+    if a.grandchild:
+        import subprocess
+
+        code = ("import signal, time\n" + ("signal.signal(signal.SIGTERM, signal.SIG_IGN)\n" if a.grandchild_ignore_term else "")
+                + "time.sleep(120)\n")
+        gc = subprocess.Popen([sys.executable, "-c", code])  # 不新建会话：与本进程同组，如同 multiprocessing spawn
+        Path(a.grandchild).write_text(str(gc.pid))
     bus = None
     if a.bus:
         from awr.runtime.bus import ZenohBus

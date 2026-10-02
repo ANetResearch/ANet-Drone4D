@@ -122,12 +122,11 @@ def test_replay_end_to_end(st) -> None:
         assert pb["dataEnd_ns"] == 30_000_000_000 and pb["speed_max"] == 20.0
         await c.until(lambda k, x: k == "batch" and x.header.flags & F.BATCH_REPLAY, 5)
         assert st.gw.mode == "replay" and st.gw.clock.global_epoch == e0 + 1
-        # 选中机的 60 Hz 通道：订阅在回放 roster 装入之后
-        await c.drain(0.3)
-        if "sim-0001" not in st.gw.roster:
-            # 网关竞态（已请求 M11）：open 时在途的实时 roster 查询使回放 roster 被实时名册覆盖；此处再取一次回放 roster
-            st.call_in_loop(st.gw._request_roster, "replay")
-            await c.drain(0.5)
+        # 选中机的 60 Hz 通道：订阅在回放 roster 装入之后（open 时在途的实时 roster 回复由网关丢弃，FX-GW）
+        end = time.monotonic() + 5
+        while "sim-0001" not in st.gw.roster and time.monotonic() < end:
+            await c.drain(0.1)
+        assert st.gw.roster and all(v.startswith("sim-") for v in st.gw.roster), sorted(st.gw.roster)[:5]  # 没有实时名册 f001…
         ids = c.topic_ids
         assert "uav/sim-0001/state" in ids, sorted(ids)[:10]
         await c.send({"op": "subscribe", "subs": [{"id": 4, "topic": "uav/sim-0001/state", "rate": 60, "mode": "latest"}]})

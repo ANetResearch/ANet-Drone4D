@@ -28,7 +28,8 @@ pytestmark = pytest.mark.skipif(not K.HAVE_NUMBA, reason="numba 不可用")
 
 T = ProfileTable()
 FIELDS_F = ["p", "v", "a_meas", "p_prev", "q", "omega", "thrust", "thr_sp", "q_sp", "vel_int", "tr_x", "tr_v", "tr_a",
-            "pos_ref", "yaw_sp", "orb", "axis_anchor", "path_tau", "target", "land_xy", "thr_cap", "td_t", "force"]
+            "pos_ref", "yaw_sp", "orb", "axis_anchor", "path_tau", "target", "land_xy", "thr_cap", "td_t", "force",
+            "rtl_via"]
 FIELDS_I = ["ctrl_mode", "ctrl_phase", "mode_evt", "stopping", "axis_lock", "path_seg"]
 MODES = np.array([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 13, 0, 15])
 
@@ -102,6 +103,9 @@ def random_state(rng: np.random.Generator, n: int = 120) -> tuple[FleetState, Pa
             S.path_off[i], S.path_len[i] = off, len(seg)
             S.path_seg[i] = off + int(rng.integers(0, len(seg)))  # 含圆弧段
             S.path_tau[i] = PB.seg[S.path_seg[i], K.SG_T0] + rng.uniform(0, 3)
+    # RTL 巡航绕行点（ADR-054）：一半直飞（NaN），其余在参考点 ±6 m 内（覆盖接受半径内清除与未到达两个分支）
+    via = S.tr_x[:n, :2] + rng.uniform(-6, 6, (n, 2))
+    S.rtl_via[:n] = np.where((rng.random(n) < 0.5)[:, None], np.nan, via)
     return S, PB
 
 
@@ -137,6 +141,41 @@ def test_single_step_equivalence(seed: int) -> None:
     assert not bad, bad
     for f in FIELDS_I:
         assert np.array_equal(getattr(S1, f)[:n], getattr(S2, f)[:n]), f
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_rtl_via_equivalence(seed: int) -> None:
+    """RTL 各子阶段（CLIMB、CRUISE、DESCEND）与巡航绕行点（ADR-054）：融合核与 numpy oracle 单步逐字段一致，
+    CRUISE 中参考点进入接受半径的绕行点被清为 NaN、其余保留。"""
+    from awr.contracts.enums import FlightState
+    from awr.sim.fleet.state import FALLBACK_BLOCKS
+
+    rng = np.random.default_rng(7000 + seed)
+    S1, PB = random_state(rng)
+    n = int(S1.active.sum())
+    S1.ctrl_mode[:n] = K.M_RTL
+    S1.landed[:n] = False
+    S1.add_block(FALLBACK_BLOCKS["safety"])
+    sb = S1.blocks["safety"]
+    sb["fs"][:n] = int(FlightState.RTL)
+    sb["sub"][:n] = rng.integers(0, 3, n)
+    via_before = S1.rtl_via[:n].copy()
+    S2 = copy.deepcopy(S1)
+    PB2 = copy.deepcopy(PB)
+    ctx = StageCtx(tick=200 + seed, t_ns=(200 + seed) * 4_000_000)
+    idx = np.flatnonzero(S1.active).astype(np.int32)
+    K.run_l1(S1, T.PT, T.LT, PB, idx, 0.008, ctx.t_ns * 1e-9, 1.0, 4.0, 1.0, rtl_phase_of(S1))
+    L1Oracle(T, PB2, every=2, w_fail=4.0, world=FakeWorld()).run_all(S2, ctx)
+    worst = {f: _rel(getattr(S1, f)[:n], getattr(S2, f)[:n]) for f in FIELDS_F if f != "force"}
+    bad = {f: v for f, v in worst.items() if v > 1e-12}
+    assert not bad, bad
+    for f in FIELDS_I:
+        assert np.array_equal(getattr(S1, f)[:n], getattr(S2, f)[:n]), f
+    cruise = sb["sub"][:n] == K.R_CRUISE
+    had = ~np.isnan(via_before[:, 0])
+    cleared = had & np.isnan(S1.rtl_via[:n, 0])
+    assert cleared.any() and (had & ~cleared & cruise).any()          # 两个分支都被覆盖
+    assert not (cleared & ~cruise).any()                              # 只有 CRUISE 会清除绕行点
 
 
 @pytest.mark.parametrize("seed", range(10))

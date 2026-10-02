@@ -179,3 +179,44 @@ def test_duplicate_registration_and_native_fallback() -> None:
             assert h.until(lambda: c.final, 30.0) and c.status == "succeeded"
         finally:
             h.close()
+
+
+def test_traj_stall_uses_reference_progress(env) -> None:
+    """M10-to-M08 第 5 条（FX-SIM2）：提供者接管的调用在参考静止（规划中、等待）时不判 203；参考前进而机体不动才判停滞，
+    判定时撤销提供者并交回 HOLD（失败后残留轨迹不再驱动机体）。"""
+    h, prov, _log = env
+    h.takeoff(10.0)
+    s = h.slot()
+    p = h.pos()
+    real_start = prov.start
+
+    def planning(call, slots, args, apply_tick):  # 规划中：只登记，不写轨迹（参考静止）
+        prov.started.append((call.cid, list(np.asarray(slots).tolist()), apply_tick))
+        return prov.name
+
+    prov.start = planning
+    h.cmd("follow_path", {"waypoints": [[p[0] + 25.0, p[1], p[2]], [p[0] + 50.0, p[1], p[2]]]}, cid="fp-wait")
+    c = h.call("fp-wait")
+    h.advance(12.0)
+    assert not c.final and h.S.ctrl_mode[s] == K.M_TRAJ, (c.status, c.code)     # 12 s 参考静止：不判 203
+    prov.start = real_start
+    h.cmd("hover", {}, cid="hv-1")
+    h.advance(2.0)
+    # 参考前进而机体被"钉住"（每步把位置写回原处）：判 203，撤销提供者并交回 HOLD
+    prov.jobs.clear()
+    h.cmd("follow_path", {"waypoints": [[p[0] + 25.0, p[1], p[2]], [p[0] + 50.0, p[1], p[2]]]}, cid="fp-stuck")
+    c2 = h.call("fp-stuck")
+    h.advance(0.1)
+    j = prov.jobs[s]
+    j["b"] = j["a"] + np.array([200.0, 0.0, 0.0])
+    j["T"] = 200.0
+    pinned = h.S.enu.pos[s].copy()
+    t_end = h.t + 15.0
+    while not c2.final and h.t < t_end:
+        h.advance(0.1)
+        h.S.p[s] = np.array([pinned[1], pinned[0], -pinned[2]])     # NED：钉住机体
+        h.S.v[s] = 0.0
+        h.S.touch()
+    assert c2.final and c2.status == "failed" and c2.code == int(Reason.STALLED), (c2.status, c2.code)
+    assert prov.canceled and prov.canceled[-1][0] == "fp-stuck"
+    assert h.S.ctrl_mode[s] != K.M_TRAJ

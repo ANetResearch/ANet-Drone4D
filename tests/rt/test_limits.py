@@ -23,7 +23,9 @@ PROTO = "awr.rt.v1"
 
 @pytest.fixture(scope="module")
 def st():
-    s = fakesim.GwStack(n=70, sim_kw={"sensors": False, "hz": 30.0})
+    # hello 超时放宽到 30 s：test_connection_limits 先开 32 个不发 hello 的连接，负载下开完之前最早的连接会被 4408 关闭，
+    # 第 33 个就不再撞上限（INT-1 §7.11）；本模块没有依赖 hello 超时的断言
+    s = fakesim.GwStack(n=70, sim_kw={"sensors": False, "hz": 30.0}, hello_timeout_s=30.0)
     yield s
     s.close()
 
@@ -39,12 +41,12 @@ async def _code(ws) -> int:
 def test_connection_limits(st) -> None:
     async def run() -> None:
         one = rtc.token(st.base, "viewer", rtc.hint_of("connlimitone"))["token"]
+        others = [rtc.token(st.base, "viewer")["token"] for _ in range(25)]  # 先取令牌，缩短开连接的窗口
         opened = [await rtc.open_client(st, one, hello=False) for _ in range(8)]
         ws = await connect(st.ws_url, subprotocols=[PROTO, "bearer." + one], origin=st.origin, compression=None)
         assert await _code(ws) == 4429  # 每 principal ≤ 8
-        opened += [await rtc.open_client(st, rtc.token(st.base, "viewer")["token"], hello=False) for _ in range(24)]
-        ws = await connect(st.ws_url, subprotocols=[PROTO, "bearer." + rtc.token(st.base, "viewer")["token"]],
-                           origin=st.origin, compression=None)
+        opened += [await rtc.open_client(st, t, hello=False) for t in others[:24]]
+        ws = await connect(st.ws_url, subprotocols=[PROTO, "bearer." + others[24]], origin=st.origin, compression=None)
         c = rtc.Client(ws)
         _, e = await c.recv()
         assert e["op"] == "error" and e["code"] == 316

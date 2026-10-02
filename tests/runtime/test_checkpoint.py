@@ -53,6 +53,44 @@ def test_format_header_and_alignment(tmp_path: Path) -> None:
         read_checkpoint(p, layout_id=LAYOUT_ID ^ 1)
 
 
+def test_serialize_into_reused_buffer_is_identical() -> None:
+    """`serialize(out=...)` 在复用缓冲中编码（写线程不再每代新分配并拷贝约 3.5 MB，ADR-070）：与不复用时逐字节相同，缓冲里
+    残留更长的上一代内容（含对齐填充处的非零字节）时也相同；含 0 维数组。"""
+    arrays = soa(10)
+    arrays["zero_d"] = np.array(3.5)
+    ref = serialize(7, 2, 3, LAYOUT_ID, arrays, {"a": 1, "b": [1, 2, 3]})
+    buf = bytearray(b"\xab" * (len(ref) + 4096))
+    got = serialize(7, 2, 3, LAYOUT_ID, arrays, {"a": 1, "b": [1, 2, 3]}, out=buf)
+    assert isinstance(got, memoryview) and bytes(got) == ref
+    got.release()
+    small = bytearray(16)
+    got = serialize(7, 2, 3, LAYOUT_ID, arrays, {"a": 1, "b": [1, 2, 3]}, out=small)
+    assert bytes(got) == ref and len(small) >= len(ref)
+
+
+def test_gate_defers_encoding_until_set(shm_dir: Path) -> None:
+    """CheckpointStore `gate`（ADR-070）：gate 未置位时写线程停在让出点（每个至多 gate_timeout_s），置位后很快写完；
+    写出的内容与不带 gate 时逐字节相同。"""
+    import threading
+
+    gate = threading.Event()
+    st = CheckpointStore(shm_dir / "ckg", layout_id=LAYOUT_ID, gate=gate, gate_timeout_s=5.0)
+    try:
+        arrays, m = soa(10), {"big": list(range(1000))}
+        assert st.save(1_000_000_000, 1, 0, arrays, m)
+        time.sleep(0.3)
+        assert st.stats["written"] == 0  # 停在第一个让出点
+        gate.set()
+        t0 = time.monotonic()
+        while st.stats["written"] == 0 and time.monotonic() - t0 < 5.0:
+            time.sleep(0.01)
+        assert st.stats["written"] == 1 and time.monotonic() - t0 < 2.0
+        got = next((shm_dir / "ckg").glob("*.bin")).read_bytes()
+        assert got == serialize(1_000_000_000, 1, 0, LAYOUT_ID, arrays, m)
+    finally:
+        st.close()
+
+
 def test_roundtrip_1000_agents_and_meta(shm_dir: Path, tmp_path: Path) -> None:
     st = CheckpointStore(shm_dir / "ckpt", layout_id=LAYOUT_ID, mirror=tmp_path / "ckpt", mirror_every_s=0.05)
     try:
@@ -188,4 +226,22 @@ def test_restore_after_window_does_not_poison(tmp_path: Path, monkeypatch) -> No
     real = ckm.time.monotonic_ns
     monkeypatch.setattr(ckm.time, "monotonic_ns", lambda: real() + 6_000_000_000)
     assert st.restore_for_restart(2).t_sim_ns == 5_000  # 稳定运行超过 5 s 后再崩：不中毒
+    st.close(final=False)
+
+
+def test_poison_skips_generations_written_after_restore(tmp_path: Path) -> None:
+    """恢复后 5 s 内再崩：恢复点之后由崩溃进程写出的各代同样跳过（stale），改用恢复点的上一代；stale 不计入连续中毒代数
+    （D1-AC-11b；D1 验收第 1 轮：第二次恢复点 4.104 s 晚于第一次 4.064 s）。"""
+    st = CheckpointStore(tmp_path / "ckpt", layout_id=LAYOUT_ID, keep=8)
+    for t in (1_000, 2_000, 3_000):
+        assert st.save(t, 1, 0, {"x": np.full(4, t, np.int64)}, {"t": t})
+        assert st.flush(5.0)
+    ck = st.restore_for_restart(1)
+    assert ck is not None and ck.t_sim_ns == 3_000
+    for t in (3_500, 4_000):  # 恢复后的新进程继续写 checkpoint，随后在 5 s 内崩溃
+        assert st.save(t, 2, 0, {"x": np.full(4, t, np.int64)}, {"t": t})
+        assert st.flush(5.0)
+    ck = st.restore_for_restart(2)
+    assert ck is not None and ck.t_sim_ns == 2_000
+    assert st.poisoned_generations() == 1
     st.close(final=False)

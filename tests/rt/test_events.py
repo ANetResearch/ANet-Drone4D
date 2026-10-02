@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import asyncio
-import collections
 import time
 
 import fakesim
@@ -144,7 +143,7 @@ def test_resume_and_ring_truncation_and_rest_410(st) -> None:
         assert [e["data"]["i"] for e in _evs(c2, "resumetest.")] == [0, 1, 2, 3]
         await c2.ws.close()
         # 环容量缩小到 8，制造超出环范围的 resume
-        st.call_in_loop(lambda: setattr(st.gw.events, "ring", collections.deque(st.gw.events.ring, maxlen=8)))
+        st.call_in_loop(st.gw.events.ring.set_capacity, 8)
         for i in range(12):
             st.call_in_loop(st.gw.emit_api_event, "trunc.x", 1, {"i": i})
         c3 = await rtc.open_client(st, tok["token"], resume={"sessionId": info["sessionId"], "lastEventSeq": base})

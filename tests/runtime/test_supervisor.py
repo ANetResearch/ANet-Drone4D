@@ -193,6 +193,98 @@ def test_hang_detected_dumped_and_restarted(tmp_path: Path) -> None:
     run(main())
 
 
+def test_standby_promoted_on_kill_and_hang(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """热备用（`standby`，AWR-19 §4.2，ADR-070）：主进程 RUNNING 后起备用进程；主进程被 kill -9 时由已就绪的备用进程
+    接替（pid 即备用进程，环境中的重启计数与上次退出码为接替时的值），随后再起新的备用进程；挂死判定后同样接替；停止时
+    备用进程一并退出。"""
+    import awr.runtime.supervisor as SUP
+
+    monkeypatch.setattr(SUP, "STANDBY_DELAY_S", 0.05)
+    cfg = make_cfg(tmp_path, [proc("api", "--mode", "run", standby=True)], backoff=(0.05, 0.05, 0.05, 0.05, 0.05))
+
+    async def wait_spare(p, timeout: float = 10.0) -> int:
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout:
+            if p.spare is not None and p.spare.ready:
+                return p.spare.pid
+            await asyncio.sleep(0.01)
+        raise AssertionError("备用进程未就绪")
+
+    async def main() -> None:
+        async with Harness(cfg) as h:
+            p = h.sup.procs["api"]
+            await h.wait_state("api", "RUNNING")
+            spare = await wait_spare(p)
+            assert spare != p.pid
+            os.kill(p.pid, signal.SIGKILL)
+            await h.wait_state("api", "BACKOFF", 2)
+            await h.wait_state("api", "RUNNING", 5)
+            assert p.pid == spare and p.restarts == 1 and p.last_exit == -9
+            log = (h.sup.logs_dir / "api.log").read_text()
+            started = [json.loads(x) for x in log.splitlines() if '"child started"' in x]
+            assert started[-1]["kv"]["restart_count"] == 1 and started[-1]["kv"]["last_exit"] == -9
+            spare2 = await wait_spare(p)
+            assert spare2 not in (spare, None)
+            os.kill(p.pid, signal.SIGSTOP)  # 挂死：判定后 SIGKILL，备用进程接替
+            await h.wait_state("api", "BACKOFF", 5)
+            await h.wait_state("api", "RUNNING", 5)
+            assert p.pid == spare2 and p.last_reason == "hung"
+            last = await wait_spare(p)
+        assert not _alive(last) and not _alive(spare2) and p.spare is None
+
+    run(main())
+
+
+def _alive(pid: int) -> bool:
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as f:
+            return f.read().rsplit(b")", 1)[1].split()[0] != b"Z"
+    except OSError:
+        return False
+
+
+def test_descendants_reaped_after_child_killed(tmp_path: Path) -> None:
+    """子进程被 SIGKILL 或判挂死后，其同组后代被回收（FX2-R3-gateway；D1 验收第 2 轮 4.1b：sim-core 的 plan-pool 孤儿）；
+    忽略 SIGTERM 的后代在 REAP_GRACE_S 后被 SIGKILL；正常停止时 supervisor 等回收完成再退出。"""
+    g1, g2, g3 = (tmp_path / f"g{i}.pid" for i in (1, 2, 3))
+    cfg = make_cfg(tmp_path, [proc("api", "--grandchild", str(g1), "--grandchild-ignore-term"),
+                              proc("hangy", "--mode", "hang", "--after", "0.5", "--grandchild", str(g2), stale_s=0.5),
+                              proc("calm", "--grandchild", str(g3), "--grandchild-ignore-term")], backoff=(5, 5, 5, 5, 5))
+
+    async def wait_pid(f: Path) -> int:
+        for _ in range(500):
+            if f.exists() and f.read_text().strip():
+                return int(f.read_text())
+            await asyncio.sleep(0.01)
+        raise AssertionError(f"{f} 未写出")
+
+    async def gone(pid: int, timeout: float) -> float:
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout:
+            if not _alive(pid):
+                return time.monotonic() - t0
+            await asyncio.sleep(0.02)
+        raise AssertionError(f"后代 {pid} 仍存活")
+
+    async def main() -> None:
+        async with Harness(cfg) as h:
+            await h.wait_state("api", "RUNNING")
+            p1, p2, p3 = await wait_pid(g1), await wait_pid(g2), await wait_pid(g3)
+            assert _alive(p1) and _alive(p2) and _alive(p3)
+            os.kill(h.sup.procs["api"].pid, signal.SIGKILL)
+            # 退出检测不依赖管道关闭：后代仍持有 stdout 管道（且忽略 SIGTERM）时也在 ≤ 100 ms 内检出（上界留负载余量）
+            assert await h.wait_state("api", "BACKOFF", 2) <= 0.3
+            assert _alive(p1)
+            assert await gone(p1, 4.0) <= 3.0  # 忽略 SIGTERM：REAP_GRACE_S 后 SIGKILL
+            await h.wait_state("hangy", "BACKOFF", 8)
+            assert h.sup.procs["hangy"].last_reason == "hung"
+            assert await gone(p2, 3.0) < 1.0  # 不忽略 SIGTERM：立即结束
+            assert h.sup.reaped_groups >= 2
+        assert not _alive(p3)  # 正常停止：忽略 SIGTERM 的后代也在 supervisor 退出前被回收
+
+    run(main())
+
+
 def test_breaker_failed_after_6th_and_manual_reset(tmp_path: Path) -> None:
     cfg = make_cfg(tmp_path, [proc("crashy", "--mode", "crash", "--after", "0.05")])
 

@@ -59,7 +59,10 @@ class Probe:
             h = F.decode_batch_header(m)
             self.batches.append(h)
             recs = list(F.iter_records(m))
-            snap = any(r.rflags & (F.RF_RESET | F.RF_KEYFRAME) for r in recs)   # SNAPSHOT：RESET 或关键帧记录
+            # SNAPSHOT：BATCH 帧头 flags bit0（AWR-17 §6.4 帧头表；订阅、全局 epoch 变化或 seek 后的首帧），或带 RESET、
+            # 关键帧标志的记录（生产者 epoch 变化、自包含 channel）。sim-core 无 checkpoint 重启是 segment 变化 → 全局 epoch + 1，
+            # 只置帧头 SNAPSHOT，记录不带 RESET（§9.7 第 3 条）；FX-SIM1 之前该断言因重启超时（> 3 s）从未执行到
+            snap = bool(h.flags & F.BATCH_SNAPSHOT) or any(r.rflags & (F.RF_RESET | F.RF_KEYFRAME) for r in recs)
             self.reset_records += sum(1 for r in recs if r.rflags & F.RF_RESET)
             self.order.append(("snapshot" if snap else "batch", h.epoch))
             await self.send({"op": "ack", "frame": h.frame_seq})

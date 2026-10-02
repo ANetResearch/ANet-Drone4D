@@ -72,10 +72,14 @@ def test_ids_unique():
     assert len(ids) == len(set(ids))
 
 
+# 生成的快照：由 tools/contracts/gen_openapi.py 从 api 导出，test_openapi_snapshot.py 比对（不另设 schema）
+GENERATED = {"rest/openapi.snapshot.json"}
+
+
 def test_every_data_file_is_covered():
     files = sorted(str(p.relative_to(CONTRACTS)) for p in CONTRACTS.rglob("*.json")
                    if not p.name.endswith(".schema.json") and not {"gen", "golden", "fixtures", "node_modules"} & set(p.relative_to(CONTRACTS).parts)
-                   and p.name != "package.json")
+                   and p.name != "package.json" and str(p.relative_to(CONTRACTS)) not in GENERATED)
     assert sorted(DATA) == files
 
 

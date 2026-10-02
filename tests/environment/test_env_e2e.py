@@ -82,13 +82,15 @@ def test_keyframe_preset_and_query_over_ws(stack):
             eid = eid or c.topic_ids.get("env/state")
             return k == "batch" and eid is not None and x.by_channel(eid) is not None
 
-        await c.until(got_env, 15)
+        await c.until(got_env, 30)  # 上限只防挂死（负载敏感，INT-1 §7.11）
         kf = c.latest_msgpack(eid)
         assert kf["schema"] == "awr.env.keyframe.v1" and kf["config"]["presets_sha256"] == PRESETS_SHA256
         v0 = kf["version"]
         await c.send({"op": "call", "id": "c-env-1", "service": "env/preset", "args": {"name": "fog", "duration_s": 5}})
-        r = await c.until(lambda k, x: k == "json" and x["op"] == "result" and x["id"] == "c-env-1", 10)
+        r = await c.until(lambda k, x: k == "json" and x["op"] == "result" and x["id"] == "c-env-1", 30)
         assert r[1]["status"] in ("accepted", "succeeded"), r[1]
+        fin = await c.result("c-env-1", timeout=30)            # ADR-058：插件命令 running → succeeded（终态，effect OK）
+        assert fin["status"] == "succeeded" and fin["effect"]["status"] == "OK", fin
 
         def newer(k, x):
             if k != "batch" or x.by_channel(eid) is None:
@@ -96,12 +98,12 @@ def test_keyframe_preset_and_query_over_ws(stack):
             f = msgpack.unpackb(x.payload(x.by_channel(eid)), raw=False, strict_map_key=False)
             return f["version"] > v0 and f["to_preset"] == "fog"
 
-        await c.until(newer, 10)
+        await c.until(newer, 30)
         await c.send({"op": "call", "id": "c-env-q", "service": "env/query", "args": {"points": [[0, 0, 40], [30, 20, 80]]}})
-        q = await c.result("c-env-q", timeout=10)
+        q = await c.result("c-env-q", timeout=30)  # env/query 是 atomic 慢任务，负载下可顺延（STARVE_NS 兜底）
         assert q["status"] == "succeeded" and q["data"]["n"] == 2 and len(q["data"]["wind_mps"]) == 2
         await c.send({"op": "call", "id": "c-env-bad", "service": "env/set", "args": {"patch": {"wind": {"speed_ref_mps": 99}}}})
-        bad = await c.result("c-env-bad", timeout=10)
+        bad = await c.result("c-env-bad", timeout=30)
         assert bad["status"] == "rejected" and bad["code"] in (110, 300)
         await c.ws.close()
 
@@ -111,7 +113,7 @@ def test_keyframe_preset_and_query_over_ws(stack):
 def test_rest(stack):
     tok = rtc.token(stack.base, "viewer")["token"]
     h = {"authorization": f"Bearer {tok}", "origin": stack.origin}
-    end = time.monotonic() + 10
+    end = time.monotonic() + 30
     while True:
         r = httpx.get(f"{stack.base}/api/env/state", headers=h, timeout=10)
         if r.status_code == 200 or time.monotonic() > end:
@@ -122,9 +124,8 @@ def test_rest(stack):
     p = httpx.get(f"{stack.base}/api/env/presets", headers=h, timeout=10)
     assert p.status_code == 200 and p.headers["etag"] == f'"{PRESETS_SHA256}"'
     q = httpx.post(f"{stack.base}/api/env/query", json={"points": [[0, 0, 50]], "fields": ["WIND", "THERMO"]}, headers=h, timeout=10)
-    # 202 pending: sim-core defers an atomic slow task forever once its p99 exceeds the slow budget (M07-to-M08 item 5)
-    assert q.status_code in (200, 202)
-    if q.status_code == 200:
-        assert q.json()["data"]["n"] == 1
+    # ADR-057（FX-SIM2）：不可分片慢任务按积分与借贷启动，`ctl/sim-core/query` 有界时延，不再挂起到 202
+    assert q.status_code == 200, q.text
+    assert q.json()["data"]["n"] == 1
     w = httpx.post(f"{stack.base}/api/env/preset", json={"name": "rain"}, headers=h, timeout=10)
     assert w.status_code == 403

@@ -150,6 +150,44 @@ def test_server_ignores_until_timeout_then_retry_succeeds(bus_kind: str, namespa
     asyncio.run(main())
 
 
+def test_reply_delivered_before_query_final(namespace: str) -> None:
+    """回复到达即交付，不等 queryable 的 ResponseFinal（consolidation NONE，FX2-R2-gateway）：zenoh 缺省合并会把回复扣到
+    查询结束，ResponseFinal 迟到或丢失时 call 要等到超时（seek 实测一次 2003 ms，worker 侧只用 41 ms）。这里回复后推迟 1.5 s
+    才 drop（模拟迟到的 ResponseFinal），call 与 call_cb 都应在远小于 1.5 s 内拿到回复。"""
+
+    async def main() -> None:
+        a, b = rtlib.open_pair("zenoh", namespace, loop=asyncio.get_running_loop())
+        timers: list[threading.Timer] = []
+
+        def late_final(req) -> None:  # 回调线程：直接回复底层 query，推迟 drop
+            q = req._q
+            q.reply(req.key, B.pack({"ok": 1}))
+            t = threading.Timer(1.5, q.drop)
+            timers.append(t)
+            t.start()
+
+        a._declare_queryable(K.CTL_CLOCK, late_final)
+        try:
+            await asyncio.sleep(0.3)
+            for i in range(3):
+                t0 = time.monotonic()
+                assert await b.call(K.CTL_CLOCK, {"cid": f"f{i}"}, timeout=3.0, retries=0) == {"ok": 1}
+                assert time.monotonic() - t0 < 0.5
+            got: queue.SimpleQueue = queue.SimpleQueue()
+            t0 = time.monotonic()
+            b.call_cb(K.CTL_CLOCK, {"cid": "cb"}, lambda rep, err: got.put((rep, err, time.monotonic() - t0)), timeout=3.0,
+                      retries=0)
+            rep, err, dt = await asyncio.to_thread(got.get, True, 3.0)
+            assert err is None and rep == {"ok": 1} and dt < 0.5
+        finally:
+            for t in timers:
+                t.cancel()
+            b.close()
+            a.close()
+
+    asyncio.run(main())
+
+
 def test_call_cb_for_sync_processes(bus_kind: str, namespace: str) -> None:
     a, b = rtlib.open_pair(bus_kind, namespace)
     inbox, _ = _serve_thread(a, K.CTL_QUERY, lambda req: req.reply_msg({"ok": req.msg()["n"] * 2}))

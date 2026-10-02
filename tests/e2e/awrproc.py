@@ -36,6 +36,22 @@ def world_ready(world: str) -> bool:
     return (base / world / "world.json").exists()
 
 
+_NUMBA_WARMED: list[bool] = []
+
+
+def numba_warm(env: dict[str, str] | None = None) -> None:
+    """启动 supervisor 前预热 sim-core 的全部 numba 核（与 `make run` 前置 `numba-warm` 同一入口，每个测试进程一次）。
+    冷缓存时首次编译约 60 s，若留给 sim-core 在启动宽限（15 s）内完成会被反复判 startup_timeout（D1 验收第 1 轮 4.1）。"""
+    if _NUMBA_WARMED:
+        return
+    _NUMBA_WARMED.append(True)
+    e = dict(env or os.environ)
+    if e.get("AWR_KERNEL", "").strip().lower() == "numpy":
+        return
+    with contextlib.suppress(Exception):
+        subprocess.run([sys.executable, "-m", "awr.sim.runtime.warm"], cwd=ROOT, env=e, capture_output=True, timeout=900)
+
+
 def hint_of(name: str) -> str:
     """固定 principal_hint（16–64 位 base32，SK-E2E §4.3）：同一测试重跑保持同一 principal。"""
     s = "".join(ch for ch in name.upper() if ch in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
@@ -81,6 +97,7 @@ class Backend:
             env["AWR_SCENARIO_PROFILE"] = self.scenario_profile
         if self.scenarios_dir:
             env["AWR_SCENARIOS_DIR"] = str(self.scenarios_dir)
+        numba_warm(env)
         t0 = time.monotonic()
         self.proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                      start_new_session=True)

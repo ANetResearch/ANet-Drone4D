@@ -135,3 +135,22 @@ def test_bookmarks(st, toks) -> None:
     (st.runs / rechelp.RUN / "bookmarks.json").write_text(json.dumps({"schema": "awr.run.bookmarks.v1", "items": items}))
     r = httpx.post(base, json={"segment": 0, "t_sim_ns": 1, "label": "z"}, headers=_h(toks["op"]), timeout=10)
     assert r.status_code == 409 and r.json()["code"] == 462
+
+
+def test_bookmarks_of_the_current_inproc_run(st, toks) -> None:
+    """FX-GW（INT-1 §7.8）：`--inproc` 与测试栈的运行 id（inproc-xxxxxx）不满足 r<date>-<time>-<hex>，此前书签 422；
+    当前运行的书签落在本运行的持久化目录，其他不合规 id 仍 422。"""
+    run = st.settings.run_id
+    assert run.startswith("inproc-")
+    r = httpx.get(f"{st.base}/api/runs/{run}/bookmarks", headers=_h(toks["viewer"]), timeout=10)
+    assert r.status_code == 200 and r.json()["items"] == []
+    r = httpx.post(f"{st.base}/api/runs/{run}/bookmarks", json={"segment": 0, "t_sim_ns": 1_500_000_000, "label": "inproc"},
+                   headers=_h(toks["op"]), timeout=10)
+    assert r.status_code == 201, r.text
+    bid = r.json()["id"]
+    items = httpx.get(f"{st.base}/api/runs/{run}/bookmarks", headers=_h(toks["viewer"]), timeout=10).json()["items"]
+    assert [x["id"] for x in items] == [bid]
+    assert json.loads((Path(st.settings.persist_dir) / "bookmarks.json").read_text())["items"][0]["label"] == "inproc"
+    assert httpx.delete(f"{st.base}/api/runs/{run}/bookmarks/{bid}", headers=_h(toks["op"]), timeout=10).status_code == 204
+    other = httpx.get(f"{st.base}/api/runs/inproc-000000/bookmarks", headers=_h(toks["viewer"]), timeout=10)
+    assert other.status_code == 422

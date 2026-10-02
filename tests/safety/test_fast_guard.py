@@ -173,3 +173,53 @@ def test_throttle_sat_real_thrust_loss_and_state_age() -> None:
         assert "SAF.EST.TIMEOUT" in h.codes(b)
     finally:
         h.close()
+
+
+def _random_rig(seed: int, use_kernel: bool) -> UnitRig:
+    rng = np.random.default_rng(seed)
+    n = 40
+    r = UnitRig(n=n)
+    r.rt.guard.use_kernel = use_kernel
+    S, sb = r.S, r.sb
+    fss = np.array([FS.FLYING, FS.FLYING, FS.FLYING, FS.TAKING_OFF, FS.HOLD, FS.RTL, FS.LANDING, FS.ELAND, FS.LANDED])
+    for i in range(n):
+        r.set(i, int(fss[rng.integers(len(fss))]), int(rng.integers(0, 6)), air=bool(rng.random() < 0.9),
+              t_enter_s=float(rng.uniform(-5.0, 0.5)))
+    S.p[:n] = rng.uniform(-50, 50, (n, 3))
+    S.pos_ref[:n] = S.p[:n] + rng.normal(0, 2.5, (n, 3))
+    S.v[:n] = rng.normal(0, 2, (n, 3))
+    q = rng.normal(0, 0.35, (n, 4))
+    q[:, 0] = 1.0
+    S.q[:n] = q / np.linalg.norm(q, axis=1)[:, None]
+    qs = S.q[:n] + rng.normal(0, 0.2, (n, 4))
+    S.q_sp[:n] = qs / np.linalg.norm(qs, axis=1)[:, None]
+    S.thrust[:n] = rng.uniform(0.3, 1.0, n)
+    S.thr_cap[:n] = rng.uniform(0.5, 1.0, n).astype(np.float32)
+    S.est_age_s[:n] = np.where(rng.random(n) < 0.1, 0.15, 0.0).astype(np.float32)
+    S.env_gust[:n] = np.where(rng.random(n) < 0.5, 1.0, 0.0).astype(np.float32)
+    sb["cond"][:n] = np.where(rng.random(n) < 0.3, np.uint64(1 << 15) | np.uint64(1 << 16), np.uint64(0))
+    S.touch()
+    return r
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_kernel_matches_numpy_path(seed: int) -> None:
+    """numba 核（`kernels.fast_guard_scan`）与 numpy 路径逐项一致：持续计时、pe 最大值、参考差分状态、条件位、候选与事件。"""
+    from awr.sim.safety import kernels as KN
+
+    if not KN.HAVE_NUMBA:
+        pytest.skip("numba 不可用")
+    a, b = _random_rig(seed, True), _random_rig(seed, False)
+    for k in range(120):
+        drift = np.random.default_rng(seed * 1000 + k).normal(0, 0.3, (40, 3))
+        for r in (a, b):
+            r.S.pos_ref[:40] += drift
+            r.S.touch()
+            r.tick(1, ("guard", "fsm") if k % 5 == 0 else ("fsm",))
+    for f in ("te_since", "pe_since", "thr_since", "trk_since", "last_ref", "last_ref_t", "pe_max_m", "pe_gust_max_m"):
+        np.testing.assert_allclose(a.sb[f], b.sb[f], rtol=1e-12, atol=1e-9, equal_nan=True, err_msg=f)
+    for f in ("cond", "fs", "sub", "latch"):
+        assert np.array_equal(a.sb[f], b.sb[f]), f
+    ea = [(e["kind"], e.get("uav"), e.get("code")) for e in a.events()]
+    eb = [(e["kind"], e.get("uav"), e.get("code")) for e in b.events()]
+    assert ea == eb and len(ea) > 0

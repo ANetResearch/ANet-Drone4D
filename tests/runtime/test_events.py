@@ -270,10 +270,11 @@ def test_570_events_per_s_no_gap_no_reorder(kind: str, namespace: str) -> None:
     pub = EventPublisher(a, "sim-core", epoch=1)
     try:
         time.sleep(0.3)
-        t0 = time.monotonic()
         k = 0
         acc = 0.0
-        while time.monotonic() - t0 < 3.0:
+        # 250 Hz × 3 s 按迭代计数（共 1710 条）而不是墙钟窗口：全量并发负载下 3 s 墙钟内的迭代数不足，条数断言偶发失败
+        # （FX-GW，INT-1 §7.11 负载敏感用例；缺口与乱序的判定不变）
+        while k < 750:
             k += 1
             acc += 570 / 250
             while acc >= 1:
@@ -285,9 +286,79 @@ def test_570_events_per_s_no_gap_no_reorder(kind: str, namespace: str) -> None:
             time.sleep(0.004)
         assert pump_until(sub, lambda: len(sink.events) == pub.last_seq, 3.0, also=pub.flush)
         assert sink.seqs == list(range(1, pub.last_seq + 1))
-        assert sink.gaps == [] and pub.last_seq >= 1500
+        assert sink.gaps == [] and pub.last_seq >= 1700
     finally:
         sub.close()
         pub.close()
+        b.close()
+        a.close()
+
+
+def test_tail_drop_recovered_by_quiet_probe(bus_kind: str, namespace: str) -> None:
+    """尾部批次被丢弃、生产者此后不再发事件：没有后续 seq 可检出缺口，由尾部探测（静默 ≥ 0.5 s）在 1 s 内补齐（D1-AC-10）。"""
+    a, b = pair(bus_kind, namespace)
+    sink = Sink()
+    sub = EventSubscriber(b, on_events=sink.on_events, on_gap=sink.on_gap)
+    pub = EventPublisher(a, "sim-core", epoch=1)
+    dropped: list[float] = []
+
+    def flt(key: str, raw: bytes) -> bool:
+        if any(e["seq"] >= 4 for e in msgpack.unpackb(raw)):
+            dropped.append(time.monotonic())
+            return False
+        return True
+
+    sub.filter = flt
+    try:
+        if bus_kind == "zenoh":
+            time.sleep(0.3)
+        for i in range(1, 6):
+            pub.emit("cmd.succeeded", t_sim_ns=i, cid=f"c{i}")
+            if i in (3, 5):
+                pub.flush()  # 两条消息：1–3 送达，4–5 被丢弃（尾部批次）
+        assert pump_until(sub, lambda: len(sink.events) == 3, 2.0, also=pub.flush)
+        assert dropped and sub.stats["gaps_detected"] == 0  # 没有后续消息，缺口检出不了
+        assert pump_until(sub, lambda: len(sink.events) == 5, 2.0, also=pub.flush)
+        assert time.monotonic() - dropped[0] < 1.0
+        assert sink.seqs == [1, 2, 3, 4, 5] and sink.gaps == []
+        assert sub.stats["tail_probes"] >= 1 and sub.stats["tail_recovered"] == 2 and sub.stats["replays"] == 0
+    finally:
+        sub.close()
+        pub.close()
+        b.close()
+        a.close()
+
+
+def test_tail_probe_quiet_producer_and_backoff(namespace: str) -> None:
+    """持续发事件的生产者不触发尾部探测；静默生产者按周期探测、无新事件时什么都不交付；生产者不可达时退避。"""
+    a, b = pair("local", namespace)
+    sink = Sink()
+    sub = EventSubscriber(b, on_events=sink.on_events, on_gap=sink.on_gap, tail_probe_s=0.1)
+    pub = EventPublisher(a, "sim-core", epoch=1)
+    mute = EventPublisher(a, "job-worker", epoch=1, serve_replay=False)
+    try:
+        t_end = time.monotonic() + 0.4
+        while time.monotonic() < t_end:  # 每 20 ms 一条：不足 0.1 s 静默，不探测
+            pub.emit("sim.clock", t_sim_ns=1)
+            pub.flush()
+            sub.pump()
+            time.sleep(0.02)
+        assert sub.stats["tail_probes"] == 0
+        mute.emit("job.progress", t_sim_ns=0)
+        mute.flush()
+        assert pump_until(sub, lambda: sub.stats["tail_probes"] >= 3, 2.0, also=pub.flush)
+        n = len(sink.events)
+        assert pump_until(sub, lambda: sub.stats["tail_errors"] >= 1, 3.0, also=pub.flush)  # job-worker 无 _replay
+        assert len(sink.events) == n and sink.gaps == []
+        tr = sub._trackers["job-worker"]
+        assert tr.tail_every_s > 0.1  # 退避
+        mute.emit("job.progress", t_sim_ns=1)
+        mute.flush()
+        sub.pump()
+        assert tr.tail_every_s == 0.1  # 实时消息到达后恢复
+    finally:
+        sub.close()
+        pub.close()
+        mute.close()
         b.close()
         a.close()

@@ -7,11 +7,11 @@
 
 LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units
 
-.PHONY: lint-tools lint-selftest lint-py-imports lint-py-callbacks lint-perf-flags $(addprefix lint-,$(LINT_SCRIPTS))
+.PHONY: lint-tools lint-selftest lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds $(addprefix lint-,$(LINT_SCRIPTS))
 
-LINT_TARGETS += lint-selftest $(addprefix lint-,$(LINT_SCRIPTS)) lint-py-imports lint-py-callbacks lint-perf-flags
+LINT_TARGETS += lint-selftest $(addprefix lint-,$(LINT_SCRIPTS)) lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds
 
-lint-tools: lint-selftest $(addprefix lint-,$(LINT_SCRIPTS)) lint-py-imports lint-py-callbacks lint-perf-flags ## 只运行 tools/lint 全部规则（不含 ruff、oxlint）
+lint-tools: lint-selftest $(addprefix lint-,$(LINT_SCRIPTS)) lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds ## 只运行 tools/lint 全部规则（不含 ruff、oxlint）
 
 lint-selftest:
 	@cd $(ROOT) && node tools/lint/selftest.mjs
@@ -30,3 +30,8 @@ lint-py-callbacks:
 
 lint-perf-flags:
 	@cd $(ROOT) && node tools/ci/check-perf-flags.mjs
+
+# 阈值表覆盖（AWR-18 §1.3 第 4 条，FX-GW 交付）：THR-01/02/03 为错误；只由断言判定、没有阈值条目的 P0 PERF-AC 以 THR-04
+# 列出（--strict 时为错误，待 M16 补齐 thresholds.json 条目后改为 --strict）
+lint-thresholds:
+	@cd $(ROOT) && node tools/ci/check-thresholds.mjs
