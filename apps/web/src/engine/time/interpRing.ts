@@ -12,6 +12,7 @@ import { DS64 } from '@awr/contracts/layouts'
 import type { TelemetryFrame } from '@/net/rt/types'
 import { hermiteRing, integrateOmegaInto, slerpInto } from './hermite'
 import { TIME_PARAMS as P } from './params'
+import { hypot4 } from '../hypot'
 
 export { slerpInto } from './hermite'
 
@@ -49,6 +50,8 @@ export interface Interp {
 }
 
 const FULL_ITEM = 80
+/** control-byte bits that a command changes: owner (0-2) and native mode (4-5) */
+const CTRL_EFFECT = 0x37
 const FULL_ROW = 16
 
 export class InterpRing implements Interp {
@@ -65,6 +68,13 @@ export class InterpRing implements Interp {
   head = new Int32Array(0)
   count = new Int32Array(0)
   state = new Uint8Array(0)
+  /** control byte (owner | locked << 3 | native << 4 | pose_src << 6) of the newest sample */
+  ctrl = new Uint8Array(0)
+  /**
+   * simulation ms of the first sample that carried the current flight state byte and control owner/native (a command's
+   * visible effect, D1-AC-26 command to visible)
+   */
+  stateSince = new Float64Array(0)
   flags = new Uint8Array(0)
   battery = new Uint8Array(0)
   agentOfSlot = new Uint16Array(0)
@@ -112,6 +122,8 @@ export class InterpRing implements Interp {
     this.head = cp(this.head, c)
     this.count = cp(this.count, c)
     this.state = cp(this.state, c)
+    this.stateSince = cp(this.stateSince, c)
+    this.ctrl = cp(this.ctrl, c)
     this.flags = cp(this.flags, c)
     this.battery = cp(this.battery, c)
     this.agentOfSlot = cp(this.agentOfSlot, c)
@@ -159,7 +171,7 @@ export class InterpRing implements Interp {
 
   private write(i: number, tMs: number, px: number, py: number, pz: number, vx: number, vy: number, vz: number,
     qx: number, qy: number, qz: number, qw: number, src: number, wx: number, wy: number, wz: number): void {
-    const ql = Math.hypot(qx, qy, qz, qw) || 1
+    const ql = hypot4(qx, qy, qz, qw) || 1
     this.t[i] = tMs
     const i3 = 3 * i
     const i4 = 4 * i
@@ -261,7 +273,10 @@ export class InterpRing implements Interp {
         const i4 = 4 * i
         this.push(s, t, sw.pos[i3], sw.pos[i3 + 1], sw.pos[i3 + 2], sw.vel[i3], sw.vel[i3 + 1], sw.vel[i3 + 2],
           sw.quat[i4], sw.quat[i4 + 1], sw.quat[i4 + 2], sw.quat[i4 + 3], 0)
+        const ck = sw.ctrl[i] & CTRL_EFFECT
+        if (this.state[s] !== sw.fs[i] || (this.ctrl[s] & CTRL_EFFECT) !== ck || this.count[s] === 1) this.stateSince[s] = t
         this.state[s] = sw.fs[i]
+        this.ctrl[s] = sw.ctrl[i]
         this.flags[s] = sw.flags[i]
         this.battery[s] = sw.battery[i]
       }
@@ -280,7 +295,11 @@ export class InterpRing implements Interp {
         dv.getFloat32(r + DS64.Q, true), dv.getFloat32(r + DS64.Q + 4, true), dv.getFloat32(r + DS64.Q + 8, true), dv.getFloat32(r + DS64.Q + 12, true), 1,
         dv.getFloat32(r + DS64.OMEGA, true), dv.getFloat32(r + DS64.OMEGA + 4, true), dv.getFloat32(r + DS64.OMEGA + 8, true))
       if (tMs >= this.t[s * this.K + this.head[s]]) {
-        this.state[s] = dv.getUint8(r + DS64.FLIGHT_STATE)
+        const fs = dv.getUint8(r + DS64.FLIGHT_STATE)
+        const cb = dv.getUint8(r + DS64.CTRL)
+        if (this.state[s] !== fs || (this.ctrl[s] & CTRL_EFFECT) !== (cb & CTRL_EFFECT) || this.count[s] === 1) this.stateSince[s] = tMs
+        this.state[s] = fs
+        this.ctrl[s] = cb
         this.flags[s] = dv.getUint8(r + DS64.FLAGS)
         this.battery[s] = dv.getUint8(r + DS64.BATTERY_PCT)
       }
@@ -316,6 +335,17 @@ export class InterpRing implements Interp {
     this.lastHold = hold
     this.lastExtrap = extrap
     this.lastMaxAgeMs = maxAge
+  }
+
+  /** simulation ms since which the vehicle's newest flight state and control owner/native hold (NaN without samples) */
+  stateSinceMs(agentNo: number): number {
+    const s = this.slotOf[agentNo]
+    return s < 0 || this.count[s] === 0 ? Number.NaN : this.stateSince[s]
+  }
+  /** control byte of the vehicle's newest sample (-1 without samples) */
+  ctrlOf(agentNo: number): number {
+    const s = this.slotOf[agentNo]
+    return s < 0 || this.count[s] === 0 ? -1 : this.ctrl[s]
   }
 
   /** one vehicle into out at index o; false when it has no samples */

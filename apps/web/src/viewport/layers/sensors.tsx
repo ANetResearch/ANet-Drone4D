@@ -43,6 +43,7 @@ export function SensorsLayer() {
         fadeFrom = L.frustumFade
         fadeT0 = performance.now()
       },
+      visible: () => L.frustumRoot.visible && L.drawCountFrustums() > 0,
     }
     const offs = [
       register('world', 'frustums.fade', (ctx) => {

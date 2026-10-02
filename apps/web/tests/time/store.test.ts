@@ -101,8 +101,10 @@ describe('live transport (M12-AC-014, AC-016)', () => {
     bindTimeline(s.rt)
     s.time(TS.PAUSED, 1000)
     tickTimeline(0)
-    const t0 = performance.now()
     timeline.play()
+    // read the clock after the call: the 1 s deadline starts inside play(), and on a loaded machine more than 1 ms can
+    // pass between a reading taken before the call and the call itself (FX-WEB2, full parallel run)
+    const t0 = performance.now()
     tickTimeline(t0 + 500)
     expect(timelineStore.getState().pending).not.toBeNull()
     tickTimeline(t0 + 1001)

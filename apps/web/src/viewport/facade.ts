@@ -7,8 +7,8 @@
 import { events, loop, perf, projectEnu, type CameraPose, type GotoState, type GovernorKnob, type PickOptions, type PickResult } from '@/engine'
 import type { CallHandle, CallStatus } from '@/net/rt'
 import { selectionStore } from '@/stores/selection'
-import { vp } from './session'
-import { clickAt } from './interaction'
+import { vp, type PointPickInfo } from './session'
+import { clickAt, pointInfoAt } from './interaction'
 import { sendGoto, gotoResults, gotoTargetFor, primaryAgentNo, sendVehicleCommand, vehicleCmdState, type GotoOptions, type GotoRequest, type VehicleCmd, type VehicleCmdState } from './gotoRule'
 import { getLayer, registerLayer, type LayerId, type LayerSpec } from './layers/registry'
 import { requestRebuild } from './hostRuntime'
@@ -197,6 +197,14 @@ export const pick = {
     const no = primaryAgentNo()
     return { worldId: p.worldId, surface: [p.surface[0], p.surface[1], p.surface[2]], target: no >= 0 ? gotoTargetFor(p.surface, no) : null }
   },
+  /** last point-cloud point under a click (ENU, class, HAG; PRD-FR-017, D1-ext), null before a hit */
+  get point(): PointPickInfo | null {
+    return vp.pointPick
+  },
+  /** point-cloud pick at CSS px without the click side effects (the ID pass result, or null on a miss) */
+  pointAt(cssX: number, cssY: number): Promise<PointPickInfo | null> {
+    return pointInfoAt(cssX, cssY)
+  },
   /** the click path at CSS px of the viewport (selects a vehicle or sets the ground pick; tests use it too) */
   at(cssX: number, cssY: number): Promise<'drone' | 'ground' | 'none'> {
     return clickAt(cssX, cssY, vp.cssW, vp.cssH)
@@ -217,6 +225,7 @@ export const pick = {
   },
   clear(): void {
     vp.pick = null
+    vp.pointPick = null
     vp.mission?.goto.clear()
     vp.changed()
   },

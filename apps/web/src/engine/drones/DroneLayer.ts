@@ -73,6 +73,12 @@ export interface DroneLayerOptions {
   subscribe: (topic: string, rate: number) => () => void
   sensors?: () => SensorsApi | null
   motionTier?: () => 'full' | 'lite' | 'reduced' | 'off'
+  /**
+   * true while the simulation clock is frozen (TIME state PAUSED or STEPPING) and TIME itself is fresh: no new samples
+   * arrive because nothing moves, so the vehicles are not marked STALE ("signal delay"); a stale TIME (connection
+   * degraded) still marks them (FX-WEB2-to-M06-M12 item 1; FX-WEB1)
+   */
+  frozen?: () => boolean
 }
 
 export class DroneLayer {
@@ -239,6 +245,7 @@ export class DroneLayer {
     const n = p.n
     const mark = this.mark
     const staleS = INPUT.staleAfterMs / 1000
+    const frozen = this.o.frozen?.() === true
     for (let i = 0; i < n; i++) {
       const a = p.agentNo[i]
       let m = 0
@@ -247,7 +254,7 @@ export class DroneLayer {
       if (a === this.hover) m |= MARK.HOVER
       if (a === this.redOwner) m |= MARK.RED
       if (a === this.focusAgent && this.focusMode === 'fpv') m |= MARK.HIDDEN
-      if (p.hold[i] || p.ageS[i] > staleS) m |= MARK.STALE
+      if (!frozen && (p.hold[i] || p.ageS[i] > staleS)) m |= MARK.STALE
       if (this.focus.has(a)) m |= MARK.FOCUSSET
       mark[a] = m
       this.alert[a] = Math.max(alertLevelOf(p.state[i], p.flags[i]), this.extAlert[a])
@@ -436,6 +443,10 @@ export class DroneLayer {
     this.trailHalo.sync(this.trails, nowRel, zero)
     this.trailFocus.sync(this.trails, nowRel, this.colorOf)
     const dpr = ctx.dpr > 0 ? ctx.dpr : 1
+    const near = (ctx.camera as PerspectiveCamera | null)?.near ?? 0
+    this.trailSel.setView(ctx.dbW, ctx.dbH, near)
+    this.trailHalo.setView(ctx.dbW, ctx.dbH, near)
+    this.trailFocus.setView(ctx.dbW, ctx.dbH, near)
     this.trailSel.setWidth(TRAIL_STYLES.selected.widthCss, dpr)
     this.trailHalo.setWidth(TRAIL_STYLES.halo.widthCss, dpr)
     this.trailFocus.setWidth(TRAIL_STYLES.focus.widthCss, dpr)

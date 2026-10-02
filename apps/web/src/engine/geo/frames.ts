@@ -1,3 +1,4 @@
+import { hypot4 } from '../hypot'
 // The single TypeScript frame-conversion implementation (M02 §7.2; AWR-03 §5.1 rules 5-8).
 // Isomorphic subset of python/awr/world/georef/frames.py: geodesy (WGS84/CGCS2000, LLA, ECEF, world ENU),
 // ENU<->NED, FLU<->FRD, ENU<->three (E, U, -N), heading, UE flight files, Sim3 interpolation.
@@ -215,7 +216,7 @@ export function ueRotToQuatInto(out: Float64Array | number[], pitchDeg: number, 
   let qy = ay * cx + az * sx
   let qz = az * cx - ay * sx
   let qw = aw * cx - ax * sx
-  const n = Math.hypot(qx, qy, qz, qw)
+  const n = hypot4(qx, qy, qz, qw)
   const s = qw < 0 ? -1 / n : 1 / n
   qx *= s
   qy *= s
@@ -260,7 +261,7 @@ export function sim3InterpolateInto(out: Float64Array | number[], a: Sim3, b: Si
     kb = Math.sin(u * th) / Math.sin(th)
   }
   let qx = ka * a.q[0] + kb * bx, qy = ka * a.q[1] + kb * by, qz = ka * a.q[2] + kb * bz, qw = ka * a.q[3] + kb * bw
-  const n = Math.hypot(qx, qy, qz, qw)
+  const n = hypot4(qx, qy, qz, qw)
   const sg = qw < 0 ? -1 / n : 1 / n
   qx *= sg; qy *= sg; qz *= sg; qw *= sg
   out[1] = qx; out[2] = qy; out[3] = qz; out[4] = qw

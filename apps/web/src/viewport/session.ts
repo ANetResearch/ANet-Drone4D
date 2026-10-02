@@ -16,6 +16,17 @@ export interface GroundPick {
   atMs: number
 }
 
+/** point-cloud pick of a click (M05 PointPick subset, PRD-FR-017) */
+export interface PointPickInfo {
+  worldId: string
+  pointEnu: Float64Array
+  classIdx: number
+  className: string
+  hagM: number | null
+  spacingM: number
+  atMs: number
+}
+
 /** world context read from world.json / coordinate.json (M06 §7.3) */
 export interface WorldContext {
   worldId: string
@@ -52,6 +63,8 @@ class ViewportSession {
    */
   staticBrowse = false
   pick: GroundPick | null = null
+  /** last point-cloud point under a click (M06-FR-064, PRD-FR-017; D1-ext): ENU, class, HAG for the info card */
+  pointPick: PointPickInfo | null = null
   cssW = 0
   cssH = 0
   /** rebuild generation of the canvas (device loss, viewport.rebuild) */

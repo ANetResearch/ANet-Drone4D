@@ -1,3 +1,4 @@
+import { hypot4 } from '../hypot'
 // Gimbal visual follow (M13-FR-021; M13 §6.5.12; ADR-046; P-04). Owner: M13. A SensorPose48 sample carries the world
 // orientation of the sensor q_ws (WORLD<-SENSOR, FLU); with the body orientation q_wb interpolated at the same sample time
 // the gimbal angles follow as R_g = R_mountᵀ·R(conj(q_wb)·q_ws), az = atan2(R_g[1][0], R_g[0][0]), el = asin(R_g[2][0])
@@ -79,7 +80,7 @@ export function gimbalFromSample(qWS: ArrayLike<number>, qWB: ArrayLike<number>,
   qInv[2] = -qWB[2]
   qInv[3] = qWB[3]
   quatMul(qInv, qWS, qBS)
-  const n = Math.hypot(qBS[0], qBS[1], qBS[2], qBS[3])
+  const n = hypot4(qBS[0], qBS[1], qBS[2], qBS[3])
   if (!(n > 0) || !Number.isFinite(n)) return false
   for (let i = 0; i < 4; i++) qBS[i] /= n
   quatToR(qBS, rBS)

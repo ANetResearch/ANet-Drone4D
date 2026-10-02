@@ -6,6 +6,12 @@ import { join } from 'node:path'
 import { pinned } from '../browser.mjs'
 import { findNewest, resolveCmd, runLogged, statusOfExit, substitute } from './common.mjs'
 
+/** Python's json.dump writes NaN and Infinity for failed measurements (ACC-1: fleet_ladder N = 500/1000 whose sim-core never
+ *  came up); they become null so the record is judged as missing instead of crashing the run as an anomaly */
+export function parseBench(text) {
+  return JSON.parse(text.replace(/(:\s*|\[\s*|,\s*)(-?Infinity|NaN)(?=\s*[,\]}])/g, '$1null'))
+}
+
 export async function runPy(c, o) {
   const [cmd0, args0] = resolveCmd(substitute(c.cmd, { runDir: o.runDir, base: o.base ?? '', ...o.params }))
   const [cmd, args] = o.params.pin === 'none' ? [cmd0, args0] : pinned(cmd0, args0, String(o.params.pin ?? '2-6'))
@@ -13,7 +19,10 @@ export async function runPy(c, o) {
   const r = await runLogged(cmd, args, { env, runDir: o.runDir, name: 'tool', timeoutS: o.timeoutS })
   const st = statusOfExit(r.code, r.timedOut)
   const file = findNewest(o.runDir, 'bench-result.json')
-  const bench = file && existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null
+  const bench = file && existsSync(file) ? parseBench(readFileSync(file, 'utf8')) : null
+  // bench_cmd keeps its judged medians in bench-ipc.json next to the record (ACC-1: the record has no rtt or gap fields)
+  const ipc = join(o.runDir, 'bench-ipc.json')
+  if (bench && existsSync(ipc)) bench.ipc = parseBench(readFileSync(ipc, 'utf8'))
   if (!bench && st.execStatus === 'PASS' && (c.metrics ?? []).some((m) => m.source === 'bench')) {
     st.errors.push({ code: 'PERF-E011', message: 'tool wrote no bench-result.json' })
   }

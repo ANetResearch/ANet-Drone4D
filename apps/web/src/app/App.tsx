@@ -10,6 +10,7 @@ import { onNotFound, useRoute } from './router/router'
 import { parseChrome, parseSel } from './router/search'
 import { GlobalLayers } from './GlobalLayers'
 import { boot } from './boot/BootController'
+import { BootMask } from './boot/BootMask'
 import { WorldCanvas } from '@/viewport/WorldCanvas'
 import { AppHeader } from '@/ui/layout/AppHeader'
 import { useShellLayout } from '@/ui/layout/layoutState'
@@ -45,6 +46,14 @@ function RouterOutlet() {
   React.useEffect(() => {
     boot.resolveGate('shell')
   }, [])
+  // page title: the product name "ANet Drone4D" (the ANetResearch/ANet-Drone4D repository), prefixed with the view
+  const routeId = route?.route.id ?? null
+  const viewWorld = route?.params.id ?? null
+  React.useEffect(() => {
+    const product = t('brand.product')
+    const view = routeId === 'world' && viewWorld ? viewWorld : routeId && ['worlds', 'jobs', 'runs', 'report', 'reports', 'bench'].includes(routeId) ? t(`title.${routeId}`) : null
+    document.title = view ? t('title.view', { view, product }) : product
+  }, [routeId, viewWorld, t])
   if (!route) return null
   const layer = route.route.layer
   const Page = route.route.component
@@ -61,6 +70,18 @@ function RouterOutlet() {
   )
 }
 
+/**
+ * ?chrome=0 (canvas-only baseline, AWR-18 §9.5; M15-FR-004): no shell and no global layers, but the boot still has to
+ * reveal (the 'shell' gate resolves on the first commit, the mask node of index.html fades out), otherwise flight60
+ * scene=pc never starts (the driver waits for the reveal) and the mask covers the canvas. FX-WEB1.
+ */
+function CanvasOnly() {
+  React.useEffect(() => {
+    boot.resolveGate('shell')
+  }, [])
+  return <BootMask />
+}
+
 export function App() {
   const route = useRoute()
   const chrome = route ? parseChrome(route.search) : true
@@ -73,7 +94,7 @@ export function App() {
           </ViewportErrorBoundary>
         )}
         {chrome ? <RouterOutlet /> : null}
-        {chrome ? <GlobalLayers /> : null}
+        {chrome ? <GlobalLayers /> : <CanvasOnly />}
       </div>
     </ErrorBoundaryShell>
   )

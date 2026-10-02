@@ -13,9 +13,18 @@ for (const city of ['shenzhen', 'newyork', 'shanghai', 'suzhou']) {
     test.setTimeout(240_000)
     const w = watch(page)
     await openWorld(page, srv.get().url, city, '?bench=flight60&scene=pc&chrome=0')
-    const mode = await perf<string>(page, 'bench.mode')
-    test.skip(mode !== 'flight60', 'M06 flight60 bench driver not active in this build')
+    // M06's bench driver is part of both builds (AWR-18 §9.5): the run must be a flight60 run, never skipped (FX-WEB1)
+    expect(await perf<string>(page, 'bench.mode')).toBe('flight60')
     await page.waitForFunction(() => (window as unknown as { __perf: { bench: { done: boolean } } }).__perf.bench.done, null, { timeout: 150_000 })
+    // the camera followed the flight to its end and the frame ring carries flight times (steady window t in (2, 60] s)
+    expect(await perf<number>(page, 'bench.flightT')).toBeGreaterThanOrEqual(60)
+    const ts = await page.evaluate(() => {
+      const r = (window as unknown as { __perf: { frame: { t: { buf: Float64Array; n: number } } } }).__perf.frame.t
+      let steady = 0
+      for (let i = Math.max(0, r.n - r.buf.length); i < r.n; i++) if (r.buf[i & (r.buf.length - 1)] > 2) steady++
+      return steady
+    })
+    expect(ts, 'frames inside the steady window').toBeGreaterThan(30)
     const pc = await perf<Record<string, number>>(page, 'pc')
     const cas = await perf<Record<string, number>>(page, 'cas')
     expect(pc.budgetViolations).toBe(0)

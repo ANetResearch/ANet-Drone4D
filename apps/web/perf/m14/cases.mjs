@@ -10,14 +10,17 @@ export default [
     priority: 'P1', layer: 'ext', gates: ['G2d'], metrics: [], owner: 'M14',
   },
   {
-    id: 'm14.bench.s3', kind: 'py', cmd: ['python', 'tools/bench/agent/run.py', '--scenario', 's3-newyork-sar', '--dur', '60'],
-    backend: { kind: 'supervisor', world: 'newyork', scenario: 's3-newyork-sar', procs: ['sim-core', 'api', 'agent-runtime'] },
+    // FX-GW (PERF-E017): build 'none'; the backend is a live supervisor with the S3 world and processes (BackendSpec.only)
+    id: 'm14.bench.s3', kind: 'py', build: 'none', params: {},
+    cmd: ['python', 'tools/bench/agent/run.py', '--scenario', 's3-newyork-sar', '--dur', '60', '--out', '{runDir}/bench-result.json'],
+    backend: { kind: 'live', world: 'newyork', scenario: 's3-newyork-sar', only: 'sim-core,api,agent-runtime' },
     runs: 3, timeoutS: 300, acIds: ['M14-AC-032', 'M14-NFR-001', 'M14-NFR-002'], priority: 'P1', layer: 'ext', gates: ['G2d'],
     metrics: [], owner: 'M14',
   },
   {
-    id: 'm14.bench.stress', kind: 'py', cmd: ['python', 'tools/bench/agent/run.py', '--stress', '--dur', '600'],
-    backend: { kind: 'none' }, runs: 1, timeoutS: 900, acIds: ['M14-AC-033', 'M14-NFR-008'], priority: 'P2', layer: 'ext',
-    gates: ['G2d'], metrics: [], owner: 'M14',
+    id: 'm14.bench.stress', kind: 'py', build: 'none', params: {},
+    cmd: ['python', 'tools/bench/agent/run.py', '--stress', '--dur', '600', '--out', '{runDir}/bench-result.json'],
+    backend: { kind: 'tool', world: 'newyork' }, runs: 1, timeoutS: 900, acIds: ['M14-AC-033', 'M14-NFR-008'], priority: 'P2',
+    layer: 'ext', gates: ['G2d'], metrics: [], owner: 'M14',
   },
 ]

@@ -63,11 +63,13 @@ export function MissionPanel() {
     { key: 'mid', label: t('mission.col.id'), format: (r) => <span className="font-mono">{r.mid}</span> },
     { key: 'generator', label: t('mission.col.generator') },
     { key: 'state', label: t('mission.col.state'), format: (r) => t(`mission.state.${r.state}`) },
-    { key: 'vehicles', label: t('mission.col.vehicles'), align: 'right', format: (r) => fmt.count(r.vehicles.length) },
+    { key: 'vehicles', label: t('mission.col.vehicles'), format: (r) => (
+      <span className="font-mono">{r.vehicles.length <= 2 ? r.vehicles.join(', ') || '—' : t('mission.vehiclesN', { first: r.vehicles.slice(0, 2).join(', '), n: r.vehicles.length })}</span>
+    ) },
     { key: 'progressPct', label: t('mission.col.progress'), unit: '%', align: 'right', format: (r) => (
       <span className="inline-flex items-center gap-1.5"><LfTickGauge mini value={r.progressPct} ariaLabel={t('mission.col.progress')} />{fmt.num(r.progressPct)}</span>
     ) },
-    { key: 'etaS', label: t('mission.col.eta'), unit: 's', align: 'right', format: (r) => fmt.num(r.etaS) },
+    { key: 'etaS', label: t('mission.col.eta'), align: 'right', format: (r) => <span className="tabular-nums">{fmt.dur(r.etaS)}</span> },
     { key: 'menu', label: '', width: '2rem', format: (r) => <RowMenu m={r} canWrite={canWrite} /> },
   ]
   const bulk = (op: 'start' | 'pause') => {
@@ -84,11 +86,19 @@ export function MissionPanel() {
     <div className="flex min-h-0 flex-col gap-2" data-mission-panel="">
       <div className="flex items-center justify-between gap-2">
         <span className="text-hud-cap uppercase text-muted-foreground">{t('mission.count', { n: rows.length })}</span>
-        <ButtonGroup>
-          <Button size="sm" variant="outline" disabled={!canWrite || !rows.length} onClick={() => bulk('start')}><Icon icon="mission.start" data-icon="inline-start" />{t('mission.startAll')}</Button>
-          <Button size="sm" variant="outline" disabled={!canWrite || !rows.length} onClick={() => bulk('pause')}><Icon icon="mission.paused" data-icon="inline-start" />{t('mission.pauseAll')}</Button>
-          <Button size="sm" variant="outline" disabled={!canWrite} onClick={reset}><Icon icon="refresh" data-icon="inline-start" />{t('mission.reset')}</Button>
-        </ButtonGroup>
+        {canWrite ? (
+          <ButtonGroup>
+            <Button size="sm" variant="outline" disabled={!rows.length} onClick={() => bulk('start')}><Icon icon="mission.start" data-icon="inline-start" />{t('mission.startAll')}</Button>
+            <Button size="sm" variant="outline" disabled={!rows.length} onClick={() => bulk('pause')}><Icon icon="mission.paused" data-icon="inline-start" />{t('mission.pauseAll')}</Button>
+            <Button size="sm" variant="outline" onClick={reset}><Icon icon="refresh" data-icon="inline-start" />{t('mission.reset')}</Button>
+          </ButtonGroup>
+        ) : (
+          // read-only sessions see one explanation instead of greyed buttons (AWR-14 §7.8)
+          <span className="flex items-center gap-1.5 text-hud-sub text-muted-foreground" data-mission-readonly={denied ?? ''}>
+            <Icon icon={denied === 'hint.offline' ? 'alert.linklost' : 'layer.visible'} />
+            {t(denied ?? 'hint.readOnly')}
+          </span>
+        )}
       </div>
       {rows.length === 0 ? <PanelEmpty title={t('mission.empty')} description={t('mission.emptyHint')} />
         : <LfTable columns={columns} rows={rows} rowKey={(r) => r.mid} figureId="mission-table" ariaLabel={t('panel.mission.title')} height={180} />}

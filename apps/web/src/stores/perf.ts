@@ -7,6 +7,7 @@
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
 import { frameSampler, governor, loop, perfProbe, tailRing } from '@/engine'
+import { uiTickDue } from './uiTick'
 
 export type Tier = 'A' | 'B' | 'S'
 export type LimitedBy = 'complete' | 'budget' | 'pool' | 'bandwidth' | 'decode' | 'upload' | 'capacity' | 'nodes' | 'headroom' | 'error'
@@ -103,5 +104,6 @@ export function summarisePerf(): void {
   })
 }
 
-loop.register('governor', 'perf-summary.s', summarisePerf, { fps: 4, tiers: ['S'] })
-loop.register('governor', 'perf-summary.ba', summarisePerf, { fps: 10, tiers: ['A', 'B'] })
+// published on the shared UI tick (Tier S 4 Hz, B/A 10 Hz; stores/uiTick.ts, ADR-066), in the governor phase of the tick frame
+loop.register('governor', 'perf-summary.s', (ctx) => void (uiTickDue(ctx) && summarisePerf()), { tiers: ['S'] })
+loop.register('governor', 'perf-summary.ba', (ctx) => void (uiTickDue(ctx) && summarisePerf()), { tiers: ['A', 'B'] })

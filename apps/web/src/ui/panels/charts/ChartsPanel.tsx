@@ -12,7 +12,8 @@ import { LfLine } from '@/ui/lf/LfLine'
 import { LfRing } from '@/ui/lf/series'
 import { useElementWidth } from '@/ui/layout/useElementWidth'
 import { PanelEmpty } from '@/ui/brand'
-import { useSelection } from '@/stores/selection'
+import { selectionStore } from '@/stores/selection'
+import { useVisibleState } from '@/ui/panels/PanelHost'
 
 const CHARTS = [
   { key: 'alt', unit: 'm', domain: [0, 150] as const },
@@ -56,7 +57,8 @@ function sampler(id: string, rings: readonly LfRing[]): (ctx: { nowMs: number })
 
 export function ChartsPanel() {
   const t = useT()
-  const primary = useSelection((s) => s.primary)
+  // held while the Dock is folded (ADR-069): a selection change does not re-render the hidden charts
+  const primary = useVisibleState(selectionStore).primary
   const rings = React.useMemo(() => CHARTS.map(() => new LfRing()), [])
   React.useEffect(() => {
     for (const r of rings) r.clear()

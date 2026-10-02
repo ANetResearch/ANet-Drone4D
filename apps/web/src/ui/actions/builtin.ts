@@ -10,12 +10,15 @@ import { notify } from '@/app/providers/ToastProvider'
 import { camera, type CameraMode } from '@/viewport/facade'
 import { layers, layersStore } from '@/stores/layers'
 import { selection, selectionStore } from '@/stores/selection'
-import { timeline, timelineStore } from '@/stores/timeline'
+import { LIVE_RATES, REPLAY_RATES, timeline, timelineStore } from '@/stores/timeline'
 import { layoutActions } from '@/ui/layout/layoutState'
 import { perfHudActions } from '@/ui/hud/PerfHud'
 import { overlays, overlaysStore } from '@/ui/shell/overlays'
-import { connViewStore, canWriteNow } from '@/ui/shell/connView'
-import { SIM_RATES, writeDeniedKey } from '@/ui/shell/guards'
+import { canWriteNow } from '@/ui/shell/connView'
+import { writeDeniedKey } from '@/ui/shell/guards'
+import { transportReasons } from '@/ui/layout/timelineGuards'
+import { bookmarkUi } from '@/ui/panels/timeline/BookmarkEditor'
+import { leaveReplay } from '@/ui/views/replayFlow'
 import { registerHotkey, setDeniedSink } from '@/ui/hotkeys/registry'
 import { toolMode } from '@/ui/tools/toolMode'
 import { railFilterActive, railIds, railStore, stepId } from '@/ui/panels/drones/railModel'
@@ -57,19 +60,36 @@ function confirmSelection(op: 'rtl' | 'land' | 'takeoff', args: Record<string, u
 }
 
 function stepRate(dir: 1 | -1): void {
-  const cur = timelineStore.getState().rateRequested
-  let i = SIM_RATES.findIndex((r) => r >= cur)
-  if (i < 0) i = SIM_RATES.length - 1
-  const next = SIM_RATES[Math.max(0, Math.min(SIM_RATES.length - 1, i + dir))]
+  const s = timelineStore.getState()
+  const reasons = transportReasons(s.mode)
+  const table = (s.mode === 'replay' ? REPLAY_RATES : LIVE_RATES).filter((r) => reasons.speed(r) === null)
+  if (!table.length) return
+  const cur = s.rateRequested
+  let i = table.findIndex((r) => r >= cur - 1e-9)
+  if (i < 0) i = table.length - 1
+  const at = Math.abs(table[i] - cur) < 1e-9 ? i + dir : dir > 0 ? i : i - 1
+  const next = table[Math.max(0, Math.min(table.length - 1, at))]
   if (next !== cur) timeline.setRate(next)
 }
 
-const canClock = (need: 'pausable' | 'steppable') => () => {
-  const w = writeDeniedKey()
-  if (w) return w
-  const c = connViewStore.getState().clock
-  return c[need] ? null : 'hint.clockLocked'
+/** transport guards of the current mode (M12 guard table plus the session guards; ui/layout/TimelineBar) */
+const tMode = () => timelineStore.getState().mode
+const playDenied = () => transportReasons(tMode()).play
+const stepDenied = () => transportReasons(tMode()).step
+const rateDenied = () => {
+  const r = transportReasons(tMode())
+  return (tMode() === 'replay' ? REPLAY_RATES : LIVE_RATES).some((x) => r.speed(x) === null) ? null : r.speed(1)
 }
+/** replay-only transport keys: live mode flashes "live cannot rewind" */
+const replayStepDenied = () => (tMode() === 'replay' ? stepDenied() : 'hint.liveNoRewind')
+/** Timeline start: replay seeks to the segment start, live fits the view to the whole run */
+function timelineStart(): void {
+  const s = timelineStore.getState()
+  if (s.mode === 'replay' && s.playback) timeline.seek(s.playback.dataStartS)
+  else timeline.fit()
+}
+/** the Timeline (track, slider, bar) holds the keyboard focus (Home and End then act on the timeline, AWR-14 §6.10) */
+const timelineFocused = () => typeof document !== 'undefined' && document.activeElement?.closest('[data-timeline-area],[data-slot="timeline-bar"]') != null
 
 /** Esc chain: one level per press (AWR-14 §6.10) */
 export function escapeChain(): void {
@@ -118,7 +138,8 @@ export function registerBuiltinActions(): void {
       disabledReasonKey: () => (primary() ? 'hint.followMode' : 'hint.noFocus'), run: () => void camera.setFollowLock(!camera.followLock) },
     { id: 'camera.focus', labelKey: 'camera.focus', icon: 'cmd.track', group: 'camera', hotkey: 'KeyF', run: () => camera.focus(selectionStore.getState().ids) },
     { id: 'camera.north', labelKey: 'camera.north', icon: 'heading', group: 'camera', hotkey: 'KeyN', run: () => camera.northUp() },
-    { id: 'camera.home', labelKey: 'camera.home', icon: 'cam.reset', group: 'camera', hotkey: 'Home', run: () => camera.home() },
+    // Home is one binding: with the Timeline focused it jumps to the start (AWR-14 §6.10 conflict rule 4), else it resets the view
+    { id: 'camera.home', labelKey: 'camera.home', icon: 'cam.reset', group: 'camera', hotkey: 'Home', run: () => (timelineFocused() ? timelineStart() : camera.home()) },
     // selection (AWR-14 §6.2)
     { id: 'select.all', labelKey: 'select.all', icon: 'check', group: 'drone', hotkey: 'mod+KeyA', run: () => selection.select(railIds()) },
     { id: 'select.next', labelKey: 'select.next', icon: 'chev.down', group: 'drone', hotkey: 'Period', run: () => {
@@ -156,17 +177,44 @@ export function registerBuiltinActions(): void {
       disabledReasonKey: needWrite(), run: () => toolMode.enterAdd() },
     { id: 'vehicle.remove', labelKey: 'command.cmd.remove', icon: 'mission.delete', group: 'drone', hotkey: 'Delete', when: () => canWriteNow() && hasSel(),
       disabledReasonKey: needWrite(needSelection), run: () => removeVehicles(selectionStore.getState().ids) },
-    // simulation clock (AWR-14 §6.17; M12 stores/timeline actions)
-    { id: 'sim.toggle', labelKey: 'menu.sim.play', icon: 'tl.play', group: 'sim', hotkey: 'Space', when: () => canClock('pausable')() === null,
-      disabledReasonKey: canClock('pausable'), run: () => timeline.togglePlay() },
-    { id: 'sim.slower', labelKey: 'sim.slower', icon: 'tl.rewind', group: 'sim', hotkey: 'BracketLeft', when: () => writeDeniedKey() === null, disabledReasonKey: needWrite(), run: () => stepRate(-1) },
-    { id: 'sim.faster', labelKey: 'sim.faster', icon: 'tl.ff', group: 'sim', hotkey: 'BracketRight', when: () => writeDeniedKey() === null, disabledReasonKey: needWrite(), run: () => stepRate(1) },
-    { id: 'sim.step', labelKey: 'sim.step100', icon: 'tl.stepfwd', group: 'sim', hotkey: 'ArrowRight', when: () => canClock('steppable')() === null && connViewStore.getState().timeState === 2,
-      disabledReasonKey: () => canClock('steppable')() ?? 'hint.pauseFirst', run: () => timeline.step('100ms') },
-    { id: 'sim.step1s', labelKey: 'sim.step1s', icon: 'tl.skipfwd', group: 'sim', hotkey: 'shift+ArrowRight', when: () => canClock('steppable')() === null && connViewStore.getState().timeState === 2,
-      disabledReasonKey: () => canClock('steppable')() ?? 'hint.pauseFirst', run: () => timeline.step('1s') },
-    { id: 'sim.tick', labelKey: 'sim.stepTick', icon: 'tl.stepfwd', group: 'sim', hotkey: 'shift+Period', when: () => canClock('steppable')() === null && connViewStore.getState().timeState === 2,
-      disabledReasonKey: () => canClock('steppable')() ?? 'hint.pauseFirst', run: () => timeline.step('tick') },
+    // simulation clock and replay transport (AWR-14 §6.10, §6.17; M12 §8.4; stores/timeline actions: in replay the step
+    // keys become seeks of +1 s, +10 s and one recording block, the back keys and PageUp/PageDown only exist there)
+    { id: 'sim.toggle', labelKey: 'menu.sim.play', icon: 'tl.play', group: 'sim', hotkey: 'Space', when: () => playDenied() === null,
+      disabledReasonKey: playDenied, run: () => timeline.togglePlay() },
+    { id: 'sim.slower', labelKey: 'sim.slower', icon: 'tl.rewind', group: 'sim', hotkey: 'BracketLeft', when: () => rateDenied() === null, disabledReasonKey: rateDenied, run: () => stepRate(-1) },
+    { id: 'sim.faster', labelKey: 'sim.faster', icon: 'tl.ff', group: 'sim', hotkey: 'BracketRight', when: () => rateDenied() === null, disabledReasonKey: rateDenied, run: () => stepRate(1) },
+    { id: 'sim.step', labelKey: 'sim.step100', icon: 'tl.stepfwd', group: 'sim', hotkey: 'ArrowRight', when: () => stepDenied() === null,
+      disabledReasonKey: stepDenied, run: () => timeline.step('100ms') },
+    { id: 'sim.step1s', labelKey: 'sim.step1s', icon: 'tl.skipfwd', group: 'sim', hotkey: 'shift+ArrowRight', when: () => stepDenied() === null,
+      disabledReasonKey: stepDenied, run: () => timeline.step('1s') },
+    { id: 'sim.tick', labelKey: 'sim.stepTick', icon: 'tl.stepfwd', group: 'sim', hotkey: 'shift+Period', when: () => stepDenied() === null,
+      disabledReasonKey: stepDenied, run: () => timeline.step('tick') },
+    { id: 'replay.back1s', labelKey: 'replay.back1s', icon: 'tl.stepback', group: 'sim', hotkey: 'ArrowLeft', when: () => replayStepDenied() === null,
+      disabledReasonKey: replayStepDenied, run: () => timeline.step('-1s') },
+    { id: 'replay.back10s', labelKey: 'replay.back10s', icon: 'tl.skipback', group: 'sim', hotkey: 'shift+ArrowLeft', when: () => replayStepDenied() === null,
+      disabledReasonKey: replayStepDenied, run: () => timeline.step('-10s') },
+    { id: 'replay.backSample', labelKey: 'replay.backSample', icon: 'tl.stepback', group: 'sim', hotkey: 'shift+Comma', when: () => replayStepDenied() === null,
+      disabledReasonKey: replayStepDenied, run: () => timeline.step('-sample') },
+    { id: 'replay.prevMark', labelKey: 'timeline.prevMark', icon: 'tl.skipback', group: 'sim', hotkey: 'PageUp', when: () => tMode() === 'replay' && stepDenied() === null,
+      disabledReasonKey: () => (tMode() === 'replay' ? stepDenied() : null), run: () => timeline.jumpMarker(-1) },
+    { id: 'replay.nextMark', labelKey: 'timeline.nextMark', icon: 'tl.skipfwd', group: 'sim', hotkey: 'PageDown', when: () => tMode() === 'replay' && stepDenied() === null,
+      disabledReasonKey: () => (tMode() === 'replay' ? stepDenied() : null), run: () => timeline.jumpMarker(1) },
+    { id: 'timeline.bookmark', labelKey: 'timeline.addBookmark', icon: 'tl.bookmark', group: 'sim', hotkey: 'KeyM', when: () => timelineStore.getState().runId !== null,
+      disabledReasonKey: () => 'hint.noRun', run: () => void bookmarkUi.addAndEdit() },
+    { id: 'timeline.start', labelKey: 'timeline.start', icon: 'tl.skipback', group: 'sim', run: timelineStart },
+    { id: 'timeline.end', labelKey: 'timeline.end', icon: 'tl.skipfwd', group: 'sim', hotkey: 'End', when: timelineFocused, disabledReasonKey: () => null,
+      run: () => {
+        const s = timelineStore.getState()
+        if (s.mode === 'replay' && s.playback) timeline.seek(s.playback.dataEndS)
+        else {
+          const span = s.view.t1S - s.view.t0S
+          timeline.zoom(s.rangeEndS - span, s.rangeEndS)
+        }
+      } },
+    { id: 'replay.runs', labelKey: 'runs.title', icon: 'data.folder', group: 'jump', keywords: ['runs', 'replay', 'recording'], run: () => navigate('/runs') },
+    { id: 'replay.exit', labelKey: 'replay.backToLive', icon: 'tl.live', group: 'sim', keywords: ['live', 'replay'], when: () => tMode() === 'replay',
+      disabledReasonKey: () => 'hint.notReplay', run: () => void leaveReplay() },
+    { id: 'jobs.open', labelKey: 'jobs.title', icon: 'nav.recon', group: 'jump', keywords: ['recon', 'jobs', 'reconstruction'], run: () => navigate('/jobs') },
   ]
   const modes: readonly CameraMode[] = ['orbit', 'free', 'third', 'fpv', 'bird']
   modes.forEach((m, i) => A.push({

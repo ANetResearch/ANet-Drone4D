@@ -1,7 +1,9 @@
 // Long Animation Frame attribution outside the loop (M06-FR-074; AWR-18 §6.3 item 3; D1-AC-06). Owner: M06.
 // PerformanceObserver({type: 'long-animation-frame', buffered: true}): every entry counts loaf.count and blockingMs;
 // scripts that are not the loop callback and whose sourceURL belongs to our chunks are summed, > 50 ms counts
-// loaf.oursOver50 (after the reveal). The loop callback is recognised by time, not by name (production builds mangle
+// loaf.oursOver50 when the entry started after the reveal (entry.startTime >= load.revealAt: Chrome delivers observer
+// callbacks as low-priority tasks, so the shader zoo frame under the mask can arrive after the reveal, FX2-R2). Entries
+// that started before the last __perf.reset() (loaf.sinceMs) are ignored. The loop callback is recognised by time, not by name (production builds mangle
 // names): invokerType 'frame-request-callback' with a startTime within 0.5 ms of a loop callback start (loop.cbStarts);
 // the loop frame itself is attributed by frameSampler (phases minus render). Our chunks: the entry chunk and the
 // engine, net and ui groups of vite.config.ts (asset names index-*, engine-*, net-*, ui-*; dev server /src/**);
@@ -47,11 +49,12 @@ export function observeLoaf(p: AwrPerf): () => void {
   const po = new PerformanceObserver((list) => {
     for (const raw of list.getEntries()) {
       const e = raw as unknown as LoafEntry
+      if (e.startTime < p.loaf.sinceMs) continue
       p.loaf.count++
       p.loaf.blockingMs += e.blockingDuration ?? 0
       const a = oursOutsideLoop(e, origin)
       const renderMs = e.renderStart && e.renderStart > 0 ? e.startTime + e.duration - e.renderStart : 0
-      if (sampler.revealed && a.ours > 50) p.loaf.oursOver50++
+      if (sampler.revealed && p.load.revealAt > 0 && e.startTime >= p.load.revealAt && a.ours > 50) p.loaf.oursOver50++
       pushLoafWorst(p, e.duration, a.ours, renderMs, a.invoker)
     }
   })

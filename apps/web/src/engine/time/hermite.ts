@@ -1,3 +1,4 @@
+import { hypot3, hypot4 } from '../hypot'
 // Pure interpolation kernels of the interpolation ring (M12 §6.4, §9.2; ADR-046; r15 §3.9, r18 §3.3). Owner: M12.
 // Cubic Hermite position with the sample velocities as end tangents (m = v * h), shortest-arc slerp with an nlerp
 // fallback above dot 0.9995, and body-rate attitude integration q(t + dt) = q ⊗ exp(ω dt / 2) (ω in the body FLU frame,
@@ -70,7 +71,7 @@ export function slerpInto(a: F32, ao: number, b: F32, bo: number, u: number, out
   const y = wa * a[ao + 1] + wb * by
   const z = wa * a[ao + 2] + wb * bz
   const w = wa * a[ao + 3] + wb * bw
-  const l = Math.hypot(x, y, z, w) || 1
+  const l = hypot4(x, y, z, w) || 1
   out[oo] = x / l
   out[oo + 1] = y / l
   out[oo + 2] = z / l
@@ -86,7 +87,7 @@ export function integrateOmegaInto(q: F32, iq: number, w: F32, iw: number, dt: n
   const y1 = q[iq + 1]
   const z1 = q[iq + 2]
   const w1 = q[iq + 3]
-  const rate = Math.hypot(wx, wy, wz)
+  const rate = hypot3(wx, wy, wz)
   const half = 0.5 * rate * dt
   if (!(rate > 1e-12) || !Number.isFinite(half)) {
     out[o] = x1
@@ -104,7 +105,7 @@ export function integrateOmegaInto(q: F32, iq: number, w: F32, iw: number, dt: n
   const y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
   const z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
   const ww = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-  const l = Math.hypot(x, y, z, ww) || 1
+  const l = hypot4(x, y, z, ww) || 1
   out[o] = x / l
   out[o + 1] = y / l
   out[o + 2] = z / l

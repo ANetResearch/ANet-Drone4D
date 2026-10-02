@@ -1,7 +1,10 @@
 // Zero allocation on the steady path (M11-AC-036, NFR-016; AWR-03 §3.6 rule 1): 10,000 BATCH frames with N = 1000 Lite32
 // rows plus a Full64 record go through the rt.worker engine and the main-thread FrameFront (receive, index, compose,
 // copy into the slot, pull, load); after a forced GC the retained heap grows by at most 64 KiB. Node's --expose-gc is
-// switched on at run time for this file.
+// switched on at run time for this file. The heap is measured after two forced GCs, and the 10,000-frame window is measured
+// twice: a per-frame leak shows in both windows (10,000 frames x even 8 B = 80 KB), while the vitest worker's own
+// allocations in the same isolate during a parallel full run (INT-1 §7.11: 72 B over once) show in at most one, so the
+// smaller growth is judged against the unchanged 64 KiB limit.
 import { setFlagsFromString } from 'node:v8'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
@@ -60,18 +63,21 @@ describe('allocation', () => {
         }
       }
     }
+    const heap = (): number => {
+      gc()
+      gc()
+      return process.memoryUsage().heapUsed
+    }
     run(2000, 0) // warm-up: JIT, caches, maps at steady size
-    gc()
-    gc()
-    const before = process.memoryUsage().heapUsed
+    const h0 = heap()
     run(10_000, 2000)
-    gc()
-    gc()
-    const after = process.memoryUsage().heapUsed
+    const h1 = heap()
+    run(10_000, 12_000)
+    const h2 = heap()
     expect(front.hdr.swarmN).toBe(1000)
     expect(front.hdr.fullCount).toBe(1)
     expect(host.counters.malformed).toBe(0)
-    expect(s.sentCount).toBeGreaterThan(3000) // acks flowed (every 3 frames)
-    expect(after - before).toBeLessThanOrEqual(64 * 1024)
-  })
+    expect(s.sentCount).toBeGreaterThan(6000) // acks flowed (every 3 frames)
+    expect(Math.min(h1 - h0, h2 - h1)).toBeLessThanOrEqual(64 * 1024)
+  }, 120_000) // two 10,000-frame windows: generous limit for the parallel full run
 })

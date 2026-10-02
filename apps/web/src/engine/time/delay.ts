@@ -68,6 +68,15 @@ export class ArrivalStats {
     }
     this.jitterMs = t[Math.min(m - 1, Math.floor(0.95 * m))]
   }
+  /**
+   * arrival statistics measured elsewhere (the rt.worker's 1 s window of the 60 Hz channels, header selHz and selJitterMs):
+   * the main thread receives the latest sample per channel once per frame, so its own arrival times are frame times
+   */
+  setExternal(hz: number, jitterMs: number): void {
+    this.hzEff = hz
+    this.jitterMs = jitterMs
+    this.last = Number.NaN
+  }
   /** a pause: the next arrival must not create an interval spanning it */
   gap(): void {
     this.last = Number.NaN
@@ -203,13 +212,18 @@ export class DelayController {
     }
     this.swarm.onSample(recvMs)
   }
-  /** a new sample of the focus vehicle's 60 Hz channel */
-  onFocusSample(recvMs: number): void {
+  /**
+   * a new sample of the focus vehicle's 60 Hz channel ingested at recvMs; workerHz and workerJitterMs are the rt.worker's
+   * arrival statistics of the 60 Hz channels (FrameHeader selHz, selJitterMs) and replace the main-thread arrival times
+   * when known (FX2-R3, ADR-046: D_focus follows the 60 Hz channel, not the frame rate of the main thread)
+   */
+  onFocusSample(recvMs: number, workerHz = 0, workerJitterMs = Number.NaN): void {
     if (this.frozen) {
       this.focusStats.gap()
       return
     }
-    this.focusStats.onSample(recvMs)
+    if (workerHz > 0 && Number.isFinite(workerJitterMs)) this.focusStats.setExternal(workerHz, workerJitterMs)
+    else this.focusStats.onSample(recvMs)
   }
   setFocus(active: boolean): void {
     if (active === this.focusActive) return

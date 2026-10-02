@@ -62,6 +62,7 @@ export async function createRenderBackend(canvas: HTMLCanvasElement, opts: Backe
   } catch (e) {
     throw new M06Error('M06-E001', `WebGL2 context creation failed: ${String((e as Error)?.message ?? e)}`)
   }
+  perfProbe().mark('boot.gl') // context and WebGLRenderer created (startup timeline)
   r.setNodesHandler(new AnetNodesHandler())
   ;(r as unknown as { reversedDepthBuffer: boolean }).reversedDepthBuffer = r.capabilities.reversedDepthBuffer
   r.info.autoReset = false

@@ -5,7 +5,7 @@ import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { setRoutes, type RouteDef } from './router'
 
 const mods = import.meta.glob<{ route: RouteDef }>('../routes/*.tsx', { eager: true })
-const EXT_DELIVERED = new Set(['bench', ...String(import.meta.env.VITE_AWR_EXT_ROUTES ?? '').split(',').filter(Boolean)])
+const EXT_DELIVERED = new Set(['bench', 'runs', 'replay', 'jobs', ...String(import.meta.env.VITE_AWR_EXT_ROUTES ?? '').split(',').filter(Boolean)])
 
 export function installRoutes(): readonly RouteDef[] {
   const list = Object.values(mods).map((m) => m.route).filter((r) => (r.d1 === 'core' || EXT_DELIVERED.has(r.id)) && (!r.testOnly || TEST_SWITCHES))

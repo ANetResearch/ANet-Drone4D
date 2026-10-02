@@ -95,13 +95,12 @@ function EnvSlider({ id, label, icon, iconStyle, valueText, min, max, step, fiel
         <Field>
           <FieldLabel className="justify-between font-normal">
             <span className="inline-flex items-center gap-1.5"><Icon icon={icon} style={iconStyle} data-rotate-icon={iconStyle ? '' : undefined} />{label}</span>
-            <span className="inline-flex items-center gap-1.5">
-              {extra}
-              <span data-numeric="" className={cn('rounded-sm px-1', field.pending && 'ring-1 ring-ring')}>{valueText}</span>
-            </span>
+            <span data-numeric="" className={cn('shrink-0 rounded-sm px-1', field.pending && 'ring-1 ring-ring')}>{valueText}</span>
           </FieldLabel>
           <Slider value={[Number.isFinite(field.value) ? field.value : min]} min={min} max={max} step={step} disabled={disabled} aria-label={label}
             onValueChange={(v) => field.onChange(first(v))} onValueCommitted={(v, d) => field.commit(first(v), isKey(d))} />
+          {/* secondary facts under the slider, so the label row never wraps in the 288 px rail */}
+          {extra ? <span className="text-hud-sub">{extra}</span> : null}
         </Field>
       </div>
     </ShakeOnce>
@@ -112,6 +111,25 @@ function setEnv(key: string, patch: Record<string, unknown>, what: string): void
   runService(`env:${key}`, 'env/set', { patch, duration_s: SET_DURATION_S }, what)
 }
 
+/**
+ * readings at the selected vehicle (written at the UI tick, 4 Hz on Tier S): their own component, so a new reading
+ * re-renders four stats instead of the whole panel with its six sliders and the preset grid (ADR-069; D1-AC-27)
+ */
+function EnvLocalReadings() {
+  const t = useT()
+  const selected = useEnv((s) => s.selected)
+  if (!selected) return null
+  return (
+    <div className="grid grid-cols-2 gap-2 border-t pt-2" data-env-local="">
+      <LfStat label={t('env.local.wind')} value={selected.windMps} format={(v) => fmt.num(v, 1)} unit="m/s" />
+      <LfStat label={t('env.local.gust')} value={selected.gustMps} format={(v) => fmt.num(v, 1)} unit="m/s" />
+      <LfStat label={t('env.local.mor')} value={selected.morM} format={fmt.mor} />
+      <LfStat label={t('env.local.airspeed')} value={selected.airspeedMps} format={(v) => fmt.num(v, 1)} unit="m/s" />
+      {selected.stale ? <Badge variant="outline" className="col-span-2 border-dashed">{t('env.stale')}</Badge> : null}
+    </div>
+  )
+}
+
 export function EnvPanel() {
   const t = useT()
   const active = useEnv((s) => s.activePreset)
@@ -120,7 +138,6 @@ export function EnvPanel() {
   const derived = useEnv((s) => s.derived)
   const beaufort = useEnv((s) => s.beaufort)
   const transition = useEnv((s) => s.transition)
-  const selected = useEnv((s) => s.selected)
   const hashOk = useEnv((s) => s.presetHashOk)
   useConnView((s) => s.version)
   const denied = writeDeniedKey()
@@ -190,15 +207,7 @@ export function EnvPanel() {
         valueText={fmt.mmh(pField.value)} min={0} max={precip === 'rain' ? 150 : 30} step={0.5} field={pField} disabled={ro}
         extra={effNote ? <span className="text-muted-foreground">{t('env.rainEff', { v: fmt.mmh(derived.rainEffMmh) })}</span> : null} />
       <EnvSlider id="cloud" label={t('env.cloud')} icon="env.cloud" valueText={fmt.pct(cloud.value)} min={0} max={100} step={1} field={cloud} disabled={ro} />
-      {selected ? (
-        <div className="grid grid-cols-2 gap-2 border-t pt-2" data-env-local="">
-          <LfStat label={t('env.local.wind')} value={selected.windMps} format={(v) => fmt.num(v, 1)} unit="m/s" />
-          <LfStat label={t('env.local.gust')} value={selected.gustMps} format={(v) => fmt.num(v, 1)} unit="m/s" />
-          <LfStat label={t('env.local.mor')} value={selected.morM} format={fmt.mor} />
-          <LfStat label={t('env.local.airspeed')} value={selected.airspeedMps} format={(v) => fmt.num(v, 1)} unit="m/s" />
-          {selected.stale ? <Badge variant="outline" className="col-span-2 border-dashed">{t('env.stale')}</Badge> : null}
-        </div>
-      ) : null}
+      <EnvLocalReadings />
     </div>
   )
 }

@@ -190,6 +190,8 @@ export interface FrameHeaderView {
   timeRecvMainMs: number
   /** BATCH frames that failed to parse (fuzz robustness, offset 224) */
   malformedFrames: number
+  /** worker arrival jitter p95 of the 60 Hz channels in ms (offset 228; NaN when unknown); M12 D_focus */
+  selJitterMs: number
 }
 
 /** Full64 items of the slot (M11 §6.3.8): item k at base + 80k holds agentNo u16, channelId u16, seq u32,

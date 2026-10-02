@@ -93,12 +93,13 @@ const Row = React.memo(function Row({ i, id, selected, focused, red, sampleMs, o
         <FlightStateBadge fs={fs} sub={fleetRows.sub[i]} flags={flags} redOwner={red} short className="ml-auto h-4 shrink-0 px-1.5 text-hud-cap" />
         {ownerIcon ? <Icon icon={ownerIcon} label={t(`owner.${owner}`)} className="shrink-0 text-muted-foreground" /> : null}
       </div>
-      <div className="flex items-center gap-2 text-hud-sub text-muted-foreground">
-        <BoundText read={readAlt} format={fmtAlt} stale={staleOf} className="w-16" />
-        <BoundText read={readSpeed} format={fmt.speed} className="w-16" />
+      {/* the telemetry line is one raster island per row (ADR-066): its 4 Hz text writes never re-raster the rail */}
+      <div className="flex items-center gap-2 text-hud-sub text-muted-foreground" data-island="">
+        <BoundText read={readAlt} format={fmtAlt} stale={staleOf} className="w-16" island={false} />
+        <BoundText read={readSpeed} format={fmt.speed} className="w-16" island={false} />
         <span className="ml-auto inline-flex items-center gap-1">
           <StateIcon icon={batIcon} spring="hud" label={t('drones.batteryLabel')} />
-          {bat === 255 ? <span>{t('drones.batteryNone')}</span> : <MotionNumber value={bat} format={(v) => fmt.pct(v)} />}
+          {bat === 255 ? <span>{t('drones.batteryNone')}</span> : <MotionNumber value={bat} format={(v) => fmt.pct(v)} island={false} />}
         </span>
       </div>
     </div>
@@ -113,8 +114,13 @@ export function DronesPanel() {
   const t = useT()
   const version = useFleet((s) => s.version)
   const n = useFleet((s) => s.n)
-  const ids = useSelection((s) => s.ids)
-  const primary = useSelection((s) => s.primary)
+  // the selection reaches the rows and the batch bar (four CallButtons with tooltip, menu and confirm machinery) in a
+  // deferred render: a selection key press (select all on 1000 rows) re-renders only this component's shell with the
+  // previous value inside the key handler, and React highlights the rows and mounts the bar in its time-sliced pass
+  // (ADR-069; D1-AC-27)
+  const ids = React.useDeferredValue(useSelection((s) => s.ids))
+  const showBatch = ids.length >= 2
+  const primary = React.useDeferredValue(useSelection((s) => s.primary))
   const filter = useRail((s) => s)
   const conn = useConnView((s) => s.conn)
   const redOwner = useRedOwner('drone-rail')
@@ -205,22 +211,26 @@ export function DronesPanel() {
       ) : n === 0 ? (
         <PanelEmpty title={t('drones.empty')} description={t(isOnline(conn) ? 'drones.emptyLive' : 'drones.emptyHint')} />
       ) : (
-        <div ref={viewportRef} className="min-h-0 flex-1 overflow-auto scroll-fade-y" data-figure="drone-rail" role="list" aria-label={t('panel.drones.title')}>
-          <div style={{ height: v.getTotalSize(), position: 'relative' }}>
-            {items.map((it) => {
-              const i = order[it.index]
-              const id = fleetIdOf(i)
-              return (
-                <div key={it.key} role="listitem" className="absolute inset-x-0" style={{ transform: `translateY(${it.start}px)`, height: LAYOUT.railRowPx }}>
-                  <Row i={i} id={id} version={version} selected={selected.has(id)} focused={primary === id} red={redOwner?.id === id}
-                    sampleMs={sampleMs} onClick={(e) => onRow(id, e)} />
-                </div>
-              )
-            })}
+        // edge fades as overlays, not a mask (ADR-066): the rows are raster islands, and a mask over composited rows costs
+        // an offscreen render pass every frame (styles/layout.css fade-scroll-y)
+        <div className="fade-scroll-y flex min-h-0 flex-1 flex-col">
+          <div ref={viewportRef} className="min-h-0 flex-1 overflow-auto" data-fade-scroller="" data-figure="drone-rail" role="list" aria-label={t('panel.drones.title')}>
+            <div style={{ height: v.getTotalSize(), position: 'relative' }}>
+              {items.map((it) => {
+                const i = order[it.index]
+                const id = fleetIdOf(i)
+                return (
+                  <div key={it.key} role="listitem" className="absolute inset-x-0" style={{ transform: `translateY(${it.start}px)`, height: LAYOUT.railRowPx }}>
+                    <Row i={i} id={id} version={version} selected={selected.has(id)} focused={primary === id} red={redOwner?.id === id}
+                      sampleMs={sampleMs} onClick={(e) => onRow(id, e)} />
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
-      {ids.length >= 2 ? <BatchBar /> : null}
+      {showBatch ? <BatchBar /> : null}
     </div>
   )
 }

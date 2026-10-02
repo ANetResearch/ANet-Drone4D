@@ -1,6 +1,7 @@
 // M06-AC-036 in Node (AWR-16 §7; AWR-15 §10.12): the six cities' zones.geojson parse into awr.zones.v1 features; built
 // walls, outlines and edges match the rings; border is not drawn by default; min_z null -> lowest ground, max_z null ->
 // world top + 50 m; the violated zone is recoloured through uniforms and attribute updates only (no rebuild).
+import { QL_STRIDE, QL_VPS } from '@/engine/lines/quadLines'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -37,11 +38,13 @@ describe('zones (M06-AC-036)', () => {
     expect(z.drawCount()).toBe(4)
     const geomBefore = z.walls.geometry.getAttribute('position')
     z.setHero('r1')
-    const col = (z.topDashed as unknown as { col: Float32Array }).col
-    expect(Array.from(col.slice(0, 3))).toEqual([1, 1, 1]) // r500 palette index
+    // quad-line layout (FX2-R3): palette index at float 8 of every vertex, 4 vertices per segment
+    const data = (z.topDashed as unknown as { data: Float32Array }).data
+    const col = (): number[] => [0, 1, 2].map((i) => data[i * QL_VPS * QL_STRIDE + 8])
+    expect(col()).toEqual([1, 1, 1]) // r500 palette index
     expect(z.walls.geometry.getAttribute('position')).toBe(geomBefore)
     z.setHero(null)
-    expect(Array.from(col.slice(0, 3))).toEqual([4, 4, 4])
+    expect(col()).toEqual([4, 4, 4])
     expect(z.zoneAt(50, 25, 60)?.id).toBe('nf1')
     expect(z.zoneAt(50, 25, 200)).toBeNull()
     expect(pointInRing(new Float64Array([0, 0, 10, 0, 10, 10, 0, 10]), 5, 5)).toBe(true)

@@ -15,6 +15,7 @@ import { Tween } from '../anim/tween'
 import type { FrameCtx } from '../loop'
 import { CameraFlight, type FlightReason } from './flight'
 import type { SensorsApi, SensorView } from '../drones/frustums'
+import { hypot2, hypot3 } from '../hypot'
 
 let installed = false
 function install(): void {
@@ -221,6 +222,7 @@ export class CameraRig {
     const act = this.controls.currentAction
     if (this.followLock && (act & (A.TRUCK | A.SCREEN_PAN | A.OFFSET)) !== 0) {
       this.followLock = false
+      this.deps.setFocus?.(-1)
       this.emitMode()
     }
   }
@@ -305,8 +307,10 @@ export class CameraRig {
     if (prev === 'fpv' && m !== 'fpv') this.leaveFpv()
     this.focusAgent = focusAgent
     const needsFocus = m === 'third' || m === 'fpv'
-    if (needsFocus) this.deps.setFocus?.(focusAgent)
-    else if (prev === 'third' || prev === 'fpv') this.deps.setFocus?.(-1)
+    // the focus exception of ADR-046 holds in third and fpv and under the follow lock of orbit and bird
+    const keepsLock = this.followLock && (m === 'orbit' || m === 'bird')
+    if (needsFocus || keepsLock) this.deps.setFocus?.(focusAgent)
+    else if (prev === 'third' || prev === 'fpv' || this.followLock) this.deps.setFocus?.(-1)
     if (m !== 'orbit' && m !== 'bird') this.followLock = false
     this.mode = m
     this.applyModeConfig(m)
@@ -318,7 +322,7 @@ export class CameraRig {
     if (m === 'free') {
       // look from the current eye along the current direction (tiny orbit radius)
       const dx = tgt[0] - eye[0], dy = tgt[1] - eye[1], dz = tgt[2] - eye[2]
-      const l = Math.hypot(dx, dy, dz) || 1
+      const l = hypot3(dx, dy, dz) || 1
       this.lookAtEnu(eye, [eye[0] + (dx / l) * CAMERA.free.dist, eye[1] + (dy / l) * CAMERA.free.dist, eye[2] + (dz / l) * CAMERA.free.dist])
     } else if (m === 'bird') {
       const h = Math.max(CAMERA.bird.minDistance, Math.min(CAMERA.bird.maxDistance, CAMERA.bird.height))
@@ -359,7 +363,7 @@ export class CameraRig {
 
   /** reference heading: horizontal velocity direction, body yaw below 0.5 m/s (r15 §3.15) */
   headingOf(q: Float64Array, v: Float64Array): number {
-    if (Math.hypot(v[0], v[1]) >= CAMERA.third.speedRef) return Math.atan2(v[1], v[0])
+    if (hypot2(v[0], v[1]) >= CAMERA.third.speedRef) return Math.atan2(v[1], v[0])
     // body x axis rotated by q (x, y, z, w)
     const x = q[0], y = q[1], z = q[2], w = q[3]
     const fx = 1 - 2 * (y * y + z * z)
@@ -372,6 +376,9 @@ export class CameraRig {
     if (on && focusAgent < 0) return false
     this.followLock = on
     if (on) this.focusAgent = focusAgent
+    // ADR-046 focus exception: the follow lock uses D_focus like third and fpv (FX2-R3; it was never switched on, so the
+    // followed vehicle stayed at tRender = simNow - D_global and t_sim to pixel was the swarm delay, D1-AC-26)
+    this.deps.setFocus?.(on ? this.focusAgent : -1)
     this.emitMode()
     return true
   }
@@ -397,6 +404,7 @@ export class CameraRig {
     this.focusAgent = -1
     if (this.followLock) {
       this.followLock = false
+      this.deps.setFocus?.(-1)
       this.emitMode()
     }
   }
@@ -422,7 +430,7 @@ export class CameraRig {
   focusSphere(c: ArrayLike<number>, r: number, nowMs = performance.now()): void {
     const cur = this.currentPose(new Float64Array(6))
     let dx = cur[0] - cur[3], dy = cur[1] - cur[4], dz = cur[2] - cur[5]
-    const l = Math.hypot(dx, dy, dz) || 1
+    const l = hypot3(dx, dy, dz) || 1
     dx /= l
     dy /= l
     dz /= l
@@ -434,7 +442,7 @@ export class CameraRig {
   northUp(nowMs = performance.now()): void {
     if (this.mode === 'fpv') return
     const cur = this.currentPose(new Float64Array(6))
-    const dh = Math.hypot(cur[0] - cur[3], cur[1] - cur[4])
+    const dh = hypot2(cur[0] - cur[3], cur[1] - cur[4])
     // eye south of the target: screen top = +N
     this.flyTo([cur[3], cur[4] - Math.max(dh, 1e-3), cur[2]], [cur[3], cur[4], cur[5]], 'north', nowMs)
   }
@@ -443,11 +451,11 @@ export class CameraRig {
   viewFrom(n: ArrayLike<number>, nowMs = performance.now()): void {
     if (this.mode === 'fpv') this.setMode('orbit', this.focusAgent, nowMs)
     const cur = this.currentPose(new Float64Array(6))
-    const d = Math.hypot(cur[0] - cur[3], cur[1] - cur[4], cur[2] - cur[5])
-    const l = Math.hypot(n[0], n[1], n[2]) || 1
+    const d = hypot3(cur[0] - cur[3], cur[1] - cur[4], cur[2] - cur[5])
+    const l = hypot3(n[0], n[1], n[2]) || 1
     let nx = n[0] / l, ny = n[1] / l
     const nz = n[2] / l
-    if (Math.hypot(nx, ny) < 1e-4) ny = -1e-4 // straight down: north up
+    if (hypot2(nx, ny) < 1e-4) ny = -1e-4 // straight down: north up
     if (nz < -0.999) nx = 0
     this.flyTo([cur[3] + nx * d, cur[4] + ny * d, cur[5] + nz * d], [cur[3], cur[4], cur[5]], 'viewcube', nowMs)
   }

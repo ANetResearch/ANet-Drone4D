@@ -27,6 +27,8 @@ export interface PerfSink {
   }
   quality?: { samples: { t: number; pose: Float64Array; mask: Uint8Array | null }[] }
   bench?: { mode: string; done: boolean; flightT: number }
+  /** startup timeline marks (performance.now ms; pc.open, pc.firstScreen) */
+  marks?: Record<string, number>
 }
 
 /** freeze mask of the CAS (M05 §6.8.3): EXTERNAL (ctx.frozen, page hidden), SHADER_COMPILE, WARMUP */
@@ -46,7 +48,7 @@ export function newStats(): PointCloudStats {
   return {
     phase: 'idle', progress: 0, drawn: 0, B: 0, Beff: 0, rungIndex: 0, rungName: '', manual: false, limitedBy: 'complete', achievedErrPx: 0, fillRate: 0,
     inflight: 0, queued: 0, failed: 0, canceled: 0, residentPts: 0, cpuCacheBytes: 0, pendingUploadPts: 0, clampedByCapacity: false, floorHeld: false,
-    poolStalls: 0, pageUtil: 0, maxPxEff: 0, rsEff: 1, frozenMask: 0, levelCounts: new Int32Array(32), selectMs: 0, lo: 0, hi: 0, Bfloor: 0,
+    poolStalls: 0, pageUtil: 0, maxPxEff: 0, maxPxCapEff: 0, rsEff: 1, frozenMask: 0, levelCounts: new Int32Array(32), selectMs: 0, lo: 0, hi: 0, Bfloor: 0,
     error: null, downloadedBytes: 0, uniqueBytes: 0, uploadPtsMax: 0, minSpacingM: 0,
   }
 }

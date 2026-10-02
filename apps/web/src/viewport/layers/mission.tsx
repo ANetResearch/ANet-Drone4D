@@ -51,7 +51,7 @@ export function MissionLayer() {
         drawCount: () => (m.root.visible ? m.drawCount() : 0),
         warmupVariants: () => [
           { object: m.thin.obj, before: () => m.thin.obj.geometry.setDrawRange(0, 2), after: () => m.thin.commit(m.thin.n) },
-          { object: m.planned.obj, before: () => ((m.planned.obj.geometry as unknown as { instanceCount: number }).instanceCount = 1), after: () => m.planned.commit() },
+          { object: m.planned.obj, before: () => m.planned.warmBefore(), after: () => m.planned.commit() },
           { object: m.patch, before: () => m.patch.geometry.setDrawRange(0, 3), after: () => m.patch.geometry.setDrawRange(0, 0) },
         ],
         setVisible: (v) => {

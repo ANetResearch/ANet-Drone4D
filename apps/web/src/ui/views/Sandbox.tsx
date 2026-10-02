@@ -14,6 +14,9 @@ import { WorldSidebar } from '@/ui/layout/WorldSidebar'
 import { Banners } from '@/ui/notify/Banners'
 import type { useShellLayout } from '@/ui/layout/layoutState'
 import { UX } from '@/ui/testing/uxProbe'
+import { useRoute } from '@/app/router/router'
+import { BookmarkEditor } from '@/ui/panels/timeline/BookmarkEditor'
+import { consumeReplayDeepLink } from './replayFlow'
 
 export function Sandbox({ shell }: { shell: ReturnType<typeof useShellLayout> }) {
   const t = useT()
@@ -24,6 +27,12 @@ export function Sandbox({ shell }: { shell: ReturnType<typeof useShellLayout> })
   React.useEffect(() => {
     UX.layout.breakpoint = shell.breakpoint
   }, [shell.breakpoint])
+  // replay deep link (/world/:id/replay/:run redirects here with one-shot ?replay=&seg=&t=)
+  const route = useRoute()
+  const replayParam = route?.search.get('replay') ?? null
+  React.useEffect(() => {
+    if (replayParam && route) void consumeReplayDeepLink(route.search)
+  }, [replayParam, route])
   if (shell.small) return <FullEmptyState title={t('shell.tooSmall')} description={t('shell.tooSmallHint')} narrow />
   const compact = shell.breakpoint === 'C'
   return (
@@ -34,6 +43,7 @@ export function Sandbox({ shell }: { shell: ReturnType<typeof useShellLayout> })
       <DroneRail />
       <BottomDock viewportW={shell.w} viewportH={shell.h} />
       <TimelineBar compact={compact} />
+      <BookmarkEditor />
     </div>
   )
 }

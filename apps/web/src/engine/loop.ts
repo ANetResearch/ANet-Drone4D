@@ -58,6 +58,8 @@ export interface RenderBackendView {
   readPixels(rt: RenderTarget, x: number, y: number, w: number, h: number, out: Uint8Array): Promise<Uint8Array>
   createPointsMaterial(): PointsNodeMaterial
   programsCount(): number
+  /** WARMING until the shader zoo finished (M06 §6.4); layers may hold their first draw on it (optional for test doubles) */
+  readonly state?: 'WARMING' | 'READY' | 'LOST' | 'FAILED'
 }
 
 export const PHASES: readonly Phase[] = ['telemetry', 'clock', 'drones', 'camera', 'world', 'render', 'overlay', 'governor']

@@ -90,10 +90,10 @@ export function LayersPanel() {
           <SelectContent>{qualityItems.map((q) => <SelectItem key={q.value} value={q.value}>{q.label}</SelectItem>)}</SelectContent>
         </Select>
         <div className="flex items-center justify-between gap-2 text-hud-sub" data-budget="">
-          <span className="font-mono">{t('layers.budget', { drawn: fmt.pts(drawn), b: fmt.pts(budget), rung: LADDER[rung.index]?.name ?? rung.name })}</span>
+          <span className="truncate font-mono tabular-nums">{t('layers.budget', { drawn: fmt.pts(drawn), b: fmt.pts(budget) })}</span>
           <LfTickGauge mini value={Math.min(100, pct)} ariaLabel={t('layers.budgetGauge')} />
         </div>
-        <p className="text-hud-sub text-muted-foreground">{t(`limitedBy.${limitedBy}`)}</p>
+        <p className="text-hud-sub text-muted-foreground"><span className="font-mono">{LADDER[rung.index]?.name ?? rung.name}</span>{` · ${t(`limitedBy.${limitedBy}`)}`}</p>
       </Field>
       <Field orientation="horizontal" className="justify-between">
         <FieldLabel htmlFor="layer-edl" className="gap-1.5 font-normal">

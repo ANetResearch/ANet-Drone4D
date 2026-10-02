@@ -8,7 +8,7 @@
 //   none  static server only (M06 and M05 specs bring their own servers; kept for static feature pages).
 // During the sampling window /proc/<pid>/stat of api and sim-core is read every 1 s (authoritative CPU, 18 §9.4 item 3).
 import { spawn } from 'node:child_process'
-import { cpSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { cpSync, createReadStream, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { createServer, request } from 'node:http'
 import { connect, createServer as createTcpServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -65,6 +65,9 @@ export async function startBackend(spec, o) {
   if (spec.scenario) env.AWR_SCENARIO = spec.scenario
   if (spec.scenarioProfile) env.AWR_SCENARIO_PROFILE = spec.scenarioProfile
   const args = ['-m', 'awr.runtime.supervisor', '--profile', profile, '--set', `net.port_offset=${k}`, '--set', 'run.keep_run_dir=false']
+  // diagnostics only (never a gate run): AWR_PERF_RUNTIME_CONFIG points the supervisor at another runtime.yaml (ACC-1 used it
+  // to look at the front end of ladder n1000 while the production sim-core liveness threshold kills the scenario setup)
+  if (process.env.AWR_PERF_RUNTIME_CONFIG) args.push('-c', process.env.AWR_PERF_RUNTIME_CONFIG)
   // PR-12 single object under test: only sim-core and api unless the case asks for the ext processes
   const only = spec.only ?? 'sim-core,api'
   if (only !== 'all') args.push('--only', only)
@@ -99,7 +102,10 @@ export async function startBackend(spec, o) {
     handle.base = `${api.protocol}//${api.host}`
     await waitHttp(`${handle.base}/api/health/ready`, 60_000)
     handle.viewerToken = await token(handle.base, 'viewer')
-    if (banner.admin && existsSync(banner.admin)) handle.adminToken = await token(handle.base, 'admin', readFileSync(banner.admin, 'utf8').trim())
+    // No admin token (ACC-1): issuing one claims the free operator seat (17 §3.2, auth.py), so the page under test came up as
+    // a viewer with "seat: other" and every spec that needs the seat (skeleton, interaction, storm RTL) failed or hung.
+    // /api/sys/procs is a viewer route and returns the pids; the admin-only log tail is not used by the harness.
+    void banner.admin
     await waitProcsRunning(handle, 30_000)
   } catch (e) {
     await stopBackend(handle)
@@ -338,23 +344,43 @@ async function startFake(spec, o) {
 }
 
 // ------------------------------------------------------------ weak-network proxy (M11 tools/bench/ipc/netem_proxy.py)
-/** start the proxy in front of the api; W3 cuts the connection 30 s after the proxy starts (built into the profile) */
-export async function startProxy(h, profile, seed = 7) {
+/**
+ * start the proxy in front of the api with its control port (M16 §6.11, §7.4): `proxy.control` is
+ * http://127.0.0.1:<port> (POST /cut?ms=, /profile?name=, /stall?ms=; GET /stats). By default W3 still cuts the connections
+ * 30 s after the proxy starts (built into the profile); `autoCut: false` leaves the cut to cutProxy (flight-time aligned).
+ */
+export async function startProxy(h, profile, seed = 7, o = {}) {
   const api = new URL(h.base)
   const port = await freePort()
-  const p = spawn(PY, [join(ROOT, 'tools', 'bench', 'ipc', 'netem_proxy.py'), '--listen', `127.0.0.1:${port}`, '--target',
-    `${api.hostname}:${api.port}`, '--profile', profile, '--seed', String(seed)], { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
+  const cport = await freePort()
+  const args = [join(ROOT, 'tools', 'bench', 'ipc', 'netem_proxy.py'), '--listen', `127.0.0.1:${port}`, '--target',
+    `${api.hostname}:${api.port}`, '--profile', profile, '--seed', String(seed), '--control', `127.0.0.1:${cport}`]
+  if (o.autoCut === false) args.push('--no-auto-cut')
+  const p = spawn(PY, args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
   await new Promise((ok, fail) => {
     const t = setTimeout(() => fail(new Error('netem_proxy: no READY')), 15_000)
     p.stdout.on('data', (d) => { if (d.toString().includes('READY')) { clearTimeout(t); ok() } })
     p.on('exit', (c) => { clearTimeout(t); fail(new Error(`netem_proxy exited ${c}`)) })
   })
-  const proxy = { base: `http://localhost:${port}`, proc: p, close: async () => { p.kill('SIGTERM') } }
+  const proxy = { base: `http://localhost:${port}`, control: `http://127.0.0.1:${cport}`, proc: p, close: async () => { p.kill('SIGTERM') } }
   ;(h.extra ??= []).push(proxy)
   return proxy
 }
 
-/** inject one stall into the proxy (SIGUSR1 = --stall-ms); the /cut control port of M16 §6.11 is requested from M11 */
-export function cutProxy(proxy) {
-  proxy.proc.kill('SIGUSR1')
+/** cut every proxied connection for `ms` (POST /cut?ms=; W3 uses 3000); falls back to one SIGUSR1 stall without a control port */
+export async function cutProxy(proxy, ms = 3000) {
+  if (!proxy.control) {
+    proxy.proc.kill('SIGUSR1')
+    return { ok: true, stall: true }
+  }
+  const r = await fetch(`${proxy.control}/cut?ms=${Math.round(ms)}`, { method: 'POST' })
+  if (!r.ok) throw new Error(`netem_proxy /cut: HTTP ${r.status}`)
+  return r.json()
+}
+
+/** switch the proxy profile at run time (POST /profile?name=) */
+export async function setProxyProfile(proxy, name) {
+  const r = await fetch(`${proxy.control}/profile?name=${encodeURIComponent(name)}`, { method: 'POST' })
+  if (!r.ok) throw new Error(`netem_proxy /profile: HTTP ${r.status}`)
+  return r.json()
 }

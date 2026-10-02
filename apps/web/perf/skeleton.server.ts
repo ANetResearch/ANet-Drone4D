@@ -170,9 +170,11 @@ export function startSkeletonServer(port: number, o: { apiProxy?: { host: string
     up.on('error', () => socket.destroy())
     socket.on('error', () => up.destroy())
   })
-  return new Promise((ok) => {
+  // port 0 picks a free port (FX-GW: the fixed 4193 + 10k collides with the vite preview of offset k + 2, ADR-055)
+  return new Promise((ok, fail) => {
+    server.once('error', fail)
     server.listen(port, '127.0.0.1', () => ok({
-      server, url: `http://127.0.0.1:${port}`, stats,
+      server, url: `http://127.0.0.1:${(server.address() as { port: number } | null)?.port ?? port}`, stats,
       close: () => new Promise((done) => {
         server.closeAllConnections()
         server.close(() => done())
@@ -192,7 +194,7 @@ export interface Backend {
   close(): Promise<void>
 }
 
-function freePort(): Promise<number> {
+export function freePort(): Promise<number> {
   return new Promise((ok, fail) => {
     const s = createTcpServer()
     s.once('error', fail)

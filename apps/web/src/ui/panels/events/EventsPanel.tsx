@@ -11,19 +11,20 @@ import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { LfTable, type LfColumn } from '@/ui/lf/LfTable'
 import { PanelEmpty } from '@/ui/brand'
 import { StatusBadge } from '@/ui/notify/StatusBadge'
-import { eventLog, useEventLog } from '@/ui/notify/eventLog'
+import { eventLog, eventLogStore } from '@/ui/notify/eventLog'
+import { useVisibleState } from '@/ui/panels/PanelHost'
 import { useRedOwner } from '@/ui/notify/redFigures'
 import { sourceOf } from '@/ui/notify/severity'
-import { selection, useSelection } from '@/stores/selection'
+import { selection, selectionStore } from '@/stores/selection'
 
 type Level = 'all' | 'warning' | 'critical'
 
 export function EventsPanel() {
   const t = useT()
-  const version = useEventLog((s) => s.version)
-  const len = useEventLog((s) => s.len)
-  const dropped = useEventLog((s) => s.dropped)
-  const primary = useSelection((s) => s.primary)
+  // held while the Dock is folded or another tab is active: the 4 Hz bridge flush no longer re-renders a hidden table
+  // (ADR-069; D1-AC-27)
+  const { version, len, dropped } = useVisibleState(eventLogStore)
+  const primary = useVisibleState(selectionStore).primary
   const red = useRedOwner('event-table')
   const [level, setLevel] = React.useState<Level>('all')
   // the ring is mutable: `version` is the cache key of the slot list (newest first)

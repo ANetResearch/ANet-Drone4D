@@ -69,7 +69,11 @@ export function isComponentKey(code: string, t: EventTarget | null): boolean {
 // by Mod+K must open the palette (INT-1, D1-AC-21)
 const OPEN_MODAL = ['[data-slot="dialog-content"]', '[data-slot="alert-dialog-content"]', '[role="menu"]']
   .map((s) => `${s}:not([data-closed]):not([data-ending-style])`).join(',')
-let modalOpen = () => typeof document !== 'undefined' && document.querySelector(OPEN_MODAL) !== null
+/** the default modal probe: an open dialog, alert dialog or menu that is not in its exit transition */
+export function modalOpenInDom(doc: ParentNode): boolean {
+  return doc.querySelector(OPEN_MODAL) !== null
+}
+let modalOpen = () => typeof document !== 'undefined' && modalOpenInDom(document)
 export function setModalProbe(fn: () => boolean): void {
   modalOpen = fn
 }

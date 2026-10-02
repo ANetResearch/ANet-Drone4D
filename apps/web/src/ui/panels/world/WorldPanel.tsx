@@ -7,8 +7,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useT } from '@/app/i18n'
 import { navigate, useRoute } from '@/app/router/router'
-import { worldsQuery } from '@/app/query/options'
+import { worldDatasetQuery, worldsQuery } from '@/app/query/options'
 import { fmt } from '@/lib/format'
+import { sanitizeText } from '@/lib/sanitize'
 import { Alert, AlertAction, AlertDescription } from '@/ui/components/ui/alert'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
@@ -27,6 +28,7 @@ export function WorldPanel() {
   const route = useRoute()
   const current = route?.params.id ?? null
   const worlds = useQuery(worldsQuery())
+  const dataset = useQuery({ ...worldDatasetQuery(current ?? 'shenzhen'), enabled: current !== null })
   const phase = useWorld((s) => s.phase)
   const anchorKind = useWorld((s) => s.anchorKind)
   const north = useWorld((s) => s.northConfidence)
@@ -56,13 +58,17 @@ export function WorldPanel() {
         </Select>
       </Field>
       <Item size="sm" variant="outline">
-        <ItemContent className="min-w-0">
-          <ItemTitle className="min-w-0 gap-1.5">
-            <Icon icon="nav.world" />
-            <span className="truncate">{info?.nameZh ?? current ?? '—'}</span>
-            <span className="font-mono text-muted-foreground">{info?.nameZh ? current : ''}</span>
-            {schematic ? <Badge variant="outline">{t('world.schematic')}</Badge> : null}
+        <ItemContent className="min-w-0 gap-1">
+          <ItemTitle className="w-full min-w-0 gap-1.5">
+            <Icon icon="nav.world" className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{info?.nameZh ?? current ?? '—'}</span>
+            {dataset.data?.reconEngine === 'mock' || (dataset.data?.tags?.includes('recon') && dataset.data.tags.includes('synthetic')) ? <Badge variant="outline" className="shrink-0" data-world-simulated="">{t('jobs.simulatedData')}</Badge> : null}
+            {schematic ? <Badge variant="outline" className="shrink-0" data-world-schematic="">{t('world.schematic')}</Badge> : null}
           </ItemTitle>
+          <ItemDescription>
+            <span className="font-mono">{current ?? '—'}</span>
+            {` · ${t('world.facts', { points: fmt.pts(info?.stats?.points), roots: fmt.count(info?.stats?.roots), top: fmt.num(info?.stats?.maxHeightM) })}`}
+          </ItemDescription>
           {/* honesty facts (AWR-03 §5.1 rule 3; M16-FR-006): north confidence and synthetic ground */}
           {north === 'assumed' || north === 'unknown' || synthGround !== null ? (
             <ItemDescription data-world-honesty="">
@@ -70,9 +76,11 @@ export function WorldPanel() {
               {synthGround !== null ? `${north === 'assumed' || north === 'unknown' ? ' · ' : ''}${t('world.syntheticGround', { z: fmt.num(synthGround) })}` : ''}
             </ItemDescription>
           ) : null}
-          <ItemDescription>
-            {t('world.facts', { points: fmt.pts(info?.stats?.points), roots: fmt.count(info?.stats?.roots), top: fmt.num(info?.stats?.maxHeightM) })}
-          </ItemDescription>
+          {dataset.data?.name ? (
+            <ItemDescription data-world-dataset="" title={sanitizeText(dataset.data.citation ?? '', 200)}>
+              {t('world.dataset', { name: sanitizeText(dataset.data.name ?? '—', 40), version: sanitizeText(/v\d+\.\d+\.\d+/.exec(dataset.data.version ?? '')?.[0] ?? '', 20) })}
+            </ItemDescription>
+          ) : null}
           <ItemDescription>{t(`world.phase.${phase}`)} {'·'} {t('world.points', { n: fmt.pts(B) })}</ItemDescription>
         </ItemContent>
       </Item>

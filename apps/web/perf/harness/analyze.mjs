@@ -115,11 +115,20 @@ export const extractors = {
   // ---- server: /proc sampling is authoritative for CPU (18 §9.4 item 3)
   sim_cpu_core: { source: 'server', fn: (_s, srv) => num(srv?.proc?.['sim-core']?.cpu_core) },
   api_cpu_core: { source: 'server', fn: (_s, srv) => num(srv?.proc?.api?.cpu_core) },
-  tick_age_p99_ms: { source: 'server', fn: (_s, srv) => num(srv?.window?.['api.tick_age_p99_ms']?.p99 ?? srv?.window?.api?.tick_age_p99_ms?.p99) },
-  step_p99_us: { source: 'server', fn: (_s, srv) => num(srv?.window?.['sim.step_p99_us']?.p99 ?? srv?.window?.sim?.step_p99_us?.p99) },
-  step_max_us: { source: 'server', fn: (_s, srv) => num(srv?.window?.['sim.step_max_us']?.max ?? srv?.window?.sim?.step_max_us?.max) },
-  rtf: { source: 'server', fn: (_s, srv) => num(srv?.window?.['sim.rtf']?.p50 ?? srv?.window?.sim?.rtf?.p50) },
+  tick_age_p99_ms: { source: 'server', fn: (_s, srv) => num(win(srv, 'api.tick_age_p99_ms')?.p99) },
+  step_p99_us: { source: 'server', fn: (_s, srv) => num(win(srv, 'sim.step_p99_us')?.p99) },
+  step_max_us: { source: 'server', fn: (_s, srv) => num(win(srv, 'sim.step_max_us')?.max) },
+  rtf: { source: 'server', fn: (_s, srv) => num(win(srv, 'sim.rtf')?.p50) },
   rss_growth_pct: { source: 'server', fn: (_s, srv) => num(srv?.rss_growth_pct) },
+}
+
+/** one field of the /api/sys/perf window: R60 returns { window_s, fields: { "<group>.<key>": {p50, p95, p99, max, count} } }
+ *  (17 §4.2); flat and nested shapes are accepted as well (ACC-1: the extractors only looked at the flat shape) */
+function win(srv, key) {
+  const w = srv?.window
+  if (!w) return null
+  const [g, k] = key.split('.')
+  return w.fields?.[key] ?? w[key] ?? w[g]?.[k] ?? null
 }
 
 // ---- bench (awr.bench.result.v1): record selected by params.n (and rate, clients)
@@ -139,9 +148,11 @@ export const benchExtractors = {
   catchup_saturated: (b, p) => num(record(b, p)?.catchup_saturated),
   tick_age_p99_ms: (b, p) => num(record(b, p)?.tick_age_ms?.p99),
   publish_p99_us: (b, p) => num(record(b, p)?.publish_us?.p99 ?? record(b, p)?.publish_p99_us),
-  cmd_rtt_p99_ms: (b, p) => num(record(b, p)?.cmd_rtt_ms?.p99 ?? record(b, p)?.rtt_ms?.p99),
-  cmd_failures: (b, p) => num(record(b, p)?.cmd_failures ?? record(b, p)?.failures),
-  event_gaps: (b, p) => num(record(b, p)?.event_gaps ?? record(b, p)?.gaps),
+  cmd_rtt_p99_ms: (b, p) => num(record(b, p)?.cmd_rtt_ms?.p99 ?? record(b, p)?.rtt_ms?.p99 ?? b?.ipc?.median?.rtt_p99),
+  cmd_failures: (b, p) => num(record(b, p)?.cmd_failures ?? record(b, p)?.failures ?? b?.ipc?.median?.fails),
+  // unrecovered gaps and reorders both count (D1-AC-10: gaps and reordering 0 after _replay)
+  event_gaps: (b, p) => num(record(b, p)?.event_gaps ?? record(b, p)?.gaps
+    ?? (b?.ipc?.median ? (b.ipc.median.unrecovered ?? 0) + (b.ipc.median.reorders ?? 0) : undefined)),
   swarm_hz_min: (b, p) => num(record(b, p)?.swarm_hz_min),
   credit_skips_pct: (b, p) => num(record(b, p)?.credit_skips_pct),
 }

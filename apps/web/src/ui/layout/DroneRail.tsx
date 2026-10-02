@@ -29,10 +29,12 @@ export function DroneRail() {
           </SidebarHeader>
           <SidebarContent className="px-2 pb-2">
             <Tabs value={value} onValueChange={(v) => prefs.setLayout({ right: { page: v === 'drone-detail' ? 'detail' : 'list' } })} className="min-h-0 flex-1">
-              <TabsPanels className="min-h-0 flex-1">
+              {/* one row of the cell height: the fleet list scrolls inside its own virtualised viewport (rendered rows <=
+                  visible + overscan, M15-FR-024, D1-AC-27); without it the cell grew with the rows and every row rendered */}
+              <TabsPanels className="min-h-0 flex-1 grid-rows-[minmax(0,1fr)]">
                 {panels.map((p) => (
                   <TabsContent key={p.id} value={p.id} className="min-h-0">
-                    <PanelBody panel={p} visible={right.open && p.id === value} />
+                    <PanelBody panel={p} visible={right.open && p.id === value} fill={p.id === 'drones'} />
                   </TabsContent>
                 ))}
               </TabsPanels>

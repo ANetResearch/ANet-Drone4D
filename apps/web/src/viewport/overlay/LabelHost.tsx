@@ -14,6 +14,7 @@ import { useVp, vp } from '../session'
 import { applyLayerVisibility } from '../bindings'
 import { labelFormatter } from './labelFormatter'
 import { Vector3 } from 'three'
+import { hypot3 } from '@/engine/hypot'
 
 export function LabelHost() {
   const ref = useRef<HTMLDivElement>(null!)
@@ -65,15 +66,18 @@ export function LabelHost() {
         return
       }
       const p = d.poses
-      const fs = p.state[i]
+      // the formatter receives the decoded FlightState: flight_state bits 0-4, bits 5-7 carry FlightSub (layouts.json;
+      // FX-WEB2-to-M06-M12 item 2)
+      const fs = p.state[i] & 0x1f
       const stale = (d.layer.mark[key] & MARK.STALE) !== 0
       if (stale) out.sub = `${f(fs, 'hold', 'zh-CN')} ${fmt.stale(p.ageS[i])}`
       else if (expanded && d.fullPoseOf(key, pos, q, vel)) {
-        out.sub = `${f(fs, 'state', 'zh-CN')} · ${fmt.alt(pos[2], 'world')} · ${fmt.speed(Math.hypot(vel[0], vel[1], vel[2]))} · ${p.battery[i] === 255 ? fmt.pct(null) : fmt.pct(p.battery[i])}`
+        out.sub = `${f(fs, 'state', 'zh-CN')} · ${fmt.alt(pos[2], 'world')} · ${fmt.speed(hypot3(vel[0], vel[1], vel[2]))} · ${p.battery[i] === 255 ? fmt.pct(null) : fmt.pct(p.battery[i])}`
       } else out.sub = f(fs, 'state', 'zh-CN')
     })
     const levels = tier === 'S' ? DECLUTTER.levelsS : DECLUTTER.levelsBA
-    const knob: GovernorKnob = { step: 3, id: 'labels', levels: levels.length, labelKey: 'perf.governor.labels', apply: (l) => L.setCap(levels[l]) }
+    const knob: GovernorKnob = { step: 3, id: 'labels', levels: levels.length, labelKey: 'perf.governor.labels', apply: (l) => L.setCap(levels[l]),
+      visible: (l) => visible && L.acceptedN > levels[l] }
     const offs = [
       register('world', 'labels.layout', (ctx) => {
         const c = L.cand
@@ -98,7 +102,7 @@ export function LabelHost() {
             const prio = sel ? LABEL_PRIO.selected : red ? LABEL_PRIO.red : lvl === 2 ? LABEL_PRIO.critical : lvl === 1 ? LABEL_PRIO.warning : hover ? LABEL_PRIO.hover : LABEL_PRIO.other
             const icon = (m & MARK.STALE) !== 0 ? LabelIcon.Hold : lvl === 2 ? LabelIcon.Critical : lvl === 1 ? LabelIcon.Warning : LabelIcon.None
             if (!c.add(LabelKind.Drone, a, p.pos[3 * i], p.pos[3 * i + 1], p.pos[3 * i + 2], prio, icon, red, hover)) break
-            if (cam) c.dist[c.n - 1] = Math.hypot(p.pos[3 * i] - cam.position.x, p.pos[3 * i + 2] - cam.position.y, -p.pos[3 * i + 1] - cam.position.z)
+            if (cam) c.dist[c.n - 1] = hypot3(p.pos[3 * i] - cam.position.x, p.pos[3 * i + 2] - cam.position.y, -p.pos[3 * i + 1] - cam.position.z)
           }
         }
         const g = vp.mission?.goto

@@ -111,8 +111,10 @@ async function routeHtml(dir, report, meta, pdf) {
   const { FLAGS } = await import('../harness/browser.mjs')
   const { CHROME } = await import('../harness/protocol.mjs')
   const json = readFileSync(join(dir, 'report.json'))
-  const srv = await startStatic({ routes: { '/report.json': (_req, res) => res.writeHead(200, { 'Content-Type': 'application/json',
-    'Cross-Origin-Resource-Policy': 'same-origin' }).end(json) } })
+  // the report route reads report.meta.json next to report.json for its fidelity block and footer (FX-WEB2, M16-to-M15 item 2)
+  const metaJson = Buffer.from(JSON.stringify(meta ?? {}))
+  const jsonRoute = (body) => (_req, res) => res.writeHead(200, { 'Content-Type': 'application/json', 'Cross-Origin-Resource-Policy': 'same-origin' }).end(body)
+  const srv = await startStatic({ routes: { '/report.json': jsonRoute(json), '/report.meta.json': jsonRoute(metaJson) } })
   const browser = await chromium.launch({ executablePath: CHROME, args: FLAGS.C1 })
   try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1, reducedMotion: 'reduce' })

@@ -2,6 +2,7 @@
 // (WAAPI: slide from --digit-distance, fade, blur when a blur slot is granted in full tier), at most one animation per
 // field per --telemetry-anim-interval (values arriving meanwhile are held and applied at the end of the interval), and
 // the site wide pop-in bucket (24 per second) decides whether a change animates at all. reduced and off assign directly.
+// The span is a raster island (ADR-066) unless `island={false}` (an enclosing element already is one).
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { EASE_CSS, MOTION } from '@/lib/tokens/motion.gen'
@@ -14,6 +15,8 @@ export interface MotionNumberProps {
   minIntervalMs?: number
   className?: string
   'aria-label'?: string
+  /** own raster island (default); false inside an element that already carries data-island */
+  island?: boolean
 }
 
 /** positions (from the right) whose characters differ; strings are right aligned like tabular numbers */
@@ -26,15 +29,23 @@ export function changedDigits(prev: string, next: string): boolean[] {
   return out
 }
 
+/**
+ * one .t-digit span per character, reused in place: only the spans whose character changed get a new text (and an
+ * animation), so a value change is a few text writes instead of rebuilding the subtree (ADR-066: less style and layout
+ * work in the UI tick frame)
+ */
 function render(el: HTMLElement, text: string, prev: string, animate: boolean, blur: boolean): number {
   const changed = changedDigits(prev, text)
-  while (el.firstChild) el.removeChild(el.firstChild)
-  let animated = 0
-  for (let i = 0; i < text.length; i++) {
+  while (el.childNodes.length > text.length) el.removeChild(el.firstChild!)
+  while (el.childNodes.length < text.length) {
     const span = document.createElement('span')
     span.className = 't-digit'
-    span.textContent = text[i]
-    el.appendChild(span)
+    el.insertBefore(span, el.firstChild)
+  }
+  let animated = 0
+  for (let i = 0; i < text.length; i++) {
+    const span = el.childNodes[i] as HTMLElement
+    if (span.textContent !== text[i]) span.textContent = text[i]
     if (animate && changed[i] && /[0-9]/.test(text[i])) {
       const from: Keyframe = blur
         ? { opacity: 0, transform: `translateY(${MOTION.digitDistancePx}px)`, filter: `blur(${MOTION.blurSmallPx}px)` }
@@ -48,7 +59,7 @@ function render(el: HTMLElement, text: string, prev: string, animate: boolean, b
   return animated
 }
 
-export function MotionNumber({ value, format, minIntervalMs = MOTION.telemetryAnimIntervalMs, className, ...rest }: MotionNumberProps) {
+export function MotionNumber({ value, format, minIntervalMs = MOTION.telemetryAnimIntervalMs, className, island = true, ...rest }: MotionNumberProps) {
   const ref = React.useRef<HTMLSpanElement>(null)
   const st = React.useRef({ shown: '', lastAnimMs: Number.NEGATIVE_INFINITY, timer: 0 as ReturnType<typeof setTimeout> | 0, latest: '' })
 
@@ -79,5 +90,5 @@ export function MotionNumber({ value, format, minIntervalMs = MOTION.telemetryAn
     if (st.current.timer) clearTimeout(st.current.timer)
   }, [])
 
-  return <span ref={ref} data-numeric="" className={cn('t-number', className)} {...rest} />
+  return <span ref={ref} data-numeric="" data-island={island ? '' : undefined} className={cn('t-number', className)} {...rest} />
 }

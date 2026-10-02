@@ -34,7 +34,8 @@ const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 export function reportCase(r) {
   const fake = r.source === 'fake'
   const metrics = (r.metrics ?? []).filter((m) => m.report_key).map((m) => ({
-    key: m.report_key, unit: m.unit, runs: (m.runs ?? []).map(num), median: num(m.median),
+    // the schema allows lower-case keys only; 18 §11.2 layer_<id>_ms with the camel-case group id groundSky (ACC-1)
+    key: m.report_key.toLowerCase(), unit: m.unit, runs: (m.runs ?? []).map(num), median: num(m.median),
     threshold: m.threshold ? { op: m.threshold.op, value: m.threshold.value } : null,
     status: fake ? 'NA' : m.status, ...(m.baseline !== undefined ? { baseline: num(m.baseline) } : {}),
     ...(m.delta !== undefined ? { delta: num(m.delta) } : {}),

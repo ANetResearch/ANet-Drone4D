@@ -4,6 +4,8 @@
 // so the P3 layers depth-test against the cloud, and shades far-plane pixels with the sky Fn (SkyQuad is hidden on
 // Tier B/A). M05 owns the EDL composite material (M05 §7.2 edlMaterial with uvScale/strength/taps, bindTargets,
 // setBackgroundNode); until it is registered this material is the composite with EDL strength 0 (identical output).
+// The lookups pre-flip v: three r186 GLSL node builders mirror v for render-target and depth textures (WebGPURenderer
+// convention) while the classic WebGLRenderer stores them unflipped; see M05 edlComposite.ts (FX-WEB1).
 import { AlwaysDepth, DataTexture, DepthTexture, FloatType, Mesh, NeverDepth, OrthographicCamera, PlaneGeometry, Scene, type Texture } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { Fn, float, min, positionGeometry, select, texture, uniform, uv, vec2, vec4 } from 'three/tsl'
@@ -20,6 +22,8 @@ export interface Composite {
   readonly uvScale: N
   readonly texel: N
   bindTargets(color: Texture, depth: DepthTexture): void
+  /** rebuild the colour graph (scene shading provider changed: the far-plane sky Fn) */
+  rebuild(): void
   dispose(): void
 }
 
@@ -34,7 +38,8 @@ export function makeComposite(reversedZ: boolean): Composite {
   const m = new MeshBasicNodeMaterial()
   const coord: N = Fn(() => {
     const lim: N = vec2(uvScale, uvScale).sub(texel.mul(0.5))
-    return min((uv() as N).mul(uvScale), lim)
+    const st: N = min((uv() as N).mul(uvScale), lim)
+    return vec2(st.x, float(1).sub(st.y)) // cancels TextureNode's render-target v flip on the classic path
   })()
   // texture nodes carry the coordinate directly: bindTargets() swaps .value on exactly these nodes
   const colorT: N = texture(placeholder, coord)
@@ -44,7 +49,8 @@ export function makeComposite(reversedZ: boolean): Composite {
   const depthOut: N = texture(depthPh, coord)
   const d: N = depthT.r
   const bg: N = reversedZ ? d.lessThanEqual(1e-7) : d.greaterThanEqual(0.9999999)
-  m.colorNode = Fn(() => vec4(select(bg, skyColor(sky, (positionGeometry as N).xy), colorT.rgb) as N, float(1)))() as N
+  const colorGraph = (): N => Fn(() => vec4(select(bg, skyColor(sky, (positionGeometry as N).xy), colorT.rgb) as N, float(1)))() as N
+  m.colorNode = colorGraph()
   m.depthNode = depthOut.r
   m.vertexNode = vec4((positionGeometry as N).xy, 0, 1) as N
   m.depthTest = true
@@ -66,6 +72,10 @@ export function makeComposite(reversedZ: boolean): Composite {
       depthOut.value = depth
       const img = color.image as { width?: number; height?: number } | undefined
       ;(texel.value as { set(x: number, y: number): void }).set(1 / Math.max(1, img?.width ?? 1), 1 / Math.max(1, img?.height ?? 1))
+    },
+    rebuild(): void {
+      m.colorNode = colorGraph()
+      m.needsUpdate = true
     },
     dispose(): void {
       quad.geometry.dispose()

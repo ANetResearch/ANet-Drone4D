@@ -71,6 +71,12 @@ export function reasonOf(e: Pick<RtEvent, 'data'>): string {
 export const mergeKeyOf = (e: Pick<RtEvent, 'type' | 'data'>): string => `${sourceOf(e.type)}:${e.type}:${reasonOf(e)}`
 
 /** FlightState display name (AWR-14 §13.2) */
+/** sub-state name of a flight state (contracts FlightSub, e.g. RTL/CRUISE -> 巡航); unknown names are sanitised verbatim */
+export function subStateText(sub: string): string {
+  const key = `fs.sub.${sub}`
+  return hasKey(key) ? t(key) : sanitizeText(sub, 32)
+}
+
 export function flightStateText(fs: number): string {
   return fs >= 0 && fs <= 13 ? t(`fs.${fs}`) : t('fs.0')
 }
@@ -86,7 +92,7 @@ export function describeEvent(e: Pick<RtEvent, 'type' | 'data' | 'uav'>): string
     case 'uav.state': {
       const fs = flightStateOf(d.to)
       const sub = subOf(d.to)
-      return t('event.uavState', { who, state: flightStateText(fs), sub: sub ? ` · ${sanitizeText(sub, 32)}` : '' })
+      return t('event.uavState', { who, state: flightStateText(fs), sub: sub ? ` · ${subStateText(sub)}` : '' })
     }
     case 'sim.vehicle.state':
       return t('event.vehicleState', { who, to: sanitizeText(typeof d.to === 'string' ? d.to : '', 32) })

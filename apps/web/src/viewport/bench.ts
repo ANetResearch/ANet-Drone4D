@@ -4,14 +4,18 @@
 //     PERF-E009 refuse to run). After the reveal the camera phase (before the rig) samples the flight by wall clock with
 //     M05's sampleFlight60, the controller input is off, camera fov/near/far come from the json; __perf.bench.flightT
 //     every frame, __perf.bench.done at t >= 60 s. scene=pc hides every M06 layer (point cloud only, as g02).
-//   ?bench=layers&fixedB= (test builds): the camera follows the same flight (looping) and, after the render phase and
-//     outside the pass-plan assertion (ctx.benchLayers), every frame renders the base (point cloud only) and base + one
-//     layer group 5 times each into an offscreen RT of the drawing-buffer size, gl.finish() (finishForBench) after each,
-//     keeps the minima, swaps the order on odd frames and cycles the groups; __perf.bench.pairs[<group>] = { n,
+//   ?bench=layers&fixedB= (test builds): the camera follows the same flight (looping) and, before the frame's own render
+//     (render phase, order -1000; the frame render clears and redraws the canvas, and renderFrame resets renderer.info, so
+//     the pass-plan assertion only sees the frame itself; ctx.benchLayers), every frame renders the base (point cloud
+//     only) and base + one layer group 5 times each into the drawing buffer, a 1-pixel read-back (finishForBench) after
+//     each, keeps the minima, swaps the order on odd frames and cycles the groups; __perf.bench.pairs[<group>] = { n,
 //     medianMs, delta, base, exp } (rings of per-frame values; the increment is the median of the deltas). Done when every
 //     group has >= 150 pairs. Groups follow AWR-18 §5.1: drones; trails (trails, frustums, mission, zones, glyphs);
-//     environment; groundSky.
-import type { PerspectiveCamera, Scene, WebGLRenderTarget } from 'three'
+//     environment; groundSky. The pairs use the drawing buffer, not an offscreen target (FX2-R2): a render target is a
+//     different program variant for three (output colour space), so the pairing compiled a second copy of every program
+//     after the reveal and ran out of uniform-buffer binding points ("Maximum number of simultaneously usable uniforms
+//     groups reached"); the drawing buffer has the size, format and programs of the measured frame.
+import type { PerspectiveCamera, Scene } from 'three'
 import { Flight60Driver, loadFlight60, perf, perfProbe, register, ring, pushRing, type CameraRig, type FrameCtx, type Ring } from '@/engine'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { benchSwitch } from './backend/testSwitches'
@@ -49,6 +53,7 @@ export function installBench(be: RenderBackend, rig: CameraRig, camera: Perspect
   if (bs.mode === '') return () => {}
   const p = perfProbe()
   p.bench.mode = bs.mode
+  p.meta.scene = bs.scene
   let driver: Flight60Driver | null = null
   let loadingFor: string | null = null
   let failed = false
@@ -105,7 +110,6 @@ function installLayersPairs(be: RenderBackend, p: ReturnType<typeof perfProbe>):
   })
   const scratch = new Float64Array(BENCH.ringCap)
   const hidden: { o: { visible: boolean }; v: boolean }[] = []
-  let rt: WebGLRenderTarget | null = null
   let frame = 0
   let group = 0
   const timeOnce = (scene: Scene, cam: PerspectiveCamera): number => {
@@ -113,7 +117,7 @@ function installLayersPairs(be: RenderBackend, p: ReturnType<typeof perfProbe>):
     let best = Number.POSITIVE_INFINITY
     for (let k = 0; k < BENCH.reps; k++) {
       const t0 = performance.now()
-      r.setRenderTarget(rt)
+      r.setRenderTarget(null)
       r.clear()
       r.render(scene, cam)
       be.finishForBench?.()
@@ -137,10 +141,6 @@ function installLayersPairs(be: RenderBackend, p: ReturnType<typeof perfProbe>):
     }
     if (g < 0) return
     group = g + 1
-    if (!rt || rt.width !== ctx.dbW || rt.height !== ctx.dbH) {
-      rt?.dispose()
-      rt = be.createRT('bench', { width: ctx.dbW, height: ctx.dbH }) as WebGLRenderTarget
-    }
     // experiment group: only the layer roots of group g on the main channel
     const ids = PAIR_GROUPS[g][1]
     hidden.length = 0
@@ -192,9 +192,8 @@ function installLayersPairs(be: RenderBackend, p: ReturnType<typeof perfProbe>):
       for (const st of stats) st.medianMs = ringMedian(st.delta, scratch)
       p.bench.done = true
     }
-  }, { order: 1000 })
+  }, { order: -1000 })
   return () => {
     offTask()
-    rt?.dispose()
   }
 }

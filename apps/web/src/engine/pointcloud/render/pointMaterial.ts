@@ -2,18 +2,27 @@
 // One program per backend tier: attribute-less Points pulled through the DrawTable (fetchNode.ts); Lite point size with
 // childDrawnMask (one level smaller where the child octant is drawn and faded in), adaptive maxPx; node-local Weyl fade
 // hash; class mask; colour modes selected by the float uniform uColorMode inside uniform branches (Height 0, HAG 1,
-// Normal 2, Class 3, Source 4, Intensity 5) so switching never compiles; lighting 0.45 + 0.55 max(n'.L, 0) +
-// 0.15 (0.5 + 0.5 n'_up) on the oct16 normal faced to the eye (AWR-15 §10.3); fog through scene.fogNode (M07, handler
-// fix 2). Hidden points (class off, fade hash) get size 0 and a position behind the eye. Tier S draws square points
-// (no fragment discard); Tier B/A round points (discard outside the unit disc), fixed when the material is built.
-// Every integer parameter is a float uniform; colours are linear, written once from the scene tokens.
+// Normal 2, Class 3, Source 4, Intensity 5) so switching never compiles; lighting per vertex from the scene shading
+// provider (engine/shading.ts; M07 §7.2): lambert(n_world, p_world) on the oct16 normal = 0.45 + 0.15 (0.5 + 0.5 n'_up)
+// + 0.55 max(n'.L, 0) with the environment's sun visibility and cloud shadow on the direct term only (AWR-15 §10.3;
+// FX-WEB1: replaces base·lam·cloudShadow). Hidden points (class off, fade hash) get size 0 and a position behind the eye.
+// Tier S draws square points (no fragment discard); Tier B/A round points (discard outside the unit disc), fixed when the
+// material is built. Every integer parameter is a float uniform; colours are linear, written once from the scene tokens.
+// Per-vertex output (ADR-064, FX2-R2): a GL point carries the varyings of its single vertex over the whole sprite, so the
+// scene fog mix(c, fogColor, fogFactor(p)) (the provider's terms, identical to scene.fogNode) and the output colour
+// transform (engine/shading.ts outputTransform: sRGB on the canvas, linear into the Tier B/A cloud target) are evaluated in
+// the vertex stage with the same result as per fragment; the fragment stage only writes vPcColor (plus the disc discard
+// on Tier B/A). The material sets fog = false and userData.awrOutputInVertex, which tells the nodes handler not to add
+// the output transform again (viewport/anetNodesHandler.ts). On SwiftShader the per-fragment fog (3 exp) and sRGB OETF
+// (3 pow) made the 25k-point pass cost 35 ms of raster; per vertex it costs 19 ms.
 import { DataTexture, FloatType, NearestFilter, RGBAFormat, RedFormat, Vector2, Vector3 } from 'three'
 import type { PointsNodeMaterial } from 'three/webgpu'
 import {
-  Discard, Fn, If, abs, builtin, clamp, dot, float, floor, fract, int, ivec2, length, max, min, mix, mod, modelViewMatrix, normalize, pointUV, pow,
+  Discard, Fn, If, abs, builtin, clamp, float, floor, fract, int, ivec2, length, max, min, mix, modelViewMatrix, modelWorldMatrix, normalize, pointUV, pow,
   select, texture, uint, uniform, varyingProperty, vec3, vec4,
 } from 'three/tsl'
 import type { PointSizeMode } from '../../loop'
+import { outputTransform, type SceneShadingProvider } from '../../shading'
 import { PC } from '../params'
 import { fetchPoint, type N } from './fetchNode'
 
@@ -36,7 +45,10 @@ export interface PointUniforms {
   sizeK: N
   projK: N
   minPx: N
+  /** size cap of non-leaf nodes (ADR-063: the tau cap in dense frames, maxPxSparse in sparse frames) */
   maxPx: N
+  /** size cap of leaf nodes (no child in the data): the rung maxPx in dense frames, maxPxSparse in sparse frames */
+  maxPxLeaf: N
   classMask: N
   colorMode: N
   heroActive: N
@@ -63,6 +75,8 @@ export interface PointTextures {
   /** texture(...) base nodes, see FetchTextures */
   pool: N
   draw: N
+  /** DrawTable block index (FetchTextures.block) */
+  block: N
   node: N
   dtm: N
   classes: N
@@ -70,7 +84,7 @@ export interface PointTextures {
 
 export function makePointUniforms(tok: PointColorTokens): PointUniforms {
   return {
-    numDraws: uniform(0), sizeK: uniform(PC.sizeK), projK: uniform(1), minPx: uniform(2), maxPx: uniform(8), classMask: uniform(PC.classMaskDefault),
+    numDraws: uniform(0), sizeK: uniform(PC.sizeK), projK: uniform(1), minPx: uniform(2), maxPx: uniform(8), maxPxLeaf: uniform(8), classMask: uniform(PC.classMaskDefault),
     colorMode: uniform(0), heroActive: uniform(0), zLo: uniform(0), zHi: uniform(1), hagLo: uniform(0), hagHi: uniform(1), gamma: uniform(tok.gamma),
     eye: uniform(new Vector3()), behind: uniform(new Vector3(0, 0, -1e6)), sun: uniform(new Vector3(0.3, -0.55, 0.77).normalize()), cloudShadow: uniform(1),
     dtmReady: uniform(0), dtmOrigin: uniform(new Vector2()), dtmCell: uniform(10), dtmSize: uniform(new Vector2(1, 1)), groundZ: uniform(0),
@@ -134,13 +148,24 @@ function dtmAt(u: PointUniforms, tex: PointTextures, x: N, y: N): N {
 }
 
 /** float bit test (classMask, childDrawnMask): floor(mask / 2^bit) mod 2 */
-const bitOf = (mask: N, bit: N): N => mod(floor(mask.div(pow(float(2), bit))), float(2))
+/**
+ * bit test (classMask, childDrawnMask) as an integer shift: 1.0 when bit `bit` (float 0..23) of `mask` is set. The masks
+ * are float uniforms or uint texel words below 2^24, exact in float32 (FX2-R2: replaces floor(mask / 2^bit) mod 2, whose
+ * pow() cost a transcendental per test on SwiftShader)
+ */
+const bitOf = (mask: N, bit: N): N => float(uint(mask).shiftRight(uint(bit)).bitAnd(uint(1)))
 
-export function makePointMaterial(create: () => PointsNodeMaterial, tex: PointTextures, u: PointUniforms, o: { pointSizeMode: PointSizeMode; round: boolean }): PointsNodeMaterial {
+export interface PointMaterialOptions {
+  pointSizeMode: PointSizeMode
+  round: boolean
+  shading: SceneShadingProvider
+}
+
+export function makePointMaterial(create: () => PointsNodeMaterial, tex: PointTextures, u: PointUniforms, o: PointMaterialOptions): PointsNodeMaterial {
   const m = create()
   const vColor = varyingProperty('vec3', 'vPcColor')
   const pos = Fn(() => {
-    const f = fetchPoint({ pool: tex.pool, draw: tex.draw, node: tex.node }, u.numDraws)
+    const f = fetchPoint({ pool: tex.pool, draw: tex.draw, node: tex.node, block: tex.block }, u.numDraws)
     const p: N = f.p
     const w: N = f.w
     // visibility: class mask bit and the node-local fade hash (M05 §6.7.4)
@@ -151,10 +176,11 @@ export function makePointMaterial(create: () => PointsNodeMaterial, tex: PointTe
     const q: N = f.q
     const oct: N = select(q.x.greaterThanEqual(0.5), float(4), float(0)).add(select(q.y.greaterThanEqual(0.5), float(2), float(0)))
       .add(select(q.z.greaterThanEqual(0.5), float(1), float(0)))
-    const pitch: N = select(bitOf(float(f.mask), oct).greaterThan(0.5), f.n1.x.mul(0.5), f.n1.x)
+    const pitch: N = select(bitOf(f.mask, oct).greaterThan(0.5), f.n1.x.mul(0.5), f.n1.x)
     const mv: N = modelViewMatrix.mul(vec4(p, 1))
     const zv: N = max(mv.z.negate(), float(1e-6))
-    const size: N = clamp(u.sizeK.mul(pitch).mul(u.projK).div(zv), u.minPx, u.maxPx)
+    // ADR-063: non-leaf nodes clamp at maxPx (the tau cap in dense frames), leaf nodes (NodeTable leaf flag) at maxPxLeaf
+    const size: N = clamp(u.sizeK.mul(pitch).mul(u.projK).div(zv), u.minPx, select(f.n1.z.greaterThan(0.5), u.maxPxLeaf, u.maxPx))
     if (o.pointSizeMode === 'glpoint') builtin('gl_PointSize').assign(select(vis.greaterThan(0.5), size, float(0)))
     // oct16 normal (AWR-16 §4.5), faced to the eye
     const wn: N = w.y.shiftRight(uint(16)).toVar()
@@ -166,9 +192,10 @@ export function makePointMaterial(create: () => PointsNodeMaterial, tex: PointTe
     const nx: N = select(nz.lessThan(0), float(1).sub(abs(ov)).mul(sgnU), ou)
     const ny: N = select(nz.lessThan(0), float(1).sub(abs(ou)).mul(sgnV), ov)
     const n: N = normalize(vec3(nx, ny, nz)).toVar()
-    const nf: N = select(dot(n, u.eye.sub(p)).lessThan(0), n.negate(), n)
-    const lamRaw: N = float(PC.lightAmbient).add(float(PC.lightSun).mul(max(dot(nf, u.sun), float(0)))).add(float(PC.lightSky).mul(nf.z.mul(0.5).add(0.5)))
-    const lam: N = select(wn.greaterThan(uint(0)), lamRaw, float(1)).mul(u.cloudShadow).toVar()
+    // light term in the three world frame (the provider faces the normal to the eye); points without a normal are unlit
+    const posW: N = modelWorldMatrix.mul(vec4(p, 1)).xyz
+    const nW: N = normalize(modelWorldMatrix.mul(vec4(n, 0)).xyz)
+    const lam: N = select(wn.greaterThan(uint(0)), o.shading.lambert(nW, posW), float(1)).toVar()
     // colour modes: uniform branches, only the selected one runs
     const c: N = vec3(0).toVar()
     const mode: N = u.colorMode
@@ -195,7 +222,9 @@ export function makePointMaterial(create: () => PointsNodeMaterial, tex: PointTe
       // Intensity (stub, needs the ext stream): ext byte 0 through the ramp
       c.assign(ramp5(u, float(w.w.bitAnd(uint(255))).div(255)).mul(lam))
     })
-    vColor.assign(c)
+    // scene fog per vertex (ADR-064): the provider's fog colour and 1 - T(camera -> p), as scene.fogNode does per fragment
+    const fogged: N = mix(c, o.shading.fogColor, o.shading.fogFactor(posW))
+    vColor.assign(outputTransform(fogged))
     return select(vis.greaterThan(0.5), p, u.behind)
   })
   m.positionNode = pos()
@@ -208,11 +237,17 @@ export function makePointMaterial(create: () => PointsNodeMaterial, tex: PointTe
   m.transparent = false
   m.depthWrite = true
   m.depthTest = true
-  m.fog = true
+  m.fog = false // applied per vertex above (ADR-064)
+  m.userData.awrOutputInVertex = true
   return m
 }
 
-/** texture nodes for a set of textures; keep them to rebind with .value = newTexture */
-export function makeTextureNodes(t: { pool: DataTexture; draw: DataTexture; node: DataTexture; dtm: DataTexture; classes: DataTexture }): PointTextures {
-  return { pool: texture(t.pool), draw: texture(t.draw), node: texture(t.node), dtm: texture(t.dtm), classes: texture(t.classes) }
+/**
+ * texture nodes for a set of textures; keep them to rebind with .value = newTexture. Every access is a texel load with
+ * integer coordinates: three's default uv transform (a mat3 multiply on each load, enabled for texture(t) without uv)
+ * is switched off (FX2-R2: about 20 loads per point in the vertex stage).
+ */
+export function makeTextureNodes(t: { pool: DataTexture; draw: DataTexture; block: DataTexture; node: DataTexture; dtm: DataTexture; classes: DataTexture }): PointTextures {
+  const tn = (x: DataTexture): N => (texture(x) as N).setUpdateMatrix(false)
+  return { pool: tn(t.pool), draw: tn(t.draw), block: tn(t.block), node: tn(t.node), dtm: tn(t.dtm), classes: tn(t.classes) }
 }

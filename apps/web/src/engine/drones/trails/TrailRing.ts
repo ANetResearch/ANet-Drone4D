@@ -1,3 +1,4 @@
+import { hypot3 } from '../../hypot'
 // CPU trail history (M06-FR-042, FR-043; M06 §6.10; r15 §3.10). Owner: M06.
 // Every present vehicle keeps a ring of 256 samples {x, y, z, t} (Float32, ENU m and sim seconds relative to the time
 // block start, blocks <= 2 h; AWR-03 §5.2 item 3). A sample is appended when >= 0.5 s of sim time or >= 5 m of travel
@@ -77,7 +78,7 @@ export class TrailRing {
         // time went backwards (seek or replay): restart this row
         this.count[r] = 0
         this.head[r] = 0
-      } else if (dt < TRAIL.minDtS - 1e-4 && Math.hypot(x - d[lo], y - d[lo + 1], z - d[lo + 2]) < TRAIL.minMoveM) return false
+      } else if (dt < TRAIL.minDtS - 1e-4 && hypot3(x - d[lo], y - d[lo + 1], z - d[lo + 2]) < TRAIL.minMoveM) return false
     }
     const o = 4 * (r * S + this.head[r])
     this.data[o] = x

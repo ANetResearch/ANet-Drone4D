@@ -3,12 +3,13 @@
 // drones phase: DroneLayer.update (interpolation at tRender, buckets, instances, glyphs, trails, focus set), latency
 // metrics (tSimToPixel of the focus or selected vehicle, pending cmdToVisible checks, HOLD and extrapolation frames);
 // world phase (order 10, after m13.gimbal): sensor frustums. Epoch changes clear the trails; RESET clears a producer.
-import type { RateClass, RtClient } from '@/net/rt/types'
+import type { RateClass, RtClient, TelemetryFrame } from '@/net/rt/types'
 import { events, register, type RenderBackendView } from '../loop'
 import { latency, perfProbe, pushRing } from '../perf/index'
 import { initTime, type DronePoseSoA, type TimeRuntime } from '../time/index'
 import { DroneLayer, DRONES, MARK, type InterpView } from './DroneLayer'
 import type { SensorsApi } from './frustums'
+import { hypot3 } from '../hypot'
 
 export { DroneLayer, DRONES, MARK, alertLevelOf, type InterpView, type RosterLike, type DroneLayerOptions } from './DroneLayer'
 export { Buckets, BUCKET, BUCKETS, type BucketInputs } from './buckets'
@@ -25,6 +26,12 @@ export { makeInstanceTexture, quadVertex, clipQuad } from './screenQuad'
 
 export interface DroneRuntime {
   readonly layer: DroneLayer
+  /**
+   * the TelemetryFrame of the latest swap (valid until the next swap; null before the first) and its sequence number:
+   * other engine modules read raw records from it in the same frame, e.g. M07's EnvSample32 (M07-to-M06 item 2)
+   */
+  readonly frame: TelemetryFrame | null
+  readonly frameSeq: number
   readonly time: TimeRuntime
   readonly poses: DronePoseSoA
   /** latest rendered pose of an agent (ENU m); false when unknown */
@@ -52,6 +59,7 @@ export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | n
     subscribe: (topic, rate) => rt()?.subscribe(topic, { rate: rate as RateClass }) ?? noop,
     sensors: () => sensors,
     motionTier: o.motionTier,
+    frozen: () => !time.clock.advancing && !time.clock.stale,
   })
   const poses = layer.poses
   const p = perfProbe()
@@ -60,6 +68,8 @@ export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | n
   const prevPos = new Float64Array(3 * 65536)
   const prevVel = new Float64Array(3 * 65536)
   let lastEpoch = -1
+  let frame: TelemetryFrame | null = null
+  let frameSeq = 0
   const offs = [
     () => time.dispose(),
     register('telemetry', 'rt.swap', (ctx) => {
@@ -69,6 +79,10 @@ export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | n
       const f = c.swapFrame()
       if (!f) return
       time.ingest(f, ctx.nowMs)
+      frame = f
+      frameSeq++
+      // M13 sensor poses (SensorPose48 raw items) and body orientations of the same frame (M13-to-M06 item 1; FX-WEB1)
+      sensors?.ingestFrame?.(f)
       const h = f.hdr
       if (lastEpoch >= 0 && h.epoch !== lastEpoch) layer.clearTrails()
       lastEpoch = h.epoch
@@ -100,12 +114,17 @@ export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | n
           holdState[a] = hold ? 1 : 0
           if (a === layer.primary || a === layer.focusAgent) events.emit('focus.hold', { id: rt()?.roster.idOf(a) ?? String(a), hold })
         }
-        if (a === who) {
+        if (a === who || lat.isPending(a)) {
           const tPose = layer.focusAgent === a ? ctx.tFocusS : ctx.tRenderS
-          const extrap = poses.ageS[i] > 0 && poses.sampleT[i] / 1000 < tPose
-          lat.presented(a, tPose, hold, extrap)
-          lat.check(a, ctx.nowMs, poses.pos[3 * i], poses.pos[3 * i + 1], poses.pos[3 * i + 2], poses.vel[3 * i], poses.vel[3 * i + 1], poses.vel[3 * i + 2])
-          presented = true
+          if (a === who) {
+            const extrap = poses.ageS[i] > 0 && poses.sampleT[i] / 1000 < tPose
+            lat.presented(a, tPose, hold, extrap)
+            presented = true
+          }
+          // commands are checked for every vehicle that has one pending (a command to a vehicle other than the
+          // Third/FPV focus one, D1-AC-26 command to visible)
+          lat.check(a, ctx.nowMs, poses.pos[3 * i], poses.pos[3 * i + 1], poses.pos[3 * i + 2], poses.vel[3 * i], poses.vel[3 * i + 1], poses.vel[3 * i + 2],
+            poses.state[i], time.interp.stateSinceMs(a) / 1000, tPose, time.interp.ctrlOf(a))
         }
       }
       if (!presented) lat.presented(-1, 0, false, false)
@@ -120,7 +139,7 @@ export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | n
         const ex = prevPos[3 * a] + prevVel[3 * a] * dt
         const ey = prevPos[3 * a + 1] + prevVel[3 * a + 1] * dt
         const ez = prevPos[3 * a + 2] + prevVel[3 * a + 2] * dt
-        lat.focusJump(Math.hypot(poses.pos[3 * i] - ex, poses.pos[3 * i + 1] - ey, poses.pos[3 * i + 2] - ez))
+        lat.focusJump(hypot3(poses.pos[3 * i] - ex, poses.pos[3 * i + 1] - ey, poses.pos[3 * i + 2] - ez))
       }
       fs.changedN = 0
       for (let i = 0; i < poses.n; i++) {
@@ -135,6 +154,12 @@ export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | n
   ]
   return {
     layer, time, poses,
+    get frame() {
+      return frame
+    },
+    get frameSeq() {
+      return frameSeq
+    },
     poseOf(agentNo, out) {
       const i = layer.poseIndexOf(agentNo)
       if (i < 0) return false
@@ -158,6 +183,12 @@ export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | n
     },
     setSensors(api) {
       sensors = api
+      // the page motion tier drives M13's gimbal damping (reduced and off snap to the target)
+      const mt = o.motionTier
+      api?.setMotionTier?.(mt ? () => {
+        const m = mt()
+        return m === 'off' ? 'reduced' : m
+      } : null)
     },
     dispose() {
       for (const off of offs) off()

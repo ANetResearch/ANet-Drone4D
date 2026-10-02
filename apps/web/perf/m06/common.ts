@@ -81,7 +81,7 @@ export type VpHooks = {
     viewportRect(): { x: number; y: number; w: number; h: number } | null
     drones(): { n: number; heroN: number; lowN: number; glyphs: number; markers: number } | null
     backendInfo(): { tier: string; deviceClass: string; state: string; programs: number } | null
-    featMatrix(o: { tier?: 'A' | 'B' | 'S' }): Promise<{ tier: string; tests: Record<string, unknown> }>
+    featMatrix(o: { tier?: 'A' | 'B' | 'S' }): Promise<{ backend: string; tier: string; tests: Record<string, unknown> }>
     vpSession: { rig: { focusSphere(c: number[], r: number): void; lookAtEnu(eye: number[], target: number[]): void } | null }
   }
 }

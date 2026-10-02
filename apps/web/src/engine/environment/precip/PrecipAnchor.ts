@@ -7,6 +7,7 @@
 import { MOTION } from '@/lib/tokens/motion.gen'
 import { smoothstep } from '../state/derive'
 import { ENV_TIERS } from '../quality/envTiers'
+import { hypot3 } from '../../hypot'
 
 export class PrecipAnchor {
   level = 0
@@ -30,7 +31,7 @@ export class PrecipAnchor {
   }
 
   update(cam: ArrayLike<number>, focus: ArrayLike<number>, camAgl: number, groundFocus: number, forceNear: boolean, nowMs: number): void {
-    const dist = Math.hypot(cam[0] - focus[0], cam[1] - focus[1], cam[2] - focus[2])
+    const dist = hypot3(cam[0] - focus[0], cam[1] - focus[1], cam[2] - focus[2])
     const s = Math.max(camAgl, ENV_TIERS.anchorFocusFrac * dist)
     const want = forceNear ? 0 : PrecipAnchor.octaveFor(s, this.level)
     if (want !== this.level) {

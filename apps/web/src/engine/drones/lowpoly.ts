@@ -7,6 +7,7 @@
 // (placeholder for p600.glb) has {position, normal} only.
 import { BufferAttribute, BufferGeometry } from 'three'
 import { SCENE } from '@/lib/tokens/scene.gen'
+import { hypot3 } from '../hypot'
 
 export const LOWPOLY = { armM: 0.45, armW: 0.05, bodyW: 0.22, bodyH: 0.1, rotorR: 0.16, rotorW: 0.025, armsDeg: [30, 90, 150, 210, 270, 330] } as const
 
@@ -98,7 +99,7 @@ export function visRadius(g: BufferGeometry | null): number {
   const bb = g.boundingBox
   if (!bb) return 0.6
   const dx = bb.max.x - bb.min.x, dy = bb.max.y - bb.min.y, dz = bb.max.z - bb.min.z
-  return Math.max(0.1, 0.5 * Math.hypot(dx, dy, dz))
+  return Math.max(0.1, 0.5 * hypot3(dx, dy, dz))
 }
 
 export function triangleCount(g: BufferGeometry): number {

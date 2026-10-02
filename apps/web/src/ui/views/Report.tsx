@@ -8,7 +8,7 @@
 // /api/sys/perf-reports/{rid}). When every chart is drawn the root carries data-report-ready="true". The viewport is
 // suspended while the page is open. Texts from the JSON are sanitised.
 import * as React from 'react'
-import { useT } from '@/app/i18n'
+import { t, useT } from '@/app/i18n'
 import { navigate } from '@/app/router/router'
 import type { RouteProps } from '@/app/router/router'
 import { fmt } from '@/lib/format'
@@ -70,6 +70,76 @@ export function glance(r: PerfReport): { p0: string; szP95: number; ttfpMax: num
   return { p0: `${r.summary.p0_pass} / ${r.summary.p0_total}`, szP95: metricOf(sz ?? { metrics: [] } as unknown as ReportCase, 'frame_p95_ms')?.median ?? Number.NaN, ttfpMax: ttfp, simCpu: cpu }
 }
 
+/** report.meta.json next to report.json (M16 build-report.mjs footerMeta): world.json datasets and the fidelity statement */
+export interface ReportMeta {
+  datasets?: Record<string, { name?: string; version?: string; citation?: string; license?: string; url?: string; anchor?: string; north?: string }>
+  fidelity?: { backend?: string; vehicle?: string; vehicle_status?: string; simulated?: boolean; synthetic_source?: boolean }
+}
+
+/** sibling report.meta.json of a same-origin report source path */
+export function metaSrcOf(src: string): string {
+  return src.replace(/[^/?#]*(?:[?#].*)?$/, 'report.meta.json')
+}
+
+/** fidelity rows (M16-FR-011): backend, vehicle profile status, simulated, device class and forced tier */
+export function fidelityRows(r: PerfReport, meta: ReportMeta | null): [string, string][] {
+  const f = meta?.fidelity ?? {}
+  const backend = sanitizeText(f.backend ?? t('report.fid.defaultBackend'), 80)
+  const status = sanitizeText(f.vehicle_status ?? t('detail.twinHint'), 40)
+  const device = typeof r.env.device_class === 'string' ? r.env.device_class : 'software'
+  return [
+    [t('report.fid.backend'), backend],
+    [t('report.fid.vehicle'), t('report.fid.vehicleValue', { vehicle: sanitizeText(f.vehicle ?? 'p600_mid360', 40), status })],
+    [t('report.fid.result'), f.simulated === false ? t('report.fid.measured') : t('report.fid.simulated')],
+    [t('report.fid.device'), t('report.fid.deviceValue', { device, tier: typeof r.env.backend_tier === 'string' ? r.env.backend_tier : 'S' })],
+    [t('report.fid.forced'), r.build.mode === 'test' ? t('report.fid.forcedTest') : t('report.fid.none')],
+  ]
+}
+
+/** footer lines (M16-FR-010): data source with version, citation and "research use", coordinates, fidelity, id line */
+export function footerLines(r: PerfReport, meta: ReportMeta | null): string[] {
+  const ds = Object.values(meta?.datasets ?? {})[0] ?? {}
+  const ver = /v\d+\.\d+\.\d+/.exec(String(ds.version ?? ''))?.[0] ?? String(ds.version ?? '')
+  const full = String(ds.citation ?? '')
+  const author = /^[^,]+ et al\./.exec(full)?.[0]
+  const venue = /\b[A-Z]{3,6} \d{4}\b/.exec(full)?.[0]
+  const cite = author && venue ? `${author}, ${venue}` : full || 'Lin et al., ECCV 2022'
+  const city = String(r.cases.find((c) => c.world_id)?.world_id ?? 'shenzhen').toUpperCase()
+  const f = meta?.fidelity ?? {}
+  return [
+    t('report.footer.data', { name: sanitizeText(ds.name ?? 'UrbanScene3D', 40), cite: sanitizeText(cite, 120), ver: sanitizeText(ver, 40) }),
+    t('report.footer.coord', {
+      anchor: sanitizeText(ds.anchor ?? 'synthetic', 20), backend: sanitizeText(f.backend ?? t('report.fid.defaultBackend'), 80),
+      vehicle: sanitizeText(f.vehicle ?? 'p600_mid360', 40), status: sanitizeText(f.vehicle_status ?? t('detail.twinHint'), 40),
+      synthetic: f.synthetic_source ? t('report.footer.synthetic') : '',
+    }),
+    `PERF · ${city} · WEBGL2 ${(typeof r.env.device_class === 'string' ? r.env.device_class : 'software').toUpperCase()} · run ${sanitizeText(r.run_id, 64)}`,
+  ]
+}
+
+function ReportFidelity({ r, meta }: { r: PerfReport; meta: ReportMeta | null }) {
+  const rows = fidelityRows(r, meta)
+  return (
+    <Card data-report-section="fidelity" data-report-fidelity="" data-figure="report-fidelity">
+      <CardHeader><CardTitle className="text-ed-title">{t('report.section.fidelity')}</CardTitle></CardHeader>
+      <CardContent>
+        <LfTable columns={[
+          { key: 'k', label: t('report.col.item'), width: '10rem', format: (x: [string, string]) => x[0] },
+          { key: 'v', label: t('report.col.content'), format: (x: [string, string]) => x[1] },
+        ]} rows={rows} rowKey={(x) => x[0]} height={100_000} ariaLabel={t('report.section.fidelity')} />
+      </CardContent>
+    </Card>
+  )
+}
+
+function ReportFooter({ r, meta }: { r: PerfReport; meta: ReportMeta | null }) {
+  return (
+    <footer data-report-footer="" className="flex flex-col gap-1 border-t pt-4 pb-6 text-ed-sub text-muted-foreground">
+      {footerLines(r, meta).map((l) => <p key={l}>{l}</p>)}
+    </footer>
+  )
+}
+
 function StatusCell({ s }: { s: Status }) {
   const t = useT()
   return (
@@ -80,7 +150,7 @@ function StatusCell({ s }: { s: Status }) {
   )
 }
 
-function ReportBody({ r }: { r: PerfReport }) {
+function ReportBody({ r, meta }: { r: PerfReport; meta: ReportMeta | null }) {
   const t = useT()
   const g = glance(r)
   let hot: ReportCase | null = null
@@ -159,11 +229,42 @@ function ReportBody({ r }: { r: PerfReport }) {
           ]} rows={all} rowKey={(x) => `${x.c.id}:${x.m.key}`} height={100_000} ariaLabel={t('report.section.appendix')} />
         </CardContent>
       </Card>
+      <ReportFidelity r={r} meta={meta} />
+      <ReportFooter r={r} meta={meta} />
     </>
   )
 }
 
-type Load = { state: 'loading' } | { state: 'ok'; r: PerfReport } | { state: 'missing' } | { state: 'error'; message: string }
+/**
+ * The meta of a report: report.meta.json next to `src` (the static render of M16), else the dataset block of the
+ * world.json of the report's first world (served by the api at /worlds/<id>/world.json); null when neither is readable
+ * (the fidelity block and footer then use the documented defaults).
+ */
+async function loadMeta(r: PerfReport, src: string | null): Promise<ReportMeta | null> {
+  const getJson = async (u: string): Promise<unknown> => {
+    const res = await fetch(u, { headers: { accept: 'application/json' } })
+    if (!res.ok) throw new ApiError(res.status, null, `${res.status}`)
+    return res.json()
+  }
+  if (src) {
+    try {
+      const m = (await getJson(metaSrcOf(src))) as ReportMeta
+      if (m && typeof m === 'object') return m
+    } catch {
+      // no sibling meta: fall through to world.json
+    }
+  }
+  const world = r.cases.find((c) => c.world_id)?.world_id ?? 'shenzhen'
+  if (!/^[a-z0-9-]{1,63}$/.test(world)) return null
+  try {
+    const w = (await getJson(`/worlds/${world}/world.json`)) as { dataset?: NonNullable<ReportMeta['datasets']>[string] }
+    return w?.dataset ? { datasets: { [world]: w.dataset } } : null
+  } catch {
+    return null
+  }
+}
+
+type Load = { state: 'loading' } | { state: 'ok'; r: PerfReport; meta: ReportMeta | null } | { state: 'missing' } | { state: 'error'; message: string }
 
 export function ReportPage({ params, search }: RouteProps) {
   const t = useT()
@@ -191,10 +292,14 @@ export function ReportPage({ params, search }: RouteProps) {
         if (!r.ok) throw new ApiError(r.status, null, `${r.status}`)
         return r.json() as Promise<PerfReport>
       }) : Promise.reject(new ApiError(404, null, 'no source'))
-    p.then((r) => {
+    p.then(async (r) => {
       if (!alive) return
-      if (r?.schema !== 'awr.perf.report.v1' || !Array.isArray(r.cases)) setLoad({ state: 'error', message: t('report.badSchema') })
-      else setLoad({ state: 'ok', r })
+      if (r?.schema !== 'awr.perf.report.v1' || !Array.isArray(r.cases)) {
+        setLoad({ state: 'error', message: t('report.badSchema') })
+        return
+      }
+      const meta = await loadMeta(r, src)
+      if (alive) setLoad({ state: 'ok', r, meta })
     }, (e: unknown) => {
       if (!alive) return
       if (e instanceof ApiError && e.status === 404) setLoad({ state: 'missing' })
@@ -225,7 +330,7 @@ export function ReportPage({ params, search }: RouteProps) {
           <PanelEmpty title={t('report.missing')} action={<Button size="sm" variant="outline" onClick={() => navigate('/worlds')}>{t('world.backToList')}</Button>} />
         ) : null}
         {load.state === 'error' ? <PanelEmpty title={t('report.error')} description={load.message} /> : null}
-        {load.state === 'ok' ? <ReportBody r={load.r} /> : null}
+        {load.state === 'ok' ? <ReportBody r={load.r} meta={load.meta} /> : null}
       </div>
     </main>
   )

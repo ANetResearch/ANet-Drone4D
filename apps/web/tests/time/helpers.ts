@@ -27,7 +27,7 @@ export function makeFrame(cap = 1024): TestFrame {
     slotNo: 0, frameSeqMax: 0, epoch: 0, flags: 0, frameTSimMs: 0, swarmN: 0, swarmSeq: 0, swarmTSimMs: 0, fullCount: 0, rawCount: 0,
     resetCount: 0, timeTSimMs: 0, timeTSrvMs: 0, timeRate: 1, timeState: 0, connState: 3, timeEpoch: 0, clockOffsetMainMs: 0, srttMs: 1,
     decodeMs: 0, ageMs: 0, bytesPerS: 0, swarmHz: 10, selHz: 0, focusHz: 0, reconnects: 0, droppedEpochFrames: 0, eventGaps: 0,
-    swarmRecvMainMs: 0, timeRecvMainMs: 0, malformedFrames: 0,
+    swarmRecvMainMs: 0, timeRecvMainMs: 0, malformedFrames: 0, selJitterMs: Number.NaN,
   } as FrameHeaderView
   const swarm = {
     agentNo: new Uint16Array(cap), fs: new Uint8Array(cap), battery: new Uint8Array(cap), flags: new Uint8Array(cap), ctrl: new Uint8Array(cap),

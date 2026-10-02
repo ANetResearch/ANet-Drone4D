@@ -25,6 +25,7 @@ import { loop, type FrameCtx } from '@/engine/loop'
 import * as sensorsEngine from '@/engine/sensors'
 import { rtClient, type DataMsg, type RtClient } from '@/net/rt'
 import { selectionStore } from './selection'
+import { uiTickDue } from './uiTick'
 
 export type SensorKindName = 'camera' | 'lidar' | 'thermal' | 'radar' | 'gnss' | 'imu' | 'baro'
 export type SensorRowState = 'online' | 'standby' | 'degraded' | 'stale' | 'pending' | 'planned'
@@ -267,8 +268,10 @@ export function attachSensorsFeed(getRt: () => RtClient | null = rtClient): () =
   if (refs === 1) {
     const rt = getRt()
     if (rt) sensorsEngine.ensureInstalled(getRt)
+    // Tier S publishes on the shared UI tick (stores/uiTick.ts, ADR-066; 4 Hz = SENSORS_STORE_HZ), Tier B/A at its own rate
     offs = [
-      loop.register('overlay', 'm13.sensors-store', (ctx) => tick(ctx, getRt()), { fps: SENSORS_STORE_HZ, order: 20 }),
+      loop.register('overlay', 'm13.sensors-store', (ctx) => tick(ctx, getRt()), { fps: SENSORS_STORE_HZ, order: 20, tiers: ['A', 'B'] }),
+      loop.register('overlay', 'm13.sensors-store.s', (ctx) => void (uiTickDue(ctx) && tick(ctx, getRt())), { order: 20, tiers: ['S'] }),
     ]
     if (rt) offs.push(rt.onData(onData))
   }
@@ -294,8 +297,8 @@ export function sensorsFeedTick(ctx: FrameCtx | null, rt: RtClient | null): void
 }
 
 // detections are needed by the event table even when the sensors tab is hidden: mirror them at <= 4 Hz once the page
-// RtClient exists (a cheap version check per tick)
-loop.register('overlay', 'm13.sensors-store.detections', () => {
+// RtClient exists (a cheap version check per tick; Tier S on the shared UI tick, ADR-066)
+function mirrorDetections(): void {
   const rt = rtClient()
   if (!rt) return
   sensorsEngine.ensureInstalled()
@@ -303,7 +306,9 @@ loop.register('overlay', 'm13.sensors-store.detections', () => {
   if (dv === detSeen || refs > 0) return
   detSeen = dv
   sensorsStore.setState({ detections: detectionRows(sensorsEngine.detectionsList()), version: sensorsStore.getState().version + 1 })
-}, { fps: SENSORS_STORE_HZ, order: 21 })
+}
+loop.register('overlay', 'm13.sensors-store.detections', mirrorDetections, { fps: SENSORS_STORE_HZ, order: 21, tiers: ['A', 'B'] })
+loop.register('overlay', 'm13.sensors-store.detections.s', (ctx) => void (uiTickDue(ctx) && mirrorDetections()), { order: 21, tiers: ['S'] })
 
 /** React hook: selector over the sensors store; mounting it attaches the feed (only visible tabs drive updates) */
 export function useSensors<T>(sel: (s: SensorsState) => T): T {

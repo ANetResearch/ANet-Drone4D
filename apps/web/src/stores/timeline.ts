@@ -24,6 +24,7 @@ import {
 import { rtClient, str, type PlaybackState, type RtClient, type RtEvent, type ServerInfoView, type TimeFrameView } from '@/net/rt'
 import { apiGet, getToken } from '@/net/api'
 import { selectionStore } from './selection'
+import { uiTickDue } from './uiTick'
 
 export type { StepKind } from '@/engine/time/index'
 
@@ -135,6 +136,8 @@ let hookedRuntime: unknown = null
 const seriesPose = newDronePoseSoA(1)
 /** recording gaps of the open replay segment (meta.json gaps, FR-027) */
 let replayGaps: TrackRange[] = []
+/** run:segment whose meta, sidecars and bookmarks are loaded (replays opened by another client or before this page) */
+let replayCtxKey = ''
 const seekLat: number[] = []
 
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now())
@@ -183,6 +186,12 @@ function onServerInfo(si: ServerInfoView): void {
       patch.playback = null
       patch.segments = []
       patch.followLive = true
+      replayCtxKey = ''
+    } else if (!s.playback) {
+      // live markers do not belong on a replay track; the replay context arrives with the next playbackState
+      timelineTrack.clearMarkers()
+      timelineTrack.clearSeries()
+      patch.followLive = false
     }
   }
   if (caps.pausable !== s.caps.pausable || caps.steppable !== s.caps.steppable || caps.maxSpeed !== s.caps.maxSpeed) patch.caps = caps
@@ -192,7 +201,11 @@ function onServerInfo(si: ServerInfoView): void {
     patch.segment = si.segment
   }
   if (Object.keys(patch).length) timelineStore.setState(patch)
-  if (mode === 'live' && si.runId && si.runId !== s.runId) void loadBookmarks(si.runId)
+  if (mode === 'replay' && !timelineStore.getState().playback) setTimeout(syncReplayState, 500)
+  if (mode === 'live' && si.runId && si.runId !== s.runId) {
+    void loadBookmarks(si.runId)
+    void probeRecording()
+  }
 }
 
 function onTime(t: TimeFrameView, recvMs: number): void {
@@ -239,6 +252,10 @@ function addEventMarker(ev: RtEvent, roster: RtClient['roster'] | undefined): vo
 function onPlaybackState(ps: PlaybackState): void {
   onPlaybackFinal(ps)
   const s = timelineStore.getState()
+  // the reply to a command the gateway rejected (our request_id, a reason other than 213, e.g. 105 open while a replay is
+  // open or 110 seek out of range) changes nothing on the server: keep the replay as it is, playbackCmd toasts the reason
+  // (FX-WEB2; before, the banner then claimed the replay worker had stopped)
+  if (ps.status === 'error' && ps.request_id && ps.code !== undefined && ps.code !== 213 && s.mode === 'replay' && s.playback) return
   if (ps.status === 'idle') {
     if (s.playback !== null || s.mode !== 'live') timelineStore.setState({ playback: null, mode: 'live', segments: [], followLive: true, buffering: false })
     return
@@ -267,6 +284,43 @@ function onPlaybackState(ps: PlaybackState): void {
   timeRuntime()?.setBlockIntervalMs(pb.decimationS !== null ? pb.decimationS * 1000 : null)
   timelineStore.setState(patch)
   if (ps.status === 'error' && ps.code === 213) notify('warning', 'timeline.replayStopped', 213)
+  // a replay this page did not open (another client, or opened before this page loaded): load its context once (FX-WEB2)
+  if (ps.run && ps.status !== 'error' && `${ps.run}:${ps.segment ?? 0}` !== replayCtxKey) void loadReplayContext(ps.run, ps.segment ?? 0)
+}
+
+/** meta (segments, gaps), sidecars (.evx markers, .ovw series), bookmarks and the fitted view of a replay segment */
+async function loadReplayContext(run: string, seg: number): Promise<void> {
+  replayCtxKey = `${run}:${seg}`
+  replayGaps = []
+  timelineTrack.clearMarkers()
+  timelineTrack.clearSeries()
+  try {
+    const meta = await apiGet<Record<string, unknown>>(`/api/runs/${encodeURIComponent(run)}`)
+    if (replayCtxKey !== `${run}:${seg}`) return
+    timelineStore.setState({ segments: segmentInfoOf(meta) })
+    const gaps = Array.isArray(meta.gaps) ? (meta.gaps as Record<string, unknown>[]) : []
+    replayGaps = gaps.filter((g) => Number(g.segment ?? -1) === seg)
+      .map((g) => ({ kind: 'gap' as const, t0S: Number(g.t_from_ns ?? 0) / 1e9, t1S: Number(g.t_to_ns ?? 0) / 1e9 }))
+  } catch {
+    // meta unavailable: the playbackState fields are enough to play
+  }
+  const pb = timelineStore.getState().playback
+  if (pb) timelineStore.setState({ view: { t0S: pb.dataStartS, t1S: Math.max(pb.dataEndS, pb.dataStartS + TIME_PARAMS.minSpanS) }, followLive: false })
+  void loadSidecars(run, seg)
+  void loadBookmarks(run)
+}
+
+/**
+ * Fallback: the server is in replay mode but 500 ms after serverInfo this page still has no playbackState. The gateway
+ * now sends one right after hello (FX-WEB2-to-M11 item 1, done by FX-GW: playback.on_hello), so this only covers a lost
+ * message: a seat holder asks again with an idempotent speed command at the current rate; viewers keep the "syncing"
+ * state until the next broadcast.
+ */
+function syncReplayState(): void {
+  const s = timelineStore.getState()
+  if (s.mode !== 'replay' || (s.playback && s.playback.dataEndS > 0) || !s.canWrite) return
+  const rate = lastTime && lastTime.rate > 0 ? lastTime.rate : 1
+  void playbackCmd('speed', { speed: rate })
 }
 
 function bind(rt: RtClient | null): void {
@@ -345,7 +399,24 @@ async function backfillEvents(): Promise<void> {
     // no gateway (FakeSource pages) or the ring moved on (410): the live channel still fills the track
   }
   if (recording !== null && rt === bound && liveMinSeq === Number.POSITIVE_INFINITY) timelineStore.setState({ recording })
+  // a recorder that auto-started with the scenario may have published rec.started before the gateway subscribed: the
+  // run's meta (an OPEN segment) is the authority then (FX-WEB2)
+  if (rt === bound && recording === null && !timelineStore.getState().recording) await probeRecording()
   if (rt === bound && timelineStore.getState().recording) await backfillFromEvx()
+}
+
+/** recording state from GET /api/runs/{run}: an OPEN segment of the current live run means "recording" */
+async function probeRecording(): Promise<void> {
+  const s = timelineStore.getState()
+  if (!s.runId || s.mode !== 'live') return
+  try {
+    const meta = await apiGet<Record<string, unknown>>(`/api/runs/${encodeURIComponent(s.runId)}`)
+    const segs = Array.isArray(meta.segments) ? (meta.segments as Record<string, unknown>[]) : []
+    const open = segs.some((x) => x.state === 'OPEN')
+    if (open !== timelineStore.getState().recording && timelineStore.getState().mode === 'live') timelineStore.setState({ recording: open })
+  } catch {
+    // no recording for this run (404) or no runs REST
+  }
 }
 
 // ------------------------------------------------------------------ periodic update (overlay phase)
@@ -496,8 +567,9 @@ function recordSeek(ms: number): void {
   timelineStore.setState({ lastSeekMs: ms })
 }
 
-loop.register('overlay', 'timeline.s', () => void tickTimeline(), { fps: TIME_PARAMS.storeHzS, tiers: ['S'] })
-loop.register('overlay', 'timeline.ba', () => void tickTimeline(), { fps: TIME_PARAMS.storeHzBA, tiers: ['A', 'B'] })
+// published on the shared UI tick (stores/uiTick.ts, ADR-066): its cadence equals TIME_PARAMS.storeHzS / storeHzBA (4 / 10 Hz)
+loop.register('overlay', 'timeline.s', (ctx) => void (uiTickDue(ctx) && tickTimeline()), { tiers: ['S'] })
+loop.register('overlay', 'timeline.ba', (ctx) => void (uiTickDue(ctx) && tickTimeline()), { tiers: ['A', 'B'] })
 
 // ------------------------------------------------------------------ actions
 function startPending(control: Control, target: number, fromRate: number = timelineStore.getState().rateRequested): void {
@@ -934,8 +1006,13 @@ export const timeline = {
   },
   async openReplay(run: string, seg = 0, tS?: number): Promise<boolean> {
     replayGaps = []
+    const prevKey = replayCtxKey
+    replayCtxKey = `${run}:${seg}` // this call loads the context itself (the broadcast playbackState must not repeat it)
     const st = await playbackCmd('open', { run, segment: seg })
-    if (!st || st.status === 'error') return false
+    if (!st || st.status === 'error') {
+      replayCtxKey = prevKey
+      return false
+    }
     timelineTrack.clearMarkers()
     timelineTrack.clearSeries()
     timelineStore.setState({ runId: run, segment: seg, mode: 'replay', followLive: false })
@@ -957,6 +1034,7 @@ export const timeline = {
   },
   async closeReplay(): Promise<void> {
     await playbackCmd('close')
+    replayCtxKey = ''
     timelineTrack.clearMarkers()
     timelineTrack.clearSeries()
     timelineStore.setState({ mode: 'live', playback: null, segments: [], followLive: true, buffering: false })
@@ -999,6 +1077,7 @@ export function resetTimeline(): void {
   timelineTrack.clearMarkers()
   timelineTrack.clearSeries()
   timelineTrack.setRanges([])
+  replayCtxKey = ''
   timelineStore.setState(initial())
 }
 

@@ -17,7 +17,12 @@ export default [
   pw('latency', 'perf/latency.spec.ts', {
     backend: S1, params: { city: 'shenzhen' }, runs: 3, acIds: ['D1-AC-26', 'PERF-AC-040'], priority: 'P0', gates: ['G2d', 'G3', 'G4'],
     metrics: [m('t_sim_to_pixel_p95_ms', 'ms', 't_sim_to_pixel_p95_ms'), m('cmd_to_visible_p95_ms', 'ms', null),
-      m('cmd_to_visible_excess_ms', 'ms', 'cmd_to_visible_excess_ms', true, { extra: true }), m('hold_pct', 'pct', 'hold_pct', true, { extra: true })],
+      m('cmd_to_visible_excess_ms', 'ms', 'cmd_to_visible_excess_ms', true, { extra: true }), m('hold_pct', 'pct', 'hold_pct', true, { extra: true }),
+      // FX2-R3: the remaining D1-AC-26 sub-items (focus-set switch, x10 HOLD, selected channel against rAF, credit skips)
+      m('focus_jump_max_m', 'm', 'focus_jump_m', true, { source: 'script', extra: true }),
+      m('hold_pct_x10', 'pct', 'hold_pct', true, { source: 'script', extra: true }),
+      m('selected_hz_over_raf', 'ratio', 'sel_hz_over_raf', true, { source: 'script', extra: true }),
+      m('credit_skips_sel_pct', 'pct', 'credit_skips_sel_pct', true, { source: 'script', extra: true })],
   }),
   pw('storm.rtl', 'perf/storm.spec.ts', {
     backend: LADDER(1000), params: { city: 'shenzhen', n: 1000, storm: 'rtl', grep: 'RTL all' }, runs: 3, timeoutS: 420,

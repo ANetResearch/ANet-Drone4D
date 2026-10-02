@@ -20,12 +20,11 @@ export function TrailsLayer() {
     const L = drones.layer
     const S = vp.be?.tier === 'S'
     const levels = S ? TRAIL_LEVELS.S : TRAIL_LEVELS.BA
-    const knob: GovernorKnob = { step: 1, id: 'trails', levels: levels.length, labelKey: 'perf.governor.trails', apply: (l) => L.setTrailLimits(levels[l][0], levels[l][1]) }
+    const knob: GovernorKnob = { step: 1, id: 'trails', levels: levels.length, labelKey: 'perf.governor.trails', apply: (l) => L.setTrailLimits(levels[l][0], levels[l][1]),
+      visible: () => L.trailRoot.visible && L.drawCountTrails() > 0 }
     const batches: TrailBatch[] = [L.trailHalo, L.trailSel, L.trailFocus]
-    const warm = (): WarmupItem[] => batches.map((b) => {
-      const g = b.mesh.geometry as unknown as { instanceCount: number }
-      return { object: b.mesh, before: () => (g.instanceCount = 1), after: () => (g.instanceCount = b.maxSlots * b.maxSegs) }
-    })
+    // one (empty) segment each; the next sync() restores the draw range
+    const warm = (): WarmupItem[] => batches.map((b) => ({ object: b.mesh, before: () => b.warmBefore() }))
     const offs = [
       registerLayer({
         id: 'trails', owner: 'M06', perfKey: 'trails', root: L.trailRoot, channel: 0,

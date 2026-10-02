@@ -75,7 +75,7 @@ export function makeProbe(withInject: boolean) {
       rttMs: Number.NaN, clockOffsetMs: Number.NaN, bytesPerS: 0,
     },
     ui: undefined as unknown,
-    loaf: { count: 0, blockingMs: 0, oursOver50: 0, oursMs: ring(SMALL), worst: [] as LoafWorst[] },
+    loaf: { count: 0, blockingMs: 0, oursOver50: 0, oursMs: ring(SMALL), worst: [] as LoafWorst[], sinceMs: 0 },
     governor: { step: 0, history: [] as GovernorEntry[], state: 'NOMINAL' as 'NOMINAL' | 'DEGRADED' | 'FLOOR_RELEASED' },
     quality: { samples: [] as { t: number; pose: Float64Array; mask: Uint8Array | null }[] },
     bench: { mode: '' as '' | 'flight60' | 'layers' | 'converge', done: false, flightT: -1, pairs: {} as Record<string, unknown> },
@@ -127,6 +127,7 @@ export function makeProbe(withInject: boolean) {
         this.loaf.oursOver50 = 0
         this.loaf.oursMs.n = 0
         this.loaf.worst.length = 0
+        this.loaf.sinceMs = typeof performance !== 'undefined' ? performance.now() : 0
       }
       if (scope === 'all' || scope === 'latency') {
         const l = this.latency

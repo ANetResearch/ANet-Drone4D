@@ -2,6 +2,7 @@
 export const qk = {
   worlds: () => ['worlds'] as const,
   world: (id: string) => ['worlds', id] as const,
+  worldDataset: (id: string) => ['worlds', id, 'dataset'] as const,
   sessionCurrent: () => ['sessions', 'current'] as const,
   scenarios: (worldId: string) => ['scenarios', worldId] as const,
   fleetVehicles: () => ['fleet', 'vehicles'] as const,

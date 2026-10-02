@@ -54,6 +54,21 @@ describe('camera modes (M06-AC-037)', () => {
     expect(r.setFollowLock(true, 3)).toBe(false)
   })
 
+  it('the follow lock switches the focus exception (D_focus) on and off like third (FX2-R3, ADR-046)', () => {
+    const focus: number[] = []
+    const r = rig({ focusPose: () => false, setFocus: (a) => focus.push(a) })
+    expect(r.setFollowLock(true, 3)).toBe(true)
+    expect(focus).toEqual([3])
+    expect(r.setFollowLock(false)).toBe(true)
+    expect(focus).toEqual([3, -1])
+    r.setFollowLock(true, 4)
+    r.setMode('bird')
+    expect(focus.at(-1)).toBe(4) // the lock survives orbit -> bird
+    r.setMode('free')
+    expect(r.followLock).toBe(false)
+    expect(focus.at(-1)).toBe(-1)
+  })
+
   it('eye >= DTM + 2 m outside FPV; the target moves with the eye', () => {
     const r = rig({ dtm: () => 50 })
     r.lookAtEnu([0, -100, 10], [0, 0, 5])

@@ -1,12 +1,15 @@
 // PerfGovernor: budget arbitration (ADR-041; M06 §6.17, FR-075, FR-076; AWR-18 §4.7). Owner: M06.
 // evaluate() at 1 Hz in the governor phase, skipped (and saturation timers cleared) on frozen frames:
-//   Tier S:   CAS held at the quality floor >= 2 s, >= 2 s since the last step, not at the end -> degrade one sub-step
+//   Tier S:   CAS held at the quality floor >= 2 s, >= 2 s since the last step, not at the end -> degrade one sub-step;
+//             sub-steps whose change is not on screen (GovernorKnob.visible false) chain into the next one in the same
+//             evaluation, so the 2 s spacing applies between visible steps (FX2-R3, ADR-067)
 //   Tier B/A: the CAS outer loop first walks down to the lowest allowed rung; only then the same rule applies
 //   any tier: CAS at the ceiling (or B >= 0.9 hi) for >= 10 s and >= 10 s since the last step -> restore one sub-step
+//             (invisible restore sub-steps chain the same way)
 // Knobs are applied in step order (1 trails, 2 frustums, 3 labels, 4 low-poly cap, 5 environment [M07], 6 motion cap,
 // 7 point-cloud floor release [cas.setFloorOverride]); the sub-levels of a knob run consecutively; restoring walks back
-// in exactly the reverse order. Each change pushes governor.history, emits 'governor.step' {step, dir, reasonKey} and
-// sets the summary label key. Pure and clock-injectable (Vitest pseudo clock, apps/web/tests/perf).
+// in exactly the reverse order. Each change pushes governor.history, emits 'governor.step' {step, dir, reasonKey} (only
+// when the knob reports a visible change, GovernorKnob.visible) and sets the summary label key. Pure and clock-injectable (Vitest pseudo clock, apps/web/tests/perf).
 import { events, type FrameCtx, type Tier } from '../loop'
 import { pushGovernorHistory, type AwrPerf } from './probe'
 
@@ -19,6 +22,13 @@ export interface GovernorKnob {
   apply(level: number): void
   /** i18n key of the HUD and Toast text (perf.governor.<id> when omitted) */
   labelKey?: string
+  /**
+   * whether the change to `level` (just applied) shows on screen now; false: the step is applied and recorded but no
+   * 'governor.step' event is emitted, so no Toast (FX2-R2: capping trails, frustums, labels or low-poly instances that are
+   * not on screen changes nothing, while the first Toast of a page costs the compositor a 0.2-0.5 s pipeline compile on
+   * SwiftShader). Omitted: always visible.
+   */
+  visible?(level: number): boolean
 }
 /** CAS view of M05 (M05 §6.8.5): times in ms, points, rung index */
 export interface CasState { atFloorSinceMs: number; atCeilSinceMs: number; B: number; lo: number; hi: number; rung: number }
@@ -28,7 +38,7 @@ export interface CasHandle {
   setTarget?(targetMs: number, tailK: number): void
 }
 
-export const GOVERNOR = { evalHz: 1, degradeAfterMs: 2000, degradeGapMs: 2000, restoreAfterMs: 10000, restoreGapMs: 10000, highFrac: 0.9 } as const
+export const GOVERNOR = { evalHz: 1, degradeAfterMs: 2000, degradeGapMs: 2000, restoreAfterMs: 10000, restoreGapMs: 10000, highFrac: 0.9, maxChain: 16 } as const
 
 interface KnobState { k: GovernorKnob; level: number }
 
@@ -67,6 +77,9 @@ export class PerfGovernor {
 
   /** CAS of the point cloud (M05); also installs the built-in step 7 knob when M05 registers none */
   setCas(cas: CasHandle | null): void {
+    // the host calls this every governor tick: the same handle must keep the step-7 knob and its level (re-creating it
+    // at level 0 would strand a released floor override, FX-WEB1)
+    if (cas === this.cas) return
     this.cas = cas
     if (this.builtinFloor) {
       const i = this.knobs.indexOf(this.builtinFloor)
@@ -81,6 +94,15 @@ export class PerfGovernor {
       this.builtinFloor = s
       this.knobs.push(s)
     }
+  }
+
+  /** true once the point-cloud CAS is attached (M05 services.cas) */
+  get hasCas(): boolean {
+    return this.cas !== null
+  }
+  /** knob ids and levels in step order (tests, HUD) */
+  knobLevels(): { step: number; id: string; level: number; levels: number }[] {
+    return this.knobs.map((x) => ({ step: x.k.step, id: x.k.id, level: x.level, levels: x.k.levels }))
   }
 
   levelOf(id: string): number {
@@ -106,13 +128,20 @@ export class PerfGovernor {
     const floorOk = this.o.tier() === 'S' || s.rung <= this.o.lowestAllowedRung()
     const atFloor = Number.isFinite(s.atFloorSinceMs) && s.atFloorSinceMs >= GOVERNOR.degradeAfterMs
     if (floorOk && atFloor && now - this.lastStepMs >= GOVERNOR.degradeGapMs && this.canDegrade()) {
-      this.degradeOne(now, 'floor')
+      // a sub-step whose change is not on screen (GovernorKnob.visible false) has no effect to wait for: the next one
+      // follows in the same evaluation, until a visible step is taken (FX2-R3, ADR-067)
+      for (let k = 0; k < GOVERNOR.maxChain && this.degradeOne(now, 'floor'); k++) if (this.lastVisible) break
       return
     }
     const ceil = (Number.isFinite(s.atCeilSinceMs) && s.atCeilSinceMs >= GOVERNOR.restoreAfterMs) ||
       (!Number.isNaN(this.highSinceMs) && now - this.highSinceMs >= GOVERNOR.restoreAfterMs)
-    if (ceil && now - this.lastStepMs >= GOVERNOR.restoreGapMs && this.canRestore()) this.restoreOne(now, 'ceil')
+    if (ceil && now - this.lastStepMs >= GOVERNOR.restoreGapMs && this.canRestore()) {
+      for (let k = 0; k < GOVERNOR.maxChain && this.restoreOne(now, 'ceil'); k++) if (this.lastVisible) break
+    }
   }
+
+  /** whether the last applied change was reported visible by its knob */
+  lastVisible = true
 
   canDegrade(): boolean {
     return this.knobs.some((x) => x.level < x.k.levels - 1)
@@ -167,12 +196,14 @@ export class PerfGovernor {
     this.labelKey = any && last ? (last.k.labelKey ?? `perf.governor.${last.k.id}`) : null
     this.state = !any ? 'NOMINAL' : this.knobs.some((k) => k.k.step === 7 && k.level > 0) ? 'FLOOR_RELEASED' : 'DEGRADED'
     const key = x.k.labelKey ?? `perf.governor.${x.k.id}`
+    const visible = !x.k.visible || x.k.visible(x.level)
+    this.lastVisible = visible
     const p = this.o.perf
     if (p) {
       p.governor.step = this.step
       p.governor.state = this.state
-      pushGovernorHistory(p, now, x.k.step, dir, `${reason}:${x.k.id}:${x.level}`)
+      pushGovernorHistory(p, now, x.k.step, dir, `${reason}:${x.k.id}:${x.level}${visible ? '' : ':hidden'}`)
     }
-    events.emit('governor.step', { step: x.k.step, dir, reasonKey: key, level: x.level, id: x.k.id })
+    if (visible) events.emit('governor.step', { step: x.k.step, dir, reasonKey: key, level: x.level, id: x.k.id })
   }
 }

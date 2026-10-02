@@ -18,6 +18,8 @@ describe('production bundle scan (M06-AC-010)', () => {
   it('finds forbidden identifiers and tier parsing', () => {
     expect(scanText('let a=q.get(`tier`);b.allowFallback=1').map((h: [string, string]) => h[0]).sort()).toEqual(['allowFallback', 'get(`tier`)'])
     expect(scanText('this.tier=e;let t=e.tier===`S`')).toEqual([])
+    // M05 switches (?fixedB, ?pcInject) and the M06 injection are test-build only too (M06-to-M05 item 2; FX-WEB1)
+    expect(scanText('p.fixedB=1;p.pcInject=.1;f.perfInject=`busyMs:5`').map((h: [string, string]) => h[0]).sort()).toEqual(['fixedB', 'pcInject', 'perfInject'])
   })
   it('classifies dist directories', () => {
     expect(scanDist(dist({ 'index-a.js': 'let x=1' })).kind).toBe('clean')

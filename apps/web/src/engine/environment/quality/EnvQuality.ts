@@ -16,6 +16,8 @@ export interface EnvKnob {
   levels: number
   labelKey: string
   apply(level: number): void
+  /** PerfGovernor GovernorKnob.visible: whether the change to `level` shows on screen (set by EnvRuntime) */
+  visible?: (level: number) => boolean
 }
 
 export class EnvQuality {

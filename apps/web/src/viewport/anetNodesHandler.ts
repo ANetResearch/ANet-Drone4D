@@ -6,6 +6,8 @@
 //   fix 3: expose renderer.depth (the default framebuffer's depth attribute): NodeMaterial.setup() only emits
 //          depthNode / gl_FragDepth on the default framebuffer when renderer.depth === true, a WebGPURenderer field that
 //          WebGLRenderer lacks, so the P2 composite's depth write-back silently vanished on screen (it worked into RTs).
+//   fix 4: a material flagged userData.awrOutputInVertex (the Tier S point material, ADR-064) already carries the output
+//          colour transform in its vertex stage: its output passes through unchanged on every target.
 // It relies on three internals (getOutputCallback instance property, renderStack[].sceneContext, the proxy forwarding
 // getRenderTarget); the feat-matrix regression page guards them on three upgrades (g01 §9).
 import { WebGLNodesHandler } from 'three/addons/tsl/WebGLNodesHandler.js'
@@ -15,7 +17,7 @@ type AnyNode = any // TSL output node (loosely typed in @types/three)
 interface HandlerInternals {
   renderer: { getRenderTarget(): { isXRRenderTarget?: boolean } | null; toneMapping: number; outputColorSpace: string }
   renderStack: { sceneContext: { fogNode: unknown } }[]
-  getOutputCallback: (out: AnyNode, builder: { material?: { toneMapped?: boolean } }) => AnyNode
+  getOutputCallback: (out: AnyNode, builder: { material?: { toneMapped?: boolean; userData?: { awrOutputInVertex?: boolean } } }) => AnyNode
 }
 
 export class AnetNodesHandler extends WebGLNodesHandler {
@@ -23,6 +25,7 @@ export class AnetNodesHandler extends WebGLNodesHandler {
     super()
     const self = this as unknown as HandlerInternals
     self.getOutputCallback = (out, builder) => {
+      if (builder?.material?.userData?.awrOutputInVertex === true) return out
       const r = self.renderer
       const rt = r.getRenderTarget()
       if (rt !== null && rt.isXRRenderTarget !== true) return out

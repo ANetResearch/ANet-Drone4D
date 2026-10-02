@@ -64,7 +64,8 @@ export function DronesLayer({ be }: { be: RenderBackend }) {
     })
     const S = be.tier === 'S'
     const lowLevels = S ? BUCKETS.lowLevelsS : BUCKETS.lowLevelsBA
-    const knob: GovernorKnob = { step: 4, id: 'lowpoly', levels: lowLevels.length, labelKey: 'perf.governor.lowpoly', apply: (l) => L.setLowCap(lowLevels[l]) }
+    const knob: GovernorKnob = { step: 4, id: 'lowpoly', levels: lowLevels.length, labelKey: 'perf.governor.lowpoly', apply: (l) => L.setLowCap(lowLevels[l]),
+      visible: (l) => L.root.visible && L.buckets.lowN > lowLevels[l] }
     const warm = (): WarmupItem[] => {
       const items: WarmupItem[] = []
       const one = (mesh: { count: number; visible: boolean }): Pick<WarmupItem, 'before' | 'after'> => ({

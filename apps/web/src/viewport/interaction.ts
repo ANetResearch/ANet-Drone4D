@@ -6,7 +6,8 @@
 // Everything asynchronous; no layout reads on the hot path (the host rect is read on pointer events only).
 import { INPUT } from '@/lib/tokens/input.gen'
 import { selection } from '@/stores/selection'
-import { vp } from './session'
+import { events } from '@/engine'
+import { vp, type PointPickInfo } from './session'
 import { gotoTargetFor, primaryAgentNo } from './gotoRule'
 
 export function installInteraction(host: HTMLElement): () => void {
@@ -71,6 +72,7 @@ export async function clickAt(x: number, y: number, _w: number, _h: number): Pro
     selection.select([r.id])
     return 'drone'
   }
+  void pointInfoAt(x, y) // PRD-FR-017: the point under the click for the info card (ID pass, asynchronous)
   const worldId = vp.worldId
   if (r.kind !== 'ground' || !worldId) {
     vp.pick = null
@@ -83,6 +85,21 @@ export async function clickAt(x: number, y: number, _w: number, _h: number): Pro
   vp.mission?.goto.set(r.pointEnu, target, 'preview', performance.now())
   vp.changed()
   return 'ground'
+}
+
+/** point-cloud pick of a click (M06-FR-064; D1-ext): vp.pointPick and the 'pick.point' event, null on a miss */
+export async function pointInfoAt(x: number, y: number): Promise<PointPickInfo | null> {
+  const picker = vp.picker
+  const worldId = vp.worldId
+  if (!picker || !worldId) return null
+  const r = await picker.pickAt(x, y, { want: ['point'] })
+  const info: PointPickInfo | null = r.kind === 'point'
+    ? { worldId, pointEnu: r.pointEnu, classIdx: r.classIdx, className: r.className ?? `class-${r.classIdx}`, hagM: r.hagM ?? null, spacingM: r.spacingM ?? 0, atMs: performance.now() }
+    : null
+  vp.pointPick = info
+  events.emit('pick.point', info)
+  vp.changed()
+  return info
 }
 
 /** double click: a vehicle -> focus it (60 m sphere); the ground -> orbit target to the hit (orbit and bird modes) */

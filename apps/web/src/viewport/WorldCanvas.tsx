@@ -9,9 +9,12 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { PerspectiveCamera } from 'three'
+import { perfProbe } from '@/engine'
 import { boot } from '@/app/boot/BootController'
+import { useRoute } from '@/app/router/router'
+import { parseChrome } from '@/app/router/search'
 import { createRenderBackend, dprFor, type RenderBackend } from './renderer'
-import { channelOf, listLayers, onLayersChanged } from './layers/registry'
+import { CH_PICK, channelOf, listLayers, onLayersChanged } from './layers/registry'
 import { vp } from './session'
 import { forcedFlags, preference } from './backend/testSwitches'
 import { assertNoPointerEventsOnWorld, GUARDS_ON } from './backend/guards'
@@ -49,7 +52,10 @@ function LayerMounts() {
         const r = s.root
         if (!r) continue
         const ch = channelOf(s)
-        r.traverse((o) => o.layers.set(ch))
+        // the point-pick object (M05, a child of the point-cloud root) stays on CH_PICK: only the pick pass draws it
+        r.traverse((o) => {
+          if (o.layers.mask !== 1 << CH_PICK) o.layers.set(ch)
+        })
         if (r.parent !== vp.worldRoot) vp.worldRoot.add(r)
       }
       if (GUARDS_ON) assertNoPointerEventsOnWorld(internal.interaction, vp.worldRoot, listLayers().filter((l) => l.id === 'pointcloud').map((l) => l.root))
@@ -73,6 +79,9 @@ let backendReady: ((be: RenderBackend) => void) | null = null
 
 export function WorldCanvas() {
   const host = useRef<HTMLDivElement>(null!)
+  // ?chrome=0 (canvas-only baseline, AWR-18 §8.6(5)): no ViewCube either (6 CSS-3D layers the compositor would draw)
+  const route = useRoute()
+  const chrome = route ? parseChrome(route.search) : true
   const [be, setBe] = useState<RenderBackend | null>(null)
   const [dpr, setDpr] = useState(0.5)
   const [gen, setGen] = useState(0)
@@ -102,7 +111,9 @@ export function WorldCanvas() {
         resize={{ scroll: false, debounce: { scroll: 50, resize: 120 } }} camera={{ fov: 60, near: 0.5, far: 20000, position: [0, 120, 240] }}
         style={{ width: '100%', height: '100%' }}
         gl={async ({ canvas }) => {
+          perfProbe().mark('boot.canvas')
           const b = await createRenderBackend(canvas as HTMLCanvasElement, { pref: preference(), forced: forcedFlags() })
+          perfProbe().mark('boot.backend')
           backendReady?.(b)
           return b.renderer as never
         }}>
@@ -111,6 +122,8 @@ export function WorldCanvas() {
             <LoopDriver be={be} hostRef={host} />
             <RenderSubscriber />
             <LayerMounts />
+            {/* M07 first: its scene shading provider and scene.fogNode exist before any layer builds a material (FX-WEB1) */}
+            {EnvironmentLayer ? <EnvironmentLayer be={be} /> : null}
             <PointCloudLayer be={be} />
             <GroundSkyLayer be={be} />
             <ZonesLayer be={be} />
@@ -120,13 +133,12 @@ export function WorldCanvas() {
             <SensorsLayer />
             <MissionLayer />
             <DebugLayer />
-            {EnvironmentLayer ? <EnvironmentLayer be={be} /> : null}
             <WarmupTrigger be={be} />
           </>
         ) : null}
       </Canvas>
       <LabelHost />
-      <ViewCube />
+      {chrome ? <ViewCube /> : null}
     </div>
   )
 }

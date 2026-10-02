@@ -9,6 +9,7 @@ import { NS, type NodeStore } from './NodeStore'
 import type { Selection } from './Selector'
 import { toNdc, type LodCamera } from './frustum'
 import { PC } from '../params'
+import { hypot2 } from '../../hypot'
 
 export interface Candidates { n: number; node: Int32Array; key: Float64Array }
 export const newCandidates = (cap: number): Candidates => ({ n: 0, node: new Int32Array(cap), key: new Float64Array(cap) })
@@ -54,7 +55,7 @@ export function reorderWindow(c: Candidates, window: number, t: NodeStore, cam: 
     const cy = 0.5 * (t.tightMin[o + 1] + t.tightMax[o + 1])
     const cz = 0.5 * (t.tightMin[o + 2] + t.tightMax[o + 2])
     let wc = 0.5
-    if (toNdc(cam, cx, cy, cz, NDC)) wc = Math.min(Math.max(1 - Math.hypot(NDC[0], NDC[1]), 0), 1) + 0.5
+    if (toNdc(cam, cx, cy, cz, NDC)) wc = Math.min(Math.max(1 - hypot2(NDC[0], NDC[1]), 0), 1) + 0.5
     const dx = cx - focus.p[0]
     const dy = cy - focus.p[1]
     const dz = cz - focus.p[2]

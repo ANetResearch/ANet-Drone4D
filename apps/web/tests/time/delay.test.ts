@@ -149,4 +149,34 @@ describe('freeze and rate transitions (M12-AC-004)', () => {
     d.tick(6000, 150, true, 1)
     expect(d.focusBlend).toBeCloseTo(0.5, 5)
   })
+
+  it('follows the worker arrival statistics of the 60 Hz channel, not the main-thread frame rate (FX2-R3, D1-AC-26)', () => {
+    // a 10 fps main thread ingests one focus sample per 100 ms frame; measured on the main thread that is 10 Hz with
+    // frame jitter and D_focus clamps at 300 ms; the worker sees the 60 Hz channel (selHz 60, jitter p95 4 ms)
+    const run = (worker: boolean): number => {
+      const d = new DelayController()
+      feed(d, 0, 3000, 10, 0, lcg(7))
+      d.setFocus(true)
+      const rnd = lcg(9)
+      for (let t = 3000; t < 9000;) {
+        const dt = rnd() < 0.3 ? 233 : 100
+        if (worker) d.onFocusSample(t, 60, 4)
+        else d.onFocusSample(t)
+        d.tick(t, dt, true, 1)
+        t += dt
+      }
+      return d.dFocusSimMs
+    }
+    expect(run(false)).toBeGreaterThan(250)
+    const w = run(true)
+    expect(w).toBeGreaterThanOrEqual(60)
+    expect(w).toBeLessThan(65)
+    // unknown worker statistics (NaN jitter, no 60 Hz channel) fall back to the main-thread arrival times
+    const d = new DelayController()
+    d.setFocus(true)
+    d.onFocusSample(0, 0, Number.NaN)
+    d.onFocusSample(100, 60, Number.NaN)
+    expect(d.focusStats.hzEff).toBeGreaterThan(9)
+    expect(d.focusStats.hzEff).toBeLessThan(11)
+  })
 })

@@ -72,7 +72,7 @@ export function LfTable<R>({ columns, rows, rowKey, total, hot, selected, onRowC
             <TableRow>
               {columns.map((c) => (
                 <TableHead key={c.key} data-num={c.align === 'right' ? '' : undefined} style={c.width ? { width: c.width } : undefined}
-                  className="text-hud-cap font-semibold uppercase text-muted-foreground">
+                  className={cn('text-hud-cap font-semibold uppercase text-muted-foreground', c.align === 'right' && 'text-right')}>
                   {c.sortable && onSort ? (
                     <Button variant="ghost" size="xs" onClick={() => onSort(c.key)} aria-label={c.label}>
                       {c.label}

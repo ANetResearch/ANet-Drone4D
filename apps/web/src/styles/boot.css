@@ -7,7 +7,21 @@
     justify-content: center; gap: 1rem; background: var(--g950); color: var(--g300);
     transition: opacity var(--duration-fast) var(--ease-smooth-out);
   }
+  /* Pre-raster (ADR-069): the mask is a compositor layer from the start, so the exit fade never re-rasters the 480 px badge
+     (FX2-R3 trace: a 470 ms frame at the reveal). During the pre-raster phase (app/boot/BootMask.tsx, after the engine is
+     ready) its layer opacity is 0.996, so the compositor draws the shell and the warm stage below it before the reveal (an
+     opaque mask culls everything below; at most one 8-bit level shows through) and the translucent-layer draw of the exit
+     fade is the one already in use. An error page goes back to the opaque mask. */
+  #boot-mask { will-change: opacity; }
+  #boot-mask[data-prewarm] { opacity: 0.996; }
   #boot-mask[data-state="revealed"] { opacity: 0; pointer-events: none; }
+  /* warm stage (app/boot/WarmStage.tsx): specimens of later UI inside the viewport, under the mask, never hit-testable,
+     display:none outside the pre-raster phase; 98 % opacity so it never occludes the shell (opaque layers would cull the
+     shell tiles below them) */
+  .warm-stage {
+    position: fixed; left: 20rem; top: 6rem; width: 46rem; z-index: var(--z-toast); display: flex; flex-direction: column; gap: 0.75rem;
+    pointer-events: none; opacity: 0.98; will-change: transform; contain: layout style;
+  }
   #boot-mask .boot-badge { width: 480px; max-width: calc(100vw - 2rem); height: auto; }
   #boot-mask .boot-phase { font: 500 0.75rem/1.125rem var(--font-sans); letter-spacing: 0.02em; min-height: 1.125rem; }
   #boot-mask .boot-progress { width: 320px; height: 2px; background: var(--lf-track); }

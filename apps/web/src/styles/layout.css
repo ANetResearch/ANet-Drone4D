@@ -12,7 +12,8 @@
   }
 }
 @layer components {
-  .app-root { position: fixed; inset: 0; overflow: hidden; background: var(--scene-clear); }
+  /* clip, not hidden: a focused row scrolled into view must never scroll the shell itself (the header moved 6 px up) */
+  .app-root { position: fixed; inset: 0; overflow: clip; background: var(--scene-clear); }
   .app-layer-canvas { position: absolute; inset: 0; z-index: var(--z-canvas); }
   .app-layer-labels { position: absolute; inset: 0; z-index: var(--z-labels); pointer-events: none; contain: strict; }
   .app-layer-viewport-ui { position: absolute; inset: 0; z-index: var(--z-viewport-ui); pointer-events: none; }
@@ -36,6 +37,9 @@
     left: var(--dock-x0); right: var(--dock-x1); bottom: calc(var(--timeline-height) + var(--rail-gap)); height: var(--dock-h);
   }
   [data-slot="rail-host"][data-inert] * { pointer-events: none; }
+  /* a folded host (inert only after its closing transition) paints nothing: its panels keep updating (event table,
+     timeline panel, sliders) and would otherwise repaint the root layer at the store rate while invisible (ADR-066) */
+  [data-slot="rail-host"][data-inert] { visibility: hidden; }
   .timeline-bar { position: absolute; inset: auto 0 0 0; height: var(--timeline-height); z-index: var(--z-rails); }
   /* viewport overlay anchors follow the unobscured rect written by ui/layout/useUnobscuredSync.ts (transform only) */
   [data-anchor] { position: absolute; left: 0; top: 0; }
@@ -45,6 +49,42 @@
   [data-anchor="bottom-right"] { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) - 100% - var(--rail-gap)), calc(var(--uo-y, 0px) + var(--uo-h, 100vh) - 100% - var(--rail-gap))); }
   [data-anchor="top-left"]     { transform: translate(calc(var(--uo-x, 0px) + var(--rail-gap)), calc(var(--uo-y, 0px) + var(--rail-gap))); }
   [data-anchor="center"]       { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) / 2 - 50%), calc(var(--uo-y, 0px) + var(--uo-h, 100vh) / 2 - 50%)); }
+  /* Raster islands (ADR-066; AWR-18 §6.1 item 5): content that changes by itself while nothing else moves (C and D class
+     telemetry text, the perf HUD, the timeline track and readout, streaming canvases) sits on its own small compositor
+     layer. A 4 Hz write then re-rasters only that island, never the 1280 px wide header or timeline strip or the overlay
+     layer shared by rails and HUD (Tier S GPU raster on SwiftShader: +20 to +50 ms of GPU time per strip re-raster).
+     A text span becomes an atomic inline box so that the transform hint applies. */
+  [data-island] { will-change: transform; }
+  span[data-island] { display: inline-block; }
+  /* Surfaces over the canvas (ADR-066): the header, the timeline bar, the open rails and every overlay anchor are layers
+     of their own, so the compositor draws only their own area. Otherwise Chrome squashes them into one layer as large as
+     the viewport (from the header down to the timeline bar), and on GPU raster that layer's full-width tiles are blended
+     over the canvas in every frame (Tier S: about +20 ms of SwiftShader CPU per frame). */
+  .app-layer-header, .timeline-bar, [data-anchor], [data-slot="rail-host"][data-state="open"] [data-slot="sidebar-inner"] { will-change: transform; }
+  /* Scroll edge fades without a mask (ADR-066): a mask-image over a scroller whose rows are raster islands forces an
+     offscreen render pass every frame (Tier S: about +10 to +20 ms of SwiftShader CPU per frame). Two gradient overlays
+     in the surface colour (--fade-scroll-bg, the rail by default) give the same picture over an opaque surface; like the
+     shadcn scroll-fade-y they show only where content is scrolled away (a named scroll timeline of the inner scroller). */
+  .fade-scroll-y { position: relative; timeline-scope: --fade-scroll-y; }
+  .fade-scroll-y > [data-fade-scroller] { scroll-timeline: --fade-scroll-y y; }
+  .fade-scroll-y::before, .fade-scroll-y::after {
+    content: ""; position: absolute; inset-inline: 0; z-index: 1; height: var(--fade-scroll-size, calc(var(--spacing) * 10));
+    pointer-events: none; opacity: 0;
+  }
+  .fade-scroll-y::before { top: 0; background: linear-gradient(to bottom, var(--fade-scroll-bg, var(--sidebar)), transparent); }
+  .fade-scroll-y::after { bottom: 0; background: linear-gradient(to top, var(--fade-scroll-bg, var(--sidebar)), transparent); }
+  @supports (animation-timeline: scroll()) {
+    .fade-scroll-y::before {
+      animation: fade-scroll-show var(--duration-epsilon) linear both; animation-timeline: --fade-scroll-y;
+      animation-range: 0 calc(var(--spacing) * 24);
+    }
+    .fade-scroll-y::after {
+      animation: fade-scroll-hide var(--duration-epsilon) linear both; animation-timeline: --fade-scroll-y;
+      animation-range: calc(100% - var(--spacing) * 24) 100%;
+    }
+  }
+  @keyframes fade-scroll-show { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fade-scroll-hide { from { opacity: 1; } to { opacity: 0; } }
 }
 /* Toast viewport (AWR-14 §3.3 table, §11.4): 360 px wide at the bottom right of the unobscured rect, 12 px inside it, so
    toasts never cover the Timeline bar, the Dock or the rails. Unlayered on purpose: it overrides the shadcn position

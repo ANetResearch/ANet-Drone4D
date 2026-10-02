@@ -4,7 +4,7 @@
 // It also writes the hysteresis mark t.drawnFrame = sel.frame for every selected node that is resident (and for nodes
 // without own points, which count as resident and faded in). childDrawnMask counts only children drawn this frame
 // whose fade reached 1, so a parent octant shrinks one level only after the child finished fading in.
-import { DataTexture, FloatType, NearestFilter, RGBAFormat, RGBAIntegerFormat, UnsignedIntType } from 'three'
+import { DataTexture, FloatType, NearestFilter, RGBAFormat, RGBAIntegerFormat, RedIntegerFormat, UnsignedIntType } from 'three'
 import type { NodeStore } from '../core/NodeStore'
 import type { Selection } from '../core/Selector'
 import { PC } from '../params'
@@ -67,8 +67,29 @@ export function buildDrawTable(sel: Selection, t: NodeStore, nowMs: number, fade
   return res
 }
 
-function intTexture(data: Uint32Array, w: number, h: number): DataTexture {
-  const tex = new DataTexture(data, w, h, RGBAIntegerFormat, UnsignedIntType)
+/** vertices per DrawTable block (block index, FX2-R2) */
+export const DRAW_BLOCK = 1 << PC.drawIndexBlockLog2
+
+/**
+ * Block index of a DrawTable (pure; FX2-R2): out[b] = the entry containing vertex b·DRAW_BLOCK for b < nb =
+ * ceil(drawn / DRAW_BLOCK), out[nb] = the last entry. The entry of vertex v lies in [out[v >> log2], out[(v >> log2) + 1]]
+ * (largest prefixStart <= v, zero-length entries resolve to the later one as in the binary search). Returns nb + 1, the
+ * number of words written.
+ */
+export function buildBlockIndex(entries: Uint32Array, k: number, drawn: number, out: Uint32Array): number {
+  const nb = Math.min(Math.ceil(drawn / DRAW_BLOCK), out.length - 1)
+  let e = 0
+  for (let b = 0; b < nb; b++) {
+    const v = b * DRAW_BLOCK
+    while (e + 1 < k && entries[4 * (e + 1)] <= v) e++
+    out[b] = e
+  }
+  out[nb] = k > 0 ? k - 1 : 0
+  return nb + 1
+}
+
+function intTexture(data: Uint32Array, w: number, h: number, format: typeof RGBAIntegerFormat | typeof RedIntegerFormat = RGBAIntegerFormat): DataTexture {
+  const tex = new DataTexture(data, w, h, format, UnsignedIntType)
   tex.minFilter = NearestFilter
   tex.magFilter = NearestFilter
   tex.generateMipmaps = false
@@ -81,20 +102,31 @@ export const nodeTableRows = (N: number): number => Math.max(1, Math.ceil((2 * N
 
 /**
  * GPU side of the tables: DrawTable RGBA32UI 1024 x 4 rewritten every frame (only the rows in use are uploaded, one
- * addUpdateRange per row, M05-FR-028) and NodeTable RGBA32F, two texels per node, (min.xyz, cubeSize) and
- * (spacing_L, level, 0, 0) in the layer frame, written once per world. No internalFormat on either (g01 §0 item 10).
+ * addUpdateRange per row, M05-FR-028), its block index R32UI 1024 wide (buildBlockIndex, rows for maxPoints, uploaded
+ * the same way) and NodeTable RGBA32F, two texels per node, (min.xyz, cubeSize) and (spacing_L, level, leaf, 0) in the
+ * layer frame (leaf = 1 without a child in the data, ADR-063), written once per world. No internalFormat on any
+ * (g01 §0 item 10).
  */
 export class DrawTables {
   readonly draw: DataTexture
   readonly drawData: Uint32Array
+  readonly block: DataTexture
+  readonly blockData: Uint32Array
   readonly node: DataTexture
   readonly nodeData: Float32Array
   readonly nodeCapacity: number
+  readonly maxPoints: number
 
-  constructor(nodeCapacity: number) {
+  /** maxPoints: the most points one frame can draw (the pool capacity) */
+  constructor(nodeCapacity: number, maxPoints: number) {
     this.drawData = new Uint32Array(PC.drawTableWidth * PC.drawTableRows * 4)
     this.draw = intTexture(this.drawData, PC.drawTableWidth, PC.drawTableRows)
     this.draw.needsUpdate = true
+    this.maxPoints = maxPoints
+    const blockRows = Math.max(1, Math.ceil((Math.ceil(maxPoints / DRAW_BLOCK) + 2) / PC.drawTableWidth))
+    this.blockData = new Uint32Array(PC.drawTableWidth * blockRows)
+    this.block = intTexture(this.blockData, PC.drawTableWidth, blockRows, RedIntegerFormat)
+    this.block.needsUpdate = true
     this.nodeCapacity = nodeCapacity
     const rows = nodeTableRows(nodeCapacity)
     this.nodeData = new Float32Array(PC.nodeTableWidth * rows * 4)
@@ -118,6 +150,10 @@ export class DrawTables {
       d[o + 3] = t.cubeSize[i]
       d[o + 4] = t.spacing[i]
       d[o + 5] = t.level[i]
+      // leaf flag (no child in the data): leaf points keep the rung maxPx in dense frames (ADR-063)
+      let leaf = 1
+      for (let c = 0; c < 8; c++) if (t.children[8 * i + c] >= 0) leaf = 0
+      d[o + 6] = leaf
     }
     this.node.needsUpdate = true
   }
@@ -134,8 +170,25 @@ export class DrawTables {
     if (k > 0) this.draw.needsUpdate = true
   }
 
+  /**
+   * upload the first n words of the block index (rows touched only, as commit). three r186 converts update ranges to
+   * texels with a fixed stride of 4 components ("only RGBA supported", WebGLTextures.updateTexture) while the
+   * unpack skip is counted in texels of the actual format, so the ranges of this one-component texture are given x 4
+   */
+  commitBlocks(n: number): void {
+    const W = PC.drawTableWidth
+    const rows = Math.ceil(n / W)
+    this.block.clearUpdateRanges()
+    for (let r = 0; r < rows; r++) {
+      const m = Math.min(n - r * W, W)
+      if (m > 0) this.block.addUpdateRange(4 * r * W, 4 * m)
+    }
+    if (n > 0) this.block.needsUpdate = true
+  }
+
   dispose(): void {
     this.draw.dispose()
+    this.block.dispose()
     this.node.dispose()
   }
 }

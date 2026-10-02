@@ -3,6 +3,7 @@
 //   __env.state()            summary numbers (state, version, perf, live counts, params digest)
 //   __env.injectPreset(id, s) a client-side smooth keyframe from the current scalars to a preset (route when steady on
 //                            a preset), version + 1: exercises the Low visuals without a server (env-switch)
+//   __env.injectStepAt(id, s) a step keyframe applied at absolute time s with zero anchors (env-fixed-time)
 //   __env.wantTurbulence()   load the shared turbulence box (env-gpu turbulence term)
 //   __env.gpuParity()        GPU windAtEnu vs windCPU at 32 x 32 points (env-gpu)
 import { FloatType, WebGLRenderTarget, type PerspectiveCamera, type Scene, type WebGLRenderer } from 'three'
@@ -32,6 +33,21 @@ export function installEnvTestHooks(env: EnvironmentRuntime, renderer: WebGLRend
         t1_ns: t + Math.round(durationS * 1e9), from, to, via, to_preset: id,
         anchors: { t_ns: t, s_m: st.anchors.sM, d_enu_m: Array.from(st.anchors.d), fall_rain_m: st.anchors.fallRain, fall_snow_m: st.anchors.fallSnow,
           wetness: st.anchors.wetness, puddle: st.anchors.puddle } } as typeof cur.wire
+      st.ingest(w, performance.now())
+      return w.version
+    },
+    /**
+     * a step keyframe to preset `id` applied at the absolute simulation time tS with zero anchors: every page that
+     * injects it holds the same environment state at any t >= tS (M07-AC-021 fixed-instant comparisons, FX-WEB1)
+     */
+    injectStepAt: (id: string, tS: number): number => {
+      const st = env.store
+      const cur = st.current
+      if (!cur) return -1
+      const t = Math.round(tS * 1e9 / 20e6) * 20e6
+      const to = Array.from(st.P.overlay(st.scalars, id, new Float64Array(st.P.nf)))
+      const w = { ...cur.wire, version: cur.version + 1000, t_ns: t, t_apply_ns: t, mode: 'step', t0_ns: t, t1_ns: t, from: to, to, via: [], to_preset: id,
+        anchors: { t_ns: t, s_m: 0, d_enu_m: [0, 0, 0], fall_rain_m: 0, fall_snow_m: 0, wetness: 0, puddle: 0 } } as typeof cur.wire
       st.ingest(w, performance.now())
       return w.version
     },

@@ -126,7 +126,10 @@ export interface PointCloudStats {
   floorHeld: boolean
   poolStalls: number
   pageUtil: number
+  /** point-size cap in force, raster px (leaf nodes; the upper bound of every point, FR-030) */
   maxPxEff: number
+  /** point-size cap of non-leaf nodes, raster px (ADR-063: the tau cap in dense frames; = maxPxEff in sparse frames) */
+  maxPxCapEff: number
   rsEff: number
   frozenMask: number
   levelCounts: Int32Array

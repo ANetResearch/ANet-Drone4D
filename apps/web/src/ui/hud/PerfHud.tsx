@@ -46,7 +46,7 @@ export function PerfHud({ compactBp }: { compactBp: boolean }) {
   const bind = React.useCallback(() => perfStore.getState().p95Ms, [])
   const fps = Number.isFinite(targetMs) && targetMs > 0 ? Math.round(1000 / targetMs) : Number.NaN
   return (
-    <div data-anchor="bottom-left" data-figure="perf-hud" className="w-(--hud-w)" style={{ '--hud-w': '16.5rem' } as React.CSSProperties}
+    <div data-anchor="bottom-left" data-figure="perf-hud" data-island="" className="w-(--hud-w)" style={{ '--hud-w': '16.5rem' } as React.CSSProperties}
       onClick={() => layoutActions.openDockTab('perf')}>
       <LfChartCard
         density="hud"
@@ -91,27 +91,21 @@ export function PerfHud({ compactBp }: { compactBp: boolean }) {
   )
 }
 
+/** the KPI text is written in the store write itself (the governor phase of the UI tick frame, ADR-066), never a frame
+ * later, so the HUD changes in the same frame as the rest of the shell */
 function HudText({ bind, className }: { bind: () => number; className?: string }) {
   const ref = React.useRef<HTMLSpanElement>(null)
   React.useEffect(() => {
-    let raf = 0
     let last = ''
-    const tick = () => {
+    const write = () => {
       const s = fmt.num(bind(), 1)
       if (s !== last && ref.current) {
         ref.current.textContent = s
         last = s
       }
     }
-    tick()
-    const un = perfStore.subscribe(() => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(tick)
-    })
-    return () => {
-      un()
-      cancelAnimationFrame(raf)
-    }
+    write()
+    return perfStore.subscribe(write)
   }, [bind])
   return <span ref={ref} data-numeric="" className={`text-hud-kpi font-extrabold ${className ?? ''}`} />
 }

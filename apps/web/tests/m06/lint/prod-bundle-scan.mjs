@@ -13,7 +13,7 @@ const HERE = fileURLToPath(new URL('.', import.meta.url))
 const ROOT = resolve(HERE, '../../../../..')
 
 /** identifiers that must not survive in a production bundle (M06-AC-010) */
-export const FORBIDDEN = ['allowFallback', 'finishForBench', 'perfInject', 'fixedB', 'selftestNoFix', 'get(`tier`)', 'get("tier")', "get('tier')"]
+export const FORBIDDEN = ['allowFallback', 'finishForBench', 'perfInject', 'fixedB', 'pcInject', 'selftestNoFix', 'get(`tier`)', 'get("tier")', "get('tier')"]
 /** markers of a test build (test hooks of M06 and M05) */
 export const TEST_MARKERS = ['__vp', '__pc']
 

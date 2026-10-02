@@ -3,7 +3,7 @@
 // stores the world context (ground height for clamps and patches, bounds, coordinate bytes for flight60) and builds
 // the zones once (walls, solid and dashed top outlines, vertical edges: <= 4 draws). A world switch rebuilds them.
 import { useEffect } from 'react'
-import { ZonesLayer as Zones } from '@/engine'
+import { register, ZonesLayer as Zones } from '@/engine'
 import type { RenderBackend } from '../renderer'
 import { registerLayer } from './registry'
 import { useVp, vp } from '../session'
@@ -38,9 +38,14 @@ export function ZonesLayer({ be }: { be: RenderBackend }) {
       },
       dispose: () => {},
     })
+    // screen-space top outlines (non-instanced quads): raster width, drawing buffer and near plane every frame
+    const offView = register('world', 'zones.view', (ctx) => {
+      if (z.root.visible) z.setView(ctx.dpr > 0 ? ctx.dpr : 1, ctx.dbW, ctx.dbH, (ctx.camera as { near?: number } | null)?.near ?? 0)
+    }, { layer: 'trails' })
     applyLayerVisibility()
     return () => {
       off()
+      offView()
       z.dispose()
       if (vp.zones === z) vp.zones = null
     }

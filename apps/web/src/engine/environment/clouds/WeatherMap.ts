@@ -27,7 +27,9 @@ export class WeatherMap {
     this.neutral.wrapS = RepeatWrapping
     this.neutral.wrapT = RepeatWrapping
     this.neutral.needsUpdate = true
+    // no uv transform: the texture matrix is identity (three would multiply every sample by it, FX2-R2)
     this.node = texture(this.neutral as Texture)
+    this.node.updateMatrix = false
   }
 
   async load(url: string, fetcher: (u: string) => Promise<ArrayBuffer>): Promise<void> {

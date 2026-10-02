@@ -34,6 +34,7 @@ export class EnvTerrain {
     this.flat.magFilter = NearestFilter
     this.flat.needsUpdate = true
     this.texNode = texture(this.flat as Texture)
+    this.texNode.updateMatrix = false // identity uv transform (FX2-R2)
   }
 
   /** once per frame: follow the DTM source (loaded later, reloaded on a world switch) */

@@ -7,6 +7,7 @@
 // is hidden (the camera sits inside it). Fixed-size heaps, zero allocation per call.
 import { Frustum, Matrix4, Sphere, Vector3, type PerspectiveCamera } from 'three'
 import type { DronePoseSoA } from '../time/interpRing'
+import { hypot3 } from '../hypot'
 
 export const BUCKET = { MARKER: 0, LOW: 1, HERO: 2, HIDDEN: 3 } as const
 export const BUCKETS = {
@@ -123,7 +124,7 @@ export class Buckets {
       const x = poses.pos[3 * i]
       const y = poses.pos[3 * i + 1]
       const z = poses.pos[3 * i + 2]
-      const d = Math.max(Math.hypot(x - ex, y - ey, z - ez), near)
+      const d = Math.max(hypot3(x - ex, y - ey, z - ez), near)
       const rv = inp.rVisOf(i)
       this.rpx[i] = (rv * k) / d
       this.sphere.center.set(x, z, -y)

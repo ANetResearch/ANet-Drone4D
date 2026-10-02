@@ -82,6 +82,34 @@ describe('rt.worker engine', () => {
     expect(r.slots.filter((s) => s.hdr.swarmN > 0).length).toBeGreaterThan(60)
   })
 
+  it('60 Hz channel arrival rate and jitter are measured in the worker, independent of the pull rate (FX2-R3)', async () => {
+    const run = async (pullEvery: number): Promise<{ hz: number; jitter: number; skips: number }> => {
+      const r = await rig({ url: 'fake:?n=3', n: 3, window: 6 })
+      r.pull()
+      r.host.onMessage({ cmd: 'sub', subs: [{ id: 1, topic: 'swarm/state', rate: 10, mode: 'latest' }, { id: 3, topic: 'uav/uav0002/state', rate: 60, mode: 'latest' }] })
+      for (let k = 0; k < 180; k++) {
+        await r.step(1000 / 60)
+        if (k % pullEvery === pullEvery - 1) r.pull()
+      }
+      const s = r.slots[r.slots.length - 1]
+      return { hz: s.hdr.selHz, jitter: s.hdr.selJitterMs, skips: r.fake.stats.creditSkips }
+    }
+    expect(H.selJitterMs + 4).toBeLessThanOrEqual(256)
+    // 30 fps main thread: the credit window (W = 6) never fills, the worker sees the 60 Hz channel at 60 Hz
+    const a = await run(2)
+    expect(a.hz).toBeGreaterThan(55)
+    expect(a.jitter).toBeLessThan(1000 / 60)
+    expect(a.skips).toBe(0)
+    // 20 fps main thread: one ack per pull at hand-over leaves the 60 Hz channel inside the credit window (D1-AC-26)
+    const c = await run(3)
+    expect(c.hz).toBeGreaterThan(55)
+    expect(c.skips).toBeLessThanOrEqual(2)
+    // 10 fps main thread: credit stalls are visible as arrival jitter (no longer the main thread's frame times)
+    const b = await run(6)
+    expect(b.hz).toBeGreaterThan(20)
+    expect(Number.isFinite(b.jitter)).toBe(true)
+  })
+
   it('ClockSync: 5 pings 100 ms apart then 2 Hz; offset and srtt in the slot header', async () => {
     const r = await rig({ url: 'fake:?n=1' })
     r.pull()

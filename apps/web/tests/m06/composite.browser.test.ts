@@ -10,18 +10,18 @@ import { vec3 } from 'three/tsl'
 import { ctx as frameCtx, makeEdlCompositeMaterial, perfProbe } from '@/engine'
 import { createRenderBackend, newPassPlan, type RenderBackend } from '@/viewport/renderer'
 import { registerLayer } from '@/viewport/layers/registry'
-import { makeSkyQuadMaterial, makeSkyUniforms } from '@/viewport/layers/groundSky.materials'
+import { makeSkyQuadGeometry, makeSkyQuadMaterial, makeSkyUniforms } from '@/viewport/layers/groundSky.materials'
 
 type N = any
 
-// withSky: the Tier S reference carries the SkyQuad (renderOrder -1000, no depth); Tier B shades far-plane pixels of
-// the composite with the same sky Fn (default uniforms on both sides)
-function scene(withSky = false): { s: Scene; cloud: Mesh; main: Mesh } {
+// withSky: the Tier S reference carries the SkyQuad (per-vertex grid at the far plane, depth-tested, after the opaque
+// objects, ADR-064); Tier B shades far-plane pixels of the composite with the same sky Fn (default uniforms on both sides)
+function scene(withSky = false, reversedZ = false): { s: Scene; cloud: Mesh; main: Mesh } {
   const s = new Scene()
   if (withSky) {
-    const sky = new Mesh(new PlaneGeometry(2, 2), makeSkyQuadMaterial(makeSkyUniforms()))
+    const sky = new Mesh(makeSkyQuadGeometry(), makeSkyQuadMaterial(makeSkyUniforms(), reversedZ))
     sky.frustumCulled = false
-    sky.renderOrder = -1000
+    sky.renderOrder = 1000
     s.add(sky)
   }
   const mc = new MeshBasicNodeMaterial()
@@ -74,7 +74,7 @@ describe('Tier B pass plan (M06-AC-021, AC-048)', () => {
       registerLayer({ id: 'groundSky', owner: 'M06', perfKey: 'groundSky', root: null, channel: 0, drawCount: (c) => (c.tier === 'S' ? 1 : 0), setVisible: () => {}, dispose: () => {} }),
     ]
     const S = await mk('S')
-    const ref = await frame(S, scene(true).s, cam(), W)
+    const ref = await frame(S, scene(true, S.caps.reversedZ).s, cam(), W)
     const B = await mk('B')
     const got = await frame(B, scene().s, cam(), W)
     let diff = 0
@@ -116,6 +116,53 @@ describe('Tier B pass plan (M06-AC-021, AC-048)', () => {
     expect([rt.viewport.z, rt.viewport.w]).toEqual([Math.round(W * 0.6), Math.round(W * 0.6)])
     for (const off of offs) off()
     await S.dispose()
+    await B.dispose()
+  })
+})
+
+describe('P2 composite orientation (FX-WEB1 regression)', () => {
+  // three r186 GLSL node builders mirror v for render-target and depth textures; the classic composites pre-flip it. A
+  // y-symmetric scene hides a mirrored composite, so this scene only has cloud content above the horizon line, and the
+  // sub-viewport case (s = 0.6) would sample cleared pixels if the lookup were mirrored
+  it('cloud content stays in the upper half at s = 1 and s = 0.6, with the M06 and the M05 composites', async () => {
+    const W = 96
+    const canvas = document.createElement('canvas')
+    const B = await createRenderBackend(canvas, { pref: 'auto', forced: { tier: 'B' } })
+    B.renderer.setPixelRatio(1)
+    B.renderer.setSize(W, W, false)
+    B.state = 'READY'
+    const offs = [
+      registerLayer({ id: 'pointcloud', owner: 'M05', perfKey: 'pointcloud', root: null, channel: 1, drawCount: () => 1, setVisible: () => {}, dispose: () => {} }),
+    ]
+    const s = new Scene()
+    const mc = new MeshBasicNodeMaterial()
+    mc.colorNode = vec3(0.3, 0.5, 0.7) as N
+    const cloud = new Mesh(new PlaneGeometry(40, 12), mc)
+    cloud.position.set(0, 14, -60) // upper part of the view only
+    cloud.layers.set(1)
+    s.add(cloud)
+    const halves = (px: Uint8Array): [number, number] => {
+      let top = 0
+      let bottom = 0
+      for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+        const i = 4 * (y * W + x)
+        if (px[i + 2] > 60) {
+          if (y >= W / 2) top++ // rows are bottom-up
+          else bottom++
+        }
+      }
+      return [top, bottom]
+    }
+    for (const edl of [false, true]) {
+      if (edl) B.setEdl(makeEdlCompositeMaterial({ reversedDepth: B.caps.reversedZ, strength: 0, radiusPx: 1.4, clear: [0, 0, 0] }) as never)
+      for (const sc of [1, 0.6]) {
+        B.setCloudScale(sc)
+        const [top, bottom] = halves(await frame(B, s, cam(), W))
+        expect(top, `edl ${edl} s ${sc}: cloud pixels in the upper half`).toBeGreaterThan(200)
+        expect(bottom, `edl ${edl} s ${sc}: no cloud pixels in the lower half`).toBe(0)
+      }
+    }
+    for (const off of offs) off()
     await B.dispose()
   })
 })

@@ -9,12 +9,14 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { extname, join, normalize, resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname, '../../../..')
-const DIST = resolve(import.meta.dirname, '../../dist')
+// M05_DIST: a private test build (VITE_AWR_TEST_SWITCHES=1 vite build --outDir <dir>), so the shared apps/web/dist of other
+// work packages is never overwritten; defaults to apps/web/dist
+const DIST = resolve(process.env.M05_DIST ?? resolve(import.meta.dirname, '../../dist'))
 const WORLDS = join(ROOT, 'worlds')
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.bin': 'application/octet-stream',
   '.f32': 'application/octet-stream', '.u8': 'application/octet-stream', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2',
-  '.geojson': 'application/geo+json', '.wasm': 'application/wasm',
+  '.geojson': 'application/geo+json', '.wasm': 'application/wasm', '.glb': 'model/gltf-binary',
 }
 const COI = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp', 'Cross-Origin-Resource-Policy': 'same-origin' }
 

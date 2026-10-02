@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { extract } from './analyze.mjs'
-import { checkAffinity, fetchServerWindow, startBackend, startProcSampler, startProxy, stopBackend, waitMark } from './backend.mjs'
+import { checkAffinity, fetchServerWindow, procs, startBackend, startProcSampler, startProxy, stopBackend, waitMark } from './backend.mjs'
 import { FLAGS } from './browser.mjs'
 import { runPw } from './exec/pw.mjs'
 import { runPy } from './exec/py.mjs'
@@ -137,10 +137,25 @@ export async function runCase(c, o) {
         }
         if (h?.kind === 'live' && backendSpec.waitMark) await waitMark(h, backendSpec.waitMark, Number(params.markTimeoutS ?? 150))
         let base = h?.base ?? null
-        if (h?.kind === 'live' && backendSpec.netProfile) base = (await startProxy(h, backendSpec.netProfile, 7)).base
+        let env = backendSpec.env
+        if (h?.kind === 'live' && backendSpec.netProfile) {
+          // the spec may drive the proxy through its control port (POST /cut?ms=, /profile?name=; M16 §6.11)
+          const px = await startProxy(h, backendSpec.netProfile, 7)
+          base = px.base
+          env = { ...(env ?? {}), AWR_PERF_PROXY_CONTROL: px.control }
+        }
         const ps = h?.kind === 'live' ? startProcSampler(h) : null
-        ex = await deps.execute(c, { runDir, base, params, timeoutS: c.timeoutS, env: backendSpec.env })
+        ex = await deps.execute(c, { runDir, base, params, timeoutS: c.timeoutS, env })
         const proc = ps?.stop() ?? null
+        // PERF-E008 (18 §17): a core process that restarted or left RUNNING during the run makes the run invalid (ACC-1:
+        // a sim-core crash loop under the supervisor was otherwise invisible to the harness)
+        if (h?.kind === 'live' && h.base && h.pids) {
+          const bad = await unhealthyCore(h)
+          if (bad) {
+            backendBad = true
+            errors.push({ code: 'PERF-E008', message: bad })
+          }
+        }
         const window = h?.kind === 'live' ? await fetchServerWindow(h, 60) : null
         const growth = Object.values(proc ?? {}).map((x) => (x.rss_mb?.[0] > 0 && x.rss_mb?.[1] > 0 ? 100 * (x.rss_mb[1] / x.rss_mb[0] - 1) : null))
           .filter((x) => x !== null)
@@ -200,6 +215,17 @@ export async function runCase(c, o) {
   for (const a of arts) for (const e of a.errors) if (!result.errors.some((x) => x.code === e.code && x.message === e.message)) result.errors.push(e)
   if (!gatingCase) result.errors.push({ code: 'FAKE-SOURCE', message: '合成数据，不参与门禁（source=fake）' })
   return finish(status)
+}
+
+/** core processes (api, sim-core) restarted or not RUNNING at the end of a run: returns a message or null */
+async function unhealthyCore(h) {
+  try {
+    const items = await procs(h)
+    const bad = items.filter((x) => ['api', 'sim-core'].includes(x.name) && ((x.restarts ?? 0) > 0 || x.state !== 'RUNNING'))
+    return bad.length ? `core process unhealthy during the run: ${bad.map((x) => `${x.name} state ${x.state} restarts ${x.restarts}`).join('; ')}` : null
+  } catch (e) {
+    return `/api/sys/procs unavailable after the run: ${String(e?.message ?? e).slice(0, 200)}`
+  }
 }
 
 function rank(s) {

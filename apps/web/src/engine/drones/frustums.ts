@@ -10,6 +10,8 @@ import { BufferAttribute, BufferGeometry, DoubleSide, LineSegments, Mesh, Quater
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { Fn, attribute, float, mod, uniform, varying, vec4 } from 'three/tsl'
 import { SCENE } from '@/lib/tokens/scene.gen'
+import type { TelemetryFrame } from '@/net/rt/types'
+import { hypot3 } from '../hypot'
 
 type N = any // TSL nodes
 
@@ -37,6 +39,15 @@ export interface SensorsApi {
   T_base_cam(s: SensorView, out: Float64Array): Float64Array
   projectionFor(s: SensorView, aspect: number, near: number, far: number, out: Float64Array): Float64Array
   frameRect?(s: SensorView, aspect: number, out: Float64Array): Float64Array
+  /**
+   * SensorPose48 samples and body orientations of this frame's TelemetryFrame (M13-to-M06 item 1): the telemetry phase
+   * calls it right after RtClient.swapFrame() and time.ingest(); returns the number of pose records taken
+   */
+  ingestFrame?(f: TelemetryFrame): number
+  /** body orientation source for the gimbal derivation (M12 interpolation; M13 falls back to its own history) */
+  setOrientationSource?(fn: ((agentNo: number, tMs: number, out4: Float64Array) => boolean) | null): void
+  /** motion tier of the page (reduced drops the gimbal damping) */
+  setMotionTier?(fn: (() => 'full' | 'lite' | 'reduced') | null): void
 }
 
 export const FRUSTUM = { maxLenM: 60, capS: 1, capBA: 16, staleIntervals: 3, poseHz: 10, dashM: 1.5, gapM: 1.5 } as const
@@ -173,7 +184,7 @@ export class FrustumLayer {
       }
       D[i0] = D[i0 + 1] = stale ? 1 : 0
       L[i0] = 0
-      L[i0 + 1] = Math.hypot(w[3 * b] - w[3 * a], w[3 * b + 1] - w[3 * a + 1], w[3 * b + 2] - w[3 * a + 2])
+      L[i0 + 1] = hypot3(w[3 * b] - w[3 * a], w[3 * b + 1] - w[3 * a + 1], w[3 * b + 2] - w[3 * a + 2])
     }
     const fov = (flags & SENSOR_FOV_VALID) !== 0
     const tri = FrustumLayer.FILL

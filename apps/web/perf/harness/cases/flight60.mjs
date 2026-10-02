@@ -53,8 +53,10 @@ export default [
         : [...frameFull(false), m('worker_decode_p95_ms', 'ms', null, false, { extra: true })],
   })),
   {
-    id: 'layers', kind: 'pw', spec: 'perf/layers.spec.ts', build: 'test', browser: 'C1', backend: S1,
-    params: { city: 'shenzhen', fixedB: 25000 }, runs: 3, timeoutS: 600, acIds: ['D1-AC-03b', 'PERF-AC-010'], priority: 'P0', layer: 'core',
+    // 18 §5.2 item 4: the drones layer at the ladder 200 load (FX2-R3; was S1 with two vehicles)
+    id: 'layers', kind: 'pw', spec: 'perf/layers.spec.ts', build: 'test', browser: 'C1',
+    backend: { kind: 'live', world: 'shenzhen', scenario: 'ladder-shenzhen', scenarioProfile: 'n200', waitMark: 'ladder.steady' },
+    params: { city: 'shenzhen', fixedB: 25000, n: 200 }, runs: 3, timeoutS: 600, acIds: ['D1-AC-03b', 'PERF-AC-010'], priority: 'P0', layer: 'core',
     gates: ['G2w', 'G3', 'G4'], owner: 'M16',
     metrics: [...['drones', 'trails', 'environment', 'groundSky'].map((g) => m(`layer.${g}_ms`, 'ms', `layer_${g}_ms`, true, { extract: `layer_${g}_ms` })),
       m('layers_fixed_total_ms', 'ms', 'layers_fixed_total_ms', true, { extra: true })],

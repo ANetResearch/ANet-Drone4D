@@ -2,10 +2,12 @@
 // world. The mask is revealed when every registered gate resolved; D1-MS1 registers the gates 'shell' (first commit of
 // the React shell) and 'canvas' (the R3F host mounted and the loop started); M05 adds 'firstFrame' (first frame with
 // points committed) and M06 'warmup' (shader zoo done) through addGate/resolveGate without editing this file. On reveal
-// the controller calls perf.markReveal() (M06 facade) and writes __ux.boot. After INPUT.bootSlowHintMs without a reveal
-// the mask shows the "still loading" hint. The reveal never waits for the WebSocket.
-// Test builds accept ?reveal=shell: only the shell and canvas gates count, so UI specs driven by FakeSource can run
-// while a renderer or point cloud change is still in progress (never in production builds, TEST_SWITCHES folds).
+// the controller calls perf.markReveal() (M06 facade) and writes __ux.boot. With the UI shell mounted, M15 adds
+// 'uiWarm' (ADR-069): when every other gate is resolved, BootMask runs the short pre-raster phase under the mask and
+// resolves it. After INPUT.bootSlowHintMs without a reveal the mask shows the "still loading" hint. The reveal never
+// waits for the WebSocket. Test builds accept ?reveal=shell: only the shell and canvas gates count, so UI specs driven
+// by FakeSource can run while a renderer or point cloud change is still in progress (never in production builds,
+// TEST_SWITCHES folds).
 import { perf } from '@/engine'
 import { INPUT } from '@/lib/tokens/input.gen'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
@@ -18,6 +20,8 @@ type Listener = (s: BootState, info: { slow: boolean; error: string | null; phas
 
 const gates = new Map<string, boolean>()
 const listeners = new Set<Listener>()
+/** callbacks of whenReadyExcept: gate -> callbacks run once when every other registered gate is resolved */
+const readyExcept = new Map<string, Set<() => void>>()
 let state: BootState = 'SHELL'
 let slow = false
 let error: string | null = null
@@ -29,8 +33,20 @@ function emit(): void {
   for (const l of listeners) l(state, { slow, error, phaseKey })
 }
 
+function notifyReadyExcept(): void {
+  for (const [gate, cbs] of readyExcept) {
+    if (gates.get(gate) !== false) continue
+    let others = true
+    for (const [k, v] of gates) if (k !== gate && !v) others = false
+    if (!others) continue
+    readyExcept.delete(gate)
+    for (const cb of cbs) cb()
+  }
+}
+
 function evaluate(): void {
   if (state === 'REVEALED' || state === 'BOOT_ERROR') return
+  notifyReadyExcept()
   const pending = [...gates.values()].filter((v) => !v).length
   if (gates.size > 0 && pending === 0) {
     state = 'REVEALED'
@@ -62,6 +78,22 @@ export const boot = {
     if (!gates.has(name)) return
     gates.set(name, true)
     evaluate()
+  },
+  /**
+   * run `cb` once when every registered gate except `gate` is resolved (ADR-069: the shell's pre-raster phase starts when
+   * the engine is ready and resolves its own gate when the first draws are done); returns the unsubscribe function
+   */
+  whenReadyExcept(gate: string, cb: () => void): () => void {
+    let set = readyExcept.get(gate)
+    if (!set) {
+      set = new Set()
+      readyExcept.set(gate, set)
+    }
+    set.add(cb)
+    notifyReadyExcept()
+    return () => {
+      readyExcept.get(gate)?.delete(cb)
+    }
   },
   fail(reasonKey: string): void {
     state = 'BOOT_ERROR'

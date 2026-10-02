@@ -11,11 +11,12 @@ import type { DronePoseSoA } from '../time/interpRing'
 import { threeToEnu, enuToThree } from '../camera/CameraRig'
 import { pickDroneRay, type DronePickHit } from './dronePick'
 import { GroundRay, type GroundResult, type QueryFn } from './groundRay'
+import { hypot3 } from '../hypot'
 
 export type PickKind = 'drone' | 'point' | 'ground'
 export type PickResult =
   | { kind: 'drone'; id: string; agentNo: number; distM: number; pointEnu: Float64Array }
-  | { kind: 'point'; nodeId: number; pointEnu: Float64Array; classIdx: number }
+  | { kind: 'point'; nodeId: number; pointEnu: Float64Array; classIdx: number; className?: string; hagM?: number | null; normal?: Float64Array | null; spacingM?: number }
   | { kind: 'ground'; pointEnu: Float64Array; surface: string; distM: number }
   | { kind: 'none'; reason?: string }
 export interface PickOptions { want: readonly PickKind[]; signal?: AbortSignal }
@@ -65,7 +66,7 @@ export class Picker {
     this.ray.setFromCamera(this.ndc, camera)
     threeToEnu(this.ray.ray.origin, this.origin)
     threeToEnu(this.ray.ray.direction, this.dir)
-    const l = Math.hypot(this.dir[0], this.dir[1], this.dir[2]) || 1
+    const l = hypot3(this.dir[0], this.dir[1], this.dir[2]) || 1
     this.dir[0] /= l
     this.dir[1] /= l
     this.dir[2] /= l

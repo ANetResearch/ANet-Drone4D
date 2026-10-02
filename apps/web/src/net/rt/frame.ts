@@ -17,15 +17,16 @@ export const SLOT_ITEM = 80 // bytes per Full64 or raw item
 export const SLOT_MAGIC = 0x31524654 // "TFR1"
 
 /**
- * Header offsets of M11 §6.3.8. `timeRecvMainMs` (216, f64) and `malformedFrames` (224, u32) use the reserved area
- * 216-255 (M12 onTime recvMs; fuzz counter); readers of the frozen layout keep treating them as reserved.
+ * Header offsets of M11 §6.3.8. `timeRecvMainMs` (216, f64), `malformedFrames` (224, u32) and `selJitterMs` (228, f32)
+ * use the reserved area 216-255 (M12 onTime recvMs; fuzz counter; worker arrival jitter p95 of the 60 Hz channels, NaN
+ * when unknown, M12 D_focus); readers of the frozen layout keep treating them as reserved.
  */
 export const H = {
   magic: 0, slotNo: 4, frameSeqMax: 8, epoch: 12, flags: 14, frameTSimMs: 16, swarmN: 24, swarmSeq: 28, swarmTSimMs: 32,
   fullCount: 40, rawCount: 44, resetCount: 48, ctrlCount: 52, timeTSimMs: 56, timeTSrvMs: 64, timeRate: 72, timeState: 76,
   connState: 77, timeEpoch: 78, clockOffsetMainMs: 80, srttMs: 88, decodeMs: 96, ageMs: 104, bytesPerS: 112, swarmHz: 120,
   selHz: 124, reconnects: 128, droppedEpochFrames: 132, resetChannelIds: 136, swarmRecvMainMs: 200, focusHz: 208, eventGaps: 212,
-  timeRecvMainMs: 216, malformedFrames: 224,
+  timeRecvMainMs: 216, malformedFrames: 224, selJitterMs: 228,
 } as const
 export const REGION = {
   swarmPos: 256, swarmQuat: 12544, swarmVel: 28928, swarmAgentNo: 41216, swarmFs: 43264, swarmFlags: 44288, swarmCtrl: 45312,
@@ -58,7 +59,7 @@ export const newHeaderView = (): FrameHeaderView => ({
   slotNo: 0, frameSeqMax: 0, epoch: 0, flags: 0, frameTSimMs: 0, swarmN: 0, swarmSeq: 0, swarmTSimMs: 0, fullCount: 0,
   rawCount: 0, resetCount: 0, timeTSimMs: 0, timeTSrvMs: 0, timeRate: 0, timeState: 0, connState: 0, timeEpoch: 0,
   clockOffsetMainMs: 0, srttMs: 0, decodeMs: 0, ageMs: Number.NaN, bytesPerS: 0, swarmHz: 0, selHz: 0, focusHz: 0,
-  reconnects: 0, droppedEpochFrames: 0, eventGaps: 0, swarmRecvMainMs: 0, timeRecvMainMs: 0, malformedFrames: 0,
+  reconnects: 0, droppedEpochFrames: 0, eventGaps: 0, swarmRecvMainMs: 0, timeRecvMainMs: 0, malformedFrames: 0, selJitterMs: Number.NaN,
 })
 
 export function readHeader(dv: DataView, out: FrameHeaderView): FrameHeaderView {
@@ -93,6 +94,7 @@ export function readHeader(dv: DataView, out: FrameHeaderView): FrameHeaderView 
   out.eventGaps = dv.getUint32(H.eventGaps, true)
   out.timeRecvMainMs = dv.getFloat64(H.timeRecvMainMs, true)
   out.malformedFrames = dv.getUint32(H.malformedFrames, true)
+  out.selJitterMs = dv.getFloat32(H.selJitterMs, true)
   return out
 }
 

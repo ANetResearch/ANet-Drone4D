@@ -1,7 +1,8 @@
 // Environment runtime: the per-page engine object behind viewport/layers/environment.tsx (M07 §6.1, §6.8, §7.2). Owner: M07.
 // Owns the EnvStore, the EnvParams written each frame, the shared assets (weather map; turbulence box on demand), the
-// Low objects (rain streaks with a second box for octave cross-fades, snow and dust points, wind arrows, the interim 2D
-// cloud quad) and the quality state. update(ctx) runs in the loop 'world' phase: store.update(tRender) then EnvParams
+// Low objects (rain streaks with a second box for octave cross-fades, snow and dust points, wind arrows) and the quality
+// state. The 2D clouds are drawn by M06's sky through the scene shading provider (shading.sky, FX-WEB1): the interim
+// far-plane cloud quad is gone, so the sky and the ground's cloud shadow come from the same Fn and uniforms. update(ctx) runs in the loop 'world' phase: store.update(tRender) then EnvParams
 // (float64 reductions on the CPU), precipitation anchor, live counts (drawRange only), visibility and perf counters.
 // Nothing here allocates per frame; nothing imports stores, React or viewport (AWR-03 §4.2).
 import { Group, type Data3DTexture, type PerspectiveCamera } from 'three'
@@ -17,7 +18,6 @@ import { sceneFogNode } from './atmosphere/fogNode'
 import { makeEnvNodes } from './lighting/EnvUniforms'
 import { EnvTerrain, type DtmSource } from './terrain/dtmSampler'
 import { WeatherMap } from './clouds/WeatherMap'
-import { Cloud2DLayer } from './clouds/Cloud2D'
 import { RainStreaks } from './precip/RainStreaks'
 import { PrecipPoints } from './precip/SnowPoints'
 import { PrecipAnchor } from './precip/PrecipAnchor'
@@ -28,6 +28,7 @@ import { TurbBoxCPU } from './wind/turbBox'
 import { fAdv, profileCfg } from './wind/profile'
 import { EnvQuality, type EnvUserLevel } from './quality/EnvQuality'
 import { ENV_TIERS, arrowCount } from './quality/envTiers'
+import { hypot3 } from '../hypot'
 
 type N = any // TSL nodes
 
@@ -69,7 +70,6 @@ export class EnvironmentRuntime {
   readonly snow: PrecipPoints
   readonly dust: PrecipPoints
   readonly arrows: WindArrows
-  readonly cloud2d: Cloud2DLayer
   /** AWSL streamlines (D1-ext): Tier B/A only */
   readonly streamlines: Streamlines | null
   readonly shading: SceneShadingProvider
@@ -108,9 +108,8 @@ export class EnvironmentRuntime {
     this.snow = new PrecipPoints('snow', this.caps.snow, p, this.terrain, () => be.createPointsMaterial(), be.pointSizeMode)
     this.dust = new PrecipPoints('dust', this.caps.dust, p, this.terrain, () => be.createPointsMaterial(), be.pointSizeMode)
     this.arrows = new WindArrows(p, this.terrain)
-    this.cloud2d = new Cloud2DLayer(p, this.weather, o.reversedZ)
     this.root.name = 'EnvironmentLayer'
-    this.root.add(this.cloud2d.mesh, this.dust.mesh, this.rain.mesh, this.rainPrev.mesh, this.snow.mesh, this.arrows.mesh)
+    this.root.add(this.dust.mesh, this.rain.mesh, this.rainPrev.mesh, this.snow.mesh, this.arrows.mesh)
     this.streamlines = be.tier === 'S' ? null : new Streamlines(p, o.fetchApiBytes ?? o.fetchBytes)
     if (this.streamlines) this.root.add(...this.streamlines.meshes)
     this.shading = createEnvShading(p, this.weather)
@@ -118,6 +117,22 @@ export class EnvironmentRuntime {
     const P = this.params
     const z = PALETTE_LINEAR.g950
     P.zenithColor.set(z[0], z[1], z[2])
+    // PerfGovernor step 5 changes the picture only when the Low objects have something to show (FX2-R3, ADR-067)
+    this.quality.knob.visible = () => this.lowVisualsPresent()
+  }
+
+  /**
+   * whether the environment's Low level draws anything that Off hides right now: precipitation, 2D clouds and their
+   * shadow, wind arrows or streamlines (fog and lighting stay at Off); from the derived values of the last update,
+   * independent of the current quality level
+   */
+  lowVisualsPresent(): boolean {
+    if (!this.masterVisible) return false
+    const d = this.store.derivedVis
+    const P = this.params
+    if (this.sub.precip && (d.rain_k > 0 || d.snow_k > 0 || P.dustK > 0)) return true
+    if (this.sub.clouds && P.cloudCover * P.cloud2DAlphaMax > 0.01) return true
+    return this.sub.arrows || (this.streamlines !== null && this.sub.streamlines)
   }
 
   setDtmSource(src: DtmSource | null, groundZ: number): void {
@@ -287,7 +302,7 @@ export class EnvironmentRuntime {
     P.precipR = this.anchor.R
     P.precipH = this.anchor.H
     // arrows: origin snapped to the spacing octave around the focus
-    const camDist = Math.hypot(this.cam[0] - this.focus[0], this.cam[1] - this.focus[1], this.cam[2] - this.focus[2])
+    const camDist = hypot3(this.cam[0] - this.focus[0], this.cam[1] - this.focus[1], this.cam[2] - this.focus[2])
     this.spacingIdx = arrowSpacingIdx(camDist, this.spacingIdx)
     const sp = ENV_TIERS.arrowSpacingM[this.spacingIdx]
     P.arrowSpacing = sp
@@ -347,14 +362,13 @@ export class EnvironmentRuntime {
     this.dust.setLive(nDust)
     this.dust.setBox(a.anchor, a.R, a.H, 1)
     this.arrows.setVisible(arrowsOn)
-    this.cloud2d.mesh.visible = on && this.sub.clouds && P.cloud2DAlphaMax > 0
     const perf = this.perf
     perf.live.rain = nRain
     perf.live.snow = nSnow
     perf.live.dust = nDust
     perf.live.arrows = arrowsOn ? arrowCount() : 0
     perf.draws = this.drawCount()
-    perf.verts = 6 * (this.rain.live + this.rainPrev.live) + nSnow + nDust + (arrowsOn ? 6 * arrowCount() : 0) + (this.cloud2d.mesh.visible ? 6 : 0)
+    perf.verts = 6 * (this.rain.live + this.rainPrev.live) + nSnow + nDust + (arrowsOn ? 6 * arrowCount() : 0)
   }
 
   private hideAll(): void {
@@ -363,7 +377,6 @@ export class EnvironmentRuntime {
     this.snow.setLive(0)
     this.dust.setLive(0)
     this.arrows.setVisible(false)
-    this.cloud2d.mesh.visible = false
     if (this.streamlines) this.streamlines.enabled = false
     this.perf.draws = 0
     this.perf.verts = 0
@@ -371,7 +384,7 @@ export class EnvironmentRuntime {
 
   drawCount(): number {
     if (!this.root.visible) return 0
-    return this.rain.drawCount() + this.rainPrev.drawCount() + this.snow.drawCount() + this.dust.drawCount() + this.arrows.drawCount() + this.cloud2d.drawCount() +
+    return this.rain.drawCount() + this.rainPrev.drawCount() + this.snow.drawCount() + this.dust.drawCount() + this.arrows.drawCount() +
       (this.streamlines ? this.streamlines.drawCount() : 0)
   }
 
@@ -394,7 +407,6 @@ export class EnvironmentRuntime {
     add(this.snow.mesh, 1)
     add(this.dust.mesh, 1)
     add(this.arrows.mesh, 6)
-    add(this.cloud2d.mesh, 6)
     if (this.streamlines) for (const m of this.streamlines.meshes) add(m, 6)
     return items
   }
@@ -405,7 +417,6 @@ export class EnvironmentRuntime {
     this.snow.dispose()
     this.dust.dispose()
     this.arrows.dispose()
-    this.cloud2d.dispose()
     this.streamlines?.dispose()
   }
 }

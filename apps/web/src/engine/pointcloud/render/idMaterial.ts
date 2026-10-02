@@ -4,13 +4,18 @@
 // exactly (render targets receive linear values, no output transform on the classic path). Hidden points (class mask,
 // fade hash) are dropped the same way as in the point material. One program per tier; no uniform changes its graph.
 import type { PointsNodeMaterial } from 'three/webgpu'
-import { Fn, builtin, clamp, float, floor, fract, max, mod, modelViewMatrix, pow, select, uint, varyingProperty, vec4 } from 'three/tsl'
+import { Fn, builtin, clamp, float, floor, fract, max, mod, modelViewMatrix, select, uint, varyingProperty, vec4 } from 'three/tsl'
 import type { PointSizeMode } from '../../loop'
 import { PC } from '../params'
 import { fetchPoint, type N } from './fetchNode'
 import type { PointTextures, PointUniforms } from './pointMaterial'
 
-const bitOf = (mask: N, bit: N): N => mod(floor(mask.div(pow(float(2), bit))), float(2))
+/**
+ * bit test (classMask, childDrawnMask) as an integer shift: 1.0 when bit `bit` (float 0..23) of `mask` is set. The masks
+ * are float uniforms or uint texel words below 2^24, exact in float32 (FX2-R2: replaces floor(mask / 2^bit) mod 2, whose
+ * pow() cost a transcendental per test on SwiftShader)
+ */
+const bitOf = (mask: N, bit: N): N => float(uint(mask).shiftRight(uint(bit)).bitAnd(uint(1)))
 
 export function makeIdMaterial(create: () => PointsNodeMaterial, tex: PointTextures & { pick: N }, u: PointUniforms, numDraws: N, o: { pointSizeMode: PointSizeMode }): PointsNodeMaterial {
   const m = create()
@@ -24,9 +29,9 @@ export function makeIdMaterial(create: () => PointsNodeMaterial, tex: PointTextu
     const q: N = f.q
     const oct: N = select(q.x.greaterThanEqual(0.5), float(4), float(0)).add(select(q.y.greaterThanEqual(0.5), float(2), float(0)))
       .add(select(q.z.greaterThanEqual(0.5), float(1), float(0)))
-    const pitch: N = select(bitOf(float(f.mask), oct).greaterThan(0.5), f.n1.x.mul(0.5), f.n1.x)
+    const pitch: N = select(bitOf(f.mask, oct).greaterThan(0.5), f.n1.x.mul(0.5), f.n1.x)
     const mv: N = modelViewMatrix.mul(vec4(f.p, 1))
-    const size: N = clamp(u.sizeK.mul(pitch).mul(u.projK).div(max(mv.z.negate(), float(1e-6))), u.minPx, u.maxPx)
+    const size: N = clamp(u.sizeK.mul(pitch).mul(u.projK).div(max(mv.z.negate(), float(1e-6))), u.minPx, select(f.n1.z.greaterThan(0.5), u.maxPxLeaf, u.maxPx))
     if (o.pointSizeMode === 'glpoint') builtin('gl_PointSize').assign(select(vis.greaterThan(0.5), size, float(0)))
     vId.assign(float(f.vid.add(1)))
     return select(vis.greaterThan(0.5), f.p, u.behind)

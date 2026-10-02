@@ -2,15 +2,21 @@
 // ThinLineBatch: 1 px lines as one LineSegments + LineBasicNodeMaterial (g01 §3: native 1 px lines stay 1 px at the
 // Tier S raster). Per vertex: palette index, dashed flag, line distance (m) and alpha; dashes are discarded in the
 // fragment with a uniform period (same program for solid and dashed). Used for executed paths, area outlines, zone
-// vertical edges and the GoTo plumb line. WideLineBatch: >= 1.5 px lines as LineSegments2 + Line2NodeMaterial (solid or
-// dashed; dashes in world metres), used for planned paths and zone top outlines. Both rebuild on data change only
+// vertical edges and the GoTo plumb line. WideLineBatch: >= 1.5 px lines as non-instanced screen-space quads
+// (engine/lines/quadLines.ts; solid or dashed, dashes in world metres; FX2-R3, ADR-067: the instanced LineSegments2 +
+// Line2NodeMaterial costs per segment on SwiftShader), used for planned paths and zone top outlines. Both rebuild on data change only
 // (event driven, <= 4 Hz) and own their geometry (M06 §6.3 rule 11).
-import { BufferAttribute, BufferGeometry, InstancedInterleavedBuffer, InterleavedBufferAttribute, LineSegments, NormalBlending, Sphere, Vector3 } from 'three'
-import { Line2NodeMaterial, LineBasicNodeMaterial } from 'three/webgpu'
-import { LineSegments2 } from 'three/addons/lines/webgpu/LineSegments2.js'
-import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js'
-import { Fn, attribute, mod, select, uniform, varying, vec4 } from 'three/tsl'
+import { BufferAttribute, BufferGeometry, DoubleSide, LineSegments, Mesh, NormalBlending, Sphere, Vector3, type InterleavedBuffer } from 'three'
+import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
+import { Fn, attribute, bool, float, mod, select, uniform, varying, vec4 } from 'three/tsl'
 import { SCENE } from '@/lib/tokens/scene.gen'
+import {
+  flushQuadLines, makeQuadLineGeometry, makeQuadLineUniforms, quadLineAttributes, quadLineVertexNode, setQuadLineView, writeQuadLine,
+  writeQuadLineColor, type QuadLineUniforms,
+} from '../lines/quadLines'
+
+/** dashes of the wide dashed lines, world metres */
+export const WIDE_DASH = { on: 3, off: 6 } as const
 
 type N = any // TSL nodes
 
@@ -114,54 +120,41 @@ export class ThinLineBatch {
   }
 }
 
-/** Line2NodeMaterial whose transparent path blends normally (no WebGPU viewport mip texture under the handler) */
-class OverlayLine2Material extends Line2NodeMaterial {
-  setupDiffuseColor(builder: unknown): void {
-    const t = this.transparent
-    this.transparent = false
-    ;(Line2NodeMaterial.prototype as unknown as { setupDiffuseColor(b: unknown): void }).setupDiffuseColor.call(this, builder)
-    this.transparent = t
-  }
-}
-
 export class WideLineBatch {
-  readonly obj: LineSegments2
-  private readonly pos: Float32Array
-  private readonly dist: Float32Array
-  private readonly col: Float32Array
-  private readonly posBuf: InstancedInterleavedBuffer
-  private readonly distBuf: InstancedInterleavedBuffer
-  private readonly colBuf: InstancedInterleavedBuffer
-  private readonly material: OverlayLine2Material
+  readonly obj: Mesh
+  private readonly data: Float32Array
+  private readonly buf: InterleavedBuffer
+  private readonly geometry: BufferGeometry
+  private readonly material: MeshBasicNodeMaterial
   private readonly uAlpha: N
+  private readonly u: QuadLineUniforms
+  private dpr = 1
   n = 0
 
   constructor(readonly capSegments: number, readonly widthCss: number, dashed: boolean, name: string, renderOrder: number, alpha = 1) {
-    this.pos = new Float32Array(capSegments * 6)
-    this.dist = new Float32Array(capSegments * 2)
-    this.col = new Float32Array(capSegments)
-    this.posBuf = new InstancedInterleavedBuffer(this.pos, 6, 1)
-    this.distBuf = new InstancedInterleavedBuffer(this.dist, 2, 1)
-    this.colBuf = new InstancedInterleavedBuffer(this.col, 1, 1)
-    const g = new LineSegmentsGeometry()
-    g.setAttribute('instanceStart', new InterleavedBufferAttribute(this.posBuf, 3, 0))
-    g.setAttribute('instanceEnd', new InterleavedBufferAttribute(this.posBuf, 3, 3))
-    g.setAttribute('instanceDistanceStart', new InterleavedBufferAttribute(this.distBuf, 1, 0))
-    g.setAttribute('instanceDistanceEnd', new InterleavedBufferAttribute(this.distBuf, 1, 1))
-    g.setAttribute('instanceColorIdx', new InterleavedBufferAttribute(this.colBuf, 1, 0))
-    g.instanceCount = 0
-    g.boundingSphere = new Sphere(new Vector3(), 1e7)
-    const m = new OverlayLine2Material({ linewidth: widthCss, worldUnits: false, dashed, dashSize: 3, gapSize: 6 })
+    const q = makeQuadLineGeometry(capSegments)
+    this.data = q.data
+    this.buf = q.buf
+    this.geometry = q.geometry
+    this.u = makeQuadLineUniforms()
+    const m = new MeshBasicNodeMaterial({ side: DoubleSide })
+    const a = quadLineAttributes()
+    m.vertexNode = quadLineVertexNode(this.u, () => bool(true)) as N
     this.uAlpha = uniform(alpha)
-    const idx: N = varying(attribute('instanceColorIdx', 'float'))
-    m.colorNode = vec4(paletteSelect(idx), 1) as N
-    m.opacityNode = this.uAlpha
+    m.colorNode = paletteSelect(a.colorIdx)
+    // dashes in world metres along the line (3 m on, 6 m off), as the Line2NodeMaterial batch had
+    m.opacityNode = dashed ? Fn(() => {
+      mod(a.extraAt, float(WIDE_DASH.on + WIDE_DASH.off)).greaterThan(WIDE_DASH.on).discard()
+      return this.uAlpha
+    })() as N : this.uAlpha
     m.transparent = true
     m.blending = NormalBlending
     m.depthWrite = false
     m.fog = false
+    // three draws transparent double-sided materials twice unless single pass (pass plan, INT-1)
+    m.forceSinglePass = true
     this.material = m
-    this.obj = new LineSegments2(g, m)
+    this.obj = new Mesh(this.geometry, m)
     this.obj.frustumCulled = false
     this.obj.renderOrder = renderOrder
     this.obj.name = name
@@ -174,28 +167,15 @@ export class WideLineBatch {
 
   seg(ax: number, ay: number, az: number, bx: number, by: number, bz: number, palette: number, dist0 = 0): boolean {
     if (this.n >= this.capSegments) return false
-    const o = this.n * 6
-    const P = this.pos
-    P[o] = ax
-    P[o + 1] = ay
-    P[o + 2] = az
-    P[o + 3] = bx
-    P[o + 4] = by
-    P[o + 5] = bz
-    this.dist[2 * this.n] = dist0
-    this.dist[2 * this.n + 1] = dist0 + Math.hypot(bx - ax, by - ay, bz - az)
-    this.col[this.n] = palette
+    writeQuadLine(this.data, this.n, ax, ay, az, bx, by, bz, dist0, dist0 + Math.hypot(bx - ax, by - ay, bz - az), palette)
     this.n++
     return true
   }
 
   commit(): void {
-    const g = this.obj.geometry as LineSegmentsGeometry
-    g.instanceCount = this.n
+    this.geometry.setDrawRange(0, this.n * 6)
     this.obj.visible = this.n > 0
-    this.posBuf.needsUpdate = true
-    this.distBuf.needsUpdate = true
-    this.colBuf.needsUpdate = true
+    flushQuadLines(this.buf, null)
   }
 
   setAlpha(a: number): void {
@@ -204,12 +184,23 @@ export class WideLineBatch {
 
   /** change the palette of segments [from, from + count) (attribute update only; no rebuild, no recompile) */
   recolor(from: number, count: number, palette: number): void {
-    for (let i = from; i < Math.min(this.n, from + count); i++) this.col[i] = palette
-    this.colBuf.needsUpdate = true
+    writeQuadLineColor(this.data, from, Math.min(this.n, from + count), palette)
+    flushQuadLines(this.buf, null)
   }
 
+  /** raster/CSS ratio (the raster width is at least 1 px); the drawing buffer and the camera near plane once per frame */
   setWidth(dpr: number): void {
-    this.material.linewidth = Math.max(this.widthCss, 1 / Math.max(dpr, 1e-3))
+    this.dpr = dpr
+    this.u.widthPx.value = Math.max(this.widthCss * Math.max(dpr, 1e-3), 1)
+  }
+
+  setView(dbW: number, dbH: number, near: number): void {
+    setQuadLineView(this.u, this.widthCss, this.dpr, dbW, dbH, near)
+  }
+
+  /** shader zoo warm-up: draw one segment (whatever it holds); commit() restores the range */
+  warmBefore(): void {
+    this.geometry.setDrawRange(0, 6)
   }
 
   drawCount(): number {
@@ -217,7 +208,7 @@ export class WideLineBatch {
   }
 
   dispose(): void {
-    this.obj.geometry.dispose()
+    this.geometry.dispose()
     this.material.dispose()
   }
 }

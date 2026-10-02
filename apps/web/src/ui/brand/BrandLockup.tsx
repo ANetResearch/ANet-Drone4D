@@ -1,4 +1,4 @@
-// Header lock-up (M15-FR-110; AWR-15 §4.5): avatar 24 px + "ANet Drone" (text-hud-title 600) + 1 x 20 px separator +
+// Header lock-up (M15-FR-110; AWR-15 §4.5; ADR-056): avatar 24 px + "ANet Drone4D" (text-hud-title 600) + 1 x 20 px separator +
 // "World Runtime" (13 px 400, muted); the compact header drops the secondary name. No crop, border, shadow or filter.
 import { Separator } from '@/ui/components/ui/separator'
 import { useT } from '@/app/i18n'

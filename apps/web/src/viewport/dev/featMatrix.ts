@@ -1,4 +1,5 @@
 // Feature matrix regression page, 28 items + PointPool (D1-AC-14, M06-AC-002; g01 §3, §9; M06-NFR-017). Owner: M06.
+// Tier B and S run the classic path below; Tier A runs the WebGPU column on a WebGPURenderer (featMatrixWgpu.ts).
 // Test builds only (lazy chunk behind window.__vp.featMatrix). Every item renders into a 128 x 128 RGBA8 target on a
 // renderer created through the production backend factory (createRenderBackend with the forced tier, so
 // AnetNodesHandler, GLPointsNodeMaterial, reversed-Z and the asynchronous readPixels are the ones the app uses) and reads
@@ -22,6 +23,7 @@ import {
 import { AnetNodesHandler } from '../anetNodesHandler'
 import { createRenderBackend } from '../renderer'
 import type { RenderBackend } from '../backend/webgl2'
+import { forcedFlags } from '../backend/testSwitches'
 
 type N = any // TSL nodes
 export type FeatResult = Record<string, unknown>
@@ -113,7 +115,12 @@ function classic(o: { reversed?: boolean; handler?: 'anet' | 'stock' } = {}): We
   return r
 }
 
-export async function runFeatMatrix(o: { tier?: 'A' | 'B' | 'S' } = {}): Promise<FeatMatrix> {
+export async function runFeatMatrix(o: { tier?: 'A' | 'B' | 'S'; allowFallback?: boolean } = {}): Promise<FeatMatrix> {
+  // Tier A: the WebGPU column on a WebGPURenderer (featMatrixWgpu.ts; the product falls back to the classic path, M06-E013)
+  if (o.tier === 'A') {
+    const { runFeatMatrixWgpu } = await import('./featMatrixWgpu')
+    return runFeatMatrixWgpu({ allowFallback: o.allowFallback ?? forcedFlags()?.allowFallback === true })
+  }
   const canvas = document.createElement('canvas')
   const be: RenderBackend = await createRenderBackend(canvas, { pref: 'auto', forced: o.tier ? { tier: o.tier } : null })
   const r = be.renderer

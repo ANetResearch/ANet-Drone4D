@@ -17,19 +17,19 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
-import { startBackend, startSkeletonServer, type Backend, type SkeletonServer } from './skeleton.server'
+import { freePort, startBackend, startSkeletonServer, type Backend, type SkeletonServer } from './skeleton.server'
 
 const ROOT = resolve(import.meta.dirname, '../../..')
 const SHOTS = resolve(ROOT, '.cache/impl/shots')
-const offset = Number.parseInt(process.env.AWR_PORT_OFFSET ?? '0', 10) || 0
-const PORT = 4193 + 10 * offset
-const GW_PORT = 8097 + 10 * offset
+// the static server and fake_gw take free ports: the former fixed 4193 + 10k and 8097 + 10k collided with the vite preview
+// and api of neighbouring offsets when several worktrees run at once (ADR-055; FX-GW)
 /** fixed principal hint (16-64 base32): reruns against one `make run` keep the operator seat (AWR-12 §4.2.2 T01) */
 const PRINCIPAL_HINT = 'SKELETONEEPLAYWRIGHTGATE'
 const CITIES = ['shenzhen', 'shanghai', 'suzhou', 'chicago', 'newyork', 'sanfrancisco']
 
 function testBuild(): boolean {
-  const dir = resolve(import.meta.dirname, '../dist/assets')
+  // the same build the skeleton server and the backend serve (AWR_PERF_DIST or M11_DIST: a private test build; FX-GW)
+  const dir = resolve(process.env.AWR_PERF_DIST ?? process.env.M11_DIST ?? resolve(import.meta.dirname, '../dist'), 'assets')
   if (!existsSync(dir)) return false
   return readdirSync(dir).some((f) => f.endsWith('.js') && readFileSync(resolve(dir, f), 'utf8').includes('__vp'))
 }
@@ -262,7 +262,7 @@ test.describe('walking skeleton early data sources (D1-AC-35)', () => {
   test.skip(!testBuild(), 'needs a VITE_AWR_TEST_SWITCHES=1 build in apps/web/dist')
   test.beforeAll(async () => {
     mkdirSync(SHOTS, { recursive: true })
-    srv = await startSkeletonServer(PORT)
+    srv = await startSkeletonServer(0)
   })
   test.afterAll(async () => {
     await srv?.close()
@@ -298,6 +298,7 @@ test.describe('walking skeleton early data sources (D1-AC-35)', () => {
     test.setTimeout(240_000)
     const py = resolve(ROOT, '.venv/bin/python')
     test.skip(!existsSync(py), 'Python venv with tools/fake/fake_gw.py dependencies not found')
+    const GW_PORT = await freePort()
     const gw: ChildProcess = spawn(py, ['tools/fake/fake_gw.py', '--n', '1', '--port', String(GW_PORT), '--no-detail', '--calls', 'ack'], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] })
     try {
       await new Promise<void>((ok, fail) => {
@@ -309,7 +310,7 @@ test.describe('walking skeleton early data sources (D1-AC-35)', () => {
           }
         })
       })
-      const proxied = await startSkeletonServer(PORT + 1, { apiProxy: { host: '127.0.0.1', port: GW_PORT } })
+      const proxied = await startSkeletonServer(0, { apiProxy: { host: '127.0.0.1', port: GW_PORT } })
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
       const errors: string[] = []
       try {

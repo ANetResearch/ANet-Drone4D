@@ -8,8 +8,9 @@
 //     (E-09), 1009 (defect), 1002 x3 / 1008 / 4426 FATAL;
 //   * TIME handled on arrival (epoch switch clears the references; a new-epoch BATCH waits one TIME, old-epoch BATCH are
 //     dropped); BATCH records indexed by reference only (decode.ts); slots composed on pull into the persistent image and
-//     copied into the free transferable slot (frame.ts); ack after consumption (3 frames or 50 ms, with fps, decodeMs,
-//     lagMs); ClockSync pings with srttMs; DEGRADED after 1 s without TIME; clientStats at 1 Hz;
+//     copied into the free transferable slot (frame.ts); ack when the slot is handed to the main thread's pull (3 frames or
+//     34 ms, with fps, decodeMs, lagMs; ADR-067); ClockSync pings with srttMs; DEGRADED after 1 s without TIME; clientStats
+//     at 1 Hz;
 //   * control messages batched per frame; while the page is hidden events stay in the worker (cap 8192, local gap);
 //   * CLIENT_DATA setpoints (per-vehicle client channels, one preallocated 32 B frame) and playback pass-through.
 import { Reason, REASONS, WS_CLOSE } from '@awr/contracts/reasons'
@@ -32,7 +33,8 @@ export const CLIENT_NAME = 'awr-web/0.1.0'
 export const DECODED_SCHEMAS = ['awr.SwarmLite32.v1', 'awr.DroneState64.v1', 'awr.EnvSample32.v1', 'awr.SensorPose48.v1',
   'awr.rt.BatchHeader.v1', 'awr.rt.RecordHeader.v1', 'awr.rt.Time.v1', 'awr.rt.ClientDataHeader.v1', 'awr.VelSetpoint16.v1'] as const
 export const ACK_EVERY_FRAMES = 3
-export const ACK_MAX_GAP_MS = 50
+/** ack coalescing: every 3 frames or when the last ack is this old (two 60 Hz ticks; one ack per pull below 30 fps, ADR-067) */
+export const ACK_MAX_GAP_MS = 34
 export const STALE_AFTER_MS = 1000
 export const CALL_TIMEOUT_MS = 3000
 export const CTRL_FLUSH_MS = 50
@@ -847,12 +849,14 @@ export class RtHost {
     const shift = env.timeOrigin - this.originMain
     dv.setFloat64(H.swarmRecvMainMs, o.swarmN > 0 ? dec.swarmRecvAt + shift : 0, true)
     dv.setFloat32(H.focusHz, dec.focusHz, true)
+    dv.setFloat32(H.selJitterMs, dec.selJitterMs, true)
     dv.setUint32(H.eventGaps, dec.eventGaps, true)
     dv.setFloat64(H.timeRecvMainMs, Number.isFinite(this.timeRecvAt) ? this.timeRecvAt + shift : 0, true)
     dv.setUint32(H.malformedFrames, dec.malformedFrames, true)
     this.decodeMs = env.now() - t0
     dv.setFloat64(H.decodeMs, this.decodeMs, true)
     w.copyTo(buf)
+    const delivered = dec.seqMax
     this.sentSeq[this.sentHead % 8] = dec.seqMax
     this.sentHead++
     if (this.sentN < 8) this.sentN++
@@ -864,6 +868,11 @@ export class RtHost {
     const ctrl = this.hidden ? this.ctrl.takeNonEvents() : this.ctrl.take()
     this.clearTimer('tCtrl')
     env.post({ slot: buf, ctrl }, [buf])
+    // the slot answers the main thread's pull of this frame: its frames count as consumed now (FX2-R3, AWR-17 §6.9 L1
+    // revised in ADR-067); waiting for the slot to come back added one frame interval to every ack, and at 15-30 fps the
+    // 60 Hz selected-vehicle channel ran into the credit window (credit_skips about half of the ticks, D1-AC-26)
+    if (delivered > this.consumed) this.consumed = delivered
+    this.maybeAck(t0)
   }
 }
 

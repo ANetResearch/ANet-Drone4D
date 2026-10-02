@@ -87,6 +87,15 @@ export const fmt = {
   sec: (v: number | null | undefined, digits = 1): string => {
     return bad(v) ? UNKNOWN : `${fmtNum(v, digits)} s`
   },
+  /** durations of minutes and hours: 4:05, 1:02:07 (ETA, elapsed time; seconds rounded) */
+  dur: (s: number | null | undefined): string => {
+    if (bad(s) || s < 0) return UNKNOWN
+    const x = Math.round(s)
+    const h = Math.floor(x / 3600)
+    const m = Math.floor((x % 3600) / 60)
+    const ss = String(x % 60).padStart(2, '0')
+    return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
+  },
   /** frame rate: 30 fps */
   fps: (v: number | null | undefined): string => {
     return bad(v) ? UNKNOWN : `${fmtNum(v, 0)} fps`

@@ -6,6 +6,9 @@
 // The clock phase task ('clock', 'm12.clock') ticks the clock, writes FrameCtx.tRenderS/tFocusS/simRate/clockState,
 // sets the extrapolation limit E_max = rate × 3 / hz_eff while advancing (held while frozen; after a frozen epoch change
 // at least one recording block interval so a seek target can be reached), and updates window.__perf.time in place.
+// Test builds (M07-NFR-019, M07-AC-021): ?simTime=<s>&paused=1 pins tRender and tFocus at <s> (clock state PAUSED, rate 0)
+// so environment and interpolation render a fixed simulation instant and RT read-backs are comparable; window.__time
+// .setFixed(s) moves the pinned instant (forward playback in steps) and .setFixed(null) releases it (FX-WEB1).
 // No allocation on the frame path.
 import { SF } from '@/net/rt/frame'
 import { rtClient } from '@/net/rt/client'
@@ -14,7 +17,8 @@ import type { FrameCtx, register as registerFn } from '../loop'
 import { SimClockView } from './clockView'
 import { epochBus, type ResetRange } from './epochBus'
 import { InterpRing, type DronePoseSoA } from './interpRing'
-import { TIME_PARAMS as P } from './params'
+import { TIME_PARAMS as P, TS } from './params'
+import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { CostWindow, RatioWindow, installPerfTime, perfTime } from './perfTime'
 
 export interface TimeRuntime {
@@ -39,6 +43,26 @@ export interface TimeDeps {
   roster?: () => RosterView | null
   /** reduced motion (defaults to <html data-motion="reduced|off">) */
   reducedMotion?: () => boolean
+}
+
+/** test builds only: pinned render time (seconds) of ?simTime=<s>&paused=1 (M07-NFR-019) */
+export const fixedTime = { on: false, tS: 0 }
+if (TEST_SWITCHES && typeof location !== 'undefined') {
+  const q = new URLSearchParams(location.search)
+  const t = Number(q.get('simTime'))
+  if (q.get('paused') === '1' && q.has('simTime') && Number.isFinite(t)) {
+    fixedTime.on = true
+    fixedTime.tS = t
+  }
+}
+if (TEST_SWITCHES && typeof window !== 'undefined') {
+  ;(window as unknown as { __time: unknown }).__time = {
+    setFixed(t: number | null): void {
+      fixedTime.on = t !== null && Number.isFinite(t)
+      if (fixedTime.on) fixedTime.tS = t as number
+    },
+    fixed: () => (fixedTime.on ? fixedTime.tS : null),
+  }
 }
 
 let current: TimeRuntime | null = null
@@ -139,7 +163,7 @@ export function initTime(deps: TimeDeps): TimeRuntime {
         rt.onEpochData?.(dataEpoch, nowMs)
       }
     }
-    if (focusNew) clock.delay.onFocusSample(nowMs)
+    if (focusNew) clock.delay.onFocusSample(nowMs, h.selHz, h.selJitterMs)
     if (typeof performance !== 'undefined') perfTime.ingestMs = performance.now() - t0
   }
 
@@ -158,6 +182,12 @@ export function initTime(deps: TimeDeps): TimeRuntime {
     ctx.tFocusS = clock.tFocusS()
     ctx.simRate = clock.rate
     ctx.clockState = clock.state4
+    if (TEST_SWITCHES && fixedTime.on) {
+      ctx.tRenderS = fixedTime.tS
+      ctx.tFocusS = fixedTime.tS
+      ctx.simRate = 0
+      ctx.clockState = TS.PAUSED
+    }
     const d = clock.delay
     const hz = d.hzEff
     if (clock.advancing) {

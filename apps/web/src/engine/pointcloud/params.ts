@@ -19,7 +19,10 @@ export interface Rung {
   edlTaps: 0 | 4 | 8
 }
 
-/** 7-rung ladder, frozen by ADR-012 (g02 §7.2) */
+/**
+ * 7-rung ladder, frozen by ADR-012 (g02 §7.2). The tau-limited maxPx below is g02's upper bound; ADR-063 (FX-WEB1) caps
+ * the non-leaf nodes of dense frames further at min(maxPx, max(4, ceil(2.5 sizeK tau))), see tauCapPx.
+ */
 export const LADDER: readonly Rung[] = [
   { name: 'soft-min', rs: 0.5, lo: 10_000, hi: 40_000, tau: 4.0, minPx: 2, maxPx: 8, maxPxSparse: 16, edlTaps: 0 },
   { name: 'soft', rs: 0.6, lo: 40_000, hi: 150_000, tau: 3.0, minPx: 2, maxPx: 8, maxPxSparse: 16, edlTaps: 0 },
@@ -119,6 +122,9 @@ export const PC = {
   recoverDispatchMs: 2000,
   // ---- draw (M05 §6.7, §6.10)
   sizeK: 1.7,
+  /** ADR-063 cap of non-leaf nodes in dense frames: max(tauCapMinPx, ceil(tauCapK sizeK tau)), raster px */
+  tauCapK: 2.5,
+  tauCapMinPx: 4,
   maxPxTauMs: 300,
   sparseProgress: 0.95,
   sparseWhileStreaming: true,
@@ -129,6 +135,12 @@ export const PC = {
   lightSky: 0.15,
   drawTableWidth: 1024,
   drawTableRows: 4,
+  /**
+   * DrawTable block index (FX2-R2): log2 of the vertex block; for every block of 64 vertices the entry containing its
+   * first vertex, so the vertex stage searches only the entries of its block (usually 1-2) instead of 12 binary-search
+   * steps over the whole table. R32UI, drawTableWidth wide, rows for the pool capacity.
+   */
+  drawIndexBlockLog2: 6,
   nodeTableWidth: 1024,
   classMaskDefault: 0x1fff,
   classMaskValid: 0x7fff,
@@ -186,6 +198,21 @@ export function nonDegenerateAtOrBelow(k: number, capPts: number, ladder: readon
   let i = Math.min(Math.max(0, k), ladder.length - 1)
   while (i > 0 && isDegenerateRung(ladder[i], capPts)) i--
   return i
+}
+
+/**
+ * ADR-063 (FX-WEB1): the point-size cap of non-leaf nodes in dense (tau-limited) frames. With the one-level Lite shrink
+ * the frontier level (tau <= key < 2 tau) and its parent (octant over a drawn child: pitch = the child's spacing) draw
+ * at sizeK x key < 2 sizeK tau px, but older ancestors keep pitch >= 2 x the frontier spacing and cover the fine levels
+ * as overlapping discs of up to maxPx on 5-6 level hierarchies (the "bubble" look). Cap = max(4, ceil(2.5 sizeK tau))
+ * keeps the frontier and its parent at their Lite size (2.5 rather than 2: the +-10 % hysteresis and keys taken at the
+ * nearest point of the node box) and clamps the older ancestors. Leaf nodes (no child in the data: where the data is
+ * exhausted near the camera) keep the rung's maxPx per node (NodeTable leaf flag), so the finest points still close up;
+ * sparse frames keep maxPxSparse for every node. Never above the rung's maxPx (g02 §7.2): Tier S rungs (tau >= 2.7) and
+ * low (tau 2) come out at 8, i.e. unchanged.
+ */
+export function tauCapPx(rung: Rung): number {
+  return Math.min(rung.maxPx, Math.max(PC.tauCapMinPx, Math.ceil(PC.tauCapK * PC.sizeK * rung.tau)))
 }
 
 export function deviceParams(tier: Tier, deviceClass: DeviceClass, startRung: number, lowestAllowedRung: number, maxTextureSize = 16384): DeviceParams {

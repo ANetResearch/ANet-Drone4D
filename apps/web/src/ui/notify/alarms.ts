@@ -32,9 +32,16 @@ export const alarmsStore = createAwrStore<AlarmsState>('ui.alarms', () => ({ ver
 export const useAlarms = <T,>(sel: (s: AlarmsState) => T): T => useStore(alarmsStore, sel)
 
 const items = new Map<string, AlarmItem>()
+/** subject membership per item (O(1) instead of subjects.includes: a 1000-vehicle storm merged into one item made every
+ * event scan up to 1000 ids, about half of the bridge flush time; D1-AC-27) */
+const subjectSets = new WeakMap<AlarmItem, Set<string>>()
 /** vehicle id -> key of the state alarm it is currently in */
 const vehicleKey = new Map<string, string>()
 const si: SevInfo = { sev: 'info', rank: 0 }
+/** low 32 bits of a critical event's seq -> its alarm key (the Timeline's HERO skips acknowledged markers, M12-to-M15
+ * item 9); bounded, oldest first out */
+const critSeq = new Map<number, string>()
+const CRIT_SEQ_CAP = 4096
 
 export const isActive = (a: AlarmItem): boolean => (a.oneShot ? !a.acked : a.active.size > 0)
 
@@ -78,14 +85,26 @@ export function consumeAlarm(e: RtEvent, wallMs: number): AlarmItem | null {
   if (s.rank > a.rank) a.rank = s.rank
   if (s.sev === 'critical') a.severity = 'critical'
   if (uav) {
-    if (!a.subjects.includes(uav)) a.subjects.push(uav)
+    let seen = subjectSets.get(a)
+    if (!seen) {
+      seen = new Set(a.subjects)
+      subjectSets.set(a, seen)
+    }
+    if (!seen.has(uav)) {
+      seen.add(uav)
+      a.subjects.push(uav)
+    }
     if (stateEvent) {
       a.active.add(uav)
       vehicleKey.set(uav, key)
     }
   }
   // a new raise of a critical re-arms the acknowledgement
-  if (s.sev === 'critical') a.acked = false
+  if (s.sev === 'critical') {
+    a.acked = false
+    critSeq.set(e.seq >>> 0, key)
+    if (critSeq.size > CRIT_SEQ_CAP) critSeq.delete(critSeq.keys().next().value as number)
+  }
   return a
 }
 
@@ -143,10 +162,16 @@ export const alarms = {
     const k = vehicleKey.get(uav)
     return k === undefined ? undefined : items.get(k)
   },
+  /** the critical event with this seq (low 32 bits) belongs to an acknowledged alarm (unknown seqs are unacknowledged) */
+  isSeqAcked(mseq: number): boolean {
+    const k = critSeq.get(mseq)
+    return k !== undefined && items.get(k)?.acked === true
+  },
   size: (): number => items.size,
   clear(): void {
     items.clear()
     vehicleKey.clear()
+    critSeq.clear()
     commitAlarms()
   },
 }

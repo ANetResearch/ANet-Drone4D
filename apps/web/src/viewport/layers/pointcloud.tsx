@@ -65,7 +65,8 @@ export function PointCloudLayer({ be }: { be: RenderBackend }) {
       registerLayer({
         id: 'pointcloud', owner: 'M05', perfKey: 'pointcloud', root: engine.root, channel: 1, drawCount: () => engine.drawCount(),
         setVisible: (v) => engine.setVisible(v), onBackendLost: () => engine.onBackendLost(), onBackendReady: (b) => engine.onBackendReady(b),
-        warmupVariants: () => [{ object: engine.root, targets: be.tier === 'S' ? ['screen'] : ['cloud'], before: () => engine.warmupBegin(), after: () => engine.warmupEnd() },
+        warmupVariants: () => [{ object: engine.root, targets: [be.tier === 'S' ? 'screen' : 'cloud', ...(testParams().quality ? ['quality' as const] : [])],
+          before: () => engine.warmupBegin(), after: () => engine.warmupEnd() },
           { object: engine.picker.object, targets: ['pick'], before: () => engine.warmupBegin(true), after: () => engine.warmupEnd() }],
         services: { cas: engine.cas, edlMaterial: engine.edlMaterial, dtm: engine.dtm, prefetchView: (e, t, f) => engine.prefetchView(e, t, f),
           setFocus: (p, m) => engine.setFocus(p, m) },

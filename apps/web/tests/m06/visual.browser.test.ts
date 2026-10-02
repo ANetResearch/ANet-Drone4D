@@ -11,7 +11,7 @@ import { positionGeometry, vec3, vec4 } from 'three/tsl'
 import { GlyphLayer, GLYPH, MarkerBatch, MarkerStyle, Palette, Shape } from '@/engine'
 import { SCENE } from '@/lib/tokens/scene.gen'
 import { createRenderBackend, type RenderBackend } from '@/viewport/renderer'
-import { makeGridMaterial, makeGridUniforms, makeSkyQuadMaterial, makeSkyUniforms, setSkyColors, updateSkyUniforms } from '@/viewport/layers/groundSky.materials'
+import { makeGridMaterial, makeGridUniforms, makeSkyQuadGeometry, makeSkyQuadMaterial, makeSkyUniforms, setSkyColors, updateSkyUniforms } from '@/viewport/layers/groundSky.materials'
 
 const to8 = (v: number): number => Math.round(Math.min(1, Math.max(0, v)) * 255)
 
@@ -170,7 +170,7 @@ describe('scene visuals (render-target read-back)', () => {
     // sky: straight up = zenith, horizontal = horizon (test colours through the uniforms)
     const su = makeSkyUniforms()
     setSkyColors(su, [0.8, 0.4, 0.2], [0.1, 0.3, 0.6])
-    const sky = new Mesh(new PlaneGeometry(2, 2), makeSkyQuadMaterial(su))
+    const sky = new Mesh(makeSkyQuadGeometry(), makeSkyQuadMaterial(su, be.caps.reversedZ))
     sky.frustumCulled = false
     const ss = new Scene()
     ss.add(sky)

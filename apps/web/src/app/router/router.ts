@@ -63,8 +63,14 @@ export function navigate(to: string, o: { replace?: boolean } = {}): void {
   resolve()
 }
 
-/** replace query parameters without a history entry; parameters of other modules are kept */
-export function updateSearch(patch: Record<string, string | null>): void {
+/**
+ * replace query parameters without a history entry; parameters of other modules are kept. `silent` is for parameters
+ * that only mirror application state (the 1 Hz `sel` and `cam` write-back of ui/shell/urlSync.ts): the route keeps its
+ * identity, so no route subscriber re-renders (every write used to re-render the whole shell, the viewport host and the
+ * panels one second after each selection, a 40-50 ms task on Tier S; ADR-069), and later reads of `route.search` see the
+ * new query. Parameters that drive the UI (settings, replay) notify as before.
+ */
+export function updateSearch(patch: Record<string, string | null>, o: { silent?: boolean } = {}): void {
   const q = new URLSearchParams(location.search)
   for (const [k, v] of Object.entries(patch)) {
     if (v === null) q.delete(k)
@@ -72,6 +78,10 @@ export function updateSearch(patch: Record<string, string | null>): void {
   }
   const s = q.toString()
   history.replaceState(null, '', `${location.pathname}${s ? `?${s}` : ''}`)
+  if (o.silent) {
+    if (current) current.search = q
+    return
+  }
   if (current) current = { ...current, search: q }
   for (const l of listeners) l()
 }

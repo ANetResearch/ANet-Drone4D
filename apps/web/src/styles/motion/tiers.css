@@ -29,7 +29,7 @@
       [data-slot="toast-content"], [data-slot="tabs-indicator"], [data-slot="tabs-trigger"], [data-slot="toggle-group-indicator"],
       [data-slot="toggle-group-item"], [data-slot="switch-thumb"], [data-slot="switch"], [data-slot="checkbox"],
       [data-slot="checkbox-indicator"], [data-slot="checkbox-indicator"] path, [data-slot="accordion-trigger-icon"],
-      [data-slot="accordion-content-inner"], [data-slot="tooltip-positioner"], [data-slot="rail-host"]) {
+      [data-slot="accordion-content-inner"], [data-slot="tooltip-positioner"], [data-slot="rail-host"], [data-slot="progress-indicator"]) {
     transition-duration: var(--duration-instant);
     transition-delay: var(--duration-instant);
   }

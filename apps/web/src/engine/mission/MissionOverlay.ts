@@ -162,6 +162,7 @@ export class MissionOverlay {
     this.goto.push(glyphs, this.thin, ctx.nowMs, redAllowed)
     this.thin.commit(this.pathSegs)
     this.planned.setWidth(ctx.dpr > 0 ? ctx.dpr : 1)
+    this.planned.setView(ctx.dbW, ctx.dbH, (ctx.camera as { near?: number } | null)?.near ?? 0)
     const d = this.data
     for (const w of d.waypoints) {
       if (w.state === 'planned') glyphs.push(GlyphClass.Mission, w.x, w.y, w.z, 10, Shape.Ring, 1.5, Palette.G50)

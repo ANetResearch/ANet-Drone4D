@@ -33,6 +33,8 @@ import { useRt } from '@/ui/shell/RtContext'
 import { isOnline, roleKeyOf, timeAgeS, timeView, useConnView } from '@/ui/shell/connView'
 import { releaseControl, requestControl } from '@/ui/shell/control'
 import { usePrefs } from '@/stores/prefs'
+import { timelineStore, useTimeline } from '@/stores/timeline'
+import { REPO_URL } from '@/ui/views/AboutDialog'
 import { useSelection } from '@/stores/selection'
 import { layoutActions } from './layoutState'
 import { IconButton } from './IconButton'
@@ -56,7 +58,8 @@ function ActionItem({ id }: { id: string }) {
   )
 }
 
-const simTimeNs = () => timeView.tSimMs * 1e6
+// the seen time of M12 (tDisplayS, the same value as the Timeline readout; M12-to-M15 item 2); unknown before the first TIME
+const simTimeNs = () => (timeView.epoch >= 0 || Number.isFinite(timeView.tSimMs) ? timelineStore.getState().tDisplayS * 1e9 : Number.NaN)
 const rttMs = () => perfProbe().net.rttMs
 const fmtRtt = (v: number) => fmt.ms(v, 0)
 const swarmHz = () => perfProbe().net.swarmHz
@@ -186,15 +189,40 @@ function WorldCrumb({ worldId }: { worldId: string | null }) {
   )
 }
 
+/**
+ * the focus vehicle as the current page of the breadcrumb trail; clicking it focuses the camera (AWR-14 §2.3). Its own
+ * component, so a selection change re-renders this crumb, not the whole header with its menubar inside the key handler
+ * (ADR-069; D1-AC-27)
+ */
+function FocusCrumb() {
+  const primary = useSelection((s) => s.primary)
+  if (!primary) return null
+  return (
+    <>
+      <BreadcrumbSeparator />
+      <BreadcrumbItem>
+        <Button variant="ghost" size="xs" className="font-mono text-foreground" aria-current="page" data-crumb="focus"
+          onClick={() => runAction('camera.focus')}>
+          {primary}
+        </Button>
+      </BreadcrumbItem>
+    </>
+  )
+}
+
 export function AppHeader({ compact }: { compact: boolean }) {
   const t = useT()
   const route = useRoute()
-  const worldId = route?.params.id ?? null
+  const sessionWorld = useConnView((s) => s.sessionWorldId)
+  // overlay pages (World Hub, Runs, Jobs) keep the sandbox's world in the breadcrumb
+  const worldId = route?.params.id ?? sessionWorld ?? null
   const runId = useConnView((s) => s.runId)
-  const primary = useSelection((s) => s.primary)
   const layout = usePrefs((s) => s.layout)
   // menus re-evaluate their guards when the session changes
   useConnView((s) => s.version)
+  const replay = useTimeline((s) => s.mode === 'replay')
+  const replayRun = useTimeline((s) => (s.mode === 'replay' ? s.runId : null))
+  const shownRun = replayRun ?? runId
   return (
     <header data-figure="header" className="app-layer-header flex items-center gap-2 border-b bg-card px-2">
       <BrandLockup compact={compact} />
@@ -245,6 +273,11 @@ export function AppHeader({ compact }: { compact: boolean }) {
               <ActionItem id="vehicle.add" />
               <ActionItem id="vehicle.remove" />
             </MenubarGroup>
+            <MenubarSeparator />
+            <MenubarGroup>
+              {replay ? <ActionItem id="replay.exit" /> : <MenubarItem onClick={() => navigate('/runs')}><Icon icon="tl.history" />{t('menu.sim.replay')}</MenubarItem>}
+              <ActionItem id="timeline.bookmark" />
+            </MenubarGroup>
           </MenubarContent>
         </MenubarMenu>
         <MenubarMenu>
@@ -267,6 +300,12 @@ export function AppHeader({ compact }: { compact: boolean }) {
               <MenubarItem onClick={() => layoutActions.openDockTab('perf')}>{t('menu.tools.perf')}</MenubarItem>
               <MenubarItem onClick={() => layoutActions.openDockTab('events')}>{t('menu.tools.events')}</MenubarItem>
               <MenubarItem onClick={() => layoutActions.openDockTab('charts')}>{t('panel.charts.title')}</MenubarItem>
+              <MenubarItem onClick={() => layoutActions.openDockTab('timeline')}>{t('panel.timeline.title')}</MenubarItem>
+            </MenubarGroup>
+            <MenubarSeparator />
+            <MenubarGroup>
+              <MenubarItem onClick={() => navigate('/jobs')}><Icon icon="nav.recon" />{t('menu.tools.jobs')}</MenubarItem>
+              <MenubarItem onClick={() => navigate('/runs')}><Icon icon="data.folder" />{t('menu.tools.runs')}</MenubarItem>
             </MenubarGroup>
           </MenubarContent>
         </MenubarMenu>
@@ -279,7 +318,8 @@ export function AppHeader({ compact }: { compact: boolean }) {
             </MenubarGroup>
             <MenubarSeparator />
             <MenubarGroup>
-              <MenubarItem onClick={() => overlays.set('about', true)}>{t('menu.help.about')}</MenubarItem>
+              <MenubarItem onClick={() => window.open(REPO_URL, '_blank', 'noopener,noreferrer')}><Icon icon="external" />{t('menu.help.repo')}</MenubarItem>
+              <MenubarItem onClick={() => overlays.set('about', true)}><Icon icon="help" />{t('menu.help.about')}</MenubarItem>
             </MenubarGroup>
           </MenubarContent>
         </MenubarMenu>
@@ -290,14 +330,17 @@ export function AppHeader({ compact }: { compact: boolean }) {
             <BreadcrumbItem><WorldCrumb worldId={worldId} /></BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem className="min-w-0">
-              <BreadcrumbPage className="max-w-40 truncate font-mono">{runId ?? t('header.noRun')}</BreadcrumbPage>
+              {/* the run being viewed (the replayed recording in replay); opens Runs (AWR-14 §2.3, UX-FR-006) */}
+              {shownRun ? (
+                <Button variant="ghost" size="xs" className="max-w-44 font-mono" onClick={() => navigate('/runs')}
+                  aria-label={`${t('runs.open')} ${shownRun}`} data-crumb="run">
+                  <span className="truncate">{shownRun}</span>
+                </Button>
+              ) : (
+                <BreadcrumbPage className="px-2 font-mono text-xs text-muted-foreground">{t('header.noRun')}</BreadcrumbPage>
+              )}
             </BreadcrumbItem>
-            {primary ? (
-              <>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem><BreadcrumbPage className="font-mono">{primary}</BreadcrumbPage></BreadcrumbItem>
-              </>
-            ) : null}
+            <FocusCrumb />
           </BreadcrumbList>
         </Breadcrumb>
       )}

@@ -1,7 +1,8 @@
 // env-visual (M07-AC-020, M07-AC-021 functional parts, M07-AC-045 counters): on Tier S with a rain preset and the
-// arrows on, environment draws <= 3 (plus the interim 2D-cloud quad while M06 has no sky() hook), rain vertices
-// <= 6 x 1424 and N_live = floor(N_cap rain_k), arrows exactly 6 x 576 vertices; __perf.env and
-// __perf.layers.environment are readable; the version switches only when tRender crosses t_apply_ns.
+// arrows on, environment draws <= 3 (rain box, the fading second box and arrows; no interim 2D-cloud quad), rain vertices
+// <= 6 x 1424 and N_live = floor(N_cap rain_k), arrows exactly 6 x 576 vertices; __perf.env and __perf.layers.environment
+// are readable; the version switches only when tRender crosses t_apply_ns. The 2D clouds are drawn by the sky through the
+// scene shading provider (FX-WEB1).
 import { expect, test } from '@playwright/test'
 import { envState, m07Server, openEnv, pageErrors } from './common'
 
@@ -24,7 +25,7 @@ test('Tier S budgets, counters and version switch timing', async ({ page }) => {
   expect(s.perf.live.arrows).toBe(576)
   expect(s.perf.live.rain).toBe(Math.floor(1424 * s.rainK))
   expect(s.perf.live.rain + s.perf.live.snow + s.perf.live.dust + s.perf.live.arrows).toBeLessThanOrEqual(2000)
-  expect(s.perf.draws).toBeLessThanOrEqual(4)
+  expect(s.perf.draws).toBeLessThanOrEqual(3)
   const layer = await page.evaluate(() => (window as unknown as { __perf: { layers: { environment: { draws: number; verts: number } }; env: { quality: string } } }).__perf)
   expect(layer.layers.environment.draws).toBe(s.perf.draws)
   expect(layer.env.quality).toBe('low')

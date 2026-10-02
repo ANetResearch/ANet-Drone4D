@@ -3,9 +3,12 @@
 // FakeSource pages reuse the M11 static server (COOP/COEP, /worlds, 404 for /api); replay pages start
 // `python -m awr.runtime.supervisor --profile ci --only sim-core,api,replay-worker` with AWR_RUNS_DIR pointing at a temporary runs
 // directory that holds one synthetic recording (`python -m awr.recorder.synth`), so `playback{open}` starts the
-// on-demand replay-worker through sys/start.
+// on-demand replay-worker through sys/start. The performance specs (seek-latency, replay20x) pass `profile: 'perf'`: PR-6 CPU
+// partitioning (api core0, sim-core core1, replay-worker core7) is on only in the perf profile; with the ci profile the backend
+// inherited the Playwright runner's `taskset -c 2-6` and shared cores 2-6 with SwiftShader, which stretched the seek tail to
+// 1.4-2.4 s and raised the 20x HOLD ratio (D1 acceptance round 1, FX2-R2-gateway).
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -23,6 +26,31 @@ export interface TimelineHook {
   store: { getState(): Record<string, unknown> }
   actions: Record<string, (...a: unknown[]) => unknown>
   track: { version: number; markers: { n: number }; columns(t0: number, t1: number, w: number): { n: number } }
+}
+
+/** utime + stime of a pid in clock ticks (USER_HZ 100; 18 §9.4 item 3), null when unreadable */
+export function procTicks(pid: number): number | null {
+  try {
+    const s = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    const f = s.slice(s.lastIndexOf(')') + 2).split(' ')
+    return Number(f[11]) + Number(f[12])
+  } catch {
+    return null
+  }
+}
+
+/** Authorization header of a viewer token (a viewer never takes the operator seat the page under test needs) */
+export async function viewerAuth(url: string): Promise<Record<string, string>> {
+  const r = await fetch(`${url}/api/auth/token`, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ role: 'viewer', principal_hint: 'MTWELVEREPLAYVIEWERAAAAA' }) })
+  return { authorization: `Bearer ${((await r.json()) as { token: string }).token}` }
+}
+
+/** R60 window of perf/server over the last `seconds` (clamped to [5, 600]) */
+export async function perfWindow(url: string, auth: Record<string, string>, seconds: number):
+  Promise<{ fields?: Record<string, { p50?: number; p99?: number; max?: number }> }> {
+  const w = Math.max(5, Math.min(600, Math.round(seconds)))
+  return (await (await fetch(`${url}/api/sys/perf?window_s=${w}`, { headers: auth })).json()) as never
 }
 
 export function watch(page: Page): string[] {
@@ -55,8 +83,8 @@ async function freePort(): Promise<number> {
 
 export interface ReplayBackend { url: string; runs: string; close(): Promise<void> }
 
-/** supervisor (ci profile) with a synthetic recording in a temporary runs directory */
-export async function startReplayBackend(o: { n?: number; simS?: number } = {}): Promise<ReplayBackend> {
+/** supervisor (ci profile; `perf` for the performance specs) with a synthetic recording in a temporary runs directory */
+export async function startReplayBackend(o: { n?: number; simS?: number; profile?: 'ci' | 'perf' } = {}): Promise<ReplayBackend> {
   const py = join(ROOT, '.venv/bin/python')
   if (!existsSync(py)) throw new Error(`${py} not found (make setup)`)
   const runs = mkdtempSync(join(tmpdir(), 'awr-m12-runs-'))
@@ -67,9 +95,14 @@ export async function startReplayBackend(o: { n?: number; simS?: number } = {}):
   const bus = await freePort()
   const env: Record<string, string | undefined> = { ...process.env, AWR_RUNS_DIR: runs, PYTHONUNBUFFERED: '1' }
   delete env.AWR_SUPERVISOR_PID
-  const p: ChildProcess = spawn(py, ['-m', 'awr.runtime.supervisor', '--profile', 'ci', '--only', 'sim-core,api,replay-worker',
+  // M12_BACKEND_PROFILE overrides the profile for diagnostics only (e.g. the unpinned ci profile for a before/after comparison)
+  const profile = process.env.M12_BACKEND_PROFILE ?? o.profile ?? 'ci'
+  const p: ChildProcess = spawn(py, ['-m', 'awr.runtime.supervisor', '--profile', profile, '--only', 'sim-core,api,replay-worker',
     '--set', 'net.port_offset=0', '--set', `net.port=${port}`, '--set', `bus.rendezvous=tcp/127.0.0.1:${bus}`,
     '--set', 'run.keep_run_dir=false'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  // drain the supervisor output: an unread pipe fills after 64 KiB and blocks the supervisor's logging (long replays)
+  p.stdout?.resume()
+  p.stderr?.resume()
   const url = `http://127.0.0.1:${port}`
   const end = Date.now() + 90_000
   for (;;) {
@@ -82,18 +115,35 @@ export async function startReplayBackend(o: { n?: number; simS?: number } = {}):
     if (Date.now() > end) throw new Error('backend not ready')
     await new Promise((r) => setTimeout(r, 250))
   }
+  let exited = p.exitCode !== null
+  p.on('exit', () => {
+    exited = true
+  })
   return {
     url, runs,
     close: async () => {
-      if (p.pid) {
+      // wait for the supervisor to stop its children (they write logs and meta into the runs directory until then), then
+      // remove the directory; SIGKILL after 30 s (FX-GW: a fixed 1.5 s wait raced the last writes, ENOTEMPTY)
+      const signal = (sig: NodeJS.Signals): void => {
+        if (!p.pid) return
         try {
-          process.kill(-p.pid, 'SIGTERM')
+          process.kill(-p.pid, sig)
         } catch {
           // gone
         }
       }
-      await new Promise((r) => setTimeout(r, 1500))
-      rmSync(runs, { recursive: true, force: true })
+      signal('SIGTERM')
+      const end = Date.now() + 30_000
+      while (!exited && Date.now() < end) await new Promise((r) => setTimeout(r, 100))
+      if (!exited) signal('SIGKILL')
+      // diagnostics only: M12_KEEP_LOGS=<dir> keeps the process logs (api.log has the server-side seek timings)
+      const keep = process.env.M12_KEEP_LOGS
+      if (keep) {
+        for (const d of readdirSync(runs)) {
+          if (existsSync(join(runs, d, 'logs'))) cpSync(join(runs, d, 'logs'), join(keep, d), { recursive: true })
+        }
+      }
+      rmSync(runs, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
     },
   }
 }

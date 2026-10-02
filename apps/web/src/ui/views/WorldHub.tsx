@@ -35,10 +35,10 @@ function WorldCard({ w }: { w: WorldListItem }) {
       }
     >
       <div className="grid grid-cols-2 gap-2">
-        <LfStat label="POINTS" value={w.stats?.points} format={fmt.pts} />
-        <LfStat label="NODES" value={w.stats?.nodes} format={fmt.count} />
-        <LfStat label="MAX H" value={w.stats?.maxHeightM} format={(v) => fmt.num(v)} unit="m" />
-        <LfStat label="TTFP" value={w.stats?.ttfpMs} format={(v) => fmt.num(v)} unit="ms" />
+        <LfStat label={t('hub.stat.points')} value={w.stats?.points} format={fmt.pts} />
+        <LfStat label={t('hub.stat.nodes')} value={w.stats?.nodes} format={fmt.count} />
+        <LfStat label={t('hub.stat.maxH')} value={w.stats?.maxHeightM} format={(v) => fmt.num(v)} unit="m" />
+        <LfStat label={t('hub.stat.ttfp')} value={w.stats?.ttfpMs} format={(v) => fmt.num(v)} unit="ms" />
       </div>
       {levels.length ? <LfBarRank variant="rung" data={levels} unit={unit} height={120} format={fmt.pts} ariaLabel={t('hub.levels')} /> : null}
       <div className="mt-2 flex items-center justify-between gap-2">

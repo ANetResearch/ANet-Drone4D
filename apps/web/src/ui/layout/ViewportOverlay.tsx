@@ -46,6 +46,8 @@ export function useCameraMode(): { mode: CameraMode; followLock: boolean } {
 }
 
 const fmtOffline = (s: number) => tr('badge.offline', { s: fmt.num(s, 0) })
+/** `?source=fake` replaces the backend by FakeSource: every value on screen is synthetic (M16-FR-006, honesty) */
+const FAKE_SOURCE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('source') === 'fake'
 const offlineAge = () => {
   const since = connViewStore.getState().downSinceMs
   return Number.isFinite(since) ? (Date.now() - since) / 1000 : Number.NaN
@@ -55,6 +57,8 @@ function GroundReadout() {
   const [, bump] = React.useReducer((x: number) => x + 1, 0)
   React.useEffect(() => viewport.onChange(bump), [])
   const g = pick.ground
+  // nothing under the pointer yet: no empty "—" card in the corner (AWR-14 §4.3: shown while hovering the viewport)
+  if (!g || !Number.isFinite(g.surface[0])) return null
   return (
     <div data-anchor="bottom-right">
       <Card size="sm" className="gap-0 rounded-xl bg-hud px-3 py-1.5 font-mono text-hud-sub" data-ground-readout="">
@@ -97,11 +101,21 @@ function WorldLoadingCard() {
   )
 }
 
+/**
+ * the overlay follows the focused vehicle in a deferred render: a selection key press (select all on 1000 rows) answers with
+ * the row highlights, and the toolbar (six tooltip triggers, the follow toggle), badges and HUD re-render in React's
+ * time-sliced pass instead of inside the key handler (ADR-069; D1-AC-27)
+ */
 export function ViewportOverlay({ compactBp }: { compactBp: boolean }) {
+  const primary = React.useDeferredValue(useSelection((s) => s.primary))
+  return <ViewportOverlayBody compactBp={compactBp} primary={primary} />
+}
+
+const ViewportOverlayBody = React.memo(function ViewportOverlayBody({ compactBp, primary }: { compactBp: boolean; primary: string | null }) {
   const t = useT()
   const { mode, followLock } = useCameraMode()
-  const primary = useSelection((s) => s.primary)
   const down = useConnView((s) => Number.isFinite(s.downSinceMs))
+  const degraded = useConnView((s) => s.conn === 'DEGRADED')
   return (
     <div className="app-layer-viewport-ui" data-slot="viewport-overlay">
       <div data-anchor="top-center" className="flex items-center gap-1 rounded-lg bg-hud p-1 ring-1 ring-foreground/10">
@@ -136,6 +150,18 @@ export function ViewportOverlay({ compactBp }: { compactBp: boolean }) {
         </ButtonGroup>
       </div>
       <div data-anchor="top-left" className="flex flex-col items-start gap-1">
+        {FAKE_SOURCE ? (
+          <Badge variant="outline" className="gap-1 bg-hud" data-badge="synthetic-source">
+            <Icon icon="alert.info" />
+            {t('badge.syntheticSource')}
+          </Badge>
+        ) : null}
+        {degraded && !down ? (
+          <Badge variant="outline" className="gap-1 border-dashed bg-hud" data-badge="signal-delay" data-testid="signal-delay-badge">
+            <Icon icon="state.hold" />
+            {t('badge.signalDelay')}
+          </Badge>
+        ) : null}
         {mode === 'third' || mode === 'fpv' ? <Badge variant="outline" data-badge="focus-low-latency">{t('badge.focusLowLatency', { id: primary ?? '' })}</Badge> : null}
         {down ? (
           <Badge variant="outline" className="gap-1 border-dashed" data-badge="offline">
@@ -151,4 +177,4 @@ export function ViewportOverlay({ compactBp }: { compactBp: boolean }) {
       <GroundReadout />
     </div>
   )
-}
+})

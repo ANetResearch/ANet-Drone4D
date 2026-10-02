@@ -5,6 +5,7 @@
 import { FLIGHT_STATE_NAMES } from '@awr/contracts/enums'
 
 export type LabelSub = 'state' | 'hold' | 'zone.nofly' | 'zone.restricted'
+/** flightState is the decoded FlightState (flight_state bits 0-4, without the FlightSub bits; FX-WEB1) */
 export type LabelFormatter = (flightState: number, sub: LabelSub, lang: string) => string
 
 const defaultFormatter: LabelFormatter = (fs, sub) => {

@@ -101,7 +101,7 @@ export function SettingsPanel({ tab, onTab }: { tab: SettingsTab; onTab: (t: Set
           <AccountTab />
         </TabsContent>
         <TabsContent value="about">
-          <AboutContent />
+          <ScrollArea className="max-h-96 pr-2"><AboutContent /></ScrollArea>
         </TabsContent>
       </TabsPanels>
     </Tabs>

@@ -2,6 +2,7 @@
 // clears all, RESET clears only the producer's range, block rebase after 2 h; GPU batches copy the CPU history into
 // slots, append new samples incrementally, recolour on red-owner changes and follow the PerfGovernor limits
 // (16 x 256 -> 8 x 128 -> 4 x 64 -> selected only). Rendering (3 draws, alpha by age) is covered by the browser spec.
+import { QL_STRIDE, QL_VPS } from '@/engine/lines/quadLines'
 import { describe, expect, it } from 'vitest'
 import { TRAIL, TrailBatch, TrailRing, TRAIL_STYLES } from '@/engine'
 
@@ -50,18 +51,22 @@ describe('TrailBatch (M06-AC-033)', () => {
     for (let k = 0; k < 10; k++) ring.append(3, k * 10, 0, 0, k)
     const b = new TrailBatch(16, 256, TRAIL_STYLES.focus)
     b.assign(0, 3, 0, ring)
-    const geo = b.mesh.geometry as unknown as { attributes: Record<string, { data: { array: Float32Array } }> }
-    const time = geo.attributes.instanceTimeStart.data.array
+    // quad-line layout (FX2-R3): 4 vertices per segment, stride 9 floats (start, end, time start, time end, palette)
+    const geo = b.mesh.geometry as unknown as { attributes: Record<string, { data: { array: Float32Array } }>; drawRange: { count: number } }
+    const d = geo.attributes.qlExtra.data.array
+    const seg = (i: number, k: number): number => d[(i * QL_VPS) * QL_STRIDE + k]
     let valid = 0
-    for (let i = 0; i < 256; i++) if (time[2 * i] >= 0) valid++
+    for (let i = 0; i < 256; i++) if (seg(i, 6) >= 0) valid++
     expect(valid).toBe(9) // 10 samples -> 9 segments
     ring.append(3, 200, 0, 0, 20)
     b.sync(ring, 20, () => 1)
     valid = 0
-    for (let i = 0; i < 256; i++) if (time[2 * i] >= 0) valid++
+    for (let i = 0; i < 256; i++) if (seg(i, 6) >= 0) valid++
     expect(valid).toBe(10)
-    const col = geo.attributes.instanceColorIdx.data.array
-    expect(col[0]).toBe(1) // recoloured (red owner)
+    expect(seg(0, 8)).toBe(1) // recoloured (red owner)
+    // all 4 vertices of a segment carry the same data; the draw range ends at the last occupied slot
+    expect(d[(0 * QL_VPS + 3) * QL_STRIDE + 8]).toBe(1)
+    expect(geo.drawRange.count).toBe(256 * 6)
     expect(b.mesh.visible).toBe(true)
     b.setLimits(8, 128, ring)
     expect([b.activeSlots, b.segs]).toEqual([8, 128])

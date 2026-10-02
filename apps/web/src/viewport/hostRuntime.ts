@@ -18,7 +18,8 @@ import { listLayers, pointCloudServices, type WarmupItem } from './layers/regist
 import { newPassPlan, type RenderBackend } from './renderer'
 import { vp } from './session'
 import { installQualityMasks } from './qualityMask'
-import { installBench } from './bench'
+import { installBench, pcOnlyScene } from './bench'
+import { makePointPick } from './pickPass'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { parseInject } from './backend/testSwitches'
 import { readCache, rememberFloorHeld, PREF_FLOOR_MS } from './backend/deviceClass'
@@ -56,12 +57,18 @@ export function requestRebuild(reason: string): Promise<void> {
   }, HOST.lostDelayMs))
 }
 
-/** shader-zoo items of every registered layer */
+/**
+ * shader-zoo items of every registered layer. flight60 scene=pc shows the point cloud alone for the page's lifetime
+ * (bindings/layersVisibility.ts hides every other layer), so only its items are warmed there: the other layers' programs
+ * would never draw, and compiling them took most of the 1.3 s zoo of the canvas-only cold start (FX2-R2, D1-AC-02)
+ */
 export function collectZoo(): WarmupItem[] {
   const out: WarmupItem[] = []
   const be = vp.be
   if (!be) return out
+  const pcOnly = pcOnlyScene()
   for (const s of listLayers()) {
+    if (pcOnly && s.id !== 'pointcloud') continue
     try {
       out.push(...(s.warmupVariants?.(be) ?? []))
     } catch (e) {
@@ -71,15 +78,26 @@ export function collectZoo(): WarmupItem[] {
   return out
 }
 
-/** self test + shader zoo under the mask; resolves the 'warmup' boot gate */
+/**
+ * self test + shader zoo under the mask; resolves the 'warmup' boot gate. The self test draws at once and its two
+ * asynchronous read-backs are awaited after the zoo, not before it: the read-back polling waits for free main-thread
+ * slots, which the UI shell takes while it mounts (2.5 s of the cold start in scene=full, FX2-R2). Its result only
+ * reports (M06-E004/E005, pointSizeDegraded); the point materials are built before it in every case.
+ */
 export async function warmupBackend(be: RenderBackend, camera: PerspectiveCamera): Promise<void> {
   const p = perfProbe()
   try {
-    const st = await be.selftest()
-    if (!st.pointSizeOk) perfStore.setState({ pointSizeDegraded: true })
+    p.mark('boot.selftest') // startup timeline marks (once per page; __perf.marks, AWR-18 §9.2)
+    const stP = be.selftest()
     await new Promise((ok) => requestAnimationFrame(() => ok(null)))
+    // the M05 EDL composite must be the P2 material the zoo warms (Tier B/A), even if no frame ran yet
+    if (be.tier !== 'S') be.setEdl(pointCloudServices()?.edlMaterial ?? null)
+    p.mark('boot.zoo')
     const rep = await be.warmup(camera, collectZoo())
+    p.mark('boot.warm')
     p.meta.warmupMs = rep.warmupMs
+    const st = await stP
+    if (!st.pointSizeOk) perfStore.setState({ pointSizeDegraded: true })
   } catch (e) {
     console.error('shader zoo warm-up failed', e)
   }
@@ -176,6 +194,7 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
   vp.picker = new Picker({
     camera: () => vp.camera, size: () => ({ w: vp.cssW, h: vp.cssH }), poses: () => (vp.staticBrowse ? null : vp.drones?.poses ?? null),
     idOf: (a) => rtClient()?.roster.idOf(a) ?? String(a), worldId: () => vp.worldId, moving: () => rig.moving,
+    pickPoint: makePointPick(be), // M06-FR-064 ID pass (FX-WEB1)
   })
   const plan = newPassPlan()
   const focusP = new Float64Array(3)
@@ -217,7 +236,17 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
         be.setCloudScale(rs * motion)
       }
       ctx.cloudScale = be.cloudScale
-      p.meta.renderScale = be.tier === 'S' ? 0.5 : be.cloudScale
+      const m = p.meta
+      m.renderScale = be.tier === 'S' ? 0.5 : be.cloudScale
+      // AWR-18 §9.2 metadata (in place, no allocation): canvas CSS size, drawing buffer, raster/CSS ratio, world
+      m.canvasCss[0] = ctx.cssW
+      m.canvasCss[1] = ctx.cssH
+      m.drawingBuffer[0] = ctx.dbW
+      m.drawingBuffer[1] = ctx.dbH
+      m.dpr = ctx.dpr
+      if (vp.worldId !== null && m.worldId !== vp.worldId) m.worldId = vp.worldId
+      const cv = vp.world?.contentVersion
+      if (cv !== undefined && m.contentVersion !== cv) m.contentVersion = cv
     }, { order: -100 }),
     register('render', 'backend.render', (ctx: FrameCtx) => {
       // M05 EDL composite for P2 once the point-cloud layer exposes it (Tier B/A)
@@ -254,9 +283,14 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
   // PerfGovernor step 6: motion tier cap (stores/perf.motionCap, M15 ui/motion/tier.ts takes the minimum). Tier S starts
   // at lite (one level: reduced), Tier B/A at full (lite, then reduced)
   const motionLevels: readonly (MotionCap | null)[] = be.tier === 'S' ? [null, 'reduced'] : [null, 'lite', 'reduced']
+  // ?chrome=0 (canvas only) has no UI whose motion could change: the step is silent there; with the UI the change shows
+  // only while some UI animation or transition runs (evaluated once per governor change, FX2-R3, ADR-067)
+  const withUi = typeof location === 'undefined' || new URLSearchParams(location.search).get('chrome') !== '0'
+  const animating = (): boolean => typeof document === 'undefined' || typeof document.getAnimations !== 'function' || document.getAnimations().length > 0
   const offMotion = perf.registerKnob({
     step: 6, id: 'motion', levels: motionLevels.length, labelKey: 'perf.governor.motion',
     apply: (l) => perfStore.setState({ motionCap: motionLevels[l] ?? (be.tier === 'S' ? null : 'full') }),
+    visible: () => withUi && animating(),
   })
   const offQuality = installQualityMasks(be)
   const offBench = installBench(be, rig, camera)

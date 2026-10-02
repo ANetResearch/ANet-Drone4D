@@ -47,7 +47,8 @@ export function checkText(f, text) {
   const shared = inEngine(f) || inViewport(f)
   add(/\b(?:material|mat|m|mm|mat\d*)\s*\.\s*onBeforeRender\s*=(?!=)/g, 'M06-L-01', 'material.onBeforeRender is overwritten by WebGLNodesHandler; use object.onBeforeRender', shared)
   add(/\binfo\s*\.\s*render\s*\.\s*frame\b/g, 'M06-L-02', 'info.render.frame is not a frame number under WebGLNodesHandler; use FrameCtx.frameNo')
-  const syncOk = f === `${SRC}/viewport/backend/microbench.ts`
+  // the device microbench and the test-build bench finish (1-pixel read-back for layer pairing timing, FX2-R2)
+  const syncOk = f === `${SRC}/viewport/backend/microbench.ts` || f === `${SRC}/viewport/backend/benchFinish.ts`
   add(/\breadRenderTargetPixels\s*\(/g, 'M06-L-03', 'synchronous readRenderTargetPixels; use RenderBackend.readPixels (async)', shared && !syncOk)
   add(/\bgl\s*\.\s*readPixels\s*\(/g, 'M06-L-03', 'synchronous gl.readPixels; use RenderBackend.readPixels (async)', shared && !syncOk)
   for (const m of src.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"]@react-three\/drei(?:\/[^'"]*)?['"]/g)) {

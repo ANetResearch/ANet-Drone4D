@@ -8,6 +8,11 @@
 // Background pixels output the sky Fn injected by M06 (setBackgroundNode, called with the clip-space xy) at the far
 // plane. Texture coordinates are clamped half a texel inside the sub-viewport so neighbours never read cleared pixels.
 // bindTargets() swaps the texture values (no recompile) and derives the texel size from the colour target.
+// Sampling the render target: three r186 GLSL node builders report isFlipY() = true, so TextureNode mirrors v for every
+// render-target and depth texture (right for WebGPURenderer's WebGL2 backend, which stores targets flipped). The classic
+// WebGLRenderer (Tier B/S through WebGLNodesHandler) stores them unflipped, so every lookup here pre-flips v and the two
+// flips cancel; without it the P2 composite read the mirrored region above the cloudRT sub-viewport, i.e. cleared pixels,
+// and the whole cloud rendered as background (FX-WEB1).
 import { AlwaysDepth, DataTexture, DepthTexture, FloatType, NeverDepth, type Texture } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { Fn, If, exp, float, log2, max, min, perspectiveDepthToViewZ, positionGeometry, select, texture, uniform, vec2, vec3, vec4 } from 'three/tsl'
@@ -104,11 +109,13 @@ export class EdlCompositeMaterial extends MeshBasicNodeMaterial {
     const logZ = (d: N): N => log2(max(perspectiveDepthToViewZ(d, u.near, u.far).negate(), float(1e-6)))
     const bg = this.background
     const stOf = (): N => clampUv(clip.mul(0.5).add(0.5).mul(u.uvScale))
+    /** classic-path render-target lookup (see the file header: cancels TextureNode's v flip) */
+    const rtUv = (st: N): N => vec2(st.x, float(1).sub(st.y))
     // colour and depth are separate expressions: one Fn result read by both colorNode and depthNode renders black on the
     // classic path (the depth flow does not see the colour flow's variables)
     const out: N = Fn(() => {
       const st: N = stOf().toVar()
-      const d: N = depthT.sample(st).r.toVar()
+      const d: N = depthT.sample(rtUv(st)).r.toVar()
       const col: N = vec3(0).toVar()
       If(isBg(d), () => {
         col.assign(bg(clip))
@@ -118,16 +125,16 @@ export class EdlCompositeMaterial extends MeshBasicNodeMaterial {
         for (let i = 0; i < 8; i++) {
           const use: N = i % 2 === 0 ? float(1) : select(u.taps.greaterThan(4.5), float(1), float(0))
           const nst: N = clampUv(st.add(u.texel.mul(u.radiusPx).mul(vec2(DIRS[i][0], DIRS[i][1]))))
-          const nd: N = depthT.sample(nst).r.toVar()
+          const nd: N = depthT.sample(rtUv(nst)).r.toVar()
           sum.addAssign(select(isBg(nd), float(0), max(float(0), z0.sub(logZ(nd)))).mul(use))
         }
         const shade: N = exp(float(-300).mul(u.strength).mul(sum).div(max(u.taps, float(1))))
-        col.assign(colorT.sample(st).rgb.mul(shade))
+        col.assign(colorT.sample(rtUv(st)).rgb.mul(shade))
       })
       return vec4(col, 1)
     })()
     this.colorNode = out
-    this.depthNode = depthT.sample(stOf()).r
+    this.depthNode = depthT.sample(rtUv(stOf())).r
   }
 
   dispose(): void {

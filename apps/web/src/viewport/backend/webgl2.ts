@@ -1,18 +1,19 @@
 // Classic WebGLRenderer backend for Tier B and S (ADR-007, ADR-044; M06 §6.2, §6.5, FR-002, FR-008, FR-018, FR-026,
 // FR-070). Owner: M06.
-// Pass plan: Tier S renders MAIN | CLOUD in one pass to the default framebuffer (canvas DPR 0.5, SkyQuad first);
+// Pass plan: Tier S renders MAIN | CLOUD in one pass to the default framebuffer (canvas DPR 0.5, SkyQuad last opaque);
 // Tier B/A render P1 the point cloud (CH_CLOUD) into cloudRT restricted to the sub-viewport round(db x s) (rt.viewport,
 // never renderer.setViewport), P2 the composite quad (colour, far-plane sky, depth write-back) to the default
-// framebuffer, P3 the rest (CH_MAIN) with autoClear off. info.autoReset is off, so render.calls counts the whole frame
+// framebuffer (rendered with the scene camera: its vertex stage ignores the matrices, and the environment sky Fn reads
+// the camera position for the 2D clouds; FX-WEB1), P3 the rest (CH_MAIN) with autoClear off. info.autoReset is off, so render.calls counts the whole frame
 // and must equal the plan (M06-E007; dev builds log an error, production counts gpu.glErrors); the assertion only runs
 // in READY. Every render target allocation counts gpu.rtAllocs; cloudRT is allocated at full canvas size on creation and
 // on resize only, so rung changes and motion degradation are zero-allocation uniform and viewport changes (D1-AC-24).
 import {
-  DepthTexture, FloatType, UnsignedByteType, HalfFloatType, WebGLRenderTarget, type Box2, type DataTexture, type Material, type Scene, type Texture, type Vector2,
-  type WebGLRenderer, type RenderTarget, type Object3D,
+  Color, DepthTexture, FloatType, UnsignedByteType, HalfFloatType, WebGLRenderTarget, type Box2, type Camera, type DataTexture, type Material, type Scene, type Texture,
+  type Vector2, type WebGLRenderer, type RenderTarget, type Object3D,
 } from 'three'
 import type { PointsNodeMaterial } from 'three/webgpu'
-import { events, perfProbe, type BackendCaps, type DeviceClass, type FrameCtx, type PointSizeMode, type RTName, type RTOptions, type TextureOps, type Tier } from '@/engine'
+import { events, onSceneShading, perfProbe, type BackendCaps, type DeviceClass, type FrameCtx, type PointSizeMode, type RTName, type RTOptions, type TextureOps, type Tier } from '@/engine'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { GLPointsNodeMaterial } from '../glPointsNodeMaterial'
 import { channelOf, CH_CLOUD, CH_MAIN, listLayers, type EdlCompositeLike, type WarmupItem } from '../layers/registry'
@@ -21,6 +22,7 @@ import { skyColor } from '../layers/groundSky.materials'
 import { lowestRungFor } from './deviceClass'
 import { runSelftest, type SelftestResult } from './selftest'
 import { warmupZoo, type ExtraPass, type WarmupReport } from './warmup'
+import { makeBenchFinish } from './benchFinish'
 import type { Forced } from './testSwitches'
 
 export type BackendState = 'WARMING' | 'READY' | 'LOST' | 'FAILED'
@@ -35,6 +37,20 @@ export interface BackendInfo {
 }
 export interface PassPlan { draws: number; cloudDraws: number; compositeDraws: number; mainDraws: number; pickDraws: number }
 export const newPassPlan = (): PassPlan => ({ draws: 0, cloudDraws: 0, compositeDraws: 0, mainDraws: 0, pickDraws: 0 })
+
+/** side length of the point pick target in raster px (M05-FR-047, M06-FR-064) */
+export const PICK_PX = 5
+/**
+ * one point-pick pass (M06-FR-064; FX-WEB1): prepare() runs in the render phase of the frame that draws it (from plan(),
+ * after the world phase built this frame's DrawTable), fills the pick sub-table and the pick camera and returns false when
+ * nothing can be hit; the pass renders CH_PICK into the 5 x 5 pickRT (counted in the frame's pass plan as pickDraws = 1)
+ * and done() receives the asynchronous read-back (RGBA8 rows bottom-up) or null
+ */
+export interface PickPassRequest {
+  prepare(ctx: FrameCtx): boolean
+  readonly camera: Camera
+  done(px: Uint8Array | null): void
+}
 
 export interface RenderBackend {
   readonly tier: Tier
@@ -67,6 +83,8 @@ export interface RenderBackend {
   cloudTarget(): RenderTarget | null
   /** M05 EDL composite (null: the built-in composite with EDL strength 0) */
   setEdl(m: EdlCompositeLike | null): void
+  /** queue a point-pick pass for the next rendered frame; a newer request replaces (and resolves null) an older one */
+  requestPick(req: PickPassRequest): void
   onLost(cb: (reason: string) => void): () => void
   finishForBench?(): void
   dispose(): Promise<void>
@@ -131,6 +149,10 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
     edl?.bindTargets(cloudRT.texture, cloudRT.depthTexture)
   }
   const rtsByName = new Map<RTName, RenderTarget>()
+  // point pick (M06-FR-064): the queued request, whether plan() prepared it this frame, and the saved clear colour
+  let pickReq: PickPassRequest | null = null
+  let pickPlanned = false
+  const clear0 = new Color()
 
   const be: RenderBackend = {
     tier, deviceClass, kind: 'webgl2', pointSizeMode: 'glpoint', caps, startRung, lowestAllowedRung: lowestRungFor(tier), textures,
@@ -174,8 +196,19 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       if (tier !== 'S' && !cloudRT) be.resizeRTs(r.domElement.width, r.domElement.height)
       // pickRT (5 x 5 raster px, RGBA8, M05-FR-047) exists before the reveal so the ID material compiles under the mask
       if (!rtsByName.has('pick') && items.some((it) => it.targets?.includes('pick'))) be.createRT('pick', { width: 5, height: 5 })
+      // test builds with ?quality=1: the coverage-mask target of viewport/qualityMask.ts, so its point program (render
+      // target output) compiles under the mask and not at the first quality sample (FX-WEB1)
+      if (TEST_SWITCHES && !rtsByName.has('quality') && items.some((it) => it.targets?.includes('quality'))) be.createRT('quality', { width: 8, height: 8 })
       const extra: ExtraPass[] = []
-      if (composite && cloudRT) extra.push({ scene: composite.scene, camera: composite.camera, target: null })
+      if (composite && cloudRT) {
+        // both P2 materials (the built-in composite and M05's EDL composite) with the scene camera, as at run time
+        const c = composite
+        extra.push({ scene: c.scene, camera, target: null, before: () => (c.quad.material = c.material) })
+        if (edl) {
+          const e = edl as unknown as Material
+          extra.push({ scene: c.scene, camera, target: null, before: () => (c.quad.material = e), after: () => (c.quad.material = e) })
+        }
+      }
       const bench = TEST_SWITCHES ? rtsByName.get('bench') : undefined
       const rep = await warmupZoo(r, scene, camera, items, (t) => (t === 'cloud' ? cloudRT : t === 'bench' ? bench : t === 'screen' ? null : rtsByName.get(t)), {
         parallelCompile: caps.parallelCompile === true, extra, programs: () => be.programsCount(),
@@ -198,6 +231,16 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       out.compositeDraws = tier === 'S' ? 0 : 1
       out.mainDraws = tier === 'S' ? main + cloud : main
       out.pickDraws = 0
+      if (pickReq && be.state === 'READY' && rtsByName.has('pick')) {
+        let ok = false
+        try {
+          ok = pickReq.prepare(ctx)
+        } catch (e) {
+          console.warn('point pick prepare failed', e)
+        }
+        pickPlanned = ok
+        out.pickDraws = ok ? 1 : 0
+      }
       out.draws = out.cloudDraws + out.compositeDraws + out.mainDraws + out.pickDraws
     },
     renderFrame(ctx: FrameCtx, plan: PassPlan): void {
@@ -224,13 +267,33 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
           edl.uniforms.uvScale.value = s
           if (c.quad.material !== (edl as unknown)) c.quad.material = edl as unknown as Material
         } else c.uvScale.value = s
-        r.render(c.scene, c.camera)
+        cam.layers.mask = MASK_MAIN
+        r.render(c.scene, cam)
         r.autoClear = false
         cam.layers.mask = MASK_MAIN
         r.render(scene, cam)
         r.autoClear = true
       }
       cam.layers.mask = MASK_S
+      if (pickReq) {
+        const req = pickReq
+        const planned = pickPlanned
+        pickReq = null
+        pickPlanned = false
+        const prt = rtsByName.get('pick') as WebGLRenderTarget | undefined
+        if (planned && prt) {
+          // ID pass: only CH_PICK (the pick object) into the 5 x 5 target, cleared to id 0 (no hit)
+          r.getClearColor(clear0)
+          const a0 = r.getClearAlpha()
+          r.setClearColor(0x000000, 0)
+          r.setRenderTarget(prt)
+          r.clear()
+          r.render(scene, req.camera)
+          r.setRenderTarget(null)
+          r.setClearColor(clear0, a0)
+          be.readPixels(prt, 0, 0, PICK_PX, PICK_PX, new Uint8Array(4 * PICK_PX * PICK_PX)).then((px) => req.done(px), () => req.done(null))
+        } else req.done(null)
+      }
       const calls = r.info.render.calls
       probe.gpu.calls = calls
       probe.gpu.passPlan = plan.draws
@@ -240,7 +303,12 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       // only a READY backend counts (a rebuilt backend warms up with the page already revealed; M06-FR-010)
       if (after > before && probe.gpu.programsAtReveal >= 0 && be.state === 'READY') {
         probe.gpu.compiledAfterReveal += after - before
-        if (TEST_SWITCHES && mismatchLogged++ < 20) console.error(`M06-E006 ${after - before} program(s) compiled after the reveal (programs ${after})`)
+        if (TEST_SWITCHES && mismatchLogged++ < 20) {
+          // the newest entries of info.programs are the ones compiled this frame: name them (diagnostics only)
+          const ps = (r.info.programs as { name?: string; cacheKey?: string }[] | null) ?? []
+          const names = ps.slice(before).map((q) => `${q.name ?? '?'}[${(q.cacheKey ?? '').slice(0, 96)}]`).join('; ')
+          console.error(`M06-E006 ${after - before} program(s) compiled after the reveal (programs ${after}): ${names}`)
+        }
       }
       if (be.state === 'READY' && calls !== plan.draws) {
         probe.gpu.planMismatches++
@@ -271,6 +339,12 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       if (m && composite) m.setBackgroundNode?.((clip: unknown) => skyColor(composite.sky, clip))
       bindComposite()
     },
+    requestPick(req: PickPassRequest): void {
+      const old = pickReq
+      pickReq = req
+      pickPlanned = false
+      old?.done(null)
+    },
     onLost(cb) {
       lost.add(cb)
       return () => {
@@ -285,6 +359,18 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       r.dispose()
     },
   }
-  if (TEST_SWITCHES) be.finishForBench = () => gl.finish()
+  // the environment's scene shading provider arrives after the backend exists (before the shader zoo): rebuild the P2
+  // sky Fn of the built-in composite and of the EDL composite (FX-WEB1)
+  const offShading = onSceneShading(() => {
+    composite?.rebuild()
+    const c = composite
+    if (edl && c) edl.setBackgroundNode?.((clip: unknown) => skyColor(c.sky, clip))
+  })
+  const dispose0 = be.dispose.bind(be)
+  be.dispose = async () => {
+    offShading()
+    await dispose0()
+  }
+  if (TEST_SWITCHES) be.finishForBench = makeBenchFinish(gl) // 1-pixel read-back, not gl.finish() (FX2-R2)
   return be
 }

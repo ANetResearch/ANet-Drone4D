@@ -2,6 +2,7 @@
 // (TS-BND-01). It only re-exports the engine modules (engine/<mod>/index.ts); modules register phases through
 // loop.register and layers through viewport/layers/registry.ts.
 export * from './loop'
+export * from './shading'
 export * from './geo/index'
 export * from './labels/index'
 export * from './perf/index'

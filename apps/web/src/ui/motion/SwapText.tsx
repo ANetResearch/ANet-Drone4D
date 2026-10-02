@@ -27,7 +27,9 @@ export function SwapText({ value, className }: { value: string; className?: stri
     const timing: KeyframeAnimationOptions = { duration: MOTION.textSwapMs, easing: EASE_CSS.inOut, fill: 'both' }
     const hidden = (y: number): Keyframe => (blur ? { opacity: 0, transform: `translateY(${y}px)`, filter: `blur(${MOTION.blurSmallPx}px)` } : { opacity: 0, transform: `translateY(${y}px)` })
     const visible: Keyframe = blur ? { opacity: 1, transform: 'translateY(0)', filter: 'blur(0px)' } : { opacity: 1, transform: 'translateY(0)' }
-    inRef.current?.animate([hidden(d), visible], timing)
+    // the entering span ends in its natural style: drop the finished fill so it does not stay a composited layer (ADR-066)
+    const ia = inRef.current?.animate([hidden(d), visible], timing)
+    ia?.finished.then(() => ia.cancel(), () => {})
     const a = outRef.current?.animate([visible, hidden(-d)], timing)
     a?.finished.then(() => setLeaving(null), () => setLeaving(null))
   }, [leaving])

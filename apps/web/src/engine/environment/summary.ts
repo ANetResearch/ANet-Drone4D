@@ -1,14 +1,16 @@
 // Panel summary of the environment (M07-FR-034, FR-058, FR-061; M07 §8.1, §8.2). Owner: M07.
 // Built from the EnvStore at the adapter's rate (Tier S <= 4 Hz, else <= 10 Hz) and written to stores/env.ts by
-// viewport/layers/environment.tsx (engine/** never imports stores). The selected-vehicle readings come from EnvSample32
-// when the frame path exposes it, else they are evaluated locally at the rendered pose with the same formulas
-// (windCPU, sigma_at); airspeed = |v - W|. Allocates (a few Hz only).
+// viewport/layers/environment.tsx (engine/** never imports stores). The selected-vehicle readings come from the
+// server's EnvSample32 raw record (uav/{id}/env; the drone runtime exposes each TelemetryFrame and EnvSampleCache keeps
+// the newest record per vehicle, FX-WEB1) while it is fresh, else they are evaluated locally at the rendered pose with
+// the same formulas (windCPU, sigma_at); airspeed = |v - W|. Allocates (a few Hz only).
 import { sigmaAt } from './atmosphere/optics'
 import { uvToFrom } from './state/conventions'
 import type { EnvStore } from './state/EnvStore'
 import { F } from './state/presets'
 import { windCPU, type WindCpuOpts } from './wind/windCPU'
 import { fAdv, profileCfg } from './wind/profile'
+import type { TelemetryFrame } from '@/net/rt/types'
 
 export interface EnvSelectedData { windMps: number; speedMps: number; dirFromDeg: number; gustMps: number; morM: number; rainEffMmh: number; airspeedMps: number; stale: boolean; source: 'sample32' | 'local' }
 
@@ -40,6 +42,61 @@ export function beaufort(v: number): number {
 const w4 = new Float64Array(4)
 const u3 = new Float64Array(3)
 const sg = new Float64Array(2)
+
+/** awr.EnvSample32.v1 byte offsets (packages/contracts/rt/layouts.json) and the raw item layout of the TelemetryFrame */
+export const ES32 = { size: 32, wind: 0, sigmaExt: 20, rainEff: 24, flags: 28, gust: 30, rawSchema: 1, item: 80, payload: 16 } as const
+/** records older than this (wall clock) fall back to the local evaluation */
+export const ES32_MAX_AGE_MS = 1500
+
+interface Es32Row { bytes: Uint8Array; dv: DataView; tSimMs: number; atMs: number }
+
+/** newest EnvSample32 per vehicle, copied out of the TelemetryFrame raw items (the slot is reused after the next swap) */
+export class EnvSampleCache {
+  private readonly rows = new Map<number, Es32Row>()
+  /** raw items of one TelemetryFrame; returns the number of EnvSample32 records taken */
+  ingest(f: TelemetryFrame, nowMs: number): number {
+    const r = f.raw
+    const dv = r.bytes
+    let n = 0
+    for (let k = 0; k < r.count; k++) {
+      const o = r.base + ES32.item * k
+      if (dv.getUint8(o + 4) !== ES32.rawSchema || dv.getUint16(o + 6, true) < ES32.size) continue
+      const a = dv.getUint16(o, true)
+      let row = this.rows.get(a)
+      if (!row) {
+        const bytes = new Uint8Array(ES32.size)
+        row = { bytes, dv: new DataView(bytes.buffer), tSimMs: 0, atMs: 0 }
+        this.rows.set(a, row)
+      }
+      row.bytes.set(new Uint8Array(dv.buffer, dv.byteOffset + o + ES32.payload, ES32.size))
+      row.tSimMs = dv.getFloat64(o + 8, true)
+      row.atMs = nowMs
+      n++
+    }
+    return n
+  }
+  /** the record of a vehicle when it is fresh and valid (flags bit 0), else null */
+  get(agentNo: number, nowMs: number): DataView | null {
+    const row = this.rows.get(agentNo)
+    if (!row || nowMs - row.atMs > ES32_MAX_AGE_MS || (row.dv.getUint8(ES32.flags) & 1) === 0) return null
+    return row.dv
+  }
+  clear(): void {
+    this.rows.clear()
+  }
+}
+
+/** readings from a server EnvSample32 record (wind ENU going-to, gust along the mean wind, extinction -> MOR) */
+export function sampleReadings(dv: DataView, kMor: number, vel: ArrayLike<number> | null, stale: boolean): EnvSelectedData {
+  const wx = dv.getFloat32(ES32.wind, true)
+  const wy = dv.getFloat32(ES32.wind + 4, true)
+  const wz = dv.getFloat32(ES32.wind + 8, true)
+  uvToFrom(wx, wy, u3)
+  const sigma = dv.getFloat32(ES32.sigmaExt, true)
+  const air = vel ? Math.hypot(vel[0] - wx, vel[1] - wy, vel[2] - wz) : Number.NaN
+  return { windMps: Math.hypot(wx, wy, wz), speedMps: u3[0], dirFromDeg: u3[1], gustMps: dv.getInt16(ES32.gust, true) * 0.01,
+    morM: sigma > 0 ? kMor / sigma : Number.NaN, rainEffMmh: dv.getUint16(ES32.rainEff, true) * 0.01, airspeedMps: air, stale, source: 'sample32' }
+}
 
 /** readings at an ENU pose (local evaluation) */
 export function localReadings(store: EnvStore, o: WindCpuOpts, pos: ArrayLike<number>, vel: ArrayLike<number> | null, stale: boolean, groundZ: number): EnvSelectedData {

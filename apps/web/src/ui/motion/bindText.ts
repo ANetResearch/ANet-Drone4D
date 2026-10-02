@@ -1,9 +1,11 @@
 // Continuous telemetry text (M15-FR-034; AWR-15 §8.6 class C; ADR-029): one overlay-phase task writes textContent of all
 // bound elements at --telemetry-text-interval (Tier S 250 ms, otherwise 100 ms), only when the string changed; no React
-// render, no animation. The job list is mutated only on bind/unbind (no allocation per frame).
+// render, no animation. The writes happen on the shared UI tick (stores/uiTick.ts, ADR-066), in the same frame as the
+// store summaries, and every bound element is a raster island (BoundText). The job list is mutated only on bind/unbind
+// (no allocation per frame).
 import { loop, type FrameCtx } from '@/engine'
-import { MOTION } from '@/lib/tokens/motion.gen'
 import { fmt } from '@/lib/format'
+import { uiTickDue } from '@/stores/uiTick'
 
 interface TextJob {
   el: HTMLElement
@@ -13,14 +15,11 @@ interface TextJob {
   last: string
 }
 const jobs: TextJob[] = []
-let lastMs = Number.NEGATIVE_INFINITY
 let unregister: (() => void) | null = null
 export const bindTextStats = { writes: 0 }
 
 function tick(ctx: FrameCtx): void {
-  if (ctx.nowMs - lastMs < MOTION.telemetryTextIntervalMs[ctx.tier]) return
-  lastMs = ctx.nowMs
-  flushTexts()
+  if (uiTickDue(ctx)) flushTexts()
 }
 
 /** write every bound element once (also used when the loop is not running, for example in tests) */

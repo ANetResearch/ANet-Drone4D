@@ -9,6 +9,7 @@ import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
 import { INPUT } from '@/lib/tokens/input.gen'
 import { loop } from '@/engine/loop'
+import { uiTickDue } from './uiTick'
 import { FlightFlags, redHighlight } from '@awr/contracts/enums'
 import { rtClient, type ConnState, type RosterView, type SwarmSnapshot } from '@/net/rt'
 
@@ -168,5 +169,6 @@ export function summariseFleet(src: FleetSource | null = rtClient(), nowMs: numb
   return true
 }
 
-loop.register('overlay', 'fleet-summary.s', () => void summariseFleet(), { fps: 4, tiers: ['S'] })
-loop.register('overlay', 'fleet-summary.ba', () => void summariseFleet(), { fps: 10, tiers: ['A', 'B'] })
+// published on the shared UI tick (Tier S 4 Hz, B/A 10 Hz; stores/uiTick.ts, ADR-066)
+loop.register('overlay', 'fleet-summary.s', (ctx) => void (uiTickDue(ctx) && summariseFleet()), { tiers: ['S'] })
+loop.register('overlay', 'fleet-summary.ba', (ctx) => void (uiTickDue(ctx) && summariseFleet()), { tiers: ['A', 'B'] })

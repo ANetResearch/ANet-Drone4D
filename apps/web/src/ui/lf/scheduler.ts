@@ -3,10 +3,14 @@
 // is not running (report pages, the small-window Empty state). Per frame at most 2 charts are redrawn and at most 2 ms are
 // spent; a chart is redrawn only when its data version changed and its rate allows it (HUD 4 Hz, focused chart <= 10 Hz,
 // Tier S <= 4 Hz); invisible charts (IntersectionObserver, document.hidden, hidden tab or collapsed rail via setVisible)
-// are never drawn. Tier S shows at most 4 streaming charts; slots go to focused > HUD > detail > others.
+// are never drawn. Tier S shows at most 4 streaming charts; slots go to focused > HUD > detail > others. On Tier S the
+// redraws happen only in frames of the shared UI tick (stores/uiTick.ts, ADR-066), together with the store summaries and
+// the C-class text, so that the frames in between carry no canvas upload; the rate check tolerates the 1 ms frame
+// quantisation of the tick.
 import { ctx as frameCtx, loop, type FrameCtx, type Tier } from '@/engine'
 import { LF } from '@/lib/tokens/input.gen'
 import { PERF_UI } from '@/ui/shell/perfUi'
+import { uiTickDue } from '@/stores/uiTick'
 
 export type LfPrio = 0 | 1 | 2 | 3
 export interface LfJobSpec {
@@ -72,7 +76,7 @@ export function schedulerFrame(nowMs: number, tier: Tier): number {
     const j = jobs[(rr + c) % n]
     if (!visible(j) || (j.streaming && !j.hasSlot)) continue
     const hz = tier === 'S' ? Math.min(j.hz, LF.focusHzTierS) : j.hz
-    if (nowMs - j.last < 1000 / hz) continue
+    if (nowMs - j.last < 1000 / hz - 1) continue
     const v = j.version()
     if (v === j.seen) continue
     if (!j.streaming && j.last > 0) {
@@ -92,6 +96,7 @@ export function schedulerFrame(nowMs: number, tier: Tier): number {
 }
 
 function loopTask(c: FrameCtx): void {
+  if (c.tier === 'S' && !uiTickDue(c)) return
   schedulerFrame(c.nowMs, c.tier)
 }
 function fallback(now: number): void {

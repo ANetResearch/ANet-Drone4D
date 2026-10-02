@@ -82,6 +82,26 @@ describe('drone data path (M06-AC-024, AC-030, AC-031)', () => {
     layer.dispose()
   })
 
+  it('a frozen clock (PAUSED or STEPPING with a fresh TIME) never marks STALE; a running or stale clock does (FX-WEB2 item 1)', () => {
+    const interp = new InterpRing()
+    const ids = new Map([[1, { id: 'a', model: 'p600', kind: 'uav' }]])
+    const s = interp.slotFor(1)
+    interp.push(s, 0, 10, 0, 20, 0, 0, 0, 0, 0, 0, 1, 0)
+    interp.push(s, 100, 10, 0, 20, 0, 0, 0, 0, 0, 0, 1, 0)
+    interp.eMaxMs = 300
+    let frozen = true
+    const layer = new DroneLayer({ be, interp, roster: () => roster(ids), subscribe: () => () => {}, frozen: () => frozen })
+    const ctx = { ...frameCtx, cssW: 1280, cssH: 720, dbW: 640, dbH: 360, dpr: 0.5, camera: null }
+    // paused 276 s after the newest sample (live sim held paused after a replay): held pose, but not a signal delay
+    layer.update({ ...ctx, nowMs: 0, tRenderS: 276.9 })
+    expect(layer.mark[1] & MARK.STALE).toBe(0)
+    expect(layer.markers.data[3]).toBe(MarkerStyle.Normal)
+    frozen = false
+    layer.update({ ...ctx, nowMs: 33, tRenderS: 276.9 })
+    expect(layer.mark[1] & MARK.STALE).not.toBe(0)
+    layer.dispose()
+  })
+
   it('alert levels from flight state and flags', () => {
     expect(alertLevelOf(FlightState.FLYING, 0)).toBe(0)
     expect(alertLevelOf(FlightState.FLYING, FlightFlags.ALERT)).toBe(2)

@@ -12,10 +12,12 @@
 import { BufferGeometry, Matrix4, Points, Sphere, Vector3, type DataTexture } from 'three'
 import type { PointsNodeMaterial } from 'three/webgpu'
 import { EASE, MOTION } from '@/lib/tokens/motion.gen'
+import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { PALETTE_LINEAR } from '@/lib/tokens/palette.gen'
 import { SCENE } from '@/lib/tokens/scene.gen'
 import { bezierAt } from '../anim/bezier'
 import type { FrameCtx, RenderBackendView } from '../loop'
+import { onSceneShading, sceneShading } from '../shading'
 import { CascadeController, FREEZE_WARMUP, type RungReason } from './core/CascadeController'
 import { CpuCache } from './core/CpuCache'
 import { PrefetchQueue, collectCandidates, newCandidates, reorderWindow, type FocusState } from './core/DownloadQueue'
@@ -25,7 +27,7 @@ import { LB_BUDGET, LB_NODES, LIMITED, newScratch, newSelection, selectVisible, 
 import { failIsFinal, isFailedAfter, nextRetryAt, shouldAbort } from './core/StreamPolicy'
 import { OUTSIDE, classifyNode, distToBox, lodCameraLookAt, makeLodCamera, newLodCamera } from './core/frustum'
 import { casFreezeMask, fillEma, newStats, pushRing, resetStats, type PerfSink } from './core/stats'
-import { DrawTables, buildDrawTable, newDrawBuild } from './gpu/DrawTable'
+import { DrawTables, buildBlockIndex, buildDrawTable, newDrawBuild } from './gpu/DrawTable'
 import { PageAllocator } from './gpu/PageAllocator'
 import { PointPool, dummyIntTexture } from './gpu/PointPool'
 import { drainUploads, newUploadResult, type UploadSink } from './gpu/Uploader'
@@ -38,7 +40,7 @@ import { EdlCompositeMaterial } from './render/edlComposite'
 import { makeIdMaterial } from './render/idMaterial'
 import { PointPicker } from './pick/PointPicker'
 import { COLOR_MODE_INDEX, dummyDtmTexture, makeClassTexture, makePointMaterial, makePointUniforms, makeTextureNodes, type PointColorTokens, type PointTextures, type PointUniforms } from './render/pointMaterial'
-import { LADDER, PC, deviceParams, httpCapFor, type DeviceParams } from './params'
+import { LADDER, PC, deviceParams, httpCapFor, tauCapPx, type DeviceParams } from './params'
 import type { ColorMode, EnginePhase, FocusMode, OpenedWorldInfo, PointCloudEvents, PointCloudStats } from './types'
 
 export interface PointCloudTokens extends PointColorTokens {
@@ -112,7 +114,13 @@ export class PointCloudEngine {
 
   private be: RenderBackendView
   private readonly tok: PointCloudTokens
-  private readonly params: PointCloudParams
+  /**
+   * test-build switches, read only behind the build-time constant TEST_SWITCHES so that a production bundle keeps neither
+   * their names nor their branches (M06-AC-010; FX-WEB1): lockB is the locked point budget of ?fixedB= (0: CAS drives B),
+   * qualityHooks the ?quality=1 sampling hooks
+   */
+  private readonly lockB: number
+  private readonly qualityHooks: boolean
   private readonly perf: PerfSink | null
   private readonly motionTier: () => 'full' | 'lite' | 'reduced'
   private readonly refreshMs: (() => number) | null
@@ -173,6 +181,8 @@ export class PointCloudEngine {
   private recovering = false
   private resetPending = false
   private readyAt = 0
+  /** performance.now() of the first world-phase update with the shader zoo done (NaN before) */
+  private warmReadyAt = Number.NaN
   private edlOn = true
   private readonly freezeIn = { frozen: false, hidden: false, compiled: false, warmupLeft: 0 }
   private readonly abortPol = { abortOutside: true, abortSuperseded: PC.abortSuperseded as boolean, saturated: false }
@@ -182,7 +192,8 @@ export class PointCloudEngine {
   constructor(o: PointCloudEngineOptions) {
     this.be = o.backend
     this.tok = { ...defaultTokens(), ...o.tokens }
-    this.params = o.params ?? {}
+    this.lockB = TEST_SWITCHES ? (o.params?.fixedB ?? 0) : 0
+    this.qualityHooks = TEST_SWITCHES ? o.params?.quality === true : false
     this.perf = o.perf ?? null
     this.motionTier = o.motionTier ?? (() => 'full')
     this.refreshMs = o.refreshMs ?? null
@@ -190,7 +201,16 @@ export class PointCloudEngine {
     const e = this.tok.easeSmoothOut
     this.ease = (x: number) => bezierAt(e, x)
     const be = this.be
-    this.dev = deviceParams(be.tier, be.deviceClass, be.startRung, be.lowestAllowedRung, be.caps?.maxTextureSize ?? 16384)
+    const devBase = deviceParams(be.tier, be.deviceClass, be.startRung, be.lowestAllowedRung, be.caps?.maxTextureSize ?? 16384)
+    // test builds: a locked budget above the device's pool (the high-budget quality check, ?fixedB=2000000 on a software
+    // device forced to Tier B) sizes the pool for it and takes the Tier B/A cache and upload quota without the software
+    // render-ratio lock, so the cloud converges and is drawn at the full sub-viewport; never in production (lockB is 0
+    // there), never on the perf path (18 §2.5, FX-WEB1)
+    const wantRows = Math.ceil(this.lockB / PC.capacityFrac / PC.poolWidth)
+    this.dev = TEST_SWITCHES && wantRows > devBase.poolRows
+      ? { ...devBase, poolRows: Math.min(wantRows, Math.max(1, be.caps?.maxTextureSize ?? 16384)), rsLock: 0,
+        cpuCacheBytes: Math.max(devBase.cpuCacheBytes, PC.cpuCacheBA), uploadPtsPerFrame: Math.max(devBase.uploadPtsPerFrame, PC.uploadBytesBA / PC.bytesPerTexel) }
+      : devBase
     const capPts = this.dev.poolRows * PC.poolWidth
     const software = be.deviceClass === 'software'
     this.cas = new CascadeController({
@@ -198,9 +218,9 @@ export class PointCloudEngine {
       tailK: this.dev.tailK, initialB: this.dev.b0, Bfloor: this.dev.bFloor, poolCapacityPts: capPts, rsLock: this.dev.rsLock,
       onRung: (from, to, reason) => this.onRung(from, to, reason),
     })
-    if (this.params.fixedB) this.cas.setB(Math.min(this.params.fixedB, PC.capacityFrac * capPts))
-    this.fetcher = new Fetcher({ workers: this.dev.workers, limit: this.dev.inflight, useWorker: o.useWorker, f: o.f, injectFail: this.params.pcInject ?? 0,
-      seed: this.params.seed ?? 1 })
+    if (this.lockB) this.cas.setB(Math.min(this.lockB, PC.capacityFrac * capPts))
+    this.fetcher = new Fetcher({ workers: this.dev.workers, limit: this.dev.inflight, useWorker: o.useWorker, f: o.f,
+      injectFail: TEST_SWITCHES ? (o.params?.pcInject ?? 0) : 0, seed: o.params?.seed ?? 1 })
     this.fetcher.onReply = (r) => this.arrivals.push(r)
     this.geometry = new BufferGeometry()
     this.geometry.setDrawRange(0, 0)
@@ -214,10 +234,10 @@ export class PointCloudEngine {
     // GPU objects, created once (FR-007: world switches keep them)
     this.alloc = new PageAllocator(capPts, PC.page)
     this.pool = new PointPool(this.dev.poolRows, 2, be.textures)
-    this.tables = new DrawTables(4096)
+    this.tables = new DrawTables(4096, capPts)
     this.classTex = makeClassTexture(this.tok.classColors)
     this.dummyDtm = dummyDtmTexture()
-    this.texNodes = makeTextureNodes({ pool: this.pool.tex, draw: this.tables.draw, node: this.tables.node, dtm: this.dummyDtm, classes: this.classTex })
+    this.texNodes = makeTextureNodes({ pool: this.pool.tex, draw: this.tables.draw, block: this.tables.block, node: this.tables.node, dtm: this.dummyDtm, classes: this.classTex })
     this.u = makePointUniforms(this.tok)
     this.material = this.buildMaterial()
     this.root.material = this.material
@@ -237,9 +257,9 @@ export class PointCloudEngine {
     this.syncCasStats()
     if (this.perf) {
       this.perf.pc.poolRows = this.dev.poolRows
-      if (this.params.fixedB || this.params.pcInject) {
-        this.perf.forced = { ...(this.perf.forced ?? {}), ...(this.params.fixedB ? { fixedB: this.params.fixedB } : {}),
-          ...(this.params.pcInject ? { perfInject: `pcFail:${this.params.pcInject}` } : {}) }
+      if (TEST_SWITCHES && (o.params?.fixedB || o.params?.pcInject)) {
+        this.perf.forced = { ...(this.perf.forced ?? {}), ...(o.params.fixedB ? { fixedB: o.params.fixedB } : {}),
+          ...(o.params.pcInject ? { perfInject: `pcFail:${o.params.pcInject}` } : {}) }
       }
     }
     setActive(this)
@@ -258,8 +278,17 @@ export class PointCloudEngine {
   }
 
   private buildMaterial(): PointsNodeMaterial {
-    return makePointMaterial(() => this.be.createPointsMaterial(), this.texNodes, this.u, { pointSizeMode: this.be.pointSizeMode, round: this.be.tier !== 'S' })
+    return makePointMaterial(() => this.be.createPointsMaterial(), this.texNodes, this.u, { pointSizeMode: this.be.pointSizeMode, round: this.be.tier !== 'S',
+      shading: sceneShading() })
   }
+
+  /** the scene shading provider changed (the environment adapter mounts before the shader zoo): new point material */
+  private readonly offShading = onSceneShading(() => {
+    const old = this.material
+    this.material = this.buildMaterial()
+    this.root.material = this.material
+    old.dispose()
+  })
 
   // ------------------------------------------------------------ events
   on<K extends keyof PointCloudEvents>(name: K, fn: (e: PointCloudEvents[K]) => void): () => void {
@@ -294,6 +323,7 @@ export class PointCloudEngine {
    * freezes 30 frames; the first-frame target set of the new world is selected with the current B.
    */
   async open(base: string, o: { reason?: 'open' | 'switch' | 'stale' } = {}): Promise<OpenedWorldInfo> {
+    if (this.perf?.marks && this.perf.marks['pc.open'] === undefined) this.perf.marks['pc.open'] = performance.now()
     const wasOpen = this.t !== null || this.phase === 'manifest' || this.phase === 'first_screen'
     const reason = o.reason ?? (wasOpen ? 'switch' : 'open')
     this.release()
@@ -380,6 +410,7 @@ export class PointCloudEngine {
     this.targetN = -1
     this.targetPts = 0
     this.load.ttfpStart = w.ttfpStart
+    if (this.perf?.marks && !this.load.isSwitch && this.perf.marks['pc.firstScreen'] === undefined) this.perf.marks['pc.firstScreen'] = w.ttfpStart
     this.load.firstScreenBytes = w.firstScreenBytes
     this.load.ttfp = Number.NaN
     this.load.pendingCommit = false
@@ -409,8 +440,9 @@ export class PointCloudEngine {
 
   private growNodeTable(N: number): void {
     const old = this.tables
-    this.tables = new DrawTables(Math.max(N, 2 * old.nodeCapacity))
+    this.tables = new DrawTables(Math.max(N, 2 * old.nodeCapacity), old.maxPoints)
     this.texNodes.draw.value = this.tables.draw
+    this.texNodes.block.value = this.tables.block
     this.texNodes.node.value = this.tables.node
     old.dispose()
   }
@@ -446,6 +478,7 @@ export class PointCloudEngine {
   }
 
   dispose(): void {
+    this.offShading()
     this.close()
     this.fetcher.dispose()
     this.geometry.dispose()
@@ -474,7 +507,14 @@ export class PointCloudEngine {
   setHeroClassActive(on: boolean): void {
     this.u.heroActive.value = on ? 1 : 0
   }
-  /** M07 EnvLighting: sun direction in the layer frame (ENU) and cloud shadow factor */
+  /** true while class 11 is demoted to g50 because another entity owns the red (RedArbiter) */
+  get heroClassActive(): boolean {
+    return this.u.heroActive.value === 1
+  }
+  /**
+   * legacy lighting uniforms (sun direction ENU and a focus cloud-shadow scalar); the material now takes its light from
+   * the scene shading provider (engine/shading.ts, per-vertex cloud shadow), so these values are kept for tests only
+   */
   setLighting(sunEnu: ArrayLike<number>, cloudShadow = 1): void {
     this.u.sun.value.set(sunEnu[0], sunEnu[1], sunEnu[2]).normalize()
     this.u.cloudShadow.value = cloudShadow
@@ -583,12 +623,18 @@ export class PointCloudEngine {
       else if (this.up.used > this.perf.pc.uploadPtsMax) this.perf.pc.uploadPtsMax = this.up.used
     }
     this.evictIfNeeded(frame, now)
-    // DrawTable, fade and childDrawnMask, uniforms
+    // DrawTable, fade and childDrawnMask, uniforms. While the shader zoo still warms (M06 backend state WARMING) the
+    // points are not drawn: the point program is compiled by the zoo, never by the first point frame on the TTFP path;
+    // the wait from t_start to the end of the warm-up is load.warmupWaitMs (D1-AC-02; 18 §4.2; FX-WEB1)
+    const hold = this.be.state === 'WARMING'
+    if (!hold && Number.isNaN(this.warmReadyAt)) this.warmReadyAt = performance.now()
     const reduced = this.motionTier() === 'reduced'
     const db = buildDrawTable(sel, t, now, this.tok.lodFadeMs, this.ease, reduced, this.tables.drawData, this.db)
     this.tables.commit(db.k)
+    this.blockWords = buildBlockIndex(this.tables.drawData, db.k, db.drawn, this.tables.blockData)
+    this.tables.commitBlocks(this.blockWords)
     this.u.numDraws.value = db.k
-    this.geometry.setDrawRange(0, db.drawn)
+    this.geometry.setDrawRange(0, hold ? 0 : db.drawn)
     const e = this.cam.eye
     this.u.eye.value.set(e[0], e[1], e[2])
     this.v3.set(0, 0, -1).applyQuaternion(cam.quaternion).transformDirection(this.Linv)
@@ -605,18 +651,25 @@ export class PointCloudEngine {
         if (t.numPoints[i] === 0 || (t.poolBase[i] >= 0 && t.drawnFrame[i] === frame)) res++
       }
       progress = res / this.targetN
-      if (res === this.targetN && db.drawn > 0 && !this.load.pendingCommit) this.load.pendingCommit = true
+      if (res === this.targetN && db.drawn > 0 && !hold && !this.load.pendingCommit) this.load.pendingCommit = true
     } else progress = sel.n > 0 ? db.residentSel / sel.n : 1
-    if (db.drawn > 0 && this.load.firstPixelPending) {
+    if (db.drawn > 0 && !hold && this.load.firstPixelPending) {
       this.load.firstPixelPending = false
       this.load.firstPixelCommit = true
     }
     // adaptive maxPx (M05 §6.7.3): sparse while budget/node limited or streaming, 300 ms smoothing
     const sparse = sel.limitedBy <= LB_NODES || (PC.sparseWhileStreaming && progress < PC.sparseProgress)
+    // ADR-063: in dense frames the non-leaf nodes are capped at the tau cap, leaf nodes keep the rung maxPx (maxPxEff,
+    // the upper bound reported in __perf.pc.maxPxEff); sparse frames use maxPxSparse for both
     const target = sparse ? rung.maxPxSparse : rung.maxPx
+    const targetCap = sparse ? rung.maxPxSparse : tauCapPx(rung)
+    const k = 1 - Math.exp(-Math.max(0, ctx.dtMs) / PC.maxPxTauMs)
     if (!(this.st.maxPxEff > 0)) this.st.maxPxEff = target
-    this.st.maxPxEff += (target - this.st.maxPxEff) * (1 - Math.exp(-Math.max(0, ctx.dtMs) / PC.maxPxTauMs))
-    this.u.maxPx.value = this.st.maxPxEff
+    if (!(this.st.maxPxCapEff > 0)) this.st.maxPxCapEff = targetCap
+    this.st.maxPxEff += (target - this.st.maxPxEff) * k
+    this.st.maxPxCapEff += (targetCap - this.st.maxPxCapEff) * k
+    this.u.maxPxLeaf.value = this.st.maxPxEff
+    this.u.maxPx.value = this.st.maxPxCapEff
     if (this.resetPending && progress >= PC.sparseProgress) {
       this.recovering = false
       this.resetPending = false
@@ -644,9 +697,9 @@ export class PointCloudEngine {
     touched: (i) => this.cache?.touch(i, this.sel.frame),
   }
 
-  /** B_eff = min(B, 0.6 x pool) (CAS already clamps; fixedB may not) */
+  /** B_eff = min(B, 0.6 x pool) (CAS already clamps; a locked test budget may not) */
   private budget(): number {
-    const B = this.params.fixedB ?? this.cas.B
+    const B = this.lockB || this.cas.B
     return Math.max(1, Math.floor(Math.min(B, PC.capacityFrac * this.poolCapacityPts)))
   }
 
@@ -839,7 +892,7 @@ export class PointCloudEngine {
     if (this.phase !== 'streaming') mask |= FREEZE_WARMUP
     if (this.warmupLeft > 0) this.warmupLeft--
     this.st.frozenMask = mask
-    if (!this.params.fixedB) {
+    if (!this.lockB) {
       if (this.refreshMs && this.be.deviceClass !== 'software') {
         const T = this.refreshMs()
         if (T > 0 && Math.abs(T - this.cas.T) / this.cas.T > 0.05) this.cas.setTarget(T, this.dev.tailK)
@@ -851,19 +904,66 @@ export class PointCloudEngine {
       if (this.cas.evals !== evals && this.perf) {
         pushRing(this.perf.cas.B_ring, this.cas.B)
         pushRing(this.perf.cas.index_ring, this.cas.index)
-        const lo = this.cas.lo
-        if (Number.isNaN(this.perf.cas.inBandAtMs) && this.perf.load.revealAt > 0 && (this.cas.lastP50 <= PC.casInBandR * this.cas.T || this.cas.B <= lo * 1.001)) {
-          this.perf.cas.inBandAtMs = now - this.perf.load.revealAt
-        }
       }
+      this.trackInBand(ctx.dtMs, ctx.nowMs)
     }
     this.syncCasStats()
   }
 
+  /** intervals presented since the reveal (time, interval), for the in-band time; preallocated, never grows */
+  private readonly bandT = new Float64Array(128)
+  private readonly bandDt = new Float64Array(128)
+  private readonly bandTmp = new Float64Array(128)
+  private bandN = 0
+  /**
+   * cas.inBandAtMs (AWR-18 §1.5): from the reveal to the first time that the p50 of the presented intervals of the last
+   * 1 s is <= casInBandR x T*, or B equals the rung's lo. It is a property of the presented frames, so it is evaluated on
+   * every frame from the reveal on, also while the CAS itself is frozen (the first 30 frames after the reveal) - the
+   * CAS evaluations are not the clock of this measure (FX2-R2: evaluated only at CAS evaluations, a slow first second
+   * after the reveal pushed it past 3 s even when the frames were already on target).
+   */
+  private trackInBand(dtMs: number, nowMs: number): void {
+    const perf = this.perf
+    if (!perf || !Number.isNaN(perf.cas.inBandAtMs) || !(perf.load.revealAt > 0) || nowMs < perf.load.revealAt) return
+    const k = this.bandN++ & 127
+    this.bandT[k] = nowMs
+    this.bandDt[k] = dtMs
+    const sinceReveal = nowMs - perf.load.revealAt
+    const atLo = this.cas.B <= this.cas.lo * 1.001
+    if (sinceReveal < 1000 && !atLo) return
+    // p50 of the intervals presented in the last 1000 ms (nearest rank, as AWR-18 §2.5)
+    let m = 0
+    const n = Math.min(this.bandN, 128)
+    for (let i = 0; i < n; i++) {
+      const j = (this.bandN - 1 - i) & 127
+      if (nowMs - this.bandT[j] > 1000) break
+      if (this.bandDt[j] > 0) this.bandTmp[m++] = this.bandDt[j]
+    }
+    let p50 = Number.POSITIVE_INFINITY
+    if (m > 0) {
+      const a = this.bandTmp // insertion sort in place (m <= 128, only until the band is entered; no allocation)
+      for (let i = 1; i < m; i++) {
+        const v = a[i]
+        let j = i - 1
+        while (j >= 0 && a[j] > v) {
+          a[j + 1] = a[j]
+          j--
+        }
+        a[j + 1] = v
+      }
+      p50 = a[Math.min(m - 1, Math.floor(0.5 * m))]
+    }
+    if (atLo || (sinceReveal >= 1000 && p50 <= PC.casInBandR * this.cas.T)) perf.cas.inBandAtMs = sinceReveal
+  }
+
   private commitFirstFrame(now: number): void {
     this.load.pendingCommit = false
-    const wait = (this.perf?.load.warmupWaitMs as number | undefined) ?? 0
-    this.load.ttfp = now - this.load.ttfpStart - (wait > 0 ? wait : 0)
+    if (this.perf?.marks && !this.load.isSwitch && this.perf.marks['pc.firstFrame'] === undefined) this.perf.marks['pc.firstFrame'] = performance.now()
+    // t_start before the end of the shader-zoo warm-up: the wait is excluded from TTFP and reported (D1-AC-02)
+    const ready = this.warmReadyAt
+    const wait = !this.load.isSwitch && ready > this.load.ttfpStart ? ready - this.load.ttfpStart : 0
+    if (this.perf && !this.load.isSwitch) this.perf.load.warmupWaitMs = wait
+    this.load.ttfp = now - this.load.ttfpStart - wait
     this.load.switchMs = this.load.isSwitch ? now - this.load.openedAt : Number.NaN
     if (this.perf) {
       if (this.load.isSwitch) this.perf.load.switchMs = this.load.switchMs
@@ -921,7 +1021,7 @@ export class PointCloudEngine {
   private sampleQuality(ctx: FrameCtx): void {
     const p = this.perf
     const cam = ctx.camera
-    if (!this.params.quality || !p?.quality || !p.bench || !cam || this.qualityK >= PC.qualitySamples) return
+    if (!this.qualityHooks || !p?.quality || !p.bench || !cam || this.qualityK >= PC.qualitySamples) return
     const t = p.bench.flightT
     if (!(t >= PC.qualityT0S + PC.qualityStepS * this.qualityK)) return
     const e = cam.position
@@ -950,7 +1050,7 @@ export class PointCloudEngine {
     s.rungName = c.rung.name
     s.manual = c.manual
     s.floorHeld = c.floorHeld
-    const clamped = this.params.fixedB ? this.params.fixedB > PC.capacityFrac * this.poolCapacityPts : c.clampedByCapacity
+    const clamped = this.lockB ? this.lockB > PC.capacityFrac * this.poolCapacityPts : c.clampedByCapacity
     if (clamped !== this.lastClamped) {
       this.lastClamped = clamped
       this.emit('pc.capacity.clamped', { clamped, Beff: s.Beff, capacity: this.poolCapacityPts })
@@ -1062,12 +1162,13 @@ export class PointCloudEngine {
     this.material.dispose()
     this.pool = new PointPool(this.dev.poolRows, 2, be.textures)
     if (this.t) this.pool.ensureStaging(this.t.maxNodePoints)
-    this.tables = new DrawTables(Math.max(4096, this.t?.N ?? 0))
+    this.tables = new DrawTables(Math.max(4096, this.t?.N ?? 0), this.poolCapacityPts)
     if (this.t) this.tables.setNodes(this.t)
     this.classTex = makeClassTexture(this.tok.classColors)
     this.dummyDtm = dummyDtmTexture()
     if (this.dtm.loaded && this.dtm.texture) this.dtm.texture.needsUpdate = true
-    this.texNodes = makeTextureNodes({ pool: this.pool.tex, draw: this.tables.draw, node: this.tables.node, dtm: this.dtm.texture ?? this.dummyDtm, classes: this.classTex })
+    this.texNodes = makeTextureNodes({ pool: this.pool.tex, draw: this.tables.draw, block: this.tables.block, node: this.tables.node, dtm: this.dtm.texture ?? this.dummyDtm,
+      classes: this.classTex })
     this.material = this.buildMaterial()
     this.root.material = this.material
     ;(this.picker.object.material as PointsNodeMaterial).dispose()
@@ -1086,7 +1187,9 @@ export class PointCloudEngine {
   }
 
   // ------------------------------------------------------------ warm-up (M05 §6.7.7, FR-037)
-  private readonly warmSave = { words: new Uint32Array(4), numDraws: 0, count: 0, visible: false, active: false, pick: false }
+  /** words of the block index written by the last frame (re-uploaded after a warm-up variant) */
+  private blockWords = 0
+  private readonly warmSave = { words: new Uint32Array(4), blocks: new Uint32Array(2), numDraws: 0, count: 0, visible: false, active: false, pick: false }
   /**
    * Shader-zoo variant (M06): make the layer drawable with one DrawTable entry and one point so the point program of
    * this tier compiles under the boot mask; colour modes, fade, class mask and EDL are uniforms (no other variant).
@@ -1107,6 +1210,10 @@ export class PointCloudEngine {
     }
     const d = this.tables.drawData
     w.words.set(d.subarray(0, 4))
+    w.blocks.set(this.tables.blockData.subarray(0, 2))
+    this.tables.blockData[0] = 0
+    this.tables.blockData[1] = 0
+    this.tables.commitBlocks(2)
     w.numDraws = this.u.numDraws.value as number
     w.count = this.geometry.drawRange.count
     w.visible = this.root.visible
@@ -1131,6 +1238,8 @@ export class PointCloudEngine {
     }
     this.tables.drawData.set(w.words, 0)
     this.tables.commit(Math.max(1, w.numDraws))
+    this.tables.blockData.set(w.blocks, 0)
+    this.tables.commitBlocks(Math.max(2, this.blockWords))
     this.u.numDraws.value = w.numDraws
     this.geometry.setDrawRange(0, w.count)
     this.root.visible = w.visible

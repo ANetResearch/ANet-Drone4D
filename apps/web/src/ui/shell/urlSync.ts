@@ -36,7 +36,8 @@ export function installUrlSync(onRevealed: (cb: () => void) => void): () => void
     const q = new URLSearchParams(location.search)
     const sel = selParam(selectionStore.getState().ids)
     const camQ = cam === 'orbit' ? null : cam
-    if (q.get('sel') !== sel || q.get('cam') !== camQ) updateSearch({ sel, cam: camQ })
+    // silent: the URL mirrors the selection and camera mode, no route subscriber needs to re-render (ADR-069)
+    if (q.get('sel') !== sel || q.get('cam') !== camQ) updateSearch({ sel, cam: camQ }, { silent: true })
   }, PERIOD_MS)
   // deep link: camera mode after reveal; unknown vehicles dropped when the roster arrives (one toast)
   const q0 = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams()

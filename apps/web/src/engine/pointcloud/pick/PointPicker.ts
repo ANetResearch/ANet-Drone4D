@@ -62,6 +62,7 @@ export class PointPicker {
     this.tex.generateMipmaps = false
     this.tex.needsUpdate = true
     this.texNode = texture(this.tex)
+    this.texNode.updateMatrix = false // texel loads: no uv transform (FX2-R2)
     const g = new BufferGeometry()
     g.setDrawRange(0, 0)
     g.boundingSphere = new Sphere(new Vector3(), 1e7)

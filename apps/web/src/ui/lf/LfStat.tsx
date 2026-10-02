@@ -34,7 +34,8 @@ export function LfStat({ label, unit, format, value, bind, stale, cls = 'C', spa
     <div data-lf-stat="" className={cn('flex items-end justify-between gap-2', className)}>
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-hud-cap font-semibold uppercase text-muted-foreground">{label}</span>
-        <span className="flex items-baseline gap-1">
+        {/* a half-width space between number and unit, but % and the degree sign sit tight (AWR-14 §13.3 rule 1) */}
+        <span className={cn('flex items-baseline', unit === '%' || unit === '°' ? 'gap-px' : 'gap-1')}>
           {bind ? (
             <span ref={ref} data-numeric="" className={cn(kpi, 'font-extrabold', hero && 'text-lf-hero-text')} />
           ) : cls === 'D' && value !== undefined ? (
@@ -44,7 +45,8 @@ export function LfStat({ label, unit, format, value, bind, stale, cls = 'C', spa
               {value === undefined ? format(Number.NaN) : format(value)}
             </span>
           )}
-          {unit ? <span className="text-hud-sub font-semibold text-muted-foreground">{unit}</span> : null}
+          {/* a missing value reads as a lone dash, without its unit */}
+          {unit && (bind || (value !== undefined && Number.isFinite(value))) ? <span className="text-hud-sub font-semibold text-muted-foreground">{unit}</span> : null}
         </span>
       </div>
       {spark ? <LfSparkline series={spark} target={sparkTarget} ariaLabel={label} className="mb-1.5" /> : null}

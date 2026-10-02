@@ -4,11 +4,14 @@
 // batch). min_z_m = null -> the lowest DTM value (ground.zM - relief), max_z_m = null -> world top + 50 m; `border` is
 // not drawn by default. A zone that wins the red (fence violation, RedArbiter owner {kind: 'zone'}) turns r500 outline
 // and r500 10 % walls through the float uniform uHeroZone compared with the per-vertex zone index: no rebuild, no
-// recompile. Tier B/A walls add a 45 degree world-space hatch (4 m spacing) through a uniform (same program).
+// recompile. Tier B/A walls add a 45 degree world-space hatch (4 m spacing) through a uniform (same program). The wall
+// colour (constant per zone) gets the output transform in the vertex stage (ADR-064): the large translucent walls carry
+// no transfer function per fragment.
 import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, Sphere, Vector3 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { Fn, abs, attribute, float, fract, mix, positionLocal, select, uniform, varying, vec4 } from 'three/tsl'
 import { SCENE } from '@/lib/tokens/scene.gen'
+import { outputTransform } from '../shading'
 import { Palette } from '../drones/glyph/GlyphLayer'
 import { ThinLineBatch, WideLineBatch } from './lineBatch'
 
@@ -71,12 +74,16 @@ export class ZonesLayer {
     const cGrey: N = uniform(new Vector3(g300[0], g300[1], g300[2]))
     const cRed: N = uniform(new Vector3(r500[0], r500[1], r500[2]))
     const hero: N = abs(zi.sub(this.uHero)).lessThan(0.5)
-    m.colorNode = vec4(select(hero, cRed, cGrey) as N, 1) as N
+    m.colorNode = vec4(varying(outputTransform(select(hero, cRed, cGrey)), 'vZoneColor') as N, 1) as N
+    m.userData.awrOutputInVertex = true
     m.opacityNode = Fn(() => {
+      const a: N = select(hero, float(ZONES.heroWallA), this.uWallA)
+      // Tier S has no hatch (uHatch 0): its walls skip the per-fragment stripe term altogether (FX2-R2)
+      if (tier === 'S') return a
       const p: N = positionLocal
       const stripe: N = abs(fract(p.x.add(p.y).add(p.z).div(ZONES.hatchM * Math.SQRT2)).sub(0.5)).lessThan(0.08)
       const hatch: N = mix(float(1), select(stripe, float(2.5), float(0.6)), this.uHatch)
-      return select(hero, float(ZONES.heroWallA), this.uWallA).mul(hatch)
+      return a.mul(hatch)
     })() as N
     m.transparent = true
     m.depthWrite = false
@@ -165,6 +172,13 @@ export class ZonesLayer {
   setWidth(dpr: number): void {
     this.topSolid.setWidth(dpr)
     this.topDashed.setWidth(dpr)
+  }
+
+  /** once per frame: raster/CSS ratio, drawing buffer and camera near plane of the screen-space top outlines */
+  setView(dpr: number, dbW: number, dbH: number, near: number): void {
+    this.setWidth(dpr)
+    this.topSolid.setView(dbW, dbH, near)
+    this.topDashed.setView(dbW, dbH, near)
   }
 
   drawCount(): number {

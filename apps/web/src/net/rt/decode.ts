@@ -4,7 +4,9 @@
 // offset, length, seq, sample time); compose() decodes the dirty channels into the worker's persistent slot image: swarm
 // Lite32 into the SoA, Full64 and EnvSample32/SensorPose48 copied as-is, msgpack/json decoded onto the control path.
 // Receive statistics per 1 s window: swarmHz, selHz (the 60 Hz channels, highest per-channel rate), focusHz (median of
-// the per-channel rates of the 30 Hz channels), bytesPerS. The steady path allocates nothing except the one Uint8Array
+// the per-channel rates of the 30 Hz channels), bytesPerS; selJitterMs is the p95 of |Δw − 1000/selHz| over the last 64
+// worker arrival intervals of the 60 Hz channels (FX2-R3: the focus delay D_focus of ADR-046 is computed from these
+// arrivals; the main thread only sees the latest sample per channel and frame, so its own arrival times are frame times). The steady path allocates nothing except the one Uint8Array
 // per received buffer that the byte copies read from (cached for consecutive records of the same message).
 import { decode as mpDecode } from '@msgpack/msgpack'
 import { BATCH_GAP, BATCH_REPLAY, BATCH_SNAPSHOT, ENC_JSON, ENC_MSGPACK, ENC_RAW, RF_RESET, SL32, decodeSwarmLite32Into, nextRecord } from './layouts'
@@ -23,6 +25,9 @@ export const K_ROSTER = 6
 /** selected-vehicle and focus-set rates (AWR-17 §6.6 default subscription set) */
 export const SEL_RATE = 60
 export const FOCUS_RATE = 30
+/** 60 Hz channels tracked for the arrival jitter, and the interval ring length */
+export const SEL_SLOTS = 16
+export const SEL_DW = 64
 
 export type CtrlMsg = { op: string } & Record<string, unknown>
 
@@ -177,6 +182,16 @@ export class Decoder {
   selHz = 0
   focusHz = 0
   bytesPerS = 0
+  /** arrival jitter p95 of the 60 Hz channels (ms, worker time); NaN until 8 intervals are known */
+  selJitterMs = Number.NaN
+  // last worker arrival per 60 Hz channel (at most SEL_SLOTS channels; the selection subscribes at most 8) and a ring of
+  // the last SEL_DW arrival intervals over all of them
+  private readonly selCh = new Int32Array(SEL_SLOTS).fill(-1)
+  private readonly selAt = new Float64Array(SEL_SLOTS)
+  private readonly selDw = new Float64Array(SEL_DW)
+  private selDwN = 0
+  private selDwHead = 0
+  private readonly selTmp = new Float64Array(SEL_DW)
   // one Uint8Array per received buffer, reused for consecutive records of the same message
   private u8Buf: ArrayBuffer | null = null
   private u8View: Uint8Array = new Uint8Array(0)
@@ -244,8 +259,9 @@ export class Decoder {
         if (kind === K_SWARM) {
           this.swarmRecvAt = now
           this.winSwarm++
-        } else if (kind === K_FULL && this.winCount[c]++ === 0 && this.winListN < this.winList.length) {
-          this.winList[this.winListN++] = c
+        } else if (kind === K_FULL) {
+          if (this.winCount[c]++ === 0 && this.winListN < this.winList.length) this.winList[this.winListN++] = c
+          if (ct.rate[c] >= SEL_RATE) this.selArrival(c, now)
         }
       }
     } catch {
@@ -253,6 +269,40 @@ export class Decoder {
       return false
     }
     return true
+  }
+
+  /** one arrival of a 60 Hz channel record at worker time now (ms) */
+  private selArrival(c: number, now: number): void {
+    let k = -1
+    let free = -1
+    for (let i = 0; i < SEL_SLOTS; i++) {
+      if (this.selCh[i] === c) {
+        k = i
+        break
+      }
+      if (free < 0 && this.selCh[i] < 0) free = i
+    }
+    if (k < 0) {
+      k = free >= 0 ? free : (c % SEL_SLOTS)
+      this.selCh[k] = c
+      this.selAt[k] = now
+      return
+    }
+    const d = now - this.selAt[k]
+    this.selAt[k] = now
+    // several records of one channel in one message (catch-up) share the arrival: no interval
+    if (!(d > 0) || d > 1000) return
+    this.selDw[this.selDwHead] = d
+    this.selDwHead = (this.selDwHead + 1) % SEL_DW
+    if (this.selDwN < SEL_DW) this.selDwN++
+  }
+
+  /** forget the 60 Hz arrival history (unsubscribe of the selection, new session) */
+  resetSel(): void {
+    this.selCh.fill(-1)
+    this.selDwN = 0
+    this.selDwHead = 0
+    this.selJitterMs = Number.NaN
   }
 
   /** roll the 1 s receive window (called on every received message) */
@@ -276,6 +326,7 @@ export class Decoder {
     }
     this.selHz = sel
     this.focusHz = nf > 0 ? median(this.tmp, nf) : 0
+    this.selJitterMs = sel > 0 && this.selDwN >= 8 ? jitterP95(this.selDw, this.selDwN, 1000 / sel, this.selTmp) : Number.NaN
     this.winSwarm = 0
     this.winBytes = 0
     this.winListN = 0
@@ -383,6 +434,20 @@ export class Decoder {
 }
 
 const composeOut: ComposeOut = { swarmN: 0, swarmSeq: 0, swarmTSimMs: 0, fullN: 0, rawN: 0, fresh: false }
+
+/** p95 of |d − ideal| over the first n values of d (insertion sort into tmp; n <= tmp.length) */
+export function jitterP95(d: Float64Array, n: number, ideal: number, tmp: Float64Array): number {
+  for (let i = 0; i < n; i++) {
+    const v = Math.abs(d[i] - ideal)
+    let j = i - 1
+    while (j >= 0 && tmp[j] > v) {
+      tmp[j + 1] = tmp[j]
+      j--
+    }
+    tmp[j + 1] = v
+  }
+  return tmp[Math.min(n - 1, Math.floor(0.95 * n))]
+}
 
 /** median of the first n values (insertion sort in place; n <= 512) */
 export function median(a: Float32Array, n: number): number {

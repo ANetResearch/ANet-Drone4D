@@ -5,6 +5,7 @@
 // false and drop this code (M06-AC-010).
 import { FLIGHT_STATE_NAMES } from '@awr/contracts/enums'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
+import { activePointCloud, governor } from '@/engine'
 import { rtClient } from '@/net/rt'
 import { selection } from '@/stores/selection'
 import { vp } from './session'
@@ -26,6 +27,12 @@ export function installTestHooks(): void {
     },
     pickAt: (x: number, y: number) => pick.at(x, y),
     pickFull: (x: number, y: number, want: ('drone' | 'point' | 'ground')[]) => pick.pickAt(x, y, { want }),
+    /** point-cloud pick (ID pass) at CSS px: ENU, class, HAG, node spacing; and the last click's point */
+    pointAt: async (x: number, y: number) => {
+      const p = await pick.pointAt(x, y)
+      return p ? { ...p, pointEnu: Array.from(p.pointEnu) } : null
+    },
+    pointPick: () => (vp.pointPick ? { ...vp.pointPick, pointEnu: Array.from(vp.pointPick.pointEnu) } : null),
     ground: () => pick.ground,
     sendGoto: () => mission.sendGoto()?.target ?? null,
     gotoState: () => mission.gotoState,
@@ -85,6 +92,13 @@ export function installTestHooks(): void {
     },
     labels: () => vp.labels?.shown() ?? [],
     zones: () => vp.zones?.zones.map((z) => ({ id: z.id, kind: z.kind, z0: z.z0, z1: z.z1, n: z.ring.length / 2 })) ?? [],
+    /** PerfGovernor wiring: CAS attached (M05 services.cas) and the knob levels in step order */
+    governor: () => ({ hasCas: governor().hasCas, knobs: governor().knobLevels() }),
+    /** M05 point-cloud engine state the viewport relies on: EDL material bound (Tier B/A), class-11 hero demotion */
+    pointCloud: () => {
+      const e = activePointCloud()
+      return e ? { edl: e.edlMaterial !== null, heroDemoted: e.heroClassActive } : null
+    },
     /** the viewport session (debugging only) */
     vpSession: vp,
     /** layer roots under WorldRoot: name, visibility, children (debugging) */

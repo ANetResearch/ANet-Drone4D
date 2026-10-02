@@ -1,3 +1,4 @@
+import { hypot3 } from '../../hypot'
 // LOD camera, frustum planes and AABB tests in the layer frame (M05 §6.4, §6.2.1; port of g02 lod.mjs makeCamera and
 // classify). Owner: M05. Pure (no DOM, no clock); float64 throughout.
 //
@@ -71,7 +72,7 @@ export function distToBox(tmin: Float64Array, tmax: Float64Array, i: number, e: 
   const dx = Math.max(tmin[o] - e[0], 0, e[0] - tmax[o])
   const dy = Math.max(tmin[o + 1] - e[1], 0, e[1] - tmax[o + 1])
   const dz = Math.max(tmin[o + 2] - e[2], 0, e[2] - tmax[o + 2])
-  return Math.hypot(dx, dy, dz)
+  return hypot3(dx, dy, dz)
 }
 
 const M = new Float64Array(16)
@@ -89,7 +90,7 @@ function mul4(a: ArrayLike<number>, b: ArrayLike<number>, out: Float64Array): Fl
 }
 
 function setPlane(out: Float64Array, p: number, a: number, b: number, c: number, d: number): void {
-  const l = Math.hypot(a, b, c) || 1
+  const l = hypot3(a, b, c) || 1
   out[4 * p] = a / l
   out[4 * p + 1] = b / l
   out[4 * p + 2] = c / l
@@ -162,14 +163,14 @@ export function lodCameraLookAt(eye: ArrayLike<number>, tgt: ArrayLike<number>, 
   let fx = tgt[0] - eye[0]
   let fy = tgt[1] - eye[1]
   let fz = tgt[2] - eye[2]
-  const fl = Math.hypot(fx, fy, fz) || 1
+  const fl = hypot3(fx, fy, fz) || 1
   fx /= fl
   fy /= fl
   fz /= fl
   let rx = fy
   let ry = -fx
   let rz = 0
-  let rl = Math.hypot(rx, ry, rz)
+  let rl = hypot3(rx, ry, rz)
   if (rl < 1e-9) {
     rx = 1
     ry = 0

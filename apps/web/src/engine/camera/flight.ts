@@ -6,6 +6,7 @@
 // tiers cut directly to B (the caller checks the tier).
 import { EASE, MOTION } from '@/lib/tokens/motion.gen'
 import { bezierAt } from '../anim/bezier'
+import { hypot3 } from '../hypot'
 
 export type FlightReason = 'mode' | 'focus' | 'viewcube' | 'home' | 'dblclick' | 'north' | 'pose'
 
@@ -31,7 +32,7 @@ export class CameraFlight {
       this.a[i] = from[i]
       this.b[i] = to[i]
     }
-    const d = Math.max(Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]), Math.hypot(to[3] - from[3], to[4] - from[4], to[5] - from[5]))
+    const d = Math.max(hypot3(to[0] - from[0], to[1] - from[1], to[2] - from[2]), hypot3(to[3] - from[3], to[4] - from[4], to[5] - from[5]))
     this.durMs = flightDurationS(d) * 1000
     this.t0 = nowMs
     this.active = true

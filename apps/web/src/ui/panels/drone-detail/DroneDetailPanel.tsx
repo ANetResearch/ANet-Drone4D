@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsPanels, TabsTrigger } from '@/ui/compo
 import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { Icon } from '@/ui/icons/Icon'
 import { StateIcon } from '@/ui/icons/StateIcon'
+import { leaveReplay, replayDeniedKey } from '@/ui/views/replayFlow'
 import { LfStat } from '@/ui/lf/LfStat'
 import { PanelEmpty } from '@/ui/brand'
 import { CallButton } from '@/ui/actions/CallButton'
@@ -39,7 +40,7 @@ import { useRedOwner } from '@/ui/notify/redFigures'
 import { useCameraMode } from '@/ui/layout/ViewportOverlay'
 import { useRt } from '@/ui/shell/RtContext'
 import { apiGet } from '@/net/api'
-import { useConnView } from '@/ui/shell/connView'
+import { connViewStore, useConnView } from '@/ui/shell/connView'
 import { requestControl } from '@/ui/shell/control'
 import { writeDeniedKey } from '@/ui/shell/guards'
 import { toolMode } from '@/ui/tools/toolMode'
@@ -135,11 +136,24 @@ function Commands({ id, ground }: { id: string; ground: GroundPickView | null })
   const denied = writeDeniedKey()
   const altM = Number(alt)
   const altOk = Number.isFinite(altM) && altM >= TAKEOFF_ALT.minM && altM <= TAKEOFF_ALT.maxM
-  if (denied === 'hint.readOnly') {
+  // read-only and replay replace the command group by one notice instead of greying every button (AWR-14 §7.1 DroneRail
+  // row, §7.8 "隐藏为一处说明"); a read-only session that goes offline keeps its notice. An operator that loses the
+  // connection keeps the greyed group with the offline reason, so a short reconnect does not reflow the panel.
+  const cv = connViewStore.getState()
+  const readOnly = cv.role === 'viewer' || (cv.role !== null && cv.seat !== 'held')
+  const notice = denied === 'hint.replay' ? 'hint.replay' : denied === 'hint.readOnly' || (denied === 'hint.offline' && readOnly) ? 'hint.readOnly' : null
+  if (notice) {
     return (
-      <div data-readonly-commands="" className="flex items-center justify-between gap-2 rounded-md border border-dashed px-2 py-1.5 text-hud-sub text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5"><Icon icon="layer.visible" />{t('detail.readOnly')}</span>
-        <Button size="xs" variant="outline" onClick={() => void requestControl(rt)}>{t('control.request')}</Button>
+      <div data-readonly-commands="" data-reason={notice} className="flex items-center justify-between gap-2 rounded-md border border-dashed px-2 py-1.5 text-hud-sub text-muted-foreground">
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <Icon icon={notice === 'hint.replay' ? 'tl.history' : 'layer.visible'} />
+          <span className="truncate">{notice === 'hint.readOnly' ? t('detail.readOnly') : t(notice)}</span>
+        </span>
+        {notice === 'hint.readOnly' && denied !== 'hint.offline' ? (
+          <Button size="xs" variant="outline" onClick={() => void requestControl(rt)}>{t('control.request')}</Button>
+        ) : notice === 'hint.replay' && replayDeniedKey() === null ? (
+          <Button size="xs" variant="outline" onClick={() => void leaveReplay()}>{t('replay.backToLive')}</Button>
+        ) : null}
       </div>
     )
   }
@@ -152,9 +166,9 @@ function Commands({ id, ground }: { id: string; ground: GroundPickView | null })
   const gotoReason = reason('goto')
   return (
     <div className="flex flex-col gap-1.5" data-commands="">
-      <div className="flex items-center gap-1">
-        <ButtonGroup>
-          <CallButton cmdKey={cmdKeyOf(id, 'takeoff')} op="takeoff" icon="cmd.takeoff" label={t('command.cmd.takeoff')} hotkey="shift+KeyT"
+      {/* labelled command group (AWR-14 §4.4): take-off, hover, land, return home on one row, GoTo and "more" below */}
+      <ButtonGroup className="w-full [&>*]:flex-1">
+          <CallButton showLabel cmdKey={cmdKeyOf(id, 'takeoff')} op="takeoff" icon="cmd.takeoff" label={t('command.cmd.takeoff')} hotkey="shift+KeyT"
             disabledReason={reason('takeoff')} onRun={() => runVehicleCmd('takeoff', id, { alt_m: altM })}
             confirm={{
               title: t('command.confirm.takeoff.title'), body: t('command.confirm.takeoff.body', { alt: altOk ? fmt.num(altM, 1) : alt }), action: t('command.cmd.takeoff'),
@@ -167,17 +181,18 @@ function Commands({ id, ground }: { id: string; ground: GroundPickView | null })
                 </Field>
               ),
             }} />
-          <CallButton cmdKey={cmdKeyOf(id, 'hover')} op="hover" icon="cmd.hover" label={t('command.cmd.hover')} hotkey="KeyH"
+          <CallButton showLabel cmdKey={cmdKeyOf(id, 'hover')} op="hover" icon="cmd.hover" label={t('command.cmd.hover')} hotkey="KeyH"
             disabledReason={reason('hover')} onRun={() => runVehicleCmd('hover', id)} />
-          <CallButton cmdKey={cmdKeyOf(id, 'land')} op="land" icon="cmd.land" label={t('command.cmd.land')} hotkey="shift+KeyL"
+          <CallButton showLabel cmdKey={cmdKeyOf(id, 'land')} op="land" icon="cmd.land" label={t('command.cmd.land')} hotkey="shift+KeyL"
             disabledReason={reason('land')} onRun={() => runVehicleCmd('land', id)}
             confirm={{ title: t('command.confirm.land.title'), body: t('command.confirm.land.body'), action: t('command.cmd.land') }} />
-          <CallButton cmdKey={cmdKeyOf(id, 'rtl')} op="rtl" icon="cmd.rth" label={t('command.cmd.rth')} hotkey="shift+KeyR"
+          <CallButton showLabel cmdKey={cmdKeyOf(id, 'rtl')} op="rtl" icon="cmd.rth" label={t('command.cmd.rth')} hotkey="shift+KeyR"
             disabledReason={reason('rtl')} onRun={() => runVehicleCmd('rtl', id)}
             confirm={{ title: t('command.confirm.rth.title'), body: t('command.confirm.rth.body'), action: t('command.cmd.rth') }} />
-          <CallButton cmdKey={cmdKeyOf(id, 'goto')} op="goto" icon="cmd.goto" label={t('command.cmd.goto')} hotkey="KeyG"
-            disabledReason={gotoReason} onRun={() => (target ? void runGoto(id) : toolMode.enterGoto(id))} />
-        </ButtonGroup>
+      </ButtonGroup>
+      <div className="flex items-center gap-1">
+        <CallButton showLabel className="flex-1" cmdKey={cmdKeyOf(id, 'goto')} op="goto" icon="cmd.goto" label={t('command.cmd.goto')} hotkey="KeyG"
+          disabledReason={gotoReason} onRun={() => (target ? void runGoto(id) : toolMode.enterGoto(id))} />
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button size="sm" variant="outline" aria-label={t('detail.more')} />}>
             <Icon icon="more" />
@@ -214,11 +229,15 @@ function Telemetry({ id }: { id: string }) {
   const r = React.useMemo(() => readers(id), [id])
   const v = vehicleState(id)
   return (
-    <div className="grid grid-cols-2 gap-2" data-telemetry="">
-      <LfStat label={t('detail.alt')} bind={r.alt} format={fmt1} unit="m" />
-      <LfStat label={t('detail.speed')} bind={r.speed} format={fmt1} unit="m/s" />
-      <LfStat label={t('detail.battery')} value={v && v.battery !== 255 ? v.battery : Number.NaN} format={(x) => fmt.num(x)} unit="%" cls="D" />
-      <LfStat label={t('detail.heading')} bind={r.yaw} format={fmt.heading} />
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2" data-telemetry="">
+        <LfStat label={t('detail.alt')} bind={r.alt} format={fmt1} unit="m" />
+        <LfStat label={t('detail.speed')} bind={r.speed} format={fmt1} unit="m/s" />
+        <LfStat label={t('detail.battery')} value={v && v.battery !== 255 ? v.battery : Number.NaN} format={(x) => fmt.num(x)} unit="%" cls="D" />
+        <LfStat label={t('detail.heading')} bind={r.yaw} format={fmt.heading} />
+      </div>
+      {/* fidelity (M16-FR-006, PRD-AC-005): every value here comes from the simulator, not from a real vehicle */}
+      <p className="text-hud-cap text-muted-foreground" data-honesty="simulated">{t('detail.simulatedNote')}</p>
     </div>
   )
 }
@@ -284,6 +303,12 @@ export function DroneDetailPanel() {
   const v = primary ? vehicleState(primary) : null
   const ownerIcon = v ? OWNER_ICON[v.owner] : null
   const profileSt = useProfileStatus(entry?.model)
+  // the selection went away (Esc, a new epoch pruned it, the vehicle was removed): back to the list instead of an empty page
+  const hadPrimary = React.useRef(primary !== null)
+  React.useEffect(() => {
+    if (primary === null && hadPrimary.current) prefs.setLayout({ right: { page: 'list' } })
+    hadPrimary.current = primary !== null
+  }, [primary])
   return (
     <div className="flex flex-col gap-2" data-drone-detail={primary ?? ''}>
       <Button size="xs" variant="ghost" className="self-start" onClick={() => prefs.setLayout({ right: { page: 'list' } })}>
