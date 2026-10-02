@@ -9,12 +9,16 @@
 - `sim`：`rtf`、`step_*`、`catchup_saturated` 取环头部，其余取 `state/sim-core/perf`；`geo` 取 `state/sim-core/perf.geo`。
 - 窗口：每 1 s 把数值字段展平（`api.*`、`sim.*`、`geo.*`，以及各连接字段在全部连接上的最大值 `clients.*`）放进 600 项环；
   `window(s)` 返回每个字段在窗口内的 `{p50, p95, p99, max, count}` 与 `t_from_unix_ns`、`t_to_unix_ns`（字符串）。
+  环项按列存放（FX2-R3-gateway，D1-AC-29）：字段名只登记一次（列号表），每秒一行 `array('d')`（缺失为 NaN），
+  每行约 0.3 KB；此前每秒一个以新建字符串为键的 dict（约 2.7 KB/行），600 行约 1.6 MB，在 soak 前 10 min 表现为 RSS 爬升。
 """
 
 from __future__ import annotations
 
+import math
 import os
 import time
+from array import array
 from collections import deque
 from typing import Any
 
@@ -70,7 +74,8 @@ class Metrics:
         self.lag = LagSampler()
         self.tick_ages: list[float] = []
         self.tick_ms: list[float] = []  # on_tick 耗时（不含 send）
-        self.ring: deque[tuple[int, dict[str, float]]] = deque(maxlen=WINDOW_MAX_S)
+        self.ring: deque[tuple[int, array]] = deque(maxlen=WINDOW_MAX_S)  # (t_unix_ns, 按列号的数值行，缺失为 NaN)
+        self.cols: dict[str, int] = {}  # 字段名 -> 列号（只增，新字段追加在末尾）
         self._enc_mark = 0
         self._bytes_mark = 0
         self._t_mark = time.monotonic()
@@ -109,26 +114,36 @@ class Metrics:
         self._record(msg)
         return msg
 
+    def _col(self, key: str) -> int:
+        i = self.cols.get(key)
+        if i is None:
+            i = self.cols[key] = len(self.cols)
+        return i
+
     def _record(self, msg: dict[str, Any]) -> None:
-        flat: dict[str, float] = {}
+        vals: list[tuple[int, float]] = []
         for sec in ("api", "sim", "geo"):
             for k, v in (msg.get(sec) or {}).items():
                 if isinstance(v, (int, float)) and not isinstance(v, bool):
-                    flat[f"{sec}.{k}"] = float(v)
+                    vals.append((self._col(f"{sec}.{k}"), float(v)))
         for k in CLIENT_FIELDS:
-            vals = [float(c[k]) for c in msg.get("clients") or [] if isinstance(c.get(k), (int, float))]
-            if vals:
-                flat[f"clients.{k}"] = max(vals)
-        self.ring.append((time.time_ns(), flat))
+            cv = [float(c[k]) for c in msg.get("clients") or [] if isinstance(c.get(k), (int, float))]
+            if cv:
+                vals.append((self._col(f"clients.{k}"), max(cv)))
+        row = array("d", [math.nan]) * len(self.cols)
+        for i, v in vals:
+            row[i] = v
+        self.ring.append((time.time_ns(), row))
 
     def window(self, seconds: int) -> dict[str, Any]:
         t_to = time.time_ns()
         t_from = t_to - int(seconds) * 1_000_000_000
-        rows = [f for t, f in self.ring if t >= t_from]
-        keys = sorted({k for f in rows for k in f})
+        rows = [r for t, r in self.ring if t >= t_from]
         fields: dict[str, dict[str, float | int]] = {}
-        for k in keys:
-            a = np.asarray([f[k] for f in rows if k in f], np.float64)
+        for k in sorted(self.cols):
+            i = self.cols[k]
+            a = np.asarray([r[i] for r in rows if len(r) > i], np.float64)
+            a = a[~np.isnan(a)]
             if a.size == 0:
                 continue
             p = np.percentile(a, [50, 95, 99])

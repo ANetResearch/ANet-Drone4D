@@ -17,21 +17,36 @@ from typing import Any
 
 from ..urbanscene3d.cities import CITIES, CITY_IDS, ZoneDef
 
-__all__ = ["LADDER_AGL_M", "LADDER_CENTER", "LADDER_NS", "LADDER_START_S", "build_all", "catalog_doc", "circle_zone",
+__all__ = ["LADDER_AGL_M", "LADDER_CENTER", "LADDER_CENTERS", "LADDER_NS", "LADDER_START_S", "build_all", "catalog_doc", "circle_zone",
            "dumps_canonical", "free_scenario", "ladder_scenario", "ladder_sets", "ring", "s1_scenario", "soak_scenario",
            "square", "write_json_canonical", "zones_doc"]
 
 SCHEMA = {"schema": "awr.scenario.v1", "schema_version": "1.0.0"}
 ZERO_SHA = "0" * 64
 
-# ---------------------------------------------------------------- ladder（M16 §6.4.8）
+# ---------------------------------------------------------------- ladder（M16 §6.4.8；ADR-062 修订）
 LADDER_CENTER = (-375.0, 20.0)
-LADDER_SPACING_M = 24.0
-LADDER_OFFSETS = ((0.0, 0.0), (12.0, 0.0), (0.0, 12.0), (12.0, 12.0))     # L0–L3 相对 L0 的偏移（12 m 交错格网）
+LADDER_SPACING_M = 40.0
+LADDER_OFFSET_M = 20.0
+LADDER_OFFSETS = ((0.0, 0.0), (20.0, 0.0), (0.0, 20.0), (20.0, 20.0))     # L0–L3 相对 L0 的偏移（20 m 交错格网）
+# 各规模的格网中心（ADR-062）：占地随 20 m 格距增大，n200 起西移，使出生点 8 m 内 HAG ≤ 35 m、border 余量 ≥ 50 m，
+# 且 n200（soak 与 S1 同场）东缘出生点 x = −285（与 v1 相同），环绕外缘到 S1 出生点、螺旋与返航线的水平距离 ≥ 50 m
+# （52.9 m，M16 §7.3.4）；n1000 为满足上述条件、离原中心最近的格点
+LADDER_CENTERS = {10: (-375.0, 20.0), 50: (-375.0, 20.0), 100: (-375.0, 20.0), 200: (-435.0, 20.0), 500: (-510.0, 20.0),
+                  1000: (-505.0, -45.0)}
 LADDER_AGL_M = (60.0, 75.0, 90.0, 105.0)
 LADDER_START_S = (15.0, 10.0, 5.0, 0.0)                                     # 高层先飞，错时 5 s
 LADDER_NS = (10, 50, 100, 200, 500, 1000)
-LADDER_ORBIT = {"radius_m": 3, "speed_mps": 2, "turns": 20, "cw": False, "yaw": "center"}
+# 稳态标记 `ladder.steady` 的时刻（仿真 s，ADR-070）：全体入圆之后。n10–n200 为 45 s（L0 在 15 s 起飞、爬升约 21 s）；
+# n500、n1000 受任务下发节流（每次 stage 4 条、每机 takeoff 与 orbit 两条）与入圆段 3 m/s 的爬升约束，进程内逐 5 s 统计
+# （FX2-R3-sim）：n500 的直线入圆段在 70 s 全部转入环绕，n1000 在 100 s（85 s 时仍有 255 架在爬升），取 75、110 s。
+# 此前 n1000 在 45 s 标记，测量窗口里 1000 架仍在起飞与转场（D1 验收第 2 轮 4.1）
+LADDER_STEADY_S = {500: 75, 1000: 110}
+# 3 m、1.2 m/s：航向朝心的偏航角速度 22.9°/s ≤ P600 上限 30°/s 的 90%（V-SC-15；v1 的 2 m/s 需要 38.2°/s，航向误差累积后
+# 触发 TILT_ERR_KILL，ADR-062），向心加速度 0.48 m/s²，一圈 15.7 s
+LADDER_ORBIT = {"radius_m": 3, "speed_mps": 1.2, "turns": 20, "cw": False, "yaw": "center"}
+# soak 的 ladder 环绕：orbit `turns` ≤ 100（AWR-12 §5.3），100 圈 × 2π·3 m / 1.0 m/s = 1885 s ≈ 31 min ≥ 30 min soak（FX2-R3-sim）
+SOAK_ORBIT_TURNS, SOAK_ORBIT_SPEED_MPS = 100, 1.0
 
 
 def _r(v: float, nd: int = 3) -> float:
@@ -160,19 +175,22 @@ def s1_scenario(pin: str | None = None) -> dict:
     }
 
 
-def ladder_sets(n: int, center: tuple[float, float] = LADDER_CENTER, spacing_m: float = LADDER_SPACING_M,
-                offset_m: float = 12.0, agl_m: tuple[float, ...] = LADDER_AGL_M, id_prefix: str = "sim",
-                profile_id: str = "p600_mid360", turns: int = 20) -> list[dict]:
-    """ladder 的 4 个高度层（M16 §6.4.8 表）：各层机数 N//4（余数给低层），同层格距 24 m，12 m 交错，高层先飞。"""
+def ladder_sets(n: int, center: tuple[float, float] | None = None, spacing_m: float = LADDER_SPACING_M,
+                offset_m: float = LADDER_OFFSET_M, agl_m: tuple[float, ...] = LADDER_AGL_M, id_prefix: str = "sim",
+                profile_id: str = "p600_mid360", turns: int = 20, speed_mps: float | None = None) -> list[dict]:
+    """ladder 的 4 个高度层（M16 §6.4.8 表，ADR-062 修订）：各层机数 N//4（余数给低层），同层格距 40 m，20 m 交错，高层先飞。
+    任意两机出生点水平距离 ≥ 20 m：爬升与返航下降都在出生点正上方，跨层机对的几何下界为 20 − 3 = 17 m（V-SC-14）。"""
     if n < 4:
         raise ValueError("ladder needs at least 4 vehicles (one per layer)")
+    if center is None:
+        center = LADDER_CENTERS.get(n, LADDER_CENTER)
     counts = [n // 4 + (1 if i < n % 4 else 0) for i in range(4)]
     cols = math.ceil(math.sqrt(counts[0]))
     rows = math.ceil(counts[0] / cols)
     w = (cols - 1) * spacing_m + offset_m
     h = (rows - 1) * spacing_m + offset_m
     ox, oy = center[0] - w / 2, center[1] - h / 2
-    offs = tuple((dx * offset_m / 12.0, dy * offset_m / 12.0) for dx, dy in LADDER_OFFSETS)
+    offs = tuple((dx * offset_m / LADDER_OFFSET_M, dy * offset_m / LADDER_OFFSET_M) for dx, dy in LADDER_OFFSETS)
     out, start = [], 1
     for L in range(4):
         out.append({
@@ -182,26 +200,34 @@ def ladder_sets(n: int, center: tuple[float, float] = LADDER_CENTER, spacing_m: 
                        "spacing_m": _r(spacing_m), "cols": cols},
             "mission": {"generator": "orbit", "center": "home", "start": {"at_s": _r(LADDER_START_S[L])},
                         "params": {"radius_m": LADDER_ORBIT["radius_m"], "agl_m": _r(agl_m[L]),
-                                   "speed_mps": LADDER_ORBIT["speed_mps"], "turns": turns,
+                                   "speed_mps": _r(LADDER_ORBIT["speed_mps"] if speed_mps is None else speed_mps), "turns": turns,
                                    "cw": LADDER_ORBIT["cw"], "yaw": LADDER_ORBIT["yaw"]}}})
         start += counts[L]
     return out
 
 
+def _ladder_events(t_s: float) -> list[dict]:
+    return [{"event_id": "steady", "when": {"metric": "elapsed_s", "op": ">=", "value": _r(t_s)},
+             "action": "mark", "args": {"label": "ladder.steady"}}]
+
+
 def ladder_scenario(pin: str | None = None) -> dict:
     """机群阶梯（M16 §6.4.8、§7.3.3）：缺省即 n200；每个 `n<N>` profile 写出完整的 4 个 set（数组整体替换）。"""
     profiles: dict[str, Any] = {f"n{n}": {"vehicle_sets": ladder_sets(n)} for n in LADDER_NS}
+    for n, t_s in LADDER_STEADY_S.items():
+        profiles[f"n{n}"]["events"] = _ladder_events(t_s)
     profiles["x500"] = {"vehicle_sets": ladder_sets(200, profile_id="x500")}
     return {
         **_head("ladder-shenzhen", "shenzhen", "Shenzhen fleet ladder", "深圳机群阶梯",
-                "Four altitude layers (60/75/90/105 m AGL) on a staggered 12 m grid take off top layer first and orbit "
+                "Four altitude layers (60/75/90/105 m AGL) on a staggered 20 m grid take off top layer first and orbit "
                 "their homes; profiles n10 to n1000 select the fleet size.", pin),
         "seed": 7, "rate": 1, "gcs_loss_policy": "ignore", "record": False, "energy_precheck": "warn",
         "time_limit_s": 600, "on_complete": "continue", "env": {"preset": "partlyCloudy"},
-        "transit": {"planner": "direct", "margin_m": 5, "layer_dz_m": 4},
+        # 转场不按 rank 分层（layer_dz_m 0，ADR-070）：入圆段在各自出生点的竖直柱内（出生点两两 ≥ 20 m，ADR-062），航线不交叉；
+        # 此前 4 m × rank 使 250 机任务的高 rank 机体先爬到限高附近再下降，n1000 有约 300 架 150 s 后仍在转场
+        "transit": {"planner": "direct", "margin_m": 5, "layer_dz_m": 0},
         "vehicle_sets": ladder_sets(200),
-        "events": [{"event_id": "steady", "when": {"metric": "elapsed_s", "op": ">=", "value": 45},
-                    "action": "mark", "args": {"label": "ladder.steady"}}],
+        "events": _ladder_events(45),
         "success": {"all": [
             {"metric": "missions_done", "op": "==", "value": True},
             {"metric": "guard_events", "op": "==", "value": 0},
@@ -230,9 +256,11 @@ def free_scenario(world_id: str, pad: tuple[float, float] | None = None, spacing
     }
 
 
-def _grid_vehicles(prefix: str, count: int, origin: tuple[float, float], cols: int, spacing_m: float = 6.0) -> list[dict]:
+def _grid_vehicles(prefix: str, count: int, origin: tuple[float, float], cols: int, spacing_m: float = 12.0) -> list[dict]:
     """编组机体（M16 §6.4.4、§6.4.6 的 `vehicle_sets` 等价展开）：`scenario.schema.json` 的 `id_prefix` 只允许
-    `^[a-z0-9]+$`，而定稿 id 为 `p600-a-01`，因此写成显式 `vehicles[]`（网格、间距 6 m），id 与 M16 §6.4 一致。"""
+    `^[a-z0-9]+$`，而定稿 id 为 `p600-a-01`，因此写成显式 `vehicles[]`（网格），id 与 M16 §6.4 一致。
+    间距 12 m（FX2-R2，ADR-065，同 ADR-059 对 S3 的修订）：此前 6 m，编组同时起飞爬升时相邻机体水平 6 m，低于 FleetGuard
+    10 m 告警线，S2、S4 的 `min_separation_m ≥ 10` 必然不成立（D1 验收第 1 轮：5.78 m、5.66 m）。"""
     out = []
     for k in range(count):
         r_, c_ = divmod(k, cols)
@@ -284,10 +312,16 @@ S3_TARGETS = (("t1", (-24.0, -1253.0)), ("t2", (160.0, -1060.0)), ("t3", (-290.0
 
 def s3_scenario(pin: str | None = None) -> dict:
     """S3 纽约港口搜救与 thermal 复核（M16 §6.4.5；M14 §6.10.3、§6.11.2、§7.4；D1-ext）。"""
-    rtl_after_search = [
-        {"event_id": f"home-{v}", "when": {"metric": "missions_done", "args": {"mission_ids": ["m-search"]}, "op": "==",
-                                          "value": True},
-         "action": "cmd", "args": {"vehicle_id": f"p600-{v}", "op": "rtl", "args": {}}} for v in ("b1", "b2", "c1")]
+    # FX-SIM2（ADR-059）：复核确认（target_confidence{t1} ≥ 0.9）后，复核候选与中继先中止各自任务（on_abort = rtl，任务
+    # ABORTED，租约交还后 M10 不再续飞），再以 rtl 兜底（任务已 DONE 时 abort 回 105）。原设计在搜索结束（约 710 s）才返航，
+    # b1/b2/c1 到 900 s 时限仍未落地，landed_all 为假（多进程实测）。
+    conf = {"metric": "target_confidence", "args": {"target_id": "t1"}, "op": ">=", "value": 0.9}
+    rtl_after_verify = []
+    for v, mid in (("b1", "m-standby-b1"), ("b2", "m-standby-b2"), ("c1", "m-relay")):
+        rtl_after_verify += [
+            {"event_id": f"release-{v}", "when": dict(conf), "action": "mission.abort", "args": {"mission_id": mid}},
+            {"event_id": f"home-{v}", "when": dict(conf), "action": "cmd",
+             "args": {"vehicle_id": f"p600-{v}", "op": "rtl", "args": {}}}]
     return {
         **_head("s3-newyork-sar", "newyork", "New York harbour search and thermal verification",
                 "纽约港口搜救与热成像复核",
@@ -296,29 +330,34 @@ def s3_scenario(pin: str | None = None) -> dict:
         "seed": 7, "rate": 1, "gcs_loss_policy": "ignore", "time_limit_s": 900, "energy_precheck": "reject",
         "env": {"preset": "partlyCloudy"},
         "vehicles": [
-            {"vehicle_id": "p600-a1", "home_enu_m": [-58, -1515, None], "speed_profile": "px4_default",
+            # FX-SIM2（ADR-059）：出生点间距 6 m → 12 m（同时起飞时 FleetGuard 10 m 告警线与 min_separation_m ≥ 10），并按
+            # 待命航向排序（西去的 b2 在最西、东去的 b1 在 a1 之东），两条待命航线不再交叉
+            {"vehicle_id": "p600-a1", "home_enu_m": [-82, -1515, None], "speed_profile": "px4_default",
              "sensors": ["camera"], "caps": ["rgb.zoom"], "marked": True},
-            {"vehicle_id": "p600-b1", "home_enu_m": [-52, -1515, None], "initial_soc": 0.80, "caps": ["thermal.imaging"],
+            {"vehicle_id": "p600-b1", "home_enu_m": [-70, -1515, None], "initial_soc": 0.80, "caps": ["thermal.imaging"],
              "marked": True},
-            {"vehicle_id": "p600-b2", "home_enu_m": [-46, -1515, None], "initial_soc": 0.95, "caps": ["thermal.imaging"]},
-            {"vehicle_id": "p600-b3", "home_enu_m": [-40, -1515, None], "initial_soc": 0.26, "caps": ["thermal.imaging"]},
-            {"vehicle_id": "p600-c1", "home_enu_m": [-34, -1515, None], "caps": ["relay.communication"]}],
+            {"vehicle_id": "p600-b2", "home_enu_m": [-94, -1515, None], "initial_soc": 0.95, "caps": ["thermal.imaging"]},
+            {"vehicle_id": "p600-b3", "home_enu_m": [-58, -1515, None], "initial_soc": 0.26, "caps": ["thermal.imaging"]},
+            {"vehicle_id": "p600-c1", "home_enu_m": [-46, -1515, None], "caps": ["relay.communication"]}],
         "missions": [
             {"mission_id": "m-search", "vehicle_ids": ["p600-a1"], "generator": "expanding_square",
              "params": {"datum_enu_m": [-64, -1283], "z_m": 60, "leg0_m": 55, "legs": 12, "first_heading_deg": 0,
                         "turn": "ccw", "speed_mps": 5}, "on_done": "rtl"},
             {"mission_id": "m-standby-b1", "vehicle_ids": ["p600-b1"], "generator": "follow_path",
-             "params": {"waypoints_enu_m": [[-52, -1515, 80], [86, -1133, 80]], "speed_mps": 3}, "on_done": "hover"},
+             "params": {"waypoints_enu_m": [[-70, -1515, 80], [86, -1133, 80]], "speed_mps": 3}, "on_done": "hover",
+             "on_abort": "rtl"},
             {"mission_id": "m-standby-b2", "vehicle_ids": ["p600-b2"], "generator": "follow_path",
-             "params": {"waypoints_enu_m": [[-46, -1515, 80], [-314, -1033, 80]], "speed_mps": 3}, "on_done": "hover"},
+             "params": {"waypoints_enu_m": [[-94, -1515, 80], [-314, -1033, 80]], "speed_mps": 3}, "on_done": "hover",
+             "on_abort": "rtl"},
             {"mission_id": "m-relay", "vehicle_ids": ["p600-c1"], "generator": "follow_path",
-             "params": {"waypoints_enu_m": [[-34, -1515, 150], [-64, -1283, 150]], "speed_mps": 5}, "on_done": "hover"}],
+             "params": {"waypoints_enu_m": [[-46, -1515, 150], [-64, -1283, 150]], "speed_mps": 5}, "on_done": "hover",
+             "on_abort": "rtl"}],
         "zones": {"active": ["border", "nofly-ny-70pine"]},
         "events": [
             *[{"event_id": f"spawn-{tid}", "at_s": 0, "action": "target.spawn",
                "args": {"target_id": tid, "pos_enu_m": [_r(p[0]), _r(p[1]), 0], "kind": "person", "conf_first": 0.42,
                         "conf_confirm": 0.9}} for tid, p in S3_TARGETS],
-            *rtl_after_search],
+            *rtl_after_verify],
         "agents": {"network": "mock", "members": [
             {"vehicle_id": "p600-a1", "capabilities": ["rgb.zoom"], "role": "searcher"},
             {"vehicle_id": "p600-b1", "capabilities": ["thermal.imaging"], "role": "verifier"},
@@ -328,7 +367,9 @@ def s3_scenario(pin: str | None = None) -> dict:
                        # M14 §7.4 (owner of $defs/agents; M14-to-M16 item 1): capability pattern and state, not "sensor"
                        "trigger": {"on": "detection", "from_roles": ["searcher"], "capability": "rgb.*", "state": "suspect",
                                    "conf_lt": 0.8, "merge_radius_m": 30},
-                       "capability": "thermal.imaging", "args": {"dwell_s": 10, "alt_agl_m": 60, "orbit_radius_m": 20},
+                       # FX-SIM2（ADR-059）：观测高度 60 → 75 m，与搜索机 a1 的 60 m 航线至少错开 15 m（原设计二者同高，
+                       # 多进程实测最小间距 10.03 m）
+                       "capability": "thermal.imaging", "args": {"dwell_s": 10, "alt_agl_m": 75, "orbit_radius_m": 20},
                        "accept": {"op": 1, "children": [
                            {"op": 12, "thresh": {"metric": "confidence", "op": 4, "value": 0.8}},
                            {"op": 10, "artifact": {"path_glob": "thermal/**", "min_size_bytes": 1024}},
@@ -361,10 +402,13 @@ def s4_scenario(pin: str | None = None) -> dict:
             {"mission_id": "m-corridor-back", "vehicle_ids": a_ids, "generator": "formation",
              "params": {"shape": "v", "half_angle_deg": 35, **form, "anchor_path_enu_m": [[800, 600], [800, -1200]]},
              "start": {"after": "m-corridor-out"}, "on_done": "rtl"},
+            # side_overlap 0.55（FX2-R2，ADR-065）：0.7 时 M10 能量预检按 5 机切分后 b-05（含 Willis 上空的高航带）落地
+            # SOC 0.153 < 0.20，任务被拒（ENERGY_INFEASIBLE），`area_coverage{m-loop}` 无值（D1 验收第 1 轮）；0.6 时仿真
+            # 实测 soc_min 0.267，余量过小
             {"mission_id": "m-loop", "vehicle_ids": b_ids, "generator": "lawnmower",
              "params": {"polygon_enu_m": square((-1101.0, -584.0), 600.0),
                         "altitude": {"mode": "per_lane", "agl_m": 150, "clearance_m": 10},
-                        "side_overlap": 0.7, "front_overlap": 0.8, "speed_mps": 5}, "on_done": "rtl"}],
+                        "side_overlap": 0.55, "front_overlap": 0.8, "speed_mps": 5}, "on_done": "rtl"}],
         "zones": {"active": ["border", "nofly-chi-hancock"]},
         "success": {"all": [
             {"metric": "formation_err_rms_m", "args": {"mission_id": "m-corridor-out"}, "op": "<=", "value": 3},
@@ -388,9 +432,11 @@ def s5_scenario(pin: str | None = None) -> dict:
                       "sensors": ["camera"]}],
         "missions": [
             {"mission_id": "m-survey", "vehicle_ids": ["p600-01"], "generator": "terrain_follow",
+             # 航速 6 m/s（FX2-R2，ADR-065）：terrain_follow 的航速取 params.speed_mps（area.speed_mps 只给割草机分区），此前缺省
+             # 5 m/s 时仿真落地 SOC 0.239 < 0.25（编写期离线模型 0.325 低估了地形跟随的爬降）；6 m/s 实测 0.310
              "params": {"area": {"polygon_enu_m": square((-2000.0, -2500.0), 300.0), "side_overlap": 0.6,
                                  "front_overlap": 0.8, "speed_mps": 5},
-                        "agl_m": 80, "max_slope_deg": 15, "clearance_m": 10}, "on_done": "rtl"}],
+                        "agl_m": 80, "max_slope_deg": 15, "clearance_m": 10, "speed_mps": 6}, "on_done": "rtl"}],
         "zones": {"active": ["border", "nofly-sf-sutro"]},
         "success": {"all": [
             {"metric": "agl_min_m", "args": {"mission_id": "m-survey"}, "op": ">=", "value": 60},
@@ -438,14 +484,18 @@ def s6_scenario(pin: str | None = None) -> dict:
 
 
 def soak_scenario(pin: str | None = None) -> dict:
-    """soak-shenzhen（M16 §7.3.4）：S1 两机与任务原样保留，另加 ladder n200 的 4 个 set（x500、200 圈，约 31 min）。"""
+    """soak-shenzhen（M16 §7.3.4）：S1 两机与任务原样保留，另加 ladder n200 的 4 个 set（x500、100 圈、1.0 m/s，一圈 18.8 s，约 31 min）。
+
+    orbit 命令的 `turns` 上限为 100（AWR-12 §5.3 参数边界，超出以 110 拒绝）：此前 120 圈、1.2 m/s 使 200 架的 orbit 全部被拒，航迹
+    SUSPENDED 后反复重试（FX2-R3-gateway 8.1）；改为 100 圈并把航速降到 1.0 m/s 保持约 31 min 的覆盖时长（FX2-R3-sim）。"""
     s1 = s1_scenario(pin)
     return {
         **_head("soak-shenzhen", "shenzhen", "Shenzhen soak: facade duo plus 200 orbiters", "深圳长稳：立面双机加 200 架环绕",
                 "S1 and the n200 ladder together for a 30 min soak; ladder vehicles use x500 (no battery model).", pin),
         "seed": 7, "rate": 1, "autoplay": True, "gcs_loss_policy": "ignore", "record": False,
         "time_limit_s": 2400, "on_complete": "continue", "energy_precheck": "warn",
-        "env": s1["env"], "vehicles": s1["vehicles"], "vehicle_sets": ladder_sets(200, profile_id="x500", turns=200),
+        "env": s1["env"], "vehicles": s1["vehicles"], "vehicle_sets": ladder_sets(200, profile_id="x500", turns=SOAK_ORBIT_TURNS,
+                                                                                speed_mps=SOAK_ORBIT_SPEED_MPS),
         "missions": s1["missions"], "transit": s1["transit"], "zones": s1["zones"], "events": s1["events"],
         "success": {"all": [{"metric": "min_separation_m", "op": ">=", "value": 10},
                             {"metric": "guard_events", "op": "==", "value": 0}]},

@@ -2,7 +2,7 @@
 
 INT-1 按 M08-to-M11 第 1 条代为实现（此前路由缺失，UI 的"添加 / 移除虚拟 P600"返回 404，D1-AC-32 阻塞）。api 只做鉴权、
 幂等、确认令牌与 HTTP 映射，业务判定全部在 sim-core（`ctl/sim-core/cmd` 的 `fleet/add`、`fleet/remove`；`ctl/sim-core/query`
-的 `fleet/profiles|profile|caps|vehicles` 与 M09 的 `safety/fault`）。
+的 `fleet/profiles|profile|caps|vehicles`；故障注入经 cmd `fault/inject|clear`，写输入日志，ADR-058）。
 
 | # | 方法与路径 | 角色 | 转发 |
 |---|---|---|---|
@@ -10,8 +10,8 @@ INT-1 按 M08-to-M11 第 1 条代为实现（此前路由缺失，UI 的"添加 
 | R13 | `GET /api/fleet/vehicles/{id}` | viewer | query `fleet/vehicles {id}`（不存在 404 `107`） |
 | R14 | `POST /api/fleet/vehicles` | operator 席 | cmd `fleet/add`；201 `{id, agent_no, lifecycle}` + Location；`Idempotency-Key` 映射为 cid |
 | R15 | `DELETE /api/fleet/vehicles/{id}?force=` | operator 席 | cmd `fleet/remove`；202 `{id, lifecycle}`；force 需 `AWR-Confirm-Token`（否则 428 `112`） |
-| R16 | `POST /api/fleet/vehicles/{id}/faults` | operator 席 | query `safety/fault {op: inject}`（Mock 限定，D1-ext）；202 `{fault_id, apply_tick}` |
-| R62 | `DELETE /api/fleet/vehicles/{id}/faults/{fault_id}` | operator 席 | query `safety/fault {op: clear}`；204 |
+| R16 | `POST /api/fleet/vehicles/{id}/faults` | operator 席 | cmd `fault/inject`（M09 登记的命令路由，Mock 限定，D1-ext）；202 `{fault_id, apply_tick}` |
+| R62 | `DELETE /api/fleet/vehicles/{id}/faults/{fault_id}` | operator 席 | cmd `fault/clear`；204 |
 | — | `GET /api/fleet/profiles`、`/api/fleet/profiles/{id}`、`/api/fleet/caps` | viewer | query `fleet/profiles`、`fleet/profile`、`fleet/caps` |
 """
 
@@ -187,23 +187,21 @@ class FaultBody(BaseModel):
 
 
 @router.post("/vehicles/{vid}/faults", status_code=202)
-async def inject_fault(vid: str, body: FaultBody, request: Request, p: Operator) -> JSONResponse:
+async def inject_fault(vid: str, body: FaultBody, request: Request, p: Operator,
+                       idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")) -> JSONResponse:
     if not VID_RE.match(vid):
         raise ApiProblem(300, detail={"field": "id"})
     if not _gw(request).is_seat_holder(p.id):
         raise ApiProblem(116, status=409)
-    cid = "rf-fault-" + uuid7()
-    args = {"op": "inject", "uav": vid, "kind": body.kind, "params": body.params, "at_s": body.at_s,
-            "duration_s": body.duration_s}
-    rep = _ok(await _query(request, "safety/fault", args, principal=_signed(request, p, cid)))
-    return JSONResponse({"fault_id": rep.get("fault_id"), "apply_tick": rep.get("apply_tick")}, status_code=202)
+    args = {"kind": body.kind, "params": body.params, "at_s": body.at_s, "duration_s": body.duration_s}
+    rep = await _cmd(request, p, "fault/inject", vid, args, _cid("rf-fault", idempotency_key))
+    res = ((rep.get("detail") or {}).get("result") or {}) if isinstance(rep.get("detail"), dict) else {}
+    return JSONResponse({"fault_id": res.get("fault_id"), "apply_tick": res.get("apply_tick")}, status_code=202)
 
 
 @router.delete("/vehicles/{vid}/faults/{fault_id}", status_code=204)
 async def clear_fault(vid: str, fault_id: str, request: Request, p: Operator) -> Response:
     if not _gw(request).is_seat_holder(p.id):
         raise ApiProblem(116, status=409)
-    cid = "rf-fault-" + uuid7()
-    _ok(await _query(request, "safety/fault", {"op": "clear", "uav": vid, "fault_id": fault_id},
-                     principal=_signed(request, p, cid)))
+    await _cmd(request, p, "fault/clear", vid, {"fault_id": fault_id}, "rf-fault-" + uuid7())
     return Response(status_code=204)

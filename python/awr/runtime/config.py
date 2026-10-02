@@ -72,7 +72,7 @@ class RunCfg(_M):
 class NetCfg(_M):
     bind: str = "127.0.0.1"
     port: int = Field(8000, ge=1024, le=65535)
-    port_offset: int = Field(0, ge=0, le=9)
+    port_offset: int = Field(0, ge=0, le=31)  # 0–31（ADR-055；原 0–9 不够 14 个并行 worktree，INT-1 §7.9）
     static_port: int = Field(8001, ge=1024, le=65535)
     access_mode: Literal["auto", "loopback", "lan"] = "auto"
     origins: list[str] = Field(default_factory=list)
@@ -135,7 +135,7 @@ class RestartMax(_M):
 
 class RestartCfg(_M):
     policy: Literal["always", "on-failure", "never"] = "always"
-    backoff_s: list[float] = Field(default_factory=lambda: [0.5, 1, 2, 4, 8], min_length=1)
+    backoff_s: list[float] = Field(default_factory=lambda: [0.1, 1, 2, 4, 8], min_length=1)  # 首档 0.1 s（ADR-061，19 §4.2）
     max: RestartMax = Field(default_factory=RestartMax)
 
 
@@ -200,6 +200,9 @@ class ProcCfg(_M):
     restart: RestartOverride | None = None
     stop: StopCfg | None = None
     env: dict[str, str] = Field(default_factory=dict)
+    # 热备用进程（AWR-19 §4.2；ADR-070）：主进程就绪后另起一个完成导入与预热、阻塞等待的同命令进程，重启时直接接替
+    standby: bool = False
+    standby_cpus: list[int] | None = None   # 热备用进程等待期间的 CPU（接替时改为 cpus）；None 时取 cpus 之外的全部 CPU
 
     @field_validator("name")
     @classmethod

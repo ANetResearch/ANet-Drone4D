@@ -9,6 +9,13 @@
 - 订阅：按 (producer, epoch) 跟踪已交付的最大连续 seq；发现缺口立即补拉 `_replay{since, epoch}`；补齐前后续事件进入
   重排缓冲（≤ 4096 条），补齐后按 seq 交付，因此每个生产者的交付顺序与发布顺序一致；1 s（墙钟）未补齐或 `truncated`
   时报告缺口 [lo, hi] 并放行缓冲；epoch 变化丢弃旧 epoch 的跟踪；同一 (producer, epoch, seq) 只交付一次。
+- 主动探测（`probe`，FX-GW）：对尚未见过的生产者以约定纪元向 `_replay` 取 since 0，使订阅建立之前发出、此后再无后续事件的
+  生产者（例如只发了一条 `rec.started` 的 recorder）也能被补拉；规则与"首见补拉"一致（只回补刚启动的生产者）。
+- 尾部探测（tail probe，FX2-R2-gateway）：缺口靠"后续 seq"检出，生产者最后一批消息被丢弃且此后不再发事件时无从检出。
+  某生产者已跟踪、无未决缺口、且距最近一条实时消息 ≥ `tail_probe_s`（默认 0.5 s）时，每 `tail_probe_s` 以 since = 已交付序号
+  向 `_replay` 查询一次（不重试）；有新事件即按序交付（truncated 时与缺口同样报告），无新事件则什么都不做。回复错误或
+  "truncated 且无事件"（生产者不可达或纪元已变）时间隔按 2 倍退避，上限 8 s；收到实时消息即恢复 0.5 s。持续发事件的生产者
+  不触发探测；请求与回复格式不变（17 §9.5）。只在订阅了总线（`subscribe=True`）时启用。
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from itertools import islice
 from typing import Any
 
 from awr.contracts import bus_keys
@@ -33,6 +41,9 @@ DEFAULT_RING = 4096
 GAP_TIMEOUT_S = 1.0
 MAX_HELD = 4096
 REPLAY_DELAY_S = 0.02  # 缺口出现后等待交错到达的同步消息，再补拉（远小于 1 s 的补齐时限）
+TAIL_PROBE_S = 0.5  # 尾部探测周期：丢弃的尾部批次在 ≤ 0.5 s + RTT 内补齐（D1-AC-10 的 1 s 时限）
+TAIL_BACKOFF_MAX_S = 8.0
+TAIL_TIMEOUT_S = 0.5
 REPLAY_KEY_SUFFIX = bus_keys.evt_replay("x").rsplit("/", 1)[1]  # "_replay"
 
 # kind 前缀 -> 事件 category（key `evt/<producer>/<category>`，17 §9.3）；前缀本身即 category 时直接使用
@@ -146,7 +157,16 @@ class EventPublisher:
             return {"v": 1, "events": [], "truncated": True}
         oldest = self._ring[0]["seq"] if self._ring else self._seq + 1
         truncated = since + 1 < oldest and since < self._seq
-        evs = [e for e in self._ring if e["seq"] > since] if since < self._seq else []
+        # 环中 seq 连续且末尾为 self._seq：seq > since 的事件就是末尾 self._seq − since 条，从右端取（O(k)；此前逐条扫描整个
+        # 4096 项的环，sim-core 的 M13 剧本事件桥 5 Hz 调用，N = 1000 时每次约 1.5 ms，FX2-R3-sim）
+        k = self._seq - since
+        if k <= 0:
+            evs = []
+        elif k >= len(self._ring):
+            evs = list(self._ring)
+        else:
+            evs = list(islice(reversed(self._ring), k))
+            evs.reverse()
         if truncated:
             self.stats["replay_truncated"] += 1
         return {"v": 1, "events": evs, "truncated": truncated}
@@ -180,6 +200,14 @@ class _Tracker:
     gap_since: int | None = None  # 单调时钟 ns
     replay_inflight: bool = False
     replay_tried: bool = False  # 本次缺口已发起过补拉（进展后可再次发起）
+    probing: bool = False  # 由 probe() 建立、回复尚未到达（纪元是猜测值，未经任何事件确认）
+    tail_due_ns: int = 0  # 下一次尾部探测的单调时刻（0 = 尚未收到实时消息，不探测）
+    tail_every_s: float = TAIL_PROBE_S  # 当前尾部探测间隔（错误时退避）
+
+    @property
+    def unconfirmed(self) -> bool:
+        """探测中且尚未交付或暂存任何事件：纪元只是猜测，不能据此丢弃或重置。"""
+        return self.probing and self.delivered == 0 and not self.held
 
 
 class EventSubscriber:
@@ -192,7 +220,7 @@ class EventSubscriber:
     def __init__(self, bus: Bus, *, on_events: Callable[[str, list[dict]], None],
                  on_gap: Callable[[str, int, int, int], None], pattern: str = "evt/**", subscribe: bool = True,
                  gap_timeout_s: float = GAP_TIMEOUT_S, max_held: int = MAX_HELD, replay_delay_s: float = REPLAY_DELAY_S,
-                 backfill_first_max: int = 0) -> None:
+                 backfill_first_max: int = 0, tail_probe_s: float = TAIL_PROBE_S) -> None:
         self.bus = bus
         # 实例内首次见到某生产者、且其首条 seq - 1 ≤ backfill_first_max 时，从 seq 1 起补拉（生产者刚启动，订阅建立之前
         # 发出的事件仍在其 _replay 环内）。缺省 0 不回补；Gateway 打开，使 sim-core 启动时的 scenario.loaded 等事件
@@ -207,9 +235,13 @@ class EventSubscriber:
         self._trackers: dict[str, _Tracker] = {}
         self._out: dict[str, list[dict]] = {}
         self.stats = {"received": 0, "delivered": 0, "duplicates": 0, "gaps_detected": 0, "gaps_filled": 0,
-                      "gaps_reported": 0, "events_lost": 0, "replays": 0, "epoch_resets": 0, "malformed": 0}
+                      "gaps_reported": 0, "events_lost": 0, "replays": 0, "epoch_resets": 0, "malformed": 0,
+                      "probes": 0, "probe_hits": 0, "probe_skipped": 0, "probe_misses": 0,
+                      "tail_probes": 0, "tail_recovered": 0, "tail_errors": 0}
         self.filter: Callable[[str, bytes], bool] | None = None  # 测试注入：返回 False 的消息被丢弃（模拟丢包）
         self._handle: Handle | None = bus.subscribe(pattern, self._on_sample) if subscribe else None
+        # 尾部探测只对总线上的实时订阅启用（subscribe=False 的手动 feed 用法不向总线发查询）
+        self.tail_probe_s = float(tail_probe_s) if subscribe and tail_probe_s and tail_probe_s > 0 else 0.0
 
     # ------------------------------------------------------------ 回调线程
     def _on_sample(self, key: str, raw: bytes) -> None:
@@ -233,9 +265,12 @@ class EventSubscriber:
                 if self.filter is not None and not self.filter(key, raw):
                     continue
                 self.feed(parts[1], raw, _flush=False)
-            else:
+            elif item[0] == "probe":
                 _, producer, epoch, rep, err = item
-                self.on_replay_reply(producer, epoch, rep, err, _flush=False)
+                self.on_probe_reply(producer, epoch, rep, err, _flush=False)
+            else:
+                _, producer, epoch, rep, err, tail = item
+                self.on_replay_reply(producer, epoch, rep, err, _flush=False, _tail=tail)
         self.check(time.monotonic_ns() if now_mono_ns is None else now_mono_ns, _flush=False)
         self._flush_out()
         return n
@@ -254,6 +289,11 @@ class EventSubscriber:
                 continue
             self.stats["received"] += 1
             self._accept(producer, ev)
+        if self.tail_probe_s:
+            tr = self._trackers.get(producer)
+            if tr is not None:  # 实时消息到达：尾部探测从此刻起重新计时，间隔恢复
+                tr.tail_every_s = self.tail_probe_s
+                tr.tail_due_ns = time.monotonic_ns() + int(self.tail_probe_s * 1e9)
         if _flush:
             self._flush_out()
 
@@ -261,7 +301,7 @@ class EventSubscriber:
         tr = self._trackers.get(producer)
         if tr is not None and tr.epoch == epoch:
             return tr
-        if tr is None:
+        if tr is None or tr.unconfirmed:  # 探测猜错纪元且尚无事件：按首见处理
             # 实例内首次见到该生产者：不回补订阅开始之前的事件（客户端经 REST 或自包含 channel 恢复），
             # 除非生产者刚启动（见 backfill_first_max）：此时从 0 起跟踪，缺口经 _replay 补齐
             backfill = 1 < first_seq <= self.backfill_first_max + 1
@@ -276,7 +316,7 @@ class EventSubscriber:
     def _accept(self, producer: str, ev: dict) -> None:
         s, epoch = int(ev["seq"]), int(ev["epoch"])
         cur = self._trackers.get(producer)
-        if cur is not None and cur.epoch != epoch and self._is_stale_epoch(cur, epoch):
+        if cur is not None and cur.epoch != epoch and not cur.unconfirmed and self._is_stale_epoch(cur, epoch):
             self.stats["duplicates"] += 1
             return
         tr = self._tracker(producer, epoch, s)
@@ -307,30 +347,98 @@ class EventSubscriber:
         """补拉回复或迟到消息属于已被替代的旧纪元（u32 纪元只增不减；回绕按差值判断）。"""
         return ((cur.epoch - epoch) & 0xFFFFFFFF) < 0x80000000
 
-    def _request_replay(self, producer: str, tr: _Tracker) -> None:
+    def _request_replay(self, producer: str, tr: _Tracker, *, tail: bool = False) -> None:
         if tr.replay_inflight:
             return
         tr.replay_inflight = True
-        self.stats["replays"] += 1
+        self.stats["tail_probes" if tail else "replays"] += 1
         epoch = tr.epoch
         inbox = self._inbox
 
         def on_reply(rep: Any, err: BaseException | None) -> None:  # 回调线程：只入队
-            inbox.put(("replay", producer, epoch, rep, err))
+            inbox.put(("replay", producer, epoch, rep, err, tail))
 
-        self.bus.call_cb(bus_keys.evt_replay(producer), {"v": 1, "since": tr.delivered, "epoch": epoch}, on_reply,
+        if tail:  # 尾部探测不重试（下一周期自然再探），避免定时器线程
+            self.bus.call_cb(bus_keys.evt_replay(producer), {"v": 1, "since": tr.delivered, "epoch": epoch}, on_reply,
+                             timeout=TAIL_TIMEOUT_S, retries=0)
+        else:
+            self.bus.call_cb(bus_keys.evt_replay(producer), {"v": 1, "since": tr.delivered, "epoch": epoch}, on_reply,
+                             timeout=0.5, retries=1, retry_gap=0.1)
+
+    def probe(self, producer: str, epoch: int) -> bool:
+        """主动补拉一个尚未见过的生产者（宿主线程调用）。订阅建立之前发出、此后再无后续事件的生产者不会触发首见补拉
+        （例如 demo 下 recorder 早于 api 订阅发出的唯一一条 `rec.started`，FX-WEB2-to-M11 第 2 条）。以约定纪元（调用方给出，
+        各生产者为"重启次数 + 1"）向 `_replay` 取 since 0，回复按 `on_probe_reply` 的规则处理。已在跟踪的生产者不探测，返回 False。"""
+        if producer in self._trackers:
+            return False
+        ep = int(epoch)
+        self._trackers[producer] = _Tracker(ep, 0, probing=True, replay_inflight=True)
+        self.stats["probes"] += 1
+        inbox = self._inbox
+
+        def on_reply(rep: Any, err: BaseException | None) -> None:  # 回调线程：只入队
+            inbox.put(("probe", producer, ep, rep, err))
+
+        self.bus.call_cb(bus_keys.evt_replay(producer), {"v": 1, "since": 0, "epoch": ep}, on_reply,
                          timeout=0.5, retries=1, retry_gap=0.1)
+        return True
+
+    def on_probe_reply(self, producer: str, epoch: int, reply: dict | None, err: BaseException | None, *,
+                       _flush: bool = True) -> None:
+        """探测回复：
+        - 无回复（生产者不提供 `_replay`）或 truncated 且无事件（纪元猜错）：尚无任何事件时撤销跟踪，恢复"未见过"，
+          此后的首条事件按首见规则处理；
+        - 事件最大 seq ≤ backfill_first_max + 1（生产者刚启动）：按序交付；
+        - 更长的历史（含环已覆盖的 truncated）：不回补，只把跟踪起点移到最大 seq（与首见规则一致），随后放行暂存的后续事件。"""
+        tr = self._trackers.get(producer)
+        if tr is None or tr.epoch != epoch or not tr.probing:
+            return
+        tr.probing = False
+        tr.replay_inflight = False
+        rep = reply if isinstance(reply, dict) else {}
+        evs = [ev for ev in rep.get("events") or []
+               if isinstance(ev, dict) and "seq" in ev and int(ev.get("epoch", epoch)) == epoch]
+        if err is not None or (not evs and rep.get("truncated")):
+            self.stats["probe_misses"] += 1
+            if tr.delivered == 0 and not tr.held:
+                del self._trackers[producer]
+        elif evs and max(int(ev["seq"]) for ev in evs) > self.backfill_first_max + 1:
+            self.stats["probe_skipped"] += 1
+            tr.delivered = max(tr.delivered, max(int(ev["seq"]) for ev in evs))
+            for s in [s for s in tr.held if s <= tr.delivered]:
+                del tr.held[s]
+                self.stats["duplicates"] += 1
+            while (nxt := tr.held.pop(tr.delivered + 1, None)) is not None:
+                self._deliver(producer, nxt)
+                tr.delivered += 1
+            if not tr.held:
+                tr.gap_since = None
+        else:
+            self.stats["probe_hits"] += 1
+            for ev in sorted(evs, key=lambda e: int(e["seq"])):
+                self._accept(producer, ev)
+        if _flush:
+            self._flush_out()
 
     def on_replay_reply(self, producer: str, epoch: int, reply: dict | None, err: BaseException | None, *,
-                        _flush: bool = True) -> None:
+                        _flush: bool = True, _tail: bool = False) -> None:
         tr = self._trackers.get(producer)
         if tr is None or tr.epoch != epoch:
             return
         tr.replay_inflight = False
         before = tr.delivered
-        for ev in (reply or {}).get("events", []) or []:
-            if isinstance(ev, dict) and "seq" in ev and int(ev.get("epoch", epoch)) == epoch:
-                self._accept(producer, ev)
+        evs = [ev for ev in (reply or {}).get("events", []) or []
+               if isinstance(ev, dict) and "seq" in ev and int(ev.get("epoch", epoch)) == epoch]
+        for ev in evs:
+            self._accept(producer, ev)
+        if _tail:
+            if tr.delivered > before:
+                self.stats["tail_recovered"] += tr.delivered - before
+            if err is not None or (not evs and (reply or {}).get("truncated")):
+                # 生产者不可达或纪元已变：退避，等实时消息（新纪元）重置跟踪
+                self.stats["tail_errors"] += 1
+                tr.tail_every_s = min(TAIL_BACKOFF_MAX_S, tr.tail_every_s * 2)
+                tr.tail_due_ns = time.monotonic_ns() + int(tr.tail_every_s * 1e9)
         if tr.held:
             if (reply or {}).get("truncated"):
                 self._give_up(producer, tr)  # 超出生产者环：已无可补
@@ -348,6 +456,10 @@ class EventSubscriber:
         delay_ns = int(self.replay_delay_s * 1e9)
         for producer, tr in list(self._trackers.items()):
             if tr.gap_since is None:
+                if (self.tail_probe_s and tr.tail_due_ns and now_mono_ns >= tr.tail_due_ns and not tr.replay_inflight
+                        and not tr.probing):
+                    tr.tail_due_ns = now_mono_ns + int(tr.tail_every_s * 1e9)
+                    self._request_replay(producer, tr, tail=True)
                 continue
             if now_mono_ns - tr.gap_since > to_ns or len(tr.held) >= mh:
                 self._give_up(producer, tr)

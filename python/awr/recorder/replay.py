@@ -48,12 +48,16 @@ class ReplayHost:
         self.binding = current_binding
         self.ring_cls = ring_cls
         self.src = McapSource(self.cfg, runs_dir=self.runs_dir, bus=bus)
-        self.inbox: queue.SimpleQueue[tuple[str, Any]] = queue.SimpleQueue()
-        self.handles = [bus.serve(bus_keys.ctl_replay_worker(op), lambda r, op=op: self.inbox.put((op, r))) for op in OPS]
-        self.handles.append(bus.serve(bus_keys.ctl_roster("replay"), lambda r: self.inbox.put(("roster", r))))
+        # 入队时刻（单调 ns）随请求一起排队：回复带 `queue_ms`（回调入队到主循环处理的等待），用于区分 worker 排队与网络或网关时延
+        self.inbox: queue.SimpleQueue[tuple[str, Any, int]] = queue.SimpleQueue()
+        self.handles = [bus.serve(bus_keys.ctl_replay_worker(op), lambda r, op=op: self.inbox.put((op, r, time.monotonic_ns())))
+                        for op in OPS]
+        self.handles.append(bus.serve(bus_keys.ctl_roster("replay"), lambda r: self.inbox.put(("roster", r, time.monotonic_ns()))))
+        self.slow_ops: list[tuple[str, float]] = []  # 处理耗时 ≥ 100 ms 的控制请求（诊断）
         self.events = ReplayEventPublisher(bus, "replay", 0)
         self.pubs = ReplayPublishers(bus)
         self.ring: StateRing | None = None
+        self.roster_sent: bytes | None = None  # 最近一次随 open/seek 回复发出的 roster（seek 时不变则不再随回复发送）
         self.pending_segment: int | None = None
         self.idle_since = time.monotonic()
         self.ops = {op: 0 for op in (*OPS, "roster")}
@@ -73,17 +77,26 @@ class ReplayHost:
         n = 0
         while n < limit:
             try:
-                op, req = self.inbox.get_nowait()
+                op, req, t_in = self.inbox.get_nowait()
             except queue.Empty:
                 break
             n += 1
             self.ops[op] = self.ops.get(op, 0) + 1
+            t_start = time.monotonic_ns()
             try:
                 rep = self.handle(op, req.msg() or {})
             except Exception:
                 log.exception("replay control failed", extra={"kv": {"op": op}})
                 rep = {"v": 1, "status": "rejected", "code": int(Reason.INTERNAL_ERROR)}
+            if op != "roster":
+                rep["queue_ms"] = round((t_start - t_in) / 1e6, 3)
             req.reply_msg(rep)
+            took_ms = (time.monotonic_ns() - t_start) / 1e6
+            if took_ms >= 100:
+                self.slow_ops.append((op, round(took_ms, 1)))
+                del self.slow_ops[:-32]
+                log.info("replay control slow", extra={"kv": {"op": op, "took_ms": round(took_ms, 1),
+                                                              "queue_ms": round((t_start - t_in) / 1e6, 1)}})
             if self.pending_segment is not None and self.ring is not None:
                 self.ring.set_segment(self.pending_segment)  # 回复发出之后才写 gen（M12 §7.4）
                 self.pending_segment = None
@@ -104,7 +117,7 @@ class ReplayHost:
                 t = self.src.seek(int(m.get("t_ns", m.get("seek_ns", 0))))
                 self.pending_segment = self.src.gen
                 return base | {"status": "accepted", "t_ns": t, "t_sample_ns": self.src.t_sample, "gen": self.src.gen,
-                               "ring_head": self.ring.head if self.ring is not None else 0, "backfill": self.src.backfill_bundle(),
+                               "ring_head": self.ring.head if self.ring is not None else 0, "backfill": self._backfill(),
                                "worker_ms": round(self.src.last_seek_ms[-1], 3) if self.src.last_seek_ms else None}
             if op == "play":
                 self.src.play()
@@ -143,9 +156,21 @@ class ReplayHost:
         return {"status": "accepted", "data_start_ns": info.data_start_ns, "data_end_ns": info.data_end_ns,
                 "speed_max": info.speed_max, "decimation_s": self.src.decimation_s, "lineage": self.src.lineage,
                 "binding": self.src.index.binding() if self.src.index else {}, "gen": self.src.gen,
-                "backfill": self.src.backfill_bundle(), "warnings": info.warnings}
+                "backfill": self._backfill(always_roster=True), "warnings": info.warnings}
+
+    def _backfill(self, *, always_roster: bool = False) -> dict[str, Any]:
+        """backfill 包；seek 时 roster 与上次发出的相同则置 None（N = 1000 时 roster 约 90 KB，占 seek 回复一半；网关对 None 保留
+        当前 roster，不重建，FX2-R2-gateway）。open 总是带 roster。"""
+        bf = self.src.backfill_bundle()
+        ros = bf.get("roster")
+        if not always_roster and ros is not None and ros == self.roster_sent:
+            bf["roster"] = None
+        else:
+            self.roster_sent = ros
+        return bf
 
     def _close(self) -> None:
+        self.roster_sent = None
         self.src.close()
         self.events.flush()
         self._drop_ring()

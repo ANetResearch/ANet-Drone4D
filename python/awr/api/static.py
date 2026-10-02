@@ -8,6 +8,7 @@
 - Range：单区间 `bytes=a-b`、`bytes=a-`、`bytes=-n` → 206 + `Content-Range` + `Content-Length`；不可满足 → 416 `309` +
   `Content-Range: bytes */size`；多区间不属于契约（返回整体 200）；禁止动态 Content-Encoding。
 - 前端（`apps/web/dist`，生产模式）：`/assets/**` 哈希文件名 immutable；`/brand/**`、`/bench/**` no-cache + ETag；
+  `/models/{file}.glb`（构建时随前端复制的机型模型，`apps/web/public/models/`，FX-WEB1）no-cache + ETag；
   `/`、`/world/{id}`、`/worlds` 等前端路由回退到 `index.html`（no-cache）；`/api/**` 不回退（404 `305`）。
 - 安全头（COOP、COEP、CORP、nosniff、Referrer-Policy）由 `middleware.AwrMiddleware` 统一添加。
 文件读取在 anyio 线程中执行（默认 executor，M11 §6.2），不在事件循环内做同步大 I/O。
@@ -41,7 +42,7 @@ MIME = {".json": "application/json", ".geojson": "application/geo+json", ".bin":
         ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp",
         ".woff2": "font/woff2", ".woff": "font/woff", ".wasm": "application/wasm", ".txt": "text/plain; charset=utf-8",
         ".map": "application/json"}
-SPA_RESERVED = ("api", "assets", "vehicles")
+SPA_RESERVED = ("api", "assets", "vehicles", "models")
 MODEL_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 FILE_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}\.glb$")
 
@@ -254,6 +255,23 @@ def build_static_router(worlds_dir: Path, web_dist: Path | None) -> tuple[APIRou
                 return pub
             r.add_api_route(f"/{top}/{{path:path}}", make(top), methods=["GET", "HEAD"])
 
+        @r.api_route("/models/{file}", methods=["GET", "HEAD"])
+        async def web_model(request: Request, file: str) -> Response:
+            """前端构建自带的机型模型副本（`apps/web/public/models/*.glb` → `dist/models/`，由 `tools/vehicles/*.py --copy-web`
+            生成；AWR-17 §5.1、M06-FR-035，FX-WEB1）：只暴露 `*.glb`，no-cache + ETag。此前该路径落到 SPA 回退，返回
+            index.html，GLTFLoader 解析失败，P600 一律退回低模。"""
+            rid = getattr(request.state, "request_id", None)
+            if not FILE_RE.match(file):
+                return problem(305, request_id=rid)
+            p = _safe_join(dist / "models", file)
+            st = await anyio.to_thread.run_sync(_stat_file, p) if p is not None else None
+            if st is None:
+                return problem(305, request_id=rid)
+            etag = f'"{st.st_size}-{st.st_mtime_ns}"'
+            if _etag_match(request, etag):
+                return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache"})
+            return _file_response(request, p, st, {"ETag": etag, "Cache-Control": "no-cache"})
+
     vehicles_dir = Path(os.environ.get("AWR_VEHICLES_DIR") or Path(__file__).resolve().parents[3] / "vehicles")
 
     @r.api_route("/vehicles/{model}/model/{file}", methods=["GET", "HEAD"])
@@ -278,7 +296,7 @@ def build_static_router(worlds_dir: Path, web_dist: Path | None) -> tuple[APIRou
 
 
 def spa_route(web_dist: Path | None):
-    """SPA 回退：非 `/api`、非 `/assets` 的 GET 返回 `index.html`（no-cache）；dist 不存在时 404 `305`。"""
+    """SPA 回退：非 `/api`、`/assets`、`/vehicles`、`/models` 的 GET 返回 `index.html`（no-cache）；dist 不存在时 404 `305`。"""
     index = Path(web_dist) / "index.html" if web_dist is not None else None
 
     async def spa(request: Request, path: str = "") -> Response:

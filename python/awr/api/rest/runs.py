@@ -64,6 +64,14 @@ def _runs_root(request: Request) -> Path:
 
 
 def _run_dir(request: Request, run: str) -> Path:
+    s = app_ctx(request).settings
+    if run == s.run_id and not RUN_RE.match(run) and s.persist_dir is not None:
+        # 当前运行的 id 不是 r<date>-<time>-<hex> 形式（`--inproc` 的 inproc-xxxxxx、测试栈）：以本运行的持久化目录为运行目录，
+        # 书签等只读写该目录（FX-GW，INT-1 §7.8：此前 422）；其他运行仍按正则与 runs 根目录解析
+        d = Path(s.persist_dir).resolve()
+        if not d.is_dir():
+            raise ApiProblem(305, status=404, detail={"run": run})
+        return d
     if not RUN_RE.match(run):
         raise ApiProblem(110, status=422, detail={"param": "run"})
     root = _runs_root(request).resolve()

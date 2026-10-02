@@ -83,7 +83,8 @@ def _state_key(const: str, producer: str) -> str:
 class RecorderCore:
     def __init__(self, *, bus: Bus, ring_path: Path, persist_dir: Path, run_id: str, world_id: str, cfg: RecorderCfg,
                  scenario: dict[str, Any] | None = None, ring_cls: type[StateRing] = StateRing,
-                 mono_ns: Callable[[], int] = time.monotonic_ns, autostart: bool | None = None) -> None:
+                 mono_ns: Callable[[], int] = time.monotonic_ns, autostart: bool | None = None,
+                 event_epoch: int = 1) -> None:
         self.bus = bus
         self.ring_path = Path(ring_path)
         self.ring_cls = ring_cls
@@ -104,7 +105,9 @@ class RecorderCore:
         self.marks = MarkedSet(self.policy.max_marked, self.policy.full_all_if_n_le)
         self.ext = KeyDeltaBlocker(self.policy.state_ext_hz, self.policy.keyframe_every_ns)
         self.saf = KeyDeltaBlocker(self.policy.safety_hz, self.policy.keyframe_every_ns)
-        self.events = EventPublisher(bus, PRODUCER, 1)
+        # 事件纪元 = 重启次数 + 1（与 agent-runtime、job-worker 一致；17 §9.5）：此前恒为 1，recorder 重启后 seq 从 1 重新计数而
+        # 纪元不变，消费者（api、agent-runtime）按 (producer, epoch, seq) 去重会把新事件当作重复丢弃，直到 seq 超过旧值（FX-GW）
+        self.events = EventPublisher(bus, PRODUCER, int(event_epoch))
         self.subscriber = EventSubscriber(bus, on_events=self._on_bus_events, on_gap=self._on_event_gap)
         self.seg_k = -1
         self.sim_segment = -1
@@ -632,7 +635,7 @@ def main() -> int:
     auto = os.environ.get("AWR_REC_AUTOSTART")
     core = RecorderCore(bus=bus, ring_path=ctx.run_dir / "state.sim-core", persist_dir=ctx.persist_dir, run_id=ctx.run_id,
                         world_id=ctx.world_id, cfg=cfg, scenario=load_scenario(),
-                        autostart=None if auto is None else auto == "1")
+                        autostart=None if auto is None else auto == "1", event_epoch=int(ctx.restart_count) + 1)
     hb = Heartbeat(ctx.hb_path)
     ready = bus.ready()
     loop_ns = cfg.loop_ms * 1_000_000

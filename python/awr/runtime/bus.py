@@ -543,6 +543,10 @@ def _zprio(p: Prio) -> zenoh.Priority:
     return getattr(zenoh.Priority, p.name)
 
 
+# 查询不做回复合并：回复到达即交付，不等 ResponseFinal（见 ZenohBus._start_query）
+_NO_CONSOLIDATION = zenoh.QueryConsolidation(zenoh.ConsolidationMode.NONE)
+
+
 class ZenohBus(Bus):
     """zenoh 1.10.1 peer 会话：只在回环上监听；SHM 关闭；全部发送 DROP（17 §9.3）。"""
 
@@ -623,8 +627,12 @@ class ZenohBus(Bus):
             once(None, _NoReply(key))
 
         q = qos_for(key)
+        # consolidation NONE（FX2-R2-gateway）：zenoh 缺省的 AUTO/LATEST 合并把回复扣到查询结束（queryable 的 ResponseFinal）
+        # 才交付；ResponseFinal 迟到或在拥塞时丢失，回复就要等到查询超时（seek 实测一次 2003 ms，worker 只用了 41 ms）。
+        # 每个 key 只有一个 queryable，`call` 取第一条回复，不需要合并；`on_drop` 仍在查询结束时触发（无回复检测不变）。
         self._session.get(key, zenoh.handlers.Callback(on_reply, on_drop), payload=payload, timeout=timeout,
-                          congestion_control=zenoh.CongestionControl.DROP, priority=_zprio(q.priority), express=q.express)
+                          consolidation=_NO_CONSOLIDATION, congestion_control=zenoh.CongestionControl.DROP,
+                          priority=_zprio(q.priority), express=q.express)
 
     # ------------------------------------------------------------ pub/sub 与 liveliness
     def publisher(self, key: str, *, priority: Prio | None = None, express: bool | None = None) -> Publisher:

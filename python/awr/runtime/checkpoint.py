@@ -85,14 +85,78 @@ def _align(n: int) -> int:
     return (n + ALIGN - 1) // ALIGN * ALIGN
 
 
+_YIELD_ITEMS = 64  # 后台编码每批元素数：批间 `time.sleep(0)` 让出 GIL
+_YIELD_BYTES = 128 * 1024  # 数组段拷贝的让出粒度（字节）
+_yield_tl = threading.local()
+
+
+def yield_point() -> None:
+    """后台编码的让出点（每批元素一次）：缺省 `time.sleep(0)` 让出 GIL；`serialize(yield_fn=...)` 期间改调该函数
+    （CheckpointStore 的 `gate`：只在主循环休眠期间继续编码，FX2-R3-sim，ADR-070）。"""
+    fn = getattr(_yield_tl, "fn", None)
+    if fn is None:
+        time.sleep(0)
+    else:
+        fn()
+
+
+def _pack_into(pk: msgpack.Packer, v: Any, parts: list[bytes]) -> None:
+    """按 msgpack 规则逐层编码（字典为 map 头 + 键值，长列表为 array 头 + 元素）；长列表每 _YIELD_ITEMS 个元素让出一次 GIL。
+
+    带 `ck_pack_parts(pk, parts)` 方法的对象（`list`、`dict` 的子类）由其自行追加编码，约定与对它本身 `packb` 逐字节相同：
+    sim-core 的调用表、幂等表、roster 与租约在相邻两代之间大部分不变，按条目缓存已编码的字节（FX2-R3-sim，ADR-070；
+    N = 1000 时每代编码此前约 29 ms，后台线程合计约 0.06 核）。"""
+    pp = getattr(type(v), "ck_pack_parts", None)
+    if pp is not None:
+        pp(v, pk, parts)
+        return
+    if isinstance(v, dict) and len(v) > 0:
+        parts.append(pk.pack_map_header(len(v)))
+        for k, x in v.items():
+            parts.append(pk.pack(k))
+            _pack_into(pk, x, parts)
+        return
+    if isinstance(v, list) and len(v) > _YIELD_ITEMS:
+        parts.append(pk.pack_array_header(len(v)))
+        for i in range(0, len(v), _YIELD_ITEMS):
+            parts.extend(map(pk.pack, v[i:i + _YIELD_ITEMS]))
+            yield_point()
+        return
+    parts.append(pk.pack(v))
+
+
+def pack_meta(meta: Any) -> bytes:
+    """与 `msgpack.packb(meta, use_bin_type=True)` 逐字节相同，但分批编码并在批间让出 GIL：checkpoint 在 sim-core 的后台写线程中
+    编码，N = 1000 时元数据约 0.6 MB，一次 packb 是 5–10 ms 不释放 GIL 的 C 调用，期间主循环拿不到 GIL，单步墙钟出现同样长度
+    的尖峰（D1-AC-07 最大值 ≤ 12 ms；FX2-R2）。"""
+    pk = msgpack.Packer(use_bin_type=True)
+    parts: list[bytes] = []
+    _pack_into(pk, meta, parts)
+    return b"".join(parts)
+
+
 def serialize(t_sim_ns: int, epoch: int, segment: int, layout_id: int, arrays: Mapping[str, np.ndarray], meta: Any,
-              flags: int = 0) -> bytes:
+              flags: int = 0, *, out: bytearray | None = None, yield_fn: Any = None) -> bytes | memoryview:
+    prev = getattr(_yield_tl, "fn", None)
+    _yield_tl.fn = yield_fn
+    try:
+        return _serialize(t_sim_ns, epoch, segment, layout_id, arrays, meta, flags, out)
+    finally:
+        _yield_tl.fn = prev
+
+
+def _serialize(t_sim_ns: int, epoch: int, segment: int, layout_id: int, arrays: Mapping[str, np.ndarray], meta: Any,
+               flags: int, out: bytearray | None) -> bytes | memoryview:
+    """编码一代 checkpoint。`out` 给出时在这块可复用的缓冲中编码（不足时扩容）并返回其前 `total` 字节的 memoryview，内容与
+    不给 `out` 时返回的 bytes 逐字节相同（对齐填充显式清零）：后台写线程每代新分配约 3.5 MB 的 bytearray 再 `bytes()` 拷贝
+    一次，两次缺页各约 7 ms（N = 1000；FX2-R3-sim，ADR-070）。"""
     names = list(arrays)
     n = len(names)
-    toc = np.zeros(n, _TOC)
     off = _align(HDR_BYTES + n * TOC_BYTES)
+    first_off = off
+    rows: list[tuple] = []
     chunks: list[tuple[int, memoryview]] = []
-    for i, name in enumerate(names):
+    for name in names:
         a = np.asarray(arrays[name])
         if not a.flags.c_contiguous:
             a = a.copy(order="C")  # ascontiguousarray 会把 0 维数组升为 1 维
@@ -102,24 +166,49 @@ def serialize(t_sim_ns: int, epoch: int, segment: int, layout_id: int, arrays: M
             raise ValueError(f"数组名或 dtype 过长：{name!r} {a.dtype.str}")
         if a.ndim > MAX_DIMS:
             raise ValueError(f"数组维数超过 {MAX_DIMS}：{name!r}")
-        shape = list(a.shape) + [DIM_UNUSED] * (MAX_DIMS - a.ndim)
-        toc[i] = (bname, ds, shape, off, a.nbytes)
+        rows.append((bname, ds, tuple(a.shape) + (DIM_UNUSED,) * (MAX_DIMS - a.ndim), off, a.nbytes))
         chunks.append((off, memoryview(a.reshape(-1).view(np.uint8)) if a.nbytes else memoryview(b"")))
         off = _align(off + a.nbytes)
-    mb = msgpack.packb(meta, use_bin_type=True)
+    toc = np.zeros(n, _TOC)  # 按列赋值（逐元素赋值结构化数组约 5 µs/项）；np.zeros 保证项内填充字节为 0（确定性）
+    if rows:
+        cols = list(zip(*rows, strict=True))
+        toc["name"], toc["dtype"], toc["offset"], toc["nbytes"] = cols[0], cols[1], cols[3], cols[4]
+        toc["shape"] = np.asarray(cols[2], np.uint32).reshape(n, MAX_DIMS)
+    mb = pack_meta(meta)
     meta_off = off
     total = meta_off + len(mb)
-    buf = bytearray(total)
+    if out is None:
+        store: bytearray = bytearray(total)
+        buf = memoryview(store)
+    else:
+        if len(out) < total:
+            out.extend(bytes(total - len(out)))
+        store = out
+        buf = memoryview(out)[:total]
+    if out is not None:
+        buf[0:first_off] = bytes(first_off)  # 头部、目录与其后的对齐填充（复用缓冲中可能残留上一代内容）
     toc_b = toc.tobytes()
     buf[HDR_BYTES:HDR_BYTES + len(toc_b)] = toc_b
-    for o, mv in chunks:
-        buf[o:o + len(mv)] = mv
+    acc = 0
+    for i, (o, mv) in enumerate(chunks):
+        end = o + len(mv)
+        buf[o:end] = mv
+        if out is not None:
+            nxt = chunks[i + 1][0] if i + 1 < len(chunks) else meta_off
+            if nxt > end:
+                buf[end:nxt] = bytes(nxt - end)
+        acc += len(mv)
+        if acc >= _YIELD_BYTES or i % 8 == 7:  # 每复制约 128 KB 或 8 个数组让出一次（此前每 32 个数组，N = 1000 时一段约 1 ms）
+            yield_point()
+            acc = 0
     buf[meta_off:total] = mb
-    crc = zlib.crc32(memoryview(buf)[HDR_BYTES:]) & 0xFFFFFFFF
+    crc = zlib.crc32(buf[HDR_BYTES:]) & 0xFFFFFFFF
     hdr = np.zeros(1, _HDR)
     hdr[0] = (MAGIC, VERSION, flags, epoch, segment, t_sim_ns, layout_id & 0xFFFFFFFF, n, meta_off, len(mb), crc)
     buf[0:HDR_BYTES] = hdr.tobytes()
-    return bytes(buf)
+    if out is None:
+        return bytes(store)
+    return buf
 
 
 def read_checkpoint(path: Path, *, layout_id: int) -> Checkpoint:
@@ -169,7 +258,7 @@ class CheckpointStore:
     """tmpfs 上保留 keep 代 checkpoint，后台线程写盘并定期镜像；主线程 save() 只做 numpy 拷贝。"""
 
     def __init__(self, dir: Path, *, layout_id: int, keep: int = 3, mirror: Path | None = None,
-                 mirror_every_s: float = 10.0) -> None:
+                 mirror_every_s: float = 10.0, gate: threading.Event | None = None, gate_timeout_s: float = 0.02) -> None:
         self.dir = Path(dir)
         self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.layout_id = layout_id
@@ -182,6 +271,11 @@ class CheckpointStore:
         self._stop = False
         self._last_mirror = 0.0
         self.stats = {"saves": 0, "skipped": 0, "written": 0, "write_ms_last": 0.0, "mirrored": 0, "errors": 0}
+        self._wbuf = bytearray()  # 写线程复用的编码缓冲（serialize `out`）
+        # gate（可选，sim-core 主循环休眠期间置位）：写线程在每个让出点等 gate（至多 gate_timeout_s，保证进度），只在主循环
+        # 休眠时编码，不与主循环争 GIL（N = 1000 时一代约 11 ms 的编码此前与其后 5–10 个 tick 交替持有 GIL，ADR-070）
+        self.gate = gate
+        self.gate_timeout_s = float(gate_timeout_s)
         self._thread = threading.Thread(target=self._writer, name="awr-ckpt-writer", daemon=True)
         self._thread.start()
 
@@ -233,7 +327,8 @@ class CheckpointStore:
 
     def _write(self, slot: _Slot) -> None:
         t0 = time.perf_counter()
-        data = serialize(slot.t_sim_ns, slot.epoch, slot.segment, self.layout_id, slot.arrays, slot.meta)
+        data = serialize(slot.t_sim_ns, slot.epoch, slot.segment, self.layout_id, slot.arrays, slot.meta, out=self._wbuf,
+                         yield_fn=self._gate_wait if self.gate is not None else None)
         final = self.dir / f"{slot.t_sim_ns:020d}{FILE_RE_SUFFIX}"
         tmp = final.with_suffix(".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -241,10 +336,18 @@ class CheckpointStore:
             os.write(fd, data)
         finally:
             os.close(fd)
+            if isinstance(data, memoryview):
+                data.release()  # 释放对复用缓冲的导出，下一代才能扩容
         os.replace(tmp, final)
         self._prune(self.dir)
         self.stats["written"] += 1
         self.stats["write_ms_last"] = round((time.perf_counter() - t0) * 1e3, 3)
+
+    def _gate_wait(self) -> None:
+        g = self.gate  # close() 时置 None：停止过程中不再等待
+        if g is not None and not g.is_set():
+            g.wait(self.gate_timeout_s)
+        time.sleep(0)
 
     def _generations(self, d: Path) -> list[Path]:
         try:
@@ -255,7 +358,7 @@ class CheckpointStore:
 
     def _prune(self, d: Path) -> None:
         for p in self._generations(d)[self.keep:]:
-            for q in (p, p.with_suffix(".poison")):
+            for q in (p, p.with_suffix(".poison"), p.with_suffix(".stale")):
                 q.unlink(missing_ok=True)
 
     def _maybe_mirror(self, *, force: bool) -> None:
@@ -295,7 +398,8 @@ class CheckpointStore:
         return True
 
     def close(self, *, final: bool = True) -> None:
-        """SIGTERM 时调用：等待写盘完成；final 时同步镜像最新一代。"""
+        """SIGTERM 时调用：等待写盘完成；final 时同步镜像最新一代。停止时不再等主循环休眠（gate 解除）。"""
+        self.gate = None
         self.flush()
         with self._cv:
             self._stop = True
@@ -316,13 +420,30 @@ class CheckpointStore:
     def is_poisoned(self, path: Path) -> bool:
         return path.with_suffix(".poison").exists()
 
+    def is_stale(self, path: Path) -> bool:
+        """恢复后 5 s 内再次崩溃的进程在恢复点之后写出的代（`.stale`）：恢复时跳过，但不计入"连续中毒代数"。"""
+        return path.with_suffix(".stale").exists()
+
+    def mark_stale_after(self, t_sim_ns: int) -> int:
+        """把晚于 t_sim_ns 的各代标记为 `.stale`（毒性判定的同一时刻调用）；返回标记数。"""
+        n = 0
+        for d in (self.dir, self.mirror):
+            if d is None:
+                continue
+            for p in self._generations(d):
+                if int(p.stem) > int(t_sim_ns) and not self.is_poisoned(p):
+                    with contextlib.suppress(OSError):
+                        p.with_suffix(".stale").touch()
+                        n += 1
+        return n
+
     def load_latest(self, *, skip_poisoned: bool = True) -> Checkpoint | None:
         """最新的有效一代；校验失败的代写 `.poison` 并尝试上一代；tmpfs 目录无可用代时读镜像目录。"""
         for d in (self.dir, self.mirror):
             if d is None:
                 continue
             for p in self._generations(d):
-                if skip_poisoned and self.is_poisoned(p):
+                if skip_poisoned and (self.is_poisoned(p) or self.is_stale(p)):
                     continue
                 try:
                     return read_checkpoint(p, layout_id=self.layout_id)
@@ -337,7 +458,8 @@ class CheckpointStore:
         """崩溃重启时的恢复策略（D1-ext；M11-FR-017；ADR-019；D1-AC-11b）：
 
         - `restart_count == 0`（冷启动）：不恢复，清除恢复标记，返回 None；
-        - 上一次恢复后 `poison_window_s`（5 s，系统单调时钟）内再次崩溃：把上一次恢复的那一代标记为 poison，改用上一代；
+        - 上一次恢复后 `poison_window_s`（5 s，系统单调时钟）内再次崩溃：把上一次恢复的那一代标记为 poison、其后写出的
+          各代标记为 stale（跳过但不计入连续中毒代数），改用上一代；
         - 从最新起连续中毒的代数达到 `max_poisoned`（3）：返回 None，生产者从剧本起点重开（segment + 1）；
         - 否则返回最新有效一代，并写恢复标记 `.restored`（`t_sim_ns`、恢复时刻），供下一次崩溃判定。
         生产者在恢复后稳定运行超过 `poison_window_s` 时可调用 `confirm_restored()` 提前清除标记（不调用也不影响判定）。
@@ -351,7 +473,11 @@ class CheckpointStore:
             t_prev, at_ns = (int(x) for x in marker.read_text().split())
             if time.monotonic_ns() - at_ns < int(poison_window_s * 1e9):
                 self.poison(t_prev)
-                log.warning("crashed shortly after restore; generation poisoned", extra={"kv": {"t_sim_ns": t_prev}})
+                # 崩溃的进程在恢复后又写出了更新的代（每 1 s【仿真】一代）：这些代同样可疑，标记 stale 跳过，否则
+                # "改用上一代"会取到恢复后写出的最新一代（D1 验收第 1 轮：第二次恢复点 4.104 s 晚于第一次 4.064 s）
+                n_stale = self.mark_stale_after(t_prev)
+                log.warning("crashed shortly after restore; generation poisoned",
+                            extra={"kv": {"t_sim_ns": t_prev, "stale_after": n_stale}})
         with contextlib.suppress(OSError):
             marker.unlink()
         if self.poisoned_generations() >= max_poisoned:
@@ -375,7 +501,10 @@ class CheckpointStore:
         """tmpfs 目录中连续（从最新起）中毒的代数；达到 3 时生产者应从剧本起点重开（FR-017）。"""
         n = 0
         for p in self._generations(self.dir):
-            if not self.is_poisoned(p):
-                break
-            n += 1
+            if self.is_poisoned(p):
+                n += 1
+                continue
+            if self.is_stale(p):
+                continue
+            break
         return n

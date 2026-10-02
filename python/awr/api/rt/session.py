@@ -79,7 +79,7 @@ class ClientSession:
         self._fast_sends = 0
         self.events_on = False
         self.events_filter: dict[str, Any] = {}
-        self.pending_events: list[dict] = []
+        self.pending_events: list[bytes] = []  # 事件的 WS JSON（EventRing 项，编码一次、各连接共享）
         self.event_gap = False
         self.srtt_client_ms: float | None = None
         self.srtt_client_mono = 0
@@ -542,26 +542,27 @@ class ClientSession:
         self.order = []
 
     # ------------------------------------------------------------ 事件
-    def event_ok(self, ev: dict) -> bool:
+    def event_ok(self, kind: str, level: int) -> bool:
         f = self.events_filter
         if not f:
             return True
         types = f.get("types")
-        if types and not any(ev["type"].startswith(t) for t in types):
+        if types and not any(kind.startswith(t) for t in types):
             return False
-        return ev["level"] >= int(f.get("levelMin", 0))
+        return level >= int(f.get("levelMin", 0))
 
     def flush_events(self) -> None:
-        """同一 tick 的事件：1 条用 `event`，≥ 2 条合并为 `events`（每条 ≤ 256 项，17 §6.12）。"""
+        """同一 tick 的事件：1 条用 `event`，≥ 2 条合并为 `events`（每条 ≤ 256 项，17 §6.12）。项是 EventRing 中已编码的
+        事件 JSON，这里只拼接（`{"op":"event",` + 事件对象去掉开头的 `{`；`events` 为 items 数组），不重新编码。"""
         if not self.pending_events:
             return
         evs, self.pending_events = self.pending_events, []
         for i in range(0, len(evs), EVENTS_PER_MSG):
             chunk = evs[i:i + EVENTS_PER_MSG]
             if len(chunk) == 1:
-                self.send_ctrl({"op": "event", **chunk[0]})
+                self.send_ctrl((b'{"op":"event",' + chunk[0][1:]).decode("utf-8"))
             else:
-                self.send_ctrl({"op": "events", "items": chunk})
+                self.send_ctrl((b'{"op":"events","items":[' + b",".join(chunk) + b"]}").decode("utf-8"))
 
     # ------------------------------------------------------------ 诊断
     def perf_row(self) -> dict[str, Any]:

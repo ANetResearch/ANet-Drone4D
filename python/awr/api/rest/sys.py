@@ -28,7 +28,7 @@ from typing import Annotated, Any
 
 import anyio
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from awr.contracts import CONTRACTS_VERSION, bus_keys
@@ -138,15 +138,16 @@ async def events(request: Request, _p: Viewer, since: Annotated[int, Query(ge=0)
     if since > 0 and since + 1 < oldest:
         raise ApiProblem(319, status=410, detail={"since": since, "oldest_seq": oldest})
     prefixes = [t for t in (types or "").split(",") if t]
-    items: list[dict] = []
-    for e in ev.since(since):
-        if e["level"] < level_min or (prefixes and not any(e["type"].startswith(t) for t in prefixes)):
-            continue
-        items.append(e)
+    # EventRing 项已是事件 JSON（编码一次，FX2-R3-gateway）：按索引过滤后直接拼接响应体，不再逐条转 dict 再序列化
+    items: list[bytes] = []
+    next_since = max(since, 0)
+    for seq, _kind, _level, item in ev.ring.iter_since(since, prefixes or None, level_min):
+        items.append(item)
+        next_since = seq
         if len(items) >= limit:
             break
-    next_since = items[-1]["seq"] if items else max(since, 0)
-    return {"items": items, "next_since": next_since, "oldest_seq": oldest}
+    body = b'{"items":[' + b",".join(items) + b'],"next_since":%d,"oldest_seq":%d}' % (next_since, oldest)
+    return Response(content=body, media_type="application/json")  # 返回 Response 时 FastAPI 原样发送（OpenAPI 仍按注解）
 
 
 

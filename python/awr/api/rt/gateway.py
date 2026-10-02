@@ -81,6 +81,11 @@ UAV_SUFFIXES = ("state", "state_ext", "safety", "env")
 CAPS_DIR = Path(__file__).resolve().parents[4] / "packages" / "contracts" / "rt" / "caps"
 DEFAULT_CLOCK = {"mode": "lockstep", "pausable": True, "max_speed": 10, "steppable": True}
 PROC_STATUS_SKIP_REASONS = ("module_missing",)
+# 启动或就绪时主动补拉其事件的辅助生产者（FX-WEB2-to-M11 第 2 条）：它们可能在 api 订阅之前发出事件、此后长时间再无后续
+# 事件（demo 下 recorder 的 `rec.started`），首见补拉不会触发。事件纪元约定为"重启次数 + 1"（AWR_RESTART_COUNT + 1）；
+# 受监管时等到首个 `sys/procs` 回复取得重启次数再探测，PROBE_FALLBACK_S 内仍无回复则按纪元 1 探测
+PROBE_PRODUCERS = ("recorder", "agent-runtime", "job-worker")
+PROBE_FALLBACK_S = 3.0
 
 
 def _with_producer(key: str, producer: str) -> str:
@@ -180,6 +185,8 @@ class Gateway:
         self._closed_bytes = 0
         self._sec = 0
         self._bg: set[asyncio.Future] = set()
+        self._probe_wanted: dict[str, int] = {}  # 生产者 -> 就绪时刻（monotonic ns），等待取得重启次数后探测
+        self._procs_known = False  # 已收到 sys/procs 回复
         self._load_seat()
 
     # ------------------------------------------------------------ 生命周期
@@ -188,6 +195,7 @@ class Gateway:
         b = self.bus
         p = self.settings.producer
 
+        # subscribe/watch 回调只入队（PY-CB-01）；stop() 先关闭这些句柄，事件循环关闭之后不会再回调
         def sub(key: str, kind: str, prod: str = p):
             return b.subscribe(key, lambda _k, raw: loop.call_soon_threadsafe(self.inbox.append, (kind, raw, prod)))
 
@@ -209,6 +217,10 @@ class Gateway:
             sub(bus_keys.state_agent("tasks"), "tasks", "agent-runtime"),
             b.watch(bus_keys.proc_ready(p), lambda k, alive: loop.call_soon_threadsafe(self.inbox.append, ("ready", alive))),
             b.watch(bus_keys.proc_alive(p), lambda k, alive: loop.call_soon_threadsafe(self.inbox.append, ("alive", alive))),
+            # 辅助生产者就绪（带历史：api 启动时已在运行的立即回调）→ 主动补拉其事件
+            *(b.watch(bus_keys.proc_ready(n),
+                      lambda k, alive, n=n: loop.call_soon_threadsafe(self.inbox.append, ("side_ready", n, alive)))
+              for n in PROBE_PRODUCERS),
         ]
         self._tasks.append(asyncio.ensure_future(self._ticker()))
         self._tasks.append(asyncio.ensure_future(self._lag_sampler()))
@@ -220,6 +232,15 @@ class Gateway:
             self.seat["state"] = "HELD"
             self.seat_claimed_mono = time.monotonic_ns()
             self._seat_session_closed(holder)
+
+    def _post(self, item: tuple) -> None:
+        """`call_cb` 回复回调 → 主线程收件箱（只入队）。在途查询无法随 stop() 撤销：总线在事件循环关闭之后才关闭时，
+        以 BusClosed 回调在途查询，此前在回调线程抛 RuntimeError（Event loop is closed）；循环已关闭时丢弃。"""
+        loop = self.loop
+        if loop is None or loop.is_closed():
+            return
+        with contextlib.suppress(RuntimeError):
+            loop.call_soon_threadsafe(self.inbox.append, item)
 
     async def begin_stop(self, reason: str = "sigterm") -> None:
         """FR-104：置 stopping（新 call 与写类 REST 返回 213）→ 广播 `sys.shutting_down` 事件与 `status proc.api` →
@@ -262,7 +283,8 @@ class Gateway:
         for h in self._handles:
             with contextlib.suppress(Exception):
                 h.close()
-        for closer in (self.interest.close, self.gcs.close, self.cpub.close, self.events.close, self.source.close):
+        for closer in (self.playback.close, self.interest.close, self.gcs.close, self.cpub.close, self.events.close,
+                       self.source.close):
             with contextlib.suppress(Exception):
                 closer()
 
@@ -333,6 +355,8 @@ class Gateway:
                 s.tick_1hz()
             self._publish_perf()
             self._query_procs()
+            if self._probe_wanted:
+                self._issue_probes()
             self.rpc.gc()
         for s in self.sessions:
             if not s.hello or s.closing:
@@ -415,7 +439,7 @@ class Gateway:
             return
         roster = unpack_or_none(bf.get("roster"))
         if isinstance(roster, dict):
-            self._on_roster(roster, None)
+            self._apply_roster(roster)  # 不经 _on_roster：不改在途查询状态（FX-GW，M12-to-M11 第 2 条）
         if isinstance(bf.get("env"), (bytes, bytearray)):
             self.env.on_heartbeat(bytes(bf["env"]))
         for suffix, key in (("state_ext", "state_ext"), ("safety", "safety")):
@@ -443,7 +467,7 @@ class Gateway:
                 continue  # 非当前模式的生产者（回放中忽略实时低频状态，反之亦然）
             try:
                 if kind == "roster":
-                    self._on_roster(item[1], item[2])
+                    self._on_roster(item[1], item[2], item[3] if len(item) > 3 else None)
                 elif kind == "ext":
                     self.demux.feed_pairs("state_ext", item[1])
                 elif kind == "safety":
@@ -469,6 +493,10 @@ class Gateway:
                         self._on_producer_ready()
                 elif kind == "alive":
                     self.live_source.note_liveliness(bool(item[1]))
+                elif kind == "side_ready":
+                    if item[2]:
+                        self._probe_wanted.setdefault(item[1], time.monotonic_ns())
+                        self._issue_probes()
                 elif kind == "seat":
                     rep = item[1]
                     if isinstance(rep, dict) and isinstance(rep.get("seat"), dict):
@@ -511,7 +539,7 @@ class Gateway:
         if loop is None or not self.settings.has_supervisor:
             return
         self.bus.call_cb(bus_keys.SYS_PROCS, {"v": 1},
-                         lambda rep, err: loop.call_soon_threadsafe(self.inbox.append, ("procs", rep if err is None else None)),
+                         lambda rep, err: self._post(("procs", rep if err is None else None)),
                          timeout=0.5, retries=0)
 
     def _on_procs(self, rep: Any) -> None:
@@ -521,9 +549,28 @@ class Gateway:
         for it in items:
             it.pop("log_tail", None)
         self.proc_items = items
+        self._procs_known = True
+        if self._probe_wanted:
+            self._issue_probes()
         for it in items:
             self._proc_status(str(it["name"]), str(it.get("state")), it)
         self.procs_ch.publish(msgpack.packb({"items": items}, use_bin_type=True), self.frame_t_sim_ns)
+
+    def _issue_probes(self) -> None:
+        """对就绪的辅助生产者发起事件探测（`EventIngest.probe`）。纪元 = 该进程的重启次数 + 1：受监管时等首个 `sys/procs`
+        回复（≤ 1 s 一次），PROBE_FALLBACK_S 后仍未取得则按 1；不受监管（测试、inproc）时立即按 1。"""
+        now = time.monotonic_ns()
+        for name, t0 in list(self._probe_wanted.items()):
+            restarts = 0
+            if self.settings.has_supervisor:
+                it = next((it for it in self.proc_items if it.get("name") == name), None)
+                if it is not None and isinstance(it.get("restarts"), int):
+                    restarts = max(0, int(it["restarts"]))
+                elif not self._procs_known and now - t0 < int(PROBE_FALLBACK_S * 1e9):
+                    continue  # 等 sys/procs
+            del self._probe_wanted[name]
+            if self.events.probe(name, restarts + 1):
+                self.stats["event_probes"] = self.stats.get("event_probes", 0) + 1
 
     def on_proc_state(self, data: dict) -> None:
         """supervisor `evt/supervisor/proc`（kind `proc.state`，data `{name, from, to, restarts, rc, reason}`）。"""
@@ -552,7 +599,16 @@ class Gateway:
         self.set_status(status_msg("ring.layout_mismatch", "error", "二进制布局哈希不一致", source="sim-core", code=312))
 
     # ------------------------------------------------------------ roster 与逐机 channel（FR-035）
+    def roster_producer(self) -> str:
+        """当前模式的名册生产者：回放模式为 replay-worker（`ctl/replay/roster`），实时为 sim-core。"""
+        return "replay" if self.mode == "replay" else self.settings.producer
+
     def _request_roster(self, producer: str) -> None:
+        """查询 `ctl/<producer>/roster`。只接受当前模式的生产者（实时事件在回放中触发的查询忽略，模式切换时各自重取）；
+        已有查询在途时只置 pending，回复到达后按**当前模式**的生产者重查（M12-to-M11 第 2 条）。"""
+        if producer != self.roster_producer():
+            self.stats["roster_ignored"] = self.stats.get("roster_ignored", 0) + 1
+            return
         if self._roster_inflight:
             self._roster_pending = True
             return
@@ -562,7 +618,7 @@ class Gateway:
         self._roster_inflight = True
         self.stats["roster_fetches"] += 1
         self.bus.call_cb(bus_keys.ctl_roster(producer), {"v": 1},
-                         lambda rep, err: loop.call_soon_threadsafe(self.inbox.append, ("roster", rep, err)),
+                         lambda rep, err: self._post(("roster", rep, err, producer)),
                          timeout=1.0, retries=2)
 
     def _on_producer_ready(self) -> None:
@@ -598,13 +654,22 @@ class Gateway:
     def on_producer_started(self, ev: dict) -> None:
         self._request_roster(self.settings.producer)
 
-    def _on_roster(self, rep: Any, err: Any) -> None:
+    def _on_roster(self, rep: Any, err: Any, producer: str | None = None) -> None:
         self._roster_inflight = False
-        if self._roster_pending:
+        want = self.roster_producer()
+        stale = producer is not None and producer != want
+        if self._roster_pending or stale:
+            # 在途期间又有变化，或回复来自上一模式的生产者（open 时在途的实时查询）：按当前模式的生产者重查
             self._roster_pending = False
-            self._request_roster(self.settings.producer)
+            self._request_roster(want)
+        if stale:
+            self.stats["roster_stale"] = self.stats.get("roster_stale", 0) + 1
+            return  # 丢弃：回放模式不装入实时名册，反之亦然（M12-to-M11 第 2 条）
         if err is not None or not isinstance(rep, dict):
             return
+        self._apply_roster(rep)
+
+    def _apply_roster(self, rep: dict) -> None:
         self.roster_loaded = True
         entries = [e for e in rep.get("entries") or [] if isinstance(e, dict) and isinstance(e.get("id"), str)]
         new_ids = {e["id"]: e for e in entries}
@@ -835,7 +900,7 @@ class Gateway:
         cid = "seat-" + secrets.token_hex(6)
         principal = self.tokens.sign_principal(holder, "operator", cid, conn_id=None, seat=True)
         self.bus.call_cb(bus_keys.CTL_LEASE, {"v": 1, "cid": cid, "op": op, "principal": principal},
-                         lambda rep, err: loop.call_soon_threadsafe(self.inbox.append, ("seat", rep, err)),
+                         lambda rep, err: self._post(("seat", rep, err)),
                          timeout=1.0, retries=2)
         self.audit.write(f"seat.{op}", principal_id=holder, cid=cid)
 
@@ -1009,7 +1074,8 @@ class Gateway:
                 "channels": [{"id": c.id, "topic": c.topic, "seq": c.seq, "encodes": c.encodes, "hits": c.hits,
                               "subscribers": c.subscribers, "last_t_sim_ns": c.t_sim_ns}
                              for c in sorted(self.registry.by_id.values(), key=lambda c: c.id)],
-                "event_ring": {"oldest_seq": self.events.oldest, "newest_seq": self.events.newest},
+                "event_ring": {"oldest_seq": self.events.oldest, "newest_seq": self.events.newest,
+                               "count": len(self.events.ring), "bytes": self.events.ring.nbytes},
                 "interest": {"detail": self.interest.detail, "marks": self.interest.marks, "topics": self.interest.topics,
                              "seq": self.interest.seq},
                 "rpc": dict(self.rpc.stats), "cpub": dict(self.cpub.stats), "stats": dict(self.stats)}

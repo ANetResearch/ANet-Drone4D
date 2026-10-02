@@ -6,8 +6,8 @@
   清理 supervisor 已不存在的残留 tmpfs 目录；配额与磁盘余量检查；打开 zenoh 汇合点（只监听回环）；按 `start_after` 启动；
   打印 READY（管理口令只在 stdout 为 TTY 时打印明文）。
 - 监管：`asyncio.create_subprocess_exec` 启动（不用 fork，新会话，stdout 与 stderr 合并为日志管道）；waitpid 检测退出；
-  5 Hz 巡检心跳（sim-core 读 StateRing 头部，其余读 `hb.<name>`）；心跳超过 `stale_s` 判挂死：SIGUSR1（faulthandler 栈）
-  → SIGTERM → 1 s → SIGKILL；退避 0.5/1/2/4/8 s；60 s 滑动窗口内第 6 次异常重启熔断为 FAILED（首次启动、sys/restart、
+  5 Hz 巡检心跳（sim-core 读 StateRing 头部，其余读 `hb.<name>`）；心跳超过 `stale_s` 判挂死：转 STOPPING、SIGUSR1
+  （faulthandler 栈）→ 0.1 s → SIGKILL（ADR-065）；退避 0.1/1/2/4/8 s（首档 ADR-061）；60 s 滑动窗口内第 6 次异常重启熔断为 FAILED（首次启动、sys/restart、
   sys/start 不计数）；ci profile 下核心进程熔断时以退出码 20 退出。
 - 服务：`sys/procs`、`sys/restart{name, reset_breaker}`、`sys/start`、`sys/stop`（仅 on_demand 进程）、`sys/run`（D1-ext，
   D1-core 回复拒绝）、`sys/inject{name, fault}`（只在 ci profile 注册）；进程状态变化发 `evt/supervisor/proc`（kind proc.state）。
@@ -15,9 +15,21 @@
   `runs/<run>/crash/<name>-<t_wall_ns>.txt`。
 - 停止（SIGTERM、SIGINT）：api → sim-core → 其余（逆启动序），每步 SIGTERM 后 `grace_s`（5 s）未退出即 SIGKILL；
   生成 `SHA256SUMS`；除非 `keep_run_dir`，删除 tmpfs 运行目录。
+- 退出检测不依赖管道关闭（FX2-R3-gateway）：`proc.wait()` 要等 stdout 管道关闭，继承了管道的后代存活时会一直阻塞，
+  因此同时按 `EXIT_POLL_S` 查 `returncode`（SIGCHLD 时即写入）。
+- 热备用（`procs[].standby`，FX2-R3-sim，ADR-070；sim-core 启用）：主进程启动或接替时（`STANDBY_DELAY_S` 之后）另起一个同命令、
+  带 `AWR_STANDBY=1` 的进程（新会话，钉在 `standby_cpus`），它完成导入、插件装配与 numba 缓存加载后在 stdout 打印
+  `AWR_STANDBY_READY` 并阻塞读 stdin。任何原因需要启动该进程时（退避到期、sys/restart、熔断复位），若备用进程已就绪即"接替"：
+  按 `cpus`、`nice` 重新调度，经 stdin 发一行 JSON（当前的子进程环境，含 `AWR_RESTART_COUNT`、`AWR_LAST_EXIT`），把它记为
+  该进程的实例并进入 STARTING；其余语义（退避、熔断计数、挂死判定、日志）与冷启动相同。冷启动 sim-core 约 2 s，接替约
+  0.5 s（D1-AC-11b：挂死 ≤ 4 s 恢复）。备用进程在接替前退出时 `STANDBY_RETRY_S` 后重起；停止该进程时一并停止。
+- 后代回收（FX2-R3-gateway；D1 验收第 2 轮 4.1b）：子进程以新会话启动（pgid = pid），它以任何方式退出后，同组仍存活的后代
+  （sim-core 的 plan-pool 工作进程与 multiprocessing resource_tracker 等）先收 SIGTERM，`REAP_GRACE_S` 后仍在的收 SIGKILL。
+  此前 sim-core 被 SIGKILL（挂死处置、熔断、kill -9）时这些后代成为孤儿常驻（每个约 160 MB）。resource_tracker 忽略 SIGTERM，
+  在工作进程退出、管道 EOF 后自行清理共享资源并退出，因此先 SIGTERM、后 SIGKILL。停止时等待回收完成（≤ `REAP_GRACE_S`）。
 
-线上状态枚举：STOPPED、STARTING、RUNNING、STOPPING、BACKOFF、FAILED；挂死（HUNG）是 SIGTERM 到退出之间的内部过渡，
-对外仍报告 RUNNING 直至进程退出（19 §4.2 计数口径）。
+线上状态枚举：STOPPED、STARTING、RUNNING、STOPPING、BACKOFF、FAILED；判定挂死（HUNG）时即转 STOPPING（reason hung），
+faulthandler 转储后 SIGKILL，退出后按退避重启（ADR-065；19 §4.2 计数口径不变：挂死计为一次异常退出）。
 """
 
 from __future__ import annotations
@@ -63,6 +75,12 @@ STATES = (STOPPED, STARTING, RUNNING, STOPPING, BACKOFF, FAILED)
 EXIT_CORE_PROC_FAILED = 20
 MONITOR_HZ = 5.0
 HUNG_TERM_WAIT_S = 1.0
+REAP_GRACE_S = 1.0  # 子进程退出后，其进程组残留后代 SIGTERM 到 SIGKILL 的间隔
+EXIT_POLL_S = 0.02  # 退出检测不依赖管道关闭：returncode 轮询周期（M11-AC-005 要求 kill -9 ≤ 100 ms 检出）
+STANDBY_DELAY_S = 0.0  # 主进程启动（或接替）时即起热备用进程：两者预热约 2 s 同时进行，主进程就绪时备用进程也已就绪；
+#                        备用进程钉在 standby_cpus（core7），不与主进程（core1）争用 CPU（ADR-070）
+STANDBY_RETRY_S = 10.0  # 热备用进程在接替前退出时的重起间隔
+STANDBY_READY = b"AWR_STANDBY_READY"  # 热备用进程完成预热后在 stdout 打印的一行
 STOP_ORDER_FIRST = ("api", "sim-core")
 _CLK_TCK = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
 _PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
@@ -180,10 +198,27 @@ class Proc:
         self._cpu_prev: tuple[float, float] | None = None
         self.cpu_pct: float | None = None
         self.rss_mb: float | None = None
+        self.spare: Spare | None = None  # 热备用进程（spec.standby）
+        self.spare_task: asyncio.Task | None = None  # 延迟起备用进程的任务
 
     @property
     def alive(self) -> bool:
         return self.process is not None and self.process.returncode is None
+
+
+class Spare:
+    """热备用进程（模块文档"热备用"）。"""
+
+    def __init__(self, process: asyncio.subprocess.Process) -> None:
+        self.process = process
+        self.pid = process.pid
+        self.ready = False
+        self.promoted = False
+        self.spawned_mono = time.monotonic()
+
+    @property
+    def alive(self) -> bool:
+        return self.process.returncode is None
 
 
 # ---------------------------------------------------------------- supervisor
@@ -214,6 +249,8 @@ class Supervisor:
         self.exit_code = 0
         self._tasks: list[asyncio.Task] = []
         self._bgtasks: set[asyncio.Future] = set()
+        self._reaps: set[asyncio.Future] = set()
+        self.reaped_groups = 0  # 回收过残留后代的进程组数（诊断）
         self._admin_password = ""
         self._audit_fd: int | None = None
 
@@ -364,9 +401,13 @@ class Supervisor:
             loop.call_soon_threadsafe(self._mark_ready, key.split("/")[1])
 
     def _mark_ready(self, name: str) -> None:
+        """liveliness `proc/<name>/ready` 到达即转 RUNNING（与巡检循环中的同一判据；不再等下一个 5 Hz 巡检周期，
+        kill -9 后的重启可见时刻提前最多 0.2 s，D1-AC-11a，FX-SIM1）。"""
         p = self.procs.get(name)
         if p is not None and p.state == STARTING:
             p.ready_seen = True
+            if p.alive and not p.stop_requested:
+                self._set_state(p, RUNNING, reason="ready")
 
     # ------------------------------------------------------------ 状态与事件
     def _set_state(self, p: Proc, to: str, *, rc: int | None = None, reason: str | None = None) -> None:
@@ -446,6 +487,8 @@ class Supervisor:
     async def _spawn(self, p: Proc) -> None:
         if self.shutting_down or p.stop_requested:
             return
+        if p.spec.standby and await self._promote(p):
+            return
         argv = self._argv(p)
         missing = self._module_missing(argv)
         if missing is not None:
@@ -479,6 +522,8 @@ class Supervisor:
         self._set_state(p, RUNNING if p.spec.liveness.mode == "exit_only" else STARTING)
         self._tasks.append(asyncio.ensure_future(self._pump(p, proc)))
         self._tasks.append(asyncio.ensure_future(self._wait(p, proc)))
+        if p.spec.standby:
+            self._schedule_spare(p)
 
     def _apply_sched(self, p: Proc) -> None:
         pid = p.pid
@@ -500,6 +545,128 @@ class Supervisor:
             except (PermissionError, OSError):
                 log.warning("nice not permitted, using 0", extra={"kv": {"name": p.name, "nice": p.spec.nice}})
 
+    # ------------------------------------------------------------ 热备用（ADR-070）
+    def _schedule_spare(self, p: Proc, delay_s: float | None = None) -> None:
+        if not p.spec.standby or self.shutting_down or p.stop_requested or p.spare is not None:
+            return
+        if p.spare_task is not None and not p.spare_task.done():
+            return
+        d = STANDBY_DELAY_S if delay_s is None else delay_s
+
+        async def later() -> None:
+            await asyncio.sleep(d)
+            await self._spawn_spare(p)
+
+        p.spare_task = asyncio.ensure_future(later())
+
+    async def _spawn_spare(self, p: Proc) -> None:
+        if self.shutting_down or p.stop_requested or p.spare is not None:
+            return
+        argv = self._argv(p)
+        env = self._env(p)
+        env["AWR_STANDBY"] = "1"
+        cwd = None
+        if p.spec.cwd:
+            cwd = Path(p.spec.cwd)
+            cwd = cwd if cwd.is_absolute() else self.root / cwd
+        try:
+            proc = await asyncio.create_subprocess_exec(*argv, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                                                        stderr=asyncio.subprocess.STDOUT, env=env,
+                                                        cwd=str(cwd) if cwd else None, start_new_session=True)
+        except OSError as e:
+            log.warning("standby spawn failed", extra={"kv": {"name": p.name, "err": str(e)}})
+            return
+        sp = p.spare = Spare(proc)
+        if self.cfg.cpu_pin_enabled and hasattr(os, "sched_setaffinity"):
+            ncpu = os.cpu_count() or 1
+            want = p.spec.standby_cpus if p.spec.standby_cpus is not None else \
+                [c for c in range(ncpu) if c not in set(p.spec.cpus or [])]
+            cpus = {c for c in want if 0 <= c < ncpu}
+            if cpus:
+                with contextlib.suppress(OSError):
+                    os.sched_setaffinity(proc.pid, cpus)
+        log.info("standby spawned", extra={"kv": {"name": p.name, "pid": proc.pid}})
+        self._tasks.append(asyncio.ensure_future(self._pump_spare(p, sp)))
+        self._tasks.append(asyncio.ensure_future(self._watch_spare(p, sp)))
+
+    async def _pump_spare(self, p: Proc, sp: Spare) -> None:
+        proc = sp.process
+        assert proc.stdout is not None
+        while True:
+            try:
+                line = await proc.stdout.readline()
+            except (ValueError, asyncio.LimitOverrunError):
+                line = await proc.stdout.read(65536)
+            if not line:
+                return
+            if not sp.ready and line.startswith(STANDBY_READY):
+                sp.ready = True
+                log.info("standby ready", extra={"kv": {"name": p.name, "pid": sp.pid,
+                                                        "warm_s": round(time.monotonic() - sp.spawned_mono, 2)}})
+            with contextlib.suppress(OSError):
+                p.sink.write_line(line)
+
+    async def _watch_spare(self, p: Proc, sp: Spare) -> None:
+        """接替之前的备用进程退出：清除并在 STANDBY_RETRY_S 后重起（接替之后由 `_wait` 负责）。"""
+        proc = sp.process
+        while proc.returncode is None and not sp.promoted:
+            await asyncio.sleep(EXIT_POLL_S * 5)
+        if sp.promoted:
+            return
+        with contextlib.suppress(Exception):
+            await proc.wait()
+        self._reap_group(f"{p.name}.standby", proc.pid)
+        if p.spare is sp:
+            p.spare = None
+        if not self.shutting_down and not p.stop_requested:
+            log.warning("standby exited before promotion", extra={"kv": {"name": p.name, "rc": proc.returncode}})
+            self._schedule_spare(p, STANDBY_RETRY_S)
+
+    async def _kill_spare(self, p: Proc) -> None:
+        if p.spare_task is not None:
+            p.spare_task.cancel()
+            p.spare_task = None
+        sp, p.spare = p.spare, None
+        if sp is None or not sp.alive:
+            return
+        sp.promoted = True  # 停止监视（不再重起）
+        with contextlib.suppress(ProcessLookupError):
+            sp.process.kill()
+        with contextlib.suppress(TimeoutError, Exception):
+            await asyncio.wait_for(sp.process.wait(), 2.0)
+        self._reap_group(f"{p.name}.standby", sp.pid)
+
+    async def _promote(self, p: Proc) -> bool:
+        """已就绪的备用进程接替为 p 的实例；没有可用的备用进程时返回 False（调用方冷启动）。"""
+        sp = p.spare
+        if sp is None or not sp.ready or not sp.alive or sp.process.stdin is None:
+            return False
+        p.spare = None
+        sp.promoted = True
+        proc = sp.process
+        p.hung, p.kill_reason, p.ready_seen, p.restart_now = False, None, False, False
+        p.exited = asyncio.Event()
+        p.spawn_mono_ns = time.monotonic_ns()
+        p.process, p.pid, p.started_mono = proc, proc.pid, time.monotonic()
+        p._cpu_prev = None
+        self._apply_sched(p)
+        try:
+            proc.stdin.write((json.dumps({"env": self._env(p)}) + "\n").encode())
+            await proc.stdin.drain()
+            proc.stdin.close()
+        except (BrokenPipeError, ConnectionResetError, OSError) as e:
+            log.warning("standby promotion failed", extra={"kv": {"name": p.name, "err": str(e)}})
+            p.process, p.pid = None, None
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
+            self._reap_group(f"{p.name}.standby", proc.pid)
+            return False
+        log.info("standby promoted", extra={"kv": {"name": p.name, "pid": proc.pid, "restarts": p.restarts}})
+        self._set_state(p, RUNNING if p.spec.liveness.mode == "exit_only" else STARTING, reason="standby")
+        self._tasks.append(asyncio.ensure_future(self._wait(p, proc)))
+        self._schedule_spare(p)  # 立即起下一个备用进程
+        return True
+
     async def _pump(self, p: Proc, proc: asyncio.subprocess.Process) -> None:
         assert proc.stdout is not None
         while True:
@@ -513,7 +680,18 @@ class Supervisor:
                 p.sink.write_line(line)
 
     async def _wait(self, p: Proc, proc: asyncio.subprocess.Process) -> None:
-        rc = await proc.wait()
+        # `proc.wait()` 要等子进程退出且 stdout 管道关闭才返回；继承了该管道的后代（plan-pool 工作进程、resource_tracker）
+        # 仍存活时它会一直阻塞，退出检测、重启与后代回收都无从发生（FX2-R3-gateway）。退出码在 SIGCHLD 时即写入
+        # `proc.returncode`，因此在等 `proc.wait()` 的同时每 EXIT_POLL_S 查一次 returncode。
+        waiter = asyncio.ensure_future(proc.wait())
+        while proc.returncode is None:
+            done, _ = await asyncio.wait({waiter}, timeout=EXIT_POLL_S)
+            if done:
+                break
+        if not waiter.done():
+            waiter.cancel()
+        rc = proc.returncode if proc.returncode is not None else waiter.result()
+        self._reap_group(p.name, proc.pid)
         if p.process is not proc:
             return
         p.process, p.pid = None, None
@@ -523,6 +701,25 @@ class Supervisor:
             p.ring = None
         p.exited.set()
         self._on_exit(p, rc)
+
+    def _reap_group(self, name: str, pgid: int) -> None:
+        """子进程（新会话，pgid = pid）退出后回收其进程组的残留后代：立即 SIGTERM，`REAP_GRACE_S` 后 SIGKILL 仍存活者。
+        组内已无进程时 killpg 返回 ESRCH，什么都不做；组 id 在仍有成员时不会被内核复用，不会误杀无关进程。"""
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            return
+        self.reaped_groups += 1
+        log.warning("reaping leftover descendants of exited child", extra={"kv": {"name": name, "pgid": pgid}})
+
+        async def finish() -> None:
+            await asyncio.sleep(REAP_GRACE_S)
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(pgid, signal.SIGKILL)
+
+        t = asyncio.ensure_future(finish())
+        self._reaps.add(t)
+        t.add_done_callback(self._reaps.discard)
 
     def _write_crash(self, p: Proc, rc: int, reason: str) -> None:
         path = self.crash_dir / f"{p.name}-{time.time_ns()}.txt"
@@ -594,8 +791,11 @@ class Supervisor:
             await asyncio.sleep(0.1)
         with contextlib.suppress(ProcessLookupError):
             proc.send_signal(sig)
+            if sig == signal.SIGKILL:
+                with contextlib.suppress(ProcessLookupError):
+                    os.kill(proc.pid, signal.SIGCONT)  # 被 SIGSTOP 挂起的进程也要能收到 SIGKILL 后回收
         try:
-            await asyncio.wait_for(asyncio.shield(p.exited.wait()), grace_s)
+            await asyncio.wait_for(asyncio.shield(p.exited.wait()), grace_s if grace_s > 0 else 5.0)
         except TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 proc.kill()
@@ -606,6 +806,14 @@ class Supervisor:
 
     async def _kill_hung(self, p: Proc, reason: str) -> None:
         p.kill_reason = reason
+        if reason == "hung":
+            # 判定挂死即对外可见（STOPPING，reason hung），faulthandler 转储后直接 SIGKILL：主循环挂死的进程处理不了
+            # SIGTERM（被 SIGSTOP 时甚至收不到），原先的 1 s SIGTERM 宽限只推迟检出与恢复（D1-AC-11b：检出 ≤ 2.5 s、
+            # 恢复 ≤ 4 s；ADR-065）
+            if p.state == RUNNING:
+                self._set_state(p, STOPPING, reason="hung")
+            await self._signal_and_wait(p, grace_s=0.0, dump=True, sig=signal.SIGKILL)
+            return
         await self._signal_and_wait(p, grace_s=HUNG_TERM_WAIT_S, dump=True)
 
     # ------------------------------------------------------------ 巡检
@@ -676,6 +884,8 @@ class Supervisor:
                     age = self._hb_age_ms(p)
                     if p.ready_seen or age is not None:
                         self._set_state(p, RUNNING, reason="ready")
+                        if p.spec.standby:
+                            self._schedule_spare(p)
                     elif now - p.started_mono > lv.startup_grace_s and p.kill_reason is None:
                         p.kill_reason = "startup_timeout"
                         self._bg(self._kill_hung(p, "startup_timeout"))
@@ -793,6 +1003,7 @@ class Supervisor:
         if p.backoff_task is not None:
             p.backoff_task.cancel()
             p.backoff_task = None
+        await self._kill_spare(p)
         if p.alive:
             self._set_state(p, STOPPING, reason="stop")
             await self._signal_and_wait(p, grace_s=self.cfg.stop_for(p.spec).grace_s)
@@ -904,6 +1115,8 @@ class Supervisor:
         rest += [p for p in procs if p not in first and p not in rest]
         for p in first + rest:
             await self.stop_proc(p)
+        if self._reaps:  # 等残留后代回收完成（≤ REAP_GRACE_S），避免 supervisor 退出后留下孤儿
+            await asyncio.wait(list(self._reaps), timeout=REAP_GRACE_S + 1.0)
         for t in self._tasks:
             t.cancel()
         for t in self._tasks:

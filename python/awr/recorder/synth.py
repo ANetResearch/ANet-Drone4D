@@ -240,6 +240,19 @@ def synthesize(persist_dir: Path, *, run_id: str | None = None, n: int = 20, sim
             "wall_s": time.perf_counter() - t0_wall, "frames": frame_seq, "events": seq_ev, "fleet": fleet.ids}
 
 
+def world_binding(world_id: str, worlds_dir: Path | None = None) -> tuple[str, str]:
+    """(content_version, coordinate_sha256) of an installed world, so that a synthetic recording binds to it (122 otherwise
+    once the current run records: replay-worker compares against the current run's binding); ("synth", zeros) when absent."""
+    import os
+
+    d = Path(worlds_dir or os.environ.get("AWR_WORLDS_DIR") or Path(__file__).resolve().parents[3] / "worlds") / world_id
+    try:
+        w = json.loads((d / "world.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "synth", "0" * 64
+    return str(w.get("contentVersion") or "synth"), str((w.get("coordinate") or {}).get("sha256") or "0" * 64)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="合成 awr 录制（M12 synth）")
     ap.add_argument("--out", type=Path, required=True)
@@ -249,9 +262,15 @@ def main() -> None:
     ap.add_argument("--rate", type=float, default=1.0)
     ap.add_argument("--events-per-s", type=float, default=5.0)
     ap.add_argument("--marked", type=int, default=16)
+    ap.add_argument("--world", default="shenzhen")
+    # 缺省绑定到已安装世界的 contentVersion 与坐标哈希（FX-GW：e2e 与 perf/m12 回放用例的录制与当前运行兼容，否则 122）
+    ap.add_argument("--content-version", default=None, help="缺省取 worlds/<world>/world.json；无世界时为 synth")
+    ap.add_argument("--coordinate-sha256", default=None)
     a = ap.parse_args()
+    cv, coord = world_binding(a.world)
     ids = [f"sim-{i:04d}" for i in range(min(a.marked, a.n))]
-    out = synthesize(a.out, n=a.n, sim_s=a.sim_s, seed=a.seed, rate=a.rate, events_per_s=a.events_per_s, marked=ids)
+    out = synthesize(a.out, n=a.n, sim_s=a.sim_s, seed=a.seed, rate=a.rate, events_per_s=a.events_per_s, marked=ids,
+                     world_id=a.world, content_version=a.content_version or cv, coordinate_sha256=a.coordinate_sha256 or coord)
     print(json.dumps({k: v for k, v in out.items() if k != "fleet"}, ensure_ascii=False, indent=1))
 
 

@@ -250,4 +250,7 @@ async def _on_hello(gw: Gateway, s: ClientSession, m: dict) -> bool:
                              "message": "断线期间的部分事件已超出事件环，请经 /api/events 补拉", "source": "api",
                              "code": int(Reason.EVENTS_TRUNCATED)})
             s.pending_events.extend(gw.events.since(since))  # hello 在订阅之前：补发不按 filter 过滤
+    pb = getattr(gw, "playback", None)
+    if pb is not None:
+        pb.on_hello(s)  # 回放模式：迟到者单独收到当前 playbackState（17 §6.11 补充约定第 5 条）
     return False

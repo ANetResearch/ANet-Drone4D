@@ -16,7 +16,7 @@ run:
 net:
   bind: 127.0.0.1               # AWR_BIND
   port: 8000                    # AWR_PORT
-  port_offset: 0                # AWR_PORT_OFFSET（0–9），8000、7447、5173、4173、8001 统一加 10·k
+  port_offset: 0                # AWR_PORT_OFFSET（0–31，ADR-055），8000、7447、5173、4173、8001 统一加 10·k
   static_port: 8001             # AWR_STATIC_PORT；只在静态拆分回退启用时监听（10 AD-07）
   access_mode: auto             # AWR_ACCESS_MODE：auto | loopback | lan
   origins: []                   # AWR_ORIGINS（逗号分隔）；回环 Origin 永远放行
@@ -34,7 +34,7 @@ cpu:
   pin: auto                     # AWR_CPU_PIN：auto（≥ 8 核且 profile ≠ ci 时启用）| on | off
 defaults:
   env: {OMP_NUM_THREADS: "1", OPENBLAS_NUM_THREADS: "1", MKL_NUM_THREADS: "1", PYTHONUNBUFFERED: "1"}
-  restart: {policy: always, backoff_s: [0.5, 1, 2, 4, 8], max: {count: 5, window_s: 60}}   # 窗口内第 6 次重启熔断（19 §4.2）
+  restart: {policy: always, backoff_s: [0.1, 1, 2, 4, 8], max: {count: 5, window_s: 60}}   # 首档 0.1 s（ADR-061）；窗口内第 6 次重启熔断（19 §4.2）
   stop: {signal: SIGTERM, grace_s: 5}
   log: {max_mb: 10, backups: 5, tail_lines: 200}
 real_ops:
@@ -49,6 +49,8 @@ procs:
     nice: -5                    # 需要 CAP_SYS_NICE，否则取 0 并告警
     liveness: {ring: state.sim-core, stale_s: 2.0, startup_grace_s: 15}
     id_range: [0, 1024]
+    standby: true               # 热备用进程：重启时直接接替（AWR-19 §4.2，ADR-070；D1-AC-11b 挂死 ≤ 4 s 恢复）
+    standby_cpus: [7]           # 等待期间钉在 plan-pool 所在的 core7（ADR-017），接替时改为 cpus
   - name: api
     layer: core
     cmd: [uvicorn, awr.api.main:app, --host, "${net.bind}", --port, "${net.port_effective}",

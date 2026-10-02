@@ -2,8 +2,9 @@
 
 cmd：
 - open `{run, segment}`：席位持有者（116）且 operator 以上（115）；实时会话须为 PAUSED（117）→ `playbackState{opening}` →
-  受监管时经 supervisor `sys/start{name: replay-worker, args{run, segment}}` 启动按需进程（失败 213）→
-  `ctl/replay-worker/open` → 回复 `{status, code, data_start_ns, data_end_ns, speed_max, decimation_s, lineage, gen, backfill,
+  受监管时经 supervisor `sys/start{name: replay-worker, args{run, segment}}` 启动按需进程（105 进程已在运行视为可继续，其余失败
+  213），再等待 liveliness `proc/replay-worker/ready`（≤ 10 s，M11-FR-079；冷启动导入 numpy、mcap、zenoh 约 1–2 s，此前没有
+  queryable）→ `ctl/replay-worker/open` → 回复 `{status, code, data_start_ns, data_end_ns, speed_max, decimation_s, lineage, gen, backfill,
   warnings}`（绑定不一致 122）→ Gateway 切到 ReplaySource（`state.replay`）、把 backfill 原子装入各 channel（各 seq + 1）、
   mode = replay、全局 epoch + 1（TIME 置 bit7）→ 重发 `serverInfo{mode: replay, dataStart_ns, dataEnd_ns}` →
   `playbackState{paused}` → SNAPSHOT；
@@ -13,6 +14,8 @@ cmd：
   replay-worker 钳制并在 warnings 带 `SPEED_CLAMPED`；
 - close → `ctl/replay-worker/close` → 切回 LiveSource、mode = live、epoch + 1 → `serverInfo{mode: live}` → `playbackState{idle}` →
   SNAPSHOT；受监管时 `sys/stop{replay-worker}`。
+回放打开期间监视 `proc/replay-worker/alive`：进程崩溃（kill -9 等）时向全部连接广播 `playbackState{status: error, code: 213}`
+（M12-FR-051、M12-AC-051：UI 1 s 内提示），保持回放模式直到 close（此时不再调用已不存在的 worker）。
 每条 cmd 以同一 `request_id` 回一条 playbackState（发给全部连接：回放是会话级模式）；回复中的 gen 记入 ReplaySource 的已知 gen，
 同 gen 的环 segment 变化不再 + 1。回放期间一切写操作返回 118（RpcRouter 入口 ①）。
 """
@@ -23,6 +26,7 @@ import asyncio
 import contextlib
 import logging
 import secrets
+import time
 from typing import TYPE_CHECKING, Any
 
 import msgpack
@@ -44,6 +48,7 @@ log = logging.getLogger("awr.api.playback")
 
 WORKER = "replay-worker"
 SPEED_MIN, SPEED_MAX = 0.1, 20.0
+READY_TIMEOUT_S = 10.0  # sys/start 之后等待 proc/replay-worker/ready 的上限（M12-to-M11 第 1 条）
 
 
 class PlaybackController:
@@ -60,8 +65,11 @@ class PlaybackController:
         self.lineage: list[dict] = []
         self.decimation_s: float | None = None
         self.busy = False
-        self.stats = {"opens": 0, "seeks": 0, "closes": 0, "errors": 0}
+        self.worker_lost = False
+        self.stats = {"opens": 0, "seeks": 0, "closes": 0, "errors": 0, "worker_lost": 0, "ready_waits": 0}
+        self.seek_ms: list[float] = []  # 最近 64 次 seek 的服务端总时延（ms，诊断）
         self._tasks: set[asyncio.Task] = set()
+        self._alive_watch: Any = None
 
     # ------------------------------------------------------------ 入口
     def handle(self, s: ClientSession, m: dict) -> None:
@@ -137,8 +145,13 @@ class PlaybackController:
             rep = await gw.bus.call(bus_keys.SYS_START, {"v": 1, "cid": cid, "name": WORKER,
                                                          "args": {"run": self.run, "segment": self.segment}},
                                     timeout=20.0, retries=0)
-            if not isinstance(rep, dict) or rep.get("status") != "accepted":
-                self._error(s, rid, int((rep or {}).get("code") or Reason.SERVICE_UNAVAILABLE))
+            code = int(rep.get("code") or 0) if isinstance(rep, dict) else int(Reason.SERVICE_UNAVAILABLE)
+            # 105：进程已在运行（例如上一次 open 失败或 close 后的空闲期内），可以继续 open
+            if not isinstance(rep, dict) or (rep.get("status") != "accepted" and code != int(Reason.STATE)):
+                self._error(s, rid, code or int(Reason.SERVICE_UNAVAILABLE))
+                return
+            if not await self._wait_ready(READY_TIMEOUT_S):
+                self._error(s, rid, int(Reason.SERVICE_UNAVAILABLE))
                 return
         rep = await self._call("open", {"v": 1, "cid": cid, "run": self.run, "segment": self.segment,
                                         "principal": self._principal(s, cid)}, timeout=5.0)
@@ -154,6 +167,8 @@ class PlaybackController:
         self.speed = 1.0
         self.status = "paused"
         self.stats["opens"] += 1
+        self.worker_lost = False
+        self._watch_worker()
         gw.enter_replay(self.gen, rep.get("backfill"))
         self._broadcast(rid, warnings=rep.get("warnings"))
         gw.audit.write("playback.open", principal_id=s.principal.id, cid=cid,
@@ -161,11 +176,13 @@ class PlaybackController:
 
     async def _cmd_seek(self, s: ClientSession, rid: str, m: dict) -> None:
         gw = self.gw
+        t0 = time.perf_counter()
         prev = self.status
         self.status = "buffering"
         self._broadcast(rid)
         cid = "pb-" + secrets.token_hex(6)
         rep = await self._call("seek", {"v": 1, "cid": cid, "t_ns": int(m["seek_ns"])})
+        t1 = time.perf_counter()
         if rep.get("status") not in ("accepted", "ok", None) or int(rep.get("code") or 0):
             self.status = prev
             self._error(s, rid, int(rep.get("code") or Reason.STATE))
@@ -175,6 +192,13 @@ class PlaybackController:
         self.stats["seeks"] += 1
         gw.replay_seek(self.gen, rep.get("backfill"))  # 装入 backfill → epoch + 1（TIME 入队）
         self._broadcast(rid, did_seek=True, current_ns=int(rep.get("t_ns") or m["seek_ns"]))  # 再 playbackState，后 SNAPSHOT
+        # 服务端分段时延（D1-AC-18 诊断：区分服务端与前端）：worker 往返（含 worker 侧 seek）、backfill 装入与纪元切换
+        t2 = time.perf_counter()
+        sk = {"call_ms": round((t1 - t0) * 1e3, 2), "load_ms": round((t2 - t1) * 1e3, 2), "total_ms": round((t2 - t0) * 1e3, 2),
+              "worker_ms": rep.get("worker_ms"), "worker_queue_ms": rep.get("queue_ms"), "seek_ns": int(m["seek_ns"])}
+        self.seek_ms.append(sk["total_ms"])
+        del self.seek_ms[:-64]
+        log.info("playback seek", extra={"kv": sk})
 
     async def _cmd_play(self, s: ClientSession, rid: str, m: dict) -> None:
         await self._simple(s, rid, "play", "playing")
@@ -203,8 +227,11 @@ class PlaybackController:
     async def _cmd_close(self, s: ClientSession, rid: str, m: dict) -> None:
         gw = self.gw
         cid = "pb-" + secrets.token_hex(6)
-        with contextlib.suppress(BusTimeout, BusError):
-            await self._call("close", {"v": 1, "cid": cid})
+        self._unwatch_worker()
+        if not self.worker_lost:  # 进程已丢失时不再等待两次查询超时
+            with contextlib.suppress(BusTimeout, BusError):
+                await self._call("close", {"v": 1, "cid": cid})
+        self.worker_lost = False
         self.status = "idle"
         self.stats["closes"] += 1
         gw.exit_replay()
@@ -213,6 +240,74 @@ class PlaybackController:
             with contextlib.suppress(BusTimeout, BusError):
                 await gw.bus.call(bus_keys.SYS_STOP, {"v": 1, "cid": cid, "name": WORKER}, timeout=5.0, retries=0)
         gw.audit.write("playback.close", principal_id=s.principal.id, cid=cid)
+
+    # ------------------------------------------------------------ replay-worker 就绪与存活
+    async def _wait_ready(self, timeout: float) -> bool:
+        """等待 liveliness `proc/replay-worker/ready`（replay-worker 在全部 queryable 声明之后才 `bus.ready()`）。
+        watch 带历史：token 已存在时立即回调。"""
+        loop = asyncio.get_running_loop()
+        ev = asyncio.Event()
+
+        def on_change(_k: str, alive: bool) -> None:  # 总线回调线程：只入队（PY-CB-01）
+            if alive and not loop.is_closed():
+                loop.call_soon_threadsafe(ev.set)
+
+        self.stats["ready_waits"] += 1
+        h = self.gw.bus.watch(bus_keys.proc_ready(WORKER), on_change)
+        try:
+            await asyncio.wait_for(ev.wait(), timeout)
+            return True
+        except TimeoutError:
+            log.warning("replay-worker not ready", extra={"kv": {"timeout_s": timeout}})
+            return False
+        finally:
+            with contextlib.suppress(Exception):
+                h.close()
+
+    def _watch_worker(self) -> None:
+        """回放打开期间监视 `proc/replay-worker/alive`；撤销即视为进程丢失（M12-FR-051）。"""
+        self._unwatch_worker()
+        loop = self.gw.loop
+        if loop is None:
+            return
+
+        def on_change(_k: str, alive: bool) -> None:  # 总线回调线程：只入队（PY-CB-01）；停止过程中迟到的撤销不再投递
+            if not alive and not loop.is_closed():
+                loop.call_soon_threadsafe(self._on_worker_lost)
+
+        with contextlib.suppress(Exception):
+            self._alive_watch = self.gw.bus.watch(bus_keys.proc_alive(WORKER), on_change)
+
+    def _unwatch_worker(self) -> None:
+        h, self._alive_watch = self._alive_watch, None
+        if h is not None:
+            with contextlib.suppress(Exception):
+                h.close()
+
+    def _on_worker_lost(self) -> None:
+        if self.gw.mode != "replay" or self.worker_lost or self._alive_watch is None:
+            return
+        self.worker_lost = True
+        self.stats["worker_lost"] += 1
+        self.status = "error"
+        log.warning("replay-worker lost during replay", extra={"kv": {"run": self.run, "segment": self.segment}})
+        msg = jdump(self.state_msg("", code=int(Reason.SERVICE_UNAVAILABLE)))
+        for s in self.gw.sessions:
+            if s.hello and not s.closing:
+                s.send_ctrl(msg)
+        self.gw.audit.write("playback.worker_lost", detail={"run": self.run, "segment": self.segment})
+
+    def close(self) -> None:
+        self._unwatch_worker()
+
+    def on_hello(self, s: ClientSession) -> None:
+        """回放模式下的新连接（页面刷新、另一客户端加入）：hello 之后单独补发一次当前 playbackState（`request_id` 为空；
+        replay-worker 已丢失时为 `error, 213`）。此前只在状态变化时广播，迟到者不知道 run、段、dataStart/End 与 speed_max
+        （FX-WEB2-to-M11 第 1 条；17 §6.11 补充约定第 5 条）。"""
+        if self.gw.mode != "replay":
+            return
+        code = int(Reason.SERVICE_UNAVAILABLE) if self.worker_lost else None
+        s.send_ctrl(jdump(self.state_msg("", code=code)))
 
     # ------------------------------------------------------------ playbackState
     def state_msg(self, rid: str, *, did_seek: bool = False, code: int | None = None, current_ns: int | None = None,

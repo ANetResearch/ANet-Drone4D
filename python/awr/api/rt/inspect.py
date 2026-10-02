@@ -3,7 +3,7 @@
 - topics：当前 channel 表（与 `advertise` 同结构）+ `topics.json` 的 topic 模式表；viewer；
 - inspect：`{tick{hz, age_p50_ms, age_p99_ms}, clients[{conn_id, principal_id, role, subs[], window, acked, frame_seq,
   credit_skips, srtt_ms, kbps, ctrl_queue_len}], channels[{id, topic, seq, encodes, last_t_sim_ns}], event_ring{oldest_seq,
-  newest_seq}}` 与兴趣集、RPC 统计；生产（demo）profile 需要 admin，dev/test/ci 为 viewer；`?dump=<conn_id>` 返回该连接最近
+  newest_seq, count, bytes}}` 与兴趣集、RPC 统计；生产（demo）profile 需要 admin，dev/test/ci 为 viewer；`?dump=<conn_id>` 返回该连接最近
   一帧 BATCH 的十六进制与逐记录解码（仅 dev/test/ci）。
 """
 
