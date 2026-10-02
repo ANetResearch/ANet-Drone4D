@@ -16,7 +16,7 @@
 1. M06 是浏览器里"看世界"的宿主：选择并管理 RenderBackend（Tier A 为 WebGPURenderer；Tier B/S 为经典 WebGLRenderer + AnetNodesHandler；全部图层一套 TSL），承载 R3F 9.8.1 宿主与自研 `engine/loop.ts` 帧序，负责场景结构、无人机与状态符号、轨迹、任务叠加、视锥、禁飞区、相机、拾取、标签、ViewCube、`window.__perf` 探针与 PerfGovernor。
 2. D1 主路径是 Tier S（本机性能验收）与 Tier B（硬件默认）；二者共享同一代码路径，只在画布 DPR、内部渲染比例、EDL 与图层上限上不同。Tier A、`/bench` 自检页与偏好记忆为 D1-ext（P1）。
 3. 启动即创建渲染器并做 shader zoo 预热，与取数、WS 连接三路并行；揭开遮罩后 `renderer.info.programs` 不得再增加（D1-AC-25）；每帧 `renderer.info.render.calls` 必须等于 pass 计划（`info.autoReset = false`）。
-4. 无人机按屏幕半径（CSS px）分三档（< 4 px 标记点、4–48 px 低模、> 48 px P600），带 15% 迟滞，Tier S 上限低模 32、P600 2；状态环、告警环、航点等屏幕符号统一由 GlyphLayer 一次绘制；轨迹用 `Line2NodeMaterial` 实例化线段环形缓冲，3 次 draw 画完全部轨迹。
+4. 无人机按屏幕半径（CSS px）分三档（< 4 px 标记点、4–48 px 低模、> 48 px P600），带 15% 迟滞，Tier S 上限低模 32、P600 2；状态环、告警环、航点等屏幕符号统一由 GlyphLayer 一次绘制；轨迹用非实例化的屏幕空间四边形线段环形缓冲（`engine/lines/quadLines.ts`，ADR-067），3 次 draw 画完全部轨迹。
 5. 相机用 `camera-controls` 3.1.2 在 `camera` 相位命令式驱动（不用 drei 组件，保证相机先于点云选择），5 个模式 Orbit、Free、Third、FPV、Bird 加"跟随锁定"修饰；相机飞行时长 `clamp(0.4 + 0.15·ln(1 + d/20), 0.4, 1.2)` s，可打断，曲线取自 token。
 6. 拾取三层：无人机 CPU 包围球（悬停 ≤ 20 Hz，1000 架 ≤ 0.2 ms）、地面与建筑经 M04 `ray_hit`（≤ 5 Hz）、点云 ID pass（M05，D1-ext）；一律异步，不产生长任务。
 7. 画布 drawing buffer 只随窗口尺寸变化：Tier S 固定 DPR 0.5；Tier B/A 的档位渲染比例与运动降载作用在固定尺寸 `cloudRT` 的子视口（`cloudRT.viewport`，不调用 `renderer.setViewport`）上，零 RT 重分配。
@@ -202,10 +202,10 @@ M06 **不负责**：点云选择、CAS、点池与点材质（M05）；环境场
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M06-FR-024 | 场景结构按 §6.7：WorldRoot（`rotation.x = −π/2`）下挂 WorldLayer、EnvironmentLayer、DroneLayer、SensorLayer、MissionLayer、TrailLayer、GlyphLayer、DebugLayer；天空在 Tier S 为场景根下的全屏四边形 SkyQuad，在 Tier B/A 由 P2 合成四边形的背景 Fn 着色（SkyQuad 不可见）；LabelLayer 与 ViewCube 为 DOM | P0 | V0.1 | 是 | M06-AC-020 | ADR-002；01-design §16 |
+| M06-FR-024 | 场景结构按 §6.7：WorldRoot（`rotation.x = −π/2`）下挂 WorldLayer、EnvironmentLayer、DroneLayer、SensorLayer、MissionLayer、TrailLayer、GlyphLayer、DebugLayer；天空在 Tier S 为场景根下的全屏网格 SkyQuad（远平面、逐顶点着色、在不透明物体之后绘制，ADR-064），在 Tier B/A 由 P2 合成四边形的背景 Fn 着色（SkyQuad 不可见）；LabelLayer 与 ViewCube 为 DOM（`?chrome=0` 不挂载 ViewCube） | P0 | V0.1 | 是 | M06-AC-020 | ADR-002；01-design §16 |
 | M06-FR-025 | 图层注册表 `viewport/layers/registry.ts`：每个图层以 LayerSpec 登记；适配组件 ≤ 150 行；M05 注册 pointcloud，M07 注册 environment，其余由 M06 注册 | P0 | V0.1 | 是 | M06-AC-020 | AWR-03 §4.3 |
 | M06-FR-026 | pass 计划：Tier S 单 pass 上屏；Tier B/A 为 P1 点云→cloudRT、P2 EDL 合成四边形（写颜色与深度）、P3 其余图层（`autoClear = false`）、ext 的 P4/P5 体积云；按需的拾取 pass；共享路径禁止 RenderPipeline、`pass()`、MRT、storage texture、compute | P0 | V0.1 | 是 | M06-AC-016、M06-AC-021 | ADR-007；g01 §6.5 |
-| M06-FR-027 | 地面网格：TSL 程序化网格，平面高度 `coordinate.ground.zM − 0.5 m`，细线 10 m、粗线 100 m，`fwidth` 抗锯齿，按距离淡出，深度测试开、不写深度；天空：全屏四边形，天顶 g950 到地平线色的解析渐变，地平线色取 M07 uniform | P0 | V0.1 | 是 | M06-AC-022 | AWR-15 §10.11；g01 §5 |
+| M06-FR-027 | 地面网格：TSL 程序化网格，平面高度 `coordinate.ground.zM − 0.5 m`，细线 10 m、粗线 100 m，`fwidth` 抗锯齿，按距离淡出，深度测试开、不写深度，两种线色在顶点阶段做输出变换；天空：天顶 g950 到地平线色的解析渐变（有环境时为 M07 的 `sky()`），地平线色取 M07 uniform；Tier S 为 32 × 18 格的全屏网格，天空颜色与输出变换逐顶点计算，放在远平面、深度测试开、渲染顺序在不透明物体之后，只填充未被覆盖的像素（ADR-064） | P0 | V0.1 | 是 | M06-AC-022 | AWR-15 §10.11；g01 §5 |
 | M06-FR-028 | 坐标：所有 ENU 与 three 之间的换算只经 `engine/geo/frames.ts`（`enuToThreeInto`、`threeToEnuInto`、`R_THREE_ENU`，M02 §7）；GPU 只放相对 WorldRoot 的 ENU float32；世界水平半径 > 10 km 时输出 M06-E016 | P0 | V0.1 | 是 | M06-AC-023 | ADR-002；AWR-03 §5.1 第 4、5、8 条 |
 | M06-FR-029 | DebugLayer 容器（默认隐藏）；dev 构建提供拾取射线与相机视锥调试；FrameTree、速度、力、风矢量在 V0.2 | P2 | V0.2 | 桩 | 容器存在且默认不参与 pass | AWR-03 附录 C §16 |
 
@@ -218,7 +218,7 @@ M06 **不负责**：点云选择、CAS、点池与点材质（M05）；环境场
 | M06-FR-032 | 上限：Tier S 低模 ≤ 32（≤ 150 三角形，`lowpoly_s`）、P600 ≤ 2；Tier B/A 低模 ≤ 300（≤ 300 三角形）、P600 ≤ 6；PerfGovernor 第 ④ 步把低模上限 32 → 16 → 8 | P0 | V0.1 | 是 | M06-AC-025 | AWR-03 §3.8；ADR-041 |
 | M06-FR-033 | 标记点：无属性扁平四边形 1 次 draw（`drawRange = 6·n`），直径 6 px + 1 px `--drone-halo` 光晕（SDF 圆），填 `--drone-marker`，过期为 `--drone-stale`；位置与样式码来自每帧更新的 RGBA32F `DroneStateTex`（宽 1024） | P0 | V0.1 | 是 | M06-AC-026 | AWR-15 §10.4；g01 §3 |
 | M06-FR-034 | 低模：每档一个 InstancedMesh、独立材质；顶点色区分机身、后臂、前臂、桨盘（前臂最亮表达机头）；光照与点云同一 EnvLighting 公式；`instanceMatrix` 只更新 `[0, count)` 区间 | P0 | V0.1 | 是 | M06-AC-026 | AWR-15 §10.4；r11 §3.8 |
-| M06-FR-035 | P600：以 `GET /vehicles/p600/model/p600.glb`（AWR-17 §5.1；D1 不带 `?v=`，走 no-cache + ETag）加载 ≤ 5000 三角形的 hero 模型，低模取同目录 `p600_lowpoly.glb` 的 `lowpoly`（≤ 300）与 `lowpoly_s`（≤ 150，第二个 mesh）；按 `model.yaml` 的 `gltf_from_flu` 逆矩阵一次性烘焙回 FLU；归一为 `{position, normal}` 属性；单材质 g300 哑光；缺失时回退低模并输出 M06-E011；红色实体额外绘制反向外壳轮廓（BackSide、沿法线外扩约 2 px 等效，r500） | P0 | V0.1 | 是 | M06-AC-026 | AWR-16 §11.5；AWR-15 §10.4；ADR-022 |
+| M06-FR-035 | P600：依次尝试 `GET /models/p600.glb`（随前端构建复制的副本）与 `GET /vehicles/p600/model/p600.glb`（AWR-17 §5.1；D1 不带 `?v=`，走 no-cache + ETag），取第一个能解析的源，加载 ≤ 5000 三角形的 hero 模型（glb 晚于 shader zoo 到达时只替换几何，沿用已预热的材质：three r186 以节点 id 作 node 程序缓存键，新建材质会在揭开后编译第二个 hero 程序；验收加固 FX-WEB1），低模取同目录 `p600_lowpoly.glb` 的 `lowpoly`（≤ 300）与 `lowpoly_s`（≤ 150，第二个 mesh）；按 `model.yaml` 的 `gltf_from_flu` 逆矩阵一次性烘焙回 FLU；归一为 `{position, normal}` 属性；单材质 g300 哑光；缺失时回退低模并输出 M06-E011；红色实体额外绘制反向外壳轮廓（BackSide、沿法线外扩约 2 px 等效，r500） | P0 | V0.1 | 是 | M06-AC-026 | AWR-16 §11.5；AWR-15 §10.4；ADR-022 |
 | M06-FR-036 | GlyphLayer：选中环、告警环（八边形 critical、三角形 warning）、过期虚线环、航点、目标、编队槽位统一为 1 次 draw 的 SDF 扁平四边形；Tier S ≤ 256、其余 ≤ 1024；超上限按"红色实体 > 其余 critical > warning > 选中 > 航点 > 过期"截断，dev 构建输出 `VIS_GLYPH_CAP`；不做深度测试（始终可见） | P0 | V0.1 | 是 | M06-AC-027 | AWR-15 §10.4、§10.6 |
 | M06-FR-037 | 一处红：消费视口 RedArbiter 的 owner（`owner = {kind, id}`），owner 的标记、环、轨迹、标签描边统一改 r500；full 档 owner 以 1 Hz 呼吸（uniform），lite 与 reduced 静态；颜色经 uniform 切换，不重编译 | P0 | V0.1 | 是 | M06-AC-028 | ADR-032；AWR-15 §3.7 |
 | M06-FR-038 | 关注集：每 250 ms 重算，K ≤ 32，屏幕半径 ≥ 8 px 进入、< 6 px 退出、至少停留 1 s；以增量 subscribe/unsubscribe 维护 `uav/{id}/state@30`；选中机与 FPV 焦点机 `@60`；开启视锥的机体订阅 `uav/{id}/sensor/{name}/pose@10` | P0 | V0.1 | 是 | M06-AC-029 | ADR-046；AWR-03 §8.5；AWR-17 §6.6、§6.13 第 4 条 |
@@ -230,7 +230,7 @@ M06 **不负责**：点云选择、CAS、点池与点材质（M05）；环境场
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M06-FR-042 | 轨迹：CPU 端为全部在场机体维护 256 样本的历史环（仿真时间每 0.5 s 或位移 ≥ 5 m 追加）；GPU 端 3 个 `Line2NodeMaterial` 实例化线段批次（关注集 1 px g400、选中 2 px g50、选中光晕 4 px `--drone-halo` 60%；三批各持有独立几何，不共享，§6.3 规则 11）；Tier S ≤ 16 架 × 256 段，Tier B/A ≤ 64 × 1024；年龄透明度 0.8 → 0.15 由顶点时间属性与 uniform `uNow = tRender − t0` 在着色器中计算，不逐帧重建几何 | P0 | V0.1 | 是 | M06-AC-033 | AWR-03 §3.8；r14 §3.7；r15 §3.10；AWR-15 §10.5 |
+| M06-FR-042 | 轨迹：CPU 端为全部在场机体维护 256 样本的历史环（仿真时间每 0.5 s 或位移 ≥ 5 m 追加）；GPU 端 3 个屏幕空间宽线批次（每段一个显式四边形、不用实例化，`engine/lines/quadLines.ts`，ADR-067；关注集 1 px g400、选中 2 px g50、选中光晕 4 px `--drone-halo` 60%；三批各持有独立几何，不共享，§6.3 规则 11；绘制范围止于最后一个占用槽，空段在顶点阶段折叠）；Tier S ≤ 16 架 × 256 段，Tier B/A ≤ 64 × 1024；年龄透明度 0.8 → 0.15 由顶点时间属性与 uniform `uNow = tRender − t0` 在着色器中计算，不逐帧重建几何 | P0 | V0.1 | 是 | M06-AC-033 | AWR-03 §3.8；r14 §3.7；r15 §3.10；AWR-15 §10.5 |
 | M06-FR-043 | 轨迹清空：全局 epoch 变化清空全部历史；`rflags.RESET` 只清空该生产者机体；时间属性以 ≤ 2 h 的块起点为基准，跨块时重新上传可见轨迹 | P0 | V0.1 | 是 | M06-AC-033 | AWR-03 §5.2 第 3–4 条 |
 | M06-FR-044 | 任务叠加：计划航点（空心圆）、已到达航点（实心）、当前目标（实心 + 环）、计划路径（1.5 px 虚线 g300）、已执行路径（1 px 实线 g500）、任务与覆盖区域（地面贴片轮廓 + 5% 填充）、覆盖揭示（10% 填充）、编队槽位（菱形）；数据取 `stores/mission.ts` 与 `uav/{id}/path` | P0 | V0.1 | 是 | M06-AC-034 | AWR-15 §10.6；AWR-03 §6.3 M06 |
 | M06-FR-045 | GoTo 目标标记：预览态（`cmd.goto` 符号 + 到地面的铅垂线）、accepted 描边、running 实心前景色、succeeded 后保持 `input.resultHoldMs`（1500 ms）再以 `--duration-quick` 渐隐、failed/rejected 红描边 + 三角告警符号并保留到下一次操作（红色仍服从 RedArbiter）；读数 "E · N · 高度"（m，1 位小数）以高优先级标签显示 | P0 | V0.1 | 是 | M06-AC-034 | AWR-14 §6.7 |
@@ -242,7 +242,7 @@ M06 **不负责**：点云选择、CAS、点池与点材质（M05）；环境场
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M06-FR-049 | CameraRig：`camera-controls` 3.1.2 以命令式方式在 `camera` 相位 `controls.update(dtS)`（秒）更新（不经 drei 组件）；控制器工作在 three 帧（Y 上），CameraRig 对外一律以 ENU 表示位姿，调用控制器前经 `frames.ts` 换算；模式 `orbit`、`free`、`third`、`fpv`、`bird` 与修饰 `followLock`；快捷键 1–5 与 L 由 M15 绑定、经门面调用；进入 third/fpv 时调用 M12 `interp.setFocus(agentNo)`，退出时 `setFocus(−1)` | P0 | V0.1 | 是 | M06-AC-037 | AWR-03 §8.5；AWR-14 §6.4；r14 §3.10；M12 §7.1 |
+| M06-FR-049 | CameraRig：`camera-controls` 3.1.2 以命令式方式在 `camera` 相位 `controls.update(dtS)`（秒）更新（不经 drei 组件）；控制器工作在 three 帧（Y 上），CameraRig 对外一律以 ENU 表示位姿，调用控制器前经 `frames.ts` 换算；模式 `orbit`、`free`、`third`、`fpv`、`bird` 与修饰 `followLock`；快捷键 1–5 与 L 由 M15 绑定、经门面调用；进入 third/fpv 与开启 followLock 时调用 M12 `interp.setFocus(agentNo)`（ADR-046 的焦点例外同样覆盖跟随锁定；FX2-R3，ADR-067：此前锁定不调用），退出、解锁（含用户平移解除）与焦点丢失时 `setFocus(−1)` | P0 | V0.1 | 是 | M06-AC-037 | AWR-03 §8.5；AWR-14 §6.4；r14 §3.10；M12 §7.1 |
 | M06-FR-050 | 相机飞行：`T = clamp(0.4 + 0.15·ln(1 + d/20), 0.4, 1.2)` s，d 取眼点与目标点位移的较大者（m）；曲线 `--ease-smooth-out` 由 `engine/anim/bezier.ts` 采样；每帧 `lerpLookAt(A, B, e(t), false)`；任何用户输入立即取消；reduced 档硬切；开始时向 M05 发目的地预取提示 | P0 | V0.1 | 是 | M06-AC-038 | ADR-029；AWR-14 §6.5；r15 §3.5 |
 | M06-FR-051 | 未遮挡区投影：`setUnobscuredRect(rect, transition)` 以 `camera.setViewOffset(W, H, W/2 − cx, H/2 − cy, W, H)` 实现，过渡时长取 `--panel-open-dur` 400 ms、`--panel-close-dur` 350 ms、分隔条松开 `--duration-fast` 250 ms；不改变 drawing buffer；FPV 模式不应用 | P0 | V0.1 | 是 | M06-AC-039 | ADR-028；AWR-14 §3.4 |
 | M06-FR-052 | Third（追尾）：目标锁定焦点机；参考系为水平速度方向（< 0.5 m/s 时改用机体航向），航向变化以 `controls.rotate(Δψ, 0, false)` 叠加，用户拖动产生的方位与俯仰偏移保持；默认偏移在速度参考系中为 (−15, 0, 6) m（x 沿水平速度、z 向上，即后方 15 m、上方 6 m，距离约 16.2 m）；距离 5–200 m；使用 tFocus（D_focus） | P0 | V0.1 | 是 | M06-AC-040 | r15 §3.15；r14 §3.10；ADR-046 |
@@ -262,7 +262,7 @@ M06 **不负责**：点云选择、CAS、点池与点材质（M05）；环境场
 | M06-FR-061 | 无人机拾取：屏幕射线换到 ENU 后对全部可见机体做射线-球求交，球半径 `max(R_vis, 6 px 等效世界尺寸)`（热区 ≥ 12 px）；悬停 ≤ 20 Hz 且相机运动期间关闭；点击即时；1000 架单次 ≤ 0.2 ms | P0 | V0.1 | 是 | M06-AC-043 | AWR-03 §6.3 M06；AWR-14 §6.6 |
 | M06-FR-062 | 地面与建筑拾取：`POST /api/world/{id}/query {op: "ray_hit", origin_enu_m, dir, max_range_m: 5000}`；预览与坐标读数 ≤ 5 Hz、新请求取消旧请求（AbortController）；点击立即发送；失败或超时（1 s）隐藏预览并输出 M06-E015 | P0 | V0.1 | 是 | M06-AC-044 | AWR-10 AD-04；AWR-17 §4.3.2 |
 | M06-FR-063 | 拾取编排：`pickAt(x, y, opts)` 返回 Promise，顺序为无人机 → 点云（M05 ID pass，ext）→ 地面；工具态决定是否需要地面命中；全部异步，不产生 > 50 ms 长任务 | P0 | V0.1 | 是 | M06-AC-045 | ADR-007；D1-AC-06 |
-| M06-FR-064 | 点云点拾取（PRD-FR-017）：M06 分配 5×5 光栅像素 `pickRT`（RGBA8，与 M05-FR-047 一致），在点击后的下一帧 render 相位以 scissor 渲染 ID pass（计入该帧 pass 计划）并异步 `readPixels`；拾取子表准备、解码与节点回查归 M05 | P1 | V0.1 | 是 | M06-AC-045 | AWR-03 §6.3 M05 |
+| M06-FR-064 | 点云点拾取（PRD-FR-017）：M06 分配 5×5 光栅像素 `pickRT`（RGBA8，与 M05-FR-047 一致），在点击后的下一帧 render 相位以 scissor 渲染 ID pass（计入该帧 pass 计划）并异步 `readPixels`；拾取子表准备、解码与节点回查归 M05。拾取相机的投影 = 5×5 窗口矩阵 × 帧相机投影（手写），其 `reversedDepth` 标志必须与渲染器的反向深度一致，否则 three r186 在首次使用时按 fov/aspect 重建投影，页面的第一次拾取落到别处的点（验收加固 FX-WEB1，`tests/m06/pickPass.test.ts`、`perf/m05/pick.spec.ts`） | P1 | V0.1 | 是 | M06-AC-045 | AWR-03 §6.3 M05 |
 | M06-FR-065 | 屏幕投影：`projectToScreen(enu, out)` 与 `anchor(id)` 提供每帧更新的 CSS 坐标，供 M15 的 3D 锚定 `Popover`（VirtualElement）使用；相机运动时发 `camera.moved` 事件 | P0 | V0.1 | 是 | M06-AC-046 | AWR-14 §4.3 |
 
 ### 4.8 标签与 DOM 叠加
@@ -289,11 +289,11 @@ M06 **不负责**：点云选择、CAS、点池与点材质（M05）；环境场
 | M06-FR-073 | `window.__perf` 按 AWR-18 §9.2 实现（schema `awr.perf.v1`）：启动时预分配全部环形缓冲（容量 65536）；governor 相位就地更新；`snapshot()` 是唯一分配对象的方法；`inject()` 只在测试构建存在；字段写者按 §6.18 所有权表；`load.revealAt` 与 `load.tti` 由 M15 BootController 揭开遮罩时调用门面 `perf.markReveal()` 写入（M15 §14 第 6 条） | P0 | V0.1 | 是 | M06-AC-050 | AWR-18 §9；n05 §3.6 |
 | M06-FR-074 | FrameSampler 记录每个 rAF 的呈现间隔，并以"最快帧 EMA"估计刷新周期，经 `refreshMs()` 提供给 M05，估计变化 > 5% 时调用 `cas.setTarget(targetMs, tailK)`（硬件档，g02 §6）；loop 在各相位前后打点写 `layers.*.cpuMs`、`gpu.renderMs`，render 相位 > 50 ms 时 `gpu.renderOver50` 加 1；LoAF 观察者按 build manifest 的 chunk 分组（`engine`、`net`、`ui` 与入口）归因 loop 之外的我方脚本；每帧我方逻辑（相位合计减 render 相位）> 50 ms 时 `loaf.oursOver50` 加 1 | P0 | V0.1 | 是 | M06-AC-051 | AWR-18 §6.3 第 3 条；M05 §6.8.5 |
 | M06-FR-075 | PerfGovernor：1 Hz 评估；Tier S 在 CAS 于 B_floor 下限饱和 ≥ 2 s 时按 ①轨迹 ②视锥 ③标签 ④低模上限 ⑤环境档 ⑥motion 档 ⑦放开 B_floor 的顺序每步间隔 ≥ 2 s 降级；CAS 上限饱和或 B ≥ 0.9·hi 持续 ≥ 10 s 时逆序恢复一步，步间 ≥ 10 s；硬件档先由 CAS 外环降到最低允许档（§6.18）再按 ①–⑥ 降；通信档不参与 | P0 | V0.1 | 是 | M06-AC-052 | ADR-041 |
-| M06-FR-076 | 旋钮注册：`governor.registerKnob({step, id, levels, apply})`；M07 注册 ⑤；motion 上限写 `stores/perf.ts` 的 `motionCap` 供 M15 `tier.ts` 取最小值；每次步骤变化写 `__perf.governor.history` 与合并 Toast 文案键 | P0 | V0.1 | 是 | M06-AC-052 | ADR-029、ADR-041 |
+| M06-FR-076 | 旋钮注册：`governor.registerKnob({step, id, levels, apply, visible?})`；M07 注册 ⑤；motion 上限写 `stores/perf.ts` 的 `motionCap` 供 M15 `tier.ts` 取最小值；每次步骤变化写 `__perf.governor.history` 与合并 Toast 文案键；`visible(level)` 为假（该旋钮的内容此刻不在屏上，例如未选中时的轨迹与视锥、少于上限的标签与低模、`?chrome=0` 下的 motion）时照常降级与记录，但不发 `governor.step` 事件，不弹 Toast（ADR-064）；这样的不可见子步骤没有可等待的效果，在同一次评估中接着执行下一子步骤，直到执行了一个可见子步骤，ADR-041 的"每步间隔 ≥ 2 s"约束相邻的可见步骤（恢复同理），历史条目原因后缀 `:hidden`（ADR-067）；M07 的 ⑤ 在 Low 层没有可隐藏的内容（无降水、2D 云遮罩 < 0.01、无风箭头与流线）时报告不可见 | P0 | V0.1 | 是 | M06-AC-052 | ADR-029、ADR-041 |
 | M06-FR-077 | `stores/perf.ts`：4 Hz（Tier S）/ 10 Hz（其余）摘要：帧节奏 p50/p95、档位与设备能力档、强制标记、B 与档位、`limitedBy`、`achievedErr`、加载进度、在途请求、降级步骤、超预算图层位图、焦点时延 p95、后端状态（预热、重建） | P0 | V0.1 | 是 | M06-AC-053 | AWR-10 §6.4；AWR-14 §3.7 |
 | M06-FR-078 | 时延度量：`latency.tSimToPixelMs`（焦点机或选中机，上一帧位姿的样本仿真时刻到本帧 rAF 时刻折算为墙钟）、`cmdToVisibleMs`（`mark("cmd.sent")` 到判据首次在渲染位姿上成立）、`focusJumpM`（进出关注集时渲染位置与外推位置之差）、`holdFrames`、`extrapFrames`（焦点机或选中机处于外推的帧数）、`dGlobalMs` | P0 | V0.1 | 是 | M06-AC-054 | ADR-046；AWR-18 §7.3、§9.3 |
 | M06-FR-079 | 图层 CPU 计时：各任务按注册时的 `layer`（AWR-18 §9.2 的 `PerfLayerId`）把 CPU 时长写入 `layers[<layer>].cpuMs`；未声明 `layer` 的 telemetry、clock、drones 插值与 world 相位任务计入 `mainJs`；draw 数与顶点数写 `draws`、`verts`；超过 AWR-03 §3.8 预算的帧计入 `overBudgetFrames` 并在 HUD 标出 | P0 | V0.1 | 是 | M06-AC-055 | AWR-03 §3.8；AWR-18 §5.1、§5.2 第 3 条 |
-| M06-FR-080 | layers 配对驱动：`?bench=layers&fixedB=` 时每帧把"基底"与"基底 + 图层 X"各渲染 5 次到同尺寸离屏 RT，每次 `finishForBench()`（测试构建）计时取最小值，奇偶帧交换先后 | P0 | V0.1 | 是 | M06-AC-055 | AWR-18 §5.2 |
+| M06-FR-080 | layers 配对驱动：`?bench=layers&fixedB=` 时每帧在帧自身渲染之前把"基底"与"基底 + 图层 X"各渲染 5 次到绘制缓冲（同尺寸、同格式、同一套程序；ADR-064 前为离屏 RT），每次 `finishForBench()`（测试构建，1 像素同步回读）计时取最小值，奇偶帧交换先后 | P0 | V0.1 | 是 | M06-AC-055 | AWR-18 §5.2；ADR-064 |
 
 ### 4.11 后续版本
 
@@ -586,16 +586,17 @@ stateDiagram-v2
 | EDL 合成 | 4 tap 与 8 tap 若为 uniform 循环则 1 个 | — | 默认帧缓冲 | M05（材质）、M06（pass） |
 | 天空、地面网格 | 地面 1；天空 S 为 SkyQuad 1，B/A 并入 EDL 合成程序（背景 Fn） | 默认帧缓冲 | 默认帧缓冲 | M06 |
 | 无人机 | 标记点、低模（`lowpoly_s` 与 `lowpoly` 属性布局相同时 1 个）、P600、P600 反向外壳 | 默认帧缓冲 | 默认帧缓冲 | M06 |
-| GlyphLayer、轨迹 3 批次、细线（`LineBasicNodeMaterial`，任务、zones 竖边与视锥边线共用程序）、粗线（`Line2NodeMaterial` 实线与虚线各 1 程序）、区域贴片、zones 侧壁 | 各 1 | 默认帧缓冲 | 默认帧缓冲 | M06 |
+| GlyphLayer、轨迹 3 批次、细线（`LineBasicNodeMaterial`，任务、zones 竖边与视锥边线共用程序）、粗线（`quadLines` 四边形宽线，实线与虚线各 1 程序）、区域贴片、zones 侧壁 | 各 1 | 默认帧缓冲 | 默认帧缓冲 | M06 |
 | 视锥远平面填充 | 1 | 默认帧缓冲 | 默认帧缓冲 | M06 |
 | 环境 Low（降水四边形、2D 云、风箭头）；Med（ext）：光线步进与合成 | 按 M07 声明 | 默认帧缓冲 | 默认帧缓冲；`cloudHalf` | M07 |
 | 自检与微基准材质 | — | `selftest` | `selftest` | M06 |
-| layers 配对驱动（仅测试构建） | 各图层变体 × `bench` 目标 | `bench` | `bench` | M06 |
+| layers 配对驱动（仅测试构建） | 配对画到绘制缓冲，与上屏帧同一套程序，不另设目标（ADR-064） | — | — | M06 |
 
 规则：
 1. 程序键依赖几何体属性集合，预热替身几何必须与运行时几何属性完全一致：P600 与低模在加载时统一为 `{position, normal}`（低模另加 `color`），预热用同属性的小替身，不等待 glb 下载。
 2. 雾节点 `scene.fogNode` 在启动时一次性设置，天气只改 uniform（M07 负责；否则切换预设会重编译，违反 D1-AC-25）。
 3. 所有颜色、选中、告警、呼吸、淡入、虚线开关参数都是 uniform 或实例属性，不产生新程序；颜色常量取自 `lib/tokens/scene.gen.ts`（线性 sRGB，AWR-15 §13.6）。
+4. flight60 `scene=pc`（画布独显基线，其余图层在页面生命期内隐藏）只预热点云的变体：其余图层的程序永不绘制，预热它们占去冷启动预热的大部分时间（ADR-064）。
 
 ```text
 warmup(zoo):
@@ -614,7 +615,7 @@ warmup(zoo):
 
 | 档 | pass | 目标 | 相机通道 | 内容 | draw 数 |
 |---|---|---|---|---|---|
-| S | S0 | 默认帧缓冲（DPR 0.5） | `CH_MAIN \| CH_CLOUD` | 天空 SkyQuad（renderOrder −1000，不测深度）→ 不透明（点云、低模、P600）→ 透明带（§6.7） | Σ 可见图层 `drawCount()` |
+| S | S0 | 默认帧缓冲（DPR 0.5） | `CH_MAIN \| CH_CLOUD` | 不透明（点云、低模、P600）→ 天空 SkyQuad（renderOrder 1000，远平面，深度测试开，ADR-064）→ 透明带（§6.7） | Σ 可见图层 `drawCount()` |
 | B/A | P1 | `cloud`，子视口 `round(dbW·s) × round(dbH·s)`（RT 像素） | `CH_CLOUD` | 点云 | 1 |
 | B/A | P2 | 默认帧缓冲 | — | 全屏合成四边形（M05 `edlMaterial`）：`colorNode = EDL(color, depth)`（EDL 关闭时强度为 0 的同一程序），`depthNode` 写回点云深度；深度 = 远平面的像素输出 M06 经 `setBackgroundNode` 注入的天空 Fn | 1 |
 | B/A | P3 | 默认帧缓冲，`autoClear = false` | `CH_MAIN` | 不透明（低模、P600）→ 透明带；SkyQuad 在 B/A 下 `visible = false` | Σ |
@@ -746,7 +747,7 @@ function frame(nowMs: number) {
 
 ```text
 scene（three，Y 上）
-├── SkyQuad（Tier S：全屏四边形，renderOrder −1000，depthTest/depthWrite 关，最先绘制；Tier B/A：`visible = false`，天空由 P2 合成四边形在"深度 = 远平面"的像素上着色，否则会在 P3 覆盖点云）
+├── SkyQuad（Tier S：32 × 18 格全屏网格，远平面，renderOrder 1000，深度测试开、不写深度，在不透明物体之后绘制，天空颜色逐顶点计算，ADR-064；Tier B/A：`visible = false`，天空由 P2 合成四边形在"深度 = 远平面"的像素上着色，否则会在 P3 覆盖点云）
 └── WorldRoot（Group，rotation.x = −π/2；子节点坐标为 World ENU：x 东、y 北、z 上）
     ├── WorldLayer
     │   ├── PointCloudLayer（M05，单个无属性 Points，森林也只有一个对象；Tier B/A 为 CH_CLOUD，Tier S 为 CH_MAIN）
@@ -877,19 +878,19 @@ update(rpx, now)：                                        # 250 ms 一次（ADR
 | 项 | 规格 |
 |---|---|
 | CPU 历史 | 每个在场机体 256 样本 `{x, y, z, t}`（Float32），追加条件：距上次样本仿真时间 ≥ 0.5 s 或位移 ≥ 5 m（本文设定：15 m/s 下覆盖约 85 s，悬停时覆盖 128 s） |
-| GPU 批次 | `LineSegments2`（`three/addons/lines/webgpu/LineSegments2.js`）+ `Line2NodeMaterial`，实例属性 `instanceStart/End`（xyz）、`instanceTimeStart/End`（相对块起点的秒）、`instanceColorIdx`（调色板索引，float）；槽位 = 机体槽 × 256（S）/ 1024（B/A）；空槽退化为零长度；选中与光晕两批各自持有几何（§6.3 规则 11） |
+| GPU 批次 | 非实例化四边形宽线（`engine/lines/quadLines.ts`，FX2-R3，ADR-067）：每段 4 个顶点、6 个索引，交错缓冲每顶点 9 个 float（起点 xyz、终点 xyz、起止时间（相对块起点的秒）、调色板索引）加静态角点属性（沿段 0/1、侧向 ±1）；顶点阶段投影两端（一端在近平面之后时在视空间裁到近平面），按光栅线宽的一半做横向偏移、沿段做方头延伸，空段（时间 −1）与完全在相机后的段折叠到裁剪体之外；线宽与绘制缓冲尺寸、近平面距离为每帧 uniform；槽 s 占 `[s·segs, (s+1)·segs)`，绘制范围止于最后一个占用槽；脏段以 `addUpdateRange` 增量上传；选中与光晕两批各自持有几何（§6.3 规则 11）。不用 `LineSegments2` + `Line2NodeMaterial` 的原因：SwiftShader 逐实例执行实例化 draw，选中轨迹与光晕 2 × 1024 个实例（大多为空段）每帧约 180 ms GPU 进程 CPU，选中一架机后帧间隔由 50 ms 变为 100 ms（D1-AC-26） |
 | 进入显示 | 机体进入关注集或被选中时，把其 CPU 环整体拷入空闲 GPU 槽（≤ 256 段 × 36 B ≈ 9 KB） |
 | 透明度 | 着色器内 `a = mix(0.8, 0.15, clamp((uNow − t)/uWindow, 0, 1))`，`uWindow = 120 s`（r15 §3.10）；超出窗口 discard |
 | 颜色 | 关注集 g400；选中 g50（下垫 4 px `--drone-halo` 60% 光晕批次）；红色实体 r500（uniform 调色板 + 实例属性索引） |
 | 上限 | S：16 架 × 256 段；B/A：64 × 1024；PerfGovernor ① 每级条数与长度减半：16×256 → 8×128 → 4×64 → 仅选中×64 |
 
-**线宽与材质**：1 px 线一律用 `LineSegments` + `LineBasicNodeMaterial`（g01 §3 已验证，原生 1 px 线在 Tier S 的 `w_rt` 下同样为 1 px），虚线由顶点属性 `lineDistance`、`dashed` 与 uniform 周期在片元 discard（同一程序）；≥ 1.5 px 的线用 `Line2NodeMaterial`。
+**线宽与材质**：1 px 线一律用 `LineSegments` + `LineBasicNodeMaterial`（g01 §3 已验证，原生 1 px 线在 Tier S 的 `w_rt` 下同样为 1 px），虚线由顶点属性 `lineDistance`、`dashed` 与 uniform 周期在片元 discard（同一程序）；≥ 1.5 px 的线用非实例化四边形宽线（`engine/lines/quadLines.ts`，ADR-067；Tier S 上实例化的 `Line2NodeMaterial` 按段计费）。
 
-**任务叠加**：`lineBatch.ts` 提供两个批次：细线批次（1 px：已执行路径实线 g500、区域轮廓虚线 g300）与计划路径批次（`Line2NodeMaterial` 1.5 px 虚线 3 / 6 px，g300）；航点、当前目标、编队槽位、S3 目标写入 GlyphLayer；区域与覆盖揭示为地面贴片（三角化的平面网格，`ShapeUtils.triangulateShape`，高度 = DTM 采样 + 0.3 m）1 次 draw；已执行段与计划段以 `mission_item` 分割，事件驱动重建（≤ 4 Hz）。
+**任务叠加**：`lineBatch.ts` 提供两个批次：细线批次（1 px：已执行路径实线 g500、区域轮廓虚线 g300）与计划路径批次（四边形宽线 1.5 px 虚线，虚线以世界米计 3 / 6，g300，ADR-067）；航点、当前目标、编队槽位、S3 目标写入 GlyphLayer；区域与覆盖揭示为地面贴片（三角化的平面网格，`ShapeUtils.triangulateShape`，高度 = DTM 采样 + 0.3 m）1 次 draw；已执行段与计划段以 `mission_item` 分割，事件驱动重建（≤ 4 Hz）。
 
 **视锥**：world 相位（排在 M13 `m13.gimbal` 之后）对每个要画的传感器调用 `frustumCorners(sensor, L, out)`（`L = min(range_m, 60)`，输出原点 + 远平面 4 角共 15 个 float，机体帧，已含挂载与云台），乘以机体 tRender 位姿（FPV 焦点机为 tFocus）得到 ENU 点；边线 8 段（原点到 4 角 + 远平面 4 边，16 顶点/架）写入 SensorLayer 自己的 1 px 细线对象，远平面 2 个三角形（6 顶点/架）写入填充对象；SensorPose48 超过 3/f 未更新时该机边线 `dashed = 1`，`FOV_VALID = 0` 时远平面退化为零面积；`ACTIVE = 0` 的传感器不画（AWR-17 §6.5；M13 §8.1）。
 
-**zones**：加载时一次性生成侧壁四边形（外环每边一个）、顶部轮廓（`nofly` 实线、`restricted` 虚线 `2w 4w`，均 1.5 px，`Line2NodeMaterial` 两批）与竖边（1 px g300 50%，细线批次），属性 `zoneIdx`；违例高亮用 `uHeroZone`（float）比较，不重建几何；Tier B/A 侧壁斜线纹理为世界空间 45° 条纹（线距 4 m）。
+**zones**：加载时一次性生成侧壁四边形（外环每边一个）、顶部轮廓（`nofly` 实线、`restricted` 虚线 `2w 4w`，均 1.5 px，四边形宽线两批，每帧更新线宽、绘制缓冲与近平面，ADR-067）与竖边（1 px g300 50%，细线批次），属性 `zoneIdx`；违例高亮用 `uHeroZone`（float）比较，不重建几何；Tier B/A 侧壁斜线纹理为世界空间 45° 条纹（线距 4 m）。
 
 ### 6.11 相机
 
@@ -1090,7 +1091,7 @@ sequenceDiagram
 | 指标 | 计算 | 写入 |
 |---|---|---|
 | `tSimToPixelMs` | 焦点机（无焦点时选中机）：本帧 telemetry 相位时，上一帧呈现的位姿样本仿真时刻 `t_pose`，以及本帧 rAF 时刻对应的 `simNow`；`(simNow − t_pose) / rate`（ms，墙钟） | 每帧 1 次 |
-| `cmdToVisibleMs` | `mark('cmd.sent', {id, kind})` 后，渲染位姿首次满足判据的帧时刻减 mark 时刻。判据：takeoff 为渲染高度较 mark 时升高 0.3 m；goto 为渲染速度在目标方向投影 ≥ 0.5 m/s；land 为渲染高度下降 0.3 m；hover 为速度模 ≤ 0.3 m/s（本文设定） | 每次 mark |
+| `cmdToVisibleMs` | `mark('cmd.sent', {id, kind})` 后，首次显示命令效果的帧时刻减 mark 时刻。判据（满足其一即可）：①状态判据（FX2-R3，ADR-067）：该机最新样本的飞行状态或控制权按命令切换（takeoff 切到 TAKING_OFF，land 切到 LANDING；hover 与 goto 为状态字节变化（FLYING 的子状态 HOVER、GOTO 在第 5–7 位；安全类命令免租约，owner 不一定变）或控制字节 owner 切到 OPERATOR；效果样本时刻一经观察即保留，剧本随后收回控制也按该时刻判定），与 mark 时显示的不同，且渲染时刻（tRender，焦点机为 tFocus）已到达携带该切换的样本时刻（InterpRing `stateSinceMs`，状态字节或控制字节 owner、native 位变化时记录），即 AWR-18 §7.3 分解的"准入 + 锁存 + 发布 + D + 呈现"；②运动学判据：takeoff 为渲染高度较 mark 时升高 0.3 m；goto 为渲染速度在目标方向投影 ≥ 0.5 m/s；land 为渲染高度下降 0.3 m；hover 为速度模 ≤ 0.3 m/s（本文设定）。只用运动学判据时，机体在 6 m/s 巡航中 hover 的度量主要是减速时间（约 1–2 s），与 D1-AC-26 的"≤ D_global + 150 ms"不是同一个量 | 每次 mark |
 | `focusJumpM` | 机体进出关注集当帧：`\|p_render − (p_prev + v_prev·dt)\|` | 每次进出 |
 | `holdFrames` | 可见机体中存在 HOLD 的帧数 | 每帧 |
 | `extrapFrames` | 焦点机或选中机处于外推（样本已过期但未到 3/f）的帧数；诊断判据外推帧占比 ≤ 5%（AWR-18 §7.3） | 每帧 |
@@ -1370,7 +1371,7 @@ export function makeBezier(x1: number, y1: number, x2: number, y2: number): (x: 
 
 | 依赖 | 版本 | 用途 | 备注 |
 |---|---|---|---|
-| three | ~0.186.1 | WebGLRenderer、WebGPURenderer、TSL、`Line2NodeMaterial`、`LineBasicNodeMaterial`、GLTFLoader | handler 在 `three/addons/tsl/WebGLNodesHandler.js`；粗线对象用 `three/addons/lines/webgpu/LineSegments2.js`（不是 GLSL 版 `lines/LineSegments2.js`，g01 §3） |
+| three | ~0.186.1 | WebGLRenderer、WebGPURenderer、TSL、`Line2NodeMaterial`、`LineBasicNodeMaterial`、GLTFLoader | handler 在 `three/addons/tsl/WebGLNodesHandler.js`；产品粗线改为自有的非实例化四边形宽线（ADR-067），`three/addons/lines/webgpu/Line2.js` 只在功能矩阵回归页 `line2_node_fatline` 一项中使用（不是 GLSL 版 `lines/LineSegments2.js`，g01 §3） |
 | @react-three/fiber | 9.8.1 | 宿主 | peer React < 19.4 |
 | @react-three/drei | 10.7.9 | 白名单（D1 基本不用） | — |
 | camera-controls | 3.1.2 | CameraRig | peer three `>=0.126.1`；drei 10.7.9 依赖 `^3.1.0`，同一份；AWR-11 T78 已给出锁定建议，ADR-037 待补（§14 第 2 条） |
@@ -1401,8 +1402,8 @@ export function makeBezier(x1: number, y1: number, x2: number, y2: number): (x: 
 | M06-AC-007 | 启动 | Tier S 后端创建 ≤ 150 ms；预热 ≤ 1.5 s（load ≤ 6）；冷启动可交互 ≤ 4.0 s（暂定，P1） | `perf/m06/startup.spec.ts` 读 `__perf.load` 与 `warmupMs` | 本机 S | P0 / P1 | D1-AC-02 |
 | M06-AC-008 | 无运行期编译 | 揭开遮罩后依次：切换天气预设、选中无人机、Third、FPV、出现 P600、点击拾取、切换着色模式、切换世界；`programs` 不增加；每步后 1 s 内最大帧间隔 ≤ 150 ms | `perf/warmup.spec.ts` | 本机 S | P0 | D1-AC-25 |
 | M06-AC-009 | 设备丢失 | `WEBGL_lose_context.loseContext()` 后 ≤ 3 s 恢复出帧；`pc.downloadedBytes` 不变；`contextLost` 加 1；连续 3 次注入失败转 E-01 | `perf/m06/context-lost.spec.ts` | 本机 S | P0 | E-06 |
-| M06-AC-010 | 测试开关 | 生产构建产物中不存在 `allowFallback`、`finishForBench`、`perfInject`、`fixedB` 标识符与 `tier=` 解析分支；生产页面中 `window.__perf.inject === undefined`、带 `?tier=B` 打开时 `__perf.forced === null` | `tools/ci` 构建产物扫描 + Playwright 生产构建冒烟 | 本机 | P0 | ADR-044；AWR-18 §9.1 第 4 条 |
-| M06-AC-011 | Tier A | `?tier=A&allowFallback=1` 下 28 项等于 g01 §3 WebGPU 预期值（PointPool 1 px 84277 像素、GLSL `ShaderMaterial` 不可用）；R3F 冒烟无 `pageerror`；`forced.tier = "A"` | `npm run perf:feat-matrix -- --tier A --allowFallback` | 本机 WGPU | P1 | D1-AC-14 |
+| M06-AC-010 | 测试开关 | 生产构建产物中不存在 `allowFallback`、`finishForBench`、`perfInject`、`fixedB`、`pcInject`、`selftestNoFix` 标识符与 `tier=` 解析分支（`make scan-m06-bundle`，验收加固 FX-WEB1 补 M05 的 `pcInject`）；生产页面中 `window.__perf.inject === undefined`、带 `?tier=B` 打开时 `__perf.forced === null` | `tools/ci` 构建产物扫描 + Playwright 生产构建冒烟 | 本机 | P0 | ADR-044；AWR-18 §9.1 第 4 条 |
+| M06-AC-011 | Tier A | `?tier=A&allowFallback=1` 下 28 项等于 g01 §3 WebGPU 预期值（PointPool 1 px 84277 像素、GLSL `ShaderMaterial` 不可用）；R3F 冒烟无 `pageerror`；`forced.tier = "A"`。D1 落实方式（FX2-R3，ADR-067）：回归页 `viewport/dev/featMatrixWgpu.ts` 在 C2 标志下自建 WebGPURenderer（WebGPU 后端，不用其 WebGL2 回退）跑 28 项 + PointPool，预期值为 `perf/m06/featMatrix.expected.ts` 的 `WGPU` 列（取自 g01 `F_feat_wgpu.json`、`P_pool.jsonl`）；产品页在 `?tier=A` 下按 FR-012 的回退分支走经典路径（M06-E013，产品 Tier A 后端 FR-012 仍待 D1-MS6），冒烟断言无 `pageerror`、`forced.tier = "A"`、每帧 calls 等于 pass 计划 | `npm run perf:feat-matrix -- --tier A --allowFallback`（`perf/m06/feat-matrix.spec.ts` 的 Tier A 用例，自起 C2 浏览器） | 本机 WGPU | P1 | D1-AC-14 |
 | M06-AC-012 | 偏好记忆 | 模拟 CAS 在最低允许档下限饱和 31 s 后，下次启动起步档 − 1；设置页清除后恢复 | `tests/m06/prefs.spec.ts` | 本机 S | P1 | AWR-03 §3.5 |
 | M06-AC-013 | `/bench` | 报告通过 `awr.perf.report.v1` Ajv strict 校验，`gate = "bench"`、`kind = "bench"`、`env.device_class`、`env.backend_tier`、`env.renderer` 齐全，含两个场景的帧节奏与 TTFP 指标；`source=fake` 时有标注；页面通过 no-emoji、no-raw-controls 与 `a11y.spec.ts`；第二次 1 分钟内上传得到 429 提示 | `perf/m06/bench-page.spec.ts` | 本机 S | P1 | AWR-18 §11.2、§11.5；AWR-17 §4.3.11 |
 | M06-AC-014 | 宿主 | async 工厂下 drei `Html` 冒烟可挂载；`flat` 生效（r500 token 色在 RT 回读中逐通道误差 ≤ 1，未被色调映射改色） | `tests/m06/r3f-smoke.test.tsx` | 本机 S | P0 | g01 §5 |

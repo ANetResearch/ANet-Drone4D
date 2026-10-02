@@ -206,7 +206,7 @@
 |---|---|---|---|---|---|---|
 | M10-FR-011 | 在 M08 的运动提供者注册表（M08-FR-086）中注册 `follow_path`、`orbit`、`goto_route` 三个提供者，ops 分别为 `follow_path`、`orbit`、`goto:route!=direct`；`route = auto` 的 goto 由 M08 在第 ⑧ 步粗校验已证明无障碍时按 direct 原生执行，否则分发给 `goto_route`（12 §5.7.4）；接口见 §7.4.2 | P0 | V0.1 | 是 | M10-AC-005、008 | 17 §7.6；12 §5.7.4；M08-FR-086 |
 | M10-FR-012 | follow_path：同步做参数与缓存检查（≤ 1 ms）；缓存未命中时提交 plan-pool 作业（圆角、TOPP-lite、B-spline、细校验），调用停在 accepted，结果在 apply_tick 生效后进入 running | P0 | V0.1 | 是 | M10-AC-004 | ADR-016；ADR-039 |
-| M10-FR-013 | orbit：入圆转场（粗校验能证明无障碍时直线切入，否则 safe_transit）、角速度斜坡（`α = a_tan/R`）、累计圈数、`yaw_behavior ∈ {center, tangent, fixed}`；`speed²/radius ≤ 3 m/s²` 由 M08 在第 ⑥ 步检查 | P0 | V0.1 | 是 | M10-AC-007 | 12 §5.3；x01 §3.10 |
+| M10-FR-013 | orbit：入圆转场（粗校验能证明无障碍时直线切入，入圆段按巡航速度飞（环绕速度是圆周切向速度），否则 safe_transit；orbit 作业项的入圆段可证无障碍时任务引擎直接下发 orbit、不另做转场规划，AWR-03 ADR-070）、角速度斜坡（`α = a_tan/R`）、累计圈数、`yaw_behavior ∈ {center, tangent, fixed}`；`speed²/radius ≤ 3 m/s²` 由 M08 在第 ⑥ 步检查；`yaw_behavior = center` 时生成器另查 `speed/radius ≤ 0.9 × 机体自动模式偏航角速度上限`，否则 110（remedy：降速、增大半径或改用 tangent；AWR-03 ADR-062） | P0 | V0.1 | 是 | M10-AC-007 | 12 §5.3；x01 §3.10 |
 | M10-FR-014 | goto_route：`safe_transit` 由 M04 `safe_transit_profile` 生成"爬升—巡航—下降"折线后按 FR-012 的流水线生成轨迹，以 PATH 子模式执行；D1-ext 按 §6.5.1 的策略可以换成 2.5D A* | P0 | V0.1 | 是 | M10-AC-008 | x01 §3.8；12 §5.7.4 |
 | M10-FR-015 | 跟踪器 stage `mission`（order 027、every 2、phase 0，125 Hz，在 L1 融合核之前）：对 TRAJ 槽位求值 B-spline 或解析原语，输出 ENU 的 p、v、a、ψ，经 M08 助手换算后写入 `tr_x/tr_v/tr_a/yaw_sp`（§6.2）；带 time_stretch（2.0 m / 1.0 m）与时钟斜坡；轨迹结束后以静止点移交给 M08 的 HOLD。热路径使用 numba 核，numpy 版本作为 oracle | P0 | V0.1 | 是 | M10-AC-005、006 | g08 §3.2、§5.2；ADR-021 |
 | M10-FR-016 | 航向模式：`lookahead`（前视 1 s；位移 < 0.1 m 时保持）、`path`（切向）、`center`（看向点）、`axis`（看向竖直轴线）、`fixed`、`none` | P0 | V0.1 | 是 | M10-AC-005 | r25 §3.7 |
@@ -252,7 +252,7 @@
 | M10-FR-041 | 槽位生成器（line、column、V、echelon、grid、circle；虚拟锚点，偏移减去形心），Python 为参考实现 | P0 | V0.1 | 是 | M10-AC-018 | r26 §3.5 |
 | M10-FR-042 | TS 版槽位与 CAPT，与 Python golden 对拍（分配结果相等，代价满足混合容差） | P1 | V0.1 | 是 | M10-AC-018 | 18 §8.3；AWR-03 §6.3 |
 | M10-FR-043 | 虚拟结构跟踪器：锚点轨迹 + 二阶临界阻尼航向滤波（τψ = 2 s）+ 转动前馈（`v = v_A + ω×r`，`a = a_A + α×r + ω×(ω×r)`）；支持 `aligned`、`filtered`、`world` 三种航向模式 | P1 | V0.1 | 是 | M10-AC-019 | r26 §3.4 |
-| M10-FR-044 | CAPT：以平方距离做 Hungarian，全员共用同步插值 `s(t)`，`T = max(4 s, max_i abs(Δ_i)/(0.6·v_max))`；集结时先原地垂直起飞到队形高度，再同步直线进入槽位；起终点间距 ≥ 2√2·R_safe（碰撞保证）。规划时按采样求预测最小间距 `d_min`：`d_min < min_sep_m` 时改为三段式错层变形（先各自竖直移到 `z + rank_i·dz_r`，再在各层同步做 CAPT 水平插值，最后竖直回到同层；`dz_r = max(layer_dz_m, sqrt(min_sep_m² − d_min²) + 1 m)`，rank 两两不同，因此水平插值期间任意两机的垂直差 ≥ dz_r）；错层方案按采样复核后仍不满足则以 125（FORMATION_INFEASIBLE）拒绝 | P1 | V0.1 | 是 | M10-AC-018 | r26 §3.6；本文 §6.5.11 实测 |
+| M10-FR-044 | CAPT：以平方距离做 Hungarian，全员共用同步插值 `s(t)`，`T = max(4 s, max_i abs(Δ_i)/(0.6·v_max))`；集结时先原地垂直起飞到队形高度，再同步直线进入槽位；起终点间距 ≥ 2√2·R_safe（碰撞保证）。规划时按采样求预测最小间距 `d_min`：集结时间距阈值取任务 `min_sep_m` + 0.5 m（跟踪误差余量，起终构型的上限仍为 0.95 × 起终最小间距；AWR-03 ADR-070），`d_min` 小于阈值时改为三段式错层变形（先各自竖直移到 `z + rank_i·dz_r`，再在各层同步做 CAPT 水平插值，最后竖直回到同层；`dz_r = max(layer_dz_m, sqrt(min_sep_m² − d_min²) + 1 m)`，rank 两两不同，因此水平插值期间任意两机的垂直差 ≥ dz_r）；错层方案按采样复核后仍不满足则以 125（FORMATION_INFEASIBLE）拒绝 | P1 | V0.1 | 是 | M10-AC-018 | r26 §3.6；本文 §6.5.11 实测 |
 | M10-FR-045 | 可行性检查（`aligned` 模式的内侧速度、外侧速度、向心加速度；曲率突变）；不可行时拒绝（125，detail = FORMATION_INFEASIBLE）并给出 remedy（降速、增大转弯半径、改用 filtered 或 world、缩小间距） | P1 | V0.1 | 是 | M10-AC-020 | r26 §3.5 |
 | M10-FR-046 | 成员丢失：`keep_slot`（默认，空槽保留）或 `compact`（n − 1 重排并做一次 CAPT）；UI 的领航机角色转交给离锚点最近的成员 | P1 | V0.1 | 是 | M10-AC-019 | r26 §3.7 |
 | M10-FR-047 | 一致性与分离修正（律 C）、PrC 拓扑、脱连检测；律 A 作为对照 | P2 | V0.6 | 否 | — | r26 §3.2–§3.4 |
@@ -274,7 +274,7 @@
 |---|---|---|---|---|---|---|
 | M10-FR-054 | 与 FleetGuard 协同：让行导致的 HOLD/SEPARATION 使 Track 进入 SUSPENDED，间距恢复后自动续飞；同一对机体 60 s 内让行 ≥ 3 次时保持 SUSPENDED 并告警（语义见 12 §5.10.3） | P0 | V0.1 | 是 | M10-AC-010 | 12 §5.10 |
 | M10-FR-055 | 转场分层：同一任务多机同时转场时 `z_i = z_transit + rank_i·Δz`，Δz = 4 m，rank 按让行优先级升序 | P1 | V0.1 | 是 | M10-AC-024 | r26 §3.11；12 §5.10.4 |
-| M10-FR-056 | 任务内 4D 冲突检查：对同一任务的全部轨迹按 0.1 s 采样，用椭球距离 `ρ = ‖(Δx, Δy, Δz/2)‖`，冲突阈值取任务 `min_sep_m`（缺省 10 m）；冲突时对优先级较低者依次尝试 `(delay, dz)` 候选，候选排序键为 `delay + 0.5·abs(dz)`；消解不了时发出 `deconflict.partial` 告警，交由 FleetGuard 兜底 | P1 | V0.1 | 是 | M10-AC-023 | r25 §3.9(1) |
+| M10-FR-056 | 任务内 4D 冲突检查：对同一任务的全部轨迹按 0.1 s 采样，用椭球距离 `ρ = ‖(Δx, Δy, Δz/2)‖`，冲突阈值取任务 `min_sep_m`（缺省 10 m）；冲突时对优先级较低者依次尝试 `(delay, dz)` 候选，候选排序键为 `delay + 0.5·abs(dz)`；消解不了时发出 `deconflict.partial` 告警，交由 FleetGuard 兜底；入场转场（ADR-070）：2–12 机的非编队任务在首段转场前收集全员转场轨迹（等待上限后未到者不等），在 plan-pool 做一次只用起步延迟的消解（阈值 `min_sep_m + 1 m`），各机按延迟起步；编队解散的分层返航先分层、后横飞（rank k ≥ 1 先在原地竖直升到当前高度 + 12k m，rank 0 原地悬停，全员到层或 30 s【仿真】后各自返航） | P1 | V0.1 | 是 | M10-AC-023 | r25 §3.9(1) |
 | M10-FR-057 | 三层互避：全局 4D 预约、椭球 swarm 代价、ORCA-3D（k = 10、τ = 5 s、`r_eff = r_body + 0.5 m`）加刹停与 ±3 m 错层兜底 | P1 | V0.6 | 否 | 100 架随机任务 30 min 零碰撞；ORCA 每 tick ≤ 2 ms | r25 §3.9；AWR-03 §8.1 V0.6 |
 
 ### 4.8 任务分配
@@ -295,7 +295,7 @@
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M10-FR-062 | 剧本加载器：执行 V-SC-01 至 V-SC-11，失败返回 121；V-SC-12（能量预检）在任务启动时按 FR-004 执行，失败为 119；V-SC-13（剧本目录）属静态校验，不在加载器中；`profiles` 深合并；展开 `vehicle_sets`（含以出生点为中心的 `mission`） | P0 | V0.1 | 是 | M10-AC-015 | 16 §12 |
+| M10-FR-062 | 剧本加载器：执行 V-SC-01 至 V-SC-11，失败返回 121；V-SC-12（能量预检）在任务启动时按 FR-004 执行，失败为 119；V-SC-13（剧本目录）属静态校验，不在加载器中；`profiles` 深合并；展开 `vehicle_sets`（含以出生点为中心的 `mission`），展开后执行 V-SC-14（编组同时段最小间距的几何下界）与 V-SC-15（航向朝心环绕的偏航角速度），失败 121（AWR-03 ADR-062；16 §12.6）；orbit 生成器对同一 v/R 条件在生成时返回 110 | P0 | V0.1 | 是 | M10-AC-015 | 16 §12 |
 | M10-FR-063 | 剧本导演：`at_s` 与 `when`（10 Hz【仿真】）触发；以 principal `scenario:<id>` 执行动作；按封闭语法求值成功谓词；度量缺失判为假；发出 `scenario.result` | P0 | V0.1 | 是 | M10-AC-016 | 12 §7.1；16 §12.3 |
 | M10-FR-064 | 度量注册：导演通过 M08 组合根的度量注册表 `awr/sim/core/metrics.py`（`register_metric(name, fn, *, owner)`、`metric(name, **kw)`，M08-FR-088）读取度量（M09 的 `min_separation_m`、`guard_events`、`pos_err_max_m`、`battery_soc_min`、`energy_rtl_count`（M09-FR-124），M08 的 `elapsed_s`、`landed_all`，M14 的 `target_confidence` 等）；M10 登记 `missions_done`、`facade_coverage`、`area_coverage`、`formation_err_rms_m`、`agl_min_m`、`agl_rms_err_m`，以及只作展示、不进入成功谓词的 `link_quality_min`（ext，12 §7.1.3） | P0 | V0.1 | 是 | M10-AC-016 | 12 §7.1.3；16 §12.3 |
 
@@ -633,6 +633,8 @@ class PlanResult:
 
 控制点池：`f64[1_048_576, 3]`（24 MiB）。分配为首次适配，释放后放入空闲表；碎片率超过 50% 时在慢任务预算内（≤ 1 ms/tick）分批压缩（本文设定）。群组状态单独保存：`psi_f, w_f, tau_g, anchor_off, anchor_nseg`。
 
+跟踪器 stage `mission` 在奇数 tick（`every = 2, phase = 1`）运行，与偶数 tick 的 M08 l1、contact、tap 错开；跟踪器在 l1 之前一个 tick 写出同一参考，τ 推进同为 8 ms，l1 看到的参考序列不变（ADR-065）。任务引擎（`mission_engine`，10 Hz）对 ≥ 32 架的任务每次 stage 至多下发 4 条新调用、处理 16 条调用终态（转场完成后直接起步作业项同样计入），其余按轮转顺序在之后的 stage 续做；≥ 32 架的任务启动前的能量预检按每次 stage 全部任务合计 8 架分批，算完前任务保持 IDLE；计数节流、不读墙钟，S1–S6 等小编组不受影响（ADR-065）。
+
 #### 6.3.5 覆盖栅格与立面网格
 
 | 结构 | 字段 | 说明 | 依据 |
@@ -715,7 +717,7 @@ stateDiagram-v2
 | CRUISE | 变形事件 `reshape{shape}` | 不可行或错层复核不通过 | 发 `formation.infeasible`，保持原队形；来源调用以 125（FORMATION_INFEASIBLE）结束 | CRUISE |
 | RESHAPING | 插值结束 | — | — | CRUISE |
 | CRUISE、RESHAPING | 成员 Track DROPPED | `on_member_loss = compact` | n − 1 重排并做一次 CAPT | RESHAPING |
-| CRUISE | 锚点到达路径终点 | — | 解散：各成员按 `on_done` 转入 RTL，返航按 rank 分层 | DISBANDED |
+| CRUISE | 锚点到达路径终点 | — | 解散：各成员按 `on_done` 转入 RTL，返航按 rank 分层（rank k 的返航高度为当前高度 + 12k m，不超过围栏 max_z − 10 m，以 RTL `alt_m` 下发；跟踪器交回 HOLD 时把成员调用的完成判据目标点改为交回点，CommandEngine `retarget_goal`；ADR-065） | DISBANDED |
 | 任意 | 任务 abort | — | 各成员 hover | DISBANDED |
 
 ```mermaid
@@ -917,6 +919,7 @@ def track_step(slots, S, Q, G, p_enu, dt, emax_xy, emax_z, out):     # p_enu：M
 | time_stretch | `e_xy·v_xy ≥ 0` 时 `f_xy = 1 − clip(abs(e_xy)/2.0, 0, 1)`，z 轴用 1.0 m；`f = min(f_xy, f_z)`；只在机体落后于参考时生效 | g08 §5.2（MPC_XY_ERR_MAX、MPC_Z_ERR_MAX） |
 | 时钟斜坡（暂停、恢复、起步） | `dτ/dt = rate`，rate 以斜率 `a_brake / max(abs(v(τ)), 0.5)` 在 0 与 1 之间变化，`a_brake = 2 m/s²`；暂停时机体停在轨迹上，不偏离路径 | 本文设定（a_brake 不超过 TOPP 的 a_tan） |
 | 航向 `lookahead` | `ψ = atan2(p(τ + 1 s) − p(τ))`，水平位移 < 0.1 m 时保持上一值；航向速率由 M08 的姿态环限幅（自动模式 60°/s） | r25 §3.7；g08 §4 |
+| 航向输出限速（全部模式） | 跟踪器输出的 `ψ` 以 45°/s 限幅逼近目标航向（`kernels_track.YAW_RATE_MAX`）。FX-SIM2 实测：环绕入圆时 `center` 模式的目标航向一步翻转 180°，姿态环耦合出 28.7° 倾角（设定值 7°），触发 M09 FastGuard `TILT_ERR_KILL`（S3 的 b1 坠毁）；限幅后同一工况最大倾角 14.2° | FX-SIM2 报告 §3 |
 | 航向 `axis` / `center` | `ψ = atan2(c − p)`，c 为螺旋轴线或给定点 | x01 §3.10 |
 | 移交 | 轨迹终点静止（v = a = 0），切换为 HOLD（GOTO 目标 = 终点）时参考连续；是否 succeeded 由 CommandEngine 按 12 §5.4 判定 | 12 §5.4 |
 | 与 FSM 的关系 | 每 tick 先读 `ctrl_mode` 与 flight_state/sub：`ctrl_mode ≠ TRAJ` 或子模式不在 {PATH, ORBIT, SWARM} 的槽位跳过（FSM 或 M08 已接管，例如 HOLD/SEPARATION、ELAND；M08 同时调用 `provider.cancel`） | ADR-026；g08 §7.2；M08 K18、K19 |
@@ -1098,6 +1101,8 @@ E(segment)：EnergyModel.path_wh(profile_id, samples, env)（M08 §7.1.5 定义�
             samples：k × 7（t_s、ENU 位置、ENU 速度），各任务项轨迹按 1 s 抽样（S1 p600-01 约 660 行）
             （P = P_hover·(T/T_hover)^1.5，相对空速取机体所在高度的环境平均风；爬升另加 m·g·Δz/0.5；12 §5.8.4–§5.8.5）
 E(返航)：EnergyModel.estimate(profile, soc, path, env) 的 soc_after_return_pct（M09-FR-053），与 ctl/sim-core/estimate 同一实现
+        返航路线（最后一项终点 → home）取 EnergyModel.rtl_route(p, home, slot)：直飞或经单绕行点的两段折线，与运行期 rtl 分发同一路线（AWR-03 ADR-054），
+        z_rtl 取所走各段走廊上界的较大者加 5 m；EnergyModel 未提供 rtl_route 时按直飞
 可行，当且仅当 soc_now − E_need/E_use ≥ energy_reserve（0.20），E_use = usable_frac·capacity_wh（P600 188.7 Wh）
 ```
 

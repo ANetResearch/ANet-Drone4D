@@ -182,18 +182,18 @@
 | M11-FR-003 | 读端 API：`attach(path, expect_layout_id)` 不一致抛 `LayoutMismatch`（312）；`register(mode, name)`；`read_latest(last_seq)` 撕裂重试 ≤ 3 次；`drain()` 返回（帧、overrun）；`header()` 按 `clock_seq` 顺序锁一致性读（读到奇数或前后不等即重试，≤ 3 次，仍失败沿用上一次读数并计 `header_retries`；g05 原型"`heartbeat_ns` 前后两次相等"的判据不充分，原型先写 `t_sim_ns` 后写 `heartbeat_ns`）；`identity()` 返回 (st_ino, writer_pid, epoch, segment)；`writer_age_ms()` | P0 | V0.1 | 是 | M11-AC-001 | g05 §3.2；17 §9.2（v1.1） |
 | M11-FR-004 | `open_or_create`：capacity、slots、layout_id 均兼容则复用原文件（head 继续递增，读者 mmap 不失效）；否则 tmp 替换，读者经 `identity()` 的 inode 变化在 1 s 内重新 attach | P0 | V0.1 | 是 | M11-AC-001 | g05 §7.4 |
 | M11-FR-005 | `LocalRing`：与 StateRing 同接口的进程内实现（无 mmap），供 `--inproc` 与单元测试 | P0 | V0.1 | 是 | M11-AC-001 | AWR-03 §3.3 |
-| M11-FR-006 | `Bus` 接口与 `ZenohBus`：全仓库唯一 `import zenoh` 的模块；`serve`、`call`（async）、`call_cb`（同步进程用）、`publisher`、`subscribe`、`token`、`watch`；queryable 回调只入队或 `call_soon_threadsafe`，由包装器在 `finally` 中调用 `Query.drop()`；sim-core 侧全部发送为 DROP；命令与 setpoint 开 express；`call` 默认 1 s 超时、间隔 0.3 s 同 cid 重试 2 次 | P0 | V0.1 | 是 | M11-AC-003 | g05 §3.3、§8、§10 R4–R5 |
+| M11-FR-006 | `Bus` 接口与 `ZenohBus`：全仓库唯一 `import zenoh` 的模块；`serve`、`call`（async）、`call_cb`（同步进程用）、`publisher`、`subscribe`、`token`、`watch`；queryable 回调只入队或 `call_soon_threadsafe`，由包装器在 `finally` 中调用 `Query.drop()`；sim-core 侧全部发送为 DROP；命令与 setpoint 开 express；`call` 默认 1 s 超时、间隔 0.3 s 同 cid 重试 2 次；查询以 `consolidation = NONE` 发起，回复到达即交付，不等 ResponseFinal（FX2-R2-gateway，17 §9.4） | P0 | V0.1 | 是 | M11-AC-003 | g05 §3.3、§8、§10 R4–R5 |
 | M11-FR-007 | `LocalBus`：同接口的进程内实现（同步分发 + 线程安全入队），语义与 ZenohBus 一致（超时、drop、liveliness 模拟） | P0 | V0.1 | 是 | M11-AC-003 | 17 §9.8 |
 | M11-FR-008 | `EventPublisher`：按 (producer, epoch) 分配单调 seq；环 4096；`emit()` 只追加，`flush()` 每轮迭代每个 category 至多一次 put（msgpack 数组，DROP）；自动服务 `evt/{producer}/_replay`（`{since, epoch}` → `{events, truncated}`） | P0 | V0.1 | 是 | M11-AC-004 | ADR-018；g05 §3.4 |
-| M11-FR-009 | `EventSubscriber`：按 (producer, epoch) 跟踪已交付的最大连续 seq；发现缺口立即异步补拉 `_replay{since, epoch}`；缺口补齐前，该生产者后续事件进入重排缓冲（≤ 4096 条），补齐后按 seq 顺序交付，因此每个生产者的交付顺序与发布顺序一致；1 s（墙钟）内未补齐或 `truncated` 时向下游报告缺口 `[lo, hi]` 并放行缓冲；epoch 变化时丢弃旧 epoch 的跟踪与缓冲；去重（同一 (producer, epoch, seq) 只交付一次） | P0 | V0.1 | 是 | M11-AC-004 | g05 §3.4；17 §9.5 |
+| M11-FR-009 | `EventSubscriber`：按 (producer, epoch) 跟踪已交付的最大连续 seq；发现缺口立即异步补拉 `_replay{since, epoch}`；缺口补齐前，该生产者后续事件进入重排缓冲（≤ 4096 条），补齐后按 seq 顺序交付，因此每个生产者的交付顺序与发布顺序一致；1 s（墙钟）内未补齐或 `truncated` 时向下游报告缺口 `[lo, hi]` 并放行缓冲；epoch 变化时丢弃旧 epoch 的跟踪与缓冲；去重（同一 (producer, epoch, seq) 只交付一次）；**尾部探测**（FX2-R2-gateway）：已跟踪、无未决缺口的生产者距最近一条实时消息 ≥ 0.5 s 时，每 0.5 s 以 since = 已交付序号查询一次 `_replay`（不重试），使"最后一批消息被丢弃、此后不再发事件"的尾部缺口也在 ≤ 0.5 s + RTT 内补齐；回复错误或"truncated 且无事件"时间隔按 2 倍退避（上限 8 s），收到实时消息即恢复；请求与回复格式不变 | P0 | V0.1 | 是 | M11-AC-004 | g05 §3.4；17 §9.5 |
 | M11-FR-010 | `Heartbeat`：`/dev/shm/awr/<run>/hb.<name>` 16 B mmap（`mono_ns` i64、`pid` u32、`beat` u32）；`beat()` 只允许在主循环调用；`age_ms(path)` 供 supervisor 读取 | P0 | V0.1 | 是 | M11-AC-005 | g05 §7.3 |
 | M11-FR-011 | `init_child(name) → RunCtx`：`prctl(PR_SET_PDEATHSIG, SIGTERM)` 后核对 `getppid() == AWR_SUPERVISOR_PID`；SIGTERM 只置 `stopping`；断言 BLAS 线程变量为 1；启用 faulthandler；JSON 行日志写 stderr；读取 `AWR_SECRET_FILE` | P0 | V0.1 | 是 | M11-AC-005 | g05 §7.3 |
-| M11-FR-012 | supervisor 进程管理：`asyncio.create_subprocess_exec` 启动（不用 fork）；waitpid 检测退出；5 Hz 巡检心跳（sim-core 读环头部，其余读 `hb.<name>`）；心跳超过 `stale_s` 判 HUNG → SIGTERM → 1 s → SIGKILL；退避 0.5/1/2/4/8 s；60 s 内第 6 次启动熔断为 FAILED；按 `start_after` 启动；停止顺序 api → sim-core → 其余，每步 5 s 后 SIGKILL | P0 | V0.1 | 是 | M11-AC-005 | ADR-017；g05 §7.1–§7.3 |
+| M11-FR-012 | supervisor 进程管理：`asyncio.create_subprocess_exec` 启动（不用 fork）；waitpid 检测退出；5 Hz 巡检心跳（sim-core 读环头部，其余读 `hb.<name>`）；心跳超过 `stale_s` 判 HUNG → SIGTERM → 1 s → SIGKILL；退避 0.1/1/2/4/8 s（首档 AWR-03 ADR-061，原 0.5 s）；60 s 内第 6 次启动熔断为 FAILED；按 `start_after` 启动；停止顺序 api → sim-core → 其余，每步 5 s 后 SIGKILL；退出检测不依赖子进程 stdout 管道关闭（每 20 ms 查退出码；继承了管道的后代存活时 `proc.wait()` 会一直阻塞）；子进程以新会话启动，它退出后同进程组的残留后代（plan-pool 工作进程、resource_tracker 等）先 SIGTERM、1 s 后 SIGKILL，停止时等回收完成（FX2-R3-gateway，D1 验收第 2 轮 4.1b）；热备用（AWR-03 ADR-070，`procs[].standby`）：进程启动或接替时另起一个带 `AWR_STANDBY=1` 的同命令进程（新会话，钉在 `standby_cpus`），它在 stdout 打印 `AWR_STANDBY_READY` 后阻塞读 stdin；需要启动该进程（退避到期、sys/restart、熔断复位）且备用进程已就绪时，按 `cpus`、`nice` 重新调度它并经 stdin 写入一行当前子进程环境（JSON），记为新实例进入 STARTING，否则冷启动；退避、熔断计数与挂死判定不变，停止进程时一并停止备用进程 | P0 | V0.1 | 是 | M11-AC-005 | ADR-017；g05 §7.1–§7.3 |
 | M11-FR-013 | supervisor 服务：queryable `sys/procs`（进程表：name、state、pid、restarts、last_exit、uptime_s、hb_age_ms、cpu_pct、rss_mb）、`sys/restart{name, reset_breaker}`；进程状态变化发 `evt/supervisor/proc`；子进程 stderr 写 `runs/<run>/logs/<name>.log`（10 MB × 5 轮转），内存保留最后 200 行 | P0 | V0.1 | 是 | M11-AC-005 | g05 §7.3；19 §4 |
 | M11-FR-014 | supervisor 启动准备：打开 zenoh 汇合点 `tcp/127.0.0.1:7447`（随 `port_offset` 平移，主机部分不可改）；清理并创建 `/dev/shm/awr/<run>/`；生成并持久化 `runs/<run>/secret`（32 字节，0600）与 `admin.token`（0600；两种访问模式都生成，admin token 在任何模式下都需要管理口令，17 §3.1、AWR-03 §3.3）；启动时与每 600 s 检查 `runs/` 配额（默认 20 GB，删除最旧的非 keep 运行） | P0 | V0.1 | 是 | M11-AC-005 | AWR-03 §3.3；19 §6.2 |
 | M11-FR-015 | 配置：解析 `configs/runtime.yaml`（结构见 19 §6.2），按 `AWR_PROFILE` 叠加 profile；优先级为命令行 > `AWR_*` > profile > 基础值 > 内置默认；未知键、类型错误、lan 模式缺 `origins`、D1 中出现 `field` profile 一律以退出码 2 失败并给出键路径；生效配置写 `runs/<run>/effective-config.yaml`（秘密掩码为 `***`） | P0 | V0.1 | 是 | M11-AC-006 | 19 OPS-FR-001、003、004 |
-| M11-FR-016 | checkpoint 文件格式与 `CheckpointStore` 写入：`save(t_sim_ns, epoch, segment, arrays, meta)` 在调用方主线程只做 numpy 拷贝，序列化与 `os.replace` 在后台线程；tmpfs 保留 3 代，每 10 s（墙钟）镜像到 `runs/<run>/ckpt/`；格式见 §6.3.7，MS1 冻结 | P0 | V0.1 | 是 | M11-AC-007 | ADR-019；g05 §7.4 |
-| M11-FR-017 | checkpoint 恢复链路：`load_latest(skip_poisoned=True)`；恢复后 5 s 内再次崩溃时 `poison(t)` 并改用上一代；连续 3 代中毒时通知生产者从剧本起点重开；supervisor 注入 `AWR_RESTART_COUNT`、`AWR_LAST_EXIT` | P1 | V0.1 | 是 | M11-AC-007、048 | ADR-019；D1-AC-11b |
+| M11-FR-016 | checkpoint 文件格式与 `CheckpointStore` 写入：`save(t_sim_ns, epoch, segment, arrays, meta)` 在调用方主线程只做 numpy 拷贝，序列化与 `os.replace` 在后台线程；tmpfs 保留 3 代，每 10 s（墙钟）镜像到 `runs/<run>/ckpt/`；格式见 §6.3.7，MS1 冻结；后台编码让出 GIL（ADR-065）：元数据以 `pack_meta`（与 `msgpack.packb` 逐字节相同）按 64 个元素一批编码，批间让出（`yield_point`）；带 `ck_pack_parts(pk, parts)` 方法的元数据对象由其自行编码（调用方缓存不变部分的编码，输出与 `packb` 逐字节相同）；`serialize(out=...)` 在写线程复用的缓冲中编码（对齐填充与目录区显式清零，与不复用时逐字节相同），数组拼接每约 128 KB 或 8 个数组让出一次；可选 `gate`（调用方主循环休眠期间置位）：写线程在每个让出点等待 gate（至多 `gate_timeout_s` = 20 ms，保证进度），`close()` 时解除（AWR-03 ADR-070） | P0 | V0.1 | 是 | M11-AC-007 | ADR-019；g05 §7.4 |
+| M11-FR-017 | checkpoint 恢复链路：`load_latest(skip_poisoned=True)`；恢复后 5 s 内再次崩溃时 `poison(t)` 并改用上一代；连续 3 代中毒时通知生产者从剧本起点重开；supervisor 注入 `AWR_RESTART_COUNT`、`AWR_LAST_EXIT`；恢复后 5 s 内再崩时，恢复点之后由崩溃进程写出的各代标记 `.stale`（`load_latest` 跳过，不计入连续中毒代数，ADR-065） | P1 | V0.1 | 是 | M11-AC-007、048 | ADR-019；D1-AC-11b |
 | M11-FR-018 | CLI `awr`：`doctor [--quick]`（Python、依赖版本、/dev/shm 容量、端口、zenoh 自环、StateRing 自测）、`config print [--profile]`、`ring dump <path>`（头部与最新槽摘要）、`bus ls`（liveliness 与 key 探测） | P0 | V0.1 | 是 | M11-AC-006 | 19 §7.3 |
 | M11-FR-019 | `ZenohStateBus` 桩：实现与 StateRing 读写相同的接口签名，key `state/{producer}/frame`；D1 调用抛 `NotImplementedError`，契约测试只校验签名 | P2 | V0.5 | 桩 | 签名测试 | ADR-018；g05 §2.3 |
 
@@ -276,7 +276,7 @@
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M11-FR-065 | 全局 EventRing：65,536 条，按到达顺序分配 Gateway 全局 seq（u64，实例内从 1 起）；按 (producer, epoch, seq) 去重 | P0 | V0.1 | 是 | M11-AC-004 | 17 §6.12 |
+| M11-FR-065 | 全局 EventRing：至少保留最近 65,536 条（事件 JSON 编码一次、按 256 条封块压缩、内存有界，§6.3.4，FX2-R3-gateway），按到达顺序分配 Gateway 全局 seq（u64，实例内从 1 起）；按 (producer, epoch, seq) 去重；订阅之前已发出的事件：首见补拉（首条 seq ≤ 1025 时从 1 起）与辅助生产者（recorder、agent-runtime、job-worker）就绪时的主动探测（纪元 = 重启次数 + 1，验收加固 FX-GW 续，17 §9.5） | P0 | V0.1 | 是 | M11-AC-004 | 17 §6.12、§9.5 |
 | M11-FR-066 | 分发：每 tick 把新事件按连接的 `filter` 过滤后，1 条用 `event`、≥ 2 条合并为 `events`（每条 ≤ 256 项）放入控制面 FIFO；批量子调用的逐机 `cmd.*` 不逐条下发 | P0 | V0.1 | 是 | M11-AC-027 | 17 §6.12；10 AD-03 |
 | M11-FR-067 | 断线恢复：`hello.resume` 的 sessionId 等于当前实例时补发 `seq > lastEventSeq`；超出环范围时下一帧置 GAP 并发 `status{id: "events.gap"}` | P0 | V0.1 | 是 | M11-AC-004 | r27 §3.9；17 §6.12 |
 | M11-FR-068 | REST `GET /api/events?since=&limit=&types=&level_min=`；`since` 早于环最早序号返回 410 `319` | P0 | V0.1 | 是 | M11-AC-034 | 17 §4.3.13 |
@@ -299,7 +299,7 @@
 |---|---|---|---|---|---|---|
 | M11-FR-076 | StateRing 为 recorder 提供 LOSSY drain（≥ 20 Hz 轮询，K = 32 覆盖 256 ms）与批处理模式的 LOSSLESS 读者（卡住 > 250 ms 或心跳 > 2 s 降级为 LOSSY），overrun 数由 `drain()` 返回 | P0 | V0.1 | 是 | M11-AC-001 | ADR-018、ADR-040；g05 §6 |
 | M11-FR-077 | 录制控制：`rec/start`、`rec/stop` 路由到 `ctl/recorder/{start,stop}`（17 §9.3 已登记；recorder 不可用时 `rejected 213`）；recorder 订阅 `ctl/sim-core/interest` 只读 `marks`；`evt/recorder/rec` 的 `rec.*`、`recorder.gap` 事件转发 UI | P1 | V0.1 | 是 | M11-AC-042 | ADR-040；17 §9.3 |
-| M11-FR-078 | `playback` op：open、close、play、pause、seek、speed 转发 `ctl/replay-worker/*`（`speed` 越出 [0.1, 20] 返回 110，超过 `speed_max` 时由 replay-worker 钳制并在 `playbackState.warnings` 带 `SPEED_CLAMPED`）；open、seek、close 使全局 epoch + 1，严格按 TIME → `playbackState` → SNAPSHOT 顺序；seek 的回复携带 backfill 包（env、roster、state_ext、safety、mission、sensor 的最新值，M12 §6.7.6），Gateway 先把 backfill 原子装入对应 channel（各 seq + 1）再切 epoch 与排入 TIME，并记下回复中的 gen（FR-050 去重）；open/close 重发 `serverInfo{mode}`；回放期间一切写操作返回 118 | P1 | V0.1 | 是 | M11-AC-042 | 17 §6.11；ADR-040；M12 §6.7.6、§14 F-16 |
+| M11-FR-078 | `playback` op：open、close、play、pause、seek、speed 转发 `ctl/replay-worker/*`（`speed` 越出 [0.1, 20] 返回 110，超过 `speed_max` 时由 replay-worker 钳制并在 `playbackState.warnings` 带 `SPEED_CLAMPED`）；open、seek、close 使全局 epoch + 1，严格按 TIME → `playbackState` → SNAPSHOT 顺序；seek 的回复携带 backfill 包（env、roster、state_ext、safety、mission、sensor 的最新值，M12 §6.7.6），Gateway 先把 backfill 原子装入对应 channel（各 seq + 1）再切 epoch 与排入 TIME，并记下回复中的 gen（FR-050 去重）；open/close 重发 `serverInfo{mode}`；回放模式下新连接 hello 之后单独补发一次当前 `playbackState`（`request_id` 为空，验收加固 FX-GW 续，17 §6.11 补充约定第 5 条）；回放期间一切写操作返回 118 | P1 | V0.1 | 是 | M11-AC-042 | 17 §6.11；ADR-040；M12 §6.7.6、§14 F-16 |
 | M11-FR-079 | 按需进程：经 supervisor queryable `sys/start{cid, name, args}`、`sys/stop{cid, name}` → `{status, code, pid}`（17 §9.3、10 §4.4（4）已登记；只允许 `runtime.yaml` 中 `on_demand: true` 的进程，D1 为 replay-worker，`args = {run, segment}`）；`start` 在 `proc/<name>/ready` 出现或启动宽限到期后回复；`playback{open}` 在 replay-worker 就绪后才继续，其间 `playbackState.status = opening`，失败返回 213 | P1 | V0.1 | 是 | M11-AC-042 | 19 §4.1、§6.2 `on_demand`；10 §4.4 |
 
 ### 4.11 REST 框架与静态服务
@@ -308,7 +308,7 @@
 |---|---|---|---|---|---|---|
 | M11-FR-080 | REST 框架：`awr/api/main.py` 按文件名排序自动发现 `awr/api/rest/*.py` 导出的 `router`；中间件顺序 Host → Origin → 请求 id → 安全头 → 鉴权 → 限流（限流按鉴权得到的 principal 计，无 token 的请求按来源地址计）；错误统一 problem+json 且 `code ∈ reasons.json`；响应头 `AWR-API-Version: 1`、`X-Request-Id`（UUIDv7）；`/api/**` 默认 `Cache-Control: no-store`（`/api/env/presets`、`/api/scenarios*` 由领域路由改为 no-cache + ETag）；Idempotency-Key 60 s；请求体 ≤ 1 MiB（perf-report ≤ 4 MiB，超限 413 `307`）；处理函数在事件循环内 ≤ 1 ms，需要仿真的一律 `await bus.call(...)`，不可用时 503 `211`；api 停止中返回 503 `213` | P0 | V0.1 | 是 | M11-AC-034 | AWR-03 §4.2、§4.3；17 §4.1 |
 | M11-FR-081 | M11 拥有的 REST（编号见 17 §4.2）：`auth.py`（R01 token、R02 whoami；R03 confirm 为 P1）、`worlds.py`（R04、R05）、`sessions.py`（R08 current；R09 POST 为 P1）、`sys.py`（R50–R54 health、info、procs、restart，R56 events，R59 config，R60 perf；R47–R49 perf-report 与 R55 audit 为 P1；R78 metrics 为 V0.5，D1 返回 404）、`commands.py`（R19–R22，P1）、`api/rt/inspect.py`（R57 topics、R58 inspect，P1） | P0 | V0.1 | 是 | M11-AC-034 | 17 §4.2 |
-| M11-FR-082 | 静态服务按 17 §5：路由 `/worlds/{id}/**`、`/worlds/_shared/env/**`、`/vehicles/{model}/model/*.glb`（只暴露 `model/`）、`/assets/**`、`/brand/**`、`/bench/**` 与 SPA 回退；单区间 Range（206、416 `309`）；`/worlds/{id}/**` 的每个请求先 `stat` 一次该世界 `world.json`，inode 或 mtime 变化即重读 contentVersion（收到 `world.added`、`world.updated` 时主动刷新），`?v=` 等于当前 contentVersion 时 immutable，不等时 409 `310` + no-store，不带 `?v=` 时 no-cache + ETag；world.json no-cache + 强 ETag + 304；禁止动态 Content-Encoding；COOP same-origin、COEP require-corp、CORP same-origin、nosniff、Referrer-Policy no-referrer；CSP 为 P1 | P0 | V0.1 | 是 | M11-AC-033 | ADR-013；17 §5.1–§5.4 |
+| M11-FR-082 | 静态服务按 17 §5：路由 `/worlds/{id}/**`、`/worlds/_shared/env/**`、`/vehicles/{model}/model/*.glb`（只暴露 `model/`）、`/models/*.glb`（前端构建内的机型模型副本，只暴露 `*.glb`，no-cache + ETag，缺失 404 `305` 不落入 SPA 回退；验收加固 FX-WEB1，17 §5.1）、`/assets/**`、`/brand/**`、`/bench/**` 与 SPA 回退；单区间 Range（206、416 `309`）；`/worlds/{id}/**` 的每个请求先 `stat` 一次该世界 `world.json`，inode 或 mtime 变化即重读 contentVersion（收到 `world.added`、`world.updated` 时主动刷新），`?v=` 等于当前 contentVersion 时 immutable，不等时 409 `310` + no-store，不带 `?v=` 时 no-cache + ETag；world.json no-cache + 强 ETag + 304；禁止动态 Content-Encoding；COOP same-origin、COEP require-corp、CORP same-origin、nosniff、Referrer-Policy no-referrer；CSP 为 P1 | P0 | V0.1 | 是 | M11-AC-033 | ADR-013；17 §5.1–§5.4 |
 | M11-FR-083 | worlds 清单：按 `worlds/<id>/world.json` 的 mtime 刷新缓存（contentVersion、点数、根数、首屏字节）；status 由文件存在性、`qa/report.json` 与构建锁推导；`in_use` 取当前会话；只读文件，不 import `awr.world.geometry` | P0 | V0.1 | 是 | M11-AC-034 | AWR-03 §4.2 第 1 条；17 §4.3.2 |
 | M11-FR-084 | 静态拆分回退（仅当 M11-AC-018 不达标时启用）：`static` 进程监听 8001，`/worlds/**` 带 `CORP: cross-origin` 与按 Origin 白名单的 CORS，前端从 `GET /api/sys/config` 的 `worlds_base` 读取地址 | P1 | V0.1 | 是 | M11-AC-018 | ADR-013；10 AD-07 |
 
@@ -327,7 +327,7 @@
 |---|---|---|---|---|---|---|
 | M11-FR-089 | rt.worker 是唯一持有 WebSocket 的地方（`binaryType = "arraybuffer"`）；BATCH 只记录每个 channel 最新记录的 (buffer, offset, length, seq, dt_us) 引用；TIME 在 `onmessage` 中立即解析并更新 epoch；未知新 epoch 的 BATCH 暂存一帧，等到同 epoch 的 TIME 才放行，否则丢弃；旧 epoch 的 BATCH 丢弃 | P0 | V0.1 | 是 | M11-AC-036 | 17 §6.10、§6.13；AWR-03 §5.2 第 4 条 |
 | M11-FR-090 | TelemetryFrame 3 槽可转移缓冲环（10 AD-06）：主线程在 telemetry 相位调用 `swapFrame()` 取走就绪槽、归还已消费槽并发出下一次 pull；Worker 收到归还时把各 channel 最新记录解码进空闲槽（swarm 到 SoA，Full64、EnvSample32、SensorPose48 原样拷贝）；槽布局见 §6.3.8 | P0 | V0.1 | 是 | M11-AC-036、037 | 10 AD-06；r27 §3.9 L0 |
-| M11-FR-091 | ack：以归还槽中最大 `frame_seq` 为已消费；满足"距上次 ack ≥ 3 帧或 ≥ 50 ms"时发送 `ack{frame, fps, decodeMs, lagMs}` | P0 | V0.1 | 是 | M11-AC-014 | ADR-014 |
+| M11-FR-091 | ack：以交付给主线程本帧拉取的槽中最大 `frame_seq` 为已消费（ADR-067；原为归还的槽）；满足"距上次 ack ≥ 3 帧或 ≥ 34 ms"时发送 `ack{frame, fps, decodeMs, lagMs}` | P0 | V0.1 | 是 | M11-AC-014 | ADR-014 |
 | M11-FR-092 | ClockSync（Worker 内）：连接后 5 次 ping（间隔 100 ms），此后 2 Hz；保留 16 个样本取最小 RTT；偏差 > 50 ms 直接跳变，否则 0.1 平滑；平滑 RTT `srtt = 0.875·srtt + 0.125·rtt`，随每次 ping 以 `srttMs` 上报服务端（FR-040）；`sessionId` 变化清空；偏移换算到主线程时基：`off_main = off_worker + (timeOrigin_main − timeOrigin_worker)`（主线程创建 Worker 时传入自己的 `performance.timeOrigin`），结果写入槽头 | P0 | V0.1 | 是 | M11-AC-024、036 | r27 §3.10；17 §6.3、§6.10 |
 | M11-FR-093 | 重连：`minDelay 500 ms`、`grow 1.5`、`max 10 s`、±20% 抖动、`connectionTimeout 4 s`；重连后 sessionId 相同则重放订阅并带 `resume`，不同则清空缓存、重置 ClockSync 与事件序号（不清插值环）；断线期间不排队命令；重连后对未终结调用以同一 call id 重发；按关闭码处理（17 §8.3、14 §7.7）：1006 调 `GET /api/auth/whoami` 判别 401 与 403（是则 E-08 FATAL）；4401 向主线程请求用同一 `principal_hint` 重签的 token 后立即重连（不计退避次数）；4403 以 viewer 重连（E-16）；4429 等 30 s 后重连（E-17）；1013 按退避重连并上报 E-09；1002 连续 3 次、1008、4426 进入 FATAL；1000 为本端主动关闭，不重连 | P0 | V0.1 | 是 | M11-AC-008、047 | 17 §6.13、§3.3 第 4 条、§8.3；14 §7.7；00-index §5.5 T6 |
 | M11-FR-094 | RtClient 门面（`net/rt/client.ts`）：`subscribe(topic, opts)` 引用计数（同 topic 取最高 rate），增量 subscribe/unsubscribe 合并后每 250 ms 至多发送一次；`call()` 返回 CallHandle（Promise、onProgress、cancel；默认 `timeout_ms` 3000）；`onEvents` 每帧至多一批；`onTime`；`status` 为 14 §7.7 的连接状态；`roster` 只读视图；`serverInfo` 只读视图（运行世界 id、run、mode、clock、role、seat，供 M06 判定静态浏览与 M15 呈现） | P0 | V0.1 | 是 | M11-AC-012、036 | 10 §6.5；14 §7.7；M06 §7 |
@@ -653,7 +653,7 @@ classDiagram
 | | `row_of` | agent_no → 行号（同一 roster_version 内稳定，17 §9.2） |
 | | `full`、`lite`、`n_rows`、`t_sim_ns`、`t_pub_ns` | 最近一帧（已拷贝的 bytes） |
 | | `identity` | (st_ino, writer_pid, epoch, segment)，每 1 s 比较 |
-| EventRing | `buf` | 65,536 项的环；项 = (gseq, t_sim_ns, type, level, producer, uav, cid, json_bytes) |
+| EventRing | `buf` | 至少保留最近 65,536 条；项 = 事件的 WS JSON 字节（并入时编码一次，WS 与 REST 直接拼接）+ (type, level) 索引；seq 连续，由位置换算。每满 256 条封块并 zlib（level 1）压缩，最新未满块为明文；按块淘汰；已封块压缩字节 ≤ 8 MiB（安全上限，超过时提前按块淘汰）。FX2-R3-gateway（D1-AC-29）：此前项为 Python dict（约 1.2 KB RSS/条，满环约 80 MB），实现回到本表设计并加压缩，soak 事件实测约 30 B/条 |
 | | `oldest`、`newest` | 全局 seq 范围 |
 | | `dedup` | (producer, epoch) → 已交付最大 seq |
 | InFlight | 键 `cid` | 值 (conn_id, principal_id, service, batch_id, t_start_mono, last_result_json, final, t_final_mono) |
@@ -723,7 +723,10 @@ classDiagram
 | 200 | f64 | `swarmRecvMainMs` | 本槽 swarm 记录在 Worker 的接收时刻，已换算到主线程 `performance.now()` 时基（M12 DelayController 计算到达抖动，M12 §14 F-16） |
 | 208 | f32 | `focusHz` | 关注集通道最近 1 s 实测频率（各关注机频率的中位数） |
 | 212 | u32 | `eventGaps` | 本地 GAP 与服务端 `events.gap` 累计次数 |
-| 216–255 | — | 保留 | 写 0 |
+| 216 | f64 | `timeRecvMainMs` | 最近一个 TIME 在 Worker 的接收时刻（主线程时基；M12 onTime） |
+| 224 | u32 | `malformedFrames` | 解析失败的 BATCH 累计数 |
+| 228 | f32 | `selJitterMs` | 60 Hz（选中机）通道在 Worker 的到达抖动 p95：最近 64 个到达间隔 Δw 的 \|Δw − 1000/selHz\| 的 p95，ms；不足 8 个间隔或没有 60 Hz 通道时为 NaN。M12 用它与 `selHz` 计算 D_focus（FX2-R3，ADR-067）：主线程每帧只收到每个 channel 的最新一条记录，主线程侧的到达时刻就是帧时刻 |
+| 232–255 | — | 保留 | 写 0 |
 | 256 | f32 × 3C | `swarmPos` | World ENU，m |
 | 12544 | f32 × 4C | `swarmQuat` | [x,y,z,w]，已乘 1/32767 |
 | 28928 | f32 × 3C | `swarmVel` | m/s（已乘 0.01） |
@@ -1280,7 +1283,7 @@ function maybeAck() {
 | msgpack 通配订阅上限 | 2 | Hz | — | — | 17 §6.7 |
 | TIME 发送 | 10，变化即发 | Hz | — | 墙钟 | ADR-014 |
 | credit W | 6（公式计算） | 帧 | [3, 8] | — | ADR-014 |
-| ack 合并 | 3 帧或 50 ms | — | — | 墙钟 | ADR-014 |
+| ack 合并 | 3 帧或 34 ms（槽交付时，ADR-067） | — | — | 墙钟 | ADR-014、ADR-067 |
 | W 重算周期 | 1 | s | — | 墙钟 | 17 §6.9、§10.7 |
 | srtt 来源 | `ping.srttMs`（5 s 内有效）；回退为最近 32 帧"发出到被 ack 覆盖"最小时延；都没有时 5 ms | ms | [0, 10000) | 墙钟 | 17 §6.9 L1；初值 5 ms 为本文设定（回环约 1 ms，取偏大值） |
 | 客户端 srtt 平滑 | EWMA 0.875 / 0.125 | — | — | 墙钟 | r27 §3.10；17 §6.9 |
@@ -1289,7 +1292,7 @@ function maybeAck() {
 | 令牌桶深度 | max(128 KiB, 2 × 上一帧) | B | — | — | r27 §3.9 L2 |
 | 帧上限 | 1 | MiB | — | — | 17 §6.4 |
 | `events` 每条上限 | 256 | 项 | — | — | 17 §6.12 |
-| 全局 EventRing | 65,536 | 条 | — | — | 17 §6.12 |
+| 全局 EventRing | ≥ 65,536（按 256 条一块淘汰）；已封块压缩字节 ≤ 8 MiB | 条；MiB | — | — | 17 §6.12；块大小与字节上限为本文设定（FX2-R3-gateway：soak 事件压缩后约 30 B/条，65,536 条约 2–3 MB，8 MiB 只在异常大事件时触发） |
 | 生产者事件环 | 4096 | 条 | — | — | g05 §3.4 |
 | 事件缺口补齐等待、重排缓冲上限 | 1 s、4096 条 | — | — | 墙钟 | D1-AC-10（1 s 内补齐）；本文设定（缓冲上限等于生产者环） |
 | 拥塞判据 | 200 ms 单次，或 3 × 50 ms；恢复 3 × < 20 ms | ms | — | 墙钟 | r27 §3.9 L4；恢复阈值本文设定 |
@@ -1316,7 +1319,7 @@ function maybeAck() {
 | Worker 事件缓存上限 | 8192 | 条 | — | — | 本文设定 |
 | `stores/fleet.ts` 更新 | Tier S 4、Tier B/A 10 | Hz | — | 墙钟 | AWR-03 §3.6 overlay 相位 |
 | StateRing K、cap、游标 | 32（≥ 16）、1024、8 | — | — | — | ADR-018 |
-| supervisor 巡检、退避、熔断 | 5 Hz；0.5/1/2/4/8 s；60 s 内第 6 次 | — | — | 墙钟 | ADR-017 |
+| supervisor 巡检、退避、熔断 | 5 Hz；0.1/1/2/4/8 s（首档 ADR-061）；60 s 内第 6 次 | — | — | 墙钟 | ADR-017 |
 | 心跳阈值 | sim-core 2 s、api 5 s、job-worker 120 s | s | — | 墙钟 | g05 §7 |
 | checkpoint | 1 s 仿真、3 代、镜像 10 s、毒性窗口 5 s | — | — | 仿真 / 墙钟 | ADR-019 |
 | `runs/` 配额 | 20 GB，检查 600 s | — | — | 墙钟 | AWR-03 §3.3 |
@@ -1453,7 +1456,7 @@ stateDiagram-v2
 | STARTING | liveliness `proc/<name>/ready` 或首次心跳 | — | 记录启动时刻 | RUNNING |
 | STARTING | `startup_grace_s` 到期或进程退出 | — | 终止残留 | BACKOFF |
 | RUNNING | 退出码非 0，或心跳超过 `stale_s`（HUNG） | — | HUNG 时 SIGTERM，1 s 后 SIGKILL；发 `proc.state` | BACKOFF |
-| BACKOFF | 退避到期（0.5、1、2、4、8 s） | 60 s 内启动次数 < 6 | exec，`AWR_RESTART_COUNT` + 1 | STARTING |
+| BACKOFF | 退避到期（0.1、1、2、4、8 s；首档 ADR-061） | 60 s 内启动次数 < 6 | exec，`AWR_RESTART_COUNT` + 1 | STARTING |
 | BACKOFF | — | 60 s 内第 6 次 | 发 `proc.failed` | FAILED |
 | FAILED | `sys/restart{reset_breaker: true}` | admin | 清零计数 | STARTING |
 | 任一 | stop | — | SIGTERM，`grace_s` 5 s 后 SIGKILL | STOPPING → STOPPED |
@@ -1484,7 +1487,7 @@ sequenceDiagram
   MAIN->>WK: pull（归还已消费槽）
   WK->>WK: 解码到空闲槽，写入 TIME 与时钟偏移
   WK-->>MAIN: 就绪槽（可转移）与控制消息批
-  WK-->>SND: ack（覆盖 n，每 3 帧或 50 ms）
+  WK-->>SND: ack（覆盖 n，槽交付时，每 3 帧或 34 ms）
   MAIN->>MAIN: clock 相位求 tRender，drones 相位插值（M12、M06）
 ```
 
@@ -1700,7 +1703,7 @@ async def issue(req: TokenReq, mode: AccessMode) -> TokenResp:
 | R60 | `GET /api/sys/perf?window_s=60`（[5, 600]）→ `perf/server` 各数值字段的 `{p50, p95, p99, max, count}` 与 `t_from_unix_ns`、`t_to_unix_ns`（字符串） | viewer | core | `rest/sys.py` |
 | R78 | `GET /api/sys/metrics?format=prom` | viewer | 否（V0.5；D1 返回 404） | `rest/sys.py` |
 | — | `GET /api/rt`（WS 升级） | token（子协议 `bearer.<token>`） | core | `api/rt/ws.py` |
-| — | `/worlds/{id}/**`、`/worlds/_shared/env/**`、`/vehicles/{model}/model/*.glb`、`/assets/**`、`/brand/**`、`/bench/**`、SPA 回退 | 无 | core | `api/static.py` |
+| — | `/worlds/{id}/**`、`/worlds/_shared/env/**`、`/vehicles/{model}/model/*.glb`、`/models/*.glb`、`/assets/**`、`/brand/**`、`/bench/**`、SPA 回退 | 无 | core | `api/static.py` |
 
 ### 7.3 bus key：M11 的消费与产生
 
@@ -2030,7 +2033,7 @@ tools/bench/ipc/                     # 所有者 M11
 ├── bench_cmd.py        命令 RTT 与事件风暴（--events 570）
 ├── bench_encode.py     编码与装帧耗时
 ├── rt_client.mjs       Node 22 内置 WebSocket 的轻量协议客户端（10、30 客户端）
-└── netem_proxy.py      用户态弱网代理（18 §8.7 剖面 W0–W3）
+└── netem_proxy.py      用户态弱网代理（18 §8.7 剖面 W0–W3；控制口 --control：/cut、/profile、/stall、/stats，M16 §6.11）
 tests/runtime/  tests/rt/  apps/web/tests/m11/  apps/web/perf/m11/
 mk/m11.mk                            # test-rt、bench-ipc、rt-fixtures
 configs/runtime.yaml                 # 所有者 M11；内容见 19 §6.2，api 行按 FR-028 补全参数
@@ -2222,7 +2225,7 @@ JSON 编码使用标准库 `json`（控制面低频；lock 中无 orjson）。�
 | M11-AC-001 | StateRing 正确性 | 1 写 3 读并发 10⁵ 次撕裂漏检 0；`layout_id` 不一致 attach 抛 312；8 个游标均可注册；K = 32、cap = 1024 文件 3,148,288 B；写者被 kill -9 后读者仍读到最后一帧；兼容时 `open_or_create` 复用（inode 不变、head 连续）；非 x86-64 抛 PlatformUnsupported；写者以 250 Hz 调 `heartbeat()`、读者 10 万次 `header()`：(`t_sim_ns`, `heartbeat_ns`) 不同刻 0 次，`clock_seq` 读到奇数必重试 | `pytest tests/runtime/test_statering.py`（含 `::test_header_seqlock`） | 本机 CPU | P0 | FR-001–005、049、076；API-AC-025、035 |
 | M11-AC-002 | StateRing 性能 | N = 1000 publish（含 begin/commit 路径）p99 ≤ 300 µs；无客户端时 api 读环 ≤ 3% 核 | `python tools/bench/ipc/bench_state.py --n 1000` | 本机 CPU | P0 | NFR-004；PERF-AC-034 |
 | M11-AC-003 | Bus 用法 | import、key、callback、struct 四项 lint 违规 0；未 drop 的 query 0；sim-core 发布全为 DROP；LocalBus 与 ZenohBus 通过同一套契约测试；空载 query RTT p99 ≤ 5 ms | `make lint`；`pytest tests/runtime/test_bus.py` | 本机 CPU | P0 | FR-006、007、101；API-AC-027 |
-| M11-AC-004 | 事件可靠性 | 570 条/s × 60 s 缺口 0、乱序 0；人为丢弃第 k 条后 ≤ 1 s 经 `_replay` 补齐，且该生产者的交付顺序仍与发布顺序一致（第 k+1 条起在补齐前不交付）；`_replay` 无回复 1 s 后放弃并放行缓冲；超出生产者环时下一帧 GAP 与 `status events.gap`；resume 补发 seq 连续；REST `since` 早于环返回 410 | `python tools/bench/ipc/bench_cmd.py --events 570`；`pytest tests/rt/test_events.py` | 本机 CPU | P0 | FR-008、009、065–068；D1-AC-10 |
+| M11-AC-004 | 事件可靠性 | 570 条/s × 60 s 缺口 0、乱序 0；人为丢弃第 k 条后 ≤ 1 s 经 `_replay` 补齐，且该生产者的交付顺序仍与发布顺序一致（第 k+1 条起在补齐前不交付）；尾部批次被丢弃且生产者此后静默时 ≤ 1 s 经尾部探测补齐（`tests/runtime/test_events.py::test_tail_drop_recovered_by_quiet_probe`）；`bench_cmd --drop-every k` 只在 60 s 窗口内注入丢弃，窗口后排空 1.5 s 再统计未补齐数；`_replay` 无回复 1 s 后放弃并放行缓冲；超出生产者环时下一帧 GAP 与 `status events.gap`；resume 补发 seq 连续；REST `since` 早于环返回 410 | `python tools/bench/ipc/bench_cmd.py --events 570`；`pytest tests/rt/test_events.py` | 本机 CPU | P0 | FR-008、009、065–068；D1-AC-10 |
 | M11-AC-005 | supervisor | kill -9 子进程 ≤ 100 ms 检出并按退避重启；主循环挂死 ≤ 2.5 s 检出（P1）；60 s 内第 6 次启动为 FAILED，`sys/restart{reset_breaker}` 可恢复；supervisor 被 kill 后子进程 ≤ 1 s 退出；日志轮转与 200 行尾部可取；配额超限删除最旧非 keep 运行 | `pytest tests/runtime/test_supervisor.py` | 本机 CPU | P0 / P1 | FR-010–014；g05 §9 |
 | M11-AC-006 | 配置与 CLI | 未知键、类型错误、lan 缺 origins、field profile 均以退出码 2 失败并指出键路径；优先级正确；effective-config 中秘密为 `***`；`awr doctor --quick` 全部通过 | `pytest tests/runtime/test_config.py`；`awr doctor --quick` | 本机 CPU | P0 | FR-015、018；OPS-AC-005 |
 | M11-AC-007 | checkpoint | 1000 架 SoA + meta 保存后读回逐字节一致；crc 失败视为毒性；主线程 `save()` 耗时 p99 ≤ 2 ms（P0）；5 s 内再次崩溃标记 poison 并改用上一代，连续 3 代毒性通知剧本重开（P1） | `pytest tests/runtime/test_checkpoint.py` | 本机 CPU | P0 / P1 | FR-016、017；ADR-019 |
@@ -2232,7 +2235,7 @@ JSON 编码使用标准库 `json`（控制面低频；lock 中无 orjson）。�
 | M11-AC-011 | uvicorn WS 参数 | 客户端提议 permessage-deflate 时响应无 `Sec-WebSocket-Extensions`；`runtime.yaml` 的 api 行含 FR-028 全部参数 | `pytest tests/rt/test_uvicorn_flags.py`；Playwright `apps/web/perf/m11/handshake.spec.ts` | 本机 CPU 与本机 S | P0 | FR-028；ADR-014；API-AC-037 |
 | M11-AC-012 | 订阅语义 | 请求 7 Hz 得 10 Hz；swarm 请求 5 Hz 得 10 Hz；同 channel 两订阅取最高且帧内一次；通配新增 channel 1 s 内收到 `added`；订阅后下一帧 SNAPSHOT 含当前值；改 rate 不重发 SNAPSHOT；`uav/*/state_ext` 请求 10 Hz 得 2 Hz；`swarm/state` 别名可订阅且 advertise 无别名；添加机体后 ≤ 1 s 出现在 advertise 与 `fleet/roster`，移除后 ≤ 1 s unadvertise | `pytest tests/rt/test_subscribe.py` | 本机 CPU | P0 | FR-030–035、045；API-AC-006、034 |
 | M11-AC-013 | 尾帧、编码一次与发送时装帧 | 源发布到 seq 148 后停止：10、30、60 Hz 订阅者最后都收到 148；"30 Hz channel 在到期 tick 被 credit 挡住、随后源停止"场景仍收到最后值（原型逻辑在此场景失败）；人为让 sender 每 3 tick 才取一次：只发布一次（seq 1）后停止的 channel 最终必收到 seq 1，`slot_overwrites` > 0，线上 `frame_seq` 连续无跳号；订阅尚无值的 channel 不产生记录，首值到达后的帧带 SNAPSHOT；10 个同 rate 客户端的编码次数等于发布次数；1 与 10 个客户端编码次数之比 ≥ 0.9（P1）；每条记录 payload 起点 % 8 == 0 | `pytest tests/rt/test_scheduler.py`（含 `::test_overwrite_keeps_tail`） | 本机 CPU | P0 / P1 | FR-033、037–039、042、043；API-AC-007、036 |
-| M11-AC-014 | credit 与 ack | §6.4.5 表中四种情形的 W 全部命中（含 `ping.srttMs` 与回退两种来源；`srttMs` 超过 5 s 未更新时改用回退）；窗口满时数据帧 0 而控制面照常；ack 恢复后只发最新值、不补积压；客户端 ack 满足"3 帧或 50 ms"，ping 携带 `srttMs` | `pytest tests/rt/test_credit.py`；vitest `ack.test.ts` | 本机 CPU | P0 | FR-040、091 |
+| M11-AC-014 | credit 与 ack | §6.4.5 表中四种情形的 W 全部命中（含 `ping.srttMs` 与回退两种来源；`srttMs` 超过 5 s 未更新时改用回退）；窗口满时数据帧 0 而控制面照常；ack 恢复后只发最新值、不补积压；客户端 ack 满足"3 帧或 34 ms"（槽交付时，ADR-067），ping 携带 `srttMs` | `pytest tests/rt/test_credit.py`；vitest `ack.test.ts` | 本机 CPU | P0 | FR-040、091 |
 | M11-AC-015 | 背压 | 30 Hz × 32 KiB、主线程每帧忙 70 ms、8 s：显示时延 p95 ≤ 150 ms；末 2 s 与首 2 s 中位数之差 ≤ 20 ms；服务端 `slot_overwrites` > 0；控制面零丢失 | Playwright `apps/web/perf/m11/backpressure.spec.ts` | 本机 S | P0 | NFR-008；API-AC-008 |
 | M11-AC-016 | 令牌桶与优先级 | `maxKbps = 2048` 时 priority 0 通道实际频率不下降；priority 3 通道出现顺延且最终送达；每帧首条记录不受预算限制 | `pytest tests/rt/test_bucket.py` | 本机 CPU | P0 | FR-041、042 |
 | M11-AC-017 | L4 拥塞 | 经 `netem_proxy.py` 注入 500 ms 停顿：≤ 1 s 出现 `status net.congested`，停顿结束 ≤ 1 s 移除；期间控制面不丢、不触发 1013 | `pytest tests/rt/test_congestion.py` | 本机 CPU | P0 | FR-044 |
@@ -2251,10 +2254,10 @@ JSON 编码使用标准库 `json`（控制面低频；lock 中无 orjson）。�
 | M11-AC-030 | 兴趣集与详情 | 订阅 1 架 `uav/{id}/env` 后 ≤ 350 ms 内 `ctl/sim-core/interest.detail` 含该机且 WS 收到首条 EnvSample32；多连接并集正确；`topics` 为字符串数组；第 65 架触发 `interest.truncated`；退订后 ≤ 1.25 s 移出兴趣集；DetailDemux 输出字节与 bus 负载切片相同（不重新编码） | `pytest tests/rt/test_interest.py` | 本机 CPU | P0 | FR-071–074；API-AC-038 |
 | M11-AC-031 | 环境自包含 | 丢弃任意一条变化关键帧后 ≤ 1 s 经心跳恢复一致（version 相等）；version 缺口触发 `_replay`；`presets_sha256` 不一致出现 `status env.presets_mismatch` | `pytest tests/environment/test_env_push.py` | 本机 CPU | P0 | FR-073；API-AC-033 |
 | M11-AC-032 | 席位与 GCS 心跳 | 席位持有者关闭全部连接后 `ctl/sim-core/gcs` 的 `ping_age_ms` 持续增长，sim-core 在 1.5 s 告警、3 s HOLD（与 M09 联测）；30 s 内重连发 `seat_resume`；第二个 operator 签发返回 116 | `pytest tests/rt/test_seat_gcs.py` | 本机 CPU | P0 | FR-023、024；API-AC-038 |
-| M11-AC-033 | 静态服务与跨源隔离 | world.json 304 与 no-cache；当前 `?v=` 为 immutable（200 与 206）；过期 `?v=` 为 409 + no-store；Range 206、越界 416；hierarchy 整体 200；无 Content-Encoding；原子替换世界目录后不先取 world.json、直接用旧 `?v=` 请求得 409；`/vehicles/{model}/model/*.glb` 可取；`crossOriginIsolated === true` 且无 COEP 拦截；CSP 下 WS 可连（P1） | `pytest tests/rt/test_static.py`；Playwright `apps/web/perf/m11/coi.spec.ts` | 本机 CPU 与本机 S | P0 / P1 | FR-082、083；API-AC-022、023 |
+| M11-AC-033 | 静态服务与跨源隔离 | world.json 304 与 no-cache；当前 `?v=` 为 immutable（200 与 206）；过期 `?v=` 为 409 + no-store；Range 206、越界 416；hierarchy 整体 200；无 Content-Encoding；原子替换世界目录后不先取 world.json、直接用旧 `?v=` 请求得 409；`/vehicles/{model}/model/*.glb` 与 `/models/*.glb` 可取，缺失时 404 `305` 而非 SPA 的 `index.html`（`tests/rt/test_static_models.py`）；`crossOriginIsolated === true` 且无 COEP 拦截；CSP 下 WS 可连（P1） | `pytest tests/rt/test_static.py`；Playwright `apps/web/perf/m11/coi.spec.ts` | 本机 CPU 与本机 S | P0 / P1 | FR-082、083；API-AC-022、023 |
 | M11-AC-034 | REST 框架与契约 | 按文件名排序自动发现；全部错误为 problem+json 且 code 在 `reasons.json`；响应带 `AWR-API-Version` 与 `X-Request-Id`；Idempotency-Key 重放返回原响应、不同请求体 422 `321`；审计行不含 token；OpenAPI 与快照一致 | `pytest tests/rt/test_rest_contract.py` | 本机 CPU | P0 | FR-068、069、080、081；API-AC-024 |
 | M11-AC-035 | 可观测性 | `perf/server` 含 FR-085 全部字段且 1 Hz；`/api/sys/perf?window_s=60` 返回 p50、p95、p99、max；`__perf.net` 每帧更新；`hb.api` 10 Hz；事件循环阻塞 3 s 时 faulthandler 输出全部线程栈 | `pytest tests/rt/test_metrics.py`；Playwright 读 `__perf.net` | 本机 CPU 与本机 S | P0 | FR-085–087、096；PERF-AC-030 |
-| M11-AC-036 | rt.worker 正确性与零分配 | 1 万帧模糊输入解析不越界；未知 epoch 暂存与丢弃规则正确；`off_main` 与主线程独立测得的服务端时钟之差 ≤ 1 ms；`--expose-gc` 下解码 1 万帧（N = 1000）堆增长 ≤ 64 KiB；隐藏页 60 s 后事件缓存 ≤ 8192 且置本地 GAP | vitest `apps/web/tests/m11/{decode,epoch,clockSync,alloc,hidden}.test.ts` | 本机 | P0 | FR-089–095；NFR-016、022 |
+| M11-AC-036 | rt.worker 正确性与零分配 | 1 万帧模糊输入解析不越界；未知 epoch 暂存与丢弃规则正确；`off_main` 与主线程独立测得的服务端时钟之差 ≤ 1 ms；`--expose-gc` 下解码 1 万帧（N = 1000）堆增长 ≤ 64 KiB（测量前强制 GC 两次；连续测两个 1 万帧窗口取较小者，排除 vitest worker 同一 isolate 中与被测代码无关的偶发分配，逐帧泄漏在两个窗口都会超限；验收加固 FX-GW，INT-1 §7.11）；隐藏页 60 s 后事件缓存 ≤ 8192 且置本地 GAP | vitest `apps/web/tests/m11/{decode,epoch,clockSync,alloc,hidden}.test.ts` | 本机 | P0 | FR-089–095；NFR-016、022 |
 | M11-AC-037 | Worker 解码耗时 | N = 1000 每帧 p95 ≤ 2 ms | `npm run perf:ladder -- --n 1000`，读 `__perf.net.decodeUs` 的 p95 | 本机 S | P1 | NFR-015；D1-AC-09b |
 | M11-AC-038 | 选中机 60 Hz | Tier S 下选中机通道实际消费频率 ≥ rAF 频率；credit_skips ≤ 1% | Playwright `apps/web/perf/latency.spec.ts`（M16 编排，M11 提供 `__perf.net` 与 `perf/server` 字段） | 本机 S | P0 | NFR-013；D1-AC-26；API-AC-009 |
 | M11-AC-039 | 带宽 | N = 1000 默认订阅集（Tier S）单客户端下行 ≤ 0.5 MB/s | Playwright `apps/web/perf/m11/bandwidth.spec.ts` 读 `perf/server.clients[].kbps` | 本机 S | P0 | NFR-014；API-AC-032 |

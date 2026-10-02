@@ -172,9 +172,9 @@
 |---|---|---|---|---|---|---|
 | M08-FR-001 | SimClock：主时钟 tick = 4 ms，`t_sim_ns = tick × 4_000_000`（int64）；状态 STOPPED、PLAYING、PAUSED、STEPPING、LIVE，按 AWR-03 §5.2 第 6 条映射到 TIME.state（0、1、2、3、9）；倍率集合 {0.25, 0.5, 1, 2, 5, 10}；单步 1 ≤ ticks ≤ 2500 | P0 | V0.1 | 是 | M08-AC-001 | g08 §3.2；AWR-03 §5.2；AWR-12 §4.1.2 S08、S09 |
 | M08-FR-002 | 固定步长追帧：每轮迭代最多执行 `max_batch = max(5, ⌈5·rate⌉)` 个 tick；到期 tick 超过 `max_batch` 时执行 `max_batch` 个并把墙钟锚点前移（不跳步、不累积欠账），置 `rtf_limited`，StateRing 头部 `rtf_milli` 与 TIME 报告实际倍率 | P0 | V0.1 | 是 | M08-AC-002 | g05 §4；g08 §3.3、§11.2 规则 4；本文设定（×10 快进时的批量上限，见 §14 F-04） |
-| M08-FR-003 | 主循环固定顺序：写心跳 → 步边界 drain inbox（每轮 ≤ 512 条）→ 执行到期 tick 的 pipeline → `events.flush()` → 慢任务 → `sleep_until(下一 tick 的墙钟时刻)`；主循环内禁止网络同步等待、禁止非 tmpfs 文件 I/O、禁止无界 Python 循环遍历全部机体 | P0 | V0.1 | 是 | M08-AC-003（代码审查清单 + 单步计时） | g05 §4 不阻塞规则；ADR-021 ① |
-| M08-FR-004 | 慢任务轮转：M08 自身的 `state_ext` 2 Hz 打包（每片 ≤ 16 架，跨迭代完成）、估价请求、幂等表与租约过期清理、roster 快照、gc gen2 手动回收（D1-core 每 ≥ 30 s【墙钟】一次；启用 checkpoint 时改在 checkpoint 拷贝之后，ADR-021 ③）、checkpoint 数组拷贝（ext）；以及他模块经 `register_slow_task` 登记的任务（M07 `env.heartbeat`、`env.detail`，M09 safety 详情，M13 sensor 详情，M04 `GeoProbeServer` 分片，`register_query` 的请求）；每轮预算 `min(1000 µs, 2800 µs − 本 tick 已用)`，下限 100 µs；任务按轮转指针续做，不在同一轮追完；不可分片的请求（估价、`env/query`）只在剩余预算 ≥ 其 p99 耗时时启动，否则顺延到下一轮 | P0 | V0.1 | 是 | M08-AC-003 | ADR-021 ②；AWR-10 §4.2；本文设定（2800 µs 使单步 p99 留 0.2 ms 余量） |
-| M08-FR-005 | 启动序列：`init_child`（PDEATHSIG、BLAS 单线程断言、faulthandler、QueueHandler 日志）→ `compose_plugins(cfg.plugins)`（组合根按 `configs/runtime.yaml` 导入 M07、M09、M10、M13，执行注册，AWR-10 §3.3 规则 1）→ 加载 profile 与世界栅格 → StateRing `open_or_create` → 生产者 `epoch = 头部 epoch + 1`、`segment = 头部 segment + 1`（checkpoint 恢复时沿用快照 segment，AWR-10 §4.2）→ pipeline 构建与注册校验（FR-012）→ numba 预热（N = 2 的哑数组调用全部核）→ `gc.collect(); gc.freeze()`，gen2 阈值设为 1,000,000 → 发 `sim.started` → 声明 `proc/sim-core/ready`；numba 缓存命中时 exec 到 ready ≤ 2.0 s（p95） | P0 | V0.1 | 是 | M08-AC-024 | ADR-021 ③；g05 §4；AWR-10 §4.2；AWR-11 TECH-NFR-004 |
+| M08-FR-003 | 主循环固定顺序：写心跳 → 步边界 drain inbox（每轮 ≤ 512 条）→ 执行到期 tick 的 pipeline → `events.flush()` → 慢任务 → `sleep_until(下一 tick 的墙钟时刻)`；×1 下（非锁步、非单步）刚执行完偶数 tick 时休眠到其后的偶数 tick 到期，奇、偶两个 tick 成对推进，主循环按 125 Hz 唤醒（StateRing 发布时刻不变，奇数 tick 的 stage 至多晚 4 ms 执行，计算顺序与结果不变；`AWR_SIM_PAIR_TICKS=0` 关闭；AWR-03 ADR-070）；休眠期间置位 checkpoint 写线程的空闲门控（FR-083）；sim-core 主循环线程保持 supervisor 给定的亲和性，其余线程由慢任务每 2 s【墙钟】改到 `AWR_SIM_AUX_CPUS`（缺省为主循环亲和性之外的 CPU，ADR-070）；主循环内禁止网络同步等待、禁止非 tmpfs 文件 I/O、禁止无界 Python 循环遍历全部机体 | P0 | V0.1 | 是 | M08-AC-003（代码审查清单 + 单步计时） | g05 §4 不阻塞规则；ADR-021 ① |
+| M08-FR-004 | 慢任务轮转：M08 自身的 `state_ext` 2 Hz 打包（每片 ≤ 16 架，跨迭代完成）、估价请求、幂等表与租约过期清理、roster 快照、gc gen2 手动回收（D1-core 每 ≥ 30 s【墙钟】一次；启用 checkpoint 时改在 checkpoint 拷贝之后，ADR-021 ③）、checkpoint 数组拷贝（ext）；以及他模块经 `register_slow_task` 登记的任务（M07 `env.heartbeat`、`env.detail`，M09 safety 详情，M13 sensor 详情，M04 `GeoProbeServer` 分片，`register_query` 的请求）；每轮预算 `min(1000 µs, 2300 µs − 本 tick 已用)`，下限 100 µs；不足 100 µs（本轮管线已用尽 tick 预算）时预算记 0，只执行已到饿死上界的任务（不可分片任务顺延满 20 ms【墙钟】或 10 轮、整块周期任务顺延满 1 s，ADR-070）；任务按轮转指针续做，不在同一轮追完；不可分片的请求（估价、`ctl/sim-core/query`、细校验）按 ADR-057 的公平轮转与预算借贷启动：启动门槛为 min(p99, 每轮最大预算)，有待处理请求而顺延时把本轮剩余预算记为该任务的积分并让下一轮从它开始，积分加剩余预算达到门槛即启动，超支部分记为借贷（上限 4 ms）并在其后各轮扣还（每轮保留 100 µs 下限），顺延至多 ⌈1000 / 100⌉ = 10 轮、且不超过 20 ms【墙钟】（有界时延）；启动后同一轮内续处理排队请求（≤ 4 条）；追帧与成对推进时每轮预算按本轮 tick 数折算为 `min(1000 µs, n·2300 µs − 本轮已用)`（n = 1 时同上式）；`ctl/sim-core/query` 排队 > 8 个时 111 | P0 | V0.1 | 是 | M08-AC-003；`tests/sim/test_slow_tasks.py` | ADR-021 ②、ADR-057；AWR-10 §4.2；本文设定（2300 µs 为墙钟抖动留出单步 p99 余量，ADR-070；此前 2800 µs） |
+| M08-FR-005 | 启动序列：`init_child`（PDEATHSIG、BLAS 单线程断言、faulthandler、QueueHandler 日志）→ `compose_plugins(cfg.plugins)`（组合根按 `configs/runtime.yaml` 导入 M07、M09、M10、M13，执行注册，AWR-10 §3.3 规则 1）→ 加载 profile 与世界栅格 → StateRing `open_or_create` → 生产者 `epoch = 头部 epoch + 1`、`segment = 头部 segment + 1`（checkpoint 恢复时沿用快照 segment，AWR-10 §4.2）→ pipeline 构建与注册校验（FR-012）→ numba 预热（N = 2 的哑数组调用全部核）→ `gc.collect(); gc.freeze()`，gen2 阈值设为 1,000,000（`stop()` 时 `gc.unfreeze()`：同一进程内反复启停（`--inproc`、测试）不再把已停止实例的对象留在永久代，AWR-03 ADR-060）→ 发 `sim.started` → 声明 `proc/sim-core/ready`；numba 缓存命中时 exec 到 ready ≤ 2.0 s（p95）；numba 预热（ADR-065）：`python -m awr.sim.runtime.warm`（`make numba-warm`）按运行期签名（只读 ENU 视图、只读 DSM/DTM 网格、float32 记分板）预热全部插件核与 plan-pool 规划核，`tests/sim/test_numba_signatures.py` 校验运行期不新增签名；单机发布走 numpy 路径（结构化字段视图在 n = 1 时为 C 连续）；热备用模式（AWR-03 ADR-070，AWR-19 §4.2）：`AWR_STANDBY=1` 时先设 PDEATHSIG，完成插件装配（含各插件 numba 预热）、L1 核预热、机型表与剧本校验器预热后在 stdout 打印 `AWR_STANDBY_READY`，阻塞读 stdin 的一行 JSON `{"env": {...}}`（supervisor 接替时写入），以其更新环境后从 `init_child` 继续上述序列（机型表复用预热结果），读到 EOF 即退出码 0 退出 | P0 | V0.1 | 是 | M08-AC-024 | ADR-021 ③；g05 §4；AWR-10 §4.2；AWR-11 TECH-NFR-004 |
 | M08-FR-006 | StateRing 发布：每次 L1 更新后由 tap 发布（125 Hz【仿真】）；快进时按墙钟间隔 ≥ 4 ms 节流（≤ 250 Hz），并置 SlotHeader `flags.FASTFWD`；主循环每次迭代在 `clock_seq` 顺序锁内写时钟组（`heartbeat_ns`、`t_sim_ns`、`clock_state`、`rate_milli`、`epoch`、`segment`），每秒写 `step_p50_us`、`step_p99_us`、`step_max_us`、`catchup_saturated`、`rtf_milli`、`step_budget_us`，增删机体时写 `roster_version`（头部布局见 AWR-17 §9.2 v1.1）；Full64/Lite32 由 Gateway 按 `awr.rt.v1` 编帧下发（M11） | P0 | V0.1 | 是 | M08-AC-033 | ADR-014；ADR-018；AWR-17 §9.2 |
 | M08-FR-007 | 线程与 CPU：pipeline 只在主线程执行；numba 不使用 `prange`；`NUMBA_NUM_THREADS=1`、`OMP_NUM_THREADS=1`；亲和性与 nice 由 supervisor 按 `configs/runtime.yaml` 设置，sim-core 启动时读回并写入 `meta.json` | P0 | V0.1 | 是 | M08-AC-024 | ADR-017；g05 §4 |
 | M08-FR-008 | `ctl/sim-core/clock`：play、pause、step{ticks}、speed{rate}、reset{scenario_id?}、checkpoint（ext）；守卫与失败码按 AWR-12 §5.13；reset 执行段切换（`segment + 1`、`epoch + 1`）、机群重生、租约全部 FREE、在途调用 `canceled 6` | P0 | V0.1 | 是 | M08-AC-001 | AWR-12 §4.1.2 S05–S10；ADR-040 |
@@ -206,7 +206,7 @@
 | M08-FR-024 | ORBIT：若机体距圆 > 1 m，先以 GOTO 入圈（至圆上最近点）；随后沿圆运动，角速度按 `ACC_HOR/R` 斜坡，切向速度 `≤ min(speed_mps, √(ACC_HOR·R))`；累计转角计圈；偏航行为 `center`（默认）、`tangent`、`fixed`；半径 [1, 1000] m；装配 M10 时 orbit 由 M10 解析原语提供者执行（FR-086），本条为原生执行路径 | P0 | V0.1 | 是 | M08-AC-015 | g04 §6.3 Orbit；AWR-17 §7.7 |
 | M08-FR-025 | TAKEOFF：SPOOLUP 1 s（推力斜坡到 `THR_MIN`）→ CLIMB（xy 保持，垂直速度 3 s 内斜坡升至 `MPC_TKO_SPEED` 1.5 m/s）→ 到达 `alt_m`（AGL，默认 2.5 m）后转 HOLD | P0 | V0.1 | 是 | M08-AC-016 | r20 §3.5；g04 §6.3 Takeoff |
 | M08-FR-026 | 下降剖面：LAND 在 AGL > 10 m 时 1.5 m/s，5–10 m 线性降到 0.7 m/s，≤ 5 m 为 0.7 m/s，≤ 1 m 为 0.3 m/s；ELAND 恒 0.5 m/s；FAILSAFE/DESCENT 冻结参考、垂直前馈向下 1 m/s；触地后 1 s 内推力斜坡降到 `THR_MIN` | P0 | V0.1 | 是 | M08-AC-016 | r20 §3.4（`MPC_LAND_*`）；g08 §7.2 |
-| M08-FR-027 | RTL 运动执行：CLIMB（原地升至 `z_rtl`，≤ 3 m/s）→ CRUISE（飞至 home 上方，巡航 `v_c`）→ DESCEND（降至 `z_home + 10 m`，1.5 m/s）→ FINAL（LAND 剖面）；`z_rtl`、`v_c`、`t_rtl` 取自 M09 注册的 `EnergyModel.rtl_plan(slot)`（按 AWR-12 §5.8.3 计算并缓存，M09-FR-052）；阶段推进由 M09 FSM 负责（M09-FR-011），refgen 按 `safety.sub` 选择本阶段目标 | P0 | V0.1 | 是 | M08-AC-016 | AWR-12 §5.8.3；g04 §6.3 RTL；M09-FR-011、FR-052 |
+| M08-FR-027 | RTL 运动执行：CLIMB（原地升至 `z_rtl`，≤ 3 m/s）→ CRUISE（飞至 home 上方，巡航 `v_c`；`rtl_plan` 带绕行点 `via_enu_m` 时先飞向绕行点，参考点进入 3 m 接受半径后转向 home 上方，FleetState `rtl_via` 清为 NaN，AWR-03 ADR-054）→ DESCEND（降至 `z_home + 10 m`，1.5 m/s）→ FINAL（LAND 剖面）；`z_rtl`、`v_c`、`t_rtl` 取自 M09 注册的 `EnergyModel.rtl_plan(slot)`（按 AWR-12 §5.8.3 计算并缓存，M09-FR-052）；阶段推进由 M09 FSM 负责（M09-FR-011），refgen 按 `safety.sub` 选择本阶段目标 | P0 | V0.1 | 是 | M08-AC-016 | AWR-12 §5.8.3；g04 §6.3 RTL；M09-FR-011、FR-052 |
 | M08-FR-028 | HOLD、SafetyStop、Pause：`v_des = 0`，按 jerk 限幅刹停，参考速度 < 0.05 m/s 后把目标锁定为当前参考点；SafetyStop 同时置 `locked`；Pause 由 M10 发起，保留任务游标 | P0 | V0.1 | 是 | M08-AC-026 | g08 §7.2；g04 §6.3 |
 | M08-FR-029 | VELOCITY：`ctl/sim-core/setpoint` 取每机最新值（mailbox）；world 或 body 帧；零速轴保持（`‖v_axis‖ ≤ 0.09 m/s` 锁定该轴，漂移 > 0.04 m 时施加 `−1.8·drift`）；沿速度方向按 `vmax_from_dist(j, a, max(d_free − 2 m, 0))` 限速，`d_free` 取 M04 `free_distance(p, dir, 200 m)`（200 m 处的限速约 30 m/s，已高于任何 `MPC_XY_VEL_MAX`，本文设定）与 M09 `d_free_fence_m`（M09-FR-043）的较小者；ingest 检出 250 ms【墙钟，暂停冻结判定】无新 setpoint 时调用 M09 注册的 `SafetyHooks.on_stream_watchdog(slots)`（M09-FR-062），由 M09 使机体进入 HOLD/LINK_LOSS；只在 rate = 1 可用 | P0 | V0.1 | 是 | M08-AC-017 | g04 §6.3 Velocity；g08 §5.1；ADR-026、ADR-045 |
 | M08-FR-030 | OFFBOARD_POS：原始位置阶跃设定、不经平滑，只用于 SIH 回归与测试，不对外暴露为命令 | P0 | V0.1 | 是 | M08-AC-005 | g08 §9.1 inst0 |
@@ -266,12 +266,12 @@
 | M08-FR-054 | 准入框架：在生产者本地依次执行 ④ 状态（准入矩阵）⑤ 租约 ⑥ 参数边界 ⑦ 后端能力 ⑧ 围栏粗校验 ⑨ 分发 ⑩ 审计；执行前验证可信入口签发的 principal；同步准入 ≤ 5 ms（p99）；原因码优先级按步骤顺序 | P0 | V0.1 | 是 | M08-AC-025 | ADR-016；AWR-12 §5.1.2 |
 | M08-FR-055 | 准入检查注册表 `register_admission_check(step, name, fn, *, owner)`：M09 注册 ④ 状态矩阵、锁与预检（矩阵数据由 M08 `state_model` 生成）与 ⑧ 围栏粗校验（O(航段数)，折线含 `p_stop`；需要细校验时 `needs_fine = True`，由 CommandEngine 经 `schedule_fine_check` 交 plan-pool），M10 注册任务类前置条件；M08 自身执行 ④ 中的生命周期（108）、定位（113）与时钟约束（117）以及 ⑤–⑦；M08 不 import M09、M10 | P0 | V0.1 | 是 | M08-AC-025 | AWR-03 §6.2 规则 1；ADR-050；M09 §7.1 |
 | M08-FR-056 | 调用生命周期：准入通过即 `accepted`（Mock 由同 tick 的准入矩阵确认，`native_ack = true`）→ 下一 tick 规范态读回符合期望为 `running` → 完成判据成立为 `succeeded`；另有 `rejected`、`failed`、`canceled`、`timeout`；effect 与 `verify_trust` 按 AWR-17 §7.3，Mock succeeded 为 V4 并置 `simulated = true`，必带 metrics | P0 | V0.1 | 是 | M08-AC-026 | g04 §7；ADR-016 |
-| M08-FR-057 | 完成判据向量化：`cmd_watch` stage（50 Hz）按 AWR-12 §5.4 的参数对全部活动调用做向量化判定（running、succeeded、`203 STALLED`、`202 PROGRESS_TIMEOUT`、`207 VEHICLE_LOST`）；安全原因的结局（`204`、`208`、`209`、操作员安全类命令取代的 `206`）由 M09 经 `CommandEngine.resolve_calls()` 回调给出（M09-FR-010），CommandEngine 以先到者为准且只结束一次；progress ≤ 2 Hz【墙钟】 | P0 | V0.1 | 是 | M08-AC-026 | g04 §6.4；ADR-021 ① |
+| M08-FR-057 | 完成判据向量化：`cmd_watch` stage（50 Hz）按 AWR-12 §5.4 的参数对全部活动调用做向量化判定（running、succeeded、`203 STALLED`、`202 PROGRESS_TIMEOUT`、`207 VEHICLE_LOST`）；安全原因的结局（`204`、`208`、`209`、操作员安全类命令取代的 `206`）由 M09 经 `CommandEngine.resolve_calls()` 回调给出（M09-FR-010），CommandEngine 以先到者为准且只结束一次；progress ≤ 2 Hz【墙钟】，且每次 cmd_watch 至多 16 条（多于此数时取最久未发者，AWR-03 ADR-060）；在途调用 ≥ 32 时逐行判据改为向量预筛，产生事件的行仍按行号升序逐行处理，与逐行实现等价（ADR-060，`tests/sim/test_cmd_watch_vec.py`）；大机群节流（ADR-065）：每次 `cmd_watch` 至多把 16 条调用读回为 running，起飞完成判据并入 numba 预筛核；批量命令（`uav` 为列表或 `"*"`）多于 4 架时每次主循环迭代准入 4 架，整批完成后一次回复，分片写入输入日志（`batch_chunk`） | P0 | V0.1 | 是 | M08-AC-026 | g04 §6.4；ADR-021 ①；ADR-060 |
 | M08-FR-058 | 幂等、取代、取消：cid 幂等表保留 60 s【墙钟】、最多 4096 条，重复调用回最新结果（总线 status = duplicate）；新导航调用取代旧调用（`206 SUPERSEDED`），安全类命令取代一切；`cancel` = 先 hover 再判 `6 CANCELLED` | P0 | V0.1 | 是 | M08-AC-026 | g04 §7.6；g05 §3.3 |
 | M08-FR-059 | 批量命令：`uav` 为列表或 `"*"` 时向量化执行 ④–⑧ 与分发，回复 `per_uav{accepted, rejected}`；1000 架同时 RTL 时准入 ≤ 8 ms、单步最大 ≤ 12 ms | P0 | V0.1 | 是 | M08-AC-027 | D1-AC-27；g05 §3.3 |
 | M08-FR-060 | apply 时复核：staged 命令在 apply_tick 由 ingest 按当前 FlightState 复核；若状态已升级为禁止该命令的状态（例如同一 tick 的守卫触发了 ELAND），调用判 `failed 204 PREEMPTED_BY_SAFETY` | P0 | V0.1 | 是 | M08-AC-026 | 本文设定（消除准入与 FSM 升级之间的竞态） |
 | M08-FR-061 | 规划结果：细粒度 `path_valid` 与 safe_transit 在 plan-pool 执行，结果按 apply_tick 生效；细校验完成前调用停在 `accepted` 不进入 `running`，失败以 `failed 102` 结束 | P0 | V0.1 | 是 | M08-AC-026 | ADR-016、ADR-039 |
-| M08-FR-062 | LeaseManager（core）：每机 owner ∈ {NONE, OPERATOR, AGENT, MISSION, SWARM}；单 operator 锁（席位）；Land、Hover、RTL、SafetyStop 免租约但仍受准入矩阵约束；SafetyStop 对 agent 不可用；owner 写入 `ctrl` 与 `state_ext.lease` | P0 | V0.1 | 是 | M08-AC-028 | ADR-027；g04 §4.9 |
+| M08-FR-062 | LeaseManager（core）：每机 owner ∈ {NONE, OPERATOR, AGENT, MISSION, SWARM}；单 operator 锁（席位）；Land、Hover、RTL、SafetyStop 免租约但仍受准入矩阵约束；SafetyStop 对 agent 不可用；owner 写入 `ctrl` 与 `state_ext.lease`；`ctl/sim-core/lease` 接受 agent principal（`agent:<aid>`，K_entry 验签，不要求席位）的 `acquire{owner: AGENT}`（按优先级抢占 MISSION、SWARM 并入栈，OPERATOR 持有时 100）与 `release{return_to: previous}`（弹栈恢复），agent 的席位操作与非 AGENT 类别 115；`lease.*` 事件 data 带 owner、holder、by（ADR-058） | P0 | V0.1 | 是 | M08-AC-028；`tests/sim/test_service_surface.py` | ADR-027、ADR-058；g04 §4.9；M14-to-M08 第 1 条 |
 | M08-FR-063 | LeaseManager（ext）：HMAC lease token（由 `AWR_SECRET` 经 HKDF 派生）、优先级抢占（SAFETY > PILOT > OPERATOR override > OPERATOR > AGENT > MISSION > SWARM）、TTL 每 5 s 续约【墙钟，暂停冻结判定】、kill 与 escalate 的确认令牌 | P1 | V0.1 | 是 | M08-AC-028 | ADR-027 |
 | M08-FR-064 | 估价 `ctl/sim-core/estimate`：M08 负责入口、限流（≤ 20 次/s，超出 `111 RATE_LIMITED`）、roster 解析与安全转场路径构造（起点 → 转场高度 → 目标 → 停留 → 返航），时间与能量积分调用 M09 注册的 `EnergyModel.estimate(profile, soc, path, env)`（M09-FR-053），返回 `eta_s`、`energy_wh`、`soc_after_pct`、`feasible`（含返航能量与 20% 余量）；drain 时只入队，在慢任务轮转中执行（FR-004），单次 p99 ≤ 1 ms，入队到回复 p99 ≤ 20 ms【墙钟】 | P0 | V0.1 | 是 | M08-AC-029 | ADR-036；AWR-10 §4.2；AWR-12 §5.8.4 |
 
@@ -302,7 +302,7 @@
 | M08-FR-075 | SIH 黄金数据入库：`.cache/research/r20/x500_n3/` 的 inst0–2.csv、marks.csv、log.txt 与 `r20/models_x500_model.sdf`、`r20/models_x500_base_model.sdf` 原样复制到 `tests/golden/sih_x500_px4-1.18rc1/`，附 README 记录镜像 `px4io/px4-sitl:v1.18.0-rc1`、全部 SIH 参数与各文件 sha256；本机无法重新生成 | P0 | V0.1 | 是 | M08-AC-005 | AWR-03 §8.7；g08 §9.1 |
 | M08-FR-076 | `tests/sim/test_fleet_sih_parity.py`：参数化 `aero ∈ {linear, composite}` × `l1_every ∈ {1, 2}`，48 ms 采样、Mock 右移 0.12 s，逐项断言 17 项指标与 guard 事件 = 0 | P0 | V0.1 | 是 | M08-AC-005 | g08 §9.2–§9.3；ADR-021 |
 | M08-FR-077 | `tests/sim/test_fleet_robust.py`：R4–R8；R9 改为 ADR-021 的两项对拍（`tests/sim/test_kernel_parity.py`） | P0 | V0.1 | 是 | M08-AC-006、AC-007 | g08 §9.4 |
-| M08-FR-078 | `tools/bench/fleet_ladder/run.py`：N ∈ {10, 50, 100, 200, 500, 1000}（100 只作表征点）、每档 60 s，以真实 sim-core 进程运行 M16 的 `ladder-shenzhen` 剧本（`--scenario`、`--profile n<N>`，负载定义见 M16 §6.4.8）；输出 `bench-result.json`（schema `awr.bench.result.v1`，AWR-18 §7.6：RTF、CPU、`step_us{p50,p99,max}`、`catchup_saturated`、`stage_ms_per_s`、RSS、内核、loadavg）；支持 `--rate`、`--kernel`、`--churn <s>`、`--with-recorder`、`--with-checkpoint`、`--clients`、`--with-flight60`、`--out`；执行 ADR-033 性能运行协议 | P0 | V0.1 | 是 | M08-AC-020、AC-021 | D1-AC-07、D1-AC-28；AWR-18 §7.6；M16 §6.4.8 |
+| M08-FR-078 | `tools/bench/fleet_ladder/run.py`：N ∈ {10, 50, 100, 200, 500, 1000}（100 只作表征点）、每档 60 s，以真实 sim-core 进程运行 M16 的 `ladder-shenzhen` 剧本（`--scenario`、`--profile n<N>`，负载定义见 M16 §6.4.8）；输出 `bench-result.json`（schema `awr.bench.result.v1`，AWR-18 §7.6：RTF、CPU、`step_us{p50,p99,max}`、`catchup_saturated`、`stage_ms_per_s`、RSS、内核、loadavg）；支持 `--rate`、`--kernel`、`--churn <s>`、`--with-recorder`、`--with-checkpoint`、`--clients`、`--with-flight60`、`--out`；执行 ADR-033 性能运行协议；FX2-R2 补齐（ADR-065）：剧本口径订阅剧本标记、`ladder.steady` 之后开始测量；`--scenario none` 为骨架布设（`AWR_SCENARIO_LOAD=0`、负载代发 GCS 信标、按层批量起飞、≥ 95% FLYING 后 3 m 半径环绕）；`--clients K [--with-flight60]` 同时启动 api 并复用 `tools/bench/ipc` 的客户端编排、取 tick 数据年龄；`--with-recorder` 同时启动 recorder（自动开始录制）并计 CPU 与写入速率；任一规模点失败以退出码 1 结束、不写 NaN，明细写 `fleet-ladder.json` | P0 | V0.1 | 是 | M08-AC-020、AC-021 | D1-AC-07、D1-AC-28；AWR-18 §7.6；M16 §6.4.8 |
 | M08-FR-079 | `tools/vehicles/regen_sih_golden/`：由 r20 `run_sih_x500.sh` 与 `sih_probe.py` 整理而成（放在 M08 所有的 `tools/vehicles/**` 下，AWR-03 §4.3），PX4 升级时在有 docker 的机器上重录，新旧差异随合并说明提交 | P1 | V0.1 | 是 | 脚本可运行（在具备 docker 的环境人工验证） | g08 §9.5 |
 
 ### 4.13 REST `rest/fleet.py`
@@ -317,7 +317,7 @@
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M08-FR-082 | 确定性：固定 tick、固定 stage 顺序、按 slot 升序处理与抽样、RNG 流 `PCG64(SeedSequence([world_seed, stream_id]))`；同一内核、同一版本、同一输入序列下 Full64 字节逐位一致 | P0 | V0.1 | 是 | M08-AC-019 | ADR-049；g08 §2 |
-| M08-FR-083 | checkpoint：FleetSim 与 CommandEngine 提供 `checkpoint_arrays()`/`restore()`，内容含 SoA、全部状态块、路径缓冲、staged 队列、幂等表、租约、SimClock、RNG 状态；主循环内只做 numpy 拷贝（≤ 1 ms，计入慢任务预算），序列化在后台线程 | P1 | V0.1 | 是 | M08-AC-035 | ADR-019；g05 §7.4 |
+| M08-FR-083 | checkpoint：FleetSim 与 CommandEngine 提供 `checkpoint_arrays()`/`restore()`，内容含 SoA、全部状态块、路径缓冲、staged 队列、幂等表、租约、SimClock、RNG 状态；主循环内只做 numpy 拷贝（≤ 1 ms，计入慢任务预算），序列化在后台线程；主线程开销（ADR-065）：数组不预先拷贝（CheckpointStore 拷贝进双缓冲），调用表只存活动行高水位以下，在途调用为"不变字段字典（准入时生成）+ 可变字段列表"，roster、租约、幂等表增量缓存；恢复兼容旧格式；后台编码（ADR-070）：在途调用缓存不变字段字典的编码并在可变字段不变时整条复用，roster 与租约按缓存键整体缓存编码，幂等表逐行缓存（M11 `pack_meta` 的 `ck_pack_parts` 约定，输出与 `packb` 逐字节相同）；写线程在复用缓冲中编码，只在主循环休眠期间编码（CheckpointStore `gate`，让出点等待至多 20 ms） | P1 | V0.1 | 是 | M08-AC-035 | ADR-019；g05 §7.4 |
 | M08-FR-084 | 输入日志与重仿真：全部外部输入（命令、时钟、租约、`env/set`、故障、plan-pool 与 geo 结果、roster 变化）以 apply_tick 与载荷哈希写入 `runs/<run>/inputs.msgpack`（格式见 AWR-16 §13.8）；`python -m awr.sim.runtime --resim runs/<run>` 批处理注入；`meta.json` 中内核、版本、FleetConfig、contentVersion、world_seed 任一不一致即拒绝（`355 RESIM_INCOMPATIBLE`，AWR-17 §8.4） | P1 | V0.1 | 是 | M08-AC-036 | ADR-049 |
 | M08-FR-085 | RNG 流表 `packages/contracts/rt/rng_streams.json` 由 M08 维护内容（M00 合入），新流先登记后使用 | P0 | V0.1 | 是 | 契约 CI | ADR-049；AWR-17 §10.8 |
 
@@ -327,7 +327,7 @@
 |---|---|---|---|---|---|---|
 | M08-FR-086 | TRAJ 运动模式与运动提供者：`CtrlMode.TRAJ = 15`；refgen 跳过 TRAJ 槽位；pos_ctrl 对 TRAJ 走与 GOTO 相同的前馈分支（`tr_x/tr_v/tr_a`），`pos_ref = tr_x`，FastGuard 的 pos_err 阈值照常适用；`register_motion_provider(provider)` 登记接管某些命令运动的对象（`ops`、`start`、`cancel`），⑨ 分发时若该 op 有提供者则调用 `provider.start()` 并置 TRAJ，否则走 M08 原生运动；提供者在轨迹末端置 `EVT_ARRIVED` 并把槽位交回 HOLD；完成判据仍由 cmd_watch 按 AWR-12 §5.4 统一判定 | P0 | V0.1 | 是 | M08-AC-041 | M10 §6.2、§14 第 1 条；g08 §4、§7.1 |
 | M08-FR-087 | ENU/FLU 只读视图：`FleetState.enu` 提供 `pos`、`vel`、`acc`（ENU）、`q_xyzw`（WORLD←FLU）、`q_sp_xyzw`、`omega_flu`、`pos_ref`、`home`（均 N 行预分配），以及切片函数 `pose_enu_flu(slots)`、`acc_enu(slots)`、`omega_flu(slots)`；每个 tick 首次访问时由 tap 同源的 numba 换算函数刷新一次并缓存，写 `p/v/q` 的 stage 负责置脏；fleet 以外的 stage 只经视图读取机体状态（AWR-03 §5.3 第 3 条），返回数组只读（`writeable = False`） | P0 | V0.1 | 是 | M08-AC-042 | AWR-03 §5.1 规则 8、§5.3；M13 §6.4、§14 第 10 条 |
-| M08-FR-088 | 度量注册表 `awr/sim/core/metrics.py`：`register_metric(name, fn, *, owner)`、`metric(name, **kw)`；供 M10 剧本导演读取 M09、M13、M14、M10 登记的剧本度量（`min_separation_m`、`guard_events`、`pos_err_max_m` 等）；名称全局唯一，未登记名称返回 `KeyError` | P0 | V0.1 | 是 | M08-AC-043 | M10-FR-064、§14 第 3 条；12 §7.1.3 |
+| M08-FR-088 | 度量注册表 `awr/sim/core/metrics.py`：`register_metric(name, fn, *, owner)`、`metric(name, **kw)`；供 M10 剧本导演读取 M09、M13、M14、M10 登记的剧本度量（`min_separation_m`、`guard_events`、`pos_err_max_m` 等）；名称全局唯一，未登记名称返回 `KeyError`。外部度量（ADR-058）：`register_external_metric(name, *, owner, keys)` 声明进程外生产者写入的度量（M08 声明 M14 的 `target_confidence{target_id}`、`t_conf_s{target_id, threshold}`），`ctl/sim-core/cmd` 的 `scenario/metric{name, args, value}` 由 agent（或 admin、内部）principal 写入，写输入日志、apply_tick 生效；尚无取值时读取抛 LookupError（谓词为假）；剧本重置清空，随 checkpoint 扩展段保存 | P0 | V0.1 | 是 | M08-AC-043；`tests/sim/test_service_surface.py` | M10-FR-064、§14 第 3 条；12 §7.1.3；M14-FR-043 |
 | M08-FR-089 | 内部调用与结果回调：`CommandEngine.submit_internal(cmd, principal)`（M09、M10 内部调用，走同一准入 ④–⑩ 与生命周期，principal 为 MISSION、SWARM 或 SAFETY）、`CommandEngine.subscribe_results(owner, cb)`（在途调用终态回调，按 cid 前缀过滤）、`CommandEngine.schedule_fine_check(cid, polyline)`（把细粒度 `path_valid` 交 plan-pool，结果在下一步边界生效，FR-061） | P0 | V0.1 | 是 | M08-AC-043 | M09 §7.4；M10 §7.5 |
 | M08-FR-090 | 安全侧契约：SupervisorQueue 实现 M09 `SafetyActuator` 全部方法（`hold`、`correct`、`rtl`、`land`、`eland`、`failsafe`、`kill`、`resume_hover`）；M08 在规定时机调用 M09 注册的 `SafetyHooks`（`on_stream_watchdog`、`on_spawn`、`on_remove`、`apply_operator`、`on_lease_event`、`on_gcs_beacon`、`on_agent_liveliness`、`matrix_verdict`）；dispatch 把 `ctl/sim-core/gcs` 与 liveliness `proc/agent-runtime/alive` 转交钩子；SimClock 提供 `wall_mono_ns()` 与 `paused_total_ns()`（PAUSED、STEPPING 期间按墙钟累加）；LeaseManager 提供 `suspend(slots)`、`resume(slots)` | P0 | V0.1 | 是 | M08-AC-043 | M09 §6.3.3、§7.1、§7.4；ADR-045 |
 | M08-FR-091 | 故障在机体上的效果（ext）：`motor_ok` 某位为 0 时融合核在该机施加不受控滚转角速度 `ω_fail`（M09 给出，默认 4 rad/s）并去掉该桨推力；`state_drop` 期间 ingest 冻结供 guard 使用的状态估计并推进 `est_age_s` | P1 | V0.1 | 是 | M08-AC-006（扩展用例） | M09 §14 第 10 条；r24 |
@@ -735,7 +735,7 @@ FleetConfig 全部字段写入 `meta.json`，重仿真时逐项比对（ADR-049�
 | 010 | `ingest` | M08 | 1 | 0 | 250 Hz | 全部 | 先执行 SupervisorQueue，再按 `seq` 执行到期的 staged 命令并做 apply 时复核；设置运动模式、目标与 STOP_MOTION；读取 setpoint mailbox；检查流式看门狗 |
 | 020 | `env` | M07 | 5 | 0 | 50 Hz | L1、L2、EXT | 推进环境网格与阵风调度；`env.query` → `wind`、`rho`、`env_flags`、`env_gust`（零阶保持，M07 §7.1） |
 | 025 | `faults` | M09 | 2 | 0 | 125 Hz | 全部 | 执行器类故障：写 `thrust_scale`、`motor_ok`（ext） |
-| 027 | `mission` | M10 | 2 | 0 | 125 Hz | L1、L2 | 跟踪器：对 TRAJ 槽位求值 B-spline 或解析原语，写 `tr_x/tr_v/tr_a/yaw_sp`（含 time_stretch），轨迹末端置 EVT_ARRIVED 并交回 HOLD（M10-FR-015） |
+| 027 | `mission` | M10 | 2 | 1 | 125 Hz | L1、L2 | 跟踪器：对 TRAJ 槽位求值 B-spline 或解析原语，写 `tr_x/tr_v/tr_a/yaw_sp`（含 time_stretch），轨迹末端置 EVT_ARRIVED 并交回 HOLD（M10-FR-015） |
 | 030 | `refgen` | M08 | 2 | 0 | 125 Hz | L1、L2 | 按运动模式生成参考（§6.5.2）；跳过 TRAJ 槽位 |
 | 040 | `pos_ctrl` | M08 | 2 | 0 | 125 Hz | L1、L2 | PX4 PositionControl（§6.5.3） |
 | 050 | `att_ctrl` | M08 | 2（L2 为 1） | 0 | 125 Hz | L1、L2 | L1 四元数 P + 理想速率环 |
@@ -745,16 +745,18 @@ FleetConfig 全部字段写入 `meta.json`，重仿真时逐项比对（ADR-049�
 | 080 | `integrate` | M08 | 2 | 0 | 125 Hz | L1、L2 | 半隐式 Euler；姿态指数映射 |
 | 085 | `kinematic` | M08 | 2 | 0 | 125 Hz | L0 | 幽灵机按轨迹插值写 p、v、q |
 | 090 | `contact` | M08 | 2 | 0 | 125 Hz | L1、L2 | 地表夹持、撞墙、硬着陆、触地检测 |
+| 091 | `collide` | M08 | 10 | 9 | 25 Hz | L1、L2 | 机间碰撞检查（自 contact 拆出，奇数 tick，AWR-03 ADR-070） |
 | 100 | `sensors` | M13 | 5 | 2 | 50 Hz | 全部 | 传感器位姿、FOV（core）；噪声（ext） |
 | 110 | `guard` | M09 | 5 | 1 | 50 Hz | L1、L2、EXT | FastGuard 向量化检查，只发 SafetyEvent |
 | 115 | `fsm` | M09 | 1 | 0 | 250 Hz | 全部 | 读取 SafetyEvent 与 `mode_evt`，按白名单更新 FlightState，写 SupervisorQueue（下一 tick 生效） |
-| 120 | `battery` | M09 | 25 | 3 | 10 Hz | L1、L2 | 电量、能量判据、`t_rtl` 与 `z_rtl` 轮转刷新 |
+| 120 | `battery` | M09 | 25 | 3 | 10 Hz | L1、L2 | 电量、能量判据（缓存无效的机体即时刷新 `t_rtl`、`z_rtl`） |
 | 121 | `mission_guard` | M09 | 25 | 13 | 10 Hz | L1、L2 | 运行期围栏、高度与净空判据（链路判据由 M09 在 50 Hz guard stage 中按墙钟评估，M09 §14） |
+| 123 | `battery_rtl` | M09 | 50 | 43 | 5 Hz | L1、L2 | `t_rtl` 与 `z_rtl` 轮转刷新（每次 n/5 架，每机每秒一次；自 battery 拆出，ADR-070） |
 | 128 | `cmd_watch` | M08 | 5 | 4 | 50 Hz | 全部 | 调用完成判据与通用 failed 判据（向量化） |
-| 130–133 | `fleet_guard.0–3` | M09 | 25 | 4、9、14、19 | 10 Hz（每片） | 全部 | 多机间距（网格哈希 + CPA），机群按 slot 分 4 片 |
+| 130–133 | `fleet_guard.0–3` | M09 | 25 | 8、13、18、23 | 10 Hz（每片） | 全部 | 多机间距（网格哈希 + CPA），机群按 slot 分 4 片（10 Hz stage 全部在 tick % 5 = 3，ADR-070） |
 | 140 | `tap` | M08 | 2 | 0 | 125 Hz | 全部 | 换算 ENU/FLU，写 StateRing |
 | 150 | `mission_engine` | M10 | 25 | 8 | 10 Hz | 全部 | Mission 与 Track 状态机；内部调用经 `submit_internal` 准入后 staged 到下一 tick |
-| 155 | `coverage` | M10 | 50 | 13 | 5 Hz | 全部 | 覆盖揭示（ext） |
+| 155 | `coverage` | M10 | 50 | 23 | 5 Hz | 全部 | 覆盖揭示（ext） |
 | 160 | `director` | M10 | 25 | 8 | 10 Hz | 全部 | 剧本导演：事件与成功条件谓词（经度量注册表读度量） |
 
 **顺序的理由**（继承 g08 §3.2 并补充）：
@@ -1071,6 +1073,7 @@ PX4 参数取 v1.18 默认值（`mc_pos_control`、`mc_att_control` 的参数 ya
 | `MPC_LAND_SPEED`、`MPC_LAND_CRWL`、`MPC_LAND_ALT1/2/3` | 0.7、0.3、10、5、1 | m/s、m | 否 | 降落剖面（ALT3 以下用 CRWL） | r20 §3.4；g04 §6.3；PX4 `multicopter_takeoff_land_params.yaml` |
 | `NAV_ACC_RAD`（PX4 默认 10，多旋翼常设值） | 2.0 | m | 否 | PATH 转弯限速距离 `d_acc` | r20 §3.4 |
 | `RTL_RETURN_ALT`、`RTL_DESCEND_ALT` | 30、10 | m | 否 | RTL 最低返航高度、下降转 FINAL 高度（PX4 通用默认 60、30，多旋翼由 `rc.mc_defaults` 改为 30、10） | g04 §6.3；r20 §3.5；AWR-12 §5.8.3 |
+| `RTL_VIA_ACCEPT_M` | 3 | m | 否 | RTL 巡航绕行点的接受半径（参考点水平距离；本文设定） | AWR-03 ADR-054 |
 | `COM_DISARM_LAND` | 2 | s | 否 | LANDED 后自动上锁（M09 执行） | r20 §3.5 |
 | 流式看门狗 | 0.25 | s【墙钟】 | 否 | Velocity | ADR-026 |
 | 零速轴锁定、漂移阈值、回拉增益 | 0.09、0.04、1.8 | m/s、m、1/s | 否 | Velocity | g04 §6.3 |
@@ -1213,7 +1216,7 @@ RTF 以 1 s 墙钟窗口统计：`rtf = Δt_sim / Δt_wall`，写 StateRing 头�
 | K07 | GOTO、PATH | 参考到达 | 机体到达判定由 cmd_watch 执行 | 置 EVT_ARRIVED | HOLD.1（GOTO、PATH 完成后悬停） |
 | K08 | ORBIT.0 | 入圈完成（距圆 < 1 m） | — | 以当前相位初始化 `orb_th` | ORBIT.1 |
 | K09 | ORBIT.1 | `orb_turn ≥ orb_goal`（`orb_goal > 0`） | — | 置 EVT_ARRIVED | HOLD.0 |
-| K10 | FLY 类 | rtl 或 SupAction RTL | — | 读取 `EnergyModel.rtl_plan(slot)` 缓存写 `z_rtl`、`v_rtl` | RTL（阶段随 M09 FSM） |
+| K10 | FLY 类 | rtl 或 SupAction RTL | — | 读取 `EnergyModel.rtl_plan(slot)` 缓存写 `z_rtl`、`v_rtl` 与 `rtl_via`（绕行点，NaN 为直飞，ADR-054） | RTL（阶段随 M09 FSM） |
 | K11 | RTL | M09 FSM 推进 RTL 子模式（CLIMB 在 z ≥ z_rtl − 0.5 m 结束；CRUISE 在距 home 水平 < 2 m 结束；DESCEND 在 AGL < 10 m 结束，M09-FR-011） | — | refgen 切换到新阶段目标，参考状态连续；置 EVT_PHASE | RTL（下一阶段） |
 | K12 | RTL（FINAL）、LAND.1 | contact `in_contact` | — | 推力斜坡 1 s 降到 `THR_MIN` | LAND.2 |
 | K13 | LAND.2、ELAND、DESCENT_FF | 触地检测通过 | — | `landed = True`，置 EVT_TOUCHDOWN；推力 0 | IDLE（M09 FSM：LANDED → 2 s 后 DISARMED） |
@@ -1352,7 +1355,7 @@ def estimate(req: EstimateReq) -> EstimateReply:            # 字段见 AWR-17 �
                          feasible=r.feasible, code=0 if r.feasible else r.code)      # 不可行为 119（环境超限 120，ext）
 ```
 
-估价不进入 pipeline：drain 时只入队，由慢任务轮转在剩余预算 ≥ 1 ms 的迭代中执行（单次 p99 ≤ 1 ms，入队到回复 p99 ≤ 20 ms，FR-004、FR-064；AWR-10 §4.2）。M10 的能量预检沿轨迹积分时直接调用 `energy_model().path_wh(profile_id, samples, env)`（同一模型，M10 §14 第 13 条）。
+估价不进入 pipeline：drain 时只入队，由慢任务轮转按 ADR-057 的积分与借贷规则执行（门槛 min(p99, 每轮最大预算)，顺延至多 10 轮；单次 p99 ≤ 1 ms，入队到回复 p99 ≤ 20 ms，FR-004、FR-064；AWR-10 §4.2）。M10 的能量预检沿轨迹积分时直接调用 `energy_model().path_wh(profile_id, samples, env)`（同一模型，M10 §14 第 13 条）。
 
 ### 6.11 DroneAdapter 抽象与能力矩阵
 
@@ -1701,12 +1704,25 @@ def register_slow_task(name: str, fn: Callable[["StageCtx"], None], *,
 def register_query(name: str, fn: Callable[["QueryReq", "StageCtx"], bytes]) -> None: ...   # ctl/sim-core/query 路由（env/query）
 def register_energy_model(model: "EnergyModel") -> None: ...               # M09 调用一次；重复登记构建失败
 def register_safety_hooks(hooks: "SafetyHooks") -> None: ...               # M09 调用一次
+# ---- 追加的扩展点（不改冻结签名；ADR-058）
+def register_command_handler(op: str, fn: Callable[[dict, int, "StageCtx"], dict], *, owner: str | None = None,
+                             need_seat: bool = True) -> None: ...          # 非机体命令（env/*、mission/*、fault/inject|clear）
+    # fn(msg, apply_tick, ctx) -> {status, code, detail?, warnings?, result?, watch?, deadline_s?}；生命周期
+    # accepted（准入）→ running（apply_tick）→ succeeded（无 watch 时同步；OK、V4、simulated，data 带 result）
+    # 或由 watch(ctx) -> None | {status: succeeded|failed, code?, result?, metrics?} 判定，截止（缺省 10 s【仿真】）202
+def register_state_ext_hook(fn: Callable[[np.ndarray, int, list[dict]], None], *,
+                            owner: str | None = None) -> None: ...          # state_ext 分片打包时原地合并字段（M13 GNSS、云台、IMU）
+
+# awr/sim/runtime/main.py（SimCore）
+def register_post_step_hook(self, fn: Callable[[int, int, int], Any]) -> Callable[[], None]: ...
+    # 锁步（--inproc 与测试）：fn(t_sim_ns, epoch, segment) 在每个 tick 的 pipeline 之后同步调用，登记后逐 tick 推进；返回注销函数
 
 # awr/sim/core/command.py
 def register_motion_provider(provider: "MotionProvider") -> None: ...       # M10（FR-086）；同一 op 只允许一个提供者
 # awr/sim/core/metrics.py
 def register_metric(name: str, fn: Callable[..., float], *, owner: str | None = None) -> None: ...   # FR-088
 def metric(name: str, **kw) -> float: ...                                   # M10 导演读取；未登记名称抛 KeyError
+def register_external_metric(name: str, *, owner: str | None = None, keys: tuple[str, ...] = ()) -> None: ...  # ADR-058
 
 @dataclass(slots=True)
 class StageCtx:
@@ -1839,9 +1855,13 @@ class EnvironmentService(Protocol):                    # M07 实现（M07 §7.1�
 
 class EnergyModel(Protocol):                           # M09 实现（M09-FR-052、FR-053）
     def estimate(self, profile: "VehicleProfile", soc: float, path: "EstimatePath", env: EnvironmentService) -> "EstimateResult": ...
-    def rtl_plan(self, slot: int) -> "RtlPlan": ...    # 缓存的 z_rtl、v_c、t_rtl（每机每秒刷新）
+    def rtl_plan(self, slot: int) -> "RtlPlan": ...    # 缓存的 z_rtl、v_c、t_rtl 与可选绕行点 via_enu_m（每机每秒刷新；ADR-054 只追加字段）
     def path_wh(self, profile_id: str, samples: np.ndarray, env: EnvironmentService | None = None) -> float: ...
                                                        # samples：k×7（t_s、ENU 位置、ENU 速度），沿轨迹积分能量（M10 能量预检）
+    # 可选（ADR-054）：rtl_route(p, home, slot) -> (via_xy | None, z_rtl) | None，任意点的返航路线，M10 能量预检的返航段按此抽样
+
+# RtlPlan(z_rtl_m: float, v_c_mps: float, t_rtl_s: float, via_enu_m: tuple[float, float] | None = None)
+#   via_enu_m：返航绕行点（World ENU 水平坐标）；None 为原地爬升后直飞 home 上方（AWR-12 §5.8.3 第 1 条，ADR-054）
 
 class SafetyHooks(Protocol):                           # M09 实现（除看门狗外，方法名与 M09 §7.1 SafetyService 一致）；全部只入候选或写状态块，不阻塞
     def on_stream_watchdog(self, slots: np.ndarray) -> None: ...                     # ingest 检出 250 ms 超时（M09-FR-062）
@@ -1880,7 +1900,7 @@ class MotionProvider(Protocol):                        # M10 实现（FR-086）
 |---|---|---|---|
 | `ctl/sim-core/cmd` | api、agent-runtime → sim-core | CommandEngine（含 `fleet/add`、`fleet/remove`） | 调用方 1 s × 3（墙钟），INTERACTIVE_HIGH、DROP |
 | `ctl/sim-core/clock` | api → sim-core | SimClock.apply | 同上 |
-| `ctl/sim-core/lease` | api、agent-runtime → sim-core | LeaseManager（含席位 op） | 同上 |
+| `ctl/sim-core/lease` | api、agent-runtime → sim-core | LeaseManager（含席位 op；agent principal 只允许 AGENT 类别的 acquire/release，ADR-058） | 同上 |
 | `ctl/sim-core/roster` | api、recorder、agent-runtime → sim-core | 返回 Roster 快照（回调线程直接读只读快照） | INTERACTIVE_LOW |
 | `ctl/sim-core/estimate` | agent-runtime、任务引擎 → sim-core | §6.10.4 | INTERACTIVE_LOW |
 | `ctl/sim-core/setpoint` | api → sim-core | 32 B raw 写入每机 mailbox（回调线程只做赋值） | REAL_TIME、DROP、express |
@@ -1890,7 +1910,7 @@ class MotionProvider(Protocol):                        # M10 实现（FR-086）
 | liveliness `proc/agent-runtime/alive` | agent-runtime → sim-core | 回调只入队，drain 时转交 `SafetyHooks.on_agent_liveliness`（ext） | — |
 | `evt/sim-core/{sim,cmd,lease}` | sim-core → api、recorder、agent-runtime | EventPublisher 按步合批 | DROP，seq + `_replay` |
 | `state/sim-core/ext` | sim-core → api、recorder | 2 Hz 全机 state_ext | DATA_LOW、DROP |
-| `state/sim-core/perf` | sim-core → api | 1 Hz【墙钟】，§7.6 字段，api 并入 `perf/server.sim` | DATA_LOW、DROP |
+| `state/sim-core/perf` | sim-core → api | 1 Hz【墙钟】，§7.6 字段，api 并入 `perf/server.sim`；另带 `slow_ms_per_s{<task>}`（慢任务按名计时，M13-to-M08 第 5 条）与 ADR-057 诊断 `slow_debt_us`、`slow_deferred`、`slow_defer_max{<task>}` | DATA_LOW、DROP |
 
 **Roster 条目**（`awr.fleet.roster.v1`，字段语义由 M08 定义、格式由 AWR-17 登记）：`id`、`agent_no`、`kind`、`model`、`profile_id`、`limits_profile`、`backend`、`simulated`、`producer`、`caps_ref`、`home_enu_m`、`yaw_rad`、`lifecycle`、`T_world_local`（null 或嵌套行主序 4×4）、`fidelity`（`l1`、`l0` 等）。
 
@@ -1918,7 +1938,7 @@ class MotionProvider(Protocol):                        # M10 实现（FR-086）
 | `sim.vehicle.state` | `from`、`to`（生命周期）、`reason?`；加入时另带 `agent_no`、`profile_id`、`backend` | 1 | 已登记 | 取代草稿中的 `fleet.added`、`fleet.removed` |
 | `roster.changed` | `roster_version` | 0 | 已登记 | 增删机体 |
 | `cmd.accepted`、`cmd.running`、`cmd.succeeded`、`cmd.failed`、`cmd.canceled`、`cmd.timeout`、`cmd.rejected` | `op`、`code`、`effect` | 0、0、0、2、1、2、1 | 已登记 | 线上形态见 AWR-17 §7.2；批量子调用由 Gateway 汇总 |
-| `cmd.progress` | `op`、`progress{…}` | 0 | 待登记 | ≤ 2 Hz【墙钟】 |
+| `cmd.progress` | `op`、`progress{…}` | 0 | 待登记 | 每个调用 ≤ 2 Hz【墙钟】；每次 cmd_watch 至多 16 条（ADR-060） |
 | `lease.acquired`、`lease.released`、`lease.preempted`、`lease.expired`、`seat.*` | `owner`、`holder`、`priority?`；席位事件为 `principal_id` | 1 | 已登记（preempted、expired、takeover 为 ext） | 写入审计 |
 | `sim.rtf_limited` | `requested_rate`、`actual_rtf` | 1 | 待登记 | 同一次受限只发一次 |
 | `sim.kernel.fallback` | `reason`、`max_vehicles: 300` | 2 | 待登记 | numba 不可用 |

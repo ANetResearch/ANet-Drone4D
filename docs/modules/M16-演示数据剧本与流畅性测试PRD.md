@@ -18,7 +18,7 @@
 2. 六城数据链沿用 16 §10 的规范化矩阵（x01 权威）；M16 负责 curated 禁飞区、剧本清单、演示前检查与"六城事实回归"，不重复实现 ingest。
 3. S1 参数采用 12 §5.8.5、§7.2 的定稿，本文负责落成剧本文件：螺旋中心取塔体足迹形心 (−162.2, 77.3)、半径 57 m（角点立面距离 ≥ 30 m）、`px4_default` 6 m/s、Δz 标称 18.47 m/圈并按整圈取整，p600-01 z 252 → 50、p600-02 z 391 → 248，两机均自上而下。可用能量口径（188.7 Wh）落地 SOC 0.36 与 0.32，两机同时扫描期间垂直间隔 155–159 m，全程最小三维间距 15.4 m。本文 v1.0 以峰值点 (−162.0, 98.5) 为中心、半径 45 m 的方案经 x01 高度图复核穿入塔体，已作废（§6.4.3）。
 4. 任务书的六类主题映射到基线剧本：巡检 S1、S6；区域覆盖 S2-B、S4-B、S5；多机编队 S2-A、S4-A；目标搜索与 thermal 验证 S3；恶劣天气为 S1 的 `wx-fog`、`wx-rain`、`wx-storm` profile；压力测试为 `ladder-shenzhen`（10/50/100/200/500/1000，其中 100 为表征点）加风暴与弱网用例。S2–S6 全部按可用能量口径复核，落地 SOC ≥ 0.32、余量比 ≥ 1.5（12 §7.3 已采用这些数值）。
-5. 机群阶梯布局定稿：4 个高度层（60/75/90/105 m AGL）交错于 12 m 格网，中心 (−375, 20)，原地环绕 r = 3 m、2 m/s；各层按"高层先飞"错开 5 s 起飞，使相邻层在爬升与入圆段始终保持 15 m 垂直间隔。按构造任意阶段机间三维距离 ≥ 16.2 m，远离 FleetGuard 的 10 m 告警线；在 flight60 相机视锥内的帧占比约 53%（n1000）至 55%（n200）。
+5. 机群阶梯布局定稿（AWR-03 ADR-062 修订）：4 个高度层（60/75/90/105 m AGL）交错于 20 m 格网（同层 40 m），中心 (−375, 20)（n200 起随占地西移），原地环绕 r = 3 m、1.2 m/s；各层按"高层先飞"错开 5 s 起飞。爬升与下降都在出生点正上方，任意两机三维距离按构造 ≥ 17 m（与错时是否生效无关；含地形时 n1000 为 14.0 m），远离 FleetGuard 的 10 m 告警线；flight60 视锥内平均可见比例 n10–n500 为 0.53–0.55，n1000 为 0.46。v1（12 m 格网、2 m/s）在错时失效时只有 9.66 m，且偏航角速度需求超过 P600 上限。
 6. Mock 模式取舍：D1-core 只承诺两种数据源——真实 sim-core 上的 Mock L1（产品默认）与 `fake_gw`（开发与隔离诊断）；纯浏览器离线回看包列为 V0.2（P2）；浏览器内跑 FleetSim 的方案否决（违反 P-02）。
 7. harness 执行 18 号文档的性能运行协议，按用例注册表调度 Playwright、Python 基准、pytest 与混沌脚本，产出 `awr.perf.report.v1` 与自包含 lieflat HTML 报告；阈值只引用 18 号文档，本机 Tier S 阈值门禁，真 GPU 阈值为设计值、经 `/bench` 回传累积后以 ADR 固化。
 8. 对基线与并行文档的反馈共 24 条（§14），其中 12 条已被 12、16、18、M08、M14 全部或部分采纳，6 条为本次审校新增；仍待处理的高优先级项为 `sim/reset` 与 `POST /api/sessions` 缺 profile 参数、性能用例的 CPU 钉核配置在 18 与 19 之间不一致、S1 几何与能量口径需以 ADR 冻结。
@@ -62,7 +62,7 @@
 |---|---|---|---|
 | x01 §3.11 S1；本文 v1.0 | x01：塔心 (−162.0, 98.5)、半径 45 m、Δz 9.24 m、4 m/s；本文 v1.0：同一中心与半径，5 m/s、Δz 18.47 m、分段 225 m、均自下而上 | 采用 12 §7.2：中心 (−162.2, 77.3)、半径 57 m、6 m/s、Δz 标称 18.47 m 按整圈取整、p600-01 252 → 50 m、p600-02 391 → 248 m、均自上而下 | (−162.0, 98.5) 是塔顶峰值点，位于塔体北缘；以它为心、半径 45 m 的螺旋在 HAG 50–250 m 离塔体栅格最近 0.1 m，约 15% 圆周落在 6 m 缓冲内（本文用 `x01/hmap_shenzhen.npy` 复核，与 12 §5.8.5 一致）。x01 原参数单架次能量不可行（12 §5.8.5） |
 | M09 §14 第 1 条 | 5 m/s、分段 210 m、上段自上而下、下段自下而上 | 不采用混合方向；两段同向自上而下可行 | 混合方向时两机在收尾汇合，最小垂直间隔 0–12 m（`.cache/research/m16/scenario_energy.json` 的 `vsep_td_m`）；12 的定稿两机同向下行、速率相同，垂直间隔保持 155–159 m |
-| 12 §7.4 草稿 ladder | 10 m 格网、r = 3 m 环绕、高度 30 + (行号 mod 4)·4 m | 12 m 交错格网、4 层 60/75/90/105 m AGL、同层间距 24 m、高层先飞 | 原布局相邻机三维距离可降到 4 m，落入 FleetGuard 10 m 告警线（M09 §11 R2）。12 §7.4 已采用本文布局；本文另加错时起飞，理由见 §6.4.8 |
+| 12 §7.4 草稿 ladder | 10 m 格网、r = 3 m 环绕、高度 30 + (行号 mod 4)·4 m | 20 m 交错格网、4 层 60/75/90/105 m AGL、同层间距 40 m、环绕 3 m / 1.2 m/s、高层先飞（AWR-03 ADR-062；v1 为 12 m 交错格网、同层 24 m、2 m/s） | 原布局相邻机三维距离可降到 4 m，落入 FleetGuard 10 m 告警线（M09 §11 R2）。12 §7.4 已采用本文布局；本文另加错时起飞，理由见 §6.4.8；INT-1 实测 v1 在错时失效时只有 9.66 m，ADR-062 改为与时序无关的 20 m 格网 |
 | M08 §6.14 草稿 fleet_ladder 负载 | 60–120 m AGL、每 20 s 随机 goto 全 border 内目标、`breezy` 预设 | 环绕负载为默认；`--churn` 为可选；预设 `partlyCloudy` | 全域随机 goto 在 1000 架时测到的是让行而不是内核；`breezy` 不在 M07 的 12 个预设中。M08-FR-078 已采纳 |
 | 12 §7.3 草稿 S2–S6 | 按 222 Wh 全包能量估算 | 按 188.7 Wh 可用能量复核并修订 S2、S4、S5、S6 | 原 S5（300 × 400 m）与 S6（4 km 往返、中继 600 s）在可用口径下落地 SOC 0.183、0.015（`scenario_energy.json` 的 `sx`）。12 §7.3 已采用本文数值 |
 | x01 S4；16 §12.5 | 湖上走廊 x = +600 | x = +800 | x = +600 与 +700 的 ±20 m 带内最高 HAG 177.5 m；x = +800 为 1.6 m（湖面）。16 §12.5 已注明 |
@@ -156,7 +156,7 @@
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M16-FR-020 | S1 `s1-shenzhen-facade` 按 12 §7.2 的参数（§6.4.2）与 §7.3.2 全文提交，含 `ci`、`perf`、`demo`、`wx-fog`、`wx-rain`、`wx-storm` profile | P0 | V0.1 | 是 | M16-AC-010、011 | D1-AC-15；12 §7.2 |
-| M16-FR-021 | ladder `ladder-shenzhen`：4 个高度层 vehicle_sets，按层错时起飞（L3 0 s、L2 5 s、L1 10 s、L0 15 s），profile `n10`、`n50`、`n100`、`n200`（缺省）、`n500`、`n1000`、`x500`，参数见 §6.4.8 | P0 | V0.1 | 是 | M16-AC-012 | D1-AC-07、09；12 §7.4 |
+| M16-FR-021 | ladder `ladder-shenzhen`：4 个高度层 vehicle_sets（20 m 交错格网，任意两机出生点 ≥ 20 m，ADR-062），按层错时起飞（L3 0 s、L2 5 s、L1 10 s、L0 15 s），profile `n10`、`n50`、`n100`、`n200`（缺省）、`n500`、`n1000`、`x500`，参数见 §6.4.8 | P0 | V0.1 | 是 | M16-AC-012 | D1-AC-07、09；12 §7.4 |
 | M16-FR-022 | S2–S6 按 §6.4.4–§6.4.7 定稿并提交；全部通过能量预检 | P1 | V0.1 | 是 | M16-AC-013 | D1-AC-17；12 §7.3 |
 | M16-FR-023 | S3 按 §6.4.5 定稿：5 架机（搜索、3 个 thermal 候选、中继）、3 个目标、首检置信度 0.42 | P1 | V0.1 | 是 | M16-AC-014 | D1-AC-16；M14 §6.11.2 |
 | M16-FR-024 | 剧本静态校验 `tests/e2e/test_scenarios_static.py`（G1）：schema、V-SC-01～11 的离线部分、ID 与文件名一致、出生点在 border 内且不在 nofly 内、剧本间命名唯一、catalog 引用存在 | P0 | V0.1 | 是 | M16-AC-015 | 16 §12.6 |
@@ -226,7 +226,7 @@
 | M16-NFR-003 | 门禁时长：G2 日集 ≤ 3 h、周集 ≤ 5 h、G3 ≤ 8 h（不含等锁与等负载）；单个 flight60 用例 3 次 ≤ 6 min | P1 | V0.1 | 是 | M16-AC-027 | 18 §12.1 |
 | M16-NFR-004 | 结果稳定：同一提交连续 3 晚，状态在通过与不通过之间翻转的用例 ≤ 5% | P1 | V0.1 | 是 | M16-AC-025 | PERF-NFR-022 |
 | M16-NFR-005 | 剧本可行：每个内置剧本按可用能量口径落地 SOC ≥ 0.25（S1 ≥ 0.29），离线 1-D 模型最小余量比 ≥ 1.4；S1 两机同时扫描期间垂直间隔 ≥ 150 m，全程最小三维间距 ≥ 12 m | P0（S1、ladder）/ P1 | V0.1 | 是 | M16-AC-016 | 12 §5.8.4、§5.8.5；M09 §6.8.6 |
-| M16-NFR-006 | 机群布局安全：ladder 任意 N、任意阶段（错时爬升、入圆、环绕、返航）机间三维距离的构造值 ≥ 16.2 m，实测 ≥ 14 m（每机留 1 m 跟踪误差）；运行中 FleetGuard `CONFLICT` 与 `AVOIDING` 事件为 0 | P0 | V0.1 | 是 | M16-AC-012 | M09-FR-081；12 §7.4 |
+| M16-NFR-006 | 机群布局安全：ladder 任意 N、任意阶段（错时爬升、入圆、环绕、返航）机间三维距离的构造值 ≥ 14 m（平地 17 m，与时序无关；加载器 V-SC-14 按含地形的下界校验，ADR-062），实测 ≥ 14 m；运行中 FleetGuard `CONFLICT` 与 `AVOIDING` 事件为 0 | P0 | V0.1 | 是 | M16-AC-012 | M09-FR-081；12 §7.4；ADR-062 |
 | M16-NFR-007 | 剧本加载：S1 加载与预检 ≤ 2 s；ladder n1000 展开、预检与出生 ≤ 5 s（墙钟，本机 CPU） | P1 | V0.1 | 是 | M16-AC-012 | 本文设定：避免阶梯运行的预热被加载时间淹没 |
 | M16-NFR-008 | S1 CI 运行（×10）墙钟 ≤ 3 min（仿真约 13.1 min，×10 约 79 s 加启动） | P0 | V0.1 | 是 | M16-AC-010 | §6.4.2 |
 | M16-NFR-009 | 演示前检查 ≤ 60 s（不含世界构建）；`make demo` 在世界已构建时 ≤ 20 s 打印 READY | P1 | V0.1 | 是 | M16-AC-006、017 | 19 OPS-NFR-002 |
@@ -462,13 +462,14 @@ PERF · SHENZHEN · WEBGL2 SOFTWARE · run p20260928-031502-3f7a9c2
 3. p600-02 的落地 SOC 比预检线 0.20 高 0.12；P_hover 上浮 10%（ADR-043 辨识容差）时落地 SOC 仍为 0.26（高 0.06）。本文 AC 取"落地 SOC ≥ 0.29（名义参数）"作为回归门槛（M16-AC-016），低于它时按 RK-M16-01 处置。
 4. 13 PQ-1 建议"保持默认限速档并增加机数"：会改变 D1-AC-15 的"两架机"表述，需要追加 ADR；12 §7.2 已选 `px4_default` 与两机，本文沿用。
 5. 风的影响：S1 基础环境下 world z 273 m 以上的平均风已超过 13.8 m/s 抗风等级，只告警、不拒绝（12 §5.12）；成功谓词中的 `guard_events` 缺省只计 action 及以上等级，不受该告警影响。
+6. **运行期能量 RTL（FX-SIM1，AWR-03 ADR-054）**：上表的最小余量比按扫描终点（入场方位）的 t_rtl 计算。INT-1 多进程实跑发现 p600-01 绕到塔远侧时，M09 按直飞返航须翻越塔顶（z_rtl ≈ 389 m、t_rtl ≈ 444 s），全程最小余量比只有 1.06，触发 `SAF.BAT.ENERGY_RTL`，D1-AC-15 失败。ADR-054 让 M09 的 t_rtl 按实际返航路线（单绕行点绕过塔体）计算，rtl 分发沿同一路线飞行；剧本参数不变，运行期全程最小余量比 p600-01 为 5.55、p600-02 为 2.67，`test_s1` 的 9 个谓词全部为真。M16 不再以调整圈数或起始 SOC 的方式回避该点（ADR-054 备选②）。
 
 #### 6.4.4 S2 上海 · 编队环绕 + 公园覆盖（D1-ext）
 
 | 组 | 机体 | 出生点（实测平坦地块） | 任务 | 参数 |
 |---|---|---|---|---|
-| A | `p600-a-01`～`p600-a-05`（`vehicle_sets` 生成，id 规则 `<id_prefix>-<序号>`，16 §12.2；2 行 × 3 列，间距 6 m） | (−2841, 1398) 起，地块中心 (−2835, 1404)，距三塔质心 470 m | `formation` V 形 | 锚点路径为以 (−2853, 934) 为圆心、半径 350 m 的 72 点闭合折线（由 `authoring.ring` 生成，首点方位 90°）；`spacing_m = 12`（高于 FleetGuard 10 m 告警线，与 12 §7.3 一致；16 §12.5 摘要中的 `min_separation_m ≥ 8` 以本文剧本的 ≥ 10 为准）；`half_angle_deg = 35`；`heading_mode = filtered`、`tau_psi_s = 2`；`z_m = 250`；`speed_mps = 6`；`corner_radius_m = 40`；`on_done = rtl` |
-| B | `p600-b-01`～`p600-b-03` | 公园西南角 (1030, −1230) 起，间距 6 m | `lawnmower`（多机切分为 ext） | 以 (1158, −1094) 为中心 300 m 方形；`altitude{mode: fly_over, agl_m: 120, clearance_m: 10}`；`side_overlap 0.7`（航线间距 41.6 m）、`front_overlap 0.8`；5 m/s |
+| A | `p600-a-01`～`p600-a-05`（`vehicle_sets` 生成，id 规则 `<id_prefix>-<序号>`，16 §12.2；2 行 × 3 列，间距 12 m，FX2-R2 由 6 m 修订，ADR-065） | (−2841, 1398) 起，地块中心 (−2835, 1404)，距三塔质心 470 m | `formation` V 形 | 锚点路径为以 (−2853, 934) 为圆心、半径 350 m 的 72 点闭合折线（由 `authoring.ring` 生成，首点方位 90°）；`spacing_m = 12`（高于 FleetGuard 10 m 告警线，与 12 §7.3 一致；16 §12.5 摘要中的 `min_separation_m ≥ 8` 以本文剧本的 ≥ 10 为准）；`half_angle_deg = 35`；`heading_mode = filtered`、`tau_psi_s = 2`；`z_m = 250`；`speed_mps = 6`；`corner_radius_m = 40`；`on_done = rtl` |
+| B | `p600-b-01`～`p600-b-03` | 公园西南角 (1030, −1230) 起，间距 12 m（ADR-065） | `lawnmower`（多机切分为 ext） | 以 (1158, −1094) 为中心 300 m 方形；`altitude{mode: fly_over, agl_m: 120, clearance_m: 10}`；`side_overlap 0.7`（航线间距 41.6 m）、`front_overlap 0.8`；5 m/s |
 
 - 环线最高障碍 202.8 m（±25 m 带，x01 hmap 复算），z 250 m 留 47 m 净空；公园 300 m 方形内最高 HAG 7.9 m；两组出生点所在格 HAG 均为 0。
 - 能量（可用口径）：A 落地 SOC 0.444、余量比 2.05、单架次 11.7 min；B 为 0.708、5.74、6.1 min。
@@ -480,15 +481,16 @@ PERF · SHENZHEN · WEBGL2 SOFTWARE · run p20260928-031502-3f7a9c2
 
 | 机体 | 出生点 | 初始 SOC | 能力 | 任务 |
 |---|---|---|---|---|
-| `p600-a1` | (−58, −1515) | 1.00 | `rgb.zoom` | `expanding_square`：基准点 (−64, −1283)，z 60 m，`leg0_m 55`，`legs 12`（2.31 km），首腿向东，ccw，5 m/s（`px4_default`） |
-| `p600-b1` | (−52, −1515) | 0.80 | `thermal.imaging` | `follow_path` 经 (−52, −1515, 80) 到待命点 (86, −1133, 80)，3 m/s，`on_done = hover`（MISSION 租约待命；比搜索机高 20 m，第 10、11 腿（x = 101 与 y = −1118）距待命点水平只有 15 m，抬高后三维距离 ≥ 25 m） |
-| `p600-b2` | (−46, −1515) | 0.95 | `thermal.imaging` | 同上，待命点 (−314, −1033, 80) |
-| `p600-b3` | (−40, −1515) | 0.26 | `thermal.imaging` | 无任务，留在地面（SOC 低于起飞下限 0.30，估价判不可行，覆盖 119 路径，M14 §6.10.3） |
-| `p600-c1` | (−34, −1515) | 1.00 | `relay.communication` | `follow_path` 经 (−34, −1515, 150) 到 (−64, −1283, 150)，`on_done = hover`；搜索任务完成后由事件 RTL |
+| `p600-a1` | (−82, −1515) | 1.00 | `rgb.zoom` | `expanding_square`：基准点 (−64, −1283)，z 60 m，`leg0_m 55`，`legs 12`（2.31 km），首腿向东，ccw，5 m/s（`px4_default`） |
+| `p600-b1` | (−70, −1515) | 0.80 | `thermal.imaging` | `follow_path` 经 (−70, −1515, 80) 到待命点 (86, −1133, 80)，3 m/s，`on_done = hover`、`on_abort = rtl`（MISSION 租约待命；比搜索机高 20 m，第 10、11 腿（x = 101 与 y = −1118）距待命点水平只有 15 m，抬高后三维距离 ≥ 25 m） |
+| `p600-b2` | (−94, −1515) | 0.95 | `thermal.imaging` | 同上（首航点 (−94, −1515, 80)），待命点 (−314, −1033, 80) |
+| `p600-b3` | (−58, −1515) | 0.26 | `thermal.imaging` | 无任务，留在地面（SOC 低于起飞下限 0.30，估价判不可行，覆盖 119 路径，M14 §6.10.3） |
+| `p600-c1` | (−46, −1515) | 1.00 | `relay.communication` | `follow_path` 经 (−46, −1515, 150) 到 (−64, −1283, 150)，`on_done = hover`、`on_abort = rtl`；复核确认后由事件返航 |
 
 - `follow_path` 要求 2–1000 个航点（M10 §6.5.10），因此以出生点上空为首航点；从地面到首航点由转场（`safe_transit`）完成。
+- **FX-SIM2 修订（ADR-059，多进程实测）**：①出生点间距由 6 m 改为 12 m，并按待命航向排序（西去的 b2 最西，东去的 b1 在 a1 之东）：原布设同时起飞时相邻机体水平 6 m（低于 FleetGuard 10 m 告警线，`min_separation_m` 必然 < 10），且 b1、b2 的待命航线在起步后 2–3 s 交叉（实测 2.57 m，两次 `SAF.SEP.AVOIDING` 计入 `guard_events`）；②`thermal-verify` 的观测高度 `alt_agl_m` 由 60 m 改为 75 m，与搜索机 60 m 航线错开 15 m（原设计同高，实测最小间距 10.03 m）；③复核确认（`target_confidence{t1} ≥ 0.9`）后 b1、b2、c1 先 `mission.abort`（`on_abort = rtl`，任务 ABORTED，租约交还后 M10 不再续飞）再以 `cmd rtl` 兜底（任务已 DONE 时 abort 回 105）：原设计在搜索结束（约 710 s）才返航，到 900 s 时限 b1、b2 未落地、c1 刚触地，`landed_all` 为假且导演以超时判 FAILED。修订后实测：确认时刻 158.9 s，b1、b2、c1 于 300–335 s 落地，a1 于 709 s 落地，剧本在 711 s 结束 SUCCEEDED，最小间距 11.8 m，`guard_events` 0。
 - 目标（`target.spawn`，t = 0 s，位置写死以保证确定性）：`t1` (−24, −1253)，`conf_first 0.42`、`conf_confirm 0.9`，位于扩展方形第 2、3 腿（x = −9、y = −1228）外侧 15–25 m 的相机覆盖带内；`t2` (160, −1060)、`t3` (−290, −1500) 为干扰目标，距 12 腿航线 ≥ 80 m，端到端测试断言 D1 流程中二者没有检出事件（若检测器模型使其被检出，改为断言委派只针对 t1）。
-- 扩展方形腿长 55、55、110、110、…、330 m，共 2.31 km（首腿向东、逆时针，M10 §6.5.10）；搜索盒 500 m（HAG 最大 0.24 m，开阔水面）。能量：a1 落地 SOC 0.510；b1（初始 0.80）约 0.43；c1 0.566（`scenario_final.json`）。
+- 扩展方形腿长 55、55、110、110、…、330 m，共 2.31 km（首腿向东、逆时针，M10 §6.5.10）；搜索盒 500 m（HAG 最大 0.24 m，开阔水面）。能量：a1 落地 SOC 0.510；b1（初始 0.80）约 0.43；c1 0.566（`scenario_final.json`；FX-SIM2 修订后 b1、b2、c1 在复核确认后即返航，落地 SOC 高于上述值）。
 - `agents` 块列出参与合同网的 4 个成员（c1 为中继，不是 `members` 成员，M14 §6.11.2）；`tasks` 取 M14 §7.4 的 `thermal-verify` 模板（§7.3.3）。
 - 成功谓词：`target_confidence{t1} ≥ 0.9`、`t_conf_s{t1, threshold 0.9} ≤ 300`、`guard_events == 0`、`min_separation_m ≥ 10`、`landed_all`（`t_conf_s` 已由 16 §12.3 登记，计算者 M14）。×1 与 ×10 各跑一次，委派结果与证据链逐项一致；b3 因 119 被排除、报价来自 estimate、effect = OK 且 `simulated = true` 由端到端测试另判（D1-AC-16）。
 
@@ -496,8 +498,8 @@ PERF · SHENZHEN · WEBGL2 SOFTWARE · run p20260928-031502-3f7a9c2
 
 | 组 | 机体 | 出生点 | 任务 | 参数 |
 |---|---|---|---|---|
-| A | `p600-a-01`～`p600-a-05` | (573, −1174) 起，1 行 × 5 列，间距 6 m（岸边平坦地块 (585, −1174)） | `m-corridor-out`：`formation` 横队（`shape = line`），锚点 (800, −1200) → (800, 600)；`m-corridor-back`：V 形，(800, 600) → (800, −1200)，`start{after: m-corridor-out}` | `spacing_m 12`；`agl_m 150`；8 m/s；变形在两任务之间由 CAPT 重分配（ext） |
-| B | `p600-b-01`～`p600-b-05` | (−1152, −665) 起，间距 6 m（Willis 西南平坦地块 (−1140, −665)） | `lawnmower` | 以 Willis (−1101, −584) 为中心 600 m 方形；`altitude{mode: per_lane, agl_m: 150, clearance_m: 10}`（ext）；`side_overlap 0.7`；5 m/s；5 机均衡切分 |
+| A | `p600-a-01`～`p600-a-05` | (573, −1174) 起，1 行 × 5 列，间距 12 m（岸边平坦地块 (585, −1174)；ADR-065） | `m-corridor-out`：`formation` 横队（`shape = line`），锚点 (800, −1200) → (800, 600)；`m-corridor-back`：V 形，(800, 600) → (800, −1200)，`start{after: m-corridor-out}` | `spacing_m 12`；`agl_m 150`；8 m/s；变形在两任务之间由 CAPT 重分配（ext） |
+| B | `p600-b-01`～`p600-b-05` | (−1152, −665) 起，间距 12 m（Willis 西南平坦地块 (−1140, −665)；ADR-065） | `lawnmower` | 以 Willis (−1101, −584) 为中心 600 m 方形；`altitude{mode: per_lane, agl_m: 150, clearance_m: 10}`（ext）；`side_overlap 0.55`（FX2-R2 由 0.7 修订，ADR-065：0.7 时 M10 能量预检判 b-05 落地 SOC 0.153 < 0.20，任务被拒、`area_coverage` 无值）；5 m/s；5 机均衡切分 |
 
 - 走廊从 x01 的 x = +600 东移到 x = +800：x = +600 与 +700 的 ±20 m 带内最高 HAG 177.5 m，x = +800 为 1.6 m（湖面，y ∈ [−1200, 600]）。走廊缩短为 1.8 km 往返，最远离家 1.81 km，使 8 m/s 巡航而 RTL 按 5 m/s 估算时余量比仍 ≥ 1.5。
 - 能量：A 落地 SOC 0.470、余量比 1.52；B 按"全部航带 z 460 m"的保守估算为 0.424、1.78（`per_lane` 实际更省）。
@@ -505,7 +507,7 @@ PERF · SHENZHEN · WEBGL2 SOFTWARE · run p20260928-031502-3f7a9c2
 
 #### 6.4.7 S5 旧金山 · 丘陵地形跟随；S6 苏州 · 走廊巡检 + 中继（D1-ext）
 
-**S5**：单机 `p600-01`，出生点 (−1895, −2262)（平坦地块，距作业区 260 m）；`terrain_follow`，区域为以 (−2000, −2500) 为中心的 **300 m × 300 m** 方形（12 §7.3 草稿的 300 × 400 m 在可用口径下落地 SOC 0.183，不过预检），`agl_m 80`、`max_slope_deg 15`、`clearance_m 10`、`side_overlap 0.6`（航线间距 37 m）、5 m/s；区域激活 `nofly-sf-sutro`。能量：落地 SOC 0.325、余量比 2.44。成功谓词：`agl_min_m{m-survey} ≥ 60`、`area_coverage ≥ 0.95`、`guard_events == 0`、`landed_all`、`battery_soc_min ≥ 0.25`。"固定 MSL 对照组被准入拒绝"不写入剧本（剧本导演只能下发安全类命令与任务启停，12 §7.1.2 第 1 条），改由端到端测试以 operator 身份下发固定 z 的 `follow_path` 并断言被准入拒绝（原因码按 17 `reasons.json` 的围栏与障碍类）。
+**S5**：单机 `p600-01`，出生点 (−1895, −2262)（平坦地块，距作业区 260 m）；`terrain_follow`，区域为以 (−2000, −2500) 为中心的 **300 m × 300 m** 方形（12 §7.3 草稿的 300 × 400 m 在可用口径下落地 SOC 0.183，不过预检），`agl_m 80`、`max_slope_deg 15`、`clearance_m 10`、`side_overlap 0.6`（航线间距 37 m）、航速 6 m/s（`params.speed_mps`；FX2-R2 由缺省 5 m/s 修订，ADR-065：仿真实测 5 m/s 时落地 SOC 0.239 < 0.25，6 m/s 为 0.310）；区域激活 `nofly-sf-sutro`。能量：编写期离线模型 5 m/s 落地 SOC 0.325、余量比 2.44（低估了地形跟随的爬降，仿真实测见前）。成功谓词：`agl_min_m{m-survey} ≥ 60`、`area_coverage ≥ 0.95`、`guard_events == 0`、`landed_all`、`battery_soc_min ≥ 0.25`。"固定 MSL 对照组被准入拒绝"不写入剧本（剧本导演只能下发安全类命令与任务启停，12 §7.1.2 第 1 条），改由端到端测试以 operator 身份下发固定 z 的 `follow_path` 并断言被准入拒绝（原因码按 17 `reasons.json` 的围栏与障碍类）。
 
 **S6**：原方案（两机 4.2 km 往返、中继驻留 600 s）在可用口径下不可行（落地 SOC 0.015，途中触发 ENERGY_RTL）。改为 4 架巡检机分东西两半、1 架中继：
 
@@ -520,40 +522,40 @@ PERF · SHENZHEN · WEBGL2 SOFTWARE · run p20260928-031502-3f7a9c2
 
 #### 6.4.8 机群阶梯 `ladder-shenzhen`（D1-core）
 
-**布局**（脚本 `.cache/research/m16/ladder_layout.py`，结果 `ladder_layout.json`）：
+**布局**（AWR-03 ADR-062 修订；生成函数 `authoring.ladder_sets(n)`，v1 的选址脚本 `.cache/research/m16/ladder_layout.py` 与结果 `ladder_layout.json` 保留为原始依据）：
 
 | 项 | 取值 | 理由 |
 |---|---|---|
-| 中心 | (−375, 20) | 在 x01 hmap 上搜索 372 m 方形内 HAG ≤ 35 m 且点覆盖 ≥ 95% 的候选中，flight60 视锥内帧占比最高（0.50–0.55）；x01 开阔区 (−674, −750) 只有 0.15，且约 15% 格子无点 |
-| 结构 | 4 个 `vehicle_sets`（L0–L3），同层格距 24 m，L1 相对 L0 偏移 (12, 0)，L2 偏移 (0, 12)，L3 偏移 (12, 12)，即 12 m 交错格网 | 同层与跨层都远离 FleetGuard 10 m 告警线 |
-| 高度 | L0–L3 分别 60、75、90、105 m AGL | 最高 HAG 34 m，最低层净空 26 m；与 M08 规格"60–120 m AGL"一致 |
-| 行为 | 按层错时起飞：L3 在 t = 0 s、L2 在 5 s、L1 在 10 s、L0 在 15 s（`vehicle_sets[].mission.start{at_s}`）；到达本层高度后以出生点为圆心 `orbit`：`radius_m 3`、`speed_mps 2`（向心加速度 1.33 m/s²）、`turns 20`（约 188 s）、`cw false`、`yaw center`；`on_done` 取缺省 `rtl`（返航点距圆周 3 m，完成后着陆上锁，剧本判定结束） | 12 §7.4；M10-FR-013 的 `speed²/radius ≤ 3`；错时理由见下文 |
+| 中心 | n10–n100 为 (−375, 20)；n200 为 (−435, 20)；n500 为 (−510, 20)；n1000 为 (−505, −45) | v1 在 x01 hmap 上选定 (−375, 20)：372 m 方形内 HAG ≤ 35 m、点覆盖 ≥ 95%，flight60 视锥内帧占比 0.50–0.55（x01 开阔区 (−674, −750) 只有 0.15）。格距加大后占地增大，n200 起西移：出生点 8 m 内 HAG ≤ 35 m、border 余量 ≥ 50 m；n200 东缘出生点仍为 x = −285（soak 与 S1 同场，§7.3.4）；n1000 取满足上述条件、离原中心最近的格点。flight60 视锥内平均可见比例 n10–n500 为 0.53–0.55（v1 为 0.52–0.55），n1000 为 0.46（v1 为 0.50） |
+| 结构 | 4 个 `vehicle_sets`（L0–L3），同层格距 40 m，L1 相对 L0 偏移 (20, 0)，L2 偏移 (0, 20)，L3 偏移 (20, 20)，即 20 m 交错格网：任意两机出生点水平距离 ≥ 20 m | 爬升与返航下降都在出生点正上方，入圆后水平偏离出生点至多 3 m，因此任意两机三维距离不低于 20 − 3 = 17 m，与起飞错时是否生效无关（V-SC-14）；v1 的 12 m 交错格网要靠错时提供 15 m 垂直间隔，INT-1 实测错时失效时最小间距 9.66 m |
+| 高度 | L0–L3 分别 60、75、90、105 m AGL | 最高 HAG 31–35 m，最低层净空 ≥ 25 m；与 M08 规格"60–120 m AGL"一致 |
+| 行为 | 按层错时起飞：L3 在 t = 0 s、L2 在 5 s、L1 在 10 s、L0 在 15 s（`vehicle_sets[].mission.start{at_s}`）；到达本层高度后以出生点为圆心 `orbit`：`radius_m 3`、`speed_mps 1.2`（向心加速度 0.48 m/s²，一圈 15.7 s）、`turns 20`（约 314 s）、`cw false`、`yaw center`；`on_done` 取缺省 `rtl`（返航点距圆周 3 m，完成后着陆上锁，剧本判定结束） | 12 §7.4；M10-FR-013 的 `speed²/radius ≤ 3`；航向朝心的偏航角速度 v/R = 22.9°/s ≤ P600 自动模式上限 30°/s 的 90%（V-SC-15）。v1 的 2 m/s 需要 38.2°/s，航向误差累积约 35 s 后到 180° 附近并触发 `TILT_ERR_KILL`（INT-1 的 `missions_done`、`landed_all` 失败） |
 | 机型 | `p600_mid360`（profile `x500` 可切换为回归机体） | 产品默认；带电量 stage，负载更接近演示 |
 | 环境 | `partlyCloudy`（L1 风 5 m/s + 湍流盒） | M08 写的 `breezy` 不在 12 个预设中 |
 | 运行 | ×1；`record = false`；`gcs_loss_policy = ignore`；`energy_precheck = warn`；`transit.planner = direct`（入圆段 3 m，粗校验可证无障碍，避免 1000 个 safe_transit 请求挤占 plan-pool）；`time_limit_s = 600`；`on_complete = continue` | ADR-040；ADR-039 |
-| 稳态标记 | 事件 `when elapsed_s ≥ 45 → mark "ladder.steady"`；harness 等到该标记后才开始 60 s 采样（采样窗 45–105 s，早于 20 圈结束的约 225 s） | L0 在 15 s 起飞、爬升 60 m 约 21 s、预检与入圆约 3 s，约 39 s 全体入圆 |
-| 可选扰动 `--churn <s>` | fleet_ladder 每 s 秒（仿真时间）令每机在以出生点为圆心、半径 3 m 的圆盘内随机 goto（本层高度、限速 2 m/s、按 slot 升序、固定种子） | 与环绕同一包络，间距不变式与 CPA 上界不变；不取"24 m 单元内随机点"，否则同层相邻机可相向逼近到 10 m 以内 |
+| 稳态标记 | 事件 `when elapsed_s ≥ T → mark "ladder.steady"`：n10–n200 T = 45 s，n500 75 s，n1000 110 s（AWR-03 ADR-070）；harness 等到该标记后才开始 60 s 采样（早于 20 圈结束；n10 实测各机 399–437 s 完成环绕） | L0 在 15 s 起飞、爬升 60 m 约 21 s、预检与入圆约 3 s，约 39 s 全体入圆；n500、n1000 受任务下发节流（每次 stage 4 条）与入圆段 3 m/s 爬升约束，进程内实测直线入圆段分别在 70、100 s 全部转入环绕（第 2 轮验收时 n1000 的 45 s 窗口落在起飞与转场期） |
+| 可选扰动 `--churn <s>` | fleet_ladder 每 s 秒（仿真时间）令每机在以出生点为圆心、半径 3 m 的圆盘内随机 goto（本层高度、限速 2 m/s、按 slot 升序、固定种子） | 与环绕同一包络，间距下界不变；不取"同层格距单元内随机点"，否则同层相邻机可相向逼近到 10 m 以内 |
 
-| N（profile） | 每层机数 | 每层列数 | 占地 m | 各层起点（L0 / L1 / L2 / L3，world ENU） | 最小三维距离（出生点 / 任意阶段构造值） |
+| N（profile） | 每层机数 | 每层列数 | 占地 m | 各层起点（L0 / L1 / L2 / L3，world ENU） | 出生点最小水平距离 / 平地构造值（错时生效）/ V-SC-14 下界（含地形，与时序无关） |
 |---|---|---|---|---|---|
-| 10（`n10`） | 3, 3, 2, 2 | 2 | 36 × 24 | (−393, 2) / (−381, 2) / (−393, 14) / (−381, 14) | 12 / 16.2 m |
-| 50（`n50`） | 13, 13, 12, 12 | 4 | 84 × 72 | (−417, −22) / (−405, −22) / (−417, −10) / (−405, −10) | 12 / 16.2 m |
-| 100（`n100`，表征点） | 25 × 4 | 5 | 108 × 108 | (−429, −34) / (−417, −34) / (−429, −22) / (−417, −22) | 12 / 16.2 m |
-| 200（`n200`，缺省） | 50 × 4 | 8 | 180 × 156 | (−465, −58) / (−453, −58) / (−465, −46) / (−453, −46) | 12 / 16.2 m |
-| 500（`n500`） | 125 × 4 | 12 | 276 × 252 | (−513, −106) / (−501, −106) / (−513, −94) / (−501, −94) | 12 / 16.2 m |
-| 1000（`n1000`） | 250 × 4 | 16 | 372 × 372 | (−561, −166) / (−549, −166) / (−561, −154) / (−549, −154) | 12 / 16.2 m |
+| 10（`n10`） | 3, 3, 2, 2 | 2 | 60 × 40 | (−405, −10) / (−385, −10) / (−405, 10) / (−385, 10) | 20 / 20.5 / 17 m |
+| 50（`n50`） | 13, 13, 12, 12 | 4 | 140 × 120 | (−445, −50) / (−425, −50) / (−445, −30) / (−425, −30) | 20 / 20.5 / 17 m |
+| 100（`n100`，表征点） | 25 × 4 | 5 | 180 × 180 | (−465, −70) / (−445, −70) / (−465, −50) / (−445, −50) | 20 / 20.5 / 17 m |
+| 200（`n200`，缺省） | 50 × 4 | 8 | 300 × 260 | (−585, −110) / (−565, −110) / (−585, −90) / (−565, −90) | 20 / 20.5 / 17 m |
+| 500（`n500`） | 125 × 4 | 12 | 460 × 420 | (−740, −190) / (−720, −190) / (−740, −170) / (−720, −170) | 20 / 20.5 / 16.3 m |
+| 1000（`n1000`） | 250 × 4 | 16 | 620 × 620 | (−815, −355) / (−795, −355) / (−815, −335) / (−795, −335) | 20 / 20.5 / 14.0 m |
 
-机体 id 为 `sim-0001` 起连续编号（各层 `id_start` 依次累加，`id_digits 4`，AWR-03 §5.6）。间距按阶段构造（FleetGuard：三维 < 10 m 发 CONFLICT，3 s 线性外推 CPA < 3 m 发 AVOIDING，M09-FR-081）：
+机体 id 为 `sim-0001` 起连续编号（各层 `id_start` 依次累加，`id_digits 4`，AWR-03 §5.6）。间距按阶段构造（FleetGuard：三维 < 10 m 发 CONFLICT，3 s 线性外推 CPA < 3 m 发 AVOIDING，M09-FR-081；剧本谓词 `min_separation_m ≥ 14`）：
 
-| 阶段 | 同层相邻（水平 24 m） | 跨层相邻（水平 12 m 或 17 m） | 最小三维距离 |
+| 阶段 | 同层相邻（水平 40 m） | 跨层相邻（水平 20 m） | 最小三维距离 |
 |---|---|---|---|
-| 地面 | 24 m | 12 m | 12 m（未起飞，不计入 `min_separation_m`） |
-| 错时爬升 | 同时起飞、同速爬升，水平 24 m | 高一层先飞 5 s，爬升中始终高出 15 m；水平 12 m | 19.2 m |
-| 入圆（到达本层后水平移出 3 m） | 两机各移 3 m：≥ 18 m | 高一层早 5 s 到位，本层入圆时高一层已在上方 15 m；水平 ≥ 12 − 6 = 6 m | 16.2 m |
-| 环绕（相位任意） | ≥ 18 m | 水平 ≥ 6 m、垂直 15 m | 16.2 m |
-| 返航与着陆（同速下降，低层先到） | ≥ 18 m | 垂直间隔保持 15 m 直至低层着陆 | 16.2 m |
+| 地面 | 40 m | 20 m | 20 m（未起飞，不计入 `min_separation_m`） |
+| 错时爬升 | 同时起飞、同速爬升，水平 40 m | 高一层先飞 5 s，爬升中高出约 15 m；水平 20 m | 25 m |
+| 入圆与环绕（相位任意） | 两机各偏 3 m：≥ 34 m | 水平 ≥ 20 − 6 = 14 m、垂直 15 m | 20.5 m |
+| 返航与着陆 | ≥ 34 m | 一机在出生点正上方下降、另一机仍在圆周：水平 ≥ 17 m | ≥ 17 m |
+| 错时失效（任意时序，V-SC-14 下界） | ≥ 34 m | 竖直段对绕飞圆：水平 ≥ 17 m；两圆：hypot(14 m, 两层绕飞高度差) | 平地 17 m；含地形时 n500 为 16.3 m、n1000 为 14.0 m（相邻出生点 DTM 不同，两层绕飞高度差小于 15 m） |
 
-若全体同时起飞，低层机到达本层高度并水平移出 3 m 入圆时，相邻高层机正以 3 m/s 穿过同一高度：水平最近 9 m（`direct` 转场斜线入圆时两机相向可到 6 m），三维距离低于 10 m，`min_separation_m ≥ 10` 与零 CONFLICT 都无法保证；这是错时起飞的原因（12 §7.4 的"批量 takeoff"需按此修订，§14 第 20 条）。环绕相位不同步时，同层 CPA 外推（相对速度 ≤ 4 m/s、3 s 视界）≥ 18 − 12 = 6 m，跨层恒有 15 m 垂直间隔，因此 AVOIDING 不会误报（M09 §11 R2 的顾虑在此布局下不成立）。M10 若提供可选参数 `phase0_rad`，全体同相位环绕可使相对位置恒定，画面更整齐（§14 第 13 条）。
+v1（12 m 交错格网、2 m/s）的问题（INT-1 §7.2，`test_ladder_smoke` 失败）：① 剧本加载与预检使 at_s 0 与 5 的两层在约 6.8 s 同时起飞，爬升段两层的垂直间隔为 0，跨层水平只有 6–12 m，最小间距 9.66 m < 14 m；② 3 m 半径、2 m/s 的航向朝心环绕需要 38.2°/s 的偏航角速度，超过 P600 自动模式上限 30°/s，航向误差累积后触发 `TILT_ERR_KILL`，`missions_done`、`landed_all` 为假。修订后 n10 以 ×5 运行：4 个任务全部 DONE、全部落地，`guard_events` 0，FleetGuard 冲突事件 0，`ladder.steady` 在 45 s 出现（`tests/e2e/test_scenarios.py::test_ladder_smoke`）；进程内每 0.1 s【仿真】采样全部空中机对，实测最小三维间距 16.7 m（84 s，L0 机在圆周、L1 机仍在出生点上方爬升，水平偏离出生点 1.1 m，含风与跟踪误差），高于谓词 14 m 与 FleetGuard 10 m。上表构造值不含跟踪误差。加载器在 `vehicle_sets` 展开后执行 V-SC-14（同时段编组机对的几何下界 ≥ max(10 m, 谓词 `min_separation_m` 的要求)）与 V-SC-15（航向朝心 orbit 的 v/R ≤ 机体偏航上限的 90%），不满足即 121（16 §12.6）。
 
 `vehicle_sets[].mission.start` 尚未在 16 §12.2 登记（§14 第 19 条）。登记前的降级：`authoring.ladder_sets()` 把 4 个 set 展开为显式 `vehicles[]` 与每机一个 `orbit` 任务（`missions[].start{at_s}` 已登记），功能等价，n1000 文件约 0.6 MB。
 
@@ -729,7 +731,7 @@ export interface CaseDef {
 | `flight60.shenzhen.full` | pw | `scene=full`，深圳 + S1 | live S1 `perf`（×1，不录制） | 3 | D1-AC-03b、04、06；PERF-AC-010 | P0 | d |
 | `flight60.shenzhen.fake` | pw | `scene=full`，`source=fake` | fake（N = 2） | 1 | D1-AC-35（诊断） | P0 | d（不判定帧节奏） |
 | `flight60-wx` | pw | `scene=full`，S1 `wx-storm` | live | 3 | D1-AC-03b（P1 口径）、ADR-041 | P1 | w |
-| `layers` | pw | B 锁定 25k，逐层配对 | live S1 | 3 | D1-AC-03b 固定层 | P0 | w（MS5 起每周） |
+| `layers` | pw | B 锁定 25k，逐层配对（drones 按 ladder 200 架负载，AWR-18 §5.2 第 4 条，ADR-067） | live ladder-shenzhen n200 | 3 | D1-AC-03b 固定层 | P0 | w（MS5 起每周） |
 | `ladder.front.n{10,50,100,200,500,1000}` | pw | `scene=full&n=N` | live `ladder-shenzhen` `n<N>`，等 `ladder.steady` | 3 | D1-AC-09a（n200）、09b（n1000）；其余表征 | P0 / P1 / 表征 | d（n200）；w（其余） |
 | `fleet-ladder` | py | `run.py --n 10,50,100,200,500,1000 --dur 60 --world shenzhen` | 由工具自带 | 3 | D1-AC-07 | P0 | d |
 | `fleet-ladder.concurrent` | py | `run.py --n 1000 --with-recorder --with-checkpoint --clients 3 --with-flight60`（工具自行启动 3 个浏览器） | 工具自带 | 3 | D1-AC-28、PERF-AC-038 | P1 | w |
@@ -738,7 +740,7 @@ export interface CaseDef {
 | `gw-3clients` | py | `bench_state.py --clients 3 --with-flight60`（M11 工具，自行启动 3 个 C1 浏览器同跑 flight60：MS4 `scene=pc&rt=1`，MS5 起 `scene=full&n=1000`）；harness 以 `taskset -c 2-6` 与 `PW_CHROME` 包裹整个工具进程，另读 `/proc` 与 `/api/sys/perf` | live ladder `n1000` | 3 | D1-AC-08、PERF-AC-035 | P0 | d |
 | `gw-10clients` / `gw-30clients` | py | `rt_client.mjs --clients 10` 或 `--clients 30`（`--n 1000 --dur 60`） | live ladder `n1000` | 3 / 1 | PERF-AC-043 / 探索 | P1 / P2 | w / 手动 |
 | `net.W0`～`net.W3` | pw | `scene=full&n=200` 经 `netem_proxy.py`；W0、W1 另跑 n1000 | live ladder | 3 | PERF-AC-042 | P1 | w |
-| `latency` | pw | Follow/FPV、命令到可见、关注集切换、×10 HOLD | live S1 | 3 | D1-AC-26、PERF-AC-040 | P0 | d |
+| `latency` | pw | Follow/FPV（30 s，t_sim 到像素、选中机通道频率 / rAF、credit_skips 占 60 Hz tick 比例）、命令到可见（H 热键 hover 两机）、关注集切换（跟随与 Home 交替 5 次，`focusJumpM` 最大值）、×10 HOLD（三档升速后 20 s）；后四项写 metrics.json（`focus_jump_max_m`、`hold_pct_x10`、`selected_hz_over_raf`、`credit_skips_sel_pct`，ADR-067） | live S1 | 3 | D1-AC-26、PERF-AC-040 | P0 | d |
 | `storm.rtl` / `storm.linkdrop` / `storm.flood` | pw + py | 1000 架全机 RTL；500 架 link_drop；10 s 5000 条事件 | live ladder `n1000` | 3 | D1-AC-27、PERF-AC-041 | P0 / P1 / P1 | d / w / w |
 | `layout`、`warmup` | pw | Ctrl+B 与分隔条；首次操作无编译 | live S1 | 3 | D1-AC-24、25 | P0 | d |
 | `ui-overhead` | pw | 同一浏览器交替 `chrome=1` 与 `chrome=0` 各 3 次 | live S1 | 1（内含 6 段） | D1-AC-23 | P1 | w |
@@ -899,7 +901,7 @@ N = 100 是任务书列出的阶梯点，基线（AWR-03 ADR-033、D1-AC-07）�
 5. 采集：`__perf.net.ageMs`（显示时延）、漂移（末 10 s 与首 10 s 中位数之差）、`net.swarmHz`、`net.reconnects`、`net.eventGaps`；W3 另测"信号延迟"徽标在断连段出现与恢复后 ≤ 1 s 消失（DOM 查询 `[data-testid=signal-delay-badge]`，由 M15 提供）；
 6. 相对 W0 的超时帧增量：同一次 harness 运行先跑 W0 再跑 Wx，配对比较。
 
-代理的控制接口（`--control`、`/cut`、`/profile`）是 M16 对 M11 的接口需求（§7.4）。代理启停封装为 `backend.mjs` 的 `startProxy(profile, seed)` / `cutProxy(ms)`，M11 的 `perf/m11/weaknet.spec.ts`（M11-AC-044，协议层断言）与本文 `perf/net.spec.ts`（PERF-AC-042，显示时延与帧节奏）共用，二者不各自管理代理进程。
+代理的控制接口（`--control`、`/cut`、`/profile`）是 M16 对 M11 的接口需求（§7.4），已由 M11 交付（验收加固 FX-GW）：`--control 127.0.0.1:<port>`（只允许回环）上 `POST /cut?ms=`（0–60000，缺省 3000；立即关闭全部连接并在窗口内拒绝新连接）、`POST /profile?name=W0|W1|W2|W3`、`POST /stall?ms=`、`GET /stats`；W3 自带的"代理启动后 30 s 断开"缺省保留，`--no-auto-cut` 关闭它、改由 `/cut` 在飞行时刻触发；`--upstream` 是 `--target` 的别名。`backend.mjs` 的 `startProxy(h, profile, seed, {autoCut})` 返回 `{base, control}`，`cutProxy(proxy, ms)` 经 `/cut` 断连，`setProxyProfile(proxy, name)` 切换剖面；harness 以 `AWR_PERF_PROXY_CONTROL` 把控制口传给规格。代理启停封装为 `backend.mjs` 的 `startProxy(profile, seed)` / `cutProxy(ms)`，M11 的 `perf/m11/weaknet.spec.ts`（M11-AC-044，协议层断言）与本文 `perf/net.spec.ts`（PERF-AC-042，显示时延与帧节奏）共用，二者不各自管理代理进程。
 
 ### 6.12 混沌与长稳
 
@@ -911,7 +913,7 @@ N = 100 是任务书列出的阶梯点，基线（AWR-03 ADR-033、D1-AC-07）�
 | 主循环挂死 | `sys/inject{name: sim-core, fault: hang}`（M11 钩子，仅 ci profile 注册；18 §8.8 写作 `AWR_CHAOS=hang:5`，二者等价，本文统一用 `sys/inject`） | ≤ 2.5 s 检出，≤ 4 s 恢复出帧；faulthandler 有栈 | P1 |
 | 毒性 checkpoint | 恢复后 5 s 内再次注入 kill | 改用上一代 | P1 |
 | 熔断 | 60 s 内连续 6 次 kill | 进入 FAILED；`sys/restart` 可恢复 | P1 |
-| soak | §7.3.4 的 `soak-shenzhen`，30 min；期间切世界 3 次（静态浏览）、预设 5 次、浮层开关 50 次、seek 10 次（有回放时） | 18 §8.8 soak 行；D1-AC-29、PERF-AC-045 | P1 |
+| soak | §7.3.4 的 `soak-shenzhen`，30 min；期间切世界 3 次（静态浏览）、预设 5 次、浮层开关 50 次、seek 10 次（有回放时）；每 5 s 采样 JS 堆、api 与 sim-core RSS、GPU 池与重连计数，首尾各 5 min 中位数判定；结束后同一浏览器跑一次整景 flight60 测帧节奏（FX2-R3-gateway，口径见 18 §8.8 soak 行） | 18 §8.8 soak 行；D1-AC-29、PERF-AC-045 | P1 |
 
 `tests/chaos/rtprobe.py` 是最小 `awr.rt.v1` 客户端（websockets 17.1）：握手、订阅 `swarm/uav/state`（规范名；`swarm/state` 只是别名）与 `event`、解析 TIME 与 BATCH 帧头（epoch、seq、rflags）、发 `call` 并跟踪 `result`，按 17 号文档的帧格式实现，不依赖前端代码。
 
@@ -1191,21 +1193,21 @@ S2–S6 的完整文件由 `awr.datasets.scenarios.authoring` 生成后提交；
 { "scenario_id": "s3-newyork-sar", "world_id": "newyork", "seed": 7, "rate": 1, "gcs_loss_policy": "ignore",
   "time_limit_s": 900, "energy_precheck": "reject", "env": { "preset": "partlyCloudy" },
   "vehicles": [
-    { "vehicle_id": "p600-a1", "home_enu_m": [-58, -1515, null], "speed_profile": "px4_default", "sensors": ["camera"], "caps": ["rgb.zoom"], "marked": true },
-    { "vehicle_id": "p600-b1", "home_enu_m": [-52, -1515, null], "initial_soc": 0.80, "caps": ["thermal.imaging"], "marked": true },
-    { "vehicle_id": "p600-b2", "home_enu_m": [-46, -1515, null], "initial_soc": 0.95, "caps": ["thermal.imaging"] },
-    { "vehicle_id": "p600-b3", "home_enu_m": [-40, -1515, null], "initial_soc": 0.26, "caps": ["thermal.imaging"] },
-    { "vehicle_id": "p600-c1", "home_enu_m": [-34, -1515, null], "caps": ["relay.communication"] } ],
+    { "vehicle_id": "p600-a1", "home_enu_m": [-82, -1515, null], "speed_profile": "px4_default", "sensors": ["camera"], "caps": ["rgb.zoom"], "marked": true },
+    { "vehicle_id": "p600-b1", "home_enu_m": [-70, -1515, null], "initial_soc": 0.80, "caps": ["thermal.imaging"], "marked": true },
+    { "vehicle_id": "p600-b2", "home_enu_m": [-94, -1515, null], "initial_soc": 0.95, "caps": ["thermal.imaging"] },
+    { "vehicle_id": "p600-b3", "home_enu_m": [-58, -1515, null], "initial_soc": 0.26, "caps": ["thermal.imaging"] },
+    { "vehicle_id": "p600-c1", "home_enu_m": [-46, -1515, null], "caps": ["relay.communication"] } ],
   "missions": [
     { "mission_id": "m-search", "vehicle_ids": ["p600-a1"], "generator": "expanding_square",
       "params": { "datum_enu_m": [-64, -1283], "z_m": 60, "leg0_m": 55, "legs": 12, "first_heading_deg": 0, "turn": "ccw", "speed_mps": 5 },
       "on_done": "rtl" },
     { "mission_id": "m-standby-b1", "vehicle_ids": ["p600-b1"], "generator": "follow_path",
-      "params": { "waypoints_enu_m": [[-52, -1515, 80], [86, -1133, 80]], "speed_mps": 3 }, "on_done": "hover" },
+      "params": { "waypoints_enu_m": [[-70, -1515, 80], [86, -1133, 80]], "speed_mps": 3 }, "on_done": "hover", "on_abort": "rtl" },
     { "mission_id": "m-standby-b2", "vehicle_ids": ["p600-b2"], "generator": "follow_path",
-      "params": { "waypoints_enu_m": [[-46, -1515, 80], [-314, -1033, 80]], "speed_mps": 3 }, "on_done": "hover" },
+      "params": { "waypoints_enu_m": [[-94, -1515, 80], [-314, -1033, 80]], "speed_mps": 3 }, "on_done": "hover", "on_abort": "rtl" },
     { "mission_id": "m-relay", "vehicle_ids": ["p600-c1"], "generator": "follow_path",
-      "params": { "waypoints_enu_m": [[-34, -1515, 150], [-64, -1283, 150]], "speed_mps": 5 }, "on_done": "hover" } ],
+      "params": { "waypoints_enu_m": [[-46, -1515, 150], [-64, -1283, 150]], "speed_mps": 5 }, "on_done": "hover", "on_abort": "rtl" } ],
   "events": [
     { "event_id": "spawn-t1", "at_s": 0, "action": "target.spawn",
       "args": { "target_id": "t1", "pos_enu_m": [-24, -1253, 0], "kind": "person", "conf_first": 0.42, "conf_confirm": 0.9 } },
@@ -1213,12 +1215,11 @@ S2–S6 的完整文件由 `awr.datasets.scenarios.authoring` 生成后提交；
       "args": { "target_id": "t2", "pos_enu_m": [160, -1060, 0], "kind": "person", "conf_first": 0.42, "conf_confirm": 0.9 } },
     { "event_id": "spawn-t3", "at_s": 0, "action": "target.spawn",
       "args": { "target_id": "t3", "pos_enu_m": [-290, -1500, 0], "kind": "person", "conf_first": 0.42, "conf_confirm": 0.9 } },
-    { "event_id": "home-b1", "when": { "metric": "missions_done", "args": { "mission_ids": ["m-search"] }, "op": "==", "value": true },
+    { "event_id": "release-b1", "when": { "metric": "target_confidence", "args": { "target_id": "t1" }, "op": ">=", "value": 0.9 },
+      "action": "mission.abort", "args": { "mission_id": "m-standby-b1" } },
+    { "event_id": "home-b1", "when": { "metric": "target_confidence", "args": { "target_id": "t1" }, "op": ">=", "value": 0.9 },
       "action": "cmd", "args": { "vehicle_id": "p600-b1", "op": "rtl", "args": {} } },
-    { "event_id": "home-b2", "when": { "metric": "missions_done", "args": { "mission_ids": ["m-search"] }, "op": "==", "value": true },
-      "action": "cmd", "args": { "vehicle_id": "p600-b2", "op": "rtl", "args": {} } },
-    { "event_id": "home-c1", "when": { "metric": "missions_done", "args": { "mission_ids": ["m-search"] }, "op": "==", "value": true },
-      "action": "cmd", "args": { "vehicle_id": "p600-c1", "op": "rtl", "args": {} } } ],
+    （b2 以 m-standby-b2、c1 以 m-relay 同样成对：release-b2、home-b2、release-c1、home-c1） ],
   "agents": { "network": "mock", "members": [
     { "vehicle_id": "p600-a1", "capabilities": ["rgb.zoom"], "role": "searcher" },
     { "vehicle_id": "p600-b1", "capabilities": ["thermal.imaging"], "role": "verifier" },
@@ -1226,7 +1227,7 @@ S2–S6 的完整文件由 `awr.datasets.scenarios.authoring` 生成后提交；
     { "vehicle_id": "p600-b3", "capabilities": ["thermal.imaging"], "role": "verifier" } ],
     "tasks": [ { "template_id": "thermal-verify",
       "trigger": { "on": "detection", "from_roles": ["searcher"], "sensor": "rgb", "conf_lt": 0.8, "merge_radius_m": 30 },
-      "capability": "thermal.imaging", "args": { "dwell_s": 10, "alt_agl_m": 60, "orbit_radius_m": 20 },
+      "capability": "thermal.imaging", "args": { "dwell_s": 10, "alt_agl_m": 75, "orbit_radius_m": 20 },
       "accept": { "op": 1, "children": [
         { "op": 12, "thresh": { "metric": "confidence", "op": 4, "value": 0.8 } },
         { "op": 10, "artifact": { "path_glob": "thermal/**", "min_size_bytes": 1024 } },
@@ -1344,30 +1345,30 @@ corridor 的两侧轨迹由生成器按 `vehicle_ids` 顺序分配（第 1 架�
   "tags": ["free"] }
 ```
 
-**ladder**（缺省即 n200；按层错时起飞见 §6.4.8）：
+**ladder**（缺省即 n200，中心 (−435, 20)；20 m 交错格网与按层错时起飞见 §6.4.8，ADR-062）：
 
 ```json
 { "scenario_id": "ladder-shenzhen", "world_id": "shenzhen", "seed": 7, "rate": 1, "gcs_loss_policy": "ignore",
   "record": false, "energy_precheck": "warn", "time_limit_s": 600, "on_complete": "continue",
   "env": { "preset": "partlyCloudy" },
-  "transit": { "planner": "direct", "margin_m": 5, "layer_dz_m": 4 },
+  "transit": { "planner": "direct", "margin_m": 5, "layer_dz_m": 0 },
   "vehicle_sets": [
     { "set_id": "L0", "id_prefix": "sim", "id_start": 1,   "id_digits": 4, "count": 50, "profile_id": "p600_mid360",
-      "layout": { "kind": "grid", "origin_enu_m": [-465, -58, null], "spacing_m": 24, "cols": 8 },
+      "layout": { "kind": "grid", "origin_enu_m": [-585, -110, null], "spacing_m": 40, "cols": 8 },
       "mission": { "generator": "orbit", "center": "home", "start": { "at_s": 15 },
-                   "params": { "radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center" } } },
+                   "params": { "radius_m": 3, "agl_m": 60, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center" } } },
     { "set_id": "L1", "id_prefix": "sim", "id_start": 51,  "id_digits": 4, "count": 50, "profile_id": "p600_mid360",
-      "layout": { "kind": "grid", "origin_enu_m": [-453, -58, null], "spacing_m": 24, "cols": 8 },
+      "layout": { "kind": "grid", "origin_enu_m": [-565, -110, null], "spacing_m": 40, "cols": 8 },
       "mission": { "generator": "orbit", "center": "home", "start": { "at_s": 10 },
-                   "params": { "radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center" } } },
+                   "params": { "radius_m": 3, "agl_m": 75, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center" } } },
     { "set_id": "L2", "id_prefix": "sim", "id_start": 101, "id_digits": 4, "count": 50, "profile_id": "p600_mid360",
-      "layout": { "kind": "grid", "origin_enu_m": [-465, -46, null], "spacing_m": 24, "cols": 8 },
+      "layout": { "kind": "grid", "origin_enu_m": [-585, -90, null], "spacing_m": 40, "cols": 8 },
       "mission": { "generator": "orbit", "center": "home", "start": { "at_s": 5 },
-                   "params": { "radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center" } } },
+                   "params": { "radius_m": 3, "agl_m": 90, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center" } } },
     { "set_id": "L3", "id_prefix": "sim", "id_start": 151, "id_digits": 4, "count": 50, "profile_id": "p600_mid360",
-      "layout": { "kind": "grid", "origin_enu_m": [-453, -46, null], "spacing_m": 24, "cols": 8 },
+      "layout": { "kind": "grid", "origin_enu_m": [-565, -90, null], "spacing_m": 40, "cols": 8 },
       "mission": { "generator": "orbit", "center": "home", "start": { "at_s": 0 },
-                   "params": { "radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center" } } } ],
+                   "params": { "radius_m": 3, "agl_m": 105, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center" } } } ],
   "events": [ { "event_id": "steady", "when": { "metric": "elapsed_s", "op": ">=", "value": 45 },
                 "action": "mark", "args": { "label": "ladder.steady" } } ],
   "success": { "all": [
@@ -1388,7 +1389,7 @@ corridor 的两侧轨迹由生成器按 `vehicle_ids` 顺序分配（第 1 架�
 
 #### 7.3.4 soak 剧本 `soak-shenzhen`
 
-S1 与 ladder n200 合并为一个剧本：S1 的两架机、任务、事件原样保留，另加 ladder n200 的四个 set；`time_limit_s = 2400`、`on_complete = continue`；ladder 的 orbit `turns` 改为 200（约 31 min）以覆盖 30 min 运行，且四个 set 的 `profile_id` 取 `x500`（电量模型为 null，SOC 恒为 1，16 §11.2）。原因：p600_mid360 的悬停续航 1320 s，30 min 环绕必然触发能量 RTL，soak 测到的会是 200 架同时返航而不是稳态。两组机体的最小水平距离约 52 m（ladder n200 东缘出生点 x = −285，环绕后 −282；S1 出生点与起降竖直段在 x = −230；S1 螺旋西缘 x = −219.2），由 `test_scenarios_static.py` 以几何求交断言。成功谓词只保留 `min_separation_m ≥ 10` 与 `guard_events == 0`（S1 的其余谓词由 `e2e.scenarios` 覆盖）。
+S1 与 ladder n200 合并为一个剧本：S1 的两架机、任务、事件原样保留，另加 ladder n200 的四个 set；`time_limit_s = 2400`、`on_complete = continue`；ladder 的 orbit `turns` 改为 100、`speed_mps` 改为 1.0（一圈 18.8 s，约 31 min；orbit 命令校验 `turns ∈ [0, 100]`，AWR-12 §5.3，此前的 120 圈使 200 架的 orbit 全部以 110 被拒，AWR-03 ADR-070；v1 为 2 m/s 下 200 圈）以覆盖 30 min 运行，且四个 set 的 `profile_id` 取 `x500`（电量模型为 null，SOC 恒为 1，16 §11.2）。原因：p600_mid360 的悬停续航 1320 s，30 min 环绕必然触发能量 RTL，soak 测到的会是 200 架同时返航而不是稳态。两组机体的最小水平距离约 53 m（52.9 m；ladder n200 中心 (−435, 20)，东缘出生点 x = −285，环绕后 −282；S1 出生点与起降竖直段在 x = −230；S1 螺旋西缘 x = −219.2），由 `test_scenarios_static.py` 以几何求交断言。成功谓词只保留 `min_separation_m ≥ 10` 与 `guard_events == 0`（S1 的其余谓词由 `e2e.scenarios` 覆盖）。
 
 #### 7.3.5 harness 结果文件 `result.json`（`awr.perf.result.v1`，M16 内部格式）
 
@@ -1423,7 +1424,7 @@ S1 与 ladder n200 合并为一个剧本：S1 的两架机、任务、事件原�
 | M13 | `target.spawn`（M13-FR-040） | S3 目标 | 已定义；16 §12.3 已登记动作名 |
 | 16 | `vehicle_sets[].mission.start{at_s}`（与 `missions[].start` 同义） | ladder 按层错时起飞 | **需求**（§14 第 19 条）；登记前按 §6.4.8 展开 |
 | 17 | `sim/reset{scenario_id, profile?}`；`POST /api/sessions` 与 `GET /api/scenarios` 带 `profile` 与 `profiles[]` | UI 与 harness 在会话内选择剧本 profile | **需求**（§14 第 6 条） |
-| 19 | `configs/runtime.yaml` 的 `perf` 钉核段可与 `AWR_PROFILE=ci` 叠加 | harness 在 ci profile 下满足 18 PR-6 | **需求**（§14 第 23 条） |
+| 19 | `configs/runtime.yaml` 的 `perf` 钉核段可与 `AWR_PROFILE=ci` 叠加 | harness 在 ci profile 下满足 18 PR-6 | **需求**（§14 第 23 条）。现状：`runtime.yaml` 已有 `perf` profile（`cpu.pin: on`），harness 的 live 后端用它；M12 的 seek-latency、replay20x 自带后端已改用 `perf` profile（FX2-R2-gateway）；`perf/skeleton.server.ts` 仍为 ci profile（不钉核），待 M16 处理 |
 
 ### 7.5 错误码
 
@@ -1438,7 +1439,7 @@ S1 与 ladder n200 合并为一个剧本：S1 的两架机、任务、事件原�
 | DEMO-E005 | LOAD_HIGH | 1 分钟 loadavg ≥ 2，或存在测试、构建、`worldpkg` 进程 | 告警；`FORCE=1` 可继续 |
 | DEMO-E006 | EXT_NOT_VERIFIED | 扩展段对应的 D1-ext 验收无通过记录 | 提示卡中该子段标"跳过" |
 | SCN-E001 | ENERGY_MARGIN_LOW | 离线复算余量比 < 1.4 或落地 SOC < 0.25 | `test_scenarios_energy.py` 失败 |
-| SCN-E002 | LAYOUT_SEPARATION | 剧本几何断言中两机最小距离 < 10 m，或 ladder 任意阶段构造值 < 16.2 m | `test_scenarios_static.py` 失败 |
+| SCN-E002 | LAYOUT_SEPARATION | 剧本几何断言中两机最小距离 < 10 m，或 ladder 构造值低于 §6.4.8 表（错时生效 20.5 m、与时序无关 17 m，ADR-062） | `test_scenarios_static.py` 失败；加载器 V-SC-14 返回 121 |
 | SCN-E003 | ZONE_INTERSECTS_PLAN | curated 区域与内置剧本的出生点、航线或返航线相交 | 同上 |
 
 ---
@@ -1602,7 +1603,7 @@ M16 不新增运行时依赖；不引入 Node 端 YAML 库（由 PyYAML 转 JSON
 | M16-AC-008 | 诚实标识 | PRD-AC-005 的 6 项可见且与数据一致 | Playwright `tests/e2e/honesty.spec.ts` | 本机 S | P1 |
 | M16-AC-010 | S1 端到端 | `scenario.result = SUCCEEDED`；§7.3.2 成功谓词全部为真；×1 与 ×10 的谓词结果与事件序列一致（同一种子）；×10 墙钟 ≤ 3 min；落地 SOC 0.36、0.32（±0.03，与 M10-AC-014 同一预言值）；D1-AC-15 全部条款 | `pytest tests/e2e/test_scenarios.py::test_s1`（ci 与 `--rate 1` 各一次） | 本机 CPU | P0 |
 | M16-AC-011 | S1 恶劣天气 profile | `wx-fog` 满足基础谓词；`wx-rain`、`wx-storm` 满足各自"安全终止"谓词；记录 pos_err、覆盖率并与晴天并列入报告 | `pytest tests/e2e/test_scenarios.py -k wx` | 本机 CPU | P1 |
-| M16-AC-012 | ladder | n10–n1000 各加载成功，n1000 加载与出生 ≤ 5 s；`ladder.steady` 在仿真 45 s 出现且此时全部机体处于 ORBIT；从起飞到全部着陆（约 290 s）FleetGuard `CONFLICT`、`AVOIDING` 事件为 0；实测 `min_separation_m ≥ 14`（构造值 16.2）；静态校验对各阶段构造值断言（SCN-E002） | `pytest tests/e2e/test_scenarios.py -k ladder`；`test_scenarios_static.py -k ladder` | 本机 CPU | P0 |
+| M16-AC-012 | ladder | n10–n1000 各加载成功，n1000 加载与出生 ≤ 5 s；`ladder.steady` 在仿真 45 s（n500 75 s、n1000 110 s，ADR-070）出现且此时全部机体处于 ORBIT；从起飞到全部着陆（约 290 s）FleetGuard `CONFLICT`、`AVOIDING` 事件为 0；实测 `min_separation_m ≥ 14`（构造值 16.2）；静态校验对各阶段构造值断言（SCN-E002） | `pytest tests/e2e/test_scenarios.py -k ladder`；`test_scenarios_static.py -k ladder` | 本机 CPU | P0 |
 | M16-AC-013 | S2、S4、S5、S6 | 各自成功谓词全部为真（×10）；S5 的固定 MSL 对照 `follow_path` 被准入拒绝 | `pytest tests/e2e/test_scenarios.py -k "s2 or s4 or s5 or s6"` | 本机 CPU | P1 |
 | M16-AC-014 | S3 | D1-AC-16 全部条款；b3 因 119 被排除；`t_conf_s ≤ 300` | `pytest tests/e2e/test_scenarios.py::test_s3` | 本机 CPU | P1 |
 | M16-AC-015 | 剧本静态校验 | 全部剧本通过 schema 与 V-SC 离线规则；文件名与 `scenario_id` 一致；DET-01 无违规；在 G1 中 ≤ 20 s | `make scenarios-check` | 本机 CPU | P0 |

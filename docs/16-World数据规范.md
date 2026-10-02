@@ -1589,6 +1589,8 @@ S2–S6 为 D1-ext（P1）。x01 §3.11 的原参数中有五个剧本单架次�
 | V-SC-11 | `record = false` 的剧本不得声明 `marked = true`（无意义配置，告警） |
 | V-SC-12 | 能量预检（运行时，按 AWR-12 §5.8.4；失败为 119 `ENERGY_INFEASIBLE`，不是 121） |
 | V-SC-13 | `scenarios/catalog.json` 通过 `catalog.schema.json`；引用的剧本存在且 `world_id` 与键一致；`ui_profiles` 与 `themes` 中 `#` 后的 profile 存在（静态校验，M16 `test_scenarios_static.py` 执行） |
+| V-SC-14 | `vehicle_sets` 展开后，任务时段相交的编组机体两两三维距离的几何下界 ≥ max(10 m, 成功谓词中 `min_separation_m >= v` 的最大 v)：每机占位取出生点正上方 [z_home, z_orb] 的竖直段（起飞爬升与返航下降）并上以出生点为心、半径 r 的绕飞圆（orbit 生成器；其余生成器 r = 0），下界与起飞错时无关；时段按 1 m/s 的爬升与下降、orbit 圈数与速度加 120 s 保守估计；有世界时 z 取 DSM（出生点）与 DTM + `agl_m`（绕飞高度）（AWR-03 ADR-062；M10 加载器在展开后执行，121） |
+| V-SC-15 | 航向朝心（`yaw = center`，缺省）的 orbit 任务：有效速度（`speed_mps` 或巡航速度，再受限速与 √(3R) 钳制）除以半径 ≤ 机体自动模式偏航角速度上限（限速配置 yawrate 与 `MPC_YAWRAUTO_MAX` 的较小者）的 90%；否则航向误差持续累积，可触发 `TILT_ERR_KILL`（AWR-03 ADR-062；无机型表时跳过，121） |
 
 ---
 
@@ -2245,7 +2247,7 @@ worldpkg validate <world_dir>... [--deep] [--json] [--strict-warn] [--rules <ID,
 | DATA-FR-042 | 剧本按 `awr.scenario.v1`（§12.2）与闭合语法（§12.3）组织 | P0 | V0.1 | 是 | DATA-AC-012 | x01 §3.11；12 §3.3.6 |
 | DATA-FR-043 | 交付 S1 与 ladder 剧本：结构按 §12.4，取值由 M16 定稿并通过能量预检（业务约束 AWR-12 §5.8.5、§7.2） | P0 | V0.1 | 是 | DATA-AC-012；D1-AC-15 | AWR-12 §5.8.5；AWR-03 §8.2 |
 | DATA-FR-044 | 交付 S2–S6 剧本（通过能量预检后） | P1 | V0.1 | 是 | DATA-AC-012；D1-AC-16、17 | x01 §3.11 |
-| DATA-FR-045 | 剧本加载执行 V-SC-01 至 V-SC-11，失败返回 121；V-SC-13 在静态校验中执行 | P0 | V0.1 | 是 | DATA-AC-012 | 12 §5.6.2 |
+| DATA-FR-045 | 剧本加载执行 V-SC-01 至 V-SC-11，以及 `vehicle_sets` 展开后的 V-SC-14、V-SC-15（ADR-062），失败返回 121；V-SC-13 在静态校验中执行 | P0 | V0.1 | 是 | DATA-AC-012 | 12 §5.6.2 |
 | DATA-FR-046 | 冻结 MCAP profile、schema 记录与 channel 清单 `rec/mcap_channels.json`（§13.3） | P0 | V0.1 | 是（契约） | DATA-AC-013（契约部分） | ADR-040 |
 | DATA-FR-047 | recorder 按 §13.3–§13.4 写出：RecPrefix8、SwarmLite32Block、增量块与关键块、1 s chunk | P1 | V0.1 | 是 | DATA-AC-013 | ADR-040 |
 | DATA-FR-048 | 写出 `awr.binding`、`awr.lineage`、`awr.segment_end` 元数据与复现所需附件（§13.5） | P1 | V0.1 | 是 | DATA-AC-013 | ADR-040、ADR-049 |
@@ -2306,7 +2308,7 @@ worldpkg validate <world_dir>... [--deep] [--json] [--strict-warn] [--rules <ID,
 | DATA-AC-009 | 栅格 | 六城 DTM、DSM 尺寸与 §6.3 表一致；DSM 各格心 ≥ DTM − 0.01 m；`max(dsm)` 与 `extent.max.z` 差 ≤ 1e-3 m；栅格无 NaN；写出 `dsm_2m_n` 时其尺寸与 DSM 相同，且值为 0 的格 DSM 等于该格心 DTM 的双线性值（±0.01 m） | `worldpkg validate worlds/* --deep --rules V-G-01,V-G-02,V-G-03,V-G-04,V-G-05,V-G-06` | 本机 CPU | P0 | FR-023、024、065 |
 | DATA-AC-010 | 语义区域 | 六城恰有一个 border，多边形与 `max_z_m` 与 §7 一致（±0.01 m）；合并 `scenarios/zones/sanfrancisco.zones.geojson` 后 nofly 要素出现且 `source_sha256` 正确；修改该文件后 `--missing` 触发重建 | `pytest tests/world/test_zones.py` | 本机 CPU | P0 | FR-027 |
 | DATA-AC-011 | 机型 | 三个 profile 通过 VH-1 至 VH-7，派生值与 §11.3 表一致（悬停比 ±0.001、倾角 ±0.05°）；分别注入 1.505 kg、`c_rd = 8.06428e-4`、Iris 惯量、E 级值进入参数位，得到对应的拒绝（`353 VEHICLE_PROFILE_INVALID`）；`model.yaml` 生成的 glb 三角形数 ≤ 预算；全部 `sensors/*.yaml`（含 x500 相机、thermal、imu）通过各自 schema | `pytest tests/sim/test_profiles.py tests/sim/test_vehicle_model.py` | 本机 CPU | P0 | FR-036–041 |
-| DATA-AC-012 | 剧本 | `scenarios/*.json` 全部通过 V-SC-01 至 V-SC-11，`catalog.json` 通过 V-SC-13；S1 以 `--profile ci` 加载后得到 2 架机、2 个任务、rate 10；profile 中的数组字段整体替换；逐条注入 11 类缺陷全部返回 121 | `pytest tests/sim/test_scenario_loader.py` | 本机 CPU | P0（S1、ladder）/ P1（S2–S6） | FR-042–045、062；D1-AC-15 |
+| DATA-AC-012 | 剧本 | `scenarios/*.json` 全部通过 V-SC-01 至 V-SC-11 与 V-SC-14、V-SC-15，`catalog.json` 通过 V-SC-13；S1 以 `--profile ci` 加载后得到 2 架机、2 个任务、rate 10；profile 中的数组字段整体替换；逐条注入 11 类缺陷全部返回 121 | `pytest tests/sim/test_scenario_loader.py` | 本机 CPU | P0（S1、ladder）/ P1（S2–S6） | FR-042–045、062；D1-AC-15 |
 | DATA-AC-013 | 录制 | 契约：`rec/mcap_channels.json` 与 `meta.schema.json` 在 MS1 通过 schema 编译并被 fake 录制夹具使用（P0）。实现（P1）：S1 ×10 录制 10 min 后 V-RC-01 至 V-RC-06 全部通过；随机 20 个时刻 seek 的首个 backfill ≤ 500 ms，replay-worker 侧 seek p95 ≤ 50 ms；静态检查 `python/awr/recorder/**` 中不出现 `iter_messages(` 与 `reverse=True` 的组合；回放 Full64、事件、EnvKeyframe 载荷与录制逐字节一致；N = 1000、×1 连续 10 min 写入 ≤ 60 MB/min、recorder ≤ 0.1 核、`bytes_per_sim_s` ≤ 1.0 MB；world 或 layout 不一致的录制返回 122 | `pytest tests/recorder/test_replay.py tests/rt/test_mcap_format.py` | 本机 CPU | P0（契约）/ P1（实现） | FR-046–050；NFR-008、009；D1-AC-18 |
 | DATA-AC-014 | 体数据与流线 | 湍流盒文件大小 2,097,216 B，CRC 与 `field_version` 正确，Python 与 TS 解码数组逐元素相等；天气图（kind 6，512 × 512 × 1，RGBA8）文件大小 1,048,640 B 且两端解码一致；AWSL golden 由两端解码一致 | `pytest tests/environment/test_awrv.py`；`vitest apps/web/tests/environment/awrv.test.ts` | 本机 CPU 与本机（Node） | P0（AWRV）/ P1（AWSL） | FR-030、032、064 |
 | DATA-AC-015 | 预设绑定 | EnvKeyframe 的 `presets_sha256` 等于两端内置 `presets.json` 字节的 sha256；把服务端副本改一字节后前端 ≤ 1 s 报警 | `vitest`；Playwright `env/presets-mismatch.spec.ts` | 本机 S | P0 | FR-028 |

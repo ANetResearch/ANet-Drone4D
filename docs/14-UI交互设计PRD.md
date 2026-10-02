@@ -162,7 +162,10 @@ URL 查询参数（只写非权威的视图状态；权威状态永远来自服�
 | `panel` | string | `perf`、`events`、`charts`、`mission`、`mission-edit`、`agents` | 空 | 打开的 Dock 标签或右栏页面 |
 | `settings` | string | `general`、`render`、`motion`、`shortcuts`、`account`、`about` | 空 | 打开设置对话框并定位标签 |
 | `t` | number | 仿真秒，≥ 0 | 空 | 仅回放路由有效：打开后 seek 到该时刻 |
+| `replay` | string | 运行 id | 空 | 一次性参数：`/world/:id/replay/:run?seg=&t=` 重定向为 `/world/:id?replay=<run>&seg=&t=`（画布与世界加载路径不变）；Sandbox 在连接就绪后按 §5.4 进入回放（先暂停实时，再 `playback open`，有 `t` 时 seek），随即从地址栏删除 `replay`、`seg`、`t`；无席位时 Toast 说明原因（FX-WEB2） |
 | `tier`、`rb`、`allowFallback` | string | 见 AWR-03 §3.5 | 空 | 仅 dev/test 构建生效，生产构建移除（ADR-044） |
+
+页面标题（`document.title`）为"<视图> · ANet Drone4D"：Sandbox 取世界 id，覆盖页与页面层取其名称（世界、重建任务、录制列表、测试报告、GPU 自检），其余为"ANet Drone4D"（ADR-056）。
 
 URL 写入规则：相机与选择变化以 `history.replaceState` 写入，节流 1 Hz，不产生历史记录；路由切换用 `pushState`。深链打开时先加载世界，再按参数恢复相机与选择，任一 id 不存在时静默忽略该项，并在 Toast 中说明"链接中的 2 架无人机已不存在"。
 
@@ -185,7 +188,7 @@ URL 写入规则：相机与选择变化以 `history.replaceState` 写入，节�
 | 仿真 | 播放或暂停（Space）；倍速（子菜单）；单步（→，仅暂停时）；加载剧本…；重置剧本（确认）；添加 P600；开始录制 / 停止录制（ext）；故障注入…（ext）；进入回放…（ext）；回到实时（ext，仅回放中） |
 | 任务 | 任务面板；GoTo 工具（G）；编辑航线（ext）；绘制区域（ext）；AGENTS 面板（ext） |
 | 工具 | 性能面板；事件日志；测试报告（子菜单列出 `GET /api/sys/perf-reports` 最近 5 份，点击打开 `/reports/:rid`）；重建任务（ext）；录制列表（ext） |
-| 帮助 | 快捷键（?）；GPU 自检 `/bench`（ext）；关于 |
+| 帮助 | 快捷键（?）；GPU 自检 `/bench`（ext）；项目仓库（新窗口打开 `github.com/ANetResearch/ANet-Drone4D`）；关于 |
 
 `DropdownMenuLabel` 与 `MenubarLabel` 一律放在对应 Group 内（Base UI error #31，g07 §6 第 1 条）。
 
@@ -269,7 +272,7 @@ classDiagram
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│[av]ANet Drone│World Runtime  世界 视图 仿真 任务 工具 帮助   shenzhen › r20260928…a3f1 › P600-01       │ 顶栏 44
+│[av]ANet Drone4D│World Runtime  世界 视图 仿真 任务 工具 帮助   shenzhen › r20260928…a3f1 › P600-01     │ 顶栏 44
 │                              SIM T+00:12:31 ×1 LIVE │ WS 38 ms │ OPERATOR │ 告警(2) │ 搜索 Mod+K │ 设置  │
 ├─────────────────┬──────────────────────────────────────────────────────────────┬────────────────────┤
 │ WORLD        [-]│      ┌ Orbit │ Free │ Third │ FPV │ Bird ┐  [L 跟随]          ┌ViewCube┐│ DRONES  2   [筛选] │
@@ -299,7 +302,7 @@ classDiagram
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│[av]ANet Drone  世界 视图 仿真 任务 工具 帮助  SIM T+00:12:31 ×1 │WS│OP│告警(2)│K│ 44
+│[av]ANet Drone4D  世界 视图 仿真 任务 工具 帮助 SIM T+00:12:31 ×1 │WS│OP│告警(2)│K│ 44
 ├──────────────────────────────────────────────────────────────┬───────────────┤
 │[左栏收起：Mod+B 展开]  ┌Orbit│Free│Third│FPV│Bird┐  ┌ViewCube┐│ DRONES 2      │
 │                        └─────────────────────────┘  └────────┘│|P600-01 飞行中 │
@@ -314,7 +317,7 @@ classDiagram
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-紧凑档的差异：左栏默认收起；倍速由 ToggleGroup 改为 `Select`；顶栏隐藏面包屑与"ANet Drone │ World Runtime"中的副标题，只保留头像与"ANet Drone"；HUD 只保留 KPI 行，无 sparkline。
+紧凑档的差异：左栏默认收起；倍速由 ToggleGroup 改为 `Select`；顶栏隐藏面包屑与"ANet Drone4D │ World Runtime"中的副标题，只保留头像与"ANet Drone4D"；HUD 只保留 KPI 行，无 sparkline。
 
 **（c）Replay 模式，Dock 展开事件标签**
 
@@ -349,7 +352,7 @@ classDiagram
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│[av]ANet Drone │ 世界                                                          [搜索世界]  [关闭 Esc] │
+│[av]ANet Drone4D │ 世界                                                        [搜索世界]  [关闭 Esc] │
 │ ┌深圳 shenzhen──────────┐ ┌上海 shanghai──────────┐ ┌纽约 newyork──────────┐                        │
 │ │5.00M 点 · 1 根 · 60 MB │ │5.00M 点 · 1 根       │ │5.00M 点 · 1 根       │                        │
 │ │[层级点数 rung bars]    │ │[层级点数 rung bars]  │ │[层级点数 rung bars]  │                        │
@@ -472,7 +475,7 @@ HUD 位于未遮挡区左下角，是一张 `LfChartCard`（`size="sm"`、`round
 
 | 元素 | 组件组合 | 要点 | 动效 | 图标 | D1 |
 |---|---|---|---|---|---|
-| 品牌锁定组合 | `<img>`（`public/brand/avatar-96.png`，24 px）+ 文本 + `Separator orientation="vertical"` | "头像 24 px + ANet Drone + 分隔线 + World Runtime"（ADR-032）；紧凑档省略"World Runtime" | — | — | core |
+| 品牌锁定组合 | `<img>`（`public/brand/avatar-96.png`，24 px）+ 文本 + `Separator orientation="vertical"` | "头像 24 px + ANet Drone4D + 分隔线 + World Runtime"（ADR-032、ADR-056）；紧凑档省略"World Runtime" | — | — | core |
 | 主菜单 | `Menubar` > `MenubarMenu` > `MenubarTrigger` + `MenubarContent` > `MenubarGroup` > `MenubarItem`/`MenubarCheckboxItem`/`MenubarRadioGroup` + `MenubarShortcut` | Label 必须在 Group 内 | 05 | 按项 | core |
 | 面包屑 | `Breadcrumb` > `BreadcrumbList` > `BreadcrumbItem` > `BreadcrumbLink`/`BreadcrumbPage` + `BreadcrumbSeparator` | 超长运行 id 中段省略（`BreadcrumbEllipsis`） | — | `chev.right` | core |
 | 仿真时钟 | `Badge variant="secondary"` + `HoverCard`（`PreviewCard`） | 文本 C 类，≤ 4 Hz（Tier S）；HoverCard 显示仿真时间、墙钟、倍速、TIME.state、epoch、RTF | 05 | `tl.clock` | core |
@@ -641,6 +644,8 @@ D1 安装清单（44 个，即 ADR-028 所述"约 45 个"；`anet-base.json` 一
 | seek | 拖动播放头只更新预览时间标签；松开发出 seek；BUFFERING 期间播放头显示 `Spinner`，完成后首个 backfill 帧 ≤ 500 ms（D1-AC-18）；键盘 ←/→ 见 §6.10 |
 | 退出 | "回到实时"按钮、菜单"仿真 › 回到实时"或命令面板（Esc 保留给 §6.10 的分级取消，不用于退出回放）；发 `playback {cmd: close}`，epoch + 1，客户端清空插值环（AWR-03 §5.2）；服务器回到实时且处于 PAUSED（12 §4.11 P08），Timeline 显示"实时仿真已暂停"并高亮播放按钮 |
 | 状态 | TIME.state 的 BUFFERING、ENDED 只在回放出现；ENDED 时播放按钮变为"从头播放"（`tl.replay`，发 `seek` 到 `dataStart_ns` 后 `play`）；`playbackState.status = error` 时横幅显示原因码文案并提供"回到实时"；回放期间任何写操作返回 `118 READ_ONLY_MODE`，UI 已预先隐藏写入口（§7.8） |
+| 中途加入 | 回放是会话级模式：由其他客户端打开的回放、或本页加载前已打开的回放，客户端在收到带 `run` 的 playbackState 时按 run 与段载入一次上下文（meta 的段与缺口、`.evx` 标记、`.ovw` 高度序列、书签、视窗适配全段）；网关在 hello 之后向该连接补发一次当前 playbackState（M11 已实现），500 ms 内仍未收到时席位持有者以当前倍率发一次幂等 `playback {cmd: speed}` 兜底，viewer 显示"回放尚未就绪"直到下一次广播。回放深链（§2.2）指向服务器正在回放的同一录制与段时只 seek 到 `t`，指向另一录制时先 `close` 再 `open`（回放已打开时 `open` 返回 105）；被网关拒绝的回放命令（应答带本页 `request_id`，原因码不是 213）不改变回放状态，只 Toast 原因码文案，横幅不得显示"回放进程已停止"（FX-WEB2） |
+| 面包屑与悬停 | 回放中顶栏面包屑的"运行"显示被回放的录制 id（点击打开 Runs 覆盖页，§2.3）；Timeline 悬停在标记上 150 ms 后经 R68 取回该像素列的事件正文（≤ 20 条，按 `mseq` 缓存，M12 §8.4），取回前只显示类别 |
 | D1 | ext |
 
 ### 5.5 Perf（性能面板）
@@ -690,7 +695,7 @@ D1 安装清单（44 个，即 ADR-028 所述"约 45 个"；`anet-base.json` 一
 | | 当前生效档位（只读，含来源） | `Badge` | — | core |
 | 快捷键 | 全表（只读，D1 不支持改键） | `Table` + `KbdGroup` | — | core |
 | 账户 | 当前角色与席位（`GET /api/auth/whoami`：`role`、`seat`、`exp_unix_ns`、`access_mode`）；申请控制（局域网模式需管理口令，`InputGroupInput type="password"`，错误时 `304 ADMIN_SECRET_REQUIRED` 显示为字段错误）；释放控制（`seat/release`）；以管理员身份登录（ext，签发 admin token） | `Field`、`Item` | viewer 或 operator | core（admin 为 ext） |
-| 关于 | 完整徽章 320 px、产品与各组件版本、contracts 版本、World `contentVersion`、服务器 serverInfo | `Item` 列表 | — | core |
+| 关于 | 完整徽章 320 px（原样，不得移除）、产品名 ANet Drone4D 与版本、许可摘要（ANet Open Source License，Apache 2.0 修改版；多租户托管需授权；界面标志与版权不得移除）、仓库链接 `github.com/ANetResearch/ANet-Drone4D`、数据来源与引用（UrbanScene3D，Lin et al., ECCV 2022，仅限非商业科研用途，不随仓库分发）、保真度声明（Mock L1 仿真值、示意坐标）、版权行"Copyright (c) 2026 Agent Network Research"、contracts 版本、World `contentVersion`、会话（世界、运行 id）；与帮助 › 关于为同一内容（ADR-056） | 描述列表 + `Separator` | — | core |
 
 浅色主题只用于报告导出（ADR-032、Q7），设置中不提供主题切换，也不显示 `Sun`/`Moon` 开关。
 
@@ -1421,7 +1426,7 @@ stateDiagram-v2
 | Tier S 流式图上限 | ADR-031 | 被暂停的图卡显示"已暂停（软件渲染档最多 4 张流式图）" | 图卡 |
 | 回放最大倍速 | ADR-040 | 倍速选项置灰 + 原因 | Timeline |
 
-原则：降级永远可见（HUD 或面板），但只在状态**变化**时发一次合并 Toast；降级恢复不发 Toast（避免噪声），只在 HUD 移除对应行。
+原则：降级永远可见（HUD 或面板），但只在状态**变化**时发一次合并 Toast；降级恢复不发 Toast（避免噪声），只在 HUD 移除对应行。降级步若不改变屏上内容（例如没有选中机时的轨迹与视锥、标签或低模数量本就低于新上限、无 UI 壳的 `?chrome=0`），只在 HUD 与面板记录，不发 Toast（ADR-064：Tier S 下第一个 Toast 的光栅会使合成器停顿 0.2–0.5 s）。
 
 ### 7.6 错误
 
@@ -1808,7 +1813,7 @@ function pickRed(fig: Figure): RedTarget | null {
 ### 11.4 Toast 与合并
 
 1. Base UI Toast，`limit={3}`，第 4 条带 `data-limited` 被挤出（g07 §6 第 6 条）；位置为未遮挡区右下。
-2. 合并键 = `来源 : 事件类型 : 原因码`；同键新事件更新计数与主体列表而不是新增一条，例如"37 架进入 HOLD（链路丢失）"；更新频率 ≤ 4 Hz（前端事件以 ≤ 4 Hz 批量写入 store，ADR-028）。
+2. 合并键 = `来源 : 事件类型 : 原因码`；同键新事件更新计数与主体列表而不是新增一条，例如"37 架进入 HOLD（链路丢失）"；更新频率 ≤ 4 Hz（前端事件以 ≤ 4 Hz 批量写入 store，ADR-028）；同一条 Toast 的改写实际 ≤ 1 Hz、在下一呈现帧之后写入，级别变化立即改写（ADR-069：Base UI Toast 的高度重测会强制整页布局，不能放在事件批量写入的任务里）。
 3. 时长：info 4 s、warning 6 s（本文设定，Base UI 默认 5 s）；critical 不自动消失，直到用户关闭、确认或条件解除；悬停时暂停计时。
 4. 命令结果：本控件可见时以按钮图标反馈为主，不重复 Toast；控件不可见（例如快捷键触发）或批量时发 Toast（§6.11）。
 5. 1000 架全机 RTL 与 500 架 link_drop 这类风暴，合并后同屏 Toast ≤ 3 条（D1-AC-27）。
@@ -2121,7 +2126,7 @@ FLYING 子模式：悬停、定点、航线、环绕、速度、集群、手动�
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | UX-FR-008 | 按 §3.1 的 11 层 z 序 token 实现浮层式布局，业务代码不写任意 `z-index` | P0 | V0.1 | 是 | UX-AC-004 | ADR-028 |
-| UX-FR-009 | 顶栏高 44 px，品牌锁定组合"头像 24 px + ANet Drone + 分隔线 + World Runtime"，紧凑档省略副标题与面包屑 | P0 | V0.1 | 是 | UX-AC-036 | ADR-032 |
+| UX-FR-009 | 顶栏高 44 px，品牌锁定组合"头像 24 px + ANet Drone4D + 分隔线 + World Runtime"，紧凑档省略副标题与面包屑 | P0 | V0.1 | 是 | UX-AC-036 | ADR-032 |
 | UX-FR-010 | 左栏 WORLD、LAYERS、ENVIRONMENT：`Sidebar variant="floating" collapsible="offcanvas"`，Mod+B 显隐，只改 transform 与 opacity | P0 | V0.1 | 是 | UX-AC-004 | ADR-028 |
 | UX-FR-011 | 右栏 DRONES 页面栈（列表、详情、编辑），用 08 page-side-by-side 切换，`\` 显隐 | P0 | V0.1 | 是 | UX-AC-004、006 | g07 §2.3 |
 | UX-FR-012 | 底部 Timeline 条常驻 48 px；Dock 面板区含事件、图表、性能、任务标签，`` ` `` 展开收起 | P0 | V0.1 | 是 | UX-AC-004 | 01-design §39 |

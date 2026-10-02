@@ -1,4 +1,4 @@
-# ANet Drone / World Runtime 文档体系
+# ANet Drone4D（World Runtime）文档体系
 
 项目首页、快速开始与许可摘要见仓库根目录的 README（[English](../README.md) · [简体中文](../README.zh-CN.md)）。
 
@@ -9,7 +9,7 @@
 | 日期 | 2026-09-28 |
 | 维护 | 文档总编；事实以各文档的"定义方"为准（[AWR-03 §10.1](03-设计基线与决策记录.md)） |
 
-ANet Drone / World Runtime 是一个"真实世界无人机数字孪生与多智能体仿真平台"，主链路为 **Reality → Reconstruction → World → Environment → Simulation → Agent**，核心理念是"World 是核心，而不是 Drone"。本期交付 D1（即 V0.1）在一台 8 核 CPU、无 GPU 的本机上运行：内置 UrbanScene3D 六城点云与 1–1000 架 Mock 无人机，支持渐进加载、点云疏密自动调节与流畅性测试。
+ANet Drone4D（代码与文档中称 World Runtime，缩写 AWR；产品显示名见 AWR-03 ADR-056）是一个"真实世界无人机数字孪生与多智能体仿真平台"，主链路为 **Reality → Reconstruction → World → Environment → Simulation → Agent**，核心理念是"World 是核心，而不是 Drone"。本期交付 D1（即 V0.1）在一台 8 核 CPU、无 GPU 的本机上运行：内置 UrbanScene3D 六城点云与 1–1000 架 Mock 无人机，支持渐进加载、点云疏密自动调节与流畅性测试。
 
 ---
 

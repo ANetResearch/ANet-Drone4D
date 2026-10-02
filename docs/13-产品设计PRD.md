@@ -91,7 +91,7 @@ AWR-03 §2.2 与附录 C 给出了 01-design 的逐节技术处置；本节只�
 |---|---|
 | 英文定位 | A Real-World Grounded 4D Physical World Runtime for Autonomous Agents |
 | 中文定位 | 以真实世界为地基的四维物理世界运行时，服务于自主智能体 |
-| 产品名 | ANet Drone / World Runtime（顶栏锁定组合为"头像 + ANet Drone + 分隔线 + World Runtime"，ADR-032） |
+| 产品名 | ANet Drone4D（与 GitHub 仓库 ANetResearch/ANet-Drone4D 一致；运行时名 World Runtime，代码与文档缩写 AWR）。顶栏锁定组合为"头像 + ANet Drone4D + 分隔线 + World Runtime"（ADR-032、ADR-056） |
 | 核心链路 | Reality → Reconstruction → World → Environment → Simulation → Agent（在原设计 Reality → World → Environment → Simulation → Agent 的基础上显式加入 Reconstruction 一环） |
 | 第一载体 | Prometheus 600（P600）四旋翼（`frame.type: quad_x`，g08 `vehicles/p600/params.yaml`）及其 MID-360S 激光雷达（与 MID-360 协议兼容，r04 §1）；首期以 Mock 数字孪生 `p600_mid360` 代表（ADR-022、ADR-043） |
 | 一句话价值 | 把一块真实区域变成一个可渲染、可碰撞、可查询、可仿真的 World，让一到一千架无人机与它们的智能体在浏览器里流畅地被观察、指挥和复现 |
@@ -99,7 +99,7 @@ AWR-03 §2.2 与附录 C 给出了 01-design 的逐节技术处置；本节只�
 
 对照句式（For / Who / The / That / Unlike）：
 
-> 对于需要在真实场景中研究和验证无人机及多智能体行为的科研团队，ANet Drone / World Runtime 是一个 World 优先的 Web 运行时：它把真实（或内置城市）点云规范化为带版本的 World Package，在服务端以统一时钟推进机群物理、环境场与安全守卫，并在任何桌面浏览器中流畅呈现。不同于 AirSim、Isaac Sim 这类依赖 GPU 与游戏引擎的桌面仿真器，也不同于 Foxglove、Rerun、Potree、Cesium 这类只看数据不算物理的查看器，本产品让"真实世界地基、服务端物理权威、浏览器流畅可达、能力协作"四件事同时成立。
+> 对于需要在真实场景中研究和验证无人机及多智能体行为的科研团队，ANet Drone4D（World Runtime）是一个 World 优先的 Web 运行时：它把真实（或内置城市）点云规范化为带版本的 World Package，在服务端以统一时钟推进机群物理、环境场与安全守卫，并在任何桌面浏览器中流畅呈现。不同于 AirSim、Isaac Sim 这类依赖 GPU 与游戏引擎的桌面仿真器，也不同于 Foxglove、Rerun、Potree、Cesium 这类只看数据不算物理的查看器，本产品让"真实世界地基、服务端物理权威、浏览器流畅可达、能力协作"四件事同时成立。
 
 ### 2.2 要解决的问题
 
@@ -156,7 +156,8 @@ AWR-03 §2.2 与附录 C 给出了 01-design 的逐节技术处置；本节只�
 
 ### 2.6 命名与品牌使用
 
-- 产品全称"ANet Drone / World Runtime"，界面语言为中文，技术名词保留英文（FPV、RTL、MOR、TTFP 等，AWR-03 §8.5）。
+- 产品显示名"ANet Drone4D"（页面标题、顶栏、关于、报告与命令行版本行一律用此名；运行时名"World Runtime"只作副名，ADR-056），界面语言为中文，技术名词保留英文（FPV、RTL、MOR、TTFP 等，AWR-03 §8.5）。
+- 关于区块（帮助 › 关于与设置 › 关于）必须写出版本、许可摘要、仓库链接 `github.com/ANetResearch/ANet-Drone4D`、UrbanScene3D 数据来源与引用（仅限非商业科研用途）、保真度声明与版权行"Copyright (c) 2026 Agent Network Research"；LICENSE 附加条件 1b 要求界面中的 ANet 标志与版权信息不得移除或修改（ADR-056）。
 - Logo 使用 `refs/design/ANet/docs/media/anet-logo.svg`（完整徽章，原样使用，禁止改色）与 GitHub 头像 `https://avatars.githubusercontent.com/u/305781773?s=96&v=4`（下载到 `apps/web/public/brand/` 本地托管，AWR-03 §4.1）。落点、尺寸与入场动效由 ADR-032 定义，视觉细节见 [15](15-视觉设计规范与色卡.md)。
 - 产品色为科技灰、黑、白与品牌红 `#E93024`，色卡名 ANet Graphite；状态不引入绿色与黄色（Q8）。
 
@@ -480,7 +481,7 @@ stateDiagram-v2
 功能树以 World 为根（PP-01）。括号内为该分支在 D1 中的层次：core = D1-core（P0），ext = D1-ext（P1），桩 = 只交付接口，后续版本写在末尾。
 
 ```text
-ANet Drone / World Runtime
+ANet Drone4D（World Runtime）
 ├── F1 世界（World）
 │   ├── 内置六城世界包、自动生成与校验 ........................ core
 │   ├── URL 直达、世界切换、默认进入深圳 + S1 ................. core

@@ -176,7 +176,7 @@
 | M12-FR-002 | simNow 推算：PLAYING、LIVE 时 `raw = t_sim + rate·(srvNow − t_srv)`，`srvNow = performance.now() + clockOffsetMainMs`（M11 ClockSync 写入 TelemetryFrame 槽头，已换算主线程时基），上限 `t_sim + rate·1 s`；其余状态 `raw = t_sim`。纪律：epoch 或 state 变化、冻结态、或 \|raw − 预测\| > 0.25 s·max(rate, 1) 时直接吸附；否则以 τ = 250 ms 指数收敛，推进中单调不减；TIME 超过 1 s（墙钟）未到置 STALE | P0 | V0.1 | 是 | M12-AC-002：注入 ±30 ms 网络抖动与 100 ms 丢帧，simNow 单调、与服务端真值差 p95 ≤ 5 ms·rate | 17 §6.10；r27 §3.10；本文设定（τ、阈值） |
 | M12-FR-003 | D_global：墙钟分量 `D_wall = clamp(2/hz_eff + jitter_p95, 60 ms, 300 ms)`，hz_eff 为 swarm 通道 1 s 窗口内的新样本频率，jitter_p95 为最近 32 次到达间隔相对 `1/hz_eff` 偏差绝对值的 p95；D_wall 以 1 s 时间常数平滑、变化率 ≤ 10%/s、5% 迟滞；`D_sim = rate_actual × D_wall` | P0 | V0.1 | 是 | M12-AC-003：注入 10→20 Hz、抖动 0→40 ms 的阶跃，D_wall 满足平滑与变化率约束 | ADR-046；17 §6.10 |
 | M12-FR-004 | 冻结规则与倍率过渡：时钟不推进时 D_sim 从进入冻结时的值在 `--duration-quick`（150 ms，墙钟）内按 `--ease-smooth-out` 降到 0（有限时长，结束时精确为 0；reduced 档直接置 0）；恢复推进时 D_sim 在 1.0 s（墙钟）内线性回升到目标；倍率变化时 D_sim 在 1.0 s 内从旧值线性过渡到 `rate_new × D_wall`，期间所见时刻连续、单调；新 epoch 从 D = 0 开始并按恢复规则回升；D_focus 适用同样三条规则；冻结态不更新 hz_eff 与 jitter_p95（暂停期间没有新样本不代表链路变慢） | P0 | V0.1 | 是 | M12-AC-004：暂停后 500 ms 所见时刻 = TIME.t_sim ±1 ms；×1→×10 与 ×10→×1 切换时 tRender 无回退 | ADR-046 的补充（本文设定，§14 F-02） |
-| M12-FR-005 | 焦点例外：Follow 与 FPV 模式下焦点机与相机使用 `tFocus = simNow − rate·D_focus_wall`，`D_focus_wall = clamp(2/hz_focus + jitter_focus, 60 ms, 300 ms)`；进入与退出在 300 ms 内平滑过渡；`focusLowLatency` 标志供 UI 标注"焦点低延迟" | P0 | V0.1 | 是 | M12-AC-005：焦点机 t_sim 到像素 p95 ≤ 150 ms（Tier S） | ADR-046；D1-AC-26 |
+| M12-FR-005 | 焦点例外：Follow 与 FPV 模式下焦点机与相机使用 `tFocus = simNow − rate·D_focus_wall`，`D_focus_wall = clamp(2/hz_focus + jitter_focus, 60 ms, 300 ms)`；hz_focus 与 jitter_focus 取 rt.worker 对 60 Hz 通道的到达统计（槽头 `selHz`、`selJitterMs`，M11 §6.3.8），两者未知时退回主线程按摄入时刻测量（FX2-R3，ADR-067：主线程每帧只摄入每个 channel 的最新样本，按摄入时刻测得的是帧率而不是通道频率，10 fps 时 D_focus 被钳在 300 ms）；进入与退出在 300 ms 内平滑过渡；`focusLowLatency` 标志供 UI 标注"焦点低延迟" | P0 | V0.1 | 是 | M12-AC-005：焦点机 t_sim 到像素 p95 ≤ 150 ms（Tier S） | ADR-046；D1-AC-26 |
 | M12-FR-006 | epoch 与 RESET：收到新 epoch 的 TIME 后同步触发 `onEpoch` 回调（插值环全部清空、轨迹清空由 M06 执行、事件视图吸附、EnvStore 进入 EPOCH_WAIT）；记录头 `rflags.RESET` 触发 `onReset(producerRange)`，只清对应 `agent_no` 区段；TIME 之前到达的新 epoch BATCH 由 M11 worker 暂存一帧 | P0 | V0.1 | 是 | M12-AC-006：`.awrrt` 夹具中 seek、剧本重置、checkpoint 恢复三种情形的清空范围正确 | AWR-03 §5.2 第 4 条；17 §6.10 |
 | M12-FR-007 | 帧相位与度量：在 `loop.register('clock', 'm12.clock')` 中每帧写 FrameCtx 的 `tRenderS`、`tFocusS`、`simRate`、`clockState`（秒，相对会话起点）；就地更新预分配的 `window.__perf.time`（§10.3） | P0 | V0.1 | 是 | M12-AC-007：`loop.render-calls.spec` 不受影响；热路径分配为 0 | AWR-03 §3.6；M06 §6.8 |
 | M12-FR-008 | 时间显示：主读数 `SIM T+hh:mm:ss.s`（tabular-nums，显示所见时刻，Tier S ≤ 4 Hz、其余 ≤ 10 Hz）；HoverCard 显示 simNow、D_global、请求与实际倍率、全局 epoch、墙钟（由 `pong.unix_ns` 与单调时钟换算）；任何时间文本都带 `SIM` 或"墙钟"前缀 | P0 | V0.1 | 是 | M12-AC-008：Playwright 读 DOM 前缀与格式 | 14 §6.17；r15 §7 第 9 条；d01 §7 第 9 条 |
@@ -241,7 +241,7 @@
 | M12-FR-042 | SegmentIndex：读 summary（无 summary 时按记录遍历重建），对每个 chunk 的每个 channel 读 MessageIndex 记录（numpy 视图），按 chunk 所属纪元与谱系有效窗口裁剪后拼接为单调数组（时刻、chunk 序号、偏移）；10 min、N = 1000 的段构建 ≤ 1.0 s，常驻内存 ≤ 40 MB | P1 | V0.1 | 是 | M12-AC-042：实测 1,270,239 条索引构建 534 ms、25.4 MB | 本文实测；16 §13.6 的替代实现 |
 | M12-FR-043 | 播放循环：回放时钟 `t_play += rate × Δwall`（int ns）；循环 ≤ 250 Hz（墙钟）；每轮只发布一次"不晚于 t_play 的最新复合帧"（整群块 + 同一时刻的标记机 Full64 行，SlotHeader `flags.REPLAY`）；头部心跳写 `t_play`、`clock_state`（置 bit7）、`rate_milli`；预读线程保持 `[t_play, t_play + max(2 s, 1.5 s × rate)]` 已解压，缺数据超过 100 ms（墙钟）置 BUFFERING；到段尾置 ENDED | P1 | V0.1 | 是 | M12-AC-043：20× 回放时 BUFFERING 占比 < 1% | ADR-040；r15 §3.7；本文实测 |
 | M12-FR-044 | 低频与事件发布：事件按 `log_time` 顺序经 M11 的 `EventPublisher(producer = "replay", epoch = gen)` 发布到 `evt/replay/<category>`，保留原事件的 `kind`、`severity`、`t_sim_ns`、`t_wall_ns`、`uav`、`cid`、`data`，缺口由 EventPublisher 自带的 `_replay` 补拉；`state_ext`、`safety` 由关键块加增量合并后按录制节拍发布到 `state/replay/{ext,safety}`；传感器位姿、任务状态、EnvKeyframe 分别发布到 `state/replay/{sensor,mission,env}`；roster 由 `ctl/replay/roster` queryable 提供 | P1 | V0.1 | 是 | M12-AC-044：回放中事件列表与实时运行时一致（除 seq、epoch、producer） | 17 §9.3、§9.7 规则 7；M11-FR-008、FR-050 |
-| M12-FR-045 | seek 与 backfill：收到 `ctl/replay-worker/seek{t_ns}` 后置 BUFFERING；按 SegmentIndex 取每个 latest 型 channel 不晚于 t 的最后一条、关键块型 channel 的最后关键块加其后增量；写复合帧（块时刻 t_b ≤ t）；gen + 1 写入环头部 `segment`；回复 `ReplaySeekReply`（含 EnvKeyframe、roster、`state_ext`、`safety`、任务、传感器的 backfill 包）；worker 侧 p95 ≤ 50 ms | P1 | V0.1 | 是 | M12-AC-045（原型实测 p50 10.9 ms、p95 11.4 ms，10 min、39 channel，不含关键块合并） | ADR-040；16 §13.6；本文实测 |
+| M12-FR-045 | seek 与 backfill：收到 `ctl/replay-worker/seek{t_ns}` 后置 BUFFERING；按 SegmentIndex 取每个 latest 型 channel 不晚于 t 的最后一条、关键块型 channel 的最后关键块加其后增量；写复合帧（块时刻 t_b ≤ t）；gen + 1 写入环头部 `segment`；回复 `ReplaySeekReply`（含 EnvKeyframe、roster、`state_ext`、`safety`、任务、传感器的 backfill 包；roster 与上一次 open/seek 回复相同则为 null，网关保持当前名册，FX2-R2-gateway）；回复另带 `worker_ms`（worker 侧 seek 耗时）与 `queue_ms`（请求在 worker 收件箱的等待）；worker 侧 p95 ≤ 50 ms | P1 | V0.1 | 是 | M12-AC-045（原型实测 p50 10.9 ms、p95 11.4 ms，10 min、39 channel，不含关键块合并） | ADR-040；16 §13.6；本文实测 |
 | M12-FR-046 | 倍速：接受 [0.1, 20]，越界返回 110；`speed_max = min(20, 64 MB/s ÷ bytes_per_sim_s, 5000 事件/s ÷ events_per_sim_s)`；请求值 > speed_max 时钳制并在 `result.warnings` 返回 `SPEED_CLAMPED`；`playbackState` 携带 `speed_max` | P1 | V0.1 | 是 | M12-AC-046：S1 录制 speed_max = 20；事件风暴录制被钳制 | ADR-040；12 §4.11 P06；本文设定（事件项，§14 F-03） |
 | M12-FR-047 | 回放步进：回放打开态（PLAYING、PAUSED、ENDED）下 → / ← 为 seek(t ± 1 s)，Shift+→ / Shift+← 为 ± 10 s，Shift+. / Shift+, 为 ± 一个录制块间隔（×1 录制 40 ms，抽取段按实际间隔），目标对齐到块网格 | P1 | V0.1 | 是 | M12-AC-047：连续 25 次 Shift+. 前进 1.00 s | 14 §6.10 |
 | M12-FR-048 | seek 精度：客户端在冻结态以 D = 0 渲染，机体从不晚于 t 的样本按速度外推到 t（外推量 ≤ 一个块间隔）；EnvStore 从 backfill 关键帧锚点按 M07 的 20 ms 网格推进到 t | P1 | V0.1 | 是 | M12-AC-048：标记机位置与录制 Full64 真值差 ≤ 1 cm；S(t)、D(t) 与下一心跳锚点反推差 ≤ 1e-6 m；同一 t 上实时与回放的 `eval_env` 满足混合容差（D1-AC-19 回放一致部分） | M07 §6.3.10；g06 §3.4；D1-AC-19；本文实测 |
@@ -496,7 +496,7 @@ DelayController 的规则（依据 ADR-046；"冻结、恢复、倍率过渡"三
   推进态且 needRamp（恢复、新 epoch）：D_sim 在 1.0 s 内从当前值线性升到 D_sim*，完成后清标记
   推进态且 rate 变化：以变化时刻的 D_sim 为起点，1.0 s 内线性过渡到新的 D_sim*
   其他：D_sim = D_sim*
-焦点：D_focus_wall 同式（取焦点机 60 Hz 通道）；冻结、恢复与倍率过渡三条规则同样作用于 dFocusSim；进出焦点例外时 dFocusSim 在 300 ms 内在 dSim 与 rate × D_focus_wall 之间线性过渡
+焦点：D_focus_wall 同式（取焦点机 60 Hz 通道；hz 与 jitter 为 Worker 侧到达统计 `selHz`、`selJitterMs`，ADR-067）；冻结、恢复与倍率过渡三条规则同样作用于 dFocusSim；进出焦点例外时 dFocusSim 在 300 ms 内在 dSim 与 rate × D_focus_wall 之间线性过渡
 ```
 
 **单调性证明要点**：推进态下 `d(tRender)/dt = rate − dD_sim/dt`。过渡期 `dD_sim/dt = (D_new − D_old)/1 s`，而 `D_new ≤ 0.3 s × rate_new`，所以 `d(tRender)/dt ≥ rate_new − 0.3·rate_new = 0.7·rate_new > 0`；倍率下调时 `dD_sim/dt < 0`，tRender 暂时加速追赶：×10 → ×1 时速度为 `1 + 9·D_wall`，D_wall ∈ [0.06, 0.3] s 对应 1.5×–3.7×（典型 D_wall = 0.2 s 时 2.8×），持续 1 s。
@@ -1379,6 +1379,8 @@ api 收到后原子装入 channel 存储再切 epoch（§6.7.6；M11-FR-078）�
 | `replay.opened`、`replay.closed` | api（代 RW） | 1 | `run`、`segment` | ext（新增） |
 | `replay.error` | api | 3 | `code`、`detail` | ext（新增） |
 
+recorder 的事件纪元（`evt/recorder/*` 的 `epoch`）= 进程重启次数 + 1（`AWR_RESTART_COUNT + 1`，与 agent-runtime、job-worker 一致，17 §9.5）：此前恒为 1，recorder 重启后 seq 从 1 重新计数而纪元不变，api 与其他消费者会把新事件按重复丢弃（验收加固 FX-GW 续）。api 启动晚于 recorder 时，`rec.started` 由 Gateway 在 `proc/recorder/ready` 出现时主动探测 `_replay` 补拉（17 §9.5；FX-WEB2-to-M11 第 2 条），时间轴的"录制中"指示不再只依赖 `GET /api/runs/{run}` 的 OPEN 段兜底。
+
 ### 7.7 原因码
 
 | 码 | 名称 | HTTP | 用途 | 来源 |
@@ -1589,7 +1591,7 @@ motion-lint：`engine/time/**` 中的呈现类时长与缓动一律取自生成�
 | `python/awr/recorder/assembler.py` | M12 | ReplayFrameAssembler、事件与低频发布 | ext |
 | `python/awr/recorder/bookmarks.py` | M12 | 书签文件读写（供 `rest/runs.py`） | ext |
 | `python/awr/recorder/repair.py`、`reindex.py` | M12 | 修复 summary；重建 `.ovw`、`.evx` | ext |
-| `python/awr/recorder/synth.py` | M12 | 合成录制生成器（测试夹具与基准） | ext |
+| `python/awr/recorder/synth.py` | M12 | 合成录制生成器（测试夹具与基准）；命令行缺省把录制绑定到已安装世界的 `contentVersion` 与坐标哈希（`--world`、`--content-version`、`--coordinate-sha256` 可覆盖），否则当前运行有绑定时回放打开返回 122（验收加固 FX-GW） | ext |
 | `python/awr/recorder/importers/base.py` | M12 | Importer 协议与测试替身 | 桩 |
 | `python/awr/recorder/importers/us3d_path.py`、`ulog.py` | M12 | 导入器 | V0.2、V0.5 |
 | `python/awr/api/rest/runs.py` | M12 | §7.3 端点（由 api 自动发现） | ext |
@@ -1781,7 +1783,7 @@ replay:
 | M12-AC-031 | 缺口（N = 1000，×1 与 ×10 各 10 min） | `recorder.gap` 为 0 | `fleet_ladder/run.py --n 1000 --with-recorder --dur 600` | 本机 CPU | P1 |
 | M12-AC-032 | 选择确定性（`synth.py` 帧序列录两次） | 消息序列（channel、log_time、data）逐字节相同 | `tests/recorder/test_policy.py` | 本机 CPU | P1 |
 | M12-AC-033 | 标记机（选中机变化、剧本标记 16 架时再选中第 17 架） | 选中机变化 1 s 内开始或停止 125 Hz 录制；集合始终 ≤ 16 且剧本标记优先 | `test_lifecycle.py`（假兴趣集消息） | 本机 CPU | P1 |
-| M12-AC-034 | MCAP 有效性与资源（N = 1000、×1、10 min） | summary 与统计一致；recorder ≤ 0.1 核；≤ 60 MB/min；RSS ≤ 200 MB | 同 AC-031，读 `/proc` | 本机 CPU | P1 |
+| M12-AC-034 | MCAP 有效性与资源（N = 1000、×1、10 min） | summary 与统计一致；recorder ≤ 0.1 核；≤ 60 MB/min；RSS ≤ 200 MB；缺口 0（`meta.json` 的 `gaps` 为空，块消息 = 仿真秒 × 25 + 1、相邻间隔 ≤ 60 ms） | 同 AC-031，读 `/proc`；`tools/bench/rec/bench_write.py --n 1000 --sim-s 600`（M16 用例 `m12.bench-write`，FX2-R2-gateway 由 60 s 改为 10 min 并增加缺口判定） | 本机 CPU | P1 |
 | M12-AC-035 | 分段（S1 中途重置两次） | 3 段；段首消息顺序正确；每段可独立打开与 seek | `test_segments_lineage.py` | 本机 CPU | P1 |
 | M12-AC-036 | 谱系（checkpoint 恢复） | `awr.lineage` 键齐全；seek 到回滚区间只得到新纪元数据；`.evx` superseded 正确 | `test_segments_lineage.py` | 本机 CPU | P1 |
 | M12-AC-037 | 派生索引重建 | 与在线写出逐字节一致 | `test_sidecar_reindex.py` | 本机 CPU | P1 |
@@ -1810,9 +1812,9 @@ replay:
 | M12-AC-060 | 循环与 playUntil（V0.2） | 循环 10 次无累计漂移；playUntil 停在事件时刻 ± 1 块 | V0.2 用例 | 本机 S | P2 |
 | M12-AC-061 | 浏览器插值耗时（N = 1000、200，`scene=full`） | `__perf.time.sampleMs` p95 ≤ 0.3 ms、≤ 0.1 ms | `apps/web/perf/m12/interp.spec.ts` | 本机 S | P0 |
 | M12-AC-062 | 重绘上界（50 万标记、1920 px） | 单次 ≤ 1.5 ms；ColumnAgg 每片 ≤ 4 ms；无 > 50 ms 长任务 | `redraw.spec.ts` | 本机 S | P0 |
-| M12-AC-063 | seek 端到端（10 min、N = 1000、20 次） | p95 ≤ 200 ms（设计目标，告警不阻塞；阻塞阈值为 AC-025 的 500 ms） | `seek-latency.spec.ts` | 本机 S | P1 |
+| M12-AC-063 | seek 端到端（10 min、N = 1000、20 次） | p95 ≤ 200 ms（设计目标，告警不阻塞；阻塞阈值为 AC-025 的 500 ms） | `seek-latency.spec.ts`（后端以 `perf` profile 启动，api、sim-core、replay-worker 分别钉 core0、core1、core7，与 Chromium 的 core2–6 分开，18 PR-6；FX2-R2-gateway：此前用 ci profile 不钉核，后端继承 Playwright 的 `taskset -c 2-6` 与 SwiftShader 争核） | 本机 S | P1 |
 | M12-AC-064 | 后端可观测 | recorder 与 replay-worker 每 1 s 输出 §10.3 字段 | `test_lifecycle.py` | 本机 CPU | P1 |
-| M12-AC-065 | 20× 回放负载（N = 1000，3 个客户端） | api ≤ 0.35 核；tick 数据年龄 p99 ≤ 15 ms；HOLD 占比 < 1% | `replay20x.spec.ts` + `perf/server` | 本机 S、本机 CPU | P1 |
+| M12-AC-065 | 20× 回放负载（N = 1000，3 个客户端） | api ≤ 0.35 核；tick 数据年龄 p99 ≤ 15 ms；HOLD 占比 < 1% | `replay20x.spec.ts` + `perf/server`（后端钉核同 AC-063） | 本机 S、本机 CPU | P1 |
 
 真 GPU 档：除 AC-059 外本模块不设绝对帧率阈值；Tier B 上选中机 60 Hz 通道 ≥ 57 Hz 属 D1-AC-26 的 GPU 设计阈值，由 M11 与 18 在 `/bench` 回传数据上判定。
 

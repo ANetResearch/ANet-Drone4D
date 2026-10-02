@@ -10,6 +10,7 @@
 | 上游文档 | [AWR-03 设计基线](../03-设计基线与决策记录.md)（ADR-002、ADR-004、ADR-005、ADR-006、ADR-007、ADR-008、ADR-009、ADR-010、ADR-011、ADR-012、ADR-013、ADR-029、ADR-031、ADR-032、ADR-033、ADR-041、ADR-042、ADR-044、ADR-050；§3.5–§3.8、§4.1、§4.3、§5.1、§5.8、§6.3、§8.2–§8.7、§11、附录 A、B、C）；[01-design](../01-design.md) §8、§9、§12、§14、§15、§16、§37、§38；研究笔记 [g02](../research/g02-gap.md)（权威）、[g01](../research/g01-gap.md)、[n01](../research/n01-discover-web-pointcloud.md)、[r12](../research/r12-potree-core-loader.md)、[r11](../research/r11-threejs-webgpu.md)、[r13](../research/r13-potree-next-splats.md)、[r10](../research/r10-3dtiles.md)、[g03](../research/g03-gap.md)、[00-index](../research/00-index.md) §3.5、§3.6、§5.2；并行说明书 [10](../10-系统架构说明书.md) §5.1、§7，[14](../14-UI交互设计PRD.md) §3.7、§4.2、§5.5、§7.3–§7.5，[15](../15-视觉设计规范与色卡.md) §8、§10.3，[16](../16-World数据规范.md) §4，[17](../17-接口与实时协议规范.md) §5、§8，[18](../18-性能与测试方案.md) §4、§8.6、§9 |
 | 下游文档 | [M06 Web 视口与渲染后端](M06-Web视口与渲染后端PRD.md)（RenderBackend、pass 计划、RT 分配、相机、FrameSampler、PerfGovernor、拾取 pass 插入）；[M15 前端 UI 壳](M15-前端UI壳与设计体系组件PRD.md)（HUD、左栏 LAYERS、Perf 面板、设置）；[M16 演示与流畅性测试](M16-演示数据剧本与流畅性测试PRD.md)（flight60 harness、`apps/web/perf/m05/*`）；[18](../18-性能与测试方案.md)（本文参数作为测试预言值，阈值归档）；[14](../14-UI交互设计PRD.md)（HUD 字段与文案）；[17](../17-接口与实时协议规范.md)（原因码 400–411，已登记于 17 §8） |
 | 适用版本范围 | V0.1（D1）至 V1.0 |
+| 验收加固修订 | 2026-10-01（FX-WEB1）：ADR-063 非叶节点点径上限（FR-029、FR-030、§6.2.3、§6.7.3、§6.8.1 注）；Tier S 稀疏点径复核结论记入 RK-M05-02；拾取（AC-027）、flight60 `scene=pc` 与 TTFP 不含首次编译的用例转为必跑（§10） |
 
 ## 0. 摘要
 
@@ -223,8 +224,8 @@
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M05-FR-028 | DrawTable（RGBA32UI，宽 1024，每条 16 B）每帧重写，只上传用到的行（经典路径每行一个 `addUpdateRange`，three 的 update range 按单行上传，不得跨行）；NodeTable（RGBA32F，每节点 2 texel）在打开世界时写一次；无属性 `THREE.Points` 以 `drawRange = Σcnt` 单次绘制；顶点程序以 TSL 编写，按 `vertexIndex` 在 DrawTable 上做固定 12 次二分；整数参数全部为 float uniform；任何纹理不设 `internalFormat`；`frustumCulled = false`，`raycast` 置空 | P0 | V0.1 | 是 | M05-AC-019 像素一致；`render.calls` 等于 pass 计划 | ADR-007、ADR-010；g01 §4.5 |
-| M05-FR-029 | Lite 点径：`pitch = childDrawnMask 在该点八分体为 1 ? 0.5·spacing_L : spacing_L`，`px = 1.7 · pitch · projK / (−z_view)`，钳到 `[minPx, maxPxEff]`；`childDrawnMask` 只统计"本帧被绘制且淡入完成"的子节点，因此父节点八分体的点径在子节点淡入完成后才缩小；点形状 Tier S 为方点（无片元 discard），Tier B/A 为圆点（`length(pointCoord − 0.5) > 0.5` 时 discard），由后端档在构建时决定，不产生运行期变体 | P0 | V0.1 | 是 | M05-AC-020 | ADR-011；g02 §5.3；15 §10.3 |
-| M05-FR-030 | 自适应 maxPx：稀疏态（`limitedBy ∈ {budget, nodes}` 或覆盖率 < 0.95）取档位 `maxPxSparse`，否则取 `maxPx`；以 300 ms 时间常数指数平滑；minPx 取档位值 | P0 | V0.1 | 是 | `pc.maxPxEff` 在 flight60 中无阶跃 | ADR-011；g02 §5.3 |
+| M05-FR-029 | Lite 点径：`pitch = childDrawnMask 在该点八分体为 1 ? 0.5·spacing_L : spacing_L`，`px = 1.7 · pitch · projK / (−z_view)`，叶节点钳到 `[minPx, maxPxEff]`、非叶节点钳到 `[minPx, maxPxCapEff]`（ADR-063，叶标志取 NodeTable t1.z）；`childDrawnMask` 只统计"本帧被绘制且淡入完成"的子节点，因此父节点八分体的点径在子节点淡入完成后才缩小；点形状 Tier S 为方点（无片元 discard），Tier B/A 为圆点（`length(pointCoord − 0.5) > 0.5` 时 discard），由后端档在构建时决定，不产生运行期变体 | P0 | V0.1 | 是 | M05-AC-020 | ADR-011；g02 §5.3；15 §10.3 |
+| M05-FR-030 | 自适应 maxPx：稀疏态（`limitedBy ∈ {budget, nodes}` 或覆盖率 < 0.95）取档位 `maxPxSparse`，否则取 `maxPx`（`maxPxEff`，叶节点与 `__perf.pc.maxPxEff` 的上限）；非叶节点在非稀疏态另以 `maxPxCap = min(maxPx, max(4, ⌈2.5·sizeK·τ⌉))` 钳制（`maxPxCapEff`，稀疏态等于 `maxPxEff`；ADR-063）；两者以 300 ms 时间常数指数平滑；minPx 取档位值 | P0 | V0.1 | 是 | `pc.maxPxEff` 在 flight60 中无阶跃；`tests/pointcloud/pointsize.test.ts` | ADR-011、ADR-063；g02 §5.3 |
 | M05-FR-031 | 节点淡入：节点首次上传后，按节点内下标 `local` 计算 Weyl 哈希 `fract(local · 0.618033988749895)`，≤ fade 的点保留，其余以零点径移出裁剪体；fade 在 `--duration-lod-fade`（250 ms）内按 `--ease-smooth-out` 从 0 到 1；不透明、写深度；reduced 动效档立即为 1；时长与曲线只来自生成的 token 模块，由薄适配层经 `options.tokens` 注入（engine 代码不 import `ui/**`，AWR-03 §4.2 第 2 条；M06 §14 第 11 条） | P0 | V0.1 | 是 | M05-AC-021 | ADR-029；15 §8.7；OLV `fadeDither.ts` |
 | M05-FR-032 | 着色模式 Height（默认）、HAG（旧金山默认）、Normal、Class、Source 由同一程序以 float uniform `uColorMode` 切换；公式、颜色与光照项取 [15 §10.3](../15-视觉设计规范与色卡.md)；HAG 采样 FR-060 加载的 DTM 纹理（R16F） | P0 | V0.1 | 是 | M05-AC-022：切换不增加 `programs` | ADR-005；15 §10.3；PRD-FR-012 |
 | M05-FR-033 | classMask：float uniform（≤ 2^16），`visible = (classMask >> cls) & 1`，关闭的点以零点径移出裁剪体；默认 `0x1FFF`（隐藏类别 13、14；类别 15 为保留位，引擎写入 uniform 前恒清零）；类别 11 在视口已有更高优先级红色实体时改用 g50（`uHeroClassActive`） | P0 | V0.1 | 是 | 关闭植被后像素 golden 一致；不重新下载 | ADR-005、ADR-032；15 §10.3 |
@@ -403,7 +404,7 @@ flowchart LR
 | 纹理 | 格式与尺寸 | 每条内容 | 更新 |
 |---|---|---|---|
 | DrawTable | RGBA32UI，宽 1024，4 行（4096 条，64 KB） | x = `prefixStart`；y = `poolBase`；z = `cnt`（位 0–23）\| `childDrawnMask`（位 24–31）；w = `nodeIdx`（位 0–23）\| `round(fade·255)`（位 24–31） | 每帧重写，只上传用到的行（`addUpdateRange`，经典路径） |
-| NodeTable | RGBA32F，宽 1024，每节点 2 texel | t0 = `[min.x, min.y, min.z, cubeSize]`（float32，图层局部 ENU）；t1 = `[spacing_L, level, 0, 0]` | 打开世界时写一次 |
+| NodeTable | RGBA32F，宽 1024，每节点 2 texel | t0 = `[min.x, min.y, min.z, cubeSize]`（float32，图层局部 ENU）；t1 = `[spacing_L, level, leaf, 0]`（leaf = 1 表示数据中无子节点，ADR-063） | 打开世界时写一次 |
 
 float32 的 `cubeMin` 在 10 km 半径内误差 ≤ 1 mm（AWR-03 §5.1 第 4 条）；点坐标 = `min + q/65535 · size`，节点内量化步长为 `size/65535`（16 §4.3）。
 
@@ -671,18 +672,25 @@ function buildDrawTable(sel: Selection, now: number, fadeMs: number, reduced: bo
 
 `easeSmoothOut` 与 `fadeMs` 来自生成的 motion token（`--duration-lod-fade`、`--ease-smooth-out`），由薄适配层经 `options.tokens` 注入，曲线经 M06 的 `engine/anim/bezier.ts` 求值；engine 代码中不得出现时长或曲线字面量（motion-lint，ADR-029），也不得 import `ui/**`（AWR-03 §4.2 第 2 条）。DrawTable 行上传按行调用 `addUpdateRange(row·4096, min(k − row·1024, 1024)·4)`（单位为 Uint32 元素）后置 `needsUpdate = true`（FR-028）。
 
+**块索引**（ADR-064，验收加固 FX2-R2）：DrawTable 写完后由 `buildBlockIndex` 生成块索引 `block[b]` = 顶点 `b·64` 所在的条目（`b < nb = ⌈drawn/64⌉`），`block[nb]` = 最后一个条目；存于 `DrawTables.block`（R32UI，1024 宽，行数按池容量），与 DrawTable 同帧按行上传。three r186 把更新区间按 4 分量折算为纹素，单分量纹理的区间因此按 ×4 提交（`commitBlocks`）。预热变体（§6.7.7）同时把 `block[0..1]` 置 0，结束后恢复。
+
 #### 6.7.2 顶点程序（TSL；GLSL 写法见 g02 §4.4，仅作语义参考）
 
 ```ts
 // render/pointMaterial.ts（点材质一律经 be.createPointsMaterial() 创建：glpoint 档为 GLPointsNodeMaterial，其余为 PointsNodeMaterial）
 const fetch = Fn(() => {
   const vid = (pointSizeMode === 'quad' ? int(vertexIndex).div(6) : int(vertexIndex)).toVar()
-  const lo = int(0).toVar(), hi = int(uNumDraws).toVar()                         // float uniform → int
-  Loop(12, () => { If(hi.sub(lo).greaterThan(1), () => {                          // 固定 12 次，≤ 4096 条
+  // 块索引（ADR-064）：条目必在 [block[b], block[b + 1]] 内（≤ 65 条），区间只剩一条即停，最多 7 步、通常 0–1 步
+  const b = vid.shiftRight(6).toVar()
+  const lo = int(textureLoad(blockTex, ivec2(b.bitAnd(1023), b.shiftRight(10))).x).toVar()
+  const hi = int(textureLoad(blockTex, ivec2(b.add(1).bitAnd(1023), b.add(1).shiftRight(10))).x).add(1).toVar()
+  Loop(7, () => {
+    If(hi.sub(lo).lessThanEqual(1), () => { Break() })
     const mid = lo.add(hi).shiftRight(1).toVar()
     If(int(textureLoad(drawTex, ivec2(mid.bitAnd(1023), mid.shiftRight(10))).x).lessThanEqual(vid),
       () => { lo.assign(mid) }).Else(() => { hi.assign(mid) })
-  }) })
+  })
+  // 拾取子表（§6.10）没有块索引，仍为整表 12 步二分：lo = 0、hi = uNumDraws
   const d = textureLoad(drawTex, ivec2(lo.bitAnd(1023), lo.shiftRight(10))).toVar()
   const local = vid.sub(int(d.x)).toVar()                                         // 节点内下标（淡入与拾取用）
   const gi = int(d.y).add(local).toVar()
@@ -699,6 +707,7 @@ const fetch = Fn(() => {
 - 点径（glpoint）：`builtin('gl_PointSize').assign(liteSizePx())`；Tier A quad：同一 `fetch`，角点偏移 `sizePx·2/viewport·clip.w`。
 - 点形状（15 §10.3）：Tier S 方点，片元阶段无 discard；Tier B/A 圆点，`length(pointUV − 0.5) > 0.5` 时 discard（glpoint 取 `gl_PointCoord`，quad 取角点插值 UV）。形状按后端档在构建材质时确定，预热表中每档只有一个点材质程序。
 - 类别 `cls = w.z >> 24`，法线 `oct16 = w.y >> 16`（解码见 16 §4.5），底色 `w.z & 0xffffff`（sRGB）。
+- 实现约束（ADR-064）：纹理节点关闭 uv 矩阵（`updateMatrix = false`；three r186 对无 uv 参数创建的 `texture(t)` 默认在每次 `load()` 前乘纹理矩阵）；类别掩码与子八分体掩码的位测试用整数移位 `(uint(mask) >> uint(bit)) & 1u`，不用 `pow(2, bit)`。在 SwiftShader 上 12 步二分约占 2.5 万点点通道的 4.3 ms。
 
 #### 6.7.3 Lite 点径与自适应 maxPx
 
@@ -706,15 +715,19 @@ const fetch = Fn(() => {
 oct   = (q.x ≥ 0.5 ? 4 : 0) | (q.y ≥ 0.5 ? 2 : 0) | (q.z ≥ 0.5 ? 1 : 0)       // Potree 子序，与 children[8i+c] 一致
 pitch = ((mask >> oct) & 1) == 1 ? 0.5·spacing_L : spacing_L                    // 最多缩小 1 级
 px    = uSizeK · pitch · uProjK / max(−z_view, 1e−6)                            // uSizeK = 1.7，uProjK = 0.5·H_px·P[1][1]
-size  = clamp(px, uMinPx, uMaxPxEff)
+size  = clamp(px, uMinPx, leaf ? uMaxPxEff : uMaxPxCapEff)                   // leaf = NodeTable t1.z（ADR-063）
 ```
 
 ```ts
 // 每帧（world 相位）
 const sparse = sel.limitedBy <= 1 || progress < 0.95                           // budget、nodes，或流式未完成
 const target = sparse ? rung.maxPxSparse : rung.maxPx                          // 16 : 8（0–1 档）
+const targetCap = sparse ? rung.maxPxSparse : tauCapPx(rung)                  // ADR-063：min(maxPx, max(4, ⌈2.5·sizeK·τ⌉))
 maxPxEff += (target - maxPxEff) * (1 - Math.exp(-dtMs / 300))                  // 300 ms 平滑
+maxPxCapEff += (targetCap - maxPxCapEff) * (1 - Math.exp(-dtMs / 300))
 ```
+
+非叶节点上限（ADR-063，验收加固 FX-WEB1）：Lite 只缩小 1 级，前沿层（τ ≤ key < 2τ）与其父层（子八分体已绘制时 pitch = 子层间距）的点径都 < 2·sizeK·τ，而两级及以上的祖先 pitch ≥ 2 倍前沿间距，τ 受限时被 maxPx 8 钳成覆盖细层的圆盘（"气泡"观感）。非叶节点因此在非稀疏态以 `maxPxCap` 钳制（soft-min 至 low 为 8，即 Tier S 与 low 不变；medium 6、high 5、ultra 4），叶节点（数据中无子节点，相机附近数据耗尽之处）保持档位 maxPx 以闭合表面。上限按节点区分，不能取帧级（例如"本帧最近叶节点的键"抬高整帧上限），否则一个近处叶节点就让整帧回到气泡观感。
 
 "覆盖率 < 0.95 也视为稀疏"是本文设定：流式期间选择器可能已报 `headroom`，但目标集尚未到齐，绘制点比选择结果稀疏；g02 的实时验证在全部预驻留条件下进行，没有覆盖这一工况。该条件可由参数 `sparseWhileStreaming` 关闭，MS5 以收敛用例（18 §4.6）比较空洞率后决定是否保留。
 
@@ -735,7 +748,7 @@ maxPxEff += (target - maxPxEff) * (1 - Math.exp(-dtMs / 300))                  /
 | Source | 4 | `col.rgb`（UrbanScene3D 为 baked-height） | 否 | 16 §4.4 |
 | Intensity（桩） | 5 | `ext.intensity` 按 `--pc-ramp` | 是 | 15 §10.3 |
 
-光照项：`n' = faceforward(n, V)`；`lam = 0.45 + 0.55·max(n'·L_sun, 0) + 0.15·(0.5 + 0.5·n'_up)`；无法线（oct16 = 0）时 `lam = 1`；`c = base · lam · cloudShadow`，`L_sun` 与 `cloudShadow` 来自 M07 的 EnvLighting uniform（15 §10.3）。雾由 `scene.fogNode` 施加（FR-034）。DTM 由 FR-060 在首屏完成后下载（六城 f32 数据 0.12–2.2 MB，16 §6.3），未就绪时绑定 1×1 哑纹理，HAG 模式暂时退化为 Height 并在左栏说明"地形加载中"。
+光照项：`n' = faceforward(n, V)`；`lam = 0.45 + 0.55·max(n'·L_sun, 0) + 0.15·(0.5 + 0.5·n'_up)`；无法线（oct16 = 0）时 `lam = 1`；`c = base · lam · cloudShadow`，`L_sun` 与 `cloudShadow` 来自 M07 的 EnvLighting uniform（15 §10.3）。雾与输出变换在顶点阶段施加（ADR-064）：`c' = mix(c, fogColor, fogFactor(p))`（场景着色提供者的同一组项，等于 `scene.fogNode` 的逐片元结果，FR-034），再经 `outputTransform`（画布为输出色彩空间，渲染目标保持线性）写入 `vPcColor`；GL 点精灵的变化量全部来自同一顶点，结果与逐片元计算相同。材质 `fog = false`、`userData.awrOutputInVertex = true`，片元阶段只输出 `vPcColor`（Tier B/A 另有圆盘 discard）。SwiftShader 上 2.5 万点的点通道由 35.1 ms 降到 18.9 ms。DTM 由 FR-060 在首屏完成后下载（六城 f32 数据 0.12–2.2 MB，16 §6.3），未就绪时绑定 1×1 哑纹理，HAG 模式暂时退化为 Height 并在左栏说明"地形加载中"。
 
 #### 6.7.6 EDL、渲染比例与 pass 贡献
 
@@ -788,6 +801,8 @@ d     = depthT(uv0)
 | 4 | medium | 1.0 | [1.5M, 3M] | 1.35 | 1 | 8 / 8 | 8 tap | dGPU 起步；iGPU 自动上限 |
 | 5 | high | 1.0 | [3M, 6M] | 1.0 | 1 | 8 / 8 | 8 tap | dGPU 自动上限；iGPU 池下为退化档，自动模式不进入（§6.8.4） |
 | 6 | ultra | 1.0 | [6M, 12M] | 0.7 | 1 | 8 / 8 | 8 tap | 只能手动；Tier B/A 池下为退化档 |
+
+注：表中"受 τ"的 maxPx 是叶节点与 `pc.maxPxEff` 的上限；非叶节点在非稀疏态另受 ADR-063 的 `maxPxCap = min(maxPx, max(4, ⌈2.5·sizeK·τ⌉))` 钳制（0–3 档为 8 不变，medium 6、high 5、ultra 4；§6.7.3）。阶梯数值不变（ADR-012）。
 
 #### 6.8.2 按设备能力档的参数（ADR-044；起步档与最低允许档由 M06 判定）
 
@@ -1604,7 +1619,7 @@ def gen_flight60(world_dir: Path, out_dir: Path, *, fps: int = 60, seconds: floa
 | M05-AC-004 | 规则 R | 六城 Tier S 与 Tier B 的层、点数、字节与 16 §4.11 表逐项相等 | `firstScreen.test.ts`（读 `worlds/*/visual/pointcloud*/metadata.json`） | 本机 CPU | P0 | ADR-013 |
 | M05-AC-005 | Q16 打包与解码 | 16 §4.3 深圳示例打包为 `0x8c9d6195, 0x80803210, 0x05f5f3f2, 0`；解码坐标误差 ≤ 量化步长一半；oct16 解码与 16 §4.5 参考实现一致 | `q16.test.ts` | 本机 CPU | P0 | 16 §4.3 |
 | M05-AC-006 | 请求序列 | HAR 中：`world.json` 带 `no-cache`；其余带 `?v=`；`hierarchy.bin` 无 Range；每根恰一次首屏 Range；无 `multipart/byteranges`；除 `/worlds/**` 外 M05 无其他请求 | `perf/m05/requests.spec.ts` | 本机 S | P0 | FR-001；P-03 |
-| M05-AC-007 | TTFP | ≤ 1.0 s（深圳、纽约、上海、苏州 P0；旧金山、芝加哥 P1），3 次取中位 | `perf/m05/ttfp.spec.ts`，读 `__perf.load.ttfp` | 本机 S | P0 / P1 | D1-AC-02；PRD-NFR-007 |
+| M05-AC-007 | TTFP | ≤ 1.0 s（深圳、纽约、上海、苏州 P0；旧金山、芝加哥 P1），3 次取中位；不含点程序首次编译：点材质与 ID 材质由 shader zoo 在遮罩下预热，揭开后 `gpu.compiledAfterReveal = 0`，等待预热的时长记入 `load.warmupWaitMs` 并从 TTFP 中扣除（功能运行即断言，验收加固 FX-WEB1） | `perf/m05/ttfp.spec.ts`，读 `__perf.load.ttfp` | 本机 S | P0 / P1 | D1-AC-02；PRD-NFR-007 |
 | M05-AC-008 | 切换世界 | 深圳 → 纽约 → 上海 → 苏州：每次 `switchMs` ≤ 1.5 s；`programs`、`rtAllocs` 不增；旧世界节点全部释放（`residentPts`、`cpuCacheBytes` 回到只含新世界）；切换期间无 > 50 ms 长任务 | `perf/m05/switch.spec.ts` | 本机 S | P0 | D1-AC-02、D1-AC-24 |
 | M05-AC-009 | 纯点云帧节奏 | flight60 `scene=pc` 深圳：p50 / p95 / p99 ≤ 33.4 / 50 / 100 ms；> 50 ms ≤ 5%；> 100 ms ≤ 0.5%；t > 2 s 后最大间隔 ≤ 250 ms；纽约、上海主回归 | `npm run perf:flight60 -- --city shenzhen --scene pc` | 本机 S | P0 | D1-AC-03a |
 | M05-AC-010 | CAS 行为 | 换档 ≤ 2；10 s 内来回 0；B 反向 ≤ 15 次/分钟；2 s 内进入目标带；最终档位 0 或 1；遮罩揭开后 30 帧与页面隐藏期间 `cas.evals` 不增 | 同上，读 `__perf.cas` | 本机 S | P0 | D1-AC-04 |
@@ -1645,7 +1660,7 @@ def gen_flight60(world_dir: Path, out_dir: Path, *, fps: int = 60, seconds: floa
 | 编号 | 风险 | 可能性 | 影响 | 触发信号 | 对策 |
 |---|---|---|---|---|---|
 | RK-M05-01 | 本机与并行开发任务共用 CPU，SwiftShader 每点耗时随负载相差 2 倍，帧节奏验收波动 | 高 | 中 | 同一构建 3 次运行 p95 相差 > 20% | CAS 以点数吸收负载（g02 §6.4 在负载 12.8 下仍达标）；执行 ADR-033 运行协议（排他锁、开跑前 load ≤ 4、3 次中位）；画质与点数阈值只在 load < 6 时判定 |
-| RK-M05-02 | g02 的实时闭环在"全部预驻留、N 点径、maxPx 8、无无人机"条件下验证；改用 Lite + maxPx 16 后每点开销约 +21%，推测 CAS 会以约少 17% 的点数维持节奏，未经实测（g02 §10 局限） | 中 | 中 | MS5 实测平均绘制点数 < 20k（load < 6） | MS5 出口按 ADR-012 重跑 live 闭环后以 ADR 冻结；若不足，候选对策为 soft-min 档 maxPxSparse 16 → 12（需 ADR），并用 M05-AC-024 比较空洞率 |
+| RK-M05-02 | g02 的实时闭环在"全部预驻留、N 点径、maxPx 8、无无人机"条件下验证；改用 Lite + maxPx 16 后每点开销约 +21%，推测 CAS 会以约少 17% 的点数维持节奏，未经实测（g02 §10 局限） | 中 | 中 | MS5 实测平均绘制点数 < 20k（load < 6） | MS5 出口按 ADR-012 重跑 live 闭环后以 ADR 冻结；若不足，候选对策为 soft-min 档 maxPxSparse 16 → 12（需 ADR），并用 M05-AC-024 比较空洞率。验收加固 FX-WEB1 复核（视觉，非性能）：Tier S `fixedB=25000` 深圳，soft-min、soft 的 maxPxSparse 16 → 12 使背景穿透率近景 1.0% → 3.0%、街景 11.7% → 18.2%，方块观感不消失而楼体开始破碎，保持 16（g02 定案；ADR-063 依据）；帧节奏影响仍按本条在性能阶段判定 |
 | RK-M05-03 | 无镜像池依赖 three 0.186 的两处内部行为：`dataReady = false` 时只 `texStorage2D` 不传数据；`copyTextureToTexture` 对未登记的 DataTexture 源走 `texSubImage2D(image.data)` 分支（§6.6.2、§6.6.3）；staging 一旦被绑定或 `initTexture` 就会改走 GPU 拷贝旧内容 | 低 | 高 | 浏览器像素测试中池内容错误或 GL 错误 | MS3 前以 `pool.pixel.test.ts` 核实经典与 WebGPU 两条路径，并加单测断言 staging 不在渲染器 properties 中；备选为保留 CPU 镜像加按行 `addUpdateRange`（Tier S 多 3.9 MB，Tier B 多 77 MB）；锁定 three ~0.186.1，升级时重跑该测试 |
 | RK-M05-04 | 分配器外部碎片导致 `poolStalls` | 低 | 中 | 六城 flight60 中 `poolStalls > 0` 或 `pageUtil < 0.95` | 256 texel 页（F10 实测利用率 98%）；分配失败先强制驱逐；仍发生时以 ADR 引入按页整理 |
 | RK-M05-05 | 远程演示经 SSH 转发，RTT 数十毫秒，HTTP/1.1 在途 ≤ 4 限制细化速度 | 中 | 中 | 远程收敛时间明显长于本机 | 首屏一次 Range 不受影响；V0.2 相邻兄弟 Range 合并；V0.5 HTTP/2 放开 8/12；远程冒烟用例记录收敛时间（M16） |

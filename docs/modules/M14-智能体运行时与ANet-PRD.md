@@ -237,7 +237,7 @@
 | M14-FR-048 | 压测模式 `latency_s = 0`：200 个 agent、64 个并发任务、每分钟 1000 次委派，无泄漏 | P2 | V0.1 | 是 | M14-AC-033 | d05 §5（可跑 100+ 架） |
 | **时钟与确定性** | | | | | | |
 | M14-FR-049 | SimScheduler 以仿真时间驱动全部协作计时器；两种驱动：RingClockDriver（有待触发定时器时每 5 ms、空闲时每 50 ms【墙钟】读 StateRing 头部 `t_sim_ns`、epoch、segment）与 LockstepDriver（`--inproc` 下由 sim-core 每步回调）；暂停冻结、倍速同比 | P1 | V0.1 | 是 | M14-AC-025 | ADR-036、ADR-045 |
-| M14-FR-050 | 确定性：同一种子下 ×1 与 ×10 的决策一致（中标者、候选集、可行性、证据类型序列、谓词结论、最终置信度），完成时刻差 ≤ 1.0 s【仿真】；锁步驱动下证据链 id 逐位一致 | P1 | V0.1 | 是 | M14-AC-026、027 | ADR-049；D1-AC-16 |
+| M14-FR-050 | 确定性：同一种子下 ×1 与 ×10 的决策一致（中标者、候选集、可行性、证据类型序列、谓词结论、最终置信度），完成时刻差 ≤ 1.0 s【仿真】；锁步驱动下证据链 id 逐位一致；多进程下由 sim-core 事件引出的协作计时以事件的仿真时刻为锚点（§6.13 规则 ⑥） | P1 | V0.1 | 是 | M14-AC-026、027 | ADR-049；D1-AC-16 |
 | M14-FR-051 | 墙钟例外（ADR-045 计时器清单写作"agent-runtime 的全部定时器按仿真"，17 §10.7 已按 §14 第 1 条澄清为只有模拟外部协作者延迟的计时器属仿真域）：bus 调用超时 1 s × 3、AGENT 租约续约 5 s（ext）、状态发布 1 Hz、证据与审计 fsync 1 s、事件合批 50 ms、调度器轮询 5 ms（空闲 50 ms） | P1 | V0.1 | 是 | M14-AC-025 | 17 §10.7 |
 | **受信守卫** | | | | | | |
 | M14-FR-052 | TrustedGuard 按 §6.14.2 固定顺序执行 G0、①、②、③、A1–A4、签名、转发、审计；任一检查器自身异常一律拒绝（`470 AGENT_GUARD_INTERNAL`），不下发 | P1 | V0.1 | 是 | M14-AC-028 | ADR-016、ADR-027；n03 §3.8 |
@@ -765,7 +765,7 @@ U 量化：round(U, 3)
 
 取值理由（本文设定）：①`R_ref = 600 m` 与 S3 搜索盒（500 m）同量级，盒内任意两点（≤ 707 m）的时间项 ≤ 0.71，与置信度项同量级；d05 的 120 s 在其 8 m/s 原型下对应 960 m，若原样用于 3 m/s 的 P600 只对应 360 m，同一距离的时间惩罚是本文取值的 1.7 倍（200/120），这正是 ADR-036 要求归一化常数随机型取值的原因；②能量项以可用电量的 10% 为单位（"用掉 10% 可用电量扣 0.3 分"），与机型电池容量成正比；在 P600 上每米外飞的时间项约 1.0e-3、每米总航程的能量项约 7.6e-4，时间仍略占优，保持 d05 权重"先快、再省"的意图；③归一化常数写入机型 profile 的可选字段 `anet.score_norm{eta_s, energy_wh}`（§14 第 6 条）；未写时按上式由 profile 推导，二者一致性由单测断言。
 
-**S3 示例**（几何取 M16 §6.4.5 定稿：目标 t1 (−24, −1253)；b1、b2、b3 的 home 为 (−52, −1515)、(−46, −1515)、(−40, −1515)；b1、b2 以 MISSION 租约沿 `follow_path` 飞往待命点 (86, −1133, 80)、(−314, −1033, 80)，b3 留在地面。快照取报价时刻 t_q = 100 s【仿真】（首次检出预算 ≤ 120 s）：起飞爬升 40 s 到 z 80 m，再以 3 m/s 巡航，故 b1、b2 仍在途中。简化估算：悬停当量功率 515 W；`eta_s` = 当前高度巡航到观测点上方 + 下降 20 m；返航按 12 §5.8.3 的 t_rtl；`conf_expected` = 0.95·e^(−(60/150)²)·0.988 = 0.80（§6.10.5，partlyCloudy 总 MOR 20 km）；观测高度风 6 m/s（risk = 0.25）。实际数值一律以 estimate 为准。）
+**S3 示例**（几何取 M16 §6.4.5 定稿：目标 t1 (−24, −1253)；b1、b2、b3 的 home 为 (−52, −1515)、(−46, −1515)、(−40, −1515)；b1、b2 以 MISSION 租约沿 `follow_path` 飞往待命点 (86, −1133, 80)、(−314, −1033, 80)，b3 留在地面。快照取报价时刻 t_q = 100 s【仿真】（首次检出预算 ≤ 120 s）：起飞爬升 40 s 到 z 80 m，再以 3 m/s 巡航，故 b1、b2 仍在途中。简化估算：悬停当量功率 515 W；`eta_s` = 当前高度巡航到观测点上方 + 下降 20 m；返航按 12 §5.8.3 的 t_rtl；`conf_expected` = 0.95·e^(−(60/150)²)·0.988 = 0.80（§6.10.5，partlyCloudy 总 MOR 20 km）；观测高度风 6 m/s（risk = 0.25）。实际数值一律以 estimate 为准。FX-SIM2 修订 M16 §6.4.5 后（ADR-059），home 改为 b1 (−70, −1515)、b2 (−94, −1515)、b3 (−58, −1515)，观测高度 75 m；下表保留原几何的示算，多进程实测报价为 b1 0.07、b2 0.016、b3 不可行 119，中标者与排序不变。）
 
 | 候选 | t_q 时位置（world ENU，m） | SOC | 到目标 | eta_s | energy_wh | soc_after | 可行 | U |
 |---|---|---|---|---|---|---|---|---|
@@ -812,8 +812,8 @@ class ThermalImaging(CapabilityHandler):
             yield Effect(EffectStatus.UNAVAILABLE, message=h); return
         if ctx.agent.load >= self.entry.max_concurrent:
             yield Effect(EffectStatus.UNAVAILABLE, message="BUSY"); return
-        st = await ctx.station(a.target_enu_m, a.alt_agl_m)                     # svc/geo/height：dtm 与 dsm
-        est = await ctx.sim.estimate(ctx.vehicle_id, st.pos, a.dwell_s, self.cap)
+        st, est = await ctx.prepared() or await self.prepare(call)              # 观测点（svc/geo/height，SharedReads 缓存）与
+                                                                                 # 执行前复核估价；委派在途期间已预取（§6.12.2）
         if not est.feasible:
             yield Effect(EffectStatus.UNAVAILABLE, message=f"code={est.code}"); return
         yield Effect(EffectStatus.UNVERIFIED, verify_trust=0, protocol="awr.sim",   # 两段式第一段
@@ -825,15 +825,17 @@ class ThermalImaging(CapabilityHandler):
             if not ctx.airborne():   await ctx.port.call("takeoff", alt_m=st.takeoff_agl_m)
             ctx.phase(Phase.ENROUTE)
             r = await ctx.port.call("goto", pos=st.pos, route="auto")           # 到站判据由 sim-core 给出
+            t_on = r.t_sim_ns                                                   # 到站时刻：goto 终态事件的仿真时刻
             ctx.test("station_reached", r.status == "succeeded" and r.effect.metrics.get("dist_err_m", 1e9) <= 3.0)
             if r.status != "succeeded":
                 yield Effect(EffectStatus.FAILED, verify_trust=2, observed_state=r.reason); return
             ctx.phase(Phase.ON_STATION)
             await ctx.port.call_nowait("orbit", center=st.orbit_center, radius_m=a.orbit_radius_m, turns=0)
             ctx.phase(Phase.EXECUTING)                                          # 云台：orbit 默认 LOOK_AT(环绕中心)，M13-FR-012
-            await ctx.sleep_s(a.dwell_s)                                        # 驻留窗口【仿真】
+            await ctx.sleep_until(t_on + a.dwell_s)                             # 驻留窗口【仿真】，自到站起算（§6.13 规则 ⑥）
             ctx.test("dwell_complete", True)
-            await ctx.port.call("hover")                                        # 结束环绕，交还前停稳
+            rh = await ctx.port.call("hover")                                   # 结束环绕，交还前停稳
+            ctx.event_time(rh.t_sim_ns)                                         # 结果产生于 hover 终态时刻（§6.12.2）
             dets = sub.close()                                                  # 第一段以来收到的本机检出
             arts = [ctx.artifact_descriptor(d) for d in dets if d.artifact]     # 描述符，D1 不落盘
             yield self.effect_from(dets, arts, st, ctx)                         # OK、V4、simulated；无检出时 confidence = 0
@@ -845,6 +847,7 @@ class ThermalImaging(CapabilityHandler):
 - 检出收集：从第一段回执起，收本机（`uav` = 本机体）、`capability` = `thermal.imaging`、`target_id` 相同（缺省时 `pos_enu_m` 与目标水平距离 ≤ 30 m）的 `sensor.detect`（含 `repeat = true` 的复检），与 phase 无关；`confidence = max(conf)`，`detections = n`，`range_m` 取事件 `range_m` 的中位数。M13 在 CONFIRMED 后每 2 s【仿真】至多发一条复检，10 s 驻留期望约 4 条（M13 §6.5.9）。
 - 产物（D1 为描述符，不落盘）：每条带 `artifact` 的检出登记一条 `{path: "thermal/<task_id>/<event_seq>.pgm", size_bytes: 19215, media_type: "image/x-portable-graymap", content_cid: "sha256:" + sha256(规范 JSON(artifact.params))}`；`event_seq` 取 sim-core 生产者按 (producer, epoch) 分配的 seq（确定性）；19215 B = 15 B 文件头 + 160 × 120 u8，与 M13 `render_thermal_frame(params)` 的输出长度一致（M13-FR-044），满足 `min_size_bytes = 1024`。回放、导出与面板预览由录制的参数逐字节重建；`content_cid` 在 D1 取生成参数的哈希（参数确定则字节确定）。效果 `simulated = true`。物理热成像（温度场）在 V0.8（ADR-048），D1 不输出 `max_temp_c`。
 - 效果聚合按 §6.6 规则 ③；取消时（A14）先下发 hover，再以 UNVERIFIED 结束。
+- 时间锚点（FX2-R3-other 修订，D1-AC-16）：驻留 `dwell_s` 自到站时刻（goto 终态事件的 `t_sim_ns`）起算，而不是自处理器收到该事件、下发 orbit 之后起算；最终结果的产生时刻取 hover 终态事件的 `t_sim_ns`（`ctx.event_time`），其后交还租约的往返不计入结果回传时刻；`t_exec_s` 取自处理器开始到该时刻。观测点与执行前复核估价是只读准备，在委派在途期间预取（§6.12.2），投递后处理器直接取用；健康、忙、包络登记、租约与命令仍在投递之后执行。三者使多进程下处理器的墙钟处理与事件滞后不进入协作时间线（§6.13 规则 ⑥）。
 
 #### 6.11.2 S3 端到端（D1-AC-16）
 
@@ -890,10 +893,15 @@ d_resp  = 0.05 s                                           请求方取结果（
   请求投递：t_send + L(ix/rt) − d_resp                     模拟提供方侧中继轮询，保留执行起点约 1 s 的滞后
   第一段回执：t_first + d_resp                              t_first 为处理器产出第一段的仿真时刻
   进度第 n 条、最终结果：t_event + L(ix/upd/n) − d_resp、t_event + L(ix/res) − d_resp   近似 v0.1 经 task.result 再委派取回
-find：t_send + 0.2 s
+    t_event：最终结果为处理器声明的结果产生时刻（ctx.event_time，thermal.imaging 取 hover 终态事件的仿真时刻），未声明时为
+             处理器结束的时刻；声明之后的进度（returning）同样以它为起点，同一委派仍按投递顺序 FIFO
+  委派在途预取：t_send 时提供方开始只读准备（观测点、执行前复核估价），投递时取用
+find：t0 + 0.2 s                                           t0 = 触发时刻：检出触发的任务为检出事件的仿真时刻，其余为 t_send
 ```
 
 即时能力把中继延迟整体放在回复一侧：只要"估价的墙钟时延 × 倍速 + d_resp ≤ L"，即估价墙钟时延 × 倍速 ≤ 0.85 s（M08-NFR-006 入队到回复 p99 ≤ 20 ms，×10 时约 0.2 s），报价到达的仿真时刻恒为 t_send + L，与倍速无关。长任务第一段回执的时刻含处理器的墙钟处理时间 × 倍速（估价与 `svc/geo/height` 各一次，毫秒级），只影响完成时刻，不影响分配决策（§6.13 规则 ④）；锁步驱动下处理时间按确定的 tick 数推进，全链路确定。
+
+多进程实测修正（FX2-R3-other，D1 验收第 2 轮 D1-AC-16 诊断）：S3 在本机以 ×10 运行时 sim-core 受 RTF 限制（有效倍速约 4–5，每轮推进至多 50 tick），一次 sim-core 往返折合 0.2–0.9 s【仿真】，事件到达 agent-runtime 滞后 0.1–0.3 s【仿真】；原实现的报价按"观测点两次高度查询 → 估价 → 环境查询"串行 4 次往返，3 个候选的报价在 find 之后 1.05、1.65、2.25 s 才收齐（×1 为 1.01 s），执行前复核、驻留起点与结果回传各自再含一次往返或事件滞后。现按 §6.13 规则 ⑥ 处理：观测点高度是 world 静态数据，按 (op, x, y) 缓存并在任务提交时预热；环境查询与估价并行发出、同一目标的并发查询合并；长任务的只读准备在委派在途期间预取；find、驻留与结果回传以事件的仿真时刻为锚点。
 
 #### 6.12.3 键控 RNG（流 5）
 
@@ -922,7 +930,9 @@ class SimScheduler:
 | RingClockDriver | 正式运行（多进程） | 有待触发定时器时每 5 ms【墙钟】、否则每 50 ms 读 StateRing 头部一致性快照（`t_sim_ns`、`epoch`、`segment`、TIME 状态），按 (t_due, seq) 顺序触发到期回调 | ×1 时 ≤ 5 ms 仿真；×10 时 ≤ 50 ms 仿真 |
 | LockstepDriver | `--inproc` 集成测试与确定性验收 | sim-core 每步结束后同步调用 `advance_to(tick·4 ms)`，在同一线程内执行到期回调直至无新回调；回调产生的命令进入 LocalBus，在下一步顶锁存 | 逐 tick，确定 |
 
-规则：①暂停时头部 `t_sim_ns` 不前进，全部协作计时器自然冻结；②epoch 或 segment 变化时调用 `on_epoch_change`，按 §6.19 处置；③墙钟例外只有 FR-051 所列几项；④**决策确定性**：分配决策只依赖仿真时间戳的输入（报价回复按 §6.12.2 在确定的仿真时刻投递、候选按 `agent_no` 排序、U 量化到 1e-3）；报价内容取决于 estimate 在 sim-core 执行时的机体状态，×10 时执行时刻最多晚约 0.2 s【仿真】（入队到回复 p99 ≤ 20 ms【墙钟】），3 m/s 下位置差 < 1 m、U 差约 1e-3 量级，由首选与次选的分差吸收（R-04），因此多进程下 ×1 与 ×10 的决策一致；命令在 sim-core 锁存的 tick 取决于墙钟到达时刻，其差异只影响完成时刻（≤ 1.0 s 仿真），并由 sim-core 输入日志记录 `apply_tick`（ADR-049）；⑤锁步驱动下全链路确定，证据链 id 逐位一致。
+规则：①暂停时头部 `t_sim_ns` 不前进，全部协作计时器自然冻结；②epoch 或 segment 变化时调用 `on_epoch_change`，按 §6.19 处置；③墙钟例外只有 FR-051 所列几项；④**决策确定性**：分配决策只依赖仿真时间戳的输入（报价回复按 §6.12.2 在确定的仿真时刻投递、候选按 `agent_no` 排序、U 量化到 1e-3）；报价内容取决于 estimate 在 sim-core 执行时的机体状态，×10 时执行时刻最多晚约 0.2 s【仿真】（入队到回复 p99 ≤ 20 ms【墙钟】），3 m/s 下位置差 < 1 m、U 差约 1e-3 量级，由首选与次选的分差吸收（R-04），因此多进程下 ×1 与 ×10 的决策一致；命令在 sim-core 锁存的 tick 取决于墙钟到达时刻，其差异只影响完成时刻（≤ 1.0 s 仿真），并由 sim-core 输入日志记录 `apply_tick`（ADR-049）；⑤锁步驱动下全链路确定，证据链 id 逐位一致；⑥**仿真时间锚点**（FX2-R3-other 修订，D1-AC-16）：多进程下 agent-runtime 收到 sim-core 事件的时刻晚于事件的仿真时刻（合批与事件泵，×10 时 0.1–0.3 s【仿真】），每次 sim-core 往返折合 0.2–0.9 s【仿真】；凡是由 sim-core 事件引出的协作计时，起点取事件自带的 `t_sim_ns` 而不是处理时的 `now_ns()`：检出触发任务的 find 自检出时刻起算（`Task.t_anchor_ns`）、驻留自 goto 终态事件起算、长任务最终结果自处理器声明的事件时刻起算（§6.12.2）；只读查询（观测点高度、目标处环境、执行前复核估价）缓存、合并、并行或在委派在途期间预取，使其在模拟的中继延迟 L 之内完成。锚点只改变计时起点，不改变任何决策输入；锚点早于当前时刻且已过期的计时器立即触发（退化为原行为）。命令仍在到达 sim-core 时锁存（ADR-049），其墙钟滞后只影响完成时刻。
+
+多进程下 ×1 与 ×10 的完成时刻差还取决于 sim-core 一侧：剧本开局任务的生效 tick 必须与倍速无关。第 2 轮验收的 10.18 s 中约 8.9 s 来自 M10 开局的 plan-pool 预热与 generator 作业（墙钟 1.0–1.8 s，按到达后的 tick 生效，×10 时折合约 9 s【仿真】），搜索机轨迹整体平移后 M13 检测器按 tick 键控的抽样又使首次检出时刻再变化数秒（D1-AC-16 第 2 轮：首检 62.3 s 对 77.9 s）。该项属 M10、M08，见 §14 第 23 条。
 
 ### 6.14 受信守卫与不可信指挥官
 
@@ -1192,6 +1202,7 @@ sequenceDiagram
 | agent 航点上限 | 64 | 个 | 常量 | 本文设定（比操作员 1000 更紧） |
 | 活动任务上限 | 64 | 个 | 常量 | 本文设定 |
 | 长任务并发（每 daemon） | 4 | 个 | 常量 | d05 §2.3 `maxConcurrentLongCalls` |
+| 委派在途预取保留时长 | 60 | s【仿真】 | 常量（`PREPARED_TTL_S`） | 本文设定（远大于 L，委派被取消、未投递时到期丢弃；§6.12.2） |
 | 热成像帧产物描述符 `size_bytes` | 19215 | B | 常量（与 M13 `render_thermal_frame` 输出长度一致，单测核对） | M13-FR-044（PGM P5 160 × 120 u8 加 15 B 文件头） |
 
 ### 6.19 故障、降级与恢复
@@ -1430,6 +1441,7 @@ Gateway 按 17 §9.7 第 5 条（M11 DetailDemux）把 `state/agent-runtime/agen
 | 驻留窗口 | `dwell_s` | 仿真 | 冻结 | 随仿真 | agent-runtime |
 | 升级等待 | 120 s | 仿真 | 冻结 | 随仿真 | agent-runtime（已登记） |
 | 黑板归档 | 终态后 60 s | 仿真 | 冻结 | 随仿真 | agent-runtime |
+| 委派在途预取的保留时长 | 60 s | 仿真 | 冻结 | 随仿真 | agent-runtime（委派被取消、未投递时到期丢弃） |
 | 调度器轮询 | 5 ms（空闲 50 ms） | 墙钟 | 继续 | 墙钟 | agent-runtime |
 | 状态发布、机体状态读取 | 1 Hz、2 Hz | 墙钟 | 继续 | 墙钟 | agent-runtime |
 | 事件合批 | 50 ms | 墙钟 | 继续 | 墙钟 | agent-runtime |
@@ -1749,7 +1761,7 @@ class SimBridge:
 | M14-AC-024 | Mock ANet | 延迟模型 | 10⁴ 次抽样全部在 [0.9, 1.1]，均值 1.000 ± 0.01；同键同值；×1、×10 与暂停下均按仿真时间计 | `pytest tests/agent/test_relay.py` | 本机 CPU | P1 | FR-046；NFR-017 |
 | M14-AC-025 | 时钟 | SimScheduler | 暂停 10 s【墙钟】期间 0 个协作定时器触发；×10 下 3 s【仿真】超时在 0.30 ± 0.05 s【墙钟】触发；epoch 或 segment 变化 100 ms 内触发回调；墙钟例外项按 §7.8 | `pytest tests/agent/test_clock.py` | 本机 CPU | P1 | FR-049、051 |
 | M14-AC-026 | 确定性 | 锁步 | `--inproc` 锁步下 S3 同种子连跑 2 次、×1 与 ×10 各 1 次：证据链 id 序列逐位相同 | `pytest tests/agent/test_s3_lockstep.py` | 本机 CPU | P1 | FR-050；NFR-010 |
-| M14-AC-027 | 确定性 | 多进程 ×1 与 ×10 | 中标 AID、候选集、各候选可行性、证据类型序列、谓词结论、最终置信度相同；completed 的仿真时刻差 ≤ 1.0 s | `pytest tests/e2e/test_scenarios.py::test_s3_rate_equivalence` | 本机 CPU | P1 | FR-050；D1-AC-16 |
+| M14-AC-027 | 确定性 | 多进程 ×1 与 ×10 | 中标 AID、候选集、各候选可行性、证据类型序列、谓词结论、最终置信度相同；completed 的仿真时刻差 ≤ 1.0 s。锁步替身的多进程时序模型（往返 0.4 s、事件滞后 0.3 s【仿真】）下同样成立，并逐项核对 §6.13 规则 ⑥ 的锚点 | `pytest tests/e2e/test_scenarios.py::test_s3_rate_equivalence`；`pytest tests/agent/test_rate_anchor.py` | 本机 CPU | P1 | FR-050；D1-AC-16 |
 | M14-AC-028 | 守卫 | 流水线 | G0、①、②、③、A1–A4 各有拒绝用例并返回规定码；10⁴ 次放行 p99 ≤ 1 ms【墙钟】；检查器注入异常时返回 470 且 bus 上无消息；审计文件记录全部放行与拒绝 | `pytest tests/agent/test_guard.py` | 本机 CPU | P1 | FR-052–058；NFR-003 |
 | M14-AC-029 | 守卫 | 对抗 | ScriptedCommander 200 条对抗输入（safety_stop、kill、escalate、velocity、env/set、sim/speed、他机 goto、越包络、NaN、注入文本、伪造 principal 直连 zenoh、超频）全部被拒；sim-core 的 Full64 与租约状态在对抗前后逐字节相同 | `pytest tests/agent/test_guard_adversarial.py` | 本机 CPU | P1 | FR-053、056、060；NFR-011 |
 | M14-AC-030 | 恢复 | 崩溃与纪元 | kill -9 agent-runtime：AGENT 持有的机体 3 s【墙钟】内进入 HOLD/LINK_LOSS；supervisor 重启后 ≤ 3 s ready；任务表从证据链重建，遗留 AGENT 租约先交还，非终态任务为 input-required（interrupted，483），R77 重试后回到 working；sim-core 重启：非终态任务 input-required（sim_rollback）；S3 期间 sim-core 单步 p99 ≤ 3 ms | `pytest tests/chaos/test_agent_runtime.py` | 本机 CPU | P1 | FR-021、066；NFR-006、009 |
@@ -1879,3 +1891,4 @@ class SimBridge:
 | 20 | M16 §6.4.5、M13 §6.5.9 | ①M16 S3 剧本中 c1 的能力写作 `comm.relay`，目录中的能力 id 为 `relay.communication`（01-design §31）；②M13 检测器表与时序写有 `rgb.wide`，目录中没有该能力 | ①M16 改为 `relay.communication`（c1 不是 `agents.members` 成员，D1 不影响合同网）；②M13 改为 `rgb.zoom`，或由 M14 在目录 v1.1 中追加 `rgb.wide`（当前不追加，避免无消费者的能力） | 目录保持 24 条 | 待 M16、M13 回改 |
 | 21 | M13 §6.7.3（RGB 只对 UNSEEN 目标发 suspect）、M13-FR-012（无任务或 follow_path 时云台 FIXED(0°, −15°)）、M16 §6.4.5（b1 待命航线经过 t1 附近） | 按 M13 模型估算，b1 沿待命航线飞行时约 0.99 的概率在 t = 80 s 前用热成像把 t1 置 CONFIRMED，早于 a1 的 RGB 检出；此后 a1 不再产生 suspect 事件，S3 的合同网不被触发，D1-AC-16 无法验收 | ①M16 在 S3 复核候选的待命任务开始时以 M10 `sensor` 动作把 thermal 置 STANDBY（M13-FR-016）；②M13 把"持有 AGENT 租约、执行 `thermal.imaging` 委派的机体"的 thermal 视为 ACTIVE（由确定性租约状态派生，不写输入日志）；二者缺一时，也可由 M16 调整待命航线使 t1 不进入 thermal 视场 | §6.19 incidental 规则；R-12；锁步用例断言无 incidental 事件 | 待 M13、M16 确认（高优先级） |
 | 22 | d05 §3.2、12 §3.3.17、12 §3.2 聚合表与 §4.13 A15 | ①清单 schema 名 `awr.capability-manifest/1` 不符合 AWR-03 §5.6；②12 写证据持久化为 `runs/<run>/evidence.jsonl`，本文按"每 AID 一条链"落为 `runs/<run>/agents/evidence/<chain>.jsonl`；③12 §3.3.17 的 `load` 为委派数，本文归一化为委派数 / `max_concurrent`（`max_concurrent = 1` 时相同） | ①改为 `awr.agent.manifest.v1`；②12 引用本文路径；③12 注明归一化 | 本文按 ①②③ 实现 | 待 12 修订 |
+| 23 | M10 §6.4.1（plan-pool 结果"就绪后的下一个步边界生效"）、M10-NFR-015（预热不阻塞 sim-core ready）、M08 SimClock（FX2-R3-other，D1-AC-16） | 剧本开局的 plan-pool 预热（spawn、导入、GeoWorld，本机 1.0–1.8 s【墙钟】）与 generator 作业（4 个约 0.2 s）在墙钟上完成，结果按到达后的 tick 生效，×10 时开局任务比 ×1 晚约 9 s【仿真】；搜索机轨迹整体平移后，M13 检测器按 tick 键控的抽样使首次检出时刻再变化数秒。D1 验收第 2 轮 `test_s3_rate_equivalence`：accepted 161.13 s 对 150.95 s，其中开局约 8.9 s、首检 77.9 s 对 62.3 s；agent-runtime 的锚点（§6.13 规则 ⑥）不能消除这一项 | 开局屏障：剧本加载后、开局任务的 generator 作业（及其排在后面的 warm 作业）结果就绪之前，SimClock 不推进仿真时间（主循环照常迭代、写心跳、处理 bus 与慢任务，不触发 2.0 s 挂死判定）；屏障在作业提交的 tick 生效（设置期间每轮至多推进 1 tick，或在 `fleet.step` 内逐 tick 检查），就绪后下一 tick 生效，墙钟上限 10 s（与 123 WORLD_NOT_READY 一致）后放行并告警。原型（诊断用 sitecustomize，未入库）：阻塞式（t < 1 s 时于 mission stage 内等待 plan-pool）在 load 8 时使 sim-core 被判挂死，只作验证；非阻塞式（设置期每轮至多 1 tick、hold 时 `steps_due` 返回 0 并重锚）保持 2.1 s 加 0.3 s 未触发挂死，accepted 差 0.40 s。阻塞式的数据：两种倍速下开局任务都在 0.932 s 生效、首检都在 62.288 s；诊断运行的 accepted 差 0.42 s（仅原型）与 0.26 s（原型加本文规则 ⑥），`test_s3_rate_equivalence` 加原型通过、不加时 10.04 s 不通过；快速核对用例 `test_s3_start_rate_invariant`（xfail，屏障实施后应通过） | 规则 ⑥ 已实现；开局屏障待 M10、M08 实施（sim 区域） | 待 M10、M08 登记（高优先级，D1-AC-16 阻塞项） |

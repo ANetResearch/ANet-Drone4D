@@ -66,7 +66,7 @@ M07 把这些裁决落成可实现的模块：一套契约（EnvKeyframe、`pres
 2. **确定性锚点网格积分**：两端都在 20 ms 仿真时间网格上做梯形积分，客户端求值无需等服务端推送即可精确 seek（§6.3.10）；每个版本带 `t_apply_ns`，客户端在 tRender 越过它时才切换，正向播放与 seek 到同一时刻得到同一版本（§6.3.10、§6.6.2）。
 3. **锋面方向冻结**：阵风锋面的传播方向在事件创建时确定，避免风向过渡时公里级锋面整体旋转造成的远处跳变（与 g06 §5.5.2 否决"旋转采样坐标"同理，§6.3.7）。
 4. **光学层与风廓线分基准**：雾顶、云底、降水层按 `coordinate.ground.zM` 平层计算（两端恒等），风廓线与湍流强度按 `z − dtm(x,y)` 地形跟随（§6.3.4、§6.3.6）。
-5. **着色提供者接口**：环境对点云、网格、天空的着色通过 M06 在 `engine/loop.ts` 定义的 `SceneShadingProvider` 注入（雾走 `scene.fogNode`，光照与天空为 TSL Fn），不增加 M05 对 M07 的依赖边（§7.2、§7.6）。
+5. **着色提供者接口**：环境对点云、网格、天空的着色通过 M06 在 `engine/shading.ts`（与 `engine/loop.ts` 同层，验收加固 FX-WEB1 落位）定义的 `SceneShadingProvider` 注入（雾走 `scene.fogNode`，光照与天空为 TSL Fn），不增加 M05 对 M07 的依赖边（§7.2、§7.6）。
 6. **两个视觉字段**：`visual.horizon_step`、`visual.cloud2d_alpha_max` 进入 EnvScalars，使 15 §10.9 的预设配色在过渡中连续且两端一致（§6.2.1）。
 
 ### 1.4 模块设计原则
@@ -200,7 +200,7 @@ M07 把这些裁决落成可实现的模块：一套契约（EnvKeyframe、`pres
 |---|---|---|---|---|---|---|
 | M07-FR-015 | ISA 热力学：`h_msl = anchor.hMslM + z`，温度（叠加 `isa_dt_c`）、气压、密度；`rh` 为占位 | P0 | V0.1 | 是 | `isa.json` golden | g06 §2.1；AWR-03 §5.5 |
 | M07-FR-016 | `EnvironmentService.query`：N 点向量化；字段位掩码（WIND、WIND_PARTS、TURB_SPEC、OPTICS、PRECIP、THERMO）；四种帧（GLOBAL、LOCAL、ADD_VELOCITY_GLOBAL、ADD_VELOCITY_LOCAL）；EnvFlags；`source_level`；`out=` 复用预分配数组 | P0 | V0.1 | 是 | M07-AC-009 | g06 §6.1；r23 §3.9 |
-| M07-FR-017 | sim-core `env` stage：`every=5, phase=0, order=20`（50 Hz），写 FleetState 的 wind、rho、env_flags、env_gust，子步零阶保持；NED 与 ENU 换算只调用 `conventions` | P0 | V0.1 | 是 | M07-AC-008 | g08 §3.2；ADR-021 |
+| M07-FR-017 | sim-core `env` stage：`every=5, phase=0, order=20`（50 Hz），写 FleetState 的 wind、rho、env_flags、env_gust，子步零阶保持；风（平均风、阵风、湍流）与 env_gust 每个 env tick 求值；rho、env_flags 与 EnvSample32 行缓存的其余列（光学、降水、热力、湍流谱）每 5 个 env tick 全量求值一次（平均 10 Hz，`tick % 50 ∈ {5, 35}`，间隔 120/80 ms 交替，都是奇数 tick，与偶数 tick 的 M08 l1 组错开；AWR-03 ADR-070），关键帧变化或新机体（行缓存无效）时立即全量（AWR-03 ADR-060）；NED 与 ENU 换算只调用 `conventions` | P0 | V0.1 | 是 | M07-AC-008 | g08 §3.2；ADR-021 |
 | M07-FR-018 | 积分锚点：`s_m`、`d_enu_m`、`fall_rain_m`、`fall_snow_m`、`wetness`、`puddle`，两端在 20 ms 网格上同式推进（梯形；湿度为精确指数） | P0 | V0.1 | 是 | M07-AC-011：1 h 随机操作序列后两端差 ≤ 1e-6 m | g06 §3.4；本文 §6.3.10 |
 | M07-FR-019 | 风到力：保证 M08 气动所用 wind 与 ρ 即本模块 `query` 结果（风只经相对空速进入动力学，禁止 gz 默认 k = 1）；降水阻力倍率与沙尘推力效率字段本期恒为 1（公式见 §6.3.12，V0.4 生效） | P0 | V0.1 | 是 | M07-AC-014 | ADR-024；g08 §6；n03 §7 第 3 条 |
 | M07-FR-020 | 传感器光学函数：任意波长的 `optical_depth`（Kim 模型 q(V₂)，V₂ = ln50/σ_bg）、LiDAR 双程透过率、有效距离求解；D1 交付纯函数与 golden，V0.4 由 M13 接入 | P2 | V0.4 | 桩 | golden 命中 | g06 §4.4；r23 §3.10 |
@@ -233,7 +233,7 @@ M07 把这些裁决落成可实现的模块：一套契约（EnvKeyframe、`pres
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M07-FR-035 | 实现 M06 在 `engine/loop.ts` 定义的 `SceneShadingProvider`（§7.2）：`lambert()`（15 §10.3 光照项，太阳直射项乘 sunVis 与云阴影）、`fogFactor()` 与启动时一次性设置的 `scene.fogNode`（`fog(雾色, 1 − T)`）、`sky()`（天顶到地平线渐变，地平线色 = 雾色，叠加 2D 云）；无环境时由 M06 的恒等实现兜底 | P0 | V0.1 | 是 | M07-AC-023 | r16 §3.11；15 §10.3、§10.9；M05-FR-034；M06 §6.4 规则 2 |
+| M07-FR-035 | 实现 M06 在 `engine/shading.ts` 定义的 `SceneShadingProvider`（§7.2；`setSceneShading`/`onSceneShading`，环境适配器在其余图层与 shader zoo 之前挂载并设置，之前已建材质的消费者经 `onSceneShading` 在首次编译前重建；验收加固 FX-WEB1）：`lambert()`（15 §10.3 光照项，太阳直射项乘 sunVis 与逐顶点云阴影）、`fogFactor()` 与启动时一次性设置的 `scene.fogNode`（`fog(雾色, 1 − T)`）、`sky()`（天顶到地平线渐变，地平线色 = 雾色，叠加 2D 云；Tier S 的 SkyQuad 与 Tier B/A 的 P2 背景都调用它，不再有单独的临时云四边形）；点材质（M05）、无人机网格与天空都从它取光照与天空色；无环境时由 M06 的恒等实现兜底 | P0 | V0.1 | 是 | M07-AC-023 | r16 §3.11；15 §10.3、§10.9；M05-FR-034；M06 §6.4 规则 2 |
 | M07-FR-036 | 雾：`T = exp(−optical_depth)`，禁止 FogExp2 与 `densityFogFactor`；雾色取 `visual.horizon_step` 对应的灰阶 | P0 | V0.1 | 是 | M07-AC-023 | ADR-023；g06 §4.4 |
 | M07-FR-037 | 2D 云：天空着色中射线与云底平面求交，查天气图得局地云量；云随 `f(z_cloud)·D` 漂移；不透明度上限取 `visual.cloud2d_alpha_max` | P0 | V0.1 | 是 | RT 回读 | r16 §3.4.4；15 §10.9 |
 | M07-FR-038 | 云阴影：全档开启，点与网格逐顶点沿太阳方向投影到云中层查同一天气图 | P0 | V0.1 | 是 | 与 2D 云同图同偏移 | r16 §3.4.5 |
@@ -241,7 +241,7 @@ M07 把这些裁决落成可实现的模块：一套契约（EnvKeyframe、`pres
 | M07-FR-040 | 雪与沙尘（Low）：Tier S/B 用 GLPointsNodeMaterial 点（经 `be.createPointsMaterial()` 取得，M06 §6.2.1；雪 2–3 px、沙尘 1–2 px），Tier A 用扁平四边形；无状态 | P0 | V0.1 | 是 | 同上 | r16 §3.2.2；15 §10.9 |
 | M07-FR-041 | 降水锚点八度档（R 20/60/180/540 m），锚点在相机与轨道焦点之间按 AGL 插值，换档带迟滞并交叉淡化；Follow 与 FPV 强制第 0 档 | P0 | V0.1 | 是 | M07-AC-027 | r16 §3.2.6 |
 | M07-FR-042 | 风箭头（Low）：24 × 24 个箭头，每个为 1 个扁平四边形（片元 SDF 画杆、头与 1 px 光晕），AGL 切片 10/50/120 m（默认 50 m），间距按相机距离八度取值；Low 含均值与阵风，Med 加湍流；颜色按固定域 20 m/s 分 5 档取 `--wind-ramp-1…5`；Tier S 与降水共享 2000 四边形当量（1 箭头 = 1 当量） | P0 | V0.1 | 是 | M07-AC-020 | 15 §10.8；n04 §3.3.4 |
-| M07-FR-043 | 质量档 Off/Low/Med（High 在 V0.3）：按设备能力档起步；经 `governor.registerKnob({step: 5, id: "env", levels, apply})` 注册第 ⑤ 步旋钮（Tier S 2 级 Low → Off；Tier B/A 3 级 Med → Low → Off；雾保留）；设置页可手动覆盖；切换零编译 | P0 | V0.1 | 是 | M07-AC-026 | ADR-041；ADR-044；M06-FR-076 |
+| M07-FR-043 | 质量档 Off/Low/Med（High 在 V0.3）：按设备能力档起步；经 `governor.registerKnob({step: 5, id: "env", levels, apply})` 注册第 ⑤ 步旋钮（Tier S 2 级 Low → Off；Tier B/A 3 级 Med → Low → Off；雾保留）；设置页可手动覆盖；切换零编译；旋钮带 `visible(level)`：Low 层此刻没有可隐藏的内容（无降水、2D 云遮罩 cover × alpha ≤ 0.01、无风箭头与流线）时报告不可见，调度器不为它等待 2 s、也不弹 Toast（ADR-067） | P0 | V0.1 | 是 | M07-AC-026 | ADR-041；ADR-044；M06-FR-076；ADR-067 |
 | M07-FR-044 | 预热与出图：全部环境材质的 Low/Med 变体登记到 shader zoo；透明环境层在 EDL 合成之后绘制，固定 renderOrder | P0 | V0.1 | 是 | M07-AC-019 | ADR-007；r16 §6 |
 | M07-FR-045 | 计量：`window.__perf.layers.environment`（CPU 提交耗时、draw、顶点）与 `window.__perf.env`（质量档、降水实数、锚点偏差、陈旧、版本） | P0 | V0.1 | 是 | Playwright 读取 | AWR-03 §3.8 |
 | M07-FR-046 | Med 降水：双层（72% 近层）、数量上限 5 万（B）/ 20 万（A）、DSM 遮挡、湍流盒漂移 | P1 | V0.1 | 是 | RT 回读 | r16 §3.2.1、§3.9 |
@@ -1142,11 +1142,12 @@ def env_stage(st: FleetState, ctx: StageCtx) -> None:
     env = cast(EnvironmentServiceImpl, ctx.env)                      # Protocol 之外的方法只在 M07 内部使用
     new_kf = env.on_env_tick(ctx.tick)                               # 网格推进；返回新版本则发布
     if new_kf is not None: ctx.events.emit("env.keyframe", new_kf.to_wire())
+    full = ctx.tick % 25 == 0 or new_kf is not None or 有新机体         # ADR-060：慢变量 10 Hz 全量，其余 env tick 只求风
     s = env.query(st.pos_enu_view(), ctx.t_ns,                       # ctx.t_ns = tick·4_000_000，恒为 20 ms 网格点
-                  fields=Fields.WIND | Fields.WIND_PARTS | Fields.THERMO | Fields.OPTICS,
+                  fields=(Fields.WIND | Fields.WIND_PARTS | Fields.THERMO | Fields.OPTICS) if full else Fields.WIND_PARTS,
                   vel=st.vel_enu_view(), agent_idx=st.slot, out=ctx.env_buf)
-    st.set_wind_from_enu(s.wind_mps); st.rho[:] = s.rho_kgm3; st.env_flags[:] = s.flags
-    st.env_gust[:] = s.gust_long_mps                                 # 阵风在平均风去向上的投影（§6.2.7），供 EnvSample32 与剧本窗口
+    st.set_wind_from_enu(s.wind_mps); st.env_gust[:] = s.gust_long_mps   # 每个 env tick（阵风投影见 §6.2.7）
+    if full: st.rho[:] = s.rho_kgm3; st.env_flags[:] = s.flags        # 10 Hz，零阶保持；EnvSample32 行缓存同步刷新
 
 register_slow_task("env.heartbeat", fn=publish_heartbeat, period_wall_s=1.0)   # 墙钟 1 Hz，完整帧；fn(ctx: StageCtx)
 register_slow_task("env.detail", fn=publish_detail, period_sim_s=0.1)         # 兴趣集 EnvSample32，10 Hz【仿真】
@@ -1192,7 +1193,7 @@ export function registerEnvironment(be: RenderBackendView, scene: Scene): () => 
 
 `FrameCtx` 中的 `tRenderS` 为 float64 秒；网格下标一律按 `k = Math.floor(tRenderS·1e9 / H_NS)` 计算（会话 ≤ 104 天时整数纳秒在 Number 中精确，AWR-03 §5.2 第 3 条）。
 
-`SceneShadingProvider`（请 M06 在 `apps/web/src/engine/loop.ts` 与 `FrameCtx`、`RenderBackendView` 同处定义，并在 `engine/index.ts` 导出 `setSceneShading()` 与 `sceneShading()`，§14 第 3 条；不能放在 `viewport/**`，因为 `engine/**` 禁止 import `viewport/**`，AWR-03 §4.2 第 2 条）：
+`SceneShadingProvider`（M06 定义于 `apps/web/src/engine/shading.ts`，由 `engine/index.ts` 导出 `setSceneShading()`、`sceneShading()`、`onSceneShading()`，§14 第 3 条；不能放在 `viewport/**`，因为 `engine/**` 禁止 import `viewport/**`，AWR-03 §4.2 第 2 条；验收加固 FX-WEB1 落地）：
 
 ```ts
 export interface SceneShadingProvider {
@@ -1205,8 +1206,9 @@ export interface SceneShadingProvider {
   /** 天空颜色（vec3，线性 sRGB，含渐变、2D 云与天空雾）；dirW 为 three 世界单位方向 */
   sky(dirW: Node): Node
 }
-export function setSceneShading(p: SceneShadingProvider): void   // 只允许在任何材质创建与 shader zoo 预热之前调用一次，否则抛错（恒等实现编进程序后再替换会重编译）；装配顺序由 M06 引擎启动流程保证
+export function setSceneShading(p: SceneShadingProvider): () => void   // 在 shader zoo 预热之前设置（WorldCanvas 先挂载环境适配器）；返回恢复恒等实现的函数（适配器卸载时调用）
 export function sceneShading(): SceneShadingProvider             // M05 点材质、M06 网格与天空材质取用
+export function onSceneShading(cb: () => void): () => void      // 提供者变更时回调：先于设置而建的材质（例如画布重挂后的图层）在首次编译前用新节点重建（FX-WEB1）
 ```
 
 M06 在无提供者时使用恒等实现（`lambert` 为 15 §10.3 原式、太阳方向取 `sun` 默认值、`fogFactor = 0`、天空为 g950 → g850 渐变），因此 M05、M06 可先于 M07 联调。`scene.fogNode = fog(fogColor, fogFactor(positionWorld))` 由 M07 在 `registerEnvironment` 中设置一次（M06 §6.4 规则 2），此后天气只改 uniform。M05-FR-034、M06 §2.3 与 15 §10.3 所称的"EnvLighting uniform"即本接口的 `lambert()` 及其背后的 `uSunDir`、`uSunVis`、云阴影 uniform。
@@ -1271,7 +1273,7 @@ M06 在无提供者时使用恒等实现（`lambert` 为 15 §10.3 原式、太�
 | M03 | 每世界 `env.json`，取值读自本模块维护的 `env_world_defaults.json`（§7.4；M03 §6.16 已采纳）；`world.bounds`；`dtm_10m`、`dsm_2m`；`worlds/_shared/` 目录不计入 `contentVersion` | 16 §3、§6、§8 |
 | M04 | `WorldQuery.ground_dtm(xy)`：向量化、格心双线性、界外钳制（与 16 §6.2 一致，前端同式） | Python API |
 | M05 | 点材质经 `sceneShading().lambert()` 取光照项（替换 M05 §6 中 `c = base·lam·cloudShadow` 的写法，§14 第 3 条）；雾走 `scene.fogNode`（M05-FR-034）或按 15 §10.3 以 `vertexStage(fogFactor())` 逐顶点；导出已上传的 DTM 纹理访问器（避免重复加载，否则 M07 自行加载同一 URL） | TS |
-| M06 | 在 `engine/loop.ts` 定义 `SceneShadingProvider`、`setSceneShading()`/`sceneShading()` 与恒等实现；SkyQuad（S）与 P2 背景 Fn（B/A）调用 `sky()`；网格与地面材质调用 `lambert()`、开 `fog`；`loop.register('world', …)`；图层注册表（LayerSpec、透明带 60）；shader zoo 登记；`governor.registerKnob`（第 ⑤ 步）；`__perf.layers` 容器；ext：体积云 RT 与 pass（§14 第 16 条） | TS |
+| M06 | 在 `engine/shading.ts` 定义 `SceneShadingProvider`、`setSceneShading()`/`sceneShading()`/`onSceneShading()` 与恒等实现（FX-WEB1 落地）；SkyQuad（S）与 P2 背景 Fn（B/A）调用 `sky()`；网格与地面材质调用 `lambert()`、开 `fog`；`loop.register('world', …)`；图层注册表（LayerSpec、透明带 60）；shader zoo 登记；`governor.registerKnob`（第 ⑤ 步）；`__perf.layers` 容器；ext：体积云 RT 与 pass（§14 第 16 条） | TS |
 | M08 | `EnvironmentService` Protocol、stage 注册表、慢任务与查询注册、FleetState 字段（wind、rho、env_flags、env_gust）、`env.*` 操作经 CommandEngine 锁存并写输入日志、checkpoint 聚合、RNG 流 1 与 6 | Python |
 | M09 | 读取 `st.wind` 与 EnvSample 做风限告警（ext） | — |
 | M11 | 经横切库 `awr.runtime`（MS1 交付）使用可靠事件发布与心跳 key；api 最新帧缓存、`rest/env.py` 的自动发现、rt topic 注册（与 M08 依赖 `awr.runtime` 同理，不在 §6.2 依赖图中另加边） | — |
@@ -1517,7 +1519,7 @@ export const windAtEnu: (pEnu: Node, opts: { turb: boolean }) => Node   // 返�
 | M07-AC-018 | 预设切换 | clear → thunderstorm 30 s（经路由）过渡期间帧节奏与 programs | > 100 ms 帧 ≤ 0.5%；`renderer.info.programs.length` 不变 | `apps/web/perf/m07/env-switch.spec.ts` | 本机 S | P0 | D1-AC-19 |
 | M07-AC-019 | 零运行期编译 | 揭开遮罩后首次切预设、切质量档（Low → Off → Low）、开关箭头与降水 | programs 不增加；每个操作后 1 s 内最大帧间隔 ≤ 150 ms | `apps/web/perf/warmup.spec.ts` 的环境步骤 | 本机 S | P0 | D1-AC-25 |
 | M07-AC-020 | Tier S 上限 | 降水与箭头顶点数、draw 数；`N_live` 与 rain_k 关系 | 雨顶点 ≤ 6·2000（箭头关）或 6·1424（箭头开）；箭头顶点 = 6·576；环境 draw ≤ 3；`N_live = floor(N_cap·rain_k)` | 读取 `__perf.layers.environment` 与 `__perf.env` | 本机 S | P0 | D1-AC-03b |
-| M07-AC-021 | 固定时刻可复现 | `?simTime=t&paused=1` 下正向播放到 t 与直接定位到 t 的 RT 回读；新版本 `t_apply_ns` 晚于 tRender 时的切换时刻；step 帧短阻尼；epoch 变化 | 每通道平均绝对差 ≤ 1/255、最大 ≤ 4/255；`EnvStore.version` 恰在 tRender 越过 `t_apply_ns` 的那一帧切换，之前不变；step 帧后视觉 uniform 在 400 ms 内完成过渡；epoch 变化后首帧即吸附 | `apps/web/perf/m07/env-visual.spec.ts` | 本机 S | P0 | — |
+| M07-AC-021 | 固定时刻可复现 | `?simTime=t&paused=1` 下正向播放到 t 与直接定位到 t 的 RT 回读；新版本 `t_apply_ns` 晚于 tRender 时的切换时刻；step 帧短阻尼；epoch 变化 | 每通道平均绝对差 ≤ 1/255、最大 ≤ 4/255；`EnvStore.version` 恰在 tRender 越过 `t_apply_ns` 的那一帧切换，之前不变；step 帧后视觉 uniform 在 400 ms 内完成过渡；epoch 变化后首帧即吸附 | `apps/web/perf/m07/env-visual.spec.ts`；固定时刻对比 `apps/web/perf/m07/env-fixed-time.spec.ts`（两页注入同一阶跃关键帧、锁定点预算，一页直接钉在 t，一页从 t0 以 0.2 s 步进播放到 t，世界打开后再设相机位姿；验收加固 FX-WEB1） | 本机 S | P0 | — |
 | M07-AC-022 | 回放一致（ext） | 同一 t 上实时与回放的 `eval_env`；seek 后锚点 | 混合容差；锚点 ≤ 1e-6 m | `apps/web/perf/m07/env-seek.spec.ts`；`tests/recorder/test_replay.py::test_env` | 本机 S 与本机 CPU | P1 | D1-AC-18、D1-AC-19 |
 | M07-AC-023 | 雾与着色正确 | 已知深度的点在 heavyRain 与 clear 下的颜色；晴天光照项；overcast 下云影与可见 2D 云的对齐 | 与 CPU 计算的 `c·T + fog·(1 − T)` 差 ≤ 2/255；clear（无云影）下 `lambert()` 与 15 §10.3 原式差 ≤ 2/255（sun_vis = 0.99 带来 ≤ 0.55% 的差）；阴影像素投影到 `h_mid` 平面的位置与 2D 云掩码 m > 0.5 的区域重合率 ≥ 95% | `env-visual.spec.ts` | 本机 S | P0 | — |
 | M07-AC-024 | 视觉合规 | 环境着色器颜色来源；r500 使用；时长常量 | 仅来自场景 token uniform；r500 次数为 0；motion-lint 通过（含豁免清单） | `make lint`；`check-env-colors` 断言 | 本机 | P0 | D1-AC-20 |
@@ -1627,7 +1629,7 @@ export const windAtEnu: (pEnu: Node, opts: { turb: boolean }) => Node   // 返�
 |---:|---|---|---|
 | 1 | ADR-025"关键帧 < 1 KB" | g06 §3.5 的具名 map 形态下 from 与 to 各约 460 B，加路由后超过 1 KB。本文改为位置编码 + 规范数值编码 + 资产 URL 派生 + 预设 id 路由（§6.2.5），实测稳态 837 B、预设切换 ≤ 932 B、任意值 `env/set` 1149 B、D1 最坏 1415 B。请把 ADR-025 的"< 1 KB"解释为稳态与预设切换帧，并请 17 §6.5 的 `awr.env.keyframe.v1` 行把"典型 0.8–1.0 KB、最坏 ≤ 1.5 KB"改为上述实测值，字段表补 `t_apply_ns` | 17 §6.5 已记位置编码与生产者纪元；数值与 `t_apply_ns` 待更新 |
 | 2 | 天空的归属 | AWR-03 §6.3 的 M06 行（"TSL 地面网格与天空渐变"）与 M07 行（"天空渐变"）重叠。建议天空对象、pass 与"地面网格与天空 ≤ 1 ms"预算归 M06；天空颜色函数（渐变、雾、2D 云）由 M07 经 `sky()` 提供，2D 云增量计入环境图层预算 | M06 §14 第 9 条提出同一拆分，待 AWR-03 §6.3 措辞修订 |
-| 3 | 着色提供者接口 | M05 点材质需要环境雾、云阴影与光照，但 AWR-03 §6.2 没有 M07 → M05 的边。请 M06 在 `engine/loop.ts`（不是 `viewport/**`，因 `engine/**` 禁止 import `viewport/**`）定义 `SceneShadingProvider`、`setSceneShading()`、`sceneShading()` 与恒等实现（§7.2）。另请 M05 把 §6 中 `c = base·lam·cloudShadow` 改为调用 `sceneShading().lambert()`：云阴影与 sun_vis 只作用于直射项（r16 §3.11），整体相乘会使 overcast 下点云亮度降到约 0.2 倍；雾的求值阶段（M05-FR-034 的 `scene.fogNode` 片元阶段，或 15 §10.3 的逐顶点）由 M05 选定，两者公式相同 | 未采纳：M06 尚无该类型，M05 仍为 `lam·cloudShadow` |
+| 3 | 着色提供者接口 | M05 点材质需要环境雾、云阴影与光照，但 AWR-03 §6.2 没有 M07 → M05 的边。请 M06 在 `engine/loop.ts`（不是 `viewport/**`，因 `engine/**` 禁止 import `viewport/**`）定义 `SceneShadingProvider`、`setSceneShading()`、`sceneShading()` 与恒等实现（§7.2）。另请 M05 把 §6 中 `c = base·lam·cloudShadow` 改为调用 `sceneShading().lambert()`：云阴影与 sun_vis 只作用于直射项（r16 §3.11），整体相乘会使 overcast 下点云亮度降到约 0.2 倍；雾的求值阶段（M05-FR-034 的 `scene.fogNode` 片元阶段，或 15 §10.3 的逐顶点）由 M05 选定，两者公式相同 | 已落实（验收加固 FX-WEB1）：M06 `engine/shading.ts` 定义提供者与恒等实现，M05 点材质改为 `sceneShading().lambert()`（云阴影与 sun_vis 只作用于直射项，逐顶点），雾经 `scene.fogNode` |
 | 4 | 共享环境资产 | 16 §8.3 新增 AWRV kind 6 `noise_field`，AWR-03 §4.4 与 16 §3.1 登记 `worlds/_shared/env/{turb,weather,cloud}/` | 16 §8.3、§3.1、§8.4 已采纳；AWR-03 §4.4 待补 |
 | 5 | EnvScalars 与 `presets.json` 结构 | 16 §8.1 补 `visual.horizon_step`、`visual.cloud2d_alpha_max` 两个视觉字段与顶层 `defaults`、`client` 两块（1.x 可选新增）；`client` 另加本文 §6.4 的 `wind_ramp_vmax_mps = 20` | 16 §8.1 已采纳前两项；`wind_ramp_vmax_mps` 待补 |
 | 6 | 14 §6.14 的字段名 | 线上字段按 EnvScalars 路径（`wind.speed_ref_mps`；`cloud.cover` 为 0–1） | 14 §6.14 已改为引用本文 §6.2.1 |

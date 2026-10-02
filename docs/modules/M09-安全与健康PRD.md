@@ -198,7 +198,7 @@ HealthGraph（RateMonitor 加 errorgraph 根因分析，P2）：交付数据结�
 | M09-FR-008 | 派生 safety 块中的标志供 M08 打包：`flag_failsafe`（`fs_auto` 或仲裁秩 ≥ 5）、`flag_alert`（M09 任一 warn 及以上的条件激活，或 LOC_DEGRADED；生命周期 DEGRADED 由 M08 fuser 并入）、`flag_gcs`（§6.9）、`flag_fcu`（Mock 恒为 1，`link_drop` 注入期间为 0）、`flag_loc_ok`（Mock 恒为 1，`gnss_denied` 注入期间为 0）、`flag_loc_deg`（D1 恒为 0，V0.5 定位降级联动）、`locked`、`severity`（g04 §3.1，无定级的状态写 0） | P0 | V0.1 | 是 | M09-AC-001 | g04 §4.7、§4.8、§4.9；M08 §6.3.1 |
 | M09-FR-009 | Supervisor 动作的内容：HOLD 以当前参考点为目标刹停；ELAND 以 0.5 m/s 下降；FAILSAFE 冻结参考、前馈下坠 +1 m/s（NED）；RTL 按 §6.8.3 的剖面；LANDING 用降落剖面；CORRECTING 飞往回拉目标；KILL 使推力归零 | P0 | V0.1 | 是 | M09-AC-006 | g08 §7.2；g04 §6.3 |
 | M09-FR-010 | 把转移原因映射为在途调用的结局，回调 M08 CommandEngine：安全抢占为 `failed 204`，watchdog 为 `canceled 209`，碰撞为 `failed 208`，操作员安全类命令为 `canceled 206` | P0 | V0.1 | 是 | M09-AC-007 | 12 §4.6 |
-| M09-FR-011 | RTL 子阶段推进：CLIMB（z < z_rtl − 0.5 m）→ CRUISE（水平距离 home ≥ 2 m）→ DESCEND → FINAL（AGL < 10 m）。CLIMB 结束时以当前位置到 home 的线段（而非缓存时的线段）重算 H_top，需要更高时经 SupervisorQueue 下发新的 `z_rtl` 并继续爬升 | P0 | V0.1 | 是 | M09-AC-008 | 12 §4.4.6、§5.8.3；M08-FR-027 |
+| M09-FR-011 | RTL 子阶段推进：CLIMB（z < z_rtl − 0.5 m）→ CRUISE（水平距离 home ≥ 2 m）→ DESCEND → FINAL（AGL < 10 m）。CLIMB 结束时以当前位置到 home 的线段（而非缓存时的线段；有绕行点时取 p→via、via→home 两段，AWR-03 ADR-054）重算 H_top，需要更高时经 SupervisorQueue 下发新的 `z_rtl` 并继续爬升 | P0 | V0.1 | 是 | M09-AC-008 | 12 §4.4.6、§5.8.3；M08-FR-027 |
 | M09-FR-012 | 消费 M08 contact 写入的触地标志（`landed` 由 0 变 1，即 IN_AIR 由 1 变 0）进入 LANDED/SETTLING，解除锁存；2 s 后 DISARMED 并结束 land 或 rtl 调用 | P0 | V0.1 | 是 | M09-AC-006 | g04 §4.8；12 F38、F39 |
 | M09-FR-013 | Mock 的 FSM 内部不保存 UNKNOWN（初始 spawn 除外）；生命周期覆盖由 M08 fuser 在打包时投影（g04 §4.6） | P0 | V0.1 | 是 | 代码审查；M09-AC-001 | g04 §4.4、§4.6 |
 | M09-FR-014 | 每次 `fs` 或 `sub` 变化（SYSTEM、AUTO、OPERATOR 三种来源都算）在同一 tick 的合批中发 `uav.state` 事件（`uav`、`from`、`to`、`reason`，17 §6.12），level 规则见 §6.13；同一 tick 内 1000 次转移只进一次 put（ADR-018） | P0 | V0.1 | 是 | M09-AC-035 | 17 §6.12；14 §11.6 |
@@ -240,8 +240,8 @@ HealthGraph（RateMonitor 加 errorgraph 根因分析，P2）：交付数据结�
 |---|---|---|---|---|---|---|
 | M09-FR-050 | 电量模型（10 Hz【仿真】）：`P = P_hover·(T/T_hover)^1.5`；SOC 以可用能量 `E_use = usable_frac·capacity_wh` 为基准（P600 为 188.7 Wh）；以 f64 的 `wh_used` 积分，battery 块的 `soc`（f32）与 `battery_pct`（u8）由它派生；`P_avg` 每步按 0.98/0.02 做指数平均；电压按 OCV 模型计算，仅供显示；机型 `battery = null` 时 soc 恒为 1、`battery_pct` 为 255（未知，AWR-03 §5.7），不触发任何电量判据 | P0 | V0.1 | 是 | M09-AC-015：P600 悬停到 0% 为 1320 s ± 2%（VH-6） | g08 §3.2、§10.4；r24 §4.6；16 §11.3；12 §5.8.1；M08 §6.3.1 |
 | M09-FR-051 | 判据：soc ≤ 0.15 告警一次（LOW）；soc ≤ 0.07 自动 RTL（CRIT）；`t_rem_usable < 1.3·t_rtl` 自动 RTL（ENERGY）；soc ≤ 0.05 就地 LANDING（EMERG，RTL 途中同样适用）。只在下降方向触发，每次飞行每档锁存一次；电量原因的 RTL 不可 resume | P0 | V0.1 | 是 | M09-AC-015、M09-AC-016 | ADR-026；r24 §4.5 |
-| M09-FR-052 | `t_rem_usable = (soc − 0.05)·E_use·3600 / P_avg`，只算到 emergency 阈值为止；`t_rtl` 与 `z_rtl` 按 12 §5.8.3 计算（H_top 取自 M04，逆风分量取自 env 在 z_rtl 处的风），每机每秒刷新一次（轮转，每次 battery stage 处理 1/10 机群） | P0 | V0.1 | 是 | M09-AC-016：r24 battery_rtl 复现（在 home 降落，soc ≥ 0.05，没有 EMERG 事件） | r24 §4.6、§4.11 |
-| M09-FR-053 | 实现 M08 定义的 `EnergyModel` 协议（M08 §7.1.5）并经 `register_energy_model()` 登记：`estimate(profile, soc, path: EstimatePath, env) -> EstimateResult`（`eta_s`、`energy_wh`、`soc_after_pct`、`soc_after_return_pct`、`feasible`、`code`）、`rtl_plan(slot) -> RtlPlan` 与 `path_wh(profile_id, samples, env)`（M10 任务能量预检沿轨迹积分）；功率按 `P_hover·(T/T_hover)^1.5`，T 含相对空速下的气动水平力（环境平均风取机体所在高度），不得用悬停功率近似（12 §5.8.4）；供 `ctl/sim-core/estimate`（M08）与任务能量预检（M10）调用，保证与运行期同一模型 | P0 | V0.1 | 是 | M09-AC-017：估价与 60 s 实飞的 soc 差 ≤ 0.01 | ADR-036；12 §5.8.4；M08 §6.10.4 |
+| M09-FR-052 | `t_rem_usable = (soc − 0.05)·E_use·3600 / P_avg`，只算到 emergency 阈值为止；`t_rtl` 与 `z_rtl` 按 12 §5.8.3 计算（H_top 取自 M04，逆风分量取自 env 在 z_rtl 处的风），每机每秒刷新一次（轮转，由 `battery_rtl` stage（5 Hz、奇数 tick 43）每次处理 1/5 机群，小机群按配额累加取整，不因每次调用至少一架而过频；缓存无效的机体由 battery stage 即时刷新，AWR-03 ADR-070）；直飞所需越障爬升 > 10 m 且离 home ≥ 30 m 时评估单绕行点返航路线（§6.8.3，AWR-03 ADR-054），t_rtl 按实际返航路线计算，每次 battery stage 至多 16 架；全机 RTL 时 FSM 每 tick 至多重算 16 架爬升终点，走廊上界按 16 架一组批量求（ADR-065） | P0 | V0.1 | 是 | M09-AC-016：r24 battery_rtl 复现（在 home 降落，soc ≥ 0.05，没有 EMERG 事件） | r24 §4.6、§4.11 |
+| M09-FR-053 | 实现 M08 定义的 `EnergyModel` 协议（M08 §7.1.5）并经 `register_energy_model()` 登记：`estimate(profile, soc, path: EstimatePath, env) -> EstimateResult`（`eta_s`、`energy_wh`、`soc_after_pct`、`soc_after_return_pct`、`feasible`、`code`）、`rtl_plan(slot) -> RtlPlan`（含可选绕行点 `via_enu_m`）、`rtl_route(p, home, slot)`（任意点的返航路线，与运行期同一选择规则，ADR-054）与 `path_wh(profile_id, samples, env)`（M10 任务能量预检沿轨迹积分）；功率按 `P_hover·(T/T_hover)^1.5`，T 含相对空速下的气动水平力（环境平均风取机体所在高度），不得用悬停功率近似（12 §5.8.4）；供 `ctl/sim-core/estimate`（M08）与任务能量预检（M10）调用，保证与运行期同一模型 | P0 | V0.1 | 是 | M09-AC-017：估价与 60 s 实飞的 soc 差 ≤ 0.01 | ADR-036；12 §5.8.4；M08 §6.10.4 |
 | M09-FR-054 | 向 M08 提供 `state_ext` 中由 M09 计算的字段：`battery{voltage_v, current_a, soc_pct, t_remain_s, wh_used}`、`link{gcs_age_ms, fcu_age_ms}`、`gcs_loss_policy`（该机当前生效的策略） | P0 | V0.1 | 是 | 契约 schema 校验 | 17 §6.5 |
 | M09-FR-055 | 单节电压阈值（3.7 V 告警、3.6 V RTL）与内阻标定 | P2 | V0.4 | 否 | — | r24 §4.5 |
 
@@ -273,7 +273,7 @@ HealthGraph（RateMonitor 加 errorgraph 根因分析，P2）：交付数据结�
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M09-FR-080 | 10 Hz【仿真】numba 网格哈希（格 10 m），每机扫描半径 `max(10, 3 + r_i + r_max)`，其中 `r = \|v\|·3 s`；按 M08 分片约定注册为 `fleet_guard.0–3`（`shards = 4`，phase 4、9、14、19），第 k 片只以 `slot % 4 == k` 的机体为主机 i，对端 j 取全体中 `j > i` 者，每对恰好处理一次；每片单独重建网格，开销计入每片预算 | P0 | V0.1 | 是 | M09-AC-022：4 片合并结果与单次全机群扫描、与暴力 O(N²) 结果逐对一致 | r24 §3.8 改进 4；M08 §6.4.2；本文实测 |
+| M09-FR-080 | 10 Hz【仿真】numba 网格哈希（格 10 m），每机扫描半径 `max(10, 3 + r_i + r_max)`，其中 `r = \|v\|·3 s`；按 M08 分片约定注册为 `fleet_guard.0–3`（`shards = 4`，phase 8、13、18、23；AWR-03 ADR-070，此前 4、9、14、19），第 k 片只以 `slot % 4 == k` 的机体为主机 i，对端 j 取全体中 `j > i` 者，每对恰好处理一次；每片单独重建网格，开销计入每片预算；机对最小间距按机存最小值（`min_separation(slots)` 结果不变），扫描核按格排序的连续副本与无开方上界预筛（访问次序与结果不变，ADR-065） | P0 | V0.1 | 是 | M09-AC-022：4 片合并结果与单次全机群扫描、与暴力 O(N²) 结果逐对一致 | r24 §3.8 改进 4；M08 §6.4.2；本文实测 |
 | M09-FR-081 | 条件：三维距离 < 10 m 时发 CONFLICT（warn，逐机边沿触发，距离 > 12 m 持续 2 s 后才重新布防）；3 s 线性外推 CPA < 3 m 时 AVOIDING；当前距离 < 3 m 时 VIOLATION。后两者都使优先级低的一方进入 HOLD/SEPARATION | P0 | V0.1 | 是 | M09-AC-022 | 12 §5.10.1 |
 | M09-FR-082 | 让行优先级键 K1–K5 按 12 §5.10.2（机动受限、任务优先级、电量紧迫度、控制方类别、agent_no） | P0 | V0.1 | 是 | M09-AC-022 | 12 §5.10.2 |
 | M09-FR-083 | 恢复：距离 > 5 m 且 CPA > 3 m，持续 2 s【仿真】后回到 FLYING/HOVER，MISSION 持有时续飞；同一对机体 60 s 内让行 ≥ 3 次时发 OSCILLATION，Track 保持 SUSPENDED | P0 | V0.1 | 是 | M09-AC-022 | 12 §5.10.3 |
@@ -360,7 +360,7 @@ HealthGraph（RateMonitor 加 errorgraph 根因分析，P2）：交付数据结�
 
 对照：numpy 版 mission_guard（8 个 nofly）为 2.16 / 2.42 ms，fleet_guard 为 4.1–4.5 ms（p50；15 m 网格 12 m/s 时 45 ms），不满足单步预算，因此这两个 stage 必须用 numba 核，numpy 版只作 oracle 与 ≤ 300 架的回退（NFR-012）（`bench_safety.json`）。
 
-**相位安排**（主时钟 250 Hz，tick = 4 ms）：guard `every = 5, phase = 1`；fsm `every = 1`；battery `every = 25, phase = 3`；fleet_guard 分 4 片 `fleet_guard.0–3`，`every = 25, phase = 4、9、14、19`；mission_guard `every = 25, phase = 13`。由于 env 在 `tick % 5 == 0`、sensors 在 `== 2`，而 M09 的 10 Hz stage 都落在 `tick % 5 ∈ {3, 4}`，任何一个 tick 至多同时执行一个 M09 的 10 Hz stage（依据 g08 §3.2 的错峰规则）。
+**相位安排**（主时钟 250 Hz，tick = 4 ms；AWR-03 ADR-070 修订）：guard `every = 5, phase = 1`；fsm `every = 1`；battery `every = 25, phase = 3`；battery_rtl `every = 50, phase = 43`（RTL 终点与时间的轮转刷新，自 battery 拆出，只在奇数 tick，每次 n/5 架、每机仍每秒一次）；fleet_guard 分 4 片 `fleet_guard.0–3`，`every = 25, phase = 8、13、18、23`；mission_guard `every = 25, phase = 13`。10 Hz stage 全部落在 `tick % 5 == 3`（3、8、13、18、23 五个相位），不与 50 Hz 的 env（`== 0`）、guard（`== 1`）、sensors（`== 2`）、cmd_watch（`== 4`）同 tick；25 tick 的周期为奇数，每个 10 Hz stage 一半落在偶数 tick（与 M08 的 l1 组同 tick），按五个相位均摊（g08 §3.2 的错峰规则）。
 
 ---
 
@@ -460,7 +460,7 @@ ADR-026 的逻辑分层与 stage 的对应：FastGuard = guard；MissionGuard = 
 | `cond_since_ns` | i64 × N × 32 | ns【仿真】 | 前 32 个条件位的起始时刻；未激活为 −1 |
 | `te_since`、`pe_since`、`thr_since`、`trk_since` | f64 × N | s【仿真】 | FastGuard 持续计时；NaN 表示未计时 |
 | `wh_used` | f64 × N | Wh | 电量积分量（`soc = 1 − wh_used / E_use`，重生时按 `initial_soc` 回填） |
-| `t_rem_s`、`t_rtl_s`、`z_rtl_m`、`v_c_mps`、`rtl_ref_xy` | f32 × N × 4、f64 × N × 2 | s、s、m、m/s、m | 能量判据与 `rtl_plan` 缓存；`rtl_ref_xy` 为上次刷新时的位置 |
+| `t_rem_s`、`t_rtl_s`、`z_rtl_m`、`v_c_mps`、`rtl_ref_xy`、`rtl_via_xy` | f32 × N × 4、f64 × N × 2 × 2 | s、s、m、m/s、m、m | 能量判据与 `rtl_plan` 缓存；`rtl_ref_xy` 为上次刷新时的位置；`rtl_via_xy` 为返航绕行点（World ENU 水平坐标，NaN 为直飞，ADR-054） |
 | `bat_once` | u8 × N | 位 | 本次飞行已触发过的电量档 |
 | `geo_margin_m`、`clearance_m`、`zone_hit` | f32 × N、f32 × N、i16 × N | m、m、zone 索引 | 围栏余量（border 内距离与 nofly 外距离取小）、净空、命中的 zone |
 | `correct_target`、`correct_since_ns` | f64 × N × 3、i64 × N | m、ns | 回拉目标与起始时刻 |
@@ -901,6 +901,8 @@ t_rtl = d_xy(p, home)/v_c + max(0, z_rtl − z_now)/v_up + max(0, z_rtl − z_ho
 - 过估处理：采样上界 p90 可比精确值高数十米（M04 §6.4.4）；某机 `z_rtl > effective_max_z` 时，该机改用 `heightmap_top_along(…, exact=True)` 重算（单段，放在 battery 轮转的该机刷新中执行；超过 2 ms 的长航段交 plan-pool，ADR-039），仍超上限（只会在剧本把 `max_z_m` 压到建筑包络以下时出现）即判该机直线返航不可行：自动 RTL 改为就地 LANDING（AUTO，触发代码不变，detail = `RTL_CEILING`），操作员 rtl 以 `102`（detail = `ABOVE_MAX_Z`）拒绝，remedy 建议改用 safe_transit 飞到 home 上方再降落。
 - RTL 执行：AUTO 与批量 RTL 用缓存的 `z_rtl` 立即进入 CLIMB；CLIMB 结束时以当前位置到 home 的线段重算 H_top，需要更高时继续爬升（FR-011）。因此批量 1000 架返航时不必在同一 tick 做 1000 次 H_top 查询（D1-AC-27）。
 - 保守性：执行时 CLIMB 可达 3 m/s（M08-FR-027）、FINAL 为 1 m/s（12 §4.4.6），而 t_rtl 按 2 m/s 与 0.7 m/s 估计，偏差方向安全。
+- **绕行返航**（AWR-03 ADR-054，FX-SIM1）：直飞所需越障爬升 `z_rtl − max(z_now, z_home + 30) > detour_min_climb_m`（10 m）、且离 home 水平距离 ≥ `detour_min_dist_m`（30 m）时，评估单绕行点候选 `via = p + f·L·u + k·w·n`（f ∈ {0.25, 0.5, 0.75}，k ∈ {±1, ±2, ±3}，w = max(30 m, L/4)，u 为 p→home 单位向量，n 为左法向）。各候选两段的走廊上界在一次 `heightmap_top_along` 调用中批量求得（与直飞同一 `h_top_tol_m`）；`z_rtl = max(z_now, z_home + 30, 两段上界 + 5)`，t_rtl 按上式、水平航程取两段之和，v_c 取 z_rtl 处逆风扣减值。按 t_rtl 升序检查合法性：两段在 z_rtl 按 10 m 采样，不越 border、不入生效 nofly、border 余量 ≥ `warn_margin_m`，z_rtl ≤ `effective_max_z − 1`。第一个合法候选比直飞至少少 `detour_min_gain_s`（5 s）时采用，缓存 `rtl_via_xy`；否则直飞。每次 battery stage 至多评估 16 架（`detour_max_per_call`）。参数见 `params.rtl.detour_*`。
+- S1 实测：p600-01 在塔远侧（773 s，z 56.7 m）直飞 z_rtl 389 m、t_rtl 444 s，绕行 z_rtl 57 m、t_rtl 61 s；全程最小 `t_rem/t_rtl` 由 1.06（直飞口径，会触发 ENERGY RTL）变为 5.55（`tests/safety/test_rtl_detour.py`、`tests/e2e/test_scenarios.py::test_s1`）。
 
 #### 6.8.4 估价接口（ADR-036 要求"同一机型与电池模型"）
 
@@ -910,7 +912,9 @@ class P600EnergyModel:                                         # 实际按 profi
     def estimate(self, profile: "VehicleProfile", soc: float, path: "EstimatePath",
                  env: "EnvironmentService") -> "EstimateResult": ...
         # path.legs：climb、cruise（带 speed_mps）、descend、dwell（dwell_s）、return（按 rtl_plan 语义展开），World ENU，M08 构造
-    def rtl_plan(self, slot: int) -> "RtlPlan": ...            # 缓存的 z_rtl_m、v_c_mps、t_rtl_s（§6.8.3），M08 执行 RTL 时读取（M08-FR-027）
+    def rtl_plan(self, slot: int) -> "RtlPlan": ...            # 缓存的 z_rtl_m、v_c_mps、t_rtl_s 与绕行点 via_enu_m（None 为直飞，§6.8.3、ADR-054），M08 执行 RTL 时读取（M08-FR-027）
+    def rtl_route(self, p: np.ndarray, home: np.ndarray, slot: int | None = None) -> "tuple[tuple[float, float] | None, float] | None": ...
+        # 任意点 p → home 的返航路线 (via_xy 或 None, z_rtl)，与运行期同一选择规则；M10 能量预检的返航段按此抽样（ADR-054）
     def path_wh(self, profile_id: str, samples: np.ndarray, env: "EnvironmentService | None" = None) -> float: ...
         # samples：k×7（t_s、ENU 位置、ENU 速度），沿轨迹积分能量，供 M10 任务能量预检（M08 §7.1.5）
 
@@ -946,7 +950,7 @@ class EstimateResult:
 | M16 §6.4.3：半径 45 m、Δz 18.47 m、5 m/s、均自下而上 | 10 → 230 m；225 → 391 m | 0.451；0.506 | 2.30（2.29）；1.63（1.52） |
 | 12 §5.8.5：形心 57 m、6 m/s、均自上而下 | 252 → 50 m（Δz 18.36）；391 → 248 m（Δz 17.88） | 0.403；0.489 | 4.51（4.34）；2.36（2.09） |
 
-两组参数在本模型下都不会触发 ENERGY RTL；本模型未计前飞阻力（12 §5.8.4 指出 391 m 处约多 9% 功率），M16 用余量比 ≥ 1.4 的门槛覆盖这一差异。AWR-03 ADR-052 已裁决：采用可用能量口径，S1 以 12 §7.2（上表第二行：形心 57 m、6 m/s、均自上而下）为准，M16 §6.4 与 16 §12.4 已同步，M16 v1.0 的"半径 45 m、5 m/s"方案作废。M09 的验收只要求：定稿的 S1 在 M09 实现的运行期判据下 `energy_rtl_count = 0`（M09-AC-034）。
+两组参数在本模型下都不会触发 ENERGY RTL（本模型的 t_rtl 不含 H_top 项；INT-1 多进程实跑发现定稿参数下 p600-01 在塔远侧按直飞口径会触发，AWR-03 ADR-054 以绕行返航消解，数据见 §6.8.3 末条）；本模型未计前飞阻力（12 §5.8.4 指出 391 m 处约多 9% 功率），M16 用余量比 ≥ 1.4 的门槛覆盖这一差异。AWR-03 ADR-052 已裁决：采用可用能量口径，S1 以 12 §7.2（上表第二行：形心 57 m、6 m/s、均自上而下）为准，M16 §6.4 与 16 §12.4 已同步，M16 v1.0 的"半径 45 m、5 m/s"方案作废。M09 的验收只要求：定稿的 S1 在 M09 实现的运行期判据下 `energy_rtl_count = 0`（M09-AC-034）。
 
 ### 6.9 链路丢失策略
 
@@ -1068,7 +1072,7 @@ sequenceDiagram
 2. 对每架机 i：`r_i = |v_i|·T`（T = 3 s），扫描半径 `R_i = max(10, 3 + r_i + r_max)`，只遍历 `ceil(R_i/C)` 格内、且 `j > i` 的机体；候选条件 `d_xy < max(3 + r_i + r_j, 10)` 且垂直差 `< max(3 + r_i + r_j, 10)`。
 3. 对候选对：`d0 = |Δp|`；`t* = clip(−Δp·Δv / |Δv|², 0, T)`；`CPA = |Δp + Δv·t*|`；更新双方的 `sep_m`（当前距离最小值）、`cpa_min` 与 `mate`。
 4. 扫掠碰撞：`Δp_prev = Δp − Δv·0.1 s`，在区间 [0, 0.1 s] 上对相对直线运动求最近距离，小于 `r_i + r_j` 时判碰撞（相对速度 24 m/s 时每周期移动 2.4 m，大于 P600 的 `2 × 0.49 m`，只查端点会漏检）。
-5. 分片（M08 分片约定，`shards = 4`）：第 k 片（`fleet_guard.k`，phase 4 + 5k）只以 `slot % 4 == k` 的机体为主机 i，对端 j 取全体中 `j > i` 者，于是每个无序对只在 `min(i, j) % 4` 那一片处理一次，每对每 100 ms 恰好检查一次，与第 4 步的 0.1 s 扫掠区间一致。`sep_m`、`cpa_min_m`、`sep_mate` 在第 0 片开始时清空、第 3 片结束时定稿（FR-085）。
+5. 分片（M08 分片约定，`shards = 4`）：第 k 片（`fleet_guard.k`，phase 8 + 5k，ADR-070）只以 `slot % 4 == k` 的机体为主机 i，对端 j 取全体中 `j > i` 者，于是每个无序对只在 `min(i, j) % 4` 那一片处理一次，每对每 100 ms 恰好检查一次，与第 4 步的 0.1 s 扫掠区间一致。`sep_m`、`cpa_min_m`、`sep_mate` 在第 0 片开始时清空、第 3 片结束时定稿（FR-085）。
 
 实测（N = 1000，原型核未含第 4 步扫掠，它只在候选对上增加一次闭式计算）：城市分布 3 m/s 为 0.88 / 1.10 ms（138 对候选）；15 m 网格 3 m/s 为 0.52 / 0.60 ms（1936 对）；15 m 网格 12 m/s 为 3.20 / 3.47 ms（34,510 对；分 4 片后每片约为其 1/4，估算约 0.8–0.9 ms，原型未实测分片）。同一场景的 numpy 版本 p50 为 4.1–4.5 ms 与 45 ms（`bench_safety.json`）。语义检查：两机相向各 5 m/s，距离 25 m 时判为冲突（CPA 0）；距离 40 m 时 CPA 出现在 4 s，超出 3 s 视界，不判冲突（`bench_safety_nb.json`）。
 
@@ -1097,7 +1101,7 @@ sequenceDiagram
 | `gnss_denied` | `duration_s` | LOC_OK = 0 | 空中：HOLD/LOC_LOST，30 s 后 LANDING；地面：arm 返回 113 | g04 §4.7；12 §5.11.3 |
 | `battery_drain` | `rate_pct_s`（0.5）或 `set_soc` | soc 额外按速率下降 | LOW → ENERGY 或 CRIT RTL → EMERG LANDING | r24 §4.11 |
 
-- **入口**：剧本 `events[].action = "fault.inject"`（16 §12.3）；REST `POST /api/fleet/vehicles/{id}/faults {kind, params, at_s?, duration_s?}` → `202 {fault_id, apply_tick}`（R16），`DELETE .../faults/{fault_id}` 清除（R62，204）；席位持有者，Mock 限定，其他后端返回 501 `109`；pytest 直接调用 `FaultInjector.inject()`。
+- **入口**：剧本 `events[].action = "fault.inject"`（16 §12.3）；REST `POST /api/fleet/vehicles/{id}/faults {kind, params, at_s?, duration_s?}` → `202 {fault_id, apply_tick}`（R16），`DELETE .../faults/{fault_id}` 清除（R62，204）；席位持有者，Mock 限定，其他后端返回 501 `109`；pytest 直接调用 `FaultInjector.inject()`。REST 与剧本导演经 `ctl/sim-core/cmd` 的命令路由 `fault/inject`、`fault/clear`（M09 以 M08 追加扩展点 `register_command_handler` 登记，CommandEngine 验签、角色与席位检查、写输入日志，调用生命周期 accepted → running → succeeded，admission 的 `detail.result` 带 `{fault_id, apply_tick}`；ADR-058）；查询路由 `safety/fault` 保留给进程内同步调用。escalate 经 CommandEngine 端到端生效：第③步确认令牌由网关校验、生产者复核存在性（缺失 112），第④步级别与 2 s 间隔由本模块检查，apply 时调用 `apply_operator`；未装配 M09（兜底 FSM）时 109。
 - **`faults.schema.json` 字段**（MS1 冻结；取值范围为本文设定，越界返回 422 `110 PARAM_OUT_OF_RANGE`）：
 
 | kind | 参数 | 类型 | 单位 | 默认 | 范围 |

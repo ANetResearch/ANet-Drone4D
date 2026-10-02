@@ -944,7 +944,7 @@ class JobContext:                                       # StageContext 的 job �
 
 `job_id`、`attempt`、`workdir`、`log`、`wait_if_perf_locked`、`emit_extra` 应 M01 §7.3 请求加入，M01 不再自建 `ctx_ext.py`。WorldBuildJob 在每个阶段开始前调用一次 `wait_if_perf_locked`。
 
-主循环：每 1 s 心跳并轮询（或被 `svc/job/submit` 唤醒）；`UPDATE ... SET state=首阶段, worker_pid=? WHERE job_id=(SELECT ... WHERE state='QUEUED' ORDER BY created_unix_ns LIMIT 1)` 认领；阶段函数在长循环内（每个节点批次、每 10 万点）调用 `heartbeat` 与 `check_cancel`，保证心跳间隔 ≤ 10 s、取消响应 ≤ 2 s；启动时把 `worker_pid` 已不存在的非终态任务置 `FAILED(resumable = true)`（J06）。
+主循环：每 1 s 心跳并轮询（或被 `svc/job/submit` 唤醒）；`UPDATE ... SET state=首阶段, worker_pid=? WHERE job_id=(SELECT ... WHERE state='QUEUED' ORDER BY created_unix_ns LIMIT 1)` 认领；阶段函数在长循环内（每个节点批次、每 10 万点）调用 `heartbeat` 与 `check_cancel`，保证心跳间隔 ≤ 10 s、取消响应 ≤ 2 s；`JobContext.progress()`、`check_cancel()` 与阶段切换同时写 job-worker 心跳（≥ 1 s 节流，长任务执行期间主循环不转）；认领按任务类型的首个阶段；启动时把 `worker_pid` 已不存在的非终态任务置 `FAILED(resumable = true)`，`error_json.code = 344 JOB_WORKER_CRASHED`（J06）。`svc/job/{submit,cancel,status,engines}` 由服务线程处理（zenoh 回调只入队，独立 SQLite 连接），提交后唤醒主线程；`job.state`（QUEUED、阶段切换、终态，可靠）与 `job.progress`（≤ 4 Hz）经 `evt/job-worker/job` 发出，`emits_events = True` 的任务（M01 recon）由 runner 自发，其余（world_build）由 worker 代发；发布成功时发 `world.added`（`evt/job-worker/world`）。runner 返回的 `error` 对象原样写入 `error_json`。
 
 ### 6.15 导出（V0.5）与大规模切片（V0.5）
 
@@ -1077,7 +1077,15 @@ class IngestFromArrays:                       # M01 使用（ext）；字段映�
     generator_params: dict | None = None      # 写入 world.json.generator.params.recon（{job_id, session_id, engine, variant}）
     camera_home: dict | None = None           # {position: [E,N,U], target: [E,N,U], fovDeg}；None 时按 §6.9 规则计算
     recon_session_dir: Path | None = None     # 复制到 reconstruction/<session_id>/ 并登记图层
+    # ---- 追加的可选字段（FX-SIM2 实现时补充；源世界帧需逐字段复制，Anchor 类型不含 label、uncertaintyM 等）
+    anchor_json: dict | None = None           # 源世界 coordinate.json 的 anchor 对象原样
+    T_ecef_world: list | None = None          # 源世界 T_ecef_world（行主序 4×4）
+    session_id: str = ""                      # 会话图层 id：reconstruction.<session_id>
+    tags: tuple[str, ...] = ("recon", "synthetic")
+    staging_nonce: str | None = None          # staging 目录名 <world_id>-<nonce>（M01 取 job_id，续跑保留）
 class ArraysAdapter(IngestAdapter):  def __init__(self, spec: IngestFromArrays): ...
+    # build_world 按 adapter.pipeline_cls（awr.world.package.arrays_build.ArraysPipeline）构建：只替换 ingest（第 6–10 步，
+    # 坐标帧与原点沿用源世界），其余阶段与六城相同；adapter.build_params() 在 generator.params 追加 recon
 
 # awr.world.terrain
 def dtm_opening(Q: np.ndarray, cell: float = 10.0, k: int = 4) -> tuple[np.ndarray, GridIndex]
