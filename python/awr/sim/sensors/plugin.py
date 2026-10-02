@@ -7,7 +7,8 @@
 - stage `sensors`（every 5、phase 2、order 100，budget 0.010 核）；
 - 慢任务 `m13.sensor_pose`（SensorPose48 10 Hz 分片打包，自计时）与 `m13.noisy_obs`（2 Hz【仿真】白噪声观测）；
 - `GET /api/fleet/profiles/{id}` 的 `sensors{}` 描述函数（M08 `profiles.register_sensor_describer`，每进程一次）；
-- M08 若提供 `register_estimate_hook`、roster 传感器组钩子（已提请，M13-to-M08），同时登记 `conf_expected` 与 roster `sensors[]`。
+- M08 的 roster 传感器组钩子与 state_ext 钩子（`register_state_ext_hook`，GNSS、云台、IMU 字段）；M08 若提供
+  `register_estimate_hook`，同时登记 `conf_expected`。
 
 `runtime()` 返回当前登记表对应的 SensorRuntime（M10、M14 经它调用云台、目标、传感器开关与几何 API）。
 """
@@ -52,7 +53,26 @@ def install() -> SensorRuntime:
     R.register_slow_task("m13.noisy_obs", rt.obs.run_slow, period_sim_s=0.5, budget_us=300)
     _register_optional_hooks(rt)
     _INSTALLED[id(reg)] = rt
+    _warm_kernels()
     return rt
+
+
+_WARMED = [False]
+
+
+def _warm_kernels() -> None:
+    """云台融合核的 numba 预热（运行期签名：状态块 C 连续数组、ENU 只读视图；M08-FR-005，ADR-070）。装配即预热，
+    sim-core 在 ready 之前完成编译或读缓存；同一进程只做一次。失败只记日志（运行期按需编译，只损失时延）。"""
+    if _WARMED[0]:
+        return
+    _WARMED[0] = True
+    try:
+        from . import kernels_gimbal, kernels_gnss
+
+        kernels_gimbal.warmup()
+        kernels_gnss.warmup()
+    except Exception:
+        log.exception("m13 numba warmup failed")
 
 
 def _register_optional_hooks(rt: SensorRuntime) -> None:
@@ -67,6 +87,12 @@ def _register_optional_hooks(rt: SensorRuntime) -> None:
         except Exception:
             log.warning("sensor describer not registered", exc_info=True)
     R = _registry()
+    ext = getattr(R, "register_state_ext_hook", None)  # M13-to-M08 第 2 条：GNSS、云台、IMU 字段并入 state_ext
+    if callable(ext):
+        try:
+            ext(rt.state_ext_fields, owner="M13")
+        except Exception:
+            log.warning("state_ext hook not registered", exc_info=True)
     hook = getattr(R, "register_estimate_hook", None)
     if callable(hook):
         try:
@@ -132,6 +158,9 @@ def uninstall() -> None:
     reg.blocks.pop(BLOCK, None)
     reg.blocks.pop(TARGET_BLOCK, None)
     reg.slow[:] = [t for t in reg.slow if not t.name.startswith("m13.")]
+    hooks = getattr(reg, "state_ext_hooks", None)
+    if hooks is not None:
+        hooks[:] = [h for h in hooks if h[0] != "M13"]
 
 
 install()

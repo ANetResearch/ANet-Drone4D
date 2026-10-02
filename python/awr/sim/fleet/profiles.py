@@ -136,23 +136,12 @@ def _deep_merge(base: dict, over: dict) -> dict:
 @cache
 def _validator():
     from jsonschema import Draft202012Validator
-    from referencing import Registry, Resource
 
     from awr.contracts._paths import contracts_root
+    from awr.sim.schemas import contracts_registry  # 与传感器、剧本校验共用一次扫描（ADR-061）
 
-    reg = Registry()
-    root = contracts_root()
-    for p in sorted(root.rglob("*.schema.json")):
-        if "gen" in p.relative_to(root).parts or "node_modules" in p.parts:
-            continue
-        try:
-            d = json.loads(p.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if isinstance(d, dict) and "$id" in d:
-            reg = reg.with_resource(d["$id"], Resource.from_contents(d))
-    schema = json.loads((root / "vehicle" / "vehicle_profile.schema.json").read_text(encoding="utf-8"))
-    return Draft202012Validator(schema, registry=reg)
+    schema = json.loads((contracts_root() / "vehicle" / "vehicle_profile.schema.json").read_text(encoding="utf-8"))
+    return Draft202012Validator(schema, registry=contracts_registry())
 
 
 def schema_errors(doc: dict) -> list[str]:
@@ -253,6 +242,14 @@ def validate_doc(doc: dict, *, pid: str | None = None) -> tuple[list[dict], dict
     return checks, d, problems
 
 
+def yaml_load(text: str):
+    """`yaml.safe_load` 的等价物：有 libyaml 时用 CSafeLoader（同一 SafeConstructor，结果相同；约快 10 倍，sim-core 启动与
+    重启时解析机型与传感器文件，D1-AC-11a，FX-SIM1）。"""
+    import yaml
+
+    return yaml.load(text, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+
+
 def load_vehicle_docs(vdir: Path | None = None) -> dict[str, tuple[dict, Path]]:
     """读取 `vehicles/*/params.yaml` 并展开 variants；返回 {profile_id: (规范化文档, 文件路径)}；id 重复即拒绝。"""
     import yaml
@@ -261,7 +258,7 @@ def load_vehicle_docs(vdir: Path | None = None) -> dict[str, tuple[dict, Path]]:
     out: dict[str, tuple[dict, Path]] = {}
     for f in sorted(vdir.glob("*/params.yaml")):
         try:
-            doc = yaml.safe_load(f.read_text(encoding="utf-8"))
+            doc = yaml_load(f.read_text(encoding="utf-8"))
         except (OSError, yaml.YAMLError) as e:
             raise ProfileError(f.parent.name, [f"{f}: {e}"]) from e
         if not isinstance(doc, dict):
@@ -456,9 +453,7 @@ def _sensor_conf(vdir: Path | None, rel: str | None) -> tuple[str | None, str]:
     if not f.exists():
         return None, "missing"
     try:
-        import yaml
-
-        d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        d = yaml_load(f.read_text(encoding="utf-8")) or {}
         return (d.get("conf") if isinstance(d, dict) else None), "present"
     except Exception:
         return None, "invalid"

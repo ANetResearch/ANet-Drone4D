@@ -4,7 +4,7 @@
 深合并（对象逐键递归，数组与标量整体替换，profiles 不可嵌套）→ 执行 V-SC-01 至 V-SC-11（失败抛 `ScenarioError`，
 对外为 121 SCENARIO_INVALID，detail 为规则号；V-SC-11 按 16 §12.6 为告警）→ 展开 `vehicle_sets`（id 为 `<id_prefix>-<序号>`，布局 grid 或 ring，
 `mission.center = "home"` 以出生点为中心实例化生成器）。V-SC-12（能量预检）在任务启动时执行（119，不是 121）；
-V-SC-13（剧本目录）为静态校验（M16）。
+V-SC-13（剧本目录）为静态校验（M16）；V-SC-14（编组同时段最小间距，ADR-062）在展开后执行（121）。
 
 `apply_scenario(rt, sc)`：倍速、机群（移除不在剧本中的骨架机体 → 下一次 stage 起 `fleet/add` 剧本机体）、任务
 （`MissionEngine.create`，origin scenario，能量预检策略取 `energy_precheck`）、导演（事件与成功谓词）。
@@ -37,6 +37,7 @@ __all__ = [
     "scenario_dirs",
     "scenario_path",
     "validate_doc",
+    "warm_validators",
 ]
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -100,24 +101,10 @@ def deep_merge(base: dict, over: dict) -> dict:
     return out
 
 
-@cache
 def _registry():
-    from referencing import Registry, Resource
+    from awr.sim.schemas import contracts_registry  # 与机型、传感器校验共用一次扫描（ADR-061）
 
-    from awr.contracts._paths import contracts_root
-
-    root = contracts_root()
-    reg = Registry()
-    for p in sorted(root.rglob("*.schema.json")):
-        if "gen" in p.relative_to(root).parts or "node_modules" in p.parts:
-            continue
-        try:
-            d = json.loads(p.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if isinstance(d, dict) and "$id" in d:
-            reg = reg.with_resource(d["$id"], Resource.from_contents(d))
-    return reg
+    return contracts_registry()
 
 
 @cache
@@ -143,6 +130,13 @@ def gen_validator(name: str):
     sub = {"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": sch["$id"],
            "$ref": f"#/$defs/gen_{name}", "$defs": sch["$defs"]}
     return Draft202012Validator(sub, registry=_registry())
+
+
+def warm_validators() -> None:
+    """构造剧本校验器并做一次空校验（jsonschema 按需编译子 schema），供 sim-core 热备用进程预热（ADR-070）。"""
+    v = _validator()
+    for _ in v.iter_errors({}):
+        break
 
 
 @cache
@@ -200,6 +194,146 @@ def expand_vehicle_sets(doc: dict, world: Any = None) -> tuple[list[dict], list[
                 mm["start"] = mi["start"]
             missions.append(mm)
     return vehicles, missions
+
+
+# ------------------------------------------------------------------------------------------------ V-SC-14（ADR-062）
+SEP_FLOOR_M = 10.0          # FleetGuard 告警线（ADR-026、12 §5.10）：guard_events = 0 的前提
+SEP_CLIMB_MPS = 1.0         # 时段估计用的保守垂直速度（爬升与返航下降都按 1 m/s 计，时段偏长即偏保守）
+SEP_WINDOW_PAD_S = 120.0
+
+
+def required_separation_m(doc: dict) -> float:
+    """V-SC-14 的要求值：max(FleetGuard 告警线 10 m, 成功谓词中 `min_separation_m >= / > v` 的最大 v)。"""
+    req = SEP_FLOOR_M
+
+    def walk(p: Any) -> None:
+        nonlocal req
+        if isinstance(p, dict):
+            if p.get("metric") == "min_separation_m" and p.get("op") in (">=", ">") and isinstance(p.get("value"), (int, float)):
+                req = max(req, float(p["value"]))
+            for k in ("all", "any"):
+                for x in p.get(k) or []:
+                    walk(x)
+    walk(doc.get("success") or {})
+    return req
+
+
+def set_separation_violation(vehicles: list[dict], missions: list[dict], required_m: float, world: Any = None) -> str | None:
+    """编组（vehicle_sets 展开）机体两两三维距离的几何下界（ADR-062）；低于 `required_m` 时返回说明，否则 None。
+
+    每架机的占位 = 出生点正上方的竖直线段 [z_home, z_orb] 并上高度 z_orb、半径 r 的绕飞圆（orbit 生成器以出生点为圆心；其余
+    生成器 r 取 0、z_orb 取出生高度，只作地面占位）。竖直段对应起飞爬升与返航下降（M10 先原地爬升再入圆，返航先回到出生点
+    上方再下降），与时序无关，因此下界对任意起飞错时与收尾先后都成立：
+      段–段：竖直区间相交时为水平距离 d，否则 hypot(d, 区间间隙)；
+      段–圆：圆所在高度落在对方竖直区间内时为 d − r，否则 hypot(d − r, 到区间端点的垂直距离)；
+      圆–圆：hypot(max(d − r_i − r_j, 0), z_orb,i − z_orb,j)。
+    "同时段"：任务时段 [start.at_s, start.at_s + T] 相交的机对才检查，T 按 1 m/s 的爬升与下降、orbit 圈数与速度加 120 s 保守估计；
+    `start.after` 或未给圈数时视为与所有机体同时段。有世界时 z 取 DSM（出生点）与 DTM + agl_m（绕飞高度），否则按平地。"""
+    idx = [k for k, v in enumerate(vehicles) if v.get("_set") is not None]
+    if len(idx) < 2:
+        return None
+    by_vid: dict[str, dict] = {}
+    for m in missions:
+        for vid in m.get("vehicle_ids") or []:
+            by_vid.setdefault(vid, m)
+    V = [vehicles[k] for k in idx]
+    H = np.asarray([[float(v["home_enu_m"][0]), float(v["home_enu_m"][1])] for v in V], np.float64)
+    zh = np.asarray([float(v["home_enu_m"][2]) if len(v["home_enu_m"]) > 2 and v["home_enu_m"][2] is not None else np.nan
+                     for v in V], np.float64)
+    ground = np.zeros(len(V))
+    if world is not None:
+        try:
+            dsm = np.asarray(world.height_dsm(H), np.float64)
+            ground = np.asarray(world.ground_dtm(H), np.float64)
+            zh = np.where(np.isnan(zh), dsm, zh)
+        except Exception:
+            pass
+    zh = np.where(np.isnan(zh), ground, zh)
+    r = np.zeros(len(V))
+    zo = zh.copy()
+    t0 = np.zeros(len(V))
+    t1 = np.full(len(V), np.inf)
+    for k, v in enumerate(V):
+        m = by_vid.get(v["vehicle_id"]) or {}
+        p = m.get("params") or {}
+        st = m.get("start") or {}
+        if m.get("generator") == "orbit":
+            r[k] = float(p.get("radius_m") or 0.0)
+            if p.get("z_m") is not None:
+                zo[k] = float(p["z_m"])
+            elif p.get("agl_m") is not None:
+                zo[k] = ground[k] + float(p["agl_m"])
+            turns, spd = float(p.get("turns") or 0.0), float(p.get("speed_mps") or 0.0)
+            if st.get("after") is None:
+                t0[k] = float(st.get("at_s") or 0.0)
+                if turns > 0 and spd > 0:
+                    t1[k] = t0[k] + 2.0 * abs(zo[k] - zh[k]) / SEP_CLIMB_MPS + 2 * math.pi * r[k] * turns / spd + SEP_WINDOW_PAD_S
+    lo, hi = np.minimum(zh, zo), np.maximum(zh, zo)
+    for i in range(len(V) - 1):
+        j = np.arange(i + 1, len(V))
+        d = np.hypot(H[j, 0] - H[i, 0], H[j, 1] - H[i, 1])
+        near = (d < required_m + r[i] + r[j] + 1e-9) & (t0[j] <= t1[i]) & (t0[i] <= t1[j])
+        if not near.any():
+            continue
+        j, d = j[near], d[near]
+        gap = np.maximum(0.0, np.maximum(lo[j] - hi[i], lo[i] - hi[j]))
+        seg = np.hypot(d, gap)
+        dz_ij = np.maximum(0.0, np.maximum(lo[i] - zo[j], zo[j] - hi[i]))      # 机 j 的圆到机 i 的竖直段
+        dz_ji = np.maximum(0.0, np.maximum(lo[j] - zo[i], zo[i] - hi[j]))
+        s_ij = np.hypot(np.maximum(d - r[j], 0.0), dz_ij)
+        s_ji = np.hypot(np.maximum(d - r[i], 0.0), dz_ji)
+        cc = np.hypot(np.maximum(d - r[i] - r[j], 0.0), zo[i] - zo[j])
+        b = np.minimum(np.minimum(seg, cc), np.minimum(s_ij, s_ji))
+        k = int(np.argmin(b))
+        if b[k] < required_m - 1e-9:
+            a, c = V[i], V[int(j[k])]
+            return (f"{a['vehicle_id']}({a.get('_set')}) and {c['vehicle_id']}({c.get('_set')}): separation lower bound "
+                    f"{b[k]:.1f} m < {required_m:g} m (horizontal {d[k]:.1f} m, orbit radii {r[i]:g}/{r[int(j[k])]:g} m); "
+                    f"increase home spacing (layout.spacing_m / set offsets) or separate the flight windows")
+    return None
+
+
+def orbit_yaw_violation(vehicles: list[dict], missions: list[dict], profiles: Any) -> str | None:
+    """航向朝心（`yaw = center`，缺省）的 orbit 任务：有效速度（`speed_mps` 或巡航速度，再受限速与 √(3R) 钳制，与生成器
+    同一公式）除以半径即所需偏航角速度，不得超过机体自动模式偏航上限（限速配置 yawrate 与 MPC_YAWRAUTO_MAX 的较小者）的
+    `YAW_RATE_FRAC`；否则航向误差持续累积（M08 姿态环按上限钳制偏航角速度），ladder v1 的 3 m、2 m/s 即因此在约 35 s 后
+    航向误差到 180° 附近并触发 TILT_ERR_KILL（ADR-062）。无机型表时跳过。"""
+    if profiles is None:
+        return None
+    from awr.sim.fleet import kernels_l1 as K
+
+    from .generators.orbit import YAW_RATE_FRAC
+
+    by_id = {v["vehicle_id"]: v for v in vehicles}
+    for m in missions:
+        if m.get("generator") != "orbit":
+            continue
+        p = m.get("params") or {}
+        if str(p.get("yaw", "center")) != "center":
+            continue
+        try:
+            R = float(p["radius_m"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if R <= 0:
+            continue
+        for vid in m.get("vehicle_ids") or []:
+            v = by_id.get(vid)
+            if v is None:
+                continue
+            try:
+                pid = v.get("profile_id", "p600_mid360")
+                lim = profiles.limits_index(v.get("speed_profile"), pid)
+                LT = profiles.LT[lim]
+            except Exception:
+                continue
+            speed = min(float(p.get("speed_mps") or LT[K.L_CRUISE]), float(LT[K.L_VXY]), math.sqrt(3.0 * R))
+            ymax = min(float(LT[K.L_YAWRATE]), K.YAWRAUTO)
+            if speed / R > YAW_RATE_FRAC * ymax + 1e-9:
+                return (f"mission {m['mission_id']} vehicle {vid}: orbit yaw=center needs {math.degrees(speed / R):.1f} deg/s "
+                        f"> {YAW_RATE_FRAC:.0%} of {pid} limit {math.degrees(ymax):.0f} deg/s; lower speed_mps, enlarge radius_m "
+                        f"or use yaw=tangent")
+    return None
 
 
 # ------------------------------------------------------------------------------------------------ V-SC
@@ -359,6 +493,14 @@ def validate_doc(doc: dict, *, world: Any = None, profiles: Any = None, vehicles
             if op not in ("rtl", "land", "hover"):
                 raise ScenarioError("V-SC-10", f"event {ev.get('event_id')}: cmd op {op} not allowed")
     _depth_check(doc["success"])
+    # V-SC-14（ADR-062）：vehicle_sets 展开后，同时段在空中的编组机体两两间距的几何下界不低于要求
+    bad = set_separation_violation(vehicles, missions, required_separation_m(doc), world)
+    if bad is not None:
+        raise ScenarioError("V-SC-14", bad)
+    # V-SC-15（ADR-062）：航向朝心的 orbit，偏航角速度需求 v/R 不超过机体自动模式上限的 90%
+    bad = orbit_yaw_violation(vehicles, missions, profiles)
+    if bad is not None:
+        raise ScenarioError("V-SC-15", bad)
     # V-SC-11（告警，16 §12.6：无意义配置；S1 的 ci profile 即 record = false 且保留 marked）
     warnings: list[str] = []
     if doc.get("record") is False and any(v.get("marked") for v in doc.get("vehicles") or []):

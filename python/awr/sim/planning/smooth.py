@@ -30,6 +30,7 @@ DS_M = 1.0
 TOL = 1.05
 R_COL_DEFAULT_M = 0.49
 END_CLEAR_M = 0.5
+START_SNAP_M = 0.5  # 起点簇：机体当前位置、停止点与计划起点之间的漂移（validate_polyline）
 FAR_XY_M = 4.0
 
 try:  # numba 只允许出现在 awr/sim/planning 与 sim/fleet/kernels_*（TECH-FR-004）
@@ -284,12 +285,31 @@ def validate(Q: np.ndarray, ts: float, world: Any, A: np.ndarray, B: np.ndarray,
     return True, info
 
 
+def _snap_start(P: np.ndarray) -> np.ndarray:
+    """细校验折线的起点簇（M08 准入折线为 [当前位置, 停止点, 航点...]，悬停机体三者相距只有厘米级漂移）：与首点相距
+    ≤ START_SNAP_M 的前导点并入首点；随后若是爬升段且水平偏移 ≤ START_SNAP_M，竖直对齐到首点所在的柱。否则漂移形成的
+    厘米级短段使真正的起点爬升段不再是首段，端点柱规则（M04 `endpoint_radius_m`，§6.5.7）落空，改按 1 m 缓冲检查，
+    紧邻建筑起飞的机体（ladder n1000 有 17 架距墙 1–1.5 m）的爬升被判 PATH_OBSTACLE，任务反复重试（D1 验收第 1 轮 4.3）。"""
+    if len(P) < 2:
+        return P
+    i = 1
+    while i < len(P) and float(np.linalg.norm(P[i] - P[0])) <= START_SNAP_M:
+        i += 1
+    if i == 1 and not (P[1, 2] > P[0, 2] and float(np.hypot(*(P[1, :2] - P[0, :2]))) <= START_SNAP_M):
+        return P
+    Q = np.vstack([P[:1], P[i:]]) if i < len(P) else P[:1].copy()
+    if len(Q) >= 2 and Q[1, 2] > Q[0, 2] and float(np.hypot(*(Q[1, :2] - Q[0, :2]))) <= START_SNAP_M:
+        Q = Q.copy()
+        Q[1, :2] = Q[0, :2]
+    return Q
+
+
 def validate_polyline(P3: np.ndarray, world: Any, r_col_m: float = R_COL_DEFAULT_M,
                       zones: list[str] | None = None) -> tuple[bool, dict]:
     """输入折线本身的细校验（follow_path 的航点；§6.5.7 端点柱规则对应 M04 `endpoint_radius_m = r_col`）。"""
     if world is None:
         return True, {}
-    P = _dedupe(np.asarray(P3, np.float64))
+    P = _snap_start(_dedupe(np.asarray(P3, np.float64)))
     if len(P) < 2:
         return True, {}
     dense = []

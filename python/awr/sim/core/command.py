@@ -24,9 +24,9 @@ from __future__ import annotations
 
 import contextlib
 import math
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -39,6 +39,7 @@ from awr.world.georef.frames import enu_to_ned, yaw_ned_from_enu
 
 from ..fleet import actions as ACT
 from ..fleet import kernels_l1 as K
+from ..fleet import kernels_watch as KW
 from ..fleet import params_px4 as P
 from ..fleet.path import MAX_PATH_LEN_M, MAX_PATH_POINTS
 from ..fleet.setpoint import p_stop_enu as _p_stop_enu
@@ -46,7 +47,7 @@ from ..fleet.state import CtrlMode
 from . import admission as A
 from . import metrics as MET
 from . import state_model as SM
-from .calls import ST_ACCEPTED, ST_FINAL, ST_RUNNING, Call, CallTable
+from .calls import OP_CODES, ST_ACCEPTED, ST_FINAL, ST_RUNNING, Call, CallTable
 from .fuser import flags_bytes
 from .interfaces import CallRef, MotionProvider
 
@@ -56,7 +57,11 @@ __all__ = ["BATCH_OPS", "Call", "CommandEngine", "StagedCmd", "motion_providers"
 FS = FlightState
 IDEM_TTL_NS = 60_000_000_000
 IDEM_MAX = 4096
+BATCH_CHUNK = 4  # 批量命令（`fleet/cmd/<op>`、uav 列表或 "*"）每次主循环迭代准入的机数（分片准入，ADR-065）
 PROGRESS_MIN_NS = 500_000_000  # progress ≤ 2 Hz【墙钟】
+PROGRESS_MAX_PER_TICK = 4  # 每次 cmd_watch 至多发出的 cmd.progress（取最久未发者；单个调用仍 ≤ 2 Hz【墙钟】，ADR-060）
+RUNNING_MAX_PER_WATCH = 16  # cmd_watch：每次至多把这么多条调用读回为 running（1000 架批量同时生效时分散到后续几次，ADR-065）
+VEC_MIN_ROWS = 32  # cmd_watch：在途调用不少于该数时逐行判据改走向量化预筛（与逐行实现等价，ADR-060；小机群保持逐行）
 VEHICLE_OPS = frozenset({"takeoff", "land", "goto", "follow_path", "orbit", "hover", "rtl", "velocity", "velocity_stop",
                          "safety_stop", "pause", "resume", "arm", "disarm", "cancel", "kill", "escalate"})
 BATCH_OPS = frozenset({"rtl", "land", "hover", "safety_stop", "pause", "resume", "takeoff"})
@@ -131,6 +136,25 @@ class StagedCmd:
 
 
 @dataclass
+class _PluginCall:
+    """登记的非机体命令的在途调用（`register_command_handler`）：apply_tick 起 running，处理者给出的 `watch(ctx)` 判定终态，
+    未给出时在 apply_tick 即 succeeded（M07-to-M08 第 1 条；ADR-058）。"""
+
+    call: Call
+    apply_tick: int
+    watch: Callable[..., Any] | None
+    deadline_ns: int
+    result: Any = None
+
+
+PLUGIN_DEADLINE_S = 10.0
+_OP_GOTO, _OP_FP, _OP_ORBIT, _OP_HOVER = (OP_CODES[k] for k in ("goto", "follow_path", "orbit", "hover"))
+_OP_RTL, _OP_LAND, _OP_TAKEOFF = OP_CODES["rtl"], OP_CODES["land"], OP_CODES["takeoff"]
+_HOLD_1S = int(1.0 * 1e9) - 1  # `_hold(…, 1.0)` 的门限
+_HOLD_3S = int(3.0 * 1e9) - 1
+
+
+@dataclass
 class _Idem:
     wall_ns: int
     adm: dict
@@ -142,9 +166,57 @@ class _Idem:
         return self.calls[0] if self.calls else None
 
 
+@dataclass
+class _BatchJob:
+    """分片准入中的批量命令（`BATCH_CHUNK` 架一片，每次主循环迭代一片；FX2-R2，ADR-065）。"""
+
+    cid: str
+    msg: dict
+    ids: list[str]
+    reqs: list[Any] = field(default_factory=list)
+    pos: int = 0
+    chunk: int = 0
+    adms: list[dict] = field(default_factory=list)
+    calls: list[Call] = field(default_factory=list)
+    accepted: list[str] = field(default_factory=list)
+    rejected: list[list] = field(default_factory=list)
+
+
+DEFERRED = None  # handle() 的返回值：批量命令转入分片准入，稍后由 batch_tick() 回复
+
+
 def _num(x: Any) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
 
+
+
+def _compact_points(op: str, args: dict) -> dict:
+    """在途调用保存的参数里，follow_path 的 `waypoints` 与 `bspline.ctrl_pts`（每点一个 3 元列表）改存为浮点元组的元组。
+    取值不变（json、msgpack 编码相同；读取方一律经 `np.asarray`）；浮点元组在首次 GC 扫描后即不再被 GC 跟踪。1000 架各
+    一条带样条的 follow_path 时调用表约持有 30 万个小列表，gen2 回收一次约 180 ms（主循环停顿，FX2-R2）。"""
+    if op != "follow_path":
+        return args
+    wp = args.get("waypoints")
+    if isinstance(wp, list) and wp and isinstance(wp[0], list):
+        args["waypoints"] = tuple(tuple(p) for p in wp)
+    bs = args.get("bspline")
+    if isinstance(bs, dict) and isinstance(bs.get("ctrl_pts"), list) and bs["ctrl_pts"] and isinstance(bs["ctrl_pts"][0], list):
+        args["bspline"] = {**bs, "ctrl_pts": tuple(tuple(p) for p in bs["ctrl_pts"])}
+    return args
+
+
+def _dist3(a: np.ndarray, b: np.ndarray) -> float:
+    """两个 3 维点的欧氏距离（标量热路径；等价于 `float(np.linalg.norm(a - b))`）。"""
+    dx = float(a[0]) - float(b[0])
+    dy = float(a[1]) - float(b[1])
+    dz = float(a[2]) - float(b[2])
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
+def _dist3_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """逐行 `_dist3`（同一运算次序与 IEEE 平方根，逐位相同；cmd_watch 大机群路径）。"""
+    d = a - b
+    return np.sqrt(d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1] + d[:, 2] * d[:, 2])
 
 class CommandEngine:
     def __init__(self, S, profiles, roster, lease, *, events, clock, caps, entry_key: bytes | None = None,
@@ -179,8 +251,14 @@ class CommandEngine:
         self.idem: OrderedDict[str, _Idem] = OrderedDict()
         self.staged: list[StagedCmd] = []
         self.table = CallTable(8192, S.capacity)
+        self._batch_jobs: deque[_BatchJob] = deque()
+        self._batch_inflight: dict[str, _BatchJob] = {}
+        self._wf_buf: tuple | None = None  # _watch_fast 的输出缓冲
+        self.watch_kernel = bool(K.HAVE_NUMBA)  # cmd_watch 大机群路径走 numba 融合核（kernels_watch；False 时走 numpy 向量实现）
         self.fine_queue: list[tuple[str, np.ndarray]] = []
         self.fine_done: list[tuple[str, bool, int]] = []
+        self.plugin_calls: list[_PluginCall] = []
+        self._metric_pending: list[tuple[int, str, dict, float]] = []
         self._seq = 0
         self._subs: list[tuple[str, Callable[[Call], None]]] = []
         self._matrix_cache: dict[tuple, int] = {}
@@ -203,11 +281,28 @@ class CommandEngine:
             return self._reject_raw("", int(Reason.BAD_REQUEST), detail={"field": "body"})
         cid = str(msg.get("cid") or "")
         now_w = self.clock.wall_mono_ns()
+        if msg.get("batch_chunk") is not None and not hasattr(q, "msg"):
+            # 输入日志中的批量分片（重仿真注入）：与实时运行同一分片、同一 apply_tick，幂等由整批承担
+            adm, _calls = self._admit(msg)
+            return adm
         self._expire_idem(now_w)
         ent = self.idem.get(cid)
         if ent is not None:
             self.stats["duplicates"] += 1
             return self._duplicate(ent)
+        job = self._batch_inflight.get(cid)
+        if job is not None and hasattr(q, "reply_msg"):  # 分片准入进行中的重发：随整批一起回复
+            job.reqs.append(q)
+            self.stats["duplicates"] += 1
+            return DEFERRED
+        if hasattr(q, "reply_msg") and cid:
+            ids = self._batch_ids(msg)
+            if ids is not None and len(ids) > BATCH_CHUNK:
+                job = _BatchJob(cid, msg, ids, reqs=[q])
+                self._batch_inflight[cid] = job
+                self._batch_jobs.append(job)
+                self._batch_step(job)
+                return DEFERRED
         adm, calls = self._admit(msg)
         if cid:
             self.idem[cid] = _Idem(now_w, adm, calls)
@@ -221,6 +316,80 @@ class CommandEngine:
                                                         "apply_tick": adm.get("apply_tick"),
                                                         "n_accepted": len(calls)}})
         return adm
+
+    # ------------------------------------------------------------ 批量分片准入（ADR-065）
+    def _batch_ids(self, msg: dict) -> list[str] | None:
+        """批量命令的机体 id 列表（"*" 按当前 roster 的 slot 升序展开）；不是批量命令时 None。"""
+        op = str(msg.get("op") or "")
+        uav = msg.get("uav")
+        if op.startswith("fleet/cmd/"):
+            if isinstance(uav, str) and uav != "*":
+                return None
+        elif not (uav == "*" or isinstance(uav, list)) or op not in BATCH_OPS:
+            return None
+        if uav == "*":
+            return [self.roster.by_slot[s].id for s in self.roster.slots_in_order()]
+        if isinstance(uav, list) and 1 <= len(uav) <= 1000 and all(isinstance(u, str) for u in uav):
+            return list(uav)
+        return None
+
+    def _batch_step(self, job: _BatchJob) -> None:
+        """准入一片（BATCH_CHUNK 架）。每片按"子批量"走完整准入与分发（同一判据、逐机 cid `<batch_id>:<vehicle_id>`、
+        本片 apply_tick = 当前 tick + 1），输入日志记录带 `batch_chunk` 的分片消息（重仿真按片注入）。全部分片完成后
+        合并为一条批量回复，写入幂等表与审计。1000 架全机 RTL 时单次迭代的准入与分发从约 0.16 s 降到数毫秒
+        （D1-AC-27 单步最大 ≤ 12 ms）。"""
+        ids = job.ids[job.pos:job.pos + BATCH_CHUNK]
+        op = str(job.msg.get("op") or "")
+        sub = dict(job.msg, uav=ids, batch_chunk=job.chunk)
+        if not op.startswith("fleet/cmd/"):
+            sub["op"] = "fleet/cmd/" + op
+        sub["batch_id"] = job.cid
+        adm, calls = self._admit(sub)
+        job.pos += len(ids)
+        job.chunk += 1
+        job.adms.append(adm)
+        job.calls += calls
+        per = adm.get("per_uav") if isinstance(adm.get("per_uav"), dict) else None
+        if per is not None:
+            job.accepted += list(per.get("accepted") or [])
+            job.rejected += [list(x) for x in per.get("rejected") or []]
+        elif adm.get("status") in ("accepted", "duplicate"):
+            job.accepted += ids
+        else:
+            job.rejected += [[u, int(adm.get("code") or int(Reason.STATE))] for u in ids]
+        if job.pos >= len(job.ids):
+            self._batch_finish(job)
+
+    def _batch_finish(self, job: _BatchJob) -> None:
+        self._batch_inflight.pop(job.cid, None)
+        with contextlib.suppress(ValueError):
+            self._batch_jobs.remove(job)
+        base = next((a for a in job.adms if a.get("status") == "accepted"), job.adms[0] if job.adms else None)
+        adm = dict(base or {"v": 1, "cid": job.cid, "status": "rejected", "code": int(Reason.NO_VEHICLE)})
+        adm["cid"] = job.cid
+        adm["per_uav"] = {"accepted": job.accepted, "rejected": job.rejected}
+        if not job.accepted and adm.get("status") != "rejected":
+            adm["status"] = "rejected"
+        self.idem[job.cid] = _Idem(self.clock.wall_mono_ns(), adm, job.calls)
+        while len(self.idem) > IDEM_MAX:
+            self.idem.popitem(last=False)
+        if self.audit is not None:
+            p = job.msg.get("principal") if isinstance(job.msg.get("principal"), dict) else {}
+            self.audit({"kind": "cmd.admission", "t_sim_ns": self.S.t_ns, "principal_id": p.get("principal_id"),
+                        "role": p.get("role"), "entry": p.get("entry"), "cid": job.cid, "uav": job.msg.get("uav"),
+                        "code": adm.get("code", 0), "detail": {"op": job.msg.get("op"), "status": adm["status"],
+                                                               "apply_tick": adm.get("apply_tick"),
+                                                               "n_accepted": len(job.calls), "chunks": job.chunk}})
+        for i, q in enumerate(job.reqs):
+            out = adm if i == 0 else self._duplicate(self.idem[job.cid])
+            with contextlib.suppress(Exception):
+                q.reply_msg(out)
+
+    def batch_tick(self) -> int:
+        """主循环每次迭代在步顶调用（drain 之后）：推进最早的分片准入任务一片；返回仍在进行的任务数。"""
+        if self._batch_jobs:
+            self._batch_step(self._batch_jobs[0])
+        return len(self._batch_jobs)
 
     def submit_internal(self, cmd: dict, principal: dict) -> dict:
         """M09、M10 进程内调用（FR-089）：同一准入与生命周期；principal 由组合根构造（不验签）。"""
@@ -276,6 +445,21 @@ class CommandEngine:
                         ACT.begin_hold(self.S, np.array([call.slot]), self.S.t_ns * 1e-9)
                         self._finish(call, "failed", code, {"status": "FAILED", "verify_trust": 2,
                                                             "observed_state": self._obs(call.slot), "message": "fine check"})
+
+    def retarget_goal(self, cid: str, pos_enu_m: Any, slot: int | None = None) -> int:
+        """运动提供者交回 HOLD 时修正在途调用的完成判据目标点（ENU）；返回修正的行数（M10 编队成员，ADR-065）。
+        给出 slot 时按该机当前调用查找（长时调用的幂等条目可能已过期，`_rows_of` 查不到）。"""
+        rows = []
+        if slot is not None and 0 <= int(slot) < self.table.by_slot.shape[0]:
+            c = self.table.current(int(slot))
+            if c is not None and c.cid == cid and not c.final and c.row >= 0:
+                rows = [c.row]
+        if not rows:
+            rows = self._rows_of(cid)
+        p = np.asarray(pos_enu_m, np.float64).reshape(3)
+        for r in rows:
+            self.table.goal[r] = p
+        return len(rows)
 
     def _rows_of(self, cid: str) -> list[int]:
         ent = self.idem.get(cid)
@@ -515,9 +699,11 @@ class CommandEngine:
             put(np.ones(n, bool), int(Reason.BACKEND_UNSUPPORTED), {"op": op, "backend": self.caps.backend})
         if op in ("arm", "disarm") and args.get("force"):
             put(np.ones(n, bool), int(Reason.BACKEND_UNSUPPORTED), {"field": "args.force"})
-        if op == "escalate":
-            put(np.ones(n, bool), int(Reason.BACKEND_UNSUPPORTED), {"op": op, "why": "D1_EXT"})
-        if op == "kill" and not args.get("confirm_token"):
+        # kill、escalate（ext）：确认令牌由网关第③步校验（17 §7.2），生产者只做存在性复核（纵深防御）；escalate 的级别与
+        # 2 s 间隔由 M09 登记在第④步的检查判定（M09-to-M08 第 4 条）
+        if op == "escalate" and (self.hooks is None or self.fallback_fsm):
+            put(np.ones(n, bool), int(Reason.BACKEND_UNSUPPORTED), {"op": op, "why": "NO_SAFETY_FSM"})
+        if op in ("kill", "escalate") and not args.get("confirm_token"):
             put(np.ones(n, bool), int(Reason.CONFIRM_REQUIRED))
         # ⑧ 围栏粗校验（M09 登记）
         self._fine_polys: dict[int, np.ndarray] = {}
@@ -541,7 +727,7 @@ class CommandEngine:
         if op == "goto" and A.finite_vec(args.get("pos"), 3):
             ps = _p_stop_enu(S, self.T.LT, np.array([slot]))[0]
             return np.array([p, ps, args["pos"]], np.float64)
-        if op == "follow_path" and isinstance(args.get("waypoints"), list):
+        if op == "follow_path" and isinstance(args.get("waypoints"), (list, tuple)):
             try:
                 return np.vstack([p[None], np.asarray(args["waypoints"], np.float64)])
             except ValueError:
@@ -664,7 +850,7 @@ class CommandEngine:
         prov = _provider_for(op, args)
         lane = 1 if op in LANE1 else 0
         warnings: list[str] = []
-        args_n = dict(args)
+        args_n = _compact_points(op, dict(args))
         if op in ("goto", "follow_path", "orbit") and _num(args.get("speed_mps")):
             lim = S.limits_id[slots]
             vmax = self.T.LT[lim, K.L_VXY]
@@ -696,6 +882,7 @@ class CommandEngine:
                         provider=getattr(prov, "name", None), warnings=list(warnings))
             call.effect = {"status": "UNVERIFIED", "verify_trust": 1, "native_ack": True, "protocol": "inproc",
                            "requested": self._requested(op, args)}
+            call.ck_static()  # checkpoint 不变部分随准入生成（分摊到分片准入，checkpoint 主线程只拼可变字段）
             r = self.table.alloc(call, t_ns=S.t_ns, deadline_ns=S.t_ns + self._deadline_ns(op, args, s))
             self._init_row(r, op, args, s)
             rows[k] = r
@@ -742,6 +929,8 @@ class CommandEngine:
             v = min(float(args.get("speed_mps") or self.T.LT[lim, K.L_CRUISE]), float(self.T.LT[lim, K.L_VXY]))
             R = float(args["radius_m"])
             tb.aux[r] = (R, min(v, math.sqrt(float(self.T.LT[lim, K.L_ACC]) * R)), float(args.get("turns", 0) or 0), 0.0)
+        elif op == "rtl" and not args.get("land", True):
+            tb.aux[r, 0] = 1.0  # rtl 不降落（cmd_watch 融合核的完成预筛按此区分）
         tb.stall_ref[r] = S.enu.pos[slot]
 
     def _requested(self, op: str, args: dict) -> str:
@@ -828,6 +1017,10 @@ class CommandEngine:
     # ------------------------------------------------------------ ⑨ apply（ingest，apply_tick）
     def apply_staged(self, ctx) -> None:
         self._apply_fine_results()
+        if self.plugin_calls:
+            self._advance_plugin_calls(ctx)
+        if self._metric_pending:
+            self._apply_metric_writes(ctx.tick)
         if not self.staged:
             return
         due = [c for c in self.staged if c.apply_tick <= ctx.tick]
@@ -856,7 +1049,7 @@ class CommandEngine:
         slots = np.array([s for s, _ in keep], np.int64)
         rws = [r for _, r in keep]
         # apply 时复核（FR-060）：状态已升级为禁止该命令时 failed 204，不改变运动模式
-        if sc.op not in ("cancel", "velocity_stop", "resume"):
+        if sc.op not in ("cancel", "velocity_stop", "resume", "escalate"):
             sb = S.blocks["safety"]
             fs, sub = sb["fs"][slots], sb["sub"][slots]
             flags = flags_bytes(S, slots.astype(np.int32))
@@ -939,8 +1132,8 @@ class CommandEngine:
                 xy = enu_to_ned(np.asarray(at["pos"], np.float64))[:2] if isinstance(at, dict) else None
                 ACT.begin_land(S, slots, xy, t_s)
         elif op == "rtl":
-            z, v = self._rtl_params(slots, args)
-            ACT.begin_rtl(S, slots, z, v, t_s)
+            z, v, via = self._rtl_params(slots, args)
+            ACT.begin_rtl(S, slots, z, v, t_s, via)
         elif op == "velocity":
             vm = args.get("vmax_mps")
             ACT.begin_velocity(S, slots, args.get("frame", "world") == "body", float(vm) if _num(vm) else math.inf,
@@ -996,6 +1189,13 @@ class CommandEngine:
             ACT.begin_kill(S, slots, t_s)
             for r in rws:
                 self._succeed_now(tb.meta[r])
+        elif op == "escalate":  # ext：升级由 M09 SafetyHooks.apply_operator 执行（HOLD/ESCALATE → ELAND → FAILSAFE），M08 不下发运动
+            for s, r in zip(slots, rws, strict=True):
+                call = tb.meta[r]
+                if self.hooks is not None:
+                    with contextlib.suppress(Exception):
+                        self.hooks.apply_operator(int(s), call, ctx.t_ns)
+                self._succeed_now(call)
         elif op == "cancel":
             target = self.idem.get(str(args.get("call_id")))
             for s, r in zip(slots, rws, strict=True):
@@ -1008,7 +1208,8 @@ class CommandEngine:
                                       "message": "canceled"})
                 self._succeed_now(tb.meta[r])
 
-    def _rtl_params(self, slots: np.ndarray, args: dict) -> tuple[np.ndarray, np.ndarray]:
+    def _rtl_params(self, slots: np.ndarray, args: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """(z_rtl, v_c, 绕行点 NED 水平坐标 k×2（NaN 为直飞）)；绕行点取 M09 返航计划（ADR-054）。"""
         S = self.S
         z_now = S.enu.pos[slots, 2].copy()
         z_home = S.enu.home[slots, 2].copy()
@@ -1016,15 +1217,19 @@ class CommandEngine:
         z = np.maximum(z_now, z_home + (float(alt) if alt is not None else P.RTL_RETURN_ALT))
         lim = S.limits_id[slots]
         v = np.maximum(1.0, np.minimum(5.0, self.T.LT[lim, K.L_VXY]))
+        via = np.full((len(slots), 2), np.nan)
         if self.energy is not None:
             for k, s in enumerate(slots):
                 try:
                     plan = self.energy.rtl_plan(int(s))
                     z[k] = max(z[k], float(plan.z_rtl_m))
                     v[k] = float(plan.v_c_mps)
+                    pv = getattr(plan, "via_enu_m", None)
+                    if pv is not None:
+                        via[k] = (float(pv[1]), float(pv[0]))
                 except Exception:
                     continue
-        return z, v
+        return z, v, via
 
     def _resume_nav(self, call: Call, t_s: float) -> None:
         S, tb = self.S, self.table
@@ -1054,6 +1259,8 @@ class CommandEngine:
 
     # ------------------------------------------------------------ cmd_watch（50 Hz，AWR-12 §5.4，向量化）
     def watch_tick(self, S, ctx) -> None:
+        if self.watch_kernel and self._watch_fast(S, ctx):
+            return
         tb = self.table
         rows = tb.rows()
         if rows.size == 0:
@@ -1067,53 +1274,71 @@ class CommandEngine:
         if rows.size == 0:
             return
         applied = tb.applied[rows]
-        # 未 apply：只判截止
-        na = rows[~applied & (t > tb.deadline[rows])]
-        for r in na:
-            self._finish(tb.meta[r], "failed", int(Reason.PROGRESS_TIMEOUT), {"status": "FAILED", "verify_trust": 2})
-        rows, slots = rows[applied], slots[applied]
-        if rows.size == 0:
-            return
+        # 未 apply：只判截止（各筛选只在有命中时才做花式下标，FX-SIM1：小机群的固定开销）
+        if not applied.all():
+            na = rows[~applied & (t > tb.deadline[rows])]
+            for r in na:
+                self._finish(tb.meta[r], "failed", int(Reason.PROGRESS_TIMEOUT), {"status": "FAILED", "verify_trust": 2})
+            rows, slots = rows[applied], slots[applied]
+            if rows.size == 0:
+                return
         fs = sb["fs"][slots]
         sub = sb["sub"][slots]
         gone = ~S.active[slots] | (S.lifecycle[slots] == int(Lifecycle.LOST))
         crashed = fs == int(FS.CRASHED)
-        for r, s, g, c in zip(rows[gone | crashed], slots[gone | crashed], gone[gone | crashed], crashed[gone | crashed],
-                              strict=True):
-            if g:
-                self._finish(tb.meta[r], "failed", int(Reason.VEHICLE_LOST), {"status": "FAILED", "verify_trust": 2})
-            elif c:
-                self._finish(tb.meta[r], "failed", int(Reason.CRASHED),
-                             {"status": "FAILED", "verify_trust": 2, "observed_state": self._obs(int(s))})
-        keep = ~(gone | crashed)
-        rows, slots, fs, sub = rows[keep], slots[keep], fs[keep], sub[keep]
-        if rows.size == 0:
-            return
-        opc = tb.op[rows]
+        bad = gone | crashed
+        if bad.any():
+            for r, s, g, c in zip(rows[bad], slots[bad], gone[bad], crashed[bad], strict=True):
+                if g:
+                    self._finish(tb.meta[r], "failed", int(Reason.VEHICLE_LOST), {"status": "FAILED", "verify_trust": 2})
+                elif c:
+                    self._finish(tb.meta[r], "failed", int(Reason.CRASHED),
+                                 {"status": "FAILED", "verify_trust": 2, "observed_state": self._obs(int(s))})
+            keep = ~bad
+            rows, slots, fs, sub = rows[keep], slots[keep], fs[keep], sub[keep]
+            if rows.size == 0:
+                return
         # 严重度升级（ELAND、FAILSAFE）→ 204（M09 登记时由其 resolve_calls 给出，先到者为准）
-        esc = np.isin(fs, (int(FS.ELAND), int(FS.FAILSAFE)))
-        for r, s in zip(rows[esc], slots[esc], strict=True):
-            self._finish(tb.meta[r], "failed", int(Reason.PREEMPTED_BY_SAFETY),
-                         {"status": "FAILED", "verify_trust": 2, "observed_state": self._obs(int(s))})
-        rows, slots, fs, sub, opc = rows[~esc], slots[~esc], fs[~esc], sub[~esc], opc[~esc]
+        esc = (fs == int(FS.ELAND)) | (fs == int(FS.FAILSAFE))
+        if esc.any():
+            for r, s in zip(rows[esc], slots[esc], strict=True):
+                self._finish(tb.meta[r], "failed", int(Reason.PREEMPTED_BY_SAFETY),
+                             {"status": "FAILED", "verify_trust": 2, "observed_state": self._obs(int(s))})
+            rows, slots, fs, sub = rows[~esc], slots[~esc], fs[~esc], sub[~esc]
         # running 读回
-        acc = (tb.status[rows] == ST_ACCEPTED) & ~tb.fine_pending[rows]
-        for r, s, f in zip(rows[acc], slots[acc], fs[acc], strict=True):
+        st_ = tb.status[rows]
+        acc = (st_ == ST_ACCEPTED) & ~tb.fine_pending[rows]
+        n_run = 0
+        for r, s, f in (zip(rows[acc], slots[acc], fs[acc], strict=True) if acc.any() else ()):
             call = tb.meta[r]
             if int(f) in _RUN_FS.get(call.op, ()):
+                if n_run >= RUNNING_MAX_PER_WATCH:  # 每次 cmd_watch 至多读回这么多条（其余下次；大批量同时生效，ADR-065）
+                    break
+                n_run += 1
                 tb.status[r] = ST_RUNNING
                 tb.t_running[r] = t
                 tb.stall_ref[r] = S.enu.pos[s]
                 tb.stall_t[r] = t
+                tb.stall_rref[r] = S.enu.pos_ref[s]
+                tb.stall_rmove[r] = False
                 call.status = "running"
                 call.effect = {"status": "UNVERIFIED", "verify_trust": 2, "observed_state": self._obs(int(s))}
                 self._event("cmd.running", call, 0, call.effect)
         run = tb.status[rows] == ST_RUNNING
         r_rows, r_slots, r_fs = rows[run], slots[run], fs[run]
         if r_rows.size:
-            self._done_vector(r_rows, r_slots, r_fs, t)
+            if r_rows.size >= VEC_MIN_ROWS:
+                (self._done_nb if self.watch_kernel else self._done_np)(r_rows, r_slots, r_fs, t)
+            else:
+                self._done_vector(r_rows, r_slots, r_fs, t)
+        prog = self._progress_pick(rows, now_w)
+        if rows.size >= VEC_MIN_ROWS:
+            (self._watch_rows_nb if self.watch_kernel else self._watch_rows_np)(rows, slots, t, now_w, ctx, prog)
+            E = S.enu
+            tb.max_dev[rows] = np.maximum(tb.max_dev[rows], np.linalg.norm(E.pos_ref[slots] - E.pos[slots], axis=1))
+            return
         # 停滞 203（导航与返航巡航段 5 s 内前进 < 0.2 m）与截止 202
-        for r, s in zip(rows, slots, strict=True):
+        for r, s in zip(rows.tolist(), slots.tolist(), strict=True):
             call = tb.meta[r]
             if call is None or call.final:
                 continue
@@ -1121,31 +1346,245 @@ class CommandEngine:
                 tb.deadline[r] += int(ctx.dt_tick * 5 * 1e9) if ctx is not None else 0
                 continue
             if tb.status[r] == ST_RUNNING and call.op in ("goto", "follow_path", "orbit"):
-                # 停滞：自上次前进 ≥ 0.2 m 起 5 s【仿真】内未再前进 0.2 m（滑动判据）
+                # 停滞：自上次前进 ≥ 0.2 m 起 5 s【仿真】内未再前进 0.2 m（滑动判据）。提供者接管（TRAJ）时按参考进度判定
+                # （M10-to-M08 第 5 条）：参考在窗口内前进过 ≥ 0.2 m 而机体不动才判 203；规划中或等待时参考静止，不判停滞
                 pe = S.enu.pos[s]
-                if float(np.linalg.norm(pe - tb.stall_ref[r])) >= 0.2:
+                traj = call.provider is not None and int(S.ctrl_mode[s]) == int(CtrlMode.TRAJ)
+                if traj:
+                    pr = S.enu.pos_ref[s]
+                    if _dist3(pr, tb.stall_rref[r]) >= 0.2:
+                        tb.stall_rref[r] = pr
+                        tb.stall_rmove[r] = True
+                if _dist3(pe, tb.stall_ref[r]) >= 0.2:
                     tb.stall_ref[r] = pe
                     tb.stall_t[r] = t
+                    tb.stall_rmove[r] = False
                 elif t - tb.stall_t[r] >= 5_000_000_000:
-                    far = float(np.linalg.norm(pe - tb.goal[r])) > max(1.0, tb.tol[r] * 2) if call.op != "orbit" else True
-                    if far and S.ctrl_mode[s] not in (CtrlMode.HOLD,):
-                        self._finish(call, "failed", int(Reason.STALLED), {"status": "FAILED", "verify_trust": 2,
-                                                                          "observed_state": self._obs(int(s))})
+                    far = _dist3(pe, tb.goal[r]) > max(1.0, tb.tol[r] * 2) if call.op != "orbit" else True
+                    if far and S.ctrl_mode[s] not in (CtrlMode.HOLD,) and (not traj or bool(tb.stall_rmove[r])):
+                        self._fail_motion(call, int(s), int(Reason.STALLED))
                         continue
                     tb.stall_ref[r] = pe
                     tb.stall_t[r] = t
+                    tb.stall_rmove[r] = False
             if t > tb.deadline[r]:
-                self._finish(call, "failed", int(Reason.PROGRESS_TIMEOUT), {"status": "FAILED", "verify_trust": 2,
-                                                                           "observed_state": self._obs(int(s))})
+                self._fail_motion(call, int(s), int(Reason.PROGRESS_TIMEOUT))
                 continue
-            if call.batch_id is None and tb.status[r] == ST_RUNNING and now_w - tb.prog_wall[r] >= PROGRESS_MIN_NS:
-                tb.prog_wall[r] = now_w
-                prog = self._progress(call, r)
-                if prog is not None:
-                    self.events.emit("cmd.progress", t_sim_ns=t, severity=0, uav=call.uav, cid=call.cid, op=call.op,
-                                     progress=prog)
+            if r in prog:
+                self._emit_progress(call, r, t, now_w)
         E = S.enu
         tb.max_dev[rows] = np.maximum(tb.max_dev[rows], np.linalg.norm(E.pos_ref[slots] - E.pos[slots], axis=1))
+
+    def _watch_fast(self, S, ctx) -> bool:
+        """watch_tick 的大机群快速路径（FX2-R3，ADR-070）：一次遍历（`kernels_watch.watch_triage`）取在途行；只要有一行需要
+        原实现的分支（未 apply、失联或坠毁、ELAND/FAILSAFE 升级、待读回 running）或在途行少于 VEC_MIN_ROWS，返回 False 由
+        原实现整段处理。否则其后各段与原实现相同（完成判据、进度挑选、停滞与截止、最大偏差），只是行筛选与掩码运算不再
+        逐个 numpy 调用（N = 1000、50 Hz，此前约 1 ms/次）。三段都只读写同一组调用表与机群状态，前段无副作用。"""
+        tb = self.table
+        cap = tb.live.shape[0]
+        buf = self._wf_buf
+        if buf is None or buf[0].shape[0] != cap:
+            buf = self._wf_buf = (np.empty(cap, np.int64), np.empty(cap, np.int64), np.empty(cap, np.uint8),
+                                  np.empty(cap, np.bool_))
+        sb = S.blocks["safety"]
+        n, spec = KW.watch_triage(tb.live, tb.slot, tb.applied, S.active, S.lifecycle, int(Lifecycle.LOST), sb["fs"], tb.status,
+                                  tb.fine_pending, int(FS.CRASHED), int(FS.ELAND), int(FS.FAILSAFE), ST_ACCEPTED, ST_RUNNING,
+                                  buf[0], buf[1], buf[2], buf[3])
+        if spec or n < VEC_MIN_ROWS:
+            return False
+        t = int(S.t_ns)
+        now_w = self.clock.wall_mono_ns()
+        rows, slots, fs, run = buf[0][:n].copy(), buf[1][:n].copy(), buf[2][:n].copy(), buf[3][:n]
+        r_rows, r_slots, r_fs = rows[run], slots[run], fs[run]
+        if r_rows.size:
+            if r_rows.size >= VEC_MIN_ROWS:
+                self._done_nb(r_rows, r_slots, r_fs, t)
+            else:
+                self._done_vector(r_rows, r_slots, r_fs, t)
+        prog = self._progress_pick(rows, now_w)
+        self._watch_rows_nb(rows, slots, t, now_w, ctx, prog)
+        E = S.enu
+        KW.max_dev_update(rows, slots, E.pos_ref, E.pos, tb.max_dev)
+        return True
+
+    def _progress_pick(self, rows: np.ndarray, now_w: int) -> frozenset[int]:
+        """本次可发 `cmd.progress` 的行：running、非批量、未暂停、距上次 ≥ PROGRESS_MIN_NS【墙钟】；多于
+        PROGRESS_MAX_PER_TICK 时取最久未发者（同为最久时按行号）。大机群下单个 tick 不再一次发出上千条进度（ADR-060）。"""
+        tb = self.table
+        if getattr(self, "watch_kernel", False) and rows.dtype == np.int64:
+            out = np.empty(PROGRESS_MAX_PER_TICK, np.int64)
+            k = KW.progress_pick(rows, tb.live, tb.paused, tb.batched, tb.status, tb.prog_wall, int(now_w), PROGRESS_MIN_NS,
+                                 ST_RUNNING, PROGRESS_MAX_PER_TICK, out)
+            return frozenset(out[:k].tolist()) if k else frozenset()
+        due = (tb.live[rows] & ~tb.paused[rows] & ~tb.batched[rows] & (tb.status[rows] == ST_RUNNING)
+               & (now_w - tb.prog_wall[rows] >= PROGRESS_MIN_NS))
+        if not due.any():
+            return frozenset()
+        c = rows[due].astype(np.int64)
+        if c.size > PROGRESS_MAX_PER_TICK:
+            c = c[np.lexsort((c, tb.prog_wall[c]))[:PROGRESS_MAX_PER_TICK]]
+        return frozenset(c.tolist())
+
+    def _emit_progress(self, call: Call, r: int, t: int, now_w: int) -> None:
+        tb = self.table
+        if call.batch_id is None and tb.status[r] == ST_RUNNING and now_w - tb.prog_wall[r] >= PROGRESS_MIN_NS:
+            tb.prog_wall[r] = now_w
+            prog = self._progress(call, r)
+            if prog is not None:
+                self.events.emit("cmd.progress", t_sim_ns=t, severity=0, uav=call.uav, cid=call.cid, op=call.op,
+                                 progress=prog)
+
+    def _watch_rows_np(self, rows: np.ndarray, slots: np.ndarray, t: int, now_w: int, ctx: Any, prog: frozenset[int]) -> None:
+        """watch_tick 逐行段（暂停顺延、停滞 203、截止 202、进度）的大机群路径（ADR-060）：无事件的行以向量方式更新停滞
+        参照，产生事件的行（203、202、进度）按行号升序走与逐行实现相同的处理；判据、运算次序与逐行实现逐项一致。"""
+        S, tb = self.S, self.table
+        n = rows.size
+        live = tb.live[rows]  # 行在终态即归还（live 即 meta 存在且未终结）
+        paused = live & tb.paused[rows]
+        if paused.any():
+            tb.deadline[rows[paused]] += int(ctx.dt_tick * 5 * 1e9) if ctx is not None else 0
+        act = live & ~paused
+        op = tb.op[rows]
+        motion = act & (tb.status[rows] == ST_RUNNING) & ((op == _OP_GOTO) | (op == _OP_FP) | (op == _OP_ORBIT))
+        stall = np.zeros(n, np.bool_)
+        if motion.any():
+            E = S.enu
+            mi = np.flatnonzero(motion)
+            mr, ms = rows[mi], slots[mi]
+            pe = E.pos[ms]
+            cmode = S.ctrl_mode[ms]
+            traj = tb.prov[mr] & (cmode == int(CtrlMode.TRAJ))
+            if traj.any():
+                ti = np.flatnonzero(traj)
+                pr = E.pos_ref[ms[ti]]
+                up = _dist3_rows(pr, tb.stall_rref[mr[ti]]) >= 0.2
+                if up.any():
+                    tb.stall_rref[mr[ti[up]]] = pr[up]
+                    tb.stall_rmove[mr[ti[up]]] = True
+            moved = _dist3_rows(pe, tb.stall_ref[mr]) >= 0.2
+            if moved.any():
+                rm = mr[moved]
+                tb.stall_ref[rm] = pe[moved]
+                tb.stall_t[rm] = t
+                tb.stall_rmove[rm] = False
+            chk = ~moved & (t - tb.stall_t[mr] >= 5_000_000_000)
+            if chk.any():
+                ci = np.flatnonzero(chk)
+                cr = mr[ci]
+                far = op[mi[ci]] == _OP_ORBIT
+                nf = ~far
+                if nf.any():
+                    far[nf] = _dist3_rows(pe[ci[nf]], tb.goal[cr[nf]]) > np.maximum(1.0, tb.tol[cr[nf]] * 2)
+                fail = far & (cmode[ci] != int(CtrlMode.HOLD)) & (~traj[ci] | tb.stall_rmove[cr])
+                keep = ~fail
+                if keep.any():
+                    rk = cr[keep]
+                    tb.stall_ref[rk] = pe[ci[keep]]
+                    tb.stall_t[rk] = t
+                    tb.stall_rmove[rk] = False
+                stall[mi[ci[fail]]] = True
+        late = act & ~stall & (t > tb.deadline[rows])
+        ev = stall | late
+        if prog:
+            ev |= act & np.isin(rows, np.fromiter(prog, np.int64, len(prog)))
+        for k in np.flatnonzero(ev).tolist():
+            r, s = int(rows[k]), int(slots[k])
+            call = tb.meta[r]
+            if call is None or call.final:
+                continue
+            if stall[k]:
+                self._fail_motion(call, s, int(Reason.STALLED))
+                continue
+            if t > tb.deadline[r]:
+                self._fail_motion(call, s, int(Reason.PROGRESS_TIMEOUT))
+                continue
+            if r in prog:
+                self._emit_progress(call, r, t, now_w)
+
+    def _watch_rows_nb(self, rows: np.ndarray, slots: np.ndarray, t: int, now_w: int, ctx: Any, prog: frozenset[int]) -> None:
+        """`_watch_rows_np` 的融合核实现（`kernels_watch.stall_scan` 一次遍历完成暂停顺延、停滞参照更新与 203、202 判定；
+        FX2-R2）。产生事件的行按行号升序走同一处理，判据与运算次序逐项相同（`tests/sim/test_cmd_watch_vec.py` 对拍）。"""
+        S, tb = self.S, self.table
+        E = S.enu
+        n = rows.size
+        stall = np.empty(n, np.bool_)
+        late = np.empty(n, np.bool_)
+        dt5 = int(ctx.dt_tick * 5 * 1e9) if ctx is not None else 0
+        KW.stall_scan(rows.astype(np.int64, copy=False), slots.astype(np.int64), int(t), dt5, ST_RUNNING, _OP_GOTO, _OP_FP,
+                      _OP_ORBIT, tb.live, tb.paused, tb.status, tb.op, tb.prov, S.ctrl_mode, E.pos, E.pos_ref, tb.stall_ref,
+                      tb.stall_t, tb.stall_rref, tb.stall_rmove, tb.goal, tb.tol, tb.deadline, stall, late)
+        ev = stall | late
+        if prog:
+            # 进度行（至多 PROGRESS_MAX_PER_TICK 条）按行号在 rows（升序）中定位，与 np.isin 的同一标记（FX2-R3）
+            pr = np.fromiter(prog, np.int64, len(prog))
+            pos = np.searchsorted(rows, pr)
+            ok = pos < rows.size
+            pos = pos[ok]
+            pos = pos[rows[pos] == pr[ok]]
+            if pos.size:
+                ev[pos] |= tb.live[rows[pos]] & ~tb.paused[rows[pos]]
+        for k in np.flatnonzero(ev).tolist():
+            r, s = int(rows[k]), int(slots[k])
+            call = tb.meta[r]
+            if call is None or call.final:
+                continue
+            if stall[k]:
+                self._fail_motion(call, s, int(Reason.STALLED))
+                continue
+            if t > tb.deadline[r]:
+                self._fail_motion(call, s, int(Reason.PROGRESS_TIMEOUT))
+                continue
+            if r in prog:
+                self._emit_progress(call, r, t, now_w)
+
+    def _done_nb(self, rows: np.ndarray, slots: np.ndarray, fs: np.ndarray, t: int) -> None:
+        """`_done_np` 的融合核实现（`kernels_watch.done_scan`；FX2-R2）：持续 orbit 的半径判据仍按 `math.hypot` 求值，
+        判为完成与非向量化命令的行按行号升序交给 `_done_eval` 逐行复核（同 `_done_np`）。"""
+        S, tb = self.S, self.table
+        E = S.enu
+        n = rows.size
+        vn = np.empty(n)
+        done = np.empty(n, np.bool_)
+        vec = np.empty(n, np.bool_)
+        orb0 = np.empty(n, np.bool_)
+        cnt = KW.done_scan(rows.astype(np.int64, copy=False), slots.astype(np.int64), int(t), _HOLD_1S, _HOLD_3S, _OP_GOTO,
+                           _OP_FP, _OP_ORBIT, _OP_HOVER, tb.live, tb.paused, tb.op, S.ctrl_mode, E.vel, E.pos, tb.goal, tb.tol,
+                           tb.aux, S.orb, K.O_TURN, tb.prov, tb.hold_since, vn, done, vec, orb0, _OP_RTL, _OP_LAND,
+                           np.ascontiguousarray(fs, np.uint8), int(FS.LANDED), int(FS.DISARMED), S.z_rtl, tb.seen_landed,
+                           _OP_TAKEOFF, int(FS.FLYING), tb.alt, E.ground_up(slice(None)))
+        if orb0.any():
+            k0 = np.flatnonzero(orb0)
+            r0, s0 = rows[k0], slots[k0]
+            P = E.pos
+            dx = P[s0, 0] - tb.goal[r0, 0]
+            dy = P[s0, 1] - tb.goal[r0, 1]
+            rr = np.fromiter(map(math.hypot, dx.tolist(), dy.tolist()), np.float64, k0.size)  # 与逐行同一 math.hypot
+            hc = (np.abs(rr - tb.aux[r0, 0]) < 1.0) & (np.abs(vn[k0] - tb.aux[r0, 1]) < 0.5)
+            hs = tb.hold_since[r0]
+            hs = np.where(hc, np.where(hs < 0, t, hs), -1)
+            tb.hold_since[r0] = hs
+            done[k0] = hc & (t - hs >= _HOLD_3S)
+            cnt = 1
+        if cnt == 0:
+            return
+        ok = tb.live[rows] & ~tb.paused[rows]
+        for k in np.flatnonzero(done | (ok & ~vec)).tolist():
+            r, s = int(rows[k]), int(slots[k])
+            call = tb.meta[r]
+            if call is None or call.final or tb.paused[r]:
+                continue
+            d, mk = self._done_eval(call, r, s, int(fs[k]), float(vn[k]), t)
+            if d:
+                self._done_finish(call, r, s, t, mk)
+
+    def _fail_motion(self, call: Call, s: int, code: int) -> None:
+        """M08 自身判定的运动失败（203 停滞、202 截止）：提供者接管的调用先撤销提供者并交回 HOLD，避免失败后轨迹仍在驱动
+        机体（之后的新调用或租约交还后的任务续飞会与残留轨迹争用 TRAJ 参考）；原生运动保持现有行为。"""
+        if call.provider is not None:
+            self._cancel_provider(call)
+            if int(self.S.ctrl_mode[s]) == int(CtrlMode.TRAJ):
+                ACT.begin_hold(self.S, np.array([s]), self.S.t_ns * 1e-9)
+        self._finish(call, "failed", code, {"status": "FAILED", "verify_trust": 2, "observed_state": self._obs(s)})
 
     def _hold(self, r: int, cond: bool, t: int, need_s: float) -> bool:
         tb = self.table
@@ -1157,84 +1596,184 @@ class CommandEngine:
         return t - tb.hold_since[r] >= int(need_s * 1e9) - 1
 
     def _done_vector(self, rows: np.ndarray, slots: np.ndarray, fs: np.ndarray, t: int) -> None:
+        """running 调用的完成判据（AWR-12 §5.4）。判据逐行求值；度量字典只在判定完成时构造（FX-SIM1：cmd_watch 热点）。
+        在途调用 ≥ VEC_MIN_ROWS 时由 `_done_np` 向量化预筛（ADR-060），本函数为小机群路径与等价基准。"""
         S, tb = self.S, self.table
-        E = S.enu
-        vn = np.linalg.norm(E.vel[slots], axis=1)
-        for r, s, f, sp in zip(rows, slots, fs, vn, strict=True):
+        vn = np.linalg.norm(S.enu.vel[slots], axis=1)
+        for r, s, f, sp in zip(rows.tolist(), slots.tolist(), fs.tolist(), vn.tolist(), strict=True):
             call = tb.meta[r]
             if call is None or call.final or tb.paused[r]:
                 continue
-            s = int(s)
-            f = int(f)
-            op = call.op
-            t_exec = round((t - int(tb.t_accept[r])) * 1e-9, 3)
-            done, m = False, {"t_exec_s": t_exec}
-            if op == "takeoff":
-                z_t = float(E.ground_up(s)) + float(tb.alt[r])
-                err = abs(float(E.pos[s, 2]) - z_t)
-                ok = f == FS.FLYING and err < max(0.3, 0.05 * float(tb.alt[r])) and abs(float(E.vel[s, 2])) < 0.3
-                done, m = self._hold(r, ok, t, 1.0), {"alt_err_m": round(err, 3), "t_exec_s": t_exec}
-            elif op == "goto":
-                dist = float(np.linalg.norm(E.pos[s] - tb.goal[r]))
-                done = self._hold(r, dist < tb.tol[r] and sp < 0.5 and S.ctrl_mode[s] != CtrlMode.TRAJ, t, 1.0)
-                m = {"dist_err_m": round(dist, 3), "t_exec_s": t_exec}
-            elif op == "follow_path":
-                dist = float(np.linalg.norm(E.pos[s] - tb.goal[r]))
-                arrived = S.ctrl_mode[s] not in (CtrlMode.PATH, CtrlMode.TRAJ)  # 原生 PATH 或提供者交回 HOLD 后才判完成
-                done = self._hold(r, arrived and dist < 0.5 and sp < 0.5, t, 1.0)
-                m = {"path_len_m": round(float(tb.aux[r, 0]), 2), "max_dev_m": round(float(tb.max_dev[r]), 3),
-                     "dist_err_m": round(dist, 3), "t_exec_s": t_exec}
-            elif op == "orbit":
-                R, v, turns = float(tb.aux[r, 0]), float(tb.aux[r, 1]), float(tb.aux[r, 2])
-                c = tb.goal[r]
-                if turns > 0:
-                    back = S.ctrl_mode[s] not in (CtrlMode.ORBIT, CtrlMode.TRAJ)
-                    done = back and (call.provider is not None or float(S.orb[s, K.O_TURN]) >= turns - 1e-6)
-                    m = {"turns": round(float(S.orb[s, K.O_TURN]), 3), "t_exec_s": t_exec}
-                else:
-                    rr = float(np.linalg.norm(E.pos[s, :2] - c[:2]))
-                    ok = abs(rr - R) < 1.0 and abs(sp - v) < 0.5
-                    done = self._hold(r, ok, t, 3.0)
-                    m = {"radius_err_m": round(abs(rr - R), 3), "t_exec_s": t_exec}
-            elif op == "hover":
-                done = self._hold(r, sp < 0.3, t, 1.0)
-            elif op == "land":
-                tb.seen_landed[r] |= f == FS.LANDED
-                done = bool(tb.seen_landed[r]) and f == FS.DISARMED
-                m = {"pos_err_m": round(float(np.linalg.norm(E.pos[s, :2] - E.land_xy(s))), 3), "t_exec_s": t_exec}
-            elif op == "rtl":
-                err = float(np.linalg.norm(E.pos[s, :2] - E.home[s, :2]))
-                if call.args.get("land", True):
-                    tb.seen_landed[r] |= f == FS.LANDED
-                    done = f == FS.DISARMED and err < 2.0 and bool(tb.seen_landed[r])
-                else:
-                    done = err < 2.0 and abs(float(E.pos[s, 2]) - float(S.z_rtl[s])) < 1.0
-                m = {"pos_err_m": round(err, 3), "t_exec_s": t_exec}
-            elif op == "velocity":
-                done = bool(tb.stop_seen[r]) and self._hold(r, sp < 0.3, t, 1.0)
-            elif op == "safety_stop":
-                done = self._hold(r, sp < 0.3, t, 0.5)
-            elif op == "pause":
-                done = self._hold(r, sp < 0.3, t, 1.0)
-            elif op == "arm":
-                done = f == FS.READY
-            elif op == "disarm":
-                done = f == FS.DISARMED
+            done, mk = self._done_eval(call, r, s, f, sp, t)
             if done:
-                call.metrics = m
-                if op == "velocity":
-                    S.vel_sess[s] = False
-                self._finish(call, "succeeded", 0, {"status": "OK", "verify_trust": 4, "simulated": True, "metrics": m,
-                                                    "latency_ms": self._latency_ms(call)})
-                if op in ("rtl", "land") and self.PB is not None:
-                    ACT.release_path(S, self.PB, np.array([s]))
+                self._done_finish(call, r, s, t, mk)
+
+    def _done_eval(self, call: Call, r: int, s: int, f: int, sp: float, t: int) -> tuple[bool, Any]:
+        """单行完成判据：返回 (是否完成, 度量构造函数或 None)；`_hold` 计时随判据更新（与逐行实现同一副作用）。"""
+        S, tb = self.S, self.table
+        E = S.enu
+        P, Vv = E.pos, E.vel
+        op = call.op
+        done = False
+        mk: Any = None  # 判定完成时构造度量字典
+        if op == "takeoff":
+            alt = float(tb.alt[r])
+            z_t = float(E.ground_up(s)) + alt
+            err = abs(float(P[s, 2]) - z_t)
+            ok = f == FS.FLYING and err < max(0.3, 0.05 * alt) and abs(float(Vv[s, 2])) < 0.3
+            done = self._hold(r, ok, t, 1.0)
+            mk = lambda err=err: {"alt_err_m": round(err, 3)}  # noqa: E731
+        elif op == "goto":
+            dist = _dist3(P[s], tb.goal[r])
+            done = self._hold(r, dist < tb.tol[r] and sp < 0.5 and S.ctrl_mode[s] != CtrlMode.TRAJ, t, 1.0)
+            mk = lambda dist=dist: {"dist_err_m": round(dist, 3)}  # noqa: E731
+        elif op == "follow_path":
+            dist = _dist3(P[s], tb.goal[r])
+            arrived = S.ctrl_mode[s] not in (CtrlMode.PATH, CtrlMode.TRAJ)  # 原生 PATH 或提供者交回 HOLD 后才判完成
+            done = self._hold(r, arrived and dist < 0.5 and sp < 0.5, t, 1.0)
+            mk = lambda r=r, dist=dist: {"path_len_m": round(float(tb.aux[r, 0]), 2),  # noqa: E731
+                                         "max_dev_m": round(float(tb.max_dev[r]), 3), "dist_err_m": round(dist, 3)}
+        elif op == "orbit":
+            R, v, turns = float(tb.aux[r, 0]), float(tb.aux[r, 1]), float(tb.aux[r, 2])
+            c = tb.goal[r]
+            if turns > 0:
+                back = S.ctrl_mode[s] not in (CtrlMode.ORBIT, CtrlMode.TRAJ)
+                done = back and (call.provider is not None or float(S.orb[s, K.O_TURN]) >= turns - 1e-6)
+                mk = lambda s=s: {"turns": round(float(S.orb[s, K.O_TURN]), 3)}  # noqa: E731
+            else:
+                rr = math.hypot(float(P[s, 0]) - float(c[0]), float(P[s, 1]) - float(c[1]))
+                ok = abs(rr - R) < 1.0 and abs(sp - v) < 0.5
+                done = self._hold(r, ok, t, 3.0)
+                mk = lambda rr=rr, R=R: {"radius_err_m": round(abs(rr - R), 3)}  # noqa: E731
+        elif op == "hover":
+            done = self._hold(r, sp < 0.3, t, 1.0)
+        elif op == "land":
+            tb.seen_landed[r] |= f == FS.LANDED
+            done = bool(tb.seen_landed[r]) and f == FS.DISARMED
+            mk = lambda s=s: {"pos_err_m": round(float(np.linalg.norm(E.pos[s, :2] - E.land_xy(s))), 3)}  # noqa: E731
+        elif op == "rtl":
+            h = E.home[s]
+            err = math.hypot(float(P[s, 0]) - float(h[0]), float(P[s, 1]) - float(h[1]))
+            if call.args.get("land", True):
+                tb.seen_landed[r] |= f == FS.LANDED
+                done = f == FS.DISARMED and err < 2.0 and bool(tb.seen_landed[r])
+            else:
+                done = err < 2.0 and abs(float(P[s, 2]) - float(S.z_rtl[s])) < 1.0
+            mk = lambda err=err: {"pos_err_m": round(err, 3)}  # noqa: E731
+        elif op == "velocity":
+            done = bool(tb.stop_seen[r]) and self._hold(r, sp < 0.3, t, 1.0)
+        elif op == "safety_stop":
+            done = self._hold(r, sp < 0.3, t, 0.5)
+        elif op == "pause":
+            done = self._hold(r, sp < 0.3, t, 1.0)
+        elif op == "arm":
+            done = f == FS.READY
+        elif op == "disarm":
+            done = f == FS.DISARMED
+        return bool(done), mk
+
+    def _done_finish(self, call: Call, r: int, s: int, t: int, mk: Any) -> None:
+        S, tb = self.S, self.table
+        m = {**(mk() if mk is not None else {}), "t_exec_s": round((t - int(tb.t_accept[r])) * 1e-9, 3)}
+        call.metrics = m
+        if call.op == "velocity":
+            S.vel_sess[s] = False
+        self._finish(call, "succeeded", 0, {"status": "OK", "verify_trust": 4, "simulated": True, "metrics": m,
+                                            "latency_ms": self._latency_ms(call)})
+        if call.op in ("rtl", "land") and self.PB is not None:
+            ACT.release_path(S, self.PB, np.array([s]))
+
+    def _done_np(self, rows: np.ndarray, slots: np.ndarray, fs: np.ndarray, t: int) -> None:
+        """`_done_vector` 的大机群路径（ADR-060）：goto、follow_path、orbit、hover 的判据与 `_hold` 计时向量化求值，其余
+        命令与"判为完成"的行按行号升序交给 `_done_eval` 逐行复核后结束（与逐行实现同一判据、同一结束顺序与度量）。"""
+        S, tb = self.S, self.table
+        E = S.enu
+        P = E.pos
+        vn = np.linalg.norm(E.vel[slots], axis=1)
+        n = rows.size
+        ok = tb.live[rows] & ~tb.paused[rows]  # 行在终态即归还（live 即 meta 存在且未终结）
+        op = tb.op[rows]
+        cm = S.ctrl_mode[slots]
+        vec = np.zeros(n, np.bool_)
+        done = np.zeros(n, np.bool_)
+        hc = np.zeros(n, np.bool_)        # _hold 的判据
+        hn = np.zeros(n, np.int64)        # _hold 的门限（int(need_s·1e9) − 1）
+        hm = np.zeros(n, np.bool_)        # 走 _hold 的行
+        m = ok & ((op == _OP_GOTO) | (op == _OP_FP))
+        if m.any():
+            k = np.flatnonzero(m)
+            r = rows[k]
+            d = _dist3_rows(P[slots[k]], tb.goal[r])
+            slow = vn[k] < 0.5
+            g = op[k] == _OP_GOTO
+            c_goto = (d < tb.tol[r]) & slow & (cm[k] != int(CtrlMode.TRAJ))
+            c_fp = (cm[k] != int(CtrlMode.PATH)) & (cm[k] != int(CtrlMode.TRAJ)) & (d < 0.5) & slow
+            hc[k] = np.where(g, c_goto, c_fp)
+            hn[k] = _HOLD_1S
+            hm[k] = True
+            vec[k] = True
+        m = ok & (op == _OP_ORBIT)
+        if m.any():
+            k = np.flatnonzero(m)
+            r = rows[k]
+            turns = tb.aux[r, 2]
+            pos = turns > 0
+            if pos.any():
+                k1 = k[pos]
+                back = (cm[k1] != int(CtrlMode.ORBIT)) & (cm[k1] != int(CtrlMode.TRAJ))
+                done[k1] = back & (tb.prov[rows[k1]] | (S.orb[slots[k1], K.O_TURN] >= turns[pos] - 1e-6))
+                vec[k1] = True
+            if (~pos).any():
+                k0 = k[~pos]
+                r0, s0 = rows[k0], slots[k0]
+                dx = P[s0, 0] - tb.goal[r0, 0]
+                dy = P[s0, 1] - tb.goal[r0, 1]
+                rr = np.fromiter(map(math.hypot, dx.tolist(), dy.tolist()), np.float64, k0.size)  # 与逐行同一 math.hypot
+                hc[k0] = (np.abs(rr - tb.aux[r0, 0]) < 1.0) & (np.abs(vn[k0] - tb.aux[r0, 1]) < 0.5)
+                hn[k0] = _HOLD_3S
+                hm[k0] = True
+                vec[k0] = True
+        m = ok & (op == _OP_HOVER)
+        if m.any():
+            k = np.flatnonzero(m)
+            hc[k] = vn[k] < 0.3
+            hn[k] = _HOLD_1S
+            hm[k] = True
+            vec[k] = True
+        m = ok & (op == _OP_TAKEOFF)
+        if m.any():  # 同 `_done_eval`：z_t = ground_up + alt，|z − z_t| < max(0.3, 0.05·alt)，FLYING，|v_z| < 0.3，持续 1 s
+            k = np.flatnonzero(m)
+            r, sk = rows[k], slots[k]
+            a = tb.alt[r]
+            err = np.abs(P[sk, 2] - (E.ground_up(sk) + a))
+            hc[k] = (fs[k] == int(FS.FLYING)) & (err < np.maximum(0.3, 0.05 * a)) & (np.abs(E.vel[sk, 2]) < 0.3)
+            hn[k] = _HOLD_1S
+            hm[k] = True
+            vec[k] = True
+        if hm.any():
+            k = np.flatnonzero(hm)
+            r = rows[k]
+            c = hc[k]
+            hs = tb.hold_since[r]
+            hs = np.where(c, np.where(hs < 0, t, hs), -1)
+            tb.hold_since[r] = hs
+            done[k] = c & (t - hs >= hn[k])
+        for k in np.flatnonzero(done | (ok & ~vec)).tolist():
+            r, s = int(rows[k]), int(slots[k])
+            call = tb.meta[r]
+            if call is None or call.final or tb.paused[r]:
+                continue
+            d, mk = self._done_eval(call, r, s, int(fs[k]), float(vn[k]), t)
+            if d:
+                self._done_finish(call, r, s, t, mk)
 
     def _progress(self, call: Call, r: int) -> dict | None:
         S, tb = self.S, self.table
         s = call.slot
         if call.op in ("goto", "follow_path"):
-            d = float(np.linalg.norm(tb.goal[r] - S.enu.pos[s]))
-            v = max(float(np.linalg.norm(S.enu.vel[s])), 0.5)
+            d = _dist3(tb.goal[r], S.enu.pos[s])
+            vx, vy, vz = (float(x) for x in S.enu.vel[s])
+            v = max(math.sqrt(vx * vx + vy * vy + vz * vz), 0.5)
             return {"phase": "paused" if tb.paused[r] else "executing", "dist_m": round(d, 2), "eta_s": round(d / v, 1)}
         if call.op == "takeoff":
             z_t = float(S.enu.ground_up(s)) + float(tb.alt[r])
@@ -1310,6 +1849,12 @@ class CommandEngine:
             if not call.final:
                 self._cancel_provider(call)
                 self._finish(call, "canceled", code, {"status": "UNVERIFIED", "verify_trust": 1, "message": message})
+        for pc in self.plugin_calls:
+            if not pc.call.final:
+                self._finish_with(pc.call, "canceled", code, {"status": "UNVERIFIED", "verify_trust": 1, "message": message},
+                                  None)
+        self.plugin_calls.clear()
+        self._metric_pending.clear()
         self.table.clear()
         self.staged.clear()
         self.fine_queue.clear()
@@ -1386,10 +1931,19 @@ class CommandEngine:
             if c.row >= 0 and not c.final:
                 self.table.deadline[c.row] = max(int(self.table.deadline[c.row]), int(until_t_ns))
                 hit = True
+        for pc in self.plugin_calls:
+            if pc.call.cid == cid and not pc.call.final:
+                pc.deadline_ns = max(pc.deadline_ns, int(until_t_ns))
+                hit = True
         return hit
 
     def _plugin_op(self, msg: dict, op: str, p: dict) -> tuple[dict, list[Call]]:
-        """登记的非机体命令（`register_command_handler`）：验签后按角色与席位放行，同步调用处理者。"""
+        """登记的非机体命令（`register_command_handler`）：验签后按角色与席位放行，同步调用处理者（准入与排程）。
+
+        生命周期（ADR-058，与机体命令同一套 `cmd.*` 事件）：准入通过即 `cmd.accepted`（V1，native_ack）；apply_tick 的 ingest
+        发 `cmd.running`（V2，observed_state `applied`）；处理者回复中没有 `watch` 时同一步 `cmd.succeeded`（OK、V4、
+        simulated，data 带 `result`）；有 `watch(ctx) -> None | {status: succeeded|failed, code?, result?, message?}` 时
+        每步判定，截止（`deadline_s`，缺省 10 s【仿真】）未决以 `failed 202` 结束；剧本重置时 `canceled 6`。"""
         spec = self.reg.commands[op]
         if not p.get("_internal"):
             if p.get("role") not in ("operator", "admin"):
@@ -1410,28 +1964,133 @@ class CommandEngine:
         det = {k: r[k] for k in ("result", "detail") if r.get(k) is not None}
         if r.get("warnings"):
             det["warnings"] = list(r["warnings"])
-        adm = self._base_adm(str(msg.get("cid") or "")) | {"status": "accepted", "code": 0, "reason": None,
-                                                              "detail": det or None, "remedy": None,
-                                                              "apply_tick": apply_tick}
-        # INT-1（M07-to-M08 第 1 条）：插件命令由处理者同步完成，准入后立即给出终态，网关的调用与 UI 草稿据此结束
         cid = str(msg.get("cid") or "")
-        if cid:
-            extra = {"result": r["result"]} if r.get("result") is not None else {}
-            self.events.emit("cmd.succeeded", t_sim_ns=self.S.t_ns, severity=SEVERITY.get("succeeded", 0), uav=None,
-                             cid=cid, batch_id=msg.get("batch_id"), op=op, code=0,
-                             effect={"status": "OK", "verify_trust": 4, "simulated": True}, **extra)
-        return adm, []
+        adm = self._base_adm(cid) | {"status": "accepted", "code": 0, "reason": None, "detail": det or None, "remedy": None,
+                                     "apply_tick": apply_tick}
+        now_w = self.clock.wall_mono_ns()
+        call = Call(cid, op, -1, None, p.get("principal_id"), p.get("role"), self._source(p),  # type: ignore[arg-type]
+                    dict(msg.get("args") or {}), int(self.S.t_ns), now_w, batch_id=msg.get("batch_id"),
+                    warnings=list(r.get("warnings") or []))
+        call.effect = {"status": "UNVERIFIED", "verify_trust": 1, "native_ack": True, "protocol": "inproc", "requested": op}
+        dl = r.get("deadline_s")
+        dl_s = float(dl) if _num(dl) and dl > 0 else PLUGIN_DEADLINE_S
+        watch = r.get("watch") if callable(r.get("watch")) else None
+        self.plugin_calls.append(_PluginCall(call, apply_tick, watch, int(self.S.t_ns + dl_s * 1e9), r.get("result")))
+        self.stats["admitted"] += 1
+        if call.warnings:
+            self._event("cmd.accepted", call, 0, dict(call.effect), warnings=call.warnings)
+        else:
+            self._event("cmd.accepted", call, 0, dict(call.effect))
+        return adm, [call]
+
+    def _advance_plugin_calls(self, ctx) -> None:
+        """apply_tick 起 running；无 watch 即 succeeded；watch 给出终态或截止 202（ADR-058）。"""
+        keep: list[_PluginCall] = []
+        t = int(ctx.t_ns)
+        for pc in self.plugin_calls:
+            c = pc.call
+            if c.final:
+                continue
+            if ctx.tick < pc.apply_tick:
+                keep.append(pc)
+                continue
+            if c.status == "accepted":
+                c.status = "running"
+                c.applied = True
+                c.effect = {"status": "UNVERIFIED", "verify_trust": 2, "observed_state": "applied"}
+                self._event("cmd.running", c, 0, dict(c.effect))
+            verdict: Any = None
+            if pc.watch is None:
+                verdict = {"status": "succeeded"}
+            else:
+                try:
+                    verdict = pc.watch(ctx)
+                except Exception as e:
+                    verdict = {"status": "failed", "code": int(Reason.SERVICE_UNAVAILABLE), "message": type(e).__name__}
+            if isinstance(verdict, dict) and verdict.get("status") in ("succeeded", "failed"):
+                self._finish_plugin(pc, verdict, t)
+            elif t > pc.deadline_ns:
+                self._finish_plugin(pc, {"status": "failed", "code": int(Reason.PROGRESS_TIMEOUT), "message": "deadline"}, t)
+            else:
+                keep.append(pc)
+        self.plugin_calls = keep
+
+    def _finish_plugin(self, pc: _PluginCall, verdict: dict, t_ns: int) -> None:
+        c = pc.call
+        res = verdict.get("result", pc.result)
+        if verdict.get("status") == "succeeded":
+            m = {"t_exec_s": round((t_ns - c.t_accept_ns) * 1e-9, 3)}
+            if isinstance(verdict.get("metrics"), dict):
+                m.update({k: v for k, v in verdict["metrics"].items() if _num(v)})
+            c.metrics = m
+            self._finish_with(c, "succeeded", 0, {"status": "OK", "verify_trust": 4, "simulated": True, "metrics": m,
+                                                  "latency_ms": self._latency_ms(c)}, res)
+        else:
+            code = int(verdict.get("code") or int(Reason.PROGRESS_TIMEOUT))
+            self._finish_with(c, "failed", code, {"status": "FAILED", "verify_trust": 2,
+                                                  "message": str(verdict.get("message") or "")}, res)
+
+    def _finish_with(self, call: Call, status: str, code: int, effect: dict, result: Any) -> None:
+        """`_finish` 的非机体版本：终态事件额外带 `result`（处理者的回复，例如 env 的 version、t_apply_ns）。"""
+        if call.final:
+            return
+        call.status, call.code, call.final, call.effect = status, int(code), True, effect
+        key = "succeeded" if status == "succeeded" else "failed" if status in ("failed", "timeout") else "canceled"
+        self.stats[key] += 1
+        extra = {"result": result} if result is not None else {}
+        self._event(f"cmd.{status}", call, code, effect, **extra)
+        for owner, cb in self._subs:
+            if not owner or call.cid.startswith(owner):
+                with contextlib.suppress(Exception):
+                    cb(call)
 
     def _metric_op(self, msg: dict, args: dict) -> tuple[dict, list[Call]]:
+        """`scenario/metric`：不带 `value` 时读取度量注册表（`args.args` 或 `args.kw` 为度量参数）；带 `value` 时为外部度量
+        接收器（M14-FR-043；M14-to-M08 第 3 条；ADR-058）：agent（或 admin、内部）principal 写入已声明的外部度量，写入输入日志，
+        在 apply_tick 生效。"""
         name = str(args.get("name") or "")
+        kw = args.get("args") if isinstance(args.get("args"), dict) else (args.get("kw") if isinstance(args.get("kw"), dict)
+                                                                          else {})
+        cid = str(msg.get("cid") or "")
+        if "value" in args:
+            p = msg.get("principal") or {}
+            if not p.get("_internal") and p.get("role") not in ("agent", "admin"):
+                return self._reject(msg, int(Reason.ROLE_FORBIDDEN), detail={"op": "scenario/metric"})
+            if not MET.is_external(name):
+                return self._reject(msg, int(Reason.PARAM_OUT_OF_RANGE), detail={"name": name, "why": "NOT_EXTERNAL"})
+            v = args.get("value")
+            if not _num(v):
+                return self._reject(msg, int(Reason.PARAM_OUT_OF_RANGE), detail={"field": "args.value"})
+            try:
+                MET._key(name, dict(kw))
+            except ValueError:
+                return self._reject(msg, int(Reason.PARAM_OUT_OF_RANGE), detail={"field": "args.args", "name": name})
+            apply_tick = self.S.tick + 1
+            self._metric_pending.append((apply_tick, name, dict(kw), float(v)))
+            if self.inputlog is not None:
+                self.inputlog.append("cmd", apply_tick, msg)
+            adm = self._base_adm(cid) | {"status": "accepted", "code": 0, "reason": None,
+                                         "detail": {"name": name, "args": dict(kw), "value": float(v)}, "remedy": None,
+                                         "apply_tick": apply_tick}
+            return adm, []
         try:
-            val = MET.metric(name, **(args.get("kw") or {}))
+            val = MET.metric(name, **kw)
         except KeyError:
             return self._reject(msg, int(Reason.NOT_FOUND), detail={"name": name})
-        adm = self._base_adm(str(msg.get("cid") or "")) | {"status": "accepted", "code": 0, "reason": None,
-                                                              "detail": {"name": name, "value": val}, "remedy": None,
-                                                              "apply_tick": None}
+        except (LookupError, TypeError, ValueError):
+            val = None
+        adm = self._base_adm(cid) | {"status": "accepted", "code": 0, "reason": None,
+                                     "detail": {"name": name, "value": val}, "remedy": None, "apply_tick": None}
         return adm, []
+
+    def _apply_metric_writes(self, tick: int) -> None:
+        due = [w for w in self._metric_pending if w[0] <= tick]
+        if not due:
+            return
+        self._metric_pending = [w for w in self._metric_pending if w[0] > tick]
+        for _t, name, kw, v in due:
+            with contextlib.suppress(KeyError, ValueError):
+                MET.set_external(name, kw, v)
 
 
 def _counts(calls: list[Call]) -> dict[str, int]:

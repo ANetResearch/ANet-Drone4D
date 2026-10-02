@@ -8,10 +8,13 @@
 
 from __future__ import annotations
 
+from functools import cache
 from typing import TYPE_CHECKING
 
 import numpy as np
 
+from . import kernels_contact as KC
+from .kernels_l1 import HAVE_NUMBA as KC_OK
 from .state import EVT_COLLISION, CtrlMode
 
 if TYPE_CHECKING:
@@ -21,13 +24,25 @@ __all__ = ["CRASH_COLLISION_UAV", "UavCollider"]
 
 CRASH_COLLISION_UAV = 3
 CELL_M = 6.0
+SMALL_N = 48  # 不超过该机数时逐对比较（n(n−1)/2 ≤ 1128 对 × 8 套网格），否则排序配对
 _SHIFTS = np.array([[a, b, c] for a in (0.0, 0.5) for b in (0.0, 0.5) for c in (0.0, 0.5)]) * CELL_M
+
+
+@cache
+def _pairs(n: int) -> tuple[np.ndarray, np.ndarray]:
+    """`np.triu_indices(n, 1)` 的只读缓存（小机群每 25 Hz 调用，n ≤ SMALL_N）。"""
+    iu, ju = np.triu_indices(n, 1)
+    iu.flags.writeable = False
+    ju.flags.writeable = False
+    return iu, ju
 
 
 class UavCollider:
     def __init__(self, capacity: int) -> None:
         self.p_chk = np.zeros((capacity, 3))
         self.primed = np.zeros(capacity, np.bool_)
+        self.use_kernel = KC_OK
+        self._hits_buf = np.zeros((4 * capacity, 2), np.int64)
 
     def check(self, S: FleetState, idx: np.ndarray, radius: np.ndarray) -> list[tuple[int, int]]:
         """返回本次新判定的碰撞对（slot 升序）；并更新机体状态。只考虑空中且未坠毁的机体。"""
@@ -41,6 +56,24 @@ class UavCollider:
         if i.size < 2:
             return []
         mid = 0.5 * (p0 + p1)
+        if i.size <= SMALL_N:
+            # 小机群：全部无序对逐套网格比较同格（与下方排序配对得到同一候选集与同一升序，FX-SIM1 固定开销优化）
+            iu, ju = _pairs(int(i.size))
+            key = np.floor((mid[None, :, :] + _SHIFTS[:, None, :]) / CELL_M)
+            same = np.all(key[:, iu, :] == key[:, ju, :], axis=2).any(axis=0)
+            if not same.any():
+                return []
+            return self._hits(S, i, p0, p1, iu[same].astype(np.int64), ju[same].astype(np.int64), radius)
+        if self.use_kernel:
+            # 大机群：numba 排序扫描（中点各轴之差 < CELL_M 为候选，覆盖网格法的全部候选）与 CPA 判定一次完成；命中对按
+            # (a, b) 升序，与下方网格法同一判据、同一施加顺序（FX2-R2：N = 1000 时约 3 ms → 数十 µs）
+            rad = radius[S.profile_id[i]].astype(np.float64)
+            nh = KC.uav_hits(p0, p1, rad, CELL_M, self._hits_buf)
+            if nh >= 0:
+                if nh == 0:
+                    return []
+                h = self._hits_buf[:nh]
+                return self._apply(S, i, h[:, 0], h[:, 1])
         cand: set[tuple[int, int]] = set()
         for sh in _SHIFTS:
             key = np.floor((mid + sh) / CELL_M).astype(np.int64)
@@ -62,7 +95,11 @@ class UavCollider:
         if not cand:
             return []
         pa = np.array(sorted(cand), np.int64)
-        a, b = pa[:, 0], pa[:, 1]
+        return self._hits(S, i, p0, p1, pa[:, 0], pa[:, 1], radius)
+
+    @staticmethod
+    def _hits(S: FleetState, i: np.ndarray, p0: np.ndarray, p1: np.ndarray, a: np.ndarray, b: np.ndarray,
+              radius: np.ndarray) -> list[tuple[int, int]]:
         r0 = p0[a] - p0[b]
         r1 = p1[a] - p1[b]
         d = r1 - r0
@@ -71,8 +108,13 @@ class UavCollider:
         m = r0 + s[:, None] * d
         dist = np.sqrt((m * m).sum(1))
         hit = dist < radius[S.profile_id[i[a]]] + radius[S.profile_id[i[b]]]
+        return UavCollider._apply(S, i, a[hit], b[hit])
+
+    @staticmethod
+    def _apply(S: FleetState, i: np.ndarray, a: np.ndarray, b: np.ndarray) -> list[tuple[int, int]]:
+        """命中对的后果（两机 KILLED、推力 0、COLLISION_UAV），按给定顺序施加；返回 slot 对。"""
         out = []
-        for x, y in zip(i[a[hit]], i[b[hit]], strict=True):
+        for x, y in zip(i[a], i[b], strict=True):
             for sl in (int(x), int(y)):
                 S.crash_sub[sl] = CRASH_COLLISION_UAV
                 S.ctrl_mode[sl] = CtrlMode.KILLED

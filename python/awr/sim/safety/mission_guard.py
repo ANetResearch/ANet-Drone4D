@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from . import kernels as KN
 from .flight_fsm import S_FLY_HOVER, Origin
-from .state import FS, SUBV
+from .state import COND, FS, SUBV
 
 if TYPE_CHECKING:
     from .service import SafetyRuntime
@@ -33,9 +34,13 @@ class MissionGuard:
     def __init__(self, rt: SafetyRuntime) -> None:
         self.rt = rt
 
-    def step(self, ctx: Any) -> None:
+    def step(self, ctx: Any, shard: tuple[int, int] = (0, 1)) -> None:
+        """10 Hz；分片（k, n）时只处理 slot % n == k 的机体（每机仍为 10 Hz，ADR-070）。"""
         rt = self.rt
         act = rt.act_idx
+        k, n = shard
+        if n > 1 and act.size:
+            act = act[act % n == k]
         if act.size:
             self._wind_limit(act)
         geo = rt.geo
@@ -63,6 +68,15 @@ class MissionGuard:
             rt.sink.add_many(new, rt.code("SAF.ENV.WIND_LIMIT"), rt.t_ns, values=sp[over & ~was])
         rt.set_cond(air[~over & was], "WIND_LIMIT", False)
 
+    def _sync_cond(self, air: np.ndarray, name: str, want: np.ndarray) -> None:
+        """条件位同步为 want：只对与当前位不同的机体调用 set_cond（与逐位 set True/False 等价，FX-SIM1）。"""
+        rt = self.rt
+        cur = (rt.sb["cond"][air] & np.uint64(1 << COND[name])) != 0
+        diff = cur != want
+        if diff.any():
+            rt.set_cond(air[diff & want], name, True)
+            rt.set_cond(air[diff & ~want], name, False)
+
     def _fence(self, act: np.ndarray, geo: Any) -> None:
         rt, S, sb = self.rt, self.rt.S, self.rt.sb
         P = rt.params.fence
@@ -78,6 +92,30 @@ class MissionGuard:
             return
         pos = S.enu.pos
         o = geo.scan(pos, air)
+        if KN.HAVE_NUMBA and getattr(geo, "use_numba", False):
+            # 融合核先写四个状态字段并逐机判断是否有任何边沿、条件位变化、越界或 CORRECTING/Velocity：无事件的机体只需提交
+            # near_ok_since 并清 Velocity 自由距离；有事件的机体（大机群稳态下没有或极少）走下面的原实现（逐机独立，其中的
+            # 赋值与核相同，near_ok_since 未改动；事件按 slot 升序，与全量走原实现时的相对次序相同）
+            dsm = geo.dsm(pos[air, :2])
+            ns_new = np.empty(air.size)
+            evf = np.empty(air.size, np.uint8)
+            hits = KN.fence_core(np.ascontiguousarray(air, np.int64), o.margin, o.nofly, o.restr, o.near, o.near_d, pos, dsm,
+                                 sb["fs"], sb["sub"], sb["cond"], sb["near_ok_since"], float(P.warn_margin_m),
+                                 float(P.near_rearm_m), float(P.near_rearm_s), float(P.min_clear_m), float(geo.max_z),
+                                 float(t_s), 0, 2, COND["GEO_BREACH"], COND["ALT_MAX"], COND["ALT_MIN"], int(FS.TAKING_OFF),
+                                 int(FS.LANDING), int(FS.RTL), int(FS.LANDED), int(FS.FLYING), int(FS.CORRECTING),
+                                 int(S_FLY_VEL), sb["geo_margin_m"], sb["zone_hit"], sb["zone_near"], sb["clearance_m"],
+                                 ns_new, evf)
+            if hits == 0:
+                sb["near_ok_since"][air] = ns_new
+                sb["d_free_fence_m"][act] = np.inf
+                return
+            calm = evf == 0
+            if calm.any():
+                sb["near_ok_since"][air[calm]] = ns_new[calm]
+                sb["d_free_fence_m"][air[calm]] = np.inf
+            air = air[~calm]
+            act = air  # 下面只用 act 求 Velocity 之外的机体（d_free_fence_m = inf）：地面机体已在上面处理
         margin = o.margin[air]
         sb["geo_margin_m"][air] = margin
         nf = o.nofly[air]
@@ -118,15 +156,11 @@ class MissionGuard:
             rt.set_cond(lr, "GEO_RESTRICTED", False)
         # ---- 越界（BREACH）
         breach = (margin < 0) | (nf >= 0)
-        rt.set_cond(air[breach], "GEO_BREACH", True)
-        rt.set_cond(air[~breach], "GEO_BREACH", False)
         exempt = (fs == FS.TAKING_OFF) | (fs == FS.LANDING) | ((fs == FS.RTL) & (sub == 3)) | (fs == FS.LANDED)
         altmax = (z > geo.max_z) & ~exempt
         altmin = (clear >= 0) & (clear < P.min_clear_m) & ~exempt
-        rt.set_cond(air[altmax], "ALT_MAX", True)
-        rt.set_cond(air[~altmax], "ALT_MAX", False)
-        rt.set_cond(air[altmin], "ALT_MIN", True)
-        rt.set_cond(air[~altmin], "ALT_MIN", False)
+        for name, want in (("GEO_BREACH", breach), ("ALT_MAX", altmax), ("ALT_MIN", altmin)):
+            self._sync_cond(air, name, want)
         fly = fs == FS.FLYING
         for k in np.flatnonzero(fly & breach):
             s = int(air[k])
@@ -170,7 +204,7 @@ class MissionGuard:
                                value=(t - since[tout]) * 1e-9, thr=P.correct_timeout_s)
         # ---- Velocity 方向距离（FR-043）
         vi = air[(fs == FS.FLYING) & (sub == S_FLY_VEL)]
-        other = np.setdiff1d(act, vi, assume_unique=False)
+        other = np.setdiff1d(act, vi, assume_unique=False) if vi.size else act  # 无 Velocity 机体时免去两次排序去重
         sb["d_free_fence_m"][other] = np.inf
         if vi.size:
             vel = S.enu.vel[vi]

@@ -24,6 +24,7 @@ from typing import Any
 import msgpack
 import numpy as np
 
+from . import kernels_rows as KR
 from .anchors import H_NS, AnchorIntegrator, Anchors
 from .atmosphere.isa import isa_arr
 from .atmosphere.optics import H_HAZE, optical_depth_arr, sigma_at_arr
@@ -56,7 +57,16 @@ from .weather.presets import (
 from .weather.transitions import eval_env
 from .wind.gust import MAX_ACTIVE, GustEvent, GustScheduler, gust_arr, gust_create, gust_expired
 from .wind.profile import f_adv, profile_arr
-from .wind.turbulence import FT, TURB_PERIOD, DrydenBank, TurbBox, ground_fade_arr, mil_sigma_arr
+from .wind.turbulence import (
+    FT,
+    TURB_PERIOD,
+    DrydenBank,
+    TurbBox,
+    bilinear_cc,
+    ground_fade_arr,
+    mil_sigma_arr,
+    wind_fused,
+)
 
 __all__ = ["EnvironmentServiceImpl", "env_seed_of", "world_config"]
 
@@ -66,6 +76,7 @@ TICK_NS = 4_000_000
 CALM_MPS = 1e-6
 _WIND, _TURB, _OPTICS, _PRECIP, _THERMO = int(Fields.WIND), int(Fields.TURB_SPEC), int(Fields.OPTICS), int(Fields.PRECIP), int(Fields.THERMO)
 _F_LOCAL, _F_ADDV_G, _F_ADDV_L = int(Frame.LOCAL), int(Frame.ADD_VELOCITY_GLOBAL), int(Frame.ADD_VELOCITY_LOCAL)
+_F_GLOBAL, _WIND_PARTS = int(Frame.GLOBAL), int(Fields.WIND_PARTS)
 _VALID, _CALM = int(EnvFlags.VALID), int(EnvFlags.CALM)
 GUST_AMP_RANGE = (0.0, 30.0)
 GUST_LEN_RANGE = (10.0, 500.0)
@@ -107,6 +118,7 @@ class EnvironmentServiceImpl:
         self.P = presets()
         self.world_id = world_id or getattr(world_query, "world_id", "") or ""
         self.wq = world_query
+        self._dtm_nb: tuple | bool | None = None
         self.env_world = dict(env_world or {})
         self.coordinate = dict(coordinate or {})
         self.world_seed = int(world_seed)
@@ -183,6 +195,7 @@ class EnvironmentServiceImpl:
         # EnvSample32 行缓存（按 slot），由 stage 每 tick 更新
         from awr.contracts.layouts import ENV_SAMPLE32
 
+        self.fuse_wind = True  # GLOBAL 帧的风走融合路径（False：全部走 numpy 路径，测试用作对拍基准）
         self.rows = np.zeros(self.capacity, ENV_SAMPLE32)
         self.row_valid = np.zeros(self.capacity, bool)
         self._warn_state = {"mor_low": False, "wind_high": False, "precip_heavy": False}
@@ -403,13 +416,70 @@ class EnvironmentServiceImpl:
             return self.anchors.A
         return self.anchors.at(self.kf.transition(), t_ns)
 
+    def _wind_only_fused(self, pos: np.ndarray, s: np.ndarray, A: Any, cfg: Mapping[str, Any], level: int, fa: float,
+                         agent_idx: np.ndarray | None, o: EnvSampleSoA) -> bool:
+        """只求风（env stage 5 个 env tick 中的 4 个）的 numba 融合路径（`turbulence.wind_fused`）：无阵风事件、GLOBAL 帧、
+        地面高可走 DTM 双线性或常数时使用，与下方 numpy 路径逐位相同；否则返回 False。N = 1000 时 env stage 约 1.3 ms →
+        约 0.4 ms（FX2-R2，D1-AC-07 的偶数 tick + env 叠加）。"""
+        if level >= 1 and self.kf.events:
+            return False
+        if self.wq is not None:
+            g = self._dtm_nb
+            if g is None:
+                g = self._dtm_nb = self._dtm_args()
+            if not g:
+                return False
+            dtm = g
+        else:
+            dtm = None
+        model = cfg["turbulence"]["model"]
+        mode = 0
+        dq = dry = None
+        if level >= 1 and model != "off":
+            if model == "box" and self.turb is not None:
+                mode = 1
+                dq = np.mod(fa * np.asarray(A.d_enu_m, np.float64), TURB_PERIOD)
+            elif model == "dryden" and agent_idx is not None:
+                mode = 2
+                dry = self.dryden.out
+            else:
+                return False
+        ex, ey = e(float(s[DIR]))
+        n = pos.shape[0]
+        ok = wind_fused(pos, dtm, float(self.ground_z), cfg["profile"], float(s[SPEED_REF]), ex, ey, float(s[W_MEAN]), mode,
+                        float(s[SIGMA_REF]), dq, self.turb if mode == 1 else None, dry, agent_idx, o, _VALID, _CALM, CALM_MPS)
+        if not ok:
+            return False
+        o.gust_long_mps[:n] = 0.0
+        o.source_level[:n] = min(level, 1)
+        return True
+
     def _z_ground(self, xy: np.ndarray) -> np.ndarray:
         if self.wq is not None:
+            g = self._dtm_nb
+            if g is None:
+                g = self._dtm_nb = self._dtm_args()
+            if g:
+                v = bilinear_cc(xy, *g)
+                if v is not None:  # 与 M04 ground_dtm 相同：float32 结果再转 float64
+                    return v.astype(np.float32).astype(np.float64)
             try:
                 return np.asarray(self.wq.ground_dtm(xy), np.float64)
             except Exception:
                 pass
         return np.full(xy.shape[0], self.ground_z)
+
+    def _dtm_args(self) -> tuple | bool:
+        """DTM 栅格（M04 `dtm_grid()` 只读视图，10 m）的 float64 一维副本与几何参数；取不到时为 False（走 M04 路径）。"""
+        try:
+            gv = self.wq.dtm_grid()
+            a = np.asarray(gv.a)
+            if a.ndim != 2 or a.size > (1 << 21):
+                return False
+            return (np.ascontiguousarray(a, np.float64).reshape(-1), a.shape[1], a.shape[0], float(gv.x0_m),
+                    float(gv.y0_m), float(gv.cell_m))
+        except Exception:
+            return False
 
     def query(self, pos: np.ndarray, t_sim_ns: int, *, fields: int = Fields.DEFAULT, frame: Frame = Frame.GLOBAL,
               vel: np.ndarray | None = None, quat_xyzw: np.ndarray | None = None, agent_idx: np.ndarray | None = None,
@@ -431,46 +501,54 @@ class EnvironmentServiceImpl:
         level = int(cfg["level"])
         prof = cfg["profile"]
         fa = f_adv(prof)
+        # GLOBAL 帧的风（均值、阵风、湍流、合成与 VALID/CALM 标志）先走融合路径（与下方 numpy 路径逐位相同）；只求风时
+        # 直接返回，全量求值时其余字段照常计算（FX2-R3：env stage 的 10 Hz 全量 tick 此前整段走 numpy，N = 1000 约 0.83 ms）
+        wind_ok = self.fuse_wind and frame == _F_GLOBAL and n and self._wind_only_fused(pos, s, A, cfg, level, fa, agent_idx, o)
+        if wind_ok and fields == _WIND_PARTS:
+            return o
         z_agl = pos[:, 2] - self._z_ground(pos[:, :2])
-        ex, ey = e(float(s[DIR]))
-        spd = float(s[SPEED_REF])
-        wm = o.wind_mean_mps[:n]
-        f = profile_arr(z_agl, prof)
-        wm[:, 0] = spd * f * ex
-        wm[:, 1] = spd * f * ey
-        wm[:, 2] = float(s[W_MEAN])
-        wg = o.wind_gust_mps[:n]
-        glong = np.zeros(n)
-        if level >= 1 and self.kf.events:
-            gust_arr(pos, A.s_m, self.kf.events, fa, wg, (ex, ey), glong)
-        else:
-            wg[:] = 0.0
-        o.gust_long_mps[:n] = glong
-        wt = o.wind_turb_mps[:n]
-        wt[:] = 0.0
         su, sw = mil_sigma_arr(z_agl, float(s[SIGMA_REF]))
-        model = cfg["turbulence"]["model"]
-        if level >= 1 and model != "off":
-            g = ground_fade_arr(z_agl)
-            if model == "box" and self.turb is not None:
-                Dq = np.mod(fa * np.asarray(A.d_enu_m, np.float64), TURB_PERIOD)
-                b = self.turb.sample(pos - Dq)
-                wt[:, 0] = su * b[:, 0] * g
-                wt[:, 1] = su * b[:, 1] * g
-                wt[:, 2] = sw * b[:, 2] * g
-            elif model == "dryden" and agent_idx is not None:
-                wt[:] = self.dryden.out[np.asarray(agent_idx, np.int64)] * g[:, None]
-        w = o.wind_mps[:n]
-        np.add(wm, wg, out=w)
-        w += wt
-        # 帧
-        if frame in (_F_ADDV_G, _F_ADDV_L) and vel is not None:
-            w -= np.asarray(vel, np.float64).reshape(n, 3)
-        if frame in (_F_LOCAL, _F_ADDV_L) and quat_xyzw is not None:
-            w[:] = _rotate_inv(np.asarray(quat_xyzw, np.float64).reshape(n, 4), w)
-        flags = np.full(n, _VALID, np.uint8)
-        calm = np.hypot(wm[:, 0], wm[:, 1]) < CALM_MPS
-        flags |= np.where(calm, _CALM, 0).astype(np.uint8)
+        if wind_ok:
+            flags = o.flags[:n].copy()
+        else:
+            ex, ey = e(float(s[DIR]))
+            spd = float(s[SPEED_REF])
+            wm = o.wind_mean_mps[:n]
+            f = profile_arr(z_agl, prof)
+            wm[:, 0] = spd * f * ex
+            wm[:, 1] = spd * f * ey
+            wm[:, 2] = float(s[W_MEAN])
+            wg = o.wind_gust_mps[:n]
+            glong = np.zeros(n)
+            if level >= 1 and self.kf.events:
+                gust_arr(pos, A.s_m, self.kf.events, fa, wg, (ex, ey), glong)
+            else:
+                wg[:] = 0.0
+            o.gust_long_mps[:n] = glong
+            wt = o.wind_turb_mps[:n]
+            wt[:] = 0.0
+            model = cfg["turbulence"]["model"]
+            if level >= 1 and model != "off":
+                g = ground_fade_arr(z_agl)
+                if model == "box" and self.turb is not None:
+                    Dq = np.mod(fa * np.asarray(A.d_enu_m, np.float64), TURB_PERIOD)
+                    b = self.turb.sample(pos - Dq)
+                    wt[:, 0] = su * b[:, 0] * g
+                    wt[:, 1] = su * b[:, 1] * g
+                    wt[:, 2] = sw * b[:, 2] * g
+                elif model == "dryden" and agent_idx is not None:
+                    wt[:] = self.dryden.out[np.asarray(agent_idx, np.int64)] * g[:, None]
+            w = o.wind_mps[:n]
+            np.add(wm, wg, out=w)
+            w += wt
+            # 帧
+            if frame in (_F_ADDV_G, _F_ADDV_L) and vel is not None:
+                w -= np.asarray(vel, np.float64).reshape(n, 3)
+            if frame in (_F_LOCAL, _F_ADDV_L) and quat_xyzw is not None:
+                w[:] = _rotate_inv(np.asarray(quat_xyzw, np.float64).reshape(n, 4), w)
+            flags = np.full(n, _VALID, np.uint8)
+            calm = np.hypot(wm[:, 0], wm[:, 1]) < CALM_MPS
+            flags |= np.where(calm, _CALM, 0).astype(np.uint8)
         if fields & (_OPTICS | _WIND):
             z_opt = pos[:, 2] - self.ground_z
             sig, fl = sigma_at_arr(z_opt, d, float(s[FOG_TOP]), float(s[BASE]))
@@ -531,10 +609,17 @@ class EnvironmentServiceImpl:
         self.dryden.step(sl, z_agl, um - v, float(s[SIGMA_REF]), dt, (ex, ey))
 
     def store_rows(self, slots: np.ndarray, q: EnvSampleSoA) -> None:
-        """把本 tick 的查询结果打包为 EnvSample32 行缓存（按 slot）。"""
+        """把本 tick 的查询结果打包为 EnvSample32 行缓存（按 slot）。numba 可用时一次遍历写完（kernels_rows，与下面的 numpy
+        实现逐字节相同；N = 1000 时约 0.3 ms → 数十 µs，FX2-R3）。"""
         n = q.n
         sl = np.asarray(slots, np.int64)[:n]
         r = self.rows
+        if KR.HAVE_NUMBA and n:
+            KR.store_rows_nb(sl, n, q.wind_mps, q.wind_mean_mps, q.turb_sigma_mps, q.sigma_ext_per_m, q.rain_eff_mmh,
+                             q.rho_kgm3, q.flags, q.source_level, q.gust_long_mps, r["wind"], r["wind_mean"],
+                             r["turb_sigma_uw"], r["sigma_ext"], r["rain_eff"], r["rho"], r["flags"], r["source_level"],
+                             r["gust"], self.row_valid)
+            return
         r["wind"][sl] = q.wind_mps[:n]
         r["wind_mean"][sl] = np.clip(np.round(q.wind_mean_mps[:n] / 0.01), -32768, 32767)
         tsig = np.stack([q.turb_sigma_mps[:n, 0], q.turb_sigma_mps[:n, 2]], axis=1)
@@ -546,6 +631,17 @@ class EnvironmentServiceImpl:
         r["source_level"][sl] = q.source_level[:n]
         r["gust"][sl] = np.clip(np.round(q.gust_long_mps[:n] / 0.01), -32768, 32767)
         self.row_valid[sl] = True
+
+    def store_wind_rows(self, slots: np.ndarray, q: EnvSampleSoA) -> None:
+        """只风的 env tick：行缓存中风与阵风两列随每个 env tick 更新（其余列保持最近一次全量求值，ADR-060）。"""
+        n = q.n
+        sl = np.asarray(slots, np.int64)[:n]
+        r = self.rows
+        if KR.HAVE_NUMBA and n:
+            KR.store_wind_rows_nb(sl, n, q.wind_mps, q.gust_long_mps, r["wind"], r["gust"])
+            return
+        r["wind"][sl] = q.wind_mps[:n]
+        r["gust"][sl] = np.clip(np.round(q.gust_long_mps[:n] / 0.01), -32768, 32767)
 
     def sample32(self, slots: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
         """兴趣集打包 awr.EnvSample32.v1（(n,) ENV_SAMPLE32）。"""

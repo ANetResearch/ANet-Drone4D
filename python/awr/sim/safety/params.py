@@ -138,6 +138,18 @@ class RtlParams:
     # 紧贴超高层的短返航线也会取到塔顶（S1 入场点 z_rtl 389 m、t_rtl 326 s，扫描中段误触 ENERGY_RTL）。20 m 仍取膨胀后
     # 金字塔的上包络（保守），对 3 km 返航线约 150 个采样。INT-1 修订。
     h_top_tol_m: float = 20.0
+    # 绕行返航（ADR-054）：直飞 home 需要为越障额外爬升 > detour_min_climb_m 时，评估单绕行点候选
+    # `via = p + f·L·u + k·w·n`（u 为 p→home 单位向量，n 为其左法向，L 为水平距，w = max(detour_step_min_m, L/4)），
+    # 每个候选的 z_rtl 取两段走廊上界 + top_margin_m，t_rtl 按两段水平航程计；选 t_rtl 最小者（至少比直飞少
+    # detour_min_gain_s），两段按 detour_zone_step_m 采样后不得越出 border、不得进入生效 nofly，且 border 余量 ≥ warn_margin_m。
+    detour_min_climb_m: float = 10.0
+    detour_min_dist_m: float = 30.0  # 离 home 水平距离不足时不评估（候选侧移 ≥ 30 m，近 home 的走廊上界两段共用，绕行不会更短）
+    detour_min_gain_s: float = 5.0
+    detour_fracs: tuple[float, ...] = (0.25, 0.5, 0.75)
+    detour_offsets: tuple[int, ...] = (-3, -2, -1, 1, 2, 3)
+    detour_step_min_m: float = 30.0
+    detour_zone_step_m: float = 10.0
+    detour_max_per_call: int = 16  # 每次 battery stage 最多为多少架机评估绕行（1000 架同时需要时按轮转分摊）
 
 
 @dataclass(frozen=True, slots=True)

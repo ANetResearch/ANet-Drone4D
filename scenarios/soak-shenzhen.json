@@ -51,12 +51,12 @@
       "id_digits": 4,
       "count": 50,
       "profile_id": "x500",
-      "layout": {"kind": "grid", "origin_enu_m": [-465, -58, null], "spacing_m": 24, "cols": 8},
+      "layout": {"kind": "grid", "origin_enu_m": [-585, -110, null], "spacing_m": 40, "cols": 8},
       "mission": {
         "generator": "orbit",
         "center": "home",
         "start": {"at_s": 15},
-        "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 200, "cw": false, "yaw": "center"}
+        "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 1, "turns": 100, "cw": false, "yaw": "center"}
       }
     },
     {
@@ -66,12 +66,12 @@
       "id_digits": 4,
       "count": 50,
       "profile_id": "x500",
-      "layout": {"kind": "grid", "origin_enu_m": [-453, -58, null], "spacing_m": 24, "cols": 8},
+      "layout": {"kind": "grid", "origin_enu_m": [-565, -110, null], "spacing_m": 40, "cols": 8},
       "mission": {
         "generator": "orbit",
         "center": "home",
         "start": {"at_s": 10},
-        "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 200, "cw": false, "yaw": "center"}
+        "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 1, "turns": 100, "cw": false, "yaw": "center"}
       }
     },
     {
@@ -81,12 +81,12 @@
       "id_digits": 4,
       "count": 50,
       "profile_id": "x500",
-      "layout": {"kind": "grid", "origin_enu_m": [-465, -46, null], "spacing_m": 24, "cols": 8},
+      "layout": {"kind": "grid", "origin_enu_m": [-585, -90, null], "spacing_m": 40, "cols": 8},
       "mission": {
         "generator": "orbit",
         "center": "home",
         "start": {"at_s": 5},
-        "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 200, "cw": false, "yaw": "center"}
+        "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 1, "turns": 100, "cw": false, "yaw": "center"}
       }
     },
     {
@@ -96,12 +96,12 @@
       "id_digits": 4,
       "count": 50,
       "profile_id": "x500",
-      "layout": {"kind": "grid", "origin_enu_m": [-453, -46, null], "spacing_m": 24, "cols": 8},
+      "layout": {"kind": "grid", "origin_enu_m": [-565, -90, null], "spacing_m": 40, "cols": 8},
       "mission": {
         "generator": "orbit",
         "center": "home",
         "start": {"at_s": 0},
-        "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 200, "cw": false, "yaw": "center"}
+        "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 1, "turns": 100, "cw": false, "yaw": "center"}
       }
     }
   ],

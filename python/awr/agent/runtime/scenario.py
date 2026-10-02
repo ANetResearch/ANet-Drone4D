@@ -129,13 +129,14 @@ class TriggerEngine:
                      origin="scenario")
 
     def _submit(self, t: TaskTemplate, *, requester: str, target: tuple | None, claim: dict[str, Any] | None,
-                origin: str) -> str | None:
+                origin: str, anchor_ns: int | None = None) -> str | None:
         args = {k: v for k, v in t.args.items() if k != "target_enu_m"}
         spec = TaskSpec(t.capability, args, target, dict(t.accept) if t.accept else None,
                         dict(t.negative_scope) if t.negative_scope else None, t.strategy, None, t.max_retries,  # type: ignore[arg-type]
                         origin, requester, f"scenario:{t.template_id}", claim)  # type: ignore[arg-type]
         try:
-            tid, _state, merged = self.tm.submit(spec, merge_radius_m=float(t.trigger.get("merge_radius_m", 30.0)))
+            tid, _state, merged = self.tm.submit(spec, merge_radius_m=float(t.trigger.get("merge_radius_m", 30.0)),
+                                                 anchor_ns=anchor_ns)
         except Exception as ex:
             log.warning("trigger submit failed", extra={"kv": {"template": t.template_id, "err": repr(ex)}})
             return None
@@ -163,7 +164,9 @@ class TriggerEngine:
             requester = self.aid_of(d.uav) or self.tm.coordinator_aid
             claim = {"conf": d.conf, "sensor": d.sensor or d.capability.split(".")[0], "target_id": d.target_id,
                      "t_sim_ns": d.t_sim_ns}
-            self._submit(t, requester=requester, target=(d.pos_enu_m[0], d.pos_enu_m[1], None), claim=claim, origin="agent")
+            # 以检出事件的仿真时刻为任务锚点：find 自此起算（§6.13 规则 ⑥）
+            self._submit(t, requester=requester, target=(d.pos_enu_m[0], d.pos_enu_m[1], None), claim=claim, origin="agent",
+                         anchor_ns=d.t_sim_ns or None)
             fired = True
         if fired:
             return

@@ -43,9 +43,26 @@ class Call:
     warnings: list[str] = field(default_factory=list)
     provider: str | None = None
     metrics: dict = field(default_factory=dict)
+    ck: dict | None = None  # checkpoint 的不变部分（`ck_static`；创建时即生成，checkpoint 每代只拼可变字段）
+    ck_raw: bytes | None = None  # `ck` 的 msgpack 编码（checkpoint 后台线程首次编码时缓存，ADR-070）
+    ck_tail: tuple | None = None  # (上一代的可变字段列表, 其 8 元素条目的完整编码)：可变字段不变时整条复用（ADR-070）
 
     def state(self) -> dict[str, Any]:
         return {"status": self.status, "code": self.code, "final": self.final, "effect": self.effect, "op": self.op}
+
+    def ck_static(self) -> dict[str, Any]:
+        """checkpoint 中调用的不变字段（创建后不再改动）；可变字段由 `ck_entry` 逐代拼接。"""
+        d = self.ck
+        if d is None:
+            d = self.ck = {"cid": self.cid, "op": self.op, "slot": self.slot, "uav": self.uav, "principal_id": self.principal_id,
+                           "role": self.role, "source": self.source, "args": self.args, "t_accept_ns": self.t_accept_ns,
+                           "wall_accept_ns": self.wall_accept_ns}
+        return d
+
+    def ck_entry(self, row: int) -> list:
+        """checkpoint 条目：[不变字段字典, row, lane, batch_id, status, applied, provider, effect]（ADR-065；恢复兼容旧的
+        逐调用字典格式）。"""
+        return [self.ck_static(), row, self.lane, self.batch_id, self.status, self.applied, self.provider, self.effect]
 
 
 class CallTable:
@@ -71,8 +88,12 @@ class CallTable:
         self.stop_seen = np.zeros(c, np.bool_)
         self.stall_ref = np.zeros((c, 3))
         self.stall_t = np.zeros(c, np.int64)
+        self.stall_rref = np.zeros((c, 3))  # TRAJ 调用：上次参考点（判"参考前进而机体不动"，M10-to-M08 第 5 条）
+        self.stall_rmove = np.zeros(c, np.bool_)  # 自 stall_t 起参考是否前进过 ≥ 0.2 m
         self.max_dev = np.zeros(c)
         self.prog_wall = np.zeros(c, np.int64)
+        self.prov = np.zeros(c, np.bool_)     # call.provider is not None（创建时确定，之后不变；cmd_watch 大机群路径）
+        self.batched = np.zeros(c, np.bool_)  # call.batch_id is not None
         self.meta: list[Call | None] = [None] * c
         self.free: list[int] = list(range(c - 1, -1, -1))
         # 每机每车道当前调用行（-1 为无）
@@ -104,8 +125,12 @@ class CallTable:
         self.stop_seen[r] = False
         self.stall_ref[r] = 0.0
         self.stall_t[r] = t_ns
+        self.stall_rref[r] = 0.0
+        self.stall_rmove[r] = False
         self.max_dev[r] = 0.0
         self.prog_wall[r] = 0
+        self.prov[r] = call.provider is not None
+        self.batched[r] = call.batch_id is not None
         if call.slot >= 0:
             self.by_slot[call.slot, call.lane] = r
         return r
@@ -122,6 +147,12 @@ class CallTable:
 
     def rows(self) -> np.ndarray:
         return np.flatnonzero(self.live)
+
+    def sync_flags(self, r: int) -> None:
+        """按 meta 重建 `prov`、`batched`（checkpoint 恢复后调用）。"""
+        m = self.meta[r]
+        self.prov[r] = m is not None and m.provider is not None
+        self.batched[r] = m is not None and m.batch_id is not None
 
     def current(self, slot: int, lane: int = 0) -> Call | None:
         r = int(self.by_slot[slot, lane])

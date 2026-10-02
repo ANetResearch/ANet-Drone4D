@@ -40,9 +40,30 @@ log = logging.getLogger("awr.environment.stage")
 ROOT = Path(__file__).resolve().parents[3]
 ENV_STAGE_FIELDS = int(Fields.WIND | Fields.WIND_PARTS | Fields.TURB_SPEC | Fields.OPTICS | Fields.PRECIP | Fields.THERMO)
 DT_ENV_S = 0.02
+FULL_EVERY = 5  # env tick 数：rho、env_flags 与行缓存的全量求值周期（10 Hz，ADR-060）
+# 全量求值所在的 tick（tick % 50）：5 与 35，都是奇数 tick（与 l1 组错开），间隔 80/120 ms 交替、平均仍为 10 Hz（ADR-070；
+# 此前 tick % 25 == 0，即 0 与 25，tick 0 为偶数，N = 1000 时该 tick 约 3 ms）
+FULL_TICKS = (5, 35)
+WIND_ONLY_FIELDS = int(Fields.WIND_PARTS)  # 只求风（均值、阵风、湍流）：不含光学、湍流谱、降水与热力
 TICK_NS = 4_000_000
 
 _st: dict[str, Any] = {"env": None, "ctx": None, "S": None, "pub_hb": None, "pub_detail": None, "bus": None, "keyframe_sent": 0}
+
+
+def _warm_kernels() -> None:
+    """装配即预热湍流采样核与行缓存写入核（numba；运行期签名），编译或读缓存发生在 sim-core ready 之前（D1 验收第 1 轮
+    4.1；行缓存写入核 ADR-070）。"""
+    try:
+        from . import kernels_rows
+        from .wind import turbulence as _turb
+
+        _turb.warmup()
+        kernels_rows.warmup()
+    except Exception:  # 预热失败不阻止装配：运行期按需编译
+        log.exception("environment numba warmup failed")
+
+
+_warm_kernels()
 
 
 def _read_json(p: Path) -> dict | None:
@@ -121,9 +142,13 @@ def _emit_frames(ctx: Any, env: EnvironmentServiceImpl, frames: list) -> None:
 
 @register_stage("env", every=5, phase=0, order=20, owner="M07", budget_core=0.08, writes=("wind", "rho", "env_flags", "env_gust"))
 def env_stage(S: Any, ctx: Any) -> None:
+    """每个 env tick（50 Hz）推进锚点网格并求风（均值 + 阵风 + 湍流）写 wind、env_gust；rho、env_flags 与 EnvSample32 行缓存
+    的其余字段（光学、降水、热力、湍流谱）平均每 FULL_EVERY 个 env tick（10 Hz，`tick % 50 ∈ FULL_TICKS`，ADR-070）全量求值
+    一次，关键帧变化、新机体（行缓存无效）时立即全量（ADR-060：慢变量按 10 Hz 摊销；风与阵风仍为 50 Hz，零阶保持语义不变）。"""
     env = ensure_service(ctx, S)
     _st["S"] = S
-    frames = env.on_env_tick_all(int(ctx.tick))
+    tick = int(ctx.tick)
+    frames = env.on_env_tick_all(tick)
     if frames or env.outbox or _st["keyframe_sent"] == 0:
         _emit_frames(ctx, env, frames)
     act = S.active_idx()
@@ -132,13 +157,18 @@ def env_stage(S: Any, ctx: Any) -> None:
     pos = S.enu.pos[act]
     vel = S.enu.vel[act]
     env.step_dryden(act, pos, vel, DT_ENV_S)
-    q = env.query(pos, int(ctx.t_ns), fields=ENV_STAGE_FIELDS, vel=vel, agent_idx=act, out=env.buf)
+    full = (tick % (10 * FULL_EVERY)) in FULL_TICKS or bool(frames) or not env.row_valid[act].all()
+    q = env.query(pos, int(ctx.t_ns), fields=ENV_STAGE_FIELDS if full else WIND_ONLY_FIELDS, vel=vel, agent_idx=act,
+                  out=env.buf)
     n = q.n
     S.set_wind_from_enu(q.wind_mps[:n], act)
-    S.rho[act] = q.rho_kgm3[:n]
-    S.env_flags[act] = q.flags[:n]
     S.env_gust[act] = q.gust_long_mps[:n]
-    env.store_rows(act, q)
+    if full:
+        S.rho[act] = q.rho_kgm3[:n]
+        S.env_flags[act] = q.flags[:n]
+        env.store_rows(act, q)
+    else:
+        env.store_wind_rows(act, q)
 
 
 def _bus(ctx: Any) -> Any:

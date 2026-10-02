@@ -29,6 +29,7 @@ __all__ = ["Director", "compile_tsir", "eval_predicate", "metric_key"]
 log = logging.getLogger("awr.sim.mission.director")
 
 TSIR_OP = {"<": 1, "<=": 2, "==": 3, ">=": 4, ">": 5}
+ADD_PER_STAGE = 50  # 布设阶段每次导演 stage（10 Hz【仿真】）至多加入的机体数
 AND, OR, NOT, THRESHOLD = 1, 2, 3, 12
 
 
@@ -120,6 +121,7 @@ class Director:
         self.n = 0
         self.next_at_ns = math.inf
         self._add_queue: list[dict] = []
+        self._add_checked = False
         self.principal: dict = {}
         self.warnings: list[str] = []
 
@@ -157,29 +159,42 @@ class Director:
         want = {v["vehicle_id"]: v for v in sc.vehicles}
         if self.phase == "remove":
             busy = False
+            sent = 0
             for e in list(rt.roster.by_slot.values()):
                 if e.id in want and self._home_matches(e, want[e.id]):
                     continue
                 busy = True
+                if sent >= ADD_PER_STAGE:  # 与加入同样分批（AWR_SIM_N 布设了大机群时）
+                    break
+                sent += 1
                 self.n += 1
                 rt.submit_internal({"cid": f"scn:{sc.scenario_id}:rm:{self.n}", "op": "fleet/remove", "uav": e.id,
                                     "args": {"id": e.id, "force": True, "confirm_token": "scenario"}}, self.principal)
             if not busy:
                 self.phase = "add"
+                self._add_checked = False
                 self._add_queue = [v for v in sc.vehicles if rt.roster.resolve(v["vehicle_id"]) is None]
             else:
                 return
         if self.phase == "add":
-            if any(rt.roster.resolve(v["vehicle_id"]) is not None and not self._home_matches(
-                    rt.roster.resolve(v["vehicle_id"]), v) for v in sc.vehicles):
-                return   # 同名骨架机体尚未移除
-            for v in list(self._add_queue):
+            if not self._add_checked:
+                if any(rt.roster.resolve(v["vehicle_id"]) is not None and not self._home_matches(
+                        rt.roster.resolve(v["vehicle_id"]), v) for v in sc.vehicles):
+                    return   # 同名骨架机体尚未移除
+                self._add_checked = True
+            # 每次 stage（10 Hz）至多提交 ADD_PER_STAGE 架：1000 架在同一 tick 内逐架加入时单个 tick 超过 2 s，被 supervisor
+            # 判挂死（D1 验收第 1 轮 4.3）；分批后 n1000 的布设约 2 s【仿真】完成，单个 tick 的增量有界
+            batch, self._add_queue = self._add_queue[:ADD_PER_STAGE], self._add_queue[ADD_PER_STAGE:]
+            for v in batch:
                 self.n += 1
                 args = {"vehicle_id": v["vehicle_id"], "profile_id": v.get("profile_id", "p600_mid360"),
                         "home_enu_m": list(v["home_enu_m"]), "yaw_rad": float(v.get("yaw_rad", 0.0)),
                         "initial_soc": float(v.get("initial_soc", 1.0))}
                 if v.get("speed_profile"):
                     args["speed_profile"] = v["speed_profile"]
+                if v.get("sensors") is not None:
+                    args["sensors"] = list(v["sensors"])
+                self._configure_sensors(v)
                 adm = rt.submit_internal({"cid": f"scn:{sc.scenario_id}:add:{self.n}", "op": "fleet/add",
                                           "args": args}, self.principal)
                 if adm.get("status") == "rejected":
@@ -187,8 +202,8 @@ class Director:
                                                                                 "code": adm.get("code"),
                                                                                 "detail": adm.get("detail")}})
                     self.warnings.append(f"add {v['vehicle_id']}: {adm.get('code')}")
-                self._add_queue.remove(v)
-            self.phase = "missions"
+            if not self._add_queue:
+                self.phase = "missions"
             return
         if self.phase == "missions":
             if any(rt.roster.resolve(v["vehicle_id"]) is None for v in sc.vehicles):
@@ -261,6 +276,23 @@ class Director:
                 self.when_since.pop(eid, None)
         self._check_end(t)
 
+    def _configure_sensors(self, v: dict) -> None:
+        """剧本机体的传感器子集与能力集交给 M13（M13-to-M10 第 5 条；M13-FR-041）。剧本 `agents.tasks[].capability` 所列能力
+        在成员机体上为委派能力：只在持有 AGENT 租约时检测（R-12，M14-to-M13 第 2 条、M14-to-M10 第 4 条）。"""
+        srt = self.rt.sensor_runtime()
+        if srt is None or (v.get("sensors") is None and v.get("caps") is None):
+            return
+        ag = (self.sc.doc.get("agents") if self.sc is not None else None) or {}
+        task_caps = {str(t.get("capability")) for t in ag.get("tasks") or [] if t.get("capability")}
+        member = next((m for m in ag.get("members") or [] if m.get("vehicle_id") == v["vehicle_id"]), None)
+        delegated = sorted(set(member.get("capabilities") or []) & task_caps) if member is not None else []
+        try:
+            srt.configure_vehicle(v["vehicle_id"], sensors=v.get("sensors"), caps=v.get("caps"), delegated=delegated or None)
+        except TypeError:  # 旧版 SensorRuntime 没有 delegated 参数
+            srt.configure_vehicle(v["vehicle_id"], sensors=v.get("sensors"), caps=v.get("caps"))
+        except Exception:
+            log.exception("sensor configure failed")
+
     def _metric(self, leaf: dict) -> float | None:
         from awr.sim.core import metrics as MET
 
@@ -295,6 +327,11 @@ class Director:
             a = {"vehicle_id": args.get("vehicle_id"), "profile_id": args.get("profile_id", "p600_mid360"),
                  "home_enu_m": args.get("home_enu_m"), "yaw_rad": float(args.get("yaw_rad", 0.0)),
                  "initial_soc": float(args.get("initial_soc", 1.0))}
+            if args.get("sensors") is not None:
+                a["sensors"] = list(args["sensors"])
+            if args.get("vehicle_id"):
+                self._configure_sensors({"vehicle_id": args["vehicle_id"], "sensors": args.get("sensors"),
+                                         "caps": args.get("caps")})
             res = rt.submit_internal({"cid": cid, "op": "fleet/add", "args": a}, self.principal)
         elif act == "vehicle.remove":
             res = rt.submit_internal({"cid": cid, "op": "fleet/remove", "uav": args.get("vehicle_id"),

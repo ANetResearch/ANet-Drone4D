@@ -64,6 +64,9 @@ class RtlPlan:
     z_rtl_m: float
     v_c_mps: float
     t_rtl_s: float
+    # 绕行点（World ENU 水平坐标）；None 为原地爬升后直飞 home（ADR-054：返航路线由 M09 按 M04 走廊上界选定，
+    # t_rtl 与 rtl 分发的实际路线一致）
+    via_enu_m: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True)

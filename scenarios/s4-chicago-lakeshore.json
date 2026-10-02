@@ -21,25 +21,25 @@
     {
       "vehicle_id": "p600-a-02",
       "profile_id": "p600_mid360",
-      "home_enu_m": [579, -1174, null],
+      "home_enu_m": [585, -1174, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-a-03",
       "profile_id": "p600_mid360",
-      "home_enu_m": [585, -1174, null],
+      "home_enu_m": [597, -1174, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-a-04",
       "profile_id": "p600_mid360",
-      "home_enu_m": [591, -1174, null],
+      "home_enu_m": [609, -1174, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-a-05",
       "profile_id": "p600_mid360",
-      "home_enu_m": [597, -1174, null],
+      "home_enu_m": [621, -1174, null],
       "speed_profile": "px4_default"
     },
     {
@@ -51,25 +51,25 @@
     {
       "vehicle_id": "p600-b-02",
       "profile_id": "p600_mid360",
-      "home_enu_m": [-1146, -665, null],
+      "home_enu_m": [-1140, -665, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-b-03",
       "profile_id": "p600_mid360",
-      "home_enu_m": [-1140, -665, null],
+      "home_enu_m": [-1128, -665, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-b-04",
       "profile_id": "p600_mid360",
-      "home_enu_m": [-1134, -665, null],
+      "home_enu_m": [-1116, -665, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-b-05",
       "profile_id": "p600_mid360",
-      "home_enu_m": [-1128, -665, null],
+      "home_enu_m": [-1104, -665, null],
       "speed_profile": "px4_default"
     }
   ],
@@ -113,7 +113,7 @@
       "params": {
         "polygon_enu_m": [[-1401, -884], [-801, -884], [-801, -284], [-1401, -284]],
         "altitude": {"mode": "per_lane", "agl_m": 150, "clearance_m": 10},
-        "side_overlap": 0.7,
+        "side_overlap": 0.55,
         "front_overlap": 0.8,
         "speed_mps": 5
       },

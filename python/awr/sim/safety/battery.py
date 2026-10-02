@@ -38,6 +38,11 @@ G = PX.G
 ONCE_LOW, ONCE_RTL, ONCE_EMERG = 1, 2, 4
 _RTL_SRC = (int(FS.FLYING), int(FS.CORRECTING), int(FS.HOLD))
 _EMERG_SRC = (int(FS.FLYING), int(FS.HOLD), int(FS.RTL))
+# 按 fs 查表（代替 np.isin，FX-SIM1）
+_EMERG_OK = np.zeros(256, np.bool_)
+_EMERG_OK[list(_EMERG_SRC)] = True
+_RTL_OK = np.zeros(256, np.bool_)
+_RTL_OK[[*_RTL_SRC, int(FS.RTL)]] = True
 
 
 @dataclass(frozen=True)
@@ -69,13 +74,18 @@ def _bat_param(bat: dict | None, key: str) -> float | None:
     return None if v is None else float(v)
 
 
+CLIMB_END_GROUP = 16  # climb_end_z_many：每组机数（≤ 32 段，采样总数远低于 heightmap_top_along 的 max_samples）
+
+
 class BatteryModel:
     """battery stage 的状态与计算（写 battery 块；只写候选，不改 FSM）。"""
 
     def __init__(self, rt: SafetyRuntime) -> None:
         self.rt = rt
         self.cursor = 0
+        self._quota = 0.0  # 轮转刷新配额累加器（battery_rtl 每次调用 + n·refresh_hz·dt_rtl 架）
         self.dt_s = 25 * 0.004
+        self.dt_rtl_s = 50 * 0.004  # battery_rtl stage（5 Hz、奇数 tick 43，每次 n/5 架；ADR-070）
 
     @property
     def bb(self) -> dict[str, np.ndarray]:
@@ -112,6 +122,7 @@ class BatteryModel:
             bb["v_c_mps"][i] = 1.0
             bb["rtl_valid"][i] = False
             bb["rtl_ceiling"][i] = False
+            bb["rtl_via_xy"][i] = np.nan
             bb["bat_once"][i] = 0
             bb["energy_rtl_n"][i] = 0
             bb["drain_pct_s"][i] = 0.0
@@ -165,9 +176,22 @@ class BatteryModel:
             bb["soc"][nb] = 1.0
             bb["battery_pct"][nb] = 255
             bb["t_rem_s"][nb] = np.inf
-        self._refresh_rtl(act, ctx)
+        # RTL 终点与时间的轮转刷新由 battery_rtl stage（50 Hz，每次 n/50 架）完成；缓存无效的机体（新机体、复位后）在此
+        # 立即刷新，判据不读无效值（与此前同一 stage 内先刷新后判定一致；ADR-070）
+        inv = act[~bb["rtl_valid"][act]]
+        if inv.size:
+            self.refresh(inv)
         if hb.size:
             self._criteria(hb)
+
+    def step_rtl(self, ctx: Any) -> None:
+        """battery_rtl stage（every 50、5 Hz、phase 43，奇数 tick）：z_rtl 与 t_rtl 的轮转刷新（每次 n/5 架，每机仍每秒一次）
+        与位移触发刷新（M09-FR-052；位移判据由 10 Hz 改为 5 Hz）。此前与能量积分、判据在同一次 battery 调用内（N = 1000
+        时合计约 1.6 ms，落在偶数 tick 时与 l1 组叠加超过 3 ms；刷新本身有约 0.4 ms 的固定开销：M04 走廊上界查询与返航
+        逆风查询各一次批量调用），拆开后只在奇数 tick 执行（ADR-070）。"""
+        act = self.rt.act_idx
+        if act.size:
+            self._refresh_rtl(act, ctx, self.dt_rtl_s)
 
     def _criteria(self, hb: np.ndarray) -> None:
         rt, S, sb, bb = self.rt, self.rt.S, self.rt.sb, self.bb
@@ -185,14 +209,14 @@ class BatteryModel:
             rt.set_cond(s, "BAT_LOW", True)
             rt.sink.add_many(s, rt.code("SAF.BAT.LOW"), t, values=soc[low], threshold=P.low)
         # EMERG：就地降落（RTL 途中同样适用）
-        em = (soc <= P.emerg) & air & np.isin(fs, _EMERG_SRC) & ((once & ONCE_EMERG) == 0)
+        em = (soc <= P.emerg) & air & _EMERG_OK[fs] & ((once & ONCE_EMERG) == 0)
         if em.any():
             s = hb[em]
             bb["bat_once"][s] |= ONCE_EMERG
             rt.set_cond(s, "BAT_EMERG", True)
             rt.fsm.propose(s, int(FS.LANDING), 0, Origin.AUTO, "SAF.BAT.EMERG", value=soc[em], thr=P.emerg)
         # CRIT 与 ENERGY：自动 RTL
-        rtl_ok = air & np.isin(fs, (*_RTL_SRC, int(FS.RTL))) & ((once & ONCE_RTL) == 0) & ~em
+        rtl_ok = air & _RTL_OK[fs] & ((once & ONCE_RTL) == 0) & ~em
         crit = rtl_ok & (soc <= P.crit)
         tr = bb["t_rtl_s"][hb].astype(np.float64)
         energy = rtl_ok & ~crit & bb["rtl_valid"][hb] & (bb["t_rem_s"][hb] < P.rtl_margin * tr)
@@ -232,13 +256,17 @@ class BatteryModel:
                 rt.set_cond(recharge, "BAT_LOW", False)
 
     # ---------------------------------------------------------------- z_rtl 与 t_rtl（轮转刷新）
-    def _refresh_rtl(self, act: np.ndarray, ctx: Any) -> None:
+    def _refresh_rtl(self, act: np.ndarray, ctx: Any, dt_s: float | None = None) -> None:
+        """轮转刷新：每次调用刷新 n·refresh_hz·dt 架（配额累加取整，小机群也保持每机每秒一次，而不是每次调用至少一架），另加
+        水平移动 > refresh_move_m 与缓存无效的机体（M09-FR-052；FX-SIM1 修正小机群的过频刷新）。"""
         rt, S, bb = self.rt, self.rt.S, self.bb
         R = rt.params.rtl
         n = act.size
-        k = max(1, math.ceil(n / 10.0))
+        self._quota += n * R.refresh_hz * (self.dt_s if dt_s is None else dt_s)
+        k = min(n, int(self._quota))
+        self._quota -= k
         start = self.cursor % n
-        rot = act[np.arange(start, start + k) % n]
+        rot = act[np.arange(start, start + k) % n] if k else act[:0]
         self.cursor = (start + k) % max(n, 1)
         pos = S.enu.pos[act]
         moved = np.hypot(pos[:, 0] - bb["rtl_ref_xy"][act, 0], pos[:, 1] - bb["rtl_ref_xy"][act, 1]) > R.refresh_move_m
@@ -259,14 +287,98 @@ class BatteryModel:
         if over.any() and not exact:
             h2 = self.h_top(pos[over], home[over], exact=True)
             z[over] = z_rtl_m(pos[over, 2], home[over, 2], h2, R.alt_m, R.top_margin_m)
-        bb["rtl_ceiling"][s] = z > max_z
         v_c = self.v_c(s, z)
         dxy = np.hypot(pos[:, 0] - home[:, 0], pos[:, 1] - home[:, 1])
+        t = t_rtl_s(dxy, pos[:, 2], home[:, 2], z, v_c, R)
+        via = np.full((s.size, 2), np.nan)
+        # 绕行返航（ADR-054）：直飞需要为越障额外爬升时，按 M04 走廊上界评估单绕行点候选，取 t_rtl 最小的合法路线
+        base = np.maximum(pos[:, 2], home[:, 2] + R.alt_m)
+        need = np.flatnonzero((z > base + R.detour_min_climb_m) & (dxy >= R.detour_min_dist_m))
+        if need.size and self.rt.world is not None:
+            if need.size > R.detour_max_per_call:
+                need = need[:R.detour_max_per_call]
+            best = self.detour(s[need], pos[need], home[need], max_z)
+            for j, k in enumerate(need):
+                b = best[j]
+                if b is not None and b[2] < t[k] - R.detour_min_gain_s:
+                    z[k], v_c[k], t[k] = b[1], b[3], b[2]
+                    via[k] = b[0]
+        bb["rtl_ceiling"][s] = z > max_z
         bb["z_rtl_m"][s] = z
         bb["v_c_mps"][s] = v_c
-        bb["t_rtl_s"][s] = t_rtl_s(dxy, pos[:, 2], home[:, 2], z, v_c, R)
+        bb["t_rtl_s"][s] = t
+        bb["rtl_via_xy"][s] = via
         bb["rtl_ref_xy"][s] = pos[:, :2]
         bb["rtl_valid"][s] = True
+
+    # ---------------------------------------------------------------- 绕行返航（ADR-054）
+    def detour_candidates(self, p_xy: np.ndarray, home_xy: np.ndarray) -> np.ndarray:
+        """单绕行点候选（K×2，World ENU）：`p + f·L·u + k·w·n`（params.rtl.detour_*）。"""
+        R = self.rt.params.rtl
+        d = np.asarray(home_xy, np.float64) - np.asarray(p_xy, np.float64)
+        L = float(math.hypot(d[0], d[1]))
+        if L < 1e-6:
+            return np.zeros((0, 2))
+        u = d / L
+        n = np.array([-u[1], u[0]])
+        w = max(R.detour_step_min_m, L / 4.0)
+        return np.asarray([p_xy + u * (f * L) + n * (k * w) for f in R.detour_fracs for k in R.detour_offsets], np.float64)
+
+    def detour(self, s: np.ndarray, pos: np.ndarray, home: np.ndarray, max_z: float) -> list:
+        """逐机最优绕行路线 `(via_xy, z_rtl, t_rtl, v_c)`，没有合法且可行的候选时为 None。候选的两段走廊上界一次批量查询
+        （M04 `heightmap_top_along`，与直飞同一 tol）；z_rtl = max(z_now, z_home + alt, 两段上界 + top_margin)；
+        t_rtl 按 12 §5.8.3 的同一公式、水平航程取两段之和；两段在 z_rtl 处按 detour_zone_step_m 采样做围栏检查。"""
+        rt = self.rt
+        R = rt.params.rtl
+        m = len(s)
+        V = [self.detour_candidates(pos[j, :2], home[j, :2]) for j in range(m)]
+        K = np.asarray([len(v) for v in V], np.int64)
+        out: list = [None] * m
+        if K.sum() == 0:
+            return out
+        Vall = np.concatenate([v for v in V if len(v)])
+        owner = np.repeat(np.arange(m), K)
+        A = np.vstack([pos[owner, :2], Vall])
+        B = np.vstack([Vall, home[owner, :2]])
+        H = self.h_top(np.c_[A, np.zeros(len(A))], np.c_[B, np.zeros(len(B))])
+        nc = len(Vall)
+        h = np.maximum(H[:nc], H[nc:])
+        z = z_rtl_m(pos[owner, 2], home[owner, 2], h, R.alt_m, R.top_margin_m)
+        L = (np.hypot(Vall[:, 0] - pos[owner, 0], Vall[:, 1] - pos[owner, 1])
+             + np.hypot(home[owner, 0] - Vall[:, 0], home[owner, 1] - Vall[:, 1]))
+        ok = np.isfinite(z) & (z <= max_z - 1.0)
+        v_c = np.ones(nc)
+        if ok.any():
+            v_c[ok] = self.v_c(s[owner[ok]], z[ok])
+        t = t_rtl_s(L, pos[owner, 2], home[owner, 2], z, v_c, R)
+        t = np.where(ok, t, np.inf)
+        start = np.r_[0, np.cumsum(K)[:-1]]
+        for j in range(m):
+            if K[j] == 0:
+                continue
+            idx = start[j] + np.argsort(t[start[j]:start[j] + K[j]], kind="stable")
+            for c in idx:
+                if not np.isfinite(t[c]):
+                    break
+                if self._route_legal(pos[j], Vall[c], home[j], float(z[c])):
+                    out[j] = ((float(Vall[c, 0]), float(Vall[c, 1])), float(z[c]), float(t[c]), float(v_c[c]))
+                    break
+        return out
+
+    def _route_legal(self, p: np.ndarray, via: np.ndarray, home: np.ndarray, z: float) -> bool:
+        geo = self.rt.geo
+        if geo is None or not geo.valid:
+            return True
+        step = self.rt.params.rtl.detour_zone_step_m
+        pts = []
+        for a, b in ((p[:2], via), (via, home[:2])):
+            L = float(math.hypot(b[0] - a[0], b[1] - a[1]))
+            k = max(2, math.ceil(L / step) + 1)
+            f = np.linspace(0.0, 1.0, k)
+            pts.append(np.c_[a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, np.full(k, z)])
+        P = np.vstack(pts)
+        inb, innf, margin = geo.point_status(P)
+        return bool(inb.all() and not innf.any() and np.all(margin >= self.rt.params.fence.warn_margin_m))
 
     def h_top(self, a: np.ndarray, b: np.ndarray, *, exact: bool = False) -> np.ndarray:
         w = self.rt.world
@@ -292,13 +404,56 @@ class BatteryModel:
         w = rt.wind_head(s, z)
         return np.maximum(1.0, cruise - w)
 
+    def climb_end_z_many(self, slots: list[int]) -> list[float]:
+        """`climb_end_z` 的批量版本：各机的 p→home（或 p→via、via→home）走廊上界一次批量求得，逐机取最大后按同一公式
+        得到所需 z_rtl。分组使每组的采样总数远低于 `heightmap_top_along` 的 max_samples，金字塔层级与逐机调用相同，结果
+        逐位一致（FX2-R2：全机 RTL 时 CLIMB 结束的走廊重算）。"""
+        out: list[float] = []
+        for g0 in range(0, len(slots), CLIMB_END_GROUP):
+            out += self._climb_end_group(slots[g0:g0 + CLIMB_END_GROUP])
+        return out
+
+    def _climb_end_group(self, slots: list[int]) -> list[float]:
+        S = self.rt.S
+        R = self.rt.params.rtl
+        sl = np.asarray(slots, np.int64)
+        P = S.enu.pos[sl]
+        H = S.enu.home[sl]
+        V = S.enu.rtl_via(sl)
+        A, B, own = [], [], []
+        for k in range(sl.size):
+            if np.all(np.isfinite(V[k])):
+                v = np.r_[V[k], 0.0]
+                A += [P[k], v]
+                B += [v, H[k]]
+                own += [k, k]
+            else:
+                A.append(P[k])
+                B.append(H[k])
+                own.append(k)
+        top = self.h_top(np.asarray(A), np.asarray(B))
+        tmax = np.full(sl.size, -np.inf)
+        for j, k in enumerate(own):
+            tmax[k] = max(tmax[k], float(top[j]))
+        max_z = self.rt.geo.max_z if self.rt.geo is not None else math.inf
+        res = []
+        for k in range(sl.size):
+            need = max(float(H[k, 2]) + R.alt_m, float(tmax[k]) + R.top_margin_m)
+            res.append(min(need, max_z - 1.0) if math.isfinite(max_z) else need)
+        return res
+
     def climb_end_z(self, s: int) -> float:
-        """CLIMB 结束时以当前位置到 home 的线段重算的所需 z_rtl（FR-011）。"""
+        """CLIMB 结束时以当前位置到 home 的线段重算的所需 z_rtl（FR-011）；有绕行点时取 p→via、via→home 两段（ADR-054）。"""
         S = self.rt.S
         R = self.rt.params.rtl
         p = S.enu.pos[s][None]
         h = S.enu.home[s][None]
-        top = float(self.h_top(p, h)[0])
+        via = S.enu.rtl_via(np.array([s]))[0]
+        if np.all(np.isfinite(via)):
+            v = np.r_[via, 0.0][None]
+            top = float(np.max(self.h_top(np.vstack([p, v]), np.vstack([v, h]))))
+        else:
+            top = float(self.h_top(p, h)[0])
         need = max(float(h[0, 2]) + R.alt_m, top + R.top_margin_m)
         max_z = self.rt.geo.max_z if self.rt.geo is not None else math.inf
         return min(need, max_z - 1.0) if math.isfinite(max_z) else need
@@ -307,7 +462,29 @@ class BatteryModel:
         bb = self.bb
         if not bb["rtl_valid"][slot]:
             self.refresh(np.array([slot]))
-        return RtlPlan(float(bb["z_rtl_m"][slot]), float(bb["v_c_mps"][slot]), float(bb["t_rtl_s"][slot]))
+        via = bb["rtl_via_xy"][slot]
+        pv = (float(via[0]), float(via[1])) if np.all(np.isfinite(via)) else None
+        return RtlPlan(float(bb["z_rtl_m"][slot]), float(bb["v_c_mps"][slot]), float(bb["t_rtl_s"][slot]), pv)
+
+    def route(self, p: np.ndarray, home: np.ndarray, slot: int | None = None) -> tuple[tuple[float, float] | None, float]:
+        """任意点 p → home 的返航路线 `(via_xy 或 None, z_rtl)`（与运行期 refresh 同一选择规则；M10 能量预检使用）。
+        v_c 按 slot 所在机体计（无 slot 时取巡航上限）。"""
+        R = self.rt.params.rtl
+        p = np.asarray(p, np.float64).reshape(1, 3)
+        h = np.asarray(home, np.float64).reshape(1, 3)
+        z = float(z_rtl_m(p[:, 2], h[:, 2], self.h_top(p, h), R.alt_m, R.top_margin_m)[0])
+        max_z = self.rt.geo.max_z if self.rt.geo is not None else math.inf
+        d = float(math.hypot(h[0, 0] - p[0, 0], h[0, 1] - p[0, 1]))
+        if (z <= max(float(p[0, 2]), float(h[0, 2]) + R.alt_m) + R.detour_min_climb_m or d < R.detour_min_dist_m
+                or self.rt.world is None):
+            return None, z
+        sl = np.array([slot if slot is not None else 0], np.int64)
+        v0 = float(self.v_c(sl, np.array([z]))[0]) if slot is not None else R.v_cruise_cap_mps
+        t0 = float(t_rtl_s(np.array([d]), p[:, 2], h[:, 2], np.array([z]), np.array([v0]), R)[0])
+        b = self.detour(sl, p, h, max_z)[0]
+        if b is not None and b[2] < t0 - R.detour_min_gain_s:
+            return b[0], b[1]
+        return None, z
 
 
 # ====================================================================== EnergyModel（M08 §7.1.5）
@@ -328,6 +505,19 @@ class P600EnergyModel:
             F = 0.5 * PX.RHO0 * prof.cda_m2 * v_air * v_air + so * prof.c_rd * v_air
         ratio = math.sqrt(1.0 + (F / (m * G)) ** 2)
         climb = m * G * max(vz, 0.0) / 0.5
+        return p_hover * ratio ** 1.5 + climb
+
+    @staticmethod
+    def _power_arr(prof: VehicleProfile, p_hover: float, v_air: np.ndarray, vz: np.ndarray) -> np.ndarray:
+        """`_power` 的数组版本（同一公式）。"""
+        m = prof.mass_kg
+        if prof.aero_model == "linear":
+            F = prof.k_dv * v_air
+        else:
+            so = prof.n_rot * prof.omega_max_rad_s * math.sqrt(max(m * G / max(prof.t_max_n, 1e-9), 0.0))
+            F = 0.5 * PX.RHO0 * prof.cda_m2 * v_air * v_air + so * prof.c_rd * v_air
+        ratio = np.sqrt(1.0 + (F / (m * G)) ** 2)
+        climb = m * G * np.maximum(vz, 0.0) / 0.5
         return p_hover * ratio ** 1.5 + climb
 
     @staticmethod
@@ -394,6 +584,13 @@ class P600EnergyModel:
             return RtlPlan(float("nan"), float("nan"), 0.0)
         return rt.bat.plan(int(slot))
 
+    def rtl_route(self, p: np.ndarray, home: np.ndarray, slot: int | None = None) -> tuple[tuple[float, float] | None, float] | None:
+        """p → home 的返航路线 `(via_xy 或 None, z_rtl)`（ADR-054；M10 能量预检与运行期同一路线规则）；运行时未绑定时 None。"""
+        rt = self.svc.rt if self.svc is not None else None
+        if rt is None or rt.bat is None:
+            return None
+        return rt.bat.route(p, home, slot)
+
     def path_wh(self, profile_id: str, samples: np.ndarray, env: Any = None) -> float:
         """samples：k×7（t_s、ENU 位置、ENU 速度）；沿轨迹积分能量（Wh），与运行期同一功率模型。"""
         svc = self.svc
@@ -410,16 +607,29 @@ class P600EnergyModel:
         if ph is None:
             return 0.0
         X = np.asarray(samples, np.float64).reshape(-1, 7)
-        wh = 0.0
-        for k in range(len(X) - 1):
-            dt = float(X[k + 1, 0] - X[k, 0])
-            if dt <= 0:
-                continue
-            vel = 0.5 * (X[k, 4:7] + X[k + 1, 4:7])
-            w = self._wind(env, 0.5 * (X[k, 1:4] + X[k + 1, 1:4]))
-            v_air = float(np.linalg.norm(vel[:2] - w[:2]))
-            wh += self._power(prof, ph, v_air, float(vel[2])) * dt / 3600.0
-        return wh
+        if env is not None:
+            wh = 0.0
+            for k in range(len(X) - 1):
+                dt = float(X[k + 1, 0] - X[k, 0])
+                if dt <= 0:
+                    continue
+                vel = 0.5 * (X[k, 4:7] + X[k + 1, 4:7])
+                w = self._wind(env, 0.5 * (X[k, 1:4] + X[k + 1, 1:4]))
+                v_air = float(np.linalg.norm(vel[:2] - w[:2]))
+                wh += self._power(prof, ph, v_air, float(vel[2])) * dt / 3600.0
+            return wh
+        # 无风（M10 能量预检的调用方式）：逐段同一公式的向量化求值，按段序累加（cumsum 与逐段 += 同一次序）。此前逐样本
+        # Python 循环，ladder n1000 的任务启动预检在一个 tick 内做 1000 架，约 3 s，sim-core 被判挂死（FX2-R2 自测）
+        if len(X) < 2:
+            return 0.0
+        dt = X[1:, 0] - X[:-1, 0]
+        ok = dt > 0
+        if not ok.any():
+            return 0.0
+        vel = 0.5 * (X[:-1, 4:7] + X[1:, 4:7])[ok]
+        v_air = np.sqrt(vel[:, 0] * vel[:, 0] + vel[:, 1] * vel[:, 1])
+        terms = self._power_arr(prof, float(ph), v_air, vel[:, 2]) * dt[ok] / 3600.0
+        return float(np.cumsum(terms)[-1])
 
 
 _ = COND

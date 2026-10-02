@@ -127,9 +127,12 @@ class MockNetwork:
         return self.views.get(aid)
 
     # ------------------------------------------------------------ 发现
-    async def find(self, requester: str, pattern: str) -> list[AgentView]:
+    async def find(self, requester: str, pattern: str, *, t0_ns: int | None = None) -> list[AgentView]:
+        """发现在 t0 + 0.2 s【仿真】返回；t0 缺省为当前时刻。检出触发的任务以检出事件的仿真时刻为 t0，
+        使 agent-runtime 收到事件的墙钟滞后不进入协作时间线（§6.13 规则 ⑥）。"""
         self.stats["finds"] += 1
-        await self.sched.sleep_s(self.relay.find_latency_s)
+        t0 = self.sched.now_ns() if t0_ns is None else int(t0_ns)
+        await self.sched.sleep_until(t0 + round(self.relay.find_latency_s * 1e9))
         return [self.views[aid] for _no, aid in self.hub.find(pattern) if aid in self.views]
 
     # ------------------------------------------------------------ 委派
@@ -159,6 +162,13 @@ class MockNetwork:
             return ix
         if d.long:
             t_req = d.t_send_ns + max(0, L_rt - self.relay.d_resp_ns)
+            prep = getattr(daemon.provider, "prepare", None)
+            if d.kind == "exec" and callable(prep):
+                # 委派在途期间提供方预取只读准备（观测点、执行前复核估价），投递时直接取用；不改变任何状态（§6.12.2）
+                try:
+                    prep(CapabilityCall(d.capability, d.args, d.ix, d.requester, d.task_id, d.ix))
+                except Exception:
+                    log.exception("provider prepare failed", extra={"kv": {"cap": d.capability}})
             d.timers.append(self.relay.deliver_at(t_req, lambda: self._on_request(d)))
         else:
             d.timers.append(self.relay.deliver_at(d.t_send_ns, lambda: self._on_request(d)))
@@ -197,7 +207,8 @@ class MockNetwork:
         self._schedule_final(d, t, eff, None)
 
     async def _run_handler(self, d: _Deleg, daemon: MockDaemon) -> None:
-        sink = RecordingSink(on_phase=lambda p, eta, prog: self._on_phase(d, daemon, p, eta, prog))
+        sink = RecordingSink()
+        sink.on_phase = lambda p, eta, prog: self._on_phase(d, daemon, p, eta, prog, sink)
         call = CapabilityCall(d.capability, d.args, d.ix, d.requester, d.task_id, d.ix)
         last: Effect | None = None
         try:
@@ -221,7 +232,10 @@ class MockNetwork:
             last = Effect(EffectStatus.FAILED, message="no result")
         now = self.sched.now_ns()
         if d.long:
-            t = now + max(0, self.relay.L_ns(f"{d.ix}/res") - self.relay.d_resp_ns)
+            # 结果产生时刻：处理器声明的事件时刻（例如 hover 终态，§6.13 规则 ⑥），缺省为处理器结束的时刻
+            t_evt = getattr(sink, "t_event_ns", None)
+            t0 = int(t_evt) if t_evt and int(t_evt) >= d.t_send_ns else now
+            t = t0 + max(0, self.relay.L_ns(f"{d.ix}/res") - self.relay.d_resp_ns)
             if not d.first_sent:
                 t = now + self.relay.d_resp_ns  # 第一段即终态（拒单、BUSY、参数非法）
         else:
@@ -234,14 +248,19 @@ class MockNetwork:
                                                 "receipt_verified": None})
         self._schedule_final(d, t, last, records, daemon)
 
-    def _on_phase(self, d: _Deleg, daemon: MockDaemon, p: Phase, eta: float | None, prog: float | None) -> None:
+    def _on_phase(self, d: _Deleg, daemon: MockDaemon, p: Phase, eta: float | None, prog: float | None,
+                  sink: RecordingSink | None = None) -> None:
         d.n_upd += 1
         n = d.n_upd
         now = self.sched.now_ns()
+        # 处理器已声明结果产生时刻（HandlerCtx.event_time）之后的阶段（returning）以该时刻为起点，与最终结果一致；
+        # 否则同一委派按投递顺序 FIFO 时，最终结果会被这条未锚定的进度推迟（§6.13 规则 ⑥）
+        t_evt = getattr(sink, "t_event_ns", None) if sink is not None else None
+        t0 = int(t_evt) if t_evt and d.t_send_ns <= int(t_evt) <= now else now
         daemon.append("agent.task.phase", {"task_id": d.task_id, "ix": d.ix, "phase": Phase(p).value,
                                            "eta_s": None if eta is None else round(float(eta), 3),
                                            "progress": None if prog is None else round(float(prog), 3)})
-        t = self._at(d, now + max(0, self.relay.L_ns(f"{d.ix}/upd/{n}") - self.relay.d_resp_ns))
+        t = self._at(d, t0 + max(0, self.relay.L_ns(f"{d.ix}/upd/{n}") - self.relay.d_resp_ns))
         upd = Update(d.ix, "progress", Effect(EffectStatus.UNVERIFIED), Phase(p), eta, prog, t_sim_ns=t)
         d.timers.append(self.relay.deliver_at(t, lambda: self._put(d, upd)))
 

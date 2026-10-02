@@ -1,7 +1,8 @@
 """PlanPoolClient（sim-core 内，M10-FR-030、FR-031、FR-037；M10 §6.4.1、§7.4.3；ADR-039、ADR-049；10 §8.5）。
 
 - 进程模型：`ProcessPoolExecutor(spawn, W = 1)`，spawn 前 `OMP_NUM_THREADS = 1`；worker 以 (world_id, contentVersion,
-  coordinate.sha256) 打开并缓存 GeoWorld（绑定不一致拒绝，123 PLAN_GRID_MISMATCH）；
+  coordinate.sha256) 打开并缓存 GeoWorld（绑定不一致拒绝，123 PLAN_GRID_MISMATCH）；worker 设 PDEATHSIG 后复核父进程 pid
+  （sim-core 先行被 SIGKILL 时立即退出），亲和性避开 sim-core 所钉的核，继承的负 nice 恢复为 0（ADR-070）；
 - 队列：优先级（0 交互 > 1 任务启动 > 2 编队与覆盖 > 3 后台）+ 提交序；W 个在途；同 `dedupe_key` 的新作业取代旧作业
   （旧结果到达后丢弃，SUPERSEDED）；
 - 生效：done_callback 只把 future 放入 inbox（线程安全）；`drain(tick)` 在 sim-core 的 stage 内（步边界）取出结果，
@@ -103,8 +104,13 @@ class PlanPoolClient:
             os.environ["OMP_NUM_THREADS"] = "1"
             os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
             os.environ.setdefault("MKL_NUM_THREADS", "1")
+            parent_cpus: tuple[int, ...] | None = None
+            with contextlib.suppress(OSError, AttributeError):
+                parent_cpus = tuple(sorted(os.sched_getaffinity(0)))
+            # 父进程 pid 与亲和性：worker 复核父进程是否已先行死亡（孤儿竞态），并避开 sim-core 所钉的核（FX2-R3，ADR-070）
             kw: dict[str, Any] = {"max_workers": self.workers, "mp_context": mp.get_context("spawn"),
-                                  "initializer": init_worker, "initargs": (self.worlds_dir, self.world_key, self.cpu)}
+                                  "initializer": init_worker,
+                                  "initargs": (self.worlds_dir, self.world_key, self.cpu, os.getpid(), parent_cpus)}
             try:
                 self._exec = ProcessPoolExecutor(max_tasks_per_child=self.max_tasks_per_child, **kw)
             except TypeError:  # pragma: no cover

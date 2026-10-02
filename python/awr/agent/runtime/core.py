@@ -27,7 +27,7 @@ from .blackboard import Blackboard
 from .bridge_sim import SimBridge
 from .clock import SimScheduler
 from .coordinator import Coordinator
-from .drone_agent import Detection, DetectionHub, DroneAgent
+from .drone_agent import Detection, DetectionHub, DroneAgent, SharedReads
 from .evidence import EvidenceLog, chain_file_name
 from .network import AgentView
 from .scenario import AgentsBlock, TriggerEngine
@@ -67,6 +67,7 @@ class RuntimeCore:
         self.coord_aid = ID.coordinator_aid(world_id)
         self.ledgers: dict[str, EvidenceLog] = {}
         self.detections = DetectionHub()
+        self.reads = SharedReads(bridge)  # 观测点高度缓存与环境查询合并，全部 agent 共用（§6.13 规则 ⑥）
         self.board = Blackboard(now_ms=sched.now_ms, sign=self._sign_unit, verify=self._verify_unit)
         self.net = MockNetwork(sched, secret=secret, run_id=run_id, world_seed=world_seed, latency=self.block.latency_s,
                                find_latency_s=self.block.find_latency_s, zero_latency=zero_latency, cat=self.cat,
@@ -77,6 +78,7 @@ class RuntimeCore:
         self.tm = TaskManager(sched=sched, net=self.net, coordinator_aid=self.coord_aid, evidence_log=self.ledger(self.coord_aid),
                               board=self.board, cat=self.cat, metric_sink=self._metric, emit=self._emit, on_change=on_change,
                               strict=strict)
+        self.tm.prefetch = self._prefetch_target
         self.allocator = ContractNetAllocator(self.tm, weights=self.block.weights, t_quote_s=self.block.t_quote_s,
                                               norms_of=self._norms_of, limits_of=self._limits_of)
         self.tm.allocator = self.allocator
@@ -88,6 +90,16 @@ class RuntimeCore:
         self.guard.lease_listeners.append(self.tm.on_lease)
         sched.on_epoch_change(self._on_epoch)
         bridge.on_event(self.on_sim_event)
+
+    def _prefetch_target(self, tgt: tuple[float, float, float | None]) -> None:
+        """新任务提交时预热目标处观测点高度（world 静态数据）：find 的 0.2 s【仿真】内完成，报价只剩估价与环境一次并行往返。"""
+        x, y = float(tgt[0]), float(tgt[1])
+        for op in ("ground_dtm", "height_dsm"):
+            spawn(self._prefetch_geo(op, x, y))
+
+    async def _prefetch_geo(self, op: str, x: float, y: float) -> None:
+        with contextlib.suppress(Exception):
+            await self.reads.geo(op, x, y)
 
     # ------------------------------------------------------------ 证据与事件
     def ledger(self, aid: str) -> EvidenceLog:
@@ -156,7 +168,7 @@ class RuntimeCore:
         ag = DroneAgent(aid=aid, agent_no=agent_no, vehicle_id=vehicle_id, profile_id=profile_id, world_id=self.world_id,
                         member_caps=capabilities, manifest=man, bridge=self.bridge, guard=self.guard, sched=self.sched,
                         detections=self.detections, ledger=led, cat=self.cat, role=role,
-                        has_battery=vd.has_battery if vd is not None else None)
+                        has_battery=vd.has_battery if vd is not None else None, reads=self.reads)
         self.agents[aid] = ag
         self.by_vehicle[vehicle_id] = aid
         self.guard.bind(AgentBinding(aid, vehicle_id, "agent", led, healthy=ag.health))
@@ -211,6 +223,7 @@ class RuntimeCore:
         elif kind in ("scenario.event", "scenario.agent_task"):
             self.triggers.on_scenario_event(ev)
         elif kind == "sim.reset":
+            self.reads.clear()
             self.tm.on_scenario_reset()
             self.guard.forget_leases()
             for lg in list(self.ledgers.values()):
@@ -221,6 +234,7 @@ class RuntimeCore:
                 spawn(self.unregister_vehicle(uav))
 
     def _on_epoch(self, epoch: int, segment: int) -> None:
+        self.reads.clear()
         self.tm.on_epoch_change(epoch, segment)
         self.guard.forget_leases()
         for lg in list(self.ledgers.values()):

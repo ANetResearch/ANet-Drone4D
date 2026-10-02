@@ -260,6 +260,8 @@ class Detector:
                     continue
                 if b["state"][s, kind] == SensorState.STANDBY:
                     continue
+                if rt.lease_gated(s, spec.detector.capability, ctx):  # R-12：委派能力只在 AGENT 租约下检测
+                    continue
                 if d == 0:
                     want = st == TargetState.UNSEEN
                 else:

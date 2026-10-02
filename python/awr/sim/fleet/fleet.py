@@ -31,7 +31,7 @@ from .stages import budgets as B
 from .stages import registry as R
 from .stages.clock import st_clock
 from .stages.cmd_watch import st_cmd_watch
-from .stages.contact import ContactCfg, ContactStage
+from .stages.contact import CollideStage, ContactCfg, ContactStage
 from .stages.fsm_min import FsmMin
 from .stages.ingest import IngestStage, SetpointMailbox
 from .stages.kinematic import KinematicStage
@@ -59,7 +59,7 @@ class FleetConfig:
     capacity: int = CAPACITY
     path_capacity: int = 524288
     max_batch_base: int = 5
-    tick_budget_us: int = 2800
+    tick_budget_us: int = 2300  # 慢任务按"本 tick 预算 − 已用"填充的目标（ADR-070：2800 → 2300 µs，为墙钟抖动留出单步 p99 余量）
     slow_budget_us: int = 1000
     boot_s: float = 0.2
     ready_s: float = 0.5
@@ -151,11 +151,12 @@ class FleetSim:
             self.oracle = self.l1.oracle
             for name, order, fn in self.oracle.stages():
                 builtin += mk(name, c.l1_every, 0, order, fn, owner="M08", fidelity=L1_FID, builtin=True)
+        contact = ContactStage(self.world, cc, PT=self.T.PT, kernel=self.kernel, capacity=self.S.capacity)
         builtin += [
             *mk("kinematic", c.l1_every, 0, 85, self.kinematic, owner="M08", fidelity=R.Fidelity.L0, builtin=True),
-            *mk("contact", c.l1_every, 0, 90, ContactStage(self.world, cc, PT=self.T.PT, kernel=self.kernel,
-                                                           capacity=self.S.capacity),
-                owner="M08", fidelity=L1_FID, builtin=True),
+            *mk("contact", c.l1_every, 0, 90, contact, owner="M08", fidelity=L1_FID, builtin=True),
+            # 机间碰撞 25 Hz，在奇数 tick ≡ 9 mod 10（ADR-070；此前在 contact 内、tick ≡ 6 mod 10）
+            *mk("collide", 10, 9, 91, CollideStage(contact), owner="M08", fidelity=L1_FID, builtin=True),
             *mk("cmd_watch", 5, 4, 128, st_cmd_watch, owner="M08", builtin=True),
             *mk("tap", c.tap_every, 0, 140, self.tap, owner="M08", builtin=True),
         ]
@@ -277,9 +278,9 @@ class FleetSim:
         return np.stack([ps[:, 1], ps[:, 0], -ps[:, 2]], 1)
 
     # ------------------------------------------------------------ checkpoint（FR-083，ext）
-    def checkpoint_arrays(self) -> dict[str, np.ndarray]:
-        out = self.S.checkpoint_arrays()
-        for k, a in self.PB.checkpoint_arrays().items():
+    def checkpoint_arrays(self, copy: bool = True) -> dict[str, np.ndarray]:
+        out = self.S.checkpoint_arrays(copy)
+        for k, a in self.PB.checkpoint_arrays(copy).items():
             out[f"pb.{k}"] = a
         return out
 

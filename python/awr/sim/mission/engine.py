@@ -54,7 +54,22 @@ HEARTBEAT_WALL_NS = 1_000_000_000
 # 调用结果 → Track 动作
 DROP_CODES = {207, 208}                  # VEHICLE_LOST、CRASHED
 SUSPEND_CODES = {206, 210, 202, 203, 6}  # SUPERSEDED、LEASE_PREEMPTED、PROGRESS_TIMEOUT、STALLED、CANCELLED
+SUBMITS_PER_STAGE = 4                    # mission_engine stage 每次至多下发的新调用（其余顺延到之后的 stage）
+THROTTLE_MIN_TRACKS = 32                 # 只对 ≥ 32 机的任务节流（S1–S6 等小编组的时序不变）
+RESULTS_PER_STAGE = 16                  # mission_engine stage（10 Hz）每次处理的调用终态上限
+PRECHECK_PER_STAGE = 8                  # 大机群任务能量预检每次 stage 的机数（分批，ADR-065）
+FULL_SCAN_EVERY = 10                    # 大编组任务的候选轨道按事件登记，另每 10 次 stage（1 s）全量检查一次（兜底，FX2-R3）
+STATUS_CACHE_NS = 5_000_000_000         # 大编组任务状态汇总（进度、ETA、规划中）的缓存时长【仿真】，任务有变化时立即重算
+RTL_LAYER_M = 12.0                      # 编队解散分层返航的层距（≥ FleetGuard rearm_m 12 m；ADR-065）
+DISBAND_SYNC_TIMEOUT_NS = 30_000_000_000  # 解散分层：全员到达各自返航层的等待上限【仿真】（FX2-R3，ADR-070）
+ENTRY_DECONF_MAX = 12                   # 入场转场 4D 消解只对 2–12 机的非编队任务（大机群任务不做，FX2-R3，ADR-070）
+ENTRY_SYNC_TIMEOUT_NS = 30_000_000_000  # 入场转场收集窗口【仿真】：首条转场规划就绪后至多等其余成员这么久
+ENTRY_DELAYS_S = tuple(range(0, 61, 2))  # 入场转场的起步延迟候选（只用延迟，不错层：转场起点即机体当前位置）
+ENTRY_CLEARANCE_PAD_M = 1.0             # 入场消解阈值 = min_sep_m + 1 m（跟踪误差与 10 Hz 起步粒度的余量）
+CAPT_SEP_PAD_M = 0.5                    # 编队集结（CAPT）的间距阈值 = min_sep_m + 0.5 m（跟踪误差余量，ADR-070）
+NO_BACKOFF_CODES = {204, 206, 210, 6}     # 让行 HOLD、被取代、租约抢占、取消：条件解除后立即续飞，不退避
 FS_DROP = {"ELAND", "FAILSAFE", "CRASHED", "LANDING", "RTL", "LANDED", "DISARMED"}
+FS_RETURN = {"RTL", "LANDING", "LANDED", "ELAND", "FAILSAFE"}
 
 
 @dataclass
@@ -86,7 +101,11 @@ class TrackRT:
     asm: str = ""                 # 编队集结：""、lift、capt_wait、capt、done（done 含退回分层转场）
     photos: int = 0               # camera.trigger 的逻辑计数（FR-008）
     rej_n: int = 0                # 连续准入拒绝次数（INT-1：续飞退避，避免 10 Hz 重试风暴）
+    fail_n: int = 0               # 连续执行失败次数（细校验 102、规划失败等；同样按 0.5·2^k s 退避续飞）
+    eta_cache: tuple | None = None  # (游标, 作业项列表, 项数, 剩余项估计时长)：eta_s 的缓存
     retry_at_ns: int = -1
+    entry: tuple | None = None    # 入场转场 4D 消解期间暂存的 (follow_path 参数, 轨迹缓存条目, 控制点, ts_s)
+    entry_at_ns: int = -1         # 入场转场的起步时刻（消解给出的延迟）
 
     @property
     def total(self) -> int:
@@ -126,6 +145,12 @@ class MissionRT:
     fphase: str = "PLANNED"       # 编队阶段（§6.4.3，ext）：PLANNED、LIFTING、ASSEMBLING、CRUISE、DISBANDED
     assemble_job: str | None = None
     assemble: dict | None = None
+    hint: set = field(default_factory=set)   # 下次 stage 需要检查的轨道（大编组任务的候选集，见 MissionEngine.stage）
+    full_scan: bool = True                   # 下次 stage 全量检查（任务状态变化等）
+    n_waiting: int = 0                       # WAITING 轨道数（_track 维护；_poll_barrier 全量检查时校正）
+    entry_phase: str = ""                    # 入场转场 4D 消解：""、collect、pending、done（ADR-070）
+    entry_job: str | None = None
+    entry_since_ns: int = -1
 
     @property
     def vehicles(self) -> list[str]:
@@ -139,6 +164,11 @@ class MissionEngine:
         self.order: list[str] = []
         self._results: deque = deque()
         self._by_cid: dict[str, tuple[str, str]] = {}
+        self._submits_stage = 0                     # 本次 stage 已下发的调用数（SUBMITS_PER_STAGE 节流）
+        self._stage_n = 0                           # stage 调用计数（大编组任务的兜底全量检查周期）
+        self._pc_left = PRECHECK_PER_STAGE          # 本次 stage 剩余的分批预检机数
+        self._rot: dict[str, int] = {}              # 各任务 stage 循环的起始轨道（节流时轮转续做）
+        self._deferred_track: tuple | None = None
         self._n = 0
         self.stats = {"calls": 0, "results": 0, "rejected": 0}
 
@@ -229,6 +259,9 @@ class MissionEngine:
             return {"code": 105, "detail": {"state": m.state}}
         on_abort = str(m.spec.get("on_abort", "hover"))
         for t in m.tracks.values():
+            if t.entry is not None:
+                self.rt.tracker.cache.unpin(t.entry[1])
+                t.entry = None
             if t.state in ("DONE", "DROPPED"):
                 continue
             if t.state != "PENDING" and t.slot >= 0 and self.rt.airborne(t.slot):
@@ -262,7 +295,8 @@ class MissionEngine:
                 continue
             s = t.slot
             out.append({"vehicle_id": vid, "home_enu_m": rt.S.enu.home[s].tolist(), "pos_enu_m": rt.S.enu.pos[s].tolist(),
-                        "v_limit_mps": rt.v_limit(s), "cruise_mps": rt.cruise(s), "r_col_m": rt.r_col(s)})
+                        "v_limit_mps": rt.v_limit(s), "cruise_mps": rt.cruise(s), "r_col_m": rt.r_col(s),
+                         "yawrate_max_rad_s": rt.yawrate_max(s)})
         return out
 
     def _generate(self, m: MissionRT) -> None:
@@ -377,7 +411,10 @@ class MissionEngine:
                    "slots": np.array([t.items[0]["start"] for t in waiting], np.float64),
                    "z_form_m": float(f.get("z_m", max(float(t.items[0]["start"][2]) for t in waiting))),
                    "v_mps": float(waiting[0].items[0].get("speed_mps") or rt.cruise(waiting[0].slot)),
-                   "min_sep_m": float(cons.get("min_sep_m", 10.0)),
+                   # CAPT 按 min_sep_m + 0.5 m 规划（不足时三段式错层）：此前按 10 m 恰好规划，跟踪误差下 S2 实测 10.2–10.4 m
+                   #（D1 验收第 2 轮 9.73 m 来自解散段，FX2-R3-sim）；起终构型本身的上限（0.95 × 起终最小间距）仍由 worker 钳位。
+                   # 1 m 的余量使 S4 返程编队也改为错层集结，多进程运行中一名成员以 203 中止后单独转场，间距 9.46 m（见报告）
+                   "min_sep_m": float(cons.get("min_sep_m", 10.0)) + CAPT_SEP_PAD_M,
                    "layer_dz_m": float(cons.get("layer_dz_m", rt.transit.get("layer_dz_m", 4.0))),
                    "rank": [int(t.rank) for t in waiting], "zones": rt.zones,
                    "r_col_m": max(rt.r_col(t.slot) for t in waiting)}
@@ -500,7 +537,13 @@ class MissionEngine:
     # ------------------------------------------------------------ 启动与能量预检
     def _try_start(self, m: MissionRT) -> dict:
         rt = self.rt
-        per, ok = self.energy_precheck(m)
+        if len(m.tracks) >= THROTTLE_MIN_TRACKS:
+            res = self._precheck_chunked(m)
+            if res is None:
+                return {"code": 0, "detail": {"pending": "energy_precheck"}}
+            per, ok = res
+        else:
+            per, ok = self.energy_precheck(m)
         m.energy = {"feasible": ok, "per_vehicle": per}
         if not ok:
             if m.precheck == "reject":
@@ -522,66 +565,99 @@ class MissionEngine:
         return {"code": 0}
 
     def energy_precheck(self, m: MissionRT) -> tuple[list[dict], bool]:
+        reserve = float((m.spec.get("constraints") or {}).get("energy_reserve", 0.20))
+        per = [r for vid, t in m.tracks.items() if (r := self._precheck_track(m, vid, t, reserve)) is not None]
+        return per, all(r["feasible"] for r in per)
+
+    def _precheck_track(self, m: MissionRT, vid: str, t: TrackRT, reserve: float) -> dict | None:
+        """单机能量预检（起飞、转场、作业项与返航段的能量积分；M10 §6.3.3）。"""
         rt = self.rt
         S = rt.S
-        reserve = float((m.spec.get("constraints") or {}).get("energy_reserve", 0.20))
-        per = []
-        ok_all = True
-        for vid, t in m.tracks.items():
-            if t.slot < 0:
-                continue
-            s = t.slot
-            home = S.enu.home[s].copy()
-            p0 = S.enu.pos[s].copy()
-            soc = rt.soc(s)
-            parts = []
-            tk = 0.0
-            z_to = max(float(p0[2]), float(home[2]) + TAKEOFF_AGL_M) if not rt.airborne(s) else float(p0[2])
-            up = EN.vertical_samples(p0, z_to, 1.5, tk)
-            if len(up):
-                parts.append(up)
-                tk = float(up[-1, 0])
-            pos = np.array([p0[0], p0[1], z_to])
-            speed = rt.cruise(s)
-            for it in t.items:
-                st = np.asarray(it["start"], np.float64)
-                v_it = float(it.get("speed_mps") or speed)
-                tr_parts, tk = self._transit_samples(pos, st, v_it, tk)
-                parts += tr_parts
-                if it["primitive"] == "orbit":
-                    o = it["geometry"]["orbit"]
-                    turns = float(o.get("turns") or 0) or 1.0
-                    R = float(o["radius_m"])
-                    T = 2 * math.pi * R * turns / max(v_it, 0.1)
-                    n = max(2, int(T) + 1)
-                    th = np.linspace(0, 2 * math.pi * turns, n)
-                    c = np.asarray(o["center_enu_m"], np.float64)
-                    P = np.c_[c[0] + R * np.cos(th), c[1] + R * np.sin(th), np.full(n, c[2])]
-                    V = np.c_[-v_it * np.sin(th), v_it * np.cos(th), np.zeros(n)]
-                    parts.append(np.c_[tk + np.linspace(0, T, n), P, V])
-                    tk += T
-                    pos = P[-1]
-                else:
-                    tr = m.trajs.get(it.get("traj_key") or "")
-                    if tr is not None:
-                        smp = np.asarray(tr["samples_1s"], np.float64).copy()
-                        smp[:, 0] += tk
-                        parts.append(smp)
-                        tk = float(smp[-1, 0])
-                    pos = np.asarray(it["end"], np.float64)
+        if t.slot < 0:
+            return None
+        s = t.slot
+        home = S.enu.home[s].copy()
+        p0 = S.enu.pos[s].copy()
+        soc = rt.soc(s)
+        parts = []
+        tk = 0.0
+        z_to = max(float(p0[2]), float(home[2]) + TAKEOFF_AGL_M) if not rt.airborne(s) else float(p0[2])
+        up = EN.vertical_samples(p0, z_to, 1.5, tk)
+        if len(up):
+            parts.append(up)
+            tk = float(up[-1, 0])
+        pos = np.array([p0[0], p0[1], z_to])
+        speed = rt.cruise(s)
+        for it in t.items:
+            st = np.asarray(it["start"], np.float64)
+            v_it = float(it.get("speed_mps") or speed)
+            tr_parts, tk = self._transit_samples(pos, st, self._transit_speed(it, s), tk)
+            parts += tr_parts
+            if it["primitive"] == "orbit":
+                o = it["geometry"]["orbit"]
+                turns = float(o.get("turns") or 0) or 1.0
+                R = float(o["radius_m"])
+                T = 2 * math.pi * R * turns / max(v_it, 0.1)
+                n = max(2, int(T) + 1)
+                th = np.linspace(0, 2 * math.pi * turns, n)
+                c = np.asarray(o["center_enu_m"], np.float64)
+                P = np.c_[c[0] + R * np.cos(th), c[1] + R * np.sin(th), np.full(n, c[2])]
+                V = np.c_[-v_it * np.sin(th), v_it * np.cos(th), np.zeros(n)]
+                parts.append(np.c_[tk + np.linspace(0, T, n), P, V])
+                tk += T
+                pos = P[-1]
+            else:
+                tr = m.trajs.get(it.get("traj_key") or "")
+                if tr is not None:
+                    smp = np.asarray(tr["samples_1s"], np.float64).copy()
+                    smp[:, 0] += tk
+                    parts.append(smp)
+                    tk = float(smp[-1, 0])
+                pos = np.asarray(it["end"], np.float64)
+        via = rt.rtl_via(pos, home, s)  # ADR-054：与运行期 rtl 分发同一返航路线
+        if via is not None:
+            v3 = np.array([via[0], via[1], pos[2]])
+            h_top = max(rt.hm_top(pos, v3), rt.hm_top(v3, home))
+        else:
             h_top = rt.hm_top(pos, home)
-            rtl, _z = EN.rtl_samples(pos, home, h_top, rt.wind, rt.dtm_at(home), 5.0, tk)
-            wh_work = sum(rt.path_wh(s, p) for p in parts if len(p) >= 2)
-            wh_rtl = rt.path_wh(s, rtl) if len(rtl) >= 2 else 0.0
-            need = wh_work + wh_rtl
-            e_use = rt.e_use(s)
-            after = soc - need / e_use
-            feas = after >= reserve - 1e-9
-            ok_all &= feas
-            per.append({"id": vid, "energy_wh": round(need, 2), "need_wh": round(need, 2), "rtl_wh": round(wh_rtl, 2),
-                        "soc_after_pct": round(after * 100.0, 1), "soc_after": round(after, 4), "feasible": bool(feas),
-                        "deficit_wh": round(max(0.0, (reserve - after) * e_use), 2)})
-        return per, ok_all
+        rtl, _z = EN.rtl_samples(pos, home, h_top, rt.wind, rt.dtm_at(home), 5.0, tk, via=via)
+        wh_work = sum(rt.path_wh(s, p) for p in parts if len(p) >= 2)
+        wh_rtl = rt.path_wh(s, rtl) if len(rtl) >= 2 else 0.0
+        need = wh_work + wh_rtl
+        e_use = rt.e_use(s)
+        after = soc - need / e_use
+        feas = after >= reserve - 1e-9
+        return {"id": vid, "energy_wh": round(need, 2), "need_wh": round(need, 2), "rtl_wh": round(wh_rtl, 2),
+                "soc_after_pct": round(after * 100.0, 1), "soc_after": round(after, 4), "feasible": bool(feas),
+                "deficit_wh": round(max(0.0, (reserve - after) * e_use), 2)}
+
+    def _precheck_chunked(self, m: MissionRT) -> tuple[list[dict], bool] | None:
+        """大机群任务（≥ THROTTLE_MIN_TRACKS 机）的分批预检：每次 stage 全部任务合计至多 PRECHECK_PER_STAGE 架，算完前任务
+        保持 IDLE（`_try_start` 返回 pending）。此前 n1000 ladder 的 4 个任务在同一 stage 内各预检 250 架，单个 tick 约
+        2.5 s，sim-core 被判挂死并反复重启（FX2-R2 自测，ADR-065）。计数分批，不读墙钟，×1 与 ×10 的启动时刻相同。"""
+        st = m.extra.get("_pc")
+        if st is None:
+            st = m.extra["_pc"] = {"keys": list(m.tracks.keys()), "i": 0, "per": [],
+                                   "reserve": float((m.spec.get("constraints") or {}).get("energy_reserve", 0.20))}
+        keys = st["keys"]
+        while st["i"] < len(keys) and self._pc_left > 0:
+            vid = keys[st["i"]]
+            st["i"] += 1
+            self._pc_left -= 1
+            r = self._precheck_track(m, vid, m.tracks[vid], st["reserve"])
+            if r is not None:
+                st["per"].append(r)
+        if st["i"] < len(keys):
+            return None
+        m.extra.pop("_pc", None)
+        per = st["per"]
+        return per, all(r["feasible"] for r in per)
+
+    def _transit_speed(self, it: dict, s: int) -> float:
+        """转场速度：作业项速度，缺省巡航；orbit 作业项取巡航（其 speed_mps 是圆周切向速度，ADR-070）。"""
+        if it.get("primitive") == "orbit":
+            return self.rt.cruise(s)
+        return float(it.get("speed_mps") or self.rt.cruise(s))
 
     def _transit_samples(self, a: np.ndarray, b: np.ndarray, v: float, tk: float) -> tuple[list[np.ndarray], float]:
         rt = self.rt
@@ -607,6 +683,7 @@ class MissionEngine:
     # ------------------------------------------------------------ Track 推进
     def _submit(self, m: MissionRT, t: TrackRT, op: str, args: dict, *, step: str, keep: bool = False) -> dict:
         self._n += 1
+        self._submits_stage += 1
         t.ncall += 1
         cid = f"m10:{m.mid}:{t.vehicle_id}:{t.ncall}"
         if not keep:
@@ -622,6 +699,17 @@ class MissionEngine:
         return adm
 
     def _advance(self, m: MissionRT, t: TrackRT) -> None:
+        """下发节流（≥ THROTTLE_MIN_TRACKS 机的任务）：每次 stage（10 Hz）至多 SUBMITS_PER_STAGE 条新调用（大编组任务同时起飞、同时结束转场时，此前一次
+        stage 内对数百架逐架准入，单个 tick 数十至数百毫秒；ADR-065）。超出时本机保持 idle，由 stage 循环在之后的 stage
+        中按轮转顺序续做（计数确定，不读墙钟，确定性不变）。"""
+        if self._submits_stage >= SUBMITS_PER_STAGE and len(m.tracks) >= THROTTLE_MIN_TRACKS:
+            if t.state not in ("DONE", "DROPPED", "SUSPENDED"):
+                t.step = "idle"
+                self._deferred_track = self._deferred_track or (m.mid, t.vehicle_id)
+            return
+        self._advance_now(m, t)
+
+    def _advance_now(self, m: MissionRT, t: TrackRT) -> None:
         """当前步骤完成后选择下一步（K01–K03、K08–K10）。"""
         if m.state not in ("RUNNING",) or t.state in ("DONE", "DROPPED", "SUSPENDED") or t.paused:
             return
@@ -652,6 +740,11 @@ class MissionEngine:
         pos = rt.S.enu.pos[s].copy()
         if t.step not in ("transit",) and float(np.linalg.norm(pos - start)) > max(1.0, 0.25 * float(it.get("speed_mps")
                                                                                                         or 5.0)):
+            if it["primitive"] == "orbit" and rt.coarse_proven(pos, start, s):
+                # orbit 作业项的入圆段可证无障碍时不另做转场：直接下发 orbit，由提供者以巡航速度直线切入（FR-013；
+                # 与操作员 orbit 同一路径）。省去每机一次 plan-pool 转场规划、一次细校验与一条 follow_path 调用（ADR-070）
+                self._start_item(m, t, it)
+                return
             self._plan_transit(m, t, pos, start)
             return
         self._start_item(m, t, it)
@@ -666,6 +759,11 @@ class MissionEngine:
         if t.not_before_ns > self.rt.t_ns:
             t.step = "idle"
             return
+        if self._submits_stage >= SUBMITS_PER_STAGE and len(m.tracks) >= THROTTLE_MIN_TRACKS:
+            # 转场终态直接起步作业项的路径同样受下发节流（此前绕过 `_advance`，一次 stage 内处理 16 条终态时连续准入
+            # 十余条 orbit 或 follow_path；ADR-065）。保持 idle，由 stage 循环续做（_advance_now 会重新走到这里）
+            t.step = "idle"
+            return
         self._run_item(m, t, it)
 
     def _plan_transit(self, m: MissionRT, t: TrackRT, a: np.ndarray, b: np.ndarray) -> None:
@@ -676,7 +774,7 @@ class MissionEngine:
                    "clearance_m": float(cons.get("clearance_m", rt.transit.get("margin_m", 5.0))),
                    "alt_max_m": cons.get("alt_max_m"), "prefer_low": bool(cons.get("prefer_low", False)),
                    "layer_dz_m": float(t.rank * float(cons.get("layer_dz_m", rt.transit.get("layer_dz_m", 4.0))))
-                   if n > 1 else 0.0, "speed_mps": float(t.items[t.cursor].get("speed_mps") or rt.cruise(t.slot))
+                   if n > 1 else 0.0, "speed_mps": self._transit_speed(t.items[t.cursor], t.slot)
                    if t.cursor < len(t.items) else rt.cruise(t.slot),
                    "zones": rt.zones, "r_col_m": rt.r_col(t.slot)}
         jid = f"safe_transit:{m.mid}:{t.vehicle_id}:{t.ncall}:{t.cursor}"
@@ -693,10 +791,19 @@ class MissionEngine:
         if t.job != res.job_id:
             return
         t.job = None
+        m.hint.add(vid)
         if not res.ok:
             self.rt.emit("plan.failed", job_id=res.job_id, code=int(res.code or 125), detail=res.detail,
                          remedy=res.remedy, level=2)
+            t.fail_n += 1          # 规划失败（含 plan-pool 过载时的 125 超时）退避续飞，不立即重交
+            t.retry_at_ns = self.rt.t_ns + int(min(30.0, 0.5 * 2.0 ** (t.fail_n - 1)) * 1e9)
             self._track(m, t, "SUSPENDED", res.detail or "PLAN_FAILED")
+            return
+        fs = self.rt.fs_name(t.slot) if t.slot >= 0 else "UNKNOWN"
+        if fs in FS_RETURN or fs == "CRASHED":
+            # 规划期间机体已转入返航、降落或安全动作（例如全机 RTL）：不再下发转场，任务让出该机（FX2-R2）
+            self._release_lease(m, t)
+            self._track(m, t, "DROPPED", f"transit_preempted:{fs}")
             return
         tr = res.trajectories[0]
         e = self.rt.tracker.cache.put_traj(tr)
@@ -706,8 +813,106 @@ class MissionEngine:
         if m.state != "RUNNING" or t.paused:
             t.step = "idle"
             return
+        if self._entry_applies(m, t):
+            self._entry_hold(m, t, tr, e)
+            return
         self._track(m, t, "TRANSIT", "transit")
         self._submit(m, t, "follow_path", self._fp_args(tr, e), step="transit")
+
+    # ------------------------------------------------------------ 入场转场 4D 消解（FR-056 的入场部分，ext；ADR-070）
+    def _entry_applies(self, m: MissionRT, t: TrackRT) -> bool:
+        """多机（2–12）非编队任务的首段入场转场：先收集全员的转场轨迹，在 plan-pool 做一次 4D 消解（只用起步延迟），
+        再按各自延迟起步。此前各机规划完成即起飞爬升，爬到转场高度的机体横飞经过相邻机仍在爬升的竖直柱上方
+        （S4 覆盖组 b-04 越过 b-03 出生点 6.6–6.9 m，D1 验收第 2 轮 D1-AC-17）；首个作业项的 4D 消解不覆盖转场段。"""
+        return (m.entry_phase in ("", "collect") and not self._is_formation(m)
+                and 2 <= len(m.tracks) <= ENTRY_DECONF_MAX and t.cursor == 0 and t.done_items == 0
+                and not t.pending_items and not t.asm)
+
+    def _entry_hold(self, m: MissionRT, t: TrackRT, tr: dict, e: Any) -> None:
+        self.rt.tracker.cache.pin(e)
+        t.entry = (self._fp_args(tr, e), e, np.asarray(e.Q, np.float64), float(e.ts_s))
+        t.step = "idle"
+        t.entry_at_ns = -1
+        self._track(m, t, "WAITING", "entry_sync")
+        t.wait_since_ns = self.rt.t_ns
+        if m.entry_phase == "":
+            m.entry_phase = "collect"
+            m.entry_since_ns = self.rt.t_ns
+        self._poll_entry(m)
+
+    def _entry_candidate(self, t: TrackRT) -> bool:
+        """尚可能产生入场转场的成员（未起飞、起飞中、转场规划中，或空闲待推进且还在首段之前）。"""
+        if t.state in ("DONE", "DROPPED", "SUSPENDED") or t.cursor != 0 or t.done_items or t.pending_items:
+            return False
+        if t.state == "PENDING":
+            return True
+        return t.state == "TRANSIT" and (t.step in ("takeoff", "plan_transit") or (t.step == "idle" and t.cid is None))
+
+    def _poll_entry(self, m: MissionRT) -> None:
+        rt = self.rt
+        now = rt.t_ns
+        if m.entry_phase == "collect":
+            ready = [t for t in m.tracks.values() if t.state == "WAITING" and t.reason == "entry_sync"]
+            pending = [t for t in m.tracks.values() if t not in ready and self._entry_candidate(t)]
+            if pending and now - m.entry_since_ns < ENTRY_SYNC_TIMEOUT_NS:
+                return
+            if len(ready) < 2:
+                m.entry_phase = "done"
+                for t in ready:
+                    self._entry_launch(m, t)
+                return
+            cons = m.spec.get("constraints") or {}
+            trs = [{"vehicle_id": t.vehicle_id, "ctrl_pts": t.entry[2], "ts_s": t.entry[3], "prio": -float(t.rank)}
+                   for t in ready]
+            payload = {"trajs": trs, "clearance_m": float(cons.get("min_sep_m", 10.0)) + ENTRY_CLEARANCE_PAD_M,
+                       "delays_s": list(ENTRY_DELAYS_S), "dzs_m": [0.0], "zones": rt.zones,
+                       "r_col_m": max(rt.r_col(t.slot) for t in ready)}
+            jid = f"deconflict_entry:{m.mid}:{m.revision}"
+            req = PlanRequest(jid, "deconflict", rt.world_key, tuple(t.vehicle_id for t in ready), payload,
+                              rt.limits_dict(), PRIO_START, rt.tick, 3 * BUDGET_MS["deconflict"], f"deconflict_entry:{m.mid}")
+            m.entry_phase, m.entry_job = "pending", jid
+            rt.pool.submit(req, lambda res, tick, mid=m.mid: self._on_entry_deconflict(mid, res, tick))
+            return
+        if m.entry_phase == "done" and m.n_waiting > 0:
+            for t in m.tracks.values():
+                if t.state == "WAITING" and t.reason in ("entry_sync", "entry_delay") and t.entry_at_ns <= now:
+                    self._entry_launch(m, t)
+
+    def _on_entry_deconflict(self, mid: str, res: PlanResult, tick: int) -> None:
+        m = self.missions.get(mid)
+        if m is None or res.job_id != m.entry_job:
+            return
+        m.entry_job = None
+        m.entry_phase = "done"
+        m.dirty = True
+        delays: dict = {}
+        if res.status in ("ok", "degraded"):
+            d = dict(res.extra or res.stats)
+            delays = d.get("delays_s") or {}
+            self.rt.emit("deconflict.result", mid=mid, phase="entry", delays_s=delays, layers_m=d.get("layers_m") or {},
+                         residual=d.get("residual") or [], level=0)
+            for vid in d.get("partial") or []:
+                self.rt.emit("deconflict.partial", mid=mid, vehicle_id=vid, phase="entry", level=2)
+        else:
+            self.rt.emit("plan.failed", job_id=res.job_id, code=int(res.code or 125), detail=res.detail, level=1)
+        now = self.rt.t_ns
+        for t in m.tracks.values():
+            if t.state == "WAITING" and t.reason == "entry_sync":
+                t.entry_at_ns = now + round(float(delays.get(t.vehicle_id, 0.0)) * 1e9)
+                if t.entry_at_ns > now:
+                    t.reason = "entry_delay"
+                    m.hint.add(t.vehicle_id)
+        if m.state == "RUNNING":
+            self._poll_entry(m)
+
+    def _entry_launch(self, m: MissionRT, t: TrackRT) -> None:
+        if m.state != "RUNNING" or t.paused or t.entry is None:
+            return
+        args, e = t.entry[0], t.entry[1]
+        t.entry = None
+        self.rt.tracker.cache.unpin(e)
+        self._track(m, t, "TRANSIT", "transit")
+        self._submit(m, t, "follow_path", args, step="transit")
 
     def _fp_args(self, tr: dict, e: Any, it: dict | None = None) -> dict:
         if it is not None and it.get("group"):
@@ -790,13 +995,76 @@ class MissionEngine:
             self._set_fphase(m, "DISBANDED")           # 锚点到达终点：解散，各成员按 on_done 返航（按 rank 分层）
         on_done = str(m.spec.get("on_done", "rtl"))
         self.rt.set_item(t.slot, 0xFFFF)
+        if on_done == "rtl" and self._disband_layers(m, t):
+            return
         if on_done == "rtl":
             self._track(m, t, "RETURNING", "on_done")
-            self._submit(m, t, "rtl", {}, step="done_action")
+            self._submit(m, t, "rtl", self._layered_rtl_args(m, t), step="done_action")
         elif on_done == "land":
             self._submit(m, t, "land", {}, step="done_action")
         else:
             self._submit(m, t, "hover", {}, step="done_action")
+
+    def _disband_layers(self, m: MissionRT, t: TrackRT) -> bool:
+        """编队解散的分层返航先分层、后横飞（FX2-R3，ADR-070）：rank k ≥ 1 的成员先在原地竖直升到各自返航层（当前高度
+        + k × RTL_LAYER_M，goto 同一水平位置），rank 0 原地悬停；全员到层（或等待 30 s【仿真】）后才各自以所在层高度返航。
+        此前 rank 0 解散即横飞回家，其余成员还在原地爬升：S2 解散头 3 s rank 0 从 rank 3 的爬升柱旁 9.6 m 经过
+        （进程内 9.97–10.0 m，多进程 9.73 m，D1 验收第 2 轮 D1-AC-17）；层间同理（rank 1 到层横飞时 rank 2 仍在爬升）。
+        只用于 ≥ 2 名在役成员的编队任务；返回 False 表示照旧直接返航。"""
+        if not self._is_formation(m) or t.slot < 0 or m.fphase != "DISBANDED":
+            return False
+        live = [x for x in m.tracks.values() if x.state not in ("DONE", "DROPPED")]
+        if len(live) < 2:
+            return False
+        args = self._layered_rtl_args(m, t)
+        S = self.rt.S
+        if args:
+            p = S.enu.pos[t.slot]
+            z_tgt = float(S.enu.home[t.slot][2]) + float(args["alt_m"])
+            self._track(m, t, "RETURNING", "disband_layer")
+            self._submit(m, t, "goto", {"pos": [round(float(p[0]), 3), round(float(p[1]), 3), round(z_tgt, 3)]},
+                         step="disband_climb")
+        else:
+            t.step = "idle"
+            self._track(m, t, "WAITING", "disband_sync")
+            t.wait_since_ns = self.rt.t_ns
+        return True
+
+    def _poll_disband(self, m: MissionRT) -> None:
+        waiting = [t for t in m.tracks.values() if t.state == "WAITING" and t.reason == "disband_sync"]
+        if not waiting:
+            return
+        live = [t for t in m.tracks.values() if t.state not in ("DONE", "DROPPED")]
+        climbing = [t for t in live if t.state == "RETURNING" and t.step == "disband_climb"]
+        unfinished = [t for t in live if t not in waiting and t not in climbing and t.state != "RETURNING"]
+        now = self.rt.t_ns
+        if (climbing or unfinished) and not any(now - t.wait_since_ns >= DISBAND_SYNC_TIMEOUT_NS for t in waiting):
+            return
+        S = self.rt.S
+        for t in waiting:
+            if t.paused:
+                continue
+            alt = round(float(S.enu.pos[t.slot][2]) - float(S.enu.home[t.slot][2]), 2) if t.slot >= 0 else 0.0
+            self._track(m, t, "RETURNING", "on_done")
+            self._submit(m, t, "rtl", {"alt_m": alt} if 10.0 <= alt <= 500.0 else {}, step="done_action")
+
+    def _layered_rtl_args(self, m: MissionRT, t: TrackRT) -> dict:
+        """编队解散后的分层返航（M16 §6.4.4、§6.4.6"各成员按 on_done 返航，按 rank 分层"）：rank k 的成员返航高度为当前高度
+        + k × RTL_LAYER_M（不超过围栏 max_z − 10 m）。此前各成员以同一高度直线回到相距 12 m 的出生点，返航航线交叉，
+        S2、S4 解散后最小间距 5–10 m（D1 验收第 1 轮 D1-AC-17；FX2-R2，ADR-065）。非编队任务与 rank 0 不加参数。"""
+        if not self._is_formation(m) or t.rank <= 0 or t.slot < 0:
+            return {}
+        S = self.rt.S
+        z_now = float(S.enu.pos[t.slot][2])
+        z_home = float(S.enu.home[t.slot][2])
+        extra = RTL_LAYER_M * float(t.rank)
+        zmax = self.rt.max_z()
+        if zmax is not None:
+            extra = min(extra, max(0.0, float(zmax) - 10.0 - z_now))
+        alt = round(z_now - z_home + extra, 2)
+        if extra <= 0.0 or not 10.0 <= alt <= 500.0:
+            return {}
+        return {"alt_m": alt}
 
     # ------------------------------------------------------------ 调用结果
     def on_call_result(self, call: Any) -> None:
@@ -819,12 +1087,20 @@ class MissionEngine:
         self.stats["results"] += 1
         step = t.step
         t.cid = None
+        m.hint.add(t.vehicle_id)
         if status == "rejected":
             # INT-1（M16-to-M10 第 2 条）：准入拒绝后按 0.5·2^k s（≤ 30 s，仿真）退避再续飞，不再每个 stage 周期重发
             t.rej_n += 1
             t.retry_at_ns = self.rt.t_ns + int(min(30.0, 0.5 * 2.0 ** (t.rej_n - 1)) * 1e9)
+        elif status in ("failed", "timeout") and code not in NO_BACKOFF_CODES:
+            # 执行失败（细校验 102、截止 202、停滞 203 等）同样退避：确定性失败（例如紧邻建筑的爬升段）此前以约 3 Hz
+            # 反复"续飞 → 规划 → 失败"，n1000 稳态中 17 架机持续占用 plan-pool 与准入（D1 验收第 1 轮 4.3）
+            t.fail_n += 1
+            t.retry_at_ns = self.rt.t_ns + int(min(30.0, 0.5 * 2.0 ** (t.fail_n - 1)) * 1e9)
         elif status in ("succeeded", "running", "accepted"):
             t.rej_n = 0
+            if status == "succeeded":
+                t.fail_n = 0
         if status == "succeeded":
             if step == "takeoff":
                 t.step = "idle"
@@ -838,7 +1114,11 @@ class MissionEngine:
                     return
                 if t.asm == "capt":
                     t.asm = "done"
-                if t.cursor < len(t.items):
+                if t.pending_items:
+                    # 续飞（K07）：转场之后先执行"剩余部分"（从断点 τ 起），不能从当前项起点重新开始（FX-SIM2：
+                    # S3 中租约交还后 reference 跳回作业项起点，pos_err 数十米触发 FAILSAFE）
+                    self._advance(m, t)
+                elif t.cursor < len(t.items):
                     self._start_item(m, t, t.items[t.cursor])
                 else:
                     self._advance(m, t)
@@ -861,6 +1141,10 @@ class MissionEngine:
             elif step == "done_action":
                 self._release_lease(m, t)
                 self._track(m, t, "DONE", "done")
+            elif step == "disband_climb":
+                t.step = "idle"
+                self._track(m, t, "WAITING", "disband_sync")
+                t.wait_since_ns = self.rt.t_ns
             else:
                 t.step = "idle"
             return
@@ -868,13 +1152,21 @@ class MissionEngine:
         fs = self.rt.fs_name(t.slot) if t.slot >= 0 else "UNKNOWN"
         if step == "abort":
             return
-        if code in DROP_CODES or fs in ("ELAND", "FAILSAFE", "CRASHED") or (code == 204 and fs in FS_DROP):
+        if code in DROP_CODES or fs in ("ELAND", "FAILSAFE", "CRASHED") or (code == 204 and fs in FS_DROP) \
+                or (code == 206 and fs in FS_RETURN):
+            # 206：返航、降落类命令（操作员或安全）取代了任务调用，任务让出该机，不在落地后自动重新起飞（FX2-R2）
             self._release_lease(m, t)
             self._track(m, t, "DROPPED", f"{status}:{code}:{fs}")
             return
         if step == "done_action" and status == "failed":
             self._release_lease(m, t)
             self._track(m, t, "DROPPED", f"on_done failed {code}")
+            return
+        if step == "disband_climb":
+            # 分层爬升被拒或失败（例如围栏、被取代）：不再分层，按原逻辑参与解散同步后返航
+            t.step = "idle"
+            self._track(m, t, "WAITING", "disband_sync")
+            t.wait_since_ns = self.rt.t_ns
             return
         if code == 204:          # 安全抢占为 HOLD（例如让行）：挂起，间距恢复后自动续飞
             t.yields.append(self.rt.t_ns)
@@ -963,6 +1255,7 @@ class MissionEngine:
         if t.job != res.job_id:
             return
         t.job = None
+        m.hint.add(vid)
         if not res.ok or not res.trajectories:
             self._track(m, t, "SUSPENDED", res.detail or "PLAN_FAILED")
             return
@@ -985,6 +1278,9 @@ class MissionEngine:
         return True
 
     def _poll_barrier(self, m: MissionRT) -> None:
+        if m.n_waiting <= 0:
+            return  # 没有 WAITING 轨道（_track 维护的计数；大编组任务此前每次 stage 逐条检查，FX2-R3）
+        m.n_waiting = sum(1 for t in m.tracks.values() if t.state == "WAITING")
         waiting = [t for t in m.tracks.values() if t.state == "WAITING" and t.reason in SYNC_REASONS]
         if not waiting:
             return
@@ -1022,6 +1318,11 @@ class MissionEngine:
         t.reason = reason
         t.t_state_ns = self.rt.t_ns
         m.dirty = True
+        m.hint.add(t.vehicle_id)
+        if old == "WAITING":
+            m.n_waiting -= 1
+        if state == "WAITING":
+            m.n_waiting += 1
         if t.slot >= 0:
             self.rt.set_track_state(t.slot, TRACK_CODE[state])
             if state in ("DONE", "DROPPED"):
@@ -1040,6 +1341,7 @@ class MissionEngine:
         m.state = state
         m.reason = reason
         m.dirty = True
+        m.full_scan = True
         m.revision += 0
         self.rt.emit("mission.state", mid=m.mid, fields={"from": old, "to": state}, reason=reason,
                      incomplete=m.incomplete, level=2 if state == "ABORTED" else 1)
@@ -1059,21 +1361,37 @@ class MissionEngine:
         self._set_state(m, "DONE", "complete")
 
     def progress(self, m: MissionRT) -> float:
-        ts = [t for t in m.tracks.values()]
+        ts = list(m.tracks.values())
         if not ts:
             return 0.0
+        # 作业项内进度按机向量化取出（`rt.item_progress` 的同一公式；大编组任务的状态发布 2 Hz，FX2-R2）
+        work = [t for t in ts if t.state == "WORKING" and t.cursor < len(t.items) and t.slot >= 0]
+        ipm = dict(zip(map(id, work), self.rt.item_progress_many([t.slot for t in work]), strict=True)) if work else {}
+        # 逐轨道累加次序与各项算式同原实现；贡献为 0 的轨道（未完成任何作业项且项内进度为 0，例如环绕中）跳过——加 0.0
+        # 不改变累加值（FX2-R3：250 条轨道的任务此前约 0.6 ms/次）
         tot = 0.0
         for t in ts:
-            if t.state == "DONE":
+            st = t.state
+            if st == "DONE":
                 tot += 1.0
                 continue
+            if st == "RETURNING":
+                tot += 0.95
+                continue
+            dn = t.done_items
             n = max(len(t.items), 1)
-            frac = t.done_items / n
-            if t.state == "WORKING" and t.cursor < len(t.items):
-                frac += self.rt.item_progress(t.slot) / n
-            if t.state == "RETURNING":
-                frac = 1.0
-            tot += min(frac, 1.0) * (0.95 if t.state != "DONE" else 1.0)
+            if st == "WORKING" and t.cursor < len(t.items):
+                ipv = ipm.get(id(t))
+                if ipv is None:
+                    ipv = self.rt.item_progress(t.slot)
+                if dn == 0 and ipv == 0.0:
+                    continue
+                frac = dn / n + ipv / n
+            else:
+                if dn == 0:
+                    continue
+                frac = dn / n
+            tot += min(frac, 1.0) * 0.95
         return 100.0 * tot / len(ts)
 
     def eta_s(self, m: MissionRT) -> float | None:
@@ -1081,22 +1399,40 @@ class MissionEngine:
             return None
         best = 0.0
         for t in m.tracks.values():
-            rem = 0.0
-            for it in t.items[t.cursor:]:
-                rem += float((it.get("est") or {}).get("duration_s", 0.0))
-            best = max(best, rem)
+            c = t.eta_cache   # (游标, 作业项列表, 项数, 剩余估计时长)：剩余项的估计时长只随游标与作业项列表变化
+            if c is not None and c[0] == t.cursor and c[1] is t.items and c[2] == len(t.items):
+                rem = c[3]
+            else:
+                rem = 0.0
+                for it in t.items[t.cursor:]:
+                    rem += float((it.get("est") or {}).get("duration_s", 0.0))
+                t.eta_cache = (t.cursor, t.items, len(t.items), rem)
+            if rem > best:
+                best = rem
         return round(best, 1)
 
     def status(self, m: MissionRT) -> dict:
         tracks = [{"vehicle_id": t.vehicle_id, "state": t.state, "item": int(t.cursor) if t.items else None,
                    "total": len(t.items)} for t in list(m.tracks.values())[:64]]
-        st = {"mid": m.mid, "state": m.state, "progress_pct": round(self.progress(m), 1), "revision": int(m.revision),
-              "tracks": tracks, "t_ns": int(self.rt.t_ns), "eta_s": self.eta_s(m)}
+        # 大编组任务（≥ 32 机）的逐轨道汇总（进度、ETA、是否有规划中的轨道）按 STATUS_CACHE_NS【仿真】缓存，任务有变化
+        # （m.dirty：轨道或任务状态变化）时立即重算：250 机任务每次约 0.8 ms，稳态心跳 1 Hz（FX2-R3，ADR-070）。
+        # `mission_progress` 度量直接调用 progress()，不经缓存
+        now = int(self.rt.t_ns)
+        c = m.extra.get("_st") if len(m.tracks) >= THROTTLE_MIN_TRACKS else None
+        if c is not None and not m.dirty and 0 <= now - c[0] < STATUS_CACHE_NS:
+            prog, eta, job_pending = c[1], c[2], c[3]
+        else:
+            prog = round(self.progress(m), 1)
+            eta = self.eta_s(m)
+            job_pending = any(t.job is not None for t in m.tracks.values())
+            if len(m.tracks) >= THROTTLE_MIN_TRACKS:
+                m.extra["_st"] = (now, prog, eta, job_pending)
+        st = {"mid": m.mid, "state": m.state, "progress_pct": prog, "revision": int(m.revision),
+              "tracks": tracks, "t_ns": now, "eta_s": eta}
         mets = self.rt.mission_metrics(m)
         if mets:
             st["metrics"] = mets
-        st["plan"] = {"pending": m.gen == "pending" or any(t.job is not None for t in m.tracks.values()),
-                      "last_ms": round(float(m.plan_ms), 2)}
+        st["plan"] = {"pending": m.gen == "pending" or job_pending, "last_ms": round(float(m.plan_ms), 2)}
         f = m.extra.get("formation") if m.extra else None
         if f:
             st["formation"] = {"phase": m.fphase, "shape": str(f.get("shape")),
@@ -1105,14 +1441,30 @@ class MissionEngine:
         return st
 
     # ------------------------------------------------------------ stage（order 150、every 25、phase 8，10 Hz）
+    @staticmethod
+    def _index_of(m: MissionRT, ts: list) -> dict[str, int] | None:
+        """轨道 vehicle_id → 在 `m.tracks` 中的序号，按 (revision, 轨道数, 首尾轨道对象) 缓存；缓存失效（轨道集合变化）时
+        重建并返回 None，调用方本次全量检查。"""
+        key = (m.revision, len(ts), id(ts[0]), id(ts[-1]))
+        c = m.extra.get("_idx")
+        if c is not None and c[0] == key:
+            return c[1]
+        m.extra["_idx"] = (key, {t.vehicle_id: k for k, t in enumerate(ts)})
+        return None
+
     def stage(self, S: Any, ctx: Any) -> None:
-        while self._results:
+        self._stage_n += 1
+        self._submits_stage = 0
+        self._pc_left = PRECHECK_PER_STAGE
+        n_res = 0
+        while self._results and n_res < RESULTS_PER_STAGE:  # 每次 stage 至多处理这么多条终态（其余下次；全机批量命令，ADR-065）
+            n_res += 1
             cid, status, code, detail = self._results.popleft()
             try:
                 self._handle_result(cid, status, code, detail)
             except Exception:
                 log.exception("mission result handling failed", extra={"kv": {"cid": cid}})
-        for mid in list(self.order):
+        for mi, mid in enumerate(list(self.order)):
             m = self.missions.get(mid)
             if m is None:
                 continue
@@ -1129,15 +1481,48 @@ class MissionEngine:
                     if t.paused and t.cid is not None:
                         self.rt.extend_deadline(t.cid, 120.0)      # 暂停期间不判截止（M08 对 paused 调用的同一规则）
             if m.state == "RUNNING":
-                for t in m.tracks.values():
+                ts = list(m.tracks.values())
+                nt = len(ts)
+                k0 = self._rot.get(mid, 0) % max(1, nt)
+                self._deferred_track = None
+                # 只访问可能有动作的轨道（挂起，或无在途调用与规划作业）：其余轨道在原循环中什么也不做，按轮转次序访问候选；
+                # 额度用完时指针停在下一个候选上（原实现停在下一条轨道上，两者此后访问的候选序列相同）。大编组任务（≥ 32 机）
+                # 的候选只取事件登记过的轨道（调用终态、规划结果、状态变化、上次访问后仍待处理），另每 FULL_SCAN_EVERY 次
+                # stage 全量检查一次作兜底：稳态 1000 条轨道全部在途时，此前每次 stage 逐条检查约 1.2 ms（FX2-R3，ADR-070）
+                throttle = nt >= THROTTLE_MIN_TRACKS
+                # 兜底全量检查按任务序号错开相位（ladder n1000 的 4 个 250 机任务此前在同一次 stage 内各全量检查一次，
+                # 合计约 1.5–2 ms，每秒一次落在同一个 tick 上；FX2-R3-sim）
+                idx_of = self._index_of(m, ts) if throttle and not m.full_scan and \
+                    (self._stage_n + mi) % FULL_SCAN_EVERY != 0 else None
+                if idx_of is not None:
+                    cand = sorted(idx_of[v] for v in m.hint if v in idx_of)
+                else:
+                    cand = [k for k, t in enumerate(ts) if t.state == "SUSPENDED" or (t.cid is None and t.job is None)]
+                    m.full_scan = False
+                m.hint = set()
+                order = [i for i in cand if i >= k0] + [i for i in cand if i < k0]
+                for j, k in enumerate(order):
+                    t = ts[k]
+                    if self._submits_stage >= SUBMITS_PER_STAGE and throttle:  # 额度用完：下次从这里续做
+                        self._rot[mid] = k
+                        m.hint.update(ts[i].vehicle_id for i in order[j:])
+                        break
                     if t.state == "SUSPENDED":
                         self._try_resume(m, t)
-                    elif t.state in ("TRANSIT", "WORKING") and t.cid is None and t.job is None and t.step == "idle" \
-                            and not t.paused:
+                    elif t.state in ("PENDING", "TRANSIT", "WORKING") and t.cid is None and t.job is None \
+                            and t.step == "idle" and not t.paused:
                         self._advance(m, t)
+                    if t.state == "SUSPENDED" or (t.cid is None and t.job is None and t.state not in ("DONE", "DROPPED")):
+                        m.hint.add(t.vehicle_id)   # 仍可能有动作（退避、驻留、节流顺延）：下次 stage 再查
+                else:
+                    self._rot[mid] = k0
                 self._poll_barrier(m)
+                if m.entry_phase in ("collect", "done") and m.n_waiting > 0:
+                    self._poll_entry(m)
                 if self._is_formation(m):
                     self._poll_assemble(m)
+                    if m.fphase == "DISBANDED" and m.n_waiting > 0:
+                        self._poll_disband(m)
             self._check_done(m)
         self.rt.publish_status(self.missions, self.order)
 

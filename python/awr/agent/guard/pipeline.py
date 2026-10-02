@@ -64,6 +64,15 @@ class CallResult:
     def ok(self) -> bool:
         return self.status == "succeeded"
 
+    @property
+    def t_sim_ns(self) -> int:
+        """终态事件的仿真时刻（sim-core `cmd.*` 事件的 `t_sim_ns`；没有时为 0）。处理器以它为锚点计时，
+        使驻留与结果回传不含 agent-runtime 收到事件的墙钟滞后（M14 §6.13 规则 ⑥）。"""
+        try:
+            return int((self.raw or {}).get("t_sim_ns") or 0)
+        except (TypeError, ValueError):
+            return 0
+
 
 @dataclass
 class AgentBinding:

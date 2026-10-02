@@ -204,6 +204,7 @@ class RowPublisher:
         self._last_full_ns = -(10 ** 18)
         self.last_rows: dict[int, dict] = {}
         self.last_payload: bytes | None = None
+        self.last_pub_rows: dict[int, dict] = {}
         self.published = 0
         self.bytes_out = 0
         self.stopped = False
@@ -281,6 +282,7 @@ class RowPublisher:
             self._last_full_ns = snap["wall_ns"]
         pk = msgpack.Packer(use_bin_type=True, use_single_float=True)  # 显示用数值：float32 足够，行更小
         items: list[bytes] = []
+        pub_rows: dict[int, dict] = {}
         for k in range(len(snap["slots"])):
             row = build_row(snap, k)
             no = int(snap["agent_no"][k])
@@ -290,10 +292,12 @@ class RowPublisher:
                 continue
             self._last_key[no] = key
             items.append(pk.pack([no, row]))
+            pub_rows[no] = row
         if not items:
             return
         payload = pk.pack_array_header(len(items)) + b"".join(items)
         self.last_payload = payload
+        self.last_pub_rows = pub_rows  # 与 last_payload 同一次发布的行（last_rows 含未发布的最新快照）
         self.published += 1
         self.bytes_out += len(payload)
         bus = self._bus

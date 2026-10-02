@@ -83,9 +83,9 @@ class PathBuffer:
         self.v_wp[sl] = v_wp
         self.seg[off:off + len(seg)] = seg
 
-    def checkpoint_arrays(self) -> dict[str, np.ndarray]:
+    def checkpoint_arrays(self, copy: bool = True) -> dict[str, np.ndarray]:
         hi = max((o + n for o, n in self.used.items()), default=0)  # 高水位以下的行（checkpoint 不写全表）
-        return {k: getattr(self, k)[:hi].copy() for k in ("pts", "yaw", "v_wp", "seg")}
+        return {k: (getattr(self, k)[:hi].copy() if copy else getattr(self, k)[:hi]) for k in ("pts", "yaw", "v_wp", "seg")}
 
     def checkpoint_meta(self) -> dict:
         return {"free": [[b.off, b.n] for b in self.free], "used": [[k, v] for k, v in self.used.items()]}

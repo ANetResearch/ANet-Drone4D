@@ -156,6 +156,11 @@ class EnuViews:
         xy = self._S.land_xy[slots]
         return np.stack([xy[..., 1], xy[..., 0]], axis=-1)
 
+    def rtl_via(self, slots) -> np.ndarray:
+        """RTL 巡航段尚未到达的绕行点 ENU 水平坐标 (x_e, y_n)，k×2；无绕行或已通过时为 NaN（ADR-054）。"""
+        xy = self._S.rtl_via[slots]
+        return np.stack([xy[..., 1], xy[..., 0]], axis=-1)
+
     def ground_up(self, slots) -> np.ndarray:
         """contact 所见地表高（DSM，ENU 向上为正，m）。"""
         return -self._S.ground_z[slots]
@@ -190,7 +195,7 @@ CORE_ARRAYS = (
     "active", "fidelity", "lifecycle", "agent_no", "profile_id", "limits_id", "home", "p", "v", "p_prev", "a_meas", "q",
     "omega", "thrust", "thr_cap", "thr_sp", "q_sp", "yaw_sp", "vel_int", "ctrl_mode", "ctrl_phase", "mode_evt", "mode_t",
     "target", "pos_sp", "vel_cmd", "tr_x", "tr_v", "tr_a", "pos_ref", "stopping", "speed_cmd", "z_rtl", "v_rtl", "land_xy",
-    "wind", "rho", "env_flags", "env_gust", "ground_z", "agl", "in_contact", "landed", "in_air", "contact_t", "crash_sub",
+    "rtl_via", "wind", "rho", "env_flags", "env_gust", "ground_z", "agl", "in_contact", "landed", "in_air", "contact_t", "crash_sub",
     "td_t", "thrust_scale", "motor_ok", "est_age_s", "sp_wall_ns", "vel_sess", "axis_anchor", "axis_lock", "path_off",
     "path_len", "path_seg", "path_tau", "orb", "desc_v", "vel_frame", "vel_vmax", "vel_yawrate", "hold_alt", "d_free",
     "force", "kin_t0",
@@ -242,6 +247,8 @@ class FleetState:
         self.z_rtl = np.zeros(n)
         self.v_rtl = np.full(n, np.nan)
         self.land_xy = np.zeros((n, 2))
+        # RTL 巡航段的绕行点（NED 水平坐标，NaN 为直飞 home；ADR-054）：CRUISE 先飞向该点，参考到达 RTL_VIA_ACCEPT_M 内后清为 NaN
+        self.rtl_via = np.full((n, 2), np.nan)
         self.wind = np.zeros((n, 3))
         self.rho = np.full(n, RHO0, np.float32)
         self.env_flags = np.zeros(n, np.uint8)
@@ -288,6 +295,7 @@ class FleetState:
         self._act_ver = -1
         self._act_idx = np.zeros(0, np.int32)
         self.enu = EnuViews(self)
+        self.l1_tick_cache: tuple | None = None  # (tick, l1 下标, RTL 子阶段)：l1 stage 写、contact stage 同 tick 复用
 
     def add_block(self, spec: StateBlockSpec) -> None:
         if spec.name in self.blocks:
@@ -312,9 +320,16 @@ class FleetState:
         return self.enu.vel
 
     def set_wind_from_enu(self, w_enu: np.ndarray, slots: np.ndarray | None = None) -> None:
-        """ENU 去向风 -> NED 空气速度 `w_ned = (w_n, w_e, −w_u)`（M08 §6.5.1；M07 env stage 调用）。"""
+        """ENU 去向风 -> NED 空气速度 `w_ned = (w_n, w_e, −w_u)`（M08 §6.5.1；M07 env stage 调用）。按 slot 写入时 numba 可用
+        走融合重排（与 `enu_to_ned` 逐位相同；N = 1000、50 Hz，此前约 85 µs/次，FX2-R3）。"""
         if slots is None:
             enu_to_ned(w_enu, out=self.wind)
+        elif self.enu.use_numba and isinstance(w_enu, np.ndarray) and w_enu.dtype == np.float64 and w_enu.ndim == 2 \
+                and w_enu.flags.c_contiguous and isinstance(slots, np.ndarray) and slots.dtype == np.int64 \
+                and slots.ndim == 1 and w_enu.shape[0] == slots.size:
+            from .kernels_tap import enu_to_ned_rows
+
+            enu_to_ned_rows(slots, w_enu, self.wind)
         else:
             self.wind[slots] = enu_to_ned(w_enu)
 
@@ -325,12 +340,15 @@ class FleetState:
             self.rho[slots] = rho
 
     # ------------------------------------------------------------ checkpoint
-    def checkpoint_arrays(self) -> dict[str, np.ndarray]:
-        out = {k: getattr(self, k).copy() for k in CORE_ARRAYS}
+    def checkpoint_arrays(self, copy: bool = True) -> dict[str, np.ndarray]:
+        """`copy=False`：返回数组本身（调用方负责拷贝；sim-core checkpoint 由 CheckpointStore.save 拷贝进双缓冲，此前先
+        `.copy()` 一遍再拷贝一遍，N = 1000 约 1 ms）。"""
+        cp = (lambda a: a.copy()) if copy else (lambda a: a)
+        out = {k: cp(getattr(self, k)) for k in CORE_ARRAYS}
         for b, arrs in self.blocks.items():
             if self.block_specs[b].checkpoint:
                 for f, a in arrs.items():
-                    out[f"blk.{b}.{f}"] = a.copy()
+                    out[f"blk.{b}.{f}"] = cp(a)
         return out
 
     def restore_arrays(self, arrays: dict[str, np.ndarray]) -> None:

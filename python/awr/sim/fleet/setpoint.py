@@ -296,6 +296,15 @@ def _ref_rtl(S: FleetState, LT: np.ndarray, i: np.ndarray, dt: float, t: float, 
         gx = np.where(r == K.R_CLIMB, S.land_xy[n, 0], home[n, 0])
         gy = np.where(r == K.R_CLIMB, S.land_xy[n, 1], home[n, 1])
         gz = np.where(r == K.R_DESCEND, home[n, 2] - K.DESC_ALT, -S.z_rtl[n])
+        via = S.rtl_via[n]
+        hv = (r == K.R_CRUISE) & ~np.isnan(via[:, 0])
+        if hv.any():  # 绕行点（ADR-054），与融合核同一判据（参考点水平距离的平方与 VIA_ACC2 比较）
+            ddx = via[:, 0] - S.tr_x[n, 0]
+            ddy = via[:, 1] - S.tr_x[n, 1]
+            use = hv & (ddx * ddx + ddy * ddy > K.VIA_ACC2)
+            gx = np.where(use, via[:, 0], gx)
+            gy = np.where(use, via[:, 1], gy)
+            S.rtl_via[n[hv & ~use]] = np.nan
         S.target[n, 0] = gx
         S.target[n, 1] = gy
         S.target[n, 2] = gz

@@ -65,6 +65,7 @@ class RecordingSink:
     resources: list[dict[str, Any]] = field(default_factory=list)
     effects: list[dict[str, Any]] = field(default_factory=list)
     phases: list[str] = field(default_factory=list)
+    t_event_ns: int | None = None  # 处理器声明的结果产生时刻（HandlerCtx.event_time；§6.13 规则 ⑥）
 
     def phase(self, p: Phase, eta_s: float | None = None, progress: float | None = None) -> None:
         self.phases.append(Phase(p).value)
@@ -92,7 +93,8 @@ class AgentNetwork(Protocol):
 
     async def unregister(self, aid: str) -> None: ...
 
-    async def find(self, requester: str, pattern: str) -> list[AgentView]: ...
+    async def find(self, requester: str, pattern: str, *, t0_ns: int | None = None) -> list[AgentView]: ...
+    # t0_ns：发现请求的仿真起点（检出触发的任务为检出事件的仿真时刻；§6.13 规则 ⑥）；真 ANet 按墙钟，忽略该参数
 
     def view(self, aid: str) -> AgentView | None: ...
 

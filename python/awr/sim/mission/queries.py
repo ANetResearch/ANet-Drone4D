@@ -221,7 +221,8 @@ class Queries:
         for vid in spec["vehicle_ids"]:
             s = rt.slot_of(str(vid))
             veh.append({"vehicle_id": vid, "home_enu_m": rt.S.enu.home[s].tolist(), "pos_enu_m": rt.S.enu.pos[s].tolist(),
-                        "v_limit_mps": rt.v_limit(s), "cruise_mps": rt.cruise(s), "r_col_m": rt.r_col(s)})
+                        "v_limit_mps": rt.v_limit(s), "cruise_mps": rt.cruise(s), "r_col_m": rt.r_col(s),
+                         "yawrate_max_rad_s": rt.yawrate_max(s)})
         payload = {"generator": spec["generator"], "params": spec.get("params") or {}, "vehicles": veh,
                    "constraints": spec.get("constraints") or {}, "zones": rt.zones, "mission_id": pid, "camera": rt.camera}
         req = PlanRequest(f"preview:{pid}:0", "preview", rt.world_key, tuple(spec["vehicle_ids"]), payload,

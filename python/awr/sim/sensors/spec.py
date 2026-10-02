@@ -173,24 +173,10 @@ def vehicles_dir() -> Path:
 
 
 # ---------------------------------------------------------------- schema 校验
-@cache
 def _registry():
-    from referencing import Registry, Resource
+    from awr.sim.schemas import contracts_registry  # 与机型、剧本校验共用一次扫描（ADR-061）
 
-    from awr.contracts._paths import contracts_root
-
-    reg = Registry()
-    root = contracts_root()
-    for p in sorted(root.rglob("*.schema.json")):
-        if "gen" in p.relative_to(root).parts or "node_modules" in p.parts:
-            continue
-        try:
-            d = json.loads(p.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if isinstance(d, dict) and "$id" in d:
-            reg = reg.with_resource(d["$id"], Resource.from_contents(d))
-    return reg
+    return contracts_registry()
 
 
 @cache
@@ -321,10 +307,15 @@ def build_spec(name: str, doc: dict, sensor_no: int, file: str = "") -> SensorSp
                       src=str(doc.get("src", "")), file=file, doc=doc)
 
 
+def _yaml_load(text: str):
+    """`yaml.safe_load` 的等价物（有 libyaml 时用 CSafeLoader；sim-core 启动路径，FX-SIM1）。"""
+    return yaml.load(text, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+
+
 def load_sensor_file(path: Path | str, name: str | None = None, sensor_no: int = 0) -> SensorSpec:
     p = Path(path)
     try:
-        doc = yaml.safe_load(p.read_text(encoding="utf-8"))
+        doc = _yaml_load(p.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as e:
         raise SensorSpecError(str(p), [f"read: {e}"]) from e
     if not isinstance(doc, dict):
@@ -343,7 +334,7 @@ def load_rig(model_dir: Path | str, sensors_map: dict[str, str] | None = None) -
     d = Path(model_dir)
     if sensors_map is None:
         try:
-            params = yaml.safe_load((d / "params.yaml").read_text(encoding="utf-8")) or {}
+            params = _yaml_load((d / "params.yaml").read_text(encoding="utf-8")) or {}
         except OSError:
             params = {}
         sensors_map = dict(params.get("sensors") or {})
@@ -351,7 +342,7 @@ def load_rig(model_dir: Path | str, sensors_map: dict[str, str] | None = None) -
     for name, rel in sensors_map.items():
         p = d / str(rel)
         try:
-            doc = yaml.safe_load(p.read_text(encoding="utf-8"))
+            doc = _yaml_load(p.read_text(encoding="utf-8"))
         except (OSError, yaml.YAMLError) as e:
             raise SensorSpecError(str(p), [f"read: {e}"]) from e
         if not isinstance(doc, dict):

@@ -16,7 +16,7 @@
   "vehicles": [
     {
       "vehicle_id": "p600-a1",
-      "home_enu_m": [-58, -1515, null],
+      "home_enu_m": [-82, -1515, null],
       "speed_profile": "px4_default",
       "sensors": ["camera"],
       "caps": ["rgb.zoom"],
@@ -24,14 +24,14 @@
     },
     {
       "vehicle_id": "p600-b1",
-      "home_enu_m": [-52, -1515, null],
+      "home_enu_m": [-70, -1515, null],
       "initial_soc": 0.8,
       "caps": ["thermal.imaging"],
       "marked": true
     },
-    {"vehicle_id": "p600-b2", "home_enu_m": [-46, -1515, null], "initial_soc": 0.95, "caps": ["thermal.imaging"]},
-    {"vehicle_id": "p600-b3", "home_enu_m": [-40, -1515, null], "initial_soc": 0.26, "caps": ["thermal.imaging"]},
-    {"vehicle_id": "p600-c1", "home_enu_m": [-34, -1515, null], "caps": ["relay.communication"]}
+    {"vehicle_id": "p600-b2", "home_enu_m": [-94, -1515, null], "initial_soc": 0.95, "caps": ["thermal.imaging"]},
+    {"vehicle_id": "p600-b3", "home_enu_m": [-58, -1515, null], "initial_soc": 0.26, "caps": ["thermal.imaging"]},
+    {"vehicle_id": "p600-c1", "home_enu_m": [-46, -1515, null], "caps": ["relay.communication"]}
   ],
   "missions": [
     {
@@ -53,22 +53,25 @@
       "mission_id": "m-standby-b1",
       "vehicle_ids": ["p600-b1"],
       "generator": "follow_path",
-      "params": {"waypoints_enu_m": [[-52, -1515, 80], [86, -1133, 80]], "speed_mps": 3},
-      "on_done": "hover"
+      "params": {"waypoints_enu_m": [[-70, -1515, 80], [86, -1133, 80]], "speed_mps": 3},
+      "on_done": "hover",
+      "on_abort": "rtl"
     },
     {
       "mission_id": "m-standby-b2",
       "vehicle_ids": ["p600-b2"],
       "generator": "follow_path",
-      "params": {"waypoints_enu_m": [[-46, -1515, 80], [-314, -1033, 80]], "speed_mps": 3},
-      "on_done": "hover"
+      "params": {"waypoints_enu_m": [[-94, -1515, 80], [-314, -1033, 80]], "speed_mps": 3},
+      "on_done": "hover",
+      "on_abort": "rtl"
     },
     {
       "mission_id": "m-relay",
       "vehicle_ids": ["p600-c1"],
       "generator": "follow_path",
-      "params": {"waypoints_enu_m": [[-34, -1515, 150], [-64, -1283, 150]], "speed_mps": 5},
-      "on_done": "hover"
+      "params": {"waypoints_enu_m": [[-46, -1515, 150], [-64, -1283, 150]], "speed_mps": 5},
+      "on_done": "hover",
+      "on_abort": "rtl"
     }
   ],
   "zones": {"active": ["border", "nofly-ny-70pine"]},
@@ -110,20 +113,38 @@
       }
     },
     {
+      "event_id": "release-b1",
+      "when": {"metric": "target_confidence", "args": {"target_id": "t1"}, "op": ">=", "value": 0.9},
+      "action": "mission.abort",
+      "args": {"mission_id": "m-standby-b1"}
+    },
+    {
       "event_id": "home-b1",
-      "when": {"metric": "missions_done", "args": {"mission_ids": ["m-search"]}, "op": "==", "value": true},
+      "when": {"metric": "target_confidence", "args": {"target_id": "t1"}, "op": ">=", "value": 0.9},
       "action": "cmd",
       "args": {"vehicle_id": "p600-b1", "op": "rtl", "args": {}}
     },
     {
+      "event_id": "release-b2",
+      "when": {"metric": "target_confidence", "args": {"target_id": "t1"}, "op": ">=", "value": 0.9},
+      "action": "mission.abort",
+      "args": {"mission_id": "m-standby-b2"}
+    },
+    {
       "event_id": "home-b2",
-      "when": {"metric": "missions_done", "args": {"mission_ids": ["m-search"]}, "op": "==", "value": true},
+      "when": {"metric": "target_confidence", "args": {"target_id": "t1"}, "op": ">=", "value": 0.9},
       "action": "cmd",
       "args": {"vehicle_id": "p600-b2", "op": "rtl", "args": {}}
     },
     {
+      "event_id": "release-c1",
+      "when": {"metric": "target_confidence", "args": {"target_id": "t1"}, "op": ">=", "value": 0.9},
+      "action": "mission.abort",
+      "args": {"mission_id": "m-relay"}
+    },
+    {
       "event_id": "home-c1",
-      "when": {"metric": "missions_done", "args": {"mission_ids": ["m-search"]}, "op": "==", "value": true},
+      "when": {"metric": "target_confidence", "args": {"target_id": "t1"}, "op": ">=", "value": 0.9},
       "action": "cmd",
       "args": {"vehicle_id": "p600-c1", "op": "rtl", "args": {}}
     }
@@ -148,7 +169,7 @@
           "merge_radius_m": 30
         },
         "capability": "thermal.imaging",
-        "args": {"dwell_s": 10, "alt_agl_m": 60, "orbit_radius_m": 20},
+        "args": {"dwell_s": 10, "alt_agl_m": 75, "orbit_radius_m": 20},
         "accept": {
           "op": 1,
           "children": [

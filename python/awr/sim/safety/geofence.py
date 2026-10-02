@@ -285,7 +285,7 @@ class GeofenceModel:
             ps = stop_point_enu(S, LT, np.array([slot]))[0]
             return np.array([p, ps, args["pos"]], np.float64)
         ps = stop_point_enu(S, LT, np.array([slot]))[0]
-        if op == "follow_path" and isinstance(args.get("waypoints"), list):
+        if op == "follow_path" and isinstance(args.get("waypoints"), (list, tuple)):
             return np.vstack([p[None], ps[None], np.asarray(args["waypoints"], np.float64)])
         if op == "orbit" and args.get("center") is not None and args.get("radius_m") is not None:
             c = np.asarray(args["center"], np.float64)

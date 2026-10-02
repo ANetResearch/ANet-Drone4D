@@ -166,6 +166,9 @@ class L1Stage:
         if idx.size == 0:
             return
         prepare_inputs(S, idx, self.world)
+        rp = rtl_phase_of(S)
         K.run_l1(S, self.T.PT, self.T.LT, self.PB, idx, ctx.dt_tick * self.every, ctx.t_ns * 1e-9, self.flags,
-                 self.w_fail, self.faults, rtl_phase_of(S))
+                 self.w_fail, self.faults, rp)
         S.touch()
+        # 同一 tick 内 contact 复用（本 tick 在 l1 与 contact 之间不改变 active、fidelity 与 M09 RTL 子阶段；FX-SIM1）
+        S.l1_tick_cache = (S.tick, idx, rp)

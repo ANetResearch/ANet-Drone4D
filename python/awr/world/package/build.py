@@ -470,6 +470,9 @@ def build_world(adapter: IngestAdapter, worlds_dir: Path, *, params: BuildParams
     """CLI 与 job-worker 共用：锁 → 启动恢复 → staging → 各阶段 → deep 校验 → 报告 → 原子发布 → `.status`。"""
     t0 = time.perf_counter()
     params = params or BuildParams.from_config()
+    if hasattr(adapter, "build_params"):          # ArraysAdapter：generator.params 追加 recon（M03-FR-021）
+        params = adapter.build_params(params)
+    pipe_cls = getattr(adapter, "pipeline_cls", None) or BuildPipeline
     wid = adapter.config().world_id
     ctx = ctx or StageContext(world_id=wid)
     ctx.world_id = wid
@@ -477,25 +480,36 @@ def build_world(adapter: IngestAdapter, worlds_dir: Path, *, params: BuildParams
     pub = Publisher(worlds_dir, wid)
     pipe = None
     stg = None
+    prog = getattr(ctx, "progress", None) or (lambda f: None)
     try:
         with pub.lock():
             pub.recover(shallow_ok=lambda p: validate_world(p, staging=True).ok)   # .trash 目录名为 <id>-<ts>
-            stg = pub.new_staging()
-            pipe = BuildPipeline(stg, params, ctx)
+            stg = pub.new_staging(nonce=getattr(adapter, "staging_nonce", None))
+            pipe = pipe_cls(stg, params, ctx)
             try:
                 pipe.run_ingest(adapter)
+                prog(0.30)
                 ctx.check_cancel()
                 pipe.run_grid()
+                prog(0.40)
+                ctx.check_cancel()
                 pipe.run_tile()
+                prog(0.70)
+                ctx.check_cancel()
                 pipe.run_derive()
                 pipe.run_package()
+                prog(0.80)
+                ctx.check_cancel()
                 pipe.run_validate(deep=True)
+                prog(0.95)
                 pipe.run_report()
+                ctx.check_cancel()                        # 原子发布前的最后一个检查点
                 shutil.rmtree(stg / WORK, ignore_errors=True)
                 pub.publish(stg)
                 cv = pipe.world["contentVersion"]
                 pub.write_status("ready", reason=None, exit_code=0, content_version=cv, deep=True, raw=_raw_status(adapter))
                 secs = time.perf_counter() - t0
+                prog(1.0)
                 ctx.log("info", f"published {cv} in {secs:.1f} s")
                 return BuildResult(wid, 0, cv, True, None, pipe.stages, "", round(secs, 3))
             except (WorldpkgError, OSError, ValueError) as e:
@@ -517,6 +531,10 @@ def build_world(adapter: IngestAdapter, worlds_dir: Path, *, params: BuildParams
                 ctx.log("error", f"build failed ({err}, exit {code}): {e}")
                 return BuildResult(wid, code, None, False, err, pipe.stages if pipe else [], str(e),
                                    round(time.perf_counter() - t0, 3), str(stg) if keep else None)
+            except BaseException:                         # 取消（JobCancelled）或其他异常：清理 staging 后原样抛出
+                if stg is not None and not params.keep_staging:
+                    shutil.rmtree(stg, ignore_errors=True)
+                raise
     except LockBusy as e:
         ctx.log("error", str(e))
         return BuildResult(wid, 3, None, False, "BUILD_IN_PROGRESS", [], str(e), round(time.perf_counter() - t0, 3))

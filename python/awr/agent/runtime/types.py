@@ -250,6 +250,7 @@ class Task:
     tried: set[str] = field(default_factory=set)
     t_submit_ns: int = 0
     t_update_ns: int = 0
+    t_anchor_ns: int | None = None  # 触发时刻（检出触发为检出事件的仿真时刻）；分配的 find 自此起算（M14 §6.13 规则 ⑥）
     merged_count: int = 0
     attempts: int = 0
     quote_round: int = 0

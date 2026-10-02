@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from . import kernels_gimbal as KG
 from .enums import GimbalMode, SensorKind, SensorState
 from .frames import gimbal_R, quat_to_R, quat_to_R_s
 
@@ -35,6 +36,7 @@ ENTER_EPS = math.radians(0.1)
 EXIT_EPS = math.radians(0.01)
 COL_OF_KIND = {SensorKind.CAMERA: 0, SensorKind.THERMAL: 1}
 KIND_OF_COL = {0: SensorKind.CAMERA, 1: SensorKind.THERMAL}
+N_COLS = len(KIND_OF_COL)
 MODE_NAMES = {"fixed": GimbalMode.FIXED, "look_at": GimbalMode.LOOK_AT, "look_at_axis": GimbalMode.LOOK_AT_AXIS,
               "nadir": GimbalMode.NADIR, "forward": GimbalMode.FORWARD}
 
@@ -113,6 +115,10 @@ class GimbalBank:
         self._seq = 0
         self.on_external: Callable[[dict], None] | None = None
         self.stats = {"scalar": 0, "numpy": 0, "limited": 0}
+        self.use_numba = KG.HAVE_NUMBA  # 大机群路径用融合核（kernels_gimbal，与 `_step_vec` 逐位相同；ADR-070）
+        self.scan = True  # 融合核内枚举动态集（gimbal_step_scan）；False 时先用 numpy 枚举再调 `_step_nb`（对拍用）
+        self._tab_key: tuple | None = None
+        self._tab: tuple | None = None
 
     # ------------------------------------------------------------ 参数
     def _cols(self, slot: int, sensor: str | None) -> list[int]:
@@ -241,13 +247,36 @@ class GimbalBank:
     def step(self, S: Any, dt_s: float) -> int:
         b = self.rt.blk
         dyn = b["g_dyn"]
+        if self.use_numba and self.scan:
+            # 扫描版融合核：动态集枚举与逐对推进一次完成（与下面的 np.nonzero 行主序枚举 + `_step_nb` 逐位相同），
+            # 对数不超过 SCALAR_MAX 时仍走标量路径（路径只取决于动态集大小，FX2-R3）
+            npair = int(KG.count_pairs(dyn, S.active))
+            if npair > SCALAR_MAX:
+                self.stats["numpy"] += 1
+                ok, f, mt, MR, eq = self._param_table()
+                n_lim = KG.gimbal_step_scan(dyn, S.active, self.rt.slot_rig, N_COLS, ok, f, mt, MR, eq, b["g_mode"],
+                                            b["g_az"], b["g_el"], b["g_paz"], b["g_pel"], b["g_tgt"], b["g_lim"], dyn,
+                                            S.enu.pos, S.enu.q_xyzw, float(dt_s), EXIT_EPS)
+                self.stats["limited"] += int(n_lim)
+                return npair
+            if npair == 0:
+                return 0
         rows = np.flatnonzero(dyn[:, 0] | dyn[:, 1])
         if rows.size == 0:
             return 0
         rows = rows[S.active[rows]]
         if rows.size == 0:
             return 0
-        pairs = [(int(s), k) for s in rows for k in (0, 1) if dyn[s, k]]
+        ri, kk = np.nonzero(dyn[rows])  # 行主序（slot 升序、k 升序），与逐对枚举同序
+        npair = ri.size
+        if npair > SCALAR_MAX:  # 大机群：向量化路径（FX2-R2：免去逐对的 Python 枚举与 spec 查找）
+            self.stats["numpy"] += 1
+            if self.use_numba:
+                self._step_nb(S, rows[ri], kk.astype(np.int64), dt_s)
+            else:
+                self._step_vec(S, rows, rows[ri], kk.astype(np.int64), ri, dt_s)
+            return int(npair)
+        pairs = [(int(rows[i]), int(k)) for i, k in zip(ri.tolist(), kk.tolist(), strict=True)]
         need_pose = any(int(b["g_mode"][s, k]) in (GimbalMode.LOOK_AT, GimbalMode.LOOK_AT_AXIS) for s, k in pairs)
         PQ = S.enu.pose_enu_flu(rows) if need_pose else None
         row_of = {int(s): i for i, s in enumerate(rows)}
@@ -366,6 +395,130 @@ class GimbalBank:
             t[axis, 2] = pm[axis, 2]
             dw = t - pm
             d = np.einsum("nji,nj->ni", MR, np.einsum("nji,nj->ni", Rb, dw))
+            h = np.sqrt(d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1])
+            nn = np.sqrt(h * h + d[:, 2] ** 2)
+            e = np.arctan2(d[:, 2], h)
+            a = np.arctan2(d[:, 1], d[:, 0])
+            sing = h < 1e-3 * nn
+            a[sing] = az[li][sing]
+            az_t[li] = a
+            el_t[li] = e
+        az_c = np.minimum(np.maximum(az_t, az_min), az_max)
+        el_c = np.minimum(np.maximum(el_t, el_min), el_max)
+        lim = (az_c != az_t) | (el_c != el_t)
+        self.stats["limited"] += int(lim.sum())
+        step = rate * dt
+        az = az + np.minimum(np.maximum(az_c - az, -step), step)
+        el = el + np.minimum(np.maximum(el_c - el, -step), step)
+        b["g_lim"][S_, K_] = lim
+        done = ~la & (np.abs(az_c - az) <= EXIT_EPS) & (np.abs(el_c - el) <= EXIT_EPS)
+        az[done] = az_c[done]
+        el[done] = el_c[done]
+        b["g_az"][S_, K_] = az
+        b["g_el"][S_, K_] = el
+        b["g_dyn"][S_[done], K_[done]] = False
+
+    def _param_table(self) -> tuple:
+        """按 (机型 rig, 云台列) 展开的参数表（行号 = rig·N_COLS + 列）：有无云台、限位与限速、挂载平移与旋转。
+        rig 列表只追加（新机型装配时），按长度缓存。"""
+        rl = self.rt.rig_list
+        key = (id(rl), len(rl))
+        if self._tab_key == key and self._tab is not None:
+            return self._tab
+        T = max(1, len(rl) * N_COLS)
+        ok = np.zeros(T, np.bool_)
+        f = np.zeros((T, KG.TAB_COLS))
+        mt = np.zeros((T, 3))
+        MR = np.zeros((T, 3, 3))
+        for r_, rg in enumerate(rl):
+            for k_ in range(N_COLS):
+                sp = None if rg is None else rg.by_kind(KIND_OF_COL[k_])
+                if sp is None or sp.gimbal is None:
+                    continue
+                i = r_ * N_COLS + k_
+                g = sp.gimbal
+                ok[i] = True
+                f[i] = (g.az_min_rad, g.az_max_rad, g.el_min_rad, g.el_max_rad, g.rate_max_rad_s, g.default_el_rad)
+                mt[i] = sp.mount_t
+                MR[i] = sp.mount_R
+        # 参数行逐位相同（且都有云台）的行对：同一机体两列输入相同时可沿用前一列的结果（gimbal_step_scan）
+        eq = np.zeros((T, T), np.bool_)
+        for i in range(T):
+            for j in range(T):
+                eq[i, j] = bool(ok[i] and ok[j] and f[i].tobytes() == f[j].tobytes() and mt[i].tobytes() == mt[j].tobytes()
+                                and MR[i].tobytes() == MR[j].tobytes())
+        self._tab_key, self._tab = key, (ok, f, mt, MR, eq)
+        return self._tab
+
+    def _step_nb(self, S: Any, S_: np.ndarray, K_: np.ndarray, dt: float) -> None:
+        """`_step_vec` 的 numba 融合实现（kernels_gimbal.gimbal_step，逐位相同；N = 1000 时 2.8 ms → 约 0.1 ms）。"""
+        b = self.rt.blk
+        ok, f, mt, MR, _eq = self._param_table()
+        rig = self.rt.slot_rig[S_].astype(np.int64)
+        tab_i = np.where(rig >= 0, rig * N_COLS + K_, -1)
+        n_lim = KG.gimbal_step(S_, K_, tab_i, ok, f, mt, MR, b["g_mode"], b["g_az"], b["g_el"], b["g_paz"], b["g_pel"],
+                               b["g_tgt"], b["g_lim"], b["g_dyn"], S.enu.pos, S.enu.q_xyzw, float(dt), EXIT_EPS)
+        self.stats["limited"] += int(n_lim)
+
+    def _step_vec(self, S: Any, rows: np.ndarray, S_: np.ndarray, K_: np.ndarray, ri: np.ndarray, dt: float) -> None:
+        """`_step_numpy` 的向量化等价实现：spec 参数按 (机型 rig, 云台列) 分组取（同组共用同一 spec），其余运算与
+        `_step_numpy` 逐项相同（同一 numpy 表达式与次序）。"""
+        b = self.rt.blk
+        n = S_.size
+        rig = self.rt.slot_rig[S_].astype(np.int64)
+        key = rig * N_COLS + K_
+        az_min = np.empty(n)
+        az_max = np.empty(n)
+        el_min = np.empty(n)
+        el_max = np.empty(n)
+        rate = np.empty(n)
+        dflt_el = np.empty(n)
+        mt = np.empty((n, 3))
+        MR = np.empty((n, 3, 3))
+        ok = np.zeros(n, np.bool_)
+        for u in np.unique(key).tolist():
+            m = key == u
+            r_, k_ = divmod(int(u), N_COLS)
+            rg = self.rt.rig_list[r_] if r_ >= 0 else None
+            sp = None if rg is None else rg.by_kind(KIND_OF_COL[k_])
+            if sp is None or sp.gimbal is None:
+                continue
+            g = sp.gimbal
+            ok[m] = True
+            az_min[m], az_max[m], el_min[m], el_max[m] = g.az_min_rad, g.az_max_rad, g.el_min_rad, g.el_max_rad
+            rate[m], dflt_el[m] = g.rate_max_rad_s, g.default_el_rad
+            mt[m] = sp.mount_t
+            MR[m] = sp.mount_R
+        if not ok.all():
+            bad = ~ok
+            b["g_dyn"][S_[bad], K_[bad]] = False
+            S_, K_, ri = S_[ok], K_[ok], ri[ok]
+            az_min, az_max, el_min, el_max, rate, dflt_el = (a[ok] for a in (az_min, az_max, el_min, el_max, rate, dflt_el))
+            mt, MR = mt[ok], MR[ok]
+            if S_.size == 0:
+                return
+        mode = b["g_mode"][S_, K_].astype(np.int64)
+        az = b["g_az"][S_, K_].copy()
+        el = b["g_el"][S_, K_].copy()
+        az_t = b["g_paz"][S_, K_].copy()
+        el_t = b["g_pel"][S_, K_].copy()
+        nad = mode == GimbalMode.NADIR
+        az_t[nad] = 0.0
+        el_t[nad] = el_min[nad]
+        fwd = mode == GimbalMode.FORWARD
+        az_t[fwd] = 0.0
+        el_t[fwd] = dflt_el[fwd]
+        la = (mode == GimbalMode.LOOK_AT) | (mode == GimbalMode.LOOK_AT_AXIS)
+        if la.any():
+            li = np.flatnonzero(la)
+            pq = S.enu.pose_enu_flu(rows)[ri[li]]
+            Rb = quat_to_R(pq[:, 3:7])
+            pm = pq[:, :3] + np.einsum("nij,nj->ni", Rb, mt[li])
+            t = b["g_tgt"][S_[li], K_[li]].copy()
+            axis = mode[li] == GimbalMode.LOOK_AT_AXIS
+            t[axis, 2] = pm[axis, 2]
+            dw = t - pm
+            d = np.einsum("nji,nj->ni", MR[li], np.einsum("nji,nj->ni", Rb, dw))
             h = np.sqrt(d[:, 0] * d[:, 0] + d[:, 1] * d[:, 1])
             nn = np.sqrt(h * h + d[:, 2] ** 2)
             e = np.arctan2(d[:, 2], h)

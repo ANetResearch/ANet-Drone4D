@@ -15,7 +15,7 @@ from typing import Any
 import yaml
 
 from .enums import KIND_NAMES, SensorKind
-from .spec import Rig, SensorSpec, SensorSpecError, load_rig, vehicles_dir
+from .spec import Rig, SensorSpec, SensorSpecError, _yaml_load, load_rig, vehicles_dir
 
 __all__ = ["describe", "describe_model", "describe_rig", "dir_for_profile", "spec_json"]
 
@@ -83,7 +83,7 @@ def _twin(d: Path, sensors_map: dict) -> list[dict]:
             continue
         p = d / str(rel)
         try:
-            doc = yaml.safe_load(p.read_text(encoding="utf-8"))
+            doc = _yaml_load(p.read_text(encoding="utf-8"))
             from .spec import build_spec
 
             s = build_spec(key, doc, 0, str(p))
@@ -98,7 +98,7 @@ def _profile_dirs(base: str) -> dict[str, str]:
     out: dict[str, str] = {}
     for p in sorted(Path(base).glob("*/params.yaml")):
         try:
-            doc = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            doc = _yaml_load(p.read_text(encoding="utf-8")) or {}
         except (OSError, yaml.YAMLError):
             continue
         if doc.get("id"):
@@ -116,7 +116,7 @@ def dir_for_profile(profile_id: str, base: Path | None = None) -> Path | None:
 def describe_model(model_dir: Path | str) -> dict[str, Any]:
     d = Path(model_dir)
     try:
-        params = yaml.safe_load((d / "params.yaml").read_text(encoding="utf-8")) or {}
+        params = _yaml_load((d / "params.yaml").read_text(encoding="utf-8")) or {}
     except OSError:
         params = {}
     smap = dict(params.get("sensors") or {})

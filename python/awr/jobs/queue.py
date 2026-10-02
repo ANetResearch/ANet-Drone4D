@@ -1,5 +1,5 @@
-"""SQLite 任务队列（`runs/jobs/jobs.sqlite`，WAL，单写者 job-worker；M03 §6.14）。D1-ext 骨架：建表、提交、认领、
-状态推进与崩溃标记；REST（`rest/jobs.py`）与 bus 服务在 MS6 接入。"""
+"""SQLite 任务队列（`runs/jobs/jobs.sqlite`，WAL；M03 §6.14）。建表、提交、认领（按任务类型的首阶段）、状态推进、取消、
+重试与崩溃标记（344 JOB_WORKER_CRASHED）。写者为 job-worker 进程（主线程执行任务，服务线程处理 `svc/job/*`，各自一条连接）。"""
 
 from __future__ import annotations
 
@@ -7,12 +7,14 @@ import json
 import os
 import sqlite3
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from .ids import new_job_id
 
 TERMINAL = ("SUCCEEDED", "FAILED", "CANCELLED")
 QUEUE_MAX = 16
+JOB_WORKER_CRASHED = 344
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -70,13 +72,39 @@ class JobQueue:
         row = self.db.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
         return dict(row) if row else None
 
-    def claim(self, first_stage: str) -> dict | None:
+    def claim(self, first_stage: str | Callable[[str], str]) -> dict | None:
+        """认领最早的 QUEUED 任务并置为其首个阶段；`first_stage` 为阶段名或 `kind -> 首阶段` 函数（M01-to-M03 第 4 条：
+        按任务类型的首个阶段认领）。"""
         now = time.time_ns()
+        row = self.db.execute("SELECT job_id, kind FROM jobs WHERE state = 'QUEUED' ORDER BY created_unix_ns LIMIT 1").fetchone()
+        if row is None:
+            return None
+        stage = first_stage(str(row["kind"])) if callable(first_stage) else first_stage
         cur = self.db.execute("UPDATE jobs SET state = ?, worker_pid = ?, attempt = attempt + 1, updated_unix_ns = ? "
-                              "WHERE job_id = (SELECT job_id FROM jobs WHERE state = 'QUEUED' ORDER BY created_unix_ns LIMIT 1) "
-                              "RETURNING job_id", (first_stage, os.getpid(), now))
-        row = cur.fetchone()
-        return self.get(row[0]) if row else None
+                              "WHERE job_id = ? AND state = 'QUEUED' RETURNING job_id", (stage, os.getpid(), now, row["job_id"]))
+        got = cur.fetchone()
+        return self.get(got[0]) if got else None
+
+    def list(self, *, limit: int = 100, states: tuple[str, ...] | None = None) -> list[dict]:
+        if states:
+            q = f"SELECT * FROM jobs WHERE state IN ({','.join('?' * len(states))}) ORDER BY created_unix_ns DESC LIMIT ?"
+            rows = self.db.execute(q, (*states, int(limit))).fetchall()
+        else:
+            rows = self.db.execute("SELECT * FROM jobs ORDER BY created_unix_ns DESC LIMIT ?", (int(limit),)).fetchall()
+        return [dict(r) for r in rows]
+
+    def retry(self, job_id: str) -> int:
+        """R42：只接受 FAILED 且 resumable 的任务，回到 QUEUED（续跑由 runner 按完成标记决定）；返回 0 或 348 / 347。"""
+        row = self.get(job_id)
+        if row is None:
+            return 347
+        if row["state"] != "FAILED" or not row["resumable"]:
+            return 348
+        try:
+            self.update(job_id, state="QUEUED", cancel_requested=0, error_json=None, worker_pid=None)
+        except sqlite3.IntegrityError:
+            return 124
+        return 0
 
     def update(self, job_id: str, **fields) -> None:
         fields["updated_unix_ns"] = time.time_ns()
@@ -91,7 +119,8 @@ class JobQueue:
     def mark_crashed(self) -> int:
         """启动时把 worker_pid 已不存在的非终态任务置 FAILED(resumable)（12 §4.12 J06）。"""
         n = 0
-        for row in self.db.execute("SELECT job_id, worker_pid FROM jobs WHERE state NOT IN ('QUEUED','SUCCEEDED','FAILED','CANCELLED')").fetchall():
+        for row in self.db.execute("SELECT job_id, worker_pid, stage FROM jobs "
+                                   "WHERE state NOT IN ('QUEUED','SUCCEEDED','FAILED','CANCELLED')").fetchall():
             pid = row["worker_pid"]
             alive = False
             if pid:
@@ -102,6 +131,8 @@ class JobQueue:
                     alive = False
             if not alive:
                 self.update(row["job_id"], state="FAILED", resumable=1,
-                            error_json=json.dumps({"code": "WORKER_CRASHED", "resumable": True}))
+                            error_json=json.dumps({"code": JOB_WORKER_CRASHED, "name": "JOB_WORKER_CRASHED",
+                                                   "stage": row["stage"],
+                                                   "resumable": True}))
                 n += 1
         return n

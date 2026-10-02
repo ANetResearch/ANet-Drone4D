@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,6 +15,7 @@ import numpy as np
 
 from .types import GeoLoadError
 
+_SCALAR_MAX = 8  # 不超过该点数时双线性逐点标量求值（结果与 numpy 路径逐位相同）
 _ITEM = {"float32": 4, "uint8": 1, "uint16": 2, "float16": 2}
 _NP = {"float32": "<f4", "uint8": "u1", "uint16": "<u2", "float16": "<f2"}
 
@@ -105,6 +107,11 @@ class Grid:
 
     def bilinear(self, x, y, oob: str = "clamp") -> np.ndarray:
         """格心双线性（界外钳制）；与 M03 `terrain.grids.Grid.bilinear` 同式（逐位相同，四邻取值以一维 take 实现）。"""
+        xa = np.atleast_1d(np.asarray(x, np.float64))
+        if xa.size <= _SCALAR_MAX and oob == "clamp" and xa.ndim == 1:
+            v = self._bilinear_scalar(xa, np.atleast_1d(np.asarray(y, np.float64)))
+            if v is not None:
+                return v
         fx, fy = self.fidx(x, y)
         w, h = self.w, self.h
         gx = np.clip(fx - 0.5, 0.0, max(w - 1, 0))
@@ -123,6 +130,35 @@ class Grid:
             inside = (fx >= 0) & (fx <= w) & (fy >= 0) & (fy <= h)
             v = np.where(inside, v, np.nan)
         return v
+
+    def _bilinear_scalar(self, xa: np.ndarray, ya: np.ndarray) -> np.ndarray | None:
+        """少量点（≤ _SCALAR_MAX）的逐点标量实现：与 `bilinear` 的 numpy 路径逐位相同（同一运算顺序的 IEEE 双精度），
+        省去约 15 次小数组运算的固定开销（sim-core env stage 50 Hz 调用，FX-SIM1）。非有限输入返回 None（走 numpy 路径）。"""
+        if xa.shape != ya.shape:
+            return None
+        w, h, x0, y0, cell = self.w, self.h, self.x0, self.y0, self.cell
+        hx, hy = float(max(w - 1, 0)), float(max(h - 1, 0))
+        cmax, rmax = max(w - 2, 0), max(h - 2, 0)
+        dc = 1 if w >= 2 else 0
+        dr = w if h >= 2 else 0
+        f = self._flat64()
+        out = np.empty(xa.size)
+        for k in range(xa.size):
+            gx = (float(xa[k]) - x0) / cell - 0.5
+            gy = (float(ya[k]) - y0) / cell - 0.5
+            if not (math.isfinite(gx) and math.isfinite(gy)):
+                return None
+            gx = 0.0 if gx < 0.0 else (hx if gx > hx else gx)
+            gy = 0.0 if gy < 0.0 else (hy if gy > hy else gy)
+            c0 = min(int(gx), cmax)
+            r0 = min(int(gy), rmax)
+            tx = gx - c0
+            ty = gy - r0
+            i = r0 * w + c0
+            v00, v01 = float(f[i]), float(f[i + dc])
+            v10, v11 = float(f[i + dr]), float(f[i + dr + dc])
+            out[k] = (v00 * (1 - tx) + v01 * tx) * (1 - ty) + (v10 * (1 - tx) + v11 * tx) * ty
+        return out
 
     def _bilinear_ref(self, x, y, oob: str = "clamp") -> np.ndarray:
         """参考实现（测试对拍用）。"""

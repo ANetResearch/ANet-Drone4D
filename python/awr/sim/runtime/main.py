@@ -23,8 +23,10 @@ import gc
 import importlib
 import json
 import logging
+import math
 import os
 import resource
+import signal
 import sys
 import threading
 import time
@@ -57,11 +59,11 @@ from ..fleet.pipeline import StageCtx
 from ..fleet.profiles import ProfileError, ProfileTable
 from ..fleet.stages import budgets as B
 from ..fleet.stages import registry as R
-from .clock import SimClock
+from .clock import TICK_NS, SimClock
 from .config import SimConfig
 from .slow import SlowTask, SlowTasks
 
-__all__ = ["SimCore", "compose_plugins", "main", "run"]
+__all__ = ["SimCore", "compose_plugins", "defer_numba_blas_probe", "main", "run"]
 
 log = logging.getLogger("awr.sim.runtime")
 
@@ -70,9 +72,23 @@ IDLE_WAIT_S = 0.05
 STATE_EXT_PERIOD_NS = 500_000_000
 PERF_PERIOD_NS = 1_000_000_000
 AUDIT_FSYNC_NS = 1_000_000_000
-GC_GEN2_PERIOD_NS = 30_000_000_000
+# gc_young：gen0 阈值、gen1 周期、两级强制阈值。gen1 强制阈值 30 → 120（FX2-R3-sim）：N = 1000 时 gen0 约每秒 30 次，
+# 30 次即在下一次 gen2（每 1 s，紧随 checkpoint）之前强制一次约 2 ms 的 gen1，落在任意 tick 上；gen2 会清零各代计数，
+# 120 次（约 4 s）的强制阈值只在 gen2 迟迟不来时生效
+GC0_MIN, GC1_EVERY, GC0_FORCE, GC1_FORCE = 700, 10, 5_000, 120
+GC_GEN2_PERIOD_NS = 1_000_000_000  # 手动 gen2 周期【墙钟】；每次回收后冻结幸存者，只扫描本周期新增的存活对象；1 s 一次（ADR-070；
+#                                    此前 2 s，单次约 3 ms）与 1 s 一代的 checkpoint 同轮执行，单次停顿减半；2 s 一次使
+#                                    单次停顿与该周期新增对象成正比（全机 RTL 等突发期间 5 s 一次约 9 ms，ADR-065）
+SWITCH_INTERVAL_S = 0.001  # GIL 切换间隔（CPython 缺省 5 ms）：后台线程（checkpoint 写盘、总线回调、规划池结果）至多占 GIL
+#                            约 1 ms 就交还主循环（D1-AC-07 单步最大值；ADR-065）
 EXT_SLICE = 16
+EXT_SLICE_MIN, EXT_SLICE_MAX = 8, 48  # state_ext 每片机数的上下限（按剩余预算自适应，_slow_state_ext）
+EXT_STARVE_NS = 50_000_000  # state_ext 连续因预算不足跳过的墙钟上限，超过即强制做一片最小片
+EXT_US_FLOOR = 15.0  # state_ext 逐机耗时估计的下限（µs）：防止轻载片把估计压得过低后一片取得过大
 SPAWN_R_SAFE_M = 1.5
+SPAWN_LINE_MAX = 64  # 骨架布设：N ≤ 64 时一字排开，更大的 N 排成网格（_spawn_plan）
+QUERY_Q_MAX = 8
+AUX_PIN_PERIOD_NS = 2_000_000_000  # 后台线程亲和性的重扫周期【墙钟】（cpuaff，ADR-070）
 
 
 def _state_ext_extra_allowed() -> bool:
@@ -84,6 +100,34 @@ def _state_ext_extra_allowed() -> bool:
         return "thrust_frac" in d.get("properties", {})
     except Exception:
         return False
+
+
+def defer_numba_blas_probe() -> bool:
+    """推迟 numba 的 BLAS 探测导入（D1-AC-11a，FX-SIM1）。
+
+    numba 在进程内首次编译或读缓存时导入 `numba.np.arraymath`，其模块级 `_check_blas()` 为确认 BLAS 可用而导入
+    `scipy.linalg`（连带 array_api_compat 对 numpy 全部子模块的克隆，约 0.4 s），而 sim-core 的全部 njit 核都不用 BLAS。
+    本函数在该模块首次导入时让探测直接判定"可用"（scipy 已是锁定依赖，判定结果与原探测相同），不改变 `numba.np.linalg`
+    自身：真正编译 BLAS 类函数时仍经其 `ensure_blas()` 导入 scipy。scipy 不可用、numba 不可用或该模块已导入时不做任何事。"""
+    if "numba.np.arraymath" in sys.modules:
+        return False
+    try:
+        import importlib.util
+
+        if importlib.util.find_spec("scipy") is None or importlib.util.find_spec("numba") is None:
+            return False
+        import numba.np.linalg as _nl
+    except Exception:
+        return False
+    orig = _nl.ensure_blas
+    _nl.ensure_blas = lambda: None
+    try:
+        import numba.np.arraymath  # noqa: F401  模块级 _check_blas() 在此执行
+    except Exception:
+        return False
+    finally:
+        _nl.ensure_blas = orig
+    return True
 
 
 # ---------------------------------------------------------------- 组合根
@@ -161,6 +205,58 @@ class AuditLog:
             self.fd = None
 
 
+# ---------------------------------------------------------------- state_ext 辅助（按片向量化，_ext_rows）
+_NAV_LUT = np.zeros(256, np.bool_)
+_NAV_LUT[[3, 4, 5, 6, 8, 9, 15]] = True  # pos_err 只对导航类运动模式有意义（GOTO、PATH、ORBIT、HOLD、LAND、RTL、TRAJ）
+_PX4_MEMO: dict[tuple[int, int], dict] = {}
+_CTRL_NAMES: dict[int, str] = {}
+# state_ext 直接编码（_ext_rows_packed）的常量片段
+_EXT_KEYS = {k: msgpack.packb(k) for k in ("lifecycle", "lease", "loc", "battery", "mission", "accel_mps2", "home_enu_m",
+                                            "frames", "link", "gcs_loss_policy", "px4", "profile", "ctrl", "thrust_frac",
+                                            "tilt_deg", "pos_err_m", "wind_rel_mps", "sens")}
+_NIL = msgpack.packb(None)
+_ARR2 = msgpack.Packer(use_bin_type=True).pack_array_header(2)
+_FRAMES_B = msgpack.packb({"t_world_local": None}, use_bin_type=True)
+_LINK_DEFAULT = msgpack.packb({"gcs_age_ms": None, "fcu_age_ms": 0}, use_bin_type=True)
+_LC_B: dict[int, bytes] = {}
+_STR_B: dict[str, bytes] = {}
+
+
+def _lc_bytes(lc: int, pk: Callable[[Any], bytes]) -> bytes:
+    b = _LC_B.get(lc)
+    if b is None:
+        b = _LC_B[lc] = pk(LIFECYCLE_NAMES[lc])
+    return b
+
+
+def _str_bytes(v: Any, pk: Callable[[Any], bytes]) -> bytes:
+    if not isinstance(v, str):
+        return pk(v)
+    b = _STR_B.get(v)
+    if b is None:
+        b = _STR_B[v] = pk(v)
+    return b
+
+
+def _px4_json(fs: int, sub: int) -> dict:
+    """state_ext 的 px4 段：`mock_emulate_px4(fs, sub, Intent())` 只取决于 (fs, sub)，按其记忆（返回副本）。"""
+    d = _PX4_MEMO.get((fs, sub))
+    if d is None:
+        px = SM.mock_emulate_px4(SM.FS(fs), sub, SM.Intent())
+        nav = SM.nav_from_custom_mode(px.custom_mode)
+        d = _PX4_MEMO[(fs, sub)] = {"arming_state": 2 if px.armed else 1, "nav_state": None if nav is None else int(nav),
+                                    "landed_state": px.landed, "system_status": px.system_status,
+                                    "custom_mode": px.custom_mode}
+    return dict(d)
+
+
+def _ctrl_name(enum: Any, mode: int) -> str:
+    n = _CTRL_NAMES.get(mode)
+    if n is None:
+        n = _CTRL_NAMES[mode] = enum(int(mode)).name
+    return n
+
+
 # ---------------------------------------------------------------- sim-core
 class SimCore:
     """sim-core 进程的全部状态；`iterate()` 为一次主循环迭代（`--inproc` 与测试可以单步驱动）。"""
@@ -214,7 +310,8 @@ class SimCore:
         self.gcs_last: dict | None = None
         self.agent_slot: dict[int, int] = {}
         self.stats = {"iters": 0, "ticks": 0, "drained": 0}
-        self._step_us: deque[float] = deque(maxlen=1000)
+        self._step_us: deque[float] = deque(maxlen=1000)  # 每 tick 的单步耗时（drain → 慢任务结束，StateRing step_stats）
+        self._pipe_us: deque[float] = deque(maxlen=1000)  # 其中 pipeline 部分（诊断）
         self._last_stats_ns = 0
         self._rtf_t0 = (0, 0)
         self._rtf_milli = 1000
@@ -224,27 +321,46 @@ class SimCore:
         self._perf_t_sim0 = 0
         self._est_q: deque = deque()
         self._query_q: deque = deque()
-        self._ext_items: list[list] = []
+        self._ext_us_per = 60.0  # state_ext 逐机耗时（含每片固定开销的均摊）的指数平均（µs），用于按预算取片长
+        self._ext_packed: list[bytes] = []
+        self._ext_packer = msgpack.Packer(use_bin_type=True)
+        self._ext_cache: dict = {}  # _ext_rows_packed 的编码缓存（px4、ctrl、profile、lease）
+        self._ext_slice_wall = 0
+        self._ext_rows_last: dict[int, bytes] = {}  # 最近一次完整发布的 state_ext（agent_no → msgpack 行），fleet/vehicles 复用
+        self._ext_agents: list[int] = []
         self._ext_order: list[int] = []
         self._ext_pos = -1
         self._ext_last = 0
         self._last_gc = 0
         self._gc_ms: deque[float] = deque(maxlen=64)
+        self._gc_young_ms: deque[float] = deque(maxlen=256)
+        self._gc_est_us = [150.0, 800.0]  # gen0、gen1 预计耗时（µs，指数平均），gc_young 据此判断本轮预算是否放得下
         self._overbudget: set[str] = set()
         self._rtf_limited_reported = False
         self._removing: dict[int, str] = {}
         self._stopped: list[int] = []
+        self._lc_synced: tuple | None = None  # S.lifecycle 已按此 roster 状态同步（_lifecycle）
         self._ext_extra = _state_ext_extra_allowed()
         self._reset_hooks: list[Callable[[dict], None]] = []
-        self.slow = SlowTasks(perf_ns)
+        self.slow = SlowTasks(perf_ns, cap_us=float(cfg.fleet.slow_budget_us))
         self.checkpointer: Any = None
         self._sp_raw: deque[bytes] = deque(maxlen=8192)
         self.inputlog: Any = None
+        self.restored_ext: list[str] = []
+        self.post_step_hooks: list[Callable[[int, int, int], Any]] = []
+        self._post_step_us: deque[float] = deque(maxlen=1000)
         self.started = False
+        self.manual_gc = False  # True：年轻代回收改由慢任务执行（sim-core 进程 main() 置位，ADR-065）
+        self.pin_aux_threads = False  # True：后台线程改到主循环以外的核（sim-core 进程 main() 置位，cpuaff，ADR-070）
+        self.pair_ticks = False  # True：×1 下奇偶 tick 成对推进，主循环 125 Hz 唤醒（sim-core 进程 main() 置位，ADR-070）
+        # 主循环休眠期间置位：checkpoint 写线程只在此期间编码，不与主循环争 GIL（CheckpointStore gate，ADR-070）
+        self.idle_gate = threading.Event()
+        self.aux_pinner: Any = None
 
     # ------------------------------------------------------------ 启动
     def start(self) -> None:
         cfg = self.cfg
+        defer_numba_blas_probe()
         self.plugins_loaded, self.plugins_missing = compose_plugins(cfg.plugins)
         if self.world is None and cfg.load_world:
             self._load_world()
@@ -298,7 +414,14 @@ class SimCore:
         gc.collect()
         gc.freeze()
         gc.set_threshold(700, 10, 1_000_000)
+        # 年轻代回收也改由慢任务在本轮剩余预算内执行（gc_young；超量时强制），不再在任意 stage 的分配点被触发：
+        # 大机群时 gen1 一次 2–7 ms，落在重 tick 上即抬高单步尾部（ADR-065）。只在 sim-core 进程（main）中启用；
+        # 进程内测试台保持自动回收。stop() 时恢复
+        if self.manual_gc:
+            gc.disable()
         self._last_gc = self.wall_ns()
+        if self.aux_pinner is not None and self.aux_pinner.active:
+            self.aux_pinner.scan()
         self.handles.append(self.bus.ready())
         self.started = True
         log.info("sim-core ready", extra={"kv": {"epoch": self.epoch, "segment": self.segment, "reused": self.reused,
@@ -345,6 +468,14 @@ class SimCore:
                 continue
             MET.unregister_metric(name)
             MET.register_metric(name, fn, owner="M08")
+        # 外部度量（ADR-058；M14-to-M08 第 3 条）：agent-runtime 经 `scenario/metric{value}` 写入，M10 剧本导演读取
+        for name, keys in (("target_confidence", ("target_id",)), ("t_conf_s", ("target_id", "threshold"))):
+            spec = have.get(name)
+            if spec is not None and not MET.is_external(name):
+                continue  # 他人以计算型度量登记了同名度量：不覆盖
+            if spec is None:
+                MET.register_external_metric(name, owner="M14", keys=keys)
+        MET.clear_external()
 
     def _rng_streams(self, seed: int) -> dict[str, np.random.Generator]:
         """RNG 流 `PCG64(SeedSequence([world_seed, stream_id]))`（rng_streams.json，ADR-049）；键为流名小写。"""
@@ -398,12 +529,27 @@ class SimCore:
 
     # ------------------------------------------------------------ 机群
     def spawn_xy(self, k: int) -> tuple[float, float, float]:
-        base = self.cfg.spawn_xy or self._flat_spot()
-        x, y = base[0] + k * self.cfg.spawn_spacing_m, base[1]
+        x, y = self._spawn_plan(k)
         z = 0.0
         if self.world is not None:
             z = float(self.world.height_dsm(np.array([[x, y]]))[0])
         return (x, y, z)
+
+    def _spawn_plan(self, k: int) -> tuple[float, float]:
+        """骨架布设的第 k 个出生点（水平）。出生基点（`AWR_SIM_SPAWN` 或平坦开阔格）每个 SimCore 只求一次（D1-验收第 1 轮
+        4.4：此前每架机重复 51 ms 的平坦格搜索，N = 1000 约 51 s，超过 15 s 启动宽限）。N ≤ SPAWN_LINE_MAX 时沿 +x 一字排开
+        （间距 `spawn_spacing_m`，与此前一致）；更大的 N 排成 C 列网格（C ≡ 2 mod 4，行距同列距），使四层交错起飞
+        （`k % 4`，fleet_ladder `ladder_load`）后同层水平距离 ≥ 2 × 间距，且网格不越出世界边界（6 m × 1000 架一字排开为 6 km）。"""
+        base = getattr(self, "_spawn_base", None)
+        if base is None:
+            base = self._spawn_base = tuple(self.cfg.spawn_xy) if self.cfg.spawn_xy else self._flat_spot()
+        d = self.cfg.spawn_spacing_m
+        n = max(1, int(self.cfg.n_vehicles))
+        if n <= SPAWN_LINE_MAX:
+            return (base[0] + k * d, base[1])
+        cols = math.ceil(math.sqrt(n))
+        cols += (2 - cols % 4) % 4
+        return (base[0] + (k % cols) * d, base[1] + (k // cols) * d)
 
     def _flat_spot(self) -> tuple[float, float]:
         """世界原点附近的平坦开阔格：以 4 m 步长向外搜索 DSM 与 DTM 高差 < 0.5 m、3×3 邻域一致的点。"""
@@ -428,18 +574,18 @@ class SimCore:
 
     def add_vehicle(self, profile_id: str, home_enu_m: tuple[float, float, float], yaw_rad: float, *,
                     vehicle_id: str | None = None, limits_profile: str | None = None, initial_soc: float = 1.0,
-                    backend: str = "mock", track: Any = None) -> str:
+                    backend: str = "mock", track: Any = None, sensors: list[str] | None = None) -> str:
         prof = self.T.get(profile_id)
         e = self.roster.add(vehicle_id=vehicle_id, model=prof.model, profile_id=profile_id, limits_profile=limits_profile,
                             home_enu_m=home_enu_m, yaw_rad=yaw_rad, initial_soc=initial_soc, t_ns=self.clock.t_ns,
-                            emit=self.events.emit, backend=backend)
+                            emit=self.events.emit, backend=backend, sensor_names=sensors)
         spec = EntitySpec(e.id, Kind.UAV, profile_id, limits_profile, home_enu_m, yaw_rad, initial_soc)
         fid = R.Fidelity.L0 if backend == "replay" else R.Fidelity.L1
         self.fleet.add(spec, slot=e.slot, agent_no=e.agent_no, entity_id=e.id, t_s=self.clock.t_ns * 1e-9, fidelity=fid)
         if track is not None:
             self.fleet.kinematic.attach(e.slot, track, self.clock.t_ns * 1e-9)
         self.fleet.S.lifecycle[e.slot] = e.lifecycle
-        self.agent_slot = {x.agent_no: x.slot for x in self.roster.by_slot.values()}
+        self.agent_slot[e.agent_no] = e.slot  # 增量维护（agent_no 不复用；移除时在 _lifecycle 中整体重建）
         if self.inputlog is not None:
             self.inputlog.append("roster", self.clock.tick + 1, {"op": "add", "id": e.id, "profile_id": profile_id,
                                                                   "home_enu_m": list(home_enu_m), "backend": backend})
@@ -467,6 +613,9 @@ class SimCore:
         vid = args.get("vehicle_id")
         if vid is not None and (not isinstance(vid, str) or not vid or self.roster.resolve(vid) is not None):
             return int(Reason.STATE), {"why": "ID_EXISTS", "vehicle_id": vid}
+        sensors = args.get("sensors")  # 剧本 `vehicles[].sensors` 子集（M13-to-M08 第 4 条）：roster `sensors[]` 只列这些
+        if sensors is not None and not (isinstance(sensors, list) and all(isinstance(x, str) and x for x in sensors)):
+            return int(Reason.PARAM_OUT_OF_RANGE), {"field": "args.sensors"}
         h = args.get("home_enu_m")
         if not (isinstance(h, (list, tuple)) and len(h) == 3 and all(isinstance(x, (int, float)) for x in h[:2])
                 and (h[2] is None or isinstance(h[2], (int, float)))):
@@ -495,7 +644,7 @@ class SimCore:
                 return int(Reason.PARAM_OUT_OF_RANGE), {"why": "SPAWN_TOO_CLOSE", "min_m": round(lim, 3),
                                                         "dist_m": round(dmin, 3)}
         vid = self.add_vehicle(pid, (x, y, z), float(args.get("yaw_rad") or 0.0), vehicle_id=vid, limits_profile=lp,
-                               initial_soc=float(args.get("initial_soc", 1.0)))
+                               initial_soc=float(args.get("initial_soc", 1.0)), sensors=sensors)
         e = self.roster.resolve(vid)
         return 0, {"id": vid, "agent_no": e.agent_no, "lifecycle": "STARTING"}
 
@@ -550,8 +699,11 @@ class SimCore:
                         hooks.on_remove(np.array([s], np.int32))
             self.agent_slot = {x.agent_no: x.slot for x in self.roster.by_slot.values()}
             self._apply_backend_caps()
-        for e in self.roster.by_slot.values():
-            S.lifecycle[e.slot] = e.lifecycle
+        key = (id(self.roster), id(S), self.roster.roster_version, self.roster.lc_gen, len(self.roster.by_slot))
+        if key != self._lc_synced:  # roster 与生命周期未变时 S.lifecycle 已一致（每 tick 调用，ADR-060）
+            for e in self.roster.by_slot.values():
+                S.lifecycle[e.slot] = e.lifecycle
+            self._lc_synced = key
 
     def _apply_backend_caps(self, extra: list | None = None) -> None:
         caps = [self.caps.clock] + ([self.replay_caps.clock] if any(e.backend == "replay"
@@ -566,6 +718,9 @@ class SimCore:
     def reset(self, reason: str = "scenario_reset", args: dict | None = None) -> None:
         """剧本重置（C09；M08-FR-008）：segment + 1、epoch + 1，机群重生（RESTARTING → READY），租约 FREE，在途调用 canceled 6。"""
         self.engine.cancel_all(int(Reason.CANCELLED), "reset")
+        from ..core import metrics as MET
+
+        MET.clear_external()  # 外部度量随剧本重置清空（ADR-058）
         self.events.flush()
         S = self.fleet.S
         for s in list(self._stopped) + list(self._removing):
@@ -575,6 +730,7 @@ class SimCore:
                 self.roster.remove(s, self.clock.t_ns, self.events.emit, "reset")
         self._stopped.clear()
         self._removing.clear()
+        self.agent_slot = {x.agent_no: x.slot for x in self.roster.by_slot.values()}
         self.lease.reset()
         self.clock.apply("reset")
         self.ctx.tick, self.ctx.t_ns = 0, 0
@@ -618,10 +774,17 @@ class SimCore:
         if n:
             ts = self.perf_ns()
             self.ctx.tick = clk.tick
-            self.fleet.step(self.ctx, n)
-            clk.tick = self.ctx.tick
-            clk.advanced(n)
-            self._step_us.append((self.perf_ns() - ts) / 1000.0 / n)
+            if self.post_step_hooks:  # 锁步（M14-to-M08 第 5 条）：逐 tick 推进，每步结束后同步调用钩子
+                for _ in range(n):
+                    self.fleet.step(self.ctx, 1)
+                    clk.tick = self.ctx.tick
+                    clk.advanced(1)
+                    self._run_post_step_hooks()
+            else:
+                self.fleet.step(self.ctx, n)
+                clk.tick = self.ctx.tick
+                clk.advanced(n)
+            self._pipe_us.append((self.perf_ns() - ts) / 1000.0 / n)
             self.stats["ticks"] += n
             if clk.step_done:
                 clk.step_done = False
@@ -640,31 +803,74 @@ class SimCore:
         self.events.flush()
         now = self.wall_ns()
         used_us = (self.perf_ns() - t_iter0) / 1000.0
-        budget = max(100.0, min(float(self.cfg.fleet.slow_budget_us), self.cfg.fleet.tick_budget_us - used_us))
-        self.slow.run(budget, now_wall=now, now_sim=clk.t_ns)
+        # 预算按本轮执行的 tick 数折算（"2800 µs − 本 tick 已用"对追帧批次的推广，ADR-057）：×1 下 n = 1 与原式相同；
+        # 追帧（×N 或负载下每轮多个 tick）时慢任务不因一轮很长而只剩 100 µs 下限
+        # 不足 100 µs 时本轮只执行已饿死的慢任务（heavy_skip，ADR-070）
+        budget = min(float(self.cfg.fleet.slow_budget_us), max(1, n) * self.cfg.fleet.tick_budget_us - used_us)
+        self.slow.run(budget, now_wall=now, now_sim=clk.t_ns, heavy_skip=True)
+        if n:
+            # 单步耗时（18 §7.6、PERF-AC-030 的定义：每 tick 从 drain 开始到慢任务结束的墙钟；追帧批次按 tick 数均摊）。
+            # 此前只计 pipeline（不含 drain、事件合批与慢任务），与 D1-AC-07 的口径不一致（FX2-R2）；pipeline 自身另记 _pipe_us
+            self._step_us.append((self.perf_ns() - t_iter0) / 1000.0 / n)
         if now - self._last_stats_ns >= PERF_PERIOD_NS:
             self._write_step_stats(now)
         self.stats["iters"] += 1
         if clk.state == TimeState.STEPPING:
             return 0.0
         if not clk.advancing:
-            return IDLE_WAIT_S
-        return max(0.0, (clk.next_deadline_ns() - self.wall_ns() - 150_000) / 1e9)
+            # 暂停：有被顺延的不可分片请求时不阻塞等待，下一轮立即续做（ADR-057 有界时延；AWR-10 §4.2）
+            return 0.0 if self.slow.backlog else IDLE_WAIT_S
+        nd = clk.next_deadline_ns()
+        if self.pair_ticks and clk.tick % 2 == 0 and clk.rate == 1.0 and not self.post_step_hooks:
+            # 成对推进（ADR-070）：下一 tick 为奇数时等到其后的偶数 tick（L1 与 StateRing 发布所在的 tick）到期再一并推进，
+            # 主循环按 125 Hz 唤醒。不提前 150 µs 醒来：提前醒来时偶数 tick 尚未到期，只会先单独推进奇数 tick
+            return max(0.0, (nd + TICK_NS - self.wall_ns()) / 1e9)
+        return max(0.0, (nd - self.wall_ns() - 150_000) / 1e9)
+
+    def register_post_step_hook(self, fn: Callable[[int, int, int], Any]) -> Callable[[], None]:
+        """锁步钩子（`--inproc` 与测试；M14-to-M08 第 5 条）：`fn(t_sim_ns, epoch, segment)` 在每个 tick 的 pipeline 结束、
+        事件合批之前于主循环线程同步调用（步边界外，预算 ≤ 1 ms，超出只计入 `post_step_us`）。登记后主循环逐 tick 推进；
+        返回注销函数。钩子异常只记日志，不中断仿真。"""
+        self.post_step_hooks.append(fn)
+
+        def remove() -> None:
+            with contextlib.suppress(ValueError):
+                self.post_step_hooks.remove(fn)
+
+        return remove
+
+    def _run_post_step_hooks(self) -> None:
+        t0 = self.perf_ns()
+        t, ep, sg = self.clock.t_ns, self.epoch, self.segment
+        for fn in list(self.post_step_hooks):
+            try:
+                fn(t, ep, sg)
+            except Exception:
+                log.exception("post-step hook failed")
+        self._post_step_us.append((self.perf_ns() - t0) / 1000.0)
 
     def run(self, should_stop: Callable[[], bool]) -> None:
+        gate = self.idle_gate
         while not should_stop():
             wait = self.iterate()
             if wait <= 0:
                 continue
+            gate.set()
             if not self.clock.advancing:
                 self.inbox.wait(wait)  # 暂停：inbox 上带超时的阻塞等待（照写心跳，20 Hz 空转；有请求立即进入下一轮）
             else:
                 time.sleep(min(wait, IDLE_WAIT_S))
+            gate.clear()
 
     def _drain(self) -> None:
         sp = self._sp_raw
         while sp:  # 流式 setpoint（32 B raw）：步顶写 mailbox（每机只保留最新值）
             self.on_setpoint(sp.popleft())
+        if self.engine is not None and self.engine._batch_jobs:  # 批量命令的下一片（每次迭代一片，ADR-065）
+            try:
+                self.engine.batch_tick()
+            except Exception:
+                log.exception("batch admission failed")
         for _ in range(DRAIN_MAX):
             try:
                 item = self.inbox.get_nowait()
@@ -688,7 +894,8 @@ class SimCore:
             self.engine.admission_us.append((self.perf_ns() - t0) / 1000.0)
             if len(self.engine.admission_us) > 4096:
                 del self.engine.admission_us[:2048]
-            req.reply_msg(rep)
+            if rep is not None:  # None：批量命令转入分片准入，由 engine.batch_tick() 在后续迭代中回复（ADR-065）
+                req.reply_msg(rep)
         elif kind == "clock":
             req = item[1]
             req.reply_msg(self._clock_op(req.msg()))
@@ -700,6 +907,10 @@ class SimCore:
         elif kind == "estimate":
             self._est_q.append((item[1], self.clock.wall_mono_ns()))
         elif kind == "query":
+            if len(self._query_q) >= QUERY_Q_MAX:  # M08 §7.2：排队 > 8 个时 111（有界时延，ADR-057）
+                with contextlib.suppress(Exception):
+                    item[1].reply_msg({"v": 1, "code": int(Reason.RATE_LIMITED), "detail": {"queue": len(self._query_q)}})
+                return
             self._query_q.append(item[1])
         elif kind == "geo":
             if self.geo is not None:
@@ -732,7 +943,7 @@ class SimCore:
                     self.ctx.interest = self.interest
 
     # ------------------------------------------------------------ 时钟与租约服务
-    def _principal_ok(self, msg: dict, *, need_seat: bool) -> int:
+    def _principal_ok(self, msg: dict, *, need_seat: bool, roles: tuple[str, ...] = ("operator", "admin")) -> int:
         p = msg.get("principal")
         if not isinstance(p, dict):
             return int(Reason.ROLE_FORBIDDEN)
@@ -740,6 +951,8 @@ class SimCore:
             return 0
         if self.k_entry is not None:
             sig = p.get("sig")
+            if isinstance(sig, str):
+                sig = sig.encode("latin-1")
             try:
                 pr = Principal(str(p["principal_id"]), p["role"], p["entry"], p.get("conn_id"), bool(p.get("seat", False)))
             except (KeyError, TypeError):
@@ -747,9 +960,9 @@ class SimCore:
             if not isinstance(sig, (bytes, bytearray)) or not verify_principal(pr, str(msg.get("cid", "")), bytes(sig),
                                                                              self.k_entry):
                 return int(Reason.ROLE_FORBIDDEN)
-        if p.get("role") not in ("operator", "admin"):
+        if p.get("role") not in roles:
             return int(Reason.ROLE_FORBIDDEN)
-        if need_seat and not self.lease.is_seat_holder(str(p.get("principal_id"))):
+        if need_seat and p.get("role") in ("operator", "admin") and not self.lease.is_seat_holder(str(p.get("principal_id"))):
             return int(Reason.SEAT_TAKEN)
         return 0
 
@@ -781,12 +994,30 @@ class SimCore:
                 "clock": self._clock_json()}
 
     def _lease_op(self, msg: dict) -> dict:
+        """`ctl/sim-core/lease`（17 §9.4 leaseOp；M08-FR-062；ADR-027；M14-to-M08 第 1 条）。
+
+        - operator/admin：席位操作；acquire（OPERATOR）与 release 须持席位；
+        - agent（`agent:<aid>`，entry agent-runtime，K_entry 验签，不要求席位）：只允许 acquire/release，且 owner 只能是
+          AGENT；acquire 按优先级抢占 MISSION/SWARM 并入栈，OPERATOR 持有时 100；release `return_to: previous` 弹栈恢复
+          （MISSION 续飞由 M10 在租约回到本任务时执行）；
+        - 事件 `lease.*` 的 data 带 owner、holder、by（执行者 principal）。"""
         cid = str(msg.get("cid", ""))
         op = str(msg.get("op", ""))
-        code = self._principal_ok(msg, need_seat=op in ("acquire", "release"))
-        lease = None
         p = msg.get("principal") or {}
-        pid = str(p.get("principal_id", ""))
+        agent = isinstance(p, dict) and p.get("role") == "agent"
+        if agent:
+            code = self._principal_ok(msg, need_seat=False, roles=("agent",))
+            if not code and op not in ("acquire", "release"):
+                code = int(Reason.ROLE_FORBIDDEN)
+            if not code and str(msg.get("owner") or "AGENT") != "AGENT":
+                code = int(Reason.ROLE_FORBIDDEN)
+        else:
+            code = self._principal_ok(msg, need_seat=op in ("acquire", "release"))
+            if not code and op == "acquire" and str(msg.get("owner") or "OPERATOR") not in ("OPERATOR",) \
+                    and not p.get("_internal"):
+                code = int(Reason.ROLE_FORBIDDEN)
+        lease = None
+        pid = str(p.get("principal_id", "")) if isinstance(p, dict) else ""
         if not code:
             if op.startswith("seat_"):
                 code, _seat = self.lease.seat_op(op, pid, str(p.get("role")), t_wall_ns=time.time_ns())
@@ -799,18 +1030,21 @@ class SimCore:
                                       "role": p.get("role"), "cid": cid, "code": 0})
             elif op in ("acquire", "release"):
                 e = self.roster.resolve(str(msg.get("uav") or ""))
+                owner = int(Owner.AGENT) if agent else int(Owner.OPERATOR)
                 if e is None:
                     code = int(Reason.NO_VEHICLE)
                 elif op == "acquire":
-                    code = self.lease.acquire(e.slot, int(Owner.OPERATOR), pid, uav=e.id, t_ns=self.clock.t_ns,
-                                              emit=self.events.emit)
+                    code = self.lease.acquire(e.slot, owner, pid, uav=e.id, t_ns=self.clock.t_ns, emit=self.events.emit,
+                                              by=pid)
                 else:
                     code = self.lease.release(e.slot, pid, return_to=str(msg.get("return_to", "previous")), uav=e.id,
-                                              t_ns=self.clock.t_ns, emit=self.events.emit)
+                                              t_ns=self.clock.t_ns, emit=self.events.emit, by=pid)
                 if e is not None:
                     L = self.lease.lease_json(e.slot)
                     lease = {"uav": e.id, "owner": L["owner"], "holder": L["holder"], "priority": L["priority"],
                              "ttl_ms": None, "token": None}
+                self.audit.write({"kind": f"lease.{op}", "t_sim_ns": self.clock.t_ns, "principal_id": pid,
+                                  "role": p.get("role"), "cid": cid, "uav": msg.get("uav"), "code": int(code)})
             else:
                 code = int(Reason.BAD_REQUEST)
         if self.inputlog is not None and not code:
@@ -824,17 +1058,30 @@ class SimCore:
         sl.add(SlowTask("audit", lambda b: self.audit.maybe_sync(self.wall_ns())))
         sl.add(SlowTask("geo", self._slow_geo))
         sl.add(SlowTask("state_ext", self._slow_state_ext))
-        sl.add(SlowTask("perf", lambda b: self._publish_perf(), period_wall_ns=PERF_PERIOD_NS))
-        sl.add(SlowTask("estimate", self._slow_estimate, atomic=True))
-        sl.add(SlowTask("query", self._slow_query, atomic=True))
-        sl.add(SlowTask("fine_check", self._slow_fine, atomic=True))
-        sl.add(SlowTask("cleanup", lambda b: self.engine._expire_idem(self.clock.wall_mono_ns()), period_wall_ns=1_000_000_000))
-        sl.add(SlowTask("gc", self._slow_gc, period_wall_ns=GC_GEN2_PERIOD_NS))
+        # 整块周期任务按估计耗时择机启动（fit；gc gen2 紧随 checkpoint 在同一轮执行，ADR-021 ③、ADR-070）
+        sl.add(SlowTask("perf", lambda b: self._publish_perf(), period_wall_ns=PERF_PERIOD_NS, fit=True))
+        # 不可分片任务按 ADR-057 的公平轮转与预算借贷启动（`pending` 为空队列时不计积分）
+        sl.add(SlowTask("estimate", self._slow_estimate, atomic=True, pending=lambda: bool(self._est_q)))
+        sl.add(SlowTask("query", self._slow_query, atomic=True, pending=lambda: bool(self._query_q)))
+        sl.add(SlowTask("fine_check", self._slow_fine, atomic=True, pending=lambda: bool(self.engine.fine_queue)))
+        sl.add(SlowTask("cleanup", lambda b: self.engine._expire_idem(self.clock.wall_mono_ns()), period_wall_ns=1_000_000_000,
+                        fit=True))
+        sl.add(SlowTask("gc", self._slow_gc, period_wall_ns=GC_GEN2_PERIOD_NS, fit=True,
+                        follow="checkpoint" if self.checkpointer is not None else None))
+        if self.manual_gc:
+            sl.add(SlowTask("gc_young", self._slow_gc_young))
         if self.checkpointer is not None:
-            sl.add(SlowTask("checkpoint", lambda b: self.checkpointer.maybe_save(self), period_sim_ns=1_000_000_000))
+            sl.add(SlowTask("checkpoint", lambda b: self.checkpointer.maybe_save(self), period_sim_ns=1_000_000_000, fit=True))
+        if self.pin_aux_threads:
+            from .cpuaff import AuxPinner
+
+            self.aux_pinner = AuxPinner()
+            if self.aux_pinner.active:
+                # 新线程继承创建者（多为主循环）的亲和性：周期重扫（cpuaff 模块文档，ADR-070）
+                sl.add(SlowTask("cpuaff", lambda b: self.aux_pinner.scan(), period_wall_ns=AUX_PIN_PERIOD_NS, fit=True))
         for t in self.reg.slow:
-            sl.add(SlowTask(t.name, self._plugin_task(t), int((t.period_wall_s or 0) * 1e9), int((t.period_sim_s or 0) * 1e9),
-                            owner="plugin"))
+            pw, ps = int((t.period_wall_s or 0) * 1e9), int((t.period_sim_s or 0) * 1e9)
+            sl.add(SlowTask(t.name, self._plugin_task(t), pw, ps, owner="plugin", fit=bool(pw or ps)))
 
     def _plugin_task(self, t: R.SlowTaskSpec) -> Callable[[float], Any]:
         def run(budget_us: float) -> Any:
@@ -906,13 +1153,27 @@ class SimCore:
         return None
 
     def vehicle_items(self, vid: str | None = None) -> list[dict]:
+        """`fleet/vehicles` 查询（慢任务内同步执行）。state_ext 取最近一次 2 Hz 分片发布的行（≤ 0.5 s【墙钟】，与网关
+        `uav/{id}/state_ext` 同一来源），缺失的机体（刚加入）现算；此前每次查询都为全部机体重算 state_ext（N = 1000
+        约 50 ms，主循环停顿）。指定 id 时只现算该机。"""
         S = self.fleet.S
         out = []
-        ext = {no: x for no, x in self.state_ext_items()}
-        for s in self.roster.slots_in_order():
+        slots = self.roster.slots_in_order()
+        if vid is not None:
+            e = self.roster.resolve(vid)
+            slots = [e.slot] if e is not None else []
+        last = self._ext_rows_last if vid is None else {}
+        miss = [s for s in slots if self.roster.by_slot[s].agent_no not in last]
+        ext: dict[int, Any] = {}
+        for s_ in slots:
+            raw = last.get(self.roster.by_slot[s_].agent_no)
+            if raw is not None:
+                no, x = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+                ext[no] = x
+        if miss:
+            ext.update({no: x for no, x in self._ext_rows(miss)})
+        for s in slots:
             e = self.roster.by_slot[s]
-            if vid is not None and e.id != vid:
-                continue
             sb = S.blocks["safety"]
             fs, sub = int(sb["fs"][s]), int(sb["sub"][s])
             out.append({"id": e.id, "agent_no": e.agent_no, "profile_id": e.profile_id, "model": e.model,
@@ -928,31 +1189,77 @@ class SimCore:
         self.engine.run_fine_checks(1)
         return None
 
+    def _slow_gc_young(self, budget_us: float) -> Any:
+        """年轻代回收（自动回收关闭后由此执行）：gen0 计数达到阈值、gen1 到期（每 GC1_EVERY 次 gen0）时，在本轮剩余预算
+        放得下预计耗时（实测的指数平均）时执行；计数超过 GC0_FORCE 时不看预算强制执行，防止长时间高负载下无界增长。"""
+        c0, c1, _c2 = gc.get_count()
+        if c0 < GC0_MIN and c1 < GC1_EVERY:
+            return False
+        gen = 1 if c1 >= GC1_EVERY else 0
+        forced = c0 >= GC0_FORCE or c1 >= GC1_FORCE
+        if not forced and budget_us < self._gc_est_us[gen]:
+            if gen == 1 and budget_us >= self._gc_est_us[0] and c0 >= GC0_MIN:
+                gen = 0      # gen1 放不下时先做 gen0（gen1 顺延，计数到 GC1_FORCE 时强制）
+            else:
+                return False
+        t0 = self.perf_ns()
+        gc.collect(gen)
+        d = (self.perf_ns() - t0) / 1000.0
+        self._gc_est_us[gen] = max(0.8 * self._gc_est_us[gen] + 0.2 * d, d * 0.5)
+        self._gc_young_ms.append(d / 1000.0)
+        return None
+
     def _slow_gc(self, budget_us: float) -> Any:
-        """gc gen2 手动回收（D1-core 每 ≥ 30 s【墙钟】一次；启用 checkpoint 时紧随 checkpoint 拷贝，ADR-021 ③）。"""
+        """gc gen2 手动回收（D1-core 每 ≥ 30 s【墙钟】一次；启用 checkpoint 时紧随 checkpoint 拷贝，ADR-021 ③）。
+        回收后冻结幸存者（`gc.freeze()`，与启动时同一手法）：下一次 gen2 只扫描这 30 s 内新产生且存活的对象，停顿与机群
+        规模、运行时长无关（N = 1000 时全量 gen2 约 35 ms，主循环停顿；ADR-065）。冻结对象仍按引用计数释放，只是不再参与
+        环检测。"""
         t0 = self.perf_ns()
         gc.collect(2)
+        gc.freeze()
         self._gc_ms.append((self.perf_ns() - t0) / 1e6)
         return None
 
     def _slow_state_ext(self, budget_us: float) -> Any:
-        """`state_ext` 2 Hz【墙钟】分片打包（每片 ≤ 16 架，跨迭代完成后一次发布）。"""
+        """`state_ext` 2 Hz【墙钟】分片打包（跨迭代完成后一次发布；ADR-051）。
+
+        每片的机数按本轮剩余预算与实测的逐机耗时（含每片固定开销的均摊）自适应取值，预算放不下 EXT_SLICE_MIN 架时本轮
+        跳过（让给预算宽裕的 tick），连续跳过超过 EXT_STARVE_NS【墙钟】时强制做一片最小片。各片的行在本片内即 msgpack
+        编码（流式），周期结束时只拼接数组头与已编码的行（与对整个列表 `packb` 逐字节相同）：此前固定 16 架一片、末片
+        一次打包 1000 行（约 11 ms），大机群时单步出现十余毫秒的尖峰（FX2-R2）。"""
         now = self.wall_ns()
         if self._ext_pos < 0:
             if now - self._ext_last < STATE_EXT_PERIOD_NS or not self.roster.by_slot:
                 return False
             self._ext_last = now
             self._ext_order = self.roster.slots_in_order()
-            self._ext_items = []
+            self._ext_agents = []
+            self._ext_packed = []
             self._ext_pos = 0
-        chunk = self._ext_order[self._ext_pos:self._ext_pos + EXT_SLICE]
-        self._ext_items += self._ext_rows(chunk)
-        self._ext_pos += EXT_SLICE
+            self._ext_slice_wall = now
+        per = max(self._ext_us_per, EXT_US_FLOOR)
+        k = int(min(EXT_SLICE_MAX, budget_us / per))
+        if k < EXT_SLICE_MIN:
+            if now - self._ext_slice_wall < EXT_STARVE_NS:
+                return False
+            k = EXT_SLICE_MIN
+        chunk = self._ext_order[self._ext_pos:self._ext_pos + k]
+        t0 = self.perf_ns()
+        agents, packed = self._ext_rows_packed(chunk)  # 直接编码（与 `_ext_rows` 再整行 pack 解码后相同，ADR-070）
+        self._ext_packed.extend(packed)
+        self._ext_agents.extend(agents)
+        if chunk:
+            self._ext_us_per = 0.7 * self._ext_us_per + 0.3 * ((self.perf_ns() - t0) / 1000.0 / len(chunk))
+        self._ext_pos += k
+        self._ext_slice_wall = now
         if self._ext_pos >= len(self._ext_order):
             self._ext_pos = -1
             if self._pub_ext is None:
                 self._pub_ext = self.bus.publisher(bus_keys.state_ext("sim-core"))
-            self._pub_ext.put(msgpack.packb(self._ext_items, use_bin_type=True))
+            self._pub_ext.put(self._ext_packer.pack_array_header(len(self._ext_packed)) + b"".join(self._ext_packed))
+            self._ext_rows_last = dict(zip(self._ext_agents, self._ext_packed, strict=True))
+            self._ext_packed = []
+            self._ext_agents = []
         return None
 
     def state_ext_items(self) -> list[list]:
@@ -960,67 +1267,223 @@ class SimCore:
         return self._ext_rows(self.roster.slots_in_order())
 
     def _ext_rows(self, slots: list[int]) -> list[list]:
+        """一片 state_ext 行（M08-FR-051；ADR-051 全机 2 Hz 分片编码）。逐机标量先按片向量化取出（`tolist()`），逐行只做
+        字典装配；PX4 显示仿真按 (fs, sub) 记忆。此前逐行做 numpy 标量索引、范数与枚举转换，约 0.35 ms/架，1000 架 2 Hz
+        合计约 0.7 核（D1 验收第 1 轮，ADR-051 估算为 20 µs/架）。字段与取值不变。"""
         S = self.fleet.S
-        out = []
+        by = self.roster.by_slot
+        ents = [(sl, by[sl]) for sl in slots if sl in by]
+        if not ents:
+            return []
+        sl = np.fromiter((x[0] for x in ents), np.int64, len(ents))
         sb = S.blocks["safety"]
         bb = S.blocks.get("battery")
-        for slot in slots:
-            e = self.roster.by_slot.get(slot)
-            if e is None:
-                continue
-            fs, sub = int(sb["fs"][slot]), int(sb["sub"][slot])
-            px = SM.mock_emulate_px4(SM.FS(fs), sub, SM.Intent())
-            nav = SM.nav_from_custom_mode(px.custom_mode)
-            acc = S.enu.acc[slot]
-            soc = float(bb["soc"][slot]) if bb is not None and "soc" in bb and bb["battery_pct"][slot] != 255 else None
+        fs = sb["fs"][sl].tolist()
+        sub = sb["sub"][sl].tolist()
+        acc = S.enu.acc[sl].tolist()
+        if bb is not None and "soc" in bb:
+            # 舍入按片向量化（np.round；Python round(x, n) 走十进制转换，每次约 1 µs，是逐行开销的主体）
+            soc = np.round(bb["soc"][sl].astype(np.float64) * 100, 1).tolist()
+            has_soc = (bb["battery_pct"][sl] != 255).tolist()
+        else:
+            soc, has_soc = None, None
+        m08 = self._ext_m08_rows(sl, ents) if self._ext_extra else None
+        lease_json = self.lease.lease_json
+        out = []
+        for k, (slot, e) in enumerate(ents):
             ext = {"lifecycle": LIFECYCLE_NAMES[e.lifecycle],
-                   "lease": {k: v for k, v in self.lease.lease_json(slot).items()},
+                   "lease": lease_json(slot),
                    "loc": {"status": "TRACKING", "gnss_fix": None, "sats": None},
-                   "battery": None if soc is None else {"voltage_v": None, "current_a": None, "soc_pct": round(soc * 100, 1),
-                                                        "t_remain_s": None, "wh_used": None},
+                   "battery": None if soc is None or not has_soc[k] else {
+                       "voltage_v": None, "current_a": None, "soc_pct": soc[k], "t_remain_s": None,
+                       "wh_used": None},
                    "mission": None,
-                   "accel_mps2": [float(acc[0]), float(acc[1]), float(acc[2])],
+                   "accel_mps2": acc[k],
                    "home_enu_m": [float(v) for v in e.home_enu_m],
                    "frames": {"t_world_local": None},
                    "link": {"gcs_age_ms": None, "fcu_age_ms": 0},
                    "gcs_loss_policy": "ignore",
-                   "px4": {"arming_state": 2 if px.armed else 1, "nav_state": None if nav is None else int(nav),
-                           "landed_state": px.landed, "system_status": px.system_status, "custom_mode": px.custom_mode}}
-            if self._ext_extra:
-                ext.update(self._ext_m08(slot, e))
+                   "px4": _px4_json(fs[k], sub[k])}
+            if m08 is not None:
+                ext.update(m08[k])
             out.append([e.agent_no, ext])
+        # 登记的 state_ext 钩子（M13 GNSS、云台、IMU 等，M13-to-M08 第 2 条）：原地合并到本片各行
+        ext_hooks = getattr(self.reg, "state_ext_hooks", None)
+        if ext_hooks:
+            objs = [r[1] for r in out]
+            for _owner, hfn in ext_hooks:
+                try:
+                    hfn(sl, int(self.clock.t_ns), objs)
+                except Exception:
+                    log.exception("state_ext hook failed", extra={"kv": {"owner": _owner}})
         # INT-1（M09-to-M08 第 5 条）：M09 的电池、链路年龄与 gcs_loss_policy（SafetyHooks.state_ext_fields），缺失时保持上面的缺省
         hooks = getattr(self.reg, "hooks", None)
         fn = getattr(hooks, "state_ext_fields", None)
-        if fn is not None and out:
+        if fn is not None:
             try:
-                extra = fn(np.asarray([sl for sl in slots if sl in self.roster.by_slot], np.int64))
+                extra = fn(sl)
             except Exception:
                 extra = {}
             if extra:
-                slot_of = {self.roster.by_slot[sl].agent_no: sl for sl in slots if sl in self.roster.by_slot}
-                for row in out:
-                    add = extra.get(slot_of.get(row[0], -1))
+                for k, row in enumerate(out):
+                    add = extra.get(int(sl[k]))
                     if add:
-                        row[1].update({k: v for k, v in add.items() if k in ("battery", "link", "gcs_loss_policy")})
+                        row[1].update({kk: v for kk, v in add.items() if kk in ("battery", "link", "gcs_loss_policy")})
+        return out
+
+    def _ext_rows_packed(self, slots: list[int]) -> tuple[list[int], list[bytes]]:
+        """`_ext_rows` 的直接编码版本（state_ext 2 Hz 分片打包的热路径；FX2-R3，ADR-070）：不先拼整行字典再整体
+        `msgpack.pack`，而是逐键拼接已编码的片段——机体不变的键（home、frames、mission、profile）与取值有限的键
+        （lifecycle、lease、px4、ctrl、gcs_loss_policy）缓存编码结果，其余逐值编码。钩子（M13 的 loc 与 sens、M09 的
+        battery、link 与 gcs_loss_policy）照常调用，合并规则与 `_ext_rows` 相同：解码后与 `[agent_no, _ext_rows 的字典]`
+        逐键相等（`tests/sim/test_state_ext_packed.py`）。N = 1000 时每行约 36 µs → 约 18 µs。"""
+        S = self.fleet.S
+        by = self.roster.by_slot
+        ents = [(sl, by[sl]) for sl in slots if sl in by]
+        if not ents:
+            return [], []
+        sl = np.fromiter((x[0] for x in ents), np.int64, len(ents))
+        sb = S.blocks["safety"]
+        bb = S.blocks.get("battery")
+        fs = sb["fs"][sl].tolist()
+        sub = sb["sub"][sl].tolist()
+        acc = S.enu.acc[sl].tolist()
+        if bb is not None and "soc" in bb:
+            soc = np.round(bb["soc"][sl].astype(np.float64) * 100, 1).tolist()
+            has_soc = (bb["battery_pct"][sl] != 255).tolist()
+        else:
+            soc, has_soc = None, None
+        pk = self._ext_packer.pack
+        cache = self._ext_cache
+        lg = getattr(self.lease, "gen", None)
+        if cache.get("lease_gen") != lg or lg is None:
+            cache["lease"] = {}
+            cache["lease_gen"] = lg
+        lease_c = cache["lease"]
+        lease_json = self.lease.lease_json
+        # 钩子：与 `_ext_rows` 同一初值（loc 的缺省三键），M13 原地合并 loc、加 sens；M09 给出 battery、link、gcs_loss_policy
+        objs = [{"loc": {"status": "TRACKING", "gnss_fix": None, "sats": None}} for _ in ents]
+        ext_hooks = getattr(self.reg, "state_ext_hooks", None)
+        if ext_hooks:
+            for _owner, hfn in ext_hooks:
+                try:
+                    hfn(sl, int(self.clock.t_ns), objs)
+                except Exception:
+                    log.exception("state_ext hook failed", extra={"kv": {"owner": _owner}})
+        hooks = getattr(self.reg, "hooks", None)
+        fn = getattr(hooks, "state_ext_fields", None)
+        extra: dict = {}
+        if fn is not None:
+            try:
+                extra = fn(sl) or {}
+            except Exception:
+                extra = {}
+        m08 = self._ext_m08_parts(sl, ents) if self._ext_extra else None
+        K = _EXT_KEYS
+        out_a: list[int] = []
+        out_b: list[bytes] = []
+        for k, (slot, e) in enumerate(ents):
+            o = objs[k]
+            add = extra.get(int(sl[k])) or {}
+            lc = e.lifecycle
+            lb = lease_c.get(slot)
+            if lb is None:
+                lb = lease_c[slot] = pk(lease_json(slot))
+            if "battery" in add:
+                bat_b = pk(add["battery"])
+            elif soc is None or not has_soc[k]:
+                bat_b = _NIL
+            else:
+                bat_b = pk({"voltage_v": None, "current_a": None, "soc_pct": soc[k], "t_remain_s": None, "wh_used": None})
+            link_b = pk(add["link"]) if "link" in add else _LINK_DEFAULT
+            gp = add.get("gcs_loss_policy", "ignore") if "gcs_loss_policy" in add else "ignore"
+            if len(o) > 2 or (len(o) == 2 and "sens" not in o):
+                # 钩子写了 loc、sens 以外的键（可能覆盖基本键）：按 `_ext_rows` 的合并规则整行装配后编码（生产中不出现）
+                out_a.append(e.agent_no)
+                out_b.append(pk(self._ext_rows([slot])[0]))
+                continue
+            home_t = tuple(e.home_enu_m)
+            hb = cache.get(("home", slot))
+            if hb is None or hb[0] != home_t:
+                hb = cache[("home", slot)] = (home_t, pk([float(v) for v in e.home_enu_m]))
+            fsb = cache.get((fs[k], sub[k]))
+            if fsb is None:
+                fsb = cache[(fs[k], sub[k])] = pk(_px4_json(fs[k], sub[k]))
+            parts = [K["lifecycle"], _lc_bytes(lc, pk), K["lease"], lb, K["loc"], pk(o["loc"]), K["battery"], bat_b,
+                     K["mission"], _NIL, K["accel_mps2"], pk(acc[k]), K["home_enu_m"], hb[1], K["frames"], _FRAMES_B,
+                     K["link"], link_b, K["gcs_loss_policy"], _str_bytes(gp, pk), K["px4"], fsb]
+            nk = 11
+            if m08 is not None:
+                parts += m08[k]
+                nk += 6
+            if "sens" in o:
+                parts += [K["sens"], pk(o["sens"])]
+                nk += 1
+            out_a.append(e.agent_no)
+            out_b.append(_ARR2 + pk(e.agent_no) + self._ext_packer.pack_map_header(nk) + b"".join(parts))
+        return out_a, out_b
+
+    def _ext_m08_parts(self, sl: np.ndarray, ents: list) -> list[list[bytes]]:
+        """`_ext_m08_rows` 的直接编码版本：每行六个键的 [键, 值, ...] 片段（同一取值与舍入）。"""
+        from ..fleet.state import CtrlMode
+
+        S = self.fleet.S
+        pk = self._ext_packer.pack
+        mode = S.ctrl_mode[sl]
+        nav = _NAV_LUT[mode].tolist()
+        pe = np.round(np.sqrt(((S.enu.pos_ref[sl] - S.enu.pos[sl]) ** 2).sum(1)), 3).tolist()
+        wr = np.round(S.enu.vel[sl] - S.enu.wind(sl), 3).tolist()
+        q = S.enu.q_xyzw[sl]
+        tilt = np.round(np.degrees(np.arccos(np.clip(1.0 - 2.0 * (q[:, 0] * q[:, 0] + q[:, 1] * q[:, 1]), -1.0, 1.0))),
+                        3).tolist()
+        thr = np.round(S.thrust[sl].astype(np.float64), 4).tolist()
+        mode_l = mode.tolist()
+        phase = S.ctrl_phase[sl].tolist()
+        cache = self._ext_cache
+        K = _EXT_KEYS
+        out = []
+        for k, (_slot, e) in enumerate(ents):
+            pb = cache.get(("profile", e.profile_id))
+            if pb is None:
+                p = self.T.get(e.profile_id)
+                pb = cache[("profile", e.profile_id)] = pk({"id": p.profile_id, "version": p.version, "status": p.status})
+            cb = cache.get(("ctrl", mode_l[k], phase[k]))
+            if cb is None:
+                cb = cache[("ctrl", mode_l[k], phase[k])] = pk({"mode": _ctrl_name(CtrlMode, mode_l[k]), "phase": phase[k]})
+            out.append([K["profile"], pb, K["ctrl"], cb, K["thrust_frac"], pk(thr[k]), K["tilt_deg"], pk(tilt[k]),
+                        K["pos_err_m"], pk(pe[k]) if nav[k] else _NIL, K["wind_rel_mps"], pk(wr[k])])
+        return out
+
+    def _ext_m08_rows(self, sl: np.ndarray, ents: list) -> list[dict]:
+        """M08-FR-051 的附加字段（契约登记后输出），按片向量化。"""
+        from ..fleet.state import CtrlMode
+
+        S = self.fleet.S
+        mode = S.ctrl_mode[sl]
+        nav = _NAV_LUT[mode].tolist()
+        pe = np.round(np.sqrt(((S.enu.pos_ref[sl] - S.enu.pos[sl]) ** 2).sum(1)), 3).tolist()
+        wr = np.round(S.enu.vel[sl] - S.enu.wind(sl), 3).tolist()
+        q = S.enu.q_xyzw[sl]
+        tilt = np.round(np.degrees(np.arccos(np.clip(1.0 - 2.0 * (q[:, 0] * q[:, 0] + q[:, 1] * q[:, 1]), -1.0, 1.0))),
+                        3).tolist()
+        thr = np.round(S.thrust[sl].astype(np.float64), 4).tolist()
+        mode_l = mode.tolist()
+        phase = S.ctrl_phase[sl].tolist()
+        prof: dict[str, dict] = {}
+        out = []
+        for k, (_slot, e) in enumerate(ents):
+            pj = prof.get(e.profile_id)
+            if pj is None:
+                p = self.T.get(e.profile_id)
+                pj = prof[e.profile_id] = {"id": p.profile_id, "version": p.version, "status": p.status}
+            out.append({"profile": pj, "ctrl": {"mode": _ctrl_name(CtrlMode, mode_l[k]), "phase": phase[k]},
+                        "thrust_frac": thr[k], "tilt_deg": tilt[k], "pos_err_m": pe[k] if nav[k] else None,
+                        "wind_rel_mps": wr[k]})
         return out
 
     def _ext_m08(self, slot: int, e) -> dict:
-        """M08-FR-051 的附加字段（契约登记后输出）。"""
-        S = self.fleet.S
-        p = self.T.get(e.profile_id)
-        nav = int(S.ctrl_mode[slot]) in (3, 4, 5, 6, 8, 9, 15)
-        pe = float(np.linalg.norm(S.enu.pos_ref[slot] - S.enu.pos[slot])) if nav else None
-        wr = S.enu.vel[slot] - S.enu.wind(slot)
-        qx, qy = float(S.enu.q_xyzw[slot, 0]), float(S.enu.q_xyzw[slot, 1])
-        tilt = float(np.degrees(np.arccos(np.clip(1.0 - 2.0 * (qx * qx + qy * qy), -1.0, 1.0))))
-        from ..fleet.state import CtrlMode
-
-        return {"profile": {"id": p.profile_id, "version": p.version, "status": p.status},
-                "ctrl": {"mode": CtrlMode(int(S.ctrl_mode[slot])).name, "phase": int(S.ctrl_phase[slot])},
-                "thrust_frac": round(float(S.thrust[slot]), 4), "tilt_deg": round(tilt, 3),
-                "pos_err_m": None if pe is None else round(pe, 3),
-                "wind_rel_mps": [round(float(x), 3) for x in wr]}
+        """M08-FR-051 的附加字段（单机；与 `_ext_m08_rows` 相同）。"""
+        return self._ext_m08_rows(np.array([slot], np.int64), [(slot, e)])[0]
 
     def _publish_perf(self) -> None:
         if self._pub_perf is None:
@@ -1040,6 +1503,7 @@ class SimCore:
         if dt_sim_s <= 0:
             dt_sim_s = 1.0
         ms_per_s = {k: round(v / 1e6 / dt_sim_s, 3) for k, v in stage.items()}
+        slow_ms = {k: round(v / dt_sim_s, 3) for k, v in self.slow.busy_ms().items()}
         for k, v in ms_per_s.items():
             b = B.BUDGET_CORE.get(k)
             over = b is not None and v > 1.25 * b * 1000.0
@@ -1061,7 +1525,10 @@ class SimCore:
                "publish_us_p99": round(self.fleet.pipeline.p99_us("tap"), 1) if tap is not None else None,
                "admission_us_p99": round(float(np.percentile(adm, 99)), 1) if adm else None,
                "estimate_us_p99": round(est.p99_us(), 1) if est is not None and est.runs else None,
-               "gc_gen2_ms_max": round(max(self._gc_ms), 3) if self._gc_ms else None}
+               "gc_gen2_ms_max": round(max(self._gc_ms), 3) if self._gc_ms else None,
+               # M13-to-M08 第 5 条：慢任务按名计时；ADR-057 借贷与顺延诊断
+               "slow_ms_per_s": slow_ms, "slow_debt_us": round(self.slow.debt_us, 1), "slow_deferred": self.slow.deferred,
+               "slow_defer_max": {t.name: t.defer_max for t in self.slow.tasks if t.atomic and t.defer_max}}
         if self.geo is not None:
             msg["geo"] = self.geo.metrics()
         return msg
@@ -1138,6 +1605,11 @@ class SimCore:
         with contextlib.suppress(Exception):
             self.events.close()
         self.audit.close()
+        # start() 的 gc.freeze() 把当时存活的对象（含本 SimCore 自身的环）移入永久代；停止后解冻，使其随后可被回收。
+        # sim-core 进程中 stop 之后即退出，不受影响；同一进程内反复启停（--inproc、测试）每次约泄漏 3.6 MB。
+        gc.unfreeze()
+        if self.manual_gc:
+            gc.enable()
 
 
 def _versions() -> dict[str, Any]:
@@ -1187,6 +1659,59 @@ def _write_profile_failure(persist_dir: Path, err: ProfileError) -> None:
              "problems": err.problems}, ensure_ascii=False, indent=1) + "\n")
 
 
+STANDBY_READY_LINE = "AWR_STANDBY_READY"  # 与 supervisor `STANDBY_READY` 一致（AWR-19 §4.2，ADR-070）
+
+
+def _standby_preload() -> dict[str, Any]:
+    """热备用进程的预热：插件装配（导入即登记，含各插件的 numba 预热）、M08 L1 核、机型表、插件的 `standby_warm()`（M10：
+    剧本校验器与生成器模块）。都与
+    运行状态无关（世界、剧本、StateRing、总线在接替之后才打开），接替后由 SimCore 复用（compose_plugins 对已导入模块不重复
+    执行，机型表经 `profiles=` 传入）。冷启动 sim-core 约 2 s，其中这些约 1.5 s（FX2-R3-sim 自测，D1-AC-11b）。"""
+    cfg = SimConfig.from_env()
+    defer_numba_blas_probe()
+    compose_plugins(cfg.plugins)
+    out: dict[str, Any] = {}
+    with contextlib.suppress(Exception):
+        if KL.HAVE_NUMBA and cfg.fleet.kernel != "numpy":
+            KL.warmup()
+    with contextlib.suppress(ProfileError):  # 无效时不预载：接替后按冷启动路径重新构造并按 353 处理
+        out["profiles"] = ProfileTable()
+    for name in cfg.plugins:  # 插件自带的预热钩子（例如 M10 的剧本校验器；按名称调用，不越过组合根的导入边界）
+        fn = getattr(sys.modules.get(name), "standby_warm", None)
+        if callable(fn):
+            try:
+                fn()
+            except Exception:
+                log.exception("plugin standby warm failed", extra={"kv": {"plugin": name}})
+    return out
+
+
+def _standby_wait() -> dict[str, Any] | None:
+    """`AWR_STANDBY=1`（supervisor 的热备用进程，AWR-19 §4.2，ADR-070）：预热后打印 `AWR_STANDBY_READY`，阻塞读 stdin 的
+    一行 JSON `{"env": {...}}`（接替时 supervisor 写入的当前子进程环境）；读到 EOF（supervisor 停止备用进程或已退出）时
+    返回 None。等待期间设 PDEATHSIG，supervisor 退出时随之退出。"""
+    with contextlib.suppress(Exception):
+        import ctypes
+
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(1, int(signal.SIGTERM), 0, 0, 0)
+    sup = os.environ.get("AWR_SUPERVISOR_PID")
+    if sup and sup.isdigit() and os.getppid() != int(sup):
+        return None
+    pre = _standby_preload()
+    sys.stdout.write(STANDBY_READY_LINE + "\n")
+    sys.stdout.flush()
+    line = sys.stdin.readline()
+    if not line.strip():
+        return None
+    try:
+        env = json.loads(line).get("env") or {}
+    except (ValueError, AttributeError):
+        return None
+    os.environ.update({str(k): str(v) for k, v in env.items()})
+    os.environ.pop("AWR_STANDBY", None)
+    return pre
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
@@ -1198,6 +1723,13 @@ def main(argv: list[str] | None = None) -> int:
         from .resim import resim_main
 
         return resim_main(Path(a.resim), Path(a.out) if a.out else None)
+
+    pre: dict[str, Any] = {}
+    if os.environ.get("AWR_STANDBY") == "1":
+        got = _standby_wait()
+        if got is None:
+            return 0
+        pre = got
 
     from awr.runtime.bus import ZenohBus
     from awr.runtime.child import init_child
@@ -1216,7 +1748,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             core = SimCore(cfg, bus, ring, reused=reused, secret=secret,
                            audit_path=ctx.persist_dir / "audit.jsonl" if ctx.supervised else None,
-                           persist_dir=ctx.persist_dir if ctx.supervised else None)
+                           persist_dir=ctx.persist_dir if ctx.supervised else None, profiles=pre.get("profiles"))
         except ProfileError as e:  # 353 VEHICLE_PROFILE_INVALID：拒绝启动（M08-FR-042）
             log.error("vehicle profile invalid", extra={"kv": {"code": e.code, "profile": e.profile_id, "problems": e.problems}})
             with contextlib.suppress(Exception):
@@ -1232,6 +1764,10 @@ def main(argv: list[str] | None = None) -> int:
 
         attach_inputlog(core, ctx)
         attach_checkpoint(core, ctx)
+        core.manual_gc = os.environ.get("AWR_SIM_MANUAL_GC", "1") != "0"
+        core.pin_aux_threads = os.environ.get("AWR_SIM_PIN_AUX", "1") != "0"
+        core.pair_ticks = os.environ.get("AWR_SIM_PAIR_TICKS", "1") != "0"
+        sys.setswitchinterval(SWITCH_INTERVAL_S)
         core.start()
         core.run(lambda: ctx.stopping)
     except Exception:

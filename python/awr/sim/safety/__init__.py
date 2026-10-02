@@ -4,7 +4,7 @@
 M09）：状态块 `safety`、`battery`，stage `faults`（025）、`guard`（110）、`fsm`（115）、`battery`（120）、`mission_guard`（121）、
 `fleet_guard.0–3`（130–133），准入检查 `safety.state`（④）与 `safety.geofence`（⑧），EnergyModel、SafetyHooks，剧本度量
 （`min_separation_m`、`guard_events`、`pos_err_max_m`、`energy_rtl_count`、`battery_soc_min`、`flight_state`），慢任务
-`safety.rows`（兴趣集 safety 行 10 Hz）与查询路由 `safety/fault`（ext）。
+`safety.rows`（兴趣集 safety 行 10 Hz）、查询路由 `safety/fault` 与命令路由 `fault/inject`、`fault/clear`（ext）。
 
 测试用法：`with registry.isolated_registry(), metrics.isolated_metrics(): svc = install()` 在隔离的登记表中装配；
 `uninstall()` 把导入时登记到全局表的内容移除（tests/safety/conftest.py 在收集阶段调用，避免影响同一 pytest 进程中不装配
@@ -33,7 +33,13 @@ STAGES = (("faults", 2, 0, 25, 1, ("thrust_scale", "motor_ok")),
                                  "safety.severity")),
           ("battery", 25, 3, 120, 1, ("battery.soc", "battery.battery_pct", "battery.p_avg_w")),
           ("mission_guard", 25, 13, 121, 1, ("safety.d_free_fence_m",)),
-          ("fleet_guard", 25, 4, 130, 4, ()))
+          ("battery_rtl", 50, 43, 123, 1, ()),
+          ("fleet_guard", 25, 8, 130, 4, ()))
+# 10 Hz stage 全部落在 tick % 5 == 3（不与 50 Hz 的 env、guard、sensors、cmd_watch 同 tick），按 25 tick 周期内的
+# 3、8、13、18、23 五个相位均摊（ADR-070，修订 M09 §5.2 相位安排）：battery 3；mission_guard 13；fleet_guard 四片 8、13、18、
+# 23；M10 mission_engine/director 8、coverage 23（50 tick 周期，只在奇数 tick 23）。battery_rtl（RTL 终点与时间的轮转刷新，
+# 此前在 battery 内与能量积分同一次调用，N = 1000 时合计约 1.6 ms）为 50 tick 周期、只在奇数 tick 43：每次刷新 n/5 架，
+# 每机仍每秒一次（其固定开销约 0.4 ms，落在偶数 tick 时与 l1 组叠加会超过 3 ms）。
 METRICS = ("min_separation_m", "guard_events", "pos_err_max_m", "energy_rtl_count", "battery_soc_min", "flight_state")
 
 SERVICE: SafetyService | None = None
@@ -57,6 +63,10 @@ def install(params: SafetyParams | None = None, *, metrics: bool = True, sync_ro
     R.register_safety_hooks(svc)
     R.register_slow_task("safety.rows", svc.slow_rows, period_sim_s=0.1, budget_us=200)
     R.register_query("safety/fault", svc.fault_query)
+    # 故障注入的命令路由（M08-to-M09 第 1 条）：`ctl/sim-core/cmd` 的 `fault/inject`、`fault/clear`（剧本导演与 REST R16、R62），
+    # 经 CommandEngine 验签、角色与席位检查，写输入日志，生命周期 accepted → running → succeeded（ADR-058）
+    for op in ("fault/inject", "fault/clear"):
+        R.register_command_handler(op, svc.fault_command(op), owner="M09")
     if metrics:
         for m in METRICS:
             MET.register_metric(m, getattr(svc, m), owner="M09")
@@ -79,6 +89,10 @@ def uninstall(svc: SafetyService | None = None) -> None:
     reg.admission[:] = [c for c in reg.admission if c.owner != "M09"]
     reg.slow[:] = [t for t in reg.slow if t.name != "safety.rows"]
     reg.queries.pop("safety/fault", None)
+    for op in ("fault/inject", "fault/clear"):
+        spec = reg.commands.get(op)
+        if spec is not None and spec.owner == "M09":
+            del reg.commands[op]
     if target is not None and reg.energy is getattr(target, "energy", None):
         reg.energy = None
     if target is not None and reg.hooks is target:

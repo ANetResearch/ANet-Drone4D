@@ -14,9 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-from scipy import ndimage as ndi
 
-from .heightmap import max_pyramid
+from .heightmap import _ndi, max3, max_pyramid
 from .types import GeoLoadError
 
 
@@ -173,10 +172,10 @@ class ZoneRaster:
                     m[rc, cc] = True
             m[r0:r1, c0:c1] |= inside
         if dilate_cells > 0:
-            m = ndi.binary_dilation(m, iterations=dilate_cells)
+            m = _ndi().binary_dilation(m, iterations=dilate_cells)
         self.mask = m
         self.pyr = max_pyramid(m.astype(np.float32))
-        self.pyr_dil = [ndi.maximum_filter(p, size=3, mode="nearest") for p in self.pyr]
+        self.pyr_dil = [max3(p) for p in self.pyr]
 
     @classmethod
     def from_mask(cls, mask: np.ndarray, x0: float, y0: float, cell_m: float) -> ZoneRaster:
@@ -185,7 +184,7 @@ class ZoneRaster:
         self.x0, self.y0, self.cell = x0, y0, cell_m
         self.mask = np.asarray(mask, bool)
         self.pyr = max_pyramid(self.mask.astype(np.float32))
-        self.pyr_dil = [ndi.maximum_filter(p, size=3, mode="nearest") for p in self.pyr]
+        self.pyr_dil = [max3(p) for p in self.pyr]
         return self
 
     def segments_flag(self, A: np.ndarray, B: np.ndarray, L: int = 0) -> np.ndarray:

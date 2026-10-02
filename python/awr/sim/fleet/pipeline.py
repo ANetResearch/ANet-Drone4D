@@ -7,6 +7,7 @@ order 在所有者区段、Σbudget ≤ 0.40、同一字段只有一个写者）
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -24,6 +25,12 @@ __all__ = ["Pipeline", "PipelineError", "StageCtx", "StageStats"]
 
 DT_TICK = 1.0 / B.TICK_HZ  # 0.004 s
 TICK_NS = 4_000_000
+
+
+def _shard_base(name: str) -> str:
+    """分片 stage `<name>.<k>`（k 为分片序号）的所属 stage 名；其他名字原样返回（`x.a` 与 `x.b` 是两个 stage）。"""
+    head, sep, tail = name.rpartition(".")
+    return head if sep and tail.isdigit() else name
 
 
 class PipelineError(ValueError):
@@ -93,7 +100,7 @@ class Pipeline:
             if not any(lo <= s.order <= hi for lo, hi in ranges):
                 raise PipelineError(f"stage {s.name!r}: order {s.order} 不在 {s.owner} 的区段内")
             for f in s.writes:
-                if f in writers:
+                if f in writers and _shard_base(writers[f]) != _shard_base(s.name):  # 同一 stage 的各分片（`<name>.<k>`）算一个写者
                     raise PipelineError(f"字段 {f!r} 有两个写者：{writers[f]!r} 与 {s.name!r}（一字段一写者，M08-FR-011）")
                 writers[f] = s.name
             names[s.name] = s
@@ -104,10 +111,41 @@ class Pipeline:
             raise PipelineError(f"Σbudget_core = {total:.3f} 超过 {budget_limit}（{detail}）")
         return cls(sorted(specs, key=lambda s: s.order), timer)
 
+    def _schedule(self) -> list[list[tuple[StageSpec, StageStats]]] | None:
+        """按 tick % L（L 为全部 every 的最小公倍数）预先展开的 stage 表（顺序同 self.stages）；L > 1000 时不展开。"""
+        sig = (id(self.stages), len(self.stages))
+        if getattr(self, "_sched_sig", None) == sig:
+            return self._sched
+        L = 1
+        for sp in self.stages:
+            L = L * sp.every // math.gcd(L, sp.every)
+        sched = None
+        if L <= 1000:
+            sched = [[(sp, self.stats[sp.name]) for sp in self.stages if (k - sp.phase) % sp.every == 0] for k in range(L)]
+        self._sched, self._sched_sig, self._sched_L = sched, sig, L
+        return sched
+
     def run_tick(self, S: FleetState, ctx: StageCtx) -> None:
         tick = ctx.tick
         timer = self.timer
         trace = self.trace
+        sched = self._schedule()
+        if sched is not None:  # 预展开调度（FX-SIM1：每 tick 只遍历到期的 stage）
+            for s, st in sched[tick % self._sched_L]:
+                ctx.call_index = st.calls
+                ctx.shard = s.shard
+                if trace is not None:
+                    trace.append((tick, s.name))
+                if timer is None:
+                    s.fn(S, ctx)
+                else:
+                    t0 = timer()
+                    s.fn(S, ctx)
+                    d = timer() - t0
+                    st.ns += d
+                    st.recent.append(d)
+                st.calls += 1
+            return
         for s in self.stages:
             if (tick - s.phase) % s.every != 0:
                 continue

@@ -26,6 +26,7 @@ def register_sensor_rig(fn) -> None:
     _SENSOR_RIG[:] = [fn]
 
 LC = Lifecycle
+_TRANSIT = frozenset({int(LC.PENDING), int(LC.STARTING), int(LC.BOOTED), int(LC.RESTARTING)})  # advance 会推进的状态
 
 
 @dataclass
@@ -70,12 +71,21 @@ class Roster:
         self.by_id: dict[str, RosterEntry] = {}
         self._next_no = 0
         self._model_seq: dict[str, int] = {}
+        self.lc_gen = 0  # 生命周期变更代数（_set、touch）；与 roster_version 一起判定"无可推进条目"
+        self._steady: tuple[int, int] | None = None
+        self._free_lo = 0  # free_slot 的扫描下界（任何 < _free_lo 的 slot 都在用）
 
     # ------------------------------------------------------------ 增删
     def free_slot(self) -> int | None:
-        for s in range(self.capacity):
-            if s not in self.by_slot:
+        """最小的空闲 slot（与逐个扫描结果相同）；从 `_free_lo`（不大于最小空闲 slot 的下界）起扫描，大机群逐架加入时
+        不再每次从 0 扫描（D1 验收第 1 轮 4.3）。"""
+        lo = self._free_lo
+        by = self.by_slot
+        for s in range(lo, self.capacity):
+            if s not in by:
+                self._free_lo = s
                 return s
+        self._free_lo = self.capacity
         return None
 
     def new_id(self, model: str) -> str:
@@ -125,6 +135,7 @@ class Roster:
         e = self.by_slot.pop(slot, None)
         if e is None:
             return None
+        self._free_lo = min(self._free_lo, slot)
         self.by_id.pop(e.id, None)
         self.roster_version += 1
         if emit is not None:
@@ -139,13 +150,19 @@ class Roster:
     def clear(self) -> None:
         self.by_slot.clear()
         self.by_id.clear()
+        self._free_lo = 0
         self.roster_version += 1
 
     # ------------------------------------------------------------ 生命周期（Mock）
+    def touch(self) -> None:
+        """条目的生命周期被外部直接改写后调用（checkpoint 恢复），使 `advance` 重新扫描。"""
+        self.lc_gen += 1
+
     def _set(self, e: RosterEntry, to: LC, t_ns: int, emit: EmitFn | None, reason: str | None = None) -> None:
         frm = e.lifecycle
         e.lifecycle = int(to)
         e.lc_t_ns = t_ns
+        self.lc_gen += 1
         if emit is not None:
             data: dict[str, Any] = {"from": LIFECYCLE_NAMES[frm], "to": LIFECYCLE_NAMES[int(to)]}
             if reason:
@@ -153,8 +170,12 @@ class Roster:
             emit("sim.vehicle.state", t_sim_ns=t_ns, severity=1, uav=e.id, **data)
 
     def advance(self, t_ns: int, emit: EmitFn | None = None) -> list[RosterEntry]:
-        """推进 Mock 生命周期（L02–L04；RESTARTING → READY）；返回本次进入 STARTING 的条目。"""
+        """推进 Mock 生命周期（L02–L04；RESTARTING → READY）；返回本次进入 STARTING 的条目。
+        上次扫描后没有条目处于可推进状态、且 roster 与生命周期都未变更时直接返回（每 tick 调用；1000 架时省去逐条扫描，ADR-060）。"""
+        if self._steady == (self.roster_version, self.lc_gen):
+            return []
         started = []
+        transit = False
         for e in self.by_slot.values():
             lc = e.lifecycle
             if lc == LC.PENDING and t_ns > e.lc_t_ns:
@@ -164,6 +185,8 @@ class Roster:
                 self._set(e, LC.BOOTED, t_ns, emit)
             elif (lc == LC.BOOTED and t_ns - e.lc_t_ns >= self.ready_ns) or (lc == LC.RESTARTING and t_ns - e.lc_t_ns >= self.boot_ns):
                 self._set(e, LC.READY, t_ns, emit)
+            transit = transit or e.lifecycle in _TRANSIT
+        self._steady = None if transit else (self.roster_version, self.lc_gen)
         return started
 
     def set_lifecycle(self, slot: int, to: LC, t_ns: int, emit: EmitFn | None = None, reason: str | None = None) -> None:

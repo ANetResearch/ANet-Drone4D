@@ -82,6 +82,7 @@ LAND_ALT3 = P.MPC_LAND_ALT3
 LAND_FAST = P.LAND_FAST_SPEED
 TD_RAMP = P.TOUCHDOWN_RAMP_S
 DESC_ALT = P.RTL_DESCEND_ALT
+VIA_ACC2 = P.RTL_VIA_ACCEPT_M * P.RTL_VIA_ACCEPT_M
 V_LOCK = P.VEL_AXIS_LOCK_MPS
 V_DRIFT = P.VEL_AXIS_DRIFT_M
 V_PULL = P.VEL_AXIS_PULL
@@ -308,8 +309,8 @@ def _seg_eval(k, tau, pb_seg):
 def tick_l1(idx, cfg,
             p, v, a_meas, p_prev, q, omega, thrust, thr_cap, thr_sp, q_sp, yaw_sp, vel_int,
             ctrl_mode, ctrl_phase, mode_evt, mode_t, target, pos_sp, vel_cmd, tr_x, tr_v, tr_a, pos_ref,
-            stopping, speed_cmd, z_rtl, v_rtl, land_xy, home, ground_z, agl, in_contact, landed, crash_sub, td_t,
-            path_off, path_len, path_seg, path_tau, pb_yaw, pb_seg,
+            stopping, speed_cmd, z_rtl, v_rtl, land_xy, rtl_via, home, ground_z, agl, in_contact, landed, crash_sub,
+            td_t, path_off, path_len, path_seg, path_tau, pb_yaw, pb_seg,
             orb, desc_v, vel_frame, vel_vmax, vel_yawrate, hold_alt, axis_lock, axis_anchor, d_free,
             wind, rho, thrust_scale, motor_ok,
             profile_id, limits_id, rtl_phase, PT, LT):
@@ -444,6 +445,17 @@ def tick_l1(idx, cfg,
                         gx = home[i, 0]
                         gy = home[i, 1]
                         gz = -z_rtl[i]
+                        vx = rtl_via[i, 0]
+                        if vx == vx:  # 绕行点（ADR-054）：参考点到达接受半径前先飞向它，之后清为 NaN 并转向 home
+                            vy = rtl_via[i, 1]
+                            ddx = vx - tr_x[i, 0]
+                            ddy = vy - tr_x[i, 1]
+                            if ddx * ddx + ddy * ddy > VIA_ACC2:
+                                gx = vx
+                                gy = vy
+                            else:
+                                rtl_via[i, 0] = math.nan
+                                rtl_via[i, 1] = math.nan
                     else:
                         gx = home[i, 0]
                         gy = home[i, 1]
@@ -928,29 +940,111 @@ def warmup() -> bool:
     aff = np.array([0.0, 0.0, 2.0])
     ev = np.zeros((S.capacity, 2), np.int32)
     prm = np.array([0.3, 1.0, 3.0, 1.0, 0.5, 0.0])
-    contact(idx, 0.0, S.p, S.v, S.p_prev, S.q, S.omega, S.thrust, S.thr_sp, S.thr_cap, S.home, g, aff, g, aff, 0.0,
-            S.ctrl_mode, S.ctrl_phase, S.mode_t, S.td_t, S.profile_id, PT, S.in_contact, S.landed, S.in_air, S.contact_t,
-            S.crash_sub, S.ground_z, S.agl, S.mode_evt, np.zeros(S.capacity, np.uint8), prm, ev)
+    # 运行期签名：世界的 DSM、DTM 网格是只读内存映射（M04），contact 收到只读 float32 网格；合成世界与测试为可写数组。
+    # 两种都预热，避免首个 contact 调用在主循环内编译（D1 验收第 1 轮 4.1）
+    g_ro = g.copy()
+    g_ro.flags.writeable = False
+    for gg, gt in ((g, g), (g_ro, g_ro), (g_ro, g), (g, g_ro)):
+        contact(idx, 0.0, S.p, S.v, S.p_prev, S.q, S.omega, S.thrust, S.thr_sp, S.thr_cap, S.home, gg, aff, gt, aff, 0.0,
+                S.ctrl_mode, S.ctrl_phase, S.mode_t, S.td_t, S.profile_id, PT, S.in_contact, S.landed, S.in_air,
+                S.contact_t, S.crash_sub, S.ground_z, S.agl, S.mode_evt, np.zeros(S.capacity, np.uint8), prm, ev)
     enu_convert(idx, S.p, S.v, S.a_meas, S.q, S.q_sp, S.omega, S.pos_ref, S.home, S.enu._pos, S.enu._vel, S.enu._acc,
                 S.enu._q, S.enu._q_sp, S.enu._omega, S.enu._pos_ref, S.enu._home)
+    from .kernels_tap import enu_to_ned_rows
+
+    enu_to_ned_rows(np.arange(2, dtype=np.int64), np.zeros((2, 3)), S.wind)
     w = np.zeros((3, 3))
     w[1, 0] = 10.0
     w[2, 0] = 10.0
     w[2, 1] = 10.0
     topp_lite_nb(w, 0.0, 5.0, 3.0, 3.0, 1.5, 2.0, np.zeros((4, SG_COLS)), np.zeros(3))
+    z3 = np.zeros((2, 3))
+    set_traj_nb(np.arange(2, dtype=np.int64), z3, z3, z3, np.zeros(2), True, S.tr_x, S.tr_v, S.tr_a, S.yaw_sp)
+    set_traj_rows_nb(np.arange(2, dtype=np.int64), z3, z3, z3, np.zeros(2), S.tr_x, S.tr_v, S.tr_a, S.yaw_sp)
+    # cmd_watch 预筛核（大机群路径）
+    from . import kernels_watch
+
+    kernels_watch.warmup()
+    # 机间碰撞核（大机群路径）
+    from .kernels_contact import uav_hits
+
+    pp = np.zeros((3, 3))
+    pp[1, 0] = 0.5
+    uav_hits(pp, pp.copy(), np.full(3, 0.5), 6.0, np.zeros((8, 2), np.int64))
+    # tap 融合核（Full64、Lite32 的结构化数组字段视图）
+    from awr.contracts.layouts import DRONE_STATE64, SWARM_LITE32
+
+    from .stages.tap import TapStage
+    from .state import FALLBACK_BLOCKS
+
+    St = FleetState(4, blocks=FALLBACK_BLOCKS)
+    tap = TapStage(None, lease_owner=lambda: np.zeros(St.capacity, np.uint8), roster_version=lambda: 0)
+    if tap.use_kernel and tap._kernel_ok(St):
+        tap.fill(St, np.zeros(4, DRONE_STATE64), np.zeros(4, SWARM_LITE32), idx)
     return True
+
+
+@njit(cache=True, fastmath=False)
+def set_traj_nb(s, p, v, a, psi, has_psi, tr_x, tr_v, tr_a, yaw_sp):
+    """TRAJ 设定点写入（ENU -> NED：(E, N, U) -> (N, E, −U)；偏航 `wrap_pi(π/2 − ψ)`），与 `actions.set_traj_enu` 的
+    numpy 实现逐位相同（M10 跟踪器 125 Hz 调用，FX-SIM1）。"""
+    for k in range(s.shape[0]):
+        i = s[k]
+        tr_x[i, 0] = p[k, 1]
+        tr_x[i, 1] = p[k, 0]
+        tr_x[i, 2] = -p[k, 2]
+        tr_v[i, 0] = v[k, 1]
+        tr_v[i, 1] = v[k, 0]
+        tr_v[i, 2] = -v[k, 2]
+        tr_a[i, 0] = a[k, 1]
+        tr_a[i, 1] = a[k, 0]
+        tr_a[i, 2] = -a[k, 2]
+        if has_psi:
+            w = ((math.pi / 2 - psi[k]) + math.pi) % (2.0 * math.pi) - math.pi
+            if w == -math.pi:
+                w = math.pi
+            yaw_sp[i] = w
+
+
+@njit(cache=True, fastmath=False)
+def set_traj_rows_nb(s, P, V, A, PSI, tr_x, tr_v, tr_a, yaw_sp):
+    """`set_traj_nb` 的按 slot 行读取版本（输入 P、V、A、PSI 的第 s[k] 行；同一运算，逐位相同）。"""
+    for k in range(s.shape[0]):
+        i = s[k]
+        tr_x[i, 0] = P[i, 1]
+        tr_x[i, 1] = P[i, 0]
+        tr_x[i, 2] = -P[i, 2]
+        tr_v[i, 0] = V[i, 1]
+        tr_v[i, 1] = V[i, 0]
+        tr_v[i, 2] = -V[i, 2]
+        tr_a[i, 0] = A[i, 1]
+        tr_a[i, 1] = A[i, 0]
+        tr_a[i, 2] = -A[i, 2]
+        w = ((math.pi / 2 - PSI[i]) + math.pi) % (2.0 * math.pi) - math.pi
+        if w == -math.pi:
+            w = math.pi
+        yaw_sp[i] = w
+
+
+_EMPTY_PATH: list = []
 
 
 def run_l1(S, PT, LT, PB, idx, dt: float, t_s: float, flags: float, w_fail: float, faults: float, rtl_phase) -> None:
     """以 FleetState 的数组调用融合核（flags：bit0 time_stretch、bit1 stop_motion）。"""
-    from .path import EMPTY_PATH
+    if PB is None:
+        if not _EMPTY_PATH:
+            from .path import EMPTY_PATH
 
-    pb = PB if PB is not None else EMPTY_PATH
+            _EMPTY_PATH.append(EMPTY_PATH)
+        pb = _EMPTY_PATH[0]
+    else:
+        pb = PB
     cfg = np.array([dt, t_s, float(int(flags) & 1), float((int(flags) >> 1) & 1), w_fail, faults, 0.0, 0.0])
     tick_l1(idx, cfg,
             S.p, S.v, S.a_meas, S.p_prev, S.q, S.omega, S.thrust, S.thr_cap, S.thr_sp, S.q_sp, S.yaw_sp, S.vel_int,
             S.ctrl_mode, S.ctrl_phase, S.mode_evt, S.mode_t, S.target, S.pos_sp, S.vel_cmd, S.tr_x, S.tr_v, S.tr_a,
-            S.pos_ref, S.stopping, S.speed_cmd, S.z_rtl, S.v_rtl, S.land_xy, S.home, S.ground_z, S.agl, S.in_contact,
+            S.pos_ref, S.stopping, S.speed_cmd, S.z_rtl, S.v_rtl, S.land_xy, S.rtl_via, S.home, S.ground_z, S.agl,
+            S.in_contact,
             S.landed, S.crash_sub, S.td_t,
             S.path_off, S.path_len, S.path_seg, S.path_tau, pb.yaw, pb.seg,
             S.orb, S.desc_v, S.vel_frame, S.vel_vmax, S.vel_yawrate, S.hold_alt, S.axis_lock, S.axis_anchor, S.d_free,

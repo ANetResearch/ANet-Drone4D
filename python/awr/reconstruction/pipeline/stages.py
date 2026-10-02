@@ -335,24 +335,17 @@ def stage_tiling(run: ReconRun) -> list[Path]:
     spec = build_ingest_spec(source=meta, al=run.alignment, fused=fused, target_world_id=run.target, session_id=run.session_id,
                              job_id=run.ctx.job_id, engine=run.engine_name, variant=eng["variant"], camera_home=_camera_home(run),
                              session_dir=run.session_dir)
-    api = m03_arrays_api()
-    if api is not None:                                            # M03-FR-021 delivered: single build_world call
-        from awr.world.package.build import build_world
-
-        run.info["builder"] = "m03.ArraysAdapter"
-        res = build_world(api[1](to_m03_spec(spec, api[0])), run.worlds_dir, ctx=run.ctx)
-        if res.exit_code != 0:
-            err = TilingFailed if res.error_code not in ("VALIDATE_FAILED",) else PackageInvalid
-            raise err(res.message or res.error_code, detail={"exit_code": res.exit_code, "error_code": res.error_code},
-                      resumable=res.error_code == "IO_ERROR")
-        run.build_result = res
-        return []
     from awr.world.ingest.types import WorldpkgError
 
-    from .m03_bridge import BridgeBuild
+    api = m03_arrays_api()
+    if api is None:                                                # pragma: no cover - M03-FR-021 is delivered
+        raise TilingFailed("M03 IngestFromArrays / ArraysAdapter unavailable", resumable=False)
+    from awr.world.package.arrays_build import PhasedBuild
 
-    run.info["builder"] = "m01.m03_bridge"
-    b = BridgeBuild(spec, run.worlds_dir, run.ctx.job_id, run.ctx)
+    # M03-FR-021：派生世界两段式构建（TILING：ingest、网格、切片；PACKAGING：派生、打包、--deep、发布）。发布推迟到
+    # PACKAGING 的最后一个取消检查点之后，两个阶段内取消都不改变世界列表（M01-FR-041）
+    run.info["builder"] = "m03.ArraysAdapter"
+    b = PhasedBuild(api[1](to_m03_spec(spec, api[0])), run.worlds_dir, run.ctx)
     run.builder = b
     try:
         b.tiling(progress=run.ctx.progress)

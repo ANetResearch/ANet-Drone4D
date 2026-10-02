@@ -61,6 +61,8 @@ class TaskManager:
         self.metric_sink = metric_sink
         self.emit = emit
         self.on_change = on_change
+        # 新任务带目标位置时的只读预取（RuntimeCore 注入：观测点高度缓存预热，§6.13 规则 ⑥）
+        self.prefetch: Callable[[tuple[float, float, float | None]], None] | None = None
         self.max_active = max_active
         self.escalation_s = escalation_s
         self.archive_s = archive_s
@@ -177,7 +179,10 @@ class TaskManager:
                         spec.requester_aid or self.coordinator_aid, spec.principal_id, dict(spec.claim) if spec.claim else None,
                         spec.note)
 
-    def submit(self, spec: TaskSpec, *, merge_radius_m: float = MERGE_RADIUS_M, start: bool = True) -> tuple[str, TaskState, str | None]:
+    def submit(self, spec: TaskSpec, *, merge_radius_m: float = MERGE_RADIUS_M, start: bool = True,
+               anchor_ns: int | None = None) -> tuple[str, TaskState, str | None]:
+        """anchor_ns：触发的仿真时刻（检出事件的 `t_sim_ns`）；分配的 find 自此起算，不含 agent-runtime 收到事件的墙钟滞后
+        （§6.13 规则 ⑥）。缺省为当前时刻。"""
         spec = self.normalize(spec)
         claim = spec.claim or {}
         target_id = claim.get("target_id") or spec.args.get("target_id")
@@ -194,7 +199,8 @@ class TaskManager:
         now = self.sched.now_ns()
         t = Task(tid, spec, retries_left=spec.max_retries, t_submit_ns=now, t_update_ns=now,
                  conf_claim=float(claim["conf"]) if isinstance(claim.get("conf"), (int, float)) else None,
-                 target_id=str(target_id) if target_id is not None else None)
+                 target_id=str(target_id) if target_id is not None else None,
+                 t_anchor_ns=int(anchor_ns) if anchor_ns else None)
         t.conf_current = t.conf_claim
         self.tasks[tid] = t
         self.evidence("agent.task.submitted", {"task_id": tid, "capability": spec.capability, "origin": spec.origin,
@@ -204,6 +210,11 @@ class TaskManager:
                                                "accept_sha256": sha256_cid(spec.accept), "spec": self._spec_doc(spec)})
         self._board_add(spec.requester_aid, tid, "claim", self._claim_body(spec, claim, target_id))
         self.board_intent(t, provider_aid=None)
+        if self.prefetch is not None and spec.target_enu_m is not None:
+            try:
+                self.prefetch(spec.target_enu_m)
+            except Exception:
+                log.exception("prefetch failed")
         if t.target_id is not None and t.conf_claim is not None and str(claim.get("sensor", "")) not in ("thermal",):
             self._target_claim(t.target_id, t.conf_claim)
         self.changed(t)

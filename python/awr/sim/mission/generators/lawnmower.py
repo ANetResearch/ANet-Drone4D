@@ -53,8 +53,12 @@ def plan(params: dict, ctx: GenContext) -> LawnmowerPlan:
         hf = lambda xy: np.zeros(len(xy))  # noqa: E731
         gf = hf
     sa = params.get("sweep_angle_deg", "auto")
+    # 多机切分只在航带之间切（exact_split=False，FX2-R2，ADR-065）：航带内切分时相邻两块共享切点，若分配时恰有一块反向
+    # 飞行，两机在各自块的同一端（起点或终点）同时到达切点、同一航带上对飞（S2 公园覆盖实测 CPA 1.6 m，两次 AVOIDING
+    # 计入 guard_events）。按航带切分时相邻块的端点相隔一个航带间距
     cp = plan_coverage(poly, holes, len(ctx.vehicles), homes, sensor, alt, speed, hf, gf,
-                       None if sa in (None, "auto") else float(sa), min_lane_m=float(params.get("min_lane_m", 6.0)))
+                       None if sa in (None, "auto") else float(sa), min_lane_m=float(params.get("min_lane_m", 6.0)),
+                       exact_split=len(ctx.vehicles) <= 1)
     if not cp.chunks:
         raise GenError(125, "COVERAGE_EMPTY", "扩大区域或减小航带间距")
     polys: dict[str, np.ndarray] = {}

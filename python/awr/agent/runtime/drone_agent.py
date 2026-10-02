@@ -5,10 +5,15 @@
   拿不到 Bus、签名器与其他 agent 的对象。
 - 健康推导（12 §3.3.17；FR-014）：FlightState ∈ {UNKNOWN, ELAND, FAILSAFE, CRASHED}、lifecycle ≠ READY、租约被 OPERATOR
   或 PILOT 持有时不健康；机型有电池模型而 `battery_pct` 为哨兵 255 时不健康（battery = null 的机型不据此判定）。
+- 共享只读查询（SharedReads，M14 §6.13 规则 ⑥）：观测点的 `ground_dtm`、`height_dsm` 是 world 静态数据，按 (op, x, y)
+  缓存；同一目标的环境查询并发合并。合同网对 3 个候选同时报价时，sim-core 往返由每候选 4 次串行降为至多 2 次并行。
+- 委派在途预取（`DroneAgent.prepare`）：Mock 长任务请求在 t_send 发出、t_send + L − d_resp 投递；其间预取处理器的只读准备
+  （观测点、执行前复核估价），投递时直接取用（§6.12.2）。
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import statistics
@@ -25,12 +30,14 @@ from .network import InvokeSink, RecordingSink
 from .tsir import KIND_VEHICLE, KIND_ZONE, VERB_CALL
 from .types import Artifact, CapabilityCall, Effect, EffectStatus, Phase
 
-__all__ = ["DSM_CLEARANCE_M", "THERMAL_FRAME_BYTES", "Detection", "DetectionHub", "DetectionSub", "DroneAgent", "HandlerCtx",
-           "Station", "derive_health"]
+__all__ = ["DSM_CLEARANCE_M", "PREPARED_TTL_S", "THERMAL_FRAME_BYTES", "Detection", "DetectionHub", "DetectionSub", "DroneAgent",
+           "HandlerCtx", "SharedReads", "Station", "consume", "derive_health", "station_point"]
 
 log = logging.getLogger("awr.agent.drone")
 
 DSM_CLEARANCE_M = 10.0
+GEO_CACHE_MAX = 4096
+PREPARED_TTL_S = 60.0  # 【仿真】委派在途预取结果的保留时长（委派被取消、未投递时到期丢弃）
 THERMAL_FRAME_BYTES = 19215  # PGM P5 160 × 120 u8 + 15 B 文件头（M13-FR-044 render_thermal_frame）
 MERGE_NEAR_M = 30.0
 UNHEALTHY_FS = {"UNKNOWN": "FS_UNKNOWN", "ELAND": "FS_ELAND", "FAILSAFE": "FS_FAILSAFE", "CRASHED": "FS_CRASHED"}
@@ -136,6 +143,67 @@ class DetectionHub:
         return claimed
 
 
+class SharedReads:
+    """处理器共享的只读 sim-core 查询（M14 §6.13 规则 ⑥）。
+
+    - `geo(op, x, y)`：`svc/geo/height` 的 `ground_dtm`、`height_dsm` 只取决于 world（静态），按 (op, x, y) 缓存，
+      并发的同键请求合并为一次；失败不缓存。
+    - `env(pos)`：目标处环境（`env/query`），并发的同键请求合并为一次；不跨时间缓存（环境随仿真时间变化）。
+    - 高度缓存至多 GEO_CACHE_MAX 条（超出时丢弃较早的一半）；sim-core 重启、纪元变化或剧本重置时清空（`clear()`）。
+
+    多进程下每次 sim-core 往返在 ×10 时约折合 0.2–0.6 s【仿真】（sim-core 每轮至多推进 50 tick，慢任务在轮末处理），
+    报价与执行前复核按串行往返计时会使报价晚于 t_send + L 到达、使委派链的仿真时刻随倍速漂移（D1-AC-16）。"""
+
+    def __init__(self, bridge: SimBridge) -> None:
+        self.bridge = bridge
+        self._geo: dict[tuple[str, float, float], float | None] = {}
+        self._geo_inflight: dict[tuple[str, float, float], asyncio.Future] = {}
+        self._env_inflight: dict[tuple[float, ...], asyncio.Future] = {}
+        self.stats = {"geo_calls": 0, "geo_hits": 0, "env_calls": 0, "env_shared": 0}
+
+    async def geo(self, op: str, x: float, y: float) -> float | None:
+        k = (str(op), round(float(x), 3), round(float(y), 3))
+        if k in self._geo:
+            self.stats["geo_hits"] += 1
+            return self._geo[k]
+        fut = self._geo_inflight.get(k)
+        if fut is None:
+            fut = self._geo_inflight[k] = asyncio.ensure_future(self._geo_fetch(k))
+        return await asyncio.shield(fut)
+
+    async def _geo_fetch(self, k: tuple[str, float, float]) -> float | None:
+        try:
+            self.stats["geo_calls"] += 1
+            v = (await self.bridge.geo_height(k[0], [[k[1], k[2]]]))[0]
+            if len(self._geo) >= GEO_CACHE_MAX:
+                for old in list(self._geo)[: GEO_CACHE_MAX // 2]:
+                    self._geo.pop(old, None)
+            self._geo[k] = v
+            return v
+        finally:
+            self._geo_inflight.pop(k, None)
+
+    def clear(self) -> None:
+        """清空高度缓存（sim-core 重启、纪元变化、剧本重置；进行中的合并请求照常完成）。"""
+        self._geo.clear()
+
+    async def env(self, pos: Sequence[float]) -> Any:
+        k = tuple(round(float(v), 2) for v in pos[:3])
+        fut = self._env_inflight.get(k)
+        if fut is None:
+            fut = self._env_inflight[k] = asyncio.ensure_future(self._env_fetch(k, pos))
+        else:
+            self.stats["env_shared"] += 1
+        return await asyncio.shield(fut)
+
+    async def _env_fetch(self, k: tuple[float, ...], pos: Sequence[float]) -> Any:
+        try:
+            self.stats["env_calls"] += 1
+            return await self.bridge.env_at(pos)
+        finally:
+            self._env_inflight.pop(k, None)
+
+
 @dataclass(frozen=True)
 class Station:
     pos: tuple[float, float, float]
@@ -143,6 +211,27 @@ class Station:
     takeoff_agl_m: float
     ground_z: float
     dsm_z: float
+
+
+async def station_point(agent: DroneAgent, target_enu_m: Sequence[float | None], alt_agl_m: float) -> Station:
+    """观测点（FR-042，只读）：z = max(ground_dtm(xy) + alt_agl_m, height_dsm(xy) + 10 m)；两项高度并行查询、经 SharedReads 缓存。"""
+    x, y = float(target_enu_m[0]), float(target_enu_m[1])  # type: ignore[arg-type]
+    reads = agent.reads
+    try:
+        g, s = await asyncio.gather(reads.geo("ground_dtm", x, y), reads.geo("height_dsm", x, y))
+    except Exception:
+        g, s = None, None
+    tz = target_enu_m[2] if len(target_enu_m) > 2 else None
+    ground = float(g) if g is not None else (float(tz) if tz is not None else 0.0)
+    dsm = float(s) if s is not None else ground
+    z = max(ground + alt_agl_m, dsm + DSM_CLEARANCE_M)
+    return Station((x, y, z), (x, y, z), float(min(120.0, max(2.5, alt_agl_m))), ground, dsm)
+
+
+def consume(f: asyncio.Future) -> None:
+    """并行发出、可能不再需要的查询与预取：取走异常，避免"异常从未取回"告警。"""
+    if not f.cancelled():
+        f.exception()
 
 
 class _RecordingPort:
@@ -209,8 +298,20 @@ class HandlerCtx:
     def now_s(self) -> float:
         return self._agent.sched.now_s()
 
+    def now_ns(self) -> int:
+        return self._agent.sched.now_ns()
+
     async def sleep_s(self, dt_s: float) -> None:
         await self._agent.sched.sleep_s(dt_s)
+
+    async def sleep_until(self, t_sim_ns: int) -> None:
+        await self._agent.sched.sleep_until(int(t_sim_ns))
+
+    def event_time(self, t_sim_ns: int) -> None:
+        """声明本次执行的最终结果产生于仿真时刻 t（例如 hover 终态事件的 `t_sim_ns`）；Mock 网络据此计算结果回传时刻，
+        而不是用处理器收到事件、交还租约之后的时刻（M14 §6.12.2、§6.13 规则 ⑥）。"""
+        if t_sim_ns and int(t_sim_ns) >= self.t_start_ns:
+            self._sink.t_event_ns = int(t_sim_ns)  # type: ignore[attr-defined]  # RecordingSink 字段
 
     def phase(self, p: Phase, eta_s: float | None = None, progress: float | None = None) -> None:
         self._agent.current_phase = Phase(p)
@@ -221,17 +322,14 @@ class HandlerCtx:
 
     async def station(self, target_enu_m: Sequence[float | None], alt_agl_m: float) -> Station:
         """观测点（FR-042）：z = max(ground_dtm(xy) + alt_agl_m, height_dsm(xy) + 10 m)；同时向守卫登记任务包络（A3，可信代码）。"""
-        x, y = float(target_enu_m[0]), float(target_enu_m[1])  # type: ignore[arg-type]
-        try:
-            g = (await self.sim.geo_height("ground_dtm", [[x, y]]))[0]
-            s = (await self.sim.geo_height("height_dsm", [[x, y]]))[0]
-        except Exception:
-            g, s = None, None
-        tz = target_enu_m[2] if len(target_enu_m) > 2 else None
-        ground = float(g) if g is not None else (float(tz) if tz is not None else 0.0)
-        dsm = float(s) if s is not None else ground
-        z = max(ground + alt_agl_m, dsm + DSM_CLEARANCE_M)
-        st = Station((x, y, z), (x, y, z), float(min(120.0, max(2.5, alt_agl_m))), ground, dsm)
+        st = await station_point(self._agent, target_enu_m, alt_agl_m)
+        self.register_station(st, alt_agl_m)
+        return st
+
+    def register_station(self, st: Station, alt_agl_m: float) -> None:
+        """向守卫登记本次委派的任务包络（A3）：以观测点为中心、按传感器视场与观测高度推出的半径。"""
+        x, y, z = st.pos
+        ground = st.ground_z
         ent = self._agent.cat.get(self._call.capability) or {}
         phys = ent.get("physical") or {}
         hfov = float(((phys.get("sensor") or {}).get("hfov_deg")) or 50.0)
@@ -240,7 +338,6 @@ class HandlerCtx:
         self._agent.guard.set_envelope(self._agent.aid, self._call.ix, Envelope(
             (x, y), max(r_env_m(alt_agl_m, hfov, float(env.get("r_env_m_max") or 300.0)), 1.0), ground,
             float(alt_rng[0]), max(float(alt_rng[1]), z - ground), env.get("speed_mps_max")))
-        return st
 
     def subscribe_detections(self, *, capability: str, target_id: str | None, near: Sequence[float]) -> DetectionSub:
         return self._agent.detections.open_sub(self.vehicle_id, capability, target_id, near)
@@ -252,12 +349,14 @@ class HandlerCtx:
         return Artifact(f"{family}/{self.task_id}/{det.seq}.pgm", THERMAL_FRAME_BYTES, sha256_cid(dict(params)),
                         "image/x-portable-graymap")
 
-    def effect_from(self, dets: Sequence[Detection], arts: Sequence[Artifact], dist_err_m: float | None) -> Effect:
+    def effect_from(self, dets: Sequence[Detection], arts: Sequence[Artifact], dist_err_m: float | None,
+                    t_end_ns: int | None = None) -> Effect:
         conf = max((d.conf for d in dets), default=0.0)
         rng = statistics.median(d.range_m for d in dets) if dets else 0.0
+        t_end = int(t_end_ns) if t_end_ns and int(t_end_ns) >= self.t_start_ns else self._agent.sched.now_ns()
         m = {"confidence": round(conf, 6), "detections": float(len(dets)), "range_m": round(rng, 3),
              "dist_err_m": round(float(dist_err_m if dist_err_m is not None else 0.0), 3),
-             "t_exec_s": round((self._agent.sched.now_ns() - self.t_start_ns) / 1e9, 3)}
+             "t_exec_s": round((t_end - self.t_start_ns) / 1e9, 3)}
         return Effect(EffectStatus.OK, verify_trust=4, auth_trust=1, simulated=True, native_ack=True, protocol="awr.sim",
                       requested=f"{self._call.capability}", observed_state=f"detections={len(dets)}", metrics=m, artifacts=tuple(arts))
 
@@ -278,9 +377,10 @@ class DroneAgent:
     def __init__(self, *, aid: str, agent_no: int, vehicle_id: str, profile_id: str, world_id: str, member_caps: Sequence[str],
                  manifest: Mapping[str, Any], bridge: SimBridge, guard: TrustedGuard, sched: Any, detections: DetectionHub,
                  ledger: Any = None, cat: Catalog | None = None, role: str = "generic",
-                 has_battery: bool | None = None) -> None:
+                 has_battery: bool | None = None, reads: SharedReads | None = None) -> None:
         from .handlers import HANDLERS
 
+        self.reads = reads if reads is not None else SharedReads(bridge)
         self.aid = aid
         self.id = aid
         self.agent_no = int(agent_no)
@@ -302,7 +402,35 @@ class DroneAgent:
         self.active: dict[str, _Active] = {}
         self.current_phase: Phase | None = None
         self.current_task: str | None = None
-        self.stats = {"invocations": 0}
+        self.stats = {"invocations": 0, "prepared": 0, "prepared_used": 0}
+        self._prepared: dict[str, asyncio.Future] = {}
+
+    # ------------------------------------------------------------ 委派在途预取（§6.12.2、§6.13 规则 ⑥）
+    def prepare(self, call: CapabilityCall) -> None:
+        """长任务委派在途（t_send 到投递 t_send + L − d_resp，约 0.9 s【仿真】）期间预取处理器的只读准备（观测点高度、
+        执行前复核估价）。投递时处理器直接取用，第一段回执与申请租约的时刻不含这些 sim-core 往返的墙钟 × 倍速。
+        预取不改变任何状态：健康、忙、包络登记、租约与命令仍在投递之后由处理器执行。"""
+        from .handlers import PREPARERS
+
+        fn = PREPARERS.get(call.capability)
+        if fn is None or call.capability not in self.member_caps or call.ix in self._prepared:
+            return
+        fut = asyncio.ensure_future(fn(self, call))
+        fut.add_done_callback(consume)
+        self._prepared[call.ix] = fut
+        self.stats["prepared"] += 1
+        self.sched.call_later(PREPARED_TTL_S, lambda ix=call.ix: self._drop_prepared(ix))
+
+    def take_prepared(self, ix: str) -> asyncio.Future | None:
+        fut = self._prepared.pop(ix, None)
+        if fut is not None:
+            self.stats["prepared_used"] += 1
+        return fut
+
+    def _drop_prepared(self, ix: str) -> None:
+        fut = self._prepared.pop(ix, None)
+        if fut is not None and not fut.done():
+            fut.cancel()
 
     # ------------------------------------------------------------ CapabilityProvider
     def capabilities(self) -> list[str]:

@@ -3,7 +3,7 @@
 插件入口（M10 §7.4.1）：sim-core 组合根按 `AWR_PLUGINS` 导入本包时调用 `install()`，登记
 
 - 状态块 `mission`（`tracker.STATE_FIELDS`，含 M08 tap 读取的 `mission_item`、`track_state`）；
-- stage：`mission`（027/2/0，125 Hz，写 `tr_x/tr_v/tr_a/yaw_sp`）、`mission_engine`（150/25/8）、`coverage`（155/50/13）、
+- stage：`mission`（027/2/1，125 Hz，奇数 tick，写 `tr_x/tr_v/tr_a/yaw_sp`；ADR-065）、`mission_engine`（150/25/8）、`coverage`（155/50/13）、
   `director`（160/25/8）；
 - 运动提供者 `m10.follow_path`、`m10.orbit`、`m10.goto_route`（M08-FR-086）与细校验执行者（M08-FR-089）；
 - 度量 `missions_done`、`mission_progress`、`facade_coverage`、`area_coverage`、`formation_err_rms_m`、`agl_min_m`、
@@ -22,7 +22,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-__all__ = ["install", "installed_runtime"]
+__all__ = ["install", "installed_runtime", "standby_warm"]
 
 _INSTALLED: dict[int, Any] = {}
 
@@ -44,10 +44,12 @@ def install() -> Any:
         return rt
     rt = M10Runtime()
     R.register_state_block("mission", owner="M10", fields=STATE_FIELDS)
-    R.register_stage("mission", every=2, phase=0, order=27, owner="M10", budget_core=0.012,
+    # phase 1（奇数 tick）：l1、contact、tap 在偶数 tick（phase 0）。跟踪器在 l1 之前一个 tick 写出同一参考（τ 推进同为
+    # 8 ms，机体位置在奇数 tick 不变），l1 看到的参考序列不变；125 Hz 的两组重核错开到奇偶 tick，单步峰值下降（ADR-065）
+    R.register_stage("mission", every=2, phase=1, order=27, owner="M10", budget_core=0.012,
                      writes=("tr_x", "tr_v", "tr_a", "yaw_sp"))(rt.st_tracker)
     R.register_stage("mission_engine", every=25, phase=8, order=150, owner="M10", budget_core=0.003)(rt.st_engine)
-    R.register_stage("coverage", every=50, phase=13, order=155, owner="M10", budget_core=0.005)(rt.st_coverage)
+    R.register_stage("coverage", every=50, phase=23, order=155, owner="M10", budget_core=0.005)(rt.st_coverage)  # ADR-070：13 → 23（与 mission_guard 错开）
     R.register_stage("director", every=25, phase=8, order=160, owner="M10", budget_core=0.002)(rt.st_director)
     q = Queries(rt)
     rt.queries = q
@@ -74,7 +76,38 @@ def install() -> Any:
         if spec is None or spec.owner == "M10":
             MET.register_metric(name, fn, owner="M10")
     _INSTALLED[id(reg)] = rt
+    _warm_kernels()
     return rt
+
+
+def _warm_kernels() -> None:
+    """跟踪核的 numba 预热（含运行期的只读视图签名）：装配即预热，使 sim-core 在 ready 之前完成编译或读缓存，
+    运行期不在主循环内 JIT（D1 验收第 1 轮 4.1；M10-NFR-015）。同一进程只做一次。"""
+    global _WARMED
+    if _WARMED:
+        return
+    _WARMED = True
+    try:
+        from awr.sim.planning import kernels_track as KT
+
+        if KT.HAVE_NUMBA:
+            KT.warmup()
+    except Exception:  # 预热失败不阻止装配：运行期按需编译（只损失时延）
+        import logging
+
+        logging.getLogger("awr.sim.mission").exception("m10 numba warmup failed")
+
+
+_WARMED = False
+
+
+def standby_warm() -> None:
+    """sim-core 热备用进程的预热钩子（M08-FR-005，AWR-03 ADR-070）：导入生成器模块、构造剧本校验器并做一次空校验，使接替后
+    的剧本加载不再承担这部分冷启动（约 0.15–0.25 s）。由 M08 在组合根装配后按插件名调用，不改变登记状态。"""
+    from . import generators, scenario_loader
+
+    del generators
+    scenario_loader.warm_validators()
 
 
 def installed_runtime() -> Any:

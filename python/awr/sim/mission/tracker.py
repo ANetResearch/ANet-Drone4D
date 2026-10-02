@@ -137,6 +137,7 @@ class TrajCache:
         self._next_id = 1
         self.hits = 0
         self.misses = 0
+        self._unpinned = 0  # 缓存中 pins == 0 的条目数：全部被钉住时 _evict 不再逐条扫描（1000 架在途，FX2-R2）
 
     def new_id(self) -> int:
         i = self._next_id
@@ -157,6 +158,7 @@ class TrajCache:
                       tr.get("group"), anchor_Q, float(tr["ts_s"]), dict(tr.get("source") or {}),
                       float(tr.get("len_m", 0.0)), float(tr.get("duration_s", 0.0)))
         self._d[key] = e
+        self._unpinned += 1
         self._evict()
         return e
 
@@ -166,6 +168,7 @@ class TrajCache:
             e = TrajEntry(key, self.new_id(), vehicle_id, float(ts_s), np.asarray(Q, np.float64), dict(yaw or {}),
                           duration_s=BS.duration(Q, ts_s))
             self._d[key] = e
+            self._unpinned += 1
             self._evict()
         return e
 
@@ -181,24 +184,31 @@ class TrajCache:
         return e
 
     def pin(self, e: TrajEntry) -> None:
+        if e.pins == 0 and self._d.get(e.key) is e:
+            self._unpinned -= 1
         e.pins += 1
 
     def unpin(self, e: TrajEntry | None) -> None:
         if e is not None and e.pins > 0:
             e.pins -= 1
+            if e.pins == 0 and self._d.get(e.key) is e:
+                self._unpinned += 1
             self._evict()
 
     def _evict(self) -> None:
-        while len(self._d) > self.maxlen:
+        while len(self._d) > self.maxlen and self._unpinned > 0:
             for k, e in self._d.items():
                 if e.pins == 0:
                     del self._d[k]
+                    self._unpinned -= 1
                     break
             else:
+                self._unpinned = 0
                 return
 
     def clear(self) -> None:
         self._d.clear()
+        self._unpinned = 0
 
     def __len__(self) -> int:
         return len(self._d)
@@ -230,6 +240,7 @@ class Tracker:
         self.pool = CtrlPool()
         self.cache = TrajCache()
         self.meta: dict[int, SlotMeta] = {}
+        self._paused_slots: set[int] = set()  # pause_slot 置位过的 slot（_hold_paused 只在其中仍暂停的机体存在时筛选）
         self.suspended: dict[str, dict] = {}   # cid → 暂停时保存的状态（resume 用）
         self.B: dict[str, np.ndarray] | None = None
         cap = N_GROUPS
@@ -510,7 +521,8 @@ class Tracker:
                     B["slot_off"], B["done"], self.pool.Q, self.G_tau, self.G_fmin, self.G_psi, self.G_w, self.G_off,
                     self.G_nseg, self.G_ts, self.G_wmax, self.G_taupsi, self.G_active, pe, dt, EMAX_XY, EMAX_Z,
                     A_BRAKE, 1.0, A_TAN, B["out_p"], B["out_v"], B["out_a"], B["out_psi"])
-        ACT.set_traj_enu(S, idx, B["out_p"][idx], B["out_v"][idx], B["out_a"][idx], B["out_psi"][idx])
+        # 输出按 slot 行直接写入（不先花式下标拷贝四个 N 行数组，与 set_traj_enu 逐位相同；FX2-R3）
+        ACT.set_traj_enu_rows(S, idx, B["out_p"], B["out_v"], B["out_a"], B["out_psi"])
         fin = idx[B["done"][idx] != 0]
         if fin.size:
             self._on_done(S, ctx, fin)
@@ -523,11 +535,13 @@ class Tracker:
             m = self.slot_meta(s)
             B["done"][s] = 0
             k = int(B["kind"][s])
-            if k == KT.K_BRAKE:
+            if k == KT.K_BRAKE and m.next_phase is None:
                 B["kind"][s] = KT.K_BRAKE     # 继续保持在静止点，等待规划结果
                 B["orb"][s, 6] = 1e9
                 B["done"][s] = 0
                 continue
+            # 刹停后接续的下一段（例如 goto route=auto 且粗校验已证明直线安全：先刹停再走直线段；FX-SIM2：此前刹停段
+            # 结束后一直停在静止点，调用以 202 截止失败）
             nxt = m.next_phase
             if nxt is not None:
                 m.next_phase = None
@@ -554,9 +568,11 @@ class Tracker:
             for s in hand:
                 m = self.slot_meta(s)
                 cid = m.cid
+                grp = int(B["group"][s]) >= 0
+                fin_p = B["out_p"][s].copy()
                 self.release(s, keep_meta=True)
                 self.stats["handovers"] += 1
-                self.rt.on_slot_finished(s, cid)
+                self.rt.on_slot_finished(s, cid, fin_p if grp else None)
 
     # ------------------------------------------------------------ 任务级暂停（FR-007：时钟斜坡停在轨迹上）
     def pause_slot(self, s: int) -> bool:
@@ -567,6 +583,7 @@ class Tracker:
         self.B["rate_tgt"][s] = 0.0
         m.phase_before_pause = m.phase
         m.paused = True
+        self._paused_slots.add(int(s))
         return True
 
     def resume_slot(self, S: Any, s: int, t_s: float) -> bool:
@@ -574,6 +591,7 @@ class Tracker:
         if self.B is None or m is None or not m.paused:
             return False
         m.paused = False
+        self._paused_slots.discard(int(s))
         self.B["rate_tgt"][s] = 1.0
         if int(S.ctrl_mode[s]) != M_TRAJ:
             ACT.begin_traj(S, np.array([s], np.int64), t_s)
@@ -582,6 +600,14 @@ class Tracker:
         return True
 
     def _hold_paused(self, S: Any, ctx: Any, idx: np.ndarray) -> None:
+        # 没有仍处于任务级暂停的机体时不筛选（只有 pause_slot 置 paused；其登记的 slot 中已恢复或已释放的不算）：
+        # 此前大机群每 125 Hz 对全部在跟踪机体做三次花式下标（FX-SIM1 只省掉了小机群的情形；FX2-R3）
+        ps = self._paused_slots
+        if not ps:
+            return
+        if not any(getattr(self.meta.get(s_), "paused", False) for s_ in ps):
+            ps.clear()
+            return
         B = self.B
         stop = idx[(B["rate"][idx] <= 0.0) & (B["rate_tgt"][idx] <= 0.0)]
         if stop.size == 0:
@@ -786,10 +812,13 @@ class OrbitProvider(_ProviderBase):
             if float(np.linalg.norm(p - entry)) < 1.0 and float(np.linalg.norm(S.enu.vel[s])) < 0.5:
                 rt.tracker.start_orbit(S, s, c, R, v, turns, cw, yb, th0)
             elif rt.coarse_proven(p, entry, s):
-                rt.tracker.start_line(S, s, p, entry, min(v, rt.speed_for(s, None)), {"mode": "path"})
+                # 入圆段按巡航速度飞（受限速配置约束）：环绕速度 v 是圆周切向速度（受 v²/R ≤ 3 与偏航角速度约束，ladder
+                # 为 1.2 m/s），不是入场速度；此前取 min(v, 巡航)，ladder 从 10 m AGL 爬到 60–105 m 需要 40–80 s（ADR-070）
+                rt.tracker.start_line(S, s, p, entry, rt.speed_for(s, None), {"mode": "path"})
                 m.next_phase = orb
             else:
                 p_stop = rt.tracker.start_brake(S, s)
-                rt.plan_for_call(call, s, "safe_transit", {"start": p_stop, "goal": entry, "speed_mps": v},
+                rt.plan_for_call(call, s, "safe_transit", {"start": p_stop, "goal": entry,
+                                                           "speed_mps": rt.speed_for(s, None)},
                                  np.stack([p_stop, entry]), then=orb)
         return "ORBIT"

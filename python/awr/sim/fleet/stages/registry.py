@@ -56,6 +56,7 @@ __all__ = [
     "register_slow_task",
     "register_stage",
     "register_state_block",
+    "register_state_ext_hook",
     "registry",
     "reset_registry",
     "safety_hooks",
@@ -137,6 +138,7 @@ class Registry:
     slow: list[SlowTaskSpec] = field(default_factory=list)
     queries: dict[str, QuerySpec] = field(default_factory=dict)
     commands: dict[str, CommandHandlerSpec] = field(default_factory=dict)
+    state_ext_hooks: list[tuple[str | None, Callable[..., None]]] = field(default_factory=list)
     energy: Any = None
     hooks: Any = None
 
@@ -233,7 +235,12 @@ def make_stage(name: str, every: int, phase: int, order: int, fn: Callable[..., 
                      (0, 1), builtin)
     if shards == 1:
         return [base]
-    step = max(1, every // (shards + 1))  # fleet_guard：every 25、4 片 -> phase 4、9、14、19（M08 §6.4.1）
+    # 分片相位间隔：every 为 50 Hz 周期（5 tick）的整数倍时取 5 的倍数，各片与首片落在同一 tick % 5 相位类（不与 50 Hz stage
+    # 同 tick；every 25 且 ≤ 4 片时为 5，与此前 fleet_guard 的 4、9、14、19 相同，ADR-070）；否则 every // (shards + 1)
+    if every % 5 == 0 and every // 5 > shards:
+        step = 5 * max(1, (every // 5) // (shards + 1))
+    else:
+        step = max(1, every // (shards + 1))
     per = budget / shards
     return [replace(base, name=f"{name}.{k}", order=order + k, phase=(phase + k * step) % every, budget_core=per,
                     shard=(k, shards)) for k in range(shards)]
@@ -320,6 +327,18 @@ def register_command_handler(op: str, fn: Callable[..., dict], *, owner: str | N
     if not op or op in ("fleet/add", "fleet/remove", "scenario/metric") or op.startswith("fleet/cmd"):
         raise ValueError(f"保留的 op：{op!r}")
     _REG.commands[op] = CommandHandlerSpec(op, fn, owner or infer_owner(getattr(fn, "__module__", None)), bool(need_seat))
+
+
+def register_state_ext_hook(fn: Callable[..., None], *, owner: str | None = None) -> None:
+    """`state/sim-core/ext` 打包钩子（追加的扩展点；M13-to-M08 第 2 条）：`fn(slots, t_sim_ns, out)` 在每片（≤ 16 架）打包时于
+    主循环线程调用，`out[i]` 为第 i 个 slot 正在装配的 state_ext 对象，钩子原地合并本模块负责的字段（M13：`loc.gnss_fix/sats/
+    eph_m/epv_m/hdop`、`loc.err_enu_m`、`sens`）；字段须已在 `uav_state_ext.schema.json` 登记。钩子不得使用 RNG 或阻塞。
+    同一函数重复登记被忽略（插件对登记表幂等）。"""
+    if not callable(fn):
+        raise TypeError("state_ext 钩子不可调用")
+    if any(f is fn for _o, f in _REG.state_ext_hooks):
+        return
+    _REG.state_ext_hooks.append((owner or infer_owner(getattr(fn, "__module__", None)), fn))
 
 
 def register_energy_model(model: EnergyModel) -> None:

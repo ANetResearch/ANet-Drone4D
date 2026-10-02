@@ -28,7 +28,8 @@
         },
         "agl_m": 80,
         "max_slope_deg": 15,
-        "clearance_m": 10
+        "clearance_m": 10,
+        "speed_mps": 6
       },
       "on_done": "rtl"
     }

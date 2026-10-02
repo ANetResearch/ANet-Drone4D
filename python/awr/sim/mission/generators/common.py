@@ -37,6 +37,7 @@ class VehicleCtx:
     cruise_mps: float = 5.0          # 限速配置的巡航速度（缺省任务速度）
     r_col_m: float = 0.49
     priority_key: tuple = ()
+    yawrate_max_rad_s: float = math.inf  # 自动模式偏航角速度上限（orbit 航向朝心时检查 v/R，ADR-062）
 
 
 @dataclass

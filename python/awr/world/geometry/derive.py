@@ -8,10 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from scipy import ndimage as ndi
 
 from .grids import Grid
-from .heightmap import dilate3, heightmap, inflate, max_pyramid
+from .heightmap import _ndi, dilate3, heightmap, inflate, max_pyramid
 from .types import GeoLoadError, GeoParams
 from .zones import ZoneIndex
 
@@ -60,7 +59,7 @@ def derive_arrays(dsm: Grid, dtm: Grid, zones: ZoneIndex, p: GeoParams, n: np.nd
     hag = a.astype(np.float64) - dtm.centres_bilinear(dsm)
     obs_ground = (n >= 1) & (hag < p.obs_ground_hag_m)
     if p.close_k and p.close_k > 1:
-        closed = ndi.grey_closing(a, size=(p.close_k, p.close_k), mode="nearest").astype(np.float32)
+        closed = _ndi().grey_closing(a, size=(p.close_k, p.close_k), mode="nearest").astype(np.float32)
         eff = np.where(obs_ground, a, closed).astype(np.float32)
     else:
         eff = a.copy()
@@ -68,7 +67,7 @@ def derive_arrays(dsm: Grid, dtm: Grid, zones: ZoneIndex, p: GeoParams, n: np.nd
     pyr_dsm = max_pyramid(eff, p.pyr_min_cells)
     pyr_hm = max_pyramid(hm, p.pyr_min_cells)
     pyrdil_hm = dilate3(pyr_hm, 2)
-    dsm_dil1 = ndi.maximum_filter(eff, size=3, mode="nearest").astype(np.float32)
+    dsm_dil1 = _ndi().maximum_filter(eff, size=3, mode="nearest").astype(np.float32)
     infl = inflate(eff, 1.0, dsm.cell)
     pyr_infl = max_pyramid(infl, p.pyr_min_cells)
     width_m, height_m = dsm.w * dsm.cell, dsm.h * dsm.cell
@@ -83,7 +82,7 @@ def derive_qa(dsm: np.ndarray, eff: np.ndarray, hag: np.ndarray, n: np.ndarray) 
     """空格率、屋顶坑（空格、自身非建筑、8 邻域 ≥ 6 个 HAG > 5 m 的建筑格）填补比例、抬升比例（M04 §6.11 表 1 口径）。"""
     empty = n == 0
     bld = hag > 5.0
-    nb = ndi.convolve(bld.astype(np.int16), np.ones((3, 3), np.int16), mode="nearest") - bld
+    nb = _ndi().convolve(bld.astype(np.int16), np.ones((3, 3), np.int16), mode="nearest") - bld
     pits = empty & ~bld & (nb >= 6)
     raised = (eff.astype(np.float64) - dsm) > 5.0
     obs_ground = (n >= 1) & (hag < 2.0)

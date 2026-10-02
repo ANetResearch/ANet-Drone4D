@@ -217,6 +217,11 @@ class ContactStage:
         self.ev = np.zeros((capacity, 2), np.int32)
         self.collider = UavCollider(capacity)
         self.uav_every = 5  # 机间碰撞 25 Hz（contact 每 5 次调用一次，D1-ext FR-037）
+        # 按 tick 定相（偶数 tick 2m，m % 5 == UAV_PHASE，即 tick ≡ 6 mod 10，落在 50 Hz guard 的相位上）：此前按调用计数，
+        # 相位取决于首次有机体的 tick（N = 1000 时恰与 env 同 tick，该类 tick 叠加约 0.5 ms），且计数不随 checkpoint 恢复
+        # （恢复后相位改变）。ADR-065。uav_phase < 0 时不在本 stage 检查（sim-core 的 pipeline 改由 `collide` stage 在奇数
+        # tick ≡ 9 mod 10 检查，ADR-070）
+        self.uav_phase = 3
         self.n_calls = 0
         self.flat = 1.0
         g = np.zeros((1, 1), np.float32)
@@ -232,12 +237,17 @@ class ContactStage:
             self.flat = 0.0
 
     def __call__(self, S: FleetState, ctx: StageCtx) -> None:
-        idx = l1_indices(S)
+        c = getattr(S, "l1_tick_cache", None)
+        if c is not None and c[0] == S.tick:
+            idx, rs = c[1], c[2]
+        else:
+            idx, rs = l1_indices(S), None
         if idx.size == 0:
             return
         PT = self.PT if self.PT is not None else ctx.profiles.PT
         t_s = ctx.t_ns * 1e-9
-        rs = rtl_phase_of(S)
+        if rs is None:
+            rs = rtl_phase_of(S)
         if self.kernel == "numba":
             nev = KC.contact(idx, t_s, S.p, S.v, S.p_prev, S.q, S.omega, S.thrust, S.thr_sp, S.thr_cap, S.home, self.dsm,
                              self.dsm_aff, self.dtm, self.dtm_aff, self.flat, S.ctrl_mode, S.ctrl_phase, S.mode_t, S.td_t,
@@ -250,16 +260,21 @@ class ContactStage:
         if nev and ctx.events is not None:
             self._emit(S, ctx, int(nev))
         self.n_calls += 1
-        if self.n_calls % self.uav_every == 0 and ctx.profiles is not None:
-            pairs = self.collider.check(S, idx, ctx.profiles.collision_r)
-            if pairs and ctx.events is not None:
-                for a, b in pairs:
-                    for s_ in (a, b):
-                        pos = [round(float(S.p[s_, 1]), 3), round(float(S.p[s_, 0]), 3), round(float(-S.p[s_, 2]), 3)]
-                        ctx.events.emit("sim.contact.collision", t_sim_ns=ctx.t_ns, severity=3, uav=S.ids[s_],
-                                        fields={"kind": "COLLISION_UAV", "pos_enu_m": pos,
-                                                "speed_mps": round(float(np.linalg.norm(S.v[s_])), 3),
-                                                "other": S.ids[b if s_ == a else a]})
+        if self.uav_phase >= 0 and (int(ctx.tick) // 2) % self.uav_every == self.uav_phase and ctx.profiles is not None:
+            self.check_uav(S, ctx, idx)
+
+    def check_uav(self, S: FleetState, ctx: StageCtx, idx: np.ndarray) -> None:
+        """机间碰撞检查与 `sim.contact.collision`（COLLISION_UAV）事件。"""
+        pairs = self.collider.check(S, idx, ctx.profiles.collision_r)
+        if pairs and ctx.events is not None:
+            for a, b in pairs:
+                for s_ in (a, b):
+                    pos = [round(float(S.p[s_, 1]), 3), round(float(S.p[s_, 0]), 3), round(float(-S.p[s_, 2]), 3)]
+                    ctx.events.emit("sim.contact.collision", t_sim_ns=ctx.t_ns, severity=3, uav=S.ids[s_],
+                                    fields={"kind": "COLLISION_UAV", "pos_enu_m": pos,
+                                            "speed_mps": round(float(np.linalg.norm(S.v[s_])), 3),
+                                            "other": S.ids[b if s_ == a else a]})
+
 
     def _emit(self, S: FleetState, ctx: StageCtx, nev: int) -> None:
         for k in range(nev):
@@ -271,3 +286,21 @@ class ContactStage:
                                 fields={"kind": kind, "pos_enu_m": pos, "speed_mps": round(float(np.linalg.norm(S.v[s])), 3)})
             elif code == KC.EV_TOUCHDOWN:
                 ctx.events.emit("sim.contact.touchdown", t_sim_ns=ctx.t_ns, severity=0, uav=S.ids[s], pos_enu_m=pos)
+
+
+class CollideStage:
+    """机间碰撞检查 stage（`collide`，every 10、phase 9，25 Hz；ADR-070）：在奇数 tick 检查，此前在 contact stage 内
+    （tick ≡ 6 mod 10，偶数 tick），与 l1 组、contact、guard 同 tick，N = 1000 时该类 tick 叠加约 0.5 ms。奇数 tick 不积分，
+    检查所见的位置与上一个偶数 tick 积分后的位置相同；后果（KILLED、推力 0）在下一个偶数 tick 生效。"""
+
+    def __init__(self, contact: ContactStage) -> None:
+        self.contact = contact
+        contact.uav_phase = -1
+
+    def __call__(self, S: FleetState, ctx: StageCtx) -> None:
+        if ctx.profiles is None:
+            return
+        idx = l1_indices(S)
+        if idx.size == 0:
+            return
+        self.contact.check_uav(S, ctx, idx)

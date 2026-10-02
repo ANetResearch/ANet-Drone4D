@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass
 from typing import Any
@@ -126,8 +127,9 @@ def segment_samples(a: np.ndarray, b: np.ndarray, v: float, t0: float = 0.0, dt:
 
 
 def rtl_samples(p: np.ndarray, home: np.ndarray, h_top_m: float, wind: WindProfile, ground_z_home: float,
-                v_cruise_mps: float = 5.0, t0: float = 0.0) -> tuple[np.ndarray, float]:
-    """12 §5.8.3 的返航路径抽样；返回 (samples, z_rtl)。"""
+                v_cruise_mps: float = 5.0, t0: float = 0.0, via: tuple[float, float] | None = None) -> tuple[np.ndarray, float]:
+    """12 §5.8.3 的返航路径抽样；返回 (samples, z_rtl)。`via`（绕行点 ENU 水平坐标，ADR-054）给出时巡航段为 p → via → home，
+    `h_top_m` 须为两段走廊上界的较大者。"""
     p = np.asarray(p, np.float64)
     home = np.asarray(home, np.float64)
     z_rtl = max(float(p[2]), float(home[2]) + RTL_ALT_M, float(h_top_m) + 5.0)
@@ -137,16 +139,21 @@ def rtl_samples(p: np.ndarray, home: np.ndarray, h_top_m: float, wind: WindProfi
     if len(up):
         parts.append(up)
         t = float(up[-1, 0])
-    a = np.array([p[0], p[1], z_rtl])
-    b = np.array([home[0], home[1], z_rtl])
-    d = b[:2] - a[:2]
-    L = float(np.linalg.norm(d))
-    if L > 1e-9:
+    pts = [np.array([p[0], p[1], z_rtl])]
+    if via is not None:
+        pts.append(np.array([float(via[0]), float(via[1]), z_rtl]))
+    pts.append(np.array([home[0], home[1], z_rtl]))
+    b = pts[-1]
+    for a, c in itertools.pairwise(pts):
+        d = c[:2] - a[:2]
+        L = float(np.linalg.norm(d))
+        if L <= 1e-9:
+            continue
         u = d / L
         wx, wy = wind.at(np.array([z_rtl - ground_z_home]))
         w_head = max(0.0, -(float(wx[0]) * u[0] + float(wy[0]) * u[1]))
         vc = max(1.0, v_cruise_mps - w_head)
-        h = segment_samples(a, b, vc, t)
+        h = segment_samples(a, c, vc, t)
         parts.append(h)
         t = float(h[-1, 0])
     z10 = float(home[2]) + 10.0

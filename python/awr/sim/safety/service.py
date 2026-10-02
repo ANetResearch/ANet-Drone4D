@@ -66,6 +66,7 @@ class SafetyRuntime:
         self.tick = 0
         self.t_ns = 0
         self._act_tick = -1
+        self._act_key: tuple | None = None  # (_refresh_active) active、fidelity、inited 的字节快照
         self.act_idx = np.zeros(0, np.int64)
         self.default_policy = svc.default_policy
         self.sink = SafetyEventSink()
@@ -82,14 +83,18 @@ class SafetyRuntime:
         self.health = HealthGraph()
         self.act_ = MockActuator(None, self.sb["sup_expect"])
         self.guards = {n: StageGuard(self, n, f) for n, f in (
-            ("guard", self._st_guard), ("fsm", self._st_fsm), ("battery", self.bat.step), ("mission_guard", self.mg.step),
+            ("guard", self._st_guard), ("fsm", self._st_fsm), ("battery", self.bat.step), ("battery_rtl", self.bat.step_rtl),
             ("faults", self.faults.step))}
+        self.mg_guard = StageGuard(self, "mission_guard", lambda ctx: self.mg.step(ctx, ctx.shard))
         self.fg_guard = StageGuard(self, "fleet_guard", lambda ctx: self.fg.step(ctx, ctx.shard[0]))
         self.degraded = False
         self._last_t = -1
 
     # ---------------------------------------------------------------- 每次调用的上下文
     def begin(self, ctx: Any) -> None:
+        if ctx is self.ctx and self._act_tick == self.tick and getattr(ctx, "tick", 0) == self.tick \
+                and getattr(ctx, "t_ns", 0) == self.t_ns:
+            return  # 同一 tick 内的后续 M09 stage：上下文与活动集不变（FX-SIM1）
         self.ctx = ctx
         self.tick = int(getattr(ctx, "tick", 0))
         t = int(getattr(ctx, "t_ns", 0))
@@ -116,19 +121,27 @@ class SafetyRuntime:
 
     def _refresh_active(self) -> None:
         S, sb = self.S, self.sb
-        m = S.active & ((S.fidelity & _L0) == 0)
-        new = np.flatnonzero(m & ~sb["inited"])
+        # active、fidelity 与 inited 三个数组与上次刷新后逐字节相同时活动集不变、也没有待初始化的行（1 KB 级 memcmp；
+        # 此前每 tick 重新筛选，N = 1000 约 50 µs，FX2-R3）
+        key = (S.active.tobytes(), S.fidelity.tobytes(), sb["inited"].tobytes())
+        if key == self._act_key:
+            self._act_tick = self.tick
+            return
+        act = np.flatnonzero(S.active)  # 先取活动槽位再在小集合上筛选（与整容量布尔运算等价，FX-SIM1）
+        act = act[(S.fidelity[act] & _L0) == 0]
+        new = act[~sb["inited"][act]]
         if new.size:
             self.fsm.init_rows(new)
-        self.act_idx = np.flatnonzero(m)
+        self.act_idx = act
         self._act_tick = self.tick
+        self._act_key = (S.active.tobytes(), S.fidelity.tobytes(), sb["inited"].tobytes())
 
     def _on_reset(self) -> None:
         self.link.reset()
         self.sink.reset()
         self.faults.reset()
         self.fg.reset()
-        self.fg.pair_min.clear()
+        self.fg.reset_pairs()
 
     # ---------------------------------------------------------------- stage 实现
     def _st_guard(self, ctx: Any) -> None:
@@ -149,6 +162,8 @@ class SafetyRuntime:
         self.begin(ctx)
         if name == "fleet_guard":
             self.fg_guard(ctx)
+        elif name == "mission_guard":
+            self.mg_guard(ctx)
         else:
             self.guards[name](ctx)
 
@@ -221,26 +236,28 @@ class SafetyRuntime:
         return np.asarray(T.collision_r, np.float64)[self.S.profile_id]
 
     def wind_head(self, slots: np.ndarray, z: np.ndarray) -> np.ndarray:
-        """返航方向在 z_rtl 处的逆风分量（≥ 0）；环境服务不可用时为 0（M07 未装配）。"""
-        env = getattr(self.ctx, "env", None)
-        if env is None or not hasattr(env, "query"):
-            return np.zeros(len(slots))
-        S = self.S
+        """返航方向在 z_rtl 处的逆风分量（≥ 0）；环境服务不可用时为 0（M07 未装配）。全部机体一次批量查询（FX-SIM1），
+        查询失败时整批为 0（与逐机查询逐机失败的结果相同）。"""
+        slots = np.asarray(slots, np.int64)
         out = np.zeros(len(slots))
-        for k, s in enumerate(np.asarray(slots, np.int64)):
-            p = S.enu.pos[s].copy()
-            h = S.enu.home[s]
-            p[2] = float(z[k])
-            d = h[:2] - p[:2]
-            n = float(np.linalg.norm(d))
-            if n < 1e-6:
-                continue
-            try:
-                w = env.query(p[None], None, fields=1)
-                w = np.asarray(getattr(w, "wind_enu", w), np.float64).reshape(-1)[:2]
-                out[k] = max(0.0, -float(np.dot(w, d / n)))
-            except Exception:
-                out[k] = 0.0
+        env = getattr(self.ctx, "env", None)
+        if env is None or not hasattr(env, "query") or len(slots) == 0:
+            return out
+        S = self.S
+        P = S.enu.pos[slots].copy()
+        P[:, 2] = np.asarray(z, np.float64)
+        d = S.enu.home[slots, :2] - P[:, :2]
+        n = np.hypot(d[:, 0], d[:, 1])
+        ok = n >= 1e-6
+        if not ok.any():
+            return out
+        try:
+            w = env.query(P[ok], None, fields=1)
+            w = np.asarray(getattr(w, "wind_enu", w), np.float64).reshape(int(ok.sum()), -1)[:, :2]
+            u = d[ok] / n[ok, None]
+            out[ok] = np.maximum(0.0, -(w * u).sum(1))
+        except Exception:
+            out[ok] = 0.0
         return out
 
     @property
@@ -259,10 +276,18 @@ class SafetyRuntime:
         return self._wind_rating
 
     def wind_at(self, slots: np.ndarray) -> np.ndarray | None:
-        """机体处 ENU 平均风（k×3）；环境服务（M07）不可用时 None。"""
+        """机体处 ENU 平均风（k×3）；环境服务（M07）不可用时 None。
+
+        注意（FX2-R3 发现，未改语义）：M07 `EnvironmentServiceImpl.query` 的仿真时刻为必填参数且返回 EnvSampleSoA，本调用
+        传 None 并按数组取值，对真实环境服务恒在 `int(None)` 处抛 TypeError 并落到下面的 except，因此恒返回 None，
+        WIND_LIMIT 告警（ext）在 sim-core 中从未生效（只有单元测试的环境替身可用）。是否启用该告警涉及风暴剧本（wx-storm）
+        的安全终止谓词，属产品决定（FX2-R2 第 6 节第 3 条）；在决定之前保持既有行为，但对真实环境服务不再每 10 Hz 构造一次
+        必然失败的查询（其中按机数分配整套结果缓冲，N = 1000 时约 0.17 ms）。"""
         env = getattr(self.ctx, "env", None)
         if env is None or not hasattr(env, "query") or len(slots) == 0:
             return None
+        if hasattr(env, "kf") and hasattr(env, "rows"):
+            return None  # 真实 M07 服务：见上（查询必然失败，结果恒为 None）
         try:
             w = env.query(self.S.enu.pos[slots], None, fields=1)
             w = np.asarray(getattr(w, "wind_enu", w), np.float64).reshape(len(slots), -1)[:, :3]
@@ -545,17 +570,26 @@ class SafetyService:
         if rt is None:
             return out
         bb, sb = rt.bb, rt.sb
-        ages = rt.link.age_ms_of(np.asarray(slots, np.int64))
-        for k, s in enumerate(np.asarray(slots, np.int64)):
-            s = int(s)
+        sl = np.asarray(slots, np.int64).reshape(-1)
+        ages = rt.link.age_ms_of(sl)
+        # 逐机标量按片取出（state_ext 全机 2 Hz 分片编码，ADR-051；字段与取值同逐机实现）
+        has = bb["has_bat"][sl].tolist()
+        # 舍入按片向量化（np.round；Python round(x, n) 每次约 1 µs）
+        vv = np.round(bb["voltage_v"][sl].astype(np.float64), 3).tolist()
+        ca = np.round(bb["current_a"][sl].astype(np.float64), 3).tolist()
+        soc = np.round(100.0 * bb["soc"][sl].astype(np.float64), 1).tolist()
+        trem = np.round(np.minimum(bb["t_rem_s"][sl].astype(np.float64), 1e7), 1).tolist()
+        wh = np.round(bb["wh_used"][sl].astype(np.float64), 3).tolist()
+        fcu_bad = ((sb["fault_mask"][sl] & SafetyRuntime.FAULT_FCU) != 0).tolist()
+        ign = (sb["policy"][sl].astype(np.int64) == int(GcsLossPolicy.IGNORE)).tolist()
+        age = np.asarray(ages).tolist()
+        for k, s in enumerate(sl.tolist()):
             bat = None
-            if bb["has_bat"][s]:
-                bat = {"voltage_v": round(float(bb["voltage_v"][s]), 3), "current_a": round(float(bb["current_a"][s]), 3),
-                       "soc_pct": round(100.0 * float(bb["soc"][s]), 1),
-                       "t_remain_s": round(min(float(bb["t_rem_s"][s]), 1e7), 1), "wh_used": round(float(bb["wh_used"][s]), 3)}
-            fcu = 0 if not (sb["fault_mask"][s] & SafetyRuntime.FAULT_FCU) else None
-            out[s] = {"battery": bat, "link": {"gcs_age_ms": None if ages[k] < 0 else int(ages[k]), "fcu_age_ms": fcu},
-                      "gcs_loss_policy": "ignore" if int(sb["policy"][s]) == int(GcsLossPolicy.IGNORE) else "hold_rtl"}
+            if has[k]:
+                bat = {"voltage_v": vv[k], "current_a": ca[k], "soc_pct": soc[k], "t_remain_s": trem[k], "wh_used": wh[k]}
+            out[s] = {"battery": bat, "link": {"gcs_age_ms": None if age[k] < 0 else int(age[k]),
+                                               "fcu_age_ms": None if fcu_bad[k] else 0},
+                      "gcs_loss_policy": "ignore" if ign[k] else "hold_rtl"}
         return out
 
     # ================================================================ ext：故障注入入口与 checkpoint
@@ -580,6 +614,26 @@ class SafetyService:
         except FaultError as e:
             return {"v": 1, "code": e.code, "detail": e.detail}
 
+    def fault_command(self, op: str) -> Any:
+        """`ctl/sim-core/cmd` 的 `fault/inject`、`fault/clear` 处理者（M08 `register_command_handler`；M08-to-M09 第 1 条）：
+        `fn(msg, apply_tick, ctx) -> {status, code, detail?, result{fault_id, apply_tick}}`，语义同查询 `safety/fault`。"""
+        kind = "inject" if op == "fault/inject" else "clear"
+
+        def handler(msg: dict, apply_tick: int, ctx: Any = None) -> dict:
+            a = msg.get("args") if isinstance(msg.get("args"), dict) else {}
+            m = {"op": kind, "uav": msg.get("uav") or a.get("uav") or a.get("vehicle_id"), "kind": a.get("kind"),
+                 "params": a.get("params"), "at_s": a.get("at_s"), "duration_s": a.get("duration_s"),
+                 "fault_id": a.get("fault_id")}
+            r = self.fault_query({"principal": msg.get("principal"), "args": m}, ctx)
+            code = int(r.get("code", 0) or 0)
+            if code:
+                return {"status": "rejected", "code": code, "detail": r.get("detail")}
+            return {"status": "accepted", "code": 0,
+                    "result": {k: r[k] for k in ("fault_id", "apply_tick") if r.get(k) is not None}}
+
+        handler.__module__ = __name__
+        return handler
+
     def checkpoint(self) -> bytes:
         rt = self.rt
         if rt is None:
@@ -591,7 +645,7 @@ class SafetyService:
                 "link": {"seat": [rt.link.seat.t_last, rt.link.seat.state, rt.link.seat.primed],
                          "agent": [rt.link.agent.t_last, rt.link.agent.state, rt.link.agent.primed]},
                 "counts": rt.sink.counts, "by_code": rt.sink.by_code, "min_sep": rt.fg.min_sep_seen,
-                "pair_min": [[a, b, v] for (a, b), v in rt.fg.pair_min.items()]}
+                "slot_min_np": rt.fg.slot_min.astype("<f8").tobytes()}
         return msgpack.packb(blob, use_bin_type=True)
 
     def restore(self, blob: bytes) -> None:
@@ -612,7 +666,11 @@ class SafetyService:
         rt.sink.counts.update(d.get("counts", {}))
         rt.sink.by_code.update(d.get("by_code", {}))
         rt.fg.min_sep_seen = float(d.get("min_sep", math.inf))
-        rt.fg.pair_min = {(int(a), int(b)): float(v) for a, b, v in d.get("pair_min", [])}
+        sm = d.get("slot_min_np")
+        if sm is not None and len(sm) == rt.fg.slot_min.nbytes:
+            rt.fg.slot_min[:] = np.frombuffer(sm, np.dtype("<f8"))
+        else:  # 旧格式：机对列表
+            rt.fg.pair_min = {(int(a), int(b)): float(v) for a, b, v in d.get("pair_min", [])}
 
     def owner_name(self, slot: int) -> str:
         rt = self.rt

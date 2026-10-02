@@ -22,25 +22,25 @@
     {
       "vehicle_id": "p600-a-02",
       "profile_id": "p600_mid360",
-      "home_enu_m": [-2835, 1398, null],
+      "home_enu_m": [-2829, 1398, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-a-03",
       "profile_id": "p600_mid360",
-      "home_enu_m": [-2829, 1398, null],
+      "home_enu_m": [-2817, 1398, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-a-04",
       "profile_id": "p600_mid360",
-      "home_enu_m": [-2841, 1404, null],
+      "home_enu_m": [-2841, 1410, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-a-05",
       "profile_id": "p600_mid360",
-      "home_enu_m": [-2835, 1404, null],
+      "home_enu_m": [-2829, 1410, null],
       "speed_profile": "px4_default"
     },
     {
@@ -52,13 +52,13 @@
     {
       "vehicle_id": "p600-b-02",
       "profile_id": "p600_mid360",
-      "home_enu_m": [1036, -1230, null],
+      "home_enu_m": [1042, -1230, null],
       "speed_profile": "px4_default"
     },
     {
       "vehicle_id": "p600-b-03",
       "profile_id": "p600_mid360",
-      "home_enu_m": [1042, -1230, null],
+      "home_enu_m": [1054, -1230, null],
       "speed_profile": "px4_default"
     }
   ],

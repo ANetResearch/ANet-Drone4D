@@ -4,10 +4,12 @@
 （110）→ 计算观测点 → 调用 `ctl/sim-core/estimate`（`vehicle_id`、`target_enu_m` 为观测点、`dwell_s`、`capability`、
 `speed_mps = null`）→ 返回 OK 效果，`metrics = {eta_s, energy_wh, soc_after_pct, feasible, code, conf_expected, load, wind_mps,
 rain_mmh, mor_m}`。估价回复缺 `conf_expected`、`env_target` 时按 §6.10.5 退化式与 `env/query` 补齐。可行性只由 estimate 判定。
+观测点高度经 SharedReads 缓存，环境查询与估价并行发出（§6.13 规则 ⑥：报价在 t_send + L 之前完成，到达时刻与倍速无关）。
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -15,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from awr.contracts.enums import FLIGHTSTATE_BY_NAME
 
+from ..drone_agent import consume
 from ..scoring import EnvAtTarget, conf_expected_fallback
 from ..types import CapabilityCall, Effect, EffectStatus
 
@@ -77,21 +80,30 @@ async def task_quote(agent: DroneAgent, call: CapabilityCall, ctx: HandlerCtx) -
                               "conf_expected": 0.0, "load": load})
         return
     st = await ctx.station(tgt, alt)
+    # 估价与目标处环境互不依赖，并行发出（估价回复缺 env_target 时才用环境查询的结果；同一目标的并发查询由 SharedReads 合并）
+    env_f = asyncio.ensure_future(agent.reads.env(st.pos))
+    env_f.add_done_callback(consume)
     try:
         est = await agent.bridge.estimate(agent.vehicle_id, st.pos, dwell, cap, None)
     except Exception as ex:
+        env_f.cancel()
         log.warning("estimate failed", extra={"kv": {"uav": agent.vehicle_id, "err": repr(ex)}})
         yield Effect(EffectStatus.UNAVAILABLE, message="code=211")
         return
     code = int(est.get("code", 0) or 0)
     if "eta_s" not in est and code in (111, 211, 213):
+        env_f.cancel()
         yield Effect(EffectStatus.UNAVAILABLE, message=f"code={code}")
         return
     env_t = est.get("env_target")
     if isinstance(env_t, dict):
+        env_f.cancel()
         env = EnvAtTarget(_num(env_t.get("wind_mps"), 0.0), _num(env_t.get("rain_mmh"), 0.0), _num(env_t.get("mor_m"), 20000.0))
     else:
-        env = await agent.bridge.env_at(st.pos) or EnvAtTarget()
+        try:
+            env = await env_f or EnvAtTarget()
+        except Exception:
+            env = EnvAtTarget()
     sensor = (agent.manifest_skill(cap) or {}).get("physical", {}).get("sensor") if hasattr(agent, "manifest_skill") else None
     sensor = sensor or (phys.get("sensor") or {})
     conf = est.get("conf_expected")

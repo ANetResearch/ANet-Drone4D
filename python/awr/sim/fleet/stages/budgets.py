@@ -26,12 +26,14 @@ BUDGET_CORE: dict[str, float] = {
     "aero": 0.010,
     "integrate": 0.008,
     "kinematic": 0.002,
-    "contact": 0.010,
+    "contact": 0.007,
+    "collide": 0.003,  # ADR-070：机间碰撞从 contact 拆出（25 Hz、奇数 tick），合计不变
     "sensors": 0.010,
     "guard": 0.050,
     "fsm": 0.005,
     "fsm_min": 0.0025,
-    "battery": 0.006,
+    "battery": 0.004,
+    "battery_rtl": 0.002,  # ADR-070：RTL 轮转刷新从 battery 拆出为独立的 10 Hz stage（相位 23），合计不变
     "mission_guard": 0.005,
     "cmd_watch": 0.005,
     "fleet_guard": 0.012,

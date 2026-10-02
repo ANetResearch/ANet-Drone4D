@@ -11,7 +11,9 @@
 - 时钟斜坡：`dτ/dt = rate`，rate 以斜率 `a_brake / max(|v(τ)|, 0.5)` 在 0 与 1 之间变化（暂停停在轨迹上）；
   时间缩放后 `v_out = v·r`，`a_out = a·r² + v·ṙ`；
 - 航向：0 保持；1 lookahead（`ψ = atan2(p(τ + t_fwd) − p(τ))`，水平位移 < 0.1 m 时保持）；2 切向；
-  3 看向点或竖直轴线（`yaw_arg[0:2]`）；4 固定（`yaw_arg[0]`）；
+  3 看向点或竖直轴线（`yaw_arg[0:2]`）；4 固定（`yaw_arg[0]`）；输出航向按 YAW_RATE_MAX（45°/s，PX4 自动模式航向
+  速率量级）限幅地逼近目标航向（FX-SIM2：环绕入圆时目标航向一步翻转 180°，姿态环耦合出 28° 倾角误差，触发 M09
+  FastGuard `TILT_ERR_KILL`）；
 - 环绕：`ω ← ω + clip(ω_t·rate − ω, ±(a_tan/R)·dt)`，`θ ← θ + dir·ω·dt·f`，`θ_acc ← θ_acc + ω·dt·f`；
   `turns > 0` 时剩余转角不大于刹车角 `ω²/(2·a_max)` 即 `ω_t ← 0`（累计转角停在 2π·turns），ω 降到 0 后置 done；
 - 群组时钟：成员的 `rate·f` 取最小值推进 `τ_g`（任一成员落后，全队一起放慢）；编队航向二阶临界阻尼滤波。
@@ -33,6 +35,7 @@ K_NONE, K_BSPLINE, K_ORBIT, K_FORM, K_BRAKE, K_LINE = 0, 1, 2, 3, 4, 5
 Y_NONE, Y_LOOKAHEAD, Y_PATH, Y_POINT, Y_FIXED = 0, 1, 2, 3, 4
 ORB_COLS = 9
 TWO_PI = 2.0 * math.pi
+YAW_RATE_MAX = math.radians(45.0)
 
 try:
     from numba import njit as _njit
@@ -320,6 +323,12 @@ def track_step(idx, kind, off, nseg, ts, tau, rate, rate_tgt, rate_dot, yaw_mode
                 ps = math.atan2(dy, dx)
         elif ym == 4:
             ps = yaw_arg[k, 0]
+        dps = _wrap(ps - psi[k])
+        lim = YAW_RATE_MAX * dt
+        if dps > lim:
+            ps = _wrap(psi[k] + lim)
+        elif dps < -lim:
+            ps = _wrap(psi[k] - lim)
         psi[k] = ps
         out_psi[k] = ps
     # 群组时钟与编队航向滤波
@@ -547,6 +556,10 @@ def track_step_numpy(idx, kind, off, nseg, ts, tau, rate, rate_tgt, rate_dot, ya
         ps[sel] = np.arctan2(dy[ok], dx[ok])
     fx = ym == 4
     ps[fx] = yaw_arg[idx[fx], 0]
+    prev = psi[idx]
+    dps = (ps - prev + math.pi) % TWO_PI - math.pi
+    lim = YAW_RATE_MAX * dt
+    ps = (prev + np.clip(dps, -lim, lim) + math.pi) % TWO_PI - math.pi
     psi[idx] = ps
     out_psi[idx] = ps
     # ---- 群组
@@ -592,5 +605,11 @@ def warmup() -> float:
     args["orb"][1, 3] = 3.0
     args["orb"][1, 5] = 0.5
     args["orb"][1, 8] = 1.0
+    track_step(**args)
+    # 运行期签名：跟踪器 stage 传入 M08 的只读 ENU 视图 `S.enu.pos`（numba 把只读数组当作另一种类型）。只预热可写
+    # 变体时，S1 起飞后首次进入跟踪会在主循环内编译，被 supervisor 的 2 s 活性阈值杀掉（D1 验收第 1 轮 4.1）
+    pr = np.zeros((n, 3))
+    pr.flags.writeable = False
+    args["p_enu"] = pr
     track_step(**args)
     return time.perf_counter() - t0

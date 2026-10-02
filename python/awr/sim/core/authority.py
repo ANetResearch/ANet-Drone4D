@@ -25,6 +25,7 @@ __all__ = ["LEASE_EXEMPT", "LeaseManager", "Seat"]
 
 LEASE_EXEMPT = frozenset({"land", "hover", "rtl", "safety_stop", "cancel", "resume"})
 PRIORITY = {Owner.NONE: 0, Owner.SWARM: 1, Owner.MISSION: 2, Owner.AGENT: 3, Owner.OPERATOR: 4}
+_PRIORITY_INT = {int(k): v for k, v in PRIORITY.items()}  # lease_json 热路径（state_ext 全机 2 Hz）免枚举构造
 WRITE_ROLES = ("operator", "admin")
 
 
@@ -56,6 +57,7 @@ class LeaseManager:
         self._owner = np.zeros(capacity, np.uint8)
         self._suspended = np.zeros(capacity, np.bool_)
         self.hooks = hooks
+        self.gen = 0  # 逐机租约的修改代数（acquire、release、孤儿化；checkpoint 据此复用上一代的租约表）
 
     def _notify(self, kind: str, slots, owner: str | None, holder: str | None) -> None:
         """租约事件同步通知 M09（`SafetyHooks.on_lease_event`，M08-FR-090）。"""
@@ -114,6 +116,7 @@ class LeaseManager:
         for L in self._lease.values():
             if L.owner == Owner.OPERATOR and L.holder == principal_id:
                 L.holder = None  # 孤儿租约：owner 仍为 OPERATOR（AWR-12 T05）
+                self.gen += 1
 
     # ------------------------------------------------------------ 逐机租约
     def lease(self, slot: int) -> _Lease:
@@ -134,7 +137,7 @@ class LeaseManager:
         return 0
 
     def acquire(self, slot: int, owner: int, holder: str | None, *, uav: str | None = None, t_ns: int = 0,
-                emit: EmitFn | None = None) -> int:
+                emit: EmitFn | None = None, by: str | None = None) -> int:
         L = self.lease(slot)
         if L.owner == owner and L.holder == holder:
             return 0
@@ -147,19 +150,21 @@ class LeaseManager:
             L.stack.append((L.owner, L.holder))
         prev_owner, prev_holder = L.owner, L.holder
         L.owner, L.holder = int(owner), holder
+        self.gen += 1
         self._owner[slot] = int(owner)
         if emit is not None:
+            who = by if by is not None else holder
             if preempted:
                 emit("lease.preempted", t_sim_ns=t_ns, severity=1, uav=uav, owner=OWNER_NAMES[prev_owner],
-                     holder=prev_holder)
-            emit("lease.acquired", t_sim_ns=t_ns, severity=1, uav=uav, owner=OWNER_NAMES[int(owner)], holder=holder)
+                     holder=prev_holder, by=who)
+            emit("lease.acquired", t_sim_ns=t_ns, severity=1, uav=uav, owner=OWNER_NAMES[int(owner)], holder=holder, by=who)
         if preempted:
             self._notify("preempted", slot, OWNER_NAMES[prev_owner], prev_holder)
         self._notify("acquired", slot, OWNER_NAMES[int(owner)], holder)
         return 0
 
     def release(self, slot: int, holder: str | None, *, return_to: str = "previous", uav: str | None = None,
-                t_ns: int = 0, emit: EmitFn | None = None) -> int:
+                t_ns: int = 0, emit: EmitFn | None = None, by: str | None = None) -> int:
         L = self.lease(slot)
         if L.owner == Owner.NONE:
             return int(Reason.STATE)
@@ -169,9 +174,11 @@ class LeaseManager:
             L.owner, L.holder = L.stack.pop()
         else:
             L.owner, L.holder, L.stack = int(Owner.NONE), None, []
+        self.gen += 1
         self._owner[slot] = L.owner
         if emit is not None:
-            emit("lease.released", t_sim_ns=t_ns, severity=1, uav=uav, owner=OWNER_NAMES[L.owner], holder=L.holder)
+            emit("lease.released", t_sim_ns=t_ns, severity=1, uav=uav, owner=OWNER_NAMES[L.owner], holder=L.holder,
+                 by=by if by is not None else holder)
         self._notify("released", slot, OWNER_NAMES[L.owner], L.holder)
         return 0
 
@@ -245,7 +252,7 @@ class LeaseManager:
 
     def lease_json(self, slot: int) -> dict[str, Any]:
         L = self.lease(slot)
-        return {"owner": OWNER_NAMES[L.owner], "holder": L.holder, "priority": PRIORITY.get(Owner(L.owner), 0),
+        return {"owner": OWNER_NAMES[L.owner], "holder": L.holder, "priority": _PRIORITY_INT.get(int(L.owner), 0),
                 "ttl_ms": None}
 
     @staticmethod

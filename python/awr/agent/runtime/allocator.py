@@ -92,7 +92,8 @@ class ContractNetAllocator:
             cands = [v] if v is not None else []
         else:
             pat = find_pattern(spec.capability)
-            cands = await self.net.find(requester, pat)
+            # 首次分配的 find 自触发时刻起算（§6.13 规则 ⑥）；重新分配（resume）从当前时刻起算
+            cands = await self.net.find(requester, pat, t0_ns=None if resume else task.t_anchor_ns)
             cands = [c for c in cands if c.aid != requester and not c.coordinator]
             if stop():
                 return

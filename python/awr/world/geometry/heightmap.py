@@ -10,9 +10,29 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from scipy import ndimage as ndi
 
 from .types import NEG
+
+
+def _ndi():
+    """scipy.ndimage 按需导入：只有派生（缓存未命中）与非缺省 buffer 的膨胀需要；装载缓存的进程（sim-core 重启，
+    D1-AC-11a）不为此付出约 0.4 s 的导入（FX-SIM1）。"""
+    from scipy import ndimage
+
+    return ndimage
+
+
+def max3(a: np.ndarray) -> np.ndarray:
+    """3×3 最大值滤波，边界按最近格延拓；与 `scipy.ndimage.maximum_filter(a, size=3, mode="nearest")` 逐位相同。"""
+    a = np.asarray(a)
+    p = np.pad(a, 1, mode="edge")
+    H, W = a.shape
+    out = p[1:H + 1, 1:W + 1].copy()
+    for dr in (0, 1, 2):
+        for dc in (0, 1, 2):
+            if dr != 1 or dc != 1:
+                np.maximum(out, p[dr:dr + H, dc:dc + W], out=out)
+    return out
 
 
 def max_pyramid(a: np.ndarray, min_cells: int = 64) -> list[np.ndarray]:
@@ -29,7 +49,7 @@ def max_pyramid(a: np.ndarray, min_cells: int = 64) -> list[np.ndarray]:
 
 
 def heightmap(dsm_eff: np.ndarray, dilate_cells: int = 2, safe_m: float = 10.0) -> np.ndarray:
-    return (ndi.maximum_filter(np.asarray(dsm_eff, np.float32), size=2 * dilate_cells + 1, mode="nearest")
+    return (_ndi().maximum_filter(np.asarray(dsm_eff, np.float32), size=2 * dilate_cells + 1, mode="nearest")
             + np.float32(safe_m)).astype(np.float32)
 
 
@@ -38,13 +58,13 @@ def inflate(dsm_eff: np.ndarray, buffer_m: float, cell_m: float = 2.0) -> np.nda
     k = math.ceil(buffer_m / cell_m) if buffer_m > 0 else 0
     a = np.asarray(dsm_eff, np.float32)
     if k > 0:
-        a = ndi.maximum_filter(a, size=2 * k + 1, mode="nearest")
+        a = _ndi().maximum_filter(a, size=2 * k + 1, mode="nearest")
     return (a + np.float32(buffer_m)).astype(np.float32)
 
 
 def dilate3(pyr: list[np.ndarray], from_level: int = 2) -> list[np.ndarray | None]:
     """膨胀金字塔：第 from_level 层起每层 3×3 最大值；更低的层为 None（不使用）。"""
-    return [None if from_level > L else ndi.maximum_filter(p, size=3, mode="nearest") for L, p in enumerate(pyr)]
+    return [None if from_level > L else max3(p) for L, p in enumerate(pyr)]
 
 
 def choose_level(cell_m: float, tol_m: float, n_levels: int, seg_len_sum: float, n_seg: int, max_samples: int) -> int:

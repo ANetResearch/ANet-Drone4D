@@ -181,7 +181,10 @@ class LinkMonitor:
         st = np.where(wmask, np.where(srcs == SRC_SEAT, self.seat.state, self.agent.state), LINK_OK).astype(np.uint8)
         old = sb["link_state"][watched].copy()
         sb["link_state"][watched] = st
-        sb["flag_gcs"][watched] = st == LINK_OK
+        ok_now = st == LINK_OK
+        sb["flag_gcs"][watched] = ok_now
+        if ok_now.all() and (old == LINK_OK).all():
+            return  # 全部正常且无恢复边沿：以下边沿、HOLD 与 RTL 候选均为空
         t = rt.t_ns
         fs = sb["fs"][watched]
         air = S.in_air[watched] | (fs == FS.TAKING_OFF)
@@ -206,7 +209,10 @@ class LinkMonitor:
             if quiet.size:
                 rt.sink.add_many(quiet, rt.code("SAF.LINK.RESTORED"), t)
         # HOLD 与 RTL 候选（持续条件每周期重提，秩过滤去重）
-        hold = (st == LINK_LOST_HOLD) & air & np.isin(fs, _HOLD_SRC)
+        # 先看链路态再求 fs 集合（全部正常时免去两次 np.isin；1000 架时约 0.2 ms/次，50 Hz）
+        hold = st == LINK_LOST_HOLD
+        if hold.any():
+            hold &= air & np.isin(fs, _HOLD_SRC)
         if hold.any():
             s = watched[hold]
             rt.set_cond(s, "LINK_LOST", True)
@@ -215,7 +221,9 @@ class LinkMonitor:
                 m = codes == c
                 rt.fsm.propose(s[m], int(FS.HOLD), S_HOLD_LINK, Origin.AUTO, int(c),
                                value=self.age_ms_of(s[m]) / 1000.0, thr=rt.params.link.hold_s)
-        lost = (st == LINK_LOST_RTL) & air & np.isin(fs, _RTL_SRC)
+        lost = st == LINK_LOST_RTL
+        if lost.any():
+            lost &= air & np.isin(fs, _RTL_SRC)
         if lost.any():
             s = watched[lost]
             rt.set_cond(s, "LINK_LOST", True)

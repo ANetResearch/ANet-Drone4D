@@ -64,10 +64,33 @@ class FleetGuard:
         self.use_numba = KN.HAVE_NUMBA and rt.kernel == "numba"
         self.last_cand = 0
         self.min_sep_seen = np.inf
-        self.pair_min: dict[tuple[int, int], float] = {}
+        # 逐机"与任一机对的最小间距"（此前为机对字典 pair_min，1000 架时定稿逐对 Python 更新约 0.5 ms，checkpoint 逐对编码
+        # 约 1.5 ms）。`min_separation(slots)` 求"涉及 slots 中任一机的机对"的最小值，等于各机最小值的最小值，两种存法结果相同
+        self.slot_min = np.full(rt.S.capacity, np.inf)
+        self.pair_gen = 0  # 修改代数（诊断）
 
     def reset(self) -> None:
         self.min_sep_seen = np.inf
+
+    def reset_pairs(self) -> None:
+        self.slot_min[:] = np.inf
+        self.pair_gen += 1
+
+    @property
+    def pair_min(self) -> dict[tuple[int, int], float]:
+        """兼容视图：{(s, s): 该机最小间距}（只读快照）。"""
+        fin = np.flatnonzero(np.isfinite(self.slot_min))
+        return {(int(s), int(s)): float(self.slot_min[s]) for s in fin}
+
+    @pair_min.setter
+    def pair_min(self, pm: dict[tuple[int, int], float]) -> None:
+        """由机对表设置（旧 checkpoint 与测试）：两端各取最小。"""
+        self.slot_min[:] = np.inf
+        for (a, b), v in pm.items():
+            for s_ in (int(a), int(b)):
+                if 0 <= s_ < self.slot_min.size:
+                    self.slot_min[s_] = min(self.slot_min[s_], float(v))
+        self.pair_gen += 1
 
     def _idx(self) -> np.ndarray:
         rt, S, sb = self.rt, self.rt.S, self.rt.sb
@@ -175,13 +198,18 @@ class FleetGuard:
         fin = np.isfinite(sep)
         if fin.any():
             self.min_sep_seen = min(self.min_sep_seen, float(sep[fin].min()))
-            for s in act[fin]:
-                m = int(sb["sep_mate"][s])
-                if m >= 0:
-                    key = (min(int(s), m), max(int(s), m))
-                    v = float(sb["sep_m"][s])
-                    if v < self.pair_min.get(key, np.inf):
-                        self.pair_min[key] = v
+            # 逐机记录"与任一机对的最小间距"（机对两端各取最小；向量化，FX2-R2）
+            sf = act[fin]
+            mate = sb["sep_mate"][sf].astype(np.int64)
+            v = sb["sep_m"][sf].astype(np.float64)
+            ok = mate >= 0
+            if ok.any():
+                sf, mate, v = sf[ok], mate[ok], v[ok]
+                sm = self.slot_min
+                if (v < sm[sf]).any() or (v < sm[mate]).any():
+                    np.minimum.at(sm, sf, v)
+                    np.minimum.at(sm, mate, v)
+                    self.pair_gen += 1
         # CONFLICT：逐机边沿，> 12 m 持续 2 s 重新布防
         warn = sep < P.warn_m
         was = sb["sep_warn"][act]
@@ -227,6 +255,6 @@ class FleetGuard:
     def min_separation(self, slots: np.ndarray | None = None) -> float:
         if slots is None:
             return float(self.min_sep_seen)
-        want = set(int(s) for s in slots)
-        vals = [v for (a, b), v in self.pair_min.items() if a in want or b in want]
-        return float(min(vals)) if vals else float("inf")
+        sl = np.asarray(slots, np.int64)
+        sl = sl[(sl >= 0) & (sl < self.slot_min.size)]
+        return float(self.slot_min[sl].min()) if sl.size else float("inf")

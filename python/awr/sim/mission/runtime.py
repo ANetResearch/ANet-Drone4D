@@ -38,6 +38,8 @@ __all__ = ["M10Runtime"]
 log = logging.getLogger("awr.sim.mission.runtime")
 
 LEVEL = {0: 0, 1: 1, 2: 2, 3: 3}
+STATUS_TRACKS_PER_STAGE = 256  # 每次 stage（10 Hz）状态汇总的轨道数上限（publish_status）
+APPROACH_EXACT_M = 30.0  # 入场直线段的精确判定上限（水平长度，m）：更长的段只认粗校验（采样点数与段长成正比，ADR-070）
 
 
 class M10Runtime:
@@ -67,7 +69,7 @@ class M10Runtime:
         self.managed_cids: set[str] = set()
         self._job_cids: dict[str, str] = {}
         self._pub_mission: Any = None
-        self._last_hb_wall = 0
+        self._status_rot = 0
         self._wall_last_pub: dict[str, int] = {}
         self._path_files: dict[str, str] = {}
         self._cov_files: dict[str, str] = {}
@@ -221,6 +223,15 @@ class M10Runtime:
         mod = sys.modules.get("awr.sim.safety")
         return getattr(mod, "SERVICE", None) if mod is not None else None
 
+    def max_z(self) -> float | None:
+        """围栏最大高度（ENU z，M09 GeofenceRT.max_z）；M09 未装配或围栏无效时 None。"""
+        svc = self.safety_service()
+        geo = getattr(getattr(svc, "rt", None), "geo", None)
+        if geo is None or not getattr(geo, "valid", False):
+            return None
+        z = getattr(geo, "max_z", None)
+        return float(z) if z is not None and np.isfinite(z) else None
+
     def set_task_priority(self, slots: list[int], prio: int) -> None:
         """FleetGuard 让行优先级 K2（Mission.priority，0–9；M09 `fg.set_task_priority`）。"""
         svc = self.safety_service()
@@ -284,6 +295,12 @@ class M10Runtime:
         from awr.sim.fleet import kernels_l1 as K
 
         return float(self.T.LT[int(self.S.limits_id[s]), K.L_CRUISE])
+
+    def yawrate_max(self, s: int) -> float:
+        """自动模式偏航角速度上限（rad/s）：限速配置的 yawrate 与 MPC_YAWRAUTO_MAX 的较小者（M08 姿态环同一钳制）。"""
+        from awr.sim.fleet import kernels_l1 as K
+
+        return float(min(self.T.LT[int(self.S.limits_id[s]), K.L_YAWRATE], K.YAWRAUTO))
 
     def a_max(self, s: int) -> float:
         from awr.sim.fleet import kernels_l1 as K
@@ -369,6 +386,20 @@ class M10Runtime:
         gz = self.world.ground_dtm(np.asarray(samples)[:, 1:3]) if self.world is not None else None
         return EN.fallback_path_wh(self._energy_params(s), samples, self.wind, gz)
 
+    def rtl_via(self, p: np.ndarray, home: np.ndarray, s: int) -> tuple[float, float] | None:
+        """M09 返航路线的绕行点（ADR-054，EnergyModel 可选方法 `rtl_route`）；未提供或直飞时 None。"""
+        from awr.sim.fleet.stages import registry as R
+
+        fn = getattr(R.energy_model(), "rtl_route", None)
+        if fn is None:
+            return None
+        try:
+            r = fn(np.asarray(p, np.float64), np.asarray(home, np.float64), int(s))
+        except Exception:
+            log.exception("EnergyModel.rtl_route failed; direct return assumed")
+            return None
+        return None if r is None else r[0]
+
     def hm_top(self, a: np.ndarray, b: np.ndarray) -> float:
         if self.world is None:
             return -math.inf
@@ -393,12 +424,27 @@ class M10Runtime:
             return max(float(a[2]), float(b[2]))
 
     def coarse_proven(self, p: np.ndarray, goal: np.ndarray, s: int) -> bool:
+        """直线段可证无障碍：M04 粗校验 `all_proven`；粗校验只给出 MAYBE（无违规、无延后的分区边）且水平长度
+        ≤ APPROACH_EXACT_M 时，按段上逐 0.5 m 采样点的柱体最大值（半径 = 缓冲 1 m + 碰撞半径）精确判定（FR-013 入圆段，
+        ADR-070）。粗校验的金字塔容差为 100 m，从低空起爬的短段（例如 ladder 起飞后 10 m AGL 爬到 60–105 m 的入圆段）
+        几乎总被附近建筑判为 MAYBE，此前因此全部改走 plan-pool 的 safe_transit。"""
         if self.world is None:
             return True
         try:
-            r = self.world.path_coarse_check(np.stack([np.asarray(p, np.float64), np.asarray(goal, np.float64)]),
-                                             buffer_m=1.0, goal_radius_m=self.r_col(s), active_zone_ids=self.zones)
-            return bool(r.ok and r.all_proven)
+            P = np.stack([np.asarray(p, np.float64), np.asarray(goal, np.float64)])
+            r = self.world.path_coarse_check(P, buffer_m=1.0, goal_radius_m=self.r_col(s), active_zone_ids=self.zones)
+            if r.ok and r.all_proven:
+                return True
+            if not r.ok or bool(np.any(r.zone_deferred)) or int(np.max(r.verdict)) > 1:
+                return False
+            d = P[1, :2] - P[0, :2]
+            L = float(np.hypot(d[0], d[1]))
+            if L > APPROACH_EXACT_M:
+                return False
+            n = max(2, math.ceil(L / 0.5) + 1)
+            xy = P[0, :2] + np.linspace(0.0, 1.0, n)[:, None] * d
+            top = float(np.max(self.world.column_max_within(xy, 1.0 + self.r_col(s))))
+            return top <= float(min(P[0, 2], P[1, 2])) - 1.0
         except Exception:
             return False
 
@@ -431,6 +477,17 @@ class M10Runtime:
             return 0.0
         T = float(B["nseg"][s]) * float(B["ts"][s])
         return 0.0 if T <= 0 else min(1.0, float(B["tau"][s]) / T)
+
+    def item_progress_many(self, slots: list[int]) -> list[float]:
+        """`item_progress` 的按机向量化版本（同一公式与运算次序）。"""
+        B = self.tracker.B
+        if B is None or not slots:
+            return [0.0] * len(slots)
+        sl = np.asarray(slots, np.int64)
+        T = B["nseg"][sl].astype(np.float64) * B["ts"][sl].astype(np.float64)
+        ok = (B["kind"][sl] == 1) & (T > 0)
+        v = np.where(ok, np.minimum(1.0, B["tau"][sl].astype(np.float64) / np.where(T > 0, T, 1.0)), 0.0)
+        return v.tolist()
 
     def lease_of(self, s: int) -> dict:
         try:
@@ -559,7 +616,17 @@ class M10Runtime:
             self.tracker.drop_suspended(call.cid)
             self.managed_cids.discard(call.cid)
 
-    def on_slot_finished(self, s: int, cid: str | None) -> None:
+    def on_slot_finished(self, s: int, cid: str | None, final_pos: Any = None) -> None:
+        """跟踪器交回 HOLD。编队成员（`final_pos` 给出）：M08 的 follow_path 完成判据以调用目标点（生成时按本成员槽位与
+        锚点终点航向算出的终点）为准，而交回点是锚点终点加滤波航向旋转后的槽位偏置；环形锚点上滤波航向滞后路径航向
+        （τψ = 2 s，ω = v/R），偏置 12–24 m 时两点相差 0.5 m 以上，成员停在交回点永远不"到达"，到截止时间以 202 失败、
+        挂起后续飞整圈（D1 验收第 1 轮 S2：soc 0.117、guard 6、POS_ERR_FAILSAFE）。交回时把调用目标点改为交回点
+        （FX2-R2，ADR-065）。"""
+        if final_pos is None or not cid or self.cmd is None:
+            return None
+        fn = getattr(self.cmd, "retarget_goal", None)
+        if callable(fn):
+            fn(cid, final_pos, int(s))
         return None
 
     def on_start_failed(self, m: MissionRT, r: dict) -> None:
@@ -649,28 +716,41 @@ class M10Runtime:
         return out
 
     def publish_status(self, missions: dict, order: list[str]) -> None:
+        """`state/mission` 状态发布：任务有变化且距上次发布 ≥ 0.5 s【墙钟】，或距上次发布 ≥ 1 s（心跳）时发布。每次 stage
+        汇总的轨道数至多 STATUS_TRACKS_PER_STAGE（至少一个任务），超出的任务按轮转留到下一次 stage：ladder n1000 的 4 个
+        250 机任务此前在同一次 stage 内一起发布心跳，约 4.6 ms（FX2-R3，ADR-070）。轨道总数不超过该值时（S1–S6）与此前
+        同一 stage 内发布全部到期任务一致。"""
         if self.events is None or not order:
             return
         clk = getattr(self.cmd, "clock", None)
         now_w = int(clk.wall_mono_ns()) if clk is not None and hasattr(clk, "wall_mono_ns") else self.t_ns
         items = []
-        hb = now_w - self._last_hb_wall >= 1_000_000_000
-        for mid in order:
+        n = len(order)
+        start = self._status_rot % n
+        used = 0
+        for j in range(n):
+            mid = order[(start + j) % n]
             m = missions.get(mid)
             if m is None:
                 continue
             last = self._wall_last_pub.get(mid, 0)
+            hb = now_w - last >= 1_000_000_000
             if not (m.dirty or hb):
                 continue
             if m.dirty and not hb and now_w - last < 500_000_000:
                 continue
+            nt = len(m.tracks)
+            if items and used + nt > STATUS_TRACKS_PER_STAGE:
+                self._status_rot = (start + j) % n
+                break
+            used += nt
             st = self.missions.status(m)
             m.last_status = st
             m.dirty = False
             self._wall_last_pub[mid] = now_w
             items.append(st)
-        if hb:
-            self._last_hb_wall = now_w
+        else:
+            self._status_rot = start
         if not items:
             return
         try:

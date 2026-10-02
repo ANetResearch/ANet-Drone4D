@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 from . import params_px4 as P
 from .kernels_l1 import njit
 
 __all__ = ["CRASH_COLLISION_WORLD", "CRASH_IMPACT", "EV_IMPACT", "EV_LIFTOFF", "EV_TOUCHDOWN", "EV_WORLD", "contact",
-           "dsm_nearest", "dtm_bilinear"]
+           "dsm_nearest", "dtm_bilinear", "uav_hits"]
 
 M_IDLE, M_SPOOLUP, M_TAKEOFF, M_LAND, M_RTL, M_ELAND, M_DESCENT, M_KILLED = 0, 1, 2, 8, 9, 11, 12, 13
 E_TOUCHDOWN, E_LIFTOFF, E_COLLISION = 8, 16, 32
@@ -204,3 +206,77 @@ def contact(idx, t_s, p, v, p_prev, q, omega, thrust, thr_sp, thr_cap, home, dsm
             nev += 1
         in_air[i] = not landed[i]
     return nev
+
+
+@njit(cache=True, fastmath=False)
+def uav_hits(p0, p1, rad, win, out):
+    """机间碰撞（COLLISION_UAV）的候选与判定（FX2-R2：替代 8 套半格平移网格的排序配对，N = 1000 时由约 3 ms 降到数十 µs）。
+
+    p0、p1：(n, 3) 各机自上次检查以来线性运动段的起止点；rad：(n,) 碰撞半径；win：候选窗口（中点各轴之差都 < win，取
+    `collide.CELL_M` = 6 m，覆盖原网格法的全部候选：同处某套 6 m 网格的一格即各轴之差 < 6 m）。判定与 `UavCollider._hits`
+    同式：线段 CPA 距离 < rad_a + rad_b。命中对 (a, b)（a < b，局部下标）写入 out，返回条数；超过 out 容量时返回 −1。
+    结果按 (a, b) 升序（调用方据此按升序施加后果，与原实现顺序相同）。"""
+    n = p0.shape[0]
+    mx = np.empty(n)
+    for i in range(n):
+        mx[i] = 0.5 * (p0[i, 0] + p1[i, 0])
+    order = np.argsort(mx, kind="mergesort")
+    sx = np.empty(n)
+    sy = np.empty(n)
+    sz = np.empty(n)
+    for k in range(n):  # 按 x 排序后的连续中点数组（内层扫描只读连续内存）
+        i = order[k]
+        sx[k] = mx[i]
+        sy[k] = 0.5 * (p0[i, 1] + p1[i, 1])
+        sz[k] = 0.5 * (p0[i, 2] + p1[i, 2])
+    nh = 0
+    cap = out.shape[0]
+    for ii in range(n):
+        ax = sx[ii]
+        ay = sy[ii]
+        az = sz[ii]
+        for jj in range(ii + 1, n):
+            if sx[jj] - ax >= win:
+                break
+            if abs(sy[jj] - ay) >= win:
+                continue
+            if abs(sz[jj] - az) >= win:
+                continue
+            a = order[ii]
+            b = order[jj]
+            lo = a if a < b else b
+            hi = b if a < b else a
+            r00 = p0[lo, 0] - p0[hi, 0]
+            r01 = p0[lo, 1] - p0[hi, 1]
+            r02 = p0[lo, 2] - p0[hi, 2]
+            d0 = (p1[lo, 0] - p1[hi, 0]) - r00
+            d1 = (p1[lo, 1] - p1[hi, 1]) - r01
+            d2 = (p1[lo, 2] - p1[hi, 2]) - r02
+            dd = d0 * d0 + d1 * d1 + d2 * d2
+            if dd > 1e-12:
+                s = -(r00 * d0 + r01 * d1 + r02 * d2) / dd
+                if s < 0.0:
+                    s = 0.0
+                elif s > 1.0:
+                    s = 1.0
+            else:
+                s = 0.0
+            m0 = r00 + s * d0
+            m1 = r01 + s * d1
+            m2 = r02 + s * d2
+            if math.sqrt(m0 * m0 + m1 * m1 + m2 * m2) < rad[lo] + rad[hi]:
+                if nh >= cap:
+                    return -1
+                out[nh, 0] = lo
+                out[nh, 1] = hi
+                nh += 1
+    if nh > 1:
+        key = np.empty(nh, np.int64)
+        for k in range(nh):
+            key[k] = out[k, 0] * n + out[k, 1]
+        o = np.argsort(key, kind="mergesort")
+        tmp = out[:nh].copy()
+        for k in range(nh):
+            out[k, 0] = tmp[o[k], 0]
+            out[k, 1] = tmp[o[k], 1]
+    return nh

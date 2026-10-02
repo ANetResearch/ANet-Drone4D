@@ -4,10 +4,10 @@
 from __future__ import annotations
 
 from .meta import agent_describe, agent_state, task_quote
-from .observe import observe
+from .observe import observe, prepare_observe
 from .relay import relay_communication
 
-__all__ = ["HANDLERS"]
+__all__ = ["HANDLERS", "PREPARERS"]
 
 HANDLERS = {
     "agent.describe": agent_describe,
@@ -16,4 +16,10 @@ HANDLERS = {
     "thermal.imaging": observe,
     "rgb.zoom": observe,
     "relay.communication": relay_communication,
+}
+
+# 委派在途预取（只读准备；DroneAgent.prepare 在 Mock 长任务请求发出时调用，§6.12.2）
+PREPARERS = {
+    "thermal.imaging": prepare_observe,
+    "rgb.zoom": prepare_observe,
 }

@@ -185,7 +185,12 @@ def _register() -> None:
         return
     from ..ir.schema import load_schema
 
-    register_job("recon", stages=RECON_STAGES, params_schema=load_schema("recon-job-params.schema.json"))(run_recon_job)
+    try:
+        reg = register_job("recon", stages=RECON_STAGES, params_schema=load_schema("recon-job-params.schema.json"),
+                           emits_events=True)                       # ReconCtx 自发 job.state/progress/log（M01 §6.7.3）
+    except TypeError:            # pragma: no cover - older M03 registry without emits_events
+        reg = register_job("recon", stages=RECON_STAGES, params_schema=load_schema("recon-job-params.schema.json"))
+    reg(run_recon_job)
 
 
 _register()

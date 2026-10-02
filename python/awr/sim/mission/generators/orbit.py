@@ -14,7 +14,9 @@ import numpy as np
 
 from .common import GenContext, GenError, GenOutput, ItemDraft, z_from
 
-__all__ = ["run"]
+__all__ = ["YAW_RATE_FRAC", "run"]
+
+YAW_RATE_FRAC = 0.9  # 航向朝心环绕的偏航角速度需求上限（相对机体自动模式上限）
 
 
 def run(params: dict, ctx: GenContext) -> GenOutput:
@@ -47,6 +49,10 @@ def run(params: dict, ctx: GenContext) -> GenOutput:
         speed = min(float(params.get("speed_mps") or v.cruise_mps), v.v_limit_mps, math.sqrt(3.0 * R))
         if params.get("speed_mps") and float(params["speed_mps"]) ** 2 / R > 3.0 + 1e-9:
             raise GenError(110, "/params/speed_mps", "降低速度或增大半径（v²/R ≤ 3 m/s²）")
+        if yaw_b == "center" and speed / R > YAW_RATE_FRAC * v.yawrate_max_rad_s + 1e-9:
+            # 航向朝心时偏航角速度需求 v/R 超过机体上限会累积航向误差（ADR-062：ladder 的 3 m、2 m/s 需要 38°/s，P600 为 30°/s）
+            raise GenError(110, "/params/speed_mps", f"航向朝心的环绕需要偏航角速度 {math.degrees(speed / R):.0f}°/s，超过机体上限 "
+                           f"{math.degrees(v.yawrate_max_rad_s):.0f}°/s 的 {YAW_RATE_FRAC:.0%}；降低速度、增大半径或改用 yaw = tangent")
         center = [float(c2[0]), float(c2[1]), float(z)]
         th_h = params.get("target_h_m")
         pitch = None

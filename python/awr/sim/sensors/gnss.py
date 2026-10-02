@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from . import kernels_gnss as KG
 from .enums import GnssFix, SensorKind, SensorState
 from .spec import SensorSpec
 
@@ -119,6 +120,7 @@ class GnssBank:
     def __init__(self, rt: SensorRuntime) -> None:
         self.rt = rt
         self.stats = {"steps": 0, "transitions": 0}
+        self.use_numba = KG.HAVE_NUMBA
 
     def on_spawn(self, slot: int, spec: SensorSpec, t_ns: int) -> None:
         b = self.rt.blk
@@ -144,6 +146,16 @@ class GnssBank:
         denied = denied_mask(S, slots, getattr(ctx, "faults", None))
         for rig_i, sel in groups:
             tb = gnss_table(rt.rig_list[rig_i].by_kind(SensorKind.GNSS))
+            if self.use_numba and len(groups) == 1 and sel.size == slots.size:
+                # 单一机型 rig（大机群的常态）：融合核一次推进误差状态与 fix 状态机（kernels_gnss，逐位相同；FX2-R3）
+                new = np.empty(slots.size, np.int64)
+                reason = np.empty(slots.size, np.int8)
+                nch = KG.gnss_step(slots, fix, np.ascontiguousarray(denied, np.bool_), tb.tau, tb.t_acq_ns, tb.t_float_ns,
+                                   tb.t_fixed_ns, bool(tb.rtk), bool(tb.dgps), int(tb.max_fix), b["gn_z"], n,
+                                   b["gn_t_state_ns"], t_ns, DT_GNSS_S, new, reason)
+                if nch:
+                    self._apply(S, ctx, slots, fix, new, reason, tb, t_ns)
+                continue
             f = fix[sel]
             tau = tb.tau[np.maximum(f, int(GnssFix.SINGLE))]
             ph = np.exp(-DT_GNSS_S / tau)[:, None]
@@ -178,6 +190,12 @@ class GnssBank:
         up2 = free & (fix == GnssFix.RTK_FLOAT) & (age >= tb.t_fixed_ns) & tb.rtk & (tb.max_fix >= GnssFix.RTK_FIXED)
         new[up2] = GnssFix.RTK_FIXED
         reason[up2] = 3
+        self._apply(S, ctx, slots, fix, new, reason, tb, t_ns)
+
+    def _apply(self, S: Any, ctx: Any, slots: np.ndarray, fix: np.ndarray, new: np.ndarray, reason: np.ndarray, tb: GnssTable,
+               t_ns: int) -> None:
+        """fix 变化行的写回与事件（`_machine` 与融合核共用）。"""
+        b = self.rt.blk
         ch = np.flatnonzero(new != fix)
         if ch.size == 0:
             return

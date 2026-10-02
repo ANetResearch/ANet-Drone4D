@@ -24,13 +24,15 @@ import numpy as np
 from . import cbrng
 from .block import BLOCK, N_GIMBAL, TARGET_BLOCK
 from .detector import Detector
-from .enums import GIMBAL_MODE_NAMES, GimbalMode, SensorKind, SensorState
-from .gimbal import COL_OF_KIND, GimbalBank, SensorError
-from .gnss import GnssBank
+from .enums import GIMBAL_MODE_NAMES, GimbalMode, GnssFix, SensorKind, SensorState
+from .gimbal import COL_OF_KIND, KIND_OF_COL, GimbalBank, SensorError
+from .gnss import GnssBank, gnss_table
 from .imu import ImuBank
 from .spec import Rig, SensorSpec, load_rig, rig_for_model
 
 __all__ = ["SensorRuntime"]
+
+_GIMBAL_NAME = {int(m): GIMBAL_MODE_NAMES[m] for m in GimbalMode}  # state_ext 热路径：按整数取云台模式名
 
 ALL_KINDS = tuple(SensorKind)
 
@@ -51,7 +53,9 @@ class SensorRuntime:
         self._roster_ver = 0
         self._parts_ver = -1
         self.vcfg: dict[str, dict] = {}
+        self.gate_caps: dict[int, frozenset[str]] = {}  # slot -> 只在 AGENT 租约下参与检测的能力（R-12）
         self._deferred: list[Callable[[], None]] = []
+        self._sync_key: tuple | None = None  # sync() 收敛后的输入字节快照
         self.gimbal = GimbalBank(self)
         self.gnss = GnssBank(self)
         self.imu = ImuBank(self)
@@ -96,6 +100,11 @@ class SensorRuntime:
         self.bind(S, ctx)
         b = self.blk
         assert b is not None
+        # 活动集、agent_no、装配标记与派生戳与上次同步完成后逐字节相同且无待执行操作时，下面三组集合都为空（同步是幂等的
+        # 收敛过程），直接返回（N = 1000、50 Hz，此前约 0.1 ms/次，FX2-R3）
+        key = (S.active.tobytes(), S.agent_no.tobytes(), b["init"].tobytes(), self.dstamp.tobytes())
+        if key == self._sync_key and not self._deferred:
+            return
         act = S.active_idx()
         want = (S.agent_no[act] + 1).astype(np.int32)
         stale = act[b["init"][act] != want]
@@ -112,6 +121,7 @@ class SensorRuntime:
             for fn in todo:
                 with contextlib.suppress(SensorError):
                     fn()
+        self._sync_key = (S.active.tobytes(), S.agent_no.tobytes(), b["init"].tobytes(), self.dstamp.tobytes())
 
     def _rig_index_for_pidx(self, pidx: int) -> int:
         i = self._rig_by_pidx.get(pidx)
@@ -171,10 +181,15 @@ class SensorRuntime:
         return -1
 
     # ------------------------------------------------------------ spawn / remove（M13 §6.7.1）
-    def configure_vehicle(self, vehicle_id: str, *, sensors: list[str] | None = None, caps: list[str] | None = None) -> None:
-        """剧本 `vehicles[].sensors`（子集）与 `caps`（有效能力集）；在 fleet/add 之前或之后调用均可（之后调用时重算 has、det_en）。"""
+    def configure_vehicle(self, vehicle_id: str, *, sensors: list[str] | None = None, caps: list[str] | None = None,
+                          delegated: list[str] | None = None) -> None:
+        """剧本 `vehicles[].sensors`（子集）与 `caps`（有效能力集）；在 fleet/add 之前或之后调用均可（之后调用时重算 has、det_en）。
+
+        `delegated`：只在委派执行期间参与检测的能力（R-12，M14-to-M13 第 2 条）：机体持有 AGENT 租约时该能力的检测器
+        视为 ACTIVE，其余时间（例如 MISSION 待命航线上的复核候选）视为 STANDBY；由确定性租约状态派生，不写输入日志。"""
         self.vcfg[str(vehicle_id)] = {"sensors": None if sensors is None else list(sensors),
-                                      "caps": None if caps is None else list(caps)}
+                                      "caps": None if caps is None else list(caps),
+                                      "delegated": None if delegated is None else list(delegated)}
         s = self.slot_of(str(vehicle_id))
         if s >= 0 and self.blk is not None and self.blk["init"][s] != 0:
             self._apply_cfg(s)
@@ -190,6 +205,11 @@ class SensorRuntime:
             return
         cfg = self.vcfg.get(self.uav_id(self.S, s))
         sel = self._selected(rig, cfg)
+        dg = None if cfg is None else cfg.get("delegated")
+        if dg:
+            self.gate_caps[s] = frozenset(dg)
+        else:
+            self.gate_caps.pop(s, None)
         has = 0
         for sp in sel:
             has |= sp.bit
@@ -248,12 +268,29 @@ class SensorRuntime:
         self.stats["spawned"] += 1
 
     def _remove(self, s: int) -> None:
+        self.gate_caps.pop(s, None)
         for f in self.blk.values():
             f[s] = 0
         self.slot_rig[s] = -1
         self.dstamp[s] = 0
         self._roster_ver += 1
         self.stats["removed"] += 1
+
+    def lease_gated(self, slot: int, capability: str, ctx: Any = None) -> bool:
+        """R-12：该能力只在委派执行期间检测，且机体当前不持有 AGENT 租约时为真（检测器据此把传感器视为 STANDBY）。"""
+        caps = self.gate_caps.get(int(slot))
+        if not caps or capability not in caps:
+            return False
+        lease = getattr(ctx if ctx is not None else self.ctx, "lease", None)
+        fn = getattr(lease, "owner_codes", None)
+        if not callable(fn):
+            return True
+        from awr.contracts.enums import Owner
+
+        try:
+            return int(fn()[int(slot)]) != int(Owner.AGENT)
+        except Exception:
+            return True
 
     def _ready(self, slot: int) -> bool:
         S, b = self.S, self.blk
@@ -375,24 +412,66 @@ class SensorRuntime:
     def state_ext_fields(self, slots: np.ndarray, t_sim_ns: int, out: list[dict]) -> None:
         """M08 state_ext 分片打包调用（M13-FR-034、§6.5.6）：全机拷贝 `loc.gnss_fix/sats/eph_m/epv_m/hdop` 与
         `sens.gimbal`（无 RNG）；属于白噪声侧缓冲（detail 并 marks）的机体再合入 `loc.err_enu_m` 与 `sens.imu`。
-        `out[i]` 为第 i 个 slot 正在装配的 state_ext 对象（原地合并）。"""
-        if self.blk is None:
+        `out[i]` 为第 i 个 slot 正在装配的 state_ext 对象（原地合并）。逐机标量按片向量化取出，字段与取值同逐机实现
+        （`gnss.summary`、`gimbal_rows`；ADR-051 全机 2 Hz 分片编码的成本，D1 验收第 1 轮）。"""
+        if self.blk is None or self.S is None:
             return
-        S = self.S
-        for i, s in enumerate(np.asarray(slots, np.int64).reshape(-1)):
-            s = int(s)
-            if not self._ready(s):
+        S, b = self.S, self.blk
+        sl = np.asarray(slots, np.int64).reshape(-1)
+        if sl.size == 0:
+            return
+        ready = (S.active[sl] & (b["init"][sl].astype(np.int64) == S.agent_no[sl].astype(np.int64) + 1)).tolist()
+        rig_i = self.slot_rig[sl].tolist() if sl.size and self.slot_rig.size else [-1] * sl.size
+        has = b["has"][sl].tolist()
+        fix = b["gn_fix"][sl].tolist()
+        sats = b["gn_sats"][sl].tolist()
+        # 舍入按片向量化（np.round；Python round(x, n) 每次约 1 µs，是逐行开销的主体）
+        hdop = np.round(b["gn_hdop"][sl].astype(np.float64), 3).tolist()
+        g_mode = b["g_mode"][sl].tolist()
+        g_az = np.round(b["g_az"][sl].astype(np.float64), 6).tolist()
+        g_el = np.round(b["g_el"][sl].astype(np.float64), 6).tolist()
+        g_lim = b["g_lim"][sl].tolist()
+        agent = S.agent_no[sl].tolist()
+        side_d = self.obs.side
+        gn_cache: dict[int, Any] = {}
+        gb_cache: dict[int, list] = {}
+        for i in range(sl.size):
+            if not ready[i]:
                 continue
+            ri = int(rig_i[i])
+            rig = self.rig_list[ri] if ri >= 0 else None
             d = out[i]
             loc = d.setdefault("loc", {"status": "TRACKING"})
-            g = self.gnss.summary(s)
-            if g:
-                loc.update(g)
-            side = self.obs.side.get(int(S.agent_no[s]))
+            # GNSS 查表部分（同 GnssBank.summary）
+            if rig is not None:
+                tb = gn_cache.get(ri, 0)
+                if tb == 0:
+                    sp = rig.by_kind(SensorKind.GNSS)
+                    if sp is None:
+                        tb = None
+                    else:
+                        t_ = gnss_table(sp)
+                        ep = [None if not math.isfinite(float(x)) else round(float(x), 4) for x in t_.eph]
+                        ev = [None if not math.isfinite(float(x)) else round(float(x), 4) for x in t_.epv]
+                        tb = (ep, ev)
+                    gn_cache[ri] = tb
+                if tb is not None and has[i] & 4:
+                    f = int(fix[i])
+                    loc.update({"gnss_fix": f, "sats": int(sats[i]), "eph_m": tb[0][f], "epv_m": tb[1][f],
+                                "hdop": None if f == GnssFix.NO_FIX else hdop[i]})
             sens: dict[str, Any] = {}
-            gr = self.gimbal_rows(s)
-            if gr:
-                sens["gimbal"] = gr
+            # 云台（同 gimbal_rows）
+            if rig is not None:
+                gb = gb_cache.get(ri)
+                if gb is None:
+                    gb = gb_cache[ri] = [(k, sp) for k in range(N_GIMBAL)
+                                         if (sp := rig.by_kind(KIND_OF_COL[k])) is not None and sp.gimbal is not None]
+                gr = [{"sensor_no": sp.sensor_no, "mode": _GIMBAL_NAME[int(g_mode[i][k])],
+                       "az_rad": g_az[i][k], "el_rad": g_el[i][k], "limited": bool(g_lim[i][k])}
+                      for k, sp in gb if has[i] & sp.bit]
+                if gr:
+                    sens["gimbal"] = gr
+            side = side_d.get(int(agent[i]))
             if side is not None:
                 if "err_enu_m" in side:
                     loc["err_enu_m"] = side["err_enu_m"]

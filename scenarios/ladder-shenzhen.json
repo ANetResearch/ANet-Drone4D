@@ -4,7 +4,7 @@
   "scenario_id": "ladder-shenzhen",
   "name": "Shenzhen fleet ladder",
   "name_zh": "深圳机群阶梯",
-  "description": "Four altitude layers (60/75/90/105 m AGL) on a staggered 12 m grid take off top layer first and orbit their homes; profiles n10 to n1000 select the fleet size.",
+  "description": "Four altitude layers (60/75/90/105 m AGL) on a staggered 20 m grid take off top layer first and orbit their homes; profiles n10 to n1000 select the fleet size.",
   "world_id": "shenzhen",
   "world_coordinate_sha256": "dee2f5f16b6c8a68b4aa6dae98dd720f44282b97eefd920c45463936674af994",
   "seed": 7,
@@ -15,7 +15,7 @@
   "time_limit_s": 600,
   "on_complete": "continue",
   "env": {"preset": "partlyCloudy"},
-  "transit": {"planner": "direct", "margin_m": 5, "layer_dz_m": 4},
+  "transit": {"planner": "direct", "margin_m": 5, "layer_dz_m": 0},
   "vehicle_sets": [
     {
       "set_id": "l0",
@@ -24,12 +24,12 @@
       "id_digits": 4,
       "count": 50,
       "profile_id": "p600_mid360",
-      "layout": {"kind": "grid", "origin_enu_m": [-465, -58, null], "spacing_m": 24, "cols": 8},
+      "layout": {"kind": "grid", "origin_enu_m": [-585, -110, null], "spacing_m": 40, "cols": 8},
       "mission": {
         "generator": "orbit",
         "center": "home",
         "start": {"at_s": 15},
-        "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+        "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
       }
     },
     {
@@ -39,12 +39,12 @@
       "id_digits": 4,
       "count": 50,
       "profile_id": "p600_mid360",
-      "layout": {"kind": "grid", "origin_enu_m": [-453, -58, null], "spacing_m": 24, "cols": 8},
+      "layout": {"kind": "grid", "origin_enu_m": [-565, -110, null], "spacing_m": 40, "cols": 8},
       "mission": {
         "generator": "orbit",
         "center": "home",
         "start": {"at_s": 10},
-        "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+        "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
       }
     },
     {
@@ -54,12 +54,12 @@
       "id_digits": 4,
       "count": 50,
       "profile_id": "p600_mid360",
-      "layout": {"kind": "grid", "origin_enu_m": [-465, -46, null], "spacing_m": 24, "cols": 8},
+      "layout": {"kind": "grid", "origin_enu_m": [-585, -90, null], "spacing_m": 40, "cols": 8},
       "mission": {
         "generator": "orbit",
         "center": "home",
         "start": {"at_s": 5},
-        "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+        "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
       }
     },
     {
@@ -69,12 +69,12 @@
       "id_digits": 4,
       "count": 50,
       "profile_id": "p600_mid360",
-      "layout": {"kind": "grid", "origin_enu_m": [-453, -46, null], "spacing_m": 24, "cols": 8},
+      "layout": {"kind": "grid", "origin_enu_m": [-565, -90, null], "spacing_m": 40, "cols": 8},
       "mission": {
         "generator": "orbit",
         "center": "home",
         "start": {"at_s": 0},
-        "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+        "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
       }
     }
   ],
@@ -104,12 +104,12 @@
           "id_digits": 4,
           "count": 3,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-393, 2, null], "spacing_m": 24, "cols": 2},
+          "layout": {"kind": "grid", "origin_enu_m": [-405, -10, null], "spacing_m": 40, "cols": 2},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 15},
-            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -119,12 +119,12 @@
           "id_digits": 4,
           "count": 3,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-381, 2, null], "spacing_m": 24, "cols": 2},
+          "layout": {"kind": "grid", "origin_enu_m": [-385, -10, null], "spacing_m": 40, "cols": 2},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 10},
-            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -134,12 +134,12 @@
           "id_digits": 4,
           "count": 2,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-393, 14, null], "spacing_m": 24, "cols": 2},
+          "layout": {"kind": "grid", "origin_enu_m": [-405, 10, null], "spacing_m": 40, "cols": 2},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 5},
-            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -149,12 +149,12 @@
           "id_digits": 4,
           "count": 2,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-381, 14, null], "spacing_m": 24, "cols": 2},
+          "layout": {"kind": "grid", "origin_enu_m": [-385, 10, null], "spacing_m": 40, "cols": 2},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 0},
-            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         }
       ]
@@ -168,12 +168,12 @@
           "id_digits": 4,
           "count": 13,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-417, -22, null], "spacing_m": 24, "cols": 4},
+          "layout": {"kind": "grid", "origin_enu_m": [-445, -50, null], "spacing_m": 40, "cols": 4},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 15},
-            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -183,12 +183,12 @@
           "id_digits": 4,
           "count": 13,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-405, -22, null], "spacing_m": 24, "cols": 4},
+          "layout": {"kind": "grid", "origin_enu_m": [-425, -50, null], "spacing_m": 40, "cols": 4},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 10},
-            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -198,12 +198,12 @@
           "id_digits": 4,
           "count": 12,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-417, -10, null], "spacing_m": 24, "cols": 4},
+          "layout": {"kind": "grid", "origin_enu_m": [-445, -30, null], "spacing_m": 40, "cols": 4},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 5},
-            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -213,12 +213,12 @@
           "id_digits": 4,
           "count": 12,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-405, -10, null], "spacing_m": 24, "cols": 4},
+          "layout": {"kind": "grid", "origin_enu_m": [-425, -30, null], "spacing_m": 40, "cols": 4},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 0},
-            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         }
       ]
@@ -232,12 +232,12 @@
           "id_digits": 4,
           "count": 25,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-429, -34, null], "spacing_m": 24, "cols": 5},
+          "layout": {"kind": "grid", "origin_enu_m": [-465, -70, null], "spacing_m": 40, "cols": 5},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 15},
-            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -247,12 +247,12 @@
           "id_digits": 4,
           "count": 25,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-417, -34, null], "spacing_m": 24, "cols": 5},
+          "layout": {"kind": "grid", "origin_enu_m": [-445, -70, null], "spacing_m": 40, "cols": 5},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 10},
-            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -262,12 +262,12 @@
           "id_digits": 4,
           "count": 25,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-429, -22, null], "spacing_m": 24, "cols": 5},
+          "layout": {"kind": "grid", "origin_enu_m": [-465, -50, null], "spacing_m": 40, "cols": 5},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 5},
-            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -277,12 +277,12 @@
           "id_digits": 4,
           "count": 25,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-417, -22, null], "spacing_m": 24, "cols": 5},
+          "layout": {"kind": "grid", "origin_enu_m": [-445, -50, null], "spacing_m": 40, "cols": 5},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 0},
-            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         }
       ]
@@ -296,12 +296,12 @@
           "id_digits": 4,
           "count": 50,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-465, -58, null], "spacing_m": 24, "cols": 8},
+          "layout": {"kind": "grid", "origin_enu_m": [-585, -110, null], "spacing_m": 40, "cols": 8},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 15},
-            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -311,12 +311,12 @@
           "id_digits": 4,
           "count": 50,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-453, -58, null], "spacing_m": 24, "cols": 8},
+          "layout": {"kind": "grid", "origin_enu_m": [-565, -110, null], "spacing_m": 40, "cols": 8},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 10},
-            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -326,12 +326,12 @@
           "id_digits": 4,
           "count": 50,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-465, -46, null], "spacing_m": 24, "cols": 8},
+          "layout": {"kind": "grid", "origin_enu_m": [-585, -90, null], "spacing_m": 40, "cols": 8},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 5},
-            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -341,12 +341,12 @@
           "id_digits": 4,
           "count": 50,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-453, -46, null], "spacing_m": 24, "cols": 8},
+          "layout": {"kind": "grid", "origin_enu_m": [-565, -90, null], "spacing_m": 40, "cols": 8},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 0},
-            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         }
       ]
@@ -360,12 +360,12 @@
           "id_digits": 4,
           "count": 125,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-513, -106, null], "spacing_m": 24, "cols": 12},
+          "layout": {"kind": "grid", "origin_enu_m": [-740, -190, null], "spacing_m": 40, "cols": 12},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 15},
-            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -375,12 +375,12 @@
           "id_digits": 4,
           "count": 125,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-501, -106, null], "spacing_m": 24, "cols": 12},
+          "layout": {"kind": "grid", "origin_enu_m": [-720, -190, null], "spacing_m": 40, "cols": 12},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 10},
-            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -390,12 +390,12 @@
           "id_digits": 4,
           "count": 125,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-513, -94, null], "spacing_m": 24, "cols": 12},
+          "layout": {"kind": "grid", "origin_enu_m": [-740, -170, null], "spacing_m": 40, "cols": 12},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 5},
-            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -405,13 +405,21 @@
           "id_digits": 4,
           "count": 125,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-501, -94, null], "spacing_m": 24, "cols": 12},
+          "layout": {"kind": "grid", "origin_enu_m": [-720, -170, null], "spacing_m": 40, "cols": 12},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 0},
-            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
+        }
+      ],
+      "events": [
+        {
+          "event_id": "steady",
+          "when": {"metric": "elapsed_s", "op": ">=", "value": 75},
+          "action": "mark",
+          "args": {"label": "ladder.steady"}
         }
       ]
     },
@@ -424,12 +432,12 @@
           "id_digits": 4,
           "count": 250,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-561, -166, null], "spacing_m": 24, "cols": 16},
+          "layout": {"kind": "grid", "origin_enu_m": [-815, -355, null], "spacing_m": 40, "cols": 16},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 15},
-            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -439,12 +447,12 @@
           "id_digits": 4,
           "count": 250,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-549, -166, null], "spacing_m": 24, "cols": 16},
+          "layout": {"kind": "grid", "origin_enu_m": [-795, -355, null], "spacing_m": 40, "cols": 16},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 10},
-            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -454,12 +462,12 @@
           "id_digits": 4,
           "count": 250,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-561, -154, null], "spacing_m": 24, "cols": 16},
+          "layout": {"kind": "grid", "origin_enu_m": [-815, -335, null], "spacing_m": 40, "cols": 16},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 5},
-            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -469,13 +477,21 @@
           "id_digits": 4,
           "count": 250,
           "profile_id": "p600_mid360",
-          "layout": {"kind": "grid", "origin_enu_m": [-549, -154, null], "spacing_m": 24, "cols": 16},
+          "layout": {"kind": "grid", "origin_enu_m": [-795, -335, null], "spacing_m": 40, "cols": 16},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 0},
-            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
+        }
+      ],
+      "events": [
+        {
+          "event_id": "steady",
+          "when": {"metric": "elapsed_s", "op": ">=", "value": 110},
+          "action": "mark",
+          "args": {"label": "ladder.steady"}
         }
       ]
     },
@@ -488,12 +504,12 @@
           "id_digits": 4,
           "count": 50,
           "profile_id": "x500",
-          "layout": {"kind": "grid", "origin_enu_m": [-465, -58, null], "spacing_m": 24, "cols": 8},
+          "layout": {"kind": "grid", "origin_enu_m": [-585, -110, null], "spacing_m": 40, "cols": 8},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 15},
-            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 60, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -503,12 +519,12 @@
           "id_digits": 4,
           "count": 50,
           "profile_id": "x500",
-          "layout": {"kind": "grid", "origin_enu_m": [-453, -58, null], "spacing_m": 24, "cols": 8},
+          "layout": {"kind": "grid", "origin_enu_m": [-565, -110, null], "spacing_m": 40, "cols": 8},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 10},
-            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 75, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -518,12 +534,12 @@
           "id_digits": 4,
           "count": 50,
           "profile_id": "x500",
-          "layout": {"kind": "grid", "origin_enu_m": [-465, -46, null], "spacing_m": 24, "cols": 8},
+          "layout": {"kind": "grid", "origin_enu_m": [-585, -90, null], "spacing_m": 40, "cols": 8},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 5},
-            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 90, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         },
         {
@@ -533,12 +549,12 @@
           "id_digits": 4,
           "count": 50,
           "profile_id": "x500",
-          "layout": {"kind": "grid", "origin_enu_m": [-453, -46, null], "spacing_m": 24, "cols": 8},
+          "layout": {"kind": "grid", "origin_enu_m": [-565, -90, null], "spacing_m": 40, "cols": 8},
           "mission": {
             "generator": "orbit",
             "center": "home",
             "start": {"at_s": 0},
-            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 2, "turns": 20, "cw": false, "yaw": "center"}
+            "params": {"radius_m": 3, "agl_m": 105, "speed_mps": 1.2, "turns": 20, "cw": false, "yaw": "center"}
           }
         }
       ]

@@ -126,6 +126,7 @@ def apply_supervisor(S: FleetState, items: list, t_s: float, PB: Any = None) -> 
             z_now = -S.p[sl, 2]
             z = np.maximum(z_now, -S.home[sl, 2] + P.RTL_RETURN_ALT)
             v = np.full(sl.size, np.nan)
+            via = np.full((sl.size, 2), np.nan)  # NED 水平坐标（ADR-054）
             em = energy_model()
             if em is not None:
                 for k, s in enumerate(sl):
@@ -133,6 +134,9 @@ def apply_supervisor(S: FleetState, items: list, t_s: float, PB: Any = None) -> 
                         plan = em.rtl_plan(int(s))
                         z[k] = max(z[k], float(plan.z_rtl_m))
                         v[k] = float(plan.v_c_mps)
+                        pv = getattr(plan, "via_enu_m", None)
+                        if pv is not None:
+                            via[k] = (float(pv[1]), float(pv[0]))
                     except Exception:
                         continue
             if it.z_rtl_m is not None:
@@ -141,7 +145,7 @@ def apply_supervisor(S: FleetState, items: list, t_s: float, PB: Any = None) -> 
                 S.z_rtl[sl] = np.maximum(S.z_rtl[sl], float(it.z_rtl_m))  # M09 CLIMB 结束时的重算（更高时）
             else:
                 ACT.release_path(S, PB, sl)
-                ACT.begin_rtl(S, sl, z, v, t_s)
+                ACT.begin_rtl(S, sl, z, v, t_s, via)
         elif a == SupAction.LAND:
             ACT.release_path(S, PB, sl)
             ACT.begin_land(S, sl, None, t_s)

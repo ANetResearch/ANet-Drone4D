@@ -1,6 +1,7 @@
 """plan-pool 进程入口（M10-FR-030、FR-031、FR-032；M10 §6.3.3、§7.4.3）。
 
-`init_worker(worlds_dir, world_key)` 在 spawn 出的进程中执行一次：PDEATHSIG、`OMP_NUM_THREADS = 1`（spawn 前已由父进程
+`init_worker(worlds_dir, world_key, cpu, parent_pid, parent_cpus)` 在 spawn 出的进程中执行一次：PDEATHSIG 并复核父进程 pid
+（父进程已先行死亡即退出，不留孤儿）、亲和性避开 sim-core 所钉的核、负 nice 恢复为 0、`OMP_NUM_THREADS = 1`（spawn 前已由父进程
 设置，这里复核）、按 (world_id, contentVersion, coordinate.sha256) 打开并缓存 GeoWorld（M04 `open_world_query`，只映射
 派生缓存，不派生）；绑定不一致时拒绝（123 PLAN_GRID_MISMATCH，P-01）。`worker_main(req)` 按作业类别分派：
 
@@ -35,7 +36,7 @@ from . import smooth as SM
 from .jobs import PlanRequest, PlanResult, result_digest
 from .transit import plan_transit
 
-__all__ = ["PlanGridMismatch", "get_world", "init_worker", "set_world", "traj_key", "worker_main"]
+__all__ = ["PlanGridMismatch", "get_world", "init_worker", "set_world", "traj_key", "worker_cpus", "worker_main"]
 
 _STATE: dict[str, Any] = {"world": None, "key": None, "worlds_dir": None, "grid25": None}
 MAX_PREVIEW_PTS = 2000
@@ -56,12 +57,35 @@ def _pdeathsig() -> None:
         pass
 
 
-def init_worker(worlds_dir: str | None, world_key: tuple[str, str, str] | None, cpu: int | None = None) -> None:
+def worker_cpus(parent: tuple[int, ...] | None, ncpu: int | None = None) -> set[int] | None:
+    """plan-pool 进程的 CPU 集合（M10-FR-030；FX2-R3，ADR-070）：spawn 出的进程继承 sim-core 的亲和性（supervisor 把 sim-core
+    钉在单核，configs/runtime.yaml `cpus: [1]`），规划作业若与主循环同核会抢占 250 Hz 主循环。父进程只钉在部分 CPU 上时，
+    返回其余 CPU；父进程未钉核（亲和性已是全部 CPU）或信息缺失时返回 None（保持继承）。"""
+    n = int(ncpu or os.cpu_count() or 0)
+    if not parent or n <= 0:
+        return None
+    rest = set(range(n)) - {int(c) for c in parent}
+    return rest if rest and len(parent) < n else None
+
+
+def init_worker(worlds_dir: str | None, world_key: tuple[str, str, str] | None, cpu: int | None = None,
+                parent_pid: int | None = None, parent_cpus: tuple[int, ...] | None = None) -> None:
+    """spawn 出的进程中执行一次。PDEATHSIG 只对设置之后的父进程死亡生效：父进程若在本进程走到这里之前已被 SIGKILL（supervisor
+    挂死处置、kill -9），本进程已被过继给 init 或 subreaper，再设 PDEATHSIG 也不会触发，且进程自己持有 call_queue 的写端、
+    永远读不到 EOF，成为常驻约 160 MB 的孤儿（D1 验收第 2 轮 4.1b）。因此设置之后复核父进程 pid，已变化即退出。
+    亲和性：`cpu` 显式给出（`AWR_PLAN_POOL_CPU`）时钉在该核；否则避开父进程所钉的核（`worker_cpus`）。优先级：继承来的负 nice
+    （sim-core `nice: -5`）恢复为 0，规划作业不与其他进程争抢。"""
     os.environ.setdefault("OMP_NUM_THREADS", "1")
     _pdeathsig()
-    if cpu is not None:
-        with contextlib.suppress(OSError, AttributeError):
-            os.sched_setaffinity(0, {int(cpu)})
+    if parent_pid is not None and os.getppid() != int(parent_pid):
+        os._exit(0)
+    cpus = {int(cpu)} if cpu is not None else worker_cpus(parent_cpus)
+    if cpus:
+        with contextlib.suppress(OSError, AttributeError, ValueError):
+            os.sched_setaffinity(0, cpus)
+    with contextlib.suppress(OSError, AttributeError):
+        if os.getpriority(os.PRIO_PROCESS, 0) < 0:
+            os.setpriority(os.PRIO_PROCESS, 0, 0)
     _STATE["worlds_dir"] = worlds_dir
     _STATE["key"] = tuple(world_key) if world_key else None
 
@@ -275,7 +299,8 @@ def _do_generator(req: PlanRequest, world: Any, t0: float, preview: bool = False
     p = req.payload
     vehicles = [VehicleCtx(v["vehicle_id"], np.asarray(v["home_enu_m"], np.float64), np.asarray(v.get("pos_enu_m",
                            v["home_enu_m"]), np.float64), float(v.get("v_limit_mps", 12.0)), float(v.get("cruise_mps", 5.0)),
-                           float(v.get("r_col_m", 0.49))) for v in p["vehicles"]]
+                           float(v.get("r_col_m", 0.49)), yawrate_max_rad_s=float(v.get("yawrate_max_rad_s", math.inf)))
+                for v in p["vehicles"]]
     ctx = GenContext(world, vehicles, dict(p.get("constraints") or {}), p.get("zones"), dict(p.get("camera") or
                      {"hfov_deg": 60.0, "vfov_deg": 42.1}), str(p.get("mission_id", "")))
     try:
@@ -502,8 +527,8 @@ def _do_assemble(req: PlanRequest, world: Any, t0: float) -> PlanResult:
 
 
 def _do_deconflict(req: PlanRequest, world: Any) -> PlanResult:
-    """FR-056：payload `trajs=[{vehicle_id, ctrl_pts, ts_s, prio}]`、`clearance_m`、`r_col_m`、`zones`；
-    dz 候选须通过 `validate`（整体平移后的 B-spline 净空复核）。"""
+    """FR-056：payload `trajs=[{vehicle_id, ctrl_pts, ts_s, prio}]`、`clearance_m`、`r_col_m`、`zones`，可选 `delays_s`、
+    `dzs_m`（候选集合，缺省为 deconflict.DELAYS_S、DZS_M）；dz 候选须通过 `validate`（整体平移后的 B-spline 净空复核）。"""
     from .deconflict import deconflict_mission, sample_traj
 
     p = req.payload
@@ -520,8 +545,13 @@ def _do_deconflict(req: PlanRequest, world: Any) -> PlanResult:
         ok, _ = SM.validate(Q, ts[k], world, Q[0], Q[-1], r_col_m=r_col, zones=p.get("zones"))
         return bool(ok)
 
+    kw = {}
+    if p.get("delays_s") is not None:      # 入场转场消解只用延迟（engine `_poll_entry`，ADR-070）
+        kw["delays"] = tuple(float(x) for x in p["delays_s"])
+    if p.get("dzs_m") is not None:
+        kw["dzs"] = tuple(float(x) for x in p["dzs_m"])
     res = deconflict_mission(S, [float(t.get("prio", 0.0)) for t in trs], clearance_m=float(p.get("clearance_m", 10.0)),
-                             validate=_valid)
+                             validate=_valid, **kw)
     ids = [str(t.get("vehicle_id", i)) for i, t in enumerate(trs)]
     js = res.to_json(ids)
     status = "ok" if res.ok else "degraded"

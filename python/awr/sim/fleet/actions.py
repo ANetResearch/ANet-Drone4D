@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from awr.world.georef.frames import enu_to_ned, yaw_ned_from_enu
+from awr.world.georef.frames import yaw_ned_from_enu
 
 from . import kernels_l1 as K
 from . import params_px4 as P
@@ -131,13 +131,18 @@ def begin_land_home(S: FleetState, slots, t: float) -> None:
     begin_land(S, s, S.home[s, :2].copy(), t)
 
 
-def begin_rtl(S: FleetState, slots, z_rtl_up, v_rtl, t: float) -> None:
-    """K10：RTL；阶段随 M09 FSM 的 RTL 子模式推进，refgen 按阶段选择目标（CLIMB 在当前 xy 升至 z_rtl）。"""
+def begin_rtl(S: FleetState, slots, z_rtl_up, v_rtl, t: float, via_ned_xy=None) -> None:
+    """K10：RTL；阶段随 M09 FSM 的 RTL 子模式推进，refgen 按阶段选择目标（CLIMB 在当前 xy 升至 z_rtl）。
+    `via_ned_xy`（k×2 或 2，NED 水平坐标，NaN 行为直飞）：CRUISE 先经绕行点再飞 home 上方（ADR-054），缺省直飞。"""
     s = _s(slots)
     init = np.isin(S.ctrl_mode[s], (K.M_IDLE, K.M_TAKEOFF, K.M_SPOOLUP, K.M_VELOCITY, K.M_OFFBOARD))
     _init_ref(S, s[init])
     S.z_rtl[s] = np.broadcast_to(np.asarray(z_rtl_up, np.float64), s.shape)
     S.v_rtl[s] = np.broadcast_to(np.asarray(v_rtl, np.float64), s.shape)
+    if via_ned_xy is None:
+        S.rtl_via[s] = np.nan
+    else:
+        S.rtl_via[s] = np.broadcast_to(np.asarray(via_ned_xy, np.float64), (s.size, 2))
     S.land_xy[s] = S.p[s, :2]
     S.stopping[s] = False
     _mark(S, s, K.M_RTL, 0, t)
@@ -187,15 +192,39 @@ def begin_traj(S: FleetState, slots, t: float) -> None:
     _mark(S, s, K.M_TRAJ, 0, t)
 
 
+_ENU_NED_PERM = np.array([1, 0, 2])
+_NO_PSI = np.zeros(0)
+_ENU_NED_SIGN = np.array([1.0, 1.0, -1.0])
+
+
 def set_traj_enu(S: FleetState, slots, p_enu: np.ndarray, v_enu: np.ndarray, a_enu: np.ndarray,
                  psi_enu: np.ndarray | None = None) -> None:
     """TRAJ 设定点写入（M10 跟踪器 order 027 用；ENU 输入，fleet 内换算为 NED，M08-FR-086、NFR-019）。"""
     s = _s(slots)
-    S.tr_x[s] = enu_to_ned(np.asarray(p_enu, np.float64))
-    S.tr_v[s] = enu_to_ned(np.asarray(v_enu, np.float64))
-    S.tr_a[s] = enu_to_ned(np.asarray(a_enu, np.float64))
+    pa, va, aa = (np.asarray(x, np.float64).reshape(-1, 3) for x in (p_enu, v_enu, a_enu))
+    ya = np.asarray(psi_enu, np.float64).reshape(-1) if psi_enu is not None else _NO_PSI
+    same = pa.shape[0] == va.shape[0] == aa.shape[0] == s.size and (psi_enu is None or ya.size == s.size)
+    if K.HAVE_NUMBA and s.size and same:
+        # 融合写入（与下方 numpy 实现逐位相同，每 125 Hz 调用，FX-SIM1 固定开销优化）；广播形状走 numpy 路径
+        K.set_traj_nb(s, pa, va, aa, ya, psi_enu is not None, S.tr_x, S.tr_v, S.tr_a, S.yaw_sp)
+        return
+    # (E, N, U) -> (N, E, -U)：列重排加符号，与 `enu_to_ned` 逐位相同
+    S.tr_x[s] = pa[:, _ENU_NED_PERM] * _ENU_NED_SIGN
+    S.tr_v[s] = va[:, _ENU_NED_PERM] * _ENU_NED_SIGN
+    S.tr_a[s] = aa[:, _ENU_NED_PERM] * _ENU_NED_SIGN
     if psi_enu is not None:
         S.yaw_sp[s] = yaw_ned_from_enu(np.asarray(psi_enu, np.float64))
+
+
+def set_traj_enu_rows(S: FleetState, slots, P_enu: np.ndarray, V_enu: np.ndarray, A_enu: np.ndarray,
+                      PSI_enu: np.ndarray) -> None:
+    """`set_traj_enu(S, slots, P[slots], V[slots], A[slots], PSI[slots])` 的等价写法：输入是按 slot 行组织的 (N, 3)、(N,)
+    数组，只读 slots 行（M10 跟踪器 125 Hz 调用，省去四次花式下标拷贝；与 set_traj_enu 逐位相同，FX2-R3）。"""
+    s = _s(slots)
+    if K.HAVE_NUMBA and s.size:
+        K.set_traj_rows_nb(s, P_enu, V_enu, A_enu, PSI_enu, S.tr_x, S.tr_v, S.tr_a, S.yaw_sp)
+        return
+    set_traj_enu(S, s, P_enu[s], V_enu[s], A_enu[s], PSI_enu[s])
 
 
 def begin_velocity(S: FleetState, slots, frame_body: bool, vmax: float, hold_alt: bool, t: float) -> None:

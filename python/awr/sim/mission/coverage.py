@@ -69,15 +69,17 @@ class FacadeGrid:
         ka, kz = self.cells_near(cam)
         if ka.size == 0 or kz.size == 0:
             return 0
-        KA, KZ = np.meshgrid(ka, kz)
-        new = self.seen[KZ, KA] == 0
+        # 与 np.meshgrid(ka, kz) 的行优先展开同序（广播视图代替 meshgrid 与 np.c_，逐位相同，5 Hz 的固定开销，ADR-060）
+        shape = (kz.size, ka.size)
+        new = self.seen[np.ix_(kz, ka)] == 0
         if not new.any():
             return 0
-        ka_n, kz_n = KA[new], KZ[new]
+        ka_n = np.broadcast_to(ka, shape)[new]
+        kz_n = np.broadcast_to(kz[:, None], shape)[new]
         ang = (ka_n + 0.5) * self.d_ang
-        nrm = np.c_[np.cos(ang), np.sin(ang), np.zeros(ang.size)]
-        X = np.c_[self.center[0] + self.r_fp * nrm[:, 0], self.center[1] + self.r_fp * nrm[:, 1],
-                  self.z0 + (kz_n + 0.5) * 2.0]
+        nrm = np.stack([np.cos(ang), np.sin(ang), np.zeros(ang.size)], axis=1)
+        X = np.stack([self.center[0] + self.r_fp * nrm[:, 0], self.center[1] + self.r_fp * nrm[:, 1],
+                      self.z0 + (kz_n + 0.5) * 2.0], axis=1)
         d = cam[None, :] - X
         dist = np.linalg.norm(d, axis=1)
         ok = dist <= 2.0 * self.standoff

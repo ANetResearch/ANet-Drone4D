@@ -106,7 +106,7 @@ class AnetDaemonNetwork:
     async def unregister(self, aid: str) -> None:
         self.views.pop(aid, None)
 
-    async def find(self, requester: str, pattern: str) -> list[AgentView]:
+    async def find(self, requester: str, pattern: str, *, t0_ns: int | None = None) -> list[AgentView]:
         rep = await self._plane(requester).post("/find", {"capability": pattern})
         out = []
         for it in rep.get("agents") or []:

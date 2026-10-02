@@ -20,8 +20,9 @@ import numpy as np
 
 from awr.sim.fleet import params_px4 as PX
 
+from . import kernels as KN
 from .flight_fsm import KILL_RANK, Origin
-from .state import FS, SUBV
+from .state import COND, FS, SUBV
 
 if TYPE_CHECKING:
     from .service import SafetyRuntime
@@ -67,8 +68,92 @@ class FastGuard:
     def __init__(self, rt: SafetyRuntime) -> None:
         self.rt = rt
         self.gust_window = False
+        self.use_kernel = getattr(rt, "kernel", "numpy") == "numba" and KN.HAVE_NUMBA
+        self._prm: np.ndarray | None = None
+        self._flags = np.zeros(0, np.uint32)
+        self._vals = np.zeros((0, 6))
+
+    def _params(self) -> np.ndarray:
+        if self._prm is None:
+            G = self.rt.params.guard
+            p = np.zeros(20)
+            p[KN.GP_GRACE], p[KN.GP_SINK], p[KN.GP_TE_RAD], p[KN.GP_TE_S] = G.grace_s, G.sink_m, G.tilt_err_rad, G.tilt_err_s
+            p[KN.GP_PE_EL], p[KN.GP_PE_S], p[KN.GP_THR] = G.pe_eland_m, G.pe_s, G.thr_frac * PX.MPC_THR_MAX
+            p[KN.GP_THR_S], p[KN.GP_TRK_DV], p[KN.GP_TRK_S], p[KN.GP_YAW_RAD] = G.thr_s, G.track_dv_mps, G.track_s, G.yaw_err_rad
+            p[KN.GP_AGE], p[KN.GP_KILL_RAD], p[KN.GP_EL_RAD], p[KN.GP_PE_FAIL] = (G.state_age_s, G.tilt_kill_rad, G.tilt_eland_rad,
+                                                                                G.pe_fail_m)
+            p[KN.GP_FS_TKO], p[KN.GP_SUB_SPOOL] = int(FS.TAKING_OFF), S_SPOOL
+            p[KN.GP_TRK_BIT], p[KN.GP_EST_BIT] = 1 << COND["TRACK_DEGRADED"], 1 << COND["EST_TIMEOUT"]
+            self._prm = p
+        return self._prm
 
     def step(self, ctx: Any) -> None:
+        if self.use_kernel:
+            self._step_kernel()
+            return
+        self._step_numpy()
+
+    def _step_kernel(self) -> None:
+        """numba 路径（`kernels.fast_guard_scan`）：逐机判定在核内完成，只有置位的机体才回到 Python 提出候选；候选的
+        提出顺序、原因码、值与阈值与 numpy 路径相同（对拍：tests/safety/test_fast_guard.py）。"""
+        rt, S, sb = self.rt, self.rt.S, self.rt.sb
+        act = rt.act_idx
+        n = act.size
+        if n == 0:
+            return
+        if self._flags.size < n:
+            self._flags = np.zeros(max(n, 64), np.uint32)
+            self._vals = np.zeros((max(n, 64), 6))
+        prm = self._params()
+        t = rt.t_ns
+        prm[KN.GP_TS] = t * 1e-9
+        E = S.enu
+        hit = KN.fast_guard_scan(act, sb["fs"], sb["sub"], S.in_air, sb["cond"], sb["t_enter_ns"], E.q_xyzw, E.q_sp_xyzw, E.pos,
+                                 E.pos_ref, E.vel, S.env_gust, S.thrust, S.thr_cap, S.est_age_s, sb["est_age_extra_s"],
+                                 sb["pe_max_m"], sb["pe_gust_max_m"], sb["te_since"], sb["pe_since"], sb["thr_since"],
+                                 sb["trk_since"], sb["last_ref"], sb["last_ref_t"], int(t), prm, _PE_SUB, _YAW_SUB, _TRK_SUB,
+                                 _AIR_ELAND, _AIR_FAIL, self._flags, self._vals)
+        if hit == 0:
+            return
+        G = rt.params.guard
+        F = self._flags[:n]
+        V = self._vals[:n]
+        tilt, terr, yerr, pe, age, dv = (V[:, KN.GV_TILT], V[:, KN.GV_TERR], V[:, KN.GV_YERR], V[:, KN.GV_PE], V[:, KN.GV_AGE],
+                                         V[:, KN.GV_DV])
+
+        def on(b: int) -> np.ndarray:
+            return (F & b) != 0
+
+        kill_tilt = on(KN.FG_KILL_TILT)
+        for m, code, val, thr in ((kill_tilt, "SAF.CTRL.TILT_KILL", tilt, G.tilt_kill_rad),
+                                  (on(KN.FG_KILL_TE) & ~kill_tilt, "SAF.CTRL.TILT_ERR_KILL", terr, G.tilt_err_rad)):
+            if m.any():
+                rt.fsm.propose(act[m], int(FS.DISARMED), 2, Origin.AUTO, code, key=KILL_RANK, value=np.degrees(val[m]),
+                               thr=float(np.degrees(thr)))
+        for m, code, val, thr in ((on(KN.FG_STALE), "SAF.EST.TIMEOUT", age, G.state_age_s),
+                                  (on(KN.FG_PEF), "SAF.CTRL.POS_ERR_FAILSAFE", pe, G.pe_fail_m)):
+            if m.any():
+                if code == "SAF.EST.TIMEOUT":
+                    rt.set_cond(act[m], "EST_TIMEOUT", True)
+                rt.fsm.propose(act[m], int(FS.FAILSAFE), 0, Origin.AUTO, code, value=val[m], thr=thr)
+        for m, code, val, thr in ((on(KN.FG_EL_TILT), "SAF.CTRL.TILT_ELAND", np.degrees(tilt), G.tilt_eland_deg),
+                                  (on(KN.FG_PEL), "SAF.CTRL.POS_ERR_ELAND", pe, G.pe_eland_m),
+                                  (on(KN.FG_TS), "SAF.CTRL.THROTTLE_SAT", S.thrust[act].astype(np.float64), G.thr_frac),
+                                  (on(KN.FG_YAW), "SAF.CTRL.YAW_ERR", np.degrees(yerr), G.yaw_err_deg)):
+            if m.any():
+                rt.fsm.propose(act[m], int(FS.ELAND), 0, Origin.AUTO, code, value=val[m], thr=thr)
+        new = on(KN.FG_TRK_NEW)
+        if new.any():
+            rt.set_cond(act[new], "TRACK_DEGRADED", True)
+            rt.sink.add_many(act[new], rt.code("SAF.CTRL.TRACK_DEGRADED"), t, values=dv[new], threshold=G.track_dv_mps)
+        gone = on(KN.FG_TRK_GONE)
+        if gone.any():
+            rt.set_cond(act[gone], "TRACK_DEGRADED", False)
+        clr = on(KN.FG_EST_CLR)
+        if clr.any():
+            rt.set_cond(act[clr], "EST_TIMEOUT", False)
+
+    def _step_numpy(self) -> None:
         rt, S, sb = self.rt, self.rt.S, self.rt.sb
         act = rt.act_idx
         if act.size == 0:

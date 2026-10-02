@@ -24,6 +24,7 @@ from .types import (
 )
 
 if TYPE_CHECKING:
+    from .arrays import ArraysAdapter, IngestFromArrays
     from .pipeline import ingest
 
 
@@ -32,14 +33,20 @@ def __getattr__(name: str) -> Any:
         from .pipeline import ingest
 
         return ingest
+    if name in ("IngestFromArrays", "ArraysAdapter"):  # M03-FR-021（D1-ext）；按需导入，不拖慢 api 进程
+        from . import arrays
+
+        return getattr(arrays, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [
+    "ArraysAdapter",
     "ConfigError",
     "GateFailed",
     "IngestAdapter",
     "IngestConfig",
+    "IngestFromArrays",
     "Landmark",
     "LockBusy",
     "NormalizedCloud",

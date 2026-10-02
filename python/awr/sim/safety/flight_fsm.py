@@ -110,6 +110,7 @@ S_FLY_HOVER = SUBV[(FS.FLYING, "HOVER")]
 S_TKO_SPOOL, S_TKO_CLIMB = SUBV[(FS.TAKING_OFF, "SPOOLUP")], SUBV[(FS.TAKING_OFF, "CLIMB")]
 S_LND_DESC, S_LND_GOTO, S_LND_TD = SUBV[(FS.LANDING, "DESCEND")], SUBV[(FS.LANDING, "GOTO")], SUBV[(FS.LANDING, "TOUCHDOWN")]
 S_RTL_CLIMB, S_RTL_CRUISE, S_RTL_DESCEND, S_RTL_FINAL = 0, 1, 2, 3
+RTL_RECOMPUTE_PER_TICK = 16  # _rtl_phase：每 tick 至多重算 CLIMB 结束走廊的机数（批量求走廊上界；大机群同时 RTL，FX2-R2）
 
 TIMER_NONE, TIMER_PREFLIGHT, TIMER_READY, TIMER_LANDED, TIMER_LOC, TIMER_NOTREADY = 0, 1, 2, 3, 4, 5
 
@@ -384,7 +385,7 @@ class FlightFSM:
         else:
             exp = None
         lc = S.lifecycle[act]
-        if not np.array_equal(lc, self.lc_shadow[act]):
+        if (lc != self.lc_shadow[act]).any():
             self._lifecycle(act, t)
             self.lc_shadow[act] = lc
             self.flags_dirty = True
@@ -586,6 +587,9 @@ class FlightFSM:
 
     # ---------------------------------------------------------------- RTL 子阶段推进（FR-011；12 §4.4.6）
     def _rtl_phase(self, act: np.ndarray, t: int) -> None:
+        """RTL 子阶段推进（逐机判据同逐机实现，按机向量化；FX2-R2）。CLIMB 结束时的走廊重算（`climb_end_z`，每架约 0.35 ms）
+        每 tick 至多 RTL_RECOMPUTE_PER_TICK 架（slot 升序），其余本 tick 保持 CLIMB、下一 tick 继续：1000 架同时 RTL 时
+        不再在一个 tick 内做数百次走廊查询（D1-AC-27）。"""
         rt, S, sb = self.rt, self.rt.S, self.rt.sb
         r = act[sb["fs"][act] == FS.RTL]
         if r.size == 0:
@@ -593,27 +597,25 @@ class FlightFSM:
         P = rt.params.rtl
         pos = S.enu.pos[r]
         home = S.enu.home[r]
-        sub = sb["sub"][r]
+        sub = sb["sub"][r].astype(np.int64)
         z = pos[:, 2]
         dxy = np.hypot(pos[:, 0] - home[:, 0], pos[:, 1] - home[:, 1])
         z_rtl = S.z_rtl[r]
-        for k, s in enumerate(r):
-            s = int(s)
-            sb_sub = int(sub[k])
-            nxt = sb_sub
-            if sb_sub == S_RTL_CLIMB and z[k] >= z_rtl[k] - P.climb_tol_m:
-                need = rt.bat.climb_end_z(s) if rt.bat is not None else -np.inf
-                if need > z_rtl[k] + P.climb_tol_m:
-                    rt.act_.rtl(np.array([s], np.int32), "rtl_climb_recompute", z_rtl_m=float(need))
-                    rt.sb["sup_expect"][s] = -1  # 已在 RTL：M08 只抬高 z_rtl，不产生模式事件
-                else:
-                    nxt = S_RTL_CRUISE
-            if nxt == S_RTL_CRUISE and dxy[k] < P.cruise_done_m:
-                nxt = S_RTL_DESCEND
-            if nxt == S_RTL_DESCEND and z[k] - home[k, 2] < P.descend_alt_m + P.climb_tol_m:
-                nxt = S_RTL_FINAL
-            if nxt != sb_sub:
-                self._commit(s, int(FS.RTL), nxt, Origin.SYSTEM, C.idx("SYS.RTL_PHASE"), t)
+        nxt = sub.copy()
+        climb = np.flatnonzero((sub == S_RTL_CLIMB) & (z >= z_rtl - P.climb_tol_m))[:RTL_RECOMPUTE_PER_TICK].tolist()
+        needs = rt.bat.climb_end_z_many([int(r[k]) for k in climb]) if (rt.bat is not None and climb) \
+            else [-np.inf] * len(climb)
+        for k, need in zip(climb, needs, strict=True):
+            s = int(r[k])
+            if need > z_rtl[k] + P.climb_tol_m:
+                rt.act_.rtl(np.array([s], np.int32), "rtl_climb_recompute", z_rtl_m=float(need))
+                rt.sb["sup_expect"][s] = -1  # 已在 RTL：M08 只抬高 z_rtl，不产生模式事件
+            else:
+                nxt[k] = S_RTL_CRUISE
+        nxt[(nxt == S_RTL_CRUISE) & (dxy < P.cruise_done_m)] = S_RTL_DESCEND
+        nxt[(nxt == S_RTL_DESCEND) & (z - home[:, 2] < P.descend_alt_m + P.climb_tol_m)] = S_RTL_FINAL
+        for k in np.flatnonzero(nxt != sub).tolist():
+            self._commit(int(r[k]), int(FS.RTL), int(nxt[k]), Origin.SYSTEM, C.idx("SYS.RTL_PHASE"), t)
 
     # ================================================================== 仲裁（M09 §6.4.6）
     def resolve(self, t: int) -> np.ndarray:

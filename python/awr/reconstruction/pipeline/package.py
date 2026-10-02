@@ -6,9 +6,9 @@ worlds share the source world frame, AWR-16 §14.1), `registration`, dataset pro
 `generator_params.recon`, the camera home of frame 0 and the session directory to publish under
 `reconstruction/<session_id>/`.
 
-M03 owns `IngestFromArrays` / `ArraysAdapter` (M03-FR-021, D1-ext). Until `awr.world.ingest` exports them, the
-transitional bridge `m03_bridge` (same field contract, built only from M03 library functions) is used; the switch is
-automatic and logged (`builder` in the stage record).
+M03 owns `IngestFromArrays` / `ArraysAdapter` (M03-FR-021, D1-ext, delivered by FX-SIM2): TILING and PACKAGING drive the
+M03 two-phase builder `awr.world.package.arrays_build.PhasedBuild` (publish after the last cancellation checkpoint of
+PACKAGING). The transitional bridge `m03_bridge` was removed once M03 delivered (request M01-to-M03 item 1).
 """
 
 from __future__ import annotations
@@ -111,9 +111,15 @@ def m03_arrays_api() -> tuple[Any, Any] | None:
 
 
 def to_m03_spec(spec: ReconIngestSpec, IngestFromArrays: Any) -> Any:
-    return IngestFromArrays(world_id=spec.world_id, name=spec.name, name_zh=spec.name_zh, xyz_world=spec.xyz_world,
-                            normals=spec.normals, class_index=spec.class_index, anchor=spec.anchor, true_north=spec.true_north,
-                            scale_status=spec.scale_status, source_kind=spec.source_kind, registration=spec.registration,
-                            source_origin_engine=spec.source_origin_engine, dataset=spec.dataset,
-                            generator_params=spec.generator_params, camera_home=spec.camera_home,
-                            recon_session_dir=spec.recon_session_dir)
+    kw: dict[str, Any] = dict(world_id=spec.world_id, name=spec.name, name_zh=spec.name_zh, xyz_world=spec.xyz_world,
+                              normals=spec.normals, class_index=spec.class_index, anchor=spec.anchor,
+                              true_north=spec.true_north, scale_status=spec.scale_status, source_kind=spec.source_kind,
+                              registration=spec.registration, source_origin_engine=spec.source_origin_engine,
+                              dataset=spec.dataset, generator_params=spec.generator_params, camera_home=spec.camera_home,
+                              recon_session_dir=spec.recon_session_dir)
+    # M03 §7.2 追加的可选字段（FX-SIM2）：源世界 anchor 原样、T_ecef_world、会话 id、标签、staging 名（job_id，续跑保留）
+    extra = {"anchor_json": spec.anchor_json, "T_ecef_world": spec.T_ecef_world, "session_id": spec.session_id,
+             "tags": tuple(spec.tags), "staging_nonce": (spec.generator_params or {}).get("job_id")}
+    fields = getattr(IngestFromArrays, "__dataclass_fields__", {})
+    kw.update({k: v for k, v in extra.items() if k in fields})
+    return IngestFromArrays(**kw)

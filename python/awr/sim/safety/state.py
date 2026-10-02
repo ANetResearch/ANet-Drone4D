@@ -66,7 +66,7 @@ BATTERY_FIELDS: dict[str, tuple] = {
     "has_bat": (_B, ()), "e_use_wh": (_F64, ()), "p_hover_w": (_F64, ()), "cells": (_U8, ()), "wh_used": (_F64, ()),
     "voltage_v": (_F32, ()), "current_a": (_F32, ()),
     "t_rem_s": (_F32, ()), "t_rtl_s": (_F32, ()), "z_rtl_m": (_F32, ()), "v_c_mps": (_F32, ()),
-    "rtl_ref_xy": (_F64, (2,)), "rtl_valid": (_B, ()), "rtl_ceiling": (_B, ()),
+    "rtl_ref_xy": (_F64, (2,)), "rtl_valid": (_B, ()), "rtl_ceiling": (_B, ()), "rtl_via_xy": (_F64, (2,)),
     "bat_once": (_U8, ()), "soc_min": (_F32, ()), "energy_rtl_n": (_U16, ()), "drain_pct_s": (_F32, ()),
 }
 
