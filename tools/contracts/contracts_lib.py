@@ -308,12 +308,13 @@ def _json_close(a, b, rtol: float, atol: float) -> bool:
     return _num_close(a, b, rtol, atol)
 
 
-def golden_equivalent(cur: bytes | None, new: bytes, rtol: float = 1e-12, atol: float = 1e-12) -> bool:
+def golden_equivalent(cur: bytes | None, new: bytes, rtol: float = 1e-9, atol: float = 1e-9) -> bool:
     """True when an on-disk JSON golden matches a freshly generated one.
 
     Byte equality first; otherwise structural JSON equality with floats compared at ulp-level tolerance.
     Transcendental functions (libm, pyproj) differ in the last bits across CPUs (CI runners vary per job),
-    so --check must not fail on a few-ulp difference while still catching any real change.
+    so --check must not fail on such last-digit differences (PX4 local projection shows ~1e-10 m) while still
+    catching any real change, which moves results far beyond 1e-9.
     Non-JSON payloads require byte equality.
     """
     if cur is None:

@@ -136,15 +136,24 @@ def test_rest_origin_host_and_lan_secret(st) -> None:
 def test_audit_and_no_token_in_logs(st, caplog) -> None:
     caplog.set_level(logging.DEBUG)
     tok = rtc.token(st.base, "viewer", client="tests/0.1")
+    audit = st.settings.run_dir / "audit.jsonl"
+
+    def denied_lines() -> list[dict]:
+        rows = [json.loads(x) for x in audit.read_text(encoding="utf-8").splitlines()] if audit.exists() else []
+        return [x for x in rows if x["kind"] == "auth.denied" and x["detail"]["why"] == "token"]
+
+    before = len(denied_lines())
+    time.sleep(1.1)  # 让同源每秒 1 条的审计节流窗口（可能被同一 stack 上的前序用例占用）先过期
     for _ in range(5):
         httpx.get(f"{st.base}/api/auth/whoami", headers={"Authorization": "Bearer v1.bad.token"}, timeout=5)
-    audit = st.settings.run_dir / "audit.jsonl"
-    time.sleep(1.3)
+    deadline = time.monotonic() + 5.0  # 审计写入是异步的：按条件轮询，不用固定等待
+    while len(denied_lines()) - before < 1 and time.monotonic() < deadline:
+        time.sleep(0.1)
     lines = [json.loads(x) for x in audit.read_text(encoding="utf-8").splitlines()]
     issued = [x for x in lines if x["kind"] == "auth.token_issued"]
     assert issued and issued[-1]["detail"]["jti"] and issued[-1]["detail"]["client"] == "tests/0.1"
-    denied = [x for x in lines if x["kind"] == "auth.denied" and x["detail"]["why"] == "token"]
-    assert 1 <= len(denied) <= 2  # 同一来源每秒至多 1 条
+    new_denied = len(denied_lines()) - before
+    assert 1 <= new_denied <= 2  # 同一来源每秒至多 1 条；5 次请求在 1 s 内发出，最多跨 2 个窗口
     text = audit.read_text(encoding="utf-8") + "\n".join(r.getMessage() + str(getattr(r, "kv", "")) for r in caplog.records)
     assert tok["token"] not in text and tok["token"].split(".")[1] not in text
     assert st.settings.admin_password not in text
