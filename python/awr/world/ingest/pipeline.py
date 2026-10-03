@@ -57,7 +57,7 @@ def ingest(adapter: IngestAdapter, ctx: StageContext | None = None, *, dtm_cell_
         raise ConfigError("level = auto 属于 V0.2 通用配置化导入")
     if cfg.dedupe != "off":
         raise ConfigError("dedupe = exact 为 V0.2（M03-FR-022）")
-    if cfg.semantic != "rules":
+    if cfg.semantic == "csf":
         raise ConfigError("--semantic csf 为 P2（V0.2 提供）")
     if cfg.units_to_m is None:
         raise ConfigError("units_to_m = auto 属于 V0.2 通用配置化导入")
@@ -71,10 +71,17 @@ def ingest(adapter: IngestAdapter, ctx: StageContext | None = None, *, dtm_cell_
         raise ConfigError(f"{n_raw} 点超过 D1 单遍切片上限 {MAX_POINTS_SINGLE_PASS}（V0.5 分块切片）")
     P = np.asarray(raw.xyz, np.float64)
     N0 = np.zeros((n_raw, 3)) if raw.normal is None else np.asarray(raw.normal, np.float64)
+    # semantic = provided：类别由适配器给出（合成世界，ADR-077），第 8 步不做规则分类
+    cls_in = None
+    if cfg.semantic == "provided":
+        if raw.class_index is None or np.shape(raw.class_index) != (n_raw,):
+            raise ConfigError("semantic = provided 需要 RawCloud.class_index（长度与点数相同）")
+        cls_in = np.asarray(raw.class_index, np.uint8)
     keep = np.isfinite(P[:, 0]) & np.isfinite(P[:, 1]) & np.isfinite(P[:, 2])
     n_nonfinite = int(n_raw - keep.sum())
     if n_nonfinite:
         P, N0 = P[keep], N0[keep]
+        cls_in = None if cls_in is None else cls_in[keep]
     N0[~(np.isfinite(N0[:, 0]) & np.isfinite(N0[:, 1]) & np.isfinite(N0[:, 2]))] = 0.0
     T["read"] = time.perf_counter() - t0
     rss["read"] = peak_rss_mb()
@@ -133,7 +140,7 @@ def ingest(adapter: IngestAdapter, ctx: StageContext | None = None, *, dtm_cell_
     T["normals"] = time.perf_counter() - t3
     # ---- 8 HAG 与规则分类
     t4 = time.perf_counter()
-    cls = classify(Nn, hag)
+    cls = classify(Nn, hag) if cls_in is None else cls_in
     upf = Nn[:, 2] > 0.95
     tilt_after = angle_to_z_deg(Nn[upf].mean(0)) if upf.any() else 0.0
     mad = ground_plane_mad(E, upf & (np.abs(hag) < 1.5)) if do_level else None
@@ -153,7 +160,8 @@ def ingest(adapter: IngestAdapter, ctx: StageContext | None = None, *, dtm_cell_
     Hd, Wd = dtm_w.shape
     pr = min(max(int((peak[1] - dtm_origin[1]) // dtm_cell_m), 0), Hd - 1)
     pc = min(max(int((peak[0] - dtm_origin[0]) // dtm_cell_m), 0), Wd - 1)
-    anchor = solve_anchor(cfg.landmark, cfg.fallback_anchor, (float(peak[0]), float(peak[1])), float(dtm_w[pr, pc]))
+    anchor = solve_anchor(cfg.landmark, cfg.fallback_anchor, (float(peak[0]), float(peak[1])), float(dtm_w[pr, pc]),
+                          label=cfg.anchor_label)
     lo, hi = colmin(E), colmax(E)
     ext_min = [round(float(v), 3) + 0.0 for v in lo]
     ext_max = [round(float(v), 3) + 0.0 for v in hi]

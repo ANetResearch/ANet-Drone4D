@@ -1,6 +1,7 @@
 """`worldpkg` 命令行（M03 §7.1；AWR-16 §15.4、§18.1）。
 
-子命令：ingest、grid、tile、package、zones、env、qa、validate、build、status、clean、export（V0.5 预留）。
+子命令：ingest、grid、tile、package、zones、env、qa、validate、build、status、default-world、clean、export（V0.5 预留）。
+`ingest synthetic` 与 `build synthcity` 生成合成演示城市（ADR-077，`awr.world.ingest.synthetic`）。
 退出码：0 成功；1 校验失败；2 ingest 门禁失败；3 参数、I/O 或锁冲突；4 原始数据缺失或 sha256 不符。
 输出只用 ASCII 与中文。
 """
@@ -61,21 +62,28 @@ def _pipeline(stage: Path, a, *, log_json: bool = False):
 
 
 def cmd_ingest(a) -> int:
-    if a.source != "urbanscene3d":
-        _err(f"worldpkg ingest {a.source}：{'D1-ext' if a.source == 'recon' else 'V0.2'} 提供；D1 只有 urbanscene3d")
+    if a.source not in ("urbanscene3d", "synthetic"):
+        _err(f"worldpkg ingest {a.source}：{'D1-ext' if a.source == 'recon' else 'V0.2'} 提供；D1 只有 urbanscene3d 与 synthetic")
         return 3
     if a.semantic == "csf":
         _err("--semantic csf 为 P2（V0.2 提供），D1 默认使用规则语义")
         return 3
-    from ..ingest.urbanscene3d import UrbanScene3DAdapter
-
     out = _safe_path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     pipe = _pipeline(out, a, log_json=a.log_json)
-    pipe.run_ingest(UrbanScene3DAdapter(a.city, Path(a.raw) if a.raw else default_raw_dir()))
+    if a.source == "synthetic":                     # 合成演示城市（ADR-077）：类别由生成器给出
+        from ..ingest.synthetic import SyntheticAdapter
+
+        adapter = SyntheticAdapter(a.city or "synthcity")
+        pipe.params = adapter.build_params(pipe.params)
+    else:
+        from ..ingest.urbanscene3d import UrbanScene3DAdapter
+
+        adapter = UrbanScene3DAdapter(a.city, Path(a.raw) if a.raw else default_raw_dir())
+    pipe.run_ingest(adapter)
     pipe.save_after("ingest")
     s = pipe.nc.stats
-    _p(f"[{a.city}] ingest done points={len(pipe.nc.xyz)} nn_median_m={s.nn_median_m} peak_hag_m={s.peak_hag_m:.1f}")
+    _p(f"[{pipe.nc.world_id}] ingest done points={len(pipe.nc.xyz)} nn_median_m={s.nn_median_m} peak_hag_m={s.peak_hag_m:.1f}")
     return 0
 
 
@@ -238,16 +246,19 @@ def cmd_build(a) -> int:
     raw = _safe_path(a.raw) if a.raw else default_raw_dir()
     data = load_data_config()
     cities = a.ids or None
+    from ..ingest.synthetic import synth_specs
+
+    synth = synth_specs()
     for c in cities or []:
-        if data.by_world(c) is None:
-            _err(f"未知世界 {c}：只有 configs/data.yaml 中登记的城市可以构建")
+        if data.by_world(c) is None and c not in synth:
+            _err(f"未知世界 {c}：只有 configs/data.yaml 中登记的城市与 configs/worldpkg.yaml 的 synthetic 世界可以构建")
             return 3
     ctx = StageContext(world_id="worldpkg", log_json=a.log_json)
     res = build_missing(worlds, raw, jobs=a.jobs, cities=cities, missing_only=a.missing, params=_params(a),
                         log_json=a.log_json, ctx=ctx)
     print_summary(res)
     if any(r.error_code == "RAW_MISSING" for r in res.values()):
-        _err("提示：原始数据缺失，运行 make fetch-data")
+        _err("提示：原始数据缺失，运行 make fetch-data（无数据试用：make demo-world 生成合成演示城市 synthcity，ADR-077）")
     return overall_exit(res)
 
 
@@ -258,6 +269,9 @@ def cmd_status(a) -> int:
     worlds = _safe_path(a.worlds) if a.worlds else default_worlds_dir()
     raw = _safe_path(a.raw) if a.raw else default_raw_dir()
     data = load_data_config()
+    from ..ingest.synthetic import synth_specs
+    from .defaults import resolve_default_world
+
     rows = []
     for spec in data.files:
         reason, _info = missing_reason(worlds, spec.world_id, raw_dir=raw, data=data)
@@ -265,12 +279,35 @@ def cmd_status(a) -> int:
         rows.append({"world_id": spec.world_id, "rebuild": reason is not None, "reason": reason,
                      "raw_present": (raw / spec.name).exists(), "status": (st or {}).get("status"),
                      "content_version": (st or {}).get("content_version")})
+    for wid, sp in synth_specs().items():           # 合成世界：没有原始文件（raw_present 恒为 true，ADR-077）
+        reason, _info = missing_reason(worlds, wid, raw_dir=raw, data=data, synthetic=sp.params())
+        st = Publisher(worlds, wid).read_status() if (worlds / ".status").exists() else None
+        rows.append({"world_id": wid, "rebuild": reason is not None, "reason": reason, "raw_present": True,
+                     "status": (st or {}).get("status"), "content_version": (st or {}).get("content_version"),
+                     "synthetic": True})
+    dw = resolve_default_world(worlds)
     if a.json:
-        _p(json.dumps({"worlds": rows}, ensure_ascii=False, indent=1))
+        _p(json.dumps({"worlds": rows, "default_world": dw.to_json()}, ensure_ascii=False, indent=1))
     else:
         for r in rows:
             _p(f"{r['world_id']:<13} status={r['status'] or '-':<8} rebuild={'yes' if r['rebuild'] else 'no'} "
                f"reason={r['reason'] or '-'} raw={'yes' if r['raw_present'] else 'no'}")
+        _p(f"default world: {dw.world} ({dw.reason}) scenario={dw.scenario or '-'}")
+    return 0
+
+
+def cmd_default_world(a) -> int:
+    """打印生效的默认世界（ADR-077 回退规则；mk/m03.mk 与 make run 预检使用）。--json 输出完整判定。"""
+    from .defaults import resolve_default_world
+
+    worlds = _safe_path(a.worlds) if a.worlds else default_worlds_dir()
+    dw = resolve_default_world(worlds)
+    if a.json:
+        _p(json.dumps(dw.to_json(), ensure_ascii=False))
+    elif a.field == "scenario":
+        _p(dw.scenario or "")
+    else:
+        _p(dw.world)
     return 0
 
 
@@ -310,8 +347,8 @@ def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="worldpkg", description="World Package 构建、切片与校验（M03）")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("ingest", help="读取与规范化（写 coordinate.json、DTM 与 .work）")
-    p.add_argument("source", choices=["urbanscene3d", "recon", "generic"])
-    p.add_argument("--city")
+    p.add_argument("source", choices=["urbanscene3d", "synthetic", "recon", "generic"])
+    p.add_argument("--city", help="urbanscene3d 城市 id；synthetic 时为合成世界 id（缺省 synthcity）")
     p.add_argument("--raw")
     p.add_argument("--out", required=True)
     p.add_argument("--keep-work", action="store_true")
@@ -372,6 +409,11 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--worlds")
     p.add_argument("--raw")
     p.set_defaults(fn=cmd_status)
+    p = sub.add_parser("default-world", help="生效的默认世界（AWR_WORLD 显式优先；深圳未构建且合成城市可用时回退，ADR-077）")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--field", choices=["world", "scenario"], default="world")
+    p.add_argument("--worlds")
+    p.set_defaults(fn=cmd_default_world)
     p = sub.add_parser("clean", help="清理 staging、trash、_shared")
     p.add_argument("--staging", action="store_true")
     p.add_argument("--trash", action="store_true")

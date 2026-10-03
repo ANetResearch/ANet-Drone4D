@@ -2,7 +2,8 @@
 
 只读 `world.json`、各根 `metadata.json` 与 `worlds/.status/`，按 mtime 缓存（刷新至多 1 Hz/城）；不做校验与重计算。
 状态映射（12 §3.3.1 → 17 API）：READY → ready；BUILDING（持锁的 staging）→ building；ABSENT → missing；
-ABSENT 且最近一次构建失败 → failed；INVALID → stale。已有 READY 包时重建失败，旧包保持 ready。
+ABSENT 且最近一次构建失败 → failed（原因 raw_missing 除外，仍为 missing，ADR-077）；INVALID → stale。已有 READY 包时重建失败，
+旧包保持 ready。
 """
 
 from __future__ import annotations
@@ -137,7 +138,10 @@ class Catalog:
             except (OSError, json.JSONDecodeError):
                 w = None
         if w is None:
-            d.status = "building" if building else ("failed" if status and status.get("status") == "failed" else "missing")
+            # 原始数据缺失（reason raw_missing）的城市没有真正构建过：报 missing，界面提示 make fetch-data（ADR-077；无数据时
+            # 只有合成演示城市可用，六城不应显示为"构建失败"）
+            failed = bool(status) and status.get("status") == "failed" and status.get("reason") != "raw_missing"
+            d.status = "building" if building else ("failed" if failed else "missing")
             return d
         cv = w.get("contentVersion")
         if building:

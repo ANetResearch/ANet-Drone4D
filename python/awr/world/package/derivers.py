@@ -70,7 +70,10 @@ def worldpkg_config(path: Path | None = None) -> dict:
     derivers = doc.get("derivers") or list(DEFAULT_DERIVERS)
     defaults = dict(DEFAULTS)
     defaults.update(doc.get("defaults") or {})
-    return {"derivers": [str(d) for d in derivers], "defaults": defaults}
+    out = {"derivers": [str(d) for d in derivers], "defaults": defaults}
+    if "synthetic" in doc:                          # 合成世界登记（ADR-077；awr.world.ingest.synthetic.synth_specs 解析）
+        out["synthetic"] = doc["synthetic"]
+    return out
 
 
 def load_deriver(spec: str):

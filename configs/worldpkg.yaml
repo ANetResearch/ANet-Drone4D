@@ -13,3 +13,16 @@ defaults:
   border_inset_m: 20
   border_headroom_m: 50
   jobs: 3
+
+# 合成世界（ADR-077；M03-FR-066、FR-067；DEMO-W）：由 awr.world.ingest.synthetic 按固定种子程序化生成，不读取任何外部数据，
+# 世界包与截图可自由再分发。`worldpkg build <id>` 或 `make demo-world` 生成；`make worlds`（build --missing）在主默认世界
+# （configs/runtime.yaml 的 run.world）未发布且其原始数据不在本机时自动生成 run.fallback_world，并由 runtime 回退为默认世界。
+# 修改种子、尺寸或目标点数会使已发布包判定为 raw_changed 并在下次 make worlds 时重建。
+synthetic:
+  synthcity:
+    seed: 20261003
+    size_m: 1200                # 城市边长（m），范围 [-600, 600]²
+    target_points: 4000000      # 目标点数（窗格接受率已计入，实际约 ±3%）
+    name: ANet Synthetic City
+    name_zh: ANet Synthetic City
+    anchor: [30.0, 120.0, 10.0] # 示意锚点 (lat, lon, hMsl)：不代表任何真实地点

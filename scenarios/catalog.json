@@ -11,18 +11,26 @@
     "newyork": {"default": "free-newyork", "demo": ["s3-newyork-sar"]},
     "sanfrancisco": {"default": "free-sanfrancisco", "demo": ["s5-sanfrancisco-terrain"]},
     "suzhou": {"default": "free-suzhou", "demo": ["s6-suzhou-corridor"]},
-    "chicago": {"default": "free-chicago", "demo": ["s4-chicago-lakeshore"]}
+    "chicago": {"default": "free-chicago", "demo": ["s4-chicago-lakeshore"]},
+    "synthcity": {"default": "s0-synthcity-showcase", "demo": ["s0-synthcity-showcase", "free-synthcity"]}
   },
   "ui_profiles": {
+    "s0-synthcity-showcase": ["demo"],
     "s1-shenzhen-facade": ["demo", "wx-fog", "wx-rain", "wx-storm"],
     "ladder-shenzhen": ["n10", "n50", "n100", "n200", "n500", "n1000"]
   },
   "themes": {
+    "showcase": ["s0-synthcity-showcase"],
     "inspection": ["s1-shenzhen-facade", "s6-suzhou-corridor"],
     "coverage": ["s2-shanghai-formation", "s4-chicago-lakeshore", "s5-sanfrancisco-terrain"],
     "formation": ["s2-shanghai-formation", "s4-chicago-lakeshore"],
     "search_thermal": ["s3-newyork-sar"],
-    "weather": ["s1-shenzhen-facade#wx-fog", "s1-shenzhen-facade#wx-rain", "s1-shenzhen-facade#wx-storm"],
+    "weather": [
+      "s0-synthcity-showcase",
+      "s1-shenzhen-facade#wx-fog",
+      "s1-shenzhen-facade#wx-rain",
+      "s1-shenzhen-facade#wx-storm"
+    ],
     "stress": ["ladder-shenzhen", "soak-shenzhen"]
   }
 }

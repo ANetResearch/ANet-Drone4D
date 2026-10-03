@@ -81,7 +81,9 @@ class IngestConfig:
     evidence: tuple[str, ...] = ()
     north_evidence: tuple[str, ...] = ()
     dedupe: Literal["off", "exact"] = "off"
-    semantic: Literal["rules", "csf"] = "rules"
+    # rules：规则分类（16 §5 第 4 条）；csf：P2；provided：适配器在 RawCloud.class_index 中给出类别（合成世界，ADR-077）
+    semantic: Literal["rules", "csf", "provided"] = "rules"
+    anchor_label: str | None = None    # synthetic 锚点标签覆盖（须以 "illustrative:" 开头，V-C-12）；None 取默认标签
 
 
 @dataclass(slots=True)
@@ -90,6 +92,7 @@ class RawCloud:
     normal: np.ndarray | None          # (N,3) 或 None
     class_las: np.ndarray | None = None
     files: list[dict] = field(default_factory=list)   # [{name, bytes, points, sha256, header_bytes}]
+    class_index: np.ndarray | None = None              # uint8 (N,)，anet-classes@1 紧凑索引（semantic = provided 时使用）
 
 
 class IngestAdapter(Protocol):

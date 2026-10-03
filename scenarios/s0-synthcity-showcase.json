@@ -1,0 +1,195 @@
+{
+  "schema": "awr.scenario.v1",
+  "schema_version": "1.0.0",
+  "scenario_id": "s0-synthcity-showcase",
+  "name": "ANet Synthetic City showcase",
+  "name_zh": "合成演示城市全景展示",
+  "description": "Seven P600 in the generated demo city: a two-band facade helix on the 318 m ANet Tower, a two-drone block coverage and a three-drone V formation along the river, while the weather turns from clear to light rain to fog.",
+  "world_id": "synthcity",
+  "world_coordinate_sha256": "5b607a060c922b48d883ad2b581bfc615474b42a6040e8343509ae5c935c66e8",
+  "seed": 7,
+  "rate": 1,
+  "autoplay": true,
+  "gcs_loss_policy": "ignore",
+  "record": true,
+  "time_limit_s": 360,
+  "on_complete": "pause",
+  "energy_precheck": "reject",
+  "env": {"preset": "clear"},
+  "vehicles": [
+    {
+      "vehicle_id": "p600-h1",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-8, 60, null],
+      "speed_profile": "px4_default",
+      "sensors": ["camera"],
+      "caps": ["rgb.zoom"],
+      "marked": true
+    },
+    {
+      "vehicle_id": "p600-h2",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [8, 60, null],
+      "speed_profile": "px4_default",
+      "sensors": ["camera", "mid360"],
+      "caps": ["rgb.zoom", "lidar.mapping"],
+      "marked": true
+    },
+    {
+      "vehicle_id": "p600-c1",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [352, -60, null],
+      "speed_profile": "px4_default",
+      "sensors": ["camera"]
+    },
+    {
+      "vehicle_id": "p600-c2",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [368, -60, null],
+      "speed_profile": "px4_default",
+      "sensors": ["camera"]
+    },
+    {
+      "vehicle_id": "p600-f1",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-488, -300, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-f2",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-472, -300, null],
+      "speed_profile": "px4_default"
+    },
+    {
+      "vehicle_id": "p600-f3",
+      "profile_id": "p600_mid360",
+      "home_enu_m": [-480, -314, null],
+      "speed_profile": "px4_default"
+    }
+  ],
+  "missions": [
+    {
+      "mission_id": "m-helix-upper",
+      "vehicle_ids": ["p600-h1"],
+      "generator": "helix_scan",
+      "params": {
+        "center_enu_m": [62.0, 122.0],
+        "radius_m": 58.0,
+        "standoff_m": 30,
+        "z_range_m": [120.0, 80.0],
+        "dz_per_rev_m": 16.0,
+        "speed_mps": 9.0,
+        "gimbal": "look_at_axis",
+        "direction": "ccw",
+        "facade_z_range_m": [40.0, 120.0]
+      },
+      "sync_policy": "free",
+      "priority": 0,
+      "on_done": "rtl",
+      "on_abort": "hover"
+    },
+    {
+      "mission_id": "m-helix-lower",
+      "vehicle_ids": ["p600-h2"],
+      "generator": "helix_scan",
+      "params": {
+        "center_enu_m": [62.0, 122.0],
+        "radius_m": 58.0,
+        "standoff_m": 30,
+        "z_range_m": [80.0, 40.0],
+        "dz_per_rev_m": 16.0,
+        "speed_mps": 9.0,
+        "gimbal": "look_at_axis",
+        "direction": "ccw",
+        "facade_z_range_m": [40.0, 120.0]
+      },
+      "sync_policy": "free",
+      "priority": 1,
+      "on_done": "rtl",
+      "on_abort": "hover"
+    },
+    {
+      "mission_id": "m-blocks",
+      "vehicle_ids": ["p600-c1", "p600-c2"],
+      "generator": "lawnmower",
+      "params": {
+        "polygon_enu_m": [[260.0, -165.0], [460.0, -165.0], [460.0, -75.0], [260.0, -75.0]],
+        "altitude": {"mode": "fly_over", "agl_m": 70, "clearance_m": 10},
+        "side_overlap": 0.4,
+        "front_overlap": 0.8,
+        "speed_mps": 9
+      },
+      "on_done": "rtl"
+    },
+    {
+      "mission_id": "m-formation",
+      "vehicle_ids": ["p600-f1", "p600-f2", "p600-f3"],
+      "generator": "formation",
+      "params": {
+        "shape": "v",
+        "spacing_m": 12,
+        "half_angle_deg": 35,
+        "heading_mode": "filtered",
+        "tau_psi_s": 2,
+        "anchor_path_enu_m": [
+          [-430, -401.07],
+          [-390, -402.65],
+          [-350, -406.12],
+          [-310, -410.94],
+          [-270, -416.37],
+          [-230, -421.6],
+          [-190, -425.82],
+          [-150, -428.4],
+          [-110, -428.93],
+          [-70, -427.35],
+          [-30, -423.88],
+          [10, -419.06],
+          [50, -413.63],
+          [90, -408.4],
+          [130, -404.18],
+          [140, -335],
+          [-430, -335]
+        ],
+        "speed_mps": 10.0,
+        "corner_radius_m": 30,
+        "z_m": 40.0
+      },
+      "on_done": "rtl"
+    }
+  ],
+  "transit": {"planner": "safe_transit", "margin_m": 5, "layer_dz_m": 4},
+  "zones": {"active": ["border", "nofly-sc-steptower", "restricted-sc-pond"]},
+  "events": [
+    {"event_id": "wx-lightrain", "at_s": 45, "action": "env.preset", "args": {"name": "lightRain", "duration_s": 20}},
+    {"event_id": "wx-fog", "at_s": 150, "action": "env.preset", "args": {"name": "fog", "duration_s": 40}},
+    {
+      "event_id": "mark-done",
+      "when": {"metric": "missions_done", "op": "==", "value": true},
+      "action": "mark",
+      "args": {"label": "showcase complete"}
+    }
+  ],
+  "success": {
+    "all": [
+      {"metric": "missions_done", "op": "==", "value": true},
+      {
+        "metric": "facade_coverage",
+        "args": {"mission_ids": ["m-helix-upper", "m-helix-lower"]},
+        "op": ">=",
+        "value": 0.9
+      },
+      {"metric": "area_coverage", "args": {"mission_ids": ["m-blocks"]}, "op": ">=", "value": 0.9},
+      {"metric": "formation_err_rms_m", "args": {"mission_id": "m-formation"}, "op": "<=", "value": 3},
+      {"metric": "min_separation_m", "op": ">=", "value": 10},
+      {"metric": "guard_events", "op": "==", "value": 0},
+      {"metric": "landed_all", "op": "==", "value": true}
+    ]
+  },
+  "profiles": {
+    "ci": {"rate": 5, "record": false},
+    "perf": {"rate": 1, "record": false},
+    "demo": {"rate": 1, "record": true, "on_complete": "continue"}
+  },
+  "tags": ["demo", "ci", "showcase", "synthetic"]
+}

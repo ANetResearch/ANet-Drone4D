@@ -42,23 +42,30 @@ def solve_origin_latlon(landmark: Landmark, target_xy: tuple[float, float], max_
 
 
 def solve_anchor(landmark: Landmark | None, fallback: tuple[float, float, float] | None, peak_xy: tuple[float, float],
-                 dtm_at_peak_m: float) -> dict:
-    """返回 coordinate.json 的 anchor 对象（synthetic，已按 M03 §6.4 取整）与 T_ecef_world。"""
+                 dtm_at_peak_m: float, label: str | None = None) -> dict:
+    """返回 coordinate.json 的 anchor 对象（synthetic，已按 M03 §6.4 取整）与 T_ecef_world。
+
+    `label` 覆盖默认标签（合成世界：说明它不对应任何真实地点，ADR-077）；必须以 `illustrative:` 开头（V-C-12）。"""
     if landmark is not None:
         lat0, lon0, _ = solve_origin_latlon(landmark, peak_xy)
         h_msl = landmark.base_msl_m - dtm_at_peak_m
-        label = (f"illustrative: world origin placed by offset from {landmark.name} "
-                 f"(tallest HAG peak at E={peak_xy[0]:.1f}, N={peak_xy[1]:.1f})")
+        label_out = (f"illustrative: world origin placed by offset from {landmark.name} "
+                     f"(tallest HAG peak at E={peak_xy[0]:.1f}, N={peak_xy[1]:.1f})")
         unc = {"horizontal": 50.0, "vertical": 40.0}
     else:
         if fallback is None:
             raise ValueError("synthetic anchor needs a landmark or a fallback (lat, lon, hMsl)")
         lat0, lon0, h_msl = fallback
-        label = "illustrative: city centre, no landmark evidence"
+        label_out = "illustrative: city centre, no landmark evidence"
         unc = {"horizontal": 5000.0, "vertical": 40.0}
+    if label is not None:
+        if not label.startswith("illustrative:"):
+            raise ValueError("synthetic anchor label must start with 'illustrative:' (V-C-12)")
+        label_out = label
     lat0, lon0, h_msl = round(lat0, 7), round(lon0, 7), round(float(h_msl), 1)
     anchor = {"kind": "synthetic", "georeferenced": False, "datum": "WGS84", "lonDeg": lon0, "latDeg": lat0,
-              "hEllipsoidM": h_msl, "hMslM": h_msl, "geoid": None, "epoch": None, "uncertaintyM": unc, "label": label}
+              "hEllipsoidM": h_msl, "hMslM": h_msl, "geoid": None, "epoch": None, "uncertaintyM": unc,
+              "label": label_out}
     return anchor
 
 

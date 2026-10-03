@@ -543,8 +543,12 @@ def build_world(adapter: IngestAdapter, worlds_dir: Path, *, params: BuildParams
 # ================================================================ --missing 判定与并行构建
 
 
-def missing_reason(worlds_dir: Path, wid: str, *, raw_dir: Path, data: DataConfig, deep: bool | None = None) -> tuple[str | None, dict]:
-    """16 §3.5 第 2 条 6 个条件；返回 (原因 或 None, 详情)。原因取 `.status.reason` 枚举值，`missing` 表示条件 ①。"""
+def missing_reason(worlds_dir: Path, wid: str, *, raw_dir: Path, data: DataConfig, deep: bool | None = None,
+                   synthetic: dict | None = None) -> tuple[str | None, dict]:
+    """16 §3.5 第 2 条 6 个条件；返回 (原因 或 None, 详情)。原因取 `.status.reason` 枚举值，`missing` 表示条件 ①。
+
+    合成世界（`synthetic` 为当前 `SynthSpec.params()`，ADR-077）的条件 ⑤ 改为"`generator.params.synthetic` 与当前配置不同"
+    （生成器版本、种子、尺寸或目标点数变化），原因同为 `raw_changed`；不读原始文件。"""
     deep = (os.environ.get("WORLDPKG_VERIFY") == "deep") if deep is None else deep
     wd = Path(worlds_dir) / wid
     info: dict = {}
@@ -564,6 +568,11 @@ def missing_reason(worlds_dir: Path, wid: str, *, raw_dir: Path, data: DataConfi
     if not rep.ok:
         info["first_error"] = rep.errors[0]
         return "validate_failed", info
+    if synthetic is not None:
+        have = ((w.get("generator") or {}).get("params") or {}).get("synthetic")
+        if have != synthetic:
+            info["synthetic"] = {"have": have, "want": synthetic}
+            return "raw_changed", info
     spec = data.by_world(wid)
     raw = Path(raw_dir) / spec.name if spec else None
     if raw is not None and raw.exists():
@@ -599,11 +608,13 @@ def _child_init() -> None:
 
 def _build_one(args: tuple) -> dict:
     wid, worlds_dir, raw_dir, params, log_json = args
+    from ..ingest.synthetic import SyntheticAdapter, synth_specs
     from ..ingest.urbanscene3d import UrbanScene3DAdapter
 
     ctx = StageContext(world_id=wid, log_json=log_json)
     try:
-        adapter = UrbanScene3DAdapter(wid, Path(raw_dir))
+        synth = synth_specs()
+        adapter = SyntheticAdapter(synth[wid]) if wid in synth else UrbanScene3DAdapter(wid, Path(raw_dir))
     except WorldpkgError as e:
         return BuildResult(wid, e.exit_code, None, False, getattr(e, "error_code", "IO_ERROR"), [], str(e)).to_json()
     return build_world(adapter, Path(worlds_dir), params=params, ctx=ctx).to_json()
@@ -654,6 +665,7 @@ def build_missing(worlds_dir: Path, raw_dir: Path | None = None, *, jobs: int = 
             continue
         ctx.log("info", f"{wid}: rebuild ({reason})")
         todo.append(wid)
+    todo += _synthetic_todo(worlds_dir, raw_dir, data, cities=cities, missing_only=missing_only, results=results, ctx=ctx)
     if not todo:
         return results
     jobs = max(1, min(int(jobs), 8))
@@ -672,6 +684,53 @@ def build_missing(worlds_dir: Path, raw_dir: Path | None = None, *, jobs: int = 
             for a, res in zip(args, ex.map(_build_one, args), strict=True):
                 results[a[0]] = BuildResult(**res)
     return results
+
+
+def _synthetic_todo(worlds_dir: Path, raw_dir: Path, data: DataConfig, *, cities: list[str] | None, missing_only: bool,
+                    results: dict[str, BuildResult], ctx: StageContext) -> list[str]:
+    """合成世界（configs/worldpkg.yaml 的 synthetic 段，ADR-077）的构建判定：
+
+    - 显式点名（`worldpkg build synthcity`，或 `AWR_WORLD=synthcity`）：按 --missing 判定或强制；
+    - `--missing` 且未点名：已发布的合成世界保持新鲜（条件 ①–⑥）；未发布时只在回退需要时生成（`defaults.fallback_needed`：
+      主默认世界未发布且其原始数据不在本机）。有原始数据时不自动生成。
+    """
+    from ..ingest.synthetic import synth_specs
+    from .defaults import fallback_needed
+
+    out: list[str] = []
+    want_env = (os.environ.get("AWR_WORLD") or "").strip()
+    for wid, spec in synth_specs().items():
+        named = bool(cities) and wid in cities
+        if cities and not named:
+            continue
+        published = (worlds_dir / wid / "world.json").exists()
+        if not named and missing_only and not published and wid != want_env \
+                and not (fallback_needed(worlds_dir, raw_dir, data) and wid == _fallback_world()):
+            continue
+        if not named and not missing_only and not published:
+            continue                                     # worlds-force 只重建已有的合成世界
+        reason: str | None = "forced"
+        if missing_only:
+            reason, _info = missing_reason(worlds_dir, wid, raw_dir=raw_dir, data=data, synthetic=spec.params())
+            if reason is None:
+                ctx.log("info", f"{wid}: up to date")
+                cv = read_json(worlds_dir / wid / "world.json")["contentVersion"]
+                Publisher(worlds_dir, wid).write_status("ready", reason=None, exit_code=0, content_version=cv, deep=False)
+                results[wid] = BuildResult(wid, 0, cv, False, None)
+                continue
+            if published and reason != "missing":
+                Publisher(worlds_dir, wid).write_status("invalid", reason=reason, exit_code=0,
+                                                        content_version=read_json(worlds_dir / wid / "world.json").get("contentVersion"),
+                                                        deep=False)
+        ctx.log("info", f"{wid}: generate ({reason}; synthetic, ADR-077)")
+        out.append(wid)
+    return out
+
+
+def _fallback_world() -> str | None:
+    from .defaults import runtime_run_defaults
+
+    return runtime_run_defaults()[2]
 
 
 def overall_exit(results: dict[str, BuildResult]) -> int:

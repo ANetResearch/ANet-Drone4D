@@ -43,3 +43,21 @@ class BuildParams:
                 "borderInsetM": num(self.border_inset_m), "borderHeadroomM": num(self.border_headroom_m),
                 "dsmOccupancy": bool(self.dsm_occupancy), "numpy": np.__version__,
                 **({"hagGrid": True} if self.hag_grid else {})}
+
+
+@dataclass(frozen=True)
+class SynthParams(BuildParams):
+    """合成世界（ADR-077）：`generator.params` 另写 `synthetic`（生成器、版本、种子、尺寸与目标点数），`--missing` 据此判定输入变化。"""
+
+    synthetic: tuple[tuple[str, object], ...] = ()
+
+    def generator_params(self) -> dict:
+        d = super().generator_params()
+        if self.synthetic:
+            d["synthetic"] = dict(self.synthetic)
+        return d
+
+
+def with_synthetic(p: BuildParams, synthetic: dict) -> SynthParams:
+    fields = {f: getattr(p, f) for f in BuildParams.__dataclass_fields__}
+    return SynthParams(**fields, synthetic=tuple(synthetic.items()))

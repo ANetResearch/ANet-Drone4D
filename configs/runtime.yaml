@@ -8,6 +8,7 @@ run:
   id: auto                      # r<YYYYMMDD>-<HHMMSS>-<4hex>
   world: shenzhen               # AWR_WORLD
   scenario: s1-shenzhen-facade  # AWR_SCENARIO（剧本 id，scenarios/catalog.json）
+  fallback_world: synthcity     # 默认世界回退（ADR-077）：world 未显式指定且未构建、本世界已构建时改用它，剧本取 catalog 中它的 default；null 关闭
   scenario_profile: null        # AWR_SCENARIO_PROFILE（剧本 profile，例如 ci、demo、n1000；M16）
   shm_root: /dev/shm/awr        # 实际目录 ${shm_root}/${run.id}
   persist_root: runs            # AWR_RUNS_DIR；实际目录 ${persist_root}/${run.id}
@@ -51,6 +52,10 @@ procs:
     id_range: [0, 1024]
     standby: true               # 热备用进程：重启时直接接替（AWR-19 §4.2，ADR-070；D1-AC-11b 挂死 ≤ 4 s 恢复）
     standby_cpus: [7]           # 等待期间钉在 plan-pool 所在的 core7（ADR-017），接替时改为 cpus
+    # 主循环以外的线程（zenoh I/O、checkpoint 写线程、输入日志、plan-pool 管理线程）只放 core7：放到"其余全部 CPU"时，
+    # 持有 GIL 的后台线程会在 api（core0）或 Chromium（core2–6）满载的核上被抢占，主循环醒来后等 GIL（ADR-073 第 6 条）。
+    # 主循环未钉核（ci profile）时不生效
+    env: {AWR_SIM_AUX_CPUS: "7"}
   - name: api
     layer: core
     cmd: [uvicorn, awr.api.main:app, --host, "${net.bind}", --port, "${net.port_effective}",
