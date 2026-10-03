@@ -39,7 +39,10 @@ playwright-report/
 blob-report/
 /apps/web/perf/results*/
 /apps/web/__screenshots__/
-coverage/
+# 只忽略覆盖率输出目录（锚定）；不锚定的 coverage/ 会把源码包 python/awr/swarm/coverage/ 一并忽略（SHOW-CI）
+/coverage/
+/apps/web/coverage/
+.coverage
 
 # 编辑器与系统
 .idea/
