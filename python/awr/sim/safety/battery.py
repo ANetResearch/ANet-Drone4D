@@ -85,7 +85,7 @@ class BatteryModel:
         self.cursor = 0
         self._quota = 0.0  # 轮转刷新配额累加器（battery_rtl 每次调用 + n·refresh_hz·dt_rtl 架）
         self.dt_s = 25 * 0.004
-        self.dt_rtl_s = 50 * 0.004  # battery_rtl stage（5 Hz、奇数 tick 43，每次 n/5 架；ADR-070）
+        self.dt_rtl_s = 50 * 0.004  # battery_rtl stage（5 Hz、tick % 50 = 17，每次 n/5 架；ADR-070、ADR-073）
 
     @property
     def bb(self) -> dict[str, np.ndarray]:
@@ -185,10 +185,10 @@ class BatteryModel:
             self._criteria(hb)
 
     def step_rtl(self, ctx: Any) -> None:
-        """battery_rtl stage（every 50、5 Hz、phase 43，奇数 tick）：z_rtl 与 t_rtl 的轮转刷新（每次 n/5 架，每机仍每秒一次）
-        与位移触发刷新（M09-FR-052；位移判据由 10 Hz 改为 5 Hz）。此前与能量积分、判据在同一次 battery 调用内（N = 1000
-        时合计约 1.6 ms，落在偶数 tick 时与 l1 组叠加超过 3 ms；刷新本身有约 0.4 ms 的固定开销：M04 走廊上界查询与返航
-        逆风查询各一次批量调用），拆开后只在奇数 tick 执行（ADR-070）。"""
+        """battery_rtl stage（every 50、5 Hz、phase 17）：z_rtl 与 t_rtl 的轮转刷新（每次 n/5 架，每机仍每秒一次）与位移触发
+        刷新（M09-FR-052）。此前与能量积分、判据在同一次 battery 调用内（N = 1000 时合计约 1.6 ms；刷新本身有约 0.4 ms 的
+        固定开销：M04 走廊上界查询与返航逆风查询各一次批量调用），ADR-070 拆出、放在相位 43；ADR-073 改到相位 17，即最轻的
+        一类 tick 对 (17, 18)（成对推进下单步按 tick 对均摊）。"""
         act = self.rt.act_idx
         if act.size:
             self._refresh_rtl(act, ctx, self.dt_rtl_s)

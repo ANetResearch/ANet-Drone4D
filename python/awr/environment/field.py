@@ -27,7 +27,7 @@ import numpy as np
 from . import kernels_rows as KR
 from .anchors import H_NS, AnchorIntegrator, Anchors
 from .atmosphere.isa import isa_arr
-from .atmosphere.optics import H_HAZE, optical_depth_arr, sigma_at_arr
+from .atmosphere.optics import FLAG_BELOW_CLOUD_PRECIP, FLAG_IN_FOG_LAYER, H_HAZE, optical_depth_arr, sigma_at_arr
 from .conventions import e
 from .io.assets import ensure_turb_box, ensure_weather_map
 from .keyframe import ApplyResult, EnvKeyframe, EnvOp, KeyframeManager
@@ -59,6 +59,7 @@ from .wind.gust import MAX_ACTIVE, GustEvent, GustScheduler, gust_arr, gust_crea
 from .wind.profile import f_adv, profile_arr
 from .wind.turbulence import (
     FT,
+    SIGMA_W_OVER_REF,
     TURB_PERIOD,
     DrydenBank,
     TurbBox,
@@ -505,6 +506,14 @@ class EnvironmentServiceImpl:
         # 直接返回，全量求值时其余字段照常计算（FX2-R3：env stage 的 10 Hz 全量 tick 此前整段走 numpy，N = 1000 约 0.83 ms）
         wind_ok = self.fuse_wind and frame == _F_GLOBAL and n and self._wind_only_fused(pos, s, A, cfg, level, fa, agent_idx, o)
         if wind_ok and fields == _WIND_PARTS:
+            return o
+        if wind_ok and KR.HAVE_NUMBA:
+            # 风之外的字段同样一次遍历写完（env 全量 tick，ADR-073 第 3 条；与下方 numpy 路径逐字节相同）
+            KR.full_rest(o, pos, self._z_ground(pos[:, :2]), n, self.ground_z, self.h_anchor,
+                         SIGMA_W_OVER_REF * float(s[SIGMA_REF]), FT, d.sigma_haze0, H_HAZE, d.sigma_fog, d.sigma_precip,
+                         float(s[FOG_TOP]), float(s[BASE]), K_MOR, FLAG_IN_FOG_LAYER, FLAG_BELOW_CLOUD_PRECIP,
+                         fields & (_OPTICS | _WIND), fields & _TURB, fields & _PRECIP, fields & _THERMO, d.rain_eff_mmh,
+                         d.snow_eff_mmh, float(s[DUST]), float(s[ISA_DT]), float(s[RH]), min(level, 1))
             return o
         z_agl = pos[:, 2] - self._z_ground(pos[:, :2])
         su, sw = mil_sigma_arr(z_agl, float(s[SIGMA_REF]))

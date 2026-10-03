@@ -14,6 +14,7 @@ numpy 实现。
 
 from __future__ import annotations
 
+import math
 import os
 
 import numpy as np
@@ -31,7 +32,7 @@ except Exception:  # pragma: no cover
 
         return deco(a[0]) if a and callable(a[0]) else deco
 
-__all__ = ["HAVE_NUMBA", "store_rows_nb", "store_wind_rows_nb", "warmup"]
+__all__ = ["HAVE_NUMBA", "full_rest_nb", "store_rows_nb", "store_wind_rows_nb", "warmup"]
 
 
 @njit(cache=True, fastmath=False, inline="always")
@@ -85,6 +86,73 @@ def store_wind_rows_nb(sl, n, wind, glong, r_wind, r_gust):
         r_gust[s] = np.int16(_q32(glong[k], np.float32(0.01), np.float32(-32768.0), np.float32(32767.0)))
 
 
+@njit(cache=True, fastmath=False)
+def full_rest_nb(pos, zg, n, ground_z, h_anchor, sw, ft, haze0, h_haze, sig_fog, sig_precip, fog_top, base, k_mor,
+                 flag_fog, flag_below, want_optics, want_turb, want_precip, want_thermo, rain, snow, dust, isa_dt, rh,
+                 src_level, flags, sigma_ext, mor, sigma_precip_pm, turb_sigma, turb_l, rain_eff, snow_eff, dust_o, temp,
+                 press, rho, rh_o, source_level):
+    """env 全量求值中风以外的字段（`EnvironmentServiceImpl.query` 在风已走融合核之后的其余部分：MIL 湍流谱、光学、降水、
+    ISA 热力、标志与来源级别）一次遍历写完（ADR-073 第 3 条）。逐项运算与 numpy 路径相同：`np.maximum(x, c)` 写作
+    `x if x >= c else c`（输入有限），`**` 与 `math.exp` 与 numpy 同用 libm，float64 结果写入 float32 字段为同一舍入；
+    `tests/environment/test_env_full_kernel.py` 与 numpy 路径逐字节对拍。N = 1000 时 numpy 路径约 0.5 ms（生产口径约 1 ms），
+    是 env 全量 tick 与普通 tick 之差的主体。"""
+    for k in range(n):
+        z_agl = pos[k, 2] - zg[k]
+        x = z_agl / ft
+        hft = x if x >= 10.0 else 10.0
+        fl = flags[k]
+        if want_optics:
+            z = pos[k, 2] - ground_z
+            s = haze0 * math.exp(-z / h_haze)
+            fog = z < fog_top
+            s = s + (sig_fog if fog else 0.0)
+            if fog:
+                fl = fl | flag_fog
+            below = z < base
+            s = s + (sig_precip if below else 0.0)
+            if sig_precip > 0 and below:
+                fl = fl | flag_below
+            sigma_ext[k] = s
+            mor[k] = k_mor / (s if s >= 1e-12 else 1e-12)
+            sigma_precip_pm[k] = sig_precip if below else 0.0
+        flags[k] = fl
+        source_level[k] = src_level
+        if want_turb:
+            su = sw / (0.177 + 0.000823 * hft) ** 0.4
+            lu = hft / (0.177 + 0.000823 * hft) ** 1.2 * ft
+            turb_sigma[k, 0] = su
+            turb_sigma[k, 1] = su
+            turb_sigma[k, 2] = sw
+            turb_l[k, 0] = lu
+            turb_l[k, 1] = lu
+            turb_l[k, 2] = hft * ft
+        if want_precip:
+            rain_eff[k] = rain
+            snow_eff[k] = snow
+            dust_o[k] = dust
+        if want_thermo:
+            h = h_anchor + pos[k, 2]
+            t_isa = 288.15 - 0.0065 * h
+            t = t_isa + isa_dt
+            p = 101325.0 * (t_isa / 288.15) ** 5.25588
+            temp[k] = t - 273.15
+            press[k] = p
+            rho[k] = p / (287.053 * t)
+            rh_o[k] = rh
+
+
+def full_rest(o, pos, zg, n, ground_z, h_anchor, sw, ft, haze0, h_haze, sig_fog, sig_precip, fog_top, base, k_mor, flag_fog,
+              flag_below, fields_optics, fields_turb, fields_precip, fields_thermo, rain, snow, dust, isa_dt, rh,
+              src_level) -> None:
+    """`full_rest_nb` 的包装（EnvSampleSoA 字段解包；标量统一为 float64、标志为 uint8，签名固定以命中预热缓存）。"""
+    full_rest_nb(pos, zg, int(n), float(ground_z), float(h_anchor), float(sw), float(ft), float(haze0), float(h_haze),
+                 float(sig_fog), float(sig_precip), float(fog_top), float(base), float(k_mor), np.uint8(flag_fog),
+                 np.uint8(flag_below), bool(fields_optics), bool(fields_turb), bool(fields_precip), bool(fields_thermo),
+                 float(rain), float(snow), float(dust), float(isa_dt), float(rh), np.uint8(src_level), o.flags,
+                 o.sigma_ext_per_m, o.mor_m, o.sigma_precip_per_m, o.turb_sigma_mps, o.turb_l_m, o.rain_eff_mmh,
+                 o.snow_eff_mmh, o.dust, o.temperature_c, o.pressure_pa, o.rho_kgm3, o.rh, o.source_level)
+
+
 def warmup() -> None:
     """以运行期类型调用一次：slot 为 int64、查询缓冲为 C 连续 float64/uint8、行缓存为 EnvSample32 的字段视图。"""
     if not HAVE_NUMBA:
@@ -101,3 +169,5 @@ def warmup() -> None:
                   o.flags, o.source_level, o.gust_long_mps, r["wind"], r["wind_mean"], r["turb_sigma_uw"], r["sigma_ext"],
                   r["rain_eff"], r["rho"], r["flags"], r["source_level"], r["gust"], rv)
     store_wind_rows_nb(sl, 2, o.wind_mps, o.gust_long_mps, r["wind"], r["gust"])
+    full_rest(o, np.zeros((2, 3)), np.zeros(2), 2, 0.0, 0.0, 0.5, 0.3048, 1e-4, 1000.0, 0.0, 0.0, 0.0, 0.0, 3.912, 16, 32,
+              True, True, True, True, 0.0, 0.0, 0.0, 0.0, 0.5, 1)

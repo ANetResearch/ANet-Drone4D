@@ -322,6 +322,8 @@ class Director:
                   "mission.abort": rt.missions.abort}[act]
             res = fn(mid, self.principal)
         elif act in ("env.preset", "env.set", "env.gust"):
+            if act == "env.preset" and "name" not in args and "preset" in args:
+                args["name"] = args.pop("preset")            # 16 §12.3 旧写法：参数即 env/preset 命令的 {name, duration_s}
             res = rt.submit_internal({"cid": cid, "op": act.replace(".", "/"), "args": args}, self.principal)
         elif act == "vehicle.add":
             a = {"vehicle_id": args.get("vehicle_id"), "profile_id": args.get("profile_id", "p600_mid360"),

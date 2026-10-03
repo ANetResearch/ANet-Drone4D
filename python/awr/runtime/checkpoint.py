@@ -33,7 +33,7 @@ from typing import Any
 import msgpack
 import numpy as np
 
-__all__ = ["MAGIC", "Checkpoint", "CheckpointError", "CheckpointStore", "read_checkpoint", "serialize"]
+__all__ = ["MAGIC", "Checkpoint", "CheckpointError", "CheckpointStore", "IdleGate", "read_checkpoint", "serialize"]
 
 log = logging.getLogger("awr.runtime.checkpoint")
 
@@ -83,6 +83,82 @@ class Checkpoint:
 
 def _align(n: int) -> int:
     return (n + ALIGN - 1) // ALIGN * ALIGN
+
+
+class IdleGate:
+    """主循环空闲窗口（sim-core 主循环休眠期间；ADR-073 第 1 条，取代 ADR-070 第 6 条③的事件门控）。
+
+    主循环休眠前 `open(until_ns)`（`time.monotonic_ns()` 口径的预计醒来时刻），醒来后 `close()`。后台线程在每个让出点调用
+    `wait_slot(timeout_s)`：窗口打开且距窗口结束不少于 `margin_ns` 时立即返回 True；否则等下一个窗口（最长 timeout_s，超时
+    返回 False，调用方照常继续以保证进度）。与只看"是否在休眠"的事件门控相比，后台线程在窗口结束前主动停在让出点，主循环
+    醒来时 GIL 空闲：此前写线程在窗口末尾开始的一段编码（不可中断的 C 调用）会把主循环醒来后的第一个 stage 拖长 1–3 ms
+    （D1 验收第 3 轮 4.1：checkpoint 之后的那一轮单步）。
+
+    `open(until_ns, slack_ns)` 的 slack_ns 是主循环可容许的醒来后等待（下一轮按其相位的耗时估计仍在单步目标之内的余量）：
+    只有带 `slack=True` 的等待方（持状态锁执行、主循环醒来后等它完成的 checkpoint 后台拷贝）把它计入剩余；写线程只在让出点
+    暂停，始终按窗口本身判断。
+
+    兼容 `threading.Event` 的 `set()`、`clear()`、`is_set()`、`wait()`：`set()` 打开一个不限时的窗口（测试与非 sim-core 用法）。"""
+
+    def __init__(self, margin_ns: int = 400_000, clock: Any = time.monotonic_ns) -> None:
+        self._cv = threading.Condition(threading.Lock())
+        self._open = False
+        self._until = 0
+        self._slack = 0
+        self._gen = 0
+        self.margin_ns = int(margin_ns)
+        self._clock = clock
+        self.stats = {"windows": 0, "slots": 0, "waits": 0, "timeouts": 0}
+        self.last_slot_remain_ns = 0  # 最近一次 wait_slot 返回 True 时窗口的剩余时长（诊断）
+        self.last_slot_slack_ns = 0  # 同上，计入的主循环等待余量
+
+    def open(self, until_ns: int | None = None, slack_ns: int = 0) -> None:
+        with self._cv:
+            self._open = True
+            self._until = (1 << 62) if until_ns is None else int(until_ns)
+            self._slack = max(0, int(slack_ns))
+            self._gen += 1
+            self.stats["windows"] += 1
+            self._cv.notify_all()
+
+    def close(self) -> None:
+        self._open = False  # 单次赋值；等待方在下一次 open() 的通知或超时时复核
+
+    set = open
+
+    def clear(self) -> None:
+        self.close()
+
+    def is_set(self) -> bool:
+        return self._open
+
+    def wait(self, timeout: float | None = None) -> bool:
+        """`threading.Event.wait` 兼容：等到窗口打开（不看余量）。"""
+        with self._cv:
+            return self._cv.wait_for(lambda: self._open, timeout)
+
+    def wait_slot(self, timeout_s: float, need_ns: int | None = None, *, slack: bool = False) -> bool:
+        """need_ns 给出时要求窗口剩余 ≥ need_ns（缺省为 margin_ns）；slack=True 时剩余另计窗口的主循环等待余量。"""
+        clock = self._clock
+        end = clock() + int(timeout_s * 1e9)
+        need = self.margin_ns if need_ns is None else int(need_ns)
+        with self._cv:
+            while True:
+                now = clock()
+                sl = self._slack if slack else 0
+                if self._open and now + need <= self._until + sl:
+                    self.stats["slots"] += 1
+                    self.last_slot_remain_ns = self._until - now
+                    self.last_slot_slack_ns = sl
+                    return True
+                left = end - now
+                if left <= 0:
+                    self.stats["timeouts"] += 1
+                    return False
+                g = self._gen
+                self.stats["waits"] += 1
+                # 窗口未打开或余量不足：等下一个窗口（open() 推进 _gen 并通知）
+                self._cv.wait_for(lambda g=g: self._gen != g, left / 1e9)
 
 
 _YIELD_ITEMS = 64  # 后台编码每批元素数：批间 `time.sleep(0)` 让出 GIL
@@ -156,7 +232,9 @@ def _serialize(t_sim_ns: int, epoch: int, segment: int, layout_id: int, arrays: 
     first_off = off
     rows: list[tuple] = []
     chunks: list[tuple[int, memoryview]] = []
-    for name in names:
+    for k, name in enumerate(names):
+        if k % 32 == 31:
+            yield_point()  # 目录构建（每个数组约 5 µs 的 Python）每 32 个数组让出一次
         a = np.asarray(arrays[name])
         if not a.flags.c_contiguous:
             a = a.copy(order="C")  # ascontiguousarray 会把 0 维数组升为 1 维
@@ -201,6 +279,7 @@ def _serialize(t_sim_ns: int, epoch: int, segment: int, layout_id: int, arrays: 
         if acc >= _YIELD_BYTES or i % 8 == 7:  # 每复制约 128 KB 或 8 个数组让出一次（此前每 32 个数组，N = 1000 时一段约 1 ms）
             yield_point()
             acc = 0
+    yield_point()  # 元数据段整体拷贝（约 0.6 MB）前再让出一次（ADR-073：让出点之间不可中断的段 ≤ 约 0.3 ms）
     buf[meta_off:total] = mb
     crc = zlib.crc32(buf[HDR_BYTES:]) & 0xFFFFFFFF
     hdr = np.zeros(1, _HDR)
@@ -327,6 +406,10 @@ class CheckpointStore:
 
     def _write(self, slot: _Slot) -> None:
         t0 = time.perf_counter()
+        if self.gate is not None:
+            # 先等一个空闲窗口再开始：save() 在主循环迭代中途唤醒本线程，此前写线程立即开始编码（目录与首批元数据，
+            # 约 2–3 ms 的 Python，第一个让出点之前不看 gate），与主循环该轮及下一轮争 GIL（ADR-073 第 1 条）
+            self._gate_wait()
         data = serialize(slot.t_sim_ns, slot.epoch, slot.segment, self.layout_id, slot.arrays, slot.meta, out=self._wbuf,
                          yield_fn=self._gate_wait if self.gate is not None else None)
         final = self.dir / f"{slot.t_sim_ns:020d}{FILE_RE_SUFFIX}"
@@ -345,8 +428,14 @@ class CheckpointStore:
 
     def _gate_wait(self) -> None:
         g = self.gate  # close() 时置 None：停止过程中不再等待
-        if g is not None and not g.is_set():
-            g.wait(self.gate_timeout_s)
+        if g is not None:
+            ws = getattr(g, "wait_slot", None)
+            if ws is not None:  # IdleGate：只在主循环空闲窗口内、距窗口结束有余量时继续（ADR-073）
+                if not ws(self.gate_timeout_s):
+                    time.sleep(0)  # 超时（长时间没有足够长的窗口）：照常让出一次后继续，保证进度
+                return
+            if not g.is_set():
+                g.wait(self.gate_timeout_s)
         time.sleep(0)
 
     def _generations(self, d: Path) -> list[Path]:

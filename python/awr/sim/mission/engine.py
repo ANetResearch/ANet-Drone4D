@@ -58,8 +58,21 @@ SUBMITS_PER_STAGE = 4                    # mission_engine stage 每次至多下�
 THROTTLE_MIN_TRACKS = 32                 # 只对 ≥ 32 机的任务节流（S1–S6 等小编组的时序不变）
 RESULTS_PER_STAGE = 16                  # mission_engine stage（10 Hz）每次处理的调用终态上限
 PRECHECK_PER_STAGE = 8                  # 大机群任务能量预检每次 stage 的机数（分批，ADR-065）
+# 大机群任务每次 stage 至多做的入圆段直线粗校验（`coarse_proven`，N = 1000 时一次约 1.7 ms）：其余轨道顺延到之后的 stage。
+# 粗校验不通过时走 plan-pool 转场，不计入下发节流，链路丢失风暴中挂起的数百条轨道此前每次 stage 各做一次（单次 stage
+# 17–25 ms，D1-AC-27 link_drop；ADR-073 第 5 条）
+COARSE_PER_STAGE = 2
+# 粗校验不通过的记忆（TrackRT.coarse_memo）：同一入圆点、同一组生效区，机体离上次不通过时的位置不超过此距离时不再重做
+# （结果必然仍不通过，直接走 plan-pool 转场）。n1000 稳态中个别机体的转场确定性失败，按 30 s 退避续飞，每次续飞都在
+# mission_engine stage 内重做一次约 2.5 ms 的粗校验（生产口径），与 12 个 tick 后的转场下发落在同一秒（ADR-073 第 5 条）
+COARSE_MEMO_M = 1.0
+# 转场被地理围栏拒绝的记忆（TrackRT.tr_reject，ADR-074 第 6 条）：转场 follow_path 以 102 GEOFENCE_REJECT 失败后，退避续飞
+# 规划出的转场与上次被拒的相同（同一规划器、长度与最高点各差 < 1 m、机体离上次位置 ≤ COARSE_MEMO_M、同一组生效区）时
+# 不再下发，保持 SUSPENDED 按原退避续飞。ladder n1000 中 sim-0406 的转场每次都爬升到约 378 m、每次都被拒，每 30 s 一次的
+# 下发与准入在主循环内约 7 ms（mission 5.3–6.6 ms + 输入日志 2 ms，D1 验收第 4 轮 D1-AC-07 的单秒尖峰之一）
 FULL_SCAN_EVERY = 10                    # 大编组任务的候选轨道按事件登记，另每 10 次 stage（1 s）全量检查一次（兜底，FX2-R3）
-STATUS_CACHE_NS = 5_000_000_000         # 大编组任务状态汇总（进度、ETA、规划中）的缓存时长【仿真】，任务有变化时立即重算
+STATUS_CACHE_NS = 5_000_000_000         # 大编组任务状态汇总（进度、ETA、规划中）的缓存时长【仿真】，任务有变化时开始重算
+SUMMARY_TRACKS_PER_CALL = 64            # 大编组任务状态汇总每次调用至多累加的轨道数（分片，ADR-073 第 3 条）
 RTL_LAYER_M = 12.0                      # 编队解散分层返航的层距（≥ FleetGuard rearm_m 12 m；ADR-065）
 DISBAND_SYNC_TIMEOUT_NS = 30_000_000_000  # 解散分层：全员到达各自返航层的等待上限【仿真】（FX2-R3，ADR-070）
 ENTRY_DECONF_MAX = 12                   # 入场转场 4D 消解只对 2–12 机的非编队任务（大机群任务不做，FX2-R3，ADR-070）
@@ -67,6 +80,7 @@ ENTRY_SYNC_TIMEOUT_NS = 30_000_000_000  # 入场转场收集窗口【仿真】�
 ENTRY_DELAYS_S = tuple(range(0, 61, 2))  # 入场转场的起步延迟候选（只用延迟，不错层：转场起点即机体当前位置）
 ENTRY_CLEARANCE_PAD_M = 1.0             # 入场消解阈值 = min_sep_m + 1 m（跟踪误差与 10 Hz 起步粒度的余量）
 CAPT_SEP_PAD_M = 0.5                    # 编队集结（CAPT）的间距阈值 = min_sep_m + 0.5 m（跟踪误差余量，ADR-070）
+GEOFENCE_REJECT = 102                   # Reason.GEOFENCE_REJECT（转场被拒的记忆，ADR-074 第 6 条）
 NO_BACKOFF_CODES = {204, 206, 210, 6}     # 让行 HOLD、被取代、租约抢占、取消：条件解除后立即续飞，不退避
 FS_DROP = {"ELAND", "FAILSAFE", "CRASHED", "LANDING", "RTL", "LANDED", "DISARMED"}
 FS_RETURN = {"RTL", "LANDING", "LANDED", "ELAND", "FAILSAFE"}
@@ -106,6 +120,9 @@ class TrackRT:
     retry_at_ns: int = -1
     entry: tuple | None = None    # 入场转场 4D 消解期间暂存的 (follow_path 参数, 轨迹缓存条目, 控制点, ts_s)
     entry_at_ns: int = -1         # 入场转场的起步时刻（消解给出的延迟）
+    coarse_memo: tuple | None = None  # (入圆点, 生效区, 位置)：上次入圆段粗校验不通过时的输入（COARSE_MEMO_M）
+    tr_key: tuple | None = None   # 最近一次下发的转场 (规划器, 长度, 最高点, 生效区, 位置)
+    tr_reject: tuple | None = None  # 上次被地理围栏拒绝的转场（同上；ADR-074 第 6 条）
 
     @property
     def total(self) -> int:
@@ -167,6 +184,7 @@ class MissionEngine:
         self._submits_stage = 0                     # 本次 stage 已下发的调用数（SUBMITS_PER_STAGE 节流）
         self._stage_n = 0                           # stage 调用计数（大编组任务的兜底全量检查周期）
         self._pc_left = PRECHECK_PER_STAGE          # 本次 stage 剩余的分批预检机数
+        self._coarse_left = COARSE_PER_STAGE        # 本次 stage 剩余的入圆段粗校验次数（大机群任务，ADR-073）
         self._rot: dict[str, int] = {}              # 各任务 stage 循环的起始轨道（节流时轮转续做）
         self._deferred_track: tuple | None = None
         self._n = 0
@@ -740,11 +758,23 @@ class MissionEngine:
         pos = rt.S.enu.pos[s].copy()
         if t.step not in ("transit",) and float(np.linalg.norm(pos - start)) > max(1.0, 0.25 * float(it.get("speed_mps")
                                                                                                         or 5.0)):
-            if it["primitive"] == "orbit" and rt.coarse_proven(pos, start, s):
-                # orbit 作业项的入圆段可证无障碍时不另做转场：直接下发 orbit，由提供者以巡航速度直线切入（FR-013；
-                # 与操作员 orbit 同一路径）。省去每机一次 plan-pool 转场规划、一次细校验与一条 follow_path 调用（ADR-070）
-                self._start_item(m, t, it)
-                return
+            zk = tuple(rt.zones) if rt.zones else ()
+            memo = t.coarse_memo
+            if it["primitive"] == "orbit" and not (memo is not None and memo[1] == zk and np.array_equal(memo[0], start)
+                                                   and float(np.linalg.norm(pos - memo[2])) <= COARSE_MEMO_M):
+                if len(m.tracks) >= THROTTLE_MIN_TRACKS:
+                    if self._coarse_left <= 0:      # 本次 stage 的粗校验额度用完：保持 idle，之后的 stage 续做（ADR-073）
+                        t.step = "idle"
+                        self._deferred_track = self._deferred_track or (m.mid, t.vehicle_id)
+                        return
+                    self._coarse_left -= 1
+                if rt.coarse_proven(pos, start, s):
+                    # orbit 作业项的入圆段可证无障碍时不另做转场：直接下发 orbit，由提供者以巡航速度直线切入（FR-013；
+                    # 与操作员 orbit 同一路径）。省去每机一次 plan-pool 转场规划、一次细校验与一条 follow_path 调用（ADR-070）
+                    t.coarse_memo = None
+                    self._start_item(m, t, it)
+                    return
+                t.coarse_memo = (start.copy(), zk, pos.copy())
             self._plan_transit(m, t, pos, start)
             return
         self._start_item(m, t, it)
@@ -816,8 +846,29 @@ class MissionEngine:
         if self._entry_applies(m, t):
             self._entry_hold(m, t, tr, e)
             return
+        key = self._transit_key(t, res)
+        rej = t.tr_reject
+        if rej is not None and key is not None and rej[0] == key[0] and rej[3] == key[3] \
+                and abs(rej[1] - key[1]) < 1.0 and abs(rej[2] - key[2]) < 1.0 \
+                and float(np.linalg.norm(np.subtract(rej[4], key[4]))) <= COARSE_MEMO_M:
+            # 与上次被地理围栏拒绝的转场相同：不再下发（结果必然仍是 102），按原退避续飞（ADR-074 第 6 条）
+            t.fail_n += 1
+            t.retry_at_ns = self.rt.t_ns + int(min(30.0, 0.5 * 2.0 ** (t.fail_n - 1)) * 1e9)
+            t.step = "idle"
+            self._track(m, t, "SUSPENDED", "transit_rejected")
+            return
+        t.tr_key = key
         self._track(m, t, "TRANSIT", "transit")
         self._submit(m, t, "follow_path", self._fp_args(tr, e), step="transit")
+
+    def _transit_key(self, t: TrackRT, res: PlanResult) -> tuple | None:
+        """转场的比较键：(规划器, 长度 m, 最高点 m, 生效区, 机体位置)；统计缺失时为 None（不记忆）。"""
+        st = res.stats or {}
+        ln, zm = st.get("len_m"), st.get("zmax_m")
+        if ln is None or zm is None or t.slot < 0:
+            return None
+        zk = tuple(self.rt.zones) if self.rt.zones else ()
+        return (st.get("planner"), float(ln), float(zm), zk, self.rt.S.enu.pos[t.slot].astype(np.float64).copy())
 
     # ------------------------------------------------------------ 入场转场 4D 消解（FR-056 的入场部分，ext；ADR-070）
     def _entry_applies(self, m: MissionRT, t: TrackRT) -> bool:
@@ -1097,10 +1148,14 @@ class MissionEngine:
             # 反复"续飞 → 规划 → 失败"，n1000 稳态中 17 架机持续占用 plan-pool 与准入（D1 验收第 1 轮 4.3）
             t.fail_n += 1
             t.retry_at_ns = self.rt.t_ns + int(min(30.0, 0.5 * 2.0 ** (t.fail_n - 1)) * 1e9)
+            if step == "transit" and code == GEOFENCE_REJECT:
+                t.tr_reject = t.tr_key  # 同一转场不再下发（ADR-074 第 6 条）
         elif status in ("succeeded", "running", "accepted"):
             t.rej_n = 0
             if status == "succeeded":
                 t.fail_n = 0
+                if step == "transit":
+                    t.tr_reject = None
         if status == "succeeded":
             if step == "takeoff":
                 t.step = "idle"
@@ -1196,6 +1251,8 @@ class MissionEngine:
             return
         if t.retry_at_ns > rt.t_ns:
             return
+        if not rt.fcu_link_ok(s):
+            return              # FCU 链路丢失（link_drop 等）：机体收不到续飞命令，链路恢复后再续（ADR-073 第 5 条）
         lease = rt.lease_of(s)
         if lease["owner"] not in ("NONE", "MISSION") or (lease["owner"] == "MISSION" and lease["holder"] != m.principal["principal_id"]):
             return
@@ -1421,6 +1478,10 @@ class MissionEngine:
         c = m.extra.get("_st") if len(m.tracks) >= THROTTLE_MIN_TRACKS else None
         if c is not None and not m.dirty and 0 <= now - c[0] < STATUS_CACHE_NS:
             prog, eta, job_pending = c[1], c[2], c[3]
+        elif c is not None:
+            # 大编组任务：汇总分片累加（每次至多 SUMMARY_TRACKS_PER_CALL 条轨道），一轮完成前沿用上一轮的值（ADR-073 第 3 条：
+            # 250 机任务一次汇总生产口径约 2–2.5 ms，ladder 稳态中个别轨道反复转场使任务频繁置脏，此前每次都整轮重算）
+            prog, eta, job_pending = self._summary_slice(m, now, c)
         else:
             prog = round(self.progress(m), 1)
             eta = self.eta_s(m)
@@ -1440,6 +1501,56 @@ class MissionEngine:
                                "heading_rad": 0.0}
         return st
 
+    def _summary_slice(self, m: MissionRT, now: int, prev: tuple) -> tuple:
+        """大编组任务状态汇总的一个分片：按轨道次序累加 progress()、eta_s() 与"是否有规划中作业"的同一算式（作业项内进度
+        按片向量化），一轮累加完成时更新缓存并返回新值，否则返回上一轮的值。各片取自不同时刻（相隔一次状态发布，≤ 1 s），
+        汇总值只用于 `state/mission` 的显示字段（`mission_progress` 度量仍调用 progress()，不经缓存）。"""
+        p = m.extra.get("_stp")
+        if p is None:
+            p = m.extra["_stp"] = {"ts": list(m.tracks.values()), "i": 0, "tot": 0.0, "best": 0.0, "job": False}
+        ts = p["ts"]
+        i0 = p["i"]
+        part = ts[i0:i0 + SUMMARY_TRACKS_PER_CALL]
+        work = [t for t in part if t.state == "WORKING" and t.cursor < len(t.items) and t.slot >= 0]
+        ipm = dict(zip(map(id, work), self.rt.item_progress_many([t.slot for t in work]), strict=True)) if work else {}
+        tot, best = p["tot"], p["best"]
+        for t in part:
+            st = t.state
+            if st == "DONE":
+                tot += 1.0
+            elif st == "RETURNING":
+                tot += 0.95
+            else:
+                dn = t.done_items
+                n = max(len(t.items), 1)
+                if st == "WORKING" and t.cursor < len(t.items):
+                    ipv = ipm.get(id(t))
+                    if ipv is None:
+                        ipv = self.rt.item_progress(t.slot)
+                    if not (dn == 0 and ipv == 0.0):
+                        tot += min(dn / n + ipv / n, 1.0) * 0.95
+                elif dn != 0:
+                    tot += min(dn / n, 1.0) * 0.95
+            c = t.eta_cache
+            if c is not None and c[0] == t.cursor and c[1] is t.items and c[2] == len(t.items):
+                rem = c[3]
+            else:
+                rem = 0.0
+                for it in t.items[t.cursor:]:
+                    rem += float((it.get("est") or {}).get("duration_s", 0.0))
+                t.eta_cache = (t.cursor, t.items, len(t.items), rem)
+            best = max(best, rem)
+            if t.job is not None:
+                p["job"] = True
+        p["tot"], p["best"], p["i"] = tot, best, i0 + len(part)
+        if p["i"] < len(ts):
+            return prev[1], prev[2], prev[3]
+        m.extra.pop("_stp", None)
+        prog = round(100.0 * tot / len(ts), 1) if ts else 0.0
+        eta = round(best, 1) if m.state == "RUNNING" else None
+        m.extra["_st"] = (now, prog, eta, p["job"])
+        return prog, eta, p["job"]
+
     # ------------------------------------------------------------ stage（order 150、every 25、phase 8，10 Hz）
     @staticmethod
     def _index_of(m: MissionRT, ts: list) -> dict[str, int] | None:
@@ -1456,6 +1567,7 @@ class MissionEngine:
         self._stage_n += 1
         self._submits_stage = 0
         self._pc_left = PRECHECK_PER_STAGE
+        self._coarse_left = COARSE_PER_STAGE
         n_res = 0
         while self._results and n_res < RESULTS_PER_STAGE:  # 每次 stage 至多处理这么多条终态（其余下次；全机批量命令，ADR-065）
             n_res += 1
@@ -1513,6 +1625,8 @@ class MissionEngine:
                             and t.step == "idle" and not t.paused:
                         self._advance(m, t)
                     if t.state == "SUSPENDED" or (t.cid is None and t.job is None and t.state not in ("DONE", "DROPPED")):
+                        if throttle and t.state == "SUSPENDED" and not self.rt.fcu_link_ok(t.slot):
+                            continue   # FCU 链路丢失：不逐 stage 复查，链路恢复由兜底全量检查发现（≤ 1 s，ADR-073 第 5 条）
                         m.hint.add(t.vehicle_id)   # 仍可能有动作（退避、驻留、节流顺延）：下次 stage 再查
                 else:
                     self._rot[mid] = k0

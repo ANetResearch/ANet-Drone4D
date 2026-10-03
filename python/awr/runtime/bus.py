@@ -120,24 +120,25 @@ def unpack(raw: bytes | memoryview) -> Any:
 def key_matches(pattern: str, key: str) -> bool:
     """zenoh key 表达式子集：`*` 匹配一个 chunk，`**` 匹配零个或多个 chunk。"""
     p, k = pattern.split("/"), key.split("/")
-    memo: dict[tuple[int, int], bool] = {}
+    return _km(p, k, 0, 0, {})
 
-    def m(i: int, j: int) -> bool:
-        r = memo.get((i, j))
-        if r is not None:
-            return r
-        if i == len(p):
-            r = j == len(k)
-        elif p[i] == "**":
-            r = m(i + 1, j) or (j < len(k) and m(i, j + 1))
-        elif j < len(k) and (p[i] == "*" or p[i] == k[j]):
-            r = m(i + 1, j + 1)
-        else:
-            r = False
-        memo[(i, j)] = r
+
+def _km(p: list[str], k: list[str], i: int, j: int, memo: dict[tuple[int, int], bool]) -> bool:
+    """`key_matches` 的递归体（模块级函数而不是闭包：递归闭包经 cell 引用自身，每次调用留下一个引用环，只能由 gc gen2
+    回收；进程内总线每秒数百次匹配即数千个环对象，ADR-073 第 2 条）。"""
+    r = memo.get((i, j))
+    if r is not None:
         return r
-
-    return m(0, 0)
+    if i == len(p):
+        r = j == len(k)
+    elif p[i] == "**":
+        r = _km(p, k, i + 1, j, memo) or (j < len(k) and _km(p, k, i, j + 1, memo))
+    elif j < len(k) and (p[i] == "*" or p[i] == k[j]):
+        r = _km(p, k, i + 1, j + 1, memo)
+    else:
+        r = False
+    memo[(i, j)] = r
+    return r
 
 
 @dataclass(frozen=True)

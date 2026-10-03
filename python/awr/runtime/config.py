@@ -21,7 +21,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from .logjson import mask
 
-__all__ = ["DEFAULT_CONFIG_PATH", "ConfigError", "ProcCfg", "RuntimeConfig", "load_runtime_config", "resolve_profile"]
+__all__ = ["DEFAULT_CONFIG_PATH", "ConfigError", "ProcCfg", "RuntimeConfig", "apply_world_fallback", "load_runtime_config",
+           "resolve_profile"]
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG_PATH = ROOT / "configs" / "runtime.yaml"
@@ -48,6 +49,7 @@ class RunCfg(_M):
     id: str = "auto"
     world: str = "shenzhen"
     scenario: str = "s1-shenzhen-facade"
+    fallback_world: str | None = "synthcity"   # 默认世界未构建且该世界已构建时回退（ADR-077）；null 关闭回退
     scenario_profile: str | None = None
     shm_root: str = "/dev/shm/awr"
     persist_root: str = "runs"
@@ -61,10 +63,10 @@ class RunCfg(_M):
             raise ValueError("run.id 必须为 auto 或 zenoh chunk（[a-z0-9][a-z0-9_-]*）")
         return v
 
-    @field_validator("world")
+    @field_validator("world", "fallback_world")
     @classmethod
-    def _world(cls, v: str) -> str:
-        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", v):
+    def _world(cls, v: str | None) -> str | None:
+        if v is not None and not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", v):
             raise ValueError("world 必须为小写 id（[a-z0-9][a-z0-9_-]*）")
         return v
 
@@ -228,6 +230,7 @@ class RuntimeConfig(_M):
     procs: list[ProcCfg] = Field(default_factory=list)
 
     # 不参与校验的解析结果（load_runtime_config 填写）
+    world_fallback_note: str | None = None
     profile: str = "dev"
     procs_enable: list[Literal["core", "ext", "dev"]] = Field(default_factory=lambda: ["core", "ext"])
     source_path: str | None = None
@@ -340,7 +343,7 @@ class RuntimeConfig(_M):
 
     def effective_dict(self) -> dict[str, Any]:
         """生效配置（含派生值），秘密键掩码为 ***；写入 runs/<run>/effective-config.yaml。"""
-        d = self.model_dump(mode="json", exclude={"source_path"})
+        d = self.model_dump(mode="json", exclude={"source_path", "world_fallback_note"})
         d["derived"] = {"port_effective": self.port_effective, "vite_port_effective": self.vite_port_effective,
                         "static_port_effective": self.static_port_effective,
                         "rendezvous_effective": self.rendezvous_effective, "access_mode": self.access_mode,
@@ -439,9 +442,45 @@ def resolve_profile(profile: str | None, env: Mapping[str, str]) -> str:
     return profile or env.get("AWR_PROFILE") or "dev"
 
 
+def _catalog_default(world_id: str, env: Mapping[str, str]) -> str | None:
+    root = Path(env.get("AWR_SCENARIOS_DIR") or ROOT / "scenarios")
+    try:
+        import json
+
+        v = ((json.loads((root / "catalog.json").read_text(encoding="utf-8")).get("worlds") or {}).get(world_id) or {}).get("default")
+        return v if isinstance(v, str) else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def apply_world_fallback(cfg: RuntimeConfig, *, env: Mapping[str, str], argv: Sequence[str] = ()) -> str | None:
+    """默认世界回退（ADR-077；与 `awr.world.package.defaults.resolve_default_world` 同一规则，runtime 不 import awr.world）：
+
+    世界未经 `AWR_WORLD` 或 `--set run.world=` 显式指定、`worlds/<run.world>/world.json` 不存在、而 `run.fallback_world`
+    （synthcity）已构建时，改用回退世界；剧本未经 `AWR_SCENARIO` 或 `--set run.scenario=` 指定时改为
+    `scenarios/catalog.json` 中该世界的 `default`。返回说明文字（未回退时 None）。"""
+    keys = {a.split("=", 1)[0].strip() for a in argv if "=" in a}
+    fb = cfg.run.fallback_world
+    if "AWR_WORLD" in env or "run.world" in keys or not fb or fb == cfg.run.world:
+        return None
+    wd = Path(env.get("AWR_WORLDS_DIR") or ROOT / "worlds")
+    if (wd / cfg.run.world / "world.json").exists() or not (wd / fb / "world.json").exists():
+        return None
+    old = cfg.run.world
+    cfg.run.world = fb
+    if "AWR_SCENARIO" not in env and "run.scenario" not in keys:
+        sc = _catalog_default(fb, env)
+        if sc:
+            cfg.run.scenario = sc
+    return f"默认世界 {old} 未构建，回退到合成演示城市 {fb}（剧本 {cfg.run.scenario}；ADR-077）"
+
+
 def load_runtime_config(path: Path | str | None = None, *, profile: str | None = None, env: Mapping[str, str] | None = None,
-                        argv: Sequence[str] = ()) -> RuntimeConfig:
-    """解析 runtime.yaml 并叠加 profile、环境变量与命令行覆盖（argv 为 `key.path=value` 列表，值按 YAML 解析）。"""
+                        argv: Sequence[str] = (), world_fallback: bool = False) -> RuntimeConfig:
+    """解析 runtime.yaml 并叠加 profile、环境变量与命令行覆盖（argv 为 `key.path=value` 列表，值按 YAML 解析）。
+
+    `world_fallback = True`（supervisor 与 awr CLI）时按 ADR-077 应用默认世界回退（`apply_world_fallback`），说明写入
+    `cfg.world_fallback_note`。"""
     env = os.environ if env is None else env
     path = Path(path) if path is not None else DEFAULT_CONFIG_PATH
     try:
@@ -495,4 +534,6 @@ def load_runtime_config(path: Path | str | None = None, *, profile: str | None =
         raise ConfigError("real_ops.enabled", "D1 中真机闸门必须关闭（OPS-FR-032；AWR_REAL_OPS 同理）")
     if cfg.access_mode == "lan" and not cfg.net.origins:
         raise ConfigError("net.origins", "lan 模式必须配置 origins（AWR_ORIGINS）")
+    if world_fallback:
+        cfg.world_fallback_note = apply_world_fallback(cfg, env=env, argv=argv)
     return cfg

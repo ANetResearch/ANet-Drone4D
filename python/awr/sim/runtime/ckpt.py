@@ -129,9 +129,20 @@ def _calls_meta(core: Any, tb: Any) -> list[list]:
     字典在准入时生成并随调用对象复用，每代只拼可变字段（N = 1000 架批量命令后首代此前为 1000 条调用逐个建字典，数毫秒，
     ADR-065）；其编码在后台线程首次编码时缓存（`_CallsMeta`，ADR-070）。字典与列表交出后只读（后台线程编码）。"""
     meta = tb.meta
-    pairs = [(c, r) for r in tb.rows().tolist() if (c := meta[r]) is not None]
-    out = _CallsMeta(c.ck_entry(r) for c, r in pairs)
-    out.calls = [c for c, _r in pairs]
+    out = _CallsMeta()
+    calls: list = []
+    app_o, app_c = out.append, calls.append
+    for r in tb.rows().tolist():
+        c = meta[r]
+        if c is None:
+            continue
+        ck = c.ck
+        if ck is None:
+            ck = c.ck_static()
+        # 与 `c.ck_entry(r)` 相同的 8 元素条目；内联省去每条调用两次方法调用（ADR-073）
+        app_o([ck, r, c.lane, c.batch_id, c.status, c.applied, c.provider, c.effect])
+        app_c(c)
+    out.calls = calls
     return out
 
 
@@ -368,12 +379,118 @@ def restore(core: Any, arrays: dict[str, np.ndarray], meta: dict) -> None:
     core.restored_ext = restore_ext(core, meta.get("ext"))
 
 
+class _BgCapture:
+    """后台拷贝（ADR-073 第 2 条）：主循环的慢任务只提出请求，本线程分两步、各等一个足够长的主循环空闲窗口（IdleGate：
+    窗口剩余 + 主循环等待余量 ≥ 该步估计耗时 × 1.1 + 0.6 ms；余量见 SimCore.run），持 sim-core 的状态锁执行：① gen2
+    （或风暴期间只冻结）；② `capture`、`CheckpointStore.save` 的数组拷贝与冻结。主循环每轮迭代开头取同一把锁（等待计入
+    单步）；窗口本身足够长时拷贝在主循环醒来之前完成，只靠余量时主循环醒来后等它完成，被推迟的那一轮仍在单步目标之内。
+    请求在途期间主循环把慢任务预算压到 SLOW_CAP_US，使之后的空闲窗口更长。超过 FORCE_S【墙钟】仍没有足够长的窗口时照常
+    持锁执行（与此前主循环内整块任务"顺延满 1 s 强制"同一有界时延，checkpoint 的仿真间隔仍约 1 s）。拷贝期间主循环在休眠
+    或等锁，zenoh 回调与 plan-pool 回调线程只往 inbox 入队、不改仿真状态，快照与在主循环内拷贝相同（同一个 tick 边界）。
+    估计耗时取最近 5 次的中位数（单次被抢占不会使之后的窗口长期不够）。本线程留在主循环核上（cpuaff.AuxPinner.keep）。"""
+
+    FORCE_S = 0.5  # 原在主循环内的整块任务因预算顺延的上界为 1 s（slow.FIT_STARVE_NS），这里不长于它
+    MARGIN_NS = 600_000
+    SLOW_CAP_US = 200.0
+    WARMUP = 2  # 前两次拷贝各自首次填充 CheckpointStore 的双缓冲（缺页），不计入估计
+
+    def __init__(self, ck: SimCheckpointer, core: Any, gate: Any) -> None:
+        import threading
+        from collections import deque
+
+        self.ck, self.core, self.gate = ck, core, gate
+        self.req = threading.Event()
+        self.stop = threading.Event()
+        self.hist = {"gc": deque([1_500_000], maxlen=5), "cap": deque([3_500_000], maxlen=5)}
+        self.stats = {"captures": 0, "forced": 0, "max_ms": 0.0, "gc_max_ms": 0.0}
+        self.trace: deque = deque(maxlen=64)  # (步骤, 是否等到窗口, 窗口剩余 ns, 耗时 ns)：诊断
+        self.thread = threading.Thread(target=self._run, name="awr-ckpt-capture", daemon=True)
+        self.thread.start()
+
+    @property
+    def pending(self) -> bool:
+        return self.req.is_set()
+
+    def request(self) -> None:
+        self.req.set()
+
+    def _est(self, k: str) -> int:
+        v = sorted(self.hist[k])
+        return int(v[len(v) // 2])
+
+    def _window(self, k: str) -> bool:
+        """等一个剩余（窗口本身 + 主循环等待余量）≥ 估计耗时 × 1.1 + 余量的窗口；FORCE_S 内等不到返回 False（照常执行）。"""
+        import time as _t
+
+        need = int(self._est(k) * 1.1) + self.MARGIN_NS
+        end = _t.monotonic() + self.FORCE_S
+        while not self.stop.is_set():
+            left = end - _t.monotonic()
+            if left <= 0:
+                return False
+            if self.gate.wait_slot(min(left, 0.25), need_ns=need, slack=True):
+                return True
+        return False
+
+    def _step(self, k: str, fn: Any) -> None:
+        import time as _t
+
+        ok = self._window(k)
+        if self.stop.is_set():
+            return
+        if ok:
+            # 关闭本窗口：checkpoint 写线程（同一个 IdleGate）停在下一个让出点，不与本步交替持有 GIL
+            self.gate.close()
+        remain = getattr(self.gate, "last_slot_remain_ns", 0) if ok else 0
+        slack = getattr(self.gate, "last_slot_slack_ns", 0) if ok else 0
+        with self.core.state_lock:
+            t0 = _t.perf_counter_ns()
+            fn()
+            dt = _t.perf_counter_ns() - t0
+        self.trace.append((k, ok, int(remain), int(slack), int(dt)))
+        n = self.stats.get("n_" + k, 0) + 1
+        self.stats["n_" + k] = n
+        if n > self.WARMUP:
+            self.hist[k].append(dt)
+        key = "max_ms" if k == "cap" else "gc_max_ms"
+        self.stats[key] = max(self.stats[key], round(dt / 1e6, 3))
+        self.stats["forced"] += 0 if ok else 1
+
+    def _run(self) -> None:
+        core = self.core
+        while not self.stop.is_set():
+            if not self.req.wait(0.5):
+                continue
+            if self.stop.is_set():
+                return
+            try:
+                if core.manual_gc:
+                    self._step("gc", core.gen2_or_freeze)
+                if not self.stop.is_set():
+                    self._step("cap", core.checkpoint_capture_only)
+                self.stats["captures"] += 1
+            except Exception:
+                log.exception("background checkpoint capture failed")
+            self.req.clear()
+
+    def close(self) -> None:
+        self.stop.set()
+        self.req.set()
+        self.thread.join(timeout=5.0)
+
+
 class SimCheckpointer:
     def __init__(self, store: Any, *, period_sim_ns: int = 1_000_000_000) -> None:
         self.store = store
         self.period = period_sim_ns
         self.last_t = -(1 << 62)
         self.copy_ms: list[float] = []
+        self.bg: _BgCapture | None = None
+
+    def enable_background(self, core: Any, gate: Any) -> None:
+        """sim-core 进程（main）启用后台拷贝（_BgCapture）；进程内测试台保持在主循环慢任务内拷贝。"""
+        if self.bg is None and gate is not None and hasattr(gate, "wait_slot"):
+            self.bg = _BgCapture(self, core, gate)
 
     def maybe_save(self, core: Any) -> Any:
         if core.clock.t_ns - self.last_t < self.period:
@@ -390,6 +507,8 @@ class SimCheckpointer:
         return ok
 
     def close(self, *, final: bool = True) -> None:
+        if self.bg is not None:
+            self.bg.close()
         self.store.close(final=final)
 
 
@@ -401,8 +520,10 @@ def attach_checkpoint(core: Any, ctx: Any) -> None:
 
     if not getattr(ctx, "supervised", False):
         return
+    # 带截止时刻的空闲窗口（ADR-073）：窗口足够长时写线程几毫秒内即可编码完一代，没有窗口（主循环持续过载）时最长等
+    # 0.25 s 再照常继续（一代编码约 11 ms CPU，1 s 一代，保证进度；两份缓冲都忙时下一代跳过并计数）
     store = CheckpointStore(ctx.run_dir / "ckpt", layout_id=LAYOUT_ID, mirror=ctx.persist_dir / "ckpt",
-                            gate=getattr(core, "idle_gate", None))
+                            gate=getattr(core, "idle_gate", None), gate_timeout_s=0.25)
     core.checkpointer = SimCheckpointer(store)
     restart_count = int(getattr(ctx, "restart_count", 0))
     if not core.reused:

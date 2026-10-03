@@ -3,7 +3,10 @@
 - agent_no = `id_base` + Session 内单调序号，本 Session 不复用；每次增删 `roster_version + 1`（写入 StateRing 头部）；
 - Mock 生命周期：PENDING →（下一 tick）STARTING →（+boot_s）BOOTED →（+ready_s）READY，时长为【仿真】，每次转移发
   `sim.vehicle.state{from, to}`（加入时另带 `agent_no`、`profile_id`、`backend`），roster 变化发 `roster.changed`；
-- 快照条目严格按 `awr.fleet.roster.v1` 的 entries 字段（`packages/contracts/rt/payloads/fleet_roster.schema.json`）。
+- 快照条目严格按 `awr.fleet.roster.v1` 的 entries 字段（`packages/contracts/rt/payloads/fleet_roster.schema.json`）；
+- 快照回复的编码（`snapshot_packed`，ADR-074 第 1 条）：各条目的 msgpack 编码在加入与生命周期转移时生成并按 slot 缓存，
+  回复只拼接映射头与各条目的已编码字节（与 `pack(snapshot())` 逐字节相同）。此前主循环 drain 中整份重建并编码，
+  N = 1000 时一次约 6.5 ms（D1 验收第 4 轮 D1-AC-07 的越线秒）。
 本模块不读墙钟；时刻由调用方以仿真 ns 传入。
 """
 
@@ -12,6 +15,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+
+import msgpack
 
 from awr.contracts.enums import LIFECYCLE_NAMES, Lifecycle
 
@@ -74,6 +79,13 @@ class Roster:
         self.lc_gen = 0  # 生命周期变更代数（_set、touch）；与 roster_version 一起判定"无可推进条目"
         self._steady: tuple[int, int] | None = None
         self._free_lo = 0  # free_slot 的扫描下界（任何 < _free_lo 的 slot 都在用）
+        # 快照回复的编码缓存（snapshot_packed，ADR-074 第 1 条）：slot -> (条目对象, 编码时的生命周期, 条目编码)；
+        # 整份回复按 (roster_version, lc_gen, 条目数) 缓存，与 checkpoint 的 roster 段同一失效键
+        self._enc: dict[int, tuple[RosterEntry, int, bytes]] = {}
+        self._snap: tuple[tuple[int, int, int], bytes] | None = None
+        # 条目编码可信的 (roster_version, lc_gen)：只经 add、remove、clear、_set 改动时随之推进；checkpoint 恢复直接改写
+        # by_slot 与 roster_version、或直接改写生命周期后 touch() 时不推进，下一次回复逐条校验
+        self._enc_ok: tuple[int, int] = (0, 0)
 
     # ------------------------------------------------------------ 增删
     def free_slot(self) -> int | None:
@@ -121,7 +133,11 @@ class Roster:
                 e.sensors = []
         self.by_slot[slot] = e
         self.by_id[vid] = e
+        trusted = self._enc_ok == (self.roster_version, self.lc_gen)
         self.roster_version += 1
+        self._encode(e)
+        if trusted:
+            self._enc_ok = (self.roster_version, self.lc_gen)
         if emit is not None:
             emit("sim.vehicle.state", t_sim_ns=t_ns, severity=1, uav=vid, **{"from": None, "to": "PENDING",
                                                                             "agent_no": e.agent_no,
@@ -137,7 +153,11 @@ class Roster:
             return None
         self._free_lo = min(self._free_lo, slot)
         self.by_id.pop(e.id, None)
+        self._enc.pop(slot, None)
+        trusted = self._enc_ok == (self.roster_version, self.lc_gen)
         self.roster_version += 1
+        if trusted:
+            self._enc_ok = (self.roster_version, self.lc_gen)
         if emit is not None:
             data: dict[str, Any] = {"from": LIFECYCLE_NAMES[e.lifecycle], "to": "REMOVED"}
             if reason:
@@ -150,8 +170,10 @@ class Roster:
     def clear(self) -> None:
         self.by_slot.clear()
         self.by_id.clear()
+        self._enc.clear()
         self._free_lo = 0
         self.roster_version += 1
+        self._enc_ok = (self.roster_version, self.lc_gen)
 
     # ------------------------------------------------------------ 生命周期（Mock）
     def touch(self) -> None:
@@ -162,7 +184,12 @@ class Roster:
         frm = e.lifecycle
         e.lifecycle = int(to)
         e.lc_t_ns = t_ns
+        trusted = self._enc_ok == (self.roster_version, self.lc_gen)
         self.lc_gen += 1
+        if self.by_slot.get(e.slot) is e:
+            self._encode(e)
+        if trusted:
+            self._enc_ok = (self.roster_version, self.lc_gen)
         if emit is not None:
             data: dict[str, Any] = {"from": LIFECYCLE_NAMES[frm], "to": LIFECYCLE_NAMES[int(to)]}
             if reason:
@@ -205,3 +232,41 @@ class Roster:
         """`ctl/<producer>/roster` 的回复（bus/roster.schema.json）。"""
         return {"v": 1, "producer": self.producer, "roster_version": self.roster_version, "id_base": self.id_base,
                 "id_count": self.id_count, "entries": [self.by_slot[s].to_entry() for s in self.slots_in_order()]}
+
+    def _encode(self, e: RosterEntry) -> bytes:
+        b = msgpack.packb(e.to_entry(), use_bin_type=True)
+        self._enc[e.slot] = (e, e.lifecycle, b)
+        return b
+
+    def snapshot_packed(self) -> bytes:
+        """`snapshot()` 的 msgpack 编码（与 `msgpack.packb(snapshot(), use_bin_type=True)` 逐字节相同），供主循环直接回复
+        （ADR-074 第 1 条）。条目编码按对象身份与生命周期校验（checkpoint 恢复换了条目对象、或生命周期被直接改写时重新
+        编码），整份回复在 (roster_version, lc_gen, 条目数) 不变时复用；N = 1000 时命中约 0、条目编码可信时重拼约 0.4–0.6 ms
+        （逐条校验约 1–1.4 ms，只在 checkpoint 恢复等绕过本类方法的改写之后）。"""
+        key = (self.roster_version, self.lc_gen, len(self.by_slot))
+        hit = self._snap
+        if hit is not None and hit[0] == key:
+            return hit[1]
+        enc = self._enc
+        by = self.by_slot
+        parts: list[bytes] | None = None
+        if self._enc_ok == (self.roster_version, self.lc_gen):
+            try:  # 条目编码可信：直接取（N = 1000 约 0.1–0.2 ms，逐条校验约 1.4 ms）
+                parts = [enc[s][2] for s in self.slots_in_order()]
+            except KeyError:
+                parts = None
+        if parts is None:
+            parts = []
+            for s in self.slots_in_order():
+                e = by[s]
+                c = enc.get(s)
+                parts.append(c[2] if c is not None and c[0] is e and c[1] == e.lifecycle else self._encode(e))
+            self._enc_ok = (self.roster_version, self.lc_gen)
+        pk = msgpack.Packer(use_bin_type=True)
+        head = b"".join((pk.pack_map_header(6), pk.pack("v"), pk.pack(1), pk.pack("producer"), pk.pack(self.producer),
+                         pk.pack("roster_version"), pk.pack(self.roster_version), pk.pack("id_base"), pk.pack(self.id_base),
+                         pk.pack("id_count"), pk.pack(self.id_count), pk.pack("entries"), pk.pack_array_header(len(parts))))
+        parts.insert(0, head)
+        out = b"".join(parts)  # 一次拼接（头部 + 各条目）
+        self._snap = (key, out)
+        return out

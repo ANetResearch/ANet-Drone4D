@@ -263,6 +263,7 @@ class CommandEngine:
         self._subs: list[tuple[str, Callable[[Call], None]]] = []
         self._matrix_cache: dict[tuple, int] = {}
         self.stats = {"admitted": 0, "rejected": 0, "duplicates": 0, "succeeded": 0, "failed": 0, "canceled": 0}
+        self._wp_cache: tuple | None = None  # (航点列表对象, float64 数组)：_wp_array
         self.admission_us: list[float] = []
 
     # ------------------------------------------------------------ 兼容视图
@@ -729,7 +730,7 @@ class CommandEngine:
             return np.array([p, ps, args["pos"]], np.float64)
         if op == "follow_path" and isinstance(args.get("waypoints"), (list, tuple)):
             try:
-                return np.vstack([p[None], np.asarray(args["waypoints"], np.float64)])
+                return np.vstack([p[None], self._wp_array(args)])
             except ValueError:
                 return None
         if op == "orbit" and A.finite_vec(args.get("center"), 3) and _num(args.get("radius_m")):
@@ -912,6 +913,18 @@ class CommandEngine:
                                       "apply_tick": apply_tick}
         return adm, calls
 
+    def _wp_array(self, args: dict) -> np.ndarray:
+        """follow_path 航点的 float64 数组：同一次准入内的 ⑧ 折线、截止时间与调用表初始化共用一次转换（按航点列表对象
+        缓存，缓存持有该对象，不会因对象回收后地址复用而误命中；1000 个航点的 `np.asarray` 每次约 0.5 ms，ADR-073 第 5 条）。
+        调用方不得修改返回的数组。"""
+        wp = args["waypoints"]
+        c = self._wp_cache
+        if c is not None and c[0] is wp:
+            return c[1]
+        a = np.asarray(wp, np.float64)
+        self._wp_cache = (wp, a)
+        return a
+
     def _init_row(self, r: int, op: str, args: dict, slot: int) -> None:
         tb, S = self.table, self.S
         if op == "goto":
@@ -920,7 +933,7 @@ class CommandEngine:
         elif op == "takeoff":
             tb.alt[r] = float(args.get("alt_m", P.MIS_TAKEOFF_ALT))
         elif op == "follow_path":
-            w = np.asarray(args["waypoints"], np.float64)
+            w = self._wp_array(args)
             tb.goal[r] = w[-1]
             tb.aux[r, 0] = float(np.linalg.norm(np.diff(np.vstack([S.enu.pos[slot], w]), axis=0), axis=1).sum())
         elif op == "orbit":
@@ -965,7 +978,7 @@ class CommandEngine:
             eta = max(d / max(v, 0.1) + v / acc, vz / P.MPC_Z_V_AUTO_DN)
             return int((1.5 * eta + 10.0) * 1e9)
         if op == "follow_path":
-            w = np.vstack([S.enu.pos[slot], np.asarray(args["waypoints"], np.float64)])
+            w = np.vstack([S.enu.pos[slot], self._wp_array(args)])
             L = float(np.linalg.norm(np.diff(w, axis=0), axis=1).sum())
             v = min(float(args.get("speed_mps") or cruise), vmax)
             n = len(w)

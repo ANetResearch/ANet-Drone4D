@@ -1,7 +1,7 @@
 """剧本与 curated 区域的编写工具（M16-FR-029；M16 §6.2.4、§6.4、§7.3、§9.2）。
 
-全部内置剧本（S1–S6、ladder、free、soak）、`catalog.json` 与六城 `zones/<id>.zones.geojson` 都由 `build_all()` 生成后
-提交入库；同一输入两次生成逐字节一致（M16-AC-019）：浮点统一舍入、键序固定、`dumps_canonical` 的换行规则确定。
+全部内置剧本（S0、S1–S6、ladder、free、soak）、`catalog.json` 与六城加合成演示城市的 `zones/<id>.zones.geojson` 都由
+`build_all()` 生成后提交入库；同一输入两次生成逐字节一致（M16-AC-019）：浮点统一舍入、键序固定、`dumps_canonical` 的换行规则确定。
 
 业务数值的定义方：S1 为 AWR-12 §7.2（ADR-052），S2–S6 为 AWR-12 §7.3 与 M16 §6.4.4–§6.4.7，ladder 为 M16 §6.4.8
 （AWR-12 §7.4 已采用），语法为 AWR-16 §12。角度约定：`start_az_deg` 与 `entry_azimuth_deg` 以 +E 为 0、逆时针为正
@@ -15,14 +15,25 @@ import math
 from pathlib import Path
 from typing import Any
 
-from ..urbanscene3d.cities import CITIES, CITY_IDS, ZoneDef
+from ..synthcity import DEMO_WORLD_IDS, SHOWCASE, SYNTHCITY, river_yc
+from ..urbanscene3d.cities import CITIES, CITY_IDS, CityFacts, ZoneDef
 
-__all__ = ["LADDER_AGL_M", "LADDER_CENTER", "LADDER_CENTERS", "LADDER_NS", "LADDER_START_S", "build_all", "catalog_doc", "circle_zone",
-           "dumps_canonical", "free_scenario", "ladder_scenario", "ladder_sets", "ring", "s1_scenario", "soak_scenario",
-           "square", "write_json_canonical", "zones_doc"]
+__all__ = ["ALL_WORLD_IDS", "LADDER_AGL_M", "LADDER_CENTER", "LADDER_CENTERS", "LADDER_NS", "LADDER_START_S", "build_all",
+           "catalog_doc", "circle_zone", "dumps_canonical", "facts", "free_scenario", "ladder_scenario", "ladder_sets", "ring",
+           "s0_scenario", "s1_scenario", "soak_scenario", "square", "write_json_canonical", "zones_doc"]
 
 SCHEMA = {"schema": "awr.scenario.v1", "schema_version": "1.0.0"}
 ZERO_SHA = "0" * 64
+ALL_WORLD_IDS: tuple[str, ...] = (*CITY_IDS, *DEMO_WORLD_IDS)     # 六城 + 合成演示城市（ADR-077）
+
+
+def facts(world_id: str) -> CityFacts:
+    """六城或合成演示城市的演示事实。"""
+    if world_id in CITIES:
+        return CITIES[world_id]
+    if world_id == SYNTHCITY.world_id:
+        return SYNTHCITY
+    raise KeyError(f"unknown built-in world {world_id!r}; built-in: {', '.join(ALL_WORLD_IDS)}")
 
 # ---------------------------------------------------------------- ladder（M16 §6.4.8；ADR-062 修订）
 LADDER_CENTER = (-375.0, 20.0)
@@ -86,7 +97,7 @@ def circle_zone(zone_id: str, kind: str, center: tuple[float, float], r_m: float
 def zones_doc(world_id: str, coordinate_sha256: str | None = None) -> dict:
     """`scenarios/zones/<world_id>.zones.geojson`（AWR-16 §7；不含 border，`origin = curated`）。"""
     feats = [circle_zone(z.zone_id, z.kind, z.center, z.radius_m, label=z.label, label_zh=z.label_zh)
-             for z in CITIES[world_id].zones]
+             for z in facts(world_id).zones]
     return {"type": "FeatureCollection",
             "awr": {"schema": "awr.zones.v1", "schema_version": "1.0.0", "world_id": world_id, "frame": "world",
                     "units": "m", "coordinate_sha256": coordinate_sha256 or ZERO_SHA, "source_sha256": None},
@@ -94,7 +105,7 @@ def zones_doc(world_id: str, coordinate_sha256: str | None = None) -> dict:
 
 
 def zone_defs(world_id: str) -> tuple[ZoneDef, ...]:
-    return CITIES[world_id].zones
+    return facts(world_id).zones
 
 
 # ---------------------------------------------------------------- 剧本
@@ -175,6 +186,88 @@ def s1_scenario(pin: str | None = None) -> dict:
     }
 
 
+def _formation_loop() -> list[list[float]]:
+    """S0 编队巡航航线：沿河道中心线自西向东（x −430 → 东端，每 40 m 一点），再沿北岸绿带 y = −335 返回 x = −430。"""
+    east = int(SHOWCASE["formation_east_x"])
+    out = [[_r(x, 2), _r(river_yc(x), 2)] for x in range(-430, east + 1, 40)]
+    out += [[east, -335], [-430, -335]]
+    return out
+
+
+def s0_scenario(pin: str | None = None) -> dict:
+    """S0 合成演示城市展示（DEMO-W，ADR-077；M16 §6.4.9）：7 架 P600，约 4.5 min【仿真】，可 ×5 运行。
+
+    - 地标立面螺旋扫描：两机分上下两段（120 → 80 m、80 → 40 m）自上而下扫描 ANet Tower（中心 (62, 122)），出生点在路口 (0, 60)；
+    - 街区覆盖：两机覆盖两个中层街区（x 260–460、y −165 至 −75，建筑 ≤ 42 m），出生点在路口 (360, −60)；
+    - 编队巡航：三机 V 形沿河道向东（x −430 → 140）再沿北岸绿带返回，z 40 m、10 m/s，出生点在路口 (−480, −300)；
+    - 天气：晴 → 45 s 转小雨（20 s 过渡）→ 150 s 转雾（40 s 过渡，雾顶 60 m）。
+    """
+    S = SHOWCASE
+    up, lo = S["helix_bands"]["upper"], S["helix_bands"]["lower"]
+    fz = [lo[1], up[0]]
+
+    def helix(z_range: tuple[float, float]) -> dict:
+        return {"center_enu_m": list(S["tower_center"]), "radius_m": S["helix_radius_m"], "standoff_m": 30,
+                "z_range_m": [z_range[0], z_range[1]], "dz_per_rev_m": S["helix_dz_m"], "speed_mps": S["helix_speed_mps"],
+                "gimbal": "look_at_axis", "direction": "ccw", "facade_z_range_m": fz}
+
+    def veh(vid: str, xy: tuple[float, float], **kw: Any) -> dict:
+        return {"vehicle_id": vid, "profile_id": "p600_mid360", "home_enu_m": [_r(xy[0]), _r(xy[1]), None],
+                "speed_profile": "px4_default", **kw}
+
+    h1, h2 = S["helix_homes"]["p600-h1"], S["helix_homes"]["p600-h2"]
+    c_ids, f_ids = list(S["blocks_homes"]), list(S["formation_homes"])
+    weather = [{"event_id": f"wx-{name.lower()}", "at_s": _r(t), "action": "env.preset",
+                "args": {"name": name, "duration_s": 20 if name == "lightRain" else 40}}
+               for name, t in S["weather"] if t > 0]
+    return {
+        **_head("s0-synthcity-showcase", SYNTHCITY.world_id, "ANet Synthetic City showcase", "合成演示城市全景展示",
+                "Seven P600 in the generated demo city: a two-band facade helix on the 318 m ANet Tower, a two-drone block "
+                "coverage and a three-drone V formation along the river, while the weather turns from clear to light rain "
+                "to fog.", pin),
+        "seed": 7, "rate": 1, "autoplay": True, "gcs_loss_policy": "ignore", "record": True, "time_limit_s": 360,
+        "on_complete": "pause", "energy_precheck": "reject", "env": {"preset": "clear"},
+        "vehicles": [
+            veh("p600-h1", h1, sensors=["camera"], caps=["rgb.zoom"], marked=True),
+            veh("p600-h2", h2, sensors=["camera", "mid360"], caps=["rgb.zoom", "lidar.mapping"], marked=True),
+            *[veh(v, S["blocks_homes"][v], sensors=["camera"]) for v in c_ids],
+            *[veh(v, S["formation_homes"][v]) for v in f_ids]],
+        "missions": [
+            {"mission_id": "m-helix-upper", "vehicle_ids": ["p600-h1"], "generator": "helix_scan", "params": helix(up),
+             "sync_policy": "free", "priority": 0, "on_done": "rtl", "on_abort": "hover"},
+            {"mission_id": "m-helix-lower", "vehicle_ids": ["p600-h2"], "generator": "helix_scan", "params": helix(lo),
+             "sync_policy": "free", "priority": 1, "on_done": "rtl", "on_abort": "hover"},
+            {"mission_id": "m-blocks", "vehicle_ids": c_ids, "generator": "lawnmower",
+             "params": {"polygon_enu_m": [list(p) for p in S["blocks_polygon"]],
+                        "altitude": {"mode": "fly_over", "agl_m": 70, "clearance_m": 10},
+                        "side_overlap": 0.4, "front_overlap": 0.8, "speed_mps": 9}, "on_done": "rtl"},
+            {"mission_id": "m-formation", "vehicle_ids": f_ids, "generator": "formation",
+             "params": {"shape": "v", "spacing_m": 12, "half_angle_deg": 35, "heading_mode": "filtered", "tau_psi_s": 2,
+                        "anchor_path_enu_m": _formation_loop(), "speed_mps": S["formation_speed_mps"],
+                        "corner_radius_m": 30, "z_m": S["formation_z_m"]}, "on_done": "rtl"}],
+        "transit": {"planner": "safe_transit", "margin_m": 5, "layer_dz_m": 4},
+        "zones": {"active": ["border", *(z.zone_id for z in SYNTHCITY.zones)]},
+        "events": [
+            *weather,
+            {"event_id": "mark-done", "when": {"metric": "missions_done", "op": "==", "value": True},
+             "action": "mark", "args": {"label": "showcase complete"}}],
+        "success": {"all": [
+            {"metric": "missions_done", "op": "==", "value": True},
+            {"metric": "facade_coverage", "args": {"mission_ids": ["m-helix-upper", "m-helix-lower"]}, "op": ">=",
+             "value": 0.9},
+            {"metric": "area_coverage", "args": {"mission_ids": ["m-blocks"]}, "op": ">=", "value": 0.9},
+            {"metric": "formation_err_rms_m", "args": {"mission_id": "m-formation"}, "op": "<=", "value": 3},
+            {"metric": "min_separation_m", "op": ">=", "value": 10},
+            {"metric": "guard_events", "op": "==", "value": 0},
+            {"metric": "landed_all", "op": "==", "value": True}]},
+        "profiles": {
+            "ci": {"rate": 5, "record": False},
+            "perf": {"rate": 1, "record": False},
+            "demo": {"rate": 1, "record": True, "on_complete": "continue"}},
+        "tags": ["demo", "ci", "showcase", "synthetic"],
+    }
+
+
 def ladder_sets(n: int, center: tuple[float, float] | None = None, spacing_m: float = LADDER_SPACING_M,
                 offset_m: float = LADDER_OFFSET_M, agl_m: tuple[float, ...] = LADDER_AGL_M, id_prefix: str = "sim",
                 profile_id: str = "p600_mid360", turns: int = 20, speed_mps: float | None = None) -> list[dict]:
@@ -241,11 +334,12 @@ def ladder_scenario(pin: str | None = None) -> dict:
 def free_scenario(world_id: str, pad: tuple[float, float] | None = None, spacing_m: float = 6.0,
                   pin: str | None = None) -> dict:
     """free-<world>（M16-FR-003，§7.3.3 模板）：2 架 P600 在平坦地块待命、无任务。"""
-    c = CITIES[world_id]
+    c = facts(world_id)
     px, py = pad if pad is not None else c.free_pad
     z = c.free_pad_z
     return {
-        **_head(f"free-{world_id}", world_id, f"{world_id.capitalize()} free play", f"{c.name_zh}自由剧本",
+        **_head(f"free-{world_id}", world_id, f"{'ANet Synthetic City' if world_id == SYNTHCITY.world_id else world_id.capitalize()} free play",
+                f"{c.name_zh}自由剧本",
                 "Two P600 wait on a flat pad; no missions; the operator commands them from the UI.", pin),
         "seed": 7, "gcs_loss_policy": "ignore", "on_complete": "continue",
         "vehicles": [
@@ -507,38 +601,44 @@ def soak_scenario(pin: str | None = None) -> dict:
 def catalog_doc() -> dict:
     """`scenarios/catalog.json`（`awr.scenario_catalog.v1`，M16 §7.3.1；V-SC-13）。"""
     worlds: dict[str, Any] = {}
-    for wid in CITY_IDS:
-        c = CITIES[wid]
+    for wid in ALL_WORLD_IDS:
+        c = facts(wid)
         w: dict[str, Any] = {"default": c.default_scenario, "demo": list(c.demo_scenarios)}
         if wid == "shenzhen":
             w["gate"] = True
         worlds[wid] = w
     return {
         "schema": "awr.scenario_catalog.v1", "schema_version": "1.0.0", "worlds": worlds,
-        "ui_profiles": {"s1-shenzhen-facade": ["demo", "wx-fog", "wx-rain", "wx-storm"],
+        "ui_profiles": {"s0-synthcity-showcase": ["demo"],
+                        "s1-shenzhen-facade": ["demo", "wx-fog", "wx-rain", "wx-storm"],
                         "ladder-shenzhen": [f"n{n}" for n in LADDER_NS]},
         "themes": {
+            "showcase": ["s0-synthcity-showcase"],
             "inspection": ["s1-shenzhen-facade", "s6-suzhou-corridor"],
             "coverage": ["s2-shanghai-formation", "s4-chicago-lakeshore", "s5-sanfrancisco-terrain"],
             "formation": ["s2-shanghai-formation", "s4-chicago-lakeshore"],
             "search_thermal": ["s3-newyork-sar"],
-            "weather": ["s1-shenzhen-facade#wx-fog", "s1-shenzhen-facade#wx-rain", "s1-shenzhen-facade#wx-storm"],
+            "weather": ["s0-synthcity-showcase", "s1-shenzhen-facade#wx-fog", "s1-shenzhen-facade#wx-rain",
+                        "s1-shenzhen-facade#wx-storm"],
             "stress": ["ladder-shenzhen", "soak-shenzhen"]},
     }
 
 
 SCENARIO_BUILDERS = {
+    "s0-synthcity-showcase": s0_scenario,
     "s1-shenzhen-facade": s1_scenario, "ladder-shenzhen": ladder_scenario, "soak-shenzhen": soak_scenario,
     "s2-shanghai-formation": s2_scenario, "s3-newyork-sar": s3_scenario, "s4-chicago-lakeshore": s4_scenario,
     "s5-sanfrancisco-terrain": s5_scenario, "s6-suzhou-corridor": s6_scenario,
 }
 CORE_SCENARIOS = ("s1-shenzhen-facade", "ladder-shenzhen", *(f"free-{w}" for w in CITY_IDS))
+DEMO_SCENARIOS = ("s0-synthcity-showcase", *(f"free-{w}" for w in DEMO_WORLD_IDS))     # 合成演示城市（ADR-077）
 
 
 def world_of(sid: str) -> str:
     if sid.startswith("free-"):
         return sid[5:]
-    return {"s1-shenzhen-facade": "shenzhen", "ladder-shenzhen": "shenzhen", "soak-shenzhen": "shenzhen",
+    return {"s0-synthcity-showcase": "synthcity", "s1-shenzhen-facade": "shenzhen", "ladder-shenzhen": "shenzhen",
+            "soak-shenzhen": "shenzhen",
             "s2-shanghai-formation": "shanghai", "s3-newyork-sar": "newyork", "s4-chicago-lakeshore": "chicago",
             "s5-sanfrancisco-terrain": "sanfrancisco", "s6-suzhou-corridor": "suzhou"}[sid]
 
@@ -549,7 +649,7 @@ def build_all(pins: dict[str, str | None] | None = None) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for sid, fn in SCENARIO_BUILDERS.items():
         out[f"{sid}.json"] = fn(pins.get(world_of(sid)))
-    for wid in CITY_IDS:
+    for wid in ALL_WORLD_IDS:
         out[f"free-{wid}.json"] = free_scenario(wid, pin=pins.get(wid))
         out[f"zones/{wid}.zones.geojson"] = zones_doc(wid, pins.get(wid))
     out["catalog.json"] = catalog_doc()

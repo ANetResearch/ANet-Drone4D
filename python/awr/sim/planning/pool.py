@@ -85,6 +85,10 @@ class PlanPoolClient:
         self._fresh_ns = 0                       # 新建（或重建）进程池的时刻：spawn 冷启动期间作业超时判定放宽
         self.state = "ok"                        # ok、rebuilding、down
         self.stats = _Stats()
+        # 剧本开局屏障（ADR-068 第 4 条、ADR-073 第 7 条）：on_submit(job_id) 在每次提交后调用（M10 设置期内置时钟保持）；
+        # _arrived 为结果（或错误）已进入 inbox 的作业（done_callback 线程写入，主线程读取与清除）
+        self.on_submit: Callable[[str], None] | None = None
+        self._arrived: set[str] = set()
         if self.mode in ("inline", "thread"):
             from . import worker
 
@@ -159,10 +163,29 @@ class PlanPoolClient:
                 self._inbox.put((req.job_id, res, None))
             except Exception as e:  # pragma: no cover - worker_main 自身兜底
                 self._inbox.put((req.job_id, None, e))
+            self._arrived.add(req.job_id)
+            if self.on_submit is not None:
+                self.on_submit(req.job_id)
             return req.job_id
         heapq.heappush(self._heap, (int(req.priority), job.seq, req.job_id))
         self._dispatch()
+        if self.on_submit is not None:
+            self.on_submit(req.job_id)
         return req.job_id
+
+    def _arrive(self, jid: str, item: Any, err: BaseException | None) -> None:
+        """结果进入 inbox（done_callback 线程或提交线程）：先入队、后登记已到达（`pending_of` 据此判定）。"""
+        self._inbox.put((jid, item, err))
+        self._arrived.add(jid)
+
+    def pending_of(self, job_ids: set[str] | list[str]) -> list[str]:
+        """给定作业中尚未到达（仍在排队或执行、结果未进入 inbox）的作业；已取代、已失败或已生效的作业不算。"""
+        out = []
+        for jid in job_ids:
+            j = self._jobs.get(jid)
+            if j is not None and j.state in ("QUEUED", "RUNNING") and jid not in self._arrived:
+                out.append(jid)
+        return out
 
     def cancel(self, dedupe_key: str) -> None:
         jid = self._latest.pop(dedupe_key, None)
@@ -178,6 +201,11 @@ class PlanPoolClient:
         else:
             j.state = "SUPERSEDED"
         self.stats.superseded += 1
+
+    def dispatch(self) -> None:
+        """把排队作业交给空闲 worker（`drain` 之外的调用点：M10 开局屏障的就绪判据在时钟保持期间调用，ADR-073）。"""
+        if self.mode != "inline":
+            self._dispatch()
 
     def pending(self) -> int:
         return sum(1 for j in self._jobs.values() if j.state in ("QUEUED", "RUNNING"))
@@ -203,10 +231,10 @@ class PlanPoolClient:
         try:
             fut = self._executor().submit(worker_main, j.req)
         except Exception as e:  # BrokenProcessPool 在 submit 时抛出
-            self._inbox.put((jid, None, e))
+            self._arrive(jid, None, e)
             return
         j.fut = fut
-        fut.add_done_callback(lambda f, jid=jid: self._inbox.put((jid, f, None)))
+        fut.add_done_callback(lambda f, jid=jid: self._arrive(jid, f, None))
 
     # ------------------------------------------------------------ 生效（步边界）
     def drain(self, tick: int) -> int:
@@ -216,6 +244,7 @@ class PlanPoolClient:
                 jid, item, err = self._inbox.get_nowait()
             except queue.Empty:
                 break
+            self._arrived.discard(jid)
             j = self._jobs.get(jid)
             if j is None:
                 continue
@@ -241,6 +270,9 @@ class PlanPoolClient:
         self._check_timeouts(tick)
         if self.mode != "inline":
             self._dispatch()
+        if len(self._arrived) > 1024:  # 回调线程"先入队后登记"与本线程"取出即清除"交错时留下的陈旧条目
+            for j in [x for x in list(self._arrived) if x not in self._jobs]:
+                self._arrived.discard(j)  # 原地清除（回调线程可能同时 add）
         return n
 
     def _apply(self, j: _Job, res: PlanResult, tick: int) -> None:

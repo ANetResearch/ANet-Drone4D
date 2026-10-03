@@ -52,6 +52,9 @@ class AuxPinner:
         self.aux = aux if aux is not None else aux_cpus_for(main_cpus, env=os.environ.get("AWR_SIM_AUX_CPUS"))
         self.moved = 0
         self.errors = 0
+        # 留在主循环核上的线程（native id）：checkpoint 后台拷贝只在主循环空闲窗口内运行，主循环核此时空闲、刚写过的状态
+        # 数组在该核缓存中；放到后台核会与 plan-pool 作业争核并跨核取数，拷贝耗时约翻倍、等不到窗口（ADR-073 第 2 条）
+        self.keep: set[int] = set()
 
     @property
     def active(self) -> bool:
@@ -66,7 +69,7 @@ class AuxPinner:
             return 0
         n = 0
         for tid in tids:
-            if tid == self.main_tid:
+            if tid == self.main_tid or tid in self.keep:
                 continue
             try:
                 cur = set(os.sched_getaffinity(tid))

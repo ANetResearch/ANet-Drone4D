@@ -55,6 +55,13 @@ class SimClock:
         self._limited_reported = False
         self._step_from = int(TimeState.PAUSED)
         self.step_done = False
+        # 内部保持（ADR-068 第 4 条、ADR-073 第 7 条，剧本开局屏障）：reason -> (墙钟截止, 就绪判据)。保持期间 steps_due 返回 0
+        # 并重锚（不欠账）；对外状态仍为 PLAYING（不是 PAUSED，不写输入日志），主循环照常迭代、写心跳、处理 bus 与慢任务
+        self._holds: dict[str, tuple[int, Callable[[], bool] | None]] = {}
+        self.hold_log: list[tuple[str, str, int, int]] = []  # (reason, ready | timeout, 保持开始 tick, 墙钟时长 ns)
+        self._hold_t0: dict[str, tuple[int, int]] = {}
+        # 设置期：主循环逐 tick 推进并在每个 tick 后检查保持（保持在置下它的 tick 之后立即生效，×1 与 ×10 相同）
+        self.per_tick = False
 
     # ------------------------------------------------------------ 查询
     @property
@@ -76,6 +83,39 @@ class SimClock:
     def advancing(self) -> bool:
         return self.state in (TimeState.PLAYING, TimeState.LIVE)
 
+    # ------------------------------------------------------------ 内部保持（剧本开局屏障）
+    def hold(self, reason: str, *, timeout_s: float = 10.0, ready: Callable[[], bool] | None = None) -> None:
+        """置内部保持：下一次 `steps_due` 起不再推进，直到 `ready()` 为真、`release(reason)` 或墙钟超过 timeout_s（超时放行，
+        记入 `hold_log` 供调用方告警）。同名保持已存在时不改截止。"""
+        if reason in self._holds:
+            return
+        now = self._wall()
+        self._holds[reason] = (now + int(timeout_s * 1e9), ready)
+        self._hold_t0[reason] = (self.tick, now)
+
+    def release(self, reason: str, how: str = "release") -> None:
+        if self._holds.pop(reason, None) is not None:
+            t0 = self._hold_t0.pop(reason, (self.tick, self._wall()))
+            self.hold_log.append((reason, how, t0[0], self._wall() - t0[1]))
+
+    @property
+    def held(self) -> bool:
+        return bool(self._holds)
+
+    def _holding(self, now: int) -> bool:
+        for reason, (deadline, ready) in list(self._holds.items()):
+            ok = False
+            if ready is not None:
+                try:
+                    ok = bool(ready())
+                except Exception:
+                    ok = True  # 判据本身出错：放行，不让仿真停在开局
+            if ok:
+                self.release(reason, "ready")
+            elif now >= deadline:
+                self.release(reason, "timeout")
+        return bool(self._holds)
+
     # ------------------------------------------------------------ 推进
     def _anchor(self, now: int) -> None:
         self.wall0, self.tick0 = now, self.tick
@@ -88,6 +128,12 @@ class SimClock:
             return n
         if not self.advancing:
             return 0
+        if self._holds:
+            held = self._holding(now)
+            self._anchor(now)  # 保持期间与刚放行时重锚：保持的墙钟时长不计入追帧（不欠账）
+            if held:
+                self.rtf_limited = False
+                return 0
         target = self.tick0 + int((now - self.wall0) * self.rate) // TICK_NS
         due = target - self.tick
         max_batch = max(self.max_batch_base, math.ceil(self.max_batch_base * self.rate))
@@ -187,6 +233,8 @@ class SimClock:
             self._anchor(now)
             return self._reply(0)
         if op == "reset":
+            for r in list(self._holds):
+                self.release(r, "reset")
             if self._pause_start is not None:
                 self._paused_total += now - self._pause_start
             self.tick = 0

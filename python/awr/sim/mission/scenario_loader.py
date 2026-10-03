@@ -472,7 +472,9 @@ def validate_doc(doc: dict, *, world: Any = None, profiles: Any = None, vehicles
         if env.get("preset") is not None and env["preset"] not in pres:
             raise ScenarioError("V-SC-08", f"unknown env preset {env['preset']}")
         for ev in doc.get("events") or []:
-            if ev.get("action") == "env.preset" and (ev.get("args") or {}).get("preset") not in pres:
+            # 事件参数即 env/preset 命令参数 {name, duration_s}（rt/commands.json）；旧写法 args.preset 仍接受（DEMO-W，ADR-077）
+            a = ev.get("args") or {}
+            if ev.get("action") == "env.preset" and a.get("name", a.get("preset")) not in pres:
                 raise ScenarioError("V-SC-08", f"event {ev.get('event_id')}: unknown preset")
     # V-SC-09
     if world is not None:

@@ -406,9 +406,11 @@ class SafetyService:
             return
         s = np.asarray(slots, np.int64)
         rt.sb["inited"][s] = False
+        gone = {int(x) for x in s}
         for f in list(rt.faults.faults.values()):
-            if f.slot in set(int(x) for x in s) and f.state != "CLEARED":
+            if f.slot in gone and f.state != "CLEARED":
                 f.end_tick = rt.tick
+        rt.faults.touch()
 
     def apply_operator(self, slot: int, cmd: Any, t_apply_ns: int) -> None:
         rt = self.rt

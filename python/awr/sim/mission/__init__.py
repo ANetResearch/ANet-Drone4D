@@ -3,7 +3,7 @@
 插件入口（M10 §7.4.1）：sim-core 组合根按 `AWR_PLUGINS` 导入本包时调用 `install()`，登记
 
 - 状态块 `mission`（`tracker.STATE_FIELDS`，含 M08 tap 读取的 `mission_item`、`track_state`）；
-- stage：`mission`（027/2/1，125 Hz，奇数 tick，写 `tr_x/tr_v/tr_a/yaw_sp`；ADR-065）、`mission_engine`（150/25/8）、`coverage`（155/50/13）、
+- stage：`mission`（027/2/1，125 Hz，奇数 tick，写 `tr_x/tr_v/tr_a/yaw_sp`；ADR-065）、`mission_engine`（150/25/8）、`coverage`（155/50/1，ADR-073）、
   `director`（160/25/8）；
 - 运动提供者 `m10.follow_path`、`m10.orbit`、`m10.goto_route`（M08-FR-086）与细校验执行者（M08-FR-089）；
 - 度量 `missions_done`、`mission_progress`、`facade_coverage`、`area_coverage`、`formation_err_rms_m`、`agl_min_m`、
@@ -49,7 +49,9 @@ def install() -> Any:
     R.register_stage("mission", every=2, phase=1, order=27, owner="M10", budget_core=0.012,
                      writes=("tr_x", "tr_v", "tr_a", "yaw_sp"))(rt.st_tracker)
     R.register_stage("mission_engine", every=25, phase=8, order=150, owner="M10", budget_core=0.003)(rt.st_engine)
-    R.register_stage("coverage", every=50, phase=23, order=155, owner="M10", budget_core=0.005)(rt.st_coverage)  # ADR-070：13 → 23（与 mission_guard 错开）
+    # coverage 相位 13 → 23（ADR-070，与 mission_guard 错开）→ 1（ADR-073：成对推进下按 tick 对错峰，(23, 24) 与 fleet_guard.3、
+    # cmd_watch 叠加是最重的几类 tick 对之一，(1, 2) 是最轻的几类之一）
+    R.register_stage("coverage", every=50, phase=1, order=155, owner="M10", budget_core=0.005)(rt.st_coverage)
     R.register_stage("director", every=25, phase=8, order=160, owner="M10", budget_core=0.002)(rt.st_director)
     q = Queries(rt)
     rt.queries = q

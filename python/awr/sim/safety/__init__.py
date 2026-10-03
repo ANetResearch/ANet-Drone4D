@@ -33,13 +33,15 @@ STAGES = (("faults", 2, 0, 25, 1, ("thrust_scale", "motor_ok")),
                                  "safety.severity")),
           ("battery", 25, 3, 120, 1, ("battery.soc", "battery.battery_pct", "battery.p_avg_w")),
           ("mission_guard", 25, 13, 121, 1, ("safety.d_free_fence_m",)),
-          ("battery_rtl", 50, 43, 123, 1, ()),
+          ("battery_rtl", 50, 17, 123, 1, ()),
           ("fleet_guard", 25, 8, 130, 4, ()))
 # 10 Hz stage 全部落在 tick % 5 == 3（不与 50 Hz 的 env、guard、sensors、cmd_watch 同 tick），按 25 tick 周期内的
 # 3、8、13、18、23 五个相位均摊（ADR-070，修订 M09 §5.2 相位安排）：battery 3；mission_guard 13；fleet_guard 四片 8、13、18、
-# 23；M10 mission_engine/director 8、coverage 23（50 tick 周期，只在奇数 tick 23）。battery_rtl（RTL 终点与时间的轮转刷新，
-# 此前在 battery 内与能量积分同一次调用，N = 1000 时合计约 1.6 ms）为 50 tick 周期、只在奇数 tick 43：每次刷新 n/5 架，
-# 每机仍每秒一次（其固定开销约 0.4 ms，落在偶数 tick 时与 l1 组叠加会超过 3 ms）。
+# 23；M10 mission_engine/director 8。battery_rtl（RTL 终点与时间的轮转刷新，此前在 battery 内与能量积分同一次调用，N = 1000
+# 时合计约 1.6 ms）为 50 tick 周期、相位 17：每次刷新 n/5 架，每机仍每秒一次。ADR-073 第 3 条：×1 下主循环成对推进奇、偶
+# tick（ADR-070），单步按一对 tick 均摊，错峰的单位是"tick 对"而不是单个 tick；battery_rtl 此前在相位 43（生产口径约
+# 1.4 ms），所在的 tick 对 (43, 44) 与 cmd_watch 叠加是全部 tick 对中最重的一类，改到最轻的一类 tick 对 (17, 18)（拆成两次
+# 各 n/10 架时每次仍约 1.0 ms：固定开销为主，未采用）。
 METRICS = ("min_separation_m", "guard_events", "pos_err_max_m", "energy_rtl_count", "battery_soc_min", "flight_state")
 
 SERVICE: SafetyService | None = None

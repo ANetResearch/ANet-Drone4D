@@ -218,6 +218,10 @@ LAG_ERR_M = 2.0
 LAG_HOLD_NS = 5_000_000_000
 
 
+# 在 stage 中累计覆盖或编队误差的生成器（其余生成器的任务在 stage 中没有工作）
+_STAMP_GENS = frozenset({"helix_scan", "lawnmower", "corridor", "terrain_follow", "formation"})
+
+
 class CoverageTracker:
     def __init__(self, rt: M10Runtime) -> None:
         self.rt = rt
@@ -298,6 +302,10 @@ class CoverageTracker:
             if m is None or m.state != "RUNNING":
                 continue
             gen = m.spec.get("generator")
+            if gen not in _STAMP_GENS:
+                # orbit、follow_path 等不累计覆盖：不必逐轨道筛选（ladder n1000 的 4 个 250 机环绕任务此前每次约 0.7 ms，
+                # 落在最重的 tick 对上，ADR-074 第 5 条）
+                continue
             working = [t for t in m.tracks.values() if t.state == "WORKING" and t.slot >= 0]
             if not working:
                 continue

@@ -38,6 +38,14 @@ __all__ = ["M10Runtime"]
 log = logging.getLogger("awr.sim.mission.runtime")
 
 LEVEL = {0: 0, 1: 1, 2: 2, 3: 3}
+# 剧本开局屏障（ADR-068 第 4 条，ADR-073 第 7 条）：剧本加载后的设置期内，plan-pool 作业（预热与开局任务的 generator 等）
+# 一经提交即置 SimClock 内部保持，结果全部进入 inbox 后放行，下一 tick 起照常推进并由 mission stage 统一生效；时钟对外
+# 仍为 PLAYING，主循环照常迭代与写心跳（不触发 2.0 s 挂死判定）。设置期在加载后 SETUP_WINDOW_NS【仿真】且无未到达的
+# 设置期作业时结束；每次保持的墙钟上限 SETUP_HOLD_TIMEOUT_S（与 123 WORLD_NOT_READY 一致），超时放行、告警并结束设置期。
+# 崩溃重启（StateRing 复用）不进入设置期（D1-AC-11b 的恢复时限不受影响）；`AWR_SCENARIO_BARRIER=0` 关闭（诊断）
+SETUP_WINDOW_NS = 1_000_000_000
+SETUP_HOLD_TIMEOUT_S = 10.0
+SETUP_HOLD_REASON = "m10.setup"
 STATUS_TRACKS_PER_STAGE = 256  # 每次 stage（10 Hz）状态汇总的轨道数上限（publish_status）
 APPROACH_EXACT_M = 30.0  # 入场直线段的精确判定上限（水平长度，m）：更长的段只认粗校验（采样点数与段长成正比，ADR-070）
 
@@ -79,6 +87,11 @@ class M10Runtime:
         self.queries: Any = None
         self.pending_starts: list[tuple] = []
         self.stats = {"paths": 0, "status_puts": 0}
+        self.setup_active = False                  # 剧本开局屏障的设置期（ADR-073 第 7 条）
+        self.setup_until_ns = 0
+        self.setup_jobs: set[str] = set()
+        self._hold_log_seen = 0
+        self._setup_seen = False
 
     # ------------------------------------------------------------ 绑定
     @property
@@ -184,7 +197,77 @@ class M10Runtime:
         apply_scenario(self, sc)
         self._apply_scenario_env(sc)
         self.emit("scenario.loaded", scenario_id=sc.scenario_id, sha256=sc.sha256, level=1)
+        self._setup_begin()
         return {"code": 0, "scenario_id": sc.scenario_id, "sha256": sc.sha256}
+
+    # ------------------------------------------------------------ 剧本开局屏障（ADR-068 第 4 条，ADR-073 第 7 条）
+    def _clock(self) -> Any:
+        clk = getattr(self.ctx, "clock", None)
+        return clk if clk is not None and hasattr(clk, "hold") else None
+
+    def _setup_begin(self) -> None:
+        clk = self._clock()
+        if clk is None or self.pool is None or os.environ.get("AWR_SCENARIO_BARRIER", "1") == "0":
+            return
+        first = not self._setup_seen
+        self._setup_seen = True
+        if first and getattr(self.core, "reused", False):
+            return  # 崩溃重启后的首次加载（checkpoint 恢复或剧本重开）：不进入设置期
+        self.setup_active = True
+        self.setup_until_ns = self.t_ns + SETUP_WINDOW_NS
+        self._hold_log_seen = len(clk.hold_log)
+        self.setup_jobs = set(self.pool.pending_of(list(self.pool._jobs)))  # 加载前已提交的作业（绑定时的预热）
+        self.pool.on_submit = self._setup_job
+        clk.per_tick = True
+        if self.setup_jobs:
+            clk.hold(SETUP_HOLD_REASON, timeout_s=SETUP_HOLD_TIMEOUT_S, ready=self._setup_ready)
+
+    def _setup_job(self, job_id: str) -> None:
+        """设置期内每次提交：登记并置保持（本 tick 结束后不再推进，与倍速无关）。"""
+        if not self.setup_active:
+            return
+        self.setup_jobs.add(job_id)
+        clk = self._clock()
+        if clk is not None:
+            clk.hold(SETUP_HOLD_REASON, timeout_s=SETUP_HOLD_TIMEOUT_S, ready=self._setup_ready)
+
+    def _setup_ready(self) -> bool:
+        """时钟保持期间每轮调用（主循环线程）：排队作业交给 worker，全部设置期作业的结果进入 inbox 即就绪。"""
+        self.pool.dispatch()
+        pend = self.pool.pending_of(self.setup_jobs)
+        if not pend:
+            self.setup_jobs.clear()
+        return not pend
+
+    def _setup_tick(self) -> None:
+        """mission stage 末尾：处理保持超时（告警并结束设置期），设置期到时且没有未到达的作业时结束。"""
+        if not self.setup_active:
+            return
+        clk = self._clock()
+        if clk is None:
+            self._setup_end()
+            return
+        log_ = clk.hold_log
+        for reason, how, tick0, dur_ns in log_[self._hold_log_seen:]:
+            if reason == SETUP_HOLD_REASON and how == "timeout":
+                self.emit("mission.warning", warning="SETUP_BARRIER_TIMEOUT", hold_tick=int(tick0),
+                          hold_s=round(dur_ns / 1e9, 3), pending=len(self.setup_jobs), level=2)
+                self._setup_end()
+                break
+        self._hold_log_seen = len(log_)
+        if self.setup_active and self.t_ns >= self.setup_until_ns and not clk.held \
+                and not self.pool.pending_of(self.setup_jobs):
+            self._setup_end()
+
+    def _setup_end(self) -> None:
+        self.setup_active = False
+        self.setup_jobs.clear()
+        if self.pool is not None and self.pool.on_submit == self._setup_job:
+            self.pool.on_submit = None
+        clk = self._clock()
+        if clk is not None:
+            clk.per_tick = False
+            clk.release(SETUP_HOLD_REASON)
 
     def _apply_scenario_env(self, sc: Any) -> None:
         """剧本顶层 `env`（preset + patch，profile 已合并）作为环境初值：以 step 帧下发给 M07（M07 §6.6.1 K01/K06「剧本初值」；
@@ -265,6 +348,8 @@ class M10Runtime:
 
     def on_reset(self, args: dict) -> None:
         """`sim/reset`（SimCore reset hook）：任务回到初始（M09）、导演重新计时；scenario_id 给出时切换剧本。"""
+        if self.setup_active:
+            self._setup_end()
         self.missions.reset()
         self.tracker.reset()
         if self.pool is not None:
@@ -335,6 +420,13 @@ class M10Runtime:
             return FLIGHTSTATE_NAMES[int(self.S.blocks["safety"]["fs"][s])]
         except Exception:
             return "UNKNOWN"
+
+    def fcu_link_ok(self, s: int) -> bool:
+        """M09 安全块的 FCU 链路标志（`safety.flag_fcu`；未装配 M09 时视为正常）。"""
+        sb = self.S.blocks.get("safety") if self.S is not None else None
+        if sb is None or "flag_fcu" not in sb or s < 0:
+            return True
+        return bool(sb["flag_fcu"][s])
 
     def airborne(self, s: int) -> bool:
         return s >= 0 and bool(self.S.in_air[s]) and not bool(self.S.landed[s])
@@ -770,6 +862,8 @@ class M10Runtime:
         if self.director is not None:
             self.director.check_timed(int(ctx.t_ns))
         self.tracker.stage(S, ctx)
+        if self.setup_active:
+            self._setup_tick()
 
     def st_engine(self, S: Any, ctx: Any) -> None:
         if not self.bound:

@@ -1179,10 +1179,12 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     setup_logging("supervisor", None, non_blocking=False)
     try:
-        cfg = load_runtime_config(a.config, profile=a.profile, argv=a.set)
+        cfg = load_runtime_config(a.config, profile=a.profile, argv=a.set, world_fallback=True)
     except ConfigError as e:
         sys.stderr.write(f"错误（退出码 2）：配置无效：{e}\n修复：按键路径修正 {a.config} 或对应的 AWR_* 环境变量\n")
         return e.exit_code
+    if cfg.world_fallback_note:
+        sys.stderr.write(f"提示：{cfg.world_fallback_note}；有 UrbanScene3D 数据时运行 make fetch-data && make worlds\n")
     if not re.fullmatch(r"x86_64|amd64", os.uname().machine.lower()):
         sys.stderr.write("错误（退出码 13）：只支持 x86-64 Linux（StateRing 依赖 TSO）\n修复：更换 x86-64 主机\n")
         return 13

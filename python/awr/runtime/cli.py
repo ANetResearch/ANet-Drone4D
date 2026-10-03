@@ -51,7 +51,8 @@ def _fail(code: int, msg: str, fix: str) -> int:
 
 
 def _load_cfg(a: argparse.Namespace) -> RuntimeConfig:
-    return load_runtime_config(getattr(a, "config", None) or DEFAULT_CONFIG_PATH, profile=getattr(a, "profile", None))
+    return load_runtime_config(getattr(a, "config", None) or DEFAULT_CONFIG_PATH, profile=getattr(a, "profile", None),
+                               world_fallback=True)      # 默认世界回退（ADR-077），与 supervisor 一致
 
 
 def _runs_root(cfg: RuntimeConfig) -> Path:

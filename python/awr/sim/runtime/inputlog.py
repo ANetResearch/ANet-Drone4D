@@ -24,10 +24,36 @@ KIND_MAP = {"cmd": "cmd", "clock": "clock", "lease": "lease", "roster": "roster"
             "plan_result": "plan_result", "geo_result": "geo_result"}
 
 
+_PLAIN_TYPES = frozenset((float, int, str, bool, type(None)))
+
+
+def _plain_seq(x: list | tuple) -> bool:
+    """x 的元素都是 msgpack 原样编码的标量，或这类标量的列表、元组（航点、样条控制点）。"""
+    pt = _PLAIN_TYPES
+    for v in x:
+        tv = type(v)
+        if tv in pt:
+            continue
+        if tv is list or tv is tuple:
+            for u in v:
+                if type(u) not in pt:
+                    return False
+            continue
+        return False
+    return True
+
+
 def _plain(x: Any) -> Any:
+    """去掉 `sig` 键、numpy 标量转 Python 标量、bytearray 转 bytes。只由数值组成的序列（例如 follow_path 的 1000 个航点
+    与样条控制点）原样返回：msgpack 对元组与列表、对这些标量的编码与逐元素复制后相同，载荷字节不变；此前逐元素递归，
+    一条带样条的转场 follow_path 约 3.5 ms（主循环准入内，ADR-073 第 5 条）。"""
+    if type(x) in _PLAIN_TYPES:
+        return x
     if isinstance(x, dict):
         return {str(k): _plain(v) for k, v in x.items() if k != "sig"}
     if isinstance(x, (list, tuple)):
+        if _plain_seq(x):
+            return x
         return [_plain(v) for v in x]
     if isinstance(x, (bytes, bytearray)):
         return bytes(x)

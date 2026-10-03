@@ -42,6 +42,7 @@ from awr.contracts import LAYOUT_ID, bus_keys
 from awr.contracts.enums import LIFECYCLE_NAMES, TIMESTATE_NAMES, Lifecycle, Owner, TimeState
 from awr.contracts.layouts import BUS_SETPOINT32
 from awr.contracts.reasons import Reason
+from awr.runtime.checkpoint import IdleGate
 from awr.runtime.events import EventPublisher
 from awr.runtime.principal import Principal, derive_key, verify_principal
 from awr.runtime.statering import StateRing
@@ -68,26 +69,56 @@ __all__ = ["SimCore", "compose_plugins", "defer_numba_blas_probe", "main", "run"
 log = logging.getLogger("awr.sim.runtime")
 
 DRAIN_MAX = 512
+# 每轮 drain 的墙钟预算（ADR-073 第 4 条）：超出即把余下的请求留到下一轮（至少处理 1 条，FIFO 不变）。一条带验签、审计、
+# 输入日志与 3 个生命周期事件的命令约 0.3–1 ms，突发 20–40 条（D1-AC-27 link_drop：500 架逐机 R16，20 条并发）此前在
+# 同一轮内全部处理，单步 32–39 ms
+DRAIN_BUDGET_NS = 1_500_000
 IDLE_WAIT_S = 0.05
+# 空闲窗口的主循环等待余量（IdleGate slack，ADR-073 第 2 条）：checkpoint 后台拷贝可越过窗口末尾、让主循环醒来后等它，
+# 只要下一轮（成对推进的两个 tick）按其相位的耗时上包络加上等待仍不超过 2 × 2.6 ms（单步目标 3 ms 留 0.4 ms 余量）
+BG_ITER_TARGET_NS = 5_200_000
+ITER_COST_DECAY = 0.1  # 各相位迭代耗时上包络的衰减（每次该相位迭代向实测值靠拢 10%，实测更大时直接取实测）
 STATE_EXT_PERIOD_NS = 500_000_000
 PERF_PERIOD_NS = 1_000_000_000
 AUDIT_FSYNC_NS = 1_000_000_000
 # gc_young：gen0 阈值、gen1 周期、两级强制阈值。gen1 强制阈值 30 → 120（FX2-R3-sim）：N = 1000 时 gen0 约每秒 30 次，
 # 30 次即在下一次 gen2（每 1 s，紧随 checkpoint）之前强制一次约 2 ms 的 gen1，落在任意 tick 上；gen2 会清零各代计数，
-# 120 次（约 4 s）的强制阈值只在 gen2 迟迟不来时生效
-GC0_MIN, GC1_EVERY, GC0_FORCE, GC1_FORCE = 700, 10, 5_000, 120
+# 120 次（约 4 s）的强制阈值只在 gen2 迟迟不来时生效。gen1 周期 10 → 120（ADR-073 第 2 条）：每 1 s 一次的 gen2 已扫描
+# 这 1 s 内全部存活对象，其间的 gen1（生产口径 1.5–2.3 ms，D1 验收第 3 轮的单步尖峰之一）只是重复扫描
+GC0_MIN, GC1_EVERY, GC0_FORCE, GC1_FORCE = 700, 120, 5_000, 120
 GC_GEN2_PERIOD_NS = 1_000_000_000  # 手动 gen2 周期【墙钟】；每次回收后冻结幸存者，只扫描本周期新增的存活对象；1 s 一次（ADR-070；
 #                                    此前 2 s，单次约 3 ms）与 1 s 一代的 checkpoint 同轮执行，单次停顿减半；2 s 一次使
 #                                    单次停顿与该周期新增对象成正比（全机 RTL 等突发期间 5 s 一次约 9 ms，ADR-065）
+GEN2_INLINE_US = 3000.0  # gen2 的估计耗时上限：超过时本次只冻结、不回收（风暴期间，_gen2_or_freeze，ADR-073 第 2 条）
+GEN2_SKIP_ADMITTED = 64  # 自上次 gen2 以来准入的调用数达到此值（全机 RTL、500 架 link_drop 等风暴）时本次只冻结
+GEN2_MAX_SKIPS = 30  # 连续只冻结的上限（约 30 s）：持续高负载时也定期回收，引用环的滞留有界
 SWITCH_INTERVAL_S = 0.001  # GIL 切换间隔（CPython 缺省 5 ms）：后台线程（checkpoint 写盘、总线回调、规划池结果）至多占 GIL
 #                            约 1 ms 就交还主循环（D1-AC-07 单步最大值；ADR-065）
 EXT_SLICE = 16
 EXT_SLICE_MIN, EXT_SLICE_MAX = 8, 48  # state_ext 每片机数的上下限（按剩余预算自适应，_slow_state_ext）
 EXT_STARVE_NS = 50_000_000  # state_ext 连续因预算不足跳过的墙钟上限，超过即强制做一片最小片
+# 强制片只落在轻轮（ADR-074 第 4 条）：饿死后本轮剩余预算 ≥ EXT_FORCE_MIN_US 才强制，连续超过 EXT_STARVE_HARD_NS 时不再挑轮。
+# N = 1000 时 8 架一片生产口径约 0.9–1.2 ms（每片固定开销约 0.6 ms），逐机上包络使片长停在下限、几乎每片都由饿死兜底，
+# 此前兜底不看本轮轻重，约一半落在剩余预算不足 600 µs 的轮次（26% 在最重的三成 tick 对上），成为各秒第 2、3 大的迭代（单步 p99
+# 的来源，D1 验收第 4 轮）；挑轮之后为 8%、1%
+EXT_FORCE_MIN_US = 600.0
+EXT_STARVE_HARD_NS = 150_000_000
 EXT_US_FLOOR = 15.0  # state_ext 逐机耗时估计的下限（µs）：防止轻载片把估计压得过低后一片取得过大
+EXT_US_DECAY = 0.1  # state_ext 逐机耗时上包络的衰减（_slow_state_ext，ADR-073 第 3 条）
 SPAWN_R_SAFE_M = 1.5
 SPAWN_LINE_MAX = 64  # 骨架布设：N ≤ 64 时一字排开，更大的 N 排成网格（_spawn_plan）
 QUERY_Q_MAX = 8
+# fleet/vehicles 全表查询的分片（ADR-074 第 2 条）：N > VEH_SYNC_MAX 时不在一次慢任务内同步构造，按剩余预算每次编码一片
+# （VEH_SLICE_MIN–VEH_SLICE_MAX 架，各条目即时 msgpack 编码），全部片完成后只拼接映射头与各条目字节回复。此前 N = 1000
+# 时一次构造并编码约 30–60 ms 落在一轮内（D1 验收第 4 轮 D1-AC-27 link_drop 注入前 `GET /api/fleet/vehicles` 的单步最大
+# 32–35 ms）。作业按不可分片任务的公平轮转与借贷启动（ADR-057：顺延满 20 ms【墙钟】强制启动），作业存在超过
+# VEH_ESCALATE_NS【墙钟】后每片取上限，N = 1000 时 sim-core 侧回复时延约 0.3–0.5 s、REST 端到端约 0.75 s（总线超时 1.5 s）
+VEH_SYNC_MAX = 64
+VEH_SLICE_MIN, VEH_SLICE_MAX = 8, 64
+VEH_ESCALATE_NS = 200_000_000
+VEH_US_FLOOR = 5.0
+_SE_KEY = msgpack.packb("state_ext", use_bin_type=True)
+_POS_KEY = msgpack.packb("pos_enu_m", use_bin_type=True)
 AUX_PIN_PERIOD_NS = 2_000_000_000  # 后台线程亲和性的重扫周期【墙钟】（cpuaff，ADR-070）
 
 
@@ -321,7 +352,14 @@ class SimCore:
         self._perf_t_sim0 = 0
         self._est_q: deque = deque()
         self._query_q: deque = deque()
-        self._ext_us_per = 60.0  # state_ext 逐机耗时（含每片固定开销的均摊）的指数平均（µs），用于按预算取片长
+        self._veh_jobs: deque = deque()  # fleet/vehicles 全表查询的分片作业（_slow_vehicles，ADR-074 第 2 条）
+        self._veh_us_per = 30.0  # 逐机编码耗时的上包络（µs），按预算取片长
+        self._veh_static: dict[int, tuple] = {}  # slot -> (条目对象, 前 5 个键值对的编码, home_enu_m 键值对的编码)
+        self._veh_lc: dict[int, bytes] = {}
+        self._veh_fs: dict[tuple[int, int], bytes] = {}
+        self._ext_us_per = 60.0  # state_ext 逐机耗时（含每片固定开销的均摊）的上包络（µs），用于按预算取片长
+        self._ext_pub_us = 500.0  # state_ext 整体拼接与发布耗时的上包络（µs）：末片之后剩余预算不足时发布顺延一轮
+        self.ext_pub_bg: Any = None  # 空闲窗口发布线程（bgpub.GatedPublisher；sim-core 进程 main() 置入，ADR-073 第 3 条）
         self._ext_packed: list[bytes] = []
         self._ext_packer = msgpack.Packer(use_bin_type=True)
         self._ext_cache: dict = {}  # _ext_rows_packed 的编码缓存（px4、ctrl、profile、lease）
@@ -335,6 +373,10 @@ class SimCore:
         self._gc_ms: deque[float] = deque(maxlen=64)
         self._gc_young_ms: deque[float] = deque(maxlen=256)
         self._gc_est_us = [150.0, 800.0]  # gen0、gen1 预计耗时（µs，指数平均），gc_young 据此判断本轮预算是否放得下
+        self._gen2_est_us = 0.0  # 上一次 gen2 的耗时（µs；跳过时按 0.7 衰减），超过 GEN2_INLINE_US 时只冻结（ADR-073）
+        self._gen2_skipped = 0
+        self._gen2_adm0 = 0
+        self._gen2_run_skips = 0
         self._overbudget: set[str] = set()
         self._rtf_limited_reported = False
         self._removing: dict[int, str] = {}
@@ -353,8 +395,11 @@ class SimCore:
         self.manual_gc = False  # True：年轻代回收改由慢任务执行（sim-core 进程 main() 置位，ADR-065）
         self.pin_aux_threads = False  # True：后台线程改到主循环以外的核（sim-core 进程 main() 置位，cpuaff，ADR-070）
         self.pair_ticks = False  # True：×1 下奇偶 tick 成对推进，主循环 125 Hz 唤醒（sim-core 进程 main() 置位，ADR-070）
-        # 主循环休眠期间置位：checkpoint 写线程只在此期间编码，不与主循环争 GIL（CheckpointStore gate，ADR-070）
-        self.idle_gate = threading.Event()
+        # 主循环空闲窗口（休眠前 open(预计醒来时刻)、醒来后 close()）：checkpoint 写线程只在窗口内、距窗口结束有余量时编码，
+        # 主循环醒来时 GIL 空闲（CheckpointStore gate；ADR-070 第 6 条③，ADR-073 第 1 条改为带截止时刻的窗口）
+        self.idle_gate = IdleGate()
+        self.state_lock = threading.Lock()  # 仿真状态锁：主循环每轮迭代持有；后台 checkpoint 拷贝在空闲窗口内持有（ADR-073）
+        self.iter_cost_ns = [float(BG_ITER_TARGET_NS)] * 50  # 按 tick % 50 相位的迭代耗时上包络（run()，IdleGate slack）
         self.aux_pinner: Any = None
 
     # ------------------------------------------------------------ 启动
@@ -765,21 +810,34 @@ class SimCore:
 
     # ------------------------------------------------------------ 主循环
     def iterate(self) -> float:
-        """一次主循环迭代；返回建议的休眠秒数。"""
-        clk = self.clock
+        """一次主循环迭代；返回建议的休眠秒数。状态锁：后台 checkpoint 拷贝（ADR-073 第 2 条）在主循环休眠期间持有，
+        主循环在本轮开头取得（等待计入单步）。"""
         t_iter0 = self.perf_ns()
+        with self.state_lock:
+            return self._iterate(t_iter0)
+
+    def _iterate(self, t_iter0: int) -> float:
+        clk = self.clock
         self.ring.heartbeat(clk.t_ns, clk.state, clk.rate_milli, step_seq=clk.tick)  # FR-003：先写心跳（时钟组）
         self._drain()
         n = clk.steps_due()
         if n:
             ts = self.perf_ns()
             self.ctx.tick = clk.tick
-            if self.post_step_hooks:  # 锁步（M14-to-M08 第 5 条）：逐 tick 推进，每步结束后同步调用钩子
-                for _ in range(n):
+            if self.post_step_hooks or clk.per_tick:
+                # 锁步（M14-to-M08 第 5 条）：逐 tick 推进，每步结束后同步调用钩子。设置期（剧本开局屏障，ADR-073 第 7 条）：
+                # 逐 tick 推进，某个 tick 的 stage 置下内部保持后本轮不再推进（保持在下一 tick 生效，与倍速无关）
+                k = 0
+                while k < n:
                     self.fleet.step(self.ctx, 1)
                     clk.tick = self.ctx.tick
                     clk.advanced(1)
-                    self._run_post_step_hooks()
+                    k += 1
+                    if self.post_step_hooks:
+                        self._run_post_step_hooks()
+                    if clk.per_tick and clk.held:
+                        break
+                n = k
             else:
                 self.fleet.step(self.ctx, n)
                 clk.tick = self.ctx.tick
@@ -807,6 +865,9 @@ class SimCore:
         # 追帧（×N 或负载下每轮多个 tick）时慢任务不因一轮很长而只剩 100 µs 下限
         # 不足 100 µs 时本轮只执行已饿死的慢任务（heavy_skip，ADR-070）
         budget = min(float(self.cfg.fleet.slow_budget_us), max(1, n) * self.cfg.fleet.tick_budget_us - used_us)
+        ck = self.checkpointer
+        if ck is not None and ck.bg is not None and ck.bg.pending:
+            budget = min(budget, ck.bg.SLOW_CAP_US)  # 后台拷贝在途：本轮少做慢任务，留出足够长的空闲窗口（ADR-073）
         self.slow.run(budget, now_wall=now, now_sim=clk.t_ns, heavy_skip=True)
         if n:
             # 单步耗时（18 §7.6、PERF-AC-030 的定义：每 tick 从 drain 开始到慢任务结束的墙钟；追帧批次按 tick 数均摊）。
@@ -819,7 +880,7 @@ class SimCore:
             return 0.0
         if not clk.advancing:
             # 暂停：有被顺延的不可分片请求时不阻塞等待，下一轮立即续做（ADR-057 有界时延；AWR-10 §4.2）
-            return 0.0 if self.slow.backlog else IDLE_WAIT_S
+            return 0.0 if self.slow.backlog or self._veh_jobs else IDLE_WAIT_S
         nd = clk.next_deadline_ns()
         if self.pair_ticks and clk.tick % 2 == 0 and clk.rate == 1.0 and not self.post_step_hooks:
             # 成对推进（ADR-070）：下一 tick 为奇数时等到其后的偶数 tick（L1 与 StateRing 发布所在的 tick）到期再一并推进，
@@ -851,16 +912,28 @@ class SimCore:
 
     def run(self, should_stop: Callable[[], bool]) -> None:
         gate = self.idle_gate
+        mono, perf = time.monotonic_ns, time.perf_counter_ns
+        clk = self.clock
+        cost = self.iter_cost_ns
         while not should_stop():
+            k0 = clk.tick % 50
+            t0 = perf()
             wait = self.iterate()
+            dt = perf() - t0
+            c = cost[k0]
+            cost[k0] = dt if dt > c else c + (dt - c) * ITER_COST_DECAY
             if wait <= 0:
                 continue
-            gate.set()
-            if not self.clock.advancing:
+            if not clk.advancing:
+                gate.open(mono() + int(wait * 1e9))
                 self.inbox.wait(wait)  # 暂停：inbox 上带超时的阻塞等待（照写心跳，20 Hz 空转；有请求立即进入下一轮）
             else:
-                time.sleep(min(wait, IDLE_WAIT_S))
-            gate.clear()
+                w = min(wait, IDLE_WAIT_S)
+                # 窗口截止 = 预计醒来时刻；余量 = 下一轮（相位 clk.tick % 50）可容许的醒来后等待（ADR-073 第 2 条）
+                slack = max(0, BG_ITER_TARGET_NS - int(cost[clk.tick % 50])) if self.pair_ticks and clk.rate == 1.0 else 0
+                gate.open(mono() + int(w * 1e9), slack)
+                time.sleep(w)
+            gate.close()
 
     def _drain(self) -> None:
         sp = self._sp_raw
@@ -871,7 +944,11 @@ class SimCore:
                 self.engine.batch_tick()
             except Exception:
                 log.exception("batch admission failed")
-        for _ in range(DRAIN_MAX):
+        t_end = self.perf_ns() + DRAIN_BUDGET_NS
+        for k in range(DRAIN_MAX):
+            if k and self.perf_ns() >= t_end:
+                self.stats["drain_deferred"] = self.stats.get("drain_deferred", 0) + 1
+                return  # 余下的请求留到下一轮（ADR-073 第 4 条）
             try:
                 item = self.inbox.get_nowait()
             except IndexError:
@@ -903,7 +980,13 @@ class SimCore:
             req = item[1]
             req.reply_msg(self._lease_op(req.msg()))
         elif kind == "roster":
-            item[1].reply_msg(self.roster.snapshot())
+            # 预编码回复（ADR-074 第 1 条）：此前整份重建并编码，N = 1000 时约 6.5 ms 落在一次迭代内；约 160 KB 的 zenoh 回复
+            # 在主循环内仍约 2.7 ms，交给空闲窗口发布线程（不在 sim-core 进程中时就地回复）
+            req, rep = item[1], self.roster.snapshot_packed()
+            if self.ext_pub_bg is not None:
+                self.ext_pub_bg.submit(lambda: req.reply(rep))
+            else:
+                req.reply(rep)
         elif kind == "estimate":
             self._est_q.append((item[1], self.clock.wall_mono_ns()))
         elif kind == "query":
@@ -1058,6 +1141,7 @@ class SimCore:
         sl.add(SlowTask("audit", lambda b: self.audit.maybe_sync(self.wall_ns())))
         sl.add(SlowTask("geo", self._slow_geo))
         sl.add(SlowTask("state_ext", self._slow_state_ext))
+        sl.add(SlowTask("vehicles", self._slow_vehicles, atomic=True, pending=lambda: bool(self._veh_jobs)))
         # 整块周期任务按估计耗时择机启动（fit；gc gen2 紧随 checkpoint 在同一轮执行，ADR-021 ③、ADR-070）
         sl.add(SlowTask("perf", lambda b: self._publish_perf(), period_wall_ns=PERF_PERIOD_NS, fit=True))
         # 不可分片任务按 ADR-057 的公平轮转与预算借贷启动（`pending` 为空队列时不计积分）
@@ -1066,16 +1150,26 @@ class SimCore:
         sl.add(SlowTask("fine_check", self._slow_fine, atomic=True, pending=lambda: bool(self.engine.fine_queue)))
         sl.add(SlowTask("cleanup", lambda b: self.engine._expire_idem(self.clock.wall_mono_ns()), period_wall_ns=1_000_000_000,
                         fit=True))
-        sl.add(SlowTask("gc", self._slow_gc, period_wall_ns=GC_GEN2_PERIOD_NS, fit=True,
-                        follow="checkpoint" if self.checkpointer is not None else None))
+        if self.checkpointer is None:
+            sl.add(SlowTask("gc", self._slow_gc, period_wall_ns=GC_GEN2_PERIOD_NS, fit=True))
         if self.manual_gc:
             sl.add(SlowTask("gc_young", self._slow_gc_young))
         if self.checkpointer is not None:
-            sl.add(SlowTask("checkpoint", lambda b: self.checkpointer.maybe_save(self), period_sim_ns=1_000_000_000, fit=True))
+            # gc gen2 并入 checkpoint 任务：先回收（上一代的元数据已冻结并由写线程释放，回收只扫本秒新增的存活对象），
+            # 再拷贝，拷贝出的元数据随即冻结（不再被年轻代回收与下一次 gen2 遍历）；此前 gen2 紧随拷贝之后执行，
+            # 要遍历刚建出的整代元数据（ADR-073 第 2 条）
+            # 后台拷贝时按 250 ms 轮询（是否到期以上一代的拷贝时刻判定）：请求与拷贝之间有窗口等待，按请求时刻计周期会使
+            # "到期 → 未到期跳过"交替，周期变成 2 s
+            bg = getattr(self.checkpointer, "bg", None) is not None
+            sl.add(SlowTask("checkpoint", self._slow_checkpoint, period_sim_ns=250_000_000 if bg else 1_000_000_000,
+                            fit=True))
         if self.pin_aux_threads:
             from .cpuaff import AuxPinner
 
             self.aux_pinner = AuxPinner()
+            bg = getattr(self.checkpointer, "bg", None)
+            if bg is not None and bg.thread.native_id is not None:
+                self.aux_pinner.keep.add(int(bg.thread.native_id))  # 后台拷贝留在主循环核（cpuaff.AuxPinner.keep）
             if self.aux_pinner.active:
                 # 新线程继承创建者（多为主循环）的亲和性：周期重扫（cpuaff 模块文档，ADR-070）
                 sl.add(SlowTask("cpuaff", lambda b: self.aux_pinner.scan(), period_wall_ns=AUX_PIN_PERIOD_NS, fit=True))
@@ -1122,7 +1216,13 @@ class SimCore:
         req = self._query_q.popleft()
         m = req.msg() or {}
         op = str(m.get("op"))
-        local = self._local_query(op, m.get("args") or {})
+        args = m.get("args") or {}
+        if op == "fleet/vehicles" and args.get("id") is None and len(self.roster.by_slot) > VEH_SYNC_MAX:
+            # 全表查询转入分片作业（_slow_vehicles），完成时回复（ADR-074 第 2 条）
+            self._veh_jobs.append({"req": req, "slots": self.roster.slots_in_order(), "pos": 0, "parts": [],
+                                   "last": self._ext_rows_last, "t0": self.wall_ns()})
+            return None
+        local = self._local_query(op, args)
         if local is not None:
             req.reply_msg(local)
             return None
@@ -1183,6 +1283,108 @@ class SimCore:
                         "home_enu_m": [round(float(v), 3) for v in e.home_enu_m], "state_ext": ext.get(e.agent_no)})
         return out
 
+    def _ext_value_bytes(self, no: int, raw: bytes | None) -> bytes | None:
+        """state_ext 行（`packb([agent_no, state_ext])`）中 state_ext 值的编码字节；行缺失或形态不符时返回 None。"""
+        if raw is None or len(raw) < 2 or raw[0] != 0x92:
+            return None
+        pn = msgpack.packb(no, use_bin_type=True)
+        if raw[1:1 + len(pn)] != pn:
+            return None
+        return raw[1 + len(pn):]
+
+    def vehicle_items_packed(self, slots: list[int], last: dict[int, bytes]) -> list[bytes]:
+        """`vehicle_items()` 各条目的 msgpack 编码（逐字节与 `packb(条目)` 相同，ADR-074 第 2 条）：按条目的键序拼接
+        11 个键值对的编码，其中静态字段（id、agent_no、profile_id、model、backend 与 home_enu_m）按条目对象缓存，生命周期与
+        (flight_state, sub) 按取值缓存，只有位置逐次编码；state_ext 直接拼接最近一次 2 Hz 发布的已编码行（不解码、不重编），
+        缺失的机体现算。N = 1000 时缓存建立后逐机约 9 µs（此前构造字典、解码 state_ext 再整体编码约 48 µs）。"""
+        S = self.fleet.S
+        sb = S.blocks["safety"]
+        by = self.roster.by_slot
+        ents = [(s_, by.get(s_)) for s_ in slots]
+        ents = [(s_, e) for s_, e in ents if e is not None]
+        if not ents:
+            return []
+        sl = np.fromiter((x[0] for x in ents), np.int64, len(ents))
+        fs_l, sub_l = sb["fs"][sl].tolist(), sb["sub"][sl].tolist()
+        pos_l = S.enu.pos[sl].astype(np.float64).tolist()
+        vals: dict[int, bytes] = {}
+        miss = []
+        for s_, e in ents:
+            x = self._ext_value_bytes(e.agent_no, last.get(e.agent_no))
+            if x is None:
+                miss.append(s_)
+            else:
+                vals[e.agent_no] = x
+        if miss:
+            for no, x in self._ext_rows(miss):
+                vals[no] = msgpack.packb(x, use_bin_type=True)
+        packb = msgpack.packb
+        st_c, lc_c, fs_c = self._veh_static, self._veh_lc, self._veh_fs
+        out = []
+        for (s_, e), fs, sub, P in zip(ents, fs_l, sub_l, pos_l, strict=True):
+            c = st_c.get(s_)
+            if c is None or c[0] is not e:
+                head = packb({"id": e.id, "agent_no": e.agent_no, "profile_id": e.profile_id, "model": e.model,
+                              "backend": e.backend}, use_bin_type=True)[1:]
+                home = packb("home_enu_m", use_bin_type=True) + packb([round(float(v), 3) for v in e.home_enu_m],
+                                                                      use_bin_type=True)
+                c = st_c[s_] = (e, head, home)
+            lb = lc_c.get(e.lifecycle)
+            if lb is None:
+                lb = lc_c[e.lifecycle] = packb("lifecycle", use_bin_type=True) + packb(LIFECYCLE_NAMES[e.lifecycle],
+                                                                                       use_bin_type=True)
+            fb = fs_c.get((fs, sub))
+            if fb is None:
+                F = SM.FS(fs)
+                subs = SM.SUB[F]
+                fb = fs_c[(fs, sub)] = (packb("flight_state", use_bin_type=True) + packb(F.name, use_bin_type=True)
+                                        + packb("sub", use_bin_type=True)
+                                        + packb(subs[sub] if sub < len(subs) else None, use_bin_type=True))
+            pb = packb([round(P[0], 3), round(P[1], 3), round(P[2], 3)], use_bin_type=True)
+            out.append(b"".join((b"\x8b", c[1], lb, fb, _POS_KEY, pb, c[2], _SE_KEY, vals.get(e.agent_no, b"\xc0"))))
+        return out
+
+    def _slow_vehicles(self, budget_us: float) -> Any:
+        """fleet/vehicles 全表查询的分片作业（ADR-074 第 2 条）：按剩余预算与逐机耗时上包络编码一片（至少 VEH_SLICE_MIN
+        架；作业存在超过 VEH_ESCALATE_NS 后至少 VEH_SLICE_MAX 架），全部完成后回复 `{v, code: 0, items}`（与同步构造的
+        `packb` 逐字节相同，但各机来自相邻的若干 tick）。启动时机由 SlowTasks 的不可分片规则决定（公平轮转、积分与借贷、
+        20 ms 饿死上界）。"""
+        jobs = self._veh_jobs
+        if not jobs:
+            return False
+        job = jobs[0]
+        now = self.wall_ns()
+        per = max(self._veh_us_per, VEH_US_FLOOR)
+        lo = VEH_SLICE_MAX if now - job["t0"] >= VEH_ESCALATE_NS else VEH_SLICE_MIN
+        k = max(lo, int(min(VEH_SLICE_MAX, budget_us / per)))
+        chunk = job["slots"][job["pos"]:job["pos"] + k]
+        t0 = self.perf_ns()
+        job["parts"].extend(self.vehicle_items_packed(chunk, job["last"]))
+        if chunk:
+            meas = (self.perf_ns() - t0) / 1000.0 / len(chunk)
+            per0 = self._veh_us_per
+            self._veh_us_per = min(meas, 2.0 * per0) if meas > per0 else per0 + (meas - per0) * EXT_US_DECAY
+        job["pos"] += len(chunk)
+        if job["pos"] >= len(job["slots"]):
+            jobs.popleft()
+            pk = msgpack.Packer(use_bin_type=True)
+            parts = job["parts"]
+            head = b"".join((pk.pack_map_header(3), pk.pack("v"), pk.pack(1), pk.pack("code"), pk.pack(0), pk.pack("items"),
+                             pk.pack_array_header(len(parts))))
+            req = job["req"]
+
+            def send() -> None:
+                try:
+                    req.reply(b"".join((head, *parts)))
+                except Exception:
+                    log.exception("fleet/vehicles reply failed")
+
+            if self.ext_pub_bg is not None:
+                self.ext_pub_bg.submit(send)  # 拼接与回复在空闲窗口内由发布线程完成（约 0.7 MB，主循环内约 9 ms）
+            else:
+                send()
+        return None
+
     def _slow_fine(self, budget_us: float) -> Any:
         if not self.engine.fine_queue:
             return False
@@ -1209,22 +1411,77 @@ class SimCore:
         self._gc_young_ms.append(d / 1000.0)
         return None
 
+    def _slow_checkpoint(self, budget_us: float) -> Any:
+        """checkpoint（1 s【仿真】一代）与 gc gen2 合为一个整块周期任务（ADR-073 第 2 条）：gen2 → 拷贝 → 冻结。
+        自动回收未关闭（进程内测试台）时只做拷贝。返回 False 表示本轮没有到期（不计耗时）。"""
+        ck = self.checkpointer
+        if self.clock.t_ns - ck.last_t < ck.period:
+            return False
+        if ck.bg is not None:
+            # 后台拷贝（sim-core 进程，ADR-073 第 2 条）：只提出请求，由 _BgCapture 在主循环空闲窗口内持状态锁执行
+            if ck.bg.pending:
+                return False
+            ck.bg.request()
+            return None
+        return self.checkpoint_capture()
+
+    def checkpoint_capture(self) -> bool:
+        """gen2（或只冻结）→ 拷贝 → 冻结（主循环慢任务内，进程内测试台）。"""
+        if self.manual_gc:
+            self._gen2_or_freeze()
+        return self.checkpoint_capture_only()
+
+    def gen2_or_freeze(self) -> None:
+        """后台拷贝的第一步（持状态锁，ADR-073 第 2 条）。"""
+        self._gen2_or_freeze()
+
+    def checkpoint_capture_only(self) -> bool:
+        """拷贝 → 冻结（主循环慢任务内，或后台拷贝的第二步持状态锁）。"""
+        ok = self.checkpointer.maybe_save(self)
+        if self.manual_gc:
+            gc.freeze()  # 拷贝出的元数据（在途调用、幂等表等，交写线程只读）移入永久代：由引用计数在写完后释放
+        return ok
+
+    def _gen2_or_freeze(self) -> None:
+        """gc gen2 + 冻结；上一次 gen2 的耗时（衰减估计）超过 GEN2_INLINE_US、或自上次以来准入的调用数达到
+        GEN2_SKIP_ADMITTED 时本次只冻结（ADR-073 第 2 条）。
+
+        gen2 只扫描上次冻结以来新增且存活的对象，耗时与这 1 s 内的对象增量成正比：稳态约 0.4–1 ms，全机 RTL、500 架
+        link_drop 等风暴期间新建上千个调用与事件对象，一次 10–20 ms，直接越过单步最大 12 ms。风暴期间只冻结（存活对象
+        移入永久代，此后由引用计数释放；其间形成又失效的引用环不再回收，只在风暴期间发生），估计值每次跳过衰减到 0.7 倍，
+        数秒后重新尝试 gen2。"""
+        adm = int(self.engine.stats.get("admitted", 0)) if self.engine is not None else 0
+        burst = adm - self._gen2_adm0 >= GEN2_SKIP_ADMITTED
+        self._gen2_adm0 = adm
+        if (burst or self._gen2_est_us > GEN2_INLINE_US) and self._gen2_run_skips < GEN2_MAX_SKIPS:
+            gc.freeze()
+            gc.collect(2)  # 冻结后各代为空：只清零各代计数（数微秒），使年轻代的强制阈值不在风暴中途触发
+            self._gen2_est_us *= 0.7
+            self._gen2_skipped += 1
+            self._gen2_run_skips += 1
+            return
+        self._gen2_run_skips = 0
+        t0 = self.perf_ns()
+        gc.collect(2)
+        gc.freeze()
+        d_us = (self.perf_ns() - t0) / 1000.0
+        self._gc_ms.append(d_us / 1000.0)
+        self._gen2_est_us = d_us
+
     def _slow_gc(self, budget_us: float) -> Any:
         """gc gen2 手动回收（D1-core 每 ≥ 30 s【墙钟】一次；启用 checkpoint 时紧随 checkpoint 拷贝，ADR-021 ③）。
         回收后冻结幸存者（`gc.freeze()`，与启动时同一手法）：下一次 gen2 只扫描这 30 s 内新产生且存活的对象，停顿与机群
         规模、运行时长无关（N = 1000 时全量 gen2 约 35 ms，主循环停顿；ADR-065）。冻结对象仍按引用计数释放，只是不再参与
         环检测。"""
-        t0 = self.perf_ns()
-        gc.collect(2)
-        gc.freeze()
-        self._gc_ms.append((self.perf_ns() - t0) / 1e6)
+        self._gen2_or_freeze()
         return None
 
     def _slow_state_ext(self, budget_us: float) -> Any:
         """`state_ext` 2 Hz【墙钟】分片打包（跨迭代完成后一次发布；ADR-051）。
 
         每片的机数按本轮剩余预算与实测的逐机耗时（含每片固定开销的均摊）自适应取值，预算放不下 EXT_SLICE_MIN 架时本轮
-        跳过（让给预算宽裕的 tick），连续跳过超过 EXT_STARVE_NS【墙钟】时强制做一片最小片。各片的行在本片内即 msgpack
+        跳过（让给预算宽裕的 tick），连续跳过超过 EXT_STARVE_NS【墙钟】时在剩余预算 ≥ EXT_FORCE_MIN_US 的轮次强制做一片
+        最小片（超过 EXT_STARVE_HARD_NS 时不再挑轮，ADR-074 第 4 条）。各片的行在本片内即 msgpack
         编码（流式），周期结束时只拼接数组头与已编码的行（与对整个列表 `packb` 逐字节相同）：此前固定 16 架一片、末片
         一次打包 1000 行（约 11 ms），大机群时单步出现十余毫秒的尖峰（FX2-R2）。"""
         now = self.wall_ns()
@@ -1237,11 +1494,18 @@ class SimCore:
             self._ext_packed = []
             self._ext_pos = 0
             self._ext_slice_wall = now
+        if self._ext_pos >= len(self._ext_order):
+            # 全部片已编码、发布顺延到本轮（上一片之后的剩余预算放不下发布）：预算不足时同样按 EXT_STARVE_NS 兜底
+            if budget_us < self._ext_pub_us and now - self._ext_slice_wall < EXT_STARVE_NS:
+                return False
+            self._ext_publish()
+            return None
         per = max(self._ext_us_per, EXT_US_FLOOR)
         k = int(min(EXT_SLICE_MAX, budget_us / per))
         if k < EXT_SLICE_MIN:
-            if now - self._ext_slice_wall < EXT_STARVE_NS:
-                return False
+            starve = now - self._ext_slice_wall
+            if starve < EXT_STARVE_NS or (budget_us < EXT_FORCE_MIN_US and starve < EXT_STARVE_HARD_NS):
+                return False  # 未饿死，或已饿死但本轮偏重：让给之后的轻轮（ADR-074 第 4 条）
             k = EXT_SLICE_MIN
         chunk = self._ext_order[self._ext_pos:self._ext_pos + k]
         t0 = self.perf_ns()
@@ -1249,18 +1513,38 @@ class SimCore:
         self._ext_packed.extend(packed)
         self._ext_agents.extend(agents)
         if chunk:
-            self._ext_us_per = 0.7 * self._ext_us_per + 0.3 * ((self.perf_ns() - t0) / 1000.0 / len(chunk))
-        self._ext_pos += k
+            # 逐机耗时取上包络（实测更大时取实测、每次至多翻倍，更小时每片向实测靠拢 10%）：此前按 0.7/0.3 指数平均，
+            # 缓存温热的轻片把估计压到实际值的一半以下，下一片按估计取满 48 架，实测 2.1–2.5 ms，落在剩余预算约 0.8 ms
+            # 的轮次上使该轮单步约 3 ms（ADR-073 第 3 条）
+            meas = (self.perf_ns() - t0) / 1000.0 / len(chunk)
+            per0 = self._ext_us_per
+            self._ext_us_per = min(meas, 2.0 * per0) if meas > per0 else per0 + (meas - per0) * EXT_US_DECAY
+        self._ext_pos = min(self._ext_pos + k, len(self._ext_order))
         self._ext_slice_wall = now
-        if self._ext_pos >= len(self._ext_order):
-            self._ext_pos = -1
-            if self._pub_ext is None:
-                self._pub_ext = self.bus.publisher(bus_keys.state_ext("sim-core"))
-            self._pub_ext.put(self._ext_packer.pack_array_header(len(self._ext_packed)) + b"".join(self._ext_packed))
-            self._ext_rows_last = dict(zip(self._ext_agents, self._ext_packed, strict=True))
-            self._ext_packed = []
-            self._ext_agents = []
+        if self._ext_pos >= len(self._ext_order) and budget_us - (self.perf_ns() - t0) / 1000.0 >= self._ext_pub_us:
+            self._ext_publish()  # 本轮剩余预算放得下发布；否则顺延到下一次调用（ADR-073 第 3 条）
         return None
+
+    def _ext_publish(self) -> None:
+        """发布已编码的各片。N = 1000 时载荷约 0.6 MB：api 与 recorder 订阅时 zenoh put 生产口径 4–7 ms，sim-core 进程中
+        交给空闲窗口发布线程（bgpub），拼接也由该线程完成（ADR-074 第 3 条；此前主线程拼接 1–5 ms）。"""
+        t0 = self.perf_ns()
+        self._ext_pos = -1
+        if self._pub_ext is None:
+            self._pub_ext = self.bus.publisher(bus_keys.state_ext("sim-core"))
+        head = self._ext_packer.pack_array_header(len(self._ext_packed))
+        if self.ext_pub_bg is not None:
+            # 拼接与发布都在主循环空闲窗口内由后台线程完成（bgpub.put_parts，ADR-074 第 3 条）：此前主线程拼接约 0.6 MB
+            # 载荷，生产口径 1–5 ms
+            self.ext_pub_bg.put_parts(self._pub_ext, head, self._ext_packed)
+        else:
+            self._pub_ext.put(head + b"".join(self._ext_packed))
+        self._ext_rows_last = dict(zip(self._ext_agents, self._ext_packed, strict=True))
+        self._ext_packed = []
+        self._ext_agents = []
+        meas = (self.perf_ns() - t0) / 1000.0
+        pub0 = self._ext_pub_us
+        self._ext_pub_us = min(meas, 2.0 * pub0) if meas > pub0 else pub0 + (meas - pub0) * EXT_US_DECAY
 
     def state_ext_items(self) -> list[list]:
         """`state/sim-core/ext` 的载荷：`[[agent_no, state_ext], ...]`（awr.uav.state_ext.v1）。"""
@@ -1525,7 +1809,10 @@ class SimCore:
                "publish_us_p99": round(self.fleet.pipeline.p99_us("tap"), 1) if tap is not None else None,
                "admission_us_p99": round(float(np.percentile(adm, 99)), 1) if adm else None,
                "estimate_us_p99": round(est.p99_us(), 1) if est is not None and est.runs else None,
-               "gc_gen2_ms_max": round(max(self._gc_ms), 3) if self._gc_ms else None,
+               "gc_gen2_ms_max": round(max(self._gc_ms), 3) if self._gc_ms else None, "gc_gen2_skipped": self._gen2_skipped,
+               "ckpt_bg": dict(self.checkpointer.bg.stats) if self.checkpointer is not None and self.checkpointer.bg is not None
+               else None,
+               "ext_pub_bg": dict(self.ext_pub_bg.stats) if self.ext_pub_bg is not None else None,
                # M13-to-M08 第 5 条：慢任务按名计时；ADR-057 借贷与顺延诊断
                "slow_ms_per_s": slow_ms, "slow_debt_us": round(self.slow.debt_us, 1), "slow_deferred": self.slow.deferred,
                "slow_defer_max": {t.name: t.defer_max for t in self.slow.tasks if t.atomic and t.defer_max}}
@@ -1595,6 +1882,9 @@ class SimCore:
         if self.checkpointer is not None:
             with contextlib.suppress(Exception):
                 self.checkpointer.close(final=True)
+        if self.ext_pub_bg is not None:
+            with contextlib.suppress(Exception):
+                self.ext_pub_bg.close()
         if self.inputlog is not None:
             with contextlib.suppress(Exception):
                 self.inputlog.close()
@@ -1767,6 +2057,13 @@ def main(argv: list[str] | None = None) -> int:
         core.manual_gc = os.environ.get("AWR_SIM_MANUAL_GC", "1") != "0"
         core.pin_aux_threads = os.environ.get("AWR_SIM_PIN_AUX", "1") != "0"
         core.pair_ticks = os.environ.get("AWR_SIM_PAIR_TICKS", "1") != "0"
+        if core.checkpointer is not None and os.environ.get("AWR_SIM_CKPT_BG", "1") != "0":
+            core.checkpointer.enable_background(core, core.idle_gate)  # 后台拷贝（ADR-073 第 2 条）
+        if os.environ.get("AWR_SIM_EXT_BG", "1") != "0":
+            from .bgpub import GatedPublisher
+
+            core.ext_pub_bg = GatedPublisher(core.idle_gate)  # state_ext 在空闲窗口内发布（ADR-073 第 3 条）；roster 与 fleet/vehicles
+            #                                                    的大回复同此（ADR-074 第 1、2 条）
         sys.setswitchinterval(SWITCH_INTERVAL_S)
         core.start()
         core.run(lambda: ctx.stopping)
