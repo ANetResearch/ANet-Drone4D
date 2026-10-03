@@ -180,7 +180,7 @@
 |---|---|---|---|---|---|---|
 | M16-FR-040 | harness `apps/web/perf/harness/run.mjs` 实现 18 §3 的 PR-1～PR-12 与单用例状态机（18 §3.2） | P0 | V0.1 | 是 | M16-AC-022 | ADR-033；PERF-FR-001 |
 | M16-FR-041 | 用例注册表：核心用例在 `harness/cases/*.mjs`；模块用例在 `apps/web/perf/<module>/cases.mjs` 导出 `CaseDef[]`，按目录名排序自动发现；重复 id 拒绝启动 | P0 | V0.1 | 是 | M16-AC-023 | AWR-03 §4.3、ADR-050 |
-| M16-FR-042 | 四类用例执行器：`pw`（Playwright spec）、`py`（Python 或 Node 基准工具，读 `awr.bench.result.v1`；自带客户端的多客户端用例也走此类，harness 以 `taskset` 包裹整个工具进程）、`pytest`（带 `perf` 标记的用例）、`shell`（混沌与冒烟脚本） | P0 | V0.1 | 是 | M16-AC-023 | 18 §3、PR-12 |
+| M16-FR-042 | 四类用例执行器：`pw`（Playwright spec；运行期间对 Playwright 进程树执行 PR-6 亲和性守护）、`py`（Python 或 Node 基准工具，读 `awr.bench.result.v1`；自带客户端的多客户端用例也走此类，harness 以 `taskset` 包裹整个工具进程）、`pytest`（带 `perf` 标记的用例）、`shell`（混沌与冒烟脚本） | P0 | V0.1 | 是 | M16-AC-023 | 18 §3、PR-12 |
 | M16-FR-043 | 后端编排：按 CaseDef 以 `AWR_PROFILE=ci` 加 `runtime.yaml` 的 `perf` 钉核段启动 supervisor（世界、剧本、profile、端口偏移），核对各进程 CPU 亲和性（不符判 PERF-E014），等待 `/api/sys/procs` 全部 RUNNING 与剧本标记事件；采样窗口内每 1 s 读 api 与 sim-core 的 `/proc/<pid>/stat`（CPU 门禁的权威来源，18 §9.4 第 3 条），运行后拉取 `/api/sys/perf?window_s=60`，二者合并写 `server.json`，停止并归档日志 | P0 | V0.1 | 是 | M16-AC-022 | M11-FR-086；18 PR-6、§9.4；19 §4.3 |
 | M16-FR-044 | 指标提取与判定：稳态窗口 (2, 60] s、最近秩分位数、超时帧占比、离散度；四态加 WARN、NA、WAIVED；阈值取 `thresholds.json`（18 的可执行镜像） | P0 | V0.1 | 是 | M16-AC-024 | 18 §2.5、§3.1、§17 |
 | M16-FR-045 | 基线库与回归判据（18 §11.3），`make perf-baseline-accept` 只接受 PASS 运行，基线永不自动更新 | P1 | V0.1 | 是 | M16-AC-025 | PERF-FR-022 |
@@ -214,6 +214,7 @@
 | M16-FR-072 | `perf/report/check-report.mjs`：schema、无 emoji 与禁用字形、每图红色实心元素 ≤ 1、`table.log` 规则、指标键全部为 18 §11.2 登记名、页脚来源与保真度字段存在 | P0 | V0.1 | 是 | M16-AC-031 | PERF-AC-054 |
 | M16-FR-073 | fleet_ladder 与 SIH 回归结果进入同一报告（阶梯表 + 行内 sparkline；17 项"SIH 值、Mock 值、容差"哑铃图） | P0 | V0.1 | 是 | M16-AC-032 | M08 §9 报告行 |
 | M16-FR-074 | `perf/report/aggregate-bench.mjs`：按设备能力档与 GPU 型号汇总 `runs/perf-reports/`；满足"同档 ≥ 3 份且 ≥ 2 台设备"时输出固化候选表 | P1 | V0.1 | 是 | M16-AC-042 | 18 §11.5 |
+| M16-FR-075 | 合成演示城市 synthcity 的演示资产（ADR-077）：演示事实 `python/awr/datasets/synthcity.py`；`authoring.build_all()` 生成 `s0-synthcity-showcase`（7 架：地标立面双段螺旋、两机街区覆盖、三机 V 形编队巡航，晴 → 小雨 → 雾，约 4.8 min【仿真】，ci profile ×5）、`free-synthcity`、`zones/synthcity.zones.geojson` 与 catalog 条目（default = S0，不是门禁世界）；默认世界回退时 `make run` 以 S0 开局（§6.4.9） | P1 | V0.1 | 是 | M16-AC-043、044 | ADR-077；DEMO-W |
 
 ---
 
@@ -371,6 +372,18 @@ M16 在链路中只做三件事：提供输入（curated zones、剧本清单）
 
 zones 文件变化会使 `worldpkg build --missing` 重建对应世界（16 §7 第 2 条），因此修改后必须随提交执行 `make worlds` 与 `make scenarios-pin`。
 
+#### 6.2.5 合成演示城市 synthcity（ADR-077）
+
+synthcity 由 M03 `awr.world.ingest.synthetic` 程序生成（M03 §6.18、16 §10.5），不含第三方数据，世界包、截图与录屏可自由再分发，用于 README 截图与"零下载试用"。演示定位：
+
+| 世界 | 演示角色 | 默认剧本 | 主题 | 默认着色 | 需要在 UI 与报告中标注 |
+|---|---|---|---|---|---|
+| `synthcity`（ANet Synthetic City） | 零下载试用、无数据时的默认世界、可再分发的截图 | `s0-synthcity-showcase` | 全景展示（巡检、覆盖、编队、天气同场） | height | 示意坐标；数据行写"程序生成，可自由再分发"（`dataset.redistribution = true`） |
+
+演示事实（`python/awr/datasets/synthcity.py` 的 `SYNTHCITY`，与六城的 `CityFacts` 同构）：范围 1200 × 1200 × 355.1 m，最高 world z 352.0 m（ANet Tower 桅杆顶），border 上限 402.0 m，`nnMedianM` 0.382，1 根深度 5，`trueNorth = exact`，示意锚点 (30.0, 120.0)。curated 区域两个：`nofly-sc-steptower`（阶梯塔，(−62, −2)，半径 55 m）与 `restricted-sc-pond`（公园池塘，(−530, 240)，60 m），选址原则同 §6.2.4（与 S0 的出生点、任务航线、返航线距离 ≥ 10 m，实测最近 27.4 m）。`free-synthcity` 的地块在路口 (0, 60)。
+
+默认世界回退（ADR-077）：未显式指定世界、深圳未构建而 synthcity 已构建时，supervisor 以 synthcity 与 catalog 中它的 `default`（S0）开局；有 UrbanScene3D 数据时 `make worlds` 先构建深圳，默认仍是深圳与 S1。`make demo` 仍固定深圳与 S1（门禁演示）。
+
 ### 6.3 数据合规
 
 | 事项 | 决策 | 落地 |
@@ -404,6 +417,7 @@ PERF · SHENZHEN · WEBGL2 SOFTWARE · run p20260928-031502-3f7a9c2
 | 目标搜索与 thermal 验证 | S3 港口搜救 | 纽约 | 5 | ext | 0.42 → ≥ 0.9、合同网、证据链 |
 | 恶劣天气 | S1 的 `wx-fog`、`wx-rain`、`wx-storm` profile；`flight60-wx` | 深圳 | 2 | ext | 安全终止、MOR 与降水视觉、降级下的帧节奏 |
 | 压力测试 | `ladder-shenzhen`（n10–n1000）；风暴、弱网、多客户端用例 | 深圳 | 10–1000 | core（n200、n1000 sim-core）；ext（n1000 前端） | CPU、RTF、单步、帧节奏、事件合并 |
+| 全景展示（零下载试用） | S0 `s0-synthcity-showcase`：立面螺旋、街区覆盖、编队巡航与天气过渡同场 | 合成演示城市 synthcity | 7 | ext | 无 UrbanScene3D 数据时的默认剧本；可自由再分发的截图与录屏（ADR-077，§6.4.9） |
 
 恶劣天气做成 profile 而不是新剧本：同一几何、同一种子下只改变环境，才能做"晴与雨"的受控对比（科研可复现，G6）；同时不新增剧本编号，不改动 16 §12.1 的内置清单。
 
@@ -570,6 +584,23 @@ v1（12 m 交错格网、2 m/s）的问题（INT-1 §7.2，`test_ladder_smoke` �
 | suzhou | (0, 300)（无点区，合成地面 z = 0；`home_enu_m` 的 z 显式写 0，不依赖无点格的 DSM 取值） |
 | chicago | (0, 0) |
 
+#### 6.4.9 S0 合成演示城市 · 全景展示（ext，ADR-077）
+
+坐标为 synthcity 的 world ENU（生成帧即 world，`T_world_source` 为单位阵），定稿参数在 `python/awr/datasets/synthcity.py` 的 `SHOWCASE`，文件由 `authoring.s0_scenario()` 生成。
+
+| 项 | 取值 | 依据 |
+|---|---|---|
+| 机体 | 7 架 P600（`px4_default`）：螺旋 `p600-h1`、`p600-h2` 出生在路口 (0, 60) 的 (∓8, 60)；覆盖 `p600-c1`、`p600-c2` 在路口 (360, −60) 的 (352, −60)、(368, −60)；编队 `p600-f1..f3` 在路口 (−480, −300) 的 (−488, −300)、(−472, −300)、(−480, −314) | 路口内开阔、无行道树（行道树离路口中心 ≥ 18 m）；出生点两两 ≥ 12 m |
+| 立面螺旋 | `helix_scan` 中心 (62, 122)，`radius_m 58`、`standoff_m 30`，上段 120 → 80 m、下段 80 → 40 m（自上而下），`dz_per_rev_m 16`、9 m/s、`look_at_axis`，`facade_z_range_m [40, 120]` | 立面覆盖的柱面代理半径 = radius − standoff = 28 m，须大于塔底半径 25 m 加 2 m DSM 格对角，否则视线终点落进含塔体的 DSM 格（首版 54 m 时 `facade_coverage` 0.767）；实际立面距 33.8–35.4 m |
+| 街区覆盖 | `lawnmower` 两机，多边形 x ∈ [260, 460]、y ∈ [−165, −75]（两个中层街区，建筑 ≤ 42 m），`fly_over` 70 m AGL、clearance 10 m、旁向重叠 0.4、9 m/s | 实测 `area_coverage` 1.0 |
+| 编队巡航 | `formation` V 形（间距 12 m、半角 35°、`filtered`、τψ 2 s），锚点沿河道中心线 x −430 → 140（每 40 m）再沿北岸绿带 y = −335 返回 x = −430，z 40 m、10 m/s、圆角 30 m | 河道与绿带上空无建筑（树冠 ≤ 15 m） |
+| 天气 | 开局 `clear`；45 s `env.preset{name: lightRain, duration_s: 20}`；150 s `env.preset{name: fog, duration_s: 40}`（雾顶 60 m AGL） | 只有 `SAF.ENV.WIND_LIMIT` 一类环境守卫，小雨 5 m/s 风在 120 m 处约 9 m/s，低于 13.8 m/s |
+| 区域 | `border`、`nofly-sc-steptower`、`restricted-sc-pond` | §6.2.5 |
+| 成功谓词 | `missions_done`、`facade_coverage{两段} ≥ 0.9`、`area_coverage{m-blocks} ≥ 0.9`、`formation_err_rms_m ≤ 3`、`min_separation_m ≥ 10`、`guard_events == 0`、`landed_all` | — |
+| 时长与 profile | `time_limit_s 360`；基础 ×1、`record = true`；`ci` ×5、不录制；`demo` ×1、录制、`on_complete = continue`；`perf` ×1 | 可 ×5 运行 |
+
+实测（2026-10-03，ci profile ×5，`tests/e2e/test_synthcity_showcase.py::test_s0_showcase_x5`）：`SUCCEEDED`，7 个谓词全真（`facade_coverage` 1.0、`area_coverage` 1.0、`formation_err_rms_m` 0.23 m、`min_separation_m` 11.84 m、`guard_events` 0）；下段螺旋 226.2 s、覆盖 244.4 s、上段螺旋 269.2 s、编队 285.6 s 完成（含返航降落），剧本 285.6 s【仿真】结束，墙钟 65.1 s（含启动 7.2 s）；两次天气事件均以 `code 0` 生效。
+
 ### 6.5 演示脚本的实现
 
 演示脚本的内容由 13 §4.4 定义，本节只规定 M16 如何把它变成可执行、可彩排的资产。
@@ -730,11 +761,12 @@ export interface CaseDef {
 | `flight60.<city>.pc`（六城） | pw | `scene=pc`，`?chrome=0` | live `free-<city>` | 3 | D1-AC-03a、02、04、06 | P0（四城）/ P1（旧金山、芝加哥） | d |
 | `flight60.shenzhen.full` | pw | `scene=full`，深圳 + S1 | live S1 `perf`（×1，不录制） | 3 | D1-AC-03b、04、06；PERF-AC-010 | P0 | d |
 | `flight60.shenzhen.fake` | pw | `scene=full`，`source=fake` | fake（N = 2） | 1 | D1-AC-35（诊断） | P0 | d（不判定帧节奏） |
+| `cas.hidden` | pw | `scene=pc`；初始化脚本使 `document.visibilityState` 可覆写，揭开后 4 s 模拟隐藏 6 s 再恢复：隐藏期间 `__perf.cas.evals` 增量 0、`frozenFrames` 随帧增加，恢复后 3 s 内重新评估（用例断言，计数写 `metrics.json`；headless 无法真正隐藏页面，18 K-09，ADR-076） | live `free-shenzhen` | 1 | D1-AC-04（页面隐藏子项）；PERF-AC-004 | P0 | d |
 | `flight60-wx` | pw | `scene=full`，S1 `wx-storm` | live | 3 | D1-AC-03b（P1 口径）、ADR-041 | P1 | w |
 | `layers` | pw | B 锁定 25k，逐层配对（drones 按 ladder 200 架负载，AWR-18 §5.2 第 4 条，ADR-067） | live ladder-shenzhen n200 | 3 | D1-AC-03b 固定层 | P0 | w（MS5 起每周） |
 | `ladder.front.n{10,50,100,200,500,1000}` | pw | `scene=full&n=N` | live `ladder-shenzhen` `n<N>`，等 `ladder.steady` | 3 | D1-AC-09a（n200）、09b（n1000）；其余表征 | P0 / P1 / 表征 | d（n200）；w（其余） |
 | `fleet-ladder` | py | `run.py --n 10,50,100,200,500,1000 --dur 60 --world shenzhen` | 由工具自带 | 3 | D1-AC-07 | P0 | d |
-| `fleet-ladder.concurrent` | py | `run.py --n 1000 --with-recorder --with-checkpoint --clients 3 --with-flight60`（工具自行启动 3 个浏览器） | 工具自带 | 3 | D1-AC-28、PERF-AC-038 | P1 | w |
+| `fleet-ladder.concurrent` | py | `run.py --n 1000 --with-recorder --with-checkpoint --clients 3 --with-flight60`（工具自行启动 3 个浏览器；与 `gw-3clients` 相同，harness 以 `taskset -c 2-6` 包裹整个工具进程，工具的 `AffinityGuard` 才会生效，PR-6；ACC-4 修正，此前为不钉核） | 工具自带 | 3 | D1-AC-28、PERF-AC-038 | P1 | w |
 | `sih-parity` | pytest | `tests/sim/test_fleet_sih_parity.py tests/sim/test_fleet_robust.py` | none | 1 | D1-AC-12 | P0 | d |
 | `ipc.state` / `ipc.cmd` | py | `bench_state.py --n 1000`；`bench_cmd.py` | 工具自带 | 3 | PERF-AC-034 / D1-AC-10、PERF-AC-037 | P0 | d |
 | `gw-3clients` | py | `bench_state.py --clients 3 --with-flight60`（M11 工具，自行启动 3 个 C1 浏览器同跑 flight60：MS4 `scene=pc&rt=1`，MS5 起 `scene=full&n=1000`）；harness 以 `taskset -c 2-6` 与 `PW_CHROME` 包裹整个工具进程，另读 `/proc` 与 `/api/sys/perf` | live ladder `n1000` | 3 | D1-AC-08、PERF-AC-035 | P0 | d |
@@ -742,7 +774,7 @@ export interface CaseDef {
 | `net.W0`～`net.W3` | pw | `scene=full&n=200` 经 `netem_proxy.py`；W0、W1 另跑 n1000 | live ladder | 3 | PERF-AC-042 | P1 | w |
 | `latency` | pw | Follow/FPV（30 s，t_sim 到像素、选中机通道频率 / rAF、credit_skips 占 60 Hz tick 比例）、命令到可见（H 热键 hover 两机）、关注集切换（跟随与 Home 交替 5 次，`focusJumpM` 最大值）、×10 HOLD（三档升速后 20 s）；后四项写 metrics.json（`focus_jump_max_m`、`hold_pct_x10`、`selected_hz_over_raf`、`credit_skips_sel_pct`，ADR-067） | live S1 | 3 | D1-AC-26、PERF-AC-040 | P0 | d |
 | `storm.rtl` / `storm.linkdrop` / `storm.flood` | pw + py | 1000 架全机 RTL；500 架 link_drop；10 s 5000 条事件 | live ladder `n1000` | 3 | D1-AC-27、PERF-AC-041 | P0 / P1 / P1 | d / w / w |
-| `layout`、`warmup` | pw | Ctrl+B 与分隔条；首次操作无编译 | live S1 | 3 | D1-AC-24、25 | P0 | d |
+| `layout`、`warmup` | pw | Ctrl+B 与分隔条；首次操作无编译（`warmup` 在揭开后 PerfGovernor 首轮走完、最近 6 s 无步骤后开始操作，逐操作最大间隔 `after_op_gap_<op>_ms` 写入 `metrics.json`，ADR-076） | live S1 | 3 | D1-AC-24、25 | P0 | d |
 | `ui-overhead` | pw | 同一浏览器交替 `chrome=1` 与 `chrome=0` 各 3 次 | live S1 | 1（内含 6 段） | D1-AC-23 | P1 | w |
 | `ui-commit`、`gc` | pw | profiling 构建；CDP `v8.gc` 追踪 | live S1 | 3 | PERF-AC-020、D1-AC-30 | P1 | w |
 | `feat-matrix.{B,S,A}` | pw | 28 项功能矩阵，`?tier=` | none（静态页） | 1 | D1-AC-14 | P0（B、S）/ P1（A，C2） | d |
@@ -913,7 +945,7 @@ N = 100 是任务书列出的阶梯点，基线（AWR-03 ADR-033、D1-AC-07）�
 | 主循环挂死 | `sys/inject{name: sim-core, fault: hang}`（M11 钩子，仅 ci profile 注册；18 §8.8 写作 `AWR_CHAOS=hang:5`，二者等价，本文统一用 `sys/inject`） | ≤ 2.5 s 检出，≤ 4 s 恢复出帧；faulthandler 有栈 | P1 |
 | 毒性 checkpoint | 恢复后 5 s 内再次注入 kill | 改用上一代 | P1 |
 | 熔断 | 60 s 内连续 6 次 kill | 进入 FAILED；`sys/restart` 可恢复 | P1 |
-| soak | §7.3.4 的 `soak-shenzhen`，30 min；期间切世界 3 次（静态浏览）、预设 5 次、浮层开关 50 次、seek 10 次（有回放时）；每 5 s 采样 JS 堆、api 与 sim-core RSS、GPU 池与重连计数，首尾各 5 min 中位数判定；结束后同一浏览器跑一次整景 flight60 测帧节奏（FX2-R3-gateway，口径见 18 §8.8 soak 行） | 18 §8.8 soak 行；D1-AC-29、PERF-AC-045 | P1 |
+| soak | §7.3.4 的 `soak-shenzhen`，30 min；期间切世界 3 次（静态浏览）、预设 5 次、浮层开关 50 次、seek 10 次（有回放时）；每 5 s 采样 JS 堆（未强制，记录）、api 与 sim-core RSS、GPU 池与重连计数，每 30 s 强制 GC 后读保留 JS 堆，首尾各 5 min 中位数判定（堆按保留堆，ADR-075）；结束后同一浏览器跑一次整景 flight60 测帧节奏（FX2-R3-gateway，口径见 18 §8.8 soak 行） | 18 §8.8 soak 行；D1-AC-29、PERF-AC-045 | P1 |
 
 `tests/chaos/rtprobe.py` 是最小 `awr.rt.v1` 客户端（websockets 17.1）：握手、订阅 `swarm/uav/state`（规范名；`swarm/state` 只是别名）与 `event`、解析 TIME 与 BATCH 帧头（epoch、seq、rflags）、发 `call` 并跟踪 `result`，按 17 号文档的帧格式实现，不依赖前端代码。
 
@@ -962,7 +994,7 @@ N = 100 是任务书列出的阶梯点，基线（AWR-03 ADR-033、D1-AC-07）�
 | 稳态窗口 | (2, 60] | s | 18 §1.5 |
 | 页面轮询间隔 | 1000 | ms | 本文设定（M16-NFR-001） |
 | 后端就绪超时 / 剧本标记超时 | 30 / 90 | s | 本文设定：sim-core 就绪 ≤ 15 s（19 §4.3），ladder 稳态标记 45 s |
-| CPU 分区 | Playwright 与 Chromium `taskset -c 2-6`；api core0；sim-core core1；plan-pool core7；`fake_gw.py` core0 | — | ADR-017；18 PR-6 |
+| CPU 分区 | Playwright 与 Chromium `taskset -c 2-6`，`pw` 执行器另以亲和性守护每 250 ms 把进程树中越出 2–6 的线程（SwiftShader marl 工作线程）改回（`perf/harness/exec/affinity.mjs`，计数写 `affinity.json`）；api core0；sim-core core1；plan-pool core7；`fake_gw.py` core0 | — | ADR-017；ADR-073 第 6 条；18 PR-6 |
 | 视口 | 1280 × 720 CSS，DPR 1 | px | g02 §2.1 |
 | 端口偏移 | harness 缺省 `AWR_PORT_OFFSET = 9`（19 §3.2 为测试夹具保留，可覆盖）；api 8000+10k，vite preview 4173+10k，弱网代理 8100+10k，代理控制 8199+10k（后两者为本文设定，与 19 OPS-FR-002 的端口不冲突） | — | 19 §3.2、§6.3 |
 | S1 ci 倍速 / 剧本种子 | 10 / 7 | —、— | 16 §12.4 |
@@ -1025,6 +1057,7 @@ sequenceDiagram
 |---|---|---|---|
 | `--case` | string | 必填 | CaseDef id，或前缀加通配（`flight60.*.pc`） |
 | `--city` / `--scene` / `--n` / `--net` / `--clients` | string / `pc\|full` / int / `W0–W3` / int | 取 CaseDef.params | 覆盖参数 |
+| `--minutes` | int | 取 CaseDef.params | 覆盖 soak 的时长，只用于缩短的自测（窗口为 min(5, 时长/3) min；注册用例与门禁仍为 30 min，ADR-075） |
 | `--source` | `live\|fake` | `live` | `fake` 时结果标"不参与门禁" |
 | `--runs` | 1 或 3 | CaseDef.runs | 调试可用 1，门禁强制按定义 |
 | `--gate` | `G2d\|G2w\|G3\|G4\|local` | `local` | 写入报告；`local` 不更新基线比较记录 |
@@ -1057,18 +1090,21 @@ sequenceDiagram
     "newyork":      { "default": "free-newyork", "demo": ["s3-newyork-sar"] },
     "sanfrancisco": { "default": "free-sanfrancisco", "demo": ["s5-sanfrancisco-terrain"] },
     "suzhou":       { "default": "free-suzhou", "demo": ["s6-suzhou-corridor"] },
-    "chicago":      { "default": "free-chicago", "demo": ["s4-chicago-lakeshore"] }
+    "chicago":      { "default": "free-chicago", "demo": ["s4-chicago-lakeshore"] },
+    "synthcity":    { "default": "s0-synthcity-showcase", "demo": ["s0-synthcity-showcase", "free-synthcity"] }
   },
   "ui_profiles": {
+    "s0-synthcity-showcase": ["demo"],
     "s1-shenzhen-facade": ["demo", "wx-fog", "wx-rain", "wx-storm"],
     "ladder-shenzhen": ["n10", "n50", "n100", "n200", "n500", "n1000"]
   },
   "themes": {
+    "showcase": ["s0-synthcity-showcase"],
     "inspection": ["s1-shenzhen-facade", "s6-suzhou-corridor"],
     "coverage": ["s2-shanghai-formation", "s4-chicago-lakeshore", "s5-sanfrancisco-terrain"],
     "formation": ["s2-shanghai-formation", "s4-chicago-lakeshore"],
     "search_thermal": ["s3-newyork-sar"],
-    "weather": ["s1-shenzhen-facade#wx-fog", "s1-shenzhen-facade#wx-rain", "s1-shenzhen-facade#wx-storm"],
+    "weather": ["s0-synthcity-showcase", "s1-shenzhen-facade#wx-fog", "s1-shenzhen-facade#wx-rain", "s1-shenzhen-facade#wx-storm"],
     "stress": ["ladder-shenzhen", "soak-shenzhen"]
   }
 }
@@ -1466,16 +1502,18 @@ M16 不拥有 UI 源码（`apps/web/src/**` 属 M06、M15 等），本节列出 
 ```text
 scenarios/
 ├── catalog.json
+├── s0-synthcity-showcase.json  free-synthcity.json   ext（合成演示城市，ADR-077）
 ├── s1-shenzhen-facade.json          core
 ├── ladder-shenzhen.json             core
 ├── free-{shenzhen,shanghai,newyork,sanfrancisco,suzhou,chicago}.json   core
 ├── soak-shenzhen.json               ext
 ├── s2-shanghai-formation.json  s3-newyork-sar.json  s4-chicago-lakeshore.json
 ├── s5-sanfrancisco-terrain.json  s6-suzhou-corridor.json               ext
-└── zones/{shenzhen,shanghai,newyork,sanfrancisco,chicago,suzhou}.zones.geojson   core
+└── zones/{shenzhen,shanghai,newyork,sanfrancisco,chicago,suzhou,synthcity}.zones.geojson   core（synthcity 为 ext）
 python/awr/datasets/
 ├── __init__.py
 ├── urbanscene3d/{__init__.py, cities.py, paths.py}      cities.py 为六城事实常量（引用 16 §10）；paths.py 为桩（V0.2）
+├── synthcity.py                     合成演示城市事实与 S0 定稿参数（ADR-077，§6.2.5、§6.4.9）
 ├── scenarios/{__init__.py, __main__.py, authoring.py, energy.py, catalog.py, geometry.py}
 └── demo/{__init__.py, __main__.py, check.py, script.py}
 apps/web/perf/                       见 §6.7.1；跨模块 spec：skeleton、flight60、ladder、layers、latency、storm、layout、warmup、
@@ -1484,7 +1522,7 @@ apps/web/playwright.config.ts        project perf 与 e2e（§6.7.1）；AWR-03 
 apps/web/tests/m16/judge.test.ts     判定与分位数的 vitest 单测（M16-AC-024）
 tests/e2e/
 ├── conftest.py
-├── test_scenarios_static.py  test_scenarios.py  test_scenarios_energy.py
+├── test_scenarios_static.py  test_scenarios.py  test_scenarios_energy.py  test_synthcity_showcase.py
 ├── test_builtin_worlds.py  test_demo_check.py  test_s1_energy.py
 ├── interaction.spec.ts  honesty.spec.ts  demo_rehearsal.spec.ts
 ├── remote_smoke.sh  first_use_time.sh
@@ -1634,6 +1672,8 @@ M16 不新增运行时依赖；不引入 Node 端 YAML 库（由 PyYAML 转 JSON
 | M16-AC-040 | SIH 与 IPC 调度 | D1-AC-12、PERF-AC-034 的结果进入同一报告 | `make perf-nightly` | 本机 CPU | P0 |
 | M16-AC-041 | 远程与首次可用 | D1-AC-33 通过；首次可用 ≤ 30 min（P1） | `tests/e2e/remote_smoke.sh`；`first_use_time.sh` | 本机 CPU | P0 / P1 |
 | M16-AC-042 | `/bench` 汇总 | 本机以 `?tier=B` 模拟 3 份回传：按设备能力档分组；不足"≥ 2 台设备"时不输出固化候选 | `node apps/web/perf/report/aggregate-bench.mjs --selftest` | 本机 | P1 |
+| M16-AC-043 | S0 静态 | 4–8 架、三类任务（立面螺旋两段相接自上而下、街区覆盖、编队）、天气开局 clear 后依次 lightRain、fog（参数为 `env/preset` 命令参数）、ci profile ×5、`time_limit_s` ∈ [180, 600]、出生点两两 ≥ 12 m；schema、V-SC 离线规则与加载器在已构建世界上的 V-SC-02/05/09 全部通过；curated 区域与出生点、航线、返航线 ≥ 10 m；catalog 中 synthcity 的 default 为 S0 且不是门禁世界 | `pytest tests/e2e/test_synthcity_showcase.py -k "shape or catalog"`；`pytest tests/e2e/test_scenarios_static.py` | 本机 | P1 |
+| M16-AC-044 | S0 端到端 ×5 | ci profile 的 supervisor（sim-core + api）：`SUCCEEDED`、全部谓词为真、两次天气事件与"showcase complete"标记出现、无 FleetGuard 冲突；仿真 180–300 s，墙钟 ≤ 120 s | `pytest tests/e2e/test_synthcity_showcase.py::test_s0_showcase_x5`（`needs_data`、`slow`；需要 `make demo-world`） | 本机 | P1 |
 
 真 GPU 档：本模块没有本期阻塞的真 GPU 验收；`/bench` 数据按 §6.14 规则汇总，V0.3 起由 GPU runner 用例（18 PERF-AC-016）阻塞 V0.3 发布。
 

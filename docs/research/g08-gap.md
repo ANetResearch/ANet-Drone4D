@@ -281,7 +281,7 @@ admit iff path_valid([p, p_stop, goal], buffer=1.0 m)                  # 折线 
 ```text
 v_r   = v − w(p,t)                                     # NED；w 来自 env stage（均值 + 阵风 + 湍流）
 b3    = R·e_z                                          # 机体 z 轴（向下）
-ΣΩ    = n·ω_max·√clip(T̂, 0, 1)                         # T ∝ ω² ⇒ 每桨 ω = ω_max·√T̂（L1 各桨推力相同）
+ΣΩ    = n·ω_max·√clip(T̂, 0, 1)                         # T ∝ ω² => 每桨 ω = ω_max·√T̂（L1 各桨推力相同）
 F_aero = −½·ρ·CdA·|v_r|·v_r − (ΣΩ·c_rd)·(v_r − (v_r·b3)·b3)
 F      = −b3·T̂·T_max·(ρ/ρ0)^k_rho + F_aero + m·g·e_z  # k_rho=1：推力随密度衰减（高原或高温），ρ 取自 env THERMO
 ```
@@ -347,8 +347,8 @@ F      = −b3·T̂·T_max·(ρ/ρ0)^k_rho + F_aero + m·g·e_z  # k_rho=1：推
 ### 7.2 执行链
 
 ```text
-guard (50 Hz, 向量化) ─► SafetyEvent{code, level, slot, t} ─► bus
-Flight FSM（事件驱动，g04 的 14 态白名单，只升不降，锁存）─► 裁决 ─► SupervisorCommand(t_next_tick)
+guard (50 Hz, 向量化) ─> SafetyEvent{code, level, slot, t} ─> bus
+Flight FSM（事件驱动，g04 的 14 态白名单，只升不降，锁存）─> 裁决 ─> SupervisorCommand(t_next_tick)
 下一 tick 的 ingest 优先执行 supervisor 命令（HOLD = 以当前 tr_x 为目标的 GOTO；ELAND = 下降速度 0.5 m/s 的 LANDING 参考；
 FAILSAFE = r24 的前馈下坠：参考冻结，v_ff = (0, 0, +1 m/s NED)）
 ```
@@ -503,12 +503,12 @@ tools/regen_sih_golden.sh                 # PX4 升级时重录：run_sih_x500.s
 
 | 检查 | 范围 | p600_mid360（3.5 kg） | p600.sdf 原值（1.505 kg） |
 |---|---|---|---|
-| 悬停推力 `m·g/(n·T_max)` | 0.30–0.65（类比 MRS 的 hover_throttle_range_check） | 0.446 ✓ | 0.192 ✗ |
-| TWR | 1.6–3.0 | 2.24 ✓（MTOW 时 1.96） | 5.2 ✗ |
-| 8 m/s 风悬停倾角 | 5°–15° | 7.85° ✓ | c_rd=8.06e-4 时约 49° ✗ |
-| J_xx = J_yy（X 型对称），J_zz > J_xx | — | ✓ | 0.011 ≠ 0.015 ✗ |
-| CdA/m | 0.005–0.02 m²/kg | 0.0100 ✓ | — |
-| m ≤ MTOW | — | ✓ | — |
+| 悬停推力 `m·g/(n·T_max)` | 0.30–0.65（类比 MRS 的 hover_throttle_range_check） | 0.446 pass | 0.192 fail |
+| TWR | 1.6–3.0 | 2.24 pass（MTOW 时 1.96） | 5.2 fail |
+| 8 m/s 风悬停倾角 | 5°–15° | 7.85° pass | c_rd=8.06e-4 时约 49° fail |
+| J_xx = J_yy（X 型对称），J_zz > J_xx | — | pass | 0.011 ≠ 0.015 fail |
+| CdA/m | 0.005–0.02 m²/kg | 0.0100 pass | — |
+| m ≤ MTOW | — | pass | — |
 
 ### 10.4 初版参数（全文见 `.cache/research/g08/vehicles/p600/params.yaml`，实现时移到 `vehicles/p600/params.yaml`）
 

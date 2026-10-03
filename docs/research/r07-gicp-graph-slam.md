@@ -10,12 +10,12 @@
 
 ## 0. 结论速览
 
-| 仓库 | ★ / 最后提交 | 定位 | 复用方式 | 落点版本 | 推荐度 |
+| 仓库 | stars / 最后提交 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|---|
-| koide3/small_gicp | 1045 / **2026-08-31**（新增 Colored ICP） | header-only C++17 精配准库：ICP / 点到面 / GICP / VGICP / Colored-ICP，预处理（体素降采样、KdTree、协方差）全部并行。**pip 有 manylinux x86_64 / aarch64 wheel（1.0.1）**，只依赖 Eigen | **adopt**：World Fusion 服务的核心算子（预处理、刚体 GICP/VGICP、KdTree 近邻、GaussianVoxelMap）；MVP 离线切片器的体素降采样和密度估计。**port**：在它的 KdTree 和协方差之上加 7 自由度的 Sim(3)-GICP（我们自己的扩展） | MVP（切片 / 密度 / Fusion 演示任务）→ V0.5（生产） | ★★★★★ |
-| koide3/glim | 1848 / **2026-09-06**（v1.2.x，GTSAM 4.3a0，CUDA 13.1，Jetson Orin） | 基于因子图的 range-inertial 建图框架：子图 + 全局「配准误差因子」+ iSAM2，带 GNSS 扩展、多航次合并和地图编辑器 | **reference**（架构、子图/重叠判定、自适应体素、GNSS 4-DoF 初始化、dump 格式）；V0.5 可以在 GPU 服务器或 Jetson 上把 GLIM（Docker `koide3/glim_ros2`）当作**离线 LiDAR 建图工具**直接用 | V0.5 | ★★★★ |
-| koide3/hdl_graph_slam | 2339 / 2024-07-16（ROS1，维护结束，作者推荐转 GLIM） | 经典 LiDAR 图优化 SLAM：scan-to-keyframe 里程计 + g2o 位姿图 + GPS / IMU / 地面平面约束 + 回环 | **port**（只移植思路和公式：GPS 先验边、关键帧与 GNSS 按时间关联、fitness→信息矩阵、回环候选规则、地面平面边），不部署 | V0.5 | ★★★ |
-| koide3/fast_gicp | 1700 / 2025-04-24（README 已声明被 small_gicp 取代） | PCL 接口的 GICP / VGICP，带 CUDA 版 VGICP 和 D2D-NDT | **skip**（CPU 场景 small_gicp 全面更好）；只在 V1.0 需要 **GPU 实时**配准时回看 `FastVGICPCuda` / `NDTCuda` | — | ★★ |
+| koide3/small_gicp | 1045 / **2026-08-31**（新增 Colored ICP） | header-only C++17 精配准库：ICP / 点到面 / GICP / VGICP / Colored-ICP，预处理（体素降采样、KdTree、协方差）全部并行。**pip 有 manylinux x86_64 / aarch64 wheel（1.0.1）**，只依赖 Eigen | **adopt**：World Fusion 服务的核心算子（预处理、刚体 GICP/VGICP、KdTree 近邻、GaussianVoxelMap）；MVP 离线切片器的体素降采样和密度估计。**port**：在它的 KdTree 和协方差之上加 7 自由度的 Sim(3)-GICP（我们自己的扩展） | MVP（切片 / 密度 / Fusion 演示任务）→ V0.5（生产） | 5/5 |
+| koide3/glim | 1848 / **2026-09-06**（v1.2.x，GTSAM 4.3a0，CUDA 13.1，Jetson Orin） | 基于因子图的 range-inertial 建图框架：子图 + 全局「配准误差因子」+ iSAM2，带 GNSS 扩展、多航次合并和地图编辑器 | **reference**（架构、子图/重叠判定、自适应体素、GNSS 4-DoF 初始化、dump 格式）；V0.5 可以在 GPU 服务器或 Jetson 上把 GLIM（Docker `koide3/glim_ros2`）当作**离线 LiDAR 建图工具**直接用 | V0.5 | 4/5 |
+| koide3/hdl_graph_slam | 2339 / 2024-07-16（ROS1，维护结束，作者推荐转 GLIM） | 经典 LiDAR 图优化 SLAM：scan-to-keyframe 里程计 + g2o 位姿图 + GPS / IMU / 地面平面约束 + 回环 | **port**（只移植思路和公式：GPS 先验边、关键帧与 GNSS 按时间关联、fitness→信息矩阵、回环候选规则、地面平面边），不部署 | V0.5 | 3/5 |
+| koide3/fast_gicp | 1700 / 2025-04-24（README 已声明被 small_gicp 取代） | PCL 接口的 GICP / VGICP，带 CUDA 版 VGICP 和 D2D-NDT | **skip**（CPU 场景 small_gicp 全面更好）；只在 V1.0 需要 **GPU 实时**配准时回看 `FastVGICPCuda` / `NDTCuda` | — | 2/5 |
 
 **一句话结论**
 
@@ -393,7 +393,7 @@ GLIM 还有一个值得照搬的保险机制：如果新子图和上一个子图
 ```
 - UTM 的网格距离与地面真实距离差一个比例因子 k（中央经线处 0.9996，带边约 1.0010），同时存在子午线收敛角。1 km 航区就可能差出 0.4–1 m，**用 ENU 切平面就能避免**。代价是地球曲率：离原点 d 处高程偏差 `d²/2R`，1 km 为 7.8 cm，2 km 为 31 cm，对单个园区或街区可以接受。更大的场景按区块分别设原点，导出 3D Tiles 时再乘 `T_ecef_enu`。
 - ENU 原点取航区中心附近的第一个 RTK FIX 点。**所有 float32 数据（Web 渲染、点云瓦片）都相对这个原点存储**，hdl 的 `zero_utm` 也是这个用意。原始 UTM 坐标的量级（5×10⁵、3.5×10⁶）超出 float32 的精度（24 bit 尾数），量化步长（ULP）为 0.03 m（5×10⁵ 处）到 0.25 m（3.5×10⁶ 处）。在 GPU 顶点着色器里还会叠加矩阵乘法误差，点云会出现肉眼可见的抖动和条纹。
-- ECEF↔WGS84↔ENU 以 r02 §3.6 的实现为准（Python 和 TS 共用），glim_ext `geodetic.cpp`（Zhu 1994 闭式解）可作交叉校验。
+- ECEF<->WGS84<->ENU 以 r02 §3.6 的实现为准（Python 和 TS 共用），glim_ext `geodetic.cpp`（Zhu 1994 闭式解）可作交叉校验。
 
 **关键帧和 GNSS 的时间关联**：GLIM 式线性插值优于 hdl 的最近邻（0.2 s 门限）。无人机速度 10 m/s、GNSS 频率 5 Hz 时，最近邻的时间误差最多 0.1 s，折合 1 m。
 ```
@@ -448,7 +448,7 @@ Stage 3: 剩下的先验用 L2 重新求解，初值取 Stage 1 结果
   (b) LiDAR 回环/重叠 BetweenFactorPose3(L_i, L_j, T_gicp, Σ_T(§3.5))       —— small_gicp GICP，候选来自 §3.6
   (c) GNSS 先验       PoseTranslationPrior3D(L_j, g_enu(t_j) − R_j·lever, σ_fix)   —— §3.7，两阶段鲁棒
   (d) 视觉 chunk 间   BetweenFactorSimilarity3(V_c, V_c+1, S_window, Σ_win)       —— r01 窗口拼接结果
-  (e) 视觉↔LiDAR      自定义 Sim3-SE3 因子：S_meas = Sim(3)-GICP(chunk_c → map ∪ {L_j})，
+  (e) 视觉<->LiDAR    自定义 Sim3-SE3 因子：S_meas = Sim(3)-GICP(chunk_c → map ∪ {L_j})，
                       残差 Log( S_meas⁻¹ · (L_j ⊕ V_c) )，信息取 7×7 的 σ̂²H⁻¹ 的逆
                       —— 简化实现：先把 L 冻结，再把 Sim(3)-GICP 的结果当作 PriorFactorSimilarity3(V_c) 加进去
   (f) 视觉轨迹 GNSS   对 V_c 内每帧相机中心：‖V_c·c_f − g_enu(t_f)‖，用 r02 的 RANSAC-Umeyama 结果作初值
@@ -468,7 +468,7 @@ QUEUED
                      视觉点：置信度 ≥ τ_conf（LingBot conf）、去天空（mask_sky）、深度截断
   → F1 GEO_ANCHOR    fix 分级过滤、ENU 原点、杆臂、时钟差；产出 gnss_enu(t) 插值器
   → F2 LIDAR_GRAPH   (有 LiDAR 时) 4-DoF 初始化 → 位姿图 (a)(b)(c) 两阶段鲁棒 → ENU 下的 LiDAR 地图 + 每个子图的 Σ
-  → F3 VIS_COARSE    每个 chunk：RANSAC-Umeyama Sim(3)（相机中心 ↔ gnss_enu）+ 重力虚拟点（r02）
+  → F3 VIS_COARSE    每个 chunk：RANSAC-Umeyama Sim(3)（相机中心 <-> gnss_enu）+ 重力虚拟点（r02）
                      无 GNSS：有 LiDAR 时走 FPFH+RANSAC+尺度扫描，都没有则 scale_status='relative'
   → F4 VIS_FINE      每个与 LiDAR 地图重叠 ≥ 0.2 的 chunk：Sim(3)-GICP 金字塔（§3.3/§3.4）+ Huber(3)
   → F5 JOINT         联合图 (d)(e)(f)(g)（§3.8），得到最终 V_c
@@ -491,7 +491,7 @@ DONE | FAILED(stage, reason) | CANCELLED
 | F3 | Umeyama 内点率、RMSE、轨迹共线度 `λ₂/λ₁`（相机中心协方差） | 内点率 ≥ 0.6；RMSE ≤ 3σ_fix；共线度 ≥ 0.05，否则必须加重力 | NEEDS_REVIEW |
 | F4 | 最细层 inlier_fraction（corr ≤ 1.5·res）、相对 F3 的修正量、平移块条件数 `cond_t` | ≥ 0.5；Δrot ≤ 2°、Δt ≤ 3σ_F3 + 1 m、Δs ≤ 2%；`cond_t ≥ 1e-3` | 退回 F3 的结果，标记 chunk 为 low_confidence |
 | F5 | 先验被剔除比例 | ≤ 20% | NEEDS_REVIEW |
-| F7 | 视觉↔LiDAR 的 Chamfer 中位数、F-score@0.3 m | ≤ 2·s；≥ 0.6 | 结果照常输出，UI 标红 |
+| F7 | 视觉<->LiDAR 的 Chamfer 中位数、F-score@0.3 m | ≤ 2·s；≥ 0.6 | 结果照常输出，UI 标红 |
 
 **参数总表（默认值）**：
 
@@ -631,7 +631,7 @@ UrbanScene3D 的 6 个采样点云都**没有颜色**（只有 xyz 和法向）�
 P = viewportHeightPx / (2·tan(fovY/2))                # 投影系数
 pointSizePx = clamp(k_size · spacing_L · P / depth, 1, 8)            # k_size ≈ 1.2，自适应密度
 nodeSSEpx   = spacing_L · P / distance(camera, node.boundingSphere)  # 屏幕空间误差
-refine(node) ⇔ nodeSSEpx > τ（≈1.5 px） 且 预算未满（按 nodeSSEpx 降序进优先队列）
+refine(node) <=> nodeSSEpx > τ（≈1.5 px） 且 预算未满（按 nodeSSEpx 降序进优先队列）
 ```
 spacing 用每个场景实测的 `nn1_median`，而不是写死的常数，这样同一套参数在 San Francisco（0.19 m）和 Shanghai（1.86 m）上都能用。点预算和 FPS 反馈控制属于 web3d 研究单元，这里只提供 `spacing` 的来源。
 
@@ -664,7 +664,7 @@ job: traj_sim3 → MapTarget.build(城市 ROI + 30 m 余量, levels=[2,1]) → a
 | Sim(3)-GICP | 本文 §3.3（numpy，复用 small_gicp 的近邻和协方差） | `reconstruction/registration/sim3_gicp.py`，之后改为 C++ 扩展 | V0.5（MVP 演示中已使用） | port | 视觉点云本身没有尺度 |
 | 4-DoF 约束（锁 roll 和 pitch） | small_gicp `RestrictDoFFactor` | 同上 | V0.5 | adopt / port | LIO 和视觉都已重力对齐时使用 |
 | FPFH + RANSAC 全局初值 | Open3D legacy（r06） | `reconstruction/registration` | V0.5 | adopt | 没有 GNSS，或超出收敛域时的兜底 |
-| WGS84↔ECEF↔ENU | r02 §3.6（COLMAP `gps.cc` 移植，Python/TS 共用）；glim_ext `geodetic.cpp` 作交叉校验 | `world/georef` | **V0.1** | port | 世界坐标系的地基；以 r02 的实现为准 |
+| WGS84<->ECEF<->ENU | r02 §3.6（COLMAP `gps.cc` 移植，Python/TS 共用）；glim_ext `geodetic.cpp` 作交叉校验 | `world/georef` | **V0.1** | port | 世界坐标系的地基；以 r02 的实现为准 |
 | GNSS 先验、时间插值、杆臂、fix 分级、两阶段鲁棒 | hdl `flush_gps_queue`、glim_ext `GNSSGlobal::backend_task` + 本文改进 | `world/georef`、`reconstruction/fusion/graph` | V0.1（轨迹 Sim3，r01）/ V0.5（位姿图） | port | 两个参考实现都偏简陋 |
 | 4-DoF yaw-only 初始化 | glim_ext `GNSSGlobal`（2D SVD） | `world/georef` | V0.5 | port | LiDAR 地图接入 ENU |
 | 重叠度判定与候选对 | GLIM `create_matching_cost_factors`、`find_overlapping_submaps` | `reconstruction/fusion` | V0.5 | port | 决定哪些 chunk 和哪些子图要配准 |
@@ -685,7 +685,7 @@ MVP / V0.1  ingest 规范化（单位 / 上轴 / 原点 / spacing）→ 切片�
             world/georef：WGS84/ECEF/ENU、coordinate.json（与 r01 一起：GNSS 轨迹 Sim3 提前到 V0.1）
 V0.4        mock LiDAR 定位（scan-to-model VGICP），雾、雨环境下演示定位退化
 V0.5        真实 World Fusion：F0–F8 全流程；LiDAR 走 FAST-LIO（r05）或 GLIM；GNSS 两阶段鲁棒位姿图；
-            视觉↔LiDAR Sim(3)-GICP；QA 与 NEEDS_REVIEW 人工对齐
+            视觉<->LiDAR Sim(3)-GICP；QA 与 NEEDS_REVIEW 人工对齐
 V0.6+       多航次合并（GLIM 流程）、Colored ICP、增量更新（新航次只重算受影响的 chunk）
 V1.0        可选 GPU 实时配准（机载重定位）
 ```
@@ -698,7 +698,7 @@ V1.0        可选 GPU 实时配准（机载重定位）
 
 ### 4.4 UI 对接（遵循视觉规范）
 
-- **World → Fusion 面板**：shadcn `Card` + 阶段步进条（用 `Progress` 和 `Badge` 组合，F0…F8 状态为 queued / running / ok / warn / failed），图标用 morphicons（运行 ↔ 完成状态用 morph 过渡，禁止 emoji）。
+- **World → Fusion 面板**：shadcn `Card` + 阶段步进条（用 `Progress` 和 `Badge` 组合，F0…F8 状态为 queued / running / ok / warn / failed），图标用 morphicons（运行 <-> 完成状态用 morph 过渡，禁止 emoji）。
 - **指标表**：各阶段的 inlier_fraction、rmse、Δs、cond_t、Chamfer、F-score，用 lieflat-charts 的表格视觉；超出门限的单元格用产品红 #E93024 标注，正常值用科技灰。
 - **对齐动画**：收到 WS `preview` 后，源点云按 Sim(3) 插值过渡（transitions.dev 缓动，约 600 ms），最终着色切换为"残差热度"（灰→红），同样用淡入淡出过渡。
 - **NEEDS_REVIEW**：3D 视图里出现 Gizmo（drei `TransformControls`），shadcn `Dialog` 提示"手动粗对齐后继续"，确认后调用 `POST /manual-align`。
@@ -755,7 +755,7 @@ V1.0        可选 GPU 实时配准（机载重定位）
 2. **§6 / §33 技术选型要重新分工。** 原文让 Open3D 承担 "ICP / Registration" 全部，后续再引入 "PCL / CUDA Point Cloud Kernels / cuVSLAM"。建议改为：**small_gicp** 负责预处理、GICP/VGICP 和 Sim(3)-GICP（核心算子，pip 安装；体素降采样比 Open3D 快 18 倍，VGICP 比 Open3D 点到面 ICP 快约 3.4 倍，可以取到 H 用于不确定度）；**Open3D** 负责 FPFH+RANSAC 全局初值、QA 指标和 RaycastingScene（r06）；**gtsam（pip）** 负责因子图；**PCL 不需要**；cuVSLAM 和 CUDA 点云核在融合链路里都用不上，删掉。
 3. **§7 World Model 的 Geographic 要写出变换链和精度约定**：`WGS84 → ECEF → ENU(origin)`，内部一律用 ENU 米制 + float64 变换 + float32 相对坐标；UTM 只作为 GIS 导入导出格式。补充 `T_ecef_enu`、`T_enu_world`（Sim3）、`scaleStatus`、`confidence`。
 4. **§41 World Package 增加**：`alignment.json`（§3.10 的契约，与 r02 的 `alignment.json` 合并成同一份 schema）；`qa/registration.json`；`reconstruction/fusion/graph/`（节点、边、先验的 JSON，可重算、可审计）；`geometry/pointcloud/scene.json`（`units_scale`、`up_axis`、`origin_offset`、`spacing`）。
-5. **§48 V0.5 拆成可验收的子里程碑**：V0.5a GNSS 两阶段鲁棒位姿图（LiDAR 地图接入 ENU，验收：ATE ≤ 5 cm@RTK）；V0.5b 视觉↔LiDAR Sim(3)-GICP（验收：Δs ≤ 0.1%、Chamfer 中位数 ≤ 2s）；V0.5c QA 与人工复核闭环。多航次合并放到 V0.6。
+5. **§48 V0.5 拆成可验收的子里程碑**：V0.5a GNSS 两阶段鲁棒位姿图（LiDAR 地图接入 ENU，验收：ATE ≤ 5 cm@RTK）；V0.5b 视觉<->LiDAR Sim(3)-GICP（验收：Δs ≤ 0.1%、Chamfer 中位数 ≤ 2s）；V0.5c QA 与人工复核闭环。多航次合并放到 V0.6。
 6. **§43 / §44 MVP 链路里补两步**："Point Cloud → **Ingest 规范化（单位、上轴、原点、spacing）** → Octree"；另外建议 MVP 就内置"Fusion 演示任务"（CPU 约 5 s），让 Reconstruction→World 这一层在 Demo 里真实可见，而不是只有静态点云。
 7. **§14 点云 Web 渲染**：LOD 选择要基于**每个节点的实测 spacing**（屏幕空间误差 = spacing·P/distance），而不是只写 "Camera Position / FOV / Distance / Screen Size"。点大小同样由 spacing 驱动（§3.11c）。这是"点云疏密自动调节"能在不同密度数据上都成立的前提。
 8. **§4 浏览器职责边界补充**：配准和融合都在 worker 进程里跑（small_gicp 不释放 GIL），浏览器只接收 `preview` 变换做动画；"LiDAR registration" 这条已经在原文的"不负责"清单里，保持不变。

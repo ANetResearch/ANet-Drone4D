@@ -3,7 +3,7 @@
 
 > 研究单元：r19 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §2、§26–§30、§33、§35–§37、§43–§49
 >
-> 仓库快照：`refs/sim/Prometheus` @ `5dcd8cf`（2025-11-21，提交信息 "communication simulation timestamp modification"，★3265，shallow clone 只有 1 个提交，共 4807 个文件）。
+> 仓库快照：`refs/sim/Prometheus` @ `5dcd8cf`（2025-11-21，提交信息 "communication simulation timestamp modification"，3265 stars，shallow clone 只有 1 个提交，共 4807 个文件）。
 > 技术栈：ROS1 **Noetic**（catkin + roscpp）+ PX4（Amov fork `prometheus_px4`，目标 `amovlab_sitl_default`）+ mavros（Amov fork `prometheus_mavros`）+ Gazebo Classic。
 > 4 个 gitee 子模块（`swarm_control`、`swarm_formation`、`searching_pkg`、`matlab_bridge`）**clone 下来是空目录**。
 >
@@ -24,17 +24,17 @@
 
 | 仓库 / 子模块 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **amov-lab/Prometheus（整体）** | P600 机载软件栈：状态估计、控制、规划、地面站通信 | **reference + port**。不在我们这边运行 ROS1，只移植契约、语义和协议 | V0.1–V0.6 | ★★★★☆ |
-| `communication`：地面站协议，以及闭源的 `libcommunication_{x86_64,aarch64}.so` | 机载端与地面站之间的 TCP/UDP 通道，载荷是 JSON | **port**。Python 纯实现编解码，约 60 行，已逐字节验证，作为 Gateway 的 `PrometheusGSBackend` | V0.2（SITL）/ V0.5（真机） | ★★★★★ |
-| `common/prometheus_msgs`：UAVState / UAVCommand / UAVControlState / UAVSetup / SwarmCommand / TextInfo | 控制与状态的数据契约 | **port**。字段语义映射到我们的 `DroneState` / `DroneCommand`（§4.2、§4.3） | V0.1 定义，V0.2 实现 | ★★★★★ |
-| `uav_control`：`UAV_controller` 状态机、failsafe、`set_command_des`、PID/UDE/NE | 控制权状态机，以及"指令 → setpoint"的语义 | **port**。Mock 后端复刻同一套状态机和指令语义，这样切换后端时 UI 行为不变 | V0.1（Mock）/ V0.2 | ★★★★★ |
-| `simulator_utils`：`Fake_UAV`、22 维四旋翼 ODE、map_generator | 不依赖 PX4 的运动学/动力学替身 | **port**。fake_uav 的级联控制用作 MVP Mock；刚体 ODE 用于 V0.4 的风扰 | V0.1 / V0.4 | ★★★★☆ |
-| `tutorial_demo` + `uav_control/include/controller_test.h` | 编队 separation 矩阵；圆、8 字、阶跃、直线测试轨迹 | **port** | V0.2 / V0.6 | ★★★☆☆ |
-| `ego_planner_swarm`（Amov fork） | 多机 B 样条局部规划，加上接入 Prometheus 的 traj_server | **reference**（上游版本另有单元），另外 **port** de Boor 求值用于前端画轨迹 | V0.6 | ★★★☆☆ |
-| `motion_planning`：A*、APF、VFH、min-snap | 经典的全局和局部规划 | **port**。APF 和 A* 给 Mock 做"带避障的 GoTo" | V0.6 | ★★★☆☆ |
-| `Simulator/gazebo_simulator`：`p600.sdf`、多机 SITL launch | P600 仿真模型和端口分配规则 | **reference**。参数只作 Digital Twin 的初值，端口公式写进 Gateway | V0.2 | ★★★☆☆ |
-| `FAST_LIO`（fork）/ `uav_control_fmt` / `future_aircraft` | MID-360 的 LIO 配置、FMT 飞控测试、竞赛 demo | reference / skip | V0.5 / — | ★★☆☆☆ |
-| `swarm_control` / `swarm_formation` / `searching_pkg` / `matlab_bridge` | 集群、编队、搜索（gitee 子模块） | **skip**。clone 为空，只能从 `SwarmCommand` 反推语义 | — | ☆ |
+| **amov-lab/Prometheus（整体）** | P600 机载软件栈：状态估计、控制、规划、地面站通信 | **reference + port**。不在我们这边运行 ROS1，只移植契约、语义和协议 | V0.1–V0.6 | 4/5 |
+| `communication`：地面站协议，以及闭源的 `libcommunication_{x86_64,aarch64}.so` | 机载端与地面站之间的 TCP/UDP 通道，载荷是 JSON | **port**。Python 纯实现编解码，约 60 行，已逐字节验证，作为 Gateway 的 `PrometheusGSBackend` | V0.2（SITL）/ V0.5（真机） | 5/5 |
+| `common/prometheus_msgs`：UAVState / UAVCommand / UAVControlState / UAVSetup / SwarmCommand / TextInfo | 控制与状态的数据契约 | **port**。字段语义映射到我们的 `DroneState` / `DroneCommand`（§4.2、§4.3） | V0.1 定义，V0.2 实现 | 5/5 |
+| `uav_control`：`UAV_controller` 状态机、failsafe、`set_command_des`、PID/UDE/NE | 控制权状态机，以及"指令 → setpoint"的语义 | **port**。Mock 后端复刻同一套状态机和指令语义，这样切换后端时 UI 行为不变 | V0.1（Mock）/ V0.2 | 5/5 |
+| `simulator_utils`：`Fake_UAV`、22 维四旋翼 ODE、map_generator | 不依赖 PX4 的运动学/动力学替身 | **port**。fake_uav 的级联控制用作 MVP Mock；刚体 ODE 用于 V0.4 的风扰 | V0.1 / V0.4 | 4/5 |
+| `tutorial_demo` + `uav_control/include/controller_test.h` | 编队 separation 矩阵；圆、8 字、阶跃、直线测试轨迹 | **port** | V0.2 / V0.6 | 3/5 |
+| `ego_planner_swarm`（Amov fork） | 多机 B 样条局部规划，加上接入 Prometheus 的 traj_server | **reference**（上游版本另有单元），另外 **port** de Boor 求值用于前端画轨迹 | V0.6 | 3/5 |
+| `motion_planning`：A*、APF、VFH、min-snap | 经典的全局和局部规划 | **port**。APF 和 A* 给 Mock 做"带避障的 GoTo" | V0.6 | 3/5 |
+| `Simulator/gazebo_simulator`：`p600.sdf`、多机 SITL launch | P600 仿真模型和端口分配规则 | **reference**。参数只作 Digital Twin 的初值，端口公式写进 Gateway | V0.2 | 3/5 |
+| `FAST_LIO`（fork）/ `uav_control_fmt` / `future_aircraft` | MID-360 的 LIO 配置、FMT 飞控测试、竞赛 demo | reference / skip | V0.5 / — | 2/5 |
+| `swarm_control` / `swarm_formation` / `searching_pkg` / `matlab_bridge` | 集群、编队、搜索（gitee 子模块） | **skip**。clone 为空，只能从 `SwarmCommand` 反推语义 | — | 0/5 |
 
 **关键结论（实现者先读这几条）**
 
@@ -182,15 +182,15 @@
 
 ```text
             RC ch6 低位 / SETUP                    RC ch6 中位（要求 odom_valid）
-   ┌──────────────┐ ◄──────────────────────── ┌──────────────────────┐
-   │     INIT     │ ────────────────────────► │   RC_POS_CONTROL     │  悬停点 = 当前 odom；
+   ┌──────────────┐ <──────────────────────── ┌──────────────────────┐
+   │     INIT     │ ────────────────────────> │   RC_POS_CONTROL     │  悬停点 = 当前 odom；
    │ 不发任何指令  │                          │ (OFFBOARD，摇杆积分   │  摇杆按 1.5 m/s(xy)、1.3 m/s(z)、
    │ 强制 POSCTL  │                          │  移动悬停点)          │  1.5 rad/s(yaw) 积分
-   └──────▲───────┘                          └─────┬─────────▲──────┘
+   └──────^───────┘                          └─────┬─────────^──────┘
           │ 上锁后                                  │ ch6 高位 且 mode==OFFBOARD
-          │（恢复 MC_YAWRATE_MAX）                  ▼         │ ch6 中位
+          │（恢复 MC_YAWRATE_MAX）                  v         │ ch6 中位
    ┌──────┴───────┐   Agent_CMD=Land / ch8 /   ┌─────────────┴────────┐
-   │ LAND_CONTROL │ ◄───────────────────────── │   COMMAND_CONTROL    │ ◄── UAVSetup(SET_CONTROL_MODE,
+   │ LAND_CONTROL │ <───────────────────────── │   COMMAND_CONTROL    │ <── UAVSetup(SET_CONTROL_MODE,
    │ GPS/RTK:     │   failsafe(geofence|odom|  │ 只在该状态接收         │     "COMMAND_CONTROL")，只要求 armed
    │  AUTO.LAND   │   RC 丢失>1.5s 且非 sim)    │ UAVCommand            │
    │ 其他: 先把    │                            │ 进入时 MPC_XY_VEL_MAX=1.0,
@@ -789,18 +789,18 @@ type DroneCommand = { cmd_id: number; drone: string; source: "ui"|"mission"|"age
 
 ```text
                 ┌──────────────────── Simulation Gateway (FastAPI + asyncio) ────────────────────┐
- Browser ⇄ WS ⇄ │ Session/Auth → CommandArbiter(优先级: safety>ui-override>ui>agent>mission>swarm) │
- (二进制 20Hz)  │      │                         ▲ DroneState bus (per-drone ring buffer, 100Hz 内部)   │
-                │      ▼                         │                                                    │
+Browser<->WS<-> │ Session/Auth → CommandArbiter(优先级: safety>ui-override>ui>agent>mission>swarm) │
+ (二进制 20Hz)  │      │                         ^ DroneState bus (per-drone ring buffer, 100Hz 内部)   │
+                │      v                         │                                                    │
                 │ SimBackend 接口: connect / send(DroneCommand) / states() / capabilities           │
                 │  ├─ MockBackend        (V0.1) 本文 §3.3–3.5，内置 100Hz 物理 + 环境场 E(x,y,z,t)    │
                 │  ├─ PrometheusGSBackend(V0.2 SITL / V0.5 真机) 地面站协议 §3.1–3.2，无 ROS           │
-                │  ├─ RosbridgeBackend   (V0.6) roslibpy ↔ rosbridge_websocket(ROS1 docker)           │
+                │  ├─ RosbridgeBackend   (V0.6) roslibpy <-> rosbridge_websocket(ROS1 docker)         │
                 │  │      订阅 /uavN/prometheus/{state,control_state,text_info}, /uavN/planning/bspline │
                 │  │      发布 /uavN/prometheus/command (50Hz 流式), /uavN/prometheus/motion_planning/goal│
                 │  ├─ Px4MavsdkBackend   (V0.2 备选) MAVSDK udp://:14540+ID，控制权 FSM 在 Gateway 内   │
                 │  └─ ReplayBackend      (V0.2) MCAP/ulog 回放                                         │
-                │ FrameService: World ENU 锚点 ↔ 每机 local（GPS: ECEF→ENU 平移；SLAM: 配准；SITL: spawn）│
+                │ FrameService: World ENU 锚点<->每机 local（GPS: ECEF→ENU 平移；SLAM: 配准；SITL: spawn）│
                 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -891,7 +891,7 @@ Prometheus 内部子模块的优先级：`communication` 等于 `prometheus_msgs
    - 写明 SITL 端口规则（offboard 14540+ID，sysid = ID+1，每机 namespace `/uavN`）。
    - 多机坐标**统一到 World ENU 锚点**，而不是 Prometheus 的"1 号机坐标系"。每机维护 `T_world←local_i`，按 GPS、SLAM、SITL 三种来源分别求取。
 6. **§36 数据流更正与安全**：
-   - 真机链路是 `PX4 → mavros(ROS1) → Prometheus uav_control → communication_bridge ⇄(TCP 55555 / UDP 8889 / TCP 55556) ⇄ Simulation Gateway → WebSocket → Browser`。
+   - 真机链路是 `PX4 → mavros(ROS1) → Prometheus uav_control → communication_bridge <->(TCP 55555 / UDP 8889 / TCP 55556) <-> Simulation Gateway → WebSocket → Browser`。
    - 新增"**链路与安全**"一节：单一控制方、心跳（5 s 后自动 Land）、禁止透传 CUSTOMMODE、网络隔离、指令 ACK（ACCEPTED/REJECTED/IGNORED）。
 7. **§37 频率**：
    - 补上 Prometheus 的实际频率：控制 100 Hz，UAVState 50 Hz，地面站转发默认 10 Hz（建议调到 20 Hz）。

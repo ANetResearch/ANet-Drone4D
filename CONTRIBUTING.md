@@ -26,9 +26,15 @@ make dev          # start with Vite on :5173 (profile dev); `make run` serves th
 make ci           # the merge gate
 ```
 
-- **`make ci` must pass before a PR is merged.** There is no hosted CI yet; `make ci` is the gate. It runs `make lint`
-  (every rule below), the contract checks, `tsc`, a production `vite build`, pytest without the `perf` marker, and
-  Vitest (unit and browser). Browser tests need Chrome for Testing 151 (`PW_CHROME`).
+- **`make ci` must pass before a PR is merged.** It is the full local gate: `make lint` (every rule below), the contract
+  checks, `tsc`, a production `vite build`, pytest without the `perf` marker (including `slow` and `needs_data`, so it
+  needs the built worlds), and Vitest (unit and browser). Browser tests need Chrome for Testing 151 (`PW_CHROME`).
+- **GitHub Actions runs the no-data subset on every push and PR** (`.github/workflows/ci.yml`, gate G1h): `make setup`,
+  `make lint`, `make test-contracts`, `make typecheck`, pytest `-m "not perf and not slow and not needs_data"`, Vitest
+  unit, `make build`, then `make demo-world`, its deep validation and the tests that need only that world. It needs no
+  GPU, browser or UrbanScene3D data; `make ci-nodata` runs the same steps up to the build locally. A test that reads
+  `data/raw/` or `worlds/` must carry the `needs_data` marker (or skip itself when the data is missing), otherwise it
+  fails there.
 - `.venv/bin/pre-commit install` enables the fast subset (ruff and oxlint) on each commit.
 - Performance and chaos cases (`make perf CASE=<id>`, `make chaos`) are not in the merge gate. They hold an exclusive
   lock and follow the performance run protocol in `docs/18-性能与测试方案.md`; attach their report when a change

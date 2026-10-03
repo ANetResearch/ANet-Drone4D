@@ -3,13 +3,13 @@
 > 研究单元：r15 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §7（Geographic）、§11、§14–16、§28、§36–41、§43
 >
 > 仓库快照（路径相对 `refs/web3d/`）：
-> - `cesium` @ `b3155a8`（2026-09-25，★15781，`cesium@1.145.0` / `@cesium/engine@26.3.0`，JS + GLSL，WebGL2）
-> - `deck.gl` @ `ba16261`（2026-09-25，★14615，master 为 `9.4.0-beta.4`，9.4 正式版发布于 2026-09-05，luma.gl 9.4，TS + GLSL/WGSL）
-> - `studio` @ `a8a589b`（2024-03-11，★92，**GitHub 已 archived**）。这个 clone **只有一个 README**：Foxglove 在 2024 年闭源后清空了仓库并重写了历史，已经没有源码可读。
+> - `cesium` @ `b3155a8`（2026-09-25，15781 stars，`cesium@1.145.0` / `@cesium/engine@26.3.0`，JS + GLSL，WebGL2）
+> - `deck.gl` @ `ba16261`（2026-09-25，14615 stars，master 为 `9.4.0-beta.4`，9.4 正式版发布于 2026-09-05，luma.gl 9.4，TS + GLSL/WGSL）
+> - `studio` @ `a8a589b`（2024-03-11，92 stars，**GitHub 已 archived**）。这个 clone **只有一个 README**：Foxglove 在 2024 年闭源后清空了仓库并重写了历史，已经没有源码可读。
 >
 > 为了能读到真实代码，本单元额外 clone 了两个仓库（只读，放在 `.cache/research/r15/`）：
-> - **lichtblick-suite/lichtblick** @ `590774d`（2026-09-25，★1141，v1.29.1，MPL-2.0）。它是 Foxglove Studio 最后一个开源版本（v1.87）的社区 fork，由 Bosch 等维护，2026 年仍在活跃开发。Player、MessagePipeline、面板 API、时间轴、3D 面板这些架构都和原版一脉相承。
-> - **foxglove/foxglove-sdk** @ `dcbc667`（2026-09-24，★311，PyPI `foxglove-sdk==0.27.0`，Rust 内核，提供 Python/C++/TS 绑定）。这是 Foxglove 目前开源的部分，包括 WebSocket server、MCAP 写入和 PlaybackControl 能力。
+> - **lichtblick-suite/lichtblick** @ `590774d`（2026-09-25，1141 stars，v1.29.1，MPL-2.0）。它是 Foxglove Studio 最后一个开源版本（v1.87）的社区 fork，由 Bosch 等维护，2026 年仍在活跃开发。Player、MessagePipeline、面板 API、时间轴、3D 面板这些架构都和原版一脉相承。
+> - **foxglove/foxglove-sdk** @ `dcbc667`（2026-09-24，311 stars，PyPI `foxglove-sdk==0.27.0`，Rust 内核，提供 Python/C++/TS 绑定）。这是 Foxglove 目前开源的部分，包括 WebSocket server、MCAP 写入和 PlaybackControl 能力。
 >
 > 本机实测产物在 `.cache/research/r15/bench/`：
 > - `coord_bench.py`：移植 Cesium 的椭球与 ENU 数学，用 pyproj 校验，并量化 float32、平面近似、UTM、Web Mercator 和航向约定带来的误差
@@ -25,10 +25,10 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **CesiumJS** | 地球级 GIS 引擎：WGS84 椭球、3D Tiles、地形、时间动态数据（CZML/Clock） | **port**（MVP 就要）：椭球与 ENU 数学（`Ellipsoid` + `FixedFrameTransforms`，约 150 行）、点尺寸衰减公式、EDL shader、瓦片优先级位打包、飞行目的地预取、`Clock` 与 `SampledProperty` 插值、Timeline 刻度算法、跟随相机的三种参考系、`requestRenderMode` 按需渲染。**adopt**（V0.5+，可选）：独立的"GIS/地球模式"视图，加载同一份 World Package 3D Tiles | V0.1 port；V0.5 起可选 adopt | ★★★★☆ |
-| **Foxglove Studio → Lichtblick + foxglove-sdk** | 机器人数据回放与调试工作台：Player/DataSource 抽象、消息管线、面板 API、时间轴、3D 面板（TF 树） | **port**：`IterablePlayer` 状态机与 tick 算法、seek-backfill、两级缓存（BlockLoader + 预读缓冲）、渲染屏障（render barrier）、面板 `onRender(state, done)` 协议、M4 时序降采样、TF 插值、decay-time 点云累积、播放性能 HUD。**adopt**：`foxglove-sdk`（Python）做仿真服务的**调试旁路**和 **MCAP 录制**，Foxglove/Lichtblick 直接连上去就能调试。**skip**：Lichtblick 的 UI（MUI 体系，和 shadcn 冲突） | V0.2（回放、遥测面板、录制） | ★★★★☆ |
-| **deck.gl** | 大规模地理数据图层（React 友好），WebGPU 实验支持 | **port**：`TripsLayer` 的 GPU 时间窗轨迹、`DataFilterExtension` 的 GPU 软范围过滤、`PointCloudLayer` 在 WebGPU 下用实例化三角形画点的做法、offset/RTC 精度模式、React 与命令式引擎的同步方式。**adopt**（V0.5+，可选）：2D 地图/小地图面板（MapView + MapLibre/天地图 + TripsLayer + IconLayer） | V0.2 port；V0.5 起可选 adopt | ★★★☆☆ |
-| `refs/web3d/studio`（原仓库） | 空壳，只有 README | **skip** | — | ☆ |
+| **CesiumJS** | 地球级 GIS 引擎：WGS84 椭球、3D Tiles、地形、时间动态数据（CZML/Clock） | **port**（MVP 就要）：椭球与 ENU 数学（`Ellipsoid` + `FixedFrameTransforms`，约 150 行）、点尺寸衰减公式、EDL shader、瓦片优先级位打包、飞行目的地预取、`Clock` 与 `SampledProperty` 插值、Timeline 刻度算法、跟随相机的三种参考系、`requestRenderMode` 按需渲染。**adopt**（V0.5+，可选）：独立的"GIS/地球模式"视图，加载同一份 World Package 3D Tiles | V0.1 port；V0.5 起可选 adopt | 4/5 |
+| **Foxglove Studio → Lichtblick + foxglove-sdk** | 机器人数据回放与调试工作台：Player/DataSource 抽象、消息管线、面板 API、时间轴、3D 面板（TF 树） | **port**：`IterablePlayer` 状态机与 tick 算法、seek-backfill、两级缓存（BlockLoader + 预读缓冲）、渲染屏障（render barrier）、面板 `onRender(state, done)` 协议、M4 时序降采样、TF 插值、decay-time 点云累积、播放性能 HUD。**adopt**：`foxglove-sdk`（Python）做仿真服务的**调试旁路**和 **MCAP 录制**，Foxglove/Lichtblick 直接连上去就能调试。**skip**：Lichtblick 的 UI（MUI 体系，和 shadcn 冲突） | V0.2（回放、遥测面板、录制） | 4/5 |
+| **deck.gl** | 大规模地理数据图层（React 友好），WebGPU 实验支持 | **port**：`TripsLayer` 的 GPU 时间窗轨迹、`DataFilterExtension` 的 GPU 软范围过滤、`PointCloudLayer` 在 WebGPU 下用实例化三角形画点的做法、offset/RTC 精度模式、React 与命令式引擎的同步方式。**adopt**（V0.5+，可选）：2D 地图/小地图面板（MapView + MapLibre/天地图 + TripsLayer + IconLayer） | V0.2 port；V0.5 起可选 adopt | 3/5 |
+| `refs/web3d/studio`（原仓库） | 空壳，只有 README | **skip** | — | 0/5 |
 
 **关键结论（实现者先读这几条）**
 
@@ -49,7 +49,7 @@
 4. **点尺寸衰减是"疏密自动调节"的视觉补偿（§3.3）**。Cesium 的公式是 `pointSize = min(GE·scale · H / (depth · 2tan(fovy/2)), maxAttenuation·dpr)`，也就是**点直径 = 该瓦片自身的 SSE（像素）**。点预算把深层节点截掉后，叶子的 GE 变大，点会自动变大，表面仍然闭合，这样"点少了但画面不破"。ADD 细化时默认上限 5 px。Cesium 没有下限，我们补一个 `max(…, 1px)`。
 5. **UrbanScene3D 没有颜色，EDL 是刚需（§3.4）**。Cesium 的 EDL 只采样上下左右 4 个邻居：`response = mean(max(0, log2(d) − log2(d_nbr)))`，`shade = exp(−300·strength·response)`，默认 strength 1、radius 1·dpr。一次 MRT（颜色 + 打包深度）加一个全屏 quad 就能完成，开销很小。
 6. **回放 Player 直接移植 Lichtblick 的 `IterablePlayer`（§3.7）**：
-   - 状态机：`preinit → initialize → start-play → idle ⇄ play`，另有 `seek-backfill` 和 `reset-playback-iterator`。
+   - 状态机：`preinit → initialize → start-play → idle <-> play`，另有 `seek-backfill` 和 `reset-playback-iterator`。
    - 每个 tick 读取的时间窗 `range = min(Δt_wall·speed, 300 ms)`，并做 EMA 平滑（0.9/0.1）。
    - seek 时先取每个 topic 在目标时刻之前的最后一条消息（backfill）。100 ms 内没完成，就先发一帧空消息并标记 BUFFERING 作为反馈。
    - 两级缓存：BlockLoader（≤100 块、每块 ≥0.1 s，给曲线图用全量预载）和 BufferedIterableSource（预读 10 s、至少 1 s，给播放用）。
@@ -87,7 +87,7 @@
 
 | 文件（相对 `packages/engine/Source/`） | 关键函数/类 | 要点 |
 |---|---|---|
-| `Core/Ellipsoid.js` | `Ellipsoid.WGS84 = (6378137, 6378137, 6356752.3142451793)`、`cartographicToCartesian`、`geodeticSurfaceNormal`、`cartesianToCartographic`（先 `scaleToGeodeticSurface` 投到椭球面，再用法线求经纬、有符号距离求高） | 大地 ↔ ECEF 的参考实现。`cartographicToCartesian` 的公式：`n` 为大地法线，`k = R²∘n`，`γ = √(n·k)`，结果为 `k/γ + h·n` |
+| `Core/Ellipsoid.js` | `Ellipsoid.WGS84 = (6378137, 6378137, 6356752.3142451793)`、`cartographicToCartesian`、`geodeticSurfaceNormal`、`cartesianToCartographic`（先 `scaleToGeodeticSurface` 投到椭球面，再用法线求经纬、有符号距离求高） | 大地 <-> ECEF 的参考实现。`cartographicToCartesian` 的公式：`n` 为大地法线，`k = R²∘n`，`γ = √(n·k)`，结果为 `k/γ + h·n` |
 | `Core/FixedFrameTransforms.js` | `localFrameToFixedFrameGenerator(first, second)`、`eastNorthUpToFixedFrame`、`northEastDownToFixedFrame`、`headingPitchRollToFixedFrame`、`headingPitchRollQuaternion`、`fixedFrameToHeadingPitchRoll`、`rotationMatrixFromPositionVelocity` | ENU 帧：`up = normalize(p∘(1/R²))`，`east = normalize(−p.y, p.x, 0)`，`north = up × east`；矩阵各列依次为 E、N、U、原点。极点和原点有退化处理。同一个生成器还能产出 NED/NWU 等任意组合，缓存在 `localFrameToFixedFrameCache` |
 | `Core/Quaternion.js` | `fromHeadingPitchRoll`：先 roll 绕 +X，再 pitch 绕 **−Y**，最后 heading 绕 **−Z** | 所以 Cesium 的 heading 是"0 = 局部 +X（东），顺时针为正"，和 PX4 yaw 相差 90° |
 | `Core/EncodedCartesian3.js` + `Shaders/Builtin/Functions/translateRelativeToEye.glsl` | `encode`：`high = floor(v/65536)·65536`，`low = v − high`；GPU 端计算 `(high − camHigh) + (low − camLow)` | GPU RTE（relative-to-eye），用两个 float 模拟 double。本机实测误差 0.56 mm |
@@ -186,7 +186,7 @@ earth(ECEF) ──static── world(ENU @anchor) ─┬─ map(=world, 可带�
 #### 3.1.2 规则（写进系统架构说明书）
 
 - **R1** World Runtime 内部只有一个度量坐标系：WORLD（ENU，米，Z-up）。环境场查询 `environment.query(x,y,z,t)` 的 x、y、z 即 WORLD 坐标。
-- **R2** GEO↔WORLD 一律走 ECEF 做严格变换：`p_ecef = geodeticToEcef(lon,lat,h)`，`p_world = M_enu⁻¹·p_ecef`。**禁止**用 `Δlat·111320` 这类局部线性近似。线性近似在 5 km 处会带来米级误差，而且不可逆。
+- **R2** GEO<->WORLD 一律走 ECEF 做严格变换：`p_ecef = geodeticToEcef(lon,lat,h)`，`p_world = M_enu⁻¹·p_ecef`。**禁止**用 `Δlat·111320` 这类局部线性近似。线性近似在 5 km 处会带来米级误差，而且不可逆。
 - **R3** 高程分三个字段：`h_ellipsoid`（RTK 与 GNSS 原生）、`h_msl`（PX4 `altitude_msl_m`，基于 EGM96/EGM2008）、`z_world`（切平面）。换算关系：`h_msl = h_ellipsoid − N(lon,lat)`，`z_world ≈ h_ellipsoid − h₀ − d²/(2R)`（精确值需走 ECEF）。
 - **R4** 不把 UTM、高斯-克吕格、Web Mercator 当米使用。它们只用于交换、栅格对齐和底图。
 - **R5** 国内底图坐标：天地图为 CGCS2000，可直接使用；高德、腾讯为 GCJ-02，百度为 BD-09，必须在底图层做反偏（偏移约 0.5–0.6 km），**不能**把这个偏移写进 World。
@@ -267,7 +267,7 @@ export class WorldFrame {                                             // 单例�
   toGeo(p: Vec3) { return ecefToGeodetic(xform(this.M, p)); }
 }
 
-// PX4 NED/FRD ↔ ENU/FLU（MAVROS 约定）
+// PX4 NED/FRD <-> ENU/FLU（MAVROS 约定）
 export const nedToEnu = ([n, e, d]: Vec3): Vec3 => [e, n, -d];
 // q_enu_flu = Q_NED2ENU ⊗ q_ned_frd ⊗ Q_FRD2FLU（MAVROS 约定，见 refs/sim/mavros/mavros/src/lib/ftf_frame_conversions.cpp）
 // Q_NED2ENU = quaternion_from_rpy(π, 0, π/2)（NED_ENU_Q）；Q_FRD2FLU = quaternion_from_rpy(π, 0, 0)（AIRCRAFT_BASELINK_Q）
@@ -431,7 +431,7 @@ interface IterableSource {
 状态机与 tick：
 
 ```ts
-states: preinit → initialize → start-play → (idle ⇄ play), 任意状态 → seek-backfill → idle|play, close
+states: preinit → initialize → start-play → (idle <-> play), 任意状态 → seek-backfill → idle|play, close
 setState(s) { if (next==='close') return; next = s; abort?.abort(); runLoop(); }   // 单线程串行执行，新状态会中止旧状态
 
 async tick() {                                           // 在 play 状态下循环调用
@@ -641,7 +641,7 @@ interface PanelContext<Cfg> {
 
 ### 3.19 WebSocket 协议与调试旁路（ws-protocol 语义 + foxglove-sdk）
 
-主协议（前端 ↔ 仿真服务），借鉴 foxglove ws-protocol 的概念：
+主协议（前端 <-> 仿真服务），借鉴 foxglove ws-protocol 的概念：
 
 | 概念 | ws-protocol | 我们的做法 |
 |---|---|---|

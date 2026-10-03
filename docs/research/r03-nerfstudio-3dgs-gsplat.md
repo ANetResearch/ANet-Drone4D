@@ -2,9 +2,9 @@
 
 > 研究单元：r03 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §8（世界的两种表达）、§14–16（点云 Web 渲染）、§35（Simulation Backend）、§41（World Package）、§43–50（路线图）
 > 仓库快照（shallow clone，仅 1 个 commit，无法看历史）：
-> - `refs/recon/gsplat` @ `512d366`（2026-09-19，★5736，Apache-2.0，`gsplat/version.py: __version__ = "1.6.0"`，main 未发 PyPI）
-> - `refs/recon/nerfstudio` @ `50e0e3c`（2025-07-28，★12032，Apache-2.0，`pyproject.toml: version = "1.1.5"`，pin `gsplat==1.4.0`、`viser==1.0.0`）
-> - `refs/recon/gaussian-splatting` @ `54c035f`（2024-10-30，★24003，Inria 非商用许可，本项目忽略许可）。子模块 `diff-gaussian-rasterization`、`simple-knn`、`fused-ssim`、`SIBR_viewers` **没有被 clone**，目录为空。
+> - `refs/recon/gsplat` @ `512d366`（2026-09-19，5736 stars，Apache-2.0，`gsplat/version.py: __version__ = "1.6.0"`，main 未发 PyPI）
+> - `refs/recon/nerfstudio` @ `50e0e3c`（2025-07-28，12032 stars，Apache-2.0，`pyproject.toml: version = "1.1.5"`，pin `gsplat==1.4.0`、`viser==1.0.0`）
+> - `refs/recon/gaussian-splatting` @ `54c035f`（2024-10-30，24003 stars，Inria 非商用许可，本项目忽略许可）。子模块 `diff-gaussian-rasterization`、`simple-knn`、`fused-ssim`、`SIBR_viewers` **没有被 clone**，目录为空。
 >
 > 跨单元对照（只用于 Web 格式选择，不在本单元深挖）：`refs/web3d/three.js` @ `110fbbe`（r186，2026-09-28）、`refs/web3d/spark` @ `9672638`（v2.2.0，2026-09-25）、`refs/web3d/splat` @ `ba182b5`、`refs/web3d/cesium` @ `b3155a8`、`refs/world/3d-tiles`。
 >
@@ -16,9 +16,9 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **gsplat** | CUDA 3DGS 光栅化与训练库，Python API。2026 年仍高频迭代：3DGUT、LiDAR 渲染、MCMC、稀疏光栅化、HiGS 推理打包、Gaussian ID 光栅化 | **adopt**：离线 GPU Worker 的 3DGS 训练与导出引擎（`rasterization`、`MCMCStrategy`、`export_splats`、`PngCompression`、`init_utils`）。**port**：分块量化打包（compressed PLY）、Morton 排序、opacity-aware 足迹公式，移植到我们的点云瓦片编码和 Web shader | V0.3（移植算法进 MVP）；V0.6–V0.8（3DGS 训练导出）；V1.0（服务端神经传感器仿真） | ★★★★★ |
-| **nerfstudio** | NeRF/3DGS 全家桶：数据处理 CLI、训练框架 splatfacto、viser Web viewer、导出器 | **reference**：`transforms.json` 数据契约、`dataparser_transforms` 坐标反变换、**Render State Machine（按吞吐自适应分辨率）**、OBB 裁剪导出。**port**：state machine → 点云自适应密度控制器（MVP 直接用）。**skip**：不作为训练主引擎，它 pin 的是旧版 gsplat 1.4.0 | V0.1（控制器移植）；V0.6（数据契约） | ★★★☆ |
-| **gaussian-splatting (Inria)** | 3DGS 原论文官方实现，2024-10 后冻结 | **reference**：标准 3DGS PLY 字段定义（事实标准）、densify/prune 语义、单目深度 scale/offset 对齐（`make_depth_scale.py`）、SH 常数。**skip**：训练与 SIBR viewer 都不用 | V0.6（深度对齐算法）；全程（PLY 契约） | ★★☆ |
+| **gsplat** | CUDA 3DGS 光栅化与训练库，Python API。2026 年仍高频迭代：3DGUT、LiDAR 渲染、MCMC、稀疏光栅化、HiGS 推理打包、Gaussian ID 光栅化 | **adopt**：离线 GPU Worker 的 3DGS 训练与导出引擎（`rasterization`、`MCMCStrategy`、`export_splats`、`PngCompression`、`init_utils`）。**port**：分块量化打包（compressed PLY）、Morton 排序、opacity-aware 足迹公式，移植到我们的点云瓦片编码和 Web shader | V0.3（移植算法进 MVP）；V0.6–V0.8（3DGS 训练导出）；V1.0（服务端神经传感器仿真） | 5/5 |
+| **nerfstudio** | NeRF/3DGS 全家桶：数据处理 CLI、训练框架 splatfacto、viser Web viewer、导出器 | **reference**：`transforms.json` 数据契约、`dataparser_transforms` 坐标反变换、**Render State Machine（按吞吐自适应分辨率）**、OBB 裁剪导出。**port**：state machine → 点云自适应密度控制器（MVP 直接用）。**skip**：不作为训练主引擎，它 pin 的是旧版 gsplat 1.4.0 | V0.1（控制器移植）；V0.6（数据契约） | 3.5/5 |
+| **gaussian-splatting (Inria)** | 3DGS 原论文官方实现，2024-10 后冻结 | **reference**：标准 3DGS PLY 字段定义（事实标准）、densify/prune 语义、单目深度 scale/offset 对齐（`make_depth_scale.py`）、SH 常数。**skip**：训练与 SIBR viewer 都不用 | V0.6（深度对齐算法）；全程（PLY 契约） | 2.5/5 |
 
 **关键结论（实现者先读这几条）：**
 
@@ -53,7 +53,7 @@
 
 | 项 | gsplat | nerfstudio | gaussian-splatting |
 |---|---|---|---|
-| Stars / 最后提交 | ★5736 / 2026-09-19（2026 年高活跃） | ★12032 / 2025-07-28（维护期） | ★24003 / 2024-10-30（冻结） |
+| Stars / 最后提交 | 5736 stars / 2026-09-19（2026 年高活跃） | 12032 stars / 2025-07-28（维护期） | 24003 stars / 2024-10-30（冻结） |
 | 语言 | Python + CUDA（`gsplat/cuda/csrc/` 共 77 个文件，其中 `.cu` 36 个） | Python（依赖 gsplat、viser、tyro） | Python + CUDA 子模块 |
 | 核心依赖 | `torch>=2.7`、ninja、jaxtyping；examples 用 `torch==2.9.1`、pycolmap、fused-ssim、ppisp | `torch==2.7.1`（pixi）、`gsplat==1.4.0`、`viser==1.0.0`、open3d | PyTorch 1.12 时代的 environment.yml、SIBR（C++/CMake） |
 | 构建 | 首次运行 JIT 编译 CUDA，或按 pt/cu 版本装预编译 wheel | pip 或 pixi；需要 CUDA | `--recursive` clone 子模块（gitlab.inria.fr）后 `pip install submodules/*` |
@@ -432,14 +432,14 @@ def quat_z_to(n):                                         # 把 (0,0,1) 旋到 n
 **数据流**（与 r01、r04、r05 对齐）：
 
 ```text
-P600 视频帧 ──► LingBot-Map（pose/intrinsic/depth/conf/world_points，相对尺度，不对齐重力）
-MID-360 ─────► FAST-LIO 地图 + 外参（米制）
-RTK ─────────► Sim(3) 地理配准（r01 结论：V0.1 起就要做）
+P600 视频帧 ──> LingBot-Map（pose/intrinsic/depth/conf/world_points，相对尺度，不对齐重力）
+MID-360 ─────> FAST-LIO 地图 + 外参（米制）
+RTK ─────────> Sim(3) 地理配准（r01 结论：V0.1 起就要做）
                   │
-                  ▼  统一到【瓦片局部 ENU，z-up，米】（只允许平移 + 缩放；旋转在训练前做完）
+                  v  统一到【瓦片局部 ENU，z-up，米】（只允许平移 + 缩放；旋转在训练前做完）
         gsplat NPZ（av_trainer 契约）或 nerfstudio transforms.json（带 ply_file_path）
                   │
-                  ▼  gsplat simple_trainer / av_trainer（MCMC + LiDAR 监督 + 天空 mask + PPISP）
+                  v  gsplat simple_trainer / av_trainer（MCMC + LiDAR 监督 + 天空 mask + PPISP）
         master/t_{key}.ply（float32，Inria 字段，瓦片局部坐标）
 ```
 
@@ -624,9 +624,9 @@ V1.0  + 3D Tiles/glTF KHR_gaussian_splatting 出口；gsplat 服务端神经相�
 | 结论 | **adopt**（训练/导出/仿真引擎） | **reference + port** | **reference** |
 
 **推荐排序**：
-1. **gsplat**（★5.7k，2026 最活跃，功能最全，是唯一需要作为依赖引入的）
-2. **nerfstudio**（★12k，只移植 state machine，并参考 transforms.json 契约）
-3. **gaussian-splatting**（★24k，只当规范来源）
+1. **gsplat**（5.7k stars，2026 最活跃，功能最全，是唯一需要作为依赖引入的）
+2. **nerfstudio**（12k stars，只移植 state machine，并参考 transforms.json 契约）
+3. **gaussian-splatting**（24k stars，只当规范来源）
 
 Web 端的配套选择是 **three.js r186 `GaussianSplat` + SPZ**（adopt），Spark RAD 作备选，3D Tiles `KHR_gaussian_splatting` 作 V1.0 标准出口。
 
@@ -651,7 +651,7 @@ Web 端的配套选择是 **three.js r186 `GaussianSplat` + SPZ**（adopt），S
 
 ## 7. 对设计文档（01-design.md）的优化建议
 
-1. **§8 Visual World**：补一条硬规则："Visual World 不是物理权威"，碰撞、规划、传感器几何只读 Geometry World。再加"Visual ↔ Geometry 一致性闸门"（高斯中心到几何点云残差 p95），作为发布条件。
+1. **§8 Visual World**：补一条硬规则："Visual World 不是物理权威"，碰撞、规划、传感器几何只读 Geometry World。再加"Visual <-> Geometry 一致性闸门"（高斯中心到几何点云残差 p95），作为发布条件。
 2. **§8 升级路径过于跳跃**（PointCloud → Mesh → 3DGS）。建议改成 §4.2 的五级路径：PointCloud → Surfel → PointSplat（无训练）→ 训练 3DGS（单瓦片）→ 多瓦片 LoD + 3D Tiles。每一步都能独立交付。
 3. **§14–15 点云格式**：补充**节点局部量化**（uint16 或 11/10/11 分块），明确"禁止 float16 世界坐标"。补充**节点内渐进排序**，以及**自适应密度控制器**（运动降级、静止补全、吞吐反推预算、可中断），并把控制器参数（目标 FPS、预算上下限）写进性能 SLO。
 4. **§15/§41 格式**：Visual World 的 3DGS 格式要写明分层：`master` 用 PLY，`web` 用 SPZ，`tiles3d` 用 glTF `KHR_gaussian_splatting` + `_compression_spz_2`。原文"后期兼容 3D Tiles"可以落实为"3DGS 与点云都走 3D Tiles 出口，与 Cesium 路线对齐"（Cesium 源码已支持 Gaussian 3D Tiles 内容）。

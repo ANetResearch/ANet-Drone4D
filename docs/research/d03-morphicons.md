@@ -2,7 +2,7 @@
 
 > 研究单元：d03 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §34（Frontend 技术栈）、§37（更新频率）、§38（UI 设计）、§39（Timeline）、§40（Drone Interaction）
 >
-> 仓库快照：`refs/design/morphicons` @ `38d2a72`（2026-08-28，★2705，shallow clone）。master 就是已发布的 **`morphicons@1.7.1`**（npm latest，2026-08-28）。1.0.0 发布于 2026-08-01，4 周内出了 11 个版本，属于 2026 年的新仓库。MIT，零运行时依赖。下文路径均相对仓库根。
+> 仓库快照：`refs/design/morphicons` @ `38d2a72`（2026-08-28，2705 stars，shallow clone）。master 就是已发布的 **`morphicons@1.7.1`**（npm latest，2026-08-28）。1.0.0 发布于 2026-08-01，4 周内出了 11 个版本，属于 2026 年的新仓库。MIT，零运行时依赖。下文路径均相对仓库根。
 >
 > 配套数据包：**`lucide@1.48.0`**（npm latest，2026-09-24），IconNode 数据包，共 1854 个图标文件、2115 个导出名（含别名）。对照组 `lucide-react@1.48.0`。三个包都用 `npm pack` 解到了 `.cache/research/d03/`。
 >
@@ -23,22 +23,22 @@
 
 | 仓库 / 制品 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **morphicons 1.7.1** `morphicons/dom`（`createMorph`、`canonicalD`） | 图标 morph 引擎：单例 rAF 调度、spring、中途打断、plan 缓存；`canonicalD` 输出静态 path | **adopt**。作为自研 `<StateIcon>` 和 `<Icon>` 的底层 | V0.1 起 | ★★★★★ |
-| morphicons `morphicons/react`（`MorphIcon`） | 官方 React 绑定，支持 uncontrolled、controlled、imperative 三种模式 | **adopt（有限）**。只用于"拖拽进度驱动的图标"这类 controlled 场景，比如面板拖拽收起。一般场景用自研 `<StateIcon>`，因为 swap 回退需要在同一个 `<svg>` 里放两条 path | V0.1–V0.2 | ★★★★ |
-| morphicons `morphicons`（纯 core：resample → Procrustes → polar interp → serialize） | 与 DOM 无关的形状对齐与插值数学 | **port / reference**。移植到 V0.6 编队变换预览（Procrustes + 极坐标插值），spring 移植到 HUD 数值动画 | V0.6 | ★★★★ |
-| morphicons `morphicons/adapters` › `canvasTarget`，以及 `website/lib/icon-sprite.ts` 的模式 | 把图标变成像素：给 3D 场景用的 sprite 和 texture | **adopt**。选中机的状态 sprite 做 morph；多机图标用 atlas（自研，见 §3.7） | V0.2（选中机），V0.6（多机 atlas） | ★★★★ |
+| **morphicons 1.7.1** `morphicons/dom`（`createMorph`、`canonicalD`） | 图标 morph 引擎：单例 rAF 调度、spring、中途打断、plan 缓存；`canonicalD` 输出静态 path | **adopt**。作为自研 `<StateIcon>` 和 `<Icon>` 的底层 | V0.1 起 | 5/5 |
+| morphicons `morphicons/react`（`MorphIcon`） | 官方 React 绑定，支持 uncontrolled、controlled、imperative 三种模式 | **adopt（有限）**。只用于"拖拽进度驱动的图标"这类 controlled 场景，比如面板拖拽收起。一般场景用自研 `<StateIcon>`，因为 swap 回退需要在同一个 `<svg>` 里放两条 path | V0.1–V0.2 | 4/5 |
+| morphicons `morphicons`（纯 core：resample → Procrustes → polar interp → serialize） | 与 DOM 无关的形状对齐与插值数学 | **port / reference**。移植到 V0.6 编队变换预览（Procrustes + 极坐标插值），spring 移植到 HUD 数值动画 | V0.6 | 4/5 |
+| morphicons `morphicons/adapters` › `canvasTarget`，以及 `website/lib/icon-sprite.ts` 的模式 | 把图标变成像素：给 3D 场景用的 sprite 和 texture | **adopt**。选中机的状态 sprite 做 morph；多机图标用 atlas（自研，见 §3.7） | V0.2（选中机），V0.6（多机 atlas） | 4/5 |
 | morphicons vue / svelte / react-native / element / astro；`maskTarget`；`svgToIcon` | 其他框架绑定和格式适配 | **skip**（本项目是 React SPA，图标都是 IconNode 数据） | — | — |
-| **lucide 1.48.0**（数据包，不是组件包） | 全站图标数据的唯一来源，已内置 `drone` 图标 | **adopt**，锁精确版本 | V0.1 | ★★★★★ |
+| **lucide 1.48.0**（数据包，不是组件包） | 全站图标数据的唯一来源，已内置 `drone` 图标 | **adopt**，锁精确版本 | V0.1 | 5/5 |
 | lucide-react 1.48.0 | 组件包 | **skip**。不安装，shadcn 的 import 由 codemod 改写到本项目的兼容层 | — | — |
-| transitions.dev `icon-swap`（scale 0.25 + blur 2px + opacity，250ms ease-in-out） | 形变质量不达标的图标对，用 crossfade 回退 | **port**。改写成"同一个 `<svg>` 内两条 path"的 WAAPI 版本，保证 shadcn 的 `[&>svg]` 选择器仍然生效 | V0.1 | ★★★★ |
+| transitions.dev `icon-swap`（scale 0.25 + blur 2px + opacity，250ms ease-in-out） | 形变质量不达标的图标对，用 crossfade 回退 | **port**。改写成"同一个 `<svg>` 内两条 path"的 WAAPI 版本，保证 shadcn 的 `[&>svg]` 选择器仍然生效 | V0.1 | 4/5 |
 
 **核心结论**
 
 1. **图标数据：`lucide@1.48.0` 加 6 个自定义 stroke 图标。** 清单共 208 个（202 个 lucide、6 个自定义），全部由脚本对照 lucide 1.48 导出表校验过：名字存在，而且都是 canonical 名。lucide 1.x 把 `Home`、`AlertTriangle`、`Loader2`、`Trash2`、`Building2` 这类旧名降成了别名，清单统一用 `House`、`TriangleAlert`、`LoaderCircle`、`Trash`、`BuildingComplex`。**lucide 已经有 `drone`**（四旋翼俯视，9 个子路径），P600 直接用它，不需要自绘。自定义图标只补 lucide 缺的语义：`PointCloud`、`SandDust`（沙尘）、`OctreeLod`、`DroneHexa`（异构六旋翼）、`Formation`（编队）、`CameraFrustum`。
 2. **渲染：不装 lucide-react。** 静态 `<Icon>` 直接渲染 morphicons 纯 core 生成的 canonical `d`，只有一条 `<path>`，没有 hook 和运行时。动态 `<StateIcon>` 用 `morphicons/dom` 的 `createMorph`。两者在静止状态下像素一致，所以一个静态图标随时可以升级成 morph，不会跳变。实测 React 19 挂载 1000 个图标：**纯 core 静态 14.5 ms，MorphIcon 31.2 ms，lucide-react 61.5 ms**；DOM 节点数 2001 对 5051。bundle 方面，202 个图标用 lucide-react 是 19.2 KB gz；lucide 数据加 morphicons react/dom 是 18.9 KB gz，这个数已经包含了约 8 KB 的 morph 运行时。
 3. **切换机制分三类。**
-   - **morph**：同一对象的离散状态，形状同族，残差小，并且在中间帧目测过。例如 play↔pause、menu↔x、电量和信号分档、告警升级、loader→check/x、面板开合、天气。
-   - **swap**：`*-Off` 这类"切口"变体，以及形状无关的对。例如 eye↔eye-off、bell↔bell-off、相机模式循环。在 t≈0.3–0.6 时它们会出现漩涡或团块，不合格，改用 transitions.dev 的 icon-swap。
+   - **morph**：同一对象的离散状态，形状同族，残差小，并且在中间帧目测过。例如 play<->pause、menu<->x、电量和信号分档、告警升级、loader→check/x、面板开合、天气。
+   - **swap**：`*-Off` 这类"切口"变体，以及形状无关的对。例如 eye<->eye-off、bell<->bell-off、相机模式循环。在 t≈0.3–0.6 时它们会出现漩涡或团块，不合格，改用 transitions.dev 的 icon-swap。
    - **CSS rotate**：连续角度，例如航向、风向。**未登记的图标对默认走 swap**，只有白名单里的对才走 morph。
 4. **性能。** rAF 不常驻：实测静止 500 ms 内 rAF 调用 0 次，settle 之后也是 0 次。单个图标在飞行中每帧花 **约 30–380 µs**（Node 实测，子路径越多越贵），其中 97% 以上是 `serialize` 拼字符串。并发 ≤10 个时无感；50 个同时 morph 时 p95 帧时间 22–29 ms；100 个 9 子路径的图标平均 29 ms/帧。和 Three.js 共用主线程，所以**必须加并发预算（K=8）**，遥测驱动的图标还要加迟滞，最短 1.5 s 才允许换一次图标。
 5. **冷启动。** 首次 `morphTo` 要现算 plan 并经历 JIT，耗时 **2–28 ms**，第一次点击会掉帧。在 `requestIdleCallback` 里用"假 `PathEl` 加 `seek`"把白名单对的 plan 预热进 WeakMap 缓存，之后降到 **0.03–0.46 ms**。
@@ -52,7 +52,7 @@
 | 项 | 值 |
 |---|---|
 | 仓库 | github.com/guillermolg00/morphicons（单一维护者 Guillermo） |
-| Star / 活跃度 | ★2705；1.0.0 于 2026-08-01 发布，1.7.1 于 2026-08-28 发布，4 周 11 个版本 |
+| Star / 活跃度 | 2705 stars；1.0.0 于 2026-08-01 发布，1.7.1 于 2026-08-28 发布，4 周 11 个版本 |
 | 定位 | 面向 stroke 图标（Lucide、Tabler、Heroicons outline、Iconoir、自定义 path）的通用 morph："any icon morphs into any other"。旋转不需要手工声明，由 2D Procrustes 加极坐标插值自动得出 |
 | 运行时依赖 | **0**；react、vue、svelte、react-native 都是 optional peer |
 | 入口（subpath exports） | `.`（纯 core）、`./dom`（driver）、`./adapters`、`./react`、`./react-native`、`./vue`、`./svelte`、`./element`（`<morph-icon>`）、`./astro`；ESM only，`sideEffects:false` |
@@ -722,26 +722,26 @@ export const CameraFrustum: IconNode = [         // 相机视锥（lucide `Cone`
 
 | 切换对 | 子路径 | max θ | max res | 目测 | 机制 / spring |
 |---|---|---|---|---|---|
-| Menu↔X | 3→2 | 45° | 0.000 | 折叠干净 | morph / snappy |
-| Plus↔X、Plus↔Minus、Check↔X | 2 | 45°/90°/73° | 0–0.34 | 好 | morph / snappy |
-| Play↔Pause | 1→2 | 2° | 0.47 | 好（三角分裂成双竖条） | morph / snappy |
-| CirclePlay↔CirclePause、Play→Square | 2–3 | 1–2° | 0.22–0.81 | 好 | morph / snappy |
-| Rewind↔FastForward、Repeat↔Repeat1 | 2/5 | 178°/92° | 0.03/0.07 | 好 | morph / snappy |
-| ChevronDown↔Up、ChevronRight↔Down、ChevronsUpDown↔DownUp | 1–2 | 90–180° | ≈0 | 纯旋转 | morph；列表或手风琴内保留 shadcn 自带的 CSS rotate，开销更低 |
-| PanelLeft/Right/Bottom Close↔Open、Maximize↔Minimize | 3–4 | 180° | 0.000 | 好 | morph / snappy |
-| Lock↔LockOpen | 2 | 27° | 0.17 | 好 | morph / snappy |
-| Locate↔LocateFixed（跟随开关） | 5→6 | 0° | 0.000 | 好 | morph / snappy |
+| Menu<->X | 3→2 | 45° | 0.000 | 折叠干净 | morph / snappy |
+| Plus<->X、Plus<->Minus、Check<->X | 2 | 45°/90°/73° | 0–0.34 | 好 | morph / snappy |
+| Play<->Pause | 1→2 | 2° | 0.47 | 好（三角分裂成双竖条） | morph / snappy |
+| CirclePlay<->CirclePause、Play→Square | 2–3 | 1–2° | 0.22–0.81 | 好 | morph / snappy |
+| Rewind<->FastForward、Repeat<->Repeat1 | 2/5 | 178°/92° | 0.03/0.07 | 好 | morph / snappy |
+| ChevronDown<->Up、ChevronRight<->Down、ChevronsUpDown<->DownUp | 1–2 | 90–180° | ≈0 | 纯旋转 | morph；列表或手风琴内保留 shadcn 自带的 CSS rotate，开销更低 |
+| PanelLeft/Right/Bottom Close<->Open、Maximize<->Minimize | 3–4 | 180° | 0.000 | 好 | morph / snappy |
+| Lock<->LockOpen | 2 | 27° | 0.17 | 好 | morph / snappy |
+| Locate<->LocateFixed（跟随开关） | 5→6 | 0° | 0.000 | 好 | morph / snappy |
 | BatteryFull→Medium→Low | 5→4→3 | 0° | 0.000 | 好（电量格收缩） | morph / hud |
 | BatteryLow→BatteryWarning | 3→5 | 90° | 0.62 | 可接受 | morph / hud |
 | SignalHigh→Medium→Low→Zero | 4→…→1 | 0–90° | 0.000 | 好 | morph / hud |
-| ShieldCheck↔ShieldAlert、TriangleAlert↔OctagonAlert、CircleCheck↔CircleAlert | 2–3 | 2–65° | 0.20–0.36 | 好（告警升级） | morph / smooth |
+| ShieldCheck<->ShieldAlert、TriangleAlert<->OctagonAlert、CircleCheck<->CircleAlert | 2–3 | 2–65° | 0.20–0.36 | 好（告警升级） | morph / smooth |
 | LoaderCircle→CircleCheck / CircleX | 1→2/3 | 78–81° | 0.49–0.68 | 好 | morph / smooth（旋转交接见 §6） |
-| PlaneTakeoff↔PlaneLanding | 2 | 49° | 0.06 | 好 | morph / snappy |
-| Wifi↔WifiOff、Power↔PowerOff、Bot↔BotOff | 4–7 | 45° | 0.20–0.79 | 可接受 | morph / snappy |
-| Sun↔CloudSun↔Cloud↔CloudRain↔CloudFog↔Haze（天气预设） | 1–9 | 75–90° | 0–0.78 | 中间帧较乱，但能读出"天气在转变" | morph / **smooth**（用户明确要求 sun↔cloud-rain） |
-| Sun↔Moon（主题）、Sunrise↔Sunset | 9→1 / 8 | 83° / 180° | 0.90 / 0 | 可接受，Sun↔Moon 也是库作者的验收对之一 | morph / smooth |
-| **Eye↔EyeOff** | 2→4 | 42° | 0.89 | **不合格**：t≈0.2–0.6 外轮廓卷成漩涡 | **swap** |
-| **Bell↔BellOff、Video↔VideoOff、Pin↔PinOff、Link↔Link2Off** | 2→3/4 | 44–82° | 0.66–0.88 | **不合格**：切口类变体发生扭曲 | **swap** |
+| PlaneTakeoff<->PlaneLanding | 2 | 49° | 0.06 | 好 | morph / snappy |
+| Wifi<->WifiOff、Power<->PowerOff、Bot<->BotOff | 4–7 | 45° | 0.20–0.79 | 可接受 | morph / snappy |
+| Sun<->CloudSun<->Cloud<->CloudRain<->CloudFog<->Haze（天气预设） | 1–9 | 75–90° | 0–0.78 | 中间帧较乱，但能读出"天气在转变" | morph / **smooth**（用户明确要求 sun<->cloud-rain） |
+| Sun<->Moon（主题）、Sunrise<->Sunset | 9→1 / 8 | 83° / 180° | 0.90 / 0 | 可接受，Sun<->Moon 也是库作者的验收对之一 | morph / smooth |
+| **Eye<->EyeOff** | 2→4 | 42° | 0.89 | **不合格**：t≈0.2–0.6 外轮廓卷成漩涡 | **swap** |
+| **Bell<->BellOff、Video<->VideoOff、Pin<->PinOff、Link<->Link2Off** | 2→3/4 | 44–82° | 0.66–0.88 | **不合格**：切口类变体发生扭曲 | **swap** |
 | **CircleDashed→LoaderCircle** | 8→1 | 171° | 0.65 | **不合格**：8 段虚线挤成一团 | **swap** |
 | **LocateFixed→LocateOff** | 6→7 | 3° | 0.83 | 一般 | **swap** |
 | **相机模式循环**（Move3d/Video/ScanEye/Map） | 3–6 | 45–136° | 0.54–0.83 | **不合格**：形状无关，变成团块 | 用 ToggleGroup 并列展示 4 个静态图标，滑动指示器负责动效；单按钮循环时用 swap |
@@ -796,7 +796,7 @@ for (const f of glob("src/components/ui/**/*.tsx")) {
 // scripts/check-icons.mjs（CI）
 // 1) grep 'from "lucide-react"' → 直接失败
 // 2) grep 'import { icons }' from "lucide" → 失败（它会引入全部 1854 个图标，破坏 tree-shaking）
-// 3) 扫描 src/**/*.{ts,tsx,css,json,mdx} 中的 /\p{Extended_Pictographic}/u → 失败（执行"严禁 emoji"；这个范围比 \p{Emoji} 更严，★ 这类文本符号也会被拦下，UI 里一律改用图标）
+// 3) 扫描 src/**/*.{ts,tsx,css,json,mdx} 中的 /\p{Extended_Pictographic}/u → 失败（执行"严禁 emoji"；这个范围比 \p{Emoji} 更严，U+2605（实心星）这类文本符号也会被拦下，UI 里一律改用图标）
 // 4) 对 registry 做 verify.mjs 同款校验：名字存在、是 canonical 名、custom 不越界
 ```
 
@@ -843,7 +843,7 @@ for (const f of glob("src/components/ui/**/*.tsx")) {
 - **Lottie 或设计师产出的动画**：运行时重，颜色和描边不跟随 token，与 shadcn 体系割裂。
 - **纯 CSS crossfade**（transitions.dev icon-swap）：零数学、compositor 友好，但表达不了"同一对象在变形"。在本方案里作为 morph 的回退。
 
-推荐排序：morphicons（adopt，★★★★★）> transitions.dev icon-swap（作为回退 port）> 其他（skip）。
+推荐排序：morphicons（adopt，5/5）> transitions.dev icon-swap（作为回退 port）> 其他（skip）。
 
 ---
 
@@ -877,8 +877,8 @@ for (const f of glob("src/components/ui/**/*.tsx")) {
 4. **§28 DroneState 增加派生 UI 状态**：`battery_level`、`link_level`、`gnss_fix`（NoFix/2D/3D/RTK_FLOAT/RTK_FIXED）、`alert_level`（OK/NOTICE/WARNING/CRITICAL）。明确分桶阈值、迟滞（+3%）和最短驻留时间（1.5 s，告警升级不受限制），由前端的 `derive-ui-state` 计算。业务逻辑设计说明书应把它们定义为状态机，而不是在组件里随手写 if/else。
 5. **§37 更新频率补 UI 层**：遥测 10–50 Hz，3D 位姿每帧插值，**离散状态图标不超过 0.7 Hz**，数值读数 5–10 Hz 节流，并按 rAF 批量提交 React 状态。
 6. **§38 右侧 DRONES 列表**：每行包含 `Drone` 图标、电量档、链路档、GNSS、告警，共 4 个状态图标。V0.6 多机时，同屏行数乘以 4 很快就会超过并发预算，需要写明"仅可见行和选中行 morph，其余行 set"。列表应虚拟化（shadcn 没有现成组件，可用 TanStack Virtual）。
-7. **§39 Timeline 控件明确化**：播放和暂停合并为一个按钮（`StateIcon` Play↔Pause，快捷键 Space）；×1/×2/×5/×10 用 `ToggleGroup` 文本项，不用图标；增加 Live 指示（`Radio` 加红点）和 Loop（Repeat↔Repeat1）；Seek 拖动时图标不 morph。
-8. **§40 相机模式用并列的 ToggleGroup**（Move3d/Video/ScanEye/Map），不用单按钮循环，因为这四个形状之间的 morph 不合格。Follow 开关用 Locate↔LocateFixed 的 morph。Trajectory、Camera FOV、Wind Force、Velocity 这些叠加层开关用 `Toggle` 加静态图标（Spline/Cone/Wind/MoveUpRight）。
+7. **§39 Timeline 控件明确化**：播放和暂停合并为一个按钮（`StateIcon` Play<->Pause，快捷键 Space）；×1/×2/×5/×10 用 `ToggleGroup` 文本项，不用图标；增加 Live 指示（`Radio` 加红点）和 Loop（Repeat<->Repeat1）；Seek 拖动时图标不 morph。
+8. **§40 相机模式用并列的 ToggleGroup**（Move3d/Video/ScanEye/Map），不用单按钮循环，因为这四个形状之间的 morph 不合格。Follow 开关用 Locate<->LocateFixed 的 morph。Trajectory、Camera FOV、Wind Force、Velocity 这些叠加层开关用 `Toggle` 加静态图标（Spline/Cone/Wind/MoveUpRight）。
 9. **性能降级链路要纳入 UI 动效**：§14 的点云自适应（point budget、FPS 反馈）应当与 UI 共用一个 quality controller。帧时间持续超过 20 ms 时，按顺序降级：`iconPolicy: full → swap` → 面板过渡改为瞬切 → 下调点预算 → 下调 DPR。前两步几乎不影响数据可视化，应当最先执行。
 10. **"流畅性测试"补 UI 维度**：复用本单元的 `dom-bench` 思路。在 3D 场景满载时，同时触发 K 个图标 morph，断言帧时间 p95 < 20 ms；并断言静止时 rAF 回调数只来自渲染循环本身，也就是 morph 调度器处于停止状态。
 11. **§42 仓库结构**：在 `web/src/components/icons/` 下放 registry、custom、icon、state-icon、lucide-compat、prewarm；在 `scripts/` 下放 shadcn-icons-codemod 和 check-icons；在 `tools/icon-sheet/` 下放 contact sheet 生成器，供设计验收使用。

@@ -20,28 +20,28 @@
 
 | 仓库 / 包（实测版本） | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **react / react-dom 19.3.0**（2026-09-09；★250,798；facebook/react 现在重定向到 react/react） | UI 运行时。`<ViewTransition>` 和 Fragment ref 已稳定；transition 之间不再互相阻塞 | **adopt**（精确锁定 19.3.0） | V0.1 | ★★★★★ |
-| **vite 8.3.1**（2026-09-24；★83,061）+ `@vitejs/plugin-react 6.1.1` | Rolldown + Oxc 一体化构建；插件不再依赖 Babel | **adopt** | V0.1 | ★★★★★ |
-| **typescript 7.0.2**（2026-07-08，Go 原生实现；★111,253） | 类型检查。trial 全量 `tsc` 只需 1.5 s；**没有 JS API** | **adopt**（只用作 tsc）。需要 TS API 的工具走 `@typescript/typescript6` 别名 | V0.1 | ★★★★ |
-| **tailwindcss / @tailwindcss/vite 4.3.3**（★97,723） | shadcn 的样式底座；v4.3 新增 scrollbar-\*、`@container-size`、`zoom-*` | **adopt** | V0.1 | ★★★★★ |
-| **shadcn 4.21.0**（★124,753） | 组件分发 CLI，具体结论见 d04 | **adopt**（devDependency） | V0.1 | ★★★★★ |
-| **three 0.186.1**（r186；★116,014） | `three/webgpu`（WebGPURenderer，并能回退到 WebGL2）和 `three/tsl` | **adopt**，锁定 `~0.186.1`（结论见 r11） | V0.1 | ★★★★★ |
-| **@react-three/fiber 9.8.1**（★32,586） | 3D 视口宿主，peer 要求 `react >=19 <19.4` | **adopt** | V0.1 | ★★★★★ |
-| @react-three/fiber **10.0.0-alpha.5** / drei 11.0.0-alpha.7 | 原生支持 WebGPU/TSL，以 `@pmndrs/scheduler` 为内核 | **reference**。**peer 要求 `react <19.3`，与 React 19.3.0 冲突（已实测 ERESOLVE）** | V0.3+ 迁移 | ★★★ |
-| **zustand 5.0.15**（★58,763） | vanilla store 加 selector，承载 UI 摘要态 | **adopt** | V0.1 | ★★★★★ |
-| **@tanstack/react-query 5.104.0**（★50,371） | REST 服务端状态：Scene、Mission、Config、File | **adopt** | V0.1 | ★★★★ |
-| **@msgpack/msgpack 3.1.3**（★1,558；2026-07 仍有提交） | 低频异构消息的编解码，与 Python `msgpack` 互通 | **adopt**（控制面）。高频遥测**不用**它，改用 raw struct | V0.1 | ★★★★ |
-| msgpackr 2.1.0（★695） | 更快的 msgpack 实现，records 扩展可以再快 1.6–2 倍 | **reference**。records 与 Python 不互通 | — | ★★★ |
-| **@playwright/test 1.63.0**（★96,804） | E2E 与性能用例：CDP、tracing、LoAF | **adopt**（配合本地 Chrome 151，用 `executablePath`） | V0.1 | ★★★★★ |
-| **vitest 5.0.2** + `@vitest/browser-playwright`（★17,167） | unit、真实浏览器组件测试和 bench（以 fixture 形式提供） | **adopt** | V0.1 | ★★★★★ |
-| **oxlint 1.86.0 + oxlint-tsgolint 7.0.2003**（oxc ★22,904，tsgolint ★1,446） | 基于 typescript-go 的 type-aware lint。trial 耗时 3.2 s，并实测能拦截 engine 层越界 import | **adopt**，替代受 TS 7 阻塞的 typescript-eslint | V0.1 | ★★★★ |
-| **pmndrs/scheduler 0.2.0**（2026 年新仓库；★8，2026-09-27 仍在提交） | 与框架无关的帧调度器，也是 R3F v10 的帧循环内核：phase、fps 限频、demand 模式、fixed timestep | **adopt**（V0.2 起用来统一帧循环，v9 桥接方式已实测）。**port** fixed-step 算法 | V0.2 | ★★★★ |
-| **RenaudRohlinger/stats-gl 4.2.3**（★280） | 无 DOM 的 `StatsProfiler`，为 WebGPU/WebGL 提供 GPU timestamp | **adopt**，作为性能 HUD 的数据源，界面按 lieflat 风格自绘 | V0.1 | ★★★★ |
-| cloudflare/partykit 下的 `partysocket 1.3.0`（★1,276） | 带退避重连的 WebSocket | **port**（约 60 行重连逻辑，放进 Worker） | V0.1 | ★★★ |
-| pmndrs/koota 0.6.6（★744） | 面向实时应用的 ECS 状态库 | **reference**，V0.6 多机实体模型时再评估 | V0.6 | ★★ |
-| TanStack/pacer 0.22（★777，beta） | 节流、防抖、队列 | **skip**：用 scheduler 的 fps 任务替代（§5.6） | — | ★★ |
-| aidenybai/react-scan 0.5.7（★21,858） | 检测 React 重渲染风暴 | **adopt**，仅开发期使用 | V0.1 | ★★★ |
-| utsuboco/r3f-perf 7.2.3（最后提交 2024-11） | R3F 性能面板 | **skip**：已停更，只支持 WebGL | — | ★ |
+| **react / react-dom 19.3.0**（2026-09-09；250,798 stars；facebook/react 现在重定向到 react/react） | UI 运行时。`<ViewTransition>` 和 Fragment ref 已稳定；transition 之间不再互相阻塞 | **adopt**（精确锁定 19.3.0） | V0.1 | 5/5 |
+| **vite 8.3.1**（2026-09-24；83,061 stars）+ `@vitejs/plugin-react 6.1.1` | Rolldown + Oxc 一体化构建；插件不再依赖 Babel | **adopt** | V0.1 | 5/5 |
+| **typescript 7.0.2**（2026-07-08，Go 原生实现；111,253 stars） | 类型检查。trial 全量 `tsc` 只需 1.5 s；**没有 JS API** | **adopt**（只用作 tsc）。需要 TS API 的工具走 `@typescript/typescript6` 别名 | V0.1 | 4/5 |
+| **tailwindcss / @tailwindcss/vite 4.3.3**（97,723 stars） | shadcn 的样式底座；v4.3 新增 scrollbar-\*、`@container-size`、`zoom-*` | **adopt** | V0.1 | 5/5 |
+| **shadcn 4.21.0**（124,753 stars） | 组件分发 CLI，具体结论见 d04 | **adopt**（devDependency） | V0.1 | 5/5 |
+| **three 0.186.1**（r186；116,014 stars） | `three/webgpu`（WebGPURenderer，并能回退到 WebGL2）和 `three/tsl` | **adopt**，锁定 `~0.186.1`（结论见 r11） | V0.1 | 5/5 |
+| **@react-three/fiber 9.8.1**（32,586 stars） | 3D 视口宿主，peer 要求 `react >=19 <19.4` | **adopt** | V0.1 | 5/5 |
+| @react-three/fiber **10.0.0-alpha.5** / drei 11.0.0-alpha.7 | 原生支持 WebGPU/TSL，以 `@pmndrs/scheduler` 为内核 | **reference**。**peer 要求 `react <19.3`，与 React 19.3.0 冲突（已实测 ERESOLVE）** | V0.3+ 迁移 | 3/5 |
+| **zustand 5.0.15**（58,763 stars） | vanilla store 加 selector，承载 UI 摘要态 | **adopt** | V0.1 | 5/5 |
+| **@tanstack/react-query 5.104.0**（50,371 stars） | REST 服务端状态：Scene、Mission、Config、File | **adopt** | V0.1 | 4/5 |
+| **@msgpack/msgpack 3.1.3**（1,558 stars；2026-07 仍有提交） | 低频异构消息的编解码，与 Python `msgpack` 互通 | **adopt**（控制面）。高频遥测**不用**它，改用 raw struct | V0.1 | 4/5 |
+| msgpackr 2.1.0（695 stars） | 更快的 msgpack 实现，records 扩展可以再快 1.6–2 倍 | **reference**。records 与 Python 不互通 | — | 3/5 |
+| **@playwright/test 1.63.0**（96,804 stars） | E2E 与性能用例：CDP、tracing、LoAF | **adopt**（配合本地 Chrome 151，用 `executablePath`） | V0.1 | 5/5 |
+| **vitest 5.0.2** + `@vitest/browser-playwright`（17,167 stars） | unit、真实浏览器组件测试和 bench（以 fixture 形式提供） | **adopt** | V0.1 | 5/5 |
+| **oxlint 1.86.0 + oxlint-tsgolint 7.0.2003**（oxc 22,904 stars，tsgolint 1,446 stars） | 基于 typescript-go 的 type-aware lint。trial 耗时 3.2 s，并实测能拦截 engine 层越界 import | **adopt**，替代受 TS 7 阻塞的 typescript-eslint | V0.1 | 4/5 |
+| **pmndrs/scheduler 0.2.0**（2026 年新仓库；8 stars，2026-09-27 仍在提交） | 与框架无关的帧调度器，也是 R3F v10 的帧循环内核：phase、fps 限频、demand 模式、fixed timestep | **adopt**（V0.2 起用来统一帧循环，v9 桥接方式已实测）。**port** fixed-step 算法 | V0.2 | 4/5 |
+| **RenaudRohlinger/stats-gl 4.2.3**（280 stars） | 无 DOM 的 `StatsProfiler`，为 WebGPU/WebGL 提供 GPU timestamp | **adopt**，作为性能 HUD 的数据源，界面按 lieflat 风格自绘 | V0.1 | 4/5 |
+| cloudflare/partykit 下的 `partysocket 1.3.0`（1,276 stars） | 带退避重连的 WebSocket | **port**（约 60 行重连逻辑，放进 Worker） | V0.1 | 3/5 |
+| pmndrs/koota 0.6.6（744 stars） | 面向实时应用的 ECS 状态库 | **reference**，V0.6 多机实体模型时再评估 | V0.6 | 2/5 |
+| TanStack/pacer 0.22（777 stars，beta） | 节流、防抖、队列 | **skip**：用 scheduler 的 fps 任务替代（§5.6） | — | 2/5 |
+| aidenybai/react-scan 0.5.7（21,858 stars） | 检测 React 重渲染风暴 | **adopt**，仅开发期使用 | V0.1 | 3/5 |
+| utsuboco/r3f-perf 7.2.3（最后提交 2024-11） | R3F 性能面板 | **skip**：已停更，只支持 WebGL | — | 1/5 |
 
 **实现者先读这 14 条（每条都有实测或源码依据）：**
 
@@ -119,29 +119,29 @@
 
 ### 1.1 核心栈（版本与活跃度）
 
-| 包 | npm latest（发布日） | 其他 dist-tag | GitHub（★ / 最近提交） | 关键 peer / engines |
+| 包 | npm latest（发布日） | 其他 dist-tag | GitHub（stars / 最近提交） | 关键 peer / engines |
 |---|---|---|---|---|
-| react / react-dom | 19.3.0（2026-09-09）；19.2.0 发布于 2025-10-01 | canary 19.3.0-canary-…-20260922 | facebook/react ★250,798 / 2026-09-22 | — |
-| vite | 8.3.1（2026-09-24）；8.0.0 发布于 2026-03-12 | previous 7.3.6 | vitejs/vite ★83,061 / 2026-09-28 | node `^20.19 \|\| >=22.12`；依赖 rolldown ~1.2.9、lightningcss ^1.33 |
+| react / react-dom | 19.3.0（2026-09-09）；19.2.0 发布于 2025-10-01 | canary 19.3.0-canary-…-20260922 | facebook/react 250,798 stars / 2026-09-22 | — |
+| vite | 8.3.1（2026-09-24）；8.0.0 发布于 2026-03-12 | previous 7.3.6 | vitejs/vite 83,061 stars / 2026-09-28 | node `^20.19 \|\| >=22.12`；依赖 rolldown ~1.2.9、lightningcss ^1.33 |
 | @vitejs/plugin-react | 6.1.1（2026-08-28） | — | 同上 | peer `vite ^8`，可选 `oxc-transform-react ^0.145.0`、`@rolldown/plugin-babel` |
-| typescript | 7.0.2（2026-07-08） | next 7.1.0-dev.20260928；6.x 最后一版 6.0.3（2026-04-16） | microsoft/TypeScript ★111,253 / 2026-09-25；typescript-go ★26,165 | 无 JS API；`@typescript/typescript6@6.0.2` 提供 `tsc6` |
-| tailwindcss / @tailwindcss/vite | 4.3.3（2026-07-16）；4.3.0 发布于 2026-05-08 | v3-lts 3.4.19 | tailwindlabs/tailwindcss ★97,723 / 2026-09-25 | peer `vite ^5.2–^8` |
-| shadcn | 4.21.0（2026-09-04） | — | shadcn-ui/ui ★124,753 / 2026-09-28 | 结论见 d04 |
-| three / @types/three | 0.186.1（2026-09-24）/ 0.186.0 | — | mrdoob/three.js ★116,014 / 2026-09-28 | 大约每 1–3 个月发一个 minor（r184 在 04，r185 在 06，r186 在 09） |
-| @react-three/fiber | 9.8.1 | alpha 10.0.0-alpha.5；canary 10.0.0-canary.14007b4（2026-09-26） | pmndrs/react-three-fiber ★32,586 / 2026-09-26；v10 milestone 87%（74 closed / 11 open，无截止日期） | v9：`react >=19 <19.4`；**v10：`react <19.3`、`three >=0.185`** |
-| @react-three/drei | 10.7.9（2026-09-25） | alpha 11.0.0-alpha.7 | pmndrs/drei ★9,902 / 2026-09-25 | v11 alpha 要求 `react <19.3` |
-| zustand | 5.0.15（2026-08-13） | — | pmndrs/zustand ★58,763 / 2026-08-24 | peer react ≥18 |
-| @tanstack/react-query | 5.104.0（2026-09-26） | 没有 v6 | TanStack/query ★50,371 / 2026-09-28 | react ^18 \|\| ^19 |
-| @msgpack/msgpack | 3.1.3（2025-12-26） | — | msgpack/msgpack-javascript ★1,558 / 2026-07-13 | 零依赖 |
-| msgpackr | 2.1.0（2026-08-27） | previous 1.12.1 | kriszyp/msgpackr ★695 / 2026-08-27 | 在 Node 下可选装原生扩展 |
-| @playwright/test / playwright | 1.63.0（2026-09-04） | next 1.64.0-alpha-2026-09-28 | microsoft/playwright ★96,804 / 2026-09-28 | 需要 chromium rev **1243**（Chrome 153） |
-| vitest / @vitest/browser-playwright | 5.0.2（2026-09-25）；5.0.0 发布于 2026-09-03 | V4 4.1.11 | vitest-dev/vitest ★17,167 / 2026-09-28 | node `^22.12 \|\| ^24 \|\| >=26`（**本机 22.12.0 恰好卡在下限**）、vite `^6.4–^8` |
-| oxlint / oxlint-tsgolint | 1.86.0（2026-09-28）/ 7.0.2003 | 每周发版 | oxc ★22,904；tsgolint ★1,446 / 2026-09-28 | — |
-| rolldown | 1.2.11 | — | rolldown/rolldown ★13,956 / 2026-09-28 | 随 Vite 8 一起安装 |
+| typescript | 7.0.2（2026-07-08） | next 7.1.0-dev.20260928；6.x 最后一版 6.0.3（2026-04-16） | microsoft/TypeScript 111,253 stars / 2026-09-25；typescript-go 26,165 stars | 无 JS API；`@typescript/typescript6@6.0.2` 提供 `tsc6` |
+| tailwindcss / @tailwindcss/vite | 4.3.3（2026-07-16）；4.3.0 发布于 2026-05-08 | v3-lts 3.4.19 | tailwindlabs/tailwindcss 97,723 stars / 2026-09-25 | peer `vite ^5.2–^8` |
+| shadcn | 4.21.0（2026-09-04） | — | shadcn-ui/ui 124,753 stars / 2026-09-28 | 结论见 d04 |
+| three / @types/three | 0.186.1（2026-09-24）/ 0.186.0 | — | mrdoob/three.js 116,014 stars / 2026-09-28 | 大约每 1–3 个月发一个 minor（r184 在 04，r185 在 06，r186 在 09） |
+| @react-three/fiber | 9.8.1 | alpha 10.0.0-alpha.5；canary 10.0.0-canary.14007b4（2026-09-26） | pmndrs/react-three-fiber 32,586 stars / 2026-09-26；v10 milestone 87%（74 closed / 11 open，无截止日期） | v9：`react >=19 <19.4`；**v10：`react <19.3`、`three >=0.185`** |
+| @react-three/drei | 10.7.9（2026-09-25） | alpha 11.0.0-alpha.7 | pmndrs/drei 9,902 stars / 2026-09-25 | v11 alpha 要求 `react <19.3` |
+| zustand | 5.0.15（2026-08-13） | — | pmndrs/zustand 58,763 stars / 2026-08-24 | peer react ≥18 |
+| @tanstack/react-query | 5.104.0（2026-09-26） | 没有 v6 | TanStack/query 50,371 stars / 2026-09-28 | react ^18 \|\| ^19 |
+| @msgpack/msgpack | 3.1.3（2025-12-26） | — | msgpack/msgpack-javascript 1,558 stars / 2026-07-13 | 零依赖 |
+| msgpackr | 2.1.0（2026-08-27） | previous 1.12.1 | kriszyp/msgpackr 695 stars / 2026-08-27 | 在 Node 下可选装原生扩展 |
+| @playwright/test / playwright | 1.63.0（2026-09-04） | next 1.64.0-alpha-2026-09-28 | microsoft/playwright 96,804 stars / 2026-09-28 | 需要 chromium rev **1243**（Chrome 153） |
+| vitest / @vitest/browser-playwright | 5.0.2（2026-09-25）；5.0.0 发布于 2026-09-03 | V4 4.1.11 | vitest-dev/vitest 17,167 stars / 2026-09-28 | node `^22.12 \|\| ^24 \|\| >=26`（**本机 22.12.0 恰好卡在下限**）、vite `^6.4–^8` |
+| oxlint / oxlint-tsgolint | 1.86.0（2026-09-28）/ 7.0.2003 | 每周发版 | oxc 22,904 stars；tsgolint 1,446 stars / 2026-09-28 | — |
+| rolldown | 1.2.11 | — | rolldown/rolldown 13,956 stars / 2026-09-28 | 随 Vite 8 一起安装 |
 
 ### 1.2 Discovery 候选（2025–2026 新出现，或 2026 年仍活跃）
 
-| 仓库 | ★ / 最近提交 | npm | 结论 |
+| 仓库 | stars / 最近提交 | npm | 结论 |
 |---|---|---|---|
 | **pmndrs/scheduler** | 8 / 2026-09-27（2026 年新仓库，由 R3F v10 抽离出来） | @pmndrs/scheduler 0.2.0（2026-08-24） | 已克隆。adopt（V0.2） |
 | **RenaudRohlinger/stats-gl** | 280 / 2026-07-10 | stats-gl 4.2.3 | 已克隆。adopt（HUD 数据源） |
@@ -149,7 +149,7 @@
 | **TanStack/pacer** | 777 / 2026-09-27 | @tanstack/pacer 0.22.0，beta | 已克隆。skip |
 | **msgpack/msgpack-javascript** | 1,558 / 2026-07-13 | 3.1.3 | 已克隆。adopt |
 | **kriszyp/msgpackr** | 695 / 2026-08-27 | 2.1.0 | 已克隆。reference |
-| cloudflare/partykit（partysocket） | 1,276 / 2026-08-03；旧仓库 partykit/partykit ★5,724，最近提交 2025-09 | partysocket 1.3.0 | 读了 node_modules 里的 dist。port |
+| cloudflare/partykit（partysocket） | 1,276 / 2026-08-03；旧仓库 partykit/partykit 5,724 stars，最近提交 2025-09 | partysocket 1.3.0 | 读了 node_modules 里的 dist。port |
 | aidenybai/react-scan | 21,858 / 2026-08-16 | 0.5.7 | 仅开发期 adopt |
 | pmndrs/detect-gpu | 1,213 / 2026-09-27 | 5.0.70 | reference，用来设初始预算档位 |
 | utsuboco/r3f-perf | 781 / 2024-11-08 | 7.2.3 | skip（已停更） |
@@ -603,7 +603,7 @@ scheduler 的 `fps` 任务（adopt）优于 TanStack Pacer：Pacer 每次调用�
 | 18 | Vite 8 安装体积增加约 15 MB，还带原生二进制（rolldown、lightningcss、oxide、tsgolint） | 离线或跨平台（arm64）安装会失败 | 准备 npm 离线缓存；lockfile 要覆盖目标平台的 optionalDependencies |
 | 19 | Vitest browser 首跑时依赖重新优化，引发 reload | 测试不稳定 | `optimizeDeps.include` 预声明 |
 | 20 | `oxc-transform-react` 的 peer 锁在 `^0.145.0` | 装 latest（0.151）会 ERESOLVE | 用 React Compiler 时锁 0.145.x；V0.1 先不启用 Compiler |
-| 21 | pmndrs/scheduler 的 fixed timestep 还没发布；★8，是新仓库 | 用 git 依赖不稳定 | V0.2 只用 phase 和 fps 功能；fixed step 按 §3.7 自己实现约 20 行，等 0.3 发布后再切换 |
+| 21 | pmndrs/scheduler 的 fixed timestep 还没发布；8 stars，是新仓库 | 用 git 依赖不稳定 | V0.2 只用 phase 和 fps 功能；fixed step 按 §3.7 自己实现约 20 行，等 0.3 发布后再切换 |
 
 ---
 

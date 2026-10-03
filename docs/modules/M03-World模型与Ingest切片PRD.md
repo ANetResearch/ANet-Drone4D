@@ -172,6 +172,7 @@ M03 在 7 层架构中的位置（AWR-03 §3.2）：上游是 Reality 与 Recons
 | M03-FR-020 | 通用配置化导入：`IngestAdapter` 协议与 `ingest.yaml` schema 在 D1 冻结；PLY（plyfile）、LAS/LAZ（laspy）读取与配置驱动的规范化在 V0.2 实现 | P1 | V0.2 | 桩 | schema 编译通过 | 13 PRD-FR-008；x01 §3.3 |
 | M03-FR-021 | `IngestFromArrays`（字段见 §7.2，与 M01 §6.8 映射表逐项对应）：接收已在 world 帧的 float64 坐标（可选法线、类别）、锚点与 `trueNorth`（继承源世界）、`registration`、溯源信息、可选 `generator_params` 与 `camera_home`，跳过步骤 2–5 与原点重定（§6.4），其余步骤与六城相同；CLI 入口为 `worldpkg ingest recon --session <dir>`（16 §14.1） | P1 | V0.1 | 是 | M03-AC-026 | M01 §2 分工表、§6.8；ADR-035；16 §14.1 |
 | M03-FR-022 | 精确去重（`dedupe = exact`，真实数据默认）；UrbanScene3D 默认 `off`（x01 已证实无重复点） | P2 | V0.2 | 否 | 去重计数写入报告 | x01 §0 第 1 条 |
+| M03-FR-066 | 合成演示城市（DEMO-W，ADR-077）：`awr/world/ingest/synthetic.py` 按 `configs/worldpkg.yaml` 的 `synthetic.<id>`（种子、边长、目标点数、名称、示意锚点）确定性生成约 1.2 km × 1.2 km、约 400 万点的城市点云（道路网格与路口、街区内六种建筑、两座 300 m 级地标塔、立面窗格密度纹理、屋顶设备、行道树、公园、河道与桥），带法线与 `anet-classes@1` 类别；`SyntheticAdapter` 以 `semantic = provided`（类别由生成器给出，不做规则分类）走与六城相同的十步 ingest 与切片、派生、`--deep` 校验、原子发布，world id `synthcity`，`anchor.kind = synthetic`；同一平台与 numpy 版本下逐字节一致（§6.18） | P1 | V0.1 | 是 | M03-AC-033、034 | ADR-077；DEMO-W |
 
 ### 4.3 Geometry 与语义派生
 
@@ -209,9 +210,10 @@ M03 在 7 层架构中的位置（AWR-03 §3.2）：上游是 Reality 与 Recons
 | M03-FR-041 | `files[]` 与 `contentVersion` 按 16 §3.4 计算；JSON 以固定键序、`indent=1`、`ensure_ascii=False`、末尾换行写出；参与哈希的文件不含时间戳与主机信息 | P0 | V0.1 | 是 | M03-AC-011 | ADR-006；16 §3.4 |
 | M03-FR-042 | 原子发布：每城一把 `flock` 锁；只写 `worlds/.staging/<id>-<nonce>/`；通过校验后以 `renameat2(RENAME_EXCHANGE)` 与旧包交换（不支持时退化为两次 `rename` 加启动恢复）；旧包进入 `.trash/` 后删除 | P0 | V0.1 | 是 | M03-AC-020 | 16 §3.5；12 §4.12 J04 |
 | M03-FR-043 | `build --missing`：按 16 §3.5 第 2 条的 6 个条件判定；`--jobs N`（默认 3）进程池并行；结论写 `worlds/.status/<id>.json` | P0 | V0.1 | 是 | M03-AC-021 | ADR-034；D1-AC-01 |
-| M03-FR-044 | `make run` 前置：原始数据缺失的城市打印 `make fetch-data` 提示，该城退出码 4；构建失败的世界标 INVALID，`make run` 继续启动其余部分；只有默认世界 `AWR_WORLD` 不可用时 `make run` 按 19 §16.2 以 4（缺数据）或 6（世界无效）中止 | P0 | V0.1 | 是 | M03-AC-022 | 12 §6.1 规则 1；19 §4.3、§16.2 |
+| M03-FR-044 | `make run` 前置：原始数据缺失的城市打印 `make fetch-data` 提示，该城退出码 4；构建失败的世界标 INVALID，`make run` 继续启动其余部分；只有默认世界 `AWR_WORLD` 不可用时 `make run` 按 19 §16.2 以 4（缺数据）或 6（世界无效）中止；未显式指定世界且深圳未构建时，默认世界按 ADR-077 回退为合成演示城市 synthcity（M03-FR-067），回退世界可用即不中止 | P0 | V0.1 | 是 | M03-AC-022 | 12 §6.1 规则 1；19 §4.3、§16.2 |
 | M03-FR-045 | `make fetch-data`（实现为 M03 注册的 `awr data fetch urbanscene3d [--verify] [--force]`，19 §8.2）：按 `configs/data.yaml`（地址与 sha256 真源）断点续传下载 7z、校验、解压到临时目录、逐文件核对后原子移入，生成 `data/raw/urbanscene3d/MANIFEST.json`；只校验写作 `make fetch-data VERIFY=1`；退出码按 19 §16.2（5 字节数或 sha256 不符、7 磁盘不足、8 缺解压工具） | P0 | V0.1 | 是 | M03-AC-023 | ADR-034；16 §10.4；19 §8.2 |
 | M03-FR-046 | `make fetch-worlds`：下载预构建六城制品并按 `contentVersion` 校验后原子发布 | P2 | V0.2 | 否 | 与本地构建的 `contentVersion` 相同 | ADR-034 |
+| M03-FR-067 | 默认世界回退（ADR-077）：`build --missing` 在未显式指定 `AWR_WORLD`、主默认世界（`configs/runtime.yaml` 的 `run.world`，深圳）未发布且其原始文件不在本机时自动生成 `run.fallback_world`（synthcity）；已发布的合成世界按 §6.10 的 6 个条件保持新鲜（条件 ⑤ 改为 `generator.params.synthetic` 不同，原因 `raw_changed`）；`worldpkg default-world` 输出生效的默认世界，`make worlds` 据此判定"默认世界不可用"；`make demo-world` 生成或刷新 synthcity；目录服务把原因为 `raw_missing` 的失败记录报为 `missing`（16 §3.5：缺原始数据时世界仍为 ABSENT） | P1 | V0.1 | 是 | M03-AC-035 | ADR-077；19 §4.3、§8.3 |
 
 ### 4.6 校验器
 
@@ -228,7 +230,7 @@ M03 在 7 层架构中的位置（AWR-03 §3.2）：上游是 Reality 与 Recons
 |---|---|---|---|---|---|---|
 | M03-FR-051 | 核心子命令 `ingest`、`grid`（由 `.work` 重算 DSM，build 内部同一实现）、`tile`、`validate`、`build`（参数与退出码见 §7.1） | P0 | V0.1 | 是 | M03-AC-024 | AWR-03 §6.3；本模块任务说明 |
 | M03-FR-052 | 辅助子命令 `package`（在 staging 目录上执行派生、打包与报告，不发布）、`status`（`--missing` 判定的只读预演）、`clean`（清理 staging、trash、`_shared`） | P1 | V0.1 | 是 | M03-AC-021、024 | 本文设定 |
-| M03-FR-053 | `mk/m03.mk`：`worlds`、`worlds-force`、`validate`、`fetch-data`、`test-world`、`perf-world` | P0 | V0.1 | 是 | M03-AC-022 | ADR-050 |
+| M03-FR-053 | `mk/m03.mk`：`worlds`、`worlds-force`、`demo-world`（ADR-077）、`validate`、`fetch-data`、`test-world`、`perf-world` | P0 | V0.1 | 是 | M03-AC-022 | ADR-050 |
 
 ### 4.8 目录服务与任务框架
 
@@ -846,7 +848,8 @@ stateDiagram-v2
 | READY | 包存在，`.status.status = ready` 且与 `world.json.contentVersion` 一致 | `ready` |
 | BUILDING | 存在持锁的 staging | `building` |
 | ABSENT | 无包、无 staging，且没有失败记录 | `missing` |
-| ABSENT（最近一次构建失败） | 无包，`.status.status = failed`（门禁、校验、原始数据或 I/O 失败） | `failed` |
+| ABSENT（最近一次构建失败） | 无包，`.status.status = failed`（门禁、校验或 I/O 失败） | `failed` |
+| ABSENT（原始数据缺失） | 无包，`.status.status = failed` 且 `reason = raw_missing`（16 §3.5：缺原始数据时世界仍为 ABSENT） | `missing`（ADR-077；无数据的机器上六城显示"未构建"与 `make fetch-data` 提示，而不是"构建失败"） |
 | INVALID（`validate_failed`、`generator_outdated`、`schema_major`、`raw_changed`、`zones_changed`） | 包存在但满足 `--missing` 条件 ②–⑥（含 `contentVersion` 复算不符） | `stale` |
 
 已有 READY 包时重建失败，旧包保持 READY（16 §3.5 状态表），状态不变为 `failed`。
@@ -1016,6 +1019,38 @@ worlds_prebuilt: { ... }    # 19 §8.2 请求追加（make fetch-worlds，V0.2�
 
 读取规则：`awr/world/ingest/manifest.py` 以 `yaml.safe_load` 读取，校验 `urbanscene3d.archive` 与 `files[]` 的必需键与类型（`bytes`、`points`、`header_bytes` 为正整数，`sha256` 为 64 位小写十六进制，`world_id` 匹配 `^[a-z0-9-]{1,63}$`），失败退出码 3；未知顶层键忽略，便于 19 追加键。
 
+### 6.18 合成演示城市 synthcity（DEMO-W，ADR-077）
+
+**定位**：UrbanScene3D 禁止再分发，README 截图与"零下载试用"需要一座完全由本仓库程序生成的城市。synthcity 不读取任何外部数据，世界包与截图可自由再分发（仓库 LICENSE 覆盖）；它是演示与回退世界，不替代六城的科研数据角色，门禁城市仍是深圳。
+
+**配置**（`configs/worldpkg.yaml`，M03 所有）：
+
+```yaml
+synthetic:
+  synthcity:
+    seed: 20261003
+    size_m: 1200                # 城市边长（m），范围 [-600, 600]²；允许 [400, 4000]
+    target_points: 4000000      # 目标点数（窗格接受率已计入，实际约 ±3%）；允许 [1e5, 2e7]
+    name: ANet Synthetic City
+    name_zh: ANet Synthetic City
+    anchor: [30.0, 120.0, 10.0] # 示意锚点 (lat, lon, hMsl)：不代表任何真实地点
+```
+
+**生成算法**（`awr/world/ingest/synthetic.py`，生成帧即 World ENU）：
+
+| 步骤 | 内容 | 关键取值 |
+|---|---|---|
+| 1 用地栅格 | 0.5 m 栅格（1200 m 城市 2400 × 2400，int8）：铺装、路面、标线、草坪、河水、池塘、河岸、桥面、建筑 9 种用地码 | 南北向道路 x = −480…480 每 120 m、东西向 y = −300…540 每 120 m 与南路 y = −540；大道（x = −240、0、240，y = 60）宽 26 m，其余 18 m，人行道 5 m；车道虚线 6 m 实 6 m 空、路口斑马线 0.5 m 间隔；河道中心线 y = −415 + 14·sin(2π(x + 600)/640)，水面半宽 22 m、岸坡到 31 m，南北向道路跨河处为桥面；中央公园 x ∈ [−600, −360]、y ∈ [180, 420]（内部道路取消，环形与对角园路、池塘、10 m 小丘） |
+| 2 建筑 | 每街区按到 CBD 中心 (0, 60) 的距离 d 选类型：d < 330 m 裙楼 + 1–2 座塔（矩形、阶梯退台、圆柱）；d < 560 m 地块（矩形、L 形）、围合院落或双板楼；其余低层（平顶或 30° 坡屋顶）；南岸一排低层 | 两座地标：圆柱 ANet Tower 中心 (62, 122)，底半径 25 m、300 m 处 19 m，开口塔冠到 318 m、桅杆到 352 m；阶梯退台塔中心 (−62, −2)，裙楼 24 m，四级 44/36/28/18 m 到 286 m；建筑间距与离行道树距离 ≥ 4 m（法线修正的 2 m 外取规则，§6.4） |
+| 3 采样 | 地面：均匀候选点按用地码的相对密度接受；立面：窗框与窗间墙全保留、玻璃按 0.10–0.22 的接受率保留（窗距 1.6–7.5 m、层高 3.0–4.0 m 五种风格，底层商铺另计），点密度差即窗格纹理；屋面、女儿墙、屋顶设备（机组箱体、水箱）；树冠为椭球壳（外壳加 28% 厚度的内部点）加树干，灌木为中等植被 | 全局密度系数 k = target_points / 期望点数（窗格接受率已计入）；四角地面点与桅杆顶点显式放置，包围盒中心与最高点与点数无关 |
+| 4 输出 | 坐标舍入到 1 mm（float64）、法线 float32 单位向量、类别 uint8（地面 1、低矮植被 2、中等植被 3、高植被 4、屋顶 5、立面 6、水面 8、路面 9、桥面 10）；规范字节流（魔数 `AWRSYN1` + xyz `<f8` + normal `<f4` + class `u1`）的 sha256 作为"原始输入"指纹 | 每个子系统用独立的 `default_rng([seed, k, i])` 流 |
+
+**适配器**（`SyntheticAdapter`）：`IngestConfig("synthcity", "simulation", 1.0, "+z", level = False, yaw = 0, trueNorth = exact, scaleStatus = assumed, fallback_anchor = (30, 120, 10), semantic = provided, anchor_label = "illustrative: ANet Synthetic City, procedurally generated; no real location")`。`RawCloud.class_index` 携带类别，ingest 第 8 步直接采用（`semantic = provided`，与 `IngestFromArrays.class_index` 同一语义）；其余九步与六城相同：DTM 中位数为 0、包围盒中心为原点，因此 `T_world_source` 为单位阵，剧本可直接使用生成坐标。`trueNorth = exact`（生成帧 +Y 即北，证据写入 `north_evidence`）；`scaleStatus = assumed`（米制由构造给出，枚举中没有"合成"值，不声称测量级置信度）。清单：`name`、`nameZh` 为 "ANet Synthetic City"，`tags = [synthetic, builtin, generated, redistributable]`，`dataset = {name, version: "synthcity generator v1.0.0 (seed …)", url: 仓库, citation, license: 仓库 LICENSE（可自由再分发与截图）, redistribution: true, sourceFiles: [规范字节流]}`（V-W-12 通过），`camera.home` 取能看到两座地标的西南俯视位，`generator.params.synthetic = {generator, version, seed, sizeM, targetPoints, sourceSha256}`。
+
+**`--missing` 与自动生成**：§6.10 的条件 ①–④、⑥ 不变；条件 ⑤ 改为 `generator.params.synthetic` 与当前配置不同（`GENERATOR_VERSION`、种子、尺寸、目标点数或生成器源文件 sha256 前 16 位变化），原因 `raw_changed`。未显式点名时：已发布的合成世界保持新鲜；未发布时只在 `defaults.fallback_needed` 成立（未显式设 `AWR_WORLD`、主默认世界未发布且其原始文件不在本机）时生成。`worlds-force` 只重建已有的合成世界。
+
+**实测**（本机 8 vCPU，2026-10-03，numpy 2.5.3）：生成 3,924,500 点用时 5.0 s（规划 0.75 s）；完整构建 23.4–25.0 s（ingest 12.5 s 含生成、dsm 3.1 s、tile 5.0 s、validate 1.8 s，峰值 RSS 1.27 GB）；1 根、深度 5、439 节点；首屏规则 G 190,507 点 / 2.29 MB，Tier S L1 约 4.1 万点；`nnMedianM` 0.382；地面占比 29.3%；法线翻正 2.4%（植被 12.9%、立面 1.2%，均来自 §6.4 的 2 m 外取规则在曲面与树冠处的误判，低于六城的 2.7–21.1%）；`validate --deep` 0 错误 0 警告；两次独立构建的 `contentVersion` 与全部内容文件逐字节一致。
+
 ---
 
 ## 7. 接口
@@ -1024,6 +1059,7 @@ worlds_prebuilt: { ... }    # 19 §8.2 请求追加（make fetch-worlds，V0.2�
 
 ```text
 worldpkg ingest urbanscene3d --city <id> [--raw data/raw/urbanscene3d] --out <staging_dir> [--keep-work] [--semantic rules|csf]
+worldpkg ingest synthetic [--city synthcity] --out <staging_dir>                    # 合成演示城市（§6.18，ADR-077）
 worldpkg ingest recon --session <dir> --world-id <id> --out <staging_dir>           # ext：读 recon-ir@1 会话，施加 T_world_engine 后走 ArraysAdapter（16 §14.1）
 worldpkg ingest generic --config <ingest.yaml> --out <staging_dir>                 # V0.2
 worldpkg grid <staging_dir> [--dsm-cell 2] [--no-dsm-n] [--hag]                     # 由 .work 重算 DSM 与 dsm_2m_n（--hag 同时写 HAG 栅格，V0.2）
@@ -1031,7 +1067,8 @@ worldpkg tile <staging_dir> [--G 64] [--leaf 20000] [--seed 1] [--forest auto|of
 worldpkg package <staging_dir>                                                      # 派生 + files[] + world.json + qa/report.json，不发布
 worldpkg validate <world_dir>... [--deep] [--json] [--strict-warn] [--rules ID,...]  # 16 §15.4
 worldpkg build [<id>...] [--missing] [--jobs 3] [--raw DIR] [--worlds worlds] [--keep-staging] [--config ingest.yaml] [--log-json]
-worldpkg status [--json]                                                             # 只读：逐城状态与 --missing 预演
+worldpkg status [--json]                                                             # 只读：逐城状态与 --missing 预演（含合成世界与生效的默认世界）
+worldpkg default-world [--json] [--field world|scenario]                             # 生效的默认世界（ADR-077 回退规则；make worlds 使用）
 worldpkg clean [--staging] [--trash] [--shared] [--all]
 worldpkg export <id> --tiles3d | --copc                                              # V0.5；D1 返回退出码 3 与"V0.5 提供"
 awr data fetch urbanscene3d [--verify] [--force]                                     # make fetch-data 的实现（M03 注册到 awr CLI，19 §8.2）
@@ -1041,7 +1078,7 @@ awr data prune-archive urbanscene3d                                             
 | 选项 | 类型 | 默认 | 取值范围 | 说明 |
 |---|---|---|---|---|
 | `--jobs` | int | 3 | 1–8 | `build` 并行城数；1 时在主进程内顺序执行；1 分钟 loadavg > 4 时自动降为 1（§11 R-2） |
-| `--missing` | flag | 否 | — | 只构建满足 6 条件之一的城市；无城市参数时遍历 `configs/data.yaml` 的 `urbanscene3d.files[]` |
+| `--missing` | flag | 否 | — | 只构建满足 6 条件之一的城市；无城市参数时遍历 `configs/data.yaml` 的 `urbanscene3d.files[]`，另按 §6.18 判定 `configs/worldpkg.yaml` 的合成世界 |
 | `--raw` | path | `data/raw/urbanscene3d` | 仓库或 `data/` 内 | 原始数据目录（环境变量 `AWR_DATA_DIR` 覆盖其父目录） |
 | `--worlds` | path | `worlds` | 仓库内 | 世界目录（`AWR_WORLDS_DIR` 覆盖） |
 | `--keep-staging` | flag | 否 | — | 失败时保留 staging 供诊断 |
@@ -1224,6 +1261,7 @@ python/awr/world/
 │   ├── stats.py               # nn_median（cKDTree）、分位数、直方图
 │   ├── urbanscene3d.py        # 唯一 UrbanScene3D 适配器：CITIES、RAW_FILES、名称表
 │   ├── arrays.py              # ArraysAdapter、IngestFromArrays（ext）
+│   ├── synthetic.py           # 合成演示城市生成器与 SyntheticAdapter（§6.18，ADR-077）
 │   ├── recon.py               # worldpkg ingest recon：读 recon-ir@1 会话 → IngestFromArrays（ext）
 │   └── generic.py             # GenericConfigAdapter（V0.2；D1 只含 schema 加载与 NotImplementedError）
 ├── terrain/  dtm.py  dsm.py（DSM、原始顶面、dsm_2m_n）  grids.py（grid_reduce、Grid、write_grid）
@@ -1362,6 +1400,10 @@ numba 不进入 `worldpkg`：本文实测纯 numpy 已满足 NFR-002，且 numba
 | M03-AC-030 | 依赖与夹具 | `worldpkg` 进程 `sys.modules` 中无 open3d、torch、numba；tiny world 全流程 ≤ 5 s；`pytest tests/world -m "not needs_data"` ≤ 60 s | `pytest tests/world/test_deps.py` | 本机 CPU | P0 | NFR-011、013 |
 | M03-AC-031 | 导出（V0.5） | 3d-tiles-validator 0 错误；CesiumJS 与 3DTilesRendererJS 可打开；COPC 点数、包围盒（1 mm）、按 LAS 码的类别直方图与源一致 | `worldpkg export <id> --tiles3d --copc` 后运行各工具 | 本机 CPU | P1（V0.5） | FR-059、060；DATA-AC-026 |
 | M03-AC-032 | 文本合规 | CLI 输出、日志与生成的 JSON 中 no-emoji 与禁用字形扫描为 0 | `make lint`（扫描 `worlds/*/**/*.json` 与 CLI 捕获输出） | 本机 CPU | P0 | NFR-014；D1-AC-20 |
+| M03-AC-033 | 合成城市生成器 | 同一规格两次生成坐标、法线、类别与规范字节流 sha256 逐字节一致，种子不同则不同；九类类别齐全、桅杆顶 352 m、塔冠 318 m、阶梯塔 286 m、四角范围 ±600 m、法线单位向量、点数偏离目标 < 8%、立面窗格密度纹理（0.5 m 条带变异系数 > 0.15）；完整规格生成 ≤ 15 s（实测 5.0 s） | `pytest tests/world/test_synthcity.py -k generator` | 本机 CPU | P1 | FR-066 |
+| M03-AC-034 | 合成城市构建 | `build_world(SyntheticAdapter)` 退出码 0，`validate --deep` 0 错误 0 警告；`T_world_source` 为单位阵、锚点标签与 `trueNorth`、`dataset.redistribution = true`、`generator.params.synthetic`；两次独立构建的 `contentVersion` 与全部内容文件逐字节一致；完整构建 ≤ 60 s（perf，实测 24 s） | `pytest tests/world/test_synthcity.py`；`pytest -m perf tests/world/test_synthcity.py` | 本机 CPU | P1 | FR-066；NFR-001 |
+| M03-AC-035 | 默认世界回退 | 缺原始数据且深圳未发布时 `build --missing` 生成 synthcity、六城报 RAW_MISSING、`make worlds` 退出码 0 并提示默认世界为 synthcity；再次运行不重建；有深圳世界时不自动生成；M03 `resolve_default_world` 与 runtime `apply_world_fallback` 在 6 组状态下结论一致；目录服务把 `raw_missing` 报为 missing | `pytest tests/world/test_synthcity.py -k "fallback or default_world"`；`pytest tests/world/test_catalog.py` | 本机 CPU | P1 | FR-067 |
+| M03-AC-036 | 合成城市浏览器冒烟 | `/world/synthcity`：Tier S 首帧 ≤ 1e5 点、驻留点随后增长、CAS 档位在 7 档内且预算不低于下限；Tier B（SwiftShader）CAS 在帧时余量不足时停在最低档（与深圳同一序列）；Tier B 锁定预算时流式加载超出首屏；无页面错误、无失败请求 | `npx playwright test perf/m03/synthcity.spec.ts --project perf`（测试构建，`M05_DIST` 可指向私有构建） | 本机 S、B | P1 | FR-066；M05-FR-037 |
 
 ---
 

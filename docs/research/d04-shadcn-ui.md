@@ -2,7 +2,7 @@
 
 > 研究单元：d04 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §3–§4（浏览器职责）、§16（场景分层）、§28（DroneState）、§34（前端技术栈）、§36–§37（实时通信与刷新频率）、§38–§40（UI、Timeline、Drone Interaction）、§43–§50（MVP 与版本路线）
 >
-> 仓库快照：`refs/design/ui` @ `984f435`（2026-09-28，"feat(registry): add community registries (#12037)"），★124743。CLI 包 `packages/shadcn` 的版本为 **4.21.0**。下文路径都相对仓库根目录。
+> 仓库快照：`refs/design/ui` @ `984f435`（2026-09-28，"feat(registry): add community registries (#12037)"），124743 stars。CLI 包 `packages/shadcn` 的版本为 **4.21.0**。下文路径都相对仓库根目录。
 >
 > 相关单元：d01（lieflat-charts，定义了 ANet Graphite 色板、图表与表格规范）、r14（R3F 宿主 + 命令式引擎）、r11/r12（WebGPU 与点云 HUD 指标）。本文的主题 token **直接沿用 d01 §3.2 的 ANet Graphite 色阶**，只补充 shadcn 需要的变量（sidebar-\*、brand-\* 等），不另起一套色板。
 >
@@ -18,19 +18,19 @@
 
 | 仓库 / 子模块 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **shadcn CLI** `packages/shadcn`（v4.21.0） | 代码分发器：`init/add/apply/preset/migrate/eject/view/search/docs/info/mcp/build/registry` | **adopt**，作为 devDependency。只在搭建和升级时运行，生成的组件源码提交进仓库 | V0.1 | ★★★★★ |
-| **registry `bases/base`**（Base UI 1.x） | 63 个 UI item（其中 61 个有源码文件）、16 个 sidebar block、dashboard-01、hooks 和 lib | **adopt**，组件源码复制进 `apps/web/src/components/ui/`，此后由本项目维护 | V0.1 起 | ★★★★★ |
-| style **`mira`**（Made for compact interfaces） | 8 种视觉风格之一：按钮 `h-7`、字号 `text-xs/relaxed`，适合高密度控制台 | **adopt**；备选是 `nova`（Reduced padding） | V0.1 | ★★★★★ |
-| registry `bases/radix` | Radix 版本，API 用 `asChild` | **reference**（社区 registry 的组件多数基于 Radix，需要移植时参考） | — | ★★★ |
-| registry `bases/aria`（React Aria） | 缺少 `menubar`、`navigation-menu`、`toast` | **skip** | — | ★★ |
-| `packages/shadcn/src/tailwind.css` | `data-open/closed/checked/...` 自定义 variant，外加 `scroll-fade`、`shimmer` 工具类 | **adopt**，可以通过 `@import "shadcn/tailwind.css"` 引入，也可以 `eject` 内联 | V0.1 | ★★★★★ |
-| `styles/style-*.css` 加 `create-style-map.ts`、`transform-style-map.ts` | 把作者源码里的 `cn-*` 占位类展开成 Tailwind 类的构建管线 | **reference**；离线第三级方案下 **port**（§3.9） | 仅离线兜底 | ★★★ |
-| blocks `sidebar-07/15/16`、`dashboard-01` | 图标折叠侧栏、左右双侧栏、带顶栏的布局、仪表盘 | **port** 布局骨架，页面内容重写 | V0.1 | ★★★★ |
-| `chart`（Recharts 3.8.0） | shadcn 图表容器 | **skip**：图表以 lieflat 为准，d01 已决定用 SVG 与 CPU canvas | — | ☆ |
-| Chat 原语：`message-scroller/message/bubble/marker/attachment/questionnaire` 与 `@shadcn/react` | 2026 年新增的对话 UI 原语 | **adopt**（V1.0 ANet 协作日志和任务协商），V0.x 不安装 | V1.0 | ★★★★ |
-| `@shadcn/helpers`（`createChat`） | 用脚本编排 AI SDK 流式对话的 mock | **reference**：用来 mock ANet 协商流程、写 E2E 用例 | V1.0 | ★★ |
-| `skills/shadcn/`（SKILL.md 与 rules） | 官方编码规范：组合方式、表单、图标、base 与 radix 的差异 | **adopt** 为本项目的 UI lint 规则 | V0.1 | ★★★★ |
-| `templates/vite-app` | Vite 8 + React 19 + TS 6 模板，带 `ThemeProvider` | **port**：`ThemeProvider` 必须改（§6 第 1 条） | V0.1 | ★★★★ |
+| **shadcn CLI** `packages/shadcn`（v4.21.0） | 代码分发器：`init/add/apply/preset/migrate/eject/view/search/docs/info/mcp/build/registry` | **adopt**，作为 devDependency。只在搭建和升级时运行，生成的组件源码提交进仓库 | V0.1 | 5/5 |
+| **registry `bases/base`**（Base UI 1.x） | 63 个 UI item（其中 61 个有源码文件）、16 个 sidebar block、dashboard-01、hooks 和 lib | **adopt**，组件源码复制进 `apps/web/src/components/ui/`，此后由本项目维护 | V0.1 起 | 5/5 |
+| style **`mira`**（Made for compact interfaces） | 8 种视觉风格之一：按钮 `h-7`、字号 `text-xs/relaxed`，适合高密度控制台 | **adopt**；备选是 `nova`（Reduced padding） | V0.1 | 5/5 |
+| registry `bases/radix` | Radix 版本，API 用 `asChild` | **reference**（社区 registry 的组件多数基于 Radix，需要移植时参考） | — | 3/5 |
+| registry `bases/aria`（React Aria） | 缺少 `menubar`、`navigation-menu`、`toast` | **skip** | — | 2/5 |
+| `packages/shadcn/src/tailwind.css` | `data-open/closed/checked/...` 自定义 variant，外加 `scroll-fade`、`shimmer` 工具类 | **adopt**，可以通过 `@import "shadcn/tailwind.css"` 引入，也可以 `eject` 内联 | V0.1 | 5/5 |
+| `styles/style-*.css` 加 `create-style-map.ts`、`transform-style-map.ts` | 把作者源码里的 `cn-*` 占位类展开成 Tailwind 类的构建管线 | **reference**；离线第三级方案下 **port**（§3.9） | 仅离线兜底 | 3/5 |
+| blocks `sidebar-07/15/16`、`dashboard-01` | 图标折叠侧栏、左右双侧栏、带顶栏的布局、仪表盘 | **port** 布局骨架，页面内容重写 | V0.1 | 4/5 |
+| `chart`（Recharts 3.8.0） | shadcn 图表容器 | **skip**：图表以 lieflat 为准，d01 已决定用 SVG 与 CPU canvas | — | 0/5 |
+| Chat 原语：`message-scroller/message/bubble/marker/attachment/questionnaire` 与 `@shadcn/react` | 2026 年新增的对话 UI 原语 | **adopt**（V1.0 ANet 协作日志和任务协商），V0.x 不安装 | V1.0 | 4/5 |
+| `@shadcn/helpers`（`createChat`） | 用脚本编排 AI SDK 流式对话的 mock | **reference**：用来 mock ANet 协商流程、写 E2E 用例 | V1.0 | 2/5 |
+| `skills/shadcn/`（SKILL.md 与 rules） | 官方编码规范：组合方式、表单、图标、base 与 radix 的差异 | **adopt** 为本项目的 UI lint 规则 | V0.1 | 4/5 |
+| `templates/vite-app` | Vite 8 + React 19 + TS 6 模板，带 `ThemeProvider` | **port**：`ThemeProvider` 必须改（§6 第 1 条） | V0.1 | 4/5 |
 
 **实现者先读这 12 条（每条都有源码或实测依据）：**
 
@@ -39,7 +39,7 @@
 3. **Vite 安装全链路已在本机跑通**（§3.1）。有三个坑：① 模板的 `ThemeProvider` 把**裸 `d` 键**绑定为切换明暗，会和 WASD 飞行控制冲突；② `scroll-area.tsx` 在 `noUnusedLocals` 下编译报错；③ 对 Vite 项目，block 的 `page.tsx` 不会写入，布局要自己在 `App.tsx` 里组装。
 4. **离线分三级**（§3.9）。L1：联网装一次，把组件源码提交进仓库，以后不再依赖 registry（shadcn 的设计初衷就是如此）。L2：本地静态镜像加 `REGISTRY_URL=http://127.0.0.1:8765/r`（已实测；需要镜像 `r/colors/neutral.json`，`/init` 保存为无扩展名的文件）。L3：直接 vendoring 作者源码加 style CSS，在运行时用 `.style-mira` 作用域（官网自己的 `apps/v4/app/style-registry.css` 就是这么做的）。npm 依赖需要另外准备离线缓存。
 5. **动效用 Base UI 的 `data-starting-style` / `data-ending-style` 对接 transitions.dev。** Base UI 官方推荐 CSS transition（可以中途平滑取消），transitions.dev 的 `.t-*` 前置态、`.is-open`、`.is-closing` 正好一一对应（§3.6）。弹层里 tw-animate-css 的 keyframe 类（`data-open:animate-in zoom-in-95 …`）要用 codemod 去掉，换成 `motion.css` 适配层。
-6. **图标：`components.json` 的 `iconLibrary` 保持 `lucide`，morphicons 使用 `lucide` 数据包。** 两者来自同一套 Lucide 图形，版本要对齐（`lucide-react@1.48` 对应 `lucide@1.48`）。应用层统一用 `<AppIcon>`（内部是 MorphIcon），shadcn 组件内部的静态 chevron 和 check 保留 `lucide-react`。严禁 emoji，也严禁把 `▲ ● ↑` 之类 Unicode 字形当图标用。
+6. **图标：`components.json` 的 `iconLibrary` 保持 `lucide`，morphicons 使用 `lucide` 数据包。** 两者来自同一套 Lucide 图形，版本要对齐（`lucide-react@1.48` 对应 `lucide@1.48`）。应用层统一用 `<AppIcon>`（内部是 MorphIcon），shadcn 组件内部的静态 chevron 和 check 保留 `lucide-react`。严禁 emoji，也严禁把 `U+25B2 U+25CF ↑` 之类 Unicode 字形当图标用。
 7. **图表：不安装 shadcn `chart`（它会引入 Recharts）。** 图表外壳用 shadcn `Card`，里面是 d01 的 LfChart（SVG 或 CPU canvas）。表格用 shadcn `Table` 加 lieflat `table.log` 皮肤（d01 §3.9）。Data Table 用 **TanStack Table v9 的新 API**（`tableFeatures()`、`useTable`、`createColumnHelper<typeof features, T>()`，见 `dashboard-01/components/data-table.tsx`）。
 8. **布局组合 sidebar-16、sidebar-07、sidebar-15 三个 block，中间用 Resizable v4。** 左侧 `Sidebar collapsible="icon"`，右侧 `Sidebar collapsible="none"`，宽度由自己控制，中间用 `ResizablePanelGroup orientation="vertical"` 分成视口和底部 Dock。两侧栏共用一个 `SidebarProvider`，也共用 `--sidebar-width`（§6 第 6 条）。
 9. **UI 层绝不拖累 3D 帧率。** 浮在 canvas 上方的元素一律不用 `backdrop-blur`，需要从 dialog、sheet 遮罩里删掉 `supports-backdrop-filter:backdrop-blur-xs`，menuColor 也不用 translucent。遥测经过 store 节流到 4–10 Hz 再给 React。侧栏折叠时有 200 ms 的 `transition-[left,right,width]`，其间对 canvas resize 做防抖（§3.10）。
@@ -54,7 +54,7 @@
 | 项 | 内容 |
 |---|---|
 | 地址 | https://github.com/shadcn-ui/ui（作者 shadcn，现属 Vercel 生态） |
-| 快照 | `984f435`，2026-09-28；CLI 4.21.0；`@shadcn/react` 0.3.1；★124743。2026 年全年高频发版：CHANGELOG 中 4.7→4.21 连续 minor，包括 GitHub registry、preset、apply、eject、`migrate cn`、React Aria base、Base UI Toast、scroll-fade 与 shimmer 工具类、SOCKS 代理 |
+| 快照 | `984f435`，2026-09-28；CLI 4.21.0；`@shadcn/react` 0.3.1；124743 stars。2026 年全年高频发版：CHANGELOG 中 4.7→4.21 连续 minor，包括 GitHub registry、preset、apply、eject、`migrate cn`、React Aria base、Base UI Toast、scroll-fade 与 shimmer 工具类、SOCKS 代理 |
 | 形态 | pnpm + turbo monorepo：`apps/v4`（Next 16 官网，也是 registry 源），`packages/shadcn`（CLI），`packages/react`（`@shadcn/react`，无样式原语），`packages/helpers`（`@shadcn/helpers`，AI SDK 对话 mock），`packages/tests`，`templates/*`（10 个脚手架模板），`skills/shadcn`（Agent Skill） |
 | 分发模型 | **不是 npm 组件库**：CLI 从 registry（`https://ui.shadcn.com/r/styles/{style}/{name}.json`）拉取 JSON，里面带源码字符串，经 transformer 处理后写进用户项目。运行时依赖只有 `@base-ui/react`、`cn`、`class-variance-authority`、`lucide-react`、`tw-animate-css`，以及个别组件自己的依赖 |
 | 许可 | MIT |
@@ -533,7 +533,7 @@ export function AppIcon({ icon, label, ...p }: { icon: IconNode; label?: string 
 
 - **必须 morph 的状态切换**：播放和暂停；侧栏展开和折叠（`PanelLeftOpen` 与 `PanelLeftClose`）；图层可见（`Eye` 与 `EyeOff`）；锁定跟随（`Lock` 与 `LockOpen`）；连接状态（`Wifi` 与 `WifiOff`）；主题（`Sun` 与 `Moon`）；排序（`ArrowUp` 与 `ArrowDown`）；天气预设（`Sun`、`CloudRain`、`CloudFog`、`Wind`）；Dock 折叠（`ChevronDown` 与 `ChevronUp`）。
 - **shadcn 组件内部的图标**（chevron、check、X、PanelLeft 等，由安装时的 transformer 写入的 `lucide-react` 组件）保持静态，不需要改动。如果要求 100% 统一走 morphicons，可以写一个 ts-morph 或正则 codemod，把 `import { XIcon } from "lucide-react"` 改为 `import { X } from "lucide"`，再把 `<XIcon …/>` 改为 `<AppIcon icon={X} …/>`。这个操作放到 V0.3，收益不大。
-- **禁止项**：emoji；Unicode 字形图标（`▲ ▼ ● ○ ↑ ←`，lieflat 模板里有，d01 已经列出）；把图标名字符串映射到组件（违反 `rules/icons.md`，还会破坏 tree-shaking）。
+- **禁止项**：emoji；Unicode 字形图标（`U+25B2 U+25BC U+25CF U+25CB ↑ ←`，lieflat 模板里有，d01 已经列出）；把图标名字符串映射到组件（违反 `rules/icons.md`，还会破坏 tree-shaking）。
 - **图标尺寸**：Button、MenuItem、SidebarMenuButton 内部的图标不加 `size-*`，由组件 CSS 控制（mira 下为 `size-4` 或 `size-3.5`）。独立使用时用 `size` 属性，统一为 14 或 16 px。
 
 ### 3.8 lieflat 图表与表格整合（交付物 3 之三）

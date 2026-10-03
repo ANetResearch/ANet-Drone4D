@@ -3,13 +3,13 @@
 > 研究单元：r27 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §3–4（前后端分离）、§28（DroneState）、§29（多机）、§31–32（ANet）、§33（Backend 栈）、§36（前后端实时通信）、§37（更新频率）、§39（Timeline）、§40（Drone Interaction）
 >
 > 仓库快照（路径相对 `refs/backend/`，只读）：
-> - `rosbridge_suite` @ `aa9a7a3`（2026-08-17，★1246）。协议规范 v2.1.0，包版本 4.2.1。主干是 `ros2` 分支（rclpy + tornado）。ROS1 分支 `ros1`（0.11.18）最后一次提交在 2025-09-10，之后只做维护。
-> - `ws-protocol` @ `f3b4135`（2025-07-20，★150）。**GitHub 已 archived**，README 声明"库已弃用，规范已过时，请迁移到 foxglove-sdk"。
-> - `zenoh` @ `9fcd9cb`（2026-09-15，★3216，1.10.1，Rust workspace）。
+> - `rosbridge_suite` @ `aa9a7a3`（2026-08-17，1246 stars）。协议规范 v2.1.0，包版本 4.2.1。主干是 `ros2` 分支（rclpy + tornado）。ROS1 分支 `ros1`（0.11.18）最后一次提交在 2025-09-10，之后只做维护。
+> - `ws-protocol` @ `f3b4135`（2025-07-20，150 stars）。**GitHub 已 archived**，README 声明"库已弃用，规范已过时，请迁移到 foxglove-sdk"。
+> - `zenoh` @ `9fcd9cb`（2026-09-15，3216 stars，1.10.1，Rust workspace）。
 >
 > 另外读了两个仓库（放在 `.cache/research/`，只读）：
-> - **eclipse-zenoh/zenoh-ts** @ `3603f28`（2026-09-15，★49，1.10.1）：浏览器接入 zenoh 的 TS 库，配套 `zenoh-plugin-remote-api`。本单元为读它单独 clone 到 `.cache/research/r27/zenoh-ts/`。
-> - **foxglove/foxglove-sdk** @ `dcbc667`（2026-09-24，★311）：r15 已 clone 到 `.cache/research/r15/foxglove-sdk/`。ws-protocol 在这里演进出 **v2** 和"控制/数据平面分离"。
+> - **eclipse-zenoh/zenoh-ts** @ `3603f28`（2026-09-15，49 stars，1.10.1）：浏览器接入 zenoh 的 TS 库，配套 `zenoh-plugin-remote-api`。本单元为读它单独 clone 到 `.cache/research/r27/zenoh-ts/`。
+> - **foxglove/foxglove-sdk** @ `dcbc667`（2026-09-24，311 stars）：r15 已 clone 到 `.cache/research/r15/foxglove-sdk/`。ws-protocol 在这里演进出 **v2** 和"控制/数据平面分离"。
 >
 > 本机实测产物在 `.cache/research/r27/`。测试机是 Xeon E5-2603 v4 @1.7 GHz（无睿频，偏保守），Python 3.12，Node 22.12，Chromium 151 headless。
 >
@@ -34,10 +34,10 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **Zenoh**（eclipse-zenoh/zenoh，★3216，1.10.1，2026-09 活跃） | 零开销 pub/sub/query/存储统一总线。Rust 核心，提供 Python/C/TS 绑定。8 级优先级、拥塞控制（Drop/Block）、express、SHM、liveliness、ACL/降采样拦截器 | **reference（V0.1 起）**：key expression 命名语法；Priority/CongestionControl/express 语义；`zenoh-ext` AdvancedPublisher/Subscriber 的"序号 + 心跳 + 缓存 + `_sn=` 区间补发"算法。这些直接用于我们 WS 协议的 topic 命名、QoS 分级和 seek backfill。<br>**adopt（V0.5+）**：`eclipse-zenoh` Python 包作为 Gateway、仿真 worker、PX4/ROS2（rmw_zenoh）和 ANet agent 之间的**内部总线**；liveliness token 做在线状态与能力发现。<br>**skip**：浏览器直连 zenoh（zenoh-ts/remote-api） | V0.1 ref；V0.5 adopt；V1.0 ANet | ★★★★★ |
-| **Foxglove ws-protocol**（★150，已归档）→ **foxglove-sdk**（★311，活跃） | 机器人可视化的 WebSocket 协议 v1：JSON 控制消息 + 二进制数据帧，包括 channel 广告（含 schema）、按 channel 订阅、time、services、parameters、assets。SDK 中已演进出 v2 和控制/数据平面分离 | **port（MVP）**：`serverInfo` 的 capabilities/sessionId、`advertise`（channel + schema）、`subscribe`/`unsubscribe`、二进制 MessageData 带时间戳、`time`、`status`/`removeStatus`、PlaybackControl/PlaybackState 语义，以及"首个订阅者出现才开始生产"的懒生产模式。<br>**port**：foxglove-sdk 的**控制平面满则断开、数据平面满则丢最旧**双队列。<br>**adopt**：foxglove-sdk 做调试旁路和 MCAP 录制（r15 已定）。<br>**skip**：把 Foxglove 协议当作主协议（规范自称过时，v2 仍在变；13/17 B 头部导致 payload 不对齐） | V0.2 | ★★★★☆ |
-| **rosbridge_suite**（★1246，4.2.1，ros2 分支 2026-08 活跃；ros1 分支 2025-09 后仅维护） | ROS 与 JSON/CBOR over WebSocket 的通用桥：`op` 信封；publish/subscribe/call_service/action；throttle/queue/fragment/png/cbor/cbor-raw；glob 白名单 | **adopt（V0.5–V0.6）**：P600 的 Prometheus 是 ROS1 Noetic，只能在机载或地面端跑 `rosbridge_server`（ros1 分支）。Gateway 用**自研 asyncio 客户端**（websockets + cbor2）订阅：`compression:"cbor"`、`throttle_rate:T`、`queue_length:1`。<br>**port**：`id` 关联一次交互、glob 白名单 ACL、OutgoingMessage 编码缓存、CBOR typed-array tag。<br>**skip**：作为浏览器主协议（JSON 路径比二进制慢约 470 倍；`queue_length=0` 时节流为 leading-edge，会丢最后一帧）；**不要用 roslibpy**（不支持二进制和 CBOR，并依赖 Twisted） | V0.5 adapter | ★★★☆☆ |
-| zenoh-ts / remote-api（额外 clone，★49） | 浏览器经 zenohd 的 remote-api 插件（WebSocket + ZSerializer 二进制）使用 zenoh | **reference**：它反证了"浏览器直连总线"不可取（每个 socket 一个无界发送队列、每个 tab 一个 zenoh session、没有限速和兴趣管理）。MVP 阶段 **skip** | — | ★★☆☆☆ |
+| **Zenoh**（eclipse-zenoh/zenoh，3216 stars，1.10.1，2026-09 活跃） | 零开销 pub/sub/query/存储统一总线。Rust 核心，提供 Python/C/TS 绑定。8 级优先级、拥塞控制（Drop/Block）、express、SHM、liveliness、ACL/降采样拦截器 | **reference（V0.1 起）**：key expression 命名语法；Priority/CongestionControl/express 语义；`zenoh-ext` AdvancedPublisher/Subscriber 的"序号 + 心跳 + 缓存 + `_sn=` 区间补发"算法。这些直接用于我们 WS 协议的 topic 命名、QoS 分级和 seek backfill。<br>**adopt（V0.5+）**：`eclipse-zenoh` Python 包作为 Gateway、仿真 worker、PX4/ROS2（rmw_zenoh）和 ANet agent 之间的**内部总线**；liveliness token 做在线状态与能力发现。<br>**skip**：浏览器直连 zenoh（zenoh-ts/remote-api） | V0.1 ref；V0.5 adopt；V1.0 ANet | 5/5 |
+| **Foxglove ws-protocol**（150 stars，已归档）→ **foxglove-sdk**（311 stars，活跃） | 机器人可视化的 WebSocket 协议 v1：JSON 控制消息 + 二进制数据帧，包括 channel 广告（含 schema）、按 channel 订阅、time、services、parameters、assets。SDK 中已演进出 v2 和控制/数据平面分离 | **port（MVP）**：`serverInfo` 的 capabilities/sessionId、`advertise`（channel + schema）、`subscribe`/`unsubscribe`、二进制 MessageData 带时间戳、`time`、`status`/`removeStatus`、PlaybackControl/PlaybackState 语义，以及"首个订阅者出现才开始生产"的懒生产模式。<br>**port**：foxglove-sdk 的**控制平面满则断开、数据平面满则丢最旧**双队列。<br>**adopt**：foxglove-sdk 做调试旁路和 MCAP 录制（r15 已定）。<br>**skip**：把 Foxglove 协议当作主协议（规范自称过时，v2 仍在变；13/17 B 头部导致 payload 不对齐） | V0.2 | 4/5 |
+| **rosbridge_suite**（1246 stars，4.2.1，ros2 分支 2026-08 活跃；ros1 分支 2025-09 后仅维护） | ROS 与 JSON/CBOR over WebSocket 的通用桥：`op` 信封；publish/subscribe/call_service/action；throttle/queue/fragment/png/cbor/cbor-raw；glob 白名单 | **adopt（V0.5–V0.6）**：P600 的 Prometheus 是 ROS1 Noetic，只能在机载或地面端跑 `rosbridge_server`（ros1 分支）。Gateway 用**自研 asyncio 客户端**（websockets + cbor2）订阅：`compression:"cbor"`、`throttle_rate:T`、`queue_length:1`。<br>**port**：`id` 关联一次交互、glob 白名单 ACL、OutgoingMessage 编码缓存、CBOR typed-array tag。<br>**skip**：作为浏览器主协议（JSON 路径比二进制慢约 470 倍；`queue_length=0` 时节流为 leading-edge，会丢最后一帧）；**不要用 roslibpy**（不支持二进制和 CBOR，并依赖 Twisted） | V0.5 adapter | 3/5 |
+| zenoh-ts / remote-api（额外 clone，49 stars） | 浏览器经 zenohd 的 remote-api 插件（WebSocket + ZSerializer 二进制）使用 zenoh | **reference**：它反证了"浏览器直连总线"不可取（每个 socket 一个无界发送队列、每个 tab 一个 zenoh session、没有限速和兴趣管理）。MVP 阶段 **skip** | — | 2/5 |
 
 **关键结论（实现者先读这几条）**
 
@@ -137,7 +137,7 @@ rosbridge_suite/
 │   │   ├── outgoing_message.py            # OutgoingMessage：同一条 ROS 消息的 JSON/CBOR 编码缓存
 │   │   ├── cbor_conversion.py             # typed-array tag（69..86）打包
 │   │   ├── pngcompression.py              # JSON→RGB PNG→base64
-│   │   ├── message_conversion.py          # ROS msg ↔ dict（NaN/Inf→null，uint8[]→base64）
+│   │   ├── message_conversion.py          # ROS msg <-> dict（NaN/Inf→null，uint8[]→base64）
 │   │   ├── publishers.py                  # MultiPublisher + unregister_timeout
 │   │   ├── services.py                    # ServiceCaller(Thread)，每次调用新建 client
 │   │   └── qos_extraction.py              # 2.1.0 新增的 qos 对象 → rclpy QoSProfile
@@ -440,13 +440,13 @@ zenoh/
 │  RtClient facade (subs ref-count, clock)  │       ││    ├─ data single-slot mailbox ─────────────┤→ websocket │
 │                                           │       ││    └─ subs{rate, next_due, last_seq}, credit, budget     │
 │ Web Worker (rt.worker.ts)                 │       ││  Scheduler (tick 60 Hz, rate classes, encode-once cache) │
-│  WebSocket('anet.rt.v1') ◄════════════════╪═══════╪╪══ Channel registry + latest-value store + event ring     │
-│  decode BATCH → per-channel SoA buffers   │◄──────┘│  Sources: LiveSimSource(mock) | McapSource | Px4Source   │
+│  WebSocket('anet.rt.v1') <════════════════╪═══════╪╪══ Channel registry + latest-value store + event ring     │
+│  decode BATCH → per-channel SoA buffers   │<──────┘│  Sources: LiveSimSource(mock) | McapSource | Px4Source   │
 │  ack(frame_seq) after main consumed       │        │  Recorder (MCAP, native rate)  | Foxglove debug bridge   │
 └───────────────────────────────────────────┘        └───────────────┬──────────────────────────────────────────┘
-              ▲  HTTP/2 GET (octree nodes, wind grid, MCAP, REST)      │ in-proc (MVP)  /  Zenoh bus (V0.5+)
+              ^  HTTP/2 GET (octree nodes, wind grid, MCAP, REST)      │ in-proc (MVP)  /  Zenoh bus (V0.5+)
               └────────────────────────────── FastAPI REST ────────────┤
-                                                                       ▼
+                                                                       v
                      Sim workers (numpy mock / PX4 SITL×N via MAVSDK) · PX4/ROS2 (rmw_zenoh) · P600 ROS1 (rosbridge)
                      · Environment service · ANet agents (liveliness tokens, capability queryables)
 ```
@@ -899,7 +899,7 @@ apps/api/rt/
 ├── recorder.py      # MCAP 写入（V0.2）
 ├── rpc.py           # call 路由、幂等缓存、权限与锁
 ├── bridges/foxglove_debug.py   # V0.2（r15）
-├── bridges/zenoh_bus.py        # V0.5：总线 ↔ ChannelRegistry
+├── bridges/zenoh_bus.py        # V0.5：总线 <-> ChannelRegistry
 ├── bridges/rosbridge_client.py # V0.5：P600 ROS1
 └── ws.py            # @app.websocket("/api/rt")
 ```
@@ -962,14 +962,14 @@ telemetry-ring.ts   # 每架飞机的快照环 {t_sim, p, q, v}（r14 §3.6，�
 
 | key（相对） | 发布者 | 优先级 | 拥塞控制 | express | 其他 |
 |---|---|---|---|---|---|
-| `uav/{id}/cmd/**`（queryable） | 各机 controller | InteractiveHigh(2) | Block | ✓ | 用 query/reply 表达 RPC；reply 给出准入结果 |
-| `uav/{id}/setpoint` | Gateway | RealTime(1) | Drop | ✓ | 遥操作 |
-| `uav/{id}/state` | 仿真 worker / PX4 适配器 | Data(5) | Drop | ✗ | 50–100 Hz；Gateway 用 `RingChannel(1)` 接收 |
-| `swarm/state` | 仿真 worker | Data(5) | Drop | ✗ | 可放 SHM（≥ 3072 B 时自动走 SHM） |
-| `uav/{id}/sensor/**/scan` | 传感器仿真 | Background(7) | Drop | ✗ | SHM；真机链路加 `low_pass_filter` 限制大小 |
-| `env/**` | 环境服务 | DataLow(6) | Drop | ✗ | AdvancedPublisher `cache(max_samples=1)`，late joiner 可立刻拿到当前天气 |
-| `event/**` | 各服务 | InteractiveLow(3) | Block | ✗ | AdvancedPublisher：seq、`cache(100)`、`sample_miss_detection(heartbeat 1 s)`；Gateway 端用 AdvancedSubscriber 做 recovery |
-| `world/query/{raycast,height,los}`（queryable） | World Service | InteractiveHigh(2) | Block | ✓ | 空间查询 RPC |
+| `uav/{id}/cmd/**`（queryable） | 各机 controller | InteractiveHigh(2) | Block | yes | 用 query/reply 表达 RPC；reply 给出准入结果 |
+| `uav/{id}/setpoint` | Gateway | RealTime(1) | Drop | yes | 遥操作 |
+| `uav/{id}/state` | 仿真 worker / PX4 适配器 | Data(5) | Drop | no | 50–100 Hz；Gateway 用 `RingChannel(1)` 接收 |
+| `swarm/state` | 仿真 worker | Data(5) | Drop | no | 可放 SHM（≥ 3072 B 时自动走 SHM） |
+| `uav/{id}/sensor/**/scan` | 传感器仿真 | Background(7) | Drop | no | SHM；真机链路加 `low_pass_filter` 限制大小 |
+| `env/**` | 环境服务 | DataLow(6) | Drop | no | AdvancedPublisher `cache(max_samples=1)`，late joiner 可立刻拿到当前天气 |
+| `event/**` | 各服务 | InteractiveLow(3) | Block | no | AdvancedPublisher：seq、`cache(100)`、`sample_miss_detection(heartbeat 1 s)`；Gateway 端用 AdvancedSubscriber 做 recovery |
+| `world/query/{raycast,height,los}`（queryable） | World Service | InteractiveHigh(2) | Block | yes | 空间查询 RPC |
 | `agent/{id}/alive`（liveliness token） | 每个 agent/drone | — | — | — | 在线状态：graceful 0.5 ms，kill 6–8 ms，静默断链看 lease |
 | `agent/{id}/capability`（queryable） | 每个 agent | InteractiveLow(3) | Block | — | ANet 能力描述（`thermal.imaging`、`rgb.zoom`…），用 `get("agent/*/capability")` 一次性发现全部 |
 
@@ -1106,27 +1106,27 @@ class RosbridgeClient:
 | 维度 | rosbridge_suite | Foxglove ws-protocol → foxglove-sdk | Zenoh |
 |---|---|---|---|
 | Star / 2026 活跃度 | 1246 / 活跃（ros2 分支）；ros1 分支停更 | 150（已归档）/ SDK 311，活跃 | **3216 / 很活跃**（每月发版，rmw_zenoh） |
-| 抽象层级 | ROS 图 ↔ Web（通用桥） | 可视化工具 ↔ 数据源（Web 协议） | 进程、主机、设备之间的数据总线 |
+| 抽象层级 | ROS 图 <-> Web（通用桥） | 可视化工具 <-> 数据源（Web 协议） | 进程、主机、设备之间的数据总线 |
 | 线格式 | JSON / CBOR / PNG；无统一时间戳 | JSON 控制 + 二进制数据（带 ns 时间戳），schema 由 channel 声明 | 紧凑二进制（varint、批处理），负载任意 |
 | 订阅与降采样 | 按 topic 的 throttle/queue（leading-edge 或 FIFO），每订阅一个线程 | 没有频率控制（全速推送） | 拦截器降采样（按规则、leading-edge）+ RingChannel |
 | 背压 | 读写各一个 1000 条的有界队列，满了就丢（不区分类型） | v1 实现基本没有（C++ 版 10 MB 丢弃）；SDK 有控制/数据分离 | 8 级优先级队列，Drop/Block，SHM |
 | 时间 | 无（`cbor-raw` 附带 ROS time） | `time` 消息 + 每帧 ns 时间戳；v2 有 Playback | HLC 时间戳（可选） |
 | 回放 | 无 | PlaybackControl（SDK）+ MCAP 生态 | 存储插件 + 查询（没有播放语义） |
-| 浏览器直连 | ✓（roslibjs） | ✓（Foxglove、Lichtblick） | 需要 zenohd + remote-api（zenoh-ts） |
+| 浏览器直连 | yes（roslibjs） | yes（Foxglove、Lichtblick） | 需要 zenohd + remote-api（zenoh-ts） |
 | 与本项目契合 | 只作 P600 ROS1 适配 | **协议设计蓝本** + 调试工具 | **内部总线** + ANet 发现 |
 | 构建与部署难度 | 需要 ROS 环境（docker） | pip/npm 零成本 | pip 零成本；zenohd 可选 |
 
 **推荐排序**（综合 star、2026 活跃度和契合度）：
 
-1. **Zenoh**（★★★★★）：star 最多、最活跃，而且是 ROS2 的一等 RMW，承担 V0.5 以后的总线与 ANet 发现，是长期基础设施。它的 key expression 命名从 V0.1 起就作为全系统 topic 规范。
-2. **Foxglove ws-protocol / foxglove-sdk**（★★★★☆）：与 Realtime Gateway 最直接相关的"设计蓝本"。概念与 v2 语义逐项移植，SDK 作为调试旁路与录制工具。仓库本身已归档，所以只借鉴，不依赖。
-3. **rosbridge_suite**（★★★☆☆）：只在"接入 ROS1 的 P600 真机或 Prometheus SITL"这一件事上不可替代。协议里值得借鉴的是 `id` 交互语义、glob ACL、编码缓存和 CBOR typed array；它的 Web 协议本身不适合作为我们的主协议。
+1. **Zenoh**（5/5）：star 最多、最活跃，而且是 ROS2 的一等 RMW，承担 V0.5 以后的总线与 ANet 发现，是长期基础设施。它的 key expression 命名从 V0.1 起就作为全系统 topic 规范。
+2. **Foxglove ws-protocol / foxglove-sdk**（4/5）：与 Realtime Gateway 最直接相关的"设计蓝本"。概念与 v2 语义逐项移植，SDK 作为调试旁路与录制工具。仓库本身已归档，所以只借鉴，不依赖。
+3. **rosbridge_suite**（3/5）：只在"接入 ROS1 的 P600 真机或 Prometheus SITL"这一件事上不可替代。协议里值得借鉴的是 `id` 交互语义、glob ACL、编码缓存和 CBOR typed array；它的 Web 协议本身不适合作为我们的主协议。
 
 **按任务选型**：
 
 | 任务 | 选择 |
 |---|---|
-| 浏览器 ↔ 服务端实时数据 | **自研 `anet.rt.v1`**（本文），运行在 FastAPI Gateway 上 |
+| 浏览器 <-> 服务端实时数据 | **自研 `anet.rt.v1`**（本文），运行在 FastAPI Gateway 上 |
 | 服务端内部多进程或多机 | MVP 同进程；V0.5 起用 **zenoh** |
 | 接 PX4 SITL 或真机 | MAVSDK（r21）→ Gateway；如果改走 ROS2，则 rmw_zenoh → zenoh 总线 |
 | 接 P600 Prometheus（ROS1） | **rosbridge_server（ros1 分支）+ 自研 CBOR 客户端** |

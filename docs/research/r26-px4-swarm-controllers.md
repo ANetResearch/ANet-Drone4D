@@ -3,8 +3,8 @@
 > 研究单元：r26 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §28（DroneState）、§29（多无人机架构）、§30（控制模式：Area Coverage / Formation / Swarm）、§36–§37（实时通信与频率）、§43（MVP）、§49（V0.6 Multi-UAV）
 >
 > 仓库快照（本地只读 clone）：
-> - `refs/swarm/PX4_Swarm_Controller` @ `02c3995`（2024-03-02，★97，ROS2 Humble + PX4 uXRCE-DDS + Gazebo Classic，C++17/Eigen，约 1.4k 行 C++ + 0.2k 行 Python）
-> - `refs/swarm/PX4-Aerial-Swarm-Reconstruction` @ `c9a0685`（2024-12-11，★16，ROS2 Humble + Gazebo Classic，约 0.9k 行 C++（含测试）+ 0.1k 行 Python；自带 227 条 `px4_msgs` 快照）
+> - `refs/swarm/PX4_Swarm_Controller` @ `02c3995`（2024-03-02，97 stars，ROS2 Humble + PX4 uXRCE-DDS + Gazebo Classic，C++17/Eigen，约 1.4k 行 C++ + 0.2k 行 Python）
+> - `refs/swarm/PX4-Aerial-Swarm-Reconstruction` @ `c9a0685`（2024-12-11，16 stars，ROS2 Humble + Gazebo Classic，约 0.9k 行 C++（含测试）+ 0.1k 行 Python；自带 227 条 `px4_msgs` 快照）
 >
 > 本机实测产物（`.cache/research/r26/`，只依赖项目 venv 中的 numpy 2.5.3，无 scipy/shapely）：
 > - `r26_formation.py` / `_out.json`：编队槽位生成器；Hungarian（e-maxx 向量化实现，已与穷举对拍）；三种控制律（A=仓库原律移植、B=虚拟结构+前馈、C=B+一致性+分离）在统一的“类 PX4 被控对象”上的对比；原仓库 `dt` 计算缺陷的复现。
@@ -26,11 +26,11 @@
 
 | 仓库 / 资产 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **PX4_Swarm_Controller**（artastier，★97，2024-03 后无提交） | ROS2 + PX4 Offboard 的多机领航-跟随框架。实现 Hou & Fantoni（hal-01180491）的 weighted topology 分布式编队：距离邻接图、PrC（Priority Coefficient）权重、相对位置/速度一致性、逐轴 PID 输出加速度 | **port（算法，已修 bug）**：邻接图 + PrC 权重（改写为 BFS 跳数）、一致性项、NaN 型 setpoint 语义、JSON 驱动的 launch 组织方式。**reference**：`NearestNeighbors<T>` 三钩子模板、`sitl_multiple_run.sh -p` 位姿表。**skip**：ROS2 节点本身、Gazebo Classic 脚本 | V0.6（拓扑与一致性项）；V0.2（Offboard 生命周期语义） | ★★★☆☆ |
-| **PX4-Aerial-Swarm-Reconstruction**（UMD 课程项目，★16，2024-12） | 20 架 Iris 在 Gazebo 城市场景中按预设航点“扫街”。一个集中式 `Control` 节点带 N 组 pub/sub，全体到达后同步推进（barrier）。按 3/5/7/10 m 四个高度层分组互不冲突。**点云融合部分未完成**（README 自述 namespace 问题） | **port（概念）**：集中式多机执行器、barrier 同步策略、分组高度分层、按 spawn 偏移处理局部 NED。**reference**：Offboard 预热 50 帧再 arm 的流程、测试/CI 模板。**skip**：`grid_plan.world`、点云部分（不存在） | V0.6（执行器、同步、分层）；MVP mock 演示复用其“多机扫城”剧本 | ★★☆☆☆ |
-| **本单元补齐：虚拟结构编队 + 航向滤波 + CAPT 分配**（非仓库代码，已原型验证） | 取代律 A 作为 FormationTracker 主律：虚拟锚点 + 完整前馈（p\*, v\*, a\*）+ 二阶航向滤波 + 可选一致性和分离项；变队形用 Hungarian（平方距离）+ 同步直线插值（CAPT） | **new** | MVP mock 演示 → V0.6 正式 | ★★★★★ |
-| **本单元补齐：多机覆盖规划器**（割草机 / BCD-lite / 代价均衡连续切分 / Hungarian 分配 / DSM 高度） | 取代 PASR 手写航点表，给 Mission 模块的 `AREA_COVERAGE` 用 | **new** | MVP mock 演示 → V0.6 正式 | ★★★★★ |
-| **本单元补齐：覆盖栅格 + 点云“扫描揭示”着色** | 在不生成新点云的前提下，展示“多机扫城 → 点云逐步融合”，并与点云 LOD 联动 | **new** | MVP | ★★★★★ |
+| **PX4_Swarm_Controller**（artastier，97 stars，2024-03 后无提交） | ROS2 + PX4 Offboard 的多机领航-跟随框架。实现 Hou & Fantoni（hal-01180491）的 weighted topology 分布式编队：距离邻接图、PrC（Priority Coefficient）权重、相对位置/速度一致性、逐轴 PID 输出加速度 | **port（算法，已修 bug）**：邻接图 + PrC 权重（改写为 BFS 跳数）、一致性项、NaN 型 setpoint 语义、JSON 驱动的 launch 组织方式。**reference**：`NearestNeighbors<T>` 三钩子模板、`sitl_multiple_run.sh -p` 位姿表。**skip**：ROS2 节点本身、Gazebo Classic 脚本 | V0.6（拓扑与一致性项）；V0.2（Offboard 生命周期语义） | 3/5 |
+| **PX4-Aerial-Swarm-Reconstruction**（UMD 课程项目，16 stars，2024-12） | 20 架 Iris 在 Gazebo 城市场景中按预设航点“扫街”。一个集中式 `Control` 节点带 N 组 pub/sub，全体到达后同步推进（barrier）。按 3/5/7/10 m 四个高度层分组互不冲突。**点云融合部分未完成**（README 自述 namespace 问题） | **port（概念）**：集中式多机执行器、barrier 同步策略、分组高度分层、按 spawn 偏移处理局部 NED。**reference**：Offboard 预热 50 帧再 arm 的流程、测试/CI 模板。**skip**：`grid_plan.world`、点云部分（不存在） | V0.6（执行器、同步、分层）；MVP mock 演示复用其“多机扫城”剧本 | 2/5 |
+| **本单元补齐：虚拟结构编队 + 航向滤波 + CAPT 分配**（非仓库代码，已原型验证） | 取代律 A 作为 FormationTracker 主律：虚拟锚点 + 完整前馈（p\*, v\*, a\*）+ 二阶航向滤波 + 可选一致性和分离项；变队形用 Hungarian（平方距离）+ 同步直线插值（CAPT） | **new** | MVP mock 演示 → V0.6 正式 | 5/5 |
+| **本单元补齐：多机覆盖规划器**（割草机 / BCD-lite / 代价均衡连续切分 / Hungarian 分配 / DSM 高度） | 取代 PASR 手写航点表，给 Mission 模块的 `AREA_COVERAGE` 用 | **new** | MVP mock 演示 → V0.6 正式 | 5/5 |
+| **本单元补齐：覆盖栅格 + 点云“扫描揭示”着色** | 在不生成新点云的前提下，展示“多机扫城 → 点云逐步融合”，并与点云 LOD 联动 | **new** | MVP | 5/5 |
 
 **关键结论（实现者先读这几条）**
 
@@ -86,9 +86,9 @@
 运行时节点图（N=3，1 号为领航机）：
 
 ```text
-simulation_node.py ──gnome-terminal──► MicroXRCEAgent udp4 -p 8888
-                    └─────────────────► PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_multiple_run.sh -s iris:3 -p "x,y|x,y|x,y"
-                                           └─ px4 -i {1..N}  ⇄  gzserver（iris_N，mavlink tcp 4560+N / udp 14560+N / sysid N+1）
+simulation_node.py ──gnome-terminal──> MicroXRCEAgent udp4 -p 8888
+                    └─────────────────> PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_multiple_run.sh -s iris:3 -p "x,y|x,y|x,y"
+                                           └─ px4 -i {1..N}  <->  gzserver（iris_N，mavlink tcp 4560+N / udp 14560+N / sysid N+1）
 
 /px4_1/waypoint ──(sub) /px4_1/fmu/out/vehicle_local_position
                 ──(pub) /px4_1/fmu/in/offboard_control_mode, /px4_1/fmu/in/trajectory_setpoint   [position 模式]
@@ -119,8 +119,8 @@ simulation_node.py ──gnome-terminal──► MicroXRCEAgent udp4 -p 8888
 运行时（N=20）：
 
 ```text
-px4_multi_sim.launch.py ─► simulation_node.py ─► MicroXRCEAgent + sitl_multiple_run.sh -n 20 -p "37,-18|37,-6|…"   (world 默认 grid_plan)
-ros2 run px4_swarm_controller arm ─► ctrl::Control（单节点，10 Hz 定时器）
+px4_multi_sim.launch.py ─> simulation_node.py ─> MicroXRCEAgent + sitl_multiple_run.sh -n 20 -p "37,-18|37,-6|…"   (world 默认 grid_plan)
+ros2 run px4_swarm_controller arm ─> ctrl::Control（单节点，10 Hz 定时器）
     for i in 1..N:  pub /px4_i/fmu/in/{offboard_control_mode, trajectory_setpoint, vehicle_command}
                     sub /px4_i/fmu/out/vehicle_local_position   [QoS(10).best_effort()]
 ```
@@ -186,7 +186,7 @@ sitl_multiple_run.sh               # 覆盖 PX4 原脚本：增加 -p 位姿表
   - 算到当前航点的三维距离，以及航向误差 `|fmod(ψ − ψd + π, 2π) − π|`；
   - 两项同时低于阈值（`threshold=0.1 m`、`threshold_angle=0.4 rad`）时切到下一个航点，循环往复；
   - 然后发布 `OffboardControlMode{position=true}` 和当前 `TrajectorySetpoint`。
-- 仓库自带轨迹非常小：“圆”是 **半径 1 m 的 8 个点**，另一条是 5 m ↔ 1 m 的上下往返。这掩盖了律 A 在中高速下的问题（§3.3）。
+- 仓库自带轨迹非常小：“圆”是 **半径 1 m 的 8 个点**，另一条是 5 m <-> 1 m 的上下往返。这掩盖了律 A 在中高速下的问题（§3.3）。
 - 缺陷：`waypoint.timestamp = seconds()`（单位是秒，PX4 约定是微秒）；0.1 m 的接受半径对真实 PX4 位置控制偏严。
 
 ### 2.6 `NearestNeighbors<Neighbors>`（`include/NearestNeighbors.hpp`，模板基类）
@@ -472,12 +472,12 @@ formation_slots(shape, n, s, half_angle=35°, cols=ceil(√n), radius=None, dz_p
 ```text
 给定路径最大曲率 κ_max（= 1/R_min）、巡航速度 V，槽位 i 在编队系中的偏移 (x_i, y_i)：
   aligned 模式：
-    内侧速度  v_i = V·(1 − κ·y_i)  需 > 0         ⇒ κ_max·max|y_i| < 1（否则内侧机需要倒飞）
+    内侧速度  v_i = V·(1 − κ·y_i)  需 > 0         => κ_max·max|y_i| < 1（否则内侧机需要倒飞）
     外侧速度  V·(1 + κ·max|y_i|) ≤ v_max
     向心加速度 V²·κ·(1 + κ·max|y_i|) ≤ a_max
-    曲率突变  Δv_i = V·Δκ·|x_i|（直线进弧）       ⇒ 必须用 filtered 模式或路径做回旋线（clothoid）过渡
+    曲率突变  Δv_i = V·Δκ·|x_i|（直线进弧）       => 必须用 filtered 模式或路径做回旋线（clothoid）过渡
   filtered 模式：w_f ≤ w_fmax = min_i( a_max / (|r_i|·(ω + …)) ) 近似取 a_max / (V + max|r_i|·ω)，τψ ≥ 1 s
-  不可行 ⇒ 提示：降速 / 增大转弯半径 / 改 world-fixed 模式 / 缩小间距
+  不可行 => 提示：降速 / 增大转弯半径 / 改 world-fixed 模式 / 缩小间距
 ```
 
 ### 3.6 槽位分配与集结、变队形（CAPT）
@@ -507,7 +507,7 @@ def assemble(members_on_ground, spec, z_form):
 
 实测：
 - 停机坪 3×4（4 m）→ 圆（6 m）：按编号直连，最小间距 0.21 m；CAPT 后为 3.33 m；总路径 389.7 m → 365.8 m。
-- 5 种队形两两互变（9 机，6 m）：锚点**固定为领航机**时，grid↔circle、circle/column 相关的 4 组变换最小间距只有 0.02 m（有机体直线穿过领航机）；**虚拟锚点**时 20 组变换全部 ≥ 4.24 m。
+- 5 种队形两两互变（9 机，6 m）：锚点**固定为领航机**时，grid<->circle、circle/column 相关的 4 组变换最小间距只有 0.02 m（有机体直线穿过领航机）；**虚拟锚点**时 20 组变换全部 ≥ 4.24 m。
 - 所以：**“领航机”只是一个 UI 角色（显示和跟随相机用），控制上的锚点必须是虚拟点。** 这也让“领航机失效”变得平凡（§3.7）。
 
 ### 3.7 领航机失效、成员增减
@@ -886,7 +886,7 @@ WebSocket 新增通道：
 
 | 维度 | PX4_Swarm_Controller | PX4-Aerial-Swarm-Reconstruction |
 |---|---|---|
-| Stars / 最后提交 / 2026 活跃 | ★97 / 2024-03-02 / 无 | ★16 / 2024-12-11 / 无 |
+| Stars / 最后提交 / 2026 活跃 | 97 stars / 2024-03-02 / 无 | 16 stars / 2024-12-11 / 无 |
 | 代码规模 | 约 1.4k 行 C++（模板化、有注释）+ 0.2k 行 Python | 约 0.9k 行 C++（半数为测试）+ 0.1k 行 Python |
 | 核心算法 | 分布式领航-跟随一致性 + PrC 权重（有论文出处） | 无算法：手写航点表 + barrier + 高度分层 |
 | 架构价值 | 邻域/控制器模板分离、JSON 可插拔、每机命名空间 | 集中式单节点多机、测试与 CI 模板 |

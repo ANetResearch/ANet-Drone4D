@@ -1,7 +1,7 @@
 # d05 研究笔记：ANet（Agent Network）→ Agent Runtime 集成设计与品牌素材规范
 
 > 研究单元：d05 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §3（总体架构）、§28（DroneState）、§29–30（多机与控制模式）、§31–32（Agent Network 与 Multi-Agent Workflow）、§33（Backend 栈）、§36–37（实时通信与频率）、§38–40（UI）、§42（Repo）、§50（V1.0）
-> 仓库快照：`refs/design/ANet` @ `840b8ea`（2026-09-06，★6，Go 1.26，依赖 `ANetCore v0.14.0`，版本号 `0.1.10`）。文中路径都相对仓库根目录。
+> 仓库快照：`refs/design/ANet` @ `840b8ea`（2026-09-06，6 stars，Go 1.26，依赖 `ANetCore v0.14.0`，版本号 `0.1.10`）。文中路径都相对仓库根目录。
 > 读码范围：除 ANet 本仓外，还读了 Go 模块缓存中的 `ANetCore@v0.14.0`（`effect/ tsir/ adp/ evidence/ delegation/ identity/ relayauth/ anetcid/`），以及本机 `/data/projs/anet-oss/` 下的 `ANetHub`（能力检索与任务板）、`ANetLink`（设备信任阶梯与 sim 适配器）。另外读了本机 ANet 工作区里**尚未推送**的 `docs/A2A-DESIGN-zh.md`（r3，2026-09-26，v0.2 系列设计）。以上都只读，没有修改。
 > 实测：用 refs 源码构建 `anet`，用 `ANetHub@c4d08da`（与 ANet 840b8ea 同为 wire 1 且同钉 ANetCore v0.14.0）构建 `anet-hub`，在本机起一个 hub 和若干 daemon，把无人机能力经 `service` 模块挂到网络上做端到端委派。另写了一份 Agent Runtime 原型（TSIR 谓词、黑板、证据链、报价打分的 Python 移植）。脚本与输出都在 `/data/projs/anet-drone/.cache/research/d05/`：`run_joint.sh`、`run_scale.sh`、`mock_drone_svc.py`、`agent_runtime_proto.py`、`resolvetest/`、`logo.png`、`usage.png`。
 > 相关单元：r21（Gateway 控制租约 Control Lease）、r25（Agent 层只输出目标，轨迹由 Planning 生成）、r26（插入验证航段、按能力加权切分）、r27（实时协议与 zenoh 总线）、d01（ANet Graphite 色卡）。
@@ -12,21 +12,21 @@
 
 | 仓库 / 子模块 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **ANet**（整体） | 面向异构 AI agent 的"委派网络"：自证明身份（AID + KEL）、按能力发现、签名任务合同、store-and-forward 中继、可离线验证的回执与评价。纯 Go 单二进制，不运行任何模型 | V0.6 **port** 其语义做进程内 Mock；V1.0 **adopt**：每架无人机一个 daemon，外加自建 hub | V0.6（Mock）/ V1.0（真网） | ★★★★☆ |
-| `provider/`（C1 CapabilityProvider） | `ID / Capabilities / Describe / Invoke / Health`，可选 `Priced`、`LongRunning`；`Registry.Resolve` 先精确匹配，再按 `.` 逐级回退到父能力 | **port**：Python 版 `CapabilityProvider` 协议，作为 Drone Agent Adapter 的内核接口 | V0.6 | ★★★★★ |
-| `module/service` | 把本机 HTTP 端点声明成能力：POST JSON 参数，回复里的顶层数字自动成为 metrics，信任固定为 V1 | **adopt**：V1.0 由 FastAPI 为每架机、每个能力提供一个端点（已实测跑通） | V1.0 | ★★★★★ |
-| `ANetCore/effect` | 五种"诚实效果状态" `OK / UNVERIFIED / FAILED / UNAVAILABLE / PAYMENT_REQUIRED`，加 8 字段 Evidence 和 V0–V4 / A0–A4 两条信任轴 | **port**：直接作为全系统"命令效果"数据模型，UI 和任务判定都用它 | V0.2 起（命令回执）/ V0.6 | ★★★★★ |
-| `ANetCore/tsir` | TaskDoc 任务合同 + 封闭谓词演算（非图灵完备、有界、fail-closed） | **port**：谓词求值器（约 80 行 Python）用作任务验收判据；TaskDoc 字段作为任务规格的参考 | V0.6 | ★★★★☆ |
-| `module/blackboard` | 共脑黑板：签名 CogUnit + HLC 混合逻辑时钟 + 只增 OR-Set + 任务相位（active/concluded/archived） | **port**：多机"目标假设 / 证据 / 结论"的共享认知层 | V0.6（Mock）/ V1.0 | ★★★★☆ |
-| `internal/daemon/ledger.go` + `ANetCore/ael` | 每个节点一条仅追加、签名、哈希链接的证据链，能处理半截写入 | **port**（简化版）：任务审计链，同时作为 Timeline 回放的事件源 | V0.6 | ★★★★☆ |
-| `internal/runtime/interactions` + `ANetCore/delegation` | 委派账本（SQLite）、多轮对话、结束协商、Receipt/Review 互锁 | **reference**：状态机按 v0.2 的 A2A 七态重做，不照搬 v0.1 的 queued/ending/done/failed | V1.0 | ★★★☆☆ |
-| `ANetCore/adp`（AgentCard） | 签名名片，包括 capabilities[]、tools[]（带 input/output schema）、endpoints、extensions；seq 高水位防回滚 | **reference**：Capability Manifest 的字段对齐它和 A2A AgentSkill | V1.0 | ★★★☆☆ |
-| `module/taskboard`（客户端）+ ANetHub 任务板 | 7 列看板 FSM（created→claimed→submitted→accepted），WIP≤3 | **reference**：给人用的任务看板；秒级延迟，不进实时链路 | V1.0+ | ★★☆☆☆ |
-| `module/transport.go` + `module/p2p` + `tools/anetpeer` | 传输列表（附加传输优先，hub 兜底），p2p 走 UDS/TCP 上的 newline-JSON | **reference**：野外无公网时的机间直连思路 | V1.x | ★★☆☆☆ |
-| `internal/mcpserv`（`anet mcp`） | 9 个 MCP 工具，让 LLM agent 自己找人、委派、读结果 | **reference**：V1.x 的"LLM 任务指挥官"实验入口 | V1.x | ★★★☆☆ |
-| `module/x402`、`module/shell`、`module/org`、`module/cas` | 付费结算、远程执行命令、组织凭证、内容寻址存储 | **skip**（`cas` 以后可作为大块证据的存储参考） | — | ★☆☆☆☆ |
-| ANetLink `profile/trust.go`、`adapters/sim`、`sdk/effect.go` | 设备信任阶梯 T0–T4 与"钳制不抬"规则；EffectBuilder 默认 UNVERIFIED | **port**：规则进 Agent Runtime；V1.x 可考虑写一个 `uav` 适配器 | V0.6 规则 / V1.x 适配器 | ★★★☆☆ |
-| `docs/media/anet-logo.svg` + GitHub 头像 | 黑底 10° 斜切圆角徽章 + 红色内框 `#E93024` + 像素斜体 "AGENT-NETWORK" 横纹字 + "ROUTE • TRUST • EXECUTE"；头像是黑底红边对话气泡 + 节点图 + 笑脸 | **adopt**：品牌资产，按 §3.11 的规范使用 | V0.1 | ★★★★★ |
+| **ANet**（整体） | 面向异构 AI agent 的"委派网络"：自证明身份（AID + KEL）、按能力发现、签名任务合同、store-and-forward 中继、可离线验证的回执与评价。纯 Go 单二进制，不运行任何模型 | V0.6 **port** 其语义做进程内 Mock；V1.0 **adopt**：每架无人机一个 daemon，外加自建 hub | V0.6（Mock）/ V1.0（真网） | 4/5 |
+| `provider/`（C1 CapabilityProvider） | `ID / Capabilities / Describe / Invoke / Health`，可选 `Priced`、`LongRunning`；`Registry.Resolve` 先精确匹配，再按 `.` 逐级回退到父能力 | **port**：Python 版 `CapabilityProvider` 协议，作为 Drone Agent Adapter 的内核接口 | V0.6 | 5/5 |
+| `module/service` | 把本机 HTTP 端点声明成能力：POST JSON 参数，回复里的顶层数字自动成为 metrics，信任固定为 V1 | **adopt**：V1.0 由 FastAPI 为每架机、每个能力提供一个端点（已实测跑通） | V1.0 | 5/5 |
+| `ANetCore/effect` | 五种"诚实效果状态" `OK / UNVERIFIED / FAILED / UNAVAILABLE / PAYMENT_REQUIRED`，加 8 字段 Evidence 和 V0–V4 / A0–A4 两条信任轴 | **port**：直接作为全系统"命令效果"数据模型，UI 和任务判定都用它 | V0.2 起（命令回执）/ V0.6 | 5/5 |
+| `ANetCore/tsir` | TaskDoc 任务合同 + 封闭谓词演算（非图灵完备、有界、fail-closed） | **port**：谓词求值器（约 80 行 Python）用作任务验收判据；TaskDoc 字段作为任务规格的参考 | V0.6 | 4/5 |
+| `module/blackboard` | 共脑黑板：签名 CogUnit + HLC 混合逻辑时钟 + 只增 OR-Set + 任务相位（active/concluded/archived） | **port**：多机"目标假设 / 证据 / 结论"的共享认知层 | V0.6（Mock）/ V1.0 | 4/5 |
+| `internal/daemon/ledger.go` + `ANetCore/ael` | 每个节点一条仅追加、签名、哈希链接的证据链，能处理半截写入 | **port**（简化版）：任务审计链，同时作为 Timeline 回放的事件源 | V0.6 | 4/5 |
+| `internal/runtime/interactions` + `ANetCore/delegation` | 委派账本（SQLite）、多轮对话、结束协商、Receipt/Review 互锁 | **reference**：状态机按 v0.2 的 A2A 七态重做，不照搬 v0.1 的 queued/ending/done/failed | V1.0 | 3/5 |
+| `ANetCore/adp`（AgentCard） | 签名名片，包括 capabilities[]、tools[]（带 input/output schema）、endpoints、extensions；seq 高水位防回滚 | **reference**：Capability Manifest 的字段对齐它和 A2A AgentSkill | V1.0 | 3/5 |
+| `module/taskboard`（客户端）+ ANetHub 任务板 | 7 列看板 FSM（created→claimed→submitted→accepted），WIP≤3 | **reference**：给人用的任务看板；秒级延迟，不进实时链路 | V1.0+ | 2/5 |
+| `module/transport.go` + `module/p2p` + `tools/anetpeer` | 传输列表（附加传输优先，hub 兜底），p2p 走 UDS/TCP 上的 newline-JSON | **reference**：野外无公网时的机间直连思路 | V1.x | 2/5 |
+| `internal/mcpserv`（`anet mcp`） | 9 个 MCP 工具，让 LLM agent 自己找人、委派、读结果 | **reference**：V1.x 的"LLM 任务指挥官"实验入口 | V1.x | 3/5 |
+| `module/x402`、`module/shell`、`module/org`、`module/cas` | 付费结算、远程执行命令、组织凭证、内容寻址存储 | **skip**（`cas` 以后可作为大块证据的存储参考） | — | 1/5 |
+| ANetLink `profile/trust.go`、`adapters/sim`、`sdk/effect.go` | 设备信任阶梯 T0–T4 与"钳制不抬"规则；EffectBuilder 默认 UNVERIFIED | **port**：规则进 Agent Runtime；V1.x 可考虑写一个 `uav` 适配器 | V0.6 规则 / V1.x 适配器 | 3/5 |
+| `docs/media/anet-logo.svg` + GitHub 头像 | 黑底 10° 斜切圆角徽章 + 红色内框 `#E93024` + 像素斜体 "AGENT-NETWORK" 横纹字 + "ROUTE • TRUST • EXECUTE"；头像是黑底红边对话气泡 + 节点图 + 笑脸 | **adopt**：品牌资产，按 §3.11 的规范使用 | V0.1 | 5/5 |
 
 **实现者先读这 12 条（都有源码或实测依据）：**
 
@@ -50,7 +50,7 @@
 | 项 | 内容 |
 |---|---|
 | 地址 | https://github.com/ANetResearch/ANet （官网 agentnetwork.org.cn，公网 hub `hub.agentnetwork.org.cn`） |
-| 快照 | `840b8ea` 2026-09-06（"证据账本：半截写入与篡改按位置区分，并让 Append 落盘；ANetCore 升 v0.14.0"）；shallow clone；★6。本机工作区另有 2026-09-27 的 A2A/x402 重设计检查点（未推送） |
+| 快照 | `840b8ea` 2026-09-06（"证据账本：半截写入与篡改按位置区分，并让 Append 落盘；ANetCore 升 v0.14.0"）；shallow clone；6 stars。本机工作区另有 2026-09-27 的 A2A/x402 重设计检查点（未推送） |
 | 语言与构建 | Go 1.26（go.mod 写 1.26.6，本机 1.26.7），`CGO_ENABLED=0`，纯 Go。`./build.sh` 或 `./build.sh --check`（gofmt、vet、两个 tag 方向的 test）。本机构建 6.7 s，默认构建二进制 21.5 MB（保留符号表） |
 | 直接依赖 | `ANetCore v0.14.0`、`ipfs/go-cid`、`multiformats/go-multihash`、`modelcontextprotocol/go-sdk v1.7.0`、`modernc.org/sqlite`（纯 Go SQLite） |
 | 规模 | 实现 18,889 行 / 测试 13,068 行 / 298 个 `Test*`（本仓）；ANetCore v0.14.0 实现 5,267 行 |
@@ -109,7 +109,7 @@ type CapabilityProvider interface {
     Capabilities(ctx) ([]string, error)
     Describe(ctx) (string, error)          // 描述对象的 CAS CID，可为空
     Invoke(ctx, Call) (effect.Effect, error) // 可达但无法验证 ≠ error，返回 Unverified
-    Health(ctx) error                      // 非 nil ⇒ 该 provider 全部能力暂不可用
+    Health(ctx) error                      // 非 nil => 该 provider 全部能力暂不可用
 }
 type Priced interface     { Price(capability string) (uint64, bool) }          // 可选
 type LongRunning interface { InvokeTimeout(capability string) (time.Duration, bool) } // 可选
@@ -218,7 +218,7 @@ v0.1 的名片装不下 schema（§2.7），所以清单通过**元能力 `agent
 
 ```text
                  ┌───────────── Agent Runtime（Python，apps/api/agent_runtime）────────────────┐
- UI ◄─WS agent/*─┤ TaskManager(A2A 七态) · Allocator(合同网) · Evaluator(TSIR) · Blackboard · Evidence │
+ UI <─WS agent/*─┤ TaskManager(A2A 七态) · Allocator(合同网) · Evaluator(TSIR) · Blackboard · Evidence │
                  │                     AgentNetwork 接口（§4.2）                                   │
                  │        ┌───────────────┴────────────────┐                                     │
                  │   MockNetwork(V0.6)             AnetDaemonNetwork(V1.0)                        │
@@ -226,9 +226,9 @@ v0.1 的名片装不下 schema（§2.7），所以清单通过**元能力 `agent
                           │ 进程内调用                     │ HTTP 127.0.0.1:398xx（每机一个 daemon 的控制面）
                  DroneAgent[i]（CapabilityProvider）      anet daemon[i] ── ANetHub（自建，LAN）
                           │                                │ modules.service → POST /anet/cap/{vid}/{cap}
-                          └──────────── FastAPI 能力端点（同一份 DroneAgent 实现）◄──┘
+                          └──────────── FastAPI 能力端点（同一份 DroneAgent 实现）<──┘
                                              │ 需要飞行时：Gateway.acquire_lease(owner="anet:<ix>")
-                                             ▼
+                                             v
                                Gateway / Mock 动力学 / PX4 SITL（r21）
 ```
 
@@ -254,11 +254,11 @@ FastAPI 端点约定：请求体就是 `args`。回复是 JSON 对象，顶层�
 
 ```text
           ┌────────────── cancel ──────────────┐
-submitted ─► working ─► completed  (effect_status ∈ {OK, UNVERIFIED}，另记 accepted=谓词结果)
-    │           │  ▲ └─► failed    (FAILED / 中断：effect_status=UNVERIFIED, reason=interrupted)
-    │           ▼  │
+submitted ─> working ─> completed  (effect_status ∈ {OK, UNVERIFIED}，另记 accepted=谓词结果)
+    │           │  ^ └─> failed    (FAILED / 中断：effect_status=UNVERIFIED, reason=interrupted)
+    │           v  │
     │     input-required (缺参数、租约被抢占、需人工批准)
-    └─► rejected (UNAVAILABLE：不提供 / 拒单 / 电量不足；带 retry_after_ms 或 reason)
+    └─> rejected (UNAVAILABLE：不提供 / 拒单 / 电量不足；带 retry_after_ms 或 reason)
 终态：completed / failed / canceled / rejected；状态迁移用 CAS：UPDATE … WHERE state NOT IN 终态
 ```
 
@@ -294,7 +294,7 @@ def verify_target(detection):                    # Drone A 的检测事件，con
 
 ```text
 P_hover = (m·g)^{3/2} / sqrt(2·ρ·A) / η,   A = n·π·r²
-          m=4.5 kg, r=0.19 m, n=4, ρ=1.225, η=0.70  ⇒  P_hover ≈ 397.5 W；电池 222 Wh，可用 80% ⇒ 26.8 min
+          m=4.5 kg, r=0.19 m, n=4, ρ=1.225, η=0.70  =>  P_hover ≈ 397.5 W；电池 222 Wh，可用 80% => 26.8 min
 v_eff   = max(v_cruise − 0.5·|wind(x,y,z,t)|, 2)      v_cruise = 8 m/s，climb = 2.5 m/s
 t_out   = d(pos, tgt)/v_eff + |Δz|/v_climb;  t_home = d(tgt, home)/v_eff
 E       = P_hover·(t_out + dwell + t_home)/3600  (Wh);  soc_after = soc − E/E_batt
@@ -305,7 +305,7 @@ feasible = soc_after ≥ rtl_reserve(0.20) ∧ 环境在 limits 内 ∧ 传感�
 
 ```text
 U = w_c·conf_expected − w_t·eta_s/120 − w_e·energy_wh/10 − w_l·load − w_r·risk
-    w_c=1.0  w_t=0.6  w_e=0.3  w_l=0.2  w_r=0.5；  不可行 ⇒ U = −∞
+    w_c=1.0  w_t=0.6  w_e=0.3  w_l=0.2  w_r=0.5；  不可行 => U = −∞
 risk = clamp(0.5·wind/wind_max + 0.3·rain/rain_max + 0.2·(1 − vis/vis_min_ok), 0, 1)
 ```
 
@@ -330,7 +330,7 @@ def evaluate(p, rec):                  # rec = {"metrics":{}, "artifacts":[{"pat
         case 12: v = rec["metrics"].get(p["thresh"]["metric"]); return v is not None and CMP[op](v, value)
         case 10: return any(glob(a.path_glob, x.path) and x.size >= a.min_size for x in rec["artifacts"])
         case 11: return next((t.status == p.expect for t in rec["tests"] if t.id == p.test_id), False)
-validate(): 深度 ≤ 16；AND/OR 子项 2..64；未知 op、ARTIFACT 带 schema_ref/contains ⇒ Malformed（fail-closed）
+validate(): 深度 ≤ 16；AND/OR 子项 2..64；未知 op、ARTIFACT 带 schema_ref/contains => Malformed（fail-closed）
 glob: '*' 不跨 '/'，'**' 跨 '/'（C-D4 方言）
 ```
 
@@ -505,7 +505,7 @@ UI（全部 shadcn 组件，图标用 morphicons，禁止 emoji）：AGENTS 面�
 | 6 | hub 任务板 | 人工看板 | 默认 hub 不带；秒级延迟 | 仅作视图参考 |
 | — | x402 / shell / org | — | 与本项目无关，且 shell 有安全风险 | skip |
 
-"2026 活跃度 + star + 契合度"综合评估：ANet 的 star 很少（★6），但 2026-08 到 09 月高强度迭代（v0.1.5 → 0.1.10，ANetCore v0.1 → v0.14），并且是**用户指定的 agent 网络**、与 01-design §31–32 语义完全对应。因此是必选项，只是 V1.0 前要锁定版本（见 §6）。
+"2026 活跃度 + star + 契合度"综合评估：ANet 的 star 很少（6 stars），但 2026-08 到 09 月高强度迭代（v0.1.5 → 0.1.10，ANetCore v0.1 → v0.14），并且是**用户指定的 agent 网络**、与 01-design §31–32 语义完全对应。因此是必选项，只是 V1.0 前要锁定版本（见 §6）。
 
 ---
 

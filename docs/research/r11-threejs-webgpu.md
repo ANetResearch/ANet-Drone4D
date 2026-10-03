@@ -1,7 +1,7 @@
 # r11 研究笔记：three.js（WebGPURenderer / TSL / compute / Points / 体积云）
 
 > 研究单元：r11 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §9–16（Web 3D、WebGPU 定位、点云渲染、场景结构）、§17–25（环境可视化）、§34（前端栈）、§37（刷新频率）、§38–40（UI/交互）
-> 仓库快照：`refs/web3d/three.js` @ `110fbbe`（2026-09-28，★116010，MIT）。`package.json` 的 version 是 `0.186.0`，`src/constants.js` 里 `REVISION = '187dev'`，也就是 r186 发布后的 dev 分支。npm 上最新是 `three@0.186.1`（2026-09-24），`@types/three@0.186.0`。
+> 仓库快照：`refs/web3d/three.js` @ `110fbbe`（2026-09-28，116010 stars，MIT）。`package.json` 的 version 是 `0.186.0`，`src/constants.js` 里 `REVISION = '187dev'`，也就是 r186 发布后的 dev 分支。npm 上最新是 `three@0.186.1`（2026-09-24），`@types/three@0.186.0`。
 > 本文路径都相对仓库根目录。结论来自源码精读，并在本机 headless Chromium 151 里做了 6 组实测（脚本在 `/data/projs/anet-drone/.cache/research/r11/`）。实测跑在 **SwiftShader 软件渲染**上，绝对数值不代表真实 GPU，只能用来比较相对量级和验证功能。凡是估算都会标注"估算"。
 
 ---
@@ -10,7 +10,7 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **mrdoob/three.js r186**（`three/webgpu` + `three/tsl`） | Web 3D 引擎本体。`WebGPURenderer` 同时有 WebGPU 和 WebGL2 两个后端；TSL 节点着色语言会同时编译成 WGSL 和 GLSL；自带 compute、后处理 `RenderPipeline`、fog 节点、体积 raymarch、GPU 排序，以及官方 3DGS（`GaussianSplat`） | **adopt**：直接依赖 npm `three@~0.186.1`，作为 World/Environment/Drone/Mission 各 Layer 的渲染内核。**port**：点云节点渲染、EDL、粒子、体积云、自适应质量控制器按本文 §3 的配方移植。**reference**：compute rasterizer、indirect draw、CountingSort 留给 V1.0 的 GPU-driven 点云 | V0.1 起全程 | ★★★★★（唯一核心渲染引擎，无替代） |
+| **mrdoob/three.js r186**（`three/webgpu` + `three/tsl`） | Web 3D 引擎本体。`WebGPURenderer` 同时有 WebGPU 和 WebGL2 两个后端；TSL 节点着色语言会同时编译成 WGSL 和 GLSL；自带 compute、后处理 `RenderPipeline`、fog 节点、体积 raymarch、GPU 排序，以及官方 3DGS（`GaussianSplat`） | **adopt**：直接依赖 npm `three@~0.186.1`，作为 World/Environment/Drone/Mission 各 Layer 的渲染内核。**port**：点云节点渲染、EDL、粒子、体积云、自适应质量控制器按本文 §3 的配方移植。**reference**：compute rasterizer、indirect draw、CountingSort 留给 V1.0 的 GPU-driven 点云 | V0.1 起全程 | 5/5（唯一核心渲染引擎，无替代） |
 
 **实现者先读这 10 条（每条都有源码或实测依据）：**
 
@@ -32,7 +32,7 @@
 | 项 | 内容 |
 |---|---|
 | 版本 | npm `0.186.1`（2026-09-24）；源码 dev `187dev`。发布节奏约每 1–3 个月一个 minor：r183 2026-02、r184 04、r185 06、r186 09 |
-| 活跃度 | 2026-09-28 当天仍有提交（`BatchedMesh: Clarify geometry compatibility requirements`），★116k，Web 3D 领域 star 最多且维护最活跃 |
+| 活跃度 | 2026-09-28 当天仍有提交（`BatchedMesh: Clarify geometry compatibility requirements`），116k stars，Web 3D 领域 star 最多且维护最活跃 |
 | 规模 | `src/` 754 个 JS 文件、约 18.4 万行；`src/nodes/` 是 TSL 与节点系统（235 个模块）；`examples/jsm/` 是 addons（loaders、controls、TSL display 节点、gpgpu、inspector） |
 | 构建 | 使用者直接 `npm i three`，用包导出 `three`、`three/webgpu`、`three/tsl`、`three/addons/*`。`build/three.webgpu.js` 和 `build/three.module.js` 都从 `three.core.js` 引入，**可以共存、共享核心类**。仓库自身用 `rollup -c utils/build/rollup.config.js` 构建，e2e 用 puppeteer（`test/e2e/puppeteer.js --webgpu`，flags 含 `--enable-unsafe-webgpu --enable-features=Vulkan --disable-vulkan-surface`） |
 | 近期 API 变更 | `PostProcessing` 在 r183 改名为 `RenderPipeline`（旧名仍能用，但会告警）；`hasFeatureAsync`、`renderAsync`、`PassNode.setResolution` 在 r181 废弃；新增 `renderer.highPrecision`、`CanvasTarget`、`WebGLRenderer.setNodesHandler`（让经典 WebGLRenderer 也能跑 TSL 材质）、官方 `GaussianSplat` 与 SPLAT/SPZ/KSPLAT/PLY splat loader |
@@ -364,7 +364,7 @@ const ladder = [
 ```
 
 - 预算上下限：`Bmin = 50k`（software 档 10k），`Bmax` 取各档初值的 2 倍。
-- 旋钮都是**无重编译**操作（uniform、drawRange、count、`setResolutionScale`）。**不要**在降质时切换材质模式（`quad` ↔ `pixel`），那会触发 pipeline 重建和卡顿；模式只在设置页或启动时决定。
+- 旋钮都是**无重编译**操作（uniform、drawRange、count、`setResolutionScale`）。**不要**在降质时切换材质模式（`quad` <-> `pixel`），那会触发 pipeline 重建和卡顿；模式只在设置页或启动时决定。
 - UI：状态栏显示 FPS、GPU ms、可见点数和预算；提供质量预设 `Auto / Performance / Quality`，Auto 就是上面的控制器，另外两档锁定参数。
 
 ### 3.5 EDL（Eye-Dome Lighting）后处理：TSL 版（两后端已实测可编译运行）
@@ -557,7 +557,7 @@ const WEBGPU_FLAGS = ['--headless=new','--enable-unsafe-webgpu','--enable-unsafe
 
 ### 5.2 与同组仓库的关系（推荐排序，综合 star、2026 活跃度、契合度）
 
-1. **three.js**（★116k，2026-09 活跃）：引擎，必选。
+1. **three.js**（116k stars，2026-09 活跃）：引擎，必选。
 2. **pmndrs/react-three-fiber**（另一单元）：可以通过 `gl={async p => { const r = new WebGPURenderer(p); await r.init(); return r }}` 承载 WebGPURenderer。本文的渲染循环、质量控制器和 LOD 调度都应该作为**纯 TS 类**实现，R3F 只负责挂载与 React 状态桥接，避免 React reconcile 进入每帧热路径。
 3. **potree-core / pnext three-loader**：移植八叉树 `hierarchy.bin`、`octree.bin` 解码与调度；渲染层用本文的 TSL 材质替换。
 4. **Potree-Next**（WebGPU 点云软光栅，另一单元）：V1.0 GPU-driven 路径的算法参考，与 §4 第 19 项互补。

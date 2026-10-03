@@ -471,7 +471,7 @@ sequenceDiagram
 ```
 
 1. **原子性**：构建只写 `worlds/.staging/<id>-<nonce>/`；发布是同一文件系统上的两次 `rename`（旧包移入 `worlds/.trash/`，新包改名为 `worlds/<id>`）。任意时刻 `worlds/<id>/` 要么是完整的旧包，要么是完整的新包；进程在任何阶段被 kill 都不得留下半个世界包（DATA-AC-021）。
-2. **`--missing` 判定**：对每个在 `data/raw/urbanscene3d/MANIFEST.json` 中登记的内置城市，满足任一条件即重建：①`worlds/<id>/world.json` 不存在；②浅校验失败（结构 + 语义，不做 deep；含 `files[]` 字节数核对与 `contentVersion` 按 `files[]` 复算）；③`generator.version` 低于 `awr/world/package/version.py::WORLDPKG_MIN_VERSION`；④`schemaVersion` 主版本不是 1；⑤原始文件 sha256 与 `dataset.sourceFiles` 不一致（仅当原始数据在本机）；⑥人工整理的区域文件 `scenarios/zones/<id>.zones.geojson` 的 sha256 与 `zones.geojson` 的 `awr.source_sha256` 不一致（§7）。环境变量 `WORLDPKG_VERIFY=deep` 时改为 deep 校验（六城约 15 s）。
+2. **`--missing` 判定**：对每个在 `data/raw/urbanscene3d/MANIFEST.json` 中登记的内置城市，满足任一条件即重建：①`worlds/<id>/world.json` 不存在；②浅校验失败（结构 + 语义，不做 deep；含 `files[]` 字节数核对与 `contentVersion` 按 `files[]` 复算）；③`generator.version` 低于 `awr/world/package/version.py::WORLDPKG_MIN_VERSION`；④`schemaVersion` 主版本不是 1；⑤原始文件 sha256 与 `dataset.sourceFiles` 不一致（仅当原始数据在本机）；⑥人工整理的区域文件 `scenarios/zones/<id>.zones.geojson` 的 sha256 与 `zones.geojson` 的 `awr.source_sha256` 不一致（§7）。环境变量 `WORLDPKG_VERIFY=deep` 时改为 deep 校验（六城约 15 s）。**合成世界**（`configs/worldpkg.yaml` 的 `synthetic` 段，§10.5，ADR-077）没有原始文件：条件 ⑤ 改为"`generator.params.synthetic` 与当前配置不同"（生成器版本、种子、尺寸、目标点数或生成器源文件 sha256 前 16 位变化），原因同为 `raw_changed`；未发布的合成世界只在"未显式指定 `AWR_WORLD`、主默认世界未发布且其原始文件不在本机"时由 `--missing` 自动生成，已发布的按 6 个条件保持新鲜。缺原始数据的城市在此过程中保持 ABSENT（下表第 2 行），目录服务报 `missing`。
 3. **状态**：世界的业务状态枚举由 [12 §3.3.1](12-业务逻辑设计说明书.md) 定义（ABSENT、BUILDING、READY、INVALID）；本文规定由文件判定状态的规则如下。
 
 | 状态 | 事件 | 守卫 | 动作 | 目标状态 |
@@ -1170,6 +1170,20 @@ chicago       [[999.483188,-0.235836,-32.14499,9009.183787], [-0.235836,999.8923
 
 sha256 为 2026-09-28 本机实测值；`header_bytes` 与 PLY 布局（binary little endian，`x y z nx ny nz` 各 float32，24 B/点，无颜色）依据 x01 §2.4。`points` 字段即 PLY `element vertex` 数（x01 §1.3）。
 
+### 10.5 合成演示城市 `synthcity`（ADR-077）
+
+由 M03 `awr/world/ingest/synthetic.py` 按固定种子程序化生成（算法见 M03 §6.18），不读取任何外部数据，世界包与截图可自由再分发。它走与六城相同的十步流程，差别只在输入与第 8 步：类别由生成器给出（`IngestConfig.semantic = provided`，`RawCloud.class_index`），不做规则分类。规范值（`configs/worldpkg.yaml` 的 `synthetic.synthcity`：种子 20261003、边长 1200 m、目标 400 万点；2026-10-03 实测，numpy 2.5.3）：
+
+| 项 | 取值 |
+|---|---|
+| 输入指纹 | `coordinate.source.files[0]` 与 `dataset.sourceFiles[0]`：`synthcity-v1.0.0-seed20261003.awrsyn`，规范字节流（魔数 `AWRSYN1\n` + xyz `<f8` + normal `<f4` + class `u1`）的字节数与 sha256；`coordinate.source.kind = simulation`、`unitsToMeters = 1`、`upAxis = +z`、`T_world_source` 为单位阵 |
+| 锚点与北向 | `anchor.kind = synthetic`、`georeferenced = false`、示意锚点 (30.0, 120.0)、`hMslM = 10`、`uncertaintyM.horizontal = 5000`、标签 `illustrative: ANet Synthetic City, procedurally generated; no real location`；`trueNorth.confidence = exact`（生成帧 +Y 即北）；`scaleStatus = assumed` |
+| 清单 | `id = synthcity`，`name` 与 `nameZh` 为 `ANet Synthetic City`，`tags = [synthetic, builtin, generated, redistributable]`，`dataset.redistribution = true`、`license` 为仓库 LICENSE（可自由再分发与截图）；`generator.params.synthetic = {generator, version, seed, sizeM, targetPoints, sourceSha256}` |
+| 派生结果 | 3,924,500 点；范围 1200 × 1200 × 355.1 m（world z −3.074 至 352.0，最高点为桅杆顶）；1 根、深度 5、439 节点；`nnMedianM` 0.382；地面占比 29.3%；法线翻正 2.4%；零法线 0；默认着色 height；首屏规则 G 190,507 点 / 2,286,084 B；border `max_z_m` 402.0 |
+| 类别（anet-classes@1 紧凑索引） | 地面 1、低矮植被 2（草坪）、中等植被 3（灌木）、高植被 4（树冠与树干）、屋顶 5（含屋顶设备顶面）、立面 6、水面 8、路面 9（含标线）、桥面 10 |
+| curated 区域 | `scenarios/zones/synthcity.zones.geojson`（M16）：`nofly-sc-steptower`（阶梯塔，中心 (−62, −2)，半径 55 m）、`restricted-sc-pond`（公园池塘，中心 (−530, 240)，半径 60 m） |
+| 确定性 | 同一平台与 numpy 版本下两次构建的 `contentVersion` 与全部内容文件逐字节一致（M03-AC-034）；跨平台以 `generator.params.numpy` 区分 |
+
 ---
 
 ## 11. Vehicle Package
@@ -1374,7 +1388,7 @@ rejected:
 
 ### 12.1 文件与命名
 
-- 路径 `scenarios/<scenario_id>.json`；`scenario_id` 匹配 `^[a-z0-9]+(-[a-z0-9]+)*$`，与文件名一致。内置剧本：`s1-shenzhen-facade`（默认）、`s2-shanghai-formation`、`s3-newyork-sar`、`s4-chicago-lakeshore`、`s5-sanfrancisco-terrain`、`s6-suzhou-corridor`、`ladder-<world_id>`。
+- 路径 `scenarios/<scenario_id>.json`；`scenario_id` 匹配 `^[a-z0-9]+(-[a-z0-9]+)*$`，与文件名一致。内置剧本：`s1-shenzhen-facade`（默认）、`s2-shanghai-formation`、`s3-newyork-sar`、`s4-chicago-lakeshore`、`s5-sanfrancisco-terrain`、`s6-suzhou-corridor`、`ladder-<world_id>`；合成演示城市的 `s0-synthcity-showcase`（synthcity 的默认剧本，默认世界回退时使用，ADR-077）。
 - 人工整理的禁飞区文件 `scenarios/zones/<world_id>.zones.geojson` 也在本目录（§7）。
 - 剧本 sha256（文件字节）写入会话与录制 `meta.json`（`scenario_sha256`）。
 - 剧本清单 `scenarios/catalog.json`（`awr.scenario_catalog.v1`，snake_case，schema `scenario/catalog.schema.json`；M16 §7.3.1 起草）：`worlds{<world_id>: {default, demo[], gate?}}` 给出每个世界的默认剧本与演示剧本（M03 WorldSummary 的 `default_scenario_id` 取自 `default`）；`ui_profiles{<scenario_id>: [profile]}` 列出 UI 可选的 profile；`themes{<theme>: ["<scenario_id>[#<profile>]"]}` 为主题映射。校验：引用的剧本文件存在且 `world_id` 与键一致；`ui_profiles` 与 `#` 后的名字存在于该剧本的 `profiles`（V-SC-13）。
@@ -1467,7 +1481,7 @@ leaf      := { "metric": metric, "args": {...}?, "op": "<" | "<=" | "==" | "!=" 
 
 | 动作 | args | 说明 | AWR-12 §7.1.2 对应 |
 |---|---|---|---|
-| `env.preset` | `{preset, duration_s?}` | 切换预设（默认 30 s 过渡） | `env_preset` |
+| `env.preset` | `{name, duration_s?}` | 切换预设（默认 30 s 过渡）；参数即 `env/preset` 命令参数（`rt/commands.json`），旧写法 `preset` 由剧本导演改写为 `name`（ADR-077） | `env_preset` |
 | `env.set` | `{patch, duration_s?}` | 局部修改 EnvScalars | `env_set` |
 | `env.gust` | `{amp_mps, length_m, dir_from_deg?}` | 注入一次 1−cos 阵风锋面，由 EnvironmentService 提前 ≥ 2 s 调度（ADR-024；g06 §5.4）。锋面按空间长度定义：`length_m` 为半波长，全波长 `2·length_m`，经过某点的时长约为 `2·length_m / 平流风速` | `gust{dv_mps, duration_s}`：`amp_mps = dv_mps`；剧本不写时长 |
 | `vehicle.add`、`vehicle.remove` | vehicle 对象、`{vehicle_id}` | 走生命周期轴 | — |
@@ -1570,6 +1584,7 @@ S2–S6 为 D1-ext（P1）。x01 §3.11 的原参数中有五个剧本单架次�
 | S4 `s4-chicago-lakeshore` | chicago | A 组湖岸走廊 x = +800（湖面，最高 HAG 1.6 m），y ∈ [−1500, 1500]（x01 原为 x = +600，其 ±20 m 带内有 177 m 障碍，M16 §6.4.6 东移；AWR-03 附录 B.2）；B 组以 Willis (−1101, −584) 为中心 600 m 盒 | A：5 机横队 150 m AGL、8 m/s，y = 0 处变 V 形；B：4 机条带覆盖，逐航带取安全高度越过 443 m 塔 | `missions_done`、`min_separation_m ≥ 8`、`area_coverage ≥ 0.9` | ext |
 | S5 `s5-sanfrancisco-terrain` | sanfrancisco | (−2000, −2500) 处 300 m × 400 m 盒（M16 改为 300 × 300）；Sutro Tower (−2796, −2613) 以 nofly 要素写入 `scenarios/zones/sanfrancisco.zones.geojson` | 单机 `terrain_follow`（80 m AGL，旁向重叠 0.6，限坡 15°）；固定 MSL 对照组只预览，下发被拒（102） | `agl_min_m ≥ 60`、`area_coverage ≥ 0.95` | ext |
 | S6 `s6-suzhou-corridor` | suzhou | 巡检段 x ∈ [−2000, 2000]，两侧 y = ±200 | 2 机 `corridor`（80 m AGL，45° 斜视，10 m/s）去程后直线返航；中继机 x = 0 驻留 ≤ 600 s（M16 改为四机分段加中继） | `area_coverage ≥ 0.95`（`link_quality_min` 只作展示，V0.2 前不入谓词） | ext |
+| S0 `s0-synthcity-showcase` | synthcity | ANet Tower 中心 (62, 122)；两个中层街区 x ∈ [260, 460]、y ∈ [−165, −75]；河道中心线 x ∈ [−430, 140] 与北岸 y = −335 | 2 机 `helix_scan`（半径 58 m，120 → 80 m 与 80 → 40 m，9 m/s）；2 机 `lawnmower`（fly_over 70 m AGL，旁向重叠 0.4，9 m/s）；3 机 `formation`（V 形，z 40 m，10 m/s）；事件 `env.preset`：45 s 小雨、150 s 雾（M16 §6.4.9） | `missions_done`、`facade_coverage ≥ 0.9`、`area_coverage ≥ 0.9`、`formation_err_rms_m ≤ 3`、`min_separation_m ≥ 10`、`guard_events == 0`、`landed_all` | ext |
 | ladder `ladder-<world_id>` | 任一（D1 门禁为 shenzhen） | 布局由 M16 §6.4.8 定稿（4 层交错网格） | `vehicle_sets`：count ∈ {10, 50, 200, 500, 1000}（按 `--profile n<N>` 选择），`mission = orbit`（绕出生点）；`record = false` | `guard_events == 0` | core |
 
 ### 12.6 校验（V-SC 组，剧本加载器执行，失败返回 121 `SCENARIO_INVALID`）
@@ -1583,7 +1598,7 @@ S2–S6 为 D1-ext（P1）。x01 §3.11 的原参数中有五个剧本单架次�
 | V-SC-05 | 出生点在 `border` 内、不在任何 `nofly` 内；显式 z 满足 `z ≥ dsm(x, y) − 0.05 m` |
 | V-SC-06 | 任务引用的 vehicle 存在；`start.after` 无环 |
 | V-SC-07 | 任务高度上限 ≤ `border.max_z_m`；`agl_m` 字段 ≥ 0 |
-| V-SC-08 | `env.preset` 与 `env.preset` 类事件的预设 id 存在于 `presets.json` |
+| V-SC-08 | `env.preset` 与 `env.preset` 类事件的预设 id（`args.name`，旧写法 `args.preset`）存在于 `presets.json` |
 | V-SC-09 | `zones.active` 中的 id 存在于世界 `zones.geojson` |
 | V-SC-10 | 事件与谓词中的动作、指标、运算符均在 §12.3 登记表中；bool 指标只用 `==`、`!=`；谓词每层 1–64 项、深度 ≤ 16（可编译为 TSIR）；`at_s ≤ time_limit_s` |
 | V-SC-11 | `record = false` 的剧本不得声明 `marked = true`（无意义配置，告警） |
@@ -2269,6 +2284,7 @@ worldpkg validate <world_dir>... [--deep] [--json] [--strict-warn] [--rules <ID,
 | DATA-FR-063 | 剧本 `success` 与 `when` 按 §12.3 编译为 TSIR（数值与 M14 `predicate.schema.json` 一致），度量缺失判假；文件只接受 §12.3 登记的动作与指标名 | P0 | V0.1 | 是 | DATA-AC-027 | AWR-12 §7.1.3；M14 §6.7.1；M16 §14 第 4 条 |
 | DATA-FR-064 | 共享环境资产 `worlds/_shared/env/{turb,weather,cloud}/` 按 §8.4 命名与服务；AWRV kind 6 `noise_field` 按 §8.3 | P0（turb、weather）/ P1（cloud） | V0.1 | 是 | DATA-AC-014 | M07 §14 第 4 条；17 §5.1 |
 | DATA-FR-065 | 可选栅格 `dsm_2m_n`（DSM 每格观测点数，§6.3） | P1 | V0.1 | 是 | DATA-AC-009 | M04 §14 第 4 条 |
+| DATA-FR-066 | 合成演示城市 `synthcity`（§10.5）：程序生成的 World Package 与六城同一格式与校验规则，输入指纹为规范字节流，`dataset.redistribution = true`；`--missing` 条件 ⑤ 的合成世界口径（§3.5） | P1 | V0.1 | 是 | M03-AC-033、034 | ADR-077 |
 
 ### 19.2 非功能需求
 

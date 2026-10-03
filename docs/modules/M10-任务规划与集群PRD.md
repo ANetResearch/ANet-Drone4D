@@ -233,7 +233,7 @@
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M10-FR-030 | plan-pool 作业协议（§7.4.3）：优先级队列；按（mission_id、revision）或（vehicle_id、call_id）去重；按作业类别设墙钟预算；done_callback 入 inbox；结果在就绪后的下一个步边界生效；`plan_result` 与实际 apply_tick 写入输入日志 | P0 | V0.1 | 是 | M10-AC-009、011 | ADR-039；ADR-049；10 §8.5 |
+| M10-FR-030 | plan-pool 作业协议（§7.4.3）：优先级队列；按（mission_id、revision）或（vehicle_id、call_id）去重；按作业类别设墙钟预算；done_callback 入 inbox；结果在就绪后的下一个步边界生效；`plan_result` 与实际 apply_tick 写入输入日志。**剧本开局屏障**（AWR-03 ADR-068 第 4 条、ADR-073 第 7 条）：剧本加载后进入设置期，设置期内每次提交作业（含加载前已在途的预热）即置 M08 SimClock 内部保持（`hold("m10.setup", timeout_s = 10, ready)`，M08-FR-001），提交所在 tick 结束后不再推进（设置期内主循环逐 tick 推进，M08-FR-003）；全部设置期作业的结果进入 inbox 即放行，由下一次 mission stage 统一生效，因此开局作业的生效 tick 与倍速、墙钟负载无关；设置期在加载后 1 s【仿真】且无未到达作业时结束；单次保持超过 10 s【墙钟】（与 123 WORLD_NOT_READY 一致）时放行、发 `mission.warning{warning: SETUP_BARRIER_TIMEOUT}` 并结束设置期；崩溃重启后的首次加载不进入设置期；`AWR_SCENARIO_BARRIER=0` 关闭（诊断） | P0 | V0.1 | 是 | M10-AC-009、011；`tests/mission/test_start_barrier.py`；`tests/e2e/test_scenarios.py::test_s3_start_rate_invariant` | ADR-039；ADR-049；ADR-068；ADR-073；10 §8.5 |
 | M10-FR-031 | plan-pool worker 按（world_id、contentVersion、coordinate.sha256）缓存 GeoWorld 与规划栅格；会话开始时预热；与 sim-core 的绑定不一致时拒绝加载（P-01） | P0 | V0.1 | 是 | M10-AC-032 | AWR-03 P-01 |
 | M10-FR-032 | 轨迹生成流水线：折线圆角（偏差 ≤ 1.0 m）→ 1 m 重采样 → TOPP-lite（v_max、a_tan、a_lat、vz_up、vz_dn）→ 按 ts = 0.5 s 采样得到控制点（Schoenberg）→ 按控制点导数凸包均匀拉伸时间 → 校验 | P0 | V0.1 | 是 | M10-AC-004 | r25 §3.4–§3.5 |
 | M10-FR-033 | 轨迹校验：样条按 0.1 s 采样；距起终点水平 > 4 m 的样点以 M04 `path_valid(buffer_m = 1.0)` 校验（巡航段）；全部样点逐点要求 `z ≥ column_max_within(xy, r_col) + 0.5 m`（端点柱规则，对巡航段自然成立，实际约束起终点竖直柱；`r_col` 取机型 `geometry.collision_radius_m`，P600 为 0.49 m，16 §11.4；对未圆角的折线等价于 M04 `path_valid` 的 `endpoint_radius_m = r_col`）；失败时先把圆角偏差减半重试，再退化为折线加路口停顿（按构造安全），并在 metrics 中标注 `degraded` | P0 | V0.1 | 是 | M10-AC-004 | 本文 §6.5.7；M04-FR-018 |
@@ -312,6 +312,7 @@
 |---|---|---|---|---|---|---|
 | M10-FR-067 | `facade_coverage`：在目标立面柱面上建 2 m × 2 m 网格（z 区间取剧本给定的立面范围，S1 为 world z [45, 374.1]，12 §7.1.3）；5 Hz 用 M13 相机模型判断视锥、距离 ≤ 2·standoff、入射角 ≤ 60°，并用 M04 `segment_los` 判断视线；被覆盖格的比例 | P0 | V0.1 | 是 | M10-AC-003 | 12 §7.1.3；x01 §3.11 |
 | M10-FR-068 | `area_coverage` 由覆盖栅格给出；`formation_err_rms_m` 为槽位参考与实际位置之差的 RMS（10 Hz 累计）；`agl_min_m`、`agl_rms_err_m` 在地形跟随段上统计 | P0 / P1 | V0.1 | 是 | M10-AC-019、026 | 12 §7.1.3 |
+| M10-FR-069 | 大编组任务（≥ 32 机）的主循环开销上界（AWR-03 ADR-073 第 3、5 条）：①入圆段直线粗校验（`coarse_proven`，N = 1000 时约 1.7 ms/次）每次 mission_engine stage 全部任务合计至多 2 次，其余轨道保持 idle、之后的 stage 续做；粗校验不通过时记下（入圆点、生效区、机体位置），同一入圆点、同一组生效区且机体离记下的位置 ≤ 1 m 时不再重做、直接走 plan-pool 转场（结果必然仍不通过；适用于全部任务。n1000 稳态中个别机体转场确定性失败、按 30 s 退避续飞，每次续飞在 stage 内重做一次约 2.5 ms 的粗校验，与 12 个 tick 后的转场下发落在同一秒，使该秒单步 p99 超过 3 ms）；②FCU 链路丢失（M09 `safety.flag_fcu = 0`，例如 link_drop）的机体不续飞（K07"机体可用"），其挂起轨道不逐 stage 复查，链路恢复由每 1 s 一次的兜底全量检查发现；③`state/mission` 的进度、ETA 与"规划中"汇总分片累加（每次至多 64 条轨道，一轮完成前沿用上一轮的值，任务状态字段照常即时更新；`mission_progress` 度量不经缓存）；④小编组任务（S1–S6）的时序不变；⑤转场被地理围栏拒绝的记忆（AWR-03 ADR-074 第 6 条，适用于全部任务）：转场 follow_path 以 102 GEOFENCE_REJECT 失败后记下该转场（规划器、长度、最高点、生效区、机体位置），退避续飞规划出的转场与之相同（规划器与生效区相同，长度与最高点各差 < 1 m，机体离记下的位置 ≤ 1 m）时不再下发，保持 SUSPENDED 并按原退避续飞；转场不同或某次转场成功后照常下发、清除记忆。ladder n1000 中 sim-0406 的转场每次都爬升到约 378 m、每次都被拒，每 30 s 一次的下发与准入在主循环内约 7 ms（mission 5.3–6.6 ms + 输入日志 2 ms）；转场为何爬升到该高度（规划器高度上限与围栏不一致）列为遗留项 | P0 | V0.1 | 是 | `tests/mission`（含 `test_transit_reject_memo.py`）；D1-AC-07、D1-AC-27 | ADR-065；ADR-070；ADR-073；ADR-074 |
 
 ---
 
@@ -335,7 +336,7 @@
 | M10-NFR-012 | 可靠性 | plan-pool 崩溃后 ≤ 0.5 s 重建并重试；sim-core 主循环不受影响 | 追帧饱和 0 次 | `make chaos-core` 中的 plan-pool 用例 | P0 | V0.1 | 是 | ARCH-AC-006 |
 | M10-NFR-013 | 带宽 | `uav/{id}/path` 单次 ≤ 64 KiB（4096 点 × 16 B）；`mission/{mid}/status` ≤ 2 KiB；覆盖栅格快照 ≤ 16 KiB + 16 B 头、≤ 1 Hz，只发给订阅者（每客户端 ≤ 16.1 kB/s） | 同左 | `tests/mission/test_mission_topics.py` | P0 / P1 | V0.1 | 是 | 17 §6.5（blob v1 不压缩；超过 256 KB 的 blob 不进 WS）；r26 §3.12.1 的 1.1 kB/s 为 zlib 增量，不适用 |
 | M10-NFR-014 | 可测试性 | 纯算法包 `awr.swarm` 与 `awr.sim.planning` 的行覆盖率 | ≥ 90% | `pytest --cov` | P1 | V0.1 | 是 | P-06 |
-| M10-NFR-015 | 冷启动 | numba 核缓存命中时，plan-pool 预热（加载 GeoWorld、规划栅格、JIT）完成时间 | 深圳 ≤ 2 s；上海 ≤ 8 s；不阻塞 sim-core ready | 启动日志 `plan.warm` 事件 | P1 | V0.1 | 是 | TECH-NFR-004；M04 冷派生 0.1–4.1 s 在 `make run` 的 warm 阶段完成，plan-pool 只映射缓存（≤ 300 ms，M04-NFR-005、M04-FR-027）；规划栅格取 `grid_2p5d(4)` 后只做一次与 DTM 地板的取大（原型含 2×2 池化的全量构建 45–1146 ms） |
+| M10-NFR-015 | 冷启动 | numba 核缓存命中时，plan-pool 预热（加载 GeoWorld、规划栅格、JIT）完成时间 | 深圳 ≤ 2 s；上海 ≤ 8 s；不阻塞 sim-core ready（剧本开局屏障只保持仿真时间，sim-core 照常 ready、写心跳，ADR-073 第 7 条） | 启动日志 `plan.warm` 事件 | P1 | V0.1 | 是 | TECH-NFR-004；M04 冷派生 0.1–4.1 s 在 `make run` 的 warm 阶段完成，plan-pool 只映射缓存（≤ 300 ms，M04-NFR-005、M04-FR-027）；规划栅格取 `grid_2p5d(4)` 后只做一次与 DTM 地板的取大（原型含 2×2 池化的全量构建 45–1146 ms） |
 
 ---
 
@@ -661,6 +662,8 @@ Mission 与 Track 的状态、事件、守卫与动作以 [12 §4.5](../12-业�
 | QUEUED、RUNNING | 被同键新作业取代，或调用被取消、会话重置 | — | 丢弃 | SUPERSEDED |
 
 重仿真模式（ADR-049）：不做墙钟超时判定；在输入日志记录的 apply_tick 处阻塞等待结果，并校验 `result_sha256`。
+
+剧本开局屏障（M10-FR-030，ADR-073 第 7 条）：设置期内"结果到达 inbox"不再是生效时刻的唯一决定因素——提交即置 SimClock 内部保持，结果全部到达后放行，生效 tick 只取决于提交 tick（×1 与 ×10、负载高低相同）。设置期外仍按"就绪后的下一个步边界生效"，其 apply_tick 由墙钟到达决定（ADR-049 已承认，输入日志记录实际 apply_tick）。
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "secondaryColor": "#E4E6E9", "tertiaryColor": "#FBFBFC", "lineColor": "#5C616A", "textColor": "#111214", "mainBkg": "#F2F3F5", "nodeBorder": "#5C616A", "clusterBkg": "#FBFBFC", "clusterBorder": "#A7ABB3", "edgeLabelBackground": "#FBFBFC", "noteBkgColor": "#E4E6E9", "noteTextColor": "#111214", "noteBorderColor": "#81868F"}}}%%
@@ -1227,7 +1230,7 @@ sequenceDiagram
 |---|---|---|---|---|---|
 | `mission`（跟踪器） | 027, 2, 0 | 125 Hz | 0.012 核（每次 ≤ 100 µs） | 78.5 µs/次（B-spline，含 time_stretch）；numpy 环绕 138 µs/次，numba 版本估算 ≤ 30 µs | numba；numpy oracle |
 | `mission_engine` | 150, 25, 8 | 10 Hz | 0.003 核（每次 ≤ 0.3 ms） | 估算：向量化检查进度与同步，只有状态变化的 Track 走 Python 分支 | numpy + 事件驱动 |
-| `coverage` | 155, 50, 13 | 5 Hz | 0.005 核（每次 ≤ 1 ms） | r26：8 机 0.41 ms；S1 立面每机每次 < 1000 格 | numpy |
+| `coverage` | 155, 50, 1（ADR-073） | 5 Hz | 0.005 核（每次 ≤ 1 ms） | r26：8 机 0.41 ms；S1 立面每机每次 < 1000 格。只处理覆盖类生成器（helix_scan、lawnmower、corridor、terrain_follow）与 formation 的任务，其余任务（orbit、follow_path 等）不逐轨道筛选：ladder n1000 的 4 个 250 机环绕任务此前每次约 0.7 ms、落在最重的 tick 对上（AWR-03 ADR-074 第 5 条） | numpy |
 | `director` | 160, 25, 8 | 10 Hz | 0.002 核（每次 ≤ 0.2 ms） | 估算：谓词数 < 20 | Python |
 | inbox 中的规划结果生效 | 步顶（计入 M08 inbox drain） | 按需 | 每个结果 ≤ 0.3 ms | 控制点拷贝进池（4096 × 3 × 8 B = 96 KB） | numpy |
 | **合计** | | | **0.022 核（M08 §5.2 分配），上限 0.03 核** | | |

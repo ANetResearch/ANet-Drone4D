@@ -9,10 +9,10 @@
 
 ## 0. 结论速览
 
-| 仓库 | ★ / 最后提交 | 定位 | 复用方式 | 落点版本 | 推荐度 |
+| 仓库 | stars / 最后提交 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|---|
-| liangheming/FASTLIO2_ROS2 | 761 / 2026-08-10 | ROS2 Humble 重构的 FAST-LIO2（ikd-Tree + 21 维 IESKF）+ **关键帧回环 PGO（GTSAM iSAM2）** + **两阶段 ICP 重定位（map→odom TF）** + **BLAM/HBA 一致性地图优化** + 存图服务（patches + poses.txt + map.pcd） | **adopt**（V0.5 机载/离线 ROS2 主干，需先打 §6.1 的 8 个补丁并按 §4.2 重调无人机参数）＋ **port**（map→odom 重定位模式、关键帧/回环流程、BLAM 平面厚度作为地图 QA） | MVP：移植 mock 定位状态机与数据契约；V0.5a 建图 / V0.5b 重定位；V0.6 多机共图 | ★★★★★ |
-| Liansheng-Wang/faster_lio_localization（LIO-Lite） | 212 / 2024-11-28（代码实质停在 2024-01） | ROS1 单节点 faster-lio（iVox）改版：建图 / 定位双模式、**地图 2D 分块 + 3×3 动态加载**、NDT→ICP 全局初始化、**冻结先验地图的紧耦合定位**、直接发布 `/mavros/vision_pose/pose` | **reference + port**（iVox 哈希 + LRU、分块/动态加载、紧耦合先验定位思路）；仅在“原厂 Prometheus ROS1 栈上快速验证重定位”时临时 adopt | MVP：移植 iVox LRU 与分块调度；V0.5 参考 | ★★★ |
+| liangheming/FASTLIO2_ROS2 | 761 / 2026-08-10 | ROS2 Humble 重构的 FAST-LIO2（ikd-Tree + 21 维 IESKF）+ **关键帧回环 PGO（GTSAM iSAM2）** + **两阶段 ICP 重定位（map→odom TF）** + **BLAM/HBA 一致性地图优化** + 存图服务（patches + poses.txt + map.pcd） | **adopt**（V0.5 机载/离线 ROS2 主干，需先打 §6.1 的 8 个补丁并按 §4.2 重调无人机参数）＋ **port**（map→odom 重定位模式、关键帧/回环流程、BLAM 平面厚度作为地图 QA） | MVP：移植 mock 定位状态机与数据契约；V0.5a 建图 / V0.5b 重定位；V0.6 多机共图 | 5/5 |
+| Liansheng-Wang/faster_lio_localization（LIO-Lite） | 212 / 2024-11-28（代码实质停在 2024-01） | ROS1 单节点 faster-lio（iVox）改版：建图 / 定位双模式、**地图 2D 分块 + 3×3 动态加载**、NDT→ICP 全局初始化、**冻结先验地图的紧耦合定位**、直接发布 `/mavros/vision_pose/pose` | **reference + port**（iVox 哈希 + LRU、分块/动态加载、紧耦合先验定位思路）；仅在“原厂 Prometheus ROS1 栈上快速验证重定位”时临时 adopt | MVP：移植 iVox LRU 与分块调度；V0.5 参考 | 3/5 |
 
 一句话结论：
 
@@ -85,19 +85,19 @@ LIO-Lite 话题：`/cloud_registered`、`/cloud_registered_body`、`/cloud_regis
 ```text
 /livox/lidar (livox_ros_driver2/CustomMsg, 10 Hz)   /livox/imu (sensor_msgs/Imu, 200 Hz, 单位 g)
                     │                                        │
-                    ▼                                        ▼
+                    v                                        v
         ┌────────────────────── fastlio2/lio_node (timer 20 ms) ─────────────────────┐
         │ MapBuilder: IMU_INIT → MAP_INIT → MAPPING                                  │
         │ IMUProcessor(初始化/前向传播/去畸变) + LidarProcessor(ikd-Tree + IESKF)     │
         └───┬───────────────┬──────────────────┬─────────────────────┬───────────────┘
             │/fastlio2/     │/fastlio2/         │/fastlio2/lio_path   │TF lidar→body
             │body_cloud     │lio_odom           │/fastlio2/world_cloud│（world_frame="lidar"=odom 语义）
-            ▼               ▼
+            v               v
    ApproximateTime(cloud, odom) 同步
-      ├──────────────► pgo/pgo_node (timer 50 ms)            → TF map→lidar，/pgo/loop_markers
+      ├──────────────> pgo/pgo_node (timer 50 ms)            → TF map→lidar，/pgo/loop_markers
       │                  srv /pgo/save_maps{file_path, save_patches}
       │
-      └──────────────► localizer/localizer_node (timer 10 ms, 1 Hz 配准) → TF map→lidar，/localizer/map_cloud
+      └──────────────> localizer/localizer_node (timer 10 ms, 1 Hz 配准) → TF map→lidar，/localizer/map_cloud
                          srv /localizer/relocalize{pcd_path,x,y,z,yaw,pitch,roll}
                          srv /localizer/relocalize_check{code} → valid
 
@@ -541,10 +541,10 @@ def ingest_pgo_maps(maps_dir, world, session_id, hba_poses=None):
 #### 4.2.4 状态机（mock 与真机共用）
 
 ```text
-NO_MAP ──load ok──▶ WAIT_INIT ──guess──▶ ALIGNING ──fine ok ×3──▶ TRACKING
-                                   ▲          │fail×N                 │ Δt_ok>3s
-                                   │          ▼                       ▼
-                                   └──── LOST ◀── Δt_ok>10s ──── DEGRADED ──ok──▶ TRACKING
+NO_MAP ──load ok──> WAIT_INIT ──guess──> ALIGNING ──fine ok ×3──> TRACKING
+                                   ^          │fail×N                 │ Δt_ok>3s
+                                   │          v                       v
+                                   └──── LOST <── Δt_ok>10s ──── DEGRADED ──ok──> TRACKING
 OUT_OF_MAP：任意状态下离瓦片覆盖 > R_LOAD 时进入，回到覆盖区后回 ALIGNING
 ```
 
@@ -583,7 +583,7 @@ REST/WS（Gateway）：`GET /api/worlds/{id}/localization/manifest`、`GET /api/
 
 | 维度 | FASTLIO2_ROS2 | faster_lio_localization（LIO-Lite） |
 |---|---|---|
-| ★ / 活跃度 | 761 / 2026-08 合并 PR | 212 / 代码 2024-01 后停更 |
+| stars / 活跃度 | 761 / 2026-08 合并 PR | 212 / 代码 2024-01 后停更 |
 | ROS | ROS2 Humble | ROS1 Melodic/Noetic |
 | LIO 内核 | FAST-LIO2 重写：ikd-Tree、21 维 IESKF（Sophus，重力固定） | faster-lio：iVox、23 维 IKFoM（在线外参、S2 重力） |
 | 输入 | 仅 `livox_ros_driver2` CustomMsg | Livox v1 CustomMsg / Velodyne / Ouster / Hesai |
@@ -653,5 +653,5 @@ REST/WS（Gateway）：`GET /api/worlds/{id}/localization/manifest`、`GET /api/
 8. **§29/§49 多机的前提是“共图重定位”**：多架 P600 各自上电的 odom 系不同，EGO-Swarm/编队需要共同参考系。V0.6 应显式包含“每机加载同一 map release → 各自 `T_map_odom_i` → 规划在 map 系”，而不是只写 Swarm/Formation。
 9. **§44–48 版本拆分**：V0.5 拆为 V0.5a（建图会话：LIO+PGO+HBA+ENU 对齐+发布 release+QA）与 V0.5b（重定位会话：瓦片加载、状态机、PX4 EV、Web 定位面板）；MVP 阶段先冻结 `localization/` 与 `reconstruction/lidar/` 契约并用 §3.8 mock 跑通 UI。
 10. **§36–37 频率表补定位层**：重定位 1–2 Hz、map→odom 平滑 50 Hz、定位状态 WS 1–2 Hz、瓦片调度 1 Hz / 2 s 预取；点云类大包（实时扫描、瓦片）走二进制通道，避免阻塞遥测。
-11. **§33 Backend 技术栈补 ROS2 侧依赖与桥**：GTSAM、Sophus、small_gicp、`livox_ros_driver2`、uXRCE-DDS；ROS2 ↔ Web 建议 foxglove ws-protocol / 自研 Gateway（二进制），不要用 rosbridge JSON 传点云。
+11. **§33 Backend 技术栈补 ROS2 侧依赖与桥**：GTSAM、Sophus、small_gicp、`livox_ros_driver2`、uXRCE-DDS；ROS2 <-> Web 建议 foxglove ws-protocol / 自研 Gateway（二进制），不要用 rosbridge JSON 传点云。
 12. **§43 MVP 增加“伪 V0.5”演示**：UrbanScene3D + 虚拟 P600 + MockLocalization（§3.8）+ 定位质量面板 + 重定位对话框；注意 UrbanScene3D 各城单位不一致（Chicago 包围盒约 4×8×1，疑似千米；其余为米），World Package `metadata.json` 必须带 `unit_scale` 并在导入时做建筑高度分布校验（与 r05 风险 7 一致）。

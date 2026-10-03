@@ -2,10 +2,10 @@
 
 > 研究单元：r16 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §12、§16（EnvironmentLayer）、§17–25（Environment Engine、E 场、风、雨、雾、沙、云）、§37（刷新频率）、§39（Timeline）、§46–47（V0.3 / V0.4）
 > 仓库快照（均为 shallow clone，路径 `refs/weather/<repo>`，文中路径都相对仓库根目录）：
-> - `natural-disasters` @ `d2bae38`（2026-08-31，★273，MIT，three r169 + WebGL2/GLSL3）
-> - `Eanpa-Sky` @ `a197d3d`（2026-09-12，★56，MIT，内置 three r186，WebGPU + TSL）
-> - `procedural-weather-threejs` @ `26ad580`（2026-02-08，★11，MIT，只有文档形式的 Claude skill，没有可运行代码）
-> - `procedural-clouds` @ `1c9481c`（2026-02-08，★6，MIT，原生 WebGPU + WGSL）
+> - `natural-disasters` @ `d2bae38`（2026-08-31，273 stars，MIT，three r169 + WebGL2/GLSL3）
+> - `Eanpa-Sky` @ `a197d3d`（2026-09-12，56 stars，MIT，内置 three r186，WebGPU + TSL）
+> - `procedural-weather-threejs` @ `26ad580`（2026-02-08，11 stars，MIT，只有文档形式的 Claude skill，没有可运行代码）
+> - `procedural-clouds` @ `1c9481c`（2026-02-08，6 stars，MIT，原生 WebGPU + WGSL）
 >
 > 本单元的结论都来自源码精读。另外在本机 headless Chromium（SwiftShader WebGL2）上做了一组微基准，脚本在 `/data/projs/anet-drone/.cache/research/r16/`。测试时机器负载很高（load average 13–20，8 核，同时有其他研究单元在跑），所以**绝对毫秒数不可信，只用来比较相对量级**。凡是估算都会标注"估算"。
 > 本文和 r11（three.js WebGPU）是互补关系：r11 定了渲染器、分档和点云；本文把 EnvironmentLayer 细化到可以直接写代码的程度。两者冲突的地方在 §7 统一说明。
@@ -16,10 +16,10 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **natural-disasters**（ABYSSAL） | 纯程序化的海洋与极端天气，**WebGL2/GLSL3**。包括：无状态闭式雨（完全在顶点着色器里算）；float RT 乒乓的 GPGPU 飞沫；128³ Perlin-Worley 与 32³ 细节噪声的运行时烘焙；四通道天气图；体积云 1/16 Bayer 摊销加重投影；Catmull-Rom 上采样；5 档质量加闭环自适应（含 `potato` 软件渲染档）；实例化线段闪电；GPU 分项计时 | **port**：它是 WebGL2 / 软件档的主要算法来源，GLSL 要改写成 TSL | V0.3（雨、雾、2D 云、质量控制）→ V0.4（体积云 Med 档）| ★★★★★ |
-| **Eanpa-Sky** | three r186 WebGPU/TSL 的天空与天气引擎，2026-09 仍在活跃开发。包括：**世界锚定的雨**加积分相位；雨向深度场（遮挡、落点、积水）；材质湿润包装；GPU 湿度历史；**确定性闪电节律**；云阴影图；快照插值过渡；按质量档的预设；懒加载；全景缓存云 | **port**：算法和工程约定。**reference**：整套引擎（只支持 WebGPU，资源 345 MB，着色器编译要几十秒）| V0.3（雨锚定、闪电、过渡）→ V0.5（湿地面、云阴影图、High 档）| ★★★★☆ |
-| **procedural-weather-threejs** | 文档形式的 skill，内容有：12 种天气状态参数表、转移矩阵与路由、生物群系预设、WGSL 粒子 compute 草稿、中点位移闪电、湿镜头和霜冻后处理 | **reference**：预设词汇、转移路由、UI 命名。代码有多处 bug（§2.3），不能照抄 | V0.3（预设表、路由）| ★★☆☆☆ |
-| **procedural-clouds** | 原生 WebGPU：compute 把 Blender 节点图（4D Perlin 加 4D Voronoi）写进 3D 密度缓存，再做全屏 ray march | **reference**：compute 写 3D 纹理加双缓冲的管线组织方式。**skip**：噪声本身，每个体素要评估约 650 个 Voronoi 格点，太贵 | V0.5（High 档云演化，作参考）| ★★☆☆☆ |
+| **natural-disasters**（ABYSSAL） | 纯程序化的海洋与极端天气，**WebGL2/GLSL3**。包括：无状态闭式雨（完全在顶点着色器里算）；float RT 乒乓的 GPGPU 飞沫；128³ Perlin-Worley 与 32³ 细节噪声的运行时烘焙；四通道天气图；体积云 1/16 Bayer 摊销加重投影；Catmull-Rom 上采样；5 档质量加闭环自适应（含 `potato` 软件渲染档）；实例化线段闪电；GPU 分项计时 | **port**：它是 WebGL2 / 软件档的主要算法来源，GLSL 要改写成 TSL | V0.3（雨、雾、2D 云、质量控制）→ V0.4（体积云 Med 档）| 5/5 |
+| **Eanpa-Sky** | three r186 WebGPU/TSL 的天空与天气引擎，2026-09 仍在活跃开发。包括：**世界锚定的雨**加积分相位；雨向深度场（遮挡、落点、积水）；材质湿润包装；GPU 湿度历史；**确定性闪电节律**；云阴影图；快照插值过渡；按质量档的预设；懒加载；全景缓存云 | **port**：算法和工程约定。**reference**：整套引擎（只支持 WebGPU，资源 345 MB，着色器编译要几十秒）| V0.3（雨锚定、闪电、过渡）→ V0.5（湿地面、云阴影图、High 档）| 4/5 |
+| **procedural-weather-threejs** | 文档形式的 skill，内容有：12 种天气状态参数表、转移矩阵与路由、生物群系预设、WGSL 粒子 compute 草稿、中点位移闪电、湿镜头和霜冻后处理 | **reference**：预设词汇、转移路由、UI 命名。代码有多处 bug（§2.3），不能照抄 | V0.3（预设表、路由）| 2/5 |
+| **procedural-clouds** | 原生 WebGPU：compute 把 Blender 节点图（4D Perlin 加 4D Voronoi）写进 3D 密度缓存，再做全屏 ray march | **reference**：compute 写 3D 纹理加双缓冲的管线组织方式。**skip**：噪声本身，每个体素要评估约 650 个 Voronoi 格点，太贵 | V0.5（High 档云演化，作参考）| 2/5 |
 
 **实现者先读这 12 条（每条都有源码或实测依据）：**
 
@@ -740,7 +740,7 @@ environment/
 | 算法成熟度 | 高（注释写明了每个参数为什么这样取，并有截图回归工具） | 很高（每个问题都有 review 报告和 GPU 夹具） | 低（有 bug） | 中（有 bug） |
 | 与点云城市的契合度 | 高（全是程序化，没有资源依赖） | 中（很多依赖 PBR 网格与 SSR；雨向捕获对点云不适用） | 中（参数表可用） | 低 |
 | 可回放性 | 雨是无状态的，但状态机用 `Math.random` | 雨和闪电都是确定性的 | 否 | 否 |
-| 2026 活跃度与 star | 273★，8 月仍更新 | 56★，9 月每天更新 | 11★，停更 | 6★，停更 |
+| 2026 活跃度与 star | 273 stars，8 月仍更新 | 56 stars，9 月每天更新 | 11 stars，停更 | 6 stars，停更 |
 
 **推荐排序**：① natural-disasters（WebGL2 与低端档的主体，算法直接移植）→ ② Eanpa-Sky（锚定、积分、确定性、湿地面、过渡这些"工程正确性"的范本，High 档的参考）→ ③ procedural-weather-threejs（预设命名、路由）→ ④ procedural-clouds（只参考 compute 3D 缓存的写法）。
 
@@ -775,7 +775,7 @@ environment/
 1. **§12 "300,000 particles → GPU Compute Shader"需要改写**：雨在所有档位都应该是无状态顶点着色器粒子（零 compute、可回放），compute 只用于需要"随风场积分"的沙尘、雪漂和风迹线，而且只在 WebGPU 档启用。另外要注明：WebGL2 回退下 compute 走 Transform Feedback，只能实例化绘制，在软件渲染上很慢（本文 §3.10）。
 2. **§16 EnvironmentLayer 的子节点应改成按"子系统"划分**，而不是按"天气种类"：`Wind / Precip(Rain·Snow·Dust·Splash) / Atmosphere(Sky·Fog·RainVeil) / Clouds(2D·Volume·Shadow) / Surface(Wetness·DSM) / Lightning / EnvLighting / Quality`（本文 §4.1）。原来的 `Sand` 与 `Rain` 并列，没有体现它们共享锚点、风场和雾的关系。还要补充 **EnvLighting**：点云没有颜色，环境视觉的主要来源是作用在点法线上的日照、云影、湿润、闪光和雾。
 3. **§18 E(x,y,z,t) 的字段应补上单位和"单一真值"**：能见度用 **MOR（米）**，消光系数由它换算（σ=3.0/MOR，并统一 2% 与 5% 阈值的口径）；降水用 mm/h（雪用水当量）；另外新增 `surfaceWetness / puddle`（服务端积分，τ 见 §3.6），以及用于回放的累积位移 `dispFall / dispWind`。`Temperature/Humidity/Pressure` 在 V0.3 只是占位，不驱动视觉。
-4. **§19–20 风场需要一个前后端统一的接口定义**（本文 §3.1）：Level 0/1 解析形式（风速、来向、幂律切变、阵风 σ、湍流尺度）加上 Level 2/3 栅格（`Data3DTexture RGBA16F`，A/B 双帧按时间插值，全局粗网格与局部细网格嵌套）。文档中 `wind/000_05.vdb` 的方案应改为"服务端插值后重采样成栅格再推送"，前端不读 VDB。还应写明坐标约定（ENU ↔ three Y-up）和风向"来向"的惯例。
+4. **§19–20 风场需要一个前后端统一的接口定义**（本文 §3.1）：Level 0/1 解析形式（风速、来向、幂律切变、阵风 σ、湍流尺度）加上 Level 2/3 栅格（`Data3DTexture RGBA16F`，A/B 双帧按时间插值，全局粗网格与局部细网格嵌套）。文档中 `wind/000_05.vdb` 的方案应改为"服务端插值后重采样成栅格再推送"，前端不读 VDB。还应写明坐标约定（ENU <-> three Y-up）和风向"来向"的惯例。
 5. **§21 风场可视化缺少档位与数据表达**：箭头网格（Low）、GPGPU 迹线（Med）、compute 迹线加尾迹（High）；颜色映射 |W|，用 lieflat 顺序色板；在 10/50/120 m 三个高度切片之间切换（对应无人机作业高度）。
 6. **§22 Rain Engine 的 Visual 部分应补上**：world-tiling 锚定、积分相位、亚像素补偿、DSM 遮挡、雨区门控（与云覆盖一致）、沙盘相机锚点与八度档（§3.2.6）、远景雨幕（σ_rain 并入雾）。Physics 部分的 `Visibility` 应明确为 `σ_rain(R)` 加到 MOR 里。
 7. **§23 Fog**：前端雾要用**高度积分**形式（§3.3），而不是 `scene.fog = FogExp2`；雾色要和天空地平线一致；Low 档在点云材质中逐顶点计算，不增加全屏 pass。

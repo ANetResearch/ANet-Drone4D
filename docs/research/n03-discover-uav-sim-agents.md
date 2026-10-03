@@ -15,22 +15,22 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **spencerfolk/rotorpy** ★311 · 2026-09-07 | 纯 Python 多旋翼 6DOF。有集总气动力矩（旋翼阻力 H 力、诱导入流、平动升力、挥舞力矩），有 Dryden 阵风、SE3 控制器、MinSnap、IMU/Mocap/相机传感器；v3 可经 MAVLink HIL 给 PX4 当物理引擎 | **port**：气动力矩 + Dryden + SE3 向量化后做成 mock **L2**（环境耦合层）；HIL 客户端参考 `px4_multirotor.py` | V0.3（L2 视觉联动）/ V0.4（风力进动力学）/ V0.4–V0.6（HIL） | ★★★★★ |
-| **learnsyslab/crazyflow** ★180 · 2026-09-26 | JAX 批量可微仿真。状态按 `(n_worlds, n_drones, ·)` 以 SoA 组织，**step pipeline 由命名阶段组成、可插拔**，有系统辨识出的 `so_rpy` 模型（含 `hb_x500` 参数），有 splat/viser web viewer | **port（架构）**：机群 `FleetSim` 采用 SoA + 命名 pipeline；`so_rpy` 作为 L1.5 廉价姿态模型 | MVP / V0.4 | ★★★★☆ |
-| **PegasusSimulator** ★887 · 2026-07-24 | Isaac Sim 上的多旋翼框架。`Backend` 抽象（PX4 MAVLink / ArduPilot / ROS2 / Python），另有 PX4 lockstep HIL 实现和 IMU/GPS/Baro/Mag 噪声模型 | **port（接口）** `Backend` 协议 + 传感器噪声参数；**reference** Isaac 部分（需要 GPU） | V0.4（HIL）/ V0.5+（GPU 节点） | ★★★★☆ |
-| **XDEI-Group/AerialClaw** ★132 · 2026-07-08（2026-03 新建） | LLM 空中智能体框架：brain–skill–runtime、硬/软技能、单步闭环 AgentLoop、安全包线配置、三级集群（commander/coordinator/executor）、设备协议、mock 适配器 | **port（语义）**：Skill 元数据 schema、单步决策 JSON、审批分级、三级任务分解 | V1.0（Agent Runtime） | ★★★★☆ |
-| **PeterJBurke/droneserver** ★7 · 2026-09-20 | MCP 服务器，**把 LLM 视为不可信指挥官**：11 步守卫管线、4 级工具分级、一次性确认令牌、服务端地理围栏（速度指令会前推投影）、只追加审计 | **port**：守卫管线 + Tier 表 + 令牌，做成我方 Agent API / MCP 层的安全中间件 | V0.6（命令网关）/ V1.0（MCP） | ★★★★☆（star 少，但设计最扎实） |
-| **zehuilu/CBBA-Python** ★130 · 2021-04-22 | CBBA 的 Python 实现，支持时间窗和异构兼容矩阵 | **port**：算法骨架（要修正打分以满足 DMG），作为 ANet 断网 / 去中心化场景的分配器 | V1.0 | ★★★☆☆ |
-| learnsyslab/gym-pybullet-drones ★2146 · 2026-09-06 | PyBullet 多机 RL 环境 | **port（公式）**：地效、下洗流、阻力三个经验模型 | V0.6 | ★★★☆☆ |
-| alireza787b/mavsdk_drone_show ★325 · 2026-09-25 | FastAPI + React 地面站，管理 PX4 SITL 机群，含 QuickScout SAR 覆盖规划、agent_runtime/MCP | **port**：`BoustrophedonPlanner`（多机分区覆盖）；**reference**：地面站运维流程 | V0.6 | ★★★☆☆ |
-| PX4 SIH / Hawkeye（refs 已有 / PX4/Hawkeye ★84） | 真飞控 + 无 GPU 物理 / 原生 3D 回放器 | **adopt**（见 r20）/ **reference**（ULog 多机回放 UI） | V0.2 / V0.6 | ★★★★★ / ★★☆☆☆ |
-| isaac-sim/IsaacLab ★8240 · 2026-09-28 | v2.3.2 起 contrib 新增 `Multirotor` + thruster 执行器 + ARL 无人机任务 | **reference**（GPU 节点的 RL 路线） | V1.x | ★★★☆☆ |
-| Genesis-Embodied-AI/genesis-world ★29992 · 2026-09-27 | 通用物理 AI 引擎，带 drone 例程（hover_env） | **reference** | V1.x | ★★☆☆☆ |
-| ntnu-arl/aerial_gym_simulator ★776 · 2026-06-28 | Isaac Gym 上的 GPU 并行多旋翼，Warp 光线投射 LiDAR | **reference**（依赖 GPU） | V1.x | ★★☆☆☆ |
-| robotmcp/ros-mcp-server ★1479 · 2026-09-27 | rosbridge 型 MCP，接任意 ROS/ROS2 机器人 | **reference**：走 ROS2 链路时的 LLM 接入 | V1.x | ★★★☆☆ |
-| Cosys-Lab/Cosys-AirSim ★433 · 2026-09-16（UE 5.8） | 仍在维护的 AirSim 分支 | **reference**：GPU 节点上替代 AirSim 做传感器仿真 | V1.x | ★★☆☆☆ |
-| SHAILAB-IPEC/OpenFly-Platform ★369 · 2026-01-13 | 空中 VLN 工具链（点云→语义→轨迹→指令） | **reference**：Agent 评测数据的生成思路 | V1.x | ★★☆☆☆ |
-| OmniDrones ★583 / Flightmare ★1425 / Agilicious ★647 | Isaac Sim 4.1 RL / Unity 渲染 / 敏捷飞行 | **skip**（维护者自述难以维护，或 2023 年后无提交） | — | ★☆☆☆☆ |
+| **spencerfolk/rotorpy** 311 stars · 2026-09-07 | 纯 Python 多旋翼 6DOF。有集总气动力矩（旋翼阻力 H 力、诱导入流、平动升力、挥舞力矩），有 Dryden 阵风、SE3 控制器、MinSnap、IMU/Mocap/相机传感器；v3 可经 MAVLink HIL 给 PX4 当物理引擎 | **port**：气动力矩 + Dryden + SE3 向量化后做成 mock **L2**（环境耦合层）；HIL 客户端参考 `px4_multirotor.py` | V0.3（L2 视觉联动）/ V0.4（风力进动力学）/ V0.4–V0.6（HIL） | 5/5 |
+| **learnsyslab/crazyflow** 180 stars · 2026-09-26 | JAX 批量可微仿真。状态按 `(n_worlds, n_drones, ·)` 以 SoA 组织，**step pipeline 由命名阶段组成、可插拔**，有系统辨识出的 `so_rpy` 模型（含 `hb_x500` 参数），有 splat/viser web viewer | **port（架构）**：机群 `FleetSim` 采用 SoA + 命名 pipeline；`so_rpy` 作为 L1.5 廉价姿态模型 | MVP / V0.4 | 4/5 |
+| **PegasusSimulator** 887 stars · 2026-07-24 | Isaac Sim 上的多旋翼框架。`Backend` 抽象（PX4 MAVLink / ArduPilot / ROS2 / Python），另有 PX4 lockstep HIL 实现和 IMU/GPS/Baro/Mag 噪声模型 | **port（接口）** `Backend` 协议 + 传感器噪声参数；**reference** Isaac 部分（需要 GPU） | V0.4（HIL）/ V0.5+（GPU 节点） | 4/5 |
+| **XDEI-Group/AerialClaw** 132 stars · 2026-07-08（2026-03 新建） | LLM 空中智能体框架：brain–skill–runtime、硬/软技能、单步闭环 AgentLoop、安全包线配置、三级集群（commander/coordinator/executor）、设备协议、mock 适配器 | **port（语义）**：Skill 元数据 schema、单步决策 JSON、审批分级、三级任务分解 | V1.0（Agent Runtime） | 4/5 |
+| **PeterJBurke/droneserver** 7 stars · 2026-09-20 | MCP 服务器，**把 LLM 视为不可信指挥官**：11 步守卫管线、4 级工具分级、一次性确认令牌、服务端地理围栏（速度指令会前推投影）、只追加审计 | **port**：守卫管线 + Tier 表 + 令牌，做成我方 Agent API / MCP 层的安全中间件 | V0.6（命令网关）/ V1.0（MCP） | 4/5（star 少，但设计最扎实） |
+| **zehuilu/CBBA-Python** 130 stars · 2021-04-22 | CBBA 的 Python 实现，支持时间窗和异构兼容矩阵 | **port**：算法骨架（要修正打分以满足 DMG），作为 ANet 断网 / 去中心化场景的分配器 | V1.0 | 3/5 |
+| learnsyslab/gym-pybullet-drones 2146 stars · 2026-09-06 | PyBullet 多机 RL 环境 | **port（公式）**：地效、下洗流、阻力三个经验模型 | V0.6 | 3/5 |
+| alireza787b/mavsdk_drone_show 325 stars · 2026-09-25 | FastAPI + React 地面站，管理 PX4 SITL 机群，含 QuickScout SAR 覆盖规划、agent_runtime/MCP | **port**：`BoustrophedonPlanner`（多机分区覆盖）；**reference**：地面站运维流程 | V0.6 | 3/5 |
+| PX4 SIH / Hawkeye（refs 已有 / PX4/Hawkeye 84 stars） | 真飞控 + 无 GPU 物理 / 原生 3D 回放器 | **adopt**（见 r20）/ **reference**（ULog 多机回放 UI） | V0.2 / V0.6 | 5/5 / 2/5 |
+| isaac-sim/IsaacLab 8240 stars · 2026-09-28 | v2.3.2 起 contrib 新增 `Multirotor` + thruster 执行器 + ARL 无人机任务 | **reference**（GPU 节点的 RL 路线） | V1.x | 3/5 |
+| Genesis-Embodied-AI/genesis-world 29992 stars · 2026-09-27 | 通用物理 AI 引擎，带 drone 例程（hover_env） | **reference** | V1.x | 2/5 |
+| ntnu-arl/aerial_gym_simulator 776 stars · 2026-06-28 | Isaac Gym 上的 GPU 并行多旋翼，Warp 光线投射 LiDAR | **reference**（依赖 GPU） | V1.x | 2/5 |
+| robotmcp/ros-mcp-server 1479 stars · 2026-09-27 | rosbridge 型 MCP，接任意 ROS/ROS2 机器人 | **reference**：走 ROS2 链路时的 LLM 接入 | V1.x | 3/5 |
+| Cosys-Lab/Cosys-AirSim 433 stars · 2026-09-16（UE 5.8） | 仍在维护的 AirSim 分支 | **reference**：GPU 节点上替代 AirSim 做传感器仿真 | V1.x | 2/5 |
+| SHAILAB-IPEC/OpenFly-Platform 369 stars · 2026-01-13 | 空中 VLN 工具链（点云→语义→轨迹→指令） | **reference**：Agent 评测数据的生成思路 | V1.x | 2/5 |
+| OmniDrones 583 stars / Flightmare 1425 stars / Agilicious 647 stars | Isaac Sim 4.1 RL / Unity 渲染 / 敏捷飞行 | **skip**（维护者自述难以维护，或 2023 年后无提交） | — | 1/5 |
 
 **实现者先看这 10 条：**
 
@@ -51,7 +51,7 @@
 
 实测时间 2026-09-28。star 来自 GitHub API；**最近提交**取默认分支 `commits.atom` 第一条的 `<updated>`；"新建"来自 `created_at`。
 
-| 仓库 | ★ | 最近提交 | 新建 | 语言 / 依赖 | GPU | 结论 |
+| 仓库 | stars | 最近提交 | 新建 | 语言 / 依赖 | GPU | 结论 |
 |---|---|---|---|---|---|---|
 | isaac-sim/IsaacLab | 8240 | 2026-09-28 | 2022-11 | Python / Isaac Sim | 必需 | reference |
 | Genesis-Embodied-AI/genesis-world（原 Genesis） | 29992 | 2026-09-27 | 2023-10 | Python / Taichi | 推荐（可以 CPU） | reference |
@@ -336,7 +336,7 @@ loop every dt=4ms (250 Hz) in World clock:
 - 姿态：`R_ned_frd = T · R_enu_flu · B`；四元数由矩阵转换，不要手写分量置换；
 - 加速度计 / 陀螺（FRD）：`(a_x, −a_y, −a_z)` 和 `(ω_x, −ω_y, −ω_z)`（RotorPy `_imu`）；
 - ENU → Three.js（Y-up 右手系）：`three = (x_enu, z_enu, −y_enu)`。可验证 `E×U = −N`，右手性成立；
-- ENU → 经纬度：小范围可用等距矩形近似（RotorPy `enu_to_geodetic`，10–20 km 内）。正式实现用 pymap3d 的 ENU↔ECEF↔LLA。
+- ENU → 经纬度：小范围可用等距矩形近似（RotorPy `enu_to_geodetic`，10–20 km 内）。正式实现用 pymap3d 的 ENU<->ECEF<->LLA。
 
 **IMU 噪声**（Pegasus `sensors/imu.py`，离散化公式 `σ_d = σ/√dt`）：
 
@@ -474,13 +474,13 @@ sweep_w 由相机 FOV 与高度决定：`2h·tan(FOV/2)`。
 
 | 方案 | 无 GPU | 环境场耦合 | 多机规模（本机） | 飞控真实度 | 2026 活跃 | 本项目排序 |
 |---|---|---|---|---|---|---|
-| 我方 FleetSim（L1 + L2，本文 + r20） | ✓ | ✓ 原生（均值 + 湍流 + 下洗） | L2 约 50@250 Hz / 约 300@100 Hz；L1 1000+ | 中高 | — | **1（MVP–V0.6）** |
-| PX4 SIH 容器（r20） | ✓ | ✗（仅均匀水平风） | ≤8 实时 | 最高 | ★★★★★ | **2（V0.2）** |
-| PX4 + HIL（我方物理，RotorPy / Pegasus 方式） | ✓ | ✓ | 约 8–16 | 最高 | ★★★★☆ | **3（V0.4–V0.6）** |
-| RotorPy 原样（solve_ivp） | ✓ | ✓ | 个位数 | 中 | ★★★★☆ | 仅作参考实现和回归基准 |
-| Crazyflow 原样（JAX + MJX） | ✓（CPU 3.3 M steps/s @64 worlds，README 数据，7950X） | 插件 | 大 | 中（Crazyflie / x500） | ★★★★★ | RL / 批量蒙特卡洛时 adopt |
-| gym-pybullet-drones | ✓ | 有限 | 数十 | 中 | ★★★★☆ | 参考公式 |
-| Pegasus / Isaac Lab / Aerial Gym / OmniDrones / Genesis | ✗（Genesis 可 CPU，但慢） | ✓ | 大 | 高（渲染） | Pegasus、Isaac Lab 活跃；OmniDrones 停滞 | GPU 节点，V1.x |
+| 我方 FleetSim（L1 + L2，本文 + r20） | yes | yes 原生（均值 + 湍流 + 下洗） | L2 约 50@250 Hz / 约 300@100 Hz；L1 1000+ | 中高 | — | **1（MVP–V0.6）** |
+| PX4 SIH 容器（r20） | yes | no（仅均匀水平风） | ≤8 实时 | 最高 | 5/5 | **2（V0.2）** |
+| PX4 + HIL（我方物理，RotorPy / Pegasus 方式） | yes | yes | 约 8–16 | 最高 | 4/5 | **3（V0.4–V0.6）** |
+| RotorPy 原样（solve_ivp） | yes | yes | 个位数 | 中 | 4/5 | 仅作参考实现和回归基准 |
+| Crazyflow 原样（JAX + MJX） | yes（CPU 3.3 M steps/s @64 worlds，README 数据，7950X） | 插件 | 大 | 中（Crazyflie / x500） | 5/5 | RL / 批量蒙特卡洛时 adopt |
+| gym-pybullet-drones | yes | 有限 | 数十 | 中 | 4/5 | 参考公式 |
+| Pegasus / Isaac Lab / Aerial Gym / OmniDrones / Genesis | no（Genesis 可 CPU，但慢） | yes | 大 | 高（渲染） | Pegasus、Isaac Lab 活跃；OmniDrones 停滞 | GPU 节点，V1.x |
 
 ### 5.2 LLM / Agent 接入
 
@@ -500,7 +500,7 @@ sweep_w 由相机 FOV 与高度决定：`2h·tan(FOV/2)`。
 | 集中式 Hungarian / SSI（统一打分） | V0.6，≤50 机，通信可靠 | **1** |
 | ANet 合同网（d05） | V1.0，跨组织 / 异构，秒级延迟可接受 | **2** |
 | CBBA（修 DMG） | 断网 / 弱连通、去中心化实验 | **3** |
-| OR-Tools / PyVRP（mTSP / VRP，带电量容量约束） | 大量航点、覆盖后排序；★14115 / ★702，2026 活跃 | 候选（V0.6 前先做 PoC 再定） |
+| OR-Tools / PyVRP（mTSP / VRP，带电量容量约束） | 大量航点、覆盖后排序；14115 stars / 702 stars，2026 活跃 | 候选（V0.6 前先做 PoC 再定） |
 
 ---
 
@@ -519,7 +519,7 @@ sweep_w 由相机 FOV 与高度决定：`2h·tan(FOV/2)`。
 | R9 | LLM 延迟 1–5 s；ANet 委派约 1 s（d05 实测） | 不能进控制环 | LLM 只下任务级技能；所有运动由 L1 控制律或 PX4 执行 |
 | R10 | 提示注入、伪造 / 重放确认令牌、越权 | 安全事故 | droneserver 守卫；令牌绑定 `drone_id + 参数指纹`；审计只追加 |
 | R11 | Dryden 系数中 V 取常数 1 m/s（RotorPy） | 高速时湍流频谱失真 | V = max(‖v_a‖, 1)，每 0.5 s 更新系数 |
-| R12 | 新项目 star 很少（droneserver ★7、AerialClaw ★132），未来维护不确定 | 依赖断更 | 一律按 port（移植语义），不作运行时依赖 |
+| R12 | 新项目 star 很少（droneserver 7 stars、AerialClaw 132 stars），未来维护不确定 | 依赖断更 | 一律按 port（移植语义），不作运行时依赖 |
 | R13 | UrbanScene3D 路径是 UE 左手系、单位 cm，pitch=90 表示垂直向下 | 回放方向错 | 转换 `(x, y, z)_UE[cm] → ENU[m] = (x/100, −y/100, z/100)`，yaw 取反，并用场景点云包围盒校验（待与数据单元确认轴向） |
 | R14 | 许可证 | — | 科研用途，按要求忽略 |
 
@@ -543,7 +543,7 @@ sweep_w 由相机 FOV 与高度决定：`2h·tan(FOV/2)`。
    - `rotor_speeds`、`airspeed / wind_est`、`home`、`geofence_status`；
    - `effect_status`（对齐 d05 的 OK / UNVERIFIED）、`stalled`。
 
-   另外单独给出 ENU↔NED↔Three.js 的换算（§3.6）。
+   另外单独给出 ENU<->NED<->Three.js 的换算（§3.6）。
 5. **§29 多机架构只写了"每机一个 PX4 SITL"，缺时钟与交互。** 应补充：
    - SIH 多进程时钟漂移（r20）；
    - 机间交互（下洗流、避碰、通信距离）必须在统一 step pipeline 中计算；

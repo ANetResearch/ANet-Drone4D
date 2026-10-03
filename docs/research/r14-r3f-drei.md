@@ -3,8 +3,8 @@
 > 研究单元：r14 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §3、§4、§9–§16、§21、§28、§34、§36–§40、§43
 >
 > 仓库快照（refs 下均为 master 的 shallow clone；下文路径相对各仓库根目录）：
-> - `refs/web3d/react-three-fiber` @ `db32547`（2026-09-27，★32582）。master 即稳定线 **`@react-three/fiber@9.8.1`**，npm latest 发布于 2026-09-24。
-> - `refs/web3d/drei` @ `66b9bda`（2026-09-25，★9900）。master 即稳定线 **`@react-three/drei@10.7.9`**，npm latest 发布于 2026-09-25。
+> - `refs/web3d/react-three-fiber` @ `db32547`（2026-09-27，32582 stars）。master 即稳定线 **`@react-three/fiber@9.8.1`**，npm latest 发布于 2026-09-24。
+> - `refs/web3d/drei` @ `66b9bda`（2026-09-25，9900 stars）。master 即稳定线 **`@react-three/drei@10.7.9`**，npm latest 发布于 2026-09-25。
 >
 > 补充 clone（只读，放在 `.cache/research/r14/`，原因：WebGPU 原生支持只存在于 alpha 分支，master 上没有）：
 > - `r3f-v10`：R3F `v10` 分支 @ `14007b4`（2026-09-26），即 **`10.0.0-alpha.5`**（npm alpha tag，2026-09-08）。另有 canary 版本几乎每天发布。
@@ -25,10 +25,10 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **react-three-fiber** v9.8.1（稳定） | three.js 的 React reconciler：`<Canvas>`/`createRoot`、帧循环（`useFrame`/`invalidate`/`advance`）、zustand root store、指针事件系统、`performance.regress` 自适应钩子，支持 async `gl` 工厂接入 WebGPURenderer | **adopt**，作为 3D 视口的场景宿主和组合层，只负责低频、结构性、可编辑的对象。热路径（点云 LOD、遥测、粒子）**不走 React** | V0.1 起 | ★★★★★ |
-| **react-three-fiber** v10.0.0-alpha.5 | 原生 WebGPU：入口拆分（`/webgpu`、`/legacy`、`/extension`），基于 `@pmndrs/scheduler` 的**相位调度**（phase/before/after/fps/drop），多 canvas 共享同一个 WebGPURenderer，`@react-three/tsl` hooks，`setRenderOverride`，`onFramed`/`onOccluded` 可见性事件 | **reference 加迁移目标**。适配层按 v10 语义设计（相位、render override），等 v10 stable 后切换 | V0.3–V0.4 评估，稳定后迁移 | ★★★★（alpha 扣分） |
-| **drei** v10.7.9（稳定） | R3F 组件库，约 120 个组件 | **选择性 adopt**：CameraControls、GizmoHelper（要设 renderPriority）、Html（只用于选中对象）、Detailed、meshBounds、Bvh、PerformanceMonitor、AdaptiveDpr/AdaptiveEvents、StatsGl（仅开发期）、View（FPV 画中画）。**reference**：Instances、Trail、Line、Clouds。**skip**：`Points`/`PointMaterial`（每帧整块重传，不兼容 WebGPU）、Sky/Stars/Sparkles/Grid/Outlines/Text（GLSL，在 WebGPURenderer 下失效或崩溃）、Stats（DOM 样式与设计体系冲突） | V0.1 起 | ★★★★ |
-| **drei** v11.0.0-alpha.7 | 按渲染器拆分成 `core`/`legacy`/`webgpu`/`external`/`experimental`，`component-status.json` 追踪每个组件的 WebGPU 移植状态（144 个组件：107 个 agnostic，27 个 implemented，4 个 todo，6 个 wont-port），新增 three Inspector 集成 | **迁移目标**。实测它的 `/webgpu` 入口下 14 个组件在 WebGPU 与 WebGL2 两个后端都能正常渲染 | 随 R3F v10 一起迁移 | ★★★★ |
+| **react-three-fiber** v9.8.1（稳定） | three.js 的 React reconciler：`<Canvas>`/`createRoot`、帧循环（`useFrame`/`invalidate`/`advance`）、zustand root store、指针事件系统、`performance.regress` 自适应钩子，支持 async `gl` 工厂接入 WebGPURenderer | **adopt**，作为 3D 视口的场景宿主和组合层，只负责低频、结构性、可编辑的对象。热路径（点云 LOD、遥测、粒子）**不走 React** | V0.1 起 | 5/5 |
+| **react-three-fiber** v10.0.0-alpha.5 | 原生 WebGPU：入口拆分（`/webgpu`、`/legacy`、`/extension`），基于 `@pmndrs/scheduler` 的**相位调度**（phase/before/after/fps/drop），多 canvas 共享同一个 WebGPURenderer，`@react-three/tsl` hooks，`setRenderOverride`，`onFramed`/`onOccluded` 可见性事件 | **reference 加迁移目标**。适配层按 v10 语义设计（相位、render override），等 v10 stable 后切换 | V0.3–V0.4 评估，稳定后迁移 | 4/5（alpha 扣分） |
+| **drei** v10.7.9（稳定） | R3F 组件库，约 120 个组件 | **选择性 adopt**：CameraControls、GizmoHelper（要设 renderPriority）、Html（只用于选中对象）、Detailed、meshBounds、Bvh、PerformanceMonitor、AdaptiveDpr/AdaptiveEvents、StatsGl（仅开发期）、View（FPV 画中画）。**reference**：Instances、Trail、Line、Clouds。**skip**：`Points`/`PointMaterial`（每帧整块重传，不兼容 WebGPU）、Sky/Stars/Sparkles/Grid/Outlines/Text（GLSL，在 WebGPURenderer 下失效或崩溃）、Stats（DOM 样式与设计体系冲突） | V0.1 起 | 4/5 |
+| **drei** v11.0.0-alpha.7 | 按渲染器拆分成 `core`/`legacy`/`webgpu`/`external`/`experimental`，`component-status.json` 追踪每个组件的 WebGPU 移植状态（144 个组件：107 个 agnostic，27 个 implemented，4 个 todo，6 个 wont-port），新增 three Inspector 集成 | **迁移目标**。实测它的 `/webgpu` 入口下 14 个组件在 WebGPU 与 WebGL2 两个后端都能正常渲染 | 随 R3F v10 一起迁移 | 4/5 |
 
 **关键结论（实现者先读这几条）**
 
@@ -82,7 +82,7 @@
 
 | 项 | react-three-fiber | drei |
 |---|---|---|
-| Star / 活跃度 | ★32582；master 最后提交 2026-09-27；2026 年发布了 9.5 到 9.8.1（共 5 个 minor），以及 v10 的 alpha.0 到 alpha.5；canary 每天发布 | ★9900；master 最后提交 2026-09-25（10.7.8 发布于 08-05，10.7.9 于 09-25）；v11 的 alpha.1 到 alpha.7 在 2026 年发布 |
+| Star / 活跃度 | 32582 stars；master 最后提交 2026-09-27；2026 年发布了 9.5 到 9.8.1（共 5 个 minor），以及 v10 的 alpha.0 到 alpha.5；canary 每天发布 | 9900 stars；master 最后提交 2026-09-25（10.7.8 发布于 08-05，10.7.9 于 09-25）；v11 的 alpha.1 到 alpha.7 在 2026 年发布 |
 | 稳定线 | `@react-three/fiber@9.8.1`，peer 为 `react >=19 <19.4`、`three >=0.156`；依赖 zustand 5、its-fine、react-use-measure、suspend-react、scheduler 0.28 | `@react-three/drei@10.7.9`，peer 为 `@react-three/fiber ^9`、`three >=0.159`；依赖 camera-controls ^3.1、three-stdlib ^2.35、three-mesh-bvh ^0.8.3、stats-gl、troika-three-text、meshline、maath、tunnel-rat、@mediapipe/tasks-vision、hls.js |
 | 下一代 | `10.0.0-alpha.5`（v10 分支，pnpm 加 unbuild 构建）；新增 `@pmndrs/scheduler` 与 `@react-three/tsl`；peer 为 `three >=0.185`、`react >=19.0 <19.3` | `11.0.0-alpha.7`（`v11-working` 分支），peer 为 `@react-three/fiber >=10.0.0-0`、`three >=0.185`；新增 exports：`/core`、`/legacy`、`/webgpu`、`/external`、`/experimental`、`/native` |
 | 规模 | v9 核心 `packages/fiber/src` 约 3.8k 行 TS；v10 约 8.4k 行（`core/renderer.tsx` 1204 行，`core/events.ts` 880 行） | 约 120 个组件，每个组件一个文件（v10）；v11 改为每个组件一个目录，含 stories、docs、test |
@@ -472,7 +472,7 @@ per frame (fps 30):
 
 | 排名 | 仓库或线 | 综合评价 |
 |---|---|---|
-| 1 | **R3F v9.8.x** | 2026 年高度活跃（★32.5k，发布频率高），是 React 与 three 集成的事实标准。实测：框架热路径开销可以忽略，async WebGPU 工厂可用，卸载与 dispose 行为完善 |
+| 1 | **R3F v9.8.x** | 2026 年高度活跃（32.5k stars，发布频率高），是 React 与 three 集成的事实标准。实测：框架热路径开销可以忽略，async WebGPU 工厂可用，卸载与 dispose 行为完善 |
 | 2 | **drei v10.7.x（选择性使用）** | 相机、Gizmo、性能钩子、HTML 叠加能节省大量工程量，但**所有 GLSL 组件在 WebGPU 下不可用**，一些"便捷"组件是性能陷阱（§2.3） |
 | 3 | **R3F v10 + drei v11（alpha）** | 设计上最契合本项目：相位调度、WebGPU 一等支持、多 canvas、TSL hooks、可见性事件、render override。风险：处于 alpha（alpha.0 发布于 2026-01，到 09 月仍是 alpha.5），bundle 587 KB gz，React peer 要求 `<19.3`。**作为 V0.3–V0.4 的迁移目标** |
 

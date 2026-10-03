@@ -103,7 +103,7 @@
 | r18 | 4DGS | `r18-4dgs.md` | 时间窗不透明度与回放 SoA 结构进入 MVP；动态外观重建放 V1.x |
 | r19 | Prometheus（P600） | `r19-prometheus-amov.md` | P600 实际是 ROS1 + 私有地面站 TCP/UDP JSON 协议；移植控制权状态机与 Mock 动力学 |
 | r20 | PX4 | `r20-px4.md` | SIH 容器多机；PX4-lite 控制级联移植并与 SIH 对照验证；端口与 namespace 规则；保真度阶梯 |
-| r21 | MAVSDK / MAVROS / MAVLink | `r21-mavsdk-mavros-mavlink.md` | DroneAdapter 抽象；MAVSDK v4 原生 Python；命令微协议；NED↔ENU 闭式公式 |
+| r21 | MAVSDK / MAVROS / MAVLink | `r21-mavsdk-mavros-mavlink.md` | DroneAdapter 抽象；MAVSDK v4 原生 Python；命令微协议；NED<->ENU 闭式公式 |
 | r22 | PX4 多机 / XTDrone | `r22-px4-multi-sim-xtdrone.md` | 每机一个容器的编排与生命周期状态机；编队律加前馈；SIH 风注入 |
 | r23 | AirSim / gz-sim | `r23-airsim-gzsim.md` | 带减速约束的速度限幅与抗饱和；风力模型；gz world 导出器；AirSim 天气是反面教材 |
 | r24 | MRS UAV | `r24-mrs-uav.md` | Safety & Health 模块、Flight FSM、围栏、电量 RTL、多机避让 |
@@ -126,14 +126,14 @@
 ## 2. 全仓库选型矩阵
 
 说明：
-- ★ 与"最后提交"来自各单元 2026-09-28 的实测。`—` 表示未查询或不适用。
+- stars 与"最后提交"来自各单元 2026-09-28 的实测。`—` 表示未查询或不适用。
 - "落点模块"采用 §3.0 的统一目录命名。
 - "版本"指落点里程碑。
 - 结论写作"A + B"时表示分部分处理，例如整体 adopt、部分算法 port。
 
 ### 2.1 重建（Reality → Geometry）
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | Robbyant/lingbot-map | 17140 | 2026-09-08 | 流式前馈视觉重建，主引擎，需 CUDA（估计峰值 16–20 GB） | adopt（GPU worker 以库方式调用，锁 commit 849e690） | `reconstruction/engines/lingbot` | V0.1 接口与 Mock；V0.5 真推理；V1.0 在线流式 |
 | nerfstudio-project/viser | 2794 | 2026-09-24 | Python→Web 流式可视化 | port（混合二进制帧、合并缓冲、客户端插值、泄漏安全的 BufferGeometry）+ adopt（仅内部 Recon QA 查看器） | `apps/api/rt`、`tools/recon_qa` | V0.1 |
@@ -160,7 +160,7 @@
 
 ### 2.2 LiDAR、定位与融合
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | Livox-SDK/livox_ros_driver2 | 853 | 2026-09-21 | MID-360(S) 驱动；其数据契约作为 mock 标准 | adopt（锁 1.2.8 加本地补丁） | `packages/contracts/sensor_lidar`、Sensor Gateway | V0.2 契约；V0.5 真机 |
 | Livox-SDK/Livox-SDK2 | 516 | 2026-09-21 | 协议真源 | adopt（间接依赖）+ port（codec、虚拟设备 SIL） | `sensors/lidar/livox_codec.py`、`simulation/sil` | V0.5 / V0.6 |
@@ -185,7 +185,7 @@
 
 ### 2.3 World Package、切片与格式
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | potree/PotreeConverter | 818 | 2026-09-23 | Potree 2.0 格式与算法标准（本机 GCC 13 无法编译 master） | port（numpy `worldpkg tile`，5M 点约 5–6 s）+ adopt（可选，>1 亿点时走 Docker） | `world/pointcloud/tiler.py` | V0.1 |
 | PDAL/PDAL | 1416 | 2026-09-21 | 重投影、地面、DEM、HAG、着色、COPC | adopt（Docker `pdal/pdal`）；V0.1 用 numpy + pyproj 替代 | `world/georef`、`world/terrain` | V0.4–V0.5 |
@@ -193,14 +193,14 @@
 | CesiumGS/3d-tiles | 2612 | 2026-08-17 | 3D Tiles 1.1 规范；SSE 语义 | adopt（作为**导出**规范；运行时不直接使用，见 §8 C3） | `world/export/tiles3d` | V0.5 / V1.0 |
 | CesiumGS/3d-tiles-tools | 539 | 2026-07-24 | 隐式瓦片客户端代码、CLI（打包、合并、升级） | port（隐式客户端）+ adopt（CLI） | `world/packaging` | V0.5 |
 | CesiumGS/3d-tiles-validator | 475 | 2026-09-16 | 导出产物的 CI 门禁 | adopt | `tools/ci/validate-world.sh` | V0.5 |
-| CesiumGS/cdb-to-3dtiles ／ yeyan00/potree23dtiles | 92 ／ 58 | 2024-05 ／ 2021-10 | REPLACE 网格规则；Potree↔3D Tiles 子节点位序映射 | reference | — | V0.5–V0.6 |
+| CesiumGS/cdb-to-3dtiles ／ yeyan00/potree23dtiles | 92 ／ 58 | 2024-05 ／ 2021-10 | REPLACE 网格规则；Potree<->3D Tiles 子节点位序映射 | reference | — | V0.5–V0.6 |
 | py3dtiles | 234 | 2026-09-18 | 其 1.1 输出不合法 | reference（仅做对照） | — | — |
 | connormanning/copc.js + hobuinc/laz-perf + hobuinc/untwine | 63 ／ 103 ／ 78 | 2026-08 至 2026-09 | COPC 读写（归档与交换） | adopt | `engine/pointcloud/io/copc`、`world/export/copc` | V0.5 |
 | visgl/loaders.gl（copc 模块） | 855 | 2026-09-26 | copc.js 的替代实现（v5 alpha） | reference | — | V0.5+ |
 
 ### 2.4 Web 3D 引擎与点云渲染
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | mrdoob/three.js | 116010 | 2026-09-28 | 唯一核心渲染引擎（`three/webgpu`、`three/tsl`，也包含经典 WebGLRenderer） | adopt（`~0.186.1`） | `viewport/renderer.ts`、全部 engine | V0.1 起 |
 | tentone/potree-core | 255 | 2026-09-14 | 库化 Potree 内核 | port（hierarchy、LRU、DEFAULT 解码、GLSL 点材质、EDLPass）+ adopt（dev 交叉验证页） | `engine/pointcloud/{io,core,render/glsl}` | V0.1 |
@@ -227,7 +227,7 @@
 
 ### 2.5 环境视觉与物理风场
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | Token-Gremlin/natural-disasters | 273 | 2026-08-31 | WebGL2/软件档天气算法主来源：无状态雨、GPGPU、Bayer 摊销云、质量闭环 | port（GLSL 改写为 TSL，另保留 GLSL 版本） | `engine/environment/*` | V0.3–V0.4 |
 | SkyeShark/Eanpa-Sky | 56 | 2026-09-12 | 世界锚定降水、积分相位、确定性闪电、过渡、湿润 | port（算法与约定） | `engine/environment/*`、`services/sim/environment` | V0.3–V0.5 |
@@ -246,7 +246,7 @@
 
 ### 2.6 动态世界（4D）
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | fudan-zvg/4d-gaussian-splatting | 1038 | 2026-01-12 | 时间窗不透明度与时间预滤波；4D 切片 | port | `engine/materials/TemporalWindowNode` | V0.2 回放；V1.0+ |
 | hustvl/4DGaussians | 3950 | 2024-10-27 | HexPlane；训练改走 gsplat.contrib.dynamic | reference | — | V1.0+ |
@@ -254,7 +254,7 @@
 
 ### 2.7 仿真与飞控
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | amov-lab/Prometheus | 3265 | 2025-11-21 | P600 软件栈；私有地面站协议（TCP 55555 / UDP 8889 / TCP 55556，JSON 加 CRC-16/ARC） | port（codec、控制权状态机、fake_uav 级联、健康规则） | `sim/backends/prometheus`、`sim/core/{authority,command,health}.py` | V0.1 语义；V0.2 模拟器；V0.5 真机 |
 | PX4/PX4-Autopilot | 12707 | 2026-09-27 | SIH 容器多机、控制级联、轨迹平滑、状态语义 | adopt（`px4io/px4-sitl` 镜像）+ port（PX4-lite 级联，约 250 行 numpy） | `sim/fleet/px4lite.py`、`sim/backends/px4_sih` | MVP 控制律；V0.2 SIH；V0.4–V0.6 HIL |
@@ -277,7 +277,7 @@
 
 ### 2.8 多机、规划与任务分配
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | ZJU-FAST-Lab/ego-planner-swarm | 2193 | 2025-03-08 | B-spline 轨迹契约、FSM、swarm 代价、跨机 UDP 报文 | port（master）+ adopt（ros2_version 分支，Docker 部署的可选规划后端） | `sim/planning/*`、`sim/planning/backends/ego_*` | V0.2 契约；V0.6 |
 | HKUST-Aerial-Robotics/Fast-Planner | 3414 | 2024-10-24 | ESDF 距离代价、EDT、states2pts、时间拉伸 | port（scipy EDT 加 L-BFGS-B） | `sim/planning/{grid,bspline}.py` | V0.2 |
@@ -290,7 +290,7 @@
 
 ### 2.9 实时通信与后端基础设施
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | eclipse-zenoh/zenoh | 3216 | 2026-09-15 | 内部总线；liveliness 与 queryable 用于能力发现；key-expr 命名语法 | reference（V0.1 起沿用命名与 QoS）+ adopt（V0.5 起，`eclipse-zenoh 1.10.x`） | `apps/api/rt/bridges/zenoh_bus.py`、`agent/anet` | V0.1 / V0.5 / V1.0 |
 | foxglove/ws-protocol | 150 | 2025-07（已归档） | channel 广告、订阅、TIME、Playback、懒生产 | port（语义；不采用其线格式） | `apps/api/rt/protocol` | V0.1 |
@@ -305,7 +305,7 @@
 
 ### 2.10 Agent 与 ANet
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | ANetResearch/ANet | 6 | 2026-09-06（本地有 2026-09-27 未推送的 v0.2 检查点） | 身份、能力发现、签名委派、证据；效果状态模型；TSIR 验收；黑板 | port（语义，V0.6 做 Mock）+ adopt（V1.0：每机一个 daemon + 自建 hub，service 模块接入） | `agent/runtime`、`agent/anet_bridge`、`agent/capabilities`、`tools/anet` | V0.2 效果状态；V0.6；V1.0 |
 | XDEI-Group/AerialClaw | 132 | 2026-07-08 | SkillSpec、单步闭环、审批分级 | port（语义） | `agent/runtime/loop.py`、`agent/skills` | V1.0 |
@@ -315,7 +315,7 @@
 
 ### 2.11 设计体系
 
-| 仓库 | ★ | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
+| 仓库 | stars | 最后提交 | 定位 | 结论 | 落点模块 | 版本 |
 |---|---|---|---|---|---|---|
 | larashero3-dotcom/lieflat-charts | 5754 | 2026-09-05 | 图表与表格视觉语言（61 个模板、token、table.log） | port（全部重写为 React 组件；不引入 ECharts、Chart.js、Recharts） | `ui/lf/*`、`lib/lf/tokens.ts`、`scripts/lint-lf.mjs` | V0.1–V1.0 |
 | Jakubantalik/transitions.dev | 4382 | 2026-09-21 | motion token 与 32 个免费配方；refine 算法；Pro 源码不可用 | adopt（token 与配方 CSS）+ port（hooks）+ reference（refine，用于 motion-lint）+ skip（Pro、CLI） | `styles/motion/*`、`ui/motion/*` | V0.1 / V0.2 |
@@ -326,7 +326,7 @@
 
 ### 2.12 前端工程栈（n05 实测版本）
 
-| 包 | ★ | 版本 / 日期 | 结论 | 说明 |
+| 包 | stars | 版本 / 日期 | 结论 | 说明 |
 |---|---|---|---|---|
 | react / react-dom | 250798 | 19.3.0（2026-09-09） | adopt | 与 R3F 9.8.1 兼容（peer <19.4）；R3F v10 alpha 要求 <19.3 |
 | vite + @vitejs/plugin-react | 83061 | 8.3.1 / 6.1.1 | adopt | Rolldown 构建约 1 s；需配置 COOP/COEP 响应头 |
@@ -353,7 +353,7 @@
 |---|---|---|---|---|
 | UrbanScene3D 六城采样点云（`data/raw/urbanscene3d/*_sampled_5m.ply`，每城约 5M 点，xyz 加法线，无颜色） | 内置演示世界，同时是回归与性能基准 | adopt（必须先规范化） | `datasets/urbanscene3d`、`world/ingest/urbanscene3d.py` | V0.1 |
 | UrbanScene3D 航线文件（`paths/*`、`Oblique.log`，UE 厘米坐标、左手系） | 视点分布与云台参数模板、回放测试集 | port（连接段需重新规划） | `datasets/urbanscene3d/paths.py` | V0.2 / V0.6 |
-| Linxius/UrbanScene3D `src/`（★156，2023-12） | Height_map、重建评测 | port（numpy 约 40 行；评测需修 4 处 bug） | `sim/world/heightmap.py`、`world/qa/recon_eval.py` | V0.2 / V0.5 |
+| Linxius/UrbanScene3D `src/`（156 stars，2023-12） | Height_map、重建评测 | port（numpy 约 40 行；评测需修 4 处 bug） | `sim/world/heightmap.py`、`world/qa/recon_eval.py` | V0.2 / V0.5 |
 | Simulator.zip ／ Evaluation.zip ／ polytech1k、artsci1k | UE4 工程、Windows exe、1k 点预配准集 | skip | — | — |
 
 ---
@@ -792,7 +792,7 @@ worlds/<id>/
 | W5 | 点间距与密度估计（nnMedian）、首屏层级规则（cum ≥ 1e5） | x01 §3.4、§3.6；small_gicp `KdTree.batch_knn_search` | `world/pointcloud/stats.py` → `metadata.anet` | P | 实测 |
 | W6 | CSF 地面 → DTM → HAG → 法线规则语义（ASPRS u8） | jianboqi/CSF（pip）；n02 `n02_semantic.py` v2/v3 | `world/ingest/semantic_rules.py`、`world/geometry/terrain/` | A + P | 实测，NY 112 s |
 | W7 | Height_map（2.5D 最大高度 + 膨胀 + 安全距离）与 `safe_transit` | UrbanScene3D `src/model_tools.h::Height_map`；x01 §3.8 | `sim/world/heightmap.py`、`sim/planning/transit.py` | P | 实测 |
-| W8 | WGS84↔ECEF↔ENU 精确公式与帧转换全集（UE→ENU、ENU→three、ENU/FLU↔NED/FRD） | cesium `Ellipsoid.js`、`FixedFrameTransforms.js`；colmap `gps.cc`；MAVROS `ftf_frame_conversions.cpp`；x01 §3.5 | `world/georef/frames.py`、`engine/geo/frames.ts` | P | 实测，与 pyproj 差 1e-9 m |
+| W8 | WGS84<->ECEF<->ENU 精确公式与帧转换全集（UE→ENU、ENU→three、ENU/FLU<->NED/FRD） | cesium `Ellipsoid.js`、`FixedFrameTransforms.js`；colmap `gps.cc`；MAVROS `ftf_frame_conversions.cpp`；x01 §3.5 | `world/georef/frames.py`、`engine/geo/frames.ts` | P | 实测，与 pyproj 差 1e-9 m |
 | W9 | Range 静态服务 | Starlette 1.7 `StaticFiles` | `apps/api/main.py` 挂 `/worlds` | A | 本次实测 206 正确 |
 
 ### 5.2 Web 点云引擎
@@ -897,7 +897,7 @@ worlds/<id>/
 | U6 | 图标：`<Icon>`（canonicalD）、`<StateIcon>`（createMorph + 同一 svg 内 WAAPI swap）、白名单、K=8 并发预算、空闲预热、208 个图标注册表 | morphicons `src/dom`、`src/core`；`.cache/research/d03/inventory.mjs` | `ui/icons/*` | A + D | 实测 |
 | U7 | lieflat 图表组件：LfChartCard、LfStat、LfSparkline、LfLiveLine（G17）、LfTickGauge（F11）、LfRungBars（F1）、LfTickRows（F5）、LfHistogram（F14）、LfHairlineLine/Area（F2/F3）、LfTable（table.log） | lieflat `templates/*-gallery.html`、`mono-tokens.js`、`report-10.zh.html` | `ui/lf/*` | P | CPU canvas 与 SVG 已实测 |
 | U8 | LfScheduler（单一 rAF，HUD 4 Hz，聚焦图 ≤10 Hz，不可见时暂停）+ Float32 环形缓冲 | d01 §3.6.2–3.6.3 | `ui/lf/scheduler.ts` | D | — |
-| U9 | `lint-lf`：禁止 `Math.random`、token 以外的 hex 色值、emoji 与 ▲▼●○ 字形、重复 id；另加 motion-lint | lieflat `scripts/validate.mjs`；transitions.dev `refine/server/motion-tokens.mjs` | `scripts/lint-lf.mjs`、`tools/motion-lint` | P | — |
+| U9 | `lint-lf`：禁止 `Math.random`、token 以外的 hex 色值、emoji 与 U+25B2/U+25BC/U+25CF/U+25CB（三角、圆点）字形、重复 id；另加 motion-lint | lieflat `scripts/validate.mjs`；transitions.dev `refine/server/motion-tokens.mjs` | `scripts/lint-lf.mjs`、`tools/motion-lint` | P | — |
 | U10 | 效果状态模型（5 种状态、Evidence、V/A 信任，钳制而不抬高） | ANetCore `effect/effect.go`；ANetLink `profile/trust.go` | `agent/runtime/effect.py`、DroneState 命令回执 | P | V0.2 起 |
 | U11 | 品牌素材（徽章 SVG、头像）与使用规范 | ANet `docs/media/anet-logo.svg`；GitHub 头像 u/305781773 | `apps/web/public/brand/` | A | — |
 
@@ -906,7 +906,7 @@ worlds/<id>/
 
 判定口径：2025–2026 年新建，或 2026 年发布关键新能力；星数少的项目只 port 算法，不做运行时依赖。
 
-| 项目 | 新在哪里（2026） | ★ | 是否纳入 | 纳入方式与位置 |
+| 项目 | 新在哪里（2026） | stars | 是否纳入 | 纳入方式与位置 |
 |---|---|---|---|---|
 | voxelkloud（view/core/format-*） | 2026-08 新出现；两级预算选择器、视频播放器式画质阶梯、octree cut 点径、WebGL2 单 draw、WebGPU compute 三遍光栅 | 0 | **纳入（port 核心算法）** | `engine/pointcloud/core/*`；compute 光栅放 V0.3 Tier A |
 | NASA-AMMOS/3DTilesRendererJS 0.5.3 | 2026-09 新增 PotreePlugin、PointCloudEffectsPlugin | 2476 | **纳入** | V0.1 对齐 SSE 口径；V0.8 作为网格与地形底座；dev 对照页 |
@@ -938,7 +938,7 @@ worlds/<id>/
 | SkyeShark/Eanpa-Sky | 2026-09 活跃的 WebGPU 天气引擎 | 56 | 纳入（port 算法） | 降水锚定、闪电、过渡 |
 | ZJU-FAST-Lab/Primitive-Planner | 2026-08 仍有提交的 EGO 后继 | — | 观察 | 百机规模时再评估 |
 | Visionary、LidarScout、Layered 4D-Rotor GS、splats4D、4C4D | 2026 动态高斯与外存浏览研究 | — | 参考 | V1.x Dynamic Visual World |
-| amb3r-slam | 2026 千米级 SLAM（官方代码未发布） | 41 | 不纳入 | 注意：0★ 的第三方复现不代表论文结果 |
+| amb3r-slam | 2026 千米级 SLAM（官方代码未发布） | 41 | 不纳入 | 注意：0 stars 的第三方复现不代表论文结果 |
 | pywebtransport | 2026 Python WebTransport（与浏览器握手失败） | 42 | 不纳入 | — |
 
 **对 `02-refs.md` 的增补建议**：

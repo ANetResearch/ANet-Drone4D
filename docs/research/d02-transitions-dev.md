@@ -2,7 +2,7 @@
 
 > 研究单元：d02 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §4、§14、§28、§36–§40、§43；视觉约束见用户需求（动效/切换全部采用 transitions.dev，图标 morphicons，UI 全量 shadcn，产品色为科技灰、黑、白、红 #E93024）
 >
-> 仓库快照：`refs/design/transitions.dev` @ `e2d5551`（2026-09-21，★4382，作者 Jakub Antalik）。最后一次提交是 "fix(react): the five transitions with an empty React tab"，补齐了 5 个 React 模板，Co-Authored-By 为 Claude Opus 5。仓库在 2026 年 5–9 月持续活跃。下文路径均相对该仓库根目录。
+> 仓库快照：`refs/design/transitions.dev` @ `e2d5551`（2026-09-21，4382 stars，作者 Jakub Antalik）。最后一次提交是 "fix(react): the five transitions with an empty React tab"，补齐了 5 个 React 模板，Co-Authored-By 为 Claude Opus 5。仓库在 2026 年 5–9 月持续活跃。下文路径均相对该仓库根目录。
 >
 > 交叉核对的旁证仓库（只读）：`refs/design/ui`（shadcn/ui @ 2026-09-28）、`refs/design/morphicons`，以及本机其他项目 node_modules 中的 `tw-animate-css@1.4.0`、`sonner@2.0.8`、`@radix-ui/react-presence`、`tailwindcss@4`（`theme.css`）。
 >
@@ -14,12 +14,12 @@
 
 | 仓库 / 子模块 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **transitions.dev · `skills/transitions-dev/`**（32 个免费动效，`01-…32-*.md`） | 可移植的 CSS 过渡配方库。每个配方包含：`:root` 语义变量、`t-*` 命名空间类、状态钩子（`data-*`/`is-*`）、`prefers-reduced-motion` 守卫，部分附带一小段 JS 编排 | **adopt（vendor 源码）**：CSS 原样拷入 `apps/web/src/styles/motion/t/`。由 Radix 承载的 6 类浮层（Dialog/Sheet/Dropdown/Popover/Select/Tooltip）**改写为 `@keyframes` 版**（原因见 §4.2） | V0.1 起 | ★★★★★ |
-| **`skills/transitions-polish/` + `_root.css` motion tokens** | 5 维动效 token（duration/easing/distance/scale/blur），外加"何时用哪个值"的规则：开合不对称、hover 进出、stagger 与 delay | **adopt**：作为全站**唯一**的动效 token 源（`tokens.css` 和 Tailwind `@theme`），规则写进本文 §4 的《动效规范》和 lint | V0.1 | ★★★★★ |
-| index.html 中的 `<script data-react-key="pN|tok-*">` React 模板 | React 用法样板：`readMs()`、`closed/open/closing` 三态机、`useLayoutEffect` flush，以及自动注入 `<style id="transitions-pN">` | **port**：改写为 TS hooks（`usePresence`/`useReplay`/`useTextSwap`/`MotionNumber`…） | V0.1 | ★★★★ |
-| `refine/`（npm `transitions-refine` 0.3.34） | 开发期注入式时间线和 Refine 面板。后端是 LLM 或确定性算法 `refineTimings()`，把动效值对齐到 token | **reference**：借鉴 `server/motion-tokens.mjs` "用途优先、数值兜底"的映射，写我们自己的 motion-lint 脚本。工具本体不引入 | V0.2（lint） | ★★★ |
-| `build/extract.mjs`、`scripts/transitions-data.json`、`transitions/*/index.html` | 生成链：从 showcase 抽取 skill；43 个条目的数据（字段为 css/react/pro） | **reference**：可作为"动效目录页 / Storybook"的数据源 | V0.2 | ★★ |
-| `cli/`（`npx transitions-dev`） | 免费配方从本地 md 拷贝；Pro 走设备码鉴权 API | **skip**（离线 vendor 即可，CI 无网络依赖） | — | ★ |
+| **transitions.dev · `skills/transitions-dev/`**（32 个免费动效，`01-…32-*.md`） | 可移植的 CSS 过渡配方库。每个配方包含：`:root` 语义变量、`t-*` 命名空间类、状态钩子（`data-*`/`is-*`）、`prefers-reduced-motion` 守卫，部分附带一小段 JS 编排 | **adopt（vendor 源码）**：CSS 原样拷入 `apps/web/src/styles/motion/t/`。由 Radix 承载的 6 类浮层（Dialog/Sheet/Dropdown/Popover/Select/Tooltip）**改写为 `@keyframes` 版**（原因见 §4.2） | V0.1 起 | 5/5 |
+| **`skills/transitions-polish/` + `_root.css` motion tokens** | 5 维动效 token（duration/easing/distance/scale/blur），外加"何时用哪个值"的规则：开合不对称、hover 进出、stagger 与 delay | **adopt**：作为全站**唯一**的动效 token 源（`tokens.css` 和 Tailwind `@theme`），规则写进本文 §4 的《动效规范》和 lint | V0.1 | 5/5 |
+| index.html 中的 `<script data-react-key="pN|tok-*">` React 模板 | React 用法样板：`readMs()`、`closed/open/closing` 三态机、`useLayoutEffect` flush，以及自动注入 `<style id="transitions-pN">` | **port**：改写为 TS hooks（`usePresence`/`useReplay`/`useTextSwap`/`MotionNumber`…） | V0.1 | 4/5 |
+| `refine/`（npm `transitions-refine` 0.3.34） | 开发期注入式时间线和 Refine 面板。后端是 LLM 或确定性算法 `refineTimings()`，把动效值对齐到 token | **reference**：借鉴 `server/motion-tokens.mjs` "用途优先、数值兜底"的映射，写我们自己的 motion-lint 脚本。工具本体不引入 | V0.2（lint） | 3/5 |
+| `build/extract.mjs`、`scripts/transitions-data.json`、`transitions/*/index.html` | 生成链：从 showcase 抽取 skill；43 个条目的数据（字段为 css/react/pro） | **reference**：可作为"动效目录页 / Storybook"的数据源 | V0.2 | 2/5 |
+| `cli/`（`npx transitions-dev`） | 免费配方从本地 md 拷贝；Pro 走设备码鉴权 API | **skip**（离线 vendor 即可，CI 无网络依赖） | — | 1/5 |
 | **11 个 Pro 动效**（confetti-burst、spinner-to-check-morph、gooey-plus-menu 等） | 付费。仓库里只有 index.html 中**混淆压缩**的演示代码（`--pv*` 变量），没有配方源码 | **skip**。spinner→check 用 icon-swap 加 success-check 组合替代（官方 SKILL.md 就是这样建议的） | — | — |
 
 **实现者先读这 10 条**
@@ -37,7 +37,7 @@
    - 事件型 KPI 用 **spinning counter**，只在事件发生时播一次。
    - 状态文字用 **text-states-swap**。
 6. **3D 画布永远全屏，面板是浮层。** 面板开合只动 transform/opacity，**禁止用动画改变 width 进而触发 canvas resize**（card-resize 只用于小型 HUD 部件）。
-7. **图标切换以 morphicons 为主**，必须设 `reducedMotion="user"`，spring 取 `"snappy"`（ζ=0.73，t90≈133ms，稳定≈417ms，与 `--duration-fast` 同一量级）。transitions.dev 的 **icon-swap** 只用于无法形变的跨族替换（spinner↔check、状态徽标），同时也是 lite/reduced 档的回退方案。
+7. **图标切换以 morphicons 为主**，必须设 `reducedMotion="user"`，spring 取 `"snappy"`（ζ=0.73，t90≈133ms，稳定≈417ms，与 `--duration-fast` 同一量级）。transitions.dev 的 **icon-swap** 只用于无法形变的跨族替换（spinner<->check、状态徽标），同时也是 lite/reduced 档的回退方案。
 8. **"spring" 的实现是 `cubic-bezier(0.34, B, 0.64, 1)` 这一族曲线**（prototypes.html 第 218–224 行注释）。实测超调量：B=1.36→4.3%，1.45→6.6%，1.96→23.5%，3.85→101%。其中 bounce(1.36) 约等于 morphicons snappy，bounce(1.96) 约等于 morphicons bouncy（23.5% 对 24.3%），两套体系可以对齐（§3.2）。
 9. **告警 shake 是"一次性事件"，不是状态。** 危险状态靠持续的红色 `#E93024` 加图标加文字表达。shake 只在告警**进入**时播放一次（280ms），3D 画布和大面板永远不抖（§4.1 第 10 行）。
 10. **Tailwind v4 的 `--ease-out` / `--ease-in-out` 与 transitions.dev 同名 token 冲突**：前者是 `cubic-bezier(0,0,.2,1)`，后者是关键字 `ease-out`。解决办法见 §4.3，在 `@theme` 中统一定义，并同时改写 `--default-transition-*`。
@@ -51,7 +51,7 @@
 | 项 | 内容 |
 |---|---|
 | 仓库 | github.com/Jakubantalik/transitions.dev（网站 https://transitions.dev） |
-| Star / 活跃度 | ★4382。最后提交 2026-09-21。`assets/proto-images/` 中有 2026-05-17 的截图；`refine/` 已发布到 npm 0.3.34 |
+| Star / 活跃度 | 4382 stars。最后提交 2026-09-21。`assets/proto-images/` 中有 2026-05-17 的截图；`refine/` 已发布到 npm 0.3.34 |
 | 形态 | ① 静态展示站（`index.html` 684KB，所有 demo、配方模板、token 都内联在这一个文件里）；② agent skill（`skills/transitions-dev/`、`skills/transitions-polish/`）；③ CLI（`cli/`）；④ Refine 实时调参工具（`refine/`） |
 | 构建 | 根目录 `package.json` 只有一个脚本 `npm run build`，即 `node build/extract.mjs`。**无运行时依赖**，配方是纯 CSS 加原生 JS |
 | License | CLI 为 MIT；配方适用 `terms.html`（Transitions.dev license）。**本项目为科研用途，按要求忽略 license 限制**，但 Pro 源码本来就不在仓库里，所以不可用 |
@@ -70,7 +70,7 @@
 | 05 | menu-dropdown | | 以触发点为原点缩放展开 |
 | 06 | modal | modal-open-close | 居中缩放打开，关闭更快 |
 | 07 | panel-reveal | | 面板位移、淡入淡出加交叉模糊 |
-| 08 | page-side-by-side | | 两页左右切换（列表↔详情） |
+| 08 | page-side-by-side | | 两页左右切换（列表<->详情） |
 | 09 | icon-swap | | 同槽位两个图标交叉缩放模糊 |
 | 10 | success-check | | 淡入、旋转、模糊、Y 回弹并绘制路径 |
 | 11 | avatar-group-hover | | 横排元素 hover 按距离衰减抬升，返回时回弹 |
@@ -83,7 +83,7 @@
 | 18 | texts-reveal | | 标题和副标题错峰模糊上升 |
 | 19 | card-tilt | 3d-tilt | 指针驱动 3D 倾斜并带眩光 |
 | 20 | plus-menu-morph | dropdown-menu-morph | 圆形按钮形变为菜单面板 |
-| 21 | accordion | | grid-rows 0fr↔1fr 展开，箭头上下翻转 |
+| 21 | accordion | | grid-rows 0fr<->1fr 展开，箭头上下翻转 |
 | 22 | toast | toast-open-close | 自下而上淡入，模糊并轻微缩放 |
 | 23 | like-button | | 心形填充、pop 加粒子 |
 | 24 | learn-more-hover | | 箭头 chevron 张开 |
@@ -141,7 +141,7 @@ index.html :root
                                    │
 PROTO_TEMPLATES[pN] = { css: "...var(--p2-open-dur)...", vars: [["--dropdown-open-dur","--p2-open-dur"],…] }
                                    │  build/extract.mjs
-                                   ▼
+                                   v
  ① 把 --pX-* 重命名为语义名（--dropdown-open-dur）  ② 把 var(--duration-*) 解析回字面量（skill 自包含）
  ③ 渲染 SKILL.md 的 Motion tokens 表 + _root.css + 01…32-*.md
 ```
@@ -233,7 +233,7 @@ PROTO_TEMPLATES[pN] = { css: "...var(--p2-open-dur)...", vars: [["--dropdown-ope
 | `--duration-stagger` | 40ms | 每项错峰 | 列表进场、数字位错峰 |
 | `--duration-micro` | 80ms | tooltip/path 延迟、shake 段、大元素错峰 | tooltip 意图延迟、shake 分段 |
 | `--duration-quick` | 150ms | modal/dropdown 关闭、文字切换、tooltip 出现 | 所有关闭、状态文字、颜色阈值变化 |
-| `--duration-fast` | 250ms | icon swap、dropdown/modal 打开、tabs、页面滑动 | 浮层打开、Tabs、列表↔详情 |
+| `--duration-fast` | 250ms | icon swap、dropdown/modal 打开、tabs、页面滑动 | 浮层打开、Tabs、列表<->详情 |
 | `--duration-medium` | 350ms | panel 关闭、toast 关闭 | 侧栏关闭、toast/横幅打开 |
 | `--duration-slow` | 400ms | panel 打开、骨架揭示、输入清空 | 侧栏/Sheet 打开、骨架→内容 |
 | `--duration-very-slow` | 500ms | 强调、badge 出现、文字揭示、success check | 成功确认、数字 pop-in、空状态标题 |
@@ -331,14 +331,14 @@ function springLinear(k: number, c: number, samples = 48) {
 
 | # | 类 / 钩子 | 关键参数（默认） | JS | 本项目用途 | 采用 |
 |---|---|---|---|---|---|
-| 01 | `.t-resize` | 300ms smooth-out，补间 width/height | 否 | HUD 小部件（小地图 240↔480）尺寸切换 | A |
+| 01 | `.t-resize` | 300ms smooth-out，补间 width/height | 否 | HUD 小部件（小地图 240<->480）尺寸切换 | A |
 | 02 | `.t-digit-group.is-animating .t-digit[data-stagger]` | 500ms，8px，stagger 70ms，blur 2px，bounce 1.45，dir(0,1) | 重放 | 离散遥测数字 | A |
 | 03 | `.t-badge[data-open] > .t-badge-dot` | slide 260ms (−8.2,12.4)px；pop 500ms bounce 1.36；关闭 180ms (0.4,0,0.2,1) | 否 | 告警数角标、无人机芯片角标 | A |
 | 04 | `.t-text-swap.is-exit/.is-enter-start` | 150ms，4px，blur 2px，ease-in-out | 三相 | 飞行模式、链路、任务状态 | A |
 | 05 | `.t-dropdown.is-open/.is-closing[data-origin]` | 开 250ms 自 .97；关 150ms 至 .99 | 三态 | DropdownMenu/Popover/Select/ContextMenu（改写为 keyframes） | A |
 | 06 | `.t-modal.is-open/.is-closing` | 开 250ms 自 .96；关 150ms 至 .96 | 三态 | Dialog/AlertDialog（改写为 keyframes） | A |
 | 07 | `.t-panel-slide[data-open]` | 开 400ms，关 350ms，Y 100px，blur 2px | 否 | Sheet（改写为 X 轴 40px keyframes）、浮动侧栏 | A |
-| 08 | `.t-page-slide[data-page] .t-page[data-page-id]` | 250ms，8px，blur 3px，stagger 0 | 否 | 右栏 机群列表↔单机详情；向导步骤 | A |
+| 08 | `.t-page-slide[data-page] .t-page[data-page-id]` | 250ms，8px，blur 3px，stagger 0 | 否 | 右栏 机群列表<->单机详情；向导步骤 | A |
 | 09 | `.t-icon-swap[data-state] .t-icon[data-icon]` | 250ms，blur 2px，起始缩放 .25，ease-in-out | 否 | 不可形变的图标替换，以及 morphicons 在 lite/reduced 档的回退 | A |
 | 10 | `.t-success-check[data-state=in]` | 500ms；旋转自 80°；Y 40px（bob 1.35）；blur 10px；path 延迟 80ms | 重放 | 任务上传成功、起飞完成、世界加载完成 | A |
 | 11 | `.t-avatar` + `--shift/--scale-active` | lift −4px，衰减 .45，scale 1.05，320ms，回弹 3.85 | 是 | 顶栏机群芯片组 hover | B |
@@ -351,7 +351,7 @@ function springLinear(k: number, c: number, samples = 48) {
 | 18 | `.t-stagger.is-shown .t-stagger-line--N` | 500ms，12px，stagger 40ms，blur 3px；退出 200ms 纯淡出 | 重放 | 空状态、欢迎页、世界详情标题；列表项进场（改写） | A |
 | 19 | `.t-tilt .t-tilt-card .t-tilt-glare` | 透视 1000px，回复 1000ms，跟随 400ms | 是 | 世界画廊卡片（可选） | S/R |
 | 20 | `.t-morph[data-open]` | 开 350ms bounce 1.25；关 250ms；圆角 40→20 | 少量 | 3D 视图中"添加航点/无人机"FAB | B |
-| 21 | `.t-acc[data-open] .t-acc-panel/.t-acc-panel-inner/.t-acc-chevron` | 250ms，grid-rows 0fr↔1fr，箭头 scaleY(−1) | 否 | 左栏 Layers/Environment 分组（覆盖 shadcn Accordion） | A |
+| 21 | `.t-acc[data-open] .t-acc-panel/.t-acc-panel-inner/.t-acc-chevron` | 250ms，grid-rows 0fr<->1fr，箭头 scaleY(−1) | 否 | 左栏 Layers/Environment 分组（覆盖 shadcn Accordion） | A |
 | 22 | `.t-toast.is-open` | 开 350ms，关 250ms，16px，blur 2px，缩放 .97 | 否 | Sonner 主题化 | A |
 | 23 | `.t-like…` | 心形与粒子 | 否 | — | S |
 | 24 | `.t-learn…` | chevron 张开 | 否 | 文档/帮助链接 | R |
@@ -585,7 +585,7 @@ effective = min(OS 约束, 用户设置, 性能档)             // 顺序 full >
 | 2b | **Dialog/AlertDialog**（确认起飞、删除世界） | 06 modal 的 keyframes 版 | `Dialog`、`AlertDialog` | 开 250ms 自 .96，关 150ms 至 .96 | 无 | V0.1 |
 | 3 | **Dropdown / Popover / Select / ContextMenu** | 05 menu-dropdown 的 keyframes 版，原点取 Radix 变量 | `DropdownMenu`、`Popover`、`Select`、`ContextMenu`、`Menubar` | 开 250ms 自 .97，关 150ms 至 .99 | 无 | V0.1 |
 | 4 | **Tabs 切换**（视角：第三人称/FPV/鸟瞰/自由；倍速；面板页签） | 16 tabs-sliding（胶囊）；内容区用 08 的"仅进入"版 | `Tabs`（外包一层 `SlidingTabsList`）、`ToggleGroup` | 250ms smooth-out；内容进入 8px 加 blur 3px | `useSlidingPill` | V0.1 |
-| 5 | **页面/视图切换**：机群列表↔单机详情 | 08 page-side-by-side | 右栏容器 | 250ms，8px，blur 3px | 无（设置 `data-page`） | V0.1 |
+| 5 | **页面/视图切换**：机群列表<->单机详情 | 08 page-side-by-side | 右栏容器 | 250ms，8px，blur 3px | 无（设置 `data-page`） | V0.1 |
 | 5b | 路由切换（世界画廊→沙盘） | 14 skeleton-reveal 加 18 texts-reveal；**3D 画布常驻不卸载** | `Skeleton`、`Card` | 400ms / 500ms | `useReplay` | V0.1 |
 | 5c | 3D 相机模式切换 | 同一 smooth-out 曲线的 JS 版（§4.6） | — | 400–1200ms，按距离取值 | `bezier()`、`useCameraTween` | V0.1 |
 | 6 | **遥测数字跳变** | 02 number-pop-in（泛化版）；事件型用 26 | 自定义 `MotionNumber` | 500ms bounce 1.45，≤2Hz | `MotionNumber`、`useTelemetryBinding` | V0.1 / V0.2 |
@@ -938,7 +938,7 @@ html[data-motion="reduced"] {           /* 用户手动选择时，复用各配�
 
 | 方案 | 优势 | 劣势 | 结论 |
 |---|---|---|---|
-| **transitions.dev（免费 32 个与 token）** | token 化、纯 CSS、每个配方都带 reduced-motion 守卫；视觉克制（小位移、2–3px 模糊、smooth-out），与 shadcn 中性风格和科技灰/黑/白/红产品色一致；变量化后容易分档；2026 年仍活跃（★4.4k） | 不负责挂载/卸载（与 Radix Presence 不兼容，需要改写为 keyframes）；部分需要 JS；blur 较多，在软件渲染下很贵；Pro 不可用；文档有若干不一致 | **主规范，adopt** |
+| **transitions.dev（免费 32 个与 token）** | token 化、纯 CSS、每个配方都带 reduced-motion 守卫；视觉克制（小位移、2–3px 模糊、smooth-out），与 shadcn 中性风格和科技灰/黑/白/红产品色一致；变量化后容易分档；2026 年仍活跃（4.4k stars） | 不负责挂载/卸载（与 Radix Presence 不兼容，需要改写为 keyframes）；部分需要 JS；blur 较多，在软件渲染下很贵；Pro 不可用；文档有若干不一致 | **主规范，adopt** |
 | tw-animate-css（shadcn 默认，1.4.0） | shadcn 原生；`enter/exit` 关键帧兼容 Radix Presence；变量化（`--tw-enter-*`） | 默认数值（150ms、ease、zoom-95、slide-2）与 token 不一致；`enter/exit` 关键帧**恒含 `filter: blur(var(--tw-enter-blur,0))`** | **承载层**：保留安装，我们的组件改用 `t-*` utility |
 | Motion（framer-motion） | 物理 spring、layout 动画、AnimatePresence | 额外 JS 体积；与 CSS token 形成两套体系；transitions.dev SKILL.md 明言 "don't pull in a motion library" | **不引入** |
 | morphicons | 任意 stroke 图标互相形变，Procrustes 对齐后旋转自然出现；零依赖 | 只管图标；默认不遵循 reduced-motion | 图标层 **adopt**（另一单元研究），spring 取 snappy |

@@ -4,9 +4,9 @@
 > 研究单元：r25 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §8（Geometry World）、§26–§30（Drone Simulation / 控制模式）、§36–§37（通信与频率）、§42（repo 的 `swarm/planning`、`swarm/avoidance`）、§45（V0.2）、§49（V0.6）
 >
 > 仓库快照（都是 shallow clone，**`refs/` 未做任何修改**）：
-> - `refs/swarm/ego-planner-swarm`：@`92fe9f7`（2025-03-08，★2193），master 分支，ROS1
-> - `refs/swarm/Fast-Planner`：@`41be219`（2024-10-24，★3414），ROS1
-> - `refs/swarm/Fast-LIO2_Ego-Planner`：@`f9581e8`（2024-12-10，★1），ROS1 Noetic，emNavi 的集成仓
+> - `refs/swarm/ego-planner-swarm`：@`92fe9f7`（2025-03-08，2193 stars），master 分支，ROS1
+> - `refs/swarm/Fast-Planner`：@`41be219`（2024-10-24，3414 stars），ROS1
+> - `refs/swarm/Fast-LIO2_Ego-Planner`：@`f9581e8`（2024-12-10，1 star），ROS1 Noetic，emNavi 的集成仓
 >
 > 为补齐分支差异，额外拉取到 `.cache/research/r25/`：
 > - `ego-swarm-ros2`：`ros2_version` 分支，@`23a8d5a`，2025-03-08
@@ -36,11 +36,11 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **ZJU-FAST-Lab/ego-planner-swarm**（master，ROS1） | 分布式、异步的多机局部规划。流程为：局部 GridMap → A* 引导 → **{p,v} 对碰撞项（ESDF-free）** → 均匀 B-spline + L-BFGS → rebound 重优化；多机之间做轨迹广播和椭球互避 | **port**：代价函数、B-spline 契约、FSM 语义、swarm 代价、UDP 轨迹报文移植到 Python/numba 的 Planning 服务。**adopt**：V0.6 以 ROS2 分支作为 SITL/真机规划后端 | V0.2（契约 + FSM + 单机规划）；V0.6（多机、EGO 后端） | ★★★★★ |
-| ego-planner-swarm `ros2_version` | 同一套算法机械移植到 rclcpp（Humble），launch 改为 `.py`，注释汉化 | **adopt**，作为 V0.6 的 ROS2 规划后端。要求 CycloneDDS，时钟有坑（见 §6） | V0.6 | ★★★★☆ |
-| **HKUST-Aerial-Robotics/Fast-Planner** | kinodynamic A*（OBVP 启发式）+ **ESDF** B-spline（NLopt）+ 非均匀 B-spline 时间重分配 + 拓扑 PRM + yaw B-spline | **port**：ESDF 距离代价、Felzenszwalb 1D EDT（直接换成 `scipy.ndimage.distance_transform_edt`）、`reallocateTime`、`planYaw`、边界状态 → 控制点公式。**reference**：kino A*、topo PRM | V0.2–V0.6 | ★★★★☆ |
-| spirit0609/**Fast-LIO2_Ego-Planner**（emNavi 改） | 链路为 MID-360 → livox_ros_driver2 → FAST-LIO(SC-PGO) → livox2pointcloud → EGO（`USE_MID360_CLOUD` 模式） | **reference**：真机链路拓扑、`REMOTE_TARGET`/`REMOTE_START` 外部目标接口、master/slave UDP bridge。代码质量低，不直接依赖 | V0.5（真机/回放）；V0.6 | ★★☆☆☆ |
-| （后继，仅供参考）Primitive-Planner（TRO 2025，2026-08 仍有提交） | 离线运动基元库 + TOPPRA，超轻量的大规模 swarm 规划 | **reference**：V1.0 百架规模时再评估 | V1.0 | ★★★☆☆ |
+| **ZJU-FAST-Lab/ego-planner-swarm**（master，ROS1） | 分布式、异步的多机局部规划。流程为：局部 GridMap → A* 引导 → **{p,v} 对碰撞项（ESDF-free）** → 均匀 B-spline + L-BFGS → rebound 重优化；多机之间做轨迹广播和椭球互避 | **port**：代价函数、B-spline 契约、FSM 语义、swarm 代价、UDP 轨迹报文移植到 Python/numba 的 Planning 服务。**adopt**：V0.6 以 ROS2 分支作为 SITL/真机规划后端 | V0.2（契约 + FSM + 单机规划）；V0.6（多机、EGO 后端） | 5/5 |
+| ego-planner-swarm `ros2_version` | 同一套算法机械移植到 rclcpp（Humble），launch 改为 `.py`，注释汉化 | **adopt**，作为 V0.6 的 ROS2 规划后端。要求 CycloneDDS，时钟有坑（见 §6） | V0.6 | 4/5 |
+| **HKUST-Aerial-Robotics/Fast-Planner** | kinodynamic A*（OBVP 启发式）+ **ESDF** B-spline（NLopt）+ 非均匀 B-spline 时间重分配 + 拓扑 PRM + yaw B-spline | **port**：ESDF 距离代价、Felzenszwalb 1D EDT（直接换成 `scipy.ndimage.distance_transform_edt`）、`reallocateTime`、`planYaw`、边界状态 → 控制点公式。**reference**：kino A*、topo PRM | V0.2–V0.6 | 4/5 |
+| spirit0609/**Fast-LIO2_Ego-Planner**（emNavi 改） | 链路为 MID-360 → livox_ros_driver2 → FAST-LIO(SC-PGO) → livox2pointcloud → EGO（`USE_MID360_CLOUD` 模式） | **reference**：真机链路拓扑、`REMOTE_TARGET`/`REMOTE_START` 外部目标接口、master/slave UDP bridge。代码质量低，不直接依赖 | V0.5（真机/回放）；V0.6 | 2/5 |
+| （后继，仅供参考）Primitive-Planner（TRO 2025，2026-08 仍有提交） | 离线运动基元库 + TOPPRA，超轻量的大规模 swarm 规划 | **reference**：V1.0 百架规模时再评估 | V1.0 | 3/5 |
 
 **核心判断（给实现者）：**
 
@@ -72,7 +72,7 @@
 | 项 | ego-planner-swarm | Fast-Planner | Fast-LIO2_Ego-Planner |
 |---|---|---|---|
 | 论文 | EGO-Swarm（ICRA 2021），EGO-Planner（RA-L 2021） | RAPTOR（T-RO 2021）、Robust & Efficient（RA-L 2019）、Topo（ICRA 2020） | 无，属于工程集成 |
-| Stars / 最后提交 | ★2193 / 2025-03-08（README 指向 ROS2 分支） | ★3414 / 2024-10-24（PR 合并） | ★1 / 2024-12-10 |
+| Stars / 最后提交 | 2193 stars / 2025-03-08（README 指向 ROS2 分支） | 3414 stars / 2024-10-24（PR 合并） | 1 star / 2024-12-10 |
 | 分支 | master、**ros2_version**、no_time_sync、multithread_map、changing_vel、drone_detect、benchmark | master | main |
 | 语言 / 构建 | C++14、catkin；ROS2 分支为 ament/colcon | C++、catkin | catkin |
 | 依赖 | Eigen、PCL、OpenCV/cv_bridge、Armadillo（仅 uav_simulator）；`local_sensing` 可选 CUDA | Eigen、PCL、**NLopt 2.7.1（需源码编译）**、Armadillo | Ceres 2.1、GTSAM、Livox-SDK2、Eigen 3.3.7、PCL |
@@ -196,7 +196,7 @@ swarm 项的计算方式：
 
 #### 2.1.5 `ego_replan_fsm.cpp`：`EGOReplanFSM`
 
-- **状态**：`INIT → WAIT_TARGET → SEQUENTIAL_START → EXEC_TRAJ ⇄ REPLAN_TRAJ`，另有 `GEN_NEW_TRAJ` 和 `EMERGENCY_STOP`。
+- **状态**：`INIT → WAIT_TARGET → SEQUENTIAL_START → EXEC_TRAJ <-> REPLAN_TRAJ`，另有 `GEN_NEW_TRAJ` 和 `EMERGENCY_STOP`。
 - **执行定时器**：`execFSMCallback`（L431）以 100 Hz 运行，重规划触发条件为：
   - 距上次规划超过 `thresh_replan_time = 1.0 s`；
   - 或者 local target 已到全局终点，且剩余距离 > `thresh_no_replan_meter = 1.0 m`。
@@ -428,7 +428,7 @@ M = 1/6·[[1,4,1,0],[−3,0,3,0],[3,−6,3,0],[−1,3,−3,1]]
 v 取 [0,1,2s,3s²]/ts，a 取 [0,0,2,6s]/ts²，j 取 [0,0,0,6]/ts³
 定义域 [0, (N−3)·ts]
 knot 数组约定：u_k = (k − p)·ts（EGO setUniformBspline），与 msg 的 knots 兼容
-导数控制点：V_i = (Q_{i+1} − Q_i)/ts，A_i = (Q_{i+2} − 2Q_{i+1} + Q_i)/ts²（凸包性质 ⇒ 用它们做保守的可行性检查）
+导数控制点：V_i = (Q_{i+1} − Q_i)/ts，A_i = (Q_{i+2} − 2Q_{i+1} + Q_i)/ts²（凸包性质 => 用它们做保守的可行性检查）
 ```
 
 **O(1) 初值（替代 lstsq）**。直接用 Fast-Planner 的 `states2pts` 由边界状态确定首尾各 3 个控制点：
@@ -436,7 +436,7 @@ knot 数组约定：u_k = (k − p)·ts（EGO setUniformBspline），与 msg 的
 ```text
 Q0 = p0 − ts·v0 + ts²/3·a0
 Q1 = p0 − ts²/6·a0
-Q2 = p0 + ts·v0 + ts²/3·a0          ⇒ p(0) = p0，v(0) = v0，a(0) = a0（已数值验证）
+Q2 = p0 + ts·v0 + ts²/3·a0          => p(0) = p0，v(0) = v0，a(0) = a0（已数值验证）
 中间控制点 = 剪枝折线按 ctrl_pt_dist 等弧长重采样
 ```
 
@@ -514,7 +514,7 @@ T 的梯形估计：d ≥ v²/a 时 T = (d − v²/a)/v + 2v/a，否则 T = 2·s
 ### 3.8 Mock 端的 receding-horizon FSM（EGO 语义精简版）
 
 ```text
-状态：IDLE → PLANNING → EXEC ⇄ REPLAN；EMERGENCY（悬停 B-spline）
+状态：IDLE → PLANNING → EXEC <-> REPLAN；EMERGENCY（悬停 B-spline）
 EXEC 每 tick：t = t_sim − traj.t0
   - t > T − 0.01 且已到终点 → IDLE（HOVER）
   - (t > replan_period=1.0 s 且距终点 > 1·horizon) 或 地图/他机轨迹版本变化 → REPLAN
@@ -619,7 +619,7 @@ apps/simulator/planning/
   fsm.py         ReplanFSM（§3.8）
   deconflict.py  优先级 + 4D 预约（§3.9-1）
   orca.py        ORCA-3D（numba）
-  backends/ego_ros2.py  V0.6：/drone_i/goal ↔ ego_planner(ros2_version)，订阅 planning/bspline
+  backends/ego_ros2.py  V0.6：/drone_i/goal <-> ego_planner(ros2_version)，订阅 planning/bspline
   backends/ego_udp.py   V0.6：§3.10 编解码，虚实混合
   api.py         FastAPI 路由 + WS 消息
 ```
@@ -758,7 +758,7 @@ def plan_astar_bspline(req, world, reserved, P=DEFAULTS):
 | 与"服务端 + 先验地图"的契合 | 中：设计目标是机载局部地图、ESDF-free | **高**：ESDF 代价在服务端最自然 | 低：纯真机集成 |
 | 多机 | **原生**：环链优先级 + 广播 + swarm 代价 | 无 | 继承 EGO，外加 master/slave 命令 |
 | 算法可移植性 | 高（代价函数都是闭式） | 高（EDT → scipy） | – |
-| 2026 活跃度 / 生态 | README 更新于 2025-03；ROS2 分支；Amov P600 同源 | 2024-10 合并最后一个 PR；FUEL/RACER 基座 | 2024-12，★1 |
+| 2026 活跃度 / 生态 | README 更新于 2025-03；ROS2 分支；Amov P600 同源 | 2024-10 合并最后一个 PR；FUEL/RACER 基座 | 2024-12，1 star |
 | 构建难度 | 中（catkin/colcon，PCL） | 中偏高（NLopt 源码编译） | 高（Ceres、GTSAM、SDK2，脚本依赖 gnome-terminal） |
 | 与 P600 的一致性 | **最高**（Prometheus 内置其 fork） | 低 | 中（同为 MID-360 + EGO） |
 

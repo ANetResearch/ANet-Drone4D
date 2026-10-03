@@ -8,11 +8,11 @@
 
 ## 0. 结论速览
 
-| 仓库 | ★ / 最后提交 | 定位 | 复用方式 | 落点版本 | 推荐度 |
+| 仓库 | stars / 最后提交 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|---|
-| hku-mars/FAST_LIO（FAST-LIO2） | 5225 / 2024-07-23 | LiDAR-IMU 紧耦合 IEKF + ikd-Tree 增量地图，MID-360 事实标准；P600 的 Prometheus 栈已内置 | **adopt**（真机/离线直接跑，ROS1 Docker 或其 ROS2 移植 FASTLIO2_ROS2）＋ **port**（ikd-Tree 降采样规则、局部地图立方体、观测性度量） | MVP 移植若干算法；V0.5 作为 LIO 主干 | ★★★★★ |
-| hku-mars/FAST-LIVO2 | 4689 / 2026-03-08 | LiDAR-IMU-Visual 直接法紧耦合（体素平面图 + 稀疏直接 VIO），带 RGB 着色与 COLMAP 导出 | **reference**（V0.5 离线着色可条件性 adopt：前提是相机与 LiDAR 硬同步 + 标定） | V0.5 离线着色 / V1.0 3DGS 输入 | ★★★★ |
-| hku-mars/r3live | 2460 / 2022-08-25 | LIO + VIO，RGB 地图贝叶斯颜色融合、离线网格重建 | **port**（仅移植 RGB 点颜色融合、z-buffer 选择、分块发布思路；不部署） | V0.5 离线着色模块 | ★★★ |
+| hku-mars/FAST_LIO（FAST-LIO2） | 5225 / 2024-07-23 | LiDAR-IMU 紧耦合 IEKF + ikd-Tree 增量地图，MID-360 事实标准；P600 的 Prometheus 栈已内置 | **adopt**（真机/离线直接跑，ROS1 Docker 或其 ROS2 移植 FASTLIO2_ROS2）＋ **port**（ikd-Tree 降采样规则、局部地图立方体、观测性度量） | MVP 移植若干算法；V0.5 作为 LIO 主干 | 5/5 |
+| hku-mars/FAST-LIVO2 | 4689 / 2026-03-08 | LiDAR-IMU-Visual 直接法紧耦合（体素平面图 + 稀疏直接 VIO），带 RGB 着色与 COLMAP 导出 | **reference**（V0.5 离线着色可条件性 adopt：前提是相机与 LiDAR 硬同步 + 标定） | V0.5 离线着色 / V1.0 3DGS 输入 | 4/5 |
+| hku-mars/r3live | 2460 / 2022-08-25 | LIO + VIO，RGB 地图贝叶斯颜色融合、离线网格重建 | **port**（仅移植 RGB 点颜色融合、z-buffer 选择、分块发布思路；不部署） | V0.5 离线着色模块 | 3/5 |
 
 一句话结论：
 1. **LIO 在本项目中的正确定位不是"建出整个世界"，而是"给世界提供 metric 骨架"**：高频可信的轨迹（控制与尺度锚点）+ 近场高精度几何。MID-360 标称 40 m@10% 反射率，P600 在 80–120 m 航高下几乎打不到地面，城市级外观/几何仍需视觉重建（LingBot-Map），LIO 轨迹用于给视觉重建定尺度、定 ENU。
@@ -407,12 +407,12 @@ UI 同时绘制"真值轨迹（灰）/估计轨迹（红虚线）"，并在 LIO 
 
 ```text
 [P600 机载 / Jetson Orin NX / Prometheus(ROS1)]
- MID-360(S) ─livox_ros_driver2─▶ /livox/lidar(CustomMsg,10Hz) + /livox/imu(200Hz)
+ MID-360(S) ─livox_ros_driver2─> /livox/lidar(CustomMsg,10Hz) + /livox/imu(200Hz)
                                   │
-                                  ▼
+                                  v
                    FAST-LIO2（Prometheus Modules/FAST_LIO）
-                   ├─ /Odometry 10Hz(+cov) ─▶ mavros /vision_pose ─▶ PX4 EKF2（EV 融合，GNSS 弱时主定位）
-                   ├─ 0.5 m 体素地图增量 ─▶ 地面站 TCP/UDP ─▶ Gateway ─▶ WS lio.* ─▶ Web "实时建图"
+                   ├─ /Odometry 10Hz(+cov) ─> mavros /vision_pose ─> PX4 EKF2（EV 融合，GNSS 弱时主定位）
+                   ├─ 0.5 m 体素地图增量 ─> 地面站 TCP/UDP ─> Gateway ─> WS lio.* ─> Web "实时建图"
                    └─ rosbag：raw lidar + imu + 吊舱图像 + RTK + 飞控日志（离线的唯一真值数据面）
 
 [离线重建服务器（CPU 即可，无需 GPU）]
@@ -421,7 +421,7 @@ UI 同时绘制"真值轨迹（灰）/估计轨迹（红虚线）"，并在 LIO 
  (3) 位姿图：回环 + RTK/GNSS 因子（FASTLIO2_ROS2 pgo / GLIM / hdl_graph_slam，见其它研究单元）→ ENU 位姿
  (4) 地图拼装：patch × 优化位姿 → Open3D 统计滤波 + 0.05–0.15 m 体素 →（可选）动态物体剔除
  (5) 着色：§3.8（无同步相机时仅做离线多视融合，时间偏移用网格搜索标定）
- (6) 视觉融合：LingBot-Map 相机轨迹 ↔ LIO 轨迹按时间戳 Umeyama Sim(3) 对齐（定尺度+ENU）→ small_gicp 点到面精配
+ (6) 视觉融合：LingBot-Map 相机轨迹 <-> LIO 轨迹按时间戳 Umeyama Sim(3) 对齐（定尺度+ENU）→ small_gicp 点到面精配
  (7) 写 World Package：geometry/pointcloud（八叉树瓦片）、geometry/voxel（占据/平面片）、reconstruction/lidar/<session>/、coordinate.json（坐标系链）
 ```
 
@@ -480,7 +480,7 @@ worlds/<world_id>/reconstruction/lidar/<session_id>/
 
 ## 6. 风险与注意事项
 
-1. **ROS1 绑定**：三仓均为 catkin ROS1；Ubuntu 20.04/Noetic 已 EOL。方案：离线处理统一跑在 `ros:noetic` Docker；新开发走 ROS2（FASTLIO2_ROS2）；ROS1 bag ↔ ROS2 bag 用 Python `rosbags` 转换，不在宿主机安装 ROS。
+1. **ROS1 绑定**：三仓均为 catkin ROS1；Ubuntu 20.04/Noetic 已 EOL。方案：离线处理统一跑在 `ros:noetic` Docker；新开发走 ROS2（FASTLIO2_ROS2）；ROS1 bag <-> ROS2 bag 用 Python `rosbags` 转换，不在宿主机安装 ROS。
 2. **Livox 消息版本**：MID-360/360S 只被 Livox-SDK2 / `livox_ros_driver2` 支持（driver2 已含 `MID360s_config.json`，`pub_handler.cpp` 识别 `kLivoxLidarTypeMid360s`），而 FAST_LIO 主仓订阅 `livox_ros_driver::CustomMsg`（v1）——需改包名/头文件或像 Prometheus 那样转自定义消息。`offset_time` 为 ns，FAST_LIO 转成 ms 存进 `curvature`，自研工具必须遵守同一约定。
 3. **量程与安装**：MID-360 垂直视场偏上（−7°~+52°），40 m@10%；P600 倾斜安装（Prometheus Gazebo 外参约 20°）。高空航拍几乎无地面点 → LIO 退化、地图空洞。V0.5 采集规范需规定"建图航线 AGL ≤ 30–40 m，或倒装/加大俯角"，城市级外观靠视觉。
 4. **内存**：`pcd_save/interval: -1` 把全部稠密点堆在内存（MID-360 约 1200 万点/分钟），Orin NX 长航时必崩。机载只存 bag，离线关键帧化。

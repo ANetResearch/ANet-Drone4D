@@ -27,7 +27,7 @@
 | 6 | `metadata.anet` 扩展项（`levelsByteEnd`、`nnMedian`、`z_p1/p99`、tight bounds、`roots[]`） | 冻结 `anet` v1，共 19 个必填键（§4.3）。`levelsByteEnd`、`levelsPoints`、`levelsNodes` 三个平铺数组；`tightBounds`；`hierarchyExt`；`stats{zP1,zP99,hagP1,hagP99,nnMedianM,classHistogram}`。**多根森林不放进 metadata**，而是在 `world.json` 的点云图层下列 `roots[]`，每个根是一个独立的标准 Potree 2.0 容器 | 每个根都能单独被 Potree 工具读取；选择器已经是"多个点云共享一个预算"（Potree `updateVisibility` 本来就这样），不需要扩展容器语义 |
 | 7 | `world.json` manifest 未定义 | 定义 **world v1**：id、`contentVersion`（全部文件哈希汇总后取 12 位）、dataset/许可、coordinate 引用与哈希、`scaleStatus`、bounds、`layers[]`（type/role/format/href/status/`T_world_layer`（只允许刚体）/roots）、lod（首屏与预算）、render（默认着色、z/hag 区间、合成地面）、camera、qa、`files[]` | 前端启动只需一个入口文件。G6 的风场 manifest 用 `coordinate.sha256` 绑定坐标（即 g06 的 `coordinate_hash`） |
 | 8 | "Potree 2.0 兼容，可以用三个现成查看器对照"（n01、r12） | **不成立，需要修正**：potree 1.8 `OctreeLoader.js:60` 与 potree-core `OctreeLoader.ts:87` 只区分 `BROTLI`，three-loader `octree-loader.ts:28` 只区分 `GLTF`；除此之外的 encoding 一律交给 DEFAULT 解码器，按 AoS int32 解析。ANET_Q16 容器交给它们只会出乱码。v1 的做法：attribute 名用 `anet:pos` / `anet:col`（没有 `position`，旧 loader 会直接失败，不会静默出错）；需要对照时，tiler 加 `--twin-default` 额外写一份节点集完全相同的 DEFAULT 孪生容器，路径由 `anet.twin` 指向 | 源码核实 |
-| 9 | `hierarchy_ext.bin` 的索引方式 | **与 `hierarchy.bin` 逐条镜像**：第 i 条 22 B 记录对应第 i 条 12 B 扩展记录（字节 22i ↔ 12i，PROXY 重复记录也算）。内容为**子树**的紧包围盒（本节点加全部子孙），u16 相对节点立方体，min 向下取整、max 向上取整，保证保守 | 分页加载时，每个 hierarchy chunk `[o, o+s)` 对应扩展文件的 `[o/22·12, s/22·12)`，可以同样用 Range 取回。如果按"全局 BFS 序号"索引，懒加载时拿不到序号 |
+| 9 | `hierarchy_ext.bin` 的索引方式 | **与 `hierarchy.bin` 逐条镜像**：第 i 条 22 B 记录对应第 i 条 12 B 扩展记录（字节 22i <-> 12i，PROXY 重复记录也算）。内容为**子树**的紧包围盒（本节点加全部子孙），u16 相对节点立方体，min 向下取整、max 向上取整，保证保守 | 分页加载时，每个 hierarchy chunk `[o, o+s)` 对应扩展文件的 `[o/22·12, s/22·12)`，可以同样用 Range 取回。如果按"全局 BFS 序号"索引，懒加载时拿不到序号 |
 | 10 | SF 单位 10.1（`x01/analysis.json`）还是 10.15（x01 §3.3 CFG） | **取 10.15**，重新生成。新矩阵 `T_world_source = [[0,−10.15,0,0.370465],[10.15,0,0,0.425911],[0,0,10.15,164.727487]]`。**依赖 10.1 的旧产物要重建**：x01 的 `enu_sanfrancisco.npy`，以及 g06 已经指出的 r17 SF 风场 | x01 地标证据（Oracle 基线 ×10.15），x01 CFG 是权威配置 |
 
 新发现（会影响实现）：
@@ -127,7 +127,7 @@
 
 ### 2.4 上下游怎么用
 
-- **前端 `WorldFrame`**（r15 §3.1.5）：由 `anchor` 构造。GEO↔world 走 ECEF 严格变换；`T_ecef_world` 只用于校验和导出。
+- **前端 `WorldFrame`**（r15 §3.1.5）：由 `anchor` 构造。GEO<->world 走 ECEF 严格变换；`T_ecef_world` 只用于校验和导出。
 - **Recon IR**（r02）：`reconstruction/<session>/alignment.json` 的 `T_enu_engine` 改名为 `T_world_engine`。`trajectory.bin` 头部的 `origin_offset` 在 World 内恒为 `[0,0,0]`，位置直接是 world 坐标。
 - **融合**（r07 F8）：导出时写 `registration.T_world_map` 与 `scaleStatus`。如果它改变了 world 原点，必须升级 World 的 `contentVersion`，并重建所有依赖坐标的派生物，例如风场库、DTM、规划栅格。
 - **G6 环境场**：各类 manifest 的 `coordinate_hash` 取 `world.json` 中的 `coordinate.sha256`。
@@ -262,7 +262,7 @@ Potree 基础字段与 `Indexer::createMetadata` 完全相同：`version="2.0"`�
 | `levelsNodes` | 每层节点数 | [1, 4, 16, 64, 250, 517] |
 | `firstScreenLevel` | 最小的 L 使 `levelsPoints[L] ≥ 1e5/根数`，且不超过 `4.5e5/根数` | 2 |
 | `tightBounds` | 真实包围盒（Potree 的 boundingBox 是立方体） | z ∈ [−5.5, 287.0] |
-| `hierarchyExt` | `{href:"hierarchy_ext.bin", recordSize:12, content:"subtree-aabb-u16"}` 或 null | ✓ |
+| `hierarchyExt` | `{href:"hierarchy_ext.bin", recordSize:12, content:"subtree-aabb-u16"}` 或 null | yes |
 | `stats` | `zP1, zP99, hagP1, hagP99, nnMedianM, nnSource, classHistogram{index:count}` | −0.64 / 167.28 / 0 / 167.31 / 1.016 |
 | `root` | `{forestIndex, forestSize}` | 0 / 1 |
 | `twin` | DEFAULT 孪生容器的 relHref，或 null | null |
@@ -280,18 +280,18 @@ Potree 基础字段与 `Indexer::createMetadata` 完全相同：`version="2.0"`�
 
 ## 5. `world.json` v1（World Package 入口）
 
-### 5.1 目录（在 00-index §3.4 基础上收紧，★ 为 V0.1 必须有）
+### 5.1 目录（在 00-index §3.4 基础上收紧，`*` 为 V0.1 必须有）
 
 ```text
 worlds/<id>/
-├── world.json ★                     # 本节；no-cache
-├── coordinate.json ★                # §2
-├── visual/pointcloud/ ★             # §4（单根）或 visual/pointcloud/r-<i>/（森林）
+├── world.json *                     # 本节；no-cache
+├── coordinate.json *                # §2
+├── visual/pointcloud/ *             # §4（单根）或 visual/pointcloud/r-<i>/（森林）
 ├── visual/pointcloud-default/       # 可选：--twin-default，Potree 查看器对照用
-├── geometry/terrain/dtm_10m.{json,f32} ★  # grid.schema.json（行序由南向北，originXY 为 (0,0) 格的左下角）
+├── geometry/terrain/dtm_10m.{json,f32} *  # grid.schema.json（行序由南向北，originXY 为 (0,0) 格的左下角）
 ├── geometry/pointcloud/source/      # 全分辨率点云（物理权威，Geometry World）
 ├── geometry/{collision,voxel,sdf}/  # r06/r13；不进入 3D Tiles
-├── semantic/anet-classes@1.json ★   # 码表副本（与 packages/contracts 中的一致，校验器比对）
+├── semantic/anet-classes@1.json *   # 码表副本（与 packages/contracts 中的一致，校验器比对）
 ├── semantic/zones.geojson           # 禁飞区、限制区（矢量体）
 ├── environment/…                    # G6：AWRV/AWSL manifest 用 coordinate.sha256 绑定
 ├── reconstruction/<session>/        # r02 Recon IR（alignment.json 用 T_world_engine）
@@ -342,7 +342,7 @@ export async function openWorld(base: string, f = fetch): Promise<OpenedWorld> {
   }));
   return { world, coord, roots };
 }
-export function parseHierarchy(buf: ArrayBuffer, md: PotreeMeta, ext: ArrayBuffer | null): PCNode[];       // r09 §3.1 语义；ext 按 22i↔12i 对应
+export function parseHierarchy(buf: ArrayBuffer, md: PotreeMeta, ext: ArrayBuffer | null): PCNode[];       // r09 §3.1 语义；ext 按 22i<->12i 对应
 export function viewQ16(buf: ArrayBuffer, byteOffset: number, n: number, bpp: 12 | 16):
   { pos: Uint16Array; col: Uint8Array; ext?: Uint8Array };                                                   // 零拷贝：new Uint16Array(buf, off, 4n) …
 ```
@@ -387,17 +387,17 @@ def ingest(city: str, raw_dir: Path) -> IngestResult     # E(float64 → float32
 
 | 注入 | 结果 |
 |---|---|
-| r11：`pos.w = "intensity"` | ✗ schema `anet/pos/w` |
-| r11：`col.a = "lod-rank"` | ✗ schema `anet/col/a` |
-| x01：类别字节直接写 LAS 65（屋顶） | ✗ schema `classHistogram` 的键超出 0..31 |
-| 随机竞选（r09）的 `levelsByteEnd` 套到中心竞选的数据上 | ✗ 与复算结果不一致（2182464 ≠ 2181252） |
-| r15 的 snake_case 键 | ✗ `additionalProperties`（world_frame） |
-| `handedness=left`，但行列式 >0 | ✗ 语义检查 |
-| SF 旧单位 10.1 配新矩阵 | ✗ `∛|det| ≠ unitsToMeters` |
-| synthetic 锚点写 `georeferenced=true` | ✗ schema if/then |
-| 非立方体 boundingBox | ✗ 语义检查 |
-| 截断 `hierarchy_ext.bin` | ✗ 长度不符 |
-| 图层 transform 带尺度 | ✗ schema `rigid` |
+| r11：`pos.w = "intensity"` | rejected: schema `anet/pos/w` |
+| r11：`col.a = "lod-rank"` | rejected: schema `anet/col/a` |
+| x01：类别字节直接写 LAS 65（屋顶） | rejected: schema `classHistogram` 的键超出 0..31 |
+| 随机竞选（r09）的 `levelsByteEnd` 套到中心竞选的数据上 | rejected: 与复算结果不一致（2182464 ≠ 2181252） |
+| r15 的 snake_case 键 | rejected: `additionalProperties`（world_frame） |
+| `handedness=left`，但行列式 >0 | rejected: 语义检查 |
+| SF 旧单位 10.1 配新矩阵 | rejected: `∛|det| ≠ unitsToMeters` |
+| synthetic 锚点写 `georeferenced=true` | rejected: schema if/then |
+| 非立方体 boundingBox | rejected: 语义检查 |
+| 截断 `hierarchy_ext.bin` | rejected: 长度不符 |
+| 图层 transform 带尺度 | rejected: schema `rigid` |
 
 复现：`python .cache/research/g03/worldpkg_validate.py .cache/research/g03/instances/* --deep`；`node .cache/research/g03/ts/check.mjs`（需先 `npm i ajv@8.20.0 ajv-formats@3.0.1`）。
 

@@ -2,7 +2,7 @@
 
 > 研究单元：x01 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §7–8（World Model）、§14–16（点云与场景结构）、§26–30（无人机与控制模式）、§38–41（UI、World Package）、§43–44（MVP）
 >
-> 仓库快照：`refs/data/UrbanScene3D` @ `a5ce19b`（2023-12-12，★156，C++17，ECCV 2022 数据集官方仓库，仅含评测代码）
+> 仓库快照：`refs/data/UrbanScene3D` @ `a5ce19b`（2023-12-12，156 stars，C++17，ECCV 2022 数据集官方仓库，仅含评测代码）
 >
 > 本地数据：
 > - `data/raw/urbanscene3d/*_sampled_5m.ply`：6 个虚拟城市采样点云，均已完整解压，逐个校验了 `header + N×24 B == 文件大小`
@@ -32,14 +32,14 @@
 
 | 资产 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **6 个虚拟城市采样点云**<br>`*_sampled_5m.ply`，各约 5M 点，xyz + normal | 系统内置演示世界，同时是性能与回归基准 | **adopt**：经过 ingest 规范化（单位 / 轴向 / 调平 / 北向 / 原点 / 法线 / DTM / 分类）后转成 World Package | V0.1 起 | ★★★★★ |
-| **航线文件**<br>`Path/<Scene>/<Method>/<overlap>/<Scene>_<proxy>.txt` + `Oblique.log` | 真实论文算法产出的航拍视点集（4 个合成场景 × 3 种方法 × 2 种重叠度 × 4 种代理） | **port**：用作航线模板库，提供视点分布、云台角、重叠度参数；轨迹回放测试集<br>**reference**：参考其 5 向倾斜网格参数 | V0.2（回放 / Timeline）<br>V0.6（多机任务模板） | ★★★★ |
-| `src/model_tools.h::Height_map` | 2.5D 最大高度栅格 + 膨胀 + 安全距离，UrbanScene3D 团队用它判定无人机位置是否安全 | **port**（numpy 约 40 行）：mock 碰撞、最小安全高度、安全转场 | V0.2 | ★★★★ |
-| `src/evaluate_model.cpp::EvaluateModel::evaluate` | 重建精度评测（Accuracy / Completeness / Chamfer / Hausdorff / 阈值占比） | **port**（Python + KDTree，并修复 4 处 bug）：World Fusion QA | V0.5 | ★★★ |
-| `src/model_tools.cpp::split_obj`、`sample_points` | 鸟瞰栅格 + 8 邻域连通 → 单体化；面积加权三角形采样 | **reference**：用于建筑单体化和 mesh 转点云 | V0.5 / V1.0 | ★★ |
-| `src/intersection_tools.cpp`（Embree / CGAL 射线） | 深度图、可见性判定 | **reference**：服务器侧传感器仿真已有 r04/r05 的 numpy 方案 | — | ★ |
-| `polytech1k.ply` / `artsci1k.ply` | 1000 点稀疏配准点（法线全 0），仅供官方评测程序预配准 | **skip** | — | ☆ |
-| `Evaluation.zip`（Windows exe）、`Simulator.zip`（UE4 工程） | 官方评测二进制，以及 UE + AirSim 采图工程 | **skip**（V1.0 以后可参考 UE 高保真路线） | — | ☆ |
+| **6 个虚拟城市采样点云**<br>`*_sampled_5m.ply`，各约 5M 点，xyz + normal | 系统内置演示世界，同时是性能与回归基准 | **adopt**：经过 ingest 规范化（单位 / 轴向 / 调平 / 北向 / 原点 / 法线 / DTM / 分类）后转成 World Package | V0.1 起 | 5/5 |
+| **航线文件**<br>`Path/<Scene>/<Method>/<overlap>/<Scene>_<proxy>.txt` + `Oblique.log` | 真实论文算法产出的航拍视点集（4 个合成场景 × 3 种方法 × 2 种重叠度 × 4 种代理） | **port**：用作航线模板库，提供视点分布、云台角、重叠度参数；轨迹回放测试集<br>**reference**：参考其 5 向倾斜网格参数 | V0.2（回放 / Timeline）<br>V0.6（多机任务模板） | 4/5 |
+| `src/model_tools.h::Height_map` | 2.5D 最大高度栅格 + 膨胀 + 安全距离，UrbanScene3D 团队用它判定无人机位置是否安全 | **port**（numpy 约 40 行）：mock 碰撞、最小安全高度、安全转场 | V0.2 | 4/5 |
+| `src/evaluate_model.cpp::EvaluateModel::evaluate` | 重建精度评测（Accuracy / Completeness / Chamfer / Hausdorff / 阈值占比） | **port**（Python + KDTree，并修复 4 处 bug）：World Fusion QA | V0.5 | 3/5 |
+| `src/model_tools.cpp::split_obj`、`sample_points` | 鸟瞰栅格 + 8 邻域连通 → 单体化；面积加权三角形采样 | **reference**：用于建筑单体化和 mesh 转点云 | V0.5 / V1.0 | 2/5 |
+| `src/intersection_tools.cpp`（Embree / CGAL 射线） | 深度图、可见性判定 | **reference**：服务器侧传感器仿真已有 r04/r05 的 numpy 方案 | — | 1/5 |
+| `polytech1k.ply` / `artsci1k.ply` | 1000 点稀疏配准点（法线全 0），仅供官方评测程序预配准 | **skip** | — | 0/5 |
+| `Evaluation.zip`（Windows exe）、`Simulator.zip`（UE4 工程） | 官方评测二进制，以及 UE + AirSim 采图工程 | **skip**（V1.0 以后可参考 UE 高保真路线） | — | 0/5 |
 
 **关键结论（实现者先读）：**
 
@@ -113,7 +113,7 @@
 |---|---|
 | 仓库 | https://github.com/Linxius/UrbanScene3D ，项目页 https://vcc.tech/UrbanScene3D |
 | 论文 | Lin et al., "Capturing, Reconstructing, and Simulating: the UrbanScene3D Dataset", ECCV 2022 |
-| Star / 活跃度 | ★156；最后提交 2023-12-12（仅更新 README）；无 2026 年活动 |
+| Star / 活跃度 | 156 stars；最后提交 2023-12-12（仅更新 README）；无 2026 年活动 |
 | 代码量 | `src/` 3,897 行 C++17，只是一个评测库 `evaluate_model` 加一个测试程序，不含采集、规划或重建代码 |
 | 依赖 | Boost（filesystem、serialization）、Eigen3、OpenCV、CGAL、tinyxml2、tinyply、tinyobjloader、Embree 3、glog、TBB、glm、OpenMP。另外代码中 `#include` 了 jsoncpp（`json/reader.h`）和 `argparse`，但 `CMakeLists.txt` 里没有这两个依赖 |
 | 许可 | 数据仅限非商业使用，禁止再分发（按任务约定忽略 license；公开演示时见 §6） |
@@ -373,7 +373,7 @@ Chicago   : [[ 999.4832, -0.2358, -32.1450,  9009.184],
 - 上海、旧金山、芝加哥的 1 m 体素里平均只有约 1 个点。1 m 占据栅格会出现"漏洞"，碰撞体素宜取 **2 m 并膨胀 1 格**。
 - 深圳、苏州、纽约可以用 1 m。
 
-### 3.5 坐标变换全集（UE ⇄ ENU ⇄ Three.js ⇄ PX4）
+### 3.5 坐标变换全集（UE <-> ENU <-> Three.js <-> PX4）
 
 约定：
 - 世界系：ENU（E=x，N=y，U=z，右手，米）。
@@ -415,7 +415,7 @@ q_three = q_x(−90°) ⊗ q_enu ⊗ q_x(−90°)^{-1}
 
 相机姿态：three 相机看向自身 −Z、+Y 为上。它相对机体 FLU 的固定旋转为：相机 −Z = 机体 +X，相机 +Y = 机体 +Z，相机 +X = 机体 −Y。写成矩阵，列依次为相机 x、y、z 轴在 FLU 中的表示：`R_flu_cam = [[0,0,−1],[−1,0,0],[0,1,0]]`。
 
-**(d) ENU/FLU ⇄ PX4 NED/FRD**（与 MAVROS `ftf` 相同）
+**(d) ENU/FLU <-> PX4 NED/FRD**（与 MAVROS `ftf` 相同）
 
 ```
 p_ned = (N, E, −U)

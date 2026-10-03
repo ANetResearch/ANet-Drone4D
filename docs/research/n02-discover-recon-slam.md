@@ -18,26 +18,26 @@
 
 ## 0. 结论速览
 
-| 仓库 | ★ / 最后提交（实测） | 定位 | 复用方式 | 落点版本 | 推荐度 |
+| 仓库 | stars / 最后提交（实测） | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|---|
-| **facebookresearch/map-anything** | 3771 / 2026-08-07 | 通用**度量**前馈重建，可选输入内参、位姿、深度（含稀疏深度）做条件。统一模型工厂封装了 VGGT、VGGT-Ω、π3X、DA3、MoGe、MUSt3R 等 | **adopt**：GPU Worker 中的"度量条件引擎"。**port**：统一输出字典、多视深度一致性置信度、IQR 自适应体素、位姿平移 log-scale 条件化 | V0.5（RTK/LiDAR 融合），V0.1 定接口 | ★★★★★ |
-| **ByteDance-Seed/Depth-Anything-3** | 6402 / 2026-07-27 | any-view 几何基础模型，单一 depth-ray 表达。DA3-Streaming 支持长视频（chunk + Sim3 + 回环，显存 <12 GB）。Nested 系列输出米制。SMALL/BASE 为 Apache 许可，**可在 CPU 上跑** | **adopt**：离线长序列引擎（DA3-Streaming）和 CPU 冒烟引擎（DA3-SMALL）。**port**：置信度加权 IRLS-Sim3、chunk 调度、水库采样、参考帧选择 | V0.1（CPU 冒烟、离线引擎），V0.5 | ★★★★★ |
-| **PRBonn/rko_lio** | 660 / 2026-09-24 | 不依赖传感器建模的 LIO。C++ 核心 + pybind，**`pip install` 即可在 CPU 上跑，不需要 ROS**，能直接读 ROS1/ROS2 bag | **adopt**：Python 后端离线 LIO Job，以及 mock-LIO 测试床。**port**：int8 体素块地图、重力方向正则 | V0.2（mock 测试床），V0.5（离线处理 P600 bag） | ★★★★★（已实测） |
-| **jianboqi/CSF** | 649 / 2026-09-11 | 布料模拟地面滤波，可 `pip install cloth-simulation-filter`，纯 CPU | **adopt**：World ingest 的地面/DTM/HAG 与规则语义 | **V0.1 MVP** | ★★★★★（已实测） |
-| **Liansheng-Wang/Super-LIO** | 602 / 2026-07-13 | RA-L 2026 LIO。ROS2 Humble/Jazzy（另有 ROS1 分支），支持 x86 和 ARM64，自带 MID-360 配置，OctVoxMap 紧凑地图 | **adopt**：机载（Orin NX）LIO，作为 FAST-LIO2 的候选替代。**port**：OctVoxMap（实时地图去重和有界内存） | V0.5 真机 | ★★★★ |
-| **facebookresearch/vggt-omega** | 4588 / 2026-09-22 | VGGT 官方后继（CVPR 2026 Oral）。register attention，1B 参数，权重需申请 | **reference**：通过 MapAnything 的 `vggt_omega` wrapper 接入，做对照 | V0.5 评测 | ★★★ |
-| **yyfz/Pi3（Pi3X）** | 2181 / 2026-05-18 | 置换等变、无参考帧；Pi3X 支持位姿/内参/深度条件和近似度量 | **reference**：由 MapAnything 的 `pi3x` wrapper 统一调用。OpenFlyScan 的无人机工作站也用它 | V0.5 评测 | ★★★★ |
-| **MIT-SPARK/VGGT-SLAM（2.0）** | 1133 / 2026-06-29 | 实时前馈稠密 SLAM（RSS 2026），在 Jetson Thor 上验证。集成 SAM 3 + Perception Encoder 做开放词汇 3D 检测 | **reference**：V1.0 的目标发现和开放词汇查询 | V1.0 | ★★★ |
-| zju3dv/Scal3R、HengyiWang/amb3r（+amb3r-slam）、DengKaiCQ/VGGT-Long | 538 / 501（41）/ 903 | 公里级前馈重建与 SLAM | **reference**：amb3r-slam 官方代码未发布；VGGT-Long 的工程改进已并入 DA3-Streaming | V0.5+ 观察 | ★★ |
-| CUT3R / TTT3R / StreamVGGT / STream3R / InfiniteVGGT | 1497 / 734 / 975 / 409 / 391 | 状态式、因果流式重建 | **skip**：LingBot-Map（★17141）在同一定位上更强、更活跃 | — | ★ |
-| OpenDroneMap/ODM（+WebODM） | 6494 / 2026-09-15 | 成熟的无人机摄影测量（正射、DSM、点云、网格） | **reference/adopt**：离线基准，以及 DJI SRT 遥测解析 | V0.5 QA | ★★★ |
-| Pointcept/Pointcept + Utonia | 3237 / 751 | PTv3 系列点云编码器；Utonia 可以不用颜色和法线（ICML 2026） | **reference**：V0.5 以后在 GPU 上做线性探针语义（需 STPLS3D/SensatUrban 标注） | V0.5+ | ★★★ |
-| IGNF/myria3d、meidachen/STPLS3D、facebookresearch/sam3 | 294 / 290 / 11818 | 航空 LiDAR 语义产线、合成航测语义数据集、2D 开放词汇分割 | **reference** | V0.5–V1.0 | ★★★ |
-| hku-mars：Point-LIO / Voxel-SLAM / Swarm-LIO2 / MARSIM / UMI-3D；APRIL-ZJU/Gaussian-LIC；rpng/MINS；mistletoe235/OpenFlyScan | 见 §1 | LIO 变体、集群 LIO、LiDAR 无人机仿真、MID-360+相机标定、LIC-3DGS、GNSS 多传感器、质量引导补拍 | **reference** | V0.5–V1.0 | ★★–★★★ |
+| **facebookresearch/map-anything** | 3771 / 2026-08-07 | 通用**度量**前馈重建，可选输入内参、位姿、深度（含稀疏深度）做条件。统一模型工厂封装了 VGGT、VGGT-Ω、π3X、DA3、MoGe、MUSt3R 等 | **adopt**：GPU Worker 中的"度量条件引擎"。**port**：统一输出字典、多视深度一致性置信度、IQR 自适应体素、位姿平移 log-scale 条件化 | V0.5（RTK/LiDAR 融合），V0.1 定接口 | 5/5 |
+| **ByteDance-Seed/Depth-Anything-3** | 6402 / 2026-07-27 | any-view 几何基础模型，单一 depth-ray 表达。DA3-Streaming 支持长视频（chunk + Sim3 + 回环，显存 <12 GB）。Nested 系列输出米制。SMALL/BASE 为 Apache 许可，**可在 CPU 上跑** | **adopt**：离线长序列引擎（DA3-Streaming）和 CPU 冒烟引擎（DA3-SMALL）。**port**：置信度加权 IRLS-Sim3、chunk 调度、水库采样、参考帧选择 | V0.1（CPU 冒烟、离线引擎），V0.5 | 5/5 |
+| **PRBonn/rko_lio** | 660 / 2026-09-24 | 不依赖传感器建模的 LIO。C++ 核心 + pybind，**`pip install` 即可在 CPU 上跑，不需要 ROS**，能直接读 ROS1/ROS2 bag | **adopt**：Python 后端离线 LIO Job，以及 mock-LIO 测试床。**port**：int8 体素块地图、重力方向正则 | V0.2（mock 测试床），V0.5（离线处理 P600 bag） | 5/5（已实测） |
+| **jianboqi/CSF** | 649 / 2026-09-11 | 布料模拟地面滤波，可 `pip install cloth-simulation-filter`，纯 CPU | **adopt**：World ingest 的地面/DTM/HAG 与规则语义 | **V0.1 MVP** | 5/5（已实测） |
+| **Liansheng-Wang/Super-LIO** | 602 / 2026-07-13 | RA-L 2026 LIO。ROS2 Humble/Jazzy（另有 ROS1 分支），支持 x86 和 ARM64，自带 MID-360 配置，OctVoxMap 紧凑地图 | **adopt**：机载（Orin NX）LIO，作为 FAST-LIO2 的候选替代。**port**：OctVoxMap（实时地图去重和有界内存） | V0.5 真机 | 4/5 |
+| **facebookresearch/vggt-omega** | 4588 / 2026-09-22 | VGGT 官方后继（CVPR 2026 Oral）。register attention，1B 参数，权重需申请 | **reference**：通过 MapAnything 的 `vggt_omega` wrapper 接入，做对照 | V0.5 评测 | 3/5 |
+| **yyfz/Pi3（Pi3X）** | 2181 / 2026-05-18 | 置换等变、无参考帧；Pi3X 支持位姿/内参/深度条件和近似度量 | **reference**：由 MapAnything 的 `pi3x` wrapper 统一调用。OpenFlyScan 的无人机工作站也用它 | V0.5 评测 | 4/5 |
+| **MIT-SPARK/VGGT-SLAM（2.0）** | 1133 / 2026-06-29 | 实时前馈稠密 SLAM（RSS 2026），在 Jetson Thor 上验证。集成 SAM 3 + Perception Encoder 做开放词汇 3D 检测 | **reference**：V1.0 的目标发现和开放词汇查询 | V1.0 | 3/5 |
+| zju3dv/Scal3R、HengyiWang/amb3r（+amb3r-slam）、DengKaiCQ/VGGT-Long | 538 / 501（41）/ 903 | 公里级前馈重建与 SLAM | **reference**：amb3r-slam 官方代码未发布；VGGT-Long 的工程改进已并入 DA3-Streaming | V0.5+ 观察 | 2/5 |
+| CUT3R / TTT3R / StreamVGGT / STream3R / InfiniteVGGT | 1497 / 734 / 975 / 409 / 391 | 状态式、因果流式重建 | **skip**：LingBot-Map（17141 stars）在同一定位上更强、更活跃 | — | 1/5 |
+| OpenDroneMap/ODM（+WebODM） | 6494 / 2026-09-15 | 成熟的无人机摄影测量（正射、DSM、点云、网格） | **reference/adopt**：离线基准，以及 DJI SRT 遥测解析 | V0.5 QA | 3/5 |
+| Pointcept/Pointcept + Utonia | 3237 / 751 | PTv3 系列点云编码器；Utonia 可以不用颜色和法线（ICML 2026） | **reference**：V0.5 以后在 GPU 上做线性探针语义（需 STPLS3D/SensatUrban 标注） | V0.5+ | 3/5 |
+| IGNF/myria3d、meidachen/STPLS3D、facebookresearch/sam3 | 294 / 290 / 11818 | 航空 LiDAR 语义产线、合成航测语义数据集、2D 开放词汇分割 | **reference** | V0.5–V1.0 | 3/5 |
+| hku-mars：Point-LIO / Voxel-SLAM / Swarm-LIO2 / MARSIM / UMI-3D；APRIL-ZJU/Gaussian-LIC；rpng/MINS；mistletoe235/OpenFlyScan | 见 §1 | LIO 变体、集群 LIO、LiDAR 无人机仿真、MID-360+相机标定、LIC-3DGS、GNSS 多传感器、质量引导补拍 | **reference** | V0.5–V1.0 | 2/5–3/5 |
 
 **关键结论（实现者先读这 10 条）：**
 
-1. **2026 年前馈重建形成"四强一基线"。** 四强是 LingBot-Map（★17141，流式，r01 已选）、Depth-Anything-3（★6402，any-view 且有小模型）、VGGT-Ω（★4588，VGGT 官方后继）和 MapAnything（★3771，度量加多模态条件）；基线是 COLMAP 4.x。**不应再只绑定单一引擎。** 建议把 r02 的 Recon IR 升级为 **Engine Adapter v2**（§3.1）：LingBot-Map 负责在线/流式，DA3-Streaming 负责离线长序列和回环，MapAnything 负责"带 RTK 位姿和 LiDAR 稀疏深度的度量重建"，DA3-SMALL 负责 CPU 冒烟和 CI。
+1. **2026 年前馈重建形成"四强一基线"。** 四强是 LingBot-Map（17141 stars，流式，r01 已选）、Depth-Anything-3（6402 stars，any-view 且有小模型）、VGGT-Ω（4588 stars，VGGT 官方后继）和 MapAnything（3771 stars，度量加多模态条件）；基线是 COLMAP 4.x。**不应再只绑定单一引擎。** 建议把 r02 的 Recon IR 升级为 **Engine Adapter v2**（§3.1）：LingBot-Map 负责在线/流式，DA3-Streaming 负责离线长序列和回环，MapAnything 负责"带 RTK 位姿和 LiDAR 稀疏深度的度量重建"，DA3-SMALL 负责 CPU 冒烟和 CI。
 2. **MapAnything 在模型层面解决了 r01/r02 指出的"前馈重建本来就没有尺度"。** 视图字典里放入 `camera_poses`（OpenCV c2w）、`is_metric_scale=True`，以及可选的 `depth_z`（稀疏深度用 0 表示无效），模型就直接输出米制几何和 `metric_scaling_factor`（`mapanything/models/mapanything/model.py::_encode_and_fuse_cam_quats_and_trans / _encode_and_fuse_depths`）。训练配置 `configs/model/task/depth_completion.yaml` 中 `sparse_depth_prob: 1`、`sparsification_removal_percent: 0.9`，说明它见过只保留 10% 像素的稀疏深度。MID-360 投影深度能否直接使用：**待验证**。在度量输出前提下，chunk 之间应改用 **SE(3) 对齐而不是 Sim(3)**（VGGT-Long 2025-10-08 更新说明和 Map-Long 的做法）。
 3. **长序列离线重建建议用 DA3-Streaming 作第二引擎。** 它是 VGGT-Long 的工程升级：`chunk_size=120`、`overlap=60`，置信度加权 IRLS-Sim3（Huber δ=0.1），SALAD 回环（相似度 ≥0.85），pypose Sim3 LM 位姿图。官方 KITTI ATE 为 **16.83 m**（chunk 60），VGGT-Long 25.60 m，Pi-Long 21.17 m；r01 记录的 LingBot-Map KITTI ATE 为 24.0 m（各自评测协议不同，只作量级参考）。该流程在 GPU 上接近 10 FPS。
 4. **无 GPU 也能跑"真实"重建冒烟测试（本机实测）。** DA3-SMALL（Apache，实测 34.3M 参数）在 8 核 CPU 上：8 帧 504×280 耗时 **37.5 s**，16 帧 88 s，峰值 RSS 1.9 GB；336 分辨率下 16 帧 51.5 s。DA3-BASE（135.4M）16 帧 504 分辨率 173 s。这足够做 CI 和演示用的"8–16 张关键帧 → 点云 → World Package"真实链路，不必全靠 mock。
@@ -57,7 +57,7 @@
    - (b) DTM 栅格同时服务 AGL 高度显示、mock 无人机贴地飞行和 WindNinja 地形风（§3.10）；
    - (c) "实时建图"演示用 OctVoxMap 去重，WebSocket 按 int8 体素块下发增量（约 3 B/点，§3.7–3.8）；
    - (d) 流式预览用水库采样维持固定点预算（§3.4）。
-10. **风险。** VGGT-Ω 权重需人工申请；MapAnything、DA3-Giant、π3 权重是 CC-BY-NC（按要求忽略许可，但 `engine.json` 要记下来）；flash-attn、spconv、xformers、gsplat 都依赖 CUDA；AMB3R-SLAM 官方代码尚未发布，GitHub 上唯一可跑的是 0★ 的第三方复现。
+10. **风险。** VGGT-Ω 权重需人工申请；MapAnything、DA3-Giant、π3 权重是 CC-BY-NC（按要求忽略许可，但 `engine.json` 要记下来）；flash-attn、spconv、xformers、gsplat 都依赖 CUDA；AMB3R-SLAM 官方代码尚未发布，GitHub 上唯一可跑的是 0 stars 的第三方复现。
 
 ---
 
@@ -69,15 +69,15 @@
 
 | 类别 | 已有 | 本单元新增/建议 | 关系 |
 |---|---|---|---|
-| 前馈重建 | vggt（★14436，2026-05-19）、lingbot-map（★17141，2026-09-08） | map-anything、Depth-Anything-3、vggt-omega | **补充**：LingBot-Map 仍是流式主引擎；vggt 保留，因为它是 LingBot 的祖先，接口要对照 |
+| 前馈重建 | vggt（14436 stars，2026-05-19）、lingbot-map（17141 stars，2026-09-08） | map-anything、Depth-Anything-3、vggt-omega | **补充**：LingBot-Map 仍是流式主引擎；vggt 保留，因为它是 LingBot 的祖先，接口要对照 |
 | 长序列 / SLAM | —（r01 提到 LingBot windowed 模式） | DA3-Streaming（在 DA3 仓库内）、VGGT-SLAM 2.0、Scal3R | **补充** |
-| LIO | FAST_LIO（★5226，**2024-07-23** 停更）、FASTLIO2_ROS2、glim（★1848，2026-09-06） | rko_lio、Super-LIO | **补充**：Python 后端用 rko_lio；机载侧 Super-LIO 可替代 FAST_LIO 主仓 |
+| LIO | FAST_LIO（5226 stars，**2024-07-23** 停更）、FASTLIO2_ROS2、glim（1848 stars，2026-09-06） | rko_lio、Super-LIO | **补充**：Python 后端用 rko_lio；机载侧 Super-LIO 可替代 FAST_LIO 主仓 |
 | 航拍摄影测量 | colmap | ODM/WebODM（reference） | 参考 |
 | 地面 / DTM / 语义 | PDAL（有 SMRF/PMF 地面滤波） | CSF、Pointcept/Utonia、myria3d、STPLS3D | **新增**：MVP 用 CSF；PDAL 的 `filters.csf` 可在 ingest 管道里二选一 |
 
 ### 1.2 评估过的全部候选（实测 star / 最近提交）
 
-| 仓库 | ★ | 最近提交 | 年份 / 会议 | 一句话 |
+| 仓库 | stars | 最近提交 | 年份 / 会议 | 一句话 |
 |---|---|---|---|---|
 | Robbyant/lingbot-map | 17141 | 2026-09-08 | 2026 | 流式 GCT + paged KV（r01 已研究） |
 | facebookresearch/vggt | 14436 | 2026-05-19 | CVPR25 Best | 前馈多视几何（r02 已研究） |
@@ -693,24 +693,24 @@ pred = m.inference(keyframes[:8], process_res=336,          # 8 帧 336 分辨�
 
 ```text
 V0.1 ingest（UrbanScene3D 内置世界）
-  raw.ply ──r09 归一化──► CSF(ground) ──► DTM(2 m) ──► HAG ──► 网格法线规则 + 平滑 ──► classification u8
+  raw.ply ──r09 归一化──> CSF(ground) ──> DTM(2 m) ──> HAG ──> 网格法线规则 + 平滑 ──> classification u8
                                   │                                          │
-                                  └──► geometry/terrain/dtm.f32              └──► 八叉树节点属性块（r09/r12）
+                                  └──> geometry/terrain/dtm.f32              └──> 八叉树节点属性块（r09/r12）
 V0.2 仿真
-  DroneState(p, R) ──► lidar_mock（z-buffer，≤20k 点）──► [可选] OctVoxMap ──► WS 0x21 增量
-                  └──► imu_mock（200 Hz）─────────────┘             └──► RKO-LIO（测试 / QA）
+  DroneState(p, R) ──> lidar_mock（z-buffer，≤20k 点）──> [可选] OctVoxMap ──> WS 0x21 增量
+                  └──> imu_mock（200 Hz）─────────────┘             └──> RKO-LIO（测试 / QA）
 V0.5 GPU Worker
-  video + RTK + MID-360 ──► LIO(RKO / Super) ──► MapAnything(pose + sparse depth, SE3 chunks) ──► Adapter v2 ──► IR ──► Fusion(GICP)
-  long video only        ──► DA3-Streaming(Sim3 + loop) ──► Adapter v2 ──► Sim3(GNSS) ──► IR
+  video + RTK + MID-360 ──> LIO(RKO / Super) ──> MapAnything(pose + sparse depth, SE3 chunks) ──> Adapter v2 ──> IR ──> Fusion(GICP)
+  long video only        ──> DA3-Streaming(Sim3 + loop) ──> Adapter v2 ──> Sim3(GNSS) ──> IR
 ```
 
 ---
 
 ## 5. 对比与推荐
 
-### 5.1 前馈重建引擎（排序依据：★、2026 活跃度、与"无人机长视频 + RTK + LiDAR"的契合度、本机可跑性）
+### 5.1 前馈重建引擎（排序依据：stars、2026 活跃度、与"无人机长视频 + RTK + LiDAR"的契合度、本机可跑性）
 
-| 排名 | 引擎 | ★ / 最近提交 | 优势 | 劣势 | 本项目角色 |
+| 排名 | 引擎 | stars / 最近提交 | 优势 | 劣势 | 本项目角色 |
 |---|---|---|---|---|---|
 | 1 | LingBot-Map | 17141 / 09-08 | 真流式（paged KV），星数最高，r01 已完整研究 | 相对尺度；KV 池约 11 GB；ATE 在户外大场景偏大 | 在线 / 流式主引擎 |
 | 2 | MapAnything | 3771 / 08-07 | **度量**；可接入位姿、内参、深度（含稀疏）条件；统一框架封装其余模型；AerialMegaDepth 训练数据 | 1B 级模型，需 GPU；默认权重 NC | 带 RTK/LiDAR 的度量引擎 + 评测框架 |
@@ -722,7 +722,7 @@ V0.5 GPU Worker
 
 ### 5.2 SLAM / LIO
 
-| 排名 | 项目 | ★ / 最近提交 | 本机可跑 | 本项目角色 |
+| 排名 | 项目 | stars / 最近提交 | 本机可跑 | 本项目角色 |
 |---|---|---|---|---|
 | 1 | RKO-LIO | 660 / 09-24 | **pip wheel 可跑，已实测** | 后端离线 LIO、mock 测试床 |
 | 2 | Super-LIO | 602 / 07-13 | 需要 ROS2 + colcon | 机载 LIO 候选（ARM64，带重定位） |
@@ -758,7 +758,7 @@ V0.5 GPU Worker
 8. **Python 端算力。** 扫描生成约 31–37 ms/帧、LIO 约 9–11 ms/帧，单进程最多支撑 2 架"带 LiDAR 仿真"的无人机。多机时要降采样、降频或做 C++ 化。**浏览器端绝不做 LiDAR 光线求交**，只画 FOV 和稀疏扫描。
 9. **UrbanScene3D 数据陷阱（新增）。** 虚拟城市几乎没有植被；SF 疑似 1:10 缩放（待核实）；Shenzhen 地面分层。语义规则阈值（2.5 m、35 m）默认米制，**必须在单位归一之后运行**。
 10. **ROS 依赖。** Super-LIO 和 FAST-LIO2 需要 ROS2/ROS1，RKO-LIO 的 ROS 部分是可选的。后端 FastAPI 只依赖 `rko_lio` 与 `rosbags`（纯 Python），不要把 ROS 引入 API 容器。
-11. **amb3r-slam 的误导风险。** 官方 `HengyiWang/amb3r-slam` 目前是占位仓库，只有 README。搜索引擎会把 `johnhenning/amb3r-slam`（第三方复现，0★）当成代码地址，不能把它的结果当作论文复现。
+11. **amb3r-slam 的误导风险。** 官方 `HengyiWang/amb3r-slam` 目前是占位仓库，只有 README。搜索引擎会把 `johnhenning/amb3r-slam`（第三方复现，0 stars）当成代码地址，不能把它的结果当作论文复现。
 12. **RKO-LIO 版本。** 仓库是 0.4.1（2026-09-25，改了 deskewed_scan 话题名和帧），PyPI 最新是 0.4.0。按 wheel 版本锁定 `rko_lio==0.4.0`，升级时注意 API 变化（0.4.0 把 `pointcloud()` 改名为 `points()`）。
 
 ---
@@ -788,7 +788,7 @@ V0.5 GPU Worker
    
    点级类别用 ASPRS LAS 编码（u8，含 64+ 自定义），Restricted Area、禁飞区等用**矢量体积语义**（`semantic/zones.geojson` + 高度区间），不要混入点类别。原文把 "Restricted Area" 和 Road、Building 并列在 Semantic 下，粒度不一致。
 5. **§7 Geometry 增加一等公民 "Terrain（DTM/DSM）"。** AGL 显示、贴地飞行、WindNinja 地形风（§20 Level 2）、LiDAR 仿真兜底都依赖 DTM，原文 Geometry 列表里缺这一项。World Package 增加 `geometry/terrain/{dtm.f32, dsm.f32, terrain.json}`。
-6. **§14–§15 的点云节点格式增加属性块。** 每点 `classification u8` 加可选的 `hag_q u8`。图层开关改为 GPU uniform `classMask`，不重载；LOD 可按类别加权（地面降权）。原文 §38 的 "Layers ☑ Semantic" 应细化为按类别开关。
+6. **§14–§15 的点云节点格式增加属性块。** 每点 `classification u8` 加可选的 `hag_q u8`。图层开关改为 GPU uniform `classMask`，不重载；LOD 可按类别加权（地面降权）。原文 §38 的 "Layers [x] Semantic" 应细化为按类别开关。
 7. **§28 DroneState 增加 `alt_agl`**（基于 DTM），与 `alt_amsl` 和 `h_ell`（r02）并列。UI 的 "Altitude 82.3 m" 要标明基准。
 8. **§36 WebSocket 增加 "LiveMapDelta（0x21）" 消息**（§3.8 的 int8 体素块）。Sensor 类数据（LiDAR 扫描）要稀疏化到 2–5k 点/帧，并写入频率和带宽预算：LiDAR 显示 ≤0.3 MB/s/架，实时地图 ≤0.2 MB/s。
 9. **§43 MVP 补两件低成本交付物。**

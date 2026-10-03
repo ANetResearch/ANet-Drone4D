@@ -5,26 +5,42 @@
 <h3>Reality in, swarms out.</h3>
 
 A real-world grounded 4D world runtime for autonomous multi-agent drones.<br/>
-Stream a city-scale point cloud into any browser, fly a simulated fleet (built for up to 1,000 drones) through wind
-and weather on one server clock, and let the drones discover and delegate work to each other over <a href="https://github.com/ANetResearch/ANet">ANet</a>.<br/>
+Stream a city-scale point cloud into any browser, fly a simulated fleet of up to 1,000 drones through wind and
+weather on one server clock, and let the drones discover and delegate work to each other over <a href="https://github.com/ANetResearch/ANet">ANet</a>.<br/>
 No GPU needed on the server.
 
 [![License](https://img.shields.io/badge/license-modified%20Apache--2.0-1f1f1f)](LICENSE)
-[![Status](https://img.shields.io/badge/status-V0.1%20%28D1%29%20in%20progress-e0322d)](#roadmap)
+[![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
+[![Status](https://img.shields.io/badge/status-V0.1%20%28D1%29%20in%20acceptance-e0322d)](#d1-acceptance)
 [![Python](https://img.shields.io/badge/Python-3.12-1f1f1f)](pyproject.toml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-7.0-1f1f1f)](apps/web/package.json)
 [![React](https://img.shields.io/badge/React-19-1f1f1f)](apps/web/package.json)
 [![three.js](https://img.shields.io/badge/three.js-r186-1f1f1f)](https://threejs.org)
 [![Renderer](https://img.shields.io/badge/renderer-WebGL2%20%C2%B7%20WebGPU%20planned-1f1f1f)](#how-it-works)
 [![Server GPU](https://img.shields.io/badge/server%20GPU-not%20required-1f1f1f)](#quick-start)
-[![Specs](https://img.shields.io/badge/design%20specs-26%20%2B%2053%20ADRs-1f1f1f)](#documentation)
+[![Specs](https://img.shields.io/badge/design%20specs-26%20%2B%2080%20ADRs-1f1f1f)](#documentation)
 [![ANet](https://img.shields.io/badge/agents-ANet-e0322d)](https://github.com/ANetResearch/ANet)
 
-[Quick start](#quick-start) · [Features](#features) · [How it works](#how-it-works) · [Roadmap](#roadmap) · [Docs](#documentation) · [ANet](https://github.com/ANetResearch/ANet)
+[Quick start](#quick-start) · [Features](#features) · [Acceptance](#d1-acceptance) · [How it works](#how-it-works) · [Roadmap](#roadmap) · [Docs](#documentation) · [ANet](https://github.com/ANetResearch/ANet)
 
 **English** · [简体中文](README.zh-CN.md)
 
 </div>
+
+<br/>
+
+<img src="docs/media/screenshot-hero.jpg" alt="The ANet Drone4D sandbox on ANet Synthetic City: world, layer and weather panels, a fleet list of seven P600 drones, the timeline and the performance HUD around the point-cloud city" width="100%" />
+
+<sub>**Screenshot of the current build**, not concept art. The city is **ANet Synthetic City**, the synthetic demo city
+that `make demo-world` generates in about 25 s (no real place, no third-party data), running scenario S0: two P600s
+spiral around the 318 m ANet Tower (red trail) while two more cover city blocks. Captured on an 8-core machine with no
+GPU (SwiftShader software rendering), with the point budget fixed at 1.5 M points by a test switch (the badge on the
+HUD); the HUD shows that machine's frame interval, about 1 s.</sub>
+
+<img src="docs/media/demo-flight.webp" alt="Ten seconds of scenario S0 in ANet Synthetic City: drones spiral around the ANet Tower, cover city blocks and fly a V formation along the river" width="100%" />
+
+<sub>**Animation, same build and city.** Ten seconds of scenario S0 with about 850 K points per frame, stepped frame by
+frame on the same no-GPU machine (0.1 s of simulation per frame) and played back at twice real time.</sub>
 
 ---
 
@@ -54,8 +70,9 @@ and the timeline share one simulation clock, so any moment can be paused, steppe
 ## Features
 
 > [!NOTE]
-> The illustrations on this page are concept art made for this README with an image model and graded to the ANet
-> Graphite palette. They are not screenshots of the current build.
+> The illustration at the top of each feature is concept art, made for this README with an image model and graded to
+> the ANet Graphite palette. Images captioned **Screenshot** are real captures of the current build in ANet Synthetic
+> City, the synthetic demo city (see [Quick start](#quick-start)).
 
 ### Reality → World
 
@@ -65,8 +82,10 @@ and the timeline share one simulation clock, so any moment can be paused, steppe
 ground, classes) into **World Package v1**: a Potree 2.0-compatible octree with the 12-byte ANET_Q16 point encoding,
 DSM and DTM rasters, semantics and zones. The six built-in cities (Shenzhen, Shanghai, New York, San Francisco,
 Suzhou and Chicago, about 5 million points each) build on the CPU in 27 to 35 s per city and pass `validate --deep`
-with zero errors. The reconstruction interface (Engine Adapter v2, Recon IR, a job state machine) already runs end
-to end with a mock engine and produces a World the browser loads; GPU engines arrive in V0.5.
+with zero errors. A seventh world, ANet Synthetic City, is generated from a fixed seed (1.2 km × 1.2 km, about 3.9
+million points, no third-party data) and goes through the same pipeline in about 25 s; it is the city in every
+screenshot on this page. The reconstruction interface (Engine Adapter v2, Recon IR, a job state machine) already runs
+end to end with a mock engine and produces a World the browser loads; GPU engines arrive in V0.5.
 
 ### Streaming city-scale point clouds
 
@@ -78,6 +97,12 @@ quality ladder (soft-min to ultra) from measured frame time, so density follows 
 is drawn in a single draw call from a paged GPU point pool, and the canvas never resizes when quality changes. The
 product selector matches the research prototype frame by frame on three cities and five budgets.
 
+<img src="docs/media/screenshot-streaming.jpg" alt="Three stages of progressive octree refinement in ANet Synthetic City: coarse nodes first, refining, complete" width="100%" />
+
+<sub>**Screenshot.** After the camera jumps to a close view, the resident coarse nodes draw first (724 K points, 52%
+loaded), then refine under the point budget (1.04 M points, 65%) until the view is complete (1.50 M points, the
+budget). Figures from the HUD; Tier B with a fixed 1.5 M budget on software rendering.</sub>
+
 ### Environment as a 4D field
 
 <img src="docs/media/feature-environment.jpg" alt="Wind streamlines, rain and low fog around point-cloud towers, with one drone's gust response" width="100%" />
@@ -88,16 +113,33 @@ through its relative airspeed. The browser evaluates the same formulas in TypeSc
 to draw rain, snow, dust, fog, clouds and wind arrows. Golden tests hold both sides together (10,261 cases), and GPU
 wind matches the CPU reference within 0.01·v_max + 0.02 m/s.
 
+<img src="docs/media/screenshot-weather.jpg" alt="The same view of ANet Synthetic City in light rain, as fog rolls in, and in fog" width="100%" />
+
+<sub>**Screenshot.** One viewpoint as scenario S0 turns light rain into fog: visibility 6.0 km, then 690 m halfway
+through the 40 s transition, then 150 m.</sub>
+
 ### Many drones, one clock
 
 <img src="docs/media/feature-swarm.jpg" alt="Drone formations and coverage lanes over a point-cloud city" width="100%" />
 
 **FleetSim** steps every drone as one structure of arrays on a shared 250 Hz clock: a PX4-style position and attitude
 cascade (L1, at 125 Hz) compiled with numba, bit-identical to its numpy reference and checked against PX4 SIH flight
-recordings. It is built for 1 to 1,000 drones (the 1,000-drone fleet ladder runs in the performance phase) of two
-types: x500 and a P600 digital twin (its parameters are placeholders until identification in V0.4). Safety runs inside
-the same loop: a 14-state flight state machine, geofences, energy-aware return to home, fleet separation and a
-link-loss policy. Missions come from 8 generators, from a helical facade scan to formations and area coverage.
+recordings. It runs 1 to 1,000 drones of two types, x500 and a P600 digital twin (its parameters are placeholders
+until identification in V0.4); at 1,000 drones it keeps real time on about half a CPU core
+([D1 acceptance](#d1-acceptance)). Safety runs inside the same loop: a 14-state flight state machine, geofences,
+energy-aware return to home, fleet separation and a link-loss policy. Missions come from 8 generators, from a helical
+facade scan to formations and area coverage.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/screenshot-swarm.jpg" alt="A V formation of three drones turning at the east end of the river, and a coverage drone's lawnmower lanes over city blocks" width="100%" /></td>
+<td width="50%"><img src="docs/media/screenshot-follow.jpg" alt="Third-person follow view behind the formation leader, with labels and trails of all three formation drones" width="100%" /></td>
+</tr>
+</table>
+
+<sub>**Screenshots.** Left: the V formation turns at the east end of the river (the leader's trail in red) while a
+coverage drone flies lawnmower lanes over two blocks. Right: third-person follow of the formation leader, which gets
+the low-latency focus channel (badge at the top left).</sub>
 
 ### Drones as physical agents
 
@@ -106,8 +148,8 @@ link-loss policy. Missions come from 8 generators, from a helical facade scan to
 Each drone joins an agent network with its capabilities. In the S3 search-and-rescue scenario a camera drone spots a
 possible target, finds thermal drones through capability discovery, collects quotes priced by the simulator's own
 estimator, and delegates the confirmation to the best one; the result is checked against a receipt and an acceptance
-predicate (TSIR, from ANetCore). V0.1 runs this on an in-process Mock ANet, and S3 passes in a lockstep test harness;
-the multi-process run waits on agent leases in sim-core. Real ANet arrives in V1.0.
+predicate (TSIR, from ANetCore). V0.1 runs this on an in-process Mock ANet; S3 passes end to end with real processes
+(sim-core, api and agent-runtime) and makes the same decisions at ×1 and ×10. Real ANet arrives in V1.0.
 
 ### And also
 
@@ -119,33 +161,83 @@ the multi-process run waits on agent leases in sim-core. Real ANet arrives in V1
 - **Geometry queries on the World.** Height, AGL, clearance, line of sight, ray hit and path validation, used by
   safety, planning and the click-to-GoTo interaction alike.
 - **Sensors.** Gimbals and camera frustums, GNSS and IMU noise models, a mock detector and thermal frames.
-- **Scenarios.** S1 Shenzhen facade inspection, S2 Shanghai formation, S3 New York search and rescue with agents, S4
-  Chicago lakeshore, S5 San Francisco terrain following, S6 Suzhou corridor, a fleet ladder from 10 to 1,000 drones,
-  and a soak run.
+- **Scenarios.** S0 ANet Synthetic City showcase (no download needed), S1 Shenzhen facade inspection, S2 Shanghai
+  formation, S3 New York search and rescue with agents, S4 Chicago lakeshore, S5 San Francisco terrain following, S6
+  Suzhou corridor, a fleet ladder from 10 to 1,000 drones, and a soak run.
 - **Remote by design.** The server binds to loopback and is reached through an SSH tunnel; viewer, operator and admin
   roles, with a single operator seat. LAN mode is opt-in.
 - **Contracts first.** 75 JSON Schemas generate the Python and TypeScript types, and golden files keep both sides in
   step. A supervisor with heartbeats, backoff and circuit breaking runs every process.
 
-### Measured so far
+## D1 acceptance
 
-All numbers come from one 8-core x86-64 virtual machine with **no GPU**. Browser cases ran in headless Chromium 151
-with SwiftShader (software WebGL2, the Tier S path). The performance-phase benchmarks (frame pacing, fleet ladder,
-gateway load, soak) have not run yet; see [Roadmap](#roadmap).
+V0.1 (D1) is accepted against 38 items, D1-AC-01 to D1-AC-35 in [docs/03 §8.4](docs/03-设计基线与决策记录.md) (03, 09
+and 11 are each split into a and b). Each item is P0, which blocks the release, or P1, or has parts of both. The fifth
+acceptance round (2026-10-03) measured 23 items again and carried the other 15 over from earlier rounds:
 
-| What | Result | Conditions |
+| Items | Pass | Fail |
 |---|---|---|
-| StateRing publish, 1,000 drones at 125 Hz | p99 151.7 µs (gate ≤ 300 µs) | `make bench-ipc`, median of 3 runs |
-| Tick data age at the reader | p99 8.0 ms (gate ≤ 15 ms) | same run, shared-memory read path only; the full gateway run is pending |
-| Command admission round trip | p99 10.3 ms over 3,010 commands, 0 failures (gate ≤ 25 ms) | `bench_cmd`, bus and event layer with a simulated sim-core and gateway |
-| Checkpoint save, 1,000 drones | p99 0.36 ms | `tests/runtime/test_checkpoint.py` |
-| FleetSim budget, 1,000 drones | about 0.26 of one CPU core (numba), a budget built from prototype measurements; the fused L1 kernel alone measured 0.125 core at 250 Hz | research prototype g08; the product fleet ladder has not run yet |
-| World build | 27.3 to 35.1 s per city; all six in 65.0 s with 3 jobs | CPU only; `validate --deep` 0 errors |
-| First points on screen | 207 to 265 ms for Shenzhen, New York, San Francisco, Chicago; 0.6 to 2.5 s for Shanghai and Suzhou | functional smoke runs, not under the performance lock |
-| Agent collaboration (S3) | target confirmed after 154.6 s of simulated time (limit 300 s); identical evidence chain across runs | lockstep harness with a simulated bridge |
+| With a P0 part (25) | **23** | 2 |
+| P1 only (13) | **12** | 1 |
+| **All (38)** | **35** | **3** |
 
-Sources: the implementation reports in [docs/impl/](docs/impl/) (M03-M04, M05, M11-R, M14) and
-[research note g08](docs/research/g08-gap.md).
+Passing items went from 13 in round 1 to 22, 24, 31 and now 35. The exit condition for D1, every P0 item passing, is
+not met yet: the two open P0 items are regressions that round 5 found (see [Open items](#open-items)). The full
+per-item table, evidence and diagnosis are in the
+[D1 acceptance report, round 5](docs/impl/D1-验收报告-第5轮.md) (Chinese).
+
+> [!NOTE]
+> **How this was measured.** One 8-core x86-64 virtual machine (Xeon E5-2603 v4 at 1.7 GHz) with **no GPU**. Browser
+> cases run in headless Chromium 151 on **SwiftShader**, that is software WebGL2: the Tier S path, a 1280 × 720 canvas
+> at render scale 0.5 with a 30 fps target, so a p50 of 33.3 ms is on target. Every performance case follows the
+> performance protocol of ADR-033: an exclusive lock, a 1-minute load of at most 4 before each run, pinned CPU
+> partitions, and the median of 3 runs. The frame-time gates below are the Tier S gates for such a machine. The gates
+> for real GPUs (integrated: p50 at the display refresh period, at most 5% dropped frames, TTFP ≤ 700 ms; discrete: at
+> most 2% dropped frames, TTFP ≤ 500 ms) are design values from docs/03 §8.4: they have not been measured here and do
+> not block D1.
+
+| Area | Result (median of 3 runs) | Gate | Item |
+|---|---|---|---|
+| World build | Six cities pass `validate --deep` with 0 errors; 27.3 to 35.1 s per city, CPU only | 0 errors; ≤ 60 s per city | 01 |
+| First screen | TTFP 1.8 to 8.1 ms on all six cities (last first-screen byte to the first complete frame, shader warm-up excluded); switching world 489 ms; cold start to interactive 3.52 to 3.76 s, point cloud only. The full scene with UI and S1 opens in 17.6 s (recorded, no gate) | TTFP ≤ 1.0 s; switch ≤ 1.5 s; cold start ≤ 4.0 s | 02 |
+| Frame pacing, point cloud only | Shenzhen p50 33.3 / p95 50.0 / p99 66.7 ms, 1.69% of frames over 50 ms, none over 100 ms, worst 83.3 ms; Shanghai and Suzhou alike; **New York worst gap 383 ms** | ≤ 33.4 / 50 / 100 ms; ≤ 5%; ≤ 0.5%; worst ≤ 250 ms | 03a |
+| Frame pacing, default scene (Shenzhen, S1, environment, HUD, drone list) | p50 33.3 / p95 50.0 / p99 66.7 ms; 2.40% over 50 ms, 0.059% over 100 ms; worst 116.7 ms; fixed layers 6.1 ms | ≤ 33.4 / 66.7 / 116.7 ms; ≤ 10%; ≤ 1%; worst ≤ 250 ms; layers ≤ 10 ms | 03b |
+| Same, with 200 drones | p99 66.7 ms; 2.83% over 50 ms, 0.12% over 100 ms; worst 116.7 ms | as 03b | 09a |
+| Density control (CAS) | In the target band 47.8 ms after the reveal; 0 rung changes in 60 s; 6.2 budget reversals per minute; no evaluation while the page is hidden | ≤ 2 s; ≤ 2; ≤ 15 per minute | 04 |
+| Streaming | 0 failed nodes; node selection p95 ≤ 0.08 ms; CPU cache ≤ 2.74 MB; 0 long frames from our scripts; nothing downloaded twice | 0; ≤ 0.5 ms; ≤ 64 MB; 0; ≤ 1.3 | 06 |
+| No compile at runtime | 0 new shader programs after the reveal; worst frame within 1 s of a first action (weather, select, follow, close-up, pick) 133 ms | 0; ≤ 150 ms | 25 |
+| Weather change, clear to thunderstorm in 30 s | 0.126% of frames over 100 ms; 0 new programs | ≤ 0.5% | 19 |
+| Latency | Focus drone, simulation time to pixel p95 81.2 ms; command to visible p95 143 ms | ≤ 150 ms; render delay (about 206 ms) + 150 ms | 26 |
+| FleetSim, 1,000 drones | Real-time factor 1.000 on 0.529 of a core; step p99 2.69 ms, worst 2.99 ms; 0 catch-up saturation | ≥ 0.99; ≤ 0.6 core; p99 ≤ 3 ms, worst ≤ 12 ms | 07 |
+| Gateway, 1,000 drones and 3 streaming browsers | Tick data age p99 10.6 ms; api 0.149 of a core (recorded) | ≤ 15 ms; ≤ 0.35 core | 08 |
+| Commands and events | 50 commands/s for 60 s: 0 failures, admission round trip p99 5.90 ms; about 666 events/s, 0 out of order and no gap left open; with 1 message in 100 dropped, all 591 gaps refilled by replay within 69 ms | 0, ≤ 25 ms; 0; ≤ 1 s | 10 |
+| Crash recovery | kill -9 api: the simulation keeps running and clients reconnect within 3 s; kill -9 sim-core: back to RUNNING within 3 s (2.1 s when profiled) and the scenario restarts; with checkpoints, a crashed sim-core shows the first frame of a new epoch within 1.5 s, and a hung main loop is detected within 2.5 s and recovered within 4 s | as stated | 11a, 11b |
+| 30-minute soak, S1 and 200 drones | Retained JS heap +3.0%; RSS +0.5% (api) and +0.2% (sim-core); 0 unexpected reconnects; frame pacing afterwards within 03b | heap ≤ 20%; RSS ≤ 10%; 0 | 29 |
+| Scenarios | S1 two-drone facade scan with 0 energy returns, at ×1 and ×10; S2, S4, S5 and S6 succeed; S3 confirms its target within 300 s of simulated time, with the same decisions at ×1 and ×10 | per-scenario predicates | 15, 16, 17 |
+
+### Open items
+
+1. **D1-AC-03a (P0), New York, point cloud only: worst frame gap 383 ms** (400, 350 and 383 ms in three runs) against
+   250 ms. Every other statistic passes, and Shenzhen, Shanghai and Suzhou stay at 117 ms or less. When PerfGovernor,
+   which trades layers and point budget for frame time, steps down early, its notice is the first toast on the page:
+   inserting it takes 43 ms of script, and the compositor's first SwiftShader compile for it then makes one frame of
+   350 to 400 ms. A regression found in round 5 (round 4: 83 ms).
+2. **D1-AC-27 (P0 part), RTL for all 1,000 drones: one long frame from our scripts** (1, 0 and 1 in three runs; the
+   gate is 0). Each toast inserted during the event storm still forces 17 to 31 ms of style and layout, which crosses
+   50 ms together with other idle callbacks in the same frame. A regression found in round 5. The other P0 limits
+   (control FIFO, sim-core step, toast count, rendered rows) pass, and so does the P1 part, link loss on 500 drones.
+3. **D1-AC-28 (P1), sim-core under full concurrency: step p99 3.89 ms against 3 ms**, with 1,000 drones, the
+   recorder, checkpoints and three SwiftShader browsers sharing the 8 cores (worst 4.92 ms, no catch-up saturation,
+   tick data age p99 10.1 ms). [ADR-074](docs/03-设计基线与决策记录.md) records it as a known issue of this machine;
+   no waiver is registered, so it counts as a failure.
+
+Of the 15 items carried over, five should be measured again because later fixes touched their code: replay and seek
+(18), checkpoint recovery (11b), UI overhead (23), GC (30) and frame pacing with 1,000 drones (09b). Two items pass
+with a sub-item still open: reconstruction progress in the UI (22) and a check with a real `ssh -L` client (33). The
+product's Tier A (WebGPU) backend is still to come; the WebGPU feature matrix passes on a regression page (14, P1).
+The no-data part of the test suite (lint, contracts, tsc, Vitest unit, pytest in two shards, the production build
+and the demo world) runs on [GitHub Actions](.github/workflows/ci.yml) on every push and pull request; the full gate
+`make ci` runs locally with the six cities and a browser.
 
 ## Quick start
 
@@ -153,17 +245,46 @@ Sources: the implementation reports in [docs/impl/](docs/impl/) (M03-M04, M05, M
 disk and 1 GiB free in `/dev/shm`. The server needs no GPU. Any desktop browser with WebGL2 can connect; a GPU on the
 viewing machine unlocks the higher quality rungs.
 
+**Try it with no download.** `make demo-world` generates ANet Synthetic City, the synthetic demo city, from a fixed
+seed; nothing is fetched:
+
 ```sh
 git clone https://github.com/ANetResearch/ANet-Drone4D.git
 cd ANet-Drone4D
 make setup        # locked install: .venv (uv pip sync) and npm ci, then generated-file checks (3-8 min)
-make fetch-data   # UrbanScene3D sampled cities: 253 MB download, about 720 MB unpacked, sha256-checked
-make worlds       # build the six city World Packages into worlds/ (never committed), about 1-2.5 min
+make demo-world   # generate ANet Synthetic City into worlds/synthcity (no download, about 25 s)
 make run          # production build if needed, then the supervisor; prints READY and an SSH command
 ```
 
+Open **http://localhost:8000/world/synthcity**. With no UrbanScene3D data on the machine, synthcity is the default
+world and scenario S0 starts: seven P600s scan the 318 m ANet Tower in two bands, cover two city blocks and fly a V
+formation along the river while the weather turns from clear to light rain to fog (about 5 minutes of simulated time).
+Stop with Ctrl+C or `make stop`.
+
+ANet Synthetic City is generated by `python/awr/world/ingest/synthetic.py`: about 3.9 million points over
+1.2 km × 1.2 km, with roads, a river, a park and two 300 m class towers. It contains no third-party data, so the world,
+screenshots and recordings may be shared freely. `make run` on its own also generates it when no data is present. On
+a machine that already has the six cities, Shenzhen stays the default world; start the demo city there with
+`AWR_WORLD=synthcity AWR_SCENARIO=s0-synthcity-showcase make run`.
+
+**Add the six real cities (optional).** The built-in city worlds (Shenzhen, Shanghai, New York, San Francisco, Suzhou
+and Chicago) are built on your machine from the UrbanScene3D dataset, which takes a download and your acceptance of
+its terms:
+
+```sh
+make fetch-data   # UrbanScene3D sampled cities: 253 MB download, about 720 MB unpacked, sha256-checked
+make worlds       # build the six city World Packages into worlds/ (never committed), about 1-2.5 min
+make run          # Shenzhen becomes the default world, with scenario S1
+```
+
 Open **http://localhost:8000/world/shenzhen**. The demo profile loads Shenzhen and scenario S1: two P600s spiral down
-the facade of the tallest tower in a 6 m/s wind from the south-east. Stop with Ctrl+C or `make stop`.
+the facade of the tallest tower in a 6 m/s wind from the south-east.
+
+> [!IMPORTANT]
+> **UrbanScene3D** is provided by its authors for **non-commercial use only**, and they forbid redistributing it, in
+> original or altered form. This repository contains none of its points and no World Package, raster or recording
+> built from it. `make fetch-data` downloads it from the authors' release on your behalf, so read and accept their
+> terms first; see [Data and citation](#data-and-citation).
 
 **From another machine.** The server listens on 127.0.0.1 only; forward the port and open the same URL locally:
 
@@ -172,12 +293,6 @@ ssh -N -L 8000:127.0.0.1:8000 -o ExitOnForwardFailure=yes -o Compression=no <use
 ```
 
 For a LAN demo, `AWR_BIND=0.0.0.0 AWR_ORIGINS=http://<server-ip>:8000 make run` opens the port to the network.
-
-> [!IMPORTANT]
-> The built-in worlds are generated from **UrbanScene3D**, which its authors provide for **non-commercial use only**
-> and forbid redistributing, in original or altered form. This repository contains none of its points and no World
-> Package, raster or recording built from it. `make fetch-data` downloads it from the authors' release on your behalf,
-> so read and accept their terms first; see [Data and citation](#data-and-citation).
 
 <details>
 <summary><b>More commands</b></summary>
@@ -194,8 +309,10 @@ For a LAN demo, `AWR_BIND=0.0.0.0 AWR_ORIGINS=http://<server-ip>:8000 make run` 
 | `make doctor` | Environment diagnosis (`DEEP=1` adds sha256 and deep world checks) |
 | `make validate` | Deep-validate every World Package |
 | `make fetch-data VERIFY=1` | Check local data against `configs/data.yaml` without downloading |
+| `make demo-world` | Generate or refresh the demo city `synthcity` (no download, about 25 s) |
 | `make vehicles-models` | Build the P600 glTF models (falls back to the procedural low-poly model without the Prometheus STL) |
 | `make ci` | The merge gate: lint, contract checks, tsc, production build, pytest and Vitest |
+| `make ci-nodata` | What GitHub Actions runs on every push and PR: the subset of `make ci` that needs no GPU, browser or downloaded data |
 | `make perf CASE=<id>` | Performance cases under the exclusive performance lock ([docs/18](docs/18-性能与测试方案.md)) |
 
 The full runbook, ports, environment variables and failure handling are in
@@ -262,11 +379,11 @@ flowchart LR
 
 | Stage | What it means | In V0.1 | Next |
 |---|---|---|---|
-| **Reality** | Point clouds, images, LiDAR and GNSS from a real place | UrbanScene3D sampled city point clouds (6 cities, about 5 M points each) | Capture sessions with a Livox MID-360 and RTK (V0.5) |
+| **Reality** | Point clouds, images, LiDAR and GNSS from a real place | UrbanScene3D sampled city point clouds (6 cities, about 5 M points each), plus the generated ANet Synthetic City | Capture sessions with a Livox MID-360 and RTK (V0.5) |
 | **Reconstruction** | Turn captures into metric 3D | Engine Adapter v2, Recon IR and the job state machine, end to end with a mock engine (CLI) | LingBot-Map, DA3-Streaming and MapAnything on a GPU worker (V0.5) |
 | **World** | The core asset, versioned | World Package v1 with geometry queries; progressive Web streaming | COPC and 3D Tiles export (V0.5); 3DGS visual layer (V0.8) |
 | **Environment** | One field E(x, y, z, t) | L0/L1 wind with turbulence, 12 presets, wind as force, Low visuals, streamlines | L2 wind field library (V0.3); sensor degradation (V0.4) |
-| **Simulation** | Many drones, one clock | FleetSim L1 built for 1 to 1,000 drones (fleet ladder pending), safety, missions, recording and replay | PX4 SIH (V0.2), SITL lockstep (V0.4), HITL (V0.6) |
+| **Simulation** | Many drones, one clock | FleetSim L1 for 1 to 1,000 drones (1,000 in real time on about half a core), safety, missions, recording and replay | PX4 SIH (V0.2), SITL lockstep (V0.4), HITL (V0.6) |
 | **Agent** | Drones discover and delegate | In-process Mock ANet, contract net, scenario S3 | Real ANet: ANetHub plus a daemon per drone, CBBA (V1.0) |
 
 ## Design system
@@ -297,6 +414,13 @@ backdrop blur, no stray icon packs.
 | Charts | The [lieflat](https://github.com/larashero3-dotcom/lieflat-charts) visual language (hairline marks, rung bars, tick gauges, log tables), reimplemented in React |
 | Type | Inter and JetBrains Mono, self-hosted |
 
+<img src="docs/media/screenshot-perf.jpg" alt="The Perf panel during scenario S0: presentation interval, frame interval histogram, point budget gauge, per-level point counts, streaming, layer budget table, degradation ladder and controller state" width="100%" />
+
+<sub>**Screenshot.** The Perf panel, built in the lieflat visual language, during scenario S0 with default settings on
+the no-GPU machine: SwiftShader selects Tier S, and PerfGovernor has stepped all seven rungs down to a 10 K point
+budget. Taken at 1920 × 1080 outside the performance protocol, so its frame times (p50 133 ms) are not acceptance
+results; see [D1 acceptance](#d1-acceptance) for those.</sub>
+
 The full specification, with contrast ratios and 3D scene colours, is [docs/15](docs/15-视觉设计规范与色卡.md)
 (Chinese). Thanks to the authors of shadcn/ui, Base UI, Transitions.dev, lucide, morphicons and lieflat-charts; the
 terms of each are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -308,14 +432,14 @@ The design documents are written in Chinese, with technical terms in English. St
 
 | | |
 |---|---|
-| **[03 Design baseline and decision record](docs/03-设计基线与决策记录.md)** | The single baseline: principles, architecture, path ownership, 53 ADRs, the version plan, D1 scope and acceptance (D1-AC-01 to D1-AC-35) |
+| **[03 Design baseline and decision record](docs/03-设计基线与决策记录.md)** | The single baseline: principles, architecture, path ownership, 80 ADRs, the version plan, D1 scope and acceptance (D1-AC-01 to D1-AC-35) |
 | **[10 Architecture](docs/10-系统架构说明书.md)** · **[11 Technology selection](docs/11-技术选型说明书.md)** | Process topology, data flow, concurrency and capacity; every technology choice with locked versions |
 | **[12 Business logic](docs/12-业务逻辑设计说明书.md)** · **[13 Product PRD](docs/13-产品设计PRD.md)** · **[14 UI interaction](docs/14-UI交互设计PRD.md)** | Flight states, command admission, leases, safety, scenarios and contract net; product scope; layout and interaction |
 | **[15 Visual design and palette](docs/15-视觉设计规范与色卡.md)** · **[16 World data](docs/16-World数据规范.md)** · **[17 API and realtime protocol](docs/17-接口与实时协议规范.md)** | ANet Graphite tokens; World Package v1, ANET_Q16 and every file format; REST and `awr.rt.v1` byte layouts |
 | **[18 Performance and testing](docs/18-性能与测试方案.md)** · **[19 Deployment and operations](docs/19-部署与运维说明书.md)** | Budgets, flight60, fleet ladder, performance protocol and lint rules; install, run, access and monitoring |
 | **Module PRDs** | [M01 Reconstruction](docs/modules/M01-重建引擎PRD.md) · [M02 LiDAR fusion and georeferencing](docs/modules/M02-LiDAR融合与地理配准PRD.md) · [M03 World model and tiling](docs/modules/M03-World模型与Ingest切片PRD.md) · [M04 Geometry queries](docs/modules/M04-几何世界查询服务PRD.md) · [M05 Web point cloud engine](docs/modules/M05-Web点云引擎PRD.md) · [M06 Viewport and render backends](docs/modules/M06-Web视口与渲染后端PRD.md) · [M07 Environment](docs/modules/M07-环境引擎PRD.md) · [M08 Simulation core and vehicles](docs/modules/M08-仿真内核与飞行器适配PRD.md) · [M09 Safety and health](docs/modules/M09-安全与健康PRD.md) · [M10 Missions, planning and swarms](docs/modules/M10-任务规划与集群PRD.md) · [M11 Realtime gateway](docs/modules/M11-实时网关PRD.md) · [M12 Timeline, recording and replay](docs/modules/M12-时间轴录制与回放PRD.md) · [M13 Sensor simulation](docs/modules/M13-传感器仿真PRD.md) · [M14 Agent runtime and ANet](docs/modules/M14-智能体运行时与ANet-PRD.md) · [M15 UI shell and design system](docs/modules/M15-前端UI壳与设计体系组件PRD.md) · [M16 Demo data, scenarios and smoothness tests](docs/modules/M16-演示数据剧本与流畅性测试PRD.md) |
 | **[Research notes](docs/research/00-index.md)** | 46 notes behind the decisions: reconstruction, Web point clouds, flight stacks, swarms, weather, realtime transport, the design system and ANet |
-| **[Implementation reports](docs/impl/)** | What each work package built and tested; the [INT-1 integration report](docs/impl/INT-1-集成报告.md) is the current status |
+| **[Implementation reports](docs/impl/)** | What each work package built and tested; start with the [D1 delivery summary](docs/impl/D1-交付总结.md) (scope, architecture, final acceptance status, known issues, how to run and test); the [D1 acceptance report, round 5](docs/impl/D1-验收报告-第5轮.md) holds the measurements |
 | **[Original design](docs/01-design.md)** | The founding design (read-only), from which the baseline was derived |
 
 ## Roadmap
@@ -325,7 +449,7 @@ behind interfaces that do not change ([docs/03](docs/03-设计基线与决策记
 
 | Version | Theme | Highlights | Status |
 |---|---|---|---|
-| **V0.1 (D1)** | A world runtime with every layer in place | Six cities, point-cloud streaming, FleetSim for 1 to 1,000 drones, safety, missions, L0/L1 environment, recording and replay, Mock ANet | **In progress**: integrated, performance phase next |
+| **V0.1 (D1)** | A world runtime with every layer in place | Six cities and a generated demo city, point-cloud streaming, FleetSim for 1 to 1,000 drones, safety, missions, L0/L1 environment, recording and replay, Mock ANet | **In acceptance**: 35 of 38 items pass, 2 P0 items open ([D1 acceptance](#d1-acceptance)) |
 | V0.2 | The real flight stack in the loop | PX4 SIH (up to 8 drones) through MAVSDK, Prometheus backend, virtual MID-360, ingest of any PLY or LAS cloud, a Python `awr.rt.v1` client | Planned |
 | V0.3 | Environment physics and planning | L2 mass-consistent wind library, GPU wind sampling, High environment tier, B-spline and ESDF planning | Planned |
 | V0.4 | Environment into sensors and dynamics | Camera and LiDAR degradation, L2 aerodynamic moments, PX4 SITL lockstep, rewind and what-if forks, P600 parameter identification | Planned |
@@ -333,25 +457,6 @@ behind interfaces that do not change ([docs/03](docs/03-设计基线与决策记
 | V0.6 | Swarms at scale | Three-layer deconfliction (4D reservations, ORCA-3D), energy-aware coverage routing, OpenFOAM wind, HITL | Planned |
 | V0.8 | Visual World and high-fidelity sensors | 3DGS LOD streaming next to point clouds, 3D Tiles terrain, Isaac sensor backends, dynamic objects | Planned |
 | V1.0 | Physical multi-agent world | Real ANet (ANetHub plus a daemon per drone), CBBA under network cuts, LLM and MCP through the trusted guard, heterogeneous agents | Planned |
-
-### Where D1 stands
-
-From the [INT-1 integration report](docs/impl/INT-1-集成报告.md) (2026-09-29):
-
-- **Integrated.** The whole chain passes end to end: World → Range → point cloud on screen → FleetSim → StateRing →
-  Gateway → WebSocket → drone on screen → GoTo round trip. `make run` brings every process to RUNNING with no error
-  in the logs.
-- **Acceptance D1-AC-01 to D1-AC-35 (38 items): 15 pass, 2 fail, 21 not measured yet.** Most of the 21 are
-  performance cases (frame pacing, streaming, fleet ladder, gateway, soak) that run in the performance phase under the
-  exclusive performance protocol; the rest are extension scenarios and chaos cases.
-- **The two failures.** Scenario S1 triggers an energy return to home near its end, because the design check missed
-  the worst point behind the tower; this is a specification conflict to be settled by an ADR (with a margin of 1.0,
-  all nine predicates pass), and S1 at ×10 takes 286 s of wall time against a 210 s limit. After a crash, sim-core
-  restarts in 3.17 s against a 3.0 s limit; the api already recovers within 3 s.
-- **Also open.** The ladder n10 smoke scenario (spawn spacing), agent leases in sim-core (they block the
-  multi-process S3 run), the reconstruction entry in the UI (the CLI works), and the Tier A WebGPU backend.
-- **Tests.** In the full INT-1 run, 2,435 pytest cases passed (6 failed, 4 of them fixed since) and 908 Vitest cases
-  passed (1 load-sensitive failure).
 
 ## Relation to ANet
 

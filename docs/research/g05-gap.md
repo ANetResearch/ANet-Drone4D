@@ -1,4 +1,4 @@
-# G5 深挖：后端进程模型与进程间通信——sim-core ↔ Gateway 的 1000 架状态共享、命令/事件可靠通道、进程监管与重启语义
+# G5 深挖：后端进程模型与进程间通信——sim-core <-> Gateway 的 1000 架状态共享、命令/事件可靠通道、进程监管与重启语义
 
 > 单元：g05（补充深挖，对应 `00-index.md` §9 G5） ｜ 日期：2026-09-28
 > 相关单元：r27（Gateway 与 zenoh）、r06（Open3D 持有 GIL）、r07（small_gicp 持有 GIL）、r25（规划必须单线程 BLAS）、r21（MAVSDK asyncio 线程池陷阱）、r22（SIH 生命周期）、n03（Crazyflow step pipeline）
@@ -102,19 +102,19 @@
                               │ spawn/exec · waitpid · heartbeat 巡检(5 Hz) · 退避重启 · 熔断 · 日志收集 · zenoh 汇合点 :7447 │
                               └──────┬──────────────┬──────────────┬───────────────┬──────────────┬──────────────┬───────────┘
                                      │              │              │               │              │              │
-   Browser ◄══ WS awr.rt.v1 ══► ┌────▼─────┐   ┌────▼─────┐   ┌────▼─────┐   ┌─────▼────┐   ┌─────▼────┐   ┌─────▼─────┐
-   Browser ◄── HTTP Range ────► │   api    │   │ sim-core │   │geo-worker│   │job-worker│   │px4-bridge│   │ recorder  │
+   Browser <══ WS awr.rt.v1 ══> ┌────v─────┐   ┌────v─────┐   ┌────v─────┐   ┌─────v────┐   ┌─────v────┐   ┌─────v─────┐
+   Browser <── HTTP Range ────> │   api    │   │ sim-core │   │geo-worker│   │job-worker│   │px4-bridge│   │ recorder  │
                                 │ FastAPI  │   │ 固定步长  │   │ Open3D   │   │small_gicp│   │  -k      │   │ MCAP      │
                                 │ Gateway  │   │ FleetSim │   │ Embree   │   │ tiler    │   │ MAVSDK   │   │ (V0.2)    │
                                 │ 1 核     │   │ 1 核     │   │ 2–4 线程 │   │ nice 10  │   │ ≤16 架   │   │           │
-                                └─┬──▲──▲──┘   └┬──┬──┬──┬┘   └────▲─────┘   └────▲─────┘   └──┬───▲───┘   └─▲───▲─────┘
-                                  │  │  │       │  │  │  └ spawn ─► plan-pool ×W (OMP=1, 进程池归 sim-core 所有)
+                                └─┬──^──^──┘   └┬──┬──┬──┬┘   └────^─────┘   └────^─────┘   └──┬───^───┘   └─^───^─────┘
+                                  │  │  │       │  │  │  └ spawn ─> plan-pool ×W (OMP=1, 进程池归 sim-core 所有)
           StateRing(mmap) 读 ─────┘  │  │       │  │  └─ StateRing 写：/dev/shm/awr/<run>/state.sim-core ──┬──────────┘
           (sim-core / px4-bridge-k)  │  │       │  │                                                     └─ recorder 读
                                      │  │       │  └── zenoh: evt/sim-core/*（DROP + seq + replay）
           zenoh: ctl/*/cmd（query）──┘  │       └───── zenoh: svc/geo/lidar（query，10 Hz 批量）
           zenoh: evt/**、proc/**/alive ─┘
-          PX4 SIH 容器 ×N ◄─ MAVLink UDP ─► px4-bridge-k ─► StateRing state.px4-bridge-k
+          PX4 SIH 容器 ×N <─ MAVLink UDP ─> px4-bridge-k ─> StateRing state.px4-bridge-k
 ```
 
 ### 2.2 进程清单
@@ -590,11 +590,11 @@ processes:
 ### 7.3 状态机与健康信号
 
 ```text
- STOPPED ─start─► STARTING ──ready token 或心跳首写──► RUNNING ──SIGTERM(stop)──► STOPPING ─► STOPPED
+ STOPPED ─start─> STARTING ──ready token 或心跳首写──> RUNNING ──SIGTERM(stop)──> STOPPING ─> STOPPED
                      │  startup_grace 超时                │ exit≠0 / 心跳超时(HUNG→SIGTERM→1 s→SIGKILL)
-                     └──────────────► BACKOFF ◄────────────┘
-                                        │ 等待 backoff[i]；60 s 内第 6 次 ─► FAILED（熔断，等待 sys/restart 手动恢复）
-                                        └──► STARTING（env 注入 AWR_RESTART_COUNT、AWR_LAST_EXIT）
+                     └──────────────> BACKOFF <────────────┘
+                                        │ 等待 backoff[i]；60 s 内第 6 次 ─> FAILED（熔断，等待 sys/restart 手动恢复）
+                                        └──> STARTING（env 注入 AWR_RESTART_COUNT、AWR_LAST_EXIT）
 ```
 
 | 信号 | 来源 | 周期 | 用途 |

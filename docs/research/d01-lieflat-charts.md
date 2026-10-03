@@ -1,7 +1,7 @@
 # d01 研究笔记：lieflat-charts 设计体系 → 《图表与表格实现规范》草案
 
 > 研究单元：d01 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §28（DroneState）、§36–37（实时通信与刷新频率）、§38–40（UI、Timeline、Drone Interaction）、§43–50（MVP 与路线）
-> 仓库快照：`refs/design/lieflat-charts` @ `eace082`（2026-09-05，★5754，PolyForm Noncommercial 1.0.0；本项目为科研用途，按用户要求忽略 license）。文中路径都相对仓库根目录。
+> 仓库快照：`refs/design/lieflat-charts` @ `eace082`（2026-09-05，5754 stars，PolyForm Noncommercial 1.0.0；本项目为科研用途，按用户要求忽略 license）。文中路径都相对仓库根目录。
 > 本单元结论全部来自源码精读，另在本机 headless Chromium（SwiftShader，WebGL2 软件渲染）做了 SVG 与 Canvas 的流式图表微基准，脚本在 `/data/projs/anet-drone/.cache/research/d01/`（`www/bench.html`、`run.mjs`、`run2.mjs`、`palette.mjs`）。测量时机器负载较高（load average 4–10，8 核，同时有其他研究单元在跑），**绝对帧率不可信，只比较相对量级**。
 > 相关单元：r11（three.js WebGPU，帧率控制器）、r12（Potree 加载器，HUD 指标与 4 Hz store）、r16（天气视觉，MOR 能见度）。本文定义的是它们共用的 HUD 与分析页的图表与表格层。
 > 需要确认的假设：用户原话"产品色采用科技灰、黑色、色、红色"，本文把中间缺字的"色"按"白色"理解。
@@ -12,16 +12,16 @@
 
 | 仓库 / 子模块 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **lieflat-charts**（整体） | 一套 Agent Skill：SKILL.md 规则 + 两份 token 文件 + 61 个图表模板（手写 SVG / ECharts / Chart.js）+ 12 套整页报告。**不是 npm 库**，没有构建，全部是单文件 HTML，用命令式 DOM 绘制 | **port**：视觉语言、token、几何与编码方式全部移植为 React + TS 组件；**不直接依赖** | V0.1–V1.0（MVP 在 V0.1 性能 HUD 与 V0.2 遥测面板） | ★★★★★ |
-| `mono-tokens.js` | 风格的唯一正本：色板、字体、形状、动画、tooltip、`rnd`、`pol/sect/blob`、`obsReveal`、`CARD_CSS` | **port** → `lib/lf/tokens.ts` + `globals.css` | V0.1 | ★★★★★ |
-| `color-presets.js` 的 **WIRE** | "黑灰阶 + 一个荧光橙主角"，和本项目"科技灰/黑/白 + 红"几乎同构 | **port**：以它为模板建一套 custom 色板 `ANet Graphite`，HERO 换成 `#E93024`，暖灰换成冷灰 | V0.1 | ★★★★★ |
-| `templates/basics-gallery.html`（F1–F17） | 稀疏数据的 Lupi 语法：梯级柱、发丝折线/面积、刻度环、刻度行、刻度仪表、直方、箱线、河流、K 线 | **port**：本项目主力，约 12 个图型进 MVP | V0.1–V0.6 | ★★★★★ |
-| `templates/glance-gallery.html`（G3–G22） | 快读型，粗笔画；G17 动态流、G18 画线加计数器最适合 HUD | **port** G17/G18/G10/G15/G20/G21（改写为 Canvas/SVG，不用 ECharts）；其余 reference | V0.1–V0.6 | ★★★★☆ |
-| `templates/lupi-gallery.html`（L1–L20） | 细读型，逐记录：L3 条码、L11 生命史、L12 柱廊、L13 沙漏、L16/L17 热力、L19 山脊、L20 平行坐标 | **port**（分析页、报告）；海报类 reference | V0.2–V1.0 | ★★★★☆ |
-| `templates/big-*.html`（B1–B3） | 交互大图：环形、力导向、Threads（9 px 透明孪生热区 + hover/pin 状态机） | **port** 交互模式；**reference** 图本身（V1.0 ANet 网络） | V1.0 | ★★★☆☆ |
-| `templates/reports/`（R01–R12） | 整页报告骨架；R09 仪表盘、R12 周报、R10 的 `table.log` 是全库**唯一的表格规范** | **port** `table.log` 与 KPI 卡；**reference** 报告版式（性能测试报告、任务复盘） | V0.1（测试报告）/ V0.6 | ★★★★☆ |
-| `templates/maps-gallery.html`（M1–M2） | 美国与世界 choropleth，依赖在线 GeoJSON | **skip**：本项目的地图是 3D 世界本身 | — | ★☆☆☆☆ |
-| `scripts/validate.mjs`、`smoke-new-charts.mjs` | 静态检查（禁 `Math.random`、色值越界、重复 id、脚本语法）与 Playwright 烟测 | **port** 成本项目的 `scripts/lint-lf.mjs` 和 e2e 用例 | V0.1 | ★★★★☆ |
+| **lieflat-charts**（整体） | 一套 Agent Skill：SKILL.md 规则 + 两份 token 文件 + 61 个图表模板（手写 SVG / ECharts / Chart.js）+ 12 套整页报告。**不是 npm 库**，没有构建，全部是单文件 HTML，用命令式 DOM 绘制 | **port**：视觉语言、token、几何与编码方式全部移植为 React + TS 组件；**不直接依赖** | V0.1–V1.0（MVP 在 V0.1 性能 HUD 与 V0.2 遥测面板） | 5/5 |
+| `mono-tokens.js` | 风格的唯一正本：色板、字体、形状、动画、tooltip、`rnd`、`pol/sect/blob`、`obsReveal`、`CARD_CSS` | **port** → `lib/lf/tokens.ts` + `globals.css` | V0.1 | 5/5 |
+| `color-presets.js` 的 **WIRE** | "黑灰阶 + 一个荧光橙主角"，和本项目"科技灰/黑/白 + 红"几乎同构 | **port**：以它为模板建一套 custom 色板 `ANet Graphite`，HERO 换成 `#E93024`，暖灰换成冷灰 | V0.1 | 5/5 |
+| `templates/basics-gallery.html`（F1–F17） | 稀疏数据的 Lupi 语法：梯级柱、发丝折线/面积、刻度环、刻度行、刻度仪表、直方、箱线、河流、K 线 | **port**：本项目主力，约 12 个图型进 MVP | V0.1–V0.6 | 5/5 |
+| `templates/glance-gallery.html`（G3–G22） | 快读型，粗笔画；G17 动态流、G18 画线加计数器最适合 HUD | **port** G17/G18/G10/G15/G20/G21（改写为 Canvas/SVG，不用 ECharts）；其余 reference | V0.1–V0.6 | 4/5 |
+| `templates/lupi-gallery.html`（L1–L20） | 细读型，逐记录：L3 条码、L11 生命史、L12 柱廊、L13 沙漏、L16/L17 热力、L19 山脊、L20 平行坐标 | **port**（分析页、报告）；海报类 reference | V0.2–V1.0 | 4/5 |
+| `templates/big-*.html`（B1–B3） | 交互大图：环形、力导向、Threads（9 px 透明孪生热区 + hover/pin 状态机） | **port** 交互模式；**reference** 图本身（V1.0 ANet 网络） | V1.0 | 3/5 |
+| `templates/reports/`（R01–R12） | 整页报告骨架；R09 仪表盘、R12 周报、R10 的 `table.log` 是全库**唯一的表格规范** | **port** `table.log` 与 KPI 卡；**reference** 报告版式（性能测试报告、任务复盘） | V0.1（测试报告）/ V0.6 | 4/5 |
+| `templates/maps-gallery.html`（M1–M2） | 美国与世界 choropleth，依赖在线 GeoJSON | **skip**：本项目的地图是 3D 世界本身 | — | 1/5 |
+| `scripts/validate.mjs`、`smoke-new-charts.mjs` | 静态检查（禁 `Math.random`、色值越界、重复 id、脚本语法）与 Playwright 烟测 | **port** 成本项目的 `scripts/lint-lf.mjs` 和 e2e 用例 | V0.1 | 4/5 |
 
 **实现者先读这 12 条（每条都有源码或实测依据）：**
 
@@ -34,7 +34,7 @@
 7. **选型遵守 SKILL.md 的优先级，同时用足它的例外条款。** HUD 属于"监控 / dashboard"，SKILL.md §0 第 4 条允许直接用 Glance（G17 动态流、G18 计数器）；分析页和报告按"Lupi Editorial → Lupi Basics → Glance"走。MVP 需要移植的图型约 16 个（§4.4）。
 8. **字号要换算。** lieflat 的字号写在 `viewBox="0 0 400 320"` 坐标系里；图放进 300 px 宽的侧栏时整体缩到 0.75，7 px 的轴标签只剩 5.25 px。本项目的 HUD 图**按像素布局**（ResizeObserver 取宽度，不用 viewBox 缩放），CSS 最小字号 10 px；中文标签不做全大写和加字距。
 9. **表格：lieflat 没有表格 gallery，唯一的规范是 R10 的 `table.log`**（`templates/reports/report-10.zh.html` 第 77–88 行）：数字右对齐，表头下 1 px 实线，行间点线，**不用斑马纹**，合计行上方 1 px 实线，只有一个 hot 单元格用强调色，全局 `font-variant-numeric: tabular-nums lining-nums`。本项目把它映射到 shadcn `Table` 的 className 上（§3.9）。
-10. **源码里的坑：** ① `glance-gallery.html`、`big-*.html` 和对应彩色版里的 `rnd` 少了 `Math.abs`，约 44% 的取值为负（实测 1651/3781），会让抖动和随机游走偏向一侧，移植时必须用 `mono-tokens.js` 的版本；② catalog 表头写"63 张"，实际只有 61 条，L18、G1、G2 不存在，但 SKILL.md 仍引用 G1；③ basics gallery 的代码块名是 `B1…B4 / C1…C9`，和 catalog 的 F1–F13 对不上（对照表见 §2.4）；④ 图例和标注里直接用了 `▲ ▼ ● ○ ◉ ↑ ←` 等 Unicode 字符，本项目禁用 emoji，这类字符也统一换成 SVG 形状或 morphicons；⑤ 依赖 Google Fonts 和 jsDelivr CDN，离线环境下字体和 ECharts 图全部失效；⑥ `FAINT`（Mono `#C6C5BF`，WIRE 为 TXT 的 .32–.40 透明度）用来写来源行，对比度只有 1.5–2.4:1；连副标题用的 Mono `MUTED #8F8E88` 也只有 2.86:1，都达不到 WCAG 对小字 4.5:1 的要求。
+10. **源码里的坑：** ① `glance-gallery.html`、`big-*.html` 和对应彩色版里的 `rnd` 少了 `Math.abs`，约 44% 的取值为负（实测 1651/3781），会让抖动和随机游走偏向一侧，移植时必须用 `mono-tokens.js` 的版本；② catalog 表头写"63 张"，实际只有 61 条，L18、G1、G2 不存在，但 SKILL.md 仍引用 G1；③ basics gallery 的代码块名是 `B1…B4 / C1…C9`，和 catalog 的 F1–F13 对不上（对照表见 §2.4）；④ 图例和标注里直接用了 `U+25B2 U+25BC U+25CF U+25CB U+25C9 ↑ ←`（三角、圆点、箭头）等 Unicode 字符，本项目禁用 emoji，这类字符也统一换成 SVG 形状或 morphicons；⑤ 依赖 Google Fonts 和 jsDelivr CDN，离线环境下字体和 ECharts 图全部失效；⑥ `FAINT`（Mono `#C6C5BF`，WIRE 为 TXT 的 .32–.40 透明度）用来写来源行，对比度只有 1.5–2.4:1；连副标题用的 Mono `MUTED #8F8E88` 也只有 2.86:1，都达不到 WCAG 对小字 4.5:1 的要求。
 11. **和 shadcn 的冲突要显式解决。** shadcn `Card` 默认 `rounded-xl border shadow-sm py-6 gap-6`（`refs/design/ui/apps/v4/registry/new-york-v4/ui/card.tsx`），lieflat 要求"圆角 24、无边框、无阴影、靠留白分卡"。做法：`LfChartCard` 仍然使用 shadcn `Card`（结构和语义不变），通过 className 覆盖样式。浮在 3D 场景上的 HUD 面板保留 1 px hairline 边框，因为它必须和 3D 背景分开；**不用 `backdrop-filter`**，在软件渲染下它非常贵。
 12. **动效分两套节奏。** lieflat 的入场是 900 ms `quarticOut`、点阵 12 ms 错峰、条形 100 ms 错峰（`mono-tokens.js` 的 `MOTION`），这套只用在分析页和报告。HUD 里的实时图**没有入场动画**，数据更新不做补间，或只做 0–260 ms 线性过渡（G17 的 `animationDurationUpdate: 260`）；数值变化用 G18 的 cubicOut 计数器，并带代次保护。所有动画都响应 `prefers-reduced-motion`。
 
@@ -45,7 +45,7 @@
 | 项 | 内容 |
 |---|---|
 | 地址 | https://github.com/larashero3-dotcom/lieflat-charts（作者"躺在废墟里"，在 moxt.ai 上制作） |
-| 快照 | `eace082`，2026-09-05（Merge PR #15），★5754，2026 年仍在活跃开发 |
+| 快照 | `eace082`，2026-09-05（Merge PR #15），5754 stars，2026 年仍在活跃开发 |
 | 形态 | Agent Skill：`SKILL.md` 带 frontmatter（`name`、`description`），`agents/openai.yaml` 供 Codex 使用；安装方式为 `npx skills add …` 或 clone 到 `~/.claude/skills/` |
 | 规模 | 约 2.57 万行（HTML、JS、MD）。仓库 39 MB，其中 `docs/` 占 19 MB（PNG 与 GIF 预览），`templates/` 1.3 MB |
 | 依赖 | 纯 SVG 的图零依赖；G3 用 Chart.js 4（CDN）；G5–G18 和 F13 用 ECharts 6（CDN，`echarts@6/dist/echarts.min.js`）；字体 Inter（Google Fonts）；地图用在线 GeoJSON |
@@ -469,7 +469,7 @@ tot[t] = Σ_s v_s[t]；y0[t] = CY - tot[t]*SC/2；逐系列堆叠：top = run，
 主角评分 score 要说明依据（原版："price is a fact, not a virtue"，价格维度不计入评分）
 ```
 
-**G21 名次条**：行按最终名次排序；每格 32×32、rx 8，颜色按名次取 5 档 ladder，格内写名次数字；行尾的升降标记**改为 SVG 三角形**（原版用 `▲▼` 字符）。
+**G21 名次条**：行按最终名次排序；每格 32×32、rx 8，颜色按名次取 5 档 ladder，格内写名次数字；行尾的升降标记**改为 SVG 三角形**（原版用 `U+25B2`/`U+25BC` 三角字符）。
 
 **L3 条码棒棒糖**：每天一根满高发丝（GRID .7），当天的值画点，下方接一段随机长度的茎（`y+14+rnd*26`）；top-3 峰值间隔 ≥6；周末空心。**RTK 改编**：每秒一根发丝，fixed 为实心点，float 为空心点，没有解时只画地板（缺口一眼可见）。
 
@@ -947,7 +947,7 @@ export function LfLiveLine({ source, windowSec = 60, hz = 4, domain, target, for
 | `table.log` 表格规范 | `report-10.zh.html:77–88` | `LfTable` | port | 是 |
 | KPI 卡 | `report-09.zh.html` `.kpi` | `LfStat` | port | 是 |
 | pickPeaks、光晕文字、沉默点 | F2/L3、`paint-order` | `stats.ts`、`ValueLabel` | port | 是 |
-| 静态检查脚本 | `scripts/validate.mjs` | `scripts/lint-lf.mjs` | port（禁 Math.random、禁 token 外的 hex、禁 emoji 和 ▲▼ 字符、重复 id） | 是 |
+| 静态检查脚本 | `scripts/validate.mjs` | `scripts/lint-lf.mjs` | port（禁 Math.random、禁 token 外的 hex、禁 emoji 和 U+25B2/U+25BC 三角字符、重复 id） | 是 |
 | Playwright 烟测 | `scripts/smoke-new-charts.mjs` | `e2e/lf-smoke.spec.ts` | port | 是 |
 | F4、F6、F8、F12、F15、F16 | `basics-gallery.html` | `components/lf/*` | port | 否（V0.1 报告 / V0.2+） |
 | L3、L11、L12、L13、L16、L17、L19、L20 | `lupi-gallery.html` | `components/lf/*` | port | 否 |
@@ -997,7 +997,7 @@ export function LfLiveLine({ source, windowSec = 60, hz = 4, domain, target, for
 6. **红色过载**：品牌红同时承担"主角"和"严重告警"两种语义。如果同一张图里两者都出现，按 §3.2 的优先级处理；PRD 评审时要逐页检查"每张图最多一处红"。
 7. **暗色主题是新增的**：lieflat 以浅色纸面为主，暗卡只是例外，没有"全暗 dashboard"的先例。明度即数据在暗底上反转（最亮 = 最重要），纸色中位横档变成 BG 色横档，光晕色也要反转。这些都需要逐个组件在两种主题下截图验收。
 8. **源码缺陷**：`rnd` 的负值问题（§0 第 10 条）；`pop` 的缓动有过冲，和"不弹跳"的说法矛盾；catalog 数量与编号不一致；G1 被引用但不存在。移植时以本文 §2.4 的对照表为准。
-9. **Unicode 字符与 emoji 规定**：`▲ ▼ ● ○ ◉ ↑ ← │` 虽然不是 emoji，但部分字体会用彩色字形渲染它们（本机装了 Noto Color Emoji）。统一改为 SVG 形状或 morphicons，由 `lint-lf` 检查。
+9. **Unicode 字符与 emoji 规定**：`U+25B2 U+25BC U+25CF U+25CB U+25C9 ↑ ← │` 虽然不是 emoji，但部分字体会用彩色字形渲染它们（本机装了 Noto Color Emoji）。统一改为 SVG 形状或 morphicons，由 `lint-lf` 检查。
 10. **规则的适用边界**：SKILL.md 的"默认先 Lupi、一张图一个结论、单页 ≤6 张图"是面向对外发布的编辑物制定的，HUD 是监控场景，适用例外条款。但"标题写结论"在分析页和报告里要坚持（例如"New York 的 p95 帧耗时比 Shenzhen 高 41%"，而不是"帧耗时箱线图"）。
 11. **许可**：PolyForm Noncommercial 不允许商用。本项目是科研用途，用户已说明忽略；如果将来商用，需要重写而不是移植（视觉语言本身不受版权保护，但代码受保护）。
 12. **mock 数据**：lieflat 要求演示数据确定性（`rnd`），这和本项目的 mock 仿真、Timeline seek、截图回归是一致的。前端 mock 用 `mulberry32(seed)`，不用 `rnd`（`rnd` 的散列质量只够做视觉抖动）；后端 mock 同样必须固定种子。
@@ -1013,7 +1013,7 @@ export function LfLiveLine({ source, windowSec = 60, hz = 4, domain, target, for
 5. **§40 Drone Interaction：选中态全局统一为红色。** 3D 里的机体标记、轨迹、标签圈，图表里的主角系列，列表里的选中行（这里用前景色竖条而不是红色），三者指向同一个对象。3D 标注沿用 lieflat 语汇：航迹到地面的铅垂发丝（F8）、选中目标的虚线圈、数值文字带光晕。
 6. **缺少告警与状态设计。** 建议增加告警分级（critical / warning / nominal / stale），以及颜色 + morphicons 图标 + 文字的三重编码规则，并规定告警在 HUD、3D、Timeline 三处的呈现方式。
 7. **§43 MVP 应把"性能埋点 + HUD + 流畅性测试报告"列为交付物。** 用户明确要求"流畅性测试"，r11/r12 已定义 `window.__perf` 和相对指标断言；本单元补上它们的可视化：性能 HUD（V0.1）和 R09 结构的测试报告页（F15 城市箱线、F14 帧耗时直方、F12 优化前后、L20 多维画像）。
-8. **§42 仓库结构里加入设计系统目录。** 例如 `apps/web/src/styles`、`lib/lf`、`components/lf`，另加 `scripts/lint-lf.mjs`（禁 `Math.random`、禁 token 之外的 hex、禁 emoji 和 ▲▼ 字符、重复 id）和 `e2e/lf-smoke`。
+8. **§42 仓库结构里加入设计系统目录。** 例如 `apps/web/src/styles`、`lib/lf`、`components/lf`，另加 `scripts/lint-lf.mjs`（禁 `Math.random`、禁 token 之外的 hex、禁 emoji 和 U+25B2/U+25BC 三角字符、重复 id）和 `e2e/lf-smoke`。
 9. **时间语义。** 文档里没有区分仿真时间和墙钟时间。图表的时间轴一律使用仿真时间，界面上用 `SIM` / `UTC` 标注；stale 判断用本地接收时间。回放和倍速播放时，图表窗口跟随仿真时间推进。
 10. **"浏览器负责看世界"的原则需要补充"浏览器内的预算分配"。** 3D 渲染、环境粒子、图表、DOM 共用一个主线程和一块 GPU。建议在 §4 或 §37 明确每帧的预算：图表 ≤2 ms，DOM 更新 ≤2 ms，其余留给 3D，并由 r11 的质量控制器统一降级（降级顺序里加一步"图表降到 1 Hz"）。
 11. **色卡与品牌资产的落地。** logo 使用 `refs/design/ANet/docs/media/anet-logo.svg`（黑底圆角平行四边形，描边为 `#E93024`），其红色与 HERO 完全一致。建议在设计文档中固定：品牌红只有 `#E93024` 一个值，其余红色阶只是为满足文字对比度派生出来的，不作为独立的品牌色使用。

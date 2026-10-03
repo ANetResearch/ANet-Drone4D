@@ -2,9 +2,9 @@
 
 > 研究单元：r09 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §6、§14–15、§33、§41、§43–44
 > 仓库快照：
-> - `refs/world/PotreeConverter` @ `c2cb618`（2026-09-23，★818，BSD-2，C++23）
-> - `refs/world/PDAL` @ `0e132bd`（2026-09-21，★1416，BSD，`project(PDAL VERSION 2.10.0)`）
-> - `refs/world/LAStools` @ `a6a88da`（2026-09-21，★1070，LASlib/LASzip 与部分工具为 LGPL，其余工具闭源）
+> - `refs/world/PotreeConverter` @ `c2cb618`（2026-09-23，818 stars，BSD-2，C++23）
+> - `refs/world/PDAL` @ `0e132bd`（2026-09-21，1416 stars，BSD，`project(PDAL VERSION 2.10.0)`）
+> - `refs/world/LAStools` @ `a6a88da`（2026-09-21，1070 stars，LASlib/LASzip 与部分工具为 LGPL，其余工具闭源）
 >
 > 本文路径均相对各自仓库根目录。所有结论来自源码精读，另附本机实测，未经实测的地方会标"未验证"。实测脚本放在 `/data/projs/anet-drone/.cache/research/`：
 > - `r09_octree_fast.py`：numpy 八叉树
@@ -21,9 +21,9 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **PotreeConverter 2.x** | 把 LAS/LAZ 转成可流式加载的加法式（additive）八叉树 LOD。输出 3 个文件：`metadata.json`、`hierarchy.bin`、`octree.bin` | **port**：计数排序分块、网格/Poisson 抽稀、节点命名、22 B 层级记录、proxy 分页、BFS 字节布局，移植为 Python/numpy 版 `worldpkg tile`。**reference**：BROTLI 的 Morton SoA 编码、读端 NodeLoader 与 LOD 遍历。**adopt（可选）**：超过 1 亿点时通过 Docker 调用原版 | V0.1（Web 点云 MVP）→ V0.5（大规模 LiDAR） | ★★★★★（算法与格式的事实标准） |
-| **PDAL 2.10** | 点云 ETL 管道。JSON pipeline 串起 Reader、Filter、Writer，支持流式模式 | **adopt（Docker/conda）**：<br>• 坐标：`filters.reprojection`/`filters.projpipeline`（WGS84↔UTM↔ENU）、`filters.georeference`（轨迹直接地理配准）<br>• 清洗：`filters.outlier`/`filters.elm`<br>• 地面：`filters.smrf`/`filters.csf`<br>• 地形：`writers.gdal`（DEM）、`filters.hag_dem`<br>• 着色：`filters.colorization`<br>• 互操作：`writers.copc`<br>**port**：`filters.sample`（体素哈希 Poisson）、`LocalCartesian`（topocentric ENU） | V0.1 只用 numpy 替代实现；V0.5 起正式进入 World Package 工具链 | ★★★★（地理与地形链路首选） |
-| **LAStools** | LAS/LAZ 的参考实现（LASzip），外加一组高效命令行工具 | **adopt（小范围）**：laszip、lasinfo、las2las、lascopcindex（开源部分），用于 QA 和互操作。**reference**：lascopcindex 的单遍流式 COPC 构建（shuffle、swap 概率、finalizer）。**skip**：lasground、lasthin、blast2dem、laspublish 等闭源工具 | V0.5（QA、互操作） | ★★☆（可替代性高） |
+| **PotreeConverter 2.x** | 把 LAS/LAZ 转成可流式加载的加法式（additive）八叉树 LOD。输出 3 个文件：`metadata.json`、`hierarchy.bin`、`octree.bin` | **port**：计数排序分块、网格/Poisson 抽稀、节点命名、22 B 层级记录、proxy 分页、BFS 字节布局，移植为 Python/numpy 版 `worldpkg tile`。**reference**：BROTLI 的 Morton SoA 编码、读端 NodeLoader 与 LOD 遍历。**adopt（可选）**：超过 1 亿点时通过 Docker 调用原版 | V0.1（Web 点云 MVP）→ V0.5（大规模 LiDAR） | 5/5（算法与格式的事实标准） |
+| **PDAL 2.10** | 点云 ETL 管道。JSON pipeline 串起 Reader、Filter、Writer，支持流式模式 | **adopt（Docker/conda）**：<br>• 坐标：`filters.reprojection`/`filters.projpipeline`（WGS84<->UTM<->ENU）、`filters.georeference`（轨迹直接地理配准）<br>• 清洗：`filters.outlier`/`filters.elm`<br>• 地面：`filters.smrf`/`filters.csf`<br>• 地形：`writers.gdal`（DEM）、`filters.hag_dem`<br>• 着色：`filters.colorization`<br>• 互操作：`writers.copc`<br>**port**：`filters.sample`（体素哈希 Poisson）、`LocalCartesian`（topocentric ENU） | V0.1 只用 numpy 替代实现；V0.5 起正式进入 World Package 工具链 | 4/5（地理与地形链路首选） |
+| **LAStools** | LAS/LAZ 的参考实现（LASzip），外加一组高效命令行工具 | **adopt（小范围）**：laszip、lasinfo、las2las、lascopcindex（开源部分），用于 QA 和互操作。**reference**：lascopcindex 的单遍流式 COPC 构建（shuffle、swap 概率、finalizer）。**skip**：lasground、lasthin、blast2dem、laspublish 等闭源工具 | V0.5（QA、互操作） | 2.5/5（可替代性高） |
 
 **关键结论（实现者先读这几条）：**
 
@@ -95,10 +95,10 @@ resources/page_template/libs/potree/      Potree 1.8 viewer（读端参考：pot
 #### 2.1.2 三阶段流水线
 
 ```text
-LAS/LAZ ─► [CHUNKING] 计数 → 合并 LUT → 分发 ─► chunks/<id>.bin(+metadata.json)
-        ─► [INDEXING] 每个 chunk 并行：buildHierarchy(细分到≤10k) → sampler.sample(自底向上) → 完成节点立即写 octree.bin
+LAS/LAZ ─> [CHUNKING] 计数 → 合并 LUT → 分发 ─> chunks/<id>.bin(+metadata.json)
+        ─> [INDEXING] 每个 chunk 并行：buildHierarchy(细分到≤10k) → sampler.sample(自底向上) → 完成节点立即写 octree.bin
                        chunk 根剩余点 → tmpChunkRoots.bin；阶段状态 → stage_chunkroots/state.json（可 --stage 续跑）
-        ─► [MERGING] processChunkRoots(小于 5M 的子树合并) → 逐个 sample → sample 到根 → HierarchyBuilder → hierarchy.bin → metadata.json → 清理
+        ─> [MERGING] processChunkRoots(小于 5M 的子树合并) → 逐个 sample → sample 到根 → HierarchyBuilder → hierarchy.bin → metadata.json → 清理
 ```
 
 #### 2.1.3 Chunking：把点计数排序到网格
@@ -246,20 +246,20 @@ LAS/LAZ ─► [CHUNKING] 计数 → 合并 LUT → 分发 ─► chunks/<id>.bi
 
 | Stage | 用途 | 关键参数（源码 `addArgs`） | 流式 |
 |---|---|---|---|
-| `filters.reprojection` | CRS 重投影（GDAL/PROJ） | `in_srs`、`out_srs`、`in/out_axis_ordering`、`in/out_coord_epoch`、`error_on_failure` | ✓ |
-| `filters.projpipeline` | 任意 PROJ pipeline 串，**适合转 ENU** | `coord_op`、`reverse_transfo`、`out_srs` | ✓ |
-| `filters.georeference` | 由轨迹、`scan2imu` 和 NED/ENU 直接把扫描点地理配准到 EPSG:4978 | `trajectory_file`、`scan2imu`（4×4）、`time_offset`、`coordinate_system`（NED/ENU）、`reverse` | ✓ |
-| `filters.transformation` | 4×4 仿射变换（**只变换 X/Y/Z，不变换法线**） | `matrix`（行主序 16 个数）、`invert` | ✓ |
-| `filters.outlier` | 统计或半径离群点检测，默认把离群点标为 class 7 | `method`（statistical/radius）、`mean_k=8`、`multiplier=2.0`、`radius=1.0`、`min_k=2` | ✗ |
-| `filters.elm` | 扩展局部最小，去除低点噪声 | `cell=10`、`threshold=1.0` | ✗ |
-| `filters.smrf` / `filters.csf` | 地面分类（Pingel 2013 / 布料模拟 Zhang 2016） | smrf：`cell=1`、`slope=0.15`、`window=18`、`threshold=0.5`、`scalar=1.25`<br>csf：`resolution=1`、`rigidness=3`、`threshold=0.5`、`iterations=500` | ✗ |
+| `filters.reprojection` | CRS 重投影（GDAL/PROJ） | `in_srs`、`out_srs`、`in/out_axis_ordering`、`in/out_coord_epoch`、`error_on_failure` | yes |
+| `filters.projpipeline` | 任意 PROJ pipeline 串，**适合转 ENU** | `coord_op`、`reverse_transfo`、`out_srs` | yes |
+| `filters.georeference` | 由轨迹、`scan2imu` 和 NED/ENU 直接把扫描点地理配准到 EPSG:4978 | `trajectory_file`、`scan2imu`（4×4）、`time_offset`、`coordinate_system`（NED/ENU）、`reverse` | yes |
+| `filters.transformation` | 4×4 仿射变换（**只变换 X/Y/Z，不变换法线**） | `matrix`（行主序 16 个数）、`invert` | yes |
+| `filters.outlier` | 统计或半径离群点检测，默认把离群点标为 class 7 | `method`（statistical/radius）、`mean_k=8`、`multiplier=2.0`、`radius=1.0`、`min_k=2` | no |
+| `filters.elm` | 扩展局部最小，去除低点噪声 | `cell=10`、`threshold=1.0` | no |
+| `filters.smrf` / `filters.csf` | 地面分类（Pingel 2013 / 布料模拟 Zhang 2016） | smrf：`cell=1`、`slope=0.15`、`window=18`、`threshold=0.5`、`scalar=1.25`<br>csf：`resolution=1`、`rigidness=3`、`threshold=0.5`、`iterations=500` | no |
 | `writers.gdal` | 点云栅格化成 DEM/DSM | `resolution`、`radius`（默认 res·√2）、`output_type`（min/max/mean/idw/count/stdev）、`window_size`、`nodata`、`data_type`、`gdaldriver=GTiff` | — |
-| `filters.hag_dem` / `filters.hag_nn` | 计算高于地面的高度（HeightAboveGround 维度） | hag_dem：`raster`、`zero_ground`、`min/max_clamp`<br>hag_nn：`count`、`max_distance` | ✓ / ✗ |
-| `filters.dem` | 按 DEM 容差过滤点 | `raster`、`limits` | ✓ |
-| `filters.colorization` | 从正射影像给点着色 | `raster`、`dimensions`（如 `"Red:1:256.0,Green:2:256.0,Blue:3:256.0"`） | ✓ |
-| `filters.sample` | **体素哈希 Poisson 抽稀** | `radius` 或 `cell`（cell = 2r/√3）、`dimension`（只打标记、不删点） | ✓ |
-| `filters.voxeldownsize` | 每个体素只留第一个点或体素中心 | `cell`、`mode`（center/first） | ✓ |
-| `filters.splitter` / `filters.chipper` / `pdal tile` | 平面切块（带 buffer）/ 按容量切块 | `length`、`origin_x/y`、`buffer` / `capacity` | ✗ |
+| `filters.hag_dem` / `filters.hag_nn` | 计算高于地面的高度（HeightAboveGround 维度） | hag_dem：`raster`、`zero_ground`、`min/max_clamp`<br>hag_nn：`count`、`max_distance` | yes / no |
+| `filters.dem` | 按 DEM 容差过滤点 | `raster`、`limits` | yes |
+| `filters.colorization` | 从正射影像给点着色 | `raster`、`dimensions`（如 `"Red:1:256.0,Green:2:256.0,Blue:3:256.0"`） | yes |
+| `filters.sample` | **体素哈希 Poisson 抽稀** | `radius` 或 `cell`（cell = 2r/√3）、`dimension`（只打标记、不删点） | yes |
+| `filters.voxeldownsize` | 每个体素只留第一个点或体素中心 | `cell`、`mode`（center/first） | yes |
+| `filters.splitter` / `filters.chipper` / `pdal tile` | 平面切块（带 buffer）/ 按容量切块 | `length`、`origin_x/y`、`buffer` / `capacity` | no |
 | `writers.copc` | COPC（LAZ 1.4 + EPT 层级） | `scale_*`（默认 0.01）、`offset_*`、`a_srs`、`extra_dims` | — |
 | `readers.ply` / `readers.las` / `readers.e57` / `readers.pcd` | 输入 | PLY 属性按原名注册为维度，例如 `nx`、`ny`、`nz` | — |
 | 插件 `spz` / `draco` | Gaussian Splat（SPZ）/ Draco 压缩 | —— | — |
@@ -375,7 +375,7 @@ def parse_chunk(buf, start_node):
   3. 整块数据 brotli 压缩。
   4. 位 Morton 的位序：x 在 bit0、y 在 bit1、z 在 bit2（`split(x)|split(y)<<1|split(z)<<2`）。
 
-**节点命名、整数坐标与包围盒的换算**（Potree 名 ↔ EPT/COPC 的 key）：
+**节点命名、整数坐标与包围盒的换算**（Potree 名 <-> EPT/COPC 的 key）：
 
 ```python
 def name_to_key(name):            # "r" + digits  →  (d, x, y, z)
@@ -625,14 +625,14 @@ else if (ft < 0.80 * T && idleMs > 500) budget = min(maxB, budget * 1.08);
 ### 3.5 World Package 离线管道（PDAL 用法）
 
 ```text
-source/*.ply|las|laz|e57  ──ingest──►  规范化（up 轴 / 单位 / 法线 / 伪彩色 / 去重）
-        ──georef──►  WGS84/UTM → ENU（RTK 原点）；无地理信息时写 LOCAL 并登记 unit_scale
-        ──clean───►  outlier(statistical) + elm + range(去 class 7)
-        ──terrain─►  smrf/csf → writers.gdal(DEM 0.5 m, idw) → hag_dem → HeightAboveGround
-        ──color───►  colorization(有正射影像时) 或 伪彩色（高度 × 法线 Lambert）
-        ──tile────►  worldpkg tile（§3.2，ANET_Q16 + 可选 DEFAULT） ; writers.copc（V0.5）
-        ──derive──►  occupancy voxel(0.5 m) / SDF / 碰撞网格（供 Geometry World）
-        ──qa──────►  qa/report.json（点数、包围盒、密度、重复率、离群率、DEM 覆盖率）
+source/*.ply|las|laz|e57  ──ingest──>  规范化（up 轴 / 单位 / 法线 / 伪彩色 / 去重）
+        ──georef──>  WGS84/UTM → ENU（RTK 原点）；无地理信息时写 LOCAL 并登记 unit_scale
+        ──clean───>  outlier(statistical) + elm + range(去 class 7)
+        ──terrain─>  smrf/csf → writers.gdal(DEM 0.5 m, idw) → hag_dem → HeightAboveGround
+        ──color───>  colorization(有正射影像时) 或 伪彩色（高度 × 法线 Lambert）
+        ──tile────>  worldpkg tile（§3.2，ANET_Q16 + 可选 DEFAULT） ; writers.copc（V0.5）
+        ──derive──>  occupancy voxel(0.5 m) / SDF / 碰撞网格（供 Geometry World）
+        ──qa──────>  qa/report.json（点数、包围盒、密度、重复率、离群率、DEM 覆盖率）
 ```
 
 **(a) UrbanScene3D 规范化**：Suzhou 是 Y-up，要转成 Z-up；Chicago 的单位 km 转成 m，只对 Chicago 做。
@@ -732,14 +732,14 @@ Python 侧用 `laspy`（venv 已装 2.7.0）加 `lazrs` 读写 LAZ，不需要�
 | Potree 2.0 三文件容器规范（metadata、22 B hierarchy、proxy、Range） | `indexer.cpp::createMetadata`/`createHierarchy`、`HierarchyBuilder.h`、`potree.js::NodeLoader` | `world/pointcloud/format`、`apps/web/pointcloud/loader` | V0.1 | port | 已实测兼容；可用官方 viewer 验证；potree23dtiles、potree-core 等生态都能读 |
 | 加法式八叉树（top-down 网格竞选、一次 Morton 排序、`reduceat`） | `sampler_random.h`、COPC `Processor::sample`、`lascopcindex` | `world/pointcloud/tiler.py`（`worldpkg tile`） | V0.1 | port | 纯 numpy，5M 点约 6 s；无需编译 |
 | 中心优先竞选 + 节点内随机顺序 | `sampler_random.h`（中心阈值、叶子洗牌）、lasthin `-central` | 同上 | V0.1 | port | 粗层级更均匀；支持部分节点渲染 |
-| Morton 编码、`childBoundingBoxOf`、命名 ↔ key 换算 | `converter_utils.h` | `world/pointcloud/octree_key.py` + TS 对应实现 | V0.1 | port | 前后端共用 |
+| Morton 编码、`childBoundingBoxOf`、命名 <-> key 换算 | `converter_utils.h` | `world/pointcloud/octree_key.py` + TS 对应实现 | V0.1 | port | 前后端共用 |
 | DEFAULT 与 BROTLI（Morton SoA）写出 | `Writer.cpp::compress`、`DecoderWorker_brotli.js` | `tiler.py --encoding` | V0.1（DEFAULT）/ V0.5（BROTLI） | port | 交叉验证、外部导出 |
 | ANET_Q16 编码 + BFS 前缀 + `hierarchy_ext` | 本文设计（参考 Potree 的节点局部 float 解码） | `tiler.py` + `apps/web/pointcloud/decoder.worker.ts` | V0.1 | 自研 | 零解码直传 GPU；兼容 WebGPU |
 | LOD 遍历：优先级、点预算、每帧上传 2 个节点、最多 4 个并发、LRU 为 2×预算 | `potree.js::updateVisibility` | `apps/web/pointcloud/lod.ts` | V0.1 | port | 成熟参数，直接用 |
 | FPS 反馈调节预算 + 部分节点渲染 + 淡入 | 本文设计 | `apps/web/pointcloud/budget.ts` | V0.1 | 自研 | 满足"疏密自动调节" |
 | 支持 Range 的静态服务 | `r09_range_server.py`（实测） | `apps/api` 的 StaticFiles 或 nginx | V0.1 | adopt | Potree 的读法依赖 Range |
 | UrbanScene3D ingest（up 轴检测、单位、伪彩色、法线旋转） | 本机实测 + `filters.transformation` 的坑 | `world/ingest/urbanscene3d.py` | V0.1 | 自研 | 数据本身有缺陷，必须处理 |
-| WGS84↔ECEF↔ENU（topocentric）、UTM | `LocalCartesian.cpp`、`filters.projpipeline`；pyproj | `world/georef/` | V0.1（numpy）/ V0.5（PDAL） | port + adopt | V0.1 就需要把 RTK 原点落地（与 r01 结论一致） |
+| WGS84<->ECEF<->ENU（topocentric）、UTM | `LocalCartesian.cpp`、`filters.projpipeline`；pyproj | `world/georef/` | V0.1（numpy）/ V0.5（PDAL） | port + adopt | V0.1 就需要把 RTK 原点落地（与 r01 结论一致） |
 | 轨迹直接地理配准（scan2imu，NED/ENU） | `filters.georeference` | `reconstruction/lidar/georef` | V0.5 | adopt | MID-360 + RTK/IMU 链路 |
 | 去噪：statistical/radius 离群点、ELM | `filters.outlier`、`filters.elm` | ingest | V0.1（numpy KNN 近似）/ V0.5 | adopt | 重建点云噪声多 |
 | 地面分类与 DEM、HAG | `filters.smrf`/`filters.csf`、`writers.gdal`、`filters.hag_dem` | `world/terrain`、`environment/wind`（地形风）、`simulation`（AGL） | V0.4–V0.5 | adopt（Docker） | 地形风场与碰撞需要 DEM |

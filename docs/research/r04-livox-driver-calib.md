@@ -3,9 +3,9 @@
 > 研究单元：r04　｜　日期：2026-09-28　｜　范围：MID-360(S) 数据包格式、点结构、非重复扫描、ROS2 话题；LiDAR-IMU 外参与时延标定；Sensor Simulation 中 MID-360 虚拟雷达的扫描模型参数（用于 mock 仿真）。
 >
 > 仓库（只读，未修改）：
-> - `refs/lidar/Livox-SDK2`（★516，HEAD c0796f0，2026-09-21，SDK v1.5.2）
-> - `refs/lidar/livox_ros_driver2`（★853，HEAD 2144554，2026-09-21，driver v1.2.8）
-> - `refs/lidar/LiDAR_IMU_Init`（★1515，HEAD 66b157a，2026-04-30）
+> - `refs/lidar/Livox-SDK2`（516 stars，HEAD c0796f0，2026-09-21，SDK v1.5.2）
+> - `refs/lidar/livox_ros_driver2`（853 stars，HEAD 2144554，2026-09-21，driver v1.2.8）
+> - `refs/lidar/LiDAR_IMU_Init`（1515 stars，HEAD 66b157a，2026-04-30）
 >
 > 交叉参考（同样只读）：`refs/sim/XTDrone/sitl_config/models/livox_mid40/scan_mode/mid360.csv`（MID-360 扫描花样表）、`refs/sim/Prometheus/Simulator/livox_laser_gazebo_plugins`（Livox Gazebo 插件）、`refs/sim/Prometheus/.../p600_mid360.sdf.jinja`（P600 + MID-360 安装位姿）、`refs/lidar/FAST_LIO/config/mid360.yaml`（MID-360 内置 IMU 外参）。
 >
@@ -17,9 +17,9 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| livox_ros_driver2 | MID-360/360S/360L 官方 ROS1/ROS2 驱动，发布 `/livox/lidar`（CustomMsg 或 PointCloud2 XYZRTLT）与 `/livox/imu` | **adopt**（真机，P600 机载，锁版本 1.2.8 + 本地补丁）；**port**（CustomMsg/XYZRTLT 数据契约、分帧与逐点时间戳逻辑进入我们的 Sensor Gateway 与 mock） | V0.5（真机）；数据契约 V0.2 起 | ★★★★★ |
-| Livox-SDK2 | UDP 协议栈（设备发现、KV 参数、点云/IMU 包），C 风格 API | **adopt**（作为 driver2 的依赖，不直接编程）；**port**（点云包二进制布局 → Python/TS codec，用于回放/虚拟设备） | V0.5；codec V0.5，虚拟设备 V0.6 | ★★★★ |
-| LiDAR_IMU_Init (LI-Init) | 无靶标 LiDAR-IMU 外参 + 时延 + 重力 + bias 初始化（FAST-LO → 批优化 → FAST-LIO 在线精修） | **adopt**（离线工具，ROS1 Docker，真机标定）；**port**（标定数学 → Python/scipy，用于标定服务与 mock 自检；激励度评估 → UI 标定向导） | V0.5 | ★★★★（真机必做，MVP 不需要） |
+| livox_ros_driver2 | MID-360/360S/360L 官方 ROS1/ROS2 驱动，发布 `/livox/lidar`（CustomMsg 或 PointCloud2 XYZRTLT）与 `/livox/imu` | **adopt**（真机，P600 机载，锁版本 1.2.8 + 本地补丁）；**port**（CustomMsg/XYZRTLT 数据契约、分帧与逐点时间戳逻辑进入我们的 Sensor Gateway 与 mock） | V0.5（真机）；数据契约 V0.2 起 | 5/5 |
+| Livox-SDK2 | UDP 协议栈（设备发现、KV 参数、点云/IMU 包），C 风格 API | **adopt**（作为 driver2 的依赖，不直接编程）；**port**（点云包二进制布局 → Python/TS codec，用于回放/虚拟设备） | V0.5；codec V0.5，虚拟设备 V0.6 | 4/5 |
+| LiDAR_IMU_Init (LI-Init) | 无靶标 LiDAR-IMU 外参 + 时延 + 重力 + bias 初始化（FAST-LO → 批优化 → FAST-LIO 在线精修） | **adopt**（离线工具，ROS1 Docker，真机标定）；**port**（标定数学 → Python/scipy，用于标定服务与 mock 自检；激励度评估 → UI 标定向导） | V0.5 | 4/5（真机必做，MVP 不需要） |
 
 核心结论：
 
@@ -150,12 +150,12 @@ launch_ROS2/msg_MID360_launch.py, msg_MID360s_launch.py ...
 **数据流**（线程模型）：
 
 ```text
-SDK IO 线程 ──PubHandler::OnLivoxLidarPointCloudCallback──▶ raw_packet_queue_ (deque+condvar)
+SDK IO 线程 ──PubHandler::OnLivoxLidarPointCloudCallback──> raw_packet_queue_ (deque+condvar)
                  （IMU 包直接走 imu_callback_ → Lds::StorageImuData）
-RawDataProcess 线程 ──LidarPubHandler::PointCloudProcess（mm→m、外参、逐点时间）──▶ points_clouds_
-                    ──CheckTimer(id)（分帧）──▶ PointFrame 回调 → Lds::StoragePointData → LidarDataQueue(ring)
-DriverNode::PointCloudDataPollThread ──Lddc::DistributePointCloudData──▶ publish CustomMsg / PointCloud2
-DriverNode::ImuDataPollThread ──Lddc::DistributeImuData──▶ publish sensor_msgs/Imu
+RawDataProcess 线程 ──LidarPubHandler::PointCloudProcess（mm→m、外参、逐点时间）──> points_clouds_
+                    ──CheckTimer(id)（分帧）──> PointFrame 回调 → Lds::StoragePointData → LidarDataQueue(ring)
+DriverNode::PointCloudDataPollThread ──Lddc::DistributePointCloudData──> publish CustomMsg / PointCloud2
+DriverNode::ImuDataPollThread ──Lddc::DistributeImuData──> publish sensor_msgs/Imu
 ```
 
 **逐点时间**（`pub_handler.cpp`）：
@@ -486,7 +486,7 @@ def excitation(ω_L_history, data_accum_length=500):      # UI 标定向导三�
 |---|---|---|---|---|---|---|
 | 1 | MID-360 参数化扫描花样 | 拟合自 `XTDrone/.../mid360.csv`；约定来自 `Prometheus/.../livox_points_plugin.cpp` | `sensors/lidar/mid360_pattern.{py,ts}` | V0.2（MVP mock） | port | 无资产、覆盖率可信，Web/后端共用 |
 | 2 | 球面 z-buffer 虚拟雷达 | 自研（MARSIM 思路） | `simulation/sensors/lidar_raycast.py` | V0.2–V0.3（MVP） | 自研 | 点云世界下最快的向量化方案 |
-| 3 | 回波物理（量程/反射率/噪声/雾雨） | Livox 规格 + tag 语义（`preprocess.cpp` 过滤条件）+ `kKeySetFogNoiseFilter` | `simulation/sensors/lidar_physics.py` ↔ `environment/` | V0.3 视觉 / V0.4 物理 | 自研 | 对应原设计 §22–24 “Fog→LiDAR” |
+| 3 | 回波物理（量程/反射率/噪声/雾雨） | Livox 规格 + tag 语义（`preprocess.cpp` 过滤条件）+ `kKeySetFogNoiseFilter` | `simulation/sensors/lidar_physics.py` <-> `environment/` | V0.3 视觉 / V0.4 物理 | 自研 | 对应原设计 §22–24 “Fog→LiDAR” |
 | 4 | CustomMsg / XYZRTLT 数据契约 | `msg/CustomMsg.msg`、`lddc.cpp::InitPointcloud2MsgHeader` | `shared/contracts/sensor_lidar.ts/.py` | V0.2 起 | adopt（语义） | V0.5 接真机零改动 |
 | 5 | 逐点时间戳与分帧 | `pub_handler.cpp::CheckTimer`、`GetEthPacketTimestamp` | Sensor Gateway / mock | V0.2 起 | port | 多机帧对齐、时间语义一致 |
 | 6 | Web 扫描层（环形缓冲 + 余晖） | 自研 | `apps/web/layers/SensorScanLayer` | V0.2（MVP） | 自研 | 不打断全局 LOD、零 GC |

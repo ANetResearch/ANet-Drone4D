@@ -5,7 +5,7 @@
 >
 > **仓库快照**（均为 shallow clone，下文路径都相对各仓库根目录）：
 >
-> | 仓库 | 本地路径 | ★ | 最后提交 |
+> | 仓库 | 本地路径 | stars | 最后提交 |
 > |---|---|---|---|
 > | TannerGilbert/PX4-Multiagent-Simulation | `refs/sim/PX4-Multiagent-Simulation` @ `b1f44fe` | 11 | 2026-02-09 "Initial public release" |
 > | AntonSHBK/px4_multi_drone_sim | `refs/sim/px4_multi_drone_sim` @ `35a6d01` | 26 | 2025-06-15 |
@@ -32,12 +32,12 @@
 
 | 仓库 / 子模块 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **XTDrone**（ROS1 + Gazebo Classic + PX4 1.11–1.13）：`coordination/formation_demo`、`communication/`、`coordination/launch_generator` | 国内使用最广的多机教学/科研平台，分层架构最完整 | **port**（只移植算法：KM 编队重分配、consensus 编队律、切向避碰、SINR 链路模型、指令词汇、端口方案）+ **reference**（架构分层）；**不运行** ROS1 栈 | V0.6（编队/避碰）/ V1.0（SINR、任务分配） | ★★★★☆ |
-| XTDrone：`sitl_config/models/livox_mid40/scan_mode/mid360.csv` | Livox MID-360 非重复扫描模式，共 80 万条射线 | **adopt**（直接作为数据资产）：用于 LiDAR 仿真和 SensorLayer 的 FOV 可视化 | V0.5 / V0.6 | ★★★★☆ |
-| **PX4-Multiagent-Simulation**（ROS2 Humble + gz Harmonic + PX4 1.15，2026-02） | 现代栈的多机拉起脚手架，支持 xacro 传感器宏、外部里程计，以及摄影测量模型 → Gazebo 世界 | **reference + port**：采用它的传感器宏思路、World 导出步骤和 EKF 参数档；launch 端口公式**不要照搬**（有误） | V0.6（gz 传感器路径）/ V0.5（外部里程计） | ★★★☆☆ |
-| **XTDrone2**（ROS2 Jazzy + gz Harmonic + PX4 1.15） | XTDrone 的 ROS2 重写，用 YAML 描述机队，通信节点走 uXRCE-DDS | **reference**：YAML schema、OFFBOARD_STATE 语义、FLU↔NED 公式；代码不能直接用（多机指令会被 PX4 静默丢弃，见 §2.4） | V0.2 / V0.6 | ★★☆☆☆ |
-| **px4_multi_drone_sim**（ROS2 Humble + gz Harmonic + PX4 1.15，Docker） | Docker 开发容器，JSON "G-code" 指令 DSL，State 模式控制器 | **port**：G22/G23/G24 轨迹原语（需要修正，见 §3.7），指令队列和中断语义，local↔global 坐标变换思路；**Docker 方案不采用**（单体镜像过大） | V0.1（Mock 任务原语）/ V0.2 | ★★☆☆☆ |
-| （补充）官方 `px4io/px4-sitl`（PX4 `Tools/packaging/containers/Dockerfile.sih`，v1.18，2026） | 无 Gazebo 的 PX4 SITL（SIH 物理），CPU 即可运行 | **adopt**：V0.2 SITL 运行时的首选。本文已实测"每机一个容器"的编排 | V0.2 / V0.4 / V0.6 | ★★★★★ |
+| **XTDrone**（ROS1 + Gazebo Classic + PX4 1.11–1.13）：`coordination/formation_demo`、`communication/`、`coordination/launch_generator` | 国内使用最广的多机教学/科研平台，分层架构最完整 | **port**（只移植算法：KM 编队重分配、consensus 编队律、切向避碰、SINR 链路模型、指令词汇、端口方案）+ **reference**（架构分层）；**不运行** ROS1 栈 | V0.6（编队/避碰）/ V1.0（SINR、任务分配） | 4/5 |
+| XTDrone：`sitl_config/models/livox_mid40/scan_mode/mid360.csv` | Livox MID-360 非重复扫描模式，共 80 万条射线 | **adopt**（直接作为数据资产）：用于 LiDAR 仿真和 SensorLayer 的 FOV 可视化 | V0.5 / V0.6 | 4/5 |
+| **PX4-Multiagent-Simulation**（ROS2 Humble + gz Harmonic + PX4 1.15，2026-02） | 现代栈的多机拉起脚手架，支持 xacro 传感器宏、外部里程计，以及摄影测量模型 → Gazebo 世界 | **reference + port**：采用它的传感器宏思路、World 导出步骤和 EKF 参数档；launch 端口公式**不要照搬**（有误） | V0.6（gz 传感器路径）/ V0.5（外部里程计） | 3/5 |
+| **XTDrone2**（ROS2 Jazzy + gz Harmonic + PX4 1.15） | XTDrone 的 ROS2 重写，用 YAML 描述机队，通信节点走 uXRCE-DDS | **reference**：YAML schema、OFFBOARD_STATE 语义、FLU<->NED 公式；代码不能直接用（多机指令会被 PX4 静默丢弃，见 §2.4） | V0.2 / V0.6 | 2/5 |
+| **px4_multi_drone_sim**（ROS2 Humble + gz Harmonic + PX4 1.15，Docker） | Docker 开发容器，JSON "G-code" 指令 DSL，State 模式控制器 | **port**：G22/G23/G24 轨迹原语（需要修正，见 §3.7），指令队列和中断语义，local<->global 坐标变换思路；**Docker 方案不采用**（单体镜像过大） | V0.1（Mock 任务原语）/ V0.2 | 2/5 |
+| （补充）官方 `px4io/px4-sitl`（PX4 `Tools/packaging/containers/Dockerfile.sih`，v1.18，2026） | 无 Gazebo 的 PX4 SITL（SIH 物理），CPU 即可运行 | **adopt**：V0.2 SITL 运行时的首选。本文已实测"每机一个容器"的编排 | V0.2 / V0.4 / V0.6 | 5/5 |
 
 **关键结论（实现者先读这几条）**
 
@@ -142,7 +142,7 @@ src/
 
 **PoseSensorPlugin**（`pose_sensor.cc`）：
 - `Configure()` 解析多个 `<sensor>`，在 `/model/<model>/pose_sensor/<name>` 上发布；`PostUpdate()` 取 `worldPose(link)`，加上偏移和高斯噪声后发布。
-- ⚠ 它把噪声**逐分量直接加到四元数上且没有归一化**，结果不是单位四元数。移植时应改成"对旋转向量加噪再指数映射"。
+- note: 它把噪声**逐分量直接加到四元数上且没有归一化**，结果不是单位四元数。移植时应改成"对旋转向量加噪再指数映射"。
 
 **GPS 模式与视觉模式参数档的差异**（`diff` 结果，是外部定位最有用的参数集）：
 
@@ -216,7 +216,7 @@ multi_drone_msg/msg/{DroneInformMsg,DroneParamsMsg,LocalAndGlobalCoordinatesMsg,
 
 **坐标变换**（`position_transformer.DroneLocalityState`）对每个量同时维护 local_NED、local_ENU、global_ENU、global_NED 四份：
 - global = R(出生朝向) · local_ENU + 出生位置。
-- ENU↔NED 用 `(x,y,z) ↦ (y,x,−z)`。
+- ENU<->NED 用 `(x,y,z) |-> (y,x,−z)`。
 
 这个思路正确，**我们的 FrameService 就是它的服务端版本**。
 
@@ -252,7 +252,7 @@ multi_drone_msg/msg/{DroneInformMsg,DroneParamsMsg,LocalAndGlobalCoordinatesMsg,
 人机交互层  QGC / ROS / Qt 地面站、系统监视器、日志分析器   ←→ 我们：Web UI（React + shadcn）
 协同层      ROS：无人机 1..n 之间通信（编队、任务分配）       ←→ 我们：Swarm / Agent Runtime（ANet）
 高层控制层  ROS：每机 communication 节点（统一指令语义）      ←→ 我们：Simulation Gateway（DroneCommand）
-底层控制层  PX4（MAVROS ↔ MAVLink）                          ←→ 我们：PX4 SITL（SIH）/ Mock / 真机
+底层控制层  PX4（MAVROS <-> MAVLink）                        ←→ 我们：PX4 SITL（SIH）/ Mock / 真机
 模拟器层    Gazebo：动力学、传感器、三维场景、其他无人系统    ←→ 我们：World Runtime（+ V0.6 gz）
 通信层      MAVLink / ROS / MAVROS                           ←→ 我们：MAVLink UDP / WebSocket / (ROS2 可选)
 ```
@@ -282,7 +282,7 @@ spawn: x = 3*row_in_all + 3*(id%row)，y = 3*(id//row + 1)
 
 **这套"统一指令词汇 + 帧标注 + 保活 + 零指令即悬停"的做法是本单元最值得移植的高层控制语义**（§3.11）。
 
-- ⚠ 基础版 `cmd_accel_*_callback` 调用 `construct_target(ax=…)`，但函数的形参名是 `afx/afy/afz`，会直接抛 `TypeError`。增强版已修复。
+- note: 基础版 `cmd_accel_*_callback` 调用 `construct_target(ax=…)`，但函数的形参名是 `afx/afy/afz`，会直接抛 `TypeError`。增强版已修复。
 
 **编队（`coordination/formation_demo/`）**：
 - `leader.py`：
@@ -369,7 +369,7 @@ dds_ns     : = drone_id（一律通过 PX4_UXRCE_DDS_NS 显式设置）
 
 | 方向 | 容器内（PX4） | 网关（同一 docker 网络） |
 |---|---|---|
-| 遥测和指令（onboard 模式） | 本地 14580 ↔ 远端 `host.docker.internal:14540` | 网关绑定 `0.0.0.0:14540`，按 `(sysid, src_ip)` 解复用；指令发往 `drone_ip:14580` |
+| 遥测和指令（onboard 模式） | 本地 14580 <-> 远端 `host.docker.internal:14540` | 网关绑定 `0.0.0.0:14540`，按 `(sysid, src_ip)` 解复用；指令发往 `drone_ip:14580` |
 | GCS 链路（可选，用于调试 QGC） | 18570 → `host.docker.internal:14550` | 网关可以转发给 QGC（相当于一个 mavlink-router） |
 | uXRCE-DDS（可选，V0.6 接 ROS2 算法时） | 客户端 → `host.docker.internal:8888` | 每个会话一个 `MicroXRCEAgent udp4 -p 8888`，由 key 区分客户端 |
 
@@ -413,13 +413,13 @@ swap(n,e,d) = (e, n, −d)             速度同理（不需要平移）
 
 ```text
                  create            start             first HEARTBEAT        prearm bit & GPOS
-  PENDING ─────► PROVISIONING ───► STARTING ───────► BOOTED ─────────────► READY ──arm──► ACTIVE
-                                      ▲                 │ hb_age>2.5s          │ hb_age>2.5s
-                                      │                 ▼                      ▼
-                         RESTARTING ◄─┴──── LOST ◄── DEGRADED ◄────────────────┘
+  PENDING ─────> PROVISIONING ───> STARTING ───────> BOOTED ─────────────> READY ──arm──> ACTIVE
+                                      ^                 │ hb_age>2.5s          │ hb_age>2.5s
+                                      │                 v                      v
+                         RESTARTING <─┴──── LOST <── DEGRADED <────────────────┘
                          (backoff 1,2,4,8s; ≤3 次/60s)  hb_age>5s
                                       │ 预算耗尽
-                                      ▼
+                                      v
                                    FAILED              DRAINING(land→disarm) → STOPPED → REMOVED
 ```
 
@@ -486,10 +486,10 @@ def x25(data, crc=0xFFFF):
 ```text
 1. READY 后:   COMMAND_LONG(400 ARM, p1=1) → ACK 0         (实测 t≈+1s)
 2. 起飞:       COMMAND_LONG(22 NAV_TAKEOFF, p4..p7=NaN) → ACK 0 → AUTO_TAKEOFF → 自动转 LOITER
-               (p7=NaN ⇒ MIS_TAKEOFF_ALT=2.5m；实测 7.8–10.5s 到 >2m。不要像 G3/XTDrone2 那样传 NED/相对高度)
+               (p7=NaN => MIS_TAKEOFF_ALT=2.5m；实测 7.8–10.5s 到 >2m。不要像 G3/XTDrone2 那样传 NED/相对高度)
 3. 预发流:     SET_POSITION_TARGET_LOCAL_NED ≥10Hz 连续 ≥1s（PX4 要求 >2Hz）
 4. 切模式:     COMMAND_LONG(176 DO_SET_MODE, p1=1 CUSTOM, p2=6 OFFBOARD) → ACK 0
-5. 保活:       只要处于 OFFBOARD 就持续 ≥10Hz（COM_OF_LOSS_T 默认 1s；丢流 ⇒ failsafe ⇒ RTL，已实测）
+5. 保活:       只要处于 OFFBOARD 就持续 ≥10Hz（COM_OF_LOSS_T 默认 1s；丢流 => failsafe => RTL，已实测）
 6. 退出:       先切 AUTO.LOITER (p2=4, p3=3) 再停流；或发 LAND(21)
 ```
 
@@ -656,11 +656,11 @@ Gateway 每 1 s:  w = E.query(p_world_i, t).wind  (ENU, 风"去向")
 
 | 条目 | 来源 | 目标模块 | 版本 | 方式 | MVP |
 |---|---|---|---|---|---|
-| 统一生命周期状态机与健康分级 | 本文原型，阈值取自 XTDrone 和 PX4 行为 | `apps/simulator/orchestrator/lifecycle.py`，Mock 同样实现 | V0.1（Mock）/ V0.2 | port | ✔ |
-| 轨迹原语（修正后的 G22/G23/G24，加弧长参数化） | px4_multi_drone_sim `g22–g24.py` | `simulation/mission/primitives.py` + TS 预览 | V0.1 | port | ✔ |
-| 指令队列、中断、G0 语义 | px4_multi_drone_sim `base_commander.py` | Gateway `CommandQueue` | V0.1 | port | ✔ |
-| 零指令悬停与按轴保持 | XTDrone `multirotor_communication_enhanced.py` | Gateway 的 velocity 指令处理 | V0.1 / V0.2 | port | ✔ |
-| FrameService（ENU↔geo，T_world←local） | px4_multi_drone_sim `DroneLocalityState`，XTDrone `uav_bias` | `world/georef/frames.py` | V0.1 | port | ✔ |
+| 统一生命周期状态机与健康分级 | 本文原型，阈值取自 XTDrone 和 PX4 行为 | `apps/simulator/orchestrator/lifecycle.py`，Mock 同样实现 | V0.1（Mock）/ V0.2 | port | yes |
+| 轨迹原语（修正后的 G22/G23/G24，加弧长参数化） | px4_multi_drone_sim `g22–g24.py` | `simulation/mission/primitives.py` + TS 预览 | V0.1 | port | yes |
+| 指令队列、中断、G0 语义 | px4_multi_drone_sim `base_commander.py` | Gateway `CommandQueue` | V0.1 | port | yes |
+| 零指令悬停与按轴保持 | XTDrone `multirotor_communication_enhanced.py` | Gateway 的 velocity 指令处理 | V0.1 / V0.2 | port | yes |
+| FrameService（ENU<->geo，T_world←local） | px4_multi_drone_sim `DroneLocalityState`，XTDrone `uav_bias` | `world/georef/frames.py` | V0.1 | port | yes |
 | 官方 SIH 镜像与每机一容器编排 | `px4io/px4-sitl`（PX4 `Dockerfile.sih`） | `simulation/px4/driver_docker.py` | V0.2 | adopt | |
 | mavlite / 网关解复用 / 流裁剪 | 本文原型 | `simulation/backends/px4_mavlink.py`（生产用 pymavlink 或 MAVSDK，mavlite 做健康探针） | V0.2 | port | |
 | SIH 风注入 | PX4 `simulator_sih` 参数 | `environment/coupling/sih_wind.py` | V0.4 | adopt | |
@@ -671,9 +671,9 @@ Gateway 每 1 s:  w = E.query(p_world_i, t).wind  (ENU, 风"去向")
 | SINR 链路模型 | XTDrone `communication_verify_1.py` | `agent/anet/channel.py` | V0.6 / V1.0 | port | |
 | MID-360 等扫描模式 CSV | XTDrone `livox_mid40/scan_mode/*.csv` | `assets/lidar/` + `sensors/lidar/` | V0.5 | adopt | |
 | YAML 机队 schema | XTDrone2 `default.yaml`、PX4-Multiagent `robots.yaml`、px4_multi_drone_sim `test_params.yaml` | Session spec（§4.2） | V0.2 | reference | |
-| 分层架构（HMI / 协同 / 高层控制 / 底层 / 模拟器 / 通信） | XTDrone 论文图 | 系统架构说明书 | V0.1 文档 | reference | ✔ |
+| 分层架构（HMI / 协同 / 高层控制 / 底层 / 模拟器 / 通信） | XTDrone 论文图 | 系统架构说明书 | V0.1 文档 | reference | yes |
 | 规划器只对接通信节点（EGO remap 到 `cmd_pose_enu`） | XTDrone `run_in_xtdrone.launch` | Planner 适配器约定 | V0.6 | reference | |
-| 无 PX4 的运动学模式 | XTDrone `control_gazebo_vehicles.py` | 印证 MockBackend 定位（大规模只做可视化） | V0.1 | reference | ✔ |
+| 无 PX4 的运动学模式 | XTDrone `control_gazebo_vehicles.py` | 印证 MockBackend 定位（大规模只做可视化） | V0.1 | reference | yes |
 | ROS1 栈、PyQt 地面站、Docker 开发镜像 | XTDrone / px4_multi_drone_sim | — | — | skip | |
 
 ### 4.2 Simulation Orchestrator 设计（V0.2 / V0.6）
@@ -682,21 +682,21 @@ Gateway 每 1 s:  w = E.query(p_world_i, t).wind  (ENU, 风"去向")
 
 ```text
 ┌───────────────────────────── Simulation Service (FastAPI) ─────────────────────────────┐
-│  REST /api/sim/sessions ──► SessionManager ──► Planner(spec→plan: sysid/ns/spawn/ports)  │
+│  REST /api/sim/sessions ──> SessionManager ──> Planner(spec→plan: sysid/ns/spawn/ports)  │
 │                                   │                                                    │
-│                                   ▼                                                    │
+│                                   v                                                    │
 │                      Driver 接口 (provision/start/kill/restart/remove/stats/logs)        │
 │        ┌──────────────┬───────────────────┬────────────────────┬──────────────────┐     │
 │        │ MockDriver   │ DockerSihDriver   │ GazeboPodDriver    │ LocalProcDriver  │ K8s  │
 │        │ (V0.1 进程内)│ (V0.2 每机一容器) │ (V0.6 gz+N px4    │ (开发机 px4 -i i)│(V1.0)│
 │        │              │  px4io/px4-sitl   │  共享 netns)       │                  │      │
 │        └──────┬───────┴─────────┬─────────┴──────────┬─────────┴────────┬─────────┘     │
-│               └────── HealthMonitor (L0–L4) ◄── MAVLink/DDS 探针 ──────┘               │
+│               └────── HealthMonitor (L0–L4) <── MAVLink/DDS 探针 ──────┘               │
 │                        │ lifecycle events                                              │
-│                        ▼                                                               │
-│  EventBus ─► Gateway(SimBackend: Px4MavlinkBackend / MockBackend / PrometheusGS…)       │
-│          ─► WS /ws/sim (sim.session.*, sim.vehicle.*, sim.metrics)                      │
-│          ─► ANet Registry（READY 时注册能力，LOST 时撤销）                                │
+│                        v                                                               │
+│  EventBus ─> Gateway(SimBackend: Px4MavlinkBackend / MockBackend / PrometheusGS…)       │
+│          ─> WS /ws/sim (sim.session.*, sim.vehicle.*, sim.metrics)                      │
+│          ─> ANet Registry（READY 时注册能力，LOST 时撤销）                                │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -835,7 +835,7 @@ r19 定义的 `SimBackend` 接口是 `connect / send(DroneCommand) / states() / 
 
 | 维度 | PX4-Multiagent-Simulation | px4_multi_drone_sim | XTDrone | XTDrone2 |
 |---|---|---|---|---|
-| ★ / 活跃度 | 11 / **2026-02** | 26 / 2025-06 | **1725** / 2025-08（ROS1，事实上已停止演进） | 115 / 2025-08 |
+| stars / 活跃度 | 11 / **2026-02** | 26 / 2025-06 | **1725** / 2025-08（ROS1，事实上已停止演进） | 115 / 2025-08 |
 | 技术栈新旧 | 新（Humble + Harmonic + 1.15） | 新 | 旧（ROS1 + Classic，Classic 已 EOL） | **最新**（Jazzy + Harmonic） |
 | 多机编排质量 | 中（有端口 bug） | 中（有指令 bug） | 高（端口方案完整，但依赖改过的 rcS） | 低（多机指令无效） |
 | 传感器 | **强**（宏、多相机、PoseSensor） | 无 | **强**（52 模型，含 Livox 扫描模式） | 中 |

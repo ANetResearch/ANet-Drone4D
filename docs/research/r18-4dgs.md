@@ -3,7 +3,7 @@
 > 研究单元：r18 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §7（World Model / Dynamic Objects）、§8（世界的两种表达）、§18（E(x,y,z,t)）、§39（Timeline）、§41（World Package `visual/gaussian`）、§43（MVP 不做 3DGS）、§50–51
 > 仓库快照（shallow clone，只有 1 个 commit）：
 >
-> | 本地路径 | commit | 日期 | ★ |
+> | 本地路径 | commit | 日期 | stars |
 > |---|---|---|---|
 > | `refs/dynamic4d/4d-gaussian-splatting`（fudan-zvg，下称 **Fudan-4DGS**） | `63725f2` "Support prefilter in time dimension." | 2026-01-12 | 1038 |
 > | `refs/dynamic4d/Dynamic3DGaussians`（JonathonLuiten，下称 **D3DGS**） | `7dbbd4d` | 2023-12-22 | 2299 |
@@ -18,9 +18,9 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **Fudan-4DGS** | 原生 4D 高斯（xyzt 联合协方差），时间连续，切片可以写成闭式解。2026 年仍在更新（时间维 prefilter） | **port**：把 4D→3D 切片核移植成 TSL/WGSL 计算前处理，并移植"时间窗不透明度 + 时间预滤波"。训练代码在 GPU Worker 里原样隔离运行 | MVP 只移植时间窗算法（V0.2 回放）；训练与渲染放 V1.0+ | ★★★★ |
-| **HexPlane-4DGS** | 规范空间 3DGS + HexPlane(6 平面) + MLP 形变场。star 最多，但 2024-10 起冻结 | **reference**：训练改用 gsplat 2026 的 `gsplat.contrib.dynamic`（同一架构，Apache-2.0，现代 torch）。参考它的逐帧导出脚本，以及用 HexPlane 因子化压缩 E(x,y,z,t) 的思路 | V1.0+（训练）；V0.4+（场压缩，可选） | ★★★ |
-| **D3DGS** | 固定数量高斯，逐时间步在线优化，带物理先验（局部刚体、等距），同时输出稠密 6-DoF 轨迹 | **reference**：参考固定槽位加逐帧属性数组的回放结构、恒速外推初始化、逐相机曝光补偿、刚体正则。**不跑训练** | 回放结构用于 MVP V0.2；正则项用于 V1.0+ | ★★ |
+| **Fudan-4DGS** | 原生 4D 高斯（xyzt 联合协方差），时间连续，切片可以写成闭式解。2026 年仍在更新（时间维 prefilter） | **port**：把 4D→3D 切片核移植成 TSL/WGSL 计算前处理，并移植"时间窗不透明度 + 时间预滤波"。训练代码在 GPU Worker 里原样隔离运行 | MVP 只移植时间窗算法（V0.2 回放）；训练与渲染放 V1.0+ | 4/5 |
+| **HexPlane-4DGS** | 规范空间 3DGS + HexPlane(6 平面) + MLP 形变场。star 最多，但 2024-10 起冻结 | **reference**：训练改用 gsplat 2026 的 `gsplat.contrib.dynamic`（同一架构，Apache-2.0，现代 torch）。参考它的逐帧导出脚本，以及用 HexPlane 因子化压缩 E(x,y,z,t) 的思路 | V1.0+（训练）；V0.4+（场压缩，可选） | 3/5 |
+| **D3DGS** | 固定数量高斯，逐时间步在线优化，带物理先验（局部刚体、等距），同时输出稠密 6-DoF 轨迹 | **reference**：参考固定槽位加逐帧属性数组的回放结构、恒速外推初始化、逐相机曝光补偿、刚体正则。**不跑训练** | 回放结构用于 MVP V0.2；正则项用于 V1.0+ | 2/5 |
 
 **关键结论：**
 
@@ -45,10 +45,10 @@
    - L3（V1.0+）：先做"静态 3DGS + 刚体目标高斯"，最后再上 4DGS 片段。
    - **物理权威始终是 Geometry World(t)**，4DGS 只属于 Visual World。
 5. **2026 年要关注的补充（未 clone，只用 GitHub API 查了 star 和 pushed_at）：**
-   - `zju3dv/street_gaussians`（★1404，2026-09-15 仍有推送）：静态背景加刚体车辆分解，正好对应 L3 前半段。
-   - `ziyc/drivestudio`（OmniRe，★1263）。
-   - `adamraudonis/splats4D`（★58，2026-07，MIT）：一种可流式的 4D splat 格式，由静态段和 GOP 关键帧/差分组成，支持 HTTP Range，带 WebGPU/WebGL2 查看器。
-   - `yangzf-1023/4C4D`（CVPR 2026，★159）：只用 4 台相机的稀疏 4DGS，可对应多机同步采集。
+   - `zju3dv/street_gaussians`（1404 stars，2026-09-15 仍有推送）：静态背景加刚体车辆分解，正好对应 L3 前半段。
+   - `ziyc/drivestudio`（OmniRe，1263 stars）。
+   - `adamraudonis/splats4D`（58 stars，2026-07，MIT）：一种可流式的 4D splat 格式，由静态段和 GOP 关键帧/差分组成，支持 HTTP Range，带 WebGPU/WebGL2 查看器。
+   - `yangzf-1023/4C4D`（CVPR 2026，159 stars）：只用 4 台相机的稀疏 4DGS，可对应多机同步采集。
    - 建议在 `02-refs.md` 的 §6 补上这几项。
 
 ---

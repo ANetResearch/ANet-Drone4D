@@ -2,7 +2,7 @@
 
 > 研究单元：r02 ｜ 日期：2026-09-28 ｜ 关联笔记：[r01 LingBot-Map + viser](./r01-lingbot-map-viser.md)（本文与 r01 的坐标约定、产物目录保持一致，只补充 r01 未覆盖的部分）
 >
-> 本地仓库：`refs/recon/vggt`（★14435，最后提交 2026-05-18）、`refs/recon/colmap`（★12828，最后提交 2026-09-27，main = 4.3.0.dev0，最新发布 4.2.0 / 2026-08-31）。`cvg/glomap` 已并入 COLMAP，全局 SfM 代码在 `src/colmap/sfm/global_mapper.*`、`src/colmap/estimators/{rotation_averaging,global_positioning}.*`。
+> 本地仓库：`refs/recon/vggt`（14435 stars，最后提交 2026-05-18）、`refs/recon/colmap`（12828 stars，最后提交 2026-09-27，main = 4.3.0.dev0，最新发布 4.2.0 / 2026-08-31）。`cvg/glomap` 已并入 COLMAP，全局 SfM 代码在 `src/colmap/sfm/global_mapper.*`、`src/colmap/estimators/{rotation_averaging,global_positioning}.*`。
 >
 > 本机验证：在隔离 venv（`.cache/research/r02-venv`，pycolmap 4.2.0 CPU wheel，8 核、无 GPU）跑了 4 个脚本：`r02_validate.py`、`r02_glomap_cpu.py`、`r02_prior.py`、`r02_collinear.py`。结果见各节和附录。
 
@@ -12,8 +12,8 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **colmap/colmap** 4.2.0（GLOMAP 已内置） | SfM/MVS 的工业基准。本项目用它的 Rig/Frame 多传感器数据模型、全局 SfM（`global_mapper`）、带位置先验的增量 SfM（`pose_prior_mapper`）、Sim3/GPS 地理配准和模型比对 | **adopt**：pycolmap 4.2.0 CPU wheel 作为离线依赖，`pip` 即可装。**port**：GPS/ENU 公式、Umeyama、官方 TS 二进制解析器（`doc/viewer_src`） | V0.1：数据规范、COLMAP 模型导入。V0.5：度量基准、地理配准、重建 QA | ★★★★★ |
-| **facebookresearch/vggt** | 前馈多视几何。一次前向同时输出相机、深度、点图和轨迹。LingBot-Map 的 heads 和 `pose_enc` 都从它继承 | **port**：`pose_enc`/几何工具、518 预处理坐标映射、COLMAP 导出、sky mask。**模型本身**在 V0.5 作为第二引擎可选 adopt（关键帧批量重建、交叉校验、给 3DGS 做初始化） | V0.1：接口规范。V0.5：批量引擎与 QA | ★★★★ |
+| **colmap/colmap** 4.2.0（GLOMAP 已内置） | SfM/MVS 的工业基准。本项目用它的 Rig/Frame 多传感器数据模型、全局 SfM（`global_mapper`）、带位置先验的增量 SfM（`pose_prior_mapper`）、Sim3/GPS 地理配准和模型比对 | **adopt**：pycolmap 4.2.0 CPU wheel 作为离线依赖，`pip` 即可装。**port**：GPS/ENU 公式、Umeyama、官方 TS 二进制解析器（`doc/viewer_src`） | V0.1：数据规范、COLMAP 模型导入。V0.5：度量基准、地理配准、重建 QA | 5/5 |
+| **facebookresearch/vggt** | 前馈多视几何。一次前向同时输出相机、深度、点图和轨迹。LingBot-Map 的 heads 和 `pose_enc` 都从它继承 | **port**：`pose_enc`/几何工具、518 预处理坐标映射、COLMAP 导出、sky mask。**模型本身**在 V0.5 作为第二引擎可选 adopt（关键帧批量重建、交叉校验、给 3DGS 做初始化） | V0.1：接口规范。V0.5：批量引擎与 QA | 4/5 |
 
 **关键结论**
 
@@ -30,11 +30,11 @@
    
    对策：自己用固定的 World 原点把 WGS84 转成 ENU，再以 Cartesian 方式（`ref_is_gps=0`）对齐。
 8. **VGGT 的 518 预处理是非等比缩放。** 例如 1920×1080 会变成 518×294（高度按 14 的倍数取整），x/y 两个方向的缩放差 0.9%。还原到原图内参时必须分轴处理，还要统一像素中心约定（COLMAP 取 +0.5）。
-9. **VGGT 的 conf 激活是 `1+exp(x)`，所以 `1 − 1/conf = sigmoid(x)` 严格成立。** 置信度因此可以无损映射到 [0,1] 并量化为 u8，VGGT 和 LingBot 的阈值语义也能统一：`conf≥5` ⇔ 0.8，`conf≥1.5` ⇔ 0.333。
+9. **VGGT 的 conf 激活是 `1+exp(x)`，所以 `1 − 1/conf = sigmoid(x)` 严格成立。** 置信度因此可以无损映射到 [0,1] 并量化为 u8，VGGT 和 LingBot 的阈值语义也能统一：`conf≥5` <=> 0.8，`conf≥1.5` <=> 0.333。
 10. **对 MVP 直接有用的部分：**
     - ① 坐标与投影约定：K → three.js 投影矩阵、OpenCV → three 相机、ENU → Y-up。
     - ② COLMAP 官方 TS 查看器（three 0.185）：Worker 加 Transferable 的二进制解析、1%–99% 鲁棒包围盒、视锥几何。
-    - ③ WGS84 ↔ ENU 精确公式，用于遥测经纬度显示和 Mock 地理原点。
+    - ③ WGS84 <-> ENU 精确公式，用于遥测经纬度显示和 Mock 地理原点。
     - ④ 置信度 u8、直方图百分位阈值，以及节点内预洗牌的前缀子采样（调疏密时不用重传数据）。
 
 ---
@@ -407,7 +407,7 @@ def georef(C_eng, frames, rtk, imu, origin, p):
 
 分块策略（与 r01 §3.7 一致）：VGGT 的每个块、LingBot 的每个窗口单独估计 Sim3，再对 `s_k` 做平滑，并检查相邻块在重叠帧上的位姿一致性。
 
-### 3.6 WGS84 ↔ ECEF ↔ ENU（移植 `geometry/gps.cc`，Python 和 TS 共用同一套公式）
+### 3.6 WGS84 <-> ECEF <-> ENU（移植 `geometry/gps.cc`，Python 和 TS 共用同一套公式）
 
 ```ts
 // apps/web/src/core/geo.ts（Python 版在 world/georef/geo.py 中逐行对应）
@@ -538,7 +538,7 @@ world/georef/geo.py ── 与 apps/web/src/core/geo.ts 共用测试向量（JSO
 
 | 维度 | LingBot-Map（r01） | VGGT | COLMAP global（GLOMAP） | COLMAP pose-prior（增量） |
 |---|---|---|---|---|
-| Star / 活跃度 | ★17k / 2026-09 | ★14.4k / 2026-05（后继 Omega） | ★12.8k / 2026-09 | 同左 |
+| Star / 活跃度 | 17k stars / 2026-09 | 14.4k stars / 2026-05（后继 Omega） | 12.8k stars / 2026-09 | 同左 |
 | 输入 | 长视频，流式 | 1 到数百帧，批量 | 无序图像或视频帧 | 图像 + 位置先验 |
 | 输出 | 位姿、深度、点（稠密） | 位姿、深度、点图、tracks（稠密） | 稀疏点、位姿 | 稀疏点、位姿 |
 | 尺度 / 地理 | 相对尺度 | 相对尺度 | 任意规范系，需要 aligner | **直接得到度量 ENU**（原点为首条先验） |

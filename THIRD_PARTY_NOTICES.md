@@ -48,23 +48,24 @@ derive from the Prometheus mesh.
 | Wind profile f(z_agl) | `python/awr/environment/wind/profile.py`, `apps/web/src/engine/environment/wind/profile.ts`, `tools/contracts/env_ref.py` | [firelab/windninja](https://github.com/firelab/windninja) `windProfile.cpp` | Public domain (work of the US Government, 17 U.S.C. 105); see the original repository | Profile formula |
 | Multicopter control cascade and parameter defaults | `python/awr/sim/fleet/px4lite.py`, `python/awr/sim/fleet/kernels_l1.py`, `python/awr/sim/fleet/params_px4.py` | [PX4/PX4-Autopilot](https://github.com/PX4/PX4-Autopilot) v1.18 | BSD-3-Clause, Copyright (c) 2012 - 2025, PX4 Development Team | Position and attitude control structure, reimplemented in numpy; default parameter values |
 | P600 ground-station semantics and airframe geometry | `python/awr/sim/backends/prometheus/`, `vehicles/p600/params.yaml` | [amov-lab/Prometheus](https://github.com/amov-lab/Prometheus) | Apache-2.0 | Control-state enumeration and send guards; rotor positions from `p600.sdf` |
-| Chart visual language | `apps/web/src/ui/lf/`, `apps/web/src/styles/lf.css`, `tools/lint/lint-lf.mjs` (rule LF-CHART-01) | [larashero3-dotcom/lieflat-charts](https://github.com/larashero3-dotcom/lieflat-charts) at `eace082` | PolyForm Noncommercial 1.0.0 | See the note below |
+| Chart visual language | `apps/web/src/ui/lf/`, `apps/web/src/styles/lf.css` | [larashero3-dotcom/lieflat-charts](https://github.com/larashero3-dotcom/lieflat-charts) at `eace082` | PolyForm Noncommercial 1.0.0 | The visual language only, no code; see the note below |
 | Agent collaboration: TSIR predicates, blackboard, capability registry, receipts | `python/awr/agent/` | [ANetResearch/ANet](https://github.com/ANetResearch/ANet), ANetCore v0.14.0 | Published by Agent Network Research, the producer of ANet-Drone4D | Ported to Python; part of ANet-Drone4D under [LICENSE](LICENSE) |
 
-**lieflat-charts.** The chart components in `apps/web/src/ui/lf/` are a React and TypeScript reimplementation of the
-lieflat visual language (hairline marks, rung bars, tick gauges, log-style tables, a streaming canvas line); no
-lieflat-charts file is included in this repository. Two small parts follow lieflat closely: the deterministic jitter
-expression in `apps/web/src/ui/lf/rnd.ts`, which is the same one-line spatial hash as lieflat's `rnd(i, k)` (built on
-the hashing primes of Teschner et al., 2003), and the three LF-CHART-01 checks in `tools/lint/lint-lf.mjs`, modeled on
-lieflat's `scripts/validate.mjs`. lieflat-charts itself is licensed for non-commercial purposes only, under the
-PolyForm Noncommercial License 1.0.0 (https://polyformproject.org/licenses/noncommercial/1.0.0). Anyone who wants to
-remove every lieflat-derived expression before a commercial deployment can replace these two parts; both are small and
-self-contained.
+**lieflat-charts.** The chart components in `apps/web/src/ui/lf/` are an independent React and TypeScript implementation
+of the lieflat visual language (hairline marks, rung bars, tick gauges, log-style tables, a streaming canvas line); what
+follows lieflat is the look of the figures, not code. No lieflat-charts file, expression or check is included in this
+repository. The two parts that used to follow lieflat closely were rewritten as original work in 2026-10 (P4-UI,
+ADR-072 in `docs/03-设计基线与决策记录.md`): the deterministic jitter in `apps/web/src/ui/lf/rnd.ts` is now a golden-ratio
+Weyl step followed by the MurmurHash3 32-bit finaliser (public domain), and the LF-CHART-01 checks are an AST rule set in
+`tools/lint/lf-chart.mjs` (entropy sources, subtree rebuilds and constant element ids) written from AWR-15 §12 and
+AWR-18 §13.1 on oxc-parser. lieflat-charts itself is licensed for non-commercial purposes only, under the PolyForm
+Noncommercial License 1.0.0 (https://polyformproject.org/licenses/noncommercial/1.0.0); its repository is studied as a
+design reference (`docs/research/d01-lieflat-charts.md`) and is not a dependency.
 
 **Published methods** used without third-party code, credited here: eye-dome lighting (Boucheny, 2009); the Dryden
-turbulence model (MIL-F-8785C); the PCG hash for GPU particles (Jarzynski and Olano, 2020); spatial hashing primes
-(Teschner et al., 2003); colour vision deficiency simulation (Machado, Oliveira and Fernandes, 2009); the OKLab colour
-space (Ottosson, 2020); WCAG 2.x contrast ratios; CAPT concurrent assignment and planning of trajectories (Turpin,
+turbulence model (MIL-F-8785C); the PCG hash for GPU particles (Jarzynski and Olano, 2020); the MurmurHash3 32-bit
+finaliser (Appleby, public domain); colour vision deficiency simulation (Machado, Oliveira and Fernandes, 2009); the
+OKLab colour space (Ottosson, 2020); WCAG 2.x contrast ratios; CAPT concurrent assignment and planning of trajectories (Turpin,
 Michael and Kumar, 2014).
 
 The design research behind ANet-Drone4D studied many more projects (`docs/02-refs.md`, `docs/research/00-index.md`).

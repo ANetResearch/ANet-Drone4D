@@ -93,41 +93,41 @@
 
 ## 3. 功能兼容矩阵（功能 × 后端）
 
-数值为 RT 回读结果（128×128；8 位线性 RT）。标记：✔ = 与参考一致；△ = 可用，但需要本文给出的写法；✘ = 不可用。
+数值为 RT 回读结果（128×128；8 位线性 RT）。标记：yes = 与参考一致；partial = 可用，但需要本文给出的写法；no = 不可用。
 
 | 功能 | classic + AnetNodesHandler | WebGPURenderer / WebGL2 | WebGPURenderer / WebGPU | 备注 |
 |---|---|---|---|---|
-| `Points` + `PointsNodeMaterial`（1 px） | ✔ 400 | ✔ 400 | ✔ 400 | |
-| TSL 中写 `builtin('gl_PointSize')`（未修复） | ✘ 400（被模板覆盖） | △ 6400（依赖全局原型补丁） | ✘（WGSL 没有点径） | |
-| 点径修复 | △ 6400，`GLPointsNodeMaterial`（公开 API） | △ 6400，`patchGLPointSize`（私有 API） | — | |
-| 逐对象点径（`onObjectUpdate` + `gl_PointSize`） | ✔ 960 / 3040 | ✔ 960 / 3040 | — | 预期 800 / 3200（加上跨行溢出，总和 4000 与预期一致） |
-| GLSL `ShaderMaterial` 点 | ✔ 6400 | ✘ "not compatible" | ✘ | |
-| 实例化四边形精灵（`Mesh(InstancedBufferGeometry)` + `PointsNodeMaterial.sizeNode`） | ✔ 6400 | ✔ 6400 | ✔ 6400 | |
-| **`vertexIndex` 无属性扁平四边形**（`drawRange = 6N`） | ✔ 6400 | ✔ 6400 | ✔ 6400 | 三端都会有一次 "position not found" 警告，无害 |
-| `scene.fog`（Fog） | ✔ 红 | ✔ | ✔ | |
-| **`scene.fogNode = fog(color, Fn)`** | △ 红（需要 AnetNodesHandler；stock 为白） | ✔ 红 | ✔ 红 | |
-| 材质内自定义 Fn 雾（`mix(c, fogColor, factor(positionWorld))`） | ✔ 红 | ✔ | ✔ | 点材质推荐用这种写法 |
-| **`onObjectUpdate` uniform + 共享材质** | ✔ 64/128/191/255 | ✔ 相同 | ✔ 相同 | stock handler 输出为 137/188/225（在 RT 中被 sRGB 编码） |
-| `onRenderUpdate` / `onFrameUpdate` | ✔（首帧 render 回调多 1 次） | ✔ | ✔ | 回调要写成幂等 |
-| 两个 `InstancedMesh` 共享一个 NodeMaterial | ✘ 400 / **0** | ✔ 400 / 400 | ✔ | 经典路径：每个 InstancedMesh 一个材质 |
-| 两个 `InstancedMesh` 各用各的材质 | ✔ 400 / 400 | ✔ | ✔ | |
-| 深度纹理 + `perspectiveDepthToViewZ`（线性深度 40 m / 80 m） | ✔ 102 / 204 | ✔ 102 / 204 | ✔ 102 / 204 | |
-| 同上，**reversed-Z** | ✔ 102 / 204（需设 `r.reversedDepthBuffer`） | ✔ | ✔ | |
-| **EDL：全屏四边形 TSL**（8 邻域，r=1.5） | ✔ 暗像素 340 | ✔ 340 | ✔ 340 | 所有中心像素和角落像素都是 153，也就是无重复编码 |
-| **半分辨率 `Loop(32)` 光线步进云 + 按深度合成** | ✔ 着色像素 1478，近处遮挡的中心不着色 | ✔ 1478 | ✔ 1478 | |
-| RT（线性）与上屏（sRGB）区分 | ✔ 128 / 188 | ✔ RT 128 | ✔ RT 128 | |
-| direct 输出（contextNode `getOutput`） | — | ✔ 上屏 188 / RT 128 / 再上屏 188 | ✔ RT 128；上屏无法回读，节点路径与 WebGL2 后端相同 | 渲染对象按 RenderContext 分开缓存，RT 与屏幕不会串用 |
-| alpha 图层掩码（`transparent + NoBlending + opacityNode`） | ✔ α=255 / 128 | ✔ | ✔ | 不透明材质的 `opacityNode` 会被忽略（α 恒为 255） |
-| **全屏四边形 `depthNode` 写深度**，之后的图层做深度测试 | ✔ | ✔ | ✔ | EDL 方法①的依据 |
-| `MeshStandardNodeMaterial` + 平行光与环境光 | ✔ | ✔（数值与经典路径完全相同） | ✔ | WebGPU 的差异来自回读行序 |
-| `texture3D`（Data3DTexture） | ✔ 200/100/50 | ✔ | ✔ | 可用于风场或噪声体 |
-| `LineBasicNodeMaterial` | ✔ 108 | ✔ | ✔ | |
-| **`Line2NodeMaterial` 粗线**（`three/addons/lines/webgpu/Line2.js`） | ✔ 1004 | ✔ 1004 | ✔ 1004 | 轨迹可以用 TSL 单源粗线，替代 drei `Line` |
-| 整数纹理 `textureLoad` + `Loop` 二分查找 + `int` 运算（G2 PointPool） | ✔ 185071（**uniform 必须是 float**） | ✔ 185071 | ✔ 84277（1 px；**不要设 `internalFormat`**） | 见 §4.5 |
-| `RenderPipeline` + `pass()` | ✘ | ✔ | ✔ | |
-| compute、`instancedArray`、storage | ✘ | △ Transform Feedback 模拟（r11） | ✔ | |
+| `Points` + `PointsNodeMaterial`（1 px） | yes 400 | yes 400 | yes 400 | |
+| TSL 中写 `builtin('gl_PointSize')`（未修复） | no 400（被模板覆盖） | partial 6400（依赖全局原型补丁） | no（WGSL 没有点径） | |
+| 点径修复 | partial 6400，`GLPointsNodeMaterial`（公开 API） | partial 6400，`patchGLPointSize`（私有 API） | — | |
+| 逐对象点径（`onObjectUpdate` + `gl_PointSize`） | yes 960 / 3040 | yes 960 / 3040 | — | 预期 800 / 3200（加上跨行溢出，总和 4000 与预期一致） |
+| GLSL `ShaderMaterial` 点 | yes 6400 | no "not compatible" | no | |
+| 实例化四边形精灵（`Mesh(InstancedBufferGeometry)` + `PointsNodeMaterial.sizeNode`） | yes 6400 | yes 6400 | yes 6400 | |
+| **`vertexIndex` 无属性扁平四边形**（`drawRange = 6N`） | yes 6400 | yes 6400 | yes 6400 | 三端都会有一次 "position not found" 警告，无害 |
+| `scene.fog`（Fog） | yes 红 | yes | yes | |
+| **`scene.fogNode = fog(color, Fn)`** | partial 红（需要 AnetNodesHandler；stock 为白） | yes 红 | yes 红 | |
+| 材质内自定义 Fn 雾（`mix(c, fogColor, factor(positionWorld))`） | yes 红 | yes | yes | 点材质推荐用这种写法 |
+| **`onObjectUpdate` uniform + 共享材质** | yes 64/128/191/255 | yes 相同 | yes 相同 | stock handler 输出为 137/188/225（在 RT 中被 sRGB 编码） |
+| `onRenderUpdate` / `onFrameUpdate` | yes（首帧 render 回调多 1 次） | yes | yes | 回调要写成幂等 |
+| 两个 `InstancedMesh` 共享一个 NodeMaterial | no 400 / **0** | yes 400 / 400 | yes | 经典路径：每个 InstancedMesh 一个材质 |
+| 两个 `InstancedMesh` 各用各的材质 | yes 400 / 400 | yes | yes | |
+| 深度纹理 + `perspectiveDepthToViewZ`（线性深度 40 m / 80 m） | yes 102 / 204 | yes 102 / 204 | yes 102 / 204 | |
+| 同上，**reversed-Z** | yes 102 / 204（需设 `r.reversedDepthBuffer`） | yes | yes | |
+| **EDL：全屏四边形 TSL**（8 邻域，r=1.5） | yes 暗像素 340 | yes 340 | yes 340 | 所有中心像素和角落像素都是 153，也就是无重复编码 |
+| **半分辨率 `Loop(32)` 光线步进云 + 按深度合成** | yes 着色像素 1478，近处遮挡的中心不着色 | yes 1478 | yes 1478 | |
+| RT（线性）与上屏（sRGB）区分 | yes 128 / 188 | yes RT 128 | yes RT 128 | |
+| direct 输出（contextNode `getOutput`） | — | yes 上屏 188 / RT 128 / 再上屏 188 | yes RT 128；上屏无法回读，节点路径与 WebGL2 后端相同 | 渲染对象按 RenderContext 分开缓存，RT 与屏幕不会串用 |
+| alpha 图层掩码（`transparent + NoBlending + opacityNode`） | yes α=255 / 128 | yes | yes | 不透明材质的 `opacityNode` 会被忽略（α 恒为 255） |
+| **全屏四边形 `depthNode` 写深度**，之后的图层做深度测试 | yes | yes | yes | EDL 方法①的依据 |
+| `MeshStandardNodeMaterial` + 平行光与环境光 | yes | yes（数值与经典路径完全相同） | yes | WebGPU 的差异来自回读行序 |
+| `texture3D`（Data3DTexture） | yes 200/100/50 | yes | yes | 可用于风场或噪声体 |
+| `LineBasicNodeMaterial` | yes 108 | yes | yes | |
+| **`Line2NodeMaterial` 粗线**（`three/addons/lines/webgpu/Line2.js`） | yes 1004 | yes 1004 | yes 1004 | 轨迹可以用 TSL 单源粗线，替代 drei `Line` |
+| 整数纹理 `textureLoad` + `Loop` 二分查找 + `int` 运算（G2 PointPool） | yes 185071（**uniform 必须是 float**） | yes 185071 | yes 84277（1 px；**不要设 `internalFormat`**） | 见 §4.5 |
+| `RenderPipeline` + `pass()` | no | yes | yes | |
+| compute、`instancedArray`、storage | no | partial Transform Feedback 模拟（r11） | yes | |
 | RT 回读行序 | 自下而上 | 自下而上 | **自上而下** | 在 RenderBackend 中统一 |
-| `material.onBeforeRender` | ✘ 被覆盖 | ✘ 未调用 | ✘ 未调用 | 三端都不能依赖它，改用 `object.onBeforeRender` 或节点更新回调 |
+| `material.onBeforeRender` | no 被覆盖 | no 未调用 | no 未调用 | 三端都不能依赖它，改用 `object.onBeforeRender` 或节点更新回调 |
 
 ---
 
@@ -215,22 +215,22 @@
 
 ## 5. R3F 9.8.1 + drei 10.7.9 组合实测
 
-`gl` 工厂写法见 §6.4。表中"✔"表示 RT 覆盖或截图可见，且无错误。readback 看不到的叠加层（Gizmo、Hud）以截图为准；WebGPU 后端无法截图，这类组件只能以"无报错"为判据。
+`gl` 工厂写法见 §6.4。表中"yes"表示 RT 覆盖或截图可见，且无错误。readback 看不到的叠加层（Gizmo、Hud）以截图为准；WebGPU 后端无法截图，这类组件只能以"无报错"为判据。
 
 | drei 组件 | classic + handler（与 TSL 材质同场景） | WebGPURenderer / WebGL2 | WebGPURenderer / WebGPU |
 |---|---|---|---|
-| CameraControls、OrbitControls | ✔ | ✔ | ✔ |
-| **GizmoHelper** + GizmoViewport | ✔（截图可见） | ✘ `capabilities.getMaxAnisotropy` 未定义，**整个 Canvas 崩溃** | ✘ 同左 |
-| Html | ✔（**需要 async 工厂**；同步工厂下 300 帧仍为 0 个 DOM 节点） | ✔ | ✔ |
-| Line、Segments（Line2/LineMaterial） | ✔ | ✘ 不渲染 | ✘ `drawIndexed` 非有限值，**整帧失效** |
-| Edges | ✔ | ✘ 只画出盒子本体，不画边线（LineMaterial 不兼容） | ✘ 整帧失效 |
-| Text（troika） | ✔ | ✘ 渲染成红色块 | ✘ 同左 |
-| Grid、Sky、Stars、Sparkles | ✔ | ✘ "ShaderMaterial is not compatible" | ✘ |
-| Outlines | △ 无报错，但截图中看不到描边（未深究，本项目不用） | ✘ "ShaderMaterial is not compatible" | ✘ |
-| PointMaterial（`onBeforeCompile`） | ✔ 6 px | ✘ 退化为 1 px | ✘ |
-| Instances、Detailed、Bvh（点击命中）、AdaptiveDpr、AdaptiveEvents、PerformanceMonitor、Billboard、Bounds、Hud | ✔ | ✔ | ✔ |
-| JSX 中的 `meshStandardNodeMaterial`（`extend`） | ✔ | ✔ | ✔ |
-| R3F 事件（合成点击 → `onClick`） | ✔ 1 次 | ✔ | ✔ |
+| CameraControls、OrbitControls | yes | yes | yes |
+| **GizmoHelper** + GizmoViewport | yes（截图可见） | no `capabilities.getMaxAnisotropy` 未定义，**整个 Canvas 崩溃** | no 同左 |
+| Html | yes（**需要 async 工厂**；同步工厂下 300 帧仍为 0 个 DOM 节点） | yes | yes |
+| Line、Segments（Line2/LineMaterial） | yes | no 不渲染 | no `drawIndexed` 非有限值，**整帧失效** |
+| Edges | yes | no 只画出盒子本体，不画边线（LineMaterial 不兼容） | no 整帧失效 |
+| Text（troika） | yes | no 渲染成红色块 | no 同左 |
+| Grid、Sky、Stars、Sparkles | yes | no "ShaderMaterial is not compatible" | no |
+| Outlines | partial 无报错，但截图中看不到描边（未深究，本项目不用） | no "ShaderMaterial is not compatible" | no |
+| PointMaterial（`onBeforeCompile`） | yes 6 px | no 退化为 1 px | no |
+| Instances、Detailed、Bvh（点击命中）、AdaptiveDpr、AdaptiveEvents、PerformanceMonitor、Billboard、Bounds、Hud | yes | yes | yes |
+| JSX 中的 `meshStandardNodeMaterial`（`extend`） | yes | yes | yes |
+| R3F 事件（合成点击 → `onClick`） | yes 1 次 | yes | yes |
 
 其他现象：
 - React 19.3 加 drei `Html` 在三个后端都会打印 "Attempted to synchronously unmount a root while React was already rendering"，不影响功能。
@@ -384,16 +384,16 @@ Tier B / A：
 
 | 图层 | 共享 TSL 源 | 后端差异 | 已验证项 |
 |---|---|---|---|
-| 点云（G2 PointPool + DrawTable） | ✔ fetch、Lite 点径、着色、雾 | 点径策略（glpoint / pixel / quad）；Tier A 在 V0.3+ 可把 fetch 换成 storage 实现 | 4.5、T3、T3b |
-| EDL | ✔ 全屏四边形 | Tier S 关闭 | T10、T11d |
-| 雨、雪、沙尘（Low/Med） | ✔ `vertexIndex` 无状态扁平四边形 | High 档的 compute 版只在 Tier A | T6，bench 中的雨 |
-| 雾 | ✔ `scene.fogNode = fog(color, heightFogFactor)`，点材质中调用同一个 Fn | 无（经典路径依赖 AnetNodesHandler 的修复 2） | T7 |
-| 体积云 | ✔ 光线步进四边形 + 合成四边形；噪声体用 CPU 生成的 `Data3DTexture` | compute 写 Storage3DTexture 只在 Tier A | T10 云、T13 |
-| 天空 | ✔ 渐变 Fn（或 `SkyMesh`，TSL 实现，但 handler 下尚未实测） | 无 | bench 天空 |
-| 无人机 | ✔ `InstancedMesh` + `MeshStandardNodeMaterial` | 经典路径每个 InstancedMesh 一个材质（3 个 LOD 档本来就各有几何体） | T9、T12 |
-| 轨迹 | ✔ `Line2NodeMaterial`（粗线）或 `LineBasicNodeMaterial` | 无 | T14、T11e |
+| 点云（G2 PointPool + DrawTable） | yes fetch、Lite 点径、着色、雾 | 点径策略（glpoint / pixel / quad）；Tier A 在 V0.3+ 可把 fetch 换成 storage 实现 | 4.5、T3、T3b |
+| EDL | yes 全屏四边形 | Tier S 关闭 | T10、T11d |
+| 雨、雪、沙尘（Low/Med） | yes `vertexIndex` 无状态扁平四边形 | High 档的 compute 版只在 Tier A | T6，bench 中的雨 |
+| 雾 | yes `scene.fogNode = fog(color, heightFogFactor)`，点材质中调用同一个 Fn | 无（经典路径依赖 AnetNodesHandler 的修复 2） | T7 |
+| 体积云 | yes 光线步进四边形 + 合成四边形；噪声体用 CPU 生成的 `Data3DTexture` | compute 写 Storage3DTexture 只在 Tier A | T10 云、T13 |
+| 天空 | yes 渐变 Fn（或 `SkyMesh`，TSL 实现，但 handler 下尚未实测） | 无 | bench 天空 |
+| 无人机 | yes `InstancedMesh` + `MeshStandardNodeMaterial` | 经典路径每个 InstancedMesh 一个材质（3 个 LOD 档本来就各有几何体） | T9、T12 |
+| 轨迹 | yes `Line2NodeMaterial`（粗线）或 `LineBasicNodeMaterial` | 无 | T14、T11e |
 | 标签、视角 gizmo | DOM/SVG | 无 | — |
-| 拾取 | ✔ ID pass | 回读 API 与行序由 RenderBackend 统一 | T11f |
+| 拾取 | yes ID pass | 回读 API 与行序由 RenderBackend 统一 | T11f |
 
 每节点、每对象参数的写法：
 - 点云节点的 spacing 与 level：从 DrawTable 或节点表纹理读取，或 `length(modelWorldMatrix[0].xyz)·k`。

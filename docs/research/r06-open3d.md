@@ -11,16 +11,16 @@
 
 | 仓库 / 子模块 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **isl-org/Open3D**（★14005，最后提交 2026-09-16，v0.20.0，MIT） | C++17 + Python 的 3D 数据处理库：点云预处理、配准、TSDF、网格、光线投射、最近邻/哈希 | **adopt**（Python 直接依赖，pin `open3d==0.20.0`） | V0.1 起 | ★★★★★ |
-| ├ `t.geometry.RaycastingScene`（Embree 4） | 光线求交 / 距离 / 有符号距离 / 占据 / 视线 | **adopt**：Geometry World 的查询内核、虚拟 LiDAR 与深度相机 | **V0.2（MVP 即可上）** | ★★★★★ |
-| ├ `t.geometry.PointCloud` 预处理 | 读写、裁剪、离群点剔除、法向、DBSCAN、平面分割、MLS 平滑、指标 | **adopt**：World Ingest 离线流水线 | V0.1 | ★★★★☆ |
-| ├ `t/pipelines/registration`（ICP 家族） + legacy RANSAC/FGR/GICP/NDT/PoseGraph | 配准与多段地图合并 | **adopt**（精配、QA）；全局配准用 legacy RANSAC | V0.5 | ★★★★☆ |
-| ├ `t.geometry.VoxelBlockGrid`（稀疏 TSDF） | 体素融合、网格 / 点提取、体渲染 | **adopt**（V0.5 网格化 / 自定义属性融合）；MVP 不用 | V0.5 | ★★★☆☆ |
-| ├ 表面重建（Poisson / BPA / Flying Edges / 二次简化） | 点云 → 网格（碰撞 / Gazebo 世界） | **adopt**（离线） | V0.5 | ★★★☆☆ |
-| ├ `core.HashSet / HashMap`、`core.nns` | 体素键哈希、KNN / 半径 / 混合近邻 | **adopt**（占据查询、密度统计） | V0.2 | ★★★★☆ |
-| ├ legacy `geometry.Octree` / `VoxelGrid` | 指针式八叉树、稀疏体素 | **skip**（不适合 Web LOD：shared_ptr 节点 + 内部节点存全量索引） | — | ★☆☆☆☆ |
-| ├ `t.geometry.PointCloud.voxel_down_sample` 作 LOD | 均值体素降采样 | **reference**（LOD 建树改用排序式“每格取一点”，见 §3.3） | — | ★★☆☆☆ |
-| ├ Filament 渲染 / WebRTC visualizer / Gaussian Splat 渲染 | 桌面与远程可视化 | **skip**（前端自研 React + Three.js）；3DGS 的 PLY/SPLAT/SPZ IO 作 V1.0 转换工具 **reference** | V1.0 | ★★☆☆☆ |
+| **isl-org/Open3D**（14005 stars，最后提交 2026-09-16，v0.20.0，MIT） | C++17 + Python 的 3D 数据处理库：点云预处理、配准、TSDF、网格、光线投射、最近邻/哈希 | **adopt**（Python 直接依赖，pin `open3d==0.20.0`） | V0.1 起 | 5/5 |
+| ├ `t.geometry.RaycastingScene`（Embree 4） | 光线求交 / 距离 / 有符号距离 / 占据 / 视线 | **adopt**：Geometry World 的查询内核、虚拟 LiDAR 与深度相机 | **V0.2（MVP 即可上）** | 5/5 |
+| ├ `t.geometry.PointCloud` 预处理 | 读写、裁剪、离群点剔除、法向、DBSCAN、平面分割、MLS 平滑、指标 | **adopt**：World Ingest 离线流水线 | V0.1 | 4/5 |
+| ├ `t/pipelines/registration`（ICP 家族） + legacy RANSAC/FGR/GICP/NDT/PoseGraph | 配准与多段地图合并 | **adopt**（精配、QA）；全局配准用 legacy RANSAC | V0.5 | 4/5 |
+| ├ `t.geometry.VoxelBlockGrid`（稀疏 TSDF） | 体素融合、网格 / 点提取、体渲染 | **adopt**（V0.5 网格化 / 自定义属性融合）；MVP 不用 | V0.5 | 3/5 |
+| ├ 表面重建（Poisson / BPA / Flying Edges / 二次简化） | 点云 → 网格（碰撞 / Gazebo 世界） | **adopt**（离线） | V0.5 | 3/5 |
+| ├ `core.HashSet / HashMap`、`core.nns` | 体素键哈希、KNN / 半径 / 混合近邻 | **adopt**（占据查询、密度统计） | V0.2 | 4/5 |
+| ├ legacy `geometry.Octree` / `VoxelGrid` | 指针式八叉树、稀疏体素 | **skip**（不适合 Web LOD：shared_ptr 节点 + 内部节点存全量索引） | — | 1/5 |
+| ├ `t.geometry.PointCloud.voxel_down_sample` 作 LOD | 均值体素降采样 | **reference**（LOD 建树改用排序式“每格取一点”，见 §3.3） | — | 2/5 |
+| ├ Filament 渲染 / WebRTC visualizer / Gaussian Splat 渲染 | 桌面与远程可视化 | **skip**（前端自研 React + Three.js）；3DGS 的 PLY/SPLAT/SPZ IO 作 V1.0 转换工具 **reference** | V1.0 | 2/5 |
 
 一句话结论：
 
@@ -37,7 +37,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 仓库 | https://github.com/isl-org/Open3D ，★14005，最后提交 2026-09-16（v0.20.0 发布），MIT |
+| 仓库 | https://github.com/isl-org/Open3D ，14005 stars，最后提交 2026-09-16（v0.20.0 发布），MIT |
 | 语言 / 构建 | C++17 + pybind11；CMake（`CMakeLists.txt`，另支持 vcpkg `vcpkg.json`）；关键选项：`BUILD_CUDA_MODULE`、`BUILD_SYCL_MODULE`、`BUILD_GUI`、`BUILD_WEBRTC`、`WITH_IPP`、`BUILD_ISPC_MODULE` |
 | 关键第三方 | Eigen、**oneTBB**（0.20 起取代 OpenMP，PR #6626）、**Embree 4**（光线投射）、nanoflann（CPU KNN）、stdgpu / SlabHash（CUDA 哈希）、PoissonRecon、Qhull、VTK（Flying Edges 等值面、布尔运算）、UVAtlas、Filament（渲染）、IPP / NPP |
 | 两代 API | legacy：`open3d.geometry / io / pipelines`（Eigen、float64、仅 CPU）；**tensor**：`open3d.core / t.geometry / t.io / t.pipelines`（float32 默认，CPU / CUDA / SYCL）。0.20 官方方向是“tensor 优先”（wheel 自带 `open3d/agent_skills/open3d-python/SKILL.md` 明确写了这点） |
@@ -51,17 +51,17 @@
 
 | 目录 | 内容 | 与本项目相关度 |
 |---|---|---|
-| `cpp/open3d/t/geometry/RaycastingScene.{h,cpp}` | Embree 4 场景：`CastRays / TestOcclusions / CountIntersections / ListIntersections / ComputeClosestPoints / ComputeDistance / ComputeSignedDistance / ComputeOccupancy / CreateRaysPinhole` | ★★★★★ |
-| `cpp/open3d/t/geometry/PointCloud.{h,cpp}`、`kernel/PointCloud*.cpp`、`kernel/PCAPartition.cpp` | 张量点云：降采样、离群点、法向、平滑、DBSCAN、平面、HPR、投影、指标、PCA 分块 | ★★★★☆ |
-| `cpp/open3d/t/pipelines/registration/` | `ICP / MultiScaleICP / SymmetricICP`、`TransformationEstimation{PointToPoint, PointToPlane, Symmetric, ForColoredICP, ForDopplerICP}`、`RobustKernel`、`Feature.cpp`（FPFH、特征对应） | ★★★★☆ |
-| `cpp/open3d/pipelines/registration/` | legacy：`Registration.cpp`（RANSAC）、`CorrespondenceChecker`、`FastGlobalRegistration`、`GeneralizedICP`、`NormalDistributionsTransform`、`ColoredICP`、`PoseGraph / GlobalOptimization` | ★★★★☆ |
-| `cpp/open3d/t/geometry/VoxelBlockGrid.{h,cpp}`、`kernel/VoxelBlockGridImpl.h` | 稀疏体素块 TSDF：`GetUniqueBlockCoordinates / Integrate / RayCast / ExtractPointCloud / ExtractTriangleMesh / Save / Load` | ★★★☆☆ |
-| `cpp/open3d/geometry/SurfaceReconstruction{Poisson,BallPivoting,AlphaShape}.cpp`、`t/geometry/TriangleMesh.h` | 表面重建、`CreateIsosurfaces`（Flying Edges）、`SimplifyQuadricDecimation`、`Boolean*`、`FillHoles`、`ComputeUVAtlas` | ★★★☆☆ |
-| `cpp/open3d/core/hashmap/`（`CPU/TBBHashBackend.h`、`CUDA/SlabHashBackend.h`）、`core/nns/` | 张量哈希、KNN / 半径 / 混合 / 多半径近邻 | ★★★★☆ |
-| `cpp/open3d/geometry/Octree.{h,cpp}`、`VoxelGrid.{h,cpp}` | legacy 八叉树与稀疏体素 | ★☆☆☆☆ |
-| `cpp/open3d/t/io/file_format/` | PLY / PCD / PTS / NPZ / XYZ* / **SPLAT / SPZ**；**不支持 LAS/LAZ**（需要 laspy / PDAL） | ★★★☆☆ |
-| `cpp/pybind/**` | Python 绑定（注意 GIL 策略，见 §2.1） | ★★★★☆ |
-| `examples/python/geometry/ray_casting_*.py`、`t_reconstruction_system/integrate_custom.py`、`pipelines/*_registration.py` | 可直接照搬的示例 | ★★★★☆ |
+| `cpp/open3d/t/geometry/RaycastingScene.{h,cpp}` | Embree 4 场景：`CastRays / TestOcclusions / CountIntersections / ListIntersections / ComputeClosestPoints / ComputeDistance / ComputeSignedDistance / ComputeOccupancy / CreateRaysPinhole` | 5/5 |
+| `cpp/open3d/t/geometry/PointCloud.{h,cpp}`、`kernel/PointCloud*.cpp`、`kernel/PCAPartition.cpp` | 张量点云：降采样、离群点、法向、平滑、DBSCAN、平面、HPR、投影、指标、PCA 分块 | 4/5 |
+| `cpp/open3d/t/pipelines/registration/` | `ICP / MultiScaleICP / SymmetricICP`、`TransformationEstimation{PointToPoint, PointToPlane, Symmetric, ForColoredICP, ForDopplerICP}`、`RobustKernel`、`Feature.cpp`（FPFH、特征对应） | 4/5 |
+| `cpp/open3d/pipelines/registration/` | legacy：`Registration.cpp`（RANSAC）、`CorrespondenceChecker`、`FastGlobalRegistration`、`GeneralizedICP`、`NormalDistributionsTransform`、`ColoredICP`、`PoseGraph / GlobalOptimization` | 4/5 |
+| `cpp/open3d/t/geometry/VoxelBlockGrid.{h,cpp}`、`kernel/VoxelBlockGridImpl.h` | 稀疏体素块 TSDF：`GetUniqueBlockCoordinates / Integrate / RayCast / ExtractPointCloud / ExtractTriangleMesh / Save / Load` | 3/5 |
+| `cpp/open3d/geometry/SurfaceReconstruction{Poisson,BallPivoting,AlphaShape}.cpp`、`t/geometry/TriangleMesh.h` | 表面重建、`CreateIsosurfaces`（Flying Edges）、`SimplifyQuadricDecimation`、`Boolean*`、`FillHoles`、`ComputeUVAtlas` | 3/5 |
+| `cpp/open3d/core/hashmap/`（`CPU/TBBHashBackend.h`、`CUDA/SlabHashBackend.h`）、`core/nns/` | 张量哈希、KNN / 半径 / 混合 / 多半径近邻 | 4/5 |
+| `cpp/open3d/geometry/Octree.{h,cpp}`、`VoxelGrid.{h,cpp}` | legacy 八叉树与稀疏体素 | 1/5 |
+| `cpp/open3d/t/io/file_format/` | PLY / PCD / PTS / NPZ / XYZ* / **SPLAT / SPZ**；**不支持 LAS/LAZ**（需要 laspy / PDAL） | 3/5 |
+| `cpp/pybind/**` | Python 绑定（注意 GIL 策略，见 §2.1） | 4/5 |
+| `examples/python/geometry/ray_casting_*.py`、`t_reconstruction_system/integrate_custom.py`、`pipelines/*_registration.py` | 可直接照搬的示例 | 4/5 |
 
 ### 2.1 RaycastingScene（重点）
 
@@ -298,7 +298,7 @@ def lidar_tick(drones, world, env, budget_rays_per_s=1.0e6, hz=10):
 
 ### 3.7 配准（V0.5 Real World Fusion）
 
-测试设置：NY 300 m×300 m 裁剪（6.9 万点），源点云为目标的 70% 随机子集，加 5 cm 噪声后施加已知变换。**合成数据偏乐观**，真实的视觉↔LiDAR 跨模态配准会更难。
+测试设置：NY 300 m×300 m 裁剪（6.9 万点），源点云为目标的 70% 随机子集，加 5 cm 噪声后施加已知变换。**合成数据偏乐观**，真实的视觉<->LiDAR 跨模态配准会更难。
 
 | 场景 | 方法 | 参数 | 耗时 | 误差（旋转 / 平移） |
 |---|---|---|---|---|
@@ -407,7 +407,7 @@ worlds/<id>/
 | TSDF / 网格 | VBG、Poisson、BPA、二次简化、Flying Edges | nvblox / OpenVDB（需 GPU / 另构建） | Open3D（离线） |
 | 占据查询 | HashSet、VoxelGrid | numpy 排序键、OpenVDB | numpy 排序键（可序列化），HashSet 次之 |
 
-推荐排序（综合 star、2026 活跃度、契合度）：**Open3D（★14k，2026-09 发布 0.20，Geometry World 与离线流水线的核心依赖）> small_gicp（在线配准）> PDAL / laspy（IO 与 CRS）> PotreeConverter / 自研（LOD）**。
+推荐排序（综合 star、2026 活跃度、契合度）：**Open3D（14k stars，2026-09 发布 0.20，Geometry World 与离线流水线的核心依赖）> small_gicp（在线配准）> PDAL / laspy（IO 与 CRS）> PotreeConverter / 自研（LOD）**。
 
 ---
 

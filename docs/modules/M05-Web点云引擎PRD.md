@@ -232,7 +232,7 @@
 | M05-FR-034 | 雾与光照：点材质保持 `fog = true`，由 M07 设置的 `scene.fogNode` 作用（经典路径依赖 AnetNodesHandler 修复 2）；太阳方向、云阴影读取 M07 的 EnvLighting uniform；M05 不自带雾公式 | P0 | V0.1 | 是 | env-gpu 用例中点云雾色与地面一致 | g01 §6.2、§7；ADR-025 |
 | M05-FR-035 | EDL 合成材质（Tier B；Tier A 部分随 FR-050 为 P1）：M05 提供单个全屏四边形 NodeMaterial，读取 cloudRT 的颜色与深度纹理，uniform `uvScale`、`strength`（0.45，EDL 关闭时为 0）、`taps`（按档 4 或 8）均为 float；背景像素（深度 = 远平面）输出 M06 注入的天空 Fn（`backgroundNode`）；`depthNode` 把点云深度写回；M06 在 P2 渲染该四边形；Tier S 不产生此 pass | P0 | V0.1 | 是 | M05-AC-023 | ADR-007；g01 §6.5；M06 §6.5；15 §10.3 |
 | M05-FR-036 | 渲染比例：Tier S 由画布 DPR 0.5 实现，所有档位锁定 0.5；Tier B/A 由 M06 在每帧开始时读取 `cas.state().rs`（当前档位 rs），以 `be.setCloudScale(rs × 运动系数)` 设置 cloudRT 子视口；M05 每帧从 `ctx.cloudScale` 读取有效比例计算 H_px 与 `uvScale`；换档在下一帧生效，不重新分配任何 RT | P0 | V0.1 | 是 | 换档时 `rtAllocs` 不增（D1-AC-24） | ADR-011、ADR-029；M06-FR-070 |
-| M05-FR-037 | 预热变体：向 M06 的 shader zoo 声明本档全部变体（点材质 × 每个真实目标、EDL 合成四边形、ID 材质），以 1 texel 哑池纹理与 1 条 DrawTable 可见一次；揭开遮罩后任何点云操作不得新增程序 | P0 | V0.1 | 是 | D1-AC-25；M05-AC-022 | ADR-007 |
+| M05-FR-037 | 预热变体：向 M06 的 shader zoo 声明本档全部变体（点材质 × 每个真实目标、EDL 合成四边形、ID 材质），以 1 texel 哑池纹理与 1 条 DrawTable 可见一次；结束时根节点可见性取当时的实际状态（图层开关且世界已打开），不取开始时的快照：shader zoo 在 `compileAsync` 期间数秒内世界可能已经打开（ACC-4 4.2b，点云整段不绘制，ADR-076）；揭开遮罩后任何点云操作不得新增程序 | P0 | V0.1 | 是 | D1-AC-25；M05-AC-022 | ADR-007 |
 
 ### 4.6 疏密控制（CAS）
 
@@ -242,7 +242,7 @@
 | M05-FR-039 | 积压判定：待上传点数 > 2 帧上传配额（Tier S 40k 点，Tier B/A 16 MiB 折合点数），或在途请求数 = 当前上限 | P0 | V0.1 | 是 | 单测 | ADR-012 |
 | M05-FR-040 | 冻结：页面隐藏、模态框打开且主动限帧、遮罩揭开或切换世界后的前 30 帧、本帧 `renderer.info.programs.length` 增加、用户主动限帧；任一成立时不评估并清空采样窗口 | P0 | V0.1 | 是 | `cas.evals` 在冻结期为 0 | ADR-012 |
 | M05-FR-041 | 外环：`B = lo` 且 `r > 1.2` 持续 ≥ 1 s、且不是被质量下限托住时降一档，B 取新档 hi；`B = hi` 且有余量证据（有 workMs 时中位数 < 0.7·T* 持续 3 s；否则 `r < 0.7` 持续 3 s，或 `p95 ≤ 1.1·T*` 持续 5 s）且距上次换档 > upDelay 时升一档，B 取新档 lo；自动模式不升入退化档（`rung.lo ≥ 0.6·池容量`，§6.8.4）；upDelay 初值 5 s，升档后 10 s 内降档则翻倍，上限 120 s | P0 | V0.1 | 是 | D1-AC-04：换档 ≤ 2、来回 0；M05-AC-011 | ADR-012；g02 §6.3 |
-| M05-FR-042 | 7 档阶梯（§6.8.1）；起步档取 `be.startRung`，若该档为退化档（只在 `MAX_TEXTURE_SIZE` 截断池时出现）则取不高于它的最高非退化档；最低允许档取 `be.lowestAllowedRung`（M06 判定：Tier S 0/0；Tier B/A 起步 iGPU 3、dGPU 4 或 5，最低允许档 2）；自动上限 Tier S 为 1、iGPU 为 4、dGPU 为 5（按 ADR-010 的池容量规则，这些档位在钳制后都不退化）；起步 B：software 25k，硬件取起步档 hi；T*：software 33.3 ms，硬件取 M06 的刷新周期；tailK：software 2.0，硬件 1.6 | P0 | V0.1 | 是 | Tier S 最终档位为 0 或 1 | ADR-012、ADR-044；g02 §7.2；M06 §6.18 |
+| M05-FR-042 | 7 档阶梯（§6.8.1）；起步档取 `be.startRung`，若该档为退化档（只在 `MAX_TEXTURE_SIZE` 截断池时出现）则取不高于它的最高非退化档；最低允许档取 `be.lowestAllowedRung`（M06 判定：Tier S 0/0；Tier B/A 起步 iGPU 3、dGPU 4 或 5，最低允许档 2）；自动上限 Tier S 为 1、iGPU 为 4、dGPU 为 5（按 ADR-010 的池容量规则，这些档位在钳制后都不退化）；起步 B：software 25k（只有点云的 flight60 `scene=pc`），有固定层（无人机、轨迹、环境、地面与天空）同帧时取 `startBudget` = max(B_floor, 25k ·(T* − 10 ms)/T*) = 20k（18 §5.1 Tier S 固定层合计 ≤ 10 ms，ADR-076），硬件取起步档 hi；T*：software 33.3 ms，硬件取 M06 的刷新周期；tailK：software 2.0，硬件 1.6 | P0 | V0.1 | 是 | Tier S 最终档位为 0 或 1 | ADR-012、ADR-044；g02 §7.2；M06 §6.18 |
 | M05-FR-043 | 质量下限：Tier S 的有效下沿为 `max(lo, 20k)`，硬件档不低于最低允许档，直到 PerfGovernor 第 7 步调用 `cas.setFloorOverride(lo)`（Tier S：B_floor 改为 10k；硬件：解锁 1、0 两档）；`cas.state()` 向 M06 提供 `atFloorSinceMs`、`atFloorTotalMs`、`atCeilSinceMs`、`B`、`lo`、`hi`、`rung`、`rs`、`Bfloor`（§6.8.5） | P0 | V0.1 | 是 | M05-AC-034：PerfGovernor 第 6 步完成前 B ≥ 20k | ADR-041；M06-FR-075 |
 | M05-FR-044 | 手动锁档：`setManual(index)` 停止外环，内环仍在该档预算带内调节；ultra 与退化档只能手动；解除锁定后从当前 B 恢复外环 | P0 | V0.1 | 是 | 手动选档后 `cas.rungChanges` 不增 | ADR-012；g02 §6.3 |
 | M05-FR-045 | 起步档记忆的信号：`cas.state().atFloorTotalMs` 为本会话内"被质量下限托住且超载"的累计毫秒数（单调不减，冻结期间不累计）；持久化由 M06-FR-013 负责（超过 30 s 时把"起步档 − 1"写入 `localStorage["awr.render.v1"]`，下次启动经 `be.startRung` 生效）；M05 不读写 localStorage | P1 | V0.1 | 是 | 注入负载后刷新页面，`be.startRung` 降低一档（M06-AC-012 联测） | AWR-03 §3.5；M06-FR-013 |
@@ -466,7 +466,7 @@ export function firstScreenLevel(roots: RootMeta[], poolCapPts: number, startHi:
 ```
 
 - Tier S：池容量 253,952 点、起步档 hi 40k，`cap = min(4.5e5, 203,161, 100,000) = 1e5`；Tier B/A 为 4.5e5。六城结果必须与 [16 §4.11](../16-World数据规范.md) 的表逐项相等（M05-AC-004），例如深圳 Tier S 为 L1、26,782 点、321,384 字节。
-- **首帧目标集**：首屏字节进入 CPU 缓存后，以起步预算 B0 对当前相机（M06 的初始总览位姿）运行一次选择（深度上限为首屏层 L，FR-004），结果即首帧目标集；遮罩未揭开时上传配额放宽为"首帧目标集全部"（Tier S ≤ B0 = 25k 点，约 0.4 MB；硬件档 ≤ 首屏点数 4.5e5，约 7.2 MB），揭开后恢复每帧 20k 点（硬件 8 MiB）。
+- **首帧目标集**：首屏字节进入 CPU 缓存后，以起步预算 B0 对当前相机（M06 的初始总览位姿）运行一次选择（深度上限为首屏层 L，FR-004），结果即首帧目标集；遮罩未揭开时上传配额放宽为"首帧目标集全部"（Tier S ≤ B0 = 25k 点（整景 20k，ADR-076），约 0.4 MB；硬件档 ≤ 首屏点数 4.5e5，约 7.2 MB），揭开后恢复每帧 20k 点（硬件 8 MiB）。
 - **TTFP 终点**：首帧目标集全部驻留、且其节点都出现在该帧 DrawTable 中的那一帧，在 render 相位提交后记录（18 §4.2）。首屏进度 = \|首帧目标集 ∩ GPU 驻留\| / \|首帧目标集\|。
 - 苏州为 6 根，每根一次首屏 Range，受 HTTP/1.1 上限 4 约束，分两批完成；TTFP 起点取最后一个响应体到齐的时刻。
 
@@ -811,7 +811,7 @@ d     = depthT(uv0)
 | 起步档 startRung | 0 | 3 | 4（M06 微基准余量充足 +1，至多 5） |
 | 最低允许档 floorIndex | 0 | 2 | 2 |
 | 自动上限 ceilIndex | 1 | 4 | 5 |
-| 起步 B | 25k | 起步档 hi | 起步档 hi |
+| 起步 B | 25k（`scene=pc`）；整景 20k（`startBudget`，ADR-076） | 起步档 hi | 起步档 hi |
 | T* | 33.3 ms（固定） | M06 FrameSampler 的刷新周期估计 | 同左 |
 | tailK | 2.0 | 1.6 | 1.6 |
 | B_floor（第 7 步之前） | 20k | 最低允许档的 lo（150k） | 同左 |
@@ -861,7 +861,7 @@ sample(dt: number, now: number, freeze: number, pending: boolean, workMs?: numbe
 ```
 
 - `state()` 把内部起点换成持续时长：`atFloorSinceMs = floorSince < 0 ? 0 : now − floorSince`，`atCeilSinceMs` 同理（M06 PerfGovernor 以 ≥ 2000 与 ≥ 10 000 判定）；`atFloorTotalMs = floorTotalMs`（会话内累计，M06-FR-013 以 > 30 000 判定）。
-- 构造时 `startIndex` 取 `max{k ≤ be.startRung : !isDegenerate(k)}`，`initialB` 为该档 hi（software 为 25k）。
+- 构造时 `startIndex` 取 `max{k ≤ be.startRung : !isDegenerate(k)}`，`initialB` 为该档 hi（software 为 `startBudget`：只有点云时 25k，有固定层时 20k，ADR-076）。
 - `moveTo` 清空采样窗口与饱和计时，写 `cas.rungChanges`、`cas.index_ring`，并在 10 s 内反向换档时 `cas.bounces += 1`；事件 `pc.rung.changed{from, to, reason}`，原因取 `overload`（r > 1.2 下限饱和）或 `headroom`。
 - **B 反向**计数与 18 §1.5 一致：相邻两次相对变化 > 2% 的有效调整方向相反记 1 次。
 - 冻结掩码由 M05 每帧从 `FrameCtx` 组合（任一位非 0 即冻结）：
@@ -953,7 +953,7 @@ sequenceDiagram
 | | 上升 | 2 次 r < 0.85 且无积压：1.08；带内每 8 次评估 1.03 | 同左 | 同左 | 倍 | ADR-012 |
 | | 降档 / 升档 | r > 1.2 持续 1 s / 余量 3 s 或 5 s | 同左 | 同左 | s | g02 §6.3 |
 | | upDelay | 5 s 起，10 s 内来回翻倍，≤ 120 s | 同左 | 同左 | s | g02 §6.3 |
-| | B0 / B_floor | 25k / 20k | 起步档 hi / 最低允许档 lo（150k） | 同左 | 点 | ADR-012、ADR-041 |
+| | B0 / B_floor | 25k（整景 20k，ADR-076）/ 20k | 起步档 hi / 最低允许档 lo（150k） | 同左 | 点 | ADR-012、ADR-041 |
 | | 自动有效上限 | 1 | min(5, 最高非退化档) = 4 | 同左 | 档 | ADR-012；§6.8.4 |
 | | 冻结帧数 | 30 | 同左 | 同左 | 帧 | ADR-012 |
 | | 起步档记忆阈值（M06-FR-013 使用 `atFloorTotalMs`） | 30 | 同左 | 同左 | s | AWR-03 §3.5 |

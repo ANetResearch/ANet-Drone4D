@@ -386,7 +386,7 @@ T.z   = σ_w · b.z
 # u 通道：精确 OU（r17 原样）：a = exp(−V·dt/L_u); x = a·x + σ_u·sqrt(1−a²)·N(0,1)
 # v/w 通道：A = [[0,1],[−1/T²,−2/T]]，T = L/V，输入强度 q = π，输出 y = (K/T²)·(x1 + √3·T·x2)，K = σ·sqrt(L/(πV))
 Φ   = e^{−dt/T}·[[1+dt/T, dt], [−dt/T², 1−dt/T]]
-P∞  = diag(π·T³/4, π·T/4)                                   # 闭式平稳协方差 ⇒ Var(y) = σ²
+P∞  = diag(π·T³/4, π·T/4)                                   # 闭式平稳协方差 => Var(y) = σ²
 Qd  = P∞ − Φ·P∞·Φᵀ ;  Lq = chol(Qd)                          # 对任意 dt 都精确（常参数时）
 x0  = chol(P∞)·N(0, I)                                      # 平稳起步
 x   = Φ·x + Lq·N(0, I)
@@ -541,9 +541,9 @@ packages/contracts/env/{env_state.schema.json, wind_manifest.schema.json, preset
 {
   "schema": "awr.env.wind_library.v1",
   "level": 2, "solver": "masscons-mac-v1", "alpha_h": 1.0, "alpha_v": 1.5,
-  "coordinate_hash": "sha256:…",                 // ★ 与 worlds/<id>/coordinate.json 不一致时拒绝加载
-  "units": "m",                                  // ★ 必须在规范化后的 World ENU 上计算（r17 的 SF 库在原始单位上，已作废）
-  "grid": { "origin_enu": [x0, y0, z0],          // ★ 最小角（格 (0,0,0) 的角点，不是格心）；r17 原型误写为 [0,0,0]
+  "coordinate_hash": "sha256:…",                 // * 与 worlds/<id>/coordinate.json 不一致时拒绝加载
+  "units": "m",                                  // * 必须在规范化后的 World ENU 上计算（r17 的 SF 库在原始单位上，已作废）
+  "grid": { "origin_enu": [x0, y0, z0],          // * 最小角（格 (0,0,0) 的角点，不是格心）；r17 原型误写为 [0,0,0]
             "cell_m": [4, 4, 4], "shape_zyx": [nz, ny, nx], "cell_centered": true,
             "z_base": "dtm", "dtype": "f16", "channels": ["u", "v", "w"] },
   "ref": { "speed_ms": 1.0, "z_ref_m": 10, "z0_m": 0.5, "d_m": 0, "profile": "log" },
@@ -657,7 +657,7 @@ export function decodeAWRV(buf: ArrayBuffer) {
 
 | golden 文件（`packages/contracts/env/golden/`） | 生成方式（`tools/contracts/gen_env_golden.py`，以 Python 为参考实现） | 两端测试 | 判据 |
 |---|---|---|---|
-| `conventions.json` | dir 从 0 到 359.5，步长 0.5，外加静风；uv↔dir、ENU↔three、ENU↔NED | `environment/tests/test_parity.py`、`engine/environment/state/parity.test.ts`（vitest） | 相对误差 ≤1e−9 |
+| `conventions.json` | dir 从 0 到 359.5，步长 0.5，外加静风；uv<->dir、ENU<->three、ENU<->NED | `environment/tests/test_parity.py`、`engine/environment/state/parity.test.ts`（vitest） | 相对误差 ≤1e−9 |
 | `profile.json` | log、power、uniform 三种廓线，各取 50 个 z，含 z ≤ d+z0 的边界 | 同上 | 相对误差 ≤1e−9 |
 | `derive.json` | 12 个预设；1000 组随机状态（seed 固定，覆盖 R=0、cover<0.6、mor 两端夹紧、雾顶 0/60、dust 0/1） | 同上 | 相对误差 ≤1e−9（实测 1e−12 以内一致） |
 | `eval_env.json` | 路由表中每条路由，外加 enter、leave 与 exp 三种模式，每种取 50 个 t | 同上 | 相对误差 ≤1e−9；方向比较 shortest_arc 的绝对值 ≤1e−9 |

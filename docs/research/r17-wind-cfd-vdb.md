@@ -1,7 +1,7 @@
 # r17 研究笔记：WindNinja / FastEddy / OpenFOAM-dev / OpenVDB（物理风场）
 
 > 研究单元：r17 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §17–21（Environment Engine、E(x,y,z,t)、风场分级、风场 Web 可视化）、§37（刷新频率）、§41（World Package `environment/wind/`）、§46–47（V0.3 视觉环境 / V0.4 物理环境）
-> 仓库快照（shallow clone，位于 `refs/weather/`）：`windninja` @ `17fc5fc`（2026-09-22，★186，VERSION 4.0.0）、`FastEddy-model` @ `e0cd2f3`（2026-08-12，★129，v5.0.1）、`OpenFOAM-dev` @ `5e2f2ea`（2026-09-25，★2247，`WM_PROJECT_VERSION=dev`）、`openvdb` @ `86b5ea9`（2026-09-23，★3418，13.1.0 于 2026-09-16 发布，Python 包版本 13.1.1-dev）。
+> 仓库快照（shallow clone，位于 `refs/weather/`）：`windninja` @ `17fc5fc`（2026-09-22，186 stars，VERSION 4.0.0）、`FastEddy-model` @ `e0cd2f3`（2026-08-12，129 stars，v5.0.1）、`OpenFOAM-dev` @ `5e2f2ea`（2026-09-25，2247 stars，`WM_PROJECT_VERSION=dev`）、`openvdb` @ `86b5ea9`（2026-09-23，3418 stars，13.1.0 于 2026-09-16 发布，Python 包版本 13.1.1-dev）。
 > 本文中的路径都相对各自仓库根目录。本机没有 GPU、没有 OpenFOAM、没有 WindNinja 二进制。结论来自源码精读，外加 6 组 Python 原型实测，所有脚本在 `/data/projs/anet-drone/.cache/research/r17/`：
 > - `r17_dsm.py`：UrbanScene3D 点云生成 DSM 和 2.5D 实体掩码
 > - `r17_masscons2.py`：WindNinja 质量守恒算法移植到笛卡尔 MAC 网格，用 pyamg 求解
@@ -18,10 +18,10 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **firelab/windninja** 4.0.0 | 复杂地形诊断风模型。输入 DEM + 来向风速（或站点 / NWP），输出地面以上某高度的风矢量栅格（ASCII/SHP/KMZ/GeoTIFF），可选输出 3D VTK。包含两套求解器：质量守恒（自研 FEM）和动量（包装 OpenFOAM 11，RNG k-ε） | **port**：把质量守恒变分法移植成笛卡尔体素版 Level 2 求解器（本文已实现并实测）；廓线、粗糙度表、风向约定、DSM 转 STL 一并移植。**adopt**：山区真实场景可在 Docker 里直接调用 CLI | L0/L1 参数：V0.2；L2：V0.3–V0.4；CLI：V0.5+ | ★★★★★（对 MVP 价值最高） |
-| **OpenFOAM/OpenFOAM-dev** | 通用 CFD。本项目只用它离线算 RANS 城市风场库（Level 3） | **adopt**：作为离线工具，在 Docker 中运行，建议锁定 OpenFOAM 13 发行版。**port**：`turbineSiting` / `windAroundBuildings` 两个教程的算例模板、ABL 边界条件公式、`boxUniform` 规则网格采样 | V0.6–V1.0 | ★★★★ |
-| **AcademySoftwareFoundation/openvdb** 13.1 | 稀疏体数据格式与工具库（含 NanoVDB 和 `vdb_tool`） | **adopt（可选工具）**：`.vdb` 仅作交换/导出格式（Houdini/Blender/ParaView）；`vdb_tool points2ls→ls2mesh` 用于点云→水密网格（供 snappyHexMesh 和碰撞 SDF 使用）。**port**：`BoxSampler` 三线性插值、`VelocityIntegrator` RK4 流线积分。**不作为运行时格式** | 导出：V0.6+；点云 SDF：V0.5+ | ★★★ |
-| **NCAR/FastEddy-model** 5.0.1 | 常驻 GPU 的可压 LES（CUDA/HIP + MPI），支持建筑解析（URBAN 扩展） | **reference**：用于理解 LES 定位、建筑拖曳项和虚拟塔输出；MVP 不用。本机无 GPU，无法运行 | V1.0+（Level 4 LES，可选） | ★★ |
+| **firelab/windninja** 4.0.0 | 复杂地形诊断风模型。输入 DEM + 来向风速（或站点 / NWP），输出地面以上某高度的风矢量栅格（ASCII/SHP/KMZ/GeoTIFF），可选输出 3D VTK。包含两套求解器：质量守恒（自研 FEM）和动量（包装 OpenFOAM 11，RNG k-ε） | **port**：把质量守恒变分法移植成笛卡尔体素版 Level 2 求解器（本文已实现并实测）；廓线、粗糙度表、风向约定、DSM 转 STL 一并移植。**adopt**：山区真实场景可在 Docker 里直接调用 CLI | L0/L1 参数：V0.2；L2：V0.3–V0.4；CLI：V0.5+ | 5/5（对 MVP 价值最高） |
+| **OpenFOAM/OpenFOAM-dev** | 通用 CFD。本项目只用它离线算 RANS 城市风场库（Level 3） | **adopt**：作为离线工具，在 Docker 中运行，建议锁定 OpenFOAM 13 发行版。**port**：`turbineSiting` / `windAroundBuildings` 两个教程的算例模板、ABL 边界条件公式、`boxUniform` 规则网格采样 | V0.6–V1.0 | 4/5 |
+| **AcademySoftwareFoundation/openvdb** 13.1 | 稀疏体数据格式与工具库（含 NanoVDB 和 `vdb_tool`） | **adopt（可选工具）**：`.vdb` 仅作交换/导出格式（Houdini/Blender/ParaView）；`vdb_tool points2ls→ls2mesh` 用于点云→水密网格（供 snappyHexMesh 和碰撞 SDF 使用）。**port**：`BoxSampler` 三线性插值、`VelocityIntegrator` RK4 流线积分。**不作为运行时格式** | 导出：V0.6+；点云 SDF：V0.5+ | 3/5 |
+| **NCAR/FastEddy-model** 5.0.1 | 常驻 GPU 的可压 LES（CUDA/HIP + MPI），支持建筑解析（URBAN 扩展） | **reference**：用于理解 LES 定位、建筑拖曳项和虚拟塔输出；MVP 不用。本机无 GPU，无法运行 | V1.0+（Level 4 LES，可选） | 2/5 |
 
 **实现者先读这 10 条（每条都有源码或实测依据）：**
 
@@ -261,7 +261,7 @@ def vk_box(N=64, dx=4.0, L=30.0, seed=7):                   # 256 m 周期盒
     k = 2π·fftfreq(N,dx);  K = |k|
     E = (K L)^4 / (1+(K L)^2)^(17/6)                          # von Kármán 能谱形状
     amp = sqrt(E / (4π K²))                                  # 单位体积 → 每模态幅值
-    p = sin(k·dx)/dx                                         # ★修正波数 → 离散（中心差分）无散
+    p = sin(k·dx)/dx                                         # *修正波数 → 离散（中心差分）无散
     ξ = CN(0,1)^3;  a = (ξ − p (p·ξ)/|p|²) · amp             # Helmholtz 投影
     u = Re(ifftn(a)); u /= std(u)                            # 每分量单位 rms
     return float16(u)                                        # (3,N,N,N)
@@ -286,8 +286,8 @@ u_turb(x,t) = diag(σ_u,σ_v,σ_w)·R(θ) · trilerp_periodic(box, R(θ)ᵀ(x �
 
 ```text
 min ∫ α_h²[(u−u0)²+(v−v0)²] + α_v²(w−w0)² dV    s.t. ∇·u = 0
-⇒ u = u0 + c_h ∂λ/∂x,  v = v0 + c_h ∂λ/∂y,  w = w0 + c_v ∂λ/∂z,   c_h = 1/(2α_h²), c_v = 1/(2α_v²)
-⇒ −[c_h(λ_xx+λ_yy) + c_v λ_zz] = ∇·u0
+=> u = u0 + c_h ∂λ/∂x,  v = v0 + c_h ∂λ/∂y,  w = w0 + c_v ∂λ/∂z,   c_h = 1/(2α_h²), c_v = 1/(2α_v²)
+=> −[c_h(λ_xx+λ_yy) + c_v λ_zz] = ∇·u0
 边界：侧面 4 面 + 顶面（流通）λ=0；地面和建筑壁面（不可穿透）法向通量=0，即该面系数为 0
 ```
 
@@ -520,7 +520,7 @@ class WindField(Protocol):
 
 | 条目 | 来源 | 用途 | 模块 | 版本 | 方式 | 理由 |
 |---|---|---|---|---|---|---|
-| 风向约定与 sd↔uv 转换 | WindNinja `ninjaMathUtility.h` | 全链路统一 | `environment/wind/conventions.py`、`web/src/env/wind.ts` | V0.2 | port | 20 行代码，避免方向反号 |
+| 风向约定与 sd<->uv 转换 | WindNinja `ninjaMathUtility.h` | 全链路统一 | `environment/wind/conventions.py`、`web/src/env/wind.ts` | V0.2 | port | 20 行代码，避免方向反号 |
 | 垂直廓线与粗糙度预设 | WindNinja `windProfile.cpp`、`set_uniVegetation` | L0 | `environment/wind/profile.py` | V0.2 | port | 公式小，参数可靠 |
 | 1−cos 阵风 + Dryden（向量化） | MIL-F-8785C；本文原型 `r17_turb.py`、`r17_windfield_api.py` | L1 飞控扰动 | `environment/wind/turbulence.py` | V0.2–V0.3 | port（本文代码） | 已做方差实测验证 |
 | 冻结 von Kármán 湍流盒 | 本文原型 `r17_turb_box.py` | 多机空间相关、前后端一致 | `environment/wind/turbbox.py` + 前端 3D 纹理 | V0.3（视觉）/ V0.6（多机物理） | port | 0.25 s 生成，1.6 MB |
@@ -547,7 +547,7 @@ class WindField(Protocol):
 | 尾流 / 回流 | 无 | 地形尺度有 | 有 | 有（时变） | 无，可用阴影修正补救 |
 | 单方向耗时 | 秒到分钟（估算） | 十分钟到小时（估算） | 15–30 min，8 核（估算） | GPU 小时级 | **7–30 s（实测）** |
 | 部署 | GDAL/Boost 构建或 Docker | 再加 OpenFOAM 11 | Docker / apt | CUDA + MPI + HPC | 纯 Python（scipy、pyamg） |
-| 2026 活跃 / star | ✓ / 186 | ✓ / 186 | ✓ / 2247 | ✓ / 129 | — |
+| 2026 活跃 / star | yes / 186 | yes / 186 | yes / 2247 | yes / 129 | — |
 
 **推荐排序**（综合 star、2026 活跃度、契合度）：
 

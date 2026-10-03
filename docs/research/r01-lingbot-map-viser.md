@@ -2,8 +2,8 @@
 
 > 研究单元：r01 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §5、§14–16、§36–37、§41、§43–44
 > 仓库快照：
-> - `refs/recon/lingbot-map` @ `849e690`（2026-09-08，★17140，Apache-2.0）
-> - `refs/recon/viser` @ `56712d3`（2026-09-24，★2794，MIT，`__version__ = 1.1.1`）
+> - `refs/recon/lingbot-map` @ `849e690`（2026-09-08，17140 stars，Apache-2.0）
+> - `refs/recon/viser` @ `56712d3`（2026-09-24，2794 stars，MIT，`__version__ = 1.1.1`）
 >
 > 本文所有路径均相对各自仓库根目录。结论全部来自源码精读，另有两处本机实测（UrbanScene3D 坐标范围、法线主轴）。凡是估算都会明确标注"估算"。
 
@@ -13,8 +13,8 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **lingbot-map** | 前馈式流式三维重建基础模型。GCT（Geometric Context Transformer）配合 FlashInfer paged KV cache，从单目视频逐帧输出相机位姿、深度和置信度 | **adopt**：在 GPU Worker 里把 `GCTStream` 当作库调用，不走 CLI。**port**：voxel-morton 去重、centroid octree 与 LOD 选择、窗口 Sim(3) 拼接、follow camera、RANSAC-Umeyama 地理配准 | V0.1 离线重建 Job；V0.5 RTK/LiDAR 融合；V1.0 在线流式建图 | ★★★★★（Reconstruction Engine 首选） |
-| **viser** | Python ↔ Web 的 3D 可视化框架。服务端是 msgpack、zstd 与二进制 WebSocket，客户端是 React-Three-Fiber。LingBot-Map 的官方 viewer 就是它 | **port**：混合二进制线协议、消息合并窗口、晚加入状态回放、Worker 解码与节拍平滑、点云 shader、GPU buffer 复用、pose 瞬时更新、录制格式、headless 基准 harness。**adopt**：`viser.transforms`（SO3/SE3），另可做内部 Recon QA viewer。**reference**：整体 UI（Mantine，与 shadcn 冲突，不进产品） | V0.1–V0.2（协议与渲染）；V0.1 内部 QA 工具 | ★★★★（协议与工程范式的最佳参考，但不能当产品前端） |
+| **lingbot-map** | 前馈式流式三维重建基础模型。GCT（Geometric Context Transformer）配合 FlashInfer paged KV cache，从单目视频逐帧输出相机位姿、深度和置信度 | **adopt**：在 GPU Worker 里把 `GCTStream` 当作库调用，不走 CLI。**port**：voxel-morton 去重、centroid octree 与 LOD 选择、窗口 Sim(3) 拼接、follow camera、RANSAC-Umeyama 地理配准 | V0.1 离线重建 Job；V0.5 RTK/LiDAR 融合；V1.0 在线流式建图 | 5/5（Reconstruction Engine 首选） |
+| **viser** | Python <-> Web 的 3D 可视化框架。服务端是 msgpack、zstd 与二进制 WebSocket，客户端是 React-Three-Fiber。LingBot-Map 的官方 viewer 就是它 | **port**：混合二进制线协议、消息合并窗口、晚加入状态回放、Worker 解码与节拍平滑、点云 shader、GPU buffer 复用、pose 瞬时更新、录制格式、headless 基准 harness。**adopt**：`viser.transforms`（SO3/SE3），另可做内部 Recon QA viewer。**reference**：整体 UI（Mantine，与 shadcn 冲突，不进产品） | V0.1–V0.2（协议与渲染）；V0.1 内部 QA 工具 | 4/5（协议与工程范式的最佳参考，但不能当产品前端） |
 
 **关键结论（实现者先读这几条）：**
 
@@ -63,7 +63,7 @@ lingbot_map/
   layers/flashinfer_cache.py    FlashInferKVCacheManager：two-stream paged KV cache
   heads/camera_head.py          CameraCausalHead：因果 + KV 的相机头，num_iterations=4 迭代细化
   heads/dpt_head.py             DPTHead（深度/点图）
-  utils/pose_enc.py             absT_quaR_FoV 9 维编码 ↔ extrinsic/intrinsic（主点固定在图像中心）
+  utils/pose_enc.py             absT_quaR_FoV 9 维编码 <-> extrinsic/intrinsic（主点固定在图像中心）
   utils/geometry.py             unproject_depth_map_to_point_map、closed_form_inverse_se3、umeyama
   utils/load_fn.py              load_and_preprocess_images（crop 模式）
   vis/point_cloud_viewer.py     PointCloudViewer（viser）：逐帧节点、置信度过滤、视锥、播放、GLB/视频导出
@@ -71,8 +71,8 @@ lingbot_map/
   vis/sky_segmentation.py       ONNX 天空分割 + 磁盘缓存 + conf 置零
   vis/glb_export.py             predictions_to_glb（trimesh）
 demo_render/                    长序列离线渲染（Open3D/Kaolin/CUDA 扩展），保存 per-frame NPZ
-  rgbd_render/geometry/{voxel,octree,unproject}.py   ★可移植：morton 体素去重、centroid 八叉树 LOD、带 jitter 的反投影
-  rgbd_render/camera.py         ★可移植：compute_global_up、follow/birdeye 相机路径
+  rgbd_render/geometry/{voxel,octree,unproject}.py   *可移植：morton 体素去重、centroid 八叉树 LOD、带 jitter 的反投影
+  rgbd_render/camera.py         *可移植：compute_global_up、follow/birdeye 相机路径
   interactive_viewer/server.py  服务端渲染 + WebSocket 推 JPEG（瘦客户端方案）+ EDL
 benchmark/                      9 个数据集评测（ATE/RPE/AUC/点云），BSS 存储格式，umeyama RANSAC，viser 结果 viewer
 ```
@@ -196,7 +196,7 @@ LingBot-Map 本身**没有**标准的"重建产物"格式，只有三种形态�
 | `ThreeAssets.tsx::PointCloudMaterial` | GLSL 点着色器：`gl_PointSize = scale / −z_view`；形状用 Lp 范数（square=∞，circle=2，diamond=1，rounded=3，sparkle=0.6）；gradient 着色；支持 fog | 点云 shader 模板 |
 | `utils/bufferGeometrySync.ts` | **GPU buffer 复用规则**：长度和类型不变时换数组并置 `needsUpdate`（走 bufferSubData）；变了就 `geometry.dispose()` 后整体重建。否则会泄漏 GL buffer 或触发 "Resizing buffer attributes is not supported" | 点云节点加载和卸载时必须遵守 |
 | `CameraFrustumVariants.tsx` | 视锥：`y=tan(fov/2)`、`x=y·aspect`、`z=1`，再按 `cbrt(xyz/3)` 归一化，使视觉体积恒定；可贴 JPEG 缩略图；OpenCV +Z 前 | 轨迹关键帧视锥 |
-| `WorldTransformUtils.ts` | 用根节点旋转实现"Python 世界系（Z-up）↔ three 世界系（Y-up）"的转换 | ENU 的做法同理 |
+| `WorldTransformUtils.ts` | 用根节点旋转实现"Python 世界系（Z-up）<-> three 世界系（Y-up）"的转换 | ENU 的做法同理 |
 | `FilePlayback.tsx` / `PlaybackDecode.ts` | `.viser` 回放；**向后 seek = 重置场景后从头重放**，复杂度 O(N) | 需要改进：周期性快照（§3.14） |
 | `Splatting/` | WASM + SIMD 排序 Worker，按 group 变换排序 | V1.0 3DGS 参考 |
 | `CLAUDE.md` + `benchmarks/run_bench.py` | 按需渲染（`frameloop="demand"`，命令式修改后 `requestRender()`）；**Playwright headless Chromium 基准**：rAF 间隔 p50/p95/p99、longtask、CDP `Performance.getMetrics`、`renderer.info`、V8 CPU profile | 流畅性测试 harness 直接移植 |
@@ -368,8 +368,8 @@ for L in range(Lmax-1, -1, -1):                               # 自底向上加�
 ```text
 节点 n：包围球半径 r，相机空间深度 z，垂直 FOV θ，视口高 H_px
   projPx(n) = r / (max(z, near) · tan(θ/2)) · H_px/2
-  可见 ⇔ 包围球与视锥相交（z 方向加 r 余量）且 n.minFrame ≤ uRevealFrame（回放模式）
-  细分 ⇔ projPx > minNodePx（推荐 100–150 px；LingBot 按 cell 取 1.5 px）
+  可见 <=> 包围球与视锥相交（z 方向加 r 余量）且 n.minFrame ≤ uRevealFrame（回放模式）
+  细分 <=> projPx > minNodePx（推荐 100–150 px；LingBot 按 cell 取 1.5 px）
   priority = projPx · (1 + 0.5·max(0, dot(dir_to_node, view_dir)))    # 视线中心加权
 遍历：max-heap(priority)，累加 n.pointCount，超过 pointBudget 就停；
       缺失节点入加载队列（并发 4–6，按 priority 排序），未加载前画父节点（additive 下天然渐进）
@@ -621,7 +621,7 @@ worlds/<world_id>/
 
 | 维度 | lingbot-map | viser |
 |---|---|---|
-| Star / 活跃度 | ★17140 / 2026-09 活跃 | ★2794 / 2026-09 活跃 |
+| Star / 活跃度 | 17140 stars / 2026-09 活跃 | 2794 stars / 2026-09 活跃 |
 | 与本项目契合度 | 极高（设计文档指定的 Visual Reconstruction Engine） | 中高（协议与渲染工程可以直接借鉴；UI 栈不兼容） |
 | 本机可运行性 | 否（需要 CUDA GPU；推理和 flashinfer 都不能在 CPU 上跑） | 是（纯 Python + 浏览器） |
 | 城市级大场景 | 需要 windowed 模式加 GNSS 配准，户外漂移明显 | 不支持 LOD，float16 世界坐标精度不够 |
@@ -662,7 +662,7 @@ worlds/<world_id>/
 
 1. **§5 LingBot-Map：补一段"输出契约与局限"。** 输出只有相对尺度、没有和重力对齐；户外公里级会漂移（引用 benchmark ATE）；超过 320 帧需要 keyframe 或 windowed；航拍必须 `--mask_sky`；显存按 §2.4 分档。明确它是**离线或准实时 Job 引擎**，在线建图放到 V1.0。
 2. **§44 V0.1 范围调整：** 把"GNSS（飞控日志）Sim(3) 配准"从 V0.5 **提前到 V0.1**。P600 本来就有 GPS/RTK 日志，成本很低；不做的话，V0.2 的 GoTo、速度、风速都没有物理意义。V0.5 只保留 RTK 精化和 LiDAR ICP。
-3. **§6 融合链路细化为：** `LingBot（相对）→ GNSS/RTK RANSAC-Umeyama Sim(3)（按窗口）→ small_gicp/fast_gicp 视觉↔LiDAR 精配准 → Open3D 体素融合`，并定义 `scale_status` 枚举，方便 UI 标注世界可信度。
+3. **§6 融合链路细化为：** `LingBot（相对）→ GNSS/RTK RANSAC-Umeyama Sim(3)（按窗口）→ small_gicp/fast_gicp 视觉<->LiDAR 精配准 → Open3D 体素融合`，并定义 `scale_status` 枚举，方便 UI 标注世界可信度。
 4. **§7 World Model：** 新增 `Reconstruction` 子对象（frames、poses、intrinsics、keyframe flags、chunk transforms、quality 指标、模型版本等 provenance）。点属性加 `first_seen_frame`、`confidence`、`class`，用于回放和语义过滤。
 5. **§14–15 点云 Web 格式：** "Binary Tile + Octree Index"要具体化。推荐 Potree 2.0 风格（hierarchy.bin + octree.bin，HTTP Range），每点 12 B 节点局部量化（u16x4 + u8x4，兼容 WebGPU 顶点格式），明确写"禁止 float16 世界坐标"（附 UrbanScene3D 实测数据）。3D Tiles 作为导出格式而不是运行时格式。LOD 公式、点预算、FPS 反馈要写进规范（§3.6）。
 6. **§12 WebGPU 定位修正：** WebGPU 没有 point size，GLSL ShaderMaterial 不能在 WebGPURenderer 上运行。点云需要实例化 quad 或 TSL；WebGL2 回退是本地和 CI 的主测试路径。

@@ -12,22 +12,22 @@
 
 ## 0. 结论速览
 
-| 仓库（★ / 最近提交，实测） | 定位 | 复用方式 | 落点版本 | 推荐度 |
+| 仓库（stars / 最近提交，实测） | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **takram-design-engineering/three-geospatial**（★1,697 / 2026-05-27；`webgpu/clouds` 分支 2026-04-10） | Three.js 地理空间渲染库。`@takram/three-atmosphere` 实现 Bruneton 预计算大气散射 + Hillaire 多重散射 LUT，**已有 TSL/WebGPU 入口**（代码里也有 WebGL2 后端分支，但本机实测 WebGL2 后端有着色器编译错误）；`@takram/three-clouds` 是 Nubis/Frostbite 系体积云（4 层天气通道、BSM 云影、1/16 时间上采样），**仍只有 GLSL + postprocessing 版本** | **adopt**：`three-atmosphere/webgpu` 作为 High 档天空、日照、空气透视（需锁 three r184，或等上游/自行 fork 修复 r186 兼容，简单补丁不够，见 §6.1）。**port**：`three-clouds` 的密度模型、步进策略、BSM、时间上采样整体改写为 TSL | V0.3 起 Low/Med 用自研或 SkyMesh；V0.5 High 档 adopt 大气；V0.5–V0.6 port 云 | ★★★★☆ |
-| **mapbox/webgl-wind**（★1,108 / 2026-06-18） | 经典 GPGPU 风粒子：粒子位置编码进 RGBA8 纹理、drop rate、速度色带、**屏幕空间拖尾（上一帧×0.996 衰减）** | **port**：状态纹理编码、drop rate 公式、手工双线性采样。**skip**：屏幕空间拖尾（3D 相机一动就糊） | V0.3 | ★★★☆☆ |
-| **NOC-OI/cesium-wind-layer**（★0 / 2026-09-24；原仓 hongfaqiu/cesium-wind-layer ★125 / 2026-04-26） | Cesium 风粒子层，fork 增加了**三维 velocity cube**（多层图集）、按层播种；拖尾用 **previous/current/next 三帧位置 + 每粒子 4 顶点展开的屏幕空间线段四边形** | **port**：三帧环形位置纹理、扁平四边形展开、按速度调节长度/宽度、RK2 | V0.3 | ★★★★☆ |
-| **Rawcloud/cesium-wind-arrows-3d**（★0 / 2026-09-16，clone 在缓存目录） | WebGL2 3D 风箭头：`sampler3D` 存 (u,v,w)、RK2 平流锚点、**箭头俯仰角来自 w**、屏幕恒定像素尺寸、“视口∩数据”播种、视角突变强制重生 | **port**：箭头字形与播种策略 | V0.3 | ★★★☆☆ |
-| **weatherlayers/weatherlayers-gl**（★161 / 2026-09-28，clone 在缓存目录） | deck.gl 气象图层（粒子、栅格、等值线、风羽格网、高低压、锋面）+ 图例/时间轴控件；**粒子拖尾用“按年龄分块的环形缓冲”** | **reference**：年龄环形缓冲拖尾（→ WebGPU compute 环形索引）、图例/时间轴交互。**skip**：deck.gl 依赖 | V0.3 | ★★★☆☆ |
-| **arch85-km/urban-wind-lab**（★1 / 2026-09-26） | 单 HTML 文件：Web Worker 里跑 **D3Q19 LBM + Smagorinsky LES + ABL 对数律入口**，WebGL2 transform feedback 流线示踪粒子 | **port**：LBM 求解器移植到服务端（numba），作为 Level 2.5“瞬态阵风/尾流涡脱落”；示踪粒子的 RK2、实体内杀死、底层加权播种 | V0.4–V0.6 | ★★★☆☆ |
-| **rbischof/windinet**（★12 / 2026-04-15；TUM-CFD-Video 镜像 2026-09-26） | 2026 年城市风场代理模型：LTX-Video 视频扩散 DiT 微调，输入建筑平面图 256² + 入口风速，**<1 s 输出 112 帧 2D 瞬态速度场**；物理约束 VAE 解码器 | **reference**：输入输出契约、物理损失（散度、壁面不穿透、距离加权 MSE）可直接作为我们任何风场的**验收指标**。**skip**：模型本身（需 CUDA，2D 行人层） | V1.0（可选） | ★★☆☆☆ |
-| **NVIDIA/physicsnemo**（★3,297 / 2026-09-22）、**neuraloperator/neuraloperator**（★3,918 / 2026-08-06）、**thuml/Transolver**（★415 / 2026-02-26） | Physics-ML 训练框架 / 神经算子 / 任意几何 Transformer 求解器 | **reference**：V1.0 用我们自己的 WindNinja/OpenFOAM 风场库训练 3D 城市风场代理 | V1.0 | ★★☆☆☆ |
-| **rerun-io/rerun**（★11,503 / 2026-09-27，0.39-dev） | 多模态机器人数据记录与可视化：Arrow 列式 chunk、实体路径 + 多时间轴、latest-at / range 查询、gRPC 流、Wasm 网页查看器 | **adopt（仅开发调试）**：`rerun-sdk` 做仿真服务的记录/调试旁路。**port**：实体路径命名、多时间轴、latest-at 语义、迟到客户端缓冲（内存上限、静态数据永不丢、newest_first）。**skip**：嵌进产品 UI（egui，违反 shadcn 约束） | V0.2 | ★★★★☆ |
-| **moq-dev/moq**（原 kixelated/moq，★1,546 / 2026-09-28） | Media over QUIC：moq-lite 协议、Rust relay、TS/Python 客户端；**WebTransport 与 WebSocket 竞速连接**、每轨道 priority/order/max-age、JSON Snapshot（快照 + RFC 7396 合并补丁） | **port（V0.2）**：竞速连接、轨道 QoS 三旋钮、Snapshot/Stream 两种 JSON 轨道语义进 `anet.rt.v1`。**adopt（V1.0 可选）**：`moq-relay` 做 FPV 视频（WebCodecs）与多观众扇出 | V0.2 port；V1.0 adopt | ★★★★☆ |
-| **wtransport/pywebtransport**（★42 / 2026-08-23） | 2026 年新的 Python WebTransport 栈（Rust 状态机 + asyncio） | **skip**：官方 KNOWN_ISSUES KI-003 写明**与当前 Chrome/Edge/Firefox 握手失败**（状态 Blocked） | — | ★☆☆☆☆ |
-| **aiortc/aioquic**（★2,006 / 2025-10-11）、**BiagioFesta/wtransport**（★709 / 2026-09-22） | Python QUIC/HTTP3；Rust WebTransport | **reference**：若 V1.0 真要 WebTransport，走 Rust（wtransport 或 moq-relay）而不是 Python | V1.0 | ★★☆☆☆ |
-| **eclipse-ditto/ditto**（★928 / 2026-09-25） | Eclipse IoT 数字孪生框架：Thing / Feature / Policy，`properties` 与 `desiredProperties` | **reference**：孪生状态模型（reported vs desired、definition 作能力类型）。**skip**：部署（Java + MongoDB + Pekko，过重） | V0.2 模型；V1.0 ANet 能力 | ★★★☆☆ |
-| ertis-research/opentwins（★276）、iTwin/itwinjs-core（★732）、paramountric/digitaltwincityviewer（★18 / 2025-01-31） | 组合式孪生平台（K8s）/ BIM 孪生 SDK / 城市孪生查看器 | **skip** | — | ★☆☆☆☆ |
+| **takram-design-engineering/three-geospatial**（1,697 stars / 2026-05-27；`webgpu/clouds` 分支 2026-04-10） | Three.js 地理空间渲染库。`@takram/three-atmosphere` 实现 Bruneton 预计算大气散射 + Hillaire 多重散射 LUT，**已有 TSL/WebGPU 入口**（代码里也有 WebGL2 后端分支，但本机实测 WebGL2 后端有着色器编译错误）；`@takram/three-clouds` 是 Nubis/Frostbite 系体积云（4 层天气通道、BSM 云影、1/16 时间上采样），**仍只有 GLSL + postprocessing 版本** | **adopt**：`three-atmosphere/webgpu` 作为 High 档天空、日照、空气透视（需锁 three r184，或等上游/自行 fork 修复 r186 兼容，简单补丁不够，见 §6.1）。**port**：`three-clouds` 的密度模型、步进策略、BSM、时间上采样整体改写为 TSL | V0.3 起 Low/Med 用自研或 SkyMesh；V0.5 High 档 adopt 大气；V0.5–V0.6 port 云 | 4/5 |
+| **mapbox/webgl-wind**（1,108 stars / 2026-06-18） | 经典 GPGPU 风粒子：粒子位置编码进 RGBA8 纹理、drop rate、速度色带、**屏幕空间拖尾（上一帧×0.996 衰减）** | **port**：状态纹理编码、drop rate 公式、手工双线性采样。**skip**：屏幕空间拖尾（3D 相机一动就糊） | V0.3 | 3/5 |
+| **NOC-OI/cesium-wind-layer**（0 stars / 2026-09-24；原仓 hongfaqiu/cesium-wind-layer 125 stars / 2026-04-26） | Cesium 风粒子层，fork 增加了**三维 velocity cube**（多层图集）、按层播种；拖尾用 **previous/current/next 三帧位置 + 每粒子 4 顶点展开的屏幕空间线段四边形** | **port**：三帧环形位置纹理、扁平四边形展开、按速度调节长度/宽度、RK2 | V0.3 | 4/5 |
+| **Rawcloud/cesium-wind-arrows-3d**（0 stars / 2026-09-16，clone 在缓存目录） | WebGL2 3D 风箭头：`sampler3D` 存 (u,v,w)、RK2 平流锚点、**箭头俯仰角来自 w**、屏幕恒定像素尺寸、“视口∩数据”播种、视角突变强制重生 | **port**：箭头字形与播种策略 | V0.3 | 3/5 |
+| **weatherlayers/weatherlayers-gl**（161 stars / 2026-09-28，clone 在缓存目录） | deck.gl 气象图层（粒子、栅格、等值线、风羽格网、高低压、锋面）+ 图例/时间轴控件；**粒子拖尾用“按年龄分块的环形缓冲”** | **reference**：年龄环形缓冲拖尾（→ WebGPU compute 环形索引）、图例/时间轴交互。**skip**：deck.gl 依赖 | V0.3 | 3/5 |
+| **arch85-km/urban-wind-lab**（1 star / 2026-09-26） | 单 HTML 文件：Web Worker 里跑 **D3Q19 LBM + Smagorinsky LES + ABL 对数律入口**，WebGL2 transform feedback 流线示踪粒子 | **port**：LBM 求解器移植到服务端（numba），作为 Level 2.5“瞬态阵风/尾流涡脱落”；示踪粒子的 RK2、实体内杀死、底层加权播种 | V0.4–V0.6 | 3/5 |
+| **rbischof/windinet**（12 stars / 2026-04-15；TUM-CFD-Video 镜像 2026-09-26） | 2026 年城市风场代理模型：LTX-Video 视频扩散 DiT 微调，输入建筑平面图 256² + 入口风速，**<1 s 输出 112 帧 2D 瞬态速度场**；物理约束 VAE 解码器 | **reference**：输入输出契约、物理损失（散度、壁面不穿透、距离加权 MSE）可直接作为我们任何风场的**验收指标**。**skip**：模型本身（需 CUDA，2D 行人层） | V1.0（可选） | 2/5 |
+| **NVIDIA/physicsnemo**（3,297 stars / 2026-09-22）、**neuraloperator/neuraloperator**（3,918 stars / 2026-08-06）、**thuml/Transolver**（415 stars / 2026-02-26） | Physics-ML 训练框架 / 神经算子 / 任意几何 Transformer 求解器 | **reference**：V1.0 用我们自己的 WindNinja/OpenFOAM 风场库训练 3D 城市风场代理 | V1.0 | 2/5 |
+| **rerun-io/rerun**（11,503 stars / 2026-09-27，0.39-dev） | 多模态机器人数据记录与可视化：Arrow 列式 chunk、实体路径 + 多时间轴、latest-at / range 查询、gRPC 流、Wasm 网页查看器 | **adopt（仅开发调试）**：`rerun-sdk` 做仿真服务的记录/调试旁路。**port**：实体路径命名、多时间轴、latest-at 语义、迟到客户端缓冲（内存上限、静态数据永不丢、newest_first）。**skip**：嵌进产品 UI（egui，违反 shadcn 约束） | V0.2 | 4/5 |
+| **moq-dev/moq**（原 kixelated/moq，1,546 stars / 2026-09-28） | Media over QUIC：moq-lite 协议、Rust relay、TS/Python 客户端；**WebTransport 与 WebSocket 竞速连接**、每轨道 priority/order/max-age、JSON Snapshot（快照 + RFC 7396 合并补丁） | **port（V0.2）**：竞速连接、轨道 QoS 三旋钮、Snapshot/Stream 两种 JSON 轨道语义进 `anet.rt.v1`。**adopt（V1.0 可选）**：`moq-relay` 做 FPV 视频（WebCodecs）与多观众扇出 | V0.2 port；V1.0 adopt | 4/5 |
+| **wtransport/pywebtransport**（42 stars / 2026-08-23） | 2026 年新的 Python WebTransport 栈（Rust 状态机 + asyncio） | **skip**：官方 KNOWN_ISSUES KI-003 写明**与当前 Chrome/Edge/Firefox 握手失败**（状态 Blocked） | — | 1/5 |
+| **aiortc/aioquic**（2,006 stars / 2025-10-11）、**BiagioFesta/wtransport**（709 stars / 2026-09-22） | Python QUIC/HTTP3；Rust WebTransport | **reference**：若 V1.0 真要 WebTransport，走 Rust（wtransport 或 moq-relay）而不是 Python | V1.0 | 2/5 |
+| **eclipse-ditto/ditto**（928 stars / 2026-09-25） | Eclipse IoT 数字孪生框架：Thing / Feature / Policy，`properties` 与 `desiredProperties` | **reference**：孪生状态模型（reported vs desired、definition 作能力类型）。**skip**：部署（Java + MongoDB + Pekko，过重） | V0.2 模型；V1.0 ANet 能力 | 3/5 |
+| ertis-research/opentwins（276 stars）、iTwin/itwinjs-core（732 stars）、paramountric/digitaltwincityviewer（18 stars / 2025-01-31） | 组合式孪生平台（K8s）/ BIM 孪生 SDK / 城市孪生查看器 | **skip** | — | 1/5 |
 
 **实现者先读这 10 条（每条都有源码或实测依据）：**
 
@@ -48,7 +48,7 @@
 
 ### 1.1 精读仓库（已 clone）
 
-| 仓库 | 快照 | ★ / 最近提交（实测） | 许可 | 语言 / 规模 | 本地路径 |
+| 仓库 | 快照 | stars / 最近提交（实测） | 许可 | 语言 / 规模 | 本地路径 |
 |---|---|---|---|---|---|
 | takram-design-engineering/three-geospatial（main） | `b012ad0` 2026-05-27 | 1,697 / 2026-05-27 | MIT | TS + GLSL/TSL，nx monorepo，4 个包：`atmosphere` 0.19.1、`clouds` 0.7.6、`core`（`@takram/three-geospatial` 0.9.1）、`effects` 0.6.4 | `refs/discovery/three-geospatial` |
 | 同上（`webgpu/clouds` 分支） | `88f7d0e` 2026-04-10 | — | MIT | 只多了 `packages/clouds/src/webgpu/` 下 9 个噪声/天气纹理节点 | `refs/discovery/three-geospatial-webgpu-clouds` |
@@ -64,7 +64,7 @@
 
 ### 1.2 只做了元数据评估的候选（未 clone）
 
-| 方向 | 仓库 | ★ / 最近提交（实测） | 评估结论 |
+| 方向 | 仓库 | stars / 最近提交（实测） | 评估结论 |
 |---|---|---|---|
 | 体积云 | FarazzShaikh/three-volumetric-clouds | 124 / 2024-09-05 | 旧版 WebGL Nubis 复现，作者 2025 年另起 `Faraz-Portfolio/demo-2025-raymarch-clouds`（7 / 2026-06-28），都是 demo 级。takram 更完整，skip |
 | 体积云 | CK42BB/procedural-clouds-threejs | 47 / 2026-02-12 | 和 r16 的 `procedural-weather-threejs` 同作者，同样是 Claude skill 文档形式，skip |
@@ -581,7 +581,7 @@ def on_tick(sim_t, uavs, wind_slice):
 rr.log("world/pointcloud", rr.Points3D(xyz, colors=rgb), static=True)   # 静态数据只发一次
 ```
 
-- 实体路径约定与 `anet.rt.v1` 的 channel 名一一对应（`world/uav/{id}` ↔ `uav/{id}/state`），两边可以互相翻译。
+- 实体路径约定与 `anet.rt.v1` 的 channel 名一一对应（`world/uav/{id}` <-> `uav/{id}/state`），两边可以互相翻译。
 - **只进开发者工具链**：Rerun 查看器是 egui/wgpu，不符合 shadcn 约束；产品 UI 的回放仍是我们自己的 Timeline（r15 的 IterablePlayer 算法），只借 Rerun 的 latest-at / range 查询语义：`latestAt(entity, component, timeline, t)` = 该时间轴上 ≤ t 的最后一条；`range(entity, timeline, [t0, t1])` 返回区间内全部记录。
 - 大批量点云/轨迹用 `rr.send_columns()` 列式发送，避免逐条 `log` 的开销。
 
@@ -635,7 +635,7 @@ rr.log("world/pointcloud", rr.Points3D(xyz, colors=rgb), static=True)   # 静态
 
 ### 5.1 天空 / 体积云（与 `refs/weather/*`、`refs/web3d/three.js` 对比）
 
-| 排名 | 仓库 | ★ / 2026 活跃 | 契合度 | 结论 |
+| 排名 | 仓库 | stars / 2026 活跃 | 契合度 | 结论 |
 |---|---|---|---|---|
 | 1 | takram three-geospatial | 1,697 / 是（2026-05，WebGPU 分支 2026-04） | 大气可直接用（High 档）；云算法最完整但只有 GLSL | **补充**：High 档大气 adopt、云 port；不替代 r16 的任何仓库 |
 | 2 | natural-disasters（r16） | 273 / 是 | WebGL2 + 质量自适应 + potato 档 | 继续作为 WebGL2/软件档云与雨的主算法源 |
@@ -645,9 +645,9 @@ rr.log("world/pointcloud", rr.Points3D(xyz, colors=rgb), static=True)   # 静态
 
 ### 5.2 3D 风场可视化
 
-| 排名 | 仓库 | ★ / 最近提交 | 适用档 | 优点 | 缺点 |
+| 排名 | 仓库 | stars / 最近提交 | 适用档 | 优点 | 缺点 |
 |---|---|---|---|---|---|
-| 1 | NOC-OI/cesium-wind-layer（← hongfaqiu 125★） | 0 / 2026-09-24 | Med | 三帧几何拖尾、多层 cube、确定性分层播种，2026 仍在迭代 | Cesium 专用，只做水平平流（层内 z 恒定） |
+| 1 | NOC-OI/cesium-wind-layer（← hongfaqiu 125 stars） | 0 / 2026-09-24 | Med | 三帧几何拖尾、多层 cube、确定性分层播种，2026 仍在迭代 | Cesium 专用，只做水平平流（层内 z 恒定） |
 | 2 | Rawcloud/cesium-wind-arrows-3d | 0 / 2026-09-16 | 全档 | `sampler3D`+(u,v,w)、俯仰箭头、视口播种、突变重生 | 新、无 star，需要自己验证 |
 | 3 | weatherlayers-gl | 161 / 2026-09-28 | High（思路） | 年龄环形拖尾、完整气象控件 | deck.gl 生态、双许可 |
 | 4 | mapbox/webgl-wind | 1,108 / 2026-06（算法 2017） | — | 最经典、最短 | 屏幕空间拖尾不适用 3D；RGBA8 编码过时 |
@@ -669,7 +669,7 @@ rr.log("world/pointcloud", rr.Points3D(xyz, colors=rgb), static=True)   # 静态
 
 ### 5.4 实时遥测（与 `refs/backend/{ws-protocol,rosbridge_suite,zenoh,mavlink}` 对比）
 
-| 排名 | 方案 | ★ / 活跃 | 角色 | 结论 |
+| 排名 | 方案 | stars / 活跃 | 角色 | 结论 |
 |---|---|---|---|---|
 | 1 | 自研 `anet.rt.v1`（r27）+ 本文 §3.6 语义 | — | 浏览器主协议 | 保持；补 QoS 三旋钮、Snapshot/Stream、传输竞速 |
 | 2 | moq-dev/moq | 1,546 / 2026-09-28 | 语义来源；V1.0 视频与扇出 | **补充**（不替换 r27） |

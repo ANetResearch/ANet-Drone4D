@@ -4,7 +4,7 @@
 >
 > 仓库快照（本文路径均相对各仓库根目录）：
 >
-> | 仓库 | 本地路径 | commit | 最后提交 | ★ | License |
+> | 仓库 | 本地路径 | commit | 最后提交 | stars | License |
 > |---|---|---|---|---|---|
 > | Potree-Next | `refs/web3d/Potree-Next` | `c0f497d` | 2025-10-07 | 124 | BSD-2 |
 > | Spark 2.2.0 | `refs/web3d/spark` | `9672638` | 2026-09-25 | 3660 | MIT |
@@ -25,11 +25,11 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **Spark 2.2**（World Labs） | Three.js 上最成熟的 3DGS 渲染器。有 LoD 树、RAD 分块格式、虚拟分页 `SplatPager`、Rust/WASM worker 排序、dyno 着色器图 | **port（核心）**：`traverse_lod_trees` 的"预算 + 像素阈值 + 注视点"贪心遍历，移植到点云八叉树；`SplatPager` 的页池、LRU 和按优先级抓取；stateless 粒子（`snowBox`）。**adopt（可选）**：`SparkGaussianLayer`，只在 WebGLRenderer 页面里用（独立的"高保真 3DGS 预览"路由）；`build-lod` 作为离线 LoD 工具。**reference**：RAD 格式、tiny-lod/bhatt-lod 合并 | V0.1（LOD 遍历）→ V0.3（粒子）→ V0.8（3DGS 预览） | ★★★★★ |
-| **SuperSplat Viewer**（PlayCanvas） | superspl.at 官方查看器，基于 PlayCanvas 引擎，WebGPU 优先、WebGL 回退。有流式 LOD、预算、实验性随机透明（stochastic）渲染器、体素碰撞 | **port**：WebGPU compute 剔除管线（projector 压实、上一帧 HiZ 遮挡剔除、256 桶深度排序、无 CPU 回读的 indirect args）；体素碰撞 SVO 格式与射线/球体查询（进 Geometry World）；"先锁最粗 LOD 再放开"的渐进揭示。**reference**：随机透明 + TAA、深度拾取。**skip**：整体嵌入（引擎不同、UI 不是 shadcn） | V0.4（碰撞）→ V0.6（compute 剔除） | ★★★★ |
-| **Potree-Next**（m-schuetz） | Potree 的 WebGPU 原型重写。存储缓冲顶点拉取、节点表、点 ID 拾取、反向 Z、EDL/HQS、Potree2/Potree3/COPC/3D Tiles 加载、3DGS 实验 | **port（技巧）**：一次 draw 画一个节点（`firstInstance` 作节点号）的顶点拉取、56 B 节点表、`r32uint` 点 ID 附件拾取、反向 Z 无限远投影 + `depth32float`、timestamp-query 分段计时、EDL 参数。**reference**：Potree3 单文件格式（内节点体素化、相对父体素的 childmask 编码、8 B/8 样本的类 BC 颜色块）。**skip**：直接依赖 | V0.1（反向 Z、拾取）→ V0.6（WebGPU 管线） | ★★★ |
-| **splat**（antimatter15） | 最薄的 WebGL2 3DGS 实现，约 1500 行 | **reference**：worker 内 16 位单趟计数排序、视线方向变化阈值、节流排序、按重要性排序的渐进流式 `.splat` | V0.8（仅作对照） | ★★ |
-| 补充：three.js r186 `GaussianSplat` | TSL 实现的 3DGS。只支持 WebGPURenderer（含 `forceWebGL` 回退），GPU 计数排序（4096 桶），WebGL 后端用 CPU 排序 | **adopt**（r03 结论，本文确认）：`GaussianLayer` 默认实现；LoD 由我们移植的 Spark 遍历在瓦片层完成 | V0.8 | ★★★★★ |
+| **Spark 2.2**（World Labs） | Three.js 上最成熟的 3DGS 渲染器。有 LoD 树、RAD 分块格式、虚拟分页 `SplatPager`、Rust/WASM worker 排序、dyno 着色器图 | **port（核心）**：`traverse_lod_trees` 的"预算 + 像素阈值 + 注视点"贪心遍历，移植到点云八叉树；`SplatPager` 的页池、LRU 和按优先级抓取；stateless 粒子（`snowBox`）。**adopt（可选）**：`SparkGaussianLayer`，只在 WebGLRenderer 页面里用（独立的"高保真 3DGS 预览"路由）；`build-lod` 作为离线 LoD 工具。**reference**：RAD 格式、tiny-lod/bhatt-lod 合并 | V0.1（LOD 遍历）→ V0.3（粒子）→ V0.8（3DGS 预览） | 5/5 |
+| **SuperSplat Viewer**（PlayCanvas） | superspl.at 官方查看器，基于 PlayCanvas 引擎，WebGPU 优先、WebGL 回退。有流式 LOD、预算、实验性随机透明（stochastic）渲染器、体素碰撞 | **port**：WebGPU compute 剔除管线（projector 压实、上一帧 HiZ 遮挡剔除、256 桶深度排序、无 CPU 回读的 indirect args）；体素碰撞 SVO 格式与射线/球体查询（进 Geometry World）；"先锁最粗 LOD 再放开"的渐进揭示。**reference**：随机透明 + TAA、深度拾取。**skip**：整体嵌入（引擎不同、UI 不是 shadcn） | V0.4（碰撞）→ V0.6（compute 剔除） | 4/5 |
+| **Potree-Next**（m-schuetz） | Potree 的 WebGPU 原型重写。存储缓冲顶点拉取、节点表、点 ID 拾取、反向 Z、EDL/HQS、Potree2/Potree3/COPC/3D Tiles 加载、3DGS 实验 | **port（技巧）**：一次 draw 画一个节点（`firstInstance` 作节点号）的顶点拉取、56 B 节点表、`r32uint` 点 ID 附件拾取、反向 Z 无限远投影 + `depth32float`、timestamp-query 分段计时、EDL 参数。**reference**：Potree3 单文件格式（内节点体素化、相对父体素的 childmask 编码、8 B/8 样本的类 BC 颜色块）。**skip**：直接依赖 | V0.1（反向 Z、拾取）→ V0.6（WebGPU 管线） | 3/5 |
+| **splat**（antimatter15） | 最薄的 WebGL2 3DGS 实现，约 1500 行 | **reference**：worker 内 16 位单趟计数排序、视线方向变化阈值、节流排序、按重要性排序的渐进流式 `.splat` | V0.8（仅作对照） | 2/5 |
+| 补充：three.js r186 `GaussianSplat` | TSL 实现的 3DGS。只支持 WebGPURenderer（含 `forceWebGL` 回退），GPU 计数排序（4096 桶），WebGL 后端用 CPU 排序 | **adopt**（r03 结论，本文确认）：`GaussianLayer` 默认实现；LoD 由我们移植的 Spark 遍历在瓦片层完成 | V0.8 | 5/5 |
 
 **实现者先读这几条：**
 
@@ -493,7 +493,7 @@ Pass E  reduce：本帧深度 → 8×8 最大深度（atomicMax(bitcast<u32>(dep
 
 ```
 P_inf_ZO = [[f/a,0,0,0],[0,f,0,0],[0,0,-1,-1],[0,0,-n,0]]   (列主序)
-remap    = z' = −z + w                    ⇒  ndc_z = n / d   (近 1，远 0)
+remap    = z' = −z + w                    =>  ndc_z = n / d  (近 1，远 0)
 depth32float, depthCompare = "greater-equal", depthClearValue = 0
 线性化：d = n / ndc_z   （EDL、拾取、雾都用它）
 ```
@@ -663,8 +663,8 @@ export interface LayerBudget { costUnits: number; tauPx: number; foveation?: Fov
 
 | 维度 | Spark | SuperSplat Viewer | Potree-Next | splat |
 |---|---|---|---|---|
-| ★ / 2026 活跃度 | 3660 / 很活跃（2.2，2026-09） | 579 / 很活跃（2026-09-26） | 124 / 停滞（2025-10） | 3072 / 停滞 |
-| 与主栈（Three.js WebGPURenderer）兼容 | ✗（只支持 WebGLRenderer） | ✗（PlayCanvas） | ✗（自研 WebGPU 渲染器） | ✗ |
+| stars / 2026 活跃度 | 3660 / 很活跃（2.2，2026-09） | 579 / 很活跃（2026-09-26） | 124 / 停滞（2025-10） | 3072 / 停滞 |
+| 与主栈（Three.js WebGPURenderer）兼容 | no（只支持 WebGLRenderer） | no（PlayCanvas） | no（自研 WebGPU 渲染器） | no |
 | 可移植算法价值 | **最高**：LoD 遍历、分页、排序、合并、RAD | **高**：compute 剔除、碰撞、揭示 | **中高**：WebGPU 点云基础技巧 | 低 |
 | 点云直接相关度 | 中（算法可迁移） | 中（管线可迁移） | **高**（本身就是点云） | 低 |
 | 3DGS 成熟度 | **最高**（分页 LoD、2DGS、景深、编辑） | 高（流式 LOD、GPU 排序） | 实验 | 入门 |

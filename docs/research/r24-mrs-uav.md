@@ -3,11 +3,11 @@
 
 > 研究单元：r24 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §26–§30（Drone Simulation / 状态模型 / 多机 / 控制模式）、§36–§37（通信与频率）、§38–§40（UI）、§49（V0.6 Multi-UAV）
 >
-> 仓库快照：`refs/sim/mrs_uav_system` @ `3340bfe`（2026-08-03，★640，分支 `ros2`）。这是一个**元仓库**，一共只有 41 个文件：README、两个 metapackage 的 `package.xml`/`CMakeLists.txt`、docker bake 和 CI 脚本，**没有一行算法代码**。
+> 仓库快照：`refs/sim/mrs_uav_system` @ `3340bfe`（2026-08-03，640 stars，分支 `ros2`）。这是一个**元仓库**，一共只有 41 个文件：README、两个 metapackage 的 `package.xml`/`CMakeLists.txt`、docker bake 和 CI 脚本，**没有一行算法代码**。
 >
 > 为了满足"深入读源码"的要求，我把真正承载逻辑的子仓库 shallow clone 到了 `.cache/research/r24/`（`refs/` 未做任何改动）：
 >
-> | 子仓库（`ros2` 分支） | ★ | 最后推送 | 主要内容 |
+> | 子仓库（`ros2` 分支） | stars | 最后推送 | 主要内容 |
 > |---|---|---|---|
 > | `mrs_uav_core` | 8 | 2026-08-14 | Core 元包，用 gitman 列出 11 个子模块 |
 > | `mrs_uav_managers` | 30 | 2026-09-21 | **UavManager / ControlManager / SafetyAreaManager** / Constraint / Gain / Estimation / Transform，约 47k 行 |
@@ -25,19 +25,19 @@
 
 | 仓库 / 子模块 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| `mrs_uav_system`（元仓库本体） | 发布入口：metapackage、PPA、docker、依赖清单 | **reference**：只用来理解整体栈和依赖 | — | ★★☆☆☆ |
-| `mrs_multirotor_simulator/..._core`（`multirotor_model.hpp`、`controllers/*.hpp`、`mixer.hpp`） | 18 状态刚体，一阶电机，RK4，位置→速度→加速度→姿态→角速度→混控的完整级联 | **port**：numpy 向量化后作为 MVP Mock Dynamics。**已实测**：稳定，400 机 RTF 1.6 | V0.1（MVP）/ V0.4（风阻耦合） | ★★★★★ |
-| `mrs_uav_managers/control_manager`（`timerSafety`、eland/ehover/failsafe、escalating failsafe、bumper、reference 校验） | 飞行中的安全裁决层：控制误差、倾角、状态估计超时、跟踪器/控制器异常 | **port**：阈值、语义和互锁（latch、grace、callbacks_enabled）全部移植进 Safety FSM | V0.2 | ★★★★★ |
-| `mrs_uav_managers/uav_manager`（takeoff 前置条件、landing FSM、max/min height、max throttle、flight timer） | 任务级飞行生命周期 | **port**：起降流程、高度纠正、落地检测 | V0.2 | ★★★★★ |
-| `mrs_uav_managers/safety_area_manager` + `mrs_lib/safety_zone` | 多边形棱柱地理围栏 + 禁飞棱柱，点和路径校验（每米 20 步离散） | **port**：Geofence 服务 + 轨迹截断/吸附 | V0.2 | ★★★★★ |
-| `mrs_uav_trackers/line_tracker.cpp` | 梯形速度参考生成，含 STOP_MOTION 刹车 | **port**：Mock 的 GoTo/RTL 参考生成器 | V0.1 | ★★★★☆ |
-| `mrs_uav_trackers/mpc_tracker.cpp`（`checkTrajectoryForCollisions`） | 多机：共享预测轨迹，按优先级爬升 + 减速避让 | **port**：只移植避碰逻辑，不移植 MPC | V0.6 | ★★★★☆ |
-| `mrs_uav_controllers`（Se3 / Failsafe / Emergency） | 几何控制律、前馈式失效下降 | **reference**（Se3 控制律）+ **port**（Failsafe 前馈下降语义） | V0.4 / V0.2 | ★★★☆☆ |
-| `mrs_lib/errorgraph` + `mrs_uav_status/topic_info.cpp` | 依赖图根因分析；话题频率红黄绿三色 | **port**：Health Registry | V0.2–V0.3 | ★★★★☆ |
-| `mrs_uav_autostart` | preflight：静止、离地高度、陀螺仪、话题存活、在围栏内，加 5 s 安全倒计时 | **port**：Preflight 检查项 | V0.2 | ★★★☆☆ |
-| `mrs_msgs`（ControlManagerDiagnostics / UavManagerDiagnostics / FutureTrajectory / Prism / ObstacleSectors） | 数据契约 | **port**：字段语义并入我们的 `DroneState` / `SafetyStatus` / `GeofencePrism` | V0.1 | ★★★★☆ |
-| `mrs_mpc_solvers`（CVXGEN 生成，约 2.4 万行 LDL） | 固定 40 步 QP | **skip**：不可再生成，也不需要 | — | ★☆☆☆☆ |
-| 完整 ROS2 Jazzy 栈（PPA 安装） | 作为可选的"MRS-SITL 后端" | **skip（MVP）/ reference（V0.6+）** | V0.6+ 可选 | ★★☆☆☆ |
+| `mrs_uav_system`（元仓库本体） | 发布入口：metapackage、PPA、docker、依赖清单 | **reference**：只用来理解整体栈和依赖 | — | 2/5 |
+| `mrs_multirotor_simulator/..._core`（`multirotor_model.hpp`、`controllers/*.hpp`、`mixer.hpp`） | 18 状态刚体，一阶电机，RK4，位置→速度→加速度→姿态→角速度→混控的完整级联 | **port**：numpy 向量化后作为 MVP Mock Dynamics。**已实测**：稳定，400 机 RTF 1.6 | V0.1（MVP）/ V0.4（风阻耦合） | 5/5 |
+| `mrs_uav_managers/control_manager`（`timerSafety`、eland/ehover/failsafe、escalating failsafe、bumper、reference 校验） | 飞行中的安全裁决层：控制误差、倾角、状态估计超时、跟踪器/控制器异常 | **port**：阈值、语义和互锁（latch、grace、callbacks_enabled）全部移植进 Safety FSM | V0.2 | 5/5 |
+| `mrs_uav_managers/uav_manager`（takeoff 前置条件、landing FSM、max/min height、max throttle、flight timer） | 任务级飞行生命周期 | **port**：起降流程、高度纠正、落地检测 | V0.2 | 5/5 |
+| `mrs_uav_managers/safety_area_manager` + `mrs_lib/safety_zone` | 多边形棱柱地理围栏 + 禁飞棱柱，点和路径校验（每米 20 步离散） | **port**：Geofence 服务 + 轨迹截断/吸附 | V0.2 | 5/5 |
+| `mrs_uav_trackers/line_tracker.cpp` | 梯形速度参考生成，含 STOP_MOTION 刹车 | **port**：Mock 的 GoTo/RTL 参考生成器 | V0.1 | 4/5 |
+| `mrs_uav_trackers/mpc_tracker.cpp`（`checkTrajectoryForCollisions`） | 多机：共享预测轨迹，按优先级爬升 + 减速避让 | **port**：只移植避碰逻辑，不移植 MPC | V0.6 | 4/5 |
+| `mrs_uav_controllers`（Se3 / Failsafe / Emergency） | 几何控制律、前馈式失效下降 | **reference**（Se3 控制律）+ **port**（Failsafe 前馈下降语义） | V0.4 / V0.2 | 3/5 |
+| `mrs_lib/errorgraph` + `mrs_uav_status/topic_info.cpp` | 依赖图根因分析；话题频率红黄绿三色 | **port**：Health Registry | V0.2–V0.3 | 4/5 |
+| `mrs_uav_autostart` | preflight：静止、离地高度、陀螺仪、话题存活、在围栏内，加 5 s 安全倒计时 | **port**：Preflight 检查项 | V0.2 | 3/5 |
+| `mrs_msgs`（ControlManagerDiagnostics / UavManagerDiagnostics / FutureTrajectory / Prism / ObstacleSectors） | 数据契约 | **port**：字段语义并入我们的 `DroneState` / `SafetyStatus` / `GeofencePrism` | V0.1 | 4/5 |
+| `mrs_mpc_solvers`（CVXGEN 生成，约 2.4 万行 LDL） | 固定 40 步 QP | **skip**：不可再生成，也不需要 | — | 1/5 |
+| 完整 ROS2 Jazzy 栈（PPA 安装） | 作为可选的"MRS-SITL 后端" | **skip（MVP）/ reference（V0.6+）** | V0.6+ 可选 | 2/5 |
 
 **实现者先读这几条**
 
@@ -90,11 +90,11 @@ mrs_uav_system_full
 │   │   ├── mrs_lib                       ← safety_zone / errorgraph / throttle model / 滤波器
 │   │   ├── mrs_msgs                      ← 全部消息与服务
 │   │   ├── mrs_uav_hw_api                ← HW API 插件接口 + HwApiManager（含 BatteryState 转发）
-│   │   ├── mrs_uav_managers              ← ★ 状态机与安全层
-│   │   ├── mrs_uav_trackers              ← ★ 参考生成 + 多机避碰
+│   │   ├── mrs_uav_managers              ← * 状态机与安全层
+│   │   ├── mrs_uav_trackers              ← * 参考生成 + 多机避碰
 │   │   ├── mrs_uav_controllers           ← SE(3)/MPC/Failsafe 控制器
 │   │   ├── mrs_uav_state_estimators
-│   │   ├── mrs_multirotor_simulator      ← ★ 轻量动力学仿真（替代 HW）
+│   │   ├── mrs_multirotor_simulator      ← * 轻量动力学仿真（替代 HW）
 │   │   ├── mrs_uav_autostart             ← preflight + 自动起飞
 │   │   ├── mrs_uav_trajectory_generation
 │   │   ├── mrs_uav_status                ← ncurses TUI（话题频率、电池、模式）
@@ -116,15 +116,15 @@ mrs_uav_system_full
  land_home ────┤ max throttle · flight timer · midair activation   │
                └───────┬──────────────── switchTracker/Controller ─┘
                        │ emergencyReference / eland / ehover 服务
-               ┌───────▼──────────── ControlManager ───────────────┐
- reference ───►│ setReference ─► validate (SafetyArea 点+路径)      │
- trajectory ──►│ ┌──────────┐  TrackerCommand  ┌────────────┐      │
- velocity ────►│ │ Tracker  │ ───────────────► │ Controller │──────┼──► HW API (PX4 / Sim)
-               │ │ (plugin) │ ◄── last output ─│ (plugin)   │      │
+               ┌───────v──────────── ControlManager ───────────────┐
+ reference ───>│ setReference ─> validate (SafetyArea 点+路径)      │
+ trajectory ──>│ ┌──────────┐  TrackerCommand  ┌────────────┐      │
+ velocity ────>│ │ Tracker  │ ───────────────> │ Controller │──────┼──> HW API (PX4 / Sim)
+               │ │ (plugin) │ <── last output ─│ (plugin)   │      │
                │ └──────────┘                  └────────────┘      │
                │ timerSafety 100 Hz · timerEland 10 Hz ·            │
                │ timerFailsafe 100 Hz · timerBumper 20 Hz           │
-               └───▲──────────────▲───────────────▲──────────────────┘
+               └───^──────────────^───────────────^──────────────────┘
                    │UavState      │Prism/valid    │constraints/gains
          EstimationManager   SafetyAreaManager   Constraint/GainManager
 ```
@@ -639,17 +639,17 @@ class HealthGraph:  # errorgraph：节点 = 组件，边 = "waiting_for"
 
 ```
                     ┌───────────────── Safety & Health Service（每个 world/sim 一个） ───────────────────┐
- fleet state (N) ──►│ L0 FastGuard   100 Hz  向量化：tilt/tilt_err/pos_err/state_age/throttle         │
+ fleet state (N) ──>│ L0 FastGuard   100 Hz  向量化：tilt/tilt_err/pos_err/state_age/throttle         │
                     │ L1 MissionGuard 10 Hz  逐机：geofence/高度/电池/链路/preflight                   │
                     │ L2 FleetGuard   2–5 Hz 多机：预测轨迹冲突/最小间距/bumper 扇区                   │
                     │ L3 HealthGraph  1 Hz   组件频率/根因/not_reporting                               │
                     │           │ SafetyEvent{code, level, drone, action}                           │
-                    │           ▼                                                                     │
+                    │           v                                                                     │
                     │ ActionArbiter：按严重度取最大 · 锁存 · grace · 迟滞 · operator override         │
-                    │           ▼                                                                     │
+                    │           v                                                                     │
                     │ FlightFSM（每机）：显式转移表，非法转移拒绝（EstimationManager 风格）            │
-                    │           ▼                                                                     │
-                    │ SafetyActuator ──► Mock：参考生成器 / 控制模式；PX4：MAVSDK 模式；UI：事件       │
+                    │           v                                                                     │
+                    │ SafetyActuator ──> Mock：参考生成器 / 控制模式；PX4：MAVSDK 模式；UI：事件       │
                     └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -787,7 +787,7 @@ P_hover = T^1.5 / sqrt(2·ρ·n·π·r²) / (FoM·η_motor) + P_avionics   # 动
 # x500：T=19.6 N → 约 232 W；4S 5 Ah（74 Wh）→ 悬停约 19 min（量级合理）
 V_oc(soc) = cells·(3.3 + 0.9·soc − 0.2·e^(−20·soc) + 0.1·soc³);  I = P/V_oc;  V = V_oc − I·R_int
 soc −= I·dt/(C·3600);  I_avg = 0.98·I_avg + 0.02·I                  # PX4 同样使用平均电流
-t_rem_usable = (soc − BAT_EMERGEN)·C/I_avg·3600                     # ★ 算到 emergency 阈值为止，而非 0
+t_rem_usable = (soc − BAT_EMERGEN)·C/I_avg·3600                     # * 算到 emergency 阈值为止，而非 0
 t_rtl = d_home/v_cruise + max(0, z_rtl − z)/v_up + z_rtl/v_land (+ 逆风修正：d_home/(v_cruise − w_head))
 if soc ≤ BAT_CRIT or t_rem_usable < 1.3·t_rtl: RTL
 ```
@@ -802,7 +802,7 @@ if soc ≤ BAT_CRIT or t_rem_usable < 1.3·t_rtl: RTL
 | 链路 | 检测 | 策略 | 说明 |
 |---|---|---|---|
 | 状态估计 / 遥测源（sim→supervisor） | 超过 0.1 s 无新状态 | FAILSAFE | 等价于 MRS 的 odometry 超时，是最危险的一类 |
-| GCS / 操作员链路（browser↔server，或真机数传） | heartbeat 1–2 Hz | 1.5 s WARN → 3 s HOLD → 13 s RTL | PX4 语义。仿真里浏览器断开也算一种情形，可以按配置关闭（`gcs_loss_policy: ignore`，用于无人值守批量仿真） |
+| GCS / 操作员链路（browser<->server，或真机数传） | heartbeat 1–2 Hz | 1.5 s WARN → 3 s HOLD → 13 s RTL | PX4 语义。仿真里浏览器断开也算一种情形，可以按配置关闭（`gcs_loss_policy: ignore`，用于无人值守批量仿真） |
 | ANet / 机间链路（V1.0） | 邻居的 FutureTrajectory 超过 1 s 未更新 | 把对方视为不避让的一方（`collision_avoidance=false`），本机主动让行 | MpcTracker 的 timeout 语义 |
 
 ### 4.8 数据契约
@@ -971,11 +971,11 @@ simulation/
 
 1. **`mrs_multirotor_simulator`（port）**：直接解决 MVP 的"无人机 mock"。零 ROS 依赖、可以向量化，已验证。
 2. **`mrs_uav_managers`（port 语义）**：Safety FSM 的阈值和互锁规则几乎都来自这里，活跃度最高（2026-09 仍在提交）。
-3. **`mrs_uav_trackers`（port LineTracker 与避碰）**：★45，活跃。
+3. **`mrs_uav_trackers`（port LineTracker 与避碰）**：45 stars，活跃。
 4. **`mrs_lib`（port safety_zone 与 errorgraph）**。
 5. **`mrs_uav_status` / `mrs_uav_autostart`（port 检查项和配色逻辑）**。
-6. **`mrs_uav_controllers`（reference）**：★96，是 star 最多的子仓库，但对 MVP 价值有限；Se3 控制律在 V0.4 高保真时再参考。
-7. **`mrs_uav_system` 元仓库（reference）**：★640，用来了解依赖全景和发布方式。
+6. **`mrs_uav_controllers`（reference）**：96 stars，是 star 最多的子仓库，但对 MVP 价值有限；Se3 控制律在 V0.4 高保真时再参考。
+7. **`mrs_uav_system` 元仓库（reference）**：640 stars，用来了解依赖全景和发布方式。
 8. **`mrs_mpc_solvers`（skip）**。
 
 ---

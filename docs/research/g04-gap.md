@@ -720,12 +720,12 @@ pack_ctrl = lambda owner, locked, native, pose: (owner & 7) | (int(locked) << 3)
 
 ```text
             准入失败（≤5 ms）                原生拒绝（DENIED/TEMP_REJECTED/FAILED/UNSUPPORTED/NOT_IN_CONTROL）
- call ──┬──────────────────────► REJECTED ◄──────────────────────────┐
+ call ──┬──────────────────────> REJECTED <──────────────────────────┐
         │ 准入通过：progress{phase:"admitted"}                        │
-        └─► DISPATCHED ──原生 ACK 或进程内确认──► ACCEPTED ──读回符合预期──► RUNNING ──完成判据──► SUCCEEDED
+        └─> DISPATCHED ──原生 ACK 或进程内确认──> ACCEPTED ──读回符合预期──> RUNNING ──完成判据──> SUCCEEDED
               │ 超过 ACK 时限                        │  被取代或被取消            │  抢占、失联、停滞、超时
-              ▼                                      ▼                            ▼
-           TIMEOUT                                CANCELED ◄──────────────────  FAILED
+              v                                      v                            v
+           TIMEOUT                                CANCELED <──────────────────  FAILED
 ```
 
 - 线上状态沿用 r27 的七个值。`DISPATCHED` 只在服务端内部使用，线上用 `progress{phase}` 表示。

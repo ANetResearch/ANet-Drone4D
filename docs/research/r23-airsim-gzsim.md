@@ -4,8 +4,8 @@
 > 研究单元：r23 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §11、§17–§27、§35–§37、§41、§45–§49
 >
 > 仓库快照（均为 shallow clone，只有 1 个提交）：
-> - `refs/sim/AirSim` @ `1ca93f6`（2026-09-15，"pin-actions" 维护性提交），★18516，1460 个文件，489 MB。UE 4.27 插件与平台无关的 C++ 核心 `AirLib`。
-> - `refs/sim/gz-sim` @ `08b3b70`（2026-09-25，"Use floating-point aspect ratio for thermal camera range"），★1520，2090 个文件，398 MB。`project(gz-sim VERSION 11.0.0)`，`VERSION_SUFFIX pre1`，也就是 Jetty（gz-sim 10，2025-09-30 发布）之后的 main 分支。
+> - `refs/sim/AirSim` @ `1ca93f6`（2026-09-15，"pin-actions" 维护性提交），18516 stars，1460 个文件，489 MB。UE 4.27 插件与平台无关的 C++ 核心 `AirLib`。
+> - `refs/sim/gz-sim` @ `08b3b70`（2026-09-25，"Use floating-point aspect ratio for thermal camera range"），1520 stars，2090 个文件，398 MB。`project(gz-sim VERSION 11.0.0)`，`VERSION_SUFFIX pre1`，也就是 Jetty（gz-sim 10，2025-09-30 发布）之后的 main 分支。
 >
 > 本机实测产物都在 `.cache/research/r23/`，没有改动 `refs/`：
 > - `fastphys.py`：把 AirSim `FastPhysicsEngine`、`RotorActuator`、`MultiRotorParams::setupFrameGenericQuad`、SimpleFlight 级联控制和 Mixer 移植为 numpy SoA 向量化实现；同时移植了 gz `LeeVelocityController` 和 gz `WindEffects` 阵风生成器。
@@ -21,20 +21,20 @@
 
 | 仓库 / 模块 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **gz-sim（整体）** | Gazebo 新架构（ECS + System 插件），PX4 官方 SITL 仿真器 | **adopt**：作为 V0.2+ 的 PX4 SITL 物理后端，由我们的导出器生成 world | V0.2 / V0.5 / V0.6 | ★★★★★ |
-| gz `WindEffects` | 全局均匀风：一阶低通 + 正弦 + 高斯噪声的阵风生成器；`F = k·m·(w − v)` 施加在 link 上 | **port** 阵风生成器（Environment Level 1）；**adopt** 为 gz 后端的风插件，但 **k 必须标定** | V0.3 / V0.4 | ★★★★★ |
-| gz `EnvironmentPreload` + `EnvironmentalSensorSystem` | 从 CSV 加载时变体网格，传感器按位姿三线性查值，支持 4 种坐标变换 | **port** 数据模式：Environment 场 `E(x,y,z,t)` 的交换格式和查询语义 | V0.4 | ★★★★☆ |
-| gz `MulticopterMotorModel` + `MulticopterVelocityControl`（Lee 几何控制） | 转子推力 `kf·ω²`、转子阻力、滚转力矩；SE(3) 几何速度控制 | **port**：给 Level B Mock 用的控制器和转子风阻模型 | V0.4 | ★★★★☆ |
-| gz `CpuLidar`（仅 gz-sim 11） | 用 DART + Bullet 的批量射线求交做 LiDAR，**不需要 GPU** | **adopt**（11.0 发布后）：无 GPU 服务器上的 LiDAR 仿真 | V0.5 | ★★★★☆ |
-| gz `Levels/Performers` | 按 performer 的 AABB 与 level 的外扩 buffer 做滞回加载/卸载 | **reference**：World Service 分区激活，以及 Web 端 tile 卸载的滞回 | V0.1（思想）/ V0.6 | ★★★☆☆ |
-| gz `websocket_server` | gzweb 协议：`op,topic,type,payload` 四段帧，含 sub/unsub/throttle/req 等 13 种操作 | **reference**：我们 WS 协议的订阅与节流语义 | V0.1 | ★★★☆☆ |
-| **AirSim（整体）** | UE4 高保真仿真，**2022 年起宣布归档**，现在只有维护性提交 | **不运行**（skip）。**port** `AirLib` 的纯 C++ 算法 | — | ★★★☆☆ |
-| AirSim `FastPhysicsEngine` + `RotorActuator` + `MultiRotorParams` | 6 自由度刚体、转子一阶滞后、六面阻力、ISA 空气密度、地面锁 | **port**：Level B Mock 动力学。已用 numpy 移植并验证（§3.1–§3.6） | V0.3 / V0.4 | ★★★★★ |
-| AirSim SimpleFlight（级联 PID + Mixer） | 位置 P → 速度 PI → 角度 P → 角速率 P → QuadX 混控 | **reference + 部分 port**：增益表和 Mixer 可以直接用；性能不如 Lee（超调 1.58 m） | V0.4 | ★★★☆☆ |
-| AirSim `MultirotorApiBase::moveOnPath` | carrot 追踪、自适应前视、50 Hz 下发速度 | **port** 并修正终点处理：GoTo 和交互式 FollowPath | V0.1 / V0.2 | ★★★★☆ |
-| AirSim `api_goal_timeout`（60 ms 看门狗） | 超过 60 ms 收不到 API 指令，就在当前位置悬停 | **port**：Gateway 和 Mock 的指令看门狗 | V0.1 | ★★★★☆ |
-| AirSim 天气 API（`WeatherParameter` 0–1） | 纯视觉的材质参数集合，**不影响传感器和物理** | **reference**：只借鉴 UI 语义，不照搬"无物理量"的设计 | V0.3 | ★★☆☆☆ |
-| AirSim LiDAR / IMU / GPS / Baro 模型 | LiDAR 是理想射线（无噪声、无强度、不受天气影响）；IMU 有 ARW + bias 随机游走；GPS **没有位置噪声** | **port** 参数模型和 IMU 噪声；LiDAR 和 GPS 的噪声、天气退化要我们自己补（§3.10） | V0.4 / V0.5 | ★★★☆☆ |
+| **gz-sim（整体）** | Gazebo 新架构（ECS + System 插件），PX4 官方 SITL 仿真器 | **adopt**：作为 V0.2+ 的 PX4 SITL 物理后端，由我们的导出器生成 world | V0.2 / V0.5 / V0.6 | 5/5 |
+| gz `WindEffects` | 全局均匀风：一阶低通 + 正弦 + 高斯噪声的阵风生成器；`F = k·m·(w − v)` 施加在 link 上 | **port** 阵风生成器（Environment Level 1）；**adopt** 为 gz 后端的风插件，但 **k 必须标定** | V0.3 / V0.4 | 5/5 |
+| gz `EnvironmentPreload` + `EnvironmentalSensorSystem` | 从 CSV 加载时变体网格，传感器按位姿三线性查值，支持 4 种坐标变换 | **port** 数据模式：Environment 场 `E(x,y,z,t)` 的交换格式和查询语义 | V0.4 | 4/5 |
+| gz `MulticopterMotorModel` + `MulticopterVelocityControl`（Lee 几何控制） | 转子推力 `kf·ω²`、转子阻力、滚转力矩；SE(3) 几何速度控制 | **port**：给 Level B Mock 用的控制器和转子风阻模型 | V0.4 | 4/5 |
+| gz `CpuLidar`（仅 gz-sim 11） | 用 DART + Bullet 的批量射线求交做 LiDAR，**不需要 GPU** | **adopt**（11.0 发布后）：无 GPU 服务器上的 LiDAR 仿真 | V0.5 | 4/5 |
+| gz `Levels/Performers` | 按 performer 的 AABB 与 level 的外扩 buffer 做滞回加载/卸载 | **reference**：World Service 分区激活，以及 Web 端 tile 卸载的滞回 | V0.1（思想）/ V0.6 | 3/5 |
+| gz `websocket_server` | gzweb 协议：`op,topic,type,payload` 四段帧，含 sub/unsub/throttle/req 等 13 种操作 | **reference**：我们 WS 协议的订阅与节流语义 | V0.1 | 3/5 |
+| **AirSim（整体）** | UE4 高保真仿真，**2022 年起宣布归档**，现在只有维护性提交 | **不运行**（skip）。**port** `AirLib` 的纯 C++ 算法 | — | 3/5 |
+| AirSim `FastPhysicsEngine` + `RotorActuator` + `MultiRotorParams` | 6 自由度刚体、转子一阶滞后、六面阻力、ISA 空气密度、地面锁 | **port**：Level B Mock 动力学。已用 numpy 移植并验证（§3.1–§3.6） | V0.3 / V0.4 | 5/5 |
+| AirSim SimpleFlight（级联 PID + Mixer） | 位置 P → 速度 PI → 角度 P → 角速率 P → QuadX 混控 | **reference + 部分 port**：增益表和 Mixer 可以直接用；性能不如 Lee（超调 1.58 m） | V0.4 | 3/5 |
+| AirSim `MultirotorApiBase::moveOnPath` | carrot 追踪、自适应前视、50 Hz 下发速度 | **port** 并修正终点处理：GoTo 和交互式 FollowPath | V0.1 / V0.2 | 4/5 |
+| AirSim `api_goal_timeout`（60 ms 看门狗） | 超过 60 ms 收不到 API 指令，就在当前位置悬停 | **port**：Gateway 和 Mock 的指令看门狗 | V0.1 | 4/5 |
+| AirSim 天气 API（`WeatherParameter` 0–1） | 纯视觉的材质参数集合，**不影响传感器和物理** | **reference**：只借鉴 UI 语义，不照搬"无物理量"的设计 | V0.3 | 2/5 |
+| AirSim LiDAR / IMU / GPS / Baro 模型 | LiDAR 是理想射线（无噪声、无强度、不受天气影响）；IMU 有 ARW + bias 随机游走；GPS **没有位置噪声** | **port** 参数模型和 IMU 噪声；LiDAR 和 GPS 的噪声、天气退化要我们自己补（§3.10） | V0.4 / V0.5 | 3/5 |
 
 **关键结论（实现者先读这几条）**
 
@@ -243,7 +243,7 @@ Drag(q, v̄, ω̄, w):
 每个物理步都会更新一次（`MultiRotorPhysicsBody::updateSensorsAndController`）。PID 输出统一截断到 [−1, 1]。
 
 ```text
-Axis4 映射：axis0 = roll 通道 ↔ y（机体 vy），axis1 = pitch 通道 ↔ x（机体 vx），axis2 = yaw，axis3 = throttle ↔ z
+Axis4 映射：axis0 = roll 通道 <-> y（机体 vy），axis1 = pitch 通道 <-> x（机体 vx），axis2 = yaw，axis3 = throttle <-> z
 PositionWorld:   v_goal[a] = clip(0.25·(p_goal − p)[a]) · 6.0          (x, y, z 都是 P = 0.25；速度上限 6 m/s)
 VelocityWorld:   e_b = Rᵀ·v_goal − Rᵀ·v                                (目标和测量都转到机体系，含 yaw)
    roll_goal  = +clip(0.2·e_b.y)·(π/5.5)      pitch_goal = −clip(0.2·e_b.x)·(π/5.5)    (xy 只有 P，没有 I)
@@ -502,7 +502,7 @@ LiDAR 有效距离：   解 e^{−2σR}·(R_ref/R)²·SNR₀ = 1，得到 R_max(
 | Levels 滞回 | gz `LevelManager` | `apps/web` tile 调度、`world/service` | reference | V0.1 | 是 |
 | WS 订阅与限频语义 | gz `websocket_server` | `apps/api/ws` | reference | V0.1 | 是 |
 | 时钟与回放控制 | AirSim clocks | `simulation/clock` | port | V0.1 | 是 |
-| NED ↔ ENU 转换公式 | 本文 §3 开头 | `apps/api/gateway` | port | V0.1 | 是 |
+| NED <-> ENU 转换公式 | 本文 §3 开头 | `apps/api/gateway` | port | V0.1 | 是 |
 | FastPhysics 6 自由度 + 六面阻力 + ISA 密度 | AirSim `FastPhysicsEngine` | `simulation/mock`（Level B） | port | V0.3 / V0.4 | 否 |
 | Lee 几何控制 + 分配矩阵 | gz `multicopter_control` | `simulation/mock`（Level B） | port | V0.4 | 否 |
 | 转子诱导阻力 | gz `MulticopterMotorModel` | `simulation/mock`（Level B） | port | V0.4 | 否 |

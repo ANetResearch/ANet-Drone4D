@@ -13,7 +13,7 @@
 >
 > **本地克隆**（只读，路径都相对各仓库根目录）：
 >
-> | 本地路径 `refs/discovery/…` | commit | 最近提交 | ★（实测） | License |
+> | 本地路径 `refs/discovery/…` | commit | 最近提交 | stars（实测） | License |
 > |---|---|---|---|---|
 > | `voxelkloud-view` / `-loader` / `-react` / `-core` / `-format-potree` / `-format-copc` / `-format-3dtiles` / `-wasm-build` / `-wasm-core` | `23fbd7f` / `07161b5` / `d296740` / `96e3e7e` / `20aa419` / `7e6b2f2` / `f4c4dff` / `dc4e04e` / `b0f4b4e` | 2026-08-24 至 2026-09-24 | 0（组织创建于 2026-08-22） | MIT |
 > | `openlidarviewer` | `75599b4` | 2026-09-28 | 23 | AGPL-3.0（科研用途，按要求忽略） |
@@ -29,17 +29,17 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **voxelkloud**（view / loader / core / format-* / react；2026-08 新出现） | 基于 three ≥0.180 的 TS 点云渲染栈。提供三种光栅器：WebGPU compute 三遍软光栅、WebGL2 真 `gl_PointSize` 单缓冲单 draw、three 实例化四边形。另有两级预算 LOD 调度器、视频播放器式自动画质阶梯、流式取消与重试策略、octree-cut 局部点径，以及 Potree v2 / COPC / EPT / 3D Tiles 驱动 | **port（核心）**：`lod/select.ts`、`quality.ts`、`stream-policy.ts`、`cut.ts`、`sink-points.ts` 与 `points-glsl.ts`、`compute-wgsl.ts`、`BlockAllocator`、`SlotPool`，改写进 `PointCloudEngine`。**adopt（仅 dev）**：`@voxelkloud/react` 做对照页和性能基线 | V0.1（LOD、调度、GL 单 draw）→ V0.3（compute 光栅）→ V0.5（COPC） | ★★★★★（与本项目契合度最高，但仓库很新，只 port 不 adopt） |
-| **NASA-AMMOS/3DTilesRendererJS** 0.5.3 | three.js、Babylon、r3f 通用的 3D Tiles 渲染器。2026-09-18 新增 `PotreePlugin`（把 Potree v1/v2 映射成合成的 ADD tileset）和 `PointCloudEffectsPlugin`；核心层 `core/renderer` 与渲染引擎无关 | **adopt**：V0.8 起用于 3D Tiles 地形、倾斜、Google 3D Tiles 等网格瓦片。**reference**：SSE 公式、LRU（字节上下限）、下载与解析优先队列、`TilesFadePlugin`。**skip**：它的点云材质（基于经典 WebGLRenderer 的 `PointsMaterial` 补丁） | V0.8（GIS 底座）/ V0.1（公式对齐） | ★★★★☆ |
-| **Aurtechmx/openlidarviewer**（OLV，2026-06 新出现） | 纯浏览器 LiDAR 查看器，WebGPU 优先、WebGL2 回退。COPC、EPT、3D Tiles 流式，OPFS 外存建索引，工程上约束很严 | **port（策略）**：`frameBudgetGovernor`（负载归一化 + 滞回）、`adaptiveDpr`（按角速度降 DPR）、`fadeDither`（Weyl 抖动淡入）、`evictionPolicy`（1.5/1.15 滞回 + 1 s 驻留保护）、`renderBackendChoice`（真实探测 adapter）、`depthCapForVelocity`。**reference**：OPFS 外存索引管线。**skip**：它的实例化 sprite 渲染器 | V0.1–V0.3 | ★★★★ |
-| **PlayCanvas splat-transform 3.7 + engine `gsplat-unified`** | 3DGS LOD 离线构建（Streamed SOG，`lod-meta.json`），引擎侧跨实例“性价比”预算分配器 | **port**：`GSplatBudgetBalancer`（按覆盖率 × 误差下降 / 代价的贪心背包，512 个对数桶），用于点云瓦片、多城市、splat 之间的**全局预算仲裁**。**adopt**：`@playcanvas/splat-transform` CLI 用于 V0.8 离线构建 splat LOD | V0.6（仲裁）/ V0.8（3DGS） | ★★★★ |
-| **connormanning/copc.js**（+ hobuinc/laz-perf） | COPC 读取的事实标准：`Copc.create` 读 header 与 VLR，`Hierarchy.load` 分页读层级，`loadPointDataView` 用 laz-perf 解压 | **adopt**：在 worker 里读 COPC（World Package 的归档与交换格式、用户拖入 COPC URL） | V0.5 | ★★★☆ |
-| **manycoretech/aholo-viewer**（2026-05 开源） | 群核的 3DGS 与 Mesh 渲染器，自研 egs 引擎（WebGL2）。chunk 级 LOD、官方称支持 10 亿 splat，带体素碰撞 | **reference**：chunk LOD 的“距离分档 + 滞回 tick + 调度节流 + 相邻 chunk 合并 draw” | V0.8 | ★★★ |
-| loaders.gl `modules/copc`（v5.0.0-alpha.6，npm 未发布） | COPC TileSource：Arrow 输出，并发信号量，Range 缓存 | **reference**：作为 copc.js 的替代实现对照 | V0.5+ | ★★★ |
-| Rerun web viewer（rerun-io/rerun ★11,503，`@rerun-io/web-viewer` 0.38.1） | 机器人多模态日志的 Web 查看器（wasm），提供 React 封装 | **adopt（可选，仅调试）**：后端仿真日志和轨迹的离线复盘；不能用作主沙盘 | V0.2+（dev） | ★★★ |
-| Visionary（★526，2025-12 创建，最近推送 2026-06） | WebGPU 3DGS/4DGS 平台，内置 ONNX Runtime，提供“Gaussian Generator 契约”和网格–高斯混合深度合成 | **reference**：V1.0 动态高斯的接口形态 | V1.0 | ★★☆ |
-| LidarScout（cg-tuwien，HPG 2025，★27） | 不做预处理、直接对海量 LAZ 做外存浏览：先读稀疏子采样，再做高度图重建（CUDA 桌面程序） | **reference**：真机 LAZ 的“秒开预览”思路 | V0.5 | ★★ |
-| 其余（Babylon.js GS 流式、Babylon-Lite、Reall3dViewer、GaussianSplats3D、gsplat.js、web-splat、three-loader-3dtiles、iTowns/Giro3D、CloudAnalyzer、vtk-js 等） | 见 §1 | **skip / reference** | — | ★–★★ |
+| **voxelkloud**（view / loader / core / format-* / react；2026-08 新出现） | 基于 three ≥0.180 的 TS 点云渲染栈。提供三种光栅器：WebGPU compute 三遍软光栅、WebGL2 真 `gl_PointSize` 单缓冲单 draw、three 实例化四边形。另有两级预算 LOD 调度器、视频播放器式自动画质阶梯、流式取消与重试策略、octree-cut 局部点径，以及 Potree v2 / COPC / EPT / 3D Tiles 驱动 | **port（核心）**：`lod/select.ts`、`quality.ts`、`stream-policy.ts`、`cut.ts`、`sink-points.ts` 与 `points-glsl.ts`、`compute-wgsl.ts`、`BlockAllocator`、`SlotPool`，改写进 `PointCloudEngine`。**adopt（仅 dev）**：`@voxelkloud/react` 做对照页和性能基线 | V0.1（LOD、调度、GL 单 draw）→ V0.3（compute 光栅）→ V0.5（COPC） | 5/5（与本项目契合度最高，但仓库很新，只 port 不 adopt） |
+| **NASA-AMMOS/3DTilesRendererJS** 0.5.3 | three.js、Babylon、r3f 通用的 3D Tiles 渲染器。2026-09-18 新增 `PotreePlugin`（把 Potree v1/v2 映射成合成的 ADD tileset）和 `PointCloudEffectsPlugin`；核心层 `core/renderer` 与渲染引擎无关 | **adopt**：V0.8 起用于 3D Tiles 地形、倾斜、Google 3D Tiles 等网格瓦片。**reference**：SSE 公式、LRU（字节上下限）、下载与解析优先队列、`TilesFadePlugin`。**skip**：它的点云材质（基于经典 WebGLRenderer 的 `PointsMaterial` 补丁） | V0.8（GIS 底座）/ V0.1（公式对齐） | 4.5/5 |
+| **Aurtechmx/openlidarviewer**（OLV，2026-06 新出现） | 纯浏览器 LiDAR 查看器，WebGPU 优先、WebGL2 回退。COPC、EPT、3D Tiles 流式，OPFS 外存建索引，工程上约束很严 | **port（策略）**：`frameBudgetGovernor`（负载归一化 + 滞回）、`adaptiveDpr`（按角速度降 DPR）、`fadeDither`（Weyl 抖动淡入）、`evictionPolicy`（1.5/1.15 滞回 + 1 s 驻留保护）、`renderBackendChoice`（真实探测 adapter）、`depthCapForVelocity`。**reference**：OPFS 外存索引管线。**skip**：它的实例化 sprite 渲染器 | V0.1–V0.3 | 4/5 |
+| **PlayCanvas splat-transform 3.7 + engine `gsplat-unified`** | 3DGS LOD 离线构建（Streamed SOG，`lod-meta.json`），引擎侧跨实例“性价比”预算分配器 | **port**：`GSplatBudgetBalancer`（按覆盖率 × 误差下降 / 代价的贪心背包，512 个对数桶），用于点云瓦片、多城市、splat 之间的**全局预算仲裁**。**adopt**：`@playcanvas/splat-transform` CLI 用于 V0.8 离线构建 splat LOD | V0.6（仲裁）/ V0.8（3DGS） | 4/5 |
+| **connormanning/copc.js**（+ hobuinc/laz-perf） | COPC 读取的事实标准：`Copc.create` 读 header 与 VLR，`Hierarchy.load` 分页读层级，`loadPointDataView` 用 laz-perf 解压 | **adopt**：在 worker 里读 COPC（World Package 的归档与交换格式、用户拖入 COPC URL） | V0.5 | 3.5/5 |
+| **manycoretech/aholo-viewer**（2026-05 开源） | 群核的 3DGS 与 Mesh 渲染器，自研 egs 引擎（WebGL2）。chunk 级 LOD、官方称支持 10 亿 splat，带体素碰撞 | **reference**：chunk LOD 的“距离分档 + 滞回 tick + 调度节流 + 相邻 chunk 合并 draw” | V0.8 | 3/5 |
+| loaders.gl `modules/copc`（v5.0.0-alpha.6，npm 未发布） | COPC TileSource：Arrow 输出，并发信号量，Range 缓存 | **reference**：作为 copc.js 的替代实现对照 | V0.5+ | 3/5 |
+| Rerun web viewer（rerun-io/rerun 11,503 stars，`@rerun-io/web-viewer` 0.38.1） | 机器人多模态日志的 Web 查看器（wasm），提供 React 封装 | **adopt（可选，仅调试）**：后端仿真日志和轨迹的离线复盘；不能用作主沙盘 | V0.2+（dev） | 3/5 |
+| Visionary（526 stars，2025-12 创建，最近推送 2026-06） | WebGPU 3DGS/4DGS 平台，内置 ONNX Runtime，提供“Gaussian Generator 契约”和网格–高斯混合深度合成 | **reference**：V1.0 动态高斯的接口形态 | V1.0 | 2.5/5 |
+| LidarScout（cg-tuwien，HPG 2025，27 stars） | 不做预处理、直接对海量 LAZ 做外存浏览：先读稀疏子采样，再做高度图重建（CUDA 桌面程序） | **reference**：真机 LAZ 的“秒开预览”思路 | V0.5 | 2/5 |
+| 其余（Babylon.js GS 流式、Babylon-Lite、Reall3dViewer、GaussianSplats3D、gsplat.js、web-splat、three-loader-3dtiles、iTowns/Giro3D、CloudAnalyzer、vtk-js 等） | 见 §1 | **skip / reference** | — | 1/5–2/5 |
 
 **实现者先读这 12 条（每条都有源码或实测依据）**
 
@@ -100,7 +100,7 @@
 
 ### 1.1 候选全表（star 与最近提交都是 2026-09-28 实测）
 
-| 分组 | 仓库 | ★ | 最近提交 | 创建 | 语言 / 许可 | 一句话 | 结论 |
+| 分组 | 仓库 | stars | 最近提交 | 创建 | 语言 / 许可 | 一句话 | 结论 |
 |---|---|---|---|---|---|---|---|
 | A. Web 点云渲染器 | **voxelkloud/view**（+ loader/core/react/vue/format-*/wasm-*，共 16 个仓库） | 0 | 2026-09-25 | 2026-08-22 | TS+Rust / MIT | three ≥0.180 的 WebGPU/WebGL2 点云栈，npm `@voxelkloud/view@0.8.0` | **port** |
 | A | **Aurtechmx/openlidarviewer** | 23 | 2026-09-28 | 2026-06-03 | TS / AGPL-3.0 | 浏览器 LiDAR 工作台，WebGPU + WebGL2，COPC/EPT/3D Tiles 流式，OPFS 外存索引 | **port（策略）** |

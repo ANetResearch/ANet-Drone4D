@@ -3,17 +3,17 @@
 > 研究单元：r10 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §7–8、§11、§14–16、§41、§43、§51
 >
 > 仓库快照（均为 shallow clone，路径相对 `refs/world/`）：
-> - `3d-tiles` @ `2177ba1`（2026-08-17，★2612）：3D Tiles 1.1 规范（OGC Community Standard），另含 `next/2.0/` 草案（最后更新 2026-08-18）
-> - `3d-tiles-tools` @ `4ca692e`（2026-07-24，★539，npm `3d-tiles-tools@0.5.4`，TypeScript）
-> - `cdb-to-3dtiles` @ `0f9487f`（2024-05-07，★92，C++17）
-> - `potree23dtiles` @ `a844fba`（2021-10-03，★58，Python）
+> - `3d-tiles` @ `2177ba1`（2026-08-17，2612 stars）：3D Tiles 1.1 规范（OGC Community Standard），另含 `next/2.0/` 草案（最后更新 2026-08-18）
+> - `3d-tiles-tools` @ `4ca692e`（2026-07-24，539 stars，npm `3d-tiles-tools@0.5.4`，TypeScript）
+> - `cdb-to-3dtiles` @ `0f9487f`（2024-05-07，92 stars，C++17）
+> - `potree23dtiles` @ `a844fba`（2021-10-03，58 stars，Python）
 >
 > 补充对照（只读引用，不属于本单元 clone 清单）：
 > - `refs/web3d/cesium` @ `b3155a8`（2026-09-25）：SSE 与遍历的事实标准实现
 > - `refs/web3d/potree`：点预算与优先级
-> - **NASA-AMMOS/3DTilesRendererJS** @ `b70e594`（v0.5.3，2026-09-28，★2475）：本单元额外 clone 到 `.cache/research/r10/3DTilesRendererJS`，它是 Three.js 生态里 3D Tiles 的事实标准加载器，2026-09 刚加入 Potree 插件
+> - **NASA-AMMOS/3DTilesRendererJS** @ `b70e594`（v0.5.3，2026-09-28，2475 stars）：本单元额外 clone 到 `.cache/research/r10/3DTilesRendererJS`，它是 Three.js 生态里 3D Tiles 的事实标准加载器，2026-09 刚加入 Potree 插件
 > - **py3dtiles 12.1.1**（PyPI，GitLab 主仓 2026-09-18 仍活跃）：Python 点云切片器，做了实测
-> - **CesiumGS/3d-tiles-validator 0.6.1**（★475，2026-09-16）：实测校验工具
+> - **CesiumGS/3d-tiles-validator 0.6.1**（475 stars，2026-09-16）：实测校验工具
 >
 > 本机实测产物：`.cache/research/r10/`。其中 `wp_tiler.py` 是切片原型，`sse_select.py` 是遍历与 SSE 参考实现，`parse_subtree.py` 用来解析 subtree，`ply_stats.py` 统计数据；`wp_sf/` 与 `py3dtiles_sf/` 是两种切片输出，另有两份 validator 报告。
 > 所有路径都相对各自仓库根目录。
@@ -24,13 +24,13 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **3d-tiles**（规范） | HLOD 流式 3D 容器的开放标准。1.1 核心包含 implicit tiling、glTF 内容和 3D Metadata；2.0 草案改为以 glTF 2.1 为基础 | **adopt（作为格式标准）**：World Package 的点云、网格、3DGS 可视层直接采用 3D Tiles 1.1 子集。**port**：SSE 语义、subtree 位流、Morton 索引 | V0.1 起（点云层原生格式），V0.5 地理配准后进入 Cesium，V1.0 评估 2.0 | ★★★★★ |
-| **3d-tiles-tools** | 3D Tiles 的处理工具箱：格式升级（pnts→glb）、打包（3tz/3dtiles）、合并、服务、分析、遍历库。**它不是切片器**，不能把 PLY/LAS 切成八叉树 | **port**：`MortonOrder`、`OctreeCoordinates`、`BufferAvailabilityInfo`、`BinarySubtreeDataResolver`、`BoundingVolumeDerivation`、`GltfTransformPointClouds`。**adopt**：CLI 的 `convert` / `mergeJson` / `serve` / `upgrade` 用于打包、合并和本地服务 | V0.1（移植 implicit 客户端），V0.5（打包与合并） | ★★★★ |
-| **cdb-to-3dtiles** | OGC CDB（军用仿真地形库）→ 3D Tiles 1.0 转换器，覆盖地形、影像、模型、矢量 | **reference**：大区域"瓦片集的瓦片集"组织方式、REPLACE 地形补洞、父级影像回退、地形贴地查询、meshopt 简化参数。反例：几何误差 `300000/2^L` 与数据无关 | V0.5–V0.6（网格/地形层、多区域组织） | ★★ |
-| **potree23dtiles** | Potree 1.7/2.0 八叉树 → 3D Tiles 1.0 pnts 的脚本，只支持 Windows | **reference**：Potree 2.0 `hierarchy.bin` 解析、ENU→ECEF 根变换。代码不用（违反规范、会丢子树、2021 年后无维护） | V0.1 仅参考 | ★ |
-| 补充：**3DTilesRendererJS** | Three.js / R3F / Babylon 的 3D Tiles 渲染器，含 implicit、Potree、点云 EDL、LRU、优先队列 | **port**（点云流式核心，因为要兼容 WebGPU）。**adopt**（V0.5+ 网格和外部 3D Tiles 图层，WebGL2 路径） | V0.1 port；V0.5 adopt | ★★★★★ |
-| 补充：**3d-tiles-validator** | 官方校验器 | **adopt**，进 CI | V0.1 | ★★★★ |
-| 补充：**py3dtiles** | Python 点云切片器 | **reference**。实测 1.1 输出**不合规**，不直接采用 | — | ★★ |
+| **3d-tiles**（规范） | HLOD 流式 3D 容器的开放标准。1.1 核心包含 implicit tiling、glTF 内容和 3D Metadata；2.0 草案改为以 glTF 2.1 为基础 | **adopt（作为格式标准）**：World Package 的点云、网格、3DGS 可视层直接采用 3D Tiles 1.1 子集。**port**：SSE 语义、subtree 位流、Morton 索引 | V0.1 起（点云层原生格式），V0.5 地理配准后进入 Cesium，V1.0 评估 2.0 | 5/5 |
+| **3d-tiles-tools** | 3D Tiles 的处理工具箱：格式升级（pnts→glb）、打包（3tz/3dtiles）、合并、服务、分析、遍历库。**它不是切片器**，不能把 PLY/LAS 切成八叉树 | **port**：`MortonOrder`、`OctreeCoordinates`、`BufferAvailabilityInfo`、`BinarySubtreeDataResolver`、`BoundingVolumeDerivation`、`GltfTransformPointClouds`。**adopt**：CLI 的 `convert` / `mergeJson` / `serve` / `upgrade` 用于打包、合并和本地服务 | V0.1（移植 implicit 客户端），V0.5（打包与合并） | 4/5 |
+| **cdb-to-3dtiles** | OGC CDB（军用仿真地形库）→ 3D Tiles 1.0 转换器，覆盖地形、影像、模型、矢量 | **reference**：大区域"瓦片集的瓦片集"组织方式、REPLACE 地形补洞、父级影像回退、地形贴地查询、meshopt 简化参数。反例：几何误差 `300000/2^L` 与数据无关 | V0.5–V0.6（网格/地形层、多区域组织） | 2/5 |
+| **potree23dtiles** | Potree 1.7/2.0 八叉树 → 3D Tiles 1.0 pnts 的脚本，只支持 Windows | **reference**：Potree 2.0 `hierarchy.bin` 解析、ENU→ECEF 根变换。代码不用（违反规范、会丢子树、2021 年后无维护） | V0.1 仅参考 | 1/5 |
+| 补充：**3DTilesRendererJS** | Three.js / R3F / Babylon 的 3D Tiles 渲染器，含 implicit、Potree、点云 EDL、LRU、优先队列 | **port**（点云流式核心，因为要兼容 WebGPU）。**adopt**（V0.5+ 网格和外部 3D Tiles 图层，WebGL2 路径） | V0.1 port；V0.5 adopt | 5/5 |
+| 补充：**3d-tiles-validator** | 官方校验器 | **adopt**，进 CI | V0.1 | 4/5 |
+| 补充：**py3dtiles** | Python 点云切片器 | **reference**。实测 1.1 输出**不合规**，不直接采用 | — | 2/5 |
 
 **关键结论（实现者先读这几条）**
 
@@ -227,7 +227,7 @@ src/
 |---|---|---|
 | Cesium | `GE·H/(d·2tan)` | 标准式 |
 | 3DTilesRendererJS | `GE / (d · (2/P5)/H)` | 代数上相同 |
-| Potree `Potree_update_visibility.js` | `weight = r · (H/2) / (tan(fovy/2) · d)`；`minimumNodePixelSize = 150`；另有 `distance < r ⇒ weight = ∞` | 即 `GE := r`（包围球半径）的 SSE |
+| Potree `Potree_update_visibility.js` | `weight = r · (H/2) / (tan(fovy/2) · d)`；`minimumNodePixelSize = 150`；另有 `distance < r => weight = ∞` | 即 `GE := r`（包围球半径）的 SSE |
 
 **点云 GE 的语义化定义（本项目采用）。** ADD 细化下，渲染到第 L 层时某区域的点间距约为 `s_L`。所以令 `GE_L = s_L = s_0/2^L`，其中 `s_0 = cube/128`，与 PotreeConverter `indexer.cpp:1440` 一致。这样 **SSE 的含义就是"屏幕上相邻点之间的像素间隙"**，τ 可以直接理解为"允许的点间隙像素数"：
 - 3DTilesRendererJS `PotreePlugin.init`：`tiles.errorTarget = 1`。
@@ -407,7 +407,7 @@ morton3(x,y,z) = Σ_b  x_b<<(3b) | y_b<<(3b+1) | z_b<<(3b+2)      // bit0=x, bit
 levelOffset(l) = (8^l − 1)/7
 tileIndex(local l, lx,ly,lz) = levelOffset(l) + morton3(lx,ly,lz)
 childSubtreeIndex = morton3(相对子树根、深度为 SL 那一层的局部坐标)
-全局 ↔ 局部：subtreeRootLevel = floor(L/SL)·SL；d = L − subtreeRootLevel；
+全局 <-> 局部：subtreeRootLevel = floor(L/SL)·SL；d = L − subtreeRootLevel；
              subtree 根坐标 = (x>>d, y>>d, z>>d)；局部坐标 = (x & (2^d−1), ...)
 可用瓦片的元数据行号 = 该瓦片之前（按位流顺序）置 1 的位数，即前缀和 cumsum(tileBits)[idx] − 1
 ```
@@ -562,7 +562,7 @@ gl_PointSize = max(px, uMinPx);                                          // uMin
 
 以上 6 个 PLY 都**只有 xyz 和法线，没有 RGB**。所以渲染配色要靠高度色带、法线着色和 EDL，并在构建期烘焙一个 `_HEIGHT` 或类别属性。
 
-### 3.9 Potree 2.0 ↔ 3D Tiles implicit 映射
+### 3.9 Potree 2.0 <-> 3D Tiles implicit 映射
 
 使用场景有两个：用 PotreeConverter 当切片器；或者复用 potree-core、three-loader 生态。
 
@@ -583,7 +583,7 @@ octree.bin 节点数据（int32·scale + offset）重新量化为 uint16 节点�
 1. **完整子覆盖**：细化时子节点必须铺满父节点区域。缺失象限用父网格裁出的子区域补上，参考 cdb-to-3dtiles `fillMissingPositiveLODElevation` 与 `createNorthWestSubRegion` 等函数。
 2. **纹理回退**：子瓦片没有影像时，沿父链找最近的影像，重算 UV（`indexUVRelativeToParent`），并缓存已处理的父影像。
 3. **GE 要有度量含义**：`GE = 简化误差（米）`，对应 meshopt `targetError × 网格尺寸`。**不要**用 cdb 的 `300000/2^L`。
-4. **简化参数起点**：`meshopt_simplify(targetIndexCount = 0.3·N, targetError = 0.01)`（cdb 默认）。更好的做法是用 gltfpack，3d-tiles-tools 已经集成，另有 meshoptimizer ★8.4k（2026-09 活跃）。
+4. **简化参数起点**：`meshopt_simplify(targetIndexCount = 0.3·N, targetError = 0.01)`（cdb 默认）。更好的做法是用 gltfpack，3d-tiles-tools 已经集成，另有 meshoptimizer 8.4k stars（2026-09 活跃）。
 5. **RTC**：顶点写成相对 AABB 中心的坐标，中心放进节点 translation。
 
 ### 3.11 3DGS 与语义扩展速查
@@ -616,14 +616,14 @@ octree.bin 节点数据（int32·scale + offset）重新量化为 uint16 节点�
 | 14 | Potree2 数据源 | 3DTilesRendererJS `PotreeLoader` / `PotreePlugin`；potree23dtiles `potreebin.py` | `source/potree2.ts`、`tiler/import_potree.py` | V0.2 | reference / port | 兼容 PotreeConverter 产物 |
 | 15 | 打包、合并、服务 | 3d-tiles-tools CLI `convert`（.3tz / .3dtiles）、`mergeJson`、`combine`、`serve`、`upgrade` | `world/packaging`、`tools/dev-serve` | V0.5 | adopt | 多架次、多区域组合与分发 |
 | 16 | 3TZ 索引（MD5 排序、HTTP Range） | 3d-tiles-tools `IndexBuilder.ts`、`ArchiveFunctions3tz.ts` | FastAPI `world_service` 单文件服务 | V0.5 | reference | 一个 World 一个文件，免解压服务 |
-| 17 | ENU↔ECEF 根变换 | 3d-tiles-tools `TilesetJsonCreator.computeTransformFromCartographicPositionDegrees`；potree23dtiles `proj.wgs84_trans_matrix` | `world/georef` | V0.5 | port | RTK 配准后进入 Cesium |
+| 17 | ENU<->ECEF 根变换 | 3d-tiles-tools `TilesetJsonCreator.computeTransformFromCartographicPositionDegrees`；potree23dtiles `proj.wgs84_trans_matrix` | `world/georef` | V0.5 | port | RTK 配准后进入 Cesium |
 | 18 | 大区域瓦片集组织、贴地查询 | cdb-to-3dtiles `combineTilesetJson`、`CDBTileset.getFitTile`、`CDB::queryElevationTiles` | `world/package`、`sim/ground_query` | V0.5 | reference | 山区加街区的多区域 World |
 | 19 | REPLACE 补洞、纹理回退、meshopt 简化 | cdb-to-3dtiles `fillMissingPositiveLODElevation`、`addElevationToTilesetCollection`、`CDBElevation::createSimplifiedMesh` | `world/mesh/tiler` | V0.6 | reference | 网格和地形层 |
 | 20 | pnts 兼容读取 | 3d-tiles-tools `TileFormatsMigrationPnts.convertPntsToGlb`、`AttributeCompression.octDecode`、`Colors` | `world/import` | V0.5 | adopt（CLI `upgrade --targetVersion 1.1`） | 导入外部旧数据 |
 | 21 | 3DGS 内容 | Khronos `KHR_gaussian_splatting`；cesium `GaussianSplat3DTileContent` | `visual/gaussian` | V0.6+ | reference | 标准化的 Visual World |
 | 22 | 外部 3D Tiles 图层（城市模型、Google 3D Tiles、PLATEAU） | 3DTilesRendererJS `TilesRenderer`（adopt） | `apps/web/src/world/layers/tiles3d.ts` | V0.5 | adopt | WebGL2 路径开箱即用，WebGPU 需验证 |
 
-### 4.2 World Package ↔ 3D Tiles 兼容策略
+### 4.2 World Package <-> 3D Tiles 兼容策略
 
 **原则：3D Tiles 负责可视层（Visual World）的流式容器，Geometry World（碰撞、ESDF、占据栅格）不进 3D Tiles。** 物理查询在服务器端完成，数据格式是 VDB、npz 或 octomap；3D Tiles 2.0 voxels 只作为将来的可视化和交换格式。
 
@@ -685,12 +685,12 @@ apps/web/src/world/pointcloud/
 ### 4.4 离线流水线（MVP）
 
 ```text
-PLY/LAS/LAZ ──► normalize（单位、轴向 → ENU Z-up 米；Chicago ×1000，Suzhou 轴向人工确认）
-           ──► clean（离群点等，交给 r06 Open3D）
-           ──► tiler.py（分层采样 → implicit octree → glb + subtree + tileset.json）
-           ──► 3d-tiles-validator（CI 必过）
-           ──► world.json 与根 tileset.json
-           ──►（V0.5）3d-tiles-tools convert → world.3tz
+PLY/LAS/LAZ ──> normalize（单位、轴向 → ENU Z-up 米；Chicago ×1000，Suzhou 轴向人工确认）
+           ──> clean（离群点等，交给 r06 Open3D）
+           ──> tiler.py（分层采样 → implicit octree → glb + subtree + tileset.json）
+           ──> 3d-tiles-validator（CI 必过）
+           ──> world.json 与根 tileset.json
+           ──>（V0.5）3d-tiles-tools convert → world.3tz
 ```
 
 ---
@@ -755,7 +755,7 @@ PLY/LAS/LAZ ──► normalize（单位、轴向 → ENU Z-up 米；Chicago ×1
 4. **§41 World Package 补齐清单和图层化结构。** 补充以下内容（详见 §4.2）：`world.json`（带 schema 版本、CRS、`up_axis`、单位、图层列表、统计信息）；根 `tileset.json`，用 external tileset 组合点云、网格、3DGS 图层，这样一个 URL 就能在 Cesium 或 3DTilesRendererJS 打开；`asset.tilesetVersion` 用于缓存失效；可选 `.3tz` 单文件分发；多架次各成一个子集再合并（CDB GeoCell 或 mergeJson 模式）。另外，原文 `── visual/` 缺少树枝符号，应为 `└── visual/`。
 5. **§7 和 §16 的坐标约定要写明。** World 内部统一用 **ENU、米、Z-up**（与 3D Tiles 1.1 和 ROS 一致）。three.js 场景是 Y-up，在 `WorldLayer` 根上做一次 `−π/2` 旋转。PX4 NED 在 Simulation Gateway 处转换。地理配准只允许刚体 transform（ENU→ECEF），**禁止带缩放**，这样才能兼容 3D Tiles 1.1 与 2.0 在 GE 缩放上的差异。
 6. **§8 Visual World 的 3DGS 走标准路线。** `KHR_gaussian_splatting` 已被 Khronos 批准，加上 3D Tiles HLOD 就能流式传输 3DGS，CesiumJS 已支持。建议写成"Visual World = 点云（V0.1）→ 网格（V0.6，REPLACE）→ 3DGS（V0.6+，`KHR_gaussian_splatting` + SPZ）"，三者共用一套 SSE、LRU 和队列框架。
-7. **§11 的 Cesium 定位。** 由于数据是 3D Tiles，**CesiumJS 可以直接消费，不需要"后续增加"**，它适合做 GIS 大场景和地球视图（V0.5 配准后）。Three.js 侧补充 **3DTilesRendererJS**（★2.5k，2026-09 活跃，支持 Potree 和 R3F），用于外部 3D Tiles 图层；自研点云流式器只负责核心点云，原因是 WebGPU、硬点预算和回放揭示这几项需求。
+7. **§11 的 Cesium 定位。** 由于数据是 3D Tiles，**CesiumJS 可以直接消费，不需要"后续增加"**，它适合做 GIS 大场景和地球视图（V0.5 配准后）。Three.js 侧补充 **3DTilesRendererJS**（2.5k stars，2026-09 活跃，支持 Potree 和 R3F），用于外部 3D Tiles 图层；自研点云流式器只负责核心点云，原因是 WebGPU、硬点预算和回放揭示这几项需求。
 8. **§18–20 环境场的交换格式。** `E(x,y,z,t)` 的物理查询留在服务器（VDB、Zarr）。可视化和交换可以在 V1.0 评估 3D Tiles 2.0 的 `EXT_voxels` / `3DTILES_tileset_voxels` 与 `EXT_node_visibility_conditions`（时间键）。这与 §20 Level 3 的 CFD 离线结果按风向风速组织（例如 `000_05.vdb`）是自然对应的。
 9. **§43 MVP 链路补两步。** 改为 `…Point Cloud → 归一化（单位/轴向） → Tiler → Validator → Octree/3D Tiles → Three.js…`。归一化和校验是 UrbanScene3D 实测暴露出来的必需步骤（Chicago km、Suzhou 轴向、全体无颜色）。
 10. **§37 更新频率补充"流式预算"指标。** 例如：首帧出图 ≤1.5 s（根瓦片约 250 KB）；桌面 GPU 在 1–2M 点下保持 60 FPS；软件 WebGL2 在 300k 点下 ≥30 FPS；最大并发请求 6 或 16；每帧上传 ≤4 MB；GPU 缓存 ≤512 MB。这些指标同时作为流畅性测试的验收线。

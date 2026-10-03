@@ -3,9 +3,9 @@
 > 研究单元：r21 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §26–§30（Drone Simulation / 状态 / 多机 / 控制模式）、§33（Backend 技术栈）、§35–§37（Simulation Backend / 实时通信 / 频率）、§45（V0.2）、§48–§49（V0.5 / V0.6）
 >
 > 仓库快照（本地只读 clone）：
-> - `refs/sim/MAVSDK` @ `34d4995`（2026-09-28，★939，**v4.0.0**，C++17 + C wrapper + Python/Kotlin/Java 绑定）
-> - `refs/sim/mavros` @ `5c68b90`（2026-09-27，★1226，`ros2` 分支，**2.16.0**，C++/rclcpp）
-> - `refs/backend/mavlink` @ `87da370`（2026-09-28，★2442，XML 方言 + 生成器；`pymavlink/` 是空的 git submodule，实际使用 PyPI 上的 `pymavlink==2.4.50`）
+> - `refs/sim/MAVSDK` @ `34d4995`（2026-09-28，939 stars，**v4.0.0**，C++17 + C wrapper + Python/Kotlin/Java 绑定）
+> - `refs/sim/mavros` @ `5c68b90`（2026-09-27，1226 stars，`ros2` 分支，**2.16.0**，C++/rclcpp）
+> - `refs/backend/mavlink` @ `87da370`（2026-09-28，2442 stars，XML 方言 + 生成器；`pymavlink/` 是空的 git submodule，实际使用 PyPI 上的 `pymavlink==2.4.50`）
 >
 > 交叉引用的仓库（只看了与本单元接口相关的部分）：`refs/sim/PX4-Autopilot` @ `b3e343c`（2026-09-27），`refs/sim/Prometheus` @ `5dcd8cf`（2025-11-21）。
 >
@@ -17,7 +17,7 @@
 > - `starve_test.py`：线程池饥饿复现。
 > - `parse_bench.py`：pymavlink 与手写 struct 解码器的吞吐。
 > - `msgdump.py` / `msgdump.txt`：关键消息的线格式（由 pymavlink 生成的方言导出）。
-> - `frames_check.py`：NED/FRD ↔ ENU/FLU 转换的数值验证。
+> - `frames_check.py`：NED/FRD <-> ENU/FLU 转换的数值验证。
 > - `mock_step_bench.py`：向量化 Mock 动力学与 WebSocket 打包的性能。
 >
 > 与其他笔记的分工：
@@ -31,10 +31,10 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **MAVSDK**（C++ 核心 + **v4 原生 Python 绑定** `pip install mavsdk==4.0.0`） | 面向 GCS/伴随计算机的 MAVLink 高层 SDK，提供 Action/Offboard/Mission/Telemetry/Param/MavlinkDirect 以及一组 Server 插件 | **adopt**：`MavsdkAdapter` 直接依赖 `mavsdk==4.0.0`（asyncio API）。**port**：命令重试参数、Offboard 20 Hz 保活与 heartbeat 看门狗、MissionItem → MISSION_ITEM_INT 的转换规则、PX4 custom_mode 编解码、THREADING 里的“可丢弃订阅/必达回调”两类队列，移植进 MockAdapter 和 Gateway | V0.2 adopt（PX4 SITL/SIH）；V0.1 port 语义给 MockAdapter | ★★★★★ |
-| **MAVROS**（ros2 分支 2.16.0） | ROS2 ↔ MAVLink 桥：Router + UAS + 66 个插件（核心 26 + extras 40），负责 ENU/NED 与 FLU/FRD 转换，并有 timesync | **reference/port**：`frame_tf` 转换公式（已数值验证）、Router 的地址学习与反向索引路由、`sys_time` 的双指数平滑 timesync 滤波器。**不进 Gateway 主链路**。P600（Prometheus，ROS1 + MAVROS）那一侧是作为**已存在的外部系统**来对接 | V0.5（P600 对接、时钟同步）；V0.6 可选 | ★★★☆☆ |
-| **MAVLink**（XML 方言 + 生成器；pymavlink 2.4.50） | 协议本体：消息与命令定义、帧格式、CRC、微协议（command/mission/param/timesync） | **adopt**：消息语义作为 DroneState/Command 的“真值表”；用 `pymavlink` 写测试替身 `fake_px4`，以及可选的 **MavlinkFacade**，把 Mock 机暴露给 QGC。**port**：热点消息的手写 struct 解码器，用于被动监听、回放和日志。**reference**：`development.xml` 新条目（EXTERNAL_WIND_ESTIMATE、BATTERY_STATUS_V2、REQUEST_OPERATOR_CONTROL） | V0.1 语义；V0.2 测试替身；V0.3+ Facade | ★★★★☆ |
-| mavsdk-grpc / mavsdk_server（旧 MAVSDK-Python 路线） | gRPC 包装，每个 `mavsdk_server` 只服务一架机 | **skip**（只作兼容参考） | — | ★☆☆☆☆ |
+| **MAVSDK**（C++ 核心 + **v4 原生 Python 绑定** `pip install mavsdk==4.0.0`） | 面向 GCS/伴随计算机的 MAVLink 高层 SDK，提供 Action/Offboard/Mission/Telemetry/Param/MavlinkDirect 以及一组 Server 插件 | **adopt**：`MavsdkAdapter` 直接依赖 `mavsdk==4.0.0`（asyncio API）。**port**：命令重试参数、Offboard 20 Hz 保活与 heartbeat 看门狗、MissionItem → MISSION_ITEM_INT 的转换规则、PX4 custom_mode 编解码、THREADING 里的“可丢弃订阅/必达回调”两类队列，移植进 MockAdapter 和 Gateway | V0.2 adopt（PX4 SITL/SIH）；V0.1 port 语义给 MockAdapter | 5/5 |
+| **MAVROS**（ros2 分支 2.16.0） | ROS2 <-> MAVLink 桥：Router + UAS + 66 个插件（核心 26 + extras 40），负责 ENU/NED 与 FLU/FRD 转换，并有 timesync | **reference/port**：`frame_tf` 转换公式（已数值验证）、Router 的地址学习与反向索引路由、`sys_time` 的双指数平滑 timesync 滤波器。**不进 Gateway 主链路**。P600（Prometheus，ROS1 + MAVROS）那一侧是作为**已存在的外部系统**来对接 | V0.5（P600 对接、时钟同步）；V0.6 可选 | 3/5 |
+| **MAVLink**（XML 方言 + 生成器；pymavlink 2.4.50） | 协议本体：消息与命令定义、帧格式、CRC、微协议（command/mission/param/timesync） | **adopt**：消息语义作为 DroneState/Command 的“真值表”；用 `pymavlink` 写测试替身 `fake_px4`，以及可选的 **MavlinkFacade**，把 Mock 机暴露给 QGC。**port**：热点消息的手写 struct 解码器，用于被动监听、回放和日志。**reference**：`development.xml` 新条目（EXTERNAL_WIND_ESTIMATE、BATTERY_STATUS_V2、REQUEST_OPERATOR_CONTROL） | V0.1 语义；V0.2 测试替身；V0.3+ Facade | 4/5 |
+| mavsdk-grpc / mavsdk_server（旧 MAVSDK-Python 路线） | gRPC 包装，每个 `mavsdk_server` 只服务一架机 | **skip**（只作兼容参考） | — | 1/5 |
 
 **关键结论（实现者先读这几条）**
 
@@ -114,7 +114,7 @@
 |---|---|---|---|
 | 路径 | `refs/sim/MAVSDK` | `refs/sim/mavros` | `refs/backend/mavlink` |
 | 最新提交 | 2026-09-28 `py: keep the Configuration usable after creating Mavsdk (#3125)` | 2026-09-27 `2.16.0` | 2026-09-28 `pymavlink: update for 32 bit system_id support (#2622)` |
-| ★ | 939 | 1226 | 2442 |
+| stars | 939 | 1226 | 2442 |
 | 活跃度 | 非常高。v4 大重构：原生 Python、C wrapper、线程模型重写 | 高。ros2 分支持续发版（2.16.0） | 高。规范仓库，`development.xml` 每月都有新条目 |
 | 语言与构建 | C++17、CMake；third_party 自带 asio、libmavlike、mavlink、curl、nlohmann_json、tinyxml2、fmt、cpptrace，mavsdk_server 另需 grpc/protobuf/absl/re2 等；Python 为 ctypes 绑定，wheel 自带 `.so` | ROS2 ament_cmake，colcon；依赖 Eigen、GeographicLib、diagnostic_updater | XML + Python 生成器（mavgen）；CMake 可生成 C/C++ 头文件 |
 | 与本项目的关系 | **UAV API 首选**（原文 §33 已写 MAVSDK，本文细化到 v4 原生绑定） | 只在对接 ROS 生态或 P600 时使用 | 协议真值表 + 测试替身 |
@@ -161,7 +161,7 @@ v4 的三个关键变化：
 ```text
 MAVSDK/
 ├── cpp/src/mavsdk/core/            # 核心：连接、系统、协议微服务、线程模型
-│   ├── THREADING.md                # ★ 线程与回调规则（必读）
+│   ├── THREADING.md                # * 线程与回调规则（必读）
 │   ├── mavsdk_impl.{hpp,cpp}       # 连接表、系统发现、收发路由、JSON interception
 │   ├── system_impl.{hpp,cpp}       # 单架系统：heartbeat 超时、飞行模式、参数、命令入口
 │   ├── mavlink_command_sender.*    # COMMAND_LONG/INT 重试与 ACK 状态机
@@ -290,10 +290,10 @@ mavros/
 ├── libmavconn/                 # asio 传输：serial/udp/tcp，URL: udp://bind@remote, udp-b://, tcp-l:// …
 ├── mavros/src/mavros_node.cpp  # 组合 Router + UAS，intra-process
 ├── mavros/include/mavros/
-│   ├── mavros_router.hpp       # ★ Endpoint(fcu/gcs/uas) + Router 路由
+│   ├── mavros_router.hpp       # * Endpoint(fcu/gcs/uas) + Router 路由
 │   ├── mavros_uas.hpp          # UAS 节点：插件加载、时间同步、TF、能力
 │   ├── plugin.hpp / plugin_filter.hpp   # 插件基类、按 msgid 注册 handler（SystemAndOk/ComponentAndOk/AnyOk 过滤）
-│   ├── frame_tf.hpp            # ★ ENU/NED、FLU/FRD、ECEF 转换
+│   ├── frame_tf.hpp            # * ENU/NED、FLU/FRD、ECEF 转换
 │   ├── setpoint_mixin.hpp      # setpoint 打包
 │   └── mission_protocol_base.hpp  # Mission 状态机（IDLE/RXLIST/…/TXWPINT/CLEAR/SET_CUR）
 ├── mavros/src/lib/{mavros_router,uas_*,ftf_*}.cpp
@@ -310,7 +310,7 @@ mavros/
   - 从消息定义里取出 `target_system` / `target_component` 的偏移，拼成 `target_addr`；
   - 在反向索引 `remote_index[addr] → [endpoints]` 中查找；
   - 有目标但没命中时，退化为广播（地址 0）；
-  - 不回发给源 endpoint，**同类 endpoint 之间不转发**（fcu↔fcu、gcs↔gcs）。
+  - 不回发给源 endpoint，**同类 endpoint 之间不转发**（fcu<->fcu、gcs<->gcs）。
 - 每 30 s 重连一次失效的 endpoint。
 
 这套算法可以直接移植到 Gateway 的 MAVLink 分发器上，用于把 PX4 流同时转给 QGC、Foxglove 和录制器（§3.10）。
@@ -504,9 +504,9 @@ def body_rate_frd_to_flu(p, q, r):       return (p, -q, -r)
 
 ```text
             submit(cmd)                         ACK=ACCEPTED
- IDLE ─────────────────► SENT(t0, tries=0) ───────────────────► DONE(ok)
-                          │  │ ACK=IN_PROGRESS(p)                ▲
-                          │  └──────► PROGRESS(p, timeout=3.0s) ──┘
+ IDLE ─────────────────> SENT(t0, tries=0) ───────────────────> DONE(ok)
+                          │  │ ACK=IN_PROGRESS(p)                ^
+                          │  └──────> PROGRESS(p, timeout=3.0s) ──┘
                           │ timeout(0.5s) & tries<3 → resend, tries++
                           │ timeout & tries==3      → DONE(TIMEOUT)
                           │ ACK∈{DENIED,UNSUPPORTED,FAILED,TEMP_REJECTED,CANCELLED} → DONE(result)
@@ -524,11 +524,11 @@ def body_rate_frd_to_flu(p, q, r):       return (p, -q, -r)
 
 ```text
 上传（客户端 → 自驾仪）
- GCS: MISSION_COUNT(count, type)         ──►
-                                        ◄── AP: MISSION_REQUEST_INT(seq=0)
- GCS: MISSION_ITEM_INT(seq=0)            ──►
+ GCS: MISSION_COUNT(count, type)         ──>
+                                        <── AP: MISSION_REQUEST_INT(seq=0)
+ GCS: MISSION_ITEM_INT(seq=0)            ──>
    ...（AP 按需请求 seq；收到比期望更小的 seq 即视为重传请求，计入 retries）
-                                        ◄── AP: MISSION_ACK(type=ACCEPTED|错误码)
+                                        <── AP: MISSION_ACK(type=ACCEPTED|错误码)
  超时：MAVSDK 用 timeout_s（0.5s）且 retries=5；MAVROS 单条 1s、列表 30s、重试 3 次
 执行：MAV_CMD_MISSION_START(300) 或 set_flight_mode(Mission)；进度：MISSION_CURRENT / MISSION_ITEM_REACHED
 ```
@@ -913,8 +913,8 @@ class DroneAdapter(Protocol):
 
 ```text
                      REST (FastAPI)                       WebSocket (binary, r15 协议)
-Browser ───────────────────────────► Gateway API ◄──────────────────────────────── Browser
-                                       │   ▲ state frames 10–30 Hz / events
+Browser ───────────────────────────> Gateway API <──────────────────────────────── Browser
+                                       │   ^ state frames 10–30 Hz / events
                   ┌────────────────────┼───┴──────────────────────────────────────┐
                   │  Vehicle Registry  │  Control Lease (owner, priority, ttl)     │
                   │  Command Engine (§3.5 状态机, per-vehicle lock, idempotency)   │
@@ -959,20 +959,20 @@ setpoint 流：仅持有者可写；lease 过期或丢失 → Tracker 停止输�
 | 维度 | **MAVSDK v4（原生）** | mavsdk-grpc（旧 MAVSDK-Python） | pymavlink 直连 | MAVROS（ROS2） | PX4 uXRCE-DDS（ROS2 原生） |
 |---|---|---|---|---|---|
 | 进程与依赖 | 一个 pip 包（46 MB .so） | pip + 每机一个 `mavsdk_server` 子进程 + grpcio | 纯 Python | ROS2 + colcon + GeographicLib | ROS2 + px4_msgs + MicroXRCEAgent |
-| 多机 | 一实例 N 架（按 sysid）✔ | 每机一个 server 与 gRPC 端口 | 自行实现 | 每机一个 node 与 namespace | 每机一个 namespace（`uav_i`）+ 一个 agent |
-| 高层语义（起飞、任务、offboard 保活、重试） | ✔ 完整 | ✔ 完整 | ✘ 全部自写 | ✔ 较全（setpoint **不自动重发**） | ✘ 很底层（`/fmu/in/trajectory_setpoint`、`offboard_control_mode` 须自己以 ≥2 Hz 发送；vehicle_command 自行处理） |
+| 多机 | 一实例 N 架（按 sysid）yes | 每机一个 server 与 gRPC 端口 | 自行实现 | 每机一个 node 与 namespace | 每机一个 namespace（`uav_i`）+ 一个 agent |
+| 高层语义（起飞、任务、offboard 保活、重试） | yes 完整 | yes 完整 | no 全部自写 | yes 较全（setpoint **不自动重发**） | no 很底层（`/fmu/in/trajectory_setpoint`、`offboard_control_mode` 须自己以 ≥2 Hz 发送；vehicle_command 自行处理） |
 | 每条消息 CPU | 0.24 ms（io）+ 回调开销 | 更高（再加 gRPC 序列化与跨进程） | 22 µs | C++，低 | 低（二进制 CDR，无 MAVLink） |
 | 坐标系 | NED（原样） | NED | NED | **ENU/FLU（自动转换）** | NED/FRD（px4_msgs） |
 | 适配 PX4 新功能 | 快（官方维护） | 同左 | 需要跟进方言 | 快 | **最快**（PX4 内部 uORB 直出） |
-| 适配 ArduPilot | ✔ | ✔ | ✔ | ✔ | ✘ |
+| 适配 ArduPilot | yes | yes | yes | yes | no |
 | 在本项目中的角色 | **Gateway 主链路** | 不用 | 测试替身、被动解码、Facade | P600 侧已有组件；ROS 生态对接 | V0.6+ 若引入 ROS2 规划器（ego-planner ros2 分支）时的机载链路 |
 
 ### 5.2 推荐排序
 
-1. **MAVSDK（v4 原生绑定）** ★★★★★：2026-09 刚发布 v4，活跃度最高，与 Python/FastAPI 后端的契合度最高，多机原生支持。风险在于新绑定“hasn’t been tested as much”（`py/README.md`），通过 `fake_px4` 与 PX4 SIH 的双重集成测试兜底。
-2. **MAVLink + pymavlink** ★★★★☆：star 最多，是协议真值来源。pymavlink 适合做测试基建、Facade 和旁路解码，不作为主控制链路（高层微协议都要自己写）。
-3. **MAVROS** ★★★☆☆：ROS2 分支活跃，frame_tf、Router、timesync 三块代码质量高，值得移植。但它会把 ROS 带进 Gateway，与原文“浏览器负责看、服务器负责算，底层可替换”的解耦目标相悖。只在 P600 侧作为既有组件对接。
-4. mavsdk-grpc / mavsdk_server ☆：被 v4 取代，不用。
+1. **MAVSDK（v4 原生绑定）** 5/5：2026-09 刚发布 v4，活跃度最高，与 Python/FastAPI 后端的契合度最高，多机原生支持。风险在于新绑定“hasn’t been tested as much”（`py/README.md`），通过 `fake_px4` 与 PX4 SIH 的双重集成测试兜底。
+2. **MAVLink + pymavlink** 4/5：star 最多，是协议真值来源。pymavlink 适合做测试基建、Facade 和旁路解码，不作为主控制链路（高层微协议都要自己写）。
+3. **MAVROS** 3/5：ROS2 分支活跃，frame_tf、Router、timesync 三块代码质量高，值得移植。但它会把 ROS 带进 Gateway，与原文“浏览器负责看、服务器负责算，底层可替换”的解耦目标相悖。只在 P600 侧作为既有组件对接。
+4. mavsdk-grpc / mavsdk_server 0/5：被 v4 取代，不用。
 
 ---
 
@@ -1005,8 +1005,8 @@ setpoint 流：仅持有者可写；lease 过期或丢失 → Tracker 停止输�
 1. **§26 链路图有误，需要改写。** 原文为 “Flight Dynamics → PX4 SITL → MAVLink → ROS / MAVSDK → Simulation Service”，建议改为：
 
    ```text
-   PX4 SITL/SIH ──MAVLink/UDP──► Simulation Gateway ─► DroneAdapter{Mock | Mavsdk | Prometheus | Replay}
-                         └─(可选) uXRCE-DDS ─► ROS2（规划器/感知）
+   PX4 SITL/SIH ──MAVLink/UDP──> Simulation Gateway ─> DroneAdapter{Mock | Mavsdk | Prometheus | Replay}
+                         └─(可选) uXRCE-DDS ─> ROS2（规划器/感知）
    ```
 
    MAVSDK 直接消费 MAVLink，不需要经过 ROS。ROS2 是并行的可选旁路，不是上游。

@@ -3,9 +3,9 @@
 > 研究单元：r12 ｜ 日期：2026-09-28 ｜ 对应设计：`docs/01-design.md` §9–16（Web 3D 选型、WebGPU 定位、点云渲染架构、数据格式、场景结构）、§34（前端栈）、§37（刷新率）、§38–40（UI 与交互）、§43–44（MVP / V0.1）
 >
 > 仓库快照（shallow clone，只读，路径均相对各仓库根）：
-> - `refs/web3d/potree` @ `5636cd4`（2026-01-08，★5622，BSD-2，v1.8.0，自带 three r124）
-> - `refs/web3d/potree-core` @ `b901ca9`（2026-09-14，★255，MIT，npm `potree-core@2.0.15`）
-> - `refs/web3d/three-loader` @ `64e23ce`（2026-05-28，★285，MIT，`@pnext/three-loader@1.0.0`，peer `three ~0.160`）
+> - `refs/web3d/potree` @ `5636cd4`（2026-01-08，5622 stars，BSD-2，v1.8.0，自带 three r124）
+> - `refs/web3d/potree-core` @ `b901ca9`（2026-09-14，255 stars，MIT，npm `potree-core@2.0.15`）
+> - `refs/web3d/three-loader` @ `64e23ce`（2026-05-28，285 stars，MIT，`@pnext/three-loader@1.0.0`，peer `three ~0.160`）
 >
 > 对照阅读：`refs/web3d/three.js`（r186，2026-09-28）、`refs/web3d/Potree-Next`（2025-10-07，WebGPU 版 Potree）、`refs/world/PotreeConverter`。
 >
@@ -21,9 +21,9 @@
 
 | 仓库 | 定位 | 复用方式 | 落点版本 | 推荐度 |
 |---|---|---|---|---|
-| **tentone/potree-core**（★255，2026-09-14，TS，MIT） | 从 Potree 抽出的库化内核，可以直接 `scene.add()` 到普通 Three.js 场景。2025–26 年新增了 `EDLPass` / `PotreeRenderer`、include/exclude 裁剪体、`RequestManager` | **port**：LOD 遍历、LRU、hierarchy/proxy 解析、DEFAULT/BROTLI worker、EDLPass、GPU picker，改写进我们的 `PointCloudEngine`<br>**adopt（仅 dev）**：做交叉验证页，渲染同一份 Potree 2.0 DEFAULT 数据对比正确性 | V0.1 | ★★★★★ |
-| **pnext/three-loader**（★285，2026-05-28，TS，MIT，Pix4D） | TypeScript 版 Potree loader，类型定义最干净：`IPointCloudGeometryNode.failed`、`load(): Promise`、`memoryScale`、`finally` 归还 worker；独有 GLTF 编码和 **LOD 化 3DGS splats**（`SplatsMesh` + wasm 排序） | **reference / port**：公共 API 的 TS 类型形状、错误与重试语义、带空闲自动终止的有界 worker 池（`utils/worker-pool.ts`）<br>**reference（V1.0）**：splats 的 LOD 渲染 | V0.1（类型）/ V1.0（3DGS） | ★★★★☆ |
-| **potree/potree**（★5622，2026-01-08，JS，BSD-2） | 完整的 Potree 1.8 viewer，所有算法的原始出处：密度修正版 adaptive size、EDL、HQ weighted splats、绕开 three 的自研 GL 渲染器、EPT/COPC | **reference**：密度 lodOffset、`getLOD`/`getPointSize` 着色器、`PotreeRenderer.renderNodes` 的“少走 three 抽象”思路、HQSplat 三遍渲染<br>**skip**：整站 viewer（jQuery / three r124 / 全局变量） | V0.1（着色器）/ V0.3（HQ） | ★★★★☆ |
+| **tentone/potree-core**（255 stars，2026-09-14，TS，MIT） | 从 Potree 抽出的库化内核，可以直接 `scene.add()` 到普通 Three.js 场景。2025–26 年新增了 `EDLPass` / `PotreeRenderer`、include/exclude 裁剪体、`RequestManager` | **port**：LOD 遍历、LRU、hierarchy/proxy 解析、DEFAULT/BROTLI worker、EDLPass、GPU picker，改写进我们的 `PointCloudEngine`<br>**adopt（仅 dev）**：做交叉验证页，渲染同一份 Potree 2.0 DEFAULT 数据对比正确性 | V0.1 | 5/5 |
+| **pnext/three-loader**（285 stars，2026-05-28，TS，MIT，Pix4D） | TypeScript 版 Potree loader，类型定义最干净：`IPointCloudGeometryNode.failed`、`load(): Promise`、`memoryScale`、`finally` 归还 worker；独有 GLTF 编码和 **LOD 化 3DGS splats**（`SplatsMesh` + wasm 排序） | **reference / port**：公共 API 的 TS 类型形状、错误与重试语义、带空闲自动终止的有界 worker 池（`utils/worker-pool.ts`）<br>**reference（V1.0）**：splats 的 LOD 渲染 | V0.1（类型）/ V1.0（3DGS） | 4/5 |
+| **potree/potree**（5622 stars，2026-01-08，JS，BSD-2） | 完整的 Potree 1.8 viewer，所有算法的原始出处：密度修正版 adaptive size、EDL、HQ weighted splats、绕开 three 的自研 GL 渲染器、EPT/COPC | **reference**：密度 lodOffset、`getLOD`/`getPointSize` 着色器、`PotreeRenderer.renderNodes` 的“少走 three 抽象”思路、HQSplat 三遍渲染<br>**skip**：整站 viewer（jQuery / three r124 / 全局变量） | V0.1（着色器）/ V0.3（HQ） | 4/5 |
 | （对照）m-schuetz/Potree-Next | WebGPU 版 Potree，屏幕中心加权优先级、按层级排序的加载队列 | **reference**：优先级公式（其余归 Potree-Next 研究单元） | V0.3+ | — |
 
 **关键结论（实现者先读这几条）**
@@ -104,10 +104,10 @@
 ```text
 src/
 ├── Potree.js                     # 全局状态：pointBudget=1M(:101)、maxNodesLoading=4(:104)、lru、workerPool(:89)
-├── Potree_update_visibility.js   # ★ updatePointClouds(:6) / updateVisibilityStructures(:37) / updateVisibility(:103)
+├── Potree_update_visibility.js   # * updatePointClouds(:6) / updateVisibilityStructures(:37) / updateVisibility(:103)
 ├── LRU.js                        # 双向链表 LRU；freeMemory(:138) 以 Potree.pointLoadLimit 为阈值
 ├── PointCloudOctree.js           # toTreeNode、computeVisibilityTextureData(:321，含密度 lodOffset)、pick
-├── PotreeRenderer.js             # ★ 自研 GL 渲染器：直接管理 VAO 和 uniform location，renderNodes(:698)
+├── PotreeRenderer.js             # * 自研 GL 渲染器：直接管理 VAO 和 uniform location，renderNodes(:698)
 ├── WorkerPool.js                 # 按 URL 分桶、无上限
 ├── modules/loader/2.0/           # OctreeLoader.js(NodeLoader.load)、DecoderWorker.js、DecoderWorker_brotli.js
 ├── materials/
@@ -132,7 +132,7 @@ src/
 
 ```text
 source/
-├── potree.ts                      # ★ Potree 类：updatePointClouds(:112) → updateVisibility(:165)
+├── potree.ts                      # * Potree 类：updatePointClouds(:112) → updateVisibility(:165)
 │                                  #   updateChildVisibility(:297)、shouldClip(:376)、updateVisibilityStructures(:432)
 ├── constants.ts                   # DEFAULT_POINT_BUDGET=1M, MIN_NODE_PIXEL_SIZE=50, MAX_LOADS_TO_GPU=2, MAX_NUM_NODES_LOADING=4
 ├── point-cloud-octree.ts          # PointCloudOctree extends Object3D：toTreeNode(:195)、hideDescendants(:298)、raycast(:369，兼容 EDL 图层)
@@ -152,7 +152,7 @@ source/
 │   ├── point-cloud-material.ts    # updateMaterial(:884)、updateVisibilityTextureData(:947)、makeOnBeforeRender(:985)
 │   └── shaders/pointcloud.vs|fs, edl.fs, blur.*, normalize.*
 └── rendering/
-    ├── edl-pass.ts                # ★ EDLPass：layer 0 常规渲染 → 点云 layer 1 渲染到 float RT → EDL 全屏合成（写 gl_FragDepth）
+    ├── edl-pass.ts                # * EDLPass：layer 0 常规渲染 → 点云 layer 1 渲染到 float RT → EDL 全屏合成（写 gl_FragDepth）
     └── potree-renderer.ts         # PotreeRenderer：统一处理 EDL 开关、图层、材质标志的保存与恢复
 ```
 
@@ -169,14 +169,14 @@ source/
 src/
 ├── potree.ts                     # Potree(version: 'v1'|'v2')；updatePointClouds 末尾额外调用 pointCloud.updateSplats()
 ├── constants.ts                  # MIN_NODE_PIXEL_SIZE=200, MAX_LOADS_TO_GPU=10, MAX_NUM_NODES_LOADING=10, MEMORY_SCALE=2, MAX_AMOUNT_OF_SPLATS=5.29M
-├── types.ts                      # ★ IPointCloudTreeNode / IPointCloudGeometryNode(failed, load(): Promise) / IVisibilityUpdateResult / IPotree
-├── utils/worker-pool.ts          # ★ 有界池（maxWorkers）+ AutoTerminatingWorker（空闲 7 s 自动 terminate）+ AsyncBlockingQueue（仅 v1 使用）
+├── types.ts                      # * IPointCloudTreeNode / IPointCloudGeometryNode(failed, load(): Promise) / IVisibilityUpdateResult / IPotree
+├── utils/worker-pool.ts          # * 有界池（maxWorkers）+ AutoTerminatingWorker（空闲 7 s 自动 terminate）+ AsyncBlockingQueue（仅 v1 使用）
 ├── loading2/
 │   ├── octree-loader.ts          # NodeLoader：按 metadata.encoding 选 Decoder / GltfDecoder / GltfSplatDecoder；try/finally 归还 worker
 │   ├── decoder.ts                # DEFAULT 解码，额外返回 tightBoundingBox
 │   ├── gltf-decoder.ts           # positions.glbin(12 B/pt) + colors.glbin(4 B/pt) 两次 Range
 │   └── worker-pool.ts            # 同样无上限
-├── splats-mesh.ts                # ★ LOD 化 3DGS：DataTexture 存协方差 / 颜色 / SH，visibilityNodes 纹理，排序 worker
+├── splats-mesh.ts                # * LOD 化 3DGS：DataTexture 存协方差 / 颜色 / SH，visibilityNodes 纹理，排序 worker
 └── workers/SortWorker.ts         # wasm 排序器（example/sorter_test.wasm）
 ```
 
@@ -274,9 +274,9 @@ PotreeConverter 2 以及 r09 的 `worldpkg tile` 都满足 `spacing_L = cube_L /
 ```text
 r_px(L)  = r_L · pf(d)
 s_px(L)  = spacing_L · pf(d) = r_px(L) · 2/(√3·G)          // 投影点间距
-⇒ minNodePixelSize = τ · (√3/2) · G                         // τ：期望的屏幕点间距（px）
-   G=128：τ=1.5 px ⇔ minNodePixelSize ≈ 166 px；τ=0.45 px ⇔ 50 px（potree-core 默认值，严重过细分）
-   G=64 ：τ=1.5 px ⇔ ≈ 83 px
+=> minNodePixelSize = τ · (√3/2) · G                        // τ：期望的屏幕点间距（px）
+   G=128：τ=1.5 px <=> minNodePixelSize ≈ 166 px；τ=0.45 px <=> 50 px（potree-core 默认值，严重过细分）
+   G=64 ：τ=1.5 px <=> ≈ 83 px
 pf(d) = (H_css·DPR/2) / (tan(fov_y/2) · max(d − r_tight, near))    // 用 tight 球的最近点距离，更保守
 ```
 
@@ -500,17 +500,17 @@ CLIP_OUTSIDE: visible = B && P ;  CLIP_INSIDE: visible = (S && B) || !P ;  HIGHL
 
 ```text
                     ┌────────────────────────── PointCloudEngine（纯 TS，无 React 依赖）─────────────────────────┐
- camera, viewport ─►│ Controller（FPS 闭环）──► budget B, τ, 画质阶梯（EDL / DPR / sizeMode）                     │
- frame stats  ─────►│        │                                                                                   │
-                    │        ▼                                                                                   │
+ camera, viewport ─>│ Controller（FPS 闭环）──> budget B, τ, 画质阶梯（EDL / DPR / sizeMode）                     │
+ frame stats  ─────>│        │                                                                                   │
+                    │        v                                                                                   │
                     │ Selector（每帧，<1 ms）── 目标集 T、渲染集 R（含 fractional 数量）、加载队列 Q ──┐        │
-                    │        ▲                                                                           │        │
-                    │  NodeStore（层级树、状态机、tight bbox）◄── HierarchyLoader（proxy 分页）          │        │
-                    │        ▲                                                                           ▼        │
-                    │  Cache（LRU：点数 + 字节）◄── Uploader（每帧点数 / 字节预算）◄── Decoded 队列 ◄── Fetcher │
+                    │        ^                                                                           │        │
+                    │  NodeStore（层级树、状态机、tight bbox）<── HierarchyLoader（proxy 分页）          │        │
+                    │        ^                                                                           v        │
+                    │  Cache（LRU：点数 + 字节）<── Uploader（每帧点数 / 字节预算）<── Decoded 队列 <── Fetcher │
                     │        │                                          （Range 合并、AbortController、重试） │
                     │        │                                          WorkerPool（gzip / DEFAULT 解码）     │
-                    │        ▼                                                                                   │
+                    │        v                                                                                   │
                     │ RenderBackend 接口 ── GlslBackend（WebGLRenderer，gl_PointSize，EDLPass）                  │
                     │                    └─ TslBackend（WebGPURenderer，vertex-pulling quad，TSL EDL）           │
                     │ Picker（深度回读，async）   Stats / Events（4 Hz）                                         │
@@ -846,10 +846,10 @@ export function PointCloudLayer({ source, quality = 'auto' }: { source: string; 
 
 | 维度 | potree-core | three-loader | potree |
 |---|---|---|---|
-| 嵌入普通 Three / React 场景 | ★★★★★（Object3D、`PotreeRenderer`、`RequestManager`） | ★★★★☆（Object3D，EDL 需要自己组装） | ★☆☆☆☆（全局变量加整站 viewer） |
-| 2026 年活跃度 | ★★★★★（2026-09 仍有功能 PR） | ★★★☆☆（2025 年以 3DGS 为主，2026 年只有依赖更新） | ★★☆☆☆ |
-| TS 类型质量 | ★★★☆☆（有 `@ts-ignore`，`load()` 返回 void） | ★★★★★ | —（JS） |
-| 功能完整度（EDL、裁剪、拾取） | ★★★★☆ | ★★★☆☆ | ★★★★★（外加 HQ splats、剖面、DEM、密度修正） |
+| 嵌入普通 Three / React 场景 | 5/5（Object3D、`PotreeRenderer`、`RequestManager`） | 4/5（Object3D，EDL 需要自己组装） | 1/5（全局变量加整站 viewer） |
+| 2026 年活跃度 | 5/5（2026-09 仍有功能 PR） | 3/5（2025 年以 3DGS 为主，2026 年只有依赖更新） | 2/5 |
+| TS 类型质量 | 3/5（有 `@ts-ignore`，`load()` 返回 void） | 5/5 | —（JS） |
+| 功能完整度（EDL、裁剪、拾取） | 4/5 | 3/5 | 5/5（外加 HQ splats、剖面、DEM、密度修正） |
 | 格式 | 1.x、2.0 DEFAULT / BROTLI | 1.x、2.0 DEFAULT、GLTF、GS | 最全（外加 EPT、COPC） |
 | three 版本兼容 | 较好（peer 宽松） | 较差（`~0.160`） | 较差（r124） |
 | 与本项目的契合度 | 最高（port 的主体） | 类型与 3DGS 参考 | 算法原典 |
