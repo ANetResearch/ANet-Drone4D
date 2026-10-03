@@ -4,8 +4,10 @@
 # 前端目录尚未交付时各脚本给出提示并通过（M15 交付 theme.css、registry.ts、brand.lock.json 后自动生效）。
 # 另含 PY-CB-01（tools/lint/check_py_callbacks.py，总线回调只入队）与 PERF-01（tools/ci/check-perf-flags.mjs，性能用例禁用 C3 标志），
 # 由 MS1/MS2 集成验证补齐（AWR-18 §13.1）；MMD-01（check-mermaid.mjs，只报告）需要 mermaid 11 依赖，尚未接入。
+# REL-01/02/03（check-release.mjs，ADR-079）检查发布集合（git ls-files --cached --others --exclude-standard）：单文件 ≤ 5 MB、不含世界与点云数据、
+# 不含凭据；不在 git 仓库内（或 git 不可用）时给出提示并通过，git 目录在工作树之外时设置 GIT_DIR 与 GIT_WORK_TREE。
 
-LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units
+LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units check-release
 
 .PHONY: lint-tools lint-selftest lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds $(addprefix lint-,$(LINT_SCRIPTS))
 
@@ -19,7 +21,7 @@ lint-selftest:
 lint-lint-lf:
 	@cd $(ROOT) && node tools/lint/lint-lf.mjs --palette
 
-lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units:
+lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units lint-check-release:
 	@cd $(ROOT) && node tools/lint/$(patsubst lint-%,%,$@).mjs
 
 lint-py-imports:

@@ -12,6 +12,7 @@ import { checkSources as brand } from './check-brand.mjs'
 import { checkImports } from './check-deps.mjs'
 import { checkName } from './check-units.mjs'
 import { checkSource as perfFlags } from '../ci/check-perf-flags.mjs'
+import { checkEntry as release, MAX_BYTES } from './check-release.mjs'
 import { readText } from './_common.mjs'
 
 class Collect {
@@ -57,8 +58,16 @@ expect('keywords in tsx', rules((R) => hex(`${SRC}/ui/x.tsx`, `<div className="b
 expect('backdrop and arbitrary values', rules((R) => lf(`${SRC}/ui/panels/a.tsx`,
   '<div className="backdrop-blur-sm text-[13px] p-[3px] rounded-[6px] text-(--lf-mut) text-(--lf-faint)" />', R)), ['VIS-L-03', 'LF-PAL-03', 'LF-TXT-01', 'LF-TXT-01', 'LF-TXT-01'])
 expect('shadcn exempt from LF-TXT-01', rules((R) => lf(`${SRC}/ui/components/ui/badge.tsx`, '<span className="text-[0.625rem]" />', R)), [])
-expect('chart code', rules((R) => lf(`${SRC}/ui/lf/Spark.ts`, "const r = Math.random(); el.innerHTML = ''\n<g id=\"a\"/><g id=\"a\"/>", R)),
-  ['LF-CHART-01', 'LF-CHART-01', 'LF-CHART-01'])
+// LF-CHART-01 (lf-chart.mjs, AST): entropy, subtree rebuilds and constant ids in ui/lf/**; comments and other folders are not chart code
+expect('chart code', rules((R) => lf(`${SRC}/ui/lf/Spark.tsx`, [
+  '// Math.random() in a comment is fine',
+  'const r = Math.random(); const u = globalThis.crypto.randomUUID(); el.innerHTML = ""; host.replaceChildren()',
+  'g.setAttribute("id", "x"); g.id = `y`',
+  'export const A = () => <svg><g id="a" /><g id={"b"} /><g id={uid} /></svg>',
+].join('\n'), R)), ['LF-CHART-01', 'LF-CHART-01', 'LF-CHART-01', 'LF-CHART-01', 'LF-CHART-01', 'LF-CHART-01', 'LF-CHART-01', 'LF-CHART-01'])
+expect('chart code: pure jitter and useId pass', rules((R) => lf(`${SRC}/ui/lf/Ok.tsx`,
+  'import { rnd } from "./rnd"\nexport function B() { const id = React.useId(); return <g id={id} opacity={rnd(1, 2)} /> }', R)), [])
+expect('chart rule only in ui/lf', rules((R) => lf(`${SRC}/ui/panels/x.ts`, 'const r = Math.random()', R)), [])
 const doc = docPalette(readText('docs/15-视觉设计规范与色卡.md') ?? '')
 expect('palette tokens from AWR-15', Object.keys(doc).length, 18)
 {
@@ -146,6 +155,25 @@ expect('palette tokens from AWR-15', Object.keys(doc).length, 18)
 expect('units ok', [checkName('speed_mps', 'm/s'), checkName('pos', 'm'), checkName('timeout_ms', 'ms')], [null, null, null])
 expect('units bad', [checkName('speed_ms', undefined) !== null, checkName('delay_sec', undefined) !== null, checkName('rate_ms', 'm/s') !== null,
   checkName('radius', 'm') !== null], [true, true, true, true])
+
+// check-release (ADR-079); token shapes and the local secret value are assembled at runtime so this file passes REL-03
+{
+  const fakeKey = ['sk', 'proj', 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8'].join('-')
+  const ghTok = 'gh' + 'p_' + 'a'.repeat(36)
+  const pem = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')
+  const local = [{ file: 'svc.env', key: 'SVC_KEY', value: 'local-' + 'value-0123456789' }]
+  const got = rules((R) => {
+    release('docs/media/a.webp', MAX_BYTES + 1, null, [], R)
+    release('docs/media/b.webp', MAX_BYTES, null, [], R)
+    release('worlds/shenzhen/world.json', 10, '{}', [], R)
+    release('tests/x/city.ply', 10, null, [], R)
+    release('packages/contracts/fixtures/world/shenzhen/world.json', 10, '{}', [], R)
+    release('a.md', 10, `key ${fakeKey}\n${ghTok}\n${pem}`, [], R)
+    release('b.ts', 10, `const k = 'local-value-0123456789'`, local, R)
+    release('c.ts', 10, 'const k = "local-value"', local, R)
+  })
+  expect('release rules', got, ['REL-01', 'REL-02', 'REL-02', 'REL-03', 'REL-03', 'REL-03', 'REL-03'])
+}
 
 if (failures) {
   console.error(`lint selftest: ${failures} failure(s)`)

@@ -89,6 +89,76 @@ class LoadSampler:
                 "mean": round(statistics.fmean(self.samples), 2)}
 
 
+class AffinityGuard:
+    """PR-6 客户端分区的守护（ADR-073 第 6 条）：客户端进程树（Chromium 及其 GPU、渲染进程）的全部线程保持在本工具的
+    亲和性内（harness 以 `taskset -c 2-6` 启动本工具）。SwiftShader 的 marl 线程池在创建工作线程时自行把亲和性设为全部
+    CPU，不继承 taskset：3 个 flight60 客户端并发时这些线程在 core1 上累计约 0.27 核（55 s 采样），sim-core 主循环
+    被抢占（逐轮 run-queue 等待数毫秒，单步 p99 约 10 ms）。本线程每 period_s 秒扫描 root 的全部后代进程的线程，
+    亲和性不在集合内的改回；本工具未钉核（亲和性为全部 CPU）时不做任何事。`moved` 为累计改回的线程数（写入明细）。"""
+
+    def __init__(self, root_pid: int, cpus: set[int] | None = None, period_s: float = 0.25) -> None:
+        self.root = int(root_pid)
+        self.cpus = set(cpus) if cpus is not None else (set(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity")
+                                                          else set())
+        ncpu = os.cpu_count() or 0
+        self.active = bool(self.cpus) and len(self.cpus) < ncpu and hasattr(os, "sched_setaffinity")
+        self.moved = 0
+        self.errors = 0
+        self._stop = threading.Event()
+        self._t = threading.Thread(target=self._run, args=(period_s,), daemon=True)
+
+    def start(self) -> AffinityGuard:
+        if self.active:
+            self._t.start()
+        return self
+
+    def _tree(self) -> list[int]:
+        kids: dict[int, list[int]] = {}
+        for d in os.listdir("/proc"):
+            if not d.isdigit():
+                continue
+            try:
+                with open(f"/proc/{d}/stat", "rb") as f:
+                    s = f.read()
+            except OSError:
+                continue
+            ppid = int(s[s.rfind(b")") + 2:].split()[1])
+            kids.setdefault(ppid, []).append(int(d))
+        out, todo = [], [self.root]
+        while todo:
+            p = todo.pop()
+            out.append(p)
+            todo.extend(kids.get(p, ()))
+        return out
+
+    def scan(self) -> int:
+        n = 0
+        for pid in self._tree():
+            try:
+                tids = os.listdir(f"/proc/{pid}/task")
+            except OSError:
+                continue
+            for t in tids:
+                try:
+                    tid = int(t)
+                    if not set(os.sched_getaffinity(tid)) <= self.cpus:
+                        os.sched_setaffinity(tid, self.cpus)
+                        n += 1
+                except (OSError, ValueError):
+                    self.errors += 1  # 线程已退出等
+        self.moved += n
+        return n
+
+    def _run(self, period: float) -> None:
+        while not self._stop.is_set():
+            self.scan()
+            self._stop.wait(period)
+
+    def stop(self) -> dict[str, int]:
+        self._stop.set()
+        return {"repinned_threads": self.moved, "cpus": len(self.cpus)}
+
+
 def acquire_perf_lock(no_lock: bool, wait_s: float = 1800.0):
     """PR-1：返回持有的文件对象（进程退出即释放）；已由 make 持有（AWR_PERF_LOCK_HELD=ex）或 no_lock 时返回 None。"""
     if no_lock or os.environ.get("AWR_PERF_LOCK_HELD") == "ex":

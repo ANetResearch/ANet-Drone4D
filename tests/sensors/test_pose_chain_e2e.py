@@ -62,6 +62,9 @@ class Stack:
         plugin.uninstall()
 
 
+pytestmark = pytest.mark.needs_data  # stack 加载已构建的深圳（AWR-18 §8.2，SHOW-CI）
+
+
 @pytest.fixture(scope="module")
 def stack():
     if not rtc.world_ready():

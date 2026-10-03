@@ -127,6 +127,52 @@ def test_capture_is_copy_safe() -> None:
             h.close()
 
 
+def test_background_capture_in_idle_windows(tmp_path) -> None:
+    """后台拷贝（ADR-073 第 2 条）：慢任务只提出请求，后台线程在主循环空闲窗口内持状态锁执行 gen2 与拷贝；窗口足够长时
+    不需强制执行，checkpoint 按 1 s【仿真】的间隔写出且可读回（快照位于 tick 边界，元数据的 tick 与数组一致）。"""
+    import threading
+
+    from awr.runtime.checkpoint import IdleGate
+
+    with R.isolated_registry() as reg:
+        h = CoreHarness(n=4, reg=reg)
+        try:
+            h.takeoff(5.0)  # 起飞期间（测试台不开空闲窗口）不挂接 checkpoint
+            core = h.core
+            core.manual_gc = True
+            gate = IdleGate()
+            core.idle_gate = gate
+            store = CheckpointStore(tmp_path / "ck", layout_id=LAYOUT_ID, gate=gate, gate_timeout_s=0.25)
+            core.checkpointer = SimCheckpointer(store)
+            from awr.sim.runtime.slow import SlowTask
+
+            core.slow.add(SlowTask("checkpoint", core._slow_checkpoint, period_sim_ns=250_000_000, fit=True))
+            core.checkpointer.enable_background(core, gate)
+            assert core.checkpointer.bg is not None and isinstance(core.state_lock, type(threading.Lock()))
+            t_end = core.clock.t_ns + 3_500_000_000
+            while core.clock.t_ns < t_end:
+                h.W[0] += 2 * TICK_NS
+                core.iterate()
+                gate.open(time.monotonic_ns() + 20_000_000)  # 模拟主循环休眠：20 ms 的空闲窗口
+                time.sleep(0.002)
+                gate.close()
+            bg = core.checkpointer.bg
+            deadline = time.monotonic() + 5.0
+            while bg.pending and time.monotonic() < deadline:
+                gate.open(time.monotonic_ns() + 20_000_000)
+                time.sleep(0.01)
+                gate.close()
+            assert bg.stats["captures"] >= 3 and bg.stats["forced"] == 0, bg.stats
+            assert store.flush(5.0) and store.stats["written"] >= 3
+            ck = store.load_latest()
+            assert ck is not None and ck.meta["clock"]["tick"] * TICK_NS == ck.t_sim_ns
+        finally:
+            if h.core.checkpointer is not None:
+                h.core.checkpointer.close(final=False)
+                h.core.checkpointer = None
+            h.close()
+
+
 def test_cached_meta_encoding_matches_packb() -> None:
     """调用表、幂等表、roster 与租约的编码缓存（`ck_pack_parts`，ADR-070）：M11 `pack_meta` 的输出与对同一元数据 `packb`
     逐字节相同；第二代（缓存命中）与第一代之后又有新调用准入时同样成立，解码结果与普通列表、字典相同。"""

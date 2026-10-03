@@ -23,7 +23,7 @@ gen = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gen)
 
 CITIES = [c for c in ("shenzhen", "newyork", "shanghai", "suzhou", "sanfrancisco", "chicago") if (WORLDS / c / "world.json").exists()]
-pytestmark = pytest.mark.skipif(not CITIES, reason="worlds not built (make worlds)")
+pytestmark = [pytest.mark.needs_data, pytest.mark.skipif(not CITIES, reason="worlds not built (make worlds)")]
 
 
 def validator():

@@ -21,14 +21,13 @@ from awr.datasets.scenarios import authoring as A
 from awr.datasets.scenarios import geometry as GEO
 from awr.datasets.scenarios.__main__ import committed_pins
 from awr.datasets.scenarios.catalog import catalog_errors, load_catalog, scenario_files, schema_errors, zones_errors
-from awr.datasets.urbanscene3d.cities import CITIES, CITY_IDS
 from awr.sim.mission.scenario_loader import deep_merge, expand_vehicle_sets
 
 ALL = scenario_files(SCENARIOS)
 DOCS = {sid: json.loads(p.read_text(encoding="utf-8")) for sid, p in ALL.items()}
-BUILTIN = ("s1-shenzhen-facade", "s2-shanghai-formation", "s3-newyork-sar", "s4-chicago-lakeshore",
+BUILTIN = ("s0-synthcity-showcase", "s1-shenzhen-facade", "s2-shanghai-formation", "s3-newyork-sar", "s4-chicago-lakeshore",
            "s5-sanfrancisco-terrain", "s6-suzhou-corridor", "ladder-shenzhen", "soak-shenzhen",
-           *(f"free-{w}" for w in CITY_IDS))
+           *(f"free-{w}" for w in A.ALL_WORLD_IDS))
 EMOJI = re.compile("[\U0001f000-\U0001faff" + "".join(f"{chr(a)}-{chr(b)}" for a, b in ((0x2600, 0x27BF), (0x25A0, 0x25FF), (0x2194, 0x21FF))) + chr(0xFE0F) + "]")
 
 
@@ -52,7 +51,7 @@ def test_builtin_set_complete() -> None:
     for sid in ALL:
         assert re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", sid), sid
     assert sorted(p.name for p in (SCENARIOS / "zones").glob("*.zones.geojson")) == \
-        sorted(f"{w}.zones.geojson" for w in CITY_IDS)
+        sorted(f"{w}.zones.geojson" for w in A.ALL_WORLD_IDS)                                 # 六城 + 合成演示城市（ADR-077）
 
 
 def test_authoring_deterministic_and_committed() -> None:
@@ -81,7 +80,7 @@ def test_schema_every_profile(sid: str, profile: str | None) -> None:
     assert len(ids) == len(set(ids)) and len(ids) <= 1000                                     # V-SC-04
     assert {m["mission_id"] for m in missions}.__len__() == len(missions)                      # V-SC-06
     assert set().union(*[set(m["vehicle_ids"]) for m in missions] or [set()]) <= set(ids)
-    zmax = CITIES[d["world_id"]].border_max_z_m
+    zmax = A.facts(d["world_id"]).border_max_z_m
     for m in missions:                                                                        # V-SC-07
         p = m["params"]
         for z in [p.get("z_m"), *(p.get("z_range_m") or [])]:
@@ -130,9 +129,9 @@ def test_catalog_v_sc_13() -> None:
     cat = load_catalog(SCENARIOS)
     assert catalog_errors(cat, SCENARIOS) == []
     assert cat["worlds"]["shenzhen"]["default"] == "s1-shenzhen-facade" and cat["worlds"]["shenzhen"]["gate"] is True
-    assert set(cat["worlds"]) == set(CITY_IDS)
-    for w in CITY_IDS:
-        assert cat["worlds"][w]["default"] == CITIES[w].default_scenario
+    assert set(cat["worlds"]) == set(A.ALL_WORLD_IDS)
+    for w in A.ALL_WORLD_IDS:
+        assert cat["worlds"][w]["default"] == A.facts(w).default_scenario
     bad = copy.deepcopy(cat)
     bad["worlds"]["shanghai"]["default"] = "s1-shenzhen-facade"
     bad["ui_profiles"]["ladder-shenzhen"].append("n7")
@@ -216,12 +215,12 @@ def test_ladder_x500_profile() -> None:
 
 
 def test_free_scenarios() -> None:
-    for w in CITY_IDS:
+    for w in A.ALL_WORLD_IDS:
         d = DOCS[f"free-{w}"]
         h = [v["home_enu_m"] for v in d["vehicles"]]
         assert len(h) == 2 and math.dist(h[0][:2], h[1][:2]) == 6.0 and not d.get("missions")
         assert d["on_complete"] == "continue" and d["success"] == {"all": [{"metric": "guard_events", "op": "==", "value": 0}]}
-        assert [h[0][0] + 3, h[0][1]] == list(CITIES[w].free_pad)
+        assert [h[0][0] + 3, h[0][1]] == list(A.facts(w).free_pad)
         assert h[0][2] == (0 if w == "suzhou" else None)                                    # 苏州无点区显式 z = 0
 
 
@@ -244,12 +243,12 @@ def test_soak_composition_and_separation() -> None:
 
 
 # ---------------------------------------------------------------- curated zones（M16-AC-003）
-@pytest.mark.parametrize("wid", CITY_IDS)
+@pytest.mark.parametrize("wid", A.ALL_WORLD_IDS)
 def test_curated_zones_valid(wid: str) -> None:
     fc = json.loads((SCENARIOS / "zones" / f"{wid}.zones.geojson").read_text(encoding="utf-8"))
     assert zones_errors(fc, wid) == []
-    assert [f["id"] for f in fc["features"]] == [z.zone_id for z in CITIES[wid].zones]
-    for f, z in zip(fc["features"], CITIES[wid].zones, strict=True):
+    assert [f["id"] for f in fc["features"]] == [z.zone_id for z in A.facts(wid).zones]
+    for f, z in zip(fc["features"], A.facts(wid).zones, strict=True):
         ring = np.asarray(f["geometry"]["coordinates"][0])
         assert len(ring) == 33 and np.allclose(np.linalg.norm(ring - z.center, axis=1), z.radius_m, atol=0.01)
     if wid == "suzhou":

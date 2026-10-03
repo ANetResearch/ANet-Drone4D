@@ -121,3 +121,30 @@ def test_full_query_fused_wind_matches_numpy(kind: str, model: str, with_wq: boo
         finally:
             KR.HAVE_NUMBA = True
         assert env.rows.tobytes() == rows_nb.tobytes()
+
+
+@pytest.mark.parametrize("preset", ["fog", "thunderstorm", "blizzard", "sandstorm", "clear"])
+@pytest.mark.parametrize("with_wq", [True, False])
+def test_full_query_rest_kernel_matches_numpy(preset: str, with_wq: bool) -> None:
+    """全量查询中风以外的字段（MIL 湍流谱、光学含雾层与云下降水标志、降水、ISA 热力）由融合核一次写完（ADR-073 第 3 条）：
+    雾、雷暴、暴雪、沙尘与晴天各预设下，全部输出字段与整段 numpy 路径逐字节相同（含雾层顶与云底两侧的位置）。"""
+    from awr.environment.stage import ENV_STAGE_FIELDS
+
+    env = EnvironmentServiceImpl(world_id="t", world_seed=1, bounds=BOUNDS, initial_preset=preset, coordinate=COORD,
+                                 load_assets=False)
+    if with_wq:
+        env.wq = _WQ()
+        env._dtm_nb = None
+    env.kf.events = []
+    env.on_env_tick_all(0)
+    rng = np.random.default_rng(23)
+    n = 400
+    pos = np.column_stack([rng.uniform(-950, 950, n), rng.uniform(-1050, 1050, n), rng.uniform(-5.0, 900.0, n)])
+    pos[:4, 2] = [61.9, 62.0, 62.1, 2.0]  # 雾层顶（fog_top 60 m AGL + 地面 2 m）两侧与地面
+    t = env.t_grid_ns
+    a = env.query(pos, t, fields=ENV_STAGE_FIELDS, agent_idx=np.arange(n, dtype=np.int64))
+    got = {k: getattr(a, k)[:n].copy() for k in _ALL_OUT}
+    env.fuse_wind = False
+    b = env.query(pos, t, fields=ENV_STAGE_FIELDS, agent_idx=np.arange(n, dtype=np.int64))
+    for k in _ALL_OUT:
+        assert got[k].tobytes() == getattr(b, k)[:n].tobytes(), k

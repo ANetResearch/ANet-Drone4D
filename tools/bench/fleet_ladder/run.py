@@ -171,7 +171,7 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
     if a.with_recorder:
         env["AWR_REC_AUTOSTART"] = "1"  # 骨架布设没有剧本的 record 开关：recorder 就绪即开始录制（M12）
     sup = _Supervisor(env, only)
-    bus = load = cl = None
+    bus = load = cl = guard = None
     detail: dict[str, Any] = {"n": n, "rate": rate, "scenario": scenario, "procs": only}
     try:
         run_id = sup.wait_ready()
@@ -257,6 +257,7 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
                                  secs=dur)
             cl = subprocess.Popen(BS._clients_cmd(ns, sup.base), cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                   text=True)
+            guard = C.AffinityGuard(cl.pid).start()  # PR-6：SwiftShader 线程不得逃出客户端的核（ADR-073 第 6 条）
             lines: list[str] = []
             if a.with_flight60:
                 end = time.monotonic() + 240
@@ -327,12 +328,15 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
                "load": load_stats, "ipc": {"cmd_failed": load.failed, "cmd_sent": load.n_cmd,
                                            "fleet_ready_s": detail["fleet_ready_s"], "n_vehicles": len(ids)}}
         detail.update({"ok": True, "rejected": dict(load.rejected), "step_series_us": steps[-int(dur):],
-                       "diagnostic": sup.diagnostic, "with_checkpoint": True})
+                       "diagnostic": sup.diagnostic, "with_checkpoint": True,
+                       "client_affinity": guard.stop() if guard is not None else None})
         return {"record": rec, "detail": detail}
     except LadderError as e:
         detail.update({"ok": False, "error": str(e), "log_tail": sup.log[-20:]})
         raise LadderError(json.dumps(detail, ensure_ascii=False)) from None
     finally:
+        if guard is not None:
+            guard.stop()
         if cl is not None and cl.poll() is None:
             cl.kill()
         if load is not None:

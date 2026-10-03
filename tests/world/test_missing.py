@@ -103,8 +103,12 @@ def test_deep_env_checks_hashes(setup, monkeypatch):
 @needs_worlds
 def test_status_json_six_cities(capsys):
     assert worldpkg(["status", "--json", "--worlds", str(WORLDS)]) == 0
-    rows = json.loads(capsys.readouterr().out)["worlds"]
-    assert {r["world_id"] for r in rows} == {"shenzhen", "shanghai", "newyork", "sanfrancisco", "suzhou", "chicago"}
+    out = json.loads(capsys.readouterr().out)
+    rows = out["worlds"]
+    assert {r["world_id"] for r in rows if not r.get("synthetic")} == {"shenzhen", "shanghai", "newyork", "sanfrancisco", "suzhou",
+                                                                      "chicago"}
+    assert [r["world_id"] for r in rows if r.get("synthetic")] == ["synthcity"]          # 合成演示城市（ADR-077）
+    assert out["default_world"]["primary"] == "shenzhen"
     for r in rows:
         if r["raw_present"]:
             assert r["rebuild"] is False, r

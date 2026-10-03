@@ -367,11 +367,13 @@ def _clients_cmd(a: argparse.Namespace, base: str) -> list[str]:
 def clients_run(a: argparse.Namespace) -> dict:
     be = _Backend(a)
     cl: subprocess.Popen | None = None
+    guard: C.AffinityGuard | None = None
     try:
         be.start()
         fleet_wait_s = be.wait_fleet(a, a.fleet_timeout)
         rss0 = {k: C.rss_mb(p) for k, p in be.pids.items()}
         cl = subprocess.Popen(_clients_cmd(a, be.base), cwd=C.ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        guard = C.AffinityGuard(cl.pid).start()  # PR-6：SwiftShader 线程不得逃出客户端的核（ADR-073 第 6 条）
         assert cl.stdout is not None
         lines: list[str] = []
         t_start = None
@@ -432,8 +434,11 @@ def clients_run(a: argparse.Namespace) -> dict:
                         "stage_ms_per_s": stage},
                 "rss_mb": {k: {"start": rss0.get(k), "end": C.rss_mb(p)} for k, p in be.pids.items()},
                 "restarted": restarted, "fleet_wait_s": round(fleet_wait_s, 1), "diagnostic": be.diagnostic,
-                "clients": summary, "client_subs": client_subs, "load": load}
+                "clients": summary, "client_subs": client_subs, "load": load,
+                "client_affinity": guard.stop()}
     finally:
+        if guard is not None:
+            guard.stop()
         if cl is not None and cl.poll() is None:
             cl.kill()
         be.close()

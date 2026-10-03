@@ -1,0 +1,102 @@
+# Hosted CI, gate G1h (docs/18 section 12.1, docs/03 ADR-078): the no-data subset of `make ci` on a clean checkout.
+# No GPU, no Chrome for Testing, no UrbanScene3D data and no built city worlds. Every command below was run on a clean
+# copy of the tracked files before it was added here (docs/impl/SHOW-CI-报告.md). `make ci` stays the full local gate G1;
+# `make ci-nodata` runs the same no-data steps locally.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # package-lock.json records registry.npmmirror.com tarball URLs; fetch the same tarballs (the lockfile integrity
+  # hashes still apply) from the public npm registry instead.
+  npm_config_registry: https://registry.npmjs.org/
+  npm_config_replace_registry_host: always
+  PYTHON_BOOT: python3.12
+
+jobs:
+  checks:
+    name: lint, contracts, tsc, vitest unit, build, demo world
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Cache uv and pip downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: uv-${{ runner.os }}-py312-${{ hashFiles('requirements.lock') }}
+          restore-keys: uv-${{ runner.os }}-py312-
+
+      - name: make setup
+        run: make setup
+      - name: make lint
+        run: make lint
+      - name: make test-contracts
+        run: make test-contracts
+      - name: tsc --noEmit
+        run: make typecheck
+      - name: Vitest unit
+        run: make test-web-unit
+      - name: Production build
+        run: make build
+      - name: Demo world (synthcity, no download)
+        run: make demo-world
+      - name: Validate the demo world
+        run: make validate-demo-world
+      - name: Demo world tests (published facts, scenario loader rules)
+        run: make test-demo-world
+
+  pytest:
+    name: pytest no-data, shard ${{ matrix.shard }} of 2
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Cache uv and pip downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: uv-${{ runner.os }}-py312-${{ hashFiles('requirements.lock') }}
+          restore-keys: uv-${{ runner.os }}-py312-
+
+      - name: make setup
+        run: make setup
+      - name: pytest -m "not perf and not slow and not needs_data"
+        run: make test-py-nodata PYTEST_SHARD=${{ matrix.shard }}

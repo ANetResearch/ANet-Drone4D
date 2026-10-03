@@ -19,6 +19,15 @@ if str(HERE) not in sys.path:
 from recon_common import WORLD_BUILT, job_params, make_worlds  # noqa: E402
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items) -> None:
+    """Tests that use `recon_base` (directly or through `chain_run`) need the built Shenzhen world: mark them needs_data so
+    that the hosted CI's `-m "not needs_data"` does not collect them (AWR-18 §8.2, SHOW-CI)."""
+    for item in items:
+        if "recon_base" in getattr(item, "fixturenames", ()) and HERE in Path(str(item.path)).resolve().parents:
+            item.add_marker(pytest.mark.needs_data)
+
+
 @pytest.fixture(scope="session")
 def golden_session(tmp_path_factory):
     from awr.reconstruction.ir.golden import write_golden_session

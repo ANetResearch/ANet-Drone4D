@@ -245,3 +245,67 @@ def test_poison_skips_generations_written_after_restore(tmp_path: Path) -> None:
     assert ck is not None and ck.t_sim_ns == 2_000
     assert st.poisoned_generations() == 1
     st.close(final=False)
+
+
+def test_idle_gate_window_deadline_and_compat(shm_dir: Path) -> None:
+    """IdleGate（ADR-073 第 1 条）：窗口打开且距截止不少于余量时 wait_slot 立即返回 True；余量不足或窗口关闭时等下一个
+    窗口（open 通知），超时返回 False；兼容 Event 的 set/clear/is_set/wait；作 CheckpointStore 的 gate 时写出的内容与
+    不带 gate 时逐字节相同。"""
+    import threading
+
+    from awr.runtime.checkpoint import IdleGate
+
+    t = [1_000_000_000]
+    g = IdleGate(margin_ns=400_000, clock=lambda: t[0])
+    assert not g.is_set() and not g.wait_slot(0.0)
+    g.open(t[0] + 2_000_000)
+    assert g.is_set() and g.wait_slot(0.0)
+    t[0] += 1_700_000  # 只剩 0.3 ms < 余量
+    assert not g.wait_slot(0.0)
+    g.close()
+    assert not g.is_set()
+    got: list[bool] = []
+    th = threading.Thread(target=lambda: got.append(g.wait_slot(5.0)))
+    th.start()
+    time.sleep(0.05)
+    assert not got  # 等下一个窗口
+    g.open(t[0] + 5_000_000)
+    th.join(2.0)
+    assert got == [True]
+    g.open(t[0] + 2_000_000, slack_ns=1_500_000)  # 主循环等待余量（ADR-073 第 2 条）：只计入 slack=True 的等待方
+    assert not g.wait_slot(0.0, need_ns=3_000_000)
+    assert g.wait_slot(0.0, need_ns=3_000_000, slack=True)
+    assert g.last_slot_remain_ns == 2_000_000 and g.last_slot_slack_ns == 1_500_000
+    assert not g.wait_slot(0.0, need_ns=4_000_000, slack=True)
+    g.set()  # Event 兼容：不限时窗口
+    assert g.wait(0.0) and g.wait_slot(0.0)
+    g.clear()
+    assert not g.wait(0.01)
+    gate = IdleGate()
+    st = CheckpointStore(shm_dir / "ckig", layout_id=LAYOUT_ID, gate=gate, gate_timeout_s=5.0)
+    try:
+        arrays, m = soa(10), {"big": list(range(1000))}
+        assert st.save(1_000_000_000, 1, 0, arrays, m)
+        time.sleep(0.2)
+        assert st.stats["written"] == 0  # 没有空闲窗口：停在第一个让出点
+        stop = threading.Event()
+
+        def windows() -> None:  # 模拟主循环：每 8 ms 一个约 4 ms 的空闲窗口
+            while not stop.is_set():
+                gate.open(time.monotonic_ns() + 4_000_000)
+                time.sleep(0.004)
+                gate.close()
+                time.sleep(0.004)
+
+        w = threading.Thread(target=windows, daemon=True)
+        w.start()
+        t0 = time.monotonic()
+        while st.stats["written"] == 0 and time.monotonic() - t0 < 5.0:
+            time.sleep(0.01)
+        stop.set()
+        w.join(1.0)
+        assert st.stats["written"] == 1
+        got_b = next((shm_dir / "ckig").glob("*.bin")).read_bytes()
+        assert got_b == serialize(1_000_000_000, 1, 0, LAYOUT_ID, arrays, m)
+    finally:
+        st.close()

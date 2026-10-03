@@ -2,7 +2,7 @@
 // lieflat visual language lint (AWR-15 §12; AWR-18 §13.1).
 //   VIS-L-03    backdrop-filter, backdrop-blur, supports-backdrop-filter (apps/web/src/**, shadcn sources included)
 //   LF-TXT-01   arbitrary font size, spacing and radius values outside ui/components/ui/** (text-[13px], p-[3px], rounded-[6px])
-//   LF-CHART-01 chart code (ui/lf/**): Math.random, innerHTML = '' rebuilds, duplicate literal ids (port of lieflat validate.mjs)
+//   LF-CHART-01 chart code (ui/lf/**): entropy sources, subtree rebuilds and constant element ids (AST check in lf-chart.mjs)
 //   --palette   LF-PAL-01..05: raw token values equal AWR-15 §3.1 and §3.2, ordinal ramps, WCAG contrast of text roles,
 //               CVD (Machado 2009 severity 1.0, OKLab dE x100) and HUD worst background (VIS-AC-001, 002, 003, 028)
 // The expected palette is read from docs/15 (the tables are the source of truth); this tool contains no colour literals.
@@ -11,6 +11,7 @@
 // Usage: node tools/lint/lint-lf.mjs [--palette] [--palette-only] [files...]
 import { existsSync } from 'node:fs'
 import { Reporter, WEB_SRC, inShadcn, isCode, isMain, isStyle, lineCol, readText, run, stripComments, walk } from './_common.mjs'
+import { checkChart } from './lf-chart.mjs'
 
 const THEME = `${WEB_SRC}/styles/theme.css`
 const DOC15 = 'docs/15-视觉设计规范与色卡.md'
@@ -41,22 +42,7 @@ export function checkSource(f, text, R) {
       }
     }
   }
-  if (f.startsWith(`${WEB_SRC}/ui/lf/`)) {
-    for (const m of src.matchAll(/Math\.random\s*\(/g)) {
-      const [l, c] = lineCol(src, m.index)
-      R.add(f, l, c, 'LF-CHART-01', 'Math.random() in chart code; use the deterministic rnd()')
-    }
-    for (const m of src.matchAll(/\.innerHTML\s*=\s*(['"`])\s*\1/g)) {
-      const [l, c] = lineCol(src, m.index)
-      R.add(f, l, c, 'LF-CHART-01', "innerHTML = '' rebuild; update marks in place")
-    }
-    const seen = new Map()
-    for (const m of text.matchAll(/\sid=(["'])([^"'{}$]+)\1/g)) {
-      const [l, c] = lineCol(text, m.index + 1)
-      if (seen.has(m[2])) R.add(f, l, c, 'LF-CHART-01', `duplicate id="${m[2]}" (first at line ${seen.get(m[2])})`)
-      else seen.set(m[2], l)
-    }
-  }
+  checkChart(f, text, R)
 }
 
 // ---------------------------------------------------------------- colour maths (WCAG 2.x, OKLab, Machado 2009)

@@ -25,8 +25,9 @@ import rtc
 
 from awr.contracts import frame as F
 
-pytestmark = pytest.mark.ext
+pytestmark = [pytest.mark.ext, pytest.mark.needs_data]
 ROOT = Path(__file__).resolve().parents[2]
+WORLDS = Path(os.environ.get("AWR_WORLDS_DIR") or ROOT / "worlds")
 
 
 def _port() -> int:
@@ -39,6 +40,9 @@ def _port() -> int:
 
 @pytest.fixture(scope="module")
 def sup(tmp_path_factory: pytest.TempPathFactory):
+    # supervisor 的默认世界是深圳，未构建时回退到 synthcity（ADR-077）；两者都没有时 api 永远不就绪，不必等满 120 s（SHOW-CI）
+    if not any((WORLDS / w / "world.json").exists() for w in ("shenzhen", "synthcity")):
+        pytest.skip("worlds/shenzhen 与 worlds/synthcity 都未构建（make worlds 或 make demo-world）")
     runs = tmp_path_factory.mktemp("procruns")
     port, bus = _port(), _port()
     # 不加载 runtime.yaml 的缺省剧本（S1 会替换骨架机体并按剧本 record 策略自动开录），INT-1

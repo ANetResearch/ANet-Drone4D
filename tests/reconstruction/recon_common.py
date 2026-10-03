@@ -19,7 +19,12 @@ SOURCE = "shenzhen"
 SMALL = {"frames": 60, "keep": 0.05}           # functional chain size (the full 600-frame run is marked slow)
 WORLD_BUILT = (WORLDS / SOURCE / "geometry" / "pointcloud" / "source" / "source.json").exists() and \
     (WORLDS / ".status" / f"{SOURCE}.json").exists()
-needs_world = pytest.mark.skipif(not WORLD_BUILT, reason="worlds/shenzhen not built (make worlds)")
+_skip_no_world = pytest.mark.skipif(not WORLD_BUILT, reason="worlds/shenzhen not built (make worlds)")
+
+
+def needs_world(fn):
+    """Needs the built Shenzhen world: the needs_data marker plus a skip when it is missing (AWR-18 §8.2, SHOW-CI)."""
+    return pytest.mark.needs_data(_skip_no_world(fn))
 
 
 def make_worlds(base: Path) -> Path:

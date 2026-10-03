@@ -38,7 +38,10 @@ def test_states(worlds):
     assert d.points == 200_000 and d.roots == 1 and d.node_count > 0 and d.levels_points[-1] == 200_000
     assert d.anchor_kind == "synthetic" and d.georeferenced is False
     assert cat.get("ghost").status == "missing"
+    # 原始数据缺失时世界仍为 ABSENT（16 §3.5 状态表）→ missing；其他原因的构建失败 → failed（ADR-077）
     Publisher(worlds, "broken").write_status("failed", reason="raw_missing", exit_code=4, content_version=None, deep=False)
+    assert Catalog(worlds, builtin=["broken"]).get("broken").status == "missing"
+    Publisher(worlds, "broken").write_status("failed", reason="gate_failed", exit_code=2, content_version=None, deep=False)
     assert Catalog(worlds, builtin=["broken"]).get("broken").status == "failed"
     pub.write_status("invalid", reason="zones_changed", exit_code=0, content_version=cv, deep=False)
     assert Catalog(worlds, builtin=["tiny"]).get("tiny").status == "stale"

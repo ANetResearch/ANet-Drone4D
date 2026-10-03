@@ -54,6 +54,15 @@ class Stack:
         shutil.rmtree(self.settings.run_dir, ignore_errors=True)
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items) -> None:
+    """用 `stack`（加载已构建的深圳）的用例补 needs_data 标记，使托管 CI 的 `-m "not needs_data"` 不收集它们（AWR-18 §8.2，SHOW-CI）。"""
+    here = Path(__file__).resolve().parent
+    for item in items:
+        if "stack" in getattr(item, "fixturenames", ()) and here in Path(str(item.path)).resolve().parents:
+            item.add_marker(pytest.mark.needs_data)
+
+
 @pytest.fixture(scope="module")
 def stack():
     if not rtc.world_ready():

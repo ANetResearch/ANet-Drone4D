@@ -38,6 +38,10 @@ def st(tmp_path_factory: pytest.TempPathFactory):
     os.environ["AWR_RUNS_DIR"] = str(runs)
     s = fakesim.GwStack(n=1)
     cv = (s.ctx.world_info or {}).get("contentVersion") or "synth"
+    if not (s.ctx.world_info or {}).get("contentVersion"):
+        # 没有已构建的深圳时（干净克隆、托管 CI）api 不知道世界的 contentVersion，兼容性判定无从比较；
+        # 这里给出 RUN 的值，使"content_version 不同即不兼容"仍被验证（SHOW-CI）
+        s.ctx.world_info = {**(s.ctx.world_info or {}), "contentVersion": cv}
     synthesize(runs / rechelp.RUN, n=4, sim_s=5, content_version=cv)
     synthesize(runs / rechelp.RUN2, n=4, sim_s=3, content_version="other")
     (runs / "not-a-run").mkdir()

@@ -211,11 +211,10 @@ def _s3_starts(scenario_run, profile: str, d) -> dict[str, int]:
 
 @full_only
 @pytest.mark.ext
-@pytest.mark.xfail(strict=False, reason="开局屏障待 M10、M08 实施（ADR-068 决策第 4 条、M14 §14 第 23 条）；实施后应通过")
 def test_s3_start_rate_invariant(scenario_run, tmp_path) -> None:
-    """D1-AC-16 的 sim 侧前提（ADR-068）：剧本开局任务的生效 tick 与倍速无关。第 2 轮验收 ×1 在 1.43 s、×10 在 10.33 s
-    生效（plan-pool 预热与 generator 作业按墙钟到达的 tick 生效），搜索机轨迹平移后首检与 accepted 时刻随之漂移约 10 s。
-    只运行到开局（×1 约 2 s 仿真），用于快速核对 sim 侧修复；完整判定仍是 `test_s3_rate_equivalence`。"""
+    """D1-AC-16 的 sim 侧前提（ADR-068 第 4 条，ADR-073 第 7 条剧本开局屏障）：剧本开局任务的生效 tick 与倍速无关。第 2 轮
+    验收 ×1 在 1.43 s、×10 在 10.33 s 生效（plan-pool 预热与 generator 作业按墙钟到达的 tick 生效），搜索机轨迹平移后首检与
+    accepted 时刻随之漂移约 10 s。只运行到开局（×1 约 2 s 仿真），用于快速核对；完整判定仍是 `test_s3_rate_equivalence`。"""
     doc = json.loads((SCENARIOS / "s3-newyork-sar.json").read_text(encoding="utf-8"))
     v = copy.deepcopy(doc)
     v["profiles"]["x1"] = {"rate": 1, "record": False}

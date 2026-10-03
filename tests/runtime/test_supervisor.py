@@ -430,6 +430,7 @@ def _start_sup_subprocess(cfg: Path, *extra: str) -> tuple[subprocess.Popen, str
                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=rtlib.child_env())
     line = p.stdout.readline()
     assert line.startswith("READY"), line
+    p.ready_line = line  # type: ignore[attr-defined]
     run_id = line.split("run=")[1].split()[0]
     return p, run_id
 
@@ -462,7 +463,8 @@ def test_zenoh_integration_sys_procs_ready_and_cli(tmp_path: Path) -> None:
         rendezvous=f"tcp/127.0.0.1:{port}")
     sup, run_id = _start_sup_subprocess(cfg)
     try:
-        ns = f"awr/shenzhen/{run_id}"
+        # 命名空间取 READY 行的运行世界：深圳未构建而 synthcity 已构建时 supervisor 回退到 synthcity（ADR-077；SHOW-CI 干净克隆）
+        ns = f"awr/{sup.ready_line.split('world=')[1].split()[0]}/{run_id}"
 
         async def main() -> None:
             bus = ZenohBus.open("tester", namespace=ns, listen=["tcp/127.0.0.1:0"], connect=[f"tcp/127.0.0.1:{port}"],
@@ -470,8 +472,12 @@ def test_zenoh_integration_sys_procs_ready_and_cli(tmp_path: Path) -> None:
             try:
                 await asyncio.sleep(0.5)
                 items = {}
-                for _ in range(50):
-                    rep = await bus.call(K.SYS_PROCS, {"v": 1})
+                end = time.monotonic() + 20
+                while time.monotonic() < end:
+                    try:
+                        rep = await bus.call(K.SYS_PROCS, {"v": 1})
+                    except BusTimeout:  # 重负载下 tester 会话或 supervisor 的 queryable 晚于 READY 就绪（SHOW-CI）
+                        continue
                     items = {i["name"]: i for i in rep["items"]}
                     if all(i["state"] == "RUNNING" for i in items.values()):
                         break

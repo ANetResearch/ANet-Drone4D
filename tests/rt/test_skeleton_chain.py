@@ -317,6 +317,7 @@ def test_openapi_lists_routes(stack) -> None:
 
 
 # ---------------------------------------------------------------- 真实进程（supervisor → sim-core + api）
+@pytest.mark.needs_data
 def test_chain_real_processes(tmp_path: Path) -> None:
     if not rtc.world_ready():
         pytest.skip("worlds/shenzhen 未构建（make worlds）")

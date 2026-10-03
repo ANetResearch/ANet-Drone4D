@@ -26,6 +26,7 @@ from awr.datasets.urbanscene3d.cities import CITY_IDS
 GLYPH = re.compile("[\U0001f000-\U0001faff" + "".join(f"{chr(a)}-{chr(b)}" for a, b in ((0x2600, 0x27BF), (0x25A0, 0x25FF), (0x2194, 0x21FF))) + chr(0xFE0F) + "]")
 
 
+@pytest.mark.needs_data
 def test_check_items_and_timing(tmp_path) -> None:
     needs_world(*CITY_IDS)
     t0 = time.monotonic()
@@ -41,6 +42,7 @@ def test_check_items_and_timing(tmp_path) -> None:
     assert dt <= 60.0, dt
 
 
+@pytest.mark.needs_data
 def test_missing_world_exits_6(tmp_path) -> None:
     needs_world(*CITY_IDS)
     w = tmp_path / "worlds"
@@ -53,6 +55,7 @@ def test_missing_world_exits_6(tmp_path) -> None:
     assert exit_code(items) == 6
 
 
+@pytest.mark.needs_data
 def test_load_high_warns(tmp_path) -> None:
     needs_world(*CITY_IDS)
     items = run_checks(ROOT, WORLDS, deep=False, runs_dir=tmp_path, with_doctor=False, max_load=0.0, offset=9)

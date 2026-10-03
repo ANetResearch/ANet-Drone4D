@@ -3,7 +3,8 @@
 // EMOJI-01: characters with Extended_Pictographic=Yes or Emoji_Presentation=Yes, and U+FE0F.
 // GLYPH-01: forbidden glyph blocks U+25A0-U+25FF, U+2600-U+26FF, U+2700-U+27BF, U+2194-U+21FF.
 // Arrows U+2190-U+2193, box drawing and mathematical symbols are allowed.
-// Scope: AWR-18 §13.2 include set, plus docs/03-*.md, docs/1[0-9]-*.md, docs/modules/**, docs/README.md.
+// Scope: AWR-18 §13.2 include set, plus docs/03-*.md, docs/1[0-9]-*.md, docs/modules/**, docs/README.md, and (ADR-079) docs/impl/**,
+// the root README.md, README.zh-CN.md, CONTRIBUTING.md, SECURITY.md, THIRD_PARTY_NOTICES.md, NOTICE, CITATION.cff and .github/**.
 // Usage: node tools/lint/no-emoji.mjs [--no-docs] [files...]
 import { Reporter, isBinaryPath, isMain, lineCol, readText, run, scopeFiles } from './_common.mjs'
 

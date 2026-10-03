@@ -159,7 +159,11 @@ def test_health_states_and_status(st) -> None:
         assert r.status_code == 503 and r.json()["sim"] == "stalled" and r.json()["code"] == 211
         st.sim.hb_paused = False
         await c.until(lambda k, x: k == "json" and x["op"] == "removeStatus" and "proc.sim-core" in x["ids"], 2)
-        assert httpx.get(f"{st.base}/api/health/ready", timeout=5).status_code == 200
+        r = httpx.get(f"{st.base}/api/health/ready", timeout=5)
+        if rtc.world_ready():
+            assert r.status_code == 200
+        else:  # 没有已构建的深圳（干净克隆、托管 CI）：健康已恢复，只因 world_loaded 为假仍是 503（SHOW-CI）
+            assert r.status_code == 503 and r.json()["sim"] == "ok" and r.json()["world_loaded"] is False
         # liveliness DELETE：心跳新鲜也立即 STALLED
         alive = st.sim.bus._handles[0]
         alive.close()

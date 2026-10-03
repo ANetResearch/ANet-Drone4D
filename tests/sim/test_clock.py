@@ -185,3 +185,72 @@ def test_core_clock_requires_seat(op: str) -> None:
             assert rep["code"] == int(Reason.SEAT_TAKEN)
         finally:
             h.close()
+
+
+def test_hold_returns_zero_reanchors_and_releases() -> None:
+    """内部保持（剧本开局屏障，ADR-068 第 4 条、ADR-073 第 7 条）：保持期间 steps_due 返回 0 且重锚（不欠账，放行后不追帧），
+    状态仍为 PLAYING；就绪判据为真即放行并记入 hold_log；墙钟超过上限时以 timeout 放行；reset 解除全部保持。"""
+    c, W = _clock(max_batch_base=5)
+    c.apply("play")
+    for _ in range(10):
+        W[0] += TICK_NS
+        _run(c, c.steps_due())
+    ready = [False]
+    c.hold("t", timeout_s=10.0, ready=lambda: ready[0])
+    assert c.held and c.state == int(TS.PLAYING)
+    for _ in range(100):  # 0.4 s 保持
+        W[0] += TICK_NS
+        assert c.steps_due() == 0
+    assert not c.rtf_limited and c.catchup_saturated == 0
+    ready[0] = True
+    W[0] += TICK_NS
+    assert c.steps_due() == 0  # 放行的这一轮重锚：保持期间的墙钟不计入追帧
+    assert not c.held and c.hold_log[-1][:3] == ("t", "ready", 10)
+    W[0] += TICK_NS
+    assert c.steps_due() == 1
+    _run(c, 1)
+    c.hold("t2", timeout_s=0.1)
+    W[0] += 50_000_000
+    assert c.steps_due() == 0 and c.held
+    W[0] += 60_000_000
+    c.steps_due()
+    assert not c.held and c.hold_log[-1][1] == "timeout" and not c.rtf_limited
+    c.hold("t3", timeout_s=10.0)
+    c.apply("reset")
+    assert not c.held and c.hold_log[-1][1] == "reset"
+
+
+def test_core_hold_takes_effect_after_the_tick_that_sets_it() -> None:
+    """设置期逐 tick 推进（`per_tick`）：某个 tick 的 stage 置下保持后，同一轮内不再推进后续到期 tick（×1 与 ×10 停在同一 tick），
+    放行后从下一 tick 继续，tick 序列无跳号。"""
+    with R.isolated_registry() as reg:
+        seen: list[int] = []
+        box: dict = {}
+
+        @R.register_stage("holder", 1, 0, 14, owner="M08", budget_core=0.0)
+        def _hold(S, ctx) -> None:
+            seen.append(int(ctx.tick))
+            if int(ctx.tick) == box.get("at"):
+                ctx.clock.hold("x", timeout_s=10.0, ready=lambda: box.get("go", False))
+
+        h = CoreHarness(n=1, reg=reg)
+        try:
+            clk = h.core.clock
+            clk.apply("speed", {"rate": 10.0})
+            clk.per_tick = True
+            box["at"] = clk.tick + 7
+            h.W[0] += 20 * TICK_NS  # ×10：本轮到期 50 个 tick
+            h.core.iterate()
+            assert seen[-1] == box["at"] and clk.held
+            for _ in range(5):
+                h.W[0] += 10 * TICK_NS
+                h.core.iterate()
+            assert seen[-1] == box["at"]
+            box["go"] = True
+            for _ in range(5):
+                h.W[0] += 10 * TICK_NS
+                h.core.iterate()
+            assert not clk.held and seen[-1] > box["at"]
+            assert seen == list(range(seen[0], seen[0] + len(seen)))
+        finally:
+            h.close()

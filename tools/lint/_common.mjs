@@ -7,10 +7,14 @@ import { fileURLToPath } from 'node:url'
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-// AWR-18 §13.2 scan scope (D1-AC-20)
+// AWR-18 §13.2 scan scope (D1-AC-20; release-facing documents added by ADR-079)
 export const INCLUDE_DIRS = ['apps', 'python', 'packages', 'tools', 'scenarios', 'configs', 'vehicles', 'tests', 'mk']
 export const INCLUDE_FILES = ['Makefile']
-export const DOC_GLOBS = [/^docs\/03-[^/]*\.md$/, /^docs\/1[0-9]-[^/]*\.md$/, /^docs\/modules\//, /^docs\/README\.md$/]
+export const DOC_GLOBS = [/^docs\/03-[^/]*\.md$/, /^docs\/1[0-9]-[^/]*\.md$/, /^docs\/modules\//, /^docs\/README\.md$/, /^docs\/impl\//]
+// release-facing documents outside docs/ (ADR-079: the repository front page, contribution and security notes, notices and the
+// hosted CI workflow); like the docs they get the emoji and glyph rules only
+export const RELEASE_DOCS = ['README.md', 'README.zh-CN.md', 'CONTRIBUTING.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md', 'NOTICE', 'CITATION.cff']
+export const RELEASE_DOC_DIRS = ['.github']
 const EXCLUDE = [/^docs\/research\//, /^docs\/01-design\.md$/, /^docs\/02-refs\.md$/, /^refs\//, /^\.cache\//, /(^|\/)node_modules\//,
   /^data\//, /^worlds\//, /^runs\//, /(^|\/)__pycache__\//, /(^|\/)\.venv\//, /^apps\/web\/dist\//, /(^|\/)\.vite(-temp)?\//]
 const BINARY_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.bin', '.awrrt', '.awrv', '.awsl', '.awtr', '.f32', '.u8', '.glb', '.gltf',
@@ -60,7 +64,11 @@ export function scopeFiles({ docs = false, filter = () => true } = {}) {
   const files = []
   for (const d of INCLUDE_DIRS) files.push(...walk(d, filter))
   for (const f of INCLUDE_FILES) if (existsSync(join(ROOT, f)) && filter(f)) files.push(f)
-  if (docs) files.push(...walk('docs', (r) => DOC_GLOBS.some((re) => re.test(r)) && filter(r)))
+  if (docs) {
+    files.push(...walk('docs', (r) => DOC_GLOBS.some((re) => re.test(r)) && filter(r)))
+    for (const f of RELEASE_DOCS) if (existsSync(join(ROOT, f)) && filter(f)) files.push(f)
+    for (const d of RELEASE_DOC_DIRS) files.push(...walk(d, filter))
+  }
   return [...new Set(files)].sort()
 }
 

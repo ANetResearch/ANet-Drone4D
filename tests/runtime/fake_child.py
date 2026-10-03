@@ -17,6 +17,14 @@ from awr.runtime.child import init_child
 from awr.runtime.heartbeat import Heartbeat
 
 
+def _say(line: str) -> None:
+    """一行一次 write（< PIPE_BUF，原子）。supervisor 把 stdout 与 stderr 合并为同一日志管道，子进程带 PYTHONUNBUFFERED=1，
+    print 会把正文与换行分两次写入；api 的 JSON 日志由 QueueListener 线程写 stderr，重负载下会插进两次写入之间，
+    把日志行拼坏（SHOW-CI 干净克隆中 test_kill9_detected_fast_and_restarted_with_backoff 因此 JSONDecodeError）。"""
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="run")
@@ -34,13 +42,13 @@ def main() -> int:
     if os.environ.get("AWR_STANDBY") == "1":  # supervisor 的热备用进程（ADR-070）：就绪后等接替指令
         import json
 
-        print("AWR_STANDBY_READY", flush=True)
+        _say("AWR_STANDBY_READY")
         line = sys.stdin.readline()
         if not line.strip():
             return 0
         os.environ.update({str(k): str(v) for k, v in (json.loads(line).get("env") or {}).items()})
         os.environ.pop("AWR_STANDBY", None)
-        print(f"fake child promoted pid={os.getpid()}", flush=True)
+        _say(f"fake child promoted pid={os.getpid()}")
     ctx = init_child(a.name)
     if a.grandchild:
         import subprocess
@@ -69,7 +77,7 @@ def main() -> int:
     for i in range(a.lines):
         sys.stderr.write(f'{{"lvl":"INFO","proc":"{a.name}","msg":"spam","kv":{{"i":{i},"pad":"{"x" * 200}"}}}}\n')
     sys.stderr.flush()
-    print(f"fake child ready pid={os.getpid()} args={a.run},{a.segment}", flush=True)
+    _say(f"fake child ready pid={os.getpid()} args={a.run},{a.segment}")
     t0 = time.monotonic()
     k = 0
     while not ctx.stopping:
