@@ -337,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         if p.suffix == ".json":
             total += len(json.loads(data)["cases"])
         cur = p.read_bytes() if p.exists() else None
-        if cur != data:
+        if not L.golden_equivalent(cur, data):
             diffs += 1
             if args.check:
                 print(f"out of date: {p.relative_to(L.ROOT)}")

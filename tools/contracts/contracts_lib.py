@@ -288,3 +288,39 @@ def write_or_check(files: dict[Path, str], check: bool, out_dir: Path, keep: tup
                     p.unlink()
                     print(f"removed stale {p.relative_to(ROOT)}")
     return diffs
+
+
+def _num_close(a, b, rtol: float, atol: float) -> bool:
+    if isinstance(a, bool) or isinstance(b, bool) or not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        return a == b
+    if isinstance(a, int) and isinstance(b, int):
+        return a == b
+    if a != a and b != b:  # both NaN
+        return True
+    return abs(a - b) <= atol + rtol * abs(b)
+
+
+def _json_close(a, b, rtol: float, atol: float) -> bool:
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(_json_close(a[k], b[k], rtol, atol) for k in a)
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_json_close(x, y, rtol, atol) for x, y in zip(a, b, strict=True))
+    return _num_close(a, b, rtol, atol)
+
+
+def golden_equivalent(cur: bytes | None, new: bytes, rtol: float = 1e-12, atol: float = 1e-12) -> bool:
+    """True when an on-disk JSON golden matches a freshly generated one.
+
+    Byte equality first; otherwise structural JSON equality with floats compared at ulp-level tolerance.
+    Transcendental functions (libm, pyproj) differ in the last bits across CPUs (CI runners vary per job),
+    so --check must not fail on a few-ulp difference while still catching any real change.
+    Non-JSON payloads require byte equality.
+    """
+    if cur is None:
+        return False
+    if cur == new:
+        return True
+    try:
+        return _json_close(json.loads(cur), json.loads(new), rtol, atol)
+    except (ValueError, UnicodeDecodeError):
+        return False
