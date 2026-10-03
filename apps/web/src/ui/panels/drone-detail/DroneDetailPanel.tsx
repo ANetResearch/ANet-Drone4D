@@ -25,6 +25,7 @@ import { Switch } from '@/ui/components/ui/switch'
 import { Table, TableBody, TableCell, TableRow } from '@/ui/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsPanels, TabsTrigger } from '@/ui/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/components/ui/tooltip'
 import { Icon } from '@/ui/icons/Icon'
 import { StateIcon } from '@/ui/icons/StateIcon'
 import { leaveReplay, replayDeniedKey } from '@/ui/views/replayFlow'
@@ -45,6 +46,7 @@ import { requestControl } from '@/ui/shell/control'
 import { writeDeniedKey } from '@/ui/shell/guards'
 import { toolMode } from '@/ui/tools/toolMode'
 import { OWNER_ICON } from '@/ui/panels/drones/DronesPanel'
+import { openEditor, RouteStatus } from '@/ui/panels/mission-edit/MissionEditPanel'
 import { useFleet } from '@/stores/fleet'
 import { layers, useLayers } from '@/stores/layers'
 import { prefs } from '@/stores/prefs'
@@ -213,6 +215,17 @@ function Commands({ id, ground }: { id: string; ground: GroundPickView | null })
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {/* route editor (D1-AC-17): page 3 of the rail for this vehicle; the result of the last submitted route below */}
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <Button size="sm" variant="outline" className="w-full" disabled={denied !== null} onClick={() => openEditor(id)} data-edit-route="">
+            <Icon icon="mission.edit" data-icon="inline-start" />
+            {t('edit.open')}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{denied ? t(denied) : t('edit.openHint')}</TooltipContent>
+      </Tooltip>
+      <RouteStatus vehicle={id} />
       {target ? (
         <p className="font-mono text-hud-sub text-muted-foreground" data-goto-target="">
           {t('detail.gotoTarget')} {fmt.enu(target[0], target[1], target[2])}
@@ -248,17 +261,19 @@ function MissionTab({ id }: { id: string }) {
   const mine = rows.filter((m) => m.vehicles.includes(id))
   if (!mine.length) return <PanelEmpty brand={false} title={t('detail.noMission')} />
   return (
-    <Table>
-      <TableBody>
-        {mine.map((m) => (
-          <TableRow key={m.mid}>
-            <TableCell className="font-mono">{m.mid}</TableCell>
-            <TableCell>{t(`mission.state.${m.state}`)}</TableCell>
-            <TableCell data-num="">{fmt.pct(m.progressPct)}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div data-lf-table="">
+      <Table>
+        <TableBody>
+          {mine.map((m) => (
+            <TableRow key={m.mid}>
+              <TableCell className="font-mono">{m.mid}</TableCell>
+              <TableCell>{t(`mission.state.${m.state}`)}</TableCell>
+              <TableCell data-num="">{fmt.pct(m.progressPct)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 
@@ -268,17 +283,19 @@ function SensorsTab({ id }: { id: string }) {
   const sensors = useSensors((s) => s.sensors)
   if (vehicleId !== id || !sensors.length) return <PanelEmpty brand={false} title={t('detail.noSensors')} />
   return (
-    <Table>
-      <TableBody>
-        {sensors.map((s) => (
-          <TableRow key={s.name}>
-            <TableCell className="font-mono">{s.name}</TableCell>
-            <TableCell>{t(`sensor.kind.${s.kind}`)}</TableCell>
-            <TableCell data-num="">{s.hfovDeg !== null ? `${fmt.num(s.hfovDeg)}°` : '—'}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div data-lf-table="">
+      <Table>
+        <TableBody>
+          {sensors.map((s) => (
+            <TableRow key={s.name}>
+              <TableCell className="font-mono">{s.name}</TableCell>
+              <TableCell>{t(`sensor.kind.${s.kind}`)}</TableCell>
+              <TableCell data-num="">{s.hfovDeg !== null ? `${fmt.num(s.hfovDeg)}°` : '—'}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 

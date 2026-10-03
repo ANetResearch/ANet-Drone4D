@@ -1,5 +1,6 @@
 // UI-internal overlay state (M15-FR-033): command palette, shortcut help and about dialog; the settings dialog is driven by
-// the ?settings=<tab> query (deep link, M15-FR-026). Written on user actions only.
+// the ?settings=<tab> query (deep link, M15-FR-026). Written on user actions only, and once by the boot
+// mask's palette rehearsal below the mask (app/boot/BootMask.tsx, ADR-076).
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
 

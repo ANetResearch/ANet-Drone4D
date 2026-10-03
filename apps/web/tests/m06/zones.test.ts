@@ -2,16 +2,19 @@
 // walls, outlines and edges match the rings; border is not drawn by default; min_z null -> lowest ground, max_z null ->
 // world top + 50 m; the violated zone is recoloured through uniforms and attribute updates only (no rebuild).
 import { QL_STRIDE, QL_VPS } from '@/engine/lines/quadLines'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseZones, pointInRing, ZonesLayer, type ZoneFeature } from '@/engine'
 
 const ROOT = join(import.meta.dirname, '../../../..')
+const CITIES = ['shenzhen', 'newyork', 'shanghai', 'suzhou', 'sanfrancisco', 'chicago']
+// The six cities are built locally from UrbanScene3D (never committed); a clean checkout skips the parse check (SHOW-CI)
+const BUILT = CITIES.every((c) => existsSync(join(ROOT, 'worlds', c, 'semantic/zones.geojson')))
 
 describe('zones (M06-AC-036)', () => {
-  it('six cities parse; border hidden by default', () => {
-    for (const c of ['shenzhen', 'newyork', 'shanghai', 'suzhou', 'sanfrancisco', 'chicago']) {
+  it.skipIf(!BUILT)('six cities parse; border hidden by default', () => {
+    for (const c of CITIES) {
       const f = parseZones(JSON.parse(readFileSync(join(ROOT, 'worlds', c, 'semantic/zones.geojson'), 'utf8')))
       expect(f.length, c).toBeGreaterThanOrEqual(1)
       const z = new ZonesLayer('S')

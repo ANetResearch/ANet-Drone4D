@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Harness CLI (M16-FR-040; M16 §7.1; AWR-18 §3). Performance cases run only through this entry point.
-//   node perf/harness/run.mjs --case <id|glob|alias> [--city --scene --n --net --clients] [--source live|fake]
+//   node perf/harness/run.mjs --case <id|glob|alias> [--city --scene --n --net --clients --minutes] [--source live|fake]
 //                             [--runs 1|3] [--gate G2d|G2w|G3|G4|local] [--run-id <id>] [--locked] [--keep-backend]
 //   node perf/harness/run.mjs --list [--gate G2d]            list registered cases (no lock)
 //   node perf/harness/run.mjs --check                        validate the registry (exit 2 on PERF-E017)
@@ -16,7 +16,8 @@ import { runCase } from './runner.mjs'
 export function parse(argv) {
   const { values } = parseArgs({ args: argv, allowPositionals: true, options: {
     case: { type: 'string' }, city: { type: 'string' }, scene: { type: 'string' }, n: { type: 'string' }, net: { type: 'string' },
-    profile: { type: 'string' }, clients: { type: 'string' }, source: { type: 'string', default: 'live' }, runs: { type: 'string' },
+    profile: { type: 'string' }, clients: { type: 'string' }, minutes: { type: 'string' }, source: { type: 'string', default: 'live' },
+    runs: { type: 'string' },
     gate: { type: 'string', default: 'local' }, 'run-id': { type: 'string' }, locked: { type: 'boolean' }, 'no-lock': { type: 'boolean' },
     'keep-backend': { type: 'boolean' }, list: { type: 'boolean' }, check: { type: 'boolean' }, record: { type: 'boolean' },
     json: { type: 'boolean' }, lenient: { type: 'boolean' },
@@ -99,7 +100,8 @@ async function main() {
       git: gitInfo(), cases: sel.map((c) => c.id) }, null, 1))
   }
   const over = {}
-  for (const k of ['city', 'scene', 'n', 'net', 'clients', 'profile']) if (a[k] !== undefined) over[k] = /^\d+$/.test(a[k]) ? Number(a[k]) : a[k]
+  // --minutes: a shortened soak for self-tests (never a gate run; the soak case registers 30, FX2-R5-web-ui)
+  for (const k of ['city', 'scene', 'n', 'net', 'clients', 'profile', 'minutes']) if (a[k] !== undefined) over[k] = /^\d+$/.test(a[k]) ? Number(a[k]) : a[k]
   if (a.record) over.record = true
   let code = 0
   for (const c of sel) {

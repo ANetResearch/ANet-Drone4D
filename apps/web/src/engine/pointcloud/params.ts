@@ -78,6 +78,13 @@ export const PC = {
   tailKHardware: 1.6,
   b0Software: 25_000,
   bFloorSoftware: 20_000,
+  /**
+   * Tier S frame share of the fixed layers (drones, trails, environment, ground and sky; AWR-18 §5.1 fixed-layer
+   * total <= 10 ms, ADR-071): with them on screen the point budget that fits the 33.3 ms frame starts at
+   * b0Software (T* - fixed) / T* = 17.5k, i.e. at the quality floor (FX2-R5, ADR-076). The point-cloud-only scene
+   * (flight60 scene=pc, the g02 setting b0Software was measured in) keeps 25k.
+   */
+  fixedLayersMsSoftware: 10,
   rsLockSoftware: 0.5,
   // ---- loading (M05 §6.5, §6.10)
   inflightS: 4,
@@ -178,6 +185,20 @@ export interface DeviceParams {
   workers: number
   /** render-scale lock (Tier S 0.5), 0 = follow the rung */
   rsLock: number
+}
+
+/**
+ * CAS start budget (M05 §6.8.4, FR-038; ADR-076). Software: b0Software (measured with the point cloud alone, g02) scaled
+ * by the frame share the fixed layers leave, (T* - fixedLayersMsSoftware) / T*, and never below the quality floor; the
+ * CAS clamps it into the band, so the whole scene on Tier S starts at B_floor = 20k instead of first spending the
+ * 30 frozen frames after the reveal at 25k (ACC-4 4.2: every full-scene run cut 25k to 20k at its first evaluation, about
+ * 2.3 s after the reveal, while 25k cost the frames of that window some 15 ms of SwiftShader time each). Hardware keeps
+ * the start rung's hi.
+ */
+export function startBudget(dev: { b0: number; bFloor: number }, software: boolean, fixedLayers: boolean): number {
+  if (!software || !fixedLayers) return dev.b0
+  const T = PC.targetMsSoftware
+  return Math.max(dev.bFloor, Math.round((dev.b0 * (T - PC.fixedLayersMsSoftware)) / T))
 }
 
 export function poolRowsFor(deviceClass: DeviceClass): number {

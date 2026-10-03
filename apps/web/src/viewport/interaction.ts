@@ -10,6 +10,17 @@ import { events } from '@/engine'
 import { vp, type PointPickInfo } from './session'
 import { gotoTargetFor, primaryAgentNo } from './gotoRule'
 
+/**
+ * a consumer of viewport clicks and double clicks (M15 route and area editor): while installed it sees every click first
+ * and returns true when it handled it, so the selection, the ground pick, the GoTo preview marker and the double-click
+ * retarget do not happen (the camera controls still get the pointer stream)
+ */
+export type ClickConsumer = (kind: 'click' | 'dblclick', cssX: number, cssY: number) => boolean
+let consumer: ClickConsumer | null = null
+export function setClickConsumer(fn: ClickConsumer | null): void {
+  consumer = fn
+}
+
 export function installInteraction(host: HTMLElement): () => void {
   let down: { x: number; y: number; id: number } | null = null
   // host origin cached on resize (no layout read per pointer move)
@@ -34,6 +45,7 @@ export function installInteraction(host: HTMLElement): () => void {
     if (!d || e.button !== 0 || d.id !== e.pointerId) return
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > INPUT.clickTolPx) return
     const [x, y] = local(e)
+    if (consumer?.('click', x, y)) return
     void clickAt(x, y, vp.cssW, vp.cssH)
   }
   const onMove = (e: PointerEvent): void => {
@@ -46,6 +58,7 @@ export function installInteraction(host: HTMLElement): () => void {
   const onLeave = (): void => selection.setHover(null)
   const onDbl = (e: MouseEvent): void => {
     const [x, y] = local(e)
+    if (consumer?.('dblclick', x, y)) return
     void dblclickAt(x, y)
   }
   host.addEventListener('pointerdown', onDown)

@@ -171,12 +171,46 @@ describe('freeze and rate transitions (M12-AC-004)', () => {
     const w = run(true)
     expect(w).toBeGreaterThanOrEqual(60)
     expect(w).toBeLessThan(65)
-    // unknown worker statistics (NaN jitter, no 60 Hz channel) fall back to the main-thread arrival times
+    // the worker's window still filling (selHz known, jitter NaN): nothing is measured (no frame-rate seed, ADR-071)
     const d = new DelayController()
     d.setFocus(true)
-    d.onFocusSample(0, 0, Number.NaN)
+    d.onFocusSample(0, 60, Number.NaN)
     d.onFocusSample(100, 60, Number.NaN)
-    expect(d.focusStats.hzEff).toBeGreaterThan(9)
-    expect(d.focusStats.hzEff).toBeLessThan(11)
+    expect(d.focusStats.hzEff).toBe(0)
+    // a source without worker statistics: main-thread arrival times after the grace period
+    const e = new DelayController()
+    e.setFocus(true)
+    for (let t = 0; t <= 3000; t += 100) e.onFocusSample(t, 0, Number.NaN)
+    expect(e.focusStats.hzEff).toBeGreaterThan(9)
+    expect(e.focusStats.hzEff).toBeLessThan(11)
+  })
+
+  it('entering the focus exception ramps D_focus from the global delay to the 60 Hz target within about 1 s, monotone (ADR-071)', () => {
+    const d = new DelayController()
+    feed(d, 0, 4000, 10, 0, lcg(11))
+    const dGlobal = d.dSimMs
+    expect(dGlobal).toBeGreaterThan(190)
+    d.setFocus(true)
+    let prevT = Number.NaN
+    let prevD = d.dFocusSimMs
+    let settledAt = Number.NaN
+    const step = 1000 / 22 // a 22 fps follow view
+    for (let t = 4000; t < 8000; t += step) {
+      // worker statistics appear after 0.6 s (its 1 s window needs 8 intervals), jitter p95 4 ms
+      d.onFocusSample(t, 60, t < 4600 ? Number.NaN : 4)
+      d.onSample(t)
+      d.tick(t, step, true, 1)
+      // tFocus = t - dFocus stays monotone and D_focus never jumps by more than (D_global - 60) x frame / 1 s
+      if (!Number.isNaN(prevT)) {
+        expect(t - d.dFocusSimMs).toBeGreaterThan(prevT - prevD)
+        expect(prevD - d.dFocusSimMs).toBeLessThanOrEqual(((dGlobal - 60) * step) / 1000 + 1)
+      }
+      prevT = t
+      prevD = d.dFocusSimMs
+      if (Number.isNaN(settledAt) && d.focusSettled) settledAt = t
+    }
+    expect(d.dFocusSimMs).toBeGreaterThanOrEqual(60)
+    expect(d.dFocusSimMs).toBeLessThan(65)
+    expect(settledAt - 4000).toBeLessThan(2000)
   })
 })

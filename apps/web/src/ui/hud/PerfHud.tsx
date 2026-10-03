@@ -28,21 +28,51 @@ function frameSeries(tier: string | null): LfSeries {
   return r && r.buf ? seriesFromPerfRing(r) : EMPTY
 }
 
-export function PerfHud({ compactBp }: { compactBp: boolean }) {
+/** p95 above 1.5 T* (the KPI's one red); a boolean selector, so the card re-renders when it flips, not with every p95 */
+const isHot = (s: { p95Ms: number; targetMs: number }): boolean => Number.isFinite(s.p95Ms) && Number.isFinite(s.targetMs) && s.p95Ms > 1.5 * s.targetMs
+
+/**
+ * the rows that follow the 4 Hz summary (points, coverage, requests, limitedBy, degradation step): their own component,
+ * so a summary write re-renders these lines and not the chart card, its badges and the sparkline (P4-UI, D1-AC-23)
+ */
+function HudDetail() {
   const t = useT()
-  const open = usePrefs((s) => s.layout.hud.open) && !compactBp
-  const tier = usePerf((s) => s.tier)
-  const targetMs = usePerf((s) => s.targetMs)
-  const p95 = usePerf((s) => s.p95Ms)
   const B = usePerf((s) => s.B)
   const progress = usePerf((s) => s.progress)
   const inflight = usePerf((s) => s.inflight)
   const limitedBy = usePerf((s) => s.limitedBy)
   const step = usePerf((s) => s.governorStep)
   const stepKey = usePerf((s) => s.governorLabelKey)
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2 text-hud-sub">
+        <span>{t('hud.points', { b: fmt.pts(B) })}</span>
+        <LfTickGauge mini value={Number.isFinite(progress) ? progress * 100 : 0} ariaLabel={t('hud.coverage')} />
+      </div>
+      <div className="flex items-center gap-2 text-hud-sub text-muted-foreground">
+        <Progress value={Number.isFinite(progress) ? progress * 100 : 0} className="w-16" aria-label={t('hud.coverage')} />
+        <span>{fmt.pct(progress * 100)}</span>
+        <span>{t('hud.inflight', { n: fmt.count(inflight) })}</span>
+        <span className="truncate">{t(`limitedBy.${limitedBy}`)}</span>
+      </div>
+      {step > 0 ? (
+        <div className="flex items-center gap-1.5 text-hud-sub text-muted-foreground">
+          <Icon icon="perf.degraded" />
+          {governorText(stepKey, step)}
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+export function PerfHud({ compactBp }: { compactBp: boolean }) {
+  const t = useT()
+  const open = usePrefs((s) => s.layout.hud.open) && !compactBp
+  const tier = usePerf((s) => s.tier)
+  const targetMs = usePerf((s) => s.targetMs)
+  const hot = usePerf(isHot)
   const forced = usePerf((s) => s.forced)
   const series = React.useMemo(() => frameSeries(tier), [tier])
-  const hot = Number.isFinite(p95) && Number.isFinite(targetMs) && p95 > 1.5 * targetMs
   const bind = React.useCallback(() => perfStore.getState().p95Ms, [])
   const fps = Number.isFinite(targetMs) && targetMs > 0 ? Math.round(1000 / targetMs) : Number.NaN
   return (
@@ -65,26 +95,7 @@ export function PerfHud({ compactBp }: { compactBp: boolean }) {
             </span>
             {open ? <LfSparkline series={series} target={Number.isFinite(targetMs) ? targetMs : undefined} hero={false} ariaLabel={t('hud.sparkline')} /> : null}
           </div>
-          {open ? (
-            <>
-              <div className="flex items-center justify-between gap-2 text-hud-sub">
-                <span>{t('hud.points', { b: fmt.pts(B) })}</span>
-                <LfTickGauge mini value={Number.isFinite(progress) ? progress * 100 : 0} ariaLabel={t('hud.coverage')} />
-              </div>
-              <div className="flex items-center gap-2 text-hud-sub text-muted-foreground">
-                <Progress value={Number.isFinite(progress) ? progress * 100 : 0} className="w-16" aria-label={t('hud.coverage')} />
-                <span>{fmt.pct(progress * 100)}</span>
-                <span>{t('hud.inflight', { n: fmt.count(inflight) })}</span>
-                <span className="truncate">{t(`limitedBy.${limitedBy}`)}</span>
-              </div>
-              {step > 0 ? (
-                <div className="flex items-center gap-1.5 text-hud-sub text-muted-foreground">
-                  <Icon icon="perf.degraded" />
-                  {governorText(stepKey, step)}
-                </div>
-              ) : null}
-            </>
-          ) : null}
+          {open ? <HudDetail /> : null}
         </div>
       </LfChartCard>
     </div>

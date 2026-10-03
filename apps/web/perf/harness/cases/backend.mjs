@@ -18,7 +18,9 @@ export default [
       b('step_max_us', 'us', 'step_max_us', true, true), b('catchup_saturated', 'count', 'catchup_saturated', true, true)],
   },
   {
-    ...base, id: 'fleet-ladder.concurrent', kind: 'py', backend: TOOL, runs: 3, timeoutS: 900, params: { judge_n: 1000, pin: 'none' },
+    // ACC-4: the tool starts the 3 Chromium clients itself, so it runs under taskset -c 2-6 like gw-3clients (PR-6); with
+    // pin 'none' the clients inherited all 8 CPUs and the tool's AffinityGuard stayed inactive (client_affinity cpus 8)
+    ...base, id: 'fleet-ladder.concurrent', kind: 'py', backend: TOOL, runs: 3, timeoutS: 900, params: { judge_n: 1000 },
     cmd: ['python', 'tools/bench/fleet_ladder/run.py', '--n', '1000', '--dur', '60', '--runs', '1', '--with-recorder', '--with-checkpoint',
       '--clients', '3', '--with-flight60', '--out', '{runDir}', '--no-lock', '--no-load-wait'],
     acIds: ['D1-AC-28', 'PERF-AC-038'], priority: 'P1', layer: 'ext', gates: ['G2w', 'G3', 'G4'], owner: 'M08',

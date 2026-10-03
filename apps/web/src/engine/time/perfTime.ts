@@ -18,6 +18,8 @@ export interface PerfTime {
   stale: boolean
   replay: boolean
   focusLowLatency: boolean
+  /** focus exception active, blended in and D_focus within 10 % of its target (ADR-071; D1-AC-26 window start) */
+  focusSettled: boolean
   clockSnaps: number
   unknownState: number
   holdRatio: number
@@ -40,7 +42,7 @@ export interface PerfTime {
 
 export const perfTime: PerfTime = {
   simNowS: 0, tRenderS: 0, tFocusS: 0, dGlobalMs: 0, dFocusMs: 0, dWallMs: 0, hzEff: 0, jitterP95Ms: 0,
-  rate: 1, state4: 0, epoch: -1, stale: true, replay: false, focusLowLatency: false, clockSnaps: 0, unknownState: 0,
+  rate: 1, state4: 0, epoch: -1, stale: true, replay: false, focusLowLatency: false, focusSettled: false, clockSnaps: 0, unknownState: 0,
   holdRatio: 0, extrapRatio: 0, maxAgeMs: 0, ingestMs: 0, sampleMs: 0, sampleP95Ms: 0, clockMs: 0, clockP95Ms: 0,
   seekMs: Number.NaN, seekP95Ms: Number.NaN, bufferingMs: 0, timelineRedrawMs: 0, timelineRedraws: 0, frozenZeroD: true, frames: 0,
 }

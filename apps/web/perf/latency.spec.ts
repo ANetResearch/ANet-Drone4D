@@ -1,5 +1,6 @@
 // Latency and interpolation (M16-FR-059; D1-AC-26; AWR-18 §7.3, §8.5): live S1 at x1, production build, UI only.
-//   1. follow: select p600-01 (60 Hz channel), follow it (L), 30 s: t_sim -> pixel of the focus vehicle (__perf.latency),
+//   1. follow: select p600-01 (60 Hz channel), follow it (L), wait for __perf.time.focusSettled (the statistics window
+//      starts when D_focus is within 10 % of its target, ADR-071), then 30 s: t_sim -> pixel of the focus vehicle (__perf.latency),
 //      selected-channel rate against the rAF rate and the connection's credit_skips per server tick (perf/server);
 //   2. command to visible: hover (H) on p600-01 three times (the scenario takes the vehicle back after each one); each
 //      command is marked cmd.sent by the M06 command path and closes when the control-owner switch reaches the rendered
@@ -25,7 +26,12 @@ test('latency: focus vehicle, command to visible, focus set, x10', async ({ perf
   await row.waitFor({ timeout: 30_000 })
   await row.click()
   await hotkey(page, 'KeyL')
-  await page.waitForTimeout(2000)
+  // statistics window (ADR-071 item 4, AWR-18 §8.5): it starts once the focus exception is active, blended in and D_focus
+  // is within 10 % of its target (__perf.time.focusSettled; about 1-2 s after L with the entry ramp), at most 10 s after L
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __perf: { time?: { focusSettled?: boolean } } }).__perf.time?.focusSettled === true),
+    { timeout: 10_000, intervals: [250] }).toBe(true).catch(() => undefined)
+  const settled = await page.evaluate(() => (window as unknown as { __perf: { time?: { focusSettled?: boolean; dFocusMs?: number } } }).__perf.time)
+  perfPage.writeMetrics({ focus_settled: settled?.focusSettled === true ? 1 : 0, d_focus_at_window_ms: settled?.dFocusMs ?? null })
   // ---- 1. follow at x1
   const t0 = await page.evaluate(() => {
     const p = (window as unknown as { __perf: { reset(s: string): void; frame: { count: number }; net: Net } }).__perf

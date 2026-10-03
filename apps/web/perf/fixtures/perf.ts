@@ -93,6 +93,25 @@ export class PerfPage {
     }, null, { polling: 1000, timeout: timeoutMs })
   }
 
+  /**
+   * the PerfGovernor walk after the reveal is over: at least minAfterRevealMs since the reveal and no step in the last
+   * quietMs, or capMs since the reveal (FX2-R5, ADR-076: the operation windows of D1-AC-25 measure first-use costs, the
+   * governor's steps are judged by D1-AC-03b/04). Returns the ms waited since the reveal.
+   */
+  async waitGovernorSettled(o: { minAfterRevealMs?: number; quietMs?: number; capMs?: number } = {}): Promise<number> {
+    const a = { minAfterRevealMs: o.minAfterRevealMs ?? 3000, quietMs: o.quietMs ?? 6000, capMs: o.capMs ?? 45_000 }
+    await this.page.waitForFunction((x) => {
+      const p = (window as unknown as WinPerf).__perf
+      if (!p || !p.load || !(p.load.revealAt > 0)) return false
+      const now = performance.now()
+      const h = p.governor?.history ?? []
+      const last = h.length ? h[h.length - 1].t : p.load.revealAt
+      const since = now - p.load.revealAt
+      return (since >= x.minAfterRevealMs && now - last >= x.quietMs) || since >= x.capMs
+    }, a, { polling: 250, timeout: a.capMs + 30_000 })
+    return this.page.evaluate(() => performance.now() - ((window as unknown as WinPerf).__perf?.load.revealAt ?? 0))
+  }
+
   async waitBenchDone(timeoutMs: number): Promise<void> {
     await this.page.waitForFunction(() => {
       const p = (window as unknown as WinPerf).__perf

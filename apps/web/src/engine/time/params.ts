@@ -27,6 +27,10 @@ export const TIME_PARAMS = {
   rampMs: 1000,
   /** entering and leaving the focus exception (Third/FPV): dFocusSim blends between dSim and rate x D_focus_wall */
   focusBlendMs: 300,
+  /** entering the focus exception: D_focus moves linearly from the global delay to its first valid target (ADR-071) */
+  focusEnterMs: 1000,
+  /** no rt.worker statistics for the 60 Hz channel this long after the first focus sample: use main-thread arrivals */
+  focusWorkerGraceMs: 1500,
   /** extrapolation limit: 3 sample intervals (ADR-046) */
   extrapIntervals: 3,
   /** default recording block interval (x1 recording, 25 Hz), used as the extrapolation floor after a frozen seek */

@@ -35,6 +35,16 @@ export default [
     metrics: [...frameFull(false), ...firstScreen(false)],
   },
   {
+    // D1-AC-04 sub-item: no CAS evaluation while the page is hidden (emulated visibilityState, headless cannot hide a page;
+    // FX2-R5, ADR-076). The spec asserts; the counters are recorded
+    id: 'cas.hidden', kind: 'pw', spec: 'perf/cas-hidden.spec.ts', build: 'production', browser: 'C1',
+    backend: { kind: 'live', world: 'shenzhen', scenario: 'free-shenzhen' }, params: { city: 'shenzhen', scene: 'pc' }, runs: 1, timeoutS: 240,
+    acIds: ['D1-AC-04', 'PERF-AC-004'], priority: 'P0', layer: 'core', gates: ['G2d', 'G3', 'G4'], owner: 'M16',
+    metrics: [m('hidden_cas_evals', 'count', null, false, { source: 'script', extra: true }),
+      m('hidden_frozen_frames', 'count', null, false, { source: 'script', extra: true }),
+      m('evals_after_show_3s', 'count', null, false, { source: 'script', extra: true })],
+  },
+  {
     id: 'flight60-wx', kind: 'pw', spec: 'perf/flight60.spec.ts', build: 'production', browser: 'C1',
     backend: { ...S1, scenarioProfile: 'wx-storm' }, params: { city: 'shenzhen', scene: 'full', governorOrder: 1 }, runs: 3, timeoutS: 360,
     acIds: ['D1-AC-03b', 'PERF-AC-010'], priority: 'P1', layer: 'ext', gates: ['G2w', 'G3', 'G4'], owner: 'M16',

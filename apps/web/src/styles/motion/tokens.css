@@ -292,7 +292,7 @@
     --stack-depth2-blur: 2px;
     --stack-ease: cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .dark {  /* recipe colours re-pointed at the ANet Graphite semantic tokens (d02 §4.3) */
+  :root, .dark {  /* recipe colours re-pointed at the ANet Graphite semantic tokens in both themes; .dark re-resolves them inside a dark container (d02 §4.3; ADR-079) */
     --tabs-bar-bg: var(--muted); --tabs-pill-bg: var(--accent); --tabs-text-muted: var(--muted-foreground); --tabs-text-active: var(--foreground);
     --tt-bg: var(--popover); --tt-fg: var(--popover-foreground);
     --shimmer-base: var(--muted-foreground); --shimmer-highlight: var(--foreground);

@@ -16,6 +16,8 @@ export interface BoundTextProps {
   'aria-label'?: string
   /** own raster island (default); false inside an element that already carries data-island */
   island?: boolean
+  /** state attributes for styling and tests (data-stale and the like) */
+  [data: `data-${string}`]: string | undefined
 }
 
 export function BoundText({ read, format, stale, className, island = true, ...rest }: BoundTextProps) {

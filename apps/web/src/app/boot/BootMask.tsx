@@ -13,9 +13,21 @@
 // PREWARM_MIN_FRAMES frames and PREWARM_MIN_MS, then two consecutive intervals <= PREWARM_SETTLED_MS: the GPU process no
 // longer stalls on compiles) or after PREWARM_MAX_MS, whichever is first; then 'uiWarm' resolves and the reveal follows.
 // The warm stage is hidden synchronously before the fade.
+// Palette rehearsal (ADR-076; D1-AC-25): the static specimens do not cover the command palette. Its first opening over
+// the revealed scene compiled 13-15 SwiftShader routines (136-168 KB) in one 220-280 ms GPU-process frame (FX2-R5 ops
+// diagnostics; the second opening compiles 0-1), because SwiftShader keys the routines of compositor draws on what was
+// drawn before them in the same submission (ADR-071 consequences): only the real dialog in the real stacking order gets
+// the same variants. So after the stage settles it is hidden, the real palette (full-viewport overlay, popup, focused
+// input, list) is opened below the mask until the frames settle again, closed, and the reveal waits for its overlay to
+// unmount (an exit animation must never show after the reveal); an info and a success toast of the page's own toaster
+// follow the same way. On Tier S both are repeated at motion tier reduced (the tier PerfGovernor step 6 sets shortly
+// after the reveal; popups and toasts then appear and leave without transitions).
 import * as React from 'react'
 import { t } from '@/app/i18n'
 import { MOTION } from '@/lib/tokens/motion.gen'
+import { overlays, overlaysStore } from '@/ui/shell/overlays'
+import { toast } from '@/ui/components/ui/toast'
+import { getGovernorMotion, getMotionTier, setGovernorMotion } from '@/ui/motion/tier'
 import { boot } from './BootController'
 import { hideWarmStage, showWarmStage, warmStep } from './WarmStage'
 
@@ -24,6 +36,15 @@ export const PREWARM_MIN_FRAMES = 6
 export const PREWARM_MIN_MS = 400
 export const PREWARM_SETTLED_MS = 100
 export const PREWARM_MAX_MS = 2000
+/**
+ * palette and toast rehearsal (ADR-076): each phase ends when settled (>= REHEARSE_MIN_FRAMES frames, 2 intervals
+ * <= PREWARM_SETTLED_MS) or after REHEARSE_PHASE_MAX_MS; closing waits for the overlay or toasts to unmount, at most
+ * REHEARSE_CLOSE_MAX_MS. The compile happens in the first frame or two of a phase; the bounds keep the added cold start
+ * near 2 s (FX2-R5: 3.6 s with 1.5 s phases and a toast pass per motion tier)
+ */
+export const REHEARSE_MIN_FRAMES = 3
+export const REHEARSE_PHASE_MAX_MS = 800
+export const REHEARSE_CLOSE_MAX_MS = 800
 
 /** the pre-raster phase: show the warm stage below a 0.996 mask until the presented frames settle; resolves when done */
 function runPrewarm(el: HTMLElement): Promise<void> {
@@ -49,6 +70,140 @@ function runPrewarm(el: HTMLElement): Promise<void> {
   })
 }
 
+/**
+ * one pass of the palette rehearsal: open the real palette below the mask until the frames settle, type a query (the
+ * filtered state of every search) until they settle again, clear it, close, and resolve one frame after the overlay
+ * unmounted (or REHEARSE_CLOSE_MAX_MS)
+ */
+function palettePass(): Promise<void> {
+  return new Promise((done) => {
+    overlays.set('palette', true)
+    const t0 = performance.now()
+    let last = t0
+    let frames = 0
+    let calm = 0
+    let closedAt = -1
+    let typedAt = -1
+    let phase0 = t0
+    const step = (now: number): void => {
+      const dt = now - last
+      last = now
+      frames++
+      calm = dt <= PREWARM_SETTLED_MS ? calm + 1 : 0
+      if (boot.state === 'BOOT_ERROR') {
+        overlays.set('palette', false)
+        done()
+        return
+      }
+      const settled = (frames >= REHEARSE_MIN_FRAMES && calm >= 2) || now - phase0 >= REHEARSE_PHASE_MAX_MS
+      if (typedAt < 0) {
+        if (settled) {
+          typePaletteQuery(t('palette.preset', { name: '' }))
+          typedAt = now
+          phase0 = now
+          frames = 0
+          calm = 0
+        }
+      } else if (closedAt < 0) {
+        if (settled) {
+          // programmatic close does not run the palette's onOpenChange: clear the query here, or the user's first
+          // palette would open pre-filled
+          typePaletteQuery('')
+          overlays.set('palette', false)
+          closedAt = now
+        }
+      } else if (!document.querySelector('[data-slot="dialog-overlay"]') || now - closedAt >= REHEARSE_CLOSE_MAX_MS) {
+        requestAnimationFrame(() => done())
+        return
+      }
+      requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  })
+}
+
+/** the toasts of the page's toaster, not the warm stage's specimens */
+function liveToasts(): number {
+  let n = 0
+  for (const el of document.querySelectorAll('[data-slot="toast"]')) if (!el.closest('[data-warm-stage]')) n++
+  return n
+}
+
+/**
+ * one pass of the toast rehearsal: an info toast (PerfGovernor notices) and a success toast (command results) shown by
+ * the page's own toaster until the frames settle, then closed; resolves one frame after they unmounted (or
+ * REHEARSE_CLOSE_MAX_MS). The specimens of the warm stage sit in a static container without the toaster's position,
+ * stacking and enter transition, so the first real toast still compiled 4-7 routines (FX2-R5 ops diagnostics)
+ */
+function toastPass(): Promise<void> {
+  return new Promise((done) => {
+    const ids = (['info', 'success'] as const).map((type) => toast.add({ id: `boot-rehearsal-${type}`, type, timeout: 0,
+      title: t('boot.phase.warming'), description: t('boot.phase.firstScreen') }))
+    const t0 = performance.now()
+    let last = t0
+    let frames = 0
+    let calm = 0
+    let closedAt = -1
+    const step = (now: number): void => {
+      const dt = now - last
+      last = now
+      frames++
+      calm = dt <= PREWARM_SETTLED_MS ? calm + 1 : 0
+      if (closedAt < 0) {
+        if ((frames >= REHEARSE_MIN_FRAMES && calm >= 2) || now - t0 >= REHEARSE_PHASE_MAX_MS || boot.state === 'BOOT_ERROR') {
+          for (const id of ids) toast.close(id)
+          closedAt = now
+        }
+      } else if (liveToasts() === 0 || now - closedAt >= REHEARSE_CLOSE_MAX_MS) {
+        requestAnimationFrame(() => done())
+        return
+      }
+      requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  })
+}
+
+/**
+ * the real command palette opened and closed below the mask (ADR-076); skipped when something already opened it. On
+ * Tier S a second pass runs at motion tier reduced: PerfGovernor step 6 sets it about 5 s after the reveal in most
+ * sessions, and without the open and close transitions the compositor draws the popup with other program variants
+ */
+export async function rehearsePalette(): Promise<void> {
+  if (typeof document === 'undefined' || overlaysStore.getState().palette || boot.state === 'BOOT_ERROR') return
+  performance.mark?.('awr.boot.rehearse.start')
+  hideWarmStage()
+  await palettePass()
+  const tierS = document.documentElement?.dataset?.tier === 'S'
+  const failed = (): boolean => boot.state === 'BOOT_ERROR' // read again after the await (TS narrowed it above)
+  if (!tierS || getMotionTier() === 'reduced' || getMotionTier() === 'off' || failed()) {
+    if (liveToasts() === 0 && !failed()) await toastPass()
+    performance.mark?.('awr.boot.rehearse.end')
+    return
+  }
+  // Tier S: the reduced pass, with the toasts (the first toasts after the reveal come from PerfGovernor step 7, issued in
+  // the same evaluation as step 6, i.e. at motion tier reduced)
+  const prev = getGovernorMotion()
+  setGovernorMotion('reduced')
+  try {
+    await palettePass()
+    if (liveToasts() === 0 && !failed()) await toastPass()
+  } finally {
+    setGovernorMotion(prev)
+    performance.mark?.('awr.boot.rehearse.end')
+  }
+}
+
+/** type into the open palette's input the way a user does (native value setter and an input event, so cmdk filters) */
+function typePaletteQuery(q: string): void {
+  const el = document.querySelector<HTMLInputElement>('[data-slot="dialog-content"] [data-slot="command-input"]')
+  if (!el) return
+  // through the prototype setter with the input as receiver: React tracks the value on the instance, so a plain
+  // assignment would not reach its onChange
+  if (!Reflect.set(HTMLInputElement.prototype, 'value', q.trim(), el)) return
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 export function BootMask({ prewarm = false }: { prewarm?: boolean }) {
   React.useEffect(() => {
     const el = document.getElementById('boot-mask')
@@ -59,7 +214,7 @@ export function BootMask({ prewarm = false }: { prewarm?: boolean }) {
     if (prewarm && boot.state !== 'REVEALED' && boot.state !== 'BOOT_ERROR') {
       boot.addGate(UI_WARM_GATE)
       offWarm = boot.whenReadyExcept(UI_WARM_GATE, () => {
-        void runPrewarm(el).then(() => boot.resolveGate(UI_WARM_GATE))
+        void runPrewarm(el).then(rehearsePalette).then(() => boot.resolveGate(UI_WARM_GATE))
       })
     }
     const un = boot.subscribe((s, info) => {

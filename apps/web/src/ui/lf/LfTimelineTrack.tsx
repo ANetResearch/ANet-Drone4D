@@ -92,7 +92,7 @@ function octagon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numbe
   ctx.closePath()
 }
 
-interface DrawState { view: { t0S: number; t1S: number }; playheadS: number; range: { t0S: number; t1S: number }; rev: number }
+export interface DrawState { view: { t0S: number; t1S: number }; playheadS: number; range: { t0S: number; t1S: number }; rev: number }
 
 function drawDetail(ctx: CanvasRenderingContext2D, hair: number, tok: LfTokens, model: TrackModelView, st: DrawState, width: number, height: number, labels: boolean): void {
   const { t0S, t1S } = st.view
@@ -338,10 +338,19 @@ function drawOverview(ctx: CanvasRenderingContext2D, hair: number, tok: LfTokens
   ctx.stroke()
 }
 
+/** what one redraw depends on besides the model: the view window, the playhead and the overview range */
+export interface TrackInputs { view: { t0S: number; t1S: number }; playheadS: number; range?: { t0S: number; t1S: number } }
+
 export interface LfTimelineTrackProps {
   model: TrackModelView
-  view: { t0S: number; t1S: number }
-  playheadS: number
+  view?: { t0S: number; t1S: number }
+  playheadS?: number
+  /**
+   * read the view, playhead and range when the scheduler considers a redraw, instead of taking them as props: the live
+   * clock moves them in every UI tick, and a component that re-rendered for them re-rendered its whole subtree four times
+   * a second (P4-UI, D1-AC-23). Takes precedence over `view`, `playheadS` and `range`.
+   */
+  read?: () => TrackInputs
   width: number
   height?: number
   ariaLabel: string
@@ -354,16 +363,26 @@ export interface LfTimelineTrackProps {
   labels?: boolean
 }
 
-export function LfTimelineTrack({ model, view, playheadS, width, height = 36, ariaLabel, className, variant = 'detail', range, labels = true }: LfTimelineTrackProps) {
+const NO_VIEW = { t0S: 0, t1S: 60 }
+
+/** copy inputs into the draw state; true when something the drawing depends on changed */
+export function applyInputs(st: DrawState, view: { t0S: number; t1S: number }, playheadS: number, range: { t0S: number; t1S: number }): boolean {
+  if (st.view.t0S === view.t0S && st.view.t1S === view.t1S && st.playheadS === playheadS && st.range.t0S === range.t0S && st.range.t1S === range.t1S) return false
+  st.view = view
+  st.playheadS = playheadS
+  st.range = range
+  st.rev++
+  return true
+}
+
+export function LfTimelineTrack({ model, view = NO_VIEW, playheadS = 0, read, width, height = 36, ariaLabel, className, variant = 'detail', range, labels = true }: LfTimelineTrackProps) {
   const ref = React.useRef<HTMLCanvasElement>(null)
   const state = React.useRef<DrawState>({ view, playheadS, range: range ?? view, rev: 0 })
+  const reader = React.useRef(read)
   React.useLayoutEffect(() => {
-    const st = state.current
-    st.view = view
-    st.playheadS = playheadS
-    st.range = range ?? view
-    st.rev++
-  }, [view, playheadS, range])
+    reader.current = read
+    if (!read) applyInputs(state.current, view, playheadS, range ?? view)
+  }, [read, view, playheadS, range])
   React.useEffect(() => {
     const cv = ref.current
     if (!cv) return
@@ -372,7 +391,14 @@ export function LfTimelineTrack({ model, view, playheadS, width, height = 36, ar
     return lfScheduler.add({
       el: cv, streaming: false, hz: LF.hudHz, prio: 2,
       // any change of the data, the HERO, the view, the range or the playhead redraws; the scheduler caps the rate
-      version: () => model.version * 1_000_003 + state.current.rev,
+      version: () => {
+        const r = reader.current
+        if (r) {
+          const x = r()
+          applyInputs(state.current, x.view, x.playheadS, x.range ?? x.view)
+        }
+        return model.version * 1_000_003 + state.current.rev
+      },
       draw: () => {
         const tok = getLfTokens()
         if (variant === 'overview') drawOverview(surf.ctx, surf.hair, tok, model, state.current, width, height)

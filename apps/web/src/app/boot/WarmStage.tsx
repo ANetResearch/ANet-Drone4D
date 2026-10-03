@@ -1,10 +1,10 @@
 // Warm stage under the boot mask (ADR-069; M15-FR-006; D1-AC-03b, 04, 25): specimens of the UI that is not on screen at
 // the reveal but appears later (toasts of every level, dialog, command palette list, popover and menu, tooltip, the
-// overlay, buttons and badges of every variant, form controls) and a 3D cube built like the viewport ViewCube
-// (preserve-3d, rounded faces that clip, hidden back faces). On Tier S every new kind of DOM content makes the GPU process
+// overlay, buttons and badges of every variant, form controls) and a cube built like the viewport ViewCube (orthographic
+// faces with rounded clipping as composited layers, P4-UI). On Tier S every new kind of DOM content makes the GPU process
 // compile Skia raster and compositor programs and SwiftShader JIT its draw routines the first time it is drawn: 100-400
 // ms frames at the first toast, the first palette or the first dialog (FX2-R3 traces: Compile/Link on the first palette,
-// 3 programs on the first toast), and the ViewCube faces compile their render-pass programs when the camera first turns.
+// 3 programs on the first toast), and the ViewCube faces compile their programs when the camera first turns.
 // The stage stays display:none until BootMask starts the pre-raster phase under the 0.996 mask; the cube turns a little
 // every frame of the phase (warmStep), so every face orientation and perspective state is drawn once. The palette list
 // itself (PaletteList, about a hundred items) is rendered once, so the first Mod+K does not pay its first mount either.
@@ -20,6 +20,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/ui/components/ui/car
 import { Checkbox } from '@/ui/components/ui/checkbox'
 import { Command, CommandInput } from '@/ui/components/ui/command'
 import { Input } from '@/ui/components/ui/input'
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/ui/components/ui/input-group'
+import { NativeSelect, NativeSelectOption } from '@/ui/components/ui/native-select'
 import { Kbd } from '@/ui/components/ui/kbd'
 import { Progress } from '@/ui/components/ui/progress'
 import { Separator } from '@/ui/components/ui/separator'
@@ -33,6 +35,8 @@ import { CircleCheckIcon, InfoIcon, OctagonXIcon, TriangleAlertIcon } from '@/ui
 import { Icon } from '@/ui/icons/Icon'
 import { StatusBadge } from '@/ui/notify/StatusBadge'
 import { PaletteList } from '@/ui/views/CommandPalette'
+import { FACE_STRIDE, FACE_VISIBLE_Z, faceTransforms } from '@/viewport/overlay/ViewCube'
+import { Matrix4 } from 'three'
 
 const noop = (): void => {}
 
@@ -52,24 +56,32 @@ export function hideWarmStage(): void {
   if (stageEl) stageEl.hidden = true
 }
 
-/** one frame of the phase: turn the cube so that every face and perspective state gets drawn */
+const warmM = new Matrix4()
+const warmR = new Matrix4()
+const warmTf = new Float64Array(FACE_STRIDE * 6)
+
+/** one frame of the phase: turn the cube so that every face orientation gets drawn (the ViewCube's orthographic faces) */
 export function warmStep(frame: number): void {
   if (!cubeEl) return
-  const yaw = (frame * 47) % 360
-  const pitch = ((frame * 29) % 140) - 70
-  cubeEl.style.transform = `translateZ(-36px) rotateX(${pitch}deg) rotateY(${yaw}deg)`
+  const yaw = (((frame * 47) % 360) * Math.PI) / 180
+  const pitch = ((((frame * 29) % 140) - 70) * Math.PI) / 180
+  faceTransforms(warmM.makeRotationX(pitch).multiply(warmR.makeRotationY(yaw)), warmTf)
+  const faces = cubeEl.children
+  for (let k = 0; k < 6 && k < faces.length; k++) {
+    const o = FACE_STRIDE * k
+    const el = faces[k] as HTMLElement
+    el.style.transform = `matrix(${warmTf[o]},${warmTf[o + 1]},${warmTf[o + 2]},${warmTf[o + 3]},${warmTf[o + 4]},${warmTf[o + 5]})`
+    el.style.visibility = warmTf[o + 6] > FACE_VISIBLE_Z ? 'visible' : 'hidden'
+  }
 }
 
-const CUBE_FACES = ['translateZ(36px)', 'rotateY(180deg) translateZ(36px)', 'rotateY(90deg) translateZ(36px)', 'rotateY(-90deg) translateZ(36px)',
-  'rotateX(90deg) translateZ(36px)', 'rotateX(-90deg) translateZ(36px)'] as const
-
-/** a cube built like viewport/overlay/ViewCube.tsx (same classes and 3D structure), without its interaction */
+/** a cube built like viewport/overlay/ViewCube.tsx (same classes and orthographic faces), without its interaction */
 function WarmCube() {
   return (
-    <div className="size-18 [perspective:400px]">
-      <div ref={(el) => { cubeEl = el }} className="relative size-full [transform-style:preserve-3d]">
-        {CUBE_FACES.map((tf, k) => (
-          <div key={tf} className="absolute inset-0 grid grid-cols-3 grid-rows-3 overflow-hidden rounded-sm bg-muted ring-1 ring-foreground/10 [backface-visibility:hidden]" style={{ transform: tf }}>
+    <div className="size-18">
+      <div ref={(el) => { cubeEl = el }} className="relative size-full">
+        {[0, 1, 2, 3, 4, 5].map((k) => (
+          <div key={k} className="absolute inset-0 grid grid-cols-3 grid-rows-3 overflow-hidden rounded-sm bg-muted ring-1 ring-foreground/10 will-change-transform">
             <span className={`pointer-events-none absolute inset-0 flex items-center justify-center text-hud-cap ${k === 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{k}</span>
             <div className="relative z-10 hover:bg-foreground/10" />
           </div>
@@ -174,6 +186,17 @@ function WarmControls() {
       <Separator orientation="vertical" className="h-4" />
       <Kbd>Ctrl K</Kbd>
       <Input className="h-7 w-40" defaultValue={t('palette.placeholder')} readOnly tabIndex={-1} />
+      {/* route editor (D1-AC-17): table cell inputs with a unit addon, the reference select, vehicle chips, handle marks */}
+      <InputGroup className="h-6 w-20">
+        <InputGroupInput type="number" defaultValue="12.5" readOnly tabIndex={-1} className="px-1 text-right font-mono tabular-nums" />
+        <InputGroupAddon align="inline-end"><InputGroupText>m</InputGroupText></InputGroupAddon>
+      </InputGroup>
+      <NativeSelect size="sm" defaultValue="AGL" tabIndex={-1} aria-label={t('edit.newRef')}>
+        <NativeSelectOption value="AGL">{t('edit.ref.AGL')}</NativeSelectOption>
+      </NativeSelect>
+      <span className="flex h-5 w-fit items-center gap-1 rounded-sm bg-muted-foreground/10 px-1.5 font-mono text-xs/relaxed font-medium">p600-01</span>
+      <span className="size-5 rounded-full ring-2 ring-foreground" />
+      <span className="flex size-5 items-center justify-center rounded-full bg-hud ring-1 ring-foreground/40"><Icon icon="plus" className="size-3" /></span>
       <span className="underline decoration-dashed underline-offset-2">{t('panel.events.title')}</span>
     </div>
   )

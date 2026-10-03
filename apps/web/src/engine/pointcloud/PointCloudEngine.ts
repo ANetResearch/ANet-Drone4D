@@ -40,7 +40,7 @@ import { EdlCompositeMaterial } from './render/edlComposite'
 import { makeIdMaterial } from './render/idMaterial'
 import { PointPicker } from './pick/PointPicker'
 import { COLOR_MODE_INDEX, dummyDtmTexture, makeClassTexture, makePointMaterial, makePointUniforms, makeTextureNodes, type PointColorTokens, type PointTextures, type PointUniforms } from './render/pointMaterial'
-import { LADDER, PC, deviceParams, httpCapFor, tauCapPx, type DeviceParams } from './params'
+import { LADDER, PC, deviceParams, httpCapFor, startBudget, tauCapPx, type DeviceParams } from './params'
 import type { ColorMode, EnginePhase, FocusMode, OpenedWorldInfo, PointCloudEvents, PointCloudStats } from './types'
 
 export interface PointCloudTokens extends PointColorTokens {
@@ -79,6 +79,13 @@ export interface PointCloudEngineOptions {
   motionTier?: () => 'full' | 'lite' | 'reduced'
   /** M06 FrameSampler refresh estimate (hardware T*) */
   refreshMs?: () => number
+  /**
+   * whether the fixed layers (drones, trails, environment, ground and sky) share the frame with the cloud (the viewport
+   * passes false only for the point-cloud-only bench scene flight60 scene=pc; omitted = cloud alone). Software devices
+   * then start the CAS at startBudget(): the budget that fits the frame left after the fixed layers, at least the
+   * quality floor (ADR-076)
+   */
+  fixedLayers?: boolean
   params?: PointCloudParams
   /** tests: fetch implementation and in-process jobs */
   f?: typeof fetch
@@ -215,7 +222,7 @@ export class PointCloudEngine {
     const software = be.deviceClass === 'software'
     this.cas = new CascadeController({
       startIndex: be.startRung, floorIndex: this.dev.floorIndex, ceilIndex: this.dev.ceilIndex, targetMs: software ? PC.targetMsSoftware : (this.refreshMs?.() ?? 16.7),
-      tailK: this.dev.tailK, initialB: this.dev.b0, Bfloor: this.dev.bFloor, poolCapacityPts: capPts, rsLock: this.dev.rsLock,
+      tailK: this.dev.tailK, initialB: startBudget(this.dev, software, o.fixedLayers === true), Bfloor: this.dev.bFloor, poolCapacityPts: capPts, rsLock: this.dev.rsLock,
       onRung: (from, to, reason) => this.onRung(from, to, reason),
     })
     if (this.lockB) this.cas.setB(Math.min(this.lockB, PC.capacityFrac * capPts))
@@ -1242,7 +1249,12 @@ export class PointCloudEngine {
     this.tables.commitBlocks(Math.max(2, this.blockWords))
     this.u.numDraws.value = w.numDraws
     this.geometry.setDrawRange(0, w.count)
-    this.root.visible = w.visible
+    // the live visibility, not the one saved by warmupBegin: the zoo awaits compileAsync for seconds while the loop runs,
+    // and a world that opened in that window set root.visible = true (open()); restoring the value saved before it left
+    // the cloud undrawn for the whole session while selection, streaming and the CAS went on (ACC-4 4.2b: the pass plan
+    // without the point pass in 2 of 47 runs, 4 of 9 ladder n200 runs). The table and draw range are rebuilt by the next
+    // frame anyway (FX2-R5, ADR-076)
+    this.root.visible = this.visible && this.t !== null
   }
 
   /** stand-in pool texel used by warm-up variants of other hosts (1 texel) */

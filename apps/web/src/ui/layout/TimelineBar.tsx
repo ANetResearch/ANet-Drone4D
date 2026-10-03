@@ -24,9 +24,10 @@ import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/components/ui/tooltip'
 import { Icon } from '@/ui/icons/Icon'
 import { StateIcon } from '@/ui/icons/StateIcon'
+import { BoundText } from '@/ui/motion/BoundText'
 import { SwapText } from '@/ui/motion/SwapText'
 import { useConnView } from '@/ui/shell/connView'
-import { LIVE_RATES, REPLAY_RATES, timeline, useTimeline } from '@/stores/timeline'
+import { LIVE_RATES, REPLAY_RATES, timeline, timelineStore, useTimeline } from '@/stores/timeline'
 import { usePrefs } from '@/stores/prefs'
 import { layoutActions } from './layoutState'
 import { IconButton } from './IconButton'
@@ -55,16 +56,21 @@ function ClockFacts() {
   )
 }
 
+/** the seen time in ns for the bound readout (read in the UI tick frame, after the store summary of that tick) */
+const readDisplayNs = (): number => timelineStore.getState().tDisplayS * 1e9
+
 function Readout({ compact }: { compact: boolean }) {
   const t = useT()
-  const tS = useTimeline((s) => s.tDisplayS)
+  // the time itself is C-class bound text (written by bindText in the UI tick, P4-UI): the readout and its HoverCard
+  // re-render only when the stale state changes, not four times a second
   const stale = useTimeline((s) => s.stale)
   const epoch = useTimeline((s) => s.epoch)
   return (
     <HoverCard>
       <HoverCardTrigger render={<span data-timeline-readout="" className={cn('flex shrink-0 items-center gap-1 font-mono text-hud-sub tabular-nums', compact ? 'w-28' : 'w-32')} />}>
         <span className="text-muted-foreground">SIM</span>
-        <span className={cn(stale && epoch >= 0 && 'underline decoration-dashed underline-offset-2')} data-stale={stale ? '' : undefined} data-island="">{fmt.simTime(tS * 1e9)}</span>
+        <BoundText read={readDisplayNs} format={fmt.simTime} data-stale={stale ? '' : undefined}
+          className={cn(stale && epoch >= 0 && 'underline decoration-dashed underline-offset-2')} />
       </HoverCardTrigger>
       <HoverCardContent className="w-72 text-hud-sub">
         <div className="mb-1.5 flex items-center gap-1.5 font-medium">
@@ -105,7 +111,8 @@ function RateControl({ compact }: { compact: boolean }) {
             </SelectTrigger>
             <SelectContent>
               {items.map((i) => (
-                <SelectItem key={i.value} value={i.value} disabled={i.reason !== null} title={i.reason ? t(i.reason) : undefined}>{i.label}</SelectItem>
+                // greyed options carry no native title: the trigger's shadcn Tooltip states the reason (replay speed_max, read-only)
+                <SelectItem key={i.value} value={i.value} disabled={i.reason !== null}>{i.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

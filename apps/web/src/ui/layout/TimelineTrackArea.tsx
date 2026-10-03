@@ -22,7 +22,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, Con
 import { Slider } from '@/ui/components/ui/slider'
 import { Spinner } from '@/ui/components/ui/spinner'
 import { Icon } from '@/ui/icons/Icon'
-import { CLS_CRITICAL, CLS_LIFECYCLE, CLS_ROUTE, CLS_SYSTEM, CLS_WARNING, LfTimelineTrack, trackLane } from '@/ui/lf/LfTimelineTrack'
+import { CLS_CRITICAL, CLS_LIFECYCLE, CLS_ROUTE, CLS_SYSTEM, CLS_WARNING, LfTimelineTrack, trackLane, type TrackInputs } from '@/ui/lf/LfTimelineTrack'
 import { eventLog } from '@/ui/notify/eventLog'
 import { selection } from '@/stores/selection'
 import { timeline, timelineGuards, timelineStore, timelineTrack, useTimeline } from '@/stores/timeline'
@@ -111,14 +111,78 @@ export interface TimelineTrackAreaProps {
   className?: string
 }
 
+const LIVE_STEP_S = 10
+
+/** the view at render or event time (the live clock moves it in every UI tick; components read it, not subscribe) */
+const storeView = (): { t0S: number; t1S: number } => timelineStore.getState().view
+
+/** overview inputs: the whole range, the view frame and the playhead, read by the LfScheduler before a redraw */
+const readOverview = (): TrackInputs => {
+  const s = timelineStore.getState()
+  return { view: s.view, playheadS: s.tDisplayS, range: overviewRange(s.mode, s.rangeStartS, s.rangeEndS) }
+}
+
+/**
+ * the keyboard and screen reader part over the detail track. Live: disabled, and its value and range move in ten-second
+ * steps, so it re-renders (and re-measures its thumb) every ten seconds instead of in every UI tick (ADR-066, P4-UI);
+ * replay keeps the exact values for 0.1 s seeking.
+ */
+function TrackSlider({ seekOk, preview, label, onPreview, onCommit }: {
+  seekOk: boolean
+  preview: number | null
+  label: string
+  onPreview: (v: number) => void
+  onCommit: (v: number) => void
+}) {
+  // live: ten-second steps (the disabled Slider only carries the "live cannot rewind" description; each re-render of the
+  // Base UI Slider rewrites its hidden input, P4-UI)
+  const sv = (x: number): number => (seekOk ? x : Math.round(x / LIVE_STEP_S) * LIVE_STEP_S)
+  const tS = useTimeline((s) => sv(s.tDisplayS))
+  const v0 = useTimeline((s) => sv(s.view.t0S))
+  const v1 = useTimeline((s) => sv(Math.max(s.view.t1S, s.view.t0S + 1e-3)))
+  const raw = preview ?? tS
+  // a live view zoomed below one step rounds both ends together: keep the range non-empty
+  const hi = v1 > v0 ? v1 : v0 + (seekOk ? 1e-3 : LIVE_STEP_S)
+  return (
+    <Slider
+      className={cn('absolute inset-0 h-full data-horizontal:w-full [&_[data-slot=slider-thumb]]:opacity-0 [&_[data-slot=slider-track]]:bg-transparent [&_[data-slot=slider-range]]:bg-transparent',
+        '[&_[data-slot=slider-thumb]]:focus-visible:opacity-100 [&>div]:h-full', seekOk ? '' : 'pointer-events-none')}
+      value={[Math.min(hi, Math.max(v0, sv(raw)))]} min={v0} max={hi} step={0.1}
+      disabled={!seekOk} aria-label={label}
+      onValueChange={(v: number | readonly number[]) => onPreview(Array.isArray(v) ? (v as number[])[0] : (v as number))}
+      onValueCommitted={(v: number | readonly number[]) => onCommit(Array.isArray(v) ? (v as number[])[0] : (v as number))} />
+  )
+}
+
+/** preview label and BUFFERING spinner at the playhead: mounted only while one of them shows, so the playhead
+ * subscription exists only then */
+function PlayheadMarks({ preview, buffering, width, cy }: { preview: number | null; buffering: boolean; width: number; cy: number }) {
+  const tS = useTimeline((s) => s.tDisplayS)
+  const view = useTimeline((s) => s.view)
+  const span = Math.max(1e-6, view.t1S - view.t0S)
+  const phX = (((preview ?? tS) - view.t0S) / span) * width
+  if (!(phX >= 0 && phX <= width)) return null
+  return (
+    <>
+      {preview !== null ? (
+        <span aria-hidden="true" data-timeline-preview="" className="pointer-events-none absolute bottom-full mb-1.5 rounded-sm bg-foreground px-1.5 py-0.5 font-mono text-hud-sub text-background"
+          style={{ left: Math.min(Math.max(0, phX - 40), Math.max(0, width - 96)) }}>{fmt.simTime(preview * 1e9)}</span>
+      ) : null}
+      {buffering ? (
+        <span aria-hidden="true" data-timeline-buffering="" className="pointer-events-none absolute" style={{ top: cy - 7, left: phX - 7 }}>
+          <Spinner className="size-3.5 text-foreground" />
+        </span>
+      ) : null}
+    </>
+  )
+}
+
 export function TimelineTrackArea({ height, overview = false, overviewHeight = 10, className }: TimelineTrackAreaProps) {
   const t = useT()
   const [ref, w] = useElementWidth<HTMLDivElement>(0)
-  const view = useTimeline((s) => s.view)
-  const tS = useTimeline((s) => s.tDisplayS)
+  // no subscription to the view, the playhead or the range: they move in every UI tick of the live clock; the canvases
+  // read them in the scheduler (LfTimelineTrack read) and the handlers read them at event time (P4-UI, D1-AC-23)
   const mode = useTimeline((s) => s.mode)
-  const r0 = useTimeline((s) => s.rangeStartS)
-  const r1 = useTimeline((s) => s.rangeEndS)
   const buffering = useTimeline((s) => s.buffering)
   const runId = useTimeline((s) => s.runId)
   const segment = useTimeline((s) => s.segment)
@@ -134,10 +198,15 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
   const detailRef = React.useRef<HTMLDivElement>(null)
   const ovRef = React.useRef<HTMLDivElement>(null)
   const width = Math.max(0, w)
-  const span = Math.max(1e-6, view.t1S - view.t0S)
-  const xOf = (tt: number) => ((tt - view.t0S) / span) * width
-  const range = overviewRange(mode, r0, r1)
   const lane = trackLane(height, true)
+  const previewRef = React.useRef<number | null>(null)
+  React.useLayoutEffect(() => {
+    previewRef.current = preview
+  }, [preview])
+  const readDetail = React.useCallback((): TrackInputs => {
+    const s = timelineStore.getState()
+    return { view: s.view, playheadS: previewRef.current ?? s.tDisplayS }
+  }, [])
 
   // wheel: pan; Ctrl+wheel zooms around the pointer (a native listener, because Ctrl+wheel must not zoom the page)
   React.useEffect(() => {
@@ -145,7 +214,7 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       const r = el.getBoundingClientRect()
-      const v = timelineStoreView()
+      const v = storeView()
       const sp = Math.max(1e-6, v.t1S - v.t0S)
       e.preventDefault()
       if (e.ctrlKey || e.metaKey) {
@@ -172,10 +241,11 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
   }
   const onPointerMove = (e: React.PointerEvent) => {
     const d = drag.current
+    const view = storeView()
     if (d && !seekOk) {
       if (Math.abs(e.clientX - d.x0) > DRAG_PX) d.moved = true
       if (d.moved) {
-        timeline.pan((-(e.clientX - d.last) / Math.max(1, width)) * span)
+        timeline.pan((-(e.clientX - d.last) / Math.max(1, width)) * Math.max(1e-6, view.t1S - view.t0S))
         d.last = e.clientX
         setHover(null)
         return
@@ -193,7 +263,7 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
     const timer = setTimeout(() => {
       void fetchReplayEvents(runId, segment, fxT0, fxT1).then((got) => {
         if (!live || !got) return
-        setHover((h) => (h?.fetch?.mseq === fxMseq ? describeColumn(h.x, width, timelineStoreView(), 'replay', { run: runId, seg: segment }) : h))
+        setHover((h) => (h?.fetch?.mseq === fxMseq ? describeColumn(h.x, width, storeView(), 'replay', { run: runId, seg: segment }) : h))
       })
     }, REPLAY_HOVER_DWELL_MS)
     return () => {
@@ -206,6 +276,8 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
     drag.current = null
     if (!d || d.moved || e.button !== 0 || width <= 0) return
     const x = localX(e)
+    const view = storeView()
+    const span = Math.max(1e-6, view.t1S - view.t0S)
     const tolS = (HIT_PX / width) * span
     const tt = view.t0S + (x / width) * span
     const idx = timelineTrack.nearest(tt, tolS)
@@ -216,7 +288,8 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
     if (seekOk) timeline.seek(m.t[idx] / 1000)
   }
   const onContextMenu = (e: React.MouseEvent) => {
-    ctxT.current = view.t0S + (localX(e) / Math.max(1, width)) * span
+    const view = storeView()
+    ctxT.current = view.t0S + (localX(e) / Math.max(1, width)) * Math.max(1e-6, view.t1S - view.t0S)
   }
   const copyLink = () => {
     const world = /^\/world\/([a-z0-9-]{1,63})/.exec(location.pathname)?.[1]
@@ -229,16 +302,12 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
   const ovCenter = (clientX: number) => {
     const r = ovRef.current?.getBoundingClientRect()
     if (!r) return
+    const { range, view } = readOverview() as Required<TrackInputs>
+    const span = Math.max(1e-6, view.t1S - view.t0S)
     const at = range.t0S + ((clientX - r.left) / Math.max(1, r.width)) * (range.t1S - range.t0S)
     timeline.zoom(at - span / 2, at + span / 2)
   }
 
-  // live: the Slider is disabled (keyboard and screen reader part only) and its range slides with the clock; whole seconds
-  // keep its thumb position constant between ticks, so it neither re-measures the thumb (forced layout) nor re-renders
-  // in every UI tick frame (ADR-066). Replay keeps the 0.1 s seek resolution.
-  const sv = (x: number): number => (seekOk ? x : Math.round(x))
-  const phX = xOf(preview ?? tS)
-  const showPh = phX >= 0 && phX <= width
   return (
     // a raster island (ADR-066): the playhead, the Slider thumb and the track canvases change at the store rate; only
     // this area re-rasters, never the full-width timeline strip around it
@@ -253,7 +322,7 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
             if (e.buttons & 1) ovCenter(e.clientX)
           }}
           onDoubleClick={() => timeline.fit()}>
-          <LfTimelineTrack model={timelineTrack} variant="overview" view={view} range={range} playheadS={tS} width={width} height={overviewHeight} ariaLabel={t('timeline.overview')} />
+          <LfTimelineTrack model={timelineTrack} variant="overview" read={readOverview} width={width} height={overviewHeight} ariaLabel={t('timeline.overview')} />
         </div>
       ) : null}
       <ContextMenu>
@@ -262,7 +331,7 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
             tabIndex={-1} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
             onPointerLeave={() => setHover(null)} onDoubleClick={() => timeline.fit()} onContextMenu={onContextMenu} />
         }>
-          {width > 0 ? <LfTimelineTrack model={timelineTrack} view={view} playheadS={preview ?? tS} width={width} height={height} ariaLabel={t('timeline.track')} /> : null}
+          {width > 0 ? <LfTimelineTrack model={timelineTrack} read={readDetail} width={width} height={height} ariaLabel={t('timeline.track')} /> : null}
           {hover ? (
             <>
               <div aria-hidden="true" className="pointer-events-none absolute top-0 w-px border-l border-dashed border-muted-foreground"
@@ -274,23 +343,9 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
               </div>
             </>
           ) : null}
-          {preview !== null && showPh ? (
-            <span aria-hidden="true" data-timeline-preview="" className="pointer-events-none absolute bottom-full mb-1.5 rounded-sm bg-foreground px-1.5 py-0.5 font-mono text-hud-sub text-background"
-              style={{ left: Math.min(Math.max(0, phX - 40), Math.max(0, width - 96)) }}>{fmt.simTime(preview * 1e9)}</span>
-          ) : null}
-          {buffering && showPh ? (
-            <span aria-hidden="true" data-timeline-buffering="" className="pointer-events-none absolute" style={{ top: lane.cy - 7, left: phX - 7 }}>
-              <Spinner className="size-3.5 text-foreground" />
-            </span>
-          ) : null}
-          <Slider
-            className={cn('absolute inset-0 h-full data-horizontal:w-full [&_[data-slot=slider-thumb]]:opacity-0 [&_[data-slot=slider-track]]:bg-transparent [&_[data-slot=slider-range]]:bg-transparent',
-              '[&_[data-slot=slider-thumb]]:focus-visible:opacity-100 [&>div]:h-full', seekOk ? '' : 'pointer-events-none')}
-            value={[sv(Math.min(view.t1S, Math.max(view.t0S, preview ?? tS)))]} min={sv(view.t0S)} max={sv(Math.max(view.t1S, view.t0S + 1e-3))} step={0.1}
-            disabled={!seekOk} aria-label={seekOk ? t('timeline.seek') : t(guards.seek ?? 'hint.liveNoRewind')}
-            onValueChange={(v: number | readonly number[]) => setPreview(Array.isArray(v) ? (v as number[])[0] : (v as number))}
-            onValueCommitted={(v: number | readonly number[]) => {
-              const x = Array.isArray(v) ? (v as number[])[0] : (v as number)
+          {preview !== null || buffering ? <PlayheadMarks preview={preview} buffering={buffering} width={width} cy={lane.cy} /> : null}
+          <TrackSlider seekOk={seekOk} preview={preview} label={seekOk ? t('timeline.seek') : t(guards.seek ?? 'hint.liveNoRewind')}
+            onPreview={setPreview} onCommit={(x) => {
               setPreview(null)
               timeline.seek(x)
             }} />
@@ -328,9 +383,4 @@ export function TimelineTrackArea({ height, overview = false, overviewHeight = 1
       </ContextMenu>
     </div>
   )
-}
-
-/** the view at event time (the wheel listener lives outside React's render) */
-function timelineStoreView(): { t0S: number; t1S: number } {
-  return timelineStore.getState().view
 }

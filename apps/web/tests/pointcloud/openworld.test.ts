@@ -14,6 +14,7 @@ import { WorldServer } from './engineHarness'
 const json = <T>(rel: string): T => JSON.parse(readFileSync(new URL(rel, WORLDS), 'utf8')) as T
 
 describe.skipIf(!haveWorlds)('cheap checks (M05-FR-002)', () => {
+  if (!haveWorlds) return // describe.skipIf still runs this body while collecting; the reads below need the built world (SHOW-CI)
   const md = json<PotreeMeta>('shenzhen/visual/pointcloud/metadata.json')
   const w = json<WorldJson>('shenzhen/world.json')
   const root = { points: md.points, depth: md.hierarchy.depth }

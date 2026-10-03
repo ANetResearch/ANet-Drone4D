@@ -45,7 +45,7 @@ export default [
   pw('layout', 'perf/layout.spec.ts', {
     backend: S1, params: { city: 'shenzhen' }, runs: 3, acIds: ['D1-AC-24', 'PERF-AC-027'], priority: 'P0', gates: ['G2d', 'G3', 'G4'],
     metrics: [m('rt_allocs_delta', 'count', 'rt_allocs_delta', true, { source: 'script', extra: true }),
-      m('over50_delta_pct', 'pct', 'over50_delta_pct', true, { source: 'script', extra: true })],
+      m('over50_delta_pct', 'pct', 'ui_over50_delta_pct', true, { source: 'script', extra: true })],
   }),
   pw('warmup', 'perf/warmup.spec.ts', {
     backend: S1, params: { city: 'shenzhen' }, runs: 3, acIds: ['D1-AC-25', 'PERF-AC-028'], priority: 'P0', gates: ['G2d', 'G3', 'G4'],
@@ -55,8 +55,9 @@ export default [
   pw('ui-overhead', 'perf/ui-overhead.spec.ts', {
     backend: S1, params: { city: 'shenzhen', blocks: 3 }, runs: 1, timeoutS: 900, acIds: ['D1-AC-23', 'PERF-AC-047'], priority: 'P1',
     layer: 'ext', gates: ['G2w', 'G3', 'G4'],
+    // D1-AC-23 is 1 percentage point (AWR-03 §8.4), not the 2 of the weak-network profiles (ADR-072)
     metrics: [m('p50_delta_ms', 'ms', 'p50_delta_ms', true, { source: 'script', extra: true }),
-      m('over50_delta_pct', 'pct', 'over50_delta_pct', true, { source: 'script', extra: true })],
+      m('over50_delta_pct', 'pct', 'ui_over50_delta_pct', true, { source: 'script', extra: true })],
   }),
   pw('ui-commit', 'perf/ui-commit.spec.ts', {
     build: 'profiling', backend: S1, params: { city: 'shenzhen', scene: 'full' }, runs: 3, acIds: ['PERF-AC-020'], priority: 'P1',
@@ -76,9 +77,14 @@ export default [
   pw('soak', 'perf/soak.spec.ts', {
     backend: { kind: 'live', world: 'shenzhen', scenario: 'soak-shenzhen' }, params: { city: 'shenzhen', minutes: 30 }, runs: 1, timeoutS: 2400,
     acIds: ['D1-AC-29', 'PERF-AC-045'], priority: 'P1', layer: 'ext', gates: ['G2w', 'G3', 'G4'],
+    // heap_growth_pct: retained heap after a forced GC every 30 s (ADR-075); the unforced-median and window-minimum ratios and
+    // the longest forced GC are records (result.json extra, no threshold)
     metrics: [...frameFull(), m('heap_growth_pct', 'pct', 'heap_growth_pct', true, { source: 'script' }),
       m('rss_growth_pct', 'pct', 'rss_growth_pct', true, { source: 'script', extra: true }),
-      m('unexpected_reconnects', 'count', 'unexpected_reconnects', true, { source: 'script', extra: true })],
+      m('unexpected_reconnects', 'count', 'unexpected_reconnects', true, { source: 'script', extra: true }),
+      m('heap_used_growth_pct', 'pct', null, false, { source: 'script', extra: true }),
+      m('heap_floor_growth_pct', 'pct', null, false, { source: 'script', extra: true }),
+      m('gc_forced_ms_max', 'ms', null, false, { source: 'script', extra: true })],
   }),
   ...['W0', 'W1', 'W2', 'W3'].map((w) => pw(`net.${w}`, 'perf/net.spec.ts', {
     backend: { ...LADDER(200), netProfile: w }, params: { city: 'shenzhen', scene: 'full', n: 200, net: w }, runs: 3, timeoutS: 420,
@@ -101,6 +107,12 @@ export default [
   })),
   pw('e2e.a11y', 'tests/e2e/a11y.spec.ts', {
     build: 'test', backend: STATIC, acIds: ['D1-AC-21'], priority: 'P1', layer: 'ext', gates: ['G2d', 'G3', 'G4'],
+  }),
+  // D1-AC-17 task editing (P4-UI): route editor (add, change, insert, delete, drag, undo and redo, follow_path succeeded) and
+  // an area drawn in the viewport that becomes a finished coverage mission; production build, free-shenzhen
+  pw('e2e.mission-edit', 'perf/mission-edit.spec.ts', {
+    backend: FREE, params: { city: 'shenzhen' }, timeoutS: 780, acIds: ['D1-AC-17', 'UX-AC-040', 'M10-AC-025', 'M15-AC-016'], priority: 'P1',
+    layer: 'ext', gates: ['G2d', 'G3', 'G4'],
   }),
   pw('e2e.timeline', 'tests/e2e/timeline.spec.ts', {
     build: 'test', backend: { kind: 'live', world: 'shenzhen', scenario: 'free-shenzhen' }, timeoutS: 420,

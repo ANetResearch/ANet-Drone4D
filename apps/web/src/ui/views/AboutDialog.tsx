@@ -70,6 +70,7 @@ export function AboutContent({ showVersion = true }: { showVersion?: boolean }) 
             <span>{t('about.dataSummary')}</span>
             <span className="text-muted-foreground">{t('about.citation')}</span>
             <ExtLink href={DATASET_URL}>vcc.tech/UrbanScene3D</ExtLink>
+            <span data-about-synthetic="">{t('about.dataSynthetic')}</span>
           </span>
         </Row>
         <Row label={t('about.fidelity')}>

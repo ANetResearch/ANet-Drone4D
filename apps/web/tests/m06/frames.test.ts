@@ -1,7 +1,7 @@
 // M06-AC-023 (AWR-03 §5.1; M06 §6.8): ENU (E, N, U) under WorldRoot is three (E, U, -N); the camera helpers agree with
 // the single frame implementation engine/geo/frames.ts (M02) within the mixed tolerance; the six cities stay within the
 // 10 km float32 radius (no M06-E016).
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
@@ -9,6 +9,8 @@ import { enuToThree, enuToThreeInto, threeToEnu, threeToEnuInto, WORLD_ROOT } fr
 
 const ROOT = join(import.meta.dirname, '../../../..')
 const CITIES = ['shenzhen', 'newyork', 'shanghai', 'suzhou', 'sanfrancisco', 'chicago']
+// The six cities are built locally from UrbanScene3D (never committed); a clean checkout skips the radius check (SHOW-CI)
+const BUILT = CITIES.every((c) => existsSync(join(ROOT, 'worlds', c, 'world.json')))
 
 describe('frames (M06-AC-023)', () => {
   it('matches frames.ts and the WorldRoot matrix on random points (atol 1e-6 m)', () => {
@@ -31,7 +33,7 @@ describe('frames (M06-AC-023)', () => {
     }
   })
 
-  it('six cities are within the 10 km horizontal radius (float32 ENU <= 0.69 mm)', () => {
+  it.skipIf(!BUILT)('six cities are within the 10 km horizontal radius (float32 ENU <= 0.69 mm)', () => {
     for (const c of CITIES) {
       const w = JSON.parse(readFileSync(join(ROOT, 'worlds', c, 'world.json'), 'utf8')) as { bounds: { min: number[]; max: number[] } }
       const r = Math.max(Math.hypot(w.bounds.min[0], w.bounds.min[1]), Math.hypot(w.bounds.max[0], w.bounds.max[1]))

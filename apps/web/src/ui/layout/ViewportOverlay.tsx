@@ -22,6 +22,7 @@ import { PerfHud } from '@/ui/hud/PerfHud'
 import { runAction } from '@/ui/actions/registry'
 import { BoundText } from '@/ui/motion/BoundText'
 import { ToolHint, ToolPopovers } from '@/ui/tools/ToolLayer'
+import { EditViewportMount } from '@/ui/panels/mission-edit/EditViewportLayer'
 import { connViewStore, useConnView } from '@/ui/shell/connView'
 import { useSelection } from '@/stores/selection'
 import { useWorld } from '@/stores/world'
@@ -173,6 +174,7 @@ const ViewportOverlayBody = React.memo(function ViewportOverlayBody({ compactBp,
       <WorldLoadingCard />
       <ToolHint />
       <ToolPopovers />
+      <EditViewportMount />
       <PerfHud compactBp={compactBp} />
       <GroundReadout />
     </div>

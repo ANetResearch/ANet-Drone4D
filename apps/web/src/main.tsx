@@ -43,12 +43,24 @@ installGovernorToasts()
 
 // render tier and motion cap from stores/perf (M06); ?tier= forces the tier in dev and test builds (ADR-044)
 const forced = parseTier(new URLSearchParams(location.search))
+// the perf summary is written in the UI tick (about once a second with new values): the root attributes are written only
+// when they change, because every write on <html> queues a mutation and invalidates the attribute selectors of the whole
+// document (P4-UI, D1-AC-23)
+let appliedTier: string | null = null
+let appliedCap: string | null | undefined
 function applyPerf() {
   const p = perfStore.getState()
   const tier = forced ?? p.tier
-  document.documentElement.dataset.tier = tier ?? ''
-  if (tier) loop.setTier(tier, p.deviceClass ?? 'software')
-  setGovernorMotion(p.motionCap ?? (tier === 'B' || tier === 'A' ? 'full' : null))
+  const key = `${tier ?? ''}|${p.deviceClass ?? ''}`
+  const cap = p.motionCap ?? (tier === 'B' || tier === 'A' ? 'full' : null)
+  if (key === appliedTier && cap === appliedCap) return
+  if (key !== appliedTier) {
+    appliedTier = key
+    if (document.documentElement.dataset.tier !== (tier ?? '')) document.documentElement.dataset.tier = tier ?? ''
+    if (tier) loop.setTier(tier, p.deviceClass ?? 'software')
+  }
+  appliedCap = cap
+  setGovernorMotion(cap)
 }
 perfStore.subscribe(applyPerf)
 applyPerf()

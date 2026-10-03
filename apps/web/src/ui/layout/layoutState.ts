@@ -28,15 +28,22 @@ export function useWindowSize(): { w: number; h: number } {
 }
 
 export function useShellLayout(bannerHeight = 0): LayoutState & { breakpoint: BreakpointId; small: boolean; w: number; h: number } {
-  const layout = usePrefs((s) => s.layout)
+  // the geometry fields only: a page change of the right rail, the Dock tab or the HUD switch re-rendered the whole shell
+  // (header, rails, Dock, timeline) through RouterOutlet (P4-UI, D1-AC-25)
+  const leftOpen = usePrefs((s) => s.layout.left.open)
+  const leftW = usePrefs((s) => s.layout.left.width)
+  const rightOpen = usePrefs((s) => s.layout.right.open)
+  const rightW = usePrefs((s) => s.layout.right.width)
+  const dockOpen = usePrefs((s) => s.layout.dock.open)
+  const dockH = usePrefs((s) => s.layout.dock.height)
   const { w, h } = useWindowSize()
   const bp = breakpointOf(w)
   const state = React.useMemo<LayoutState>(() => ({
-    left: { open: layout.left.open, width: layout.left.width },
-    right: { open: layout.right.open, width: layout.right.width },
-    dock: { open: layout.dock.open, height: layout.dock.height },
+    left: { open: leftOpen, width: leftW },
+    right: { open: rightOpen, width: rightW },
+    dock: { open: dockOpen, height: dockH },
     bannerVisible: bannerHeight > 0, bannerHeight, breakpoint: bp.id,
-  }), [layout, bannerHeight, bp.id])
+  }), [leftOpen, leftW, rightOpen, rightW, dockOpen, dockH, bannerHeight, bp.id])
   const lastBp = React.useRef<BreakpointId | null>(null)
   React.useEffect(() => {
     const before = lastBp.current

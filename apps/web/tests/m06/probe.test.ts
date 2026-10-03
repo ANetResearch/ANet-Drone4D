@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { cbStarts, layerMs, PERF_LAYERS } from '@/engine/loop'
 import { makeProbe, pushGovernorHistory, pushLoafWorst, pushRing, RING_CAP, tailRing, type AwrPerf } from '@/engine/perf/probe'
 import { feedInterval, frameEnd, frameStart, refreshMs, sampler, setSoftware } from '@/engine/perf/frameSampler'
-import { isLoopCallback, isOurScript, oursOutsideLoop } from '@/engine/perf/loaf'
+import { isFrameCallback, isLoopCallback, isOurScript, oursOutsideLoop, resetLoopKeys } from '@/engine/perf/loaf'
 
 const SCHEMA = JSON.parse(readFileSync(join(import.meta.dirname, '../../../../packages/contracts/perf/perf-snapshot.schema.json'), 'utf8'))
 
@@ -85,5 +85,27 @@ describe('__perf probe (M06-AC-050)', () => {
       ],
     }
     expect(oursOutsideLoop(e, origin)).toEqual({ ours: 55, invoker: 'DIV.onclick' })
+  })
+
+  it('LoAF: Chrome 151 reports rAF callbacks as user-callback / FrameRequestCallback; the loop is then known by source position (ACC-3 4.2a)', () => {
+    const origin = 'http://127.0.0.1:4173'
+    resetLoopKeys()
+    cbStarts.fill(0)
+    const loop = (t: number) => ({ invokerType: 'user-callback', invoker: 'FrameRequestCallback', startTime: t, duration: 58, sourceURL: `${origin}/assets/ui-CuK7zbIZ.js`, sourceCharPosition: 516414, sourceFunctionName: 'Lx' })
+    expect(isFrameCallback(loop(0))).toBe(true)
+    expect(isFrameCallback({ invokerType: 'user-callback', invoker: 'IdleRequestCallback', startTime: 0, duration: 1 })).toBe(false)
+    // not in the time ring and not identified yet: counted as ours
+    expect(isLoopCallback(loop(5000))).toBe(false)
+    // matched by time once: its source position identifies the loop from then on, even when the ring moved on
+    cbStarts[3] = 6000
+    expect(isLoopCallback(loop(6000.2))).toBe(true)
+    cbStarts.fill(0)
+    expect(isLoopCallback(loop(9000))).toBe(true)
+    // another rAF callback of ours (a UI animation frame) is still ours
+    const other = { ...loop(9100), sourceCharPosition: 1038723, sourceFunctionName: 'e', duration: 60 }
+    expect(isLoopCallback(other)).toBe(false)
+    const e = { duration: 214, startTime: 8990, scripts: [loop(9000), { ...other, invokerType: 'event-listener', invoker: 'DOMWindow.onkeydown' }] }
+    expect(oursOutsideLoop(e, origin)).toEqual({ ours: 60, invoker: 'DOMWindow.onkeydown' })
+    resetLoopKeys()
   })
 })

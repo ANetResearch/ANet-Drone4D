@@ -164,7 +164,12 @@ function StageStrip({ r }: { r: JobRow }) {
       </div>
       <div className="flex gap-1">
         {stages.map((s, i) => (
-          <span key={s} className={cn('min-w-0 flex-1 text-hud-cap leading-tight', i === cur ? 'font-semibold text-foreground' : 'text-muted-foreground')} title={s}>{t(`jobs.state.${s}`)}</span>
+          <Tooltip key={s}>
+            <TooltipTrigger render={<span className={cn('min-w-0 flex-1 text-hud-cap leading-tight', i === cur ? 'font-semibold text-foreground' : 'text-muted-foreground')} />}>
+              {t(`jobs.state.${s}`)}
+            </TooltipTrigger>
+            <TooltipContent className="font-mono">{s}</TooltipContent>
+          </Tooltip>
         ))}
       </div>
     </div>
@@ -358,7 +363,12 @@ export function JobsPage() {
   }, [])
   const failedHot = rows.find((r) => r.state === 'FAILED')
   const cols: LfColumn<JobRow>[] = [
-    { key: 'id', label: t('jobs.col.job'), format: (r) => <span className="font-mono" title={r.jobId}>{r.jobId.length > 14 ? `${r.jobId.slice(0, 6)}…${r.jobId.slice(-6)}` : r.jobId}</span> },
+    { key: 'id', label: t('jobs.col.job'), format: (r) => r.jobId.length > 14 ? (
+      <Tooltip>
+        <TooltipTrigger render={<span className="font-mono" />}>{`${r.jobId.slice(0, 6)}…${r.jobId.slice(-6)}`}</TooltipTrigger>
+        <TooltipContent className="font-mono">{r.jobId}</TooltipContent>
+      </Tooltip>
+    ) : <span className="font-mono">{r.jobId}</span> },
     { key: 'engine', label: t('jobs.col.engine'), format: (r) => (r.engine ? t(`jobs.engine.${r.engine}`) : r.kind === 'world_build' ? t('jobs.kind.world_build') : '—') },
     { key: 'src', label: t('jobs.col.source'), format: (r) => <span className="font-mono">{r.sourceWorldId ?? '—'}</span> },
     { key: 'dst', label: t('jobs.col.target'), format: (r) => <span className="font-mono">{r.targetWorldId ?? '—'}</span> },

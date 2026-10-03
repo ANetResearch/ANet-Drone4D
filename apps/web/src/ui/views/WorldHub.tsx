@@ -1,5 +1,7 @@
 // World Hub overlay page, /worlds (M15-FR-023; AWR-14 §5.1): one card per world from GET /api/worlds with LfStat (points,
 // nodes, highest building, TTFP), LfBarRank of levelsPoints (one rung = the automatic unit) and the validation badge.
+// Ready worlds come first (stable order otherwise): without UrbanScene3D data only the generated demo city synthcity is
+// built and the six cities show "not built" with the fetch hint (ADR-077).
 // Overlay pages cap the viewport at 5 fps while visible (M15-FR-007).
 import { useQuery } from '@tanstack/react-query'
 import { useT } from '@/app/i18n'
@@ -41,6 +43,7 @@ function WorldCard({ w }: { w: WorldListItem }) {
         <LfStat label={t('hub.stat.ttfp')} value={w.stats?.ttfpMs} format={(v) => fmt.num(v)} unit="ms" />
       </div>
       {levels.length ? <LfBarRank variant="rung" data={levels} unit={unit} height={120} format={fmt.pts} ariaLabel={t('hub.levels')} /> : null}
+      {w.status === 'missing' ? <p className="mt-2 text-hud-sub text-muted-foreground" data-world-missing-hint="">{t('hub.missingHint')}</p> : null}
       <div className="mt-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-1">
           {w.anchorKind === 'synthetic' || w.georeferenced === false ? <Badge variant="outline">{t('world.schematic')}</Badge> : null}
@@ -50,6 +53,12 @@ function WorldCard({ w }: { w: WorldListItem }) {
       </div>
     </LfChartCard>
   )
+}
+
+/** ready (or in-use) worlds first, the backend order otherwise */
+function hubOrder(list: readonly WorldListItem[]): WorldListItem[] {
+  const rank = (w: WorldListItem) => (w.inUse ? 0 : (w.status ?? 'ready') === 'ready' ? 1 : 2)
+  return list.map((w, i) => ({ w, i })).sort((a, b) => rank(a.w) - rank(b.w) || a.i - b.i).map((x) => x.w)
 }
 
 export function WorldHub() {
@@ -72,7 +81,7 @@ export function WorldHub() {
         <PanelEmpty title={t('hub.unavailable')} description={t('hub.unavailableHint')}
           action={<Button size="sm" variant="outline" onClick={() => void q.refetch()}>{t('common.retry')}</Button>} />
       ) : (
-        <div className="grid grid-cols-3 gap-3 2xl:grid-cols-4" data-world-cards={q.data.length}>{q.data.map((w) => <WorldCard key={w.id} w={w} />)}</div>
+        <div className="grid grid-cols-3 gap-3 2xl:grid-cols-4" data-world-cards={q.data.length}>{hubOrder(q.data).map((w) => <WorldCard key={w.id} w={w} />)}</div>
       )}
     </section>
   )

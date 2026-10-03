@@ -61,13 +61,14 @@ describe('WarmStage (ADR-069)', () => {
     expect(stage.hidden).toBe(false)
     await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
     expect(stage.querySelectorAll('[data-slot="toast"]').length).toBe(4)
-    const faces = stage.querySelectorAll('[class*="backface-visibility"]')
+    // the cube mirrors the orthographic ViewCube (P4-UI): six faces, each its own 2D matrix(), back faces hidden
+    const faces = stage.querySelectorAll<HTMLElement>('.size-18 [class*="will-change-transform"]')
     expect(faces.length).toBe(6)
-    const cube = faces[0].parentElement!
     warmStep(3)
-    const a = cube.style.transform
+    const a = [...faces].map((f) => f.style.transform).join('|')
+    expect([...faces].filter((f) => f.style.visibility === 'visible').length).toBeGreaterThanOrEqual(1)
     warmStep(4)
-    expect(cube.style.transform).not.toBe(a)
+    expect([...faces].map((f) => f.style.transform).join('|')).not.toBe(a)
     hideWarmStage()
     expect(stage.hidden).toBe(true)
   })

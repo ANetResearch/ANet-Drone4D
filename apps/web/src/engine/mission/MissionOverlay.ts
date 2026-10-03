@@ -32,6 +32,27 @@ export interface MissionData {
 }
 export const EMPTY_MISSION: MissionData = { paths: [], waypoints: [], areas: [], slots: [], targets: [] }
 
+/**
+ * the route and area editor's draft (M15 mission-edit page, AWR-14 §6.8; P4-UI): the draft route as a brighter planned
+ * line whose rejected segments are dashed r500 with a warning triangle at their middle, its waypoints as rings (the
+ * selected one as the current-waypoint mark), the area being drawn (vertices as diamonds, an open outline until it is
+ * closed, then a task patch) and the server preview paths. Interactive: a new draft is drawn in the next frame, without
+ * the 4 Hz rebuild cap of the store-driven data.
+ */
+export interface MissionDraft {
+  /** waypoint xyz triples (world ENU m) */
+  route: ArrayLike<number>
+  /** per segment: 1 = rejected by the coarse check */
+  bad: ArrayLike<number> | null
+  /** selected waypoint index, -1 none */
+  sel: number
+  /** area vertices xy pairs and whether the ring is closed */
+  area: ArrayLike<number> | null
+  areaClosed: boolean
+  /** preview paths, xyz triples each */
+  preview: readonly ArrayLike<number>[]
+}
+
 export const MISSION = { thinCap: 16384, wideCap: 8192, patchTris: 8192, patchLiftM: 0.3, rebuildHz: 4, fillA: 0.05, coverA: 0.1 } as const
 
 export class MissionOverlay {
@@ -43,6 +64,9 @@ export class MissionOverlay {
   private readonly patchPos: BufferAttribute
   private readonly patchA: BufferAttribute
   private data: MissionData = EMPTY_MISSION
+  private draft: MissionDraft | null = null
+  /** a draft change rebuilds in the next frame (interactive editing), not at the 4 Hz cap */
+  private urgent = false
   private dirty = false
   private lastBuild = Number.NEGATIVE_INFINITY
   private pathSegs = 0
@@ -81,6 +105,13 @@ export class MissionOverlay {
     this.data = d
     this.dirty = true
   }
+  /** the editor draft (null when the editor is closed) */
+  setDraft(d: MissionDraft | null): void {
+    if (d === this.draft) return
+    this.draft = d
+    this.dirty = true
+    this.urgent = true
+  }
   /** ground height for area patches (M05 dtm.sample, else coordinate ground.zM) */
   setGround(fn: (x: number, y: number) => number): void {
     this.groundZ = fn
@@ -107,11 +138,42 @@ export class MissionOverlay {
         dist += Math.hypot(bx - ax, by - ay, bz - az)
       }
     }
+    // editor draft: preview paths and the route (rejected segments dashed r500 in the thin batch)
+    const dr = this.draft
+    const areas: { ring: ArrayLike<number>; kind: 'task' | 'coverage' }[] = [...d.areas]
+    if (dr) {
+      for (const pp of dr.preview) {
+        let dist = 0
+        for (let i = 3; i + 2 < pp.length; i += 3) {
+          this.planned.seg(pp[i - 3], pp[i - 2], pp[i - 1], pp[i], pp[i + 1], pp[i + 2], Palette.G300, dist)
+          dist += Math.hypot(pp[i] - pp[i - 3], pp[i + 1] - pp[i - 2], pp[i + 2] - pp[i - 1])
+        }
+      }
+      const r = dr.route
+      let dist = 0
+      for (let i = 3, k = 0; i + 2 < r.length; i += 3, k++) {
+        const ax = r[i - 3], ay = r[i - 2], az = r[i - 1], bx = r[i], by = r[i + 1], bz = r[i + 2]
+        if (dr.bad && dr.bad[k]) thin.seg(ax, ay, az, bx, by, bz, Palette.R500, true, 1, dist)
+        else this.planned.seg(ax, ay, az, bx, by, bz, Palette.G50, dist)
+        dist += Math.hypot(bx - ax, by - ay, bz - az)
+      }
+      const a = dr.area
+      if (a && a.length >= 4) {
+        if (dr.areaClosed && a.length >= 6) areas.push({ ring: a, kind: 'task' })
+        else {
+          for (let i = 2; i + 1 < a.length; i += 2) {
+            const zu = this.groundZ(a[i - 2], a[i - 1]) + MISSION.patchLiftM
+            const zv = this.groundZ(a[i], a[i + 1]) + MISSION.patchLiftM
+            thin.seg(a[i - 2], a[i - 1], zu, a[i], a[i + 1], zv, Palette.G50, false, 1)
+          }
+        }
+      }
+    }
     // area outlines (dashed, on the patch height)
     let tri = 0
     const P = this.patchPos.array as Float32Array
     const A = this.patchA.array as Float32Array
-    for (const a of d.areas) {
+    for (const a of areas) {
       const k = Math.floor(a.ring.length / 2)
       if (k < 3) continue
       const contour: Vector2[] = []
@@ -152,8 +214,9 @@ export class MissionOverlay {
 
   /** world phase: rebuild on change (<= 4 Hz), push waypoint glyphs and the GoTo marker */
   update(ctx: FrameCtx, glyphs: GlyphLayer, redAllowed: boolean): void {
-    if (this.dirty && ctx.nowMs - this.lastBuild >= 1000 / MISSION.rebuildHz - 1) {
+    if (this.dirty && (this.urgent || ctx.nowMs - this.lastBuild >= 1000 / MISSION.rebuildHz - 1)) {
       this.dirty = false
+      this.urgent = false
       this.lastBuild = ctx.nowMs
       this.rebuild()
     }
@@ -173,6 +236,24 @@ export class MissionOverlay {
       }
     }
     for (const s of d.slots) glyphs.push(GlyphClass.Mission, s.x, s.y, s.z, 10, Shape.Diamond, 1.5, Palette.G200)
+    const dr = this.draft
+    if (dr) {
+      const r = dr.route
+      for (let i = 0, k = 0; i + 2 < r.length; i += 3, k++) {
+        if (k === dr.sel) {
+          glyphs.push(GlyphClass.Selection, r[i], r[i + 1], r[i + 2], 8, Shape.Disc, 1, Palette.G50)
+          glyphs.push(GlyphClass.Selection, r[i], r[i + 1], r[i + 2], 14, Shape.Ring, 1.5, Palette.G50)
+        } else glyphs.push(GlyphClass.Mission, r[i], r[i + 1], r[i + 2], 10, Shape.Ring, 1.5, Palette.G50)
+      }
+      if (dr.bad) {
+        for (let i = 3, k = 0; i + 2 < r.length; i += 3, k++) {
+          if (!dr.bad[k]) continue
+          glyphs.push(GlyphClass.Warning, (r[i - 3] + r[i]) / 2, (r[i - 2] + r[i + 1]) / 2, (r[i - 1] + r[i + 2]) / 2, 12, Shape.Triangle, 1.5, Palette.R500)
+        }
+      }
+      const a = dr.area
+      if (a) for (let i = 0; i + 1 < a.length; i += 2) glyphs.push(GlyphClass.Mission, a[i], a[i + 1], this.groundZ(a[i], a[i + 1]) + MISSION.patchLiftM, 8, Shape.Diamond, 1.5, Palette.G50)
+    }
     for (const t of d.targets) glyphs.push(redAllowed ? GlyphClass.Red : GlyphClass.Mission, t.x, t.y, t.z, 16, Shape.Crosshair, 1.5, redAllowed ? Palette.R500 : Palette.G50)
   }
 

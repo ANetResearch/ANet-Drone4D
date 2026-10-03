@@ -7,8 +7,11 @@
 // the freeze to exactly 0 over --duration-quick with --ease-smooth-out (reduced motion: 0 at once) and stops updating
 // hz_eff and jitter; resuming and a new epoch ramp D_sim linearly over 1 s from its current value (0) to the target; a
 // rate change ramps linearly over 1 s from the value at the change. tRender = simNow − D_sim stays monotone because the
-// ramp slope is at most 0.3 s × rate_new per second (M12 §6.3 proof). The focus exception (Third/FPV) runs the same rules
-// on its own channel (60 Hz focus samples) and blends in and out over 300 ms. No allocation.
+// ramp slope is at most 0.3 s × rate_new per second (M12 §6.3 proof). The focus exception (Third/FPV, follow lock) runs
+// the same rules on its own channel (60 Hz focus samples, rt.worker arrival statistics) and blends in and out over
+// 300 ms; entering it, D_focus starts at the global delay and moves linearly to its first valid target over
+// focusEnterMs (1 s; 300 -> 60 ms makes the focus vehicle run at 1.24 x rate for that second, still monotone) instead of
+// crawling down at 10 %/s from a frame-rate seed (ADR-071 item 4). No allocation.
 import { EASE, MOTION } from '@/lib/tokens/motion.gen'
 import { bezierAt } from '../anim/bezier'
 import { TIME_PARAMS as P } from './params'
@@ -97,19 +100,57 @@ export class WallDelay {
   value: number = P.dMaxMs
   held: number = P.dMaxMs
   private init = false
+  /** linear entry ramp (focus channel, ADR-071 item 4): from, length and elapsed ms; NaN when not ramping */
+  private rampFrom = Number.NaN
+  private rampMs = 0
+  private rampT = 0
+  private seedFrom = Number.NaN
+  private seedMs = 0
   target(hz: number, jitterMs: number): number {
     return hz > 0 ? Math.min(P.dMaxMs, Math.max(P.dMinMs, 2000 / hz + jitterMs)) : P.dMaxMs
+  }
+  get initialized(): boolean {
+    return this.init
+  }
+  get ramping(): boolean {
+    return !Number.isNaN(this.rampFrom)
+  }
+  /**
+   * forget the value; the first valid measurement after this starts from `fromMs` and moves linearly to its target over
+   * `rampMs` (no 10 %/s limit during the ramp), then the normal smoothing applies. Without a seed the first valid
+   * measurement initialises the value directly (swarm channel).
+   */
+  reseed(fromMs: number, rampMs: number): void {
+    this.init = false
+    this.seedFrom = fromMs
+    this.seedMs = rampMs
+    this.rampFrom = Number.NaN
   }
   tick(dtMs: number, hz: number, jitterMs: number): void {
     if (!(hz > 0)) return
     const tgt = this.target(hz, jitterMs)
     if (!this.init) {
       this.init = true
-      this.value = tgt
       this.held = tgt
+      if (Number.isFinite(this.seedFrom) && this.seedMs > 0 && Math.abs(tgt - this.seedFrom) > P.dHyst * tgt) {
+        this.value = this.seedFrom
+        this.rampFrom = this.seedFrom
+        this.rampMs = this.seedMs
+        this.rampT = 0
+      } else this.value = tgt
+      this.seedFrom = Number.NaN
       return
     }
     if (Math.abs(tgt - this.held) > P.dHyst * this.held) this.held = tgt
+    if (this.ramping) {
+      this.rampT += dtMs
+      const u = this.rampT / this.rampMs
+      if (u >= 1) {
+        this.rampFrom = Number.NaN
+        this.value = this.held
+      } else this.value = this.rampFrom + (this.held - this.rampFrom) * u
+      return
+    }
     const step = (this.held - this.value) * (1 - Math.exp(-dtMs / P.dTauMs))
     const lim = P.dRatePerS * this.value * (dtMs / 1000)
     this.value += Math.max(-lim, Math.min(lim, step))
@@ -190,6 +231,8 @@ export class DelayController {
   /** RK-M12-05 switch: frozen states decay D to 0 (default on) */
   zeroWhenFrozen = true
   private frozen = false
+  private focusFirstMs = Number.NaN
+  private focusWorkerSeen = false
 
   get dWallMs(): number {
     return this.wall.value
@@ -222,13 +265,37 @@ export class DelayController {
       this.focusStats.gap()
       return
     }
-    if (workerHz > 0 && Number.isFinite(workerJitterMs)) this.focusStats.setExternal(workerHz, workerJitterMs)
-    else this.focusStats.onSample(recvMs)
+    // While the worker's window is still filling (selHz known, jitter NaN) nothing is measured: main-thread arrival
+    // times are the frame rate and would seed D_focus at 100-200 ms, from where the 10 %/s limit took 6-8 s to reach the
+    // 60 ms floor (ACC-3 4.2). They are used only when no worker statistics appeared within focusWorkerGraceMs of the
+    // first focus sample (sources without them; ADR-071 item 4).
+    if (Number.isNaN(this.focusFirstMs)) this.focusFirstMs = recvMs
+    if (workerHz > 0) {
+      this.focusWorkerSeen = true
+      if (Number.isFinite(workerJitterMs)) this.focusStats.setExternal(workerHz, workerJitterMs)
+      return
+    }
+    if (this.focusWorkerSeen || recvMs - this.focusFirstMs < P.focusWorkerGraceMs) return
+    this.focusStats.onSample(recvMs)
   }
   setFocus(active: boolean): void {
     if (active === this.focusActive) return
     this.focusActive = active
-    if (active) this.focusStats.reset()
+    if (active) {
+      this.focusStats.reset()
+      this.focusFirstMs = Number.NaN
+      this.focusWorkerSeen = false
+      // the first valid measurement ramps D_focus linearly from the delay shown until then (ADR-071 item 4)
+      this.focusWall.reseed(this.wall.value, P.focusEnterMs)
+    }
+  }
+  /**
+   * the focus channel settled (ADR-071 item 4; start of the D1-AC-26 statistics window): focus exception active and
+   * blended in, its wall delay measured, the entry ramp done and the value within 10 % of its target
+   */
+  get focusSettled(): boolean {
+    const w = this.focusWall
+    return this.focusActive && this.focusBlend >= 1 && w.initialized && !w.ramping && Math.abs(w.value - w.held) <= 0.1 * w.held
   }
   onEpoch(): void {
     this.global.onEpoch()
@@ -242,10 +309,12 @@ export class DelayController {
     this.wall.tick(dtMs, this.swarm.hzEff, this.swarm.jitterMs)
     this.global.tick(nowMs, advancing, rate, rate * this.wall.value, reduced, this.zeroWhenFrozen)
     this.dSimMs = this.global.dSimMs
-    // focus channel: its own wall delay when its samples arrive, else the global one
+    // focus channel: its own wall delay once measured (entering ramps from the global one), else the global one
     const fh = this.focusStats.hzEff
+    // seed the entry ramp with the delay shown right now (the global one; ADR-071 item 4)
+    if (this.focusActive && fh > 0 && !this.focusWall.initialized) this.focusWall.reseed(this.wall.value, P.focusEnterMs)
     this.focusWall.tick(dtMs, fh, this.focusStats.jitterMs)
-    const fWall = fh > 0 ? this.focusWall.value : this.wall.value
+    const fWall = fh > 0 && this.focusWall.initialized ? this.focusWall.value : this.wall.value
     this.focusSim.tick(nowMs, advancing, rate, rate * fWall, reduced, this.zeroWhenFrozen)
     const step = reduced ? 1 : dtMs / P.focusBlendMs
     this.focusBlend = this.focusActive ? Math.min(1, this.focusBlend + step) : Math.max(0, this.focusBlend - step)

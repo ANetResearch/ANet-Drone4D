@@ -5,7 +5,10 @@ import { hypot3 } from '../../hypot'
 // passed since the last one (15 m/s: ~85 s of history; hovering: 128 s). Preallocated for `maxDrones` (1000 x 256 x
 // 16 B = 4 MB, NFR-011); vehicles map to rows through a 65536-entry table. Epoch changes clear everything, rflags.RESET
 // clears one producer range, block rebases shift all times and bump `rebaseCount` so the GPU copies re-upload.
-export const TRAIL = { samples: 256, minDtS: 0.5, minMoveM: 5, blockS: 7200, windowS: 120 } as const
+// A row restarts only when time goes back by more than backS (seek, replay): the stored times are Float32, so the same
+// instant sampled again (paused clock, stepping, ?simTime pin) can read back up to half an ulp (<= 0.25 ms at 2 h)
+// later than itself and must not count as going backwards (SHOW-M: trails vanished on pause).
+export const TRAIL = { samples: 256, minDtS: 0.5, minMoveM: 5, blockS: 7200, windowS: 120, backS: 1e-3 } as const
 
 export class TrailRing {
   readonly data: Float32Array
@@ -74,7 +77,7 @@ export class TrailRing {
       const lo = 4 * (r * S + ((this.head[r] - 1 + S) % S))
       const d = this.data
       const dt = t - d[lo + 3]
-      if (dt < 0) {
+      if (dt < -TRAIL.backS) {
         // time went backwards (seek or replay): restart this row
         this.count[r] = 0
         this.head[r] = 0

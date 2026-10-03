@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { Matrix4, PerspectiveCamera, Vector3 } from 'three'
 import { CameraRig, enuToThree } from '@/engine'
-import { allDirections, cubeMatrix, dirName, regionDir } from '@/viewport/overlay/ViewCube'
+import { allDirections, cubeMatrix, dirName, FACE_STRIDE, FACE_VISIBLE_Z, faceTransforms, regionDir } from '@/viewport/overlay/ViewCube'
 
 describe('ViewCube and view tools (M06-AC-041)', () => {
   it('26 unique directions with names', () => {
@@ -29,6 +29,24 @@ describe('ViewCube and view tools (M06-AC-041)', () => {
     // the Up face normal (cube (0, -1, 0)) points up on screen (CSS -y)
     const u = new Vector3(0, -1, 0).applyMatrix4(m)
     expect(u.y).toBeLessThan(-0.99)
+  })
+
+  it('orthographic faces (P4-UI): looking north from above shows South and Up, placed like the former CSS-3D cube', () => {
+    const cam = new PerspectiveCamera()
+    cam.position.copy(enuToThree(0, -100, 100, new Vector3()))
+    cam.lookAt(0, 0, 0)
+    cam.updateMatrixWorld()
+    const tf = faceTransforms(cubeMatrix(cam.matrixWorld, new Matrix4()), new Float64Array(FACE_STRIDE * 6))
+    const vis = ['S', 'N', 'E', 'W', 'U', 'D'].filter((_, k) => tf[FACE_STRIDE * k + 6] > FACE_VISIBLE_Z)
+    expect(vis).toEqual(['S', 'U'])
+    // South (k 0) below the centre, Up (k 4) above it, both foreshortened vertically by cos 45 degrees
+    const s = FACE_STRIDE * 0
+    const u = FACE_STRIDE * 4
+    expect(tf[s + 5]).toBeGreaterThan(20)
+    expect(tf[u + 5]).toBeLessThan(-20)
+    expect(tf[s]).toBeCloseTo(1, 6)
+    expect(Math.abs(tf[s + 3])).toBeCloseTo(Math.SQRT1_2, 6)
+    expect(Math.abs(tf[u + 3])).toBeCloseTo(Math.SQRT1_2, 6)
   })
 
   it('region click keeps target and distance; north up; home', () => {

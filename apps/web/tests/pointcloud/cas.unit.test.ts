@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { CascadeController, FREEZE_EXTERNAL, FREEZE_SHADER_COMPILE, FREEZE_WARMUP, type CasOptions } from '@/engine/pointcloud/core/CascadeController'
 import { casFreezeMask } from '@/engine/pointcloud/core/stats'
-import { LADDER, PC, deviceParams } from '@/engine/pointcloud/params'
+import { LADDER, PC, deviceParams, startBudget } from '@/engine/pointcloud/params'
 
 const POOL_S = PC.poolWidth * PC.poolRowsS
 const POOL_I = PC.poolWidth * PC.poolRowsIgpu
@@ -222,5 +222,25 @@ describe('capacity clamp and degenerate rungs (M05 §6.8.4)', () => {
     expect(a).toBe(b)
     expect(b.rs).toBe(0.5)
     expect(igpu().state(0).rs).toBe(0.75)
+  })
+})
+
+describe('start budget with the fixed layers (ADR-076)', () => {
+  const sw = deviceParams('S', 'software', 0, 0, 16384)
+  it('software whole scene starts at the quality floor, the point-cloud-only scene at b0Software', () => {
+    expect(startBudget(sw, true, true)).toBe(PC.bFloorSoftware)
+    expect(startBudget(sw, true, false)).toBe(PC.b0Software)
+    // (T* - fixed) / T* of 25k is below the floor, so the floor wins
+    expect(Math.round((PC.b0Software * (PC.targetMsSoftware - PC.fixedLayersMsSoftware)) / PC.targetMsSoftware)).toBeLessThan(PC.bFloorSoftware)
+  })
+  it('hardware keeps the start rung hi', () => {
+    const hw = deviceParams('B', 'iGPU', 3, 2, 16384)
+    expect(startBudget(hw, false, true)).toBe(hw.b0)
+  })
+  it('a CAS started there is at its lower band edge (in band from the reveal) and still probes upwards with headroom', () => {
+    const c = software({ initialB: startBudget(sw, true, true) })
+    expect(c.B).toBe(c.lo)
+    feed(c, 0, 3000, 20)
+    expect(c.B).toBeGreaterThan(c.lo)
   })
 })

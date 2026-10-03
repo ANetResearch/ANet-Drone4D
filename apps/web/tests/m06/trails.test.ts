@@ -34,6 +34,23 @@ describe('TrailRing (M06-FR-042, FR-043)', () => {
     expect(r.append(300, 0, 0, 0, 1)).toBe(false) // capacity
   })
 
+  it('keeps the row when the same instant repeats (paused clock, Float32 round-up); restarts on a real seek back', () => {
+    const r = new TrailRing(2)
+    r.append(1, 0, 0, 0, 6.44) // block start
+    // 108.104 - 6.44 = 101.664 is stored as 101.66400146484375 (Float32 rounds up): the old dt < 0 test restarted the row
+    // on every frame rendered at this paused instant
+    for (let k = 0; k < 6; k++) r.append(1, 10, 0, 0, 7 + k)
+    r.append(1, 20, 0, 0, 108.104)
+    const row = r.rowFor(1)
+    const before = r.count[row]
+    for (let k = 0; k < 10; k++) expect(r.append(1, 20, 0, 0, 108.104)).toBe(false)
+    expect(r.count[row]).toBe(before)
+    expect(r.append(1, 25, 0, 0, 108.604)).toBe(true) // playback resumes
+    expect(r.count[row]).toBe(before + 1)
+    expect(r.append(1, 0, 0, 0, 100)).toBe(true) // seek back by 8.6 s: history restarts
+    expect(r.count[row]).toBe(1)
+  })
+
   it('rebases the block after 2 h and bumps rebaseCount', () => {
     const r = new TrailRing(2)
     r.append(1, 0, 0, 0, 0)

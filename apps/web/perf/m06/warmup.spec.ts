@@ -3,7 +3,8 @@
 // no_camera_sensor refusal), the P600 hero appearing (procedural stand-in, ?hero=procedural), a click pick, a point
 // colour mode switch (M05 __pc hook) and an in-app world switch. gpu.programs stays at gpu.programsAtReveal and
 // gpu.compiledAfterReveal stays 0. The 150 ms maximum frame interval within 1 s of each step is a performance
-// threshold: measured always, asserted only under M06_PERF=1 (acceptance phase, exclusive lock).
+// threshold: measured always, asserted only under M06_PERF=1 (acceptance phase, exclusive lock); with M06_PERF=1 the
+// steps start once the PerfGovernor walk after the reveal is over (ADR-076).
 import { expect, test, type Page } from '@playwright/test'
 import { firstVehicle, frames, maxGapMs, openWorld, PERF, perf, watch, type VpHooks } from './common'
 import { startM06Server, type M06Server } from './server'
@@ -35,6 +36,17 @@ test('no program is compiled after the reveal (M06-AC-008)', async ({ page }) =>
   const log: Step[] = []
   const id = await firstVehicle(page)
   await frames(page, 10)
+  if (PERF) {
+    // the frame-interval threshold measures first-use costs, not the PerfGovernor walk after the reveal (Tier S: about
+    // 5 s; its frames are judged by D1-AC-03b/04): start once it is over, as warmup.spec.ts does (ADR-076)
+    await page.waitForFunction(() => {
+      const p = (window as unknown as { __perf: { load: { revealAt: number }; governor?: { history?: { t: number }[] } } }).__perf
+      const now = performance.now()
+      const h = p.governor?.history ?? []
+      const last = h.length ? h[h.length - 1].t : p.load.revealAt
+      return (now - p.load.revealAt >= 3000 && now - last >= 6000) || now - p.load.revealAt > 45_000
+    }, null, { timeout: 90_000, polling: 250 })
+  }
 
   const hasEnv = await page.evaluate(() => typeof (window as unknown as { __env?: { setPreset?: unknown } }).__env?.setPreset === 'function')
   if (hasEnv) {

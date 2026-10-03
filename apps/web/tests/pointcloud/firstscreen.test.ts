@@ -52,6 +52,7 @@ describe.skipIf(!have)('rule R on the six cities (AWR-16 §4.11)', () => {
 })
 
 describe.skipIf(!have)('hierarchy.bin of shenzhen', () => {
+  if (!have) return // describe.skipIf still runs this body while collecting; the reads below need the built world (SHOW-CI)
   const md = json<PotreeMeta>('shenzhen/visual/pointcloud/metadata.json')
   const hb = readFileSync(new URL('shenzhen/visual/pointcloud/hierarchy.bin', WORLDS))
   const xb = readFileSync(new URL('shenzhen/visual/pointcloud/hierarchy_ext.bin', WORLDS))

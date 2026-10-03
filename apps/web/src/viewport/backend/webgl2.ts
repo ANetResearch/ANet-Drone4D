@@ -23,6 +23,7 @@ import { lowestRungFor } from './deviceClass'
 import { runSelftest, type SelftestResult } from './selftest'
 import { warmupZoo, type ExtraPass, type WarmupReport } from './warmup'
 import { makeBenchFinish } from './benchFinish'
+import { installAttribSlotReset } from './attribSlots'
 import type { Forced } from './testSwitches'
 
 export type BackendState = 'WARMING' | 'READY' | 'LOST' | 'FAILED'
@@ -73,7 +74,8 @@ export interface RenderBackend {
   /** the live scene (R3F); called once by the host */
   attach(scene: Scene): void
   selftest(): Promise<SelftestResult>
-  warmup(camera: Parameters<WebGLRenderer['render']>[1], items: readonly WarmupItem[]): Promise<WarmupReport>
+  /** sync: no compileAsync first, so the renders happen inside the call (late layers warmed inside a frame) */
+  warmup(camera: Parameters<WebGLRenderer['render']>[1], items: readonly WarmupItem[], o?: { sync?: boolean }): Promise<WarmupReport>
   plan(ctx: FrameCtx, out: PassPlan): void
   /** the only place that calls renderer.render at run time (AWR-03 §3.6 rule 2) */
   renderFrame(ctx: FrameCtx, plan: PassPlan): void
@@ -118,6 +120,9 @@ function planDiagnosis(r: WebGLRenderer, scene: Scene, ctx: FrameCtx): string {
 
 export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, startRung: number, info: BackendInfo): RenderBackend {
   const gl = r.getContext() as WebGL2RenderingContext
+  // SwiftShader keys its vertex routines on stale vertex-input slots of earlier draws: normalise them before every draw so
+  // no program is compiled again after the reveal (P4-WEB, ADR-071 item 1; attribSlots.ts)
+  const slotReset = deviceClass === 'software' && /swiftshader/i.test(info.rendererString) ? installAttribSlotReset(gl) : null
   const caps: BackendCaps = {
     reversedZ: r.capabilities.reversedDepthBuffer, timerQuery: gl.getExtension('EXT_disjoint_timer_query_webgl2') !== null,
     parallelCompile: gl.getExtension('KHR_parallel_shader_compile') !== null, compute: false, mrt: false, readbackTopDown: false,
@@ -191,7 +196,7 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       if (!res.linearOk) console.warn(`M06-E005 render-target linear check read ${res.linearValue} (expected 128 +- 2)`)
       return res
     },
-    async warmup(camera, items): Promise<WarmupReport> {
+    async warmup(camera, items, wo = {}): Promise<WarmupReport> {
       if (!scene) throw new Error('RenderBackend.warmup before attach(scene)')
       if (tier !== 'S' && !cloudRT) be.resizeRTs(r.domElement.width, r.domElement.height)
       // pickRT (5 x 5 raster px, RGBA8, M05-FR-047) exists before the reveal so the ID material compiles under the mask
@@ -211,7 +216,8 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       }
       const bench = TEST_SWITCHES ? rtsByName.get('bench') : undefined
       const rep = await warmupZoo(r, scene, camera, items, (t) => (t === 'cloud' ? cloudRT : t === 'bench' ? bench : t === 'screen' ? null : rtsByName.get(t)), {
-        parallelCompile: caps.parallelCompile === true, extra, programs: () => be.programsCount(),
+        parallelCompile: caps.parallelCompile === true && wo.sync !== true, sync: wo.sync === true, extra, programs: () => be.programsCount(),
+        bare: slotReset ? (fn) => slotReset.bare(fn) : undefined,
       })
       probe.gpu.programs = rep.programs
       probe.meta.warmupMs = rep.warmupMs
@@ -294,6 +300,7 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
           be.readPixels(prt, 0, 0, PICK_PX, PICK_PX, new Uint8Array(4 * PICK_PX * PICK_PX)).then((px) => req.done(px), () => req.done(null))
         } else req.done(null)
       }
+      slotReset?.tail()
       const calls = r.info.render.calls
       probe.gpu.calls = calls
       probe.gpu.passPlan = plan.draws
@@ -353,6 +360,7 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
     },
     async dispose() {
       r.domElement.removeEventListener('webglcontextlost', onLostEv)
+      slotReset?.dispose()
       cloudRT?.dispose()
       for (const rt of rtsByName.values()) rt.dispose()
       composite?.dispose()

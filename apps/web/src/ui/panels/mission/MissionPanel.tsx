@@ -1,13 +1,15 @@
 // Mission tab (M15-FR-021; AWR-14 §5.3, §6.19 rows 10-11; M10 §8.2): the mission table in the lieflat table.log skin over
 // stores/mission (M10): mission, generator, state, vehicles, progress (20-tick gauge, 1 tick = 5%), ETA; the row menu
 // starts, pauses, resumes or aborts the mission (mission/{mid}/*; abort confirms first) and focuses its vehicles. The
-// header starts or pauses every mission and resets the scenario (sim/reset, confirmed: the recording segment ends and
-// the epoch increments). "Pause mission" and "pause simulation" stay distinct texts. Viewers see the table only.
+// header opens the route editor or the area drawing for the focused vehicle (right rail page 3, D1-AC-17), starts or
+// pauses every mission and resets the scenario (sim/reset, confirmed: the recording segment ends and the epoch
+// increments). "Pause mission" and "pause simulation" stay distinct texts. Viewers see the table only.
 import { useT } from '@/app/i18n'
 import { fmt } from '@/lib/format'
 import { camera } from '@/viewport/facade'
 import { Button } from '@/ui/components/ui/button'
 import { ButtonGroup } from '@/ui/components/ui/button-group'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu'
 import { Icon } from '@/ui/icons/Icon'
 import { LfTable, type LfColumn } from '@/ui/lf/LfTable'
@@ -17,7 +19,8 @@ import { confirmThen } from '@/ui/actions/ConfirmHost'
 import { runService } from '@/ui/actions/vehicleCommands'
 import { useConnView } from '@/ui/shell/connView'
 import { writeDeniedKey } from '@/ui/shell/guards'
-import { selection } from '@/stores/selection'
+import { selection, useSelection } from '@/stores/selection'
+import { openEditor } from '@/ui/panels/mission-edit/MissionEditPanel'
 import { selectMissionRows, useMission, type MissionRow } from '@/stores/mission'
 
 type MissionOp = 'start' | 'pause' | 'resume' | 'abort'
@@ -59,6 +62,7 @@ export function MissionPanel() {
   useConnView((s) => s.version)
   const denied = writeDeniedKey()
   const canWrite = denied === null
+  const primary = useSelection((s) => s.primary)
   const columns: LfColumn<MissionRow>[] = [
     { key: 'mid', label: t('mission.col.id'), format: (r) => <span className="font-mono">{r.mid}</span> },
     { key: 'generator', label: t('mission.col.generator') },
@@ -88,6 +92,26 @@ export function MissionPanel() {
         <span className="text-hud-cap uppercase text-muted-foreground">{t('mission.count', { n: rows.length })}</span>
         {canWrite ? (
           <ButtonGroup>
+            {/* D1-AC-17 entries: the route editor and area drawing for the focused vehicle (right rail page 3) */}
+            {/* disabled reasons in a shadcn Tooltip (the buttons stay hoverable: focusableWhenDisabled, aria-disabled) */}
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button size="sm" variant="outline" disabled={!primary} focusableWhenDisabled className="aria-disabled:opacity-50"
+                  onClick={() => primary && openEditor(primary, 'add')} data-mission-edit-route="" />
+              }>
+                <Icon icon="cmd.followpath" data-icon="inline-start" />{t('edit.open')}
+              </TooltipTrigger>
+              <TooltipContent>{primary ? t('edit.openHint') : t('hint.noFocus')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button size="sm" variant="outline" disabled={!primary} focusableWhenDisabled className="aria-disabled:opacity-50"
+                  onClick={() => primary && openEditor(primary, 'area')} data-mission-edit-area="" />
+              }>
+                <Icon icon="tool.box" data-icon="inline-start" />{t('edit.tool.area')}
+              </TooltipTrigger>
+              <TooltipContent>{primary ? t('edit.area.hint') : t('hint.noFocus')}</TooltipContent>
+            </Tooltip>
             <Button size="sm" variant="outline" disabled={!rows.length} onClick={() => bulk('start')}><Icon icon="mission.start" data-icon="inline-start" />{t('mission.startAll')}</Button>
             <Button size="sm" variant="outline" disabled={!rows.length} onClick={() => bulk('pause')}><Icon icon="mission.paused" data-icon="inline-start" />{t('mission.pauseAll')}</Button>
             <Button size="sm" variant="outline" onClick={reset}><Icon icon="refresh" data-icon="inline-start" />{t('mission.reset')}</Button>

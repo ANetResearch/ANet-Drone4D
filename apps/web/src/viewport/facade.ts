@@ -4,13 +4,13 @@
 // pick: click/hover/preview picking and the ground pick of the last click; mission: GoTo and single-vehicle commands,
 // GoTo marker state; drones: highlights and the red owner (normally the viewport RedArbiter binding); layers: visibility;
 // labels: M15 text formatter; governor and registry extension points. Signatures only grow (M15, SK-E2E callers).
-import { events, loop, perf, projectEnu, type CameraPose, type GotoState, type GovernorKnob, type PickOptions, type PickResult } from '@/engine'
+import { events, loop, perf, projectEnu, type CameraPose, type GotoState, type GovernorKnob, type MissionDraft, type PickOptions, type PickResult } from '@/engine'
 import type { CallHandle, CallStatus } from '@/net/rt'
 import { selectionStore } from '@/stores/selection'
 import { vp, type PointPickInfo } from './session'
-import { clickAt, pointInfoAt } from './interaction'
+import { clickAt, pointInfoAt, setClickConsumer, type ClickConsumer } from './interaction'
 import { sendGoto, gotoResults, gotoTargetFor, primaryAgentNo, sendVehicleCommand, vehicleCmdState, type GotoOptions, type GotoRequest, type VehicleCmd, type VehicleCmdState } from './gotoRule'
-import { getLayer, registerLayer, type LayerId, type LayerSpec } from './layers/registry'
+import { getLayer, pointCloudServices, registerLayer, type LayerId, type LayerSpec } from './layers/registry'
 import { requestRebuild } from './hostRuntime'
 import { setRedOverride } from './bindings/redOwner'
 import { agentNoOf } from './bindings/selection'
@@ -21,8 +21,9 @@ import { Vector3 } from 'three'
 import type { SensorsApi } from '@/engine'
 
 export type { GotoOptions, GotoRoute, VehicleCmd, VehicleCmdState } from './gotoRule'
-export type { CameraPose } from '@/engine'
+export type { CameraPose, MissionDraft } from '@/engine'
 export type { LabelFormatter } from './overlay/labelFormatter'
+export type { ClickConsumer } from './interaction'
 
 export interface Rect { x: number; y: number; w: number; h: number }
 export type CameraMode = 'orbit' | 'free' | 'third' | 'fpv' | 'bird'
@@ -59,6 +60,21 @@ export const viewport = {
     const cam = vp.camera
     if (!cam || vp.cssW <= 0) return false
     return projectEnu(cam, vp.cssW, vp.cssH, enu, out, tmp)
+  },
+  /** ENU ray (origin, unit direction) through a CSS pixel of the viewport; false before the camera exists (M15 editor drag) */
+  screenRay(cssX: number, cssY: number, o: Float64Array, d: Float64Array): boolean {
+    const cam = vp.camera
+    const pk = vp.picker
+    if (!cam || !pk || vp.cssW <= 0) return false
+    pk.rayAt(cssX, cssY, cam, vp.cssW, vp.cssH)
+    o.set(pk.origin)
+    d.set(pk.dir)
+    return true
+  },
+  /** terrain height (DTM) at an ENU point from the loaded world (M05 dtm, else the world ground level); 0 before a world */
+  groundZ(x: number, y: number): number {
+    const dtm = pointCloudServices()?.dtm
+    return vp.groundAt(x, y, dtm ? (a, b) => dtm.sample(a, b) : null)
   },
   /** screen anchor of a vehicle id (Popover VirtualElement), false when unknown or outside the view */
   anchor(id: string, out: Float32Array): boolean {
@@ -213,6 +229,10 @@ export const pick = {
   pickAt(cssX: number, cssY: number, opts: PickOptions): Promise<PickResult> {
     return vp.picker ? vp.picker.pickAt(cssX, cssY, opts) : Promise.resolve({ kind: 'none' })
   },
+  /** route our clicks and double clicks to a consumer first (M15 editor tools); null restores the default click path */
+  setClickConsumer(fn: ClickConsumer | null): void {
+    setClickConsumer(fn)
+  },
   /** hover pick (<= 20 Hz, none while the camera moves); results also go out as 'pick.hover' */
   hover(cssX: number, cssY: number): PickResult | null {
     return vp.picker?.hoverAt(cssX, cssY) ?? null
@@ -250,6 +270,10 @@ export const mission = {
   /** last result of op for the primary selection; viewport.onChange fires on every result */
   commandState(op: VehicleCmd): VehicleCmdState | null {
     return vehicleCmdState(op)
+  },
+  /** the route and area editor's draft drawn by the mission overlay (M15 mission-edit; null when the editor closes) */
+  setDraft(d: MissionDraft | null): void {
+    vp.mission?.setDraft(d)
   },
   /** GoTo tool preview marker at a surface point (null hides it) */
   setGotoPreview(p: Float64Array | null): void {

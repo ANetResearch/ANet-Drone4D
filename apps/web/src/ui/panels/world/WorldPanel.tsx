@@ -23,17 +23,23 @@ import { writeDeniedKey } from '@/ui/shell/guards'
 import { toolMode, useTool } from '@/ui/tools/toolMode'
 import { useWorld } from '@/stores/world'
 
+/** loading phase and drawn points: follows the engine statistics without re-rendering the Select and the facts above it */
+function WorldPoints() {
+  const t = useT()
+  const phase = useWorld((s) => s.phase)
+  const B = useWorld((s) => s.B)
+  return <ItemDescription>{t(`world.phase.${phase}`)} {'·'} {t('world.points', { n: fmt.pts(B) })}</ItemDescription>
+}
+
 export function WorldPanel() {
   const t = useT()
   const route = useRoute()
   const current = route?.params.id ?? null
   const worlds = useQuery(worldsQuery())
   const dataset = useQuery({ ...worldDatasetQuery(current ?? 'shenzhen'), enabled: current !== null })
-  const phase = useWorld((s) => s.phase)
   const anchorKind = useWorld((s) => s.anchorKind)
   const north = useWorld((s) => s.northConfidence)
   const synthGround = useWorld((s) => s.syntheticGroundZ)
-  const B = useWorld((s) => s.B)
   const session = useConnView((s) => s.sessionWorldId)
   useConnView((s) => s.version)
   const toolActive = useTool((s) => s.mode.startsWith('ADD'))
@@ -77,11 +83,16 @@ export function WorldPanel() {
             </ItemDescription>
           ) : null}
           {dataset.data?.name ? (
-            <ItemDescription data-world-dataset="" title={sanitizeText(dataset.data.citation ?? '', 200)}>
-              {t('world.dataset', { name: sanitizeText(dataset.data.name ?? '—', 40), version: sanitizeText(/v\d+\.\d+\.\d+/.exec(dataset.data.version ?? '')?.[0] ?? '', 20) })}
-            </ItemDescription>
+            // the citation is shown in a shadcn Tooltip (no native title attribute)
+            <Tooltip>
+              <TooltipTrigger render={<ItemDescription data-world-dataset="" />}>
+                {/* generated worlds (synthcity, ADR-077) carry redistribution = true and say so instead of "research use" */}
+                {t(dataset.data.redistribution === true ? 'world.datasetFree' : 'world.dataset', { name: sanitizeText(dataset.data.name ?? '—', 40), version: sanitizeText(/v\d+\.\d+\.\d+/.exec(dataset.data.version ?? '')?.[0] ?? '', 20) })}
+              </TooltipTrigger>
+              {dataset.data.citation ? <TooltipContent className="max-w-80">{sanitizeText(dataset.data.citation, 200)}</TooltipContent> : null}
+            </Tooltip>
           ) : null}
-          <ItemDescription>{t(`world.phase.${phase}`)} {'·'} {t('world.points', { n: fmt.pts(B) })}</ItemDescription>
+          <WorldPoints />
         </ItemContent>
       </Item>
       {worlds.isError ? <p className="text-hud-sub text-muted-foreground">{t('world.listUnavailable')}</p> : null}

@@ -21,20 +21,22 @@ export function ShortcutTable() {
   }
   const keys = [...groups.keys()].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b))
   return (
-    <Table data-shortcut-table="">
-      <TableHeader><TableRow><TableHead>{t('settings.shortcut.action')}</TableHead><TableHead>{t('settings.shortcut.keys')}</TableHead></TableRow></TableHeader>
-      <TableBody>
-        {keys.map((g) => [
-          <TableRow key={`g-${g}`}><TableCell colSpan={2} className="pt-3 text-hud-cap font-semibold uppercase text-muted-foreground">{t(`palette.group.${g}`)}</TableCell></TableRow>,
-          ...(groups.get(g) ?? []).map((h) => (
-            <TableRow key={h.id} data-hotkey={h.id}>
-              <TableCell>{t(h.labelKey)}</TableCell>
-              <TableCell><KbdGroup>{comboLabel(h.combo).map((k) => <Kbd key={k}>{k}</Kbd>)}</KbdGroup></TableCell>
-            </TableRow>
-          )),
-        ])}
-      </TableBody>
-    </Table>
+    <div data-lf-table="">
+      <Table data-shortcut-table="">
+        <TableHeader><TableRow><TableHead>{t('settings.shortcut.action')}</TableHead><TableHead>{t('settings.shortcut.keys')}</TableHead></TableRow></TableHeader>
+        <TableBody>
+          {keys.map((g) => [
+            <TableRow key={`g-${g}`}><TableCell colSpan={2} className="pt-3 text-hud-cap font-semibold uppercase text-muted-foreground">{t(`palette.group.${g}`)}</TableCell></TableRow>,
+            ...(groups.get(g) ?? []).map((h) => (
+              <TableRow key={h.id} data-hotkey={h.id}>
+                <TableCell>{t(h.labelKey)}</TableCell>
+                <TableCell><KbdGroup>{comboLabel(h.combo).map((k) => <Kbd key={k}>{k}</Kbd>)}</KbdGroup></TableCell>
+              </TableRow>
+            )),
+          ])}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 

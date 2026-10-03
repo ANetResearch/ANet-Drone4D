@@ -193,3 +193,25 @@ describe.skipIf(!haveFlight)('PointCloudEngine streaming in Node', { timeout: 30
     for (let i = 0; i < t2.N; i++) if (t2.state[i] === NS.FAILED) expect(t2.lastSeen[i]).not.toBe(t2.lastSeen[0])
   })
 })
+
+describe.skipIf(!haveWorlds)('shader-zoo warm-up across a world open (ACC-4 4.2b; ADR-076)', { timeout: 120_000 }, () => {
+  it('a world opened while the zoo awaits compileAsync stays drawn after warmupEnd', async () => {
+    const r = makeRig()
+    rig = r
+    // the layer adapter binds the layer preference at mount, before any world is open: the root is hidden until open()
+    r.engine.setVisible(true)
+    expect(r.engine.root.visible).toBe(false)
+    // the zoo's first prepare() runs before the world is open: the saved visibility is false
+    r.engine.warmupBegin()
+    expect(r.engine.root.visible).toBe(true)
+    // compileAsync takes seconds; the world opens meanwhile (open() makes the root visible)
+    await r.engine.open(worldBase('shenzhen'))
+    r.engine.warmupEnd()
+    expect(r.engine.root.visible).toBe(true)
+    // a layer switched off by the user stays off
+    r.engine.setVisible(false)
+    r.engine.warmupBegin()
+    r.engine.warmupEnd()
+    expect(r.engine.root.visible).toBe(false)
+  })
+})

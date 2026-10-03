@@ -14,11 +14,12 @@ import { boot } from '@/app/boot/BootController'
 import { rtClient } from '@/net/rt'
 import type { ClientStats } from '@/net/rt/types'
 import { perfStore, type MotionCap } from '@/stores/perf'
-import { listLayers, pointCloudServices, type WarmupItem } from './layers/registry'
+import { listLayers, onLayersChanged, pointCloudServices, type LayerId, type WarmupItem } from './layers/registry'
 import { newPassPlan, type RenderBackend } from './renderer'
 import { vp } from './session'
 import { installQualityMasks } from './qualityMask'
 import { installBench, pcOnlyScene } from './bench'
+import { installAnimationSampler } from './animationSampler'
 import { makePointPick } from './pickPass'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { parseInject } from './backend/testSwitches'
@@ -62,13 +63,14 @@ export function requestRebuild(reason: string): Promise<void> {
  * (bindings/layersVisibility.ts hides every other layer), so only its items are warmed there: the other layers' programs
  * would never draw, and compiling them took most of the 1.3 s zoo of the canvas-only cold start (FX2-R2, D1-AC-02)
  */
-export function collectZoo(): WarmupItem[] {
+export function collectZoo(only?: ReadonlySet<LayerId>): WarmupItem[] {
   const out: WarmupItem[] = []
   const be = vp.be
   if (!be) return out
   const pcOnly = pcOnlyScene()
   for (const s of listLayers()) {
     if (pcOnly && s.id !== 'pointcloud') continue
+    if (only && !only.has(s.id)) continue
     try {
       out.push(...(s.warmupVariants?.(be) ?? []))
     } catch (e) {
@@ -76,6 +78,28 @@ export function collectZoo(): WarmupItem[] {
     }
   }
   return out
+}
+
+/** layers whose warm-up variants the zoo rendered (late registrations are warmed by installLateWarm) */
+const warmedLayers = new Set<LayerId>()
+
+/** resolves once no layer registered for `quietMs` (rAF clock), at most `maxMs` after the call */
+function layersQuiet(quietMs = 120, maxMs = 1500): Promise<void> {
+  return new Promise((ok) => {
+    const t0 = performance.now()
+    let last = t0
+    const off = onLayersChanged(() => {
+      last = performance.now()
+    })
+    const tick = (): void => {
+      const now = performance.now()
+      if (now - last >= quietMs || now - t0 >= maxMs) {
+        off()
+        ok()
+      } else requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
 }
 
 /**
@@ -92,7 +116,13 @@ export async function warmupBackend(be: RenderBackend, camera: PerspectiveCamera
     await new Promise((ok) => requestAnimationFrame(() => ok(null)))
     // the M05 EDL composite must be the P2 material the zoo warms (Tier B/A), even if no frame ran yet
     if (be.tier !== 'S') be.setEdl(pointCloudServices()?.edlMaterial ?? null)
+    // the layers that need the drone runtime (trails, glyphs, sensors, mission) register one commit after it exists:
+    // wait until the set is quiet, so their batches (selected trail and halo, frustums, goto marker...) are rendered,
+    // their buffers uploaded and their draw states compiled under the mask too (P4-WEB, ADR-071 item 2)
+    await layersQuiet()
     p.mark('boot.zoo')
+    warmedLayers.clear()
+    for (const l of listLayers()) warmedLayers.add(l.id)
     const rep = await be.warmup(camera, collectZoo())
     p.mark('boot.warm')
     p.meta.warmupMs = rep.warmupMs
@@ -284,13 +314,49 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
   // at lite (one level: reduced), Tier B/A at full (lite, then reduced)
   const motionLevels: readonly (MotionCap | null)[] = be.tier === 'S' ? [null, 'reduced'] : [null, 'lite', 'reduced']
   // ?chrome=0 (canvas only) has no UI whose motion could change: the step is silent there; with the UI the change shows
-  // only while some UI animation or transition runs (evaluated once per governor change, FX2-R3, ADR-067)
+  // only while some UI animation or transition runs (FX2-R3, ADR-067). document.getAnimations() flushes style: called
+  // inside the governor phase right after the motion knob rewrote <html data-motion> it forced a whole-document style
+  // recalculation in the loop callback (47-51 ms, ACC-3 4.2a). The answer is sampled instead in an idle callback after
+  // the frame (style is clean then) and the knob reads the sample, at most 1 s old (P4-WEB, ADR-071 item 5).
   const withUi = typeof location === 'undefined' || new URLSearchParams(location.search).get('chrome') !== '0'
-  const animating = (): boolean => typeof document === 'undefined' || typeof document.getAnimations !== 'function' || document.getAnimations().length > 0
+  const uiAnim = installAnimationSampler()
+  const animating = (): boolean => uiAnim.animating
   const offMotion = perf.registerKnob({
     step: 6, id: 'motion', levels: motionLevels.length, labelKey: 'perf.governor.motion',
     apply: (l) => perfStore.setState({ motionCap: motionLevels[l] ?? (be.tier === 'S' ? null : 'full') }),
     visible: () => withUi && animating(),
+  })
+  // layers that register after the zoo (a drone runtime created late, a world switch): their warm-up variants are
+  // rendered once in the next frame's world phase, before the frame's own render overwrites the drawing buffer, so the
+  // buffers, draw states and SwiftShader routines exist before their first visible use (P4-WEB, ADR-071 item 2)
+  // A sync warm-up cannot wait for the microtask in which three's nodes handler drops the geometry it just built, so the
+  // same layers are rendered once more in the following frame (warmup.ts, second pass)
+  let lateIds: Set<LayerId> | null = null
+  let lateAgain: Set<LayerId> | null = null
+  const offLateTask = register('world', 'viewport.lateWarm', () => {
+    if (be.state !== 'READY') return
+    const ids = lateAgain ?? lateIds
+    if (!ids) return
+    if (lateAgain) lateAgain = null
+    else {
+      lateIds = null
+      lateAgain = ids
+    }
+    try {
+      void be.warmup(camera, collectZoo(ids), { sync: true })
+    } catch (e) {
+      console.warn('late layer warm-up failed', e)
+    }
+  }, { order: 1000 })
+  const offLate = onLayersChanged(() => {
+    if (warmedLayers.size === 0) return // the boot zoo has not run yet: it will take them
+    const present = new Set(listLayers().map((l) => l.id))
+    for (const id of [...warmedLayers]) if (!present.has(id)) warmedLayers.delete(id) // unmounted: a remount warms again
+    for (const l of listLayers()) {
+      if (warmedLayers.has(l.id)) continue
+      warmedLayers.add(l.id)
+      ;(lateIds ??= new Set()).add(l.id)
+    }
   })
   const offQuality = installQualityMasks(be)
   const offBench = installBench(be, rig, camera)
@@ -300,6 +366,9 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
     for (const off of offs) off()
     offLost()
     offMotion()
+    uiAnim.dispose()
+    offLate()
+    offLateTask()
     offQuality()
     offBench()
     offReveal()

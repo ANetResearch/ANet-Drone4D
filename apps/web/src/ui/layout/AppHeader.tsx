@@ -217,7 +217,12 @@ export function AppHeader({ compact }: { compact: boolean }) {
   // overlay pages (World Hub, Runs, Jobs) keep the sandbox's world in the breadcrumb
   const worldId = route?.params.id ?? sessionWorld ?? null
   const runId = useConnView((s) => s.runId)
-  const layout = usePrefs((s) => s.layout)
+  // the four panel switches of the View menu, not the whole layout: a rail page change or a resize (row click -> detail
+  // page) no longer re-renders the header and its six menus (P4-UI, D1-AC-25)
+  const leftOpen = usePrefs((s) => s.layout.left.open)
+  const rightOpen = usePrefs((s) => s.layout.right.open)
+  const dockOpen = usePrefs((s) => s.layout.dock.open)
+  const hudOpen = usePrefs((s) => s.layout.hud.open)
   // menus re-evaluate their guards when the session changes
   useConnView((s) => s.version)
   const replay = useTimeline((s) => s.mode === 'replay')
@@ -240,19 +245,19 @@ export function AppHeader({ compact }: { compact: boolean }) {
           <MenubarTrigger>{t('menu.view')}</MenubarTrigger>
           <MenubarContent>
             <MenubarGroup>
-              <MenubarCheckboxItem checked={layout.left.open} onCheckedChange={() => layoutActions.toggleLeft()}>
+              <MenubarCheckboxItem checked={leftOpen} onCheckedChange={() => layoutActions.toggleLeft()}>
                 {t('menu.view.left')}
                 <Shortcut combo="mod+KeyB" />
               </MenubarCheckboxItem>
-              <MenubarCheckboxItem checked={layout.right.open} onCheckedChange={() => layoutActions.toggleRight()}>
+              <MenubarCheckboxItem checked={rightOpen} onCheckedChange={() => layoutActions.toggleRight()}>
                 {t('menu.view.right')}
                 <Shortcut combo="Backslash" />
               </MenubarCheckboxItem>
-              <MenubarCheckboxItem checked={layout.dock.open} onCheckedChange={() => layoutActions.toggleDock()}>
+              <MenubarCheckboxItem checked={dockOpen} onCheckedChange={() => layoutActions.toggleDock()}>
                 {t('menu.view.dock')}
                 <Shortcut combo="Backquote" />
               </MenubarCheckboxItem>
-              <MenubarCheckboxItem checked={layout.hud.open} onCheckedChange={() => runAction('view.hud')}>
+              <MenubarCheckboxItem checked={hudOpen} onCheckedChange={() => runAction('view.hud')}>
                 {t('menu.view.hud')}
                 <Shortcut combo="KeyP" />
               </MenubarCheckboxItem>

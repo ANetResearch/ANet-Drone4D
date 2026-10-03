@@ -215,6 +215,7 @@ export function initTime(deps: TimeDeps): TimeRuntime {
     pt.stale = clock.stale
     pt.replay = clock.replay
     pt.focusLowLatency = d.focusLowLatency
+    pt.focusSettled = d.focusSettled
     pt.clockSnaps = clock.clockSnaps
     pt.frames++
     ratios.roll(ctx.nowMs, pt)

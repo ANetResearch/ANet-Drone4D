@@ -1,4 +1,5 @@
-// Playwright executor (M16-FR-042 `pw`): `npx playwright test <spec> --project perf|e2e` under taskset -c 2-6 (PR-6),
+// Playwright executor (M16-FR-042 `pw`): `npx playwright test <spec> --project perf|e2e` under taskset -c 2-6 and the
+// affinity guard of exec/affinity.mjs (PR-6: SwiftShader worker threads re-pinned to 2-6),
 // JSON reporter to <runDir>/pw.json, case parameters in AWR_PERF_CASE_PARAMS, snapshot directory in AWR_PERF_RUN_DIR.
 // A skipped test counts as a failure of a gating case (a production build silently skipping test-build specs would
 // otherwise pass: SK-E2E request item 3). pageerror and GL errors reported by the spec mark the run as an anomaly
@@ -6,8 +7,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CHROME } from '../protocol.mjs'
-import { pinned } from '../browser.mjs'
+import { BROWSER_CPUS, pinned } from '../browser.mjs'
 import { WEB_DIR } from '../registry.mjs'
+import { startAffinityGuard, writeAffinity } from './affinity.mjs'
 import { runLogged } from './common.mjs'
 
 function collect(suite, out) {
@@ -53,7 +55,13 @@ export async function runPw(c, o) {
   }
   const npx = join(WEB_DIR, '..', '..', 'node_modules', '.bin', 'playwright')
   const [cmd, a] = pinned(existsSync(npx) ? npx : 'npx', existsSync(npx) ? args.slice(1) : args)
-  const r = await runLogged(cmd, a, { cwd: WEB_DIR, env, runDir: o.runDir, name: 'playwright', timeoutS: o.timeoutS })
+  // PR-6: SwiftShader worker threads leave the taskset; keep the whole runner tree on the browser cores (exec/affinity.mjs)
+  let guard = null
+  const onSpawn = (pid) => {
+    if (cmd === 'taskset') guard = startAffinityGuard(pid, BROWSER_CPUS)
+  }
+  const r = await runLogged(cmd, a, { cwd: WEB_DIR, env, runDir: o.runDir, name: 'playwright', timeoutS: o.timeoutS, onSpawn })
+  if (guard) writeAffinity(o.runDir, guard.stop())
   const file = join(o.runDir, 'pw.json')
   if (!existsSync(file)) {
     return { execStatus: 'FAIL', errors: [{ code: 'EXEC', message: `no Playwright report (exit ${r.code}${r.timedOut ? ', timeout' : ''})` }], anomaly: false }

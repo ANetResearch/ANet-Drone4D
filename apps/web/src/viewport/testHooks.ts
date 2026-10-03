@@ -114,7 +114,11 @@ export function installTestHooks(): void {
       return true
     },
     rebuild: () => viewport.rebuild(),
-    /** the 28-item feature matrix of g01 §3 on this build's backend path (D1-AC-14; lazy chunk) */
-    featMatrix: async (o: { tier?: 'A' | 'B' | 'S' } = {}) => (await import('./dev/featMatrix')).runFeatMatrix(o),
+    /** the 28-item feature matrix of g01 §3 on this build's backend path (D1-AC-14; lazy chunk). The env test is written
+     * inline (not TEST_SWITCHES) so the bundler drops the dynamic import before it creates chunks: otherwise a plain
+     * production build still emits the unreferenced featMatrix chunks with the allowFallback switch (M06-AC-010) */
+    featMatrix: import.meta.env.DEV || import.meta.env.VITE_AWR_TEST_SWITCHES === '1'
+      ? async (o: { tier?: 'A' | 'B' | 'S' } = {}) => (await import('./dev/featMatrix')).runFeatMatrix(o)
+      : undefined,
   }
 }

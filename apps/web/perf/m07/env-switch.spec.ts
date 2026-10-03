@@ -2,6 +2,13 @@
 // renderer programs never grow after the mask is lifted (first preset switch, quality Low -> Off -> Low, arrows and
 // precipitation on/off), and with M07_PERF=1 frames longer than 100 ms stay <= 0.5 % during the transition and each
 // operation is followed by a max frame gap <= 150 ms within 1 s. Functional runs check programs and liveness only.
+// Measured window (FX2-R5, ADR-076): the transition starts on a revealed page whose PerfGovernor has settled (>= 8 s since
+// the reveal and no step in the last 6 s, at most 45 s), with the environment held at Low (03 §8.4 "预设切换（Low）"):
+// until ACC-4 the 30 s window began before the reveal (the boot mask, the reveal and the governor's first walk, which
+// on Tier S also turned the environment Off, fell inside it). With M07_PERF=1 the frames over 100 ms (time since the
+// transition start, interval) and environment samples are written to <AWR_PERF_RUN_DIR>/env-switch.json.
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { envState, m07Server, openEnv, pageErrors, PERF, programs } from './common'
 
@@ -9,7 +16,19 @@ const srv = m07Server(2)
 
 test('preset switch, quality and sub-layer toggles without new programs', async ({ page }) => {
   await openEnv(page, srv.get().url, '&tier=S')
-  await page.waitForTimeout(1500)
+  await page.waitForFunction(() => (window as unknown as { __perf: { load: { revealAt: number } } }).__perf.load.revealAt > 0, null, { timeout: 120_000 })
+  if (PERF) {
+    // steady page: the governor's walk after the reveal is over (D1-AC-03b/04 measure that part)
+    await page.waitForFunction(() => {
+      const p = (window as unknown as { __perf: { load: { revealAt: number }; governor?: { history?: { t: number }[] } } }).__perf
+      const now = performance.now()
+      const h = p.governor?.history ?? []
+      const last = h.length ? h[h.length - 1].t : p.load.revealAt
+      return (now - p.load.revealAt >= 8000 && now - last >= 6000) || now - p.load.revealAt > 45_000
+    }, null, { timeout: 90_000, polling: 250 })
+  } else await page.waitForTimeout(1500)
+  // the transition is measured at Low (03 §8.4): on Tier S the governor may already have lowered the environment
+  await page.evaluate(() => (window as unknown as { __env: { env: { quality: { knob: { apply(l: number): void } } } } }).__env.env.quality.knob.apply(0))
   const p0 = await programs(page)
   // clear first (steady on a preset so the route applies), then the 30 s route to thunderstorm
   await page.evaluate(() => (window as unknown as { __env: { injectPreset(id: string, s: number): number } }).__env.injectPreset('clear', 0))
@@ -17,22 +36,34 @@ test('preset switch, quality and sub-layer toggles without new programs', async 
     null, { timeout: 60_000 })
   const v = await page.evaluate(() => (window as unknown as { __env: { injectPreset(id: string, s: number): number } }).__env.injectPreset('thunderstorm', 30))
   expect(v).toBeGreaterThan(0)
-  const frames = await page.evaluate(async (ms) => {
+  const rec = await page.evaluate(async (ms) => {
     const out: number[] = []
+    const long: [number, number][] = []
+    const env: (number | string)[][] = []
+    const w = window as unknown as { __env: { state(): { quality: string; perf: { live: { rain: number } } }; env: { params: { cloudCover: number } } } }
     let last = performance.now()
     const t0 = last
+    let nextS = t0
     await new Promise<void>((done) => {
       const f = (): void => {
         const now = performance.now()
-        out.push(now - last)
+        const dt = now - last
+        out.push(dt)
+        if (dt > 100) long.push([Math.round(now - t0), Math.round(dt)])
+        if (now >= nextS) {
+          nextS = now + 1000
+          const st = w.__env.state()
+          env.push([Math.round(now - t0), st.quality, st.perf.live.rain, Math.round(100 * w.__env.env.params.cloudCover) / 100])
+        }
         last = now
         if (now - t0 < ms) requestAnimationFrame(f)
         else done()
       }
       requestAnimationFrame(f)
     })
-    return out
+    return { out, long, env }
   }, PERF ? 31_000 : 6_000)
+  const frames = rec.out
   const s1 = await envState(page)
   expect(s1.version).toBeGreaterThanOrEqual(v)
   expect(s1.perf.live.rain).toBeGreaterThanOrEqual(0)
@@ -50,7 +81,11 @@ test('preset switch, quality and sub-layer toggles without new programs', async 
   expect(await programs(page)).toBe(p0)
   if (PERF) {
     const long = frames.filter((d) => d > 100).length
-    expect(long / frames.length).toBeLessThanOrEqual(0.005)
+    if (process.env.AWR_PERF_RUN_DIR) {
+      writeFileSync(join(process.env.AWR_PERF_RUN_DIR, 'env-switch.json'), JSON.stringify({ frames: frames.length, over100: long,
+        over100_pct: (100 * long) / frames.length, long: rec.long, env: rec.env }, null, 1))
+    }
+    expect(long / frames.length, JSON.stringify(rec.long)).toBeLessThanOrEqual(0.005)
   }
   expect(pageErrors(page)).toEqual([])
 })

@@ -19,12 +19,14 @@ export function resolveCmd(cmd) {
   return [head, rest]
 }
 
-/** spawn with a timeout; stdout and stderr go to <runDir>/<name>.log; resolves { code, timedOut, ms } */
-export function runLogged(cmd, args, { cwd = ROOT, env = process.env, runDir, name = 'exec', timeoutS = 600 }) {
+/** spawn with a timeout; stdout and stderr go to <runDir>/<name>.log; resolves { code, timedOut, ms };
+ *  onSpawn(pid) is called once the child exists (the pw executor starts its PR-6 affinity guard there) */
+export function runLogged(cmd, args, { cwd = ROOT, env = process.env, runDir, name = 'exec', timeoutS = 600, onSpawn = null }) {
   return new Promise((ok) => {
     const t0 = Date.now()
     const log = createWriteStream(join(runDir, `${name}.log`))
     const p = spawn(cmd, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+    if (onSpawn && p.pid !== undefined) onSpawn(p.pid)
     p.stdout.pipe(log, { end: false })
     p.stderr.pipe(log, { end: false })
     let timedOut = false

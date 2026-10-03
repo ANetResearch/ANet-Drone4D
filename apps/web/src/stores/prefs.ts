@@ -107,7 +107,17 @@ export const prefs = {
       dock: { ...cur.dock, ...patch.dock }, hud: { ...cur.hud, ...patch.hud },
       panels: { ...cur.panels, ...(patch.panels as LayoutPrefsV1['panels'] | undefined) },
     })
-    prefsStore.setState({ layout: next })
+    // slices whose fields did not change keep their identity: a rail page change no longer re-renders the left rail and
+    // the Dock that subscribe to their own slice (P4-UI, D1-AC-25)
+    const stable: LayoutPrefsV1 = {
+      ...next,
+      left: shallowEq(next.left, cur.left) ? cur.left : next.left,
+      right: shallowEq(next.right, cur.right) ? cur.right : next.right,
+      dock: shallowEq(next.dock, cur.dock) ? cur.dock : next.dock,
+      hud: shallowEq(next.hud, cur.hud) ? cur.hud : next.hud,
+      panels: shallowEq(next.panels, cur.panels) ? cur.panels : next.panels,
+    }
+    prefsStore.setState({ layout: stable })
     layoutWriter.schedule()
   },
   setUi<K extends keyof UiPrefsV1>(k: K, v: UiPrefsV1[K]): void {
@@ -123,6 +133,13 @@ export const prefs = {
     layoutWriter.flush()
     uiWriter.flush()
   },
+}
+
+function shallowEq(a: object, b: object): boolean {
+  const ka = Object.keys(a)
+  if (ka.length !== Object.keys(b).length) return false
+  for (const k of ka) if ((a as Record<string, unknown>)[k] !== (b as Record<string, unknown>)[k]) return false
+  return true
 }
 
 export function usePrefs<T>(sel: (s: PrefsState) => T): T {

@@ -1,9 +1,10 @@
 // Fleet list, the DroneRail page 1 (M15-FR-024; AWR-14 §4.4, §6.2, §11.3; D1-AC-27): search (id prefix then substring),
 // filter menu (state group, owner, alerts), sort, and a virtualised list (@tanstack/react-virtual, 56 px rows, overscan
-// 10: rendered rows <= visible + 10) over the typed rows of stores/fleet (M11), refreshed by fleetStore.version (Tier S
-// 4 Hz). A row shows the id, the shape-coded FlightState badge (warning outline, critical outline, or solid red for the
-// one owner of the rail's one red), the owner icon, the altitude and speed as C-class bound text (swarm columns of the
-// page RtClient, rows bind only while mounted) and the battery as a D-class MotionNumber with its bucketed icon. List
+// 10: rendered rows <= visible + 10) over the typed rows of stores/fleet (M11), refreshed when the rail key (row count
+// and row signatures) changes, checked at the fleet summary rate (Tier S 4 Hz; ADR-072). A row shows the id, the
+// shape-coded FlightState badge (warning outline, critical outline, or solid red for the one owner of the rail's one
+// red), the owner icon, the altitude and speed as C-class bound text (swarm columns of the page RtClient, rows bind only
+// while mounted) and the battery as a D-class MotionNumber with its bucketed icon. List
 // selection is bg-muted plus a foreground bar (never red; the focused row's bar is thicker). Click selects and opens
 // the detail page, Mod+click toggles, Shift+click selects the range; double click focuses the camera. With two or more
 // selected the batch bar sends one fleet/cmd call per action. Row roots carry data-rail-row for DOM counting.
@@ -68,10 +69,23 @@ const staleOf = () => {
   return Number.isFinite(since) ? Math.max(0.1, (Date.now() - since) / 1000) : 0
 }
 
-interface RowProps { i: number; id: string; version: number; selected: boolean; focused: boolean; red: boolean; sampleMs: number; onClick: (e: React.MouseEvent) => void }
+/**
+ * what a row shows from the typed columns, as one number: a row re-renders only when its own state, battery, owner or
+ * flags change, not on every fleet sample (P4-UI, D1-AC-23; the altitude and speed are bound text and need no render)
+ */
+export function rowSignature(i: number): number {
+  const r = fleetRows
+  return (((((r.fs[i] & 31) * 8 + (r.sub[i] & 7)) * 256 + r.flags[i]) * 256 + r.battery[i]) * 8 + (r.owner[i] & 7)) * 4 + (r.alert[i] & 1) * 2 + (r.stale[i] & 1)
+}
 
-const Row = React.memo(function Row({ i, id, selected, focused, red, sampleMs, onClick }: RowProps) {
+/** sample time of the current fleet rows on the performance.now() clock (the battery icon dwell, ui/icons/bucket.ts) */
+const rowSample = { ms: 0 }
+
+interface RowProps { i: number; id: string; sig: number; selected: boolean; focused: boolean; red: boolean; onRow: (id: string, e: React.MouseEvent) => void }
+
+const Row = React.memo(function Row({ i, id, selected, focused, red, onRow }: RowProps) {
   const t = useT()
+  const sampleMs = rowSample.ms
   const agentNo = fleetRows.agentNo[i]
   const fs = fleetRows.fs[i]
   const bat = fleetRows.battery[i]
@@ -85,7 +99,7 @@ const Row = React.memo(function Row({ i, id, selected, focused, red, sampleMs, o
   const ownerIcon = OWNER_ICON[owner] ?? null
   return (
     <div data-rail-row="" data-drone-id={id} data-selected={selected ? '' : undefined} data-focused={focused ? '' : undefined} data-alert={alert ? '' : undefined} data-stale={stale ? '' : undefined}
-      tabIndex={-1} onClick={onClick} onDoubleClick={() => camera.focus([id])}
+      tabIndex={-1} onClick={(e) => onRow(id, e)} onDoubleClick={() => camera.focus([id])}
       className={cn('lf-sel-bar flex h-full cursor-pointer flex-col justify-center gap-1 rounded-md px-2 hover:bg-muted/50', selected && 'bg-muted', focused && 'shadow-[inset_3px_0_0_var(--foreground)]')}>
       <div className="flex min-w-0 items-center gap-1.5">
         <Icon icon="drone.quad" className="shrink-0" />
@@ -110,9 +124,13 @@ const GROUPS: readonly StateGroup[] = ['all', 'air', 'ground', 'alert']
 const SORTS: readonly RailSort[] = ['id', 'severity', 'battery']
 const OWNERS = [-1, 0, 1, 2, 3, 4, 5]
 
+/**
+ * the panel shell: search, filter menu and the empty and connecting states. It does not subscribe to the fleet samples;
+ * only FleetList below does, so the 4 Hz fleet summary re-renders the list rows that changed and never the search field
+ * and the filter menu (P4-UI, D1-AC-23: their Base UI hidden inputs rewrote attributes on every render)
+ */
 export function DronesPanel() {
   const t = useT()
-  const version = useFleet((s) => s.version)
   const n = useFleet((s) => s.n)
   // the selection reaches the rows and the batch bar (four CallButtons with tooltip, menu and confirm machinery) in a
   // deferred render: a selection key press (select all on 1000 rows) re-renders only this component's shell with the
@@ -120,45 +138,8 @@ export function DronesPanel() {
   // (ADR-069; D1-AC-27)
   const ids = React.useDeferredValue(useSelection((s) => s.ids))
   const showBatch = ids.length >= 2
-  const primary = React.useDeferredValue(useSelection((s) => s.primary))
   const filter = useRail((s) => s)
   const conn = useConnView((s) => s.conn)
-  const redOwner = useRedOwner('drone-rail')
-  const viewportRef = React.useRef<HTMLDivElement>(null)
-  // fleetRows are columnar and updated in place: `version` is the cache key of the order and of the sample time
-  // oxlint-disable-next-line react-hooks/exhaustive-deps -- see above
-  const order = React.useMemo(() => buildOrder(fleetRows, filter, fleetIdOf), [n, filter, version])
-  // oxlint-disable-next-line react-hooks/exhaustive-deps -- see above
-  const sampleMs = React.useMemo(() => performance.now(), [version])
-  const selected = React.useMemo(() => new Set(ids), [ids])
-  // oxlint-disable-next-line react/incompatible-library -- ADR-028: TanStack Virtual; the compiler skips this component
-  const v = useVirtualizer({ count: order.length, getScrollElement: () => viewportRef.current, estimateSize: () => LAYOUT.railRowPx, overscan: LAYOUT.railOverscan })
-  const items = v.getVirtualItems()
-  const rendered = items.length
-  React.useEffect(() => {
-    UX.droneRail.renderedRows = rendered
-    UX.droneRail.visibleRows = Math.ceil((viewportRef.current?.clientHeight ?? 0) / LAYOUT.railRowPx)
-  }, [rendered])
-  // keep the focused row visible after a selection from elsewhere (3D, events, palette; AWR-14 §6.2 rule 3)
-  React.useEffect(() => {
-    if (!primary) return
-    let k = -1
-    for (let x = 0; x < order.length; x++) if (fleetIdOf(order[x]) === primary) k = x
-    if (k >= 0) v.scrollToIndex(k, { align: 'auto' })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- only when the focus changes
-  }, [primary])
-  const onRow = React.useCallback((id: string, e: React.MouseEvent) => {
-    if (e.shiftKey) {
-      const cur = selectionStore.getState().primary
-      const list = Array.from(buildOrder(fleetRows, railStore.getState(), fleetIdOf), (x) => fleetIdOf(x))
-      if (cur) selection.selectRange(cur, id, list)
-      else selection.select([id])
-    } else if (e.ctrlKey || e.metaKey) selection.select([id], 'toggle')
-    else {
-      selection.select([id])
-      prefs.setLayout({ right: { page: 'detail' } })
-    }
-  }, [])
   const connecting = n === 0 && (conn === 'CONNECTING' || conn === 'SYNCING')
   useRoute() // the view world of the route
   const session = useConnView((s) => s.sessionWorldId)
@@ -202,35 +183,95 @@ export function DronesPanel() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="flex items-center justify-between text-hud-cap uppercase text-muted-foreground">
-        <span>{t('drones.count', { shown: fmt.count(order.length), n: fmt.count(n) })}</span>
-        {ids.length ? <Badge variant="outline">{t('drones.selected', { n: ids.length })}</Badge> : null}
-      </div>
       {connecting ? (
         <div className="flex flex-col gap-2" data-rail-skeleton="">{[0, 1, 2].map((k) => <Skeleton key={k} className="h-12 rounded-md" />)}</div>
       ) : n === 0 ? (
         <PanelEmpty title={t('drones.empty')} description={t(isOnline(conn) ? 'drones.emptyLive' : 'drones.emptyHint')} />
-      ) : (
-        // edge fades as overlays, not a mask (ADR-066): the rows are raster islands, and a mask over composited rows costs
-        // an offscreen render pass every frame (styles/layout.css fade-scroll-y)
-        <div className="fade-scroll-y flex min-h-0 flex-1 flex-col">
-          <div ref={viewportRef} className="min-h-0 flex-1 overflow-auto" data-fade-scroller="" data-figure="drone-rail" role="list" aria-label={t('panel.drones.title')}>
-            <div style={{ height: v.getTotalSize(), position: 'relative' }}>
-              {items.map((it) => {
-                const i = order[it.index]
-                const id = fleetIdOf(i)
-                return (
-                  <div key={it.key} role="listitem" className="absolute inset-x-0" style={{ transform: `translateY(${it.start}px)`, height: LAYOUT.railRowPx }}>
-                    <Row i={i} id={id} version={version} selected={selected.has(id)} focused={primary === id} red={redOwner?.id === id}
-                      sampleMs={sampleMs} onClick={(e) => onRow(id, e)} />
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      ) : <FleetList ids={ids} />}
       {showBatch ? <BatchBar /> : null}
     </div>
+  )
+}
+
+function onRow(id: string, e: React.MouseEvent): void {
+  if (e.shiftKey) {
+    const cur = selectionStore.getState().primary
+    const list = Array.from(buildOrder(fleetRows, railStore.getState(), fleetIdOf), (x) => fleetIdOf(x))
+    if (cur) selection.selectRange(cur, id, list)
+    else selection.select([id])
+  } else if (e.ctrlKey || e.metaKey) selection.select([id], 'toggle')
+  else {
+    selection.select([id])
+    prefs.setLayout({ right: { page: 'detail' } })
+  }
+}
+
+/**
+ * a hash of what the rail shows (row count and every row signature): FleetList re-renders when it changes, not on every
+ * fleet sample (4 Hz); altitude and speed are bound text and change without a render (P4-UI, D1-AC-23)
+ */
+export function railKey(s: { n: number }): number {
+  let h = (s.n * 2654435761) | 0
+  for (let i = 0; i < s.n; i++) h = (Math.imul(h ^ rowSignature(i), 16777619) + i) | 0
+  return h
+}
+
+/** the count line and the virtualised rows; the only part of the rail that follows the fleet samples */
+function FleetList({ ids }: { ids: readonly string[] }) {
+  const t = useT()
+  const version = useFleet(railKey)
+  const n = useFleet((s) => s.n)
+  const primary = React.useDeferredValue(useSelection((s) => s.primary))
+  const filter = useRail((s) => s)
+  const redOwner = useRedOwner('drone-rail')
+  const viewportRef = React.useRef<HTMLDivElement>(null)
+  // fleetRows are columnar and updated in place: the rail key is the cache key of the order and of the sample time
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- see above
+  const order = React.useMemo(() => buildOrder(fleetRows, filter, fleetIdOf), [n, filter, version])
+  React.useMemo(() => {
+    rowSample.ms = performance.now()
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- one sample time per change of the rail key
+  }, [version])
+  const selected = React.useMemo(() => new Set(ids), [ids])
+  // oxlint-disable-next-line react/incompatible-library -- ADR-028: TanStack Virtual; the compiler skips this component
+  const v = useVirtualizer({ count: order.length, getScrollElement: () => viewportRef.current, estimateSize: () => LAYOUT.railRowPx, overscan: LAYOUT.railOverscan })
+  const items = v.getVirtualItems()
+  const rendered = items.length
+  React.useEffect(() => {
+    UX.droneRail.renderedRows = rendered
+    UX.droneRail.visibleRows = Math.ceil((viewportRef.current?.clientHeight ?? 0) / LAYOUT.railRowPx)
+  }, [rendered])
+  // keep the focused row visible after a selection from elsewhere (3D, events, palette; AWR-14 §6.2 rule 3)
+  React.useEffect(() => {
+    if (!primary) return
+    let k = -1
+    for (let x = 0; x < order.length; x++) if (fleetIdOf(order[x]) === primary) k = x
+    if (k >= 0) v.scrollToIndex(k, { align: 'auto' })
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- only when the focus changes
+  }, [primary])
+  return (
+    <>
+      <div className="flex items-center justify-between text-hud-cap uppercase text-muted-foreground">
+        <span>{t('drones.count', { shown: fmt.count(order.length), n: fmt.count(n) })}</span>
+        {ids.length ? <Badge variant="outline">{t('drones.selected', { n: ids.length })}</Badge> : null}
+      </div>
+      {/* edge fades as overlays, not a mask (ADR-066): the rows are raster islands, and a mask over composited rows costs
+          an offscreen render pass every frame (styles/layout.css fade-scroll-y) */}
+      <div className="fade-scroll-y flex min-h-0 flex-1 flex-col">
+        <div ref={viewportRef} className="min-h-0 flex-1 overflow-auto" data-fade-scroller="" data-figure="drone-rail" role="list" aria-label={t('panel.drones.title')}>
+          <div style={{ height: v.getTotalSize(), position: 'relative' }}>
+            {items.map((it) => {
+              const i = order[it.index]
+              const id = fleetIdOf(i)
+              return (
+                <div key={it.key} role="listitem" className="absolute inset-x-0" style={{ transform: `translateY(${it.start}px)`, height: LAYOUT.railRowPx }}>
+                  <Row i={i} id={id} sig={rowSignature(i)} selected={selected.has(id)} focused={primary === id} red={redOwner?.id === id} onRow={onRow} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </>
   )
 }

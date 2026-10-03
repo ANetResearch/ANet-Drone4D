@@ -47,7 +47,8 @@ function apply() {
   const changed = r.tier !== current || r.source !== source
   current = r.tier
   source = r.source
-  if (typeof document !== 'undefined') document.documentElement.dataset.motion = current
+  // only a change is written: a write on <html> invalidates the attribute selectors of the whole document (P4-UI)
+  if (typeof document !== 'undefined' && document.documentElement.dataset.motion !== current) document.documentElement.dataset.motion = current
   PERF_UI.motionTier = current === 'off' ? 'reduced' : current
   UX.motion.tier = current
   UX.motion.source = source
@@ -82,6 +83,8 @@ export function initMotionTier(search = typeof location !== 'undefined' ? locati
 }
 
 export const getMotionTier = (): MotionTier => current
+/** the current PerfGovernor input (the boot mask's palette rehearsal restores it after its reduced pass, ADR-076) */
+export const getGovernorMotion = (): RunTier => gov
 export const getMotionSource = (): MotionSource => source
 const subscribe = (cb: () => void) => {
   listeners.add(cb)

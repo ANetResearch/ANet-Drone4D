@@ -201,8 +201,8 @@ let onFrameStart: ((nowMs: number) => void) | null = null
 let onFrameEnd: ((nowMs: number) => void) | null = null
 /** timing of the last executed frame (ms): render phase, whole callback, our logic (all phases minus render) */
 export const frameTiming = { renderMs: 0, frameMs: 0, oursMs: 0, cbStart: 0 }
-/** callback start times of the last 16 frames (performance.now), for LoAF loop-callback identification */
-export const cbStarts = new Float64Array(16)
+/** callback start times of the last 256 frames (performance.now), for LoAF loop-callback identification (engine/perf/loaf.ts) */
+export const cbStarts = new Float64Array(256)
 let cbN = 0
 
 export function frame(nowMs: number): void {
@@ -211,7 +211,7 @@ export function frame(nowMs: number): void {
   if (capFps > 0 && nowMs - lastRunMs < 1000 / capFps - 2) return
   const t0 = performance.now()
   frameTiming.cbStart = t0
-  cbStarts[cbN++ & 15] = t0
+  cbStarts[cbN++ & 255] = t0
   ctx.frameNo++
   ctx.dtMs = lastRunMs === Number.NEGATIVE_INFINITY ? 0 : nowMs - lastRunMs
   ctx.nowMs = nowMs

@@ -9,11 +9,13 @@ import { useRoute } from '@/app/router/router'
 import { boot } from '@/app/boot/BootController'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { worldStore, writeWorldStats, type AnchorKind } from '@/stores/world'
+import { uiTickDue } from '@/stores/uiTick'
 import { layers, layersStore, type LayersState } from '@/stores/layers'
 import { prefsStore } from '@/stores/prefs'
 import { getMotionTier } from '@/ui/motion/tier'
 import type { RenderBackend } from '../renderer'
 import { registerLayer } from './registry'
+import { pcOnlyScene } from '../bench'
 import { vp } from '../session'
 
 boot.addGate('firstFrame')
@@ -45,6 +47,9 @@ function bindPrefs(engine: PointCloudEngine, s: LayersState, prev: LayersState |
  * residency is rebuilt from its CPU cache without a single new request (FR-027).
  */
 let shared: PointCloudEngine | null = null
+/** statistics copy: at most 4 Hz (on Tier B/A the UI tick is 10 Hz) */
+const STATS_MIN_MS = 249
+let statsAt = Number.NEGATIVE_INFINITY
 
 export function PointCloudLayer({ be }: { be: RenderBackend }) {
   const route = useRoute()
@@ -55,13 +60,19 @@ export function PointCloudLayer({ be }: { be: RenderBackend }) {
 
   useEffect(() => {
     let engine = shared
-    if (!engine) engine = shared = new PointCloudEngine({ backend: be, perf: perfProbe(), params: testParams(), motionTier })
+    if (!engine) engine = shared = new PointCloudEngine({ backend: be, perf: perfProbe(), params: testParams(), motionTier, fixedLayers: !pcOnlyScene() })
     else if (engine.backend !== be) engine.onBackendReady(be) // canvas rebuilt after a device loss
     holder.current = engine
     const offs = [
       register('world', 'pointcloud.update', (ctx) => engine.update(ctx), { layer: 'pointcloud' }),
       register('governor', 'pointcloud.cas', (ctx) => engine.sampleFrame(ctx), { layer: 'pointcloud' }),
-      register('governor', 'pointcloud.stats', () => void writeWorldStats(engine.stats()), { fps: 4 }),
+      // the 4 Hz copy rides the shared UI tick (ADR-066 rule: every periodic UI publisher writes in the tick frame): on its
+      // own 4 Hz phase it re-rendered the panels that read stores/world in frames between the ticks (P4-UI, D1-AC-23)
+      register('governor', 'pointcloud.stats', (ctx) => {
+        if (!uiTickDue(ctx) || ctx.nowMs - statsAt < STATS_MIN_MS) return
+        statsAt = ctx.nowMs
+        writeWorldStats(engine.stats())
+      }),
       registerLayer({
         id: 'pointcloud', owner: 'M05', perfKey: 'pointcloud', root: engine.root, channel: 1, drawCount: () => engine.drawCount(),
         setVisible: (v) => engine.setVisible(v), onBackendLost: () => engine.onBackendLost(), onBackendReady: (b) => engine.onBackendReady(b),
