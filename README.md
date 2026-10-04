@@ -11,17 +11,18 @@ No GPU needed on the server.
 
 [![License](https://img.shields.io/badge/license-modified%20Apache--2.0-1f1f1f)](LICENSE)
 [![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-V0.1%20%28D1%29%20in%20acceptance-e0322d)](#d1-acceptance)
+[![Live demo](https://img.shields.io/badge/live%20demo-drone4d.agentnetwork.org.cn-e0322d)](https://drone4d.agentnetwork.org.cn)
+[![Status](https://img.shields.io/badge/status-V0.1%20%28D1%29%20%C2%B7%20P0%2025%2F25-1f1f1f)](#d1-acceptance)
 [![Python](https://img.shields.io/badge/Python-3.12-1f1f1f)](pyproject.toml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-7.0-1f1f1f)](apps/web/package.json)
 [![React](https://img.shields.io/badge/React-19-1f1f1f)](apps/web/package.json)
 [![three.js](https://img.shields.io/badge/three.js-r186-1f1f1f)](https://threejs.org)
 [![Renderer](https://img.shields.io/badge/renderer-WebGL2%20%C2%B7%20WebGPU%20planned-1f1f1f)](#how-it-works)
 [![Server GPU](https://img.shields.io/badge/server%20GPU-not%20required-1f1f1f)](#quick-start)
-[![Specs](https://img.shields.io/badge/design%20specs-26%20%2B%2080%20ADRs-1f1f1f)](#documentation)
-[![ANet](https://img.shields.io/badge/agents-ANet-e0322d)](https://github.com/ANetResearch/ANet)
+[![Specs](https://img.shields.io/badge/design%20specs-26%20%2B%2085%20ADRs-1f1f1f)](#documentation)
+[![ANet](https://img.shields.io/badge/agents-ANet-1f1f1f)](https://github.com/ANetResearch/ANet)
 
-[Quick start](#quick-start) · [Features](#features) · [Acceptance](#d1-acceptance) · [How it works](#how-it-works) · [Roadmap](#roadmap) · [Docs](#documentation) · [ANet](https://github.com/ANetResearch/ANet)
+[Live demo](https://drone4d.agentnetwork.org.cn) · [Quick start](#quick-start) · [Features](#features) · [Acceptance](#d1-acceptance) · [How it works](#how-it-works) · [Roadmap](#roadmap) · [Docs](#documentation) · [ANet](https://github.com/ANetResearch/ANet)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -43,6 +44,27 @@ HUD); the HUD shows that machine's frame interval, about 1 s.</sub>
 frame on the same no-GPU machine (0.1 s of simulation per frame) and played back at twice real time.</sub>
 
 ---
+
+## Try it online
+
+**[drone4d.agentnetwork.org.cn](https://drone4d.agentnetwork.org.cn)** is a public instance of the current build. There
+is nothing to install and no sign-in: **Launch demo** on the landing page opens the sandbox at `/world/synthcity`.
+
+- **Read-only.** Every visitor is a viewer: orbit and switch cameras, follow and select drones, and inspect telemetry,
+  layers, the timeline and the performance panel. Sending commands and changing the weather are disabled.
+- **What runs there.** ANet Synthetic City and scenario S0 on a loop: seven P600s scan the ANet Tower, cover two city
+  blocks and fly a V formation along the river, and each run starts over with the weather order (clear, light rain,
+  fog) rotated by one.
+- **What it leaves out.** Only the synthetic city is served, since the six UrbanScene3D cities may not be
+  redistributed. Heavy server-side features (GPU reconstruction, recording and replay, the agent runtime) are not
+  offered.
+- **Where it renders.** The server is a 4-core machine with no GPU that runs physics, safety, missions and the
+  environment. The point cloud, weather and interface render in your browser, so image quality and frame rate depend
+  on your device's GPU. Desktop Chrome or Edge works best, on a machine with a discrete or integrated GPU; phones are
+  not supported yet.
+
+The deployment kit is in [tools/deploy/emax/](tools/deploy/emax/) and the topology in
+[docs/19 §3.7](docs/19-部署与运维说明书.md) (both Chinese).
 
 ## Why ANet-Drone4D
 
@@ -165,26 +187,31 @@ predicate (TSIR, from ANetCore). V0.1 runs this on an in-process Mock ANet; S3 p
   formation, S3 New York search and rescue with agents, S4 Chicago lakeshore, S5 San Francisco terrain following, S6
   Suzhou corridor, a fleet ladder from 10 to 1,000 drones, and a soak run.
 - **Remote by design.** The server binds to loopback and is reached through an SSH tunnel; viewer, operator and admin
-  roles, with a single operator seat. LAN mode is opt-in.
+  roles, with a single operator seat. LAN mode and a read-only public mode behind a reverse proxy, which serves the
+  [live demo](#try-it-online), are opt-in.
 - **Contracts first.** 75 JSON Schemas generate the Python and TypeScript types, and golden files keep both sides in
   step. A supervisor with heartbeats, backoff and circuit breaking runs every process.
 
 ## D1 acceptance
 
 V0.1 (D1) is accepted against 38 items, D1-AC-01 to D1-AC-35 in [docs/03 §8.4](docs/03-设计基线与决策记录.md) (03, 09
-and 11 are each split into a and b). Each item is P0, which blocks the release, or P1, or has parts of both. The fifth
-acceptance round (2026-10-03) measured 23 items again and carried the other 15 over from earlier rounds:
+and 11 are each split into a and b). Each item is P0, which blocks the release, or P1, or has parts of both. The sixth
+acceptance round (2026-10-03 to 10-04) measured 8 items again and carried the other 30 over from earlier rounds:
 
 | Items | Pass | Fail |
 |---|---|---|
-| With a P0 part (25) | **23** | 2 |
+| With a P0 part (25) | **24** | 1, in its P1 part only |
 | P1 only (13) | **12** | 1 |
-| **All (38)** | **35** | **3** |
+| **All (38)** | **36** | **2** |
 
-Passing items went from 13 in round 1 to 22, 24, 31 and now 35. The exit condition for D1, every P0 item passing, is
-not met yet: the two open P0 items are regressions that round 5 found (see [Open items](#open-items)). The full
-per-item table, evidence and diagnosis are in the
-[D1 acceptance report, round 5](docs/impl/D1-验收报告-第5轮.md) (Chinese).
+Counted by their P0 parts, all 25 pass: the one item with a P0 part that fails, D1-AC-27, fails only in its P1 part.
+So **the first of D1's exit criteria, every P0 item passing, is met**. The rest of the release gate in docs/03 §8.1 is
+not met yet: two provisional thresholds still have to be frozen, and each failing P1 item must be fixed or covered by
+a registered waiver (see [Open items](#open-items)). Passing items went from 13 in round 1 to 22, 24, 31, 35 and
+now 36. The two P0 regressions that round 5 found, a 383 ms frame gap in New York and one long frame during RTL for
+all 1,000 drones, are fixed by [ADR-081](docs/03-设计基线与决策记录.md), which delivers toasts after layout. The full
+per-item table, evidence and diagnosis are in the [D1 acceptance report, round 6](docs/impl/D1-验收报告-第6轮.md)
+(Chinese).
 
 > [!NOTE]
 > **How this was measured.** One 8-core x86-64 virtual machine (Xeon E5-2603 v4 at 1.7 GHz) with **no GPU**. Browser
@@ -198,46 +225,53 @@ per-item table, evidence and diagnosis are in the
 
 | Area | Result (median of 3 runs) | Gate | Item |
 |---|---|---|---|
-| World build | Six cities pass `validate --deep` with 0 errors; 27.3 to 35.1 s per city, CPU only | 0 errors; ≤ 60 s per city | 01 |
-| First screen | TTFP 1.8 to 8.1 ms on all six cities (last first-screen byte to the first complete frame, shader warm-up excluded); switching world 489 ms; cold start to interactive 3.52 to 3.76 s, point cloud only. The full scene with UI and S1 opens in 17.6 s (recorded, no gate) | TTFP ≤ 1.0 s; switch ≤ 1.5 s; cold start ≤ 4.0 s | 02 |
-| Frame pacing, point cloud only | Shenzhen p50 33.3 / p95 50.0 / p99 66.7 ms, 1.69% of frames over 50 ms, none over 100 ms, worst 83.3 ms; Shanghai and Suzhou alike; **New York worst gap 383 ms** | ≤ 33.4 / 50 / 100 ms; ≤ 5%; ≤ 0.5%; worst ≤ 250 ms | 03a |
-| Frame pacing, default scene (Shenzhen, S1, environment, HUD, drone list) | p50 33.3 / p95 50.0 / p99 66.7 ms; 2.40% over 50 ms, 0.059% over 100 ms; worst 116.7 ms; fixed layers 6.1 ms | ≤ 33.4 / 66.7 / 116.7 ms; ≤ 10%; ≤ 1%; worst ≤ 250 ms; layers ≤ 10 ms | 03b |
-| Same, with 200 drones | p99 66.7 ms; 2.83% over 50 ms, 0.12% over 100 ms; worst 116.7 ms | as 03b | 09a |
+| World build | Six cities pass `validate --deep` with 0 errors; 26.9 to 31.5 s per city, CPU only | 0 errors; ≤ 60 s per city | 01 |
+| First screen | TTFP 1.4 to 4.4 ms on all six cities (last first-screen byte to the first complete frame, shader warm-up excluded); switching world 328 ms; cold start to interactive 3.49 to 3.80 s, point cloud only. The full scene with UI and S1 opens in 17.7 s (recorded, no gate) | TTFP ≤ 1.0 s; switch ≤ 1.5 s; cold start ≤ 4.0 s | 02 |
+| Frame pacing, point cloud only | Shenzhen p50 33.3 / p95 50.0 / p99 66.7 ms, 1.57% of frames over 50 ms, none over 100 ms, worst 83.3 ms; New York, Shanghai and Suzhou alike, worst 83.3 ms in all four cities (New York: 383 ms in round 5) | ≤ 33.4 / 50 / 100 ms; ≤ 5%; ≤ 0.5%; worst ≤ 250 ms | 03a |
+| Frame pacing, default scene (Shenzhen, S1, environment, HUD, drone list) | p50 33.3 / p95 50.0 / p99 66.7 ms; 2.56% over 50 ms, 0.060% over 100 ms; worst 116.7 ms; fixed layers 5.96 ms | ≤ 33.4 / 66.7 / 116.7 ms; ≤ 10%; ≤ 1%; worst ≤ 250 ms; layers ≤ 10 ms | 03b |
+| Same, with 200 drones | p99 66.7 ms; 3.98% over 50 ms, 0.25% over 100 ms; worst 150 ms | as 03b | 09a |
 | Density control (CAS) | In the target band 47.8 ms after the reveal; 0 rung changes in 60 s; 6.2 budget reversals per minute; no evaluation while the page is hidden | ≤ 2 s; ≤ 2; ≤ 15 per minute | 04 |
-| Streaming | 0 failed nodes; node selection p95 ≤ 0.08 ms; CPU cache ≤ 2.74 MB; 0 long frames from our scripts; nothing downloaded twice | 0; ≤ 0.5 ms; ≤ 64 MB; 0; ≤ 1.3 | 06 |
+| Streaming | 0 failed nodes; node selection p95 ≤ 0.095 ms; CPU cache ≤ 2.52 MB; 0 long frames from our scripts; nothing downloaded twice | 0; ≤ 0.5 ms; ≤ 64 MB; 0; ≤ 1.3 | 06 |
 | No compile at runtime | 0 new shader programs after the reveal; worst frame within 1 s of a first action (weather, select, follow, close-up, pick) 133 ms | 0; ≤ 150 ms | 25 |
 | Weather change, clear to thunderstorm in 30 s | 0.126% of frames over 100 ms; 0 new programs | ≤ 0.5% | 19 |
-| Latency | Focus drone, simulation time to pixel p95 81.2 ms; command to visible p95 143 ms | ≤ 150 ms; render delay (about 206 ms) + 150 ms | 26 |
+| Latency | Focus drone, simulation time to pixel p95 62.0 ms; command to visible p95 142 ms | ≤ 150 ms; render delay (about 206 ms) + 150 ms | 26 |
 | FleetSim, 1,000 drones | Real-time factor 1.000 on 0.529 of a core; step p99 2.69 ms, worst 2.99 ms; 0 catch-up saturation | ≥ 0.99; ≤ 0.6 core; p99 ≤ 3 ms, worst ≤ 12 ms | 07 |
 | Gateway, 1,000 drones and 3 streaming browsers | Tick data age p99 10.6 ms; api 0.149 of a core (recorded) | ≤ 15 ms; ≤ 0.35 core | 08 |
 | Commands and events | 50 commands/s for 60 s: 0 failures, admission round trip p99 5.90 ms; about 666 events/s, 0 out of order and no gap left open; with 1 message in 100 dropped, all 591 gaps refilled by replay within 69 ms | 0, ≤ 25 ms; 0; ≤ 1 s | 10 |
+| Event storm, RTL for all 1,000 drones (P0 part) | 0 long frames from our scripts; control FIFO peak 12; 2 toasts; sim-core worst step 5.97 ms | 0; < 256; ≤ 3; ≤ 12 ms | 27 |
 | Crash recovery | kill -9 api: the simulation keeps running and clients reconnect within 3 s; kill -9 sim-core: back to RUNNING within 3 s (2.1 s when profiled) and the scenario restarts; with checkpoints, a crashed sim-core shows the first frame of a new epoch within 1.5 s, and a hung main loop is detected within 2.5 s and recovered within 4 s | as stated | 11a, 11b |
 | 30-minute soak, S1 and 200 drones | Retained JS heap +3.0%; RSS +0.5% (api) and +0.2% (sim-core); 0 unexpected reconnects; frame pacing afterwards within 03b | heap ≤ 20%; RSS ≤ 10%; 0 | 29 |
 | Scenarios | S1 two-drone facade scan with 0 energy returns, at ×1 and ×10; S2, S4, S5 and S6 succeed; S3 confirms its target within 300 s of simulated time, with the same decisions at ×1 and ×10 | per-scenario predicates | 15, 16, 17 |
 
 ### Open items
 
-1. **D1-AC-03a (P0), New York, point cloud only: worst frame gap 383 ms** (400, 350 and 383 ms in three runs) against
-   250 ms. Every other statistic passes, and Shenzhen, Shanghai and Suzhou stay at 117 ms or less. When PerfGovernor,
-   which trades layers and point budget for frame time, steps down early, its notice is the first toast on the page:
-   inserting it takes 43 ms of script, and the compositor's first SwiftShader compile for it then makes one frame of
-   350 to 400 ms. A regression found in round 5 (round 4: 83 ms).
-2. **D1-AC-27 (P0 part), RTL for all 1,000 drones: one long frame from our scripts** (1, 0 and 1 in three runs; the
-   gate is 0). Each toast inserted during the event storm still forces 17 to 31 ms of style and layout, which crosses
-   50 ms together with other idle callbacks in the same frame. A regression found in round 5. The other P0 limits
-   (control FIFO, sim-core step, toast count, rendered rows) pass, and so does the P1 part, link loss on 500 drones.
-3. **D1-AC-28 (P1), sim-core under full concurrency: step p99 3.89 ms against 3 ms**, with 1,000 drones, the
-   recorder, checkpoints and three SwiftShader browsers sharing the 8 cores (worst 4.92 ms, no catch-up saturation,
-   tick data age p99 10.1 ms). [ADR-074](docs/03-设计基线与决策记录.md) records it as a known issue of this machine;
-   no waiver is registered, so it counts as a failure.
+Both open items are P1, so they leave the P0 criterion intact, but the release gate still needs each of them fixed or
+covered by a registered waiver.
 
-Of the 15 items carried over, five should be measured again because later fixes touched their code: replay and seek
-(18), checkpoint recovery (11b), UI overhead (23), GC (30) and frame pacing with 1,000 drones (09b). Two items pass
-with a sub-item still open: reconstruction progress in the UI (22) and a check with a real `ssh -L` client (33). The
+1. **D1-AC-27 (P1 part), link loss on 500 drones: sim-core worst step 16.5 ms against 12 ms** (21.95, 16.54 and
+   8.13 ms in three runs; 7.81 ms and a pass in round 5). In the first run one of the 500 fault injections still timed
+   out after a bus retry (503). Three extra runs under the same protocol gave 6.55, 34.68 and 7.98 ms with all 500
+   accepted, so 3 of the 6 runs exceed 12 ms: on this machine the item sits at the edge of its margin. The diagnosis
+   found a long tail on the fault request and reply path; plan-pool workers that briefly start on the simulation core
+   are a suspect. The P0 part, RTL for all 1,000 drones, passes.
+2. **D1-AC-28 (P1), sim-core under full concurrency: step p99 3.89 ms against 3 ms**, with 1,000 drones, the
+   recorder, checkpoints and three SwiftShader browsers sharing the 8 cores (worst 4.92 ms, no catch-up saturation,
+   tick data age p99 10.1 ms; carried over from round 5). [ADR-074](docs/03-设计基线与决策记录.md) records it as a known
+   issue of this machine.
+
+Neither item has a registered waiver yet, so both count as failures.
+
+Of the 30 items carried over, 13 should be measured again because the toast fix or the public demo touched their code,
+or because no recent round covered them: image quality (05), gateway (08), frame pacing with 1,000 drones (09b),
+commands and events (10), process and checkpoint recovery (11a, 11b), scenario S1 (15), replay and seek (18), UI
+overhead (23), canvas size (24), GC (30), interaction (32) and the walking skeleton (34). Two items pass with a
+sub-item still open: reconstruction progress in the UI (22) and a check with a real `ssh -L` client (33). The
 product's Tier A (WebGPU) backend is still to come; the WebGPU feature matrix passes on a regression page (14, P1).
-The no-data part of the test suite (lint, contracts, tsc, Vitest unit, pytest in two shards, the production build
-and the demo world) runs on [GitHub Actions](.github/workflows/ci.yml) on every push and pull request; the full gate
-`make ci` runs locally with the six cities and a browser.
+Round 6 also smoke-tested the public demo build (landing page, read-only sandbox, writes refused); how the
+[live demo](#try-it-online) performs on visitors' GPUs cannot be measured on this machine. The no-data part of the test
+suite (lint, contracts, tsc, Vitest unit, pytest in two shards, the production build and the demo world) runs on
+[GitHub Actions](.github/workflows/ci.yml) on every push and pull request; the full gate `make ci` runs locally with the
+six cities and a browser.
 
 ## Quick start
 
@@ -432,14 +466,14 @@ The design documents are written in Chinese, with technical terms in English. St
 
 | | |
 |---|---|
-| **[03 Design baseline and decision record](docs/03-设计基线与决策记录.md)** | The single baseline: principles, architecture, path ownership, 80 ADRs, the version plan, D1 scope and acceptance (D1-AC-01 to D1-AC-35) |
+| **[03 Design baseline and decision record](docs/03-设计基线与决策记录.md)** | The single baseline: principles, architecture, path ownership, 85 ADRs, the version plan, D1 scope and acceptance (D1-AC-01 to D1-AC-35) |
 | **[10 Architecture](docs/10-系统架构说明书.md)** · **[11 Technology selection](docs/11-技术选型说明书.md)** | Process topology, data flow, concurrency and capacity; every technology choice with locked versions |
 | **[12 Business logic](docs/12-业务逻辑设计说明书.md)** · **[13 Product PRD](docs/13-产品设计PRD.md)** · **[14 UI interaction](docs/14-UI交互设计PRD.md)** | Flight states, command admission, leases, safety, scenarios and contract net; product scope; layout and interaction |
 | **[15 Visual design and palette](docs/15-视觉设计规范与色卡.md)** · **[16 World data](docs/16-World数据规范.md)** · **[17 API and realtime protocol](docs/17-接口与实时协议规范.md)** | ANet Graphite tokens; World Package v1, ANET_Q16 and every file format; REST and `awr.rt.v1` byte layouts |
 | **[18 Performance and testing](docs/18-性能与测试方案.md)** · **[19 Deployment and operations](docs/19-部署与运维说明书.md)** | Budgets, flight60, fleet ladder, performance protocol and lint rules; install, run, access and monitoring |
 | **Module PRDs** | [M01 Reconstruction](docs/modules/M01-重建引擎PRD.md) · [M02 LiDAR fusion and georeferencing](docs/modules/M02-LiDAR融合与地理配准PRD.md) · [M03 World model and tiling](docs/modules/M03-World模型与Ingest切片PRD.md) · [M04 Geometry queries](docs/modules/M04-几何世界查询服务PRD.md) · [M05 Web point cloud engine](docs/modules/M05-Web点云引擎PRD.md) · [M06 Viewport and render backends](docs/modules/M06-Web视口与渲染后端PRD.md) · [M07 Environment](docs/modules/M07-环境引擎PRD.md) · [M08 Simulation core and vehicles](docs/modules/M08-仿真内核与飞行器适配PRD.md) · [M09 Safety and health](docs/modules/M09-安全与健康PRD.md) · [M10 Missions, planning and swarms](docs/modules/M10-任务规划与集群PRD.md) · [M11 Realtime gateway](docs/modules/M11-实时网关PRD.md) · [M12 Timeline, recording and replay](docs/modules/M12-时间轴录制与回放PRD.md) · [M13 Sensor simulation](docs/modules/M13-传感器仿真PRD.md) · [M14 Agent runtime and ANet](docs/modules/M14-智能体运行时与ANet-PRD.md) · [M15 UI shell and design system](docs/modules/M15-前端UI壳与设计体系组件PRD.md) · [M16 Demo data, scenarios and smoothness tests](docs/modules/M16-演示数据剧本与流畅性测试PRD.md) |
 | **[Research notes](docs/research/00-index.md)** | 46 notes behind the decisions: reconstruction, Web point clouds, flight stacks, swarms, weather, realtime transport, the design system and ANet |
-| **[Implementation reports](docs/impl/)** | What each work package built and tested; start with the [D1 delivery summary](docs/impl/D1-交付总结.md) (scope, architecture, final acceptance status, known issues, how to run and test); the [D1 acceptance report, round 5](docs/impl/D1-验收报告-第5轮.md) holds the measurements |
+| **[Implementation reports](docs/impl/)** | What each work package built and tested; start with the [D1 delivery summary](docs/impl/D1-交付总结.md) (scope, architecture, final acceptance status, known issues, how to run and test); the [D1 acceptance report, round 6](docs/impl/D1-验收报告-第6轮.md) holds the measurements |
 | **[Original design](docs/01-design.md)** | The founding design (read-only), from which the baseline was derived |
 
 ## Roadmap
@@ -449,7 +483,7 @@ behind interfaces that do not change ([docs/03](docs/03-设计基线与决策记
 
 | Version | Theme | Highlights | Status |
 |---|---|---|---|
-| **V0.1 (D1)** | A world runtime with every layer in place | Six cities and a generated demo city, point-cloud streaming, FleetSim for 1 to 1,000 drones, safety, missions, L0/L1 environment, recording and replay, Mock ANet | **In acceptance**: 35 of 38 items pass, 2 P0 items open ([D1 acceptance](#d1-acceptance)) |
+| **V0.1 (D1)** | A world runtime with every layer in place | Six cities and a generated demo city, point-cloud streaming, FleetSim for 1 to 1,000 drones, safety, missions, L0/L1 environment, recording and replay, Mock ANet | **P0 25/25; 36 of 38 items pass**; 2 P1 known issues remain ([D1 acceptance](#d1-acceptance)) |
 | V0.2 | The real flight stack in the loop | PX4 SIH (up to 8 drones) through MAVSDK, Prometheus backend, virtual MID-360, ingest of any PLY or LAS cloud, a Python `awr.rt.v1` client | Planned |
 | V0.3 | Environment physics and planning | L2 mass-consistent wind library, GPU wind sampling, High environment tier, B-spline and ESDF planning | Planned |
 | V0.4 | Environment into sensors and dynamics | Camera and LiDAR degradation, L2 aerodynamic moments, PX4 SITL lockstep, rewind and what-if forks, P600 parameter identification | Planned |
