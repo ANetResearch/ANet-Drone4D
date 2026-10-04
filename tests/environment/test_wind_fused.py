@@ -1,7 +1,7 @@
 """env 查询"只求风"融合路径与 numpy 路径逐位相同（FX2-R2；M07-FR-016；`turbulence.wind_fused`）。
 
 env stage 在 5 个 env tick 中的 4 个只求风（`Fields.WIND_PARTS`、GLOBAL 帧），走 numba 融合实现；`Fields.WIND` 位会让
-查询走原 numpy 路径（另求光学），两者的风分量（均值、阵风、湍流、合成）必须逐位相同，CALM 与 VALID 标志相同。
+查询走原 numpy 路径（另求光学），两者的风分量（均值、阵风、湍流、合成）在 rtol = atol = 1e-12 内一致（同一 CPU 上逐位相同；CI 机型的 numpy SIMD 超越函数末位不同），CALM 与 VALID 标志相同。
 覆盖三种廓线、无湍流、湍流盒与 Dryden 三种湍流方式，以及 DTM 地面高（格心双线性，float32 舍入）与常数地面高。
 """
 
@@ -15,6 +15,18 @@ from awr.environment.query import EnvFlags, Fields
 from awr.environment.wind import turbulence as TB
 
 pytestmark = pytest.mark.skipif(not TB._HAVE_NB, reason="numba unavailable")
+
+
+def _assert_same(got: np.ndarray, ref: np.ndarray, name: str) -> None:
+    """Float outputs agree to rtol = atol = 1e-12 (ADR-021 parity bar); integer and flag outputs agree exactly.
+
+    Byte equality only holds on one CPU: numpy dispatches SIMD exp/log/pow (AVX-512 builds on CI runners) whose last ulp
+    differs from the scalar libm path that the numba kernel and AVX2 machines use.
+    """
+    if np.issubdtype(got.dtype, np.floating):
+        np.testing.assert_allclose(got, ref, rtol=1e-12, atol=1e-12, err_msg=name)
+    else:
+        assert np.array_equal(got, ref), name
 
 BOUNDS = ((-900.0, -1000.0, 0.0), (900.0, 1000.0, 300.0))
 COORD = {"ground": {"zM": 2.0}, "anchor": {"hMslM": 12.2}}
@@ -78,7 +90,7 @@ def test_wind_only_fused_matches_numpy(kind: str, model: str, with_wq: bool) -> 
     b = env.query(pos, t, fields=int(Fields.WIND_PARTS | Fields.WIND), agent_idx=agent)
     env.fuse_wind = True
     for k, v in fused.items():
-        assert v.tobytes() == getattr(b, k)[:n].tobytes(), k
+        _assert_same(v, getattr(b, k)[:n], k)
     m = np.uint8(int(EnvFlags.VALID) | int(EnvFlags.CALM))
     assert ((fl_a & m) == (b.flags[:n] & m)).all()
     if model != "off":
@@ -95,7 +107,7 @@ _ALL_OUT = ("wind_mps", "wind_mean_mps", "wind_gust_mps", "wind_turb_mps", "turb
 @pytest.mark.parametrize("kind", ["log", "power"])
 def test_full_query_fused_wind_matches_numpy(kind: str, model: str, with_wq: bool) -> None:
     """全量查询（env stage 的 10 Hz 全量 tick，ENV_STAGE_FIELDS）中风由融合路径求、其余字段 numpy：全部输出字段与整段 numpy
-    路径逐字节相同；随后写入的 EnvSample32 行缓存（numba 写入核）也与 numpy 写入逐字节相同（FX2-R3，ADR-070）。"""
+    路径一致（浮点 rtol = atol = 1e-12，整数与标志逐位）；同一输入下 EnvSample32 行缓存的 numba 写入核与 numpy 写入核逐字节相同（FX2-R3，ADR-070）。"""
     from awr.environment import kernels_rows as KR
     from awr.environment.stage import ENV_STAGE_FIELDS
 
@@ -107,12 +119,13 @@ def test_full_query_fused_wind_matches_numpy(kind: str, model: str, with_wq: boo
     t = env.t_grid_ns
     a = env.query(pos, t, fields=ENV_STAGE_FIELDS, agent_idx=agent)
     got = {k: getattr(a, k)[:n].copy() for k in _ALL_OUT}
-    env.store_rows(agent, a)
-    rows_nb = env.rows.copy()
     env.fuse_wind = False
     b = env.query(pos, t, fields=ENV_STAGE_FIELDS, agent_idx=agent)
+    env.rows[:] = 0
+    env.store_rows(agent, b)  # numba 写入核与 numpy 写入核吃同一份输入，逐字节对拍写入核本身
+    rows_nb = env.rows.copy()
     for k in _ALL_OUT:
-        assert got[k].tobytes() == getattr(b, k)[:n].tobytes(), k
+        _assert_same(got[k], getattr(b, k)[:n], k)
     if KR.HAVE_NUMBA:
         KR.HAVE_NUMBA = False
         try:
@@ -147,4 +160,4 @@ def test_full_query_rest_kernel_matches_numpy(preset: str, with_wq: bool) -> Non
     env.fuse_wind = False
     b = env.query(pos, t, fields=ENV_STAGE_FIELDS, agent_idx=np.arange(n, dtype=np.int64))
     for k in _ALL_OUT:
-        assert got[k].tobytes() == getattr(b, k)[:n].tobytes(), k
+        _assert_same(got[k], getattr(b, k)[:n], k)

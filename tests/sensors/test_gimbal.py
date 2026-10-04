@@ -201,4 +201,8 @@ def test_vector_path_matches_numpy_path(bench_factory, variant):
         blk = b.S.blocks["sensors"]
         out.append({k: blk[k].copy() for k in ("g_az", "g_el", "g_lim", "g_dyn")} | {"limited": b.rt.gimbal.stats["limited"]})
     for k in out[0]:
-        assert np.array_equal(out[0][k], out[1][k]), k
+        a, b2 = np.asarray(out[0][k]), np.asarray(out[1][k])
+        if np.issubdtype(a.dtype, np.floating):  # numpy SIMD 超越函数在不同 CPU 上末位不同：浮点按 1e-9 对拍，标志逐位
+            np.testing.assert_allclose(a, b2, rtol=1e-9, atol=1e-9, err_msg=k)
+        else:
+            assert np.array_equal(a, b2), k
