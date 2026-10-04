@@ -34,18 +34,22 @@ def _run(fn, p, v, idx, shards, rcol):
 
 
 def _brute(p, v, idx):
+    """Pair-by-pair reference with the kernel's own arithmetic (squared horizontal distance against the squared limit,
+    speed as sqrt of the summed squares). The grid layouts put pairs exactly on the screening radius (15 m lattice,
+    12 m/s: 3 + 36 + 36 = 75 m), so a different but equivalent formula (hypot, linalg.norm) resolves those ties
+    differently whenever the last bit of the cos/sin-derived velocities moves, which numpy's SIMD trig does across CPUs."""
     T = ARGS["T"]
+    sp = np.sqrt((v**2).sum(1)) * T
     cnt = 0
     for a in range(len(idx)):
         for b in range(len(idx)):
             i, j = int(idx[a]), int(idx[b])
             if j <= i:
                 continue
-            ri = np.linalg.norm(v[i]) * T
-            rj = np.linalg.norm(v[j]) * T
-            lim = ARGS["min_sep"] + ri + rj
+            lim = ARGS["min_sep"] + sp[i] + sp[j]
             d = p[j] - p[i]
-            if math.hypot(d[0], d[1]) < max(lim, ARGS["warn"]) and abs(d[2]) < max(lim, ARGS["zband"]):
+            lh = max(lim, ARGS["warn"])
+            if d[0] ** 2 + d[1] ** 2 < lh * lh and abs(d[2]) < max(lim, ARGS["zband"]):
                 cnt += 1
     return cnt
 
