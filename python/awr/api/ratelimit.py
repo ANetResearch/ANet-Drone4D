@@ -12,6 +12,9 @@ WS 与 REST 共用同一张桶表（REST 命令镜像与 WS `call` 计入同一 
 | ping | 10 | 10 | 超出部分忽略（不回错误）|
 | stats | 2 | 2 | `clientStats`，超出部分忽略 |
 | perf_report | 1/60 | 1 | R47 每 principal 每分钟 1 次（ext）|
+| public_api | 20 | 120 | 公开模式：每个客户端地址的全部 `/api/**`（健康检查除外；ADR-082）|
+| auth | 0.5 | 10 | 公开模式：每个客户端地址的 token 签发 |
+| world_query | 20 | 40 | 公开模式：每个客户端地址的 world query |
 
 `check()` 返回 0 表示放行（已扣除令牌），否则返回建议的重试等待毫秒数（不扣令牌）。
 """
@@ -32,6 +35,9 @@ CATEGORIES: dict[str, tuple[float, float]] = {
     "ping": (10.0, 10.0),
     "stats": (2.0, 2.0),
     "perf_report": (1.0 / 60.0, 1.0),
+    "public_api": (20.0, 120.0),
+    "auth": (0.5, 10.0),
+    "world_query": (20.0, 40.0),
 }
 MAX_BUCKETS = 8192
 

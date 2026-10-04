@@ -1,7 +1,8 @@
 """R01 `POST /api/auth/token`、R02 `GET /api/auth/whoami`（AWR-17 §3.1、§3.2、§4.3.1；M11-FR-021、FR-023）。
 
-签发规则：角色缺省 viewer；admin（任意模式）与局域网模式的 operator 必须带正确的 `admin_secret`（`runs/<run>/admin.token`
-中的管理口令，常量时间比较），否则 401 `304`。operator 与 admin 签发时同时占操作席位：api 以可信入口签名的 principal 经
+签发规则：角色缺省 viewer；admin（任意模式）与局域网、公开模式的 operator 必须带正确的 `admin_secret`（`runs/<run>/admin.token`
+中的管理口令，公开模式为 `AWR_ADMIN_SECRET_FILE`；常量时间比较），否则 401 `304`；公开模式未配置管理口令时 operator 与
+admin 一律 403 `115`（`detail.why = PUBLIC_READONLY`，ADR-082）。operator 与 admin 签发时同时占操作席位：api 以可信入口签名的 principal 经
 `ctl/sim-core/lease{op: seat_claim}` 向 sim-core 登记（同一 principal 重复签发幂等），席位已被他人持有时 409 `116`
 （detail 含 `holder_principal`、`holder_since_unix_ns`）；sim-core 不可达时 503 `211`。
 `principal_hint` 为 16–64 位 base32（浏览器 localStorage 保存），缺省或非法时服务端生成并在响应中返回。
@@ -46,7 +47,7 @@ class TokenResponse(BaseModel):
     run_id: str
     exp_unix_ns: str
     seat: Literal["held", "none"]
-    access_mode: Literal["loopback", "lan"]
+    access_mode: Literal["loopback", "lan", "public"]
 
 
 class WhoAmI(BaseModel):
@@ -89,13 +90,16 @@ async def _claim_seat(request: Request, pid: str, role: str) -> None:
 @router.post("/token", response_model=TokenResponse)
 async def issue_token(body: TokenRequest, request: Request) -> TokenResponse:
     s = app_ctx(request).settings
-    need_secret = body.role == "admin" or (body.role == "operator" and s.access_mode == "lan")
+    need_secret = body.role == "admin" or (body.role == "operator" and s.access_mode in ("lan", "public"))
     ctx = app_ctx(request)
+    source = getattr(request.state, "client_ip", None) or (request.client.host if request.client else "?")
+    if need_secret and s.is_public and not s.admin_password:
+        ctx.audit.deny(source, "public_readonly", code=115, detail={"role": body.role})
+        raise ApiProblem(115, status=403, detail={"why": "PUBLIC_READONLY", "role": body.role})
     if need_secret:
         given = (body.admin_secret or "").encode("utf-8")
         if not given or not hmac.compare_digest(given, s.admin_password.encode("utf-8")):
-            ctx.audit.deny(request.client.host if request.client else "?", "admin_secret", code=304,
-                           detail={"role": body.role})
+            ctx.audit.deny(source, "admin_secret", code=304, detail={"role": body.role})
             raise ApiProblem(304, status=401)
     if ctx.gateway is not None and ctx.gateway.stopping:
         raise ApiProblem(118, status=409, detail={"why": "API_STOPPING"})
@@ -116,7 +120,7 @@ async def issue_token(body: TokenRequest, request: Request) -> TokenResponse:
                     detail={"jti": payload.get("jti"), "client": body.client, "seat": seat})
     return TokenResponse(token=token, principal_id=pid, principal_hint=hint, role=body.role, run_id=s.run_id,
                          exp_unix_ns=str(int(payload["exp"]) * 1_000_000_000), seat=seat,
-                         access_mode="lan" if s.access_mode == "lan" else "loopback")
+                         access_mode=s.access_mode if s.access_mode in ("lan", "public") else "loopback")
 
 
 class ConfirmRequest(BaseModel):

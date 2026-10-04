@@ -7,7 +7,8 @@
   `.staging/`、`.trash/`、`.locks/`、`.status/`、`.geo-cache/` 因 id 正则与隐藏段规则不可达；`/worlds/_shared/env/**` 为跨世界共享资产。
 - Range：单区间 `bytes=a-b`、`bytes=a-`、`bytes=-n` → 206 + `Content-Range` + `Content-Length`；不可满足 → 416 `309` +
   `Content-Range: bytes */size`；多区间不属于契约（返回整体 200）；禁止动态 Content-Encoding。
-- 前端（`apps/web/dist`，生产模式）：`/assets/**` 哈希文件名 immutable；`/brand/**`、`/bench/**` no-cache + ETag；
+- 前端（`apps/web/dist`，生产模式）：`/assets/**` 哈希文件名 immutable；`/brand/**`、`/bench/**`、`/demo/**`（公开演示构建
+  的落地页媒体，ADR-083）no-cache + ETag；
   `/models/{file}.glb`（构建时随前端复制的机型模型，`apps/web/public/models/`，FX-WEB1）no-cache + ETag；
   `/`、`/world/{id}`、`/worlds` 等前端路由回退到 `index.html`（no-cache）；`/api/**` 不回退（404 `305`）。
 - 安全头（COOP、COEP、CORP、nosniff、Referrer-Policy）由 `middleware.AwrMiddleware` 统一添加。
@@ -42,7 +43,7 @@ MIME = {".json": "application/json", ".geojson": "application/geo+json", ".bin":
         ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp",
         ".woff2": "font/woff2", ".woff": "font/woff", ".wasm": "application/wasm", ".txt": "text/plain; charset=utf-8",
         ".map": "application/json"}
-SPA_RESERVED = ("api", "assets", "vehicles", "models")
+SPA_RESERVED = ("api", "assets", "vehicles", "models", "demo")
 MODEL_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 FILE_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}\.glb$")
 
@@ -241,7 +242,7 @@ def build_static_router(worlds_dir: Path, web_dist: Path | None) -> tuple[APIRou
                 return problem(305, request_id=getattr(request.state, "request_id", None))
             return _file_response(request, p, st, {"Cache-Control": IMMUTABLE})
 
-        for top in ("brand", "bench"):
+        for top in ("brand", "bench", "demo"):
             def make(top: str):
                 async def pub(request: Request, path: str) -> Response:
                     p = _safe_join(dist / top, path)

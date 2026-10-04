@@ -8,7 +8,9 @@
   `target.spawn`、`agent.task` 发 `scenario.event`（M13、M14 订阅，ext）；`mark` 写事件；
 - 成功谓词：封闭文法 all/any/not/leaf；度量缺失判假（失败即关闭）；结束条件为全部任务 DONE 或 ABORTED 且全部机体
   上锁（DISARMED）、或到达 `time_limit_s`；结果 `scenario.result{status, predicates[{expr, value, ok}]}`，
-  按 `on_complete`（pause、continue、reset）处理会话；
+  按 `on_complete`（pause、continue、reset）处理会话：pause 暂停时钟；continue 照常运行；reset（循环，ADR-084）在结果发出
+  `LOOP_GAP_S`【仿真】后经 `M10Runtime.request_loop_reset()` 请求剧本重置（步边界外由 SimCore 执行 `sim/reset`，原因
+  `scenario_loop`），重新加载时天气序列循环左移一位（`scenario_loader.rotate_weather`）；
 - `compile_tsir()`：谓词编译为 TSIR 数值形式（AND 1、OR 2、NOT 3、THRESHOLD 12；LT 1、LE 2、EQ 3、GE 4、GT 5；
   `!=` 为 NOT(EQ)），供 M14 复用。
 """
@@ -29,6 +31,7 @@ __all__ = ["Director", "compile_tsir", "eval_predicate", "metric_key"]
 log = logging.getLogger("awr.sim.mission.director")
 
 TSIR_OP = {"<": 1, "<=": 2, "==": 3, ">=": 4, ">": 5}
+LOOP_GAP_S = 8.0  # on_complete = reset：结果发出后停留 8 s【仿真】（机群已落地，观众看得到结束画面）再从头重开（ADR-084）
 ADD_PER_STAGE = 50  # 布设阶段每次导演 stage（10 Hz【仿真】）至多加入的机体数
 AND, OR, NOT, THRESHOLD = 1, 2, 3, 12
 
@@ -124,6 +127,8 @@ class Director:
         self._add_checked = False
         self.principal: dict = {}
         self.warnings: list[str] = []
+        self.loop_at_ns = math.inf     # on_complete = reset：请求剧本重置的仿真时刻（ADR-084）
+        self.loop_requested = False
 
     # ------------------------------------------------------------ 加载
     def load(self, sc: LoadedScenario) -> None:
@@ -134,6 +139,8 @@ class Director:
         self.pending.clear()
         self.when_since.clear()
         self.result = None
+        self.loop_at_ns = math.inf
+        self.loop_requested = False
         self.principal = {"principal_id": f"scenario:{sc.scenario_id}", "role": "scenario", "entry": "scenario",
                           "seat": False, "source": "SCENARIO"}
         self._next_at()
@@ -254,6 +261,9 @@ class Director:
             return
         if self.phase in ("remove", "add", "missions"):
             self._step_setup()
+            return
+        if self.phase == "done":
+            self._check_loop(int(ctx.t_ns))
             return
         if self.phase != "running":
             return
@@ -378,6 +388,20 @@ class Director:
         if oc == "pause" and clk is not None:
             with contextlib.suppress(Exception):
                 clk.apply("pause")
+        elif oc == "reset":
+            self.loop_at_ns = t + LOOP_GAP_S * 1e9
+
+    def _check_loop(self, t: int) -> None:
+        """on_complete = reset：到期后请求一次剧本重置（只请求一次；重置后 load() 清零）。"""
+        if self.loop_requested or t < self.loop_at_ns:
+            return
+        self.loop_requested = True
+        req = getattr(self.rt, "request_loop_reset", None)
+        if callable(req):
+            try:
+                req()
+            except Exception:
+                log.exception("scenario loop reset request failed")
 
     def evaluate_now(self) -> dict:
         if self.sc is None:

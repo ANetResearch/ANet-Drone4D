@@ -14,6 +14,12 @@ RateLimit（111）→ Idempotency-Key（321）（M11 §6.10；M11-FR-022、FR-02
   `Retry-After`；
 - Idempotency-Key：带该头的 `/api/**` POST 按 (principal, key) 保存首个响应 60 s，重放返回原状态码与响应体并带
   `Idempotent-Replayed: true`；同 key 不同请求体 422 `321`。
+- 客户端地址：配置了可信反向代理（`AWR_TRUSTED_PROXIES`）时按 `X-Forwarded-For` 取（`public.client_ip`），只用于限流键、
+  审计与日志的来源字段，不参与鉴权；
+- 世界白名单（`AWR_WORLDS_ALLOW`，任何模式可设）：`/worlds/<id>/**`、`/api/worlds/<id>`、`/api/world/<id>/**` 中不在白名单的
+  世界 404 `305`（Host 与 Origin 校验之后）；
+- 公开模式（ADR-082）：`/api/**` 按 `public.public_policy` 拒绝（演示站不提供的功能族 404 `305`，operator 以下角色的写请求
+  除 token 签发与两个只读查询外 403 `115`），并按客户端地址追加限流类别 public_api、auth、world_query（429 `111`）。
 WebSocket 升级（`/api/rt`）的 Host、Origin 与子协议检查在 `rt/ws.py` 中以 `send_denial_response` 完成（17 §6.2）。
 """
 
@@ -26,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 from awr.runtime.principal import TokenInvalid
 
 from .problem import problem, uuid7
+from .public import public_categories, public_policy, world_of_path
 from .ratelimit import category_for_path
 
 if TYPE_CHECKING:
@@ -73,7 +80,9 @@ class AwrMiddleware:
         state = scope.setdefault("state", {})
         state["request_id"] = rid
         client = scope.get("client")
-        source = client[0] if client else "?"
+        source = s.client_ip(client[0] if client else None, _header(scope, b"x-forwarded-for"),
+                             _header(scope, b"x-real-ip"))
+        state["client_ip"] = source
 
         async def send_wrapped(msg: dict) -> None:
             if msg["type"] == "http.response.start":
@@ -104,6 +113,11 @@ class AwrMiddleware:
             ctx.audit.deny(source, "origin", code=303, detail={"origin": origin})
             await reply(problem(303, request_id=rid, detail={"origin": origin}))
             return
+        if s.worlds_allow is not None:
+            wid = world_of_path(path)
+            if wid is not None and not s.world_allowed(wid):
+                await reply(problem(305, request_id=rid, detail={"world_id": wid}))
+                return
         state["principal"] = None
         state["auth_error"] = None
         auth = _header(scope, b"authorization")
@@ -117,6 +131,18 @@ class AwrMiddleware:
         if not is_api:
             await self.app(scope, receive, send_wrapped)
             return
+        if s.is_public:
+            deny = public_policy(method, path, principal.role if principal is not None else None)
+            if deny is not None:
+                if deny[1] == 115:
+                    ctx.audit.deny(source, "public_readonly", code=115, detail={"path": path, "method": method})
+                await reply(problem(deny[1], status=deny[0], request_id=rid))
+                return
+            for cat in public_categories(method, path):
+                retry = ctx.limiter.check(f"ip:{source}", cat)
+                if retry:
+                    await reply(problem(111, status=429, request_id=rid, detail={"category": cat}, retry_after_ms=retry))
+                    return
         gw = ctx.gateway
         if principal is not None and gw is not None:
             gw.note_rest_activity(principal.id)

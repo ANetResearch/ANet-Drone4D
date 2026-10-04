@@ -86,7 +86,7 @@ async def info(request: Request) -> dict[str, Any]:
     out: dict[str, Any] = {"name": "awr", "version": _ver("awr") or "0.0.0", "protocol": PROTOCOL, "api_version": 1,
                            "contracts": CONTRACTS_VERSION, "access_mode": s.access_mode}
     p = _optional_principal(request)
-    if p is None:
+    if p is None or (s.is_public and not p.at_least("admin")):  # 公开模式：版本与绑定细节只给 admin（ADR-082）
         return out
     gw = ctx.gateway
     out.update({"git_commit": os.environ.get("AWR_GIT_COMMIT"), "layout_id": f"{L.LAYOUT_ID:08x}",

@@ -1007,6 +1007,10 @@ class Gateway:
     def conn_count(self, pid: str) -> tuple[int, int]:
         return len(self.sessions), sum(1 for s in self.sessions if s.principal.id == pid)
 
+    def conn_count_ip(self, ip: str) -> int:
+        """同一客户端地址的连接数（`AWR_WS_MAX_PER_IP`，公开模式；ADR-082）。"""
+        return sum(1 for s in self.sessions if getattr(s, "client_ip", None) == ip)
+
     def server_info(self, s: ClientSession) -> dict:
         h = self.source.p
         caps = ["time", "credit", "rpc", "events", "clientPublish", "procHealth"]

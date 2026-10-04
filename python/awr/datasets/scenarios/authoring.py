@@ -263,7 +263,9 @@ def s0_scenario(pin: str | None = None) -> dict:
         "profiles": {
             "ci": {"rate": 5, "record": False},
             "perf": {"rate": 1, "record": False},
-            "demo": {"rate": 1, "record": True, "on_complete": "continue"}},
+            "demo": {"rate": 1, "record": True, "on_complete": "continue"},
+            # 公开演示站（ADR-084）：不录制，结束后自动从头重开，每轮天气序列循环左移一位
+            "public": {"rate": 1, "record": False, "on_complete": "reset"}},
         "tags": ["demo", "ci", "showcase", "synthetic"],
     }
 

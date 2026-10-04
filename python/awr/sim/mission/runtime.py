@@ -6,6 +6,9 @@
 M04 WorldQuery、`ctx.events` 为 EventPublisher、`ctx.lease` 为 LeaseManager、`ctx.profiles` 为 ProfileTable），并创建
 PlanPoolClient（`AWR_PLAN_POOL`，缺省 process）。剧本经 `AWR_SCENARIO`（`scenarios/<id>.json`）在绑定后加载
 （`AWR_SCENARIO_LOAD=0` 关闭），`sim/reset` 经 SimCore 的 reset hook 重新加载（`args.scenario_id` 可切换剧本）。
+循环剧本（`on_complete = reset`，ADR-084）：导演在结束后经 `request_loop_reset()` 请 SimCore 在步边界外重置（原因
+`scenario_loop`，`args.loop_index` 为下一轮序号），重新加载时按轮次轮换天气（`scenario_loader.rotate_weather`）；人工
+`sim/reset` 的轮次归零。
 
 文件平面：`uav/{id}/path` blob 写到 `$AWR_RUN_DIR/paths/<vehicle>.<rev>.bin` 后发 `path.changed` 事件（M11 网关推送）；
 任务状态以 `state/sim-core/mission`（msgpack 列表，变化时发布、墙钟节流 ≤ 2 Hz，另有 1 Hz 心跳）发布。
@@ -92,6 +95,7 @@ class M10Runtime:
         self.setup_jobs: set[str] = set()
         self._hold_log_seen = 0
         self._setup_seen = False
+        self.loop_index = 0                        # 循环剧本的轮次（ADR-084；崩溃重启后从 0 开始）
 
     # ------------------------------------------------------------ 绑定
     @property
@@ -169,10 +173,12 @@ class M10Runtime:
         self.load_scenario(sid, os.environ.get("AWR_SCENARIO_PROFILE") or None)
 
     def load_scenario(self, sid: str, profile: str | None = None, doc: dict | None = None) -> dict:
-        from .scenario_loader import ScenarioError, apply_scenario, load_scenario
+        from .scenario_loader import ScenarioError, apply_scenario, load_scenario, rotate_weather
 
         try:
             sc = load_scenario(sid, profile=profile, world=self.world, profiles=self.T, doc=doc)
+            if self.loop_index > 0 and sc.doc.get("on_complete") == "reset":
+                sc.doc = rotate_weather(sc.doc, self.loop_index)
         except ScenarioError as e:
             self.load_error = {"code": 121, "rule": e.rule, "detail": e.detail}
             log.warning("scenario invalid", extra={"kv": {"scenario": sid, "rule": e.rule, "detail": e.detail}})
@@ -346,8 +352,23 @@ class M10Runtime:
         return self.submit_internal({"cid": cid, "op": "fault/inject", "uav": args.get("vehicle_id"), "args": args},
                                     principal)
 
+    def request_loop_reset(self) -> bool:
+        """循环剧本到期（导演 stage 内调用）：请 SimCore 在步边界外执行 `sim/reset`（原因 scenario_loop，下一轮序号随 args
+        传回 on_reset）。SimCore 不支持延迟重置时返回 False（剧本停在结束状态）。"""
+        req = getattr(self.core, "request_reset", None)
+        if not callable(req):
+            log.warning("scenario loop unsupported: SimCore has no request_reset")
+            return False
+        req("scenario_loop", {"loop_index": self.loop_index + 1})
+        return True
+
     def on_reset(self, args: dict) -> None:
-        """`sim/reset`（SimCore reset hook）：任务回到初始（M09）、导演重新计时；scenario_id 给出时切换剧本。"""
+        """`sim/reset`（SimCore reset hook）：任务回到初始（M09）、导演重新计时；scenario_id 给出时切换剧本。
+        `args.loop_index`（只由循环剧本的 request_loop_reset 给出）为新一轮的序号，人工重置归零（ADR-084）。"""
+        try:
+            self.loop_index = max(0, int((args or {}).get("loop_index", 0) or 0))
+        except (TypeError, ValueError):
+            self.loop_index = 0
         if self.setup_active:
             self._setup_end()
         self.missions.reset()

@@ -1,8 +1,8 @@
 """`configs/runtime.yaml` 加载、profile 叠加与结构校验（AWR-19 §6.2–§6.4；M11-FR-015；OPS-FR-001、003、004）。
 
 优先级：命令行（`--set key=value`）> `AWR_*` 环境变量 > `profiles.<profile>` > 基础值 > 内置默认。
-未知键、类型错误、lan 模式缺 `origins`、profile = field、D1 中 `real_ops.enabled: true`（或 `AWR_REAL_OPS=1`）
-一律抛 ConfigError（退出码 2），消息给出键路径。生效配置经 `effective_dict()` 输出，秘密键掩码为 `***`。
+未知键、类型错误、lan 或 public 模式缺 `origins`、public 模式绑定非回环地址、profile = field、D1 中 `real_ops.enabled: true`
+（或 `AWR_REAL_OPS=1`）一律抛 ConfigError（退出码 2），消息给出键路径。生效配置经 `effective_dict()` 输出，秘密键掩码为 `***`。
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ __all__ = ["DEFAULT_CONFIG_PATH", "ConfigError", "ProcCfg", "RuntimeConfig", "ap
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG_PATH = ROOT / "configs" / "runtime.yaml"
-D1_PROFILES = ("dev", "demo", "ci", "perf")
+D1_PROFILES = ("dev", "demo", "ci", "perf", "public")
 LAYERS = ("core", "ext", "dev")
 
 
@@ -76,9 +76,32 @@ class NetCfg(_M):
     port: int = Field(8000, ge=1024, le=65535)
     port_offset: int = Field(0, ge=0, le=31)  # 0–31（ADR-055；原 0–9 不够 14 个并行 worktree，INT-1 §7.9）
     static_port: int = Field(8001, ge=1024, le=65535)
-    access_mode: Literal["auto", "loopback", "lan"] = "auto"
+    access_mode: Literal["auto", "loopback", "lan", "public"] = "auto"
     origins: list[str] = Field(default_factory=list)
     allowed_hosts: list[str] = Field(default_factory=list)
+    # 公开演示站（ADR-082；AWR-17 §3.3、AWR-19 §3.7）：可信反向代理（只用于限流与日志的客户端地址）、世界白名单、WS 连接上限
+    trusted_proxies: list[str] = Field(default_factory=list)
+    worlds_allow: list[str] = Field(default_factory=list)   # 空表示不限制
+    ws_max: int = Field(32, ge=1, le=1024)
+    ws_max_per_ip: int | None = Field(None, ge=1, le=64)
+
+    @field_validator("trusted_proxies")
+    @classmethod
+    def _proxies(cls, v: list[str]) -> list[str]:
+        for x in v:
+            try:
+                ipaddress.ip_network(x, strict=False)
+            except ValueError:
+                raise ValueError(f"trusted_proxies 只能是 IP 或 CIDR：{x!r}") from None
+        return v
+
+    @field_validator("worlds_allow")
+    @classmethod
+    def _worlds_allow(cls, v: list[str]) -> list[str]:
+        for w in v:
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", w):
+                raise ValueError(f"worlds_allow 必须为小写世界 id：{w!r}")
+        return v
 
     @field_validator("origins")
     @classmethod
@@ -161,6 +184,7 @@ class LogCfg(_M):
 class DefaultsCfg(_M):
     env: dict[str, str] = Field(default_factory=lambda: {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
                                                          "MKL_NUM_THREADS": "1", "PYTHONUNBUFFERED": "1"})
+    standby: bool = True   # 热备用总开关：false 时忽略 procs[].standby（公开演示站的小内存主机，ADR-082）
     restart: RestartCfg = Field(default_factory=RestartCfg)
     stop: StopCfg = Field(default_factory=StopCfg)
     log: LogCfg = Field(default_factory=LogCfg)
@@ -375,6 +399,10 @@ _ENV_MAP: dict[str, tuple[str, str]] = {  # 变量 -> (键路径, 类型)
     "AWR_ACCESS_MODE": ("net.access_mode", "str"),
     "AWR_ORIGINS": ("net.origins", "csv"),
     "AWR_ALLOWED_HOSTS": ("net.allowed_hosts", "csv"),
+    "AWR_TRUSTED_PROXIES": ("net.trusted_proxies", "csv"),
+    "AWR_WORLDS_ALLOW": ("net.worlds_allow", "csv"),
+    "AWR_WS_MAX": ("net.ws_max", "int"),
+    "AWR_WS_MAX_PER_IP": ("net.ws_max_per_ip", "int"),
     "AWR_RUNS_QUOTA_GB": ("quota.runs_gb", "float"),
     "AWR_CPU_PIN": ("cpu.pin", "str"),
     "AWR_REAL_OPS": ("real_ops.enabled", "bool"),
@@ -532,8 +560,13 @@ def load_runtime_config(path: Path | str | None = None, *, profile: str | None =
         raise ConfigError(loc, msg) from None
     if cfg.real_ops.enabled:
         raise ConfigError("real_ops.enabled", "D1 中真机闸门必须关闭（OPS-FR-032；AWR_REAL_OPS 同理）")
-    if cfg.access_mode == "lan" and not cfg.net.origins:
-        raise ConfigError("net.origins", "lan 模式必须配置 origins（AWR_ORIGINS）")
+    if cfg.access_mode in ("lan", "public") and not cfg.net.origins:
+        raise ConfigError("net.origins", f"{cfg.access_mode} 模式必须配置 origins（AWR_ORIGINS）")
+    if cfg.access_mode == "public" and not _is_loopback(cfg.net.bind):
+        raise ConfigError("net.bind", "public 模式只能监听回环地址（由反向代理对外，AWR-19 §3.7）")
+    if not cfg.defaults.standby:  # 热备用总开关关闭：逐进程的 standby 一律视为 false（ADR-082）
+        for p in cfg.procs:
+            p.standby = False
     if world_fallback:
         cfg.world_fallback_note = apply_world_fallback(cfg, env=env, argv=argv)
     return cfg

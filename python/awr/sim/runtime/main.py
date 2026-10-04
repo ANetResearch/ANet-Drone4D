@@ -760,6 +760,11 @@ class SimCore:
     def register_reset_hook(self, fn: Callable[[dict], None]) -> None:
         self._reset_hooks.append(fn)
 
+    def request_reset(self, reason: str, args: dict | None = None) -> None:
+        """延迟剧本重置（M10 循环剧本 `on_complete = reset`，ADR-084）：stage 运行在 tick 之内，不能就地重置；入 inbox，
+        下一次 drain（步边界外）执行 `reset(reason, args)`，语义与 `sim/reset` 相同（epoch + 1、segment + 1、机群重生）。"""
+        self.inbox.put(("reset", str(reason), dict(args or {})))
+
     def reset(self, reason: str = "scenario_reset", args: dict | None = None) -> None:
         """剧本重置（C09；M08-FR-008）：segment + 1、epoch + 1，机群重生（RESTARTING → READY），租约 FREE，在途调用 canceled 6。"""
         self.engine.cancel_all(int(Reason.CANCELLED), "reset")
@@ -779,6 +784,7 @@ class SimCore:
         self.lease.reset()
         self.clock.apply("reset")
         self.ctx.tick, self.ctx.t_ns = 0, 0
+        self._rtf_t0 = (0, 0)  # RTF 窗口随仿真时间归零重新开始（_write_step_stats）
         self.epoch += 1
         self.segment += 1
         self.ring.set_epoch(self.epoch)
@@ -979,6 +985,8 @@ class SimCore:
         elif kind == "lease":
             req = item[1]
             req.reply_msg(self._lease_op(req.msg()))
+        elif kind == "reset":  # request_reset（循环剧本，ADR-084）：步边界外执行，与 sim/reset 同一路径
+            self.reset(reason=item[1], args=item[2])
         elif kind == "roster":
             # 预编码回复（ADR-074 第 1 条）：此前整份重建并编码，N = 1000 时约 6.5 ms 落在一次迭代内；约 160 KB 的 zenoh 回复
             # 在主循环内仍约 2.7 ms，交给空闲窗口发布线程（不在 sim-core 进程中时就地回复）
@@ -1825,7 +1833,9 @@ class SimCore:
         t0w, t0s = self._rtf_t0
         if t0w:
             dw = now - t0w
-            self._rtf_milli = round(1000 * (self.clock.t_ns - t0s) / dw) if dw > 0 else 1000
+            # 时钟后退（sim/reset、checkpoint 恢复）时不得为负：此前重置后的第一次 1 Hz 统计算出负值，写 u32 抛 OverflowError
+            # 使主循环崩溃（循环剧本每轮重置都会触发，DEMO-PUBLIC 发现，ADR-084）
+            self._rtf_milli = max(0, round(1000 * (self.clock.t_ns - t0s) / dw)) if dw > 0 else 1000
         self._rtf_t0 = (now, self.clock.t_ns)
         self.ring.set_step_stats(int(np.percentile(a, 50)), int(np.percentile(a, 99)), int(a.max()),
                                  self.cfg.fleet.tick_budget_us, self._rtf_milli, self.clock.catchup_saturated)

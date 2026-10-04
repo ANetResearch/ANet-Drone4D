@@ -34,6 +34,7 @@ __all__ = [
     "deep_merge",
     "expand_vehicle_sets",
     "load_scenario",
+    "rotate_weather",
     "scenario_dirs",
     "scenario_path",
     "validate_doc",
@@ -541,6 +542,38 @@ def load_scenario(sid: str, *, profile: str | None = None, world: Any = None, pr
     active = (merged.get("zones") or {}).get("active")
     return LoadedScenario(str(merged["scenario_id"]), merged, sha, profile, vehicles, missions,
                           list(active) if active is not None else None, warnings)
+
+
+def rotate_weather(doc: dict, k: int) -> dict:
+    """循环剧本（`on_complete = reset`）第 k 轮的天气轮换（ADR-084）：天气序列 = 顶层 `env.preset`（初值）加按触发时刻排序的
+    `env.preset` 事件的 `name`；第 k 轮把预设名循环左移 k 位，时刻、过渡时长与其余字段不变。k ≤ 0、序列少于 2 项时原样返回；
+    否则返回深拷贝（不改动入参，`LoadedScenario.sha256` 仍指剧本文件）。"""
+    seq_ev = sorted((e for e in doc.get("events") or [] if e.get("action") == "env.preset" and e.get("at_s") is not None
+                     and isinstance((e.get("args") or {}).get("name", (e.get("args") or {}).get("preset")), str)),
+                    key=lambda e: float(e["at_s"]))
+    env = doc.get("env") if isinstance(doc.get("env"), dict) else {}
+    head = [env["preset"]] if isinstance(env.get("preset"), str) else []
+    names = head + [str((e.get("args") or {}).get("name", (e.get("args") or {}).get("preset"))) for e in seq_ev]
+    if k <= 0 or len(names) < 2:
+        return doc
+    r = k % len(names)
+    if r == 0:
+        return doc
+    rot = names[r:] + names[:r]
+    out = copy.deepcopy(doc)
+    i = 0
+    if head:
+        out["env"]["preset"] = rot[0]
+        i = 1
+    ids = {id(e): e["event_id"] for e in seq_ev}
+    order = [ids[id(e)] for e in seq_ev]
+    by_id = {e.get("event_id"): e for e in out.get("events") or []}
+    for eid in order:
+        a = by_id[eid].setdefault("args", {})
+        a.pop("preset", None)
+        a["name"] = rot[i]
+        i += 1
+    return out
 
 
 # ------------------------------------------------------------------------------------------------ 应用

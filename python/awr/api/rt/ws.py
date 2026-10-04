@@ -3,7 +3,8 @@ AWR-17 §3.4、§6.2、§6.3、§8.3）。
 
 握手顺序：Host（400 `323`）→ Origin（403 `303`）→ 子协议含 `awr.rt.v1`（否则 400 + `AWR-Supported-Protocols`）——这三步在
 升级前以 `send_denial_response` 返回 problem+json → 以 `awr.rt.v1` 接受升级（不回显 bearer）→ api 停止中以 1001 关闭 →
-token（`bearer.<token>`，失败发 `error{301|302}` 后 4401）→ 连接数（全部 ≤ 32、每 principal ≤ 8，`error 316` + 4429）→
+token（`bearer.<token>`，失败发 `error{301|302}` 后 4401）→ 连接数（全部 ≤ 32、每 principal ≤ 8，配置了 `AWR_WS_MAX_PER_IP` 时
+每个客户端地址 ≤ 该值（公开模式 4，全部 ≤ 64，ADR-082），`error 316` + 4429）→
 serverInfo、全量 advertise、TIME、活动 status → 10 s 内等待 hello（4408；之前的其他 op 回 `error 300`）。hello：contracts
 主版本不同发 `error 311` 并 4426；`role` 只能等于或低于 token 角色；记录 `client`、`tier`、`deviceClass`、`maxKbps`；
 `resume.sessionId` 等于当前实例时补发 `seq > lastEventSeq` 的事件（环中已没有时下一帧置 GAP）。
@@ -54,8 +55,10 @@ async def _deny(ws: WebSocket, code: int, status: int, headers: dict[str, str] |
 
 
 def _source(ws: WebSocket) -> str:
+    """客户端地址（可信反向代理之后按 X-Forwarded-For，`public.client_ip`）：只用于连接计数与审计来源。"""
     c = ws.client
-    return c.host if c is not None else "?"
+    st = ws.app.state.awr.settings
+    return st.client_ip(c.host if c is not None else None, ws.headers.get("x-forwarded-for"), ws.headers.get("x-real-ip"))
 
 
 async def rt_endpoint(ws: WebSocket) -> None:
@@ -94,11 +97,14 @@ async def rt_endpoint(ws: WebSocket) -> None:
         await ws.close(code=4401)
         return
     total, mine = gw.conn_count(principal.id)
-    if total >= st.max_conns or mine >= st.max_conns_per_principal:
+    ip = _source(ws)
+    per_ip = st.max_conns_per_ip is not None and gw.conn_count_ip(ip) >= st.max_conns_per_ip
+    if total >= st.max_conns or mine >= st.max_conns_per_principal or per_ip:
         await _send_json(ws, error_msg(int(Reason.CONN_LIMIT), "hello", message="连接数超过上限"))
         await ws.close(code=4429)
         return
     s = ClientSession(gw, ws, "c-" + secrets.token_hex(6), principal)
+    s.client_ip = ip
     cap = capture_dir(st.profile)
     if cap is not None:
         s.capture = Capture(cap, s.conn_id, gw.session_id, principal.role)

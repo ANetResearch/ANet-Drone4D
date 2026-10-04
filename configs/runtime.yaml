@@ -19,9 +19,13 @@ net:
   port: 8000                    # AWR_PORT
   port_offset: 0                # AWR_PORT_OFFSET（0–31，ADR-055），8000、7447、5173、4173、8001 统一加 10·k
   static_port: 8001             # AWR_STATIC_PORT；只在静态拆分回退启用时监听（10 AD-07）
-  access_mode: auto             # AWR_ACCESS_MODE：auto | loopback | lan
-  origins: []                   # AWR_ORIGINS（逗号分隔）；回环 Origin 永远放行
+  access_mode: auto             # AWR_ACCESS_MODE：auto | loopback | lan | public（公开演示站，ADR-082）
+  origins: []                   # AWR_ORIGINS（逗号分隔）；回环 Origin 永远放行（public 模式除外：只认此处列出的）
   allowed_hosts: []             # AWR_ALLOWED_HOSTS；空时由 origins 推导并加 localhost、127.0.0.1
+  trusted_proxies: []           # AWR_TRUSTED_PROXIES：可信反向代理（IP/CIDR），只用于限流与日志的客户端地址（X-Forwarded-For）
+  worlds_allow: []              # AWR_WORLDS_ALLOW：世界白名单，空表示不限制；其余世界的 REST 与静态请求 404
+  ws_max: 32                    # AWR_WS_MAX：WS 连接总数上限（17 §3.4）
+  ws_max_per_ip: null           # AWR_WS_MAX_PER_IP：每个客户端地址的 WS 连接上限（null 不限制）
 bus:
   rendezvous: tcp/127.0.0.1:7447    # 端口随 port_offset 平移；主机部分不可改（只允许回环）
   shm: false                        # zenoh SHM 一律关闭（g05 §0 第 9 条）
@@ -36,6 +40,7 @@ cpu:
 defaults:
   env: {OMP_NUM_THREADS: "1", OPENBLAS_NUM_THREADS: "1", MKL_NUM_THREADS: "1", PYTHONUNBUFFERED: "1"}
   restart: {policy: always, backoff_s: [0.1, 1, 2, 4, 8], max: {count: 5, window_s: 60}}   # 首档 0.1 s（ADR-061）；窗口内第 6 次重启熔断（19 §4.2）
+  standby: true                 # 热备用总开关（false 时忽略 procs[].standby；public profile 关闭以省内存，ADR-082）
   stop: {signal: SIGTERM, grace_s: 5}
   log: {max_mb: 10, backups: 5, tail_lines: 200}
 real_ops:
@@ -102,4 +107,12 @@ profiles:
   demo:  {procs_enable: [core, ext], run: {resume_after_crash: play}}
   ci:    {procs_enable: [core, ext], cpu: {pin: "off"}, run: {keep_run_dir: true}, quota: {runs_gb: 5}, net: {port_offset: 9}}   # 功能门禁（G1）
   perf:  {procs_enable: [core, ext], cpu: {pin: "on"}, run: {keep_run_dir: true}, quota: {runs_gb: 5}, net: {port_offset: 9}}    # 性能用例（18 PR-6 要求钉核）
+  # 公开演示站（T4，AWR-19 §3.7，ADR-082/084）：只起核心进程（recorder、agent-runtime、job-worker 关闭），只服务 synthcity 与
+  # 循环剧本 S0（public 剧本 profile：不录制、结束后从头重开），api 只监听回环 18640 由 nginx 对外；AWR_ORIGINS（部署域名）必须
+  # 由部署环境给出（tools/deploy/emax/env.example），缺省即以退出码 2 拒绝启动
+  public: {procs_enable: [core], cpu: {pin: "off"}, defaults: {standby: false},
+           run: {world: synthcity, scenario: s0-synthcity-showcase, scenario_profile: public, fallback_world: null},
+           net: {bind: 127.0.0.1, port: 18640, access_mode: public, trusted_proxies: [127.0.0.1, "::1"], worlds_allow: [synthcity],
+                 ws_max: 64, ws_max_per_ip: 4},
+           bus: {rendezvous: tcp/127.0.0.1:18647}, quota: {runs_gb: 2, disk_warn_gb: 2, disk_min_gb: 1}}
   field: {}                     # V0.5 起定义；D1 中选择 field 即以退出码 2 拒绝

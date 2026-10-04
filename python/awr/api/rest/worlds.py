@@ -4,6 +4,7 @@
 id、name、name_zh、status、content_version、scale_status、anchor_kind、georeferenced、points、bytes、roots、octree_bytes、
 node_count、levels_points、max_height_m、first_screen、world_json_url、thumbnail_url、default_scenario_id、in_use。
 详情另含 coordinate_sha256、bounds_m、camera_home、layers、qa。`in_use` = 当前运行世界。
+配置了世界白名单（`AWR_WORLDS_ALLOW`，公开模式只有 synthcity，ADR-082）时列表只含白名单内的世界，其余世界的详情 404 `305`。
 Catalog 读盘在 anyio 线程中执行（冷读约 10 ms，此后 1 s 缓存），不占用事件循环。
 """
 
@@ -54,7 +55,7 @@ async def list_worlds(request: Request, _p: Viewer, limit: Annotated[int, Query(
                       cursor: str | None = None) -> dict[str, Any]:
     ctx = app_ctx(request)
     off = _offset(cursor)
-    worlds = await anyio.to_thread.run_sync(ctx.catalog.list)
+    worlds = [w for w in await anyio.to_thread.run_sync(ctx.catalog.list) if ctx.settings.world_allowed(w.id)]
     page = worlds[off:off + limit]
     nxt = _cursor(off + limit) if off + limit < len(worlds) else None
     return {"items": [_item(w, ctx.settings.world_id, LIST_FIELDS) for w in page], "next_cursor": nxt}
@@ -63,7 +64,7 @@ async def list_worlds(request: Request, _p: Viewer, limit: Annotated[int, Query(
 @router.get("/{world_id}")
 async def get_world(world_id: str, request: Request, _p: Viewer) -> dict[str, Any]:
     ctx = app_ctx(request)
-    if not WORLD_ID_RE.match(world_id):
+    if not WORLD_ID_RE.match(world_id) or not ctx.settings.world_allowed(world_id):
         raise ApiProblem(305, status=404, detail={"world_id": world_id})
     w = await anyio.to_thread.run_sync(ctx.catalog.get, world_id)
     if w is None:

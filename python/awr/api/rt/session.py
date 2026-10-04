@@ -58,6 +58,7 @@ class ClientSession:
         self.conn_id = conn_id
         self.principal = principal
         self.role = principal.role
+        self.client_ip: str | None = None  # 客户端地址（限流与连接计数，ws.rt_endpoint 填写；ADR-082）
         self.ctrl: deque[str | bytes] = deque()
         self.wake = asyncio.Event()
         self.closing = False

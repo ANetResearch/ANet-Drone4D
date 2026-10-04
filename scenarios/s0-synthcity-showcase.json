@@ -189,7 +189,8 @@
   "profiles": {
     "ci": {"rate": 5, "record": false},
     "perf": {"rate": 1, "record": false},
-    "demo": {"rate": 1, "record": true, "on_complete": "continue"}
+    "demo": {"rate": 1, "record": true, "on_complete": "continue"},
+    "public": {"rate": 1, "record": false, "on_complete": "reset"}
   },
   "tags": ["demo", "ci", "showcase", "synthetic"]
 }

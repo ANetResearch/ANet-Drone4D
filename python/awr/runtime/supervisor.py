@@ -2,7 +2,8 @@
 
 入口 `python -m awr.runtime.supervisor -c configs/runtime.yaml`（`make run` / `make dev`）。职责：
 - 启动准备（19 §4.3 固定顺序）：生成 run id，创建 `runs/<run>/`（0700）与 `/dev/shm/awr/<run>/`（0700），更新 `runs/current`，
-  写 `supervisor.pid`；生成 `secret`（32 字节）与 `admin.token`（均 0600）；写 `effective-config.yaml` 与初始 `meta.json`；
+  写 `supervisor.pid`；生成 `secret`（32 字节）与 `admin.token`（均 0600；公开模式不生成随机口令，只在配置了
+  `AWR_ADMIN_SECRET_FILE` 时写入该口令，ADR-082）；写 `effective-config.yaml` 与初始 `meta.json`；
   清理 supervisor 已不存在的残留 tmpfs 目录；配额与磁盘余量检查；打开 zenoh 汇合点（只监听回环）；按 `start_after` 启动；
   打印 READY（管理口令只在 stdout 为 TTY 时打印明文）。
 - 监管：`asyncio.create_subprocess_exec` 启动（不用 fork，新会话，stdout 与 stderr 合并为日志管道）；waitpid 检测退出；
@@ -100,6 +101,17 @@ def _pid_alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def _read_admin_secret(path: str | None) -> str:
+    """部署时配置的管理口令文件（首行，去掉空白）；未配置、不存在或为空时返回空串。"""
+    if not path:
+        return ""
+    try:
+        lines = Path(path).read_text(encoding="utf-8").strip().splitlines()
+    except OSError:
+        return ""
+    return lines[0].strip() if lines else ""
 
 
 def _write_private(path: Path, data: bytes) -> None:
@@ -276,6 +288,13 @@ class Supervisor:
 
     def _write_secrets(self) -> None:
         _write_private(self.persist_dir / "secret", new_secret())
+        if self.cfg.access_mode == "public":
+            # 公开演示站（ADR-082）：不生成随机管理口令；只认部署时配置的 AWR_ADMIN_SECRET_FILE（api 同样只读它）。
+            # 配置了才写 admin.token（供本机 awr CLI 使用），未配置时 operator 与 admin 一律拒绝签发
+            self._admin_password = _read_admin_secret(os.environ.get("AWR_ADMIN_SECRET_FILE"))
+            if self._admin_password:
+                _write_private(self.persist_dir / "admin.token", (self._admin_password + "\n").encode())
+            return
         self._admin_password = new_admin_password()
         _write_private(self.persist_dir / "admin.token", (self._admin_password + "\n").encode())
 
@@ -454,6 +473,15 @@ class Supervisor:
         })
         if c.net.origins:
             env["AWR_ORIGINS"] = ",".join(c.net.origins)
+        if c.net.allowed_hosts:
+            env["AWR_ALLOWED_HOSTS"] = ",".join(c.net.allowed_hosts)
+        if c.net.trusted_proxies:
+            env["AWR_TRUSTED_PROXIES"] = ",".join(c.net.trusted_proxies)
+        if c.net.worlds_allow:
+            env["AWR_WORLDS_ALLOW"] = ",".join(c.net.worlds_allow)
+        env["AWR_WS_MAX"] = str(c.net.ws_max)
+        if c.net.ws_max_per_ip is not None:
+            env["AWR_WS_MAX_PER_IP"] = str(c.net.ws_max_per_ip)
         if c.run.scenario_profile:
             env["AWR_SCENARIO_PROFILE"] = c.run.scenario_profile
         if p.spec.plugins:
@@ -1092,7 +1120,10 @@ class Supervisor:
                  f"  bus      {c.rendezvous_effective}（namespace {self.namespace}）",
                  f"  logs     {self.logs_dir}",
                  f"  ssh      ssh -N -L {c.port_effective}:127.0.0.1:{c.port_effective} <user>@<host>"]
-        if tty:
+        if c.access_mode == "public":  # 公开演示站：口令从不打印（ADR-082）
+            lines.append("  admin    " + ("AWR_ADMIN_SECRET_FILE（已配置）" if self._admin_password
+                                          else "未配置：operator 与 admin 一律拒绝签发（公开只读）"))
+        elif tty:
             lines.append(f"  admin    {self._admin_password}")
         else:
             lines.append(f"  admin    {self.persist_dir / 'admin.token'}")
