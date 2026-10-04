@@ -34,6 +34,25 @@ export const LAYER_BUDGET_MS: Readonly<Record<PerfLayerId, number>> = {
   pointcloud: 16, drones: 2.5, trails: 1, frustums: 1, environment: 2.5, groundSky: 1, labels: 2, hudCharts: 1, mainJs: 4,
 }
 
+/**
+ * uniform-block budget of the classic path (FX-UBO, ADR-086; viewport/backend/uboBinder.ts UboStats): device limits read at
+ * start-up, binding points in use, the largest per-program block counts, live node uniform groups and the programs over
+ * the budget with the layers hidden for them (M06-E017)
+ */
+export interface UboProbe {
+  limits: { bindings: number; vertex: number; fragment: number; combined: number }
+  points: number
+  maxVertex: number
+  maxFragment: number
+  maxCombined: number
+  maxDistinct: number
+  groups: number
+  created: number
+  deleted: number
+  violations: number
+  pruned: string[]
+}
+
 export const GOVERNOR_HISTORY_CAP = 64
 const SMALL = 4096
 
@@ -68,6 +87,8 @@ export function makeProbe(withInject: boolean) {
       programs: 0, calls: 0, passPlan: 0, rtAllocs: 0, glErrors: 0, contextLost: 0, renderMs: ring(), renderOver50: 0,
       /** programs at the reveal of the mask; later growth is M06-E006 */
       programsAtReveal: -1, planMismatches: 0, compiledAfterReveal: 0,
+      /** uniform-block budget (classic path; null on other backends and before the renderer exists) */
+      ubo: null as UboProbe | null,
     },
     latency: { tSimToPixelMs: ring(SMALL), cmdToVisibleMs: ring(SMALL), focusJumpM: ring(SMALL), holdFrames: 0, extrapFrames: 0, dGlobalMs: 0 },
     net: {

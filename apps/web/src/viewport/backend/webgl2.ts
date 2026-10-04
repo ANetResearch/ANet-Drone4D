@@ -8,6 +8,10 @@
 // and must equal the plan (M06-E007; dev builds log an error, production counts gpu.glErrors); the assertion only runs
 // in READY. Every render target allocation counts gpu.rtAllocs; cloudRT is allocated at full canvas size on creation and
 // on resize only, so rung changes and motion degradation are zero-allocation uniform and viewport changes (D1-AC-24).
+// Uniform blocks (FX-UBO, ADR-086): AnetNodesHandler binds them per draw (binding points in use = the largest block count
+// of one program) and checks every program against the device limits read at start-up; gpu.ubo publishes both. A program
+// over the budget draws nothing, and after the frame its layer is hidden unless essential (UBO_ESSENTIAL), with one
+// console warning per layer (M06-E017).
 import {
   Color, DepthTexture, FloatType, UnsignedByteType, HalfFloatType, WebGLRenderTarget, type Box2, type Camera, type DataTexture, type Material, type Scene, type Texture,
   type Vector2, type WebGLRenderer, type RenderTarget, type Object3D,
@@ -15,8 +19,9 @@ import {
 import type { PointsNodeMaterial } from 'three/webgpu'
 import { events, onSceneShading, perfProbe, type BackendCaps, type DeviceClass, type FrameCtx, type PointSizeMode, type RTName, type RTOptions, type TextureOps, type Tier } from '@/engine'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
+import { AnetNodesHandler, type UboViolation } from '../anetNodesHandler'
 import { GLPointsNodeMaterial } from '../glPointsNodeMaterial'
-import { channelOf, CH_CLOUD, CH_MAIN, listLayers, type EdlCompositeLike, type WarmupItem } from '../layers/registry'
+import { channelOf, CH_CLOUD, CH_MAIN, listLayers, type EdlCompositeLike, type LayerId, type LayerSpec, type WarmupItem } from '../layers/registry'
 import { makeComposite, type Composite } from './composite'
 import { skyColor } from '../layers/groundSky.materials'
 import { lowestRungFor } from './deviceClass'
@@ -24,6 +29,7 @@ import { runSelftest, type SelftestResult } from './selftest'
 import { warmupZoo, type ExtraPass, type WarmupReport } from './warmup'
 import { makeBenchFinish } from './benchFinish'
 import { installAttribSlotReset } from './attribSlots'
+import { WEBGL2_MIN_LIMITS } from './uboBinder'
 import type { Forced } from './testSwitches'
 
 export type BackendState = 'WARMING' | 'READY' | 'LOST' | 'FAILED'
@@ -99,6 +105,20 @@ const MASK_MAIN = 1 << CH_MAIN
 let mismatchLogged = 0
 
 /**
+ * layers never hidden for a program over the uniform-block budget (the point cloud, ground and sky, the vehicles: the
+ * object still draws nothing and the warning names it); every other layer is hidden when one of its programs is over
+ */
+export const UBO_ESSENTIAL: ReadonlySet<LayerId> = new Set<LayerId>(['pointcloud', 'groundSky', 'drones'])
+
+/** the registered layer whose root holds `o` (null for objects outside the layers: composite quad, self tests) */
+export function layerOf(o: { parent: unknown } | null, layers: readonly LayerSpec[] = listLayers()): LayerSpec | null {
+  for (let x = o as { parent: unknown } | null; x; x = x.parent as { parent: unknown } | null) {
+    for (const s of layers) if (s.root === (x as unknown)) return s
+  }
+  return null
+}
+
+/**
  * test builds, error path of M06-E007 only: the planned draws per layer and the objects of the last render list of
  * the scene (the main pass), to name the layer whose drawCount() disagrees with what three drew
  */
@@ -129,6 +149,39 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
     maxTextureSize: r.capabilities.maxTextureSize, floatColorRT: gl.getExtension('EXT_color_buffer_float') !== null,
   }
   const probe = perfProbe()
+  // uniform-block budget (FX-UBO, ADR-086): limits read by the handler at start-up, counts as programs are built
+  const nh = AnetNodesHandler.of(r)
+  const uboQueue: UboViolation[] = []
+  const uboWarned = new Set<string>()
+  if (nh?.uboStats) {
+    probe.gpu.ubo = nh.uboStats
+    nh.onViolation = (v) => uboQueue.push(v)
+    const L = nh.uboStats.limits
+    const M = WEBGL2_MIN_LIMITS
+    if (L.bindings < M.bindings || L.vertex < M.vertex || L.fragment < M.fragment || L.combined < M.combined) {
+      console.warn(`M06-E017 uniform block limits below the WebGL2 minimum: bindings ${L.bindings}, vertex ${L.vertex}, fragment ${L.fragment}, combined ${L.combined}`)
+    }
+  }
+  /** after a frame or the shader zoo: hide the layers of programs over the budget (never an essential one), warn once */
+  const pruneOverBudget = (): void => {
+    if (uboQueue.length === 0 || !nh?.uboStats) return
+    const st = nh.uboStats
+    const L = st.limits
+    for (const v of uboQueue.splice(0)) {
+      const spec = layerOf(v.object)
+      const id = spec?.id ?? 'none'
+      const hide = spec !== null && !UBO_ESSENTIAL.has(spec.id)
+      if (hide && !st.pruned.includes(id)) {
+        spec.setVisible(false)
+        st.pruned.push(id)
+      }
+      if (uboWarned.has(id)) continue
+      uboWarned.add(id)
+      console.warn(`M06-E017 ${v.object.name || v.object.type} (${v.material.type}, layer ${id}) needs ${v.vertex} vertex / ${v.fragment} fragment uniform blocks: `
+        + `${v.reason} (limits: bindings ${L.bindings}, vertex ${L.vertex}, fragment ${L.fragment}, combined ${L.combined}); `
+        + (hide ? `layer ${id} hidden` : 'the object draws nothing'))
+    }
+  }
   const lost = new Set<(reason: string) => void>()
   const onLostEv = (e: Event): void => {
     e.preventDefault()
@@ -221,6 +274,7 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       })
       probe.gpu.programs = rep.programs
       probe.meta.warmupMs = rep.warmupMs
+      pruneOverBudget()
       return rep
     },
     plan(ctx: FrameCtx, out: PassPlan): void {
@@ -301,6 +355,7 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
         } else req.done(null)
       }
       slotReset?.tail()
+      pruneOverBudget()
       const calls = r.info.render.calls
       probe.gpu.calls = calls
       probe.gpu.passPlan = plan.draws

@@ -1,12 +1,12 @@
 // M06-AC-005 and AC-018 (M06 §6.3 rules; g01 §0 item 5): shared InstancedMesh material or geometry -> M06-E008,
-// int uniform -> M06-E009, texture.internalFormat -> M06-E010 (assertions); material.onBeforeRender, info.render.frame,
+// int uniform -> M06-E009, texture.internalFormat -> M06-E010, hand-written uniform blocks -> M06-E017 (assertions); material.onBeforeRender, info.render.frame,
 // synchronous read-back, non-white-listed drei, shared-path features and onObjectUpdate -> M06 lint failures; the
 // repository passes the lint; pointer events on WorldRoot ancestors fail the dev assertion.
 import { describe, expect, it } from 'vitest'
-import { DataTexture, Group, InstancedMesh, Mesh, PlaneGeometry, Points, BufferGeometry, Object3D } from 'three'
+import { DataTexture, Group, InstancedMesh, Mesh, PlaneGeometry, Points, BufferGeometry, Object3D, ShaderMaterial, Uniform, UniformsGroup } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { texture, uniform, vec3, vec4 } from 'three/tsl'
-import { assertFloatUniforms, assertInstancing, assertNoInternalFormat, assertNoPointerEventsOnWorld, checkLayerRoot, M06Error } from '@/viewport/backend/guards'
+import { assertFloatUniforms, assertInstancing, assertNoHandUniformBlocks, assertNoInternalFormat, assertNoPointerEventsOnWorld, checkLayerRoot, M06Error } from '@/viewport/backend/guards'
 // @ts-expect-error untyped .mjs lint module
 import { checkText, run } from './lint/m06-lint.mjs'
 
@@ -27,6 +27,18 @@ describe('registration assertions (M06-AC-005)', () => {
     const ok = new Group()
     ok.add(new InstancedMesh(new PlaneGeometry(), new MeshBasicNodeMaterial(), 2), new InstancedMesh(new PlaneGeometry(), new MeshBasicNodeMaterial(), 2))
     expect(() => assertInstancing(ok)).not.toThrow()
+  })
+  it('hand-written uniform blocks (ShaderMaterial.uniformsGroups) -> M06-E017; node materials pass (rule 12, ADR-086)', () => {
+    const g = new UniformsGroup()
+    g.add(new Uniform(1))
+    const sm = new ShaderMaterial()
+    sm.uniformsGroups = [g]
+    expect(() => assertNoHandUniformBlocks(sm)).toThrowError(/M06-E017/)
+    const root = new Group()
+    root.add(new Mesh(new PlaneGeometry(), sm))
+    expect(() => checkLayerRoot(root, new Map(), 'test')).toThrowError(/M06-E017/)
+    expect(() => assertNoHandUniformBlocks(new ShaderMaterial())).not.toThrow()
+    expect(() => assertNoHandUniformBlocks(new MeshBasicNodeMaterial())).not.toThrow()
   })
   it('int uniform -> M06-E009; float uniforms pass', () => {
     const bad = new MeshBasicNodeMaterial()

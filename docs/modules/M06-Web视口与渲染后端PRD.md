@@ -184,12 +184,14 @@ M06 **不负责**：点云选择、CAS、点池与点材质（M05）；环境场
 | M06-FR-013 | 偏好记忆：首次会话中 CAS 在最低允许档下限饱和累计 > 30 s，把"起步档 − 1"（Tier A 时改为 Tier B）写入 `localStorage["awr.render.v1"]`，下次启动生效；设置页可清除；设备能力档与微基准结果按渲染器字符串与浏览器主版本缓存 30 天 | P1 | V0.1 | 是 | M06-AC-012 | AWR-03 §3.5 |
 | M06-FR-014 | `/bench` 自检页（内容规格见 §8.1，JSX 由 M15 实现）：在用户 GPU 浏览器上依次跑 flight60 `scene=pc` 与 `scene=full`（深圳；运行世界不是深圳时 `scene=full` 用 `source=fake` 并在报告中标注），按 AWR-18 §11.2 生成 `awr.perf.report.v1`（`gate = "bench"`、`kind = "bench"`、`run_id = b<YYYYMMDD>-<HHMMSS>-<4hex>`，`env` 含 `device_class`、`backend_tier`、`renderer`、`adapter_info`），经用户确认后 POST 到 `/api/sys/perf-report`（≤ 4 MiB，每 principal 每分钟 1 次） | P1 | V0.1 | 是 | M06-AC-013 | ADR-044；AWR-18 §11.2、§11.5；AWR-17 §4.3.11 |
 | M06-FR-015 | `wgpu-gl`（WebGPURenderer + forceWebGL + direct 输出）只作为功能矩阵的 CI 回归变体，不进入生产档位 | P2 | V0.1 | 是 | feat-matrix 附加列 | g01 §6.1 |
+| M06-FR-085 | 经典路径的 uniform block（FX-UBO，ADR-086）：节点材质的 UniformsGroup 不交给 WebGLRenderer（three r186 为每个组终身占用一个全局绑定点，WebGL2 只保证 24 个）；`AnetNodesHandler` 修复 5 在每次 draw 前把当前程序的组上传（只写变化的值）并以 `bindBufferBase` 绑定到"第 i 个 block 读第 i 个绑定点"，占用的绑定点数等于单个程序的最大 block 数，与材质、程序、pass 数量无关；材质 dispose 时删除缓冲。启动时读取 `MAX_UNIFORM_BUFFER_BINDINGS`、`MAX_{VERTEX,FRAGMENT,COMBINED}_UNIFORM_BLOCKS`，每个程序创建前按生成的 GLSL 检查每阶段、合计与绑定点预算；超限的程序换成不绘制的空程序，帧后隐藏其所在的非必要图层（点云、地面天空、无人机除外），控制台每图层一次 M06-E017，`__perf.gpu.ubo` 记录上限、绑定点、每程序最大 block 数、存活组数、超限数与被裁剪图层 | P0 | V0.1 | 是 | M06-AC-058 | ADR-086；three r186 `WebGLUniformsGroups`、`WebGLNodesHandler.collectUniformsGroups` |
+| M06-FR-086 | 经典路径运行节点的 updateBefore（VERIFY-UBO，ADR-087）：stock handler 只运行 `builder.updateNodes`；`AnetNodesHandler` 修复 6 把每个程序的 `updateBeforeNodes` 记在其缓存条目上，FRAME 类在每次 `renderStart`（WebGLRenderer 上传本帧几何属性的 `projectObject` 之前）对全部存活程序运行一次，被绘制程序的全部 updateBefore 节点在其 `onBeforeRender` 中、update 节点之前运行（与 WebGPURenderer 次序一致，FRAME 类按帧去重）。three 的实例化在实例矩阵超过 `MAX_UNIFORM_BLOCK_SIZE` 时改用交错实例属性，并靠一个 OnBeforeFrameUpdate 节点把 `instanceMatrix` 的版本与更新区间同步到该交错缓冲：Tier B 低模批次 300 × 64 B = 19 200 B，在报告 16 384（WebGL2 最低值，ANGLE Metal 的取值）的设备上走此路径，缺少本条时 GPU 一直使用首次上传的单位矩阵，全部低模无人机画在原点。updateAfter 节点不运行，材质不得依赖（`m06.gpu-limits` 断言场景中没有） | P0 | V0.1 | 是 | M06-AC-059 | ADR-087；three r186 `createInstanceMatrixNode`、`instance()`、`NodeBuilder.buildUpdateNodes`、`NodeFrame.updateBeforeNode` |
 
 ### 4.2 R3F 宿主与帧循环
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M06-FR-016 | `WorldCanvas`：`<Canvas flat frameloop="never" dpr={dpr} gl={asyncFactory} resize={{scroll: false, debounce: {scroll: 50, resize: 120}}} eventSource={viewportContainer} eventPrefix="client">`；三档一律 async 工厂；`dpr` 首次挂载取 0.5，后端就绪后若为 Tier B/A 在遮罩揭开前改为 §6.5 的值（仅此一次），此后不再变化 | P0 | V0.1 | 是 | M06-AC-014 | ADR-008；g01 §5、§6.4 |
+| M06-FR-016 | `WorldCanvas`（R3F store 的 `clock` 经 vite 插件 `awr-r3f-clock` 换为字段与语义相同、不打印 THREE.Clock 弃用告警的 `R3fClock`，ADR-086）：`<Canvas flat frameloop="never" dpr={dpr} gl={asyncFactory} resize={{scroll: false, debounce: {scroll: 50, resize: 120}}} eventSource={viewportContainer} eventPrefix="client">`；三档一律 async 工厂；`dpr` 首次挂载取 0.5，后端就绪后若为 Tier B/A 在遮罩揭开前改为 §6.5 的值（仅此一次），此后不再变化 | P0 | V0.1 | 是 | M06-AC-014 | ADR-008；g01 §5、§6.4 |
 | M06-FR-017 | `engine/loop.ts`：rAF 中依次执行 telemetry、clock、drones、camera、world 相位，调用 R3F `advance(nowMs / 1000, true)`（秒；其中唯一 priority 1 订阅者执行 render 相位），再执行 overlay、governor 相位；`register(phase, id, fn, {order, fps, tiers, layer})` 返回注销函数（`layer` 为 AWR-18 §9.2 的 `PerfLayerId`）；`fps` 任务量化到帧边界；telemetry 任务在 `swapFrame()` 取得新槽后调用 M12 `time.ingest(frame)`（M12 §6） | P0 | V0.1 | 是 | M06-AC-015 | AWR-03 §3.6；AWR-10 AD-06；n05 §0 第 12 条 |
 | M06-FR-018 | 出图唯一：`renderer.info.autoReset = false`（three r186 默认 true，每次 `render()` 清零，`WebGLRenderer.js` L1744），每帧 render 相位开始 `info.reset()`；主 pass 与本帧计划内的拾取 pass 完成后断言 `info.render.calls === plan.draws`；layers 配对驱动的离屏渲染在断言之后执行、不计入；不等时 dev 构建抛 M06-E007，生产构建计入 `__perf.gpu.glErrors`；断言只在 `READY` 状态执行（预热不计） | P0 | V0.1 | 是 | M06-AC-016 | AWR-03 §3.6 规则 2 |
 | M06-FR-019 | 热路径零分配：`engine/**` 与相位回调中禁止 `new`、数组与对象字面量、闭包创建、`Array.prototype.map/filter`；预分配 TypedArray 与对象池；dev 构建以采样器检查每 1000 帧堆增量 | P0 | V0.1 | 是 | M06-AC-017 | AWR-03 §3.6 规则 1 |
@@ -556,7 +558,13 @@ stateDiagram-v2
 
 ### 6.3 AnetNodesHandler 与编码约束
 
-实现以 g01 §6.2 的实测代码为准（修复 1：绑定非 XR RT 时输出线性、不做色调映射；修复 2：`renderStart` 中把 `target.fogNode` 写入 `sceneContext.fogNode`）。它依赖 handler 三处内部结构（`getOutputCallback` 实例属性、`renderStack[].sceneContext`、proxy 转发 `getRenderTarget`），three 升级时由 feat-matrix 的 `onObjectUpdate == [64, 128, 191, 255]` 与 `fog_sceneFogNode == 红` 两项断言守护（g01 §9）。
+实现以 g01 §6.2 的实测代码为准（修复 1：绑定非 XR RT 时输出线性、不做色调映射；修复 2：`renderStart` 中把 `target.fogNode` 写入 `sceneContext.fogNode`；修复 3：补 `renderer.depth`；修复 4：`userData.awrOutputInVertex` 的材质输出原样通过，ADR-064）。
+
+修复 5（FX-UBO，ADR-086，`viewport/backend/uboBinder.ts`）：stock handler 把每个（材质，程序）的节点 uniform 组（`render`、`object` 与每个 buffer 节点各一个）交给 WebGLRenderer，后者为每个组终身分配一个全局绑定点；synthcity 整景 Tier S 57 个、Tier B 65 个存活组（绑定点分配峰值 60 / 68），超过 WebGL2 最低保证的 24 个绑定点后 three 报 "Maximum number of simultaneously usable uniforms groups reached" 并改用绑定点 0，此后每个经由它读 block 的 draw 都是 GL_INVALID_OPERATION（"uniform buffer that is too small"）。SwiftShader 报 72 个绑定点，所以测试从未发现。修复后 `material.uniformsGroups` 始终为空数组，组由 `UboBinder` 持有 GL 缓冲：每个程序的第 i 个 block 一次性 `uniformBlockBinding` 到绑定点 i；每次 draw 前（材质 `onBeforeRender`，程序已知；程序在 `setProgram` 内切换时再在 `onUpdateProgram` 中）按 three 的 std140 布局与变化判定上传变化的值并 `bindBufferBase`；缓冲大小不小于程序报告的 `UNIFORM_BLOCK_DATA_SIZE`；组 dispose（材质 dispose）时删除缓冲。WebGLRenderer 在相机首次 draw 的 `setProgram` 内才切换到反向深度投影，而上传已提前到 `onBeforeRender`：`renderStart` 在任何 draw 之前按同一条件先切换。每个程序创建前按生成的 GLSL 统计每阶段与合计 block 数、去重后的 block 数，超出设备上限时换成不绘制的空程序并报告（M06-FR-085、M06-E017）。
+
+修复 6（VERIFY-UBO，ADR-087）：WebGLNodesHandler 只运行节点的 `update`，从不运行 `updateBefore` / `updateAfter`。three r186 的 `createInstanceMatrixNode` 按 `MAX_UNIFORM_BLOCK_SIZE` 选择实例矩阵的来源：不超过时为 buffer 节点（uniform block），超过时为交错实例属性（`InstancedInterleavedBuffer` 与 `instanceMatrix` 共用数组），后者的版本与更新区间由 `instance()` 内的 OnBeforeFrameUpdate 节点（`updateBeforeType = FRAME`）从 `instanceMatrix` 同步。Tier B 低模批次容量 300（19 200 B）在 SwiftShader（65 536）上走 uniform block，在报告 16 384 的真实 GPU 上走交错属性，同步节点从不运行，GL 缓冲停在首次上传时的单位矩阵，全部低模无人机画在 ENU 原点且不再移动（不报错）。修复后 `onUpdateProgram` 新建程序条目时记下该程序的 `updateBeforeNodes`（FRAME 类另存一份）；`renderStart` 在 super 之后对全部存活程序的 FRAME 类节点调用 `nodeFrame.updateBeforeNode`（早于 `projectObject` 中的属性上传，同帧生效）；材质的 `onBeforeRender` 在 stock 的 update 节点之前运行被绘制程序的全部 updateBefore 节点（OBJECT / RENDER 语义，FRAME 类按 frameId 去重）。Tier S 的低模容量 32（2 KB）与 hero（≤ 6 个，384 B）始终走 uniform block。updateAfter 节点不运行（D1 场景中没有，`m06.gpu-limits` 断言），新增依赖 updateAfter 的节点须先扩展 handler（M06-FR-086）。
+
+`GLPointsNodeMaterial` 的 `contextNode` 以 `overrideNode` 在几何没有 `position` 属性时把 `positionGeometry` 解析为常量 `vec3(0)`：无属性点（PointPool、雪与沙尘、拾取 pass）的位置来自 `positionNode`，`NodeMaterial.setupPosition` 仍以 `attribute('position')` 初始化 `positionLocal` varying，three 每个程序打印一次 "AttributeNode: Vertex attribute "position" not found"。生成的 GLSL 不变，有 `position` 的几何（自检、微基准）照旧读属性（规则 10 的配套做法，ADR-086）。它依赖 handler 三处内部结构（`getOutputCallback` 实例属性、`renderStack[].sceneContext`、proxy 转发 `getRenderTarget`），three 升级时由 feat-matrix 的 `onObjectUpdate == [64, 128, 191, 255]` 与 `fog_sceneFogNode == 红` 两项断言守护（g01 §9）。
 
 **编码规范**（写入 `apps/web/src/viewport/README.md` 并由 dev 断言强制，g01 §0 第 5 条）：
 
@@ -573,8 +581,9 @@ stateDiagram-v2
 | 9 | 共享路径禁止 RenderPipeline、`pass()`、MRT、storage texture、compute | lint `no-restricted-imports` |
 | 10 | 无属性几何体不得为消除警告添加假 `position`（会被 `position.count` 截断 drawRange） | — |
 | 11 | 实例化对象（InstancedMesh、`LineSegments2` 等使用 InstancedBufferGeometry 的对象）不共享几何体（handler 源码自述限制；首次 build 会把实例属性写入当前几何并在 microtask 中 dispose） | 注册时检查几何引用唯一，否则 M06-E008 |
+| 12 | 经典路径不手写 `UniformsGroup` / `ShaderMaterial.uniformsGroups`：uniform block 只经节点材质与 handler 修复 5 逐 draw 绑定（WebGLRenderer 自己的 UBO 路径终身占用绑定点 0 起的全局绑定点，会与逐 draw 绑定冲突）；单个程序的 block 数受设备上限约束（WebGL2 最低每阶段 12、合计 24、绑定点 24），超限即 M06-E017 | `gpu-limits.spec.ts` 模拟上限；生成 GLSL 预算检查 |
 
-规则 1–7 即 g01 §0 第 5 条的 handler 约束，规则 8–11 来自 ADR-007 约束、g01 §2 源码核对与 three `WebGLNodesHandler.js` L31–L38。
+规则 1–7 即 g01 §0 第 5 条的 handler 约束，规则 8–11 来自 ADR-007 约束、g01 §2 源码核对与 three `WebGLNodesHandler.js` L31–L38，规则 12 来自 ADR-086（FX-UBO）。
 
 ### 6.4 shader zoo 预热
 
@@ -1219,6 +1228,7 @@ stateDiagram-v2
 | M06-E014 | 警告（dev） | GlyphLayer 超上限截断 | 截断 | `VIS_GLYPH_CAP` |
 | M06-E015 | 警告 | `ray_hit` 失败或超时 | 隐藏预览 | 提示条"未命中地面" |
 | M06-E016 | 警告 | 世界水平半径 > 10 km | 继续 | 控制台 |
+| M06-E017 | 警告 | 程序的 uniform block 超出设备上限（每阶段、合计或绑定点），或设备报告的上限低于 WebGL2 最低值（ADR-086） | 该程序换成不绘制的空程序；帧后隐藏所在的非必要图层（点云、地面天空、无人机不隐藏）；`__perf.gpu.ubo.violations`、`pruned` | 控制台，每图层一次 |
 
 ---
 
@@ -1454,6 +1464,8 @@ export function makeBezier(x1: number, y1: number, x2: number, y2: number): (x: 
 | M06-AC-055 | 图层预算 | `perf:layers`：drones ≤ 2.5、trails + frustums ≤ 1、groundSky ≤ 1、labels ≤ 2 ms（配对增量中位数，暂定）；与其他模块合计固定层 ≤ 10 ms | `npm run perf:layers` | 本机 S | P0 | D1-AC-03b |
 | M06-AC-056 | 替身可测 | 无后端时 `source=fake` 跑完 flight60 `scene=full` 无 `pageerror`；M06 引擎单测不依赖 WebGL | `make test-fixtures`；Vitest | Node、本机 S | P0 | D1-AC-35 |
 | M06-AC-057 | 真 GPU（设计阈值） | iGPU：p50 = T*（误差 ≤ 0.5 ms）、> 1.5T* 占比 ≤ 5%、TTFP ≤ 700 ms；dGPU：> 1.5T* 占比 ≤ 2%（60 Hz）/ ≤ 4%（144 Hz）、TTFP ≤ 500 ms | `/bench` 回传，同档 ≥ 3 份且来自 ≥ 2 台设备后以 ADR 固化 | 真 GPU | 不阻塞 D1 | AWR-18 §2.3、§11.5 |
+| M06-AC-058 | 真实 GPU 的 uniform block 上限 | 以 init script 严格模拟 WebGL2 最低上限 24/12/12/24（`MAX_UNIFORM_BLOCK_SIZE` 16 384）与中等上限 36/14/14/28（65 536）（报告上限；超出绑定点的 `bindBufferBase`、`bindBufferRange`、`uniformBlockBinding` 视为 GL_INVALID_VALUE；超出每阶段或合计上限、或任一 block 大于 `MAX_UNIFORM_BLOCK_SIZE` 的程序视为链接失败；ADR-087 起），测试构建与演示构建、Tier S 与 Tier B 各跑一次 `/world/synthcity`：揭开、12 个天气预设、选中、Third 与 FPV、P600 近景、全部图层开关、拾取、着色切换；控制台 0 条 WebGL 错误、0 条 three 告警与错误（含 THREE.Clock、AttributeNode）；`__perf.gpu.ubo` 的上限等于模拟值、绑定点 ≤ 上限、每程序 block 数不超限、超限数 0；点云与无人机切换显隐的像素差高于帧间噪声；揭开后 `programs` 不增加 | `perf/m06/gpu-limits.spec.ts`（`m06.gpu-limits`）；`tests/m06/ubo.browser.test.ts`、`tests/m06/uboBinder.test.ts` | 本机 S（上限模拟） | P0 | ADR-086 |
+| M06-AC-059 | 实例矩阵的交错属性回退 | 模拟 `MAX_UNIFORM_BLOCK_SIZE` 16 384（最低上限组），测试构建 Tier S 与 Tier B 各打开 synthcity（FakeSource 40 架绕飞），相机距首架约 85 m 使邻近机落入低模档：4 次在低模批次 draw 时回读 GPU 实际使用的首个实例平移（Tier B 为交错实例属性 `nodeAttribute3`，Tier S 为 NodeBuffer uniform block），与 CPU `instanceMatrix` 一致（误差 < 1e-3）且 4 次之间机体确实移动；场景中没有带 updateAfter 节点的程序；控制台 0 条 WebGL 错误与 three 告警。`tests/m06/ubo.browser.test.ts`：300 实例的 InstancedMesh 在 16 384 下走实例属性，stock handler 移动实例后像素仍在原处，`AnetNodesHandler` 画在新位置 | `perf/m06/gpu-limits.spec.ts` 低模 2 例；`tests/m06/ubo.browser.test.ts` | 本机 S（上限模拟） | P0 | ADR-087 |
 
 ---
 

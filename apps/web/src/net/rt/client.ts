@@ -86,7 +86,12 @@ export class LocalPort implements WorkerLike {
   }
 }
 
-/** `?source=fake&fakeN=200&fakeRate=1&fakeFixture=/path.awrrt` -> `fake:?n=...`; otherwise the given url */
+/**
+ * `?source=fake&fakeN=200&fakeRate=1&fakeFixture=/path.awrrt` -> `fake:?n=...`; otherwise the given url. fakeWorld (the
+ * world of the synthetic fleet, default shenzhen), fakeEnvPeriodS, fakeEnvPresets (comma list or `all`), fakeEnvStep=1 and
+ * fakeEnvCycles drive the environment keyframes (FX-UBO gpu-limits spec: every weather preset on any world, without test
+ * hooks)
+ */
 export function resolveRtUrl(url: string, search: string): string {
   const q = new URLSearchParams(search)
   if (q.get('source') !== 'fake') return url
@@ -94,7 +99,8 @@ export function resolveRtUrl(url: string, search: string): string {
   const benchN = q.get('bench') === 'flight60' && q.get('scene') === 'full' ? String(SCENE_FULL_N) : null
   p.set('n', q.get('fakeN') ?? q.get('n') ?? benchN ?? '1')
   for (const [k, v] of [['fakeRate', 'rate'], ['fakeWindow', 'window'], ['fakeStart', 'start'], ['fakeFixture', 'fixture'], ['fakeLoop', 'loop'],
-    ['fakeGround', 'ground'], ['fakeDrop', 'drop'], ['fakeSeed', 'seed']] as const) {
+    ['fakeGround', 'ground'], ['fakeDrop', 'drop'], ['fakeSeed', 'seed'], ['fakeWorld', 'world'], ['fakeEnvPeriodS', 'envPeriodS'],
+    ['fakeEnvPresets', 'envPresets'], ['fakeEnvStep', 'envStep'], ['fakeEnvCycles', 'envCycles']] as const) {
     const x = q.get(k)
     if (x !== null) p.set(v, x)
   }

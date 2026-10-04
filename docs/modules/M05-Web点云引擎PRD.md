@@ -223,7 +223,7 @@
 
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M05-FR-028 | DrawTable（RGBA32UI，宽 1024，每条 16 B）每帧重写，只上传用到的行（经典路径每行一个 `addUpdateRange`，three 的 update range 按单行上传，不得跨行）；NodeTable（RGBA32F，每节点 2 texel）在打开世界时写一次；无属性 `THREE.Points` 以 `drawRange = Σcnt` 单次绘制；顶点程序以 TSL 编写，按 `vertexIndex` 在 DrawTable 上做固定 12 次二分；整数参数全部为 float uniform；任何纹理不设 `internalFormat`；`frustumCulled = false`，`raycast` 置空 | P0 | V0.1 | 是 | M05-AC-019 像素一致；`render.calls` 等于 pass 计划 | ADR-007、ADR-010；g01 §4.5 |
+| M05-FR-028 | DrawTable（RGBA32UI，宽 1024，每条 16 B）每帧重写，只上传用到的行（经典路径每行一个 `addUpdateRange`，three 的 update range 按单行上传，不得跨行）；NodeTable（RGBA32F，每节点 2 texel）在打开世界时写一次；无属性 `THREE.Points` 以 `drawRange = Σcnt` 单次绘制（`GLPointsNodeMaterial` 在无 `position` 属性时把 `positionGeometry` 解析为常量，不再打印 AttributeNode 告警，ADR-086）；顶点程序以 TSL 编写，按 `vertexIndex` 在 DrawTable 上做固定 12 次二分；整数参数全部为 float uniform；任何纹理不设 `internalFormat`；`frustumCulled = false`，`raycast` 置空 | P0 | V0.1 | 是 | M05-AC-019 像素一致；`render.calls` 等于 pass 计划 | ADR-007、ADR-010；g01 §4.5 |
 | M05-FR-029 | Lite 点径：`pitch = childDrawnMask 在该点八分体为 1 ? 0.5·spacing_L : spacing_L`，`px = 1.7 · pitch · projK / (−z_view)`，叶节点钳到 `[minPx, maxPxEff]`、非叶节点钳到 `[minPx, maxPxCapEff]`（ADR-063，叶标志取 NodeTable t1.z）；`childDrawnMask` 只统计"本帧被绘制且淡入完成"的子节点，因此父节点八分体的点径在子节点淡入完成后才缩小；点形状 Tier S 为方点（无片元 discard），Tier B/A 为圆点（`length(pointCoord − 0.5) > 0.5` 时 discard），由后端档在构建时决定，不产生运行期变体 | P0 | V0.1 | 是 | M05-AC-020 | ADR-011；g02 §5.3；15 §10.3 |
 | M05-FR-030 | 自适应 maxPx：稀疏态（`limitedBy ∈ {budget, nodes}` 或覆盖率 < 0.95）取档位 `maxPxSparse`，否则取 `maxPx`（`maxPxEff`，叶节点与 `__perf.pc.maxPxEff` 的上限）；非叶节点在非稀疏态另以 `maxPxCap = min(maxPx, max(4, ⌈2.5·sizeK·τ⌉))` 钳制（`maxPxCapEff`，稀疏态等于 `maxPxEff`；ADR-063）；两者以 300 ms 时间常数指数平滑；minPx 取档位值 | P0 | V0.1 | 是 | `pc.maxPxEff` 在 flight60 中无阶跃；`tests/pointcloud/pointsize.test.ts` | ADR-011、ADR-063；g02 §5.3 |
 | M05-FR-031 | 节点淡入：节点首次上传后，按节点内下标 `local` 计算 Weyl 哈希 `fract(local · 0.618033988749895)`，≤ fade 的点保留，其余以零点径移出裁剪体；fade 在 `--duration-lod-fade`（250 ms）内按 `--ease-smooth-out` 从 0 到 1；不透明、写深度；reduced 动效档立即为 1；时长与曲线只来自生成的 token 模块，由薄适配层经 `options.tokens` 注入（engine 代码不 import `ui/**`，AWR-03 §4.2 第 2 条；M06 §14 第 11 条） | P0 | V0.1 | 是 | M05-AC-021 | ADR-029；15 §8.7；OLV `fadeDither.ts` |
@@ -1588,6 +1588,7 @@ def gen_flight60(world_dir: Path, out_dir: Path, *, fps: int = 60, seconds: floa
 ### 9.5 编码约束清单（评审逐条检查）
 
 1. 整数参数（`uNumDraws`、`uColorMode`、`classMask`、`taps`）一律 float uniform，着色器内 `int()`（g01 §0 第 5 条）。
+   点材质、ID pass 材质与 EDL 合成材质的 uniform 组由 M06 `AnetNodesHandler` 逐 draw 绑定（修复 5，ADR-086）：本模块不手写 `UniformsGroup`，每个程序的 block 数（现为顶点 2–3、片元 2）须在 WebGL2 最低上限（每阶段 12、合计 24）之内，`perf/m06/gpu-limits.spec.ts` 在模拟上限下覆盖。
 2. 任何纹理不设 `internalFormat`；整数纹理用 `RGBAIntegerFormat + UnsignedIntType`（g01 §0 第 10 条）。
 3. 热路径不用逐对象 `onObjectUpdate`；每节点参数一律来自 DrawTable 与 NodeTable（g01 §7）。
 4. `engine/pointcloud/**` 不 import `react`、`ui/**`、`viewport/**`、`stores/**`；与 store、token、图层注册表的连接全部由薄适配层 `viewport/layers/pointcloud.tsx` 完成（§7.3、§7.5），M05 所有的 `stores/{world,layers}.ts` 也不 import 引擎；engine 中不写时长、曲线字面量（motion-lint）。

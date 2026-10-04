@@ -37,6 +37,15 @@ export interface FakeSourceOptions {
   rate?: number
   eventPeriodS?: number
   envPeriodS?: number
+  /**
+   * weather presets the environment keyframes cycle through every envPeriodS (default clear, partlyCloudy, overcast,
+   * lightRain); 'all' in a fake URL is every preset of packages/contracts/env/presets.json (FX-UBO gpu-limits spec)
+   */
+  envPresets?: readonly string[]
+  /** step keyframes (the new preset applies at once) instead of 30 s smooth transitions */
+  envStep?: boolean
+  /** number of passes through envPresets, after which the first preset applies once more and holds (default: endless) */
+  envCycles?: number
   /** .awrrt bytes: replay mode */
   fixture?: ArrayBuffer | Uint8Array
   loop?: boolean
@@ -64,6 +73,8 @@ export function parseFakeUrl(url: string): FakeSourceOptions & { fixtureUrl?: st
   return {
     n: num('n'), world: q.get('world') ?? undefined, seed: num('seed'), window: num('window'), rate: num('rate'),
     eventPeriodS: num('eventPeriodS'), envPeriodS: num('envPeriodS'), loop: q.get('loop') === '1', ground: q.get('ground') === '1',
+    envPresets: q.get('envPresets') === 'all' ? presets().presets.map((p) => p.id) : q.get('envPresets')?.split(',').filter((x) => x !== ''),
+    envStep: q.get('envStep') === '1', envCycles: num('envCycles'),
     dropEveryS: num('drop'), sessionId: q.get('session') ?? undefined,
     start: start && start.length === 3 && start.every(Number.isFinite) ? [start[0], start[1], start[2]] : undefined,
     fixtureUrl: q.get('fixture') ?? undefined,
@@ -216,6 +227,9 @@ export class FakeWorld {
   private timer: ReturnType<typeof setInterval> | null = null
   private readonly eventPeriodTicks: number
   private readonly envPeriodS: number
+  private readonly envPresets: readonly string[]
+  private readonly envStep: boolean
+  private readonly envCycles: number
   private readonly dropEveryS: number
   private lastDropAt: number
   private connSeq = 0
@@ -263,6 +277,9 @@ export class FakeWorld {
     this.autoTick = o.autoTick !== false
     this.eventPeriodTicks = Math.max(1, Math.round((o.eventPeriodS ?? 2) * TICK_HZ))
     this.envPeriodS = o.envPeriodS ?? 20
+    this.envPresets = o.envPresets && o.envPresets.length > 0 ? [...o.envPresets] : ['clear', 'partlyCloudy', 'overcast', 'lightRain']
+    this.envStep = o.envStep === true
+    this.envCycles = o.envCycles !== undefined && o.envCycles > 0 ? Math.floor(o.envCycles) : Number.POSITIVE_INFINITY
     this.dropEveryS = o.dropEveryS ?? 0
     const n = Math.max(1, Math.min(1024, Math.floor(o.n ?? 1)))
     this.n = n
@@ -916,14 +933,15 @@ export class FakeWorld {
     this.publish(this.swarmCh, this.liteBytes) // copied into each frame by assemble() in this same tick
     for (const c of this.fullCh) if (c.refs > 0) this.publish(c, this.fullBytes.subarray(DS64.SIZE * c.row, DS64.SIZE * (c.row + 1)))
     if (k % TICK_HZ === 1 || k === 1) for (const c of this.extCh) if (c.refs > 0) this.publish(c, mpEncode(this.stateExt(c.row)))
-    const envDue = this.envT0Ns < 0 || (this.envPeriodS > 0 && this.tSimNs >= this.envT0Ns + this.envPeriodS * 1e9)
+    const envDue = this.envT0Ns < 0 || (this.envPeriodS > 0 && this.envVersion <= this.envCycles * this.envPresets.length
+      && this.tSimNs >= this.envT0Ns + this.envPeriodS * 1e9)
     if (envDue) {
       this.envVersion++
       const from = this.envT0Ns < 0 ? null : this.envPreset
-      const ids = ['clear', 'partlyCloudy', 'overcast', 'lightRain']
+      const ids = this.envPresets
       this.envPreset = ids[(this.envVersion - 1) % ids.length]
       this.envT0Ns = this.tSimNs
-      this.publish(this.envCh, mpEncode(this.keyframe(this.envVersion, this.tSimNs, from, this.envPreset)))
+      this.publish(this.envCh, mpEncode(this.keyframe(this.envVersion, this.tSimNs, this.envStep ? null : from, this.envPreset)))
       if (this.envVersion > 1) this.emit('env.changed', 1, { version: this.envVersion, by: 'fake', reason: 'preset' }, null, null)
     } else if (k % TICK_HZ === 0) {
       this.publish(this.envCh, this.envCh.payload ?? new Uint8Array(0))

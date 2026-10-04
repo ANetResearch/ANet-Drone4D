@@ -43,6 +43,22 @@ function demoPlugin(): Plugin {
   }
 }
 
+// R3F 9.8.1 在每个 store 里 new THREE.Clock()，three r183 起 Clock 已弃用、构造时打印一次弃用告警（FX-UBO，ADR-086）。
+// 只把 @react-three/fiber 自身模块对 'three' 的导入解析到 src/viewport/r3fThree.ts（three 原样再导出，Clock 换成字段与
+// 语义相同、不告警的 R3fClock）；其余模块与该文件自身对 'three' 的导入不受影响。vite dev 与 Vitest 浏览器模式的依赖
+// 预构建不经过插件，告警只在这两处保留。
+const R3F_THREE = resolve(import.meta.dirname, 'src/viewport/r3fThree.ts')
+function r3fClockPlugin(): Plugin {
+  return {
+    name: 'awr-r3f-clock',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source === 'three' && importer && /[\\/]@react-three[\\/]fiber[\\/]/.test(importer)) return R3F_THREE
+      return null
+    },
+  }
+}
+
 // 跨源隔离（AWR-11 TECH-FR-007）：dev 与 preview 都返回 COOP same-origin 与 COEP require-corp
 const COI_HEADERS = {
   'Cross-Origin-Opener-Policy': 'same-origin',
@@ -63,7 +79,7 @@ const PROXY = {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), ...(DEMO ? [demoPlugin()] : [])],
+  plugins: [r3fClockPlugin(), react(), tailwindcss(), ...(DEMO ? [demoPlugin()] : [])],
   resolve: { tsconfigPaths: true },
   server: {
     host: '127.0.0.1',

@@ -12,7 +12,7 @@ import { observeLoaf } from './loaf'
 import { PerfGovernor, type GovernorKnob } from './governor'
 import { LatencyMeter } from './latency'
 
-export { ring, pushRing, tailRing, lastOf, RING_CAP, LAYER_BUDGET_MS, INJECT, busyWait, pushGovernorHistory, pushLoafWorst, type Ring, type AwrPerf, type ForcedFlags, type LoafWorst, type GovernorEntry } from './probe'
+export { ring, pushRing, tailRing, lastOf, RING_CAP, LAYER_BUDGET_MS, INJECT, busyWait, pushGovernorHistory, pushLoafWorst, type Ring, type AwrPerf, type ForcedFlags, type LoafWorst, type GovernorEntry, type UboProbe } from './probe'
 export { refreshMs, onRefreshChange, setSoftware, sampler as frameSampler, feedInterval } from './frameSampler'
 export { isOurScript, isLoopCallback, oursOutsideLoop } from './loaf'
 export { PerfGovernor, GOVERNOR, type GovernorKnob, type GovernorStepNo, type CasHandle, type CasState } from './governor'

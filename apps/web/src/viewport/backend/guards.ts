@@ -4,6 +4,8 @@
 //   rule 11 instanced objects (InstancedMesh, InstancedBufferGeometry) do not share geometry -> M06-E008
 //   rule 5  no int/uint uniforms (UBO members are written as Float32) -> M06-E009
 //   rule 8  no texture.internalFormat on any backend                  -> M06-E010 family (texture wrapper assertion)
+//   rule 12 no hand-written uniform blocks (ShaderMaterial.uniformsGroups) -> M06-E017 (ADR-086: they would take
+//           WebGLRenderer's global binding points that AnetNodesHandler binds per draw)
 // Rules 2, 3, 6 and 9 (material.onBeforeRender, info.render.frame, onObjectUpdate on hot paths, RenderPipeline/pass/
 // MRT/storage/compute on the shared path) are enforced by the M06 lint (apps/web/tests/m06/lint, make lint-m06).
 import type { Material, Object3D, Texture } from 'three'
@@ -74,6 +76,14 @@ export function assertInstancing(root: Object3D, owners: Map<unknown, Object3D> 
   })
 }
 
+/** rule 12: uniform blocks only from node materials (bound per draw by AnetNodesHandler fix 5, ADR-086) */
+export function assertNoHandUniformBlocks(m: Material, where = ''): void {
+  const x = m as Material & { isNodeMaterial?: boolean; uniformsGroups?: unknown[] }
+  if (x.isNodeMaterial !== true && Array.isArray(x.uniformsGroups) && x.uniformsGroups.length > 0) {
+    throw new M06Error('M06-E017', `hand-written uniform blocks on ${where || m.type}: use a node material (blocks are bound per draw, ADR-086)`)
+  }
+}
+
 /** all guards over a layer root; materials are checked once */
 export function checkLayerRoot(root: Object3D | null, owners: Map<unknown, Object3D>, where: string): void {
   if (!root) return
@@ -81,7 +91,10 @@ export function checkLayerRoot(root: Object3D | null, owners: Map<unknown, Objec
   root.traverse((o) => {
     const m = (o as { material?: Material | Material[] }).material
     const mats = Array.isArray(m) ? m : m ? [m] : []
-    for (const x of mats) assertFloatUniforms(x, `${where}/${o.name || o.type}`)
+    for (const x of mats) {
+      assertFloatUniforms(x, `${where}/${o.name || o.type}`)
+      assertNoHandUniformBlocks(x, `${where}/${o.name || o.type}`)
+    }
   })
 }
 

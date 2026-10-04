@@ -27,4 +27,12 @@ export default [
     id: 'm06.layout', kind: 'pw', spec: 'perf/m06/layout.spec.ts', build: 'test', browser: 'C1', backend: { kind: 'none', world: 'shenzhen' }, params: {}, runs: 1,
     timeoutS: 240, acIds: ['M06-AC-048', 'M06-AC-049'], priority: 'P0', layer: 'core', gates: ['G2d'], metrics: [], owner: 'M06',
   },
+  // real-GPU uniform-block limits on SwiftShader (FX-UBO, ADR-086; VERIFY-UBO, ADR-087): emulated 24/12/12/24 (16 384 B blocks)
+  // and 36/14/14/28, Tier S and B, test and public demo builds, plus the low-poly instancing read-back on Tier S and B (the
+  // spec builds into .cache/gpu-limits unless GPU_LIMITS_TEST_DIST / GPU_LIMITS_DEMO_DIST are given, hence build 'none');
+  // functional, no frame-interval threshold
+  {
+    id: 'm06.gpu-limits', kind: 'pw', spec: 'perf/m06/gpu-limits.spec.ts', build: 'none', browser: 'C1', backend: { kind: 'none', world: 'synthcity' }, params: {},
+    runs: 1, timeoutS: 3000, acIds: ['M06-AC-058', 'M06-AC-059'], priority: 'P0', layer: 'core', gates: ['G2d'], metrics: [], owner: 'M06',
+  },
 ]
