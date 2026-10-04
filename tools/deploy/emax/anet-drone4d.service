@@ -1,0 +1,45 @@
+# /etc/systemd/system/anet-drone4d.service：ANet Drone4D 公开演示站（T4，AWR-19 §3.7、§4.4；ADR-085）。
+# 由 tools/deploy/emax/install.sh 安装（不要手改已安装的副本：下次安装会覆盖）。外层 systemd 只保活 supervisor，
+# sim-core 与 api 的启动顺序、心跳、退避与熔断由 supervisor 负责（AWR-19 §4.2）；supervisor 收到 SIGTERM 后按 api、sim-core
+# 的顺序优雅停止子进程（每步 5 s），因此 KillMode=mixed 只把 SIGTERM 发给主进程，超时后再一并 SIGKILL。
+# 日志：supervisor 的 stdout 与 stderr（READY 行、状态转移、告警，JSON 行）进 journal（journalctl -u anet-drone4d）；
+# 子进程日志另写 /opt/anet-drone4d/var/runs/<run>/logs/*.log（10 MB × 5 轮转）。
+
+[Unit]
+Description=ANet Drone4D public demo (World Runtime, synthcity, read-only)
+Documentation=https://github.com/ANetResearch/ANet-Drone4D/blob/main/tools/deploy/emax/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=awr
+Group=awr
+WorkingDirectory=/opt/anet-drone4d
+EnvironmentFile=/etc/anet-drone4d/env
+ExecStart=/opt/anet-drone4d/current/.venv/bin/python -m awr.runtime.supervisor -c /opt/anet-drone4d/current/configs/runtime.yaml
+Restart=always
+RestartSec=5
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+# 资源：4 核、约 2.8 GB 可用内存的共用主机，不与 ANet 生产服务争抢（实测 sim-core 约 0.25 核、全部进程约 0.6 GB）
+CPUQuota=200%
+MemoryMax=2G
+Nice=5
+LimitNOFILE=65536
+
+# 加固：不提权；/usr、/boot、/etc 只读（/opt/anet-drone4d 与 /dev/shm 可写）；不可见其他用户的家目录与 /tmp
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=anet-drone4d
+
+[Install]
+WantedBy=multi-user.target

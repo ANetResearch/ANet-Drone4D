@@ -101,3 +101,30 @@ def test_supervisor_cli_exits_2_on_bad_config(tmp_path: Path) -> None:
     r = subprocess.run([sys.executable, "-m", "awr.runtime.supervisor", "-c", str(p)], capture_output=True, text=True,
                        timeout=60)
     assert r.returncode == 2 and "net.nope" in r.stderr and "修复" in r.stderr
+
+
+def test_public_profile_for_demo_site() -> None:
+    """公开演示站 profile（ADR-082、ADR-085；AWR-19 §3.7）：只起核心进程、关闭热备用与钉核、synthcity 与循环剧本、
+    回环 18640、世界白名单与连接上限；部署域名必须由环境给出，绑定非回环地址拒绝启动。"""
+    with pytest.raises(ConfigError) as ei:
+        load_runtime_config(profile="public", env={})
+    assert ei.value.path == "net.origins"
+    env = {"AWR_ORIGINS": "https://drone4d.agentnetwork.org.cn"}
+    c = load_runtime_config(profile="public", env=env, world_fallback=True)
+    assert c.access_mode == "public" and c.net.bind == "127.0.0.1" and c.port_effective == 18640
+    assert c.rendezvous_effective == "tcp/127.0.0.1:18647" and c.cpu_pin_enabled is False
+    assert [p.name for p in c.enabled_procs() if not p.on_demand] == ["sim-core", "api"]
+    assert all(not p.standby for p in c.procs) and c.defaults.standby is False
+    assert (c.run.world, c.run.scenario, c.run.scenario_profile, c.run.fallback_world) == (
+        "synthcity", "s0-synthcity-showcase", "public", None)
+    assert c.net.worlds_allow == ["synthcity"] and c.net.ws_max == 64 and c.net.ws_max_per_ip == 4
+    assert c.net.trusted_proxies == ["127.0.0.1", "::1"]
+    assert "drone4d.agentnetwork.org.cn" in c.allowed_hosts
+    with pytest.raises(ConfigError) as ei:
+        load_runtime_config(profile="public", env=env | {"AWR_BIND": "0.0.0.0"})
+    assert ei.value.path == "net.bind"
+    with pytest.raises(ConfigError) as ei:
+        load_runtime_config(profile="public", env=env | {"AWR_TRUSTED_PROXIES": "nginx"})
+    assert ei.value.path == "net.trusted_proxies"
+    # 其他 profile 的热备用不受影响
+    assert load_runtime_config(profile="demo", env={}).proc("sim-core").standby is True

@@ -895,7 +895,8 @@
           "access_mode": {
             "enum": [
               "loopback",
-              "lan"
+              "lan",
+              "public"
             ],
             "title": "Access Mode",
             "type": "string"
