@@ -15,6 +15,7 @@ import { ShortcutTable } from '@/ui/views/ShortcutHelp'
 import { useRt } from '@/ui/shell/RtContext'
 import { roleKeyOf, useConnView } from '@/ui/shell/connView'
 import { releaseControl, requestControl } from '@/ui/shell/control'
+import { DEMO_PUBLIC } from '@/lib/demo'
 import { layers, useLayers } from '@/stores/layers'
 import { usePerf } from '@/stores/perf'
 import { setUserMotion, useMotionSource, useMotionTier, type UserMotion } from '@/ui/motion/tier'
@@ -121,10 +122,15 @@ function AccountTab() {
         <FieldLabel>{t('settings.role')}</FieldLabel>
         <FieldDescription data-account-role={role ?? ''}>{t(key)} {'·'} {t(`seat.${seat ?? 'none'}`)}</FieldDescription>
       </Field>
-      <Field orientation="horizontal">
-        {writer ? <Button size="sm" variant="outline" onClick={() => releaseControl()}>{t('control.release')}</Button>
-          : <Button size="sm" variant="outline" onClick={() => void requestControl(rt)}>{t('control.request')}</Button>}
-      </Field>
+      {DEMO_PUBLIC ? (
+        // public demo build (ADR-083): read-only for everyone, no control request
+        <FieldDescription data-account-demo="">{t('demo.readOnly')}</FieldDescription>
+      ) : (
+        <Field orientation="horizontal">
+          {writer ? <Button size="sm" variant="outline" onClick={() => releaseControl()}>{t('control.release')}</Button>
+            : <Button size="sm" variant="outline" onClick={() => void requestControl(rt)}>{t('control.request')}</Button>}
+        </Field>
+      )}
     </FieldGroup>
   )
 }

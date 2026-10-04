@@ -43,6 +43,7 @@ import { useRt } from '@/ui/shell/RtContext'
 import { apiGet } from '@/net/api'
 import { connViewStore, useConnView } from '@/ui/shell/connView'
 import { requestControl } from '@/ui/shell/control'
+import { DEMO_PUBLIC } from '@/lib/demo'
 import { writeDeniedKey } from '@/ui/shell/guards'
 import { toolMode } from '@/ui/tools/toolMode'
 import { OWNER_ICON } from '@/ui/panels/drones/DronesPanel'
@@ -151,7 +152,7 @@ function Commands({ id, ground }: { id: string; ground: GroundPickView | null })
           <Icon icon={notice === 'hint.replay' ? 'tl.history' : 'layer.visible'} />
           <span className="truncate">{notice === 'hint.readOnly' ? t('detail.readOnly') : t(notice)}</span>
         </span>
-        {notice === 'hint.readOnly' && denied !== 'hint.offline' ? (
+        {notice === 'hint.readOnly' && denied !== 'hint.offline' && !DEMO_PUBLIC ? (
           <Button size="xs" variant="outline" onClick={() => void requestControl(rt)}>{t('control.request')}</Button>
         ) : notice === 'hint.replay' && replayDeniedKey() === null ? (
           <Button size="xs" variant="outline" onClick={() => void leaveReplay()}>{t('replay.backToLive')}</Button>

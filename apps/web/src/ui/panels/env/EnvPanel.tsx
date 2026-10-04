@@ -18,6 +18,8 @@ import { Field, FieldLabel } from '@/ui/components/ui/field'
 import { Progress } from '@/ui/components/ui/progress'
 import { Slider } from '@/ui/components/ui/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/components/ui/tooltip'
+import { DEMO_PUBLIC } from '@/lib/demo'
 import { Icon } from '@/ui/icons/Icon'
 import type { IconKey } from '@/ui/icons/registry'
 import { LfStat } from '@/ui/lf/LfStat'
@@ -85,25 +87,42 @@ const isKey = (d: unknown): boolean => {
 }
 const first = (v: number | readonly number[]): number => (Array.isArray(v) ? (v[0] ?? 0) : (v as number))
 
+/**
+ * public demo build (ADR-083): disabled controls carry the read-only reason in a shadcn Tooltip; the wrapper takes the
+ * pointer because disabled controls do not. Outside the demo build (or when writable) the children render unchanged.
+ */
+function DemoReadOnly({ on, children, className }: { on: boolean; children: React.ReactElement; className?: string }) {
+  const t = useT()
+  if (!DEMO_PUBLIC || !on) return children
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<div className={className} data-demo-readonly="" />}>{children}</TooltipTrigger>
+      <TooltipContent>{t('demo.readOnly')}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 function EnvSlider({ id, label, icon, iconStyle, valueText, min, max, step, field, disabled, extra }: {
   id: string; label: string; icon: IconKey; iconStyle?: React.CSSProperties; valueText: string; min: number; max: number; step: number
   field: ReturnType<typeof useEnvField>; disabled: boolean; extra?: React.ReactNode
 }) {
   return (
-    <ShakeOnce trigger={field.shake}>
-      <div data-env-field={id} data-pending={field.pending ? '' : undefined}>
-        <Field>
-          <FieldLabel className="justify-between font-normal">
-            <span className="inline-flex items-center gap-1.5"><Icon icon={icon} style={iconStyle} data-rotate-icon={iconStyle ? '' : undefined} />{label}</span>
-            <span data-numeric="" className={cn('shrink-0 rounded-sm px-1', field.pending && 'ring-1 ring-ring')}>{valueText}</span>
-          </FieldLabel>
-          <Slider value={[Number.isFinite(field.value) ? field.value : min]} min={min} max={max} step={step} disabled={disabled} aria-label={label}
-            onValueChange={(v) => field.onChange(first(v))} onValueCommitted={(v, d) => field.commit(first(v), isKey(d))} />
-          {/* secondary facts under the slider, so the label row never wraps in the 288 px rail */}
-          {extra ? <span className="text-hud-sub">{extra}</span> : null}
-        </Field>
-      </div>
-    </ShakeOnce>
+    <DemoReadOnly on={disabled}>
+      <ShakeOnce trigger={field.shake}>
+        <div data-env-field={id} data-pending={field.pending ? '' : undefined}>
+          <Field>
+            <FieldLabel className="justify-between font-normal">
+              <span className="inline-flex items-center gap-1.5"><Icon icon={icon} style={iconStyle} data-rotate-icon={iconStyle ? '' : undefined} />{label}</span>
+              <span data-numeric="" className={cn('shrink-0 rounded-sm px-1', field.pending && 'ring-1 ring-ring')}>{valueText}</span>
+            </FieldLabel>
+            <Slider value={[Number.isFinite(field.value) ? field.value : min]} min={min} max={max} step={step} disabled={disabled} aria-label={label}
+              onValueChange={(v) => field.onChange(first(v))} onValueCommitted={(v, d) => field.commit(first(v), isKey(d))} />
+            {/* secondary facts under the slider, so the label row never wraps in the 288 px rail */}
+            {extra ? <span className="text-hud-sub">{extra}</span> : null}
+          </Field>
+        </div>
+      </ShakeOnce>
+    </DemoReadOnly>
   )
 }
 
@@ -166,22 +185,24 @@ export function EnvPanel() {
         <Alert><Icon icon="alert.warning" /><AlertDescription>{t('env.hashMismatch')}</AlertDescription></Alert>
       ) : null}
       {ro ? <p className="text-hud-sub text-muted-foreground">{t(denied)}</p> : null}
-      <ToggleGroup indicator={false} spacing={1} size="sm" variant="outline" value={active ? [active] : []} disabled={ro}
-        aria-label={t('env.presets')} className="grid w-full grid-cols-3"
-        onValueChange={(v: unknown[]) => {
-          const id = (v.length ? v[v.length - 1] : active) as PresetId | null
-          if (!id || id === active) return
-          setClicked(id)
-          runService('env:preset', 'env/preset', { name: presetWireName(id), duration_s: PRESET_DURATION_S }, t(`env.preset.${id}`))
-        }}>
-        {PRESETS.map((p) => (
-          <ToggleGroupItem key={p.id} value={p.id} aria-label={t(`env.preset.${p.id}`)} data-preset={p.id} data-pending={clicked === p.id ? '' : undefined}
-            className={cn('justify-start', clicked === p.id && 'ring-1 ring-ring')}>
-            <Icon icon={p.icon} data-icon="inline-start" />
-            <span className="truncate">{t(`env.preset.${p.id}`)}</span>
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+      <DemoReadOnly on={ro}>
+        <ToggleGroup indicator={false} spacing={1} size="sm" variant="outline" value={active ? [active] : []} disabled={ro}
+          aria-label={t('env.presets')} className="grid w-full grid-cols-3"
+          onValueChange={(v: unknown[]) => {
+            const id = (v.length ? v[v.length - 1] : active) as PresetId | null
+            if (!id || id === active) return
+            setClicked(id)
+            runService('env:preset', 'env/preset', { name: presetWireName(id), duration_s: PRESET_DURATION_S }, t(`env.preset.${id}`))
+          }}>
+          {PRESETS.map((p) => (
+            <ToggleGroupItem key={p.id} value={p.id} aria-label={t(`env.preset.${p.id}`)} data-preset={p.id} data-pending={clicked === p.id ? '' : undefined}
+              className={cn('justify-start', clicked === p.id && 'ring-1 ring-ring')}>
+              <Icon icon={p.icon} data-icon="inline-start" />
+              <span className="truncate">{t(`env.preset.${p.id}`)}</span>
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </DemoReadOnly>
       {transition.active ? (
         <div className="flex items-center gap-2 text-hud-sub" data-env-transition="">
           <Progress value={transition.progress * 100} className="flex-1" aria-label={t('env.transition')} />

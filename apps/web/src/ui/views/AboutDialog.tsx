@@ -4,7 +4,8 @@
 // the built-in worlds (UrbanScene3D, non-commercial research use, not redistributed), the fidelity statement
 // (simulated results, schematic coordinates), the copyright line and the component versions (contracts, world
 // content version, session). AboutContent is the single About placement, shared by the Help > About dialog and the
-// About tab of Settings.
+// About tab of Settings. The public demo build adds the demo-site row first (read-only, synthcity only, no server-side
+// GPU features; ADR-083).
 import type * as React from 'react'
 import { useT } from '@/app/i18n'
 import { CONTRACTS_VERSION } from '@awr/contracts/layouts'
@@ -16,6 +17,7 @@ import { BrandBadge } from '@/ui/brand'
 import { overlays, useOverlays } from '@/ui/shell/overlays'
 import { useConnView } from '@/ui/shell/connView'
 import { useWorld } from '@/stores/world'
+import { DEMO_PUBLIC } from '@/lib/demo'
 import { useModalFrameCap } from './useModalFrameCap'
 
 export const APP_VERSION = '0.1.0'
@@ -59,6 +61,11 @@ export function AboutContent({ showVersion = true }: { showVersion?: boolean }) 
       </div>
       <Separator />
       <dl className="grid grid-cols-[5.5rem_1fr] gap-x-4 gap-y-2.5 text-hud-sub leading-relaxed">
+        {DEMO_PUBLIC ? (
+          <Row label={t('demo.about')}>
+            <span data-about-demo="">{t('demo.aboutSummary')}</span>
+          </Row>
+        ) : null}
         <Row label={t('about.license')}>
           <span data-about-license="">{t('about.licenseSummary')}</span>
         </Row>

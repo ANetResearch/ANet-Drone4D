@@ -1,7 +1,7 @@
 // Application root (M15-FR-001, FR-002, §6.3.1): providers from the outside in (root error boundary, i18n, theme, Query,
 // Tooltip, Toast, RtProvider), the resident WorldCanvas on the --z-canvas layer (never unmounted by routing), the router
 // outlet (sandbox shell, overlay pages, pages) and the global layers. ?chrome=0 renders the canvas only (the canvas-only
-// baseline of AWR-18 §9.5).
+// baseline of AWR-18 §9.5): no shell, no global layers and no toaster (notices take the non-DOM channel, ADR-081).
 import * as React from 'react'
 import { useT } from '@/app/i18n'
 import { notify } from '@/app/providers/ToastProvider'
@@ -17,6 +17,7 @@ import { useShellLayout } from '@/ui/layout/layoutState'
 import { BANNER_PX, useBannerCount } from '@/ui/notify/Banners'
 import { Sandbox } from '@/ui/views/Sandbox'
 import { prefs } from '@/stores/prefs'
+import { DEMO_PUBLIC } from '@/lib/demo'
 import { selection } from '@/stores/selection'
 import { ViewportErrorBoundary } from './providers/ErrorBoundaries'
 import { UI_ONLY } from '@/ui/testing/uiOnly'
@@ -46,11 +47,12 @@ function RouterOutlet() {
   React.useEffect(() => {
     boot.resolveGate('shell')
   }, [])
-  // page title: the product name "ANet Drone4D" (the ANetResearch/ANet-Drone4D repository), prefixed with the view
+  // page title: the product name "ANet Drone4D" (the ANetResearch/ANet-Drone4D repository), prefixed with the view; the
+  // public demo build names the demo site ("ANet Drone4D Public Demo", ADR-083)
   const routeId = route?.route.id ?? null
   const viewWorld = route?.params.id ?? null
   React.useEffect(() => {
-    const product = t('brand.product')
+    const product = t(DEMO_PUBLIC ? 'demo.product' : 'brand.product')
     const view = routeId === 'world' && viewWorld ? viewWorld : routeId && ['worlds', 'jobs', 'runs', 'report', 'reports', 'bench'].includes(routeId) ? t(`title.${routeId}`) : null
     document.title = view ? t('title.view', { view, product }) : product
   }, [routeId, viewWorld, t])
@@ -86,7 +88,7 @@ export function App() {
   const route = useRoute()
   const chrome = route ? parseChrome(route.search) : true
   return (
-    <ErrorBoundaryShell>
+    <ErrorBoundaryShell toasts={chrome}>
       <div data-app="" className="app-root">
         {UI_ONLY ? <div data-viewport="" className="app-layer-canvas bg-background" /> : (
           <ViewportErrorBoundary>

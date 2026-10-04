@@ -2,6 +2,7 @@
 // en with the fallback chain en -> zh-CN; D1 ships zh-CN only. Missing keys render the key name and warn in dev builds
 // (M15-E002). Components under app/** and ui/** hold no CJK literals (lint I18N-01): all texts live in the JSON files.
 import { useSyncExternalStore } from 'react'
+import { DEMO_PUBLIC } from '@/lib/demo'
 import { uxDefect } from '@/ui/testing/uxProbe'
 import zhCN from './zh-CN.json'
 import en from './en.json'
@@ -10,8 +11,22 @@ import { formatMessage } from './plural'
 
 export type Locale = 'zh-CN' | 'en'
 type Dict = Readonly<Record<string, string>>
-const ZH: Dict = { ...(zhCN as Dict), ...(reasonsZh as Dict) }
-const DICTS: Record<Locale, Dict> = { 'zh-CN': ZH, en: en as Dict }
+// public demo build (ADR-083): every read-only reason and the viewer role read "the public demo is read-only", and the
+// live-rewind hint no longer points at the recordings list (not offered there); the keys stay the same, so every guard,
+// Tooltip and notice that compares or shows them works unchanged
+const DEMO_ALIASES: Readonly<Record<string, string>> = {
+  'hint.readOnly': 'demo.readOnly', 'detail.readOnly': 'demo.readOnly', 'hint.needSeat': 'demo.readOnly',
+  'hint.replaySeat': 'demo.readOnly', 'role.viewer': 'demo.role', 'role.viewerSeatTaken': 'demo.role',
+  'hint.liveNoRewind': 'demo.liveNoRewind',
+}
+function withDemo(d: Dict): Dict {
+  if (!DEMO_PUBLIC) return d
+  const out: Record<string, string> = { ...d }
+  for (const [k, v] of Object.entries(DEMO_ALIASES)) if (d[v]) out[k] = d[v]
+  return out
+}
+const ZH: Dict = withDemo({ ...(zhCN as Dict), ...(reasonsZh as Dict) })
+const DICTS: Record<Locale, Dict> = { 'zh-CN': ZH, en: withDemo(en as Dict) }
 
 let locale: Locale = 'zh-CN'
 let dict: Dict = ZH

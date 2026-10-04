@@ -28,6 +28,7 @@ import { confirmThen } from './ConfirmHost'
 import { removeVehicles } from './removeVehicles'
 import { registerAction, type ActionDescriptor } from './registry'
 import { runForSelection } from './vehicleCommands'
+import { DEMO_HIDDEN_ACTIONS, DEMO_PUBLIC } from '@/lib/demo'
 
 const primary = () => selectionStore.getState().primary
 const hasSel = () => selectionStore.getState().ids.length > 0
@@ -227,6 +228,12 @@ export function registerBuiltinActions(): void {
     },
   }))
   for (const a of A) {
+    // public demo build (ADR-083): no entry to the hidden pages; bookmarks are a write (operator) and not offered
+    if (DEMO_PUBLIC && DEMO_HIDDEN_ACTIONS.has(a.id)) continue
+    if (DEMO_PUBLIC && a.id === 'timeline.bookmark') {
+      a.when = () => false
+      a.disabledReasonKey = () => 'hint.readOnly'
+    }
     registerAction(a)
     if (a.hotkey) {
       registerHotkey({

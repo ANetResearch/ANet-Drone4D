@@ -1,7 +1,8 @@
 // ADR-076 (M15-FR-006; D1-AC-25): after the pre-raster phase the boot mask opens the real command palette below the mask
 // until the frames settle, closes it and resolves only after the dialog overlay unmounted, so no exit animation shows
-// after the reveal (then an info and a success toast of the page's toaster are shown and closed the same way); a palette
-// that is already open is left alone.
+// after the reveal (then an info and a success toast of the page's toaster are shown and closed the same way); on Tier S
+// both run again at motion tier reduced and the toasts run at both tiers (ADR-081); a palette that is already open is left
+// alone while the toast pass still runs.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.setConfig({ testTimeout: 30_000 })
@@ -62,10 +63,17 @@ describe('palette rehearsal below the boot mask', () => {
     closeSpy.mockRestore()
   })
 
-  it('Tier S: a second pass at motion tier reduced, then the governor input is restored', async () => {
+  it('Tier S: a second pass at motion tier reduced, toasts at both tiers, then the governor input is restored', async () => {
     const { overlaysStore } = await import('@/ui/shell/overlays')
-    const { getGovernorMotion } = await import('@/ui/motion/tier')
+    const { getGovernorMotion, getMotionTier } = await import('@/ui/motion/tier')
     const { rehearsePalette } = await import('@/app/boot/BootMask')
+    const { toast } = await import('@/ui/components/ui/toast')
+    const added: { id: string; tier: string }[] = []
+    const addSpy = vi.spyOn(toast, 'add').mockImplementation((o: { id?: string }) => {
+      added.push({ id: o.id ?? '', tier: getMotionTier() })
+      return o.id ?? ''
+    })
+    const closeSpy = vi.spyOn(toast, 'close').mockImplementation(() => {})
     const seen: boolean[] = []
     const un = overlaysStore.subscribe((s) => seen.push(s.palette))
     installDom(2, { open: () => overlaysStore.getState().palette })
@@ -74,16 +82,35 @@ describe('palette rehearsal below the boot mask', () => {
     await rehearsePalette()
     un()
     expect(seen).toEqual([true, false, true, false])
+    expect(added.map((x) => x.id)).toEqual(['boot-rehearsal-info', 'boot-rehearsal-success', 'boot-rehearsal-reduced-info',
+      'boot-rehearsal-reduced-success'])
+    expect(added[2].tier).toBe('reduced')
     expect(getGovernorMotion()).toBe(before)
+    addSpy.mockRestore()
+    closeSpy.mockRestore()
   })
 
-  it('leaves a palette that is already open alone', async () => {
+  it('leaves a palette that is already open alone and still rehearses the toasts', async () => {
     const { overlays, overlaysStore } = await import('@/ui/shell/overlays')
     const { rehearsePalette } = await import('@/app/boot/BootMask')
+    const { toast } = await import('@/ui/components/ui/toast')
+    const added: string[] = []
+    const addSpy = vi.spyOn(toast, 'add').mockImplementation((o: { id?: string }) => {
+      added.push(o.id ?? '')
+      return o.id ?? ''
+    })
+    const closeSpy = vi.spyOn(toast, 'close').mockImplementation(() => {})
     overlays.set('palette', true)
+    const seen: boolean[] = []
+    const un = overlaysStore.subscribe((s) => seen.push(s.palette))
     installDom(3, { open: () => overlaysStore.getState().palette })
     await rehearsePalette()
+    un()
+    expect(seen).toEqual([])
     expect(overlaysStore.getState().palette).toBe(true)
+    expect(added).toEqual(['boot-rehearsal-info', 'boot-rehearsal-success'])
     overlays.set('palette', false)
+    addSpy.mockRestore()
+    closeSpy.mockRestore()
   })
 })

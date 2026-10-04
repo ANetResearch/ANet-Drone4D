@@ -1,6 +1,8 @@
 // REST fetchers and token (AWR-03 §4.1: net/api.ts holds only fetchers and the token; QueryClient, keys and
 // queryOptions live in app/query, M15). Owner: M11. Errors are problem+json (AWR-17 §4.4): ApiError carries the HTTP
 // status, the reason code and the Chinese message and remedy from the server.
+import { DEMO_PUBLIC } from '@/lib/demo'
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -122,7 +124,9 @@ function writeHint(h: string): void {
  * POST /api/auth/token {role, principal_hint, client}. Returns '' when no gateway answers (offline, FakeSource), so the
  * realtime client still starts; the token is cached until one minute before expiry.
  */
-export async function getToken(role: 'viewer' | 'operator' | 'admin' = 'operator', o: { force?: boolean } = {}): Promise<string> {
+export async function getToken(role: 'viewer' | 'operator' | 'admin' = DEMO_PUBLIC ? 'viewer' : 'operator', o: { force?: boolean } = {}): Promise<string> {
+  // public demo build (ADR-083): anonymous visitors are viewers; the server refuses operator without the admin secret
+  if (DEMO_PUBLIC) role = 'viewer'
   if (o.force) {
     // the realtime link was refused (4401, 4403, whoami 401): issue a fresh token for the same principal_hint
     cached = null

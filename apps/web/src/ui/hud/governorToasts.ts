@@ -1,7 +1,8 @@
 // Degradation and backend notices (M15-FR-097; AWR-14 §7.5; ADR-041): the M06 engine events `governor.step` (dir -1 =
 // one degradation sub-step, +1 = one restore) and `backend.notice`. A degradation raises one merged toast (key
 // "governor"; the same knob toasts at most once per INPUT.governorToastDedupMs); restoring never toasts (the HUD row just
-// disappears); `webgpu.unavailable` and `pointsize.degraded` raise one info toast each per page.
+// disappears); `webgpu.unavailable` and `pointsize.degraded` raise one info toast each per page. On ?chrome=0 there is no
+// toast surface: notify() records the notice in its non-DOM channel, so no step writes to the DOM there (ADR-081).
 import { hasKey, t } from '@/app/i18n'
 import { notify } from '@/app/providers/ToastProvider'
 import { events } from '@/engine'

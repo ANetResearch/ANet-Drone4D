@@ -23,6 +23,7 @@ import {
 } from '@/engine/time/index'
 import { rtClient, str, type PlaybackState, type RtClient, type RtEvent, type ServerInfoView, type TimeFrameView } from '@/net/rt'
 import { apiGet, getToken } from '@/net/api'
+import { DEMO_PUBLIC } from '@/lib/demo'
 import { selectionStore } from './selection'
 import { uiTickDue } from './uiTick'
 
@@ -408,7 +409,7 @@ async function backfillEvents(): Promise<void> {
 /** recording state from GET /api/runs/{run}: an OPEN segment of the current live run means "recording" */
 async function probeRecording(): Promise<void> {
   const s = timelineStore.getState()
-  if (!s.runId || s.mode !== 'live') return
+  if (!s.runId || s.mode !== 'live' || DEMO_PUBLIC) return  // the public demo runs no recorder and offers no runs REST (ADR-083)
   try {
     const meta = await apiGet<Record<string, unknown>>(`/api/runs/${encodeURIComponent(s.runId)}`)
     const segs = Array.isArray(meta.segments) ? (meta.segments as Record<string, unknown>[]) : []
@@ -760,11 +761,14 @@ async function apiSend<T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, bod
 
 async function loadBookmarks(run: string): Promise<void> {
   let shared: Bookmark[] = []
-  try {
-    const r = await apiGet<{ items: Record<string, unknown>[] }>(`/api/runs/${encodeURIComponent(run)}/bookmarks`)
-    shared = (r.items ?? []).map((x) => fromWire(x, 'user'))
-  } catch {
-    shared = []
+  // the public demo offers no runs REST (ADR-083): local bookmarks only
+  if (!DEMO_PUBLIC) {
+    try {
+      const r = await apiGet<{ items: Record<string, unknown>[] }>(`/api/runs/${encodeURIComponent(run)}/bookmarks`)
+      shared = (r.items ?? []).map((x) => fromWire(x, 'user'))
+    } catch {
+      shared = []
+    }
   }
   if (timelineStore.getState().runId !== run) return
   setBookmarks([...shared, ...readLocal(run)])

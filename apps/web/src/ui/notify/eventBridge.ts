@@ -12,6 +12,7 @@ import { TEST_SWITCHES } from '@/lib/testSwitches'
 import type { RtClient, RtEvent } from '@/net/rt'
 import { selection } from '@/stores/selection'
 import { UX } from '@/ui/testing/uxProbe'
+import { noteUiWork } from './afterLayout'
 import { commitAlarms, consumeAlarm, type AlarmItem } from './alarms'
 import { commitEventLog, eventLog } from './eventLog'
 import { skipAlarmToast, toastAlarm, toastInfoEvent } from './toastMerger'
@@ -92,6 +93,7 @@ export function flushEvents(): void {
   batchView.length = 0
   commitEventLog()
   commitAlarms()
+  noteUiWork() // a toast write waits for a frame without this flush (ADR-081)
   if (TEST_SWITCHES) {
     const ms = performance.now() - t0
     UX.bridge.flushes++

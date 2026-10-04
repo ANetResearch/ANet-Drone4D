@@ -12,6 +12,8 @@ import { fmt } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/components/ui/tooltip'
+import { DEMO_PUBLIC } from '@/lib/demo'
 import { ButtonGroup } from '@/ui/components/ui/button-group'
 import { Icon } from '@/ui/icons/Icon'
 import { LfTable, type LfColumn } from '@/ui/lf/LfTable'
@@ -119,11 +121,22 @@ export function TimelinePanel() {
               <IconButton icon="tl.skipfwd" variant="outline" label={seekOk ? t('timeline.nextMark') : t('hint.replaySeat')} hotkey="PageDown" disabled={!seekOk} onClick={() => timeline.jumpMarker(1)} />
             </ButtonGroup>
           ) : null}
-          <Button size="sm" variant="outline" disabled={!runId} onClick={() => void bookmarkUi.addAndEdit()}>
-            <Icon icon="tl.bookmark" data-icon="inline-start" />
-            {t('timeline.addBookmark')}
-          </Button>
-          {mode === 'replay' ? (
+          {DEMO_PUBLIC ? (
+            // public demo build (ADR-083): bookmarks are a write, disabled with the read-only reason; no recordings list
+            <Tooltip>
+              <TooltipTrigger render={<Button size="sm" variant="outline" disabled focusableWhenDisabled className="aria-disabled:opacity-50" data-demo-readonly="" />}>
+                <Icon icon="tl.bookmark" data-icon="inline-start" />
+                {t('timeline.addBookmark')}
+              </TooltipTrigger>
+              <TooltipContent>{t('demo.readOnly')}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button size="sm" variant="outline" disabled={!runId} onClick={() => void bookmarkUi.addAndEdit()}>
+              <Icon icon="tl.bookmark" data-icon="inline-start" />
+              {t('timeline.addBookmark')}
+            </Button>
+          )}
+          {DEMO_PUBLIC ? null : mode === 'replay' ? (
             <Button size="sm" variant="outline" onClick={() => void timeline.closeReplay()} data-replay-exit="">
               <Icon icon="tl.live" data-icon="inline-start" />
               {t('replay.backToLive')}

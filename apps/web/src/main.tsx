@@ -6,7 +6,7 @@ import './styles/index.css'
 import { App } from '@/app/App'
 import { boot } from '@/app/boot/BootController'
 import { startRouter } from '@/app/router/router'
-import { parseTier } from '@/app/router/search'
+import { parseChrome, parseTier } from '@/app/router/search'
 import { installRoutes } from '@/app/router/table'
 import { registerExtPanels, registerCorePanels } from '@/ui/panels/builtin'
 import { registerBuiltinActions } from '@/ui/actions/builtin'
@@ -16,6 +16,7 @@ import { installGovernorToasts } from '@/ui/hud/governorToasts'
 import { recordTtfp } from '@/app/query/options'
 import { initMotionTier, setGovernorMotion, setUserMotion } from '@/ui/motion/tier'
 import { prewarmIcons } from '@/ui/icons/prewarm'
+import { installLayoutClock } from '@/ui/notify/afterLayout'
 import { installPerfUi, PERF_UI } from '@/ui/shell/perfUi'
 import { installUx } from '@/ui/testing/uxProbe'
 import { installUxBindings } from '@/ui/testing/uxBindings'
@@ -28,6 +29,8 @@ import { INPUT } from '@/lib/tokens/input.gen'
 import { perfStore } from '@/stores/perf'
 import { prefsStore } from '@/stores/prefs'
 
+// the post-layout clock of toast delivery first: its ResizeObserver must be the first of the page (ADR-081)
+installLayoutClock()
 installPerfUi()
 installUx()
 installUxBindings()
@@ -73,9 +76,11 @@ boot.start()
 loop.onRunningChange((running) => {
   if (running) boot.resolveGate('canvas')
 })
+// ?chrome=0 (canvas only) has no icons to morph: no idle warm-up slices there (ADR-081)
+const chromeOn = parseChrome(new URLSearchParams(location.search))
 boot.subscribe((s) => {
   if (s !== 'REVEALED') return
-  prewarmIcons()
+  if (chromeOn) prewarmIcons()
   // World Hub "last TTFP" is a local record of this browser (not part of the REST contract)
   const m = /^\/world\/([a-z0-9-]{1,63})/.exec(location.pathname)
   if (m) recordTtfp(m[1], perfProbe().load.ttfp)

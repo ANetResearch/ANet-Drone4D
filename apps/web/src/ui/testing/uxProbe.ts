@@ -7,7 +7,7 @@ export interface UxProbe {
   boot: { state: string; revealAt: number }
   camera: { mode: string; followLock: boolean; lastFlight: { durationMs: number; d_m: number } }
   selection: { ids: string[]; primary: string | null }
-  toasts: { visible: number; merged: Record<string, number> }
+  toasts: { visible: number; merged: Record<string, number>; headless: number }
   red: Record<string, { kind: string; id: string } | null>
   rayHitRequests: number
   droneRail: { renderedRows: number; visibleRows: number }
@@ -22,7 +22,7 @@ export const UX: UxProbe = {
   boot: { state: 'SHELL', revealAt: Number.NaN },
   camera: { mode: 'orbit', followLock: false, lastFlight: { durationMs: 0, d_m: 0 } },
   selection: { ids: [], primary: null },
-  toasts: { visible: 0, merged: {} },
+  toasts: { visible: 0, merged: {}, headless: 0 },
   red: {},
   rayHitRequests: 0,
   droneRail: { renderedRows: 0, visibleRows: 0 },

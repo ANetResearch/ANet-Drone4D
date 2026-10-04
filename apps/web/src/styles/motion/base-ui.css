@@ -98,26 +98,28 @@
     transition-property: transform, opacity, width, height;
   }
 
-  /* 22 toast + 32 banner-stacking: Base UI Toast, limit 3 */
+  /* 22 toast + 32 banner-stacking: Base UI Toast, limit 3. Transform and opacity only (ADR-081): the toast is its own
+     compositor layer (will-change-transform), so both run on the compositor without main-thread style, layout or paint
+     per frame. The recipe's blur (a filter: a render surface and a blur pass per frame, and on Tier S another set of
+     SwiftShader routines at the first toast) and the height transition of the stack (layout on every frame of a stack
+     change) are not used; a stacked toast takes its new height at once, behind the front toast whose content is shown */
   [data-slot="toast"] {
     --peek: var(--stack-peek);
     --scale: calc(max(0, 1 - (var(--toast-index) * var(--stack-depth-scale))));
     transition:
       transform var(--toast-open) var(--toast-ease),
-      opacity   var(--toast-open) var(--toast-ease),
-      filter    var(--toast-open) var(--toast-ease),
-      height    var(--duration-quick) var(--toast-ease);
+      opacity   var(--toast-open) var(--toast-ease);
     &:not([data-expanded], [data-starting-style], [data-ending-style], [data-limited]) {
       opacity: calc(1 - min(var(--toast-index), 2) * var(--stack-depth-fade) * 0.5);
     }
     &[data-limited] { opacity: 0; }
     &[data-starting-style] {
-      opacity: 0; filter: blur(var(--toast-blur));
+      opacity: 0;
       transform: translateY(var(--toast-distance)) scale(var(--toast-scale));
     }
     &[data-ending-style] { transition-duration: var(--toast-close); }
     &[data-ending-style]:not([data-limited]):not([data-swipe-direction]) {
-      opacity: 0; filter: blur(var(--toast-blur));
+      opacity: 0;
       transform: translateY(calc(var(--toast-distance) - (var(--toast-index) * var(--peek)) - (var(--shrink) * var(--height))))
                  scale(calc(var(--scale) * var(--toast-scale)));
     }

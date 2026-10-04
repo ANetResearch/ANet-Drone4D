@@ -93,3 +93,44 @@
   inset: auto calc(100vw - var(--uo-x, 0px) - var(--uo-w, 100vw) + 0.75rem) calc(100vh - var(--uo-y, 0px) - var(--uo-h, 100vh) + 0.75rem) auto;
   width: 22.5rem; max-width: 22.5rem; margin: 0;
 }
+/* The page toaster's viewport (not the warm stage specimens) is a resident, fixed-size, contained compositor layer
+   (ADR-081; D1-AC-27, D1-AC-03a): it exists from the first commit, its own layer is created before any toast (will-change),
+   size, layout, paint and style containment make it a relayout boundary, so a toast added, updated or removed inside it
+   never dirties the layout of the page, and its fixed box (the toast column plus a bleed for the shadow, the focus ring
+   and the 16 px entry offset) never changes with the toasts. Toasts keep their bottom-right corner 12 px inside the
+   unobscured rect: the box grows by the bleed on every side and the toasts are inset by it. The stack area holds three
+   expanded toasts of two description lines (3 x 98 px + 2 gaps); taller content is clipped at the top of the box. */
+[data-slot="toast-viewport"]:not([data-warm-stage] *) {
+  --toast-bleed: 1.5rem;
+  --toast-stack-h: 24rem;
+  inset: auto calc(100vw - var(--uo-x, 0px) - var(--uo-w, 100vw) + 0.75rem - var(--toast-bleed))
+    calc(100vh - var(--uo-y, 0px) - var(--uo-h, 100vh) + 0.75rem - var(--toast-bleed)) auto;
+  width: calc(22.5rem + 2 * var(--toast-bleed)); max-width: none;
+  height: calc(var(--toast-stack-h) + 2 * var(--toast-bleed));
+  contain: size layout paint style; will-change: transform;
+}
+[data-slot="toast-viewport"]:not([data-warm-stage] *) > [data-slot="toast"] {
+  right: var(--toast-bleed); bottom: var(--toast-bleed); width: 22.5rem;
+}
+/* The content box keeps its own height (not h-full): a stacked toast takes the front toast's height (--height), and with
+   h-full every add or removal resized the content of every toast in the stack, so Base UI's ResizeObserver on each
+   content re-measured it with a flushSync render (3 x 7-9 ms in the frame of an add during the storm, FX-TOAST
+   diagnostics). The content of a toast behind the front one is transparent (data-behind), so its overflow never shows */
+[data-slot="toast-viewport"]:not([data-warm-stage] *) [data-slot="toast-content"] { height: auto; }
+/* The per-toast stack variables (Base UI's inline --toast-* and the root's own --height, --offset-y, --peek, --scale,
+   --shrink of toast.tsx and the motion recipe) are read on the toast root only: registered as non-inherited, a change of
+   a toast's index on every add or removal restyles the roots, not every element inside them (35-40 % of the restyle of
+   an add with four toasts, FX-TOAST static measurement). --gap stays inherited: the root's ::after (the hover bridge
+   between stacked toasts) reads it, and --toast-frontmost-height is set on the viewport and inherited by the roots. The
+   generic names (--height, --offset-y, --peek, --scale, --shrink) are the toast root's own: no other part may expect them
+   to inherit. */
+@property --toast-index { syntax: '*'; inherits: false; }
+@property --toast-offset-y { syntax: '*'; inherits: false; }
+@property --toast-height { syntax: '*'; inherits: false; }
+@property --toast-swipe-movement-x { syntax: '*'; inherits: false; }
+@property --toast-swipe-movement-y { syntax: '*'; inherits: false; }
+@property --height { syntax: '*'; inherits: false; }
+@property --offset-y { syntax: '*'; inherits: false; }
+@property --peek { syntax: '*'; inherits: false; }
+@property --scale { syntax: '*'; inherits: false; }
+@property --shrink { syntax: '*'; inherits: false; }

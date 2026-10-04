@@ -5,6 +5,8 @@
 // badge (conn.online, morphing to WifiOff with a red outline when the link is down; WS RTT as C-class text; HoverCard
 // with RTT, rates, reconnects and serverInfo); role and seat (viewer "read-only" with Eye, operator, admin; request or
 // release control); the alarm centre (the only solid red of the header); the command palette and settings.
+// Public demo build (ADR-083): the role badge reads "public demo · read-only" with the read-only Tooltip and offers no
+// control request; the Jobs, Runs, replay and Bench entries are left out and Help links back to the demo home page.
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useT } from '@/app/i18n'
@@ -36,6 +38,8 @@ import { usePrefs } from '@/stores/prefs'
 import { timelineStore, useTimeline } from '@/stores/timeline'
 import { REPO_URL } from '@/ui/views/AboutDialog'
 import { useSelection } from '@/stores/selection'
+import { DEMO_PUBLIC } from '@/lib/demo'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/components/ui/tooltip'
 import { layoutActions } from './layoutState'
 import { IconButton } from './IconButton'
 
@@ -123,6 +127,21 @@ function ConnBadge() {
         </dl>
       </HoverCardContent>
     </HoverCard>
+  )
+}
+
+/** public demo: the visitor is always a viewer; the badge explains the read-only mode instead of offering control */
+function DemoRoleBadge() {
+  const t = useT()
+  const role = useConnView((s) => s.role)
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Badge variant="outline" tabIndex={0} className="h-6 gap-1" data-role={role ?? ''} data-demo-role="" />}>
+        <Icon icon="layer.visible" />
+        {t('demo.role')}
+      </TooltipTrigger>
+      <TooltipContent>{t('demo.readOnly')}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -280,7 +299,7 @@ export function AppHeader({ compact }: { compact: boolean }) {
             </MenubarGroup>
             <MenubarSeparator />
             <MenubarGroup>
-              {replay ? <ActionItem id="replay.exit" /> : <MenubarItem onClick={() => navigate('/runs')}><Icon icon="tl.history" />{t('menu.sim.replay')}</MenubarItem>}
+              {replay ? <ActionItem id="replay.exit" /> : DEMO_PUBLIC ? null : <MenubarItem onClick={() => navigate('/runs')}><Icon icon="tl.history" />{t('menu.sim.replay')}</MenubarItem>}
               <ActionItem id="timeline.bookmark" />
             </MenubarGroup>
           </MenubarContent>
@@ -307,11 +326,15 @@ export function AppHeader({ compact }: { compact: boolean }) {
               <MenubarItem onClick={() => layoutActions.openDockTab('charts')}>{t('panel.charts.title')}</MenubarItem>
               <MenubarItem onClick={() => layoutActions.openDockTab('timeline')}>{t('panel.timeline.title')}</MenubarItem>
             </MenubarGroup>
-            <MenubarSeparator />
-            <MenubarGroup>
-              <MenubarItem onClick={() => navigate('/jobs')}><Icon icon="nav.recon" />{t('menu.tools.jobs')}</MenubarItem>
-              <MenubarItem onClick={() => navigate('/runs')}><Icon icon="data.folder" />{t('menu.tools.runs')}</MenubarItem>
-            </MenubarGroup>
+            {DEMO_PUBLIC ? null : (
+              <>
+                <MenubarSeparator />
+                <MenubarGroup>
+                  <MenubarItem onClick={() => navigate('/jobs')}><Icon icon="nav.recon" />{t('menu.tools.jobs')}</MenubarItem>
+                  <MenubarItem onClick={() => navigate('/runs')}><Icon icon="data.folder" />{t('menu.tools.runs')}</MenubarItem>
+                </MenubarGroup>
+              </>
+            )}
           </MenubarContent>
         </MenubarMenu>
         <MenubarMenu>
@@ -319,7 +342,9 @@ export function AppHeader({ compact }: { compact: boolean }) {
           <MenubarContent>
             <MenubarGroup>
               <MenubarItem onClick={() => overlays.set('help', true)}>{t('menu.help.shortcuts')}<Shortcut combo="shift+Slash" /></MenubarItem>
-              <MenubarItem onClick={() => navigate('/bench')}>{t('menu.help.bench')}</MenubarItem>
+              {DEMO_PUBLIC ? (
+                <MenubarItem onClick={() => location.assign('/')} data-demo-home=""><Icon icon="nav.world" />{t('demo.home')}</MenubarItem>
+              ) : <MenubarItem onClick={() => navigate('/bench')}>{t('menu.help.bench')}</MenubarItem>}
             </MenubarGroup>
             <MenubarSeparator />
             <MenubarGroup>
@@ -336,7 +361,9 @@ export function AppHeader({ compact }: { compact: boolean }) {
             <BreadcrumbSeparator />
             <BreadcrumbItem className="min-w-0">
               {/* the run being viewed (the replayed recording in replay); opens Runs (AWR-14 §2.3, UX-FR-006) */}
-              {shownRun ? (
+              {shownRun && DEMO_PUBLIC ? (
+                <BreadcrumbPage className="max-w-44 truncate px-2 font-mono text-xs text-muted-foreground" data-crumb="run">{shownRun}</BreadcrumbPage>
+              ) : shownRun ? (
                 <Button variant="ghost" size="xs" className="max-w-44 font-mono" onClick={() => navigate('/runs')}
                   aria-label={`${t('runs.open')} ${shownRun}`} data-crumb="run">
                   <span className="truncate">{shownRun}</span>
@@ -352,7 +379,7 @@ export function AppHeader({ compact }: { compact: boolean }) {
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <Clock />
         <ConnBadge />
-        <RoleBadge />
+        {DEMO_PUBLIC ? <DemoRoleBadge /> : <RoleBadge />}
         <AlarmCenter />
         <Button variant="outline" size="sm" onClick={() => overlays.set('palette', true)} aria-label={t('header.search')}>
           <Icon icon="cmd.search" data-icon="inline-start" />

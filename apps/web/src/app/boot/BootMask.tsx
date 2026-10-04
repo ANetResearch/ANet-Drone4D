@@ -21,7 +21,11 @@
 // input, list) is opened below the mask until the frames settle again, closed, and the reveal waits for its overlay to
 // unmount (an exit animation must never show after the reveal); an info and a success toast of the page's own toaster
 // follow the same way. On Tier S both are repeated at motion tier reduced (the tier PerfGovernor step 6 sets shortly
-// after the reveal; popups and toasts then appear and leave without transitions).
+// after the reveal; popups and toasts then appear and leave without transitions). Toast coverage of every mode
+// (ADR-081): the toast pass runs at the starting tier as well (Tier S lite: the first toast of a session that PerfGovernor
+// never takes to step 6, a command result before it, or a storm whose first visible step is step 1, ACC-5 4.3), and
+// it runs when the palette was already open; ?chrome=0 mounts no toaster (its notices never reach the DOM), so there is
+// nothing to rehearse there.
 import * as React from 'react'
 import { t } from '@/app/i18n'
 import { MOTION } from '@/lib/tokens/motion.gen'
@@ -135,9 +139,9 @@ function liveToasts(): number {
  * REHEARSE_CLOSE_MAX_MS). The specimens of the warm stage sit in a static container without the toaster's position,
  * stacking and enter transition, so the first real toast still compiled 4-7 routines (FX2-R5 ops diagnostics)
  */
-function toastPass(): Promise<void> {
+function toastPass(pass = ''): Promise<void> {
   return new Promise((done) => {
-    const ids = (['info', 'success'] as const).map((type) => toast.add({ id: `boot-rehearsal-${type}`, type, timeout: 0,
+    const ids = (['info', 'success'] as const).map((type) => toast.add({ id: `boot-rehearsal-${pass}${type}`, type, timeout: 0,
       title: t('boot.phase.warming'), description: t('boot.phase.firstScreen') }))
     const t0 = performance.now()
     let last = t0
@@ -165,29 +169,32 @@ function toastPass(): Promise<void> {
 }
 
 /**
- * the real command palette opened and closed below the mask (ADR-076); skipped when something already opened it. On
- * Tier S a second pass runs at motion tier reduced: PerfGovernor step 6 sets it about 5 s after the reveal in most
- * sessions, and without the open and close transitions the compositor draws the popup with other program variants
+ * the real command palette opened and closed below the mask (ADR-076), then the toasts (ADR-081); a palette that something
+ * already opened is left alone, the toast passes still run. On Tier S a second pass runs at motion tier reduced:
+ * PerfGovernor step 6 sets it about 5 s after the reveal in most sessions, and without the open and close transitions the
+ * compositor draws the popup and the toasts with other program variants
  */
 export async function rehearsePalette(): Promise<void> {
-  if (typeof document === 'undefined' || overlaysStore.getState().palette || boot.state === 'BOOT_ERROR') return
+  if (typeof document === 'undefined' || boot.state === 'BOOT_ERROR') return
+  const palette = (): boolean => !overlaysStore.getState().palette
+  const failed = (): boolean => boot.state === 'BOOT_ERROR' // read again after every await
   performance.mark?.('awr.boot.rehearse.start')
   hideWarmStage()
-  await palettePass()
+  if (palette()) await palettePass()
+  // the starting tier (Tier S lite, Tier B/A full or the user's setting)
+  if (liveToasts() === 0 && !failed()) await toastPass()
   const tierS = document.documentElement?.dataset?.tier === 'S'
-  const failed = (): boolean => boot.state === 'BOOT_ERROR' // read again after the await (TS narrowed it above)
   if (!tierS || getMotionTier() === 'reduced' || getMotionTier() === 'off' || failed()) {
-    if (liveToasts() === 0 && !failed()) await toastPass()
     performance.mark?.('awr.boot.rehearse.end')
     return
   }
-  // Tier S: the reduced pass, with the toasts (the first toasts after the reveal come from PerfGovernor step 7, issued in
-  // the same evaluation as step 6, i.e. at motion tier reduced)
+  // Tier S: the reduced pass (the first toasts after the reveal come from PerfGovernor step 7, issued in the same
+  // evaluation as step 6, i.e. at motion tier reduced, in most full-scene sessions)
   const prev = getGovernorMotion()
   setGovernorMotion('reduced')
   try {
-    await palettePass()
-    if (liveToasts() === 0 && !failed()) await toastPass()
+    if (palette() && !failed()) await palettePass()
+    if (liveToasts() === 0 && !failed()) await toastPass('reduced-')
   } finally {
     setGovernorMotion(prev)
     performance.mark?.('awr.boot.rehearse.end')

@@ -4,6 +4,7 @@
 // contract: the last TTFP per world is a local record (awr.ui.ttfp.v1, written when a world reveals).
 import { queryOptions } from '@tanstack/react-query'
 import { apiGet } from '@/net/api'
+import { demoWorlds } from '@/lib/demo'
 import { qk } from './keys'
 
 export type WorldStatus = 'ready' | 'missing' | 'building' | 'stale' | 'failed' | 'invalid'
@@ -90,7 +91,8 @@ export const worldsQuery = () =>
   queryOptions({
     queryKey: qk.worlds(),
     queryFn: ({ signal }) => apiGet<{ items?: WorldWire[]; next_cursor?: string | null }>('/api/worlds?limit=100', { signal }),
-    select: mapWorldList,
+    // the public demo build lists only the demo world even if a server lists more (ADR-083; the server filters as well)
+    select: (d: { items?: WorldWire[] }) => demoWorlds(mapWorldList(d)),
   })
 
 /** world.json `dataset` block (AWR-16; M16-FR-006 / FR-010 data source and citation shown in the WORLD group and About) */
