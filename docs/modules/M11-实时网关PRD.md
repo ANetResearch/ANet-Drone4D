@@ -346,6 +346,14 @@
 | M11-FR-102 | `--inproc` 启动器 `python -m awr.api.inproc`：同一进程内以线程运行 sim-core 主循环（M08 提供 `run(cfg, bus, ring)` 入口），使用 LocalBus 与 LocalRing；只用于测试与 ≤ 50 架降级演示，不参与性能验收 | P0 | V0.1 | 是 | M11-AC-041 | AWR-03 §3.3；g05 §3.7 |
 | M11-FR-103 | 会话世界切换（run 切换）：席位持有者经 WS `call session/start{world_id, scenario_id?}` 或 R09 `POST /api/sessions` 发起；api 校验席位与世界 status = ready 后广播 `session.switching`，以 `sys/run{cid, world_id, scenario_id, principal}` 请 supervisor 编排（超时 10 s、不重试，回复 `{status, code, run_id, world_id, scenario_id, segment}`）；收到回复后 api 以新命名空间 `awr/<world>/<run>` 重开 Bus、LiveSource 等待新 `proc/sim-core/ready` 后 attach，全局 epoch 在内存中 + 1 并写入新 run 的 `gw.epoch`，WS 连接不断开，依次下发 `session.switched`、新 `serverInfo`、全量 advertise、TIME、SNAPSHOT；旧 run 的 token 在 REST 返回 302；新 sim-core 启动失败时回到旧世界并发 `session.error`（123 或 213）；切换期间写操作返回 118 | P1 | V0.1 | 是 | M11-AC-043 | 10 AD-01、AD-09、§4.6；12 §4.1.4；17 §9.3 `sys/run` |
 | M11-FR-104 | 停止流程：api 收到 SIGTERM 后置 `stopping`，新 `call` 与写类 REST 返回 213，广播事件 `sys.shutting_down`（level 1，12 S20）与 `status{id: "proc.api", level: warning}`，随后以 1001 关闭全部 WS，关闭 Bus 并排空 audit 写线程，5 s 内退出（超时由 supervisor SIGKILL） | P0 | V0.1 | 是 | M11-AC-049 | 10 §4.6；12 §4.1.2 S20；19 §4.2；g05 §7.6 |
+| M11-AC-060 | 公开模式的鉴权与策略 | public 模式（未配置口令）：viewer 签发 200、operator 与 admin 403 `115`；配置口令后错误 401 `304`、正确放行；回环与其他 Origin 的 REST 403 `303`、WS 升级 403；viewer 的命令、环境、机群、任务、会话写入 403 `115`，WS `call` 115；功能族 404 `305`；白名单外世界的静态与 REST 404，世界列表只含白名单 | `pytest tests/rt/test_public_mode.py` | 本机 CPU | P1 | FR-120、122、123 |
+| M11-AC-061 | 客户端地址 | 可信代理之后按 `X-Forwarded-For` 得到客户端地址：自右向左第一个不可信、不可解析条目之前的内容不可信、无转发头取 `X-Real-IP`、对端不可信时忽略转发头；审计 `auth.denied` 的 source 为客户端地址 | `pytest tests/rt/test_public_mode.py::test_client_ip_rules`、`::test_audit_source_is_client_ip` | 本机 CPU | P1 | FR-121 |
+| M11-AC-062 | 公开模式的连接与限流 | 同一客户端地址第 3 条 WS（上限 2）得到 `error 316` + 4429，另一地址不受影响；同一地址第 11 次 token 签发 429 `111`，另一地址照常 | `pytest tests/rt/test_public_mode.py::test_ws_per_ip_limit_behind_proxy`、`::test_token_rate_limit_per_client_ip` | 本机 CPU | P1 | FR-124 |
+| M11-FR-120 | 公开访问模式（ADR-082；17 §3.3 第 3 行）：`AWR_ACCESS_MODE=public` 只能绑定回环地址且必须配置 `AWR_ORIGINS`（否则配置以退出码 2 拒绝）；匿名只签 viewer（不占席位）；operator 与 admin 只认 `AWR_ADMIN_SECRET_FILE` 的口令（不读 `runs/<run>/admin.token`），未配置时 403 `115`（`detail.why = PUBLIC_READONLY`），口令错误 401 `304`；token `mode` 与签发回复的 `access_mode` 为 `public`；Origin 白名单只有 `AWR_ORIGINS` 的精确值 | P1 | V0.1 | 是 | M11-AC-060 | ADR-082；17 §3.1–§3.3 |
+| M11-FR-121 | 客户端地址：`AWR_TRUSTED_PROXIES`（IP 或 CIDR）中的对端按 `X-Forwarded-For` 自右向左取第一个不可信地址（遇到不可解析的条目即停止；无转发头时取 `X-Real-IP`），否则为对端地址；只用于限流键、WS 连接计数与审计、日志来源（`awr.api.public.client_ip`），不参与鉴权 | P1 | V0.1 | 是 | M11-AC-061 | ADR-082；17 §3.3 规则 7 |
+| M11-FR-122 | 世界白名单 `AWR_WORLDS_ALLOW`（任何模式）：`/worlds/<id>/**`、`/api/worlds/<id>`、`/api/world/<id>/**` 中不在白名单的世界在 Host 与 Origin 之后 404 `305`（`_shared` 除外）；`GET /api/worlds` 只列白名单内的世界 | P1 | V0.1 | 是 | M11-AC-060 | ADR-082 |
+| M11-FR-123 | 公开模式的 REST 策略（中间件，在路由依赖之前）：演示站不提供的功能族（runs、jobs、recon、agents、agent-tasks、perf-report(s)、procs、audit、rt inspect 与 topics、OpenAPI）对 admin 以外 404 `305`；operator 以下角色的写请求只放行 token 签发、`env/query` 与 world query，其余 403 `115` 并记审计；`/api/sys/info` 的细节只给 admin；OpenAPI 不暴露 | P1 | V0.1 | 是 | M11-AC-060 | ADR-082；17 §3.3 规则 8 |
+| M11-FR-124 | 公开模式的限流与连接：按客户端地址追加令牌桶 public_api（20/s，突发 120，健康检查除外）、auth（0.5/s，突发 10）、world_query（20/s，突发 40），超限 429 `111`；WS 总数上限取 `AWR_WS_MAX`（缺省 32），每个客户端地址上限 `AWR_WS_MAX_PER_IP`（缺省不限制；public profile 64 与 4），超限 `error 316` + 4429；supervisor 把 `net.allowed_hosts`、`trusted_proxies`、`worlds_allow`、`ws_max`、`ws_max_per_ip` 注入子进程 | P1 | V0.1 | 是 | M11-AC-061、062 | ADR-082；17 §3.4 |
 
 ---
 
@@ -1654,6 +1662,7 @@ async def issue(req: TokenReq, mode: AccessMode) -> TokenResp:
 2. 管理口令只在局域网模式签 operator 与任意模式签 admin 时需要；口令文件 `runs/<run>/admin.token` 0600，启动时打印到终端一次（AWR-03 §3.3）。
 3. `AWR_SECRET` 从 `runs/<run>/secret` 读取（经 `AWR_SECRET_FILE`），不经环境变量传值；`K_auth`、`K_lease`、`K_entry`、`K_confirm` 以 HKDF 分钥（ADR-027）。
 4. 回环模式下 Vite 开发服务器（5173）与 SSH 转发的任意本地端口都在 Origin 白名单内（正则允许任意端口）。
+5. **公开模式**（ADR-082，FR-120 至 FR-124；实现 `awr/api/public.py`）：HostGuard 之后取客户端地址（FR-121，写入 `scope["state"]["client_ip"]`，审计与限流都用它）；OriginGuard 只认 `AWR_ORIGINS`；配置了世界白名单时在 Auth 之前拒绝白名单外的世界（静态与 REST 一律 404 `305`）；Auth 之后执行 `public_policy`（功能族 404、只读写入 403）与按地址的 public_api、auth、world_query 令牌桶；token 签发在公开模式下只认 `AWR_ADMIN_SECRET_FILE`，未配置时 operator 与 admin 403 `115`。WS 端点在 token 之后按 principal、总数与客户端地址三项计数（FR-124）。回环与局域网模式不经过这些分支，行为不变。
 
 ---
 ## 7. 接口

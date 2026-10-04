@@ -313,6 +313,7 @@
 | M10-FR-067 | `facade_coverage`：在目标立面柱面上建 2 m × 2 m 网格（z 区间取剧本给定的立面范围，S1 为 world z [45, 374.1]，12 §7.1.3）；5 Hz 用 M13 相机模型判断视锥、距离 ≤ 2·standoff、入射角 ≤ 60°，并用 M04 `segment_los` 判断视线；被覆盖格的比例 | P0 | V0.1 | 是 | M10-AC-003 | 12 §7.1.3；x01 §3.11 |
 | M10-FR-068 | `area_coverage` 由覆盖栅格给出；`formation_err_rms_m` 为槽位参考与实际位置之差的 RMS（10 Hz 累计）；`agl_min_m`、`agl_rms_err_m` 在地形跟随段上统计 | P0 / P1 | V0.1 | 是 | M10-AC-019、026 | 12 §7.1.3 |
 | M10-FR-069 | 大编组任务（≥ 32 机）的主循环开销上界（AWR-03 ADR-073 第 3、5 条）：①入圆段直线粗校验（`coarse_proven`，N = 1000 时约 1.7 ms/次）每次 mission_engine stage 全部任务合计至多 2 次，其余轨道保持 idle、之后的 stage 续做；粗校验不通过时记下（入圆点、生效区、机体位置），同一入圆点、同一组生效区且机体离记下的位置 ≤ 1 m 时不再重做、直接走 plan-pool 转场（结果必然仍不通过；适用于全部任务。n1000 稳态中个别机体转场确定性失败、按 30 s 退避续飞，每次续飞在 stage 内重做一次约 2.5 ms 的粗校验，与 12 个 tick 后的转场下发落在同一秒，使该秒单步 p99 超过 3 ms）；②FCU 链路丢失（M09 `safety.flag_fcu = 0`，例如 link_drop）的机体不续飞（K07"机体可用"），其挂起轨道不逐 stage 复查，链路恢复由每 1 s 一次的兜底全量检查发现；③`state/mission` 的进度、ETA 与"规划中"汇总分片累加（每次至多 64 条轨道，一轮完成前沿用上一轮的值，任务状态字段照常即时更新；`mission_progress` 度量不经缓存）；④小编组任务（S1–S6）的时序不变；⑤转场被地理围栏拒绝的记忆（AWR-03 ADR-074 第 6 条，适用于全部任务）：转场 follow_path 以 102 GEOFENCE_REJECT 失败后记下该转场（规划器、长度、最高点、生效区、机体位置），退避续飞规划出的转场与之相同（规划器与生效区相同，长度与最高点各差 < 1 m，机体离记下的位置 ≤ 1 m）时不再下发，保持 SUSPENDED 并按原退避续飞；转场不同或某次转场成功后照常下发、清除记忆。ladder n1000 中 sim-0406 的转场每次都爬升到约 378 m、每次都被拒，每 30 s 一次的下发与准入在主循环内约 7 ms（mission 5.3–6.6 ms + 输入日志 2 ms）；转场为何爬升到该高度（规划器高度上限与围栏不一致）列为遗留项 | P0 | V0.1 | 是 | `tests/mission`（含 `test_transit_reject_memo.py`）；D1-AC-07、D1-AC-27 | ADR-065；ADR-070；ADR-073；ADR-074 |
+| M10-FR-090 | 循环剧本（`on_complete = reset`，ADR-084）：导演在 `scenario.result` 之后 `LOOP_GAP_S` = 8 s【仿真】经 `M10Runtime.request_loop_reset()` 请求一次剧本重置（SimCore `request_reset` 入步边界 inbox，下一次 drain 执行与 `sim/reset` 相同的路径，原因 `scenario_loop`，`args.loop_index` 为下一轮序号）；重置钩子记下轮次，重新加载时按 `scenario_loader.rotate_weather` 把天气序列循环左移该轮次（深拷贝，不改剧本文件的 sha256）；人工 `sim/reset` 与崩溃重启的轮次归零 | P1 | V0.1 | 是 | M10-AC-050 | ADR-084；AWR-16 §12.1 |
 
 ---
 
@@ -1654,6 +1655,7 @@ def track_step(idx, kind, off, nseg, ts, tau, rate, rate_tgt, rate_slope, rate_d
 | M10-AC-032 | 世界绑定 | 用错误的 `coordinate.sha256` 启动 plan-pool | 拒绝加载，调用返回 123（`PLAN_GRID_MISMATCH`） | `pytest tests/planning/test_binding.py` | 本机 CPU | P0 | FR-031 |
 | M10-AC-033 | 前端 store | 回放 `.awrrt` 夹具（S1 两个任务） | store 写入 ≤ 4 Hz；`rows` 与夹具最终态一致；路径缓冲零拷贝（引用相同的 ArrayBuffer） | `vitest apps/web/tests/mission/store.test.ts` | 本机 | P0 | FR-066 |
 | M10-AC-034 | 规划时延 | safe_transit、follow_path 作业（六城） | safe_transit p95 ≤ 50 ms；follow_path（≤ 200 航点、≤ 5 km）p95 ≤ 500 ms；1000 航点、20 km 的最坏情况 ≤ 2.0 s | `pytest tests/planning/test_latency.py` | 本机 CPU | P0 | NFR-004、005 |
+| M10-AC-050 | 剧本 | 循环剧本 | 小剧本（无任务、12 s 时限、两条天气事件）以 `on_complete = reset` 运行：结束后约 8 s 只重置一次、epoch + 1、两轮的天气序列分别左移 1 与 2 位、人工重置后轮次归零；`rotate_weather` 整轮回到原序列且不改入参 | `pytest tests/mission/test_director.py::test_loop_reset_rotates_weather` | 本机 CPU | P1 | FR-090 |
 
 ---
 

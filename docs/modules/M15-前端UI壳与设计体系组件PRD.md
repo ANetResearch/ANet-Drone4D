@@ -177,10 +177,10 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 |---|---|---|---|---|---|---|
 | M15-FR-001 | 入口 `main.tsx` 创建 React 根；`app/App.tsx` 把 M06 的 `<WorldCanvas>` 常驻挂在 `--z-canvas` 层，路由只切换其上的 DOM 层（画布不随路由卸载）；StrictMode 只在 dev 构建开启，所有 effect 有对称 cleanup（Worker、RtClient、订阅） | P0 | V0.1 | 是 | M15-AC-001、002 | AWR-14 §2.1 规则 1；n05 §6 第 14 条 |
 | M15-FR-002 | Providers 自外向内：RootErrorBoundary → I18nProvider → ThemeProvider（固定 `dark`，无热键、无 `disableTransitionOnChange`）→ QueryClientProvider → TooltipProvider → ToastProvider（`limit=3`）→ RtProvider → Router → AppShell | P0 | V0.1 | 是 | M15-AC-001 | d04 §6 第 1 条；g07 §6 第 6 条 |
-| M15-FR-003 | 自研路由器（原生 `URLPattern` + `history`，约 200 行）：路由表由 `app/routes/*.tsx` 经 `import.meta.glob` 自动登记（扩展点）；D1-core 路由 `/`（重定向 `/world/shenzhen`）、`/worlds`、`/world/:id`、`/reports/:rid` 与 `/reports`（仅带 `src` 参数，供 M16 `render.mjs`，FR-080）；D1-ext 路由见 FR-022；未知路由重定向 `/worlds` 并 Toast 1 条 | P0 | V0.1 | 是 | M15-AC-003 | AWR-03 §4.3；AWR-14 §2.2；n05 §5.5；M16-FR-071 |
-| M15-FR-004 | 查询参数 `cam`、`sel`、`panel`、`settings`、`t` 的解析与校验（非法值静默忽略）；相机与选择变化以 `replaceState` 写回，节流 `input.urlSyncHz`（1 Hz）；路由切换 `pushState`。`?chrome=0` 在生产与测试构建都解析：不渲染 UI 壳（只保留 WorldCanvas 与 LabelLayer），供 `scene=pc` 与 D1-AC-23 的"只有画布"配对基线（AWR-18 §9.5）；`tier`、`rb`、`allowFallback`、`motion` 只在 dev/test 构建解析（术语见 §1.5）；其他模块的开关（`bench`、`city`、`scene`、`source`、`fixedB`、`quality`、`perfInject`、`rt`）原样保留，路由器写回 URL 时不清除 | P0 | V0.1 | 是 | M15-AC-003、058 | AWR-14 §2.2；ADR-044；AWR-18 §9.5 |
+| M15-FR-003 | 自研路由器（原生 `URLPattern` + `history`，约 200 行）：路由表由 `app/routes/*.tsx` 经 `import.meta.glob` 自动登记（扩展点）；D1-core 路由 `/`（重定向 `/world/shenzhen`）、`/worlds`、`/world/:id`、`/reports/:rid` 与 `/reports`（仅带 `src` 参数，供 M16 `render.mjs`，FR-080）；D1-ext 路由见 FR-022；未知路由重定向 `/worlds` 并 Toast 1 条；公开演示构建只注册其中 4 条路由（FR-122，ADR-083）。 | P0 | V0.1 | 是 | M15-AC-003 | AWR-03 §4.3；AWR-14 §2.2；n05 §5.5；M16-FR-071 |
+| M15-FR-004 | 查询参数 `cam`、`sel`、`panel`、`settings`、`t` 的解析与校验（非法值静默忽略）；相机与选择变化以 `replaceState` 写回，节流 `input.urlSyncHz`（1 Hz）；路由切换 `pushState`。`?chrome=0` 在生产与测试构建都解析：不渲染 UI 壳（只保留 WorldCanvas 与 LabelLayer），也不挂载 Toast 表面（`notify()` 走非 DOM 通道，见 FR-089，ADR-081），供 `scene=pc` 与 D1-AC-23 的"只有画布"配对基线（AWR-18 §9.5）；`tier`、`rb`、`allowFallback`、`motion` 只在 dev/test 构建解析（术语见 §1.5）；其他模块的开关（`bench`、`city`、`scene`、`source`、`fixedB`、`quality`、`perfInject`、`rt`）原样保留，路由器写回 URL 时不清除 | P0 | V0.1 | 是 | M15-AC-003、058 | AWR-14 §2.2；ADR-044；AWR-18 §9.5 |
 | M15-FR-005 | 世界切换：校验 id `^[a-z0-9-]{1,63}$`；经门面调用 M05 `openWorld`，不重建渲染器；清空选择集；视口中央显示紧凑加载卡（`Card size="sm"` + `Progress`），首帧后 `--duration-quick` 淡出 | P0 | V0.1 | 是 | M15-AC-004 | AWR-03 §5.6；AWR-10 §6.6；D1-AC-02 |
-| M15-FR-006 | 启动控制器 BootController（SHELL、WARMING、FIRST_SCREEN、REVEALED、BOOT_ERROR，§6.3.3）：`index.html` 内联静态遮罩（完整徽章 480 px + 阶段文字）在 JS 解析前显示；揭开条件为"首个含点帧已提交且 shader zoo 完成"；揭开时调用门面 `perf.markReveal()`，遮罩以 `--duration-fast` + `--ease-smooth-out` 淡出；揭开不等待 WS。预光栅阶段（ADR-069）：UI 壳挂载时（非 `?chrome=0`）登记启动闸门 `uiWarm`，其余闸门全部满足后，遮罩图层以不透明度 0.996 绘制（合成器不再裁掉其下的壳）并显示预热舞台 `app/boot/WarmStage.tsx`（四级 Toast、对话框与警示对话框、命令面板列表、弹出层与菜单、Tooltip、按钮与徽标各变体、表单控件、与 ViewCube 同构并逐帧转动的 3D 立方体），连续两帧间隔 ≤ 100 ms（至少 6 帧且 400 ms）或满 2 s 后进入命令面板预演（ADR-076）：隐藏预热舞台，在遮罩下打开真实命令面板（全视口遮罩层、弹层、聚焦输入框与列表），至少 4 帧且连续两帧 ≤ 100 ms（或满 1.5 s）后输入一次查询（列表过滤后的状态），再次稳定后清空查询并关闭，等其遮罩层卸载（至多 1 s）再过一帧；Tier S 上再以 motion 档 reduced 重复一遍（PerfGovernor ⑥ 多在揭开后约 5 s 设为 reduced，弹层无过渡时合成器用另一组程序变体），之后恢复 motion 输入，然后解除闸门并揭开（舞台样本不能覆盖面板首次合成：SwiftShader 按同一提交内此前的绘制为合成器绘制取例程变体，只有真实层叠顺序下的真实对话框才得到相同变体；首次打开原有 13–15 次 JIT、136–168 KB、220–280 ms 的帧）；面板已被打开时跳过；预热舞台在揭开的同一任务内隐藏；遮罩从一开始就是独立合成层（`will-change: opacity`），淡出不重新栅格徽章；错误态恢复不透明遮罩 | P0 | V0.1 | 是 | M15-AC-005 | AWR-14 §7.3；ADR-007；ADR-032 |
+| M15-FR-006 | 启动控制器 BootController（SHELL、WARMING、FIRST_SCREEN、REVEALED、BOOT_ERROR，§6.3.3）：`index.html` 内联静态遮罩（完整徽章 480 px + 阶段文字）在 JS 解析前显示；揭开条件为"首个含点帧已提交且 shader zoo 完成"；揭开时调用门面 `perf.markReveal()`，遮罩以 `--duration-fast` + `--ease-smooth-out` 淡出；揭开不等待 WS。预光栅阶段（ADR-069）：UI 壳挂载时（非 `?chrome=0`）登记启动闸门 `uiWarm`，其余闸门全部满足后，遮罩图层以不透明度 0.996 绘制（合成器不再裁掉其下的壳）并显示预热舞台 `app/boot/WarmStage.tsx`（四级 Toast、对话框与警示对话框、命令面板列表、弹出层与菜单、Tooltip、按钮与徽标各变体、表单控件、与 ViewCube 同构并逐帧转动的 3D 立方体），连续两帧间隔 ≤ 100 ms（至少 6 帧且 400 ms）或满 2 s 后进入命令面板预演（ADR-076）：隐藏预热舞台，在遮罩下打开真实命令面板（全视口遮罩层、弹层、聚焦输入框与列表），至少 4 帧且连续两帧 ≤ 100 ms（或满 1.5 s）后输入一次查询（列表过滤后的状态），再次稳定后清空查询并关闭，等其遮罩层卸载（至多 1 s）再过一帧；Tier S 上再以 motion 档 reduced 重复一遍（PerfGovernor ⑥ 多在揭开后约 5 s 设为 reduced，弹层无过渡时合成器用另一组程序变体），Toast 预演（页面自己的 toaster 显示并关闭一条 info 与一条 success Toast，等其卸载）在起始 motion 档（Tier S 为 lite）与 reduced 档各做一遍，面板已被打开时只跳过面板、Toast 照常（ADR-081：Tier S 上 PerfGovernor 未走到 ⑥ 的会话、⑥ 之前的命令结果与风暴中第一个可见步骤 ① 的第一条 Toast 都在 lite 档）；之后恢复 motion 输入，然后解除闸门并揭开（舞台样本不能覆盖面板首次合成：SwiftShader 按同一提交内此前的绘制为合成器绘制取例程变体，只有真实层叠顺序下的真实对话框才得到相同变体；首次打开原有 13–15 次 JIT、136–168 KB、220–280 ms 的帧）；面板已被打开时跳过；预热舞台在揭开的同一任务内隐藏；遮罩从一开始就是独立合成层（`will-change: opacity`），淡出不重新栅格徽章；错误态恢复不透明遮罩 | P0 | V0.1 | 是 | M15-AC-005 | AWR-14 §7.3；ADR-007；ADR-032 |
 | M15-FR-007 | 限帧协同：覆盖页可见面积 ≥ 90% 时 `viewport.setFrameCap(5)`；Dialog、AlertDialog、CommandDialog、设置打开时 `setFrameCap(15)`，在 `onOpenChangeComplete(false)` 恢复；窗口 < 1280 × 720 时全屏 `Empty` 并 `setSuspended(true)`，恢复后自动继续 | P0 | V0.1 | 是 | M15-AC-006 | AWR-14 §2.1 规则 2、§14.1；d02 §4.6；g07 §1.1 第 6 条 |
 | M15-FR-008 | 错误边界三级：根、视口、每个面板各一个；UI 错误态 E-01 至 E-15 按 AWR-14 §7.6 呈现，面板错误只替换面板体（"重新加载面板"） | P0 | V0.1 | 是 | M15-AC-007 | AWR-14 §7.6 |
 | M15-FR-009 | 深链恢复：先加载世界，再按 `cam`、`sel` 恢复；不存在的机体 id 被忽略，并以 1 条 Toast 说明数量 | P0 | V0.1 | 是 | M15-AC-003 | AWR-14 §2.2 |
@@ -231,7 +231,7 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 |---|---|---|---|---|---|---|
 | M15-FR-035 | RtProvider：用 `net/rt` 的工厂 `createRtClient()` 创建全局唯一 `RtClient`（M11 §7.5 尚未列出工厂与 `getToken`，本文请求补登，§14 第 13 条），`init({url, token, tier, deviceClass})` 的 token 取自 `net/api.ts` 的 `getToken()`，tier 与 deviceClass 取自 `stores/perf.ts`；卸载或世界切换到另一 run 时 `close()`；StrictMode 双调用下不产生两个 Worker | P0 | V0.1 | 是 | M15-AC-024 | M11-FR-094；n05 §6 第 14 条 |
 | M15-FR-036 | 事件桥 `ui/notify/eventBridge.ts`：`RtClient.onEvents` 每帧至多一批，批内事件复制进预分配结构环（容量 8192）；每 250 ms 刷入一次告警 store、事件日志、Toast 合并器与 Query 失效表；单次刷入 ≤ 2 ms（570 条事件/s 压测）。刷入不直接调用 Toast 管理器（Toast 在下一呈现帧之后投递，FR-089）；折叠的栏与非活动标签页中的面板经 `useVisibleState`（`ui/panels/PanelHost.tsx`）冻结订阅，不随刷入重渲染（ADR-069） | P0 | V0.1 | 是 | M15-AC-025 | ADR-028；D1-AC-10、D1-AC-27 |
-| M15-FR-037 | 连接呈现：`RtClient.status`（ConnState，M11 保证状态变化后下一帧即反映）与 `onStatus`（服务端状态条目）驱动顶栏连接徽标（`Badge variant="outline"` + `HoverCard`；图标 `conn.online`，断线时 morph 为 WifiOff 并加红描边；正常时显示 WS RTT，C 类文本）、断线横幅（`input.offlineBannerDelayMs` 1 s 后出现，重连次数与倒计时取自 M11 请求补登的 `onConnState`，§14 第 13 条）、命令与环境控件置灰、数值 STALE 呈现、重连对账 Toast（epoch 变化时"仿真已从剧本起点重开"）；`status` 横幅按 id 覆盖、堆叠 ≤ 3 | P0 | V0.1 | 是 | M15-AC-026 | AWR-14 §4.1、§7.7；M11 §6.6.3、§8 |
+| M15-FR-037 | 连接呈现：`RtClient.status`（ConnState，M11 保证状态变化后下一帧即反映）与 `onStatus`（服务端状态条目）驱动顶栏连接徽标（`Badge variant="outline"` + `HoverCard`；图标 `conn.online`，断线时 morph 为 WifiOff 并加红描边；正常时显示 WS RTT，C 类文本）、断线横幅（`input.offlineBannerDelayMs` 1 s 后出现，重连次数与倒计时取自 M11 请求补登的 `onConnState`，§14 第 13 条）、命令与环境控件置灰、数值 STALE 呈现、重连对账 Toast（epoch 变化时"仿真已从剧本起点重开"）；`status` 横幅按 id 覆盖、堆叠 ≤ 3；公开演示构建不提供申请控制（FR-123，ADR-083）。 | P0 | V0.1 | 是 | M15-AC-026 | AWR-14 §4.1、§7.7；M11 §6.6.3、§8 |
 | M15-FR-038 | TanStack Query：`app/query/client.ts` 默认 `staleTime` 30 s、`gcTime` 5 min、幂等 GET `retry` 1、`refetchOnWindowFocus` false；query key 工厂 `app/query/keys.ts` 与 `queryOptions()` 工厂 `app/query/options.ts`；fetcher 一律来自 `net/api.ts`；命令类不走 Query（走 `RtClient.call`） | P0 | V0.1 | 是 | M15-AC-027 | n05 §3.9；AWR-17 §4.2 |
 | M15-FR-039 | WS 事件驱动缓存（`app/query/eventInvalidation.ts`，表见 §6.6.3）：`sim.vehicle.state` → 失效 fleet vehicles；`mission.*` → `setQueryData` 任务列表；`job.*` → jobs；`session.switched` → sessions/current 并路由跳转；`env.*` 预设变化 → 不失效（环境走 `stores/env.ts`） | P0 | V0.1 | 是 | M15-AC-027 | n05 §3.9；AWR-10 §6.4 |
 | M15-FR-040 | 命令调用 `useCommand(service)` 与 `<CallButton>`：按 AWR-14 §6.11 按钮状态机（READY、PENDING、ACCEPTED、RUNNING，终态后 `input.resultHoldMs` 1500 ms 回到 READY）；非 OPERATOR 持有的机体先弹接管 AlertDialog（`acquire` 先于目标命令）；断线期间保持图标并置灰，重连后以同一 call id 重发 `call`，服务端返回 `duplicate: true` 的最新结果（17 §6.13 第 3 条）；失败终态 morph `CircleX` 并 12 shake 一次；点击到"待确认"呈现 ≤ 100 ms | P0 | V0.1 | 是 | M15-AC-028 | ADR-016、ADR-027；AWR-14 §6.11、§6.12 |
@@ -273,7 +273,7 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 | M15-FR-061 | `<StateIcon>`：同一 `<svg>` 内主 path 与 ghost path；full 档白名单对 morph（spring `snappy` 用户触发、`smooth` 状态过程、`hud` 列表与 HUD），非白名单对 swap（09 icon-swap）；lite 档一律 swap 且关键帧不含 `filter`；reduced 与 off 档 `set`；固定传 `reducedMotion: "user"`；morph 期间根元素带 `data-morphing` | P0 | V0.1 | 是 | M15-AC-039 | d03 §3.4；g07 §7；AWR-15 §7.5 |
 | M15-FR-062 | 白名单 `ui/icons/whitelist.ts`：只登记满足 d03 §4.2 四条准入的对（同一对象、子路径差 ≤ 2 或同族分档、max res ≤ 0.5 或纯旋转、contact sheet 目测通过）；lucide 升级后必须重跑 `tools/shadcn/icons/verify.mjs` 与 contact sheet | P0 | V0.1 | 是 | M15-AC-038 | d03 §4.2；AWR-15 §7.5 |
 | M15-FR-063 | 并发预算 K = 8：`morphBudget.acquire(settleMs)` 失败则 `set`；维护 `__perf.ui.icons.{active, activeMax, denied}`；列表中只有已挂载的可见行与选中行会发生切换 | P0 | V0.1 | 是 | M15-AC-039 | d03 §0 第 4 条；ADR-030 |
-| M15-FR-064 | 空闲预热：启动后在 `requestIdleCallback` 中按片（每片 `timeRemaining() > 3 ms`）对白名单对双向 `seek(y, 0.5)` 预热 plan 缓存；预热后首次 morph ≤ 0.5 ms | P0 | V0.1 | 是 | M15-AC-039 | d03 §3.5 |
+| M15-FR-064 | 空闲预热：启动后在 `requestIdleCallback` 中按片（每片 `timeRemaining() > 3 ms`）对白名单对双向 `seek(y, 0.5)` 预热 plan 缓存；预热后首次 morph ≤ 0.5 ms。有 Toast 待写时让出本次空闲期，每片结束时登记供 Toast 同帧让路；`?chrome=0` 不预热（没有图标；ADR-081） | P0 | V0.1 | 是 | M15-AC-039 | d03 §3.5 |
 | M15-FR-065 | 遥测分档图标 `useBucketedIcon(kind, value)`：电量边界 20/40/70%、升档需越过边界 +3%、降档立即生效、同一图标位驻留 ≥ 1.5 s（告警升级不受限）、图标变化 ≤ 0.7 Hz；信号档同法；记录 `__perf.ui.icons.minSwitchIntervalMs` | P0 | V0.1 | 是 | M15-AC-039 | d03 §3.6 |
 | M15-FR-066 | 连续角度（航向、风向）写独立的 CSS `rotate` 属性（`el.style.rotate`），角度展开 `d = (((next − prev) % 360) + 540) % 360 − 180`、`unwrapped = prev + d`（prev 为上次展开值，可超出 0–360；AWR-15 §7.5 的写法在 prev 累计超过 540° 后会因 JS 负数取余出错，§14 第 16 条），过渡 `rotate var(--telemetry-text-interval) var(--ease-linear)`；不 morph | P0 | V0.1 | 是 | M15-AC-039 | d03 §3.6；AWR-15 §7.5 |
 | M15-FR-067 | 兼容层 `ui/icons/lucide-compat.tsx`：base-mira 实际使用的 16 个名字按 canonical 名导出（`Loader2Icon` → LoaderCircle、`MoreHorizontalIcon` → Ellipsis）；`CheckIcon` 带 `pathLength=1` 与 `data-draw`；icons codemod 把 `lucide-react` import 改写到兼容层 | P0 | V0.1 | 是 | M15-AC-038 | g07 §4 |
@@ -313,7 +313,7 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M15-FR-088 | 告警 store `ui/notify/alarms.ts`：`AlarmItem`（字段见 AWR-14 §11.4）按合并键 `source:type:reason` 聚合，主体去重，UI 只显示前 3 个 + "等 N 架"；≤ 4 Hz 写入；critical 持续到确认或条件解除；确认（ack）只是本客户端状态，不上线；上限 512 条（本文设定），满时淘汰最旧的非活动项 | P0 | V0.1 | 是 | M15-AC-047 | AWR-14 §11.1、§11.4 |
-| M15-FR-089 | Toast：Base UI Toast（`limit=3`，第 4 条 `data-limited`）；合并键相同则 `toast.update(id)` 而不新增，更新 ≤ 4 Hz；时长 info 4 s、warning 6 s、critical 不自动消失；悬停暂停计时；每条至多一个操作按钮；文本经净化；本控件可见时的命令结果不重复 Toast。投递（ADR-069）：`notify()` 只记录每个合并键的最新内容，Toast 管理器在下一呈现帧之后的任务中调用（rAF 后 macrotask，页面隐藏时直接 macrotask）；同一条 Toast 的改写 ≤ 1 Hz（`TOAST_UPDATE_MIN_MS`，内容总是最新合并计数；级别变化立即改写；内容相同不改写）。原因：Base UI `ToastContent` 每次文本变化以 MutationObserver 重测根高度（`offsetHeight` + `flushSync`），在事件桥刷入任务内会强制布局刚提交的整页改动 | P0 | V0.1 | 是 | M15-AC-047 | g07 §6 第 6 条；AWR-14 §11.4 |
+| M15-FR-089 | Toast：Base UI Toast（`limit=3`，第 4 条 `data-limited`）；合并键相同则 `toast.update(id)` 而不新增，更新 ≤ 4 Hz；时长 info 4 s、warning 6 s、critical 不自动消失；悬停暂停计时；每条至多一个操作按钮；文本经净化；本控件可见时的命令结果不重复 Toast。投递（ADR-069、ADR-081）：`notify()` 只记录每个合并键的最新内容，Toast 管理器在下一帧的布局后时段调用（`ui/notify/afterLayout.ts`：帧内样式与布局之后、绘制之前的 ResizeObserver 回调，每帧至多写一条；页面隐藏或没有 ResizeObserver 时 macrotask，1 s 内没有帧时以计时器兜底；时钟的 ResizeObserver 在应用挂载前创建；事件桥刷入或图标预热切片在 150 ms 内刚结束时让到下一帧，至多 4 帧）；同一条 Toast 的改写 ≤ 1 Hz（`TOAST_UPDATE_MIN_MS`，内容总是最新合并计数；级别变化立即改写；内容相同不改写）。原因：Base UI 在 Toast 挂载时（布局 effect 中 `style.height = auto` + `offsetHeight`）与每次文本变化时（MutationObserver，`flushSync`）强制布局，只有在布局后时段整页才是干净的，测量只布局 Toast 本身；原先的空闲回调在风暴中多由 300 ms 上限触发，每次插入强制布局整页 17–31 ms。表面（ADR-081）：页面 toaster 的视口常驻且预先成层（`will-change: transform`），固定尺寸（Toast 列宽 22.5 rem、可容纳三条展开 Toast 的堆叠区 24 rem，四周各留 1.5 rem 给阴影、焦点环与 16 px 入场位移），`contain: size layout paint style`；Toast 只以 transform 与 opacity 过渡（不用 blur 与高度过渡）；内容盒取自身高度（堆叠变化不触发 Base UI 的内容重测），只在根上使用的栈变量（`--toast-index`、`--toast-offset-y`、`--toast-height`、`--toast-swipe-movement-x/y`、`--height`、`--offset-y`、`--peek`、`--scale`、`--shrink`）以 `@property` 登记为不继承；页面 toaster 用 shadcn toast.tsx 的部件组合，列表按 Toast 对象记忆化（只重渲染变化的那一条）。`?chrome=0` 不挂载 toaster，`notify()` 只记入非 DOM 通道（`headlessNotices()`，最近 16 条；测试构建 `__ux.toasts.headless` 计数），不写 DOM | P0 | V0.1 | 是 | M15-AC-047 | g07 §6 第 6 条；AWR-14 §11.4 |
 | M15-FR-090 | 告警中心：顶栏告警按钮 + 计数 `Badge` + `Popover`（400 px，分段 ToggleGroup：全部、critical、warning；> 100 条虚拟化；确认、全部确认）；新 critical 进入时计数徽章执行 03 notification-badge（单次 12 shake 属 ext，见 FR-056）；面板、画布、Dialog 永不抖动 | P0 | V0.1 | 是 | M15-AC-047 | AWR-14 §4.1、§11.5；d02 §4.1 第 10 行 |
 | M15-FR-091 | RedArbiter `lib/redArbiter.ts`（纯函数，接口 `arbitrate(prev: RedState, cands, nowMs): RedState` 与类型逐字按 AWR-15 §3.7.2，M06 与 M15 共用）：每张"图"（根元素 `data-figure`）一个实例，每 `input.redEvalIntervalMs`（250 ms）评估；优先级"未确认 critical（rank 高、同级最新）> 焦点机（SELECTED）> 数据主角（HERO）"；critical 与 hero 同级驻留 `input.redDwellMs`（1.5 s），只能被更高 rank 或更高级别抢占，SELECTED 切换立即生效；SELECTED 候选只来自 3D 视口与机群概览图，列表选中永不用红（AWR-15 §3.7.1 第 5 条）；输出 owner 给视口（经 M06 `drones.setRedOwner`）与各 DOM 图 | P0 | V0.1 | 是 | M15-AC-048 | ADR-032；AWR-15 §3.7；AWR-14 §11.2；M06 §14 第 6 条 |
 | M15-FR-092 | 形状编码组件 `ui/notify/StatusBadge.tsx`：nominal、warning（红描边空心 + TriangleAlert）、critical-primary（`bg-brand-solid` 实心 + OctagonAlert，仅 owner）、critical-secondary（红描边 + OctagonAlert）、stale（虚线 + `STALE <t> S`）；FlightState 徽章按 AWR-14 §13.2 | P0 | V0.1 | 是 | M15-AC-048 | ADR-032；AWR-14 §11.3 |
@@ -326,7 +326,7 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 | M15-FR-094 | HUD 交互：P 键在"展开 / 单行"之间切换（01 card-resize，只作用于 HUD 自身）；点击打开 Dock"性能"标签（`panel=perf`）；紧凑档只保留 KPI 行 | P0 | V0.1 | 是 | M15-AC-049 | AWR-14 §3.7、§14.1 |
 | M15-FR-095 | Perf 面板 11 张卡片（AWR-14 §5.5：呈现间隔、帧间隔分布、点预算、逐层点数、流式与驻留、图层预算、降级阶梯、控制器状态、网络、时延、服务端）；数据来自 `stores/perf.ts`、`stores/world.ts`、`__perf`、`perf/server`；"复制诊断信息"写入 `__perf.snapshot()` 摘要；dev 构建显示 `__perf.forced` 警示徽章 | P0 | V0.1 | 是 | M15-AC-050 | AWR-14 §5.5；AWR-18 §9 |
 | M15-FR-096 | `__perf.ui` 写入（字段见 AWR-18 §9.2，M15 不向 `awr.perf.v1` 新增字段）：`storeWrites`（store 工厂）、`charts{drawsMax, drawMsMax, hiddenDraws, streamingVisible, svgHzMax}`（LfScheduler）、`icons{active, activeMax, denied, minSwitchIntervalMs}`（StateIcon）、`motionTier`；`react{commits, durations}` 只在 profiling 构建写入；`labels` 由 M06 写入；事件桥耗时等 M15 自用诊断量只写 `__ux`（§7.1.7） | P0 | V0.1 | 是 | M15-AC-050 | AWR-18 §6.3、§9.2；M06 §6.18 |
-| M15-FR-097 | 降级呈现：订阅 `governor.step` 事件 → HUD 降级行 + Perf 面板降级阶梯主角移动 + 合并 Toast（每步至多 1 条，同类 10 s 内不重复）；恢复只移除 HUD 行、不发 Toast；`backend.notice('webgpu.unavailable')` 发一次 info Toast | P0 | V0.1 | 是 | M15-AC-051 | ADR-041；AWR-14 §7.5 |
+| M15-FR-097 | 降级呈现：订阅 `governor.step` 事件 → HUD 降级行 + Perf 面板降级阶梯主角移动 + 合并 Toast（每步至多 1 条，同类 10 s 内不重复）；恢复只移除 HUD 行、不发 Toast；`backend.notice('webgpu.unavailable')` 发一次 info Toast；无壳页面（`?chrome=0`）没有 Toast 表面，提示经 FR-089 的非 DOM 通道记录，降级步骤不产生任何 DOM 写入（ADR-081） | P0 | V0.1 | 是 | M15-AC-051 | ADR-041；AWR-14 §7.5 |
 
 ### 4.13 快捷键、动作与命令面板
 
@@ -354,7 +354,7 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 | 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M15-FR-109 | 品牌资产本地托管 `public/brand/`：`anet-logo.svg`（与 `refs/design/ANet/docs/media/anet-logo.svg` 字节一致）、`avatar-96.png`、`avatar-460.png`（由 `https://avatars.githubusercontent.com/u/305781773?s=96&v=4` 及其 `s=460` 版本下载一次）、`favicon-16.png`、`favicon-32.png`、`brand.lock.json`（sha256、来源、获取日期）；运行时禁止引用 GitHub URL | P0 | V0.1 | 是 | M15-AC-056 | ADR-032；AWR-15 §4.1 |
-| M15-FR-110 | 品牌组件：`BrandLockup`（顶栏：头像 24 px + "ANet Drone4D" + 分隔线 + "World Runtime"，紧凑档省略副名；产品显示名见 ADR-056）、`BrandBadge`（完整徽章，宽 ≥ 320 px，实色底，禁止改色与滤镜）、`BootMask`（480 px）、`AboutDialog`（320 px）、测试报告封面（480 px，FR-080）、全视口空状态（徽章）、面板空状态（头像 48 px）；徽章不得位于 `[data-viewport]` 内；入场只允许 opacity + translateY `--distance-micro`，`--duration-fast` | P0 | V0.1 | 是 | M15-AC-056 | ADR-032；AWR-15 §4.2–§4.6 |
+| M15-FR-110 | 品牌组件：`BrandLockup`（顶栏：头像 24 px + "ANet Drone4D" + 分隔线 + "World Runtime"，紧凑档省略副名；产品显示名见 ADR-056）、`BrandBadge`（完整徽章，宽 ≥ 320 px，实色底，禁止改色与滤镜）、`BootMask`（480 px）、`AboutDialog`（320 px）、测试报告封面（480 px，FR-080）、全视口空状态（徽章）、面板空状态（头像 48 px）；徽章不得位于 `[data-viewport]` 内；入场只允许 opacity + translateY `--distance-micro`，`--duration-fast`；公开演示构建的关于区块另有演示站一行（FR-124，ADR-083）。 | P0 | V0.1 | 是 | M15-AC-056 | ADR-032；AWR-15 §4.2–§4.6 |
 
 ### 4.16 lint、可访问性与分辨率
 
@@ -364,6 +364,16 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 | M15-FR-112 | 可访问性（P0 部分）：纯图标按钮 `aria-label` 覆盖率 100% 且与 Tooltip 文案同源；焦点环 `--ring`（灰）可见；AlertDialog 默认焦点"取消"；焦点在可编辑元素时全局快捷键不误触发 | P0 | V0.1 | 是 | M15-AC-057 | D1-AC-21；AWR-14 §12 |
 | M15-FR-113 | 可访问性（P1 部分）：跳转链接与 Tab 顺序、roving tabindex、列表键盘（↑/↓、Space、Enter、Home/End）、`role="status"`（≤ 1 条/2 s）与 `role="alert"`（≤ 1 条/5 s）播报区、画布屏外摘要 | P1 | V0.1 | 是 | M15-AC-057 | AWR-14 §12.2、§12.3 |
 | M15-FR-114 | 分辨率：1280–3840 CSS px、DPR 1–2 下无水平滚动，顶栏、DroneRail 行、HUD 关键字段无截断（`scrollWidth ≤ clientWidth`）；字号不随分辨率缩放；性能上限（标签数、流式图数）只随设备能力档与渲染档变化 | P0 | V0.1 | 是 | M15-AC-012 | AWR-14 §14 |
+
+### 4.17 公开演示构建（ADR-083）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D1 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M15-FR-120 | 编译期开关 `VITE_AWR_DEMO=public`（`lib/demo.ts` 的 `DEMO_PUBLIC`，常量折叠）：默认构建不含任何演示分支；`vite.config.ts` 拒绝与 `VITE_AWR_TEST_SWITCHES=1` 同用或 `public` 以外的取值；演示构建经 `prod-bundle-scan` 无测试开关、不发布 `dist/bench`，落地页媒体由 `docs/media` 复制到 `dist/demo`（头图在 `public/demo/`） | P1 | V0.1 | 是 | M15-AC-070 | ADR-083、ADR-079 |
+| M15-FR-121 | 落地页 `/`（`app/demo/Landing.tsx`，入口 `app/demo/entry.tsx`）：品牌头图、一句话定位、主按钮"进入演示 / Launch demo"（`/world/synthcity`）、合成城市真实截图与 `demo-flight.webp`（懒加载）、四个功能要点（渐进加载与疏密自动调节、4D 环境场、多机仿真与安全、ANet 协作）、"演示说明"（公开只读、synthcity 程序生成、未含 GPU 重建等服务端重计算功能、性能取决于访客 GPU）、lieflat 皮肤的"本站运行的内容"表、仓库与文档链接、中英切换；首屏只加载运行时、react 与 landing 分块（不加载 three、引擎、实时客户端），`index.html` 在脚本执行前隐藏启动遮罩 | P1 | V0.1 | 是 | M15-AC-071 | ADR-083 |
+| M15-FR-122 | 演示路由与入口：只注册 `/`、`/world/:id`（只接受 synthcity）、`/worlds`、`/settings`；应用内的 `/` 进入 `/world/synthcity`；顶栏去掉重建任务、录制列表、回放录制与 GPU 自检，帮助菜单增加"演示首页"；面包屑的 run 不链接录制列表；命令面板与快捷键去掉打开重建任务与录制列表；时间轴不再请求 `/api/runs/**`；世界列表只列 synthcity | P1 | V0.1 | 是 | M15-AC-072 | ADR-083 |
+| M15-FR-123 | 演示只读：token 一律按 viewer 申请；`hint.readOnly`、`detail.readOnly`、`hint.needSeat`、`hint.replaySeat` 显示"公开演示为只读模式"，`role.viewer` 显示"公开演示 · 只读"；顶栏为带 Tooltip 的只读徽标，顶栏、详情页与设置都不出现"申请控制"；环境面板的禁用控件与时间轴"添加书签"以 shadcn Tooltip 说明只读；相机、选择、遥测、图层、着色、画质、时间轴实时查看与 Perf 面板照常 | P1 | V0.1 | 是 | M15-AC-072 | ADR-083；AWR-14 §7.8 |
+| M15-FR-124 | 演示站标识：页面标题"<视图> · ANet Drone4D 公开演示"；关于区块最前增加"演示站"一行（只读、只运行 synthcity 与循环剧本 S0、不提供服务端 GPU 功能、帧率取决于访客 GPU）；落地页文案与演示文案在 zh-CN 与 en 两份词典中都有译文 | P1 | V0.1 | 是 | M15-AC-073 | ADR-083、ADR-056 |
 
 ---
 
@@ -375,7 +385,7 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 | M15-NFR-002 | 画布稳定：Mod+B × 10、`\` × 10、`` ` `` × 10、三处分隔条各拖动 5 次，drawing buffer 尺寸与 `__perf.gpu.rtAllocs` 不变，该时段 > 50 ms 帧占比 ≤ 同段基线 + 1 个百分点 | P0 | V0.1 | 是 | M15-AC-010 | D1-AC-24 |
 | M15-NFR-003 | store 写入：任一 store 写入 ≤ 10 次/s（Tier S 下领域摘要 ≤ 4 次/s）；flight60 `scene=full` 无用户输入时稳态 React commit ≤ 12 次/s | P0 | V0.1 | 是 | M15-AC-021 | AWR-18 §6.2；ADR-008 |
 | M15-NFR-004 | commit 耗时：稳态 `actualDuration` p95 ≤ 2 ms、最大 ≤ 8 ms（profiling 构建）；交互引发的单次 commit ≤ 16 ms、p95 ≤ 8 ms（暂定，P1） | P0（稳态）/ P1（交互） | V0.1 | 是 | M15-AC-059 | AWR-18 §6.2；r14 §0 第 2 条 |
-| M15-NFR-005 | 长任务：遮罩揭开后，LoAF 中归因到 `ui` chunk 的我方脚本 > 50 ms 次数为 0；我方脚本每帧中位数 ≤ 4 ms（Tier S）。实现约束（ADR-069）：周期任务（事件桥刷入、URL 回写）内不得触发 Toast 测量或整树重渲染；隐藏面板不随 store 写入重渲染；选择类按键中非紧急的子树（批量操作条、视口工具条与 HUD）以延迟值渲染；仅镜像应用状态的 URL 参数（`sel`、`cam`）静默回写，不通知路由订阅者 | P0 | V0.1 | 是 | M15-AC-059 | D1-AC-06；AWR-18 §6.2 |
+| M15-NFR-005 | 长任务：遮罩揭开后，LoAF 中归因到 `ui` chunk 的我方脚本 > 50 ms 次数为 0；我方脚本每帧中位数 ≤ 4 ms（Tier S）。实现约束（ADR-069、ADR-081）：周期任务（事件桥刷入、URL 回写）内不得触发 Toast 测量或整树重渲染，Toast 只在帧的布局后时段写入；隐藏面板不随 store 写入重渲染；选择类按键中非紧急的子树（批量操作条、视口工具条与 HUD）以延迟值渲染；仅镜像应用状态的 URL 参数（`sel`、`cam`）静默回写，不通知路由订阅者 | P0 | V0.1 | 是 | M15-AC-059 | D1-AC-06；AWR-18 §6.2 |
 | M15-NFR-006 | 图表：每帧重画 ≤ 2 张且 ≤ 2 ms；不可见图重画次数 0；Tier S 同屏流式图 ≤ 4；SVG 图刷新 ≤ 2 Hz | P0 | V0.1 | 是 | M15-AC-042 | ADR-031；d01 §3.6 |
 | M15-NFR-007 | 图标：同时 morph ≤ 8；预热后首次 morph ≤ 0.5 ms；遥测驱动的单图标切换间隔 ≥ 1.5 s；挂载 1000 个 `<Icon>` ≤ 30 ms（本机 S，d03 实测 14.5 ms 的 2 倍余量） | P0 | V0.1 | 是 | M15-AC-039 | d03 §0 第 2、4、5 条 |
 | M15-NFR-008 | DOM 动效预算：计算样式 `backdrop-filter` 非 none 的元素为 0；同时带 filter 的动画 ≤ 12；number pop-in ≤ 24 次/s；常驻循环 ≤ 2；Tier S 遥测文本写入 ≤ 4 Hz、其余 ≤ 10 Hz | P0 | V0.1 | 是 | M15-AC-037 | ADR-029；d02 §4.7 |
@@ -384,6 +394,10 @@ M15 位于 Web Runtime 层（AWR-03 §3.2），是所有前端模块的"呈现�
 | M15-NFR-011 | 首绘：静态遮罩 FCP ≤ 500 ms（navigationStart 起，本机 S，本文设定）；UI 壳首次 commit ≤ 50 ms（本文设定） | P1 | V0.1 | 是 | M15-AC-005 | 本文设定：遮罩在 JS 执行前可见，冷启动可交互 ≤ 4.0 s 的前提 |
 | M15-NFR-012 | 包体（gzip）：`ui` 与 `app` chunk 合计 ≤ 200 KB；CSS ≤ 25 KB；字体按 unicode-range 分片、只请求已用子集 | P1 | V0.1 | 是 | M15-AC-060 | 本文设定：g07 样板 JS gzip 166 KB（g07 §7），其中 React 约 68 KB（n05 §3.3 trial 构建产物）；CSS gzip 18–19.5 KB（g07 §7；AWR-15 §13.7） |
 | M15-NFR-013 | 内存与长稳：S1 + 200 架 Tier S 连续 30 min，期间切换世界 3 次、预设 5 次、开关浮层 50 次，保留 JS 堆（每 30 s 强制 GC 后读取，ADR-075）首尾 5 min 中位数之比 ≤ 1.2；事件日志 ≤ 5000、告警 ≤ 512、Toast ≤ 3 恒成立 | P1 | V0.1 | 是 | M15-AC-061 | D1-AC-29 |
+| M15-AC-070 | 演示构建开关 | 默认构建不含演示标识（`data-demo-role`、`awr.demo.lang` 等）；演示构建经 `prod-bundle-scan` clean、无 `dist/bench`、有 `dist/demo` 媒体；与 `VITE_AWR_TEST_SWITCHES=1` 同用时构建失败；`tests/m15/demo.test.ts` 两例 | `make demo-build`、`tests/m15/demo.test.ts` | 本机 | P1 |
+| M15-AC-071 | 落地页 | 公开模式下打开 `/`：只请求运行时、react、landing 与入口 4 个脚本分块（无 three、r3f、engine、ui、main），启动遮罩不绘制，中英切换生效，无 pageerror 与 console.error | Playwright（本包报告的 `pw-demo.mjs`） | 本机 Chrome 151 | P1 |
+| M15-AC-072 | 演示沙盘只读 | 点击"进入演示"：点云上屏、机群列表 7 架；顶栏只读徽标与 Tooltip、环境面板 Tooltip、详情页说明都是"公开演示为只读模式"；页面中没有"申请控制"；工具、帮助、仿真菜单中没有重建、录制与 GPU 自检；`/jobs` 回到只有 synthcity 的世界列表 | 同上 | 本机 Chrome 151 | P1 |
+| M15-AC-073 | 演示站标识 | 沙盘标题含"公开演示"；关于区块有"演示站"一行；`demo.*` 与 `landing.*` 键 zh-CN 与 en 齐全（`tests/m15/i18n.test.ts` 键集对齐） | 同上；`tests/m15/i18n.test.ts` | 本机 | P1 |
 | M15-NFR-014 | 热路径零分配：overlay 相位中 `bindText`、LfScheduler 调度、StateIcon 决策、事件桥入环不分配对象；flight60 `scene=full` 期间 V8 GC 停顿 ≤ 帧时间总和 1% | P1 | V0.1 | 是 | M15-AC-061 | AWR-03 §3.6 规则 1；D1-AC-30 |
 | M15-NFR-015 | 持久化容错：localStorage 不可用、配额满、内容损坏时页面行为与首次访问一致，无异常抛出 | P0 | V0.1 | 是 | M15-AC-014 | UX-NFR-015 |
 | M15-NFR-016 | 设计体系 lint：D1-AC-20 全部规则与 §6.13 新增规则 0 违规；`make lint` 总时长 ≤ 90 s | P0 | V0.1 | 是 | M15-AC-040 | D1-AC-20；AWR-18 §13.1 |
@@ -1098,7 +1112,7 @@ M15 不设自己的帧率阈值，FPS 信号经 FrameSampler → PerfGovernor �
 | BU 折叠 | `accordion-content`（内层 `accordion-content-inner`）、`accordion-trigger-icon` | 21 | 高度 `--acc-expand`；chevron `scaleY(-1)`；内层大于 240 × 240 px 时 full 档也不 blur | `--acc-collapse` | 内层无 blur | 0 s |
 | BU 常驻 | `tabs-indicator`（default 与 line 两种变体）、`toggle-group-indicator`（codemod 新增）、`tabs-content`（`TabsPanels` 单格 grid） | 16、08 | `--tabs-dur`；页面 `--page-slide-dur` ±8 px；右栏页面栈与 Dock 标签页属全高或大面积表面，任何档都不带 blur | 同 | 无 blur | 0 s |
 | BU 常驻 | `switch-thumb`（过渡属性 `translate`）、`checkbox-indicator`（path `pathLength=1`） | 27、25 | `--toggle-dur` bounce；描画 `--check-draw` | 取消 `--check-uncheck` | 同 | 0 s |
-| BU Toast | `toast`（`--toast-index`、`data-expanded`、`data-limited`） | 22、32 | `--toast-open`，16 px、.97、blur | `--toast-close` | 无 blur | 0 s |
+| BU Toast | `toast`（`--toast-index`、`data-expanded`、`data-limited`） | 22、32 | `--toast-open`，16 px、.97（只过渡 transform 与 opacity，各档都不用 blur 与高度过渡，ADR-081） | `--toast-close` | 同 full | 0 s |
 | 常驻浮层 | RailHost（左、右栏 X 轴；Dock Y 轴），`sidebar-container` 自身无过渡 | 07 | `--panel-open-dur`，位移 `--distance-drawer` + opacity；任何档都不带 blur | `--panel-close-dur` | 同 | 0 s |
 | 自研 | `SwapText`、`MotionNumber`、`NotificationDot`、`ShakeOnce`、`SkeletonReveal`、`ShimmerText`、`MatrixLoader`、`useListPresence`、HUD card-resize、横幅与工具态提示条（07 Y 轴 8 px） | 04、02、03、12、14、15、31、18、01、07 | 配方变量 | 配方变量 | 无 blur；错峰上限 150 ms | 0.01 ms，终态可见 |
 
@@ -1415,6 +1429,26 @@ UI 错误态 E-01 至 E-15 的触发与呈现以 AWR-14 §7.6 为准；线上原
 | M15-E009 | 信息 | sanitize 截断 | 以破折号结尾；计数 |
 | M15-E010 | 警告 | 事件桥入环溢出（8192） | 覆盖最旧；事件面板顶部提示"部分事件未显示，可在服务器补拉"（`GET /api/events`） |
 
+
+### 6.16 公开演示构建（ADR-083，FR-120 至 FR-124）
+
+**入口分流**：演示构建由 `vite.config.ts` 的 `awr-demo-public` 插件改写 `index.html`：入口换成 `app/demo/entry.tsx`，`<head>` 内联一行脚本给 `/` 打上 `data-landing`，样式 `html[data-landing] #boot-mask { display: none }` 在首帧前隐藏遮罩。`entry.tsx` 对 `/` 调用 `renderLanding()`，其余路径 `import('../../main')`（应用照常启动遮罩、路由与面板）。落地页的"进入演示"是普通链接，整页进入沙盘。
+
+**分块**：分组表在 react、r3f 与 three 之后、`ui` 之前插入 `landing` 组，测试只匹配落地页实际用到的模块（`Landing.tsx`、`app/i18n/**`、7 个 shadcn 部件、`ui/icons` 的 4 个模块、`ui/brand/assets.ts`、`ui/testing/uxProbe.ts`、`lib/{utils,demo,testSwitches}.ts` 与 Vite 预加载辅助模块），它们的依赖随之进入同一分块；否则落地页会静态导入整个 `ui` 分块并经它导入 engine 与 three。默认构建不插入该组，分块结构不变。
+
+**只读文案**：i18n 在演示构建中把 `hint.readOnly` 等 4 个只读原因键改指 `demo.readOnly`、`role.viewer` 改指 `demo.role`、`hint.liveNoRewind` 改指 `demo.liveNoRewind`（`app/i18n/index.ts` 的 `DEMO_ALIASES`）：键不变，所有比较这些键的守卫（如详情页的只读说明）与显示它们的 Tooltip 都不需要分支。需要分支的只有入口本身（顶栏角色徽标、详情页与设置的"申请控制"、时间轴书签与录制列表、菜单项、命令面板动作）。
+
+**数据**：`worldsQuery` 的 `select` 经 `demoWorlds()` 只保留 synthcity；`net/api.ts` 的 `getToken()` 在演示构建中一律申请 viewer（服务端公开模式拒绝无口令的 operator，ADR-082）；`stores/timeline.ts` 不探测录制状态、不读服务端书签。
+
+| 页面区块 | 组件 | 设计体系 |
+|---|---|---|
+| 顶栏 | 头像 + 产品名 + `Badge` "公开演示"、`ToggleGroup` 语言切换（带滑动指示器）、GitHub 与"进入演示"`Button` | shadcn base-mira；颜色只用 token |
+| 头图与定位 | `public/demo/drone4d-banner.jpg`、标题、定位、`Button` 主按钮与外链按钮 | 入场 `brand-enter`（transitions.dev token，按 `--duration-stagger` 错开） |
+| 真实画面 | `demo-flight.webp` 与 6 张合成城市截图（`loading="lazy"`） | 图注 `text-ed-sub` |
+| 功能要点 | 4 张 `Card`，morphicons 图标 | — |
+| 演示说明与本站运行的内容 | `Card` 列表；`Table` 在 `[data-lf-table]` 内（table.log 皮肤） | lieflat |
+| 页脚 | 仓库、文档、ANet 链接，许可与版权行 | — |
+
 ---
 
 ## 7. 接口
@@ -1554,7 +1588,7 @@ export function IconSprite(): JSX.Element                                      /
 | `boot` | `{state: string; revealAt: number}` | BootController |
 | `camera` | `{mode: string; followLock: boolean; lastFlight: {durationMs: number; d_m: number}}` | 订阅 M06 `camera.mode`、`camera.flight` |
 | `selection` | `{ids: string[]; primary: string \| null}` | 选择 store（快照） |
-| `toasts` | `{visible: number; merged: Record<string, number>}` | Toast 合并器 |
+| `toasts` | `{visible: number; merged: Record<string, number>; headless: number}` | Toast 合并器；`headless` 为无 Toast 表面（`?chrome=0`）时记入非 DOM 通道的提示数（ADR-081） |
 | `red` | `Record<figureId, {kind, id} \| null>` | RedArbiter |
 | `rayHitRequests` | number | 工具态 |
 | `droneRail` | `{renderedRows: number; visibleRows: number}` | 虚拟列表 |

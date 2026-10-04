@@ -1409,7 +1409,7 @@ rejected:
 | `gcs_loss_policy` | enum | **是** | `hold_rtl`、`ignore` | — | 必须显式声明（ADR-026、ADR-045） |
 | `record` | bool | 否 | — | true | D1-ext（ADR-040）；ladder 剧本必须为 false |
 | `time_limit_s` | number | 否 | 仿真时间 | 1800 | 超时判 FAILED |
-| `on_complete` | enum | 否 | `pause`、`continue`、`reset` | `pause` | — |
+| `on_complete` | enum | 否 | `pause`、`continue`、`reset` | `pause` | `pause` 暂停时钟；`continue` 照常运行；`reset` 循环：结果发出 8 s【仿真】后由导演请求剧本重置（`sim.reset` 原因 `scenario_loop`，epoch + 1），重新加载时天气序列（`env.preset` 初值与按时刻排序的 `env.preset` 事件）循环左移一位（ADR-084） |
 | `energy_precheck` | enum | 否 | `reject`、`warn` | `reject` | AWR-12 §5.8.4 |
 | `env` | object | 否 | `{preset, patch}` | `{"preset":"clear"}` | 以 `step` 关键帧生效；`patch` 为 EnvScalars 部分快照（§8.1 字段名） |
 | `vehicles[]` | vehicle[] | 条件 | 见下 | [] | 与 `vehicle_sets` 至少其一非空 |

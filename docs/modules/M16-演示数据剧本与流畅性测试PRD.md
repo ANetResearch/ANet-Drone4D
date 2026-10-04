@@ -215,6 +215,7 @@
 | M16-FR-073 | fleet_ladder 与 SIH 回归结果进入同一报告（阶梯表 + 行内 sparkline；17 项"SIH 值、Mock 值、容差"哑铃图） | P0 | V0.1 | 是 | M16-AC-032 | M08 §9 报告行 |
 | M16-FR-074 | `perf/report/aggregate-bench.mjs`：按设备能力档与 GPU 型号汇总 `runs/perf-reports/`；满足"同档 ≥ 3 份且 ≥ 2 台设备"时输出固化候选表 | P1 | V0.1 | 是 | M16-AC-042 | 18 §11.5 |
 | M16-FR-075 | 合成演示城市 synthcity 的演示资产（ADR-077）：演示事实 `python/awr/datasets/synthcity.py`；`authoring.build_all()` 生成 `s0-synthcity-showcase`（7 架：地标立面双段螺旋、两机街区覆盖、三机 V 形编队巡航，晴 → 小雨 → 雾，约 4.8 min【仿真】，ci profile ×5）、`free-synthcity`、`zones/synthcity.zones.geojson` 与 catalog 条目（default = S0，不是门禁世界）；默认世界回退时 `make run` 以 S0 开局（§6.4.9） | P1 | V0.1 | 是 | M16-AC-043、044 | ADR-077；DEMO-W |
+| M16-FR-080 | S0 的 `public` 剧本 profile（公开演示站，ADR-084、ADR-085）：`{rate: 1, record: false, on_complete: reset}`，由 `authoring.s0_scenario()` 生成；循环运行时每轮结束 8 s【仿真】后从头重开，天气序列每轮循环左移一位（晴、小雨、雾三轮一周期）；其余 profile、机体、任务与成功谓词不变 | P1 | V0.1 | 是 | M16-AC-050 | ADR-084 |
 
 ---
 
@@ -597,7 +598,7 @@ v1（12 m 交错格网、2 m/s）的问题（INT-1 §7.2，`test_ladder_smoke` �
 | 天气 | 开局 `clear`；45 s `env.preset{name: lightRain, duration_s: 20}`；150 s `env.preset{name: fog, duration_s: 40}`（雾顶 60 m AGL） | 只有 `SAF.ENV.WIND_LIMIT` 一类环境守卫，小雨 5 m/s 风在 120 m 处约 9 m/s，低于 13.8 m/s |
 | 区域 | `border`、`nofly-sc-steptower`、`restricted-sc-pond` | §6.2.5 |
 | 成功谓词 | `missions_done`、`facade_coverage{两段} ≥ 0.9`、`area_coverage{m-blocks} ≥ 0.9`、`formation_err_rms_m ≤ 3`、`min_separation_m ≥ 10`、`guard_events == 0`、`landed_all` | — |
-| 时长与 profile | `time_limit_s 360`；基础 ×1、`record = true`；`ci` ×5、不录制；`demo` ×1、录制、`on_complete = continue`；`perf` ×1 | 可 ×5 运行 |
+| 时长与 profile | `time_limit_s 360`；基础 ×1、`record = true`；`ci` ×5、不录制；`demo` ×1、录制、`on_complete = continue`；`perf` ×1；`public` ×1、不录制、`on_complete = reset`（公开演示站循环运行，每轮天气左移一位，FR-080、ADR-084） | 可 ×5 运行 |
 
 实测（2026-10-03，ci profile ×5，`tests/e2e/test_synthcity_showcase.py::test_s0_showcase_x5`）：`SUCCEEDED`，7 个谓词全真（`facade_coverage` 1.0、`area_coverage` 1.0、`formation_err_rms_m` 0.23 m、`min_separation_m` 11.84 m、`guard_events` 0）；下段螺旋 226.2 s、覆盖 244.4 s、上段螺旋 269.2 s、编队 285.6 s 完成（含返航降落），剧本 285.6 s【仿真】结束，墙钟 65.1 s（含启动 7.2 s）；两次天气事件均以 `code 0` 生效。
 
@@ -1674,6 +1675,7 @@ M16 不新增运行时依赖；不引入 Node 端 YAML 库（由 PyYAML 转 JSON
 | M16-AC-042 | `/bench` 汇总 | 本机以 `?tier=B` 模拟 3 份回传：按设备能力档分组；不足"≥ 2 台设备"时不输出固化候选 | `node apps/web/perf/report/aggregate-bench.mjs --selftest` | 本机 | P1 |
 | M16-AC-043 | S0 静态 | 4–8 架、三类任务（立面螺旋两段相接自上而下、街区覆盖、编队）、天气开局 clear 后依次 lightRain、fog（参数为 `env/preset` 命令参数）、ci profile ×5、`time_limit_s` ∈ [180, 600]、出生点两两 ≥ 12 m；schema、V-SC 离线规则与加载器在已构建世界上的 V-SC-02/05/09 全部通过；curated 区域与出生点、航线、返航线 ≥ 10 m；catalog 中 synthcity 的 default 为 S0 且不是门禁世界 | `pytest tests/e2e/test_synthcity_showcase.py -k "shape or catalog"`；`pytest tests/e2e/test_scenarios_static.py` | 本机 | P1 |
 | M16-AC-044 | S0 端到端 ×5 | ci profile 的 supervisor（sim-core + api）：`SUCCEEDED`、全部谓词为真、两次天气事件与"showcase complete"标记出现、无 FleetGuard 冲突；仿真 180–300 s，墙钟 ≤ 120 s | `pytest tests/e2e/test_synthcity_showcase.py::test_s0_showcase_x5`（`needs_data`、`slow`；需要 `make demo-world`） | 本机 | P1 |
+| M16-AC-050 | S0 循环 | `public` profile 实跑：`scenario.result` 之后 8 s【仿真】出现一次 `sim.reset{reason: scenario_loop}`、epoch + 1，第二轮天气初值为小雨、45 s 的过渡目标为雾；sim-core 不崩溃不重启；导演循环与天气轮换的单元用例通过 | `tests/mission/test_director.py::test_loop_reset_rotates_weather`；本包报告的实跑记录 | 本机 CPU | P1 |
 
 真 GPU 档：本模块没有本期阻塞的真 GPU 验收；`/bench` 数据按 §6.14 规则汇总，V0.3 起由 GPU runner 用例（18 PERF-AC-016）阻塞 V0.3 发布。
 

@@ -165,7 +165,7 @@ URL 查询参数（只写非权威的视图状态；权威状态永远来自服�
 | `replay` | string | 运行 id | 空 | 一次性参数：`/world/:id/replay/:run?seg=&t=` 重定向为 `/world/:id?replay=<run>&seg=&t=`（画布与世界加载路径不变）；Sandbox 在连接就绪后按 §5.4 进入回放（先暂停实时，再 `playback open`，有 `t` 时 seek），随即从地址栏删除 `replay`、`seg`、`t`；无席位时 Toast 说明原因（FX-WEB2） |
 | `tier`、`rb`、`allowFallback` | string | 见 AWR-03 §3.5 | 空 | 仅 dev/test 构建生效，生产构建移除（ADR-044） |
 
-页面标题（`document.title`）为"<视图> · ANet Drone4D"：Sandbox 取世界 id，覆盖页与页面层取其名称（世界、重建任务、录制列表、测试报告、GPU 自检），其余为"ANet Drone4D"（ADR-056）。
+页面标题（`document.title`）为"<视图> · ANet Drone4D"：Sandbox 取世界 id，覆盖页与页面层取其名称（世界、重建任务、录制列表、测试报告、GPU 自检），其余为"ANet Drone4D"（ADR-056）。公开演示构建（`VITE_AWR_DEMO=public`，ADR-083）中产品名部分为"ANet Drone4D 公开演示"，只有 `/`（落地页，不加载应用）、`/world/synthcity`、`/worlds` 与 `/settings` 四条路由，其余路径回到世界列表；只读控件的原因统一为"公开演示为只读模式"，不出现申请控制，关于区块最前增加"演示站"一行（M15-FR-120 至 FR-124）。
 
 URL 写入规则：相机与选择变化以 `history.replaceState` 写入，节流 1 Hz，不产生历史记录；路由切换用 `pushState`。深链打开时先加载世界，再按参数恢复相机与选择，任一 id 不存在时静默忽略该项，并在 Toast 中说明"链接中的 2 架无人机已不存在"。
 
@@ -1426,7 +1426,7 @@ stateDiagram-v2
 | Tier S 流式图上限 | ADR-031 | 被暂停的图卡显示"已暂停（软件渲染档最多 4 张流式图）" | 图卡 |
 | 回放最大倍速 | ADR-040 | 倍速选项置灰 + 原因 | Timeline |
 
-原则：降级永远可见（HUD 或面板），但只在状态**变化**时发一次合并 Toast；降级恢复不发 Toast（避免噪声），只在 HUD 移除对应行。降级步若不改变屏上内容（例如没有选中机时的轨迹与视锥、标签或低模数量本就低于新上限、无 UI 壳的 `?chrome=0`），只在 HUD 与面板记录，不发 Toast（ADR-064：Tier S 下第一个 Toast 的光栅会使合成器停顿 0.2–0.5 s）。
+原则：降级永远可见（HUD 或面板），但只在状态**变化**时发一次合并 Toast；降级恢复不发 Toast（避免噪声），只在 HUD 移除对应行。降级步若不改变屏上内容（例如没有选中机时的轨迹与视锥、标签或低模数量本就低于新上限、无 UI 壳的 `?chrome=0`），只在 HUD 与面板记录，不发 Toast（ADR-064：Tier S 下第一个 Toast 的光栅会使合成器停顿 0.2–0.5 s）。无 UI 壳的 `?chrome=0` 没有 Toast 表面，任何步骤（含会改变点云的 ⑦）的提示都只进入非 DOM 通道，降级步骤不写 DOM（ADR-081）。
 
 ### 7.6 错误
 
@@ -1575,7 +1575,7 @@ sequenceDiagram
 | 7 | Dialog、AlertDialog、CommandDialog、设置 | 06 modal | BU | `--modal-open-dur`（250 ms），自 .96 | `--modal-close-dur`（150 ms） | smooth-out；遮罩 opacity `--duration-quick`，不 blur | 同 | 0 s |
 | 8 | Sheet（Jobs 详情、证据链） | 07 panel-reveal（全高，不带 blur） | BU | 400 ms | 350 ms | smooth-out | 同 | 0 s |
 | 9 | Tooltip（含相机工具条共享气泡） | 17 tooltip | BU | `--tt-in-dur`（150 ms） | `--tt-out-dur`（50 ms）；气泡移动 `--tt-move-dur`（160 ms） | ease-out | 同 | 0 s |
-| 10 | Toast 进出与堆叠 | 22 toast + 32 banner-stacking | BU（Toast Root） | `--toast-open`（350 ms），16 px，.97 | `--toast-close`（250 ms） | smooth-out | 去 blur | 0 s |
+| 10 | Toast 进出与堆叠 | 22 toast + 32 banner-stacking | BU（Toast Root） | `--toast-open`（350 ms），16 px，.97，只过渡 transform 与 opacity（ADR-081） | `--toast-close`（250 ms） | smooth-out | 同 full（各档都不用 blur） | 0 s |
 | 11 | 连接横幅、回放横幅、工具态提示条 | 07 panel-reveal 的 Y 轴 8 px 变体 | 自研（usePresence） | 400 ms | 350 ms | smooth-out | 去 blur | 0.01ms |
 | 12 | Switch（图层开关） | 27 toggle | BU-常驻（Switch.Thumb，属性 `translate`） | `--toggle-dur`（350 ms），bounce 1.35 | 同 | `--ease-bounce` | 同 | 0 s |
 | 13 | Checkbox（classMask） | 25 checkbox-check | BU（Checkbox.Indicator） | 描画 350 ms | 150 ms | — | 同 | 0 s |
@@ -1812,8 +1812,8 @@ function pickRed(fig: Figure): RedTarget | null {
 
 ### 11.4 Toast 与合并
 
-1. Base UI Toast，`limit={3}`，第 4 条带 `data-limited` 被挤出（g07 §6 第 6 条）；位置为未遮挡区右下。
-2. 合并键 = `来源 : 事件类型 : 原因码`；同键新事件更新计数与主体列表而不是新增一条，例如"37 架进入 HOLD（链路丢失）"；更新频率 ≤ 4 Hz（前端事件以 ≤ 4 Hz 批量写入 store，ADR-028）；同一条 Toast 的改写实际 ≤ 1 Hz、在下一呈现帧之后写入，级别变化立即改写（ADR-069：Base UI Toast 的高度重测会强制整页布局，不能放在事件批量写入的任务里）。
+1. Base UI Toast，`limit={3}`，第 4 条带 `data-limited` 被挤出（g07 §6 第 6 条）；位置为未遮挡区右下。承载 Toast 的视口常驻、预先成层、尺寸固定（可容纳三条展开 Toast）并做布局与绘制隔离，Toast 只以 transform 与 opacity 进出与堆叠（ADR-081）；无 UI 壳的 `?chrome=0` 不显示 Toast，提示只进入非 DOM 通道。
+2. 合并键 = `来源 : 事件类型 : 原因码`；同键新事件更新计数与主体列表而不是新增一条，例如"37 架进入 HOLD（链路丢失）"；更新频率 ≤ 4 Hz（前端事件以 ≤ 4 Hz 批量写入 store，ADR-028）；同一条 Toast 的改写实际 ≤ 1 Hz、在下一帧的布局后时段（样式与布局之后、绘制之前）写入，每帧至多一条，级别变化立即改写（ADR-069、ADR-081：Base UI Toast 挂载与改写时的高度测量会强制布局，只有布局后时段整页是干净的，不能放在事件批量写入的任务里，也不能放在由超时触发的空闲回调里）。
 3. 时长：info 4 s、warning 6 s（本文设定，Base UI 默认 5 s）；critical 不自动消失，直到用户关闭、确认或条件解除；悬停时暂停计时。
 4. 命令结果：本控件可见时以按钮图标反馈为主，不重复 Toast；控件不可见（例如快捷键触发）或批量时发 Toast（§6.11）。
 5. 1000 架全机 RTL 与 500 架 link_drop 这类风暴，合并后同屏 Toast ≤ 3 条（D1-AC-27）。
