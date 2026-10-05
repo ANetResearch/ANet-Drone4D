@@ -2390,3 +2390,483 @@ def pack_records(idx: i32[:], agent_no: i32[:], p: f64[:, :], v: f64[:, :], q: f
 | X-10 | AWR-17 §4.3.5、§6.12 | ①§4.3.5 写"非强制移除只在 LANDED、DISARMED 下允许，否则 105"，但同一段又给出 202 DRAINING 响应，且与 AWR-12 §5.14.2（空中先 DRAINING 再移除）冲突；②本文新增的事件 kind（`sim.rtf_limited`、`sim.kernel.fallback`、`sim.stage.overbudget`、`sim.profile.loaded`、`sim.contact.*`、`cmd.progress`）未在 §6.12 登记 | ①本文按业务语义定义方 AWR-12 实现，建议 AWR-17 删除"否则 105"；②请 M00 在 `bus/event.schema.json` 登记（§7.4"待登记"行） |
 | X-11 | AWR-18 §7.1 | contact 行写作"DSM 双线性"，与 M04 §6.3 的柱体语义矛盾 | 建议改为"DSM 柱体最近格"（FR-036） |
 | X-12 | AWR-15 §7 与 M13 PRD | 图标注册表没有幽灵机图标；M13 要求的 `pose_enu_flu`、`acc_enu`、`omega_flu` 与 `StageCtx.call_index` | 请 M15 登记 `drone.ghost`（lucide Ghost）；M13 所需视图与字段本文已提供（FR-087、§7.1.1），慢任务登记参数名以本文 `period_sim_s`、`budget_us` 为准（M13 草稿中的 `hz`、`slice_budget_us` 请改名） |
+
+
+---
+
+## 15. D2 增补（V0.2-demo）
+
+> 本节是 M08 对 D2（V0.2-demo）的增补，依据 [AWR-04 D2 设计增补与决策记录](../04-D2-设计增补与决策记录.md)（D2 唯一基线，ADR-088 至 ADR-113）与 [用户 D2 需求原文](../inputs/D2-需求原文-2026-10-05.md)。本节只写 M08 在 D2 新增或改变的部分；§1–§14 的 D1 条款在未被本节修改处继续有效。与 AWR-04 冲突时以 AWR-04 为准，本节发现的基线问题列在 §15.11。
+
+### 15.0 定位与编号
+
+1. **M08 在 D2 的职责**（AWR-04 §3.2 M08 行、§4.5、§5、§14.2 WP-02）：
+   - 时钟档参数化（`d1_250`、`sandbox100`）与按频率声明的 stage 调度（ADR-090）；
+   - **机型目录装载**：ProfileTable 接入 M21 的 `vehicles/catalog.json`、机型版本固定、按构型登记的自洽检查、会话内克隆机型；P600 profile 升至 2.0.0（ADR-095）；
+   - **固定翼与 VTOL 运动学 stage 的宿主**：保真度位 `FW`、构型列、ENU 写入助手、VTOL 保真度切换、命令与安全动作按构型分派（ADR-096；运动学公式、参数与 stage 本体归 M21）；
+   - **能量模型**：按构型分派的功率模型注册表，battery stage、估价、能量 RTL 与任务能量预检共用同一份功率（ADR-052、ADR-096）；
+   - 识别物实体层宿主：roster `kind = target`、实体表、checkpoint、10 Hz 发布（推进与判据归 M18，ADR-098）；
+   - 新命令 `loiter`、`gimbal`、`zoom`、`sensor_mode`、`fleet update` 与插件命令分派；手动控制期间时钟锁 ×1；
+   - 批处理自由运行、tap 空载优化、`state/sim-core/perf` 自报 `cost_core_per_rate`、预热（P1）、`rest/fleet.py` 的 `ctx_for` 与沙盒车辆路由、`fleet_ladder` 的 `--clock` 与 `--targets`。
+2. **不归 M08**：固定翼与 VTOL 的运动学、能量公式与参数（M21）；识别物运动与"被发现"判据（M18）；感知（M19）；任务编排（M20）；会话池、倍速治理与准入（M17）；电量积分与能量 RTL 判据（M09，经本节的功率模型注册表取功率）；云台、变焦与传感器模式的状态（M13，经本节的命令分派接入）。
+3. **编号**：D2 条目从 201 起编号（FR、NFR、AC 各自在 2xx 段内连续），与 D1 号段分开。需求表"D2"列取"是、桩、否"，目标版本统一为 `V0.2-demo`（AWR-04 §1.2）。
+
+### 15.1 职责边界与依赖
+
+| 能力 | M08 提供 | 协作模块与其职责 | 接口（§15.3） |
+|---|---|---|---|
+| 时钟档 | ClockProfile、TICK_NS、按档调度表、按档预算表 | M07、M09、M10、M13 的 D1 stage 不改注册代码，由 M08 的按档调度表重映射（stage 内部按 tick 推算调用序号的逻辑见 §15.7 变更请求 ②）；M17 经 `AWR_CLOCK_PROFILE` 选档 | §15.3.1 |
+| 机型装载 | 目录与版本解析、ProfileTable、检查注册表、会话克隆 | M21 提供 `catalog.json`、`awr_*` 机型包与 FW 检查；M13 提供传感器描述 | §15.3.3 |
+| 固定翼与 VTOL | 保真度位 `FW`、`frame_kind` 列、`write_kinematic`、`set_fidelity`、按构型分派命令与 SupervisorQueue 动作 | M21 注册 `fw_kin` stage（order 086）、运动提供者与参数检查 | §15.3.5、§15.3.6 |
+| 能量 | 功率模型注册表与分派助手 | M09 注册多旋翼模型并在 battery stage、估价、RTL 中调用分派助手；M21 注册 `fixed_wing`、`vtol` 模型 | §15.3.2 |
+| 识别物实体 | 实体表、roster `kind = target`、checkpoint、`tap_targets` 发布 | M18 登记实体状态块并写入；M19 登记感知列；M11 把总线 key 映射为 `swarm/target/state` | §15.3.4 |
+| 命令 | 准入框架 ④–⑩、插件命令分派、FW 参数检查挂点（第 ⑥ 步） | M13 处理 `gimbal`、`zoom`、`sensor_mode`；M18 处理 `target/*`；M20 处理 `nest/*`、`task/*`；M07 处理 `env/calendar` | §15.3.6 |
+| 运行时 | 批处理、perf 自报、tap 优化、预热、时钟锁 | M17 读取 perf 并授予倍速；M10 规划结果在批处理中按固定延迟生效 | §15.3.7 |
+| 沙盒 REST | `rest/fleet.py` 的 `sandbox_router` | M11 的 sandbox-api 挂载；M13 提供 `/sensors` 内容 | §15.3.8 |
+
+依赖方向沿用 AWR-03 §6.2 规则 1：M18–M21 经 M08 的注册表接入 sim-core，M08 不 import 它们；本节新增的注册点全部是追加（不改 D1-MS1 冻结的签名，M08-FR-065）。
+
+### 15.2 功能需求（D2）
+
+#### 15.2.1 时钟档与调度
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M08-FR-201 | 时钟档 `clock_profile ∈ {d1_250, sandbox100}`：取自 `configs/runtime.yaml` 的 `run.clock_profile`（缺省 `d1_250`）或环境变量 `AWR_CLOCK_PROFILE`（sandbox-pool 拉起沙盒 sim-core 时置 `sandbox100`），进程生命周期内不可变；`TICK_NS` 由档位给出（4 000 000 或 10 000 000），`t_sim_ns = tick × TICK_NS`；`caps.clock.tick_hz` 报 250 或 100；`meta.json`、输入日志头与 checkpoint 记录档位，档位不一致的 checkpoint 或输入日志拒绝恢复（`355 RESIM_INCOMPATIBLE`）；单步上限按仿真时长 10 s 计（d1_250 为 2500 tick，sandbox100 为 1000 tick）；`max_batch = max(5, ⌈5·rate⌉)` 不变 | P0 | V0.2-demo | 是 | M08-AC-201 | ADR-090；AWR-04 §4.5 |
+| M08-FR-202 | 按频率声明 stage：`register_stage` 追加关键字 `hz` 与 `phase_slot`：给出 `hz` 时 `every = tick_hz / hz`（必须整除，否则 ValueError），`phase = phase_slot mod every`；只给 `every`、`phase` 的 D1 写法按 `d1_250` 的 tick 解释，在其他档位由 M08 维护的按档调度表 `stages/rates.py`（§15.4.1）给出该 stage 的 `(every, phase)`，表中缺项时构建失败（`PipelineError: no schedule for <stage>@<profile>`）。D1 插件（M07、M09、M10、M13）因此无需改注册代码；但 stage 内部按 tick 推算调用序号或相位的逻辑（M13 sensors 的 `c = (tick − 2) // 5`、M07 env 的 `tick % 50 ∈ {5, 35}` 全量求值）须改用 `ctx.call_index` 与 `ctx.dt(stage)`（§15.7 变更请求 ②）；D2 新模块（M18–M21）一律用 `hz` 写法 | P0 | V0.2-demo | 是 | M08-AC-201、AC-203 | ADR-090；M08-FR-012 |
+| M08-FR-203 | 按档预算：`d1_250` 沿用 §5.2 预算表（N = 1000）并增加 D2 stage 行，构建期 Σ ≤ 0.40 不变；`sandbox100` 使用独立预算表（N ≤ 12、识别物 ≤ 30，§15.4.2），构建期 Σ（含主循环项）≤ 0.16 核，超出拒绝构建并打印逐项预算；`stage_ms_per_s` 的告警线按所在档位的表计算 | P0 | V0.2-demo | 是 | M08-AC-203 | AWR-04 §4.4.1；D2-AC-08 |
+| M08-FR-204 | order 区段与包归属扩展：M21 `086–089`（自 M08 区段让出），M18 `170–174`，M19 `175–184`，M20 `185–194`，`195–199` 与 `125–127` 保留；包到模块：`awr.sim.fixedwing`、`awr.sim.catalog` → M21，`awr.sim.targets` → M18，`awr.sim.perception` → M19，`awr.sim.tasking` → M20（§6.4.2 表追加四行） | P0 | V0.2-demo | 是 | M08-AC-203 | ADR-110；§6.4.2 |
+
+#### 15.2.2 机型目录装载与 P600 v2
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M08-FR-205 | 目录装载：`vehicles/catalog.json`（M21 维护，schema `vehicle/catalog.schema.json`）存在时，loader 只装载目录列出的机型包，按条目的 `package` 路径读取 `params.yaml`；目录不存在时退回 D1 的 `vehicles/*/params.yaml` 扫描（本机开发与 D1 测试）；`hidden = true` 的条目（x500、x500_sih）可按 id 加载但不出现在 `GET /catalog/models`；`reference = true` 原样透传给 API 与 UI | P0 | V0.2-demo | 是 | M08-AC-206 | AWR-04 §5.4 第 1 条；ADR-095 |
+| M08-FR-206 | 版本固定：机型引用写作 `<id>` 或 `<id>@<version>`；`vehicles/<pkg>/params.yaml` 为当前版本，旧版本存档为 `vehicles/<pkg>/history/params-<version>.yaml`（同一 schema；AWR-20 §3.4、AWR-04 ADR-115）；ProfileTable 以 `id@version` 为键，`<id>` 解析为当前版本；roster 与 `state_ext.profile` 写实际版本；P600 v1 冻结为 `vehicles/p600/history/params-1.0.0.yaml`，D1 剧本 S1–S6 在 D1 门禁回退时改写为 `p600_mid360@1.0.0` | P0 | V0.2-demo | 是 | M08-AC-206 | ADR-095 |
+| M08-FR-207 | 按构型的自洽检查：`frame.type` 枚举增加 `fixed_wing`、`vtol_quadplane`；多旋翼执行 VH-1 至 VH-7；VTOL 的升力系统执行 VH-1 至 VH-4；固定翼与 VTOL 的固定翼部分执行 M21 经 `register_profile_check(frame_types, check_id, fn)` 登记的 FW-1 至 FW-4（`V_min ≥ 1.1·V_s`、`R_min` 与 `φ_max` 一致、续航与功率一致、含挂载的总质量 ≤ MTOW）；全部构型另执行挂载质量检查 MNT-1（`mass_kg + Σ 可选挂载质量 ≤ mtow_kg`）。文件加载失败 `353 VEHICLE_PROFILE_INVALID`，会话克隆失败 `522 VEHICLE_CLONE_INVALID`，两者都带逐项原因 `[{check, value, range, msg}]` | P0 | V0.2-demo | 是 | M08-AC-206 | AWR-04 §5.4 第 2 条；M08-FR-042 |
+| M08-FR-208 | 会话内克隆：`ProfileTable.add_session(base_ref, overrides) -> profile_ref`，只允许覆盖白名单字段（`mass_kg`、`battery.*`、限速配置、`acoustic.lwa_hover_dba`、`sensors` 挂载与参数覆盖）；克隆 id 为 `<base_id>_c<n>`（n 为会话内序号；符合 17 §17.1 的 id 正则；表容量 16，会话配额 8）；在步边界（inbox drain）执行，ProfileTable 的 `PT`、`LT` 矩阵写时复制重建（O(P)，不在 stage 中途替换数组）；克隆进入 checkpoint 与会话配置快照；删除仍被机体引用的克隆返回 `105 STATE`（detail = MODEL_IN_USE） | P0 | V0.2-demo | 是 | M08-AC-206 | AWR-04 §5.4 第 2 条 |
+| M08-FR-209 | P600 profile 2.0.0：按 §15.4.3 修订 `vehicles/p600/params.yaml`（3.825 kg、MTOW 4.1 kg、6S HV 228 Wh、悬停 29 min、派生 `p_hover_w` 401 W），追加 AWR-04 §5.1 与 §2.3 的可选字段（`nav.hold_sigma_m`、`env_limits`、`link`、`acoustic`、`visual`、`rcs_m2`、`ir`、`capabilities`、`catalog`、`labels`、`payload[]`）；新增限速档 `p600_std`（§15.4.3；数值即本节起草时的 `awr_sandbox`，按 AWR-20 §4.3 每型 `<id>_std` 命名），`limits_profiles.default` 保持 `prometheus_outdoor`（D1 剧本行为不变），沙盒机队实例缺省取目录字段 `catalog.limits_default` | P0 | V0.2-demo | 是 | M08-AC-206 | ADR-095；AWR-04 §5.1 |
+
+#### 15.2.3 固定翼与 VTOL 运动学宿主
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M08-FR-210 | 构型列与保真度位：FleetState 增加 `frame_kind`（u8：0 多旋翼、1 固定翼、2 VTOL，按机型在 spawn 时写入）；`Fidelity` 增加 `FW = 16`，`Fidelity.ALL` 随之扩为 31；固定翼与处于 TRANSITION_FW、FW 模式的 VTOL 的 slot 置 `L1 | FW`，使登记为 L1 的 D1 stage（env、guard、battery、mission_guard、contact、tap 等）自动覆盖它们；M08 自己的 L1 物理 stage（refgen 至 integrate 与融合核 `l1`）跳过带 `FW` 位的 slot | P0 | V0.2-demo | 是 | M08-AC-204 | ADR-096；M08-FR-013 |
+| M08-FR-211 | ENU 写入助手 `write_kinematic(slots, p_enu, v_enu, q_xyzw, omega_flu, acc_enu, pos_ref_enu)`（numba，`awr/sim/fleet/kinematic_write.py`）：在 fleet 包内完成 ENU/FLU → NED/FRD 换算并写入状态与 `pos_ref`（固定翼的导引参考点，使 FastGuard 的 pos_err 语义为横向偏差）；只接受带 `FW` 或 `L0` 位的 slot，否则 ValueError；同一 tick 一个 slot 只允许一次写入（一字段一写者） | P0 | V0.2-demo | 是 | M08-AC-204 | AWR-03 §5.3 第 3 条；M08-FR-087 |
+| M08-FR-212 | VTOL 保真度切换 `set_fidelity(slots, add=FW | remove=FW)`：只在 ingest（步边界）生效；切入 FW 时保留位置、速度与姿态，切回 L1 时以当前速度与姿态初始化 L1 状态（推力取悬停值、速度与位置积分器清零、`motor_w` 取悬停转速），并清除 TRAJ 跟踪；切换写入输入日志 | P0 | V0.2-demo | 是 | M08-AC-204 | ADR-096 |
+| M08-FR-213 | 按构型分派：命令（`goto`、`hover`、`hold`、`orbit`、`loiter`、`follow_path`、`velocity`、`takeoff`、`land`、`rtl`）与 SupervisorQueue 动作（HOLD、RTL、LAND、ELAND、FAILSAFE_DESCENT）对 `frame_kind ≠ 0` 的 slot 交给 M21 经 `register_motion_provider(..., frames={fixed_wing, vtol})` 登记的提供者执行（AWR-04 §5.3 的映射：hover 与 hold 为半径 `max(R_loiter,min, 80 m)` 的盘旋、takeoff 为弹射、land 为进近后伞降、ELAND 与 FAILSAFE_DESCENT 为立即开伞）；contact stage 对处于伞降的固定翼按"正常触地"处理（触地垂直速度上限 6 m/s，超过才判硬着陆）；FlightState 由 M09 FSM 按 `mode_evt` 推进，映射沿用 14 态（弹射与爬升为 TAKING_OFF，盘旋为 HOLD，进近与伞降为 LANDING） | P0 | V0.2-demo | 是 | M08-AC-205、AC-209 | AWR-04 §5.3；ADR-096 |
+
+#### 15.2.4 能量模型
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M08-FR-214 | 功率模型注册表：`register_power_model(frame_kind, model)`（每个构型一次，重复登记失败）与分派助手 `power_by_frame(state, slots, ctx) -> f64[n]`（W）、`leg_power_w(profile, v_air_mps, v_climb_mps, turn_load, rho)`；M09 登记多旋翼模型（D1 公式 `P = P_hover·(T/T_hover)^1.5` 原样迁入），M21 登记 `fixed_wing` 与 `vtol`（AWR-04 §5.3 的 `P_elec` 与 VTOL 各模式功率）；未登记构型的机体拒绝 spawn（`110`，detail = NO_POWER_MODEL） | P0 | V0.2-demo | 是 | M08-AC-207 | ADR-052、ADR-096；§14 F-06、F-08 |
+| M08-FR-215 | 一处功率、处处同源：M09 battery stage 的 SOC 积分、`ctl/sim-core/estimate` 的能量积分、M09 能量 RTL 的返航能量与 M10、M20 的任务能量预检（`EnergyModel.path_wh`）全部经 FR-214 的分派助手取功率；可用能量口径 `E_use = usable_frac·capacity_wh` 不变 | P0 | V0.2-demo | 是 | M08-AC-207 | ADR-036、ADR-052 |
+
+#### 15.2.5 识别物实体层
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M08-FR-216 | 实体表：与 FleetState（1024 行）分开的 SoA 表 `EntityTable(kind, capacity)`，D2 只有 `kind = target`、容量 32；`register_entity_block(kind, name, owner, fields)` 供 M18（运动、判据、行为字段）与 M19（每识别物的最佳捕获等级等）登记列，沿用"一字段一写者"校验；行按 `target_no`（u16，会话内单调，不复用）分配，遍历一律按 `target_no` 升序；参与 checkpoint 与输入日志 | P0 | V0.2-demo | 是 | M08-AC-208 | ADR-098；AWR-04 §7.1 |
+| M08-FR-217 | roster 与发布：`rt/enums.json` 的 `Kind` 追加 `target`；识别物进入 roster（`{target_no, id = "tg-<n>", kind: "target", class, label}`），增删时 `roster_version + 1` 并发 `roster.changed`；识别物不经 DroneAdapter、不进入租约；M08 stage `tap_targets`（10 Hz，相位排在 M18 stage 之后，§15.4.1）按 `awr.TargetLite32.v1` 打包全部识别物，发布到总线 key `state/sim-core/targets`（msgpack `{v: 1, t_sim_ns, roster_version, rows: bin(32·n)}`，DROP），由 M11 映射为 `swarm/target/state`；数量上限由会话 limits 给出（沙盒 30，超出 `505 SANDBOX_ENTITY_LIMIT`） | P0 | V0.2-demo | 是 | M08-AC-208 | ADR-098；AWR-04 §11.2 |
+
+#### 15.2.6 命令与手动控制
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M08-FR-218 | 新机体命令（`rt/commands.json`，走 ADR-016 准入 ④–⑩）：`uav/{id}/cmd/loiter{center_enu_m, radius_m, dir, alt_m, turns?, duration_s?}`（多旋翼映射为 D1 ORBIT，速度取 `min(v_cruise, √(3·R))`；固定翼交 M21）；`uav/{id}/cmd/gimbal`、`uav/{id}/cmd/zoom`、`uav/{id}/cmd/sensor/mode`（经 `register_command_handler` 交 M13；载荷见 AWR-04 §11.2）；`fleet/cmd/update{vehicle_id, label?, sensors?, limits_profile?}`（改挂载只在 LANDED 且 DISARMED 时允许，否则 `105 STATE`）；`target/{add,update,remove}`、`nest/{add,update,remove}`、`task/{create,start,pause,resume,cancel}`、`env/calendar` 由 M18、M20、M07 登记处理函数，M08 只执行通用准入与生命周期 | P0 | V0.2-demo | 是 | M08-AC-209 | AWR-04 §11.2；M08-FR-054 |
+| M08-FR-219 | 第 ⑥ 步参数检查注册：`register_admission_check(6, name, fn, frames=...)`（D1 只开放 ④ 与 ⑧，本条追加 ⑥）；M21 登记固定翼检查：使空速低于 `V_min` 的指令与半径小于 `R_loiter,min` 的 `loiter`、`orbit` 以 `110 PARAM_OUT_OF_RANGE` 拒绝（detail = FW_AIRSPEED 或 LOITER_RADIUS_MIN，并给出下限值）；VTOL 单架次悬停累计超过 `hover_max_s` 时悬停类命令以 `524 VTOL_HOVER_LIMIT` 拒绝 | P0 | V0.2-demo | 是 | M08-AC-209 | AWR-04 §5.3；D2-AC-10 |
+| M08-FR-220 | 手动控制时钟锁：任一 slot 处于 OPERATOR 持有的 VELOCITY 模式（`velocity` 调用 running，或 1 s【墙钟】内收到过该 slot 的 VelSetpoint16）时，沙盒档把倍率置 1 并锁定：`sim/speed` 返回 `117 CLOCK_CONSTRAINT`（detail = MANUAL_CONTROL），`sim/pause` 与 `sim/step` 照常；全部 slot 离开 VELOCITY 后 2 s【墙钟】解锁，倍率保持 ×1，由 M17 治理器按新请求重新授予；`d1_250` 档保持 D1 行为（ADR-045 第 ④ 条：倍率 ≠ 1 时 `velocity` 以 117 拒绝）；锁定与解锁发 `sim.clock{reason: manual_lock | manual_unlock}` | P0 | V0.2-demo | 是 | M08-AC-210 | ADR-045 第 ④ 条；AWR-04 §4.4.5 第 4 条、§10.6 |
+
+#### 15.2.7 运行时：批处理、tap、性能自报、预热
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M08-FR-221 | 批处理自由运行：`python -m awr.sim.runtime --batch --until <t_sim_s> --config <session.json> [--seed n] [--out <dir>] [--clock sandbox100]`：不按墙钟节拍（每轮执行全部到期 tick）、不写 StateRing 槽（只写头部时钟组，1 Hz）、总线为进程内 LocalBus、不写 checkpoint；规划作业仍在独立进程执行，但按**固定延迟**生效：`apply_tick = request_tick + lat_ticks(kind)`（`lat_ticks = ⌈budget_ms·tick_hz/1000⌉`，§15.4.4），到期未返回时主循环阻塞等待（批处理专用），墙钟等待超过 60 s 判批处理失败（退出码 3），不产生"按机器速度而异的超时结果"；结束时写 `relay_stats.json`、`events.jsonl`、`summary.json`（墙钟用时、平均 RTF、各 stage 耗时），退出码 0 | P0 | V0.2-demo | 是 | M08-AC-211 | ADR-106；AWR-04 §4.10 第 3 条 |
+| M08-FR-222 | 确定性：批处理与实时运行共用 ADR-049 的计数器式 RNG；登记新流 `targets_motion`、`perception`（`rt/rng_streams.json`）；实体表按 `target_no` 升序处理；同一内核、版本、会话配置快照与种子下，批处理的事件序列、识别物轨迹与 `relay_stats.json` 逐字节一致 | P1 | V0.2-demo | 是 | M08-AC-211 | ADR-106；D2-AC-32 |
+| M08-FR-223 | tap 空载优化：①sandbox100 下 tap 50 Hz；②活动机体为 0 时只写头部时钟组，不写槽体；③读者游标表连续 2 s【墙钟】无活动读者时降为 5 Hz，出现读者后下一次 tap 恢复全速；④预计算换算视图，消除逐 tick 的 Python 分配。目标：sandbox100 下 N = 0 时 tap ≤ 8 ms/仿真秒，N = 12 时 ≤ 15 ms/仿真秒（D1 实测 N = 0 为 58.8 ms/s） | P0 | V0.2-demo | 是 | M08-AC-212 | AWR-04 §4.2 结论 1 |
+| M08-FR-224 | 性能自报：`state/sim-core/perf`（1 Hz【墙钟】）追加 `clock_profile`、`cpu_win_core`（进程 CPU 秒 ÷ 墙钟秒，取 `/proc/self/stat` 的 utime + stime）、`rtf_win`、`rate_set`、`cost_core_per_rate`（`cpu_win_core ÷ rtf_win` 的指数平均，α = 0.3，只在 `rtf_win ≥ 0.2` 的窗口更新）、`n_uav`、`n_target`、`ray_rate_hz`（M19 经度量注册表提供）、`rss_anon_mb`（`/proc/self/status` 的 RssAnon） | P0 | V0.2-demo | 是 | M08-AC-212 | ADR-091；AWR-04 §4.4.5 第 1 条 |
+| M08-FR-225 | 预热（P1）：复用 D1 热备用路径（M08-FR-005 的 `AWR_STANDBY=1`）：sandbox-pool 以 `AWR_STANDBY=1 AWR_CLOCK_PROFILE=sandbox100` 拉起，完成插件装配与 numba 预热后打印 `AWR_STANDBY_READY`；领取时 stdin 写入 `{"env": {...}, "binding": {run_id, world_id, ring_path, namespace, secret_path}, "config_snapshot": <path>}`，进程打开世界与 StateRing 后按快照或模板装配；领取到 READY ≤ 1.5 s | P1 | V0.2-demo | 是 | M08-AC-214 | AWR-04 §4.6"启动时间" |
+
+#### 15.2.8 REST 与工具
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M08-FR-226 | `rest/fleet.py` 改为请求级上下文：处理函数一律经 `Depends(ctx_for)` 取运行上下文（不再读 `request.app.state.awr`），D1 的 `router`（`/api/fleet/**`）在 show-api 中行为不变；另导出 `sandbox_router`（相对路径，由 sandbox-api 挂载到 `/api/sandbox/v1/sessions/{sid}`），路由与字段见 §15.3.8 | P0 | V0.2-demo | 是 | M08-AC-213 | ADR-092；AWR-04 §11.1、§14.3 |
+| M08-FR-227 | 机体全部状态：`GET .../vehicles/{vid}/state` 返回 Full64 解码值与 `state_ext` 的合并 JSON（字段名带单位后缀，SOC、能量、FlightState、租约、限速档、健康、`frame_kind`、FW 模式），覆盖 AWR-04 §11.7"状态"行；`GET .../vehicles/{vid}/sensors` 返回 M13 `describe()` 与当前载荷状态 | P0 | V0.2-demo | 是 | M08-AC-213 | AWR-04 §11.7；R-D2-23 |
+| M08-FR-228 | `tools/bench/fleet_ladder/run.py` 增加 `--clock {d1_250,sandbox100}`、`--targets <n>`（按模板放置识别物，开启 M18、M19）与 `--perception {off,full}`（`full` 时使接力与巡查几何下的射线预算打满）；结果写入 `bench-result.json` 的 `clock_profile`、`n_target` 与逐 stage 成本 | P0 | V0.2-demo | 是 | M08-AC-202 | AWR-04 §4.2；§14.3 |
+
+#### 15.2.9 非功能需求
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M08-NFR-201 | sandbox100、10 架飞行 + 30 识别物（射线预算打满）、×1：sim-core ≤ 0.16 核；单步 p99 ≤ 8 ms（cgroup 模拟下）；满载会话 `cost_core_per_rate ≤ 0.12` | P0 | V0.2-demo | 是 | M08-AC-202 | D2-AC-04、08；AWR-04 §4.2 结论 2 |
+| M08-NFR-202 | d1_250 共享展示（S7：8 架 + 3 识别物）：D1 门禁不回退（D1-AC-07 单步 p99 ≤ 3 ms、N = 1000 Σbudget ≤ 0.40），sim-core ≤ 0.30 核 | P0 | V0.2-demo | 是 | M08-AC-201、AC-202 | D2-AC-26；AWR-04 §4.4.1 |
+| M08-NFR-203 | 内存：单沙盒 sim-core（12 架 + 30 识别物、已触发规划）匿名页 + shmem：S 级世界 ≤ 150 MB、sanfrancisco ≤ 170 MB；sim-core 进程内不构建 Grid25 | P0 | V0.2-demo | 是 | M08-AC-202 | D2-AC-28 |
+
+### 15.3 接口
+
+#### 15.3.1 时钟档与 stage 注册（追加，不改冻结签名）
+
+```python
+# awr/sim/runtime/clock_profile.py
+@dataclass(frozen=True)
+class ClockProfile:
+    name: Literal["d1_250", "sandbox100"]
+    tick_hz: int                 # 250 | 100
+    tick_ns: int                 # 4_000_000 | 10_000_000
+    max_step_ticks: int          # 2500 | 1000（10 s）
+    budget_total_core: float     # 0.40 | 0.16（构建期 Σ 上限）
+    checkpoint_period_s: float   # 1.0 | 5.0【仿真】
+def current() -> ClockProfile: ...   # 进程内唯一，由 runtime 在 init_child 之后设置一次
+
+# awr/sim/fleet/stages/registry.py（追加关键字）
+def register_stage(name, every=None, phase=None, order=None, *, hz: float | None = None, phase_slot: int = 0,
+                   owner=None, fidelity=Fidelity.L1 | Fidelity.L2, budget_core=None, shards=1): ...
+def register_entity_block(kind: Literal["target"], name: str, owner: str, fields: dict[str, tuple]) -> None: ...
+def register_power_model(frame_kind: int, model: "PowerModel") -> None: ...
+def register_profile_check(frame_types: frozenset[str], check_id: str, fn: Callable[[dict], "CheckResult"]) -> None: ...
+def register_admission_check(step: Literal[4, 6, 8], name: str, fn, *, owner: str, frames: frozenset[int] | None = None): ...
+```
+
+`StageCtx` 追加只读字段 `profile: ClockProfile` 与 `entities: EntityTables`；`ctx.dt(stage)` 按档位返回 `every / tick_hz` 秒。
+
+#### 15.3.2 功率模型
+
+```python
+class PowerModel(Protocol):
+    frame_kind: int                                              # 0 多旋翼、1 固定翼、2 VTOL
+    def power_w(self, state: FleetState, slots: np.ndarray, ctx: StageCtx) -> np.ndarray: ...   # f64[n]，W，当前电功率
+    def leg_power_w(self, profile: VehicleProfile, v_air_mps: float, v_climb_mps: float,
+                    turn_load: float, rho_kgm3: float) -> float: ...                             # W，估价与预检用
+    def hover_or_loiter_power_w(self, profile: VehicleProfile, wind_mps: float, rho_kgm3: float) -> float: ...
+def power_by_frame(state, slots, ctx) -> np.ndarray: ...         # 按 frame_kind 分组调用，保持 slot 升序
+```
+
+| 字段或参数 | 类型 | 单位 | 范围 | 说明 |
+|---|---|---|---|---|
+| `v_air_mps` | f64 | m/s | ≥ 0 | 相对空速（风经 M07 EnvironmentService） |
+| `v_climb_mps` | f64 | m/s | 有符号 | 爬升为正；下降功率按模型自身规则 |
+| `turn_load` | f64 | — | ≥ 1 | 过载 `n = 1/cos φ`；多旋翼忽略 |
+| `rho_kgm3` | f64 | kg/m³ | 0.9–1.4 | M07 THERMO |
+| 返回值 | f64 | W | > 0 | 电功率（含航电） |
+
+#### 15.3.3 目录、版本与会话克隆
+
+| 接口 | 签名 | 说明 |
+|---|---|---|
+| 解析 | `ProfileTable.resolve(ref: str) -> Profile`；`ref = "<id>" \| "<id>@<semver>" \| "<id>_c<n>"` | 未知 `520 MODEL_UNKNOWN` |
+| 克隆 | `ProfileTable.add_session(base_ref: str, overrides: dict) -> str`（步边界执行） | 返回克隆 id；失败 `522` 与逐项原因 |
+| 删除 | `ProfileTable.remove_session(ref: str)` | 被引用时 `105 STATE` |
+| 描述 | `ProfileTable.describe(ref) -> dict` | D1 内容 + `frame_kind`、`catalog`、`derived`、全部检查结果、`sensors{}`（M13） |
+| 目录项 | `catalog.json`：`[{id, display_name, category ∈ {multirotor, fixed_wing, vtol}, reference: bool, hidden: bool, package: str, versions: [semver], default_version}]` | M21 维护；schema `vehicle/catalog.schema.json` |
+
+#### 15.3.4 实体层与 `awr.TargetLite32.v1` 的发布
+
+| 项 | 规则 |
+|---|---|
+| 实体表 | `EntityTables["target"]`：容量 32；列由 M18、M19 登记；M08 只拥有 `active`（u8）、`target_no`（u16）与 `roster_flags`（u8） |
+| 总线 key | `state/sim-core/targets`（新登记于 `bus/keys.json`，producer sim-core，DROP，10 Hz【仿真】，快进时按墙钟 ≥ 50 ms 节流） |
+| 载荷 | msgpack `{v: 1, t_sim_ns: i64, roster_version: u32, rows: bin(32·n)}`；`rows` 按 `target_no` 升序，布局由 M18 起草的 `rt/layouts.json` `awr.TargetLite32.v1` 给出，M08 的 `tap_targets` 只按布局表打包，不解释字段语义 |
+| 增删 | `target/add` 成功后下一 tick 出现在 roster 与 `rows` 中；`target/remove` 后 `rows` 立即不含该行，`target_no` 不复用 |
+
+#### 15.3.5 运动学写入与保真度切换
+
+| 函数 | 参数（单位） | 约束 |
+|---|---|---|
+| `write_kinematic(slots, p_enu, v_enu, q_xyzw, omega_flu, acc_enu, pos_ref_enu)` | m、m/s、WORLD←FLU 四元数、rad/s、m/s²、m | slot 必须带 `FW` 或 `L0` 位；每 tick 每 slot 至多一次 |
+| `set_fidelity(slots, *, add: int = 0, remove: int = 0)` | 位掩码 | 只能在 ingest 内调用（步边界）；写输入日志 |
+| `frame_kind_view() -> np.ndarray[u8]` | — | 只读 |
+
+#### 15.3.6 命令字段（新增部分）
+
+| 服务 | 字段 | 类型与单位 | 缺省与范围 | 说明 |
+|---|---|---|---|---|
+| `uav/{id}/cmd/loiter` | `center_enu_m` | f64[3]，m | 必填（z 可为 null，取 `alt_m`） | 盘旋中心 |
+| | `radius_m` | f64，m | 多旋翼 [5, 500]；固定翼 ≥ `R_loiter,min` | 小于下限 110（detail 带下限） |
+| | `dir` | enum `cw`、`ccw` | `cw` | 俯视顺时针 |
+| | `alt_m`、`alt_ref` | f64，m；enum `agl`、`amsl` | 当前高度、`agl` | — |
+| | `turns`、`duration_s` | f64；f64，s | 二者都缺省为"直到取消" | 互斥 |
+| `fleet/cmd/update` | `vehicle_id`、`label?`、`sensors?`、`limits_profile?` | — | `sensors` 为挂载与参数覆盖数组 | 改挂载需 LANDED 且 DISARMED |
+| `uav/{id}/cmd/gimbal`、`zoom`、`sensor_mode` | 由 M13 定义 | — | — | M08 只做路由、生命周期与准入 ④⑤⑦ |
+
+#### 15.3.7 `state/sim-core/perf` 追加字段
+
+| 字段 | 类型 | 单位 | 说明 |
+|---|---|---|---|
+| `clock_profile` | str | — | `d1_250` 或 `sandbox100` |
+| `cpu_win_core` | f32 | 核 | 最近 1 s【墙钟】的进程 CPU |
+| `rtf_win` | f32 | — | 同窗口实际倍速 |
+| `rate_set` | f32 | — | SimClock 设定倍率 |
+| `cost_core_per_rate` | f32 | 核 | EMA(`cpu_win_core / rtf_win`)，α = 0.3 |
+| `n_uav`、`n_target` | u16 | — | 活动数量 |
+| `ray_rate_hz` | f32 | Hz（条/仿真秒） | M19 度量 |
+| `rss_anon_mb` | f32 | MB | RssAnon |
+| `clock_lock` | str \| null | — | `manual` 或 null |
+
+#### 15.3.8 沙盒车辆路由（`rest/fleet.py` 的 `sandbox_router`）
+
+前缀由 sandbox-api 加上 `/api/sandbox/v1/sessions/{sid}`；鉴权为沙盒 token（ADR-093），限流按 AWR-04 §11.5。
+
+| 方法与相对路径 | 请求 | 回复 | 错误 |
+|---|---|---|---|
+| `GET /vehicles` | — | `[{vehicle_id, agent_no, model_ref, nest_id, label, frame_kind, flight_state, soc}]` | — |
+| `POST /vehicles` | `{model_id, nest_id?, pos_enu_m?, yaw_deg?, sensors?, limits_profile? = catalog.limits_default, label?}`（`nest_id` 与 `pos_enu_m` 二选一） | `{vehicle_id, agent_no}` | `505`、`520`、`525`、`110` |
+| `GET /vehicles/{vid}`、`PATCH`、`DELETE` | PATCH 同 `fleet/cmd/update` | 实例；DELETE 在空中时 202 DRAINING（D1 语义） | `105`、`107` |
+| `GET /vehicles/{vid}/state` | — | §15.2 FR-227 | `107` |
+| `GET /vehicles/{vid}/sensors` | — | M13 描述与载荷状态 | `107` |
+| `POST /vehicles/{vid}/commands` | `{op, args, cid?}` | 与 WS `call` 相同的调用回复 | ADR-016 全部码 |
+| `POST /vehicles/{vid}:acquire`、`:release` | `{mode ∈ {command, velocity}, ttl_s? = 30}` | `{lease{owner, holder, expires_unix_ms}}` | `100`、`116` |
+
+### 15.4 默认参数
+
+#### 15.4.1 两个时钟档的调度（按档调度表 `stages/rates.py`）
+
+| stage（order） | 所有者 | d1_250：every / phase / 频率 | sandbox100：every / phase / 频率 | 说明 |
+|---|---|---|---|---|
+| clock（000）、ingest（010）、fsm（115） | M08、M09 | 1 / 0 / 250 Hz | 1 / 0 / 100 Hz | — |
+| env（020） | M07 | 5 / 0 / 50 Hz | 2 / 0 / 50 Hz | 逐机采样 50 Hz 不变（ADR-021） |
+| faults（025） | M09 | 2 / 0 / 125 Hz | 1 / 0 / 100 Hz | — |
+| mission 跟踪器（027）、l1（030–080）、kinematic（085）、contact（090） | M10、M08 | 2 / 0 / 125 Hz | 1 / 0 / 100 Hz | L1 every 1（AWR-04 §4.5） |
+| fw_kin（086） | M21 | 5 / 1 / 50 Hz | 2 / 1 / 50 Hz | 新增，`FW` 位 |
+| collide（091） | M08 | 10 / 9 / 25 Hz | 4 / 3 / 25 Hz | — |
+| sensors（100）、guard（110）、cmd_watch（128） | M13、M09、M08 | 5 / 2、1、4 / 50 Hz | 2 / 1 / 50 Hz | — |
+| battery（120）、mission_guard（121） | M09 | 25 / 3、13 / 10 Hz | 10 / 3、7 / 10 Hz | — |
+| battery_rtl（123） | M09 | 50 / 17 / 5 Hz | 20 / 13 / 5 Hz | — |
+| fleet_guard（130–133） | M09 | 25 / 8、13、18、23（4 片） | 10 / 5（1 片，N ≤ 12） | — |
+| tap（140） | M08 | 2 / 0 / 125 Hz | 2 / 0 / 50 Hz | FR-223 |
+| tap_targets（141） | M08 | 25 / 21 / 10 Hz | 10 / 2 / 10 Hz | 新增，在 targets 之后两个或一个 tick |
+| mission_engine（150）、director（160） | M10 | 25 / 8 / 10 Hz | 10 / 4 / 10 Hz | — |
+| coverage（155） | M10 | 50 / 1 / 5 Hz | 20 / 9 / 5 Hz | — |
+| targets（170） | M18 | 25 / 19 / 10 Hz（奇数 tick，避开 L1 组与 env 全量 tick） | 10 / 1 / 10 Hz | 运动、声源相位、敏感判定 |
+| perception（175） | M19 | 2 / 1（25 片轮转，每对 5 Hz） | 1 / 0（20 片轮转，每对 5 Hz） | 单 tick ≤ 1 ms、≤ 8 条射线 |
+| tasking（慢任务） | M20 | 1 Hz【仿真】 | 1 Hz【仿真】 | `register_slow_task(period_sim_s=1.0)` |
+| checkpoint | M08 | 1 s，tmpfs + 磁盘 | 5 s，只写 tmpfs 1 代 | AWR-04 §4.5 |
+
+#### 15.4.2 sandbox100 预算表（N ≤ 12、识别物 ≤ 30、×1，单位：核）
+
+| 项 | 预算 | 项 | 预算 |
+|---|---|---|---|
+| clock + ingest + fsm | 0.022 | env | 0.006 |
+| faults + mission 跟踪器 | 0.006 | l1 + contact + collide + kinematic | 0.020 |
+| fw_kin | 0.002 | sensors | 0.004 |
+| guard + battery + mission_guard + battery_rtl + fleet_guard | 0.013 | cmd_watch | 0.004 |
+| tap + tap_targets | 0.010 | mission_engine + coverage + director | 0.004 |
+| targets（M18） | 0.004 | perception（M19，含 ≤ 250 条射线/仿真秒） | 0.025 |
+| 主循环项（drain、flush、慢任务含 tasking 与 state_ext） | 0.034 | **合计 / 上限** | **0.154 / 0.16** |
+
+D2-MS1 由 `fleet_ladder --clock sandbox100 --targets 30 --perception full` 实测替换初值；`d1_250` 表新增行：fw_kin 0.004（按 N = 1000 全为固定翼的上界）、tap_targets 0.001、targets 0.004、perception 0.025，stage 合计由 0.307 升至 0.341，加主循环项 0.015 为 0.356，仍 ≤ 0.40。
+
+#### 15.4.3 P600 profile 2.0.0 与限速配置
+
+| 字段 | v1（1.0.0） | v2（2.0.0） | 置信度与依据 |
+|---|---|---|---|
+| `mass_kg` / `mtow_kg` | 3.5 / 4.0 | 3.825 / 4.1 | B，用户规格（AWR-04 §5.1） |
+| `inertia_kgm2` | 0.0548 / 0.0548 / 0.101 | 按质量比缩放：0.0599 / 0.0599 / 0.110 | D，同 v1 方法 |
+| `battery.v_nominal_v` / `capacity_wh` | 22.2 / 222 | 22.8 / 228 | C（HV 电芯 3.8 V）/ B 派生 |
+| `battery.v_range_v`、`v_storage_v` | — | [22.0, 26.1]、23.1 | B |
+| `battery.hover_endurance_s` / `p_hover_w` | 1320 / 515 | 1740 / 401 | B / D 派生（`0.85 × 228 / (1740/3600)`） |
+| `derived.hover_thrust` / `twr` | 0.446 / 2.24 | 0.488 / 2.05 | 派生，加载器复算（VH-1、VH-2 范围内） |
+| `derived.endurance_check_s` | 1319 | 1740 | 派生 |
+| 新增可选字段 | — | `nav.hold_sigma_m{rtk{h 0.01, v 0.015}, slam{h 0.1, v 0.2}}`、`env_limits.temp_c [6, 40]`、`link.range_m 3500`、`acoustic{lwa_hover_dba 88, bpf_hz 150, thrust_exp 1.5, tonal_db, band_shape_db}`、`visual.area_m2{top 0.22, side 0.19, front 0.19}`、`rcs_m2 0.05`、`capabilities [compute.orin_nx]`、`catalog{category: multirotor, reference: false}`、`payload[]`（GX40 0.405 kg、GCU 0.0186 kg、可选 `nir_ill_l` 0.18 kg） | B / D，AWR-04 §5.1、§5.2、§2.3 |
+
+| 限速配置 | `MPC_XY_VEL_MAX`（m/s） | `MPC_XY_CRUISE`（m/s） | `MPC_ACC_HOR`（m/s²） | `MC_YAWRATE_MAX`（°/s） | 用途 |
+|---|---|---|---|---|---|
+| `px4_default` | 12 | 5 | 3 | 200 | D1 不变（M08-FR-046） |
+| `p600_std`（新增；起草时名为 `awr_sandbox`） | 12 | 8 | 3 | 60 | P600 沙盒机队缺省（其他机型的 `<id>_std` 见 AWR-20 §4.3）（AWR-04 §5.1"巡航 8、最大 12"；偏航 60°/s 为本文设定，便于手动控制） |
+| `prometheus_outdoor` | 3 | 3 | 3 | 30 | `limits_profiles.default`，D1 剧本缺省 |
+
+#### 15.4.4 其他
+
+| 参数 | 值 | 依据 |
+|---|---|---|
+| 会话克隆机型上限 | 16 | 本文设定（目录 5 型 × 约 3 个变体） |
+| 识别物实体容量 / 沙盒上限 | 32 / 30 | ADR-098；AWR-04 §4.4.3 |
+| 批处理规划延迟 `lat_ticks` | 分配 200 ms、站位 500 ms、扫描 2000 ms、转场 50 ms、其余取 M10 `BUDGET_MS` | AWR-04 §11.5 单作业预算 |
+| 批处理等待上限 | 60 s【墙钟】，超过退出码 3 | 本文设定 |
+| 手动锁解锁延迟 | 2 s【墙钟】 | 本文设定（容忍键位松开后的短暂间隙） |
+| tap 无读者降频 | 2 s【墙钟】无读者 → 5 Hz | 本文设定 |
+| 伞降触地垂直速度上限 | 6 m/s | 本文设定（AWR-04 §5.3 伞降垂直 5 m/s 加 1 m/s 余量） |
+
+### 15.5 算法
+
+**按档调度解析**（构建期一次，`stages/rates.py`）：
+
+```text
+resolve_schedule(spec, profile):
+    if spec.hz is not None:
+        every = profile.tick_hz / spec.hz;  require every 为整数
+        phase = spec.phase_slot mod every
+    elif profile.name == "d1_250":
+        every, phase = spec.every, spec.phase                  # D1 原样
+    else:
+        (every, phase) = RATES[profile.name][base_name(spec.name)]   # 缺项即 PipelineError
+        分片 stage（fleet_guard.k 等）：按表给出的片数重新展开；N ≤ 12 时 sandbox100 只用 1 片
+    检查 0 ≤ phase < every；budget = BUDGETS[profile.name][base_name] 或显式值
+build(profile): 全部 stage 解析后执行 D1 的全部构建期校验；Σbudget + Σloop ≤ profile.budget_total_core
+```
+
+**VTOL 保真度切换与功率分派**（M21 发起，M08 执行）：
+
+```text
+ingest（步边界）:
+    for (slot, op) in pending_fidelity_ops（按 slot 升序）:
+        if op == ADD_FW:   fid[slot] |= FW;  保留 p、v、q；清除 TRAJ 与 refgen 状态
+        if op == REMOVE_FW:
+            fid[slot] &= ~FW
+            thrust[slot] = hover_thrust(profile);  e_v_int[slot] = 0;  motor_w[slot] = ω_hover
+            pos_sp[slot] = p[slot];  vel_sp[slot] = v[slot]            # 以当前状态接续 L1
+        input_log.append(fidelity_op)
+
+battery stage（M09，10 Hz）:
+    P = power_by_frame(state, active_slots, ctx)                        # M08 分派
+        for k in sorted(registered_frame_kinds):
+            S = active_slots[frame_kind[active_slots] == k]
+            P[S] = power_model[k].power_w(state, S, ctx)
+    wh_used += P·dt / 3600                                              # M09 原有积分，口径不变
+```
+
+**批处理主循环**（FR-221）：
+
+```text
+while t_sim < until:
+    drain inbox；执行全部到期 tick（无墙钟休眠）
+    for job in plan_client.due(tick):                 # apply_tick == tick
+        r = job.wait(timeout_wall = 60 s)             # 只在批处理中允许阻塞
+        if r is None: exit(3)
+        job.apply(r, tick)                            # 与实时模式同一回调，写输入日志
+    每 3600 s【仿真】打印进度；慢任务按仿真时间触发
+写 relay_stats.json、events.jsonl、summary.json；exit(0)
+```
+
+**手动控制时钟锁**（FR-220）见 §15.6.1。
+
+### 15.6 状态机与时序
+
+#### 15.6.1 手动控制时钟锁（sandbox100）
+
+| 状态 | 事件 | 守卫 | 动作 | 目标状态 |
+|---|---|---|---|---|
+| FREE | 某 slot 进入 OPERATOR 的 VELOCITY（调用 running 或收到 setpoint） | 档位为 sandbox100 | 倍率置 1；发 `sim.clock{reason: manual_lock}` | LOCKED |
+| LOCKED | `sim/speed{rate ≠ 1}` | — | 回复 `117 CLOCK_CONSTRAINT`（detail = MANUAL_CONTROL） | LOCKED |
+| LOCKED | 全部 slot 离开 VELOCITY | — | 启动 2 s【墙钟】解锁计时 | UNLOCKING |
+| UNLOCKING | 任一 slot 重新进入 VELOCITY | — | 取消计时 | LOCKED |
+| UNLOCKING | 计时到 | — | 发 `sim.clock{reason: manual_unlock}`；倍率保持 1 | FREE |
+| FREE | `sim/speed{rate}` | 治理器已授予 | 设置倍率 | FREE |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+stateDiagram-v2
+  [*] --> FREE
+  FREE --> LOCKED: 进入 VELOCITY，倍率置 1
+  LOCKED --> LOCKED: speed 请求，117
+  LOCKED --> UNLOCKING: 全部离开 VELOCITY
+  UNLOCKING --> LOCKED: 重新进入 VELOCITY
+  UNLOCKING --> FREE: 2 s 墙钟
+```
+
+#### 15.6.2 会话内克隆机型并加机（时序）
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+sequenceDiagram
+  participant C as 客户端（UI 或 SDK）
+  participant A as sandbox-api
+  participant Q as sim-core 查询与命令入口
+  participant P as ProfileTable（M08）
+  participant K as 检查注册表（M08 + M21）
+  participant R as roster 与 FleetState（M08）
+  C->>A: POST /sessions/{sid}/models {base_id, overrides}
+  A->>Q: ctl/sim-core/query catalog/clone（M21 登记）
+  Q->>P: add_session(base_ref, overrides)（步边界）
+  P->>K: VH、FW、MNT 检查
+  K-->>P: 全部通过或逐项原因
+  P-->>A: s1-p600_mid360 或 522 与原因
+  C->>A: POST /sessions/{sid}/vehicles {model_id: s1-p600_mid360, nest_id}
+  A->>Q: fleet/cmd/add（准入 ④–⑩）
+  Q->>R: spawn：frame_kind、fidelity、功率模型存在性
+  R-->>A: vehicle_id、agent_no；roster.changed
+```
+
+### 15.7 实现指引
+
+| 路径 | 改动 | 复用的 D1 代码 |
+|---|---|---|
+| `python/awr/sim/runtime/clock_profile.py`（新） | ClockProfile 与 `current()` | — |
+| `python/awr/sim/runtime/clock.py` | 删除模块常量 `TICK_NS`，改读 `current().tick_ns`；`MAX_STEP_TICKS` 按档；手动控制锁状态机（§15.6.1） | `SimClock` 全部逻辑（追帧、保持、单步） |
+| `python/awr/sim/fleet/pipeline.py` | `DT_TICK`、`TICK_NS` 改由档位给出；`StageCtx.profile`、`StageCtx.entities` | Pipeline 构建与校验 |
+| `python/awr/sim/fleet/stages/{registry,budgets}.py`、`stages/rates.py`（新） | `hz`、`phase_slot`、按档调度与预算表、order 区段与包归属、`register_entity_block`、`register_power_model`、`register_profile_check`、准入第 ⑥ 步 | D1 注册表与校验（`ORDER_RANGES`、`PACKAGE_OWNER`） |
+| `python/awr/sim/fleet/state.py` | `frame_kind` 列；`Fidelity.FW = 16`、`ALL = 31` | FleetState 与状态块分配 |
+| `python/awr/sim/fleet/kinematic_write.py`（新）、`stages/kinematic.py` | `write_kinematic`、`set_fidelity`；L0 kinematic stage 改用同一助手 | `kinematic.py` 的 ENU→NED 换算 |
+| `python/awr/sim/fleet/kernels_l1.py`、`stages/l1.py`、`stages/contact.py` | 跳过 `FW` 位；伞降触地规则 | 融合核掩码分支 |
+| `python/awr/sim/fleet/profiles.py` | 目录装载、版本键、按构型检查、会话克隆、写时复制重建 `PT`/`LT` | `load_vehicle_docs`、`validate_doc`、`ProfileTable` |
+| `python/awr/sim/core/entities.py`（新）、`core/roster.py` | 实体表、`kind = target`、`target_no` | `RosterEntry`、`roster_version` |
+| `python/awr/sim/fleet/stages/tap.py`、`stages/tap_targets.py`（新） | 空载优化；TargetLite32 打包与发布 | `kernels_tap.py`、`bgpub.GatedPublisher` |
+| `python/awr/sim/core/command.py`、`core/admission.py`、`core/supervisor_queue.py` | 新命令、插件命令分派、按构型分派运动提供者与安全动作 | `register_motion_provider`、`register_command_handler`、`submit_internal` |
+| `python/awr/sim/core/estimate.py`、`core/interfaces.py` | `PowerModel` 协议与 `power_by_frame`、`leg_power_w` | `EnergyModel` 协议 |
+| `python/awr/sim/runtime/{main,__main__}.py`、`runtime/batch.py`（新） | 批处理、perf 自报、预热 binding | 主循环、`slow.py`、`warm.py`、热备用路径 |
+| `python/awr/api/rest/fleet.py` | `ctx_for`、`sandbox_router` | D1 处理函数与 `describe` |
+| `vehicles/p600/params.yaml`、`vehicles/p600/history/params-1.0.0.yaml`（新） | v2 与 v1 冻结 | v1 文件原样移入 `history/` |
+| `tools/bench/fleet_ladder/run.py` | `--clock`、`--targets`、`--perception` | D1 阶梯与 harness |
+| `tests/sim/test_clock_profiles.py`、`test_profiles_catalog.py`、`test_entities.py`、`test_power_dispatch.py`、`test_batch_determinism.py`、`test_fw_host.py`（新） | 见 §15.8 | `test_schedule_golden.py`、`test_fleet_sih_parity.py` 参数化 |
+
+**变更请求（M08 提出，由所有者实现）**：①M09 `awr/sim/safety/battery.py`：battery stage、`P600EnergyModel.estimate`、`path_wh` 与能量 RTL 改经 `power_by_frame`、`leg_power_w`，并登记多旋翼功率模型；固定翼能量 RTL 按"返航距离 ÷ 地速 × 巡航功率 + 回收能量"（AWR-04 §5.3）。②M07 `awr/environment/{stage,field}.py`、M12 `awr/recorder/synth.py`、M14 `awr/agent/runtime/clock.py`：模块常量 `TICK_NS = 4_000_000` 改为读取时钟档（或由 `caps.clock.tick_hz` 推出）；M13 `awr/sim/sensors/stage.py` 的 `call_index(tick)` 与 `EVERY·dt_tick`、M07 env 的 `FULL_TICKS`（按 tick % 50）改为按 `ctx.call_index` 与 `ctx.dt(stage)` 计算，使同一代码在两个档位下保持每机采样频率不变。③M11：总线 key `state/sim-core/targets` 到 `swarm/target/state` 的映射；前端 roster 消费方过滤 `kind = target`。
+
+### 15.8 验收
+
+| 编号 | 度量 | 阈值 | 测试方法 | 环境 | 优先级 | 对应 |
+|---|---|---|---|---|---|---|
+| M08-AC-201 | 时钟档与调度 golden | sandbox100：`t_sim_ns = tick × 1e7`；100 个 tick 的执行日志与 §15.4.1 表一致（golden）；d1_250 的 M08-AC-004 golden 不变；`hz` 不整除、调度表缺项各构建失败；档位不一致的 checkpoint 恢复返回 355 | `pytest tests/sim/test_clock_profiles.py tests/sim/test_schedule_golden.py` | 本机 CPU | P0 | FR-201、202；D2-AC-08、26 |
+| M08-AC-202 | sandbox100 成本与 SIH | SIH 17 项在 `l1_every = 1 @ 100 Hz` 下全部在 §6.13.2 容差内、guard 事件 0；S1 在 sandbox100 下 SUCCEEDED 且能量 RTL 0；10 架飞行 + 30 识别物（`--perception full`）×1：sim-core ≤ 0.16 核、单步 p99 ≤ 8 ms；匿名页 + shmem ≤ 150 MB（synthcity）、≤ 170 MB（sanfrancisco）；S7 在 d1_250 下 ≤ 0.30 核且 D1-AC-07 不回退 | `make regress-sih`（参数化 `--clock sandbox100`）；`fleet_ladder --clock sandbox100 --targets 30 --perception full`（ADR-033 协议） | 本机 CPU | P0 | FR-228、NFR-201–203；D2-AC-08、26、28 |
+| M08-AC-203 | 预算与区段 | sandbox100 下 Σbudget > 0.16 构建失败；M18–M21 的 stage 落在各自区段，越区段构建失败；`perception` 的 `stage_ms_per_s` 超预算 1.25 倍时发 `sim.stage.overbudget` | `pytest tests/sim/test_pipeline.py -k profile` | 本机 CPU | P0 | FR-203、204 |
+| M08-AC-204 | 固定翼宿主 | `write_kinematic` 的 ENU 与 NED 往返换算误差 ≤ 1e-9；带 `FW` 位的 slot 在 100 个 tick 内不被 l1、refgen 写入（字段哈希不变）；对多旋翼 slot 调用 `write_kinematic` 抛 ValueError；VTOL 切换前后位置跳变 0、速度跳变 ≤ 0.1 m/s、切回 L1 后 2 s 内 `pos_err` ≤ 1 m | `pytest tests/sim/test_fw_host.py` | 本机 CPU | P0 | FR-210–212；D2-AC-10 |
+| M08-AC-205 | 安全动作按构型分派 | 固定翼收到 HOLD、RTL、LAND、ELAND 分别进入盘旋、返航、进近伞降、立即开伞；伞降 5 m/s 触地不判硬着陆，8 m/s 判硬着陆；FlightState 序列与 §15.2 FR-213 的映射一致 | `test_fw_host.py::test_supervisor_dispatch` | 本机 CPU | P0 | FR-213 |
+| M08-AC-206 | 目录装载与克隆 | 目录 5 个可见机型 + x500 隐藏机型加载通过全部检查；P600 2.0.0 与 §15.4.3 逐项一致、v1 可经 `p600_mid360@1.0.0` 加载；克隆越界（质量超 MTOW、`V_min < 1.1·V_s`）返回 522 与逐项原因；第 17 个克隆被拒；删除被引用克隆返回 105；克隆生效的那一 tick 单步不超过同负载 p99 + 1 ms | `pytest tests/sim/test_profiles_catalog.py` | 本机 CPU | P0 | FR-205–209；D2-AC-09 |
+| M08-AC-207 | 功率分派 | 固定翼（AWR-F1）18 m/s 定常巡航的 SOC 积分续航与 M21 解析值（120 min）误差 ≤ 2%；同一路径的 `estimate` 能量与逐步积分误差 ≤ 2%；未登记构型 spawn 返回 110（NO_POWER_MODEL）；多旋翼 P600 v2 悬停续航 1740 s ± 1% | `pytest tests/sim/test_power_dispatch.py` | 本机 CPU | P0 | FR-214、215；D2-AC-10 |
+| M08-AC-208 | 实体层 | 加 30 个识别物后第 31 个返回 505；roster 出现 `kind = target` 且 `roster_version` 递增；`state/sim-core/targets` 10 Hz ± 5%，`rows` 字节与布局一致；checkpoint 恢复后实体表逐字节一致 | `pytest tests/sim/test_entities.py` | 本机 CPU | P0 | FR-216、217；D2-AC-11 |
+| M08-AC-209 | 新命令与第 ⑥ 步 | 多旋翼 `loiter` 映射为 ORBIT 并在 3 s 后 `‖r − R‖ < 1 m`；固定翼 `loiter` 半径小于 `R_loiter,min` 返回 110 且 detail 含下限；空速低于 `V_min` 返回 110；VTOL 悬停超限返回 524；空中 `fleet/cmd/update` 改挂载返回 105；`gimbal`、`zoom`、`sensor_mode` 送达 M13 处理函数；`target/add` 送达 M18 | `pytest tests/sim/test_commands_d2.py` | 本机 CPU | P0 | FR-218、219；D2-AC-10 |
+| M08-AC-210 | 手动控制时钟锁 | ×5 下开始速度遥控：≤ 1 个 tick 内倍率变为 1；锁定期间 `sim/speed` 返回 117（MANUAL_CONTROL）；`velocity_stop` 后 2 s ± 0.1 s 解锁；d1_250 下倍率 ≠ 1 时 `velocity` 返回 117 | `pytest tests/sim/test_clock_profiles.py::test_manual_lock` | 本机 CPU | P0 | FR-220；D2-AC-21 |
+| M08-AC-211 | 批处理 | 1 h【仿真】批处理（T5 模板）两次：事件序列、识别物轨迹与 `relay_stats.json` 逐字节一致；人为让规划 worker 延迟 3 倍：结果不变（固定延迟生效）；24 h【仿真】批处理在本机单核墙钟 ≤ 3 h | `pytest tests/sim/test_batch_determinism.py`；`tools/bench/sandbox/relay_batch.py --hours 24` | 本机 CPU | P0（逐字节一致项 P1） | FR-221、222；D2-AC-19、32 |
+| M08-AC-212 | tap 与自报 | sandbox100：N = 0 时 tap ≤ 8 ms/仿真秒，N = 12 时 ≤ 15 ms/仿真秒；无读者 2 s 后降为 5 Hz，读者附着后下一次 tap 恢复；perf 字段齐全、1 Hz；`cost_core_per_rate` 与 cgroup 计量的 CPU ÷ 倍速偏差 ≤ 15% | `fleet_ladder --clock sandbox100`；`pytest tests/sim/test_perf_report.py` | 本机 CPU | P0 | FR-223、224；D2-AC-07 |
+| M08-AC-213 | 沙盒车辆路由 | `sandbox_router` 的全部路由出现在 OpenAPI 快照中并与字段表一致；`GET .../state` 覆盖 AWR-04 §11.7"状态"行全部字段；show-api 下 D1 的 `/api/fleet/**` 用例（M08-AC-009、030 等）不变 | `pytest tests/sim/test_fleet_rest.py tests/sandbox/test_vehicle_routes.py` | 本机 CPU | P0 | FR-226、227；D2-AC-22、36 |
+| M08-AC-214 | 预热（P1） | 预热进程领取到 READY ≤ 1.5 s；未领取的预热进程匿名页 ≤ 120 MB | `pytest tests/sandbox/test_prewarm.py` | 本机 CPU | P1 | FR-225 |
+
+### 15.9 风险
+
+| 风险 | 影响 | 对策 |
+|---|---|---|
+| sandbox100 下 SIH 17 项不过 | 沙盒成本无法降 55% | 退回主时钟 125 Hz、L1 every 1（ADR-090 的退路）；按档调度表只改一张表 |
+| 他模块写死 4 ms 的常量遗漏 | 100 Hz 档下环境或回放时间错误 | 变更请求 ②；CI 以 `grep -rn "4_000_000" python/awr` 白名单检查 |
+| VTOL 切换引入不连续 | 过渡阶段 guard 误报 | FR-212 的状态接续规则与 AC-204 的跳变阈值 |
+| 批处理阻塞等待掩盖规划性能问题 | 实时运行仍超时 | `summary.json` 记录每类作业墙钟分布，超过预算的作业单列 |
+
+### 15.10 D2 追溯
+
+| 需求 | ADR | 本节条款 | D2 验收 |
+|---|---|---|---|
+| R-D2-13、R-D2-15、R-D2-20、R-D2-27（机型目录、P600 参数、增删无人机） | 095、096、110 | FR-205–209、218 | D2-AC-09、10 |
+| R-D2-03（定点巡航含固定翼盘旋） | 096 | FR-210–213、218、219 | D2-AC-10、16 |
+| R-D2-19（7×24 接力的能量与批处理验证） | 052、105、106 | FR-214、215、221、222 | D2-AC-19、20、32 |
+| R-D2-21、R-D2-22（手动控制、接口控制） | 045、093 | FR-218、220、226 | D2-AC-21、22 |
+| R-D2-23（全部 status） | 107 | FR-227 | D2-AC-22、36 |
+| R-D2-02、R-D2-24（沙盒成本） | 089、090、091 | FR-201–204、223、224、NFR-201–203 | D2-AC-04、07、08、28 |
+| R-D2-07、R-D2-18（识别物实体） | 098 | FR-216、217 | D2-AC-11 |
+
+研究依据：g08 §3（多速率 pipeline）、§9（SIH 17 项）、§10（机型参数）；r20（PX4 限速参数）；AWR-04 §4.2 实测。
+
+### 15.11 对基线（AWR-04）的反馈
+
+处置结果以 [AWR-04 附录 B](../04-D2-设计增补与决策记录.md)（v1.2）为准；本节保留为起草时的记录。
+
+| # | 基线条款 | 问题 | 本节的处理 | 建议 |
+|---|---|---|---|---|
+| D2F-01 | §5.1 末段"沙盒缺省限速 `px4_default`（巡航 8 m/s、最大 12 m/s）" | D1 的 `px4_default` 是 `MPC_XY_CRUISE = 5`（M08-FR-046、AC-010 冻结为 4.98 ± 0.15 m/s），改成 8 会使 D1 用例回退 | 新增限速配置 `awr_sandbox`（12 / 8 / 3、偏航 60°/s），沙盒缺省用它；`px4_default` 不变 | §5.1 改写为"沙盒缺省限速 `awr_sandbox`" |
+| D2F-02 | §14.3 变更请求表 | `TICK_NS = 4_000_000` 写死在 M07 `environment/stage.py`、`environment/field.py`，M12 `recorder/synth.py`，M14 `agent/runtime/clock.py`；M13 sensors stage 与 M07 env stage 内部还按 250 Hz 的 tick 推算调用序号与全量求值相位；表中只列了 M08 自己的 `clock.py`、`pipeline.py` | §15.7 变更请求 ② | 在 §14.3 补四行，并在 ADR-090 后果中写"凡依赖 tick 长度的常量一律经时钟档读取" |
+| D2F-03 | §3.2 影响表、§14.2–§14.3 | §5.3 末段要求 M09 能量 RTL 对固定翼改口径，battery stage 也必须改用固定翼功率，但 §3.2 没有 M09 行，WP 表也没有 M09 的路径 | §15.7 变更请求 ①；M08 提供功率模型注册表（FR-214） | §3.2 增加 M09 行，WP-02 或 WP-08 加入 `awr/sim/safety/battery.py` 的变更请求 |
+| D2F-04 | §7.1、§11.2、§11.6 | 规定了 `swarm/target/state` 与 `awr.TargetLite32.v1`，但未规定识别物状态从 sim-core 到 api 的通道（StateRing 只有机体槽），`bus/keys.json` 清单里也没有对应 key | 新 key `state/sim-core/targets`（10 Hz，DROP），由 M11 映射为 topic（FR-217） | §11.6 `bus/keys.json` 一行补 `state/sim-core/targets` |
+| D2F-05 | §4.10 第 3 条、ADR-106、D2-AC-32 | D1 规划结果"就绪即在下一步边界生效"，apply_tick 随机器负载变化（只记入输入日志供重仿真），批处理两次运行无法逐字节一致 | 批处理中规划结果按固定延迟 `lat_ticks(kind)` 生效、未返回即阻塞（FR-221） | 在 ADR-106 决策中写明"批处理模式下规划结果按固定延迟生效" |
+| D2F-06 | §3.3"经 M08 的 stage 注册表接入" | 未给出 M18–M21 的 order 区段；D1 的区段表只剩 125–127、170–199 | FR-204 分配：M21 086–089、M18 170–174、M19 175–184、M20 185–194 | 在 ADR-110 中登记该分配 |
+| D2F-07 | §5.3"以 `110 PARAM_OUT_OF_RANGE` 拒绝"与 §11.3 的 `523 FW_AIRSPEED` | 同一情形两个码；D2-AC-10 写 110 | 按 D2-AC-10 返回 110，detail 写 FW_AIRSPEED 或 LOITER_RADIUS_MIN；`524 VTOL_HOVER_LIMIT` 照常使用 | §11.3 删除 523 或注明"仅作 detail" |
+| D2F-08 | §11.3 `521 ENV_LIMIT` | 与 D1 已登记的 `120 ENV_LIMIT`（`reasons.json`）重名 | 本节不使用 521 | 改名为 `521 ENV_TEMP_LIMIT` 或复用 120 |
+| D2F-09 | ADR-090 后果"`TICK_NS` 由时钟档给出" | 未说明 D1 插件 stage 在 100 Hz 档下的 `every` 与 `phase` 由谁给出；若由各模块改注册代码，会触及 M07、M09、M10、M13 的冻结实现 | 由 M08 维护按档调度表，D1 插件不改注册代码（FR-202） | 在 ADR-090 中写明调度表归 M08 |
+| D2F-10 | §13 D2-AC-08 方法列 `make test-golden` | 仓库没有该 make 目标；SIH 黄金回归的目标是 `make regress-sih` | 本节 AC-202 用 `make regress-sih` 并加时钟档参数 | D2-AC-08 方法列改为 `make regress-sih` |

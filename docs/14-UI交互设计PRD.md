@@ -2401,3 +2401,1543 @@ FLYING 子模式：悬停、定点、航线、环绕、速度、集群、手动�
 **同级文档（引用其定义）**：12 §3.3.16、§4.1.4、§4.2.2、§4.8、§4.11、§5.12–§5.14；15 §3.6、§3.7、§7、§8.3–§8.7、§9.3–§9.9、§10.4、§10.12；17 §3、§4.2–§4.3、§6.2–§6.3、§6.6、§6.11–§6.13、§7.1–§7.5、§8.2–§8.3；M06-FR-013、FR-022、`camera.setMode`；M07 §6.2.1、§6.5、§8.1；M12-FR-013、014、016、026、047；M15-FR-010、012、045、058、059、080、083。
 
 **研究笔记**：00-index §3.5、§3.6、§3.13、§8.1 C6–C8；d01 §3.1.4、§3.2、§3.7、§3.8、§3.9、§4.4；d02 §3.1、§3.3、§4.1、§4.4.3、§4.5、§4.6、§4.7；d03 §3.4、§3.6、§4.1、§4.2、§4.4、§6；d04 §3.4、§3.5、§3.7、§3.8、§3.10、§3.11、§6、§7；g07 §1、§2.1–§2.4、§3.4、§3.6、§4、§5.1、§6；r12 §4.7、§4.10；r14 §3.8–§3.10；r15 §3.5、§3.14、§3.15、§3.18、§7；g04 §3.1、§4.8、§4.9、§6.1、§6.2、§7；g06 §3.3、§4.2；d05 §3.9、§3.11、§4.3；x01 §3.11。
+
+---
+
+## 20. D2 增补（V0.2-demo）
+
+| 项 | 内容 |
+|---|---|
+| 增补版本 | v1.1-D2（2026-10-05），追加在 v1.0 之后；§0 至 §19 与"追溯"原文不改，本节与之冲突处以本节为准（只在 D2 范围内） |
+| 基线 | [AWR-04](04-D2-设计增补与决策记录.md) v1.1（ADR-088 至 ADR-113）；本节直接上游为 AWR-04 §10（交互与 UI）、§11（开放接口）、§4.6（会话生命周期）、§6.4（明确捕获）、§7（识别物）、§8（任务）；冲突以 AWR-04 为准，发现的基线问题列在 §20.24 |
+| 需求来源 | [D2 需求原文](inputs/D2-需求原文-2026-10-05.md)：R-D2-01 至 R-D2-28（AWR-04 §2.1） |
+| 下游 | M15（UI 壳实现，WP-12）；M06（FPV 与传感器视图着色变体，WP-11）；M17（`stores/sandboxSession.ts`，WP-04）；M18、M19、M20、M21（领域 store、视口图层、计算器 TS 移植，WP-05 至 WP-08）；M16（Playwright 用例与模板，WP-13） |
+| 接口 | 端点、topic、载荷字段与原因码一律以 [17](17-接口与实时协议规范.md) §17（D2 增补）为准，本节只写 UI 如何使用 |
+| 编号 | 功能需求 UX-FR-101 起，非功能 UX-NFR-019 起，验收 UX-AC-043 起；需求表"D2"列取值是、桩、否；版本列取值 `V0.2-demo`（AWR-04 §1.2） |
+
+### 20.0 摘要
+
+1. **载入进度条**（R-D2-01）：复用 D1 启动遮罩的 `.boot-progress > i` 节点，改为 `transform: scaleX(var(--boot-p))`；进度 = 五段加权（应用脚本 0.15、世界清单 0.10、首屏点云 0.40、预热 0.30、揭开 0.05），单调、≤ 10 Hz 写入，只显示不门控，揭开时置 100%；切换底图与静态浏览的加载卡用同一组件（去掉应用脚本段后重新归一）。
+2. **一套构建、运行期两种界面**（ADR-111）：演示构建按会话角色在运行期切换 viewer 界面与 operator 界面；新增路由 `/sandbox/:sid`（`sid` 满足 `^sb-[a-z2-7]{10}$`）与 `/sandbox/api`；`/world/:id` 接受七个世界，非共享展示世界为静态浏览。
+3. **沙盒入口**：落地页"开启我的沙盒"打开世界与场景模板 Sheet（缺省 synthcity + T5 区域值守），两次点击进入；满员时落在共享展示并显示非模态排队卡片；进入后顶栏下方出现 32 px 会话条（世界、剩余寿命与续期、可达倍速、实体计数、载入场景、重置、结束）。
+4. **四个管理面板**：右栏页面栈顶部以实体切换（无人机、识别物、机巢）组织三张列表与各自详情；底部 Dock 的"任务"标签承载任务表与接力统计；机型目录、克隆编辑、识别物高级属性用宽 Sheet。全部表格为 lieflat `table.log` 皮肤。
+5. **任务绘制与预览**：点、折线、多边形与"选择识别物"四种工具复用 D1 `mission-edit` 的视口编辑层；"预览分配"（dry-run）在视口画子区、条带、补拍航点、航段与站位，并给出架数与理由、完工曲线、单站足迹上界说明、可持续性与瓶颈、不可行原因与建议。
+6. **手动控制与传感器视图**：接管即抢占编排租约并重分配工作项、时钟锁 ×1；`manual` 键位作用域与虚拟双摇杆以 30 Hz 发 VelSetpoint16；预测 3 s 进入敏感体即告警，服务端软围栏缺省开启；FPV 之外提供日视、夜视、热像（白热、黑热）三种视觉近似视图，HUD 显示像素进度 `N_eff / N_req` 与限制因素。
+7. **提示**：明确捕获为中性 Toast（同一识别物 30 s 内一次）；被发现为 critical，进入"一处红"仲裁并要求确认；新增感知、识别物、编排、沙盒四个事件筛选。
+8. **其余**：World Hub 列出七个世界及"可立即开沙盒"状态与授权说明；会话内切换底图载入同名模板；4 步可跳过的新手引导；共享展示访客不占槽位可用 FPV、传感器视图、识别物只读、接力统计、机型目录与 GSD 计算器；`/sandbox/api` 以 shadcn 组件渲染 OpenAPI。本节共 UX-FR 47 条、UX-NFR 12 条、UX-AC 26 条，§20.24 列出 14 条基线反馈。
+
+### 20.1 范围与追溯
+
+| 需求 | 本节落点 | D2 验收 |
+|---|---|---|
+| R-D2-01 载入进度条 | §20.3 | D2-AC-01 |
+| R-D2-02、R-D2-24 开放交互与沙盒 | §20.2、§20.4、§20.13.4、§20.14 | D2-AC-02、05、06、34、37、38 |
+| R-D2-03 至 R-D2-06、R-D2-16 任务 | §20.9 | D2-AC-16、17、18、35 |
+| R-D2-07 至 R-D2-11、R-D2-18 识别物 | §20.7 | D2-AC-11、12 |
+| R-D2-12 明确捕获并提示 | §20.10.6、§20.11 | D2-AC-13、14 |
+| R-D2-13、R-D2-15、R-D2-20、R-D2-27 无人机管理 | §20.6 | D2-AC-09、10 |
+| R-D2-14 五类传感器 | §20.6.5、§20.10.5 | D2-AC-14、31 |
+| R-D2-19 接力监控 | §20.9.4、§20.11 | D2-AC-19、35 |
+| R-D2-21 手动控制 | §20.10 | D2-AC-21 |
+| R-D2-22、R-D2-23 接口控制与读取 | §20.14、§20.17 | D2-AC-22、36 |
+| R-D2-25、R-D2-28 底图 | §20.12 | D2-AC-24 |
+| R-D2-26 机巢 | §20.8 | D2-AC-18、19 |
+| R2 设计体系（继承） | §20.15、§20.16 | D2-AC-25 |
+| R3 流畅性（继承） | §20.3、§20.5.3、§20.21 | D2-AC-01、26、30 |
+
+不在 D2：移动端专门布局（窗口小于 1280 × 720 仍为全屏空状态，"开启我的沙盒"禁用）；英文界面的 D2 新增文案（键先入 `en.json`，译文为 P2）；拖拽式面板停靠。
+
+**新增术语**（D1 术语见 §1.5；"沙盘""沙盒""共享展示"的区分见 AWR-04 §1.2）：
+
+| 术语 | 定义 |
+|---|---|
+| 共享展示 | 公开站的 D1 run（剧本 S7），所有访客以 viewer 进入，经 `/api/rt` 连接 |
+| 沙盒 | 一位访客或 API 客户端独占的隔离仿真会话（一个 run），经 `/api/sandbox/v1/sessions/{sid}/rt` 连接 |
+| 静态浏览 | 视图世界不等于任何在场 run 时，只加载点云与地形，不建 WS 订阅（D1 §6.16 的扩展） |
+| operator 界面、viewer 界面 | 同一构建在运行期按会话角色呈现的两套写入口；角色由本地是否持有该 `sid` 的有效沙盒 token 决定，服务端独立执行同样的策略 |
+| 会话条 | 沙盒视图顶栏下方 32 px 的状态条（§20.4.4），与回放横幅同构，属于顶栏这张"图" |
+| 实体切换 | 右栏页面栈根页顶部的三段 `ToggleGroup`：无人机、识别物、机巢 |
+| 配置体、有效体、禁入体 | 配置体：访客配置的敏感空间体；有效体：physical 模式下配置体与准则体之交（按所选机型）；禁入体：配置体（geometric）或保守有效体（physical）外扩 `m = 20 m + 3σ_hold`（AWR-04 §7.3、§8.1） |
+| 规划图层 | M20 提供的视口图层：子区、条带、补拍航点、航段、站位、机巢连线 |
+| 传感器视图 | FPV 相机上的视觉近似着色变体：日视（EO）、夜视（NIR）、热像（LWIR 白热或黑热）；只作显示，不回流任何判据（ADR-108） |
+| 像素进度 | HUD 对视锥内最近识别物显示的 `N_eff / N_req` 与限制因素（AWR-04 §6.4） |
+
+### 20.2 信息架构、路由与角色
+
+#### 20.2.1 站点地图（演示构建）
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "secondaryColor": "#E4E6E9", "tertiaryColor": "#FBFBFC", "lineColor": "#5C616A", "textColor": "#111214", "mainBkg": "#F2F3F5", "nodeBorder": "#5C616A", "clusterBkg": "#FBFBFC", "clusterBorder": "#A7ABB3", "edgeLabelBackground": "#FBFBFC", "noteBkgColor": "#E4E6E9", "noteTextColor": "#111214", "noteBorderColor": "#81868F"}}}%%
+flowchart TB
+  LAND["/ 落地页（不加载应用）"]
+  SHEET["开启我的沙盒：世界与模板 Sheet"]
+  SHOW["/world/synthcity 共享展示（viewer，S7）"]
+  STATIC["/world/:id 静态浏览（六城，viewer）"]
+  HUB["/worlds World Hub（七个世界与沙盒可用性）"]
+  SBX["/sandbox/:sid 我的沙盒（operator）"]
+  API["/sandbox/api OpenAPI 文档页"]
+  Q["排队卡片（在共享展示之上，非模态）"]
+  LAND -->|"进入演示"| SHOW
+  LAND -->|"开启我的沙盒"| SHEET
+  SHEET -->|"有空位：开始"| SBX
+  SHEET -->|"已满：排队"| Q
+  Q -->|"slot_ready 确认"| SBX
+  SHOW --> HUB
+  HUB -->|"打开世界"| STATIC
+  HUB -->|"在此城市开沙盒"| SHEET
+  SBX -->|"结束会话或过期"| SHOW
+  SBX -->|"帮助 › 开放接口"| API
+  SHOW -->|"帮助 › 开放接口"| API
+```
+
+#### 20.2.2 路由表（D2）
+
+| 路由 | 视图 | 角色界面 | 规则 | D2 |
+|---|---|---|---|---|
+| `/` | 落地页 | — | 演示构建为落地页（不加载应用）；"进入演示"到 `/world/synthcity`，"开启我的沙盒"打开 §20.4.1 的 Sheet；默认构建仍为 D1 行为 | 是 |
+| `/world/:id` | 沙盘 | viewer | `:id` ∈ 七个世界（`GET /api/worlds` 白名单）；等于共享展示世界（`serverInfo.world.id`）时连接 `/api/rt`，否则静态浏览（§20.12.3） | 是 |
+| `/worlds` | World Hub | viewer | 七张卡片与沙盒可用性（§20.12.1） | 是 |
+| `/settings` | 设置 | — | 新增"沙盒"标签（§20.4.6）与"手动控制"字段（软围栏、虚拟摇杆显示） | 是 |
+| `/sandbox/api` | OpenAPI 文档页 | — | 在路由表中先于 `/sandbox/:sid` 登记；无需会话 | 是 |
+| `/sandbox/:sid` | 沙盘（沙盒） | operator | `:sid` 不满足 `^sb-[a-z2-7]{10}$` 时回到 `/worlds`；本地无该 sid 的有效 token 时显示"会话不可用"页（§20.4.7），不连接 | 是 |
+| 其他 | — | — | 重定向 `/worlds`（D1 规则不变） | — |
+
+默认构建（本机、局域网）同样注册 `/sandbox/:sid` 与 `/sandbox/api`，入口为菜单"世界 › 开启沙盒…"，只在 `GET /api/sandbox/v1/meta` 返回 200 时出现（sandbox-pool 未运行时不出现入口）。
+
+URL 查询参数（D1 §2.2 的扩展，只写视图状态）：
+
+| 参数 | 取值 | 默认 | 说明 |
+|---|---|---|---|
+| `panel` | D1 取值 + `tasks`、`task-new`、`relay` | 空 | `tasks` 打开 Dock"任务"标签；`task-new` 打开右栏"新建任务"页；`relay` 打开任务标签的"接力"子页 |
+| `ent` | `drones`、`targets`、`nests` | `drones` | 右栏实体切换 |
+| `sv` | `fpv`、`eo`、`nir`、`lwir` | `fpv` | 传感器视图，需 `cam=fpv` 与焦点机，否则忽略 |
+| `tgt` | 识别物 id | 空 | 选中识别物（不进入无人机选择集，§20.7.1） |
+
+#### 20.2.3 运行期角色切换（ADR-111）
+
+```ts
+// 伪代码：app/shell/surface.ts（M15）；只决定呈现，服务端独立执行同样的策略（AWR-04 ADR-093）
+type Surface = 'shared' | 'static' | 'sandbox' | 'sandbox-gone'
+interface UiSurface { surface: Surface; role: 'viewer' | 'operator'; rtPath: string | null; worldId: string }
+function resolveSurface(route: Route, sess: SandboxSessionState, showWorld: string | null): UiSurface {
+  if (route.id === 'sandbox') {
+    const ok = sess.sid === route.params.sid && sess.token !== null
+      && sess.tokenExpUnixMs > Date.now() && !['ENDED', 'FAILED'].includes(sess.state)
+    return ok
+      ? { surface: 'sandbox', role: 'operator', rtPath: `/api/sandbox/v1/sessions/${sess.sid}/rt`, worldId: sess.world! }
+      : { surface: 'sandbox-gone', role: 'viewer', rtPath: null, worldId: showWorld ?? 'synthcity' }
+  }
+  const id = route.params.id
+  return id === showWorld
+    ? { surface: 'shared', role: 'viewer', rtPath: '/api/rt', worldId: id }
+    : { surface: 'static', role: 'viewer', rtPath: null, worldId: id }
+}
+```
+
+规则：
+1. 演示构建不再在编译期剔除写入口（ADR-111 第 1 条）；写入口按 `surface === 'sandbox'` 显示，viewer 界面沿用 D1 §7.8 的"隐藏为一处说明"。
+2. 只读原因文案按界面区分：共享展示"共享展示为只读，开启我的沙盒即可操作"（带"开启我的沙盒"按钮）；静态浏览"静态浏览，开启沙盒即可在此城市运行仿真"；D1 文案"公开演示为只读模式"在演示构建中废止（M15-FR-123 按 ADR-111 修订）。
+3. 角色徽标：共享展示"公开演示 · 只读"（`layer.visible`）；沙盒"我的沙盒 · 可操作"（新增 `sandbox.mine`）；静态浏览"静态浏览"（`layer.pointcloud`）。
+4. 同一页面在 surface 变化时（例如排队领到沙盒、会话结束回到共享展示）只切换路由与 WS 端点，画布不卸载（D1 U-01）；世界不同时走 §20.12.2 的切换加载卡。
+5. 页面标题：沙盒"<世界> · 我的沙盒 · ANet Drone4D 公开演示"；OpenAPI 页"开放接口 · ANet Drone4D 公开演示"；其余同 D1。
+
+#### 20.2.4 菜单与命令面板增量
+
+| 菜单 | D2 增加的项（只在 operator 界面出现的标"op"） |
+|---|---|
+| 世界 | 开启我的沙盒…（共享展示与静态浏览）；切换底图…（op，§20.12.2）；载入场景…（op）；导出配置快照（op）；导入配置快照…（op） |
+| 视图 | 传感器视图（子菜单：FPV、日视、夜视、热像，需焦点机）；识别物标签；敏感体显示（配置体、有效体）；规划图层 |
+| 仿真 | 倍速子菜单的档位旁显示"本会话可达 ×k"（op）；仿真日历…（op，§20.5.4） |
+| 任务 | 新建任务…（op，T 键之外不另设单键）；预览分配（op）；接力统计 |
+| 沙盒（新，op） | 续期；结束会话；会话信息（sid、世界、寿命、配额）；开放接口与 SDK |
+| 帮助 | 开放接口（`/sandbox/api`）；新手引导（重新开始） |
+
+命令面板新增分组"沙盒""识别物""机巢""任务"，可按识别物 id、机巢 id、任务 id 跳转并选中；写操作项在 viewer 界面不出现。
+
+### 20.3 载入进度条（R-D2-01；AWR-04 §10.1）
+
+#### 20.3.1 线框
+
+```text
+┌──────────────────────────────────────────── 视口（启动遮罩，--z-mask） ───────────────────────────────────────────┐
+│                                                                                                                 │
+│                                     [ANet 完整徽章 480 px，原样]                                                  │
+│                                     ━━━━━━━━━━━━━━━━━━━━━━━━━──────────────   ← .boot-progress，320 × 2 px         │
+│                                     加载首屏点云 · 1.4 / 3.2 MB                ← .boot-phase（04 text-swap）       │
+│                                                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+进度条宽 320 px（紧凑档同宽）、高 2 px，轨道为 `--lf-track`，填充为前景中性色（`g50`），不用红；阶段文字一行，`text-hud-cap` 字阶。超过 `INPUT.bootSlowHintMs` 时 D1 的"仍在加载 · 查看详情"链接照常出现在文字下方。
+
+#### 20.3.2 分段、权重与段内进度来源
+
+| 分段 | 权重 w | 段内进度 f（0–1，只增不减） | 来源（实现位置） | 阶段文字键与中文 |
+|---|---|---|---|---|
+| bundle 应用脚本 | 0.15 | 已完成分块字节和 ÷ 清单总字节；清单由构建期写入 `index.html` 的 `window.__AWR_BOOT_MANIFEST = {chunks: [{href, bytes}], total}`，完成事件取 Resource Timing（`PerformanceObserver` 的 `resource` 条目，`encodedBodySize`） | `index.html` 内联加载器；`vite.config.ts` 内联插件 `bootManifestPlugin()`（新，与 D1 的 `demoPlugin()` 同样写在配置内） | `boot.phase.bundle`：载入应用 |
+| world 世界清单与层级 | 0.10 | （`world.json` 完成 + 已完成 `hierarchy.bin` 数）÷（1 + 根数） | M05 加载器经 `perf.bootProgress('world', f)` 上报 | `boot.phase.world`：读取世界清单 |
+| points 首屏点云 | 0.40 | 首屏 Range 已收字节 ÷ 本档首屏字节（`levelsByteEnd`）；Range 以流式读取计字节 | M05 Fetcher 上报 | `boot.phase.points`：加载首屏点云 · {received} / {total} MB |
+| warming 预热 | 0.30 | `0.6 · 已编译程序数 / zoo 总数 + 0.4 · 已完成 uiWarm 子阶段数 / 子阶段总数`（子阶段：预光栅、命令面板演练、Toast 演练，按 BootMask 实际启用的数目） | M06 `warmup.ts` 上报；`BootMask.tsx` 的 uiWarm 子阶段 | `boot.phase.warming`：预热着色器与界面 |
+| reveal 揭开 | 0.05 | D1 BootController 全部门控解析（shell、canvas、firstFrame、warmup、uiWarm）即为 1 | `BootController.ts`（门控逻辑不改） | — |
+
+`index.html` 的内联加载器在应用脚本执行前就能运行，因此 bundle 段在 main 分块下载期间按"已完成分块"阶跃前进；不对模块做二次流式 fetch（会重复下载，见 §20.24 第 2 条）。浏览器不支持 `PerformanceObserver` 的 `resource` 条目时，bundle 段在 main 分块执行时一次置 1。
+
+#### 20.3.3 聚合与写入算法
+
+```ts
+// 伪代码：app/boot/BootProgress.ts（新，M15）；D1 BootController 的门控与揭开逻辑不改
+const W = { bundle: 0.15, world: 0.10, points: 0.40, warming: 0.30, reveal: 0.05 } as const
+type Seg = keyof typeof W
+const f: Record<Seg, number> = { bundle: 0, world: 0, points: 0, warming: 0, reveal: 0 }
+let shown = 0, lastWriteMs = -Infinity, pending = false
+let active: readonly Seg[] = ['bundle', 'world', 'points', 'warming', 'reveal']   // 切换底图时去掉 'bundle'
+
+export function report(seg: Seg, x: number): void {
+  f[seg] = Math.max(f[seg], Math.min(1, Math.max(0, x)))            // 段内只增不减
+  schedule()
+}
+function schedule(): void { if (!pending) { pending = true; requestAnimationFrame(flush) } }
+function total(): number {
+  let s = 0, wsum = 0
+  for (const k of active) { s += W[k] * f[k]; wsum += W[k] }
+  return s / wsum                                                    // 去掉某段后重新归一
+}
+function flush(now: number): void {
+  pending = false
+  if (now - lastWriteMs < 100) { setTimeout(schedule, 100 - (now - lastWriteMs)); return }   // ≤ 10 Hz
+  const p = Math.max(shown, total())                                 // 全程单调
+  if (p - shown < 0.005 && p < 1) return                             // 小于半个像素的变化不写
+  shown = p; lastWriteMs = now
+  bar.style.setProperty('--boot-p', p.toFixed(4))                    // CSS：transform: scaleX(var(--boot-p))
+  phase.textContent = phaseText(firstIncomplete(active, f))          // 第一个未完成段的文字
+}
+export function onReveal(): void { f.reveal = 1; shown = 1; bar.style.setProperty('--boot-p', '1') }  // 同步写，先于淡出
+```
+
+规则：
+1. **只显示不门控**：揭开时刻仍只由 D1 门控决定，"揭开从不等待 WebSocket"不变；沙盒的就绪与排队不进入遮罩，揭开后由会话条与排队卡片呈现（ADR-108 备选第 2 条）。
+2. **动效**：填充只过渡 `transform`，时长 `--duration-quick`、曲线 `--ease-smooth-out`；`prefers-reduced-motion` 或 reduced 档时无过渡（按写入值跳变）；不用 shimmer、不用循环动画（不计入常驻循环）。
+3. **CSS**：`index.html` 内联样式与 `styles/boot.css` 同步改为 `.boot-progress > i { width: 100%; transform-origin: left center; transform: scaleX(var(--boot-p, 0)); }`，`--boot-p` 为 0–1 的无单位数（D1 的 `width: var(--boot-p, 0%)` 删除）。
+4. **错误**：进入 BOOT_ERROR 时进度冻结在当前值，阶段文字换成 D1 E-02 至 E-04 的错误文案，填充不变色（错误由文字与两个操作表达）。
+5. **长帧**：写入只改一个自定义属性与一段文字（布局隔离：`.boot-progress` 与 `.boot-phase` 均 `contain: layout paint`），不得在遮罩下产生新的 > 50 ms 帧（D2-AC-01）。
+6. **测试钩子**：dev/test 构建把每次写入追加到 `__ux.boot.progress[] = {tMs, p, seg}`（预分配环 256 项），供单调性与阶段文字数断言。
+
+#### 20.3.4 切换底图与静态浏览的加载卡
+
+D1 §7.3 的紧凑加载卡（`Card size="sm"`：世界名 + 进度 + 阶段文字）改用同一 `BootProgress` 实例：`active = ['world', 'points', 'warming', 'reveal']`，权重重新归一（world 0.118、points 0.471、warming 0.353、reveal 0.059）；warming 段在着色器已预热时一次置 1。会话内切换底图时，加载卡在 sim-core 重启期间显示"正在新城市启动沙盒"（阶段键 `boot.phase.sandbox`，不计权重，只在 points 完成而会话尚未 READY 时出现）。
+
+### 20.4 沙盒入口、排队与会话条
+
+#### 20.4.1 落地页与"开启我的沙盒"Sheet
+
+落地页（`app/demo/Landing.tsx`，D1 M15-FR-121）的首屏主按钮由一个改为两个，其余内容不变；"演示说明"改写为 §20.16 的 D2 文案。
+
+```text
+┌────────────────────────────── 落地页首屏（1600 × 900）──────────────────────────────┐
+│ [品牌头图]                                                                           │
+│ ANet Drone4D · 4D 世界运行时                                                          │
+│ 一句话定位                                                                            │
+│ [进入演示]  [开启我的沙盒]                    ← Button / Button variant="outline"      │
+│ 共享展示为只读；每位访客可开一个隔离沙盒（30 min 起，可续期）                          │
+└────────────────────────────────────────────────────────────────────────────────────┘
+
+┌ Sheet side="right"，宽 480 px：开启我的沙盒 ─────────────────────────┐
+│ 城市      [synthcity v]  可立即开始 · 合成城市                         │ ← Select（七个世界，带可用性 Badge）
+│ 场景模板  ( ) T1 定点巡航            约 40 s 明确捕获                  │ ← RadioGroup，每项第二行为"首次反馈"
+│           (o) T5 区域值守与接力（推荐） 约 60 s 首次捕获，随后接力      │
+│           ( ) T6 手动飞行与传感器视图  …                              │
+│ 仿真时段  [日间 10:00] [黄昏 18:30] [夜间 23:00]                     │ ← ToggleGroup（缺省日间）
+│ ─────────────────────────────────────────────────────────────────── │
+│ 当前 3 / 4 个沙盒在运行 · 排队 0                                     │ ← GET /api/sandbox/v1/meta
+│ [取消]                                                    [开始]    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+| 项 | 规则 |
+|---|---|
+| 可用性 | 打开 Sheet 时取 `GET /api/sandbox/v1/worlds`：`available = false`（`reason: derived_cache_missing`）的世界置灰并说明"该城市暂不可用"；`admit_now = false` 的世界标"容量不足，可排队"；缺省选中 synthcity |
+| 模板 | 取 `GET /api/sandbox/v1/templates?world=`；缺省 T5；世界变化时保留同名模板 |
+| 小窗口 | 窗口小于 1280 × 720 时"开启我的沙盒"禁用，Tooltip"沙盒需要桌面浏览器窗口 ≥ 1280 × 720"，不创建会话（D2-AC-34） |
+| 开始 | `POST /api/sandbox/v1/sessions {world, template, calendar, principal_hint}`（17 §17.4）；按钮进入 Spinner；需要工作量证明时（码 509）在 Worker 中求解，按钮下方显示"正在验证浏览器（约 1–2 s）"与 `Progress`（不确定进度时隐藏条，只显文字）；求解完成后自动重发 |
+| 结果 | 201：把 `{sid, token, expires_unix_ns}` 写入存储（§20.4.7），`location.assign('/sandbox/' + sid)`（落地页是独立入口，整页加载应用并显示进度条）；202 排队：写入排队票，跳到 `/world/synthcity` 并显示排队卡片；409 码 508：Sheet 内显示"该城市当前容量不足"，列出 `detail.available_now` 的世界作为一键替换，另有"排队"；409 或 429 码 504：显示配额文案（§20.16）与 `Retry-After` 倒计时，不自动重试 |
+| 应用内入口 | 共享展示、静态浏览与 World Hub 的"开启我的沙盒"打开同一 Sheet（组件 `ui/sandbox/StartSheet.tsx`，落地页与应用共用）；应用内成功后用路由切换而不是整页加载 |
+
+#### 20.4.2 创建与进入时序
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "secondaryColor": "#E4E6E9", "tertiaryColor": "#FBFBFC", "lineColor": "#5C616A", "textColor": "#111214", "mainBkg": "#F2F3F5", "nodeBorder": "#5C616A", "clusterBkg": "#FBFBFC", "clusterBorder": "#A7ABB3", "edgeLabelBackground": "#FBFBFC", "noteBkgColor": "#E4E6E9", "noteTextColor": "#111214", "noteBorderColor": "#81868F", "actorBkg": "#F2F3F5", "actorBorder": "#5C616A", "actorTextColor": "#111214", "signalColor": "#3E4249", "signalTextColor": "#111214", "activationBkgColor": "#E4E6E9", "activationBorderColor": "#5C616A", "sequenceNumberColor": "#FBFBFC"}}}%%
+sequenceDiagram
+  participant U as 访客
+  participant L as 落地页 StartSheet
+  participant A as sandbox-api
+  participant P as sandbox-pool
+  participant W as 应用（/sandbox/:sid）
+  U->>L: 开启我的沙盒（第 1 次点击）
+  U->>L: 开始（第 2 次点击）
+  L->>A: POST /sessions {world, template, calendar, principal_hint}
+  A->>P: sys/session/create
+  P-->>A: SPAWNING（sid、token）
+  A-->>L: 201 {session, token}
+  L->>W: location.assign（启动遮罩与进度条）
+  par 应用启动（揭开不等会话）
+    W->>W: bundle、world、points、warming
+  and 沙盒启动
+    P->>P: 拉起 sim-core、装配模板（≤ 6 s）
+  end
+  W->>A: WS /sessions/{sid}/rt（bearer token）
+  A-->>W: serverInfo{sandbox.state}、advertise、TIME
+  Note over W: 会话条"沙盒启动中"直到 READY
+  A-->>W: serverInfo（READY）→ 首个连接使会话进入 ACTIVE，时钟 ×1 启动
+  W-->>U: 新手引导第 1 步（首次访问）；T5 运行中
+```
+
+#### 20.4.3 排队卡片
+
+```text
+                                                   ┌ 排队卡片（未遮挡区右上，宽 320 px）──────────┐
+                                                   │ [hourglass] 沙盒排队中 · 第 3 位              │
+                                                   │ 预计等待约 4 min（按会话剩余寿命估计）          │
+                                                   │ 你可以继续浏览共享展示                         │
+                                                   │                               [离开队列]     │
+                                                   └──────────────────────────────────────────────┘
+领到空位后：
+                                                   ┌──────────────────────────────────────────────┐
+                                                   │ [sandbox.mine] 已为你保留沙盒 · 52 s 内确认    │
+                                                   │ synthcity · T5 区域值守与接力                  │
+                                                   │ [放弃]                          [进入沙盒]    │
+                                                   └──────────────────────────────────────────────┘
+```
+
+卡片是 `Card size="sm"`，非模态（不 `inert` 其他区域、不抢焦点，出现时 `role="status"` 播报一次），位于 Toast 视口之上、HUD 之外的未遮挡区右上角；同一时刻只有一张。
+
+| 状态 | 事件 | 守卫 | 动作 | 目标状态 |
+|---|---|---|---|---|
+| NONE | `POST /sessions` 返回 202 | — | 存排队票；显示卡片；发起长轮询 `GET /queue/{ticket_id}?wait_s=25` | QUEUED |
+| QUEUED | 长轮询返回 `position`、`eta_s` 变化 | — | 更新第 k 位与预计等待（D 类数字，02 number-pop-in） | QUEUED |
+| QUEUED | 长轮询返回 `state = slot_ready` | — | 卡片切换为确认态，60 s 倒计时（墙钟），`role="alert"` 播报一次 | SLOT_READY |
+| SLOT_READY | "进入沙盒" | 倒计时未到 | `POST /queue/{ticket_id}/claim` | CLAIMING |
+| CLAIMING | 201 `{session, token}` | — | 写存储；路由到 `/sandbox/:sid`（世界不同则切换加载卡） | NONE（进入沙盒） |
+| SLOT_READY | 倒计时到 0 或"放弃" | — | `DELETE /queue/{ticket_id}`（倒计时到期由服务端作废，客户端只清本地） | NONE |
+| QUEUED | "离开队列" | — | `DELETE /queue/{ticket_id}` | NONE |
+| QUEUED、SLOT_READY | 长轮询 410（码 511） | — | 卡片换为"排队票已失效"，提供"重新排队" | NONE |
+| 任意 | 页面刷新 | 存储中有未过期的票 | 恢复卡片并继续长轮询 | 原状态 |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "secondaryColor": "#E4E6E9", "tertiaryColor": "#FBFBFC", "lineColor": "#5C616A", "textColor": "#111214", "mainBkg": "#F2F3F5", "nodeBorder": "#5C616A", "clusterBkg": "#FBFBFC", "clusterBorder": "#A7ABB3", "edgeLabelBackground": "#FBFBFC", "noteBkgColor": "#E4E6E9", "noteTextColor": "#111214", "noteBorderColor": "#81868F"}}}%%
+stateDiagram-v2
+  [*] --> QUEUED: POST /sessions 返回 202
+  QUEUED --> QUEUED: 位置或预计等待变化
+  QUEUED --> SLOT_READY: 长轮询返回 slot_ready
+  SLOT_READY --> CLAIMING: 进入沙盒（60 s 内）
+  CLAIMING --> [*]: 201，进入 /sandbox/:sid
+  SLOT_READY --> [*]: 倒计时到期或放弃
+  QUEUED --> [*]: 离开队列或票失效（511）
+```
+
+#### 20.4.4 会话条
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────────────────────── 顶栏 44 px（D1）─┐
+│[av]ANet Drone4D│World Runtime  世界 视图 仿真 任务 工具 沙盒 帮助   synthcity › sb-k3m9q2x7ab › P600-02          │
+├──────────────────────────────────────────────────────────────────────────────────────────────── 会话条 32 px ──┤
+│[sandbox.mine] 我的沙盒 · synthcity · T5 │ 剩余 27:41 [续期] │ ×2（可达 ×5）│ 机 5/12 识别物 2/30 机巢 2/4 任务 1/6 │
+│                                                                    │ 白天 10:42 · 照度 日间 │[载入场景][重置][结束会话]│
+└───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+| 字段 | 组件 | 数据（17 §17.7 `sandbox/session` 1 Hz） | 规则 |
+|---|---|---|---|
+| 会话徽标 | `Badge` + `Icon sandbox.mine` | `state` | SPAWNING 时"沙盒启动中"+ `Spinner`；DRAINING 时"正在结束" |
+| 世界与模板 | 文本 + `HoverCard` | `world_id`、`template_id`、`sid` | HoverCard 列出 sid（可复制，`copy` morph `Check`）、创建时刻、寿命上限、配额用量 |
+| 剩余寿命 | 文本（C 类，1 Hz）+ `Button size="sm" variant="ghost"`"续期" | `expires_unix_ns`、`renewable`、`renew_block_reason` | `renewable = false` 时"续期"置灰，Tooltip 给原因（"有访客在排队，暂停续期"或"已达 120 min 上限"）；剩余 ≤ 60 s 时数字为红色文字（HERO_TEXT，不占实心名额） |
+| 倍速 | 文本 + `Badge` | `clock.rate_granted`、`clock.rate_cap`、`clock.limited_by` | 受限时 Badge"可达 ×k"，Tooltip 给原因（CPU 预算、手动控制锁定、降级）；Timeline 倍速控件的档位 > `rate_cap` 置灰（ADR-045 零硬编码） |
+| 实体计数 | 四组 `k / max`（D 类） | `usage`、`limits` | 达到上限的项文字加 warning 描边环；"添加"类按钮同步置灰（码 505 文案） |
+| 日历与照度 | 文本 + `env.time` 图标 | `env/state` 的 `calendar`、`sun.band` | 点击打开仿真日历 Popover（§20.5.4） |
+| 载入场景 | `Button` → `AlertDialog` | — | "载入场景会清空当前机队、识别物、机巢与任务（可先导出快照）"；确认后 `POST /sessions/{sid}/template {template}` |
+| 重置 | `Button` → `AlertDialog` | — | 重新载入当前模板（同上，template 取当前值） |
+| 结束会话 | `Button variant="outline"` → `AlertDialog` | — | "结束后沙盒立即回收，可先导出快照"；确认后 `DELETE /sessions/{sid}`，回到共享展示 |
+
+会话条与顶栏同为一张"图"；1280 宽紧凑档只保留徽标、剩余寿命、倍速与"更多"`DropdownMenu`（其余项进菜单）。会话条使未遮挡区上沿下移 32 px（D1 §3.4 规则按回放横幅处理）。
+
+#### 20.4.5 会话状态到 UI
+
+| 会话 `state`（17 §17.4） | 会话条 | 写入口 | WS | 其他 |
+|---|---|---|---|---|
+| SPAWNING | "沙盒启动中"+ Spinner | 置灰，Tooltip"沙盒启动中" | 已连接，等待 READY 的 `serverInfo` | 揭开不等待；超过 10 s 追加"启动较慢，仍在尝试" |
+| READY、ACTIVE | 正常 | 可用 | 实时 | — |
+| IDLE | 正常（客户端在线时不会出现） | 可用 | — | — |
+| DRAINING | "正在结束 · 原因" | 置灰 | 收到 `sandbox.expiring` 后保持 | 自动导出快照（§20.4.6） |
+| ENDED、FAILED | 会话条移除 | — | 关闭码 4410 | "会话已结束"Dialog |
+| 崩溃恢复（`epoch + 1`） | 一条 info Toast"沙盒已从最近检查点恢复" | 可用 | 重连 | D1 §7.7 对账规则不变 |
+
+#### 20.4.6 寿命、续期、结束与快照
+
+1. **自动续期**：会话可续（`renewable = true`）且剩余 ≤ 300 s 时，浏览器自动 `POST /sessions/{sid}/keepalive`（每次续 30 min，累计上限 120 min，AWR-04 §4.4.3），成功后静默更新会话条，不弹 Toast；`keepalive` 响应带新 token，客户端替换存储中的 token 与 WS 子协议（下次重连生效）。
+2. **即将结束**：收到 `sandbox.expiring {reason, in_s}`（提前 60 s）时弹常驻 warning Toast："沙盒将在 60 s 后结束（原因）· [导出快照] [续期]"（"续期"只在可续时出现），倒计时为 C 类文字；同时自动执行一次快照导出（`GET /sessions/{sid}/snapshot`）写入 `localStorage` 键 `awr.sandbox.snapshot.v1`（≤ 256 KB，超出或写入失败时只保留"导出快照"按钮手动下载）。
+3. **原因文案**：`idle` 空闲超过 10 min；`lifetime` 已达寿命；`preempted` 有访客排队，你的沙盒已持有超过 30 min；`reclaimed` 服务器负载过高回收；`user` 你结束了会话；`failed` 沙盒连续崩溃。
+4. **结束 Dialog**（`AlertDialog`，非破坏性，默认焦点"回到共享展示"）：
+
+```text
+┌ 沙盒已结束 ──────────────────────────────────────────────────┐
+│ 原因：有访客在排队，你的沙盒已持有超过 30 min                    │
+│ 配置快照已保存在本浏览器（机队 5、识别物 2、机巢 2、任务 1）       │
+│ [下载快照文件]   [用快照新开沙盒]            [回到共享展示]      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+"用快照新开沙盒"= `POST /sessions {world: 快照世界, config_snapshot}`，走 §20.4.1 的同一流程。
+5. **导入快照**：菜单"世界 › 导入配置快照…"选择 JSON 文件（shadcn `Field` + M15 在 `ui/components/ui/` 内新增的文件选择封装 `file-trigger.tsx`；业务代码不写原生 `input`，no-raw-controls 不变），校验 `world_id` 与当前世界一致，不一致时提示"快照属于 shanghai，请在该城市的沙盒中导入"；确认后 `POST /sessions/{sid}/restore`。
+6. **设置 › 沙盒**标签：会话信息（只读）、"自动续期"开关（缺省开）、"关闭标签页时结束沙盒"开关（缺省关；开启时 `pagehide` 发 `navigator.sendBeacon` 到 `POST /sessions/{sid}/end-beacon`，17 §17.5）、新手引导"重新开始"。
+
+#### 20.4.7 会话恢复、多标签页与存储
+
+| 键 | 存储 | 内容 | 生命周期 |
+|---|---|---|---|
+| `awr.sandbox.session.v1` | sessionStorage（主）与 localStorage（备份） | `{sid, token, token_exp_unix_ms, world, template}` | 会话寿命内；`ENDED` 或 token 过期即删 |
+| `awr.sandbox.queue.v1` | sessionStorage | `{ticket_id, ticket_token, expires_unix_ms}` | 票有效期内 |
+| `awr.sandbox.snapshot.v1` | localStorage | 最近一次配置快照（≤ 256 KB）与导出时刻 | 7 天或被下次导出覆盖 |
+| `awr.ui.onboarding.v1` | localStorage | `{done: bool, step: 0–4, v: 1}` | 永久（"重新开始"清除） |
+| `awr.auth.principal.v1` | localStorage | D1 已有的 `principal_hint`（§3.6） | 不变 |
+
+读写一律 try/catch（D1 UX-NFR-015）。恢复流程：路由 `/sandbox/:sid` 加载时，先读 sessionStorage，缺失再读 localStorage 备份；有 token 则 `GET /sessions/{sid}` 校验（200 且 `state` 活动即恢复，目标 ≤ 3 s 回到同一 sid，D2-AC-38）；401、410 即删存储并显示"会话不可用"页（"该沙盒已结束或不属于本浏览器 · [回到共享展示] [开启我的沙盒]"）。第二个标签页读到 localStorage 备份即加入同一沙盒（同一 principal 共享席位）；两页同时操作同一机体时按 D1 租约规则处理（同一 principal 视为同一持有者）。存储不可用（隐私模式）且本页没有 token 时，`POST /sessions` 对同一 principal 与地址前缀幂等返回已有会话但不返回 token（17 §17.4），UI 显示"你的沙盒正在另一个标签页运行"，并提供"另开一个沙盒"（`force_new: true`，占用该地址前缀的第二个名额）。
+
+### 20.5 沙盒主视图布局
+
+#### 20.5.1 线框（1920 × 1080，operator，T5 运行中）
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 顶栏 44（同 D1；菜单多"沙盒"）                                                                               │
+│ 会话条 32：我的沙盒 · synthcity · T5 │ 剩余 27:41 │ ×2（可达 ×5）│ 机 5/12 识别物 2/30 机巢 2/4 任务 1/6 │ …   │
+├──────────────────┬───────────────────────────────────────────────────────────────┬──────────────────────┤
+│ WORLD        [-] │  ┌Orbit│Free│Third│FPV│Bird┐ [L]                    ┌ViewCube┐│ [无人机|识别物|机巢]   │← 实体切换
+│ synthcity 示意坐标│  └─────────────────────────┘                          └────────┘│ 识别物 2/30  [+ 新增]  │
+│ 场景 T5 [载入场景]│                                                                │ 筛选 [全部类别 v]      │
+│ 底图 [切换底图…]  │        ╭ ─ ─ ─ ╮  人-01（配置体，扇形）                        │┌────────────────────┐│
+│ LAYERS       [-] │       (  人  )  ← 识别物标记：类别字形 + 最佳等级环                ││|人-01 游走 · 识别 R  ││
+│ 点云       [开]   │        ╰ ─ ─ ─ ╯                                               ││ 已捕获 · 被发现 0   ││
+│ 识别物     [开]   │   ┊条带 3┊条带 4┊      o 站位 S1（P600-03 在岗）                 │└────────────────────┘│
+│ 敏感体 配置体|有效体│   ┊      ┊         [] 机巢 N1（box）   <> 机巢 N2（vtol_pad）       │ 车-01 沿路 · 检测 D   │
+│ 禁入体     [开]   │                                                                │──────────────────────│
+│ 规划图层   [开]   │ ┌HUD──────────────────┐                          [Toast 已明确捕获] │ 详情 ›               │
+│ ENVIRONMENT  [-] │ │p95 41 ms S档 …       │                                         │                      │
+│ 日历 10:42 日间   │ └──────────────────────┘                                         │                      │
+├──────────────────┴───────────────────────────────────────────────────────────────┴──────────────────────┤
+│ [播放/暂停] ×0.25 ×0.5 [×1] ×2 ×5 ×10(灰) │ ─────────────────────o T+00:06:12 LIVE │ 事件 图表 性能 任务 [^] │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+说明：识别物、敏感体、禁入体与规划图层为三维叠加；线框中的字形只是示意，实际图标见 §20.15.2。×10 置灰表示超过本会话可达倍速。
+
+#### 20.5.2 面板与页面登记（`ui/panels/registry.ts`）
+
+| 面板 id | 名称 | 默认槽位 | 允许槽位 | 最小尺寸 | `when` | 所有者（store / 图层） | D2 |
+|---|---|---|---|---|---|---|---|
+| `drones` | 无人机（D1 增强） | right（实体切换第 1 项） | right、left | w 280 | 总是 | M15（`stores/fleet.ts`、`stores/catalog.ts`） | 是 |
+| `drone-detail` | 单机详情（新增"传感器""感知"标签） | right（第 2 页） | right | w 280 | 焦点机 | M15、M19 | 是 |
+| `targets` | 识别物 | right（实体切换第 2 项） | right、left | w 280 | run 有 `targets` 能力 | M18（`stores/targets.ts`） | 是 |
+| `target-detail` | 识别物详情 | right（第 2 页） | right | w 320 | 选中识别物 | M18 | 是 |
+| `nests` | 机巢 | right（实体切换第 3 项） | right、left | w 280 | run 有 `tasking` 能力 | M20（`stores/tasking.ts`） | 是 |
+| `nest-detail` | 机巢详情 | right（第 2 页） | right | w 320 | 选中机巢 | M20 | 是 |
+| `task-new` | 新建任务 | right（第 3 页） | right | w 360 | operator 界面 | M20 | 是 |
+| `tasks` | 任务（替代沙盒与 S7 中的 D1 `mission`） | bottom | bottom、right | h 200 / w 320 | run 有 `tasking` 能力 | M20 | 是 |
+| `mission` | D1 任务面板 | bottom | bottom、right | — | run 无 `tasking` 能力（D1 剧本） | M10 | — |
+
+`when` 中的能力取 `serverInfo.capabilities`（17 §17.7.1：`targets`、`perception`、`tasking`、`sandbox`）。实体切换是右栏根页顶部的 `ToggleGroup`（单选、`toggle-group-indicator` 滑动指示，配方 16），切换只换列表，不卸载其他列表的 store 订阅。机型目录、克隆编辑与识别物"高级属性"用 `Sheet side="right"`（宽 560 px，紧凑档 480 px），因为它们不需要同时在视口作图；任务创建需要在视口绘制，因此是右栏页面而不是 Sheet。
+
+#### 20.5.3 图层组（左栏 LAYERS 增量）与 Tier S 上限
+
+| 图层 | 默认 | 子选项 | 所有者 | Tier S 上限（登记 AWR-03 §3.8） | 超限时（PerfGovernor） |
+|---|---|---|---|---|---|
+| 识别物 | 开 | 标签开关 | M18 `viewport/layers/targets.tsx` | 32 个标记 | — |
+| 敏感体 | 开 | `ToggleGroup`：配置体、有效体（有效体需选择参考机型，缺省为焦点机的机型） | M18 | 64 个网格（每识别物 ≤ 4 个体） | 先降为"仅选中识别物显示体，其余只画地面环" |
+| 禁入体 | 开 | — | M18 | 32 个地面环 | 不降 |
+| 规划图层 | 开 | 子区、条带、补拍航点、航段、站位 | M20 `viewport/layers/tasking.tsx` | 条带 ≤ 512 段；航段 ≤ 256 段；站位 ≤ 32 | 先隐藏非选中任务的条带与航段 |
+| 机巢 | 开 | 链路距离圈 | M20 | 4 个 | — |
+| 视锥（D1） | 开 | 新增"传感器作用距离" | M13、M19 | D1 上限不变 | D1 规则 |
+
+#### 20.5.4 ENVIRONMENT 组增量（仿真日历与照度）
+
+| 元素 | 组件 | 规则 |
+|---|---|---|
+| 日历时刻 | 文本（C 类）+ `Badge`（照度档：日间、低照、夜间） | 取 `env/state` 的 `calendar.t_cal`（示意时区）与 `sun.band`；HoverCard 显示太阳高度、方位、照度（lx） |
+| 设置日历 | `Popover`：`InputGroup`（`YYYY-MM-DD HH:mm`，正则校验）+ `ToggleGroup` 快捷时段（日间 10:00、黄昏 18:30、夜间 23:00）+ 时区只读 | 确认后 `call env/calendar {start_utc, tz}`（op）；shadcn `calendar` 组件在 V0.6 前禁用（§4.7），因此不用日期选择器 |
+| 声学背景 | `Select`：乡村、郊区、城市 | `call env/set {patch: {acoustic_bg}}`（op）；viewer 只读 |
+| 消光提示 | 文本 | MOR 下降到 3 km 以下时显示"雾霾时优先使用长焦热像"（AWR-04 §9.2 读表结论 ③） |
+
+#### 20.5.5 共享展示（viewer）布局差异
+
+共享展示沿用 §20.5.1 的布局，差异：无会话条，顶栏右侧角色徽标"公开演示 · 只读"旁增加"开启我的沙盒"按钮；右栏实体切换照常（只读，详情页无写按钮）；Dock"任务"标签显示 S7 的区域值守与接力任务及接力统计（覆盖率、间隙、被发现次数、交接）；排队卡片在右上；Timeline 控件置灰（D1 §7.8）。静态浏览时实体切换与 Dock"任务"标签显示 `Empty`"静态浏览，没有运行中的仿真 · [在此城市开沙盒]"。
+
+### 20.6 无人机管理（R-D2-13、R-D2-15、R-D2-20、R-D2-27；M21、M19）
+
+#### 20.6.1 无人机列表（D1 DroneRail 增强）
+
+| 项 | D2 增量 |
+|---|---|
+| 列表头 | 计数"无人机 5 / 12"；`Button`"添加"（op，打开 §20.6.4 流程）；`Button variant="ghost"`"机型目录"（viewer 与 operator 均可，打开 §20.6.2 的 Sheet） |
+| 行 | D1 字段之外增加机型短名 `Badge`（P600、Q1、Q9、F1、V1；参考机型 Badge 带细描边表示"模拟参考值"）、所属机巢、当前工作项（"条带 3–4""站位 S1""手动"）；固定翼行的高度速度读数换为空速与滚转 |
+| 分组 | 按 `kind` 分组标题（D1）之外，可选"按机巢分组"（`DropdownMenu` 筛选项） |
+| 行菜单 | D1 项之外增加"修改挂载…"（op，只在 LANDED 且已上锁时可用，否则禁用并在第二行说明"降落并上锁后可修改挂载"）、"移除"（D1 流程） |
+
+#### 20.6.2 机型目录 Sheet
+
+```text
+┌ Sheet：机型目录（560 px）──────────────────────────────────────────────┐
+│ [全部|四旋翼|固定翼|垂起]                         [搜索型号]            │ ← ToggleGroup + InputGroup
+│ ┌ P600（MID-360）──────────┐ ┌ AWR-Q1 轻型四旋翼 ──────┐               │
+│ │ quad_x · 3.825 kg · 悬停 29 min│ │ 模拟参考值，非任何真实产品 │               │ ← 参考机型 Badge
+│ │ 巡航 8 m/s · 链路 3.5 km  │ │ 0.95 kg · 悬停 35 min    │               │
+│ │ GX40、MID-360            │ │ EO 1080P · 可选 LWIR 13 mm │               │
+│ │ [详情] [克隆编辑]         │ │ [详情] [克隆编辑]         │               │
+│ └──────────────────────────┘ └──────────────────────────┘               │
+│ （AWR-Q9、AWR-F1、AWR-V1 同构；会话内克隆的型号排在最后，带"本会话"Badge）│
+│ ── 详情（展开 Accordion）───────────────────────────────────────────── │
+│ 组      参数                    值            置信度   仿真用途          │ ← LfTable（table.log）
+│ 飞行器  起飞重量 / MTOW         3.825 / 4.1 kg  B       悬停推力、能量     │
+│ 动力电池 6S HV 10 Ah 228 Wh     —             B       能量模型、换电     │
+│ 派生    悬停功率                401 W         D       续航              │
+│ …                                                                       │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+| 项 | 规则 |
+|---|---|
+| 数据 | `GET /api/sandbox/v1/catalog/models`、`/catalog/models/{id}`、`/catalog/sensors`（公开、可缓存，viewer 可用，D2-AC-37）；会话内克隆型号 `GET /sessions/{sid}/models` |
+| 参数表 | 按 AWR-04 §5.1 的分组（飞行器、飞控、机载计算、动力电池、遥控器、数传、光电吊舱、RTK、充电器、三维激光雷达）与"派生"组；列：参数、值（带单位）、置信度（A–D，`Badge`）、仿真用途；"标签"类参数的用途列写"标签（不进入物理）" |
+| 参考机型 | 卡片与详情顶部固定显示"模拟参考值，非任何真实产品"（`Badge variant="outline"`）；P600 显示"规格来自用户随附硬件指标" |
+| 只读 | 预置型号只读；"克隆编辑"只在 operator 界面出现 |
+
+#### 20.6.3 克隆编辑表单
+
+右侧同一 Sheet 内切换到表单页（08 page-side-by-side）。字段的单位、范围与默认值如下；默认值取源型号，范围为 UI 前置校验，最终以服务端 M08 自洽检查（VH-1 至 VH-4、固定翼检查、挂载质量检查）为准。
+
+| 组 | 字段（17 §17.6.2） | 单位 | UI 范围 | 派生只读量（即时重算） |
+|---|---|---|---|---|
+| 基本 | `label` | — | 1–32 字符，运行时净化 | — |
+| 质量 | `mass_kg`、`mtow_kg` | kg | 0.2–200；`mass_kg ≤ mtow_kg` | 推重比、悬停油门（多旋翼） |
+| 电池 | `battery.cells`、`battery.capacity_ah`、`battery.chemistry` | —、Ah | 3–14 节；0.5–60 Ah；LiPo、LiHV、Li-ion | `capacity_wh`、`E_use = 0.85·E_nom` |
+| 续航与功率 | `battery.hover_endurance_s`（多旋翼）或 `airframe.c_d0`、`airframe.wing_area_m2`（固定翼） | s、—、m² | 300–7200 s；0.02–0.08；0.1–3 | 悬停功率或巡航、盘旋功率与续航 |
+| 速度 | `speed.cruise_mps`、`speed.max_mps`；固定翼另有 `speed.min_mps` | m/s | 1–40；`cruise ≤ max`；`v_min ≥ 1.1·V_s` | 固定翼 `V_s`、`R_min`、10 m/s 风下 `R_loiter,min` |
+| 垂直 | `speed.climb_mps`、`speed.sink_mps` | m/s | 0.5–10 | — |
+| 转弯（固定翼） | `airframe.bank_max_deg` | ° | 15–45 | `R_min(V)` |
+| 声学 | `acoustic.lwa_hover_dba`、`acoustic.bpf_hz` | dB(A)、Hz | 60–110；20–1000 | 对"人"的乡村夜间 `r_ac`（physical 模式的建议半径参考） |
+| 可见性 | `visual.area_m2{top, side, front}`、`visual.lights` | m²、— | 0.01–5；开或关 | — |
+| 链路 | `link.range_m` | m | 500–50 000 | — |
+| 挂载 | `sensors[]`（从 `/catalog/sensors` 选，§20.6.5） | — | 目录内传感器 | 挂载总质量与 MTOW 余量 |
+
+| 状态 | 事件 | 守卫 | 动作 | 目标状态 |
+|---|---|---|---|---|
+| CLEAN | 任一字段修改 | — | 本地前置校验（300 ms 静默，`input.validateIdleMs`） | DIRTY |
+| DIRTY | 前置校验失败 | — | 字段 `data-invalid` + 一次 shake（配方 12），保存置灰 | INVALID |
+| INVALID | 修改后校验通过 | — | 清错 | DIRTY |
+| DIRTY | 保存 | 前置校验通过 | 新建 `POST /sessions/{sid}/models` 或修改 `PATCH …/models/{id}`；按钮 Spinner | SAVING |
+| SAVING | 201、200 | — | 列表出现"本会话"卡片（列表进场动效）；回到目录页 | CLEAN |
+| SAVING | 422 码 522 | — | `detail.violations[{field, rule, value, limit}]` 逐项映射到字段错误，未映射的进表单顶部 `Alert` | INVALID |
+| CLEAN、DIRTY | 返回 | DIRTY 时确认"放弃修改？" | — | 关闭 |
+
+#### 20.6.4 添加无人机
+
+| 步 | 用户动作 | 系统反馈 |
+|---|---|---|
+| 1 | 列表头"添加"或右键地面"在此添加无人机" | 右栏第 3 页"添加无人机"：机型 `Combobox`（预置 + 本会话型号，带续航与链路摘要）、放置方式 `RadioGroup`（"放入机巢"缺省 / "在地图上放置"） |
+| 2a | 放入机巢：选机巢 `Select`（只列兼容的机巢，不兼容的置灰并说明"6S 充电器不能充 12S 电池"等） | 显示机巢剩余槽位 |
+| 2b | 在地图上放置：进入 `ADD_PICK`（D1 工具态，§6.13） | ray_hit 预览与 D1 一致 |
+| 3 | 标签（可空）、初始电量（缺省 100%）；"添加" | `POST /sessions/{sid}/vehicles {model_id, nest_id 或 home_enu_m, label?, initial_soc?}`；≤ 1 s 在列表与视口出现（D2-AC-09） |
+| 失败 | — | 505（已 12 架）、525（机巢不兼容，`detail.why`）、102（出生点非法）、520（型号未知）按 §20.16 文案 Toast，工具态与表单保留 |
+
+#### 20.6.5 传感器挂载与参数（单机详情"传感器"标签）
+
+```text
+┌ P600-02 · 传感器 ─────────────────────────────────────────────┐
+│ 挂载                         状态      操作                      │
+│ GX40 光电吊舱（EO / 夜视）    工作      [视图] [参数]             │
+│ MID-360 激光雷达             工作      [扫描显示 开]              │
+│ 远距照明器 nir_ill_l          未挂载    [挂载]（需降落上锁）       │
+│ ── GX40 参数 ───────────────────────────────────────────────── │
+│ 分析分辨率  [1080P|4K]（4K 需机载算力标签）                      │
+│ 焦距        4.8 ━━━━━━━━o━━━━━━━━━━ 48 mm   当前 22.0 mm          │ ← Slider + InputGroup
+│ 云台        俯仰 −35°  偏航 +12°   [跟踪识别物 v] [回中]          │
+│ 照明        [Switch] 机内 850 nm 0.8 W · 当前作用距离约 48 m       │
+│ ── 即时提示（M19 纯函数 TS 移植）──────────────────────────────── │
+│ 人 · 识别 R · 1080P · 22 mm：GSD 7.9 cm @ 600 m；P ≥ 0.9 最大斜距 390 m│
+│ 可行窗口（geometric，日间，MOR 10 km，按 48 mm）：320–850 m       │
+└───────────────────────────────────────────────────────────────┘
+```
+
+| 传感器 | 可配置项（17 §17.6.3、`sensor/mode`、`zoom`、`gimbal` 命令） | 何时可改 | 接口 |
+|---|---|---|---|
+| EO `eo_gx40` 与一体化 EO | 分析分辨率 1080P / 4K（有 `compute.orin_nx` 能力才可选 4K）、焦距、云台俯仰与偏航、跟踪对象 | 任意（需租约） | `call uav/{id}/cmd/zoom`、`gimbal`、`sensor/mode` |
+| 夜视 `nir` | 被动 / 主动；机内照明开关；外挂照明器 `nir_ill_l` 开关 | 开关任意；挂载需 LANDED 且上锁 | `sensor/mode`；挂载经 `PATCH …/vehicles/{vid}`（`fleet/update`） |
+| LWIR `lwir640` | 镜头 13、25、75、100 mm（挂载项）；数字变焦 1–4×（只影响显示）；调色板白热、黑热 | 镜头需上锁；其余任意 | 同上 |
+| 毫米波雷达 `mmw77` | 启用、方位扇区中心 | 任意 | `sensor/mode` |
+| 声阵列 `mic8` | 启用 | 任意 | `sensor/mode` |
+| MID-360 | 启用；扫描显示（订阅 `uav/{id}/sensor/lidar/scan`，每会话同时 ≤ 1 路） | 任意 | `sensor/mode`；订阅 |
+
+即时提示由 `engine/perception/calc.ts`（M19 的 TS 移植，与 §20.13.5 计算器同一实现）在参数变化时 ≤ 10 Hz 重算，不发请求；提示文字为 C 类数值。挂载修改的守卫：机体非 LANDED 或未上锁时"挂载"按钮置灰，Tooltip"降落并上锁后可修改挂载"；保存失败 522（挂载后超过 MTOW）显示逐项原因。
+
+#### 20.6.6 移除与修改约束
+
+移除沿用 D1 §6.13 第 5 条（地面直接移除、空中先降落）；被任务占用的机体移除前 AlertDialog 追加一行"该机正在执行 区域值守 · 条带 3–4，移除后其工作项将重新分配"。修改型号不提供（先移除再添加）。
+
+### 20.7 识别物管理（R-D2-07 至 R-D2-11、R-D2-18；M18）
+
+#### 20.7.1 识别物列表
+
+| 项 | 规则 |
+|---|---|
+| 头部 | "识别物 2 / 30"；`Button`"新增"（op）带类别 `DropdownMenu`（人、狗、车、机、机器、物）；筛选 `DropdownMenu`：类别、感知态、最佳等级、"仅被发现过" |
+| 行 | 类别图标（§20.15.2）+ 标签（例如"人-01"）；运动模式（静止、沿路径、游走）；最佳捕获等级（无、检测 D、识别 R、确认 I）与"已捕获"`Badge`；感知态（未察觉、起疑、反应中、已警觉、平复中，`StateIcon`）；被发现计数（D 类，> 0 时红描边 `Badge` 加 `TriangleAlert`，未确认的最新被发现行为红色实心徽标，§20.11.2） |
+| 选择 | 识别物选择与无人机选择集分开：单击行或视口标记设置 `tgt`（单选），不影响无人机焦点机；Esc 链在"清空无人机选择"之前增加"清空识别物选择" |
+| 虚拟化 | ≤ 30 行，不需要虚拟化；数据来自 `swarm/target/state`（10 Hz），列表 ≤ 4 Hz 摘要写入（ADR-008） |
+
+#### 20.7.2 新增、放置与运动绘制
+
+| 工具态（`ui/tools/toolMode.ts` 新增） | 进入 | 视口交互 | 完成 | 失败 |
+|---|---|---|---|---|
+| `TARGET_PLACE` | 新增菜单选类别；或右键地面"在此放置识别物" | 光标处 ray_hit 预览（≤ 5 Hz，D1 GoTo 同一拾取）：类别字形 + 包围盒 + 配置体地面投影（按模板缺省）；地面类贴 DSM，机类按相对高度 | 单击 → `POST /sessions/{sid}/targets {class, pos, …模板缺省}` → 详情页打开 | 540（放置在建筑内、世界外或高于 0.5 m 台阶上）提示条闪烁一次，工具态保留 |
+| `TARGET_MOVE` | 详情页"移动"或拖动选中识别物标记 | 拖动只在水平面移动，Shift 只改高度（机类）；过程值只写 transform | 松开 → `PATCH …/targets/{id} {pos}` | 540 时标记回到原位 |
+| `TARGET_PATH` | 运动模式选"沿路径"后"绘制路径" | 复用 D1 `EditViewportLayer` 的航点添加、插入、移动、删除（§6.8）；循环方式 once、pingpong、loop | Enter → `PATCH …/targets/{id} {motion}` | 541 以外的参数错误为字段错误 |
+| `TARGET_REGION` | 运动模式选"游走"后"绘制区域" | 复用 D1 区域绘制（单击加点、双击或 Enter 闭合、Shift 拖矩形、Backspace 删点） | 闭合且不自相交 → `PATCH {motion.region}` | 自相交拒绝闭合 |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "secondaryColor": "#E4E6E9", "tertiaryColor": "#FBFBFC", "lineColor": "#5C616A", "textColor": "#111214", "mainBkg": "#F2F3F5", "nodeBorder": "#5C616A", "clusterBkg": "#FBFBFC", "clusterBorder": "#A7ABB3", "edgeLabelBackground": "#FBFBFC", "noteBkgColor": "#E4E6E9", "noteTextColor": "#111214", "noteBorderColor": "#81868F"}}}%%
+stateDiagram-v2
+  [*] --> IDLE
+  IDLE --> TARGET_PLACE: 新增并选类别（operator，未达 30 个）
+  TARGET_PLACE --> TARGET_PLACE: 鼠标移动（ray_hit 预览）或 540
+  TARGET_PLACE --> CREATING: 单击命中
+  CREATING --> DETAIL: 201，打开详情页
+  CREATING --> TARGET_PLACE: 拒绝（540、505）
+  DETAIL --> TARGET_PATH: 绘制路径
+  DETAIL --> TARGET_REGION: 绘制游走区域
+  TARGET_PATH --> DETAIL: Enter 提交或 Esc
+  TARGET_REGION --> DETAIL: 闭合提交或 Esc
+  TARGET_PLACE --> IDLE: Esc
+  DETAIL --> IDLE: 关闭详情
+```
+
+#### 20.7.3 属性表单
+
+详情页（右栏第 2 页）显示常用字段；"高级属性"打开 Sheet，以 `Accordion` 分九组（AWR-04 §2.2）。缺省值取类别模板（`packages/contracts/target/class_defaults.json`，AWR-04 §7.2），字段名与单位以 17 §17.6.5 为准。
+
+| 组 | 详情页常用字段 | 高级属性字段 | 组件 | 校验（前置；服务端码） |
+|---|---|---|---|---|
+| 基本 | 标签、类别（只读）、启用 | — | `InputGroup`、`Switch` | 1–32 字符，净化 |
+| 几何 | 尺寸 l × w × h（m） | `critical_dim_m` 覆盖值（缺省空） | 三个 `InputGroup` + 单位 | 0.05–30 m；只读显示平视与俯视关键维度（投影式即时计算） |
+| 运动 | 模式、速度（m/s）、路径或区域入口 | `speed_max_mps`、`accel_mps2`、`turn_rate_max_rad_s`、`speed_sigma_mps`、`turn_tau_s`、`pause_prob`、`dwell_s[]` | `ToggleGroup` + `Slider` | 速度 0–40 m/s，`speed ≤ speed_max` |
+| 外观 | 对比度 `contrast0` | `color_srgb`（预设色板，不允许任意十六进制输入，避免设计体系外的颜色进入画面）、`albedo_vis`、`camouflage`、`occlusion` | `Slider` | −1–4；0–1 |
+| 反射率 | — | `reflect_850`、`reflect_905` | `Slider` | 0–1 |
+| 热 | 温差 ΔT（K） | `thermal.mode`（相对、绝对）、`t_surface_c`、`emissivity`、`hot_fraction` | `RadioGroup` + `InputGroup` | ΔT −20–200 K；ε 0.5–1 |
+| 雷达 | — | `rcs_m2`、`rcs_fluct` | `InputGroup`、`Select` | 0.001–1000 m² |
+| 声源 | 有无声源、`lw_dba` | `waveform`、`f0_hz`、`harmonics_db[]`、`period_s`、`duty`、`phase_s`、`bandwidth_hz`；波形示意图（P1） | `Select`、`Slider`、`LfLine` | `duty` 0–1、`period_s` 0.1–600、`f0_hz` 20–8000；服务端 541 |
+| 射频（可扩展） | — | `rf{freq_mhz, eirp_dbm, duty}`（只入配置，D2 不参与判定；表单整组禁用并注明"V0.3 起生效"） | 禁用的 `FieldGroup` | — |
+| 感知与行为 | 判据模式（geometric 缺省 / physical）、所需等级 `level_req`（D、R、I，缺省 R）、`n_req_px`（可空） | `alertness`、`reaction`（ignore、freeze、look_at、flee、hide、approach、alert_others、emit）与参数、`calm_s`、`alert_radius_m` | `ToggleGroup`、`Select`、`InputGroup` | `n_req_px` 1–200；`calm_s` 0–3600 |
+
+字段修改按 D1 环境滑块规则提交（松开或回车提交，`PATCH …/targets/{id}`），提交前显示"待确认"描边，收到 `target/{id}/detail` 的新值后转为正式值（U-03）；被拒绝时回滚并 Toast 原因码文案。
+
+#### 20.7.4 敏感体编辑与可视化
+
+```text
+┌ 人-01 · 敏感范围 ───────────────────────────────────────────────────┐
+│ 判据模式 [geometric|physical]   显示 [配置体|有效体（参考机型 P600 v）]  │
+│ #  类型  形状    半径 m  高度 m    半角   方位偏移  背向衰减  启用        │ ← LfTable，行内编辑
+│ 1  视觉  扇形    300    0–300     60°    0°       —        [开]        │
+│ 2  声学  半球    300    0–300     —      —        —        [开]        │
+│ [+ 添加敏感体]                                                         │
+│ 建议半径（physical 模型，参考 P600，乡村夜间保守口径）：声学 226 m        │
+│ [采纳建议半径]                                                        │
+│ 禁入体：配置体外扩 20 m + 3σ_hold（运动识别物的扇形按整圆）             │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+| 项 | 规则 |
+|---|---|
+| 编辑 | 行内 `InputGroup`（单位在表头）；类型 `Select`（视觉、声学；雷达与射频为"可扩展"，选中后提示"D2 只入配置"）；形状 `Select`（球、半球、柱、扇形）；每识别物 ≤ 4 个；越界时字段错误，服务端 542 |
+| 视口手柄 | 选中识别物时，配置体在视口显示半径手柄（体的水平最远点，10 px 命中半径）；拖动只改半径（过程值写 transform，松开 `PATCH`）；扇形另有方位手柄 |
+| 有效体 | "有效体"需选参考机型（缺省焦点机的机型，无焦点机时为会话中第一个机型）；半径取 `target/{id}/detail` 的 `radius_eff_m[model_id]`（17 §17.7.4），geometric 模式下有效体即配置体，显示提示"geometric 模式：进入配置体并驻留即被发现" |
+| 建议半径 | `GET …/targets/{id}/suggested_radius?model_id=` 返回各体的建议半径与口径（昼夜、背景、警觉度）；"采纳"即把配置体半径改为建议值（AlertDialog 列出改前改后） |
+| 三维样式 | 配置体：FAINTDATA 细线框，虚线 2 4（属 planned 形态，§11.3）；有效体：DATA 细线框实线；禁入体：地面虚线环（运动识别物整圆）；有无人机位于配置体内（感知态 SUSPICIOUS）时，该体描边转红（warning 形态，不占实心名额）；被发现由识别物标记进入红色仲裁（§20.11.2）。半透明面片不用于 Tier S（只画线框与地面环） |
+| viewer | 共享展示可切换配置体与有效体显示（只读），D2-AC-37 |
+
+#### 20.7.5 感知态、捕获与被发现的呈现
+
+| 状态 | 视口标记 | 列表行 | 详情页 |
+|---|---|---|---|
+| 未被检测 | 类别字形 + 空心小点 | 等级"无" | — |
+| 检测 D | 字形 + 单环（虚线） | "检测 D" | 当前最佳：传感器、机体、斜距、`N_eff / N_req` |
+| 识别 R、确认 I | 字形 + 单环实线（R）或双环（I） | "识别 R""确认 I" | 同上 |
+| 已明确捕获 | 环 + `BadgeCheck` 角标（DATA 色） | "已捕获"`Badge` | 捕获机体、持续时长 |
+| 起疑（SUSPICIOUS） | 字形旁 `TriangleAlert`（描边） | 感知态 `StateIcon` | 驻留进度条 `t / t_dwell`（D2-AC-12 的可视对照） |
+| 被发现（REACTING、ALERTED） | 红色仲裁候选（未确认时实心红，其余红描边 + `OctagonAlert`） | 计数 + 红徽标 | 最近一次：机体、敏感体类型、距离、余量 |
+| 平复中 | 字形 + 虚线环倒计时 | "平复中" | `calm_s` 倒计时 |
+
+### 20.8 机巢（R-D2-26；M20）
+
+```text
+┌ 机巢 N1 · 机巢箱 ───────────────────────────────────────────────┐
+│ 位置 E −120.0 N 80.0（屋顶） [移动]   链路 3.5 km 圈 [显示]        │
+│ 槽位 4 / 6 · RTK 基站 有 · 抗风上限 12 m/s                        │
+│ 库存   P600 × 4（在巢 2 · 空中 2）                                │ ← LfTable
+│ 能量   换电 180 s · 检查 60 s · 起飞间隔 30 s                      │
+│ 充电通道（C1-XR × 4，6S，10 A）                                    │
+│  1 =========--- 74%  余 18 min                                   │ ← LfTickRows（每通道一行，20 格）
+│  2 ===--------- 22%  余 52 min                                   │
+│  3 空闲   4 空闲                                                   │
+│ 电池   就绪 3 · 充电中 2 · 待充 1 （6S）                           │
+│ 起降队列  P600-04 → 区域值守 · T+00:12:40                          │
+│ [编辑配置] [移除机巢]                                              │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+| 项 | 规则 |
+|---|---|
+| 新增 | 实体切换"机巢"列表头"新增"→ 工具态 `NEST_PLACE`（ray_hit 预览，地面或屋顶，显示链路距离圈）→ 单击后右栏表单：名称、类型（机巢箱 box、发射回收站 launcher、垂起起降台 vtol_pad）、槽位、能量模式（换电、充电）、充电器（型号、数量、通道、最大电流、最大节数）、电池包（节数、数量）、`turnaround_s`、`launch_interval_s`、`wind_max_mps`、RTK 基站、链路距离；可选"同时放入无人机"（型号与数量，等价于创建后逐架 `POST …/vehicles {nest_id}`）→ `POST /sessions/{sid}/nests`；上限 4 个（505） |
+| 兼容 | `box` 只收多旋翼，`launcher` 只收固定翼且标注"需地勤，不参与无人值守 7×24"，`vtol_pad` 收垂起与多旋翼；充电器 `cells_max` 小于电池节数时表单即时提示，服务端 525 |
+| 状态 | `nest/{id}/status`（1 Hz）：槽位、库存、各通道充电进度（`LfTickRows`，F5，20 格刻度）、电池队列、起降队列；电池就绪数为 0 且有待派遣时，"电池"行转 warning 描边并显示"派遣延后（battery）"（同时进入事件面板） |
+| 修改与移除 | `PATCH …/nests/{id}` 对配置字段即时生效（运行中的充电不受影响，新参数从下一块电池起生效）；移除要求机巢内无机体（否则 105，提示"先移走或移除机巢中的无人机"） |
+| 视口 | 机巢标记（`nest` 图标）+ 名称；选中时显示链路距离圈（虚线）；起飞与回收时标记旁短暂显示"起飞 P600-04"（04 text-swap，2 s） |
+
+### 20.9 任务创建：绘制工具与预览（R-D2-03 至 R-D2-06、R-D2-16、R-D2-19；M20）
+
+#### 20.9.1 任务类型、绘制工具与参数缺省
+
+"新建任务"页（右栏第 3 页，`task-new`）顶部为类型 `ToggleGroup`（七项，图标见 §20.15.2），选中后进入对应绘制工具；参数表单在绘制完成后出现。缺省值为 UI 预填值，语义与边界以 AWR-04 §8.1、§8.3 与 17 §17.6.7 为准。
+
+| 类型 | 绘制工具（工具态） | 参数（单位，缺省） | 适用机型提示 |
+|---|---|---|---|
+| `point_watch` 定点巡航 | `TASK_POINT`：单击地面或屋顶取点（ray_hit） | 高度 `alt_m`（m AGL，60）；高度基准 AGL / 绝对；驻留 `dwell_s`（s，300）或"直到取消"；传感器指向：看向点（缺省为该点）/ 航向 / 识别物；固定翼盘旋半径 `loiter_radius_m`（m，`max(80, R_loiter,min)`，只读显示下限） | 多旋翼悬停；固定翼与垂起盘旋 |
+| `polyline_patrol` 多点巡线 | `TASK_LINE`：单击加点（≥ 2、≤ 64），双击或 Enter 结束 | 模式 once / pingpong / loop（loop）；圈数（3）或时长（s）；速度（m/s，机型巡航）；高度（m AGL，60）；传感器朝向 前 / 下 / 侧（下） | 全部 |
+| `area_patrol` 多机协同巡查 | `TASK_AREA`：多边形（单击加点，双击或 Enter 闭合，Shift 拖矩形） | 架数 自动 / 指定 k；目标类别（人）与所需等级（R）→ 只读显示所需 GSD（人 R 级 ≤ 2.7 cm）；重访周期 `revisit_s`（s，300）；时长（s，1800）或"直到取消" | 全部 |
+| `area_scan_gsd` 按 GSD 完整扫描 | `TASK_AREA` | GSD `gsd_cm`（cm/px，3.0）；侧向重叠 `sidelap`（0.1）；离轴上限 `theta_max_deg`（15°）；时间上限 `t_max_s`（自动 = `min(600, 0.8·t_sortie − 2·t_transit)`，可改）；航高上限 `h_cap_m`（120）；净空 `clearance_m`（20）；允许多架次 `allow_multi_sortie`（否） | 多旋翼、固定翼 |
+| `perimeter_patrol` 巡边 | `TASK_AREA` | 偏移 `offset_m`（m，0；正为外侧）；方向 顺时针 / 逆时针；重访周期（s，300） | 全部 |
+| `relay_watch` 接力监控 | `TASK_PICK_TARGET`：单击识别物标记或列表行 | 所需等级（取识别物 `level_req`）；时长"持续"或 s；允许机型（全部） | 需通过可行窗口预检 |
+| `area_guard` 区域值守（组合） | `TASK_AREA` | 目标类别（人）与等级（R）；重访周期（s，300）；允许机巢（全部）；允许机型（全部）；发现动作 `on_detect`（relay） | 全部 |
+
+公共参数（"更多"`Collapsible`）：优先级 低 / 普通 / 高（普通）；开始时刻 立即 / 仿真时刻；允许机巢；允许机型；发现动作 notify / relay / ignore（巡查与扫描缺省 notify，区域值守缺省 relay）。D1 的航线编辑（指定单机 `follow_path`）作为"手工指定架次"子模式并入本页（P1），入口为类型栏右侧的"更多 › 手工指定架次"。
+
+#### 20.9.2 绘制交互与前置校验
+
+绘制工具复用 D1 `ui/panels/mission-edit/EditViewportLayer.tsx` 与 `editModel.ts`（点的命中、插入手柄、矩形、撤销重做 ≤ 50 步），新增 `TASK_POINT` 与 `TASK_PICK_TARGET` 两种单击模式。绘制中视口顶部提示条按工具显示键位（"单击加点 · 双击或 Enter 闭合 · Shift 拖矩形 · Backspace 删点 · Esc 取消"）；多边形旁实时显示面积（km²，C 类）与顶点数"12 / 64"。
+
+```ts
+// 伪代码：ui/panels/task-new/precheck.ts（M15）；与服务端 §11.5 规模配额一致，只用于即时提示，服务端为准（码 585）
+const LIM = { areaMaxM2: 1e6, verticesMax: 64, stripsMax: 200, waypointsMin: 2, waypointsMax: 64 }
+function precheckArea(ring: Vec2[], type: TaskType, p: Params, cat: CatalogView): Issue[] {
+  const issues: Issue[] = []
+  if (ring.length < 3) issues.push({ key: 'task.issue.minVertices' })
+  if (ring.length > LIM.verticesMax) issues.push({ key: 'task.issue.vertices', code: 585 })
+  if (selfIntersects(ring)) issues.push({ key: 'task.issue.selfIntersect' })                 // 闭合时直接拒绝
+  const A = Math.abs(shoelace(ring))
+  if (A > LIM.areaMaxM2) issues.push({ key: 'task.issue.area', code: 585, value: A })
+  if (type === 'area_scan_gsd') {                                                          // 粗估条带数，提示 GSD 过细
+    const w = Math.min(cat.wOut * p.gsd_cm / 100, 2 * p.h_cap_m * Math.tan(rad(p.theta_max_deg)))
+    const strips = Math.ceil(minWidth(ring) / ((1 - p.sidelap) * w))
+    if (strips > LIM.stripsMax) issues.push({ key: 'task.issue.strips', code: 585, value: strips })
+  }
+  if (!insideWorldBounds(ring)) issues.push({ key: 'task.issue.outsideWorld' })
+  return issues
+}
+```
+
+校验结果在表单顶部 `Alert`（warning 描边）列出，阻断项使"预览分配"置灰；视口中问题顶点画红描边（warning 形态）。
+
+#### 20.9.3 预览分配（dry-run）
+
+"预览分配"发 `POST /sessions/{sid}/tasks?dry_run=true`（每会话 1 次/s；共享规划服务作业，扫描预算 2 s）。等待期间按钮内 `Spinner`，视口保持草稿几何；超过 1 s 时表单顶部显示"规划中"。返回后：
+
+```text
+┌ 预览：按 GSD 完整扫描 · 0.24 km² ─────────────────────────────────┐
+│ 派出 2 架 P600（机巢 N1）· 完工 8.0 min ≤ T_max 10.0 min             │ ← LfStat × 2
+│ 为什么是 2 架：1 架完工 12.8 min，超过 T_max                          │
+│ 航高 110 m · 焦距 10.6 mm · 条带宽 57.6 m · 间距 51.8 m · 8 条带       │
+│ 单站足迹上界 64 m（航高 120 m、离轴 15°）：区域不能由一架远距覆盖       │
+│ 直接覆盖 97.5% · 补拍航点 6 · 障碍格 0.24%（不计入分母）               │
+│ ┌ 完工时间 vs 架数 ─────────────────────────────┐                    │
+│ │ 12.8 o                                         │  ← LfLine（n = 1..4，│
+│ │  8.0      o───────────── T_max 10 min ─────     │    T_max 参考线；    │
+│ │  6.2           o     4.9 o                      │    选中 n 为主角点） │
+│ └────────────────────────────────────────────────┘                    │
+│ 分配：P600-02 条带 1–4 · P600-03 条带 5–8                              │ ← LfTable
+│ 可持续 7×24：不适用（扫描任务）                                         │
+│ [调整参数]                                         [启动任务]          │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+| 结果字段（17 §17.6.7 `TaskPlanPreview`） | 呈现 |
+|---|---|
+| `n_vehicles`、`makespan_s`、`t_max_s`、`why_n` | KPI 与一句"为什么是 n 架"（n − 1 架的完工时间超过 `T_max`，或可用同类机不足） |
+| `scan{h_m, f_mm, strip_w_m, spacing_m, n_strips, footprint_bound_m}` | 一行几何摘要；单站足迹上界说明固定显示（AWR-04 §8.3"约束的意义"） |
+| `coverage{direct_pct, fill_waypoints, obstacle_pct, visible_pct}` | 覆盖摘要；补洞后可见格覆盖的承诺为 100% |
+| `makespan_curve[{n, makespan_s}]` | `LfLine`，`T_max` 为参考线，被选 n 为主角（HERO 候选，表内唯一红色为该点） |
+| `assignments[{uav, nest, items[], eta_s}]` | 分配表（`LfTable`）；行悬停时视口高亮该机的条带与航段 |
+| `geometry`（子区、条带、补拍航点、航段、站位） | 规划图层以"计划"形态（前景色虚线，§11.3 planned）画出；预览态与运行态的差别只在线型（预览虚线、运行实线） |
+| `sustainability{verdict, bottlenecks[], windows[]}` | 接力与区域值守显示"可持续 7×24：是 / 否"与瓶颈码中文（`night_sensor` 夜间传感器不足、`los` 无视线可见站位、`weather` 天气、`airframe` 机体周转不足、`charger` 充电通道不足、`battery` 电池不足、`link_range` 链路距离、`wind` 抗风）；不可行时段按日历列出 |
+| 不可行（422 problem+json：码 580、581、585，`detail.why`、`detail.remedies[]`） | 580（`height`、`fleet_short`、`single_station_far_view`）、581、585 显示为表单顶部 `Alert`：原因中文 + 建议（例如"可用同类机 1 架，需 2 架：添加 1 架 P600 或开启多架次"，按钮"添加无人机"直达 §20.6.4） |
+
+"启动任务"= `POST /sessions/{sid}/tasks`（非 dry-run，携带与预览相同的参数与 `preview_id`，服务端在 60 s 内复用该预览结果，超期重算）；成功后页面关闭，Dock"任务"标签出现新行（列表进场动效），视口规划图层由虚线转实线。
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "secondaryColor": "#E4E6E9", "tertiaryColor": "#FBFBFC", "lineColor": "#5C616A", "textColor": "#111214", "mainBkg": "#F2F3F5", "nodeBorder": "#5C616A", "clusterBkg": "#FBFBFC", "clusterBorder": "#A7ABB3", "edgeLabelBackground": "#FBFBFC", "noteBkgColor": "#E4E6E9", "noteTextColor": "#111214", "noteBorderColor": "#81868F"}}}%%
+stateDiagram-v2
+  [*] --> TYPE
+  TYPE --> DRAWING: 选择任务类型
+  DRAWING --> DRAWING: 加点、移动、撤销重做
+  DRAWING --> PARAMS: 闭合或结束（前置校验无阻断项）
+  PARAMS --> DRAWING: 编辑几何
+  PARAMS --> PREVIEWING: 预览分配
+  PREVIEWING --> PREVIEWED: 200 可行
+  PREVIEWING --> INFEASIBLE: 422（580、581、585）
+  INFEASIBLE --> PARAMS: 调整参数
+  PREVIEWED --> PARAMS: 修改参数（预览作废，图层清除）
+  PREVIEWED --> STARTING: 启动任务
+  STARTING --> [*]: 201，任务进入 Dock
+  STARTING --> PREVIEWED: 拒绝（584、583），保留预览
+  TYPE --> [*]: 返回或 Esc
+```
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "secondaryColor": "#E4E6E9", "tertiaryColor": "#FBFBFC", "lineColor": "#5C616A", "textColor": "#111214", "mainBkg": "#F2F3F5", "nodeBorder": "#5C616A", "clusterBkg": "#FBFBFC", "clusterBorder": "#A7ABB3", "edgeLabelBackground": "#FBFBFC", "noteBkgColor": "#E4E6E9", "noteTextColor": "#111214", "noteBorderColor": "#81868F", "actorBkg": "#F2F3F5", "actorBorder": "#5C616A", "actorTextColor": "#111214", "signalColor": "#3E4249", "signalTextColor": "#111214", "activationBkgColor": "#E4E6E9", "activationBorderColor": "#5C616A", "sequenceNumberColor": "#FBFBFC"}}}%%
+sequenceDiagram
+  participant U as 访客
+  participant T as 新建任务页
+  participant A as sandbox-api
+  participant S as sim-core（M20 慢任务）
+  participant P as 共享规划服务
+  U->>T: 选类型、画多边形、填参数
+  T->>T: 前置校验（面积、顶点、条带粗估）
+  U->>T: 预览分配
+  T->>A: POST /tasks?dry_run=true
+  A->>A: 规模配额校验（585）
+  A->>S: ctl/sim-core/tasking {op: dry_run}
+  S->>P: ctl/plan/submit（GSD 反推、补洞、分配）
+  P-->>S: 计划（≤ 2 s 预算）
+  S-->>A: TaskPlanPreview（preview_id）
+  A-->>T: 200
+  T-->>U: 视口画计划图层与结果卡
+  U->>T: 启动任务
+  T->>A: POST /tasks {…, preview_id}
+  A->>S: call task/create（ADR-016 准入）
+  S-->>A: accepted，task.created
+  A-->>T: 201 {tid}
+```
+
+#### 20.9.4 任务面板（Dock"任务"标签）
+
+| 区域 | 组件 | 内容 |
+|---|---|---|
+| 工具条 | `ButtonGroup` | "新建任务"（op）；"显示规划图层"`Toggle`；筛选 `DropdownMenu`（运行中、已结束、不可行） |
+| 任务表 | `LfTable`（table.log） | 列：任务（标签 + 类型图标）、状态（规划中、就绪、运行中、已暂停、已完成、已取消、失败、不可行；`StateIcon`）、架数、进度（20 格刻度条；扫描为可见格覆盖 %、巡查为最近访问覆盖、巡线为圈数、定点为驻留）、完工或剩余（D 类）、发现动作、接力 KPI（覆盖率、间隙、被发现）；数据 `task/{tid}/status`（1 Hz） |
+| 行操作 | `DropdownMenu` | 开始、暂停、恢复、取消（AlertDialog）、在视口聚焦、查看分配（展开行内分配表与工作项状态）；区域值守行可展开其子任务（内部巡查、巡边与发现后生成的接力） |
+| 接力子页（`panel=relay`） | `LfStat` × 6 + `LfTable` | 覆盖率 `∫G dt / T`（%）、间隙次数与最大间隙（s，按原因分列）、被发现次数（目标 0，> 0 时红色文字）、交接次数与平均重叠（s）、最小禁入余量（m）、电池最短可用库存；在岗机与接替机（ETA、站位）；数据 `relay/{tid}/stats`（1 Hz） |
+| 曲线（P1） | `LfLine` | 覆盖率随时间曲线、间隙条码（L3 地板语汇） |
+
+工作项被重新分配（能量接替、手动接管、机体丢失）时，行内分配表更新并在事件面板写一条"编排"事件；不弹 Toast（避免接力运行中的高频提示），只有 `task.infeasible`、`relay.gap`（≥ 1 个感知周期）与 `task.state → FAILED` 弹 warning Toast。
+
+### 20.10 手动控制与传感器视图（R-D2-21、R-D2-14；AWR-04 §10.6）
+
+#### 20.10.1 接管、控制与释放
+
+| 状态 | 事件 | 守卫 | 动作 | 目标状态 |
+|---|---|---|---|---|
+| IDLE | 详情"手动控制"、右键"手动控制"或命令面板（不设单键：M 已用于书签） | operator 界面；焦点机 FlightState 允许 velocity（FLYING、HOLD；地面机先提示"先起飞"） | 若该机由任务（M20）或他人持有：AlertDialog"接管 P600-02？当前执行 区域值守 · 条带 3–4，接管后工作项将重新分配；手动控制期间沙盒倍速锁定 ×1" | CONFIRMING |
+| CONFIRMING | 确认 | — | `call uav/{id}/cmd/acquire`，随后 `call uav/{id}/cmd/velocity {frame: "body"（固定翼 "fw"）, hold_alt: false, keepout_guard: "clamp"}` 并 advertise CLIENT_DATA channel | ACQUIRING |
+| ACQUIRING | velocity 结果 running | — | 相机切到 FPV（或保持 Third，按设置）；注册 `manual` 作用域；显示键位提示浮层与虚拟摇杆；倍速控件置灰并显示"手动控制中 · 锁定 ×1" | ACTIVE |
+| ACQUIRING | 拒绝（100、105、114、117） | — | Toast 原因码文案 | IDLE |
+| ACTIVE | 输入变化 | — | setpoint 泵以 30 Hz 发 VelSetpoint16（§20.10.3） | ACTIVE |
+| ACTIVE | Esc（无更高层浮层时）、"释放"按钮 | — | 发 FINAL 包与 `velocity_stop`，`release {return_to: "none"}`；机体悬停（固定翼盘旋）待命并回到可用池 | STOPPING |
+| ACTIVE | "返回机巢" | — | `velocity_stop` 后 `rtl`，随后 `release` | STOPPING |
+| ACTIVE | WS 断开或看门狗 250 ms 无包 | — | 服务端悬停并以 `canceled 209 WATCHDOG` 结束 velocity（D1 规则）；重连后 UI 回到 IDLE 并 Toast"连接中断，已悬停" | IDLE |
+| ACTIVE | 租约被抢占（210）或安全动作（204） | — | 退出作用域，Toast 原因 | IDLE |
+| STOPPING | `velocity_stop` 与 `release` 完成 | — | 注销作用域；倍速解锁 | IDLE |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "secondaryColor": "#E4E6E9", "tertiaryColor": "#FBFBFC", "lineColor": "#5C616A", "textColor": "#111214", "mainBkg": "#F2F3F5", "nodeBorder": "#5C616A", "clusterBkg": "#FBFBFC", "clusterBorder": "#A7ABB3", "edgeLabelBackground": "#FBFBFC", "noteBkgColor": "#E4E6E9", "noteTextColor": "#111214", "noteBorderColor": "#81868F"}}}%%
+stateDiagram-v2
+  [*] --> IDLE
+  IDLE --> CONFIRMING: 手动控制（operator，状态允许）
+  CONFIRMING --> ACQUIRING: 确认接管
+  CONFIRMING --> IDLE: 取消
+  ACQUIRING --> ACTIVE: velocity running
+  ACQUIRING --> IDLE: 拒绝
+  ACTIVE --> STOPPING: Esc、释放或返回机巢
+  ACTIVE --> IDLE: 看门狗、抢占或断线
+  STOPPING --> IDLE: 停止与释放完成
+```
+
+#### 20.10.2 `manual` 键位作用域
+
+热键注册表增加作用域 `manual`（`ui/hotkeys/registry.ts` 的 `HotkeyScope` 加 `'manual'`），只在 ACTIVE 时注册；匹配优先级：获得焦点组件自身的键 > `manual` > 工具态 > 编辑模式 > 列表或视口 > 全局（D1 §6.10 冲突规则 4 的扩展）。作用域内相机自由键暂停（相机为 FPV 或跟随）。
+
+| 键 | 多旋翼 | 固定翼与垂起 FW 模式 | 说明 |
+|---|---|---|---|
+| W / S | 前进 / 后退（机体系 x） | 空速 +1 / −1 m/s（按住 5 Hz 连发，夹在 `[V_min, V_max]`） | 与 D1 自由相机的 WASD 语义一致 |
+| A / D | 左移 / 右移（机体系 y） | 左转 / 右转（转弯率） | — |
+| Q / E | 下降 / 上升 | 下沉 / 爬升 | 与 D1 Q/E 方向一致 |
+| ← / → | 左偏航 / 右偏航 | 同 A / D | 作用域内屏蔽单步与回退 |
+| ↑ / ↓ | 云台俯仰 +5° / −5° | 同左 | 新增，作用域内 |
+| C | 速度档循环：慢、常、快 | 同左 | 当前档显示在 HUD |
+| B | 传感器视图循环：FPV、日视、夜视、热像 | 同左 | FPV 相机下全局可用（不限作用域） |
+| `-` / `=` | 变焦缩小 / 放大（一档 = 当前焦距 ×0.8 / ×1.25） | 同左 | 发 `zoom`，≤ 4 次/s 合并 |
+| I | 夜视主动照明开关 | 同左 | 只在夜视视图 |
+| Shift+R / Shift+L / Shift+X | 返航 / 降落 / 安全停止（作用于被控机，D1 全局安全键） | 同左 | 飞行键不用 Shift，安全键不会被误触 |
+| Esc | 分级取消：先关最上层浮层；无浮层时退出手动控制（停止并释放） | 同左 | — |
+| F、Space、G、数字键 1–5 | 屏蔽（作用域内无效，提示条闪烁"手动控制中"一次） | 同左 | 避免误切相机与暂停 |
+
+接管时显示键位提示浮层（`Card size="sm"`，未遮挡区左上，可折叠，`KbdGroup`），ShortcutHelp 对话框登记"手动控制"分组。
+
+#### 20.10.3 虚拟双摇杆与 setpoint 泵
+
+```text
+┌───────────────────────────────── FPV 视口（P600-02，手动控制，夜视 · 主动照明）──────────────────────────────────┐
+│ 手动控制 · P600-02 · 档：常 · 锁定 ×1                                  [释放 Esc] [返回机巢]                     │
+│                                         ┌──────────────┐                                                    │
+│                                         │  人-01  识别 R │  ← 捕获框（投影包围盒）                              │
+│                                         │  9.6 / 14 px  │  ← 像素进度；限制：照度不足                            │
+│                                         └──────────────┘                                                    │
+│                                                +                                                            │
+│ 航向 045° AGL 62 m 速度 3.1 m/s 电量 71% │ f 22 mm · HFOV 14.5° · 斜距 312 m · GSD 4.1 cm                          │
+│ 预计 2.4 s 后进入 人-01 的视觉敏感范围（已限速）                                                                   │
+│   ┌──────┐                                                                              ┌──────┐               │
+│   │  o   │  左摇杆：升降、偏航                                                          │   o  │  右摇杆：前后、左右 │
+│   └──────┘                                                                              └──────┘               │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+| 项 | 规则 |
+|---|---|
+| 显示 | 手动控制 ACTIVE 时出现；设置"手动控制 › 显示虚拟摇杆"缺省为"自动"（检测到 `pointer: coarse` 或用户点击过摇杆时显示，键盘用户可隐藏）；摇杆为 DOM 圆盘（直径 120 px），只写 transform |
+| 映射（多旋翼，frame body） | 右摇杆 x → `vel.y`（左正，FLU），y → `vel.x`；左摇杆 y → `vel.z`，x → `yaw_rate`（逆时针正）；死区 0.08，指数 0.3：`u' = sign(u)·(0.7·|u| + 0.3·|u|³)`（去死区后重新归一） |
+| 映射（固定翼，frame fw） | 右摇杆 y → 空速增量（每秒 ±2 m/s 积分到指令空速），x → 转弯率；左摇杆 y → 爬升率；`vel = [V_cmd, NaN, climb]`、`yaw_rate = turn_rate`（17 §17.7.6） |
+| 速度档 | 多旋翼 水平 2 / 5 / `min(vmax, 10)` m/s，垂直 1 / 2 / 3 m/s，偏航 0.4 / 0.8 / 1.2 rad/s；固定翼 转弯率为 `{0.33, 0.66, 1.0}·g·tan φ_max / V_a`，爬升为 `{0.33, 0.66, 1.0}·climb_max` |
+| 键盘合成 | 按键为 ±1 的阶跃输入，经 150 ms 一阶平滑（避免指令阶跃），与摇杆取绝对值较大者 |
+| 发送 | setpoint 泵 30 Hz（33 ms，`setInterval` 在 rt.worker 内执行，主线程只写共享输入状态）；输入归零后继续以 0 速发 5 个包再停发，松开全部输入不等于释放；释放时发 FINAL 包（CLIENT_DATA flags bit0）并调用 `velocity_stop`；页面不可见（`visibilitychange`）时立即发 FINAL 并停发，服务端看门狗兜底 |
+
+```ts
+// 伪代码：ui/manual/setpointPump.ts（M15）；在 rt.worker 中按 30 Hz 运行，零分配
+const out = new Float32Array(4)                  // VelSetpoint16：vel[3]、yaw_rate
+function tick(inp: ManualInput, tier: SpeedTier, fw: boolean, va: number): void {
+  const k = TIERS[tier]
+  if (!fw) {
+    out[0] = shape(inp.fwd) * k.h; out[1] = shape(-inp.right) * k.h
+    out[2] = shape(inp.up) * k.v;  out[3] = shape(-inp.yawRight) * k.yaw
+  } else {
+    vCmd = clamp(vCmd + shape(inp.fwd) * 2 * DT, vMin, vMax)
+    out[0] = vCmd; out[1] = NaN; out[2] = shape(inp.up) * k.climb
+    out[3] = shape(-inp.yawRight) * k.turnFrac * G * Math.tan(phiMax) / Math.max(va, vMin)
+  }
+  sendClientData(channelId, seq++, simNowNs(), out, /*final*/ false)   // 17 §6.4 CLIENT_DATA
+}
+```
+
+#### 20.10.4 敏感范围保护
+
+1. **始终显示禁入体**：手动控制期间敏感体与禁入体图层强制显示（不受图层开关影响），被控机最近的三个禁入体加粗。
+2. **接近告警（客户端预测）**：每 100 ms 以被控机位置 `p` 与速度 `v`（Full64，60 Hz 插值后的值）对每个启用的配置体计算 `d`（到边界的有符号距离，体外为正；球与半球按三维、柱与扇形按水平；运动识别物扇形按整圆）与 `t_hit = d / max(ε, −v·n)`；`t_hit ≤ 3 s` 时 HUD 显示"预计 t s 后进入 <识别物> 的<视觉/声学>敏感范围"，并弹 warning Toast（合并键 `manual:keepout:<target>`，5 s 内不重复）。
+3. **软围栏（服务端执行）**：velocity 调用的 `keepout_guard` 缺省 `clamp`：sim-core 在把 setpoint 交给 L1 之前去掉朝禁入体方向的速度分量（17 §17.7.6），被钳制时该 velocity 调用的 `progress` 帧带 `warnings: ["KEEPOUT_CLAMPED"]`，并发 `uav.keepout_guard` 事件（均 ≤ 1 Hz），HUD 显示"已限速"。设置"手动控制 › 软围栏"关闭时改发 `keepout_guard: "warn"`，进入配置体即按判据计发现；关闭开关需 AlertDialog 确认"关闭后进入敏感范围将被识别物发现"。SDK 调用同一参数，因此 API 客户端与界面行为一致。
+4. **时钟**：手动控制期间沙盒倍速由 sim-core 锁定 ×1（`sim/speed` 返回 117，detail `MANUAL_CONTROL`）；Timeline 倍速控件置灰并显示原因（AWR-04 §4.4.5 第 4 条）。
+
+#### 20.10.5 传感器视图
+
+| 控件 | 位置 | 组件 | 作用 | 接口 |
+|---|---|---|---|---|
+| 视图切换 FPV / 日视 / 夜视 / 热像 | FPV 顶部工具条 | `ToggleGroup`（`toggle-group-indicator`，配方 16）+ 键 B | 切换 M06 的着色变体（视觉近似，不回流判据） | 本地 |
+| 传感器选择 | 同上 | `Select` | 选择该机挂载的成像传感器（例如 GX40、LWIR 100 mm）；视图与所选传感器的 FOV、焦距绑定 | 本地；读 `uav/{id}/payload` |
+| 变焦 | 右侧竖条 | `Slider`（`[f_min, f_max]` mm，对数刻度）+ 键 `-` / `=` | 改焦距；LWIR 数字变焦标注"只影响显示" | `call zoom`（op） |
+| 云台 | FPV 内右键拖动或 ↑ / ↓ | — | 俯仰与偏航（俯仰 −90°…+30°，偏航 ±160°） | `call gimbal {mode: "angles"}`（op，拖动松开时发） |
+| 跟踪 | 工具条 | `Button`"跟踪识别物" + `Select` | 云台锁定识别物 | `call gimbal {mode: "track", target}`（op） |
+| 主动照明 | 夜视视图工具条 | `Switch` + 键 I | 开关机内或外挂照明器；显示当前作用距离 `R_nir` | `call sensor/mode {illum: {builtin, ext}}`（op，AWR-04 §11.2 的统一载荷） |
+| 调色板 | 热像视图工具条 | `ToggleGroup`：白热、黑热 | 只有两种灰阶（AWR-04 §10.7，无伪彩） | `call sensor/mode {palette}`（op，便于 API 读取一致）；viewer 本地切换 |
+| 分辨率 | 传感器 HoverCard | `Select`：1080P、4K（需 `compute.orin_nx`） | 分析分辨率 | `call sensor/mode {resolution}`（op） |
+
+viewer（共享展示）可在任意 S7 机上使用视图切换、传感器选择与调色板（本地显示），变焦与云台跟随该机的实际状态（只读，`uav/{id}/payload`），不发任何写请求（D2-AC-37）。视图切换不改变 S7 的传感器状态。
+
+渲染约束（M06 实现，本文约束可见行为）：三种着色变体进入 shader zoo 并在遮罩下预热，首次切换 programs 增量为 0、切换 ≤ 300 ms（D2-AC-21）；夜视为单色并按照明锥与 `R_nir` 衰减亮度、被动低照时加噪；热像以识别物类别模板与 `ΔT` 近似画热斑、背景按 DSM 与日历近似；视图只是近似，HUD 判据数值只来自 `uav/{id}/perception`；热像视图除捕获框外不得出现红色像素（D2-AC-25）。
+
+#### 20.10.6 HUD 像素进度与限制因素
+
+| HUD 元素 | 数据（`uav/{id}/perception`，5 Hz） | 规则 |
+|---|---|---|
+| 捕获框 | 视锥内识别物的投影包围盒（由 TargetLite32 位置与类别尺寸在客户端投影） | 未捕获：前景色细描边；P ≥ 0.9 达到所需等级并计时中：描边 + 计时环 `t / 1.0 s`；已明确捕获：实线描边 + `BadgeCheck`，作为该图的 HERO 候选可取红（同图无未确认 critical 时） |
+| 像素进度 | `n_eff`、`n_req`、`level_req` | "识别 R · 9.6 / 14 px"（C 类，≤ 4 Hz） |
+| 限制因素 | `limiting` | `fov` 不在视锥内、`los` 视线被遮挡、`pixels` 像素不足（建议放大或靠近）、`light` 照度不足（建议开启照明或改用热像）、`contrast` 对比度不足、`blur` 运动模糊（建议减速或跟踪） |
+| 传感器读数 | `f_mm`、`hfov_rad`、`range_m`、`gsd_m`；LWIR 另有 `delta_t_app_k` | 一行 C 类文字 |
+| 多目标 | 视锥内多个识别物 | 只对最近的一个显示像素进度与限制因素，其余只画框（≤ 8 个） |
+
+### 20.11 捕获与被发现提示（R-D2-12、R-D2-09；AWR-04 §10.7）
+
+#### 20.11.1 事件 → 呈现
+
+事件名、`level` 与 data 字段以 17 §17.7.5 为准；"级别"为 UI 呈现级别（§11.1）。
+
+| 事件 | 级别 | Toast（合并键；时长） | 列表与详情 | 3D | 事件表筛选 | Timeline 标记 |
+|---|---|---|---|---|---|---|
+| `perception.capture` | info | "已明确捕获 人-01 · P600-02 日视 · 识别 R"（`perception:capture:<target>`；同一识别物 30 s【墙钟】内只提示一次，4 s） | 识别物行"已捕获"；无人机行当前工作项后加"捕获 人-01" | 识别物环加 `BadgeCheck`；FPV 捕获框转实线 | 感知 | DATA 实心点 |
+| `perception.capture_lost` | info | 无（只在 FPV 捕获框与事件表体现） | "已捕获"`Badge` 移除 | 角标移除 | 感知 | 否 |
+| `perception.level` | info | 无 | 最佳等级更新（≤ 4 Hz） | 环样式更新 | 感知（缺省折叠，事件量大） | 否 |
+| `target.discovered` | critical | "人-01 发现了 P600-02（视觉，148 m）· [确认]"（`target:discovered:<target>`；常驻直到确认或平复） | 计数 + 红徽标；详情"最近一次被发现" | 红色仲裁候选（§20.11.2） | 识别物 | 仲裁胜出者实心，其余八边形描边 |
+| `target.state`（感知态变化） | info | 无 | 感知态 `StateIcon`（04 text-swap） | 字形旁图标 | 识别物 | 否 |
+| `uav.keepout_guard` | warning | "已限速：接近 人-01 的视觉敏感范围"（`manual:keepout:<target>`；5 s） | — | 禁入体加粗 1 s | 编排 | 否 |
+| `relay.dispatch`、`relay.handover` | info | 无 | 接力子页更新 | 接替机航段闪现（04，2 s） | 编排 | `relay.handover` 为 DATA 点 |
+| `relay.gap` | warning | "接力出现间隙 12 s（原因：昼夜切换）"（`relay:gap:<tid>`；6 s） | 接力子页间隙计数 | — | 编排 | 空心三角 |
+| `task.state`（→ FAILED、INFEASIBLE） | warning | "任务 区域值守 不可行：夜间传感器不足"（`task:<tid>:<code>`） | 任务行状态 | — | 编排 | 空心三角 |
+| `task.created`、`task.state`（其余）、`task.allocated`、`task.reallocated`、`nest.launch`、`nest.recover`、`nest.swap_done` | info | 无 | 任务表、机巢详情 | 机巢标记短文字 | 编排 | 否 |
+| `perception.detect`（雷达、声阵列、激光雷达的检测） | info | 无 | 单机详情"感知"标签 | FPV 中方位指示（不画识别物框，非成像检测不给识别物 id） | 感知 | 否 |
+| `nest.dispatch_delayed` | warning | "机巢 N1 派遣延后：电池不足"（`nest:<id>:delay`；6 s） | 机巢"电池"行 warning 描边 | — | 编排 | 否 |
+| `fw.wind_exceeds` | warning | "F1-01 风速超过盘旋能力，改为逆风等待航线" | 行状态 | — | 编排 | 否 |
+| `sandbox.expiring` | warning | §20.4.6（常驻倒计时） | 会话条 | — | 沙盒 | 否 |
+| `sandbox.rate` | info | "本会话可达倍速 ×5（CPU 预算）"（`sandbox:rate`；只在授予值下降时） | 会话条倍速 | — | 沙盒 | 否 |
+| `session.switched`（沙盒切换底图或载入场景） | info | "已载入场景 T5"（纪元 + 1，D1 §7.7 对账） | 全部列表重建 | — | 沙盒 | 段边界 |
+
+事件面板新增四个筛选（`ToggleGroup` 多选）：感知、识别物、编排、沙盒；"感知"缺省只显示 capture 与 capture_lost，`perception.level` 需展开"显示等级变化"。告警中心（§11.5）只收 warning 与 critical。
+
+#### 20.11.2 "一处红"候选扩展（§11.2 的增量）
+
+| 图 | 红色实心候选（按优先级） | 备注 |
+|---|---|---|
+| 3D 视口 | 未确认的 critical：无人机（D1 严重度 5、6、8）与被发现的识别物（`RedCandidate {entity: {kind: 'target', id}, level: 'critical', rank: 5}`）→ 焦点机 | rank 5 与 ELAND 同级，同级取最新（`lib/redArbiter.ts` 已支持 `kind: 'target'`）；确认后退为红描边加 `OctagonAlert`；多个被发现时取最新者，其余红描边 |
+| FPV 传感器视图（一张图） | 视野内未确认的被发现识别物 → 已明确捕获的捕获框（HERO） | 热像视图除捕获框外无红色像素 |
+| 识别物列表 | 最新未确认被发现行的计数徽标 | 选中态不用红 |
+| 任务表 | 最新 FAILED 或 INFEASIBLE 行（hot 单元格） | 接力"被发现次数"> 0 时该 KPI 为红色文字（不占实心） |
+| 预览结果卡 | 完工曲线中被选 n 的点（HERO） | — |
+| 会话条（顶栏这张图的一部分） | 无实心；剩余 ≤ 60 s 时数字为红色文字 | 顶栏实心名额仍只给告警计数徽标（§11.2） |
+| 机巢详情、排队卡片、OpenAPI 页 | 无 | — |
+
+"确认"沿用 D1 语义（每个客户端自己的 UI 状态，不上线）；被发现 Toast 的"确认"与告警中心的"确认"同一状态。
+
+### 20.12 底图切换与静态浏览（R-D2-25、R-D2-28；ADR-109）
+
+#### 20.12.1 World Hub（七个世界）
+
+D1 §5.1 的卡片增加：沙盒可用性 `Badge`（"可立即开沙盒""容量不足，可排队""暂不可用"，取 `GET /api/sandbox/v1/worlds` 的 `available` 与 `admit_now`）、"在此城市开沙盒"按钮（打开 §20.4.1 的 Sheet 并预选该世界）、规模档（S 级或 L 级，L 级卡片说明"大城市占用更多资源，可能需要排队"）。UrbanScene3D 六城卡片底部固定一行说明"UrbanScene3D 数据，经数据集权利方授权使用 · 引用"（"引用"打开 `Popover` 显示 ECCV 2022 BibTeX，可复制）；synthcity 卡片保留"程序生成 · 示意坐标"。演示构建的 `demoWorlds()` 不再只列 synthcity（`lib/demo.ts` 的 `DEMO_WORLDS` 改为取服务端白名单）。
+
+#### 20.12.2 沙盒内切换底图
+
+| 步 | 交互 | 接口与反馈 |
+|---|---|---|
+| 1 | 左栏 WORLD"切换底图…"或菜单"世界 › 切换底图…" | Dialog：世界 `Select`（带可用性 Badge）、提示"切换底图会在新城市重启仿真并载入同名场景模板（当前模板 T5 → shanghai 的 T5），机队、识别物、机巢与任务不会搬运坐标" |
+| 2 | 可选"先导出快照" | `GET /sessions/{sid}/snapshot` 下载 |
+| 3 | "切换" | `POST /sessions/{sid}/world {world, template}`；准入不通过时 409 码 508（Dialog 内显示可立即开始的世界）或 507 |
+| 4 | 等待 | 画布显示切换加载卡（§20.3.4），会话条"正在新城市启动沙盒"；WS 保持（sandbox-api 在 sim-core 重启后重发 `serverInfo`，纪元 + 1） |
+| 5 | 完成 | 加载卡淡出；info Toast"已切换到 shanghai · 载入场景 T5"；相机到该世界模板的初始视角 |
+
+快照只能在同一世界导入（快照的 `world_id` 不同时导入被拒，§20.4.6 第 5 条）。
+
+#### 20.12.3 静态浏览（共享展示 viewer）
+
+`/world/:id`（非共享展示世界）只加载点云与地形，不建 WS；顶部 info 横条"静态浏览：此城市没有运行中的仿真 · [在此城市开沙盒] [回到共享展示]"（D1 §6.16 横条的改写）；右栏实体切换与 Dock"任务"为 `Empty`；GSD 计算器与机型目录可用。静态浏览不依赖派生缓存（AWR-04 §4.4.7 第 2 条）。
+
+### 20.13 新手引导、场景模板与共享展示可用交互
+
+#### 20.13.1 场景模板
+
+模板列表与首次反馈以 AWR-04 §10.4 为准（T1–T6，缺省 T5）。UI 规则：
+1. Sheet 与"载入场景"Dialog 中，模板以 `RadioGroup` 呈现，每项第二行为"首次反馈"（例如"约 40 s 明确捕获"）；
+2. T6（手动飞行）的仿真时段缺省夜间，Sheet 中切到 T6 时时段 ToggleGroup 自动选"夜间"并提示"夜间更能体现夜视与热像"（可改）；
+3. 载入任何模板后，若该模板定义了"引导焦点"（例如 T5 的接力目标"人-01"），相机飞到该识别物上方的模板视角，并把它设为选中识别物。
+
+#### 20.13.2 新手引导（4 步，可跳过）
+
+```text
+                ┌ 1 / 4 · 你的沙盒 ─────────────────────────────┐
+                │ 这是只属于你的仿真。剩余时间到期前会自动续期，      │  ← Popover，锚定会话条
+                │ 有访客排队时暂停续期。                            │
+                │ [跳过引导]                    [上一步] [下一步]   │
+                └──────────────────────────────────────────────────┘
+```
+
+| 步 | 锚点 | 文案要点 | 完成条件 |
+|---|---|---|---|
+| 1 | 会话条 | 你的沙盒、剩余寿命与续期、可达倍速 | 下一步 |
+| 2 | 右栏实体切换"识别物" | 识别物与敏感范围；"无人机进入敏感范围并驻留就会被发现" | 下一步，或访客点开识别物 |
+| 3 | Dock"任务"标签 | 区域值守已在运行；点"查看分配"在视口看子区、条带与站位；新建任务可"预览分配" | 下一步，或访客打开分配 |
+| 4 | Toast 视口（无 Toast 时锚定焦点机的 FPV 按钮） | 明确捕获会在这里提示；用 FPV 与夜视、热像查看像素进度 | 完成 |
+
+规则：首次进入 READY 的沙盒时出现（`awr.ui.onboarding.v1.done = false`）；`Popover` 非模态，不 `inert` 其他区域，不抢焦点（第一次出现时 `role="status"` 播报标题），键盘 ←/→ 换步（焦点在引导内时），Esc 或"跳过引导"结束并记录 `done = true`；任一步锚点不可见（栏收起、紧凑档）时锚定到未遮挡区顶部中点；切换步骤用 05 menu-dropdown 配方；帮助菜单"新手引导"可重新开始。引导期间仿真照常运行（不暂停）。
+
+#### 20.13.3 访客路径预算（D2-AC-34）
+
+| 段 | 动作 | 预算（Tier S，本机） |
+|---|---|---|
+| 落地页 | 第 1 次点击"开启我的沙盒"、第 2 次点击"开始"（缺省 synthcity + T5） | 交互 ≤ 2 s；创建请求 ≤ 1 s（与应用启动并行的沙盒启动 ≤ 6 s） |
+| 应用启动 | 整页加载、进度条、揭开 | ≤ 20 s（DEMO-PUBLIC 实测 Tier S 约 17 s） |
+| T5 运行 | 首次 `perception.capture` | 模板设计目标：会话 ACTIVE 后 ≤ 60 s【仿真，×1】（§20.24 第 4 条） |
+| 合计 | 落地页到第一次捕获 Toast | ≤ 3 次点击（引导不计点击：非模态、可忽略）、≤ 90 s |
+
+#### 20.13.4 共享展示（viewer）可用交互（AWR-04 §10.3）
+
+| 交互 | 入口 | 数据 | 不产生写请求的保证 |
+|---|---|---|---|
+| 任意 S7 机的 FPV 与日视、夜视、热像视图，HUD 像素进度 | 选中机 → FPV（键 4）→ 视图切换（键 B） | 订阅 `uav/{id}/perception@5`、`uav/{id}/payload@2` | 变焦、云台、照明在 viewer 界面不渲染为可操作控件 |
+| 识别物列表与详情（只读），配置体与有效体切换 | 右栏实体切换 | `swarm/target/state`、`target/{id}/detail@2` | 详情页无写按钮 |
+| 接力统计 | Dock"任务 › 接力" | `relay/{tid}/stats@1` | — |
+| 机型目录与 P600 参数 | 右栏"机型目录" | `GET /api/sandbox/v1/catalog/*`（公开、可缓存） | 无"克隆编辑" |
+| 六城静态浏览 | World Hub | 静态世界文件 | 不建 WS |
+| GSD 与识别距离计算器 | 工具菜单"GSD 计算器"、机型目录详情 | 前端纯函数 | 纯本地 |
+
+满员排队期间以上交互全部可用；D2-AC-37 以拦截全部 WS `call` 与 REST 非 GET 请求计数为 0 验证。
+
+#### 20.13.5 GSD 与识别距离计算器
+
+```text
+┌ GSD 与识别距离计算器（Sheet 480 px）──────────────────────────────────┐
+│ 机型 [P600 v]  传感器 [GX40 EO v]  分辨率 [1080P|4K]                     │
+│ 焦距   4.8 ━━━━━━━━━━━━━o━━ 48 mm    当前 48.0 mm                        │
+│ 识别物 [人 v]  观察方向 [平视|俯视|最不利]   所需等级 [D|R|I]             │
+│ 斜距   [ 600 ] m     照度 [日间|低照|夜间]   能见度 MOR [10 km v]           │
+│ ── 结果 ──────────────────────────────────────────────────────────── │
+│ GSD 3.6 cm · 关键维度 0.72 m · 像素 N 19.9 px                            │
+│ P(D) 1.00 · P(R) 0.98 · P(I) 0.84                                        │
+│ P ≥ 0.9 最大斜距：D 3404 m · R 851 m · I 532 m（未计消光与对比度）        │
+│ 可行窗口（geometric，模板敏感半径）：320–850 m · 限制：像素                 │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+```ts
+// 伪代码：engine/perception/calc.ts（M19 的 TypeScript 移植；与 python/awr/sim/perception 同一公式，单测对拍 ≤ 1%）
+function pEff(s: SensorSpec, res: Res): number { return s.pixel_m * s.wNative / res.wOut }      // 等效像元
+function pPrime(s: SensorSpec, res: Res, lambda_m: number, fNum: number): number {
+  return Math.max(pEff(s, res), lambda_m * fNum)                                                // 衍射约束
+}
+function dCrit(t: TargetDims, epsRad: number, betaRad: number): number {                       // 投影关键维度
+  const { l, w, h } = t
+  const A = Math.abs(Math.sin(epsRad)) * l * w
+          + Math.abs(Math.cos(epsRad)) * (Math.abs(Math.cos(betaRad)) * w * h + Math.abs(Math.sin(betaRad)) * l * h)
+  return t.criticalOverride ?? Math.sqrt(A)
+}
+function ttpf(n: number, n50: number): number {
+  const x = n / n50, e = 2.7 + 0.7 * x, q = Math.pow(x, e)
+  return q / (1 + q)
+}
+function compute(i: CalcInput): CalcOutput {
+  const pp = pPrime(i.sensor, i.res, i.lambda_m, i.fNum(i.f_m))
+  const gsd = i.range_m * pp / i.f_m
+  const dc = dCrit(i.target, i.epsRad, i.betaRad)
+  const n = dc * i.f_m / (i.range_m * pp)
+  const levels = { D: 1.0, R: 4.0, I: 6.4 }                                                     // N50（周期）× 2 像素
+  const p = mapValues(levels, n50c => ttpf(n, 2 * n50c))
+  const rMax = mapValues(levels, n50c => dc * i.f_m / (2 * n50c * X90 * pp))                    // X90 = 1.7505（P = 0.9）
+  const win = feasibilityWindow(i)                                                               // 只计 k_light、τ、k_c 的解析部分
+  return { gsd, dc, n, p, rMax, win }
+}
+```
+
+计算器只给"未计消光与对比度"的几何上限与解析可行窗口，结果区注明"判据以服务端感知为准"；滑块拖动时 ≤ 10 Hz 重算（C 类，tabular-nums）。
+
+### 20.14 开放接口文档页 `/sandbox/api`
+
+```text
+┌ 顶栏（D1）─────────────────────────────────────────────────────────────────────────────────────────┐
+│ 开放接口 · 沙盒 REST v1  [OpenAPI 3.1 下载] [Python SDK 下载]   你的会话：sb-k3m9q2x7ab（剩余 27:41）    │
+├──────────────────────┬─────────────────────────────────────────────────────────────────────────────┤
+│ 会话 Sessions        │ POST /api/sandbox/v1/sessions/{sid}/vehicles/{vid}/commands                  │
+│ 机型目录 Catalog     │ 对单机发起命令（与 WS call 同一准入与幂等）                                     │
+│ 无人机 Vehicles   [v]│ 参数   名称        位置   类型     必填  说明                                    │ ← LfTable
+│  · 列表与增删        │        sid        path   string   是    沙盒 id                                   │
+│  · 状态与传感器      │        id         body   string   否    call id，60 s 幂等                        │
+│  · 命令            ← │ 请求示例 [curl|Python SDK]                                       [复制]          │ ← Tabs + 代码块
+│ 感知 Perception      │ 响应   200 首个 result 帧 · 4xx problem+json（码 100、110、114 …）                │
+│ 识别物 Targets       │ 实时   对应 WS：call uav/{id}/cmd/{op}                                           │
+│ 机巢与任务 Tasking   │                                                                              │
+│ 环境 Env             │                                                                              │
+│ 实时 WS              │                                                                              │
+└──────────────────────┴─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| 项 | 规则 |
+|---|---|
+| 数据 | 运行时取 `GET /api/sandbox/v1/openapi.json`（公开），按 `tags` 分组；不引入 Swagger UI 或 Redoc（设计体系约束，AWR-04 §11.4） |
+| 组件 | 左侧 `Sidebar`（分组 `Collapsible`）；右侧 `Card`：方法 `Badge`（GET、POST、PATCH、DELETE 用文字区分，不用颜色区分）、路径（等宽）、说明、参数表（`LfTable`）、请求与响应示例（`Tabs`：curl、Python SDK；代码块为 `pre`，等宽字体，`Copy` morph `Check`）、错误码列表（链接到 §20.16 的原因码文案）、"实时对应"一行 |
+| token | curl 示例中 token 一律写占位 `$AWR_SANDBOX_TOKEN`；持有会话时提供"复制我的 token"按钮（点击才复制，页面不明文显示），并提示"token 只对你的沙盒有效，到期自动失效" |
+| 实时 | "实时 WS"分组为静态说明：端点、子协议、topic 表与载荷字段（来自 17 §17.7，构建期生成为 `ui/sandbox/rtDoc.gen.json`） |
+| 快照一致 | 页面渲染的路由集合与 `packages/contracts/rest/sandbox.openapi.snapshot.json` 一致（CI，D2-AC-22） |
+
+### 20.15 组件映射（shadcn、morphicons、lieflat、transitions.dev）
+
+#### 20.15.1 区域 → 组件
+
+组件一律来自 `ui/components/ui`（shadcn base-mira，D1 §4.7 的 44 个已安装组件即可覆盖，D2 不新增 shadcn 组件；`calendar`、`drawer`、`chart` 仍禁用）。"动效"列引用 §8.2 与 §20.15.4 的编号，"图标"列引用语义 key。
+
+| 区域与元素 | 组件组合 | 动效 | 图标 | lieflat | 所有者 |
+|---|---|---|---|---|---|
+| 启动遮罩进度条 | 既有 DOM 节点（`index.html`）+ `BootProgress` | #33 | — | — | M15 |
+| 落地页"开启我的沙盒" | `Button` + `Sheet side="right"` > `Field`、`Select`（`items`）、`RadioGroup`、`ToggleGroup`、`Progress`、`Spinner` | 8、#37 | `sandbox.mine` | — | M15 |
+| 排队卡片 | `Card size="sm"` + `Button` + `Progress`（倒计时） | #35、15 | `state.hold` | — | M15 |
+| 会话条 | 自研条（`--z-banner`）> `Badge`、`HoverCard`、`Button size="sm"`、`DropdownMenu`（紧凑档）、`AlertDialog` | #34、14、15 | `sandbox.mine`、`env.time` | — | M15 |
+| 会话结束 | `AlertDialog` | 7 | `sandbox.mine` | — | M15 |
+| 右栏实体切换 | `ToggleGroup`（单选，`toggle-group-indicator`） | #36 | `drone.quad`、`target.person`、`nest.box` | — | M15 |
+| 无人机列表（增强） | D1 DroneRail（`Item`、虚拟化）+ `Badge`（机型） | 21 | 机型类别图标 | — | M15 |
+| 机型目录与克隆编辑 | `Sheet`（560 px）> `ToggleGroup`、`InputGroup`、`Card`、`Accordion`、`Table`、`FieldGroup`、`Field`、`Slider` | #37、3、18 | `drone.quad`、`fw.plane` | `LfTable` | M15（store M21） |
+| 传感器标签 | `Tabs`（详情）> `Table`、`Slider`、`InputGroup`、`Switch`、`Select`、`ToggleGroup` | 4、12 | `sensor.*` | `LfTable` | M15（store M19） |
+| 识别物列表与详情 | `Item`、`Badge`、`StateIcon`、`DropdownMenu`、`Field`、`Slider`、`ToggleGroup` | 21、14 | `target.*` | — | M15（store M18） |
+| 识别物高级属性 | `Sheet` > `Accordion`（九组）> `FieldGroup` | #37、2 | `target.*`、`sound.wave` | `LfLine`（波形，P1） | M15（store M18） |
+| 敏感体表 | `Table`（行内 `InputGroup`、`Select`、`Switch`）+ `Button` | — | `sens.visual`、`sens.acoustic` | `LfTable` | M15（store M18） |
+| 机巢详情 | `Item`、`Table`、`Badge`、`Button` | 15 | `nest.*` | `LfTickRows`（充电通道）、`LfTable` | M15（store M20） |
+| 新建任务页 | `ToggleGroup`（七类型）+ `Alert`（工具提示条）+ `FieldGroup` + `Collapsible`（公共参数）+ `Button` | 3、11、18 | `task.*` | — | M15（store M20） |
+| 预览结果卡 | `Card` > `LfStat`、`LfLine`、`LfTable`、`Alert` | #43、#44 | `task.*` | `LfStat`、`LfLine`、`LfTable` | M15 |
+| 任务面板 | Dock `Tabs` > `LfTable` + 行内刻度条 + `DropdownMenu` + `Collapsible`（子任务） | 4、21 | `task.*` | `LfTable`、20 格刻度条 | M15（store M20） |
+| 接力子页 | `LfStat` × 6 + `LfTable`；曲线 P1 | 30 | `task.relay` | `LfStat`、`LfLine`（P1） | M15 |
+| 手动控制确认 | `AlertDialog` | 7 | `manual.stick` | — | M15 |
+| 键位提示浮层 | `Card size="sm"` + `KbdGroup` + `Collapsible` | 26 | `manual.stick` | — | M15 |
+| 虚拟摇杆 | 自研 DOM（不是 shadcn 控件，lint 白名单登记 `ui/manual/VirtualSticks.tsx`） | #45 | — | — | M15 |
+| 传感器视图工具条 | `ToggleGroup`、`Select`、`Slider`（竖向）、`Switch`、`Button` | #36、#46 | `cam.fpv`、`sensor.camera`、`sensor.nir`、`sensor.thermal` | — | M15（着色 M06） |
+| HUD 捕获框与像素进度 | 自研 DOM 叠加（LabelLayer 同层，只写 transform） | #39 | `effect.verified` | — | M15 |
+| 新手引导 | `Popover`（非模态）+ `Button` | 6 | — | — | M15 |
+| GSD 计算器 | `Sheet` > `Select`、`ToggleGroup`、`Slider`、`InputGroup` + 结果 `LfStat` | #37 | `perf.chart` | `LfStat` | M15（计算 M19） |
+| OpenAPI 页 | `Sidebar`、`Collapsible`、`Card`、`Badge`、`Tabs`、`Table`、`Button` | 3、4 | `api.doc` | `LfTable` | M15 |
+| World Hub 卡片增量 | `Badge`、`Button`、`Popover`（引用） | 6 | `layer.building` | — | M15 |
+| 仿真日历 | `Popover` > `InputGroup` + `ToggleGroup` | 6 | `env.time` | — | M15（M07） |
+
+#### 20.15.2 新增图标语义 key（登记到 `tools/shadcn/icons/inventory.mjs`，生成 `ui/icons/registry.ts`）
+
+全部为 lucide 1.48.0 canonical 名（已在 `node_modules/lucide/dist/esm/icons/` 核实存在），切换方式均为 static（随状态 swap），不新增 morph 白名单对。
+
+| key | lucide | 用途 |
+|---|---|---|
+| `sandbox.mine` | Box | 会话徽标、"开启我的沙盒" |
+| `target.person` / `target.dog` / `target.vehicle` / `target.uav` / `target.machine` / `target.object` | PersonStanding / Dog / Car / Drone / Cog / Package | 识别物类别 |
+| `sens.visual` / `sens.acoustic` / `sens.radar` | Eye / Ear / Radar | 敏感体类型 |
+| `nest.box` / `nest.launcher` / `nest.vtol` | Warehouse / Rocket / LandPlot | 机巢类型 |
+| `sensor.radar` / `sensor.acoustic` / `sensor.nir` | RadioTower / Mic / Flashlight | 传感器类别（EO 用既有 `sensor.camera`，LWIR 用既有 `sensor.thermal`，MID-360 用既有 `sensor.lidar`） |
+| `fw.plane` | Plane | 固定翼与垂起机型 |
+| `task.point` / `task.polyline` / `task.area` / `task.scan` / `task.perimeter` / `task.relay` / `task.guard` | MapPin / Waypoints / Scan / ScanLine / SquareDashed / Repeat2 / ShieldHalf | 七类任务 |
+| `manual.stick` | Joystick | 手动控制 |
+| `api.doc` | FileBraces | 开放接口 |
+| `sound.wave` | AudioWaveform | 声源 |
+| `target.keepout` | ShieldBan | 禁入体图层 |
+
+#### 20.15.3 lieflat 图型（§10.1 的增量）
+
+| 面板 / 区域 | 图型（lieflat 编号） | 组件 | 引擎 / 刷新 | 红色（每图至多一处） | D2 |
+|---|---|---|---|---|---|
+| 机型参数表 | table.log | `LfTable` | DOM / 静态 | 无 | 是 |
+| 敏感体表 | table.log | `LfTable` | DOM / 事件 | 无 | 是 |
+| 机巢充电通道 | F5 刻度行 | `LfTickRows`（每通道一行，20 格） | SVG / 1 Hz | 无（电池短缺为 warning 描边） | 是 |
+| 预览：完工曲线 | 点线（G 族静态） | `LfLine`（n = 1…4 或到可用机数，`T_max` 参考线） | SVG / 一次 | 被选 n 的点（HERO） | 是 |
+| 预览：分配表 | table.log | `LfTable` | DOM / 一次 | 无 | 是 |
+| 任务表 | table.log + 行内刻度条 | `LfTable` | DOM / 1 Hz | 最新 FAILED 或 INFEASIBLE 行（hot） | 是 |
+| 接力 KPI | KPI | `LfStat` × 6 | DOM / 1 Hz | 被发现次数 > 0 时的数字（红色文字） | 是 |
+| 接力覆盖率曲线 | G17 动态流 | `LfLiveLine` | Canvas / 1 Hz | LIVE 末端点 | P1 |
+| 声源波形示意 | 静态线 | `LfLine`（一个周期的合成波形 `s(t) = Σ a_k·sin(2πk f0 t)·gate(t)`） | SVG / 参数变化时 | 无 | P1 |
+| 计算器结果 | KPI | `LfStat` | DOM / ≤ 10 Hz | 无 | 是 |
+
+#### 20.15.4 transitions.dev 配方（§8.2 表的续行，编号接 32）
+
+| # | 交互 | 配方 | 宿主 | 打开 / 进入 | 关闭 / 退出 | 曲线 | lite 差异 | reduced |
+|---|---|---|---|---|---|---|---|---|
+| 33 | 启动进度条填充 | 只过渡 `transform` 的数值跟随（不属配方，按 ADR-029 token） | 自研 | `--duration-quick`（150 ms） | — | `--ease-smooth-out` | 同 | 跳变 |
+| 34 | 会话条出现与移除 | 07 panel-reveal 的 Y 轴 8 px 变体（同回放横幅） | 自研（usePresence） | 400 ms | 350 ms | smooth-out | 去 blur | 0.01ms |
+| 35 | 排队卡片进出与确认态切换 | 22 toast 的位移与透明度（16 px、.97，不 blur）；确认态文字 04 text-swap | 自研 | `--toast-open`（350 ms） | `--toast-close`（250 ms） | smooth-out | 同 | 0 s |
+| 36 | 实体切换、传感器视图切换、任务类型选择 | 16 tabs-sliding（`toggle-group-indicator`） | BU-常驻 | `--tabs-dur`（250 ms） | — | smooth-out | 同 | 0 s |
+| 37 | 机型目录、高级属性、计算器、开启沙盒 Sheet | 07 panel-reveal（全高，不 blur） | BU | 400 ms | 350 ms | smooth-out | 同 | 0 s |
+| 38 | 新手引导 Popover 与换步 | 05 menu-dropdown | BU | 250 ms | 150 ms | smooth-out | 同 | 0 s |
+| 39 | 捕获框转实线、`BadgeCheck` 角标 | 10 success-check（描画 350 ms）；3D 角标缩放 0 → 1 | 自研 | 350 ms / `--duration-fast` | 150 ms 淡出 | smooth-out | 无超调 | 直接 |
+| 40 | 被发现：告警计数徽标 | 03 notification-badge + 12 shake 一次（同一识别物 10 s 内不重复） | 自研 | slide 260 ms、pop 500 ms | 180 ms | bounce | 同 | 不抖动 |
+| 41 | 实体计数、架数、电池就绪数 | 02 number-pop-in（只动变化的位） | 自研 MotionNumber | 500 ms | — | bounce | 去 blur；全站 ≤ 24 次/s | 直接赋值 |
+| 42 | 剩余寿命、倒计时、像素进度、GSD 读数 | 不做动画（C 类，≤ 4 Hz） | — | — | — | — | — | — |
+| 43 | 预览结果卡由骨架到内容 | 14 skeleton-reveal | 自研 | `--duration-slow`（400 ms） | — | ease-in-out | 去 blur | 直接 |
+| 44 | 完工曲线入场 | ADR-031 图表入场 | lf 组件 | `--duration-chart-enter`（900 ms） | — | smooth-out | `--duration-fast` 整体淡入 | 无 |
+| 45 | 虚拟摇杆回中 | 只写 transform，松手回中 | 自研 | — | `--duration-quick` | smooth-out | 同 | 直接 |
+| 46 | 传感器视图着色切换 | 不做 DOM 动画；着色变体即时切换（≤ 300 ms 内完成首帧） | M06 | — | — | — | — | — |
+
+预算不变（§8.1 第 4 条）：新增常驻循环为 0（进度条、倒计时都不是循环动画）；排队卡片与会话条属全宽或大面积表面时不 blur。
+
+#### 20.15.5 视口图层预算（Tier S，登记 AWR-03 §3.8）
+
+| 图层 | 上限 | 绘制方式 | 每帧 CPU | 超限处置 |
+|---|---|---|---|---|
+| 识别物标记 | 32 | 实例化字形 + 环（一个 draw） | ≤ 0.2 ms | — |
+| 敏感体线框 | 64 个体（每体 ≤ 96 段） | 合并线段批（`engine/lines`） | ≤ 0.3 ms | 只画选中识别物的体，其余画地面环 |
+| 禁入体地面环 | 32 | 同上 | ≤ 0.1 ms | — |
+| 规划图层 | 条带 512 段、航段 256 段、站位 32、子区 16 | 线段批 + 点精灵 | ≤ 0.4 ms | 隐藏非选中任务 |
+| 机巢 | 4 | 字形 | 可忽略 | — |
+| HUD 捕获框 | 8 | DOM，只写 transform | ≤ 0.1 ms | 只画最近 8 个 |
+
+### 20.16 文案（新增键与中文）
+
+文案键放 `app/i18n/zh-CN.json`（英文键同步进入 `en.json`，译文 P2）；原因码中文短文案由 `reasons.json` 生成（`app/i18n/reasons.zh-CN.gen.json`）。
+
+| 键 | 中文 |
+|---|---|
+| `landing.sandbox.open` | 开启我的沙盒 |
+| `landing.notes.d2` | 共享展示为只读，持续运行 7×24 接力演示（剧本 S7）；每位访客可开一个隔离沙盒（30 min 起，可续期至 120 min）；七个世界可选，UrbanScene3D 六城经数据集权利方授权使用；帧率取决于你的显卡 |
+| `role.shared` / `role.sandbox` / `role.static` | 公开演示 · 只读 / 我的沙盒 · 可操作 / 静态浏览 |
+| `hint.sharedReadOnly` | 共享展示为只读，开启我的沙盒即可操作 |
+| `hint.staticBrowse` | 静态浏览，开启沙盒即可在此城市运行仿真 |
+| `sandbox.spawning` | 沙盒启动中 |
+| `sandbox.queue.position` | 沙盒排队中 · 第 {n} 位 |
+| `sandbox.queue.ready` | 已为你保留沙盒 · {s} s 内确认 |
+| `sandbox.renew.blocked.queue` | 有访客在排队，暂停续期 |
+| `sandbox.renew.blocked.max` | 已达 120 min 上限 |
+| `sandbox.rate.capped` | 本会话可达 ×{k}（{why}） |
+| `sandbox.expiring` | 沙盒将在 {s} s 后结束（{reason}） |
+| `sandbox.ended.title` | 沙盒已结束 |
+| `sandbox.smallWindow` | 沙盒需要桌面浏览器窗口 ≥ 1280 × 720 |
+| `catalog.reference` | 模拟参考值，非任何真实产品 |
+| `perception.captured` | 已明确捕获 {target} · {uav} {sensor} · {level} |
+| `perception.limiting.{fov,los,pixels,light,contrast,blur}` | 不在视锥内 / 视线被遮挡 / 像素不足 / 照度不足 / 对比度不足 / 运动模糊 |
+| `target.discovered` | {target} 发现了 {uav}（{kind}，{range} m） |
+| `manual.approach` | 预计 {t} s 后进入 {target} 的{kind}敏感范围 |
+| `manual.clamped` | 已限速：接近 {target} 的{kind}敏感范围 |
+| `task.why.n` | 为什么是 {n} 架：{n_minus_1} 架完工 {t} min，超过 T_max |
+| `task.footprint` | 单站足迹上界 {d} m（航高 {h} m、离轴 {theta}°）：区域不能由一架远距覆盖 |
+| `about.dataset.d2` | UrbanScene3D（Lin et al., ECCV 2022）经数据集权利方授权使用；世界包不随仓库分发 |
+
+原因码 500–599 的中文短文案（Toast 与字段错误使用；`message_zh` 与 `remedy_zh` 全文以 17 §17.9 为准）：
+
+| 码 | 短文案 | UI 处理 |
+|---|---|---|
+| 500 SANDBOX_FULL | 沙盒与排队都已满 | Sheet 内提示，留在共享展示 |
+| 501 SANDBOX_RATE_LIMITED | 倍速受限，已授予 ×k | 会话条 Badge（不弹 Toast） |
+| 502 SANDBOX_SPAWN_FAILED | 沙盒启动失败 | Sheet 内"重试" |
+| 503 SANDBOX_SCOPE | 不属于你的沙盒 | 回到"会话不可用"页 |
+| 504 SANDBOX_QUOTA | 同一网络的沙盒数或创建次数已达上限 | 显示 `Retry-After` 倒计时 |
+| 505 SANDBOX_ENTITY_LIMIT | 数量已达上限（机 12、识别物 30、机巢 4、活动任务 6） | 按钮置灰 + Toast |
+| 506 SANDBOX_EXPIRED | 沙盒已结束 | 结束 Dialog |
+| 507 SANDBOX_WORLD_FORBIDDEN | 该城市暂不可用 | Sheet 内置灰 |
+| 508 SANDBOX_WORLD_CAPACITY | 该城市当前容量不足 | 列出可立即开始的世界 + 排队 |
+| 509 SANDBOX_CHALLENGE_REQUIRED | 正在验证浏览器 | 自动求解后重发 |
+| 510 SANDBOX_PREEMPTED | 有访客排队，你的沙盒已结束 | 结束 Dialog |
+| 511 SANDBOX_TICKET_INVALID | 排队票已失效 | 排队卡片"重新排队" |
+| 520–525（M21） | 型号不存在 / 超出机型工作温度（警告） / 机型参数不自洽 / 风速超出固定翼保持能力 / 垂起悬停时间已用完 / 机巢不兼容 | 字段错误或 Toast |
+| 540–542（M18） | 放置位置无效 / 声源参数无效 / 敏感体参数无效 | 字段错误 |
+| 560–562（M19） | 传感器不支持 / 传感器参数无效 / 该等级不可达 | 字段错误或 Toast |
+| 580–586（M20） | 任务不可行 / 没有可行站位 / 机巢无可用机 / 航段进入禁入体 / 计划被拒绝 / 任务规模超限 / 规划暂被限流 | 预览卡 `Alert` 或 Toast |
+
+### 20.17 UI 写操作到接口的映射（§6.19 的续表）
+
+| # | UI 操作（本节章节） | 接口（17 §17） | 角色 | 主要失败码 | D2 |
+|---|---|---|---|---|---|
+| 24 | 开启沙盒（§20.4.1） | `POST /api/sandbox/v1/sessions`（需要时先 `GET /challenge`） | 无 | 500、504、507、508、509 | 是 |
+| 25 | 排队确认、离开（§20.4.3） | `POST /queue/{ticket_id}/claim`、`DELETE /queue/{ticket_id}` | 排队票 | 511 | 是 |
+| 26 | 续期、结束（§20.4.4） | `POST /sessions/{sid}/keepalive`、`DELETE /sessions/{sid}`；关闭页时 `POST /sessions/{sid}/end-beacon` | 沙盒 token | 506 | 是 |
+| 27 | 载入场景、重置、导入快照（§20.4.4、§20.4.6） | `POST /sessions/{sid}/template`、`POST /sessions/{sid}/restore` | 沙盒 token | 110、507 | 是 |
+| 28 | 切换底图（§20.12.2） | `POST /sessions/{sid}/world` | 沙盒 token | 507、508 | 是 |
+| 29 | 倍速（§20.4.4、D1 §6.17） | `call sim/speed`（经治理器）或 `POST /sessions/{sid}/clock` | 沙盒 token | 117、501（警告） | 是 |
+| 30 | 克隆、修改、删除机型（§20.6.3） | `POST/PATCH/DELETE /sessions/{sid}/models[/{id}]` | 沙盒 token | 522、520 | 是 |
+| 31 | 添加、修改挂载、移除无人机（§20.6） | `POST /sessions/{sid}/vehicles`、`PATCH …/vehicles/{vid}`、`DELETE …/vehicles/{vid}` | 沙盒 token | 505、525、102、105 | 是 |
+| 32 | 变焦、云台、传感器模式、照明（§20.6.5、§20.10.5） | `call uav/{id}/cmd/{zoom,gimbal,sensor/mode}` | 沙盒 token + 租约 | 100、560、561 | 是 |
+| 33 | 识别物增删改、移动、路径、敏感体、采纳建议半径（§20.7） | `POST/PATCH/DELETE /sessions/{sid}/targets[/{id}]`（即命令 `target/{add,update,remove}`） | 沙盒 token | 505、540、541、542 | 是 |
+| 34 | 机巢增删改（§20.8） | `POST/PATCH/DELETE /sessions/{sid}/nests[/{id}]` | 沙盒 token | 505、525、105 | 是 |
+| 35 | 预览分配（§20.9.3） | `POST /sessions/{sid}/tasks?dry_run=true`（只读） | 沙盒 token | 580、581、585、586 | 是 |
+| 36 | 启动、暂停、恢复、取消任务（§20.9） | `POST /sessions/{sid}/tasks`、`POST …/tasks/{tid}:{start,pause,resume,cancel}` | 沙盒 token | 580、583、584 | 是 |
+| 37 | 手动控制接管、速度、释放（§20.10） | `call uav/{id}/cmd/acquire`、`velocity {frame, keepout_guard}` + CLIENT_DATA、`velocity_stop`、`release` | 沙盒 token + 租约 | 100、105、114、117、209 | 是 |
+| 38 | 仿真日历、声学背景（§20.5.4） | `call env/calendar`、`call env/set` | 沙盒 token | 110 | 是 |
+
+viewer 界面（共享展示、静态浏览）不出现以上任何写入口；D2-AC-37 以拦截验证写请求数为 0。SDK 能完成上表全部操作，UI 不存在只能从界面完成的写操作（PRD-AC-007 的 D2 延续，D2-AC-36）。
+
+### 20.18 默认参数表（UI）
+
+| 参数 | 值 | 依据 |
+|---|---|---|
+| 进度条写入频率上限 | 10 Hz；最小写入增量 0.005 | AWR-04 §10.1 |
+| 进度条分段权重 | 0.15 / 0.10 / 0.40 / 0.30 / 0.05 | AWR-04 §10.1 |
+| warming 段内拆分 | 着色器 0.6、uiWarm 0.4 | 本文设定 |
+| 自动续期阈值 | 剩余 ≤ 300 s 且可续 | 本文设定（AWR-04 §4.4.3 每次 30 min） |
+| 即将结束提示 | 提前 60 s（服务端推送） | AWR-04 §4.4.6 |
+| 排队长轮询 | `wait_s = 25`，返回即重发；确认窗口 60 s | 17 §17.4 |
+| 工作量证明提示文案阈值 | 求解超过 300 ms 才显示"正在验证浏览器" | 本文设定 |
+| 会话恢复目标 | ≤ 3 s 回到同一 sid | D2-AC-38 |
+| 明确捕获 Toast 去重 | 同一识别物 30 s【墙钟】 | AWR-04 §6.4 |
+| 接近告警预测时间 | 3 s；同一识别物 Toast 去重 5 s | AWR-04 §10.6 |
+| setpoint 发送频率 | 30 Hz；归零后补发 5 个 0 速包 | AWR-04 §10.6；17 §6.4 |
+| 虚拟摇杆 | 直径 120 px；死区 0.08；指数 0.3 | 本文设定 |
+| 多旋翼速度档 | 水平 2 / 5 / `min(vmax, 10)` m/s；垂直 1 / 2 / 3 m/s；偏航 0.4 / 0.8 / 1.2 rad/s | 本文设定 |
+| 固定翼速度档 | 转弯率 0.33 / 0.66 / 1.0 × `g·tan φ_max / V_a`；爬升 0.33 / 0.66 / 1.0 × `climb_max`；空速步进 1 m/s | 本文设定（AWR-04 §5.3） |
+| 键盘输入平滑 | 一阶 150 ms | 本文设定 |
+| 变焦一档 | ×1.25 放大 / ×0.8 缩小；合并 ≤ 4 次/s | 本文设定 |
+| 计算器与即时提示重算 | ≤ 10 Hz | ADR-029 |
+| 面板摘要刷新 | Tier S ≤ 4 Hz，其余 ≤ 10 Hz | ADR-008、ADR-029 |
+| 识别物列表上限 | 30（服务端上限） | AWR-04 §4.4.3 |
+| HUD 捕获框 | ≤ 8 个，像素进度只给最近 1 个 | 本文设定 |
+| Sheet 宽度 | 标准 560 px，紧凑档 480 px（开启沙盒 480 px） | 本文设定 |
+| 会话条高度 | 32 px | 本文设定（同回放横幅） |
+| 快照本地保存上限 | 256 KB，保留 7 天 | 本文设定 |
+| 新手引导 | 4 步，`awr.ui.onboarding.v1` | AWR-04 §10.4 |
+
+### 20.19 实现指引（目录、文件与复用）
+
+| 路径 | 内容 | 所有者（工作包） | 复用的 D1 代码 |
+|---|---|---|---|
+| `apps/web/index.html`、`apps/web/src/styles/boot.css` | `.boot-progress > i` 改为 `scaleX(var(--boot-p))`；内联加载器读取 `__AWR_BOOT_MANIFEST` 并以 Resource Timing 上报 bundle 段 | M15（WP-12） | D1 遮罩节点与内联样式 |
+| `apps/web/vite.config.ts`（内联插件 `bootManifestPlugin()`） | 构建期把入口模块预加载清单与字节数写入 `index.html` | M15 | D1 `demoPlugin()` 的内联插件写法 |
+| `apps/web/src/app/boot/BootProgress.ts`（新）、`BootMask.tsx` | 分段聚合、≤ 10 Hz 写入、阶段文字；uiWarm 子阶段上报 | M15 | `BootController.ts`（门控不改）、`BootMask.tsx` 的预光栅与演练阶段 |
+| `apps/web/src/engine/pointcloud/**`、`apps/web/src/viewport/backend/warmup.ts` | `perf.bootProgress('world' / 'points' / 'warming', f)` 上报 | M05、M06 | 首屏 Range 与 shader zoo |
+| `apps/web/src/lib/demo.ts` | `DEMO_WORLDS` 取服务端白名单；`DEMO_ROUTES` 加 `sandbox`、`sandboxApi`；去掉编译期只读假设 | M15 | D1 演示开关 |
+| `apps/web/src/app/demo/Landing.tsx` | 第二个主按钮与 D2 演示说明；引入 `StartSheet` | M15 | D1 落地页 |
+| `apps/web/src/app/routes/sandbox.tsx`、`sandboxApi.tsx`（新） | 两条路由；`sid` 正则；`sandboxApi` 先登记 | M15 | `app/router/*` |
+| `apps/web/src/app/shell/surface.ts`（新） | §20.2.3 的 `resolveSurface` | M15 | `ui/shell/guards.ts`、`control.ts` |
+| `apps/web/src/stores/sandboxSession.ts`（新） | 会话、排队、寿命、倍速授予、存储读写 | M17（WP-04） | `lib/createStore.ts`、`lib/persist.ts` |
+| `apps/web/src/ui/sandbox/`（新目录）：`StartSheet.tsx`、`QueueCard.tsx`、`SessionBar.tsx`、`SessionEndedDialog.tsx`、`Onboarding.tsx`、`TemplatePicker.tsx`、`OpenApiPage.tsx`、`GsdCalculator.tsx`、`pow.worker.ts` | §20.4、§20.13、§20.14 | M15 | `ui/components/ui/*`、`ui/lf/*` |
+| `apps/web/src/ui/panels/{targets,target-detail,nests,nest-detail,tasks,task-new}/`（新）；`drones`、`drone-detail` 增量 | §20.6 至 §20.9 的面板与页面，经 `builtin.ts` 登记 | M15（store 由 M18、M20、M21、M19 提供） | `ui/panels/registry.ts`、`DronesPanel.tsx`、`railModel.ts`、`mission-edit/*` |
+| `apps/web/src/ui/tools/toolMode.ts` | 新工具态 `TARGET_PLACE`、`TARGET_MOVE`、`TARGET_PATH`、`TARGET_REGION`、`NEST_PLACE`、`TASK_POINT`、`TASK_LINE`、`TASK_AREA`、`TASK_PICK_TARGET` | M15 | D1 `GOTO_PICK`、`ADD_PICK` 的 ray_hit 流程 |
+| `apps/web/src/ui/panels/mission-edit/EditViewportLayer.tsx`、`editModel.ts` | 抽出折线与多边形编辑为可复用的 `PolyEditor`（任务、识别物路径与区域共用） | M15 | 原文件（重构不改 D1 行为，UX-AC-040 回归） |
+| `apps/web/src/ui/manual/`（新）：`ManualControl.tsx`、`VirtualSticks.tsx`、`manualScope.ts`、`setpointPump.ts` | §20.10.1 至 §20.10.4 | M15 | `ui/actions/vehicleCommands.ts`、`net/rt` CLIENT_DATA 发送 |
+| `apps/web/src/ui/hotkeys/registry.ts` | `HotkeyScope` 加 `'manual'` 与优先级 | M15 | D1 分发器 |
+| `apps/web/src/ui/notify/{eventBridge,toastMerger,redFigures,severity}.ts` | §20.11 的事件映射、合并键、红色候选 | M15 | D1 告警通道 |
+| `apps/web/src/viewport/layers/targets.tsx`（新，M18）、`tasking.tsx`（新，M20） | 识别物、敏感体、禁入体；规划图层与机巢 | M18、M20 | `engine/lines`、`engine/drones/glyph` |
+| `apps/web/src/viewport/**`（FPV 着色变体与 shader zoo 登记） | 日视、夜视、热像三种变体；HUD 捕获框投影 | M06（WP-11） | D1 FPV 相机、`warmup.ts` |
+| `apps/web/src/engine/perception/calc.ts`（新） | 计算器与即时提示的 TS 移植 | M19（WP-06） | — |
+| `apps/web/src/net/api.ts`、`net/rt/transport.ts` | 沙盒 REST 与 WS 基址可配置；`Authorization` 取沙盒 token | M11（WP-03） | D1 fetchers 与 rt.worker |
+| `tools/shadcn/icons/inventory.mjs` | §20.15.2 新 key | M15 | D1 生成器 |
+| `apps/web/src/app/i18n/{zh-CN,en}.json`、`reasons.zh-CN.gen.json` | §20.16 | M15 | 生成脚本 |
+| `apps/web/perf/m15/`、`apps/web/tests/m15/`、`apps/web/tests/{m17,m18,m19,m20,m21}/` | §20.22 的用例 | M15、M16（WP-13） | FakeSource、`fake_gw.py`（加 D2 topic 与夹具） |
+
+### 20.20 功能需求（D2）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| UX-FR-101 | 启动遮罩进度条：五段加权、单调、≤ 10 Hz、`scaleX`、只显示不门控、揭开置 100%、阶段文字 ≥ 4 种（§20.3） | P0 | V0.2-demo | 是 | UX-AC-043（D2-AC-01） | R-D2-01；ADR-108 |
+| UX-FR-102 | 切换底图与静态浏览的加载卡复用同一进度条（去掉 bundle 段重新归一，§20.3.4） | P0 | V0.2-demo | 是 | UX-AC-043 | AWR-04 §10.1 |
+| UX-FR-103 | D2 路由表：七个世界、`/sandbox/:sid`（sid 正则）、`/sandbox/api` 先于 `/sandbox/:sid`；URL 参数 `ent`、`sv`、`tgt` 与 `panel` 新值（§20.2.2） | P0 | V0.2-demo | 是 | UX-AC-044 | ADR-111 |
+| UX-FR-104 | 运行期角色切换 operator 与 viewer 界面；角色徽标与只读文案按共享展示、静态浏览、沙盒区分（§20.2.3） | P0 | V0.2-demo | 是 | UX-AC-044 | ADR-111 |
+| UX-FR-105 | 菜单与命令面板增量（"沙盒"菜单、四个新分组）；页面标题（§20.2.4） | P0 | V0.2-demo | 是 | UX-AC-044 | ADR-111 |
+| UX-FR-106 | 落地页"开启我的沙盒"与 Sheet（世界可用性、模板、时段、小窗口禁用）（§20.4.1） | P0 | V0.2-demo | 是 | UX-AC-045（D2-AC-34） | ADR-112 |
+| UX-FR-107 | 创建流程：工作量证明 Worker 求解、201 进入、202 排队、508 替代世界、504 配额文案（§20.4.1、§20.4.2） | P0 | V0.2-demo | 是 | UX-AC-045、046 | AWR-04 §11.5 |
+| UX-FR-108 | 非模态排队卡片与状态机（长轮询、slot_ready 60 s 确认、离开、票失效）（§20.4.3） | P0 | V0.2-demo | 是 | UX-AC-046（D2-AC-05） | AWR-04 §4.4.6 |
+| UX-FR-109 | 会话条：徽标、世界与模板、剩余寿命与续期、可达倍速与原因、实体计数、载入场景、重置、结束（§20.4.4） | P0 | V0.2-demo | 是 | UX-AC-047 | AWR-04 §10.2 |
+| UX-FR-110 | 会话状态到 UI 的映射；自动续期、即将结束提示、结束 Dialog、快照导出导入与"用快照新开"（§20.4.5、§20.4.6） | P0 | V0.2-demo | 是 | UX-AC-047（D2-AC-06） | AWR-04 §4.6 |
+| UX-FR-111 | 会话恢复与多标签页、存储键与容错、"会话不可用"页（§20.4.7） | P0 | V0.2-demo | 是 | UX-AC-048（D2-AC-38） | AWR-04 §4.6 |
+| UX-FR-112 | 右栏实体切换与面板登记（§20.5.2）；Dock"任务"在有 `tasking` 能力时替代 D1 任务面板 | P0 | V0.2-demo | 是 | UX-AC-049 | AWR-04 §10.5 |
+| UX-FR-113 | LAYERS 增量图层与 Tier S 上限、超限处置（§20.5.3、§20.15.5） | P0 | V0.2-demo | 是 | UX-AC-066（D2-AC-30） | AWR-03 §3.8 |
+| UX-FR-114 | ENVIRONMENT 增量：日历时刻与照度档、设置日历（不用 calendar 组件）、声学背景（§20.5.4） | P0 | V0.2-demo | 是 | UX-AC-049 | ADR-102 |
+| UX-FR-115 | 机型目录 Sheet：卡片、分组参数表（置信度与用途）、参考机型标注、viewer 可浏览（§20.6.2） | P0 | V0.2-demo | 是 | UX-AC-050（D2-AC-09、37） | R-D2-13、15、27 |
+| UX-FR-116 | 克隆编辑表单：字段、单位、前置校验、派生量即时重算、522 逐项映射（§20.6.3） | P0 | V0.2-demo | 是 | UX-AC-050 | AWR-04 §5.4 |
+| UX-FR-117 | 添加无人机（放入机巢或地图放置）、修改挂载（落地上锁）、移除（§20.6.4、§20.6.6） | P0 | V0.2-demo | 是 | UX-AC-050 | R-D2-20 |
+| UX-FR-118 | 单机"传感器"标签：五类传感器与 MID-360 的可配置项与接口、即时 GSD 与可行窗口提示（§20.6.5） | P0 | V0.2-demo | 是 | UX-AC-051（D2-AC-31） | R-D2-14 |
+| UX-FR-119 | 识别物列表：头部、行字段、筛选、独立的识别物选择（§20.7.1） | P0 | V0.2-demo | 是 | UX-AC-052（D2-AC-11） | R-D2-07 |
+| UX-FR-120 | 识别物放置、移动、路径与游走区域绘制工具态（§20.7.2） | P0 | V0.2-demo | 是 | UX-AC-052 | R-D2-18 |
+| UX-FR-121 | 识别物属性表单九组与提交、待确认、回滚（§20.7.3） | P0 | V0.2-demo | 是 | UX-AC-052 | R-D2-10、11 |
+| UX-FR-122 | 敏感体编辑表、半径手柄、配置体与有效体切换、建议半径与采纳、三维样式（§20.7.4） | P0 | V0.2-demo | 是 | UX-AC-053（D2-AC-12） | R-D2-08、09 |
+| UX-FR-123 | 识别物感知态、捕获与被发现的三处呈现（§20.7.5） | P0 | V0.2-demo | 是 | UX-AC-053 | AWR-04 §7.4 |
+| UX-FR-124 | 声源波形示意图 | P1 | V0.2-demo | 是 | UX-AC-053 | AWR-04 §7.5 |
+| UX-FR-125 | 机巢放置、配置、兼容性提示、充电通道与电池队列、起降队列、移除约束（§20.8） | P0 | V0.2-demo | 是 | UX-AC-054（D2-AC-18） | R-D2-26 |
+| UX-FR-126 | 七类任务的绘制工具与参数表单缺省（§20.9.1） | P0 | V0.2-demo | 是 | UX-AC-055（D2-AC-16） | R-D2-03 至 06、16 |
+| UX-FR-127 | 绘制交互复用 D1 编辑层与前置校验（面积、顶点、条带粗估、自相交）（§20.9.2） | P0 | V0.2-demo | 是 | UX-AC-055 | AWR-04 §11.5 |
+| UX-FR-128 | 预览分配：规划图层（预览虚线）、架数与理由、完工曲线、单站足迹上界说明、覆盖摘要、分配表、可持续性与瓶颈、不可行原因与建议（§20.9.3） | P0 | V0.2-demo | 是 | UX-AC-056（D2-AC-17、18） | R-D2-06；ADR-103 |
+| UX-FR-129 | 任务面板：任务表、行操作、子任务展开、接力子页 KPI（§20.9.4） | P0 | V0.2-demo | 是 | UX-AC-057（D2-AC-35） | R-D2-19 |
+| UX-FR-130 | 接力覆盖率曲线与间隙条码 | P1 | V0.2-demo | 是 | UX-AC-057 | AWR-04 §9.5 |
+| UX-FR-131 | D1 航线编辑并入新建任务页"手工指定架次"子模式 | P1 | V0.2-demo | 是 | UX-AC-055 | AWR-04 §10.5 |
+| UX-FR-132 | 手动控制接管、确认、velocity 调用、释放与返回机巢、断线与抢占处理（§20.10.1） | P0 | V0.2-demo | 是 | UX-AC-058（D2-AC-21） | R-D2-21 |
+| UX-FR-133 | `manual` 键位作用域与优先级、屏蔽键、安全键保留（§20.10.2） | P0 | V0.2-demo | 是 | UX-AC-058 | AWR-04 §10.6 |
+| UX-FR-134 | 虚拟双摇杆、映射（多旋翼与固定翼）、速度档、30 Hz setpoint 泵、FINAL 包（§20.10.3） | P0 | V0.2-demo | 是 | UX-AC-058 | ADR-026 |
+| UX-FR-135 | 敏感范围保护：强制显示禁入体、3 s 接近告警、服务端软围栏开关与确认、时钟锁 ×1 呈现（§20.10.4） | P0 | V0.2-demo | 是 | UX-AC-059 | AWR-04 §10.6 |
+| UX-FR-136 | 传感器视图：FPV、日视、夜视、热像（白热、黑热）；传感器选择、变焦、云台、跟踪、照明、分辨率；viewer 只读（§20.10.5） | P0 | V0.2-demo | 是 | UX-AC-060（D2-AC-21、37） | R-D2-14；ADR-108 |
+| UX-FR-137 | HUD 捕获框、像素进度与限制因素（§20.10.6） | P0 | V0.2-demo | 是 | UX-AC-061（D2-AC-14） | ADR-100 |
+| UX-FR-138 | 事件到呈现映射、合并键与去重、事件面板四个筛选（§20.11.1） | P0 | V0.2-demo | 是 | UX-AC-061 | AWR-04 §10.7 |
+| UX-FR-139 | "一处红"候选扩展：被发现 rank 5、FPV 图、任务表、预览卡（§20.11.2） | P0 | V0.2-demo | 是 | UX-AC-062（D2-AC-25） | ADR-032 |
+| UX-FR-140 | World Hub 七个世界、沙盒可用性、授权说明与引用（§20.12.1） | P0 | V0.2-demo | 是 | UX-AC-063（D2-AC-24） | ADR-109 |
+| UX-FR-141 | 沙盒内切换底图（确认、快照、加载卡、同名模板）与静态浏览横条（§20.12.2、§20.12.3） | P0 | V0.2-demo | 是 | UX-AC-063 | R-D2-25 |
+| UX-FR-142 | 场景模板选择规则与 4 步新手引导（§20.13.1、§20.13.2） | P0 | V0.2-demo | 是 | UX-AC-064（D2-AC-34） | ADR-112 |
+| UX-FR-143 | 共享展示 viewer 交互全集且零写请求（§20.13.4） | P0 | V0.2-demo | 是 | UX-AC-065（D2-AC-37） | AWR-04 §10.3 |
+| UX-FR-144 | GSD 与识别距离计算器（§20.13.5） | P0 | V0.2-demo | 是 | UX-AC-065 | AWR-04 §10.3 |
+| UX-FR-145 | 开放接口文档页（§20.14） | P0 | V0.2-demo | 是 | UX-AC-067（D2-AC-22） | AWR-04 §11.4 |
+| UX-FR-146 | 新增图标、lieflat 图型、动效配方 #33–#46 登记，`make lint` 全过（§20.15） | P0 | V0.2-demo | 是 | UX-AC-062（D2-AC-25） | R2 |
+| UX-FR-147 | D2 文案键、原因码 500–599 文案、UI 写操作映射续表（§20.16、§20.17） | P0 | V0.2-demo | 是 | UX-AC-068（D2-AC-36） | PRD-AC-007 |
+
+### 20.21 非功能需求（D2）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| UX-NFR-019 | 进度条不推迟揭开、不产生新长帧：共享路径 TTFP 与揭开相对 D1 劣化 ≤ 5%，沙盒路径揭开相对同世界共享路径劣化 ≤ 5%，遮罩下与揭开后 > 50 ms 长帧增量 0 | P0 | V0.2-demo | 是 | UX-AC-043 | D2-AC-01 |
+| UX-NFR-020 | 30 识别物 + 敏感体 + 12 架整景（synthcity 与 sanfrancisco）在 Tier S 满足 D1-AC-03b 阈值，不放宽 | P0 | V0.2-demo | 是 | UX-AC-066 | D2-AC-30 |
+| UX-NFR-021 | 传感器视图切换 ≤ 300 ms 且 `programs` 增量 0；首次打开 Sheet、引导、排队卡片后 `programs` 不增加 | P0 | V0.2-demo | 是 | UX-AC-060 | D2-AC-21；D1-AC-25 |
+| UX-NFR-022 | 手动控制 setpoint 送达 ≥ 25 Hz；命令到可见 p95 ≤ D_global + 150 ms | P0 | V0.2-demo | 是 | UX-AC-058 | D2-AC-21 |
+| UX-NFR-023 | D2 面板与会话条只订阅 ≤ 10 Hz 摘要（Tier S ≤ 4 Hz），遥测不进 React 逐帧；面板打开时主线程无 > 50 ms 长任务 | P0 | V0.2-demo | 是 | UX-AC-066 | ADR-008 |
+| UX-NFR-024 | 访客路径：落地页到第一次捕获 Toast ≤ 3 次点击、≤ 90 s（T5，×1，Tier S 本机） | P0 | V0.2-demo | 是 | UX-AC-064 | D2-AC-34 |
+| UX-NFR-025 | 会话恢复：刷新后 ≤ 3 s 回到同一 sid；第二个标签页加入同一沙盒 | P0 | V0.2-demo | 是 | UX-AC-048 | D2-AC-38 |
+| UX-NFR-026 | 可访问性：新增纯图标按钮 `aria-label` 覆盖 100%；排队卡片、引导与会话条的播报只在状态变化时各一次；新面板键盘可达 | P0 | V0.2-demo | 是 | UX-AC-062 | D2-AC-25 |
+| UX-NFR-027 | 设计体系：新代码 `make lint` 全部规则 0 违规；识别物名称等用户输入经运行时净化 | P0 | V0.2-demo | 是 | UX-AC-062 | D2-AC-25 |
+| UX-NFR-028 | 存储容错：sessionStorage 与 localStorage 不可用、配额满或内容损坏时行为与首次访问一致，无异常抛出 | P0 | V0.2-demo | 是 | UX-AC-048 | D1 UX-NFR-015 |
+| UX-NFR-029 | 计算器与即时提示与 M19 参考实现误差 ≤ 1% | P0 | V0.2-demo | 是 | UX-AC-065 | D2-AC-37 |
+| UX-NFR-030 | viewer 界面零写请求：共享展示与静态浏览全部交互期间 WS `call` 与 REST 非 GET 请求数为 0（`/api/sandbox/v1/catalog/*` 与 `GET` 不计） | P0 | V0.2-demo | 是 | UX-AC-065 | D2-AC-37 |
+
+### 20.22 验收标准（D2）
+
+通用约定沿用 §17（本机 S、ADR-033 运行协议、`window.__ux` 测试钩子、FakeSource 与 `fake_gw.py` 注入）；D2 新增 `__ux.boot.progress[]`、`__ux.sandbox`（会话状态、排队状态、最近 setpoint 计数）、`__ux.red`（各图的红色候选）钩子。用例放 `apps/web/perf/m15/`、`apps/web/tests/m15/` 与 `apps/web/tests/{m17,m18,m19,m20,m21}/`。
+
+| 编号 | 度量 | 阈值 | 测试方法 | 环境 | 优先级 |
+|---|---|---|---|---|---|
+| UX-AC-043 | 进度条（D2-AC-01） | `__ux.boot.progress[].p` 全程单调不减；出现 ≥ 4 种阶段文字；揭开时 p = 1；写入间隔 ≥ 100 ms；共享路径 TTFP 与揭开相对 D1 基线劣化 ≤ 5%；沙盒路径揭开相对同世界共享路径劣化 ≤ 5% 且揭开时会话可仍为 SPAWNING；遮罩下与揭开后我方 > 50 ms 长帧增量 0；切换底图的加载卡读到同一组件的单调序列 | `perf/m15/boot-progress.spec.ts`（演示构建） | 本机 S | P0 |
+| UX-AC-044 | 路由与角色 | `/sandbox/api` 不被当作 sid；`/sandbox/SB-1` 回到 `/worlds`；持有 token 时为 operator 界面（存在"新建任务"），清空存储后同一路由显示"会话不可用"页且不建 WS；`/world/shanghai` 为静态浏览且不建 WS；三种角色徽标文案正确 | `tests/m15/routes-d2.test.ts`、Playwright | 本机 S | P0 |
+| UX-AC-045 | 开启沙盒（D2-AC-34 部分） | 落地页 2 次点击发出 1 个 `POST /sessions`；注入 509 时 Worker 求解后自动重发且 UI 显示验证文案；窗口 1200 × 700 时按钮禁用且不发请求；注入 508 时 Sheet 列出 `available_now` | Playwright（`page.route` 拦截） | 本机 S | P0 |
+| UX-AC-046 | 排队（D2-AC-05） | 注入 202：落在共享展示且卡片显示位置与预计等待；注入 `slot_ready`：卡片 ≤ 1 s 进入确认态并倒计时；点击"进入沙盒"后 ≤ 6 s 进入新会话（真实后端）；60 s 未确认卡片消失；"离开队列"发 1 个 DELETE | Playwright + e2e | 本机 | P0 |
+| UX-AC-047 | 会话条与寿命（D2-AC-06 部分） | 剩余 ≤ 300 s 且可续时自动发 1 次 keepalive；`renewable = false` 时续期置灰且 Tooltip 原因正确；注入 `sandbox.expiring` 弹常驻倒计时 Toast 并自动写入快照；结束后出现结束 Dialog，"用快照新开沙盒"发出带 `config_snapshot` 的创建 | Playwright（FakeSource） | 本机 S | P0 |
+| UX-AC-048 | 恢复与多标签（D2-AC-38） | 刷新后 ≤ 3 s 回到同一 sid；第二个标签页加入同一沙盒；禁用 localStorage 与写入损坏 JSON 时页面不抛异常；存储不可用时第二页显示"正在另一个标签页运行"并可另开 | Playwright | 本机 S | P0 |
+| UX-AC-049 | 布局与面板 | 实体切换三项可用且切换不卸载其他列表订阅；Dock 在 `tasking` 能力下显示"任务"而非 D1 任务面板；会话条使未遮挡区上沿下移 32 px（视觉中心 ±4 px，D1 UX-AC-005 口径）；日历 Popover 不使用 calendar 组件 | `layout.spec.ts` 扩展 | 本机 S | P0 |
+| UX-AC-050 | 无人机管理（D2-AC-09） | 目录 5 个可见机型，参考机型带"模拟参考值"；克隆编辑越界字段前置错误；注入 522 时 `violations` 逐项落到字段；添加无人机 ≤ 1 s 出现在列表与视口；非 LANDED 时"修改挂载"禁用；注入 525 时 Toast 文案正确 | Playwright + e2e | 本机 S | P0 |
+| UX-AC-051 | 传感器配置（D2-AC-31） | 五类传感器与 MID-360 的配置项按 §20.6.5 渲染并发出对应命令；4K 选项只在有 `compute.orin_nx` 的机型可选；即时提示与 M19 参考值误差 ≤ 1% | Playwright + vitest | 本机 S | P0 |
+| UX-AC-052 | 识别物管理（D2-AC-11） | 五类模板新增后详情字段齐全；放置贴地预览与服务端位置误差 ≤ 0.5 m；路径与游走区域绘制提交后 `target/{id}/detail` 反映新运动；30 个后"新增"置灰并有 505 文案；属性被拒时回滚 | Playwright + e2e | 本机 S | P0 |
+| UX-AC-053 | 敏感体与感知态（D2-AC-12） | 半径手柄拖动只在松开时发 1 次 PATCH；有效体显示的半径等于 `radius_eff_m[model_id]`；"采纳建议半径"改为建议值；无人机进入配置体时体描边转红（warning）且识别物行显示驻留进度；被发现时计数 + 1 | Playwright（FakeSource） | 本机 S | P0 |
+| UX-AC-054 | 机巢（D2-AC-18 部分） | 放置后出现链路距离圈；充电通道 `LfTickRows` 随 `nest/{id}/status` 更新；cells 不兼容时表单即时提示且服务端 525；电池就绪 0 且有派遣时"电池"行 warning 描边并有事件 | Playwright | 本机 S | P0 |
+| UX-AC-055 | 任务绘制（D2-AC-16 部分） | 七类工具均可完成绘制；自相交多边形拒绝闭合；面积 > 1 km² 或顶点 > 64 时"预览分配"置灰且显示 585 文案；撤销重做 ≤ 50 步；D1 航线编辑回归（UX-AC-040）通过 | Playwright | 本机 S | P0 |
+| UX-AC-056 | 预览分配（D2-AC-17） | AOI-A（AWR-04 §8.3）预览显示 2 架、"1 架完工 12.8 min 超过 T_max"、条带 8、单站足迹上界说明；规划图层为虚线，启动后为实线；只有一架同型机时显示 580（fleet_short）与"添加无人机"按钮 | e2e（真实后端） | 本机 | P0 |
+| UX-AC-057 | 任务面板与接力（D2-AC-35 部分） | 区域值守行可展开子任务；发现后自动出现接力子任务；接力子页 6 个 KPI 随 `relay/{tid}/stats` 更新；被发现次数 > 0 时为红色文字；工作项重分配不弹 Toast | Playwright（FakeSource）+ e2e | 本机 S | P0 |
+| UX-AC-058 | 手动控制（D2-AC-21） | 接管时 WS 上 `acquire` 先于 `velocity`；setpoint 送达 ≥ 25 Hz；倍速控件置灰；`manual` 作用域内 Shift+R 只发返航、F 不改相机、Q/E 只改升降、Space 不暂停；Esc 发 FINAL 包、`velocity_stop` 与 `release`；接管后该机工作项被重新分配（任务表更新）；命令到可见 p95 ≤ D_global + 150 ms | Playwright + e2e | 本机 S | P0 |
+| UX-AC-059 | 敏感范围保护 | 以恒速朝配置体飞行时，预计进入前 3 s ± 0.2 s 出现 HUD 告警与 1 条 Toast；软围栏开启时机体不进入配置体且出现"已限速"；关闭软围栏需确认，关闭后进入即按判据计发现 | e2e | 本机 | P0 |
+| UX-AC-060 | 传感器视图（D2-AC-21） | 四种视图切换各 ≤ 300 ms 且 `programs` 增量 0；热像只有白热、黑热两种；变焦滑块松开发出 1 次 `zoom`；viewer 下切换视图不发写请求 | `warmup.spec.ts`、Playwright | 本机 S | P0 |
+| UX-AC-061 | 捕获与提示（D2-AC-14） | 注入 `perception.capture` 出现 1 条 Toast，同一识别物 30 s 内再次注入不再出现；HUD 显示 `N_eff / N_req` 与限制因素文字（六种 `limiting` 逐一）；事件面板四个筛选生效 | Playwright（FakeSource） | 本机 S | P0 |
+| UX-AC-062 | 一处红与设计体系（D2-AC-25） | 被发现、手动控制焦点机与捕获框同时存在时视口与 FPV 每张图红色实心实体 ≤ 1（RT 回读像素统计 + DOM 计算样式）；确认后被发现转红描边；热像视图除捕获框外无红色像素；`make lint` 全过；新面板 a11y 用例通过 | `alarm.spec.ts` 扩展、`make lint` | 本机 S | P0 |
+| UX-AC-063 | 底图（D2-AC-24） | World Hub 七张卡片、六城卡片含授权说明与引用；沙盒内切换到 shanghai 后载入同名模板、纪元 + 1、加载卡进度单调；派生缓存缺失的世界置灰 | Playwright + e2e | 本机 S | P0 |
+| UX-AC-064 | 访客路径与引导（D2-AC-34） | 落地页到第一次 `perception.capture` Toast ≤ 3 次点击、≤ 90 s（T5，×1）；引导 4 步可跳过、只出现一次、不阻挡点击 | Playwright（真实后端） | 本机 S | P0 |
+| UX-AC-065 | 共享展示交互（D2-AC-37） | §20.13.4 每项在 viewer token 下可用，全程 WS `call` 与 REST 非 GET 写请求数为 0；满员排队期间同样可用；计算器 20 组输入与 M19 参考实现误差 ≤ 1% | Playwright + vitest | 本机 S | P0 |
+| UX-AC-066 | 整景帧节奏（D2-AC-30） | 30 识别物 + 敏感体 + 12 架整景在 synthcity 与 sanfrancisco 各一次满足 D1-AC-03b 阈值；超限时 PerfGovernor 先降敏感体与规划图层；打开任一 D2 面板时主线程无 > 50 ms 长任务 | flight60 变体 | 本机 S | P0 |
+| UX-AC-067 | OpenAPI 页（D2-AC-22 部分） | 页面路由集合与 `sandbox.openapi.snapshot.json` 一致；curl 示例不含明文 token；"复制我的 token"只在点击后写剪贴板 | Playwright | 本机 S | P0 |
+| UX-AC-068 | UI 与 API 同权（D2-AC-36 部分） | §20.17 第 24–38 行逐项：UI 执行该操作时只出现表中列出的端点或服务；SDK 示例覆盖同一组操作 | `api-parity.spec.ts` 扩展 | 本机 S | P0 |
+
+阈值关系：UX-AC-043 至 UX-AC-068 只细化 D2-AC，不放宽 D1 与 D2 的任何阈值。
+
+### 20.23 风险
+
+| # | 风险 | 影响 | 缓解 |
+|---|---|---|---|
+| K9 | 演示构建由编译期只读改为运行期角色切换，写入口代码进入公开站分块 | 包体积与攻击面 | 写入口按路由懒加载（`/sandbox/:sid` 分块），服务端独立执行角色策略；`prod-bundle-scan` 增加"viewer 首屏不加载 `ui/manual`、`task-new` 分块"检查 |
+| K10 | 会话条、Sheet、引导等新浮层在 Tier S 首次出现时触发合成器编译 | 揭开后长帧（ADR-069、ADR-076 的同类问题） | 把会话条、排队卡片与一个 Sheet 加入 BootMask 演练阶段；UX-NFR-021 验收 |
+| K11 | 访客在共享展示上误以为可以操作 | 体验 | 只读文案带"开启我的沙盒"按钮；viewer 界面不渲染写控件 |
+| K12 | 手动控制与键位冲突（浏览器保留键、输入框焦点） | 误操作 | `manual` 作用域只在 ACTIVE 注册；可编辑元素内不触发（D1 规则）；安全键保留 Shift 组合 |
+| K13 | 访客把视觉近似的传感器视图当作判据 | 误读 | HUD 判据只来自服务端；视图角落固定标注"视觉近似" |
+| K14 | 90 s 访客路径在慢机器上超时 | D2-AC-34 | 沙盒在落地页即创建、与应用启动并行；T5 首次捕获目标 ≤ 60 s【仿真】（§20.24 第 4 条） |
+
+### 20.24 对基线的反馈
+
+处置结果以 [AWR-04 附录 B](04-D2-设计增补与决策记录.md)（v1.2）为准；本节保留为起草时的记录。
+
+以下不改变 AWR-04 的决策，只请求澄清或以修订表达；本节在裁决前按"本节处理"执行。
+
+| # | 位置 | 问题 | 本节处理 | 建议 |
+|---|---|---|---|---|
+| 1 | AWR-04 §10.2"沙盒状态条（顶栏）" | 44 px 顶栏在 1280 宽度下放不下世界、寿命、倍速、四组计数与三个按钮 | 定为顶栏下方 32 px 会话条（与回放横幅同构，属顶栏这张图），紧凑档折叠为"更多"菜单 | §10.2 写明"顶栏下方的会话条" |
+| 2 | AWR-04 §10.1 应用脚本段"以流式 fetch 统计已收字节" | 对模块分块再做一次流式 fetch 会重复下载（或要求改用 blob 执行，破坏缓存与 CSP） | 用 Resource Timing 在分块完成时按字节计入（即基线允许的阶跃回退，以字节加权） | §10.1 把"流式 fetch"改为"Resource Timing 按完成字节" |
+| 3 | AWR-04 §10.6 第 4 条"软围栏" | 未说明钳制在客户端还是服务端；若在客户端，SDK 客户端不受约束，界面与接口行为不一致（与 R-D2-22"以接口形式控制"同权的要求冲突） | 由 sim-core 在 velocity setpoint 入口执行（`keepout_guard` 参数，17 §17.7.6），UI 只做 3 s 预测告警 | §10.6 写明服务端执行，并登记参数 |
+| 4 | D2-AC-34"落地页到第一次捕获 ≤ 90 s" | 预算未扣除应用启动（DEMO-PUBLIC 实测 Tier S 约 17 s）与两次点击；T5 若按"≤ 90 s 首次捕获"设计，总时长必超 | T5 的设计目标取会话 ACTIVE 后 ≤ 60 s【仿真】 | §10.4 T5 行的"首次反馈"改为 ≤ 60 s，或 D2-AC-34 写明起止点为"会话 ACTIVE" |
+| 5 | AWR-04 §10.2 路由 | `/sandbox/api` 与 `/sandbox/:sid` 存在匹配歧义 | `sid` 正则 `^sb-[a-z2-7]{10}$` 且 `/sandbox/api` 先登记 | §4.1 写明 sid 字母表（小写 base32，满足 zenoh chunk 规则） |
+| 6 | AWR-04 §10.2"会话内切换底图"与 §11.1 端点表 | 端点表没有切换底图的端点（`POST /sessions/{sid}/template` 只在同一世界内载入） | 增加 `POST /sessions/{sid}/world {world, template}`（17 §17.5） | §11.1 补登 |
+| 7 | AWR-04 §4.4.6 L1"推送 `sandbox.slot_ready`" | 排队访客没有沙盒 WS（停留在共享展示，连 show-api），无法收到推送 | 排队票长轮询 `GET /queue/{ticket_id}?wait_s=25`（17 §17.4）；`slot_ready` 作为票状态 | §4.6 与 §11.1 补登排队端点 |
+| 8 | AWR-04 §10.7 被发现的红色仲裁 | 未给出与无人机 critical（严重度 5、6、8）的相对等级 | rank 5（与 ELAND 同级，同级取最新） | §10.7 写明 rank |
+| 9 | AWR-04 §10.4 新手引导第 3 步"可'预览分配'" | 区域值守已在运行，"预览分配"是创建前的 dry-run，对运行中的任务应为"查看分配" | 第 3 步文案为"查看分配"（运行中）与"新建任务时可预览分配" | §10.4 措辞修订 |
+| 10 | AWR-14 §5.6 关于页（D1） | 关于页写"UrbanScene3D 仅限非商业科研用途，不随仓库分发"，与 ADR-109 冲突 | 改为 §20.16 `about.dataset.d2` | 由 M15 随 WP-12 修改；ADR-109 后果补记 AWR-14 §5.6 |
+| 11 | AWR-14 §4.7 禁用 `calendar`（V0.6 前）与 ADR-102 的仿真日历输入 | 基线未说明日历输入控件 | 用 `InputGroup`（文本 + 正则）加快捷时段 `ToggleGroup`，不解禁 calendar | ADR-102 后果补记 |
+| 12 | AWR-04 §4.6"`principal_hint` 不参与鉴权"与 D2-AC-38"同一 principal 重复创建幂等" | 浏览器存储不可用（隐私模式）时刷新会丢 token；幂等返回已有会话又不能给 token（否则 hint 即成凭据），访客只能等空闲回收 | 幂等返回不带 token，UI 提供"另开一个沙盒"（`force_new`，占该前缀第二个名额） | §4.6 写明该边界行为 |
+| 13 | AWR-04 §10.5"D1 的任务编辑……并入本面板" | 未给优先级 | 定为 P1（UX-FR-131），P0 路径不依赖 | §10.5 标注 P1 |
+| 14 | ADR-111"演示构建运行期角色切换" | 写入口进入公开站分块（编译期剔除取消后），`prod-bundle-scan` 的检查项未同步 | 写入口懒加载，并在扫描中检查 viewer 首屏分块（K9） | ADR-111 后果补记 bundle 扫描项 |
+
+### 20.25 追溯
+
+| 需求 | ADR | 本节 | 验收 |
+|---|---|---|---|
+| R-D2-01 | 108 | §20.3 | UX-AC-043；D2-AC-01 |
+| R-D2-02、R-D2-24 | 089、093、094、107、111、112 | §20.2、§20.4、§20.13、§20.14 | UX-AC-044 至 048、064、065、067；D2-AC-02、05、06、34、37、38 |
+| R-D2-03 至 R-D2-06、R-D2-16、R-D2-17 | 103、104 | §20.9 | UX-AC-055、056；D2-AC-16、17、18 |
+| R-D2-07 至 R-D2-11、R-D2-18 | 098、099 | §20.7 | UX-AC-052、053；D2-AC-11、12 |
+| R-D2-12 | 100 | §20.10.6、§20.11 | UX-AC-061、062；D2-AC-13、14 |
+| R-D2-13、R-D2-15、R-D2-20、R-D2-27 | 095、096、097 | §20.6 | UX-AC-050；D2-AC-09、10 |
+| R-D2-14 | 101 | §20.6.5、§20.10.5 | UX-AC-051、060；D2-AC-14、31 |
+| R-D2-19 | 105 | §20.9.4、§20.11 | UX-AC-057；D2-AC-19、35 |
+| R-D2-21 | 108、090 | §20.10 | UX-AC-058、059、060；D2-AC-21 |
+| R-D2-22、R-D2-23 | 107 | §20.14、§20.17 | UX-AC-067、068；D2-AC-22、36 |
+| R-D2-25、R-D2-28 | 109 | §20.12 | UX-AC-063；D2-AC-24 |
+| R-D2-26 | 103 | §20.8 | UX-AC-054；D2-AC-18、19 |
+| R2（设计体系） | 108；AWR-03 ADR-028 至 032 | §20.15、§20.16 | UX-AC-062；D2-AC-25 |
+| R3（流畅性） | 090、108 | §20.3、§20.15.5、§20.21 | UX-AC-043、066；D2-AC-01、26、30 |
+
+本节引用：AWR-04 §1.2、§4.4.3、§4.4.5、§4.4.6、§4.6、§4.4.7、§5.1、§5.2、§5.3、§5.4、§6.1、§6.2、§6.4、§6.5、§7.2 至 §7.5、§8.1、§8.3、§8.4、§9.2、§9.5、§9.6、§10、§11；ADR-088 至 ADR-113；AWR-14 §1.5、§2.2、§3.4、§3.5、§4.7、§5.1、§5.6、§6.7、§6.8、§6.10、§6.13、§6.16、§6.19、§7.3、§7.7、§7.8、§8.1、§8.2、§10.1、§11.1 至 §11.6、§17；AWR-17 §17（D2 增补）；DEMO-PUBLIC 报告 §6.3（Tier S 揭开约 17 s）。

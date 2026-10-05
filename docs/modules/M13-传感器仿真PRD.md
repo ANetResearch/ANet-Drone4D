@@ -1531,3 +1531,285 @@ detail 字符串 SENSOR_SPEC_INVALID、SENSOR_UNKNOWN、TARGET_TABLE_FULL 已由
 | ADR | ADR-002、ADR-003、ADR-014、ADR-015、ADR-021、ADR-023、ADR-028 至 ADR-033、ADR-041、ADR-043、ADR-045、ADR-046、ADR-047、ADR-048、ADR-049、ADR-050 |
 | AWR-03 条款 | §2.3（P-02、P-03、P-04、P-07、P-09、P-10）；§3.6 规则 1；§3.8；§4.1–§4.3；§5.1 第 1、4、7、8 条；§5.2 第 8 条；§5.3；§5.4；§5.7；§5.8；§5.9；§5.11；§6.3 M13 行；§8.2；§8.4（D1-AC-16、20、25、26、34） |
 | 01-design | §2、§8、§16、§22–§24、§27、§28、§35、§37、§40、§42（处置见 §1.3） |
+
+
+---
+
+## 15. D2 增补（V0.2-demo）
+
+> 本节是 M13 对 D2（V0.2-demo）的增补，依据 [AWR-04 D2 设计增补与决策记录](../04-D2-设计增补与决策记录.md)（D2 唯一基线）与 [用户 D2 需求原文](../inputs/D2-需求原文-2026-10-05.md)。§1–§14 的 D1 条款在未被本节修改处继续有效；与 AWR-04 冲突时以 AWR-04 为准，问题列在 §15.11。
+
+### 15.0 定位与编号
+
+1. 用户要求"传感器包括日视、夜视、红外、雷达波、声波"（R-D2-14），并要求以接口获取"所有 sensor 信息"（R-D2-23）。AWR-04 把**物理判据与检测引擎**放在新模块 M19（ADR-100、ADR-101），把**挂载、云台、变焦与数据产品**留在 M13（AWR-04 §3.2 M13 行、WP-10）。本节回答"五类传感器模型落在哪里、检测引擎从哪里取数"：
+
+| 层 | 内容 | 归属 |
+|---|---|---|
+| 规格（spec） | 传感器参数文件与 schema：`eo_zoom`、`nir`、`nir_illuminator`、`lwir`、`radar_mmw`、`acoustic_array`、`mid360` v2 | schema 由 M19 起草（`nav`、`payload` 由 M13）；P600 的文件由 M13，`awr_*` 机型的文件由 M21；**加载与校验由 M13** |
+| 挂载与状态 | 挂载、云台（共享指向）、焦距与变焦动态、成像模式、照明器开关、分析分辨率 | **M13**（sensors stage 与 `payload` 状态块） |
+| 物理判据 | 像素数、TTPF、对比度、照度、消光、热对比、雷达 SNR、声学带 SNR、点数判据、明确捕获 | M19（只读 M13 的状态与几何） |
+| 数据产品 | `uav/{id}/payload`、`uav/{id}/sensor/nav`、`uav/{id}/sensor/lidar/scan` | **M13** |
+| | `uav/{id}/perception`、`.../radar/tracks`、`.../acoustic/bearings`、检测历史 | M19 |
+| D1 Mock 检测器 | S3 的 `P_d` 模型与 `sensor.detect` | M13 保留，不观察 M18 识别物（ADR-100） |
+
+2. **编号**：D2 条目从 201 起（FR、NFR、AC 各自在 2xx 段内连续）；"D2"列取"是、桩、否"，目标版本 `V0.2-demo`（AWR-04 §1.2）。
+
+### 15.1 五类传感器的落点
+
+| 用户原文 | 传感器 id（spec） | SensorKind | 挂载方式 | M13 维护的动态状态 | M19 的判据（AWR-04 §6.2） |
+|---|---|---|---|---|---|
+| 日视 | `eo_gx40`（`eo_zoom`） | camera（0） | 云台 `g0` | 焦距、FOV、模式 `day`、分析分辨率 | Johnson + TTPF，`k_los·k_c·k_light·k_blur` |
+| 夜视 | 同一 `eo_gx40` 的 `lowlight` 与 `nir` 模式；机内 850 nm 补光；可选 `nir_ill_l`（`nir_illuminator`） | camera（0）；照明器 illuminator（7） | 云台 `g0`（照明器与相机同轴） | 模式、各照明器开关、发散角（机内随变焦取 HFOV） | 被动 `k_light`；主动 `R_nir` 与照明锥 |
+| 红外 | `lwir640`（`lwir`，镜头 13、25、75、100 mm 四选一） | thermal（2） | 云台 `g0` 或 `g1` | 镜头焦距（不可光学变焦）、FOV | ΔT、NETD、杂波，N 按原生像元 |
+| 雷达波 | `mmw77`（`radar_mmw`） | radar（3） | 机体固连（缺省前视下俯 10°） | 开关 | 雷达方程 SNR、航迹 |
+| 声波 | `mic8`（`acoustic_array`） | acoustic（8） | 机体固连（全向） | 开关、自噪声抑制档 | 逐 1/3 倍频程带 SNR、方位 |
+| （随附规格） | `mid360` v2（`lidar_livox`） | lidar（1） | 机体固连 | 扫描订阅状态 | 点数判据（不需要扫描） |
+
+`SensorKind` 枚举追加 `illuminator = 7`、`acoustic = 8`（`rt/enums.json`，只追加）；`awr.SensorPose48.v1` 只为 camera、lidar、thermal、radar 四类生成行（有视场的传感器），照明器与声阵列不进入 SensorPose48。
+
+### 15.2 功能需求（D2）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M13-FR-201 | 规格加载：`SensorSpec` 增加五种结构（`eo_zoom`、`nir_illuminator`、`lwir`、`radar_mmw`、`acoustic_array`）与 `mid360` v2，按 M19 起草的 `sensor/*.schema.json` 校验；每个取值带 `conf`（A–E）与 `src`；每个 spec 带 `mass_kg`、`power_w`、`mount{xyz_m, rpy_deg, gimbal_id?, optional, mounted}`；失败拒绝加载该机型（文件 353，会话覆盖 561）；D1 的 camera、thermal、gnss、imu 结构不变 | P0 | V0.2-demo | 是 | M13-AC-201 | AWR-04 §6.1、§11.6；M13-FR-001 |
+| M13-FR-202 | 挂载组与覆盖：机队实例的 `sensors[]` 覆盖（`{name, mounted?, lens_mm?, analysis_res?, rpy_deg?}`）经 `fleet/cmd/update`（LANDED 且 DISARMED）生效；可选挂载默认不装；挂载质量与功率汇总提供给 M08 的 MNT-1 检查与 M21 的续航复算；`analysis_res = 4k` 只允许带 `compute.orin_nx` 能力的机型，否则 `561 SENSOR_PARAM_INVALID` | P0 | V0.2-demo | 是 | M13-AC-201 | AWR-04 §5.1（Orin NX 能力标签）、§5.4 第 3 条 |
+| M13-FR-203 | 载荷状态块 `payload`（M08 `register_state_block`，M13 唯一写者，参与 checkpoint）：每 slot 每云台的偏航、俯仰与指向源，每成像传感器的当前焦距 `f_mm`、指令焦距、F 数、HFOV/VFOV、成像模式，每照明器的开关与发散角；由 sensors stage 以 50 Hz 推进（两个时钟档相同，M08 §15.4.1） | P0 | V0.2-demo | 是 | M13-AC-202 | AWR-04 §11.7"云台与载荷"行 |
+| M13-FR-204 | 变焦：`uav/{id}/cmd/zoom{sensor, f_mm \| hfov_deg \| zoom_x}`；焦距按对数速率逼近指令（`|d ln f / dt| ≤ ln(f_max/f_min) / t_zoom_full`，GX40 全程 4 s）；FOV 由靶面与焦距复算（`HFOV = 2·atan(W_s / 2f)`），F 数按 `F#(f) = F_wide + (F_tele − F_wide)·ln(f/f_min)/ln(f_max/f_min)`；越界 `110 PARAM_OUT_OF_RANGE`，无光学变焦的传感器（LWIR、雷达等）`560 SENSOR_UNSUPPORTED`；LWIR 的数字变焦与调色板只在前端显示，不进入状态 | P0 | V0.2-demo | 是 | M13-AC-202 | AWR-04 §6.1（GX40 4.8–48 mm、F1.7–3.2、全程 4 s；LWIR 数字变焦只影响显示） |
+| M13-FR-205 | 成像模式：`uav/{id}/cmd/sensor/mode{sensor, active?, mode? ∈ {auto, day, lowlight, nir}, illum?{builtin?, ext?} ∈ {auto, on, off}, resolution?, palette?, cue?}`（AWR-04 §11.2 的统一载荷）；`auto` 按 M07 照度档切换（日间 → `day`；低照 → `lowlight`；夜间 → `nir`，并打开该云台上全部照明器），切换只在照度档变化事件时发生（确定性，无随机）；`nir` 需要至少一个照明器（GX40 机内补光恒存在），否则 560；模式与照明器状态写入 `payload` 并发 `sensor.mode{uav, sensor, from, to, reason}` | P0 | V0.2-demo | 是 | M13-AC-203 | AWR-04 §6.1"夜视"、§6.5 照度档；ADR-101 |
+| M13-FR-206 | 云台指向源与仲裁：源按优先级 `operator`（手动或 API 的 `gimbal` 命令）> `tasking`（M20 架次项与接力站位的 LOOK_AT）> `cue`（M19 由雷达或声阵列检测引导）> `default`（D1 缺省策略，M13-FR-012）；`operator` 源在最后一条 operator 云台命令后保持 60 s【仿真】或至 `gimbal{mode: release}`；`cue` 源保持 5 s【仿真】；同一 `gimbal_id` 上的传感器共享指向（P600 的 GX40 与 `nir_ill_l` 同轴）；当前源写入 `payload.gimbal_src` | P0 | V0.2-demo | 是 | M13-AC-204 | AWR-04 §6.4（雷达、声阵列"自动把云台转向检测方位"）、§10.6 |
+| M13-FR-207 | 引导接口（供 M19）：`SensorRuntime.cue(slot, az_enu_deg, el_deg, range_m \| None, source_sensor)`：有距离时 LOOK_AT `p_sensor + range·u`，无距离时取方位射线与 DTM 的交点（M04 `ray_hit`，无交点取 300 m 处）；受限位与 90°/s 角速度约束；`operator` 或 `tasking` 源存在时只记录不执行 | P0 | V0.2-demo | 是 | M13-AC-204 | AWR-04 §6.2"非成像传感器只给 D"、§6.4 |
+| M13-FR-208 | 云台命令扩展：`uav/{id}/cmd/gimbal{gimbal_id?, mode ∈ {fixed, look_at, look_at_axis, nadir, forward, release}, yaw_deg?, pitch_deg?, look_at_enu_m?, rate_deg_s?}`（D1 五种模式 + `release`）；GX40 限位俯仰 −90°~+30°、偏航 ±160°、90°/s（AWR-04 §6.1，D 级） | P0 | V0.2-demo | 是 | M13-AC-204 | M13-FR-011；AWR-04 §6.1 |
+| M13-FR-209 | `uav/{id}/payload`（msgpack，2 Hz，订阅时生成）与 `GET .../vehicles/{vid}/sensors`（M08 路由调用 M13）：每个挂载传感器的 `describe()` 静态参数加 §15.3.2 的动态字段；同一内容进入 `state_ext.sens.payload`（选中机 2 Hz） | P0 | V0.2-demo | 是 | M13-AC-205 | AWR-04 §11.7 |
+| M13-FR-210 | `uav/{id}/sensor/nav`（msgpack，10 Hz，只为被订阅的机体生成，每会话 ≤ 4 架）：IMU 比力与角速度（D1 IMU 模型按 10 Hz 取样）、GNSS（D1 GM 模型：位置、速度、fix、eph、epv、卫星数、HDOP）、气压高度（D1 纯函数）与定位档 `loc_mode ∈ {rtk, slam, single}`；D1 中这些属于 D1-ext 且只对兴趣集 2 Hz，D2 在订阅时升为 P0 | P0 | V0.2-demo | 是 | M13-AC-205 | AWR-04 §11.7"导航"行；M13-FR-031、033、035 |
+| M13-FR-211 | 定位档：会话内存在带 `rtk_base` 且链路距离覆盖该机的机巢时为 `rtk`（GNSS 取 RTK_FIXED 档参数，悬停误差取 `nav.hold_sigma_m.rtk`），否则装有 MID-360 的机体为 `slam`（`hold_sigma_m.slam`），其余为 `single`；机巢 RTK 覆盖经 M08 度量注册表读取 M20 登记的度量 `tasking.rtk_bases`（不 import M20），1 Hz【仿真】刷新 | P1 | V0.2-demo | 是 | M13-AC-205 | AWR-04 §5.1 RTK 行、悬停精度行 |
+| M13-FR-212 | MID-360 v2：`range.hard_max_m` 由 70 改为 100，其余沿用 r04 拟合（`R_max(ρ) = 40 m·(ρ/0.1)^0.269`、盲区 0.1 m、FOV 360° × −7°~52°、20 万点/s、10 Hz）；质量 0.265 kg、功率 6.5 W（B） | P0 | V0.2-demo | 是 | M13-AC-201 | AWR-04 §5.1 三维激光雷达行 |
+| M13-FR-213 | MID-360 限频扫描：`uav/{id}/sensor/lidar/scan` 只在被订阅时生成，≤ 2 Hz，每会话同时只为 1 架机生成（订阅另一架时切换到最近订阅者，被暂停者在 `payload.lidar_scan = paused`）；每帧取 D1 花样纯函数 `mid360_pattern` 的一个 100 ms 帧（20 000 条射线），在 M04 DSM（2 m，柱体语义）上做 numba DDA 求交，并对 ≤ 30 个识别物包围盒做射线–AABB 求交；距离上限按命中面反射率 `R_max(ρ)` 截断（地物缺省 ρ = 0.2，识别物取 `reflect_905`）；测距噪声沿用 D1 参数（计数器 RNG）；以 `awr.LidarScan8.v1` 编码（每帧 ≤ 20 000 点、≤ 160 KB）；计算放在慢任务 `m13.lidar_scan` 中按片执行（每轮 ≤ 300 µs，一帧在 ≤ 250 ms 墙钟内完成） | P0 | V0.2-demo | 是 | M13-AC-206 | AWR-04 §11.7 MID-360 行；M13-FR-050、052、054；r04 §3.1 |
+| M13-FR-214 | Mock 检测器并存：S3 的 Mock 目标表与 `sensor.detect` 保持 D1 行为（ADR-100）；Mock 检测器只观察剧本 `target.spawn` 写入的 Mock 目标，不读取 M18 实体表；沙盒与 S7 中没有 Mock 目标时不产生 `sensor.detect`；D1 槽位 `camera.yaml` 与 `thermal.yaml` 保留 `detector` 块以维持 S3（AWR-20 §3.4） | P0 | V0.2-demo | 是 | M13-AC-207 | ADR-100；M13-FR-040–045 |
+| M13-FR-215 | P600 2.0.0 的传感器集合（按 AWR-20 §3.4、AWR-04 ADR-115；本节起草时"把 `camera` 改指 GX40"的写法作废，附录 B 第 83 行）：新槽位 `eo` → 挂载文件 `sensors/eo_gx40.yaml`（`spec_ref: eo_gx40@…`，缺省挂载，沙盒与 FPV 传感器视图使用）；`mid360` v2；`gnss`、`imu` 不变；`nir_ill`（`nir_ill_l`，可选，缺省不装）；`camera`（6000 × 4000）与 `thermal` 保留为字符串形式的 D1 槽位，只供 D1 剧本（S3 的 Mock 检测器），不出现在 D2 目录与沙盒实例中；`sensor_no` 按映射顺序编号（camera 0、thermal 1、mid360 2、gnss 3、imu 4、eo 5、nir_ill 6），D1 编号不变；`p600_mid360@1.0.0` 仍引用 D1 文件 | P0 | V0.2-demo | 是 | M13-AC-207 | ADR-095、ADR-115；AWR-04 §5.2 缺省挂载 |
+| M13-FR-216 | `describe()` 扩展：返回全部挂载传感器（含可选与未装）的静态参数、置信度、质量、功率与派生值（GX40 两端 FOV、各镜头 LWIR FOV、雷达 `R_ref` 对 1 m² 与车、人的作用距离）；供 `GET /catalog/sensors`（M21）、`GET .../vehicles/{vid}/sensors` 与孪生表 | P0 | V0.2-demo | 是 | M13-AC-201 | M13-FR-015；AWR-04 §10.5 机队面板 |
+| M13-FR-217 | 前端（`apps/web/src/engine/sensors/**`、`stores/sensors.ts`）：`specs.gen.ts` 由新 spec 生成（含变焦范围、F 数、镜头表）；`intrinsics.ts` 增加 `withFocal(sensor, f_mm, out)`，FPV 与视锥按 `payload.f_mm` 更新并沿用 D1 云台视觉跟随的临界阻尼（τ = 0.15 s）平滑焦距；`stores/sensors.ts` 增加载荷字段（≤ 4 Hz）；照明器以与相机同轴的锥体由 M06 绘制 | P0 | V0.2-demo | 是 | M13-AC-208 | M13-FR-020–023；AWR-04 §10.5 |
+| M13-NFR-201 | 成本：sensors stage（含变焦、模式、指向仲裁）在 sandbox100、12 架下 ≤ 0.004 核；`payload` 与 `nav` 打包 ≤ 0.002 核；`m13.lidar_scan` 2 Hz 时 ≤ 0.012 核（每轮 ≤ 300 µs）；N = 1000 的 d1_250 阶梯中 sensors stage 预算 0.010 不变 | P0 | V0.2-demo | 是 | M13-AC-206、AC-209 | M08 §15.4.2；AWR-04 §4.4.1 |
+| M13-NFR-202 | 确定性：变焦、模式、指向仲裁全部按仿真时间推进且不抽随机数；扫描噪声用计数器 RNG（键含 frame_seq 与点序号），同一快照与种子下扫描帧逐字节一致 | P1 | V0.2-demo | 是 | M13-AC-209 | ADR-049；D2-AC-32 |
+
+### 15.3 接口
+
+#### 15.3.1 规格文件（结构要点；完整 schema 以 M19 起草的 `sensor/*.schema.json` 为准）
+
+```yaml
+# vehicles/p600/sensors/eo_gx40.yaml（awr.sensor.eo_zoom.v1；槽位 eo，规格经 spec_ref 取自型号库 vehicles/sensor_models/，AWR-20 §7.5）
+schema: awr.sensor.eo_zoom.v1
+sensor_id: camera
+model: pinhole
+native: {width: 3840, height: 2160, pixel_um: 1.45}          # 靶面 5.568 × 3.132 mm
+outputs: {"4k": [3840, 2160, 1.45], "1080p": [1920, 1080, 2.90], "720p": [1280, 720, 4.35],
+          sxga: [1280, 1024, 3.06], "1.3m": [1280, 960, 3.26]}  # [W, H, 等效像元 µm]
+analysis_res: {default: "1080p", max_without_cap: "1080p", requires_cap_4k: compute.orin_nx}
+zoom: {f_min_mm: 4.8, f_max_mm: 48.0, f_num: [1.7, 3.2], t_full_s: 4.0}
+modes:
+  day:      {e_min_color_lx: 0.5, t_exp_s: 0.001}
+  lowlight: {e_min_mono_lx: 0.05, t_exp_s: 0.0333}
+  nir:      {illuminators: [builtin_850, nir_ill_l], t_exp_s: 0.0333}
+illuminator_builtin: {id: builtin_850, wavelength_nm: 850, power_w: 0.8, divergence: follow_hfov, r_ref_m: 200, theta_ref_deg: 6.6}
+gimbal: {id: g0, pitch_min_deg: -90, pitch_max_deg: 30, yaw_min_deg: -160, yaw_max_deg: 160, rate_max_deg_s: 90,
+         default_mode: fixed, default_yaw_deg: 0, default_pitch_deg: -15}
+mount: {xyz_m: [0.12, 0.0, -0.08], rpy_deg: [0, 0, 0], optional: false, mounted: true}
+mass_kg: 0.4236          # 云台 405 g + GCU 18.6 g（B）
+power_w: 8.0             # D，模拟参考值
+stream: {codecs: [h264, h265, mjpeg], bitrate_mbps: [0.25, 16]}   # 标签
+detector: {capability: rgb.zoom, p0: 0.80, r_fp_m: 90, t_look_s: 1.0, pos_sigma_m: 2.0}   # 仅 S3 Mock
+conf: B
+src: "用户 GX40 规格（AWR-04 §6.1）；云台限位、曝光与最低照度为模拟参考值（D）"
+```
+
+`nir_ill_l.yaml`（`awr.sensor.nir_illuminator.v1`）：`{wavelength_nm: 850, power_w: 3.0, divergence_deg: 5.5, r_ref_m: 465, gimbal_id: g0, mass_kg: 0.18, mount{optional: true, mounted: false}, conf: D}`。`lwir640`、`mmw77`、`mic8` 的参数见 §15.4，文件放在各机型包的 `sensors/` 下（P600 不缺省挂载）。
+
+#### 15.3.2 `uav/{id}/payload` 与 `GET .../vehicles/{vid}/sensors` 的动态字段
+
+| 字段 | 类型 | 单位 | 说明 |
+|---|---|---|---|
+| `t_sim_ns` | i64 | ns | 采样时刻 |
+| `gimbals[]` | `{id, yaw_deg, pitch_deg, mode, src ∈ {operator, tasking, cue, default}, target_enu_m?}` | ° | 机体系偏航与俯仰（D1 约定） |
+| `imaging[]` | `{sensor, kind, f_mm, f_cmd_mm, f_num, hfov_deg, vfov_deg, mode, analysis_res, active}` | mm、° | 成像传感器 |
+| `illuminators[]` | `{id, on, divergence_deg, power_w}` | °、W | 机内与外挂 |
+| `radar` | `{active}` | — | 航迹由 M19 发布 |
+| `acoustic` | `{active, nr_db}` | dB | 方位由 M19 发布 |
+| `lidar_scan` | enum | — | `off`、`active`、`paused` |
+
+#### 15.3.3 `uav/{id}/sensor/nav`（契约 `sensor/nav.schema.json`，M13 起草）
+
+| 字段 | 类型 | 单位 | 说明 |
+|---|---|---|---|
+| `imu.acc_mps2`、`imu.gyro_rad_s` | f32[3] | m/s²、rad/s | FLU，含噪声与偏置（D1 IMU 模型） |
+| `gnss.fix` | enum `GnssFix` | — | NO_FIX、SINGLE、DGPS、RTK_FLOAT、RTK_FIXED |
+| `gnss.pos_enu_m`、`gnss.vel_enu_mps` | f64[3]、f32[3] | m、m/s | 含 GM 误差与杆臂 |
+| `gnss.eph_m`、`gnss.epv_m`、`gnss.sats`、`gnss.hdop` | f32、f32、u8、f32 | m | PX4 语义 1σ |
+| `baro.alt_m`、`baro.p_pa` | f32 | m、Pa | D1 气压计纯函数 |
+| `loc_mode` | enum | — | `rtk`、`slam`、`single`（FR-211） |
+
+#### 15.3.4 运行时 API（供 M19、M20、M08）
+
+```python
+class SensorRuntime:                                     # awr/sim/sensors/runtime.py（D1 类，追加方法）
+    def payload_view(self) -> PayloadView: ...           # 只读：焦距、FOV、模式、照明器、云台角与源（M19 用）
+    def sensor_world_pose(self, slots, sensor="camera"): ...                 # D1 已有
+    def imaging_specs(self, slot) -> list[ImagingSpec]: ...                  # 含当前 f、F#、p_eff、分析分辨率
+    def cue(self, slot, az_enu_deg, el_deg, range_m, source_sensor) -> bool: ...   # FR-207
+    def set_tasking_pointing(self, slot, gimbal_id, look_at_enu_m | None) -> None: ...  # M20；None 释放
+    def scan_interest(self, slots: list[int]) -> None: ...                   # M11 兴趣下推（FR-213）
+```
+
+### 15.4 默认参数
+
+| 传感器 | 参数（模拟参考值除注明外） | 质量 / 功率 | 置信度与来源 |
+|---|---|---|---|
+| `eo_gx40` | 3840 × 2160、1.45 µm；f 4.8–48 mm（HFOV 60.2°–6.6°、VFOV 36.1°–3.7°）；F1.7–3.2；全程变焦 4 s；快门 1–1/30000 s；机内 850 nm 补光 0.8 W、`R_ref` 200 m @ 6.6°；分析分辨率缺省 1080P | 0.424 kg / 8 W | 光学参数 B（用户规格）；云台、曝光、功率 D |
+| `nir` 模式 | 彩色最低照度 0.5 lx，黑白 0.05 lx；低照曝光 1/30 s | — | D（AWR-04 §6.1） |
+| `nir_ill_l` | 850 nm、3 W、固定 5.5°、`R_ref` ≈ 465 m | 0.18 kg / 3 W | D |
+| `lwir640` | 640 × 512、12 µm、8–14 µm、NETD 50 mK、30 Hz、积分 10 ms；镜头 13 mm（32.9° × 26.6°）、25 mm（17.5° × 14.0°）、75 mm（5.9° × 4.7°）、100 mm（4.4° × 3.5°） | 13 mm 0.12 kg、25 mm 0.15 kg、75 mm 0.35 kg、100 mm 0.45 kg / 3 W | D |
+| `mmw77` | 77 GHz FMCW；方位 ±60°、俯仰 ±15°；`R_ref` 180 m（1 m²，P_d 0.9、P_fa 1e-6）；距离分辨 0.3 m、方位分辨 4°、速度分辨 0.1 m/s、方位精度 1°；5 Hz；缺省挂载前视、下俯 10° | 0.15 kg / 4 W | D |
+| `mic8` | 8 麦克风、孔径 0.3 m、100 Hz–8 kHz、阵增益 9 dB、自噪声抑制 NR 多旋翼 25 dB / 固定翼 35 dB、方位精度 ±5°、1/3 倍频程 | 0.20 kg / 2 W | D |
+| `mid360` v2 | 见 FR-212；扫描帧 ≤ 2 Hz、≤ 20 000 点、每会话 1 路 | 0.265 kg / 6.5 W | B |
+| 指向仲裁 | `operator` 保持 60 s、`cue` 保持 5 s【仿真】 | — | 本文设定 |
+| `nav` 订阅 | 10 Hz、每会话 ≤ 4 架 | — | AWR-04 §11.7；会话上限为本文设定 |
+
+### 15.5 算法
+
+```text
+# 1 变焦与 FOV（sensors stage，50 Hz，dt = 0.02 s）
+for 每个带 zoom 的成像传感器 s:
+    λ = ln(f_cmd / f)；step = ln(f_max/f_min) · dt / t_full
+    f = f · exp(clamp(λ, −step, +step))
+    hfov = 2·atan(W_s/(2f))；vfov = 2·atan(H_s/(2f))
+    f_num = F_wide + (F_tele − F_wide)·ln(f/f_min)/ln(f_max/f_min)
+    机内照明器发散角 = hfov（AWR-04 §6.1）
+
+# 2 指向仲裁（每次 stage 调用，按 slot 升序）
+src = 第一个有效者：operator（t − t_op ≤ 60 s 且未 release）> tasking（M20 设置非空）> cue（t − t_cue ≤ 5 s）> default
+目标 = 该源给出的模式与目标；按 D1 kernels_gimbal 以限位与 90°/s 推进（复用 D1 实现）
+
+# 3 cue（M19 调用）
+if 当前源 ∈ {operator, tasking}: 记录 last_cue，返回 False
+u = 方位 az、俯仰 el 的 ENU 单位向量
+p = p_sensor + range·u                if range 已知
+    ray_hit(DTM, p_sensor, u) 或 p_sensor + 300·u     否则
+设 cue 源 LOOK_AT(p)，t_cue = t；返回 True
+
+# 4 MID-360 扫描帧（慢任务 m13.lidar_scan，每轮 ≤ 300 µs）
+on 帧开始（≤ 2 Hz 且存在扫描兴趣）:
+    az, el = mid360_pattern(frame_seq)；位姿取帧中时刻；rays = R_world_sensor · dir(az, el)
+分片 k（每片约 2000 条，numba）:
+    t_dsm = dda_dsm(origin, rays, step = 2 m, r_max = 100 m)      # 柱体语义，返回命中距离与类别
+    t_tgt = ray_aabb(origin, rays, target_boxes)                  # ≤ 30 个识别物
+    t = min(t_dsm, t_tgt)；ρ = 命中物反射率；有效 if 0.1 ≤ t ≤ min(100, 40·(ρ/0.1)^0.269)
+    t += cbrng.normal(seed, stream=lidar, agent_no, frame_seq, i)·σ(t)
+全部分片完成: 写 LidarScan8（传感器帧 cm，refl = ρ·255，tag_line 按 D1），发布到 scan 通道
+```
+
+### 15.6 状态机与时序
+
+#### 15.6.1 成像模式（`mode = auto` 时）
+
+| 状态 | 事件 | 守卫 | 动作 | 目标状态 |
+|---|---|---|---|---|
+| DAY | 照度档变为低照 | — | 黑白、曝光 1/30 s；发 `sensor.mode` | LOWLIGHT |
+| LOWLIGHT | 照度档变为夜间 | 云台上有照明器（GX40 恒有） | 打开该云台全部照明器；发 `sensor.mode` | NIR |
+| LOWLIGHT | 照度档变为日间 | — | 彩色、曝光 1/1000 s | DAY |
+| NIR | 照度档变为低照或日间 | — | 关闭照明器 | LOWLIGHT 或 DAY |
+| 任一 | `sensor_mode{mode ≠ auto}` | 目标模式可用 | 锁定为该模式（退出 auto） | 对应状态 |
+| 任一 | `sensor_mode{mode = nir}` | 无照明器 | 回复 560 | 原状态 |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+stateDiagram-v2
+  [*] --> DAY
+  DAY --> LOWLIGHT: 进入低照档
+  LOWLIGHT --> NIR: 进入夜间档，开照明器
+  LOWLIGHT --> DAY: 回到日间档
+  NIR --> LOWLIGHT: 回到低照档，关照明器
+  NIR --> DAY: 直接回到日间档
+```
+
+#### 15.6.2 雷达引导云台到明确捕获（时序）
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+sequenceDiagram
+  participant P as M19 perception stage
+  participant S as M13 SensorRuntime
+  participant G as sensors stage（50 Hz）
+  participant N as 网关与客户端
+  P->>P: 雷达 SNR ≥ 13.2 dB，D 级航迹（方位、俯仰、距离）
+  P->>S: cue(slot, az, el, range, mmw77)
+  S->>S: 源仲裁：无 operator 与 tasking，设 cue 源
+  G->>G: 云台以 90°/s 转向 LOOK_AT
+  G-->>N: uav/{id}/payload（src = cue）
+  P->>S: payload_view()（新指向、焦距）
+  P->>P: EO 进入视锥，N_eff ≥ N_req 持续 1 s
+  P-->>N: perception.capture
+```
+
+### 15.7 实现指引
+
+| 路径 | 改动 | 复用的 D1 代码 |
+|---|---|---|
+| `python/awr/sim/sensors/spec.py`、`enums.py` | 五种新结构与 `mid360` v2 的加载与校验；`SensorKind` 追加 7、8；`mount.optional/mounted`、`mass_kg`、`power_w` | `SensorSpec` 加载、`conf`/`src` 校验 |
+| `python/awr/sim/sensors/block.py`、`payload.py`（新） | `payload` 状态块字段；变焦、F 数、模式与照明器推进 | `block.FIELDS` 注册方式 |
+| `python/awr/sim/sensors/gimbal.py`、`kernels_gimbal.py` | 指向源与仲裁、`gimbal_id` 共享、`release`、`cue` | D1 五种模式与限位、角速度核 |
+| `python/awr/sim/sensors/stage.py` | 调用序号改用 `ctx.call_index`、步长改用 `ctx.dt(stage)`（M08 §15.7 变更请求 ②）；加入变焦与模式推进 | D1 sensors stage 的分相位结构 |
+| `python/awr/sim/sensors/plugin.py` | 登记 `gimbal`、`zoom`、`sensor_mode` 命令处理函数（M08 `register_command_handler`）、慢任务 `m13.payload_pub`、`m13.nav_pub`、`m13.lidar_scan` | `install()` 的登记模式、`register_slow_task` |
+| `python/awr/sim/sensors/lidar/scan_rt.py`（新） | DDA 求交、AABB、LidarScan8 打包 | `lidar/pattern`（D1 花样）、`tests/sensors/fixtures/gen_lidar_fixture.py` 的 2.5D 步进、`frame.py` 的 LidarScan8 打包（D1 桩） |
+| `python/awr/sim/sensors/{gnss,imu,baro}.py`、`nav_pub.py`（新） | `sensor/nav` 10 Hz 订阅生成；`loc_mode` | D1 GM、IMU、气压计模型与 `cbrng` |
+| `python/awr/sim/sensors/describe.py` | 新类型描述、派生值、质量与功率汇总 | D1 `describe()` 与孪生表行 |
+| `python/awr/sim/sensors/detector.py` | 确认只读 Mock 目标表（不变，加单测） | D1 Mock 检测器 |
+| `vehicles/p600/sensors/{eo_gx40,nir_ill_l}.yaml`（新）、`mid360.yaml`（v2） | §15.3.1 | D1 `camera.yaml` 的挂载与云台块 |
+| `apps/web/src/engine/sensors/{intrinsics.ts,specs.gen.ts}`、`apps/web/src/stores/sensors.ts` | `withFocal`、新 spec 生成、载荷字段 | D1 `projectionFor`、`frameRect`、`sensorCache` |
+| `packages/contracts/sensor/{nav,payload}.schema.json`（起草） | §15.3.2、§15.3.3 | — |
+| `tests/sensors/test_zoom_modes.py`、`test_gimbal_arbitration.py`、`test_lidar_scan.py`、`test_nav_payload.py`（新） | 见 §15.8 | D1 `tests/sensors/*` |
+
+### 15.8 验收
+
+| 编号 | 度量 | 阈值 | 测试方法 | 环境 | 优先级 | 对应 |
+|---|---|---|---|---|---|---|
+| M13-AC-201 | 规格加载 | 五种新 spec 与 `mid360` v2 通过 schema 与取值校验；缺 `conf`、焦距范围倒置、`analysis_res = 4k` 而机型无 `compute.orin_nx` 各被拒绝（353 或 561）；可选挂载缺省不装；`describe()` 返回全部挂载的质量与功率，P600 缺省挂载合计质量与 §15.4 一致 | `pytest tests/sensors/test_spec_d2.py` | 本机 CPU | P0 | FR-201、202、212、216；D2-AC-09 |
+| M13-AC-202 | 变焦与 FOV | GX40 在 4.8 mm 与 48 mm 的 HFOV、VFOV 与规格误差 ≤ 0.2°；4.8 → 48 mm 用时 4.00 s ± 1 个 stage 周期，且 ln f 随时间线性；F 数两端为 1.7 与 3.2；越界返回 110，对 LWIR 变焦返回 560 | `pytest tests/sensors/test_zoom_modes.py` | 本机 CPU | P0 | FR-203、204；D2-AC-13 |
+| M13-AC-203 | 成像模式 | 日历扫过日出与日落：`auto` 模式在照度档变化的同一 tick 切换并发 `sensor.mode`；夜间模式打开同云台全部照明器；手动锁定后不随照度切换；无照明器时 `nir` 返回 560 | `test_zoom_modes.py::test_auto_modes` | 本机 CPU | P0 | FR-205；D2-AC-14、15 |
+| M13-AC-204 | 指向仲裁与引导 | 源优先级矩阵（4 × 4 组合）全部符合 FR-206；`operator` 60 s、`cue` 5 s 到期回落；`cue` 在 operator 或 tasking 期间不改变指向；雷达航迹引导后云台指向误差 ≤ 1°，用时 ≤ 偏角/90°/s + 0.1 s；共享 `gimbal_id` 的照明器与相机光轴夹角 0 | `pytest tests/sensors/test_gimbal_arbitration.py` | 本机 CPU | P0 | FR-206–208；D2-AC-31 |
+| M13-AC-205 | 数据产品 | `uav/{id}/payload` 2 Hz ± 5%、`sensor/nav` 10 Hz ± 5%，字段覆盖 AWR-04 §11.7"导航""云台与载荷"两行并通过 schema；第 5 架 nav 订阅不生成并在回复中说明；有 RTK 机巢覆盖时 `loc_mode = rtk` 且 GNSS 为 RTK_FIXED，移出覆盖后为 `slam`（P1） | `pytest tests/sensors/test_nav_payload.py`；`tools/sdk/examples/` | 本机 CPU | P0（定位档 P1） | FR-209–211；D2-AC-22、36 |
+| M13-AC-206 | MID-360 扫描 | 订阅后 ≤ 2 Hz、每帧 ≤ 20 000 点、帧 ≤ 160 KB；落在 DSM 面上的点与 DSM 高度偏差 ≤ 0.5 m（剔除噪声 3σ）；识别物包围盒出现在点云中；同一会话第二架被订阅时第一架为 `paused`；慢任务每轮 p99 ≤ 300 µs，2 Hz 时 ≤ 0.012 核 | `pytest tests/sensors/test_lidar_scan.py`；`fleet_ladder --clock sandbox100` | 本机 CPU | P0 | FR-213、NFR-201；D2-AC-22 |
+| M13-AC-207 | D1 并存 | S3 Mock 检测 golden 不变（`sensor.detect` 序列逐字节一致）；在含 M18 识别物、无 Mock 目标的会话中 `sensor.detect` 为 0；`p600_mid360@1.0.0` 下 D1 的 M13-AC-001 至 AC-031 全部通过；v2 下 FPV、视锥与孪生表路径（名称 `camera`）可用 | `pytest tests/sensors`；S3 剧本回归（`make test-mission`） | 本机 CPU | P0 | FR-214、215；D2-AC-26 |
+| M13-AC-208 | 前端几何 | `withFocal` 的投影矩阵与 Python 几何库在 5 个焦距上的像素误差 ≤ 1e-6 px；FPV 视场在变焦指令后按 τ = 0.15 s 收敛；`specs.gen.ts` 与 YAML 对拍 | `npx vitest run tests/m13/`（`apps/web`） | 本机 | P0 | FR-217；D2-AC-21 |
+| M13-AC-209 | 成本与确定性 | sandbox100、12 架：sensors stage ≤ 0.004 核；同一快照与种子下两次扫描帧逐字节一致（P1） | `fleet_ladder`；`test_lidar_scan.py::test_determinism` | 本机 CPU | P0（确定性 P1） | NFR-201、202；D2-AC-08、32 |
+
+### 15.9 风险
+
+| 风险 | 影响 | 对策 |
+|---|---|---|
+| 名称 `camera` 改指 GX40 后，D1 依赖 6000 × 4000 内参的用例或 S3 结果变化 | D1 回退 | D1 剧本可固定 `p600_mid360@1.0.0`（ADR-095）；AC-207 两个版本都跑 |
+| 扫描帧在慢任务中跨多轮完成，快进时帧内位姿变化 | 点云拖影 | 位姿统一取帧中时刻（D1 `DESKEWED` 语义），快进 ×5 以上暂停扫描生成 |
+| 自动模式与 M19 的照度判据不同步 | 模式切换与 `k_light` 不一致 | 二者都读 M07 同一照度档事件，同一 tick 生效 |
+
+### 15.10 D2 追溯
+
+| 需求 | ADR | 本节条款 | D2 验收 |
+|---|---|---|---|
+| R-D2-14（日视、夜视、红外、雷达波、声波） | 100、101 | §15.1、FR-201、203–208 | D2-AC-14、31 |
+| R-D2-12（视锥与分辨率阈值，几何输入） | 100 | FR-203、204、217 | D2-AC-13、14 |
+| R-D2-13、R-D2-27（传感器参数配置、随附规格） | 095、101 | FR-201、202、212、215、216 | D2-AC-09 |
+| R-D2-21（手动控制与传感器视图） | 108 | FR-204–208、217 | D2-AC-21 |
+| R-D2-23（所有 sensor 信息） | 107 | FR-209–211、213 | D2-AC-22、36 |
+
+研究依据：r04 §3.1（MID-360 量程、花样与扫描）；r23 §3.10（GNSS、IMU、气压计噪声）；用户 GX40 与 MID-360 规格（R-D2-27）。
+
+### 15.11 对基线（AWR-04）的反馈
+
+处置结果以 [AWR-04 附录 B](../04-D2-设计增补与决策记录.md)（v1.2）为准；本节保留为起草时的记录。
+
+| # | 基线条款 | 问题 | 本节的处理 | 建议 |
+|---|---|---|---|---|
+| D2F-01 | §11.7 MID-360 行"抽稀到每帧 ≤ 2 万点，ANET_Q16 编码……沿用 AWR-17" | AWR-17 为该 topic 登记的是 `awr.LidarScan8.v1`（每点 8 B，M13 §7.2.4），ANET_Q16 是 M05 的点云切片编码，二者不同 | 采用 `awr.LidarScan8.v1`，每帧 ≤ 20 000 点（≤ 160 KB，低于 blob 256 KB 上限） | §11.7 改为"LidarScan8 编码" |
+| D2F-02 | §11.6 `rt/enums.json` 一项 | 只列了 `frame.type`、感知等级、识别物感知态与判据模式，未列 `SensorKind` 的追加（照明器、声阵列）与 `Kind` 的 `target` | 追加 `SensorKind` 7、8（只追加） | §11.6 补上 |
+| D2F-03 | §5.2 P600"缺省挂载 GX40、MID-360" | D1 的 P600 还有 `camera.yaml`（UrbanScene3D 采图相机 6000 × 4000）与 `thermal.yaml`（S3 使用），基线未说明 v2 中二者的去留 | `camera` 名称改指 GX40；`thermal` 保留为可选挂载、缺省不装；v1 冻结引用原文件（FR-215） | §5.2 注明 |
+| D2F-04 | §11.3 原因码段（560–579 归 M19） | 变焦、模式与挂载覆盖的参数错误由 M13 判定，语义上属同一族 | M13 直接使用 560、561（由 M19 登记） | §11.3 注明"560–579 为传感器码段，M13 与 M19 共用，M19 登记" |
+| D2F-05 | §11.7"每会话同时 ≤ 1 路"扫描 | 没有规定 sim-core 如何得知"哪架机的扫描被订阅"；D1 的兴趣下推（`ctl/sim-core/interest`）只有 detail 兴趣集 | 增加扫描兴趣并由 M11 下推（`SensorRuntime.scan_interest`） | 在 §11.2 或 M11 增补中登记扫描兴趣的下推字段 |
+| D2F-06 | §11.7"导航"行 | MID-360 自带 IMU（ICM40609，200 Hz）不在数据产品表中；"所有 sensor 信息"若被解读为含该 IMU，会缺项 | `sensor/nav` 只给飞控 IMU 的 10 Hz 取样；MID-360 IMU 不单独输出 | 表中注明"MID-360 内置 IMU 不单独输出（V0.4 HIL 起提供）" |
+| D2F-07 | §2.2、§2.3 的字段名 `lw_dba`、`lwa_hover_dba`、`tonal_db`、`band_shape_db`、`gain_back_db`、`eirp_dbm` | 单位后缀 `_db`、`_dba`、`_dbm` 不在 `rt/units.json` 的后缀字典中，`check-units` 对带 `unit` 注记的 schema 属性会报 UNIT-01 | 本节的 `payload.acoustic.nr_db` 沿用同一写法 | 由 M00 在 `units.json` 登记 `_db`（dB）、`_dba`（dB(A)）、`_dbm`（dBm）三个后缀 |

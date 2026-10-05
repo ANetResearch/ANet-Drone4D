@@ -2382,3 +2382,326 @@ JSON 编码使用标准库 `json`（控制面低频；lock 中无 orjson）。�
 15. **契约未覆盖、本文补充的内部项**：①`heartbeat(..., *, step_seq=None)`：17 §9.2 的写者签名没有写头部 `step_seq` 的途径，而 M11-AC-028 与 D1-AC-11a 依赖它；②`gw.seen`（§6.3.6）：17 §9.6 只有 `gw.epoch`，api 停机期间若生产者重开，重启后的 api 无法判断是否需要 + 1，本文以内部文件补足。两项都不改变线上格式，建议 17 §9.2、§9.6 注明。
 16. **17 尚未登记的会话与停止语义**：10 AD-01 与 12 §4.1.2 S20 使用的 WS 服务 `session/start`、事件 `session.switching` 与 `sys.shutting_down` 不在 17 §7.1、§6.12 中（10 §21 第 1 条已提出）；本文按 10、12 实现（FR-103、FR-104）。另外 M15-FR-037 把顶栏连接徽标写作 `link.*` 分档图标，而 14 §4.1 与 §11 规定为 `conn.online`（Wifi 与 WifiOff 之间 morph）；本文 §8 按 14 执行，建议 M15 对齐。
 17. **与 18 的字段对齐**：①18 §9.4 的 `perf/server` 映射表仍写 `sim.n` 并把 `sim.step_p50_us`、`step_max_us`、`catchup_saturated`、`cpu_pct` 标为待增，17 v1.1 §6.5 已定义为 `sim.n_active` 等字段，本文 FR-085 按 17 输出；②18 §9.2 的 `__perf.net` 没有 RTT、时钟偏移与下行字节速率，本文以扩展字段 `rttMs`、`clockOffsetMs`、`bytesPerS` 提供，建议 18 登记；③`net.decodeUs` 在 18 中写作"每个 BATCH"一个样本，而 rt.worker 只在 flush 时解码（一槽可合并多个 BATCH），本文按每槽一个样本提供，建议 18 改写；④18 §9.4 第 4 条"17 §4.2 尚未登记 `/api/sys/perf`"已过时（R60）。
+
+
+---
+
+## 15. D2 增补（V0.2-demo）
+
+> 本节是 M11 对 D2（V0.2-demo）的增补，依据 [AWR-04 D2 设计增补与决策记录](../04-D2-设计增补与决策记录.md)（D2 唯一基线，重点为 §4.7、§4.8、§11.2、§11.5、ADR-092、ADR-093）与 [用户 D2 需求原文](../inputs/D2-需求原文-2026-10-05.md)。§1–§14 的 D1 条款在未被本节修改处继续有效；与 AWR-04 冲突时以 AWR-04 为准，问题列在 §15.11。
+
+### 15.0 定位与编号
+
+1. D2 把公开站从"一个只读 run"变为"一个只读共享展示 + 至多 N_max 个隔离沙盒"。M11 负责其中的**多会话路由与沙盒鉴权**：
+   - api 从"进程即一个 run"改为"按请求解析运行上下文"（`RunBinding`、`ctx_for`），show-api（D1 api）行为不变；
+   - 新进程入口 **sandbox-api**（`127.0.0.1:18641`）与 **GatewayHub**：每个活动沙盒一个 SessionContext（自己的 zenoh 会话 + 按 `RunBinding` 实例化的 D1 Gateway）；
+   - 沙盒 token 的签发与校验、sid 作用域、沙盒内的权限与席位；
+   - 按地址前缀聚合的限流与连接上限；
+   - `awr.rt.v1` 的 D2 topic、命令与事件的网关侧接入，兴趣下推扩展；
+   - 运行时库 `awr.runtime.cgroup`、`runtime.yaml` 的 `sandbox:` 段与 public profile v2；前端 `net/**` 的 API 基址与 token 提供者可配置。
+2. 不归 M11：会话池、broker、配额计数、倍速治理与回收（M17）；各领域 REST 资源的语义（M08、M17–M21、M07 的 `rest/<domain>.py`）；nginx 配置与部署套件（M00，M11 提供口径与对拍用例）。
+3. **编号**：D2 条目从 201 起（FR、NFR、AC 各自在 2xx 段内连续）；"D2"列取"是、桩、否"，目标版本 `V0.2-demo`（AWR-04 §1.2）。
+
+### 15.1 进程与路由总览
+
+| 路径前缀（nginx） | 进程 | 上下文解析 | 鉴权 | 说明 |
+|---|---|---|---|---|
+| `/worlds/<白名单>/**` | nginx（`alias`） | — | 无 | 静态世界；show-api 的 D1 静态服务只在本机与局域网（无 nginx）时使用 |
+| `/api/rt`、`/api/**`（不含 `/api/sandbox/`） | show-api（18640，D1） | 恒为唯一上下文（共享展示 run） | D1：匿名 viewer；operator 与 admin 只认部署口令 | ADR-082 不变 |
+| `/api/sandbox/v1/{sessions,worlds,templates,catalog/**,openapi.json,health}` | sandbox-api（18641） | 无会话（公开路由） | 创建匿名；其余公开可缓存 | 资源由 M17、M21 提供 |
+| `/api/sandbox/v1/sessions/{sid}/**`、`.../{sid}/rt` | sandbox-api | 路径 sid → SessionContext | 沙盒 token，`token.sid == 路径 sid` | 资源由各领域 `sandbox_router` 提供 |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+flowchart LR
+  C["客户端（浏览器或 SDK）"] --> N["nginx：前缀限流键 $drone4d_prefix"]
+  N -- "/api/sandbox/" --> SA["sandbox-api：中间件（Host、Origin、前缀限流）"]
+  SA --> CF["ctx_for：路径 sid → SessionContext"]
+  CF --> AU["沙盒 token：K_sbauth 验签、scope、sid 一致、禁用操作"]
+  AU --> R["领域 sandbox_router（rest/fleet、targets、perception、tasking、catalog、env、sandbox）"]
+  AU --> WS["WS /sessions/{sid}/rt → 该上下文的 Gateway"]
+  SA -. "sys/session/*（池命名空间）" .-> P["sandbox-pool"]
+  WS -- "该会话的 zenoh 会话 awr/{world}/{sid}" --> S["sim-core@sid"]
+```
+
+### 15.2 功能需求（D2）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M11-FR-201 | `RunBinding{run_id, kind ∈ {shared, sandbox}, world_id, run_dir, ring_path, namespace, secret_path, producer = "sim-core", clock_profile}`（`awr/runtime/binding.py`）；`ApiSettings` 拆为进程级设置（访问模式、Origin、Host、可信代理、世界白名单、连接上限）与 `RunBinding`；D1 的 `ApiSettings.from_env()` 保留并经 `binding()` 由 `AWR_RUN` 等变量构造唯一绑定；`Gateway.__init__` 改为接收 `(settings, binding, bus, tokens, ...)`，不再读进程级的 `run_id`、`run_dir`、`ring_path` | P0 | V0.2-demo | 是 | M11-AC-201 | ADR-092；AWR-04 §4.7 第 1 条 |
+| M11-FR-202 | 请求级上下文依赖 `ctx_for(request) -> RunContext`（`api/deps.py`）：show-api 恒返回 `app.state.awr`（D1 行为）；sandbox-api 取路径参数 `sid` → GatewayHub 查上下文：不存在 404 `305`，已结束 410 `506 SANDBOX_EXPIRED`，处于 SPAWNING 或世界切换中 503 `211 SIM_UNAVAILABLE`（带 `Retry-After: 1`）；`app_ctx()` 保留为 `ctx_for` 的别名，供尚未迁移的路由在 show-api 中使用 | P0 | V0.2-demo | 是 | M11-AC-201、AC-203 | ADR-092；AWR-04 §14.3 |
+| M11-FR-203 | 路由挂载：各领域 `rest/<domain>.py` 除 D1 的 `router` 外可导出 `sandbox_router`（相对路径，挂载到 `/api/sandbox/v1/sessions/{sid}`）与 `sandbox_public_router`（挂载到 `/api/sandbox/v1`）；sandbox-api 按文件名排序发现并挂载（沿用 D1 `discover_routers`，导入失败记错误日志后跳过）；拒绝挂载清单 `runs、jobs、recon、agents、sys、scenarios、auth、sessions（D1）`，即使导出了 `sandbox_router` 也不挂载；sandbox-api 只暴露 `GET /api/sandbox/v1/openapi.json`（由已挂载路由生成），全站 OpenAPI 在公开模式下仍隐藏 | P0 | V0.2-demo | 是 | M11-AC-202 | AWR-04 §4.7 第 3 条、§11.1 |
+| M11-FR-204 | sandbox-api 进程入口 `python -m awr.api.sandbox`（uvicorn 应用工厂 `awr.api.sandbox:app`，单 worker、`--ws-per-message-deflate false`，绑定 `127.0.0.1:18641`）：由 supervisor 按 D1 语义监管（心跳、退避、熔断）；启动时以 `AWR_CGROUP=sandbox/ctl` 调用 `awr.runtime.cgroup.join()`；打开一个池命名空间 `awr/_sandbox/pool` 的总线会话（`sys/session/{create,get,list,keepalive,stop,rate,activity}` 的客户端，内部 principal 由 `var/sandbox/internal.key` 签名）；健康检查 `GET /api/sandbox/v1/health` 不计限流 | P0 | V0.2-demo | 是 | M11-AC-206 | ADR-092；AWR-04 §4.7、§4.9 |
+| M11-FR-205 | GatewayHub 与 SessionContext 生命周期（§15.6.1）：会话 READY 时 `attach(binding)`：用池渲染的 zenoh 配置打开该会话自己的总线会话（namespace `awr/<world>/<sid>`）、以 `RunBinding` 实例化 D1 `Gateway`（不启动自有 tick 循环）、附着 StateRing；ENDED 时 `detach(sid)`：以 1001 关闭全部连接、关闭总线会话、释放环读者游标；底图切换（同一 sid、新世界）时以 1012（reason `world_switch`）关闭连接并按新绑定重建上下文；上下文表来源为池事件 `evt/sandbox-pool/session` 加每 2 s【墙钟】一次 `sys/session/list` 对账 | P0 | V0.2-demo | 是 | M11-AC-203、AC-206 | AWR-04 §4.7 第 2、6 条 |
+| M11-FR-206 | Hub 驱动：一个 60 Hz【墙钟】循环只对"有订阅者"的上下文调用 `gateway.tick_once()`；每个上下文独立做 BATCH 装帧、credit 窗口、兴趣集聚合与下推；无订阅者的上下文不读环、不编码；单个上下文的事件风暴只占用本上下文的控制面队列（满即对本上下文的连接 1013） | P0 | V0.2-demo | 是 | M11-AC-204 | AWR-04 §4.7 第 4、5 条 |
+| M11-FR-207 | 沙盒 token（`SandboxTokenService`，`api/security.py`）：主密钥 `var/sandbox/token.key`（32 B，0600，首次启动原子创建，重启后不变）；`K_sbauth = HKDF-SHA256(token.key, salt = "awr-sandbox", info = "awr/sandbox-auth/v1")`（全局一把，17 §17.3.1；AWR-04 附录 B 第 65 行）；载荷沿用 D1 `make_token_payload` 并追加 `scope = "sandbox"`、`sid`（`run = sid`、`role ∈ {operator, viewer}`、`mode` 取进程访问模式、`exp` = 会话寿命截止）；续期（M17 `keepalive`）换发新 token；可信入口签名沿用 D1：`K_entry`、`K_confirm` 由该 run 的 `secret_path` 经 `derive_key(secret, sid, …)` 得到，sim-core 以同一密钥验签 | P0 | V0.2-demo | 是 | M11-AC-205 | ADR-093；AWR-04 §4.8；17 §3.2 |
+| M11-FR-208 | 沙盒授权：①路径 sid 与 token `sid` 不一致 403 `503 SANDBOX_SCOPE`；②沙盒 token 用于 show-api 或其他 sid 一律 401 `302 TOKEN_INVALID`（密钥不同，自然失败），show-api 另显式拒绝带 `scope` 的 token；③沙盒内禁用 `seat/takeover`、`sys/*`、`rec/*`、`uav/{id}/cmd/kill`、`uav/{id}/cmd/escalate`（403 `115 ROLE_FORBIDDEN`，WS 与 REST 同表）；④上下文创建时把席位预置给会话 principal（`principal_id_from_hint` 的结果），同一 principal 的多个连接与标签页共享席位，其他 principal 无法获得该 sid 的 operator token；⑤`role = viewer` 的沙盒 token（观摩链接，P1）只读 | P0（⑤ P1） | V0.2-demo | 是 | M11-AC-205 | ADR-093；AWR-04 §4.8 |
+| M11-FR-209 | 地址前缀与限流键：`prefix_of(addr) `（IPv4 /32、IPv6 /64；IPv4 映射的 IPv6 先还原为 IPv4）与 `agg_prefix_of(addr)`（IPv4 /24、IPv6 /48）；客户端地址仍按 D1 M11-FR-121（可信代理与 `X-Forwarded-For`）求得；show-api 的 D1 公开类别（`public_api`、`auth`、`world_query`）与 WS 每地址上限改按前缀计；sandbox-api 类别见 §15.4.2；超限 429 `111`（带 `Retry-After`）或 `504 SANDBOX_QUOTA`；nginx 的 `$drone4d_prefix` 与本函数对同一组地址给出相同的键（对拍用例） | P0 | V0.2-demo | 是 | M11-AC-207 | AWR-04 §11.5；ADR-107 |
+| M11-FR-210 | 连接上限：sandbox-api 全站 `ws_max_sbx = 4·N_max`（N_max 由池给出，硬上限 24）、每前缀 4、每会话 4；show-api 全站 `ws_max_show = 24`、每前缀 4；超限以关闭码 4429 拒绝并带原因（`site`、`prefix`、`session`） | P0 | V0.2-demo | 是 | M11-AC-207 | AWR-04 §4.7 第 5 条、§11.5 |
+| M11-FR-211 | D2 topic 接入（`rt/topics.json` 只新增）：`swarm/target/state`（raw `awr.TargetLite32.v1`，10 Hz，源 `state/sim-core/targets`）；按实体分发的 msgpack 流 `target/{id}/detail`、`uav/{id}/perception`、`uav/{id}/payload`、`uav/{id}/sensor/nav`、`uav/{id}/sensor/radar/tracks`、`uav/{id}/sensor/acoustic/bearings`、`nest/{id}/status`、`task/{tid}/status`、`relay/{tid}/stats`，源为 `state/sim-core/<stream>`（载荷 `{v: 1, t_sim_ns, items: {<id>: <payload>}}`），由 DetailDemux 按 id 拆分；`uav/{id}/sensor/lidar/scan`（blob `awr.LidarScan8.v1`）；频率与优先级见 §15.4.1 | P0 | V0.2-demo | 是 | M11-AC-208 | AWR-04 §11.2、§11.7 |
+| M11-FR-212 | 兴趣下推扩展：`ctl/sim-core/interest` 载荷追加 `streams{perception, payload, nav, radar, acoustic, scan, target_detail, nest, task, relay}`（各为被订阅的 id 列表，`scan` ≤ 1 个、`nav` ≤ 4 个），由各上下文按订阅聚合后 1 Hz 或变化时下推；生产者只为列表中的 id 生成数据（M13、M18、M19、M20 读取） | P0 | V0.2-demo | 是 | M11-AC-208 | AWR-04 §11.7（"订阅时生成""每会话同时 ≤ 1 路"） |
+| M11-FR-213 | 命令与事件：`rt/commands.json` 新增服务（`uav/{id}/cmd/{loiter,gimbal,zoom,sensor_mode}`、`fleet/cmd/update`、`target/{add,update,remove}`、`nest/{add,update,remove}`、`task/{create,start,pause,resume,cancel}`、`env/calendar`）在网关执行准入 ①–③ 后按 roster 路由到 `ctl/sim-core/cmd`；新事件（`target.*`、`perception.*`、`nest.*`、`task.*`、`relay.*`、`sandbox.*`、`sensor.mode`）经 D1 EventIngest 分配全局 seq；roster 中 `kind = target` 的条目单独进入 `fleet/roster` 的 `targets[]`，机群列表消费方不受影响 | P0 | V0.2-demo | 是 | M11-AC-208 | AWR-04 §11.2；M08 §15.2 FR-217、218 |
+| M11-FR-214 | `sandbox/session` topic（msgpack，1 Hz，sandbox-api 自产）：会话状态、剩余寿命、可否续期、倍速设定与授予、可达倍速与受限原因、配额用量（机、识别物、机巢、任务、REST 与 call 桶余量）、排队位置；sandbox-api 每 1 s【墙钟】向池报告各会话活动（WS 连接数、最近 API 调用时刻）`sys/session/activity`；`sandbox.slot_ready`、`sandbox.rate`、`sandbox.expiring` 事件经池转发到对应上下文 | P0 | V0.2-demo | 是 | M11-AC-209 | AWR-04 §4.6、§11.2 |
+| M11-FR-215 | 重启与故障域：sandbox-api 重启后经 `sys/session/list` 重建全部上下文（≤ 3 s），客户端按 D1 退避 ≤ 5 s 回到原 sid，token 仍有效（主密钥持久化）；sandbox-pool 重启期间已附着的上下文继续服务（环与总线不依赖池），新建与续期返回 503 `211`；show-api 与 sandbox-api 互不依赖，任一重启不影响另一方 | P0 | V0.2-demo | 是 | M11-AC-206 | AWR-04 §4.7 第 6 条；D2-AC-03 |
+| M11-FR-216 | 运行时库 `awr.runtime.cgroup`：`join(rel)`、`create_leaf(rel, limits)`、`set_limits(rel, cpu_max?, cpu_weight?, memory_high?, memory_max?, memory_min?)`、`remove_leaf(rel)`、`read(rel) -> {cpu_stat, memory_stat, memory_pressure, cpu_pressure}`；单元根由 `/proc/self/cgroup` 与 `AWR_CGROUP_ROOT` 求得；无写权限（无委派）时 `join` 返回 False 并只记一次告警，调用方按 AWR-04 §4.4.4 第 3 条退化 | P0 | V0.2-demo | 是 | M11-AC-210 | AWR-04 §4.4.4 |
+| M11-FR-217 | 配置：`configs/runtime.yaml` 新段 `sandbox:`（AWR-04 §4.4.3 全部键：`enabled`、`max_sessions`、`world_costs`、`mem_sandbox_mb`、实体与任务上限、`idle_ttl_s`、`lifetime_s`、`renew_s`、`lifetime_max_s`、`queue_max`、前缀配额、`nice`、`prewarm`、`worlds_allow`、`ws_max_per_session`）；`procs:` 追加 `sandbox-pool`、`sandbox-api`（`env: {AWR_CGROUP: sandbox/ctl}`）；public profile v2：`run.scenario = s7-synthcity-relay`、`net.worlds_allow` 与 `sandbox.worlds_allow` 为七个世界、`net.ws_max = 24`；未知键或类型错误以退出码 2 拒绝并指出键路径（D1 规则） | P0 | V0.2-demo | 是 | M11-AC-210 | ADR-091、ADR-094、ADR-109 |
+| M11-FR-218 | 静态世界：公开部署由 nginx 以 `alias` 直接服务 `/worlds/`（M00 配置）；show-api 的 D1 静态服务保留给本机与局域网；提供对拍用例 `tests/api/test_static_parity.py`：对同一组请求（整文件、Range、多段越界、HEAD、条件请求）比较 nginx 与 api 的状态码、`Content-Range`、`Content-Length`、`ETag`、`Cache-Control`、`Accept-Ranges` | P0 | V0.2-demo | 是 | M11-AC-211 | ADR-092；AWR-04 §4.1 第 5 条 |
+| M11-FR-219 | 前端 `apps/web/src/net/**`：`apiBase()` 与 `rtUrl()` 按会话角色返回共享展示（`/api`、`/api/rt`）或沙盒（`/api/sandbox/v1/sessions/{sid}`、`.../rt`）；`RtClient.connect({url, token: () => string, onAuthExpired})`，token 由 `stores/sandboxSession.ts`（M17）提供，续期后无缝换发（`rt.reauthenticate`）；关闭码 1012（`world_switch`）触发重连并把新 `hello.world` 交给 M15 切换底图；`fleet/roster` 的 `targets[]` 进入 M18 的 `stores/targets.ts`；FakeSource 增加全部 D2 topic 的夹具 | P0 | V0.2-demo | 是 | M11-AC-212 | AWR-04 §3.2 M11 行、§10.2 |
+| M11-NFR-201 | 性能：D2-AC-04 变体 A 负载下，show-api 与 sandbox-api 各自 CPU ≤ 0.7 核、事件循环延迟 p99 ≤ 20 ms、网关 tick 年龄 p99 ≤ 25 ms；空闲上下文（无订阅者）每个 ≤ 0.005 核 | P0 | V0.2-demo | 是 | M11-AC-204 | D2-AC-04；AWR-04 §4.4.1 |
+| M11-NFR-202 | 内存：sandbox-api 匿名页 ≤ 65 MB + 5 MB × 上下文数；每个上下文的 zenoh 会话 ≤ 2 个线程 | P0 | V0.2-demo | 是 | M11-AC-204 | AWR-04 §4.4.2 |
+| M11-NFR-203 | D1 不回退：show-api 在 `tests/rt/test_public_mode.py` 与 D1 的 M11-AC-001 至 AC-062 下行为不变 | P0 | V0.2-demo | 是 | M11-AC-201 | D2-AC-26、29 |
+
+### 15.3 接口
+
+#### 15.3.1 上下文与依赖
+
+```python
+# awr/runtime/binding.py
+@dataclass(frozen=True)
+class RunBinding:
+    run_id: str                  # 共享展示为 D1 run id；沙盒为 "sb-<base32 10 位>"，即 sid
+    kind: Literal["shared", "sandbox"]
+    world_id: str
+    run_dir: Path                # /dev/shm/awr/<run>
+    ring_path: Path              # <run_dir>/state.sim-core
+    namespace: str               # awr/<world>/<run>
+    secret_path: Path            # 该 run 的 per-run secret（0600）
+    producer: str = "sim-core"
+    clock_profile: str = "d1_250"
+
+# awr/api/deps.py
+def ctx_for(request: Request) -> RunContext: ...           # show-api：唯一上下文；sandbox-api：按路径 sid
+SandboxOperator = Annotated[ApiPrincipal, Depends(require_sandbox("operator"))]
+SandboxViewer = Annotated[ApiPrincipal, Depends(require_sandbox("viewer"))]
+
+# awr/api/rt/hub.py
+class GatewayHub:
+    async def attach(self, binding: RunBinding) -> SessionContext: ...
+    async def detach(self, sid: str, *, code: int = 1001, reason: str = "ended") -> None: ...
+    async def rebind(self, sid: str, binding: RunBinding) -> None: ...      # 底图切换：1012 world_switch
+    def get(self, sid: str) -> SessionContext | None: ...
+    async def run(self) -> None: ...                                        # 60 Hz 驱动有订阅者的上下文
+@dataclass
+class SessionContext:
+    binding: RunBinding
+    bus: Bus
+    gateway: Gateway
+    tokens: SandboxTokenService
+    principal_id: str            # 会话 principal（席位预置）
+    state: Literal["BINDING", "LIVE", "SWITCHING", "CLOSING"]
+```
+
+#### 15.3.2 沙盒 token 载荷
+
+| 字段 | 类型 | 取值 | 说明 |
+|---|---|---|---|
+| `v` | int | 1 | D1 |
+| `sub` | str | `p-<hint>` | 会话 principal（D1 `principal_id_from_hint`） |
+| `role` | str | `operator`、`viewer` | viewer 为观摩链接（P1） |
+| `run`、`sid` | str | `sb-…` | 二者相同；`sid` 供路由在验签前选择密钥 |
+| `scope` | str | `sandbox` | show-api 拒绝带 `scope` 的 token |
+| `mode` | str | `public`、`lan`、`loopback` | 进程访问模式 |
+| `iat`、`exp` | int | unix s | `exp` = 会话寿命截止（续期换发） |
+| `jti` | str | 16 hex | 审计 |
+
+携带方式与 D1 相同：`Authorization: Bearer` 或 WS 子协议 `bearer.<token>`（禁止 URL 与 cookie）。
+
+#### 15.3.3 `sandbox/session` 载荷（1 Hz）
+
+| 字段 | 类型 | 单位 | 说明 |
+|---|---|---|---|
+| `state` | enum | — | QUEUED、SPAWNING、READY、ACTIVE、IDLE、DRAINING、ENDED、FAILED（AWR-04 §4.6） |
+| `world_id`、`template` | str | — | 当前底图与模板 |
+| `expires_unix_ns`、`expires_in_s`、`renewable`、`lifetime_max_unix_ns` | str（十进制）、int、bool、str（十进制） | ns、s | 寿命（17 §1.3 的时间字段命名；AWR-04 附录 B 第 29 行） |
+| `rate_set`、`rate_granted`、`rate_reachable`、`rate_reason` | f32、f32、f32、str | — | 倍速治理（M17） |
+| `clock_lock` | str \| null | — | `manual`（M08 §15.2 FR-220） |
+| `usage` | `{vehicles, targets, nests, tasks, rest_tokens, call_tokens}` | — | 当前用量与上限 |
+| `queue` | `{position, eta_s}` \| null | s | 仅排队时 |
+| `expiring` | `{reason, at_unix_ms}` \| null | ms | 提前 60 s 告知（AWR-04 §4.4.6） |
+
+### 15.4 默认参数
+
+#### 15.4.1 D2 topic 的网关参数
+
+| topic | 编码 | 原生频率 | rate class（D1 网格） | 优先级 | 生成条件 |
+|---|---|---|---|---|---|
+| `swarm/target/state` | raw | 10 Hz | 10 | 2 | 常开（≤ 30 个，≤ 1 KB/帧） |
+| `target/{id}/detail` | msgpack | 2 Hz | 2 | 3 | 兴趣 `target_detail` |
+| `uav/{id}/perception` | msgpack | 5 Hz | 5 | 2 | 兴趣 `perception` |
+| `uav/{id}/payload` | msgpack | 2 Hz | 2 | 3 | 兴趣 `payload` |
+| `uav/{id}/sensor/nav` | msgpack | 10 Hz | 10 | 3 | 兴趣 `nav`（每会话 ≤ 4） |
+| `uav/{id}/sensor/radar/tracks` | msgpack | 5 Hz | 5 | 3 | 兴趣 `radar` |
+| `uav/{id}/sensor/acoustic/bearings` | msgpack | 2 Hz | 2 | 3 | 兴趣 `acoustic` |
+| `uav/{id}/sensor/lidar/scan` | blob | ≤ 2 Hz | 2 | 4 | 兴趣 `scan`（每会话 ≤ 1） |
+| `nest/{id}/status`、`task/{tid}/status`、`relay/{tid}/stats` | msgpack | 1 Hz | 1 | 3 | 兴趣 `nest`、`task`、`relay` |
+| `sandbox/session` | msgpack | 1 Hz | 1 | 1 | sandbox-api 自产，常开 |
+
+#### 15.4.2 限流类别（sandbox-api；按 AWR-04 §11.5）
+
+| 类别 | 键 | 速率 | 突发 | 超限 |
+|---|---|---|---|---|
+| `sbx_create` | 前缀 / 聚合前缀 | 6/h / 12/h | 2 / 4 | 429 `504` + `Retry-After` |
+| `sbx_rest` | sid | 10/s | 30 | 429 `111` |
+| `sbx_call`（WS `call` 与 REST 命令镜像） | sid | 20/s | 40 | `111` |
+| `sbx_clock` | sid | 2/s | 2 | `111` |
+| `sbx_entity`（机、识别物、机巢增删改） | sid | 5/s | 5 | `111` |
+| `sbx_task`（任务创建与 dry-run） | sid | 1/s | 2 | `111` |
+| `sbx_public`（公开路由：worlds、templates、catalog） | 前缀 | 20/s | 60 | 429 `111` |
+| velocity setpoint（CLIENT_DATA） | 连接 | 50 Hz | — | 超出丢弃并计数 |
+
+活动沙盒数、排队票与人机验证的判定在 broker（M17）；sandbox-api 只负责把前缀键与请求一并交给 `sys/session/create`。
+
+#### 15.4.3 其他
+
+| 参数 | 值 | 依据 |
+|---|---|---|
+| sandbox-api 绑定 | `127.0.0.1:18641` | AWR-04 §4.7 |
+| 上下文对账周期 | 2 s【墙钟】 | 本文设定 |
+| 活动上报周期 | 1 s【墙钟】 | AWR-04 §4.6 |
+| `ws_max_sbx` / `ws_max_show` / 每前缀 / 每会话 | `4·N_max`（≤ 24）/ 24 / 4 / 4 | AWR-04 §4.7 第 5 条 |
+| 主密钥 | `var/sandbox/token.key`，32 B，0600 | AWR-04 §4.7 第 6 条 |
+
+### 15.5 算法
+
+```text
+# 1 ctx_for 与沙盒鉴权（依赖顺序：中间件 → ctx_for → require_sandbox → 路由）
+ctx_for(req):
+    if app.kind == "show": return app.state.awr
+    sid = req.path_params["sid"]；c = hub.get(sid)
+    c is None → 404 305；sid ∈ hub.ended_recent → 410 506；c.state ∈ {BINDING, SWITCHING} → 503 211
+    return c
+require_sandbox(role)(req, c = Depends(ctx_for)):
+    tok = bearer(req)；无 → 401 301
+    hdr = 解析载荷（不验签）；hdr.sid ≠ c.binding.run_id → 403 503
+    p = decode_token(tok, K_sbauth, run_id = sid)；失败 → 401 302
+    p.scope ≠ "sandbox" → 401 302；ROLE_RANK[p.role] < ROLE_RANK[role] → 403 115
+    op ∈ SANDBOX_DENY → 403 115
+    return p
+
+# 2 前缀键
+prefix_of(a):  a 为 IPv4（含 ::ffff: 映射）→ a/32；否则 → a/64
+agg_prefix_of(a): IPv4 → /24；IPv6 → /48
+keys(req) = {"p": prefix_of(client_ip(req)), "a": agg_prefix_of(client_ip(req)), "s": sid?}
+
+# 3 Hub 驱动（60 Hz）
+every 1/60 s:
+    for c in sorted(contexts, key = sid):              # 确定顺序，便于计量
+        if c.state == LIVE and c.gateway.has_subscribers(): c.gateway.tick_once()
+    if 本轮耗时 > 8 ms: metrics.hub_overrun += 1       # 观测 0.7 核上限
+```
+
+### 15.6 状态机与时序
+
+#### 15.6.1 SessionContext
+
+| 状态 | 事件 | 守卫 | 动作 | 目标状态 |
+|---|---|---|---|---|
+| — | 池事件 READY 或对账发现新会话 | — | 打开总线会话、实例化 Gateway、附着环、预置席位 | BINDING |
+| BINDING | 环可读且 `hello` 往返成功 | ≤ 3 s | 接受连接 | LIVE |
+| BINDING | 超时 | — | 记错误；下一次对账重试 | — |
+| LIVE | 池事件 WORLD_SWITCH（同 sid、新绑定） | — | 1012（`world_switch`）关闭连接；释放旧总线与环 | SWITCHING |
+| SWITCHING | 新绑定 READY | — | 以新绑定重建 Gateway | LIVE |
+| LIVE、SWITCHING | 池事件 ENDED 或对账不再列出 | — | 1001 关闭连接；关闭总线；释放游标；记入 `ended_recent`（10 min） | CLOSING |
+| CLOSING | 资源释放完成 | — | 删除上下文 | — |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+stateDiagram-v2
+  [*] --> BINDING: READY 或对账发现
+  BINDING --> LIVE: 环与 hello 就绪
+  LIVE --> SWITCHING: 底图切换，1012
+  SWITCHING --> LIVE: 新绑定就绪
+  LIVE --> CLOSING: ENDED，1001
+  SWITCHING --> CLOSING: ENDED
+  CLOSING --> [*]
+```
+
+#### 15.6.2 沙盒 WS 接入（时序）
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+sequenceDiagram
+  participant B as 浏览器（RtClient）
+  participant N as nginx
+  participant A as sandbox-api
+  participant H as GatewayHub
+  participant G as Gateway@sid
+  participant S as sim-core@sid
+  B->>N: WS /api/sandbox/v1/sessions/{sid}/rt（bearer 子协议）
+  N->>A: 转发（前缀键、XFF）
+  A->>A: Host、Origin、每前缀与每会话连接数
+  A->>H: ctx_for(sid)
+  H-->>A: SessionContext（LIVE）
+  A->>A: require_sandbox：sid 一致、K_sbauth 验签
+  A->>G: 接入（席位已预置给会话 principal）
+  B->>G: hello、subscribe（uav/u01/perception 等）
+  G->>S: ctl/sim-core/interest{streams}
+  S-->>G: state/sim-core/perception（只含被订阅 id）
+  G-->>B: BATCH（60 Hz 网格对齐）
+```
+
+### 15.7 实现指引
+
+| 路径 | 改动 | 复用的 D1 代码 |
+|---|---|---|
+| `python/awr/runtime/binding.py`（新） | `RunBinding` | supervisor 注入的环境变量口径 |
+| `python/awr/runtime/cgroup.py`（新） | FR-216 | — |
+| `python/awr/runtime/config.py` | `sandbox:` 段、`procs` 新条目、public profile v2 校验 | D1 键路径校验与退出码 2 |
+| `python/awr/runtime/principal.py` | 载荷追加可选 `scope`、`sid`；`decode_token` 透传 | `encode_token`、`decode_token`、`derive_key` |
+| `python/awr/api/settings.py` | 拆出 `binding()`；进程级字段不变 | `ApiSettings.from_env` |
+| `python/awr/api/deps.py` | `ctx_for`、`require_sandbox`、`SandboxOperator`、`SandboxViewer` | `require_role`、`Viewer`、`Operator` |
+| `python/awr/api/security.py` | `SandboxTokenService`（主密钥、按 sid 派生、换发） | `TokenService`（`k_entry`、`k_confirm` 原样） |
+| `python/awr/api/{public,ratelimit,middleware}.py` | 前缀函数、沙盒类别、沙盒拒绝清单、限流键改为前缀 | `client_ip`、`RateLimiter`、`public_policy` |
+| `python/awr/api/main.py` | `create_app(kind = "show")`；`discover_routers(attr)` 参数化 | D1 lifespan、处理器、静态与 SPA |
+| `python/awr/api/sandbox.py`（新，进程入口） | sandbox-api 应用工厂、池控制总线、挂载、OpenAPI | `main.py` 的处理器安装与路由发现 |
+| `python/awr/api/rt/hub.py`（新）、`rt/gateway.py`、`rt/ws.py`、`rt/interest.py`、`rt/detail.py`、`rt/channels.py` | GatewayHub；Gateway 接收 `RunBinding`、`tick_once()`；按 sid 的 WS 端点；`streams` 兴趣；按实体流拆分；新 topic 登记 | D1 Gateway 全部（BATCH、credit、EventIngest、DetailDemux、InterestAggregator、席位） |
+| `packages/contracts/rt/{topics,commands,reasons,enums}.json`、`bus/keys.json` | 新 topic、服务、原因码 500–519 等由提出模块起草，M11 汇总；`state/sim-core/<stream>` 与 `evt/sandbox-pool/session` 等 key | D1 契约生成链 |
+| `configs/runtime.yaml` | FR-217 | public profile v1 |
+| `apps/web/src/net/{api.ts, rt/client.ts, rt/session.ts, rt/FakeSource.ts}` | FR-219 | D1 RtClient、`reauthenticate`、FakeSource |
+| `tests/api/test_ctx_for.py`、`tests/api/test_sandbox_auth.py`、`tests/api/test_prefix_ratelimit.py`、`tests/api/test_static_parity.py`、`tests/rt/test_hub.py`、`tests/chaos/test_sandbox_api_restart.py`（新） | §15.8 | `tests/rt/test_public_mode.py` |
+
+### 15.8 验收
+
+| 编号 | 度量 | 阈值 | 测试方法 | 环境 | 优先级 | 追溯 |
+|---|---|---|---|---|---|---|
+| M11-AC-201 | D1 不回退 | show-api 在 `ctx_for` 改造后通过 `tests/rt/test_public_mode.py` 与 D1 的 M11-AC-001 至 AC-062；全部领域 `rest/*.py` 不再直接读 `request.app.state.awr`（静态检查） | `make test-rt`；`make lint-py-imports` 加规则 | 本机 CPU | P0 | FR-201、202、NFR-203；D2-AC-26、29 |
+| M11-AC-202 | 挂载与 OpenAPI | sandbox-api 只挂载 §15.1 所列前缀；拒绝清单中的模块即使导出 `sandbox_router` 也不出现；`openapi.json` 与 `packages/contracts/rest/sandbox.openapi.snapshot.json` 一致；`/api/openapi.json`（全站）在公开模式下 404 | `pytest tests/api/test_sandbox_mount.py` | 本机 CPU | P0 | FR-203；D2-AC-22 |
+| M11-AC-203 | 上下文状态码 | 未知 sid 404 `305`；已结束 sid 410 `506`；SPAWNING 与底图切换中 503 `211` 带 `Retry-After` | `pytest tests/api/test_ctx_for.py` | 本机 CPU | P0 | FR-202、205 |
+| M11-AC-204 | Hub 性能 | D2-AC-04 变体 A：两个 api 进程各 ≤ 0.7 核、事件循环延迟 p99 ≤ 20 ms、tick 年龄 p99 ≤ 25 ms；4 个空闲上下文合计 ≤ 0.02 核且不读环；sandbox-api 匿名页 ≤ 65 + 5 × 上下文数 MB | `tools/bench/sandbox/capacity.py`（M16）；`pytest tests/rt/test_hub.py::test_idle_cost` | 本机（cgroup 模拟） | P0 | FR-206、NFR-201、202；D2-AC-04 |
+| M11-AC-205 | 鉴权与隔离 | 矩阵（A 的 token × {A、B、共享展示} × {REST 写、REST 读、WS 订阅、WS call}）：只有 A 自身通过，其余为 302 或 503；沙盒内 `seat/takeover`、`sys/*`、`rec/*`、`kill`、`escalate` 为 115；同一 principal 两个标签页共享席位；token 篡改、过期、`scope` 缺失分别为 302；sandbox-api 重启后旧 token 仍有效 | `pytest tests/api/test_sandbox_auth.py` | 本机 CPU | P0 | FR-207、208；D2-AC-03、29 |
+| M11-AC-206 | 重启与故障域 | kill -9 sandbox-api：≤ 3 s 重建上下文，客户端 ≤ 5 s 回到原 sid；kill -9 sandbox-pool：已附着上下文继续推送，新建返回 503 `211`；kill -9 show-api：沙盒连接不受影响，反之亦然 | `pytest tests/chaos/test_sandbox_api_restart.py` | 本机（cgroup 模拟） | P0 | FR-204、205、215；D2-AC-03 |
+| M11-AC-207 | 前缀限流与连接 | 伪造 `X-Forwarded-For` 不改变键；同一 /64 内轮换 IPv6 地址按同一前缀计数；同一 /24 内多地址创建计入聚合前缀；§15.4.2 每类超限码与 `Retry-After` 正确；第 `ws_max_sbx + 1` 条、每前缀第 5 条、每会话第 5 条连接以 4429 拒绝；nginx 键与 `prefix_of` 对 200 个地址一致 | `pytest tests/api/test_prefix_ratelimit.py`；`tools/deploy/emax` 对拍脚本 | 本机 CPU | P0 | FR-209、210；D2-AC-23、38 |
+| M11-AC-208 | topic、兴趣与命令 | 每个 D2 topic 在订阅后按 §15.4.1 频率 ± 10% 送达并通过 schema；未订阅的实体流在 sim-core 侧不生成（兴趣下推后 ≤ 1 s 生效）；`scan` 第二个订阅切换生成对象；新命令经网关准入后到达 sim-core 并回 call 结果；`fleet/roster.targets[]` 与 TargetLite32 的 Python、TS 解码对拍一致 | `pytest tests/rt/test_d2_topics.py`；`npx vitest run tests/m11/`（`apps/web`） | 本机 CPU | P0 | FR-211–213；D2-AC-22、36 |
+| M11-AC-209 | 会话 topic 与活动上报 | `sandbox/session` 1 Hz，字段齐全，剩余寿命误差 ≤ 1 s；断开最后一条 WS 后池在 ≤ 2 s 内收到活动变化；`sandbox.expiring` 提前 60 s 送达 | `pytest tests/rt/test_hub.py::test_session_topic` | 本机 CPU | P0 | FR-214；D2-AC-05、06 |
+| M11-AC-210 | cgroup 与配置 | 有委派时 sandbox-api 与 sandbox-pool 位于 `sandbox/ctl/`；无写权限时 `join` 返回 False 且服务正常；`runtime.yaml` 的 `sandbox:` 段未知键以退出码 2 拒绝；public profile v2 的世界白名单为七个世界 | `pytest tests/runtime/test_cgroup.py tests/runtime/test_config_sandbox.py` | 本机（cgroup 模拟） | P0 | FR-216、217；D2-AC-04、24 |
+| M11-AC-211 | 静态对拍 | nginx 与 show-api 对 §15.2 FR-218 的请求集头部与状态码逐项一致（`Date` 除外） | `pytest tests/api/test_static_parity.py`（需本机 nginx） | 本机 | P0 | FR-218；D2-AC-24 |
+| M11-AC-212 | 前端网络层 | 沙盒角色下 REST 与 WS 指向沙盒前缀并携带沙盒 token；续期后不断线换发；收到 1012（`world_switch`）后 ≤ 5 s 重连并触发底图切换回调；FakeSource 能驱动全部 D2 topic | `npx vitest run tests/m11/`；Playwright `tests/m15/sandbox-net.spec.ts` | 本机 Tier S | P0 | FR-219；D2-AC-24、38 |
+
+### 15.9 风险
+
+| 风险 | 影响 | 对策 |
+|---|---|---|
+| `ctx_for` 改造遗漏某个领域路由 | show-api 行为变化或 sandbox-api 串会话 | 静态检查禁止 `request.app.state.awr`；AC-201、AC-205 矩阵 |
+| 一个 sandbox-api 事件循环承载全部会话 | 单进程 CPU 上限 | Hub 只驱动有订阅者的上下文；每会话连接 ≤ 4；超 0.7 核时下调 `ws_max_sbx`（AWR-04 §4.4.1） |
+| 主密钥泄露 | 可伪造任意沙盒 token | 0600、只在 sandbox-api 读取；轮换即全部会话 token 失效（运维手册） |
+
+### 15.10 D2 追溯
+
+| 需求 | ADR | 本节条款 | D2 验收 |
+|---|---|---|---|
+| R-D2-02、R-D2-24（开放低成本交互、沙盒对外开放） | 089、092、093、107 | FR-201–210、214–217 | D2-AC-02 至 07、23、29、38 |
+| R-D2-22、R-D2-23（接口控制、接口获取 sensor 与 status） | 092、107 | FR-203、211–213 | D2-AC-22、36 |
+| R-D2-25、R-D2-28（七个世界、底图切换） | 109、111 | FR-205、217–219 | D2-AC-24 |
+
+### 15.11 对基线（AWR-04）的反馈
+
+处置结果以 [AWR-04 附录 B](../04-D2-设计增补与决策记录.md)（v1.2）为准；本节保留为起草时的记录。
+
+| # | 基线条款 | 问题 | 本节的处理 | 建议 |
+|---|---|---|---|---|
+| D2F-01 | §4.8"token 载荷沿用 17 §3.2"与 §4.7 第 6 条"持久化签名密钥" | 17 §3.2 的 `K_auth` 按 run 由 `AWR_SECRET` 派生；沙盒改用持久化主密钥，基线未给出派生规则，SDK 与第三方实现无从对拍 | `K_auth(sid) = HKDF(token.key, salt = sid, "awr/sbx-auth/v1")`，`K_entry` 仍按 run 的 per-run secret（FR-207） | 17 §3.2 登记沙盒派生规则与 `scope`、`sid` 字段 |
+| D2F-02 | §4.7 第 5 条"sandbox-api `ws_max` 16（N_max × 4）" | N_max 为 `auto`（硬上限 6），写死 16 会在 N_max = 6 时不足、在 N_max = 2 时过宽 | `ws_max_sbx = 4·N_max`（FR-210） | 改写为公式 |
+| D2F-03 | §11.7"订阅时生成""每会话同时 ≤ 1 路" | 没有规定订阅如何传到 sim-core；D1 的 `ctl/sim-core/interest` 只有 detail 兴趣集 | 兴趣载荷追加 `streams{…}`（FR-212） | §11.2 增加一句"按实体的数据流经兴趣下推按需生成" |
+| D2F-04 | §10.2"会话内切换底图 = 在新世界重启 sim-core"、§4.7 | 同一 sid 换世界后 namespace 与环都变化，未规定已连接客户端的行为 | 以 1012（`world_switch`）关闭，客户端重连后按新 `hello.world` 切换（FR-205、219） | 在 §4.6 状态表补"底图切换"行（ACTIVE → SPAWNING → ACTIVE，sid 不变） |
+| D2F-05 | §11.1 `POST .../vehicles/{vid}:{acquire,release}` | 冒号动词在 Starlette 中可以工作，但 `GET /vehicles/{vid}` 的路径参数会把 `u01:acquire` 整体匹配为 id，OpenAPI 生成与 SDK 也不友好 | 本节按基线实现（`vid` 禁止含冒号），并在 OpenAPI 中显式列出 | 建议改为 `POST/DELETE .../vehicles/{vid}/lease` |
+| D2F-06 | §11.3 `503 SANDBOX_SCOPE` 与 HTTP 403 | 原因码 503 与 HTTP 状态 503 同号，客户端日志易误读 | 照基线使用 | 可改为 511（码段内空位），或在 17 中注明 |

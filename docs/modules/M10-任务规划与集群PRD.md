@@ -1757,3 +1757,311 @@ def track_step(idx, kind, off, nseg, ts, tau, rate, rate_tgt, rate_slope, rate_d
 | 16 | 并行文档（S1 数值） | 12 §7.2 已按几何与可用能量复核定稿 S1（形心 (−162.2, 77.3)、半径 57 m、标称 Δz 18.47 m 按整圈取整、6 m/s、两机自上而下、落地 SOC 0.36 与 0.32）；16 §12.4 仍是半径 45 m、Δz 16.16 m、4 m/s，M16 §6.4.3、§7.3.2 是半径 45 m、Δz 18.47 m、5 m/s、自下而上 | 本文按 12 §7.2 与 12 §13.1 第 1 条回改（§6.5.9、§6.5.10、M10-AC-003、012、014） | 16 §12.4 与 M16 的 S1 数值按 12 §7.2 统一；若 M16 坚持其方案，须由 12 与 M16 在一处裁决后再改本文 | 待并行文档修订 |
 | 17 | 并行文档（间距口径） | 草案的编队间距缺省 8 m、`min_sep_m` 缺省 8 m 低于 FleetGuard 10 m 告警线与 S2、S4 的 `min_separation_m ≥ 10`；12 m 间距下 CAPT 最坏只保证 8.49 m | 缺省改为间距 12 m、`min_sep_m` 10 m；变形前按预测最小间距校验，不足时三段式错层（FR-044） | M16 的 S2、S4 已用 12 m，无需改动；12 §5.10.4 可注明编队变形也可能使用错层 | 本文已处理 |
 | 18 | 并行文档（M13） | M13 UC-03 写"M10 以 2 Hz 调用"相机几何库计算立面覆盖；本文为 5 Hz | 保持 5 Hz（每机每次 < 1000 格，计入 M10 的 coverage 预算 0.005 核） | M13 UC-03 的频率改为"5 Hz（M10 覆盖戳记）" | 未处理 |
+
+
+---
+
+## 15. D2 增补（V0.2-demo）
+
+> 本节是 M10 对 D2（V0.2-demo）的增补，依据 [AWR-04 D2 设计增补与决策记录](../04-D2-设计增补与决策记录.md)（D2 唯一基线）与 [用户 D2 需求原文](../inputs/D2-需求原文-2026-10-05.md)。§1–§14 的 D1 条款在未被本节修改处继续有效；与 AWR-04 冲突时以 AWR-04 为准，问题列在 §15.11。
+
+### 15.0 定位与编号
+
+1. **D2 中 M10 的位置**：用户任务（定点巡航、巡线、区域巡查、GSD 扫描、巡边、接力、区域值守）的分解、分配与编排归新模块 M20（AWR-04 §3.3、§8）；识别物与敏感范围归 M18（§7）。M10 在 D2 不新增任务类型，而是作为**规划与执行底座**被 M20 调用，并把 M18 给出的敏感范围当作规划障碍：
+   - 规划作业注册点 `register_plan_kind`（替换 worker 的 if/elif 分派，ADR-113）；
+   - `PlanPoolClient` 的 `remote` 模式与规划服务端核心 `sim/planning/server.py`（公平队列、可杀 worker、输入规模配额），由 M17 的 sandbox-pool 宿主运行；
+   - 全部规划器接受**禁入体**（keepout）参数：M18 产生、M20 组装与外扩、M10 消费（M10 不 import M18、M20）；
+   - 覆盖库（最优扫描角、条带、BCD 分割、代价均衡切分、Hungarian）作为 M20 的纯函数库；固定翼航段编译（圆角半径约束、跳带顺序）；
+   - 任务引擎为 M20 提供"已编译架次"的提交、进度回调与抢占接口；Grid25 改由 M04 派生缓存提供；`rest/scenarios.py` 改用 `ctx_for`。
+2. **编号**：D2 条目从 201 起（FR、NFR、AC 各自在 2xx 段内连续）；"D2"列取"是、桩、否"，目标版本 `V0.2-demo`（AWR-04 §1.2）。
+
+### 15.1 与 M18、M20、M17 的分工
+
+| 能力 | M18 识别物 | M20 编排 | M10（本模块） | M17 沙盒池 |
+|---|---|---|---|---|
+| 敏感范围几何 | 定义敏感体；按判据模式给出"配置体"或"保守有效体"（`keepout_volumes()`） | 按 AWR-04 §8.1 组装：运动识别物的扇形按整圆、外扩 `m = 20 m + 3σ_hold`、运动目标再外扩 `v_t·τ_pred`；与 zones 合并后随作业下发 | 把禁入体作为硬障碍用于转场、A*、航线校验、条带裁剪与补拍；只认契约 `KeepoutVolume`，不解释其来源 | — |
+| 任务分解与分配 | — | 工作项、贪心分配、GSD 反推、站位选择、接力、可持续性评估 | 提供条带、分割、Hungarian、转场、航线编译与能量预检 | — |
+| 重计算执行 | — | 经 `register_plan_kind` 注册 `tasking.*` 作业 | 注册表、worker、服务端核心、PlanPoolClient（process 与 remote） | 宿主共享规划服务进程，管理 cgroup `sandbox/plan/` |
+| 架次执行 | 识别物运动（不经 M10） | 生成架次（工作项序列），监控进度与交接 | 编译为 MissionSpec 并由任务引擎与跟踪器执行；多旋翼走 TRAJ，固定翼交 M21 运动提供者 | — |
+| 运行期越界 | 判定"被发现" | 预测进入并后撤 | 不在运行期判定敏感范围（只保证规划结果在禁入体外） | — |
+
+依赖方向：M20 → M10（库与作业接口）；M18 → 契约 `KeepoutVolume`（由 M18 起草）← M10；M17 → `sim/planning/server.py`（库）。M10 不依赖 M17、M18、M20。
+
+### 15.2 功能需求（D2）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M10-FR-201 | 作业注册表：`register_plan_kind(kind, fn, *, owner, budget_ms, validate_input, priority_default)`，`fn(req: PlanRequest, world: GeoWorld) -> PlanResult`；D1 的 11 种作业改由 `planning/kinds_builtin.py` 登记，`worker_main` 只查表分派（未知类别 `300 BAD_REQUEST`，detail = UNKNOWN_KIND）；同名重复登记在导入时失败；worker 进程启动时按 `AWR_PLAN_PLUGINS`（缺省 `awr.sim.planning.kinds_builtin,awr.tasking.plan_kinds`）导入插件模块完成登记，sim-core 侧导入同一清单以获得预算与输入校验函数 | P0 | V0.2-demo | 是 | M10-AC-201 | ADR-113 第 ② 条；AWR-04 §14.3 |
+| M10-FR-202 | `PlanPoolClient` 的 `remote` 模式（`AWR_PLAN_POOL=remote`，沙盒 sim-core 缺省）：作业经本会话总线 query `ctl/plan/submit`（由 sandbox-pool 在该会话命名空间登记的 queryable 应答）提交给共享规划服务；`ctl/plan/cancel` 取消或取代；提交前先在 sim-core 内执行该类别的 `validate_input`（不通过即 `585 PLAN_INPUT_TOO_LARGE`，不提交）；结果仍只在步边界 `drain(tick)` 生效并把 `result_sha256` 与 apply_tick 写入输入日志（D1 语义不变）；结果载荷 > 1 MB 时由服务写入 `/dev/shm/awr/<sid>/plan/<job_id>.msgpack` 并只回复路径与 sha256，sim-core 读取校验后删除 | P0 | V0.2-demo | 是 | M10-AC-202 | ADR-113；AWR-04 §4.9 |
+| M10-FR-203 | 规划服务端核心 `sim/planning/server.py`（`PlanServer`，由 M17 宿主）：每会话一条队列（≤ 8 个待执行作业，超出 `111 RATE_LIMITED`），会话间按轮转公平调度、会话内按 D1 的优先级类与提交序；同一会话同 `dedupe_key` 的新作业取代旧作业；worker 数 W = 1（可配 2）；作业墙钟超过 `budget_ms × 3` 即 SIGKILL 该 worker 并重建（≤ 5 s），作业以 `125 PLAN_FAILED`（detail = TIMEOUT）失败；同一会话 10 min【墙钟】内 3 次超时则冻结其提交 5 min，期间提交立即回复 `586 PLAN_THROTTLED`；worker 崩溃按 D1 规则重试一次，再崩溃 `214 PLANNER_CRASHED` | P0 | V0.2-demo | 是 | M10-AC-203 | ADR-113 第 ① 条；AWR-04 §4.9、§11.5 |
+| M10-FR-204 | 多世界 worker：worker 按 `(world_id, contentVersion, coordinate.sha256)` 以只读方式打开 M04 GeoWorld 并缓存（LRU，容量 = 当前活动世界数，上限 4）；只映射派生缓存（含 Grid25），公开模式 `allow_derive = false` 时缓存缺失或键不一致的作业以 `123 WORLD_NOT_READY`（detail = derived_cache_missing）失败；worker 匿名页 PSS ≤ 90 MB（不含 memmap 文件页） | P0 | V0.2-demo | 是 | M10-AC-204 | ADR-113 第 ⑤ 条；D2-AC-28 |
+| M10-FR-205 | Grid25 来自派生缓存：`_grid25(world, alt_min)` 改为调用 M04 `world.grid25(alt_min_agl_m)`（memmap 只读）；sim-core 与沙盒内一律不在进程内构建；本机开发且 `allow_derive = true` 时由 M04 首次派生写入缓存 | P0 | V0.2-demo | 是 | M10-AC-204 | ADR-113 第 ⑤ 条；AWR-04 §4.2 |
+| M10-FR-206 | 禁入体参数：`path_valid`、`safe_transit`/`astar25`、`follow_path`、`generator`/`coverage`、`preview`、`resume` 与 M20 的全部 `tasking.*` 作业接受 `payload.keepouts: KeepoutVolume[]`（≤ 64 个，§15.3.1）；禁入体按 2.5D 语义合成"禁入高度场" `Hk`（§15.5 算法 1）并与 Height_map 取大；转场剖面、A*、航线细校验与条带裁剪全部使用合成场；机体碰撞半径 `r_col`（profile `collision_radius_m`）由 M10 叠加，M20 下发的半径已含外扩 `m`；任一结果段与禁入体相交时作业返回 `infeasible`（detail = KEEPOUT，附第一个相交点与禁入体 id），由 M20 映射为 `583 KEEPOUT_VIOLATION`；`keepouts` 的摘要计入 `dedupe_key` 与轨迹缓存键 | P0 | V0.2-demo | 是 | M10-AC-205 | AWR-04 §8.1"所有航段的规划都把识别物的禁入体……交给 M10" |
+| M10-FR-207 | 进程内快速校验 `keepout.segment_clear(a, b, keepouts, r_col) -> (ok, t_hit, kid)`（numpy 纯函数，单段 ≤ 50 µs @ 64 个禁入体）：供 M20 在 sim-core 的 1 Hz 站位跟随中校验"当前站位 → 新站位"的直线段（位移 ≤ 20 m）而不提交作业；与 worker 内的细校验同一几何定义 | P0 | V0.2-demo | 是 | M10-AC-205 | AWR-04 §9.4"跟随" |
+| M10-FR-208 | 覆盖库（纯函数，可在 worker 与单测中直接调用，不依赖 sim-core）：`best_sweep_angle(poly, spacing, v, holes)`、`lanes_for_angle(poly, spacing, theta, holes)`、`clip_lanes(lanes, blocked, geo)`、`bcd_cells`、`order_cells`、`split_balanced(seq, k, v)`、`assign_chunks(chunks, homes, v)`、`hungarian(cost)`；新增 `stripes_for_gsd(poly, w_m, overlap, theta, keepouts, obstacles)`（返回条带段、被截断条带与"条带直接覆盖率"）与 `partition_area(poly, n, weights)`（按机巢距离加权的等面积子区）；全部确定性（同一输入逐字节相同） | P0 | V0.2-demo | 是 | M10-AC-206 | ADR-103（"条带生成、扫描角与子区分割复用 M10 coverage 库"）；r26 §3.8.3 |
+| M10-FR-209 | 固定翼航段编译：机型 `frame_kind ∈ {fixed_wing, vtol}` 的架次编译为 `fw_path` 与 `loiter` 项，不生成 B-spline、不进入 TRAJ：折线拐角以半径 `R_fw = max(R_loiter,min, 1.1·R_min(V_cruise))`（`R_loiter,min` 按巡航空速与会话风场上限 `w_max` 计算）的圆弧圆角（无法内切的锐角改为外绕环），速度取巡航；条带间距 `d < 2·R_fw` 时按跳带顺序（步长 `k = ⌈2·R_fw / d⌉`，§15.5 算法 2）排列；`loiter` 半径 ≥ `R_loiter,min`；执行交 M21 经 M08 登记的固定翼运动提供者 | P0 | V0.2-demo | 是 | M10-AC-207 | AWR-04 §5.3、§8.1（固定翼条带转弯半径约束）；ADR-096 |
+| M10-FR-210 | 已编译架次接口（供 M20）：`MissionEngine.submit_compiled(spec: MissionSpec, *, origin="tasking", on_event=cb) -> mid`（经 M08 `submit_internal`，租约 owner = MISSION，principal `svc:tasking`）；`cb` 收到 `item_started`、`item_done`、`mission_done`、`aborted{reason}`（tick 精确）；`MissionEngine.preempt(vehicle_id, reason)`（手动接管或接替）；新增项 `dwell{station_enu_m, look_at_enu_m?, duration_s: null}`（`null` 为直到取消，用于定点巡航与接力站位）与 `MissionSpec.on_done = land_at{nest_pos_enu_m}` | P0 | V0.2-demo | 是 | M10-AC-208 | AWR-04 §8.4（返航与接替、手动接管） |
+| M10-FR-211 | 能量预检沿用 D1（M09 `EnergyModel.path_wh`），功率经 M08 的按构型分派（M08-FR-214、215）；固定翼架次以 `fw_path` 的弧长与巡航功率积分；预检失败 `119 ENERGY_INFEASIBLE` | P0 | V0.2-demo | 是 | M10-AC-208 | ADR-036、ADR-052 |
+| M10-FR-212 | 输入规模配额（AWR-04 §11.5）由各作业类别的 `validate_input` 实现，在 sandbox-api（经 M20 的 REST 校验）、sim-core 提交前与服务端入队前三处执行：多边形面积 ≤ 1 km²、顶点 ≤ 64、条带 ≤ 200、每任务工作项 ≤ 50、站位候选 ≤ 2400、覆盖校验格 ≤ 250 000、禁入体 ≤ 64；超出 `585` 并给出超限项与上限 | P0 | V0.2-demo | 是 | M10-AC-209 | ADR-113 第 ④ 条 |
+| M10-FR-213 | `rest/scenarios.py` 改用 `Depends(ctx_for)`；sandbox-api 不挂载 scenarios 路由（AWR-04 §4.7 第 3 条）；共享展示（S7，d1_250）仍用 process 模式 plan-pool（W = 1），同样经注册表分派（S7 中 M20 的 `tasking.*` 作业在该进程执行） | P0 | V0.2-demo | 是 | M10-AC-210 | AWR-04 §14.3；ADR-094 |
+| M10-FR-214 | D1 任务编辑在沙盒中作为 M20 任务面板的"手工指定架次"子模式：`mission/*` 服务在沙盒照常可用（operator 角色），与 M20 冲突时按 D1 租约优先级处理（同为 MISSION 时后到者取代，被取代的工作项由 M20 重新分配） | P1 | V0.2-demo | 是 | M10-AC-208 | AWR-04 §10.5"任务"行 |
+| M10-NFR-201 | 性能：D2 规模（工作项 ≤ 50、机 ≤ 12）的分配作业 ≤ 200 ms；AOI-A 级 GSD 扫描规划（8 条带、补洞前）≤ 2 s；64 个禁入体下 safe_transit p95 ≤ 50 ms、astar25 p95 ≤ 300 ms（本机单核）；`Hk` 合成 ≤ 5 ms/作业 | P0 | V0.2-demo | 是 | M10-AC-205、AC-206 | AWR-04 §8.4、§11.5 |
+| M10-NFR-202 | 确定性：同一输入（含 keepouts）结果 `result_sha256` 逐字节一致；公平队列与超时不改变单个作业的结果，只改变生效 tick | P0 | V0.2-demo | 是 | M10-AC-201、AC-202 | ADR-049；D1 NFR-010 |
+
+### 15.3 接口
+
+#### 15.3.1 `KeepoutVolume`（契约 `target/keepout.schema.json`，M18 起草，M10 消费）
+
+| 字段 | 类型 | 单位 | 取值 | 说明 |
+|---|---|---|---|---|
+| `id` | str | — | ≤ 32 字符 | 例如 `tg-3/visual` |
+| `shape` | enum | — | `cylinder`、`sphere`、`hemisphere`、`sector` | `sector` 为水平扇形柱（只用于静止识别物；运动识别物由 M20 改为 `cylinder`） |
+| `center_enu_m` | f64[3] | m（World ENU） | — | 球心或柱轴底点 |
+| `r_m` | f64 | m | (0, 2000] | **已含**外扩 `m` 与运动外扩，M10 只再加 `r_col` |
+| `z_min_m`、`z_max_m` | f64 | m（ENU 绝对高程） | `z_min < z_max` | `cylinder`、`sector` 的竖直范围；`hemisphere` 只用 `z_min`（球心高度） |
+| `heading_deg`、`half_angle_deg` | f64 | °（自北顺时针） | 半角 (0, 180] | 仅 `sector` |
+| `source` | object | — | `{kind ∈ {target, zone, manual}, id}` | 只用于诊断与回复 |
+
+#### 15.3.2 作业注册与远程提交
+
+```python
+# awr/sim/planning/jobs.py
+PlanFn = Callable[[PlanRequest, "GeoWorld"], PlanResult]
+def register_plan_kind(kind: str, fn: PlanFn, *, owner: str, budget_ms: int,
+                       validate_input: Callable[[dict], tuple[int, str] | None] | None = None,
+                       priority_default: int = PRIO_START) -> None: ...
+def plan_kinds() -> Mapping[str, PlanKindSpec]: ...
+
+# awr/sim/planning/server.py（M17 宿主调用）
+class PlanServer:
+    def __init__(self, *, workers: int = 1, worlds_dir: Path, allow_derive: bool, cgroup_leaf: str | None): ...
+    def submit(self, sid: str, req: PlanRequest) -> "Ticket": ...          # 入队或立即拒绝（585、586、111）
+    def cancel(self, sid: str, job_id: str) -> None: ...
+    def drop_session(self, sid: str) -> None: ...                           # 会话结束：清队列，在途作业结果丢弃
+    def stats(self) -> dict: ...                                            # 每会话排队、在途、超时、冻结截止
+```
+
+| 总线 key（会话命名空间） | 方向 | 载荷 | 说明 |
+|---|---|---|---|
+| `ctl/plan/submit` | sim-core → pool（query） | `PlanRequest.to_wire()`（msgpack） | 回复 `{status, job_id, result?, result_path?, result_sha256, code?, detail?}`；query 超时 = `budget_ms × 3 + 5 s` |
+| `ctl/plan/cancel` | sim-core → pool（query） | `{job_id}` | 幂等 |
+
+#### 15.3.3 新作业类别与预算（M20 登记，M10 执行框架）
+
+| kind | 所有者 | budget_ms | 输入上限（`validate_input`） |
+|---|---|---|---|
+| `tasking.allocate` | M20 | 200 | 工作项 ≤ 50、机 ≤ 12 |
+| `tasking.scan_plan` | M20 | 2000 | 面积 ≤ 1 km²、顶点 ≤ 64、条带 ≤ 200、覆盖格 ≤ 250 000 |
+| `tasking.station_select` | M20 | 500 | 候选 ≤ 2400、视线候选 ≤ 64 × 3 条 |
+| `tasking.coverage_check` | M20 | 2000 | 覆盖格 ≤ 250 000 |
+| D1 类别 | M10 | 见 `BUDGET_MS`（`jobs.py`） | 增加 keepouts ≤ 64 |
+
+#### 15.3.4 已编译架次（MissionSpec 增量）
+
+| 字段 | 类型 | 单位 | 缺省 | 说明 |
+|---|---|---|---|---|
+| `MissionSpec.origin` | enum | — | `operator` | `operator`、`scenario`、`tasking` |
+| `MissionSpec.on_done` | enum 或 object | — | `rtl` | 增加 `{land_at: {nest_id, pos_enu_m}}` |
+| `MissionItemSpec.kind` | enum | — | — | 增加 `dwell`（已有）的 `duration_s = null` 语义、`fw_path`、`loiter` |
+| `geometry.fw_path` | `{polyline_enu_m[][3], fillet_r_m}` | m | — | ≤ 1000 点；`fillet_r_m ≥ R_fw` |
+| `geometry.loiter` | `{center_enu_m, radius_m, dir, turns \| duration_s}` | m、s | — | 半径 ≥ `R_loiter,min` |
+| `geometry.station` | `{station_enu_m, look_at_enu_m}` | m | — | `dwell` 用；云台按 `look_at` 指向（M13 LOOK_AT） |
+| `keepouts_digest` | str | — | — | 编译时使用的禁入体摘要，变化时 M20 重编译 |
+
+### 15.4 默认参数
+
+| 参数 | 值 | 依据 |
+|---|---|---|
+| 共享规划 worker 数 W | 1（可配 2，内存 +70 MB） | ADR-113；AWR-04 §15.1 |
+| 每会话待执行作业上限 | 8 | 本文设定（区域值守一次重规划约 3–5 个作业） |
+| 超时判定 / worker 重建上限 | `budget_ms × 3` / ≤ 5 s | ADR-113 |
+| 冻结规则 | 10 min 内 3 次超时 → 冻结 5 min | AWR-04 §4.9 |
+| 结果载荷外置阈值 | 1 MB | 本文设定（单会话 12 架条带轨迹的上界约 1.2 MB） |
+| 每作业禁入体上限 | 64 | AWR-04 §10.5 图层预算（敏感体 ≤ 64） |
+| `Hk` 栅格 | 与 A* 同一 4 m Height_map；转场剖面沿线按 Amanatides–Woo 取格 | M10 §6 `max_along` |
+| 固定翼圆角半径 | `R_fw = max(R_loiter,min, 1.1·R_min(V_cruise))` | AWR-04 §5.3；本文设定 10% 余量 |
+| worker 世界缓存 | LRU，≤ 4 个世界 | AWR-04 §4.4.2 |
+
+### 15.5 算法
+
+**算法 1：禁入高度场与段校验**
+
+```text
+build_Hk(keepouts, grid, r_col):                     # grid 为 4 m Height_map 的几何（原点、步长、尺寸）
+    Hk = full(grid.shape, −inf)
+    for v in keepouts（按 id 排序，确定性）:
+        R = v.r_m + r_col
+        cells = 包围盒 ∩ grid；d = 格心到轴心的水平距离
+        inside = d ≤ R （sector 另要求方位角落在 heading ± half_angle 内，边界格按格角任一在内计）
+        top = cylinder/sector: v.z_max_m + r_col
+              sphere:          v.center.z + sqrt(R² − d²)
+              hemisphere:      v.center.z + sqrt(R² − d²)（下界取地面：2.5D 不表示"从下方穿过"，保守）
+        Hk[inside] = max(Hk[inside], top)
+    return Hk
+H_eff = max(Height_map, Hk)                          # 转场剖面、A*、细校验、补拍点可飞性都用 H_eff
+
+segment_clear(a, b, keepouts, r_col):                 # 进程内快速校验（FR-207）
+    for v in keepouts:
+        R = v.r_m + r_col
+        t* = argmin_t∈[0,1] 水平距离(a + t(b − a), 轴)；z(t*) 线性插值
+        if 水平距离 ≤ R 且 z(t*) 落在 v 的竖直范围（球：三维距离 ≤ R）且（sector 时方位在扇区内，按 ≤ 2 m 步长抽样复核）:
+            return (False, t*, v.id)
+    return (True, None, None)
+```
+
+**算法 2：固定翼跳带顺序**
+
+```text
+order_fw(stripes[0..n−1], d, R_fw):                   # stripes 已按扫描方向排序
+    k = max(1, ceil(2·R_fw / d))
+    seq = []
+    for s in 0..k−1:                                   # 组 s：s, s+k, s+2k, …
+        group = stripes[s::k]
+        方向交替（boustrophedon），组内相邻条带间距 k·d ≥ 2·R_fw，掉头为半径 k·d/2 的半圆
+        组与组之间以 R_fw 圆角连接
+        seq += group
+    return seq
+# 算例：AWR-F1 巡航 18 m/s、φ_max 35°、无风：R_loiter,min = 1.2 × 18² / (9.81 × tan 35°) = 56.6 m，R_fw = 56.6 m；
+#       d = 51.8 m 时 k = ⌈113.2 / 51.8⌉ = 3；会话风场上限 5 m/s 时 R_fw = 92.4 m、k = 4
+```
+
+**算法 3：公平队列与超时**
+
+```text
+loop（PlanServer 调度线程）:
+    if 有空闲 worker:
+        sid = 轮转指针下一个"有待执行作业且未冻结"的会话
+        job = 该会话队列中（优先级升序，提交序升序）的第一个；启动；记 t_start
+    for job in running:
+        if now − t_start > 3·budget_ms:
+            SIGKILL(job.worker)；job → TIMEOUT（125，detail = TIMEOUT）；重建 worker（≤ 5 s）
+            timeouts[sid].append(now)；若 10 min 内 ≥ 3：frozen_until[sid] = now + 5 min
+    结果到达：若作业已被取代或会话已结束则丢弃，否则按 FR-202 回复
+```
+
+### 15.6 状态机与时序
+
+#### 15.6.1 共享规划服务中的作业
+
+| 状态 | 事件 | 守卫 | 动作 | 目标状态 |
+|---|---|---|---|---|
+| — | `submit` | 会话已冻结 | 回复 586 | — |
+| — | `submit` | `validate_input` 不通过或队列满 | 回复 585 或 111 | — |
+| — | `submit` | 通过 | 入会话队列；同 `dedupe_key` 的旧作业 → SUPERSEDED | QUEUED |
+| QUEUED | 轮到该会话且有空闲 worker | — | 派发，记开始墙钟 | RUNNING |
+| QUEUED | `cancel` 或会话结束 | — | 移出队列 | CANCELED |
+| RUNNING | worker 返回 | 未被取代 | 回复结果（> 1 MB 外置） | DONE |
+| RUNNING | worker 返回 | 已被取代 | 丢弃结果 | SUPERSEDED |
+| RUNNING | 墙钟 > 3 × 预算 | — | SIGKILL 并重建 worker；计超时 | TIMEOUT |
+| RUNNING | worker 崩溃 | 首次 | 重建并重交 | QUEUED |
+| RUNNING | worker 崩溃 | 第二次 | 回复 214 | FAILED |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+stateDiagram-v2
+  [*] --> QUEUED: 校验通过
+  QUEUED --> RUNNING: 轮到该会话
+  QUEUED --> CANCELED: 取消或会话结束
+  QUEUED --> SUPERSEDED: 同键新作业
+  RUNNING --> DONE: 返回
+  RUNNING --> SUPERSEDED: 返回但已被取代
+  RUNNING --> TIMEOUT: 超过 3 倍预算，kill
+  RUNNING --> QUEUED: 首次崩溃
+  RUNNING --> FAILED: 再次崩溃
+  DONE --> [*]
+  TIMEOUT --> [*]
+  FAILED --> [*]
+  CANCELED --> [*]
+  SUPERSEDED --> [*]
+```
+
+#### 15.6.2 区域值守的一次重规划（时序）
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+sequenceDiagram
+  participant T as M20（sim-core 慢任务）
+  participant G as M18 识别物
+  participant C as PlanPoolClient（remote）
+  participant S as PlanServer（sandbox-pool）
+  participant W as worker（sandbox/plan）
+  participant E as M10 任务引擎
+  T->>G: keepout_volumes(mode)
+  G-->>T: 配置体或保守有效体
+  T->>T: 扇形按整圆、外扩 m 与 v·τ_pred
+  T->>C: submit tasking.allocate {work_items, vehicles, keepouts}
+  C->>C: validate_input（585 即止）
+  C->>S: ctl/plan/submit
+  S->>W: 轮到该会话时派发
+  W->>W: H_eff = max(Height_map, Hk)；转场与条带
+  W-->>S: PlanResult
+  S-->>C: 回复（或外置文件路径）
+  C->>T: drain(tick) 在步边界生效
+  T->>E: submit_compiled(MissionSpec, origin=tasking)
+  E-->>T: item_started、item_done
+```
+
+### 15.7 实现指引
+
+| 路径 | 改动 | 复用的 D1 代码 |
+|---|---|---|
+| `python/awr/sim/planning/jobs.py` | `register_plan_kind`、`PlanKindSpec`、`plan_kinds()`；`PlanKind` 改为开放字符串 | `PlanRequest`、`PlanResult`、`result_digest` |
+| `python/awr/sim/planning/kinds_builtin.py`（新） | 把 `worker.py` 中 11 个 `_do_*` 登记为内置类别 | `worker.py` 的 `_do_path_valid`、`_do_transit`、`_do_generator` 等 |
+| `python/awr/sim/planning/worker.py` | 查表分派；多世界 LRU；Grid25 改读 M04 缓存；结果外置 | `init_worker`、`get_world`、`_pdeathsig` |
+| `python/awr/sim/planning/pool.py` | `remote` 模式（总线 query、取消、外置结果读取） | 队列、取代、drain、输入日志 |
+| `python/awr/sim/planning/server.py`（新） | `PlanServer`（§15.5 算法 3） | `pool.py` 的优先级与取代规则、`BrokenProcessPool` 处理 |
+| `python/awr/sim/planning/keepout.py`（新） | `build_Hk`、`segment_clear`、`keepouts_digest` | `astar25.py` 的栅格几何、M10 §6 的 `max_along` |
+| `python/awr/sim/planning/{transit,astar25,smooth}.py` | 接受 `H_eff`；剖面可行性先查 `Hk` | `plan_transit`、2.5D A* |
+| `python/awr/swarm/coverage/{lanes,partition,plan}.py` | `stripes_for_gsd`、`partition_area`；`clip_lanes` 接收禁入体栅格 | `lanes_for_angle`、`best_sweep_angle`、`bcd_cells`、`split_balanced`、`assign_chunks` |
+| `python/awr/swarm/allocation/hungarian.py` | 原样作为 M20 的库调用 | 全部 |
+| `python/awr/sim/mission/fw_compile.py`（新）、`mission/engine.py`、`mission/model.py` | 固定翼编译；`submit_compiled`、事件回调、`preempt`；`dwell` 直到取消、`land_at` | 任务引擎状态机、`submit_internal` 用法、FR-005 切分 |
+| `python/awr/api/rest/scenarios.py` | `ctx_for` | D1 路由 |
+| `tests/planning/test_registry.py`、`test_server_fairness.py`、`test_keepout.py`、`test_fw_compile.py`（新） | 见 §15.8 | `tests/planning/*` 的 golden |
+
+### 15.8 验收
+
+| 编号 | 度量 | 阈值 | 测试方法 | 环境 | 优先级 | 对应 |
+|---|---|---|---|---|---|---|
+| M10-AC-201 | 注册表等价 | D1 的 S1、S4 覆盖与 6 城 240 组转场在注册表分派下 `result_sha256` 与 D1 golden 逐字节一致；未知类别回复 300（UNKNOWN_KIND）；重复登记导入失败 | `pytest tests/planning/test_registry.py` | 本机 CPU | P0 | FR-201、NFR-202 |
+| M10-AC-202 | remote 模式与公平 | 4 个会话各持续提交 `tasking.allocate`（各 200 个）：每会话完成数占比在 25% ± 5% 内；同键取代后旧结果不生效；结果只在步边界生效且输入日志记录 apply_tick；外置结果（> 1 MB）sha256 校验通过且文件被删除 | `pytest tests/planning/test_server_fairness.py` | 本机 CPU | P0 | FR-202、203 |
+| M10-AC-203 | 超时与冻结 | 注入"睡眠 10 × 预算"的作业：worker 在 3 × 预算 ± 100 ms 被 kill，≤ 5 s 重建，后续作业正常；同会话第 3 次超时后 5 min 内提交回复 586，其他会话不受影响；再崩溃回复 214 | 同上 `::test_kill_and_throttle` | 本机 CPU | P0 | FR-203；D2-AC-28 |
+| M10-AC-204 | worker 内存与缓存 | 缓存 synthcity 与 sanfrancisco 后 worker 匿名页 PSS ≤ 90 MB；Grid25 位于文件页（`/proc/<pid>/smaps` 中对应 memmap）；`allow_derive = false` 且缓存缺失时回复 123（derived_cache_missing） | `pytest tests/planning/test_worker_mem.py` | 本机 CPU | P0 | FR-204、205；D2-AC-28 |
+| M10-AC-205 | 禁入体 | synthcity 200 组随机起终点 × 1–8 个禁入体（含 sector 与 hemisphere）：全部 ok 结果的最小水平余量 ≥ `r_m + r_col`（按 1 m 抽样复核）；`segment_clear` 与 worker 细校验对 10⁴ 条随机段结论一致；keepouts 为空时结果与 D1 golden 一致；64 个禁入体时 safe_transit p95 ≤ 50 ms、astar25 p95 ≤ 300 ms、`segment_clear` 单段 ≤ 50 µs | `pytest tests/planning/test_keepout.py`；`tools/bench/plan/keepout_bench.py` | 本机 CPU | P0 | FR-206、207、NFR-201；D2-AC-16 |
+| M10-AC-206 | 覆盖库 | AOI-A（AWR-04 §8.3）在 w = 57.6 m、s = 0.1 下：8 条带，间距 51.8 m ± 1%，总长 5.16 km ± 3%；`partition_area` 子区面积偏差 ≤ 5%；同一输入两次结果逐字节一致 | `pytest tests/swarm/test_coverage_d2.py` | 本机 CPU | P0 | FR-208；D2-AC-17 |
+| M10-AC-207 | 固定翼编译 | 全部圆角半径 ≥ `R_fw`；`d < 2·R_fw` 时相邻执行条带间距 ≥ 2·R_fw；`loiter` 半径 < `R_loiter,min` 时编译失败；固定翼 slot 的 `ctrl_mode` 从不为 TRAJ，M10 跟踪器不写其设定点 | `pytest tests/planning/test_fw_compile.py` | 本机 CPU | P0 | FR-209；D2-AC-10、16 |
+| M10-AC-208 | 已编译架次 | `submit_compiled` 的架次按序执行并逐项回调（tick 与事件流一致）；`dwell(duration = null)` 保持到取消；`preempt` 后 ≤ 1 tick 释放租约并回调 `aborted{reason: preempted}`；能量不足返回 119；沙盒中 D1 `mission/*` 照常可用（P1） | `pytest tests/mission/test_compiled.py` | 本机 CPU | P0 | FR-210、211、214；D2-AC-18、21 |
+| M10-AC-209 | 输入配额 | §15.3.3 各上限的边界值与边界值 + 1：前者受理，后者在 sim-core 提交前与服务端入队前都回复 585，且回复列出超限项 | `pytest tests/planning/test_quota.py` | 本机 CPU | P0 | FR-212；D2-AC-23 |
+| M10-AC-210 | D1 不回退 | D1 的 M10-AC-001 至 AC-034、AC-050 在 show-api（`ctx_for`）与 process 模式下全部通过；sandbox-api 不暴露 scenarios 路由（404） | `make test-mission` | 本机 CPU | P0 | FR-213；D2-AC-26 |
+
+### 15.9 风险
+
+| 风险 | 影响 | 对策 |
+|---|---|---|
+| 大半径敏感体（人 320 m 级）使 120 m 限高下的转场不可达 | 接力与巡查站位无法到达 | 2.5D 合成场下 A* 绕行；不可达时作业返回 `no_path` 并由 M20 给出原因与换机巢建议 |
+| 单 worker 被一个会话的长作业占满 | 其他会话规划等待 | 预算 × 3 强杀、每会话队列上限、轮转；W 可配 2 |
+| 外置结果文件残留 | tmpfs 占用 | 会话结束由 sandbox-pool 删除 `/dev/shm/awr/<sid>/`；sim-core 读取即删 |
+
+### 15.10 D2 追溯
+
+| 需求 | ADR | 本节条款 | D2 验收 |
+|---|---|---|---|
+| R-D2-03 至 R-D2-05（定点、巡线、区域巡查） | 103 | FR-206、208–210 | D2-AC-16 |
+| R-D2-06（GSD 完整扫描） | 103 | FR-208、212 | D2-AC-17 |
+| R-D2-16、R-D2-17（自行编排、默认贪心、接口预留） | 104、113 | FR-201–203、210 | D2-AC-18 |
+| R-D2-19（不进入敏感范围的接力） | 105 | FR-206、207 | D2-AC-19、20 |
+| R-D2-02、R-D2-24（沙盒容量） | 113 | FR-202–205、212 | D2-AC-23、28 |
+
+研究依据：r25、r26 §3.8（覆盖、扫描角与 GSD 足迹）；n03（任务分配）；M10 D1 实现的 `swarm/coverage`、`swarm/allocation`。
+
+### 15.11 对基线（AWR-04）的反馈
+
+处置结果以 [AWR-04 附录 B](../04-D2-设计增补与决策记录.md)（v1.2）为准；本节保留为起草时的记录。
+
+| # | 基线条款 | 问题 | 本节的处理 | 建议 |
+|---|---|---|---|---|
+| D2F-01 | 本轮任务书对 M10 的定位"与 M18 的分工与接口" | 按 AWR-04 §3.3，任务编排归 M20、识别物归 M18；M10 与 M18 之间只有禁入体一条接口，主要分工在 M10 与 M20 之间 | §15.1 同时给出 M18、M20、M17 三方分工 | 无需改基线；下游 M18、M20 PRD 引用本节 §15.1 |
+| D2F-02 | §8.1"禁入体……交给 M10 的 safe_transit 与 2.5D A*"、§11.6 契约清单 | 没有禁入体的契约（形状、半径是否已含外扩、竖直范围、sector 参数），M18、M20、M10 三方各自实现会不一致 | 定义 `KeepoutVolume`（§15.3.1），半径已含外扩、M10 只加 `r_col` | §11.6 `target/` 一行增加 `keepout.schema.json`（M18 起草） |
+| D2F-03 | §4.1 图与 §4.9"沙盒 sim-core 经 `ctl/plan/submit` 提交到 sandbox-pool" | D1 总线把 namespace 写进会话配置（§4.7 已指出），沙盒 sim-core 的 key 只能落在 `awr/<world>/<sid>/` 下，无法直达池命名空间 `awr/_sandbox/pool` | 由 sandbox-pool 在每个会话的总线会话（它本来就为心跳持有）上登记 `ctl/plan/submit` queryable（FR-202） | §4.9 写明"规划提交在会话命名空间内，由池的会话级总线会话应答" |
+| D2F-04 | §4.9 与 §15 `125 PLAN_TIMEOUT` | `reasons.json` 中 125 的名字是 `PLAN_FAILED`（超时只是 detail），没有 `PLAN_TIMEOUT` | 回复 `125 PLAN_FAILED`，detail = TIMEOUT | §4.9、ADR-113 改写为"125 PLAN_FAILED（TIMEOUT）" |
+| D2F-05 | §5.3、§8.1、§9.2（固定翼） | 规定了固定翼的盘旋与条带转弯约束，但没有说明固定翼架次由谁执行：D1 的 M10 跟踪器只服务多旋翼 TRAJ | M10 编译 `fw_path` 与 `loiter`（FR-209），执行交 M21 的运动提供者，M10 跟踪器不接管固定翼 | §5.3 末段补一句执行归属 |
+| D2F-06 | §4.4.2 世界工作集与共享 worker | worker 需同时映射多个世界的派生缓存，基线没有给出 worker 的世界缓存上限，L 级世界文件页 220–350 MB/个 | worker 世界缓存 LRU ≤ 4，且只映射活动世界（FR-204） | §4.4.2 注明"共享 worker 只映射活动世界，会话结束后解除映射" |

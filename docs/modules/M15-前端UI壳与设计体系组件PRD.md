@@ -1992,3 +1992,321 @@ npx tsc -p tsconfig.json --noEmit && npx playwright test perf/m15/smoke.spec.ts
 | AWR-03 条款 | §3.6（帧序 overlay 相位、零分配）、§3.8（HUD 与图表 ≤ 1 ms、标签与 DOM ≤ 2 ms）、§4.1–§4.3（目录、边界、所有权）、§5.1–§5.7（坐标、时间、四元数、单位、命名、未知值与显示格式）、§8.2（D1 交互编辑）、§8.4（D1-AC-02、20、21、23、24、27、29、30、32）、§8.5（快捷键、视口最小尺寸、UI 语言）、§10.2（写作规范） | 对应章节 |
 | 相邻文档条款 | AWR-14 §3.1–§3.7、§4.1、§4.7、§6.10–§6.11、§7.7、§8.2、§11、§14、§19 第 17 条；AWR-15 §3.7、§4.2、§7、§13；AWR-17 §4.2、§10.7；AWR-18 PR-7、§8.5、§9.2、§9.5、§11.4、§13.1；M06 §7；M11 §7.5；M12 §6.5；M16-FR-071 | 对应章节；冲突见 §14 第 13–17 条 |
 | 研究笔记 | g07 §0–§8；d01 §0、§3.1–§3.9、§4.2–§4.4；d02 §3.1–§3.4、§4.1–§4.7；d03 §0、§3.2–§3.7、§4.1–§4.4、§6；d04 §0、§3.1–§3.11、§6；d05 §3.11；n05 §0、§3.1–§3.3、§3.9、§3.10、§5.5；r14 §0、§3.4、§5.3；00-index §3.13、§5.7、C6–C8 | §13 |
+
+
+---
+
+## 15. D2 增补（V0.2-demo）
+
+> 本节是 M15 对 D2（V0.2-demo）的增补，依据 [AWR-04 D2 设计增补与决策记录](../04-D2-设计增补与决策记录.md)（D2 唯一基线，重点为 §10、ADR-108、ADR-111、ADR-112）与 [用户 D2 需求原文](../inputs/D2-需求原文-2026-10-05.md)。§1–§14 的 D1 条款在未被本节修改处继续有效（FR-120 至 FR-124、AC-070 至 AC-073 按 §15.3 修订）；与 AWR-04 冲突时以 AWR-04 为准，问题列在 §15.11。
+
+### 15.0 定位与编号
+
+1. M15 在 D2 拥有全部**新页面、面板与交互件**的壳层实现（AWR-04 §10 "M15 主责"）：载入进度条、演示构建的运行期角色切换与新路由、落地页的沙盒入口、沙盒状态条与排队卡片、机队、识别物、机巢、任务四个管理面板、手动控制（`manual` 键位作用域与虚拟摇杆）、FPV 传感器视图的控制与 HUD、捕获与被发现提示、共享展示可用的只读交互、场景模板与新手引导、底图切换、OpenAPI 文档页、文案与 i18n。
+2. 数据与几何不在 M15：领域 store 由各模块提供（`stores/sandboxSession.ts` M17、`catalog.ts` M21、`targets.ts` M18、`perception.ts` M19、`tasking.ts` M20、`fleet.ts` M11、`sensors.ts` M13）；视口图层由领域模块提供（`viewport/layers/targets.tsx` M18、`tasking.tsx` M20），FPV 与三种传感器着色变体由 M06 实现；GSD 计算器的公式是 M19 的 TS 移植（`engine/perception/**`）。M15 只经 selector（≤ 10 Hz，Tier S 4 Hz）读取，经 `ui/actions` 与 `net/api` 写入。
+3. **编号**：D2 条目从 201 起（FR、NFR、AC 各自在 2xx 段内连续）；"D2"列取"是、桩、否"，目标版本 `V0.2-demo`（AWR-04 §1.2）。
+
+### 15.1 页面与组件清单
+
+| 页面或组件 | 路由或挂载点 | 角色 | 主要数据 | 文件（新） |
+|---|---|---|---|---|
+| 载入进度条 | `index.html` `#boot-mask .boot-progress`；切换底图与静态浏览的加载层 | 全部 | BootController 门控、M05 首屏字节、M06 shader zoo 计数 | `app/boot/progress.ts`、`ui/boot/LoadingLayer.tsx` |
+| 落地页沙盒入口 | `/`（`app/demo/Landing.tsx`） | 匿名 | `GET /worlds`、`GET /templates` | `app/demo/SandboxLaunchSheet.tsx` |
+| 沙盒视图 | `/sandbox/:sid` | operator（沙盒） | `stores/sandboxSession.ts` | `app/routes/sandbox.tsx` |
+| 沙盒状态条 | AppHeader 中段 | operator（沙盒） | `sandbox/session` topic | `ui/sandbox/StatusBar.tsx` |
+| 排队卡片 | 视口右下（非模态） | 匿名、viewer | 排队票、`sandbox.slot_ready` | `ui/sandbox/QueueCard.tsx` |
+| 机队面板 | 右栏 `fleet` | operator；viewer 只读目录 | `catalog.ts`、`fleet.ts` | `ui/panels/fleet/*` |
+| 识别物面板 | 左栏 `targets` | operator；viewer 只读 | `targets.ts`、`perception.ts` | `ui/panels/targets/*` |
+| 机巢面板 | 右栏 `nests` | operator | `tasking.ts` | `ui/panels/nests/*` |
+| 任务面板 | 右栏 `tasks` | operator | `tasking.ts` | `ui/panels/tasks/*` |
+| 接力统计面板 | 底栏 `relay` | 全部 | `relay/{tid}/stats` | `ui/panels/relay/*` |
+| 手动控制 | 视口浮层与键位作用域 `manual` | operator（沙盒） | 租约、`targets.ts` 禁入体 | `ui/manual/*` |
+| FPV 传感器视图控制与 HUD | FPV 视图浮层 | 全部（控制项限 operator） | `perception.ts`、`sensors.ts` | `ui/fpv/*` |
+| GSD 与识别距离计算器 | 命令面板与机队面板入口（Dialog） | 全部 | `engine/perception/calc.ts`（M19） | `ui/views/GsdCalculator.tsx` |
+| 场景模板选择与新手引导 | Sheet、Popover | operator（沙盒） | `GET /templates` | `ui/sandbox/{TemplatePicker,Onboarding}.tsx` |
+| 底图切换 | 状态条入口（Dialog） | operator（沙盒） | `GET /worlds` | `ui/sandbox/WorldSwitch.tsx` |
+| OpenAPI 文档页 | `/sandbox/api` | 全部 | `GET /api/sandbox/v1/openapi.json` | `app/routes/sandboxApi.tsx`、`ui/views/ApiDocs.tsx` |
+
+### 15.2 功能需求（D2）
+
+#### 15.2.1 载入、路由与角色
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M15-FR-201 | 载入进度条：复用 `#boot-mask .boot-progress > i`，CSS 由 `width` 改为 `transform: scaleX(var(--boot-p))`（`transform-origin: left`），2 px，品牌徽标下方，配一行阶段文字（`boot.phase.bundle`、`boot.phase.world`、`boot.phase.points`、`boot.phase.warming`）；进度为五段加权（§15.4.1），单调不减，写入 ≤ 10 Hz，揭开时置 1；揭开仍只由 D1 BootController 门控决定，进度条不新增门控、不等待 WebSocket 或沙盒就绪；只用 transitions.dev 的时长与缓动 token，`prefers-reduced-motion` 下按段跳变；颜色只取中性 token；切换底图与静态浏览的加载层（`LoadingLayer`）用同一模型（去掉应用脚本段后按权重归一） | P0 | V0.2-demo | 是 | M15-AC-201 | R-D2-01；ADR-108；AWR-04 §10.1 |
+| M15-FR-202 | 演示构建的运行期角色切换（ADR-111）：编译期开关 `VITE_AWR_DEMO=public` 保留，但写入界面不再在编译期剔除；`useSessionRole()` 返回 `shared-viewer`（共享展示）、`sandbox-operator`（持有该 sid 的沙盒 token）、`sandbox-viewer`（观摩链接，P1）或 `local`（非演示构建）；`PanelCtx` 增加 `session ∈ {shared, sandbox, local}`；面板、命令、快捷键与命令面板动作按角色显隐；服务端独立执行同样的策略（客户端隐藏不是安全边界） | P0 | V0.2-demo | 是 | M15-AC-202 | ADR-111、ADR-093 |
+| M15-FR-203 | 路由：演示构建注册 `/`、`/world/:id`、`/worlds`、`/settings`、`/sandbox/:sid`、`/sandbox/api`；`/world/:id` 接受七个世界：与共享展示 run 同世界时进入共享展示，否则为静态浏览（只加载点云与地形，不建 WS 订阅，状态条提示"静态浏览，开启沙盒即可在此城市运行仿真"）；`/worlds` 列出七个世界及"可立即开沙盒"状态；`/sandbox/:sid` 的世界取自会话；其余路径回到 `/worlds`；面板可经 `?panel=<id>` 深链（沿用 D1 `urlSync`），使"无人机管理""待识别物管理"可直接分享 | P0 | V0.2-demo | 是 | M15-AC-202 | ADR-111；AWR-04 §10.2；R-D2-07、R-D2-13 |
+| M15-FR-204 | 落地页：两个主按钮"进入演示"（`/world/synthcity`）与"开启我的沙盒"；后者打开 `SandboxLaunchSheet`（shadcn Sheet）：世界列表（七个，标"可立即开始"或"需排队"与原因）、场景模板（T1–T6，缺省 synthcity + T5 区域值守）、"恢复上次配置"（同一世界存在本地快照时）；确认后 `POST /api/sandbox/v1/sessions{world, template, principal_hint, config_snapshot?}`，需要工作量证明（409 `509`）时在 Web Worker 中求解并显示"正在验证"（不阻塞主线程）；成功进入 `/sandbox/:sid`，排队时进入共享展示并显示排队卡片；视口小于 1280 × 720 时按钮禁用并说明"沙盒需要桌面浏览器窗口 ≥ 1280 × 720"，不发起请求；落地页仍不加载 three、引擎与实时客户端（M15-FR-121 的分块约束不变） | P0 | V0.2-demo | 是 | M15-AC-203 | ADR-111、ADR-112；AWR-04 §10.2、§11.5 |
+| M15-FR-205 | 文案（zh-CN 与 en 两份词典）：角色徽标"公开演示 · 只读"与"我的沙盒 · 可操作"；只读提示改为"共享展示为只读，开启我的沙盒即可操作"；页面标题共享展示为"<视图> · ANet Drone4D 公开演示"、沙盒为"<视图> · 我的沙盒 · ANet Drone4D"；关于区块与落地页"演示说明"写明共享展示运行 S7（7×24 接力演示）、每位访客可开一个隔离沙盒（30 min 起、可续期）、七个世界、UrbanScene3D 六城经数据集权利方授权使用并附 ECCV 2022 引用、帧率取决于访客 GPU；全部参考机型参数旁标"模拟参考值，非任何真实产品" | P0 | V0.2-demo | 是 | M15-AC-202、AC-218 | ADR-109、ADR-111；AWR-04 §5.2、§10.2 |
+
+#### 15.2.2 沙盒会话界面
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M15-FR-206 | 沙盒状态条（AppHeader 中段）：世界、剩余时间（`MotionNumber`，每秒更新）、"续期"（`renewable` 时）、倍速药丸（设定值、授予值，受限时标"本会话可达 ×k"并以 Tooltip 给出原因；手动控制期间置灰并提示"手动控制期间仿真锁定 ×1"）、机 n/12、识别物 n/30、机巢 n/4 计数、"载入场景""切换底图""重置""结束会话"（后两者经确认对话框）；SPAWNING 时显示"沙盒启动中"（`ShimmerText`）；收到 `sandbox.expiring` 时以 Banner 倒计时 60 s 并给出"续期"或"导出配置" | P0 | V0.2-demo | 是 | M15-AC-204 | AWR-04 §10.2、§4.4.6 |
+| M15-FR-207 | 排队卡片（非模态，视口右下）：位置、预计等待、"离开队列"；收到 `sandbox.slot_ready` 后变为"沙盒已就绪"并倒计时 60 s，确认即进入 `/sandbox/:sid`，超时作废并说明；排队期间共享展示与 §15.2.5 的只读交互全部可用 | P0 | V0.2-demo | 是 | M15-AC-205 | AWR-04 §4.4.6 L1、§10.2 |
+| M15-FR-208 | 会话恢复与多标签页（会话数据由 M17 `stores/sandboxSession.ts` 维护）：刷新或崩溃后读取 sessionStorage 与 localStorage 备份并经 `GET /sessions/{sid}` 校验，≤ 3 s 回到同一 sid；第二个标签页加入同一沙盒；会话结束时把 `GET /sessions/{sid}/snapshot` 存入 localStorage（键 `awr.sandbox.snapshot.<world>`，保留 7 天），供下次"恢复上次配置" | P0 | V0.2-demo | 是 | M15-AC-206 | AWR-04 §4.6"会话恢复与多标签页" |
+| M15-FR-209 | 场景模板与新手引导：`TemplatePicker`（Sheet，列出当前世界的 T1–T6 与一句话说明和"首次反馈"）在会话内重新装配；新手引导 4 步（shadcn Popover，可跳过，`localStorage` 键 `awr.onboarding.v1` 记录已看过）：①沙盒状态条与寿命；②识别物面板与敏感范围；③任务面板（区域值守已在运行，可"预览分配"）；④捕获提示与 FPV；各面板空状态沿用 AWR-14 §7.2 的 Empty 写法并给出下一步 | P0 | V0.2-demo | 是 | M15-AC-215 | ADR-112；AWR-04 §10.4 |
+| M15-FR-210 | 底图切换：`WorldSwitch` 对话框列出七个世界与可用性（508 时显示"该城市当前容量不足，可改用 synthcity 立即开始或排队"）；确认后提示"当前配置不会搬到新世界，将载入目标世界的同名场景模板"，可先导出快照；切换期间显示 `LoadingLayer`；收到网关 1012（`world_switch`）后按新世界重载点云与地形，sid 不变 | P0 | V0.2-demo | 是 | M15-AC-216 | AWR-04 §10.2 底图行；R-D2-25 |
+
+#### 15.2.3 管理面板
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M15-FR-211 | 机队面板（`fleet`，右栏）：①机型目录卡片（构型、尺寸、质量、续航、速度、链路距离、缺省挂载；参考机型带"模拟参考值"徽标）与参数表（LfTable，table.log 皮肤，按 AWR-04 §5.1 分组并显示置信度）；②"克隆编辑"（Sheet：白名单字段的数值输入带上下限与单位；挂载开关与镜头、分析分辨率选择；右侧即时显示 GSD、各等级最大识别距离与对缺省识别物类别的可行窗口，来自 M19 计算器）；保存失败 `522` 时逐项高亮原因；③实例列表与增删改（选择机型、机巢或在底图点选出生点、限速档、标签）；`525 NEST_INCOMPATIBLE` 与 `505` 以 Alert 说明；viewer 只看①（R-D2-13 的只读浏览） | P0 | V0.2-demo | 是 | M15-AC-207 | R-D2-13、R-D2-15、R-D2-20；AWR-04 §10.5 |
+| M15-FR-212 | 识别物面板（`targets`，左栏）：①列表（类别图标、名称、感知态、最佳捕获等级、被发现计数）与筛选；②"新增"按类别模板（人、机、狗、车、物）后在底图点选放置（`ray_hit` 求交贴地），可拖动；路径模式画折线、随机游走模式画多边形区域（复用 D1 `EditViewportLayer` 的点、折线、多边形工具与撤销重做）；③属性表单分组（几何、运动、外观、反射率、热、雷达、声源、感知与行为），含判据模式、`level_req`、`n_req_px`、敏感体列表（形状、半径、高度、半角、方向）与"采纳建议半径"（`GET .../targets/{id}/suggested_radius?model_id=`）；④敏感体三维显示切换"配置体 / 对选中机型的有效体"（图层由 M18 提供，M15 提供开关）；⑤声音波形 lieflat 线图（一个周期的示意波形，P1）；用户输入的名称经运行时文本净化；viewer 只读①与④ | P0（⑤ P1） | V0.2-demo | 是 | M15-AC-208 | R-D2-07 至 R-D2-11、R-D2-18；AWR-04 §10.5 |
+| M15-FR-213 | 机巢面板（`nests`，右栏）：底图点选放置（贴 DSM 或屋顶）、类型（机巢箱、发射回收站、VTOL 起降台）、库存（按机型）、能量模式（换电、充电）、充电通道与电池队列（每通道一条 LfTickGauge 进度，显示剩余时间）、起降队列；`crewed = true` 的发射回收站标"需地勤，不参与无人值守 7×24" | P0 | V0.2-demo | 是 | M15-AC-209 | R-D2-16、R-D2-26；AWR-04 §8.2 |
+| M15-FR-214 | 任务面板（`tasks`，右栏）：视口工具条（点、折线、多边形）复用 D1 `ui/panels/mission-edit` 的 `EditViewportLayer`、LfTable 航点表与撤销重做；类型（`point_watch`、`polyline_patrol`、`area_patrol`、`area_scan_gsd`、`perimeter_patrol`、`relay_watch`、`area_guard`）与参数表单；"预览分配"（dry-run）：视口画出子区、条带、补拍航点、航段与站位（图层由 M20 提供），面板给出架数、完工曲线（LfLine）、"选择 n 的理由"、单站足迹上界说明、可持续性结论"可持续 7×24：是 / 否"与瓶颈、不可行时逐项列出原因码与说明（580–586）；启动、暂停、恢复、取消；接力任务的 KPI（覆盖率、间隙次数与最大间隙、被发现次数、交接次数、最小禁入体余量，LfStat）；D1 任务编辑作为"手工指定架次"子模式并入本面板 | P0 | V0.2-demo | 是 | M15-AC-210 | R-D2-03 至 R-D2-06、R-D2-16、R-D2-19；AWR-04 §10.5 |
+
+#### 15.2.4 手动控制、传感器视图与提示
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M15-FR-215 | 手动控制（§15.6.1）：选中机"接管"即 `POST .../vehicles/{vid}:acquire{mode: velocity}`（服务端抢占 M20 租约并重新分配其工作项）；进入后相机切到跟随或 FPV、显示键位提示浮层与"释放"按钮；以 30 Hz 发送 VelSetpoint16（经 rt.worker 的 CLIENT_DATA，不经 React 渲染路径），全部键松开与摇杆归零时发送零速度，释放、窗口失焦或页面隐藏时发送 `velocity_stop`；映射见 §15.4.3（多旋翼为机体系速度与偏航角速度，固定翼为空速、转弯率、爬升率）；失败码 `100`、`116`、`117` 以 Toast 说明 | P0 | V0.2-demo | 是 | M15-AC-211 | R-D2-21；AWR-04 §10.6 |
+| M15-FR-216 | 键位作用域 `manual`：`HotkeyScope` 增加 `manual`，优先级高于 `tool` 与全局；接管期间独占 W/S、A/D、Q/E（下降与上升）、←/→（偏航）、C（速度档）、Esc（退出接管），并屏蔽 F（聚焦）、Space（播放暂停）、G（点选 GoTo）与 D1 CameraRig 的自由相机键；不使用 Shift，全局安全热键 Shift+R、Shift+L、Shift+X 保持有效；ShortcutHelp 登记新作用域 | P0 | V0.2-demo | 是 | M15-AC-211 | AWR-04 §10.6 第 2 条；AWR-14 §6.10 |
+| M15-FR-217 | 敏感范围预警与软围栏显示：手动控制时始终显示禁入体；按当前速度外推 3 s，预测进入任一禁入体时 HUD 与 Toast 告警（同一识别物 5 s 内只告警一次）；软围栏由服务端执行（AWR-04 v1.2 §10.6：sim-core 在 velocity setpoint 入口钳制，会话参数 `keepout_guard` 缺省开启），界面只提供开关（设置中可关闭，关闭后进入即按判据计发现）并在结果带 `KEEPOUT_CLAMPED` 警告时提示"已被软围栏限速"；禁入体几何取 `stores/targets.ts` 的当前判据模式口径 | P0 | V0.2-demo | 是 | M15-AC-211 | AWR-04 §10.6 第 4 条 |
+| M15-FR-218 | FPV 传感器视图控制（渲染由 M06）：视图切换分段控件"日视 / 夜视 / 红外白热 / 红外黑热"（只列该机已挂载的传感器；LWIR 只用灰阶调色板）；变焦滑条（对数刻度，4.8–48 mm，operator 才可用，5 Hz 节流发送 `zoom`）；FPV 内拖动改云台（operator，5 Hz 节流发送 `gimbal{mode: fixed}`，松开后 60 s 内保持）；HUD：视锥内最近识别物的框、像素进度 `N_eff / N_req`（例如 9.6 / 14 px）、限制因素（`fov`、`los`、`pixels`、`light`、`contrast`、`blur` 的本地化文字）、捕获计时条（0–1 s）；视图切换 ≤ 300 ms 且不触发运行期着色器编译（变体在遮罩下预热，M06） | P0 | V0.2-demo | 是 | M15-AC-212 | R-D2-12、R-D2-14、R-D2-21；AWR-04 §6.4、§10.5 |
+| M15-FR-219 | 提示与一处红：`perception.capture` → 中性 Toast"已明确捕获：<识别物>（<传感器>，<等级>）"，同一识别物 30 s 内只提示一次，FPV 捕获框为该图的 HERO 候选；`target.discovered` → 告警 Toast（带"确认"），视口以 `RedCandidate{entity: {kind: 'target', id}, level: 'critical'}` 进入仲裁：未确认时红色实心（高于焦点机），确认后退为红色描边加告警图标，多个同时被发现时最新者实心、其余描边；事件面板新增"感知""识别物""编排"三个筛选；突发时沿用 D1 `toastMerger`（同屏 ≤ 3） | P0 | V0.2-demo | 是 | M15-AC-213 | R-D2-09、R-D2-12；AWR-04 §10.7；AWR-15 §3.7 |
+
+#### 15.2.5 共享展示可用交互、文档页与设计体系
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M15-FR-220 | 共享展示（viewer）可用交互，全部只读、不发写请求、不占沙盒槽位、排队期间可用：任意 S7 机的 FPV 与三种传感器视图和 HUD；识别物列表与详情、敏感体显示切换；接力统计面板（覆盖率、间隙、被发现次数、交接；覆盖率曲线 P1）；机型目录与 P600 参数浏览；六城静态浏览；GSD 与最大识别距离计算器（选机型、传感器、焦距、识别物类别与距离，即时给出 GSD、N、TTPF 概率与可行窗口） | P0 | V0.2-demo | 是 | M15-AC-214 | R-D2-02；AWR-04 §10.3 |
+| M15-FR-221 | OpenAPI 文档页 `/sandbox/api`（独立分块，不加载 three 与引擎）：读取 `openapi.json`，按 tag 分组（shadcn Tabs 与 Accordion），每个操作给出方法、路径、参数表（LfTable）、请求与回复 schema 展开、示例、可复制的 curl（token 以 `$AWR_SANDBOX_TOKEN` 占位，持有会话时可一键填入 sid）与 Python SDK 片段；不引入 Swagger UI；顶部给出 SDK 下载与最小示例（AWR-04 §11.4） | P0 | V0.2-demo | 是 | M15-AC-217 | AWR-04 §11.4；ADR-107 |
+| M15-FR-222 | 设计体系：新页面只用 shadcn（base-mira）组件、transitions.dev token、morphicons 图标、lieflat 图表与表格、ANet Graphite token；新增图标键 `target.person`、`target.dog`、`target.car`、`target.package`、`target.uav`、`target.machine`、`nest`、`sensor.radar`、`sensor.mic`、`sensor.thermal`、`sensor.nir`、`sensor.lidar`、`manual.joystick`、`task.scan`、`task.guard`、`task.relay`（缺失几何入 `ui/icons/custom`）；禁止 emoji 与状态字形；用户输入经运行时净化；`make lint`（no-emoji、no-hex、lint-lf、motion-lint、check-icons、no-raw-controls、check-brand）对新代码全部生效 | P0 | V0.2-demo | 是 | M15-AC-218 | R2；AWR-04 §10.8；D2-AC-25 |
+| M15-NFR-201 | 性能：新面板对 store 的订阅写入 ≤ 10 Hz（Tier S 4 Hz）；稳态 React commit ≤ 12 次/s 且 p95 ≤ 2 ms（D1 门槛不放宽）；手动控制输入路径不触发 React 渲染；30 识别物 + 敏感体 + 12 架整景在 Tier S 满足 D1-AC-03b（与 M06、M16 共测）；进度条不推迟揭开、遮罩下与揭开后我方 > 50 ms 长帧增量 0 | P0 | V0.2-demo | 是 | M15-AC-219 | D2-AC-01、30；M15 §5 |
+| M15-NFR-202 | 可访问性：新面板与对话框通过 axe 用例（无 serious 及以上）；键盘可完成识别物新增与属性编辑、任务创建与预览；摇杆有键盘替代（`manual` 作用域） | P0 | V0.2-demo | 是 | M15-AC-218 | D2-AC-25 |
+
+### 15.3 对 D1 条款的修订（ADR-111）
+
+| 条款 | D1 原文要点 | D2 修订 |
+|---|---|---|
+| M15-FR-120 | 演示构建只读，编译期剔除写入界面 | 编译期开关保留；写入界面保留在包中，运行期按会话角色切换（FR-202）；`DEMO_ROUTES` 增加 `sandbox`、`sandboxApi`；`lib/demo.ts` 中"UrbanScene3D 不得再分发"的注释与 `DEMO_WORLDS = [synthcity]` 改为七个世界（ADR-109） |
+| M15-FR-121 | 落地页一个主按钮"进入演示" | 增加"开启我的沙盒"与 `SandboxLaunchSheet`（FR-204）；"演示说明"按 FR-205 改写；首屏分块约束不变 |
+| M15-FR-122 | 只注册四个路由，`/world/:id` 只接受 synthcity，世界列表只列 synthcity | 路由按 FR-203；世界列表列七个世界并标可用性 |
+| M15-FR-123 | "公开演示为只读模式"，不出现"申请控制" | 共享展示仍只读、仍不出现"申请控制"，提示改为"共享展示为只读，开启我的沙盒即可操作"；沙盒视图为 operator 界面 |
+| M15-FR-124 | 标题与关于区块写"只运行 synthcity 与循环剧本 S0" | 按 FR-205 改写（S7、沙盒、七个世界、授权说明） |
+| M15-AC-070 至 AC-073 | 对应以上 | 由 M15-AC-202、AC-203、AC-218 取代其中与只读、单世界相关的断言；分块与测试开关断言保留 |
+
+### 15.4 默认参数
+
+#### 15.4.1 进度条分段（AWR-04 §10.1）
+
+| 分段 | 权重 | 段内进度来源 | 阶段文字键 |
+|---|---|---|---|
+| 应用脚本 | 0.15 | 构建期写入 `index.html` 的分块清单（文件名与字节数）× `PerformanceObserver('resource')` 已完成分块的 `encodedBodySize`；按已完成分块阶跃前进 | `boot.phase.bundle` |
+| 世界清单与层级 | 0.10 | `world.json` 与各根 `hierarchy.bin` 完成数（M05 事件） | `boot.phase.world` |
+| 首屏点云 | 0.40 | M05 `bootBytes() / bootBytesTotal()`（首屏 Range 已收字节 / `levelsByteEnd`） | `boot.phase.points` |
+| 预热 | 0.30 | M06 shader zoo 已编译程序数 / 总数，加 uiWarm 预光栅帧 | `boot.phase.warming` |
+| 揭开 | 0.05 | 全部门控解析 | — |
+
+#### 15.4.2 界面参数
+
+| 参数 | 值 | 依据 |
+|---|---|---|
+| 进度写入频率 | ≤ 10 Hz | AWR-04 §10.1 |
+| 捕获 Toast 去重 | 同一识别物 30 s | AWR-04 §6.4 |
+| 敏感范围预警外推 / 去重 | 3 s / 同一识别物 5 s | AWR-04 §10.6；去重为本文设定 |
+| 过期预告 | 60 s | AWR-04 §4.4.6 |
+| `slot_ready` 确认窗口 | 60 s | AWR-04 §4.4.6 L1 |
+| 会话恢复目标 | ≤ 3 s | D2-AC-38 |
+| 沙盒最小窗口 | 1280 × 720 | AWR-04 §10.2 |
+| 变焦与云台拖动发送 | ≤ 5 Hz | 本文设定（低于 `sbx_call` 20/s 配额的 1/4） |
+| 本地快照保留 | 7 天 | 本文设定 |
+
+#### 15.4.3 手动控制映射
+
+| 输入 | 多旋翼（机体系 FLU） | 固定翼与 VTOL（FW 模式） |
+|---|---|---|
+| W / S | 前进 / 后退 `vx = ±v_tier` | 空速指令 ±1 m/s（按住时 2 m/s² 斜坡），钳在 [V_min, V_max] |
+| A / D | 左移 / 右移 `vy = ±v_tier` | 转弯率 ∓ / ±，上限 `g·tan φ_max / V_a` |
+| Q / E | 下降 / 上升 `vz = ∓v_z,tier` | 爬升率 ∓ / ± 2 m/s（钳在下沉与爬升上限） |
+| ← / → | 偏航角速度 ∓ / ± 45°/s（≤ 限速档 `MC_YAWRATE_MAX`） | 同 A / D |
+| C | 速度档循环：慢 1 m/s（垂直 0.5）、常 3 m/s（1.5）、快 8 m/s（3） | 循环 V_min + 1、巡航、V_max − 2 |
+| 虚拟摇杆 | 左杆 y 升降、x 偏航；右杆 y 前后、x 左右；死区 0.08 | 右杆 y 空速、x 转弯；左杆 y 爬升 |
+| 发送 | 30 Hz VelSetpoint16（FLU）；松开全部输入发零速度 | 同左（固定翼在 sim-core 内映射，M08 §15.2 FR-213） |
+
+### 15.5 算法
+
+```text
+# 1 进度聚合（app/boot/progress.ts）
+p_seg[k] ∈ [0, 1] 由各来源回调更新；P_raw = Σ w_k · p_seg[k]
+P = max(P_prev, P_raw)                                  # 单调
+if 门控全部解析: P = 1
+节流：距上次写入 ≥ 100 ms 或 P = 1 时 style.setProperty('--boot-p', P)；阶段文字取第一个 p_seg < 1 的分段
+reduced motion：P 量化到分段边界
+
+# 2 手动控制循环（ui/manual/controller.ts，30 Hz 定时器，不经 React）
+u = keys ⊕ joystick（死区、档位）→ 机体系 v_cmd、yaw_rate
+# 软围栏在服务端执行（sim-core velocity setpoint 入口，AWR-04 §10.6）；界面不再本地钳制，只显示 KEEPOUT_CLAMPED 警告
+预测 p(t + 3 s) = p + v_world·3；落入任一禁入体 → HUD 告警，Toast（5 s 去重）
+rt.sendVelocity(vid, v_cmd, yaw_rate)                     # VelSetpoint16 via CLIENT_DATA
+
+# 3 角色解析（useSessionRole）
+if !DEMO_PUBLIC: return 'local'
+if 路由为 /sandbox/:sid 且 sandboxSession.token.sid == sid 且 token 未过期: return token.role == 'operator' ? 'sandbox-operator' : 'sandbox-viewer'
+return 'shared-viewer'
+```
+
+### 15.6 状态机与时序
+
+#### 15.6.1 手动控制（界面侧）
+
+| 状态 | 事件 | 守卫 | 动作 | 目标状态 |
+|---|---|---|---|---|
+| IDLE | 点击"接管" | 角色 `sandbox-operator`，选中 1 架 | `:acquire{mode: velocity}`；按钮转加载 | ACQUIRING |
+| ACQUIRING | 成功 | — | 激活 `manual` 作用域、相机跟随或 FPV、显示键位提示与摇杆、倍速置灰、启动 30 Hz 循环 | ACTIVE |
+| ACQUIRING | 失败（100、116、117） | — | Toast 说明原因 | IDLE |
+| ACTIVE | Esc、"释放"、窗口失焦、页面隐藏 | — | `velocity_stop`；`:release` | RELEASING |
+| ACTIVE | 租约被抢占（安全动作、`210 LEASE_PREEMPTED`）或机体移除 | — | 停止循环；Toast 说明 | IDLE |
+| RELEASING | 释放完成 | — | 退出作用域，恢复相机与倍速控件 | IDLE |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+stateDiagram-v2
+  [*] --> IDLE
+  IDLE --> ACQUIRING: 接管
+  ACQUIRING --> ACTIVE: 租约获得
+  ACQUIRING --> IDLE: 拒绝
+  ACTIVE --> RELEASING: Esc、释放、失焦
+  ACTIVE --> IDLE: 被抢占或机体移除
+  RELEASING --> IDLE: 已释放
+```
+
+#### 15.6.2 沙盒会话（界面侧，对应 AWR-04 §4.6 的服务端状态）
+
+| 状态 | 事件 | 守卫 | 动作 | 目标状态 |
+|---|---|---|---|---|
+| NONE | 点击"开启我的沙盒"并确认 | 窗口 ≥ 1280 × 720 | `POST /sessions`；Sheet 内显示进度 | CREATING |
+| CREATING | 回复 409 `509` | — | Worker 求解工作量证明后重发，显示"正在验证" | CREATING |
+| CREATING | 回复 `{sid, token}` | — | 保存会话；跳转 `/sandbox/:sid` | SPAWNING |
+| CREATING | 回复排队票 | — | 进入共享展示，显示排队卡片 | QUEUED |
+| CREATING | 回复 504、508 或其他错误 | — | Sheet 内说明原因与可立即开始的世界 | NONE |
+| QUEUED | `sandbox.slot_ready` 后访客确认 | 60 s 内 | 领取会话并跳转 | SPAWNING |
+| QUEUED | 离开队列或确认超时 | — | 关闭卡片 | NONE |
+| SPAWNING | `sandbox/session.state` 为 READY 或 ACTIVE | — | 隐藏"沙盒启动中"；首次会话启动新手引导 | ACTIVE |
+| ACTIVE | `sandbox.expiring` | — | Banner 倒计时 60 s | EXPIRING |
+| EXPIRING | 续期成功 | 队列为空 | 更新寿命 | ACTIVE |
+| ACTIVE、EXPIRING | DRAINING、ENDED、FAILED | — | 保存快照到本地；全幅空状态"重新开启""恢复上次配置" | ENDED |
+| ENDED | 点击"重新开启" | — | 同 NONE 的创建动作 | CREATING |
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+stateDiagram-v2
+  [*] --> NONE
+  NONE --> CREATING: 开启我的沙盒
+  CREATING --> CREATING: 509，求解工作量证明
+  CREATING --> SPAWNING: 领取成功
+  CREATING --> QUEUED: 排队票
+  CREATING --> NONE: 504、508 等
+  QUEUED --> SPAWNING: slot_ready 并确认
+  QUEUED --> NONE: 离开或超时
+  SPAWNING --> ACTIVE: 会话就绪
+  ACTIVE --> EXPIRING: 过期预告
+  EXPIRING --> ACTIVE: 续期
+  ACTIVE --> ENDED: 结束、回收或失败
+  EXPIRING --> ENDED: 到时
+  ENDED --> CREATING: 重新开启
+```
+
+#### 15.6.3 从落地页到首次捕获（时序）
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif", "fontSize": "13px", "background": "#FBFBFC", "primaryColor": "#F2F3F5", "primaryTextColor": "#111214", "primaryBorderColor": "#5C616A", "lineColor": "#5C616A", "textColor": "#111214"}}}%%
+sequenceDiagram
+  participant V as 访客
+  participant L as 落地页（无 three）
+  participant W as PoW Worker
+  participant A as sandbox-api
+  participant S as 沙盒视图（sandbox 路由）
+  V->>L: 开启我的沙盒（synthcity，T5）
+  L->>A: POST /sessions
+  A-->>L: 409 509（需要工作量证明）
+  L->>W: 求解（约 1–2 s）
+  W-->>L: nonce
+  L->>A: POST /sessions{pow}
+  A-->>L: {sid, token, expires_unix_ns}
+  L->>S: 跳转（进度条按五段推进）
+  S->>A: WS /sessions/{sid}/rt
+  A-->>S: sandbox/session（SPAWNING → ACTIVE）
+  S-->>V: 引导第 1 步；≤ 90 s 出现已明确捕获提示
+```
+
+### 15.7 实现指引
+
+| 路径 | 改动 | 复用的 D1 代码 |
+|---|---|---|
+| `apps/web/index.html` | `.boot-progress > i` 改为 `scaleX(var(--boot-p))`；构建期注入分块清单（vite 插件写入 `<script type="application/json" id="boot-manifest">`） | D1 启动遮罩节点 |
+| `src/app/boot/{progress.ts（新）,BootMask.tsx,BootController.ts}` | 进度模型；门控只读暴露 | BootController 门控、`whenReadyExcept` |
+| `src/ui/boot/LoadingLayer.tsx`（新） | 切换底图与静态浏览加载层 | BootMask 样式 |
+| `src/lib/demo.ts`、`src/app/router/table.ts` | `DEMO_ROUTES`、七个世界、`useSessionRole` | `installRoutes`、`demoWorlds` |
+| `src/app/routes/{sandbox.tsx,sandboxApi.tsx}`（新）、`routes/world.tsx`、`routes/worlds.tsx` | 新路由；静态浏览模式；可用性标记 | `world.tsx` 的世界加载流程、`WorldHub` |
+| `src/app/demo/{Landing.tsx, SandboxLaunchSheet.tsx（新）, powWorker.ts（新）}` | 两个主按钮、Sheet、工作量证明 | D1 落地页分块与文案 |
+| `src/ui/sandbox/{StatusBar,QueueCard,TemplatePicker,Onboarding,WorldSwitch}.tsx`（新）、`src/ui/layout/AppHeader.tsx` | 状态条嵌入顶栏中段 | `MotionNumber`、`ShimmerText`、Banners |
+| `src/ui/panels/{fleet,targets,nests,tasks,relay}/*`（新）、`src/ui/panels/builtin.ts` | 五个面板登记（`registerPanel`，`when` 按角色与 `session`） | `PanelHost`、`registry.ts`、`mission-edit/{EditViewportLayer,editStore,editModel}`、`LfTable`、`LfStat`、`LfLine`、`LfTickGauge` |
+| `src/ui/manual/{controller.ts,Joystick.tsx,KeyHints.tsx}`（新）、`src/ui/hotkeys/registry.ts` | 手动控制、`manual` 作用域 | `ui/shell/control.ts` 的租约请求模式、`net/rt/session.ts` 的 VelSetpoint16 |
+| `src/ui/fpv/{SensorViewSwitch,ZoomSlider,PerceptionHud}.tsx`（新） | FPV 控制与 HUD | M06 FPV 与 shader zoo 变体 |
+| `src/ui/notify/{eventBridge.ts,redFigures.ts,toastMerger.ts}`、`src/ui/panels/events/EventsPanel.tsx` | 捕获与被发现提示、RedCandidate、三类筛选 | D1 一处红仲裁、Toast 合并 |
+| `src/ui/views/{GsdCalculator.tsx,ApiDocs.tsx}`（新）、`src/ui/views/{AboutDialog.tsx,ShortcutHelp.tsx}` | 计算器、文档页、关于与快捷键帮助 | Dialog、ShortcutHelp |
+| `src/ui/icons/{registry.ts,custom.ts}`、`src/app/i18n/{zh-CN,en}.json` | 新图标键与几何；`boot.*`、`sandbox.*`、`fleet.*`、`targets.*`、`nest.*`、`task.*`、`manual.*`、`perception.*`、`api.*` 词条 | 图标注册表与 i18n 运行时 |
+| `apps/web/tests/m15/*.test.ts`、`apps/web/perf/m15/boot-progress`、Playwright 规格（新） | §15.8 | D1 M16 harness、`__ux` 探针 |
+
+### 15.8 验收
+
+| 编号 | 度量 | 阈值 | 测试方法 | 环境 | 优先级 | 对应 |
+|---|---|---|---|---|---|---|
+| M15-AC-201 | 进度条 | 进度全程单调；出现 ≥ 4 个阶段文字；揭开时为 1；共享路径 TTFP 与揭开时刻相对 D1 劣化 ≤ 5%；沙盒路径揭开相对同世界共享路径劣化 ≤ 5% 且不等待会话就绪；遮罩下与揭开后我方 > 50 ms 长帧增量 0；切换底图的加载层使用同一模型；reduced motion 下按段跳变 | Playwright `perf/m15/boot-progress`（演示构建） | 本机 Tier S | P0 | FR-201、NFR-201；D2-AC-01 |
+| M15-AC-202 | 角色与路由 | 无沙盒 token 时只出现 viewer 界面（无"申请控制"、无写入控件）；持有 token 进入 `/sandbox/:sid` 出现 operator 界面；他人 sid 的 URL 落到 viewer 界面并提示；`/world/<六城>` 为静态浏览且无 WS 连接；`?panel=targets` 打开识别物面板；标题、徽标、只读提示与关于区块文案符合 FR-205 | Playwright `tests/m15/demo-roles.spec.ts` | 本机 Tier S | P0 | FR-202、203、205；D2-AC-24、37 |
+| M15-AC-203 | 落地到首次捕获 | 落地页到第一次 `perception.capture` Toast ≤ 3 次点击、≤ 90 s（T5，×1）；落地页只请求运行时、react、landing 与入口分块；需要工作量证明时主线程无 > 50 ms 长任务；窗口小于 1280 × 720 时按钮禁用且无 `POST /sessions` | Playwright `tests/m15/visitor-path.spec.ts` | 本机 Tier S | P0 | FR-204；D2-AC-34 |
+| M15-AC-204 | 状态条 | 剩余时间与 `sandbox/session` 误差 ≤ 1 s；续期后更新；倍速受限时显示授予值与原因；手动控制期间倍速置灰；`sandbox.expiring` 后 Banner 倒计时 60 s | Playwright `tests/m15/statusbar.spec.ts`（FakeSource） | 本机 Tier S | P0 | FR-206；D2-AC-06、07 |
+| M15-AC-205 | 排队 | 满员时得到排队卡片（位置、预计等待），共享展示交互可用；`slot_ready` 后 60 s 内确认 ≤ 6 s 进入沙盒；超时作废有说明；"离开队列"后卡片消失 | e2e `tests/e2e/test_sandbox_queue.py` + Playwright | 本机 | P0 | FR-207；D2-AC-05 |
+| M15-AC-206 | 恢复与多标签页 | 刷新后 ≤ 3 s 回到同一 sid；第二个标签页加入同一沙盒；结束后本地快照可用于"恢复上次配置" | Playwright `tests/m15/session-restore.spec.ts` | 本机 Tier S | P0 | FR-208；D2-AC-38 |
+| M15-AC-207 | 机队面板 | 5 个可见机型卡片与参数表、参考机型徽标；克隆编辑越界保存显示 522 的逐项原因；增删实例 ≤ 1 s 反映在列表与视口；525、505 有说明；viewer 只见目录 | Playwright `tests/m15/fleet-panel.spec.ts` | 本机 Tier S | P0 | FR-211；D2-AC-09 |
+| M15-AC-208 | 识别物面板 | 五类模板新增；点选放置与拖动后贴地误差 ≤ 0.5 m（与 M18 对拍）；路径与区域绘制、撤销重做可用；"采纳建议半径"写回敏感体；敏感体显示切换生效；名称中的 emoji 被净化 | Playwright `tests/m15/targets-panel.spec.ts` | 本机 Tier S | P0 | FR-212；D2-AC-11 |
+| M15-AC-209 | 机巢面板 | 放置、库存、能量模式、充电通道进度与电池队列随 `nest/{id}/status` 更新（≤ 1 s）；`crewed` 标注 | Playwright `tests/m15/nests-panel.spec.ts` | 本机 Tier S | P0 | FR-213；D2-AC-18 |
+| M15-AC-210 | 任务面板 | 七种类型可创建；"预览分配"在视口显示子区、条带、补拍航点、航段与站位，面板显示架数、完工曲线、选择理由、可持续性与瓶颈；不可行时列出 580–586 的原因；启动、暂停、取消生效；D1 任务编辑作为子模式可用 | Playwright `tests/m15/tasks-panel.spec.ts` | 本机 Tier S | P0 | FR-214；D2-AC-16、17、35 |
+| M15-AC-211 | 手动控制 | 键盘与摇杆 setpoint 送达 ≥ 25 Hz；命令到可见 p95 ≤ D_global + 150 ms；`manual` 作用域内 Shift+R 只发出返航、F 不改变相机、Q/E 只改变升降、G 不进入点选；接管期间倍速置灰；预测进入敏感体前 3 s 告警；软围栏开启时不进入；失焦即 `velocity_stop`；释放后机体进入可用池 | Playwright `tests/m15/manual-control.spec.ts`、e2e | 本机 Tier S | P0 | FR-215–217；D2-AC-21 |
+| M15-AC-212 | 传感器视图 | 四种视图切换 ≤ 300 ms 且 `programs` 增量 0；未挂载的传感器不出现在切换器；HUD 像素进度与限制因素与 `uav/{id}/perception` 一致；变焦与拖动发送 ≤ 5 Hz | Playwright `tests/m15/fpv-sensors.spec.ts` | 本机 Tier S | P0 | FR-218；D2-AC-14、21 |
+| M15-AC-213 | 提示与一处红 | 捕获 Toast 同一识别物 30 s 内不重复；被发现时视口红色实心实体 = 1（RedArbiter 像素统计，UX-AC-030 口径），确认后为描边；被发现、手动控制焦点机与捕获框同时存在时每张图红色实心实体 ≤ 1；LWIR 视图除捕获框外无红色像素；事件面板三类筛选正确 | Playwright `tests/m15/red-d2.spec.ts` | 本机 Tier S | P0 | FR-219；D2-AC-14、25 |
+| M15-AC-214 | 共享展示交互 | FR-220 全部交互在 viewer token 下可用，网络日志中写请求为 0；满员排队期间可用；计算器与 M19 参考实现误差 ≤ 1% | Playwright `tests/m15/viewer-d2.spec.ts` | 本机 Tier S | P0 | FR-220；D2-AC-37 |
+| M15-AC-215 | 模板与引导 | T1–T6 可在会话内载入；新手引导可跳过且只出现一次；各面板空状态给出下一步 | Playwright `tests/m15/onboarding.spec.ts` | 本机 Tier S | P0 | FR-209；D2-AC-34 |
+| M15-AC-216 | 底图切换 | 切换到六城之一后 sid 不变、载入同名模板、加载层进度单调；容量不足时显示 508 文案与可立即开始的世界 | Playwright `tests/m15/world-switch.spec.ts` | 本机 Tier S | P0 | FR-210；D2-AC-24 |
+| M15-AC-217 | OpenAPI 页 | 页面覆盖 `openapi.json` 的全部操作；curl 片段可执行（本机）；不加载 three、引擎与 Swagger UI 分块 | Playwright `tests/m15/api-docs.spec.ts` | 本机 Tier S | P0 | FR-221；D2-AC-22 |
+| M15-AC-218 | 设计体系与可访问性 | `make lint` 全过；新图标键齐全；axe 无 serious 及以上；zh-CN 与 en 键集对齐（`tests/m15/i18n.test.ts`）；授权说明与 ECCV 2022 引用出现在关于区块 | `make lint`；`npx vitest run tests/m15/`；Playwright a11y | 本机 | P0 | FR-205、222、NFR-202；D2-AC-24、25 |
+| M15-AC-219 | 性能 | 新面板打开时 store 写入 ≤ 10 Hz（Tier S 4 Hz）、commit ≤ 12 次/s 且 p95 ≤ 2 ms；30 识别物 + 敏感体 + 12 架整景 flight60 变体在 synthcity 与 sanfrancisco 满足 D1-AC-03b；手动控制 60 s 内 React commit 不随 setpoint 频率增长 | Playwright flight60 变体（M16 harness） | 本机 Tier S | P0 | NFR-201；D2-AC-30 |
+
+### 15.9 风险
+
+| 风险 | 影响 | 对策 |
+|---|---|---|
+| 演示构建包含写入界面后体积增大 | 首屏变慢 | 管理面板、手动控制、文档页按路由与面板懒加载；落地页分块约束不变（AC-203） |
+| 面板数量增加挤占 Tier S 帧预算 | D1-AC-03b 回退 | 面板只订阅可见部分，隐藏即退订；图层上限与 PerfGovernor 降级由 M06、M18、M20 负责（D2-AC-30） |
+| 软围栏服务端钳制与界面预警不同步 | 界面预警与实际钳制在边界附近不一致 | 预警按同一禁入体几何外推 3 s；以服务端 `KEEPOUT_CLAMPED` 为准显示（AWR-04 v1.2 §10.6） |
+
+### 15.10 D2 追溯
+
+| 需求 | ADR | 本节条款 | D2 验收 |
+|---|---|---|---|
+| R-D2-01（极简进度条） | 108 | FR-201 | D2-AC-01 |
+| R-D2-02、R-D2-24（开放低成本交互、沙盒） | 111、112 | FR-202–210、220、221 | D2-AC-02、05、06、34、37、38 |
+| R-D2-07、R-D2-08、R-D2-10、R-D2-11、R-D2-18（待识别物管理页面） | 098、099 | FR-212 | D2-AC-11、12 |
+| R-D2-13、R-D2-15、R-D2-20（无人机管理页面） | 095 | FR-211 | D2-AC-09 |
+| R-D2-03 至 R-D2-06、R-D2-16、R-D2-19、R-D2-26（任务与机巢） | 103–105 | FR-213、214 | D2-AC-16 至 18、35 |
+| R-D2-12、R-D2-14、R-D2-21（捕获提示、传感器视图、手动控制） | 100、108 | FR-215–219 | D2-AC-14、21、25 |
+| R-D2-25、R-D2-28（底图与授权说明） | 109、111 | FR-203、205、210 | D2-AC-24 |
+| R2（设计体系，继承） | 108；AWR-03 ADR-028 至 032 | FR-222、NFR-202 | D2-AC-25 |
+| R3（流畅性，继承） | 108 | NFR-201 | D2-AC-01、30 |
+
+### 15.11 对基线（AWR-04）的反馈
+
+处置结果以 [AWR-04 附录 B](../04-D2-设计增补与决策记录.md)（v1.2）为准；本节保留为起草时的记录。
+
+| # | 基线条款 | 问题 | 本节的处理 | 建议 |
+|---|---|---|---|---|
+| D2F-01 | §10.1"应用脚本"分段"以流式 fetch 统计已收字节" | 内联加载器再 fetch 一遍分块，只有在分块带强缓存头时才不会重复下载；且需在模块脚本之前执行 | 采用构建期清单 + `PerformanceObserver` 的已完成分块字节（基线允许的"按已完成分块数阶跃"），不重复请求 | §10.1 改为"以 Resource Timing 统计已完成分块字节" |
+| D2F-02 | §10.2 底图行"会话内切换底图"与 §11.1 | REST 表中没有切换世界的端点（只有 `template` 与 `restore`） | 界面按 `POST /sessions/{sid}/template{world, template}` 调用 | M17 在 §11.1 明确该端点的 `world` 参数与 409 `508` 行为 |
+| D2F-03 | §10.6 第 4 条软围栏 | 只描述了界面行为，API 与 SDK 的速度控制不受保护，"不进入敏感范围"的保障随入口而异 | 界面侧实现（FR-217），并在文档页说明 | 由 M08 ingest 或 M18 提供服务端软围栏（会话开关，缺省开），界面只显示 |
+| D2F-04 | §10.6 第 2 条键位清单 | 未提 G（D1 点选 GoTo）：接管期间若触发 GoTo 会以导航调用取代速度控制 | `manual` 作用域屏蔽 G（FR-216） | 键位清单补 G |
+| D2F-05 | R-D2-07、R-D2-13 原文为"管理页面"，§10.5 落为浮层面板 | 面板不可直接分享或收藏，与"页面"的字面要求有差距 | 面板支持 `?panel=<id>` 深链（FR-203） | §10.5 注明"面板可经 URL 深链打开，满足'管理页面'的访问方式" |
+| D2F-06 | ADR-111 第 ④ 条"FR-120 至 FR-124 与 AC-070 至 AC-073 按本 ADR 修订" | `lib/demo.ts` 的注释与常量仍写"UrbanScene3D 不得再分发、只有 synthcity"，属于 ADR-109 的修订范围但未列入 §14.3 | 本节 §15.3 一并修订 | §14.3 增加 `apps/web/src/lib/demo.ts` 一行（M15） |
