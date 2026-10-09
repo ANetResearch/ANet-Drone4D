@@ -50,3 +50,10 @@ blob-report/
 *.swp
 .DS_Store
 *.log
+
+# 论文编译中间文件
+/paper/*.aux
+/paper/*.log
+/paper/*.out
+/paper/*.blg
+/paper/*.bbl

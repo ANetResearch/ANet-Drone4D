@@ -1,0 +1,53 @@
+\begingroup
+\newcommand{\cellq}[2]{\node[circle,fill=oursred,inner sep=1.5pt] at (#1) {};
+  \node[font=\tiny,text=ink,align=center,anchor=north,text width=1.7cm,
+        execute at begin node={\hyphenpenalty=10000}] at ($(#1)+(0,-0.12)$) {#2};}
+\newcommand{\celln}[1]{\node[circle,draw=g3,inner sep=1.4pt] at (#1) {};}
+\begin{tikzpicture}[font=\scriptsize,x=1.9cm,y=0.92cm]
+  % header
+  \foreach \c/\t/\d in {1/Geometry/D1, 2/Wind/D2, 3/Visibility/D2, 4/Energy/shared, 5/Perception/shared}
+    \node[font=\scriptsize\bfseries,align=center] at (\c,0.75) {\t\\[-1pt]{\tiny\mdseries\color{g2}\d}};
+  % rows
+  \foreach \r/\t in {0/Launch precheck, 1/Return altitude, 2/Return trigger, 3/{Scan height, spacing},
+                     4/Fleet size, 5/Task award}
+    {\node[anchor=east,align=right,font=\scriptsize] at (0.45,-\r) {\t};
+     \draw[g5,line width=0.4pt] (0.48,-\r-0.5) -- (5.55,-\r-0.5);}
+  \draw[g2,line width=0.5pt] (0.48,0.4) -- (5.55,0.4);
+  % row 0: precheck
+  \cellq{1,0}{cruise above the route's roofs}
+  \cellq{2,0}{route wind vs rating}
+  \celln{3,0}
+  \cellq{4,0}{out + station + return $\le$ reserve}
+  \celln{5,0}
+  % row 1: return altitude
+  \cellq{1,-1}{highest roof on the line, detour}
+  \cellq{2,-1}{headwind of candidates}
+  \celln{3,-1}
+  \cellq{4,-1}{climb vs detour energy}
+  \celln{5,-1}
+  % row 2: return trigger
+  \cellq{1,-2}{climb to return altitude}
+  \cellq{2,-2}{wind at return altitude}
+  \celln{3,-2}
+  \cellq{4,-2}{same model as precheck}
+  \celln{5,-2}
+  % row 3: scan
+  \cellq{1,-3}{obstacle cells, line of sight}
+  \celln{2,-3}
+  \cellq{3,-3}{optical depth caps height}
+  \celln{4,-3}
+  \cellq{5,-3}{pixels for D/R/I}
+  % row 4: fleet size
+  \celln{1,-4}
+  \cellq{2,-4}{sortie endurance in wind}
+  \cellq{3,-4}{lower height, more strips}
+  \cellq{4,-4}{per-sortie energy}
+  \celln{5,-4}
+  % row 5: award
+  \cellq{1,-5}{line of sight to the task}
+  \cellq{2,-5}{weather risk term}
+  \cellq{3,-5}{expected detection}
+  \cellq{4,-5}{precheck of the bid}
+  \cellq{5,-5}{sensor capability}
+\end{tikzpicture}
+\endgroup

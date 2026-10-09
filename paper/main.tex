@@ -1,0 +1,111 @@
+\documentclass[pdflatex,sn-mathphys-num]{sn-jnl}
+
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{makecell}
+\usepackage{url}
+\providecommand{\burl}[1]{\url{#1}}
+\usepackage{pifont}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,shapes.misc,backgrounds}
+
+\definecolor{oursred}{HTML}{C8102E}
+\definecolor{ink}{HTML}{1F1F1F}
+\definecolor{g1}{HTML}{3A3A3A}
+\definecolor{g2}{HTML}{6B6B6B}
+\definecolor{g3}{HTML}{9A9A9A}
+\definecolor{g4}{HTML}{C4C4C4}
+\definecolor{g5}{HTML}{E6E6E6}
+
+\newcommand{\yes}{\ding{51}}
+\newcommand{\no}{--}
+\newcommand{\prt}{$\circ$}
+\input{sections/numbers}
+
+\raggedbottom
+
+\begin{document}
+
+\title[Drone4D]{Drone4D: A Space-Time World Runtime for Coupled Decisions of Urban Drone Fleets}
+
+
+\author[1]{\fnm{Miao-Hui} \sur{Song}}
+
+\author[2,3]{\fnm{Mu} \sur{Yuan}}
+
+\author*[3,4]{\fnm{Jinke} \sur{Song}}\email{ink@anet0.com}
+
+\author[5]{\fnm{Shengyuan} \sur{Ye}}
+
+\author[6]{\fnm{Lan} \sur{Zhang}}
+
+\affil[1]{\orgname{National University of Defense Technology}, \orgaddress{\city{Hefei}, \country{China}}}
+\affil[2]{\orgname{The Chinese University of Hong Kong}, \orgaddress{\city{Hong Kong SAR}, \country{China}}}
+\affil[3]{\orgname{Agent Network Research}}
+\affil[4]{\orgname{The Hong Kong University of Science and Technology}, \orgaddress{\city{Hong Kong SAR}, \country{China}}}
+\affil[5]{\orgname{Guangdong Power Grid Co., Ltd.}, \orgaddress{\city{Guangzhou}, \country{China}}}
+\affil[6]{\orgname{University of Science and Technology of China}, \orgaddress{\city{Hefei}, \country{China}}}
+
+\abstract{%
+Drone fleets in smart cities take decisions whose outcome depends jointly on the 3D city, the weather and the battery:
+whether to launch, how to fly home and how high to scan. Drone simulators and city digital twins keep these factors in
+separate tools, so each decision sees only part of the picture. We present Drone4D, a space-time (4D) world runtime that serves one
+consistent model of city geometry, a time-varying weather field and vehicle energy to the planner, the fleet runtime
+and a browser display, and a decision layer that couples them in launch precheck, return planning, task delegation and
+scan planning. A motivational study over seven cities shows that a fixed-altitude return enters the building clearance
+envelope on 45\% of return lines, that a return trigger with its own wind model aborts up to a quarter of feasible
+legs, and that a weather-blind scan plan captures as few as 5\% of targets in fog while predicting full coverage. Batched
+queries on one clock make coupling affordable: 1,000 drones run at \STAGERTF{} times real time on one core. In
+closed-loop campaigns over seven cities and twelve weather conditions, the coupled policy reduces unsafe sorties from
+\PXUNSAFE\% to \CPUNSAFE\% and more than doubles completed sorties (\CPDONE\% against \PXDONE\%) compared with a
+fixed-altitude return; delegation raises request success from 42\% to 59\% without stranding a drone; and scan planning
+raises recognition capture in fog from 5\% to 89\%.}
+
+\keywords{urban air mobility, drone fleets, digital twin, weather-aware planning, return-to-launch, pervasive simulation}
+
+\maketitle
+
+\input{sections/intro}
+\input{sections/background}
+\input{sections/design}
+\input{sections/evaluation}
+% \input{sections/discussion}
+\input{sections/conclusion}
+
+\backmatter
+
+\section*{Statements and Declarations}
+
+\begin{itemize}
+% \item \textbf{Funding.} [Funding information to be added by the authors.]
+\item \textbf{Competing interests.} The authors have no competing interests to declare that are relevant to the
+content of this article.
+\item \textbf{Ethics approval and consent to participate.} Not applicable. The study involves no human participants,
+human data or animals; all experiments are simulations.
+\item \textbf{Consent for publication.} Not applicable.
+\item \textbf{Data availability.} The raw results of every experiment (one table per campaign) and the scripts that
+produce every figure and number in this article are available in the \texttt{paper/} directory of the project
+repository, \url{https://github.com/ANetResearch/ANet-Drone4D}. The city point clouds are derived from the public
+UrbanScene3D dataset~\cite{lin2022urbanscene3d}.
+\item \textbf{Code availability.} The runtime, the decision layer and the experiment harness are open source at
+\url{https://github.com/ANetResearch/ANet-Drone4D}; \texttt{tools/paper/} contains the experiment harness and
+\texttt{paper/figures/} the figure scripts; \texttt{paper/README.md} lists the command that produced each data set.
+% \item \textbf{Author contributions.} Conceptualization: Miaohui Song, Mu Yuan, Jinke Song; Methodology: Miaohui Song,
+% Jinke Song; Software: Miaohui Song, Mu Yuan; Investigation and formal analysis: Miaohui Song, Mu Yuan, Shengyuan Ye;
+% Writing -- original draft preparation: Miaohui Song; Writing -- review and editing: Mu Yuan, Jinke Song, Shengyuan Ye,
+% Lan Zhang; Resources: Jinke Song; Supervision: Jinke Song, Lan Zhang. All authors read and approved the final
+% manuscript.
+% \item \textbf{Use of large language models.} Large language models were used to help search the literature (every
+% reference was checked against its publisher or arXiv record), to assist with drafting and editing the text, and to
+% produce a simulated reviewer critique of the draft (Sect.~\ref{sec:eval:setup}). All experiments, data and figures were
+% produced by code in the project repository, and the authors take full responsibility for the content.
+\end{itemize}
+
+\bibliography{refs}
+
+\end{document}

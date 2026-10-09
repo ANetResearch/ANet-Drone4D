@@ -1,0 +1,71 @@
+\section{Introduction}\label{sec:intro}
+
+Small multirotor drones are becoming part of the infrastructure of smart cities. Municipal operators fly them to
+inspect bridges and power lines, to search for missing persons, to survey traffic and crowds after an incident and to
+deliver medical supplies, and they increasingly fly them as fleets dispatched from shared depots rather than as single
+aircraft under a pilot's hand~\cite{mohamed2020uav,gharibi2016internet,prevot2016utm}. A fleet operator takes the same
+few decisions for every sortie: whether a drone may launch for a task, at which altitude and along which path it
+returns when its battery or the operator calls it home, and how high and how densely a scan must be flown so that the
+camera can still recognise what it is looking for.
+
+These decisions are \emph{coupled}. The right return altitude depends on the buildings along the return line; when the
+return must start depends on the energy needed to fly that path against the wind; the right scan height depends on the
+visibility, which in turn sets the number of strips, the flight time per sortie and thus the number of drones. A
+decision that sees only one of these factors is not merely less accurate; it is wrong in a systematic way that depends
+on the city and on the weather. Yet the tools of today keep the factors apart. Flight stacks return at a fixed
+altitude above the take-off point~\cite{meier2015px4}; drone simulators model a vehicle in a uniform
+wind~\cite{shah2017airsim,koenig2004gazebo}; urban digital twins display real geometry but do not
+simulate~\cite{batty2018digitaltwins,ketzler2020digitaltwins}; and weather enters operations, if at all, as a go/no-go
+rule of thumb~\cite{gao2021weather}. Each module therefore decides with its own partial model, and two modules that
+need the same quantity may compute it differently.
+
+We measure what this costs in six real cities and one synthetic city (Sect.~\ref{sec:bg:study}). A return at the default altitude of
+PX4~\cite{meier2015px4}, a widely used open-source flight stack, enters the building clearance envelope on 45\% of return lines, and no fixed altitude is both safe and
+cheap in any of the cities. A return trigger with its own headwind model aborts up to a quarter of legs that the
+planner's energy model considers feasible. A scan plan made for clear air captures 5\% of the targets in fog while
+predicting full coverage. And the obvious fix, querying geometry, wind and energy for every drone at every tick, costs
+more than thirteen CPU cores for a fleet of 1,000 drones. Coupled decisions therefore need two things at once: one
+consistent model of the city, the weather and the vehicle that every module queries, and a runtime that makes those
+queries cheap enough for a whole fleet.
+
+This paper presents \emph{Drone4D}, a space-time (4D) world runtime for urban drone fleets that provides both, and a
+decision layer built on it. The runtime serves one model of city geometry, of a weather field that varies in space and
+time, and of vehicle energy and perception, to the planner, to the simulated fleet and to the operator's browser
+(Sect.~\ref{sec:design}). Its design follows one rule: \emph{a quantity that two modules need is computed by one
+function}. A versioned World Package turns city point clouds into a geometry service with exact and bounded corridor
+queries; an analytic environment field gives wind, visibility and air density at any point and time and is evaluated
+identically on the server and in the browser; the fleet runtime advances up to 1,000 drones on one simulation clock with
+staged, batched queries and refreshes return plans on a rotating schedule; and a budgeted point-cloud client streams
+the city to ordinary browsers without a server GPU. On top of the runtime, the decision layer couples the launch
+precheck, return planning, a perception-driven scan planner and capability-based task delegation (contract net) to the
+shared models. Switches that hide individual inputs from a decision, while the simulated ground truth stays fully
+coupled, turn every baseline and ablation into a configuration of the same system.
+
+Our evaluation in closed-loop campaigns over seven cities and twelve weather conditions (Sect.~\ref{sec:eval}) shows
+what the coupling enables. Compared with a PX4-style return, the coupled policy reduces unsafe sorties from
+\PXUNSAFE\% to \CPUNSAFE\% and completes \CPDONE\% of sorties instead of \PXDONE\%. When a weather front is forecast, a
+precheck that queries the field at the times the legs will be flown cuts unsafe sorties from 40--89\% to 4--11\%. The
+scan planner raises recognition capture in fog from 5\% to 89\% and states the price in drones before launch, and
+delegation on the shared models raises request success from 42\% to 59\% without stranding a drone. The coupling
+costs little: on one CPU core the runtime advances 1,000 drones at \STAGERTF{} times real time, and keeping every return
+plan current costs 1.25 core-milliseconds per simulated second.
+
+In summary, this paper makes the following contributions:
+\begin{itemize}
+\item A data-driven study in six real cities and one synthetic city that quantifies how decisions based on partial
+models fail: returns that fly into buildings, modules that contradict each other in wind, scans that silently miss their
+targets, and the cost of naive coupling (Sect.~\ref{sec:background}).
+\item The design and implementation of Drone4D, a space-time world runtime that serves one consistent model of geometry, weather and
+energy to the planner, the fleet runtime and the browser, with batched queries and a rotating refresh that keep coupled
+decisions within the real-time budget of a 1,000-drone fleet on a CPU-only server (Sect.~\ref{sec:design}).
+\item A coupled decision layer, comprising a launch precheck with a space-time variant, a geometry- and energy-aware
+return, a perception-driven scan planner and capability-based task delegation, together with decision-visibility
+switches that make every baseline and ablation a configuration of one system (Sect.~\ref{sec:design:decisions}).
+\item An evaluation over 60,480 closed-loop sorties, weather fronts, scan and delegation campaigns, micro-benchmarks,
+cross-device streaming and consistency tests, which quantifies the gain of each coupling and its cost
+(Sect.~\ref{sec:eval}).
+\end{itemize}
+
+The remainder of the paper is organised as follows. Section~\ref{sec:background} presents the motivational study, the
+resulting challenges and related work. Section~\ref{sec:design} describes the runtime and the decision layer,
+Sect.~\ref{sec:eval} evaluates them, and Sect.~\ref{sec:conclusion} concludes.

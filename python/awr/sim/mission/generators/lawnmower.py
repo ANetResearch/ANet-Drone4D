@@ -52,6 +52,15 @@ def plan(params: dict, ctx: GenContext) -> LawnmowerPlan:
     else:
         hf = lambda xy: np.zeros(len(xy))  # noqa: E731
         gf = hf
+    gsd_stats = None
+    perc = params.get("perception")
+    if perc:
+        gp = _gsd_plan(poly, perc, speed, homes, hf, gf)
+        if not gp.feasible and gp.why == "height":
+            raise GenError(125, "COVERAGE_LEVEL_UNREACHABLE", "降低感知等级或放宽航高上限")
+        sensor["spacing_m"] = gp.spacing_m
+        alt = {"mode": "fixed_agl", "agl_m": gp.h_agl_m, "clearance_m": float(perc.get("clearance_m", 20.0))}
+        gsd_stats = gp.summary()
     sa = params.get("sweep_angle_deg", "auto")
     # 多机切分只在航带之间切（exact_split=False，FX2-R2，ADR-065）：航带内切分时相邻两块共享切点，若分配时恰有一块反向
     # 飞行，两机在各自块的同一端（起点或终点）同时到达切点、同一航带上对飞（S2 公园覆盖实测 CPA 1.6 m，两次 AVOIDING
@@ -66,7 +75,24 @@ def plan(params: dict, ctx: GenContext) -> LawnmowerPlan:
         P = cp.polyline_of(i)
         if len(P) >= 2:
             polys[v.vehicle_id] = lift_polyline(P, w)
-    return LawnmowerPlan(polys, poly.tolist(), cp.trigger_m, cp.stats, cp.lanes)
+    stats = dict(cp.stats)
+    if gsd_stats is not None:
+        stats["gsd"] = gsd_stats
+    return LawnmowerPlan(polys, poly.tolist(), cp.trigger_m, stats, cp.lanes)
+
+
+def _gsd_plan(poly, perc: dict, speed: float, homes: np.ndarray, hf, gf):
+    """`perception = {level, sigma_ext_per_m?, t_sortie_s?, h_cap_agl_m?, clearance_m?, target?}`：按感知等级反推航高与间距。"""
+    from awr.sim.perception.levels import EoSensor, Target
+    from awr.swarm.coverage.gsd import ScanRequest, plan_gsd_scan
+
+    tgt = Target(**perc["target"]) if isinstance(perc.get("target"), dict) else Target()
+    req = ScanRequest(aoi=poly, level=str(perc.get("level", "R")), target=tgt,
+                      side_overlap=float(perc.get("side_overlap", 0.1)),
+                      h_cap_agl_m=float(perc.get("h_cap_agl_m", 120.0)), clearance_m=float(perc.get("clearance_m", 20.0)),
+                      speed_mps=speed)
+    return plan_gsd_scan(req, EoSensor(), hf, gf, sigma_ext_per_m=float(perc.get("sigma_ext_per_m", 1e-4)),
+                         t_sortie_s=float(perc.get("t_sortie_s", 1200.0)), homes=homes)
 
 
 def run(params: dict, ctx: GenContext) -> GenOutput:

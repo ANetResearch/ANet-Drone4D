@@ -16,12 +16,14 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from awr.contracts.reasons import Reason
+from awr.sim.core.awareness import get_awareness
+from awr.sim.core.envwind import env_mean_wind
 from awr.sim.core.interfaces import EstimatePath, EstimateResult, RtlPlan, VehicleProfile
 from awr.sim.fleet import kernels_l1 as KL
 from awr.sim.fleet import params_px4 as PX
@@ -220,6 +222,8 @@ class BatteryModel:
         crit = rtl_ok & (soc <= P.crit)
         tr = bb["t_rtl_s"][hb].astype(np.float64)
         energy = rtl_ok & ~crit & bb["rtl_valid"][hb] & (bb["t_rem_s"][hb] < P.rtl_margin * tr)
+        if not get_awareness().use_energy_rtl:
+            energy[:] = False
         for m, code, cond in ((crit, "SAF.BAT.CRIT", "BAT_CRIT"), (energy, "SAF.BAT.ENERGY_RTL", "BAT_ENERGY")):
             if not m.any():
                 continue
@@ -276,7 +280,7 @@ class BatteryModel:
 
     def refresh(self, s: np.ndarray, *, exact: bool = False) -> None:
         rt, S, bb = self.rt, self.rt.S, self.bb
-        R = rt.params.rtl
+        R = self._rtl_params()
         s = np.asarray(s, np.int64)
         pos = S.enu.pos[s]
         home = S.enu.home[s]
@@ -294,7 +298,7 @@ class BatteryModel:
         # 绕行返航（ADR-054）：直飞需要为越障额外爬升时，按 M04 走廊上界评估单绕行点候选，取 t_rtl 最小的合法路线
         base = np.maximum(pos[:, 2], home[:, 2] + R.alt_m)
         need = np.flatnonzero((z > base + R.detour_min_climb_m) & (dxy >= R.detour_min_dist_m))
-        if need.size and self.rt.world is not None:
+        if need.size and self.rt.world is not None and get_awareness().use_detour:
             if need.size > R.detour_max_per_call:
                 need = need[:R.detour_max_per_call]
             best = self.detour(s[need], pos[need], home[need], max_z)
@@ -303,6 +307,8 @@ class BatteryModel:
                 if b is not None and b[2] < t[k] - R.detour_min_gain_s:
                     z[k], v_c[k], t[k] = b[1], b[3], b[2]
                     via[k] = b[0]
+        if get_awareness().shared_energy:
+            t = self._energy_equivalent_t(s, pos, home, z, v_c, t, R)
         bb["rtl_ceiling"][s] = z > max_z
         bb["z_rtl_m"][s] = z
         bb["v_c_mps"][s] = v_c
@@ -380,9 +386,14 @@ class BatteryModel:
         inb, innf, margin = geo.point_status(P)
         return bool(inb.all() and not innf.any() and np.all(margin >= self.rt.params.fence.warn_margin_m))
 
+    def _rtl_params(self) -> Any:
+        R = self.rt.params.rtl
+        aw = get_awareness()
+        return R if aw.rtl_policy == "awr" else replace(R, alt_m=float(aw.fixed_alt_m))
+
     def h_top(self, a: np.ndarray, b: np.ndarray, *, exact: bool = False) -> np.ndarray:
         w = self.rt.world
-        if w is None:
+        if w is None or not get_awareness().use_geometry:
             return np.full(len(a), -np.inf)
         try:
             if exact:
@@ -401,8 +412,61 @@ class BatteryModel:
         else:
             lim = S.limits_id[s]
             cruise = np.minimum(np.minimum(T.LT[lim, KL.L_CRUISE], T.LT[lim, KL.L_VXY]), R.v_cruise_cap_mps)
-        w = rt.wind_head(s, z)
+        aw = get_awareness()
+        w = rt.wind_head(s, z) if aw.use_wind else 0.0
+        if aw.shared_energy:
+            # ground-velocity control holds the ground speed while the headwind stays within the wind rating
+            wr = rt.wind_rating
+            rating = wr[S.profile_id[s]] if wr is not None else np.full(len(s), np.nan)
+            rating = np.where(np.isfinite(rating), rating, 12.0)
+            return np.maximum(1.0, cruise - np.maximum(w - rating, 0.0))
         return np.maximum(1.0, cruise - w)
+
+    def _wind_xy(self, s: np.ndarray, z: np.ndarray) -> np.ndarray:
+        """Mean wind (k×2) at the drones' xy and altitude z; zeros when wind is not visible or the field is unavailable."""
+        out = np.zeros((len(s), 2))
+        env = getattr(self.rt.ctx, "env", None)
+        if not get_awareness().use_wind or env is None or not hasattr(env, "query") or len(s) == 0:
+            return out
+        P = self.rt.S.enu.pos[s].copy()
+        P[:, 2] = np.asarray(z, np.float64)
+        try:
+            w = env_mean_wind(env, P, self.rt.t_ns)[:, :2]
+            return np.where(np.isfinite(w), w, 0.0)
+        except Exception:
+            return out
+
+    def _energy_equivalent_t(self, s: np.ndarray, pos: np.ndarray, home: np.ndarray, z: np.ndarray, v_c: np.ndarray,
+                             t: np.ndarray, R: Any) -> np.ndarray:
+        """Return time expressed as energy at the current mean power, t_eq = E_rtl / p_avg, with E_rtl from the same
+        power model the mission precheck uses (airspeed from the wind field, climb work, descent at hover power)."""
+        T = self.rt.profiles
+        if T is None:
+            return t
+        from awr.sim.core.estimate import vehicle_profile
+
+        bb, S = self.bb, self.rt.S
+        ph = bb["p_hover_w"][s].astype(np.float64)
+        w = self._wind_xy(s, z)
+        d = home[:, :2] - pos[:, :2]
+        n = np.hypot(d[:, 0], d[:, 1])
+        u = np.where(n[:, None] > 1e-6, d / np.maximum(n, 1e-6)[:, None], 0.0)
+        v_air = np.hypot(v_c * u[:, 0] - w[:, 0], v_c * u[:, 1] - w[:, 1])
+        w_abs = np.hypot(w[:, 0], w[:, 1])
+        t_up = np.maximum(0.0, z - pos[:, 2]) / R.v_up_est
+        t_dn = np.maximum(0.0, z - home[:, 2] - R.descend_alt_m) / R.v_dn_est + R.descend_alt_m / R.v_land_est
+        t_cr = np.maximum(t - t_up - t_dn, 0.0)
+        E = np.zeros(len(s))
+        pid = S.profile_id[s]
+        for p in np.unique(pid):
+            k = pid == p
+            prof = vehicle_profile(T.get(T.ids[int(p)]))
+            pw = P600EnergyModel._power_arr
+            E[k] = (pw(prof, ph[k], v_air[k], np.zeros(k.sum())) * t_cr[k]
+                    + pw(prof, ph[k], w_abs[k], np.full(k.sum(), R.v_up_est)) * t_up[k]
+                    + pw(prof, ph[k], w_abs[k], np.zeros(k.sum())) * t_dn[k])
+        p_avg = np.maximum(bb["p_avg_w"][s].astype(np.float64), 0.5 * ph)
+        return np.where(ph > 0, E / np.maximum(p_avg, 1e-6), t)
 
     def climb_end_z_many(self, slots: list[int]) -> list[float]:
         """`climb_end_z` 的批量版本：各机的 p→home（或 p→via、via→home）走廊上界一次批量求得，逐机取最大后按同一公式
@@ -415,7 +479,7 @@ class BatteryModel:
 
     def _climb_end_group(self, slots: list[int]) -> list[float]:
         S = self.rt.S
-        R = self.rt.params.rtl
+        R = self._rtl_params()
         sl = np.asarray(slots, np.int64)
         P = S.enu.pos[sl]
         H = S.enu.home[sl]
@@ -445,7 +509,7 @@ class BatteryModel:
     def climb_end_z(self, s: int) -> float:
         """CLIMB 结束时以当前位置到 home 的线段重算的所需 z_rtl（FR-011）；有绕行点时取 p→via、via→home 两段（ADR-054）。"""
         S = self.rt.S
-        R = self.rt.params.rtl
+        R = self._rtl_params()
         p = S.enu.pos[s][None]
         h = S.enu.home[s][None]
         via = S.enu.rtl_via(np.array([s]))[0]
@@ -469,14 +533,14 @@ class BatteryModel:
     def route(self, p: np.ndarray, home: np.ndarray, slot: int | None = None) -> tuple[tuple[float, float] | None, float]:
         """任意点 p → home 的返航路线 `(via_xy 或 None, z_rtl)`（与运行期 refresh 同一选择规则；M10 能量预检使用）。
         v_c 按 slot 所在机体计（无 slot 时取巡航上限）。"""
-        R = self.rt.params.rtl
+        R = self._rtl_params()
         p = np.asarray(p, np.float64).reshape(1, 3)
         h = np.asarray(home, np.float64).reshape(1, 3)
         z = float(z_rtl_m(p[:, 2], h[:, 2], self.h_top(p, h), R.alt_m, R.top_margin_m)[0])
         max_z = self.rt.geo.max_z if self.rt.geo is not None else math.inf
         d = float(math.hypot(h[0, 0] - p[0, 0], h[0, 1] - p[0, 1]))
         if (z <= max(float(p[0, 2]), float(h[0, 2]) + R.alt_m) + R.detour_min_climb_m or d < R.detour_min_dist_m
-                or self.rt.world is None):
+                or self.rt.world is None or not get_awareness().use_detour):
             return None, z
         sl = np.array([slot if slot is not None else 0], np.int64)
         v0 = float(self.v_c(sl, np.array([z]))[0]) if slot is not None else R.v_cruise_cap_mps
@@ -533,8 +597,7 @@ class P600EnergyModel:
         if env is None:
             return np.zeros(3)
         try:
-            w = env.query(np.asarray(pos, np.float64)[None], None, fields=1)
-            w = np.asarray(getattr(w, "wind_enu", w), np.float64).reshape(-1)[:3]
+            w = env_mean_wind(env, np.asarray(pos, np.float64)[None])[0]
             return w if w.size == 3 and np.all(np.isfinite(w)) else np.zeros(3)
         except Exception:
             return np.zeros(3)
@@ -607,17 +670,21 @@ class P600EnergyModel:
         if ph is None:
             return 0.0
         X = np.asarray(samples, np.float64).reshape(-1, 7)
-        if env is not None:
-            wh = 0.0
-            for k in range(len(X) - 1):
-                dt = float(X[k + 1, 0] - X[k, 0])
-                if dt <= 0:
-                    continue
-                vel = 0.5 * (X[k, 4:7] + X[k + 1, 4:7])
-                w = self._wind(env, 0.5 * (X[k, 1:4] + X[k + 1, 1:4]))
-                v_air = float(np.linalg.norm(vel[:2] - w[:2]))
-                wh += self._power(prof, ph, v_air, float(vel[2])) * dt / 3600.0
-            return wh
+        if env is not None and len(X) >= 2:
+            dt = X[1:, 0] - X[:-1, 0]
+            ok = dt > 0
+            if not ok.any():
+                return 0.0
+            vel = 0.5 * (X[:-1, 4:7] + X[1:, 4:7])[ok]
+            mid = 0.5 * (X[:-1, 1:4] + X[1:, 1:4])[ok]
+            try:
+                w = env_mean_wind(env, mid)
+                w = np.where(np.isfinite(w), w, 0.0)
+            except Exception:
+                w = np.zeros((len(mid), 3))
+            v_air = np.hypot(vel[:, 0] - w[:, 0], vel[:, 1] - w[:, 1])
+            terms = self._power_arr(prof, float(ph), v_air, vel[:, 2]) * dt[ok] / 3600.0
+            return float(np.cumsum(terms)[-1])
         # 无风（M10 能量预检的调用方式）：逐段同一公式的向量化求值，按段序累加（cumsum 与逐段 += 同一次序）。此前逐样本
         # Python 循环，ladder n1000 的任务启动预检在一个 tick 内做 1000 架，约 3 s，sim-core 被判挂死（FX2-R2 自测）
         if len(X) < 2:

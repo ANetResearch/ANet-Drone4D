@@ -1,0 +1,21 @@
+{
+ "exp": "energy",
+ "run_id": "full",
+ "git_sha": "b1272fd5b10a28afed073eedca5b01ead5d7734e",
+ "started": "2026-10-08T19:03:30+0000",
+ "hardware": {
+  "host": "user",
+  "cpu": "Intel(R) Xeon(R) Gold 6426Y",
+  "cores": 64,
+  "mem_gb": 503,
+  "python": "3.12.3",
+  "os": "Linux-6.8.0-137-generic-x86_64-with-glibc2.39"
+ },
+ "config": {
+  "opts": {
+   "seeds": 3
+  },
+  "n_tasks": 171,
+  "procs": 12
+ }
+}

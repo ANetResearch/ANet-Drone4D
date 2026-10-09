@@ -1,0 +1,36 @@
+\begin{table}[t]
+\caption{Capabilities needed for coupled urban drone decisions. \yes{} supported, \prt{} partial or only through
+user-supplied assets, \no{} not supported or not documented. Evidence for every cell (documentation pages, papers) is
+listed in the supplementary material.}
+\label{tab:related}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\newcommand{\rot}[1]{\rotatebox{90}{\parbox{1.9cm}{\raggedright #1}}}
+\begin{tabular*}{\textwidth}{@{\extracolsep\fill}lcccccccccc@{}}
+\toprule
+ & \multicolumn{2}{c}{Geometry} & \multicolumn{2}{c}{Weather} & & & \multicolumn{2}{c}{Access} & & \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){8-9}
+System & \rot{Real city} & \rot{City scale} & \rot{Drives dynamics} & \rot{Affects sensing} & \rot{Energy-aware decisions}
+ & \rot{$\geq$1,000 drones} & \rot{No server GPU} & \rot{Browser} & \rot{Deterministic replay} & \rot{Open source} \\
+\midrule
+AirSim/Cosys-AirSim~\cite{shah2017airsim,jansen2023cosysairsim} & \prt & \prt & \prt & \prt & \no & \no & \no & \no & \no & \yes \\
+Gazebo+PX4 SITL~\cite{koenig2004gazebo,meier2015px4} & \prt & \prt & \prt & \no & \prt & \no & \prt & \prt & \prt & \yes \\
+Flightmare~\cite{song2020flightmare} & \no & \no & \no & \no & \no & \prt & \prt & \no & \no & \yes \\
+gym-pybullet-drones~\cite{panerati2021learning} & \no & \no & \no & \no & \no & \no & \yes & \no & \no & \yes \\
+RotorPy~\cite{folk2023rotorpy} & \no & \no & \prt & \no & \no & \yes & \yes & \no & \no & \yes \\
+Crazyflow~\cite{schuck2026crazyflow} & \no & \no & \no & \no & \no & \yes & \yes & \no & \no & \yes \\
+OmniDrones~\cite{xu2024omnidrones} & \no & \no & \no & \no & \no & \prt & \no & \no & \no & \yes \\
+Aerial Gym~\cite{kulkarni2025aerialgym} & \no & \no & \no & \no & \no & \yes & \no & \no & \no & \yes \\
+Pegasus~\cite{jacinto2024pegasus} & \no & \no & \no & \no & \no & \no & \no & \no & \no & \yes \\
+Isaac Sim/Lab~\cite{nvidia2025isaaclab,mittal2023orbit} & \no & \no & \no & \no & \no & \prt & \no & \prt & \no & \prt \\
+MRS UAV System~\cite{baca2021mrs} & \no & \no & \no & \no & \no & \no & \no & \no & \no & \yes \\
+CARLA (driving)~\cite{dosovitskiy2017carla} & \no & \prt & \no & \prt & \no & \no & \prt & \no & \yes & \yes \\
+OpenFly~\cite{gao2025openfly} & \prt & \yes & \no & \no & \no & \no & \no & \no & \no & \yes \\
+EmbodiedCity~\cite{gao2024embodiedcity} & \prt & \yes & \no & \no & \no & \no & \no & \prt & \no & \prt \\
+CesiumJS/3D Tiles~\cite{ogc2023_3dtiles} & \yes & \yes & \no & \no & \no & \no & \yes & \yes & \no & \yes \\
+Potree~\cite{schuetz2020octree} & \yes & \yes & \no & \no & \no & \no & \yes & \yes & \no & \yes \\
+\midrule
+\textbf{This work} & \yes & \yes & \yes & \yes & \yes & \yes & \yes & \yes & \yes & \yes \\
+\botrule
+\end{tabular*}
+\end{table}

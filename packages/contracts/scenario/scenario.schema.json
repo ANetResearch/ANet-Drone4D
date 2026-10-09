@@ -873,6 +873,47 @@
           "type": "number",
           "minimum": 0,
           "default": 6
+        },
+        "perception": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "level": {
+              "enum": [
+                "D",
+                "R",
+                "I"
+              ],
+              "default": "R"
+            },
+            "sigma_ext_per_m": {
+              "type": "number",
+              "minimum": 0
+            },
+            "t_sortie_s": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "h_cap_agl_m": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 120
+            },
+            "clearance_m": {
+              "type": "number",
+              "minimum": 0,
+              "default": 20
+            },
+            "side_overlap": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.95,
+              "default": 0.1
+            }
+          },
+          "required": [
+            "level"
+          ]
         }
       },
       "required": [

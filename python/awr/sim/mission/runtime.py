@@ -28,6 +28,7 @@ import msgpack
 import numpy as np
 
 from awr.contracts import bus_keys
+from awr.sim.core.awareness import get_awareness
 from awr.sim.planning import bspline as BS
 from awr.sim.planning.jobs import BUDGET_MS, PRIO_INTERACTIVE, PRIO_START, PlanRequest, PlanResult
 from awr.world.georef.frames import yaw_enu_from_ned
@@ -491,9 +492,11 @@ class M10Runtime:
         from awr.sim.fleet.stages import registry as R
 
         em = R.energy_model()
+        aw = get_awareness()
+        env = getattr(self.ctx, "env", None) if aw.precheck_env and aw.use_wind else None
         if em is not None:
             try:
-                return float(em.path_wh(self.T.ids[int(self.S.profile_id[s])], samples, None))
+                return float(em.path_wh(self.T.ids[int(self.S.profile_id[s])], samples, env))
             except Exception:
                 log.exception("EnergyModel.path_wh failed; fallback model used")
         gz = self.world.ground_dtm(np.asarray(samples)[:, 1:3]) if self.world is not None else None
@@ -504,7 +507,7 @@ class M10Runtime:
         from awr.sim.fleet.stages import registry as R
 
         fn = getattr(R.energy_model(), "rtl_route", None)
-        if fn is None:
+        if fn is None or not get_awareness().use_detour:
             return None
         try:
             r = fn(np.asarray(p, np.float64), np.asarray(home, np.float64), int(s))
@@ -514,13 +517,16 @@ class M10Runtime:
         return None if r is None else r[0]
 
     def hm_top(self, a: np.ndarray, b: np.ndarray) -> float:
-        if self.world is None:
+        if self.world is None or not get_awareness().use_geometry:
             return -math.inf
         try:
             return float(self.world.heightmap_top_along(np.asarray(a, np.float64)[:2], np.asarray(b, np.float64)[:2],
                                                         exact=True))
         except Exception:
             return -math.inf
+
+    def rtl_wind(self) -> EN.WindProfile:
+        return self.wind if get_awareness().use_wind else EN.WindProfile()
 
     def dtm_at(self, p: np.ndarray) -> float:
         if self.world is None:

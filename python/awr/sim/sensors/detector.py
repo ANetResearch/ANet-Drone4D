@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from .runtime import SensorRuntime
 
 __all__ = ["DT_DETECT_S", "KIND_CODES", "MAX_PAIRS", "MAX_TARGETS", "REPEAT_NS", "TARGET_FIELDS", "TargetState", "TargetTable",
-           "bayes_miss", "expected_pd", "pd_1s", "pd_tick"]
+           "bayes_miss", "expected_pd", "pd_1s", "pd_johnson", "pd_tick"]
 
 MAX_TARGETS = 64
 MAX_PAIRS = 16
@@ -84,6 +84,24 @@ def expected_pd(spec: Any, p_uav: np.ndarray, p_tgt: np.ndarray, env: Any = None
     A, B = np.broadcast_arrays(A, B)
     r = np.linalg.norm(B - A, axis=1)
     return pd_1s(float(spec.p0), float(spec.r_fp_m), r, los, _vis(env, A, B, t_sim_ns), 1.0)
+
+
+def pd_johnson(fx_px: np.ndarray, p_cam: np.ndarray, p_tgt: np.ndarray, d: np.ndarray, vis: np.ndarray,
+               los: np.ndarray | float = 1.0, fov: np.ndarray | float = 1.0) -> np.ndarray:
+    """Johnson/TTPF 口径的 1 s 检出概率：相机（d = 0）取 D 级、热成像（d = 1，确认）取 R 级；
+    `N = d_c(elev)·f_x/r`，有效像素数乘对比度因子 `k_c(|C0|·vis)`（缺省行人目标，见 awr.sim.perception.levels）。"""
+    from awr.sim.perception.levels import Target, apparent_contrast, critical_dim, k_contrast, ttpf
+
+    A = np.asarray(p_cam, np.float64).reshape(-1, 3)
+    B = np.asarray(p_tgt, np.float64).reshape(-1, 3)
+    dv = B - A
+    r = np.maximum(np.linalg.norm(dv, axis=1), 1e-3)
+    elev = np.arcsin(np.clip(-dv[:, 2] / r, -1.0, 1.0))
+    t = Target()
+    n = critical_dim(t, elev) * np.asarray(fx_px, np.float64) / r * k_contrast(apparent_contrast(t, vis))
+    dd = np.asarray(d)
+    p = np.where(dd == 0, ttpf(n, "D"), ttpf(n, "R"))
+    return p * np.asarray(los, np.float64) * np.asarray(fov, np.float64)
 
 
 def bayes_miss(p_c: np.ndarray, pd: np.ndarray) -> np.ndarray:
@@ -208,6 +226,7 @@ class Detector:
         self.pending: list[tuple[int, dict]] = []
         self.stats = {"ticks": 0, "pairs": 0, "rotated": 0, "los_skip": 0, "events": 0, "hits": 0}
         self.dt_s = DT_DETECT_S  # 测试开关可改为 0.1（M13-AC-021 频率无关）
+        self.model = "range"     # "johnson"：按目标像素数与表观对比度的等级概率（pd_johnson）
         self.last_events: list[dict] = []
 
     def enabled(self) -> bool:
@@ -315,7 +334,11 @@ class Detector:
         p0 = np.array([sp.detector.p0 for sp in specs])
         rfp = np.array([sp.detector.r_fp_m for sp in specs])
         tl = np.array([sp.detector.t_look_s for sp in specs])
-        Pd = pd_1s(p0, rfp, r, los, vis, fov.astype(np.float64))
+        if self.model == "johnson":
+            fx = np.array([float(sp.intr.fx) for sp in specs])
+            Pd = pd_johnson(fx, ps, tp, dd, vis, los, fov.astype(np.float64))
+        else:
+            Pd = pd_1s(p0, rfp, r, los, vis, fov.astype(np.float64))
         p = pd_tick(Pd, self.dt_s, tl)
         u = cbrng.uniform_elem(rt.seed, 4, agent, tick, 256 + 2 * ii + dd)
         hit = u < p

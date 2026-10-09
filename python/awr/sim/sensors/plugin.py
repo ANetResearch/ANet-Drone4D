@@ -18,6 +18,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import numpy as np
+
 from .block import BLOCK, FIELDS, TARGET_BLOCK
 from .detector import TARGET_FIELDS
 from .runtime import SensorRuntime
@@ -125,6 +127,8 @@ def _rig_entries_for_profile(profile_id: str, names: list[str] | None = None) ->
 
 def _conf_expected(profile_id: str, p_uav: Any, p_tgt: Any, capability: str, env: Any = None, t_sim_ns: int = 0) -> float | None:
     """M08 estimate 的 `conf_expected`（M13-FR-045；M14 §6.10.5）：机型上声明该能力的检测器的期望 P_d（FOV 视为 1）。"""
+    from awr.sim.core.awareness import get_awareness
+
     from .describe import dir_for_profile
     from .detector import expected_pd
     from .spec import rig_for_model
@@ -132,9 +136,21 @@ def _conf_expected(profile_id: str, p_uav: Any, p_tgt: Any, capability: str, env
     d = dir_for_profile(profile_id)
     if d is None:
         return None
+    aw = get_awareness()
+    if not aw.visibility:
+        env = None
+    los: Any = 1.0
+    if aw.los:
+        w = getattr(getattr(runtime(), "ctx", None), "world", None)
+        if w is not None and callable(getattr(w, "los_batch", None)):
+            try:
+                los = np.asarray(w.los_batch(np.asarray(p_uav, np.float64).reshape(1, 3),
+                                             np.asarray(p_tgt, np.float64).reshape(1, 3)), np.float64)
+            except Exception:
+                los = 1.0
     for s in rig_for_model(d.name, d.parent).specs:
         if s.detector is not None and s.detector.capability == capability:
-            return float(expected_pd(s.detector, p_uav, p_tgt, env, t_sim_ns)[0])
+            return float(expected_pd(s.detector, p_uav, p_tgt, env, t_sim_ns, los=los)[0])
     return None
 
 

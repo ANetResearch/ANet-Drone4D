@@ -1,0 +1,14 @@
+\section{Conclusion}\label{sec:conclusion}
+
+Urban drone decisions depend on the city, the weather and the battery at once, and a decision that sees only part of
+this picture fails in systematic, city- and weather-dependent ways: returns fly into buildings, modules contradict each
+other in wind, and scans miss their targets without noticing. We presented Drone4D, a space-time world runtime that serves one model of
+geometry, weather and energy to the planner, the fleet runtime and the browser, and a decision layer that couples the
+launch precheck, return planning, scan planning and task delegation to it. Batched queries on one clock and a rotating
+refresh make the coupling cheap enough for 1,000 drones on one CPU core. In closed-loop campaigns over seven cities and
+twelve weather conditions, coupling reduced unsafe sorties from \PXUNSAFE\% to \CPUNSAFE\% while doubling the share of
+completed sorties, kept sorties out of a forecast weather front, restored recognition capture in fog and raised the
+success of task delegation. Each coupling removes a different failure, and none of them alone delivers both safety and
+productivity. 
+The runtime, the experiment harness, the raw results and the figure scripts are released as open source,
+so that calibrated vehicle, weather and perception models can be plugged into the same shared interfaces.

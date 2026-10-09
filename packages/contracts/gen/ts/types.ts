@@ -5291,6 +5291,14 @@ export interface ScenarioGenLawnmower {
   sweep_angle_deg?: number | 'auto'
   speed_mps?: number
   min_lane_m?: number
+  perception?: {
+    level: 'D' | 'R' | 'I'
+    sigma_ext_per_m?: number
+    t_sortie_s?: number
+    h_cap_agl_m?: number
+    clearance_m?: number
+    side_overlap?: number
+  }
 }
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema

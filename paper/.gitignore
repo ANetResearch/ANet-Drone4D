@@ -1,0 +1,12 @@
+*.aux
+*.log
+*.out
+*.blg
+*.bbl
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+/main.pdf
+/submission/
+__pycache__/
+.DS_Store

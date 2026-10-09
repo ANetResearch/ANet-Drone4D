@@ -1,0 +1,44 @@
+\begin{tikzpicture}[x=0.92cm,y=0.92cm,font=\scriptsize,
+  bld/.style={fill=g4,draw=g2,line width=0.3pt},
+  lab/.style={align=left,text=ink,font=\scriptsize,fill=white,fill opacity=0.85,text opacity=1,inner sep=1pt},
+  num/.style={circle,fill=oursred,text=white,inner sep=0.8pt,font=\scriptsize\bfseries}]
+  % ground
+  \fill[g5] (-0.3,0) rectangle (12.6,-0.12);
+  \draw[g2,line width=0.4pt] (-0.3,0) -- (12.6,0);
+  % buildings
+  \foreach \x/\w/\h in {1.85/0.45/1.2, 2.5/0.35/0.8, 3.0/0.7/2.9, 3.9/0.45/1.6, 4.6/0.6/2.2, 5.5/0.35/0.9,
+                        6.2/0.55/1.4, 7.6/0.5/1.0, 8.3/0.4/1.8, 9.0/0.6/0.7}
+    \draw[bld] (\x,0) rectangle ++(\w,\h);
+  % home pad
+  \fill[g1] (0.2,0) rectangle (0.8,0.06);
+  \node[below=1pt,lab] at (0.5,0) {home};
+  % fog layer over the scan area
+  \fill[g3,opacity=0.25] (9.8,0) rectangle (12.5,1.7);
+  \node[lab,fill=none,text=g1,anchor=east] at (12.5,0.4) {fog, MOR 200\,m};
+  % targets
+  \foreach \x in {10.2,10.9,11.6,12.2} \fill[ink] (\x,0) rectangle ++(0.05,0.12);
+  % wind arrows, above everything
+  \foreach \y/\l in {3.75/0.9, 4.1/1.15, 4.45/1.4}
+    \draw[-{Stealth[length=3pt]},g2,line width=0.5pt] (7.4,\y) -- ++(-\l,0);
+  \node[lab,fill=none,text=g2,anchor=west] at (7.5,4.1) {wind $\mathbf{w}(x,y,z,t)$, stronger aloft};
+  % fixed-altitude return (crosses buildings)
+  \draw[g1,dashed,line width=0.6pt,-{Stealth[length=3pt]}] (10.0,1.2) -- (3.75,1.2);
+  \draw[g1,line width=0.5pt] (3.58,1.08) -- (3.82,1.32) (3.58,1.32) -- (3.82,1.08);
+  \node[lab,text=g1,anchor=south] at (7.0,1.24) {fixed-altitude return};
+  % geometry-aware return
+  \draw[oursred,line width=0.9pt,-{Stealth[length=3.5pt]}] (10.0,1.2) -- (10.0,3.15) -- (0.5,3.15) -- (0.5,0.1);
+  \node[lab,text=oursred,anchor=south] at (5.2,3.18) {return above the highest roof on its line};
+  % drone
+  \fill[ink] (9.85,1.15) rectangle (10.15,1.25);
+  \draw[ink,line width=0.4pt] (9.8,1.29) -- (10.2,1.29);
+  % scan heights
+  \draw[g1,dotted,line width=0.7pt] (9.8,2.4) -- (12.5,2.4);
+  \node[lab,fill=none,text=g1,anchor=south west] at (10.1,2.42) {clear-air scan height};
+  \draw[oursred,line width=0.8pt] (9.8,0.75) -- (12.5,0.75);
+  \node[lab,fill=none,text=oursred,anchor=south west] at (10.25,0.77) {visibility-limited height};
+  % decision markers
+  \node[num] at (0.5,0.55) {1};
+  \node[lab,fill=none,anchor=west] at (0.68,0.55) {precheck};
+  \node[num] at (10.0,3.15) {2};
+  \node[num] at (9.8,0.75) {3};
+\end{tikzpicture}
