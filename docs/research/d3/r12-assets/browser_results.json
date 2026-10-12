@@ -1,0 +1,1286 @@
+[
+ {
+  "case": "L1_viewer_webgl2_min",
+  "flags": "C1",
+  "limits": "min",
+  "ready_ms": 2207.899999856949,
+  "device": "webgl2",
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": null,
+  "gpuLimits": {
+   "programs": 4,
+   "maxV": 1,
+   "maxF": 0,
+   "maxBlockSize": 656,
+   "maxTextureSize": 0
+  },
+  "downloads": null
+ },
+ {
+  "case": "L2_viewer_webgl2_native",
+  "flags": "C1",
+  "limits": null,
+  "ready_ms": 1687.1999998092651,
+  "device": "webgl2",
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "L3_viewer_auto_C1",
+  "flags": "C1",
+  "limits": null,
+  "ready_ms": 2467.7000000476837,
+  "device": "webgl2",
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "L4_editor_v2_webgl2_min",
+  "flags": "C1",
+  "limits": "min",
+  "ready_ms": 5429,
+  "device": "webgl2",
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": null,
+  "gpuLimits": {
+   "programs": 6,
+   "maxV": 1,
+   "maxF": 0,
+   "maxBlockSize": 460,
+   "maxTextureSize": 0
+  },
+  "downloads": null
+ },
+ {
+  "case": "L5_editor_v3_C1",
+  "flags": "C1",
+  "limits": null,
+  "ready_ms": 60085.200000047684,
+  "device": null,
+  "renderer": null,
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "L6_editor_v3_swgpu",
+  "flags": "SWGPU",
+  "limits": null,
+  "ready_ms": 6978.600000143051,
+  "device": "webgpu",
+  "renderer": "google / swiftshader",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "L7_viewer_swgpu",
+  "flags": "SWGPU",
+  "limits": null,
+  "ready_ms": 2194.5999999046326,
+  "device": "webgpu",
+  "renderer": "google / swiftshader",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "L4b_editor_v2_webgl2_min_edit",
+  "flags": "C1",
+  "limits": "min",
+  "ready_ms": 5186.300000190735,
+  "device": "webgl2",
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": {
+   "steps": [
+    {
+     "name": "frame",
+     "ms": 0,
+     "splats": 1115652,
+     "selected": 0,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 0
+     }
+    },
+    {
+     "name": "intersectBox",
+     "ms": 110,
+     "splats": 1115652,
+     "selected": 0,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 0
+     },
+     "hits": 189825
+    },
+    {
+     "name": "selectMask",
+     "ms": 35,
+     "splats": 1115652,
+     "selected": 189825,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 189825,
+      "numDeleted": 0
+     }
+    },
+    {
+     "name": "delete",
+     "ms": 118,
+     "splats": 925827,
+     "selected": 0,
+     "deleted": 189825,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 189825
+     }
+    },
+    {
+     "name": "undo",
+     "ms": 95,
+     "splats": 925827,
+     "selected": 0,
+     "deleted": 189825,
+     "obj": {
+      "numSelected": 189825,
+      "numDeleted": 0
+     }
+    },
+    {
+     "name": "redo",
+     "ms": 0,
+     "splats": 1115652,
+     "selected": 189825,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 189825
+     }
+    }
+   ]
+  },
+  "gpuLimits": {
+   "programs": 7,
+   "maxV": 1,
+   "maxF": 0,
+   "maxBlockSize": 460,
+   "maxTextureSize": 0
+  },
+  "downloads": null
+ },
+ {
+  "case": "L6b_editor_v3_swgpu_edit",
+  "flags": "SWGPU",
+  "limits": null,
+  "ready_ms": 4937.800000190735,
+  "device": "webgpu",
+  "renderer": "google / swiftshader",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": {
+   "steps": [
+    {
+     "name": "frame",
+     "ms": 0,
+     "splats": 1115652,
+     "selected": 0,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 0,
+      "instances": 1115652
+     }
+    },
+    {
+     "name": "intersectBox",
+     "ms": 7700,
+     "splats": 1115652,
+     "selected": 0,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 0,
+      "instances": 1115652
+     },
+     "hits": 189825
+    },
+    {
+     "name": "selectMask",
+     "ms": 40,
+     "splats": 1115652,
+     "selected": 189825,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 189825,
+      "numDeleted": 0,
+      "instances": 1115652
+     }
+    },
+    {
+     "name": "delete",
+     "ms": 145,
+     "splats": 925827,
+     "selected": 0,
+     "deleted": 189825,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 189825,
+      "instances": 925827
+     }
+    },
+    {
+     "name": "undo",
+     "ms": 81,
+     "splats": 1115652,
+     "selected": 189825,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 189825,
+      "numDeleted": 0,
+      "instances": 1115652
+     }
+    },
+    {
+     "name": "redo",
+     "ms": 44,
+     "splats": 1115652,
+     "selected": 189825,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 189825,
+      "instances": 925827
+     }
+    }
+   ]
+  },
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "L7b_viewer_swgpu_capture",
+  "flags": "SWGPU",
+  "limits": null,
+  "ready_ms": 2016.0999999046326,
+  "device": "webgpu",
+  "renderer": "google / swiftshader",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "L6c_editor_v3_swgpu_capture",
+  "flags": "SWGPU",
+  "limits": null,
+  "ready_ms": 4347.799999952316,
+  "device": "webgpu",
+  "renderer": "google / swiftshader",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": {
+   "steps": [
+    {
+     "name": "frame",
+     "ms": 0,
+     "splats": 1115652,
+     "selected": 0,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 0,
+      "instances": 1115652
+     }
+    },
+    {
+     "name": "intersectBox",
+     "ms": 237,
+     "splats": 1115652,
+     "selected": 0,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 0,
+      "instances": 1115652
+     },
+     "hits": 189825
+    },
+    {
+     "name": "selectMask",
+     "ms": 36,
+     "splats": 1115652,
+     "selected": 189825,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 189825,
+      "numDeleted": 0,
+      "instances": 1115652
+     }
+    },
+    {
+     "name": "delete",
+     "ms": 119,
+     "splats": 925827,
+     "selected": 0,
+     "deleted": 189825,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 189825,
+      "instances": 925827
+     }
+    },
+    {
+     "name": "undo",
+     "ms": 120,
+     "splats": 1115652,
+     "selected": 189825,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 189825,
+      "numDeleted": 0,
+      "instances": 1115652
+     }
+    },
+    {
+     "name": "redo",
+     "ms": 42,
+     "splats": 1115652,
+     "selected": 189825,
+     "deleted": 0,
+     "obj": {
+      "numSelected": 0,
+      "numDeleted": 189825,
+      "instances": 925827
+     }
+    }
+   ]
+  },
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k1_1080p",
+  "flags": "GPU",
+  "limits": null,
+  "ready_ms": 1639.4000005722046,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [
+   "WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost"
+  ],
+  "pageErrors": [],
+  "bench": {
+   "frames": 518,
+   "fps": 34.46643688954421,
+   "dt_p50_ms": 29.699999809265137,
+   "dt_p95_ms": 33.80000019073486,
+   "dt_max_ms": 77.40000057220459,
+   "gpu_ms_p50": 9.334783999999999,
+   "gpu_ms_p95": 11.031552,
+   "gpu_samples": 518,
+   "splats_p50": 1115652,
+   "splats_max": 1115652,
+   "sort_ms_p50": 21.899999618530273,
+   "sort_ms_max": 48.40000057220459,
+   "sorts": 448,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k2_1080p",
+  "flags": "GPU",
+  "limits": null,
+  "ready_ms": 2137.800000190735,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [
+   "WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost"
+  ],
+  "pageErrors": [],
+  "bench": {
+   "frames": 399,
+   "fps": 26.567694217178566,
+   "dt_p50_ms": 33,
+   "dt_p95_ms": 56.30000019073486,
+   "dt_max_ms": 104.20000076293945,
+   "gpu_ms_p50": 12.47232,
+   "gpu_ms_p95": 14.314496,
+   "gpu_samples": 399,
+   "splats_p50": 4462608,
+   "splats_max": 4462608,
+   "sort_ms_p50": 99.60000038146973,
+   "sort_ms_max": 143.0999994277954,
+   "sorts": 123,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k3_1080p",
+  "flags": "GPU",
+  "limits": null,
+  "ready_ms": 3696.8999996185303,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [
+   "WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost"
+  ],
+  "pageErrors": [],
+  "bench": {
+   "frames": 414,
+   "fps": 27.54049386103681,
+   "dt_p50_ms": 28.399999618530273,
+   "dt_p95_ms": 75.89999961853027,
+   "dt_max_ms": 94.19999980926514,
+   "gpu_ms_p50": 11.70432,
+   "gpu_ms_p95": 14.631936,
+   "gpu_samples": 414,
+   "splats_p50": 10040868,
+   "splats_max": 10040868,
+   "sort_ms_p50": 214.89999961853027,
+   "sort_ms_max": 300.5,
+   "sorts": 62,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k4_1080p",
+  "flags": "GPU",
+  "limits": null,
+  "ready_ms": 8302.20000076294,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [
+   "WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost"
+  ],
+  "pageErrors": [],
+  "bench": {
+   "frames": 453,
+   "fps": 30.303233463053505,
+   "dt_p50_ms": 27.700000762939453,
+   "dt_p95_ms": 90.70000076293945,
+   "dt_max_ms": 121.10000038146973,
+   "gpu_ms_p50": 9.885696,
+   "gpu_ms_p95": 13.047808,
+   "gpu_samples": 453,
+   "splats_p50": 17850432,
+   "splats_max": 17850432,
+   "sort_ms_p50": 403.69999980926514,
+   "sort_ms_max": 466.69999980926514,
+   "sorts": 36,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k4_720p",
+  "flags": "GPU",
+  "limits": null,
+  "ready_ms": 7474.800000190735,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [
+   "WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost"
+  ],
+  "pageErrors": [],
+  "bench": {
+   "frames": 703,
+   "fps": 46.84497117113296,
+   "dt_p50_ms": 17.59999942779541,
+   "dt_p95_ms": 49.19999980926514,
+   "dt_max_ms": 103.79999923706055,
+   "gpu_ms_p50": 7.586816,
+   "gpu_ms_p95": 7.757823999999999,
+   "gpu_samples": 703,
+   "splats_p50": 17850432,
+   "splats_max": 17850432,
+   "sort_ms_p50": 393.0999994277954,
+   "sort_ms_max": 505.5,
+   "sorts": 35,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1280,
+    720
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2egl_k4_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 7472.800000190735,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 1737,
+   "fps": 103.45033073118408,
+   "dt_p50_ms": 0.5999994277954102,
+   "dt_p95_ms": 1.1000003814697266,
+   "dt_max_ms": 5677.099999427795,
+   "gpu_ms_p50": 8.481792,
+   "gpu_ms_p95": 8.823808,
+   "gpu_samples": 1737,
+   "splats_p50": 17850432,
+   "splats_max": 17850432,
+   "sort_ms_p50": 474.30000019073486,
+   "sort_ms_max": 501.4000005722046,
+   "sorts": 3,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_auto_k2_1080p",
+  "flags": "GPU",
+  "limits": null,
+  "ready_ms": 2229.699999809265,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 385,
+   "fps": 25.588229415119788,
+   "dt_p50_ms": 34.80000019073486,
+   "dt_p95_ms": 56.20000076293945,
+   "dt_max_ms": 84.40000057220459,
+   "gpu_ms_p50": 13.549567999999999,
+   "gpu_ms_p95": 14.973951999999999,
+   "gpu_samples": 385,
+   "splats_p50": 4462608,
+   "splats_max": 4462608,
+   "sort_ms_p50": 94.59999942779541,
+   "sort_ms_max": 127.60000038146973,
+   "sorts": 125,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k2_min_limits_1080p",
+  "flags": "GPU",
+  "limits": "min",
+  "ready_ms": 2112.5,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [
+   "WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost"
+  ],
+  "pageErrors": [],
+  "bench": {
+   "frames": 371,
+   "fps": 24.676372707539628,
+   "dt_p50_ms": 35.60000038146973,
+   "dt_p95_ms": 60.29999923706055,
+   "dt_max_ms": 82.39999961853027,
+   "gpu_ms_p50": 13.519872,
+   "gpu_ms_p95": 15.535103999999999,
+   "gpu_samples": 371,
+   "splats_p50": 4462608,
+   "splats_max": 4462608,
+   "sort_ms_p50": 101.19999980926514,
+   "sort_ms_max": 172.60000038146973,
+   "sorts": 118,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": {
+   "programs": 3,
+   "maxV": 1,
+   "maxF": 0,
+   "maxBlockSize": 656,
+   "maxTextureSize": 0
+  },
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k4_budget4_1080p",
+  "flags": "GPU",
+  "limits": null,
+  "ready_ms": 6554.199999809265,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [
+   "WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost"
+  ],
+  "pageErrors": [],
+  "bench": {
+   "frames": 429,
+   "fps": 28.46066377147494,
+   "dt_p50_ms": 29.100000381469727,
+   "dt_p95_ms": 94.80000019073486,
+   "dt_max_ms": 118.39999961853027,
+   "gpu_ms_p50": 10.418175999999999,
+   "gpu_ms_p95": 14.472192,
+   "gpu_samples": 429,
+   "splats_p50": 17850432,
+   "splats_max": 17850432,
+   "sort_ms_p50": 399.3999996185303,
+   "sort_ms_max": 580.5,
+   "sorts": 34,
+   "gsplatComponents": 1,
+   "budget": 4000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "E_ss2_k2_1080p",
+  "flags": "GPU",
+  "limits": null,
+  "ready_ms": 400091.69999980927,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [
+   "WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost",
+   "WebGL: INVALID_OPERATION: bindBuffer: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindBuffer: object does not belong to this context",
+   "WebGL: INVALID_VALUE: bufferSubData: buffer overflow",
+   "WebGL: INVALID_OPERATION: bindVertexArray: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindVertexArray: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindVertexArray: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindBuffer: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindBuffer: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindTexture: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindTexture: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindTexture: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindTexture: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindTexture: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindVertexArray: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindVertexArray: object does not belong to this context",
+   "[.WebGL-0x349c036bd400] GL_INVALID_OPERATION: glDrawElementsInstanced: Must have element array buffer bound.",
+   "WebGL: INVALID_OPERATION: bindBuffer: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindTexture: object does not belong to this context",
+   "WebGL: INVALID_OPERATION: bindVertexArray: object does not belong to this context"
+  ],
+  "pageErrors": [],
+  "bench": null,
+  "setup": "setup error: page.evaluate: TypeError: Cannot read properties of null (reading 'splatData')\n    at xV.run (http://127.0.0.1:37525/ss2/index.js:149:113011)\n    at AV.intersect (http://127.0.0.1:37525/ss2/index.js:149:118599)\n    at eval (eval at evaluate (:311:30), <anonymous>:41:96)",
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "E_ss2_k2_egl_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 6676,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": {
+   "frames": 1553,
+   "fps": 129.65869623296823,
+   "dt_p50_ms": 1.3999999999996362,
+   "dt_p95_ms": 5.599999999998545,
+   "gpu_ms_p50": null,
+   "gpu_ms_p95": null,
+   "gpu_samples": 0,
+   "size": [
+    null,
+    null
+   ],
+   "splats": 4462608,
+   "intersect_ms": 28,
+   "intersect_hits": 145493
+  },
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "E_ss2_k3_egl_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 11252,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": {
+   "frames": 1275,
+   "fps": 103.89504563233376,
+   "dt_p50_ms": 1,
+   "dt_p95_ms": 4.200000000000728,
+   "gpu_ms_p50": null,
+   "gpu_ms_p95": null,
+   "gpu_samples": 0,
+   "size": [
+    null,
+    null
+   ],
+   "splats": 10040868,
+   "intersect_ms": 31,
+   "intersect_hits": 189876
+  },
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "E_ss2_k4_egl_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 17328.5,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": {
+   "frames": 1228,
+   "fps": 74.69858997287005,
+   "dt_p50_ms": 1.2999999999992724,
+   "dt_p95_ms": 4.599999999998545,
+   "gpu_ms_p50": null,
+   "gpu_ms_p95": null,
+   "gpu_samples": 0,
+   "size": [
+    null,
+    null
+   ],
+   "splats": 17850432,
+   "intersect_ms": 81,
+   "intersect_hits": 145474
+  },
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "VID_ss2_k1_720p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 2970.5,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": {
+   "keys": 7,
+   "frames": 181,
+   "encoderSupported": true,
+   "export_ms": 15612,
+   "error": null
+  },
+  "gpuLimits": null,
+  "downloads": [
+   {
+    "file": "/w/out/gpu_a3/VID_ss2_k1_720p-local.mp4",
+    "size": 6002541
+   }
+  ]
+ },
+ {
+  "case": "VID_ss2_k4_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 18025.5,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": {
+   "keys": 7,
+   "frames": 181,
+   "encoderSupported": true,
+   "export_ms": 107471,
+   "error": null
+  },
+  "gpuLimits": null,
+  "downloads": [
+   {
+    "file": "/w/out/gpu_a3/VID_ss2_k4_1080p-tile4.mp4",
+    "size": 5949581
+   }
+  ]
+ },
+ {
+  "case": "G_webgl2egl_k1_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 784.6000003814697,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 4568,
+   "fps": 304.4950862003016,
+   "dt_p50_ms": 1.9000005722045898,
+   "dt_p95_ms": 7.899999618530273,
+   "dt_max_ms": 172.19999980926514,
+   "gpu_ms_p50": 2.105344,
+   "gpu_ms_p95": 2.715648,
+   "gpu_samples": 4568,
+   "splats_p50": 1115652,
+   "splats_max": 1115652,
+   "sort_ms_p50": 23,
+   "sort_ms_max": 51.30000019073486,
+   "sorts": 325,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2egl_k2_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 1929.4000005722046,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 3553,
+   "fps": 234.6769558094281,
+   "dt_p50_ms": 0.8000001907348633,
+   "dt_p95_ms": 1.8000001907348633,
+   "dt_max_ms": 606.3000001907349,
+   "gpu_ms_p50": 3.459072,
+   "gpu_ms_p95": 3.820544,
+   "gpu_samples": 3553,
+   "splats_p50": 4462608,
+   "splats_max": 4462608,
+   "sort_ms_p50": 106.69999980926514,
+   "sort_ms_max": 135.30000019073486,
+   "sorts": 30,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2egl_k3_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 3798,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 2352,
+   "fps": 153.7163929223796,
+   "dt_p50_ms": 0.6000003814697266,
+   "dt_p95_ms": 1.5,
+   "dt_max_ms": 2402.1000003814697,
+   "gpu_ms_p50": 5.36576,
+   "gpu_ms_p95": 5.681152,
+   "gpu_samples": 2352,
+   "splats_p50": 10040868,
+   "splats_max": 10040868,
+   "sort_ms_p50": 211.89999961853027,
+   "sort_ms_max": 318.8999996185303,
+   "sorts": 8,
+   "gsplatComponents": 1,
+   "budget": 100000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "E_ss3_k1_egl_startup",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 2379.800000190735,
+  "device": "webgpu",
+  "renderer": "google / swiftshader",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": null,
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k4lod_default_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 1031.8999996185303,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 3608,
+   "fps": 240.49552613286068,
+   "dt_p50_ms": 3.40000057220459,
+   "dt_p95_ms": 8.09999942779541,
+   "dt_max_ms": 134.39999961853027,
+   "gpu_ms_p50": 2.5241599999999997,
+   "gpu_ms_p95": 3.121152,
+   "gpu_samples": 3608,
+   "splats_p50": 3977476,
+   "splats_max": 3978011,
+   "sort_ms_p50": 94.59999942779541,
+   "sort_ms_max": 154.30000019073486,
+   "sorts": 123,
+   "gsplatComponents": 1,
+   "budget": 4000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k4lod_b8_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 853.6999998092651,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 2584,
+   "fps": 167.0914571782865,
+   "dt_p50_ms": 1,
+   "dt_p95_ms": 2.1999998092651367,
+   "dt_max_ms": 1143.6999998092651,
+   "gpu_ms_p50": 4.299776,
+   "gpu_ms_p95": 4.768768,
+   "gpu_samples": 2584,
+   "splats_p50": 7966629,
+   "splats_max": 7966647,
+   "sort_ms_p50": 192.5999994277954,
+   "sort_ms_max": 228.80000019073486,
+   "sorts": 24,
+   "gsplatComponents": 1,
+   "budget": 8000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k4lod_b2_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 602.1000003814697,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 4918,
+   "fps": 327.4180123189612,
+   "dt_p50_ms": 1.7999992370605469,
+   "dt_p95_ms": 5.699999809265137,
+   "dt_max_ms": 149.60000038146973,
+   "gpu_ms_p50": 1.59744,
+   "gpu_ms_p95": 2.220032,
+   "gpu_samples": 4918,
+   "splats_p50": 1994889,
+   "splats_max": 1994974,
+   "sort_ms_p50": 42,
+   "sort_ms_max": 106.39999961853027,
+   "sorts": 213,
+   "gsplatComponents": 1,
+   "budget": 2000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2_k1lod_default_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 248.60000038146973,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)",
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 4017,
+   "fps": 267.7779629938323,
+   "dt_p50_ms": 2.3000001907348633,
+   "dt_p95_ms": 10.300000190734863,
+   "dt_max_ms": 89.60000038146973,
+   "gpu_ms_p50": 2.105344,
+   "gpu_ms_p95": 3.1365119999999997,
+   "gpu_samples": 4017,
+   "splats_p50": 1115652,
+   "splats_max": 1115652,
+   "sort_ms_p50": 23.100000381469727,
+   "sort_ms_max": 83.40000057220459,
+   "sorts": 350,
+   "gsplatComponents": 1,
+   "budget": 4000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "G_webgl2vk_k4lod_default_1080p",
+  "flags": "GPU",
+  "limits": null,
+  "ready_ms": 2137.300000190735,
+  "device": "webgl2",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA A40 (0x00002235)), NVIDIA)",
+  "glErrors": [
+   "WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost"
+  ],
+  "pageErrors": [],
+  "bench": {
+   "frames": 412,
+   "fps": 27.40858802389897,
+   "dt_p50_ms": 32.89999961853027,
+   "dt_p95_ms": 52.5,
+   "dt_max_ms": 58.5,
+   "gpu_ms_p50": 12.205055999999999,
+   "gpu_ms_p95": 13.63968,
+   "gpu_samples": 412,
+   "splats_p50": 3985862,
+   "splats_max": 3988016,
+   "sort_ms_p50": 84.80000019073486,
+   "sort_ms_max": 147.69999980926514,
+   "sorts": 137,
+   "gsplatComponents": 1,
+   "budget": 4000000,
+   "canvas": [
+    1920,
+    1080
+   ]
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "S_spark_k1_egl_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 1147,
+  "device": null,
+  "renderer": null,
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 8537,
+   "fps": 609.2591403144426,
+   "dt_p50_ms": 0.3000000000001819,
+   "dt_p95_ms": 0.9000000000014552,
+   "gpu_ms_p50": 1.708032,
+   "gpu_ms_p95": 1.792,
+   "gpu_samples": 8532,
+   "loaded": true,
+   "loadMs": 619.3000001907349,
+   "numSplats": 1115652,
+   "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)"
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "S_spark_k2_egl_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 3339.699999809265,
+  "device": null,
+  "renderer": null,
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 3335,
+   "fps": 250.2006857074265,
+   "dt_p50_ms": 0.2999999999992724,
+   "dt_p95_ms": 0.6999999999989086,
+   "gpu_ms_p50": 4.389888,
+   "gpu_ms_p95": 4.47488,
+   "gpu_samples": 2914,
+   "loaded": true,
+   "loadMs": 2624.0999994277954,
+   "numSplats": 4462608,
+   "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)"
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "S_spark_k3_egl_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 6799.5,
+  "device": null,
+  "renderer": null,
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 1935,
+   "fps": 157.15736040609136,
+   "dt_p50_ms": 0.2999999999992724,
+   "dt_p95_ms": 0.8000000000010914,
+   "gpu_ms_p50": 9.04192,
+   "gpu_ms_p95": 9.107456,
+   "gpu_samples": 1937,
+   "loaded": true,
+   "loadMs": 6012.200000762939,
+   "numSplats": 10040868,
+   "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)"
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ },
+ {
+  "case": "S_spark_k4_egl_1080p",
+  "flags": "GPUEGL",
+  "limits": null,
+  "ready_ms": 12744,
+  "device": null,
+  "renderer": null,
+  "glErrors": [],
+  "pageErrors": [],
+  "bench": {
+   "frames": 942,
+   "fps": 69.71116488688587,
+   "dt_p50_ms": 0.2999999999992724,
+   "dt_p95_ms": 0.6000000000021828,
+   "gpu_ms_p50": 15.638528,
+   "gpu_ms_p95": 15.91296,
+   "gpu_samples": 835,
+   "loaded": true,
+   "loadMs": 11239.800000190735,
+   "numSplats": 17850432,
+   "renderer": "ANGLE (NVIDIA Corporation, NVIDIA A40/PCIe/SSE2, OpenGL ES 3.2)"
+  },
+  "setup": null,
+  "gpuLimits": null,
+  "downloads": null
+ }
+]

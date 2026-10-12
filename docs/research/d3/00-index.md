@@ -5,7 +5,7 @@
 > 输入：
 > - 用户诉求：固定沙盘、固定事件（A、B、C 沿建筑与道路从 X 到 Y 再到 Z，期间有遮挡、风速变化、下雨）；机队数量、飞行策略、协同策略都可变，同一事件可反复采集；沙盘基于 3DGS + mesh；物理引擎决定位姿与视角，渲染出"无人机当时的真实视角"；每机没有全局视野；在 GLB 沙盘里模拟 LiDAR 做重建与采集；深入研究 FAST-LIVO2。
 > - 用户设计讨论 `/data/projs/anet-drone-data/design-r1.md`（下称 design-r1）。
-> - D3 研究单元 r1–r10 的笔记（本目录）与实验目录 `.cache/research/d3/<单元>/`。
+> - D3 研究单元 r1–r10 的笔记（本目录）与实验目录 `.cache/research/d3/<单元>/`；r11（Skyfall-GS 研读与生成式高斯外观层实验）于 2026-10-12 补入，结论见 §10；r12（SuperSplat、SuperSplat Viewer 与 splat-transform 研读与实验）于同日补入，结论与用户第二次决定的落点见 §11。
 > - D2 文档 `docs/03`、`docs/04`、`docs/16`、`docs/17`、`docs/19`、`docs/20` 与代码审计（r7）。
 >
 > 约束：本研究没有修改项目代码，也没有修改 `docs/research/d3/` 以外的文档。D2 正在另一工作流中验收修复，本文全部建议都以"D2 先发布并打标签，D3 在新分支上只做新增"为前提。
@@ -71,6 +71,8 @@
 | r8 | [r8-rerun.md](r8-rerun.md) | Rerun 数据模型、`.rrd`、catalog 查询、Web Viewer、MCAP 互通 | 本机（后续上 dmax） | — | 完成（2026-10-12 补记：§9–§11 实测章节已落盘，结论与建议见 r8-rerun.md §0 与 §10；本索引 §2.8 的数字以笔记为准） |
 | r9 | [r9-gz-sim.md](r9-gz-sim.md) | gz-sim 源码机制、外部权威时钟锁步（C++ `Drone4DClock`）、确定性、速度控制修正、GPU 选择、Realistic 后端接口 | dmax GPU | `d3-r9-gz-sim:harmonic`（与 r5 共享层）、`d3-r9-gz-sim:dev`（3.52 GB） | 完成 |
 | r10 | [r10-rotorpy-camera-sensor.md](r10-rotorpy-camera-sensor.md) | RotorPy 与其 v3.0 相机、照片级相机原型（时间语义、效果链、宿主适配、服务化）、3DGS 吞吐、Rerun 记录 | dmax GPU | `d3-r10-rotorpy:0.1`（17 GB） | 完成 |
+| r11 | [r11-skyfall-gs.md](r11-skyfall-gs.md)（插图 `r11-assets/`） | Skyfall-GS 论文与代码研读、许可审查；"网格 → 3DGS → 扩散逐级细化"高斯外观层的适配方案（D3-SKY）与实测（crop 150 m 街区，网格蒸馏基线与 4 个课程式细化变体），决策门 G-3DGS 对照，与 P600 实拍重建路线的比较 | dmax GPU 2、3 | `d3-sky:v1`（19.5 GB，基于 `d3-r3-camera-render:v1`）；模型权重 41 GB 与实验缓存 17 GB 在 `/data/anet-drone4d-d3/sky/` | 完成（2026-10-12 补入；结论见 §10） |
+| r12 | [r12-supersplat.md](r12-supersplat.md)（插图与结果 `r12-assets/`） | SuperSplat 编辑器（3.5.2 与 v2 分支 2.32.5）、SuperSplat Viewer 1.37.0、splat-transform 3.10.1 与 PlayCanvas engine 的源码研读与实测：高斯资产体检、清理、格式（PLY、压缩 PLY、SOG、流式 SOG、SPZ）与精度、坐标约定、浏览器渲染规模（1.12M–17.85M 高斯，Viewer 与 Spark）、编辑操作与相机时间轴的无头自动化、splat-transform 光栅化器；对 M22 发布流水线、内部编辑工具、Lab 检视视图、Spark 共渲染与事件编辑器选择交互的采用建议 | 本机（SwiftShader）+ dmax GPU 2、3 | 未构建新镜像（使用已有 `mcr.microsoft.com/playwright:v1.47.0-jammy`）；工作目录 `/data/anet-drone4d-d3/r12-supersplat/`（6.8 GB，可由脚本重建） | 完成（2026-10-12 补入；结论见 §11） |
 
 D1/D2 前序研究仍然有效：`r03`（3DGS/gsplat）、`r05`（FAST-LIO/LIVO/R3LIVE）、`r06`（Open3D）、`r10`（3D Tiles）、`r13`（Potree-Next/splats）、`r20`–`r23`（PX4、Gazebo/AirSim）、`n03`（无人机仿真与 Agent）。
 
@@ -708,3 +710,87 @@ D1/D2 前序研究仍然有效：`r03`（3DGS/gsplat）、`r05`（FAST-LIO/LIVO/
 | M27 评测与数据集 | `r6-event-benchmark/scripts/bench.py` 中的 `evaluate()`、`export_dataset.py`、`aggregate.py`；`r1-fast-livo2/scripts/eval_sim.py`；`r8-rerun/scripts/d3rr.py`、`d3scene.py`、`mcap_interop.py`、`query_bench.py` | EC/EU/AO/CE 指标与 SLAM 指标；`.rrd` 导出 |
 | 镜像（dmax） | `d3-r1-fast-livo2:noetic`、`d3-r1-simgen:py311`、`d3-r2-glb-world:0.1`、`d3-r3-camera-render:v1`、`d3-r4-lidar:0.3`、`d3-r5-gazebo:harmonic`、`d3-r6-event-benchmark:py311`、`d3-r9-gz-sim:dev`、`d3-r10-rotorpy:0.1`、`px4io/px4-sitl-gazebo:latest`（经 `docker.1ms.run`） | 复现用；进入生产前改为项目自有的构建流水线 |
 | 回归数据（dmax） | `r1-fast-livo2/datasets/HKisland_GNSS03.bag`（10 GB）；`r4-mesh-lidar/out/bag/sim_*_z.bag` | sim2real 与 CI 基线（r4 的 bag 尺度偏小，需按 §1.2 重生成） |
+| M22/M25 高斯外观层（2026-10-12 补入） | `r11-skyfall-gs/scripts/`：`sky_world.py`（crop 米制变换、按 AGL 与俯角取景、掩膜、面元采样）、`sky_gs.py`（gsplat 训练、网格深度一致性、指标、PLY 导出、帧率）、`s2_train_base.py`（网格蒸馏基线）、`s4_eval.py`、`s5_gate.py`（留出评估与决策门指标）；`s3_idu.py`、`refine_cn.py`、`refine_flowedit.py`（生成式细化，只作研究工具）；`docker/Dockerfile`（`d3-sky:v1`） | M22 `appearance.gs` 构建阶段与 M25 `gs_eval` 的参照实现；生成式细化与扩散模型不进入产品镜像（AWR-05 ADR-187） |
+| M22/M15/M27 高斯资产工具链（2026-10-12 补入，r12） | `r12-supersplat/scripts/`：`analyze_base.py`、`st_bench.sh`（体检、清理、格式、坐标变换、LOD）、`precision.py`（编码精度与坐标回读）、`gen_settings.py`（Viewer 设置文件与动画轨）、`bshot.mjs`（WebGL2 上限模拟、截图、离屏截帧、基准）、`editor_setup.js`、`editor_video.js`（编辑器无头自动化与视频导出）、`dmax_prep.sh`、`st_render.sh`、`eval_psnr.py` | AWR-05 §6.5 的高斯发布流水线、内部编辑工具与检视视图的参照实现与升级回归脚本（ADR-192） |
+
+---
+
+## 9. 附记：用户决定的落点（2026-10-12）
+
+本节只登记用户对 §6 问题的答复与 2026-10-12 交互式确认的设计决定在设计基线中的落点，不修改 §0 至 §8 的研究结论与实测数字。设计基线以 [AWR-05](../../05-D3-设计增补与决策记录.md) 为准（v1.3：§3.3、§3.5、§19；v1.4 并入 r11：§6.4、ADR-187、§20；v1.4 第二次交互式讨论与 r12：§3.6、§6.4.7 至 §6.5、ADR-188 至 ADR-192、§21）。
+
+| 用户决定 | 与本研究建议的关系 | 基线落点 |
+|---|---|---|
+| 交付重心为基准排行优先（原为数据集工厂优先） | §5 的阶段计划以数据集与观测能力为主线，排行榜在 P3；改为首个里程碑即有评测与内部排行榜原型 | AWR-05 ADR-174、ADR-175、§10 |
+| gz-sim 提前为 P0 缺省后端，正式成绩只在 gz-sim 锁步档产生，FleetSim 为快速档 | §0 第 5 条与 §4.4 以 Fast 为主力、Realistic 在 P2；锁步与确定性结论（§2.5，r9）不变，用途与阶段改变 | AWR-05 ADR-176 至 ADR-178 |
+| 相机第一阶段增加卷帘快门、热成像（实体温度与发射率）、1080p 多机输出 | §2.2 的 1080p 数字与"CPU 编码先成瓶颈"的结论直接用于编码约束；热成像为新增能力，本研究未实测，参数为暂定值 | AWR-05 ADR-179、ADR-180、§5.4.10 |
+| 第一批事件四类：Re-ID、多人交汇与交接、车辆追踪、未知位置目标搜索 | r6 原型事件（三人一车）作为首个固定事件；其余三类为新增范围 | AWR-05 ADR-181、§5.2.8 |
+| 主得分由事件捕获率、事件理解、主动观测效率、协同效率共同构成 | §0 第 8 条的四类指标保留，并合成为版本化主得分；第二次交互式讨论改为暂不确定合成权重，按赛道分别报告四项指标（见 §11） | AWR-05 ADR-182、ADR-191、§5.6.9 |
+| 仅内部排行与提交，公开站只读展示样例 | 取代 §6 第 9 题"P3 开放带配额的提交" | AWR-05 ADR-183、ADR-184 |
+| 智能体：Python 研究算法优先，大模型指挥层与 ANet 委派在 P1 | 与 §4.6 的 SDK 设计一致 | AWR-05 ADR-185 |
+| 首个里程碑为最小基准闭环，首个场景为 crop | 与 §0 第 1 条的原型闭环一致，增加 gz-sim 锁步与内部排行榜 | AWR-05 ADR-175 |
+| 高斯外观层：尽量使用 3DGS，参照 Skyfall-GS 研究"网格 → 3DGS → 扩散逐级细化"，评估后决定是否从 P3 提前到 P1 | §0 第 2 条与 §2.4"从网格训练的 3DGS 上限即网格"的结论只针对无扩散细化的训练；扩散细化路线需要新的实验证据。评估由并行进行的 Skyfall-GS 实验提供，实验笔记入库到本目录后由 AWR-05 ADR-186 引用；评估协议与决策门见 AWR-05 §6.4。2026-10-12 补记：实验笔记已入库为 [r11](r11-skyfall-gs.md)，扩散细化未带来低空观感增益，裁决建议为结论 C（维持 P3），见 §10 | AWR-05 ADR-186、ADR-187、§6.4 |
+
+---
+
+## 10. 附记：r11 生成式高斯外观层实验的结论与落点（2026-10-12）
+
+r11 在本索引首版（r1–r10）之后补入。本节摘录其结论与对 §0、§2.4 的补充，不修改 §0 至 §8 的原文；数字以 [r11-skyfall-gs.md](r11-skyfall-gs.md) 为准，统一尺度口径沿用 §1.2（crop 20.935 m/单位，r2 的 `T_world_source`）。
+
+### 10.1 关键实测（crop 150 m × 150 m 街区，留出视角中空 AGL 64–115 m / 低空 11–29 m）
+
+| 项 | 数值 |
+|---|---|
+| 网格直接训练 3DGS（网格蒸馏，产物 A） | 4M 高斯，30k 步 17.2 min、峰值 4.7 GB，SH0 PLY 259 MB；对网格 PSNR 33.0 / 33.1 dB；期望深度残差中位数 0.20 / 0.25 m；gsplat 单视角 720p 291、1080p 225 帧/s；低空 Tenengrad 为网格的约 72%，29/29 个低空视角的锐度与 MUSIQ 低于网格 |
+| 课程式扩散细化，不加约束（b1） | 一致性逐级降至 21.6 / 19.9 dB；期望深度残差中位数 3.66 / 3.38 m；低空 57% 像素出现前景浮点 |
+| 频带分离加几何锁定（b4） | 32.1 / 32.3 dB；残差中位数 0.18 / 0.22 m；720p 366 帧/s；低空 MUSIQ 31.8（产物 A 33.6），只有 5/29 个低空视角高于产物 A |
+| 细化器 | SDXL + ControlNet-Union 4.6–8.1 s/张、14.2 GB；强度 ≤ 0.55 几乎不增细节，≥ 0.70 出现照片级纹理与语义幻觉；FlowEdit + FLUX.1 [schnell] 15.6 s/张、几乎不改变输入 |
+| 机理 | 同一视角两个扩散样本之间只有 19–21 dB；高斯最大轴尺度中位数 10.6 cm，18 m 级像素足迹约 3–4 cm |
+| 成本 | 单 150 m 瓦片约 1.2–1.4 GPU·h（A40）；600 m 舞台约 20 个瓦片，约 24–28 GPU·h |
+| 许可 | Skyfall-GS 核心训练代码与光栅化器按 Inria 非商业许可对待，只复用 MIT 的 FlowEdit；FLUX.1 [dev] 许可禁止生产用途与监视相关研发，未运行 |
+
+### 10.2 对 §0 第 2 条与 §2.4 的补充
+
+1. "用网格渲染图训练出的 3DGS 上限就是网格本身"在正确米制尺度下复现：网格蒸馏 3DGS 与网格的一致性约 33 dB，低空清晰度低于网格。
+2. 以图像扩散模型逐级细化并回训，没有把低空观感提高到网格蒸馏基线以上：逐视角生成的细节不具三维一致性，被 3DGS 平均掉，或在不锁定几何时转为前景浮点；网格的粗几何（多面体树团、平面化立面）还会诱发语义幻觉。
+3. "只有对真实航拍重建的资产，3DGS 才带来额外的真实感"这一判断维持不变；r11 建议把 P600 小范围实拍参照集提前到 P1，使任何外观方案的"更真实"可以用 KID 度量。
+
+### 10.3 设计基线落点
+
+| 结论 | 落点 |
+|---|---|
+| 决策门首轮裁决为结论 C：生成式高斯外观不提前到 P1，维持 P3 并保留为研究工具 | AWR-05 §6.4.1、ADR-187；用户已确认为结论 C0（ADR-188，Q-D3-14 关闭） |
+| 方案 C1：P1 以网格蒸馏 3DGS 先行验证外观层基础设施，并采集真实航拍参照集（+2.0 人周） | 未采纳（AWR-05 ADR-188，Q-D3-18 关闭）；网格蒸馏验证并入 P3，参照集改用公开数据集（ADR-189） |
+| 外观来源分档 `aerial`、`mesh_distilled`、`generative`；C3-G 合成；出处清单 | AWR-05 §5.4.4；M22 v1.2 §15；M25 v1.2 §16；M27 §14.9；17 §18.23.7 |
+| 门限修订 G-3DGS v2 与再评估触发条件 | AWR-05 §6.4.4、§6.4.5 |
+| 扩散模型白名单与 Skyfall-GS 组件许可 | AWR-05 §14 |
+
+---
+
+## 11. 附记：r12 SuperSplat 研究与第二次用户决定的落点（2026-10-12）
+
+r12 与用户第二次交互式讨论的决定在本索引首版（r1–r10）与 r11 之后补入。本节摘录 r12 的结论并登记第二次决定的落点，不修改 §0 至 §8 的原文；数字以 [r12-supersplat.md](r12-supersplat.md) 为准。
+
+### 11.1 r12 关键实测（资产为 r11 的网格蒸馏 3DGS 与 2 × 2 至 4 × 4 平铺）
+
+| 项 | 数值 |
+|---|---|
+| 资产体检与清理 | r11 的 4M 高斯中 58% 不透明度低于 1/255、36% 位于街区盒体外（最远 508 km）；盒体裁剪加不透明度 ≥ 0.004 后剩 1.116M（−72%），对"只裁剪"版本的渲染 PSNR 61–85 dB |
+| 格式与精度（1.116M 高斯，SH0） | 浮点 PLY 62.5 MB；SOG 14.1 MB（位置误差 p99 4.1–9.7 mm）；压缩 PLY 18.2 MB（p99 13 mm）；SPZ v4 19.7 MB（p99 0.19 mm） |
+| 坐标约定 | splat-transform 与 PlayCanvas 把 PLY 存储视为绕 Z 轴 180° 的空间；世界 ENU 到网页 y 向上坐标的变换经回读校验残差为 0 |
+| 浏览器渲染（A40，1080p，WebGL2） | Viewer：17.85M 单文件 GPU 8.5 ms、CPU 排序 474 ms；流式 LOD 预算 4M 时 GPU 2.5 ms、排序 95 ms；Spark 2.2：17.85M GPU 15.6 ms |
+| 编辑器 | v3 为 WebGPU 专用（只有 WebGL2 时启动失败）；v2（WebGL2）在 A40 上可编辑 1,785 万个高斯，全场景盒体求交 28–81 ms |
+| 无头 GPU 浏览器 | dmax 容器内 WebGPU core 不可用，WebGL2 可走 ANGLE GL-EGL 或 Vulkan；WebGPU 路径须在带显示的工作站验收 |
+| splat-transform 光栅化器 | 1.12M 高斯 720p 17 ms/帧，17.85M 112 ms/帧；gsplat 4M 720p 2.1–3.4 ms |
+| 许可 | 四个仓库均为 MIT；依赖 mediabunny 为 MPL-2.0（文件级） |
+
+### 11.2 第二次用户决定与 r11、r12 结论的设计基线落点
+
+| 用户决定或研究结论 | 与本研究的关系 | 基线落点 |
+|---|---|---|
+| 高斯外观层维持 P3（结论 C0）：第一阶段不做高斯，只用网格渲染；不采纳 C1 的 P1 前移 | 与 §0 第 2 条、§10.2 一致：网格蒸馏 3DGS 不比网格更真实，生成式细化无增益 | AWR-05 ADR-188、§6.4.3、§6.4.7 |
+| G-3DGS 保留为 P3 入口门；真实航拍参照集暂时只用公开数据集（MARS-LVIG 等），不安排实地拍摄 | 取代 r11 建议的 P600 参照集；r1 已用 MARS-LVIG HKisland03 做 sim2real 回归 | AWR-05 ADR-189、§6.4.8（公开数据集清单、用途与许可） |
+| FLUX.1 [dev] 允许在内部研究中使用（许可解释由用户负责），用于 P3 复测 Skyfall-GS 原版细化 | 补全 r11 §6.4 所列"未复现原版细化强度"的局限 | AWR-05 ADR-190、§6.4.9 |
+| 暂不确定合成权重；排行榜按事件类型或研究任务分赛道，各赛道分别报告四项指标 | 与 §0 第 8 条一致：不同策略在 EC、EU、协同收益上的排序不一致（r6 §12.3） | AWR-05 ADR-191、§5.6.9 |
+| SuperSplat 系高斯采纳项（splat-transform 发布流水线、内部编辑器、Lab 检视视图、Spark 共渲染）随外观层移至 P3；网格选择交互复用于事件编辑器（P1） | r12 §4、§5 的建议阶段为 P1 或 P2；工作量与风险按 r12 §5、§6 登记 | AWR-05 ADR-192、§6.5、§10.6、§12.1（WP-D3-39 至 WP-D3-41） |
+| M25 运行期维持 gsplat，借用 SOG 与 SPZ 格式和 `fillRatio` 发布门 | r12 §4.4 | AWR-05 §6.5.6；M25 v1.3 §17 |

@@ -5,10 +5,10 @@
 | 文档编号 | AWR-M22 |
 | 标题 | World 资产导入（World Asset Import）PRD：GLB 到米制 World Package 1.1.0（`profile = d3-glb`）的尺度配准与调平、派生资产、`world.json` 加法式扩展、CLI 与作业、"不完整即未知"标注、MeshWorldQuery 与共享几何服务、浏览器分层，以及三份默认 GLB 的配置与验收 |
 | 编号说明 | 模块号与文件名按 [AWR-05 §1.3、§5.0](../05-D3-设计增补与决策记录.md) 为 **M22**，需求前缀 `M22-`。研究笔记 r2 §5 所称"world.json v2"在本文一律指 `schemaVersion = "1.1.0"` 加 `profile = "d3-glb"`，不存在 2.x 主版本（§13 第 15 条） |
-| 版本 | v1.0 |
+| 版本 | v1.3 |
 | 日期 | 2026-10-12 |
-| 状态 | 草案 |
-| 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-02、03、07、10、16、19、26、30、34）；用户设计讨论 design-r1 第四节、第十节；[AWR-05](../05-D3-设计增补与决策记录.md) §1、§2.4、§4.5、§4.8、§5.1、§7.8、§8、§10–§15，ADR-128 至 ADR-132、ADR-136、ADR-141、ADR-151、ADR-154 至 ADR-156、ADR-158；[AWR-03](../03-设计基线与决策记录.md) §5.1、§5.5、§10.2，ADR-001 至 ADR-006、ADR-034、ADR-048；[AWR-04](../04-D2-设计增补与决策记录.md) §4.4；[16 World 数据规范](../16-World数据规范.md) §2–§7、§9、§17；[M03](M03-World模型与Ingest切片PRD.md)、[M04](M04-几何世界查询服务PRD.md)、[M05](M05-Web点云引擎PRD.md)、[M06](M06-Web视口与渲染后端PRD.md)；D3 研究 [00-index](../research/d3/00-index.md) §1.2、§2.1、§3.3、§4.2、§8，[r2](../research/d3/r2-glb-world.md) 全文，[r6](../research/d3/r6-event-runtime-benchmark.md) §3，[r7](../research/d3/r7-d2-code-audit.md) §3.9、§4.4、§8.3，[r3](../research/d3/r3-camera-render.md) §6，[r4](../research/d3/r4-mesh-lidar.md) §3 |
+| 状态 | 草案 v1.2（v1.1 按 AWR-05 v1.3 修订：P0a 只构建 crop，town 与 ESDF 移至 P0b，OSM 车道图前移到 P0b，`physics` 导出输入前移到 P0a，高斯外观层生成式来源的标注，修订内容汇总见 §14；v1.2 按 AWR-05 v1.4（ADR-187）并入 r11 结论：外观来源分档 `aerial`、`mesh_distilled`、`generative`，网格蒸馏构建阶段 `appearance.gs`，出处清单与按来源分档的入包验收，修订内容汇总见 §15；v1.3 按 AWR-05 v1.4 定稿（ADR-188、ADR-192）：高斯外观层定为结论 C0，`appearance.gs` 与高斯图层全部在 P3，新增高斯发布子阶段（splat-transform）、网页高斯制品与编辑记录入库，新增几何不完整人工标注（质量层覆写，P1），修订内容汇总见 §16） |
+| 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-02、03、07、10、16、19、26、30、34；v1.1 增加 2026-10-12 交互式确认的 R-D3-42、44、48、49、51）；用户设计讨论 design-r1 第四节、第十节；[AWR-05](../05-D3-设计增补与决策记录.md) §1、§2.4、§4.5、§4.8、§5.1、§7.8、§8、§10–§15，ADR-128 至 ADR-132、ADR-136、ADR-141、ADR-151、ADR-154 至 ADR-156、ADR-158；[AWR-03](../03-设计基线与决策记录.md) §5.1、§5.5、§10.2，ADR-001 至 ADR-006、ADR-034、ADR-048；[AWR-04](../04-D2-设计增补与决策记录.md) §4.4；[16 World 数据规范](../16-World数据规范.md) §2–§7、§9、§17；[M03](M03-World模型与Ingest切片PRD.md)、[M04](M04-几何世界查询服务PRD.md)、[M05](M05-Web点云引擎PRD.md)、[M06](M06-Web视口与渲染后端PRD.md)；D3 研究 [00-index](../research/d3/00-index.md) §1.2、§2.1、§3.3、§4.2、§8，[r2](../research/d3/r2-glb-world.md) 全文，[r6](../research/d3/r6-event-runtime-benchmark.md) §3，[r7](../research/d3/r7-d2-code-audit.md) §3.9、§4.4、§8.3，[r3](../research/d3/r3-camera-render.md) §6，[r4](../research/d3/r4-mesh-lidar.md) §3；v1.2 增加 [r11](../research/d3/r11-skyfall-gs.md) §2、§4、§7（D3-SKY）与 AWR-05 §5.4.4、§6.4、ADR-187；v1.3 增加用户第二次交互式讨论确认的 R-D3-52、55、56，[r12](../research/d3/r12-supersplat.md) §2.6、§2.8、§3.1–§3.3、§4.1、§4.3、§4.6 与 AWR-05 §6.4.8、§6.5、ADR-188、ADR-189、ADR-192 |
 | 下游文档 | M23（锚点、NavMesh、`metric_ok` 与 600）、M24（SDF 导出输入、Fast 档接触查询）、M25（`appearance`、`raycast` 瓦片、逐三角形语义与质量位、`sensorHints`）、M26（视线与净空查询）、M27（`world_build` 作业、`world_manifest.json`、`/api/bench/v1/worlds` 数据）、M03 与 M04 的 D3 增补节（扩展点 6、7）、M00（契约 1.3.0 中 world 目录的 schema）、M05 与 M06（Tier S 彩色点云、P1 舞台网格、P2 网格瓦片）、M15（`/lab/worlds`）、17 号文档（原因码 600–609）、`docs/impl/D3-*` |
 | 适用版本范围 | V0.3（本期交付 D3，阶段 P-1 至 P3）至 V1.0 |
 
@@ -20,7 +20,10 @@
 4. "不完整即未知"由 M22 提供数据：覆盖多边形、质量位、逐三角形质量码、`unknown` 体素与 `zones.border` 覆盖内缩，消费者按 AWR-05 §5.1.5 执行。
 5. MeshWorldQuery 继承 D2 `DsmWorldQuery`：2.5D 方法保持 2 m 栅格语义，3D 方法经每世界一个的共享几何服务 `geosvc` 做网格精确求交；会话匿名内存增量 ≤ 20 MB。
 6. 浏览器分层：P0a Tier S 彩色点云（M05 零改动），P1 事件舞台裁剪网格，P2 全世界 3D Tiles；网格类浏览器制品放在 `export/`，不改变 `contentVersion`。
-7. 需求：功能 73 条（P0 67 条）、非功能 12 条、验收 32 条，映射 D3-AC-01 至 05、21、24、26、31、39、41、47、54；对基线的反馈 18 条（§13），其中须基线裁决的有：600 的判定集合、契约扩展点 8 的文件范围、共享几何服务进程登记、浏览器网格制品的内容归属。
+7. **v1.1（§14）**：首个场景为 crop（R-D3-49），P0a 只构建 `oryahovo-crop1`；`smalltown-01` 与 ESDF 移至 P0b；车辆追踪事件所需的 OSM 车道图（车道、转向连通、限速、停止线）由 P1 前移到 P0b；gz-sim 为缺省后端，`export-gazebo` 的 `physics` 档输入在 P0a 提供；`gaussian` 阶段增加生成式来源（网格 → 3DGS → 扩散逐级细化，经 AWR-05 ADR-186 决策门）的标注与约束。
+8. 需求：功能 73 条（P0 67 条；v1.1 新增 M22-FR-074 至 FR-078；v1.2 新增 M22-FR-079 至 FR-081）、非功能 12 条、验收 32 条（v1.1 新增 M22-AC-033 至 AC-035；v1.2 新增 M22-AC-036、AC-037），映射 D3-AC-01 至 05、21、24、26、31、39、41、47、54；对基线的反馈 18 条（§13），其中须基线裁决的有：600 的判定集合、契约扩展点 8 的文件范围、共享几何服务进程登记、浏览器网格制品的内容归属。
+9. **v1.2（§15）**：按 AWR-05 v1.4 ADR-187 并入 r11（D3-SKY）结论：生成式高斯外观维持研究工具，产品构建流水线不运行扩散模型、发布构建拒绝 `generative` 图层；外观来源增加 `mesh_distilled`，新增网格蒸馏构建阶段 `appearance.gs`、出处清单 `provenance.json` 与外观瓦片划分（v1.3 定稿：P3）；对齐验收按来源分档。
+10. **v1.3（§16）**：按 AWR-05 v1.4 定稿（ADR-188、ADR-192）：高斯外观层维持 P3（结论 C0），不采纳方案 C1；`gaussian` 阶段拆为以锁定版本 splat-transform 为执行器的高斯发布子阶段（体检、清理、对齐、瓦片、`spz@2` 与流式 SOG、体素、校验），出处清单增加 `pipeline`、`stats`、`edits` 段，网页高斯制品写入 `export/gaussian/`（P3）；新增几何不完整人工标注（`quality.overrides.json`，事件编辑器的网格选择交互产生提议，管理员提升后产生新的世界版本，P1）。需求增至功能 78 条、验收 35 条（v1.3 新增 M22-FR-082 至 FR-086、M22-AC-038 至 AC-040）。
 
 ---
 
@@ -77,25 +80,28 @@
 
 ### 2.1 D3 范围（按阶段）
 
+v1.1 按 AWR-05 v1.3（ADR-175、ADR-181、ADR-186）重排；v1.0 的阶段对照见 §14.2。
+
 | 阶段 | M22 交付 | 工作包 |
 |---|---|---|
 | P-1 | 契约草案：`world.schema.json` 1.1.0、`coordinate.schema.json` 与 `grid.schema.json`、`qa-report.schema.json` 的加法式修订、新格式 schema、`event/anchors.schema.json`（与 M23 共同起草）；扩展点 6、7、8 的变更请求；正确尺度下 CPU 与 GPU 逐射线差异的复测；本 PRD | WP-D3-01、02、03 |
-| P0a | crop（`oryahovo-crop1`）与 town（`smalltown-01`）世界包：标定与两法调平复核、13 个构建阶段（行人 NavMesh 必交；车辆 NavMesh 在 crop 必交、town 缺省不生成）、OSM 锚点与道路图、彩色点云、`sensorHints`；MeshWorldQuery 与 `geosvc`；CLI 与 `world_build` 作业入口；世界摘要（`/lab/worlds` 数据） | WP-D3-04 |
-| P0b | MeshLidar 所需的瓦片网格与逐三角形质量码的联调（M25 消费）；公开站只读视图的浏览器层世界子集；`world_manifest.json` 数据 | WP-D3-07、25、27 协同 |
-| P1 | hill（`hill-01`）世界包；锚点覆写与编辑器叠加数据；OSM 道路图的车道属性（与 M23 跟驰协同）；事件舞台裁剪网格导出；`export-gazebo` 输入（M24 导出器调用） | WP-D3-14、17、18 协同 |
+| P0a（最小基准闭环） | town 配准（`register`，作为 crop 共帧继承的参照，不构建完整世界包）与 crop（`oryahovo-crop1`）世界包：标定与两法调平复核、13 个构建阶段（行人与车辆 NavMesh、occupancy；ESDF 移至 P0b）、OSM 锚点与道路图、碰撞分块（供 M24 `physics` 导出档）、彩色点云、`sensorHints`；跨 ISA 确定性；MeshWorldQuery 与 `geosvc`；CLI 与 `world_build` 作业入口；世界摘要（`/lab/worlds` 数据）；`export-gazebo` 的 `physics` 档输入 | WP-D3-04（P0a 6.5 人周） |
+| P0b（基准 v1） | town（`smalltown-01`）世界包（含跨 ISA 复验）；ESDF；OSM 车道图（车道、转向连通、限速、停止线，供 M23 IDM 跟驰，由 P1 前移）；MeshLidar 所需的瓦片网格与逐三角形质量码的联调；公开站样例的浏览器层世界子集；`world_manifest.json` 数据；外观来源、出处清单与来源分档验收的契约（FR-076、077、080，v1.2） | WP-D3-04（P0b 2.0 人周）、WP-D3-32（车道图 1.0 人周）、WP-D3-25、27 协同 |
+| P1 | hill（`hill-01`）世界包；锚点覆写与编辑器叠加数据；几何不完整人工标注（质量层覆写，FR-082，v1.3）；事件舞台裁剪网格导出；`export-gazebo` 的 `xval` 档输入；高斯外观图层不在 P1 交付（v1.3 定稿为结论 C0，AWR-05 ADR-188） | WP-D3-14、17、18 协同 |
 | P2 | 全世界 3D Tiles 网格瓦片导出（M06 图层消费） | WP-D3-21 协同 |
-| P3 | 真实航拍资产的世界包构建与 3DGS 外观层导入（含球谐系数旋转、与网格的配准验收） | WP-D3-22 |
+| P3 | 真实航拍资产的世界包构建与 3DGS 外观层导入（含球谐系数旋转、与网格的配准验收）；高斯图层登记与网格蒸馏验证图层 `appearance.gs`（FR-079 至 081）；高斯发布子阶段、网页高斯制品与编辑记录入库（FR-083 至 086，v1.3） | WP-D3-22、WP-D3-39、WP-D3-40 |
 
 ### 2.2 不做
 
 | 项 | 理由或去向 |
 |---|---|
 | 室内结构重建、自动补全缺失立面 | AWR-05 §2.3"不在 D3"；进入建筑只做状态切换 |
-| 从网格训练 3DGS 用于产品观测 | ADR-141：上限即网格，低空掉 6–7 dB |
+| 只以网格训练 3DGS（无扩散细化）用于产品观测 | ADR-141：上限即网格，低空掉 6–7 dB（r11 在正确尺度下复现：低空锐度约为网格的 72%）；v1.2：网格蒸馏 3DGS 只作外观层基础设施验证资产（`mesh_distilled`，非排名运行，ADR-187） |
+| 在产品构建流水线中运行扩散模型生成外观（`generative`） | ADR-187 首轮裁决为结论 C：生成式外观维持研究工具；生成流程只存在于研究镜像（r11 的 D3-SKY 脚本），M22 只承担研究世界中生成式图层的登记、标注与入包验收，发布构建拒绝该来源（FR-076） |
 | 运行期渲染与 LiDAR 扫描 | M25；M22 只提供资产与查询 |
 | SDF 语义与 Gazebo 插件 | M24；M22 提供 `appearance.glb`、碰撞 STL 与坐标 |
 | 事件编译与磁带生成 | M23；M22 提供 NavMesh、锚点、道路图与 `walkable_height` |
-| 交通法规级车道模型 | AWR-05 §2.3；P1 只提供 OSM 车道属性 |
+| 交通法规级车道模型 | AWR-05 §2.3；P0b 只提供 OSM 车道图的几何、连通、限速与停止线（v1.1） |
 | D2 七个世界的任何变更 | ADR-129：D3 世界只用新 id，不改 D2 世界包与派生缓存 |
 
 ### 2.3 与其他模块的边界
@@ -185,7 +191,7 @@
 | M22-FR-028 | zones：以 M22 派生器替代 D2 的包围盒内缩规则写 `semantic/zones.geojson` 的 `border`：覆盖多边形最大连通分量按城镇级 20 m、小场景 5 m 内缩，去洞，Douglas–Peucker 简化到每环 ≤ 1024 顶点；`max_z_m = round(max(dsm_2m) + 50, 2)`；其余 zone 规则不变 | P0 | P0a | V0.3 | M22-AC-012 | 05 §5.1.4；16 §7；r2 §4.9 规则 1 |
 | M22-FR-029 | semantic：逐三角形粗语义（地面、路面、低矮与中等与高植被、屋顶、立面、水面、未分类），以纹理颜色、法线、nDSM 与 OSM 先验（道路缓冲、建筑轮廓、水体）判定，结果按 `anet-classes@1` 索引写 `cls.u8`；规则见 §6.6.8 | P0 | P0a | V0.3 | M22-AC-017 | 05 §5.1.3 第 5 行；r2 §4.6 第 4 条（E13） |
 | M22-FR-030 | collision：移除漂浮碎块后以 meshoptimizer `simplify`（单线程，确定性）减面到 10%；按质心 k-d 二分到每块 ≤ 50,000 面；输出 `awr-trimesh@1` 与每块二进制 STL（世界 ENU、米、Z 上，顶点为外观顶点的 float32 原值）；记录双向误差 p50、p95、p99 | P0 | P0a | V0.3 | M22-AC-018 | 05 §5.1.3 第 6 行；r2 §4.4 |
-| M22-FR-031 | occupancy：16³ 稀疏砖块四态体素（0 unknown、1 free、2 occupied、3 below-surface），体素边长 crop 1 m、town 2 m、hill 0.25 m；覆盖外的柱一律 unknown；表面之下与洞一律不可视为空地；ESDF 为 f16、截断 20 m、只在 free 体素计算、以非 free 体素为障碍；格式 `awr-occ@1`（§7.3.2） | P0 | P0a | V0.3 | M22-AC-030 | 05 §5.1.3 第 7 行；r2 §4.5 |
+| M22-FR-031 | occupancy：16³ 稀疏砖块四态体素（0 unknown、1 free、2 occupied、3 below-surface），体素边长 crop 1 m、town 2 m、hill 0.25 m；覆盖外的柱一律 unknown；表面之下与洞一律不可视为空地；ESDF 为 f16、截断 20 m、只在 free 体素计算、以非 free 体素为障碍；格式 `awr-occ@1`（§7.3.2） | P0 | P0a（占据）、P0b（ESDF） | V0.3 | M22-AC-030 | 05 §5.1.3 第 7 行；r2 §4.5 |
 | M22-FR-032 | 行人 NavMesh：Recast 分瓦片烘焙（Node，recast-navigation 低层 API 传入逐三角形 area id）→ 以种子洪泛裁剪 → 语义区域代价与 OSM 道路走廊代价 → 读入 `offmesh.json` 人工连接；导出 `detour-navmesh@1`（`person.bin` + `person.json`）；参数见 §6.8；随机 1,000 对路径 100% 可达、路径落在 OSM 道路走廊 ≥ 70%、经过植被 ≤ 5% | P0 | P0a | V0.3 | M22-AC-010 | 05 §5.1.3 第 8 行、D3-AC-03；ADR-132；r2 §4.6 |
 | M22-FR-033 | 车辆 NavMesh（P0 允许"车辆 NavMesh + 锚点约束"）：独立参数烘焙，以道路走廊为种子裁剪，只保留与车辆锚点连通的岛；crop 必交（首发示例事件含 1 辆车，否则编译返回 616；AWR-05 v1.2 裁决 M23 §14 第 5 条），town 缺省不生成 | P0 | P0a | V0.3 | M22-AC-010 | ADR-132；r6 §3；00-index §3.3 |
 | M22-FR-034 | OSM 道路图 `geojson/awr-navgraph@1`：覆盖内 `highway=*` 线段转世界帧，按节点切分为边，属性 `kind`、`agents`、`width_m`、`speed_mps`、`oneway`、`lanes`、`osm_id`、逐顶点贴地高度 `z_m`；P1 增补转向限制与车道级属性供 M23 跟驰模型 | P0 | P0a | V0.3 | M22-AC-010 | 05 §5.1.3 第 8 行、§2.3；r2 §4.6 第 3 条 |
@@ -226,7 +232,7 @@
 | M22-FR-054 | CLI `python -m awr.world.glb`：`inspect`、`register`、`build`、`validate`、`status`、`anchors`、`export-gazebo`、`export-web`、`summary`；AWR-05 §5.1.7 的参数原样保留，增补项见 §7.7；`--json` 输出与 `--log-json` 结构化日志沿用 M03 约定 | P0 | P0a | V0.3 | M22-AC-021 | 05 §5.1.7 |
 | M22-FR-055 | 退出码沿用 M03（0 成功、1 校验失败、2 门禁失败、3 参数或 IO 错误或锁占用、4 原始数据缺失或校验和不符）；作业失败原因以 601 `WORLD_BUILD_FAILED{stage, error_code}` 上报，许可字段缺失以 602，配准门不过以 603 | P0 | P0a | V0.3 | M22-AC-021 | 05 §8.4；`world/ingest/types.py` 异常与退出码 |
 | M22-FR-056 | `world_build` 作业：`awr.world.glb.jobs:run_world_build(ctx, params)` 供 M27 注册（不进入 D2 `awr.jobs` 注册表，避免与 D2 `world_build` 重名）；参数 `{world_id, steps?, profile?, force?}`；只读配方；阶段进度经 `ctx.progress`；完成后通知 M27 回收旧 `geosvc` 并按需预热新版本 | P0 | P0a | V0.3 | M22-AC-021 | 05 §5.1.7、§5.6.2 |
-| M22-FR-057 | `export-gazebo`：调用 M24 导出器（`awr.world.export.gz`），输入 world 帧 `appearance.glb`、`mesh.collision` STL 与 `coordinate.json`，输出到 `--out`；M22 保证视觉网格与碰撞 STL 同点偏差为 0（碰撞顶点取外观顶点 float32 原值） | P0 | P1 | V0.3 | M22-AC-032 | 05 §5.3.4、D3-AC-31 |
+| M22-FR-057 | `export-gazebo`：调用 M24 导出器（`awr.world.export.gz`），输入 world 帧 `appearance.glb`、`mesh.collision` STL 与 `coordinate.json`，输出到 `--out`；M22 保证视觉网格与碰撞 STL 同点偏差为 0（碰撞顶点取外观顶点 float32 原值） | P0 | P0a（`physics` 档）、P1（`xval` 档） | V0.3 | M22-AC-032 | 05 §5.3.4、D3-AC-31 |
 | M22-FR-058 | `anchors` 子命令：`list`、`add`、`move`、`confirm`、`deprecate`、`import`、`export`、`diff`；只写 `configs/worlds.d3/<id>/anchors.overrides.json`，变更以 `build --steps anchors` 生效 | P0 | P0a | V0.3 | M22-AC-031 | 05 §5.1.7 |
 
 ### 4.8 浏览器分层与对外数据
@@ -253,7 +259,7 @@
 | 编号 | 需求描述 | 优先级 | 阶段 | 目标版本 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M22-FR-068 | `oryahovo-crop1`（城镇级事件主场景）：按 §8.1 配方构建并发布；`scaleStatus = landmark`；生成行人与车辆 NavMesh、锚点、舞台定义（P1 导出） | P0 | P0a | V0.3 | M22-AC-002 至 020 | 05 §2.4；ADR-156 |
-| M22-FR-069 | `smalltown-01`（大范围 LiDAR 探索、远景与 FAST-LIVO2 回归环线）：按 §8.1 配方构建并发布；行人 NavMesh 与锚点照常生成；占据体素 2 m | P0 | P0a | V0.3 | M22-AC-002 至 020 | 05 §2.4；ADR-156 |
+| M22-FR-069 | `smalltown-01`（大范围 LiDAR 探索、远景与 FAST-LIVO2 回归环线）：按 §8.1 配方构建并发布；行人 NavMesh 与锚点照常生成；占据体素 2 m | P0 | P0b | V0.3 | M22-AC-002 至 020 | 05 §2.4；ADR-156 |
 | M22-FR-070 | `hill-01`（街巷级近距离与 Re-ID）：按 §8.1 配方构建并发布；建筑轮廓配准、墙面法调平加人工水平面复核；台阶与外环路以 off-mesh 连接接入主岛；纹理在浏览器制品中限制到 4096² | P0 | P1 | V0.3 | M22-AC-023 | 05 §2.4、WP-D3-14；r2 §2.4、§4.6 第 5 条 |
 | M22-FR-071 | 世界角色登记：配方与 `world.json.tags` 写角色（`role-event-main`、`role-lidar-explore`、`role-close-range`）；世界摘要输出角色与推荐用途说明（企业级文案，经 copy-lint） | P1 | P0a | V0.3 | M22-AC-028 | 05 §2.4、§7.10 |
 
@@ -262,7 +268,7 @@
 | 编号 | 需求描述 | 优先级 | 阶段 | 目标版本 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M22-FR-072 | 真实航拍资产世界包：资产包由同一批影像产出网格与 3DGS（共享相机位姿）；网格按本文全流程构建，标定方法在 RTK 或 GNSS 位姿可用时取 `control-points`（`scaleStatus = rtk` 或 `gnss`），否则 OSM 配准；新世界 id 与配方单独登记 | P0 | P3 | V0.3 | M22-AC-026 | 05 §5.4.4、Q-D3-04、ADR-141 |
-| M22-FR-073 | 3DGS 外观层导入：以与网格相同的 `T_world_source` 变换高斯（位置乘相似变换；旋转左乘 `R`；尺度乘 `s`；球谐系数按 `R` 做 Wigner D 旋转），按 512 m 瓦片切分并写 `visual/gaussian/`（`spz@2` 或 `KHR_gaussian_splatting`，图层 `type = gaussian`、`role = visual`）；构建时验证覆盖区内网格平面深度与 3DGS 期望深度残差中位数 ≤ 5 cm，不过则不发布该图层 | P0 | P3 | V0.3 | M22-AC-026 | 05 §5.4.4、D3-AC-41；ADR-141 |
+| M22-FR-073 | 3DGS 外观层导入：以与网格相同的 `T_world_source` 变换高斯（位置乘相似变换；旋转左乘 `R`；尺度乘 `s`；球谐系数按 `R` 做 Wigner D 旋转），按 512 m 瓦片切分并写 `visual/gaussian/`（`spz@2` 或 `KHR_gaussian_splatting`，图层 `type = gaussian`、`role = visual`）；构建时验证覆盖区内网格平面深度与 3DGS 期望深度残差中位数 ≤ 5 cm，不过则不发布该图层 | P0 | P3（v1.2：生成式来源按 ADR-187 不提前；`mesh_distilled` 的构建见 FR-079） | V0.3 | M22-AC-026 | 05 §5.4.4、D3-AC-41；ADR-141 |
 
 ---
 
@@ -883,6 +889,8 @@ c'_l = D_l(R) · c_l，l = 1..3           （球谐系数按实 Wigner D 矩阵�
 配准验收：覆盖区内 64 个相机位姿（AGL 25–120 m，俯角 30–90°），网格平面深度与 3DGS 期望深度的逐像素残差中位数 ≤ 5 cm
 ```
 
+v1.2：上式只适用于 `appearanceSource = aerial`（外部重建资产）。`mesh_distilled` 由 `appearance.gs` 以世界帧米制网格为输入训练，输出已在世界帧且为 SH0，不做相似变换与球谐旋转；其入包验收按来源分档（FR-077，AWR-05 §6.4.4）。
+
 ### 6.7 配准与调平门限
 
 | 编号 | 量 | 门限 | 适用 | 依据 |
@@ -1003,7 +1011,7 @@ D1 必需图层按 16 §3.2 原次序写出（`pointcloud.visual`、`pointcloud.
 | `semantic.anchors` | anchors | semantic | `awr-anchors@1` | `semantic/anchors.json` | true | P0a |
 | `semantic.quality` | quality | semantic | `geojson/awr-quality@1` | `semantic/quality.geojson` | false | P0a |
 | `mesh.appearance` | mesh | visual | `gltf-glb@2` | `visual/mesh/appearance/` | false | P0a |
-| `gaussian.appearance` | gaussian | visual | `spz@2` 或 `gltf-glb@2`（`KHR_gaussian_splatting`） | `visual/gaussian/` | false | P3 |
+| `gaussian.appearance` | gaussian | visual | `spz@2` 或 `gltf-glb@2`（`KHR_gaussian_splatting`） | `visual/gaussian/`（含 `provenance.json`，v1.2） | false | P3（v1.3 定稿：全部来源） |
 
 `<cell>` 写作 `2m` 或 `0p5m`，`<v>` 写作 `0p25m`、`1m`、`2m`。目录 `href` 的 sidecar 固定为 `<href>index.json`（F12）。M04 扩展点 7 的分派判据为"存在 `role = geometry`、`type = mesh`、`format = awr-trimesh@1` 的图层"，即 `mesh.raycast`。
 
@@ -1562,6 +1570,8 @@ tests/d3/world/、tests/d3/quality/        # 本模块测试
 
 ### 9.5 工作分解与排期（WP-D3-04 共 8.5 人周，按 AWR-05 §10.7 关键路径）
 
+> v1.1 说明：本节为 v1.0 排期；v1.1 起 WP-D3-04 分为 P0a 6.5 人周（town 配准与 crop 世界包）与 P0b 2.0 人周（town 世界包、ESDF），OSM 车道图 1.0 人周计入 WP-D3-32（P0b），周次以 AWR-05 v1.3 §10.7 为准（§14.2）。
+
 | 条目 | 内容 | 人周 | 周次（4 人排期） | 完成定义 |
 |---|---|---|---|---|
 | W1 | reader、inspect、osm、register（roads、frame-of、control-points）、level、normalize、配准接受门；crop 与 town 的 `registration.json` 接受并入库 | 2.0 | 第 4–5 周 | M22-AC-001 至 004 通过 |
@@ -1727,3 +1737,173 @@ tests/d3/world/、tests/d3/quality/        # 本模块测试
 | 16 | 05 §5.1.7、§14 | `register --dem` 只列 `srtm30m` 与 `none` 两个取值；hill 的 `hMslM` 取 EU-DEM 25 m（r2 §2.5），§14 未登记 EU-DEM（Copernicus）署名 | `--dem` 增加 `eudem25m`；§14 增加 EU-DEM 行（按数据源条款署名） | §7.7、§8.1、FR-065 |
 | 17 | 05 §5.1.6、§5.3.5 | MeshWorldQuery 接口无最近表面距离查询，而 M24 Fast 档"网格接触 stage"需要（射线只能近似） | 接口增加 `closest_batch`；M24 PRD 确认其用法与预算 | FR-046、§7.5.1 |
 | 18 | 05 §5.2.1 `anchors_ref` 与 r2 §5.3 | 锚点字段两套写法：r6 为 `{id, kind ∈ door/point/zone/curb, profile, xy 或 polygon, radius_m, building?, pair?}`，r2 为 `{kind: "poi:museum", navSnap, entrances, …}` | 以 `kind`（DSL 语义）加 `category`（来源语义）合并，`event/anchors.schema.json` 由 M22 与 M23 按 §7.3.5 共同起草 | §7.3.5 |
+
+---
+
+## 14. D3-REV 修订（v1.1，依据 AWR-05 v1.3）
+
+### 14.1 修订依据与摘要
+
+依据用户 2026-10-12 交互式确认的设计决定 R-D3-49（首个场景为 crop 小镇）、R-D3-48（最小基准闭环）、R-D3-42（第一批四类事件，含车辆追踪）、R-D3-44（gz-sim 为 P0 缺省后端）与 R-D3-51（高斯外观层评估，几何真值恒取网格），以及 AWR-05 v1.3 的 ADR-175、ADR-176、ADR-181、ADR-186。本节与 §0、§2.1、§4 阶段列的同步修订一起构成 v1.1。
+
+### 14.2 阶段对照（v1.0 → v1.1）
+
+| 范围 | v1.0 | v1.1 |
+|---|---|---|
+| `smalltown-01` 世界包（FR-069） | P0a | P0b（town 的 `register` 仍在 P0a，作为 crop 共帧继承的参照） |
+| ESDF（FR-031 的 ESDF 部分） | P0a | P0b |
+| OSM 车道图（车道、转向连通、限速、停止线；新增 FR-074） | P1（车道属性） | P0b |
+| `export-gazebo` 输入（FR-057） | P1 | P0a（`physics` 档）、P1（`xval` 档） |
+| 3DGS 外观层导入（FR-073）与生成式来源（新增 FR-076、077） | P3 | P3（决策门通过时生成式来源 P1；v1.2 按 ADR-187 修订，见 §15.2） |
+
+验收的阶段：M22-AC-002（town 配准）保持 P0a；M22-AC-004、005 中 town 的条款与 M22-AC-030 中的 ESDF 条款在 P0b 验收；M22-AC-032（`export-gazebo`）的 `physics` 档条款在 P0a 验收。
+
+### 14.3 新增功能需求
+
+| 编号 | 需求描述 | 优先级 | 阶段 | 目标版本 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M22-FR-074 | OSM 车道图 `geojson/awr-navgraph@1` 的车道扩展（只增）：每条道路按 `lanes`、`oneway`、`turn:lanes` 生成车道中心线（缺省车道宽 3.2 m，缺失标签时按道路等级取 1 或 2 车道）、路口转向连通（冲突区多边形）、限速（`maxspeed` 或按道路等级缺省）与停止线（次路进入主路处）；车道几何吸附到车辆 NavMesh，越出道路走廊的段标记并告警 | P0 | P0b | V0.3 | M22-AC-033 | ADR-181、ADR-132 v1.3 |
+| M22-FR-075 | 车道图查询库：`lane_route(a, b) -> LaneRoute`（最短路，代价为长度除以限速）、`conflict_zones(intersection)`、`stop_line(lane)`；Python 实现为确定性 CPU 路径，M23 生成器的 JS 实现以 golden 逐位对拍 | P0 | P0b | V0.3 | M22-AC-033 | ADR-181 |
+| M22-FR-076 | `gaussian` 阶段的外观来源：图层元数据增加 `appearanceSource ∈ {aerial, mesh_distilled, generative}`（v1.2 增加 `mesh_distilled`）、生成或训练流程版本与参数 sha256；任何来源的图层只登记为外观层，不参与任何几何派生（raycast、grids、occupancy、NavMesh、碰撞）；`world.json` 的 `dataset.derivedFrom[]` 登记源网格、训练器与（生成式时）扩散模型及 Skyfall-GS 组件的版本与许可。v1.2：`generative` 图层只用于研究世界，发布到 dmax 世界目录与分发渠道的世界包遇到该来源时拒绝（601，`detail.why = appearance_generative_forbidden`）（ADR-187） | P0 | P0b（契约）；`mesh_distilled` 自 P1（方案 C1）或 P3；`generative` 只用于研究 | V0.3 | M22-AC-034、037 | ADR-186、ADR-187 |
+| M22-FR-077 | 外观层与网格的对齐验收（v1.2 按来源分档，AWR-05 §6.4.4 G-3DGS v2 的 G1）：`aerial` 残差中位数 ≤ 5 cm（与 FR-073 一致）、边缘 F 值 ≥ 0.80；`mesh_distilled` 与 `generative` 期望深度相对残差中位数中空（AGL 40–150 m）≤ 0.5%、低空（AGL 8–40 m）≤ 1.5%，中空边缘 F 值 ≥ 0.80、低空 ≥ 同瓦片产物 A 的 90%，`generative` 的残差另须 ≤ 同瓦片 `mesh_distilled` 的 1.1 倍；天空方向不透明度 > 0.5 的像素占比 ≤ 0.1%；不通过时不入包（601，`detail.why = appearance_alignment`）。v1.1 的"残差中位数 ≤ 5 cm 适用于全部来源"作废：首轮评估中网格派生外观的残差中位数为 0.18–0.25 m（相对 0.2–1.1%），该门限只对厘米级 GSD 的实拍重建有意义（r11 §7.5） | P0 | P1（方案 C1）或 P3 | V0.3 | M22-AC-034、036、037 | ADR-186、ADR-187 |
+| M22-FR-078 | town 配准独立交付：`register smalltown-01` 的 `registration.json` 在 P0a 发布并作为 `oryahovo-crop1` 的 `--frame-of` 参照；完整 town 世界包在 P0b 构建，构建时复用同一 `registration.json` | P0 | P0a | V0.3 | M22-AC-035 | ADR-175、R-D3-49 |
+
+### 14.4 新增验收
+
+| 编号 | 优先级 | 阶段 | 度量与阈值 | 方法 | 环境 | D3-AC |
+|---|---|---|---|---|---|---|
+| M22-AC-033 | P0 | P0b | crop 车道图：OSM 道路走廊内车道段占比 ≥ 99%；转向连通与冲突区覆盖全部路口；`lane_route` 随机 500 对可达且 Python 与 JS 结果逐位一致；限速与停止线字段齐全 | `tests/d3/world/test_lanes.py` | 本机 | 33、62 |
+| M22-AC-034 | P0 | P0b（契约）、P3 | 外观图层登记 `appearanceSource`（`aerial`、`mesh_distilled` 或 `generative`）且不改变 `raycast`、grids、occupancy、NavMesh 与碰撞文件的 sha256；对齐验收按 FR-077（v1.2 按来源分档）；许可登记齐全 | `tests/d3/world/test_gaussian_layer.py` | dmax | 41、64 |
+| M22-AC-035 | P0 | P0a | town `registration.json` 先于 crop 构建发布；crop 以共帧继承得到 20.935 m/单位（M22-AC-003）；P0b 构建 town 世界包时复用同一配准记录，`T_world_source` 逐位一致 | `tests/d3/world/test_frame_of.py` | dmax CPU 池 | 02 |
+
+### 14.5 D3-AC 映射变更
+
+| D3-AC | v1.0 中 M22 的阶段 | v1.1 | 说明 |
+|---|---|---|---|
+| D3-AC-02 | P0a（crop 与 town） | P0a（crop）、P0b（town 复验） | town 配准仍在 P0a |
+| D3-AC-33 | P1 | P0b | 车道图前移 |
+| D3-AC-56 | — | P0a | 最小基准闭环中的 crop 世界包 |
+| D3-AC-64 | — | P0b | 高斯外观层评估的图层登记与对齐验收支持 |
+
+---
+
+## 15. D3-SKY 修订（v1.2，依据 AWR-05 v1.4）
+
+> v1.3 定稿说明：本节中"方案 C1 确认时 P1"与"D3-AC-66"的陈述只作追溯；用户确认结论 C0、方案 C1 未采纳后的有效条款见 §16。
+
+### 15.1 修订依据与摘要
+
+依据 AWR-05 v1.4 并入的研究单元 r11（[r11-skyfall-gs.md](../research/d3/r11-skyfall-gs.md)，Skyfall-GS 研读与"网格 → 3DGS → 扩散逐级细化"实验）与 ADR-187（高斯外观层决策门首轮裁决）。结论对本模块的影响：
+
+1. 生成式高斯外观（`generative`）首轮裁决为结论 C，不提前到 P1，维持研究工具；M22 不在产品构建流水线中运行扩散模型，只承担研究世界中生成式图层的登记、标注与入包验收，发布构建拒绝该来源（FR-076）。
+2. 外观来源增加 `mesh_distilled`（以网格多高度渲染图直接训练的 3DGS，r11 产物 A）：与网格一致性 33 dB、期望深度残差中位数 0.20–0.25 m，但低空锐度约为网格的 72%，只作外观层基础设施验证资产，不宣称更真实。方案 C1 经用户确认后在 P1 交付其构建阶段 `appearance.gs`（FR-079），否则随 P3。
+3. 入包对齐验收按来源分档（FR-077）：`aerial` 维持残差中位数 ≤ 5 cm，网格派生来源改用相对残差。
+4. 外观层出处清单 `visual/gaussian/provenance.json`（FR-080）与外观瓦片划分（FR-081）。
+
+### 15.2 条款修订
+
+| 条款 | v1.1 | v1.2 | 依据 |
+|---|---|---|---|
+| §2.1 P1 行 | 决策门通过时的生成式高斯外观图层 | 方案 C1 确认时的网格蒸馏高斯外观图层；生成式不在 P1 交付 | ADR-187 |
+| §2.2 不做 | 只以网格训练 3DGS 用于产品观测 | 保留；增加"在产品构建流水线中运行扩散模型" | ADR-187 |
+| FR-076 | `appearanceSource ∈ {aerial, generative}`；阶段 P0b（契约）、P1（按决策门） | 增加 `mesh_distilled`；`generative` 只用于研究世界，发布构建拒绝（601，`appearance_generative_forbidden`） | ADR-187 |
+| FR-077 | 全部来源残差中位数 ≤ 5 cm、边缘 F ≥ 0.80 | 按来源分档（G-3DGS v2）；增加天空不透明度检查 | AWR-05 §6.4.4 |
+| M22-AC-034 | 生成式图层登记与对齐验收 | 三类来源的登记与分档验收 | ADR-187 |
+| §6.6.17 | 相似变换与 ≤ 5 cm 配准验收 | 只适用于 `aerial`；`mesh_distilled` 输出已在世界帧且为 SH0 | ADR-187 |
+| §7.1.3 `gaussian.appearance` | `visual/gaussian/`，P3 | 增加 `provenance.json`；方案 C1 时 `mesh_distilled` 自 P1 | ADR-187 |
+
+### 15.3 新增功能需求
+
+| 编号 | 需求描述 | 优先级 | 阶段 | 目标版本 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M22-FR-079 | 可选构建阶段 `appearance.gs`（网格蒸馏，`appearanceSource = mesh_distilled`）：输入为世界帧米制 `appearance.glb` 与 `raycast` 网格；训练视图由 M25 `render_offline`（EGL）渲染，覆盖 AGL 8–150 m、俯角 15–90°（每个训练瓦片约 480 张 1280 × 720，高中空与低空各半，固定种子生成）；网格表面按面积采样面元初始化（颜色取纹理）；gsplat MCMC（SH0、`scene_scale = 10`、30k 步、每训练瓦片上限 4M），损失含 L1、SSIM 与期望深度对网格平面深度的相对 L1（λ = 0.1）；输出已在世界帧，不做相似变换与球谐旋转；在训练窗口内运行（AWR-05 §4.7）；阶段失败不阻断其余图层发布；训练器版本、超参与种子写入出处清单 | P1 | P3（v1.3 定稿） | V0.3 | M22-AC-036 | ADR-187；r11 §2.3、§2.4、§4.2 |
+| M22-FR-080 | 外观层出处清单 `visual/gaussian/provenance.json`：`appearance_source`；`source_mesh`（`contentVersion`、`T_world_source`、源 GLB sha256 与 CC-BY-4.0 署名）；`trainer`（gsplat 版本、策略与超参、种子、训练视图集合哈希）；`generator`（仅 `generative`：模型名、版本与权重 sha256、许可标识、提示词与负向提示词、条件模式与权重、各级强度、样本数、种子表、频带分离与几何锁定标志）；`metrics`（入包时的 G1–G3、G6 快照与验收工具版本）；`tiles`；schema 由本模块起草、M00 合入契约 1.3.0（只增） | P0 | P0b（契约）；随图层交付 | V0.3 | M22-AC-037 | ADR-187；r11 §7.3 |
+| M22-FR-081 | 外观瓦片划分：外观瓦片与 512 m 求交瓦片对齐，内部再分 128–256 m 子瓦片（缺省 128 m，即每个求交瓦片 4 × 4 块），训练区为子瓦片外扩 ≥ 15 m（相邻重叠 ≥ 30 m），评估掩膜只取子瓦片内；每子瓦片高斯数上限 4M；发布编码 `spz@2`（`KHR_gaussian_splatting` 为可选）；`tiles[]` 记录编号、包围盒、重叠宽度、高斯数与编码 | P1 | P3（v1.3 定稿） | V0.3 | M22-AC-036 | ADR-187；r11 §2.1、§7.4 |
+
+### 15.4 新增验收
+
+| 编号 | 优先级 | 阶段 | 度量与阈值 | 方法 | 环境 | D3-AC |
+|---|---|---|---|---|---|---|
+| M22-AC-036 | P1 | P3（v1.3 定稿） | crop 事件舞台（600 m × 600 m）`appearance.gs` 构建：产出 `visual/gaussian/` 全部子瓦片与 `provenance.json`；舞台合计训练 ≤ 10 GPU·h（A40），`spz@2` 编码后参数 ≤ 1 GB；期望深度相对残差中位数中空 ≤ 0.5%、低空 ≤ 1.5%；几何图层文件 sha256 不变；人为注入训练失败时其余图层照常发布且 `qa/report.json` 记录失败阶段 | `tests/d3/world/test_gaussian_build.py` | dmax（训练窗口） | 69、41 |
+| M22-AC-037 | P0 | P0b（契约）、随图层交付 | 来源分档的入包验收：构造 `aerial` 残差 6 cm、`mesh_distilled` 低空相对残差 2%、`generative` 残差为同瓦片 `mesh_distilled` 1.2 倍、天空不透明像素 0.5% 的四个夹具均被拒绝（601，`appearance_alignment`）；`provenance.json` 通过 schema 校验，缺字段拒绝；发布构建中出现 `generative` 图层返回 601（`appearance_generative_forbidden`） | `tests/d3/world/test_gaussian_layer.py` | 本机 | 64、41 |
+
+### 15.5 阶段对照（v1.1 → v1.2）
+
+| 范围 | v1.1 | v1.2（方案 C0，确认前缺省） | v1.2（方案 C1，用户确认后） |
+|---|---|---|---|
+| `generative` 图层 | P1（按决策门） | 只用于研究世界 | 只用于研究世界 |
+| `mesh_distilled` 构建阶段与图层（FR-079、081） | — | P3 | P1 |
+| 出处清单与分档验收（FR-077、080） | P1（按决策门） | P0b（契约）、P3（实施） | P0b（契约）、P1（实施） |
+| 真实航拍资产导入（FR-072、073） | P3 | P3 | P3 |
+
+M22 在方案 C1 下的工作量为 WP-D3-22（P1 部分）中的 1.5 人周（FR-079、081 新增 1.0；图层登记与几何派生隔离由 P3 前移 0.5），P3 部分相应减少 0.5 人周（AWR-05 §6.4.3）。
+
+### 15.6 D3-AC 映射变更
+
+| D3-AC | v1.1 | v1.2 | 说明 |
+|---|---|---|---|
+| D3-AC-41 | P3 | P3 | 来源分档的对齐验收（FR-077） |
+| D3-AC-64 | P0b | P0b | 首轮证据为 r11；本模块提供图层登记与对齐验收的契约 |
+| D3-AC-66（方案 C1 确认后登记） | — | P1 | 网格蒸馏外观层构建与入包（M22-AC-036） |
+
+## 16. D3-FINAL 修订（v1.3，依据 AWR-05 v1.4 定稿）
+
+### 16.1 修订依据与摘要
+
+依据用户 2026-10-12 第二次交互式讨论确认的设计决定 R-D3-52（高斯外观层维持 P3，结论 C0，不采纳方案 C1）、R-D3-55（真实航拍参照集只用公开数据集）与 R-D3-56（SuperSplat 系采纳项随高斯外观层移至 P3，网格选择交互复用于事件编辑器），以及 AWR-05 v1.4 的 ADR-188、ADR-189、ADR-192 与研究单元 [r12](../research/d3/r12-supersplat.md)。对本模块的影响：
+
+1. 高斯外观图层（三类来源）、网格蒸馏构建阶段 `appearance.gs`（FR-079、081）与对齐验收的实施全部在 P3；P1 不含任何高斯外观工作。
+2. `gaussian` 阶段的入包拆为高斯发布子阶段，执行器为锁定版本的 splat-transform（FR-083 至 FR-086）；服务端制品 `spz@2` 供 M25，网页制品为流式 SOG（`sog-lod@1`），写入非内容导出目录 `export/gaussian/`。
+3. 新增几何不完整人工标注（FR-082）：事件编辑器以网格选择交互产生质量标注提议，管理员审核后写入 `quality.overrides.json`，`build --steps quality` 后产生新的世界版本（P1）。
+4. 公开参照集（AWR-05 §6.4.8）中的 UrbanScene3D 真实场景、Mill 19、GauU-Scene V2 用于 P3 的外部资产入库配方试点，只在内部研究目录中构建，不发布（FR-086 的约束）。
+
+### 16.2 条款修订
+
+| 条款 | v1.2 | v1.3 | 依据 |
+|---|---|---|---|
+| §2.1 P1 行 | 方案 C1 确认时的网格蒸馏高斯外观图层 | 删除；增加几何不完整人工标注 | ADR-188、ADR-192 |
+| §2.1 P3 行 | 方案 C0 下另含高斯图层登记与 `appearance.gs` | 高斯图层、`appearance.gs`、高斯发布子阶段、网页制品与编辑记录入库 | ADR-188、ADR-192 |
+| FR-079、FR-081、M22-AC-034、M22-AC-036 的阶段 | P1（方案 C1）或 P3 | P3 | ADR-188 |
+| M22-AC-036 的 D3-AC 映射 | 66、41 | 69、41（D3-AC-66 作废） | AWR-05 §11.7 |
+| §7.1.3 `gaussian.appearance` | 方案 C1 时 `mesh_distilled` 自 P1 | 全部来源 P3；网页制品见 FR-086 | ADR-192 |
+| FR-073 的 `spz@2` 写出 | 自研编码 | 由 `gs.encode.server`（splat-transform）写出，读回位置误差 p99 ≤ 1 mm | ADR-192 |
+
+### 16.3 新增功能需求
+
+| 编号 | 需求描述 | 优先级 | 阶段 | 目标版本 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M22-FR-082 | 几何不完整人工标注：配方增加 `quality.overrides.json`（`{schema: "awr.quality.overrides.v1", ops: [{op: add \| deprecate, id, kind ∈ {hole, stretched, fragment, other}, polygon (world 帧 E、N，3–64 顶点，简单多边形), note, by, reason}]}`），按数组顺序在自动派生之后施加；人工条目写入 `geojson/awr-quality@1`（`source = manual`）并按 kind 置质量位；每次构建输出与上一版本的差异；`python -m awr.world.glb quality {list\|add\|deprecate\|import\|export}` 只改覆写文件，`build --steps quality` 生效并产生新的 `contentVersion`；bench-api 的 BN-31（管理员）写入覆写并排入 `world_build{steps: quality}` | P1 | P1 | V0.3 | M22-AC-038 | AWR-05 §5.1.5、§6.5.5；ADR-192 |
+| M22-FR-083 | 高斯发布子阶段：`gs.inspect`（统计与 `fillRatio`，NaN 或 Inf 与无效 `fillRatio` 拒绝 601）、`gs.clean`（NaN 过滤、不透明度 ≥ 0.004、覆盖外包盒裁剪，可选浮点过滤与连通簇保留）、`gs.align`（`aerial` 相似变换与球谐旋转，沿用 FR-073）、`gs.tile`（与 FR-081 一致）、`gs.encode.server`（`spz@2`）、`gs.encode.web`（LOD 1–3 抽稀与流式 SOG）、`gs.voxel`（可选，0.25 m）、`gs.validate`（固定视角渲染对比与出处完整性）；执行器为锁定版本的 splat-transform（随世界构建镜像，`tools/worldglb/splat-transform/`），由 `python/awr/world/glb/gaussian/` 封装；CLI `python -m awr.world.glb gaussian {inspect\|publish\|validate} <wid> --src <file> --source {aerial,mesh_distilled,generative} [--registration reg.json] [--floaters] [--lod 50,25,10] [--chunk-extent 32] [--voxel 0.25] [--gpu N\|cpu]` | P1 | P3 | V0.3 | M22-AC-039 | AWR-05 §6.5.1；r12 §4.1 |
+| M22-FR-084 | 坐标换算：封装统一计算世界 ENU 到 splat-transform 引擎空间（PLY 存储空间绕 Z 轴 180°）与网页坐标（x = E − Ec，y = U，z = −(N − Nc)）的变换，禁止手写 `-t`、`-r`、`-B` 参数；输出逐点回读校验（残差为 0）；`export.json` 记录 `T_web_world` | P1 | P3 | V0.3 | M22-AC-039 | r12 §0 第 6 条、§3.2 |
+| M22-FR-085 | 出处清单增补（只增）：`pipeline[]`（工具、版本、命令行、输入输出 sha256、耗时）、`stats.before` 与 `stats.after`（数量、`fillRatio`）、`edits[]`（`.ssproj` sha256、编辑器版本、操作者、删除数量与包围盒）；含 FLUX.1 [dev] 生成器的图层在发布构建中拒绝（601，`appearance_generator_forbidden`），研究构建中 `scope = internal_research` | P1 | P3 | V0.3 | M22-AC-039、040 | AWR-05 §6.4.9、§6.5.1 |
+| M22-FR-086 | 网页高斯制品与编辑记录入库：流式 SOG 写入 `export/gaussian/<tileset>/`（`lod-meta.json` 与块文件、`viewer-settings.base.json`），以 `export.json.source_content_version` 绑定，不改变 `contentVersion`；格式注册 `sog@1`、`sog-lod@1`、`ssproj@1`、`svo-voxel@1.1` 由本模块起草（在 16 号文档登记后使用）；BN-33 上传的 `.ssproj` 与 PLY 经 `gs.inspect`、`gs.clean`（只做校验）与 `gs.validate` 后产生新的外观层版本，`appearanceSource` 不变，含颜色分级操作的工程拒绝；BN-34（管理员）排入 `world_build{steps: gaussian}`；`generative` 与以公开参照集试点产出的图层只写研究目录 | P1 | P3 | V0.3 | M22-AC-040 | AWR-05 §6.5.2、§6.5.3；r12 §4.6 |
+
+### 16.4 新增验收
+
+| 编号 | 优先级 | 阶段 | 度量与阈值 | 方法 | 环境 | D3-AC |
+|---|---|---|---|---|---|---|
+| M22-AC-038 | P1 | P1 | 质量层覆写：`quality add` 与 `deprecate` 只改覆写文件；`build --steps quality` 后人工条目出现在 `awr-quality@1`（`source = manual`）与质量位栅格，`contentVersion` 改变而 `raycast`、NavMesh 与锚点文件 sha256 不变；自相交或顶点数 > 64 的多边形被拒绝；BN-31 以研究者身份调用返回 403 | `tests/d3/world/test_quality_overrides.py` | 本机 | 26 |
+| M22-AC-039 | P1 | P3 | 高斯发布子阶段：NaN 或 Inf、无效 `fillRatio` 的夹具被拒绝（601）；坐标换算回读残差为 0；清理后对"只裁剪"版本的渲染 PSNR ≥ 50 dB（暂定）；`spz@2` 读回位置误差 p99 ≤ 1 mm；同一输入与镜像两次发布的内容文件 sha256 相同；出处清单含 `pipeline[]` 与 `stats` 且通过 schema 校验；含 FLUX.1 [dev] 生成器的图层在发布构建中返回 601 | `tests/d3/world/test_gaussian_publish.py` | dmax | 69、68 |
+| M22-AC-040 | P1 | P3 | 网页制品与编辑记录：流式 SOG 的 LOD 0 对清理版本的渲染 PSNR ≥ 48 dB；`export/` 写出后世界 `contentVersion` 不变；上传的编辑工程产生新的外观层版本且 `edits[]` 完整、`appearanceSource` 不变；含颜色分级操作的工程被拒绝 | `tests/d3/world/test_gaussian_web.py` | dmax | 69、70 |
+
+### 16.5 阶段对照（v1.2 → v1.3）
+
+| 范围 | v1.2（方案 C0 / C1） | v1.3 |
+|---|---|---|
+| `mesh_distilled` 构建阶段与图层（FR-079、081） | P3 / P1 | P3 |
+| 出处清单与分档验收（FR-077、080） | P0b（契约）、P3 或 P1（实施） | P0b（契约）、P3（实施） |
+| 高斯发布子阶段、网页制品与编辑记录（FR-083 至 086） | — | P3 |
+| 几何不完整人工标注（FR-082） | — | P1 |
+| 真实航拍资产导入（FR-072、073） | P3 | P3 |
+
+本模块的工作量：WP-D3-39（2.5 人周，本模块为所有者）；WP-D3-22 中网格蒸馏验证图层的训练阶段 0.5 人周（AWR-05 §12.1）；质量层覆写的后端部分随 WP-D3-17 的 0.75 人周增量交付（与 WP-D3-14 的锚点覆写接口同批）。
+
+### 16.6 D3-AC 映射变更
+
+| D3-AC | v1.2 | v1.3 | 说明 |
+|---|---|---|---|
+| D3-AC-26 | P1 | P1 | 增加质量层覆写（M22-AC-038） |
+| D3-AC-66 | P1（方案 C1 确认后登记） | 作废 | 度量并入 D3-AC-69（M22-AC-036、039） |
+| D3-AC-68 | — | P3 | 公开参照集试点与生成器许可拒绝（M22-AC-039） |
+| D3-AC-69 | — | P3 | 高斯发布子阶段与网格蒸馏验证图层（M22-AC-036、039、040） |
+| D3-AC-70 | — | P3 | 编辑记录入库（M22-AC-040） |

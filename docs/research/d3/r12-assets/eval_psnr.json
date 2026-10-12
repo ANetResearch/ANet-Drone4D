@@ -1,0 +1,148 @@
+{
+ "clean": {
+  "psnr_db_per_view": [
+   15.24,
+   12.74,
+   21.65,
+   24.79,
+   27.68,
+   13.23
+  ],
+  "psnr_db_mean": 19.22,
+  "psnr_db_min": 12.74,
+  "in_block_vs_base_psnr_db_mean": 28.78,
+  "in_block_vs_base_psnr_db_per_view": [
+   21.62,
+   20.28,
+   33.4,
+   36.46,
+   38.65,
+   22.29
+  ]
+ },
+ "nofloat": {
+  "psnr_db_per_view": [
+   15.22,
+   12.73,
+   21.6,
+   24.73,
+   27.6,
+   13.22
+  ],
+  "psnr_db_mean": 19.18,
+  "psnr_db_min": 12.73,
+  "vs_clean_psnr_db_mean": 49.31,
+  "vs_clean_psnr_db_min": 47.76,
+  "in_block_vs_base_psnr_db_mean": 28.52,
+  "in_block_vs_base_psnr_db_per_view": [
+   21.54,
+   20.23,
+   33.07,
+   36.02,
+   38.03,
+   22.21
+  ]
+ },
+ "sog": {
+  "psnr_db_per_view": [
+   15.24,
+   12.74,
+   21.63,
+   24.77,
+   27.66,
+   13.23
+  ],
+  "psnr_db_mean": 19.21,
+  "psnr_db_min": 12.74,
+  "vs_clean_psnr_db_mean": 52.12,
+  "vs_clean_psnr_db_min": 49.06,
+  "in_block_vs_base_psnr_db_mean": 28.73,
+  "in_block_vs_base_psnr_db_per_view": [
+   21.66,
+   20.32,
+   33.32,
+   36.34,
+   38.45,
+   22.26
+  ]
+ },
+ "cply": {
+  "psnr_db_per_view": [
+   15.24,
+   12.74,
+   21.64,
+   24.78,
+   27.68,
+   13.23
+  ],
+  "psnr_db_mean": 19.22,
+  "psnr_db_min": 12.74,
+  "vs_clean_psnr_db_mean": 57.46,
+  "vs_clean_psnr_db_min": 55.9
+ },
+ "spz": {
+  "psnr_db_per_view": [
+   15.24,
+   12.74,
+   21.64,
+   24.78,
+   27.68,
+   13.23
+  ],
+  "psnr_db_mean": 19.22,
+  "psnr_db_min": 12.74,
+  "vs_clean_psnr_db_mean": 55.9,
+  "vs_clean_psnr_db_min": 55.06
+ },
+ "lod1": {
+  "psnr_db_per_view": [
+   15.22,
+   12.73,
+   21.56,
+   24.67,
+   27.44,
+   13.22
+  ],
+  "psnr_db_mean": 19.14,
+  "psnr_db_min": 12.73,
+  "vs_clean_psnr_db_mean": 41.19,
+  "vs_clean_psnr_db_min": 40.0,
+  "in_block_vs_base_psnr_db_mean": 27.75,
+  "in_block_vs_base_psnr_db_per_view": [
+   21.49,
+   20.19,
+   32.08,
+   34.65,
+   35.93,
+   22.14
+  ]
+ },
+ "lod2": {
+  "psnr_db_per_view": [
+   15.19,
+   12.7,
+   21.44,
+   24.46,
+   27.1,
+   13.2
+  ],
+  "psnr_db_mean": 19.01,
+  "psnr_db_min": 12.7,
+  "vs_clean_psnr_db_mean": 36.24,
+  "vs_clean_psnr_db_min": 34.98
+ },
+ "lod3": {
+  "psnr_db_per_view": [
+   15.1,
+   12.65,
+   21.07,
+   23.82,
+   26.07,
+   13.14
+  ],
+  "psnr_db_mean": 18.64,
+  "psnr_db_min": 12.65,
+  "vs_clean_psnr_db_mean": 31.07,
+  "vs_clean_psnr_db_min": 29.95
+ }
+}

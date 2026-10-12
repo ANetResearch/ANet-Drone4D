@@ -4,10 +4,10 @@
 |---|---|
 | 文档编号 | AWR-M23 |
 | 标题 | 事件运行时 |
-| 版本 | v1.0 |
+| 版本 | v1.2 |
 | 日期 | 2026-10-12 |
-| 状态 | 草案 |
-| 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-01 至 04、06、11、19、21、27、30、38）；用户设计讨论 design-r1（`/data/projs/anet-drone-data/design-r1.md` §五、§九）；[AWR-05](../05-D3-设计增补与决策记录.md)（§1.2、§2.3、§4.1、§4.3、§4.4、§4.5、§4.8、§5.0、§5.1.3 至 §5.1.6、§5.2、§5.4.1、§5.5.4、§5.5.5、§5.6.1 至 §5.6.6、§6.1.3、§7.1、§7.2、§7.8、§7.9、§7.11、§8、§10、§11、§12、§13；ADR-128 至 ADR-136、ADR-152、ADR-155、ADR-156、ADR-158、ADR-159、ADR-161）；[AWR-04](../04-D2-设计增补与决策记录.md)（ADR-099、ADR-110）；[AWR-03](../03-设计基线与决策记录.md)（ADR-047、ADR-049、§10.2）；[M07](M07-环境引擎PRD.md)、[M08](M08-仿真内核与飞行器适配PRD.md)、[M12](M12-时间轴录制与回放PRD.md)、[M18-M19](M18-M19-识别物与感知对抗PRD.md)；D3 研究 [00-index](../research/d3/00-index.md) §2.7、§3.3、§4.3，[r6](../research/d3/r6-event-runtime-benchmark.md) §3 至 §8、§11、§12.4、§14 至 §16，[r7](../research/d3/r7-d2-code-audit.md) §3.1、§4.2、§4.3、§8.2，[r2](../research/d3/r2-glb-world.md) §4，[r8](../research/d3/r8-rerun.md) §6 |
+| 状态 | 草案 v1.1（按 AWR-05 v1.3 修订：第一批四类事件、首个固定事件、车道图与驾驶行为及骨骼动画前移、搜索先验与 test 变体；修订内容汇总见 §15；v1.2 按 AWR-05 v1.4 同步：事件类型与排行榜赛道的对应、事件编辑器网格选择交互的区域与几何不完整标注提议，见 §16） |
+| 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-01 至 04、06、11、19、21、27、30、38；v1.1 增加 2026-10-12 交互式确认的 R-D3-42、47、48、49）；用户设计讨论 design-r1（`/data/projs/anet-drone-data/design-r1.md` §五、§九）；[AWR-05](../05-D3-设计增补与决策记录.md)（§1.2、§2.3、§4.1、§4.3、§4.4、§4.5、§4.8、§5.0、§5.1.3 至 §5.1.6、§5.2、§5.4.1、§5.5.4、§5.5.5、§5.6.1 至 §5.6.6、§6.1.3、§7.1、§7.2、§7.8、§7.9、§7.11、§8、§10、§11、§12、§13；ADR-128 至 ADR-136、ADR-152、ADR-155、ADR-156、ADR-158、ADR-159、ADR-161）；[AWR-04](../04-D2-设计增补与决策记录.md)（ADR-099、ADR-110）；[AWR-03](../03-设计基线与决策记录.md)（ADR-047、ADR-049、§10.2）；[M07](M07-环境引擎PRD.md)、[M08](M08-仿真内核与飞行器适配PRD.md)、[M12](M12-时间轴录制与回放PRD.md)、[M18-M19](M18-M19-识别物与感知对抗PRD.md)；D3 研究 [00-index](../research/d3/00-index.md) §2.7、§3.3、§4.3，[r6](../research/d3/r6-event-runtime-benchmark.md) §3 至 §8、§11、§12.4、§14 至 §16，[r7](../research/d3/r7-d2-code-audit.md) §3.1、§4.2、§4.3、§8.2，[r2](../research/d3/r2-glb-world.md) §4，[r8](../research/d3/r8-rerun.md) §6 |
 | 下游文档 | M22（NavMesh、锚点与 `walkable_height` 的确定性实现）、M25（`DynamicSource` 消费者）、M26（通信区、任务简报、L1 观测的演员来源）、M27（`event_compile` 作业、真值、评测、数据集与 Rerun 派生）、M24（Realistic 档磁带回放与环境表）、M18（扩展点 2、3、4）、M07（环境轨）、M12（扩展点 11）、M15 与 M06（事件编辑器、事件回放、前端磁带解码器）、[17](../17-接口与实时协议规范.md)（原因码 610–629、topic、REST）、[18](../18-性能与测试方案.md) |
 | 适用版本范围 | V0.3（即本期交付 D3）至 V1.0 |
 
@@ -19,7 +19,8 @@
 4. 语义验证器从磁带与网格重新计算相遇、上下车、进出建筑、区域经过、空中遮挡等事件，strict 模式下声明不成立即失败（613），未声明的显著事件以 `declared: false` 写入真值；同时产出事件图与参考相机可观测性 oracle。
 5. 运行期，磁带经扩展点 3 作为 M18 的运动源（`motion.mode = timeline`），环境轨经确定性调度 stage 以 M07 `env/set` 在关键帧时刻生效；M25 与 M26 直接读取磁带，不经 sim-core 实体表（ADR-128）。
 6. Exogenous 为首个 Benchmark 的主模式；Interactive 模式在 P2 交付，每次运行产出实现磁带并报告事件偏离度（ADR-135）。
-7. 事件编辑器后端提供异步编译、实时预检与自动排时、草稿与版本、编辑资源下载与真值对照；验收 36 条（P0 33 条），对应 D3-AC-03、04、06、07、08、10、19、26、29、33、37；对基线反馈 16 条（§14）。
+7. **v1.1（§15）**：第一批事件纳入四类：跨遮挡身份保持（Re-ID）、多人交汇与交接、车辆追踪、未知位置目标搜索（AWR-05 ADR-181）；DSL 增加 `event_type`、外观库引用、热成像参数、驾驶行为与搜索先验；门 1 校验类型必备配置与外观可区分性，门 3 按类型产出关键事件；OSM 车道图与 IDM 跟驰、物品携带与 `object_handover`、动画相位侧车由 P1 前移到 P0b；首个固定事件 `crop-handoff-001` 在 P0a 交付；每类 ≥ 1 个 dev 与 ≥ 2 个 test 事件由模板变体生成（P0b）。
+8. 事件编辑器后端提供异步编译、实时预检与自动排时、草稿与版本、编辑资源下载与真值对照；验收 36 条（P0 33 条），对应 D3-AC-03、04、06、07、08、10、19、26、29、33、37；对基线反馈 16 条（§14）。
 
 ---
 
@@ -39,6 +40,7 @@
 | G-M23-4 | 事件真值不凭声明成立 | 声明不成立时 strict 编译失败；未声明的显著事件写入真值；事件发生在几何不完整区域时单独标记（D3-AC-04、06） | P0a |
 | G-M23-5 | 作者在编辑阶段得到可行性反馈 | 拖动锚点后 ≤ 200 ms 给出预检结果与建议时刻，一键采纳后编译通过（D3-AC-26） | P1 |
 | G-M23-6 | 交互式事件可复现、可度量 | Interactive 运行可经输入日志逐位重放，实现磁带单独验证并输出事件偏离度（D3-AC-37） | P2 |
+| G-M23-7 | 第一批四类事件可正式评分（v1.1） | 四类各 ≥ 1 个 dev 与 ≥ 2 个 test 事件 strict 编译通过，类型验证器产出关键事件，Evaluator 可按赛道计算四项指标与置信区间（D3-AC-62；v1.2） | P0b |
 
 ### 1.3 对基线与研究原型的继承、修正与增强
 
@@ -67,7 +69,7 @@
 
 ## 2. 范围
 
-### 2.1 P0a（事件与相机闭环，WP-D3-05）
+### 2.1 P0a（v1.1：最小基准闭环，WP-D3-05）
 
 - DSL 与契约（`event.v1`、`tape.v1`、`truth.v1`、`graph.v1`），P-1 起草、P0a 第 6 周前冻结。
 - 锚点解析与吸附（世界锚点与事件局部覆盖层）。
@@ -77,8 +79,11 @@
 - 运行期接入：会话段 `event`、`TapeMotionSource`、环境轨调度 stage、`event/status`、批处理输出 `event_run`、回放磁带演员源库函数。
 - 事件存储、版本与发布；`/api/bench/v1/events` 的编译、状态与预检接口。
 - 支持的演员类别：`person`、`vehicle`（车辆 NavMesh 加锚点约束）、`dog`（行人 NavMesh）、`machine` 与 `object`（静止）。
+- v1.1：DSL 的 `event_type` 字段与类型注册表（只实现 `rendezvous_handoff`）；首个固定事件 `crop-handoff-001`（沿用 r6 原型：3 名脚本演员 + 1 辆车 + ≥ 40 名背景行人，360 s，交汇、上车交接、进入建筑与车辆经过）。
 
-### 2.2 P0b
+### 2.2 P0b（v1.1：基准 v1）
+
+- v1.1 前移与新增（§15）：第一批四类事件的类型验证器、关键事件与 report 类型、简报（参考外观图、搜索先验）；外观库引用与可区分性校验；OSM 车道图上的 IDM 跟驰与路口让行（原 P1）；`object` 携带与 `object_handover` 检测器（原 P1）；动画相位侧车（原 P1）；热成像实体参数与车辆发动机状态侧车；事件模板与 test 变体生成；每类 ≥ 1 个 dev 与 ≥ 2 个 test 事件。
 
 - Rerun 真值层导出辅助（`/truth/actors`、`/truth/events`、`/truth/env`），供 M27 的 `.rrd` 派生（WP-D3-25）。
 - 公开站只读回放的磁带制品筛选规则（只同步 dev 事件，WP-D3-27）。
@@ -86,10 +91,9 @@
 ### 2.3 P1（WP-D3-14、WP-D3-17 后端部分）
 
 - 背景 `actor` 实体种类（扩展点 13）与 `actor/state` topic；背景总数上限提高到 2,000。
-- 车辆改用配准后的 OSM 车道图、IDM 跟驰、弯道限速与路口先到先行。
-- 动画片段与相位侧车；相遇站位模板与朝向。
-- `uav` 类演员（三维航点）与 `object` 携带（`pickup`、`drop`）。
-- 事件编辑器后端：编辑资源、草稿与版本、编译结果对照、制品下载、版本差异；检测器 `object_handover`、`follow`、`loiter`、`run`。
+- （v1.1 前移到 P0b：OSM 车道图与 IDM、动画相位侧车、相遇站位模板、`object` 携带与 `object_handover` 检测器。）
+- `uav` 类演员（三维航点）。
+- 事件编辑器后端：编辑资源、草稿与版本、编译结果对照、制品下载、版本差异；检测器 `follow`、`loiter`、`run`。
 
 ### 2.4 P2（WP-D3-21）
 
@@ -220,7 +224,7 @@
 | M23-FR-039 | 天空可见度（脚本行人，1 Hz）写入 `event_truth.json`；参考相机可观测性 oracle 写入 `observability.npz`（§6.10.3） | P0 | V0.3 | P0a | M23-AC-019 | r6 §6.2、§6.3 |
 | M23-FR-040 | 事件图 `drone4d.event_graph.v1`：实体、事件、`participates_in` 与通过验证的关系；节点 id 与注释 id 一致，未声明事件按确定性次序编号 `e###` | P0 | V0.3 | P0a | M23-AC-020 | r6 §6.4 |
 | M23-FR-041 | `truth.mcap`：`/event/actors`（10 Hz，全部演员）与 `/event/semantic`（事件起止）；供 M27 回放与 `.rrd` 派生 | P0 | V0.3 | P0a | M23-AC-020 | AWR-05 §5.2.6 |
-| M23-FR-042 | P1 检测器：`object_handover`、`follow`、`loiter`、`run` | P1 | V0.3 | P1 | M23-AC-015 | r6 schema |
+| M23-FR-042 | P1 检测器：`object_handover`、`follow`、`loiter`、`run` | P0 | V0.3 | P0b（`object_handover`）、P1（其余） | M23-AC-015 | r6 schema |
 | M23-FR-043 | 门 3 性能：43 名演员 360 s 事件在 dmax CPU 池（`--cpus 16`）≤ 60 s；整条编译流水线 p95 ≤ 90 s | P0 | V0.3 | P0a | M23-AC-019 | r6 §6.2；本文设定 |
 | **运行期接入** | | | | | | |
 | M23-FR-044 | 插件只登记在 `D3_PLUGINS`；会话段 `event`（order 45）校验磁带（614、615），以 `target/add` 写入脚本演员（`motion.mode = timeline`、`reaction_policy = 磁带模式`），挂接运动源；`event` 与 `targets` 同时出现时拒绝重复 id | P0 | V0.3 | P0a | M23-AC-021 | AWR-05 §5.2.5；r7 §8.2 |
@@ -237,9 +241,9 @@
 | M23-FR-054 | 混合模式：脚本演员 Exogenous，背景演员按局部偏离模型躲避低空无人机（§6.13.4） | P1 | V0.3 | P2 | M23-AC-033 | AWR-05 §5.2.4 |
 | **P1 扩展** | | | | | | |
 | M23-FR-055 | 背景 `actor` 实体种类（扩展点 13）：stage 按磁带写入背景行，发布 `actor/state`；容量 ≥ 2,048；`target` 容量 32 的 D2 行为不变 | P1 | V0.3 | P1 | M23-AC-030 | D3-AC-29 |
-| M23-FR-056 | 车辆沿 OSM 车道图运动：IDM 跟驰、弯道限速、路口先到先行；路段 100% 在道路走廊内；车辆之间无穿越 | P1 | V0.3 | P1 | M23-AC-031 | ADR-132；D3-AC-33 |
-| M23-FR-057 | 动画侧车 `tape.anim`（片段 id、相位 u16），其 sha256 写入规范头，供 M25 做 LBS | P1 | V0.3 | P1 | M23-AC-012 | AWR-05 §5.2.3 |
-| M23-FR-058 | 相遇站位模板（面对面 1.2 m、并排 0.8 m）与朝向对方；`uav` 类演员三维航点；`object` 携带（`pickup`、`drop`） | P1 | V0.3 | P1 | M23-AC-007、010 | r6 §5.2 |
+| M23-FR-056 | 车辆沿 OSM 车道图运动：IDM 跟驰、弯道限速、路口先到先行；路段 100% 在道路走廊内；车辆之间无穿越 | P0 | V0.3 | P0b | M23-AC-031 | ADR-132；D3-AC-33 |
+| M23-FR-057 | 动画侧车 `tape.anim`（片段 id、相位 u16），其 sha256 写入规范头，供 M25 做 LBS | P0 | V0.3 | P0b | M23-AC-012 | AWR-05 §5.2.3 |
+| M23-FR-058 | 相遇站位模板（面对面 1.2 m、并排 0.8 m）与朝向对方；`uav` 类演员三维航点；`object` 携带（`pickup`、`drop`） | P0 | V0.3 | P0b（站位模板、`object` 携带）、P1（`uav` 类演员） | M23-AC-007、010 | r6 §5.2 |
 | **事件编辑器后端** | | | | | | |
 | M23-FR-059 | 异步编译与状态：`POST /events`（202）、`GET /events/{eid}`（门结果、段、建议时刻、磁带摘要、真值摘要），状态机按 §6.14 | P0 | V0.3 | P0a | M23-AC-027 | AWR-05 §8.2 |
 | M23-FR-060 | 预检：`POST /events/{eid}/preflight` 返回逐段结果、吸附与建议时刻 | P0 | V0.3 | P0a | M23-AC-006、027 | AWR-05 §8.2 |
@@ -1680,6 +1684,9 @@ tests/d3/actors/                          # P1（D3-AC-29）
 
 ### 9.5 实施顺序与工作包
 
+> v1.1 说明：本节周次与阶段为 v1.0 排期；v1.1 起阶段归属以 §2 与 §15 为准（四类事件、车道图与 IDM、动画侧车在 P0b），周次以 AWR-05 v1.3 §10.7 与本文 §12 为准。
+
+
 | 周（4 人排期） | 条目 | 工作量（人周） | 依赖 |
 |---|---|---|---|
 | P-1 第 1–3 周 | 契约草案（`event/`、流 19、原因码、snapshot `event` 段）；本 PRD | 计入 WP-D3-01、02 | — |
@@ -1736,7 +1743,7 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 | M23-AC-028 | P0 | P1 | 编辑器端到端（与 M15） | 显示 NavMesh、锚点与 quality；拖动锚点后 ≤ 200 ms 给出预检结果与建议时刻；一键采纳后编译通过；时间线与播放头同步 | Playwright `lab/event-editor` | 本机 Tier B | 26 |
 | M23-AC-029 | P0 | P0a | 版本规则 | 只改注释：`content_sha256` 不变、`truth_rev + 1`、`truth_sha256` 变化；改背景人数未递增版本返回 617；递增后 `event_sha256` 与 `content_sha256` 变化；被 Run 引用的 COMPILED 版本自动 PUBLISHED；世界重建后旧版本 DEPRECATED 且新 Run 引用返回 615 | `test_api_events.py` | 本机 | 07 |
 | M23-AC-030 | P1 | P1 | 背景 actor 实体种类 | ≥ 200 名背景演员以 `actor` 种类进入 sim-core 并发布 `actor/state`；`target` 容量 32 的 D2 行为不变；Tier S 下演员图层 + 200 人 + 10 架满足 D1-AC-03b | `tests/d3/actors/`、Playwright | 本机 Tier S | 29 |
-| M23-AC-031 | P1 | P1 | 车道图与车辆 | 车辆路段 100% 落在道路走廊内；IDM 跟驰下车辆之间无穿越；示例事件改用车道图后语义验证仍全部成立 | `test_vehicle.py` | 本机 | 33 |
+| M23-AC-031 | P0 | P0b | 车道图与车辆（v1.1 前移） | 车辆路段 100% 落在道路走廊内；IDM 跟驰下车辆之间无穿越；示例事件改用车道图后语义验证仍全部成立 | `test_vehicle.py` | 本机 | 33 |
 | M23-AC-032 | P0 | P2 | Interactive | flee、hide 目标点 100% 在 NavMesh 上；偏离不超过 `max_deviation_m`；实现磁带经输入日志重放 `content_sha256` 相同；实现磁带单独通过门 3；输出事件偏离度；P2 之前提交 `interactive` 返回 619 | `test_interactive.py` | 本机 | 37 |
 | M23-AC-033 | P1 | P2 | 混合模式 | 低空无人机接近时背景行人偏离并在 ≤ 30 s 内回到磁带位置；脚本演员列与 Exogenous 逐字节相同 | `test_interactive.py` | 本机 | 37 |
 | M23-AC-034 | P0 | P3 | 事件族 | 同一事件族与种子两次采样得到的 DSL 与磁带哈希相同；变体全部通过三道门；留出变体比例与配置一致并只出现在 test 清单 | `test_family.py` | dmax CPU 池 | 42、43 |
@@ -1773,11 +1780,11 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 | M23-2 磁带 | P0a 第 10 周 | 生成器、打包、`TapeReader`、golden | M23-AC-007 至 014 |
 | M23-3 运行期 | P0a 第 11 周 | 会话段、运动源、`event_clock`、`event/status`、`event_run` | M23-AC-021 至 025 |
 | M23-4 真值 | P0a 第 12 周 | 门 3、oracle、事件图、`truth.mcap`、REST 与存储 | M23-AC-015 至 020、026、027、029、035 |
-| P0a 出口 | 第 18 周 | 与 M22、M25、M26、M27 闭环 | D3-AC-02 至 08、10、19 中 M23 部分通过 |
-| P0b 出口 | 第 23 周 | Rerun 真值辅助、公开制品筛选 | M23-AC-020（P0b 部分）、036 |
-| P1 出口 | 第 32 周 | `actor` 种类、车道图、动画侧车、编辑器后端 | M23-AC-027（P1 部分）、028、030、031 |
-| P2 出口 | 第 41 周 | Interactive 与混合模式 | M23-AC-032、033 |
-| P3 出口 | 第 47 周 | 事件族、OpenLABEL、新世界示例事件 | M23-AC-020（P3 部分）、034 |
+| P0a 出口（v1.1：最小基准闭环） | 第 20 周 | 与 M22、M24、M25、M26、M27 闭环；`crop-handoff-001` | D3-AC-02 至 08、10、19、56 中 M23 部分通过 |
+| P0b 出口（v1.1：基准 v1） | 第 34 周 | 四类事件、车道图与 IDM、`object_handover`、动画侧车、热成像实体参数、test 变体；Rerun 真值辅助、公开样例制品筛选 | M23-AC-020（P0b 部分）、031、036、037 至 043 |
+| P1 出口 | 第 42 周 | `actor` 种类、编辑器后端、`uav` 类演员 | M23-AC-027（P1 部分）、028、030 |
+| P2 出口 | 第 48 周 | Interactive 与混合模式 | M23-AC-032、033 |
+| P3 出口 | 第 51 周 | 事件族、OpenLABEL、新世界示例事件 | M23-AC-020（P3 部分）、034 |
 
 ---
 
@@ -1844,3 +1851,127 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 14. **磁带在数据集目录与公开站中的级别**：§5.2.6 列出事件级 `truth.mcap`，§5.6.4 数据集目录的 `truth/` 下未列出；§7.9 的公开站"事件磁带回放"未限定 dev 事件，而 test 事件的磁带、DSL 与 plan 即真值（§5.6.6）。建议 §5.6.4 在 `truth/` 下补 `event.mcap`，§7.9 注明只同步 dev 事件的磁带。
 15. **排名运行对事件编译模式的要求未写明**（§5.6.1）：lenient 编译允许声明不成立的事件进入磁带。建议 Run 规格校验增加"排名运行只引用 strict 编译且已发布的版本，否则 682"（本文 §6.14）。
 16. **会话段与 stage 区段的归属**：§8.1 把 snapshot 可选段 `event` 的起草方写为 M26，而装配该段的是 M23 会话段（order 45）；扩展点 1 把 195–199 整体分给 M23 与 M24，未划分次序，而 `pose_history` 应在全部物理之后。建议 `event` 段由 M23 起草（字段见本文 §7.5），195–199 的分配写为 195 M23 `event_clock`、196–197 M24 接触 stage、199 M24 `pose_history`，以 M08 PRD 的 D3 增补为准。
+
+---
+
+## 15. D3-REV 修订（v1.1，依据 AWR-05 v1.3）
+
+### 15.1 修订依据与摘要
+
+依据用户 2026-10-12 交互式确认的设计决定 R-D3-42（第一批事件四类全部纳入）、R-D3-47（热成像基于实体温度与发射率）、R-D3-48（最小基准闭环只含 1 个固定事件）与 R-D3-49（首个场景 crop），以及 AWR-05 v1.3 的 ADR-175、ADR-180、ADR-181。本节与 §0、§1.2、§2、§4 的阶段列与 §12 里程碑的同步修订一起构成 v1.1。
+
+1. 首个里程碑（P0a）只实现 `rendezvous_handoff` 类的固定事件 `crop-handoff-001`（沿用 r6 原型），其余类型与配套在 P0b。
+2. 四类事件共用 DSL、三道门、磁带格式与评测指标定义；类型只决定必备配置、门 3 验证器、关键事件集合、允许的 report 类型与简报内容（AWR-05 §5.2.8）。
+3. 车道图与 IDM、`object` 携带与 `object_handover`、动画相位侧车由 P1 前移到 P0b。
+4. test 事件由事件模板的参数化变体生成（P0b），分布式事件族仍在 P3（FR-068）。
+
+### 15.2 DSL 增补（只增，`drone4d.event.v1`）
+
+| 字段 | 类型 | 规则 | 阶段 |
+|---|---|---|---|
+| `event_type` | enum | `reid_occlusion`、`rendezvous_handoff`（缺省）、`vehicle_track`、`target_search` | P0a（字段）、P0b（四类） |
+| `actors[].appearance_ref` | string | `appearance_lib@1` 中的外观 id；缺省按类别取样例资产；Re-ID 类事件的目标与干扰者必须给出 | P0b |
+| `actors[].roles` | list | `target`、`distractor`、`participant`、`background_vehicle`；类型验证器据此确定参与者 | P0b |
+| `actors[].thermal` | object | `{surface_temp_c?, emissivity?, profile?}`；缺省取 M25 `thermal_table_v1` 的类别值 | P0b |
+| `actors[].drive` | object | `{profile ∈ {urban, cautious, aggressive}, idm{v0_mps?, T_s?, s0_m?, a_mps2?, b_mps2?}, lane_route[]?}`；只对 `vehicle` | P0b |
+| `search` | object | `{target, prior{type: gmm \| grid, components[{anchor \| xy, sigma_m, weight}] \| grid_ref}, area_polygon, motion ∈ {static, wander(radius_m)}, window_s（缺省 60）}`；只对 `target_search` | P0b |
+| `environment.keyframes[].air_temp_c`、`rh_pct` | number | 缺省 15 °C、60%；供热成像 | P0b |
+| `template`（事件模板文件） | object | `drone4d.event_template.v1`：基础 DSL 加参数域（锚点集合、时刻偏移、外观分配、先验样本），由 FR-080 展开为变体 | P0b |
+
+### 15.3 类型注册表、验证器与关键事件
+
+| 类型 | 门 1 必备配置检查 | 门 3 验证器与关键事件（`event_truth.json.key_events[]`） | 允许的 report 类型（写入 `bench/task.v1.report_types`） |
+|---|---|---|---|
+| `reid_occlusion` | 1 名 `target`、≥ 3 名 `distractor`，均有 `appearance_ref`；目标与每名干扰者的外观属性距离 ≥ 2 且至少共享 1 个属性；目标路线经过 ≥ 2 处遮挡设施（建筑出入口对、树冠或廊下、上下车） | 以参考相机可观测性 oracle 判定遮挡区间（目标在全部参考视点中不可见且持续 ≥ 5 s）；每次遮挡结束产出 `target_reacquire`；另产出 `enter_building`、`exit_building`、`board`、`alight` | `reacquire`、`identity_link`、`enter_building`、`exit_building`、`board`、`alight` |
+| `rendezvous_handoff` | ≥ 2 名 `participant`；P0b 起至少 1 件 `object` 与 `pickup`/`drop` 动作 | `meet`（≥ 2 人间距 ≤ 2 m 持续 ≥ 5 s）、`handover`（物品容器在交汇窗口内由 A 变为 B）、`disperse`、`board`、`alight`、`enter_building`、关系边（`before`、`during`、`causes`） | `meet`、`handover`、`disperse`、`board`、`alight`、`enter_building`、`relation` |
+| `vehicle_track` | 1 辆 `target` 车辆、≥ 2 辆 `distractor` 车辆（外观相似：同类型或同色），全部车辆有 `drive` 且路线可在车道图上解析 | `depart`、`turn{intersection}`、`stop`、`park`、`enter_zone`、`exit_zone`、`target_reacquire`（车辆被建筑或其他车辆遮挡 ≥ 3 s 后重新可见） | `vehicle_event`、`identity_link` |
+| `target_search` | `search` 段完整；目标类别为 `person`、`vehicle` 或 `object`；先验支撑集与 `area_polygon` 相交面积 ≥ 90% | 目标实际位置由先验按事件种子抽样（流 19 的 `search` 通道，确定性）并写入磁带；把目标在场区间按 `window_s` 切分为关键事件 `target_window_k`（参与者为目标） | `found` |
+
+规则：
+1. 关键事件、参与者与区间全部由门 3 从磁带与网格计算，作者声明只作核对；验证器参数写入 `event_truth.json.validator_params` 并进入 `truth_sha256`。
+2. 目标搜索类的先验写入 `brief.json`；实际位置只在磁带与真值中（test 事件的磁带即真值）；简报泄漏扫描对实际位置坐标 0 命中。
+3. 外观可区分性只用属性向量判定（门 1）；外观嵌入距离写入编译报告作为诊断。
+4. `target_search` 另产出单个 `target_present` 事件（目标在场区间）作为 EU 的真值，`found` 报告与之匹配；其余类型的 report 到关键事件的映射见 AWR-05 §5.2.8 规则 5，映射表写入 `event_truth.json.report_map`。
+
+### 15.4 车道图上的车辆驾驶行为（P0b，由 P1 前移）
+
+- 路线：`lane_route[]` 为车道图节点序列或锚点序列（由车道图最短路径展开）；生成器沿车道中心线做弧长参数化。
+- 跟驰：IDM，`a_IDM = a · [1 − (v/v0)^4 − (s*/s)^2]`，`s* = s0 + v·T + v·Δv / (2√(a·b))`；缺省 `v0` 按道路等级（居住区 8.3 m/s、次干道 11.1 m/s、主干道 13.9 m/s）、`T = 1.5 s`、`s0 = 2 m`、`a = 1.5 m/s²`、`b = 2.0 m/s²`；弯道限速 `v ≤ √(a_lat · R)`，`a_lat = 2.0 m/s²`。
+- 路口：按车道图冲突区与道路等级让行（次路让主路，同级先到先行，时间相同时按车辆 idx），无信号灯；`stop` 动作在停止线前减速至 0 并停留 `dwell_s`。
+- 泊车：`park` 动作在锚点处减速停车并置发动机关闭标志。
+- 确定性：只用整数毫秒步进与 float64 显式运算次序，不用随机数（背景车流的出发时刻与目的地取流 19 的 `vehicle` 通道）；生成结果进入 `content_sha256`。
+
+### 15.5 磁带侧车（只增）
+
+| 侧车 | 内容 | 规则 |
+|---|---|---|
+| `tape.anim`（由 FR-057 前移到 P0b） | 每帧每演员动画片段 id（u8）与相位（u16） | sha256 写入规范头；只影响外观，不影响位置 |
+| `tape.flags`（v1.1 新增） | 每帧每演员标志位 u8：bit0 `engine_on`（车辆行驶中或停车后 120 s 内为 1，`park` 后为 0），bit1 `carrying_object` | sha256 写入规范头；供 M25 热成像与评测诊断 |
+
+### 15.6 新增功能需求
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | 阶段 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M23-FR-070 | `event_type` 字段与类型注册表：每个类型登记必备配置检查、验证器、关键事件定义、允许的 report 类型与简报生成器；未登记类型返回 611 | P0 | V0.3 | P0a（字段与 `rendezvous_handoff`）、P0b（其余三类） | M23-AC-037 | ADR-181 |
+| M23-FR-071 | 门 1 类型检查：按 §15.3 第 2 列校验，失败一次报出全部错误（611，`detail.why = type_requirement`） | P0 | V0.3 | P0b | M23-AC-037 | ADR-181 |
+| M23-FR-072 | 外观引用与可区分性：`appearance_ref` 解析到 `appearance_lib@1`（无法解析时 611，`detail.why = appearance_unresolved`）；Re-ID 类事件的属性距离与难负样本约束不满足时返回 611 | P0 | V0.3 | P0b | M23-AC-038 | ADR-181 |
+| M23-FR-073 | Re-ID 验证器：以参考相机可观测性 oracle 计算遮挡区间并产出 `target_reacquire`；遮挡少于 2 处或均短于 5 s 时 strict 编译失败（613） | P0 | V0.3 | P0b | M23-AC-039 | ADR-181 |
+| M23-FR-074 | 交汇与交接验证器：`meet`、`handover`、`disperse` 与关系边；事件图增加 `handover` 节点与 `object` 实体 | P0 | V0.3 | P0b | M23-AC-039 | ADR-181 |
+| M23-FR-075 | 车辆追踪：车道图路线解析、IDM 跟驰、弯道限速、路口让行、`stop` 与 `park`；验证器产出 `turn`、`stop`、`park`、`enter_zone`、`exit_zone`、`target_reacquire` | P0 | V0.3 | P0b | M23-AC-040 | ADR-181、ADR-132 v1.3 |
+| M23-FR-076 | 目标搜索：先验解析（GMM 或栅格）、按事件种子确定性抽样实际位置、`motion = wander` 时以 DetourCrowd 在半径内游走；关键事件 `target_window_k`；`brief.json` 只含先验 | P0 | V0.3 | P0b | M23-AC-041 | ADR-181 |
+| M23-FR-077 | 关键事件清单：`event_truth.json.key_events[]{id, type, participants, interval, window_s?, params}` 与 `validator_params`，供 M27 计分 | P0 | V0.3 | P0a（交汇与交接类）、P0b | M23-AC-039 | ADR-182 |
+| M23-FR-078 | report 类型白名单：按类型写入 `bench/task.v1.report_types`，M26 动作守卫据此校验 `report.type` | P0 | V0.3 | P0a、P0b | M23-AC-037 | ADR-181 |
+| M23-FR-079 | 热成像参数与 `tape.flags` 侧车：`actors[].thermal`、环境 `air_temp_c` 与 `rh_pct`、`engine_on` 与 `carrying_object` 标志 | P0 | V0.3 | P0b | M23-AC-042 | ADR-180 |
+| M23-FR-080 | 事件模板与 test 变体：`drone4d.event_template.v1` 按参数域确定性展开 N 个变体（变体 id 为参数 sha256 前 12 位），每个变体独立编译并由管理员登记为 dev 或 test（M27 `splits.json`）；同一模板的 dev 与 test 变体参数不重复 | P0 | V0.3 | P0b | M23-AC-043 | ADR-147 v1.3、ADR-181 |
+| M23-FR-081 | 首个固定事件 `crop-handoff-001`：`events/d3/handoff/crop-handoff-001.yaml`（r6 原型最终版加简报），strict 编译通过；磁带与真值进入 golden 与样例包 | P0 | V0.3 | P0a | M23-AC-037 | ADR-175 |
+| M23-FR-082 | 第一批事件集：四类各 ≥ 1 个 dev 与 ≥ 2 个 test 事件（crop）；dev 事件入 git（`events/d3/{reid,handoff,vehicle,search}/`），test 事件只存 `/data/d3/hidden/` | P0 | V0.3 | P0b | M23-AC-043 | ADR-181 |
+| M23-FR-083 | 简报内容：参考外观图（M25 渲染）与由属性向量生成的规范描述文本（中文与英文），目标搜索类附先验图层（PNG 与参数）；不得含演员 id、路线、时刻与实际位置 | P0 | V0.3 | P0b | M23-AC-041 | ADR-181、ADR-161 |
+
+### 15.7 新增验收
+
+| 编号 | 优先级 | 阶段 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
+|---|---|---|---|---|---|---|---|
+| M23-AC-037 | P0 | P0a、P0b | 类型注册与门 1 | P0a：`crop-handoff-001` 以 `event_type = rendezvous_handoff` strict 编译通过；P0b：四类各 1 个缺少必备配置的事件一次报出全部类型错误（611）；`report_types` 写入任务契约 | `tests/d3/events/test_types.py` | 本机 | 06、56、62 |
+| M23-AC-038 | P0 | P0b | 外观可区分性 | 构造属性距离 1 的干扰者被拒绝；无法解析的外观引用返回 611（`appearance_unresolved`）；24 个外观两两属性距离统计写入编译报告 | `tests/d3/events/test_appearance.py` | 本机 | 62 |
+| M23-AC-039 | P0 | P0b | Re-ID 与交汇交接验证器 | 构造 2 处 6 s 遮挡的路线产出 2 个 `target_reacquire`；构造交接用例产出 `handover` 且物品容器转移与磁带一致；关系边与事件图一致 | `tests/d3/events/test_validators_types.py` | 本机 | 62 |
+| M23-AC-040 | P0 | P0b | 车辆追踪 | D3-AC-33 全部条款；`turn`、`stop`、`park` 关键事件与磁带一致；两台机器生成的 `content_sha256` 相同 | `tests/d3/events/test_vehicle.py` | 本机与 dmax | 33、62 |
+| M23-AC-041 | P0 | P0b | 目标搜索 | 同一事件种子两次抽样得到相同位置；不同 test 变体位置服从先验（1,000 次抽样的卡方检验 p ≥ 0.01）；`brief.json` 与任务契约中实际位置坐标检索 0 命中；60 s 窗口关键事件计数正确 | `tests/d3/events/test_search.py` | 本机 | 62、16 |
+| M23-AC-042 | P0 | P0b | 热成像参数与标志侧车 | `tape.flags` 中 `engine_on` 在行驶、停车 120 s 内与 `park` 后取值正确；侧车 sha256 写入规范头；缺省热参数与 M25 参数表版本一致 | `tests/d3/events/test_flags.py` | 本机 | 61 |
+| M23-AC-043 | P0 | P0b | 模板变体与事件集 | 同一模板两次展开的变体 DSL 与磁带哈希相同；dev 与 test 变体参数集交集为空；四类事件集齐全并登记划分 | `tests/d3/events/test_template.py` | 本机 | 62 |
+
+### 15.8 D3-AC 映射变更
+
+| D3-AC | v1.0 中 M23 的阶段 | v1.1 | 说明 |
+|---|---|---|---|
+| D3-AC-33 | P1（应交付） | P0b（阻塞） | 车辆追踪类事件所需 |
+| D3-AC-56 | — | P0a | 首个固定事件 `crop-handoff-001` |
+| D3-AC-62 | — | P0b | 第一批四类事件 |
+
+## 16. v1.2 同步（依据 AWR-05 v1.4）
+
+### 16.1 修订依据与摘要
+
+依据用户 2026-10-12 第二次交互式讨论确认的设计决定 R-D3-54（排行榜拆分为多个赛道，各赛道分别报告四项指标，合成主得分待定）与 R-D3-56（基于网格的选择交互复用于事件编辑器的区域、锚点与几何不完整标注），以及 AWR-05 v1.4 的 ADR-191、ADR-192。对本模块的影响限于赛道归属与编辑器后端，事件 DSL、编译门、磁带格式与哈希规则不变。
+
+1. 赛道归属：排行榜的事件类型赛道与 `event_type` 一一对应：`reid` ↔ `reid_occlusion`、`handoff` ↔ `rendezvous_handoff`、`vehicle` ↔ `vehicle_track`、`search` ↔ `target_search`；榜单版本按 `event_type` 把 test 事件登记到同名赛道（AWR-05 §5.6.9）。每个事件只有一个 `event_type`（门 1 已校验），因此每个 test 事件只属于一个事件类型赛道。
+2. 编辑器区域：背景人群 `zone`、通信干扰区与目标搜索的任务区由事件编辑器以多边形、套索、盒体三种方式绘制（命中测试对象为网格或 `dsm_2m`，不在高斯上进行），写入 DSL 时一律为 3–64 顶点的简单多边形，校验规则不变（M23-FR-005、007）。
+3. 几何不完整标注提议：事件草稿增加可选段 `quality_proposals[]`，只用于提交管理员审核（经 M22 质量层覆写产生新的世界版本），不进入编译输入、磁带与任何哈希。
+
+### 16.2 条款修订
+
+| 条款 | v1.1 | v1.2 | 依据 |
+|---|---|---|---|
+| G-M23-7 | Evaluator 可计算主得分 | Evaluator 可按赛道计算四项指标与置信区间 | ADR-191 |
+| M23-FR-061 编辑资源 | NavMesh、锚点、quality 多边形的只读下载 | 另含质量层人工条目（`source = manual`）与网格选择交互所需的舞台网格引用 | ADR-192 |
+| M23-FR-062 草稿与版本 | 草稿以 ETag 乐观并发保存 | 草稿可携带 `quality_proposals[]`（不参与编译） | ADR-192 |
+
+### 16.3 新增功能需求与验收
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | 阶段 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M23-FR-084 | 赛道归属：`event_truth.json` 与 `bench/task.v1` 输出 `event_type`，M27 据此把 test 事件登记到同名事件类型赛道；研究任务赛道引用的事件组合由榜单版本登记，不改变事件本身 | P0 | V0.3 | P0a（`handoff`）、P0b（四类） | M23-AC-044 | ADR-191 |
+| M23-FR-085 | 草稿的质量标注提议：`quality_proposals[]{kind ∈ {hole, stretched, fragment, other}, polygon (world 帧 E、N，3–64 顶点), note, author}` 随草稿保存与版本化；编译时忽略，不进入规范头、`content_sha256` 与 `truth_sha256`；管理员在世界侧提升（M22-FR-082） | P1 | V0.3 | P1 | M23-AC-044 | ADR-192 |
+
+| 编号 | 优先级 | 阶段 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
+|---|---|---|---|---|---|---|---|
+| M23-AC-044 | P1 | P0b、P1 | 赛道归属与草稿提议 | 四类 test 事件的 `event_type` 与赛道一一对应；同一草稿在有无 `quality_proposals[]` 时编译得到的 `content_sha256` 与 `truth_sha256` 相同；套索与盒体绘制的区域写入 DSL 后为简单多边形且顶点数 ≤ 64 | `tests/d3/events/test_lane_map.py`、`test_draft_proposals.py` | 本机 | 26、57、62 |

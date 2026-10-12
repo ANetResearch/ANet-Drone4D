@@ -4,25 +4,26 @@
 |---|---|
 | 文档编号 | AWR-M25 |
 | 标题 | 传感器生成服务（Sensor Generation Service） |
-| 版本 | v1.0 |
+| 版本 | v1.3 |
 | 日期 | 2026-10-12 |
-| 状态 | 草案（P-1，WP-D3-02） |
-| 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-04、07 至 12、25、26、28、29、31、38、40）；[AWR-05](../05-D3-设计增补与决策记录.md)（§1.2、§2.3、§4.1 至 §4.7、§5.4、§5.5.3、§5.5.4、§5.6.1 至 §5.6.4、§6.1.3、§6.2、§6.3、§8、§10、§11、§12；ADR-128、136、139 至 144、151、154、156、157、160 至 163、165）；[AWR-03](../03-设计基线与决策记录.md)（§5.1 至 §5.5、§10.2，ADR-033、048、049）；[AWR-04](../04-D2-设计增补与决策记录.md)；[AWR-20](../20-机型与传感器目录.md)；[M13](M13-传感器仿真PRD.md)（D1/D2 传感器约定、计数器 RNG、MID-360 花样）；D3 研究 [00-index](../research/d3/00-index.md)、[r1](../research/d3/r1-fast-livo2.md)、[r3](../research/d3/r3-camera-render.md)、[r4](../research/d3/r4-mesh-lidar.md)、[r7](../research/d3/r7-d2-code-audit.md)、[r9](../research/d3/r9-gz-sim.md)、[r10](../research/d3/r10-rotorpy-camera-sensor.md)，旁及 [r2](../research/d3/r2-glb-world.md)、[r5](../research/d3/r5-gazebo-realistic-backend.md)、[r6](../research/d3/r6-event-runtime-benchmark.md)、[r8](../research/d3/r8-rerun.md)；研究 [r04](../research/r04-livox-driver-calib.md) §3.1 |
+| 状态 | 草案 v1.2（P-1，WP-D3-02；v1.1 按 AWR-05 v1.3 修订：卷帘快门、1080p 多机输出、热成像、相机档位吞吐、外观库与骨骼动画、高斯外观层决策门，修订内容汇总见 §15；v1.2 按 AWR-05 v1.4（ADR-187）并入 r11 结论：C3-G 合成、外观来源 `mesh_distilled`、评估工具 G-3DGS v2、3DGS 外观层工程的阶段按方案 C0 或 C1，修订内容汇总见 §16；v1.3 按 AWR-05 v1.4 定稿：结论 C0，外观层工程全部在 P3，P3 入口门以公开参照集计算 KID，FLUX.1 [dev] 只在研究镜像内部复测，gsplat 运行期不变并借用 SPZ 格式与 `fillRatio` 发布门，修订内容汇总见 §17） |
+| 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-04、07 至 12、25、26、28、29、31、38、40；v1.1 增加 2026-10-12 交互式确认的 R-D3-42、44、47、48、51）；[AWR-05](../05-D3-设计增补与决策记录.md)（§1.2、§2.3、§4.1 至 §4.7、§5.4、§5.5.3、§5.5.4、§5.6.1 至 §5.6.4、§6.1.3、§6.2、§6.3、§8、§10、§11、§12；ADR-128、136、139 至 144、151、154、156、157、160 至 163、165）；[AWR-03](../03-设计基线与决策记录.md)（§5.1 至 §5.5、§10.2，ADR-033、048、049）；[AWR-04](../04-D2-设计增补与决策记录.md)；[AWR-20](../20-机型与传感器目录.md)；[M13](M13-传感器仿真PRD.md)（D1/D2 传感器约定、计数器 RNG、MID-360 花样）；D3 研究 [00-index](../research/d3/00-index.md)、[r1](../research/d3/r1-fast-livo2.md)、[r3](../research/d3/r3-camera-render.md)、[r4](../research/d3/r4-mesh-lidar.md)、[r7](../research/d3/r7-d2-code-audit.md)、[r9](../research/d3/r9-gz-sim.md)、[r10](../research/d3/r10-rotorpy-camera-sensor.md)，旁及 [r2](../research/d3/r2-glb-world.md)、[r5](../research/d3/r5-gazebo-realistic-backend.md)、[r6](../research/d3/r6-event-runtime-benchmark.md)、[r8](../research/d3/r8-rerun.md)；研究 [r04](../research/r04-livox-driver-calib.md) §3.1；v1.2 增加 [r11](../research/d3/r11-skyfall-gs.md)（D3-SKY）与 AWR-05 §5.4.4、§6.4、ADR-187 |
 | 下游文档 | M26（`bench/obs.v1` 白名单投影、Env 阻塞与到期帧枚举）、M27（运行清单、无损写入、`render_offline`、`slam_eval`、`.rrd` 派生、准入与产能）、M24（PoseHistory 生产、`pose_history_hz`、gz 交叉验证）、M22（外观层、raycast 网格侧表、瓦片定义、`sensorHints`）、M23（`TapeReader`、环境轨、实现磁带）、M21 与 AWR-20（`p600_mid360_inv`、长量程型号、MID-360 内置 IMU 字段）、M00（契约 `sensor/v2/**`、原因码、随机流）、M16（`tools/bench/d3/**` harness）、[17](../17-接口与实时协议规范.md)（原因码 640–659、MCAP 通道载荷） |
 | 适用版本范围 | V0.3（本期交付 D3）至 V1.0 |
-| 修订记录 | v1.0（2026-10-12）：首版。需求 M25-FR-001 至 M25-FR-181，验收 M25-AC-001 至 M25-AC-045，对基线反馈 24 条（§14）；同日按 AWR-05 v1.2 §18 裁决同步：求交瓦片取 M22 的 512 m、harsh 振动频率取机型桨叶通过频率、`cam0` 取 `eo` 槽位（GX40）参数与曝光规则、导出导航解与云台读数纯函数库 |
+| 修订记录 | v1.0（2026-10-12）：首版。需求 M25-FR-001 至 M25-FR-181，验收 M25-AC-001 至 M25-AC-045，对基线反馈 24 条（§14）；同日按 AWR-05 v1.2 §18 裁决同步：求交瓦片取 M22 的 512 m、harsh 振动频率取机型桨叶通过频率、`cam0` 取 `eo` 槽位（GX40）参数与曝光规则、导出导航解与云台读数纯函数库。v1.1（2026-10-12）：按 AWR-05 v1.3 修订（§15）：`rgb1080-rs` 逐顶点卷帘与 1080p GPU 编码进入 P0a；网格 LiDAR 与 IMU 合成由 P0b 前移到 P0a；热成像模型（P0b）；相机档位吞吐目标；外观库与 LBS 由 P1 前移到 P0b；gz 适配由 P2 前移到 P0a；高斯外观层评估协议与决策门；新增 M25-FR-182 至 FR-197、M25-AC-046 至 AC-053。v1.2（2026-10-12）：按 AWR-05 v1.4（ADR-187）并入 r11 结论（§16）：生成式高斯外观首轮裁决为结论 C，维持研究工具；`appearance_source` 增加 `mesh_distilled`；C3 合成补充为 C3-G；`gs_eval` 按 G-3DGS v2 实现并增加幻觉目标审计与 KID 流程；3DGS 外观层工程（FR-150 至 153）在方案 C1 确认时提前到 P1；`visual/gaussian/` 目录名与 M22 统一；新增 M25-FR-198 至 FR-201、M25-AC-054、AC-055。v1.3（2026-10-12）：按 AWR-05 v1.4 定稿（ADR-188 至 ADR-190、ADR-192，§17）：结论 C0，FR-150 至 153、198、199 定为 P3；KID 流程以公开参照集在 P3 入口门启用；外观层使用范围与研究模型隔离；服务端只读 `spz@2`；CI 金标准缩略图；新增 M25-FR-202 至 FR-206、M25-AC-056、AC-057 |
 
 ## 0. 摘要
 
 1. **定位**：M25 是 D3 全部物理档共用的观测生成服务，是世界、事件与位姿的纯函数：`O = Render(World, Tape(t), PoseHistory(t), Rig, Env(t), run_seed, 触发网格)`。它按每架机每个传感器的实际位姿生成相机（RGB、平面深度、实例、语义、可见度）、网格 LiDAR、IMU、GNSS 与导航解，以及对应的隐藏真值；不读 Agent 状态，不改变世界与事件（ADR-128、ADR-139）。
 2. **统一相机契约**：`CameraModel`、`CameraFrame` 与 `drone4d.frame.v1`（`agent_view`、`ground_truth`、`internal` 三分区）沿用 D2 M13 的 ENU、FLU、RDF、`[x, y, z, w]`、像素中心 0.5、整数纳秒与平面深度约定；绝对触发网格按有理数帧率计算，时间戳为中间行曝光中点，位姿一律取自已推进的 PoseHistory，不外推（ADR-140、ADR-160）。
-3. **快速照片级相机**：OpenGL on EGL 一遍 MRT 输出线性颜色、R32F 平面深度、R16UI 实例、R8UI 语义与质量位；reversed-Z + `DEPTH32F`；效果链顺序固定（雾雨、曝光与运动模糊、统一畸变映射、渐晕、Poisson-Gaussian 噪声、ISP、编码）；Agent 收到的字节即存档字节。720p 吞吐阈值按晴天档 ≥ 120 帧/s、最坏档 ≥ 80 帧/s 在 P-1 实测后冻结（D3-AC-11）。同一渲染核心以 `drone4d-camera` 包与镜像对外交付（P1，ADR-165）。
-4. **3DGS 外观层**：P3 起只对真实航拍重建资产启用，采用 C3 合成，3DGS 只替换静态像素颜色，深度、实例、语义、遮挡与可见度一律来自网格，切换外观层不改变任何真值字节（ADR-141）。
-5. **网格 LiDAR**：Warp 逐射线求交，MID-360 非重复花样在 GPU 生成，逐点时刻（K = 11 个位姿节点）、动态实体（实例化或 refit）、语义反射率表与烘焙阴影补偿、905 nm 雨雾消光与近场假回波；输出 `lidar_frame.v2`、隐藏真值 `lidar_gt.v1` 与 Livox 兼容格式；按用户决策提前到 P0，在 P0b 出口验收（ADR-142）。
+3. **快速照片级相机**：OpenGL on EGL 一遍 MRT 输出线性颜色、R32F 平面深度、R16UI 实例、R8UI 语义与质量位；reversed-Z + `DEPTH32F`；效果链顺序固定（雾雨、曝光与运动模糊、统一畸变映射、渐晕、Poisson-Gaussian 噪声、ISP、编码）；Agent 收到的字节即存档字节。吞吐阈值按相机档位在 P-1 实测后冻结（D3-AC-11）：`rgb720-gs` 晴天档 ≥ 120、最坏档 ≥ 80 帧/s；v1.1 增加 `rgb1080-rs`（1920 × 1080，卷帘读出 20 ms，逐顶点行时刻投影）晴天档 ≥ 60、最坏档 ≥ 40 帧/s 与 `therm512`（640 × 512 长波红外）≥ 300 帧/s；1080p 在线路径只用 GPU 编码。同一渲染核心以 `drone4d-camera` 包与镜像对外交付（P1，ADR-165）。
+4. **3DGS 外观层**：真实航拍重建资产在 P3 启用；v1.1 增加生成式高斯外观（网格 → 3DGS → 扩散逐级细化，参照 Skyfall-GS）的评估项与决策门（AWR-05 ADR-186、§6.4）；v1.2：首轮评估（r11）裁决为结论 C，生成式外观维持研究工具，不提前到 P1；外观来源增加 `mesh_distilled`（网格蒸馏 3DGS，只作外观层工程的验证资产与非排名运行）；v1.3 定稿为结论 C0，`GsCameraBackend` 与 C3-G 在 P3（AWR-05 ADR-187、ADR-188）；两类来源均采用 C3 合成，3DGS 只替换静态像素颜色，深度、实例、语义、遮挡与可见度一律来自网格，切换外观层不改变任何真值字节（ADR-141）。
+5. **网格 LiDAR**：Warp 逐射线求交，MID-360 非重复花样在 GPU 生成，逐点时刻（K = 11 个位姿节点）、动态实体（实例化或 refit）、语义反射率表与烘焙阴影补偿、905 nm 雨雾消光与近场假回波；输出 `lidar_frame.v2`、隐藏真值 `lidar_gt.v1` 与 Livox 兼容格式；按用户决策提前到 P0：v1.1 起采集在 P0a（最小基准闭环）交付，SLAM 合同与重建对比在 P0b 出口验收（ADR-142、ADR-175）。
 6. **IMU、GNSS 与导航解**：IMU 由物理档逐物理步的机体系比力与角速度合成（M25 计算杆臂项，80 Hz 一阶抗混叠，线性重采样到 200 Hz 绝对网格），不对插值位姿求导；GNSS 为 Gauss-Markov 加白噪声；导航解为确定性误差模型。三档噪声参数与离散化方法在 §6.10 给出完整定义（ADR-160、ADR-162）。
 7. **FAST-LIVO2 输入合同**：`/livox/lidar`（每帧 20,000 点、无回波零点占位）、`/livox/imu`（g 单位）、`/left_camera/image/compressed`（专用全局快门 `slam_cam`）、`rig.json` 与配置生成、真值侧车与合同测试（含负向用例），冻结为 SLAM 轨道的输入（ADR-143）。
 8. **服务化**：每块 GPU 一个 `sensorsvc-worker`，会话制、三级队列、按 GPU 时间份额准入；Benchmark 锁步下超限只阻塞仿真时钟，不降频、不转离线；有状态传感器过程按完整触发网格递推（ADR-162）。宿主适配覆盖 FleetSim（Env）、gz-sim（PoseTap，原生传感器只作交叉验证）、RotorPy 与 Gymnasium。
-9. **验收**：45 条（P0 级 39 条），覆盖 D3-AC-04、09 至 17、19、22 至 24、31、32、35、41、47 至 49 中属于 M25 的部分。对基线反馈 24 条（§14），其中 4 条影响契约登记（触发网格公式、M25 随机流、演员语义码、合批键）。
+9. **热成像（v1.1）**：同一光栅管线增加热成像输出族：静态表面温度按语义类别、太阳与日照可见度、云量与降雨计算，动态实体按类别与 DSL 参数，发射率按类别，反射环境辐射、大气透过、微测辐射热计时间常数、NETD 与固定图案噪声；Agent 侧交付辐射测温 u16（0.01 K）（AWR-05 §5.4.10、ADR-180）。
+10. **验收**：45 条（P0 级 39 条；v1.1 增至 53 条；v1.2 增至 55 条），覆盖 D3-AC-04、09 至 17、19、22 至 24、31、32、35、41、47 至 49 中属于 M25 的部分。对基线反馈 24 条（§14），其中 4 条影响契约登记（触发网格公式、M25 随机流、演员语义码、合批键）。
 
 ---
 
@@ -83,25 +84,27 @@ D3 研究已经给出全部关键部件的实测依据：EGL/OpenGL MRT 720p 光
 
 ### 2.1 分阶段范围
 
+v1.1 按 AWR-05 v1.3（ADR-175、ADR-179、ADR-180、ADR-186）重排；v1.0 的阶段对照见 §15.2。
+
 | 阶段 | 交付（M25 部分） | 工作包 | 出口验收 |
 |---|---|---|---|
-| P-1 | 契约草案 `sensor/v2/{frame.v1, render_req.v1, pose_history.v1}`；720p 完整链路吞吐 spike（moderngl，全输出、可见度、深度编码与落盘，晴天档与最坏档）；正确尺度下 CPU 与 GPU 逐射线差异分布；逐点位姿与单一位姿 ATE 比值；噪声档参数表复测口径 | WP-D3-01、WP-D3-03 | D3-AC-47 |
-| P0a | SensorBackend v2 与 PoseHistory 接入、触发网格；`RasterCameraBackend`（RGB、深度、实例、语义、可见度；reversed-Z；统一畸变映射；接触阴影）与效果链；深度传感器模型（L2-depth）；GNSS 与导航解（L1、L2 共用）；GPU Worker、会话、三级队列、Benchmark 锁步阻塞与交互预览降频；`V1Adapter`；动态实体样例资产 | WP-D3-06（S1 至 S4，6.5 人周） | D3-AC-09、10、11、16（部分）、17、19（部分）、22 |
-| P0b | `MeshLidarBackend`（倒装 MID-360、逐点时刻、动态实体、天气、语义反射率）、`lidar_frame.v2` 与 `lidar_gt.v1`；IMU 合成；噪声档参数表；Livox 输出、`slam_cam`、`rig.json` 与合同测试 | WP-D3-07（S5、S6，5.0 人周，与 M21 共担） | D3-AC-12、13、14（与 M27 共担）、15（与 M27 共担） |
-| P1 | `drone4d-camera` 包与镜像；RotorPy 与 Gym 适配、T0 特征档；长量程 LiDAR 型号；gz 原生相机交叉验证；骨骼动画 LBS；性能应交付目标 | WP-D3-24（2.5 人周，与 M24 共担）、WP-D3-19、WP-D3-18（交叉验证部分）、WP-D3-14（动画相位） | D3-AC-31（交叉验证条款）、32、48、49 |
-| P2 | Realistic 档接入（gz PoseHistory 250 Hz）、Fast 与 Realistic 对照；Interactive 模式实现磁带作为动态源 | WP-D3-20、WP-D3-21 | D3-AC-35、37（部分） |
-| P3 | `GsCameraBackend`（C3 合成）、外观层切换、瓦片驻留、配准验收工具 | WP-D3-22（5.5 人周，与 M22 共担） | D3-AC-41 |
+| P-1 | 契约草案 `sensor/v2/{frame.v1, render_req.v1, pose_history.v1}`（含卷帘与热成像只增字段）；720p 完整链路吞吐 spike；`rgb1080-rs` 逐顶点卷帘与 `therm512` 吞吐 spike、1080p nvJPEG 单帧体积；标准轨会话显存与 GPU 时间；正确尺度下 CPU 与 GPU 逐射线差异分布；逐点位姿与单一位姿 ATE 比值；噪声档参数表复测口径 | WP-D3-01、WP-D3-03 | D3-AC-47 |
+| P0a（最小基准闭环） | SensorBackend v2 与 PoseHistory 接入（Realistic 档 `PoseTap` 与后续 Fast 档共用）、触发网格；`RasterCameraBackend`（RGB、深度、实例、语义、可见度；reversed-Z；统一畸变映射；接触阴影）、`rgb1080-rs` 逐顶点卷帘与 GPU 编码、基础效果链（雾、噪声、ISP）；`MeshLidarBackend`（倒装 MID-360、逐点时刻、动态实体）与 `lidar_frame.v2`、`lidar_gt.v1`；IMU 合成、GNSS 与导航解；GPU Worker、会话、Benchmark 锁步阻塞；`V1Adapter`；动态实体样例资产 | WP-D3-06（P0a 5.5 人周）、WP-D3-07（P0a 3.0 人周） | D3-AC-09、10、17（帧部分）、19（部分）、56、60 |
+| P0b（基准 v1） | 热成像输出族（`thermal_table_v1`、`thermal_bake`、NETD 与固定图案噪声、u16 编码与真值）；雨与 2048² 投影阴影、自动曝光、交互预览队列与降频；外观库 `appearance_lib@1` 与 LBS 骨骼动画、参考外观图；LiDAR 天气与语义反射率完善、噪声档参数冻结；Livox 输出、`slam_cam`、`rig.json` 与合同测试；相机档位吞吐与 LiDAR 并发正式验收；高斯外观层评估协议（WP-D3-37） | WP-D3-06（P0b 2.0）、WP-D3-07（P0b 2.0）、WP-D3-33、WP-D3-34、WP-D3-37 | D3-AC-11、12、13、14（与 M27 共担）、15（与 M27 共担）、16（部分）、22、61、62（外观部分）、64 |
+| P1 | `drone4d-camera` 包与镜像（含卷帘；热成像为可选组件）；RotorPy 与 Gym 适配、T0 特征档；长量程 LiDAR 型号；gz 原生相机交叉验证；性能应交付目标；高斯外观工作不在 P1（v1.3 定稿为结论 C0，ADR-188） | WP-D3-24、WP-D3-19、WP-D3-18（交叉验证部分） | D3-AC-31（交叉验证条款）、32、48、49 |
+| P2 | Fast 与 Realistic 对照扩展；Interactive 模式实现磁带作为动态源；热成像识别阈值标定支持 | WP-D3-21 | D3-AC-37（部分）、38（部分） |
+| P3 | P3 入口门的 `gs_eval`（G1 至 G8，KID 以公开参照集计算，FR-202）；`GsCameraBackend`（C3-G 合成）、外观层切换、瓦片驻留、配准验收工具，先以网格蒸馏验证图层验证，再接入真实航拍资产（v1.3 定稿）；外观层使用范围、服务端格式与 CI 缩略图（FR-203 至 206） | WP-D3-22（与 M22 共担）、WP-D3-42 | D3-AC-41、68、69 |
 
 ### 2.2 不做
 
 | 不做 | 原因或替代 |
 |---|---|
-| 热成像物理模型、雷达波 | 不在 D3（AWR-05 §2.3） |
+| 雷达波；主动照明成像 | 不在 D3（AWR-05 §2.3）；v1.1：热成像不再列为"不做"，按 §15 交付简化物理模型 |
 | 以 3DGS 期望深度判定遮挡（C2） | 假可见像素 14.3%（r3 §5.2） |
-| 从 GLB 网格训练 3DGS 用于产品观测 | 上限即网格（R-D3-26，ADR-141） |
+| 只以网格训练 3DGS（无扩散细化）用于产品观测 | 上限即网格（R-D3-26，ADR-141；r11 在正确尺度下复现）；v1.2：网格蒸馏 3DGS 只作外观层基础设施验证与非排名运行（`mesh_distilled`）；生成式细化路线经首轮评估维持研究工具（ADR-187），扩散模型不进入本模块镜像 |
 | gz 原生传感器作为 Realistic 档缺省观测 | 吞吐与 MID-360 保真度不足（R-D3-31） |
 | D2 `scan_rt.py` 用于数据集 | 只保留给公开站 2 Hz 预览（ADR-142） |
-| 在 emax 运行任何 M25 负载 | 公开站只读（R-D3-27） |
+| 在 emax 运行任何 M25 负载 | 公开站只读样例（R-D3-46） |
 | 昼夜与真实雨天光照 | 摄影测量贴图烘焙了拍摄时刻光照，只做全局变暗与去饱和（AWR-05 风险 3） |
 | 植被穿透与多径 | 摄影测量树冠为实心壳（r4 §5.3）；多回波只作选项 |
 
@@ -175,7 +178,7 @@ D3 研究已经给出全部关键部件的实测依据：EGL/OpenGL MRT 720p 光
 | M25-FR-002 | 输出只取决于（世界 `contentVersion`、动态源内容哈希、PoseHistory、Rig、环境时间线、run_seed、触发网格、后端版本集合）；不读 Agent 状态，不写世界、事件与机体状态 | P0 | P0a | M25-AC-012 | ADR-128、ADR-162 |
 | M25-FR-003 | `ObsFrame`、`TruthFrame`、`SensorRequest`、`PoseHistory`、`FrameMeta` 为 M25、M26、M27 的内部类型；`ObsFrame` 载荷不含实例、语义、可见度、`invalid_mask`、真值位姿与真值外参、run_seed、磁带与事件哈希、后端内部元数据；真值只进入 `TruthFrame` | P0 | P0a | M25-AC-017；D3-AC-16 | ADR-161 |
 | M25-FR-004 | 起草 `packages/contracts/sensor/v2/{frame.v1, render_req.v1, pose_history.v1}.schema.json`（字段见 §7.2），由 M00 合入契约 1.3.0；`frame.v1` 分 `agent_view`、`ground_truth`、`internal` 三分区 | P0 | P-1 | M25-AC-001 | ADR-155；AWR-05 §8.1 |
-| M25-FR-005 | 起草 `sensor/v2/{lidar_frame.v2, lidar_gt.v1}.schema.json`：`lidar_frame.v2` 保持 v1 的 20 B/点 SoA 布局，点数上限放宽到 2,000,000；`lidar_gt.v1` 为全槽位 3 B/点 | P0 | P0b | M25-AC-026、031 | ADR-142；r4 §9.1 |
+| M25-FR-005 | 起草 `sensor/v2/{lidar_frame.v2, lidar_gt.v1}.schema.json`：`lidar_frame.v2` 保持 v1 的 20 B/点 SoA 布局，点数上限放宽到 2,000,000；`lidar_gt.v1` 为全槽位 3 B/点 | P0 | P0a | M25-AC-026、031 | ADR-142；r4 §9.1 |
 | M25-FR-006 | 坐标与时间约定沿用 M13：世界 ENU（m）、机体 FLU、光学帧 RDF、四元数 `[x, y, z, w]`（WORLD←FLU）、像素中心 0.5（COLMAP）、整数纳秒、相机深度为平面深度、LiDAR 为斜距；导出到 vikit 与 ROS `CameraInfo` 时主点减 0.5 | P0 | P0a | M25-AC-004 | AWR-05 §5.4.2；r3 §4 |
 | M25-FR-007 | `RigSpec` 由 M21 机型目录与 Run 规格覆盖构建（§6.3.3）：相机交付分辨率由 Run 规格给出，内参按 §6.2.4 自目录原生分辨率换算；校验失败返回 `649 SENSOR_RIG_INVALID`（曝光与读出之和超过帧周期、`slam_cam` 非全局快门或带云台、SLAM 运行使用正装前倾挂载、型号未知） | P0 | P0a | M25-AC-002 | AWR-05 §5.4.5、§5.4.6 |
 | M25-FR-008 | 相机语义图与 LiDAR 真值使用 `d3-semantic@1` 码（§6.4.6）：0–15 为 `anet-classes@1` 静态类，32–37 为演员类别，255 为天空或无几何；码表经 M00 登记后生效 | P0 | P0a | M25-AC-009 | §14 第 3 条 |
@@ -186,24 +189,24 @@ D3 研究已经给出全部关键部件的实测依据：EGL/OpenGL MRT 720p 光
 | M25-FR-021 | 传感器位姿按 `T_world_sensor = T_world_base · T_base_mount · R_gimbal(az, el)` 计算（复用 `awr.sim.sensors.frames`），云台角与变焦取 PoseHistory 的云台样本插值 | P0 | P0a | M25-AC-004 | M13 §6.3 |
 | M25-FR-022 | 绝对触发网格：帧率以有理数表示，`t_end,k = t0 + ⌊k · 10⁹ · q / p⌋`（帧率 p/q）；第 k 帧在首个 `t_b ≥ t_end,k` 的 tick 交付；不得以 `round(1e9/fps)` 累加 | P0 | P0a | M25-AC-003 | AWR-05 §5.4.3 时间行；§14 第 1 条 |
 | M25-FR-023 | 时间戳为中间行曝光中点 `t_mid,k = t_end,k − ⌊(e + T_ro) / 2⌋`；第 i 行曝光中点按 §6.2.3；运动模糊子帧与卷帘行带分别参数化；位姿一律取自已推进的 PoseHistory | P0 | P0a | M25-AC-003 | ADR-140 |
-| M25-FR-024 | LiDAR 帧窗口 `[t_s, t_s + 100 ms)`，`t_s + 100 ms` 落在 tick 边界并在该 tick 交付；`timebase = header.stamp = t_s`；`offset_time = i · 5000 ns` | P0 | P0b | M25-AC-026 | AWR-05 §5.4.5 帧时序 |
-| M25-FR-025 | IMU 输出于 200 Hz 绝对网格 `t0 + j · 5 ms`；GNSS 与导航解输出于 10 Hz 网格 `t0 + j · 100 ms`；每 tick 交付窗口 `(t_{b−1}, t_b]` 内的全部样本 | P0 | P0a（GNSS、导航解）、P0b（IMU） | M25-AC-020、027 | ADR-160 |
+| M25-FR-024 | LiDAR 帧窗口 `[t_s, t_s + 100 ms)`，`t_s + 100 ms` 落在 tick 边界并在该 tick 交付；`timebase = header.stamp = t_s`；`offset_time = i · 5000 ns` | P0 | P0a | M25-AC-026 | AWR-05 §5.4.5 帧时序 |
+| M25-FR-025 | IMU 输出于 200 Hz 绝对网格 `t0 + j · 5 ms`；GNSS 与导航解输出于 10 Hz 网格 `t0 + j · 100 ms`；每 tick 交付窗口 `(t_{b−1}, t_b]` 内的全部样本 | P0 | P0a | M25-AC-020、027 | ADR-160 |
 | M25-FR-026 | 跨传感器时间一致：同一时刻的演员状态由同一 `DynamicSource` 时刻函数给出；不经 sim-core 实体表，不受 stage 次序与时钟档影响 | P0 | P0a | M25-AC-008；D3-AC-10 | AWR-05 §4.3 规则 1 |
 | **C. 相机：几何与光栅化** | | | | | |
 | M25-FR-030 | `RasterCameraBackend` 以 OpenGL on EGL 一遍 MRT 输出 RGBA16F 线性颜色、R32F 平面深度、R16UI 实例、R8UI 语义、R8UI 质量位；动态实体与静态场景同一 z-buffer | P0 | P0a | M25-AC-004、005 | ADR-140；r3 §3、§5 |
 | M25-FR-031 | 深度缓冲 reversed-Z + `DEPTH32F`（`glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE)`，清除 0，比较 `GREATER`），near 0.3 m、far 3000 m；演员片元深度测试使用 1 cm 朝向相机的偏置，R32F 平面深度写入无偏置值 | P0 | P0a | M25-AC-005 | ADR-140；r3 §5.2 |
 | M25-FR-032 | 世界外观按瓦片局部原点上传（顶点 float32 相对坐标，模型视图矩阵以 float64 计算后转换）；材质一律 unlit；纹理以 sRGB 解码到线性；三线性 mip 与 16× 各向异性过滤 | P0 | P0a | M25-AC-004 | r3 §2.1、§4.2 |
 | M25-FR-033 | 逐三角形语义与质量位以 `gl_PrimitiveID` 查表写入语义与质量附件；天空像素语义写 255 | P0 | P0a | M25-AC-009、010 | r3 §5.1 |
-| M25-FR-034 | 动态实体：P0 使用 Khronos 样例（CesiumMan、CesiumMilkTruck、Fox）按类别尺寸归一化；按 `sensorHints.bakedSunAzElDeg` 做 Lambert 着色；P1 起按磁带动画片段与相位在顶点着色器做 LBS | P0（P1 部分为 P1） | P0a、P1 | M25-AC-019、038 | R-D3-38；ADR-156；r3 §2.3、§5.4 |
-| M25-FR-035 | 接地阴影缺省 `shadow = contact`（沿太阳方向的贴地椭圆衰减贴花），`shadow = map` 为 2048² 投影阴影图，只用于离线高质量档或显式开启 | P0 | P0a | M25-AC-011 | ADR-140 |
+| M25-FR-034 | 动态实体：P0 使用 Khronos 样例（CesiumMan、CesiumMilkTruck、Fox）按类别尺寸归一化；按 `sensorHints.bakedSunAzElDeg` 做 Lambert 着色；P1 起按磁带动画片段与相位在顶点着色器做 LBS | P0（P1 部分为 P1） | P0a（样例资产）、P0b（外观库与 LBS） | M25-AC-019、038 | R-D3-38；ADR-156；r3 §2.3、§5.4 |
+| M25-FR-035 | 接地阴影缺省 `shadow = contact`（沿太阳方向的贴地椭圆衰减贴花），`shadow = map` 为 2048² 投影阴影图，只用于离线高质量档或显式开启 | P0 | P0a（`contact`）、P0b（`map`） | M25-AC-011 | ADR-140 |
 | M25-FR-036 | 畸变：在含裕量的无畸变域渲染（像素比上限 1.35，超出时等比降低渲染焦距），随后对全部输出施加同一重映射：RGB 双线性，深度、实例、语义、质量位最近邻；`K` 与 `dist` 描述交付图像 | P0 | P0a | M25-AC-006；D3-AC-09 | AWR-05 RV-30；r10 §4.6 |
-| M25-FR-037 | 运动模糊子帧与卷帘行带机制：子帧时刻与行带时刻按 §6.2.3；真值层在 `t_mid`（卷帘时为各行带中心时刻）单独渲染一遍；在线闭环缺省 `blur_subframes = 1`、`rs_bands = 1` | P0 | P0a | M25-AC-003、011 | ADR-140 |
+| M25-FR-037 | （v1.1：卷帘缺省实现改为逐顶点行时刻投影，行带方法保留为参照实现，见 FR-182）运动模糊子帧与卷帘行带机制：子帧时刻与行带时刻按 §6.2.3；真值层在 `t_mid`（卷帘时为各行带中心时刻）单独渲染一遍；在线闭环缺省 `blur_subframes = 1`、`rs_bands = 1` | P0 | P0a | M25-AC-003、011 | ADR-140 |
 | M25-FR-038 | 变焦改变交付 `K`（fx、fy 按焦距比例缩放，主点不变），逐帧写入；`slam_cam` 内参与外参在运行中恒定 | P0 | P0a | M25-AC-004、029 | AWR-05 §5.4.6 |
 | M25-FR-039 | 无几何的下视像素（仰角 < 0）以远景雾色填充并置 `invalid_mask` 位 0；无几何的上视像素按天空渐变着色 | P0 | P0a | M25-AC-010 | ADR-131 |
 | **D. 相机：效果链与 ISP** | | | | | |
 | M25-FR-045 | 效果链顺序固定（§6.5.1），实现版本记为 `fx_version` 并写入 FrameMeta 与运行清单 | P0 | P0a | M25-AC-011 | AWR-05 §5.4.3 效果链行 |
-| M25-FR-046 | 雾按 Koschmieder 模型、雨按消光 + 雨线 + 湿润模型；参数取 `DynamicSource.env_at(t)`，与 LiDAR 使用同一环境时间线 | P0 | P0a | M25-AC-011 | r3 §6 |
-| M25-FR-047 | 自动曝光（`isp.ae ∈ {auto, fixed}`）以整数直方图测光，按完整触发网格顺序递推；噪声档的曝光误差以确定性调制叠加 | P0 | P0a | M25-AC-011、012 | ADR-162 |
+| M25-FR-046 | 雾按 Koschmieder 模型、雨按消光 + 雨线 + 湿润模型；参数取 `DynamicSource.env_at(t)`，与 LiDAR 使用同一环境时间线 | P0 | P0a（雾）、P0b（雨） | M25-AC-011 | r3 §6 |
+| M25-FR-047 | 自动曝光（`isp.ae ∈ {auto, fixed}`）以整数直方图测光，按完整触发网格顺序递推；噪声档的曝光误差以确定性调制叠加 | P0 | P0b | M25-AC-011、012 | ADR-162 |
 | M25-FR-048 | Poisson-Gaussian 噪声在线性域施加，随机数键为 `(run_seed, uav, sensor, frame_index, 像素, 通道)` | P0 | P0a | M25-AC-011、012 | ADR-136 |
 | M25-FR-049 | ISP：增益、渐晕、sRGB 编码曲线、可选色调曲线、8 位量化（`floor(x · 255 + 0.5)`） | P0 | P0a | M25-AC-011 | r10 §4.8 |
 | M25-FR-050 | L2-depth 深度传感器模型：在交付（畸变后）平面深度上按噪声档施加量程截断与 `σ(d)`，越界与天空写 0；不是渲染真值深度 | P0 | P0a | M25-AC-011 | AWR-05 §5.4.6 深度行 |
@@ -215,31 +218,31 @@ D3 研究已经给出全部关键部件的实测依据：EGL/OpenGL MRT 720p 光
 | **F. 编码与交付** | | | | | |
 | M25-FR-060 | RGB 缺省以 nvJPEG（经 nvImageCodec，质量 90，4:2:0）编码一次，交付字节即存档字节；`rgb_codec = raw` 时交付原始 sRGB 数组并由 M27 以 zstd 无损存档；各载荷 `sha256` 写入 FrameMeta | P0 | P0a | M25-AC-013；D3-AC-19 | ADR-148、ADR-163 |
 | M25-FR-061 | L2-depth 深度以 f32 交付，存档为 f32 + 字节重排 + zstd；真值实例 u16、语义 u8、质量位 u8 以 zstd 压缩；f16、u16 与对数编码只用于预览与派生 | P0 | P0a | M25-AC-013 | ADR-163 |
-| M25-FR-062 | 预览质量：480×270（可配）RGB、JPEG 质量 75，不含真值与深度；只经 `lab-gateway` 发往内部工作区 | P1 | P0a | M25-AC-015 | AWR-05 §7.4 |
+| M25-FR-062 | 预览质量：480×270（可配）RGB、JPEG 质量 75，不含真值与深度；只经 `lab-gateway` 发往内部工作区 | P1 | P0b | M25-AC-015 | AWR-05 §7.4 |
 | M25-FR-063 | 编码器名称与版本写入 FrameMeta 并属于确定性键；CPU 回退编码器（libjpeg-turbo）只用于 CI 与 `drone4d-camera` 的 CPU 模式 | P0 | P0a | M25-AC-012 | ADR-136 |
 | **G. 网格 LiDAR** | | | | | |
-| M25-FR-070 | `MeshLidarBackend` 以 NVIDIA Warp `mesh_query_ray` 求交，无 GPU 时以 Open3D `RaycastingScene` 回退；两者在瓦片局部原点下以 float32 相对坐标求交 | P0 | P0b | M25-AC-021；D3-AC-12 | ADR-142；r4 §3 |
-| M25-FR-071 | MID-360 非重复花样在 GPU 上按 `awr.sim.sensors.lidar.pattern` 同式生成（每帧以 float64 约化三个相位标量），20,000 射线/帧、10 Hz；与 CPU 花样角度差 ≤ 0.03° | P0 | P0b | M25-AC-021 | r4 §4.1、§4.2；M13 §6.5.10 |
-| M25-FR-072 | 逐点时刻：每帧取 K 个位姿节点（缺省 11，可选 `native` 取帧内全部物理步样本），逐点线性插值位置、归一化线性插值姿态；输出点为点时刻的传感器系坐标 | P0 | P0b | M25-AC-023 | AWR-05 §5.4.5；§14 第 12 条 |
-| M25-FR-073 | 动态实体：≤ 64 个近邻实体以局部系网格加包围球剔除实例化，超过 64 或带骨骼动画时以合并网格 refit；实体位姿与可见性取自动态源在位姿节点时刻的状态，状态为缺席、在车内、在建筑内、离场时不可被击中 | P0 | P0b | M25-AC-023、008 | r4 §4.1、§4.3 |
-| M25-FR-074 | 反射率 `reflectance_model = sem_table_v1`：按语义类别取 905 nm 反射率，纹理亮度经烘焙阴影补偿后只作调制，乘入射角余弦与两程大气衰减，按 Livox 漫反射口径编码到 0–150 | P0 | P0b | M25-AC-025 | AWR-05 RV-31；r4 §5.1 |
-| M25-FR-075 | 检测概率为逻辑斯蒂模型；盲区 0.1 m；测距噪声与角度噪声（角度噪声扰动求交方向，报告名义方向）；虚警按每射线概率 | P0 | P0b | M25-AC-024、028 | r04 §3.1.4；r1 §4.2 |
-| M25-FR-076 | 天气：905 nm 雾（Kim 模型）与雨消光，近场假回波（`tag` bit[1:0] = 01）；参数取同一环境时间线，帧内取帧首常数 | P0 | P0b | M25-AC-024 | r4 §5.4 |
-| M25-FR-077 | 射线打到无数据区或拉伸面时在 `lidar_gt.v1` 中置 `void` 位；观测帧按传感器语义输出（无回波或有回波） | P0 | P0b | M25-AC-031；D3-AC-04 | ADR-131 |
-| M25-FR-078 | 输出 `lidar_frame.v2`（只含有效点，`offset_time` 为槽位 i 的 `i · 5000 ns`）与 `lidar_gt.v1`（全部 20,000 槽位）；`tag` 为 Livox 语义，不含"命中识别物"位 | P0 | P0b | M25-AC-026、031；D3-AC-16 | ADR-142、ADR-161 |
+| M25-FR-070 | `MeshLidarBackend` 以 NVIDIA Warp `mesh_query_ray` 求交，无 GPU 时以 Open3D `RaycastingScene` 回退；两者在瓦片局部原点下以 float32 相对坐标求交 | P0 | P0a | M25-AC-021；D3-AC-12 | ADR-142；r4 §3 |
+| M25-FR-071 | MID-360 非重复花样在 GPU 上按 `awr.sim.sensors.lidar.pattern` 同式生成（每帧以 float64 约化三个相位标量），20,000 射线/帧、10 Hz；与 CPU 花样角度差 ≤ 0.03° | P0 | P0a | M25-AC-021 | r4 §4.1、§4.2；M13 §6.5.10 |
+| M25-FR-072 | 逐点时刻：每帧取 K 个位姿节点（缺省 11，可选 `native` 取帧内全部物理步样本），逐点线性插值位置、归一化线性插值姿态；输出点为点时刻的传感器系坐标 | P0 | P0a | M25-AC-023 | AWR-05 §5.4.5；§14 第 12 条 |
+| M25-FR-073 | 动态实体：≤ 64 个近邻实体以局部系网格加包围球剔除实例化，超过 64 或带骨骼动画时以合并网格 refit；实体位姿与可见性取自动态源在位姿节点时刻的状态，状态为缺席、在车内、在建筑内、离场时不可被击中 | P0 | P0a | M25-AC-023、008 | r4 §4.1、§4.3 |
+| M25-FR-074 | 反射率 `reflectance_model = sem_table_v1`：按语义类别取 905 nm 反射率，纹理亮度经烘焙阴影补偿后只作调制，乘入射角余弦与两程大气衰减，按 Livox 漫反射口径编码到 0–150 | P0 | P0a（基础）、P0b（阴影补偿与演员分布化完善） | M25-AC-025 | AWR-05 RV-31；r4 §5.1 |
+| M25-FR-075 | 检测概率为逻辑斯蒂模型；盲区 0.1 m；测距噪声与角度噪声（角度噪声扰动求交方向，报告名义方向）；虚警按每射线概率 | P0 | P0a | M25-AC-024、028 | r04 §3.1.4；r1 §4.2 |
+| M25-FR-076 | 天气：905 nm 雾（Kim 模型）与雨消光，近场假回波（`tag` bit[1:0] = 01）；参数取同一环境时间线，帧内取帧首常数 | P0 | P0a（基础）、P0b（完善） | M25-AC-024 | r4 §5.4 |
+| M25-FR-077 | 射线打到无数据区或拉伸面时在 `lidar_gt.v1` 中置 `void` 位；观测帧按传感器语义输出（无回波或有回波） | P0 | P0a | M25-AC-031；D3-AC-04 | ADR-131 |
+| M25-FR-078 | 输出 `lidar_frame.v2`（只含有效点，`offset_time` 为槽位 i 的 `i · 5000 ns`）与 `lidar_gt.v1`（全部 20,000 槽位）；`tag` 为 Livox 语义，不含"命中识别物"位 | P0 | P0a | M25-AC-026、031；D3-AC-16 | ADR-142、ADR-161 |
 | M25-FR-079 | 建图任务缺省挂载为 `p600_mid360_inv`；SLAM 运行（`slam_eval` 或 `outputs` 含 `bag`）使用正装前倾 20° 挂载时返回 649 | P0 | P0b | M25-AC-033 | ADR-157 |
 | M25-FR-080 | 型号参数化：花样（非重复表驱动或重复扫描表）、量程模型、视场、点频与回波模式由型号文件给出，长量程型号以同一后端接入；多回波为选项（缺省关闭） | P1 | P1 | M25-AC-036；D3-AC-32 | ADR-157；r4 §5.3 |
-| M25-FR-081 | D2 `scan_rt.py` 保持不变，只用于公开站预览；M25 的任何输出路径不得以 DSM 扫描替代网格求交 | P0 | P0b | M25-AC-021 | ADR-142 |
+| M25-FR-081 | D2 `scan_rt.py` 保持不变，只用于公开站预览；M25 的任何输出路径不得以 DSM 扫描替代网格求交 | P0 | P0a | M25-AC-021 | ADR-142 |
 | **H. IMU、GNSS 与导航解** | | | | | |
-| M25-FR-090 | IMU 合成：取 PoseHistory 逐物理步的机体系比力 `f_b` 与角速度 `ω_b`，由 M25 加 IMU 杆臂项 `ω̇ × r + ω × (ω × r)` 并旋转到 IMU 帧；物理频率上一阶 80 Hz 抗混叠；线性插值到 200 Hz 绝对网格；不对插值位姿求导，不断言 C2 连续 | P0 | P0b | M25-AC-027；D3-AC-13 | ADR-160；§14 第 13 条 |
-| M25-FR-091 | IMU 噪声按噪声档：白噪声、偏置随机游走（MID-360 内置 IMU）或 Gauss-Markov 偏置（飞控 IMU）、上电偏置、振动（harsh）；按型号量程饱和；单位由型号声明（`/livox/imu` 加速度为 g） | P0 | P0b | M25-AC-027、028 | AWR-05 §5.4.6 |
+| M25-FR-090 | IMU 合成：取 PoseHistory 逐物理步的机体系比力 `f_b` 与角速度 `ω_b`，由 M25 加 IMU 杆臂项 `ω̇ × r + ω × (ω × r)` 并旋转到 IMU 帧；物理频率上一阶 80 Hz 抗混叠；线性插值到 200 Hz 绝对网格；不对插值位姿求导，不断言 C2 连续 | P0 | P0a | M25-AC-027；D3-AC-13 | ADR-160；§14 第 13 条 |
+| M25-FR-091 | IMU 噪声按噪声档：白噪声、偏置随机游走（MID-360 内置 IMU）或 Gauss-Markov 偏置（飞控 IMU）、上电偏置、振动（harsh）；按型号量程饱和；单位由型号声明（`/livox/imu` 加速度为 g） | P0 | P0a | M25-AC-027、028 | AWR-05 §5.4.6 |
 | M25-FR-092 | SLAM 导出前对 PoseHistory 断言 `|ω| < 5 rad/s`、`|a| < 30 m/s²`；违例时 bag 生成返回 642 并在报告中标注时间段 | P0 | P0b | M25-AC-027 | r1 §4.6 |
 | M25-FR-093 | GNSS：Gauss-Markov（精确离散）加白噪声、天线杆臂、速度白噪声；缺省 `single` 档，`rtk_fixed` 为显式选项；harsh 档叠加多路径跳变 | P0 | P0a | M25-AC-028 | AWR-05 §5.4.6 GNSS |
 | M25-FR-094 | 导航解（NavSolution）10 Hz：位置、速度、姿态与标称不确定度，误差模型见 §6.9.4；L1 与 L2 运行共用，以进程内 CPU 后端生成 | P0 | P0a | M25-AC-020 | ADR-161 第 2 条；§14 第 10 条 |
 | M25-FR-095 | 有状态过程（自动曝光、IMU 偏置、GNSS 与导航解 Gauss-Markov、多路径保持）按完整触发网格或采样网格顺序递推，与帧是否交付、何时交付无关 | P0 | P0a | M25-AC-012 | ADR-162 |
-| M25-FR-096 | IMU 初始化窗口：地面起飞静止窗口由 Env 保证（缺省 2 s、合同下限 0.5 s），空中出生时 2 s 悬停保持窗口；M25 在 SLAM 导出前校验窗口并写入 `rig.json` 的 `gravity_align_en` | P0 | P0b | M25-AC-027 | AWR-05 §5.4.6 初始化 |
+| M25-FR-096 | IMU 初始化窗口：地面起飞静止窗口由 Env 保证（缺省 2 s、合同下限 0.5 s），空中出生时 2 s 悬停保持窗口；M25 在 SLAM 导出前校验窗口并写入 `rig.json` 的 `gravity_align_en` | P0 | P0a | M25-AC-027 | AWR-05 §5.4.6 初始化 |
 | **I. 噪声档** | | | | | |
-| M25-FR-100 | 提供 `clean`、`realistic`、`harsh` 三档逐传感器参数与离散化方法（§6.10），以 `noise_table_version` 版本化；数值在 P-1 以 Fast 档复测后以 ADR 冻结 | P0 | P0b（相机、GNSS 部分 P0a） | M25-AC-028 | AWR-05 §5.4.6 参数表 |
+| M25-FR-100 | 提供 `clean`、`realistic`、`harsh` 三档逐传感器参数与离散化方法（§6.10），以 `noise_table_version` 版本化；数值在 P-1 以 Fast 档复测后以 ADR 冻结 | P0 | P0a（基础档）、P0b（参数冻结与热成像档） | M25-AC-028 | AWR-05 §5.4.6 参数表 |
 | M25-FR-101 | 开发运行可按项覆盖噪声参数并记入运行清单；排名运行禁止覆盖（649） | P1 | P1 | M25-AC-028 | ADR-161 |
 | **J. SLAM 导出合同（FAST-LIVO2 输入）** | | | | | |
 | M25-FR-105 | Livox `CustomMsg` ROS1 序列化（md5 `e4d6829bdfe657cb6c21a746c86b21a6`）：每帧 20,000 点，无回波槽位写 `(0, 0, 0)`、反射率 0、`tag` 0，`line = i & 3`，`offset_time = i · 5000 ns` 单调；ROS2 CDR 为选项 | P0 | P0b | M25-AC-026；D3-AC-13 | r1 §2.10；r4 §6 |
@@ -259,19 +262,19 @@ D3 研究已经给出全部关键部件的实测依据：EGL/OpenGL MRT 720p 光
 | M25-FR-126 | 容量估算接口 `estimate(run_spec)` 返回 GPU 时间份额、显存、写速率与 CPU 核数，供 M27 准入 | P0 | P0a | M25-AC-015 | AWR-05 §4.7 |
 | M25-FR-127 | 故障语义：世界加载失败 645、GPU 不可用 647、worker 失联 648、动态源不一致 650；故障由 M27 按运行状态机重试 | P0 | P0a | M25-AC-016 | AWR-05 §5.6.2 |
 | M25-FR-128 | 运行指标与结构化日志（队列深度、各级 GPU 时间、帧率、时延分位数、641 计数、显存、世界缓存命中）；日志、指标与错误消息不得含 run_seed | P0 | P0a | M25-AC-017 | ADR-161 |
-| M25-FR-129 | 交互预览帧经 `lab-gateway` 发布到 `uav/{id}/sensor/{name}/preview` | P1 | P0a | M25-AC-015 | AWR-05 §8.3 |
+| M25-FR-129 | 交互预览帧经 `lab-gateway` 发布到 `uav/{id}/sensor/{name}/preview` | P1 | P0b | M25-AC-015 | AWR-05 §8.3 |
 | **L. 宿主适配** | | | | | |
 | M25-FR-140 | FleetSim 与 Env 适配：PoseHistory 增量推送、到期帧枚举、Benchmark 等待全部到期帧、交互预览非阻塞并在下一步顶部锁存最新就绪帧 | P0 | P0a | M25-AC-014 | AWR-05 §5.4.7 宿主适配行 |
-| M25-FR-141 | gz-sim 适配：Realistic 档由 `PoseTap` 写入 PoseHistory（250 Hz），M25 不使用 gz 渲染 | P0 | P2 | M25-AC-040；D3-AC-35 | R-D3-31；ADR-138 |
+| M25-FR-141 | （v1.1：Realistic 档为缺省档，本条在 P0a 交付）gz-sim 适配：Realistic 档由 `PoseTap` 写入 PoseHistory（250 Hz），M25 不使用 gz 渲染 | P0 | P0a | M25-AC-040；D3-AC-35 | R-D3-31；ADR-138 |
 | M25-FR-142 | `GzNativeSensorBackend`：订阅 `GzSensorBridge` 帧，按同一位姿与 M25 逐像素比对；同时作为 ROS 2 生态出口的说明对象，不进主链路 | P1 | P1 | M25-AC-037；D3-AC-31 | AWR-05 §6.2 |
 | M25-FR-143 | RotorPy 适配：`BatchedPhotorealCamera` 与 `BatchedPinholeCamera` 同签名，可作为 `simulate_batch(camera=...)`；只依赖 `render(worlds, states)`、`measurement`、`frame_rate` 三个约定 | P1 | P1 | M25-AC-035；D3-AC-48 | ADR-144 |
 | M25-FR-144 | Gymnasium 向量环境观测包装，返回 `(B, H, W, 3)` uint8 | P1 | P1 | M25-AC-035 | r10 §4.9 |
 | M25-FR-145 | Interactive 模式动态源：读取 M23 正在写入的实现磁带，只允许查询已写入区间 | P1 | P2 | M25-AC-041 | ADR-135 |
 | **M. 3DGS 外观层** | | | | | |
-| M25-FR-150 | `GsCameraBackend`（gsplat）采用 C3：网格通道照常输出深度、实例、语义、质量位与可见度；3DGS 只替换静态像素颜色 | P0 | P3 | M25-AC-042；D3-AC-41 | ADR-141 |
-| M25-FR-151 | `appearance ∈ {mesh, 3dgs}` 由 Run 规格切换；切换不改变深度、实例、语义与可见度字节；世界无 3DGS 层时返回 `643 APPEARANCE_UNAVAILABLE` | P0 | P3 | M25-AC-042 | ADR-141 |
-| M25-FR-152 | 3DGS 瓦片驻留：视锥内与相邻瓦片同时驻留，worker 显存预算内按 LRU 换入换出 | P1 | P3 | M25-AC-042 | r3 §7.3 |
-| M25-FR-153 | 配准验收工具：覆盖区内网格平面深度与 3DGS 期望深度残差中位数 ≤ 5 cm，供 M22 入包 | P0 | P3 | M25-AC-042 | AWR-05 §5.4.4 |
+| M25-FR-150 | `GsCameraBackend`（gsplat）采用 C3：网格通道照常输出深度、实例、语义、质量位与可见度；3DGS 只替换静态像素颜色（v1.2 补充规则见 FR-198） | P0 | P3（v1.3 定稿：验证资产为 `mesh_distilled`；生成式来源不提前） | M25-AC-042；D3-AC-41 | ADR-141 |
+| M25-FR-151 | `appearance ∈ {mesh, 3dgs}` 由 Run 规格切换（`3dgs` 另带 `appearance_source`，v1.2）；切换不改变深度、实例、语义、可见度、热成像与 LiDAR 字节；世界无对应来源的 3DGS 层时返回 `643 APPEARANCE_UNAVAILABLE` | P0 | P3（v1.3 定稿） | M25-AC-042 | ADR-141 |
+| M25-FR-152 | 3DGS 瓦片驻留：视锥内与相邻瓦片同时驻留，worker 显存预算内按 LRU 换入换出 | P1 | P3（v1.3 定稿） | M25-AC-042 | r3 §7.3 |
+| M25-FR-153 | 配准验收工具：覆盖区内网格平面深度与 3DGS 期望深度残差中位数 ≤ 5 cm，供 M22 入包（v1.2：按来源分档，§6.12） | P0 | P3（v1.3 定稿） | M25-AC-042 | AWR-05 §5.4.4 |
 | **N. `drone4d-camera` 独立包** | | | | | |
 | M25-FR-160 | 发布 Python 包（wheel，Linux x86_64）与容器镜像；渲染核心与 `RasterCameraBackend` 同源构建；类型由 `sensor/v2` 生成 | P0 | P1 | M25-AC-034；D3-AC-49 | ADR-165 |
 | M25-FR-161 | 离线模式读取公开世界包外观层（world 帧 `appearance.glb` 或事件舞台裁剪子集）与可选磁带，按调用方位姿与时刻渲染；不依赖 dmax、bench-api 与 sim-core | P0 | P1 | M25-AC-034 | AWR-05 §5.4.9 |
@@ -427,6 +430,7 @@ t_row(i)    = t_mid + (i − (H − 1)/2) · T_ro / H                    第 i �
 - 每个 `(b, j)` 的机体位姿、云台角与演员状态各自在该时刻求值；RGB 在线性域对 S 个子帧取平均；子帧时刻以 float64 计算后取整到纳秒。
 - 渲染次数为 `B · S`（颜色）加 `B`（真值层，S 为偶数或 S > 1 时单独一遍）；行带以 scissor 限定行范围。
 - 在线闭环缺省 S = 1、B = 1；离线高质量档缺省 S = 4，`T_ro > 0` 时 B = 8。
+- v1.1：`rs_method = vertex`（缺省）时不按行带分次绘制，B 只用于真值层的采样时刻登记与 `bands` 参照实现；逐顶点行时刻投影的算法见 §15.4（M25-FR-182）。
 
 依据：r10 §3.2（RotorPy 取步末瞬时位姿使 30 Hz 实得 25 Hz）、§4.5；AWR-05 §5.4.3 时间行与 RV-26。
 
@@ -589,6 +593,8 @@ class FrameMeta:                           # 内部字段，进入 frame.v1 的 
     backend: str; renderer_version: str; fx_version: str
     lidar_model_version: str | None; reflectance_model: str | None
     appearance: Literal["mesh", "3dgs"]; noise_tier: str; noise_table_version: str
+    appearance_source: Literal["mesh", "aerial", "mesh_distilled", "generative"]  # v1.2，FR-194
+    appearance_version: str | None         # v1.2：外观层 provenance.json 的 sha256；appearance = mesh 时为 None
     encoder: str | None; gpu_model: str | None; driver: str | None
     payload_sha256: dict[str, str]         # 每个载荷字段的 sha256（交付字节）
     render_ms: float; queue_ms: float      # 只用于指标，不参与确定性比较
@@ -697,7 +703,7 @@ def render_camera_frame(ctx, sess, req) -> tuple[CameraObsInt, CameraTruth]:
 | 深度偏置 | 演员片元参与深度测试的值朝相机偏置 1 cm，消除脚底与地面的深度并列；平面深度附件写无偏置值 |
 | 骨骼动画（P1） | 磁带侧车给出动画片段与相位，顶点着色器 LBS（人约 5k 顶点 × 20 关节，每帧微秒级）；LiDAR 侧以合并网格 refit 跟随（§6.8.3） |
 | 外观域差 | 演员纹理按与背景同等有效 GSD 施加 mip 偏置（`lod_bias = log2(texel_bg / texel_actor)`，上限 2），减少"过于锐利"的域差（r3 §5.4） |
-| 资产 | P0 为 CesiumMan、CesiumMilkTruck、Fox（CC-BY-4.0 或 CC0，逐项登记）；P1 起采购或制作带骨骼动画的人物与车辆（Q-D3-08） |
+| 资产 | P0 为 CesiumMan、CesiumMilkTruck、Fox（CC-BY-4.0 或 CC0，逐项登记）；P0b 起（v1.1 由 P1 前移）使用外观库 `appearance_lib@1` 中带骨骼动画、外观可区分的人物与车辆（§15.7）（Q-D3-08） |
 
 #### 6.4.5 接地阴影
 
@@ -1195,20 +1201,20 @@ ROS1 字节拼装沿用 r4 `custom_msg_ros1_fast`（2 万点 1.0 ms，与 `rosba
 | N1（负向） | 删除无回波点的 bag 被拒绝（642，原因"livox_zero_points_missing"） |
 | N2（负向） | IMU 加速度改为 m/s² 的 bag 被拒绝（642） |
 
-### 6.12 3DGS 外观层（P3）
+### 6.12 3DGS 外观层（P3；v1.2 按 ADR-187 修订；v1.3 定稿为结论 C0）
 
 | 项 | 规定 |
 |---|---|
-| 适用 | 只对真实航拍重建资产（同一批影像同时产出网格与 3DGS，共享相机位姿）启用；不从 GLB 网格训练 3DGS 用于产品观测 |
-| 资产 | 世界包可选层 `visual/mesh/gaussian/`（`spz@2` 或 `KHR_gaussian_splatting`），按瓦片组织，带瓦片包围盒与 `scene_scale` |
+| 适用 | 来源 `appearance_source`：`aerial`（真实航拍重建资产，同一批影像同时产出网格与 3DGS，共享相机位姿；唯一可经榜单版本登记进入排名运行的 3DGS 来源）；`mesh_distilled`（网格蒸馏 3DGS，只作外观层基础设施验证与非排名运行，不宣称更真实）；`generative`（研究工具，只在研究世界中出现，ADR-187）。不从 GLB 网格训练 3DGS 用于产品观测 |
+| 资产 | 世界包可选层 `visual/gaussian/`（v1.2 与 M22 统一目录名；`spz@2` 或 `KHR_gaussian_splatting`），按 M22-FR-081 的外观瓦片组织，带瓦片包围盒、`scene_scale` 与出处清单 `provenance.json` |
 | 渲染 | 网格通道照常执行（深度、实例、语义、质量位、无遮挡实例、可见度）；另以 gsplat `rasterization(..., render_mode="RGB")` 渲染静态背景颜色（批量 B = 8 最优，r10 §3.6） |
-| 合成（C3） | 实例 ≠ 0 的像素取网格演员颜色；实例 = 0 且有静态几何的像素取 3DGS 颜色（3DGS 累计不透明度 < 0.5 时回退网格颜色并在 `FrameMeta` 计数）；天空像素在 3DGS 不透明度 ≥ 0.5 时取 3DGS 颜色；演员轮廓 1 px 内按 3DGS alpha 与网格覆盖率混合 |
+| 合成（C3-G，v1.2） | 实例 ≠ 0 的像素取网格演员颜色；实例 = 0 且有静态几何的像素在 3DGS 累计不透明度 ≥ 0.5 且位于外观层覆盖多边形内时取 3DGS 颜色，否则回退网格颜色并在 `FrameMeta` 计数；天空像素在 3DGS 不透明度 ≥ 0.5 时取 3DGS 颜色，否则取背景色；演员轮廓 1 px 内按 3DGS alpha 与网格覆盖率混合；动态实体阴影在 3DGS 颜色上按网格深度衰减；3DGS 期望深度不参与遮挡、可见度与标签；LiDAR 与热成像不读 3DGS（M25-FR-198） |
 | 后续效果链 | 与网格外观完全相同（§6.5），因此切换 `appearance` 只改变 RGB 字节 |
 | 互操作 | GL 颜色与 gsplat 输出经 CUDA-GL 互操作共享（不经主机内存）；无互操作时退回读回路径并记录 |
-| 瓦片驻留 | 视锥内瓦片与其 8 邻接瓦片同时驻留；worker 内 3DGS 显存预算缺省 8 GB，LRU 换入；训练窗口外不训练 |
-| 配准验收工具 | `python -m awr.sensorsvc.gs.register_check <world>`：在覆盖区随机 1,000 个视点渲染网格平面深度与 3DGS 期望深度，残差中位数 ≤ 5 cm 才允许入包（ADR-141） |
+| 瓦片驻留 | 视锥内瓦片与其 8 邻接瓦片同时驻留；worker 内 3DGS 显存预算缺省 8 GB，LRU 换入；训练窗口外不训练。v1.2 估算：每 128–150 m 子瓦片 4M 高斯（SH0 约 0.26 GB），AGL 60 m 斜视约 9–16 个子瓦片同时驻留，约 2.3–4.1 GB（r11 §7.4，M25-FR-199） |
+| 配准验收工具 | `python -m awr.sensorsvc.gs.register_check <world>`：在覆盖区随机 1,000 个视点渲染网格平面深度与 3DGS 期望深度；v1.2 按来源分档判定（M22-FR-077、AWR-05 §6.4.4）：`aerial` 残差中位数 ≤ 5 cm（ADR-141），`mesh_distilled` 与 `generative` 相对残差中位数中空 ≤ 0.5%、低空 ≤ 1.5%；另检查天空方向不透明度 > 0.5 的像素占比 ≤ 0.1% |
 | 缺失 | Run 规格 `appearance = 3dgs` 而世界无 3DGS 层时，会话打开失败（643） |
-| 吞吐 | 720p 混合着色 ≥ 150 帧/s（≤ 8M 高斯，D3-AC-41）；依据 r10 §3.6（4M 高斯 184 帧/s，以期望深度判遮挡的原型） |
+| 吞吐 | 720p 混合着色 ≥ 150 帧/s（≤ 8M 高斯，D3-AC-41），v1.2 增加 1080p 卷帘 ≥ 60 帧/s，口径为"C3-G + 卷帘 + ISP"全链路；依据 r10 §3.6（4M 高斯 184 帧/s，以期望深度判遮挡的原型）与 r11 §4.5（gsplat 单视角 4M 高斯 720p 291 帧/s、1080p 225 帧/s，未含网格遍与 ISP） |
 
 ### 6.13 T0 特征级（P1，不排名开发运行）
 
@@ -1247,7 +1253,7 @@ ROS1 字节拼装沿用 r4 `custom_msg_ros1_fast`（2 万点 1.0 ms，与 `rosba
 | `rigs` | 每机 `RigSpec`（§6.3.3）；校验失败 649 |
 | `run_seed` | 64 位整数，只在内存中保存；不回显 |
 | `t0_ns` | 回合零点 |
-| `appearance` | `mesh` 或 `3dgs`（643） |
+| `appearance` | `mesh` 或 `3dgs`（643）；`3dgs` 另带 `appearance_source ∈ {aerial, mesh_distilled, generative}`；`ranked = true` 时只接受 `mesh`，P3 起经榜单版本登记可接受 `aerial`（v1.2，ADR-187） |
 | `outputs` | 每传感器输出集合 |
 
 会话只引用世界与动态源，不复制；同一 worker 上多个会话共享同一世界的 GPU 资源。
@@ -1255,7 +1261,7 @@ ROS1 字节拼装沿用 r4 `custom_msg_ros1_fast`（2 万点 1.0 ms，与 `rosba
 #### 6.14.3 合批
 
 ```text
-合批键 = (world_content_version, dynamic_source_id, backend, appearance, W×H, outputs, t_ns)
+合批键 = (world_content_version, dynamic_source_id, backend, appearance, appearance_source, appearance_version, W×H, outputs, t_ns)（v1.2 增加外观来源与版本）
   t_ns 为采样时刻（全局快门为 t_mid；运动模糊为子帧时刻；卷帘为行带时刻）
 同键请求共享一次演员状态求值与上传（骨骼蒙皮、实例变换）；不同 t_ns 一律不共享
 GL 路径：同一上下文内按批顺序绘制到纹理数组的不同层，效果链与读回对整批执行
@@ -1519,8 +1525,8 @@ sequenceDiagram
 
 | 类别 | 参数 | 缺省值 | 单位 | 依据 |
 |---|---|---|---|---|
-| 相机 `cam0` | 分辨率、HFOV | 1280 × 720、60.23°（机型 `eo` 槽位 GX40，4.8 mm；fx = fy = 1103.45，cx = 640，cy = 360） | px、度 | AWR-20 §15.6.1；AWR-05 §5.4.2（v1.2） |
-| | 帧率、曝光、读出 | 10；目录相机按事件起点照度取 1 ms（日间）或 33.3 ms（夜间），运行内恒定，无目录相机（`from_hfov`）缺省 8 ms；0（全局快门） | Hz、s | AWR-20 §15.6.2；AWR-05 §5.4.2（v1.2） |
+| 相机 `cam0` | 分辨率、HFOV | `rgb720-gs` 档 1280 × 720、60.23°（机型 `eo` 槽位 GX40，4.8 mm；fx = fy = 1103.45，cx = 640，cy = 360）；v1.1 标准轨为 `rgb1080-rs` 档 1920 × 1080（fx = fy = 1655.17，cx = 960，cy = 540） | px、度 | AWR-20 §15.6.1、§15.16；AWR-05 §5.4.2（v1.3） |
+| | 帧率、曝光、读出 | 10；目录相机按事件起点照度取 1 ms（日间）或 33.3 ms（夜间），运行内恒定，无目录相机（`from_hfov`）缺省 8 ms；读出：`rgb720-gs` 0（全局快门），`rgb1080-rs` 0.020 s（`rs_method = vertex`） | Hz、s | AWR-20 §15.6.2、§15.16；AWR-05 §5.4.2（v1.3） |
 | | near、far | 0.3、3000 | m | ADR-140 |
 | | 子帧、行带 | 1、1（离线高质量档 4、8） | — | 本文设定 |
 | | 阴影 | `contact` | — | ADR-140 |
@@ -1984,6 +1990,9 @@ tests/d3/{sensors,lidar,slam,camera_pkg,rotorpy,gs}/                    # 测试
 
 ### 9.5 实施顺序与工作包
 
+> v1.1 说明：本节周次与阶段为 v1.0 排期；v1.1 起阶段归属以 §2.1 与 §15.2 为准（卷帘、1080p、网格 LiDAR 与 IMU 在 P0a；热成像、外观库与 LBS 在 P0b），周次以 AWR-05 v1.3 §10.7 为准。
+
+
 | 条目 | 内容 | 人周 | 周次（4 人排期） | 依赖 | 工作包 |
 |---|---|---|---|---|---|
 | S0 | 契约草案三件、P-1 相机吞吐 spike、CPU 与 GPU 逐射线差异、逐点位姿 ATE 比值 | 计入 WP-D3-01、03 | 第 1–3 周 | r3、r4、r10 原型 | WP-D3-01、03 |
@@ -2172,3 +2181,281 @@ tests/d3/{sensors,lidar,slam,camera_pkg,rotorpy,gs}/                    # 测试
 | 22 | AWR-05 §5.4.2 `objects[]` | `px_unoccluded` 未说明其他演员是否算遮挡物 | 按 r3 §5.3 定义为"只渲染演员时的像素集合"（演员间遮挡同时计入分子分母），演员间遮挡另由 `occluder_sem_px` 中的演员类别码给出 | §6.6.1 |
 | 23 | AWR-05 §5.4.2 `frame.v1` | 为满足可见度与审计需要，`ground_truth` 需增加 `instance_unocc`、`bbox_unocc_xywh`、`objects[].flags`（截断）与 `timing`（真值采样时刻），`internal` 需增加 `derived` | 契约 1.3.0 采纳上述只增字段 | §7.2.1 |
 | 24 | AWR-05 §5.4.7 合批行 | "不满批时最多等待 20 ms"若用于锁步一次性提交，会给每个 tick 增加 20 ms 墙钟 | 注明等待只适用于流式提交（`more = true`）；锁步一次性提交立即成批 | §6.14.3 |
+
+---
+
+## 15. D3-REV 修订（v1.1，依据 AWR-05 v1.3）
+
+### 15.1 修订依据与摘要
+
+依据用户 2026-10-12 交互式确认的设计决定 R-D3-47（相机第一阶段增加卷帘快门、热成像与 1080p 多机输出）、R-D3-42（第一批四类事件，含可区分外观的人物外观库）、R-D3-44（gz-sim 为 P0 缺省档，两档共用传感器服务）、R-D3-48（最小基准闭环）与 R-D3-51（高斯外观层评估），以及 AWR-05 v1.3 的 ADR-175、ADR-179、ADR-180、ADR-181、ADR-186。本节与 §0、§2、§4 的"阶段"列、§6.2.3 与 §6.20 的同步修订一起构成 v1.1。
+
+### 15.2 阶段对照（v1.0 → v1.1）
+
+| 范围 | v1.0 | v1.1 |
+|---|---|---|
+| 网格 LiDAR、`lidar_frame.v2`、IMU 合成与噪声（FR-005、024、025、070 至 078、081、090、091、096） | P0b | P0a |
+| gz-sim 适配（FR-141） | P2 | P0a |
+| 卷帘快门逐顶点实现、1080p GPU 编码（新增 FR-182 至 184） | — | P0a |
+| 雨、投影阴影图、自动曝光、交互预览（FR-035、046、047、062、129 的相应部分） | P0a | P0b |
+| 热成像（新增 FR-185 至 190） | 不做 | P0b |
+| 外观库与 LBS（FR-034 的 P1 部分、新增 FR-191、192） | P1 | P0b |
+| 3DGS 外观层（FR-150 至 153） | P3 | P3（决策门通过时 P1；v1.2 按 ADR-187 修订，见 §16.4） |
+| 高斯外观层评估工具（新增 FR-193、194） | — | P0b |
+
+### 15.3 相机档位与吞吐目标
+
+| 档位 | 分辨率与快门 | 用途 | 晴天档 | 最坏档 | 应交付目标 | 会话显存（每机） |
+|---|---|---|---|---|---|---|
+| `rgb720-gs` | 1280 × 720，全局快门 | 开发运行、Fast 档、交互预览参考 | ≥ 120 帧/s | ≥ 80 帧/s | ≥ 200 / ≥ 120 帧/s | ≤ 0.15 GB |
+| `rgb1080-rs` | 1920 × 1080，卷帘读出 20 ms，`rs_method = vertex` | 标准轨 Agent 相机 | ≥ 60 帧/s | ≥ 40 帧/s | ≥ 90 / ≥ 60 帧/s | ≤ 0.25 GB |
+| `therm512` | 640 × 512，长波红外，辐射测温 | 标准轨热成像 | ≥ 300 帧/s（单档） | — | ≥ 500 帧/s | ≤ 0.06 GB |
+
+测量条件：独占 A40、单 Worker、crop 世界、全输出含真值与可见度、编码与落盘，10 min 持续；数值为暂定，P-1 由 WP-D3-03 实测后以 ADR 冻结（D3-AC-11）。标准轨会话（3 机 × `rgb1080-rs` + 3 × `therm512` + 3 × MID-360）显存 ≤ 1.2 GB，最坏档 GPU 时间约 0.85 GPU·s/仿真 s。
+
+### 15.4 卷帘快门：逐顶点行时刻投影（M25-FR-182）
+
+```text
+输入：读出窗口 [t_mid − T_ro/2, t_mid + T_ro/2] 内相机位姿节点 N_c = 9 个（由 PoseHistory 与云台采样插值，lerp + slerp，uniform 数组）；
+      每个演员在窗口首末两个时刻的位姿（实例缓冲，线性插值）；行时刻函数 t_row(y) = t_mid + (y − (H − 1)/2) · T_ro / H
+顶点着色器（每顶点，静态网格演员同理，演员先按其时刻插值得到世界坐标）：
+  t ← t_mid
+  for it in 1..2:                         # 2 次不动点迭代
+      P ← camera_pose(t)                  # 节点表插值
+      (x, y) ← project(P, X_world)        # 无畸变域像素坐标
+      t ← t_row(clamp(y, 0, H − 1))
+  输出 clip = project_clip(camera_pose(t), X_world)，并把 t 写入插值变量供真值层记录
+片元着色器：深度、实例、语义与颜色同一遍写出；reversed-Z 不变
+```
+
+- 适用条件与误差：恒速平移与恒角速度下 2 次迭代后的行时刻误差 < 1 µs；三角形内部按屏幕空间仿射插值，单个三角形跨越的行数受网格边长与距离限制，验收以 Warp 逐行射线参照衡量（D3-AC-60：8 m/s 平移叠加 90°/s 偏航、读出 20 ms，1080p 重投影误差 p99 ≤ 0.5 px）。
+- 运动模糊：子帧 j 的时刻偏移叠加在每行时刻上（`t_sub = t_row + Δ_j`），子帧数为 S 时绘制 S 次。
+- 参照实现 `rs_method = bands`：按 §6.2.3 以 B 条行带逐带绘制，只用于回归对拍。
+- 真值：实例、语义与可见度来自同一遍输出，与交付 RGB 的几何一致；`ground_truth.timing` 记录 `rs_method`、`N_c` 与每帧读出窗口。
+- 畸变：卷帘几何在无畸变域生成，随后与其他输出共用同一畸变映射（FR-036）。
+
+### 15.5 1080p 多机输出：编码与存储（M25-FR-183、184）
+
+- `rgb1080-rs` 的 RGB 一律经 nvImageCodec / nvJPEG 在 GPU 编码（质量 90，4:2:0），渲染与编码两条 CUDA 流重叠；在线路径禁止 CPU 编码，CPU 回退编码器只用于 CI。
+- 读回采用固定页内存异步拷贝；每会话预分配 2 组读回缓冲（双缓冲），避免多机同 tick 的缓冲争用。
+- 体积口径（估，P-1 实测冻结）：单帧 0.6–0.8 MB，每机·分钟 @ 10 Hz 约 360–480 MB；评测运行的帧字节交付后只保留逐帧摘要（M27 `ranked_eval`），M25 为每帧提供 `delivered_sha256` 与字节数。
+
+### 15.6 热成像（M25-FR-185 至 190；AWR-05 §5.4.10）
+
+**数据模型**
+
+```python
+@dataclass(frozen=True)
+class ThermalModel:                      # python/awr/sensorsvc/thermal/model.py（可打包核心）
+    width: int = 640; height: int = 512
+    fx: float; fy: float; cx: float; cy: float
+    band_um: tuple[float, float] = (8.0, 14.0)
+    fps: str = "10"
+    tau_bolometer_s: float = 0.010       # 微测辐射热计时间常数
+    lag_subframes: int = 4               # 帧窗口内加权子帧数
+    optics_sigma_px: float = 0.6
+    netd_mk_300k: float = 50.0           # 标称 NETD（300 K，F1.0）；数值以 AWR-20 §15.6.5 为单一真源
+    fpn_offset_k: float = 0.10; fpn_gain_frac: float = 0.005
+    quant_k: float = 0.01                # u16 输出量化步长
+    codec: Literal["radiometric_u16", "agc_jpeg"] = "radiometric_u16"
+```
+
+**管线**（单独一遍 640 × 512 MRT，几何与实例缓冲与可见光共用）
+
+1. 光栅化输出：表面温度与发射率（RG16F）、平面深度（R32F）、实例（R16UI）、语义（R8UI）、法向竖直分量（R8 SNORM，由片元导数求平面法向）。
+2. 静态表面温度：`T_s = T_air + ΔT_base(c) + s · ΔT_sun(c) · max(0, sin h) + (1 − cloud) · ΔT_night(c) · [h < 0] − wet · ΔT_wet(c)`；c 为三角形语义类别（`gl_PrimitiveID` 查表），s 为 `thermal_static.npz` 中该三角形的日照可见度。
+3. 动态实体：每个实例一组 uniform（温度、发射率；外观库带材质分区时按分区取值），车辆发动机与排气分区的温度由磁带状态推导的 `engine_on` 与熄火时长按 τ = 600 s 指数回落计算。
+4. 辐射换算（后处理计算着色器）：`L_obj = ε·B(T_s) + (1 − ε)·[w_sky·B(T_sky) + (1 − w_sky)·B(T_air)]`，`w_sky = clamp(n_z, 0, 1)`；无几何像素取 `B(T_sky)`；`L_sensor = τ(d)·L_obj + (1 − τ(d))·B(T_air)`；B 为 8–14 µm 波段积分 Planck 辐亮度查找表（200–400 K，0.01 K 步长，float32，构建期生成并记录 sha256）。
+5. 探测器：帧窗口内 S = 4 个子帧按 `w_j ∝ exp(−(t_end − t_j)/τ_b)` 加权（子帧各自取机体、云台与演员位姿）；高斯光学模糊 σ = 0.6 px；表观温度 `T_app = B⁻¹(L_sensor)`；时间噪声 `σ_T(T) = NETD_300 · (dB/dT|300 K)/(dB/dT|T)`；固定图案噪声偏置与增益按 `(run_seed, uav, sensor)` 抽样、运行内固定；量化到 0.01 K 写入 u16（`temp_ck = round(T_app[K] × 100)`，饱和于 [0, 65535]）。
+6. 真值：`objects[]` 增加 `dT_app_k`（实体可见像素表观温度中位数减去其外接 3 px 环带的中位数）；实例与语义同可见光规则；表面温度与发射率真值图只在 `render_offline` 中输出。
+
+**参数表 `thermal_table_v1`**（置信度 D，P0b 核对后冻结；数值单位 K，相对 `T_air`）
+
+| 类别（`d3-semantic@1`） | ΔT_base | ΔT_sun | ΔT_night | ΔT_wet | ε |
+|---|---|---|---|---|---|
+| 路面 | +1.0 | +12.0 | −1.0 | 1.0 | 0.95 |
+| 地面 | +0.5 | +8.0 | −2.0 | 0.8 | 0.93 |
+| 建筑立面 | +0.5 | +6.0（乘入射余弦） | −1.0 | 0.5 | 0.92 |
+| 屋顶 | +1.0 | +15.0 | −4.0 | 1.5 | 0.90 |
+| 植被 | −1.5 | +3.0 | −2.0 | 0.5 | 0.98 |
+| 水体 | −2.0 | 0.0 | +1.0 | 0.0 | 0.96 |
+| 其他与未知 | 0.0 | +4.0 | −1.5 | 0.5 | 0.93 |
+
+**大气消光**：`β = β_clear(rh) + β_fog + β_rain`（km⁻¹）；暂定 `β_clear = 0.02 + 0.06 · rh`，`β_fog = 0.5 · 3.912 / V_km`（V 为能见度），`β_rain = 0.25 · R^0.63`（R 为雨强 mm/h）；系数在 P0b 以文献值核定后冻结，形式不变。
+
+**`thermal_bake` 作业**：按（世界 `contentVersion`、事件 `content_sha256`）以 Warp 对静态网格逐三角形质心向事件起点太阳方向（M07 太阳位置）求交，输出 `thermal_static.npz`（u8 日照可见度，0–255）；事件时长 ≤ 1 h 时只计算一次；产物 sha256 写入运行清单；同镜像同型号 GPU 逐字节一致。
+
+**随机流**：流 22 `sensor_gen` 增加通道 `therm_temporal`（键 `(run_seed, 22, uav_no, frame_index, ch)`）与 `therm_fpn`（键 `(run_seed, 22, uav_no, 0, ch)`，每像素以像素序号作为子键）。
+
+### 15.7 外观库与骨骼动画（M25-FR-191、192）
+
+- 外观库 `appearance_lib@1` 的人物与车辆资产以 glTF 2.0 入库，附骨骼与动画片段（行走、站立、交接动作、上下车；车辆的车轮旋转与转向），材质按可见光与热成像分区（皮肤、衣物、发动机、排气、车身）。
+- 渲染：磁带动画侧车给出每个演员的片段与相位，顶点着色器做线性混合蒙皮（LBS，每顶点 ≤ 4 骨骼，骨骼矩阵经 SSBO 传入）；卷帘逐顶点投影对蒙皮后的世界坐标执行；LiDAR 对带动画实体以合并网格 refit（FR-073）。
+- 参考外观图：每个外观以标准姿态、标准光照与 3 个视角（正面、侧面、俯视 45°）离线渲染为 256 × 512 图，作为任务简报的非真值内容（M23、M26）；外观嵌入只用于门 1 的可区分性校验与评测诊断，不下发 Agent。
+
+### 15.8 高斯外观层评估支持（M25-FR-193、194；AWR-05 §6.4）
+
+- 评估工具 `tools/bench/d3/gs_eval.py`：对给定世界与外观层，在指定视角集上计算 G1（期望深度与网格深度残差、边缘 F 值）、G2（相邻帧网格深度重投影光度误差与亮度方差）、G3（语义分割 mIoU 降幅，分割模型由评估配置指定）、G5（`ref_det_v1` 在演员合成于两种背景上的 AP 差）与 G6（C3 合成吞吐，含卷帘与 ISP）；G4（KID）与 G7、G8 由评估报告引用并行实验的结果。
+- C3 合成与卷帘：3DGS 颜色按与网格相同的读出窗口取 N_c 个相机节点，以行带近似（16 带）或逐像素时刻查表合成，二者在评估中都给出吞吐与误差；结论写入决策备忘。
+- 外观来源标注：`FrameMeta.appearance_source ∈ {mesh, aerial, mesh_distilled, generative}`（v1.2 增加 `mesh_distilled`），进入运行清单与数据集元数据。
+
+### 15.9 新增功能需求
+
+| 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
+|---|---|---|---|---|---|
+| M25-FR-182 | 卷帘快门缺省 `rs_method = vertex`：逐顶点行时刻投影（2 次不动点迭代，相机位姿 9 节点，演员位姿首末线性插值），颜色、深度、实例、语义同一遍输出；`bands` 为参照实现；验收以 Warp 逐行射线参照衡量 | P0 | P0a | M25-AC-046 | ADR-179 |
+| M25-FR-183 | `rgb1080-rs` 档：1920 × 1080，读出 20 ms，在线路径 GPU 编码（nvJPEG 质量 90），双缓冲读回；交付字节即存档字节，并为每帧提供 `delivered_sha256` 与字节数 | P0 | P0a | M25-AC-047 | ADR-179 |
+| M25-FR-184 | 相机档位登记：`BackendCapsV2.profiles` 声明 `rgb720-gs`、`rgb1080-rs`、`therm512` 的分辨率、快门与吞吐等效系数，`estimate()` 按档位折算 GPU 时间与显存（§15.3） | P0 | P0a | M25-AC-047 | ADR-178 |
+| M25-FR-185 | 热成像输出族：`ThermalModel`、单独一遍 MRT、静态表面温度、动态实体温度、发射率、反射环境辐射、大气透过、探测器时间常数、光学模糊、NETD 时间噪声与固定图案噪声、u16 量化（§15.6） | P0 | P0b | M25-AC-048 | ADR-180 |
+| M25-FR-186 | `thermal_table_v1` 与大气消光参数版本化，版本号写入 FrameMeta、运行清单与榜单版本；修改即新版本 | P0 | P0b | M25-AC-048 | ADR-180 |
+| M25-FR-187 | `thermal_bake` 作业生成 `thermal_static.npz`，按（世界版本、事件版本）缓存，sha256 进入运行清单 | P0 | P0b | M25-AC-048 | ADR-180 |
+| M25-FR-188 | 热成像真值：`objects[].dT_app_k`、实例与语义；表面温度与发射率真值图只由 `render_offline` 输出 | P0 | P0b | M25-AC-049 | ADR-180 |
+| M25-FR-189 | 热成像交付：`ThermalObs.temp_ck`（u16 + zstd，交付字节即存档字节）；`therm_codec = agc_jpeg` 只用于开发运行与预览；排名运行只允许 `radiometric_u16` | P0 | P0b | M25-AC-049 | ADR-161 |
+| M25-FR-190 | 热成像确定性：同镜像同型号 GPU 逐字节一致；随机数取流 22 的 `therm_temporal` 与 `therm_fpn` 通道 | P0 | P0b | M25-AC-048 | ADR-171 |
+| M25-FR-191 | 外观库渲染：glTF 骨骼资产、LBS（≤ 4 骨骼/顶点）、材质分区（可见光与热成像）、动画相位取自磁带侧车 | P0 | P0b | M25-AC-050 | ADR-181 |
+| M25-FR-192 | 参考外观图：每个外观 3 个视角、256 × 512、标准姿态与光照的离线渲染，产物进入事件简报（非真值）；外观嵌入只用于门 1 与评测诊断 | P0 | P0b | M25-AC-050 | ADR-181 |
+| M25-FR-193 | 高斯外观层评估工具 `gs_eval.py` 计算 G1、G2、G3、G5、G6（§15.8；v1.2 按 G-3DGS v2 实现，见 FR-200） | P1 | P0b | M25-AC-051、055 | ADR-186、ADR-187 |
+| M25-FR-194 | 外观来源标注 `appearance_source ∈ {mesh, aerial, mesh_distilled, generative}`（v1.2 增加 `mesh_distilled`）写入 FrameMeta、运行清单与数据集元数据；`mesh_distilled` 与生成式来源的帧不得标注为真实影像 | P0 | P0b | M25-AC-051 | ADR-186、ADR-187 |
+| M25-FR-195 | Realistic 档为缺省：`PoseTap` 写入的 PoseHistory（250 Hz）为 P0a 的主要位姿来源，Fast 档在 P0b 以同一会话协议接入；同一 PoseHistory 在两档下的 M25 输出逐字节相同 | P0 | P0a、P0b | M25-AC-052 | ADR-176 |
+| M25-FR-196 | 评测运行支持：会话 `open` 增加 `ranked_eval = true` 标志；此时 M25 不额外保留帧副本，只向写入器交付帧与 `delivered_sha256`，真值层按 M27 `truth_min` 规则输出（`objects[]` 全量，实例图只在 M27 请求的证据帧上按 `render_offline` 重建） | P0 | P0b | M25-AC-053 | ADR-163 v1.3 |
+| M25-FR-197 | 会话显存预算：标准轨会话 ≤ 1.2 GB，超出时 `open` 返回 647 `SENSOR_GPU_UNAVAILABLE` 并由 M27 排队；显存占用写入 `/phys/tick_stats` 的 M25 分项 | P0 | P0a | M25-AC-047 | ADR-178 |
+
+### 15.10 新增非功能需求
+
+| 编号 | 需求 | 验收 | 说明 |
+|---|---|---|---|
+| M25-NFR-13 | `rgb1080-rs` 晴天档 ≥ 60、最坏档 ≥ 40 帧/s；`therm512` ≥ 300 帧/s（暂定，P-1 实测冻结）；在线闭环 1080p 单帧时延 p99 ≤ 80 ms | M25-AC-047、048；D3-AC-11 | 相机档位吞吐 |
+| M25-NFR-14 | 标准轨单 Run（最坏档）在 Worker 独占时传感器实时因子 ≥ 1.0；3 个并发正式 Run 各 ≥ 0.35 | M25-AC-047 | 标准轨产能 |
+| M25-NFR-15 | 热成像辐射换算往返误差 ≤ 0.01 K；无噪声表观温度误差 ≤ 0.05 K（构造平板） | M25-AC-048 | 热成像精度 |
+| M25-NFR-16 | 外观库 LBS 每帧额外开销 ≤ 0.5 ms（720p，≤ 64 个带骨骼实体） | M25-AC-050 | 动画开销 |
+
+### 15.11 新增验收
+
+| 编号 | 阶段 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
+|---|---|---|---|---|---|---|
+| M25-AC-046 | P0a | 卷帘几何 | 8 m/s 平移叠加 90°/s 偏航、读出 20 ms、1080p：逐顶点方法的标记顶点像素位置相对 Warp 逐行射线参照 p99 ≤ 0.5 px，行带方法（16 带）≤ 1.5 px；静止机体时卷帘与全局快门输出逐字节一致；深度、实例、语义与 RGB 边缘对齐 ≤ 0.5 px | `tests/d3/sensors/test_rolling_shutter.py` | dmax（单卡） | 60 |
+| M25-AC-047 | P0a | 1080p 与相机档位 | 3 机 × 1080p @ 10 Hz：在线路径无 CPU 编码调用，交付与存档 sha256 一致；会话显存 ≤ 1.2 GB；`estimate()` 按档位折算误差 ≤ 15%；`rgb1080-rs` 吞吐在共享卡上测量并登记（正式验收在 P0b 独占卡） | `tests/d3/sensors/test_1080p.py`、`camera_throughput.py` | dmax | 11、60 |
+| M25-AC-048 | P0b | 热成像物理与噪声 | D3-AC-61 的辐射、发射率、透过、NETD、固定图案噪声与动态实体用例全部通过；`thermal_bake` 同镜像同型号 GPU 两次逐字节一致；参数表版本写入清单 | `tests/d3/sensors/test_thermal.py` | dmax | 61 |
+| M25-AC-049 | P0b | 热成像交付与真值 | `ThermalObs` 通过 `bench/obs.v1` 校验；交付字节即存档字节；`dT_app_k` 与解析构造值差 ≤ 0.1 K；排名运行请求 `agc_jpeg` 被拒绝 | `tests/d3/sensors/test_thermal_obs.py` | dmax | 61、16 |
+| M25-AC-050 | P0b | 外观库与 LBS | 24 个人物外观与 8 个车辆外观可渲染；行走动画的足部与 NavMesh 贴地误差 ≤ 3 cm；参考外观图生成并进入简报；LBS 开销达标 | `tests/d3/sensors/test_appearance.py` | dmax | 62 |
+| M25-AC-051 | P0b | 高斯外观层评估工具 | `gs_eval.py` 对网格外观自身运行时 G1 残差 0、G2 比值 1.0；对样例 3DGS 外观输出全部指标并写入报告；`appearance_source` 正确标注 | `tests/d3/gs/test_gs_eval.py` | dmax | 64 |
+| M25-AC-052 | P0a、P0b | 两档共用 | P0a：Realistic 档 PoseHistory 驱动的 3 机输出满足 D3-AC-09、10；P0b：同一 PoseHistory 分别经两档会话协议送入时输出逐字节相同 | `tests/d3/sensors/test_tiers.py` | dmax | 35 |
+| M25-AC-053 | P0b | 评测运行支持 | `ranked_eval` 会话不产生额外帧副本；证据帧实例图重建与原实时输出逐字节一致（同镜像同型号 GPU） | `tests/d3/sensors/test_ranked_eval.py` | dmax | 22 |
+
+### 15.12 D3-AC 映射变更
+
+| D3-AC | v1.0 中 M25 的阶段 | v1.1 | 说明 |
+|---|---|---|---|
+| D3-AC-11 | P0a | P0b | 按相机档位分列阈值 |
+| D3-AC-12、13 | P0b | P0b | LiDAR 采集已在 P0a 交付，并发与合同在 P0b 验收 |
+| D3-AC-56、60 | — | P0a | 最小基准闭环中的相机与 LiDAR；卷帘与 1080p |
+| D3-AC-61、62（外观部分）、64 | — | P0b | 热成像；外观库；高斯外观层评估 |
+
+---
+
+## 16. D3-SKY 修订（v1.2，依据 AWR-05 v1.4）
+
+> v1.3 定稿说明：本节中"方案 C1 确认时 P1"、"WP-D3-38"与"D3-AC-66、67"的陈述只作追溯；用户确认结论 C0、方案 C1 未采纳后的有效条款见 §17。
+
+### 16.1 修订依据与摘要
+
+依据 AWR-05 v1.4 并入的研究单元 r11（[r11-skyfall-gs.md](../research/d3/r11-skyfall-gs.md)）与 ADR-187。对本模块的影响：
+
+1. 生成式高斯外观首轮裁决为结论 C，维持研究工具：扩散模型与 Skyfall-GS 组件不进入 `sensorsvc` 镜像；`GsCameraBackend` 只需支持外观来源的标注与切换，不承担生成。
+2. 外观来源增加 `mesh_distilled`（网格蒸馏 3DGS）。方案 C1 经用户确认后，`GsCameraBackend`、C3-G 合成、瓦片驻留与外观切换（FR-150 至 153、198、199）以 `mesh_distilled` 为验证资产提前到 P1，真实航拍资产仍在 P3；方案 C0 下全部留在 P3。
+3. 合成规则 C3 补充为 C3-G（FR-198）；评估工具 `gs_eval` 按 G-3DGS v2 实现，增加航拍域幻觉目标审计与 KID 流程（FR-200）；外观来源与版本进入 FrameMeta、会话与合批键（FR-194、201）。
+4. 目录名统一：世界包高斯图层为 `visual/gaussian/`（v1.1 §6.12 误写为 `visual/mesh/gaussian/`）。
+
+### 16.2 新增功能需求
+
+| 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
+|---|---|---|---|---|---|
+| M25-FR-198 | C3-G 合成补充规则：静态像素只有在 3DGS 累计不透明度 ≥ 0.5 且位于外观层覆盖多边形内时取 3DGS 颜色，否则回退网格颜色并计数 `sensorsvc_gs_fallback_px_total`；天空像素不透明度 < 0.5 时取背景色；动态实体阴影在 3DGS 颜色上按网格深度衰减；3DGS 期望深度不参与遮挡、可见度与标签；LiDAR 反射率与热成像不读 3DGS；卷帘时 3DGS 颜色按行带（16 带）合成，逐像素时刻查表为可选实现，二者的误差与吞吐写入评估报告 | P0 | P3（v1.3 定稿） | M25-AC-054 | ADR-187；r11 §2.7 |
+| M25-FR-199 | 3DGS 驻留预算与容量估算：`estimate()` 按每子瓦片 4M 高斯（SH0 约 0.26 GB）与视锥覆盖的子瓦片数（AGL 60 m 斜视约 9–16 个）折算显存，超出 8 GB 缺省预算时 `open` 返回 647 并由 M27 排队；驻留与换入次数写入 `/phys/tick_stats` 的 M25 分项 | P1 | P3（v1.3 定稿） | M25-AC-054 | ADR-187；r11 §7.4 |
+| M25-FR-200 | `gs_eval` 按 G-3DGS v2（AWR-05 §6.4.4）实现：G1 按来源分档（绝对残差、相对残差、边缘 F 值）；G2 以同瓦片产物 A 为参照并输出绝对门限；G3 支持配置航拍域分割模型或以网格语义层投影为参照；G5 输出 `ref_det_v1` 的 AP 差与航拍域检测器的幻觉目标审计（相对网格渲染的每帧新增人与车辆检测数）；G4 在给定真实航拍参照集时计算 KID（特征提取器版本、子集大小与重采样种子固定）；G6 以"C3-G + 卷帘 + ISP"全链路计时；r11 的 `s4_eval.py`、`s5_gate.py` 为参照实现 | P1 | P0b（G4 的 KID 流程在参照集到位时启用） | M25-AC-055 | ADR-187；r11 §3.4、§7.5 |
+| M25-FR-201 | 外观来源与版本贯通：会话 `appearance_source` 与 `appearance_version`（外观层 `provenance.json` 的 sha256）进入 FrameMeta、运行清单与合批键；`ranked = true` 的会话只接受 `appearance = mesh`，P3 起经榜单版本登记可接受 `aerial`，其余返回 682（`why = ranked_appearance`，由 M27 校验，本模块在 `open` 时复核） | P0 | P0b（契约）；随 FR-150 交付 | M25-AC-054 | ADR-187 |
+
+### 16.3 新增验收
+
+| 编号 | 阶段 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
+|---|---|---|---|---|---|---|
+| M25-AC-054 | P3（v1.3 定稿） | C3-G 合成与外观切换 | 以 `mesh_distilled` 外观层（crop 事件舞台）运行：同一 Run 规格只改 `appearance` 时深度、实例、语义、可见度、热成像与 LiDAR 输出逐字节不变；实例掩膜与网格真值 IoU ≥ 0.999；天空方向不透明度 > 0.5 的像素占比 ≤ 0.1%；AGL 60 m 斜视飞越舞台全程回退像素占比 ≤ 1%（暂定）且驻留显存 ≤ 8 GB；"C3-G + 卷帘 + ISP" 720p ≥ 150 帧/s、1080p ≥ 60 帧/s（独占 A40）；FrameMeta 的 `appearance_source`、`appearance_version` 正确；`ranked = true` 会话请求 `mesh_distilled` 被拒绝（682） | `tests/d3/gs/test_c3g.py`、`tools/bench/d3/gs_throughput.py` | 独占 A40 | 41、66 |
+| M25-AC-055 | P0b | `gs_eval` v2 | 对网格外观自身运行时 G1 残差 0、G2 比值 1.0、幻觉目标审计新增检测 0；在 r11 保留的产物 A 与 b4 checkpoint 上复现 r11 §4.5 的 G1、G2、G6 指标（相对偏差 ≤ 5%）；给定参照集样本时 KID 流程同输入同种子两次结果一致 | `tests/d3/gs/test_gs_eval.py` | dmax | 64 |
+
+### 16.4 阶段对照（v1.1 → v1.2）
+
+| 范围 | v1.1 | v1.2（方案 C0，确认前缺省） | v1.2（方案 C1，用户确认后） |
+|---|---|---|---|
+| 生成式外观（`generative`） | P1（决策门通过时） | 研究工具，不进入本模块镜像 | 同左 |
+| `GsCameraBackend`、C3-G、驻留、切换、配准工具（FR-150 至 153、198、199） | P3（决策门通过时 P1） | P3 | P1（验证资产 `mesh_distilled`）；P3 只增加真实航拍资产的接入与配准验收 |
+| `gs_eval` 与外观来源标注（FR-193、194、200、201） | P0b | P0b | P0b；KID 流程随 WP-D3-38 参照集在 P1 启用 |
+
+M25 在方案 C1 下的工作量为 WP-D3-22（P1 部分）中的 2.0 人周（由 P3 前移）与 WP-D3-38 中 KID 流程的部分（AWR-05 §6.4.3）；方案 C0 下工作量与阶段不变。
+
+### 16.5 D3-AC 映射变更
+
+| D3-AC | v1.1 | v1.2 | 说明 |
+|---|---|---|---|
+| D3-AC-41 | P3 | P3 | C3-G 规则；外观来源三类 |
+| D3-AC-64 | P0b | P0b | `gs_eval` v2 与 G5 补测（M25-AC-055） |
+| D3-AC-66（方案 C1 确认后登记） | — | P1 | 网格蒸馏外观层的合成、切换、驻留与吞吐（M25-AC-054） |
+| D3-AC-67（方案 C1 确认后登记） | — | P1 | 真实航拍参照集的 KID 流程（M25-FR-200） |
+
+## 17. D3-FINAL 修订（v1.3，依据 AWR-05 v1.4 定稿）
+
+### 17.1 修订依据与摘要
+
+依据用户 2026-10-12 第二次交互式讨论确认的设计决定 R-D3-52（高斯外观层维持 P3，结论 C0，不采纳方案 C1）、R-D3-53（FLUX.1 [dev] 允许在内部研究中使用，许可解释由用户负责）、R-D3-55（真实航拍参照集只用公开数据集）与 R-D3-56（SuperSplat 系采纳项随高斯外观层移至 P3；M25 继续以 gsplat 为高斯渲染后端），以及 AWR-05 v1.4 的 ADR-188 至 ADR-190、ADR-192 与研究单元 [r12](../research/d3/r12-supersplat.md)。对本模块的影响：
+
+1. `GsCameraBackend`、C3-G 合成、瓦片驻留与外观切换、配准验收工具（FR-150 至 153、198、199）全部在 P3，P3 内先以网格蒸馏验证图层（`mesh_distilled`）验证，不等待真实航拍资产；P1 不含高斯外观工作。
+2. P3 入口门（AWR-05 §6.4.8）：`gs_eval` 按 G-3DGS v2 对网格蒸馏变体、b4、Skyfall-GS 原版细化（FlowEdit + FLUX.1 [dev]，内部复测）与已到位的 `aerial` 资产测量 G1 至 G8；G4 的 KID 以公开参照集计算（FR-202）。
+3. FLUX.1 [dev] 只在研究镜像 `d3-sky` 中运行；`sensorsvc` 镜像与 M25 Worker 不挂载研究模型目录；出处标注 `scope = internal_research` 的外观层只能在非排名运行中加载（FR-203）。
+4. 运行期继续采用 gsplat 与 C3-G，不引入 PlayCanvas 引擎；服务端只读取 `spz@2`，网页格式（SOG）不用于服务端；借用 splat-transform 的格式实现、`fillRatio` 发布门与 PlayCanvas 的流式驻留策略；splat-transform 光栅化器只用于无 CUDA 的 CI 金标准缩略图（FR-204 至 206）。
+
+### 17.2 条款修订
+
+| 条款 | v1.2 | v1.3 | 依据 |
+|---|---|---|---|
+| §2 P1 行 | 方案 C1 确认时的 `GsCameraBackend`、C3-G、驻留与切换及 KID 流程 | 删除；高斯外观工作不在 P1 | ADR-188 |
+| §2 P3 行 | 方案 C0 或 C1 | 外观层工程与真实航拍资产均在 P3；网格蒸馏验证图层先行；P3 入口门 | ADR-188 |
+| FR-150 至 153、198、199 的阶段 | P3（方案 C1 确认时 P1） | P3 | ADR-188 |
+| FR-200 的 KID 流程 | 参照集到位时启用（方案 C1 为 P600 参照集） | 以公开参照集在 P3 入口门启用（FR-202） | ADR-189 |
+| §6.12 标题 | P3；方案 C1 确认时 P1 | P3 | ADR-188 |
+| M25-AC-054 的阶段与映射 | P3（方案 C1 确认时 P1）；D3-AC-66 | P3；D3-AC-69（D3-AC-66 作废） | AWR-05 §11.7 |
+
+### 17.3 新增功能需求
+
+| 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
+|---|---|---|---|---|---|
+| M25-FR-202 | KID 流程（`gs_eval kid`）：读取 `configs/refsets.d3/` 登记的公开参照集子集；按参照影像的高度档（低空 AGL ≤ 60 m、中空 AGL 80–150 m）与俯角分布生成网格渲染与 3DGS 渲染视角；特征提取器版本、子集大小与重采样种子固定；输出 KID 的均值与区间、参照集版本与子集 sha256；只在研究镜像中运行 | P1 | P3（入口门） | M25-AC-056 | AWR-05 §6.4.8、ADR-189 |
+| M25-FR-203 | 外观层使用范围：外观层出处清单 `scope = internal_research`（含非白名单生成器，如 FLUX.1 [dev]）的图层只能在 `ranked = false` 的会话中加载，否则 `open` 返回 643（`why = appearance_scope`）；`sensorsvc` 镜像与 Worker 容器的挂载清单不含研究模型目录 | P0 | P3 | M25-AC-056 | ADR-190 |
+| M25-FR-204 | 服务端格式：只读取 `spz@2`（解析与 splat-transform 的格式实现一致，读回位置误差 p99 ≤ 1 mm）；会话请求网页格式（`sog@1`、`sog-lod@1`）时 `open` 返回 643（`why = web_format`） | P1 | P3 | M25-AC-057 | ADR-192；r12 §3.3、§4.4 |
+| M25-FR-205 | CI 金标准缩略图：外观层版本变化时，以 splat-transform 光栅化器在无 CUDA 环境中按固定视角集渲染缩略图并与上一版本比较，结果写入 `qa/report.json` 的外观层段；不用于运行期 | P2 | P3 | M25-AC-057 | ADR-192；r12 §3.10 |
+| M25-FR-206 | 驻留优先级：瓦片 LRU 的换入优先级参照 PlayCanvas 的流式驻留策略（按相机距离选级、相机后方降权、预算分配），在 8 GB 缺省驻留预算内；不改变 FR-199 的容量估算 | P2 | P3 | M25-AC-057 | ADR-192；r12 §2.7、§4.4 |
+
+### 17.4 新增验收
+
+| 编号 | 阶段 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
+|---|---|---|---|---|---|---|
+| M25-AC-056 | P3 | 入口门工具与使用范围 | `gs_eval kid` 对同一输入两次运行结果一致，输出含参照集版本与子集 sha256；低空档与中空档各输出网格渲染与网格蒸馏变体的 KID；`scope = internal_research` 的外观层在排名会话中 `open` 返回 643；`sensorsvc` 镜像与 Worker 的挂载清单扫描中研究模型目录为 0 | `tests/d3/gs/test_kid.py`、`test_scope.py`、挂载清单扫描 | dmax | 68 |
+| M25-AC-057 | P3 | 格式与 CI 对拍 | `spz@2` 读回位置误差 p99 ≤ 1 mm；请求 SOG 的会话返回 643（`why = web_format`）；外观层版本变化时 CI 生成缩略图对比报告；驻留预算下 AGL 60 m 斜视飞越的回退像素占比 ≤ 1%（暂定，与 M25-AC-054 同口径） | `tests/d3/gs/test_formats.py`、CI 任务 | dmax、无 CUDA 的 CI 主机 | 69 |
+
+### 17.5 阶段对照（v1.2 → v1.3）
+
+| 范围 | v1.2（方案 C0 / C1） | v1.3 |
+|---|---|---|
+| `GsCameraBackend`、C3-G、驻留、切换、配准工具（FR-150 至 153、198、199） | P3 / P1 | P3（网格蒸馏验证图层先行） |
+| `gs_eval` 与外观来源标注（FR-193、194、200、201） | P0b | P0b；KID 流程在 P3 入口门以公开参照集启用（FR-202） |
+| 使用范围、格式、CI 缩略图与驻留优先级（FR-203 至 206） | — | P3 |
+
+本模块的工作量：WP-D3-22 中 `GsCameraBackend` 与 C3-G 等 2.0 人周维持在 P3；WP-D3-42 中 KID 流程与复测的部分（AWR-05 §12.1）；FR-203 至 206 计入 WP-D3-22 与 WP-D3-39 的范围，不另计。
+
+### 17.6 D3-AC 映射变更
+
+| D3-AC | v1.2 | v1.3 | 说明 |
+|---|---|---|---|
+| D3-AC-41 | P3 | P3 | 入包经高斯发布子阶段（M22-FR-083） |
+| D3-AC-64 | P0b | P0b | 裁决定稿为结论 C0；G4 移至 P3 入口门 |
+| D3-AC-66、67 | P1（方案 C1 确认后登记） | 作废 | 度量分别并入 D3-AC-69 与 D3-AC-68 |
+| D3-AC-68 | — | P3 | P3 入口门（M25-AC-055、056） |
+| D3-AC-69 | — | P3 | 网格蒸馏验证图层的合成、切换、驻留与吞吐（M25-AC-054、057） |
