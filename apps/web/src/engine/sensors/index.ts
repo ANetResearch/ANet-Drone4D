@@ -156,6 +156,7 @@ export function onPayloadData(m: { topic: string; data: unknown }, agentNoOf: (i
  * orientations of the agents with sensor views (swarm rows and Full64 items) for the gimbal derivation.
  */
 export function ingestFrame(f: TelemetryFrame): number {
+  if (!ingestGate()) return 0
   const sw = f.swarm
   const n = f.hdr.swarmN
   const tS = f.hdr.swarmTSimMs
@@ -195,6 +196,23 @@ export function onPoseSamples(rows: DataView, n: number, tMs: number): number {
   let got = 0
   for (let i = 0; i < n; i++) got += poseRecord(rows, i * SP48.SIZE, tMs)
   return got
+}
+
+// ------------------------------------------------------------ world scope (D2.2-W1)
+/** the store layer's ingestion gate (stores/worldScope worldLive): samples, payloads and detections of a stream that
+ *  simulates another world than the view shows are not taken; engine/ never imports stores (AWR-03 §4.2) */
+let ingestGate: () => boolean = () => true
+export function setIngestGate(fn: (() => boolean) | null): void {
+  ingestGate = fn ?? (() => true)
+}
+/** forget every sensor view, payload, orientation history, detection and per-vehicle subscription (world or source switch) */
+export function resetWorld(): void {
+  for (const s of subs.values()) for (const off of s) off()
+  subs.clear()
+  wantedAt.clear()
+  cache.clear()
+  clearDetections()
+  lastEpoch = -1
 }
 
 // ------------------------------------------------------------ runtime side (installed on first use)
@@ -266,9 +284,10 @@ export function ensureInstalled(getRt: () => RtClient | null = rtGetter): void {
   const rt = rtGetter()
   if (rt) {
     offs.push(rt.onEvents((batch) => {
+      if (!ingestGate()) return
       for (const ev of batch) if (ev.type === 'sensor.detect') onDetectEvent(ev)
     }))
-    if (typeof rt.onData === 'function') offs.push(rt.onData((m) => void onPayloadData(m, (id) => rtGetter()?.roster.agentNoOf(id) ?? -1)))
+    if (typeof rt.onData === 'function') offs.push(rt.onData((m) => void (ingestGate() && onPayloadData(m, (id) => rtGetter()?.roster.agentNoOf(id) ?? -1))))
     offs.push(rt.onTime((t) => {
       if (t.epoch !== lastEpoch) {
         if (lastEpoch >= 0) clearDetections()

@@ -26,6 +26,7 @@ import { apiGet, getToken } from '@/net/api'
 import { DEMO_PUBLIC } from '@/lib/demo'
 import { selectionStore } from './selection'
 import { uiTickDue } from './uiTick'
+import { onWorldReset, worldLive, worldScopeStore } from './worldScope'
 
 export type { StepKind } from '@/engine/time/index'
 
@@ -226,6 +227,8 @@ function onTime(t: TimeFrameView, recvMs: number): void {
 }
 
 function onEvents(batch: readonly RtEvent[]): void {
+  // D2.2-W1: markers of another world's stream never reach this world's track
+  if (!worldLive()) return
   const roster = bound?.roster
   let recording: boolean | null = null
   for (const ev of batch) {
@@ -336,6 +339,23 @@ function bind(rt: RtClient | null): void {
   if (rt.serverInfo) onServerInfo(rt.serverInfo)
   void backfillEvents()
 }
+
+// D2.2-W1: the markers and series belong to the world of the realtime source (stores/worldScope). A world or source switch
+// clears the track; when the view is live again on the shared show (or the local build), the GET /api/events backfill runs
+// once more, as after a first connection.
+let worldBackfill = false
+onWorldReset('timeline', () => {
+  timelineTrack.clearMarkers()
+  timelineTrack.clearSeries()
+  liveMinSeq = Number.POSITIVE_INFINITY
+  worldBackfill = true
+})
+worldScopeStore.subscribe((sc, prev) => {
+  if (!sc.live || prev.live || !worldBackfill || !bound) return
+  worldBackfill = false
+  // D2.2-W2: the shared key now carries the world ('shared:<world>', stores/worldScope sourceKeyOf)
+  if (sc.source === 'local' || sc.source?.startsWith('shared:')) void backfillEvents()
+})
 
 /** older markers of the open recording segment (.evx) before the EventRing window (FR-018, recording on) */
 async function backfillFromEvx(): Promise<void> {

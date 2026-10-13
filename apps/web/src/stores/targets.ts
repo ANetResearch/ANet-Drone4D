@@ -14,6 +14,9 @@
 // shared UI tick (<= 4 writes/s on Tier S, ADR-066) only when it changed. Actions send WS calls (target/add, update,
 // remove; seat required, 5 per second per sandbox) and never write the summary directly. Text from the wire passes
 // lib/sanitize.ts.
+// D2.2-W1: the targets belong to the world of the realtime source (stores/worldScope): rows, details and discoveries are
+// ingested only while that world is the one the view shows, and a world or source switch clears the model and the summary
+// (selection, detail, placement preview and alarms included).
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
@@ -25,6 +28,7 @@ import {
 } from '@/engine/targets'
 import { rtClient, type CallResult, type DataMsg, type RtClient, type RtEvent } from '@/net/rt'
 import { uiTickDue } from './uiTick'
+import { onWorldReset, worldLive } from './worldScope'
 
 export const TARGETS_MAX = 30
 export const TARGETS_STORE_HZ = 4
@@ -81,10 +85,11 @@ let lastKey = ''
 let rtGetter: () => RtClient | null = rtClient
 
 function onData(m: DataMsg): void {
-  targetsModel.ingest(m)
+  if (worldLive()) targetsModel.ingest(m)
 }
 
 function onEvents(batch: readonly RtEvent[]): void {
+  if (!worldLive()) return
   let add: DiscoveredAlarm[] | null = null
   for (const e of batch) {
     if (e.type !== 'target.discovered') continue
@@ -171,6 +176,17 @@ export function attachTargetsFeed(getRt: () => RtClient | null = rtClient): () =
 export function targetsFeedTick(rt: RtClient | null): void {
   tick(null, rt)
 }
+
+/** world scope reset: the model and the summary of the previous world go (the view options bodyView and modelId stay) */
+export function resetTargetsWorld(): void {
+  targetsModel.reset()
+  detailSub?.off()
+  detailSub = null
+  lastKey = ''
+  const s = targetsStore.getState()
+  targetsStore.setState({ items: [], count: 0, selected: null, detail: null, placing: null, alarms: [], version: s.version + 1 })
+}
+onWorldReset('targets', resetTargetsWorld)
 
 // ------------------------------------------------------------------------------------------------ actions
 export interface TargetCallOutcome {

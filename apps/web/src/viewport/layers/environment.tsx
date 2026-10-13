@@ -5,6 +5,7 @@
 // LayerSpec (draws, zoo variants, PerfGovernor step 5 knob), the realtime binding, the horizon colour of M06's identity
 // sky, and writes stores/env at <= 4 Hz (Tier S) / 10 Hz from the
 // engine summary; the sub-layer switches and the quality setting travel the other way (engine never imports stores).
+// D2.2-W1: keyframes are taken only while the world scope is live (stores/worldScope); a scope reset clears the store.
 import { useEffect } from 'react'
 import type { Scene } from 'three'
 import { ctx as frameCtx, perf, perfProbe, register, setSceneShading } from '@/engine'
@@ -21,6 +22,7 @@ import type { RenderBackend } from '../renderer'
 import { pointCloudServices, registerLayer } from './registry'
 import { skyControl } from './groundSky'
 import { vp } from '../session'
+import { onWorldReset, worldLive } from '@/stores/worldScope'
 
 const bytes = (u: string, h?: HeadersInit): Promise<ArrayBuffer> => fetch(u, { headers: h }).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u} ${r.status}`))))
 const apiBytes = async (u: string): Promise<ArrayBuffer> => {
@@ -39,7 +41,7 @@ export function EnvironmentLayer({ be }: { be: RenderBackend }) {
     const scene = vp.scene as (Scene & { fogNode?: unknown }) | null
     if (scene) scene.fogNode = env.fogNode // once, before the shader zoo (WarmupTrigger mounts after this adapter)
     const offShading = setSceneShading(env.shading) // point cloud, drone meshes and sky read light and sky from it
-    const bind = new EnvBinding(() => rtClient(), env)
+    const bind = new EnvBinding(() => rtClient(), env, worldLive)
     const series = new EnvSeries()
     const p = perfProbe() as ReturnType<typeof perfProbe> & { env?: unknown }
     p.env = env.perf
@@ -120,6 +122,11 @@ export function EnvironmentLayer({ be }: { be: RenderBackend }) {
       }),
       layersStore.subscribe(applySub),
       selectionStore.subscribe((s) => bind.select(s.primary ?? null)),
+      // M07 C09 "world switch or disconnect" (D2.2-W1): the keyframes, samples and wind series of the previous world go
+      onWorldReset('environment', () => {
+        for (const c of [env.store, samples, series]) c.clear()
+        seenSeq = vp.drones?.frameSeq ?? -1
+      }),
     ]
     const motion = (): void => {
       const reduced = getMotionTier() === 'reduced'

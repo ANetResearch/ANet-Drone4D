@@ -5,9 +5,17 @@
 // false and drop this code (M06-AC-010).
 // D2.1 (WP-11b): field (the field-view renderer, synthetic profiles, volumes and targets: dev/fieldDemo.ts, lazy), quality
 // (form factor, profile, point-size mode, DPR), loop (suspension, requestFrame, wake) and touch (long presses seen).
+// D2.2-W1: isolation() reports the world scope and what every world-bound layer and model holds and draws now, and
+// governorHold(on) keeps the PerfGovernor at level 0 so the layers under test stay on under SwiftShader (perf/d22).
 import { FLIGHT_STATE_NAMES } from '@awr/contracts/enums'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
-import { activePointCloud, events, governor, loop } from '@/engine'
+import { activePointCloud, ctx as frameCtx, events, governor, loop } from '@/engine'
+import { targetsModel } from '@/engine/targets'
+import { fieldModel } from '@/engine/perception'
+import { worldScopeNow } from '@/stores/worldScope'
+import { taskingStore } from '@/stores/tasking'
+import { targetsLayer } from './layers/targets'
+import { taskingLayer } from './layers/tasking'
 import type { FieldKind } from '@/engine/perception'
 import { perceptionActions, perceptionStore, type FieldView, type VolumesMode } from '@/stores/perception'
 import { targetsActions } from '@/stores/targets'
@@ -110,9 +118,33 @@ export function installTestHooks(): void {
       }
     },
     labels: () => vp.labels?.shown() ?? [],
+    /** D2.2-W1: the world scope and what the world-bound layers and models hold and draw now */
+    isolation: () => {
+      const L = vp.drones?.layer
+      const draws: Record<string, number> = {}
+      for (const s of listLayers()) draws[s.id] = s.drawCount(frameCtx)
+      const fs = fieldLayer.renderer?.stats
+      return {
+        scope: { ...worldScopeNow() }, draws, staticBrowse: vp.staticBrowse,
+        poses: vp.drones?.poses.n ?? 0, frustums: L?.frustums.count ?? 0, roster: rtClient()?.roster.size ?? 0,
+        targets: targetsModel.rows.n, targetBodies: targetsLayer.overlay?.nBodies ?? 0,
+        field: { profiles: fieldModel.profiles.size, volumes: fieldModel.volumes !== null, quant: fieldModel.quant.size, points: fs?.points ?? 0,
+          bodyAnchors: fs?.bodyAnchors ?? 0, uavAnchors: fs?.uavAnchors ?? 0 },
+        tasking: taskingLayer.overlay?.stats ?? null, labels: vp.labels?.shown().length ?? 0,
+        taskingStore: { nests: taskingStore.getState().nests.length, nestStatus: Object.keys(taskingStore.getState().nestStatus).length,
+          tasks: taskingStore.getState().tasks.length },
+        mission: { goto: vp.mission?.goto.visible ?? false }, camera: { mode: vp.rig?.mode ?? null, focus: vp.rig?.focusAgent ?? -1 },
+      }
+    },
     zones: () => vp.zones?.zones.map((z) => ({ id: z.id, kind: z.kind, z0: z.z0, z1: z.z1, n: z.ring.length / 2 })) ?? [],
     /** PerfGovernor wiring: CAS attached (M05 services.cas) and the knob levels in step order */
     governor: () => ({ hasCas: governor().hasCas, knobs: governor().knobLevels() }),
+    /** D2.2-W1: hold the PerfGovernor (every knob back to level 0 and kept there) or release it */
+    governorHold: (on: boolean) => {
+      const g = governor()
+      g.hold = on
+      if (on) g.resetAll()
+    },
     /** M05 point-cloud engine state the viewport relies on: EDL material bound (Tier B/A), class-11 hero demotion */
     pointCloud: () => {
       const e = activePointCloud()

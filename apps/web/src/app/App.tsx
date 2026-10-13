@@ -23,6 +23,7 @@ import { Sandbox } from '@/ui/views/Sandbox'
 import { prefs } from '@/stores/prefs'
 import { DEMO_PUBLIC } from '@/lib/demo'
 import { selection } from '@/stores/selection'
+import { requestSelection } from '@/ui/shell/urlSync'
 import { ViewportErrorBoundary } from './providers/ErrorBoundaries'
 import { UI_ONLY } from '@/ui/testing/uiOnly'
 import { installD2Shell } from './shell/install'
@@ -50,12 +51,12 @@ function RouterOutlet() {
   React.useEffect(() => {
     onNotFound(() => notify('route:notFound', 'info', t('route.notFound')))
   }, [t])
-  // world change: remember it, drop the old selection and restore ?sel= from the URL (read at that moment only)
+  // world change: remember it, drop the old selection and hand ?sel= (read at that moment only) to the world-bound deep link:
+  // it is applied once this world's realtime data is live and dropped with its parameter otherwise (D2.2-W1, ui/shell/urlSync)
   const onWorld = React.useEffectEvent((id: string) => {
     prefs.setUi('lastWorld', id)
     selection.clear()
-    const sel = route ? parseSel(route.search) : undefined
-    if (sel) selection.select(sel)
+    requestSelection(id, route ? parseSel(route.search) : undefined)
   })
   React.useEffect(() => {
     if (worldId) onWorld(worldId)

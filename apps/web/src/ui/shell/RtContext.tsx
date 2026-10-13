@@ -15,6 +15,8 @@
 // parked sandbox has no rt path (app/shell/surface.ts) but keeps its sandbox REST endpoint. Connection states and close
 // codes go to the controller (LIVE completes a resume, 4430 is the server's reclaim, 4431 the full viewer seats),
 // serverInfo.power sets the thresholds, and presence goes out through the client when it supports the op (M11 net).
+// D2.2-W1: every serverInfo names the world the connected source simulates (stores/worldScope streamWorld): realtime data
+// is ingested only while it equals the world the view shows, and the world-bound state resets when it changes.
 import * as React from 'react'
 import { reasonText, t } from '@/app/i18n'
 import { notify } from '@/app/providers/ToastProvider'
@@ -25,6 +27,7 @@ import { setShowWorld, surfaceStore, type SurfaceState } from '@/app/shell/surfa
 import { bindSandboxRt, onSandboxToken, sandbox, sandboxStore } from '@/ui/sandbox/session'
 import { installCaptureNotices } from '@/ui/notify/d2Notices'
 import { perfStore } from '@/stores/perf'
+import { onWorldReset, worldScope } from '@/stores/worldScope'
 import { bindSafety } from '@/stores/safety'
 import { bindAgents } from '@/stores/agents'
 import { bindJobs } from '@/stores/jobs'
@@ -58,9 +61,14 @@ export function initRt(client: RtClient, token: string): void {
   client.init({ url: rtUrl(), token, tier: p.tier ?? 'S', deviceClass: p.deviceClass ?? 'software' })
 }
 
-/** the endpoint key of a surface (null: no realtime link); `linkOpen` false (power saving) closes the link too */
-export function endpointKeyOf(s: Pick<SurfaceState, 'rtPath' | 'surface' | 'sid'>, linkOpen = true): string | null {
-  return s.rtPath && linkOpen ? `${s.surface === 'sandbox' ? `sandbox:${s.sid}` : 'shared'}` : null
+/**
+ * the endpoint key of a surface (null: no realtime link); `linkOpen` false (power saving) closes the link too.
+ * D2.2-W2: the shared key carries the world (synthcity's live show and each UrbanScene3D city's recorded show are
+ * different realtime sources, app/shell/surface.ts resolveSurface), so switching between two shown worlds reconnects
+ * instead of being mistaken for the same endpoint (same rule as stores/worldScope sourceKeyOf).
+ */
+export function endpointKeyOf(s: Pick<SurfaceState, 'rtPath' | 'surface' | 'sid' | 'worldId'>, linkOpen = true): string | null {
+  return s.rtPath && linkOpen ? `${s.surface === 'sandbox' ? `sandbox:${s.sid}` : `shared:${s.worldId ?? ''}`}` : null
 }
 
 /** presence through the page client when the net layer has the op (AWR-17 §17.20.4; M11 d2-WP-12c-to-M11 item 1) */
@@ -105,8 +113,17 @@ function connectFor(client: RtClient, s: SurfaceState, alive: () => boolean, lin
     }
   }
   if (getEndpoint().kind !== 'shared') setEndpoint({ kind: 'shared' })
+  // D2.2-W2: a city's recorded show is a `fake:` replay URL (lib/demo cityShowRtUrl), not the page's live /api/rt
+  // link — REST still goes through the shared show (the endpoint kind above), only the realtime socket differs, and
+  // a replay needs no auth token (FakeSource ignores it)
+  if (s.rtPath.startsWith('fake:')) {
+    const p = perfStore.getState()
+    client.init({ url: s.rtPath, token: '', tier: p.tier ?? 'S', deviceClass: p.deviceClass ?? 'software' })
+    return () => {}
+  }
+  const myKey = endpointKeyOf(s, linkOpen)
   void getToken().then((token) => {
-    if (alive() && endpointKeyOf(surfaceStore.getState()) === 'shared') initRt(client, token)
+    if (alive() && endpointKeyOf(surfaceStore.getState(), powerStore.getState().linkOpen) === myKey) initRt(client, token)
   })
   return () => {}
 }
@@ -171,12 +188,21 @@ export function RtProvider({ children }: { children: React.ReactNode }) {
     power.setPresenceSink(presenceSink(client))
     // the shared show's run world decides which /world/:id is the show and which is static browsing
     const offInfo = client.onServerInfo((si) => {
-      if (getEndpoint().kind === 'shared') setShowWorld(si.worldId || null)
+      worldScope.setStreamWorld(si.worldId || null)
+      // D2.2-W2: a city's recorded show replays a real serverInfo byte for byte (its own world, not synthcity's); it
+      // must not overwrite which world the live shared show is running, or every other city's surface (including
+      // synthcity's) would mis-resolve afterwards (app/shell/surface.ts resolveSurface reads showWorld)
+      const surf = surfaceStore.getState()
+      const isCityReplay = typeof surf.rtPath === 'string' && surf.rtPath.startsWith('fake:')
+      if (getEndpoint().kind === 'shared' && !isCityReplay) setShowWorld(si.worldId || null)
       power.setServerPower(((si as unknown as { power?: Record<string, unknown> }).power) ?? null)
     })
     const offNotices = installCaptureNotices(client)
+    // a world or source switch: the client's latest swarm sample belongs to the previous world (the next frame refills it)
+    const offWorld = onWorldReset('rt', () => client.clearWorldData?.())
     return () => {
       alive = false
+      offWorld()
       offSurface()
       offPowerLink()
       offPowerConn()

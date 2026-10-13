@@ -22,6 +22,9 @@
 // volumes go to engine/perception fieldModel (the renderer reads `fieldModel.version`, values change at most 1 Hz, phone
 // 0.5 Hz); the readings and the legend are mirrored here. Interest-driven on the server: nothing is generated while nobody
 // subscribes, and the power-save disconnect keeps the last data (static render).
+// D2.2-W1: frames, events, profiles, volumes and readings belong to the world of the realtime source (stores/worldScope):
+// they are ingested and subscribed only while that world is the one the view shows, and a world or source switch drops
+// them with the followed vehicle (the toolbar's view, volumes and reference choice are view preferences and stay).
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
@@ -35,6 +38,7 @@ import { rtClient, type ConnState, type DataMsg, type RtClient, type RtEvent } f
 import { selectionStore } from './selection'
 import { targetsStore } from './targets'
 import { uiTickDue } from './uiTick'
+import { onWorldReset, worldLive } from './worldScope'
 
 export type { FieldKind, PairReading, QuantFrame } from '@/engine/perception'
 export type FieldView = FieldKind | 'none'
@@ -202,6 +206,7 @@ function onFieldData(m: DataMsg): boolean {
 const N_LAST = 31
 
 function onData(m: DataMsg): void {
+  if (!worldLive()) return
   if (onFieldData(m)) return
   const mm = /^uav\/([^/]+)\/perception$/.exec(m.topic)
   if (!mm || mm[1] !== followed()) return
@@ -220,7 +225,8 @@ export function fieldTopics(s: Pick<PerceptionState, 'fieldView' | 'volumesMode'
 
 function syncFieldSubs(rt: RtClient): void {
   const st = perceptionStore.getState()
-  const want = fieldTopics(st, selectedTarget())
+  // another world's stream (or none): nothing is wanted, the server generates nothing for this page
+  const want = worldLive() ? fieldTopics(st, selectedTarget()) : new Map<string, number>()
   for (const [topic, off] of [...fieldSubs]) {
     if (!want.has(topic)) {
       off()
@@ -259,6 +265,7 @@ function onConn(s: ConnState): void {
 }
 
 function onEvents(batch: readonly RtEvent[]): void {
+  if (!worldLive()) return
   for (const e of batch) {
     const d = detectionOf(e)
     if (!d) continue
@@ -270,7 +277,7 @@ function onEvents(batch: readonly RtEvent[]): void {
 }
 
 function tick(_ctx: FrameCtx | null, rt: RtClient | null): void {
-  const uav = followed()
+  const uav = worldLive() ? followed() : null
   if (rt && sub?.uav !== uav) {
     sub?.off()
     sub = uav ? { uav, off: rt.subscribe(`uav/${uav}/perception`, { rate: 5 }) } : null
@@ -341,6 +348,29 @@ export function perceptionFeedTick(rt: RtClient | null): void {
   tick(null, rt)
 }
 export const perceptionFeedIngest = { data: onData, events: onEvents, conn: onConn }
+
+/** world scope reset: frames, events, field samples, readings and the followed vehicle of the previous world go */
+export function resetPerceptionWorld(): void {
+  follow = null
+  sub?.off()
+  sub = null
+  latest = null
+  pendingCaptures = []
+  pendingDetections = []
+  for (const off of fieldSubs.values()) off()
+  fieldSubs = new Map()
+  profileAppliedMs = new Map()
+  quantLatest = null
+  lastCapture.clear()
+  fieldModel.reset()
+  fieldModel.selectedTarget = null
+  lastKey = ''
+  fieldDirty = false
+  const st = perceptionStore.getState()
+  perceptionStore.setState({ uav: null, frame: null, hud: null, captured: [], captures: [], detections: [], legend: null, quant: null,
+    fieldVersion: fieldModel.version, version: st.version + 1 })
+}
+onWorldReset('perception', resetPerceptionWorld)
 /** test helper: replace the wall clock of the phone decimation */
 export function setPerceptionClock(fn: () => number): void {
   nowMs = fn

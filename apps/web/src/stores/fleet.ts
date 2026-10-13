@@ -5,6 +5,8 @@
 // DroneRail re-renders at most at the summary rate (M15-AC-021). Rows are in swarm order; fleetIdOf / fleetModelOf /
 // fleetRowOf translate through the roster. Rows are stale when the link is not LIVE or no swarm sample arrived for
 // input.staleAfterMs (AWR-14 §7.9: "信号延迟" and the dashed STALE styling).
+// D2.2-W1: the rows belong to the world of the realtime source (stores/worldScope): while the source simulates another world
+// than the view shows (or there is none) the summary is empty, and a world or source switch clears the rows at once.
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
 import { INPUT } from '@/lib/tokens/input.gen'
@@ -12,6 +14,7 @@ import { loop } from '@/engine/loop'
 import { uiTickDue } from './uiTick'
 import { FlightFlags, redHighlight } from '@awr/contracts/enums'
 import { rtClient, type ConnState, type RosterView, type SwarmSnapshot } from '@/net/rt'
+import { onWorldReset, worldLive } from './worldScope'
 
 export interface FleetSummary {
   /** increments on every write (the DronesPanel cache key) */
@@ -117,6 +120,7 @@ export function resetFleetSummary(): void {
 /** one summary pass (exported for tests); returns true when the store was written */
 export function summariseFleet(src: FleetSource | null = rtClient(), nowMs: number = performance.now()): boolean {
   if (!src) return false
+  if (!worldLive()) return clearFleet()
   const sw = src.swarm
   if (sw.version !== seenSwarm) lastSwarmAtMs = nowMs
   const live = src.status === 'LIVE'
@@ -168,6 +172,22 @@ export function summariseFleet(src: FleetSource | null = rtClient(), nowMs: numb
   })
   return true
 }
+
+/** empty summary (another world's stream, or a world switch); returns true when the store was written */
+function clearFleet(): boolean {
+  const had = fleetRows.n > 0 || fleetStore.getState().n > 0
+  resetFleetSummary()
+  if (!had) return false
+  const prev = fleetStore.getState()
+  byState.fill(0)
+  byOwner.fill(0)
+  fleetStore.setState({
+    version: prev.version + 1, n: 0, alerts: 0, minBatteryPct: Number.NaN, byState: byState.slice(), byOwner: byOwner.slice(), inAir: 0,
+    batteryUnknown: 0, stale: true, rosterVersion: prev.rosterVersion, tSimMs: 0,
+  })
+  return true
+}
+onWorldReset('fleet', () => void clearFleet())
 
 // published on the shared UI tick (Tier S 4 Hz, B/A 10 Hz; stores/uiTick.ts, ADR-066)
 loop.register('overlay', 'fleet-summary.s', (ctx) => void (uiTickDue(ctx) && summariseFleet()), { tiers: ['S'] })

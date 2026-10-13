@@ -3,6 +3,9 @@
 // visible page, one tab), the D2 actions are registered (key B, GSD calculator, new task), the manual controller gets the
 // page client and the domain data (model limits from M21's catalogue store, the 3 s keep-out entry prediction of M18's
 // manualKeepoutWarning over the current criterion bodies), and the `ent` / `tgt` / `panel` deep links apply once.
+// D2.2-W1: the world scope follows the surface and the opened world (app/shell/worldScope.ts), and the shell's world-bound
+// state (entity selection, drafts, tools, manual control, alarms, event log, discoveries) resets with it
+// (ui/shell/worldReset.ts).
 // Called once from app/App.tsx when the application module loads (before the router resolves the first path).
 import { rtClient } from '@/net/rt'
 import { catalogStore } from '@/stores/catalog'
@@ -13,6 +16,8 @@ import { installAutoRenew, sandbox } from '@/ui/sandbox/session'
 import { registerD2Actions } from '@/ui/actions/d2Actions'
 import { installSensorBindings } from '@/ui/fpv/bindings'
 import { installSurface } from './surface'
+import { installWorldScope } from './worldScope'
+import { installWorldReset } from '@/ui/shell/worldReset'
 
 let done = false
 
@@ -34,6 +39,8 @@ export function installD2Shell(): void {
   if (done) return
   done = true
   installSurface()
+  installWorldReset()
+  installWorldScope()
   registerD2Actions()
   installSensorBindings()
   sandbox.resumeQueue()

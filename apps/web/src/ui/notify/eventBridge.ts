@@ -4,6 +4,9 @@
 // the alarms, the toast merger, the batch command tracker and the query invalidation table, with one store write each.
 // Flush time and drops go to window.__ux.bridge in dev and test builds (not to __perf). Test builds also expose
 // window.__uxInject.events(batch) so storm specs can inject events without a backend.
+// D2.2-W1: events that describe the simulation of a world (vehicles, targets, perception, tasks, nests, missions, the run)
+// pass only while the realtime source simulates the world the view shows (stores/worldScope); system, job, world-build and
+// sandbox-session events always pass.
 import { navigate } from '@/app/router/router'
 import { queryClient } from '@/app/query/client'
 import { applyInvalidation, planInvalidation } from '@/app/query/eventInvalidation'
@@ -17,6 +20,7 @@ import { commitAlarms, consumeAlarm, type AlarmItem } from './alarms'
 import { commitEventLog, eventLog } from './eventLog'
 import { skipAlarmToast, toastAlarm, toastInfoEvent } from './toastMerger'
 import { freezableInterval } from '@/lib/powerFreeze'
+import { worldLive } from '@/stores/worldScope'
 
 type BatchListener = (e: RtEvent) => void
 const batchListeners = new Set<BatchListener>()
@@ -54,10 +58,25 @@ const ring = new BridgeRing(LIMITS.bridgeRingCap)
 const touched = new Set<AlarmItem>()
 const batchView: RtEvent[] = []
 
+/** event types that do not describe a world's simulation: they pass the world gate */
+const WORLD_FREE = /^(sys|job|sandbox|session|world|proc|recorder|rec|lease|power|identity)\./
+/** the event may be shown with the current world scope (exported for tests) */
+export function eventInScope(e: Pick<RtEvent, 'type'>): boolean {
+  return worldLive() || WORLD_FREE.test(e.type)
+}
+
 /** copy one batch (called from the RtClient callback; no allocation besides the ring slots) */
 export function pushEvents(batch: readonly RtEvent[]): void {
   const now = Date.now()
-  for (let i = 0; i < batch.length; i++) ring.write(batch[i], now)
+  const live = worldLive()
+  for (let i = 0; i < batch.length; i++) if (live || WORLD_FREE.test(batch[i].type)) ring.write(batch[i], now)
+}
+
+/** events not yet flushed belong to the previous world after a world scope reset: drop them (ui/shell/worldReset.ts) */
+export function dropPendingEvents(): void {
+  for (let k = 0; k < ring.len; k++) ring.ev[(ring.head + k) % ring.cap] = null
+  ring.head = 0
+  ring.len = 0
 }
 
 let rosterSeen = -1

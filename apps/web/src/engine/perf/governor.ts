@@ -10,6 +10,8 @@
 // 7 point-cloud floor release [cas.setFloorOverride]); the sub-levels of a knob run consecutively; restoring walks back
 // in exactly the reverse order. Each change pushes governor.history, emits 'governor.step' {step, dir, reasonKey} (only
 // when the knob reports a visible change, GovernorKnob.visible) and sets the summary label key. Pure and clock-injectable (Vitest pseudo clock, apps/web/tests/perf).
+// `hold` (test builds only, window.__vp.governorHold; D2.2-W1 world isolation specs) keeps every knob where it is: on SwiftShader
+// the point-cloud budget sits at its floor and the governor would switch the layers under test off.
 import { events, type FrameCtx, type Tier } from '../loop'
 import { pushGovernorHistory, type AwrPerf } from './probe'
 
@@ -52,6 +54,8 @@ export class PerfGovernor {
   step = 0
   labelKey: string | null = null
   state: 'NOMINAL' | 'DEGRADED' | 'FLOOR_RELEASED' = 'NOMINAL'
+  /** test builds: no evaluation while set (see the header) */
+  hold = false
   private builtinFloor: KnobState | null = null
 
   constructor(private readonly o: { tier: () => Tier; lowestAllowedRung: () => number; perf?: AwrPerf | null; now?: () => number }) {}
@@ -112,7 +116,7 @@ export class PerfGovernor {
   /** governor phase; the 1 Hz cadence is enforced here (the task may run every frame) */
   evaluate(ctx: FrameCtx): void {
     const now = this.o.now ? this.o.now() : ctx.nowMs
-    if (ctx.frozen) {
+    if (ctx.frozen || this.hold) {
       this.highSinceMs = Number.NaN
       return
     }

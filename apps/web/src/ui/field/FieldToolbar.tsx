@@ -11,6 +11,8 @@
 //     "simulated reference values · free-space field".
 // Placement: desktop at the bottom centre of the unobscured rect, tablet in the top bar (compact) and phone in the viewport
 // window's "layers" drawer (ui/mobile).
+// D2.2-W1: the legend reads the field of the realtime source's world; with no source for the view's world (static browsing)
+// or a source that simulates another world it is not shown (stores/worldScope).
 import * as React from 'react'
 import { t, useT } from '@/app/i18n'
 import { cn } from '@/lib/utils'
@@ -18,6 +20,7 @@ import { notify } from '@/app/providers/ToastProvider'
 import { FIELD_VIEWS, perceptionActions, perceptionStore, usePerception, type FieldLegend as Legend, type FieldView, type VolumesMode } from '@/stores/perception'
 import { prefs, prefsStore } from '@/stores/prefs'
 import { useTargets } from '@/stores/targets'
+import { useWorldScope } from '@/stores/worldScope'
 import { field as fieldApi } from '@/viewport/facade'
 import { Card } from '@/ui/components/ui/card'
 import { Toggle } from '@/ui/components/ui/toggle'
@@ -139,7 +142,8 @@ export function FieldLegend({ inline = false }: { inline?: boolean }) {
   const view = usePerception((s) => s.fieldView)
   const legend = usePerception((s) => s.legend)
   const selectedTarget = useTargets((s) => s.selected)
-  if (view === 'none') return null
+  const away = useWorldScope((s) => s.bound && s.foreign)
+  if (view === 'none' || away) return null
   const lg: Legend | null = legend && legend.kind === view ? legend : null
   const unit = lg ? tr(`field.unit.${lg.unit}`) : ''
   const labels = lg ? bandLabels(lg.bands) : []

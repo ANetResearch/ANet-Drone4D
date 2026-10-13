@@ -5,10 +5,14 @@
 // env/state 10, event all, perf/server 1, sys/procs 1 (selected vehicles at 60 Hz come from bindings/selection).
 // __perf.net.creditSkips follows perf/server clients[] of this connection (M11-FR-096).
 // D2.1 (AWR-04 §15.8.6): the quality profile lowers swarm/state (phone 5, tablet 10 Hz) and caps hero and low-poly instances.
+// D2.2-W1: static browsing follows the world scope (stores/worldScope: no realtime source for the view's world, or a source
+// that simulates another world); the runtime ingests frames only while the scope is live and forgets every sample, pose,
+// trail and highlight when the scope resets.
 import { useEffect } from 'react'
 import { BUCKETS, createDroneRuntime, perf, perfProbe, setProceduralHero, type GovernorKnob } from '@/engine'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { createRtClient, rtClient } from '@/net/rt'
+import { onWorldReset, worldLive, worldScopeNow, worldScopeStore } from '@/stores/worldScope'
 import type { RenderBackend } from '../renderer'
 import { registerLayer, type WarmupItem } from './registry'
 import { vp } from '../session'
@@ -26,7 +30,7 @@ function motionTier(): 'full' | 'lite' | 'reduced' | 'off' {
 export function DronesLayer({ be }: { be: RenderBackend }) {
   useEffect(() => {
     const rt = createRtClient() // the page instance (M15 RtProvider initialises it)
-    const drones = createDroneRuntime(be, rtClient, { motionTier })
+    const drones = createDroneRuntime(be, rtClient, { motionTier, accept: worldLive })
     drones.setSensors(vp.sensors)
     vp.drones = drones
     const L = drones.layer
@@ -42,8 +46,9 @@ export function DronesLayer({ be }: { be: RenderBackend }) {
     const pcOnly = pcOnlyScene() // flight60 scene=pc: no simulation channels, no vehicles
     let userVisible = true
     const syncSim = (): void => {
+      const sc = worldScopeNow()
       const session = rt.serverInfo?.worldId ?? null
-      const st = pcOnly || (session !== null && vp.worldId !== null && session !== vp.worldId)
+      const st = pcOnly || (sc.bound ? sc.foreign : session !== null && vp.worldId !== null && session !== vp.worldId)
       if (st && simSubs) {
         for (const off of simSubs) off()
         simSubs = null
@@ -58,7 +63,7 @@ export function DronesLayer({ be }: { be: RenderBackend }) {
       }
     }
     syncSim()
-    const offSim = [vp.subscribe(syncSim), rt.onServerInfo(syncSim)]
+    const offSim = [vp.subscribe(syncSim), rt.onServerInfo(syncSim), worldScopeStore.subscribe(syncSim), onWorldReset('drones', () => drones.resetWorld())]
     const offData = rt.onData((m) => {
       if (m.topic !== 'perf/server') return
       const clients = (m.data as { clients?: { conn_id?: string; credit_skips?: number }[] }).clients ?? []

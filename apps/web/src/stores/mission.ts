@@ -6,11 +6,15 @@
 // (`GET /api/missions`, debounced). Path points reference the received buffer without copying (Float32Array view on
 // the blob after its 16-byte header). Detail (R24) is loaded lazily by `loadMissionDetail(mid)` and converted to the
 // overlay shape M06 reads (waypoints, areas, slots). Pure geometry (formation slots, CAPT) lives in ./missionGeom.
+// D2.2-W1: mission rows, paths, coverage and details belong to the world of the realtime source (stores/worldScope): they
+// are taken only while that world is the one the view shows (REST answers that started before a switch are dropped), and
+// a world or source switch clears the store.
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
 import { loop } from '@/engine/loop'
 import { apiGet } from '@/net/api'
 import { rtClient, type DataMsg, type RtClient } from '@/net/rt'
+import { onWorldReset, worldLive, worldScopeNow } from './worldScope'
 
 export { captAssign, captCost, formationSlots, hungarian, rotateSlots, FORMATION_SHAPES, type FormationShape } from './missionGeom'
 
@@ -232,6 +236,7 @@ function schedule(): void {
 
 /** Feed one channel message (exported for tests and replay tools). */
 export function ingestMissionData(m: DataMsg): void {
+  if (!worldLive()) return
   const topic = m.topic
   if (topic.startsWith('mission/') && topic.endsWith('/status')) {
     const prev = pendingRows.get(topic.slice(8, -7)) ?? missionStore.getState().rows.get(topic.slice(8, -7))
@@ -273,8 +278,10 @@ function scheduleIndex(): void {
 
 /** R23: generator and vehicle lists for the rows (the status topic does not carry them). */
 export async function fetchMissionIndex(): Promise<void> {
+  const epoch = worldScopeNow().epoch
   try {
     const r = await apiGet<{ items: { mid: string; generator: string; vehicles: string[] }[] }>('/api/missions')
+    if (worldScopeNow().epoch !== epoch) return
     for (const it of r.items ?? []) known.set(it.mid, { generator: it.generator ?? '', vehicles: it.vehicles ?? [] })
     const s = missionStore.getState()
     let changed = false
@@ -294,8 +301,10 @@ export async function fetchMissionIndex(): Promise<void> {
 
 /** R24 -> overlay detail (waypoints of each item start, task area, formation slots); cached by revision. */
 export async function loadMissionDetail(mid: string): Promise<MissionDetail | null> {
+  const epoch = worldScopeNow().epoch
   try {
     const d = await apiGet<Record<string, unknown>>(`/api/missions/${encodeURIComponent(mid)}`)
+    if (worldScopeNow().epoch !== epoch) return null
     const det = toDetail(d)
     const s = missionStore.getState()
     const detail = new Map(s.detail)
@@ -376,7 +385,9 @@ loop.register('overlay', 'mission-store.bind', () => {
   }
 }, { fps: 1 })
 
-/** Test helper: clear the store and the batching state. */
+onWorldReset('mission', () => resetMissionStore())
+
+/** Test helper and world scope reset: clear the store and the batching state. */
 export function resetMissionStore(): void {
   if (flushTimer !== null) clearTimeout(flushTimer)
   if (indexTimer !== null) clearTimeout(indexTimer)

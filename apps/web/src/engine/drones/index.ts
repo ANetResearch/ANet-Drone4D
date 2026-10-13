@@ -3,6 +3,9 @@
 // drones phase: DroneLayer.update (interpolation at tRender, buckets, instances, glyphs, trails, focus set), latency
 // metrics (tSimToPixel of the focus or selected vehicle, pending cmdToVisible checks, HOLD and extrapolation frames);
 // world phase (order 10, after m13.gimbal): sensor frustums. Epoch changes clear the trails; RESET clears a producer.
+// D2.2-W1: `accept` is the store layer's ingestion gate (stores/worldScope worldLive, passed by viewport/layers/drones.tsx;
+// engine/ never imports stores): a frame of a stream that simulates another world than the view shows is swapped (the slot
+// ring keeps flowing) but never ingested; resetWorld() forgets every sample, pose, trail and highlight of the previous world.
 import type { RateClass, RtClient, TelemetryFrame } from '@/net/rt/types'
 import { events, register, type RenderBackendView } from '../loop'
 import { latency, perfProbe, pushRing } from '../perf/index'
@@ -42,12 +45,16 @@ export interface DroneRuntime {
   fullPoseOf(agentNo: number, pos: Float64Array, quat: Float64Array, vel: Float64Array): boolean
   setSelected(agentNo: number): void
   setSensors(api: SensorsApi | null): void
+  /** forget the samples, poses, trails, highlights and the last frame (world or source switch of the view) */
+  resetWorld(): void
   dispose(): void
 }
 
 export interface DroneRuntimeOptions {
   motionTier?: () => 'full' | 'lite' | 'reduced' | 'off'
   capacity?: number
+  /** ingestion gate: false while the realtime stream simulates another world than the view shows (default: always true) */
+  accept?: () => boolean
 }
 
 export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | null, o: DroneRuntimeOptions = {}): DroneRuntime {
@@ -80,6 +87,7 @@ export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | n
       if (!c) return
       const f = c.swapFrame()
       if (!f) return
+      if (o.accept && !o.accept()) return
       time.ingest(f, ctx.nowMs)
       frame = f
       frameSeq++
@@ -182,6 +190,15 @@ export function createDroneRuntime(be: RenderBackendView, rt: () => RtClient | n
     },
     setSelected(agentNo) {
       layer.setHighlights(agentNo >= 0 ? [agentNo] : [], agentNo, layer.hover)
+    },
+    resetWorld() {
+      time.interp.clearAll()
+      layer.clearTrails()
+      layer.setHighlights([], -1, -1)
+      poses.n = 0
+      lastEpoch = -1
+      frame = null
+      holdState.fill(0)
     },
     setSensors(api) {
       sensors = api

@@ -18,6 +18,8 @@
 // getter; shared show: POST /api/auth/token); updateToken() swaps the token for the next reconnect without dropping the
 // link (keepalive renewal); close 1012 `world_switch` and 4410 reach onWorldSwitch and onSandboxGone; roster entries of
 // kind `target` are kept apart from the vehicles (their agent_no is numbered within targets).
+// D2.2-W1: clearWorldData() forgets the latest swarm sample and the roster when the view's world scope changes (M15
+// ui/shell/RtContext.tsx); the client itself stays world-agnostic (a connection is bound to one world by its serverInfo).
 import { getToken, identityProvider } from '../api'
 import { getEndpoint } from '../endpoint'
 import { openFake, type FakeSourceOptions, type FakeWorld } from './FakeSource'
@@ -160,6 +162,11 @@ class Roster implements RosterView {
       this.byId.set(e.id, e)
     }
     for (const t of this.tlist) this.tByNo.set(t.targetNo, t.id)
+  }
+  /** forget every entry (a world or source switch of the view); the next roster message refills it */
+  clear(): void {
+    if (this.list.length === 0 && this.tlist.length === 0) return
+    this.set(this.version + 1, [])
   }
   targets(): readonly RosterTargetEntry[] {
     return this.tlist
@@ -330,6 +337,16 @@ export class RtClientImpl implements RtClient {
 
   reconnectNow(): void {
     this.worker?.postMessage({ cmd: 'reconnect' })
+  }
+
+  clearWorldData(): void {
+    this.roster.clear()
+    const sw = this.swarm
+    if (sw.n === 0) return
+    sw.n = 0
+    sw.seq = 0
+    sw.tSimMs = 0
+    sw.version++
   }
 
   reauthenticate(token: string, role: 'operator' | 'viewer'): void {

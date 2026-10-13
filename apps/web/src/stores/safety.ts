@@ -8,10 +8,13 @@
 // RESTORED codes (info) close the open alarms of the same event type for that vehicle; uav.state events are not alarms.
 // Writes are coalesced: ingestion only touches module buffers, flushSafety() publishes at most every
 // SAFETY_FLUSH_MS (250 ms, Tier S <= 4 writes/s, M15-AC-021); bindSafety() wires the page RtClient and the selection.
+// D2.2-W1: safety events and rows belong to the world of the realtime source (stores/worldScope): taken only while that
+// world is the one the view shows; a world or source switch resets the store.
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
 import { SAFETY_CODES } from '@awr/contracts/safetyCodes'
 import type { DataMsg, RtEvent } from '@/net/rt'
+import { onWorldReset, worldLive } from './worldScope'
 
 export type Severity = 'info' | 'warning' | 'critical'
 
@@ -305,6 +308,8 @@ export function resetSafety(): void {
   safetyStore.setState({ selected: null, alarms: [], toasts: [], unackedCritical: 0, version: safetyStore.getState().version + 1 })
 }
 
+onWorldReset('safety', () => resetSafety())
+
 /** What the binding needs from the realtime client (tests pass a stub). */
 export interface SafetySource {
   onEvents(cb: (b: readonly RtEvent[]) => void): () => void
@@ -336,11 +341,12 @@ export function bindSafety(rt: SafetySource, selection: SelectionSource, now: ()
     }
   }
   const offEv = rt.onEvents((b) => {
+    if (!worldLive()) return
     for (const e of b) if (e.type === 'sim.reset') resetSafety()
     ingestSafetyEvents(b, now())
   })
   const offData = rt.onData((m) => {
-    if (!primary || m.topic !== `uav/${primary}/safety`) return
+    if (!worldLive() || !primary || m.topic !== `uav/${primary}/safety`) return
     const row = m.data as SafetyRow | null
     if (row && typeof row === 'object' && 'fsm' in row) setSafetyRow(primary, row, now())
   })

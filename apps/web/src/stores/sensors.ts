@@ -21,6 +21,9 @@
 // engine/sensors (views, smoothed gimbal, staleness) and uav/{id}/state_ext (subscribed at 2 Hz for the primary only), and
 // writes only when something changed (<= 4 writes/s, Tier S budget; nothing while the tab is hidden, AWR-14 §4.4).
 // Detections are mirrored at <= 4 Hz whenever the event table changes. Text from the wire passes lib/sanitize.ts.
+// D2.2-W1: sensor poses, payloads, state_ext and detections belong to the world of the realtime source (stores/worldScope):
+// engine/sensors takes them only while that world is the one the view shows (setIngestGate), and a world or source switch
+// clears the engine cache and this store.
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
@@ -30,6 +33,7 @@ import * as sensorsEngine from '@/engine/sensors'
 import { rtClient, type DataMsg, type RtClient } from '@/net/rt'
 import { selectionStore } from './selection'
 import { uiTickDue } from './uiTick'
+import { onWorldReset, worldLive } from './worldScope'
 
 export type SensorKindName = 'camera' | 'lidar' | 'thermal' | 'radar' | 'gnss' | 'imu' | 'baro'
 export type SensorRowState = 'online' | 'standby' | 'degraded' | 'stale' | 'pending' | 'planned'
@@ -261,7 +265,7 @@ let lastKey = ''
 let detSeen = -1
 
 function onData(m: DataMsg): void {
-  if (!m.topic.endsWith('/state_ext') || !m.data || typeof m.data !== 'object') return
+  if (!worldLive() || !m.topic.endsWith('/state_ext') || !m.data || typeof m.data !== 'object') return
   const id = m.topic.split('/')[1]
   if (id !== selectionStore.getState().primary) return
   lastExt = m.data as Record<string, unknown>
@@ -349,6 +353,23 @@ export function attachSensorsFeed(getRt: () => RtClient | null = rtClient): () =
 export function sensorsFeedTick(ctx: FrameCtx | null, rt: RtClient | null): void {
   tick(ctx, rt)
 }
+
+// the engine takes samples only while the realtime source simulates the world the view shows
+sensorsEngine.setIngestGate(worldLive)
+
+/** world scope reset: the engine cache, the primary's state_ext and the store of the previous world go */
+export function resetSensorsWorld(): void {
+  sensorsEngine.resetWorld()
+  extSub?.off()
+  extSub = null
+  lastExt = null
+  lastExtId = null
+  lastKey = ''
+  detSeen = sensorsEngine.detectionsVersion()
+  sensorsStore.setState({ vehicleId: null, sensors: [], gimbal: null, gimbals: [], frameRect: null, stale: false, staleS: null, gnss: null, imu: null,
+    detections: [], payload: null, version: sensorsStore.getState().version + 1 })
+}
+onWorldReset('sensors', resetSensorsWorld)
 
 // detections are needed by the event table even when the sensors tab is hidden: mirror them at <= 4 Hz once the page
 // RtClient exists (a cheap version check per tick; Tier S on the shared UI tick, ADR-066)

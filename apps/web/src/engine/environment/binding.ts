@@ -3,6 +3,8 @@
 // layer) go to EnvStore.ingest; the global epoch of TIME goes to onEpoch (C06); a presets hash mismatch fetches
 // GET /api/env/presets once and evaluates with the server copy (C08); the selected vehicle's uav/{id}/env topic is
 // subscribed at 10 Hz while it is the primary selection (the gateway only produces EnvSample32 for the interest set).
+// D2.2-W1: `accept` is the store layer's ingestion gate (stores/worldScope worldLive, passed by viewport/layers/
+// environment.tsx; engine/ never imports stores): keyframes of a stream that simulates another world are not taken.
 import { apiGet } from '@/net/api'
 import type { RtClient } from '@/net/rt/types'
 import type { EnvKeyframeWire } from './state/keyframe'
@@ -18,14 +20,14 @@ export class EnvBinding {
   /** env.warning{code: asset_unavailable} entered and not left (the panel shows "off (asset unavailable)") */
   assetUnavailable = false
 
-  constructor(private readonly rt: () => RtClient | null, private readonly env: EnvironmentRuntime) {}
+  constructor(private readonly rt: () => RtClient | null, private readonly env: EnvironmentRuntime, private readonly accept: () => boolean = () => true) {}
 
   install(): () => void {
     const c = this.rt()
     if (!c) return () => {}
     this.offs.push(
       c.onData((m) => {
-        if (m.topic !== 'env/state' || !m.data || typeof m.data !== 'object') return
+        if (m.topic !== 'env/state' || !m.data || typeof m.data !== 'object' || !this.accept()) return
         this.frames++
         try {
           this.env.store.ingest(m.data as EnvKeyframeWire, performance.now())
@@ -34,7 +36,9 @@ export class EnvBinding {
         }
         this.maybeFetchPresets()
       }),
-      c.onTime((t) => this.env.store.onEpoch(t.epoch)),
+      c.onTime((t) => {
+        if (this.accept()) this.env.store.onEpoch(t.epoch)
+      }),
       c.onEvents((batch) => {
         for (const ev of batch) {
           if (ev.type === 'env.warning' && ev.data?.code === 'asset_unavailable') this.assetUnavailable = ev.data.state !== 'leave'

@@ -8,12 +8,15 @@
 // message, evidence summary, names) goes through lib/sanitize before it is stored (AWR-03 §8.4 D1-AC-20 note 5).
 // The two axes stay separate: TaskRow.state is the A2A task state, TaskRow.effect the effect status; verified is the
 // single server-side verdict (OK and (verify_trust >= 2 or simulated)).
+// D2.2-W1: agent rows, tasks and evidence belong to the run of the realtime source (stores/worldScope): taken only while
+// its world is the one the view shows; a world or source switch resets the store.
 import { useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { createAwrStore } from '@/lib/createStore'
 import { sanitizeText } from '@/lib/sanitize'
 import { apiGet, apiPost } from '@/net/api'
 import type { DataMsg, RtEvent } from '@/net/rt'
+import { onWorldReset, worldLive } from './worldScope'
 
 export type A2AState = 'submitted' | 'working' | 'input-required' | 'completed' | 'failed' | 'canceled' | 'rejected'
 export type AwrPhase = 'queued' | 'lease' | 'enroute' | 'on_station' | 'executing' | 'returning'
@@ -277,7 +280,9 @@ export function flushAgents(nowMs: number): boolean {
   return true
 }
 
-/** Test helper and session reset. */
+onWorldReset('agents', () => resetAgents())
+
+/** Test helper, session and world scope reset. */
 export function resetAgents(): void {
   agentsBuf.clear()
   tasksBuf.clear()
@@ -404,9 +409,10 @@ export interface AgentsSource {
 export function bindAgents(rt: AgentsSource, now: () => number = () => performance.now()): { setPanelOpen(open: boolean): void; dispose(): void } {
   let offTopics: (() => void)[] = []
   const offEv = rt.onEvents((b) => {
-    applyAgentEvents(b, now())
+    if (worldLive()) applyAgentEvents(b, now())
   })
   const offData = rt.onData((m) => {
+    if (!worldLive()) return
     if (m.topic === 'agent/tasks') {
       if (m.data && typeof m.data === 'object') ingestTasksWire(m.data as Record<string, unknown>, now())
     } else if (m.topic.startsWith('agent/') && m.topic.endsWith('/status')) {

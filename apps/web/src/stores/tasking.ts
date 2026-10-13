@@ -24,6 +24,9 @@
 // sandbox REST (SB-47 to SB-58: one problem+json per failure, `code` and `detail` kept for the forms) and fall back to the
 // WS calls of the same commands on the shared show (nest/*, task/create, task/{tid}/{op}); text from the wire passes
 // lib/sanitize.ts.
+// D2.2-W1: nests, tasks, plans and relay statistics belong to the world of the realtime source (stores/worldScope): topics
+// and REST answers are taken only while that world is the one the view shows (an answer that started before a world or
+// source switch is dropped), and the switch resets the store like an endpoint change.
 import type {
   Nest, NestStatus, PlanReply, RelayStats, Sustainability, TaskingSnapshot, TaskingTask, TaskingTaskPlan, TaskingTaskPreview,
 } from '@awr/contracts/types'
@@ -36,6 +39,7 @@ import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from '@/net/api'
 import { apiPath, getEndpoint, onEndpointChange } from '@/net/endpoint'
 import { rtClient, type CallResult, type ConnState, type DataMsg, type RtClient, type RtEvent } from '@/net/rt'
 import { uiTickDue } from './uiTick'
+import { onWorldReset, worldLive, worldScopeNow } from './worldScope'
 
 export const TASKING_STORE_HZ = 4
 export const NESTS_MAX = 4
@@ -202,6 +206,7 @@ function resetBuffers(): void {
 const TOPIC = /^(nest|task|relay)\/([a-z0-9]+(?:-[a-z0-9]+)*)\/(status|stats)$/
 
 function onData(m: DataMsg): void {
+  if (!worldLive()) return
   const t = TOPIC.exec(m.topic)
   if (!t || !m.data || typeof m.data !== 'object') return
   const [, kind, id] = t
@@ -232,6 +237,7 @@ function onData(m: DataMsg): void {
 const PLAN_EVENTS = new Set(['task.allocated', 'task.reallocated', 'task.state', 'relay.dispatch', 'relay.handover', 'task.created'])
 
 function onEvents(batch: readonly RtEvent[]): void {
+  if (!worldLive()) return
   for (const e of batch) {
     if (e.type === 'nest.launch' || e.type === 'nest.recover') {
       buf.changed = true
@@ -301,6 +307,12 @@ function isSandbox(): boolean {
   return getEndpoint().kind === 'sandbox'
 }
 
+/** endpoint and world-scope epoch of a request: its answer is dropped when either changed meanwhile */
+function stamp(): { ep: ReturnType<typeof getEndpoint>; epoch: number } {
+  return { ep: getEndpoint(), epoch: worldScopeNow().epoch }
+}
+const outdated = (s: { ep: ReturnType<typeof getEndpoint>; epoch: number }): boolean => getEndpoint() !== s.ep || worldScopeNow().epoch !== s.epoch
+
 function noteError(e: unknown): void {
   const s = taskingStore.getState()
   const err = e instanceof ApiError ? { code: e.reason ?? e.status, message: e.message, detail: e.detail } : { code: 0, message: String(e), detail: null }
@@ -308,11 +320,11 @@ function noteError(e: unknown): void {
 }
 
 export async function refreshNests(): Promise<void> {
-  if (!isSandbox()) return
-  const ep = getEndpoint()
+  if (!isSandbox() || !worldLive()) return
+  const st = stamp()
   try {
     const r = await port.get<{ items: Nest[] }>('/nests')
-    if (getEndpoint() !== ep) return
+    if (outdated(st)) return
     buf.nests = [...(r.items ?? [])].sort((a, b) => cmpTid(String(a.id ?? ''), String(b.id ?? '')))
     buf.unknownNest = false
     buf.changed = true
@@ -322,11 +334,11 @@ export async function refreshNests(): Promise<void> {
 }
 
 export async function refreshTasks(): Promise<void> {
-  if (!isSandbox()) return
-  const ep = getEndpoint()
+  if (!isSandbox() || !worldLive()) return
+  const st = stamp()
   try {
     const r = await port.get<{ items: TaskingTask[] }>('/tasks')
-    if (getEndpoint() !== ep) return
+    if (outdated(st)) return
     buf.objs.clear()
     for (const o of r.items ?? []) buf.objs.set(o.tid, o)
     buf.unknownTask = false
@@ -338,14 +350,14 @@ export async function refreshTasks(): Promise<void> {
 
 /** SB-54 include=plan of one task (sandbox; no-op on the shared show) */
 export async function refreshPlan(tid: string): Promise<void> {
-  if (!isSandbox() || buf.planInflight.has(tid)) return
-  const ep = getEndpoint()
+  if (!isSandbox() || !worldLive() || buf.planInflight.has(tid)) return
+  const st = stamp()
   buf.planInflight.add(tid)
   buf.planAtMs.set(tid, Date.now())
   buf.dirtyPlan.delete(tid)
   try {
     const o = await port.get<TaskingTask>(`/tasks/${encodeURIComponent(tid)}?include=plan`)
-    if (getEndpoint() !== ep) return
+    if (outdated(st)) return
     buf.objs.set(tid, o)
     if (o.plan) buf.plans.set(tid, { revision: o.plan.revision, geometry: o.plan.geometry ?? {}, assignments: o.plan.assignments ?? [] })
     buf.changed = true
@@ -360,7 +372,7 @@ export async function refreshPlan(tid: string): Promise<void> {
 }
 
 function scheduleRest(nowMs: number): void {
-  if (!isSandbox() || taskingStore.getState().stale) return
+  if (!isSandbox() || !worldLive() || taskingStore.getState().stale) return
   if (buf.unknownNest || nowMs - buf.refreshAtMs > REFRESH_MS) void refreshNests()
   if (buf.unknownTask || nowMs - buf.refreshAtMs > REFRESH_MS) void refreshTasks()
   if (nowMs - buf.refreshAtMs > REFRESH_MS) buf.refreshAtMs = nowMs
@@ -412,6 +424,8 @@ export function resetTasking(): void {
   lastKey = ''
   taskingStore.setState({ ...blank(), version: taskingStore.getState().version + 1 })
 }
+
+onWorldReset('tasking', () => resetTasking())
 
 /** reference-counted feed (useTasking and the viewport layer attach it); returns the detach function */
 export function attachTaskingFeed(getRt: () => RtClient | null = rtClient): () => void {
@@ -530,9 +544,11 @@ export const taskingActions = {
   /** dry-run (viewers too): the result becomes `preview` (drawn by the layer); 202 polls SB-68 every second (<= 60 s) */
   async preview(spec: TaskSpecBody): Promise<PreviewEntry> {
     const entry: PreviewEntry = { spec, state: 'pending', previewId: null, preview: null, code: 0, detail: null, tWallMs: Date.now() }
+    const epoch = worldScopeNow().epoch
     const set = (e: PreviewEntry): void => {
       const s = taskingStore.getState()
-      if (s.preview && s.preview.tWallMs > e.tWallMs) return
+      // a preview of the previous world never lands after a world or source switch
+      if (worldScopeNow().epoch !== epoch || (s.preview && s.preview.tWallMs > e.tWallMs)) return
       taskingStore.setState({ preview: { ...e }, version: s.version + 1 })
     }
     set(entry)
@@ -636,8 +652,10 @@ export const taskingActions = {
 }
 
 async function loadPreviewKeepouts(): Promise<void> {
+  const st = stamp()
   try {
     const snap = await port.get<TaskingSnapshot>('/tasking/snapshot')
+    if (outdated(st)) return
     const ko: KeepoutCyl[] = []
     for (const k of snap.keepouts ?? []) {
       const kk = k as { id?: string; center_enu_m?: number[]; r_m?: number }

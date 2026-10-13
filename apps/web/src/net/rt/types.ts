@@ -328,6 +328,9 @@ export interface RtClient {
   presence(m: PresenceReport): void
   /** D2.1 internal identity token for the WS handshake (`ident.<token>`); a change reconnects at once */
   setIdentity(token: string | null): void
+  /** D2.2-W1: forget the latest swarm sample and the roster (a world or source switch of the view; the next frame and the
+   *  next roster message of a connection, or of a renewed fleet/roster subscription, refill them). Optional for test doubles */
+  clearWorldData?(): void
   close(): void
 }
 

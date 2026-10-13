@@ -47,7 +47,7 @@ import { REPO_URL } from '@/ui/views/AboutDialog'
 import { useSelection } from '@/stores/selection'
 import { DEMO_PUBLIC } from '@/lib/demo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/components/ui/tooltip'
-import { useSurface } from '@/app/shell/surface'
+import { isCityReplay, useSurface } from '@/app/shell/surface'
 import { sandboxDialogs } from '@/ui/sandbox/dialogs'
 import { onboarding } from '@/ui/sandbox/Onboarding'
 import { useInternal } from '@/app/shell/surface'
@@ -56,6 +56,7 @@ import { requestInternalControl } from '@/ui/shell/control'
 import { usePower } from '@/app/power/store'
 import { layoutActions } from './layoutState'
 import { IconButton } from './IconButton'
+import { useWorldScope } from '@/stores/worldScope'
 
 function Shortcut({ combo }: { combo: string }) {
   return <MenubarShortcut>{comboLabel(combo).join(' ')}</MenubarShortcut>
@@ -192,6 +193,10 @@ function SurfaceRoleBadge() {
   const role = useConnView((s) => s.role)
   const surface = useSurface((s) => s.surface)
   const world = useSurface((s) => s.worldId)
+  const rtPath = useSurface((s) => s.rtPath)
+  // D2.2-W2: a city's recorded show is surfaced the same as the live show (surface = 'shared') but labelled
+  // honestly as a simulated replay, not the live scenario (isCityReplay: app/shell/surface.ts)
+  const replay = isCityReplay(surface, rtPath)
   const internal = useInternal()
   if (internal && surface !== 'sandbox') {
     return (
@@ -213,14 +218,17 @@ function SurfaceRoleBadge() {
     )
   }
   const stat = surface === 'static'
+  const labelKey = stat ? 'role.static' : replay ? 'role.cityReplay' : 'role.shared'
+  const hintKey = stat ? 'hint.staticBrowse' : replay ? 'hint.cityReplay' : 'hint.sharedReadOnly'
+  const icon = stat ? 'layer.pointcloud' : replay ? 'tl.history' : 'layer.visible'
   return (
     <span className="flex items-center gap-1.5">
       <Tooltip>
-        <TooltipTrigger render={<Badge variant="outline" tabIndex={0} className="h-6 gap-1" data-role={role ?? ''} data-demo-role="" data-surface={surface} />}>
-          <Icon icon={stat ? 'layer.pointcloud' : 'layer.visible'} />
-          {t(stat ? 'role.static' : 'role.shared')}
+        <TooltipTrigger render={<Badge variant="outline" tabIndex={0} className="h-6 gap-1" data-role={role ?? ''} data-demo-role="" data-surface={surface} data-city-replay={replay} />}>
+          <Icon icon={icon} />
+          {t(labelKey)}
         </TooltipTrigger>
-        <TooltipContent>{t(stat ? 'hint.staticBrowse' : 'hint.sharedReadOnly')}</TooltipContent>
+        <TooltipContent>{t(hintKey)}</TooltipContent>
       </Tooltip>
       <Button size="sm" variant="outline" onClick={() => sandboxDialogs.open('start', { world: stat ? world : null })} data-header-open-sandbox="">
         <Icon icon="sandbox.mine" data-icon="inline-start" />
@@ -365,7 +373,9 @@ export function AppHeader({ compact }: { compact: boolean }) {
   const internalOn = useInternal()
   const hidden = DEMO_PUBLIC && !internalOn
   const internalLocal = internalOn && surface === 'local'
-  const shownRun = replayRun ?? runId
+  // D2.2-W1: the run of a source that simulates another world (or of no source: static browsing) is not this world's run
+  const foreign = useWorldScope((s) => s.bound && s.foreign)
+  const shownRun = replayRun ?? (foreign ? null : runId)
   return (
     <header data-figure="header" className="app-layer-header flex items-center gap-2 border-b bg-card px-2">
       <BrandLockup compact={compact} />

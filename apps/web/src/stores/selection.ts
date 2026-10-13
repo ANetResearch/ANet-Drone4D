@@ -1,9 +1,12 @@
 // Selection (M15-FR-031, §7.1.2; AWR-14 §6.2; AWR-10 §6.4). Owner: M15. ids are ordered and unique (<= 1000); primary is
 // the focused vehicle; hover is the pointer target. M06 viewport/bindings/selection.ts subscribes and calls
 // drones.setHighlights (input to 3D highlight <= 2 frames). Writes are driven by user actions only.
+// D2.2-W1: the ids name vehicles of the world of the realtime source: a world scope reset (stores/worldScope) clears the
+// selection and the hover.
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
 import { LIMITS } from '@/lib/tokens/input.gen'
+import { onWorldReset } from './worldScope'
 
 export interface SelectionState {
   ids: readonly string[]
@@ -69,6 +72,11 @@ export const selection = {
     }
   },
 }
+
+onWorldReset('selection', () => {
+  selection.clear()
+  selection.setHover(null)
+})
 
 export function useSelection<T>(sel: (s: SelectionState) => T): T {
   return useStore(selectionStore, sel)
