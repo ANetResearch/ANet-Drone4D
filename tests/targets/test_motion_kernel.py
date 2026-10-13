@@ -33,16 +33,19 @@ def _fields(ms: MotionState) -> tuple:
             bool(ms.path_done), ms.odo_m, bool(ms.blocked), ms.detour, ms.flat_c, ms.flat_r, ms.flat_z, ms.flat_fail)
 
 
+def _close(x: float, y: float) -> bool:
+    """numba 内核与 Python 参考逐步积分：浮点按 1e-9 相对与绝对容差比较（不同 CPU 指令集上末位不同，并随步数缓慢累积），
+    离散状态在 _same 中仍逐项相等。"""
+    return (math.isnan(x) and math.isnan(y)) or math.isclose(x, y, rel_tol=1e-9, abs_tol=1e-9)
+
+
 def _same(a: tuple, b: tuple) -> bool:
     for x, y in zip(a, b, strict=True):
         if isinstance(x, tuple) or isinstance(y, tuple):
-            if (x is None) != (y is None) or (x is not None and tuple(map(float, x)) != tuple(map(float, y))):
+            if (x is None) != (y is None) or (x is not None and not all(_close(u, v) for u, v in zip(map(float, x), map(float, y), strict=True))):
                 return False
         elif isinstance(x, float) or isinstance(y, float):
-            fx, fy = float(x), float(y)
-            if not (fx == fy or (math.isnan(fx) and math.isnan(fy))):
-                return False
-            if fx == 0.0 and math.copysign(1.0, fx) != math.copysign(1.0, fy):
+            if not _close(float(x), float(y)):
                 return False
         elif x != y:
             return False
