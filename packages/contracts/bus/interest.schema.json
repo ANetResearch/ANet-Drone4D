@@ -38,8 +38,95 @@
           "state_ext",
           "safety",
           "sensor",
-          "env"
+          "env",
+          "perception",
+          "nav",
+          "radar",
+          "acoustic",
+          "lidar"
         ]
+      }
+    },
+    "streams": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "D2 per-vehicle data products generated on demand (AWR-04 §11.2): agent_no lists per stream; lidar holds at most one vehicle per session",
+      "properties": {
+        "perception": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "nav": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "radar": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "acoustic": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "lidar": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "field": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "description": "FieldInterestCode of every subscribed field/* topic (1 acoustic, 2 visual, 3 thermal, 4 radar, 5 volumes)"
+        },
+        "quant": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "description": "target_no of every subscribed target/{id}/quant"
+        },
+        "fsub": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "description": "subscription generation of field/* and target/*/quant (incremented on every subscribe op; a change makes the sim-core send keyframes at once)"
+        }
       }
     }
   },

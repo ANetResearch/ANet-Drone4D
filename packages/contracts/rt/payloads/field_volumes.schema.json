@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/field_volumes.schema.json",
+  "title": "awr.field.volumes.v1",
+  "description": "Topic field/volumes (on subscription; on change, keyframe every 30 s and on a new subscription) and SB-75 (AWR-17 §17.20.6; AWR-04 §15.11.4 item 2; drafted by M19 WP-19b). Per target, enabled body and session model: effective radius table over 8 azimuths (relative to the target heading, az_deg) x 6 elevations (target looking at the vehicle, el_deg) in decimetres, folded: 1 item = uniform, 6 = per elevation, 8 = per azimuth, 48 = azimuth-major i*6 + j; w_m is the transition half-width (P 0.9 to 0.1) at the reference direction. Non-keyframes list only targets whose rev changed. Display probability P = 1/(1 + exp((r - r_eff(dir))/(w/2.197))) inside the configured body (geometric mode: P = 1 inside unless physical reference is shown).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "keyframe": {
+      "type": "boolean"
+    },
+    "models": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]{1,40}$"
+      }
+    },
+    "az_deg": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "number"
+      }
+    },
+    "el_deg": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "number"
+      }
+    },
+    "tgt": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "rev": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bodies": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "idx": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3
+                },
+                "kind": {
+                  "enum": [
+                    "visual",
+                    "acoustic",
+                    "radar"
+                  ]
+                },
+                "shape": {
+                  "enum": [
+                    "sphere",
+                    "hemisphere",
+                    "cylinder",
+                    "sector"
+                  ]
+                },
+                "mode": {
+                  "enum": [
+                    "geometric",
+                    "physical"
+                  ]
+                },
+                "r_eff_dm": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 48,
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 65535
+                    }
+                  }
+                },
+                "w_m": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "unit": "m"
+                }
+              },
+              "required": [
+                "idx",
+                "kind",
+                "shape",
+                "mode",
+                "r_eff_dm",
+                "w_m"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "rev",
+          "bodies"
+        ]
+      }
+    }
+  },
+  "required": [
+    "t_sim_ns",
+    "keyframe",
+    "models",
+    "az_deg",
+    "el_deg",
+    "tgt"
+  ]
+}

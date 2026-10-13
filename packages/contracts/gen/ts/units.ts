@@ -44,8 +44,20 @@ export const UNIT_SUFFIXES: Readonly<Record<string, readonly [string, string]>> 
   "_pct_s": ["%/s", "rate of percentage"],
   "_mb_per_min": ["MiB/min", "write rate"],
   "_mb_per_s": ["MiB/s", "throughput"],
-  "_cms": ["cm/s", "Lite32 vel_cms only (binary layout)"],
+  "_cms": ["cm/s", "cm/s in binary layouts only (Lite32 vel_cms, TargetLite32 speed_cms)"],
   "_milli": ["x1/1000", "fixed point x1000 (StateRing rate_milli, rtf_milli)"],
+  "_db": ["dB", "level difference, gain or SNR"],
+  "_dba": ["dB(A)", "A-weighted sound level"],
+  "_dbm": ["dBm", "RF power"],
+  "_lx": ["lx", "illuminance"],
+  "_urad": ["urad", "small angle (jitter)"],
+  "_nm": ["nm", "wavelength"],
+  "_um": ["um", "pixel pitch and band edges"],
+  "_ghz": ["GHz", "radar frequency"],
+  "_mhz": ["MHz", "RF frequency"],
+  "_mk": ["mK", "NETD"],
+  "_cm": ["cm", "GSD in requests"],
+  "_kib": ["KiB", "size"],
 }
 export const UNIT_DENIED_SUFFIXES: Readonly<Record<string, string>> = {"_m_s":"write _mps","_msec":"write _ms","_sec":"write _s","_secs":"write _s","_kmh":"write _mps","_kts":"write _mps","_ft":"write _m","_feet":"write _m","_meters":"write _m","_degrees":"write _deg","_mph":"write _mps"}
 export const UNIT_DENIED_NAMES: Readonly<Record<string, string>> = {"speed_ms":"speed_mps","gust_amp_ms":"gust_amp_mps","vmax_ms":"vmax_mps","w_mean_ms":"w_mean_mps","turb_sigma_u_ref_ms":"turb_sigma_u_ref_mps","wind_rating_ms":"wind_rating_mps","speed_ref_ms":"speed_ref_mps","ref_speed_ms":"ref_speed_mps"}

@@ -284,6 +284,33 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "IdentityRequest": {
+        "properties": {
+          "principal_hint": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Principal Hint"
+          },
+          "secret": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret"
+        ],
+        "title": "IdentityRequest",
+        "type": "object"
+      },
       "KeepBody": {
         "additionalProperties": false,
         "properties": {
@@ -838,6 +865,24 @@
         "title": "TaskSubmit",
         "type": "object"
       },
+      "TicketRequest": {
+        "properties": {
+          "principal_hint": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Principal Hint"
+          }
+        },
+        "title": "TicketRequest",
+        "type": "object"
+      },
       "TokenRequest": {
         "properties": {
           "admin_secret": {
@@ -863,6 +908,18 @@
               }
             ],
             "title": "Client"
+          },
+          "identity_token": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity Token"
           },
           "principal_hint": {
             "anyOf": [
@@ -1001,6 +1058,18 @@
           "exp_unix_ns": {
             "title": "Exp Unix Ns",
             "type": "string"
+          },
+          "identity": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity"
           },
           "principal_id": {
             "title": "Principal Id",
@@ -1537,6 +1606,63 @@
           }
         },
         "summary": "Confirm",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/identity": {
+      "delete": {
+        "description": "R80：撤销身份令牌（jti 写入 `var/identity/revoked.json`；两个 api 与池 ≤ 1 Hz 重载）。",
+        "operationId": "identity_logout_api_auth_identity_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Identity Logout",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "description": "R79：show-api 是唯一比对点（M17 身份库：常量时间比对、补足 300 ms ± 25 ms、前缀、聚合前缀与全站锁定）。\n成功 200 `{identity_token, exp_unix_ns, tier}`；错误 401 `304`；未配置 403 `115`；锁定 429 `516`；速率 429 `111`。",
+        "operationId": "identity_unlock_api_auth_identity_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Identity Unlock Api Auth Identity Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Identity Unlock",
         "tags": [
           "auth"
         ]
@@ -2519,6 +2645,26 @@
         "summary": "Clear Fault",
         "tags": [
           "fleet"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "description": "D2.1（M11-FR-229；17 §17.20.1）：公开的构建信息 `build{version, channel, release}`（部署目录 RELEASE 与 pyproject.toml）。",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "sys"
         ]
       }
     },
@@ -4249,6 +4395,138 @@
         "summary": "Restart",
         "tags": [
           "sys"
+        ]
+      }
+    },
+    "/api/viewer/queue": {
+      "post": {
+        "operationId": "issue_api_viewer_queue_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Issue Api Viewer Queue Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue",
+        "tags": [
+          "viewer"
+        ]
+      }
+    },
+    "/api/viewer/queue/{ticket_id}": {
+      "delete": {
+        "operationId": "leave_api_viewer_queue__ticket_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "title": "Ticket Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leave",
+        "tags": [
+          "viewer"
+        ]
+      },
+      "get": {
+        "operationId": "poll_api_viewer_queue__ticket_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "title": "Ticket Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wait_s",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 25,
+              "minimum": 0,
+              "title": "Wait S",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Poll Api Viewer Queue  Ticket Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Poll",
+        "tags": [
+          "viewer"
         ]
       }
     },

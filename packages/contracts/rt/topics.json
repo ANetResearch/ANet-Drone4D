@@ -360,20 +360,22 @@
     },
     {
       "pattern": "uav/{id}/sensor/lidar/scan",
-      "kind": "state",
-      "encoding": "raw",
+      "kind": "blob",
+      "encoding": "blob",
       "schemaName": "awr.LidarScan8.v1",
-      "native_hz": 10,
+      "native_hz": 2,
       "default_rate": {
-        "S": 5,
-        "B": 5,
-        "A": 5
+        "S": 2,
+        "B": 2,
+        "A": 2
       },
       "mode": "latest",
       "priority": 3,
-      "self_contained": false,
+      "self_contained": true,
       "owner": "M13",
-      "d1": "V0.2"
+      "d1": "V0.2-demo",
+      "interest": true,
+      "doc": "M13 §7.2.4 blob, 8 B per point, <= 20 000 points per frame; produced while subscribed, <= 1 stream per session (else error 315); advanced from V0.2 to D2"
     },
     {
       "pattern": "env/wind/frame",
@@ -388,6 +390,350 @@
       "owner": "M07",
       "d1": "V0.4",
       "doc": "AWRV kind 5 or URL"
+    },
+    {
+      "pattern": "swarm/target/state",
+      "kind": "state",
+      "encoding": "raw",
+      "schemaName": "awr.TargetLite32.v1",
+      "native_hz": 10,
+      "default_rate": {
+        "S": 10,
+        "B": 10,
+        "A": 10
+      },
+      "mode": "latest",
+      "priority": 1,
+      "self_contained": false,
+      "owner": "M18",
+      "d1": "V0.2-demo",
+      "clock": "sim",
+      "interest": false,
+      "doc": "all targets (<= 32) in one record, n rows of 32 B; spliced from state/sim-core/targets without re-encoding"
+    },
+    {
+      "pattern": "target/{id}/detail",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.target.detail.v1",
+      "native_hz": 2,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M18",
+      "d1": "V0.2-demo",
+      "interest": false,
+      "doc": "selected target; radius_eff_m covers every model in the session (<= 8)"
+    },
+    {
+      "pattern": "uav/{id}/perception",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.uav.perception.v1",
+      "native_hz": 5,
+      "default_rate": {
+        "S": 5,
+        "B": 5,
+        "A": 5
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M19",
+      "d1": "V0.2-demo",
+      "clock": "sim",
+      "interest": true,
+      "doc": "selected vehicle and FPV"
+    },
+    {
+      "pattern": "uav/{id}/payload",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.uav.payload.v1",
+      "native_hz": 2,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M13",
+      "d1": "V0.2-demo",
+      "interest": false
+    },
+    {
+      "pattern": "uav/{id}/sensor/nav",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.sensor.nav.v1",
+      "native_hz": 10,
+      "default_rate": {
+        "S": 10,
+        "B": 10,
+        "A": 10
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M13",
+      "d1": "V0.2-demo",
+      "clock": "sim",
+      "interest": true,
+      "doc": "produced while subscribed"
+    },
+    {
+      "pattern": "uav/{id}/sensor/radar/tracks",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.sensor.radar_tracks.v1",
+      "native_hz": 5,
+      "default_rate": {
+        "S": 5,
+        "B": 5,
+        "A": 5
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M19",
+      "d1": "V0.2-demo",
+      "clock": "sim",
+      "interest": true,
+      "doc": "no target truth ids"
+    },
+    {
+      "pattern": "uav/{id}/sensor/acoustic/bearings",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.sensor.acoustic_bearings.v1",
+      "native_hz": 2,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M19",
+      "d1": "V0.2-demo",
+      "interest": true,
+      "doc": "no target truth ids"
+    },
+    {
+      "pattern": "nest/{id}/status",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.nest.status.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M20",
+      "d1": "V0.2-demo",
+      "interest": false
+    },
+    {
+      "pattern": "task/{tid}/status",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.task.status.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M20",
+      "d1": "V0.2-demo",
+      "interest": false,
+      "doc": "1 Hz plus on change; revision + 1 when the plan geometry changes"
+    },
+    {
+      "pattern": "relay/{tid}/stats",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.relay.stats.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M20",
+      "d1": "V0.2-demo",
+      "interest": false
+    },
+    {
+      "pattern": "sandbox/session",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.sandbox.session_state.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 3,
+      "self_contained": true,
+      "owner": "M17",
+      "d1": "V0.2-demo",
+      "clock": "wall",
+      "interest": false,
+      "apis": [
+        "sandbox"
+      ],
+      "doc": "sandbox-api only"
+    },
+    {
+      "pattern": "field/acoustic",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.field.profile.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M19",
+      "d1": "V0.2-demo",
+      "clock": "wall",
+      "interest": true,
+      "doc": "radial profile of every vehicle; delta frames carry only changed vehicles, keyframe every 5 s and on a new subscription (interest fsub)"
+    },
+    {
+      "pattern": "field/visual",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.field.profile.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M19",
+      "d1": "V0.2-demo",
+      "clock": "wall",
+      "interest": true,
+      "doc": "radial profile of every vehicle; delta frames carry only changed vehicles, keyframe every 5 s and on a new subscription (interest fsub)"
+    },
+    {
+      "pattern": "field/thermal",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.field.profile.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M19",
+      "d1": "V0.2-demo",
+      "clock": "wall",
+      "interest": true,
+      "doc": "radial profile of every vehicle; delta frames carry only changed vehicles, keyframe every 5 s and on a new subscription (interest fsub)"
+    },
+    {
+      "pattern": "field/radar",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.field.profile.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M19",
+      "d1": "V0.2-demo",
+      "clock": "wall",
+      "interest": true,
+      "doc": "radial profile of every vehicle; delta frames carry only changed vehicles, keyframe every 5 s and on a new subscription (interest fsub)"
+    },
+    {
+      "pattern": "field/volumes",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.field.volumes.v1",
+      "native_hz": 0.5,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M19",
+      "d1": "V0.2-demo",
+      "clock": "wall",
+      "interest": true,
+      "doc": "effective radius tables per (target, body, model); on change, keyframe every 30 s and on a new subscription"
+    },
+    {
+      "pattern": "target/{id}/quant",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.target.quant.v1",
+      "native_hz": 2,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M19",
+      "d1": "V0.2-demo",
+      "clock": "sim",
+      "interest": true,
+      "doc": "pair readings of the selected target (<= 12 pairs), columnar enc soa1"
     }
+  ],
+  "default_subscriptions_sandbox": [
+    "swarm/target/state@10",
+    "nest/*/status@1",
+    "task/*/status@1",
+    "relay/*/stats@1",
+    "sandbox/session@1",
+    "uav/{selected}/payload@2",
+    "uav/{selected}/perception@5",
+    "target/{selected_target}/detail@2"
   ]
 }

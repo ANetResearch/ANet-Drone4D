@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/target/1/keepout.schema.json",
+  "title": "awr.target.keepout.v1 (KeepoutVolume)",
+  "description": "Keepout volume handed to planning (AWR-04 §8.1; M10 §15.3.1; drafted by M18). r_m already includes the margin m = 20 m + 3 sigma_hold and the motion margin; M10 only adds r_col. Angles follow AWR-03 §5.4 (World ENU, rad, counter-clockwise from east); moving targets never produce sector.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "shape": {
+      "enum": [
+        "cylinder",
+        "sphere",
+        "hemisphere",
+        "sector"
+      ]
+    },
+    "center_enu_m": {
+      "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+    },
+    "r_m": {
+      "type": "number",
+      "maximum": 3000,
+      "exclusiveMinimum": 0,
+      "unit": "m"
+    },
+    "z_min_m": {
+      "type": "number",
+      "unit": "m",
+      "description": "absolute ENU z; cylinder and sector bottom, hemisphere centre height"
+    },
+    "z_max_m": {
+      "type": "number",
+      "unit": "m"
+    },
+    "yaw_rad": {
+      "type": "number",
+      "minimum": -3.141592653589793,
+      "maximum": 3.141592653589793,
+      "unit": "rad",
+      "description": "sector axis"
+    },
+    "half_angle_rad": {
+      "type": "number",
+      "maximum": 3.141592653589793,
+      "exclusiveMinimum": 0,
+      "unit": "rad",
+      "description": "sector only"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "target",
+            "zone",
+            "manual"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "vol_idx": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "shape",
+    "center_enu_m",
+    "r_m"
+  ]
+}

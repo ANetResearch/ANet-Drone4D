@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/tasking/1/sustainability.schema.json",
+  "title": "awr.tasking.sustainability.v1",
+  "description": "7x24 sustainability assessment (AWR-04 §9.6; SB-56; dry-run of relay and area_guard).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "verdict": {
+      "enum": [
+        "yes",
+        "no",
+        "not_applicable"
+      ]
+    },
+    "horizon_s": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "unit": "s"
+    },
+    "bottlenecks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "night_sensor",
+              "los",
+              "weather",
+              "airframe",
+              "charger",
+              "battery",
+              "link_range",
+              "wind"
+            ]
+          },
+          "detail": {}
+        },
+        "required": [
+          "code"
+        ]
+      }
+    },
+    "windows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "t_from_unix_ns": {
+            "type": "string",
+            "pattern": "^[0-9]{1,20}$",
+            "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+          },
+          "t_to_unix_ns": {
+            "type": "string",
+            "pattern": "^[0-9]{1,20}$",
+            "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+          },
+          "band": {
+            "enum": [
+              "day",
+              "low",
+              "night"
+            ]
+          },
+          "feasible": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "d_lo_m": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "unit": "m"
+          },
+          "d_hi_m": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "unit": "m"
+          }
+        },
+        "required": [
+          "t_from_unix_ns",
+          "t_to_unix_ns",
+          "band",
+          "feasible"
+        ]
+      }
+    },
+    "n_air": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "n_air_recommended": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "chargers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "need": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "have": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "packs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "need": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "have": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "required": [
+    "verdict"
+  ]
+}

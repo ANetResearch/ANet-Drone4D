@@ -1,0 +1,535 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json",
+  "title": "awr.vehicle.instance.v1 (fleet instance REST shapes)",
+  "description": "Sandbox fleet resources SB-28 to SB-37 (AWR-17 §17.6.3; M08 §15.3.8; AWR-20 §7.7): root = list item; $defs hold the create request, patch, full state, sensors and command bodies. Create: 12 vehicles max (505), unknown model 520, nest incompatible 525, mount 560 or 522.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "agent_no": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "kind": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "profile_id": {
+      "type": "string"
+    },
+    "backend": {
+      "type": "string"
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "lifecycle": {
+      "type": "string"
+    },
+    "flight_state": {
+      "type": "string"
+    },
+    "sub": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "battery_pct": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100,
+      "unit": "%"
+    },
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "owner": {
+          "enum": [
+            "NONE",
+            "OPERATOR",
+            "MISSION",
+            "AGENT",
+            "SWARM",
+            "SAFETY",
+            "PILOT",
+            "EXTERNAL"
+          ]
+        },
+        "holder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expires_unix_ms": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "owner"
+      ]
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]{1,40}$"
+    },
+    "category": {
+      "enum": [
+        "multirotor",
+        "fixed_wing",
+        "vtol"
+      ]
+    },
+    "label": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nest_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "work": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tid": {
+              "$ref": "../../world/1/common.schema.json#/$defs/slug"
+            },
+            "wid": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tid",
+            "wid"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "manual": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "agent_no",
+    "model_id",
+    "lifecycle",
+    "flight_state"
+  ],
+  "$defs": {
+    "create_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "../../world/1/common.schema.json#/$defs/slug"
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "nest_id": {
+          "oneOf": [
+            {
+              "$ref": "../../world/1/common.schema.json#/$defs/slug"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "home_enu_m": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 32
+        },
+        "yaw_rad": {
+          "type": "number",
+          "unit": "rad"
+        },
+        "initial_soc": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "sensors": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]{1,24}$"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limits_profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lights": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "nav": {
+              "type": "boolean"
+            },
+            "strobe": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "model_id"
+      ],
+      "description": "vehicle instance configuration (AWR-17 §17.6.3 POST body; AWR-20 §7.7)"
+    },
+    "created": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "../../world/1/common.schema.json#/$defs/slug"
+        },
+        "agent_no": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lifecycle": {
+          "type": "string"
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "nest_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "agent_no",
+        "lifecycle",
+        "model_id"
+      ]
+    },
+    "patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "nest_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sensors": {
+          "type": "array"
+        },
+        "limits_profile": {
+          "type": "string"
+        },
+        "lights": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "nav": {
+              "type": "boolean"
+            },
+            "strobe": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "t_sim_ns": {
+          "$ref": "../../world/1/common.schema.json#/$defs/int64"
+        },
+        "state": {
+          "type": "object",
+          "description": "Full64 decoded (AWR-17 R13)"
+        },
+        "state_ext": {
+          "$ref": "../../rt/1/uav_state_ext.schema.json"
+        },
+        "fw": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "MC",
+                    "TRANSITION_FW",
+                    "FW",
+                    "TRANSITION_MC"
+                  ]
+                },
+                "airspeed_mps": {
+                  "type": "number",
+                  "unit": "m/s"
+                },
+                "bank_rad": {
+                  "type": "number",
+                  "unit": "rad"
+                },
+                "gamma_rad": {
+                  "type": "number",
+                  "unit": "rad"
+                },
+                "hover_used_s": {
+                  "type": "number",
+                  "minimum": 0,
+                  "unit": "s"
+                }
+              },
+              "required": [
+                "mode"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "energy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "e_avail_wh": {
+              "type": "number",
+              "unit": "Wh"
+            },
+            "e_rtl_wh": {
+              "type": "number",
+              "unit": "Wh"
+            },
+            "e_res_wh": {
+              "type": "number",
+              "unit": "Wh"
+            },
+            "t_end_s": {
+              "type": "number",
+              "unit": "s"
+            }
+          }
+        }
+      },
+      "required": [
+        "t_sim_ns",
+        "state"
+      ],
+      "description": "SB-33"
+    },
+    "sensors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "payload": {
+          "$ref": "../../sensor/1/payload.schema.json"
+        },
+        "sensors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]{1,24}$"
+              },
+              "type": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "spec_ref": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mount": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "pos_m": {
+                    "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+                  },
+                  "q_xyzw": {
+                    "$ref": "../../world/1/common.schema.json#/$defs/quatXYZW"
+                  }
+                }
+              },
+              "state": {
+                "enum": [
+                  "ACTIVE",
+                  "STANDBY",
+                  "DEGRADED",
+                  "FAULT"
+                ]
+              },
+              "mode": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "kind",
+              "state",
+              "enabled"
+            ]
+          }
+        }
+      },
+      "required": [
+        "sensors"
+      ],
+      "description": "SB-34"
+    },
+    "command_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "op": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60000,
+          "default": 3000
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "description": "SB-35"
+    },
+    "lease_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priority": {
+          "enum": [
+            "normal",
+            "override"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "command",
+            "velocity"
+          ]
+        },
+        "ttl_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "return_to": {
+          "enum": [
+            "none",
+            "pool",
+            "hover"
+          ]
+        }
+      },
+      "description": "SB-36, SB-37"
+    }
+  }
+}

@@ -8,8 +8,10 @@ import re
 
 NAMESPACE_FMT = "awr/{world}/{run}"
 CHUNK_RE = re.compile("^[a-z0-9][a-z0-9_-]*$")
-EVENT_CATEGORIES: tuple[str, ...] = ("cmd", "safety", "mission", "sim", "env", "lease", "proc", "rec", "job", "world", "sensor", "agent", "health")
-PRODUCERS: tuple[str, ...] = ("sim-core", "replay", "api", "supervisor", "recorder", "replay-worker", "agent-runtime", "job-worker", "geo-worker")
+EVENT_CATEGORIES: tuple[str, ...] = ("cmd", "safety", "mission", "sim", "env", "lease", "proc", "rec", "job", "world", "sensor", "agent", "health", "target", "perception", "nest", "task", "relay", "sandbox")
+PRODUCERS: tuple[str, ...] = ("sim-core", "replay", "api", "supervisor", "recorder", "replay-worker", "agent-runtime", "job-worker", "geo-worker", "sandbox-pool", "sandbox-api")
+POOL_NAMESPACE = "awr/_sandbox/pool"
+POOL_KEYS: frozenset[str] = frozenset(("EVT_SANDBOX_POOL", "STATE_SANDBOX_POOL", "SYS_SESSION"))
 
 
 def _chunk(x: str) -> str:
@@ -20,6 +22,11 @@ def _chunk(x: str) -> str:
 
 def namespace(world: str, run: str) -> str:
     return NAMESPACE_FMT.format(world=_chunk(world), run=_chunk(run))
+
+
+def pool_key(rel: str) -> str:
+    """Absolute key in the sandbox-pool namespace awr/_sandbox/pool (keys with ns = pool, AWR-17 §17.10.1)."""
+    return f"{POOL_NAMESPACE}/{rel}"
 
 
 def proc_alive(name: str) -> str:
@@ -142,3 +149,68 @@ def svc_geo(op: str) -> str:
 
 def state_frame(producer: str) -> str:
     return f"state/{_chunk(producer)}/frame"
+
+
+def sys_session(op: str) -> str:
+    return f"sys/session/{_chunk(op)}"
+
+
+EVT_SANDBOX_POOL = "evt/sandbox-pool/session"
+
+
+STATE_SANDBOX_POOL = "state/sandbox-pool/sessions"
+
+
+def ctl_plan(op: str) -> str:
+    return f"ctl/plan/{_chunk(op)}"
+
+
+CTL_TARGET = "ctl/sim-core/target"
+
+
+CTL_TASKING = "ctl/sim-core/tasking"
+
+
+CTL_SNAPSHOT = "ctl/sim-core/snapshot"
+
+
+STATE_TARGETS = "state/sim-core/targets"
+
+
+STATE_TARGET_DETAIL = "state/sim-core/target_detail"
+
+
+STATE_PERCEPTION = "state/sim-core/perception"
+
+
+STATE_NAV = "state/sim-core/nav"
+
+
+STATE_RADAR = "state/sim-core/radar"
+
+
+STATE_ACOUSTIC = "state/sim-core/acoustic"
+
+
+STATE_LIDAR = "state/sim-core/lidar"
+
+
+STATE_PAYLOAD = "state/sim-core/payload"
+
+
+STATE_NESTS = "state/sim-core/nests"
+
+
+STATE_TASKS = "state/sim-core/tasks"
+
+
+STATE_RELAY = "state/sim-core/relay"
+
+
+STATE_FIELD = "state/sim-core/field"
+
+
+STATE_TARGET_QUANT = "state/sim-core/target_quant"
+
+
+CTL_CHECKPOINT = "ctl/sim-core/checkpoint"

@@ -2,12 +2,15 @@
 // Types for every JSON Schema under packages/contracts (json-schema-to-typescript 16, one bundled schema).
 
 /**
- * Recording block messages (awr.StateExtBlock.v1, awr.SafetyBlock.v1). AWR-16 §13.4 (msgpack snake_case).
+ * awr.sensor.acoustic_array.v1 (microphone array). Model file vehicles/sensor_models/<id>.yaml or mount file vehicles/<dir>/sensors/<file>.yaml (AWR-20 §7.5): a model file carries model_id and model_version; a mount file carries sensor_id, spec_ref and mount plus whitelisted overrides; the effective spec is deep_merge(model, mount).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "Blocks".
+ * via the `definition` "AcousticArray".
  */
-export type Blocks = BlocksStateExtBlock | BlocksSafetyBlock
+export type AcousticArray = AcousticArray1 & AcousticArray2
+export type AcousticArray1 = {
+  [k: string]: unknown
+}
 /**
  * @minItems 3
  * @maxItems 3
@@ -16,6 +19,35 @@ export type Blocks = BlocksStateExtBlock | BlocksSafetyBlock
  * via the `definition` "WorldCommonVec3".
  */
 export type WorldCommonVec3 = [number, number, number, ...number[]]
+/**
+ * @minItems 4
+ * @maxItems 4
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "WorldCommonQuatXYZW".
+ */
+export type WorldCommonQuatXYZW = [number, number, number, number, ...number[]]
+/**
+ * Vehicle, zone, scenario, session and mission ids (AWR-03 §5.6).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "WorldCommonSlug".
+ */
+export type WorldCommonSlug = string
+/**
+ * int64 value: a JSON integer below 2^53 in magnitude, or a decimal string (AWR-16 §1.4 rule 5).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "WorldCommonInt64".
+ */
+export type WorldCommonInt64 = number | string
+/**
+ * Recording block messages (awr.StateExtBlock.v1, awr.SafetyBlock.v1). AWR-16 §13.4 (msgpack snake_case).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Blocks".
+ */
+export type Blocks = BlocksStateExtBlock | BlocksSafetyBlock
 /**
  * Nested row-major 4x4 affine matrix. Last row must be [0,0,0,1] (semantic check V-C-01).
  *
@@ -199,14 +231,36 @@ export type BusEventKnownKinds =
   | 'anet.evidence.gap'
   | 'agent.health'
   | 'agent.runtime.state'
-/**
- * @minItems 4
- * @maxItems 4
- *
- * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "WorldCommonQuatXYZW".
- */
-export type WorldCommonQuatXYZW = [number, number, number, number, ...number[]]
+  | 'target.discovered'
+  | 'target.state'
+  | 'perception.level'
+  | 'perception.capture'
+  | 'perception.capture_lost'
+  | 'perception.detect'
+  | 'uav.keepout_guard'
+  | 'fw.wind_exceeds'
+  | 'nest.launch'
+  | 'nest.recover'
+  | 'nest.swap_done'
+  | 'nest.dispatch_delayed'
+  | 'task.created'
+  | 'task.state'
+  | 'task.allocated'
+  | 'task.reallocated'
+  | 'relay.dispatch'
+  | 'relay.handover'
+  | 'relay.gap'
+  | 'sandbox.state'
+  | 'sandbox.expiring'
+  | 'sandbox.rate'
+  | 'sandbox.slot_ready'
+  | 'sensor.mode'
+  | 'task.warning'
+  | 'vtol.hover_limit'
+  | 'sandbox.parking'
+  | 'sandbox.parked'
+  | 'sandbox.resumed'
+  | 'relay.day_rollover'
 /**
  * TSIR predicate (numeric form, ANetCore v0.14 tsir/predicate.go). M14 §6.7.1: op 1 AND, 2 OR, 3 NOT, 10 ARTIFACT, 11 TEST, 12 THRESHOLD, 13 SCOPE; depth <= 16, AND/OR children 2..64; validation failure = MALFORMED (fail closed). Private resource kinds: 101 zone, 102 vehicle, 103 capability.
  */
@@ -324,12 +378,13 @@ export type PredicateNode =
  */
 export type WorldCommonSemver = string
 /**
- * Vehicle, zone, scenario, session and mission ids (AWR-03 §5.6).
+ * @minItems 2
+ * @maxItems 2
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "WorldCommonSlug".
+ * via the `definition` "WorldCommonVec2".
  */
-export type WorldCommonSlug = string
+export type WorldCommonVec2 = [number, number, ...number[]]
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "CommandsCategory".
@@ -354,6 +409,9 @@ export type CommandsCategory =
   | 'confirm'
   | 'rec'
   | 'fleet'
+  | 'payload'
+  | 'entity'
+  | 'task'
 /**
  * World Package coordinate.json (v1). The single metric frame of a World (AWR-16 §3.3, camelCase): 'world' = ENU tangent plane at anchor, metres, right-handed, Z up.
  *
@@ -401,20 +459,22 @@ export type WorldCommonSha256 = string
  */
 export type WorldCommonRelHref = string
 /**
- * @minItems 2
- * @maxItems 2
- *
- * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "WorldCommonVec2".
- */
-export type WorldCommonVec2 = [number, number, ...number[]]
-/**
  * Environment asset binding style (AWR-16 §1.4 rule 7).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "WorldCommonSha256Prefixed".
  */
 export type WorldCommonSha256Prefixed = string
+/**
+ * awr.sensor.eo_zoom.v1 (zoom EO payload). Model file vehicles/sensor_models/<id>.yaml or mount file vehicles/<dir>/sensors/<file>.yaml (AWR-20 §7.5): a model file carries model_id and model_version; a mount file carries sensor_id, spec_ref and mount plus whitelisted overrides; the effective spec is deep_merge(model, mount).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "EoZoom".
+ */
+export type EoZoom = EoZoom1 & EoZoom2
+export type EoZoom1 = {
+  [k: string]: unknown
+}
 /**
  * Fault injection request. Mock-only fault injection (M09 §6.12; REST R16 POST /api/fleet/vehicles/{id}/faults; scenario action fault.inject). Out-of-range values return 422 110.
  *
@@ -505,6 +565,13 @@ export type Faults =
       duration_s?: number | null
     }
 /**
+ * Roster entry. kind = target (D2, AWR-17 §17.7.2 rule 4): {agent_no, id, kind, model = target class, label}; agent_no is unique within each kind (targets count from 0); other kinds keep the D1 required fields
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "FleetRosterPropertiesEntriesItems".
+ */
+export type FleetRosterPropertiesEntriesItems = FleetRosterPropertiesEntriesItems1
+/**
  * Geometry probe service (svc/geo/{height,ray_hit}; V0.2 raycast, los, lidar). AWR-17 §9.3; M04 §7.3 (drafted by M04). op names follow M04 §7.3: svc/geo/height serves height_dsm, ground_dtm, agl, clearance, probe, segment_los, path_coarse_check, heightmap_top, terrain_profile; svc/geo/ray_hit serves ray_hit; raycast, los and lidar are the V0.2 geo-worker ops. Failure replies may carry detail (the reason name).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -532,7 +599,7 @@ export type WorldCommonRelHref1 = string
  */
 export type WorldCommonVec21 = [number, number, ...number[]]
 /**
- * Provenance and licence record (AWR-13 §13.3 DC-1). redistribution is a fact record only (ADR-034).
+ * Provenance and licence record (AWR-13 §13.3 DC-1). redistribution is a fact record only (ADR-034); terms states the deployment authorization (ADR-109).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "WorldPropertiesDataset".
@@ -543,6 +610,10 @@ export type WorldPropertiesDataset = {
   url?: string
   citation?: string
   license: string
+  /**
+   * Terms under which ANet-Drone4D deployments serve this package, shown in the world panel tooltip and recorded in the deployment index (ADR-109 rule 3: the six UrbanScene3D cities are used under authorization of the dataset rights holders). Optional; packages built before ADR-109 omit it.
+   */
+  terms?: string
   /**
    * Fact record only; readers must not restrict loading or demos by it (ADR-034).
    */
@@ -566,12 +637,25 @@ export type Inputlog = InputlogHeader | InputlogEntry
  */
 export type WorldCommonRunId = string
 /**
- * int64 value: a JSON integer below 2^53 in magnitude, or a decimal string (AWR-16 §1.4 rule 5).
+ * awr.sensor.lwir.v1 (uncooled thermal imager). Model file vehicles/sensor_models/<id>.yaml or mount file vehicles/<dir>/sensors/<file>.yaml (AWR-20 §7.5): a model file carries model_id and model_version; a mount file carries sensor_id, spec_ref and mount plus whitelisted overrides; the effective spec is deep_merge(model, mount). Digital zoom changes the display only; N always uses native pixels.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "WorldCommonInt64".
+ * via the `definition` "Lwir".
  */
-export type WorldCommonInt64 = number | string
+export type Lwir = Lwir1 & Lwir2
+export type Lwir1 = {
+  [k: string]: unknown
+}
+/**
+ * awr.sensor.nir_illuminator.v1 (external 850 nm illuminator). Model file vehicles/sensor_models/<id>.yaml or mount file vehicles/<dir>/sensors/<file>.yaml (AWR-20 §7.5): a model file carries model_id and model_version; a mount file carries sensor_id, spec_ref and mount plus whitelisted overrides; the effective spec is deep_merge(model, mount). nir_ill_l: 3 W, fixed 5.5 deg, R_ref about 465 m, 0.18 kg (AWR-04 §6.1).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "NirIlluminator".
+ */
+export type NirIlluminator = NirIlluminator1 & NirIlluminator2
+export type NirIlluminator1 = {
+  [k: string]: unknown
+}
 /**
  * awr.rt.v1 control-plane JSON messages. UTF-8 JSON text frames, each with an op (AWR-17 §6.3). Envelope fields keep the frozen r27 camelCase names; business payloads (args, data, effect, detail, event data) are snake_case. Readers ignore unknown ops, fields and capabilities within the same major version. The top level uses anyOf because unadvertise has the same shape in both directions.
  *
@@ -613,6 +697,22 @@ export type OpsClientToServer =
   | OpsClientUnadvertise
   | OpsClientStats
   | OpsPlayback
+  | OpsPresence
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ParkNs".
+ */
+export type ParkNs = string
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "PlanViolations".
+ */
+export type PlanViolations = {
+  wid: string
+  uav?: WorldCommonSlug
+  code: number
+  why?: string
+}[]
 /**
  * Potree 2.0 metadata.json + ANET_Q16 v1 extension. Container = Potree 2.0 (metadata.json + hierarchy.bin 22 B/record + octree.bin). encoding DEFAULT/BROTLI follow PotreeConverter 2.x exactly (Indexer::createMetadata). encoding ANET_Q16 adds the 'anet' object; Potree/potree-core/three-loader treat every non-BROTLI encoding as DEFAULT, so ANET_Q16 containers are NOT readable by them (use the DEFAULT twin for cross-checks).
  *
@@ -706,6 +806,16 @@ export type PredicateNode1 =
         }
       }
     }
+/**
+ * awr.sensor.radar_mmw.v1 (77 GHz FMCW radar). Model file vehicles/sensor_models/<id>.yaml or mount file vehicles/<dir>/sensors/<file>.yaml (AWR-20 §7.5): a model file carries model_id and model_version; a mount file carries sensor_id, spec_ref and mount plus whitelisted overrides; the effective spec is deep_merge(model, mount). SNR = 13.2 + 10 lg(sigma) - 40 lg(R / R_ref) - 2 gamma_rain R / 1000 (AWR-04 §6.2).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "RadarMmw".
+ */
+export type RadarMmw = RadarMmw1 & RadarMmw2
+export type RadarMmw1 = {
+  [k: string]: unknown
+}
 /**
  * Recon IR recon-ir@1 (reconstruction/<session>/). AWR-16 §14.1; M01 drafts the details (session, engine, rig, cameras, frames.jsonl rows, alignment, qa). T_world_cam is C2W with an OpenCV RDF camera; x_world = s*R(q)*x_engine + t.
  *
@@ -819,12 +929,38 @@ export type ScenarioMetrics =
   | 't_conf_s'
   | 'link_quality_min'
 /**
+ * POST /sessions/{sid}/targets and target/add: class and pos are required, the rest comes from the class template
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TargetCreateRequest".
+ */
+export type TargetCreateRequest = Target
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskRequest".
+ */
+export type TaskingTaskRequest = TaskingTaskRequest1
+/**
  * Agent task (TaskSpec, TaskStatus, TaskStatusLite). M14 §6.5, §6.6; AWR-12 §4.13 (A2A seven states).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "Task".
  */
 export type Task = TaskSpec | TaskStatus
+/**
+ * SB-22: summary plus profile, parameter table and derived values
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "VehicleCatalogModelDetail".
+ */
+export type VehicleCatalogModelDetail = VehicleCatalogModelSummary & VehicleCatalogModelDetail1
+/**
+ * Vehicle profile params.yaml (awr.vehicle.v1, schema 1.1). AWR-16 §11.2: every identifiable parameter is {value, conf A-D, src}; conf E values live only in rejected[]. Loader runs VH-1..VH-7 and rejects on failure (353). Keys snake_case with unit suffix; px4_params keeps PX4 names. Schema 1.1 (ADR-115, AWR-20 §7.3): required fields depend on frame.type (multirotor fields for quad_x, hex_x and the VTOL lift system; airframe for fixed_wing and vtol_quadplane); D1 files stay valid; catalog models carry signatures.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "VehicleProfile".
+ */
+export type VehicleProfile = VehicleProfile1
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "WorldLayer".
@@ -842,6 +978,123 @@ export type WorldCommonLayerId = string
 export type WorldCommonHash8 = string
 
 export interface AwrContracts {}
+export interface AcousticArray2 {
+  schema: 'awr.sensor.acoustic_array.v1'
+  model_id?: string
+  model_version?: string
+  display_name?: string
+  reference?: boolean
+  mass_kg?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  power_w?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  env_limits?: {
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    temp_c?: [number, number, ...number[]]
+  }
+  overridable?: string[]
+  conf?: 'A' | 'B' | 'C' | 'D'
+  src?: string
+  sensor_id?: string
+  spec_ref?: string
+  mount?: {
+    xyz_m: WorldCommonVec3
+    rpy_deg?: WorldCommonVec3
+    q_xyzw?: WorldCommonQuatXYZW
+    preset?: string
+  }
+  on_gimbal_of?: string
+  gimbal?: {
+    pitch_min_deg?: number
+    pitch_max_deg?: number
+    yaw_min_deg?: number
+    yaw_max_deg?: number
+    rate_max_deg_s?: number
+    integrated?: boolean
+    default_mode?: string
+    default_yaw_deg?: number
+    default_pitch_deg?: number
+  }
+  n_mics?: number
+  aperture_m?: number
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  band_hz?: [number, number, ...number[]]
+  array_gain_db?: number
+  nr_db?: {
+    /**
+     * unit dB
+     */
+    multirotor?: number
+    /**
+     * unit dB
+     */
+    fixed_wing?: number
+  }
+  r_ego_m?: {
+    /**
+     * unit m
+     */
+    multirotor?: number
+    /**
+     * unit m
+     */
+    fixed_wing?: number
+  }
+  az_acc_deg?: number
+  rate_hz?: number
+  detect_snr_db?: number
+  classify?: {
+    bands?: number
+    snr_db?: number
+  }
+}
+/**
+ * awr.sensor.acoustic_bearings.v1. Topic uav/{id}/sensor/acoustic/bearings, 2 Hz (AWR-17 §17.7.4; M19 §6.8): bearings with per-band SNR (bands with SNR >= 0 dB, <= 24); no target truth ids.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AcousticBearings".
+ */
+export interface AcousticBearings {
+  uav?: WorldCommonSlug
+  t_sim_ns: WorldCommonInt64
+  sensor: string
+  ego_noise_dba?: number
+  bearings: {
+    bearing_id: number
+    az_rad: number
+    el_rad?: number
+    level: 'none' | 'D' | 'R' | 'I'
+    /**
+     * @maxItems 24
+     */
+    bands: {
+      fc_hz: number
+      snr_db: number
+    }[]
+    /**
+     * P1
+     */
+    harmonic_f0_hz?: number | null
+  }[]
+}
 /**
  * awr.agent.status.v1. Topic agent/{aid}/status, 1 Hz self-contained (M14 §7.2.1).
  *
@@ -1048,7 +1301,7 @@ export interface BlocksStateExtBlock {
   }
 }
 /**
- * awr.uav.state_ext.v1. Topic uav/{id}/state_ext, 2 Hz self-contained (AWR-17 §6.5; semantics M08). px4 and prom carry raw native values for display only (V0.2).
+ * awr.uav.state_ext.v1. Topic uav/{id}/state_ext, 2 Hz self-contained (AWR-17 §6.5; semantics M08). px4 and prom carry raw native values for display only (V0.2). D2 adds optional fields only (AWR-17 §17.7.4).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "UavStateExt".
@@ -1184,6 +1437,60 @@ export interface UavStateExt {
        */
       bias_gyro_rad_s?: [number, number, number, ...number[]]
     }
+  }
+  /**
+   * D2: catalog or session clone model id (optional, 1.x)
+   */
+  model_id?: string
+  /**
+   * D2 (optional, 1.x)
+   */
+  label?: string
+  /**
+   * D2 (optional, 1.x)
+   */
+  nest_id?: string | null
+  /**
+   * D2 tasking work item (optional, 1.x)
+   */
+  work?: {
+    tid: WorldCommonSlug
+    wid: string
+    kind?: string
+  } | null
+  /**
+   * D2 fixed wing and VTOL state (optional, 1.x)
+   */
+  fw?: {
+    mode: 'MC' | 'TRANSITION_FW' | 'FW' | 'TRANSITION_MC'
+    airspeed_mps?: number
+    bank_rad?: number
+    gamma_rad?: number
+    hover_used_s?: number
+  } | null
+  /**
+   * D2 manual control (optional, 1.x)
+   */
+  manual?: {
+    active: boolean
+    keepout_guard?: 'clamp' | 'warn' | 'off'
+  }
+  /**
+   * D2: VEHICLE_ENV_LIMIT warning active (optional, 1.x)
+   */
+  env_limit_warn?: boolean
+  /**
+   * D2: active limits profile (optional, 1.x)
+   */
+  limits_profile?: string
+  /**
+   * D2 energy estimate (optional, 1.x)
+   */
+  energy?: {
+    e_avail_wh?: number
+    e_rtl_wh?: number
+    e_res_wh?: number
+    t_end_s?: number
   }
 }
 /**
@@ -1561,6 +1868,56 @@ export interface CapabilityCatalog {
   capabilities: Capability[]
 }
 /**
+ * awr.capacity.v1 (public capacity, SB-71). GET /api/sandbox/v1/capacity (AWR-17 §17.20.2; AWR-04 §15.5.4). Public, no token, Cache-Control public max-age=1, at most 1 KiB, no visitor identifiers. Draft by M17 (WP-04b) for contracts 1.2.0; sandbox.internal_active is an M17 addition (count of internal-tier sessions holding a slot, shown as '+1 internal'); null numbers mean the pool or the show-api status file is unavailable.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Capacity".
+ */
+export interface Capacity {
+  schema: 'awr.capacity.v1'
+  t_unix_ns: string
+  build: {
+    version: string
+    channel: 'demo' | 'local' | 'ci'
+    commit: string
+    dirty: boolean
+    built_at: string
+    release: string
+  }
+  accepting: boolean
+  maintenance: boolean
+  degrade_level: 'L0' | 'L1' | 'L2' | 'L3' | 'L4'
+  viewers: {
+    live: number | null
+    max: number | null
+    queue: number | null
+    eta_s: number | null
+    state: 'open' | 'full' | 'unknown'
+  }
+  sandbox: {
+    active: number | null
+    max: number | null
+    reserved_internal: number | null
+    internal_active?: number | null
+    parked: number | null
+    queue: number | null
+    eta_s: number | null
+    admit_now: boolean
+    /**
+     * @maxItems 16
+     */
+    worlds_admit_now: string[]
+    state: 'open' | 'full' | 'queue' | 'closed'
+  }
+  power: {
+    viewer_idle_s: number
+    sandbox_idle_s: number
+    hidden_s: number
+    warn_s: number
+  }
+  hint: 'open' | 'queue_viewer' | 'queue_sandbox' | 'queue_both' | 'closed' | 'unavailable'
+}
+/**
  * Backend capability declaration (rt/caps/*.json). AWR-17 §7.7; ADR-045 caps.clock.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -1631,6 +1988,276 @@ export interface Catalog {
   }
 }
 /**
+ * awr.target.class_defaults.v1 (class templates). Class templates (AWR-04 §7.2): every entry is a target object without id and pos; adding a class only adds an entry (TargetClass binary codes append). Values are simulation reference values.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ClassDefaults".
+ */
+export interface ClassDefaults {
+  schema: 'awr.target.class_defaults.v1'
+  version: string
+  doc?: string
+  classes: {
+    [k: string]: Target
+  }
+  label_zh?: {
+    [k: string]: string
+  }
+}
+/**
+ * awr.target.v1 (target object). Target configuration (AWR-04 §2.2, §7; AWR-17 §17.6.5; M18-M19 PRD §6.2.1). GET returns the full object; POST and target/add use $defs/create_request (class and pos only, the rest from target/class_defaults.json). Validation codes: 540 placement, 541 sound, 542 sensitivity, 544 motion, 505 count.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Target".
+ */
+export interface Target {
+  id?: WorldCommonSlug
+  label?: string
+  class: 'person' | 'uav' | 'machine' | 'dog' | 'vehicle' | 'object'
+  enabled?: boolean
+  /**
+   * World ENU m; ground classes may give z null (DSM)
+   *
+   * @minItems 2
+   * @maxItems 3
+   */
+  pos?: [number | null, number | null, ...(number | null)[]]
+  yaw_rad?: number
+  /**
+   * uav class only
+   */
+  alt_agl_m?: number
+  size_m?: {
+    /**
+     * unit m
+     */
+    l: number
+    /**
+     * unit m
+     */
+    w: number
+    /**
+     * unit m
+     */
+    h: number
+  }
+  critical_dim_m?: number | null
+  motion?: {
+    mode: 'static' | 'path' | 'random_walk'
+    speed_mps?: number
+    speed_max_mps?: number
+    accel_mps2?: number
+    turn_rate_max_rad_s?: number
+    /**
+     * World ENU m; z null = ground
+     *
+     * @maxItems 64
+     */
+    path?: [number | null, number | null, number | null, ...(number | null)[]][]
+    loop?: 'once' | 'pingpong' | 'loop'
+    dwell_s?: number[]
+    /**
+     * random walk polygon, World ENU m
+     *
+     * @minItems 3
+     * @maxItems 64
+     */
+    region?: [WorldCommonVec2, WorldCommonVec2, WorldCommonVec2, ...WorldCommonVec2[]]
+    speed_sigma_mps?: number
+    turn_tau_s?: number
+    pause_prob?: number
+    /**
+     * uav class vertical speed (read only, detail and state)
+     */
+    vz_mps?: number
+  }
+  /**
+   * palette token name or #RRGGBB, rendering only
+   */
+  color_srgb?: string
+  albedo_vis?: number
+  contrast0?: number
+  camouflage?: number
+  occlusion?: number
+  reflect_850?: number
+  reflect_905?: number
+  thermal?: {
+    mode: 'relative' | 'absolute'
+    delta_t_k?: number
+    t_surface_c?: number
+    emissivity?: number
+    hot_fraction?: number
+  }
+  rcs_m2?: number
+  rcs_fluct?: 'swerling0' | 'swerling1'
+  rcs_band?: string
+  sound?: Sound | null
+  rf?: {
+    freq_mhz?: number
+    eirp_dbm?: number
+    duty?: number
+  } | null
+  criterion_mode?: 'geometric' | 'physical'
+  alertness?: number
+  hearing_th_dba?: number
+  acoustic_adv_db?: number
+  /**
+   * visual threshold, arc minutes
+   */
+  visual_theta0_arcmin?: number
+  level_req?: 'D' | 'R' | 'I'
+  n_req_px?: number | null
+  reaction?: Reaction
+  calm_s?: number
+  alert_radius_m?: number
+  /**
+   * @maxItems 4
+   */
+  sensitivity?: Sensitivity[]
+  /**
+   * configuration revision (read only; TargetLite32 carries it mod 64)
+   */
+  cfg_rev?: number
+  /**
+   * angular resolution, arc minutes (D2.1, AWR-04 §15.10.1): for the equivalent pixels of the readout only; not part of the criterion
+   */
+  visual_acuity_arcmin?: number
+  /**
+   * class band weighting added to A-weighting (24 bands 50 Hz-10 kHz); null = 0
+   */
+  hearing_band_adj_db?:
+    | [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        ...number[]
+      ]
+    | null
+  /**
+   * P1: radar receiver of counter-UAV targets; the radar body is judged when configured
+   */
+  radar_rx?: {
+    snr_ref_db: number
+    r_ref_m: number
+    snr_req_db: number
+    fov_az_deg: number
+    fov_el_deg: number
+  } | null
+  /**
+   * P2: schema only
+   */
+  rf_rx?: {
+    sens_dbm?: number
+    f_mhz?: number
+    bw_mhz?: number
+  } | null
+}
+/**
+ * awr.target.sound.v1 (periodic sound source). Periodic source per 1/3-octave band (AWR-04 §7.5; M18-M19 PRD §6.5.2): on phase full level, off phase -40 dB. Out of range: 541.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Sound".
+ */
+export interface Sound {
+  waveform: 'tone' | 'harmonic' | 'pulse_train' | 'noise_band'
+  f0_hz: number
+  /**
+   * relative to the fundamental, default [0, -6, -10, -14]
+   *
+   * @maxItems 8
+   */
+  harmonics_db?: number[]
+  lw_dba: number
+  period_s: number
+  duty: number
+  phase_s?: number
+  /**
+   * noise_band only
+   */
+  bandwidth_hz?: number
+}
+/**
+ * awr.target.reaction.v1 (behaviour after being discovered). Two phases (AWR-04 §7.4; M18-M19 PRD §6.4.2): onset once on entering REACTING, response during ALERTED and CALMING (up to two parallel items, e.g. a dog emits and approaches); alert_others broadcasts to the same class within alert_radius_m.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Reaction".
+ */
+export interface Reaction {
+  onset?: {
+    kind: 'none' | 'freeze' | 'look_at'
+    duration_s?: number
+  }
+  /**
+   * @maxItems 2
+   */
+  response?: {
+    kind: 'ignore' | 'flee' | 'approach' | 'return' | 'emit' | 'hide'
+    speed_mps?: number
+    dist_m?: number
+    duration_s?: number
+    sound?: {
+      duty?: number
+      lw_dba?: number
+      period_s?: number
+    }
+    /**
+     * hide (P1)
+     */
+    search_m?: number
+  }[]
+  alert_others?: boolean
+}
+/**
+ * awr.target.sensitivity.v1 (sensitivity volume). One sensitivity volume of a target (AWR-04 §7.3; M18-M19 PRD §6.3.1; AWR-17 §17.6.5). <= 4 per target and <= 64 enabled per session (542). z range is relative to the target; sector is a horizontal sector prism; moving targets plan sectors as full circles.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Sensitivity".
+ */
+export interface Sensitivity {
+  /**
+   * radar and rf are stored only (warning) in D2
+   */
+  kind: 'visual' | 'acoustic' | 'radar' | 'rf'
+  shape: 'sphere' | 'hemisphere' | 'cylinder' | 'sector'
+  radius_max_m: number
+  z_min_m?: number
+  z_max_m?: number
+  /**
+   * sector only
+   */
+  half_angle_deg?: number
+  /**
+   * relative to the target heading, counter-clockwise positive
+   */
+  azimuth_offset_deg?: number
+  /**
+   * physical acoustic back attenuation
+   */
+  gain_back_db?: number
+  enabled?: boolean
+}
+/**
  * Point class table anet-classes@N (compact runtime index <-> ASPRS LAS 1.4 code). AWR-16 §5. The runtime byte col.a stores index; exports store lasCode. semantic/anet-classes@1.json must equal packages/contracts/classes/anet-classes-v1.json byte for byte (V-K-04).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -1696,6 +2323,52 @@ export interface ClassTable {
    * Index used for any LAS code not listed (counted in QA).
    */
   unmappedLasCodeIndex: number
+}
+/**
+ * awr.vehicle_clone.v1 (session clone patch). Session-only model clone (AWR-20 §7.6; AWR-17 §17.6.2 POST /sessions/{sid}/models): set uses dotted paths from the editable list; frame, geometry, motor, prop, aero, inertia, airframe aerodynamics, v_min, v_max, battery cells and chemistry and env_limits are not editable. Out of range: 522 with violations; <= 8 per session (505). The REST body may use from_model_id, label and patch instead.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Clone".
+ */
+export interface Clone {
+  schema: 'awr.vehicle_clone.v1'
+  base: string
+  id: string
+  display_name?: string
+  set?: {
+    [k: string]: number
+  }
+  default_mounts?: {
+    [k: string]: boolean
+  }
+  mounts?: {
+    [k: string]: {
+      lens_mm?: number
+    }
+  }
+}
+/**
+ * POST /sessions/{sid}/models body (SB-25)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "CloneRestRequest".
+ */
+export interface CloneRestRequest {
+  from_model_id: string
+  model_id?: string
+  label?: string
+  patch?: {}
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "CloneViolation".
+ */
+export interface CloneViolation {
+  field: string
+  rule: string
+  value?: unknown
+  limit?: unknown
+  message_zh?: string
 }
 /**
  * commands.json meta-schema. AWR-17 §7.1, §10.5.
@@ -1814,7 +2487,7 @@ export interface Commands {
     category: CommandsCategory
     lease: boolean | string | null
     agent: 'yes' | 'no' | 'own_lease' | 'own_calls' | 'non_unlock_only' | 'agent_class'
-    d1: 'core' | 'ext' | 'stub' | 'V0.2'
+    d1: 'core' | 'ext' | 'stub' | 'V0.2' | 'V0.2-demo'
     args_schema: {}
     admission?: {
       [k: string]: 'Y' | '=' | 'S' | '-' | '?'
@@ -2001,6 +2674,55 @@ export interface WorldCommonAabb {
   max: WorldCommonVec3
 }
 /**
+ * awr.sensor.detection.v1. Detection record of the session detection ring (8192, AWR-17 §17.6.4; SB-39). Imaging sensors give the target id; radar and acoustic give track_id or bearing_id and target null.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Detection".
+ */
+export interface Detection {
+  seq: number
+  t_sim_ns: WorldCommonInt64
+  kind: 'level' | 'capture' | 'capture_lost' | 'detect'
+  uav: WorldCommonSlug
+  sensor: string
+  sensor_kind: 'eo' | 'nir' | 'lwir' | 'radar' | 'acoustic' | 'lidar'
+  target: WorldCommonSlug | null
+  track_id?: number | null
+  bearing_id?: number | null
+  level_from: 'none' | 'D' | 'R' | 'I'
+  level_to: 'none' | 'D' | 'R' | 'I'
+  /**
+   * unit px
+   */
+  n_eff?: number | null
+  /**
+   * unit px
+   */
+  n_req?: number | null
+  p?: number | null
+  range_m?: number | null
+  gsd_m?: number | null
+  az_rad?: number | null
+  el_rad?: number | null
+  vr_mps?: number | null
+  snr_db?: number | null
+  limiting?: 'fov' | 'los' | 'pixels' | 'light' | 'contrast' | 'blur' | null
+  reason?: 'fov' | 'los' | 'pixels' | 'light' | 'contrast' | 'blur' | null
+  meas_enu_m?: WorldCommonVec3 | null
+  sigma_m?: number | null
+}
+/**
+ * SB-39 reply
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "DetectionPage".
+ */
+export interface DetectionPage {
+  items: Detection[]
+  next_since_seq: number
+  oldest_seq?: number
+}
+/**
  * Recon engine.json. AWR-16 §14.1 (licence text recorded per AWR-13 §13.3 DC-6).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -2042,7 +2764,7 @@ export interface Enums {
     | undefined
 }
 /**
- * awr.env.keyframe.v1 (EnvKeyframe). Self-contained environment keyframe (M07 §6.2.5; ADR-025). msgpack snake_case on env/state, evt/sim-core/env and state/sim-core/env; target < 1 KB. Integer-valued numbers use the shortest integer encoding, -0 normalises to 0.
+ * awr.env.keyframe.v1 (EnvKeyframe). Self-contained environment keyframe (M07 §6.2.5; ADR-025). msgpack snake_case on env/state, evt/sim-core/env and state/sim-core/env; target < 1 KB. Integer-valued numbers use the shortest integer encoding, -0 normalises to 0. D2 adds optional calendar, sun mode and illuminance, humidity, surface and acoustic background (AWR-04 §6.5; AWR-17 §17.6.9).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "EnvState".
@@ -2088,6 +2810,18 @@ export interface EnvState {
     sun: {
       azimuth_deg: number
       elevation_deg: number
+      /**
+       * D2: clock = NOAA position from the simulation calendar (ADR-102); absent = fixed
+       */
+      mode?: 'fixed' | 'clock'
+      /**
+       * D2 ground illuminance (optional, 1.x); unit lx
+       */
+      illum_lx?: number
+      /**
+       * D2 illuminance band: day h >= 6 deg, low -6..6 deg, night < -6 deg
+       */
+      band?: 'day' | 'low' | 'night'
     }
     weather_map: {
       n: number
@@ -2182,6 +2916,42 @@ export interface EnvState {
     streamlines: string | null
     vmax_mps: number
   }
+  /**
+   * D2 simulation calendar (optional, 1.x)
+   */
+  calendar?: {
+    start_utc: string
+    tz: string
+    /**
+     * UNIX time in ns as a decimal string (AWR-17 §1.3)
+     */
+    t_cal_unix_ns?: string
+  }
+  /**
+   * D2 relative humidity for the LWIR water vapour term (optional, 1.x); unit %
+   */
+  humidity_pct?: number
+  /**
+   * D2 background surface temperature and emissivity, thermal crossover factor (optional, 1.x)
+   */
+  surface?: {
+    /**
+     * unit degC
+     */
+    t_c: number
+    emissivity: number
+    k_cross?: number
+  }
+  /**
+   * D2 acoustic background (optional, 1.x)
+   */
+  acoustic_bg?: {
+    profile: 'rural' | 'suburban' | 'urban'
+    /**
+     * unit dB(A)
+     */
+    l_bg_dba: number
+  }
 }
 /**
  * Per-world environment configuration environment/env.json (awr.env.world.v1). AWR-16 §8.2 (format awr-env-world@1, snake_case). coordinate_hash must equal the world coordinate.sha256 (V-E-01); default_preset must exist in presets.json (V-E-02).
@@ -2270,6 +3040,155 @@ export interface EnvWorldDefaultsItem {
     } | null
   }
 }
+export interface EoZoom2 {
+  schema: 'awr.sensor.eo_zoom.v1'
+  model_id?: string
+  model_version?: string
+  display_name?: string
+  reference?: boolean
+  mass_kg?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  power_w?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  env_limits?: {
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    temp_c?: [number, number, ...number[]]
+  }
+  overridable?: string[]
+  conf?: 'A' | 'B' | 'C' | 'D'
+  src?: string
+  sensor_id?: string
+  spec_ref?: string
+  mount?: {
+    xyz_m: WorldCommonVec3
+    rpy_deg?: WorldCommonVec3
+    q_xyzw?: WorldCommonQuatXYZW
+    preset?: string
+  }
+  on_gimbal_of?: string
+  gimbal?: {
+    pitch_min_deg?: number
+    pitch_max_deg?: number
+    yaw_min_deg?: number
+    yaw_max_deg?: number
+    rate_max_deg_s?: number
+    integrated?: boolean
+    default_mode?: string
+    default_yaw_deg?: number
+    default_pitch_deg?: number
+  }
+  sensor?: {
+    format_in?: string
+    width_px: number
+    height_px: number
+    pixel_um: number
+  }
+  optics?: {
+    f_min_mm: number
+    f_max_mm: number
+    f_number?: {
+      at_min?: number
+      at_max?: number
+      law?: 'linear_f' | 'linear_ln_f'
+    }
+    zoom_time_s?: number
+  }
+  /**
+   * @minItems 1
+   */
+  outputs?: [
+    {
+      name: string
+      width_px: number
+      height_px: number
+      crop_w_px: number
+      crop_h_px?: number
+      fps?: number
+    },
+    ...{
+      name: string
+      width_px: number
+      height_px: number
+      crop_w_px: number
+      crop_h_px?: number
+      fps?: number
+    }[]
+  ]
+  analysis?: {
+    default?: string
+    k4_requires?: string
+  }
+  exposure?: {
+    day_s?: number
+    lowlight_s?: number
+    shutter_min_s?: number
+    shutter_max_s?: number
+    switch_lx?: number
+  }
+  jitter_urad?: {
+    fast?: number
+    slow?: number
+    fast_max_exposure_s?: number
+  }
+  night?: Nir
+  spec_fov?: {
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    hfov_deg?: [number, number, ...number[]]
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    vfov_deg?: [number, number, ...number[]]
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    dfov_deg?: [number, number, ...number[]]
+  }
+  /**
+   * label only
+   */
+  stream?: {}
+}
+/**
+ * awr.sensor.nir.v1 (night imaging block). Night imaging of an EO sensor (AWR-04 §6.1 nir; AWR-20 §7.5 eo_zoom.night): passive low light (colour and mono minimum illuminance) and an optional built-in 850 nm illuminator. R_nir = R_ref (theta_ref / theta) sqrt(P / P_ref) sqrt(rho_850 / rho_ref) tau_850(R).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Nir".
+ */
+export interface Nir {
+  e_min_color_lx: number
+  e_min_mono_lx: number
+  illuminator?: {
+    wavelength_nm: number
+    p_w: number
+    divergence?: 'follow_hfov' | 'fixed'
+    divergence_deg?: number
+    r_ref_m: number
+    p_ref_w?: number
+    theta_ref_deg?: number
+    rho_ref?: number
+    r_spec_max_m?: number
+  }
+}
 /**
  * World export manifest (V0.5 stub). Non-content export manifest under export/ (AWR-16 §17): 3dtiles@1.1 and copc@1.0. D1 freezes only the envelope.
  *
@@ -2298,6 +3217,162 @@ export interface WorldCommonFileRef {
   sha256?: WorldCommonSha256
 }
 /**
+ * awr.field.profile.v1. Topics field/acoustic, field/visual, field/thermal, field/radar (1 Hz wall, on subscription) and SB-74 (AWR-17 §17.20.6; semantics AWR-04 §15.11.4, M18-M19 PRD §15.2.2; drafted by M19 WP-19b). Free-space field of each vehicle: v(r, e) = v_r(r) (+ or x) f_el(e) on the shared log-spaced grid r_m; e is the elevation of the vehicle seen from the observer (sample point), looked up in the nearest el_deg cell; beyond cut_el_m of that cell nothing is drawn. v_r encoding v_enc: lin = round((v - v_off) * 10), log = round((lg v + 8) * 4000); 65535 = not drawn; trailing 65535 omitted. f_el i16 x100 (dB for combine add, factor for mul); f_el and cut_el_m with one item apply to every elevation. Topic frames carry arrays only for vehicles whose rev changed (or every vehicle in a keyframe); `same` references an earlier item of the same frame with identical arrays. Non-keyframes omit r_m, el_deg, bands, iso, ref and shell_ref (unchanged since the last keyframe; a grid change is always a keyframe).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "FieldProfile".
+ */
+export interface FieldProfile {
+  t_sim_ns: WorldCommonInt64
+  kind: 'acoustic' | 'visual' | 'thermal' | 'radar'
+  unit: 'dba' | 'arcmin' | 'px' | 'db'
+  combine: 'add' | 'mul'
+  keyframe?: boolean
+  /**
+   * @minItems 32
+   * @maxItems 32
+   */
+  r_m?: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    ...number[]
+  ]
+  /**
+   * @minItems 6
+   * @maxItems 6
+   */
+  el_deg?: [number, number, number, number, number, number, ...number[]]
+  /**
+   * lower edge of bands 1..5 (bands[0] = nominal draw floor)
+   *
+   * @minItems 5
+   * @maxItems 5
+   */
+  bands?: [number, number, number, number, number, ...number[]]
+  v_enc: 'lin' | 'log'
+  v_off: number
+  /**
+   * dashed reference shells (field value): acoustic background L_bg, visual 1 arcmin, thermal 14 px
+   *
+   * @maxItems 4
+   */
+  iso?: {
+    id: 'bg' | 'ref' | 'r' | 'd'
+    v: number
+  }[]
+  /**
+   * what uav[].shell_m is: the default person shell (acoustic, visual) or the D-level shell (thermal N = 3.5, radar 13.2 dB)
+   */
+  shell_ref?: 'person' | 'D'
+  ref?: {
+    sensor?: string
+    lens_mm?: number
+    model?: string
+  }
+  /**
+   * @maxItems 64
+   */
+  uav: {
+    id: WorldCommonSlug
+    model_id?: string
+    rev: number
+    /**
+     * @maxItems 32
+     */
+    v_r?: number[]
+    /**
+     * @minItems 1
+     * @maxItems 6
+     */
+    f_el?: [number, ...number[]]
+    /**
+     * @minItems 1
+     * @maxItems 6
+     */
+    cut_el_m?: [number, ...number[]]
+    shell_m?: number
+    same?: number
+  }[]
+}
+/**
+ * awr.field.volumes.v1. Topic field/volumes (on subscription; on change, keyframe every 30 s and on a new subscription) and SB-75 (AWR-17 §17.20.6; AWR-04 §15.11.4 item 2; drafted by M19 WP-19b). Per target, enabled body and session model: effective radius table over 8 azimuths (relative to the target heading, az_deg) x 6 elevations (target looking at the vehicle, el_deg) in decimetres, folded: 1 item = uniform, 6 = per elevation, 8 = per azimuth, 48 = azimuth-major i*6 + j; w_m is the transition half-width (P 0.9 to 0.1) at the reference direction. Non-keyframes list only targets whose rev changed. Display probability P = 1/(1 + exp((r - r_eff(dir))/(w/2.197))) inside the configured body (geometric mode: P = 1 inside unless physical reference is shown).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "FieldVolumes".
+ */
+export interface FieldVolumes {
+  t_sim_ns: WorldCommonInt64
+  keyframe: boolean
+  /**
+   * @maxItems 8
+   */
+  models: string[]
+  /**
+   * @minItems 8
+   * @maxItems 8
+   */
+  az_deg: [number, number, number, number, number, number, number, number, ...number[]]
+  /**
+   * @minItems 6
+   * @maxItems 6
+   */
+  el_deg: [number, number, number, number, number, number, ...number[]]
+  /**
+   * @maxItems 30
+   */
+  tgt: {
+    id: WorldCommonSlug
+    rev: number
+    /**
+     * @maxItems 4
+     */
+    bodies: {
+      idx: number
+      kind: 'visual' | 'acoustic' | 'radar'
+      shape: 'sphere' | 'hemisphere' | 'cylinder' | 'sector'
+      mode: 'geometric' | 'physical'
+      /**
+       * @maxItems 8
+       */
+      r_eff_dm: [number, ...number[]][]
+      /**
+       * @maxItems 8
+       */
+      w_m: number[]
+    }[]
+  }[]
+}
+/**
  * awr.fleet.roster.v1. Topic fleet/roster (AWR-17 §6.5; semantics M08). Needed to decode Lite32 (agent_no to vehicle id).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -2307,17 +3382,19 @@ export interface FleetRoster {
   roster_version: number
   /**
    * @maxItems 1000
+   *
+   * Items: Roster entry. kind = target (D2, AWR-17 §17.7.2 rule 4): {agent_no, id, kind, model = target class, label}; agent_no is unique within each kind (targets count from 0); other kinds keep the D1 required fields
    */
   entries: {
     agent_no: number
     id: WorldCommonSlug
-    kind: 'uav' | 'ugv' | 'robot' | 'vehicle' | 'sensor' | 'human'
-    model: string
-    profile_id: string
-    backend: 'mock' | 'replay' | 'px4_sih' | 'prometheus'
-    simulated: boolean
-    producer: string
-    lifecycle:
+    kind: 'uav' | 'ugv' | 'robot' | 'vehicle' | 'sensor' | 'human' | 'target'
+    model?: string
+    profile_id?: string
+    backend?: 'mock' | 'replay' | 'px4_sih' | 'prometheus'
+    simulated?: boolean
+    producer?: string
+    lifecycle?:
       | 'PENDING'
       | 'PROVISIONING'
       | 'STARTING'
@@ -2330,13 +3407,13 @@ export interface FleetRoster {
       | 'DRAINING'
       | 'STOPPED'
       | 'REMOVED'
-    sensors: {
+    sensors?: {
       sensor_no: number
       name: string
       kind: 'camera' | 'lidar' | 'thermal' | 'radar'
     }[]
-    t_world_local: WorldCommonMat4 | null
-    caps_ref: string
+    t_world_local?: WorldCommonMat4 | null
+    caps_ref?: string
     px4_origin?: {
       lat_deg: number
       lon_deg: number
@@ -2344,22 +3421,22 @@ export interface FleetRoster {
       source?: 'lpos_ref' | 'gps_global_origin' | 'sih_param'
     }
     sih_quant_offset_m?: WorldCommonVec3
+    /**
+     * display name (D2; targets and sandbox vehicles)
+     */
+    label?: string
   }[]
 }
-/**
- * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "FleetRosterPropertiesEntriesItems".
- */
-export interface FleetRosterPropertiesEntriesItems {
+export interface FleetRosterPropertiesEntriesItems1 {
   agent_no: number
   id: WorldCommonSlug
-  kind: 'uav' | 'ugv' | 'robot' | 'vehicle' | 'sensor' | 'human'
-  model: string
-  profile_id: string
-  backend: 'mock' | 'replay' | 'px4_sih' | 'prometheus'
-  simulated: boolean
-  producer: string
-  lifecycle:
+  kind: 'uav' | 'ugv' | 'robot' | 'vehicle' | 'sensor' | 'human' | 'target'
+  model?: string
+  profile_id?: string
+  backend?: 'mock' | 'replay' | 'px4_sih' | 'prometheus'
+  simulated?: boolean
+  producer?: string
+  lifecycle?:
     | 'PENDING'
     | 'PROVISIONING'
     | 'STARTING'
@@ -2372,13 +3449,13 @@ export interface FleetRosterPropertiesEntriesItems {
     | 'DRAINING'
     | 'STOPPED'
     | 'REMOVED'
-  sensors: {
+  sensors?: {
     sensor_no: number
     name: string
     kind: 'camera' | 'lidar' | 'thermal' | 'radar'
   }[]
-  t_world_local: WorldCommonMat4 | null
-  caps_ref: string
+  t_world_local?: WorldCommonMat4 | null
+  caps_ref?: string
   px4_origin?: {
     lat_deg: number
     lon_deg: number
@@ -2386,6 +3463,10 @@ export interface FleetRosterPropertiesEntriesItems {
     source?: 'lpos_ref' | 'gps_global_origin' | 'sih_param'
   }
   sih_quant_offset_m?: WorldCommonVec3
+  /**
+   * display name (D2; targets and sandbox vehicles)
+   */
+  label?: string
 }
 /**
  * awr.flight60.v1 (public/bench/flight60/<world>.json). AWR-18 §8.6: companion of the f32 [3601 x 6] .bin (eye xyz, target xyz, ENU, 60 Hz).
@@ -2665,6 +3746,205 @@ export interface InputlogEntry {
   }
 }
 /**
+ * awr.vehicle.instance.v1 (fleet instance REST shapes). Sandbox fleet resources SB-28 to SB-37 (AWR-17 §17.6.3; M08 §15.3.8; AWR-20 §7.7): root = list item; $defs hold the create request, patch, full state, sensors and command bodies. Create: 12 vehicles max (505), unknown model 520, nest incompatible 525, mount 560 or 522.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Instance".
+ */
+export interface Instance {
+  id: WorldCommonSlug
+  agent_no: number
+  kind?: string
+  model?: string
+  profile_id?: string
+  backend?: string
+  simulated?: boolean
+  lifecycle: string
+  flight_state: string
+  sub?: string | null
+  battery_pct?: number | null
+  lease?: {
+    owner: 'NONE' | 'OPERATOR' | 'MISSION' | 'AGENT' | 'SWARM' | 'SAFETY' | 'PILOT' | 'EXTERNAL'
+    holder?: string | null
+    expires_unix_ms?: number | null
+  }
+  model_id: string
+  category?: 'multirotor' | 'fixed_wing' | 'vtol'
+  label?: string | null
+  nest_id?: string | null
+  work?: {
+    tid: WorldCommonSlug
+    wid: string
+    kind?: string
+  } | null
+  manual?: boolean
+}
+/**
+ * SB-35
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "InstanceCommandRequest".
+ */
+export interface InstanceCommandRequest {
+  id?: string
+  op: string
+  args?: {}
+  timeout_ms?: number
+}
+/**
+ * vehicle instance configuration (AWR-17 §17.6.3 POST body; AWR-20 §7.7)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "InstanceCreateRequest".
+ */
+export interface InstanceCreateRequest {
+  id?: WorldCommonSlug
+  model_id: string
+  nest_id?: WorldCommonSlug | null
+  home_enu_m?: [number | null, number | null, number | null, ...(number | null)[]] | null
+  label?: string | null
+  yaw_rad?: number
+  initial_soc?: number
+  sensors?:
+    | {
+        name: string
+        type?: string
+        enabled?: boolean
+      }[]
+    | null
+  limits_profile?: string | null
+  lights?: {
+    nav?: boolean
+    strobe?: boolean
+  }
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "InstanceCreated".
+ */
+export interface InstanceCreated {
+  id: WorldCommonSlug
+  agent_no: number
+  lifecycle: string
+  model_id: string
+  nest_id?: string | null
+}
+/**
+ * SB-36, SB-37
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "InstanceLeaseRequest".
+ */
+export interface InstanceLeaseRequest {
+  priority?: 'normal' | 'override'
+  mode?: 'command' | 'velocity'
+  ttl_s?: number
+  return_to?: 'none' | 'pool' | 'hover'
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "InstancePatch".
+ */
+export interface InstancePatch {
+  label?: string
+  nest_id?: string | null
+  sensors?: unknown[]
+  limits_profile?: string
+  lights?: {
+    nav?: boolean
+    strobe?: boolean
+  }
+}
+/**
+ * SB-34
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "InstanceSensors".
+ */
+export interface InstanceSensors {
+  payload?: Payload
+  sensors: {
+    name: string
+    type: string
+    kind: string
+    spec_ref?: string | null
+    mount?: {
+      pos_m?: WorldCommonVec3
+      q_xyzw?: WorldCommonQuatXYZW
+    }
+    state: 'ACTIVE' | 'STANDBY' | 'DEGRADED' | 'FAULT'
+    mode?: string | null
+    enabled: boolean
+  }[]
+}
+/**
+ * awr.uav.payload.v1. Topic uav/{id}/payload, 2 Hz, every vehicle (AWR-17 §17.7.4; semantics M13): gimbal angles, focal length and FOV, sensor mode, illuminators. Also the payload part of GET .../vehicles/{vid}/sensors. Angles in rad on the wire.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Payload".
+ */
+export interface Payload {
+  uav?: WorldCommonSlug
+  t_sim_ns?: WorldCommonInt64
+  gimbal: {
+    pitch_rad: number
+    /**
+     * relative to the nose
+     */
+    yaw_rad: number
+    mode: 'angles' | 'look_at' | 'track' | 'stow' | 'fixed' | 'cue'
+    track_target?: string | null
+    src?: 'operator' | 'tasking' | 'cue' | 'default'
+  }
+  sensors: {
+    sensor: string
+    kind: 'eo' | 'nir' | 'lwir' | 'radar' | 'acoustic' | 'lidar' | 'nir_illuminator'
+    enabled: boolean
+    active?: boolean
+    f_mm?: number | null
+    hfov_rad?: number | null
+    vfov_rad?: number | null
+    mode?: string | null
+    resolution?: null | '1080p' | '4k'
+    palette?: null | 'white_hot' | 'black_hot'
+    cue?: null | 'on' | 'off'
+    illuminator?: {
+      on: boolean
+      kind: 'builtin' | 'nir_ill_l'
+      power_w?: number
+      divergence_rad?: number
+      range_m?: number
+    } | null
+  }[]
+}
+/**
+ * SB-33
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "InstanceState".
+ */
+export interface InstanceState {
+  t_sim_ns: WorldCommonInt64
+  /**
+   * Full64 decoded (AWR-17 R13)
+   */
+  state: {}
+  state_ext?: UavStateExt
+  fw?: {
+    mode: 'MC' | 'TRANSITION_FW' | 'FW' | 'TRANSITION_MC'
+    airspeed_mps?: number
+    bank_rad?: number
+    gamma_rad?: number
+    hover_used_s?: number
+  } | null
+  energy?: {
+    e_avail_wh?: number
+    e_rtl_wh?: number
+    e_res_wh?: number
+    t_end_s?: number
+  }
+}
+/**
  * Interest (ctl/sim-core/interest). AWR-17 §9.4, 10 AD-10: 250 ms debounce plus 1 s full resend.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -2681,7 +3961,80 @@ export interface Interest {
    * @maxItems 16
    */
   marks: number[]
-  topics: ('state_ext' | 'safety' | 'sensor' | 'env')[]
+  topics: ('state_ext' | 'safety' | 'sensor' | 'env' | 'perception' | 'nav' | 'radar' | 'acoustic' | 'lidar')[]
+  /**
+   * D2 per-vehicle data products generated on demand (AWR-04 §11.2): agent_no lists per stream; lidar holds at most one vehicle per session
+   */
+  streams?: {
+    /**
+     * @maxItems 64
+     */
+    perception?: number[]
+    /**
+     * @maxItems 64
+     */
+    nav?: number[]
+    /**
+     * @maxItems 64
+     */
+    radar?: number[]
+    /**
+     * @maxItems 64
+     */
+    acoustic?: number[]
+    /**
+     * @maxItems 1
+     */
+    lidar?: number[]
+    /**
+     * FieldInterestCode of every subscribed field/* topic (1 acoustic, 2 visual, 3 thermal, 4 radar, 5 volumes)
+     *
+     * @maxItems 5
+     */
+    field?: number[]
+    /**
+     * target_no of every subscribed target/{id}/quant
+     *
+     * @maxItems 30
+     */
+    quant?: number[]
+    /**
+     * subscription generation of field/* and target/* /quant (incremented on every subscribe op; a change makes the sim-core send keyframes at once)
+     *
+     * @maxItems 1
+     */
+    fsub?: number[]
+  }
+}
+/**
+ * awr.target.keepout.v1 (KeepoutVolume). Keepout volume handed to planning (AWR-04 §8.1; M10 §15.3.1; drafted by M18). r_m already includes the margin m = 20 m + 3 sigma_hold and the motion margin; M10 only adds r_col. Angles follow AWR-03 §5.4 (World ENU, rad, counter-clockwise from east); moving targets never produce sector.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Keepout".
+ */
+export interface Keepout {
+  id: string
+  shape: 'cylinder' | 'sphere' | 'hemisphere' | 'sector'
+  center_enu_m: WorldCommonVec3
+  r_m: number
+  /**
+   * absolute ENU z; cylinder and sector bottom, hemisphere centre height
+   */
+  z_min_m?: number
+  z_max_m?: number
+  /**
+   * sector axis
+   */
+  yaw_rad?: number
+  /**
+   * sector only
+   */
+  half_angle_rad?: number
+  source?: {
+    kind: 'target' | 'zone' | 'manual'
+    id?: string
+    vol_idx?: number
+  }
 }
 /**
  * bus/keys.json meta-schema. AWR-17 §9.3.
@@ -2708,9 +4061,17 @@ export interface Keys {
       express: boolean
     }
     payload: string | null
-    d1: 'core' | 'ext' | 'test' | 'V0.2' | 'V0.5'
+    d1: 'core' | 'ext' | 'test' | 'V0.2' | 'V0.5' | 'V0.2-demo'
     doc?: string
+    /**
+     * namespace the key is relative to; absent = run (awr/<world>/<run>)
+     */
+    ns?: 'run' | 'pool'
   }[]
+  /**
+   * sandbox-pool control namespace (AWR-17 §17.10.1)
+   */
+  pool_namespace?: string
 }
 /**
  * layouts.json meta-schema. Structure of rt/layouts.json (AWR-17 §10.3). Semantic rules (no overlap, natural alignment, bits within the integer, enums exist, scale only on integers) are checked by tools/contracts/gen.py.
@@ -2893,6 +4254,143 @@ export interface LidarLivox {
   conf?: 'A' | 'B' | 'C' | 'D'
   src?: string
   [k: string]: unknown
+}
+/**
+ * awr.sandbox.limits.v1 (session limits). Per-session entity and rate limits (AWR-04 §4.4.3, §11.5; AWR-17 §17.4.1 limits). Values come from configs/runtime.yaml sandbox: (M17).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Limits".
+ */
+export interface Limits {
+  vehicles_max: number
+  targets_max: number
+  nests_max: number
+  tasks_active_max: number
+  cloned_models_max?: number
+  rest_rps: number
+  rest_burst: number
+  call_rps: number
+  call_burst: number
+  clock_rps: number
+  entity_rps: number
+  task_rps: number
+  ws_max: number
+  /**
+   * Hz
+   */
+  setpoint_hz_max: number
+  snapshot_kib?: number
+  plan: {
+    area_max_m2: number
+    vertices_max: number
+    strips_max: number
+    work_items_max: number
+    station_candidates_max: number
+    coverage_cells_max: number
+  }
+}
+export interface Lwir2 {
+  schema: 'awr.sensor.lwir.v1'
+  model_id?: string
+  model_version?: string
+  display_name?: string
+  reference?: boolean
+  mass_kg?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  power_w?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  env_limits?: {
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    temp_c?: [number, number, ...number[]]
+  }
+  overridable?: string[]
+  conf?: 'A' | 'B' | 'C' | 'D'
+  src?: string
+  sensor_id?: string
+  spec_ref?: string
+  mount?: {
+    xyz_m: WorldCommonVec3
+    rpy_deg?: WorldCommonVec3
+    q_xyzw?: WorldCommonQuatXYZW
+    preset?: string
+  }
+  on_gimbal_of?: string
+  gimbal?: {
+    pitch_min_deg?: number
+    pitch_max_deg?: number
+    yaw_min_deg?: number
+    yaw_max_deg?: number
+    rate_max_deg_s?: number
+    integrated?: boolean
+    default_mode?: string
+    default_yaw_deg?: number
+    default_pitch_deg?: number
+  }
+  detector?: {
+    type?: string
+    width_px: number
+    height_px: number
+    pixel_um: number
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    band_um?: [number, number, ...number[]]
+    netd_mk: number
+    netd_f_number?: number
+    frame_hz?: number
+    integration_s?: number
+  }
+  /**
+   * @minItems 1
+   */
+  lenses?: [
+    {
+      f_mm: number
+      f_number?: number
+      mass_kg?: number
+      power_w?: number
+    },
+    ...{
+      f_mm: number
+      f_number?: number
+      mass_kg?: number
+      power_w?: number
+    }[]
+  ]
+  /**
+   * mount file: selected lens
+   */
+  lens_mm?: number
+  gimbal_mass_kg?: number
+  digital_zoom_max?: number
+  jitter_urad?: number
+  palettes?: ('white_hot' | 'black_hot')[]
+  sigma_clutter_k?: {
+    /**
+     * unit K
+     */
+    day?: number
+    /**
+     * unit K
+     */
+    night?: number
+  }
 }
 /**
  * awr.agent.manifest.v1. M14 §6.4.4; returned by agent.describe.
@@ -3139,6 +4637,222 @@ export interface Model {
   fallback: 'lowpoly_only'
 }
 /**
+ * awr.sensor.nav.v1. Topic uav/{id}/sensor/nav, 10 Hz sim while subscribed (AWR-04 §11.7; AWR-17 §17.7.4; M13 §15.3.3): flight-controller IMU sampled at 10 Hz (FLU, noise and bias), GNSS (accuracy tier RTK or SLAM), barometric altitude.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Nav".
+ */
+export interface Nav {
+  uav?: WorldCommonSlug
+  t_sim_ns: WorldCommonInt64
+  imu: {
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    f_mps2: [number, number, number, ...number[]]
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    w_rad_s: [number, number, number, ...number[]]
+  }
+  gnss: {
+    pos_enu_m: WorldCommonVec3
+    vel_mps: WorldCommonVec3
+    fix: 'none' | '2d' | '3d' | 'rtk_float' | 'rtk_fixed' | 'slam'
+    hacc_m?: number
+    vacc_m?: number
+    sats?: number
+    hdop?: number
+  }
+  baro: {
+    alt_m: number
+    p_pa?: number
+  }
+  loc_mode?: 'rtk' | 'slam' | 'single'
+}
+/**
+ * awr.tasking.nest.v1 (nest). Nest object (AWR-04 §8.2; AWR-17 §17.6.6; M20 §6.2.1). box takes multirotors, launcher fixed wing (crewed, not part of unattended 7x24), vtol_pad VTOL and multirotors. <= 4 per session (505); incompatible 525; delete with vehicles inside 105.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Nest".
+ */
+export interface Nest {
+  id?: WorldCommonSlug
+  name?: string
+  /**
+   * World ENU m; z null = DSM or roof
+   *
+   * @minItems 2
+   * @maxItems 3
+   */
+  pos: [number | null, number | null, ...(number | null)[]]
+  kind?: 'box' | 'launcher' | 'vtol_pad'
+  crewed?: boolean
+  slots?: number
+  energy?: {
+    mode: 'swap' | 'charge'
+    swap_s?: number
+    packs?: {
+      cells: number
+      count: number
+      capacity_ah?: number
+      chemistry?: 'lipo' | 'lihv' | 'liion'
+      pack_id?: string
+    }[]
+  }
+  chargers?: {
+    model: string
+    count: number
+    channels: number
+    i_max_a: number
+    cells_max: number
+  }[]
+  turnaround_s?: number
+  launch_interval_s?: number
+  wind_max_mps?: number
+  rtk_base?: boolean
+  link_range_m?: number | null
+  /**
+   * read only, derived from vehicle instances; in a create request it places vehicles (reply vehicle_ids); PATCH -> 110 INVENTORY_READONLY
+   */
+  inventory?: {
+    model_id: string
+    count: number
+    in_nest?: number
+    airborne?: number
+  }[]
+  /**
+   * create reply only
+   */
+  vehicle_ids?: WorldCommonSlug[]
+}
+/**
+ * SB-47
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "NestList".
+ */
+export interface NestList {
+  items: Nest[]
+}
+/**
+ * awr.nest.status.v1. Topic nest/{id}/status 1 Hz (AWR-17 §17.7.4; M20 §6.3.3): slots, inventory, packs, charging channels, launch and recover queues.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "NestStatus".
+ */
+export interface NestStatus {
+  id: WorldCommonSlug
+  kind: 'box' | 'launcher' | 'vtol_pad'
+  t_sim_ns?: WorldCommonInt64
+  slots: {
+    total: number
+    occupied: number
+  }
+  inventory: {
+    model_id: string
+    count: number
+    in_nest?: number
+    airborne?: number
+  }[]
+  aircraft?: {
+    uav: WorldCommonSlug
+    state: 'ready' | 'charging' | 'swapping' | 'turnaround' | 'airborne' | 'standby'
+    soc?: number
+  }[]
+  packs?: {
+    pack_id: string
+    cells?: number
+    soc?: number
+    state: 'installed' | 'queued' | 'charging' | 'ready' | 'depleted'
+    t_ready_s?: number | null
+  }[]
+  chargers: {
+    ch: number
+    model?: string
+    state: 'idle' | 'charging' | 'blocked'
+    pack_id?: string | null
+    soc_pct?: number | null
+    eta_s?: number | null
+    i_a?: number | null
+  }[]
+  launch_queue?: {
+    uav: WorldCommonSlug
+    tid?: WorldCommonSlug | null
+    t_planned_ns?: WorldCommonInt64
+    delay_reason?: string | null
+  }[]
+  recover_queue?: {
+    uav: WorldCommonSlug
+    eta_s?: number | null
+  }[]
+  wind_ok: boolean
+}
+export interface NirIlluminator2 {
+  schema: 'awr.sensor.nir_illuminator.v1'
+  model_id?: string
+  model_version?: string
+  display_name?: string
+  reference?: boolean
+  mass_kg?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  power_w?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  env_limits?: {
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    temp_c?: [number, number, ...number[]]
+  }
+  overridable?: string[]
+  conf?: 'A' | 'B' | 'C' | 'D'
+  src?: string
+  sensor_id?: string
+  spec_ref?: string
+  mount?: {
+    xyz_m: WorldCommonVec3
+    rpy_deg?: WorldCommonVec3
+    q_xyzw?: WorldCommonQuatXYZW
+    preset?: string
+  }
+  on_gimbal_of?: string
+  gimbal?: {
+    pitch_min_deg?: number
+    pitch_max_deg?: number
+    yaw_min_deg?: number
+    yaw_max_deg?: number
+    rate_max_deg_s?: number
+    integrated?: boolean
+    default_mode?: string
+    default_yaw_deg?: number
+    default_pitch_deg?: number
+  }
+  wavelength_nm?: number
+  p_w?: number
+  divergence_deg?: number
+  ref?: {
+    r_m?: number
+    p_w?: number
+    theta_deg?: number
+    rho?: number
+  }
+}
+/**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "OpsServerInfo".
  */
@@ -3148,7 +4862,21 @@ export interface OpsServerInfo {
   protocol: 'awr.rt.v1'
   sessionId: string
   connId: string
-  capabilities: ('time' | 'credit' | 'rpc' | 'events' | 'clientPublish' | 'procHealth' | 'playbackControl' | 'm4')[]
+  capabilities: (
+    | 'time'
+    | 'credit'
+    | 'rpc'
+    | 'events'
+    | 'clientPublish'
+    | 'procHealth'
+    | 'playbackControl'
+    | 'm4'
+    | 'targets'
+    | 'perception'
+    | 'tasking'
+    | 'calendar'
+    | 'sandbox'
+  )[]
   window: number
   tickHz: 60
   rateClasses?: number[]
@@ -3172,6 +4900,14 @@ export interface OpsServerInfo {
     pausable?: boolean
     max_speed?: number
     steppable?: boolean
+    /**
+     * D2: main clock rate, d1_250 = 250, sandbox100 = 100 (ADR-090)
+     */
+    tick_hz?: number
+    /**
+     * D2: currently reachable rate granted by the governor (sandbox); D1 max_speed
+     */
+    rate_cap?: number
   }
   role?: 'viewer' | 'operator' | 'admin'
   principal?: string
@@ -3188,6 +4924,41 @@ export interface OpsServerInfo {
     maxBinaryBytes?: number
   }
   serverUnix_ns?: string
+  /**
+   * D2, sandbox-api only (AWR-17 §17.7.1): subset of awr.sandbox.session.v1
+   */
+  sandbox?: {
+    sid: string
+    state: 'SPAWNING' | 'READY' | 'ACTIVE' | 'IDLE' | 'PARKING' | 'PARKED' | 'DRAINING' | 'ENDED' | 'FAILED'
+    world_id: string
+    template_id?: string | null
+    expires_unix_ns?: string
+    renewable?: boolean
+    limits?: Limits
+    tier?: 'public' | 'internal'
+  }
+  /**
+   * D2.1 power-saving thresholds in wall seconds (AWR-04 §15.7.2); the server is authoritative
+   */
+  power?: {
+    viewer_idle_s?: number
+    viewer_idle_busy_s?: number
+    sandbox_idle_s?: number
+    sandbox_idle_busy_s?: number
+    hidden_s?: number
+    warn_s?: number
+    quiet_s?: number
+    grace_s?: number
+    presence_min_s?: number
+    internal_idle_s?: number
+  }
+  /**
+   * D2.1 internal identity of this connection (AWR-17 §17.20.5)
+   */
+  identity?: {
+    tier: 'public' | 'internal'
+    exp_unix_ns?: string
+  }
 }
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -3559,6 +5330,386 @@ export interface OpsPlayback {
   request_id: string
 }
 /**
+ * D2.1 (AWR-17 §17.20.4): client -> server, at most one per presence_min_s per connection; no reply
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "OpsPresence".
+ */
+export interface OpsPresence {
+  op: 'presence'
+  input_age_s?: number
+  visible?: boolean
+  power?: 'active' | 'quiet' | 'warning' | 'saving'
+}
+/**
+ * awr.sandbox.park.v1 (park, park beacon, resume; SB-69, SB-70, SB-72). Request and reply bodies of the D2.1 park endpoints (AWR-17 §17.20.4; AWR-04 §15.7.4). Draft by M17 (WP-04b) for contracts 1.2.0. The session object fields added by D2.1 are listed in $defs/session_d21 (to be merged into session.schema.json properties; state enum gains PARKING and PARKED, end_reason gains parked_expired).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Park".
+ */
+export interface Park {
+  [k: string]: unknown
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ParkParkBeacon".
+ */
+export interface ParkParkBeacon {
+  token: string
+  reason?: 'idle' | 'hidden' | 'user'
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ParkParkReply".
+ */
+export interface ParkParkReply {
+  state: 'PARKING' | 'PARKED'
+  session?: {}
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ParkParkRequest".
+ */
+export interface ParkParkRequest {
+  reason?: 'idle' | 'hidden' | 'user'
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ParkResumeCreated".
+ */
+export interface ParkResumeCreated {
+  session: {}
+  token: string | null
+  token_exp_unix_ns?: ParkNs
+  idempotent?: boolean
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ParkResumeQueued".
+ */
+export interface ParkResumeQueued {
+  queue: {
+    ticket_id: string
+    ticket_token: string | null
+    position: number
+    eta_s: number | null
+    expires_unix_ns?: ParkNs
+    kind: 'resume' | 'internal'
+    sid?: string
+  }
+  available_now?: string[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ParkSessionD21".
+ */
+export interface ParkSessionD21 {
+  state?: 'SPAWNING' | 'READY' | 'ACTIVE' | 'IDLE' | 'PARKING' | 'PARKED' | 'DRAINING' | 'ENDED' | 'FAILED'
+  tier?: 'public' | 'internal'
+  last_input_unix_ns?: ParkNs | null
+  parked_unix_ns?: ParkNs | null
+  park_reason?: null | 'idle' | 'hidden' | 'user' | 'idle_disconnected' | 'preempted' | 'reclaimed_cpu' | 'reclaimed_mem'
+  resume_mode?: null | 'checkpoint' | 'snapshot'
+  retention_unix_ns?: ParkNs | null
+  remaining_s?: number | null
+  t_sim_ns?: ParkNs | null
+  end_reason?: null | 'idle' | 'lifetime' | 'preempted' | 'reclaimed' | 'user' | 'failed' | 'parked_expired'
+}
+/**
+ * awr.uav.perception.v1. Topic uav/{id}/perception, 5 Hz sim for the interest set (AWR-17 §17.7.4; semantics M19 §6.7, §6.10): per imaging sensor the targets in the frustum with level, pixels and limiting factor; GET .../vehicles/{vid}/perception adds radar, acoustic and lidar. Images are not provided.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Perception".
+ */
+export interface Perception {
+  uav: WorldCommonSlug
+  t_sim_ns: WorldCommonInt64
+  sensors: {
+    sensor: string
+    kind: 'eo' | 'nir' | 'lwir'
+    mode?: string | null
+    f_mm?: number
+    hfov_rad?: number
+    vfov_rad?: number
+    illum?: {
+      builtin?: 'auto' | 'on' | 'off'
+      ext?: 'auto' | 'on' | 'off'
+    }
+    n_in_fov?: number
+    /**
+     * sorted by slant range
+     *
+     * @maxItems 8
+     */
+    targets: {
+      target: WorldCommonSlug
+      cls_est?: 'unknown' | 'person' | 'uav' | 'machine' | 'dog' | 'vehicle' | 'object'
+      level: 'none' | 'D' | 'R' | 'I'
+      p?: number
+      /**
+       * px
+       */
+      n?: number
+      /**
+       * px
+       */
+      n_eff: number
+      /**
+       * px
+       */
+      n_req: number
+      level_req?: 'D' | 'R' | 'I'
+      range_m: number
+      gsd_m: number
+      limiting: 'fov' | 'los' | 'pixels' | 'light' | 'contrast' | 'blur' | null
+      k?: {
+        los: number
+        c: number
+        light: number
+        blur: number
+        occ?: number
+      }
+      hold_s?: number
+      captured: boolean
+      capture_state?: 'IDLE' | 'ARMING' | 'CAPTURED' | 'HOLDING'
+      /**
+       * LWIR apparent temperature difference
+       */
+      delta_t_app_k?: number
+      meas_enu_m?: WorldCommonVec3
+      sigma_m?: number
+    }[]
+  }[]
+  hud?: {
+    sensor?: string
+    target?: WorldCommonSlug
+    /**
+     * unit px
+     */
+    n_eff?: number
+    /**
+     * unit px
+     */
+    n_req?: number
+    limiting?: 'fov' | 'los' | 'pixels' | 'light' | 'contrast' | 'blur' | null
+  } | null
+  budget?: {
+    rays_tick_max?: number
+    rays_s?: number
+    dropped?: number
+  }
+  radar?: RadarTracks | null
+  acoustic?: AcousticBearings | null
+  lidar?: {
+    n_points_target?: {
+      target: WorldCommonSlug
+      n_1s: number
+      level: 'none' | 'D' | 'R' | 'I'
+    }[]
+  } | null
+}
+/**
+ * awr.sensor.radar_tracks.v1. Topic uav/{id}/sensor/radar/tracks, 5 Hz sim (AWR-17 §17.7.4; M19 §6.8): tracks never carry target truth ids.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "RadarTracks".
+ */
+export interface RadarTracks {
+  uav?: WorldCommonSlug
+  t_sim_ns: WorldCommonInt64
+  sensor: string
+  tracks: {
+    track_id: number
+    range_m: number
+    az_rad: number
+    el_rad: number
+    vr_mps: number
+    snr_db: number
+    level: 'none' | 'D' | 'R' | 'I'
+    /**
+     * P1 micro-Doppler
+     */
+    class_hint?: string | null
+  }[]
+  clutter_gated?: boolean
+}
+/**
+ * feasibility_window result: d_hi - d_lo < 10 m or no d_hi -> infeasible with why
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "PerceptionFeasibilityReply".
+ */
+export interface PerceptionFeasibilityReply {
+  feasible: boolean
+  d_lo_m?: number | null
+  d_hi_m?: number | null
+  why?: string | null
+}
+/**
+ * SB-67 (P1)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "PerceptionFeasibilityRequest".
+ */
+export interface PerceptionFeasibilityRequest {
+  target: WorldCommonSlug
+  model_id: string
+  sensor: string
+  light: 'day' | 'low' | 'night'
+  mor_m: number
+  mode?: 'geometric' | 'physical'
+  level_req?: 'D' | 'R' | 'I'
+}
+/**
+ * awr.sensor.perception_levels.v1 meta-schema. Perception level parameters (ADR-100). levels.*.n_p90_px = ratio_at_p_definite * n50_px.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "PerceptionLevels".
+ */
+export interface PerceptionLevels {
+  schema: 'awr.sensor.perception_levels.v1'
+  doc?: string
+  pixels_per_cycle: number
+  ttpf: {
+    e0: number
+    e1: number
+    p_definite: number
+    ratio_at_p_definite: number
+    form?: string
+  }
+  levels: {
+    D: {
+      n50_cycles: number
+      n50_px: number
+      n_p90_px: number
+    }
+    R: {
+      n50_cycles: number
+      n50_px: number
+      n_p90_px: number
+    }
+    I: {
+      n50_cycles: number
+      n50_px: number
+      n_p90_px: number
+    }
+  }
+  contrast: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  lwir?: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  light?: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  blur?: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  capture: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  los?: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  feasibility?: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  wavelength_nm?: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  k_mor: number
+  lidar?: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  radar?: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+  acoustic?: {
+    [k: string]:
+      | number
+      | {
+          [k: string]: number
+        }
+      | number[]
+  }
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "PerceptionTrack".
+ */
+export interface PerceptionTrack {
+  target: WorldCommonSlug
+  pos: WorldCommonVec3
+  vel: WorldCommonVec3
+  /**
+   * @minItems 3
+   * @maxItems 6
+   */
+  cov_diag?: [number, number, number, ...number[]]
+  state: 'TENTATIVE' | 'CONFIRMED' | 'COASTING' | 'DROPPED'
+  t_last_ns?: WorldCommonInt64
+}
+/**
+ * SB-66 (P1)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "PerceptionTracks".
+ */
+export interface PerceptionTracks {
+  items: PerceptionTrack[]
+}
+/**
  * awr.perf.clients.v1. Topic perf/clients (admin, ext): clientStats aggregated per connection.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -3766,6 +5917,39 @@ export interface PerfSnapshot {
     [k: string]: unknown
   }
   [k: string]: unknown
+}
+/**
+ * awr.tasking.plan.v1 (external allocation plan). SB-58 and command tasking/plan (AWR-17 §17.6.8): checked against capability, energy, keepouts, fence, station constraints and the AWR-04 §8.4 hard constraints; stale revision 105 (STALE_SNAPSHOT), infeasible 584 with violations.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Plan".
+ */
+export interface Plan {
+  based_on_revision: number
+  allocator?: string
+  /**
+   * @minItems 1
+   */
+  assignments: [
+    {
+      wid: string
+      uav: WorldCommonSlug
+      order?: number
+    },
+    ...{
+      wid: string
+      uav: WorldCommonSlug
+      order?: number
+    }[]
+  ]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "PlanReply".
+ */
+export interface PlanReply {
+  plan_id: string
+  applied: boolean
 }
 export interface PointcloudMetadata1 {
   version: '2.0'
@@ -4742,6 +6926,87 @@ export interface QaReport {
     total_bytes?: number
   }
 }
+export interface RadarMmw2 {
+  schema: 'awr.sensor.radar_mmw.v1'
+  model_id?: string
+  model_version?: string
+  display_name?: string
+  reference?: boolean
+  mass_kg?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  power_w?:
+    | number
+    | {
+        value: number
+        conf: 'A' | 'B' | 'C' | 'D'
+        src: string
+        check?: string
+      }
+  env_limits?: {
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    temp_c?: [number, number, ...number[]]
+  }
+  overridable?: string[]
+  conf?: 'A' | 'B' | 'C' | 'D'
+  src?: string
+  sensor_id?: string
+  spec_ref?: string
+  mount?: {
+    xyz_m: WorldCommonVec3
+    rpy_deg?: WorldCommonVec3
+    q_xyzw?: WorldCommonQuatXYZW
+    preset?: string
+  }
+  on_gimbal_of?: string
+  gimbal?: {
+    pitch_min_deg?: number
+    pitch_max_deg?: number
+    yaw_min_deg?: number
+    yaw_max_deg?: number
+    rate_max_deg_s?: number
+    integrated?: boolean
+    default_mode?: string
+    default_yaw_deg?: number
+    default_pitch_deg?: number
+  }
+  freq_ghz?: number
+  fov?: {
+    az_deg?: number
+    el_deg?: number
+  }
+  r_ref_m?: number
+  sigma_ref_m2?: number
+  pd_ref?: number
+  pfa?: number
+  snr_req_db?: number
+  range_res_m?: number
+  az_res_deg?: number
+  vel_res_mps?: number
+  az_acc_deg?: number
+  rate_hz?: number
+  r_max_m?: number
+  rain?: {
+    k?: number
+    alpha?: number
+  }
+  clutter?: {
+    sigma0_db?: number
+    k?: number
+  }
+  classify?: {
+    snr_db?: number
+    dwell_s?: number
+  }
+}
 /**
  * reasons.json meta-schema. AWR-17 §8.
  *
@@ -4763,11 +7028,26 @@ export interface Reasons {
     code: number
     name: string
     http: number | null
-    category: 'ok' | 'native' | 'call_control' | 'admission' | 'runtime' | 'protocol' | 'job' | 'data' | 'browser' | 'module'
+    category:
+      | 'ok'
+      | 'native'
+      | 'call_control'
+      | 'admission'
+      | 'runtime'
+      | 'protocol'
+      | 'job'
+      | 'data'
+      | 'browser'
+      | 'module'
+      | 'sandbox'
+      | 'catalog'
+      | 'targets'
+      | 'perception'
+      | 'tasking'
     step: string | null
     message_zh: string
     remedy_zh: string
-    d1: 'core' | 'ext' | 'V0.2' | 'V0.5' | 'V1.0'
+    d1: 'core' | 'ext' | 'V0.2' | 'V0.5' | 'V1.0' | 'V0.2-demo'
   }[]
   ws_close_codes: {
     code: number
@@ -4921,6 +7201,72 @@ export interface ReconJobParams {
   [k: string]: unknown
 }
 /**
+ * awr.relay.stats.v1. Topic relay/{tid}/stats 1 Hz, SB-59 and relay_stats.json of batch runs (AWR-04 §9.5; AWR-17 §17.7.4). coverage = integral of the capture indicator over the monitored time; discovered counts only our vehicles.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "RelayStats".
+ */
+export interface RelayStats {
+  tid: WorldCommonSlug
+  target: WorldCommonSlug
+  t_monitor_s: number
+  coverage: number
+  gaps: {
+    count: number
+    max_s: number
+    by_cause: {
+      keepout_priority?: number
+      illum_transition?: number
+      infeasible?: number
+      battery?: number
+      other?: number
+    }
+    /**
+     * seconds per cause
+     */
+    total_s_by_cause?: {
+      keepout_priority?: number
+      illum_transition?: number
+      infeasible?: number
+      battery?: number
+      other?: number
+    }
+  }
+  discovered: number
+  config_entries: {
+    count: number
+    total_s: number
+  }
+  handovers: {
+    count: number
+    mean_overlap_s?: number | null
+    min_overlap_s?: number | null
+  }
+  min_keepout_margin_m?: number | null
+  sorties?: number
+  flight_h?: number
+  energy_wh?: number
+  min_ready_packs?: number | null
+  energy_rtl?: number
+  dispatch_delays?: {
+    battery?: number
+    charger?: number
+    slot?: number
+    wind?: number
+    launch_interval?: number
+  }
+  on_station?: {
+    uav: WorldCommonSlug
+    station: string
+    since_t_sim_ns?: WorldCommonInt64
+  }[]
+  next?: {
+    uav?: WorldCommonSlug
+    eta_s?: number | null
+    reason?: string
+  } | null
+}
+/**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "ReplayReplayReq".
  */
@@ -4965,7 +7311,7 @@ export interface RngStreams {
     name: string
     owner: string
     purpose: string
-    d1: 'core' | 'ext' | 'stub' | 'no'
+    d1: 'core' | 'ext' | 'stub' | 'no' | 'V0.2-demo'
   }[]
   reserved?: {
     from?: number
@@ -5008,6 +7354,50 @@ export interface SafetyCodes {
     merge_key: string | null
     d1: 'core' | 'ext' | 'stub'
   }[]
+}
+/**
+ * awr.sandbox.session_state.v1. Topic sandbox/session 1 Hz, sandbox-api only (AWR-17 §17.7.4; source state/sandbox-pool/sessions).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SandboxSessionState".
+ */
+export interface SandboxSessionState {
+  sid: string
+  state: 'SPAWNING' | 'READY' | 'ACTIVE' | 'IDLE' | 'DRAINING' | 'ENDED' | 'FAILED'
+  world_id?: WorldCommonId
+  template_id?: string | null
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  expires_unix_ns: string
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  max_expires_unix_ns?: string
+  expires_in_s: number
+  renewable: boolean
+  renew_block_reason?: null | 'queue_nonempty' | 'max_lifetime' | 'degraded'
+  clock: {
+    rate_requested?: number
+    rate_granted: number
+    rate_cap: number
+    limited_by?: null | 'cpu_budget' | 'cost_cap' | 'manual_control' | 'degraded'
+  }
+  usage: {
+    vehicles: number
+    targets: number
+    nests: number
+    tasks_active: number
+    ws: number
+    cloned_models?: number
+  }
+  limits_rev?: number
+  queue_len: number
+  degrade_level: 'L0' | 'L1' | 'L2' | 'L3' | 'L4'
+  expiring: {
+    reason: 'idle' | 'lifetime' | 'preempted' | 'reclaimed' | 'user'
+    in_s: number
+  } | null
 }
 export interface Scenario2 {
   schema: 'awr.scenario.v1'
@@ -5323,6 +7713,395 @@ export interface ScenarioGenTerrainFollow {
   speed_mps?: number
 }
 /**
+ * awr.sandbox.session.v1 (sandbox session object and session API bodies). Session object returned by SB-04, SB-06, SB-08 and SB-10 (AWR-17 §17.4.1); $defs hold the session API request and reply bodies (§17.3, §17.4, §17.6.1). Times on the wire are UNIX ns decimal strings; queueing is not a session state (see ticket.schema.json).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Session".
+ */
+export interface Session {
+  sid: string
+  state: 'SPAWNING' | 'READY' | 'ACTIVE' | 'IDLE' | 'PARKING' | 'PARKED' | 'DRAINING' | 'ENDED' | 'FAILED'
+  world_id: WorldCommonId
+  template_id: string | null
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  created_unix_ns: string
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  expires_unix_ns: string
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  lifetime_max_unix_ns?: string
+  expires_in_s: number
+  renewable: boolean
+  renew_block_reason?: null | 'queue_nonempty' | 'max_lifetime' | 'degraded'
+  idle_ttl_s?: number
+  clock: {
+    state: 'STOPPED' | 'PLAYING' | 'PAUSED' | 'STEPPING' | 'BUFFERING' | 'ENDED' | 'STALLED' | 'RESTARTING' | 'FAILED' | 'LIVE'
+    rate_requested: number
+    rate_granted: number
+    rate_cap: number
+    limited_by: null | 'cpu_budget' | 'cost_cap' | 'manual_control' | 'degraded'
+    tick_hz: number
+  }
+  limits: Limits
+  usage?: {
+    vehicles: number
+    targets: number
+    nests: number
+    tasks_active: number
+    ws: number
+    cloned_models?: number
+  }
+  epoch?: number
+  restarts?: number
+  degrade_level?: 'L0' | 'L1' | 'L2' | 'L3' | 'L4'
+  calendar?: {
+    /**
+     * ISO 8601 UTC
+     */
+    start_utc: string
+    /**
+     * IANA time zone
+     */
+    tz: string
+  }
+  acoustic_bg?: 'rural' | 'suburban' | 'urban'
+  seed?: number
+  end_reason?: null | 'idle' | 'lifetime' | 'preempted' | 'reclaimed' | 'user' | 'failed' | 'parked_expired'
+  endpoints: {
+    rest: string
+    rt: string
+  }
+  tier?: 'public' | 'internal'
+  last_input_unix_ns?: string | null
+  parked_unix_ns?: string | null
+  park_reason?: null | 'idle' | 'hidden' | 'user' | 'idle_disconnected' | 'preempted' | 'reclaimed_cpu' | 'reclaimed_mem'
+  resume_mode?: null | 'checkpoint' | 'snapshot'
+  retention_unix_ns?: string | null
+  remaining_s?: number | null
+  t_sim_ns?: string | null
+}
+/**
+ * SB-18 (local and LAN only)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionBatchRequest".
+ */
+export interface SessionBatchRequest {
+  until_s: number
+  config_snapshot?: Snapshot | null
+  seed?: number | null
+}
+/**
+ * awr.sandbox.snapshot.v1 (session configuration snapshot). Configuration only (AWR-04 §4.6; AWR-17 §17.4.5): tasks as definitions and parameters, no run state; <= 256 KiB on export, <= 512 KiB decompressed on import; world_id must match the session (512, why world_mismatch).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Snapshot".
+ */
+export interface Snapshot {
+  schema: 'awr.sandbox.snapshot.v1'
+  contracts: string
+  world_id: WorldCommonId
+  template_id?: string | null
+  calendar: {
+    /**
+     * ISO 8601 UTC
+     */
+    start_utc: string
+    /**
+     * IANA time zone
+     */
+    tz: string
+  }
+  acoustic_bg?: 'rural' | 'suburban' | 'urban'
+  seed: number
+  env?: {
+    preset?: string | null
+    overrides?: {}
+  }
+  /**
+   * @maxItems 8
+   */
+  models?: Clone[]
+  /**
+   * @maxItems 4
+   */
+  nests: Nest[]
+  /**
+   * @maxItems 12
+   *
+   * Items: vehicle instance configuration (AWR-17 §17.6.3 POST body; AWR-20 §7.7)
+   */
+  vehicles: {
+    id?: WorldCommonSlug
+    model_id: string
+    nest_id?: WorldCommonSlug | null
+    home_enu_m?: [number | null, number | null, number | null, ...(number | null)[]] | null
+    label?: string | null
+    yaw_rad?: number
+    initial_soc?: number
+    sensors?:
+      | {
+          name: string
+          type?: string
+          enabled?: boolean
+        }[]
+      | null
+    limits_profile?: string | null
+    lights?: {
+      nav?: boolean
+      strobe?: boolean
+    }
+  }[]
+  /**
+   * @maxItems 30
+   */
+  targets: TargetCreateRequest[]
+  /**
+   * @maxItems 6
+   */
+  tasks: TaskingTaskRequest[]
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  created_unix_ns?: string
+}
+export interface TaskingTaskRequest1 {
+  type: 'point_watch' | 'polyline_patrol' | 'area_patrol' | 'area_scan_gsd' | 'perimeter_patrol' | 'relay_watch' | 'area_guard'
+  label?: string | null
+  params: {}
+  common?: {
+    priority?: 'low' | 'normal' | 'high'
+    start_at_s?: number | null
+    allowed_nests?: WorldCommonSlug[]
+    allowed_models?: string[]
+    on_detect?: 'notify' | 'relay' | 'ignore'
+    allocator?: string
+    external_fallback?: 'greedy' | 'none'
+  }
+  preview_id?: string | null
+}
+/**
+ * SB-19
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionBatchStatus".
+ */
+export interface SessionBatchStatus {
+  batch_id?: string
+  state: 'queued' | 'running' | 'done' | 'failed'
+  progress_pct?: number
+  sim_t_s?: number
+  wall_s?: number
+  result?: {
+    relay_stats?: RelayStats[]
+    events_url?: string
+  } | null
+}
+/**
+ * first result of the call that a REST write maps to (same admission and idempotency as WS call)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionCallResult".
+ */
+export interface SessionCallResult {
+  op?: 'result'
+  id: string
+  status: 'accepted' | 'rejected' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'timeout'
+  code: number
+  final?: boolean
+  reason?: string
+  message?: string
+  warnings?: string[]
+  data?: {}
+  effect?: {}
+  detail?: unknown
+  [k: string]: unknown
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionChallenge".
+ */
+export interface SessionChallenge {
+  challenge_id: string
+  alg: 'sha256-lz'
+  prefix_b64: string
+  bits: number
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  expires_unix_ns: string
+}
+/**
+ * data of the SB-15 result; granted below requested is a warning (501), not an error
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionClockData".
+ */
+export interface SessionClockData {
+  requested_rate: number
+  granted_rate: number
+  rate_cap: number
+  limited_by?: null | 'cpu_budget' | 'cost_cap' | 'manual_control' | 'degraded'
+  limit_code?: 0 | 501
+}
+/**
+ * SB-15; step ticks count sandbox100 ticks (10 ms)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionClockRequest".
+ */
+export interface SessionClockRequest {
+  op: 'play' | 'pause' | 'speed' | 'step'
+  rate?: 0.25 | 0.5 | 1 | 2 | 5 | 10
+  ticks?: number
+}
+/**
+ * POST /sessions (SB-04, AWR-17 §17.4.2); template and config_snapshot are mutually exclusive
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionCreateRequest".
+ */
+export interface SessionCreateRequest {
+  world?: WorldCommonId
+  template?: string | null
+  config_snapshot?: Snapshot | null
+  calendar?: {
+    /**
+     * ISO 8601 UTC
+     */
+    start_utc: string
+    /**
+     * IANA time zone
+     */
+    tz: string
+  }
+  acoustic_bg?: 'rural' | 'suburban' | 'urban'
+  seed?: number | null
+  principal_hint: string
+  pow?: {
+    challenge_id: string
+    nonce: number
+  } | null
+  force_new?: boolean
+  queue_ok?: boolean
+  client?: {
+    kind?: 'browser' | 'sdk' | 'other'
+    version?: string
+  }
+}
+/**
+ * 201 (new, token present) or 200 (idempotent, token null)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionCreated".
+ */
+export interface SessionCreated {
+  session: Session
+  token: string | null
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  token_exp_unix_ns?: string
+  idempotent?: boolean
+}
+/**
+ * SB-17 (token in the body: sendBeacon cannot set headers)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionEndBeacon".
+ */
+export interface SessionEndBeacon {
+  token: string
+}
+/**
+ * SB-16 (events use the WS event shape; the bus schema is referenced for the common fields)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionEventsPage".
+ */
+export interface SessionEventsPage {
+  items: BusEvent[]
+  next_since_seq?: number
+  oldest_seq?: number
+  [k: string]: unknown
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionKeepaliveReply".
+ */
+export interface SessionKeepaliveReply {
+  session: Session
+  renewed: boolean
+  token: string | null
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  token_exp_unix_ns?: string
+}
+/**
+ * SB-00
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionMeta".
+ */
+export interface SessionMeta {
+  api_version: 1
+  contracts: string
+  access_mode: 'public' | 'lan' | 'loopback'
+  features: ('queue' | 'pow' | 'batch')[]
+  max_sessions: number
+  active_sessions: number
+  queue_len: number
+  pow?: {
+    required_now?: boolean
+    bits?: number
+  }
+  sdk?: {
+    min_version?: string
+  }
+  /**
+   * D2.1 (AWR-17 §17.20.1)
+   */
+  build?: {
+    version: string
+    channel: 'demo' | 'local' | 'ci'
+    release: string
+  }
+}
+/**
+ * 202 queued
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionQueued".
+ */
+export interface SessionQueued {
+  queue: {
+    ticket_id: string
+    ticket_token: string
+    position: number
+    eta_s: number | null
+    /**
+     * UNIX time in ns as a decimal string (AWR-17 §1.3)
+     */
+    expires_unix_ns?: string
+  }
+  available_now?: WorldCommonId[]
+}
+/**
+ * SB-12
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionRestoreRequest".
+ */
+export interface SessionRestoreRequest {
+  snapshot: Snapshot
+}
+/**
  * Orchestrator SessionSpec (V0.2 stub). M08 §7 (stub): D1 freezes only the envelope.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -5338,6 +8117,251 @@ export interface SessionSpec {
     [k: string]: unknown
   }[]
   [k: string]: unknown
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionTemplateItem".
+ */
+export interface SessionTemplateItem {
+  template_id: string
+  world_id: WorldCommonId
+  name_zh: string
+  summary_zh?: string
+  first_feedback_zh?: string
+  entities?: {
+    vehicles?: number
+    targets?: number
+    nests?: number
+    tasks?: number
+  }
+  calendar_default?: {
+    start_local?: string
+    tz?: string
+  }
+  recommended?: boolean
+}
+/**
+ * SB-13
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionTemplateRequest".
+ */
+export interface SessionTemplateRequest {
+  template: string
+}
+/**
+ * SB-02
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionTemplates".
+ */
+export interface SessionTemplates {
+  items: {
+    template_id: string
+    world_id: WorldCommonId
+    name_zh: string
+    summary_zh?: string
+    first_feedback_zh?: string
+    entities?: {
+      vehicles?: number
+      targets?: number
+      nests?: number
+      tasks?: number
+    }
+    calendar_default?: {
+      start_local?: string
+      tz?: string
+    }
+    recommended?: boolean
+  }[]
+}
+/**
+ * payload of the sandbox token v1.<b64url(payload)>.<b64url(sig)> signed with K_sbauth (AWR-17 §17.3.1)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionTokenPayload".
+ */
+export interface SessionTokenPayload {
+  v: 1
+  sub: string
+  role: 'operator'
+  run: string
+  sid: string
+  scope: 'sandbox'
+  mode: 'public' | 'lan' | 'loopback'
+  iat: number
+  exp: number
+  jti: string
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionWorldItem".
+ */
+export interface SessionWorldItem {
+  world_id: WorldCommonId
+  name_zh?: string
+  tier: 'S' | 'L'
+  available: boolean
+  reason?: null | 'derived_cache_missing' | 'not_allowed'
+  admit_now: boolean
+  cost?: {
+    anon_mb?: number
+    ws_mb?: number
+  }
+  dataset?: {
+    name?: string
+    terms_zh?: string
+    citation?: string
+  }
+  anchor?: {
+    lat_deg?: number
+    lon_deg?: number
+    tz?: string
+  }
+  bounds_m?: {
+    /**
+     * unit m
+     */
+    xmin?: number
+    /**
+     * unit m
+     */
+    xmax?: number
+    /**
+     * unit m
+     */
+    ymin?: number
+    /**
+     * unit m
+     */
+    ymax?: number
+  }
+  templates?: string[]
+}
+/**
+ * SB-14
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionWorldRequest".
+ */
+export interface SessionWorldRequest {
+  world: WorldCommonId
+  template?: string | null
+}
+/**
+ * SB-01
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionWorlds".
+ */
+export interface SessionWorlds {
+  items: {
+    world_id: WorldCommonId
+    name_zh?: string
+    tier: 'S' | 'L'
+    available: boolean
+    reason?: null | 'derived_cache_missing' | 'not_allowed'
+    admit_now: boolean
+    cost?: {
+      anon_mb?: number
+      ws_mb?: number
+    }
+    dataset?: {
+      name?: string
+      terms_zh?: string
+      citation?: string
+    }
+    anchor?: {
+      lat_deg?: number
+      lon_deg?: number
+      tz?: string
+    }
+    bounds_m?: {
+      /**
+       * unit m
+       */
+      xmin?: number
+      /**
+       * unit m
+       */
+      xmax?: number
+      /**
+       * unit m
+       */
+      ymin?: number
+      /**
+       * unit m
+       */
+      ymax?: number
+    }
+    templates?: string[]
+  }[]
+}
+/**
+ * vehicle instance configuration (AWR-17 §17.6.3 POST body; AWR-20 §7.7)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SnapshotVehicle".
+ */
+export interface SnapshotVehicle {
+  id?: WorldCommonSlug
+  model_id: string
+  nest_id?: WorldCommonSlug | null
+  home_enu_m?: [number | null, number | null, number | null, ...(number | null)[]] | null
+  label?: string | null
+  yaw_rad?: number
+  initial_soc?: number
+  sensors?:
+    | {
+        name: string
+        type?: string
+        enabled?: boolean
+      }[]
+    | null
+  limits_profile?: string | null
+  lights?: {
+    nav?: boolean
+    strobe?: boolean
+  }
+}
+/**
+ * awr.tasking.sustainability.v1. 7x24 sustainability assessment (AWR-04 §9.6; SB-56; dry-run of relay and area_guard).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Sustainability".
+ */
+export interface Sustainability {
+  verdict: 'yes' | 'no' | 'not_applicable'
+  horizon_s?: number
+  bottlenecks?: {
+    code: 'night_sensor' | 'los' | 'weather' | 'airframe' | 'charger' | 'battery' | 'link_range' | 'wind'
+    detail?: unknown
+  }[]
+  windows?: {
+    /**
+     * UNIX time in ns as a decimal string (AWR-17 §1.3)
+     */
+    t_from_unix_ns: string
+    /**
+     * UNIX time in ns as a decimal string (AWR-17 §1.3)
+     */
+    t_to_unix_ns: string
+    band: 'day' | 'low' | 'night'
+    feasible: boolean
+    why?: string | null
+    d_lo_m?: number | null
+    d_hi_m?: number | null
+  }[]
+  n_air?: number
+  n_air_recommended?: number
+  chargers?: {
+    need?: number
+    have?: number
+  }
+  packs?: {
+    need?: number
+    have?: number
+  }
 }
 /**
  * awr.sys.procs.v1. Topic sys/procs and GET /api/sys/procs items (AWR-17 §4.3.12, §6.5; M11). Field names and the state enum follow 17 §4.3.12 and 19 §4.2 (STOPPED, STARTING, RUNNING, STOPPING, BACKOFF, FAILED); log_tail only for admin. last_reason, on_demand, layer and since_wall_ns are optional supervisor additions (AWR-03 §5.11 rule 1).
@@ -5362,6 +8386,212 @@ export interface SysProcs {
     layer?: string | null
     since_wall_ns?: string
     [k: string]: unknown
+  }[]
+}
+/**
+ * SB-41 201 (command accepted, effective next tick)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TargetCreated".
+ */
+export interface TargetCreated {
+  id: WorldCommonSlug
+  cfg?: Target
+}
+/**
+ * awr.target.detail.v1. Topic target/{id}/detail 2 Hz, SB-45 and state/sim-core/target_detail (AWR-17 §17.7.4; M18-M19 PRD §7.2). cfg_rev is the full configuration revision; cfg carries the full target object when cfg_rev changed and every 10 s.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TargetDetail".
+ */
+export interface TargetDetail {
+  id: WorldCommonSlug
+  label?: string
+  class: 'person' | 'uav' | 'machine' | 'dog' | 'vehicle' | 'object'
+  t_sim_ns?: WorldCommonInt64
+  awareness: 'UNAWARE' | 'SUSPICIOUS' | 'REACTING' | 'ALERTED' | 'CALMING'
+  alertness: number
+  criterion_mode: 'geometric' | 'physical'
+  level_req?: 'D' | 'R' | 'I'
+  discovered_count: number
+  episode?: number
+  last_discovered?: {
+    t_sim_ns: WorldCommonInt64
+    uav: WorldCommonSlug
+    kind: 'visual' | 'acoustic' | 'radar' | 'rf'
+    range_m?: number
+    margin_db?: number | null
+    margin_ratio?: number | null
+  } | null
+  dwell?: {
+    uav: WorldCommonSlug
+    kind?: string
+    t_s: number
+    t_dwell_s: number
+  } | null
+  behavior?: {
+    phase?: 'onset' | 'response'
+    type?: string
+    t_left_s?: number | null
+  } | null
+  /**
+   * @maxItems 4
+   */
+  sensitivity: {
+    idx: number
+    kind: 'visual' | 'acoustic' | 'radar' | 'rf'
+    shape: 'sphere' | 'hemisphere' | 'cylinder' | 'sector'
+    radius_cfg_m: number
+    /**
+     * effective radius per model of the session (<= 8)
+     */
+    radius_eff_m?: {
+      [k: string]: number
+    }
+    z_min_m?: number
+    z_max_m?: number
+    half_angle_deg?: number
+    azimuth_offset_deg?: number
+    enabled: boolean
+    occupied_by?: WorldCommonSlug[]
+  }[]
+  inside_n?: number
+  keepout?: {
+    radius_m?: number
+    margin_m?: number
+    full_circle?: boolean
+  }
+  sound?: {
+    on: boolean
+    phase_s?: number
+    /**
+     * dB(A)
+     */
+    lw_dba_now?: number
+  } | null
+  motion?: {
+    mode?: 'static' | 'path' | 'random_walk'
+    speed_mps?: number
+    vz_mps?: number
+    path_idx?: number | null
+  }
+  capture?: {
+    best_level: 'none' | 'D' | 'R' | 'I'
+    captured?: boolean
+    sensor?: string | null
+    uav?: WorldCommonSlug | null
+    /**
+     * unit px
+     */
+    n_eff?: number | null
+    /**
+     * unit px
+     */
+    n_req?: number | null
+    since_t_sim_ns?: WorldCommonInt64 | null
+  } | null
+  cfg_rev: number
+  cfg?: Target
+}
+/**
+ * SB-40
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TargetList".
+ */
+export interface TargetList {
+  items: Target[]
+  rev?: number
+}
+/**
+ * awr.target.quant.v1. Pair readings of one target against our vehicles (<= 12 pairs, ascending slant range; AWR-17 §17.20.6; semantics AWR-04 §15.10.3, §15.10.4; drafted by M19 WP-19b). Expanded form (this schema): SB-73 and the decoded topic. Topic target/{id}/quant (2 Hz sim, on subscription) carries the columnar form enc = soa1: one array per field (sub-objects acoustic, visual, radar, reverse hold column objects; `_has` marks pairs without the sub-object), a column whose values are all equal is folded into a scalar, numbers are integers scaled by the fixed table QUANT_SCALE (python/awr/sim/perception/quant.py; apps/web/src/engine/perception/field.ts) and decode to exactly the expanded values. Probabilities are for display; the discovery decision stays the deterministic criterion (would_discover).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TargetQuant".
+ */
+export interface TargetQuant {
+  t_sim_ns: WorldCommonInt64
+  target: WorldCommonSlug
+  criterion_mode: 'geometric' | 'physical'
+  /**
+   * @maxItems 12
+   */
+  pairs: {
+    uav: WorldCommonSlug
+    model_id: string
+    range_m: number
+    elev_deg: number
+    az_rel_deg: number
+    los: boolean | null
+    los_age_s?: number | null
+    acoustic: {
+      lp_dba: number
+      lp_band_db: number
+      band_hz: number
+      thr_dba: number
+      l_bg_dba: number
+      margin_db: number
+      p: number
+      in_body: boolean
+    } | null
+    visual: {
+      theta_arcmin: number
+      d_vis_m: number
+      n_eq_px: number | null
+      theta_th_arcmin: number
+      ratio: number
+      c_app: number
+      light_band: 'day' | 'low' | 'night'
+      lights_on: boolean
+      in_fov: boolean
+      p: number
+      in_body: boolean
+    } | null
+    radar?: {
+      snr_db: number
+      snr_req_db: number
+      margin_db: number
+      p: number
+      in_body: boolean
+    } | null
+    reverse?: {
+      sensor: string
+      level: 'none' | 'D' | 'R' | 'I'
+      n_eff?: number | null
+      n_req?: number | null
+      p?: number | null
+      limiting?: string | null
+    } | null
+    p_any: number
+    would_discover: boolean
+    dwell_s: number
+    t_dwell_s: number
+  }[]
+}
+/**
+ * SB-46 (visual and acoustic volumes only; conservative a + 0.2, L_bg - 3 dB)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TargetSuggestedRadius".
+ */
+export interface TargetSuggestedRadius {
+  model_id: string
+  basis?: {
+    light?: 'day' | 'low' | 'night'
+    l_bg_dba?: number
+    alertness_used?: number
+    conservative?: boolean
+  }
+  volumes: {
+    idx: number
+    kind: 'visual' | 'acoustic'
+    radius_cfg_m: number
+    radius_suggested_m?: number
+    now_m?: number
+    day_m?: number
+    night_m?: number
+    conservative_max_m?: number
+    margin_db?: number | null
   }[]
 }
 /**
@@ -5440,6 +8670,488 @@ export interface TaskStatus {
   }[]
 }
 /**
+ * awr.tasking.snapshot.v1 (Allocator snapshot). SB-57 (AWR-04 §8.5; AWR-17 §17.6.8): input of an external Allocator; plans are submitted against its revision.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingSnapshot".
+ */
+export interface TaskingSnapshot {
+  revision: number
+  t_sim_ns: WorldCommonInt64
+  work_items: {
+    wid: string
+    tid: WorldCommonSlug
+    kind: string
+    pos?: WorldCommonVec3
+    region?: WorldCommonVec2[]
+    capability?: string[]
+    level_req?: ('D' | 'R' | 'I') | null
+    workload_s?: number
+    deadline_s?: number | null
+    priority?: number
+  }[]
+  vehicles: {
+    id: WorldCommonSlug
+    model_id: string
+    nest_id?: WorldCommonSlug | null
+    pos: WorldCommonVec3
+    soc: number
+    e_avail_wh?: number
+    t_ready_s?: number
+    sensors?: string[]
+    capabilities?: string[]
+  }[]
+  nests?: Nest[]
+  keepouts?: Keepout[]
+  zones_ref?: string | null
+}
+/**
+ * awr.tasking.task.v1 (task object, request and dry-run preview). Task object of GET .../tasks/{tid} (AWR-17 §17.6.7; M20 §6.2.2); $defs/request is the create and dry-run body (task/create), $defs/preview the dry-run reply awr.tasking.preview.v1. Infeasible: 580 (why height, fleet_short, single_station_far_view, no_capability, energy, range, area_empty), 581, 585.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTask".
+ */
+export interface TaskingTask {
+  tid: WorldCommonSlug
+  type: 'point_watch' | 'polyline_patrol' | 'area_patrol' | 'area_scan_gsd' | 'perimeter_patrol' | 'relay_watch' | 'area_guard'
+  label?: string | null
+  state: 'PLANNING' | 'READY' | 'RUNNING' | 'PAUSED' | 'DONE' | 'CANCELED' | 'FAILED' | 'INFEASIBLE'
+  revision: number
+  params: {}
+  common?: {
+    priority?: 'low' | 'normal' | 'high'
+    start_at_s?: number | null
+    allowed_nests?: WorldCommonSlug[]
+    allowed_models?: string[]
+    on_detect?: 'notify' | 'relay' | 'ignore'
+    allocator?: string
+    external_fallback?: 'greedy' | 'none'
+  }
+  progress?: {
+    /**
+     * unit %
+     */
+    pct?: number
+    coverage_pct?: number
+    laps_done?: number
+    dwell_s?: number
+  }
+  n_vehicles?: number
+  makespan_s?: number | null
+  items?: {
+    wid: string
+    kind: string
+    uav?: WorldCommonSlug | null
+    state: string
+    eta_s?: number | null
+    reason?: string | null
+  }[]
+  children?: WorldCommonSlug[]
+  parent?: WorldCommonSlug | null
+  created_t_sim_ns?: WorldCommonInt64
+  plan?: TaskingTaskPlan
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskPlan".
+ */
+export interface TaskingTaskPlan {
+  revision: number
+  geometry?: {
+    subregions?: WorldCommonVec2[][]
+    strips?: {
+      id: string
+      p0: WorldCommonVec3
+      p1: WorldCommonVec3
+      uav?: WorldCommonSlug | null
+    }[]
+    fill_waypoints?: {
+      pos: WorldCommonVec3
+      dwell_s?: number
+    }[]
+    legs?: {
+      uav: WorldCommonSlug
+      kind: 'transit' | 'strip' | 'fill' | 'return' | 'patrol' | 'loiter'
+      polyline: WorldCommonVec3[]
+    }[]
+    stations?: {
+      id: string
+      pos: WorldCommonVec3
+      target?: WorldCommonSlug | null
+      role: 'primary' | 'handover'
+      uav?: WorldCommonSlug | null
+      loiter_radius_m?: number | null
+    }[]
+  }
+  assignments?: {
+    uav: WorldCommonSlug
+    nest?: WorldCommonSlug | null
+    items: {
+      wid: string
+      kind:
+        | 'strip_group'
+        | 'subregion'
+        | 'segment'
+        | 'station'
+        | 'dwell'
+        | 'look_in'
+        | 'relay_station'
+        | 'perimeter_phase'
+        | 'guard_cycle'
+        | 'fill'
+      ref?: string
+    }[]
+    eta_s?: number
+    energy_margin?: number
+  }[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskGeometry".
+ */
+export interface TaskingTaskGeometry {
+  subregions?: WorldCommonVec2[][]
+  strips?: {
+    id: string
+    p0: WorldCommonVec3
+    p1: WorldCommonVec3
+    uav?: WorldCommonSlug | null
+  }[]
+  fill_waypoints?: {
+    pos: WorldCommonVec3
+    dwell_s?: number
+  }[]
+  legs?: {
+    uav: WorldCommonSlug
+    kind: 'transit' | 'strip' | 'fill' | 'return' | 'patrol' | 'loiter'
+    polyline: WorldCommonVec3[]
+  }[]
+  stations?: {
+    id: string
+    pos: WorldCommonVec3
+    target?: WorldCommonSlug | null
+    role: 'primary' | 'handover'
+    uav?: WorldCommonSlug | null
+    loiter_radius_m?: number | null
+  }[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskItem".
+ */
+export interface TaskingTaskItem {
+  wid: string
+  kind: string
+  uav?: WorldCommonSlug | null
+  state: string
+  eta_s?: number | null
+  reason?: string | null
+}
+/**
+ * SB-52
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskList".
+ */
+export interface TaskingTaskList {
+  items: TaskingTask[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskParamsAreaGuard".
+ */
+export interface TaskingTaskParamsAreaGuard {
+  /**
+   * World ENU m, counter-clockwise, area <= 1 km^2
+   *
+   * @minItems 3
+   * @maxItems 64
+   */
+  polygon: [WorldCommonVec2, WorldCommonVec2, WorldCommonVec2, ...WorldCommonVec2[]]
+  target_class?: string
+  level_req?: 'D' | 'R' | 'I'
+  revisit_s?: number
+  perimeter_offset_m?: number
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskParamsAreaPatrol".
+ */
+export interface TaskingTaskParamsAreaPatrol {
+  /**
+   * World ENU m, counter-clockwise, area <= 1 km^2
+   *
+   * @minItems 3
+   * @maxItems 64
+   */
+  polygon: [WorldCommonVec2, WorldCommonVec2, WorldCommonVec2, ...WorldCommonVec2[]]
+  n_vehicles?: 'auto' | number
+  target_class?: string
+  level_req?: 'D' | 'R' | 'I'
+  revisit_s?: number
+  duration_s?: number | null
+  theta_max_deg?: number
+  sidelap?: number
+  alt_m?: number
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskParamsAreaScanGsd".
+ */
+export interface TaskingTaskParamsAreaScanGsd {
+  /**
+   * World ENU m, counter-clockwise, area <= 1 km^2
+   *
+   * @minItems 3
+   * @maxItems 64
+   */
+  polygon: [WorldCommonVec2, WorldCommonVec2, WorldCommonVec2, ...WorldCommonVec2[]]
+  gsd_cm: number
+  sidelap?: number
+  frontlap?: number
+  theta_max_deg?: number
+  t_max_s?: number | null
+  h_cap_m?: number
+  clearance_m?: number
+  allow_multi_sortie?: boolean
+  n_vehicles?: 'auto' | number
+  strategy?: 'strips' | 'single_station'
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskParamsPerimeterPatrol".
+ */
+export interface TaskingTaskParamsPerimeterPatrol {
+  /**
+   * World ENU m, counter-clockwise, area <= 1 km^2
+   *
+   * @minItems 3
+   * @maxItems 64
+   */
+  polygon: [WorldCommonVec2, WorldCommonVec2, WorldCommonVec2, ...WorldCommonVec2[]]
+  offset_m?: number
+  direction?: 'cw' | 'ccw'
+  revisit_s?: number
+  n_vehicles?: 'auto' | number
+  alt_m?: number
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskParamsPointWatch".
+ */
+export interface TaskingTaskParamsPointWatch {
+  /**
+   * @minItems 2
+   * @maxItems 3
+   */
+  point: [number | null, number | null, ...(number | null)[]]
+  alt_m?: number
+  alt_ref?: 'agl' | 'abs'
+  dwell_s?: number | null
+  look?: {
+    mode: 'point' | 'heading' | 'target'
+    point?: WorldCommonVec3
+    heading_rad?: number
+    target?: WorldCommonSlug
+  }
+  loiter_radius_m?: number
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskParamsPolylinePatrol".
+ */
+export interface TaskingTaskParamsPolylinePatrol {
+  /**
+   * @minItems 2
+   * @maxItems 64
+   */
+  waypoints: [
+    [number | null, number | null, ...(number | null)[]],
+    [number | null, number | null, ...(number | null)[]],
+    ...[number | null, number | null, ...(number | null)[]][]
+  ]
+  mode?: 'once' | 'pingpong' | 'loop'
+  laps?: number
+  duration_s?: number | null
+  speed_mps?: number | null
+  alt_m?: number
+  sensor_facing?: 'down' | 'forward' | 'side'
+  auto_detour?: boolean
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskParamsRelayWatch".
+ */
+export interface TaskingTaskParamsRelayWatch {
+  target: WorldCommonSlug
+  level_req?: 'D' | 'R' | 'I'
+  duration_s?: number | null
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskingTaskPreview".
+ */
+export interface TaskingTaskPreview {
+  preview_id: string
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  valid_until_unix_ns?: string
+  n_vehicles: number
+  makespan_s?: number | null
+  t_max_s?: number | null
+  why_n?: {
+    rule: 'makespan' | 'fleet_short' | 'user_fixed'
+    n_minus_1_makespan_s?: number | null
+  }
+  makespan_curve?: {
+    n: number
+    makespan_s: number | null
+  }[]
+  scan?: {
+    h_m?: number
+    f_mm?: number
+    p_eff_um?: number
+    strip_w_m?: number
+    spacing_m?: number
+    n_strips?: number
+    theta_e_deg?: number
+    footprint_bound_m?: number
+    h_floor_m?: number
+  }
+  coverage?: {
+    direct_pct?: number
+    visible_pct?: number
+    fill_waypoints?: number
+    obstacle_pct?: number
+    cells?: number
+  }
+  assignments: {
+    uav: WorldCommonSlug
+    nest?: WorldCommonSlug | null
+    items: {
+      wid: string
+      kind:
+        | 'strip_group'
+        | 'subregion'
+        | 'segment'
+        | 'station'
+        | 'dwell'
+        | 'look_in'
+        | 'relay_station'
+        | 'perimeter_phase'
+        | 'guard_cycle'
+        | 'fill'
+      ref?: string
+    }[]
+    eta_s?: number
+    energy_margin?: number
+  }[]
+  geometry?: {
+    subregions?: WorldCommonVec2[][]
+    strips?: {
+      id: string
+      p0: WorldCommonVec3
+      p1: WorldCommonVec3
+      uav?: WorldCommonSlug | null
+    }[]
+    fill_waypoints?: {
+      pos: WorldCommonVec3
+      dwell_s?: number
+    }[]
+    legs?: {
+      uav: WorldCommonSlug
+      kind: 'transit' | 'strip' | 'fill' | 'return' | 'patrol' | 'loiter'
+      polyline: WorldCommonVec3[]
+    }[]
+    stations?: {
+      id: string
+      pos: WorldCommonVec3
+      target?: WorldCommonSlug | null
+      role: 'primary' | 'handover'
+      uav?: WorldCommonSlug | null
+      loiter_radius_m?: number | null
+    }[]
+  }
+  sustainability?: Sustainability
+  warnings?: string[]
+}
+/**
+ * awr.sandbox.template.v1 (scenario template). scenarios/sandbox/<world>/<template>.json (AWR-04 §10.4; ADR-112), generated by tools/sandbox/gen_templates.py (M16): T1-T6 per world; the configuration part has the snapshot shape.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Template".
+ */
+export interface Template {
+  schema: 'awr.sandbox.template.v1'
+  template_id: string
+  world_id: WorldCommonId
+  name_zh: string
+  summary_zh?: string
+  first_feedback_zh?: string
+  recommended?: boolean
+  calendar_default?: {
+    start_local?: string
+    tz?: string
+  }
+  acoustic_bg?: 'rural' | 'suburban' | 'urban'
+  env?: {
+    preset?: string | null
+    overrides?: {}
+  }
+  seed?: number
+  /**
+   * @maxItems 8
+   */
+  models?: Clone[]
+  /**
+   * @maxItems 4
+   */
+  nests: Nest[]
+  /**
+   * @maxItems 12
+   *
+   * Items: vehicle instance configuration (AWR-17 §17.6.3 POST body; AWR-20 §7.7)
+   */
+  vehicles: {
+    id?: WorldCommonSlug
+    model_id: string
+    nest_id?: WorldCommonSlug | null
+    home_enu_m?: [number | null, number | null, number | null, ...(number | null)[]] | null
+    label?: string | null
+    yaw_rad?: number
+    initial_soc?: number
+    sensors?:
+      | {
+          name: string
+          type?: string
+          enabled?: boolean
+        }[]
+      | null
+    limits_profile?: string | null
+    lights?: {
+      nav?: boolean
+      strobe?: boolean
+    }
+  }[]
+  /**
+   * @maxItems 30
+   */
+  targets: TargetCreateRequest[]
+  /**
+   * @maxItems 6
+   */
+  tasks: TaskingTaskRequest[]
+  /**
+   * initial view (M15)
+   */
+  camera?: {}
+  /**
+   * scenarios/sandbox/anchors/<world>.json used to generate the template
+   */
+  anchors_ref?: string
+}
+/**
  * Thermal camera file sensors/thermal.yaml (awr.sensor.thermal.v1). AWR-16 §11.6 (D1-ext, S3).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -5485,6 +9197,21 @@ export interface Thermal {
   netd_k: number
 }
 /**
+ * awr.sandbox.ticket.v1 (queue ticket view). SB-05 long-poll reply and SB-07 state (AWR-17 §17.4.3). slot_ready expires after 60 s without a claim; waiting tickets expire after ticket_idle_s without a long poll.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Ticket".
+ */
+export interface Ticket {
+  ticket_id: string
+  state: 'waiting' | 'slot_ready' | 'claimed' | 'expired'
+  position: number
+  eta_s: number | null
+  claim_deadline_unix_ns?: string | null
+  world_id?: WorldCommonId
+  template_id?: string | null
+}
+/**
  * topics.json meta-schema. AWR-17 §6.6, §10.5.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -5516,13 +9243,25 @@ export interface Topics {
     priority: number | null
     self_contained: boolean
     owner: string
-    d1: 'core' | 'ext' | 'V0.2' | 'V0.3' | 'V0.4'
+    d1: 'core' | 'ext' | 'V0.2' | 'V0.3' | 'V0.4' | 'V0.2-demo'
     aliases?: string[]
     clock?: 'sim' | 'wall'
     doc?: string
     role?: 'viewer' | 'operator' | 'admin'
     deprecated?: boolean
+    /**
+     * true: produced only for the interest set and marks (ctl/sim-core/interest), AWR-17 §17.7.2
+     */
+    interest?: boolean
+    /**
+     * api processes that advertise the topic; absent = both (AWR-17 §17.7.2 rule 3)
+     */
+    apis?: ('show' | 'sandbox')[]
   }[]
+  /**
+   * sandbox browser defaults on top of default_subscriptions (AWR-17 §17.7.7)
+   */
+  default_subscriptions_sandbox?: string[]
 }
 /**
  * units.json meta-schema. AWR-03 §5.4; AWR-17 §10.5.
@@ -5553,12 +9292,137 @@ export interface Units {
   }[]
 }
 /**
- * Vehicle profile params.yaml (awr.vehicle.v1). AWR-16 §11.2: every identifiable parameter is {value, conf A-D, src}; conf E values live only in rejected[]. Loader runs VH-1..VH-7 and rejects on failure (353). Keys snake_case with unit suffix; px4_params keeps PX4 names.
+ * awr.vehicle_catalog.v1 (vehicles/catalog.json). Catalog index (AWR-20 §7.2; M21): models with visibility, order and nest kinds; sensor model library; battery packs and chargers. display_name, reference and profile_version repeat params.yaml and are checked equal (CI-1).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "VehicleProfile".
+ * via the `definition` "VehicleCatalog".
  */
-export interface VehicleProfile {
+export interface VehicleCatalog {
+  schema: 'awr.vehicle_catalog.v1'
+  catalog_version: string
+  disclaimer_zh: string
+  /**
+   * sandbox default limits profile when a model gives none
+   */
+  limits_default?: string
+  /**
+   * @minItems 1
+   */
+  models: [
+    {
+      id: string
+      dir: string
+      profile_version: string
+      display_name: string
+      display_name_zh?: string
+      category: 'multirotor' | 'fixed_wing' | 'vtol'
+      size_class?: 'light' | 'medium' | 'heavy'
+      reference: boolean
+      visible: boolean
+      order?: number
+      /**
+       * @minItems 1
+       */
+      nest_kinds: ['box' | 'launcher' | 'vtol_pad', ...('box' | 'launcher' | 'vtol_pad')[]]
+      summary_zh?: string
+      versions?: string[]
+    },
+    ...{
+      id: string
+      dir: string
+      profile_version: string
+      display_name: string
+      display_name_zh?: string
+      category: 'multirotor' | 'fixed_wing' | 'vtol'
+      size_class?: 'light' | 'medium' | 'heavy'
+      reference: boolean
+      visible: boolean
+      order?: number
+      /**
+       * @minItems 1
+       */
+      nest_kinds: ['box' | 'launcher' | 'vtol_pad', ...('box' | 'launcher' | 'vtol_pad')[]]
+      summary_zh?: string
+      versions?: string[]
+    }[]
+  ]
+  sensor_models: {
+    id: string
+    file: string
+    type: 'eo_zoom' | 'nir_illuminator' | 'lwir' | 'radar_mmw' | 'acoustic_array' | 'lidar_livox' | 'gnss' | 'imu'
+    model_version: string
+    reference: boolean
+    visible?: boolean
+  }[]
+  packs: {
+    pack_id: string
+    cells: number
+    chemistry: 'lipo' | 'lihv' | 'liion'
+    capacity_ah: number
+    capacity_wh?: number
+    mass_kg?: number
+    c_max: number
+    packs_per_swap?: number
+    conf?: 'A' | 'B' | 'C' | 'D'
+    src?: string
+  }[]
+  chargers: {
+    model: string
+    channels: number
+    i_max_a: number
+    cells_min?: number
+    cells_max: number
+    mass_kg?: number
+    conf?: 'A' | 'B' | 'C' | 'D'
+    src?: string
+  }[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "VehicleCatalogModelSummary".
+ */
+export interface VehicleCatalogModelSummary {
+  model_id: string
+  name_zh?: string
+  category: 'multirotor' | 'fixed_wing' | 'vtol'
+  reference: boolean
+  version: string
+  mass_kg?: number
+  mtow_kg?: number
+  endurance?: {
+    hover_s?: number
+    cruise_s?: number
+    loiter_s?: number
+    mission_s?: number
+  }
+  speed?: {
+    cruise_mps?: number
+    max_mps?: number
+    min_mps?: number
+    stall_mps?: number
+  }
+  link_range_m?: number
+  default_sensors?: string[]
+  optional_sensors?: string[]
+  nest_kinds?: ('box' | 'launcher' | 'vtol_pad')[]
+  session_clone?: boolean
+}
+export interface VehicleCatalogModelDetail1 {
+  profile?: VehicleProfile
+  params_table?: {
+    group?: string
+    key: string
+    label_zh?: string
+    value: unknown
+    unit?: string | null
+    confidence: 'A' | 'B' | 'C' | 'D' | 'label'
+    use_zh?: string
+  }[]
+  derived?: {
+    [k: string]: number | null
+  }
+}
+export interface VehicleProfile1 {
   schema: 'awr.vehicle.v1'
   profile_version: string
   id: string
@@ -5566,7 +9430,7 @@ export interface VehicleProfile {
   kind: 'uav'
   status: 'regression' | 'placeholder' | 'identified'
   frame: {
-    type: 'quad_x' | 'hex_x'
+    type: 'quad_x' | 'hex_x' | 'fixed_wing' | 'vtol_quadplane'
     rotor_order: 'px4'
     body: 'frd'
   }
@@ -5582,7 +9446,7 @@ export interface VehicleProfile {
     src: string
     check?: string
   }
-  inertia_kgm2: {
+  inertia_kgm2?: {
     value: {
       xx: number
       yy: number
@@ -5599,7 +9463,7 @@ export interface VehicleProfile {
       src: string
       check?: string
     }
-    arm_xy_m: {
+    arm_xy_m?: {
       value: number
       conf: 'A' | 'B' | 'C' | 'D'
       src: string
@@ -5617,8 +9481,29 @@ export interface VehicleProfile {
       src: string
       check?: string
     }
+    /**
+     * bounding box l x w x h, m (D2)
+     */
+    size_m?: {
+      value: {
+        /**
+         * unit m
+         */
+        l: number
+        /**
+         * unit m
+         */
+        w: number
+        /**
+         * unit m
+         */
+        h: number
+      }
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+    }
   }
-  motor: {
+  motor?: {
     n: number
     t_max_n: {
       value: number
@@ -5651,7 +9536,7 @@ export interface VehicleProfile {
       check?: string
     }
   }
-  prop: {
+  prop?: {
     d_m: {
       value: number
       conf: 'A' | 'B' | 'C' | 'D'
@@ -5665,7 +9550,7 @@ export interface VehicleProfile {
       check?: string
     }
   }
-  aero: {
+  aero?: {
     model: 'linear' | 'composite'
     k_dv_n_per_mps?: {
       value: number
@@ -5712,7 +9597,7 @@ export interface VehicleProfile {
       src: string
       check?: string
     }
-    p_hover_w: {
+    p_hover_w?: {
       value: number
       conf: 'A' | 'B' | 'C' | 'D'
       src: string
@@ -5724,6 +9609,29 @@ export interface VehicleProfile {
       src: string
       check?: string
     }
+    chemistry?: 'lipo' | 'lihv' | 'liion'
+    mass_kg?: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    v_range_v?: [number, number, ...number[]]
+    v_storage_v?: number
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    size_m?: [number, number, number, ...number[]]
+    /**
+     * must be listed in catalog.json packs[]
+     */
+    pack_id?: string
+    packs_per_swap?: number
   } | null
   limits_profiles: {
     default: string
@@ -5743,13 +9651,22 @@ export interface VehicleProfile {
     check?: string
   }
   fidelity: {
-    default: 'l0' | 'l1' | 'sih'
-    supported: ('l0' | 'l1' | 'sih')[]
+    default: 'l0' | 'l1' | 'sih' | 'fw_kin'
+    supported: ('l0' | 'l1' | 'sih' | 'fw_kin')[]
     sih_airframe?: string
   }
   model: WorldCommonRelHref
+  /**
+   * slot -> mount file; string form = D1 slot (scenario only, not listed by the D2 catalog); object form (D2, AWR-20 §7.4); sensor_no follows the mapping order
+   */
   sensors?: {
-    [k: string]: WorldCommonRelHref
+    [k: string]:
+      | WorldCommonRelHref
+      | {
+          file: WorldCommonRelHref
+          default?: boolean
+          removable?: boolean
+        }
   }
   payload?: {
     name: string
@@ -5763,6 +9680,52 @@ export interface VehicleProfile {
     tilt_at_8mps_deg?: number
     cda_per_mass_m2kg?: number
     endurance_check_s?: number
+    v_stall_mps?: number
+    aspect_ratio?: number
+    wing_loading_n_m2?: number
+    p_cruise_w?: number
+    p_loiter_w?: number
+    endurance_cruise_s?: number
+    endurance_loiter_s?: number
+    r_min_loiter_m?: number
+    ld_max?: number
+    endurance_mission_cruise_s?: number
+    airframe_residual_kg?: number
+    /**
+     * @minItems 24
+     * @maxItems 24
+     */
+    band_shape_db?: [
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      ...number[]
+    ]
+    /**
+     * D2.1 (AWR-04 §15.10.2): source level at 1 m = L_WA - 11 (hover, or cruise for fixed wing)
+     */
+    sl_a_1m_dba?: number
   }
   rejected?: {
     param: string
@@ -5773,6 +9736,379 @@ export interface VehicleProfile {
   variants?: {
     [k: string]: {}
   }
+  /**
+   * fixed wing and VTOL airframe (AWR-20 §5.1); aerodynamic and energy coefficients as value objects, speeds and angles may be plain numbers
+   */
+  airframe?: {
+    span_m?: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    length_m?: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    wing_area_m2: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    cd0: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    oswald_e: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    cl_max: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    eta_prop: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    p_avionics_w?: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    p_max_w?: {
+      value: number
+      conf: 'A' | 'B' | 'C' | 'D'
+      src: string
+      check?: string
+    }
+    v_min_mps:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    v_loiter_mps?:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    v_cruise_mps:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    v_max_mps:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    phi_max_deg:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    roll_rate_max_deg_s?:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    tau_v_s?:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    tau_phi_s?:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    accel_max_mps2?:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    decel_max_mps2?:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    climb_max_mps?:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    sink_max_mps?:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    r_loiter_default_m?:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    launch?: {
+      type: 'catapult' | 'hand' | 'vtol' | 'runway'
+      t_s?: number
+      climb_mps?: number
+      alt_agl_m?: number
+    }
+    recovery?: {
+      type: 'parachute' | 'net' | 'vtol' | 'belly'
+      descent_mps?: number
+      drift?: 'wind' | 'none'
+    }
+    conf?: 'A' | 'B' | 'C' | 'D'
+    src?: string
+  }
+  /**
+   * VTOL mode parameters (AWR-20 §5.4)
+   */
+  vtol?: {
+    transition_fw_s: number
+    transition_mc_s: number
+    v_transition_mps?: number
+    p_hover_w:
+      | number
+      | {
+          value: number
+          conf: 'A' | 'B' | 'C' | 'D'
+          src: string
+          check?: string
+        }
+    hover_max_s: number
+    d_fw_min_m?: number
+    agl_transition_min_m?: number
+  }
+  /**
+   * acoustic signature (ADR-097; AWR-20 §4.4)
+   */
+  acoustic?: {
+    lwa_hover_dba?: number
+    lwa_cruise_dba?: number
+    thrust_exp?: number
+    bpf_hz?: number
+    bpf_cruise_hz?: number
+    blades?: number
+    tonal_db?: number
+    f_pk_hz?: number
+    /**
+     * @minItems 24
+     * @maxItems 24
+     */
+    band_shape_db?: [
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      ...number[]
+    ]
+    conf?: 'A' | 'B' | 'C' | 'D'
+    src?: string
+  }
+  /**
+   * visibility signature (ADR-097)
+   */
+  visual?: {
+    area_m2: {
+      top: number
+      side: number
+      front: number
+    }
+    contrast_sky?: number
+    contrast_ground?: number
+    lights_installed?: {
+      nav?: boolean
+      strobe?: boolean
+    }
+    night_visible_m?: number
+  }
+  rcs_m2?: {
+    value: number
+    conf: 'A' | 'B' | 'C' | 'D'
+    src: string
+    check?: string
+  }
+  ir?: {
+    motor_delta_t_k?: number
+    /**
+     * D2.1 (AWR-04 §15.10.2): share of the side projection that is hot (motors, ESC, battery bay)
+     */
+    hot_fraction?: number
+    /**
+     * D2.1 (AWR-04 §15.10.2)
+     */
+    emissivity?: number
+  }
+  link?: {
+    model?: string
+    range_m: number
+  }
+  nav?: {
+    hold_sigma_m?: {
+      rtk?: {
+        h: number
+        v: number
+      }
+      slam?: {
+        h: number
+        v: number
+      }
+      gnss?: {
+        h: number
+        v: number
+      }
+    }
+  }
+  env_limits?: {
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    temp_c: [number, number, ...number[]]
+  }
+  capabilities?: string[]
+  compute_tops?: number
+  labels?: {
+    [k: string]: string
+  }
+  /**
+   * catalog model metadata (AWR-20 §7.3)
+   */
+  catalog?: {
+    reference: boolean
+    category: 'multirotor' | 'fixed_wing' | 'vtol'
+    size_class?: 'light' | 'medium' | 'heavy'
+    limits_default: string
+  }
+}
+/**
+ * SB-21, SB-24
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "VehicleCatalogModels".
+ */
+export interface VehicleCatalogModels {
+  items: {
+    model_id: string
+    name_zh?: string
+    category: 'multirotor' | 'fixed_wing' | 'vtol'
+    reference: boolean
+    version: string
+    mass_kg?: number
+    mtow_kg?: number
+    endurance?: {
+      hover_s?: number
+      cruise_s?: number
+      loiter_s?: number
+      mission_s?: number
+    }
+    speed?: {
+      cruise_mps?: number
+      max_mps?: number
+      min_mps?: number
+      stall_mps?: number
+    }
+    link_range_m?: number
+    default_sensors?: string[]
+    optional_sensors?: string[]
+    nest_kinds?: ('box' | 'launcher' | 'vtol_pad')[]
+    session_clone?: boolean
+  }[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "VehicleCatalogSensorItem".
+ */
+export interface VehicleCatalogSensorItem {
+  sensor_type: string
+  name_zh?: string
+  kind: 'eo' | 'nir' | 'nir_illuminator' | 'lwir' | 'radar' | 'acoustic' | 'lidar'
+  reference?: boolean
+  mass_kg?: number
+  power_w?: number
+  mount_requires_landed?: boolean
+  spec: {}
+}
+/**
+ * SB-23
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "VehicleCatalogSensors".
+ */
+export interface VehicleCatalogSensors {
+  items: VehicleCatalogSensorItem[]
 }
 /**
  * Wind library manifest environment/wind/l2/manifest.json (awr.env.wind_library.v1, anet-wind@1). AWR-16 §8.5; V0.3 (D1 ships the schema only). Must be computed on the normalised World ENU (units const m).
@@ -5869,7 +10205,7 @@ export interface World {
     params?: {}
   }
   /**
-   * Provenance and licence record (AWR-13 §13.3 DC-1). redistribution is a fact record only (ADR-034).
+   * Provenance and licence record (AWR-13 §13.3 DC-1). redistribution is a fact record only (ADR-034); terms states the deployment authorization (ADR-109).
    */
   dataset: {
     name: string
@@ -5877,6 +10213,10 @@ export interface World {
     url?: string
     citation?: string
     license: string
+    /**
+     * Terms under which ANet-Drone4D deployments serve this package, shown in the world panel tooltip and recorded in the deployment index (ADR-109 rule 3: the six UrbanScene3D cities are used under authorization of the dataset rights holders). Optional; packages built before ADR-109 omit it.
+     */
+    terms?: string
     /**
      * Fact record only; readers must not restrict loading or demos by it (ADR-034).
      */
@@ -6073,6 +10413,57 @@ export interface WorldCommonHrefWithHash1 {
 export interface WorldCommonRigid1 {
   q: WorldCommonQuatXYZW
   t: WorldCommonVec3
+}
+/**
+ * awr.sandbox.world_costs.v1 (configs/sandbox/world_costs.json). World cost table for weighted admission (AWR-04 §4.4.2; M17 §6.2 WorldCost). Generated by the M16 harness, consumed by sandbox-pool; initial values are conservative and frozen by ADR after emax measurement (D2-MS5).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "WorldCosts".
+ */
+export interface WorldCosts {
+  schema: 'awr.sandbox.world_costs.v1'
+  generator?: string
+  /**
+   * UNIX time in ns as a decimal string (AWR-17 §1.3)
+   */
+  generated_unix_ns?: string
+  host?: {
+    cpu_model?: string
+    cores?: number
+    mem_mb?: number
+    [k: string]: unknown
+  }
+  /**
+   * @minItems 1
+   */
+  worlds: [
+    {
+      world: WorldCommonId
+      world_class: 'S' | 'L'
+      anon_mb: number
+      ws_mb: number
+      /**
+       * core; x1 full-load cores per session prior (core-seconds per second)
+       */
+      c0: number
+      available: boolean
+      measured?: boolean
+      src?: string
+    },
+    ...{
+      world: WorldCommonId
+      world_class: 'S' | 'L'
+      anon_mb: number
+      ws_mb: number
+      /**
+       * core; x1 full-load cores per session prior (core-seconds per second)
+       */
+      c0: number
+      available: boolean
+      measured?: boolean
+      src?: string
+    }[]
+  ]
 }
 /**
  * Semantic zones zones.geojson (awr.zones.v1). GeoJSON FeatureCollection in WORLD ENU metres (x = E, y = N), not RFC 7946 WGS84; self-described by the top-level 'awr' member (AWR-16 §7, snake_case properties). Exactly one border (derived); nofly + restricted <= 64.

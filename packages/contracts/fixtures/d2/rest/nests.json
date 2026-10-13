@@ -1,0 +1,43 @@
+{
+ "items": [
+  {
+   "id": "nest-01",
+   "name": "机巢 1",
+   "pos": [
+    -120.0,
+    80.0,
+    0.0
+   ],
+   "kind": "box",
+   "crewed": false,
+   "slots": 4,
+   "energy": {
+    "mode": "swap",
+    "swap_s": 180,
+    "packs": [
+     {
+      "cells": 6,
+      "count": 6,
+      "capacity_ah": 10.0,
+      "chemistry": "lihv",
+      "pack_id": "lpb610hv"
+     }
+    ]
+   },
+   "chargers": [
+    {
+     "model": "c1_xr",
+     "count": 4,
+     "channels": 1,
+     "i_max_a": 10,
+     "cells_max": 6
+    }
+   ],
+   "turnaround_s": 60,
+   "launch_interval_s": 30,
+   "wind_max_mps": 12,
+   "rtk_base": true,
+   "link_range_m": 3500
+  }
+ ]
+}

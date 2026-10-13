@@ -1,6 +1,6 @@
 {
   "schema": "awr.reasons.v1",
-  "doc": "Reason codes (AWR-17 §8). Codes never change meaning; only additions. Ranges and module sub-ranges follow AWR-17 §8.1 and §8.4.",
+  "doc": "Reason codes (AWR-17 §8). Codes never change meaning; only additions. Ranges and module sub-ranges follow AWR-17 §8.1 and §8.4. D2 adds 500-599 (AWR-04 §11.3, AWR-17 §17.9): codes 500-599 are unrelated to HTTP 5xx.",
   "ranges": [
     {
       "from": 0,
@@ -73,6 +73,36 @@
       "to": 499,
       "category": "module",
       "owner": "M02"
+    },
+    {
+      "from": 500,
+      "to": 519,
+      "category": "sandbox",
+      "owner": "M17 (session, quota, admission, queue)"
+    },
+    {
+      "from": 520,
+      "to": 539,
+      "category": "catalog",
+      "owner": "M21 (models, fixed wing, nest compatibility)"
+    },
+    {
+      "from": 540,
+      "to": 559,
+      "category": "targets",
+      "owner": "M18 (targets and sensitivity volumes)"
+    },
+    {
+      "from": 560,
+      "to": 579,
+      "category": "perception",
+      "owner": "M19 (sensor range shared with M13, registered by M19)"
+    },
+    {
+      "from": 580,
+      "to": 599,
+      "category": "tasking",
+      "owner": "M20 (tasks, planning, relay)"
     }
   ],
   "detail_only": [
@@ -85,10 +115,26 @@
     "PREDICATE_MALFORMED",
     "KERNEL_LIMIT",
     "WORLD_NOT_IN_SESSION",
-    "GEO_CEILING"
+    "GEO_CEILING",
+    "INVENTORY_READONLY",
+    "NOT_READY",
+    "MODEL_IN_USE",
+    "NOT_LANDED_LOCKED",
+    "STALE_SNAPSHOT",
+    "MANUAL_CONTROL",
+    "RATE_ABOVE_GRANT",
+    "WORLD_MISMATCH",
+    "SNAPSHOT_TOO_LARGE",
+    "PLAN_TIMEOUT",
+    "LOITER_RADIUS_MIN",
+    "MOUNT_CHANGE_IN_FLIGHT"
   ],
   "warnings": [
-    "SPEED_CLAMPED"
+    "SPEED_CLAMPED",
+    "SANDBOX_RATE_LIMITED",
+    "KEEPOUT_CLAMPED",
+    "VEHICLE_ENV_LIMIT",
+    "PREVIEW_RECOMPUTED"
   ],
   "reasons": [
     {
@@ -1570,6 +1616,436 @@
       "message_zh": "发布包完整性校验失败",
       "remedy_zh": "重新下发正确版本",
       "d1": "V0.5"
+    },
+    {
+      "code": 500,
+      "name": "SANDBOX_FULL",
+      "http": 409,
+      "category": "sandbox",
+      "step": "create",
+      "message_zh": "沙盒已满且排队已满（队列 20）",
+      "remedy_zh": "稍后再试；可继续浏览共享展示",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 501,
+      "name": "SANDBOX_RATE_LIMITED",
+      "http": null,
+      "category": "sandbox",
+      "step": "governor",
+      "message_zh": "倍速授予低于请求（只作警告，倍速仍按授予值生效）",
+      "remedy_zh": "以 granted_rate 运行；减少机群或识别物可提高上限",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 502,
+      "name": "SANDBOX_SPAWN_FAILED",
+      "http": 503,
+      "category": "sandbox",
+      "step": "spawn",
+      "message_zh": "沙盒进程 30 s 内未就绪或熔断",
+      "remedy_zh": "重试；连续失败请稍后再试",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 503,
+      "name": "SANDBOX_SCOPE",
+      "http": 403,
+      "category": "sandbox",
+      "step": "entry",
+      "message_zh": "token 不属于该沙盒，或沙盒 token 用于其他 run",
+      "remedy_zh": "使用该沙盒自己的 token",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 504,
+      "name": "SANDBOX_QUOTA",
+      "http": 429,
+      "category": "sandbox",
+      "step": "quota",
+      "message_zh": "地址前缀的活动沙盒、排队票或创建次数超限（数量类以 HTTP 409 返回，速率类 429）",
+      "remedy_zh": "等待 Retry-After 或结束已有沙盒",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 505,
+      "name": "SANDBOX_ENTITY_LIMIT",
+      "http": 409,
+      "category": "sandbox",
+      "step": "params",
+      "message_zh": "实体数量达到上限",
+      "remedy_zh": "移除不用的实体",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 506,
+      "name": "SANDBOX_EXPIRED",
+      "http": 410,
+      "category": "sandbox",
+      "step": "entry",
+      "message_zh": "会话已结束或过期",
+      "remedy_zh": "用快照新开沙盒（快照 10 min 内可取）",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 507,
+      "name": "SANDBOX_WORLD_FORBIDDEN",
+      "http": 409,
+      "category": "sandbox",
+      "step": "create",
+      "message_zh": "世界不在白名单或派生缓存缺失",
+      "remedy_zh": "选择 available = true 的世界",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 508,
+      "name": "SANDBOX_WORLD_CAPACITY",
+      "http": 409,
+      "category": "sandbox",
+      "step": "create",
+      "message_zh": "世界加权内存准入不满足",
+      "remedy_zh": "改用 detail.available_now 中的世界或排队",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 509,
+      "name": "SANDBOX_CHALLENGE_REQUIRED",
+      "http": 409,
+      "category": "sandbox",
+      "step": "create",
+      "message_zh": "需要工作量证明或证明无效",
+      "remedy_zh": "求解 detail.challenge 后重发",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 510,
+      "name": "SANDBOX_PREEMPTED",
+      "http": 410,
+      "category": "sandbox",
+      "step": "reclaim",
+      "message_zh": "有访客排队，会话按持有时长被抢占",
+      "remedy_zh": "用快照新开沙盒",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 511,
+      "name": "SANDBOX_TICKET_INVALID",
+      "http": 410,
+      "category": "sandbox",
+      "step": "queue",
+      "message_zh": "排队票不存在、过期或已领取",
+      "remedy_zh": "重新排队",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 512,
+      "name": "SANDBOX_SNAPSHOT_INVALID",
+      "http": 422,
+      "category": "sandbox",
+      "step": "restore",
+      "message_zh": "配置快照无效",
+      "remedy_zh": "在同一世界导入有效快照",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 513,
+      "name": "SANDBOX_STATE",
+      "http": 409,
+      "category": "sandbox",
+      "step": "session",
+      "message_zh": "会话状态不允许该操作",
+      "remedy_zh": "等待会话就绪或新开沙盒",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 514,
+      "name": "SANDBOX_BATCH_BUSY",
+      "http": 409,
+      "category": "sandbox",
+      "step": "batch",
+      "message_zh": "已有批处理在运行",
+      "remedy_zh": "等待当前批处理完成",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 515,
+      "name": "SANDBOX_PARKED",
+      "http": 409,
+      "category": "sandbox",
+      "step": "session",
+      "message_zh": "沙盒已节能驻留，需要先恢复",
+      "remedy_zh": "POST /sessions/{sid}/resume；SDK 自动恢复一次",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 516,
+      "name": "IDENTITY_LOCKED",
+      "http": 429,
+      "category": "sandbox",
+      "step": "identity",
+      "message_zh": "失败次数过多，内部身份暂时锁定",
+      "remedy_zh": "等待 Retry-After 后再试",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 517,
+      "name": "VIEWER_SEATS_FULL",
+      "http": 409,
+      "category": "sandbox",
+      "step": "viewer",
+      "message_zh": "实时观看席位已满",
+      "remedy_zh": "进入观看排队（POST /api/viewer/queue），期间可静态浏览",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 518,
+      "name": "IDLE_RECLAIMED",
+      "http": null,
+      "category": "sandbox",
+      "step": "power",
+      "message_zh": "空闲或驻留，服务端已回收连接（节能模式）",
+      "remedy_zh": "任意操作后重连或恢复",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 519,
+      "name": "VIEWER_TICKET_INVALID",
+      "http": 410,
+      "category": "sandbox",
+      "step": "viewer",
+      "message_zh": "观看排队票不存在、作废或已使用",
+      "remedy_zh": "重新排队",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 520,
+      "name": "MODEL_UNKNOWN",
+      "http": 404,
+      "category": "catalog",
+      "step": "params",
+      "message_zh": "机型 id 不存在（含其他会话的克隆型号）",
+      "remedy_zh": "从 GET /catalog/models 或本会话克隆机型中选择",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 521,
+      "name": "VEHICLE_ENV_LIMIT",
+      "http": null,
+      "category": "catalog",
+      "step": "estimate",
+      "message_zh": "环境温度超出机型工作温度（只作警告）",
+      "remedy_zh": "改用工作温度覆盖当前环境的机型",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 522,
+      "name": "VEHICLE_CLONE_INVALID",
+      "http": 422,
+      "category": "catalog",
+      "step": "params",
+      "message_zh": "克隆机型或挂载未通过自洽检查",
+      "remedy_zh": "按 detail.violations 逐项修改",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 523,
+      "name": "FW_AIRSPEED",
+      "http": null,
+      "category": "catalog",
+      "step": "exec",
+      "message_zh": "固定翼执行中风速超过保持能力且无可用的逆风等待航线",
+      "remedy_zh": "降低风速、加大盘旋半径或改用多旋翼",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 524,
+      "name": "VTOL_HOVER_LIMIT",
+      "http": 409,
+      "category": "catalog",
+      "step": "flight_state",
+      "message_zh": "垂起机型本架次悬停累计已达 hover_max_s，拒绝悬停类命令",
+      "remedy_zh": "改用盘旋（loiter）",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 525,
+      "name": "NEST_INCOMPATIBLE",
+      "http": 409,
+      "category": "catalog",
+      "step": "params",
+      "message_zh": "机巢类型、充电器节数或槽位不兼容",
+      "remedy_zh": "选择兼容的机巢或修改充电器",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 540,
+      "name": "TARGET_PLACEMENT_INVALID",
+      "http": 422,
+      "category": "targets",
+      "step": "params",
+      "message_zh": "识别物放置位置无效",
+      "remedy_zh": "在可通行地面或屋顶重新放置",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 541,
+      "name": "SOUND_PARAM_INVALID",
+      "http": 422,
+      "category": "targets",
+      "step": "params",
+      "message_zh": "声源参数越界或组合无效",
+      "remedy_zh": "按 detail.field 修改",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 542,
+      "name": "SENSITIVITY_PARAM_INVALID",
+      "http": 422,
+      "category": "targets",
+      "step": "params",
+      "message_zh": "敏感体参数越界或超过 4 个",
+      "remedy_zh": "按 detail.field 修改",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 543,
+      "name": "TARGET_NOT_FOUND",
+      "http": 404,
+      "category": "targets",
+      "step": "params",
+      "message_zh": "命令载荷引用的识别物不存在",
+      "remedy_zh": "刷新识别物列表",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 544,
+      "name": "MOTION_PARAM_INVALID",
+      "http": 422,
+      "category": "targets",
+      "step": "params",
+      "message_zh": "运动参数越界（路径点数、速度、转向率、游走区域）",
+      "remedy_zh": "按 detail.field 修改",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 560,
+      "name": "SENSOR_UNSUPPORTED",
+      "http": 409,
+      "category": "perception",
+      "step": "capability",
+      "message_zh": "该机型不能挂载或不具备该传感器",
+      "remedy_zh": "换机型或换传感器",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 561,
+      "name": "SENSOR_PARAM_INVALID",
+      "http": 422,
+      "category": "perception",
+      "step": "params",
+      "message_zh": "传感器参数越界（焦距、分辨率需要机载算力等）",
+      "remedy_zh": "按 detail.field 修改",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 562,
+      "name": "LEVEL_UNREACHABLE",
+      "http": 409,
+      "category": "perception",
+      "step": "estimate",
+      "message_zh": "会话中没有传感器能达到所需等级",
+      "remedy_zh": "降低 level_req 或挂载成像传感器",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 563,
+      "name": "ILLUMINATOR_UNAVAILABLE",
+      "http": 409,
+      "category": "perception",
+      "step": "capability",
+      "message_zh": "外挂照明器要求开启而该机未挂载",
+      "remedy_zh": "挂载 nir_ill_l 或改用机内照明",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 564,
+      "name": "FIELD_QUERY_INVALID",
+      "http": 422,
+      "category": "perception",
+      "step": "params",
+      "message_zh": "场指标、锚点或采样数非法",
+      "remedy_zh": "按 detail.field 修改",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 580,
+      "name": "TASK_INFEASIBLE",
+      "http": 422,
+      "category": "tasking",
+      "step": "precheck",
+      "message_zh": "任务不可行",
+      "remedy_zh": "按 detail.remedies 调整",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 581,
+      "name": "NO_FEASIBLE_STATION",
+      "http": 422,
+      "category": "tasking",
+      "step": "precheck",
+      "message_zh": "可行窗口为空，没有满足不被发现与所需等级的站位",
+      "remedy_zh": "按 detail.suggestions 换型、加照明器或长焦热像、缩小敏感范围",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 582,
+      "name": "NEST_EMPTY",
+      "http": 409,
+      "category": "tasking",
+      "step": "allocate",
+      "message_zh": "允许的机巢中没有可用机体",
+      "remedy_zh": "添加无人机或放宽允许机巢",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 583,
+      "name": "KEEPOUT_VIOLATION",
+      "http": 409,
+      "category": "tasking",
+      "step": "path",
+      "message_zh": "航段或站位进入禁入体",
+      "remedy_zh": "调整几何或等待重规划",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 584,
+      "name": "PLAN_REJECTED",
+      "http": 422,
+      "category": "tasking",
+      "step": "plan_check",
+      "message_zh": "外部分配计划未通过可行性检查",
+      "remedy_zh": "按 detail.violations 逐项修改计划",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 585,
+      "name": "PLAN_INPUT_TOO_LARGE",
+      "http": 422,
+      "category": "tasking",
+      "step": "quota",
+      "message_zh": "规划输入超过规模配额",
+      "remedy_zh": "缩小区域、减少顶点或放宽 GSD",
+      "d1": "V0.2-demo"
+    },
+    {
+      "code": 586,
+      "name": "PLAN_THROTTLED",
+      "http": 429,
+      "category": "tasking",
+      "step": "quota",
+      "message_zh": "10 min 内 3 次规划超时，规划冻结 5 min",
+      "remedy_zh": "等待 Retry-After",
+      "d1": "V0.2-demo"
     }
   ],
   "ws_close_codes": [
@@ -1633,6 +2109,12 @@
       "client": "reconnect"
     },
     {
+      "code": 4410,
+      "name": "SANDBOX_GONE",
+      "reason": 506,
+      "client": "do not reconnect; drop the stored sandbox session; show the end dialog (error 305, 503, 506 or 510 precedes the close)"
+    },
+    {
       "code": 4426,
       "name": "VERSION_MISMATCH",
       "reason": 311,
@@ -1643,6 +2125,18 @@
       "name": "CONN_LIMIT",
       "reason": 316,
       "client": "reconnect after 30 s"
+    },
+    {
+      "code": 4430,
+      "name": "IDLE_RECLAIMED",
+      "reason": 518,
+      "client": "do not reconnect; enter the power-saving overlay, reconnect (viewer) or resume (sandbox) after an interaction"
+    },
+    {
+      "code": 4431,
+      "name": "VIEWER_SEATS_FULL",
+      "reason": 517,
+      "client": "do not reconnect; join the viewer queue (R81), reconnect on seat_ready"
     }
   ]
 }

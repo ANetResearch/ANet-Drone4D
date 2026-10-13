@@ -1,0 +1,9 @@
+# AWR-20 §7.8 example vehicles/awr_f1/sensors/eo_pod.yaml (copied verbatim for the schema 1.1 contract tests; values owned by M21 and M13)
+schema: awr.sensor.eo_zoom.v1
+sensor_id: eo
+spec_ref: eo_gx40@1.0.0
+mount: {xyz_m: [0.25, 0.0, -0.12], rpy_deg: [0, 0, 0]}
+gimbal: {pitch_min_deg: -90, pitch_max_deg: 10, yaw_min_deg: -180, yaw_max_deg: 180, rate_max_deg_s: 60, integrated: false}
+mass_kg: {value: 0.25, conf: D, src: "吊舱内模块质量，不含两轴吊舱结构（计入机型 mass_kg）"}
+conf: D
+src: "两轴吊舱，本文设定"

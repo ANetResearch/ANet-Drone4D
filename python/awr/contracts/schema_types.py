@@ -7,6 +7,18 @@ from __future__ import annotations
 from typing import Any, Literal, NotRequired, TypedDict
 
 __all__ = [
+    "AcousticArray",
+    "AcousticArrayClassify",
+    "AcousticArrayEnvLimits",
+    "AcousticArrayGimbal",
+    "AcousticArrayMassKgOneOf1",
+    "AcousticArrayMount",
+    "AcousticArrayNrDb",
+    "AcousticArrayPowerWOneOf1",
+    "AcousticArrayREgoM",
+    "AcousticBearings",
+    "AcousticBearingsBearings",
+    "AcousticBearingsBearingsBands",
     "AgentStatus",
     "AgentStatusTrust",
     "AgentTasks",
@@ -53,14 +65,24 @@ __all__ = [
     "CapabilityPhysicalOneOfLimits0",
     "CapabilityPhysicalOneOfSensor0",
     "CapabilityTrust",
+    "Capacity",
+    "CapacityBuild",
+    "CapacityPower",
+    "CapacitySandbox",
+    "CapacityViewers",
     "Caps",
     "CapsAck",
     "CapsClock",
     "CapsCmdOneOf1",
     "Catalog",
     "CatalogWorlds",
+    "ClassDefaults",
     "ClassTable",
     "ClassTableClasses",
+    "Clone",
+    "CloneMounts",
+    "CloneRestRequest",
+    "CloneViolation",
     "Commands",
     "CommandsAdmissionColumns",
     "CommandsAdmissionConditions",
@@ -84,12 +106,16 @@ __all__ = [
     "CoordinateSource",
     "CoordinateSourceFiles",
     "CoordinateTrueNorth",
+    "Detection",
+    "DetectionPage",
     "Effect",
     "EffectArtifacts",
     "Engine",
     "Enums",
     "EnvState",
+    "EnvStateAcousticBg",
     "EnvStateAnchors",
+    "EnvStateCalendar",
     "EnvStateConfig",
     "EnvStateConfigSun",
     "EnvStateConfigWeatherMap",
@@ -98,6 +124,7 @@ __all__ = [
     "EnvStateConfigWindLibraryOneOf0",
     "EnvStateConfigWindProfile",
     "EnvStateConfigWindTurbulence",
+    "EnvStateSurface",
     "EnvStateVis",
     "EnvWorld",
     "EnvWorldDefaults",
@@ -115,6 +142,20 @@ __all__ = [
     "EnvWorldStreamlinesLibraryOneOf0",
     "EnvWorldWind",
     "EnvWorldWindLibraryOneOf0",
+    "EoZoom",
+    "EoZoomAnalysis",
+    "EoZoomEnvLimits",
+    "EoZoomExposure",
+    "EoZoomGimbal",
+    "EoZoomJitterUrad",
+    "EoZoomMassKgOneOf1",
+    "EoZoomMount",
+    "EoZoomOptics",
+    "EoZoomOpticsFNumber",
+    "EoZoomOutputs",
+    "EoZoomPowerWOneOf1",
+    "EoZoomSensor",
+    "EoZoomSpecFov",
     "Export",
     "Faults",
     "FaultsOneOf0",
@@ -127,6 +168,13 @@ __all__ = [
     "FaultsOneOfParams1",
     "FaultsOneOfParams2",
     "FaultsOneOfParams5",
+    "FieldProfile",
+    "FieldProfileIso",
+    "FieldProfileRef",
+    "FieldProfileUav",
+    "FieldVolumes",
+    "FieldVolumesTgt",
+    "FieldVolumesTgtBodies",
     "FleetRoster",
     "FleetRosterEntries",
     "FleetRosterEntriesPx4Origin",
@@ -158,7 +206,27 @@ __all__ = [
     "InputlogEntry",
     "InputlogEntryPrincipalOneOf0",
     "InputlogHeader",
+    "Instance",
+    "InstanceCommandRequest",
+    "InstanceCreateRequest",
+    "InstanceCreateRequestLights",
+    "InstanceCreateRequestSensorsOneOf0",
+    "InstanceCreated",
+    "InstanceLease",
+    "InstanceLeaseRequest",
+    "InstancePatch",
+    "InstancePatchLights",
+    "InstanceSensors",
+    "InstanceSensorsSensors",
+    "InstanceSensorsSensorsMount",
+    "InstanceState",
+    "InstanceStateEnergy",
+    "InstanceStateFwOneOf0",
+    "InstanceWorkOneOf0",
     "Interest",
+    "InterestStreams",
+    "Keepout",
+    "KeepoutSource",
     "Keys",
     "KeysKeys",
     "KeysKeysQosOneOf1",
@@ -171,6 +239,17 @@ __all__ = [
     "LidarLivoxImu",
     "LidarLivoxMount",
     "LidarLivoxPattern",
+    "Limits",
+    "LimitsPlan",
+    "Lwir",
+    "LwirDetector",
+    "LwirEnvLimits",
+    "LwirGimbal",
+    "LwirLenses",
+    "LwirMassKgOneOf1",
+    "LwirMount",
+    "LwirPowerWOneOf1",
+    "LwirSigmaClutterK",
     "Manifest",
     "ManifestAgent",
     "ManifestSkills",
@@ -198,6 +277,33 @@ __all__ = [
     "ModelMaterial",
     "ModelOutputs",
     "ModelSourceOneOf0",
+    "Nav",
+    "NavBaro",
+    "NavGnss",
+    "NavImu",
+    "Nest",
+    "NestChargers",
+    "NestEnergy",
+    "NestEnergyPacks",
+    "NestInventory",
+    "NestList",
+    "NestStatus",
+    "NestStatusAircraft",
+    "NestStatusChargers",
+    "NestStatusInventory",
+    "NestStatusLaunchQueue",
+    "NestStatusPacks",
+    "NestStatusRecoverQueue",
+    "NestStatusSlots",
+    "Nir",
+    "NirIlluminator",
+    "NirIlluminatorEnvLimits",
+    "NirIlluminatorGimbal",
+    "NirIlluminatorMassKgOneOf1",
+    "NirIlluminatorMount",
+    "NirIlluminatorPowerWOneOf1",
+    "NirIlluminatorRef",
+    "NirIlluminator_",
     "Ops",
     "OpsAck",
     "OpsAdvertise",
@@ -222,14 +328,18 @@ __all__ = [
     "OpsPlaybackState",
     "OpsPlaybackStateLineage",
     "OpsPong",
+    "OpsPresence",
     "OpsProgress",
     "OpsProgressData",
     "OpsRemoveStatus",
     "OpsResult",
     "OpsServerInfo",
     "OpsServerInfoClock",
+    "OpsServerInfoIdentity",
     "OpsServerInfoLimits",
+    "OpsServerInfoPower",
     "OpsServerInfoRun",
+    "OpsServerInfoSandbox",
     "OpsServerInfoWorld",
     "OpsServerToClient",
     "OpsStatus",
@@ -239,6 +349,38 @@ __all__ = [
     "OpsSubscribed",
     "OpsUnadvertise",
     "OpsUnsubscribe",
+    "Park",
+    "ParkNs",
+    "ParkParkBeacon",
+    "ParkParkReply",
+    "ParkParkRequest",
+    "ParkResumeCreated",
+    "ParkResumeQueued",
+    "ParkResumeQueuedQueue",
+    "ParkSessionD21",
+    "Payload",
+    "PayloadGimbal",
+    "PayloadSensors",
+    "PayloadSensorsIlluminatorOneOf0",
+    "Perception",
+    "PerceptionBudget",
+    "PerceptionFeasibilityReply",
+    "PerceptionFeasibilityRequest",
+    "PerceptionHudOneOf0",
+    "PerceptionLevels",
+    "PerceptionLevelsLevels",
+    "PerceptionLevelsLevelsD",
+    "PerceptionLevelsLevelsI",
+    "PerceptionLevelsLevelsR",
+    "PerceptionLevelsTtpf",
+    "PerceptionLidarOneOf0",
+    "PerceptionLidarOneOfNPointsTarget0",
+    "PerceptionSensors",
+    "PerceptionSensorsIllum",
+    "PerceptionSensorsTargets",
+    "PerceptionSensorsTargetsK",
+    "PerceptionTrack",
+    "PerceptionTracks",
     "PerfClients",
     "PerfClientsClients",
     "PerfReport",
@@ -261,6 +403,11 @@ __all__ = [
     "PerfSnapshotFrame",
     "PerfSnapshotLoad",
     "PerfSnapshotMeta",
+    "Plan",
+    "PlanAssignments",
+    "PlanReply",
+    "PlanViolations",
+    "PlanViolations_",
     "PointcloudMetadata",
     "PointcloudMetadataAnetExt",
     "PointcloudMetadataAnetExtClassTable",
@@ -314,6 +461,22 @@ __all__ = [
     "QaReportValidation",
     "QaReportValidationErrors",
     "QaReportValidationWarnings",
+    "RadarMmw",
+    "RadarMmwClassify",
+    "RadarMmwClutter",
+    "RadarMmwEnvLimits",
+    "RadarMmwFov",
+    "RadarMmwGimbal",
+    "RadarMmwMassKgOneOf1",
+    "RadarMmwMount",
+    "RadarMmwPowerWOneOf1",
+    "RadarMmwRain",
+    "RadarTracks",
+    "RadarTracksTracks",
+    "Reaction",
+    "ReactionOnset",
+    "ReactionResponse",
+    "ReactionResponseSound",
     "Reasons",
     "ReasonsRanges",
     "ReasonsReasons",
@@ -334,6 +497,15 @@ __all__ = [
     "ReconIrSession",
     "ReconIrSessionEngine",
     "ReconJobParams",
+    "RelayStats",
+    "RelayStatsConfigEntries",
+    "RelayStatsDispatchDelays",
+    "RelayStatsGaps",
+    "RelayStatsGapsByCause",
+    "RelayStatsGapsTotalSByCause",
+    "RelayStatsHandovers",
+    "RelayStatsNextOneOf0",
+    "RelayStatsOnStation",
     "Replay",
     "ReplayReplayRep",
     "ReplayReplayReq",
@@ -344,6 +516,10 @@ __all__ = [
     "Roster",
     "SafetyCodes",
     "SafetyCodesCodes",
+    "SandboxSessionState",
+    "SandboxSessionStateClock",
+    "SandboxSessionStateExpiringOneOf0",
+    "SandboxSessionStateUsage",
     "Scenario",
     "ScenarioActions",
     "ScenarioBoolMetrics",
@@ -375,20 +551,166 @@ __all__ = [
     "ScenarioVehicleSetsMissionOneOfStart0",
     "ScenarioVehicles",
     "ScenarioZones",
+    "Sensitivity",
+    "Session",
+    "SessionBatchRequest",
+    "SessionBatchStatus",
+    "SessionBatchStatusResultOneOf0",
+    "SessionCalendar",
+    "SessionCallResult",
+    "SessionChallenge",
+    "SessionClock",
+    "SessionClockData",
+    "SessionClockRequest",
+    "SessionCreateRequest",
+    "SessionCreateRequestCalendar",
+    "SessionCreateRequestClient",
+    "SessionCreateRequestPowOneOf0",
+    "SessionCreated",
+    "SessionEndBeacon",
+    "SessionEndpoints",
+    "SessionEventsPage",
+    "SessionKeepaliveReply",
+    "SessionMeta",
+    "SessionMetaBuild",
+    "SessionMetaPow",
+    "SessionMetaSdk",
+    "SessionQueued",
+    "SessionQueuedQueue",
+    "SessionRestoreRequest",
     "SessionSpec",
     "SessionSpecBackends",
+    "SessionTemplateItem",
+    "SessionTemplateItemCalendarDefault",
+    "SessionTemplateItemEntities",
+    "SessionTemplateRequest",
+    "SessionTemplates",
+    "SessionTemplatesCalendarDefault",
+    "SessionTemplatesEntities",
+    "SessionTemplates_",
+    "SessionTokenPayload",
+    "SessionUsage",
+    "SessionWorldItem",
+    "SessionWorldItemAnchor",
+    "SessionWorldItemBoundsM",
+    "SessionWorldItemCost",
+    "SessionWorldItemDataset",
+    "SessionWorldRequest",
+    "SessionWorlds",
+    "SessionWorldsAnchor",
+    "SessionWorldsBoundsM",
+    "SessionWorldsCost",
+    "SessionWorldsDataset",
+    "SessionWorlds_",
+    "Snapshot",
+    "SnapshotCalendar",
+    "SnapshotEnv",
+    "SnapshotVehicle",
+    "SnapshotVehicleLights",
+    "SnapshotVehicleSensorsOneOf0",
+    "SnapshotVehicles",
+    "SnapshotVehiclesLights",
+    "SnapshotVehiclesSensorsOneOf0",
+    "Sound",
+    "Sustainability",
+    "SustainabilityBottlenecks",
+    "SustainabilityChargers",
+    "SustainabilityPacks",
+    "SustainabilityWindows",
     "SysProcs",
     "SysProcs_",
+    "Target",
+    "TargetCreateRequest",
+    "TargetCreated",
+    "TargetDetail",
+    "TargetDetailBehaviorOneOf0",
+    "TargetDetailCaptureOneOf0",
+    "TargetDetailDwellOneOf0",
+    "TargetDetailKeepout",
+    "TargetDetailLastDiscoveredOneOf0",
+    "TargetDetailMotion",
+    "TargetDetailSensitivity",
+    "TargetDetailSoundOneOf0",
+    "TargetList",
+    "TargetMotion",
+    "TargetQuant",
+    "TargetQuantPairs",
+    "TargetQuantPairsAcousticOneOf0",
+    "TargetQuantPairsRadarOneOf0",
+    "TargetQuantPairsReverseOneOf0",
+    "TargetQuantPairsVisualOneOf0",
+    "TargetRadarRxOneOf0",
+    "TargetRfOneOf0",
+    "TargetRfRxOneOf0",
+    "TargetSizeM",
+    "TargetSuggestedRadius",
+    "TargetSuggestedRadiusBasis",
+    "TargetSuggestedRadiusVolumes",
+    "TargetThermal",
     "Task",
     "TaskSpec",
     "TaskSpecClaimOneOf0",
     "TaskStatus",
     "TaskStatusLite",
+    "TaskStatusProgress",
     "TaskStatusQuotes",
+    "TaskStatus_",
+    "TaskStatus__",
+    "TaskingSnapshot",
+    "TaskingSnapshotVehicles",
+    "TaskingSnapshotWorkItems",
+    "TaskingTask",
+    "TaskingTaskCommon",
+    "TaskingTaskGeometry",
+    "TaskingTaskGeometryFillWaypoints",
+    "TaskingTaskGeometryLegs",
+    "TaskingTaskGeometryStations",
+    "TaskingTaskGeometryStrips",
+    "TaskingTaskItem",
+    "TaskingTaskList",
+    "TaskingTaskParamsAreaGuard",
+    "TaskingTaskParamsAreaPatrol",
+    "TaskingTaskParamsAreaScanGsd",
+    "TaskingTaskParamsPerimeterPatrol",
+    "TaskingTaskParamsPointWatch",
+    "TaskingTaskParamsPointWatchLook",
+    "TaskingTaskParamsPolylinePatrol",
+    "TaskingTaskParamsRelayWatch",
+    "TaskingTaskPlan",
+    "TaskingTaskPlanAssignments",
+    "TaskingTaskPlanAssignments_",
+    "TaskingTaskPlanGeometry",
+    "TaskingTaskPlanGeometryFillWaypoints",
+    "TaskingTaskPlanGeometryLegs",
+    "TaskingTaskPlanGeometryStations",
+    "TaskingTaskPlanGeometryStrips",
+    "TaskingTaskPreview",
+    "TaskingTaskPreviewAssignments",
+    "TaskingTaskPreviewAssignments_",
+    "TaskingTaskPreviewCoverage",
+    "TaskingTaskPreviewGeometry",
+    "TaskingTaskPreviewGeometryFillWaypoints",
+    "TaskingTaskPreviewGeometryLegs",
+    "TaskingTaskPreviewGeometryStations",
+    "TaskingTaskPreviewGeometryStrips",
+    "TaskingTaskPreviewMakespanCurve",
+    "TaskingTaskPreviewScan",
+    "TaskingTaskPreviewWhyN",
+    "TaskingTaskProgress",
+    "TaskingTaskRequest",
+    "TaskingTaskRequestCommon",
+    "TaskingTask_",
+    "Template",
+    "TemplateCalendarDefault",
+    "TemplateEnv",
+    "TemplateVehicles",
+    "TemplateVehiclesLights",
+    "TemplateVehiclesSensorsOneOf0",
     "Thermal",
     "ThermalDetector",
     "ThermalGimbal",
     "ThermalMount",
+    "Ticket",
     "Topics",
     "TopicsDeprecated",
     "TopicsTopics",
@@ -404,42 +726,95 @@ __all__ = [
     "UavStateExt",
     "UavStateExtBatteryOneOf0",
     "UavStateExtCtrl",
+    "UavStateExtEnergy",
     "UavStateExtFrames",
+    "UavStateExtFwOneOf0",
     "UavStateExtLease",
     "UavStateExtLink",
     "UavStateExtLoc",
+    "UavStateExtManual",
     "UavStateExtMissionOneOf0",
     "UavStateExtProfile",
     "UavStateExtSens",
     "UavStateExtSensGimbal",
     "UavStateExtSensImu",
     "UavStateExtTrajOneOf0",
+    "UavStateExtWorkOneOf0",
     "Units",
     "UnitsExceptions",
     "UnitsSuffixes",
+    "VehicleCatalog",
+    "VehicleCatalogChargers",
+    "VehicleCatalogModelDetail",
+    "VehicleCatalogModelDetailParamsTable",
+    "VehicleCatalogModelSummary",
+    "VehicleCatalogModelSummaryEndurance",
+    "VehicleCatalogModelSummarySpeed",
+    "VehicleCatalogModels",
+    "VehicleCatalogModelsEndurance",
+    "VehicleCatalogModelsSpeed",
+    "VehicleCatalogModels_",
+    "VehicleCatalogModels__",
+    "VehicleCatalogPacks",
+    "VehicleCatalogSensorItem",
+    "VehicleCatalogSensorModels",
+    "VehicleCatalogSensors",
     "VehicleProfile",
+    "VehicleProfileAcoustic",
     "VehicleProfileAero",
     "VehicleProfileAeroCdaM2",
     "VehicleProfileAeroKDvNPerMps",
     "VehicleProfileAeroSihKdvEquiv",
+    "VehicleProfileAirframe",
+    "VehicleProfileAirframeAccelMaxMps2OneOf1",
+    "VehicleProfileAirframeCd0",
+    "VehicleProfileAirframeClMax",
+    "VehicleProfileAirframeClimbMaxMpsOneOf1",
+    "VehicleProfileAirframeDecelMaxMps2OneOf1",
+    "VehicleProfileAirframeEtaProp",
+    "VehicleProfileAirframeLaunch",
+    "VehicleProfileAirframeLengthM",
+    "VehicleProfileAirframeOswaldE",
+    "VehicleProfileAirframePAvionicsW",
+    "VehicleProfileAirframePMaxW",
+    "VehicleProfileAirframePhiMaxDegOneOf1",
+    "VehicleProfileAirframeRLoiterDefaultMOneOf1",
+    "VehicleProfileAirframeRecovery",
+    "VehicleProfileAirframeRollRateMaxDegSOneOf1",
+    "VehicleProfileAirframeSinkMaxMpsOneOf1",
+    "VehicleProfileAirframeSpanM",
+    "VehicleProfileAirframeTauPhiSOneOf1",
+    "VehicleProfileAirframeTauVSOneOf1",
+    "VehicleProfileAirframeVCruiseMpsOneOf1",
+    "VehicleProfileAirframeVLoiterMpsOneOf1",
+    "VehicleProfileAirframeVMaxMpsOneOf1",
+    "VehicleProfileAirframeVMinMpsOneOf1",
+    "VehicleProfileAirframeWingAreaM2",
     "VehicleProfileBatteryOneOf0",
     "VehicleProfileBatteryOneOfCapacityAh0",
     "VehicleProfileBatteryOneOfCapacityWh0",
     "VehicleProfileBatteryOneOfHoverEnduranceS0",
+    "VehicleProfileBatteryOneOfMassKg0",
     "VehicleProfileBatteryOneOfPHoverW0",
     "VehicleProfileBatteryOneOfUsableFrac0",
     "VehicleProfileBatteryOneOfVNominalV0",
+    "VehicleProfileCatalog",
     "VehicleProfileDerived",
+    "VehicleProfileEnvLimits",
     "VehicleProfileFidelity",
     "VehicleProfileFrame",
     "VehicleProfileGeometry",
     "VehicleProfileGeometryArmXyM",
     "VehicleProfileGeometryCollisionRadiusM",
     "VehicleProfileGeometryRotorZM",
+    "VehicleProfileGeometrySizeM",
+    "VehicleProfileGeometrySizeMValue",
     "VehicleProfileGeometryWheelbaseM",
     "VehicleProfileInertiaKgm2",
     "VehicleProfileInertiaKgm2Value",
+    "VehicleProfileIr",
     "VehicleProfileLimitsProfiles",
+    "VehicleProfileLink",
     "VehicleProfileMassKg",
     "VehicleProfileMotor",
     "VehicleProfileMotorKF",
@@ -448,11 +823,23 @@ __all__ = [
     "VehicleProfileMotorTMaxN",
     "VehicleProfileMotorTauS",
     "VehicleProfileMtowKg",
+    "VehicleProfileNav",
+    "VehicleProfileNavHoldSigmaM",
+    "VehicleProfileNavHoldSigmaMGnss",
+    "VehicleProfileNavHoldSigmaMRtk",
+    "VehicleProfileNavHoldSigmaMSlam",
     "VehicleProfilePayload",
     "VehicleProfileProp",
     "VehicleProfilePropCRd",
     "VehicleProfilePropDM",
+    "VehicleProfileRcsM2",
     "VehicleProfileRejected",
+    "VehicleProfileSensorsOneOf1",
+    "VehicleProfileVisual",
+    "VehicleProfileVisualAreaM2",
+    "VehicleProfileVisualLightsInstalled",
+    "VehicleProfileVtol",
+    "VehicleProfileVtolPHoverWOneOf1",
     "VehicleProfileWindRatingMps",
     "WindManifest",
     "WindManifestGrid",
@@ -484,6 +871,9 @@ __all__ = [
     "WorldCommonSourceFile",
     "WorldCommonVec2",
     "WorldCommonVec3",
+    "WorldCosts",
+    "WorldCostsHost",
+    "WorldCostsWorlds",
     "WorldDataset",
     "WorldGenerator",
     "WorldLayer",
@@ -515,11 +905,11 @@ type BusDetail = BusDetailOneOf0 | BusDetailOneOf1
 
 
 # bus/event.schema.json#/$defs/known_kinds
-type BusEventKnownKinds = Literal["sim.started", "sim.reset", "sim.stopped", "sim.restarted", "sim.clock", "sim.vehicle.state", "sim.frame.reset", "roster.changed", "uav.state", "cmd.accepted", "cmd.running", "cmd.succeeded", "cmd.failed", "cmd.canceled", "cmd.timeout", "cmd.rejected", "fleet.batch.progress", "safety.geofence", "safety.separation", "safety.battery", "safety.link", "safety.fastguard", "safety.fsm", "safety.loc", "safety.env", "safety.fault", "safety.health", "mission.state", "mission.item_reached", "mission.energy_warning", "mission.aborted", "lease.acquired", "lease.released", "lease.preempted", "lease.expired", "seat.acquired", "seat.released", "seat.expired", "seat.takeover", "env.changed", "env.warning", "env.keyframe", "env.presets_mismatch", "proc.state", "session.switching", "session.switched", "session.error", "sys.shutting_down", "rec.started", "rec.stopped", "recorder.gap", "job.state", "job.progress", "world.added", "world.updated", "sensor.detect", "sensor.gnss_fix", "sensor.state", "vehicle.added", "vehicle.removed", "vehicle.spawn_failed", "scenario.agent_task", "scenario.mark", "sim.kernel.fallback", "sim.stage.overbudget", "sim.rtf_limited", "sim.profile.loaded", "sim.contact.collision", "sim.contact.touchdown", "cmd.progress", "geo.ready", "mission.created", "mission.start_failed", "mission.warning", "track.state", "track.lagging", "plan.ready", "plan.failed", "plan.degraded", "plan.warm", "path.changed", "coverage.progress", "coverage.changed", "scenario.loaded", "scenario.event", "scenario.result", "scenario.invalid", "formation.phase", "formation.member_lost", "formation.member_lagging", "deconflict.result", "deconflict.partial", "rec.lineage", "replay.opened", "replay.closed", "replay.error", "job.log", "agent.registered", "agent.task.submitted", "agent.task.find", "agent.task.quote", "agent.task.awarded", "agent.task.state", "agent.task.phase", "agent.task.effect", "agent.task.accepted", "agent.task.rejected", "agent.task.escalated", "agent.board.unit", "agent.board.incidental", "agent.lease.acquired", "agent.lease.released", "agent.lease.preempted", "agent.guard.rejected", "agent.session.reset", "anet.evidence.gap", "agent.health", "agent.runtime.state"]
+type BusEventKnownKinds = Literal["sim.started", "sim.reset", "sim.stopped", "sim.restarted", "sim.clock", "sim.vehicle.state", "sim.frame.reset", "roster.changed", "uav.state", "cmd.accepted", "cmd.running", "cmd.succeeded", "cmd.failed", "cmd.canceled", "cmd.timeout", "cmd.rejected", "fleet.batch.progress", "safety.geofence", "safety.separation", "safety.battery", "safety.link", "safety.fastguard", "safety.fsm", "safety.loc", "safety.env", "safety.fault", "safety.health", "mission.state", "mission.item_reached", "mission.energy_warning", "mission.aborted", "lease.acquired", "lease.released", "lease.preempted", "lease.expired", "seat.acquired", "seat.released", "seat.expired", "seat.takeover", "env.changed", "env.warning", "env.keyframe", "env.presets_mismatch", "proc.state", "session.switching", "session.switched", "session.error", "sys.shutting_down", "rec.started", "rec.stopped", "recorder.gap", "job.state", "job.progress", "world.added", "world.updated", "sensor.detect", "sensor.gnss_fix", "sensor.state", "vehicle.added", "vehicle.removed", "vehicle.spawn_failed", "scenario.agent_task", "scenario.mark", "sim.kernel.fallback", "sim.stage.overbudget", "sim.rtf_limited", "sim.profile.loaded", "sim.contact.collision", "sim.contact.touchdown", "cmd.progress", "geo.ready", "mission.created", "mission.start_failed", "mission.warning", "track.state", "track.lagging", "plan.ready", "plan.failed", "plan.degraded", "plan.warm", "path.changed", "coverage.progress", "coverage.changed", "scenario.loaded", "scenario.event", "scenario.result", "scenario.invalid", "formation.phase", "formation.member_lost", "formation.member_lagging", "deconflict.result", "deconflict.partial", "rec.lineage", "replay.opened", "replay.closed", "replay.error", "job.log", "agent.registered", "agent.task.submitted", "agent.task.find", "agent.task.quote", "agent.task.awarded", "agent.task.state", "agent.task.phase", "agent.task.effect", "agent.task.accepted", "agent.task.rejected", "agent.task.escalated", "agent.board.unit", "agent.board.incidental", "agent.lease.acquired", "agent.lease.released", "agent.lease.preempted", "agent.guard.rejected", "agent.session.reset", "anet.evidence.gap", "agent.health", "agent.runtime.state", "target.discovered", "target.state", "perception.level", "perception.capture", "perception.capture_lost", "perception.detect", "uav.keepout_guard", "fw.wind_exceeds", "nest.launch", "nest.recover", "nest.swap_done", "nest.dispatch_delayed", "task.created", "task.state", "task.allocated", "task.reallocated", "relay.dispatch", "relay.handover", "relay.gap", "sandbox.state", "sandbox.expiring", "sandbox.rate", "sandbox.slot_ready", "sensor.mode", "task.warning", "vtol.hover_limit", "sandbox.parking", "sandbox.parked", "sandbox.resumed", "relay.day_rollover"]
 
 
 # rt/commands.schema.json#/$defs/category
-type CommandsCategory = Literal["nav", "nav_setup", "nav_stream", "safety", "safety_light", "safety_lock", "mission", "task_or_unlock", "setup", "call_control", "lease", "batch", "clock", "env", "query", "seat", "confirm", "rec", "fleet"]
+type CommandsCategory = Literal["nav", "nav_setup", "nav_stream", "safety", "safety_light", "safety_lock", "mission", "task_or_unlock", "setup", "call_control", "lease", "batch", "clock", "env", "query", "seat", "confirm", "rec", "fleet", "payload", "entity", "task"]
 
 
 # recon/engine.schema.json# Recon engine.json
@@ -547,11 +937,23 @@ type Ops = OpsServerToClient | OpsClientToServer
 
 
 # rt/ops.schema.json#/$defs/clientToServer
-type OpsClientToServer = OpsHello | OpsSubscribe | OpsUnsubscribe | OpsAck | OpsPing | OpsCall | OpsCancel | OpsClientAdvertise | OpsClientUnadvertise | OpsClientStats | OpsPlayback
+type OpsClientToServer = OpsHello | OpsSubscribe | OpsUnsubscribe | OpsAck | OpsPing | OpsCall | OpsCancel | OpsClientAdvertise | OpsClientUnadvertise | OpsClientStats | OpsPlayback | OpsPresence
 
 
 # rt/ops.schema.json#/$defs/serverToClient
 type OpsServerToClient = OpsServerInfo | OpsAdvertise | OpsUnadvertise | OpsSubscribed | OpsPong | OpsResult | OpsProgress | OpsEvent | OpsEvents | OpsStatus | OpsRemoveStatus | OpsError | OpsPlaybackState
+
+
+# sandbox/park.schema.json# awr.sandbox.park.v1 (park, park beacon, resume; SB-69, SB-70, SB-72)
+type Park = Any
+
+
+# sandbox/park.schema.json#/$defs/ns
+type ParkNs = str
+
+
+# tasking/plan.schema.json#/$defs/violations
+type PlanViolations = list[PlanViolations_]
 
 
 # schemas/world/pointcloud-metadata.schema.json#/$defs/levelArray
@@ -590,8 +992,12 @@ type ScenarioMetrics = Literal["elapsed_s", "missions_done", "mission_progress",
 type ScenarioPredicate = ScenarioPredicateOneOf0 | ScenarioPredicateOneOf1 | ScenarioPredicateOneOf2 | ScenarioLeaf
 
 
+# target/target.schema.json#/$defs/create_request
+type TargetCreateRequest = dict[str, Any]
+
+
 # agent/task.schema.json# Agent task (TaskSpec, TaskStatus, TaskStatusLite)
-type Task = TaskSpec | TaskStatus
+type Task = TaskSpec | TaskStatus_
 
 
 # schemas/world/common.schema.json# AWR common definitions (v1)
@@ -656,6 +1062,121 @@ type WorldCommonVec2 = list[float]
 
 # schemas/world/common.schema.json#/$defs/vec3
 type WorldCommonVec3 = list[float]
+
+
+# sensor/acoustic_array.schema.json# awr.sensor.acoustic_array.v1 (microphone array)
+class AcousticArray(TypedDict):
+    schema: Literal["awr.sensor.acoustic_array.v1"]
+    model_id: NotRequired[str]
+    model_version: NotRequired[str]
+    display_name: NotRequired[str]
+    reference: NotRequired[bool]
+    mass_kg: NotRequired[float | AcousticArrayMassKgOneOf1]
+    power_w: NotRequired[float | AcousticArrayPowerWOneOf1]
+    env_limits: NotRequired[AcousticArrayEnvLimits]
+    overridable: NotRequired[list[str]]
+    conf: NotRequired[Literal["A", "B", "C", "D"]]
+    src: NotRequired[str]
+    sensor_id: NotRequired[str]
+    spec_ref: NotRequired[str]
+    mount: NotRequired[AcousticArrayMount]
+    on_gimbal_of: NotRequired[str]
+    gimbal: NotRequired[AcousticArrayGimbal]
+    n_mics: NotRequired[int]
+    aperture_m: NotRequired[float]
+    band_hz: NotRequired[list[float]]
+    array_gain_db: NotRequired[float]
+    nr_db: NotRequired[AcousticArrayNrDb]
+    r_ego_m: NotRequired[AcousticArrayREgoM]
+    az_acc_deg: NotRequired[float]
+    rate_hz: NotRequired[float]
+    detect_snr_db: NotRequired[float]
+    classify: NotRequired[AcousticArrayClassify]
+
+
+# sensor/acoustic_array.schema.json#/properties/classify
+class AcousticArrayClassify(TypedDict):
+    bands: NotRequired[int]
+    snr_db: NotRequired[float]
+
+
+# sensor/acoustic_array.schema.json#/properties/env_limits
+class AcousticArrayEnvLimits(TypedDict):
+    temp_c: NotRequired[list[float]]
+
+
+# sensor/acoustic_array.schema.json#/properties/gimbal
+class AcousticArrayGimbal(TypedDict):
+    pitch_min_deg: NotRequired[float]
+    pitch_max_deg: NotRequired[float]
+    yaw_min_deg: NotRequired[float]
+    yaw_max_deg: NotRequired[float]
+    rate_max_deg_s: NotRequired[float]
+    integrated: NotRequired[bool]
+    default_mode: NotRequired[str]
+    default_yaw_deg: NotRequired[float]
+    default_pitch_deg: NotRequired[float]
+
+
+# sensor/acoustic_array.schema.json#/properties/mass_kg/oneOf/1
+class AcousticArrayMassKgOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/acoustic_array.schema.json#/properties/mount
+class AcousticArrayMount(TypedDict):
+    xyz_m: WorldCommonVec3
+    rpy_deg: NotRequired[WorldCommonVec3]
+    q_xyzw: NotRequired[WorldCommonQuatXYZW]
+    preset: NotRequired[str]
+
+
+# sensor/acoustic_array.schema.json#/properties/nr_db
+class AcousticArrayNrDb(TypedDict):
+    multirotor: NotRequired[float]
+    fixed_wing: NotRequired[float]
+
+
+# sensor/acoustic_array.schema.json#/properties/power_w/oneOf/1
+class AcousticArrayPowerWOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/acoustic_array.schema.json#/properties/r_ego_m
+class AcousticArrayREgoM(TypedDict):
+    multirotor: NotRequired[float]
+    fixed_wing: NotRequired[float]
+
+
+# sensor/acoustic_bearings.schema.json# awr.sensor.acoustic_bearings.v1
+class AcousticBearings(TypedDict):
+    uav: NotRequired[WorldCommonSlug]
+    t_sim_ns: WorldCommonInt64
+    sensor: str
+    ego_noise_dba: NotRequired[float]
+    bearings: list[AcousticBearingsBearings]
+
+
+# sensor/acoustic_bearings.schema.json#/properties/bearings/items
+class AcousticBearingsBearings(TypedDict):
+    bearing_id: int
+    az_rad: float
+    el_rad: NotRequired[float]
+    level: Literal["none", "D", "R", "I"]
+    bands: list[AcousticBearingsBearingsBands]
+    harmonic_f0_hz: NotRequired[float | None]
+
+
+# sensor/acoustic_bearings.schema.json#/properties/bearings/items/properties/bands/items
+class AcousticBearingsBearingsBands(TypedDict):
+    fc_hz: float
+    snr_db: float
 
 
 # agent/agent_status.schema.json# awr.agent.status.v1
@@ -1070,6 +1591,61 @@ class CapabilityTrust(TypedDict):
     simulated_verify: NotRequired[int]
 
 
+# sandbox/capacity.schema.json# awr.capacity.v1 (public capacity, SB-71)
+class Capacity(TypedDict):
+    schema: Literal["awr.capacity.v1"]
+    t_unix_ns: str
+    build: CapacityBuild
+    accepting: bool
+    maintenance: bool
+    degrade_level: Literal["L0", "L1", "L2", "L3", "L4"]
+    viewers: CapacityViewers
+    sandbox: CapacitySandbox
+    power: CapacityPower
+    hint: Literal["open", "queue_viewer", "queue_sandbox", "queue_both", "closed", "unavailable"]
+
+
+# sandbox/capacity.schema.json#/properties/build
+class CapacityBuild(TypedDict):
+    version: str
+    channel: Literal["demo", "local", "ci"]
+    commit: str
+    dirty: bool
+    built_at: str
+    release: str
+
+
+# sandbox/capacity.schema.json#/properties/power
+class CapacityPower(TypedDict):
+    viewer_idle_s: float
+    sandbox_idle_s: float
+    hidden_s: float
+    warn_s: float
+
+
+# sandbox/capacity.schema.json#/properties/sandbox
+class CapacitySandbox(TypedDict):
+    active: int | None
+    max: int | None
+    reserved_internal: int | None
+    internal_active: NotRequired[int | None]
+    parked: int | None
+    queue: int | None
+    eta_s: int | None
+    admit_now: bool
+    worlds_admit_now: list[str]
+    state: Literal["open", "full", "queue", "closed"]
+
+
+# sandbox/capacity.schema.json#/properties/viewers
+class CapacityViewers(TypedDict):
+    live: int | None
+    max: int | None
+    queue: int | None
+    eta_s: int | None
+    state: Literal["open", "full", "unknown"]
+
+
 # rt/caps.schema.json# Backend capability declaration (rt/caps/*.json)
 class Caps(TypedDict):
     backend: Literal["mock", "replay", "px4_sih", "prometheus"]
@@ -1127,6 +1703,15 @@ class CatalogWorlds(TypedDict):
     gate: NotRequired[bool]
 
 
+# target/class_defaults.schema.json# awr.target.class_defaults.v1 (class templates)
+class ClassDefaults(TypedDict):
+    schema: Literal["awr.target.class_defaults.v1"]
+    version: str
+    doc: NotRequired[str]
+    classes: dict[str, dict[str, Any]]
+    label_zh: NotRequired[dict[str, str]]
+
+
 # schemas/world/class-table.schema.json#/properties/classes/items
 class ClassTableClasses(TypedDict):
     index: int
@@ -1138,6 +1723,39 @@ class ClassTableClasses(TypedDict):
     colorToken: NotRequired[str]
     defaultVisible: NotRequired[bool]
     pseudoReflectance: NotRequired[float]
+
+
+# vehicle/clone.schema.json# awr.vehicle_clone.v1 (session clone patch)
+class Clone(TypedDict):
+    schema: Literal["awr.vehicle_clone.v1"]
+    base: str
+    id: str
+    display_name: NotRequired[str]
+    set: NotRequired[dict[str, float]]
+    default_mounts: NotRequired[dict[str, bool]]
+    mounts: NotRequired[dict[str, CloneMounts]]
+
+
+# vehicle/clone.schema.json#/properties/mounts/additionalProperties
+class CloneMounts(TypedDict):
+    lens_mm: NotRequired[float]
+
+
+# vehicle/clone.schema.json#/$defs/rest_request
+class CloneRestRequest(TypedDict):
+    from_model_id: str
+    model_id: NotRequired[str]
+    label: NotRequired[str]
+    patch: NotRequired[dict[str, Any]]
+
+
+# vehicle/clone.schema.json#/$defs/violation
+class CloneViolation(TypedDict):
+    field: str
+    rule: str
+    value: NotRequired[Any]
+    limit: NotRequired[Any]
+    message_zh: NotRequired[str]
 
 
 # rt/commands.schema.json# commands.json meta-schema
@@ -1177,7 +1795,7 @@ class CommandsServices(TypedDict):
     category: CommandsCategory
     lease: bool | str | None
     agent: Literal["yes", "no", "own_lease", "own_calls", "non_unlock_only", "agent_class"]
-    d1: Literal["core", "ext", "stub", "V0.2"]
+    d1: Literal["core", "ext", "stub", "V0.2", "V0.2-demo"]
     args_schema: dict[str, Any]
     admission: NotRequired[dict[str, Literal["Y", "=", "S", "-", "?"]]]
     admission_cond: NotRequired[dict[str, str]]
@@ -1315,6 +1933,41 @@ class CoordinateTrueNorth(TypedDict):
     evidence: NotRequired[list[str]]
 
 
+# sensor/detection.schema.json# awr.sensor.detection.v1
+class Detection(TypedDict):
+    seq: int
+    t_sim_ns: WorldCommonInt64
+    kind: Literal["level", "capture", "capture_lost", "detect"]
+    uav: WorldCommonSlug
+    sensor: str
+    sensor_kind: Literal["eo", "nir", "lwir", "radar", "acoustic", "lidar"]
+    target: WorldCommonSlug | None
+    track_id: NotRequired[int | None]
+    bearing_id: NotRequired[int | None]
+    level_from: Literal["none", "D", "R", "I"]
+    level_to: Literal["none", "D", "R", "I"]
+    n_eff: NotRequired[float | None]
+    n_req: NotRequired[float | None]
+    p: NotRequired[float | None]
+    range_m: NotRequired[float | None]
+    gsd_m: NotRequired[float | None]
+    az_rad: NotRequired[float | None]
+    el_rad: NotRequired[float | None]
+    vr_mps: NotRequired[float | None]
+    snr_db: NotRequired[float | None]
+    limiting: NotRequired[Literal["fov", "los", "pixels", "light", "contrast", "blur"] | None]
+    reason: NotRequired[Literal["fov", "los", "pixels", "light", "contrast", "blur"] | None]
+    meas_enu_m: NotRequired[WorldCommonVec3 | None]
+    sigma_m: NotRequired[float | None]
+
+
+# sensor/detection.schema.json#/$defs/page
+class DetectionPage(TypedDict):
+    items: list[Detection]
+    next_since_seq: int
+    oldest_seq: NotRequired[int]
+
+
 # agent/effect.schema.json# Effect record (shared by command results and agent tasks)
 class Effect(TypedDict):
     status: Literal["OK", "UNVERIFIED", "FAILED", "UNAVAILABLE", "PAYMENT_REQUIRED"]
@@ -1346,6 +1999,12 @@ class Enums(TypedDict):
     doc: NotRequired[str]
 
 
+# env/env_state.schema.json#/properties/acoustic_bg
+class EnvStateAcousticBg(TypedDict):
+    profile: Literal["rural", "suburban", "urban"]
+    l_bg_dba: float
+
+
 # env/env_state.schema.json#/properties/anchors
 class EnvStateAnchors(TypedDict):
     t_ns: int
@@ -1355,6 +2014,13 @@ class EnvStateAnchors(TypedDict):
     fall_snow_m: float
     wetness: float
     puddle: float
+
+
+# env/env_state.schema.json#/properties/calendar
+class EnvStateCalendar(TypedDict):
+    start_utc: str
+    tz: str
+    t_cal_unix_ns: NotRequired[str]
 
 
 # env/env_state.schema.json#/properties/config
@@ -1369,6 +2035,9 @@ class EnvStateConfig(TypedDict):
 class EnvStateConfigSun(TypedDict):
     azimuth_deg: float
     elevation_deg: float
+    mode: NotRequired[Literal["fixed", "clock"]]
+    illum_lx: NotRequired[float]
+    band: NotRequired[Literal["day", "low", "night"]]
 
 
 # env/env_state.schema.json#/properties/config/properties/weather_map
@@ -1415,6 +2084,13 @@ class EnvStateConfigWindTurbulence(TypedDict):
     n: int
     dx_m: float
     l_m: float
+
+
+# env/env_state.schema.json#/properties/surface
+class EnvStateSurface(TypedDict):
+    t_c: float
+    emissivity: float
+    k_cross: NotRequired[float]
 
 
 # env/env_state.schema.json#/properties/vis
@@ -1534,6 +2210,139 @@ class EnvWorldWindLibraryOneOf0(TypedDict):
     sha256: str
 
 
+# sensor/eo_zoom.schema.json# awr.sensor.eo_zoom.v1 (zoom EO payload)
+class EoZoom(TypedDict):
+    schema: Literal["awr.sensor.eo_zoom.v1"]
+    model_id: NotRequired[str]
+    model_version: NotRequired[str]
+    display_name: NotRequired[str]
+    reference: NotRequired[bool]
+    mass_kg: NotRequired[float | EoZoomMassKgOneOf1]
+    power_w: NotRequired[float | EoZoomPowerWOneOf1]
+    env_limits: NotRequired[EoZoomEnvLimits]
+    overridable: NotRequired[list[str]]
+    conf: NotRequired[Literal["A", "B", "C", "D"]]
+    src: NotRequired[str]
+    sensor_id: NotRequired[str]
+    spec_ref: NotRequired[str]
+    mount: NotRequired[EoZoomMount]
+    on_gimbal_of: NotRequired[str]
+    gimbal: NotRequired[EoZoomGimbal]
+    sensor: NotRequired[EoZoomSensor]
+    optics: NotRequired[EoZoomOptics]
+    outputs: NotRequired[list[EoZoomOutputs]]
+    analysis: NotRequired[EoZoomAnalysis]
+    exposure: NotRequired[EoZoomExposure]
+    jitter_urad: NotRequired[EoZoomJitterUrad]
+    night: NotRequired[Nir]
+    spec_fov: NotRequired[EoZoomSpecFov]
+    stream: NotRequired[dict[str, Any]]
+
+
+# sensor/eo_zoom.schema.json#/properties/analysis
+class EoZoomAnalysis(TypedDict):
+    default: NotRequired[str]
+    k4_requires: NotRequired[str]
+
+
+# sensor/eo_zoom.schema.json#/properties/env_limits
+class EoZoomEnvLimits(TypedDict):
+    temp_c: NotRequired[list[float]]
+
+
+# sensor/eo_zoom.schema.json#/properties/exposure
+class EoZoomExposure(TypedDict):
+    day_s: NotRequired[float]
+    lowlight_s: NotRequired[float]
+    shutter_min_s: NotRequired[float]
+    shutter_max_s: NotRequired[float]
+    switch_lx: NotRequired[float]
+
+
+# sensor/eo_zoom.schema.json#/properties/gimbal
+class EoZoomGimbal(TypedDict):
+    pitch_min_deg: NotRequired[float]
+    pitch_max_deg: NotRequired[float]
+    yaw_min_deg: NotRequired[float]
+    yaw_max_deg: NotRequired[float]
+    rate_max_deg_s: NotRequired[float]
+    integrated: NotRequired[bool]
+    default_mode: NotRequired[str]
+    default_yaw_deg: NotRequired[float]
+    default_pitch_deg: NotRequired[float]
+
+
+# sensor/eo_zoom.schema.json#/properties/jitter_urad
+class EoZoomJitterUrad(TypedDict):
+    fast: NotRequired[float]
+    slow: NotRequired[float]
+    fast_max_exposure_s: NotRequired[float]
+
+
+# sensor/eo_zoom.schema.json#/properties/mass_kg/oneOf/1
+class EoZoomMassKgOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/eo_zoom.schema.json#/properties/mount
+class EoZoomMount(TypedDict):
+    xyz_m: WorldCommonVec3
+    rpy_deg: NotRequired[WorldCommonVec3]
+    q_xyzw: NotRequired[WorldCommonQuatXYZW]
+    preset: NotRequired[str]
+
+
+# sensor/eo_zoom.schema.json#/properties/optics
+class EoZoomOptics(TypedDict):
+    f_min_mm: float
+    f_max_mm: float
+    f_number: NotRequired[EoZoomOpticsFNumber]
+    zoom_time_s: NotRequired[float]
+
+
+# sensor/eo_zoom.schema.json#/properties/optics/properties/f_number
+class EoZoomOpticsFNumber(TypedDict):
+    at_min: NotRequired[float]
+    at_max: NotRequired[float]
+    law: NotRequired[Literal["linear_f", "linear_ln_f"]]
+
+
+# sensor/eo_zoom.schema.json#/properties/outputs/items
+class EoZoomOutputs(TypedDict):
+    name: str
+    width_px: int
+    height_px: int
+    crop_w_px: int
+    crop_h_px: NotRequired[int]
+    fps: NotRequired[float]
+
+
+# sensor/eo_zoom.schema.json#/properties/power_w/oneOf/1
+class EoZoomPowerWOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/eo_zoom.schema.json#/properties/sensor
+class EoZoomSensor(TypedDict):
+    format_in: NotRequired[str]
+    width_px: int
+    height_px: int
+    pixel_um: float
+
+
+# sensor/eo_zoom.schema.json#/properties/spec_fov
+class EoZoomSpecFov(TypedDict):
+    hfov_deg: NotRequired[list[float]]
+    vfov_deg: NotRequired[list[float]]
+    dfov_deg: NotRequired[list[float]]
+
+
 # schemas/world/export.schema.json# World export manifest (V0.5 stub)
 class Export(TypedDict):
     schema: Literal["awr.world.export.v1"]
@@ -1617,6 +2426,76 @@ class FaultsOneOfParams5(TypedDict):
     set_soc: NotRequired[float]
 
 
+# rt/payloads/field_profile.schema.json# awr.field.profile.v1
+class FieldProfile(TypedDict):
+    t_sim_ns: WorldCommonInt64
+    kind: Literal["acoustic", "visual", "thermal", "radar"]
+    unit: Literal["dba", "arcmin", "px", "db"]
+    combine: Literal["add", "mul"]
+    keyframe: NotRequired[bool]
+    r_m: NotRequired[list[float]]
+    el_deg: NotRequired[list[float]]
+    bands: NotRequired[list[float]]
+    v_enc: Literal["lin", "log"]
+    v_off: float
+    iso: NotRequired[list[FieldProfileIso]]
+    shell_ref: NotRequired[Literal["person", "D"]]
+    ref: NotRequired[FieldProfileRef]
+    uav: list[FieldProfileUav]
+
+
+# rt/payloads/field_profile.schema.json#/properties/iso/items
+class FieldProfileIso(TypedDict):
+    id: Literal["bg", "ref", "r", "d"]
+    v: float
+
+
+# rt/payloads/field_profile.schema.json#/properties/ref
+class FieldProfileRef(TypedDict):
+    sensor: NotRequired[str]
+    lens_mm: NotRequired[float]
+    model: NotRequired[str]
+
+
+# rt/payloads/field_profile.schema.json#/properties/uav/items
+class FieldProfileUav(TypedDict):
+    id: WorldCommonSlug
+    model_id: NotRequired[str]
+    rev: int
+    v_r: NotRequired[list[int]]
+    f_el: NotRequired[list[int]]
+    cut_el_m: NotRequired[list[int]]
+    shell_m: NotRequired[float]
+    same: NotRequired[int]
+
+
+# rt/payloads/field_volumes.schema.json# awr.field.volumes.v1
+class FieldVolumes(TypedDict):
+    t_sim_ns: WorldCommonInt64
+    keyframe: bool
+    models: list[str]
+    az_deg: list[float]
+    el_deg: list[float]
+    tgt: list[FieldVolumesTgt]
+
+
+# rt/payloads/field_volumes.schema.json#/properties/tgt/items
+class FieldVolumesTgt(TypedDict):
+    id: WorldCommonSlug
+    rev: int
+    bodies: list[FieldVolumesTgtBodies]
+
+
+# rt/payloads/field_volumes.schema.json#/properties/tgt/items/properties/bodies/items
+class FieldVolumesTgtBodies(TypedDict):
+    idx: int
+    kind: Literal["visual", "acoustic", "radar"]
+    shape: Literal["sphere", "hemisphere", "cylinder", "sector"]
+    mode: Literal["geometric", "physical"]
+    r_eff_dm: list[list[int]]
+    w_m: list[float]
+
+
 # rt/payloads/fleet_roster.schema.json# awr.fleet.roster.v1
 class FleetRoster(TypedDict):
     roster_version: int
@@ -1627,18 +2506,19 @@ class FleetRoster(TypedDict):
 class FleetRosterEntries(TypedDict):
     agent_no: int
     id: WorldCommonSlug
-    kind: Literal["uav", "ugv", "robot", "vehicle", "sensor", "human"]
-    model: str
-    profile_id: str
-    backend: Literal["mock", "replay", "px4_sih", "prometheus"]
-    simulated: bool
-    producer: str
-    lifecycle: Literal["PENDING", "PROVISIONING", "STARTING", "BOOTED", "READY", "DEGRADED", "LOST", "RESTARTING", "FAILED", "DRAINING", "STOPPED", "REMOVED"]
-    sensors: list[FleetRosterEntriesSensors]
-    t_world_local: WorldCommonMat4 | None
-    caps_ref: str
+    kind: Literal["uav", "ugv", "robot", "vehicle", "sensor", "human", "target"]
+    model: NotRequired[str]
+    profile_id: NotRequired[str]
+    backend: NotRequired[Literal["mock", "replay", "px4_sih", "prometheus"]]
+    simulated: NotRequired[bool]
+    producer: NotRequired[str]
+    lifecycle: NotRequired[Literal["PENDING", "PROVISIONING", "STARTING", "BOOTED", "READY", "DEGRADED", "LOST", "RESTARTING", "FAILED", "DRAINING", "STOPPED", "REMOVED"]]
+    sensors: NotRequired[list[FleetRosterEntriesSensors]]
+    t_world_local: NotRequired[WorldCommonMat4 | None]
+    caps_ref: NotRequired[str]
     px4_origin: NotRequired[FleetRosterEntriesPx4Origin]
     sih_quant_offset_m: NotRequired[WorldCommonVec3]
+    label: NotRequired[str]
 
 
 # rt/payloads/fleet_roster.schema.json#/properties/entries/items/properties/px4_origin
@@ -1891,13 +2771,199 @@ class InputlogHeader(TypedDict):
     meta_sha256: WorldCommonSha256
 
 
+# vehicle/instance.schema.json# awr.vehicle.instance.v1 (fleet instance REST shapes)
+class Instance(TypedDict):
+    id: WorldCommonSlug
+    agent_no: int
+    kind: NotRequired[str]
+    model: NotRequired[str]
+    profile_id: NotRequired[str]
+    backend: NotRequired[str]
+    simulated: NotRequired[bool]
+    lifecycle: str
+    flight_state: str
+    sub: NotRequired[str | None]
+    battery_pct: NotRequired[float | None]
+    lease: NotRequired[InstanceLease]
+    model_id: str
+    category: NotRequired[Literal["multirotor", "fixed_wing", "vtol"]]
+    label: NotRequired[str | None]
+    nest_id: NotRequired[str | None]
+    work: NotRequired[InstanceWorkOneOf0 | None]
+    manual: NotRequired[bool]
+
+
+# vehicle/instance.schema.json#/$defs/command_request
+class InstanceCommandRequest(TypedDict):
+    id: NotRequired[str]
+    op: str
+    args: NotRequired[dict[str, Any]]
+    timeout_ms: NotRequired[int]
+
+
+# vehicle/instance.schema.json#/$defs/create_request
+class InstanceCreateRequest(TypedDict):
+    id: NotRequired[WorldCommonSlug]
+    model_id: str
+    nest_id: NotRequired[WorldCommonSlug | None]
+    home_enu_m: NotRequired[list[float | None] | None]
+    label: NotRequired[str | None]
+    yaw_rad: NotRequired[float]
+    initial_soc: NotRequired[float]
+    sensors: NotRequired[list[InstanceCreateRequestSensorsOneOf0] | None]
+    limits_profile: NotRequired[str | None]
+    lights: NotRequired[InstanceCreateRequestLights]
+
+
+# vehicle/instance.schema.json#/$defs/create_request/properties/lights
+class InstanceCreateRequestLights(TypedDict):
+    nav: NotRequired[bool]
+    strobe: NotRequired[bool]
+
+
+# vehicle/instance.schema.json#/$defs/create_request/properties/sensors/oneOf/0/items
+class InstanceCreateRequestSensorsOneOf0(TypedDict):
+    name: str
+    type: NotRequired[str]
+    enabled: NotRequired[bool]
+
+
+# vehicle/instance.schema.json#/$defs/created
+class InstanceCreated(TypedDict):
+    id: WorldCommonSlug
+    agent_no: int
+    lifecycle: str
+    model_id: str
+    nest_id: NotRequired[str | None]
+
+
+# vehicle/instance.schema.json#/properties/lease
+class InstanceLease(TypedDict):
+    owner: Literal["NONE", "OPERATOR", "MISSION", "AGENT", "SWARM", "SAFETY", "PILOT", "EXTERNAL"]
+    holder: NotRequired[str | None]
+    expires_unix_ms: NotRequired[int | None]
+
+
+# vehicle/instance.schema.json#/$defs/lease_request
+class InstanceLeaseRequest(TypedDict):
+    priority: NotRequired[Literal["normal", "override"]]
+    mode: NotRequired[Literal["command", "velocity"]]
+    ttl_s: NotRequired[float]
+    return_to: NotRequired[Literal["none", "pool", "hover"]]
+
+
+# vehicle/instance.schema.json#/$defs/patch
+class InstancePatch(TypedDict):
+    label: NotRequired[str]
+    nest_id: NotRequired[str | None]
+    sensors: NotRequired[list[Any]]
+    limits_profile: NotRequired[str]
+    lights: NotRequired[InstancePatchLights]
+
+
+# vehicle/instance.schema.json#/$defs/patch/properties/lights
+class InstancePatchLights(TypedDict):
+    nav: NotRequired[bool]
+    strobe: NotRequired[bool]
+
+
+# vehicle/instance.schema.json#/$defs/sensors
+class InstanceSensors(TypedDict):
+    payload: NotRequired[Payload]
+    sensors: list[InstanceSensorsSensors]
+
+
+# vehicle/instance.schema.json#/$defs/sensors/properties/sensors/items
+class InstanceSensorsSensors(TypedDict):
+    name: str
+    type: str
+    kind: str
+    spec_ref: NotRequired[str | None]
+    mount: NotRequired[InstanceSensorsSensorsMount]
+    state: Literal["ACTIVE", "STANDBY", "DEGRADED", "FAULT"]
+    mode: NotRequired[str | None]
+    enabled: bool
+
+
+# vehicle/instance.schema.json#/$defs/sensors/properties/sensors/items/properties/mount
+class InstanceSensorsSensorsMount(TypedDict):
+    pos_m: NotRequired[WorldCommonVec3]
+    q_xyzw: NotRequired[WorldCommonQuatXYZW]
+
+
+# vehicle/instance.schema.json#/$defs/state
+class InstanceState(TypedDict):
+    t_sim_ns: WorldCommonInt64
+    state: dict[str, Any]
+    state_ext: NotRequired[UavStateExt]
+    fw: NotRequired[InstanceStateFwOneOf0 | None]
+    energy: NotRequired[InstanceStateEnergy]
+
+
+# vehicle/instance.schema.json#/$defs/state/properties/energy
+class InstanceStateEnergy(TypedDict):
+    e_avail_wh: NotRequired[float]
+    e_rtl_wh: NotRequired[float]
+    e_res_wh: NotRequired[float]
+    t_end_s: NotRequired[float]
+
+
+# vehicle/instance.schema.json#/$defs/state/properties/fw/oneOf/0
+class InstanceStateFwOneOf0(TypedDict):
+    mode: Literal["MC", "TRANSITION_FW", "FW", "TRANSITION_MC"]
+    airspeed_mps: NotRequired[float]
+    bank_rad: NotRequired[float]
+    gamma_rad: NotRequired[float]
+    hover_used_s: NotRequired[float]
+
+
+# vehicle/instance.schema.json#/properties/work/oneOf/0
+class InstanceWorkOneOf0(TypedDict):
+    tid: WorldCommonSlug
+    wid: str
+    kind: NotRequired[str]
+
+
 # bus/interest.schema.json# Interest (ctl/sim-core/interest)
 class Interest(TypedDict):
     v: Literal[1]
     seq: int
     detail: list[int]
     marks: list[int]
-    topics: list[Literal["state_ext", "safety", "sensor", "env"]]
+    topics: list[Literal["state_ext", "safety", "sensor", "env", "perception", "nav", "radar", "acoustic", "lidar"]]
+    streams: NotRequired[InterestStreams]
+
+
+# bus/interest.schema.json#/properties/streams
+class InterestStreams(TypedDict):
+    perception: NotRequired[list[int]]
+    nav: NotRequired[list[int]]
+    radar: NotRequired[list[int]]
+    acoustic: NotRequired[list[int]]
+    lidar: NotRequired[list[int]]
+    field: NotRequired[list[int]]
+    quant: NotRequired[list[int]]
+    fsub: NotRequired[list[int]]
+
+
+# target/keepout.schema.json# awr.target.keepout.v1 (KeepoutVolume)
+class Keepout(TypedDict):
+    id: str
+    shape: Literal["cylinder", "sphere", "hemisphere", "sector"]
+    center_enu_m: WorldCommonVec3
+    r_m: float
+    z_min_m: NotRequired[float]
+    z_max_m: NotRequired[float]
+    yaw_rad: NotRequired[float]
+    half_angle_rad: NotRequired[float]
+    source: NotRequired[KeepoutSource]
+
+
+# target/keepout.schema.json#/properties/source
+class KeepoutSource(TypedDict):
+    kind: Literal["target", "zone", "manual"]
+    id: NotRequired[str]
+    vol_idx: NotRequired[int]
 
 
 # bus/keys.schema.json# bus/keys.json meta-schema
@@ -1909,6 +2975,7 @@ class Keys(TypedDict):
     event_categories: NotRequired[list[str]]
     producers: NotRequired[list[str]]
     keys: list[KeysKeys]
+    pool_namespace: NotRequired[str]
 
 
 # bus/keys.schema.json#/properties/keys/items
@@ -1920,8 +2987,9 @@ class KeysKeys(TypedDict):
     consumers: list[str]
     qos: KeysKeysQosOneOf1 | None
     payload: str | None
-    d1: Literal["core", "ext", "test", "V0.2", "V0.5"]
+    d1: Literal["core", "ext", "test", "V0.2", "V0.5", "V0.2-demo"]
     doc: NotRequired[str]
+    ns: NotRequired[Literal["run", "pool"]]
 
 
 # bus/keys.schema.json#/properties/keys/items/properties/qos/oneOf/1
@@ -2029,6 +3097,133 @@ class LidarLivoxPattern(TypedDict):
     mode: Literal["non_repetitive", "repetitive", "repetitive_low"]
     point_rate_hz: float
     beams: int
+
+
+# sandbox/limits.schema.json# awr.sandbox.limits.v1 (session limits)
+class Limits(TypedDict):
+    vehicles_max: int
+    targets_max: int
+    nests_max: int
+    tasks_active_max: int
+    cloned_models_max: NotRequired[int]
+    rest_rps: float
+    rest_burst: int
+    call_rps: float
+    call_burst: int
+    clock_rps: float
+    entity_rps: float
+    task_rps: float
+    ws_max: int
+    setpoint_hz_max: float
+    snapshot_kib: NotRequired[float]
+    plan: LimitsPlan
+
+
+# sandbox/limits.schema.json#/properties/plan
+class LimitsPlan(TypedDict):
+    area_max_m2: float
+    vertices_max: int
+    strips_max: int
+    work_items_max: int
+    station_candidates_max: int
+    coverage_cells_max: int
+
+
+# sensor/lwir.schema.json# awr.sensor.lwir.v1 (uncooled thermal imager)
+class Lwir(TypedDict):
+    schema: Literal["awr.sensor.lwir.v1"]
+    model_id: NotRequired[str]
+    model_version: NotRequired[str]
+    display_name: NotRequired[str]
+    reference: NotRequired[bool]
+    mass_kg: NotRequired[float | LwirMassKgOneOf1]
+    power_w: NotRequired[float | LwirPowerWOneOf1]
+    env_limits: NotRequired[LwirEnvLimits]
+    overridable: NotRequired[list[str]]
+    conf: NotRequired[Literal["A", "B", "C", "D"]]
+    src: NotRequired[str]
+    sensor_id: NotRequired[str]
+    spec_ref: NotRequired[str]
+    mount: NotRequired[LwirMount]
+    on_gimbal_of: NotRequired[str]
+    gimbal: NotRequired[LwirGimbal]
+    detector: NotRequired[LwirDetector]
+    lenses: NotRequired[list[LwirLenses]]
+    lens_mm: NotRequired[float]
+    gimbal_mass_kg: NotRequired[float]
+    digital_zoom_max: NotRequired[float]
+    jitter_urad: NotRequired[float]
+    palettes: NotRequired[list[Literal["white_hot", "black_hot"]]]
+    sigma_clutter_k: NotRequired[LwirSigmaClutterK]
+
+
+# sensor/lwir.schema.json#/properties/detector
+class LwirDetector(TypedDict):
+    type: NotRequired[str]
+    width_px: int
+    height_px: int
+    pixel_um: float
+    band_um: NotRequired[list[float]]
+    netd_mk: float
+    netd_f_number: NotRequired[float]
+    frame_hz: NotRequired[float]
+    integration_s: NotRequired[float]
+
+
+# sensor/lwir.schema.json#/properties/env_limits
+class LwirEnvLimits(TypedDict):
+    temp_c: NotRequired[list[float]]
+
+
+# sensor/lwir.schema.json#/properties/gimbal
+class LwirGimbal(TypedDict):
+    pitch_min_deg: NotRequired[float]
+    pitch_max_deg: NotRequired[float]
+    yaw_min_deg: NotRequired[float]
+    yaw_max_deg: NotRequired[float]
+    rate_max_deg_s: NotRequired[float]
+    integrated: NotRequired[bool]
+    default_mode: NotRequired[str]
+    default_yaw_deg: NotRequired[float]
+    default_pitch_deg: NotRequired[float]
+
+
+# sensor/lwir.schema.json#/properties/lenses/items
+class LwirLenses(TypedDict):
+    f_mm: float
+    f_number: NotRequired[float]
+    mass_kg: NotRequired[float]
+    power_w: NotRequired[float]
+
+
+# sensor/lwir.schema.json#/properties/mass_kg/oneOf/1
+class LwirMassKgOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/lwir.schema.json#/properties/mount
+class LwirMount(TypedDict):
+    xyz_m: WorldCommonVec3
+    rpy_deg: NotRequired[WorldCommonVec3]
+    q_xyzw: NotRequired[WorldCommonQuatXYZW]
+    preset: NotRequired[str]
+
+
+# sensor/lwir.schema.json#/properties/power_w/oneOf/1
+class LwirPowerWOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/lwir.schema.json#/properties/sigma_clutter_k
+class LwirSigmaClutterK(TypedDict):
+    day: NotRequired[float]
+    night: NotRequired[float]
 
 
 # agent/manifest.schema.json# awr.agent.manifest.v1
@@ -2294,6 +3489,260 @@ class ModelSourceOneOf0(TypedDict):
     frame: Literal["flu", "frd"]
 
 
+# sensor/nav.schema.json# awr.sensor.nav.v1
+class Nav(TypedDict):
+    uav: NotRequired[WorldCommonSlug]
+    t_sim_ns: WorldCommonInt64
+    imu: NavImu
+    gnss: NavGnss
+    baro: NavBaro
+    loc_mode: NotRequired[Literal["rtk", "slam", "single"]]
+
+
+# sensor/nav.schema.json#/properties/baro
+class NavBaro(TypedDict):
+    alt_m: float
+    p_pa: NotRequired[float]
+
+
+# sensor/nav.schema.json#/properties/gnss
+class NavGnss(TypedDict):
+    pos_enu_m: WorldCommonVec3
+    vel_mps: WorldCommonVec3
+    fix: Literal["none", "2d", "3d", "rtk_float", "rtk_fixed", "slam"]
+    hacc_m: NotRequired[float]
+    vacc_m: NotRequired[float]
+    sats: NotRequired[int]
+    hdop: NotRequired[float]
+
+
+# sensor/nav.schema.json#/properties/imu
+class NavImu(TypedDict):
+    f_mps2: list[float]
+    w_rad_s: list[float]
+
+
+# tasking/nest.schema.json# awr.tasking.nest.v1 (nest)
+class Nest(TypedDict):
+    id: NotRequired[WorldCommonSlug]
+    name: NotRequired[str]
+    pos: list[float | None]
+    kind: NotRequired[Literal["box", "launcher", "vtol_pad"]]
+    crewed: NotRequired[bool]
+    slots: NotRequired[int]
+    energy: NotRequired[NestEnergy]
+    chargers: NotRequired[list[NestChargers]]
+    turnaround_s: NotRequired[float]
+    launch_interval_s: NotRequired[float]
+    wind_max_mps: NotRequired[float]
+    rtk_base: NotRequired[bool]
+    link_range_m: NotRequired[float | None]
+    inventory: NotRequired[list[NestInventory]]
+    vehicle_ids: NotRequired[list[WorldCommonSlug]]
+
+
+# tasking/nest.schema.json#/properties/chargers/items
+class NestChargers(TypedDict):
+    model: str
+    count: int
+    channels: int
+    i_max_a: float
+    cells_max: int
+
+
+# tasking/nest.schema.json#/properties/energy
+class NestEnergy(TypedDict):
+    mode: Literal["swap", "charge"]
+    swap_s: NotRequired[float]
+    packs: NotRequired[list[NestEnergyPacks]]
+
+
+# tasking/nest.schema.json#/properties/energy/properties/packs/items
+class NestEnergyPacks(TypedDict):
+    cells: int
+    count: int
+    capacity_ah: NotRequired[float]
+    chemistry: NotRequired[Literal["lipo", "lihv", "liion"]]
+    pack_id: NotRequired[str]
+
+
+# tasking/nest.schema.json#/properties/inventory/items
+class NestInventory(TypedDict):
+    model_id: str
+    count: int
+    in_nest: NotRequired[int]
+    airborne: NotRequired[int]
+
+
+# tasking/nest.schema.json#/$defs/list
+class NestList(TypedDict):
+    items: list[Nest]
+
+
+# rt/payloads/nest_status.schema.json# awr.nest.status.v1
+class NestStatus(TypedDict):
+    id: WorldCommonSlug
+    kind: Literal["box", "launcher", "vtol_pad"]
+    t_sim_ns: NotRequired[WorldCommonInt64]
+    slots: NestStatusSlots
+    inventory: list[NestStatusInventory]
+    aircraft: NotRequired[list[NestStatusAircraft]]
+    packs: NotRequired[list[NestStatusPacks]]
+    chargers: list[NestStatusChargers]
+    launch_queue: NotRequired[list[NestStatusLaunchQueue]]
+    recover_queue: NotRequired[list[NestStatusRecoverQueue]]
+    wind_ok: bool
+
+
+# rt/payloads/nest_status.schema.json#/properties/aircraft/items
+class NestStatusAircraft(TypedDict):
+    uav: WorldCommonSlug
+    state: Literal["ready", "charging", "swapping", "turnaround", "airborne", "standby"]
+    soc: NotRequired[float]
+
+
+# rt/payloads/nest_status.schema.json#/properties/chargers/items
+class NestStatusChargers(TypedDict):
+    ch: int
+    model: NotRequired[str]
+    state: Literal["idle", "charging", "blocked"]
+    pack_id: NotRequired[str | None]
+    soc_pct: NotRequired[float | None]
+    eta_s: NotRequired[float | None]
+    i_a: NotRequired[float | None]
+
+
+# rt/payloads/nest_status.schema.json#/properties/inventory/items
+class NestStatusInventory(TypedDict):
+    model_id: str
+    count: int
+    in_nest: NotRequired[int]
+    airborne: NotRequired[int]
+
+
+# rt/payloads/nest_status.schema.json#/properties/launch_queue/items
+class NestStatusLaunchQueue(TypedDict):
+    uav: WorldCommonSlug
+    tid: NotRequired[WorldCommonSlug | None]
+    t_planned_ns: NotRequired[WorldCommonInt64]
+    delay_reason: NotRequired[str | None]
+
+
+# rt/payloads/nest_status.schema.json#/properties/packs/items
+class NestStatusPacks(TypedDict):
+    pack_id: str
+    cells: NotRequired[int]
+    soc: NotRequired[float]
+    state: Literal["installed", "queued", "charging", "ready", "depleted"]
+    t_ready_s: NotRequired[float | None]
+
+
+# rt/payloads/nest_status.schema.json#/properties/recover_queue/items
+class NestStatusRecoverQueue(TypedDict):
+    uav: WorldCommonSlug
+    eta_s: NotRequired[float | None]
+
+
+# rt/payloads/nest_status.schema.json#/properties/slots
+class NestStatusSlots(TypedDict):
+    total: int
+    occupied: int
+
+
+# sensor/nir.schema.json# awr.sensor.nir.v1 (night imaging block)
+class Nir(TypedDict):
+    e_min_color_lx: float
+    e_min_mono_lx: float
+    illuminator: NotRequired[NirIlluminator_]
+
+
+# sensor/nir_illuminator.schema.json# awr.sensor.nir_illuminator.v1 (external 850 nm illuminator)
+class NirIlluminator(TypedDict):
+    schema: Literal["awr.sensor.nir_illuminator.v1"]
+    model_id: NotRequired[str]
+    model_version: NotRequired[str]
+    display_name: NotRequired[str]
+    reference: NotRequired[bool]
+    mass_kg: NotRequired[float | NirIlluminatorMassKgOneOf1]
+    power_w: NotRequired[float | NirIlluminatorPowerWOneOf1]
+    env_limits: NotRequired[NirIlluminatorEnvLimits]
+    overridable: NotRequired[list[str]]
+    conf: NotRequired[Literal["A", "B", "C", "D"]]
+    src: NotRequired[str]
+    sensor_id: NotRequired[str]
+    spec_ref: NotRequired[str]
+    mount: NotRequired[NirIlluminatorMount]
+    on_gimbal_of: NotRequired[str]
+    gimbal: NotRequired[NirIlluminatorGimbal]
+    wavelength_nm: NotRequired[float]
+    p_w: NotRequired[float]
+    divergence_deg: NotRequired[float]
+    ref: NotRequired[NirIlluminatorRef]
+
+
+# sensor/nir_illuminator.schema.json#/properties/env_limits
+class NirIlluminatorEnvLimits(TypedDict):
+    temp_c: NotRequired[list[float]]
+
+
+# sensor/nir_illuminator.schema.json#/properties/gimbal
+class NirIlluminatorGimbal(TypedDict):
+    pitch_min_deg: NotRequired[float]
+    pitch_max_deg: NotRequired[float]
+    yaw_min_deg: NotRequired[float]
+    yaw_max_deg: NotRequired[float]
+    rate_max_deg_s: NotRequired[float]
+    integrated: NotRequired[bool]
+    default_mode: NotRequired[str]
+    default_yaw_deg: NotRequired[float]
+    default_pitch_deg: NotRequired[float]
+
+
+# sensor/nir_illuminator.schema.json#/properties/mass_kg/oneOf/1
+class NirIlluminatorMassKgOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/nir_illuminator.schema.json#/properties/mount
+class NirIlluminatorMount(TypedDict):
+    xyz_m: WorldCommonVec3
+    rpy_deg: NotRequired[WorldCommonVec3]
+    q_xyzw: NotRequired[WorldCommonQuatXYZW]
+    preset: NotRequired[str]
+
+
+# sensor/nir_illuminator.schema.json#/properties/power_w/oneOf/1
+class NirIlluminatorPowerWOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/nir_illuminator.schema.json#/properties/ref
+class NirIlluminatorRef(TypedDict):
+    r_m: NotRequired[float]
+    p_w: NotRequired[float]
+    theta_deg: NotRequired[float]
+    rho: NotRequired[float]
+
+
+# sensor/nir.schema.json#/properties/illuminator
+class NirIlluminator_(TypedDict):
+    wavelength_nm: float
+    p_w: float
+    divergence: NotRequired[Literal["follow_hfov", "fixed"]]
+    divergence_deg: NotRequired[float]
+    r_ref_m: float
+    p_ref_w: NotRequired[float]
+    theta_ref_deg: NotRequired[float]
+    rho_ref: NotRequired[float]
+    r_spec_max_m: NotRequired[float]
+
+
 # rt/ops.schema.json#/$defs/ack
 class OpsAck(TypedDict):
     op: Literal["ack"]
@@ -2504,6 +3953,14 @@ class OpsPong(TypedDict):
     unix_ns: NotRequired[str]
 
 
+# rt/ops.schema.json#/$defs/presence
+class OpsPresence(TypedDict):
+    op: Literal["presence"]
+    input_age_s: NotRequired[float]
+    visible: NotRequired[bool]
+    power: NotRequired[Literal["active", "quiet", "warning", "saving"]]
+
+
 # rt/ops.schema.json#/$defs/progress
 class OpsProgress(TypedDict):
     op: Literal["progress"]
@@ -2548,7 +4005,7 @@ class OpsServerInfo(TypedDict):
     protocol: Literal["awr.rt.v1"]
     sessionId: str
     connId: str
-    capabilities: list[Literal["time", "credit", "rpc", "events", "clientPublish", "procHealth", "playbackControl", "m4"]]
+    capabilities: list[Literal["time", "credit", "rpc", "events", "clientPublish", "procHealth", "playbackControl", "m4", "targets", "perception", "tasking", "calendar", "sandbox"]]
     window: int
     tickHz: Literal[60]
     rateClasses: NotRequired[list[int]]
@@ -2565,6 +4022,9 @@ class OpsServerInfo(TypedDict):
     layouts: dict[str, str]
     limits: NotRequired[OpsServerInfoLimits]
     serverUnix_ns: NotRequired[str]
+    sandbox: NotRequired[OpsServerInfoSandbox]
+    power: NotRequired[OpsServerInfoPower]
+    identity: NotRequired[OpsServerInfoIdentity]
 
 
 # rt/ops.schema.json#/$defs/serverInfo/properties/clock
@@ -2573,6 +4033,14 @@ class OpsServerInfoClock(TypedDict):
     pausable: NotRequired[bool]
     max_speed: NotRequired[float]
     steppable: NotRequired[bool]
+    tick_hz: NotRequired[int]
+    rate_cap: NotRequired[float]
+
+
+# rt/ops.schema.json#/$defs/serverInfo/properties/identity
+class OpsServerInfoIdentity(TypedDict):
+    tier: Literal["public", "internal"]
+    exp_unix_ns: NotRequired[str]
 
 
 # rt/ops.schema.json#/$defs/serverInfo/properties/limits
@@ -2584,10 +4052,36 @@ class OpsServerInfoLimits(TypedDict):
     maxBinaryBytes: NotRequired[int]
 
 
+# rt/ops.schema.json#/$defs/serverInfo/properties/power
+class OpsServerInfoPower(TypedDict):
+    viewer_idle_s: NotRequired[float]
+    viewer_idle_busy_s: NotRequired[float]
+    sandbox_idle_s: NotRequired[float]
+    sandbox_idle_busy_s: NotRequired[float]
+    hidden_s: NotRequired[float]
+    warn_s: NotRequired[float]
+    quiet_s: NotRequired[float]
+    grace_s: NotRequired[float]
+    presence_min_s: NotRequired[float]
+    internal_idle_s: NotRequired[float]
+
+
 # rt/ops.schema.json#/$defs/serverInfo/properties/run
 class OpsServerInfoRun(TypedDict):
     id: str
     segment: int
+
+
+# rt/ops.schema.json#/$defs/serverInfo/properties/sandbox
+class OpsServerInfoSandbox(TypedDict):
+    sid: str
+    state: Literal["SPAWNING", "READY", "ACTIVE", "IDLE", "PARKING", "PARKED", "DRAINING", "ENDED", "FAILED"]
+    world_id: str
+    template_id: NotRequired[str | None]
+    expires_unix_ns: NotRequired[str]
+    renewable: NotRequired[bool]
+    limits: NotRequired[Limits]
+    tier: NotRequired[Literal["public", "internal"]]
 
 
 # rt/ops.schema.json#/$defs/serverInfo/properties/world
@@ -2654,6 +4148,286 @@ class OpsUnadvertise(TypedDict):
 class OpsUnsubscribe(TypedDict):
     op: Literal["unsubscribe"]
     ids: list[int]
+
+
+# sandbox/park.schema.json#/$defs/park_beacon
+class ParkParkBeacon(TypedDict):
+    token: str
+    reason: NotRequired[Literal["idle", "hidden", "user"]]
+
+
+# sandbox/park.schema.json#/$defs/park_reply
+class ParkParkReply(TypedDict):
+    state: Literal["PARKING", "PARKED"]
+    session: NotRequired[dict[str, Any]]
+
+
+# sandbox/park.schema.json#/$defs/park_request
+class ParkParkRequest(TypedDict):
+    reason: NotRequired[Literal["idle", "hidden", "user"]]
+
+
+# sandbox/park.schema.json#/$defs/resume_created
+class ParkResumeCreated(TypedDict):
+    session: dict[str, Any]
+    token: str | None
+    token_exp_unix_ns: NotRequired[ParkNs]
+    idempotent: NotRequired[bool]
+
+
+# sandbox/park.schema.json#/$defs/resume_queued
+class ParkResumeQueued(TypedDict):
+    queue: ParkResumeQueuedQueue
+    available_now: NotRequired[list[str]]
+
+
+# sandbox/park.schema.json#/$defs/resume_queued/properties/queue
+class ParkResumeQueuedQueue(TypedDict):
+    ticket_id: str
+    ticket_token: str | None
+    position: int
+    eta_s: float | None
+    expires_unix_ns: NotRequired[ParkNs]
+    kind: Literal["resume", "internal"]
+    sid: NotRequired[str]
+
+
+# sandbox/park.schema.json#/$defs/session_d21
+class ParkSessionD21(TypedDict):
+    state: NotRequired[Literal["SPAWNING", "READY", "ACTIVE", "IDLE", "PARKING", "PARKED", "DRAINING", "ENDED", "FAILED"]]
+    tier: NotRequired[Literal["public", "internal"]]
+    last_input_unix_ns: NotRequired[ParkNs | None]
+    parked_unix_ns: NotRequired[ParkNs | None]
+    park_reason: NotRequired[Literal["idle", "hidden", "user", "idle_disconnected", "preempted", "reclaimed_cpu", "reclaimed_mem"] | None]
+    resume_mode: NotRequired[Literal["checkpoint", "snapshot"] | None]
+    retention_unix_ns: NotRequired[ParkNs | None]
+    remaining_s: NotRequired[float | None]
+    t_sim_ns: NotRequired[ParkNs | None]
+    end_reason: NotRequired[Literal["idle", "lifetime", "preempted", "reclaimed", "user", "failed", "parked_expired"] | None]
+
+
+# sensor/payload.schema.json# awr.uav.payload.v1
+class Payload(TypedDict):
+    uav: NotRequired[WorldCommonSlug]
+    t_sim_ns: NotRequired[WorldCommonInt64]
+    gimbal: PayloadGimbal
+    sensors: list[PayloadSensors]
+
+
+# sensor/payload.schema.json#/properties/gimbal
+class PayloadGimbal(TypedDict):
+    pitch_rad: float
+    yaw_rad: float
+    mode: Literal["angles", "look_at", "track", "stow", "fixed", "cue"]
+    track_target: NotRequired[str | None]
+    src: NotRequired[Literal["operator", "tasking", "cue", "default"]]
+
+
+# sensor/payload.schema.json#/properties/sensors/items
+class PayloadSensors(TypedDict):
+    sensor: str
+    kind: Literal["eo", "nir", "lwir", "radar", "acoustic", "lidar", "nir_illuminator"]
+    enabled: bool
+    active: NotRequired[bool]
+    f_mm: NotRequired[float | None]
+    hfov_rad: NotRequired[float | None]
+    vfov_rad: NotRequired[float | None]
+    mode: NotRequired[str | None]
+    resolution: NotRequired[Literal["1080p", "4k"] | None]
+    palette: NotRequired[Literal["white_hot", "black_hot"] | None]
+    cue: NotRequired[Literal["on", "off"] | None]
+    illuminator: NotRequired[PayloadSensorsIlluminatorOneOf0 | None]
+
+
+# sensor/payload.schema.json#/properties/sensors/items/properties/illuminator/oneOf/0
+class PayloadSensorsIlluminatorOneOf0(TypedDict):
+    on: bool
+    kind: Literal["builtin", "nir_ill_l"]
+    power_w: NotRequired[float]
+    divergence_rad: NotRequired[float]
+    range_m: NotRequired[float]
+
+
+# sensor/perception.schema.json# awr.uav.perception.v1
+class Perception(TypedDict):
+    uav: WorldCommonSlug
+    t_sim_ns: WorldCommonInt64
+    sensors: list[PerceptionSensors]
+    hud: NotRequired[PerceptionHudOneOf0 | None]
+    budget: NotRequired[PerceptionBudget]
+    radar: NotRequired[RadarTracks | None]
+    acoustic: NotRequired[AcousticBearings | None]
+    lidar: NotRequired[PerceptionLidarOneOf0 | None]
+
+
+# sensor/perception.schema.json#/properties/budget
+class PerceptionBudget(TypedDict):
+    rays_tick_max: NotRequired[int]
+    rays_s: NotRequired[float]
+    dropped: NotRequired[int]
+
+
+# sensor/perception.schema.json#/$defs/feasibility_reply
+class PerceptionFeasibilityReply(TypedDict):
+    feasible: bool
+    d_lo_m: NotRequired[float | None]
+    d_hi_m: NotRequired[float | None]
+    why: NotRequired[str | None]
+
+
+# sensor/perception.schema.json#/$defs/feasibility_request
+class PerceptionFeasibilityRequest(TypedDict):
+    target: WorldCommonSlug
+    model_id: str
+    sensor: str
+    light: Literal["day", "low", "night"]
+    mor_m: float
+    mode: NotRequired[Literal["geometric", "physical"]]
+    level_req: NotRequired[Literal["D", "R", "I"]]
+
+
+# sensor/perception.schema.json#/properties/hud/oneOf/0
+class PerceptionHudOneOf0(TypedDict):
+    sensor: NotRequired[str]
+    target: NotRequired[WorldCommonSlug]
+    n_eff: NotRequired[float]
+    n_req: NotRequired[float]
+    limiting: NotRequired[Literal["fov", "los", "pixels", "light", "contrast", "blur"] | None]
+
+
+# sensor/perception_levels.schema.json# awr.sensor.perception_levels.v1 meta-schema
+class PerceptionLevels(TypedDict):
+    schema: Literal["awr.sensor.perception_levels.v1"]
+    doc: NotRequired[str]
+    pixels_per_cycle: float
+    ttpf: PerceptionLevelsTtpf
+    levels: PerceptionLevelsLevels
+    contrast: dict[str, float | dict[str, float] | list[float]]
+    lwir: NotRequired[dict[str, float | dict[str, float] | list[float]]]
+    light: NotRequired[dict[str, float | dict[str, float] | list[float]]]
+    blur: NotRequired[dict[str, float | dict[str, float] | list[float]]]
+    capture: dict[str, float | dict[str, float] | list[float]]
+    los: NotRequired[dict[str, float | dict[str, float] | list[float]]]
+    feasibility: NotRequired[dict[str, float | dict[str, float] | list[float]]]
+    wavelength_nm: NotRequired[dict[str, float | dict[str, float] | list[float]]]
+    k_mor: float
+    lidar: NotRequired[dict[str, float | dict[str, float] | list[float]]]
+    radar: NotRequired[dict[str, float | dict[str, float] | list[float]]]
+    acoustic: NotRequired[dict[str, float | dict[str, float] | list[float]]]
+
+
+# sensor/perception_levels.schema.json#/properties/levels
+class PerceptionLevelsLevels(TypedDict):
+    D: PerceptionLevelsLevelsD
+    R: PerceptionLevelsLevelsR
+    I: PerceptionLevelsLevelsI  # noqa: E741
+
+
+# sensor/perception_levels.schema.json#/properties/levels/properties/D
+class PerceptionLevelsLevelsD(TypedDict):
+    n50_cycles: float
+    n50_px: float
+    n_p90_px: float
+
+
+# sensor/perception_levels.schema.json#/properties/levels/properties/I
+class PerceptionLevelsLevelsI(TypedDict):
+    n50_cycles: float
+    n50_px: float
+    n_p90_px: float
+
+
+# sensor/perception_levels.schema.json#/properties/levels/properties/R
+class PerceptionLevelsLevelsR(TypedDict):
+    n50_cycles: float
+    n50_px: float
+    n_p90_px: float
+
+
+# sensor/perception_levels.schema.json#/properties/ttpf
+class PerceptionLevelsTtpf(TypedDict):
+    e0: float
+    e1: float
+    p_definite: float
+    ratio_at_p_definite: float
+    form: NotRequired[str]
+
+
+# sensor/perception.schema.json#/properties/lidar/oneOf/0
+class PerceptionLidarOneOf0(TypedDict):
+    n_points_target: NotRequired[list[PerceptionLidarOneOfNPointsTarget0]]
+
+
+# sensor/perception.schema.json#/properties/lidar/oneOf/0/properties/n_points_target/items
+class PerceptionLidarOneOfNPointsTarget0(TypedDict):
+    target: WorldCommonSlug
+    n_1s: float
+    level: Literal["none", "D", "R", "I"]
+
+
+# sensor/perception.schema.json#/properties/sensors/items
+class PerceptionSensors(TypedDict):
+    sensor: str
+    kind: Literal["eo", "nir", "lwir"]
+    mode: NotRequired[str | None]
+    f_mm: NotRequired[float]
+    hfov_rad: NotRequired[float]
+    vfov_rad: NotRequired[float]
+    illum: NotRequired[PerceptionSensorsIllum]
+    n_in_fov: NotRequired[int]
+    targets: list[PerceptionSensorsTargets]
+
+
+# sensor/perception.schema.json#/properties/sensors/items/properties/illum
+class PerceptionSensorsIllum(TypedDict):
+    builtin: NotRequired[Literal["auto", "on", "off"]]
+    ext: NotRequired[Literal["auto", "on", "off"]]
+
+
+# sensor/perception.schema.json#/properties/sensors/items/properties/targets/items
+class PerceptionSensorsTargets(TypedDict):
+    target: WorldCommonSlug
+    cls_est: NotRequired[Literal["unknown", "person", "uav", "machine", "dog", "vehicle", "object"]]
+    level: Literal["none", "D", "R", "I"]
+    p: NotRequired[float]
+    n: NotRequired[float]
+    n_eff: float
+    n_req: float
+    level_req: NotRequired[Literal["D", "R", "I"]]
+    range_m: float
+    gsd_m: float
+    limiting: Literal["fov", "los", "pixels", "light", "contrast", "blur"] | None
+    k: NotRequired[PerceptionSensorsTargetsK]
+    hold_s: NotRequired[float]
+    captured: bool
+    capture_state: NotRequired[Literal["IDLE", "ARMING", "CAPTURED", "HOLDING"]]
+    delta_t_app_k: NotRequired[float]
+    meas_enu_m: NotRequired[WorldCommonVec3]
+    sigma_m: NotRequired[float]
+
+
+# sensor/perception.schema.json#/properties/sensors/items/properties/targets/items/properties/k
+class PerceptionSensorsTargetsK(TypedDict):
+    los: float
+    c: float
+    light: float
+    blur: float
+    occ: NotRequired[float]
+
+
+# sensor/perception.schema.json#/$defs/track
+class PerceptionTrack(TypedDict):
+    target: WorldCommonSlug
+    pos: WorldCommonVec3
+    vel: WorldCommonVec3
+    cov_diag: NotRequired[list[float]]
+    state: Literal["TENTATIVE", "CONFIRMED", "COASTING", "DROPPED"]
+    t_last_ns: NotRequired[WorldCommonInt64]
+
+
+# sensor/perception.schema.json#/$defs/tracks
+class PerceptionTracks(TypedDict):
+    items: list[PerceptionTrack]
 
 
 # rt/payloads/perf_clients.schema.json# awr.perf.clients.v1
@@ -2885,6 +4659,34 @@ class PerfSnapshotMeta(TypedDict):
     worldId: NotRequired[str]
     contentVersion: NotRequired[str]
     scene: NotRequired[str]
+
+
+# tasking/plan.schema.json# awr.tasking.plan.v1 (external allocation plan)
+class Plan(TypedDict):
+    based_on_revision: int
+    allocator: NotRequired[str]
+    assignments: list[PlanAssignments]
+
+
+# tasking/plan.schema.json#/properties/assignments/items
+class PlanAssignments(TypedDict):
+    wid: str
+    uav: WorldCommonSlug
+    order: NotRequired[int]
+
+
+# tasking/plan.schema.json#/$defs/reply
+class PlanReply(TypedDict):
+    plan_id: str
+    applied: bool
+
+
+# tasking/plan.schema.json#/$defs/violations/items
+class PlanViolations_(TypedDict):
+    wid: str
+    uav: NotRequired[WorldCommonSlug]
+    code: int
+    why: NotRequired[str]
 
 
 # schemas/world/pointcloud-metadata.schema.json#/$defs/anetExt
@@ -3300,6 +5102,159 @@ class QaReportValidationWarnings(TypedDict):
     message: str
 
 
+# sensor/radar_mmw.schema.json# awr.sensor.radar_mmw.v1 (77 GHz FMCW radar)
+class RadarMmw(TypedDict):
+    schema: Literal["awr.sensor.radar_mmw.v1"]
+    model_id: NotRequired[str]
+    model_version: NotRequired[str]
+    display_name: NotRequired[str]
+    reference: NotRequired[bool]
+    mass_kg: NotRequired[float | RadarMmwMassKgOneOf1]
+    power_w: NotRequired[float | RadarMmwPowerWOneOf1]
+    env_limits: NotRequired[RadarMmwEnvLimits]
+    overridable: NotRequired[list[str]]
+    conf: NotRequired[Literal["A", "B", "C", "D"]]
+    src: NotRequired[str]
+    sensor_id: NotRequired[str]
+    spec_ref: NotRequired[str]
+    mount: NotRequired[RadarMmwMount]
+    on_gimbal_of: NotRequired[str]
+    gimbal: NotRequired[RadarMmwGimbal]
+    freq_ghz: NotRequired[float]
+    fov: NotRequired[RadarMmwFov]
+    r_ref_m: NotRequired[float]
+    sigma_ref_m2: NotRequired[float]
+    pd_ref: NotRequired[float]
+    pfa: NotRequired[float]
+    snr_req_db: NotRequired[float]
+    range_res_m: NotRequired[float]
+    az_res_deg: NotRequired[float]
+    vel_res_mps: NotRequired[float]
+    az_acc_deg: NotRequired[float]
+    rate_hz: NotRequired[float]
+    r_max_m: NotRequired[float]
+    rain: NotRequired[RadarMmwRain]
+    clutter: NotRequired[RadarMmwClutter]
+    classify: NotRequired[RadarMmwClassify]
+
+
+# sensor/radar_mmw.schema.json#/properties/classify
+class RadarMmwClassify(TypedDict):
+    snr_db: NotRequired[float]
+    dwell_s: NotRequired[float]
+
+
+# sensor/radar_mmw.schema.json#/properties/clutter
+class RadarMmwClutter(TypedDict):
+    sigma0_db: NotRequired[float]
+    k: NotRequired[float]
+
+
+# sensor/radar_mmw.schema.json#/properties/env_limits
+class RadarMmwEnvLimits(TypedDict):
+    temp_c: NotRequired[list[float]]
+
+
+# sensor/radar_mmw.schema.json#/properties/fov
+class RadarMmwFov(TypedDict):
+    az_deg: NotRequired[float]
+    el_deg: NotRequired[float]
+
+
+# sensor/radar_mmw.schema.json#/properties/gimbal
+class RadarMmwGimbal(TypedDict):
+    pitch_min_deg: NotRequired[float]
+    pitch_max_deg: NotRequired[float]
+    yaw_min_deg: NotRequired[float]
+    yaw_max_deg: NotRequired[float]
+    rate_max_deg_s: NotRequired[float]
+    integrated: NotRequired[bool]
+    default_mode: NotRequired[str]
+    default_yaw_deg: NotRequired[float]
+    default_pitch_deg: NotRequired[float]
+
+
+# sensor/radar_mmw.schema.json#/properties/mass_kg/oneOf/1
+class RadarMmwMassKgOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/radar_mmw.schema.json#/properties/mount
+class RadarMmwMount(TypedDict):
+    xyz_m: WorldCommonVec3
+    rpy_deg: NotRequired[WorldCommonVec3]
+    q_xyzw: NotRequired[WorldCommonQuatXYZW]
+    preset: NotRequired[str]
+
+
+# sensor/radar_mmw.schema.json#/properties/power_w/oneOf/1
+class RadarMmwPowerWOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# sensor/radar_mmw.schema.json#/properties/rain
+class RadarMmwRain(TypedDict):
+    k: NotRequired[float]
+    alpha: NotRequired[float]
+
+
+# sensor/radar_tracks.schema.json# awr.sensor.radar_tracks.v1
+class RadarTracks(TypedDict):
+    uav: NotRequired[WorldCommonSlug]
+    t_sim_ns: WorldCommonInt64
+    sensor: str
+    tracks: list[RadarTracksTracks]
+    clutter_gated: NotRequired[bool]
+
+
+# sensor/radar_tracks.schema.json#/properties/tracks/items
+class RadarTracksTracks(TypedDict):
+    track_id: int
+    range_m: float
+    az_rad: float
+    el_rad: float
+    vr_mps: float
+    snr_db: float
+    level: Literal["none", "D", "R", "I"]
+    class_hint: NotRequired[str | None]
+
+
+# target/reaction.schema.json# awr.target.reaction.v1 (behaviour after being discovered)
+class Reaction(TypedDict):
+    onset: NotRequired[ReactionOnset]
+    response: NotRequired[list[ReactionResponse]]
+    alert_others: NotRequired[bool]
+
+
+# target/reaction.schema.json#/properties/onset
+class ReactionOnset(TypedDict):
+    kind: Literal["none", "freeze", "look_at"]
+    duration_s: NotRequired[float]
+
+
+# target/reaction.schema.json#/properties/response/items
+class ReactionResponse(TypedDict):
+    kind: Literal["ignore", "flee", "approach", "return", "emit", "hide"]
+    speed_mps: NotRequired[float]
+    dist_m: NotRequired[float]
+    duration_s: NotRequired[float]
+    sound: NotRequired[ReactionResponseSound]
+    search_m: NotRequired[float]
+
+
+# target/reaction.schema.json#/properties/response/items/properties/sound
+class ReactionResponseSound(TypedDict):
+    duty: NotRequired[float]
+    lw_dba: NotRequired[float]
+    period_s: NotRequired[float]
+
+
 # rt/reasons.schema.json# reasons.json meta-schema
 class Reasons(TypedDict):
     schema: Literal["awr.reasons.v1"]
@@ -3316,11 +5271,11 @@ class ReasonsReasons(TypedDict):
     code: int
     name: str
     http: int | None
-    category: Literal["ok", "native", "call_control", "admission", "runtime", "protocol", "job", "data", "browser", "module"]
+    category: Literal["ok", "native", "call_control", "admission", "runtime", "protocol", "job", "data", "browser", "module", "sandbox", "catalog", "targets", "perception", "tasking"]
     step: str | None
     message_zh: str
     remedy_zh: str
-    d1: Literal["core", "ext", "V0.2", "V0.5", "V1.0"]
+    d1: Literal["core", "ext", "V0.2", "V0.5", "V1.0", "V0.2-demo"]
 
 
 # rt/reasons.schema.json#/properties/ws_close_codes/items
@@ -3466,6 +5421,89 @@ class ReconJobParams(TypedDict):
     seed: NotRequired[int]
 
 
+# tasking/relay_stats.schema.json# awr.relay.stats.v1
+class RelayStats(TypedDict):
+    tid: WorldCommonSlug
+    target: WorldCommonSlug
+    t_monitor_s: float
+    coverage: float
+    gaps: RelayStatsGaps
+    discovered: int
+    config_entries: RelayStatsConfigEntries
+    handovers: RelayStatsHandovers
+    min_keepout_margin_m: NotRequired[float | None]
+    sorties: NotRequired[int]
+    flight_h: NotRequired[float]
+    energy_wh: NotRequired[float]
+    min_ready_packs: NotRequired[int | None]
+    energy_rtl: NotRequired[int]
+    dispatch_delays: NotRequired[RelayStatsDispatchDelays]
+    on_station: NotRequired[list[RelayStatsOnStation]]
+    next: NotRequired[RelayStatsNextOneOf0 | None]
+
+
+# tasking/relay_stats.schema.json#/properties/config_entries
+class RelayStatsConfigEntries(TypedDict):
+    count: int
+    total_s: float
+
+
+# tasking/relay_stats.schema.json#/properties/dispatch_delays
+class RelayStatsDispatchDelays(TypedDict):
+    battery: NotRequired[int]
+    charger: NotRequired[int]
+    slot: NotRequired[int]
+    wind: NotRequired[int]
+    launch_interval: NotRequired[int]
+
+
+# tasking/relay_stats.schema.json#/properties/gaps
+class RelayStatsGaps(TypedDict):
+    count: int
+    max_s: float
+    by_cause: RelayStatsGapsByCause
+    total_s_by_cause: NotRequired[RelayStatsGapsTotalSByCause]
+
+
+# tasking/relay_stats.schema.json#/properties/gaps/properties/by_cause
+class RelayStatsGapsByCause(TypedDict):
+    keepout_priority: NotRequired[int]
+    illum_transition: NotRequired[int]
+    infeasible: NotRequired[int]
+    battery: NotRequired[int]
+    other: NotRequired[int]
+
+
+# tasking/relay_stats.schema.json#/properties/gaps/properties/total_s_by_cause
+class RelayStatsGapsTotalSByCause(TypedDict):
+    keepout_priority: NotRequired[float]
+    illum_transition: NotRequired[float]
+    infeasible: NotRequired[float]
+    battery: NotRequired[float]
+    other: NotRequired[float]
+
+
+# tasking/relay_stats.schema.json#/properties/handovers
+class RelayStatsHandovers(TypedDict):
+    count: int
+    mean_overlap_s: NotRequired[float | None]
+    min_overlap_s: NotRequired[float | None]
+
+
+# tasking/relay_stats.schema.json#/properties/next/oneOf/0
+class RelayStatsNextOneOf0(TypedDict):
+    uav: NotRequired[WorldCommonSlug]
+    eta_s: NotRequired[float | None]
+    reason: NotRequired[str]
+
+
+# tasking/relay_stats.schema.json#/properties/on_station/items
+class RelayStatsOnStation(TypedDict):
+    uav: WorldCommonSlug
+    station: str
+    since_t_sim_ns: NotRequired[WorldCommonInt64]
+
+
 # bus/replay.schema.json#/$defs/replayRep
 class ReplayReplayRep(TypedDict):
     v: Literal[1]
@@ -3505,7 +5543,7 @@ class RngStreamsStreams(TypedDict):
     name: str
     owner: str
     purpose: str
-    d1: Literal["core", "ext", "stub", "no"]
+    d1: Literal["core", "ext", "stub", "no", "V0.2-demo"]
 
 
 # bus/roster.schema.json# Roster reply (ctl/<producer>/roster)
@@ -3537,6 +5575,49 @@ class SafetyCodesCodes(TypedDict):
     icon: str
     merge_key: str | None
     d1: Literal["core", "ext", "stub"]
+
+
+# rt/payloads/sandbox_session_state.schema.json# awr.sandbox.session_state.v1
+class SandboxSessionState(TypedDict):
+    sid: str
+    state: Literal["SPAWNING", "READY", "ACTIVE", "IDLE", "DRAINING", "ENDED", "FAILED"]
+    world_id: NotRequired[WorldCommonId]
+    template_id: NotRequired[str | None]
+    expires_unix_ns: str
+    max_expires_unix_ns: NotRequired[str]
+    expires_in_s: int
+    renewable: bool
+    renew_block_reason: NotRequired[Literal["queue_nonempty", "max_lifetime", "degraded"] | None]
+    clock: SandboxSessionStateClock
+    usage: SandboxSessionStateUsage
+    limits_rev: NotRequired[int]
+    queue_len: int
+    degrade_level: Literal["L0", "L1", "L2", "L3", "L4"]
+    expiring: SandboxSessionStateExpiringOneOf0 | None
+
+
+# rt/payloads/sandbox_session_state.schema.json#/properties/clock
+class SandboxSessionStateClock(TypedDict):
+    rate_requested: NotRequired[float]
+    rate_granted: float
+    rate_cap: float
+    limited_by: NotRequired[Literal["cpu_budget", "cost_cap", "manual_control", "degraded"] | None]
+
+
+# rt/payloads/sandbox_session_state.schema.json#/properties/expiring/oneOf/0
+class SandboxSessionStateExpiringOneOf0(TypedDict):
+    reason: Literal["idle", "lifetime", "preempted", "reclaimed", "user"]
+    in_s: float
+
+
+# rt/payloads/sandbox_session_state.schema.json#/properties/usage
+class SandboxSessionStateUsage(TypedDict):
+    vehicles: int
+    targets: int
+    nests: int
+    tasks_active: int
+    ws: int
+    cloned_models: NotRequired[int]
 
 
 # scenario/scenario.schema.json# awr.scenario.v1 scenario file
@@ -3808,6 +5889,251 @@ class ScenarioZones(TypedDict):
     active: NotRequired[list[WorldCommonSlug]]
 
 
+# target/sensitivity.schema.json# awr.target.sensitivity.v1 (sensitivity volume)
+class Sensitivity(TypedDict):
+    kind: Literal["visual", "acoustic", "radar", "rf"]
+    shape: Literal["sphere", "hemisphere", "cylinder", "sector"]
+    radius_max_m: float
+    z_min_m: NotRequired[float]
+    z_max_m: NotRequired[float]
+    half_angle_deg: NotRequired[float]
+    azimuth_offset_deg: NotRequired[float]
+    gain_back_db: NotRequired[float]
+    enabled: NotRequired[bool]
+
+
+# sandbox/session.schema.json# awr.sandbox.session.v1 (sandbox session object and session API bodies)
+class Session(TypedDict):
+    sid: str
+    state: Literal["SPAWNING", "READY", "ACTIVE", "IDLE", "PARKING", "PARKED", "DRAINING", "ENDED", "FAILED"]
+    world_id: WorldCommonId
+    template_id: str | None
+    created_unix_ns: str
+    expires_unix_ns: str
+    lifetime_max_unix_ns: NotRequired[str]
+    expires_in_s: int
+    renewable: bool
+    renew_block_reason: NotRequired[Literal["queue_nonempty", "max_lifetime", "degraded"] | None]
+    idle_ttl_s: NotRequired[int]
+    clock: SessionClock
+    limits: Limits
+    usage: NotRequired[SessionUsage]
+    epoch: NotRequired[int]
+    restarts: NotRequired[int]
+    degrade_level: NotRequired[Literal["L0", "L1", "L2", "L3", "L4"]]
+    calendar: NotRequired[SessionCalendar]
+    acoustic_bg: NotRequired[Literal["rural", "suburban", "urban"]]
+    seed: NotRequired[int]
+    end_reason: NotRequired[Literal["idle", "lifetime", "preempted", "reclaimed", "user", "failed", "parked_expired"] | None]
+    endpoints: SessionEndpoints
+    tier: NotRequired[Literal["public", "internal"]]
+    last_input_unix_ns: NotRequired[str | None]
+    parked_unix_ns: NotRequired[str | None]
+    park_reason: NotRequired[Literal["idle", "hidden", "user", "idle_disconnected", "preempted", "reclaimed_cpu", "reclaimed_mem"] | None]
+    resume_mode: NotRequired[Literal["checkpoint", "snapshot"] | None]
+    retention_unix_ns: NotRequired[str | None]
+    remaining_s: NotRequired[float | None]
+    t_sim_ns: NotRequired[str | None]
+
+
+# sandbox/session.schema.json#/$defs/batch_request
+class SessionBatchRequest(TypedDict):
+    until_s: float
+    config_snapshot: NotRequired[Snapshot | None]
+    seed: NotRequired[int | None]
+
+
+# sandbox/session.schema.json#/$defs/batch_status
+class SessionBatchStatus(TypedDict):
+    batch_id: NotRequired[str]
+    state: Literal["queued", "running", "done", "failed"]
+    progress_pct: NotRequired[float]
+    sim_t_s: NotRequired[float]
+    wall_s: NotRequired[float]
+    result: NotRequired[SessionBatchStatusResultOneOf0 | None]
+
+
+# sandbox/session.schema.json#/$defs/batch_status/properties/result/oneOf/0
+class SessionBatchStatusResultOneOf0(TypedDict):
+    relay_stats: NotRequired[list[RelayStats]]
+    events_url: NotRequired[str]
+
+
+# sandbox/session.schema.json#/properties/calendar
+class SessionCalendar(TypedDict):
+    start_utc: str
+    tz: str
+
+
+# sandbox/session.schema.json#/$defs/call_result
+class SessionCallResult(TypedDict):
+    op: NotRequired[Literal["result"]]
+    id: str
+    status: Literal["accepted", "rejected", "running", "succeeded", "failed", "canceled", "timeout"]
+    code: int
+    final: NotRequired[bool]
+    reason: NotRequired[str]
+    message: NotRequired[str]
+    warnings: NotRequired[list[str]]
+    data: NotRequired[dict[str, Any]]
+    effect: NotRequired[dict[str, Any]]
+    detail: NotRequired[Any]
+
+
+# sandbox/session.schema.json#/$defs/challenge
+class SessionChallenge(TypedDict):
+    challenge_id: str
+    alg: Literal["sha256-lz"]
+    prefix_b64: str
+    bits: int
+    expires_unix_ns: str
+
+
+# sandbox/session.schema.json#/properties/clock
+class SessionClock(TypedDict):
+    state: Literal["STOPPED", "PLAYING", "PAUSED", "STEPPING", "BUFFERING", "ENDED", "STALLED", "RESTARTING", "FAILED", "LIVE"]
+    rate_requested: float
+    rate_granted: float
+    rate_cap: float
+    limited_by: Literal["cpu_budget", "cost_cap", "manual_control", "degraded"] | None
+    tick_hz: int
+
+
+# sandbox/session.schema.json#/$defs/clock_data
+class SessionClockData(TypedDict):
+    requested_rate: float
+    granted_rate: float
+    rate_cap: float
+    limited_by: NotRequired[Literal["cpu_budget", "cost_cap", "manual_control", "degraded"] | None]
+    limit_code: NotRequired[Literal[0, 501]]
+
+
+# sandbox/session.schema.json#/$defs/clock_request
+class SessionClockRequest(TypedDict):
+    op: Literal["play", "pause", "speed", "step"]
+    rate: NotRequired[Literal[0.25, 0.5, 1, 2, 5, 10]]
+    ticks: NotRequired[int]
+
+
+# sandbox/session.schema.json#/$defs/create_request
+class SessionCreateRequest(TypedDict):
+    world: NotRequired[WorldCommonId]
+    template: NotRequired[str | None]
+    config_snapshot: NotRequired[Snapshot | None]
+    calendar: NotRequired[SessionCreateRequestCalendar]
+    acoustic_bg: NotRequired[Literal["rural", "suburban", "urban"]]
+    seed: NotRequired[int | None]
+    principal_hint: str
+    pow: NotRequired[SessionCreateRequestPowOneOf0 | None]
+    force_new: NotRequired[bool]
+    queue_ok: NotRequired[bool]
+    client: NotRequired[SessionCreateRequestClient]
+
+
+# sandbox/session.schema.json#/$defs/create_request/properties/calendar
+class SessionCreateRequestCalendar(TypedDict):
+    start_utc: str
+    tz: str
+
+
+# sandbox/session.schema.json#/$defs/create_request/properties/client
+class SessionCreateRequestClient(TypedDict):
+    kind: NotRequired[Literal["browser", "sdk", "other"]]
+    version: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/create_request/properties/pow/oneOf/0
+class SessionCreateRequestPowOneOf0(TypedDict):
+    challenge_id: str
+    nonce: int
+
+
+# sandbox/session.schema.json#/$defs/created
+class SessionCreated(TypedDict):
+    session: Session
+    token: str | None
+    token_exp_unix_ns: NotRequired[str]
+    idempotent: NotRequired[bool]
+
+
+# sandbox/session.schema.json#/$defs/end_beacon
+class SessionEndBeacon(TypedDict):
+    token: str
+
+
+# sandbox/session.schema.json#/properties/endpoints
+class SessionEndpoints(TypedDict):
+    rest: str
+    rt: str
+
+
+# sandbox/session.schema.json#/$defs/events_page
+class SessionEventsPage(TypedDict):
+    items: list[BusEvent]
+    next_since_seq: NotRequired[int]
+    oldest_seq: NotRequired[int]
+
+
+# sandbox/session.schema.json#/$defs/keepalive_reply
+class SessionKeepaliveReply(TypedDict):
+    session: Session
+    renewed: bool
+    token: str | None
+    token_exp_unix_ns: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/meta
+class SessionMeta(TypedDict):
+    api_version: Literal[1]
+    contracts: str
+    access_mode: Literal["public", "lan", "loopback"]
+    features: list[Literal["queue", "pow", "batch"]]
+    max_sessions: int
+    active_sessions: int
+    queue_len: int
+    pow: NotRequired[SessionMetaPow]
+    sdk: NotRequired[SessionMetaSdk]
+    build: NotRequired[SessionMetaBuild]
+
+
+# sandbox/session.schema.json#/$defs/meta/properties/build
+class SessionMetaBuild(TypedDict):
+    version: str
+    channel: Literal["demo", "local", "ci"]
+    release: str
+
+
+# sandbox/session.schema.json#/$defs/meta/properties/pow
+class SessionMetaPow(TypedDict):
+    required_now: NotRequired[bool]
+    bits: NotRequired[int]
+
+
+# sandbox/session.schema.json#/$defs/meta/properties/sdk
+class SessionMetaSdk(TypedDict):
+    min_version: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/queued
+class SessionQueued(TypedDict):
+    queue: SessionQueuedQueue
+    available_now: NotRequired[list[WorldCommonId]]
+
+
+# sandbox/session.schema.json#/$defs/queued/properties/queue
+class SessionQueuedQueue(TypedDict):
+    ticket_id: str
+    ticket_token: str
+    position: int
+    eta_s: float | None
+    expires_unix_ns: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/restore_request
+class SessionRestoreRequest(TypedDict):
+    snapshot: Snapshot
+
+
 # sim/session_spec.schema.json# Orchestrator SessionSpec (V0.2 stub)
 class SessionSpec(TypedDict):
     schema: Literal["awr.sim.session_spec.v1"]
@@ -3820,6 +6146,326 @@ class SessionSpec(TypedDict):
 class SessionSpecBackends(TypedDict):
     backend: Literal["mock", "replay", "px4_sih", "prometheus"]
     vehicles: NotRequired[list[str]]
+
+
+# sandbox/session.schema.json#/$defs/template_item
+class SessionTemplateItem(TypedDict):
+    template_id: str
+    world_id: WorldCommonId
+    name_zh: str
+    summary_zh: NotRequired[str]
+    first_feedback_zh: NotRequired[str]
+    entities: NotRequired[SessionTemplateItemEntities]
+    calendar_default: NotRequired[SessionTemplateItemCalendarDefault]
+    recommended: NotRequired[bool]
+
+
+# sandbox/session.schema.json#/$defs/template_item/properties/calendar_default
+class SessionTemplateItemCalendarDefault(TypedDict):
+    start_local: NotRequired[str]
+    tz: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/template_item/properties/entities
+class SessionTemplateItemEntities(TypedDict):
+    vehicles: NotRequired[int]
+    targets: NotRequired[int]
+    nests: NotRequired[int]
+    tasks: NotRequired[int]
+
+
+# sandbox/session.schema.json#/$defs/template_request
+class SessionTemplateRequest(TypedDict):
+    template: str
+
+
+# sandbox/session.schema.json#/$defs/templates
+class SessionTemplates(TypedDict):
+    items: list[SessionTemplates_]
+
+
+# sandbox/session.schema.json#/$defs/templates/properties/items/items/properties/calendar_default
+class SessionTemplatesCalendarDefault(TypedDict):
+    start_local: NotRequired[str]
+    tz: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/templates/properties/items/items/properties/entities
+class SessionTemplatesEntities(TypedDict):
+    vehicles: NotRequired[int]
+    targets: NotRequired[int]
+    nests: NotRequired[int]
+    tasks: NotRequired[int]
+
+
+# sandbox/session.schema.json#/$defs/templates/properties/items/items
+class SessionTemplates_(TypedDict):
+    template_id: str
+    world_id: WorldCommonId
+    name_zh: str
+    summary_zh: NotRequired[str]
+    first_feedback_zh: NotRequired[str]
+    entities: NotRequired[SessionTemplatesEntities]
+    calendar_default: NotRequired[SessionTemplatesCalendarDefault]
+    recommended: NotRequired[bool]
+
+
+# sandbox/session.schema.json#/$defs/token_payload
+class SessionTokenPayload(TypedDict):
+    v: Literal[1]
+    sub: str
+    role: Literal["operator"]
+    run: str
+    sid: str
+    scope: Literal["sandbox"]
+    mode: Literal["public", "lan", "loopback"]
+    iat: int
+    exp: int
+    jti: str
+
+
+# sandbox/session.schema.json#/properties/usage
+class SessionUsage(TypedDict):
+    vehicles: int
+    targets: int
+    nests: int
+    tasks_active: int
+    ws: int
+    cloned_models: NotRequired[int]
+
+
+# sandbox/session.schema.json#/$defs/world_item
+class SessionWorldItem(TypedDict):
+    world_id: WorldCommonId
+    name_zh: NotRequired[str]
+    tier: Literal["S", "L"]
+    available: bool
+    reason: NotRequired[Literal["derived_cache_missing", "not_allowed"] | None]
+    admit_now: bool
+    cost: NotRequired[SessionWorldItemCost]
+    dataset: NotRequired[SessionWorldItemDataset]
+    anchor: NotRequired[SessionWorldItemAnchor]
+    bounds_m: NotRequired[SessionWorldItemBoundsM]
+    templates: NotRequired[list[str]]
+
+
+# sandbox/session.schema.json#/$defs/world_item/properties/anchor
+class SessionWorldItemAnchor(TypedDict):
+    lat_deg: NotRequired[float]
+    lon_deg: NotRequired[float]
+    tz: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/world_item/properties/bounds_m
+class SessionWorldItemBoundsM(TypedDict):
+    xmin: NotRequired[float]
+    xmax: NotRequired[float]
+    ymin: NotRequired[float]
+    ymax: NotRequired[float]
+
+
+# sandbox/session.schema.json#/$defs/world_item/properties/cost
+class SessionWorldItemCost(TypedDict):
+    anon_mb: NotRequired[float]
+    ws_mb: NotRequired[float]
+
+
+# sandbox/session.schema.json#/$defs/world_item/properties/dataset
+class SessionWorldItemDataset(TypedDict):
+    name: NotRequired[str]
+    terms_zh: NotRequired[str]
+    citation: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/world_request
+class SessionWorldRequest(TypedDict):
+    world: WorldCommonId
+    template: NotRequired[str | None]
+
+
+# sandbox/session.schema.json#/$defs/worlds
+class SessionWorlds(TypedDict):
+    items: list[SessionWorlds_]
+
+
+# sandbox/session.schema.json#/$defs/worlds/properties/items/items/properties/anchor
+class SessionWorldsAnchor(TypedDict):
+    lat_deg: NotRequired[float]
+    lon_deg: NotRequired[float]
+    tz: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/worlds/properties/items/items/properties/bounds_m
+class SessionWorldsBoundsM(TypedDict):
+    xmin: NotRequired[float]
+    xmax: NotRequired[float]
+    ymin: NotRequired[float]
+    ymax: NotRequired[float]
+
+
+# sandbox/session.schema.json#/$defs/worlds/properties/items/items/properties/cost
+class SessionWorldsCost(TypedDict):
+    anon_mb: NotRequired[float]
+    ws_mb: NotRequired[float]
+
+
+# sandbox/session.schema.json#/$defs/worlds/properties/items/items/properties/dataset
+class SessionWorldsDataset(TypedDict):
+    name: NotRequired[str]
+    terms_zh: NotRequired[str]
+    citation: NotRequired[str]
+
+
+# sandbox/session.schema.json#/$defs/worlds/properties/items/items
+class SessionWorlds_(TypedDict):
+    world_id: WorldCommonId
+    name_zh: NotRequired[str]
+    tier: Literal["S", "L"]
+    available: bool
+    reason: NotRequired[Literal["derived_cache_missing", "not_allowed"] | None]
+    admit_now: bool
+    cost: NotRequired[SessionWorldsCost]
+    dataset: NotRequired[SessionWorldsDataset]
+    anchor: NotRequired[SessionWorldsAnchor]
+    bounds_m: NotRequired[SessionWorldsBoundsM]
+    templates: NotRequired[list[str]]
+
+
+# sandbox/snapshot.schema.json# awr.sandbox.snapshot.v1 (session configuration snapshot)
+class Snapshot(TypedDict):
+    schema: Literal["awr.sandbox.snapshot.v1"]
+    contracts: str
+    world_id: WorldCommonId
+    template_id: NotRequired[str | None]
+    calendar: SnapshotCalendar
+    acoustic_bg: NotRequired[Literal["rural", "suburban", "urban"]]
+    seed: int
+    env: NotRequired[SnapshotEnv]
+    models: NotRequired[list[Clone]]
+    nests: list[Nest]
+    vehicles: list[SnapshotVehicles]
+    targets: list[TargetCreateRequest]
+    tasks: list[TaskingTaskRequest]
+    created_unix_ns: NotRequired[str]
+
+
+# sandbox/snapshot.schema.json#/properties/calendar
+class SnapshotCalendar(TypedDict):
+    start_utc: str
+    tz: str
+
+
+# sandbox/snapshot.schema.json#/properties/env
+class SnapshotEnv(TypedDict):
+    preset: NotRequired[str | None]
+    overrides: NotRequired[dict[str, Any]]
+
+
+# sandbox/snapshot.schema.json#/$defs/vehicle
+class SnapshotVehicle(TypedDict):
+    id: NotRequired[WorldCommonSlug]
+    model_id: str
+    nest_id: NotRequired[WorldCommonSlug | None]
+    home_enu_m: NotRequired[list[float | None] | None]
+    label: NotRequired[str | None]
+    yaw_rad: NotRequired[float]
+    initial_soc: NotRequired[float]
+    sensors: NotRequired[list[SnapshotVehicleSensorsOneOf0] | None]
+    limits_profile: NotRequired[str | None]
+    lights: NotRequired[SnapshotVehicleLights]
+
+
+# sandbox/snapshot.schema.json#/$defs/vehicle/properties/lights
+class SnapshotVehicleLights(TypedDict):
+    nav: NotRequired[bool]
+    strobe: NotRequired[bool]
+
+
+# sandbox/snapshot.schema.json#/$defs/vehicle/properties/sensors/oneOf/0/items
+class SnapshotVehicleSensorsOneOf0(TypedDict):
+    name: str
+    type: NotRequired[str]
+    enabled: NotRequired[bool]
+
+
+# sandbox/snapshot.schema.json#/properties/vehicles/items
+class SnapshotVehicles(TypedDict):
+    id: NotRequired[WorldCommonSlug]
+    model_id: str
+    nest_id: NotRequired[WorldCommonSlug | None]
+    home_enu_m: NotRequired[list[float | None] | None]
+    label: NotRequired[str | None]
+    yaw_rad: NotRequired[float]
+    initial_soc: NotRequired[float]
+    sensors: NotRequired[list[SnapshotVehiclesSensorsOneOf0] | None]
+    limits_profile: NotRequired[str | None]
+    lights: NotRequired[SnapshotVehiclesLights]
+
+
+# sandbox/snapshot.schema.json#/properties/vehicles/items/properties/lights
+class SnapshotVehiclesLights(TypedDict):
+    nav: NotRequired[bool]
+    strobe: NotRequired[bool]
+
+
+# sandbox/snapshot.schema.json#/properties/vehicles/items/properties/sensors/oneOf/0/items
+class SnapshotVehiclesSensorsOneOf0(TypedDict):
+    name: str
+    type: NotRequired[str]
+    enabled: NotRequired[bool]
+
+
+# target/sound.schema.json# awr.target.sound.v1 (periodic sound source)
+class Sound(TypedDict):
+    waveform: Literal["tone", "harmonic", "pulse_train", "noise_band"]
+    f0_hz: float
+    harmonics_db: NotRequired[list[float]]
+    lw_dba: float
+    period_s: float
+    duty: float
+    phase_s: NotRequired[float]
+    bandwidth_hz: NotRequired[float]
+
+
+# tasking/sustainability.schema.json# awr.tasking.sustainability.v1
+class Sustainability(TypedDict):
+    verdict: Literal["yes", "no", "not_applicable"]
+    horizon_s: NotRequired[float]
+    bottlenecks: NotRequired[list[SustainabilityBottlenecks]]
+    windows: NotRequired[list[SustainabilityWindows]]
+    n_air: NotRequired[int]
+    n_air_recommended: NotRequired[int]
+    chargers: NotRequired[SustainabilityChargers]
+    packs: NotRequired[SustainabilityPacks]
+
+
+# tasking/sustainability.schema.json#/properties/bottlenecks/items
+class SustainabilityBottlenecks(TypedDict):
+    code: Literal["night_sensor", "los", "weather", "airframe", "charger", "battery", "link_range", "wind"]
+    detail: NotRequired[Any]
+
+
+# tasking/sustainability.schema.json#/properties/chargers
+class SustainabilityChargers(TypedDict):
+    need: NotRequired[int]
+    have: NotRequired[int]
+
+
+# tasking/sustainability.schema.json#/properties/packs
+class SustainabilityPacks(TypedDict):
+    need: NotRequired[int]
+    have: NotRequired[int]
+
+
+# tasking/sustainability.schema.json#/properties/windows/items
+class SustainabilityWindows(TypedDict):
+    t_from_unix_ns: str
+    t_to_unix_ns: str
+    band: Literal["day", "low", "night"]
+    feasible: bool
+    why: NotRequired[str | None]
+    d_lo_m: NotRequired[float | None]
+    d_hi_m: NotRequired[float | None]
 
 
 # rt/payloads/sys_procs.schema.json# awr.sys.procs.v1
@@ -3843,6 +6489,248 @@ class SysProcs_(TypedDict):
     on_demand: NotRequired[bool]
     layer: NotRequired[str | None]
     since_wall_ns: NotRequired[str]
+
+
+# target/target.schema.json#/$defs/created
+class TargetCreated(TypedDict):
+    id: WorldCommonSlug
+    cfg: NotRequired[Target]
+
+
+# rt/payloads/target_detail.schema.json#/properties/behavior/oneOf/0
+class TargetDetailBehaviorOneOf0(TypedDict):
+    phase: NotRequired[Literal["onset", "response"]]
+    type: NotRequired[str]
+    t_left_s: NotRequired[float | None]
+
+
+# rt/payloads/target_detail.schema.json#/properties/capture/oneOf/0
+class TargetDetailCaptureOneOf0(TypedDict):
+    best_level: Literal["none", "D", "R", "I"]
+    captured: NotRequired[bool]
+    sensor: NotRequired[str | None]
+    uav: NotRequired[WorldCommonSlug | None]
+    n_eff: NotRequired[float | None]
+    n_req: NotRequired[float | None]
+    since_t_sim_ns: NotRequired[WorldCommonInt64 | None]
+
+
+# rt/payloads/target_detail.schema.json#/properties/dwell/oneOf/0
+class TargetDetailDwellOneOf0(TypedDict):
+    uav: WorldCommonSlug
+    kind: NotRequired[str]
+    t_s: float
+    t_dwell_s: float
+
+
+# rt/payloads/target_detail.schema.json#/properties/keepout
+class TargetDetailKeepout(TypedDict):
+    radius_m: NotRequired[float]
+    margin_m: NotRequired[float]
+    full_circle: NotRequired[bool]
+
+
+# rt/payloads/target_detail.schema.json#/properties/last_discovered/oneOf/0
+class TargetDetailLastDiscoveredOneOf0(TypedDict):
+    t_sim_ns: WorldCommonInt64
+    uav: WorldCommonSlug
+    kind: Literal["visual", "acoustic", "radar", "rf"]
+    range_m: NotRequired[float]
+    margin_db: NotRequired[float | None]
+    margin_ratio: NotRequired[float | None]
+
+
+# rt/payloads/target_detail.schema.json#/properties/motion
+class TargetDetailMotion(TypedDict):
+    mode: NotRequired[Literal["static", "path", "random_walk"]]
+    speed_mps: NotRequired[float]
+    vz_mps: NotRequired[float]
+    path_idx: NotRequired[int | None]
+
+
+# rt/payloads/target_detail.schema.json#/properties/sensitivity/items
+class TargetDetailSensitivity(TypedDict):
+    idx: int
+    kind: Literal["visual", "acoustic", "radar", "rf"]
+    shape: Literal["sphere", "hemisphere", "cylinder", "sector"]
+    radius_cfg_m: float
+    radius_eff_m: NotRequired[dict[str, float]]
+    z_min_m: NotRequired[float]
+    z_max_m: NotRequired[float]
+    half_angle_deg: NotRequired[float]
+    azimuth_offset_deg: NotRequired[float]
+    enabled: bool
+    occupied_by: NotRequired[list[WorldCommonSlug]]
+
+
+# rt/payloads/target_detail.schema.json#/properties/sound/oneOf/0
+class TargetDetailSoundOneOf0(TypedDict):
+    on: bool
+    phase_s: NotRequired[float]
+    lw_dba_now: NotRequired[float]
+
+
+# target/target.schema.json#/$defs/list
+class TargetList(TypedDict):
+    items: list[Target]
+    rev: NotRequired[int]
+
+
+# target/target.schema.json#/properties/motion
+class TargetMotion(TypedDict):
+    mode: Literal["static", "path", "random_walk"]
+    speed_mps: NotRequired[float]
+    speed_max_mps: NotRequired[float]
+    accel_mps2: NotRequired[float]
+    turn_rate_max_rad_s: NotRequired[float]
+    path: NotRequired[list[list[float | None]]]
+    loop: NotRequired[Literal["once", "pingpong", "loop"]]
+    dwell_s: NotRequired[list[float]]
+    region: NotRequired[list[WorldCommonVec2]]
+    speed_sigma_mps: NotRequired[float]
+    turn_tau_s: NotRequired[float]
+    pause_prob: NotRequired[float]
+    vz_mps: NotRequired[float]
+
+
+# rt/payloads/target_quant.schema.json# awr.target.quant.v1
+class TargetQuant(TypedDict):
+    t_sim_ns: WorldCommonInt64
+    target: WorldCommonSlug
+    criterion_mode: Literal["geometric", "physical"]
+    pairs: list[TargetQuantPairs]
+
+
+# rt/payloads/target_quant.schema.json#/properties/pairs/items
+class TargetQuantPairs(TypedDict):
+    uav: WorldCommonSlug
+    model_id: str
+    range_m: float
+    elev_deg: float
+    az_rel_deg: float
+    los: bool | None
+    los_age_s: NotRequired[float | None]
+    acoustic: TargetQuantPairsAcousticOneOf0 | None
+    visual: TargetQuantPairsVisualOneOf0 | None
+    radar: NotRequired[TargetQuantPairsRadarOneOf0 | None]
+    reverse: NotRequired[TargetQuantPairsReverseOneOf0 | None]
+    p_any: float
+    would_discover: bool
+    dwell_s: float
+    t_dwell_s: float
+
+
+# rt/payloads/target_quant.schema.json#/properties/pairs/items/properties/acoustic/oneOf/0
+class TargetQuantPairsAcousticOneOf0(TypedDict):
+    lp_dba: float
+    lp_band_db: float
+    band_hz: float
+    thr_dba: float
+    l_bg_dba: float
+    margin_db: float
+    p: float
+    in_body: bool
+
+
+# rt/payloads/target_quant.schema.json#/properties/pairs/items/properties/radar/oneOf/0
+class TargetQuantPairsRadarOneOf0(TypedDict):
+    snr_db: float
+    snr_req_db: float
+    margin_db: float
+    p: float
+    in_body: bool
+
+
+# rt/payloads/target_quant.schema.json#/properties/pairs/items/properties/reverse/oneOf/0
+class TargetQuantPairsReverseOneOf0(TypedDict):
+    sensor: str
+    level: Literal["none", "D", "R", "I"]
+    n_eff: NotRequired[float | None]
+    n_req: NotRequired[float | None]
+    p: NotRequired[float | None]
+    limiting: NotRequired[str | None]
+
+
+# rt/payloads/target_quant.schema.json#/properties/pairs/items/properties/visual/oneOf/0
+class TargetQuantPairsVisualOneOf0(TypedDict):
+    theta_arcmin: float
+    d_vis_m: float
+    n_eq_px: float | None
+    theta_th_arcmin: float
+    ratio: float
+    c_app: float
+    light_band: Literal["day", "low", "night"]
+    lights_on: bool
+    in_fov: bool
+    p: float
+    in_body: bool
+
+
+# target/target.schema.json#/properties/radar_rx/oneOf/0
+class TargetRadarRxOneOf0(TypedDict):
+    snr_ref_db: float
+    r_ref_m: float
+    snr_req_db: float
+    fov_az_deg: float
+    fov_el_deg: float
+
+
+# target/target.schema.json#/properties/rf/oneOf/0
+class TargetRfOneOf0(TypedDict):
+    freq_mhz: NotRequired[float]
+    eirp_dbm: NotRequired[float]
+    duty: NotRequired[float]
+
+
+# target/target.schema.json#/properties/rf_rx/oneOf/0
+class TargetRfRxOneOf0(TypedDict):
+    sens_dbm: NotRequired[float]
+    f_mhz: NotRequired[float]
+    bw_mhz: NotRequired[float]
+
+
+# target/target.schema.json#/properties/size_m
+class TargetSizeM(TypedDict):
+    l: float  # noqa: E741
+    w: float
+    h: float
+
+
+# target/target.schema.json#/$defs/suggested_radius
+class TargetSuggestedRadius(TypedDict):
+    model_id: str
+    basis: NotRequired[TargetSuggestedRadiusBasis]
+    volumes: list[TargetSuggestedRadiusVolumes]
+
+
+# target/target.schema.json#/$defs/suggested_radius/properties/basis
+class TargetSuggestedRadiusBasis(TypedDict):
+    light: NotRequired[Literal["day", "low", "night"]]
+    l_bg_dba: NotRequired[float]
+    alertness_used: NotRequired[float]
+    conservative: NotRequired[bool]
+
+
+# target/target.schema.json#/$defs/suggested_radius/properties/volumes/items
+class TargetSuggestedRadiusVolumes(TypedDict):
+    idx: int
+    kind: Literal["visual", "acoustic"]
+    radius_cfg_m: float
+    radius_suggested_m: NotRequired[float]
+    now_m: NotRequired[float]
+    day_m: NotRequired[float]
+    night_m: NotRequired[float]
+    conservative_max_m: NotRequired[float]
+    margin_db: NotRequired[float | None]
+
+
+# target/target.schema.json#/properties/thermal
+class TargetThermal(TypedDict):
+    mode: Literal["relative", "absolute"]
+    delta_t_k: NotRequired[float]
+    t_surface_c: NotRequired[float]
+    emissivity: NotRequired[float]
+    hot_fraction: NotRequired[float]
 
 
 # agent/task.schema.json#/$defs/spec
@@ -3869,33 +6757,19 @@ class TaskSpecClaimOneOf0(TypedDict):
     t_sim_ns: NotRequired[int]
 
 
-# agent/task.schema.json#/$defs/status
+# rt/payloads/task_status.schema.json# awr.task.status.v1
 class TaskStatus(TypedDict):
-    task_id: str
-    capability: str
-    state: Literal["submitted", "working", "input-required", "completed", "canceled", "failed", "rejected"]
-    phase: Literal["queued", "lease", "enroute", "on_station", "executing", "returning"]
-    alloc: Literal["discovering", "quoting", "awarding", "reassigning", "done"]
-    provider_aid: NotRequired[str | None]
-    vehicle_id: NotRequired[str | None]
-    ix: NotRequired[str | None]
-    effect: NotRequired[Effect | None]
-    verified: NotRequired[bool]
-    predicate_ok: NotRequired[bool | None]
-    scope_ok: NotRequired[bool | None]
-    reason: NotRequired[str | None]
-    reason_code: NotRequired[int]
-    retries_left: NotRequired[int]
-    conf_claim: NotRequired[float | None]
-    conf_current: NotRequired[float | None]
-    target_enu_m: NotRequired[list[float] | None]
-    origin: NotRequired[str]
-    t_submit_ns: int
-    t_update_ns: int
-    args: NotRequired[dict[str, Any]]
-    accept: NotRequired[Predicate]
-    negative_scope: NotRequired[Predicate | None]
-    quotes: NotRequired[list[TaskStatusQuotes]]
+    tid: WorldCommonSlug
+    type: Literal["point_watch", "polyline_patrol", "area_patrol", "area_scan_gsd", "perimeter_patrol", "relay_watch", "area_guard"]
+    state: Literal["PLANNING", "READY", "RUNNING", "PAUSED", "DONE", "CANCELED", "FAILED", "INFEASIBLE"]
+    revision: int
+    t_sim_ns: NotRequired[WorldCommonInt64]
+    progress: NotRequired[TaskStatusProgress]
+    n_vehicles: NotRequired[int]
+    makespan_s: NotRequired[float | None]
+    items: list[TaskStatus__]
+    children: NotRequired[list[WorldCommonSlug]]
+    warnings: NotRequired[list[str]]
 
 
 # agent/task.schema.json#/$defs/statusLite
@@ -3923,6 +6797,14 @@ class TaskStatusLite(TypedDict):
     t_update_ns: int
 
 
+# rt/payloads/task_status.schema.json#/properties/progress
+class TaskStatusProgress(TypedDict):
+    pct: NotRequired[float]
+    coverage_pct: NotRequired[float | None]
+    laps_done: NotRequired[int | None]
+    dwell_s: NotRequired[float | None]
+
+
 # agent/task.schema.json#/$defs/status/properties/quotes/items
 class TaskStatusQuotes(TypedDict):
     aid: str
@@ -3937,6 +6819,521 @@ class TaskStatusQuotes(TypedDict):
     risk: NotRequired[float]
     score: NotRequired[float]
     t_quote_ns: NotRequired[int]
+
+
+# agent/task.schema.json#/$defs/status
+class TaskStatus_(TypedDict):
+    task_id: str
+    capability: str
+    state: Literal["submitted", "working", "input-required", "completed", "canceled", "failed", "rejected"]
+    phase: Literal["queued", "lease", "enroute", "on_station", "executing", "returning"]
+    alloc: Literal["discovering", "quoting", "awarding", "reassigning", "done"]
+    provider_aid: NotRequired[str | None]
+    vehicle_id: NotRequired[str | None]
+    ix: NotRequired[str | None]
+    effect: NotRequired[Effect | None]
+    verified: NotRequired[bool]
+    predicate_ok: NotRequired[bool | None]
+    scope_ok: NotRequired[bool | None]
+    reason: NotRequired[str | None]
+    reason_code: NotRequired[int]
+    retries_left: NotRequired[int]
+    conf_claim: NotRequired[float | None]
+    conf_current: NotRequired[float | None]
+    target_enu_m: NotRequired[list[float] | None]
+    origin: NotRequired[str]
+    t_submit_ns: int
+    t_update_ns: int
+    args: NotRequired[dict[str, Any]]
+    accept: NotRequired[Predicate]
+    negative_scope: NotRequired[Predicate | None]
+    quotes: NotRequired[list[TaskStatusQuotes]]
+
+
+# rt/payloads/task_status.schema.json#/properties/items/items
+class TaskStatus__(TypedDict):
+    wid: str
+    kind: str
+    uav: NotRequired[WorldCommonSlug | None]
+    state: str
+    eta_s: NotRequired[float | None]
+    reason: NotRequired[str | None]
+
+
+# tasking/snapshot.schema.json# awr.tasking.snapshot.v1 (Allocator snapshot)
+class TaskingSnapshot(TypedDict):
+    revision: int
+    t_sim_ns: WorldCommonInt64
+    work_items: list[TaskingSnapshotWorkItems]
+    vehicles: list[TaskingSnapshotVehicles]
+    nests: NotRequired[list[Nest]]
+    keepouts: NotRequired[list[Keepout]]
+    zones_ref: NotRequired[str | None]
+
+
+# tasking/snapshot.schema.json#/properties/vehicles/items
+class TaskingSnapshotVehicles(TypedDict):
+    id: WorldCommonSlug
+    model_id: str
+    nest_id: NotRequired[WorldCommonSlug | None]
+    pos: WorldCommonVec3
+    soc: float
+    e_avail_wh: NotRequired[float]
+    t_ready_s: NotRequired[float]
+    sensors: NotRequired[list[str]]
+    capabilities: NotRequired[list[str]]
+
+
+# tasking/snapshot.schema.json#/properties/work_items/items
+class TaskingSnapshotWorkItems(TypedDict):
+    wid: str
+    tid: WorldCommonSlug
+    kind: str
+    pos: NotRequired[WorldCommonVec3]
+    region: NotRequired[list[WorldCommonVec2]]
+    capability: NotRequired[list[str]]
+    level_req: NotRequired[Literal["D", "R", "I"] | None]
+    workload_s: NotRequired[float]
+    deadline_s: NotRequired[float | None]
+    priority: NotRequired[float]
+
+
+# tasking/task.schema.json# awr.tasking.task.v1 (task object, request and dry-run preview)
+class TaskingTask(TypedDict):
+    tid: WorldCommonSlug
+    type: Literal["point_watch", "polyline_patrol", "area_patrol", "area_scan_gsd", "perimeter_patrol", "relay_watch", "area_guard"]
+    label: NotRequired[str | None]
+    state: Literal["PLANNING", "READY", "RUNNING", "PAUSED", "DONE", "CANCELED", "FAILED", "INFEASIBLE"]
+    revision: int
+    params: dict[str, Any]
+    common: NotRequired[TaskingTaskCommon]
+    progress: NotRequired[TaskingTaskProgress]
+    n_vehicles: NotRequired[int]
+    makespan_s: NotRequired[float | None]
+    items: NotRequired[list[TaskingTask_]]
+    children: NotRequired[list[WorldCommonSlug]]
+    parent: NotRequired[WorldCommonSlug | None]
+    created_t_sim_ns: NotRequired[WorldCommonInt64]
+    plan: NotRequired[TaskingTaskPlan]
+
+
+# tasking/task.schema.json#/properties/common
+class TaskingTaskCommon(TypedDict):
+    priority: NotRequired[Literal["low", "normal", "high"]]
+    start_at_s: NotRequired[float | None]
+    allowed_nests: NotRequired[list[WorldCommonSlug]]
+    allowed_models: NotRequired[list[str]]
+    on_detect: NotRequired[Literal["notify", "relay", "ignore"]]
+    allocator: NotRequired[str]
+    external_fallback: NotRequired[Literal["greedy", "none"]]
+
+
+# tasking/task.schema.json#/$defs/geometry
+class TaskingTaskGeometry(TypedDict):
+    subregions: NotRequired[list[list[WorldCommonVec2]]]
+    strips: NotRequired[list[TaskingTaskGeometryStrips]]
+    fill_waypoints: NotRequired[list[TaskingTaskGeometryFillWaypoints]]
+    legs: NotRequired[list[TaskingTaskGeometryLegs]]
+    stations: NotRequired[list[TaskingTaskGeometryStations]]
+
+
+# tasking/task.schema.json#/$defs/geometry/properties/fill_waypoints/items
+class TaskingTaskGeometryFillWaypoints(TypedDict):
+    pos: WorldCommonVec3
+    dwell_s: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/geometry/properties/legs/items
+class TaskingTaskGeometryLegs(TypedDict):
+    uav: WorldCommonSlug
+    kind: Literal["transit", "strip", "fill", "return", "patrol", "loiter"]
+    polyline: list[WorldCommonVec3]
+
+
+# tasking/task.schema.json#/$defs/geometry/properties/stations/items
+class TaskingTaskGeometryStations(TypedDict):
+    id: str
+    pos: WorldCommonVec3
+    target: NotRequired[WorldCommonSlug | None]
+    role: Literal["primary", "handover"]
+    uav: NotRequired[WorldCommonSlug | None]
+    loiter_radius_m: NotRequired[float | None]
+
+
+# tasking/task.schema.json#/$defs/geometry/properties/strips/items
+class TaskingTaskGeometryStrips(TypedDict):
+    id: str
+    p0: WorldCommonVec3
+    p1: WorldCommonVec3
+    uav: NotRequired[WorldCommonSlug | None]
+
+
+# tasking/task.schema.json#/$defs/item
+class TaskingTaskItem(TypedDict):
+    wid: str
+    kind: str
+    uav: NotRequired[WorldCommonSlug | None]
+    state: str
+    eta_s: NotRequired[float | None]
+    reason: NotRequired[str | None]
+
+
+# tasking/task.schema.json#/$defs/list
+class TaskingTaskList(TypedDict):
+    items: list[TaskingTask]
+
+
+# tasking/task.schema.json#/$defs/params_area_guard
+class TaskingTaskParamsAreaGuard(TypedDict):
+    polygon: list[WorldCommonVec2]
+    target_class: NotRequired[str]
+    level_req: NotRequired[Literal["D", "R", "I"]]
+    revisit_s: NotRequired[float]
+    perimeter_offset_m: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/params_area_patrol
+class TaskingTaskParamsAreaPatrol(TypedDict):
+    polygon: list[WorldCommonVec2]
+    n_vehicles: NotRequired[Literal["auto"] | int]
+    target_class: NotRequired[str]
+    level_req: NotRequired[Literal["D", "R", "I"]]
+    revisit_s: NotRequired[float]
+    duration_s: NotRequired[float | None]
+    theta_max_deg: NotRequired[float]
+    sidelap: NotRequired[float]
+    alt_m: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/params_area_scan_gsd
+class TaskingTaskParamsAreaScanGsd(TypedDict):
+    polygon: list[WorldCommonVec2]
+    gsd_cm: float
+    sidelap: NotRequired[float]
+    frontlap: NotRequired[float]
+    theta_max_deg: NotRequired[float]
+    t_max_s: NotRequired[float | None]
+    h_cap_m: NotRequired[float]
+    clearance_m: NotRequired[float]
+    allow_multi_sortie: NotRequired[bool]
+    n_vehicles: NotRequired[Literal["auto"] | int]
+    strategy: NotRequired[Literal["strips", "single_station"]]
+
+
+# tasking/task.schema.json#/$defs/params_perimeter_patrol
+class TaskingTaskParamsPerimeterPatrol(TypedDict):
+    polygon: list[WorldCommonVec2]
+    offset_m: NotRequired[float]
+    direction: NotRequired[Literal["cw", "ccw"]]
+    revisit_s: NotRequired[float]
+    n_vehicles: NotRequired[Literal["auto"] | int]
+    alt_m: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/params_point_watch
+class TaskingTaskParamsPointWatch(TypedDict):
+    point: list[float | None]
+    alt_m: NotRequired[float]
+    alt_ref: NotRequired[Literal["agl", "abs"]]
+    dwell_s: NotRequired[float | None]
+    look: NotRequired[TaskingTaskParamsPointWatchLook]
+    loiter_radius_m: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/params_point_watch/properties/look
+class TaskingTaskParamsPointWatchLook(TypedDict):
+    mode: Literal["point", "heading", "target"]
+    point: NotRequired[WorldCommonVec3]
+    heading_rad: NotRequired[float]
+    target: NotRequired[WorldCommonSlug]
+
+
+# tasking/task.schema.json#/$defs/params_polyline_patrol
+class TaskingTaskParamsPolylinePatrol(TypedDict):
+    waypoints: list[list[float | None]]
+    mode: NotRequired[Literal["once", "pingpong", "loop"]]
+    laps: NotRequired[int]
+    duration_s: NotRequired[float | None]
+    speed_mps: NotRequired[float | None]
+    alt_m: NotRequired[float]
+    sensor_facing: NotRequired[Literal["down", "forward", "side"]]
+    auto_detour: NotRequired[bool]
+
+
+# tasking/task.schema.json#/$defs/params_relay_watch
+class TaskingTaskParamsRelayWatch(TypedDict):
+    target: WorldCommonSlug
+    level_req: NotRequired[Literal["D", "R", "I"]]
+    duration_s: NotRequired[float | None]
+
+
+# tasking/task.schema.json#/$defs/plan
+class TaskingTaskPlan(TypedDict):
+    revision: int
+    geometry: NotRequired[TaskingTaskPlanGeometry]
+    assignments: NotRequired[list[TaskingTaskPlanAssignments]]
+
+
+# tasking/task.schema.json#/$defs/plan/properties/assignments/items
+class TaskingTaskPlanAssignments(TypedDict):
+    uav: WorldCommonSlug
+    nest: NotRequired[WorldCommonSlug | None]
+    items: list[TaskingTaskPlanAssignments_]
+    eta_s: NotRequired[float]
+    energy_margin: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/plan/properties/assignments/items/properties/items/items
+class TaskingTaskPlanAssignments_(TypedDict):
+    wid: str
+    kind: Literal["strip_group", "subregion", "segment", "station", "dwell", "look_in", "relay_station", "perimeter_phase", "guard_cycle", "fill"]
+    ref: NotRequired[str]
+
+
+# tasking/task.schema.json#/$defs/plan/properties/geometry
+class TaskingTaskPlanGeometry(TypedDict):
+    subregions: NotRequired[list[list[WorldCommonVec2]]]
+    strips: NotRequired[list[TaskingTaskPlanGeometryStrips]]
+    fill_waypoints: NotRequired[list[TaskingTaskPlanGeometryFillWaypoints]]
+    legs: NotRequired[list[TaskingTaskPlanGeometryLegs]]
+    stations: NotRequired[list[TaskingTaskPlanGeometryStations]]
+
+
+# tasking/task.schema.json#/$defs/plan/properties/geometry/properties/fill_waypoints/items
+class TaskingTaskPlanGeometryFillWaypoints(TypedDict):
+    pos: WorldCommonVec3
+    dwell_s: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/plan/properties/geometry/properties/legs/items
+class TaskingTaskPlanGeometryLegs(TypedDict):
+    uav: WorldCommonSlug
+    kind: Literal["transit", "strip", "fill", "return", "patrol", "loiter"]
+    polyline: list[WorldCommonVec3]
+
+
+# tasking/task.schema.json#/$defs/plan/properties/geometry/properties/stations/items
+class TaskingTaskPlanGeometryStations(TypedDict):
+    id: str
+    pos: WorldCommonVec3
+    target: NotRequired[WorldCommonSlug | None]
+    role: Literal["primary", "handover"]
+    uav: NotRequired[WorldCommonSlug | None]
+    loiter_radius_m: NotRequired[float | None]
+
+
+# tasking/task.schema.json#/$defs/plan/properties/geometry/properties/strips/items
+class TaskingTaskPlanGeometryStrips(TypedDict):
+    id: str
+    p0: WorldCommonVec3
+    p1: WorldCommonVec3
+    uav: NotRequired[WorldCommonSlug | None]
+
+
+# tasking/task.schema.json#/$defs/preview
+class TaskingTaskPreview(TypedDict):
+    preview_id: str
+    valid_until_unix_ns: NotRequired[str]
+    n_vehicles: int
+    makespan_s: NotRequired[float | None]
+    t_max_s: NotRequired[float | None]
+    why_n: NotRequired[TaskingTaskPreviewWhyN]
+    makespan_curve: NotRequired[list[TaskingTaskPreviewMakespanCurve]]
+    scan: NotRequired[TaskingTaskPreviewScan]
+    coverage: NotRequired[TaskingTaskPreviewCoverage]
+    assignments: list[TaskingTaskPreviewAssignments]
+    geometry: NotRequired[TaskingTaskPreviewGeometry]
+    sustainability: NotRequired[Sustainability]
+    warnings: NotRequired[list[str]]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/assignments/items
+class TaskingTaskPreviewAssignments(TypedDict):
+    uav: WorldCommonSlug
+    nest: NotRequired[WorldCommonSlug | None]
+    items: list[TaskingTaskPreviewAssignments_]
+    eta_s: NotRequired[float]
+    energy_margin: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/assignments/items/properties/items/items
+class TaskingTaskPreviewAssignments_(TypedDict):
+    wid: str
+    kind: Literal["strip_group", "subregion", "segment", "station", "dwell", "look_in", "relay_station", "perimeter_phase", "guard_cycle", "fill"]
+    ref: NotRequired[str]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/coverage
+class TaskingTaskPreviewCoverage(TypedDict):
+    direct_pct: NotRequired[float]
+    visible_pct: NotRequired[float]
+    fill_waypoints: NotRequired[int]
+    obstacle_pct: NotRequired[float]
+    cells: NotRequired[int]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/geometry
+class TaskingTaskPreviewGeometry(TypedDict):
+    subregions: NotRequired[list[list[WorldCommonVec2]]]
+    strips: NotRequired[list[TaskingTaskPreviewGeometryStrips]]
+    fill_waypoints: NotRequired[list[TaskingTaskPreviewGeometryFillWaypoints]]
+    legs: NotRequired[list[TaskingTaskPreviewGeometryLegs]]
+    stations: NotRequired[list[TaskingTaskPreviewGeometryStations]]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/geometry/properties/fill_waypoints/items
+class TaskingTaskPreviewGeometryFillWaypoints(TypedDict):
+    pos: WorldCommonVec3
+    dwell_s: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/geometry/properties/legs/items
+class TaskingTaskPreviewGeometryLegs(TypedDict):
+    uav: WorldCommonSlug
+    kind: Literal["transit", "strip", "fill", "return", "patrol", "loiter"]
+    polyline: list[WorldCommonVec3]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/geometry/properties/stations/items
+class TaskingTaskPreviewGeometryStations(TypedDict):
+    id: str
+    pos: WorldCommonVec3
+    target: NotRequired[WorldCommonSlug | None]
+    role: Literal["primary", "handover"]
+    uav: NotRequired[WorldCommonSlug | None]
+    loiter_radius_m: NotRequired[float | None]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/geometry/properties/strips/items
+class TaskingTaskPreviewGeometryStrips(TypedDict):
+    id: str
+    p0: WorldCommonVec3
+    p1: WorldCommonVec3
+    uav: NotRequired[WorldCommonSlug | None]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/makespan_curve/items
+class TaskingTaskPreviewMakespanCurve(TypedDict):
+    n: int
+    makespan_s: float | None
+
+
+# tasking/task.schema.json#/$defs/preview/properties/scan
+class TaskingTaskPreviewScan(TypedDict):
+    h_m: NotRequired[float]
+    f_mm: NotRequired[float]
+    p_eff_um: NotRequired[float]
+    strip_w_m: NotRequired[float]
+    spacing_m: NotRequired[float]
+    n_strips: NotRequired[int]
+    theta_e_deg: NotRequired[float]
+    footprint_bound_m: NotRequired[float]
+    h_floor_m: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/preview/properties/why_n
+class TaskingTaskPreviewWhyN(TypedDict):
+    rule: Literal["makespan", "fleet_short", "user_fixed"]
+    n_minus_1_makespan_s: NotRequired[float | None]
+
+
+# tasking/task.schema.json#/properties/progress
+class TaskingTaskProgress(TypedDict):
+    pct: NotRequired[float]
+    coverage_pct: NotRequired[float]
+    laps_done: NotRequired[int]
+    dwell_s: NotRequired[float]
+
+
+# tasking/task.schema.json#/$defs/request
+class TaskingTaskRequest(TypedDict):
+    type: Literal["point_watch", "polyline_patrol", "area_patrol", "area_scan_gsd", "perimeter_patrol", "relay_watch", "area_guard"]
+    label: NotRequired[str | None]
+    params: dict[str, Any]
+    common: NotRequired[TaskingTaskRequestCommon]
+    preview_id: NotRequired[str | None]
+
+
+# tasking/task.schema.json#/$defs/request/properties/common
+class TaskingTaskRequestCommon(TypedDict):
+    priority: NotRequired[Literal["low", "normal", "high"]]
+    start_at_s: NotRequired[float | None]
+    allowed_nests: NotRequired[list[WorldCommonSlug]]
+    allowed_models: NotRequired[list[str]]
+    on_detect: NotRequired[Literal["notify", "relay", "ignore"]]
+    allocator: NotRequired[str]
+    external_fallback: NotRequired[Literal["greedy", "none"]]
+
+
+# tasking/task.schema.json#/properties/items/items
+class TaskingTask_(TypedDict):
+    wid: str
+    kind: str
+    uav: NotRequired[WorldCommonSlug | None]
+    state: str
+    eta_s: NotRequired[float | None]
+    reason: NotRequired[str | None]
+
+
+# sandbox/template.schema.json# awr.sandbox.template.v1 (scenario template)
+class Template(TypedDict):
+    schema: Literal["awr.sandbox.template.v1"]
+    template_id: str
+    world_id: WorldCommonId
+    name_zh: str
+    summary_zh: NotRequired[str]
+    first_feedback_zh: NotRequired[str]
+    recommended: NotRequired[bool]
+    calendar_default: NotRequired[TemplateCalendarDefault]
+    acoustic_bg: NotRequired[Literal["rural", "suburban", "urban"]]
+    env: NotRequired[TemplateEnv]
+    seed: NotRequired[int]
+    models: NotRequired[list[Clone]]
+    nests: list[Nest]
+    vehicles: list[TemplateVehicles]
+    targets: list[TargetCreateRequest]
+    tasks: list[TaskingTaskRequest]
+    camera: NotRequired[dict[str, Any]]
+    anchors_ref: NotRequired[str]
+
+
+# sandbox/template.schema.json#/properties/calendar_default
+class TemplateCalendarDefault(TypedDict):
+    start_local: NotRequired[str]
+    tz: NotRequired[str]
+
+
+# sandbox/template.schema.json#/properties/env
+class TemplateEnv(TypedDict):
+    preset: NotRequired[str | None]
+    overrides: NotRequired[dict[str, Any]]
+
+
+# sandbox/template.schema.json#/properties/vehicles/items
+class TemplateVehicles(TypedDict):
+    id: NotRequired[WorldCommonSlug]
+    model_id: str
+    nest_id: NotRequired[WorldCommonSlug | None]
+    home_enu_m: NotRequired[list[float | None] | None]
+    label: NotRequired[str | None]
+    yaw_rad: NotRequired[float]
+    initial_soc: NotRequired[float]
+    sensors: NotRequired[list[TemplateVehiclesSensorsOneOf0] | None]
+    limits_profile: NotRequired[str | None]
+    lights: NotRequired[TemplateVehiclesLights]
+
+
+# sandbox/template.schema.json#/properties/vehicles/items/properties/lights
+class TemplateVehiclesLights(TypedDict):
+    nav: NotRequired[bool]
+    strobe: NotRequired[bool]
+
+
+# sandbox/template.schema.json#/properties/vehicles/items/properties/sensors/oneOf/0/items
+class TemplateVehiclesSensorsOneOf0(TypedDict):
+    name: str
+    type: NotRequired[str]
+    enabled: NotRequired[bool]
 
 
 # vehicle/thermal.schema.json# Thermal camera file sensors/thermal.yaml (awr.sensor.thermal.v1)
@@ -3989,6 +7386,17 @@ class ThermalMount(TypedDict):
     preset: NotRequired[str]
 
 
+# sandbox/ticket.schema.json# awr.sandbox.ticket.v1 (queue ticket view)
+class Ticket(TypedDict):
+    ticket_id: str
+    state: Literal["waiting", "slot_ready", "claimed", "expired"]
+    position: int
+    eta_s: float | None
+    claim_deadline_unix_ns: NotRequired[str | None]
+    world_id: NotRequired[WorldCommonId]
+    template_id: NotRequired[str | None]
+
+
 # rt/topics.schema.json# topics.json meta-schema
 class Topics(TypedDict):
     schema: Literal["awr.topics.v1"]
@@ -3999,6 +7407,7 @@ class Topics(TypedDict):
     default_subscriptions: NotRequired[list[str]]
     deprecated: NotRequired[list[TopicsDeprecated]]
     topics: list[TopicsTopics]
+    default_subscriptions_sandbox: NotRequired[list[str]]
 
 
 # rt/topics.schema.json#/properties/deprecated/items
@@ -4019,12 +7428,14 @@ class TopicsTopics(TypedDict):
     priority: int | None
     self_contained: bool
     owner: str
-    d1: Literal["core", "ext", "V0.2", "V0.3", "V0.4"]
+    d1: Literal["core", "ext", "V0.2", "V0.3", "V0.4", "V0.2-demo"]
     aliases: NotRequired[list[str]]
     clock: NotRequired[Literal["sim", "wall"]]
     doc: NotRequired[str]
     role: NotRequired[Literal["viewer", "operator", "admin"]]
     deprecated: NotRequired[bool]
+    interest: NotRequired[bool]
+    apis: NotRequired[list[Literal["show", "sandbox"]]]
 
 
 # rt/topics.schema.json#/properties/topics/items/properties/default_rate/oneOf/0
@@ -4125,6 +7536,15 @@ class UavStateExt(TypedDict):
     pos_err_m: NotRequired[float | None]
     wind_rel_mps: NotRequired[list[float]]
     sens: NotRequired[UavStateExtSens]
+    model_id: NotRequired[str]
+    label: NotRequired[str]
+    nest_id: NotRequired[str | None]
+    work: NotRequired[UavStateExtWorkOneOf0 | None]
+    fw: NotRequired[UavStateExtFwOneOf0 | None]
+    manual: NotRequired[UavStateExtManual]
+    env_limit_warn: NotRequired[bool]
+    limits_profile: NotRequired[str]
+    energy: NotRequired[UavStateExtEnergy]
 
 
 # rt/payloads/uav_state_ext.schema.json#/properties/battery/oneOf/0
@@ -4142,9 +7562,26 @@ class UavStateExtCtrl(TypedDict):
     phase: NotRequired[int]
 
 
+# rt/payloads/uav_state_ext.schema.json#/properties/energy
+class UavStateExtEnergy(TypedDict):
+    e_avail_wh: NotRequired[float]
+    e_rtl_wh: NotRequired[float]
+    e_res_wh: NotRequired[float]
+    t_end_s: NotRequired[float]
+
+
 # rt/payloads/uav_state_ext.schema.json#/properties/frames
 class UavStateExtFrames(TypedDict):
     t_world_local: NotRequired[WorldCommonMat4 | None]
+
+
+# rt/payloads/uav_state_ext.schema.json#/properties/fw/oneOf/0
+class UavStateExtFwOneOf0(TypedDict):
+    mode: Literal["MC", "TRANSITION_FW", "FW", "TRANSITION_MC"]
+    airspeed_mps: NotRequired[float]
+    bank_rad: NotRequired[float]
+    gamma_rad: NotRequired[float]
+    hover_used_s: NotRequired[float]
 
 
 # rt/payloads/uav_state_ext.schema.json#/properties/lease
@@ -4170,6 +7607,12 @@ class UavStateExtLoc(TypedDict):
     epv_m: NotRequired[float | None]
     hdop: NotRequired[float | None]
     err_enu_m: NotRequired[list[float] | None]
+
+
+# rt/payloads/uav_state_ext.schema.json#/properties/manual
+class UavStateExtManual(TypedDict):
+    active: bool
+    keepout_guard: NotRequired[Literal["clamp", "warn", "off"]]
 
 
 # rt/payloads/uav_state_ext.schema.json#/properties/mission/oneOf/0
@@ -4217,6 +7660,13 @@ class UavStateExtTrajOneOf0(TypedDict):
     rate: NotRequired[float]
 
 
+# rt/payloads/uav_state_ext.schema.json#/properties/work/oneOf/0
+class UavStateExtWorkOneOf0(TypedDict):
+    tid: WorldCommonSlug
+    wid: str
+    kind: NotRequired[str]
+
+
 # rt/units.schema.json# units.json meta-schema
 class Units(TypedDict):
     schema: Literal["awr.units.v1"]
@@ -4241,7 +7691,180 @@ class UnitsSuffixes(TypedDict):
     quantity: str
 
 
-# vehicle/vehicle_profile.schema.json# Vehicle profile params.yaml (awr.vehicle.v1)
+# vehicle/catalog.schema.json# awr.vehicle_catalog.v1 (vehicles/catalog.json)
+class VehicleCatalog(TypedDict):
+    schema: Literal["awr.vehicle_catalog.v1"]
+    catalog_version: str
+    disclaimer_zh: str
+    limits_default: NotRequired[str]
+    models: list[VehicleCatalogModels]
+    sensor_models: list[VehicleCatalogSensorModels]
+    packs: list[VehicleCatalogPacks]
+    chargers: list[VehicleCatalogChargers]
+
+
+# vehicle/catalog.schema.json#/properties/chargers/items
+class VehicleCatalogChargers(TypedDict):
+    model: str
+    channels: int
+    i_max_a: float
+    cells_min: NotRequired[int]
+    cells_max: int
+    mass_kg: NotRequired[float]
+    conf: NotRequired[Literal["A", "B", "C", "D"]]
+    src: NotRequired[str]
+
+
+# vehicle/catalog.schema.json#/$defs/model_detail
+class VehicleCatalogModelDetail(TypedDict):
+    profile: NotRequired[VehicleProfile]
+    params_table: NotRequired[list[VehicleCatalogModelDetailParamsTable]]
+    derived: NotRequired[dict[str, float | None]]
+
+
+# vehicle/catalog.schema.json#/$defs/model_detail/properties/params_table/items
+class VehicleCatalogModelDetailParamsTable(TypedDict):
+    group: NotRequired[str]
+    key: str
+    label_zh: NotRequired[str]
+    value: Any
+    unit: NotRequired[str | None]
+    confidence: Literal["A", "B", "C", "D", "label"]
+    use_zh: NotRequired[str]
+
+
+# vehicle/catalog.schema.json#/$defs/model_summary
+class VehicleCatalogModelSummary(TypedDict):
+    model_id: str
+    name_zh: NotRequired[str]
+    category: Literal["multirotor", "fixed_wing", "vtol"]
+    reference: bool
+    version: str
+    mass_kg: NotRequired[float]
+    mtow_kg: NotRequired[float]
+    endurance: NotRequired[VehicleCatalogModelSummaryEndurance]
+    speed: NotRequired[VehicleCatalogModelSummarySpeed]
+    link_range_m: NotRequired[float]
+    default_sensors: NotRequired[list[str]]
+    optional_sensors: NotRequired[list[str]]
+    nest_kinds: NotRequired[list[Literal["box", "launcher", "vtol_pad"]]]
+    session_clone: NotRequired[bool]
+
+
+# vehicle/catalog.schema.json#/$defs/model_summary/properties/endurance
+class VehicleCatalogModelSummaryEndurance(TypedDict):
+    hover_s: NotRequired[float]
+    cruise_s: NotRequired[float]
+    loiter_s: NotRequired[float]
+    mission_s: NotRequired[float]
+
+
+# vehicle/catalog.schema.json#/$defs/model_summary/properties/speed
+class VehicleCatalogModelSummarySpeed(TypedDict):
+    cruise_mps: NotRequired[float]
+    max_mps: NotRequired[float]
+    min_mps: NotRequired[float]
+    stall_mps: NotRequired[float]
+
+
+# vehicle/catalog.schema.json#/properties/models/items
+class VehicleCatalogModels(TypedDict):
+    id: str
+    dir: str
+    profile_version: str
+    display_name: str
+    display_name_zh: NotRequired[str]
+    category: Literal["multirotor", "fixed_wing", "vtol"]
+    size_class: NotRequired[Literal["light", "medium", "heavy"]]
+    reference: bool
+    visible: bool
+    order: NotRequired[int]
+    nest_kinds: list[Literal["box", "launcher", "vtol_pad"]]
+    summary_zh: NotRequired[str]
+    versions: NotRequired[list[str]]
+
+
+# vehicle/catalog.schema.json#/$defs/models/properties/items/items/properties/endurance
+class VehicleCatalogModelsEndurance(TypedDict):
+    hover_s: NotRequired[float]
+    cruise_s: NotRequired[float]
+    loiter_s: NotRequired[float]
+    mission_s: NotRequired[float]
+
+
+# vehicle/catalog.schema.json#/$defs/models/properties/items/items/properties/speed
+class VehicleCatalogModelsSpeed(TypedDict):
+    cruise_mps: NotRequired[float]
+    max_mps: NotRequired[float]
+    min_mps: NotRequired[float]
+    stall_mps: NotRequired[float]
+
+
+# vehicle/catalog.schema.json#/$defs/models
+class VehicleCatalogModels_(TypedDict):
+    items: list[VehicleCatalogModels__]
+
+
+# vehicle/catalog.schema.json#/$defs/models/properties/items/items
+class VehicleCatalogModels__(TypedDict):
+    model_id: str
+    name_zh: NotRequired[str]
+    category: Literal["multirotor", "fixed_wing", "vtol"]
+    reference: bool
+    version: str
+    mass_kg: NotRequired[float]
+    mtow_kg: NotRequired[float]
+    endurance: NotRequired[VehicleCatalogModelsEndurance]
+    speed: NotRequired[VehicleCatalogModelsSpeed]
+    link_range_m: NotRequired[float]
+    default_sensors: NotRequired[list[str]]
+    optional_sensors: NotRequired[list[str]]
+    nest_kinds: NotRequired[list[Literal["box", "launcher", "vtol_pad"]]]
+    session_clone: NotRequired[bool]
+
+
+# vehicle/catalog.schema.json#/properties/packs/items
+class VehicleCatalogPacks(TypedDict):
+    pack_id: str
+    cells: int
+    chemistry: Literal["lipo", "lihv", "liion"]
+    capacity_ah: float
+    capacity_wh: NotRequired[float]
+    mass_kg: NotRequired[float]
+    c_max: float
+    packs_per_swap: NotRequired[int]
+    conf: NotRequired[Literal["A", "B", "C", "D"]]
+    src: NotRequired[str]
+
+
+# vehicle/catalog.schema.json#/$defs/sensor_item
+class VehicleCatalogSensorItem(TypedDict):
+    sensor_type: str
+    name_zh: NotRequired[str]
+    kind: Literal["eo", "nir", "nir_illuminator", "lwir", "radar", "acoustic", "lidar"]
+    reference: NotRequired[bool]
+    mass_kg: NotRequired[float]
+    power_w: NotRequired[float]
+    mount_requires_landed: NotRequired[bool]
+    spec: dict[str, Any]
+
+
+# vehicle/catalog.schema.json#/properties/sensor_models/items
+class VehicleCatalogSensorModels(TypedDict):
+    id: str
+    file: str
+    type: Literal["eo_zoom", "nir_illuminator", "lwir", "radar_mmw", "acoustic_array", "lidar_livox", "gnss", "imu"]
+    model_version: str
+    reference: bool
+    visible: NotRequired[bool]
+
+
+# vehicle/catalog.schema.json#/$defs/sensors
+class VehicleCatalogSensors(TypedDict):
+    items: list[VehicleCatalogSensorItem]
+
+
+# vehicle/vehicle_profile.schema.json# Vehicle profile params.yaml (awr.vehicle.v1, schema 1.1)
 class VehicleProfile(TypedDict):
     schema: Literal["awr.vehicle.v1"]
     profile_version: str
@@ -4252,21 +7875,49 @@ class VehicleProfile(TypedDict):
     frame: VehicleProfileFrame
     mass_kg: VehicleProfileMassKg
     mtow_kg: NotRequired[VehicleProfileMtowKg]
-    inertia_kgm2: VehicleProfileInertiaKgm2
+    inertia_kgm2: NotRequired[VehicleProfileInertiaKgm2]
     geometry: VehicleProfileGeometry
-    motor: VehicleProfileMotor
-    prop: VehicleProfileProp
-    aero: VehicleProfileAero
+    motor: NotRequired[VehicleProfileMotor]
+    prop: NotRequired[VehicleProfileProp]
+    aero: NotRequired[VehicleProfileAero]
     battery: NotRequired[VehicleProfileBatteryOneOf0 | None]
     limits_profiles: VehicleProfileLimitsProfiles
     wind_rating_mps: NotRequired[VehicleProfileWindRatingMps]
     fidelity: VehicleProfileFidelity
     model: WorldCommonRelHref
-    sensors: NotRequired[dict[str, WorldCommonRelHref]]
+    sensors: NotRequired[dict[str, WorldCommonRelHref | VehicleProfileSensorsOneOf1]]
     payload: NotRequired[list[VehicleProfilePayload]]
     derived: NotRequired[VehicleProfileDerived]
     rejected: NotRequired[list[VehicleProfileRejected]]
     variants: NotRequired[dict[str, dict[str, Any]]]
+    airframe: NotRequired[VehicleProfileAirframe]
+    vtol: NotRequired[VehicleProfileVtol]
+    acoustic: NotRequired[VehicleProfileAcoustic]
+    visual: NotRequired[VehicleProfileVisual]
+    rcs_m2: NotRequired[VehicleProfileRcsM2]
+    ir: NotRequired[VehicleProfileIr]
+    link: NotRequired[VehicleProfileLink]
+    nav: NotRequired[VehicleProfileNav]
+    env_limits: NotRequired[VehicleProfileEnvLimits]
+    capabilities: NotRequired[list[str]]
+    compute_tops: NotRequired[float]
+    labels: NotRequired[dict[str, str]]
+    catalog: NotRequired[VehicleProfileCatalog]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/acoustic
+class VehicleProfileAcoustic(TypedDict):
+    lwa_hover_dba: NotRequired[float]
+    lwa_cruise_dba: NotRequired[float]
+    thrust_exp: NotRequired[float]
+    bpf_hz: NotRequired[float]
+    bpf_cruise_hz: NotRequired[float]
+    blades: NotRequired[int]
+    tonal_db: NotRequired[float]
+    f_pk_hz: NotRequired[float]
+    band_shape_db: NotRequired[list[float]]
+    conf: NotRequired[Literal["A", "B", "C", "D"]]
+    src: NotRequired[str]
 
 
 # vehicle/vehicle_profile.schema.json#/properties/aero
@@ -4301,6 +7952,227 @@ class VehicleProfileAeroSihKdvEquiv(TypedDict):
     check: NotRequired[str]
 
 
+# vehicle/vehicle_profile.schema.json#/properties/airframe
+class VehicleProfileAirframe(TypedDict):
+    span_m: NotRequired[VehicleProfileAirframeSpanM]
+    length_m: NotRequired[VehicleProfileAirframeLengthM]
+    wing_area_m2: VehicleProfileAirframeWingAreaM2
+    cd0: VehicleProfileAirframeCd0
+    oswald_e: VehicleProfileAirframeOswaldE
+    cl_max: VehicleProfileAirframeClMax
+    eta_prop: VehicleProfileAirframeEtaProp
+    p_avionics_w: NotRequired[VehicleProfileAirframePAvionicsW]
+    p_max_w: NotRequired[VehicleProfileAirframePMaxW]
+    v_min_mps: float | VehicleProfileAirframeVMinMpsOneOf1
+    v_loiter_mps: NotRequired[float | VehicleProfileAirframeVLoiterMpsOneOf1]
+    v_cruise_mps: float | VehicleProfileAirframeVCruiseMpsOneOf1
+    v_max_mps: float | VehicleProfileAirframeVMaxMpsOneOf1
+    phi_max_deg: float | VehicleProfileAirframePhiMaxDegOneOf1
+    roll_rate_max_deg_s: NotRequired[float | VehicleProfileAirframeRollRateMaxDegSOneOf1]
+    tau_v_s: NotRequired[float | VehicleProfileAirframeTauVSOneOf1]
+    tau_phi_s: NotRequired[float | VehicleProfileAirframeTauPhiSOneOf1]
+    accel_max_mps2: NotRequired[float | VehicleProfileAirframeAccelMaxMps2OneOf1]
+    decel_max_mps2: NotRequired[float | VehicleProfileAirframeDecelMaxMps2OneOf1]
+    climb_max_mps: NotRequired[float | VehicleProfileAirframeClimbMaxMpsOneOf1]
+    sink_max_mps: NotRequired[float | VehicleProfileAirframeSinkMaxMpsOneOf1]
+    r_loiter_default_m: NotRequired[float | VehicleProfileAirframeRLoiterDefaultMOneOf1]
+    launch: NotRequired[VehicleProfileAirframeLaunch]
+    recovery: NotRequired[VehicleProfileAirframeRecovery]
+    conf: NotRequired[Literal["A", "B", "C", "D"]]
+    src: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/accel_max_mps2/oneOf/1
+class VehicleProfileAirframeAccelMaxMps2OneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/cd0
+class VehicleProfileAirframeCd0(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/cl_max
+class VehicleProfileAirframeClMax(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/climb_max_mps/oneOf/1
+class VehicleProfileAirframeClimbMaxMpsOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/decel_max_mps2/oneOf/1
+class VehicleProfileAirframeDecelMaxMps2OneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/eta_prop
+class VehicleProfileAirframeEtaProp(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/launch
+class VehicleProfileAirframeLaunch(TypedDict):
+    type: Literal["catapult", "hand", "vtol", "runway"]
+    t_s: NotRequired[float]
+    climb_mps: NotRequired[float]
+    alt_agl_m: NotRequired[float]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/length_m
+class VehicleProfileAirframeLengthM(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/oswald_e
+class VehicleProfileAirframeOswaldE(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/p_avionics_w
+class VehicleProfileAirframePAvionicsW(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/p_max_w
+class VehicleProfileAirframePMaxW(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/phi_max_deg/oneOf/1
+class VehicleProfileAirframePhiMaxDegOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/r_loiter_default_m/oneOf/1
+class VehicleProfileAirframeRLoiterDefaultMOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/recovery
+class VehicleProfileAirframeRecovery(TypedDict):
+    type: Literal["parachute", "net", "vtol", "belly"]
+    descent_mps: NotRequired[float]
+    drift: NotRequired[Literal["wind", "none"]]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/roll_rate_max_deg_s/oneOf/1
+class VehicleProfileAirframeRollRateMaxDegSOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/sink_max_mps/oneOf/1
+class VehicleProfileAirframeSinkMaxMpsOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/span_m
+class VehicleProfileAirframeSpanM(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/tau_phi_s/oneOf/1
+class VehicleProfileAirframeTauPhiSOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/tau_v_s/oneOf/1
+class VehicleProfileAirframeTauVSOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/v_cruise_mps/oneOf/1
+class VehicleProfileAirframeVCruiseMpsOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/v_loiter_mps/oneOf/1
+class VehicleProfileAirframeVLoiterMpsOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/v_max_mps/oneOf/1
+class VehicleProfileAirframeVMaxMpsOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/v_min_mps/oneOf/1
+class VehicleProfileAirframeVMinMpsOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/airframe/properties/wing_area_m2
+class VehicleProfileAirframeWingAreaM2(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
 # vehicle/vehicle_profile.schema.json#/properties/battery/oneOf/0
 class VehicleProfileBatteryOneOf0(TypedDict):
     cells: int
@@ -4308,8 +8180,15 @@ class VehicleProfileBatteryOneOf0(TypedDict):
     v_nominal_v: VehicleProfileBatteryOneOfVNominalV0
     capacity_wh: VehicleProfileBatteryOneOfCapacityWh0
     usable_frac: VehicleProfileBatteryOneOfUsableFrac0
-    p_hover_w: VehicleProfileBatteryOneOfPHoverW0
+    p_hover_w: NotRequired[VehicleProfileBatteryOneOfPHoverW0]
     hover_endurance_s: NotRequired[VehicleProfileBatteryOneOfHoverEnduranceS0]
+    chemistry: NotRequired[Literal["lipo", "lihv", "liion"]]
+    mass_kg: NotRequired[VehicleProfileBatteryOneOfMassKg0]
+    v_range_v: NotRequired[list[float]]
+    v_storage_v: NotRequired[float]
+    size_m: NotRequired[list[float]]
+    pack_id: NotRequired[str]
+    packs_per_swap: NotRequired[int]
 
 
 # vehicle/vehicle_profile.schema.json#/properties/battery/oneOf/0/properties/capacity_ah
@@ -4330,6 +8209,14 @@ class VehicleProfileBatteryOneOfCapacityWh0(TypedDict):
 
 # vehicle/vehicle_profile.schema.json#/properties/battery/oneOf/0/properties/hover_endurance_s
 class VehicleProfileBatteryOneOfHoverEnduranceS0(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/battery/oneOf/0/properties/mass_kg
+class VehicleProfileBatteryOneOfMassKg0(TypedDict):
     value: float
     conf: Literal["A", "B", "C", "D"]
     src: str
@@ -4360,6 +8247,14 @@ class VehicleProfileBatteryOneOfVNominalV0(TypedDict):
     check: NotRequired[str]
 
 
+# vehicle/vehicle_profile.schema.json#/properties/catalog
+class VehicleProfileCatalog(TypedDict):
+    reference: bool
+    category: Literal["multirotor", "fixed_wing", "vtol"]
+    size_class: NotRequired[Literal["light", "medium", "heavy"]]
+    limits_default: str
+
+
 # vehicle/vehicle_profile.schema.json#/properties/derived
 class VehicleProfileDerived(TypedDict):
     hover_thrust: NotRequired[float]
@@ -4367,18 +8262,36 @@ class VehicleProfileDerived(TypedDict):
     tilt_at_8mps_deg: NotRequired[float]
     cda_per_mass_m2kg: NotRequired[float]
     endurance_check_s: NotRequired[float]
+    v_stall_mps: NotRequired[float]
+    aspect_ratio: NotRequired[float]
+    wing_loading_n_m2: NotRequired[float]
+    p_cruise_w: NotRequired[float]
+    p_loiter_w: NotRequired[float]
+    endurance_cruise_s: NotRequired[float]
+    endurance_loiter_s: NotRequired[float]
+    r_min_loiter_m: NotRequired[float]
+    ld_max: NotRequired[float]
+    endurance_mission_cruise_s: NotRequired[float]
+    airframe_residual_kg: NotRequired[float]
+    band_shape_db: NotRequired[list[float]]
+    sl_a_1m_dba: NotRequired[float]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/env_limits
+class VehicleProfileEnvLimits(TypedDict):
+    temp_c: list[float]
 
 
 # vehicle/vehicle_profile.schema.json#/properties/fidelity
 class VehicleProfileFidelity(TypedDict):
-    default: Literal["l0", "l1", "sih"]
-    supported: list[Literal["l0", "l1", "sih"]]
+    default: Literal["l0", "l1", "sih", "fw_kin"]
+    supported: list[Literal["l0", "l1", "sih", "fw_kin"]]
     sih_airframe: NotRequired[str]
 
 
 # vehicle/vehicle_profile.schema.json#/properties/frame
 class VehicleProfileFrame(TypedDict):
-    type: Literal["quad_x", "hex_x"]
+    type: Literal["quad_x", "hex_x", "fixed_wing", "vtol_quadplane"]
     rotor_order: Literal["px4"]
     body: Literal["frd"]
 
@@ -4386,9 +8299,10 @@ class VehicleProfileFrame(TypedDict):
 # vehicle/vehicle_profile.schema.json#/properties/geometry
 class VehicleProfileGeometry(TypedDict):
     wheelbase_m: NotRequired[VehicleProfileGeometryWheelbaseM]
-    arm_xy_m: VehicleProfileGeometryArmXyM
+    arm_xy_m: NotRequired[VehicleProfileGeometryArmXyM]
     rotor_z_m: NotRequired[VehicleProfileGeometryRotorZM]
     collision_radius_m: VehicleProfileGeometryCollisionRadiusM
+    size_m: NotRequired[VehicleProfileGeometrySizeM]
 
 
 # vehicle/vehicle_profile.schema.json#/properties/geometry/properties/arm_xy_m
@@ -4415,6 +8329,20 @@ class VehicleProfileGeometryRotorZM(TypedDict):
     check: NotRequired[str]
 
 
+# vehicle/vehicle_profile.schema.json#/properties/geometry/properties/size_m
+class VehicleProfileGeometrySizeM(TypedDict):
+    value: VehicleProfileGeometrySizeMValue
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+
+
+# vehicle/vehicle_profile.schema.json#/properties/geometry/properties/size_m/properties/value
+class VehicleProfileGeometrySizeMValue(TypedDict):
+    l: float  # noqa: E741
+    w: float
+    h: float
+
+
 # vehicle/vehicle_profile.schema.json#/properties/geometry/properties/wheelbase_m
 class VehicleProfileGeometryWheelbaseM(TypedDict):
     value: float
@@ -4438,9 +8366,22 @@ class VehicleProfileInertiaKgm2Value(TypedDict):
     zz: float
 
 
+# vehicle/vehicle_profile.schema.json#/properties/ir
+class VehicleProfileIr(TypedDict):
+    motor_delta_t_k: NotRequired[float]
+    hot_fraction: NotRequired[float]
+    emissivity: NotRequired[float]
+
+
 # vehicle/vehicle_profile.schema.json#/properties/limits_profiles
 class VehicleProfileLimitsProfiles(TypedDict):
     default: str
+
+
+# vehicle/vehicle_profile.schema.json#/properties/link
+class VehicleProfileLink(TypedDict):
+    model: NotRequired[str]
+    range_m: float
 
 
 # vehicle/vehicle_profile.schema.json#/properties/mass_kg
@@ -4509,6 +8450,36 @@ class VehicleProfileMtowKg(TypedDict):
     check: NotRequired[str]
 
 
+# vehicle/vehicle_profile.schema.json#/properties/nav
+class VehicleProfileNav(TypedDict):
+    hold_sigma_m: NotRequired[VehicleProfileNavHoldSigmaM]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/nav/properties/hold_sigma_m
+class VehicleProfileNavHoldSigmaM(TypedDict):
+    rtk: NotRequired[VehicleProfileNavHoldSigmaMRtk]
+    slam: NotRequired[VehicleProfileNavHoldSigmaMSlam]
+    gnss: NotRequired[VehicleProfileNavHoldSigmaMGnss]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/nav/properties/hold_sigma_m/properties/gnss
+class VehicleProfileNavHoldSigmaMGnss(TypedDict):
+    h: float
+    v: float
+
+
+# vehicle/vehicle_profile.schema.json#/properties/nav/properties/hold_sigma_m/properties/rtk
+class VehicleProfileNavHoldSigmaMRtk(TypedDict):
+    h: float
+    v: float
+
+
+# vehicle/vehicle_profile.schema.json#/properties/nav/properties/hold_sigma_m/properties/slam
+class VehicleProfileNavHoldSigmaMSlam(TypedDict):
+    h: float
+    v: float
+
+
 # vehicle/vehicle_profile.schema.json#/properties/payload/items
 class VehicleProfilePayload(TypedDict):
     name: str
@@ -4539,12 +8510,68 @@ class VehicleProfilePropDM(TypedDict):
     check: NotRequired[str]
 
 
+# vehicle/vehicle_profile.schema.json#/properties/rcs_m2
+class VehicleProfileRcsM2(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
+
+
 # vehicle/vehicle_profile.schema.json#/properties/rejected/items
 class VehicleProfileRejected(TypedDict):
     param: str
     value: Any
     src: str
     why: str
+
+
+# vehicle/vehicle_profile.schema.json#/properties/sensors/additionalProperties/oneOf/1
+class VehicleProfileSensorsOneOf1(TypedDict):
+    file: WorldCommonRelHref
+    default: NotRequired[bool]
+    removable: NotRequired[bool]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/visual
+class VehicleProfileVisual(TypedDict):
+    area_m2: VehicleProfileVisualAreaM2
+    contrast_sky: NotRequired[float]
+    contrast_ground: NotRequired[float]
+    lights_installed: NotRequired[VehicleProfileVisualLightsInstalled]
+    night_visible_m: NotRequired[float]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/visual/properties/area_m2
+class VehicleProfileVisualAreaM2(TypedDict):
+    top: float
+    side: float
+    front: float
+
+
+# vehicle/vehicle_profile.schema.json#/properties/visual/properties/lights_installed
+class VehicleProfileVisualLightsInstalled(TypedDict):
+    nav: NotRequired[bool]
+    strobe: NotRequired[bool]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/vtol
+class VehicleProfileVtol(TypedDict):
+    transition_fw_s: float
+    transition_mc_s: float
+    v_transition_mps: NotRequired[float]
+    p_hover_w: float | VehicleProfileVtolPHoverWOneOf1
+    hover_max_s: float
+    d_fw_min_m: NotRequired[float]
+    agl_transition_min_m: NotRequired[float]
+
+
+# vehicle/vehicle_profile.schema.json#/properties/vtol/properties/p_hover_w/oneOf/1
+class VehicleProfileVtolPHoverWOneOf1(TypedDict):
+    value: float
+    conf: Literal["A", "B", "C", "D"]
+    src: str
+    check: NotRequired[str]
 
 
 # vehicle/vehicle_profile.schema.json#/properties/wind_rating_mps
@@ -4665,6 +8692,34 @@ class WorldCommonSourceFile(TypedDict):
     sha256: WorldCommonSha256
 
 
+# sandbox/world_costs.schema.json# awr.sandbox.world_costs.v1 (configs/sandbox/world_costs.json)
+class WorldCosts(TypedDict):
+    schema: Literal["awr.sandbox.world_costs.v1"]
+    generator: NotRequired[str]
+    generated_unix_ns: NotRequired[str]
+    host: NotRequired[WorldCostsHost]
+    worlds: list[WorldCostsWorlds]
+
+
+# sandbox/world_costs.schema.json#/properties/host
+class WorldCostsHost(TypedDict):
+    cpu_model: NotRequired[str]
+    cores: NotRequired[int]
+    mem_mb: NotRequired[float]
+
+
+# sandbox/world_costs.schema.json#/properties/worlds/items
+class WorldCostsWorlds(TypedDict):
+    world: WorldCommonId
+    world_class: Literal["S", "L"]
+    anon_mb: float
+    ws_mb: float
+    c0: float
+    available: bool
+    measured: NotRequired[bool]
+    src: NotRequired[str]
+
+
 # schemas/world/world.schema.json#/properties/dataset
 class WorldDataset(TypedDict):
     name: str
@@ -4672,6 +8727,7 @@ class WorldDataset(TypedDict):
     url: NotRequired[str]
     citation: NotRequired[str]
     license: str
+    terms: NotRequired[str]
     redistribution: bool
     notice: NotRequired[str]
     sourceFiles: list[WorldCommonSourceFile]
@@ -4879,6 +8935,10 @@ EnvState = TypedDict("EnvState", {
     "anchors": EnvStateAnchors,
     "events": list[list[Any]],
     "vis": EnvStateVis,
+    "calendar": NotRequired[EnvStateCalendar],
+    "humidity_pct": NotRequired[float],
+    "surface": NotRequired[EnvStateSurface],
+    "acoustic_bg": NotRequired[EnvStateAcousticBg],
 })
 
 
@@ -4960,6 +9020,76 @@ RngStreamsReserved = TypedDict("RngStreamsReserved", {
 # scenario/scenario.schema.json#/$defs/predicate/oneOf/2
 ScenarioPredicateOneOf2 = TypedDict("ScenarioPredicateOneOf2", {
     "not": ScenarioPredicate,
+})
+
+
+# target/target.schema.json# awr.target.v1 (target object)
+Target = TypedDict("Target", {
+    "id": NotRequired[WorldCommonSlug],
+    "label": NotRequired[str],
+    "class": Literal["person", "uav", "machine", "dog", "vehicle", "object"],
+    "enabled": NotRequired[bool],
+    "pos": NotRequired[list[float | None]],
+    "yaw_rad": NotRequired[float],
+    "alt_agl_m": NotRequired[float],
+    "size_m": NotRequired[TargetSizeM],
+    "critical_dim_m": NotRequired[float | None],
+    "motion": NotRequired[TargetMotion],
+    "color_srgb": NotRequired[str],
+    "albedo_vis": NotRequired[float],
+    "contrast0": NotRequired[float],
+    "camouflage": NotRequired[float],
+    "occlusion": NotRequired[float],
+    "reflect_850": NotRequired[float],
+    "reflect_905": NotRequired[float],
+    "thermal": NotRequired[TargetThermal],
+    "rcs_m2": NotRequired[float],
+    "rcs_fluct": NotRequired[Literal["swerling0", "swerling1"]],
+    "rcs_band": NotRequired[str],
+    "sound": NotRequired[Sound | None],
+    "rf": NotRequired[TargetRfOneOf0 | None],
+    "criterion_mode": NotRequired[Literal["geometric", "physical"]],
+    "alertness": NotRequired[float],
+    "hearing_th_dba": NotRequired[float],
+    "acoustic_adv_db": NotRequired[float],
+    "visual_theta0_arcmin": NotRequired[float],
+    "level_req": NotRequired[Literal["D", "R", "I"]],
+    "n_req_px": NotRequired[float | None],
+    "reaction": NotRequired[Reaction],
+    "calm_s": NotRequired[float],
+    "alert_radius_m": NotRequired[float],
+    "sensitivity": NotRequired[list[Sensitivity]],
+    "cfg_rev": NotRequired[int],
+    "visual_acuity_arcmin": NotRequired[float],
+    "hearing_band_adj_db": NotRequired[list[float] | None],
+    "radar_rx": NotRequired[TargetRadarRxOneOf0 | None],
+    "rf_rx": NotRequired[TargetRfRxOneOf0 | None],
+})
+
+
+# rt/payloads/target_detail.schema.json# awr.target.detail.v1
+TargetDetail = TypedDict("TargetDetail", {
+    "id": WorldCommonSlug,
+    "label": NotRequired[str],
+    "class": Literal["person", "uav", "machine", "dog", "vehicle", "object"],
+    "t_sim_ns": NotRequired[WorldCommonInt64],
+    "awareness": Literal["UNAWARE", "SUSPICIOUS", "REACTING", "ALERTED", "CALMING"],
+    "alertness": float,
+    "criterion_mode": Literal["geometric", "physical"],
+    "level_req": NotRequired[Literal["D", "R", "I"]],
+    "discovered_count": int,
+    "episode": NotRequired[int],
+    "last_discovered": NotRequired[TargetDetailLastDiscoveredOneOf0 | None],
+    "dwell": NotRequired[TargetDetailDwellOneOf0 | None],
+    "behavior": NotRequired[TargetDetailBehaviorOneOf0 | None],
+    "sensitivity": list[TargetDetailSensitivity],
+    "inside_n": NotRequired[int],
+    "keepout": NotRequired[TargetDetailKeepout],
+    "sound": NotRequired[TargetDetailSoundOneOf0 | None],
+    "motion": NotRequired[TargetDetailMotion],
+    "capture": NotRequired[TargetDetailCaptureOneOf0 | None],
+    "cfg_rev": int,
+    "cfg": NotRequired[Target],
 })
 
 

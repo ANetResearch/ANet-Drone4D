@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sandbox/1/capacity.schema.json",
+  "title": "awr.capacity.v1 (public capacity, SB-71)",
+  "description": "GET /api/sandbox/v1/capacity (AWR-17 §17.20.2; AWR-04 §15.5.4). Public, no token, Cache-Control public max-age=1, at most 1 KiB, no visitor identifiers. Draft by M17 (WP-04b) for contracts 1.2.0; sandbox.internal_active is an M17 addition (count of internal-tier sessions holding a slot, shown as '+1 internal'); null numbers mean the pool or the show-api status file is unavailable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "t_unix_ns", "build", "accepting", "maintenance", "degrade_level", "viewers", "sandbox", "power", "hint"],
+  "properties": {
+    "schema": {"const": "awr.capacity.v1"},
+    "t_unix_ns": {"type": "string", "pattern": "^[0-9]{1,20}$"},
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "channel", "commit", "dirty", "built_at", "release"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+        "channel": {"enum": ["demo", "local", "ci"]},
+        "commit": {"type": "string", "pattern": "^([0-9a-f]{10}|nogit)$"},
+        "dirty": {"type": "boolean"},
+        "built_at": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"},
+        "release": {"type": "string", "pattern": "^([0-9]{8}-[0-9]{6}-([0-9a-f]{10}|nogit)(-dirty)?|local-([0-9a-f]{10}|nogit))$"}
+      }
+    },
+    "accepting": {"type": "boolean"},
+    "maintenance": {"type": "boolean"},
+    "degrade_level": {"enum": ["L0", "L1", "L2", "L3", "L4"]},
+    "viewers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live", "max", "queue", "eta_s", "state"],
+      "properties": {
+        "live": {"type": ["integer", "null"], "minimum": 0},
+        "max": {"type": ["integer", "null"], "minimum": 0},
+        "queue": {"type": ["integer", "null"], "minimum": 0},
+        "eta_s": {"type": ["integer", "null"], "minimum": 0},
+        "state": {"enum": ["open", "full", "unknown"]}
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active", "max", "reserved_internal", "parked", "queue", "eta_s", "admit_now", "worlds_admit_now", "state"],
+      "properties": {
+        "active": {"type": ["integer", "null"], "minimum": 0},
+        "max": {"type": ["integer", "null"], "minimum": 0, "maximum": 6},
+        "reserved_internal": {"type": ["integer", "null"], "minimum": 0},
+        "internal_active": {"type": ["integer", "null"], "minimum": 0},
+        "parked": {"type": ["integer", "null"], "minimum": 0},
+        "queue": {"type": ["integer", "null"], "minimum": 0},
+        "eta_s": {"type": ["integer", "null"], "minimum": 0},
+        "admit_now": {"type": "boolean"},
+        "worlds_admit_now": {"type": "array", "maxItems": 16, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"}},
+        "state": {"enum": ["open", "full", "queue", "closed"]}
+      }
+    },
+    "power": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["viewer_idle_s", "sandbox_idle_s", "hidden_s", "warn_s"],
+      "properties": {
+        "viewer_idle_s": {"type": "number", "exclusiveMinimum": 0},
+        "sandbox_idle_s": {"type": "number", "exclusiveMinimum": 0},
+        "hidden_s": {"type": "number", "exclusiveMinimum": 0},
+        "warn_s": {"type": "number", "minimum": 0}
+      }
+    },
+    "hint": {"enum": ["open", "queue_viewer", "queue_sandbox", "queue_both", "closed", "unavailable"]}
+  }
+}

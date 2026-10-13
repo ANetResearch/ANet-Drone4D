@@ -139,7 +139,8 @@
               "ext",
               "V0.2",
               "V0.3",
-              "V0.4"
+              "V0.4",
+              "V0.2-demo"
             ]
           },
           "aliases": {
@@ -166,6 +167,20 @@
           },
           "deprecated": {
             "type": "boolean"
+          },
+          "interest": {
+            "type": "boolean",
+            "description": "true: produced only for the interest set and marks (ctl/sim-core/interest), AWR-17 §17.7.2"
+          },
+          "apis": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "show",
+                "sandbox"
+              ]
+            },
+            "description": "api processes that advertise the topic; absent = both (AWR-17 §17.7.2 rule 3)"
           }
         },
         "required": [
@@ -182,6 +197,13 @@
           "d1"
         ]
       }
+    },
+    "default_subscriptions_sandbox": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "sandbox browser defaults on top of default_subscriptions (AWR-17 §17.7.7)"
     }
   },
   "required": [

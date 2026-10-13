@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import numpy as np
 
-LAYOUT_ID = 0x3D5E08D0
+LAYOUT_ID = 0x009600AE
 SCHEMA_HASH: dict[str, str] = {
     "awr.DroneState64.v1": "b469b083",
     "awr.SwarmLite32.v1": "8ec882b6",
@@ -30,6 +30,7 @@ SCHEMA_HASH: dict[str, str] = {
     "awr.ipc.ReaderCursor.v1": "09ba61b1",
     "awr.ipc.SlotHeader.v1": "4e6ef433",
     "awr.ipc.Heartbeat16.v1": "420007cc",
+    "awr.TargetLite32.v1": "95be1644",
 }
 
 # awr.DroneState64.v1 (64 B): Full64: single vehicle full-precision state (topic uav/{id}/state; StateRing full region).
@@ -282,6 +283,18 @@ IPC_HEARTBEAT16 = np.dtype({
 assert IPC_HEARTBEAT16.itemsize == 16
 IPC_HEARTBEAT16_OFFSETS: dict[str, int] = {"mono_ns": 0, "pid": 8, "beat": 12}
 
+# awr.TargetLite32.v1 (32 B): TargetLite32: one row per target, n rows back to back in target_no order (topic swarm/target/state; bus state/sim-core/targets rows; AWR-17 §17.7.3). Not in the StateRing. Bytes 0-31 are the AWR-17 layout; flags bits 2-7 carry cfg_rev mod 64 (AWR-04 appendix B.3 L-03 merge, WP-01).
+TARGET_LITE32 = np.dtype({
+    "names": ["agent_no", "class", "state", "pos", "heading_rad", "speed_cms", "best", "alertness_u8", "discovered_n", "n_vol", "flags", "keepout_r_m"],
+    "formats": ["<u2", "u1", "u1", ("<f4", 3), "<f4", "<i2", "u1", "u1", "<u2", "u1", "u1", "<f4"],
+    "offsets": [0, 2, 3, 4, 16, 20, 22, 23, 24, 26, 27, 28],
+    "itemsize": 32,
+})
+assert TARGET_LITE32.itemsize == 32
+TARGET_LITE32_OFFSETS: dict[str, int] = {"agent_no": 0, "class": 2, "state": 3, "pos": 4, "heading_rad": 16, "speed_cms": 20, "best": 22, "alertness_u8": 23, "discovered_n": 24, "n_vol": 26, "flags": 27, "keepout_r_m": 28}
+TARGET_LITE32_SCALE: dict[str, float] = {"speed_cms": 0.01, "alertness_u8": 0.00392156862745098}
+TARGET_LITE32_BITS: dict[str, dict[str, tuple]] = {"state": {"awareness": (0, 3, "Awareness"), "criterion": (3, 1, "CriterionMode"), "moving": (4, 1), "occupied": (5, 1), "sound_on": (6, 1), "enabled": (7, 1)}, "best": {"level": (0, 2, "PerceptionLevel"), "captured": (2, 1), "relay": (3, 1), "sensor": (4, 4, "PerceptionSensor")}, "flags": {"hidden": (0, 1), "discovered_recent": (1, 1), "cfg_rev": (2, 6)}}
+
 DTYPES: dict[str, np.dtype] = {
     "awr.DroneState64.v1": DRONE_STATE64,
     "awr.SwarmLite32.v1": SWARM_LITE32,
@@ -305,6 +318,7 @@ DTYPES: dict[str, np.dtype] = {
     "awr.ipc.ReaderCursor.v1": IPC_READER_CURSOR,
     "awr.ipc.SlotHeader.v1": IPC_SLOT_HEADER,
     "awr.ipc.Heartbeat16.v1": IPC_HEARTBEAT16,
+    "awr.TargetLite32.v1": TARGET_LITE32,
 }
 SIZES: dict[str, int] = {
     "awr.DroneState64.v1": 64,
@@ -329,6 +343,7 @@ SIZES: dict[str, int] = {
     "awr.ipc.ReaderCursor.v1": 32,
     "awr.ipc.SlotHeader.v1": 64,
     "awr.ipc.Heartbeat16.v1": 16,
+    "awr.TargetLite32.v1": 32,
 }
 
 

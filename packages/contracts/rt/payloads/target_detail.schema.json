@@ -1,0 +1,429 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/target_detail.schema.json",
+  "title": "awr.target.detail.v1",
+  "description": "Topic target/{id}/detail 2 Hz, SB-45 and state/sim-core/target_detail (AWR-17 §17.7.4; M18-M19 PRD §7.2). cfg_rev is the full configuration revision; cfg carries the full target object when cfg_rev changed and every 10 s.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "label": {
+      "type": "string"
+    },
+    "class": {
+      "enum": [
+        "person",
+        "uav",
+        "machine",
+        "dog",
+        "vehicle",
+        "object"
+      ]
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "awareness": {
+      "enum": [
+        "UNAWARE",
+        "SUSPICIOUS",
+        "REACTING",
+        "ALERTED",
+        "CALMING"
+      ]
+    },
+    "alertness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "criterion_mode": {
+      "enum": [
+        "geometric",
+        "physical"
+      ]
+    },
+    "level_req": {
+      "enum": [
+        "D",
+        "R",
+        "I"
+      ]
+    },
+    "discovered_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "episode": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "last_discovered": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "t_sim_ns": {
+              "$ref": "../../world/1/common.schema.json#/$defs/int64"
+            },
+            "uav": {
+              "$ref": "../../world/1/common.schema.json#/$defs/slug"
+            },
+            "kind": {
+              "enum": [
+                "visual",
+                "acoustic",
+                "radar",
+                "rf"
+              ]
+            },
+            "range_m": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "m"
+            },
+            "margin_db": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "unit": "dB"
+            },
+            "margin_ratio": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "t_sim_ns",
+            "uav",
+            "kind"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "dwell": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "uav": {
+              "$ref": "../../world/1/common.schema.json#/$defs/slug"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "t_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            },
+            "t_dwell_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            }
+          },
+          "required": [
+            "uav",
+            "t_s",
+            "t_dwell_s"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "behavior": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "phase": {
+              "enum": [
+                "onset",
+                "response"
+              ]
+            },
+            "type": {
+              "type": "string"
+            },
+            "t_left_s": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "unit": "s"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sensitivity": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "idx": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "kind": {
+            "enum": [
+              "visual",
+              "acoustic",
+              "radar",
+              "rf"
+            ]
+          },
+          "shape": {
+            "enum": [
+              "sphere",
+              "hemisphere",
+              "cylinder",
+              "sector"
+            ]
+          },
+          "radius_cfg_m": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "m"
+          },
+          "radius_eff_m": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]{1,40}$"
+            },
+            "maxProperties": 8,
+            "additionalProperties": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "m"
+            },
+            "description": "effective radius per model of the session (<= 8)"
+          },
+          "z_min_m": {
+            "type": "number",
+            "unit": "m"
+          },
+          "z_max_m": {
+            "type": "number",
+            "unit": "m"
+          },
+          "half_angle_deg": {
+            "type": "number",
+            "unit": "deg"
+          },
+          "azimuth_offset_deg": {
+            "type": "number",
+            "unit": "deg"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "occupied_by": {
+            "type": "array",
+            "items": {
+              "$ref": "../../world/1/common.schema.json#/$defs/slug"
+            }
+          }
+        },
+        "required": [
+          "idx",
+          "kind",
+          "shape",
+          "radius_cfg_m",
+          "enabled"
+        ]
+      },
+      "maxItems": 4
+    },
+    "inside_n": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "keepout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "radius_m": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m"
+        },
+        "margin_m": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m"
+        },
+        "full_circle": {
+          "type": "boolean"
+        }
+      }
+    },
+    "sound": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "type": "boolean"
+            },
+            "phase_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            },
+            "lw_dba_now": {
+              "type": "number",
+              "description": "dB(A)"
+            }
+          },
+          "required": [
+            "on"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "static",
+            "path",
+            "random_walk"
+          ]
+        },
+        "speed_mps": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m/s"
+        },
+        "vz_mps": {
+          "type": "number",
+          "unit": "m/s"
+        },
+        "path_idx": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "capture": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "best_level": {
+              "enum": [
+                "none",
+                "D",
+                "R",
+                "I"
+              ]
+            },
+            "captured": {
+              "type": "boolean"
+            },
+            "sensor": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]{1,24}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "uav": {
+              "oneOf": [
+                {
+                  "$ref": "../../world/1/common.schema.json#/$defs/slug"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "n_eff": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "unit px"
+            },
+            "n_req": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "unit px"
+            },
+            "since_t_sim_ns": {
+              "oneOf": [
+                {
+                  "$ref": "../../world/1/common.schema.json#/$defs/int64"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "best_level"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cfg_rev": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cfg": {
+      "$ref": "../../target/1/target.schema.json"
+    }
+  },
+  "required": [
+    "id",
+    "class",
+    "awareness",
+    "alertness",
+    "criterion_mode",
+    "discovered_count",
+    "sensitivity",
+    "cfg_rev"
+  ]
+}

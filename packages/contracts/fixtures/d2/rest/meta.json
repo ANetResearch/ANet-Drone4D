@@ -1,0 +1,20 @@
+{
+ "api_version": 1,
+ "contracts": "1.2.0",
+ "access_mode": "loopback",
+ "features": [
+  "queue",
+  "pow",
+  "batch"
+ ],
+ "max_sessions": 4,
+ "active_sessions": 1,
+ "queue_len": 0,
+ "pow": {
+  "required_now": false,
+  "bits": 20
+ },
+ "sdk": {
+  "min_version": "1.0.0"
+ }
+}

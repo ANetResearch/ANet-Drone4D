@@ -106,11 +106,25 @@
       "owner": "M01",
       "purpose": "reconstruction self-check sampling",
       "d1": "ext"
+    },
+    {
+      "stream_id": 17,
+      "name": "targets_motion",
+      "owner": "M18",
+      "purpose": "target random walk turn rate, speed and pauses: counter-based keys (seed, 17, target_no, tick, channel), independent of observers",
+      "d1": "V0.2-demo"
+    },
+    {
+      "stream_id": 18,
+      "name": "perception",
+      "owner": "M19",
+      "purpose": "measurement noise, Swerling draws and bearing noise: keys (seed, 18, uav_no, tick, 64*sensor_no + target_no)",
+      "d1": "V0.2-demo"
     }
   ],
   "reserved": {
-    "from": 17,
+    "from": 19,
     "to": 63,
-    "note": "7 is unassigned; 11-16 M01 reconstruction (ext); 17-63 reserved"
+    "note": "7 is unassigned; 11-16 M01 reconstruction (ext); 17 targets_motion (M18), 18 perception (M19); 19-63 reserved"
   }
 }

@@ -26,9 +26,10 @@
   "url": "https://vcc.tech/UrbanScene3D",
   "redistribution": false,
   "citation": "Lin et al., Capturing, Reconstructing, and Simulating: the UrbanScene3D Dataset, ECCV 2022",
-  "notice": "Terms forbid redistribution: generate this package locally on first start.",
+  "notice": "Not included in the repository; ANet-Drone4D deployment bundles carry this World Package under the authorization (ADR-109). Works that use it cite the ECCV 2022 paper (NOTICE, THIRD_PARTY_NOTICES.md section 4).",
   "version": "2022",
-  "license": "UrbanScene3D terms of use (research only, no redistribution)",
+  "license": "Used in ANet-Drone4D deployments under authorization of the dataset rights holders; anyone who downloads the dataset remains bound by the UrbanScene3D terms of use (see url)",
+  "terms": "经数据集权利方授权使用 (used under authorization of the dataset rights holders): ANet-Drone4D deployments, including the public demo and its deployment bundles, serve World Packages built from UrbanScene3D; the authorization is not passed on by the repository or its license (ADR-109, R-D2-28)",
   "sourceFiles": [
    {
     "name": "sanfrancisco.ply",

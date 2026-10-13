@@ -92,7 +92,7 @@
         "null"
       ],
       "additionalProperties": false,
-      "description": "Provenance and licence record (AWR-13 §13.3 DC-1). redistribution is a fact record only (ADR-034).",
+      "description": "Provenance and licence record (AWR-13 §13.3 DC-1). redistribution is a fact record only (ADR-034); terms states the deployment authorization (ADR-109).",
       "required": [
         "name",
         "version",
@@ -116,6 +116,11 @@
         },
         "license": {
           "type": "string"
+        },
+        "terms": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Terms under which ANet-Drone4D deployments serve this package, shown in the world panel tooltip and recorded in the deployment index (ADR-109 rule 3: the six UrbanScene3D cities are used under authorization of the dataset rights holders). Optional; packages built before ADR-109 omit it."
         },
         "redistribution": {
           "type": "boolean",

@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sandbox/1/limits.schema.json",
+  "title": "awr.sandbox.limits.v1 (session limits)",
+  "description": "Per-session entity and rate limits (AWR-04 §4.4.3, §11.5; AWR-17 §17.4.1 limits). Values come from configs/runtime.yaml sandbox: (M17).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "vehicles_max": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "targets_max": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nests_max": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tasks_active_max": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cloned_models_max": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rest_rps": {
+      "type": "number",
+      "minimum": 0
+    },
+    "rest_burst": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "call_rps": {
+      "type": "number",
+      "minimum": 0
+    },
+    "call_burst": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "clock_rps": {
+      "type": "number",
+      "minimum": 0
+    },
+    "entity_rps": {
+      "type": "number",
+      "minimum": 0
+    },
+    "task_rps": {
+      "type": "number",
+      "minimum": 0
+    },
+    "ws_max": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "setpoint_hz_max": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Hz"
+    },
+    "snapshot_kib": {
+      "type": "number",
+      "minimum": 0,
+      "unit": "KiB"
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "area_max_m2": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m^2"
+        },
+        "vertices_max": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "strips_max": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "work_items_max": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "station_candidates_max": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverage_cells_max": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "area_max_m2",
+        "vertices_max",
+        "strips_max",
+        "work_items_max",
+        "station_candidates_max",
+        "coverage_cells_max"
+      ]
+    }
+  },
+  "required": [
+    "vehicles_max",
+    "targets_max",
+    "nests_max",
+    "tasks_active_max",
+    "rest_rps",
+    "rest_burst",
+    "call_rps",
+    "call_burst",
+    "clock_rps",
+    "entity_rps",
+    "task_rps",
+    "ws_max",
+    "setpoint_hz_max",
+    "plan"
+  ]
+}

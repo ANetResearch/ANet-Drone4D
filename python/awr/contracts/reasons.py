@@ -157,6 +157,49 @@ class Reason(IntEnum):
     QA_GATE_FAILED = 497
     RELEASE_IMMUTABLE = 498
     RELEASE_INTEGRITY = 499
+    SANDBOX_FULL = 500
+    SANDBOX_RATE_LIMITED = 501
+    SANDBOX_SPAWN_FAILED = 502
+    SANDBOX_SCOPE = 503
+    SANDBOX_QUOTA = 504
+    SANDBOX_ENTITY_LIMIT = 505
+    SANDBOX_EXPIRED = 506
+    SANDBOX_WORLD_FORBIDDEN = 507
+    SANDBOX_WORLD_CAPACITY = 508
+    SANDBOX_CHALLENGE_REQUIRED = 509
+    SANDBOX_PREEMPTED = 510
+    SANDBOX_TICKET_INVALID = 511
+    SANDBOX_SNAPSHOT_INVALID = 512
+    SANDBOX_STATE = 513
+    SANDBOX_BATCH_BUSY = 514
+    SANDBOX_PARKED = 515
+    IDENTITY_LOCKED = 516
+    VIEWER_SEATS_FULL = 517
+    IDLE_RECLAIMED = 518
+    VIEWER_TICKET_INVALID = 519
+    MODEL_UNKNOWN = 520
+    VEHICLE_ENV_LIMIT = 521
+    VEHICLE_CLONE_INVALID = 522
+    FW_AIRSPEED = 523
+    VTOL_HOVER_LIMIT = 524
+    NEST_INCOMPATIBLE = 525
+    TARGET_PLACEMENT_INVALID = 540
+    SOUND_PARAM_INVALID = 541
+    SENSITIVITY_PARAM_INVALID = 542
+    TARGET_NOT_FOUND = 543
+    MOTION_PARAM_INVALID = 544
+    SENSOR_UNSUPPORTED = 560
+    SENSOR_PARAM_INVALID = 561
+    LEVEL_UNREACHABLE = 562
+    ILLUMINATOR_UNAVAILABLE = 563
+    FIELD_QUERY_INVALID = 564
+    TASK_INFEASIBLE = 580
+    NO_FEASIBLE_STATION = 581
+    NEST_EMPTY = 582
+    KEEPOUT_VIOLATION = 583
+    PLAN_REJECTED = 584
+    PLAN_INPUT_TOO_LARGE = 585
+    PLAN_THROTTLED = 586
 
 
 class ReasonInfo(NamedTuple):
@@ -319,11 +362,54 @@ REASONS: dict[int, ReasonInfo] = {
     497: ReasonInfo(497, "QA_GATE_FAILED", 409, "module", "georef", "质量门禁未通过", "查看报告后补飞或调参", "V0.5"),
     498: ReasonInfo(498, "RELEASE_IMMUTABLE", 409, "module", "georef", "已发布版本不可修改", "发布新版本", "V0.5"),
     499: ReasonInfo(499, "RELEASE_INTEGRITY", 409, "module", "georef", "发布包完整性校验失败", "重新下发正确版本", "V0.5"),
+    500: ReasonInfo(500, "SANDBOX_FULL", 409, "sandbox", "create", "沙盒已满且排队已满（队列 20）", "稍后再试；可继续浏览共享展示", "V0.2-demo"),
+    501: ReasonInfo(501, "SANDBOX_RATE_LIMITED", None, "sandbox", "governor", "倍速授予低于请求（只作警告，倍速仍按授予值生效）", "以 granted_rate 运行；减少机群或识别物可提高上限", "V0.2-demo"),
+    502: ReasonInfo(502, "SANDBOX_SPAWN_FAILED", 503, "sandbox", "spawn", "沙盒进程 30 s 内未就绪或熔断", "重试；连续失败请稍后再试", "V0.2-demo"),
+    503: ReasonInfo(503, "SANDBOX_SCOPE", 403, "sandbox", "entry", "token 不属于该沙盒，或沙盒 token 用于其他 run", "使用该沙盒自己的 token", "V0.2-demo"),
+    504: ReasonInfo(504, "SANDBOX_QUOTA", 429, "sandbox", "quota", "地址前缀的活动沙盒、排队票或创建次数超限（数量类以 HTTP 409 返回，速率类 429）", "等待 Retry-After 或结束已有沙盒", "V0.2-demo"),
+    505: ReasonInfo(505, "SANDBOX_ENTITY_LIMIT", 409, "sandbox", "params", "实体数量达到上限", "移除不用的实体", "V0.2-demo"),
+    506: ReasonInfo(506, "SANDBOX_EXPIRED", 410, "sandbox", "entry", "会话已结束或过期", "用快照新开沙盒（快照 10 min 内可取）", "V0.2-demo"),
+    507: ReasonInfo(507, "SANDBOX_WORLD_FORBIDDEN", 409, "sandbox", "create", "世界不在白名单或派生缓存缺失", "选择 available = true 的世界", "V0.2-demo"),
+    508: ReasonInfo(508, "SANDBOX_WORLD_CAPACITY", 409, "sandbox", "create", "世界加权内存准入不满足", "改用 detail.available_now 中的世界或排队", "V0.2-demo"),
+    509: ReasonInfo(509, "SANDBOX_CHALLENGE_REQUIRED", 409, "sandbox", "create", "需要工作量证明或证明无效", "求解 detail.challenge 后重发", "V0.2-demo"),
+    510: ReasonInfo(510, "SANDBOX_PREEMPTED", 410, "sandbox", "reclaim", "有访客排队，会话按持有时长被抢占", "用快照新开沙盒", "V0.2-demo"),
+    511: ReasonInfo(511, "SANDBOX_TICKET_INVALID", 410, "sandbox", "queue", "排队票不存在、过期或已领取", "重新排队", "V0.2-demo"),
+    512: ReasonInfo(512, "SANDBOX_SNAPSHOT_INVALID", 422, "sandbox", "restore", "配置快照无效", "在同一世界导入有效快照", "V0.2-demo"),
+    513: ReasonInfo(513, "SANDBOX_STATE", 409, "sandbox", "session", "会话状态不允许该操作", "等待会话就绪或新开沙盒", "V0.2-demo"),
+    514: ReasonInfo(514, "SANDBOX_BATCH_BUSY", 409, "sandbox", "batch", "已有批处理在运行", "等待当前批处理完成", "V0.2-demo"),
+    515: ReasonInfo(515, "SANDBOX_PARKED", 409, "sandbox", "session", "沙盒已节能驻留，需要先恢复", "POST /sessions/{sid}/resume；SDK 自动恢复一次", "V0.2-demo"),
+    516: ReasonInfo(516, "IDENTITY_LOCKED", 429, "sandbox", "identity", "失败次数过多，内部身份暂时锁定", "等待 Retry-After 后再试", "V0.2-demo"),
+    517: ReasonInfo(517, "VIEWER_SEATS_FULL", 409, "sandbox", "viewer", "实时观看席位已满", "进入观看排队（POST /api/viewer/queue），期间可静态浏览", "V0.2-demo"),
+    518: ReasonInfo(518, "IDLE_RECLAIMED", None, "sandbox", "power", "空闲或驻留，服务端已回收连接（节能模式）", "任意操作后重连或恢复", "V0.2-demo"),
+    519: ReasonInfo(519, "VIEWER_TICKET_INVALID", 410, "sandbox", "viewer", "观看排队票不存在、作废或已使用", "重新排队", "V0.2-demo"),
+    520: ReasonInfo(520, "MODEL_UNKNOWN", 404, "catalog", "params", "机型 id 不存在（含其他会话的克隆型号）", "从 GET /catalog/models 或本会话克隆机型中选择", "V0.2-demo"),
+    521: ReasonInfo(521, "VEHICLE_ENV_LIMIT", None, "catalog", "estimate", "环境温度超出机型工作温度（只作警告）", "改用工作温度覆盖当前环境的机型", "V0.2-demo"),
+    522: ReasonInfo(522, "VEHICLE_CLONE_INVALID", 422, "catalog", "params", "克隆机型或挂载未通过自洽检查", "按 detail.violations 逐项修改", "V0.2-demo"),
+    523: ReasonInfo(523, "FW_AIRSPEED", None, "catalog", "exec", "固定翼执行中风速超过保持能力且无可用的逆风等待航线", "降低风速、加大盘旋半径或改用多旋翼", "V0.2-demo"),
+    524: ReasonInfo(524, "VTOL_HOVER_LIMIT", 409, "catalog", "flight_state", "垂起机型本架次悬停累计已达 hover_max_s，拒绝悬停类命令", "改用盘旋（loiter）", "V0.2-demo"),
+    525: ReasonInfo(525, "NEST_INCOMPATIBLE", 409, "catalog", "params", "机巢类型、充电器节数或槽位不兼容", "选择兼容的机巢或修改充电器", "V0.2-demo"),
+    540: ReasonInfo(540, "TARGET_PLACEMENT_INVALID", 422, "targets", "params", "识别物放置位置无效", "在可通行地面或屋顶重新放置", "V0.2-demo"),
+    541: ReasonInfo(541, "SOUND_PARAM_INVALID", 422, "targets", "params", "声源参数越界或组合无效", "按 detail.field 修改", "V0.2-demo"),
+    542: ReasonInfo(542, "SENSITIVITY_PARAM_INVALID", 422, "targets", "params", "敏感体参数越界或超过 4 个", "按 detail.field 修改", "V0.2-demo"),
+    543: ReasonInfo(543, "TARGET_NOT_FOUND", 404, "targets", "params", "命令载荷引用的识别物不存在", "刷新识别物列表", "V0.2-demo"),
+    544: ReasonInfo(544, "MOTION_PARAM_INVALID", 422, "targets", "params", "运动参数越界（路径点数、速度、转向率、游走区域）", "按 detail.field 修改", "V0.2-demo"),
+    560: ReasonInfo(560, "SENSOR_UNSUPPORTED", 409, "perception", "capability", "该机型不能挂载或不具备该传感器", "换机型或换传感器", "V0.2-demo"),
+    561: ReasonInfo(561, "SENSOR_PARAM_INVALID", 422, "perception", "params", "传感器参数越界（焦距、分辨率需要机载算力等）", "按 detail.field 修改", "V0.2-demo"),
+    562: ReasonInfo(562, "LEVEL_UNREACHABLE", 409, "perception", "estimate", "会话中没有传感器能达到所需等级", "降低 level_req 或挂载成像传感器", "V0.2-demo"),
+    563: ReasonInfo(563, "ILLUMINATOR_UNAVAILABLE", 409, "perception", "capability", "外挂照明器要求开启而该机未挂载", "挂载 nir_ill_l 或改用机内照明", "V0.2-demo"),
+    564: ReasonInfo(564, "FIELD_QUERY_INVALID", 422, "perception", "params", "场指标、锚点或采样数非法", "按 detail.field 修改", "V0.2-demo"),
+    580: ReasonInfo(580, "TASK_INFEASIBLE", 422, "tasking", "precheck", "任务不可行", "按 detail.remedies 调整", "V0.2-demo"),
+    581: ReasonInfo(581, "NO_FEASIBLE_STATION", 422, "tasking", "precheck", "可行窗口为空，没有满足不被发现与所需等级的站位", "按 detail.suggestions 换型、加照明器或长焦热像、缩小敏感范围", "V0.2-demo"),
+    582: ReasonInfo(582, "NEST_EMPTY", 409, "tasking", "allocate", "允许的机巢中没有可用机体", "添加无人机或放宽允许机巢", "V0.2-demo"),
+    583: ReasonInfo(583, "KEEPOUT_VIOLATION", 409, "tasking", "path", "航段或站位进入禁入体", "调整几何或等待重规划", "V0.2-demo"),
+    584: ReasonInfo(584, "PLAN_REJECTED", 422, "tasking", "plan_check", "外部分配计划未通过可行性检查", "按 detail.violations 逐项修改计划", "V0.2-demo"),
+    585: ReasonInfo(585, "PLAN_INPUT_TOO_LARGE", 422, "tasking", "quota", "规划输入超过规模配额", "缩小区域、减少顶点或放宽 GSD", "V0.2-demo"),
+    586: ReasonInfo(586, "PLAN_THROTTLED", 429, "tasking", "quota", "10 min 内 3 次规划超时，规划冻结 5 min", "等待 Retry-After", "V0.2-demo"),
 }
 
-DETAIL_ONLY: frozenset[str] = frozenset(("SENSOR_SPEC_INVALID", "SENSOR_UNKNOWN", "TARGET_TABLE_FULL", "TARGET_ID_DUP", "JOB_WORKER_UNAVAILABLE", "PREVIEW_EXPIRED", "PREDICATE_MALFORMED", "KERNEL_LIMIT", "WORLD_NOT_IN_SESSION", "GEO_CEILING"))
-WARNINGS: frozenset[str] = frozenset(("SPEED_CLAMPED",))
-WS_CLOSE: dict[str, int] = {"NORMAL": 1000, "GOING_AWAY": 1001, "PROTOCOL_ERROR": 1002, "ABNORMAL": 1006, "POLICY_VIOLATION": 1008, "MESSAGE_TOO_BIG": 1009, "INTERNAL_ERROR": 1011, "CONTROL_BACKLOG": 1013, "AUTH": 4401, "SEAT_REVOKED": 4403, "HELLO_TIMEOUT": 4408, "VERSION_MISMATCH": 4426, "CONN_LIMIT": 4429}
+DETAIL_ONLY: frozenset[str] = frozenset(("SENSOR_SPEC_INVALID", "SENSOR_UNKNOWN", "TARGET_TABLE_FULL", "TARGET_ID_DUP", "JOB_WORKER_UNAVAILABLE", "PREVIEW_EXPIRED", "PREDICATE_MALFORMED", "KERNEL_LIMIT", "WORLD_NOT_IN_SESSION", "GEO_CEILING", "INVENTORY_READONLY", "NOT_READY", "MODEL_IN_USE", "NOT_LANDED_LOCKED", "STALE_SNAPSHOT", "MANUAL_CONTROL", "RATE_ABOVE_GRANT", "WORLD_MISMATCH", "SNAPSHOT_TOO_LARGE", "PLAN_TIMEOUT", "LOITER_RADIUS_MIN", "MOUNT_CHANGE_IN_FLIGHT"))
+WARNINGS: frozenset[str] = frozenset(("SPEED_CLAMPED", "SANDBOX_RATE_LIMITED", "KEEPOUT_CLAMPED", "VEHICLE_ENV_LIMIT", "PREVIEW_RECOMPUTED"))
+WS_CLOSE: dict[str, int] = {"NORMAL": 1000, "GOING_AWAY": 1001, "PROTOCOL_ERROR": 1002, "ABNORMAL": 1006, "POLICY_VIOLATION": 1008, "MESSAGE_TOO_BIG": 1009, "INTERNAL_ERROR": 1011, "CONTROL_BACKLOG": 1013, "AUTH": 4401, "SEAT_REVOKED": 4403, "HELLO_TIMEOUT": 4408, "SANDBOX_GONE": 4410, "VERSION_MISMATCH": 4426, "CONN_LIMIT": 4429, "IDLE_RECLAIMED": 4430, "VIEWER_SEATS_FULL": 4431}
 
 
 def info(code: int) -> ReasonInfo:

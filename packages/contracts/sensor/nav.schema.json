@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/nav.schema.json",
+  "title": "awr.sensor.nav.v1",
+  "description": "Topic uav/{id}/sensor/nav, 10 Hz sim while subscribed (AWR-04 §11.7; AWR-17 §17.7.4; M13 §15.3.3): flight-controller IMU sampled at 10 Hz (FLU, noise and bias), GNSS (accuracy tier RTK or SLAM), barometric altitude.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "uav": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "imu": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "f_mps2": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "w_rad_s": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "f_mps2",
+        "w_rad_s"
+      ]
+    },
+    "gnss": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pos_enu_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "vel_mps": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "fix": {
+          "enum": [
+            "none",
+            "2d",
+            "3d",
+            "rtk_float",
+            "rtk_fixed",
+            "slam"
+          ]
+        },
+        "hacc_m": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m"
+        },
+        "vacc_m": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m"
+        },
+        "sats": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hdop": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "pos_enu_m",
+        "vel_mps",
+        "fix"
+      ]
+    },
+    "baro": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "alt_m": {
+          "type": "number",
+          "unit": "m"
+        },
+        "p_pa": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "Pa"
+        }
+      },
+      "required": [
+        "alt_m"
+      ]
+    },
+    "loc_mode": {
+      "enum": [
+        "rtk",
+        "slam",
+        "single"
+      ]
+    }
+  },
+  "required": [
+    "t_sim_ns",
+    "imu",
+    "gnss",
+    "baro"
+  ]
+}

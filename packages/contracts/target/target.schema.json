@@ -1,0 +1,646 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/target/1/target.schema.json",
+  "title": "awr.target.v1 (target object)",
+  "description": "Target configuration (AWR-04 §2.2, §7; AWR-17 §17.6.5; M18-M19 PRD §6.2.1). GET returns the full object; POST and target/add use $defs/create_request (class and pos only, the rest from target/class_defaults.json). Validation codes: 540 placement, 541 sound, 542 sensitivity, 544 motion, 505 count.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "label": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "class": {
+      "enum": [
+        "person",
+        "uav",
+        "machine",
+        "dog",
+        "vehicle",
+        "object"
+      ]
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "pos": {
+      "type": "array",
+      "items": {
+        "type": [
+          "number",
+          "null"
+        ]
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "World ENU m; ground classes may give z null (DSM)"
+    },
+    "yaw_rad": {
+      "type": "number",
+      "minimum": -3.141592653589793,
+      "maximum": 3.141592653589793,
+      "unit": "rad"
+    },
+    "alt_agl_m": {
+      "type": "number",
+      "minimum": 5,
+      "maximum": 300,
+      "unit": "m",
+      "description": "uav class only"
+    },
+    "size_m": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "l": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 30,
+          "description": "unit m"
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 30,
+          "description": "unit m"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 30,
+          "description": "unit m"
+        }
+      },
+      "required": [
+        "l",
+        "w",
+        "h"
+      ]
+    },
+    "critical_dim_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0.02,
+      "maximum": 30,
+      "unit": "m"
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "static",
+            "path",
+            "random_walk"
+          ]
+        },
+        "speed_mps": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 40,
+          "unit": "m/s"
+        },
+        "speed_max_mps": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 40,
+          "unit": "m/s"
+        },
+        "accel_mps2": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20,
+          "unit": "m/s^2"
+        },
+        "turn_rate_max_rad_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "unit": "rad/s"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "maxItems": 64,
+          "description": "World ENU m; z null = ground"
+        },
+        "loop": {
+          "enum": [
+            "once",
+            "pingpong",
+            "loop"
+          ]
+        },
+        "dwell_s": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "s"
+          }
+        },
+        "region": {
+          "type": "array",
+          "items": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+          },
+          "minItems": 3,
+          "maxItems": 64,
+          "description": "random walk polygon, World ENU m"
+        },
+        "speed_sigma_mps": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "unit": "m/s"
+        },
+        "turn_tau_s": {
+          "type": "number",
+          "maximum": 600,
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "pause_prob": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "vz_mps": {
+          "type": "number",
+          "minimum": -20,
+          "maximum": 20,
+          "unit": "m/s",
+          "description": "uav class vertical speed (read only, detail and state)"
+        }
+      },
+      "required": [
+        "mode"
+      ]
+    },
+    "color_srgb": {
+      "type": "string",
+      "description": "palette token name or #RRGGBB, rendering only"
+    },
+    "albedo_vis": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "contrast0": {
+      "type": "number",
+      "minimum": -1,
+      "maximum": 4
+    },
+    "camouflage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "occlusion": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reflect_850": {
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 1
+    },
+    "reflect_905": {
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 1
+    },
+    "thermal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "relative",
+            "absolute"
+          ]
+        },
+        "delta_t_k": {
+          "type": "number",
+          "minimum": -30,
+          "maximum": 200,
+          "unit": "K"
+        },
+        "t_surface_c": {
+          "type": "number",
+          "minimum": -40,
+          "maximum": 600,
+          "unit": "degC"
+        },
+        "emissivity": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1
+        },
+        "hot_fraction": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "mode"
+      ]
+    },
+    "rcs_m2": {
+      "type": "number",
+      "minimum": 0.0001,
+      "maximum": 1000,
+      "unit": "m^2"
+    },
+    "rcs_fluct": {
+      "enum": [
+        "swerling0",
+        "swerling1"
+      ]
+    },
+    "rcs_band": {
+      "type": "string"
+    },
+    "sound": {
+      "oneOf": [
+        {
+          "$ref": "sound.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rf": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "freq_mhz": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "unit": "MHz"
+            },
+            "eirp_dbm": {
+              "type": "number",
+              "unit": "dBm"
+            },
+            "duty": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "criterion_mode": {
+      "enum": [
+        "geometric",
+        "physical"
+      ]
+    },
+    "alertness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "hearing_th_dba": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 60,
+      "unit": "dB(A)"
+    },
+    "acoustic_adv_db": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 20,
+      "unit": "dB"
+    },
+    "visual_theta0_arcmin": {
+      "type": "number",
+      "minimum": 0.3,
+      "maximum": 10,
+      "description": "visual threshold, arc minutes"
+    },
+    "level_req": {
+      "enum": [
+        "D",
+        "R",
+        "I"
+      ]
+    },
+    "n_req_px": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 200,
+      "unit": "px"
+    },
+    "reaction": {
+      "$ref": "reaction.schema.json"
+    },
+    "calm_s": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 3600,
+      "unit": "s"
+    },
+    "alert_radius_m": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 500,
+      "unit": "m"
+    },
+    "sensitivity": {
+      "type": "array",
+      "items": {
+        "$ref": "sensitivity.schema.json"
+      },
+      "maxItems": 4
+    },
+    "cfg_rev": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "configuration revision (read only; TargetLite32 carries it mod 64)"
+    },
+    "visual_acuity_arcmin": {
+      "type": "number",
+      "minimum": 0.3,
+      "maximum": 20,
+      "description": "angular resolution, arc minutes (D2.1, AWR-04 §15.10.1): for the equivalent pixels of the readout only; not part of the criterion"
+    },
+    "hearing_band_adj_db": {
+      "oneOf": [
+        {
+          "type": "array",
+          "minItems": 24,
+          "maxItems": 24,
+          "items": {
+            "type": "number",
+            "minimum": -20,
+            "maximum": 20
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "unit": "dB",
+      "description": "class band weighting added to A-weighting (24 bands 50 Hz-10 kHz); null = 0"
+    },
+    "radar_rx": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "snr_ref_db": {
+              "type": "number",
+              "minimum": -50,
+              "maximum": 100
+            },
+            "r_ref_m": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 20000
+            },
+            "snr_req_db": {
+              "type": "number",
+              "minimum": -20,
+              "maximum": 60
+            },
+            "fov_az_deg": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 180
+            },
+            "fov_el_deg": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 90
+            }
+          },
+          "required": [
+            "snr_ref_db",
+            "r_ref_m",
+            "snr_req_db",
+            "fov_az_deg",
+            "fov_el_deg"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "P1: radar receiver of counter-UAV targets; the radar body is judged when configured"
+    },
+    "rf_rx": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sens_dbm": {
+              "type": "number",
+              "minimum": -200,
+              "maximum": 0
+            },
+            "f_mhz": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "bw_mhz": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "P2: schema only"
+    }
+  },
+  "required": [
+    "class"
+  ],
+  "$defs": {
+    "create_request": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "#"
+        }
+      ],
+      "required": [
+        "class",
+        "pos"
+      ],
+      "description": "POST /sessions/{sid}/targets and target/add: class and pos are required, the rest comes from the class template"
+    },
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#"
+          }
+        },
+        "rev": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "SB-40"
+    },
+    "created": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "../../world/1/common.schema.json#/$defs/slug"
+        },
+        "cfg": {
+          "$ref": "#"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "description": "SB-41 201 (command accepted, effective next tick)"
+    },
+    "suggested_radius": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "basis": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "light": {
+              "enum": [
+                "day",
+                "low",
+                "night"
+              ]
+            },
+            "l_bg_dba": {
+              "type": "number",
+              "unit": "dB(A)"
+            },
+            "alertness_used": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1.2
+            },
+            "conservative": {
+              "type": "boolean"
+            }
+          }
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "idx": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "kind": {
+                "enum": [
+                  "visual",
+                  "acoustic"
+                ]
+              },
+              "radius_cfg_m": {
+                "type": "number",
+                "minimum": 0,
+                "unit": "m"
+              },
+              "radius_suggested_m": {
+                "type": "number",
+                "minimum": 0,
+                "unit": "m"
+              },
+              "now_m": {
+                "type": "number",
+                "minimum": 0,
+                "unit": "m"
+              },
+              "day_m": {
+                "type": "number",
+                "minimum": 0,
+                "unit": "m"
+              },
+              "night_m": {
+                "type": "number",
+                "minimum": 0,
+                "unit": "m"
+              },
+              "conservative_max_m": {
+                "type": "number",
+                "minimum": 0,
+                "unit": "m"
+              },
+              "margin_db": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "unit": "dB"
+              }
+            },
+            "required": [
+              "idx",
+              "kind",
+              "radius_cfg_m"
+            ]
+          }
+        }
+      },
+      "required": [
+        "model_id",
+        "volumes"
+      ],
+      "description": "SB-46 (visual and acoustic volumes only; conservative a + 0.2, L_bg - 3 dB)"
+    }
+  }
+}

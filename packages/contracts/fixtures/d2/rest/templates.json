@@ -1,0 +1,112 @@
+{
+ "items": [
+  {
+   "template_id": "t1_point_watch",
+   "world_id": "synthcity",
+   "name_zh": "定点巡航",
+   "summary_zh": "定点巡航",
+   "first_feedback_zh": "明确捕获提示",
+   "entities": {
+    "vehicles": 2,
+    "targets": 2,
+    "nests": 1,
+    "tasks": 1
+   },
+   "calendar_default": {
+    "start_local": "10:00",
+    "tz": "Asia/Shanghai"
+   },
+   "recommended": false
+  },
+  {
+   "template_id": "t2_polyline",
+   "world_id": "synthcity",
+   "name_zh": "多点巡线",
+   "summary_zh": "多点巡线",
+   "first_feedback_zh": "明确捕获提示",
+   "entities": {
+    "vehicles": 2,
+    "targets": 2,
+    "nests": 1,
+    "tasks": 1
+   },
+   "calendar_default": {
+    "start_local": "10:00",
+    "tz": "Asia/Shanghai"
+   },
+   "recommended": false
+  },
+  {
+   "template_id": "t3_area_patrol",
+   "world_id": "synthcity",
+   "name_zh": "多机区域巡查",
+   "summary_zh": "多机区域巡查",
+   "first_feedback_zh": "明确捕获提示",
+   "entities": {
+    "vehicles": 2,
+    "targets": 2,
+    "nests": 1,
+    "tasks": 1
+   },
+   "calendar_default": {
+    "start_local": "10:00",
+    "tz": "Asia/Shanghai"
+   },
+   "recommended": false
+  },
+  {
+   "template_id": "t4_scan_gsd",
+   "world_id": "synthcity",
+   "name_zh": "GSD 完整扫描",
+   "summary_zh": "GSD 完整扫描",
+   "first_feedback_zh": "明确捕获提示",
+   "entities": {
+    "vehicles": 2,
+    "targets": 2,
+    "nests": 1,
+    "tasks": 1
+   },
+   "calendar_default": {
+    "start_local": "10:00",
+    "tz": "Asia/Shanghai"
+   },
+   "recommended": false
+  },
+  {
+   "template_id": "t5_area_guard",
+   "world_id": "synthcity",
+   "name_zh": "区域值守与接力",
+   "summary_zh": "区域值守与接力",
+   "first_feedback_zh": "明确捕获提示",
+   "entities": {
+    "vehicles": 2,
+    "targets": 2,
+    "nests": 1,
+    "tasks": 1
+   },
+   "calendar_default": {
+    "start_local": "10:00",
+    "tz": "Asia/Shanghai"
+   },
+   "recommended": true
+  },
+  {
+   "template_id": "t6_manual",
+   "world_id": "synthcity",
+   "name_zh": "手动飞行与传感器视图",
+   "summary_zh": "手动飞行与传感器视图",
+   "first_feedback_zh": "明确捕获提示",
+   "entities": {
+    "vehicles": 2,
+    "targets": 2,
+    "nests": 1,
+    "tasks": 1
+   },
+   "calendar_default": {
+    "start_local": "10:00",
+    "tz": "Asia/Shanghai"
+   },
+   "recommended": false
+  }
+ ]
+}

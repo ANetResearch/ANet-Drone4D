@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/tasking/1/relay_stats.schema.json",
+  "title": "awr.relay.stats.v1",
+  "description": "Topic relay/{tid}/stats 1 Hz, SB-59 and relay_stats.json of batch runs (AWR-04 §9.5; AWR-17 §17.7.4). coverage = integral of the capture indicator over the monitored time; discovered counts only our vehicles.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "tid": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "target": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "t_monitor_s": {
+      "type": "number",
+      "minimum": 0,
+      "unit": "s"
+    },
+    "coverage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "gaps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_s": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "s"
+        },
+        "by_cause": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "keepout_priority": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "illum_transition": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "infeasible": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "battery": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "other": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "total_s_by_cause": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "keepout_priority": {
+              "type": "number",
+              "minimum": 0
+            },
+            "illum_transition": {
+              "type": "number",
+              "minimum": 0
+            },
+            "infeasible": {
+              "type": "number",
+              "minimum": 0
+            },
+            "battery": {
+              "type": "number",
+              "minimum": 0
+            },
+            "other": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "description": "seconds per cause"
+        }
+      },
+      "required": [
+        "count",
+        "max_s",
+        "by_cause"
+      ]
+    },
+    "discovered": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "config_entries": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_s": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "s"
+        }
+      },
+      "required": [
+        "count",
+        "total_s"
+      ]
+    },
+    "handovers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mean_overlap_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "unit": "s"
+        },
+        "min_overlap_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "unit": "s"
+        }
+      },
+      "required": [
+        "count"
+      ]
+    },
+    "min_keepout_margin_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "unit": "m"
+    },
+    "sorties": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "flight_h": {
+      "type": "number",
+      "minimum": 0
+    },
+    "energy_wh": {
+      "type": "number",
+      "minimum": 0,
+      "unit": "Wh"
+    },
+    "min_ready_packs": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "energy_rtl": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "dispatch_delays": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "battery": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "charger": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "slot": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wind": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "launch_interval": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "on_station": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "uav": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "station": {
+            "type": "string"
+          },
+          "since_t_sim_ns": {
+            "$ref": "../../world/1/common.schema.json#/$defs/int64"
+          }
+        },
+        "required": [
+          "uav",
+          "station"
+        ]
+      }
+    },
+    "next": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "uav": {
+              "$ref": "../../world/1/common.schema.json#/$defs/slug"
+            },
+            "eta_s": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "unit": "s"
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "tid",
+    "target",
+    "t_monitor_s",
+    "coverage",
+    "gaps",
+    "discovered",
+    "config_entries",
+    "handovers"
+  ]
+}

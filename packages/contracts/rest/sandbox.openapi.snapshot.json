@@ -1,0 +1,5413 @@
+{
+  "components": {
+    "securitySchemes": {
+      "sandbox": {
+        "description": "sandbox token v1.<payload>.<sig> (scope sandbox, sid = path sid)",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "ticket": {
+        "description": "queue ticket token q1.<...> (queue endpoints only)",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Design snapshot of /api/sandbox/v1 (AWR-17 §17.5, SB-00 to SB-68). Generated from tools/contracts/sandbox_api.py until the sandbox-api exports its live schema.",
+    "title": "AWR sandbox REST v1",
+    "version": "1",
+    "x-awr-contracts": "1.2.0",
+    "x-awr-source": "design"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/capacity": {
+      "get": {
+        "operationId": "sb_71",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/capacity.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "公开容量（载入期排队可见）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "pub",
+          "sb": "SB-71"
+        }
+      }
+    },
+    "/catalog/models": {
+      "get": {
+        "operationId": "sb_21",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/catalog.schema.json#/$defs/models"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "机型目录（预置）",
+        "tags": [
+          "rest/catalog.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "rest/catalog.py (M21)",
+          "priority": "P0",
+          "rate": "pub",
+          "sb": "SB-21"
+        }
+      }
+    },
+    "/catalog/models/{model_id}": {
+      "get": {
+        "operationId": "sb_22",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/catalog.schema.json#/$defs/model_detail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "机型完整参数、参数表与派生量",
+        "tags": [
+          "rest/catalog.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "rest/catalog.py (M21)",
+          "priority": "P0",
+          "rate": "pub",
+          "sb": "SB-22"
+        }
+      }
+    },
+    "/catalog/sensors": {
+      "get": {
+        "operationId": "sb_23",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/catalog.schema.json#/$defs/sensors"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "传感器目录",
+        "tags": [
+          "rest/catalog.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "rest/catalog.py (M21)",
+          "priority": "P0",
+          "rate": "pub",
+          "sb": "SB-23"
+        }
+      }
+    },
+    "/challenge": {
+      "get": {
+        "operationId": "sb_03",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/challenge"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "领取工作量证明题目",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "no",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "create",
+          "sb": "SB-03"
+        }
+      }
+    },
+    "/meta": {
+      "get": {
+        "operationId": "sb_00",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/meta"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "接口版本、契约版本、访问模式、会话与队列概况",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "pub",
+          "sb": "SB-00"
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "sb_20",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "沙盒 OpenAPI 3.1",
+        "tags": [
+          "sandbox-api"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "sandbox-api entry (M11)",
+          "priority": "P0",
+          "rate": "pub",
+          "sb": "SB-20"
+        }
+      }
+    },
+    "/queue/{ticket_id}": {
+      "delete": {
+        "operationId": "sb_07",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "离开队列",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "ticket",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "ticket",
+          "sb": "SB-07"
+        }
+      },
+      "get": {
+        "operationId": "sb_05",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wait_s",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/ticket.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "排队状态长轮询",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "ticket",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "ticket",
+          "sb": "SB-05"
+        }
+      }
+    },
+    "/queue/{ticket_id}/claim": {
+      "post": {
+        "operationId": "sb_06",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/created"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "ticket": []
+          }
+        ],
+        "summary": "领取空位",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "ticket",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "ticket",
+          "sb": "SB-06"
+        }
+      }
+    },
+    "/sessions": {
+      "post": {
+        "operationId": "sb_04",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/create_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/created"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/created"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/queued"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "创建、排队或幂等返回",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "key",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "create",
+          "sb": "SB-04"
+        }
+      }
+    },
+    "/sessions/{sid}": {
+      "delete": {
+        "operationId": "sb_09",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "结束会话",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-09"
+        }
+      },
+      "get": {
+        "operationId": "sb_08",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wait_state",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wait_s",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "会话对象（可长轮询到指定状态）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-08"
+        }
+      }
+    },
+    "/sessions/{sid}/batch": {
+      "post": {
+        "operationId": "sb_18",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/batch_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/batch_status"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "批处理评估（本机与局域网；公开站 404）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "task",
+          "sb": "SB-18"
+        }
+      }
+    },
+    "/sessions/{sid}/batch/{batch_id}": {
+      "get": {
+        "operationId": "sb_19",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/batch_status"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "批处理进度与结果",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-19"
+        }
+      }
+    },
+    "/sessions/{sid}/clock": {
+      "post": {
+        "operationId": "sb_15",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/clock_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "播放、暂停、倍速（经治理器）、单步",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "clock",
+          "sb": "SB-15"
+        }
+      }
+    },
+    "/sessions/{sid}/detections": {
+      "get": {
+        "operationId": "sb_39",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since_seq",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "uav",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sensor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "level_min",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sensor/1/detection.schema.json#/$defs/page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "检测历史补拉",
+        "tags": [
+          "rest/perception.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/perception.py (M19)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-39"
+        }
+      }
+    },
+    "/sessions/{sid}/end-beacon": {
+      "post": {
+        "operationId": "sb_17",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/end_beacon"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "关闭页面时结束会话（token 在请求体）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "body_token",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P1",
+          "rate": "rest",
+          "sb": "SB-17"
+        }
+      }
+    },
+    "/sessions/{sid}/env/calendar": {
+      "post": {
+        "operationId": "sb_62",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "jump": {
+                    "type": "boolean"
+                  },
+                  "start_utc": {
+                    "type": "string"
+                  },
+                  "tz": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start_utc",
+                  "tz"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "仿真日历（call env/calendar）",
+        "tags": [
+          "rest/env.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/env.py (M07)",
+          "priority": "P0",
+          "rate": "clock",
+          "sb": "SB-62"
+        }
+      }
+    },
+    "/sessions/{sid}/env/preset": {
+      "post": {
+        "operationId": "sb_61",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "duration_s": {
+                    "maximum": 600,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "天气预设（同 call env/preset）",
+        "tags": [
+          "rest/env.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/env.py (M07)",
+          "priority": "P0",
+          "rate": "clock",
+          "sb": "SB-61"
+        }
+      }
+    },
+    "/sessions/{sid}/env/query": {
+      "post": {
+        "operationId": "sb_63",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "fields": {
+                    "type": "array"
+                  },
+                  "points": {
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "points"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "环境场点查询",
+        "tags": [
+          "rest/env.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/env.py (M07)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-63"
+        }
+      }
+    },
+    "/sessions/{sid}/env/state": {
+      "get": {
+        "operationId": "sb_60",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/env/1/env_state.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "EnvKeyframe（含日历、太阳、照度档）",
+        "tags": [
+          "rest/env.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/env.py (M07)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-60"
+        }
+      }
+    },
+    "/sessions/{sid}/events": {
+      "get": {
+        "operationId": "sb_16",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since_seq",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "level_min",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/events_page"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "事件补拉",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-16"
+        }
+      }
+    },
+    "/sessions/{sid}/keepalive": {
+      "post": {
+        "operationId": "sb_10",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/keepalive_reply"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "续期并换发 token",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-10"
+        }
+      }
+    },
+    "/sessions/{sid}/models": {
+      "get": {
+        "operationId": "sb_24",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/catalog.schema.json#/$defs/models"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "本会话克隆机型",
+        "tags": [
+          "rest/catalog.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/catalog.py (M21)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-24"
+        }
+      },
+      "post": {
+        "operationId": "sb_25",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/vehicle/1/clone.schema.json#/$defs/rest_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/catalog.schema.json#/$defs/model_detail"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "克隆并编辑机型",
+        "tags": [
+          "rest/catalog.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/catalog.py (M21)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-25"
+        }
+      }
+    },
+    "/sessions/{sid}/models/{model_id}": {
+      "delete": {
+        "operationId": "sb_27",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "删除克隆机型",
+        "tags": [
+          "rest/catalog.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/catalog.py (M21)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-27"
+        }
+      },
+      "patch": {
+        "operationId": "sb_26",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/vehicle/1/clone.schema.json#/$defs/rest_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/catalog.schema.json#/$defs/model_detail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "修改克隆机型",
+        "tags": [
+          "rest/catalog.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/catalog.py (M21)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-26"
+        }
+      }
+    },
+    "/sessions/{sid}/nests": {
+      "get": {
+        "operationId": "sb_47",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/nest.schema.json#/$defs/list"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "机巢列表",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-47"
+        }
+      },
+      "post": {
+        "operationId": "sb_48",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/tasking/1/nest.schema.json"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/nest.schema.json"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "新增机巢（可同时放入无人机）",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-48"
+        }
+      }
+    },
+    "/sessions/{sid}/nests/{id}": {
+      "delete": {
+        "operationId": "sb_51",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "删除机巢",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-51"
+        }
+      },
+      "get": {
+        "operationId": "sb_49",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/nest.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "机巢配置与状态",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-49"
+        }
+      },
+      "patch": {
+        "operationId": "sb_50",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/tasking/1/nest.schema.json"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/nest.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "修改机巢",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-50"
+        }
+      }
+    },
+    "/sessions/{sid}/pair": {
+      "post": {
+        "operationId": "sb_77",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "以配对码加入同一沙盒（P1）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P1",
+          "rate": "create",
+          "sb": "SB-77"
+        }
+      }
+    },
+    "/sessions/{sid}/pair-code": {
+      "post": {
+        "operationId": "sb_76",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "指挥器配对码（P1）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P1",
+          "rate": "rest",
+          "sb": "SB-76"
+        }
+      }
+    },
+    "/sessions/{sid}/park": {
+      "post": {
+        "operationId": "sb_69",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sandbox/1/park.schema.json#/$defs/park_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/park.schema.json#/$defs/park_reply"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/park.schema.json#/$defs/park_reply"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "节能驻留（checkpoint 落盘、释放槽位）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-69"
+        }
+      }
+    },
+    "/sessions/{sid}/park-beacon": {
+      "post": {
+        "operationId": "sb_72",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sandbox/1/park.schema.json#/$defs/park_beacon"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "驻留信标（pagehide，token 在请求体）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "body_token",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-72"
+        }
+      }
+    },
+    "/sessions/{sid}/perception/feasibility": {
+      "post": {
+        "operationId": "sb_67",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sensor/1/perception.schema.json#/$defs/feasibility_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sensor/1/perception.schema.json#/$defs/feasibility_reply"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "服务端可行窗口查询",
+        "tags": [
+          "rest/perception.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/perception.py (M19)",
+          "priority": "P1",
+          "rate": "rest",
+          "sb": "SB-67"
+        }
+      }
+    },
+    "/sessions/{sid}/perception/field/{kind}": {
+      "get": {
+        "operationId": "sb_74",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rt/1/field_profile.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "辐射场剖面",
+        "tags": [
+          "rest/perception.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/perception.py (M19)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-74"
+        }
+      }
+    },
+    "/sessions/{sid}/perception/field/{kind}/samples": {
+      "post": {
+        "operationId": "sb_78",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "场的显式采样点（对拍）",
+        "tags": [
+          "rest/perception.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/perception.py (M19)",
+          "priority": "P1",
+          "rate": "task",
+          "sb": "SB-78"
+        }
+      }
+    },
+    "/sessions/{sid}/perception/quant": {
+      "get": {
+        "operationId": "sb_73",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "uav",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rt/1/target_quant.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "逐对感知量化读数",
+        "tags": [
+          "rest/perception.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/perception.py (M19)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-73"
+        }
+      }
+    },
+    "/sessions/{sid}/perception/volumes": {
+      "get": {
+        "operationId": "sb_75",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rt/1/field_volumes.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "识别物感知体表",
+        "tags": [
+          "rest/perception.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/perception.py (M19)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-75"
+        }
+      }
+    },
+    "/sessions/{sid}/relay/{tid}/stats": {
+      "get": {
+        "operationId": "sb_59",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/relay_stats.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "接力统计",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-59"
+        }
+      }
+    },
+    "/sessions/{sid}/restore": {
+      "post": {
+        "operationId": "sb_12",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/restore_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "导入配置快照（同一世界）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-12"
+        }
+      }
+    },
+    "/sessions/{sid}/resume": {
+      "post": {
+        "operationId": "sb_70",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/park.schema.json#/$defs/resume_created"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/park.schema.json#/$defs/resume_created"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/park.schema.json#/$defs/resume_queued"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "从驻留恢复（满员时恢复票）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "create",
+          "sb": "SB-70"
+        }
+      }
+    },
+    "/sessions/{sid}/rt": {
+      "get": {
+        "operationId": "sb_64",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "Switching Protocols"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "沙盒实时连接（WebSocket Upgrade，子协议 awr.rt.v1 + bearer.<token>）",
+        "tags": [
+          "sandbox-api"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "no",
+          "owner": "sandbox-api rt/hub.py (M11)",
+          "priority": "P0",
+          "rate": "-",
+          "sb": "SB-64"
+        }
+      }
+    },
+    "/sessions/{sid}/snapshot": {
+      "get": {
+        "operationId": "sb_11",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/snapshot.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "导出配置快照（结束后 10 min 内可用）",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-11"
+        }
+      }
+    },
+    "/sessions/{sid}/targets": {
+      "get": {
+        "operationId": "sb_40",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/target/1/target.schema.json#/$defs/list"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "识别物列表",
+        "tags": [
+          "rest/targets.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/targets.py (M18)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-40"
+        }
+      },
+      "post": {
+        "operationId": "sb_41",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/target/1/target.schema.json#/$defs/create_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/target/1/target.schema.json#/$defs/created"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "新增识别物",
+        "tags": [
+          "rest/targets.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/targets.py (M18)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-41"
+        }
+      }
+    },
+    "/sessions/{sid}/targets/{id}": {
+      "delete": {
+        "operationId": "sb_44",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "删除识别物",
+        "tags": [
+          "rest/targets.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/targets.py (M18)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-44"
+        }
+      },
+      "get": {
+        "operationId": "sb_42",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/target/1/target.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "识别物完整配置",
+        "tags": [
+          "rest/targets.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/targets.py (M18)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-42"
+        }
+      },
+      "patch": {
+        "operationId": "sb_43",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/target/1/target.schema.json"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/target/1/target.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "修改识别物（JSON Merge Patch）",
+        "tags": [
+          "rest/targets.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/targets.py (M18)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-43"
+        }
+      }
+    },
+    "/sessions/{sid}/targets/{id}/state": {
+      "get": {
+        "operationId": "sb_45",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rt/1/target_detail.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "感知态、有效敏感体、计数、声源相位",
+        "tags": [
+          "rest/targets.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/targets.py (M18)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-45"
+        }
+      }
+    },
+    "/sessions/{sid}/targets/{id}/suggested_radius": {
+      "get": {
+        "operationId": "sb_46",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "light",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bg",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/target/1/target.schema.json#/$defs/suggested_radius"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "physical 模型的建议半径",
+        "tags": [
+          "rest/targets.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/targets.py (M18)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-46"
+        }
+      }
+    },
+    "/sessions/{sid}/tasking/plans": {
+      "post": {
+        "operationId": "sb_58",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/tasking/1/plan.schema.json"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/plan.schema.json#/$defs/reply"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "提交外部分配计划",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "task",
+          "sb": "SB-58"
+        }
+      }
+    },
+    "/sessions/{sid}/tasking/snapshot": {
+      "get": {
+        "operationId": "sb_57",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/snapshot.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "Allocator 快照",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "task",
+          "sb": "SB-57"
+        }
+      }
+    },
+    "/sessions/{sid}/tasks": {
+      "get": {
+        "operationId": "sb_52",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/task.schema.json#/$defs/list"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "任务列表",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-52"
+        }
+      },
+      "post": {
+        "operationId": "sb_53",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/tasking/1/task.schema.json#/$defs/request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/task.schema.json#/$defs/preview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/task.schema.json"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "创建任务或预览分配（dry-run）",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "task",
+          "sb": "SB-53"
+        }
+      }
+    },
+    "/sessions/{sid}/tasks/previews/{preview_id}": {
+      "get": {
+        "operationId": "sb_68",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "preview_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/task.schema.json#/$defs/preview"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "dry-run 排队超时后的异步取回",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "task",
+          "sb": "SB-68"
+        }
+      }
+    },
+    "/sessions/{sid}/tasks/{tid}": {
+      "get": {
+        "operationId": "sb_54",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/task.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "任务、状态与计划几何",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-54"
+        }
+      }
+    },
+    "/sessions/{sid}/tasks/{tid}/sustainability": {
+      "get": {
+        "operationId": "sb_56",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/tasking/1/sustainability.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "7x24 可持续性评估",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "task",
+          "sb": "SB-56"
+        }
+      }
+    },
+    "/sessions/{sid}/tasks/{tid}:cancel": {
+      "post": {
+        "operationId": "sb_55_cancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "任务控制 cancel",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "call",
+          "sb": "SB-55.cancel"
+        }
+      }
+    },
+    "/sessions/{sid}/tasks/{tid}:pause": {
+      "post": {
+        "operationId": "sb_55_pause",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "任务控制 pause",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "call",
+          "sb": "SB-55.pause"
+        }
+      }
+    },
+    "/sessions/{sid}/tasks/{tid}:resume": {
+      "post": {
+        "operationId": "sb_55_resume",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "任务控制 resume",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "call",
+          "sb": "SB-55.resume"
+        }
+      }
+    },
+    "/sessions/{sid}/tasks/{tid}:start": {
+      "post": {
+        "operationId": "sb_55_start",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "任务控制 start",
+        "tags": [
+          "rest/tasking.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/tasking.py (M20)",
+          "priority": "P0",
+          "rate": "call",
+          "sb": "SB-55.start"
+        }
+      }
+    },
+    "/sessions/{sid}/template": {
+      "post": {
+        "operationId": "sb_13",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/template_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "载入场景模板",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-13"
+        }
+      }
+    },
+    "/sessions/{sid}/tracks": {
+      "get": {
+        "operationId": "sb_66",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sensor/1/perception.schema.json#/$defs/tracks"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "识别物航迹（不外露真值）",
+        "tags": [
+          "rest/perception.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/perception.py (M19)",
+          "priority": "P1",
+          "rate": "rest",
+          "sb": "SB-66"
+        }
+      }
+    },
+    "/sessions/{sid}/vehicles": {
+      "get": {
+        "operationId": "sb_28",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "机队实例列表",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-28"
+        }
+      },
+      "post": {
+        "operationId": "sb_29",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json#/$defs/create_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json#/$defs/created"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "添加无人机",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-29"
+        }
+      }
+    },
+    "/sessions/{sid}/vehicles/{vid}": {
+      "delete": {
+        "operationId": "sb_32",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "移除",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-32"
+        }
+      },
+      "get": {
+        "operationId": "sb_30",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "实例与状态快照",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-30"
+        }
+      },
+      "patch": {
+        "operationId": "sb_31",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/merge-patch+json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json#/$defs/patch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "修改标签、机巢、挂载、限速档",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-31"
+        }
+      }
+    },
+    "/sessions/{sid}/vehicles/{vid}/commands": {
+      "post": {
+        "operationId": "sb_35",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json#/$defs/command_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "发起命令（同 WS call）",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "call",
+          "sb": "SB-35"
+        }
+      }
+    },
+    "/sessions/{sid}/vehicles/{vid}/perception": {
+      "get": {
+        "operationId": "sb_38",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sensor/1/perception.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "当前感知结果",
+        "tags": [
+          "rest/perception.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/perception.py (M19)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-38"
+        }
+      }
+    },
+    "/sessions/{sid}/vehicles/{vid}/sensors": {
+      "get": {
+        "operationId": "sb_34",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json#/$defs/sensors"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "挂载、规格、工作状态、云台与变焦",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-34"
+        }
+      }
+    },
+    "/sessions/{sid}/vehicles/{vid}/state": {
+      "get": {
+        "operationId": "sb_33",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json#/$defs/state"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "全部状态",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "yes",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "rest",
+          "sb": "SB-33"
+        }
+      }
+    },
+    "/sessions/{sid}/vehicles/{vid}:acquire": {
+      "post": {
+        "operationId": "sb_36",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json#/$defs/lease_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "申请租约",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "call",
+          "sb": "SB-36"
+        }
+      }
+    },
+    "/sessions/{sid}/vehicles/{vid}:release": {
+      "post": {
+        "operationId": "sb_37",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/vehicle/1/instance.schema.json#/$defs/lease_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/call_result"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "释放租约",
+        "tags": [
+          "rest/fleet.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "cid",
+          "owner": "rest/fleet.py (M08)",
+          "priority": "P0",
+          "rate": "call",
+          "sb": "SB-37"
+        }
+      }
+    },
+    "/sessions/{sid}/world": {
+      "post": {
+        "operationId": "sb_14",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/world_request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [
+          {
+            "sandbox": []
+          }
+        ],
+        "summary": "切换底图",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "session",
+          "idempotent": "key",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "entity",
+          "sb": "SB-14"
+        }
+      }
+    },
+    "/target_classes": {
+      "get": {
+        "operationId": "sb_65",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/target/1/class_defaults.schema.json"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "识别物类别模板",
+        "tags": [
+          "rest/targets.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "rest/targets.py (M18)",
+          "priority": "P1",
+          "rate": "pub",
+          "sb": "SB-65"
+        }
+      }
+    },
+    "/templates": {
+      "get": {
+        "operationId": "sb_02",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "world",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/templates"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "场景模板",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "pub",
+          "sb": "SB-02"
+        }
+      }
+    },
+    "/worlds": {
+      "get": {
+        "operationId": "sb_01",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json#/$defs/worlds"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "https://schemas.anet-drone.dev/rest/1/problem.schema.json"
+                }
+              }
+            },
+            "description": "problem+json with a reason code (rt/reasons.json; codes 500-599 are not HTTP 5xx)"
+          }
+        },
+        "security": [],
+        "summary": "七个世界的可用性与准入",
+        "tags": [
+          "rest/sandbox.py"
+        ],
+        "x-awr": {
+          "auth": "public",
+          "idempotent": "yes",
+          "owner": "rest/sandbox.py (M17)",
+          "priority": "P0",
+          "rate": "pub",
+          "sb": "SB-01"
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/sandbox/v1"
+    }
+  ]
+}

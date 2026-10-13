@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/task_status.schema.json",
+  "title": "awr.task.status.v1",
+  "description": "Topic task/{tid}/status 1 Hz plus on change (AWR-17 §17.7.4); revision + 1 when the plan geometry changes (clients refetch SB-54 include=plan).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "tid": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "type": {
+      "enum": [
+        "point_watch",
+        "polyline_patrol",
+        "area_patrol",
+        "area_scan_gsd",
+        "perimeter_patrol",
+        "relay_watch",
+        "area_guard"
+      ]
+    },
+    "state": {
+      "enum": [
+        "PLANNING",
+        "READY",
+        "RUNNING",
+        "PAUSED",
+        "DONE",
+        "CANCELED",
+        "FAILED",
+        "INFEASIBLE"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "unit %"
+        },
+        "coverage_pct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100,
+          "unit": "%"
+        },
+        "laps_done": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "dwell_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "unit": "s"
+        }
+      }
+    },
+    "n_vehicles": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "makespan_s": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "unit": "s"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "wid": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "uav": {
+            "oneOf": [
+              {
+                "$ref": "../../world/1/common.schema.json#/$defs/slug"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "eta_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "unit": "s"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "wid",
+          "kind",
+          "state"
+        ]
+      }
+    },
+    "children": {
+      "type": "array",
+      "items": {
+        "$ref": "../../world/1/common.schema.json#/$defs/slug"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "tid",
+    "type",
+    "state",
+    "revision",
+    "items"
+  ]
+}

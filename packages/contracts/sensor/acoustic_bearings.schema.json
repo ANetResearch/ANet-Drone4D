@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/acoustic_bearings.schema.json",
+  "title": "awr.sensor.acoustic_bearings.v1",
+  "description": "Topic uav/{id}/sensor/acoustic/bearings, 2 Hz (AWR-17 §17.7.4; M19 §6.8): bearings with per-band SNR (bands with SNR >= 0 dB, <= 24); no target truth ids.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "uav": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "sensor": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]{1,24}$"
+    },
+    "ego_noise_dba": {
+      "type": "number",
+      "unit": "dB(A)"
+    },
+    "bearings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "bearing_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "az_rad": {
+            "type": "number",
+            "unit": "rad"
+          },
+          "el_rad": {
+            "type": "number",
+            "unit": "rad"
+          },
+          "level": {
+            "enum": [
+              "none",
+              "D",
+              "R",
+              "I"
+            ]
+          },
+          "bands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "fc_hz": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "unit": "Hz"
+                },
+                "snr_db": {
+                  "type": "number",
+                  "unit": "dB"
+                }
+              },
+              "required": [
+                "fc_hz",
+                "snr_db"
+              ]
+            },
+            "maxItems": 24
+          },
+          "harmonic_f0_hz": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "unit": "Hz",
+            "description": "P1"
+          }
+        },
+        "required": [
+          "bearing_id",
+          "az_rad",
+          "level",
+          "bands"
+        ]
+      }
+    }
+  },
+  "required": [
+    "t_sim_ns",
+    "sensor",
+    "bearings"
+  ]
+}

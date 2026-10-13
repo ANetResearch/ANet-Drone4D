@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/radar_tracks.schema.json",
+  "title": "awr.sensor.radar_tracks.v1",
+  "description": "Topic uav/{id}/sensor/radar/tracks, 5 Hz sim (AWR-17 §17.7.4; M19 §6.8): tracks never carry target truth ids.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "uav": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "sensor": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]{1,24}$"
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "track_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "range_m": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "m"
+          },
+          "az_rad": {
+            "type": "number",
+            "unit": "rad"
+          },
+          "el_rad": {
+            "type": "number",
+            "unit": "rad"
+          },
+          "vr_mps": {
+            "type": "number",
+            "unit": "m/s"
+          },
+          "snr_db": {
+            "type": "number",
+            "unit": "dB"
+          },
+          "level": {
+            "enum": [
+              "none",
+              "D",
+              "R",
+              "I"
+            ]
+          },
+          "class_hint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "P1 micro-Doppler"
+          }
+        },
+        "required": [
+          "track_id",
+          "range_m",
+          "az_rad",
+          "el_rad",
+          "vr_mps",
+          "snr_db",
+          "level"
+        ]
+      }
+    },
+    "clutter_gated": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "t_sim_ns",
+    "sensor",
+    "tracks"
+  ]
+}

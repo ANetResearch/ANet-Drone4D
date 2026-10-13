@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/target/1/reaction.schema.json",
+  "title": "awr.target.reaction.v1 (behaviour after being discovered)",
+  "description": "Two phases (AWR-04 §7.4; M18-M19 PRD §6.4.2): onset once on entering REACTING, response during ALERTED and CALMING (up to two parallel items, e.g. a dog emits and approaches); alert_others broadcasts to the same class within alert_radius_m.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "onset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "none",
+            "freeze",
+            "look_at"
+          ]
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60,
+          "unit": "s"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "response": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "ignore",
+              "flee",
+              "approach",
+              "return",
+              "emit",
+              "hide"
+            ]
+          },
+          "speed_mps": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 40,
+            "unit": "m/s"
+          },
+          "dist_m": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000,
+            "unit": "m"
+          },
+          "duration_s": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3600,
+            "unit": "s"
+          },
+          "sound": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "duty": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "lw_dba": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 140,
+                "unit": "dB(A)"
+              },
+              "period_s": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 3600,
+                "unit": "s"
+              }
+            }
+          },
+          "search_m": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 500,
+            "unit": "m",
+            "description": "hide (P1)"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "maxItems": 2
+    },
+    "alert_others": {
+      "type": "boolean"
+    }
+  }
+}

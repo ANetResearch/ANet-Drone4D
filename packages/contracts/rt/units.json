@@ -172,11 +172,59 @@
     },
     "_cms": {
       "unit": "cm/s",
-      "quantity": "Lite32 vel_cms only (binary layout)"
+      "quantity": "cm/s in binary layouts only (Lite32 vel_cms, TargetLite32 speed_cms)"
     },
     "_milli": {
       "unit": "x1/1000",
       "quantity": "fixed point x1000 (StateRing rate_milli, rtf_milli)"
+    },
+    "_db": {
+      "unit": "dB",
+      "quantity": "level difference, gain or SNR"
+    },
+    "_dba": {
+      "unit": "dB(A)",
+      "quantity": "A-weighted sound level"
+    },
+    "_dbm": {
+      "unit": "dBm",
+      "quantity": "RF power"
+    },
+    "_lx": {
+      "unit": "lx",
+      "quantity": "illuminance"
+    },
+    "_urad": {
+      "unit": "urad",
+      "quantity": "small angle (jitter)"
+    },
+    "_nm": {
+      "unit": "nm",
+      "quantity": "wavelength"
+    },
+    "_um": {
+      "unit": "um",
+      "quantity": "pixel pitch and band edges"
+    },
+    "_ghz": {
+      "unit": "GHz",
+      "quantity": "radar frequency"
+    },
+    "_mhz": {
+      "unit": "MHz",
+      "quantity": "RF frequency"
+    },
+    "_mk": {
+      "unit": "mK",
+      "quantity": "NETD"
+    },
+    "_cm": {
+      "unit": "cm",
+      "quantity": "GSD in requests"
+    },
+    "_kib": {
+      "unit": "KiB",
+      "quantity": "size"
     }
   },
   "denied_suffixes": {

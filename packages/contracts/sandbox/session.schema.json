@@ -1,0 +1,1431 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sandbox/1/session.schema.json",
+  "title": "awr.sandbox.session.v1 (sandbox session object and session API bodies)",
+  "description": "Session object returned by SB-04, SB-06, SB-08 and SB-10 (AWR-17 §17.4.1); $defs hold the session API request and reply bodies (§17.3, §17.4, §17.6.1). Times on the wire are UNIX ns decimal strings; queueing is not a session state (see ticket.schema.json).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "sid": {
+      "type": "string",
+      "pattern": "^sb-[a-z2-7]{10}$"
+    },
+    "state": {
+      "enum": [
+        "SPAWNING",
+        "READY",
+        "ACTIVE",
+        "IDLE",
+        "PARKING",
+        "PARKED",
+        "DRAINING",
+        "ENDED",
+        "FAILED"
+      ]
+    },
+    "world_id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/id"
+    },
+    "template_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_unix_ns": {
+      "type": "string",
+      "pattern": "^[0-9]{1,20}$",
+      "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+    },
+    "expires_unix_ns": {
+      "type": "string",
+      "pattern": "^[0-9]{1,20}$",
+      "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+    },
+    "lifetime_max_unix_ns": {
+      "type": "string",
+      "pattern": "^[0-9]{1,20}$",
+      "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+    },
+    "expires_in_s": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "renewable": {
+      "type": "boolean"
+    },
+    "renew_block_reason": {
+      "enum": [
+        null,
+        "queue_nonempty",
+        "max_lifetime",
+        "degraded"
+      ]
+    },
+    "idle_ttl_s": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "STOPPED",
+            "PLAYING",
+            "PAUSED",
+            "STEPPING",
+            "BUFFERING",
+            "ENDED",
+            "STALLED",
+            "RESTARTING",
+            "FAILED",
+            "LIVE"
+          ]
+        },
+        "rate_requested": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rate_granted": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rate_cap": {
+          "type": "number",
+          "minimum": 0
+        },
+        "limited_by": {
+          "enum": [
+            null,
+            "cpu_budget",
+            "cost_cap",
+            "manual_control",
+            "degraded"
+          ]
+        },
+        "tick_hz": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "state",
+        "rate_requested",
+        "rate_granted",
+        "rate_cap",
+        "limited_by",
+        "tick_hz"
+      ]
+    },
+    "limits": {
+      "$ref": "limits.schema.json"
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vehicles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "targets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tasks_active": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ws": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cloned_models": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "vehicles",
+        "targets",
+        "nests",
+        "tasks_active",
+        "ws"
+      ]
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "restarts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "degrade_level": {
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L4"
+      ]
+    },
+    "calendar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start_utc": {
+          "type": "string",
+          "description": "ISO 8601 UTC"
+        },
+        "tz": {
+          "type": "string",
+          "description": "IANA time zone"
+        }
+      },
+      "required": [
+        "start_utc",
+        "tz"
+      ]
+    },
+    "acoustic_bg": {
+      "enum": [
+        "rural",
+        "suburban",
+        "urban"
+      ]
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "end_reason": {
+      "enum": [
+        null,
+        "idle",
+        "lifetime",
+        "preempted",
+        "reclaimed",
+        "user",
+        "failed",
+        "parked_expired"
+      ]
+    },
+    "endpoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rest": {
+          "type": "string"
+        },
+        "rt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rest",
+        "rt"
+      ]
+    },
+    "tier": {
+      "enum": [
+        "public",
+        "internal"
+      ]
+    },
+    "last_input_unix_ns": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]{1,20}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "parked_unix_ns": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]{1,20}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "park_reason": {
+      "enum": [
+        null,
+        "idle",
+        "hidden",
+        "user",
+        "idle_disconnected",
+        "preempted",
+        "reclaimed_cpu",
+        "reclaimed_mem"
+      ]
+    },
+    "resume_mode": {
+      "enum": [
+        null,
+        "checkpoint",
+        "snapshot"
+      ]
+    },
+    "retention_unix_ns": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]{1,20}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "remaining_s": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "t_sim_ns": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]{1,20}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "sid",
+    "state",
+    "world_id",
+    "template_id",
+    "created_unix_ns",
+    "expires_unix_ns",
+    "expires_in_s",
+    "renewable",
+    "clock",
+    "limits",
+    "endpoints"
+  ],
+  "$defs": {
+    "create_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "world": {
+          "$ref": "../../world/1/common.schema.json#/$defs/id"
+        },
+        "template": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "config_snapshot": {
+          "oneOf": [
+            {
+              "$ref": "snapshot.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "calendar": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "start_utc": {
+              "type": "string",
+              "description": "ISO 8601 UTC"
+            },
+            "tz": {
+              "type": "string",
+              "description": "IANA time zone"
+            }
+          },
+          "required": [
+            "start_utc",
+            "tz"
+          ]
+        },
+        "acoustic_bg": {
+          "enum": [
+            "rural",
+            "suburban",
+            "urban"
+          ]
+        },
+        "seed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "principal_hint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "pow": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "challenge_id": {
+                  "type": "string"
+                },
+                "nonce": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "challenge_id",
+                "nonce"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "force_new": {
+          "type": "boolean"
+        },
+        "queue_ok": {
+          "type": "boolean"
+        },
+        "client": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "browser",
+                "sdk",
+                "other"
+              ]
+            },
+            "version": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "principal_hint"
+      ],
+      "description": "POST /sessions (SB-04, AWR-17 §17.4.2); template and config_snapshot are mutually exclusive"
+    },
+    "created": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "$ref": "#"
+        },
+        "token": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token_exp_unix_ns": {
+          "type": "string",
+          "pattern": "^[0-9]{1,20}$",
+          "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+        },
+        "idempotent": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "session",
+        "token"
+      ],
+      "description": "201 (new, token present) or 200 (idempotent, token null)"
+    },
+    "queued": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "queue": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ticket_id": {
+              "type": "string",
+              "pattern": "^q-[a-z2-7]{10}$"
+            },
+            "ticket_token": {
+              "type": "string",
+              "pattern": "^q1\\."
+            },
+            "position": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "eta_s": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "unit": "s"
+            },
+            "expires_unix_ns": {
+              "type": "string",
+              "pattern": "^[0-9]{1,20}$",
+              "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+            }
+          },
+          "required": [
+            "ticket_id",
+            "ticket_token",
+            "position",
+            "eta_s"
+          ]
+        },
+        "available_now": {
+          "type": "array",
+          "items": {
+            "$ref": "../../world/1/common.schema.json#/$defs/id"
+          }
+        }
+      },
+      "required": [
+        "queue"
+      ],
+      "description": "202 queued"
+    },
+    "keepalive_reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "$ref": "#"
+        },
+        "renewed": {
+          "type": "boolean"
+        },
+        "token": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token_exp_unix_ns": {
+          "type": "string",
+          "pattern": "^[0-9]{1,20}$",
+          "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+        }
+      },
+      "required": [
+        "session",
+        "renewed",
+        "token"
+      ]
+    },
+    "clock_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "play",
+            "pause",
+            "speed",
+            "step"
+          ]
+        },
+        "rate": {
+          "enum": [
+            0.25,
+            0.5,
+            1,
+            2,
+            5,
+            10
+          ]
+        },
+        "ticks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "description": "SB-15; step ticks count sandbox100 ticks (10 ms)"
+    },
+    "clock_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requested_rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "granted_rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rate_cap": {
+          "type": "number",
+          "minimum": 0
+        },
+        "limited_by": {
+          "enum": [
+            null,
+            "cpu_budget",
+            "cost_cap",
+            "manual_control",
+            "degraded"
+          ]
+        },
+        "limit_code": {
+          "enum": [
+            0,
+            501
+          ]
+        }
+      },
+      "required": [
+        "requested_rate",
+        "granted_rate",
+        "rate_cap"
+      ],
+      "description": "data of the SB-15 result; granted below requested is a warning (501), not an error"
+    },
+    "world_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "world": {
+          "$ref": "../../world/1/common.schema.json#/$defs/id"
+        },
+        "template": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "world"
+      ],
+      "description": "SB-14"
+    },
+    "template_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "template": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "template"
+      ],
+      "description": "SB-13"
+    },
+    "restore_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshot": {
+          "$ref": "snapshot.schema.json"
+        }
+      },
+      "required": [
+        "snapshot"
+      ],
+      "description": "SB-12"
+    },
+    "end_beacon": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "description": "SB-17 (token in the body: sendBeacon cannot set headers)"
+    },
+    "challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "challenge_id": {
+          "type": "string",
+          "pattern": "^c-[a-z2-7]{10}$"
+        },
+        "alg": {
+          "const": "sha256-lz"
+        },
+        "prefix_b64": {
+          "type": "string"
+        },
+        "bits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "expires_unix_ns": {
+          "type": "string",
+          "pattern": "^[0-9]{1,20}$",
+          "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+        }
+      },
+      "required": [
+        "challenge_id",
+        "alg",
+        "prefix_b64",
+        "bits",
+        "expires_unix_ns"
+      ]
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "api_version": {
+          "const": 1
+        },
+        "contracts": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "access_mode": {
+          "enum": [
+            "public",
+            "lan",
+            "loopback"
+          ]
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "queue",
+              "pow",
+              "batch"
+            ]
+          }
+        },
+        "max_sessions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "active_sessions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queue_len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pow": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "required_now": {
+              "type": "boolean"
+            },
+            "bits": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "sdk": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            }
+          }
+        },
+        "build": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "D2.1 (AWR-17 §17.20.1)",
+          "properties": {
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            },
+            "channel": {
+              "enum": [
+                "demo",
+                "local",
+                "ci"
+              ]
+            },
+            "release": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "version",
+            "channel",
+            "release"
+          ]
+        }
+      },
+      "required": [
+        "api_version",
+        "contracts",
+        "access_mode",
+        "features",
+        "max_sessions",
+        "active_sessions",
+        "queue_len"
+      ],
+      "description": "SB-00"
+    },
+    "world_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "world_id": {
+          "$ref": "../../world/1/common.schema.json#/$defs/id"
+        },
+        "name_zh": {
+          "type": "string"
+        },
+        "tier": {
+          "enum": [
+            "S",
+            "L"
+          ]
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "reason": {
+          "enum": [
+            null,
+            "derived_cache_missing",
+            "not_allowed"
+          ]
+        },
+        "admit_now": {
+          "type": "boolean"
+        },
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "anon_mb": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "MiB"
+            },
+            "ws_mb": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "MiB"
+            }
+          }
+        },
+        "dataset": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "terms_zh": {
+              "type": "string"
+            },
+            "citation": {
+              "type": "string"
+            }
+          }
+        },
+        "anchor": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "lat_deg": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90,
+              "unit": "deg"
+            },
+            "lon_deg": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "unit": "deg"
+            },
+            "tz": {
+              "type": "string"
+            }
+          }
+        },
+        "bounds_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "xmin": {
+              "type": "number",
+              "description": "unit m"
+            },
+            "xmax": {
+              "type": "number",
+              "description": "unit m"
+            },
+            "ymin": {
+              "type": "number",
+              "description": "unit m"
+            },
+            "ymax": {
+              "type": "number",
+              "description": "unit m"
+            }
+          }
+        },
+        "templates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "world_id",
+        "tier",
+        "available",
+        "admit_now"
+      ]
+    },
+    "worlds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "world_id": {
+                "$ref": "../../world/1/common.schema.json#/$defs/id"
+              },
+              "name_zh": {
+                "type": "string"
+              },
+              "tier": {
+                "enum": [
+                  "S",
+                  "L"
+                ]
+              },
+              "available": {
+                "type": "boolean"
+              },
+              "reason": {
+                "enum": [
+                  null,
+                  "derived_cache_missing",
+                  "not_allowed"
+                ]
+              },
+              "admit_now": {
+                "type": "boolean"
+              },
+              "cost": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "anon_mb": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "MiB"
+                  },
+                  "ws_mb": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "MiB"
+                  }
+                }
+              },
+              "dataset": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "terms_zh": {
+                    "type": "string"
+                  },
+                  "citation": {
+                    "type": "string"
+                  }
+                }
+              },
+              "anchor": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "lat_deg": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90,
+                    "unit": "deg"
+                  },
+                  "lon_deg": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180,
+                    "unit": "deg"
+                  },
+                  "tz": {
+                    "type": "string"
+                  }
+                }
+              },
+              "bounds_m": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "xmin": {
+                    "type": "number",
+                    "description": "unit m"
+                  },
+                  "xmax": {
+                    "type": "number",
+                    "description": "unit m"
+                  },
+                  "ymin": {
+                    "type": "number",
+                    "description": "unit m"
+                  },
+                  "ymax": {
+                    "type": "number",
+                    "description": "unit m"
+                  }
+                }
+              },
+              "templates": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "world_id",
+              "tier",
+              "available",
+              "admit_now"
+            ]
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "SB-01"
+    },
+    "template_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "pattern": "^t[1-9][0-9]*_[a-z0-9_]+$"
+        },
+        "world_id": {
+          "$ref": "../../world/1/common.schema.json#/$defs/id"
+        },
+        "name_zh": {
+          "type": "string"
+        },
+        "summary_zh": {
+          "type": "string"
+        },
+        "first_feedback_zh": {
+          "type": "string"
+        },
+        "entities": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "vehicles": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "targets": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nests": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tasks": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "calendar_default": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "start_local": {
+              "type": "string"
+            },
+            "tz": {
+              "type": "string"
+            }
+          }
+        },
+        "recommended": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "template_id",
+        "world_id",
+        "name_zh"
+      ]
+    },
+    "templates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "template_id": {
+                "type": "string",
+                "pattern": "^t[1-9][0-9]*_[a-z0-9_]+$"
+              },
+              "world_id": {
+                "$ref": "../../world/1/common.schema.json#/$defs/id"
+              },
+              "name_zh": {
+                "type": "string"
+              },
+              "summary_zh": {
+                "type": "string"
+              },
+              "first_feedback_zh": {
+                "type": "string"
+              },
+              "entities": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "vehicles": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "targets": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "nests": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "tasks": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "calendar_default": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "start_local": {
+                    "type": "string"
+                  },
+                  "tz": {
+                    "type": "string"
+                  }
+                }
+              },
+              "recommended": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "template_id",
+              "world_id",
+              "name_zh"
+            ]
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "SB-02"
+    },
+    "token_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "sub": {
+          "type": "string"
+        },
+        "role": {
+          "const": "operator"
+        },
+        "run": {
+          "type": "string",
+          "pattern": "^sb-[a-z2-7]{10}$"
+        },
+        "sid": {
+          "type": "string",
+          "pattern": "^sb-[a-z2-7]{10}$"
+        },
+        "scope": {
+          "const": "sandbox"
+        },
+        "mode": {
+          "enum": [
+            "public",
+            "lan",
+            "loopback"
+          ]
+        },
+        "iat": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exp": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "jti": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        }
+      },
+      "required": [
+        "v",
+        "sub",
+        "role",
+        "run",
+        "sid",
+        "scope",
+        "mode",
+        "iat",
+        "exp",
+        "jti"
+      ],
+      "description": "payload of the sandbox token v1.<b64url(payload)>.<b64url(sig)> signed with K_sbauth (AWR-17 §17.3.1)"
+    },
+    "events_page": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "../../bus/1/event.schema.json"
+          }
+        },
+        "next_since_seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "oldest_seq": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "SB-16 (events use the WS event shape; the bus schema is referenced for the common fields)"
+    },
+    "batch_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "until_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "config_snapshot": {
+          "oneOf": [
+            {
+              "$ref": "snapshot.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seed": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "until_s"
+      ],
+      "description": "SB-18 (local and LAN only)"
+    },
+    "batch_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "batch_id": {
+          "type": "string",
+          "pattern": "^bt-[a-z2-7]{8}$"
+        },
+        "state": {
+          "enum": [
+            "queued",
+            "running",
+            "done",
+            "failed"
+          ]
+        },
+        "progress_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "unit": "%"
+        },
+        "sim_t_s": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "s"
+        },
+        "wall_s": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "s"
+        },
+        "result": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "relay_stats": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "../../tasking/1/relay_stats.schema.json"
+                  }
+                },
+                "events_url": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "description": "SB-19"
+    },
+    "call_result": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "op": {
+          "const": "result"
+        },
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "running",
+            "succeeded",
+            "failed",
+            "canceled",
+            "timeout"
+          ]
+        },
+        "code": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "final": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "data": {
+          "type": "object"
+        },
+        "effect": {
+          "type": "object"
+        },
+        "detail": {}
+      },
+      "required": [
+        "id",
+        "status",
+        "code"
+      ],
+      "description": "first result of the call that a REST write maps to (same admission and idempotency as WS call)"
+    }
+  }
+}

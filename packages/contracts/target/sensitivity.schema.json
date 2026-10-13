@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/target/1/sensitivity.schema.json",
+  "title": "awr.target.sensitivity.v1 (sensitivity volume)",
+  "description": "One sensitivity volume of a target (AWR-04 §7.3; M18-M19 PRD §6.3.1; AWR-17 §17.6.5). <= 4 per target and <= 64 enabled per session (542). z range is relative to the target; sector is a horizontal sector prism; moving targets plan sectors as full circles.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "enum": [
+        "visual",
+        "acoustic",
+        "radar",
+        "rf"
+      ],
+      "description": "radar and rf are stored only (warning) in D2"
+    },
+    "shape": {
+      "enum": [
+        "sphere",
+        "hemisphere",
+        "cylinder",
+        "sector"
+      ]
+    },
+    "radius_max_m": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 3000,
+      "unit": "m"
+    },
+    "z_min_m": {
+      "type": "number",
+      "minimum": -50,
+      "maximum": 1000,
+      "unit": "m",
+      "default": 0
+    },
+    "z_max_m": {
+      "type": "number",
+      "minimum": -50,
+      "maximum": 1000,
+      "unit": "m",
+      "default": 300
+    },
+    "half_angle_deg": {
+      "type": "number",
+      "maximum": 180,
+      "exclusiveMinimum": 0,
+      "unit": "deg",
+      "description": "sector only",
+      "default": 60
+    },
+    "azimuth_offset_deg": {
+      "type": "number",
+      "minimum": -180,
+      "maximum": 180,
+      "unit": "deg",
+      "description": "relative to the target heading, counter-clockwise positive",
+      "default": 0
+    },
+    "gain_back_db": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 30,
+      "unit": "dB",
+      "description": "physical acoustic back attenuation",
+      "default": 0
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "kind",
+    "shape",
+    "radius_max_m"
+  ]
+}

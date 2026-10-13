@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/vehicle/1/clone.schema.json",
+  "title": "awr.vehicle_clone.v1 (session clone patch)",
+  "description": "Session-only model clone (AWR-20 §7.6; AWR-17 §17.6.2 POST /sessions/{sid}/models): set uses dotted paths from the editable list; frame, geometry, motor, prop, aero, inertia, airframe aerodynamics, v_min, v_max, battery cells and chemistry and env_limits are not editable. Out of range: 522 with violations; <= 8 per session (505). The REST body may use from_model_id, label and patch instead.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.vehicle_clone.v1"
+    },
+    "base": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+@[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]{1,40}_c[0-9]+$"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "set": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "mass_kg",
+          "battery.capacity_ah",
+          "limits.vxy_max_mps",
+          "limits.cruise_mps",
+          "limits.z_up_mps",
+          "limits.z_dn_mps",
+          "airframe.v_cruise_mps",
+          "airframe.v_loiter_mps",
+          "airframe.phi_max_deg",
+          "acoustic.lwa_hover_dba",
+          "acoustic.lwa_cruise_dba",
+          "acoustic.tonal_db",
+          "visual.contrast_sky",
+          "link.range_m"
+        ]
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "default_mounts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "mounts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lens_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "unit": "mm"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "base",
+    "id"
+  ],
+  "$defs": {
+    "rest_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "from_model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "patch": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "from_model_id"
+      ],
+      "description": "POST /sessions/{sid}/models body (SB-25)"
+    },
+    "violation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "value": {},
+        "limit": {},
+        "message_zh": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "rule"
+      ]
+    }
+  }
+}

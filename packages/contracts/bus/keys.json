@@ -16,7 +16,13 @@
     "world",
     "sensor",
     "agent",
-    "health"
+    "health",
+    "target",
+    "perception",
+    "nest",
+    "task",
+    "relay",
+    "sandbox"
   ],
   "producers": [
     "sim-core",
@@ -27,7 +33,9 @@
     "replay-worker",
     "agent-runtime",
     "job-worker",
-    "geo-worker"
+    "geo-worker",
+    "sandbox-pool",
+    "sandbox-api"
   ],
   "keys": [
     {
@@ -164,7 +172,7 @@
         "congestion": "DROP",
         "express": true
       },
-      "payload": "raw awr.bus.Setpoint32.v1",
+      "payload": "raw awr.bus.Setpoint32.v1; frame 0 world, 1 body, 2 fw (D2)",
       "d1": "core"
     },
     {
@@ -198,7 +206,7 @@
         "congestion": "DROP",
         "express": false
       },
-      "payload": "bus/interest.schema.json",
+      "payload": "bus/interest.schema.json (D2: topics perception, nav, radar, acoustic, lidar and streams{})",
       "d1": "core"
     },
     {
@@ -311,14 +319,15 @@
       "type": "pubsub",
       "producer": "sim-core",
       "consumers": [
-        "api"
+        "api",
+        "sandbox-pool"
       ],
       "qos": {
         "priority": "DATA_LOW",
         "congestion": "DROP",
         "express": false
       },
-      "payload": "{stage_ms_per_s{}, n_active, kernel, cpu_pct}",
+      "payload": "{stage_ms_per_s{}, n_active, kernel, cpu_pct}; D2 adds clock_profile, cpu_win_core, rtf_win, rate_set, cost_core_per_rate, n_uav, n_target, ray_rate_hz, rays_dropped, rss_anon_mb, clock_lock (M08 §15.3.7)",
       "d1": "core"
     },
     {
@@ -603,6 +612,355 @@
       },
       "payload": "slot bytes (ZenohStateBus)",
       "d1": "V0.5"
+    },
+    {
+      "name": "SYS_SESSION",
+      "key": "sys/session/{op}",
+      "type": "queryable",
+      "producer": "sandbox-api",
+      "consumers": [
+        "sandbox-pool"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{v, cid, principal, args} -> {v, cid, status, code, detail, result}; activity: {sid: {ws_n, api_calls, last_api_unix_ns, last_input_unix_ns}} per 1 s",
+      "d1": "V0.2-demo",
+      "doc": "op in create, get, list, keepalive, stop, rate, activity, queue, world, template, restore, snapshot, park, resume, stats, pair, reserve; signed with K_pool, only the svc:sandbox-api principal is accepted (AWR-17 §17.10)",
+      "ns": "pool"
+    },
+    {
+      "name": "EVT_SANDBOX_POOL",
+      "key": "evt/sandbox-pool/session",
+      "type": "pubsub",
+      "producer": "sandbox-pool",
+      "consumers": [
+        "sandbox-api"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "sandbox.state, sandbox.expiring, sandbox.rate events and queue ticket changes",
+      "d1": "V0.2-demo",
+      "ns": "pool"
+    },
+    {
+      "name": "STATE_SANDBOX_POOL",
+      "key": "state/sandbox-pool/sessions",
+      "type": "pubsub",
+      "producer": "sandbox-pool",
+      "consumers": [
+        "sandbox-api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "1 Hz awr.sandbox.session_state.v1 summaries of every session",
+      "d1": "V0.2-demo",
+      "ns": "pool"
+    },
+    {
+      "name": "CTL_PLAN",
+      "key": "ctl/plan/{op}",
+      "type": "queryable",
+      "producer": "sim-core (PlanPoolClient remote mode)",
+      "consumers": [
+        "sandbox-pool"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "submit: {v, job_id, kind, args, budget_ms} -> {v, job_id, status, code, result | result_path}; cancel: {v, job_id}",
+      "d1": "V0.2-demo",
+      "doc": "op in submit, cancel; declared by sandbox-pool inside every session namespace (ADR-113)"
+    },
+    {
+      "name": "CTL_TARGET",
+      "key": "ctl/sim-core/target",
+      "type": "queryable",
+      "producer": "sandbox-api, show-api",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{op: get | state | suggested_radius, args}; writes go through ctl/{producer}/cmd",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "CTL_TASKING",
+      "key": "ctl/sim-core/tasking",
+      "type": "queryable",
+      "producer": "sandbox-api, show-api",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{op: dry_run | get | sustainability | snapshot | plan_check | relay_stats, args}",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "CTL_SNAPSHOT",
+      "key": "ctl/sim-core/snapshot",
+      "type": "queryable",
+      "producer": "sandbox-api",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{op: export} -> sandbox/snapshot.schema.json (<= 512 KiB); import and templates through sim/reset{sandbox_config}",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_TARGETS",
+      "key": "state/sim-core/targets",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "10 Hz sim msgpack {v: 1, t_sim_ns, roster_version, rows: bin(32 n)} of awr.TargetLite32.v1 rows in target_no order",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_TARGET_DETAIL",
+      "key": "state/sim-core/target_detail",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "2 Hz array of awr.target.detail.v1",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_PERCEPTION",
+      "key": "state/sim-core/perception",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "5 Hz sim array of awr.uav.perception.v1 for the interest set and marks",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_NAV",
+      "key": "state/sim-core/nav",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "10 Hz sim array of awr.sensor.nav.v1 for subscribed vehicles",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_RADAR",
+      "key": "state/sim-core/radar",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "5 Hz sim array of awr.sensor.radar_tracks.v1",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_ACOUSTIC",
+      "key": "state/sim-core/acoustic",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "2 Hz array of awr.sensor.acoustic_bearings.v1",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_LIDAR",
+      "key": "state/sim-core/lidar",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "awr.LidarScan8.v1 blob of the one vehicle whose scan is subscribed, <= 2 Hz",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_PAYLOAD",
+      "key": "state/sim-core/payload",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "2 Hz array of awr.uav.payload.v1, every vehicle",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_NESTS",
+      "key": "state/sim-core/nests",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "1 Hz array of awr.nest.status.v1",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_TASKS",
+      "key": "state/sim-core/tasks",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "1 Hz plus on change, array of awr.task.status.v1",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_RELAY",
+      "key": "state/sim-core/relay",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api",
+        "recorder"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "1 Hz array of awr.relay.stats.v1",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_FIELD",
+      "key": "state/sim-core/field",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{v, t_sim_ns, items: {acoustic|visual|thermal|radar: awr.field.profile.v1, volumes: awr.field.volumes.v1}}; items are msgpack bin (one encoding per payload), the gateway strips the bin header",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "STATE_TARGET_QUANT",
+      "key": "state/sim-core/target_quant",
+      "type": "pubsub",
+      "producer": "sim-core",
+      "consumers": [
+        "api"
+      ],
+      "qos": {
+        "priority": "DATA_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{v, t_sim_ns, items: {<target id>: awr.target.quant.v1 enc soa1 (msgpack bin)}}",
+      "d1": "V0.2-demo"
+    },
+    {
+      "name": "CTL_CHECKPOINT",
+      "key": "ctl/sim-core/checkpoint",
+      "type": "queryable",
+      "producer": "sandbox-pool",
+      "consumers": [
+        "sim-core"
+      ],
+      "qos": {
+        "priority": "INTERACTIVE_LOW",
+        "congestion": "DROP",
+        "express": false
+      },
+      "payload": "{v, cid, op: checkpoint, to: disk, path, principal} -> {v, cid, ok, bytes, t_sim_ns, layout_hashes}",
+      "d1": "V0.2-demo",
+      "doc": "D2.1 park (AWR-17 §17.20.4): synchronous checkpoint to disk, <= 5 s; until M08 serves it the pool uses clock{op: checkpoint}"
     }
-  ]
+  ],
+  "pool_namespace": "awr/_sandbox/pool"
 }

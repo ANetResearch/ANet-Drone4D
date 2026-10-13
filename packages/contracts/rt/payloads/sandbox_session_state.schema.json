@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/sandbox_session_state.schema.json",
+  "title": "awr.sandbox.session_state.v1",
+  "description": "Topic sandbox/session 1 Hz, sandbox-api only (AWR-17 §17.7.4; source state/sandbox-pool/sessions).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "sid": {
+      "type": "string",
+      "pattern": "^sb-[a-z2-7]{10}$"
+    },
+    "state": {
+      "enum": [
+        "SPAWNING",
+        "READY",
+        "ACTIVE",
+        "IDLE",
+        "DRAINING",
+        "ENDED",
+        "FAILED"
+      ]
+    },
+    "world_id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/id"
+    },
+    "template_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expires_unix_ns": {
+      "type": "string",
+      "pattern": "^[0-9]{1,20}$",
+      "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+    },
+    "max_expires_unix_ns": {
+      "type": "string",
+      "pattern": "^[0-9]{1,20}$",
+      "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+    },
+    "expires_in_s": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "renewable": {
+      "type": "boolean"
+    },
+    "renew_block_reason": {
+      "enum": [
+        null,
+        "queue_nonempty",
+        "max_lifetime",
+        "degraded"
+      ]
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rate_requested": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rate_granted": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rate_cap": {
+          "type": "number",
+          "minimum": 0
+        },
+        "limited_by": {
+          "enum": [
+            null,
+            "cpu_budget",
+            "cost_cap",
+            "manual_control",
+            "degraded"
+          ]
+        }
+      },
+      "required": [
+        "rate_granted",
+        "rate_cap"
+      ]
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vehicles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "targets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tasks_active": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ws": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cloned_models": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "vehicles",
+        "targets",
+        "nests",
+        "tasks_active",
+        "ws"
+      ]
+    },
+    "limits_rev": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "queue_len": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "degrade_level": {
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L4"
+      ]
+    },
+    "expiring": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "enum": [
+                "idle",
+                "lifetime",
+                "preempted",
+                "reclaimed",
+                "user"
+              ]
+            },
+            "in_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            }
+          },
+          "required": [
+            "reason",
+            "in_s"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "sid",
+    "state",
+    "expires_unix_ns",
+    "expires_in_s",
+    "renewable",
+    "clock",
+    "usage",
+    "queue_len",
+    "degrade_level",
+    "expiring"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sandbox/1/ticket.schema.json",
+  "title": "awr.sandbox.ticket.v1 (queue ticket view)",
+  "description": "SB-05 long-poll reply and SB-07 state (AWR-17 §17.4.3). slot_ready expires after 60 s without a claim; waiting tickets expire after ticket_idle_s without a long poll.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "pattern": "^q-[a-z2-7]{10}$"
+    },
+    "state": {
+      "enum": [
+        "waiting",
+        "slot_ready",
+        "claimed",
+        "expired"
+      ]
+    },
+    "position": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "eta_s": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "unit": "s"
+    },
+    "claim_deadline_unix_ns": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]{1,20}$",
+          "description": "UNIX time in ns as a decimal string (AWR-17 §1.3)"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "world_id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/id"
+    },
+    "template_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "ticket_id",
+    "state",
+    "position",
+    "eta_s"
+  ]
+}

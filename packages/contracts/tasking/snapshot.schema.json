@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/tasking/1/snapshot.schema.json",
+  "title": "awr.tasking.snapshot.v1 (Allocator snapshot)",
+  "description": "SB-57 (AWR-04 §8.5; AWR-17 §17.6.8): input of an external Allocator; plans are submitted against its revision.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "work_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "wid": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+          },
+          "tid": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "pos": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+          },
+          "region": {
+            "type": "array",
+            "items": {
+              "$ref": "../../world/1/common.schema.json#/$defs/vec2"
+            }
+          },
+          "capability": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "level_req": {
+            "oneOf": [
+              {
+                "enum": [
+                  "D",
+                  "R",
+                  "I"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workload_s": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "s"
+          },
+          "deadline_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "unit": "s"
+          },
+          "priority": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "wid",
+          "tid",
+          "kind"
+        ]
+      }
+    },
+    "vehicles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "model_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,40}$"
+          },
+          "nest_id": {
+            "oneOf": [
+              {
+                "$ref": "../../world/1/common.schema.json#/$defs/slug"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pos": {
+            "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+          },
+          "soc": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "e_avail_wh": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "Wh"
+          },
+          "t_ready_s": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "s"
+          },
+          "sensors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "model_id",
+          "pos",
+          "soc"
+        ]
+      }
+    },
+    "nests": {
+      "type": "array",
+      "items": {
+        "$ref": "nest.schema.json"
+      }
+    },
+    "keepouts": {
+      "type": "array",
+      "items": {
+        "$ref": "../../target/1/keepout.schema.json"
+      }
+    },
+    "zones_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "revision",
+    "t_sim_ns",
+    "work_items",
+    "vehicles"
+  ]
+}

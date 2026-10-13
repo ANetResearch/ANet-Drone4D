@@ -86,7 +86,12 @@
               "job",
               "data",
               "browser",
-              "module"
+              "module",
+              "sandbox",
+              "catalog",
+              "targets",
+              "perception",
+              "tasking"
             ]
           },
           "step": {
@@ -109,7 +114,8 @@
               "ext",
               "V0.2",
               "V0.5",
-              "V1.0"
+              "V1.0",
+              "V0.2-demo"
             ]
           }
         },

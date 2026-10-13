@@ -53,9 +53,9 @@ export const TimeFlags = { STATE_MASK: 15, REPLAY: 128 } as const
 export type TimeFlags = (typeof TimeFlags)[keyof typeof TimeFlags]
 export const TIME_FLAGS_NAMES: Readonly<Record<number, string>> = { 15: "STATE_MASK", 128: "REPLAY" }
 
-export const Kind = { UAV: 0, UGV: 1, ROBOT: 2, VEHICLE: 3, SENSOR: 4, HUMAN: 5 } as const
+export const Kind = { UAV: 0, UGV: 1, ROBOT: 2, VEHICLE: 3, SENSOR: 4, HUMAN: 5, TARGET: 6 } as const
 export type Kind = (typeof Kind)[keyof typeof Kind]
-export const KIND_NAMES: Readonly<Record<number, string>> = { 0: "uav", 1: "ugv", 2: "robot", 3: "vehicle", 4: "sensor", 5: "human" }
+export const KIND_NAMES: Readonly<Record<number, string>> = { 0: "uav", 1: "ugv", 2: "robot", 3: "vehicle", 4: "sensor", 5: "human", 6: "target" }
 
 export const ScaleStatus = { RELATIVE: 0, ASSUMED: 1, LANDMARK: 2, GNSS: 3, LIDAR: 4, RTK: 5, SURVEY: 6 } as const
 export type ScaleStatus = (typeof ScaleStatus)[keyof typeof ScaleStatus]
@@ -81,9 +81,9 @@ export const EnvMode = { SMOOTH: 0, EXP: 1, STEP: 2 } as const
 export type EnvMode = (typeof EnvMode)[keyof typeof EnvMode]
 export const ENV_MODE_NAMES: Readonly<Record<number, string>> = { 0: "smooth", 1: "exp", 2: "step" }
 
-export const SensorKind = { CAMERA: 0, LIDAR: 1, THERMAL: 2, RADAR: 3, GNSS: 4, IMU: 5, BARO: 6 } as const
+export const SensorKind = { CAMERA: 0, LIDAR: 1, THERMAL: 2, RADAR: 3, GNSS: 4, IMU: 5, BARO: 6, ILLUMINATOR: 7, ACOUSTIC: 8 } as const
 export type SensorKind = (typeof SensorKind)[keyof typeof SensorKind]
-export const SENSOR_KIND_NAMES: Readonly<Record<number, string>> = { 0: "camera", 1: "lidar", 2: "thermal", 3: "radar", 4: "gnss", 5: "imu", 6: "baro" }
+export const SENSOR_KIND_NAMES: Readonly<Record<number, string>> = { 0: "camera", 1: "lidar", 2: "thermal", 3: "radar", 4: "gnss", 5: "imu", 6: "baro", 7: "illuminator", 8: "acoustic" }
 
 export const Encoding = { RAW: 0, MSGPACK: 1, JSON: 2, BLOB: 3 } as const
 export type Encoding = (typeof Encoding)[keyof typeof Encoding]
@@ -93,9 +93,9 @@ export const EventLevel = { INFO: 0, NOTICE: 1, WARNING: 2, CRITICAL: 3 } as con
 export type EventLevel = (typeof EventLevel)[keyof typeof EventLevel]
 export const EVENT_LEVEL_NAMES: Readonly<Record<number, string>> = { 0: "INFO", 1: "NOTICE", 2: "WARNING", 3: "CRITICAL" }
 
-export const SetpointFrame = { WORLD: 0, BODY: 1 } as const
+export const SetpointFrame = { WORLD: 0, BODY: 1, FW: 2 } as const
 export type SetpointFrame = (typeof SetpointFrame)[keyof typeof SetpointFrame]
-export const SETPOINT_FRAME_NAMES: Readonly<Record<number, string>> = { 0: "world", 1: "body" }
+export const SETPOINT_FRAME_NAMES: Readonly<Record<number, string>> = { 0: "world", 1: "body", 2: "fw" }
 
 export const CursorMode = { FREE: 0, LOSSY: 1, LOSSLESS: 2 } as const
 export type CursorMode = (typeof CursorMode)[keyof typeof CursorMode]
@@ -201,9 +201,9 @@ export const SyncType = { PTP: 0, GPS_PPS: 1, PX4_TIMESYNC: 2, NONE: 3, SIM: 4 }
 export type SyncType = (typeof SyncType)[keyof typeof SyncType]
 export const SYNC_TYPE_NAMES: Readonly<Record<number, string>> = { 0: "ptp", 1: "gps_pps", 2: "px4_timesync", 3: "none", 4: "sim" }
 
-export const CommandCategory = { NAV: 0, NAV_SETUP: 1, NAV_STREAM: 2, SAFETY: 3, SAFETY_LIGHT: 4, SAFETY_LOCK: 5, MISSION: 6, TASK_OR_UNLOCK: 7, SETUP: 8, CALL_CONTROL: 9, LEASE: 10, BATCH: 11, CLOCK: 12, ENV: 13, QUERY: 14, SEAT: 15, CONFIRM: 16, REC: 17, FLEET: 18 } as const
+export const CommandCategory = { NAV: 0, NAV_SETUP: 1, NAV_STREAM: 2, SAFETY: 3, SAFETY_LIGHT: 4, SAFETY_LOCK: 5, MISSION: 6, TASK_OR_UNLOCK: 7, SETUP: 8, CALL_CONTROL: 9, LEASE: 10, BATCH: 11, CLOCK: 12, ENV: 13, QUERY: 14, SEAT: 15, CONFIRM: 16, REC: 17, FLEET: 18, PAYLOAD: 19, ENTITY: 20, TASK: 21 } as const
 export type CommandCategory = (typeof CommandCategory)[keyof typeof CommandCategory]
-export const COMMAND_CATEGORY_NAMES: Readonly<Record<number, string>> = { 0: "nav", 1: "nav_setup", 2: "nav_stream", 3: "safety", 4: "safety_light", 5: "safety_lock", 6: "mission", 7: "task_or_unlock", 8: "setup", 9: "call_control", 10: "lease", 11: "batch", 12: "clock", 13: "env", 14: "query", 15: "seat", 16: "confirm", 17: "rec", 18: "fleet" }
+export const COMMAND_CATEGORY_NAMES: Readonly<Record<number, string>> = { 0: "nav", 1: "nav_setup", 2: "nav_stream", 3: "safety", 4: "safety_light", 5: "safety_lock", 6: "mission", 7: "task_or_unlock", 8: "setup", 9: "call_control", 10: "lease", 11: "batch", 12: "clock", 13: "env", 14: "query", 15: "seat", 16: "confirm", 17: "rec", 18: "fleet", 19: "payload", 20: "entity", 21: "task" }
 
 export const GnssFix = { NO_FIX: 0, SINGLE: 1, DGPS: 2, RTK_FLOAT: 3, RTK_FIXED: 4 } as const
 export type GnssFix = (typeof GnssFix)[keyof typeof GnssFix]
@@ -220,6 +220,138 @@ export const RECON_ENGINE_NAMES: Readonly<Record<number, string>> = { 0: "mock",
 export const ReconStage = { PREPARING: 0, SEGMENTING: 1, INFERRING: 2, FUSING: 3, GEOREFERENCING: 4, TILING: 5, PACKAGING: 6 } as const
 export type ReconStage = (typeof ReconStage)[keyof typeof ReconStage]
 export const RECON_STAGE_NAMES: Readonly<Record<number, string>> = { 0: "PREPARING", 1: "SEGMENTING", 2: "INFERRING", 3: "FUSING", 4: "GEOREFERENCING", 5: "TILING", 6: "PACKAGING" }
+
+export const TargetClass = { UNKNOWN: 0, PERSON: 1, UAV: 2, MACHINE: 3, DOG: 4, VEHICLE: 5, OBJECT: 6 } as const
+export type TargetClass = (typeof TargetClass)[keyof typeof TargetClass]
+export const TARGET_CLASS_NAMES: Readonly<Record<number, string>> = { 0: "UNKNOWN", 1: "PERSON", 2: "UAV", 3: "MACHINE", 4: "DOG", 5: "VEHICLE", 6: "OBJECT" }
+
+export const TargetClassWire = { PERSON: 1, UAV: 2, MACHINE: 3, DOG: 4, VEHICLE: 5, OBJECT: 6 } as const
+export type TargetClassWire = (typeof TargetClassWire)[keyof typeof TargetClassWire]
+export const TARGET_CLASS_WIRE_NAMES: Readonly<Record<number, string>> = { 1: "person", 2: "uav", 3: "machine", 4: "dog", 5: "vehicle", 6: "object" }
+
+export const Awareness = { UNAWARE: 0, SUSPICIOUS: 1, REACTING: 2, ALERTED: 3, CALMING: 4 } as const
+export type Awareness = (typeof Awareness)[keyof typeof Awareness]
+export const AWARENESS_NAMES: Readonly<Record<number, string>> = { 0: "UNAWARE", 1: "SUSPICIOUS", 2: "REACTING", 3: "ALERTED", 4: "CALMING" }
+
+export const CriterionMode = { GEOMETRIC: 0, PHYSICAL: 1 } as const
+export type CriterionMode = (typeof CriterionMode)[keyof typeof CriterionMode]
+export const CRITERION_MODE_NAMES: Readonly<Record<number, string>> = { 0: "geometric", 1: "physical" }
+
+export const SensitivityKind = { VISUAL: 0, ACOUSTIC: 1, RADAR: 2, RF: 3 } as const
+export type SensitivityKind = (typeof SensitivityKind)[keyof typeof SensitivityKind]
+export const SENSITIVITY_KIND_NAMES: Readonly<Record<number, string>> = { 0: "visual", 1: "acoustic", 2: "radar", 3: "rf" }
+
+export const SensitivityShape = { SPHERE: 0, HEMISPHERE: 1, CYLINDER: 2, SECTOR: 3 } as const
+export type SensitivityShape = (typeof SensitivityShape)[keyof typeof SensitivityShape]
+export const SENSITIVITY_SHAPE_NAMES: Readonly<Record<number, string>> = { 0: "sphere", 1: "hemisphere", 2: "cylinder", 3: "sector" }
+
+export const PerceptionLevel = { NONE: 0, D: 1, R: 2, I: 3 } as const
+export type PerceptionLevel = (typeof PerceptionLevel)[keyof typeof PerceptionLevel]
+export const PERCEPTION_LEVEL_NAMES: Readonly<Record<number, string>> = { 0: "NONE", 1: "D", 2: "R", 3: "I" }
+
+export const PerceptionSensor = { NONE: 0, EO: 1, NIR: 2, LWIR: 3, RADAR: 4, ACOUSTIC: 5, LIDAR: 6 } as const
+export type PerceptionSensor = (typeof PerceptionSensor)[keyof typeof PerceptionSensor]
+export const PERCEPTION_SENSOR_NAMES: Readonly<Record<number, string>> = { 0: "NONE", 1: "EO", 2: "NIR", 3: "LWIR", 4: "RADAR", 5: "ACOUSTIC", 6: "LIDAR" }
+
+export const PerceptionLimiting = { FOV: 0, LOS: 1, PIXELS: 2, LIGHT: 3, CONTRAST: 4, BLUR: 5 } as const
+export type PerceptionLimiting = (typeof PerceptionLimiting)[keyof typeof PerceptionLimiting]
+export const PERCEPTION_LIMITING_NAMES: Readonly<Record<number, string>> = { 0: "fov", 1: "los", 2: "pixels", 3: "light", 4: "contrast", 5: "blur" }
+
+export const CaptureState = { IDLE: 0, ARMING: 1, CAPTURED: 2, HOLDING: 3 } as const
+export type CaptureState = (typeof CaptureState)[keyof typeof CaptureState]
+export const CAPTURE_STATE_NAMES: Readonly<Record<number, string>> = { 0: "IDLE", 1: "ARMING", 2: "CAPTURED", 3: "HOLDING" }
+
+export const PerceptionTrackState = { TENTATIVE: 0, CONFIRMED: 1, COASTING: 2, DROPPED: 3 } as const
+export type PerceptionTrackState = (typeof PerceptionTrackState)[keyof typeof PerceptionTrackState]
+export const PERCEPTION_TRACK_STATE_NAMES: Readonly<Record<number, string>> = { 0: "TENTATIVE", 1: "CONFIRMED", 2: "COASTING", 3: "DROPPED" }
+
+export const LightBand = { DAY: 0, LOW: 1, NIGHT: 2 } as const
+export type LightBand = (typeof LightBand)[keyof typeof LightBand]
+export const LIGHT_BAND_NAMES: Readonly<Record<number, string>> = { 0: "day", 1: "low", 2: "night" }
+
+export const AcousticBg = { RURAL: 0, SUBURBAN: 1, URBAN: 2 } as const
+export type AcousticBg = (typeof AcousticBg)[keyof typeof AcousticBg]
+export const ACOUSTIC_BG_NAMES: Readonly<Record<number, string>> = { 0: "rural", 1: "suburban", 2: "urban" }
+
+export const ClockProfile = { D1_250: 0, SANDBOX100: 1 } as const
+export type ClockProfile = (typeof ClockProfile)[keyof typeof ClockProfile]
+export const CLOCK_PROFILE_NAMES: Readonly<Record<number, string>> = { 0: "d1_250", 1: "sandbox100" }
+
+export const FrameType = { QUAD_X: 0, HEX_X: 1, FIXED_WING: 2, VTOL_QUADPLANE: 3 } as const
+export type FrameType = (typeof FrameType)[keyof typeof FrameType]
+export const FRAME_TYPE_NAMES: Readonly<Record<number, string>> = { 0: "quad_x", 1: "hex_x", 2: "fixed_wing", 3: "vtol_quadplane" }
+
+export const VehicleCategory = { MULTIROTOR: 0, FIXED_WING: 1, VTOL: 2 } as const
+export type VehicleCategory = (typeof VehicleCategory)[keyof typeof VehicleCategory]
+export const VEHICLE_CATEGORY_NAMES: Readonly<Record<number, string>> = { 0: "multirotor", 1: "fixed_wing", 2: "vtol" }
+
+export const FwMode = { MC: 0, TRANSITION_FW: 1, FW: 2, TRANSITION_MC: 3 } as const
+export type FwMode = (typeof FwMode)[keyof typeof FwMode]
+export const FW_MODE_NAMES: Readonly<Record<number, string>> = { 0: "MC", 1: "TRANSITION_FW", 2: "FW", 3: "TRANSITION_MC" }
+
+export const NestKind = { BOX: 0, LAUNCHER: 1, VTOL_PAD: 2 } as const
+export type NestKind = (typeof NestKind)[keyof typeof NestKind]
+export const NEST_KIND_NAMES: Readonly<Record<number, string>> = { 0: "box", 1: "launcher", 2: "vtol_pad" }
+
+export const TaskType = { POINT_WATCH: 0, POLYLINE_PATROL: 1, AREA_PATROL: 2, AREA_SCAN_GSD: 3, PERIMETER_PATROL: 4, RELAY_WATCH: 5, AREA_GUARD: 6 } as const
+export type TaskType = (typeof TaskType)[keyof typeof TaskType]
+export const TASK_TYPE_NAMES: Readonly<Record<number, string>> = { 0: "point_watch", 1: "polyline_patrol", 2: "area_patrol", 3: "area_scan_gsd", 4: "perimeter_patrol", 5: "relay_watch", 6: "area_guard" }
+
+export const TaskState = { PLANNING: 0, READY: 1, RUNNING: 2, PAUSED: 3, DONE: 4, CANCELED: 5, FAILED: 6, INFEASIBLE: 7 } as const
+export type TaskState = (typeof TaskState)[keyof typeof TaskState]
+export const TASK_STATE_NAMES: Readonly<Record<number, string>> = { 0: "PLANNING", 1: "READY", 2: "RUNNING", 3: "PAUSED", 4: "DONE", 5: "CANCELED", 6: "FAILED", 7: "INFEASIBLE" }
+
+export const RelayGapCause = { KEEPOUT_PRIORITY: 0, ILLUM_TRANSITION: 1, INFEASIBLE: 2, BATTERY: 3, OTHER: 4 } as const
+export type RelayGapCause = (typeof RelayGapCause)[keyof typeof RelayGapCause]
+export const RELAY_GAP_CAUSE_NAMES: Readonly<Record<number, string>> = { 0: "keepout_priority", 1: "illum_transition", 2: "infeasible", 3: "battery", 4: "other" }
+
+export const SandboxState = { SPAWNING: 0, READY: 1, ACTIVE: 2, IDLE: 3, DRAINING: 4, ENDED: 5, FAILED: 6, PARKING: 7, PARKED: 8 } as const
+export type SandboxState = (typeof SandboxState)[keyof typeof SandboxState]
+export const SANDBOX_STATE_NAMES: Readonly<Record<number, string>> = { 0: "SPAWNING", 1: "READY", 2: "ACTIVE", 3: "IDLE", 4: "DRAINING", 5: "ENDED", 6: "FAILED", 7: "PARKING", 8: "PARKED" }
+
+export const SandboxEndReason = { IDLE: 0, LIFETIME: 1, PREEMPTED: 2, RECLAIMED: 3, USER: 4, FAILED: 5, PARKED_EXPIRED: 6 } as const
+export type SandboxEndReason = (typeof SandboxEndReason)[keyof typeof SandboxEndReason]
+export const SANDBOX_END_REASON_NAMES: Readonly<Record<number, string>> = { 0: "idle", 1: "lifetime", 2: "preempted", 3: "reclaimed", 4: "user", 5: "failed", 6: "parked_expired" }
+
+export const TicketState = { WAITING: 0, SLOT_READY: 1, CLAIMED: 2, EXPIRED: 3 } as const
+export type TicketState = (typeof TicketState)[keyof typeof TicketState]
+export const TICKET_STATE_NAMES: Readonly<Record<number, string>> = { 0: "waiting", 1: "slot_ready", 2: "claimed", 3: "expired" }
+
+export const DegradeLevel = { L0: 0, L1: 1, L2: 2, L3: 3, L4: 4 } as const
+export type DegradeLevel = (typeof DegradeLevel)[keyof typeof DegradeLevel]
+export const DEGRADE_LEVEL_NAMES: Readonly<Record<number, string>> = { 0: "L0", 1: "L1", 2: "L2", 3: "L3", 4: "L4" }
+
+export const FieldKind = { ACOUSTIC: 0, VISUAL: 1, THERMAL: 2, RADAR: 3 } as const
+export type FieldKind = (typeof FieldKind)[keyof typeof FieldKind]
+export const FIELD_KIND_NAMES: Readonly<Record<number, string>> = { 0: "acoustic", 1: "visual", 2: "thermal", 3: "radar" }
+
+export const FieldInterestCode = { ACOUSTIC: 1, VISUAL: 2, THERMAL: 3, RADAR: 4, VOLUMES: 5 } as const
+export type FieldInterestCode = (typeof FieldInterestCode)[keyof typeof FieldInterestCode]
+export const FIELD_INTEREST_CODE_NAMES: Readonly<Record<number, string>> = { 1: "acoustic", 2: "visual", 3: "thermal", 4: "radar", 5: "volumes" }
+
+export const Tier = { PUBLIC: 0, INTERNAL: 1 } as const
+export type Tier = (typeof Tier)[keyof typeof Tier]
+export const TIER_NAMES: Readonly<Record<number, string>> = { 0: "public", 1: "internal" }
+
+export const PowerState = { ACTIVE: 0, QUIET: 1, WARNING: 2, SAVING: 3 } as const
+export type PowerState = (typeof PowerState)[keyof typeof PowerState]
+export const POWER_STATE_NAMES: Readonly<Record<number, string>> = { 0: "active", 1: "quiet", 2: "warning", 3: "saving" }
+
+export const ParkReason = { IDLE: 0, HIDDEN: 1, USER: 2, IDLE_DISCONNECTED: 3, PREEMPTED: 4, RECLAIMED_CPU: 5, RECLAIMED_MEM: 6 } as const
+export type ParkReason = (typeof ParkReason)[keyof typeof ParkReason]
+export const PARK_REASON_NAMES: Readonly<Record<number, string>> = { 0: "idle", 1: "hidden", 2: "user", 3: "idle_disconnected", 4: "preempted", 5: "reclaimed_cpu", 6: "reclaimed_mem" }
+
+export const ResumeMode = { CHECKPOINT: 0, SNAPSHOT: 1 } as const
+export type ResumeMode = (typeof ResumeMode)[keyof typeof ResumeMode]
+export const RESUME_MODE_NAMES: Readonly<Record<number, string>> = { 0: "checkpoint", 1: "snapshot" }
+
+export const TokenScope = { SANDBOX: 0, IDENTITY: 1 } as const
+export type TokenScope = (typeof TokenScope)[keyof typeof TokenScope]
+export const TOKEN_SCOPE_NAMES: Readonly<Record<number, string>> = { 0: "sandbox", 1: "identity" }
+
+export const ViewerTicketState = { WAITING: 0, SEAT_READY: 1, EXPIRED: 2 } as const
+export type ViewerTicketState = (typeof ViewerTicketState)[keyof typeof ViewerTicketState]
+export const VIEWER_TICKET_STATE_NAMES: Readonly<Record<number, string>> = { 0: "waiting", 1: "seat_ready", 2: "expired" }
 
 /** FlightSub: 3-bit sub-mode names per FlightState (null = reserved slot). */
 export const FLIGHT_SUB: ReadonlyArray<ReadonlyArray<string | null>> = [

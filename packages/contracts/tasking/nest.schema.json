@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/tasking/1/nest.schema.json",
+  "title": "awr.tasking.nest.v1 (nest)",
+  "description": "Nest object (AWR-04 §8.2; AWR-17 §17.6.6; M20 §6.2.1). box takes multirotors, launcher fixed wing (crewed, not part of unattended 7x24), vtol_pad VTOL and multirotors. <= 4 per session (505); incompatible 525; delete with vehicles inside 105.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "pos": {
+      "type": "array",
+      "items": {
+        "type": [
+          "number",
+          "null"
+        ]
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "World ENU m; z null = DSM or roof"
+    },
+    "kind": {
+      "enum": [
+        "box",
+        "launcher",
+        "vtol_pad"
+      ]
+    },
+    "crewed": {
+      "type": "boolean"
+    },
+    "slots": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12
+    },
+    "energy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "swap",
+            "charge"
+          ]
+        },
+        "swap_s": {
+          "type": "number",
+          "minimum": 30,
+          "maximum": 900,
+          "unit": "s"
+        },
+        "packs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "cells": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "capacity_ah": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "unit": "Ah"
+              },
+              "chemistry": {
+                "enum": [
+                  "lipo",
+                  "lihv",
+                  "liion"
+                ]
+              },
+              "pack_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "cells",
+              "count"
+            ]
+          }
+        }
+      },
+      "required": [
+        "mode"
+      ]
+    },
+    "chargers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "channels": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "i_max_a": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "unit": "A"
+          },
+          "cells_max": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "model",
+          "count",
+          "channels",
+          "i_max_a",
+          "cells_max"
+        ]
+      }
+    },
+    "turnaround_s": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 3600,
+      "unit": "s"
+    },
+    "launch_interval_s": {
+      "type": "number",
+      "minimum": 5,
+      "maximum": 600,
+      "unit": "s"
+    },
+    "wind_max_mps": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 25,
+      "unit": "m/s"
+    },
+    "rtk_base": {
+      "type": "boolean"
+    },
+    "link_range_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 50000,
+      "unit": "m"
+    },
+    "inventory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,40}$"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "in_nest": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "airborne": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "model_id",
+          "count"
+        ]
+      },
+      "description": "read only, derived from vehicle instances; in a create request it places vehicles (reply vehicle_ids); PATCH -> 110 INVENTORY_READONLY"
+    },
+    "vehicle_ids": {
+      "type": "array",
+      "items": {
+        "$ref": "../../world/1/common.schema.json#/$defs/slug"
+      },
+      "description": "create reply only"
+    }
+  },
+  "required": [
+    "pos"
+  ],
+  "$defs": {
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "SB-47"
+    }
+  }
+}

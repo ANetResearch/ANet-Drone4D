@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/target/1/sound.schema.json",
+  "title": "awr.target.sound.v1 (periodic sound source)",
+  "description": "Periodic source per 1/3-octave band (AWR-04 §7.5; M18-M19 PRD §6.5.2): on phase full level, off phase -40 dB. Out of range: 541.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "waveform": {
+      "enum": [
+        "tone",
+        "harmonic",
+        "pulse_train",
+        "noise_band"
+      ]
+    },
+    "f0_hz": {
+      "type": "number",
+      "minimum": 20,
+      "maximum": 10000,
+      "unit": "Hz"
+    },
+    "harmonics_db": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": -60,
+        "maximum": 0,
+        "unit": "dB"
+      },
+      "maxItems": 8,
+      "description": "relative to the fundamental, default [0, -6, -10, -14]"
+    },
+    "lw_dba": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 140,
+      "unit": "dB(A)"
+    },
+    "period_s": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 3600,
+      "unit": "s"
+    },
+    "duty": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "phase_s": {
+      "type": "number",
+      "minimum": 0,
+      "unit": "s"
+    },
+    "bandwidth_hz": {
+      "type": "number",
+      "minimum": 10,
+      "maximum": 5000,
+      "unit": "Hz",
+      "description": "noise_band only"
+    }
+  },
+  "required": [
+    "waveform",
+    "f0_hz",
+    "lw_dba",
+    "period_s",
+    "duty"
+  ]
+}

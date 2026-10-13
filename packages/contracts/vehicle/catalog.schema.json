@@ -1,0 +1,670 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/vehicle/1/catalog.schema.json",
+  "title": "awr.vehicle_catalog.v1 (vehicles/catalog.json)",
+  "description": "Catalog index (AWR-20 §7.2; M21): models with visibility, order and nest kinds; sensor model library; battery packs and chargers. display_name, reference and profile_version repeat params.yaml and are checked equal (CI-1).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.vehicle_catalog.v1"
+    },
+    "catalog_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "disclaimer_zh": {
+      "type": "string"
+    },
+    "limits_default": {
+      "type": "string",
+      "description": "sandbox default limits profile when a model gives none"
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,40}$"
+          },
+          "dir": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "profile_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "display_name_zh": {
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "multirotor",
+              "fixed_wing",
+              "vtol"
+            ]
+          },
+          "size_class": {
+            "enum": [
+              "light",
+              "medium",
+              "heavy"
+            ]
+          },
+          "reference": {
+            "type": "boolean"
+          },
+          "visible": {
+            "type": "boolean"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nest_kinds": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "box",
+                "launcher",
+                "vtol_pad"
+              ]
+            },
+            "minItems": 1
+          },
+          "summary_zh": {
+            "type": "string"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "dir",
+          "profile_version",
+          "display_name",
+          "category",
+          "reference",
+          "visible",
+          "nest_kinds"
+        ]
+      },
+      "minItems": 1
+    },
+    "sensor_models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "file": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "eo_zoom",
+              "nir_illuminator",
+              "lwir",
+              "radar_mmw",
+              "acoustic_array",
+              "lidar_livox",
+              "gnss",
+              "imu"
+            ]
+          },
+          "model_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "reference": {
+            "type": "boolean"
+          },
+          "visible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "file",
+          "type",
+          "model_version",
+          "reference"
+        ]
+      }
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pack_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "cells": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "chemistry": {
+            "enum": [
+              "lipo",
+              "lihv",
+              "liion"
+            ]
+          },
+          "capacity_ah": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "unit": "Ah"
+          },
+          "capacity_wh": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "unit": "Wh"
+          },
+          "mass_kg": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "unit": "kg"
+          },
+          "c_max": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "packs_per_swap": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "conf": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ]
+          },
+          "src": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pack_id",
+          "cells",
+          "chemistry",
+          "capacity_ah",
+          "c_max"
+        ]
+      }
+    },
+    "chargers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "channels": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "i_max_a": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "unit": "A"
+          },
+          "cells_min": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "cells_max": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "mass_kg": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "kg"
+          },
+          "conf": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ]
+          },
+          "src": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "channels",
+          "i_max_a",
+          "cells_max"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "catalog_version",
+    "disclaimer_zh",
+    "models",
+    "sensor_models",
+    "packs",
+    "chargers"
+  ],
+  "$defs": {
+    "model_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "name_zh": {
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "multirotor",
+            "fixed_wing",
+            "vtol"
+          ]
+        },
+        "reference": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "mass_kg": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "kg"
+        },
+        "mtow_kg": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "kg"
+        },
+        "endurance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hover_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            },
+            "cruise_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            },
+            "loiter_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            },
+            "mission_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            }
+          }
+        },
+        "speed": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cruise_mps": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "m/s"
+            },
+            "max_mps": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "m/s"
+            },
+            "min_mps": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "m/s"
+            },
+            "stall_mps": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "m/s"
+            }
+          }
+        },
+        "link_range_m": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m"
+        },
+        "default_sensors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "optional_sensors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "nest_kinds": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "box",
+              "launcher",
+              "vtol_pad"
+            ]
+          }
+        },
+        "session_clone": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "model_id",
+        "category",
+        "reference",
+        "version"
+      ]
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "model_id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]{1,40}$"
+              },
+              "name_zh": {
+                "type": "string"
+              },
+              "category": {
+                "enum": [
+                  "multirotor",
+                  "fixed_wing",
+                  "vtol"
+                ]
+              },
+              "reference": {
+                "type": "boolean"
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+              },
+              "mass_kg": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "unit": "kg"
+              },
+              "mtow_kg": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "unit": "kg"
+              },
+              "endurance": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "hover_s": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "s"
+                  },
+                  "cruise_s": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "s"
+                  },
+                  "loiter_s": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "s"
+                  },
+                  "mission_s": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "s"
+                  }
+                }
+              },
+              "speed": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "cruise_mps": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "m/s"
+                  },
+                  "max_mps": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "m/s"
+                  },
+                  "min_mps": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "m/s"
+                  },
+                  "stall_mps": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "m/s"
+                  }
+                }
+              },
+              "link_range_m": {
+                "type": "number",
+                "minimum": 0,
+                "unit": "m"
+              },
+              "default_sensors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "optional_sensors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nest_kinds": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "box",
+                    "launcher",
+                    "vtol_pad"
+                  ]
+                }
+              },
+              "session_clone": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "model_id",
+              "category",
+              "reference",
+              "version"
+            ]
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "SB-21, SB-24"
+    },
+    "model_detail": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/model_summary"
+        }
+      ],
+      "type": "object",
+      "properties": {
+        "profile": {
+          "$ref": "vehicle_profile.schema.json"
+        },
+        "params_table": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "group": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "label_zh": {
+                "type": "string"
+              },
+              "value": {},
+              "unit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confidence": {
+                "enum": [
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "label"
+                ]
+              },
+              "use_zh": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "value",
+              "confidence"
+            ]
+          }
+        },
+        "derived": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "description": "SB-22: summary plus profile, parameter table and derived values"
+    },
+    "sensor_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sensor_type": {
+          "type": "string"
+        },
+        "name_zh": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "eo",
+            "nir",
+            "nir_illuminator",
+            "lwir",
+            "radar",
+            "acoustic",
+            "lidar"
+          ]
+        },
+        "reference": {
+          "type": "boolean"
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "kg"
+        },
+        "power_w": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "W"
+        },
+        "mount_requires_landed": {
+          "type": "boolean"
+        },
+        "spec": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "sensor_type",
+        "kind",
+        "spec"
+      ]
+    },
+    "sensors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sensor_item"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "SB-23"
+    }
+  }
+}

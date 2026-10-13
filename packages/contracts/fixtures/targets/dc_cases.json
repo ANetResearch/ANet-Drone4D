@@ -1,0 +1,870 @@
+{
+ "schema": "awr.fixture.dc_cases.v1",
+ "source": "AWR-04 §2.2 projected-area critical dimension",
+ "cases": [
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 0,
+   "beta_deg": 0,
+   "d_c_m": 0.7245688373,
+   "d_c_worst_m": 0.7245688373
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 0,
+   "beta_deg": 45,
+   "d_c_m": 0.9949620564,
+   "d_c_worst_m": 0.7245688373
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 0,
+   "beta_deg": 90,
+   "d_c_m": 0.9354143467,
+   "d_c_worst_m": 0.7245688373
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 30,
+   "beta_deg": 0,
+   "d_c_m": 0.7277797311,
+   "d_c_worst_m": 0.7277797311
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 30,
+   "beta_deg": 45,
+   "d_c_m": 0.965567921,
+   "d_c_worst_m": 0.7277797311
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 30,
+   "beta_deg": 90,
+   "d_c_m": 0.9125635475,
+   "d_c_worst_m": 0.7277797311
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 60,
+   "beta_deg": 0,
+   "d_c_m": 0.6264214321,
+   "d_c_worst_m": 0.6264214321
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 60,
+   "beta_deg": 45,
+   "d_c_m": 0.7904926043,
+   "d_c_worst_m": 0.6264214321
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 60,
+   "beta_deg": 90,
+   "d_c_m": 0.7532621128,
+   "d_c_worst_m": 0.6264214321
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 90,
+   "beta_deg": 0,
+   "d_c_m": 0.3872983346,
+   "d_c_worst_m": 0.3872983346
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 90,
+   "beta_deg": 45,
+   "d_c_m": 0.3872983346,
+   "d_c_worst_m": 0.3872983346
+  },
+  {
+   "class": "person",
+   "size_m": [
+    0.5,
+    0.3,
+    1.75
+   ],
+   "eps_deg": 90,
+   "beta_deg": 90,
+   "d_c_m": 0.3872983346,
+   "d_c_worst_m": 0.3872983346
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 0,
+   "beta_deg": 0,
+   "d_c_m": 0.1870828693,
+   "d_c_worst_m": 0.1870828693
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 0,
+   "beta_deg": 45,
+   "d_c_m": 0.2224802793,
+   "d_c_worst_m": 0.1870828693
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 0,
+   "beta_deg": 90,
+   "d_c_m": 0.1870828693,
+   "d_c_worst_m": 0.1870828693
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 30,
+   "beta_deg": 0,
+   "d_c_m": 0.3025902991,
+   "d_c_worst_m": 0.3025902991
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 30,
+   "beta_deg": 45,
+   "d_c_m": 0.3226702194,
+   "d_c_worst_m": 0.3025902991
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 30,
+   "beta_deg": 90,
+   "d_c_m": 0.3025902991,
+   "d_c_worst_m": 0.3025902991
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 60,
+   "beta_deg": 0,
+   "d_c_m": 0.351551009,
+   "d_c_worst_m": 0.351551009
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 60,
+   "beta_deg": 45,
+   "d_c_m": 0.3617137671,
+   "d_c_worst_m": 0.351551009
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 60,
+   "beta_deg": 90,
+   "d_c_m": 0.351551009,
+   "d_c_worst_m": 0.351551009
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 90,
+   "beta_deg": 0,
+   "d_c_m": 0.35,
+   "d_c_worst_m": 0.35
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 90,
+   "beta_deg": 45,
+   "d_c_m": 0.35,
+   "d_c_worst_m": 0.35
+  },
+  {
+   "class": "uav",
+   "size_m": [
+    0.35,
+    0.35,
+    0.1
+   ],
+   "eps_deg": 90,
+   "beta_deg": 90,
+   "d_c_m": 0.35,
+   "d_c_worst_m": 0.35
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 0,
+   "beta_deg": 0,
+   "d_c_m": 0.7483314774,
+   "d_c_worst_m": 0.7483314774
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 0,
+   "beta_deg": 45,
+   "d_c_m": 0.9806453092,
+   "d_c_worst_m": 0.7483314774
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 0,
+   "beta_deg": 90,
+   "d_c_m": 0.894427191,
+   "d_c_worst_m": 0.7483314774
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 30,
+   "beta_deg": 0,
+   "d_c_m": 0.9137692412,
+   "d_c_worst_m": 0.9137692412
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 30,
+   "beta_deg": 45,
+   "d_c_m": 1.087578279,
+   "d_c_worst_m": 0.9137692412
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 30,
+   "beta_deg": 90,
+   "d_c_m": 1.021185744,
+   "d_c_worst_m": 0.9137692412
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 60,
+   "beta_deg": 0,
+   "d_c_m": 0.9413914078,
+   "d_c_worst_m": 0.9413914078
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 60,
+   "beta_deg": 45,
+   "d_c_m": 1.042617089,
+   "d_c_worst_m": 0.9413914078
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 60,
+   "beta_deg": 90,
+   "d_c_m": 1.003104074,
+   "d_c_worst_m": 0.9413914078
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 90,
+   "beta_deg": 0,
+   "d_c_m": 0.8366600265,
+   "d_c_worst_m": 0.8366600265
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 90,
+   "beta_deg": 45,
+   "d_c_m": 0.8366600265,
+   "d_c_worst_m": 0.8366600265
+  },
+  {
+   "class": "machine",
+   "size_m": [
+    1.0,
+    0.7,
+    0.8
+   ],
+   "eps_deg": 90,
+   "beta_deg": 90,
+   "d_c_m": 0.8366600265,
+   "d_c_worst_m": 0.8366600265
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 0,
+   "beta_deg": 0,
+   "d_c_m": 0.4242640687,
+   "d_c_worst_m": 0.4242640687
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 0,
+   "beta_deg": 45,
+   "d_c_m": 0.713524269,
+   "d_c_worst_m": 0.4242640687
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 0,
+   "beta_deg": 90,
+   "d_c_m": 0.7348469228,
+   "d_c_worst_m": 0.4242640687
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 30,
+   "beta_deg": 0,
+   "d_c_m": 0.5393371605,
+   "d_c_worst_m": 0.5393371605
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 30,
+   "beta_deg": 45,
+   "d_c_m": 0.758886127,
+   "d_c_worst_m": 0.5393371605
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 30,
+   "beta_deg": 90,
+   "d_c_m": 0.776307747,
+   "d_c_worst_m": 0.5393371605
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 60,
+   "beta_deg": 0,
+   "d_c_m": 0.5690578697,
+   "d_c_worst_m": 0.5690578697
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 60,
+   "beta_deg": 45,
+   "d_c_m": 0.6988456913,
+   "d_c_worst_m": 0.5690578697
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 60,
+   "beta_deg": 90,
+   "d_c_m": 0.7098076211,
+   "d_c_worst_m": 0.5690578697
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 90,
+   "beta_deg": 0,
+   "d_c_m": 0.5196152423,
+   "d_c_worst_m": 0.5196152423
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 90,
+   "beta_deg": 45,
+   "d_c_m": 0.5196152423,
+   "d_c_worst_m": 0.5196152423
+  },
+  {
+   "class": "dog",
+   "size_m": [
+    0.9,
+    0.3,
+    0.6
+   ],
+   "eps_deg": 90,
+   "beta_deg": 90,
+   "d_c_m": 0.5196152423,
+   "d_c_worst_m": 0.5196152423
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 0,
+   "beta_deg": 0,
+   "d_c_m": 1.643167673,
+   "d_c_worst_m": 1.643167673
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 0,
+   "beta_deg": 45,
+   "d_c_m": 2.58498725,
+   "d_c_worst_m": 1.643167673
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 0,
+   "beta_deg": 90,
+   "d_c_m": 2.598076211,
+   "d_c_worst_m": 1.643167673
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 30,
+   "beta_deg": 0,
+   "d_c_m": 2.527502441,
+   "d_c_worst_m": 2.527502441
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 30,
+   "beta_deg": 45,
+   "d_c_m": 3.136386379,
+   "d_c_worst_m": 2.527502441
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 30,
+   "beta_deg": 90,
+   "d_c_m": 3.145738622,
+   "d_c_worst_m": 2.527502441
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 60,
+   "beta_deg": 0,
+   "d_c_m": 2.892197395,
+   "d_c_worst_m": 2.892197395
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 60,
+   "beta_deg": 45,
+   "d_c_m": 3.218056139,
+   "d_c_worst_m": 2.892197395
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 60,
+   "beta_deg": 90,
+   "d_c_m": 3.223322164,
+   "d_c_worst_m": 2.892197395
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 90,
+   "beta_deg": 0,
+   "d_c_m": 2.846049894,
+   "d_c_worst_m": 2.846049894
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 90,
+   "beta_deg": 45,
+   "d_c_m": 2.846049894,
+   "d_c_worst_m": 2.846049894
+  },
+  {
+   "class": "vehicle",
+   "size_m": [
+    4.5,
+    1.8,
+    1.5
+   ],
+   "eps_deg": 90,
+   "beta_deg": 90,
+   "d_c_m": 2.846049894,
+   "d_c_worst_m": 2.846049894
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 0,
+   "beta_deg": 0,
+   "d_c_m": 0.4,
+   "d_c_worst_m": 0.4
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 0,
+   "beta_deg": 45,
+   "d_c_m": 0.5318295897,
+   "d_c_worst_m": 0.4
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 0,
+   "beta_deg": 90,
+   "d_c_m": 0.4898979486,
+   "d_c_worst_m": 0.4
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 30,
+   "beta_deg": 0,
+   "d_c_m": 0.5084919514,
+   "d_c_worst_m": 0.5084919514
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 30,
+   "beta_deg": 45,
+   "d_c_m": 0.604110068,
+   "d_c_worst_m": 0.5084919514
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 30,
+   "beta_deg": 90,
+   "d_c_m": 0.5725784635,
+   "d_c_worst_m": 0.5084919514
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 60,
+   "beta_deg": 0,
+   "d_c_m": 0.5365129047,
+   "d_c_worst_m": 0.5365129047
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 60,
+   "beta_deg": 45,
+   "d_c_m": 0.5909885389,
+   "d_c_worst_m": 0.5365129047
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 60,
+   "beta_deg": 90,
+   "d_c_m": 0.5725784635,
+   "d_c_worst_m": 0.5365129047
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 90,
+   "beta_deg": 0,
+   "d_c_m": 0.4898979486,
+   "d_c_worst_m": 0.4898979486
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 90,
+   "beta_deg": 45,
+   "d_c_m": 0.4898979486,
+   "d_c_worst_m": 0.4898979486
+  },
+  {
+   "class": "object",
+   "size_m": [
+    0.6,
+    0.4,
+    0.4
+   ],
+   "eps_deg": 90,
+   "beta_deg": 90,
+   "d_c_m": 0.4898979486,
+   "d_c_worst_m": 0.4898979486
+  }
+ ]
+}

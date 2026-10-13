@@ -195,10 +195,11 @@ class Kind(IntEnum):
     VEHICLE = 3
     SENSOR = 4
     HUMAN = 5
+    TARGET = 6
 
 
-KIND_NAMES: dict[int, str] = {0: "uav", 1: "ugv", 2: "robot", 3: "vehicle", 4: "sensor", 5: "human"}
-KIND_BY_NAME: dict[str, int] = {"uav": 0, "ugv": 1, "robot": 2, "vehicle": 3, "sensor": 4, "human": 5}
+KIND_NAMES: dict[int, str] = {0: "uav", 1: "ugv", 2: "robot", 3: "vehicle", 4: "sensor", 5: "human", 6: "target"}
+KIND_BY_NAME: dict[str, int] = {"uav": 0, "ugv": 1, "robot": 2, "vehicle": 3, "sensor": 4, "human": 5, "target": 6}
 
 
 class ScaleStatus(IntEnum):
@@ -284,10 +285,12 @@ class SensorKind(IntEnum):
     GNSS = 4
     IMU = 5
     BARO = 6
+    ILLUMINATOR = 7
+    ACOUSTIC = 8
 
 
-SENSORKIND_NAMES: dict[int, str] = {0: "camera", 1: "lidar", 2: "thermal", 3: "radar", 4: "gnss", 5: "imu", 6: "baro"}
-SENSORKIND_BY_NAME: dict[str, int] = {"camera": 0, "lidar": 1, "thermal": 2, "radar": 3, "gnss": 4, "imu": 5, "baro": 6}
+SENSORKIND_NAMES: dict[int, str] = {0: "camera", 1: "lidar", 2: "thermal", 3: "radar", 4: "gnss", 5: "imu", 6: "baro", 7: "illuminator", 8: "acoustic"}
+SENSORKIND_BY_NAME: dict[str, int] = {"camera": 0, "lidar": 1, "thermal": 2, "radar": 3, "gnss": 4, "imu": 5, "baro": 6, "illuminator": 7, "acoustic": 8}
 
 
 class Encoding(IntEnum):
@@ -315,10 +318,11 @@ EVENTLEVEL_BY_NAME: dict[str, int] = {"INFO": 0, "NOTICE": 1, "WARNING": 2, "CRI
 class SetpointFrame(IntEnum):
     WORLD = 0
     BODY = 1
+    FW = 2
 
 
-SETPOINTFRAME_NAMES: dict[int, str] = {0: "world", 1: "body"}
-SETPOINTFRAME_BY_NAME: dict[str, int] = {"world": 0, "body": 1}
+SETPOINTFRAME_NAMES: dict[int, str] = {0: "world", 1: "body", 2: "fw"}
+SETPOINTFRAME_BY_NAME: dict[str, int] = {"world": 0, "body": 1, "fw": 2}
 
 
 class CursorMode(IntEnum):
@@ -638,10 +642,13 @@ class CommandCategory(IntEnum):
     CONFIRM = 16
     REC = 17
     FLEET = 18
+    PAYLOAD = 19
+    ENTITY = 20
+    TASK = 21
 
 
-COMMANDCATEGORY_NAMES: dict[int, str] = {0: "nav", 1: "nav_setup", 2: "nav_stream", 3: "safety", 4: "safety_light", 5: "safety_lock", 6: "mission", 7: "task_or_unlock", 8: "setup", 9: "call_control", 10: "lease", 11: "batch", 12: "clock", 13: "env", 14: "query", 15: "seat", 16: "confirm", 17: "rec", 18: "fleet"}
-COMMANDCATEGORY_BY_NAME: dict[str, int] = {"nav": 0, "nav_setup": 1, "nav_stream": 2, "safety": 3, "safety_light": 4, "safety_lock": 5, "mission": 6, "task_or_unlock": 7, "setup": 8, "call_control": 9, "lease": 10, "batch": 11, "clock": 12, "env": 13, "query": 14, "seat": 15, "confirm": 16, "rec": 17, "fleet": 18}
+COMMANDCATEGORY_NAMES: dict[int, str] = {0: "nav", 1: "nav_setup", 2: "nav_stream", 3: "safety", 4: "safety_light", 5: "safety_lock", 6: "mission", 7: "task_or_unlock", 8: "setup", 9: "call_control", 10: "lease", 11: "batch", 12: "clock", 13: "env", 14: "query", 15: "seat", 16: "confirm", 17: "rec", 18: "fleet", 19: "payload", 20: "entity", 21: "task"}
+COMMANDCATEGORY_BY_NAME: dict[str, int] = {"nav": 0, "nav_setup": 1, "nav_stream": 2, "safety": 3, "safety_light": 4, "safety_lock": 5, "mission": 6, "task_or_unlock": 7, "setup": 8, "call_control": 9, "lease": 10, "batch": 11, "clock": 12, "env": 13, "query": 14, "seat": 15, "confirm": 16, "rec": 17, "fleet": 18, "payload": 19, "entity": 20, "task": 21}
 
 
 class GnssFix(IntEnum):
@@ -693,6 +700,386 @@ class ReconStage(IntEnum):
 
 RECONSTAGE_NAMES: dict[int, str] = {0: "PREPARING", 1: "SEGMENTING", 2: "INFERRING", 3: "FUSING", 4: "GEOREFERENCING", 5: "TILING", 6: "PACKAGING"}
 RECONSTAGE_BY_NAME: dict[str, int] = {"PREPARING": 0, "SEGMENTING": 1, "INFERRING": 2, "FUSING": 3, "GEOREFERENCING": 4, "TILING": 5, "PACKAGING": 6}
+
+
+class TargetClass(IntEnum):
+    UNKNOWN = 0
+    PERSON = 1
+    UAV = 2
+    MACHINE = 3
+    DOG = 4
+    VEHICLE = 5
+    OBJECT = 6
+
+
+TARGETCLASS_NAMES: dict[int, str] = {0: "UNKNOWN", 1: "PERSON", 2: "UAV", 3: "MACHINE", 4: "DOG", 5: "VEHICLE", 6: "OBJECT"}
+TARGETCLASS_BY_NAME: dict[str, int] = {"UNKNOWN": 0, "PERSON": 1, "UAV": 2, "MACHINE": 3, "DOG": 4, "VEHICLE": 5, "OBJECT": 6}
+
+
+class TargetClassWire(IntEnum):
+    PERSON = 1
+    UAV = 2
+    MACHINE = 3
+    DOG = 4
+    VEHICLE = 5
+    OBJECT = 6
+
+
+TARGETCLASSWIRE_NAMES: dict[int, str] = {1: "person", 2: "uav", 3: "machine", 4: "dog", 5: "vehicle", 6: "object"}
+TARGETCLASSWIRE_BY_NAME: dict[str, int] = {"person": 1, "uav": 2, "machine": 3, "dog": 4, "vehicle": 5, "object": 6}
+
+
+class Awareness(IntEnum):
+    UNAWARE = 0
+    SUSPICIOUS = 1
+    REACTING = 2
+    ALERTED = 3
+    CALMING = 4
+
+
+AWARENESS_NAMES: dict[int, str] = {0: "UNAWARE", 1: "SUSPICIOUS", 2: "REACTING", 3: "ALERTED", 4: "CALMING"}
+AWARENESS_BY_NAME: dict[str, int] = {"UNAWARE": 0, "SUSPICIOUS": 1, "REACTING": 2, "ALERTED": 3, "CALMING": 4}
+
+
+class CriterionMode(IntEnum):
+    GEOMETRIC = 0
+    PHYSICAL = 1
+
+
+CRITERIONMODE_NAMES: dict[int, str] = {0: "geometric", 1: "physical"}
+CRITERIONMODE_BY_NAME: dict[str, int] = {"geometric": 0, "physical": 1}
+
+
+class SensitivityKind(IntEnum):
+    VISUAL = 0
+    ACOUSTIC = 1
+    RADAR = 2
+    RF = 3
+
+
+SENSITIVITYKIND_NAMES: dict[int, str] = {0: "visual", 1: "acoustic", 2: "radar", 3: "rf"}
+SENSITIVITYKIND_BY_NAME: dict[str, int] = {"visual": 0, "acoustic": 1, "radar": 2, "rf": 3}
+
+
+class SensitivityShape(IntEnum):
+    SPHERE = 0
+    HEMISPHERE = 1
+    CYLINDER = 2
+    SECTOR = 3
+
+
+SENSITIVITYSHAPE_NAMES: dict[int, str] = {0: "sphere", 1: "hemisphere", 2: "cylinder", 3: "sector"}
+SENSITIVITYSHAPE_BY_NAME: dict[str, int] = {"sphere": 0, "hemisphere": 1, "cylinder": 2, "sector": 3}
+
+
+class PerceptionLevel(IntEnum):
+    NONE = 0
+    D = 1
+    R = 2
+    I = 3  # noqa: E741
+
+
+PERCEPTIONLEVEL_NAMES: dict[int, str] = {0: "NONE", 1: "D", 2: "R", 3: "I"}
+PERCEPTIONLEVEL_BY_NAME: dict[str, int] = {"NONE": 0, "D": 1, "R": 2, "I": 3}
+
+
+class PerceptionSensor(IntEnum):
+    NONE = 0
+    EO = 1
+    NIR = 2
+    LWIR = 3
+    RADAR = 4
+    ACOUSTIC = 5
+    LIDAR = 6
+
+
+PERCEPTIONSENSOR_NAMES: dict[int, str] = {0: "NONE", 1: "EO", 2: "NIR", 3: "LWIR", 4: "RADAR", 5: "ACOUSTIC", 6: "LIDAR"}
+PERCEPTIONSENSOR_BY_NAME: dict[str, int] = {"NONE": 0, "EO": 1, "NIR": 2, "LWIR": 3, "RADAR": 4, "ACOUSTIC": 5, "LIDAR": 6}
+
+
+class PerceptionLimiting(IntEnum):
+    FOV = 0
+    LOS = 1
+    PIXELS = 2
+    LIGHT = 3
+    CONTRAST = 4
+    BLUR = 5
+
+
+PERCEPTIONLIMITING_NAMES: dict[int, str] = {0: "fov", 1: "los", 2: "pixels", 3: "light", 4: "contrast", 5: "blur"}
+PERCEPTIONLIMITING_BY_NAME: dict[str, int] = {"fov": 0, "los": 1, "pixels": 2, "light": 3, "contrast": 4, "blur": 5}
+
+
+class CaptureState(IntEnum):
+    IDLE = 0
+    ARMING = 1
+    CAPTURED = 2
+    HOLDING = 3
+
+
+CAPTURESTATE_NAMES: dict[int, str] = {0: "IDLE", 1: "ARMING", 2: "CAPTURED", 3: "HOLDING"}
+CAPTURESTATE_BY_NAME: dict[str, int] = {"IDLE": 0, "ARMING": 1, "CAPTURED": 2, "HOLDING": 3}
+
+
+class PerceptionTrackState(IntEnum):
+    TENTATIVE = 0
+    CONFIRMED = 1
+    COASTING = 2
+    DROPPED = 3
+
+
+PERCEPTIONTRACKSTATE_NAMES: dict[int, str] = {0: "TENTATIVE", 1: "CONFIRMED", 2: "COASTING", 3: "DROPPED"}
+PERCEPTIONTRACKSTATE_BY_NAME: dict[str, int] = {"TENTATIVE": 0, "CONFIRMED": 1, "COASTING": 2, "DROPPED": 3}
+
+
+class LightBand(IntEnum):
+    DAY = 0
+    LOW = 1
+    NIGHT = 2
+
+
+LIGHTBAND_NAMES: dict[int, str] = {0: "day", 1: "low", 2: "night"}
+LIGHTBAND_BY_NAME: dict[str, int] = {"day": 0, "low": 1, "night": 2}
+
+
+class AcousticBg(IntEnum):
+    RURAL = 0
+    SUBURBAN = 1
+    URBAN = 2
+
+
+ACOUSTICBG_NAMES: dict[int, str] = {0: "rural", 1: "suburban", 2: "urban"}
+ACOUSTICBG_BY_NAME: dict[str, int] = {"rural": 0, "suburban": 1, "urban": 2}
+
+
+class ClockProfile(IntEnum):
+    D1_250 = 0
+    SANDBOX100 = 1
+
+
+CLOCKPROFILE_NAMES: dict[int, str] = {0: "d1_250", 1: "sandbox100"}
+CLOCKPROFILE_BY_NAME: dict[str, int] = {"d1_250": 0, "sandbox100": 1}
+
+
+class FrameType(IntEnum):
+    QUAD_X = 0
+    HEX_X = 1
+    FIXED_WING = 2
+    VTOL_QUADPLANE = 3
+
+
+FRAMETYPE_NAMES: dict[int, str] = {0: "quad_x", 1: "hex_x", 2: "fixed_wing", 3: "vtol_quadplane"}
+FRAMETYPE_BY_NAME: dict[str, int] = {"quad_x": 0, "hex_x": 1, "fixed_wing": 2, "vtol_quadplane": 3}
+
+
+class VehicleCategory(IntEnum):
+    MULTIROTOR = 0
+    FIXED_WING = 1
+    VTOL = 2
+
+
+VEHICLECATEGORY_NAMES: dict[int, str] = {0: "multirotor", 1: "fixed_wing", 2: "vtol"}
+VEHICLECATEGORY_BY_NAME: dict[str, int] = {"multirotor": 0, "fixed_wing": 1, "vtol": 2}
+
+
+class FwMode(IntEnum):
+    MC = 0
+    TRANSITION_FW = 1
+    FW = 2
+    TRANSITION_MC = 3
+
+
+FWMODE_NAMES: dict[int, str] = {0: "MC", 1: "TRANSITION_FW", 2: "FW", 3: "TRANSITION_MC"}
+FWMODE_BY_NAME: dict[str, int] = {"MC": 0, "TRANSITION_FW": 1, "FW": 2, "TRANSITION_MC": 3}
+
+
+class NestKind(IntEnum):
+    BOX = 0
+    LAUNCHER = 1
+    VTOL_PAD = 2
+
+
+NESTKIND_NAMES: dict[int, str] = {0: "box", 1: "launcher", 2: "vtol_pad"}
+NESTKIND_BY_NAME: dict[str, int] = {"box": 0, "launcher": 1, "vtol_pad": 2}
+
+
+class TaskType(IntEnum):
+    POINT_WATCH = 0
+    POLYLINE_PATROL = 1
+    AREA_PATROL = 2
+    AREA_SCAN_GSD = 3
+    PERIMETER_PATROL = 4
+    RELAY_WATCH = 5
+    AREA_GUARD = 6
+
+
+TASKTYPE_NAMES: dict[int, str] = {0: "point_watch", 1: "polyline_patrol", 2: "area_patrol", 3: "area_scan_gsd", 4: "perimeter_patrol", 5: "relay_watch", 6: "area_guard"}
+TASKTYPE_BY_NAME: dict[str, int] = {"point_watch": 0, "polyline_patrol": 1, "area_patrol": 2, "area_scan_gsd": 3, "perimeter_patrol": 4, "relay_watch": 5, "area_guard": 6}
+
+
+class TaskState(IntEnum):
+    PLANNING = 0
+    READY = 1
+    RUNNING = 2
+    PAUSED = 3
+    DONE = 4
+    CANCELED = 5
+    FAILED = 6
+    INFEASIBLE = 7
+
+
+TASKSTATE_NAMES: dict[int, str] = {0: "PLANNING", 1: "READY", 2: "RUNNING", 3: "PAUSED", 4: "DONE", 5: "CANCELED", 6: "FAILED", 7: "INFEASIBLE"}
+TASKSTATE_BY_NAME: dict[str, int] = {"PLANNING": 0, "READY": 1, "RUNNING": 2, "PAUSED": 3, "DONE": 4, "CANCELED": 5, "FAILED": 6, "INFEASIBLE": 7}
+
+
+class RelayGapCause(IntEnum):
+    KEEPOUT_PRIORITY = 0
+    ILLUM_TRANSITION = 1
+    INFEASIBLE = 2
+    BATTERY = 3
+    OTHER = 4
+
+
+RELAYGAPCAUSE_NAMES: dict[int, str] = {0: "keepout_priority", 1: "illum_transition", 2: "infeasible", 3: "battery", 4: "other"}
+RELAYGAPCAUSE_BY_NAME: dict[str, int] = {"keepout_priority": 0, "illum_transition": 1, "infeasible": 2, "battery": 3, "other": 4}
+
+
+class SandboxState(IntEnum):
+    SPAWNING = 0
+    READY = 1
+    ACTIVE = 2
+    IDLE = 3
+    DRAINING = 4
+    ENDED = 5
+    FAILED = 6
+    PARKING = 7
+    PARKED = 8
+
+
+SANDBOXSTATE_NAMES: dict[int, str] = {0: "SPAWNING", 1: "READY", 2: "ACTIVE", 3: "IDLE", 4: "DRAINING", 5: "ENDED", 6: "FAILED", 7: "PARKING", 8: "PARKED"}
+SANDBOXSTATE_BY_NAME: dict[str, int] = {"SPAWNING": 0, "READY": 1, "ACTIVE": 2, "IDLE": 3, "DRAINING": 4, "ENDED": 5, "FAILED": 6, "PARKING": 7, "PARKED": 8}
+
+
+class SandboxEndReason(IntEnum):
+    IDLE = 0
+    LIFETIME = 1
+    PREEMPTED = 2
+    RECLAIMED = 3
+    USER = 4
+    FAILED = 5
+    PARKED_EXPIRED = 6
+
+
+SANDBOXENDREASON_NAMES: dict[int, str] = {0: "idle", 1: "lifetime", 2: "preempted", 3: "reclaimed", 4: "user", 5: "failed", 6: "parked_expired"}
+SANDBOXENDREASON_BY_NAME: dict[str, int] = {"idle": 0, "lifetime": 1, "preempted": 2, "reclaimed": 3, "user": 4, "failed": 5, "parked_expired": 6}
+
+
+class TicketState(IntEnum):
+    WAITING = 0
+    SLOT_READY = 1
+    CLAIMED = 2
+    EXPIRED = 3
+
+
+TICKETSTATE_NAMES: dict[int, str] = {0: "waiting", 1: "slot_ready", 2: "claimed", 3: "expired"}
+TICKETSTATE_BY_NAME: dict[str, int] = {"waiting": 0, "slot_ready": 1, "claimed": 2, "expired": 3}
+
+
+class DegradeLevel(IntEnum):
+    L0 = 0
+    L1 = 1
+    L2 = 2
+    L3 = 3
+    L4 = 4
+
+
+DEGRADELEVEL_NAMES: dict[int, str] = {0: "L0", 1: "L1", 2: "L2", 3: "L3", 4: "L4"}
+DEGRADELEVEL_BY_NAME: dict[str, int] = {"L0": 0, "L1": 1, "L2": 2, "L3": 3, "L4": 4}
+
+
+class FieldKind(IntEnum):
+    ACOUSTIC = 0
+    VISUAL = 1
+    THERMAL = 2
+    RADAR = 3
+
+
+FIELDKIND_NAMES: dict[int, str] = {0: "acoustic", 1: "visual", 2: "thermal", 3: "radar"}
+FIELDKIND_BY_NAME: dict[str, int] = {"acoustic": 0, "visual": 1, "thermal": 2, "radar": 3}
+
+
+class FieldInterestCode(IntEnum):
+    ACOUSTIC = 1
+    VISUAL = 2
+    THERMAL = 3
+    RADAR = 4
+    VOLUMES = 5
+
+
+FIELDINTERESTCODE_NAMES: dict[int, str] = {1: "acoustic", 2: "visual", 3: "thermal", 4: "radar", 5: "volumes"}
+FIELDINTERESTCODE_BY_NAME: dict[str, int] = {"acoustic": 1, "visual": 2, "thermal": 3, "radar": 4, "volumes": 5}
+
+
+class Tier(IntEnum):
+    PUBLIC = 0
+    INTERNAL = 1
+
+
+TIER_NAMES: dict[int, str] = {0: "public", 1: "internal"}
+TIER_BY_NAME: dict[str, int] = {"public": 0, "internal": 1}
+
+
+class PowerState(IntEnum):
+    ACTIVE = 0
+    QUIET = 1
+    WARNING = 2
+    SAVING = 3
+
+
+POWERSTATE_NAMES: dict[int, str] = {0: "active", 1: "quiet", 2: "warning", 3: "saving"}
+POWERSTATE_BY_NAME: dict[str, int] = {"active": 0, "quiet": 1, "warning": 2, "saving": 3}
+
+
+class ParkReason(IntEnum):
+    IDLE = 0
+    HIDDEN = 1
+    USER = 2
+    IDLE_DISCONNECTED = 3
+    PREEMPTED = 4
+    RECLAIMED_CPU = 5
+    RECLAIMED_MEM = 6
+
+
+PARKREASON_NAMES: dict[int, str] = {0: "idle", 1: "hidden", 2: "user", 3: "idle_disconnected", 4: "preempted", 5: "reclaimed_cpu", 6: "reclaimed_mem"}
+PARKREASON_BY_NAME: dict[str, int] = {"idle": 0, "hidden": 1, "user": 2, "idle_disconnected": 3, "preempted": 4, "reclaimed_cpu": 5, "reclaimed_mem": 6}
+
+
+class ResumeMode(IntEnum):
+    CHECKPOINT = 0
+    SNAPSHOT = 1
+
+
+RESUMEMODE_NAMES: dict[int, str] = {0: "checkpoint", 1: "snapshot"}
+RESUMEMODE_BY_NAME: dict[str, int] = {"checkpoint": 0, "snapshot": 1}
+
+
+class TokenScope(IntEnum):
+    SANDBOX = 0
+    IDENTITY = 1
+
+
+TOKENSCOPE_NAMES: dict[int, str] = {0: "sandbox", 1: "identity"}
+TOKENSCOPE_BY_NAME: dict[str, int] = {"sandbox": 0, "identity": 1}
+
+
+class ViewerTicketState(IntEnum):
+    WAITING = 0
+    SEAT_READY = 1
+    EXPIRED = 2
+
+
+VIEWERTICKETSTATE_NAMES: dict[int, str] = {0: "waiting", 1: "seat_ready", 2: "expired"}
+VIEWERTICKETSTATE_BY_NAME: dict[str, int] = {"waiting": 0, "seat_ready": 1, "expired": 2}
 
 
 # FlightSub: 3-bit sub-mode names per FlightState (None = reserved slot)

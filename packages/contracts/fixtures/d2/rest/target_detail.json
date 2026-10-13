@@ -1,0 +1,176 @@
+{
+ "id": "person-01",
+ "label": "person-01",
+ "class": "person",
+ "t_sim_ns": 3000000000,
+ "awareness": "UNAWARE",
+ "alertness": 0.5,
+ "criterion_mode": "geometric",
+ "level_req": "R",
+ "discovered_count": 0,
+ "episode": 0,
+ "last_discovered": null,
+ "dwell": null,
+ "behavior": null,
+ "sensitivity": [
+  {
+   "idx": 0,
+   "kind": "visual",
+   "shape": "sector",
+   "radius_cfg_m": 300.0,
+   "radius_eff_m": {
+    "p600_mid360": 300.0,
+    "awr_v1": 300.0
+   },
+   "z_min_m": 0.0,
+   "z_max_m": 300.0,
+   "half_angle_deg": 60.0,
+   "azimuth_offset_deg": 0.0,
+   "enabled": true,
+   "occupied_by": []
+  },
+  {
+   "idx": 1,
+   "kind": "acoustic",
+   "shape": "hemisphere",
+   "radius_cfg_m": 300.0,
+   "radius_eff_m": {
+    "p600_mid360": 300.0,
+    "awr_v1": 300.0
+   },
+   "z_min_m": 0.0,
+   "z_max_m": 300.0,
+   "half_angle_deg": 180.0,
+   "azimuth_offset_deg": 0.0,
+   "enabled": true,
+   "occupied_by": []
+  }
+ ],
+ "inside_n": 0,
+ "keepout": {
+  "radius_m": 300.0,
+  "margin_m": 20.06,
+  "full_circle": true
+ },
+ "sound": {
+  "on": false,
+  "phase_s": 3.0,
+  "lw_dba_now": 70.0
+ },
+ "motion": {
+  "mode": "random_walk",
+  "speed_mps": 1.4,
+  "vz_mps": 0.0,
+  "path_idx": null
+ },
+ "capture": {
+  "best_level": "R",
+  "captured": true,
+  "sensor": null,
+  "uav": null,
+  "n_eff": null,
+  "n_req": null,
+  "since_t_sim_ns": null
+ },
+ "cfg_rev": 1,
+ "cfg": {
+  "id": "person-01",
+  "class": "person",
+  "enabled": true,
+  "size_m": {
+   "l": 0.5,
+   "w": 0.3,
+   "h": 1.75
+  },
+  "critical_dim_m": null,
+  "motion": {
+   "mode": "random_walk",
+   "speed_mps": 1.4,
+   "speed_max_mps": 2.5,
+   "accel_mps2": 1.5,
+   "turn_rate_max_rad_s": 1.0,
+   "speed_sigma_mps": 0.2,
+   "turn_tau_s": 4.0,
+   "pause_prob": 0.02
+  },
+  "albedo_vis": 0.25,
+  "contrast0": 0.4,
+  "camouflage": 0.0,
+  "occlusion": 0.0,
+  "reflect_850": 0.45,
+  "reflect_905": 0.4,
+  "thermal": {
+   "mode": "relative",
+   "delta_t_k": 8,
+   "emissivity": 0.97,
+   "hot_fraction": 1.0
+  },
+  "rcs_m2": 0.5,
+  "rcs_fluct": "swerling0",
+  "rcs_band": "77ghz",
+  "sound": {
+   "waveform": "pulse_train",
+   "f0_hz": 200,
+   "harmonics_db": [
+    0
+   ],
+   "lw_dba": 70,
+   "period_s": 8,
+   "duty": 0.25,
+   "phase_s": 0
+  },
+  "rf": null,
+  "criterion_mode": "geometric",
+  "alertness": 0.5,
+  "hearing_th_dba": 20,
+  "acoustic_adv_db": 0,
+  "visual_theta0_arcmin": 1.0,
+  "level_req": "R",
+  "n_req_px": null,
+  "reaction": {
+   "onset": {
+    "kind": "look_at",
+    "duration_s": 10
+   },
+   "response": [
+    {
+     "kind": "flee",
+     "speed_mps": 2.5,
+     "dist_m": 100
+    }
+   ],
+   "alert_others": true
+  },
+  "calm_s": 60,
+  "alert_radius_m": 50,
+  "sensitivity": [
+   {
+    "kind": "visual",
+    "shape": "sector",
+    "radius_max_m": 300,
+    "z_min_m": 0.0,
+    "z_max_m": 300.0,
+    "half_angle_deg": 60,
+    "azimuth_offset_deg": 0,
+    "gain_back_db": 0,
+    "enabled": true
+   },
+   {
+    "kind": "acoustic",
+    "shape": "hemisphere",
+    "radius_max_m": 300,
+    "z_min_m": 0,
+    "z_max_m": 300,
+    "half_angle_deg": 180,
+    "azimuth_offset_deg": 0,
+    "gain_back_db": 0.0,
+    "enabled": true
+   }
+  ],
+  "pos": [
+   150.0,
+   -40.0,
+   0.0
+  ]
+ }
+}

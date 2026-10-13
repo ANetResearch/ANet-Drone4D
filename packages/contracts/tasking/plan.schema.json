@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/tasking/1/plan.schema.json",
+  "title": "awr.tasking.plan.v1 (external allocation plan)",
+  "description": "SB-58 and command tasking/plan (AWR-17 §17.6.8): checked against capability, energy, keepouts, fence, station constraints and the AWR-04 §8.4 hard constraints; stale revision 105 (STALE_SNAPSHOT), infeasible 584 with violations.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "based_on_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "allocator": {
+      "type": "string",
+      "default": "external"
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "wid": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+          },
+          "uav": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "wid",
+          "uav"
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "based_on_revision",
+    "assignments"
+  ],
+  "$defs": {
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "plan_id": {
+          "type": "string",
+          "pattern": "^pl-[a-z2-7]{8}$"
+        },
+        "applied": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "plan_id",
+        "applied"
+      ]
+    },
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "wid": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+          },
+          "uav": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wid",
+          "code"
+        ]
+      }
+    }
+  }
+}

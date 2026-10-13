@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/target/1/class_defaults.schema.json",
+  "title": "awr.target.class_defaults.v1 (class templates)",
+  "description": "Class templates (AWR-04 §7.2): every entry is a target object without id and pos; adding a class only adds an entry (TargetClass binary codes append). Values are simulation reference values.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.target.class_defaults.v1"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "classes": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,23}$"
+      },
+      "additionalProperties": {
+        "allOf": [
+          {
+            "$ref": "target.schema.json"
+          }
+        ],
+        "required": [
+          "class",
+          "size_m",
+          "motion",
+          "contrast0",
+          "albedo_vis",
+          "reflect_850",
+          "reflect_905",
+          "thermal",
+          "rcs_m2",
+          "sound",
+          "criterion_mode",
+          "alertness",
+          "level_req",
+          "reaction",
+          "calm_s",
+          "alert_radius_m",
+          "sensitivity"
+        ],
+        "type": "object"
+      }
+    },
+    "label_zh": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "version",
+    "classes"
+  ]
+}

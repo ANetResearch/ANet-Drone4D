@@ -1,0 +1,211 @@
+{
+ "items": [
+  {
+   "id": "person-01",
+   "class": "person",
+   "enabled": true,
+   "size_m": {
+    "l": 0.5,
+    "w": 0.3,
+    "h": 1.75
+   },
+   "critical_dim_m": null,
+   "motion": {
+    "mode": "random_walk",
+    "speed_mps": 1.4,
+    "speed_max_mps": 2.5,
+    "accel_mps2": 1.5,
+    "turn_rate_max_rad_s": 1.0,
+    "speed_sigma_mps": 0.2,
+    "turn_tau_s": 4.0,
+    "pause_prob": 0.02
+   },
+   "albedo_vis": 0.25,
+   "contrast0": 0.4,
+   "camouflage": 0.0,
+   "occlusion": 0.0,
+   "reflect_850": 0.45,
+   "reflect_905": 0.4,
+   "thermal": {
+    "mode": "relative",
+    "delta_t_k": 8,
+    "emissivity": 0.97,
+    "hot_fraction": 1.0
+   },
+   "rcs_m2": 0.5,
+   "rcs_fluct": "swerling0",
+   "rcs_band": "77ghz",
+   "sound": {
+    "waveform": "pulse_train",
+    "f0_hz": 200,
+    "harmonics_db": [
+     0
+    ],
+    "lw_dba": 70,
+    "period_s": 8,
+    "duty": 0.25,
+    "phase_s": 0
+   },
+   "rf": null,
+   "criterion_mode": "geometric",
+   "alertness": 0.5,
+   "hearing_th_dba": 20,
+   "acoustic_adv_db": 0,
+   "visual_theta0_arcmin": 1.0,
+   "level_req": "R",
+   "n_req_px": null,
+   "reaction": {
+    "onset": {
+     "kind": "look_at",
+     "duration_s": 10
+    },
+    "response": [
+     {
+      "kind": "flee",
+      "speed_mps": 2.5,
+      "dist_m": 100
+     }
+    ],
+    "alert_others": true
+   },
+   "calm_s": 60,
+   "alert_radius_m": 50,
+   "sensitivity": [
+    {
+     "kind": "visual",
+     "shape": "sector",
+     "radius_max_m": 300,
+     "z_min_m": 0.0,
+     "z_max_m": 300.0,
+     "half_angle_deg": 60,
+     "azimuth_offset_deg": 0,
+     "gain_back_db": 0,
+     "enabled": true
+    },
+    {
+     "kind": "acoustic",
+     "shape": "hemisphere",
+     "radius_max_m": 300,
+     "z_min_m": 0,
+     "z_max_m": 300,
+     "half_angle_deg": 180,
+     "azimuth_offset_deg": 0,
+     "gain_back_db": 0.0,
+     "enabled": true
+    }
+   ],
+   "pos": [
+    150.0,
+    -40.0,
+    0.0
+   ]
+  },
+  {
+   "id": "dog-01",
+   "class": "dog",
+   "enabled": true,
+   "size_m": {
+    "l": 0.9,
+    "w": 0.3,
+    "h": 0.6
+   },
+   "critical_dim_m": null,
+   "motion": {
+    "mode": "random_walk",
+    "speed_mps": 1.5,
+    "speed_max_mps": 8.0,
+    "accel_mps2": 1.5,
+    "turn_rate_max_rad_s": 2.0,
+    "speed_sigma_mps": 0.3,
+    "turn_tau_s": 4.0,
+    "pause_prob": 0.02
+   },
+   "albedo_vis": 0.2,
+   "contrast0": 0.3,
+   "camouflage": 0.0,
+   "occlusion": 0.0,
+   "reflect_850": 0.35,
+   "reflect_905": 0.3,
+   "thermal": {
+    "mode": "relative",
+    "delta_t_k": 6,
+    "emissivity": 0.95,
+    "hot_fraction": 1.0
+   },
+   "rcs_m2": 0.1,
+   "rcs_fluct": "swerling0",
+   "rcs_band": "77ghz",
+   "sound": {
+    "waveform": "pulse_train",
+    "f0_hz": 600,
+    "harmonics_db": [
+     0
+    ],
+    "lw_dba": 100,
+    "period_s": 6,
+    "duty": 0.15,
+    "phase_s": 0
+   },
+   "rf": null,
+   "criterion_mode": "geometric",
+   "alertness": 0.7,
+   "hearing_th_dba": 15,
+   "acoustic_adv_db": 5,
+   "visual_theta0_arcmin": 1.0,
+   "level_req": "R",
+   "n_req_px": null,
+   "reaction": {
+    "onset": {
+     "kind": "none",
+     "duration_s": 0
+    },
+    "response": [
+     {
+      "kind": "emit",
+      "sound": {
+       "duty": 0.6
+      },
+      "duration_s": 30
+     },
+     {
+      "kind": "approach",
+      "dist_m": 20
+     }
+    ],
+    "alert_others": true
+   },
+   "calm_s": 60,
+   "alert_radius_m": 50,
+   "sensitivity": [
+    {
+     "kind": "visual",
+     "shape": "sector",
+     "radius_max_m": 200,
+     "z_min_m": 0.0,
+     "z_max_m": 300.0,
+     "half_angle_deg": 90,
+     "azimuth_offset_deg": 0,
+     "gain_back_db": 0,
+     "enabled": true
+    },
+    {
+     "kind": "acoustic",
+     "shape": "hemisphere",
+     "radius_max_m": 250,
+     "z_min_m": 0,
+     "z_max_m": 250,
+     "half_angle_deg": 180,
+     "azimuth_offset_deg": 0,
+     "gain_back_db": 0.0,
+     "enabled": true
+    }
+   ],
+   "pos": [
+    -80.0,
+    120.0,
+    0.0
+   ]
+  }
+ ],
+ "rev": 2
+}

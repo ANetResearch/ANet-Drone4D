@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/detection.schema.json",
+  "title": "awr.sensor.detection.v1",
+  "description": "Detection record of the session detection ring (8192, AWR-17 §17.6.4; SB-39). Imaging sensors give the target id; radar and acoustic give track_id or bearing_id and target null.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "kind": {
+      "enum": [
+        "level",
+        "capture",
+        "capture_lost",
+        "detect"
+      ]
+    },
+    "uav": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "sensor": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]{1,24}$"
+    },
+    "sensor_kind": {
+      "enum": [
+        "eo",
+        "nir",
+        "lwir",
+        "radar",
+        "acoustic",
+        "lidar"
+      ]
+    },
+    "target": {
+      "oneOf": [
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/slug"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "track_id": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "bearing_id": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "level_from": {
+      "enum": [
+        "none",
+        "D",
+        "R",
+        "I"
+      ]
+    },
+    "level_to": {
+      "enum": [
+        "none",
+        "D",
+        "R",
+        "I"
+      ]
+    },
+    "n_eff": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "unit px"
+    },
+    "n_req": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "unit px"
+    },
+    "p": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "range_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "unit": "m"
+    },
+    "gsd_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "unit": "m"
+    },
+    "az_rad": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "unit": "rad"
+    },
+    "el_rad": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "unit": "rad"
+    },
+    "vr_mps": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "unit": "m/s"
+    },
+    "snr_db": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "unit": "dB"
+    },
+    "limiting": {
+      "enum": [
+        "fov",
+        "los",
+        "pixels",
+        "light",
+        "contrast",
+        "blur",
+        null
+      ]
+    },
+    "reason": {
+      "enum": [
+        "fov",
+        "los",
+        "pixels",
+        "light",
+        "contrast",
+        "blur",
+        null
+      ]
+    },
+    "meas_enu_m": {
+      "oneOf": [
+        {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sigma_m": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "unit": "m"
+    }
+  },
+  "required": [
+    "seq",
+    "t_sim_ns",
+    "kind",
+    "uav",
+    "sensor",
+    "sensor_kind",
+    "target",
+    "level_from",
+    "level_to"
+  ],
+  "$defs": {
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#"
+          }
+        },
+        "next_since_seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "oldest_seq": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "items",
+        "next_since_seq"
+      ],
+      "description": "SB-39 reply"
+    }
+  }
+}

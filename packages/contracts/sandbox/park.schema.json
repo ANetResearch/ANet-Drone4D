@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sandbox/1/park.schema.json",
+  "title": "awr.sandbox.park.v1 (park, park beacon, resume; SB-69, SB-70, SB-72)",
+  "description": "Request and reply bodies of the D2.1 park endpoints (AWR-17 §17.20.4; AWR-04 §15.7.4). Draft by M17 (WP-04b) for contracts 1.2.0. The session object fields added by D2.1 are listed in $defs/session_d21 (to be merged into session.schema.json properties; state enum gains PARKING and PARKED, end_reason gains parked_expired).",
+  "$defs": {
+    "ns": {"type": "string", "pattern": "^[0-9]{1,20}$"},
+    "park_request": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"reason": {"enum": ["idle", "hidden", "user"]}}
+    },
+    "park_beacon": {
+      "type": "object", "additionalProperties": false, "required": ["token"],
+      "properties": {"token": {"type": "string", "minLength": 10, "maxLength": 2048}, "reason": {"enum": ["idle", "hidden", "user"]}}
+    },
+    "park_reply": {
+      "type": "object", "additionalProperties": false, "required": ["state"],
+      "properties": {"state": {"enum": ["PARKING", "PARKED"]}, "session": {"type": "object"}}
+    },
+    "resume_created": {
+      "type": "object", "additionalProperties": false, "required": ["session", "token"],
+      "properties": {"session": {"type": "object"}, "token": {"type": ["string", "null"]},
+                     "token_exp_unix_ns": {"$ref": "#/$defs/ns"}, "idempotent": {"type": "boolean"}}
+    },
+    "resume_queued": {
+      "type": "object", "additionalProperties": false, "required": ["queue"],
+      "properties": {
+        "queue": {
+          "type": "object", "additionalProperties": false, "required": ["ticket_id", "ticket_token", "position", "eta_s", "kind"],
+          "properties": {
+            "ticket_id": {"type": "string", "pattern": "^q-[a-z2-7]{10}$"},
+            "ticket_token": {"type": ["string", "null"]},
+            "position": {"type": "integer", "minimum": 0},
+            "eta_s": {"type": ["number", "null"], "minimum": 0},
+            "expires_unix_ns": {"$ref": "#/$defs/ns"},
+            "kind": {"enum": ["resume", "internal"]},
+            "sid": {"type": "string", "pattern": "^sb-[a-z2-7]{10}$"}
+          }
+        },
+        "available_now": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "session_d21": {
+      "type": "object",
+      "properties": {
+        "state": {"enum": ["SPAWNING", "READY", "ACTIVE", "IDLE", "PARKING", "PARKED", "DRAINING", "ENDED", "FAILED"]},
+        "tier": {"enum": ["public", "internal"]},
+        "last_input_unix_ns": {"oneOf": [{"$ref": "#/$defs/ns"}, {"type": "null"}]},
+        "parked_unix_ns": {"oneOf": [{"$ref": "#/$defs/ns"}, {"type": "null"}]},
+        "park_reason": {"enum": [null, "idle", "hidden", "user", "idle_disconnected", "preempted", "reclaimed_cpu", "reclaimed_mem"]},
+        "resume_mode": {"enum": [null, "checkpoint", "snapshot"]},
+        "retention_unix_ns": {"oneOf": [{"$ref": "#/$defs/ns"}, {"type": "null"}]},
+        "remaining_s": {"type": ["number", "null"], "minimum": 0},
+        "t_sim_ns": {"oneOf": [{"$ref": "#/$defs/ns"}, {"type": "null"}]},
+        "end_reason": {"enum": [null, "idle", "lifetime", "preempted", "reclaimed", "user", "failed", "parked_expired"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/nir.schema.json",
+  "title": "awr.sensor.nir.v1 (night imaging block)",
+  "description": "Night imaging of an EO sensor (AWR-04 §6.1 nir; AWR-20 §7.5 eo_zoom.night): passive low light (colour and mono minimum illuminance) and an optional built-in 850 nm illuminator. R_nir = R_ref (theta_ref / theta) sqrt(P / P_ref) sqrt(rho_850 / rho_ref) tau_850(R).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "e_min_color_lx": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "unit": "lx"
+    },
+    "e_min_mono_lx": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "unit": "lx"
+    },
+    "illuminator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wavelength_nm": {
+          "type": "number",
+          "minimum": 700,
+          "maximum": 1100,
+          "unit": "nm"
+        },
+        "p_w": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "W"
+        },
+        "divergence": {
+          "enum": [
+            "follow_hfov",
+            "fixed"
+          ]
+        },
+        "divergence_deg": {
+          "type": "number",
+          "maximum": 180,
+          "exclusiveMinimum": 0,
+          "unit": "deg"
+        },
+        "r_ref_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "m"
+        },
+        "p_ref_w": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "W"
+        },
+        "theta_ref_deg": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "deg"
+        },
+        "rho_ref": {
+          "type": "number",
+          "maximum": 1,
+          "exclusiveMinimum": 0
+        },
+        "r_spec_max_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "m"
+        }
+      },
+      "required": [
+        "wavelength_nm",
+        "p_w",
+        "r_ref_m"
+      ]
+    }
+  },
+  "required": [
+    "e_min_color_lx",
+    "e_min_mono_lx"
+  ]
+}

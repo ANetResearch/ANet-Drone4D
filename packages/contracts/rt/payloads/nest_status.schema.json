@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/nest_status.schema.json",
+  "title": "awr.nest.status.v1",
+  "description": "Topic nest/{id}/status 1 Hz (AWR-17 §17.7.4; M20 §6.3.3): slots, inventory, packs, charging channels, launch and recover queues.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "kind": {
+      "enum": [
+        "box",
+        "launcher",
+        "vtol_pad"
+      ]
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "slots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "occupied": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "total",
+        "occupied"
+      ]
+    },
+    "inventory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,40}$"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "in_nest": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "airborne": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "model_id",
+          "count"
+        ]
+      }
+    },
+    "aircraft": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "uav": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "state": {
+            "enum": [
+              "ready",
+              "charging",
+              "swapping",
+              "turnaround",
+              "airborne",
+              "standby"
+            ]
+          },
+          "soc": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "uav",
+          "state"
+        ]
+      }
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pack_id": {
+            "type": "string"
+          },
+          "cells": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "soc": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "state": {
+            "enum": [
+              "installed",
+              "queued",
+              "charging",
+              "ready",
+              "depleted"
+            ]
+          },
+          "t_ready_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "unit": "s"
+          }
+        },
+        "required": [
+          "pack_id",
+          "state"
+        ]
+      }
+    },
+    "chargers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ch": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "model": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "charging",
+              "blocked"
+            ]
+          },
+          "pack_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "soc_pct": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 100,
+            "unit": "%"
+          },
+          "eta_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "unit": "s"
+          },
+          "i_a": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "unit": "A"
+          }
+        },
+        "required": [
+          "ch",
+          "state"
+        ]
+      }
+    },
+    "launch_queue": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "uav": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "tid": {
+            "oneOf": [
+              {
+                "$ref": "../../world/1/common.schema.json#/$defs/slug"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "t_planned_ns": {
+            "$ref": "../../world/1/common.schema.json#/$defs/int64"
+          },
+          "delay_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "uav"
+        ]
+      }
+    },
+    "recover_queue": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "uav": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "eta_s": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "unit": "s"
+          }
+        },
+        "required": [
+          "uav"
+        ]
+      }
+    },
+    "wind_ok": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "kind",
+    "slots",
+    "inventory",
+    "chargers",
+    "wind_ok"
+  ]
+}

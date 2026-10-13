@@ -1,0 +1,385 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/perception_levels.schema.json",
+  "title": "awr.sensor.perception_levels.v1 meta-schema",
+  "description": "Perception level parameters (ADR-100). levels.*.n_p90_px = ratio_at_p_definite * n50_px.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.perception_levels.v1"
+    },
+    "doc": {
+      "type": "string"
+    },
+    "pixels_per_cycle": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "ttpf": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "e0": {
+          "type": "number"
+        },
+        "e1": {
+          "type": "number"
+        },
+        "p_definite": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "ratio_at_p_definite": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "form": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "e0",
+        "e1",
+        "p_definite",
+        "ratio_at_p_definite"
+      ]
+    },
+    "levels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "D": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "n50_cycles": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "n50_px": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "n_p90_px": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "n50_cycles",
+            "n50_px",
+            "n_p90_px"
+          ]
+        },
+        "R": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "n50_cycles": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "n50_px": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "n_p90_px": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "n50_cycles",
+            "n50_px",
+            "n_p90_px"
+          ]
+        },
+        "I": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "n50_cycles": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "n50_px": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "n_p90_px": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "n50_cycles",
+            "n50_px",
+            "n_p90_px"
+          ]
+        }
+      },
+      "required": [
+        "D",
+        "R",
+        "I"
+      ]
+    },
+    "contrast": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "lwir": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "light": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "blur": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "los": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "feasibility": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "wavelength_nm": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "k_mor": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "lidar": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "radar": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "acoustic": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "pixels_per_cycle",
+    "ttpf",
+    "levels",
+    "contrast",
+    "capture",
+    "k_mor"
+  ]
+}

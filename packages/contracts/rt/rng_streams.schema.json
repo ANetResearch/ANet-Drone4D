@@ -39,7 +39,8 @@
               "core",
               "ext",
               "stub",
-              "no"
+              "no",
+              "V0.2-demo"
             ]
           }
         },

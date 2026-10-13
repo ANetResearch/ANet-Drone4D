@@ -1,0 +1,307 @@
+{
+ "schema": "awr.fixture.feasibility_table.v1",
+ "source": "tools/fake/perception_stub.py (stub, not the golden table)",
+ "note": "Development data for M20 and M15 until M19 regenerates the golden table with feasibility_window (AWR-04 appendix B.3 L-05).",
+ "rows": [
+  {
+   "class": "person",
+   "sensor": "eo_1080p_48mm",
+   "light": "day",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 320.1,
+   "d_hi_m": 850.0
+  },
+  {
+   "class": "person",
+   "sensor": "eo_1080p_48mm",
+   "light": "day",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 320.1,
+   "d_hi_m": 662.0
+  },
+  {
+   "class": "person",
+   "sensor": "nir_builtin",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "person",
+   "sensor": "nir_builtin",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "person",
+   "sensor": "nir_ill_l",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 320.1,
+   "d_hi_m": 454.0
+  },
+  {
+   "class": "person",
+   "sensor": "nir_ill_l",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 320.1,
+   "d_hi_m": 382.0
+  },
+  {
+   "class": "person",
+   "sensor": "lwir_75mm",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "person",
+   "sensor": "lwir_75mm",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "person",
+   "sensor": "lwir_100mm",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 320.1,
+   "d_hi_m": 424.0
+  },
+  {
+   "class": "person",
+   "sensor": "lwir_100mm",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 320.1,
+   "d_hi_m": 424.0
+  },
+  {
+   "class": "dog",
+   "sensor": "eo_1080p_48mm",
+   "light": "day",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 241.9,
+   "d_hi_m": 548.0
+  },
+  {
+   "class": "dog",
+   "sensor": "eo_1080p_48mm",
+   "light": "day",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 241.9,
+   "d_hi_m": 406.0
+  },
+  {
+   "class": "dog",
+   "sensor": "nir_builtin",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "dog",
+   "sensor": "nir_builtin",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "dog",
+   "sensor": "nir_ill_l",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "dog",
+   "sensor": "nir_ill_l",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "dog",
+   "sensor": "lwir_75mm",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "dog",
+   "sensor": "lwir_75mm",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": null,
+   "d_hi_m": null
+  },
+  {
+   "class": "dog",
+   "sensor": "lwir_100mm",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 241.9,
+   "d_hi_m": 264.0
+  },
+  {
+   "class": "dog",
+   "sensor": "lwir_100mm",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 241.9,
+   "d_hi_m": 264.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "eo_1080p_48mm",
+   "light": "day",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 2067.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "eo_1080p_48mm",
+   "light": "day",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 1156.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "nir_builtin",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 223.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "nir_builtin",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 201.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "nir_ill_l",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 490.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "nir_ill_l",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 404.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "lwir_75mm",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 444.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "lwir_75mm",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 444.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "lwir_100mm",
+   "light": "night",
+   "mor_m": 10000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 565.0
+  },
+  {
+   "class": "vehicle",
+   "sensor": "lwir_100mm",
+   "light": "night",
+   "mor_m": 3000.0,
+   "mode": "geometric",
+   "level_req": "R",
+   "d_lo_m": 170.1,
+   "d_hi_m": 565.0
+  }
+ ]
+}

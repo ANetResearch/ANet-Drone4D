@@ -1,0 +1,433 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/eo_zoom.schema.json",
+  "title": "awr.sensor.eo_zoom.v1 (zoom EO payload)",
+  "description": "Model file vehicles/sensor_models/<id>.yaml or mount file vehicles/<dir>/sensors/<file>.yaml (AWR-20 §7.5): a model file carries model_id and model_version; a mount file carries sensor_id, spec_ref and mount plus whitelisted overrides; the effective spec is deep_merge(model, mount).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.eo_zoom.v1"
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "model_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "reference": {
+      "type": "boolean"
+    },
+    "mass_kg": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number"
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ]
+        }
+      ]
+    },
+    "power_w": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number"
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ]
+        }
+      ]
+    },
+    "env_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "temp_c": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "overridable": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "conf": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "src": {
+      "type": "string"
+    },
+    "sensor_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,23}$"
+    },
+    "spec_ref": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+@[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "mount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "xyz_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "rpy_deg": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "q_xyzw": {
+          "$ref": "../../world/1/common.schema.json#/$defs/quatXYZW"
+        },
+        "preset": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "xyz_m"
+      ]
+    },
+    "on_gimbal_of": {
+      "type": "string"
+    },
+    "gimbal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitch_min_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "pitch_max_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "yaw_min_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "yaw_max_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "rate_max_deg_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "deg/s"
+        },
+        "integrated": {
+          "type": "boolean"
+        },
+        "default_mode": {
+          "type": "string"
+        },
+        "default_yaw_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "default_pitch_deg": {
+          "type": "number",
+          "unit": "deg"
+        }
+      }
+    },
+    "sensor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format_in": {
+          "type": "string"
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pixel_um": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "um"
+        }
+      },
+      "required": [
+        "width_px",
+        "height_px",
+        "pixel_um"
+      ]
+    },
+    "optics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "f_min_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "mm"
+        },
+        "f_max_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "mm"
+        },
+        "f_number": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "at_min": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "at_max": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "law": {
+              "enum": [
+                "linear_f",
+                "linear_ln_f"
+              ]
+            }
+          }
+        },
+        "zoom_time_s": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "s"
+        }
+      },
+      "required": [
+        "f_min_mm",
+        "f_max_mm"
+      ]
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "width_px": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "height_px": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "crop_w_px": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "crop_h_px": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fps": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "name",
+          "width_px",
+          "height_px",
+          "crop_w_px"
+        ]
+      },
+      "minItems": 1
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "string"
+        },
+        "k4_requires": {
+          "type": "string"
+        }
+      }
+    },
+    "exposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "day_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "lowlight_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "shutter_min_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "shutter_max_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "switch_lx": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "lx"
+        }
+      }
+    },
+    "jitter_urad": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fast": {
+          "type": "number",
+          "minimum": 0
+        },
+        "slow": {
+          "type": "number",
+          "minimum": 0
+        },
+        "fast_max_exposure_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        }
+      }
+    },
+    "night": {
+      "$ref": "nir.schema.json"
+    },
+    "spec_fov": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hfov_deg": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "unit": "deg"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "vfov_deg": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "unit": "deg"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "dfov_deg": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "unit": "deg"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "stream": {
+      "type": "object",
+      "description": "label only"
+    }
+  },
+  "required": [
+    "schema"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "model_id",
+        "model_version"
+      ]
+    },
+    {
+      "required": [
+        "sensor_id",
+        "spec_ref"
+      ]
+    }
+  ]
+}

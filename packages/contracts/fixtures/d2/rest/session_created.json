@@ -1,0 +1,71 @@
+{
+ "session": {
+  "sid": "sb-k3m7q2x7ab",
+  "state": "SPAWNING",
+  "world_id": "synthcity",
+  "template_id": "t5_area_guard",
+  "created_unix_ns": "1791168123000000000",
+  "expires_unix_ns": "1791169923000000000",
+  "lifetime_max_unix_ns": "1791175323000000000",
+  "expires_in_s": 1800,
+  "renewable": true,
+  "renew_block_reason": null,
+  "idle_ttl_s": 600,
+  "clock": {
+   "state": "STOPPED",
+   "rate_requested": 1,
+   "rate_granted": 1,
+   "rate_cap": 5.6,
+   "limited_by": null,
+   "tick_hz": 100
+  },
+  "limits": {
+   "vehicles_max": 12,
+   "targets_max": 30,
+   "nests_max": 4,
+   "tasks_active_max": 6,
+   "cloned_models_max": 8,
+   "rest_rps": 10,
+   "rest_burst": 30,
+   "call_rps": 20,
+   "call_burst": 40,
+   "clock_rps": 2,
+   "entity_rps": 5,
+   "task_rps": 1,
+   "ws_max": 4,
+   "setpoint_hz_max": 50,
+   "snapshot_kib": 512,
+   "plan": {
+    "area_max_m2": 1000000,
+    "vertices_max": 64,
+    "strips_max": 200,
+    "work_items_max": 50,
+    "station_candidates_max": 2400,
+    "coverage_cells_max": 250000
+   }
+  },
+  "usage": {
+   "vehicles": 2,
+   "targets": 2,
+   "nests": 1,
+   "tasks_active": 2,
+   "ws": 1
+  },
+  "epoch": 1,
+  "restarts": 0,
+  "degrade_level": "L0",
+  "calendar": {
+   "start_utc": "2026-10-05T02:00:00Z",
+   "tz": "Asia/Shanghai"
+  },
+  "acoustic_bg": "rural",
+  "seed": 7,
+  "end_reason": null,
+  "endpoints": {
+   "rest": "/api/sandbox/v1/sessions/sb-k3m7q2x7ab",
+   "rt": "/api/sandbox/v1/sessions/sb-k3m7q2x7ab/rt"
+  }
+ },
+ "token": "v1.fixture.0000000000000000",
+ "token_exp_unix_ns": "1791169923000000000"
+}

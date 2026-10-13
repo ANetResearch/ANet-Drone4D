@@ -187,7 +187,30 @@
         "agent.session.reset",
         "anet.evidence.gap",
         "agent.health",
-        "agent.runtime.state"
+        "agent.runtime.state",
+        "target.discovered",
+        "target.state",
+        "perception.level",
+        "perception.capture",
+        "perception.capture_lost",
+        "perception.detect",
+        "uav.keepout_guard",
+        "fw.wind_exceeds",
+        "nest.launch",
+        "nest.recover",
+        "nest.swap_done",
+        "nest.dispatch_delayed",
+        "task.created",
+        "task.state",
+        "task.allocated",
+        "task.reallocated",
+        "relay.dispatch",
+        "relay.handover",
+        "relay.gap",
+        "sandbox.state",
+        "sandbox.expiring",
+        "sandbox.rate",
+        "sandbox.slot_ready", "sensor.mode", "task.warning", "vtol.hover_limit", "sandbox.parking", "sandbox.parked", "sandbox.resumed", "relay.day_rollover"
       ]
     }
   }

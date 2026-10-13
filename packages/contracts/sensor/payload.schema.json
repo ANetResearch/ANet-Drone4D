@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/payload.schema.json",
+  "title": "awr.uav.payload.v1",
+  "description": "Topic uav/{id}/payload, 2 Hz, every vehicle (AWR-17 §17.7.4; semantics M13): gimbal angles, focal length and FOV, sensor mode, illuminators. Also the payload part of GET .../vehicles/{vid}/sensors. Angles in rad on the wire.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "uav": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "gimbal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitch_rad": {
+          "type": "number",
+          "unit": "rad"
+        },
+        "yaw_rad": {
+          "type": "number",
+          "unit": "rad",
+          "description": "relative to the nose"
+        },
+        "mode": {
+          "enum": [
+            "angles",
+            "look_at",
+            "track",
+            "stow",
+            "fixed",
+            "cue"
+          ]
+        },
+        "track_target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "src": {
+          "enum": [
+            "operator",
+            "tasking",
+            "cue",
+            "default"
+          ]
+        }
+      },
+      "required": [
+        "pitch_rad",
+        "yaw_rad",
+        "mode"
+      ]
+    },
+    "sensors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sensor": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,24}$"
+          },
+          "kind": {
+            "enum": [
+              "eo",
+              "nir",
+              "lwir",
+              "radar",
+              "acoustic",
+              "lidar",
+              "nir_illuminator"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "f_mm": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "unit": "mm"
+          },
+          "hfov_rad": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "unit": "rad"
+          },
+          "vfov_rad": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "unit": "rad"
+          },
+          "mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution": {
+            "enum": [
+              null,
+              "1080p",
+              "4k"
+            ]
+          },
+          "palette": {
+            "enum": [
+              null,
+              "white_hot",
+              "black_hot"
+            ]
+          },
+          "cue": {
+            "enum": [
+              null,
+              "on",
+              "off"
+            ]
+          },
+          "illuminator": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "on": {
+                    "type": "boolean"
+                  },
+                  "kind": {
+                    "enum": [
+                      "builtin",
+                      "nir_ill_l"
+                    ]
+                  },
+                  "power_w": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "W"
+                  },
+                  "divergence_rad": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "rad"
+                  },
+                  "range_m": {
+                    "type": "number",
+                    "minimum": 0,
+                    "unit": "m"
+                  }
+                },
+                "required": [
+                  "on",
+                  "kind"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "sensor",
+          "kind",
+          "enabled"
+        ]
+      }
+    }
+  },
+  "required": [
+    "gimbal",
+    "sensors"
+  ]
+}

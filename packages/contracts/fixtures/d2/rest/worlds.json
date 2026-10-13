@@ -1,0 +1,179 @@
+{
+ "items": [
+  {
+   "world_id": "synthcity",
+   "name_zh": "合成城市",
+   "tier": "S",
+   "available": true,
+   "reason": null,
+   "admit_now": true,
+   "cost": {
+    "anon_mb": 140.0,
+    "ws_mb": 60.0
+   },
+   "dataset": {
+    "name": "synthcity",
+    "terms_zh": "合成数据",
+    "citation": ""
+   },
+   "templates": [
+    "t1_point_watch",
+    "t2_polyline",
+    "t3_area_patrol",
+    "t4_scan_gsd",
+    "t5_area_guard",
+    "t6_manual"
+   ]
+  },
+  {
+   "world_id": "shenzhen",
+   "name_zh": "深圳",
+   "tier": "S",
+   "available": true,
+   "reason": null,
+   "admit_now": true,
+   "cost": {
+    "anon_mb": 140.0,
+    "ws_mb": 60.0
+   },
+   "dataset": {
+    "name": "UrbanScene3D",
+    "terms_zh": "经数据集权利方授权使用",
+    "citation": "ECCV 2022"
+   },
+   "templates": [
+    "t1_point_watch",
+    "t2_polyline",
+    "t3_area_patrol",
+    "t4_scan_gsd",
+    "t5_area_guard",
+    "t6_manual"
+   ]
+  },
+  {
+   "world_id": "suzhou",
+   "name_zh": "苏州",
+   "tier": "S",
+   "available": true,
+   "reason": null,
+   "admit_now": true,
+   "cost": {
+    "anon_mb": 140.0,
+    "ws_mb": 60.0
+   },
+   "dataset": {
+    "name": "UrbanScene3D",
+    "terms_zh": "经数据集权利方授权使用",
+    "citation": "ECCV 2022"
+   },
+   "templates": [
+    "t1_point_watch",
+    "t2_polyline",
+    "t3_area_patrol",
+    "t4_scan_gsd",
+    "t5_area_guard",
+    "t6_manual"
+   ]
+  },
+  {
+   "world_id": "newyork",
+   "name_zh": "纽约",
+   "tier": "S",
+   "available": true,
+   "reason": null,
+   "admit_now": true,
+   "cost": {
+    "anon_mb": 140.0,
+    "ws_mb": 60.0
+   },
+   "dataset": {
+    "name": "UrbanScene3D",
+    "terms_zh": "经数据集权利方授权使用",
+    "citation": "ECCV 2022"
+   },
+   "templates": [
+    "t1_point_watch",
+    "t2_polyline",
+    "t3_area_patrol",
+    "t4_scan_gsd",
+    "t5_area_guard",
+    "t6_manual"
+   ]
+  },
+  {
+   "world_id": "chicago",
+   "name_zh": "芝加哥",
+   "tier": "L",
+   "available": true,
+   "reason": null,
+   "admit_now": true,
+   "cost": {
+    "anon_mb": 155.0,
+    "ws_mb": 160.0
+   },
+   "dataset": {
+    "name": "UrbanScene3D",
+    "terms_zh": "经数据集权利方授权使用",
+    "citation": "ECCV 2022"
+   },
+   "templates": [
+    "t1_point_watch",
+    "t2_polyline",
+    "t3_area_patrol",
+    "t4_scan_gsd",
+    "t5_area_guard",
+    "t6_manual"
+   ]
+  },
+  {
+   "world_id": "shanghai",
+   "name_zh": "上海",
+   "tier": "L",
+   "available": true,
+   "reason": null,
+   "admit_now": true,
+   "cost": {
+    "anon_mb": 155.0,
+    "ws_mb": 160.0
+   },
+   "dataset": {
+    "name": "UrbanScene3D",
+    "terms_zh": "经数据集权利方授权使用",
+    "citation": "ECCV 2022"
+   },
+   "templates": [
+    "t1_point_watch",
+    "t2_polyline",
+    "t3_area_patrol",
+    "t4_scan_gsd",
+    "t5_area_guard",
+    "t6_manual"
+   ]
+  },
+  {
+   "world_id": "sanfrancisco",
+   "name_zh": "旧金山",
+   "tier": "L",
+   "available": true,
+   "reason": null,
+   "admit_now": true,
+   "cost": {
+    "anon_mb": 155.0,
+    "ws_mb": 160.0
+   },
+   "dataset": {
+    "name": "UrbanScene3D",
+    "terms_zh": "经数据集权利方授权使用",
+    "citation": "ECCV 2022"
+   },
+   "templates": [
+    "t1_point_watch",
+    "t2_polyline",
+    "t3_area_patrol",
+    "t4_scan_gsd",
+    "t5_area_guard",
+    "t6_manual"
+   ]
+  }
+ ]
+}

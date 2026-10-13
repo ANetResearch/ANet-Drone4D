@@ -25,6 +25,8 @@ class Stream(IntEnum):
     RECON_MOCK_GNSS = 14
     RECON_MOCK_GRAVITY = 15
     RECON_SELFCHECK = 16
+    TARGETS_MOTION = 17
+    PERCEPTION = 18
 
 
 def rng(world_seed: int, stream: int, *keys: int) -> np.random.Generator:

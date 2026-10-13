@@ -125,14 +125,26 @@
               "ext",
               "test",
               "V0.2",
-              "V0.5"
+              "V0.5",
+              "V0.2-demo"
             ]
           },
           "doc": {
             "type": "string"
+          },
+          "ns": {
+            "enum": [
+              "run",
+              "pool"
+            ],
+            "description": "namespace the key is relative to; absent = run (awr/<world>/<run>)"
           }
         }
       }
+    },
+    "pool_namespace": {
+      "type": "string",
+      "description": "sandbox-pool control namespace (AWR-17 §17.10.1)"
     }
   }
 }

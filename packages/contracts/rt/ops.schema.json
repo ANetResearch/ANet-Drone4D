@@ -42,7 +42,12 @@
               "clientPublish",
               "procHealth",
               "playbackControl",
-              "m4"
+              "m4",
+              "targets",
+              "perception",
+              "tasking",
+              "calendar",
+              "sandbox"
             ]
           }
         },
@@ -141,6 +146,16 @@
             },
             "steppable": {
               "type": "boolean"
+            },
+            "tick_hz": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "D2: main clock rate, d1_250 = 250, sandbox100 = 100 (ADR-090)"
+            },
+            "rate_cap": {
+              "type": "number",
+              "minimum": 0,
+              "description": "D2: currently reachable rate granted by the governor (sandbox); D1 max_speed"
             }
           }
         },
@@ -195,6 +210,126 @@
         },
         "serverUnix_ns": {
           "type": "string"
+        },
+        "sandbox": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "D2, sandbox-api only (AWR-17 §17.7.1): subset of awr.sandbox.session.v1",
+          "properties": {
+            "sid": {
+              "type": "string",
+              "pattern": "^sb-[a-z2-7]{10}$"
+            },
+            "state": {
+              "enum": [
+                "SPAWNING",
+                "READY",
+                "ACTIVE",
+                "IDLE",
+                "PARKING",
+                "PARKED",
+                "DRAINING",
+                "ENDED",
+                "FAILED"
+              ]
+            },
+            "world_id": {
+              "type": "string"
+            },
+            "template_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expires_unix_ns": {
+              "type": "string",
+              "pattern": "^[0-9]{1,20}$"
+            },
+            "renewable": {
+              "type": "boolean"
+            },
+            "limits": {
+              "$ref": "../../sandbox/1/limits.schema.json"
+            },
+            "tier": {
+              "enum": [
+                "public",
+                "internal"
+              ]
+            }
+          },
+          "required": [
+            "sid",
+            "state",
+            "world_id"
+          ]
+        },
+        "power": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "D2.1 power-saving thresholds in wall seconds (AWR-04 §15.7.2); the server is authoritative",
+          "properties": {
+            "viewer_idle_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "viewer_idle_busy_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "sandbox_idle_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "sandbox_idle_busy_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "hidden_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "warn_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "quiet_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "grace_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "presence_min_s": {
+              "type": "number",
+              "minimum": 0
+            },
+            "internal_idle_s": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "D2.1 internal identity of this connection (AWR-17 §17.20.5)",
+          "properties": {
+            "tier": {
+              "enum": [
+                "public",
+                "internal"
+              ]
+            },
+            "exp_unix_ns": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tier"
+          ]
         }
       },
       "required": [
@@ -1301,7 +1436,38 @@
         },
         {
           "$ref": "#/$defs/playback"
+        },
+        {
+          "$ref": "#/$defs/presence"
         }
+      ]
+    },
+    "presence": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "D2.1 (AWR-17 §17.20.4): client -> server, at most one per presence_min_s per connection; no reply",
+      "properties": {
+        "op": {
+          "const": "presence"
+        },
+        "input_age_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "visible": {
+          "type": "boolean"
+        },
+        "power": {
+          "enum": [
+            "active",
+            "quiet",
+            "warning",
+            "saving"
+          ]
+        }
+      },
+      "required": [
+        "op"
       ]
     }
   }

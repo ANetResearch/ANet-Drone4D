@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/acoustic_array.schema.json",
+  "title": "awr.sensor.acoustic_array.v1 (microphone array)",
+  "description": "Model file vehicles/sensor_models/<id>.yaml or mount file vehicles/<dir>/sensors/<file>.yaml (AWR-20 §7.5): a model file carries model_id and model_version; a mount file carries sensor_id, spec_ref and mount plus whitelisted overrides; the effective spec is deep_merge(model, mount).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.acoustic_array.v1"
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "model_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "reference": {
+      "type": "boolean"
+    },
+    "mass_kg": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number"
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ]
+        }
+      ]
+    },
+    "power_w": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number"
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ]
+        }
+      ]
+    },
+    "env_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "temp_c": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "overridable": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "conf": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ]
+    },
+    "src": {
+      "type": "string"
+    },
+    "sensor_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,23}$"
+    },
+    "spec_ref": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+@[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "mount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "xyz_m": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "rpy_deg": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "q_xyzw": {
+          "$ref": "../../world/1/common.schema.json#/$defs/quatXYZW"
+        },
+        "preset": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "xyz_m"
+      ]
+    },
+    "on_gimbal_of": {
+      "type": "string"
+    },
+    "gimbal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitch_min_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "pitch_max_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "yaw_min_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "yaw_max_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "rate_max_deg_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "deg/s"
+        },
+        "integrated": {
+          "type": "boolean"
+        },
+        "default_mode": {
+          "type": "string"
+        },
+        "default_yaw_deg": {
+          "type": "number",
+          "unit": "deg"
+        },
+        "default_pitch_deg": {
+          "type": "number",
+          "unit": "deg"
+        }
+      }
+    },
+    "n_mics": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "aperture_m": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "unit": "m"
+    },
+    "band_hz": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "unit": "Hz"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "array_gain_db": {
+      "type": "number",
+      "unit": "dB"
+    },
+    "nr_db": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "multirotor": {
+          "type": "number",
+          "description": "unit dB"
+        },
+        "fixed_wing": {
+          "type": "number",
+          "description": "unit dB"
+        }
+      }
+    },
+    "r_ego_m": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "multirotor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "unit m"
+        },
+        "fixed_wing": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "unit m"
+        }
+      }
+    },
+    "az_acc_deg": {
+      "type": "number",
+      "minimum": 0,
+      "unit": "deg"
+    },
+    "rate_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "unit": "Hz"
+    },
+    "detect_snr_db": {
+      "type": "number",
+      "unit": "dB"
+    },
+    "classify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bands": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "snr_db": {
+          "type": "number",
+          "unit": "dB"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "model_id",
+        "model_version"
+      ]
+    },
+    {
+      "required": [
+        "sensor_id",
+        "spec_ref"
+      ]
+    }
+  ]
+}

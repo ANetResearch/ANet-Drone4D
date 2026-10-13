@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/field_profile.schema.json",
+  "title": "awr.field.profile.v1",
+  "description": "Topics field/acoustic, field/visual, field/thermal, field/radar (1 Hz wall, on subscription) and SB-74 (AWR-17 §17.20.6; semantics AWR-04 §15.11.4, M18-M19 PRD §15.2.2; drafted by M19 WP-19b). Free-space field of each vehicle: v(r, e) = v_r(r) (+ or x) f_el(e) on the shared log-spaced grid r_m; e is the elevation of the vehicle seen from the observer (sample point), looked up in the nearest el_deg cell; beyond cut_el_m of that cell nothing is drawn. v_r encoding v_enc: lin = round((v - v_off) * 10), log = round((lg v + 8) * 4000); 65535 = not drawn; trailing 65535 omitted. f_el i16 x100 (dB for combine add, factor for mul); f_el and cut_el_m with one item apply to every elevation. Topic frames carry arrays only for vehicles whose rev changed (or every vehicle in a keyframe); `same` references an earlier item of the same frame with identical arrays. Non-keyframes omit r_m, el_deg, bands, iso, ref and shell_ref (unchanged since the last keyframe; a grid change is always a keyframe).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "kind": {
+      "enum": [
+        "acoustic",
+        "visual",
+        "thermal",
+        "radar"
+      ]
+    },
+    "unit": {
+      "enum": [
+        "dba",
+        "arcmin",
+        "px",
+        "db"
+      ]
+    },
+    "combine": {
+      "enum": [
+        "add",
+        "mul"
+      ]
+    },
+    "keyframe": {
+      "type": "boolean"
+    },
+    "r_m": {
+      "type": "array",
+      "minItems": 32,
+      "maxItems": 32,
+      "items": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 2000.5
+      },
+      "unit": "m"
+    },
+    "el_deg": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "number"
+      },
+      "unit": "deg"
+    },
+    "bands": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "number"
+      },
+      "description": "lower edge of bands 1..5 (bands[0] = nominal draw floor)"
+    },
+    "v_enc": {
+      "enum": [
+        "lin",
+        "log"
+      ]
+    },
+    "v_off": {
+      "type": "number"
+    },
+    "iso": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "bg",
+              "ref",
+              "r",
+              "d"
+            ]
+          },
+          "v": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "v"
+        ]
+      },
+      "description": "dashed reference shells (field value): acoustic background L_bg, visual 1 arcmin, thermal 14 px"
+    },
+    "shell_ref": {
+      "enum": [
+        "person",
+        "D"
+      ],
+      "description": "what uav[].shell_m is: the default person shell (acoustic, visual) or the D-level shell (thermal N = 3.5, radar 13.2 dB)"
+    },
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sensor": {
+          "type": "string",
+          "maxLength": 24
+        },
+        "lens_mm": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 40
+        }
+      }
+    },
+    "uav": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "model_id": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "rev": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "v_r": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            }
+          },
+          "f_el": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+              "type": "integer",
+              "minimum": -32768,
+              "maximum": 32767
+            }
+          },
+          "cut_el_m": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "unit": "m"
+          },
+          "shell_m": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "m"
+          },
+          "same": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "rev"
+        ]
+      }
+    }
+  },
+  "required": [
+    "t_sim_ns",
+    "kind",
+    "unit",
+    "combine",
+    "v_enc",
+    "v_off",
+    "uav"
+  ]
+}

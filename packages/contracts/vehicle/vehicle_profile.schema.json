@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.anet-drone.dev/vehicle/1/vehicle_profile.schema.json",
-  "title": "Vehicle profile params.yaml (awr.vehicle.v1)",
-  "description": "AWR-16 §11.2: every identifiable parameter is {value, conf A-D, src}; conf E values live only in rejected[]. Loader runs VH-1..VH-7 and rejects on failure (353). Keys snake_case with unit suffix; px4_params keeps PX4 names.",
+  "title": "Vehicle profile params.yaml (awr.vehicle.v1, schema 1.1)",
+  "description": "AWR-16 §11.2: every identifiable parameter is {value, conf A-D, src}; conf E values live only in rejected[]. Loader runs VH-1..VH-7 and rejects on failure (353). Keys snake_case with unit suffix; px4_params keeps PX4 names. Schema 1.1 (ADR-115, AWR-20 §7.3): required fields depend on frame.type (multirotor fields for quad_x, hex_x and the VTOL lift system; airframe for fixed_wing and vtol_quadplane); D1 files stay valid; catalog models carry signatures.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -38,7 +38,9 @@
         "type": {
           "enum": [
             "quad_x",
-            "hex_x"
+            "hex_x",
+            "fixed_wing",
+            "vtol_quadplane"
           ]
         },
         "rotor_order": {
@@ -292,10 +294,59 @@
             "src"
           ],
           "unit": "m"
+        },
+        "size_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "l": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "unit m"
+                },
+                "w": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "unit m"
+                },
+                "h": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "unit m"
+                }
+              },
+              "required": [
+                "l",
+                "w",
+                "h"
+              ]
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "description": "bounding box l x w x h, m (D2)"
         }
       },
       "required": [
-        "arm_xy_m",
         "collision_radius_m"
       ]
     },
@@ -879,6 +930,74 @@
                 "src"
               ],
               "unit": "s"
+            },
+            "chemistry": {
+              "enum": [
+                "lipo",
+                "lihv",
+                "liion"
+              ]
+            },
+            "mass_kg": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ],
+              "unit": "kg"
+            },
+            "v_range_v": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "v_storage_v": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "unit": "V"
+            },
+            "size_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "pack_id": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]+$",
+              "description": "must be listed in catalog.json packs[]"
+            },
+            "packs_per_swap": {
+              "type": "integer",
+              "minimum": 1
             }
           },
           "required": [
@@ -886,8 +1005,7 @@
             "capacity_ah",
             "v_nominal_v",
             "capacity_wh",
-            "usable_frac",
-            "p_hover_w"
+            "usable_frac"
           ]
         },
         {
@@ -967,7 +1085,8 @@
           "enum": [
             "l0",
             "l1",
-            "sih"
+            "sih",
+            "fw_kin"
           ]
         },
         "supported": {
@@ -976,7 +1095,8 @@
             "enum": [
               "l0",
               "l1",
-              "sih"
+              "sih",
+              "fw_kin"
             ]
           }
         },
@@ -994,9 +1114,37 @@
     },
     "sensors": {
       "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,15}$"
+      },
       "additionalProperties": {
-        "$ref": "../../world/1/common.schema.json#/$defs/relHref"
-      }
+        "oneOf": [
+          {
+            "$ref": "../../world/1/common.schema.json#/$defs/relHref"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "$ref": "../../world/1/common.schema.json#/$defs/relHref"
+              },
+              "default": {
+                "type": "boolean",
+                "default": false
+              },
+              "removable": {
+                "type": "boolean",
+                "default": true
+              }
+            },
+            "required": [
+              "file"
+            ]
+          }
+        ]
+      },
+      "description": "slot -> mount file; string form = D1 slot (scenario only, not listed by the D2 catalog); object form (D2, AWR-20 §7.4); sensor_no follows the mapping order"
     },
     "payload": {
       "type": "array",
@@ -1041,6 +1189,51 @@
         },
         "endurance_check_s": {
           "type": "number"
+        },
+        "v_stall_mps": {
+          "type": "number"
+        },
+        "aspect_ratio": {
+          "type": "number"
+        },
+        "wing_loading_n_m2": {
+          "type": "number"
+        },
+        "p_cruise_w": {
+          "type": "number"
+        },
+        "p_loiter_w": {
+          "type": "number"
+        },
+        "endurance_cruise_s": {
+          "type": "number"
+        },
+        "endurance_loiter_s": {
+          "type": "number"
+        },
+        "r_min_loiter_m": {
+          "type": "number"
+        },
+        "ld_max": {
+          "type": "number"
+        },
+        "endurance_mission_cruise_s": {
+          "type": "number"
+        },
+        "airframe_residual_kg": {
+          "type": "number"
+        },
+        "band_shape_db": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 24,
+          "maxItems": 24
+        },
+        "sl_a_1m_dba": {
+          "type": "number",
+          "description": "D2.1 (AWR-04 §15.10.2): source level at 1 m = L_WA - 11 (hover, or cruise for fixed wing)"
         }
       }
     },
@@ -1077,6 +1270,1295 @@
       "additionalProperties": {
         "type": "object"
       }
+    },
+    "airframe": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "span_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m"
+        },
+        "length_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m"
+        },
+        "wing_area_m2": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "m^2"
+        },
+        "cd0": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ]
+        },
+        "oswald_e": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ]
+        },
+        "cl_max": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ]
+        },
+        "eta_prop": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ]
+        },
+        "p_avionics_w": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "minimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "W"
+        },
+        "p_max_w": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "conf": {
+              "enum": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            "src": {
+              "type": "string",
+              "minLength": 1
+            },
+            "check": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "value",
+            "conf",
+            "src"
+          ],
+          "unit": "W"
+        },
+        "v_min_mps": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "m/s"
+        },
+        "v_loiter_mps": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "m/s"
+        },
+        "v_cruise_mps": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "m/s"
+        },
+        "v_max_mps": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "m/s"
+        },
+        "phi_max_deg": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 60
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 60
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "deg"
+        },
+        "roll_rate_max_deg_s": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "deg/s"
+        },
+        "tau_v_s": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "s"
+        },
+        "tau_phi_s": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "s"
+        },
+        "accel_max_mps2": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "m/s^2"
+        },
+        "decel_max_mps2": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "m/s^2"
+        },
+        "climb_max_mps": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "m/s"
+        },
+        "sink_max_mps": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "m/s"
+        },
+        "r_loiter_default_m": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "m"
+        },
+        "launch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "catapult",
+                "hand",
+                "vtol",
+                "runway"
+              ]
+            },
+            "t_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            },
+            "climb_mps": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "m/s"
+            },
+            "alt_agl_m": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "m"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        "recovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "parachute",
+                "net",
+                "vtol",
+                "belly"
+              ]
+            },
+            "descent_mps": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "m/s"
+            },
+            "drift": {
+              "enum": [
+                "wind",
+                "none"
+              ]
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        "conf": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        "src": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "wing_area_m2",
+        "cd0",
+        "oswald_e",
+        "cl_max",
+        "eta_prop",
+        "v_min_mps",
+        "v_cruise_mps",
+        "v_max_mps",
+        "phi_max_deg"
+      ],
+      "description": "fixed wing and VTOL airframe (AWR-20 §5.1); aerodynamic and energy coefficients as value objects, speeds and angles may be plain numbers"
+    },
+    "vtol": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transition_fw_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "transition_mc_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "v_transition_mps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "m/s"
+        },
+        "p_hover_w": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "conf": {
+                  "enum": [
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "check": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "conf",
+                "src"
+              ]
+            }
+          ],
+          "unit": "W"
+        },
+        "hover_max_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "s"
+        },
+        "d_fw_min_m": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m"
+        },
+        "agl_transition_min_m": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m"
+        }
+      },
+      "required": [
+        "transition_fw_s",
+        "transition_mc_s",
+        "p_hover_w",
+        "hover_max_s"
+      ],
+      "description": "VTOL mode parameters (AWR-20 §5.4)"
+    },
+    "acoustic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lwa_hover_dba": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 140,
+          "unit": "dB(A)"
+        },
+        "lwa_cruise_dba": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 140,
+          "unit": "dB(A)"
+        },
+        "thrust_exp": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "bpf_hz": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "Hz"
+        },
+        "bpf_cruise_hz": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "Hz"
+        },
+        "blades": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tonal_db": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 30,
+          "unit": "dB"
+        },
+        "f_pk_hz": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "Hz"
+        },
+        "band_shape_db": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 24,
+          "maxItems": 24
+        },
+        "conf": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        "src": {
+          "type": "string"
+        }
+      },
+      "description": "acoustic signature (ADR-097; AWR-20 §4.4)"
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "area_m2": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "side": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "front": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "top",
+            "side",
+            "front"
+          ]
+        },
+        "contrast_sky": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "contrast_ground": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 4
+        },
+        "lights_installed": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "nav": {
+              "type": "boolean"
+            },
+            "strobe": {
+              "type": "boolean"
+            }
+          }
+        },
+        "night_visible_m": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "m"
+        }
+      },
+      "required": [
+        "area_m2"
+      ],
+      "description": "visibility signature (ADR-097)"
+    },
+    "rcs_m2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "conf": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        "src": {
+          "type": "string",
+          "minLength": 1
+        },
+        "check": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "conf",
+        "src"
+      ],
+      "unit": "m^2"
+    },
+    "ir": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "motor_delta_t_k": {
+          "type": "number",
+          "minimum": 0,
+          "unit": "K"
+        },
+        "hot_fraction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "D2.1 (AWR-04 §15.10.2): share of the side projection that is hot (motors, ESC, battery bay)"
+        },
+        "emissivity": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "default": 0.9,
+          "description": "D2.1 (AWR-04 §15.10.2)"
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "range_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "m"
+        }
+      },
+      "required": [
+        "range_m"
+      ]
+    },
+    "nav": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hold_sigma_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "rtk": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "h": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "v": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "h",
+                "v"
+              ]
+            },
+            "slam": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "h": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "v": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "h",
+                "v"
+              ]
+            },
+            "gnss": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "h": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "v": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "h",
+                "v"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "env_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "temp_c": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "temp_c"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)*$"
+      }
+    },
+    "compute_tops": {
+      "type": "number",
+      "minimum": 0
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "type": "boolean"
+        },
+        "category": {
+          "enum": [
+            "multirotor",
+            "fixed_wing",
+            "vtol"
+          ]
+        },
+        "size_class": {
+          "enum": [
+            "light",
+            "medium",
+            "heavy"
+          ]
+        },
+        "limits_default": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference",
+        "category",
+        "limits_default"
+      ],
+      "description": "catalog model metadata (AWR-20 §7.3)"
     }
   },
   "required": [
@@ -1088,13 +2570,170 @@
     "status",
     "frame",
     "mass_kg",
-    "inertia_kgm2",
     "geometry",
-    "motor",
-    "prop",
-    "aero",
     "limits_profiles",
     "fidelity",
     "model"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "frame": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "enum": [
+                  "quad_x",
+                  "hex_x"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "aero",
+          "inertia_kgm2",
+          "motor",
+          "prop"
+        ],
+        "properties": {
+          "geometry": {
+            "type": "object",
+            "required": [
+              "arm_xy_m"
+            ]
+          }
+        },
+        "not": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "airframe"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "vtol"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "frame": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "vtol_quadplane"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "aero",
+          "airframe",
+          "inertia_kgm2",
+          "motor",
+          "prop",
+          "vtol"
+        ],
+        "properties": {
+          "geometry": {
+            "type": "object",
+            "required": [
+              "arm_xy_m"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "frame": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "fixed_wing"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "airframe"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "aero"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "inertia_kgm2"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "motor"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "prop"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": [
+          "catalog"
+        ]
+      },
+      "then": {
+        "type": "object",
+        "required": [
+          "battery",
+          "acoustic",
+          "visual",
+          "rcs_m2",
+          "link",
+          "env_limits",
+          "nav"
+        ],
+        "properties": {
+          "battery": {
+            "type": "object"
+          }
+        }
+      }
+    }
   ]
 }

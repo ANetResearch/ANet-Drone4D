@@ -33,6 +33,7 @@ STRUCT_FORMATS: dict[str, str] = {
     "awr.ipc.ReaderCursor.v1": "<IIQqII",
     "awr.ipc.SlotHeader.v1": "<QQqqIIIIIIII",
     "awr.ipc.Heartbeat16.v1": "<qII",
+    "awr.TargetLite32.v1": "<HBB3ffhBBHBBf",
 }
 STRUCTS: dict[str, struct.Struct] = {k: struct.Struct(v) for k, v in STRUCT_FORMATS.items()}
 

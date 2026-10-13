@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "enums": "awr.enums.v1",
   "doc": "Byte layouts of awr.rt.v1 records and frame headers, recording, fixtures, IPC and asset headers (AWR-17 §6.4, §6.5, §9.2, §10.3; AWR-16 §8.3, §8.6, §13.4, §13.9, §14.1). Little endian, natural alignment, size % 8 == 0. layout_id = first 4 bytes (LE u32) of sha256 over the canonical JSON of this file; per-schema hash = first 8 hex of sha256 over the canonical JSON of the schema object.",
   "schemas": [
@@ -357,6 +357,26 @@
         {"n": "mono_ns", "t": "i64", "o": 0, "unit": "ns"},
         {"n": "pid", "t": "u32", "o": 8},
         {"n": "beat", "t": "u32", "o": 12}
+      ]
+    },
+    {
+      "schemaName": "awr.TargetLite32.v1",
+      "kind": "record",
+      "size": 32,
+      "doc": "TargetLite32: one row per target, n rows back to back in target_no order (topic swarm/target/state; bus state/sim-core/targets rows; AWR-17 §17.7.3). Not in the StateRing. Bytes 0-31 are the AWR-17 layout; flags bits 2-7 carry cfg_rev mod 64 (AWR-04 appendix B.3 L-03 merge, WP-01).",
+      "fields": [
+        {"n": "agent_no", "t": "u16", "o": 0, "doc": "target number in fleet/roster (kind = target); numbered per kind from 0, never reused in a session"},
+        {"n": "class", "t": "u8", "o": 2, "enum": "TargetClass", "doc": "7-255 reserved; template extensions only append"},
+        {"n": "state", "t": "u8", "o": 3, "bits": {"awareness": [0, 3, "Awareness"], "criterion": [3, 1, "CriterionMode"], "moving": [4, 1], "occupied": [5, 1], "sound_on": [6, 1], "enabled": [7, 1]}, "doc": "occupied: one of our vehicles is inside an enabled configured volume; sound_on: periodic source in its on phase"},
+        {"n": "pos", "t": "f32", "c": 3, "o": 4, "unit": "m", "frame": "world", "doc": "ground classes: foot point on the DSM"},
+        {"n": "heading_rad", "t": "f32", "o": 16, "unit": "rad", "frame": "world", "doc": "psi_enu (east = 0, counter-clockwise positive)"},
+        {"n": "speed_cms", "t": "i16", "o": 20, "scale": 0.01, "unit": "m/s", "doc": "horizontal speed, cm/s on the wire (+-327 m/s)"},
+        {"n": "best", "t": "u8", "o": 22, "bits": {"level": [0, 2, "PerceptionLevel"], "captured": [2, 1], "relay": [3, 1], "sensor": [4, 4, "PerceptionSensor"]}, "doc": "written by M19 (level, captured, sensor) and M20 (relay)"},
+        {"n": "alertness_u8", "t": "u8", "o": 23, "scale": 0.00392156862745098, "doc": "alertness x 255"},
+        {"n": "discovered_n", "t": "u16", "o": 24, "doc": "cumulative discoveries, saturates at 65535, not cleared by soft reset"},
+        {"n": "n_vol", "t": "u8", "o": 26, "doc": "enabled sensitivity volumes (0-4)"},
+        {"n": "flags", "t": "u8", "o": 27, "bits": {"hidden": [0, 1], "discovered_recent": [1, 1], "cfg_rev": [2, 6]}, "doc": "hidden: hide reaction active; discovered_recent: REACTING, ALERTED or CALMING; cfg_rev: configuration revision mod 64 (refetch GET .../targets/{id} on change)"},
+        {"n": "keepout_r_m", "t": "f32", "o": 28, "unit": "m", "doc": "largest horizontal keepout radius including the margin; 0 without enabled volumes"}
       ]
     }
   ]

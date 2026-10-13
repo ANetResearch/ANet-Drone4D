@@ -1,0 +1,44 @@
+{
+ "tid": "task-02",
+ "target": "person-01",
+ "t_monitor_s": 0.0,
+ "coverage": 0.0,
+ "gaps": {
+  "count": 0,
+  "max_s": 0.0,
+  "by_cause": {
+   "keepout_priority": 0,
+   "illum_transition": 0,
+   "infeasible": 0,
+   "battery": 0,
+   "other": 0
+  }
+ },
+ "discovered": 0,
+ "config_entries": {
+  "count": 0,
+  "total_s": 0.0
+ },
+ "handovers": {
+  "count": 0,
+  "mean_overlap_s": null
+ },
+ "min_keepout_margin_m": 35.2,
+ "sorties": 1,
+ "flight_h": 0.0,
+ "energy_wh": 0.0,
+ "min_ready_packs": 5,
+ "energy_rtl": 0,
+ "on_station": [
+  {
+   "uav": "uav0001",
+   "station": "st-1",
+   "since_t_sim_ns": 3000000000
+  }
+ ],
+ "next": {
+  "uav": "uav0002",
+  "eta_s": 1150.0,
+  "reason": "energy"
+ }
+}

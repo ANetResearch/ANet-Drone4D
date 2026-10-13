@@ -1,0 +1,215 @@
+{
+ "schema": "awr.fixture.optics_cases.v1",
+ "source": "AWR-04 §6.1; p' = max(p_eff, lambda F#)",
+ "cases": [
+  {
+   "sensor": "eo_gx40",
+   "resolution": "4k",
+   "f_mm": 4.8,
+   "f_number": 1.7,
+   "p_eff_um": 1.45,
+   "p_prime_um": 1.45,
+   "hfov_deg": 60.2274663,
+   "gsd_m_at_300m": 0.090625,
+   "n_person_at_857m": 2.798801287
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "4k",
+   "f_mm": 16.0,
+   "f_number": 2.088888889,
+   "p_eff_um": 1.45,
+   "p_prime_um": 1.45,
+   "hfov_deg": 19.74128569,
+   "gsd_m_at_300m": 0.0271875,
+   "n_person_at_857m": 9.329337623
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "4k",
+   "f_mm": 48.0,
+   "f_number": 3.2,
+   "p_eff_um": 1.45,
+   "p_prime_um": 1.76,
+   "hfov_deg": 6.638872701,
+   "gsd_m_at_300m": 0.011,
+   "n_person_at_857m": 23.05830606
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "1080p",
+   "f_mm": 4.8,
+   "f_number": 1.7,
+   "p_eff_um": 2.9,
+   "p_prime_um": 2.9,
+   "hfov_deg": 60.2274663,
+   "gsd_m_at_300m": 0.18125,
+   "n_person_at_857m": 1.399400643
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "1080p",
+   "f_mm": 16.0,
+   "f_number": 2.088888889,
+   "p_eff_um": 2.9,
+   "p_prime_um": 2.9,
+   "hfov_deg": 19.74128569,
+   "gsd_m_at_300m": 0.054375,
+   "n_person_at_857m": 4.664668811
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "1080p",
+   "f_mm": 48.0,
+   "f_number": 3.2,
+   "p_eff_um": 2.9,
+   "p_prime_um": 2.9,
+   "hfov_deg": 6.638872701,
+   "gsd_m_at_300m": 0.018125,
+   "n_person_at_857m": 13.99400643
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "720p",
+   "f_mm": 4.8,
+   "f_number": 1.7,
+   "p_eff_um": 4.35,
+   "p_prime_um": 4.35,
+   "hfov_deg": 60.2274663,
+   "gsd_m_at_300m": 0.271875,
+   "n_person_at_857m": 0.9329337623
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "720p",
+   "f_mm": 16.0,
+   "f_number": 2.088888889,
+   "p_eff_um": 4.35,
+   "p_prime_um": 4.35,
+   "hfov_deg": 19.74128569,
+   "gsd_m_at_300m": 0.0815625,
+   "n_person_at_857m": 3.109779208
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "720p",
+   "f_mm": 48.0,
+   "f_number": 3.2,
+   "p_eff_um": 4.35,
+   "p_prime_um": 4.35,
+   "hfov_deg": 6.638872701,
+   "gsd_m_at_300m": 0.0271875,
+   "n_person_at_857m": 9.329337623
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "sxga",
+   "f_mm": 4.8,
+   "f_number": 1.7,
+   "p_eff_um": 3.05859375,
+   "p_prime_um": 3.05859375,
+   "hfov_deg": 44.37249815,
+   "gsd_m_at_300m": 0.1911621094,
+   "n_person_at_857m": 1.326839129
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "sxga",
+   "f_mm": 16.0,
+   "f_number": 2.088888889,
+   "p_eff_um": 3.05859375,
+   "p_prime_um": 3.05859375,
+   "hfov_deg": 13.95023437,
+   "gsd_m_at_300m": 0.05734863281,
+   "n_person_at_857m": 4.422797095
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "sxga",
+   "f_mm": 48.0,
+   "f_number": 3.2,
+   "p_eff_um": 3.05859375,
+   "p_prime_um": 3.05859375,
+   "hfov_deg": 4.670598923,
+   "gsd_m_at_300m": 0.01911621094,
+   "n_person_at_857m": 13.26839129
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "1p3m",
+   "f_mm": 4.8,
+   "f_number": 1.7,
+   "p_eff_um": 3.2625,
+   "p_prime_um": 3.2625,
+   "hfov_deg": 47.01808045,
+   "gsd_m_at_300m": 0.20390625,
+   "n_person_at_857m": 1.243911683
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "1p3m",
+   "f_mm": 16.0,
+   "f_number": 2.088888889,
+   "p_eff_um": 3.2625,
+   "p_prime_um": 3.2625,
+   "hfov_deg": 14.87016422,
+   "gsd_m_at_300m": 0.061171875,
+   "n_person_at_857m": 4.146372277
+  },
+  {
+   "sensor": "eo_gx40",
+   "resolution": "1p3m",
+   "f_mm": 48.0,
+   "f_number": 3.2,
+   "p_eff_um": 3.2625,
+   "p_prime_um": 3.2625,
+   "hfov_deg": 4.981592262,
+   "gsd_m_at_300m": 0.020390625,
+   "n_person_at_857m": 12.43911683
+  },
+  {
+   "sensor": "lwir640",
+   "resolution": "native",
+   "f_mm": 13.0,
+   "f_number": 1.0,
+   "p_eff_um": 12.0,
+   "p_prime_um": 12.0,
+   "hfov_deg": 32.91265944,
+   "gsd_m_at_300m": 0.2769230769,
+   "n_person_at_857m": 0.9159271572
+  },
+  {
+   "sensor": "lwir640",
+   "resolution": "native",
+   "f_mm": 25.0,
+   "f_number": 1.0,
+   "p_eff_um": 12.0,
+   "p_prime_um": 12.0,
+   "hfov_deg": 17.46476854,
+   "gsd_m_at_300m": 0.144,
+   "n_person_at_857m": 1.761398379
+  },
+  {
+   "sensor": "lwir640",
+   "resolution": "native",
+   "f_mm": 75.0,
+   "f_number": 1.0,
+   "p_eff_um": 12.0,
+   "p_prime_um": 12.0,
+   "hfov_deg": 5.861969131,
+   "gsd_m_at_300m": 0.048,
+   "n_person_at_857m": 5.284195138
+  },
+  {
+   "sensor": "lwir640",
+   "resolution": "native",
+   "f_mm": 100.0,
+   "f_number": 1.0,
+   "p_eff_um": 12.0,
+   "p_prime_um": 12.0,
+   "hfov_deg": 4.398154935,
+   "gsd_m_at_300m": 0.036,
+   "n_person_at_857m": 7.045593517
+  }
+ ]
+}

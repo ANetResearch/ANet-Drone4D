@@ -1,0 +1,512 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor/1/perception.schema.json",
+  "title": "awr.uav.perception.v1",
+  "description": "Topic uav/{id}/perception, 5 Hz sim for the interest set (AWR-17 §17.7.4; semantics M19 §6.7, §6.10): per imaging sensor the targets in the frustum with level, pixels and limiting factor; GET .../vehicles/{vid}/perception adds radar, acoustic and lidar. Images are not provided.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "uav": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "sensors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sensor": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,24}$"
+          },
+          "kind": {
+            "enum": [
+              "eo",
+              "nir",
+              "lwir"
+            ]
+          },
+          "mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "f_mm": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "mm"
+          },
+          "hfov_rad": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "rad"
+          },
+          "vfov_rad": {
+            "type": "number",
+            "minimum": 0,
+            "unit": "rad"
+          },
+          "illum": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "builtin": {
+                "enum": [
+                  "auto",
+                  "on",
+                  "off"
+                ]
+              },
+              "ext": {
+                "enum": [
+                  "auto",
+                  "on",
+                  "off"
+                ]
+              }
+            }
+          },
+          "n_in_fov": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "target": {
+                  "$ref": "../../world/1/common.schema.json#/$defs/slug"
+                },
+                "cls_est": {
+                  "enum": [
+                    "unknown",
+                    "person",
+                    "uav",
+                    "machine",
+                    "dog",
+                    "vehicle",
+                    "object"
+                  ]
+                },
+                "level": {
+                  "enum": [
+                    "none",
+                    "D",
+                    "R",
+                    "I"
+                  ]
+                },
+                "p": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "n": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "px"
+                },
+                "n_eff": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "px"
+                },
+                "n_req": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "px"
+                },
+                "level_req": {
+                  "enum": [
+                    "D",
+                    "R",
+                    "I"
+                  ]
+                },
+                "range_m": {
+                  "type": "number",
+                  "minimum": 0,
+                  "unit": "m"
+                },
+                "gsd_m": {
+                  "type": "number",
+                  "minimum": 0,
+                  "unit": "m"
+                },
+                "limiting": {
+                  "enum": [
+                    "fov",
+                    "los",
+                    "pixels",
+                    "light",
+                    "contrast",
+                    "blur",
+                    null
+                  ]
+                },
+                "k": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "los": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "c": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "light": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "blur": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "occ": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "los",
+                    "c",
+                    "light",
+                    "blur"
+                  ]
+                },
+                "hold_s": {
+                  "type": "number",
+                  "minimum": 0,
+                  "unit": "s"
+                },
+                "captured": {
+                  "type": "boolean"
+                },
+                "capture_state": {
+                  "enum": [
+                    "IDLE",
+                    "ARMING",
+                    "CAPTURED",
+                    "HOLDING"
+                  ]
+                },
+                "delta_t_app_k": {
+                  "type": "number",
+                  "unit": "K",
+                  "description": "LWIR apparent temperature difference"
+                },
+                "meas_enu_m": {
+                  "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+                },
+                "sigma_m": {
+                  "type": "number",
+                  "minimum": 0,
+                  "unit": "m"
+                }
+              },
+              "required": [
+                "target",
+                "level",
+                "n_eff",
+                "n_req",
+                "range_m",
+                "gsd_m",
+                "limiting",
+                "captured"
+              ]
+            },
+            "maxItems": 8,
+            "description": "sorted by slant range"
+          }
+        },
+        "required": [
+          "sensor",
+          "kind",
+          "targets"
+        ]
+      }
+    },
+    "hud": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sensor": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]{1,24}$"
+            },
+            "target": {
+              "$ref": "../../world/1/common.schema.json#/$defs/slug"
+            },
+            "n_eff": {
+              "type": "number",
+              "minimum": 0,
+              "description": "unit px"
+            },
+            "n_req": {
+              "type": "number",
+              "minimum": 0,
+              "description": "unit px"
+            },
+            "limiting": {
+              "enum": [
+                "fov",
+                "los",
+                "pixels",
+                "light",
+                "contrast",
+                "blur",
+                null
+              ]
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rays_tick_max": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rays_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "radar": {
+      "oneOf": [
+        {
+          "$ref": "radar_tracks.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "acoustic": {
+      "oneOf": [
+        {
+          "$ref": "acoustic_bearings.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lidar": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "n_points_target": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "target": {
+                    "$ref": "../../world/1/common.schema.json#/$defs/slug"
+                  },
+                  "n_1s": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "level": {
+                    "enum": [
+                      "none",
+                      "D",
+                      "R",
+                      "I"
+                    ]
+                  }
+                },
+                "required": [
+                  "target",
+                  "n_1s",
+                  "level"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "uav",
+    "t_sim_ns",
+    "sensors"
+  ],
+  "$defs": {
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "$ref": "../../world/1/common.schema.json#/$defs/slug"
+        },
+        "pos": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "vel": {
+          "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+        },
+        "cov_diag": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 6
+        },
+        "state": {
+          "enum": [
+            "TENTATIVE",
+            "CONFIRMED",
+            "COASTING",
+            "DROPPED"
+          ]
+        },
+        "t_last_ns": {
+          "$ref": "../../world/1/common.schema.json#/$defs/int64"
+        }
+      },
+      "required": [
+        "target",
+        "pos",
+        "vel",
+        "state"
+      ]
+    },
+    "tracks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/track"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "SB-66 (P1)"
+    },
+    "feasibility_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "$ref": "../../world/1/common.schema.json#/$defs/slug"
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,40}$"
+        },
+        "sensor": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,24}$"
+        },
+        "light": {
+          "enum": [
+            "day",
+            "low",
+            "night"
+          ]
+        },
+        "mor_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "unit": "m"
+        },
+        "mode": {
+          "enum": [
+            "geometric",
+            "physical"
+          ]
+        },
+        "level_req": {
+          "enum": [
+            "D",
+            "R",
+            "I"
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "model_id",
+        "sensor",
+        "light",
+        "mor_m"
+      ],
+      "description": "SB-67 (P1)"
+    },
+    "feasibility_reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "feasible": {
+          "type": "boolean"
+        },
+        "d_lo_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "unit": "m"
+        },
+        "d_hi_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "unit": "m"
+        },
+        "why": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "feasible"
+      ],
+      "description": "feasibility_window result: d_hi - d_lo < 10 m or no d_hi -> infeasible with why"
+    }
+  }
+}

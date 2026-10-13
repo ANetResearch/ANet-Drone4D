@@ -32,7 +32,8 @@
               "robot",
               "vehicle",
               "sensor",
-              "human"
+              "human",
+              "target"
             ]
           },
           "model": {
@@ -143,22 +144,51 @@
           },
           "sih_quant_offset_m": {
             "$ref": "../../world/1/common.schema.json#/$defs/vec3"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 32,
+            "description": "display name (D2; targets and sandbox vehicles)"
           }
         },
         "required": [
           "agent_no",
           "id",
-          "kind",
-          "model",
-          "profile_id",
-          "backend",
-          "simulated",
-          "producer",
-          "lifecycle",
-          "sensors",
-          "t_world_local",
-          "caps_ref"
-        ]
+          "kind"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "target"
+                }
+              },
+              "type": "object"
+            },
+            "then": {
+              "required": [
+                "model"
+              ],
+              "type": "object"
+            },
+            "else": {
+              "required": [
+                "model",
+                "profile_id",
+                "backend",
+                "simulated",
+                "producer",
+                "lifecycle",
+                "sensors",
+                "t_world_local",
+                "caps_ref"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "description": "Roster entry. kind = target (D2, AWR-17 §17.7.2 rule 4): {agent_no, id, kind, model = target class, label}; agent_no is unique within each kind (targets count from 0); other kinds keep the D1 required fields"
       }
     }
   },

@@ -1,0 +1,91 @@
+{
+ "uav": "uav0001",
+ "t_sim_ns": 3000000000,
+ "sensors": [
+  {
+   "sensor": "eo_gx40",
+   "kind": "eo",
+   "mode": "auto",
+   "f_mm": 48.0,
+   "hfov_rad": 0.11587,
+   "vfov_rad": 0.06523,
+   "illum": {
+    "builtin": "auto",
+    "ext": "off"
+   },
+   "n_in_fov": 2,
+   "targets": [
+    {
+     "target": "person-01",
+     "cls_est": "person",
+     "level": "I",
+     "p": 1.0,
+     "n": 130.144,
+     "n_eff": 127.819,
+     "n_req": 14.0,
+     "level_req": "R",
+     "range_m": 88.9,
+     "gsd_m": 0.0054,
+     "limiting": null,
+     "k": {
+      "los": 1.0,
+      "c": 1.0,
+      "light": 1.0,
+      "blur": 0.982,
+      "occ": 0.0
+     },
+     "hold_s": 1.0,
+     "captured": true,
+     "capture_state": "CAPTURED",
+     "meas_enu_m": [
+      153.59,
+      -37.84,
+      0.0
+     ],
+     "sigma_m": 0.089
+    },
+    {
+     "target": "dog-01",
+     "cls_est": "dog",
+     "level": "I",
+     "p": 0.9998,
+     "n": 36.24,
+     "n_eff": 35.688,
+     "n_req": 14.0,
+     "level_req": "R",
+     "range_m": 226.2,
+     "gsd_m": 0.0137,
+     "limiting": null,
+     "k": {
+      "los": 1.0,
+      "c": 1.0,
+      "light": 1.0,
+      "blur": 0.985,
+      "occ": 0.0
+     },
+     "hold_s": 1.0,
+     "captured": false,
+     "capture_state": "IDLE",
+     "meas_enu_m": [
+      -79.08,
+      124.4,
+      0.0
+     ],
+     "sigma_m": 0.226
+    }
+   ]
+  }
+ ],
+ "hud": {
+  "sensor": "eo_gx40",
+  "target": "person-01",
+  "n_eff": 127.819,
+  "n_req": 14.0,
+  "limiting": null
+ },
+ "budget": {
+  "rays_tick_max": 8,
+  "rays_s": 120.0,
+  "dropped": 0
+ }
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.anet-drone.dev/rt/1/uav_state_ext.schema.json",
   "title": "awr.uav.state_ext.v1",
-  "description": "Topic uav/{id}/state_ext, 2 Hz self-contained (AWR-17 §6.5; semantics M08). px4 and prom carry raw native values for display only (V0.2).",
+  "description": "Topic uav/{id}/state_ext, 2 Hz self-contained (AWR-17 §6.5; semantics M08). px4 and prom carry raw native values for display only (V0.2). D2 adds optional fields only (AWR-17 §17.7.4).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -423,6 +423,144 @@
           }
         }
       }
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]{1,40}$",
+      "description": "D2: catalog or session clone model id (optional, 1.x)"
+    },
+    "label": {
+      "type": "string",
+      "maxLength": 32,
+      "description": "D2 (optional, 1.x)"
+    },
+    "nest_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "D2 (optional, 1.x)"
+    },
+    "work": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tid": {
+              "$ref": "../../world/1/common.schema.json#/$defs/slug"
+            },
+            "wid": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tid",
+            "wid"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "D2 tasking work item (optional, 1.x)"
+    },
+    "fw": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "MC",
+                "TRANSITION_FW",
+                "FW",
+                "TRANSITION_MC"
+              ]
+            },
+            "airspeed_mps": {
+              "type": "number",
+              "unit": "m/s"
+            },
+            "bank_rad": {
+              "type": "number",
+              "unit": "rad"
+            },
+            "gamma_rad": {
+              "type": "number",
+              "unit": "rad"
+            },
+            "hover_used_s": {
+              "type": "number",
+              "minimum": 0,
+              "unit": "s"
+            }
+          },
+          "required": [
+            "mode"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "D2 fixed wing and VTOL state (optional, 1.x)"
+    },
+    "manual": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "keepout_guard": {
+          "enum": [
+            "clamp",
+            "warn",
+            "off"
+          ]
+        }
+      },
+      "required": [
+        "active"
+      ],
+      "description": "D2 manual control (optional, 1.x)"
+    },
+    "env_limit_warn": {
+      "type": "boolean",
+      "description": "D2: VEHICLE_ENV_LIMIT warning active (optional, 1.x)"
+    },
+    "limits_profile": {
+      "type": "string",
+      "description": "D2: active limits profile (optional, 1.x)"
+    },
+    "energy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "e_avail_wh": {
+          "type": "number",
+          "unit": "Wh"
+        },
+        "e_rtl_wh": {
+          "type": "number",
+          "unit": "Wh"
+        },
+        "e_res_wh": {
+          "type": "number",
+          "unit": "Wh"
+        },
+        "t_end_s": {
+          "type": "number",
+          "unit": "s"
+        }
+      },
+      "description": "D2 energy estimate (optional, 1.x)"
     }
   },
   "required": [
