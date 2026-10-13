@@ -193,7 +193,8 @@ def test_activity_reported_and_pool_down_keeps_contexts(sbx: SbStack) -> None:
     # 池不可达：已附着的上下文继续服务（FR-215），对账失败不判定结束
     sbx.pool.down()
     try:
-        time.sleep(2.5)
+        # 按条件等待池被判为不可达（负载高的 runner 上检测晚于固定的 2.5 s），再确认上下文仍在服务
+        sbx.wait(lambda: not sbx.hub.pool_up, 10, "pool down")
         assert sbx.call_in_loop(lambda: sbx.hub.get(sid) is not None and sbx.hub.get(sid).live)
         r = httpx.get(f"{sbx.base}/api/sandbox/v1/health")
         assert r.json()["pool"] == "down" and r.json()["contexts"] >= 1
@@ -237,7 +238,9 @@ def test_idle_context_light_ticks_do_not_read_the_ring(sbx: SbStack) -> None:
     # 轻量 tick 仍推进 GCS 心跳与兴趣下推（sim-core 的链路判据与按需生成照常）
     sim = sbx.pool.sims[sid]
     n_gcs = len(sim.gcs)
-    time.sleep(0.5)
+    end = time.monotonic() + 5.0  # 按条件等待（负载高的 runner 上 0.5 s 内不一定有新的心跳）
+    while len(sim.gcs) <= n_gcs and time.monotonic() < end:
+        time.sleep(0.05)
     assert len(sim.gcs) > n_gcs
 
     async def go() -> None:
