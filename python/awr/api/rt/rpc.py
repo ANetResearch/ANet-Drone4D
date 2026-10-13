@@ -25,6 +25,12 @@ result `data{accepted_n, rejected_n, rejected_by_code, accepted, rejected}`，�
 CLIENT_DATA（遥操作，FR-062）：客户端 advertise 的 `uav/{id}/setpoint` channel；operator 角色、本连接对该机存在已准入的活动
 velocity 调用；`seq` 不递增或 `t_client_sim_ns < simNow − 200 ms` 的包丢弃计数；每 channel > 60 Hz 的部分丢弃计数；有效包
 立即（不等 tick）转为 32 B raw 发布到 `ctl/sim-core/setpoint`；不满足条件时每个 channel 发一次 `error 322`。
+
+沙盒（D2，`gw.policy` 非空；M11-FR-208、FR-213；M17-FR-039；17 §17.3.3）：① 之后按 `policy.deny_code` 拒绝沙盒内禁用的服务
+（`sys/*`、`seat/takeover`、`seat/release`、`rec/*`、`kill`、`escalate`、`sim/reset`，115）；② 的桶键为 sid、类别为沙盒类别
+（`ratelimit.sandbox_category_for_service`：sbx_call 与时钟、实体、任务、环境类别）；`sim/speed` 先经 `policy.grant_rate`
+（池的倍速授予 `sys/session/rate`）再以授予值下发，结果 `data` 带 `granted_rate`、`rate_cap`、`limited_by`，受限时带警告
+`SANDBOX_RATE_LIMITED`（码 501 只作警告）。CLIENT_DATA 的每 channel 上限在沙盒为 `sandbox.rest.setpoint_hz`（50 Hz）。
 """
 
 from __future__ import annotations
@@ -125,6 +131,8 @@ class InFlight:
     last_progress_ns: int = 0
     history: list[dict] = field(default_factory=list)
     final_ev: asyncio.Event | None = None
+    extra: dict | None = None  # 并入终态 result.data 的附加字段（沙盒倍速授予）
+    warnings: list[str] | None = None
 
 
 @dataclass
@@ -208,7 +216,7 @@ class RpcRouter:
         self.tasks: set[asyncio.Task] = set()
         self.confirm = ConfirmTokens(confirm_key or os.urandom(32))
         self.stats = {"calls": 0, "rejected_entry": 0, "bus_timeouts": 0, "duplicates": 0, "batches": 0,
-                      "batch_fallbacks": 0}
+                      "batch_fallbacks": 0, "seat_reclaims": 0}
 
     # ------------------------------------------------------------ 入口
     def handle_call(self, s: Any, m: dict) -> None:
@@ -244,6 +252,12 @@ class RpcRouter:
         if write and role == "viewer":
             self._reject(s, cid, service, int(Reason.ROLE_FORBIDDEN), {"role": role})
             return
+        pol = gw.policy
+        if pol is not None:
+            deny = pol.deny_code(spec.op, service)
+            if deny is not None:
+                self._reject(s, cid, service, deny, {"why": "SANDBOX_FORBIDDEN", "service": service})
+                return
         if service in ADMIN_ONLY and role != "admin":
             self._reject(s, cid, service, int(Reason.ROLE_FORBIDDEN), {"role": role, "need": "admin"})
             return
@@ -256,10 +270,14 @@ class RpcRouter:
         if write and service not in ADMIN_ONLY and not gw.is_seat_holder(pid):
             self._reject(s, cid, service, int(Reason.SEAT_TAKEN), {"seat": gw.seat_json()})
             return
-        # ② 限流（call 桶 + 类别桶）
-        extra = category_for_service(spec.op)
-        for cat in ([extra] if extra else []) + ["call"]:
-            retry = gw.limiter.check(pid, cat)
+        # ② 限流（call 桶 + 类别桶；沙盒按 sid 与沙盒类别）
+        if pol is not None:
+            cats, lkey = pol.categories(spec.op), pol.limit_key(pid)
+        else:
+            extra = category_for_service(spec.op)
+            cats, lkey = ([extra] if extra else []) + ["call"], pid
+        for cat in cats:
+            retry = gw.limiter.check(lkey, cat)
             if retry:
                 self._reject(s, cid, service, int(Reason.RATE_LIMITED), {"category": cat}, retry_after_ms=retry)
                 return
@@ -284,11 +302,35 @@ class RpcRouter:
             self._reject(s, cid, service, route, {"uav": params.get("id")})
             return
         key, kind, op, uav = route
+        if pol is not None and spec.op == "sim/speed":
+            self._open(cid, s, pid, service, op, uav, kind, args=args)
+            self._spawn(self._dispatch_speed(cid, key, kind, op, args, pid, role, getattr(s, "conn_id", None), params))
+            return
         principal = gw.tokens.sign_principal(pid, role, cid, conn_id=getattr(s, "conn_id", None),
                                              seat=gw.is_seat_holder(pid))
         msg = self._build(kind, cid, op, uav, args, principal, params)
         self._open(cid, s, pid, service, op, uav, kind, args=args)
         self._spawn(self._dispatch(cid, key, kind, msg))
+
+    async def _dispatch_speed(self, cid: str, key: str, kind: str, op: str, args: dict, pid: str, role: str,
+                              conn_id: str | None, params: dict) -> None:
+        """沙盒 `sim/speed`（M17-FR-039）：先经池授予（`policy.grant_rate`），再以授予值下发；授予信息并入结果。"""
+        gw = self.gw
+        try:
+            want = float(args.get("rate", 1.0))
+        except (TypeError, ValueError):
+            want = 1.0
+        granted, info = await gw.policy.grant_rate(want)
+        f = self.inflight.get(cid)
+        if f is None or f.final:
+            return
+        f.extra = {"granted_rate": granted, **info}
+        if granted < want:
+            f.warnings = ["SANDBOX_RATE_LIMITED"]
+        a = dict(args)
+        a["rate"] = granted
+        principal = gw.tokens.sign_principal(pid, role, cid, conn_id=conn_id, seat=gw.is_seat_holder(pid))
+        await self._dispatch(cid, key, kind, self._build(kind, cid, op, None, a, principal, params))
 
     def _confirm_action(self, op: str, params: dict, args: dict) -> tuple[str, str] | None:
         if op in CONFIRM_ACTIONS:
@@ -301,7 +343,7 @@ class RpcRouter:
 
     def _route(self, op: str, name: str, params: dict, args: dict) -> tuple[str, str, str, str | None] | int:
         gw = self.gw
-        prod = gw.settings.producer
+        prod = gw.producer
         if name.startswith("uav/"):
             uav = params.get("id")
             e = gw.roster_entry(uav)
@@ -329,6 +371,8 @@ class RpcRouter:
             a = dict(args)
             if op.startswith("mission/") and params and params.get("mid"):
                 a["mid"] = params["mid"]
+            if op.startswith("task/") and params and params.get("tid"):
+                a["tid"] = params["tid"]  # D2 `task/{tid}/{start,pause,resume,cancel}`（17 §17.7.6）
             return {"v": 1, "cid": cid, "op": op, "uav": uav, "args": a, "principal": principal, "lease": None,
                     "t_wall_ns": time.time_ns(), "epoch_seen": gw.clock.global_epoch, "batch_id": batch_id}
         if kind == "clock":
@@ -382,6 +426,13 @@ class RpcRouter:
     async def _dispatch(self, cid: str, key: str, kind: str, msg: dict) -> None:
         try:
             rep = await self.gw.bus.call(key, msg, timeout=1.0, retries=2, retry_gap=0.3)
+            if isinstance(rep, dict) and int(rep.get("code", 0) or 0) == int(Reason.SEAT_TAKEN) and \
+                    getattr(self.gw, "seat_pinned", None) and kind in ("clock", "cmd", "lease") and \
+                    await self.gw.reclaim_pinned_seat():
+                # 沙盒固定席位（ADR-093）：READY 后立即到达的写入早于 sim-core 处理启动登记时以 116 拒绝（被拒的 cid 不进入
+                # 幂等表）；同步重登记后重发一次（d2-WP-13-to-M17 第 4 条、d2-ACC-1-to-M17 第 8 条）
+                self.stats["seat_reclaims"] += 1
+                rep = await self.gw.bus.call(key, msg, timeout=1.0, retries=2, retry_gap=0.3)
         except BusTimeout:
             self.stats["bus_timeouts"] += 1
             code = int(Reason.SERVICE_UNAVAILABLE) if kind == "rec" else int(Reason.SIM_UNAVAILABLE)
@@ -412,6 +463,8 @@ class RpcRouter:
                 self.gw.update_seat(rep["seat"])
             code = int(rep.get("code", 0) or 0)
             data = {k: rep[k] for k in ("clock", "lease", "seat", "segment") if rep.get(k) is not None}
+            if f.extra:
+                data.update(f.extra)
             if rep.get("status") == "rejected" or code:
                 self._final(cid, result_msg(cid, "rejected", code or int(Reason.STATE), final=True, data=data or None,
                                             effect=EFFECT_UNAVAILABLE))
@@ -420,7 +473,7 @@ class RpcRouter:
                                                                   "native_ack": True, "protocol": "inproc",
                                                                   "requested": f.service}))
             f.accepted_sent = True
-            self._final(cid, result_msg(cid, "succeeded", 0, final=True, data=data or None,
+            self._final(cid, result_msg(cid, "succeeded", 0, final=True, data=data or None, warnings=f.warnings,
                                         effect={"status": "OK", "verify_trust": 4, "simulated": True,
                                                 "latency_ms": self._latency_ms(f)}))
             if f.op == "seat/takeover":
@@ -432,10 +485,16 @@ class RpcRouter:
         st = adm.get("status")
         cid = f.cid
         if st == "accepted":
+            det = adm.get("detail") if isinstance(adm.get("detail"), dict) else {}
+            res = adm.get("result") if isinstance(adm.get("result"), dict) else det.get("result")
+            if isinstance(res, dict) and res:
+                # 插件命令的受理结果（M08 `_plugin_op` 放在 `detail.result`；D2：`target/add` 的 `{id, cfg}` 等）并入受理与终态
+                # result 的 data（D2-INT：此前丢弃，界面放置识别物后拿不到新 id，详情页不打开，`targetsModel.setConfig` 也不生效）
+                f.extra = {**(f.extra or {}), **res}
             self._send(f, result_msg(cid, "accepted", 0, effect={"status": "UNVERIFIED", "verify_trust": 1,
                                                                   "native_ack": True, "protocol": "inproc",
                                                                   "requested": f.service},
-                                     warnings=adm.get("warnings")))
+                                     warnings=adm.get("warnings"), data=dict(f.extra) if f.extra else None))
             f.accepted_sent = True
             pend, f.pending = f.pending, []
             for m in pend:
@@ -498,7 +557,7 @@ class RpcRouter:
             if e is None:
                 agg.rejected.append([vid, int(Reason.NO_VEHICLE)])
             else:
-                groups.setdefault(e.get("producer") or gw.settings.producer, []).append(vid)
+                groups.setdefault(e.get("producer") or gw.producer, []).append(vid)
         self._spawn(self._dispatch_batch(f, agg, groups, bop, inner, s.principal.id, s.role,
                                          getattr(s, "conn_id", None)))
 
@@ -665,10 +724,14 @@ class RpcRouter:
             m = {"op": "progress", "id": f.cid, "data": prog}
         elif sub in ("running", "succeeded", "failed", "canceled", "timeout"):
             final = sub != "running"
+            res = data.get("result")
+            if isinstance(res, dict) and res:
+                f.extra = {**(f.extra or {}), **res}      # 插件命令的终态 result（M08 `_finish_with`，ADR-058）
             eff = data.get("effect") if isinstance(data.get("effect"), dict) and data.get("effect") else \
                 {"status": "UNVERIFIED", "verify_trust": 2}
             m = result_msg(f.cid, sub, int(data.get("code", 0) or 0), final=True if final else None, effect=eff,
-                           warnings=data.get("warnings") if isinstance(data.get("warnings"), list) else None)
+                           warnings=data.get("warnings") if isinstance(data.get("warnings"), list) else None,
+                           data=dict(f.extra) if f.extra else None)
         else:
             return
         if not f.accepted_sent:
@@ -725,7 +788,7 @@ class RpcRouter:
             return False
         ccid = f"{target}:cancel"[:96]
         e = gw.roster_entry(f.uav)
-        producer = (e or {}).get("producer", gw.settings.producer)
+        producer = (e or {}).get("producer", gw.producer)
         principal = gw.tokens.sign_principal(s.principal.id, s.role, ccid, conn_id=getattr(s, "conn_id", None),
                                              seat=gw.is_seat_holder(s.principal.id))
         msg = self._build("cmd", ccid, "cancel", f.uav, {"call_id": target}, principal)
@@ -794,8 +857,9 @@ class ClientPublish:
             if no is None:
                 s.error(int(Reason.CLIENT_PUBLISH_DENIED), "advertise", cid, f"机体不在 roster：{parts[1]}")
                 continue
+            hz = gw.policy.setpoint_hz() if gw.policy is not None else CD_RATE_HZ  # 沙盒 50 Hz（17 §17.3.6）
             s.cpub[cid] = {"uav": parts[1], "agent_no": no, "last_seq": -1, "denied": False,
-                           "bucket": _Bucket(CD_RATE_HZ, 6.0, time.monotonic())}
+                           "bucket": _Bucket(hz, 6.0, time.monotonic())}
 
     def on_unadvertise(self, s: Any, ids: Any) -> None:
         for i in ids if isinstance(ids, list) else []:

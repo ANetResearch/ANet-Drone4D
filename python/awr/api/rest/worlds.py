@@ -16,7 +16,7 @@ from typing import Annotated, Any
 import anyio
 from fastapi import APIRouter, Query, Request
 
-from ..deps import Viewer, app_ctx
+from ..deps import Viewer, ctx_for
 from ..problem import ApiProblem
 from ..static import WORLD_ID_RE
 
@@ -53,7 +53,7 @@ def _offset(cursor: str | None) -> int:
 @router.get("")
 async def list_worlds(request: Request, _p: Viewer, limit: Annotated[int, Query(ge=1, le=1000)] = 100,
                       cursor: str | None = None) -> dict[str, Any]:
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     off = _offset(cursor)
     worlds = [w for w in await anyio.to_thread.run_sync(ctx.catalog.list) if ctx.settings.world_allowed(w.id)]
     page = worlds[off:off + limit]
@@ -63,7 +63,7 @@ async def list_worlds(request: Request, _p: Viewer, limit: Annotated[int, Query(
 
 @router.get("/{world_id}")
 async def get_world(world_id: str, request: Request, _p: Viewer) -> dict[str, Any]:
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     if not WORLD_ID_RE.match(world_id) or not ctx.settings.world_allowed(world_id):
         raise ApiProblem(305, status=404, detail={"world_id": world_id})
     w = await anyio.to_thread.run_sync(ctx.catalog.get, world_id)

@@ -218,7 +218,8 @@ def _doctor_checks(cfg: RuntimeConfig | None, cfg_err: ConfigError | None, *, qu
     assert cfg is not None
     out.append(Check("DOC-22", "配置与访问模式", "OK", 2, f"profile={cfg.profile} access={cfg.access_mode} bind={cfg.net.bind}"))
     # 端口（DOC-09）
-    ports = [cfg.port_effective, cfg.rendezvous_port] + ([cfg.vite_port_effective] if "dev" in cfg.procs_enable else [])
+    ports = [cfg.port_effective, cfg.rendezvous_port] + ([cfg.vite_port_effective] if "dev" in cfg.procs_enable else []) \
+        + ([cfg.sandbox_port_effective] if "sandbox" in cfg.procs_enable else [])  # D2 sandbox-api（M11-FR-217）
     busy = [p for p in ports if not _port_free(p)]
     out.append(Check("DOC-09", "端口空闲", "ERROR" if busy else "OK", 3,
                      f"被占用：{busy}" if busy else f"{ports} 空闲",

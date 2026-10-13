@@ -11,6 +11,10 @@ M11-FR-001、FR-015、FR-020、FR-080；AWR-17 §4、§5、§6；AWR-19 §6.3）
 `app.state`：`awr`（ApiContext）、`bus`（总线，R07 依赖）、`session_world_id`（当前运行世界）。
 lifespan：受监管时先 `init_child("api")`（保存并恢复 uvicorn 已装的 SIGTERM/SIGINT 处理器，停机仍走 uvicorn 的优雅关闭）
 → 打开总线 → 读取世界摘要 → 启动 Gateway → 10 Hz 心跳 `hb.api` → `bus.ready()` 声明 `proc/api/ready`。
+
+D2（M11-FR-202、FR-203）：本进程是 show-api（`ApiContext.kind = "show"`），请求级上下文 `deps.ctx_for` 恒返回唯一的
+`ApiContext`；Gateway 按 `settings.binding()` 实例化。`discover_routers(attr)` 按属性名收集路由（D1 `router`；sandbox-api 收集
+`sandbox_router` 与 `sandbox_public_router`，入口 `awr.api.sandbox_main`）。
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ClassVar
 
 import anyio
 from fastapi import APIRouter, FastAPI, Request
@@ -39,15 +43,18 @@ from awr.runtime.child import init_child
 from awr.world.package.catalog import Catalog
 
 from .audit import AuditWriter
+from .identity import ApiIdentity
 from .middleware import AwrMiddleware
 from .problem import ApiProblem, problem
 from .ratelimit import RateLimiter
 from .rt.gateway import Gateway
 from .rt.inspect import router as inspect_router
+from .rt.presence import PowerView, power_info, reap_due, reclaim_msg
 from .rt.ws import rt_endpoint
 from .security import TokenService
 from .settings import ApiSettings
 from .static import WorldFiles, build_static_router, spa_route
+from .viewer_queue import SeatsConfig, ViewerSeats, status_path
 
 __all__ = ["ApiContext", "app", "create_app", "discover_routers"]
 
@@ -58,6 +65,7 @@ HB_PERIOD_S = 0.1
 
 @dataclass
 class ApiContext:
+    kind: ClassVar[str] = "show"  # show-api；sandbox-api 的应用上下文为 sandbox_main.SandboxApiContext
     settings: ApiSettings
     tokens: TokenService
     catalog: Catalog
@@ -72,6 +80,11 @@ class ApiContext:
     subscribe_events: bool = True
     started_mono: float = field(default_factory=time.monotonic)
     world_info: dict[str, Any] = field(default_factory=dict)
+    # D2.1（M11-FR-220 至 FR-229）：节能阈值、观看席位与排队、内部身份、状态文件
+    power: PowerView = field(default_factory=PowerView)
+    seats: ViewerSeats | None = None
+    identity: ApiIdentity | None = None
+    status_file: Any = None
     _tasks: list[asyncio.Task] = field(default_factory=list)
     _ready: Any = None
 
@@ -98,13 +111,15 @@ class ApiContext:
                               "audit": self.audit, "limiter": self.limiter, "confirm_key": self.tokens.k_confirm}
         if self.ring_cls is not None:
             kw["ring_cls"] = self.ring_cls
-        self.gateway = Gateway(s, self.bus, self.tokens, **kw)
+        self.gateway = Gateway(s, self.bus, self.tokens, binding=s.binding(), **kw)
+        self.gateway.power_info = power_info(self.power)
         await self.gateway.start()
         self._install_stop_hook(loop)
         app.state.bus = self.bus
         app.state.session_world_id = s.world_id
         if self.run_ctx is not None:
             self._tasks.append(asyncio.ensure_future(self._heartbeat()))
+        self._tasks.append(asyncio.ensure_future(self._power_loop()))
         self._ready = self.bus.ready()
         log.info("api ready", extra={"kv": {"run_id": s.run_id, "world": s.world_id, "bus": s.bus_kind}})
 
@@ -154,6 +169,38 @@ class ApiContext:
                 hb.beat()
             await asyncio.sleep(HB_PERIOD_S)
 
+    async def _power_loop(self) -> None:
+        """1 Hz：观看排队清理与状态文件（FR-225）；每 `power.scan_s`（10 s）兜底回收空闲连接（FR-221）。"""
+        last_scan = time.monotonic()
+        while True:
+            await asyncio.sleep(1.0)
+            try:
+                seats = self.seats
+                if seats is not None:
+                    seats.gc()
+                    if self.status_file is not None:
+                        await anyio.to_thread.run_sync(seats.write_status, self.status_file)
+                now = time.monotonic()
+                if now - last_scan >= self.power.scan_s:
+                    last_scan = now
+                    self.reap_idle()
+            except Exception:
+                log.exception("power loop failed")
+
+    def reap_idle(self) -> int:
+        """兜底：阈值 + 余量内无交互的连接以 `error{518}` + 4430 断开（释放观看席位并派发排队）。返回断开数。"""
+        gw = self.gateway
+        if gw is None or gw.stopping:
+            return 0
+        busy = self.seats.busy() if self.seats is not None else False
+        due = reap_due(list(gw.sessions), self.power, busy=busy)
+        for sess, reason in due:
+            sess.send_ctrl(reclaim_msg(reason))
+            gw._spawn_close(sess, 4430)
+        if due:
+            log.info("idle connections reclaimed", extra={"kv": {"n": len(due), "busy": busy}})
+        return len(due)
+
     async def stop(self) -> None:
         for t in self._tasks:
             t.cancel()
@@ -169,23 +216,26 @@ class ApiContext:
         if self.bus is not None and not self.external_bus:
             with contextlib.suppress(Exception):
                 self.bus.close()
+        if self.identity is not None:
+            await anyio.to_thread.run_sync(self.identity.flush)
         await anyio.to_thread.run_sync(self.audit.close)
 
 
-def discover_routers() -> list[tuple[str, APIRouter]]:
-    """按文件名排序导入 `awr.api.rest` 下各模块并收集其 `router`（导入失败的模块记错误日志后跳过，不拖垮 api）。"""
+def discover_routers(attr: str = "router", *, deny: tuple[str, ...] = ()) -> list[tuple[str, APIRouter]]:
+    """按文件名排序导入 `awr.api.rest` 下各模块并收集其属性 `attr`（D1 `router`；沙盒 `sandbox_router`、
+    `sandbox_public_router`）。`deny` 中的模块即使导出了该属性也不收集（FR-203）。导入失败的模块记错误日志后跳过。"""
     from . import rest as pkg
 
     out: list[tuple[str, APIRouter]] = []
     for mi in sorted(pkgutil.iter_modules(pkg.__path__), key=lambda m: m.name):
-        if mi.name.startswith("_"):
+        if mi.name.startswith("_") or mi.name in deny:
             continue
         try:
             mod = importlib.import_module(f"{pkg.__name__}.{mi.name}")
         except Exception:
             log.exception("rest module import failed", extra={"kv": {"module": mi.name}})
             continue
-        r = getattr(mod, "router", None)
+        r = getattr(mod, attr, None)
         if isinstance(r, APIRouter):
             out.append((mi.name, r))
     return out
@@ -227,6 +277,26 @@ def _default_scenarios() -> dict[str, str]:
         return {}
 
 
+def _install_d21(ctx: ApiContext) -> None:
+    """D2.1（M11-FR-221 至 FR-230）：`power:`、`viewer_seats:`、`identity:` 段（生效配置 + `AWR_*_JSON` 覆盖）、观看席位、
+    内部身份与状态文件路径（`AWR_SHOW_STATUS_FILE`，缺省 `<AWR_SHM_ROOT>/_status/show.json`）。"""
+    import os
+
+    from awr.runtime.config import section_from_env
+
+    env = dict(os.environ)
+    ctx.power = PowerView.from_cfg(section_from_env("power", env))
+    seats_cfg = SeatsConfig.from_cfg(section_from_env("viewer_seats", env), ctx.settings.max_conns)
+    ctx.seats = ViewerSeats(seats_cfg)
+    try:
+        ctx.identity = ApiIdentity.from_env(env, ctx.audit)
+    except Exception:
+        log.exception("identity service unavailable")
+        ctx.identity = None
+    ctx.status_file = status_path(env) if (ctx.settings.supervised or env.get("AWR_SHOW_STATUS_FILE")
+                                           or env.get("AWR_SHOW_STATUS_OUT")) else None
+
+
 def create_app(settings: ApiSettings | None = None, *, bus: Any = None, ring_cls: type | None = None,
                subscribe_events: bool = True) -> FastAPI:
     s = settings if settings is not None else ApiSettings.from_env()
@@ -236,6 +306,7 @@ def create_app(settings: ApiSettings | None = None, *, bus: Any = None, ring_cls
                      bus=bus, ring_cls=ring_cls,
                      external_bus=bus is not None, subscribe_events=subscribe_events,
                      audit=AuditWriter(audit_dir / "audit.jsonl" if audit_dir is not None else None))
+    _install_d21(ctx)
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

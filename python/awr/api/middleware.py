@@ -21,6 +21,12 @@ RateLimit（111）→ Idempotency-Key（321）（M11 §6.10；M11-FR-022、FR-02
 - 公开模式（ADR-082）：`/api/**` 按 `public.public_policy` 拒绝（演示站不提供的功能族 404 `305`，operator 以下角色的写请求
   除 token 签发与两个只读查询外 403 `115`），并按客户端地址追加限流类别 public_api、auth、world_query（429 `111`）。
 WebSocket 升级（`/api/rt`）的 Host、Origin 与子协议检查在 `rt/ws.py` 中以 `send_denial_response` 完成（17 §6.2）。
+
+D2（M11-FR-209；AWR-04 §11.5）：公开模式的按地址类别改按地址前缀计（IPv4 /32、IPv6 /64，`public.prefix_of`），键 `pfx:<前缀>`。
+sandbox-api（`ctx.kind == "sandbox"`）复用本中间件的 Host、Origin、请求 id、安全头、请求体上限与 Idempotency-Key；鉴权用
+`ctx.tokens`（SandboxTokenService：只验签名、过期与 scope，sid 与会话状态由路由依赖 `deps.require_sandbox_session` 判定）；
+限流改为 `ctx.rate_checks(method, path, prefix)`（`ratelimit.sandbox_rate_checks`：公开路由按前缀、会话路由按 sid）；
+D1 的公开模式策略（功能族隐藏、只读）不适用于 sandbox-api（沙盒内的权限由沙盒 token 与路由依赖决定）。
 """
 
 from __future__ import annotations
@@ -32,7 +38,7 @@ from typing import TYPE_CHECKING, Any
 from awr.runtime.principal import TokenInvalid
 
 from .problem import problem, uuid7
-from .public import public_categories, public_policy, world_of_path
+from .public import agg_prefix_of, prefix_of, public_categories, public_policy, world_of_path
 from .ratelimit import category_for_path
 
 if TYPE_CHECKING:
@@ -52,6 +58,7 @@ BODY_MAX_PERF_REPORT = 4 << 20
 IDEM_TTL_S = 60.0
 IDEM_MAX = 4096
 WRITE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
+TICKET_PREFIXES = ("q1.", "vq1.")
 
 
 def _header(scope: dict, name: bytes) -> str | None:
@@ -76,6 +83,7 @@ class AwrMiddleware:
         path: str = scope.get("path", "")
         method: str = scope.get("method", "GET").upper()
         is_api = path == "/api" or path.startswith("/api/")
+        sbx_api = path.startswith("/api/sandbox/v1")
         rid = (_header(scope, b"x-request-id") or uuid7())[:128]
         state = scope.setdefault("state", {})
         state["request_id"] = rid
@@ -96,6 +104,8 @@ class AwrMiddleware:
                 if is_api:
                     if b"awr-api-version" not in names:
                         headers.append((b"awr-api-version", b"1"))
+                    if sbx_api and b"awr-sandbox-api" not in names:
+                        headers.append((b"awr-sandbox-api", b"1"))  # 17 §17.5 第 1 条（d2-WP-04-to-M11 第 3 条）
                     if b"cache-control" not in names:
                         headers.append((b"cache-control", b"no-store"))
                 msg = {**msg, "headers": headers}
@@ -120,33 +130,65 @@ class AwrMiddleware:
                 return
         state["principal"] = None
         state["auth_error"] = None
+        state["identity"] = None
         auth = _header(scope, b"authorization")
         if auth and auth[:7].lower() == "bearer ":
-            try:
-                state["principal"] = ctx.tokens.verify(auth[7:].strip())
-            except TokenInvalid as e:
-                state["auth_error"] = str(e)
-                ctx.audit.deny(source, "token", code=302)
+            bearer = auth[7:].strip()
+            if bearer.startswith(TICKET_PREFIXES):
+                pass  # 排队票据令牌（q1. 沙盒排队、vq1. 观看排队）由路由自己校验，不当作 token 验签（d2-WP-04-to-M11 第 2 条）
+            else:
+                try:
+                    state["principal"] = ctx.tokens.verify(bearer)
+                except TokenInvalid as e:
+                    state["auth_error"] = str(e)
+                    ctx.audit.deny(source, "token", code=302)
+        idsvc = getattr(ctx, "identity", None)
+        if idsvc is not None:
+            itok = _header(scope, b"x-awr-identity")
+            if itok:
+                state["identity"] = idsvc.verify(itok.strip())  # D2.1 身份令牌（M11-FR-227）；无效时 None
         principal = state["principal"]
         if not is_api:
             await self.app(scope, receive, send_wrapped)
             return
-        if s.is_public:
-            deny = public_policy(method, path, principal.role if principal is not None else None)
+        sandbox = getattr(ctx, "kind", "show") == "sandbox"
+        pfx = prefix_of(source)
+        state["client_prefix"] = pfx  # 配额与限流的地址前缀（M17 的创建与排队把它交给池，FR-209）
+        state["client_agg_prefix"] = agg_prefix_of(source)
+        if sandbox:
+            for key, cat in ctx.rate_checks(method, path, pfx):
+                retry = ctx.limiter.check(key, cat)
+                if retry:
+                    await reply(problem(111, status=429, request_id=rid, detail={"category": cat}, retry_after_ms=retry))
+                    return
+            fast = getattr(ctx, "fast_get", None) if method == "GET" else None
+            hit = fast(path) if fast is not None else None
+            if hit is not None:
+                # 快速路径（D2-FX-R2，D2-AC-42/55）：公开容量 SB-71 的缓存响应在完成 Host、Origin、请求 id 与限流之后直接回复，
+                # 不经 FastAPI 路由匹配与依赖解析（安全头与 API 版本头仍由 send_wrapped 附加）
+                status, hdrs, data = hit
+                await send_wrapped({"type": "http.response.start", "status": status,
+                                    "headers": [*hdrs, (b"content-length", str(len(data)).encode("ascii"))]})
+                await send_wrapped({"type": "http.response.body", "body": data})
+                return
+        elif s.is_public:
+            deny = public_policy(method, path, principal.role if principal is not None else None,
+                                 identity=state.get("identity") is not None)
             if deny is not None:
                 if deny[1] == 115:
                     ctx.audit.deny(source, "public_readonly", code=115, detail={"path": path, "method": method})
                 await reply(problem(deny[1], status=deny[0], request_id=rid))
                 return
             for cat in public_categories(method, path):
-                retry = ctx.limiter.check(f"ip:{source}", cat)
+                retry = ctx.limiter.check(f"pfx:{pfx}", cat)
                 if retry:
                     await reply(problem(111, status=429, request_id=rid, detail={"category": cat}, retry_after_ms=retry))
                     return
         gw = ctx.gateway
         if principal is not None and gw is not None:
             gw.note_rest_activity(principal.id)
-        if method in WRITE_METHODS and gw is not None and gw.stopping:
+        stopping = bool(getattr(ctx, "stopping", False)) or (gw is not None and gw.stopping)
+        if method in WRITE_METHODS and stopping:
             await reply(problem(213, status=503, request_id=rid, detail={"why": "API_STOPPING"}))
             return
         body = b""
@@ -181,7 +223,7 @@ class AwrMiddleware:
 
             receive = receive_body
         key = principal.id if principal is not None else f"addr:{source}"
-        for cat in category_for_path(method, path):
+        for cat in ([] if sandbox else category_for_path(method, path)):
             retry = ctx.limiter.check(key, cat)
             if retry:
                 await reply(problem(111, status=429, request_id=rid, detail={"category": cat}, retry_after_ms=retry))

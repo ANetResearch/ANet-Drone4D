@@ -8,6 +8,11 @@
 4. 启用 faulthandler；5. JSON 行日志写 stderr（configs/logging.yaml）；6. 从注入的环境变量构造 RunCtx。
 
 秘密不经环境变量传递：`AWR_SECRET_FILE` 指向 `runs/<run>/secret`（0600），需要时 `ctx.read_secret()`。
+
+脱离模式（`AWR_DETACHED=1`，D2；AWR-04 §4.9；M17-FR-025、§9.3；M11 WP-03）：sandbox-pool 以 setsid 拉起的沙盒 sim-core
+不随拉起者退出——不设 PDEATHSIG、不做孤儿自检（池崩溃或重启期间沙盒继续运行，由新池实例按 pid 接管）；BLAS 线程变量缺省补 1
+而不是断言；`AWR_LOG_FILE` 给出时把 stdout 与 stderr 重定向到该文件（追加，0600），不依赖拉起者的管道。其余行为与受监管相同
+（`RunCtx.supervised` 为真：审计与持久目录照常写入 `AWR_PERSIST_DIR`）。
 """
 
 from __future__ import annotations
@@ -52,6 +57,8 @@ class RunCtx:
     secret_file: Path | None
     zenoh_config: Path | None = None
     profile: str = "dev"
+    detached: bool = False  # AWR_DETACHED=1：由 sandbox-pool 拉起，不随拉起者退出
+    log_file: Path | None = None  # AWR_LOG_FILE：脱离模式下 stdout 与 stderr 的去处
     _stopping: bool = field(default=False, repr=False)
     _stop_callbacks: list[Callable[[], None]] = field(default_factory=list, repr=False)
 
@@ -91,7 +98,8 @@ class RunCtx:
 
     @property
     def supervised(self) -> bool:
-        return self.supervisor_pid > 0
+        """受 supervisor 或 sandbox-pool 监管（脱离模式也算：持久目录、审计与心跳照常）。"""
+        return self.supervisor_pid > 0 or self.detached
 
     @classmethod
     def from_env(cls, name: str, env: dict[str, str] | None = None) -> RunCtx:
@@ -108,6 +116,7 @@ class RunCtx:
         last = e.get("AWR_LAST_EXIT")
         zc = e.get("AWR_ZENOH_CONFIG")
         sf = e.get("AWR_SECRET_FILE")
+        lf = e.get("AWR_LOG_FILE")
         return cls(
             name=name,
             run_id=run_id,
@@ -122,6 +131,8 @@ class RunCtx:
             secret_file=Path(sf) if sf else None,
             zenoh_config=Path(zc) if zc else None,
             profile=e.get("AWR_PROFILE", "dev"),
+            detached=e.get("AWR_DETACHED") == "1",
+            log_file=Path(lf) if lf else None,
         )
 
 
@@ -135,10 +146,34 @@ def _set_pdeathsig(sig: int) -> bool:
         return False
 
 
+def _redirect_output(path: Path) -> bool:
+    """脱离模式：stdout 与 stderr（fd 1、2）改写到日志文件（追加，0600）；失败时保持原样。"""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    except OSError:
+        return False
+    try:
+        with contextlib.suppress(Exception):
+            sys.stdout.flush()
+            sys.stderr.flush()
+        os.dup2(fd, 1)
+        os.dup2(fd, 2)
+    finally:
+        os.close(fd)
+    return True
+
+
 def init_child(name: str, *, setup_log: bool = True, env: dict[str, str] | None = None) -> RunCtx:
     """子进程启动时第一个调用（在 import numpy 之前调用可让独立运行时的 BLAS 默认值生效）。"""
     ctx = RunCtx.from_env(name, env)
-    if ctx.supervised:
+    if ctx.detached:
+        # 脱离模式（AWR_DETACHED）：不设 PDEATHSIG、不核对父进程；BLAS 变量缺省补 1；按 AWR_LOG_FILE 重定向输出
+        if ctx.log_file is not None:
+            _redirect_output(ctx.log_file)
+        for v in BLAS_VARS:
+            os.environ.setdefault(v, "1")
+    elif ctx.supervisor_pid > 0:
         _set_pdeathsig(signal.SIGTERM)
         if os.getppid() != ctx.supervisor_pid:  # supervisor 在 prctl 之前已退出：本进程已成孤儿
             sys.stderr.write(f'{{"lvl":"FATAL","proc":"{name}","msg":"supervisor gone before PDEATHSIG armed"}}\n')
@@ -163,5 +198,6 @@ def init_child(name: str, *, setup_log: bool = True, env: dict[str, str] | None 
     if setup_log:
         setup_logging(name, ctx.run_id)
     log.info("child started", extra={"kv": {"name": name, "restart_count": ctx.restart_count,
-                                            "last_exit": ctx.last_exit, "supervised": ctx.supervised}})
+                                            "last_exit": ctx.last_exit, "supervised": ctx.supervised,
+                                            "detached": ctx.detached}})
     return ctx

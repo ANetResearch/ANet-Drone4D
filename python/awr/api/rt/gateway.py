@@ -15,6 +15,23 @@ on_tick(k)：drain inbox（roster 回复、`state/sim-core/{ext,safety,sensor,de
 （api 重启后沿用，D1-AC-11a）；持有者最后一个连接关闭 → `seat_grace` + 30 s 墙钟宽限，宽限内同一 principal 重连 →
 `seat_resume`，到期 → `seat_expire`；签发 operator token 后 30 s 内既无 WS 连接也无 REST 请求的持有者同样进入宽限；
 sim-core 就绪后按缓存幂等重登记；被接管（ext）时对旧持有者的连接发 `error 116` 并以 4403 关闭。
+
+D2（M11-FR-201、FR-205、FR-206、FR-211 至 FR-214；AWR-04 §4.7；17 §17.7、§17.10.2）：
+- run 寻址来自 `RunBinding`（缺省由进程设置 `settings.binding()` 构造，show-api 行为不变）：环、run 目录、生产者、run id、
+  世界都读绑定，不读进程级字段；
+- 驱动方式 `drive`：`self`（D1，自有 60 Hz ticker 与事件循环延迟采样）或 `hub`（sandbox-api 的 GatewayHub 统一驱动：有连接时
+  `tick_once(k)` 全量 tick，无连接时 `tick_once(k, light=True)` 只排空收件箱、事件、在途调用、兴趣与 GCS 心跳，不读环、不编码）；
+- `seat_pinned`：沙盒会话的席位固定给会话 principal（ADR-093）：启动即登记、连接全部断开也不进入宽限；
+- `policy`（沙盒）：入口拒绝清单（`sys/*`、`seat/takeover`、`rec/*`、`kill`、`escalate`、`sim/reset`，115）、按 sid 的限流键与
+  沙盒类别、`sim/speed` 先经池的倍速授予再下发（M17-FR-039），以及 serverInfo 的 `sandbox` 块与 `clock.rate_cap`；
+- roster 中 `kind = target` 的条目与无人机共用 `fleet/roster.entries`（17 §17.7.2 规则 4），agent_no 按 kind 各自编号：
+  只有非 target 条目进入逐机 channel 与 `by_agent_no`；
+- D2 topic：`state/sim-core/targets` 的行原样拼接为 `swarm/target/state`；`state/sim-core/<stream>` 由 `StreamDemux`
+  按实体拆为 `target/{id}/detail`、`uav/{id}/{perception,payload,sensor/nav,sensor/radar/tracks,sensor/acoustic/bearings,
+  sensor/lidar/scan}`、`nest/{id}/status`、`task/{tid}/status`、`relay/{tid}/stats`；
+- serverInfo：`capabilities` 增加 `targets`、`perception`、`tasking`、`calendar`（对应数据首次出现时）与 `sandbox`，
+  `clock.tick_hz`、`clock.rate_cap`，沙盒会话另带 `sandbox{sid, state, world_id, template_id, expires_unix_ns, renewable, limits}`；
+- EventRing 容量可配（沙盒上下文 8192 条，M17-FR-041）。
 """
 
 from __future__ import annotations
@@ -38,14 +55,15 @@ from awr.contracts import CONTRACTS_VERSION, bus_keys
 from awr.contracts import layouts as L
 from awr.contracts import topics as T
 from awr.contracts.enums import TimeState
+from awr.runtime.binding import RunBinding
 from awr.runtime.statering import StateRing
 
 from ..audit import AuditWriter
 from ..ratelimit import RateLimiter
 from .channels import ENCODES, Channel, ChannelRegistry
 from .clock import GatewayClock, Health, _atomic_write
-from .detail import DetailDemux, EnvCache
-from .events import EventIngest
+from .detail import DetailDemux, EnvCache, StreamDemux
+from .events import EVENT_RING, EventIngest
 from .interest import GcsBeacon, InterestAggregator
 from .metrics import Metrics
 from .playback import PlaybackController, unpack_or_none
@@ -81,6 +99,8 @@ UAV_SUFFIXES = ("state", "state_ext", "safety", "env")
 CAPS_DIR = Path(__file__).resolve().parents[4] / "packages" / "contracts" / "rt" / "caps"
 DEFAULT_CLOCK = {"mode": "lockstep", "pausable": True, "max_speed": 10, "steppable": True}
 PROC_STATUS_SKIP_REASONS = ("module_missing",)
+D2_CAPS = ("targets", "perception", "tasking", "calendar")
+PIN_RECLAIM_S = 2.0  # 沙盒固定席位的重登记间隔下限
 # 启动或就绪时主动补拉其事件的辅助生产者（FX-WEB2-to-M11 第 2 条）：它们可能在 api 订阅之前发出事件、此后长时间再无后续
 # 事件（demo 下 recorder 的 `rec.started`），首见补拉不会触发。事件纪元约定为"重启次数 + 1"（AWR_RESTART_COUNT + 1）；
 # 受监管时等到首个 `sys/procs` 回复取得重启次数再探测，PROBE_FALLBACK_S 内仍无回复则按纪元 1 探测
@@ -110,15 +130,22 @@ def _load_caps() -> dict[str, dict]:
 class Gateway:
     def __init__(self, settings: ApiSettings, bus: Any, tokens: TokenService, *, ring_cls: type = StateRing,
                  world_info: dict | None = None, subscribe_events: bool = True, audit: AuditWriter | None = None,
-                 limiter: RateLimiter | None = None, confirm_key: bytes | None = None) -> None:
+                 limiter: RateLimiter | None = None, confirm_key: bytes | None = None, binding: RunBinding | None = None,
+                 drive: str = "self", event_ring: int = EVENT_RING, seat_pinned: str | None = None,
+                 policy: Any = None) -> None:
         self.settings = settings
+        self.binding = binding if binding is not None else settings.binding()
+        self.drive = drive
+        self.policy = policy
+        self.seat_pinned = seat_pinned
+        self.caps_seen: set[str] = set()
         self.bus = bus
         self.tokens = tokens
         self.audit = audit if audit is not None else AuditWriter(None)
         self.limiter = limiter if limiter is not None else RateLimiter()
         self.session_id = "gw-" + secrets.token_hex(6)
         self.mode = "live"
-        self.clock = GatewayClock(settings.run_dir)
+        self.clock = GatewayClock(self.binding.run_dir)
         self.registry = ChannelRegistry()
         for cid, topic in FIXED:
             self.registry.add_fixed(cid, topic)
@@ -131,7 +158,7 @@ class Gateway:
         self.registry.on_unadvertise = self._unadvertise_delta
         self.proc_states: dict[str, str] = {}
         self.proc_items: list[dict] = []
-        self.source = LiveSource(settings.ring_path, self.registry, self.clock, name=settings.producer,
+        self.source = LiveSource(self.binding.ring_path, self.registry, self.clock, name=self.binding.producer,
                                  ring_cls=ring_cls, on_roster_change=self._request_roster,
                                  on_layout_error=self._layout_error, sup_state=self.sup_state)
         self.live_source = self.source
@@ -143,14 +170,17 @@ class Gateway:
         self.cpub = ClientPublish(self)
         self.env = EnvCache(self, self.registry.by_topic["env/state"])
         self.demux = DetailDemux(self)
+        self.streams = StreamDemux(self)
         self.interest = InterestAggregator(self)
         self.gcs = GcsBeacon(self)
         self.metrics = Metrics()
-        self.events = EventIngest(self, subscribe=subscribe_events)
+        self.events = EventIngest(self, subscribe=subscribe_events, ring=event_ring)
         self.inbox: deque[tuple] = deque()
         self.roster: dict[str, dict] = {}
         self.roster_loaded = False
         self.by_agent_no: dict[int, str] = {}
+        self.targets: dict[str, dict] = {}  # roster 中 kind = target 的条目（D2；agent_no 在 target 内编号）
+        self.target_by_no: dict[int, str] = {}
         self.sensor_map: dict[tuple[int, int], Channel] = {}
         self.gw_roster_version = 0
         self.caps = _load_caps()
@@ -165,7 +195,7 @@ class Gateway:
         self.principal_last_ping: dict[str, int] = {}
         self.principal_last_rest: dict[str, int] = {}
         self.frame_t_sim_ns = 0
-        self.world_info = {k: v for k, v in (world_info or {"id": settings.world_id, "frame": "world"}).items()
+        self.world_info = {k: v for k, v in (world_info or {"id": self.binding.world_id, "frame": "world"}).items()
                            if v is not None}
         self.statuses: dict[str, dict] = {}
         self.sim_perf: dict[str, Any] = {}
@@ -188,12 +218,24 @@ class Gateway:
         self._probe_wanted: dict[str, int] = {}  # 生产者 -> 就绪时刻（monotonic ns），等待取得重启次数后探测
         self._procs_known = False  # 已收到 sys/procs 回复
         self._load_seat()
+        self._pin_claim_mono = 0.0
+        self.power_info: dict | None = None  # D2.1 serverInfo.power（show-api 与 hub 填写，M11-FR-229）
+        if seat_pinned:
+            self.seat = {"state": "HELD", "holder": seat_pinned}
+
+    @property
+    def producer(self) -> str:
+        return self.binding.producer
+
+    @property
+    def run_id(self) -> str:
+        return self.binding.run_id
 
     # ------------------------------------------------------------ 生命周期
     async def start(self) -> None:
         self.loop = loop = asyncio.get_running_loop()
         b = self.bus
-        p = self.settings.producer
+        p = self.binding.producer
 
         # subscribe/watch 回调只入队（PY-CB-01）；stop() 先关闭这些句柄，事件循环关闭之后不会再回调
         def sub(key: str, kind: str, prod: str = p):
@@ -215,6 +257,9 @@ class Gateway:
             sub(_with_producer(bus_keys.STATE_ENV, "replay"), "env", "replay"),
             sub(bus_keys.state_agent("agents"), "agents", "agent-runtime"),
             sub(bus_keys.state_agent("tasks"), "tasks", "agent-runtime"),
+            # D2（17 §17.10.2）：识别物摘要与按实体拆分的数据产品
+            sub(bus_keys.STATE_TARGETS, "targets"),
+            *(sub(key, f"stream:{name}") for name, key in StreamDemux.KEYS.items()),
             b.watch(bus_keys.proc_ready(p), lambda k, alive: loop.call_soon_threadsafe(self.inbox.append, ("ready", alive))),
             b.watch(bus_keys.proc_alive(p), lambda k, alive: loop.call_soon_threadsafe(self.inbox.append, ("alive", alive))),
             # 辅助生产者就绪（带历史：api 启动时已在运行的立即回调）→ 主动补拉其事件
@@ -222,11 +267,16 @@ class Gateway:
                       lambda k, alive, n=n: loop.call_soon_threadsafe(self.inbox.append, ("side_ready", n, alive)))
               for n in PROBE_PRODUCERS),
         ]
-        self._tasks.append(asyncio.ensure_future(self._ticker()))
-        self._tasks.append(asyncio.ensure_future(self._lag_sampler()))
-        if self.settings.supervised:
-            self._tasks.append(asyncio.ensure_future(self._fault_watchdog()))
-        if self.seat.get("holder") and self.seat.get("state") in ("HELD", "GRACE"):
+        if self.drive == "self":
+            self._tasks.append(asyncio.ensure_future(self._ticker()))
+            self._tasks.append(asyncio.ensure_future(self._lag_sampler()))
+            if self.settings.supervised:
+                self._tasks.append(asyncio.ensure_future(self._fault_watchdog()))
+        if self.seat_pinned:
+            # 沙盒：席位固定给会话 principal（ADR-093），启动即向 sim-core 登记（sim-core 未就绪时由 ready 回调重登记）
+            self._save_seat()
+            self._seat_op("seat_claim", self.seat_pinned)
+        elif self.seat.get("holder") and self.seat.get("state") in ("HELD", "GRACE"):
             # api 重启：沿用 gw.seat 中的持有者；持有者尚未重连时进入宽限（重连即恢复 HELD）
             holder = self.seat["holder"]
             self.seat["state"] = "HELD"
@@ -325,6 +375,30 @@ class Gateway:
             await asyncio.sleep(FAULT_REARM_S)
 
     # ------------------------------------------------------------ tick
+    def has_subscribers(self) -> bool:
+        """有已握手的连接（hub 驱动时据此决定全量 tick 还是轻量 tick）。"""
+        return any(s.hello and not s.closing for s in self.sessions)
+
+    def tick_once(self, k: int, *, light: bool = False) -> None:
+        """hub 驱动（FR-206）：全量 tick 同 D1 `on_tick`；轻量 tick 只排空收件箱、事件、在途调用、兴趣与 GCS 心跳（不读环、
+        不编码；REST 命令的结果与超时、席位与 sim-core 的 GCS 判据照常推进）。"""
+        if not light:
+            self.on_tick(k)
+            return
+        self.k = k
+        t = time.monotonic_ns()
+        try:
+            self._drain_inbox()
+            self.events.pump()
+            if k // TICK_HZ != self._sec:
+                self._sec = k // TICK_HZ
+                self.rpc.gc()
+            self.rpc.tick(t)
+            self.interest.maybe_push(t)
+            self.gcs.maybe_publish(t)
+        except Exception:
+            log.exception("gateway light tick failed")
+
     def on_tick(self, k: int) -> None:
         self.k = k
         self.stats["ticks"] += 1
@@ -385,7 +459,7 @@ class Gateway:
     def enter_replay(self, gen: int, backfill: Any) -> None:
         """open 回复：切到 ReplaySource、装入 backfill、mode = replay、全局 epoch + 1（TIME bit7）、重发 serverInfo。"""
         if self.replay_source is None:
-            self.replay_source = ReplaySource(Path(self.settings.run_dir) / "state.replay", self.registry, self.clock,
+            self.replay_source = ReplaySource(Path(self.binding.run_dir) / "state.replay", self.registry, self.clock,
                                               name="replay", ring_cls=self.ring_cls,
                                               on_roster_change=self._request_roster,
                                               on_layout_error=self._layout_error, sup_state=self.sup_state)
@@ -418,7 +492,7 @@ class Gateway:
             rs.close()
             self.replay_source = None
         self.env.reset()
-        self._request_roster(self.settings.producer)
+        self._request_roster(self.binding.producer)
         self.live_source.p.roster_version = -1  # 切回后按实时帧重建行号表
         self._poll_now()
         self.bump_epoch("playback.close")
@@ -465,6 +539,8 @@ class Gateway:
             kind = item[0]
             if kind in ("ext", "safety", "sensor", "detail", "env", "mission") and item[2] != active:
                 continue  # 非当前模式的生产者（回放中忽略实时低频状态，反之亦然）
+            if (kind == "targets" or kind.startswith("stream:")) and active != self.binding.producer:
+                continue  # D2 数据产品只来自实时生产者（回放不重放这些流）
             try:
                 if kind == "roster":
                     self._on_roster(item[1], item[2], item[3] if len(item) > 3 else None)
@@ -486,6 +562,10 @@ class Gateway:
                     self.demux.feed_agents(item[1])
                 elif kind == "tasks":
                     self.demux.feed_tasks(item[1])
+                elif kind == "targets":
+                    self.streams.feed_targets(item[1])
+                elif kind.startswith("stream:"):
+                    self.streams.feed(kind[7:], item[1])
                 elif kind == "procs":
                     self._on_procs(item[1])
                 elif kind == "ready":
@@ -584,7 +664,7 @@ class Gateway:
     def _proc_status(self, name: str, state: str, it: dict) -> None:
         self.proc_states[name] = state
         sid = f"proc.{name}"
-        if name == self.settings.producer or name == "api":
+        if name == self.binding.producer or name == "api":
             return  # sim-core 由生产者健康驱动；api 自身停止时单独发 proc.api
         skip = (state == "STOPPED" and it.get("on_demand")) or (state == "FAILED" and it.get("last_reason")
                                                                  in PROC_STATUS_SKIP_REASONS)
@@ -601,7 +681,7 @@ class Gateway:
     # ------------------------------------------------------------ roster 与逐机 channel（FR-035）
     def roster_producer(self) -> str:
         """当前模式的名册生产者：回放模式为 replay-worker（`ctl/replay/roster`），实时为 sim-core。"""
-        return "replay" if self.mode == "replay" else self.settings.producer
+        return "replay" if self.mode == "replay" else self.binding.producer
 
     def _request_roster(self, producer: str) -> None:
         """查询 `ctl/<producer>/roster`。只接受当前模式的生产者（实时事件在回放中触发的查询忽略，模式切换时各自重取）；
@@ -622,7 +702,7 @@ class Gateway:
                          timeout=1.0, retries=2)
 
     def _on_producer_ready(self) -> None:
-        self._request_roster(self.settings.producer)
+        self._request_roster(self.binding.producer)
         holder = self.seat.get("holder")
         if holder:  # sim-core 重启就绪后按缓存幂等重登记席位（M11-FR-023）
             self._seat_op("seat_claim", holder)
@@ -633,7 +713,7 @@ class Gateway:
         vid, name = data.get("vehicle_id"), data.get("file")
         if not isinstance(vid, str) or vid not in self.roster or not isinstance(name, str):
             return
-        base = (Path(self.settings.run_dir) / "paths").resolve()
+        base = (Path(self.binding.run_dir) / "paths").resolve()
         p = (base / name).resolve()
         if base not in p.parents:
             return
@@ -646,13 +726,13 @@ class Gateway:
             return
         try:
             ch = self.registry.get_or_create(f"uav/{vid}/path", entity={"kind": "uav", "id": vid},
-                                             producer=self.settings.producer)
+                                             producer=self.binding.producer)
         except ValueError:
             return
         ch.publish(blob, self.frame_t_sim_ns)
 
     def on_producer_started(self, ev: dict) -> None:
-        self._request_roster(self.settings.producer)
+        self._request_roster(self.binding.producer)
 
     def _on_roster(self, rep: Any, err: Any, producer: str | None = None) -> None:
         self._roster_inflight = False
@@ -672,7 +752,10 @@ class Gateway:
     def _apply_roster(self, rep: dict) -> None:
         self.roster_loaded = True
         entries = [e for e in rep.get("entries") or [] if isinstance(e, dict) and isinstance(e.get("id"), str)]
-        new_ids = {e["id"]: e for e in entries}
+        # 识别物（kind = target，D2）与无人机共用 entries（17 §17.7.2 规则 4）；agent_no 按 kind 各自编号，只有无人机进入
+        # 逐机 channel 与 by_agent_no
+        gone_t = self._apply_targets([e for e in entries if e.get("kind") == "target"])
+        new_ids = {e["id"]: e for e in entries if e.get("kind") != "target"}
         gone: list[int] = []
         for vid in [v for v in self.roster if v not in new_ids]:
             gone += self._drop_vehicle(vid)
@@ -689,15 +772,32 @@ class Gateway:
         self.gw_roster_version += 1
         self.roster_ch.publish(msgpack.packb({"roster_version": self.gw_roster_version, "entries": entries},
                                              use_bin_type=True), self.frame_t_sim_ns)
+        gone += gone_t
         if gone:
             self._unadvertise_delta(gone)
         if added:
             self._advertise_delta(added)
         self._update_clock_caps()
 
+    def _apply_targets(self, entries: list[dict]) -> list[int]:
+        """roster 中的识别物条目：维护 id 与 target_no 的对应，识别物消失时删除其 `target/{id}/…` channel（返回被删 channel id）。"""
+        new = {e["id"]: e for e in entries if isinstance(e.get("agent_no"), int)}
+        gone: list[int] = []
+        for tid in [t for t in self.targets if t not in new]:
+            self.targets.pop(tid, None)
+            for topic in [t for t in self.registry.by_topic if t.startswith(f"target/{tid}/")]:
+                c = self.registry.remove(topic, announce=False)
+                if c is not None:
+                    gone.append(c.id)
+        self.targets = new
+        self.target_by_no = {int(e["agent_no"]): tid for tid, e in new.items()}
+        if new:
+            self.note_cap("targets")
+        return gone
+
     def _add_vehicle(self, vid: str, e: dict) -> list[Channel]:
         ent = {"kind": e.get("kind", "uav") or "uav", "id": vid}
-        prod = e.get("producer") or self.settings.producer
+        prod = e.get("producer") or self.binding.producer
         chans: list[Channel] = []
         for suffix in UAV_SUFFIXES:
             try:
@@ -742,6 +842,13 @@ class Gateway:
             if c is not None:
                 ids.append(c.id)
         return ids
+
+    def note_cap(self, cap: str) -> None:
+        """D2 能力首次出现（识别物、感知、编排、日历）：记入 serverInfo.capabilities 并对全部连接重发 serverInfo。"""
+        if cap in self.caps_seen:
+            return
+        self.caps_seen.add(cap)
+        self._resend_server_info()
 
     def _update_clock_caps(self) -> None:
         """`serverInfo.clock` 由 roster 中在场后端的 `caps.clock` 合成；变化时对全部连接重发 serverInfo（FR-054）。"""
@@ -811,7 +918,7 @@ class Gateway:
 
     # ------------------------------------------------------------ 席位与 GCS（FR-023、FR-024）
     def _seat_path(self) -> Path | None:
-        return Path(self.settings.run_dir) / "gw.seat" if self.settings.run_dir is not None else None
+        return Path(self.binding.run_dir) / "gw.seat" if self.binding.run_dir is not None else None
 
     def _load_seat(self) -> None:
         p = self._seat_path()
@@ -834,6 +941,14 @@ class Gateway:
 
     def update_seat(self, seat: dict) -> None:
         holder = seat.get("holder")
+        if self.seat_pinned and holder != self.seat_pinned:
+            # 沙盒的固定席位：sim-core 报告的持有者不是会话 principal（无 checkpoint 重启后席位为空）时重新登记；
+            # 至多每 2 s 一次（sim-core 拒绝时不形成回复与重登记的循环）
+            now = time.monotonic()
+            if self.loop is not None and not self.stopping and now - self._pin_claim_mono >= PIN_RECLAIM_S:
+                self._pin_claim_mono = now
+                self._seat_op("seat_claim", self.seat_pinned)
+            return
         state = seat.get("state", "FREE") if holder else "FREE"
         if holder != self.seat.get("holder"):
             self.seat_since_unix_ns = time.time_ns() if holder else None  # leaseReply.seat 不带起始时间，按 api 首次观察记
@@ -904,9 +1019,29 @@ class Gateway:
                          timeout=1.0, retries=2)
         self.audit.write(f"seat.{op}", principal_id=holder, cid=cid)
 
+    async def reclaim_pinned_seat(self) -> bool:
+        """沙盒固定席位的同步重登记（D2-FX-R2：READY 后立即的写入在 sim-core 处理启动登记之前到达时，sim-core 以 116 拒绝；
+        rpc 先 await 本方法再重发一次）。只对 `seat_pinned` 生效；返回 sim-core 是否确认持有者为会话 principal。"""
+        if not self.seat_pinned or self.stopping or self.bus is None:
+            return False
+        cid = "seat-" + secrets.token_hex(6)
+        principal = self.tokens.sign_principal(self.seat_pinned, "operator", cid, conn_id=None, seat=True)
+        try:
+            rep = await self.bus.call(bus_keys.CTL_LEASE, {"v": 1, "cid": cid, "op": "seat_claim", "principal": principal},
+                                      timeout=1.0, retries=1)
+        except Exception:
+            return False
+        self._pin_claim_mono = time.monotonic()
+        seat = rep.get("seat") if isinstance(rep, dict) else None
+        if isinstance(seat, dict):
+            self.update_seat(seat)
+            return seat.get("holder") == self.seat_pinned
+        return False
+
     def _seat_session_closed(self, pid: str) -> None:
-        """T03：席位持有者的最后一个 ClientSession 关闭 → GRACE，启动 30 s 墙钟宽限。"""
-        if self.stopping or self.seat.get("holder") != pid or self.seat.get("state") not in ("HELD", "GRACE"):
+        """T03：席位持有者的最后一个 ClientSession 关闭 → GRACE，启动 30 s 墙钟宽限（沙盒的固定席位不进入宽限）。"""
+        if self.seat_pinned or self.stopping or self.seat.get("holder") != pid or \
+                self.seat.get("state") not in ("HELD", "GRACE"):
             return
         if any(s.principal.id == pid for s in self.sessions):
             return
@@ -1011,25 +1146,48 @@ class Gateway:
         """同一客户端地址的连接数（`AWR_WS_MAX_PER_IP`，公开模式；ADR-082）。"""
         return sum(1 for s in self.sessions if getattr(s, "client_ip", None) == ip)
 
+    def conn_count_prefix(self, prefix: str) -> int:
+        """同一地址前缀的连接数（D2 起 `AWR_WS_MAX_PER_IP` 按前缀计，M11-FR-209）。"""
+        return sum(1 for s in self.sessions if getattr(s, "client_prefix", None) == prefix)
+
     def server_info(self, s: ClientSession) -> dict:
         h = self.source.p
         caps = ["time", "credit", "rpc", "events", "clientPublish", "procHealth"]
         if self.playback_available():
             caps.append("playbackControl")
-        return {"op": "serverInfo", "name": "awr-gateway", "protocol": PROTOCOL, "sessionId": self.session_id,
+        caps += [c for c in D2_CAPS if c in self.caps_seen]
+        clock = dict(self.clock_caps)
+        clock["tick_hz"] = self.binding.tick_hz
+        if self.policy is not None:
+            caps.append("sandbox")
+            cap = self.policy.rate_cap()
+            if cap is not None:
+                clock["rate_cap"] = cap
+        info = {"op": "serverInfo", "name": "awr-gateway", "protocol": PROTOCOL, "sessionId": self.session_id,
                 "connId": s.conn_id, "capabilities": caps, "window": s.window, "tickHz": TICK_HZ,
                 "rateClasses": list(T.RATE_CLASSES), "world": dict(self.world_info),
-                "run": {"id": self.settings.run_id, "segment": int(h.segment or 0)}, "mode": self.mode,
+                "run": {"id": self.binding.run_id, "segment": int(h.segment or 0)}, "mode": self.mode,
                 "dataStart_ns": self.playback.data_start_ns if self.mode == "replay" else None,
-                "dataEnd_ns": self.playback.data_end_ns if self.mode == "replay" else None, "clock": dict(self.clock_caps), "role": s.role,
+                "dataEnd_ns": self.playback.data_end_ns if self.mode == "replay" else None, "clock": clock, "role": s.role,
                 "principal": s.principal.id, "seat": self.seat_for(s.principal.id), "contracts": CONTRACTS_VERSION,
                 "layouts": {k: L.SCHEMA_HASH[k] for k in INFO_SCHEMAS},
                 "limits": {"maxSubs": MAX_SUBS, "maxHighRateFull": MAX_HIGH_RATE_FULL, "ctrlQueue": CTRL_MAX,
                            "maxTextBytes": 262144, "maxBinaryBytes": 4096},
                 "serverUnix_ns": str(time.time_ns())}
+        if self.policy is not None:
+            sb = self.policy.server_info_block()
+            if sb:
+                info["sandbox"] = sb
+        if self.power_info:
+            info["power"] = dict(self.power_info)
+        ident: dict[str, Any] = {"tier": getattr(s, "identity_tier", "public")}
+        if getattr(s, "identity_exp", None):
+            ident["exp_unix_ns"] = str(int(s.identity_exp) * 1_000_000_000)
+        info["identity"] = ident
+        return info
 
     def playback_available(self) -> bool:
-        return True
+        return self.policy is None  # 沙盒不提供回放（17 §17.3.3）
 
     def handshake(self, s: ClientSession) -> None:
         """连接建立：依次 serverInfo、全量 advertise、TIME、全部活动 status（17 §6.2 第 6 步）。"""

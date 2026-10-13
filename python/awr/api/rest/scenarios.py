@@ -13,6 +13,10 @@
 | — | `POST /api/missions/{mid}/{start|pause|resume|abort}` | operator 席 | op `mission/control`（WS 服务 `mission/{mid}/*` 的 REST 镜像；CommandEngine 服务分发接入前的等价入口） |
 
 api 进程不做规划计算（AWR-03 §4.2 第 1 条）：全部任务数据经总线向 sim-core 查询；写操作携带 api 签名的 principal。
+
+D2（M10-FR-213；AWR-04 §4.7、§14.3）：运行上下文经请求级依赖 `Depends(ctx_for)` 取得，不再读 `request.app.state.awr`；
+show-api 中 `ctx_for` 恒返回唯一上下文（D1 行为不变）。sandbox-api 不挂载本路由（AWR-04 §4.7 第 3 条：沙盒的任务编辑
+经 M20 任务面板与 `mission/*` 命令）。
 """
 
 from __future__ import annotations
@@ -23,18 +27,19 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from awr.contracts import bus_keys
 
-from ..deps import Operator, Viewer, app_ctx
+from ..deps import Operator, Viewer, ctx_for
 from ..problem import ApiProblem, uuid7
 
 router = APIRouter(tags=["scenarios", "missions"])
+Ctx = Annotated[Any, Depends(ctx_for)]
 
 ROOT = Path(__file__).resolve().parents[4]
 SID_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -93,9 +98,8 @@ async def get_scenario(sid: str, _p: Viewer) -> Response:
 
 
 # ------------------------------------------------------------------------------------------------ 总线查询
-async def _query(request: Request, op: str, args: dict, *, principal: dict | None = None, cid: str | None = None) -> dict:
-    ctx = app_ctx(request)
-    bus = ctx.bus
+async def _query(ctx: Any, op: str, args: dict, *, principal: dict | None = None, cid: str | None = None) -> dict:
+    bus = getattr(ctx, "bus", None)
     if bus is None:
         raise ApiProblem(211, status=503)
     msg: dict[str, Any] = {"v": 1, "op": op, "args": args, "cid": cid or ("q-" + uuid7())}
@@ -126,8 +130,8 @@ def _check(rep: dict, *, not_found_detail: dict | None = None) -> dict:
     raise ApiProblem(code, detail=rep.get("detail"))
 
 
-def _signed(request: Request, p: Any, cid: str) -> dict:
-    gw = app_ctx(request).gateway
+def _signed(ctx: Any, p: Any, cid: str) -> dict:
+    gw = getattr(ctx, "gateway", None)
     if gw is None:
         raise ApiProblem(211, status=503)
     return gw.tokens.sign_principal(p.id, p.role, cid, conn_id=None, seat=gw.is_seat_holder(p.id))
@@ -138,25 +142,25 @@ def _strip(rep: dict) -> dict:
 
 
 @router.get("/api/scenario")
-async def current_scenario(request: Request, _p: Viewer) -> dict[str, Any]:
+async def current_scenario(ctx: Ctx, _p: Viewer) -> dict[str, Any]:
     """当前剧本的加载状态与结果（M16-to-M10 第 5 条，INT-1）：经 `ctl/sim-core/query scenario/result` 返回
     `{scenario_id, sha256, phase, result, now}`；剧本加载事件早于 api 订阅时，harness 与 e2e 以此判定"已加载"与结果。
     未加载剧本 404 `305`。"""
-    rep = _check(await _query(request, "scenario/result", {}), not_found_detail={"scenario": None})
+    rep = _check(await _query(ctx, "scenario/result", {}), not_found_detail={"scenario": None})
     return _strip(rep)
 
 
 @router.get("/api/missions")
-async def list_missions(request: Request, _p: Viewer) -> dict[str, Any]:
-    rep = _check(await _query(request, "mission/list", {}))
+async def list_missions(ctx: Ctx, _p: Viewer) -> dict[str, Any]:
+    rep = _check(await _query(ctx, "mission/list", {}))
     return {"items": rep.get("items") or [], "next_cursor": None}
 
 
 @router.get("/api/missions/preview/{preview_id}")
-async def get_preview(preview_id: str, request: Request, _p: Viewer) -> JSONResponse:
+async def get_preview(preview_id: str, ctx: Ctx, _p: Viewer) -> JSONResponse:
     if not re.match(r"^pv-[0-9a-f]{6}$", preview_id):
         raise ApiProblem(305, detail={"reason": "PREVIEW_EXPIRED"})
-    rep = await _query(request, "mission/preview/get", {"preview_id": preview_id})
+    rep = await _query(ctx, "mission/preview/get", {"preview_id": preview_id})
     if int(rep.get("code", 0) or 0) == 305:
         raise ApiProblem(305, detail={"reason": "PREVIEW_EXPIRED"})
     rep = _check(rep)
@@ -167,10 +171,10 @@ async def get_preview(preview_id: str, request: Request, _p: Viewer) -> JSONResp
 
 
 @router.get("/api/missions/{mid}")
-async def get_mission(mid: str, request: Request, _p: Viewer) -> dict[str, Any]:
+async def get_mission(mid: str, ctx: Ctx, _p: Viewer) -> dict[str, Any]:
     if not MID_RE.match(mid):
         raise ApiProblem(300, detail={"field": "mid"})
-    rep = _check(await _query(request, "mission/detail", {"mid": mid}), not_found_detail={"mid": mid})
+    rep = _check(await _query(ctx, "mission/detail", {"mid": mid}), not_found_detail={"mid": mid})
     return _strip(rep)
 
 
@@ -206,13 +210,13 @@ _IDEM: dict[tuple[str, str], dict] = {}
 
 
 @router.post("/api/missions")
-async def create_mission(body: MissionCreate, request: Request, p: Operator) -> JSONResponse:
+async def create_mission(body: MissionCreate, request: Request, ctx: Ctx, p: Operator) -> JSONResponse:
     key = request.headers.get("Idempotency-Key")
     if key and (p.id, key) in _IDEM:
         return JSONResponse(_IDEM[(p.id, key)], status_code=201, headers={"Cache-Control": "no-store"})
     cid = "r-" + uuid7()
     args = {k: v for k, v in body.model_dump().items() if v is not None}
-    rep = _check(await _query(request, "mission/create", args, principal=_signed(request, p, cid), cid=cid))
+    rep = _check(await _query(ctx, "mission/create", args, principal=_signed(ctx, p, cid), cid=cid))
     out = {"mid": rep.get("mid"), "state": rep.get("state", "IDLE"), "revision": rep.get("revision", 0)}
     if key:
         _IDEM[(p.id, key)] = out
@@ -223,15 +227,15 @@ async def create_mission(body: MissionCreate, request: Request, p: Operator) -> 
 
 
 @router.post("/api/missions/preview")
-async def preview_mission(body: MissionPreview, request: Request, _p: Viewer) -> JSONResponse:
+async def preview_mission(body: MissionPreview, ctx: Ctx, _p: Viewer) -> JSONResponse:
     args = {k: v for k, v in body.model_dump().items() if v is not None}
-    rep = _check(await _query(request, "mission/preview", args))
+    rep = _check(await _query(ctx, "mission/preview", args))
     pid = str(rep.get("preview_id"))
     loop = asyncio.get_running_loop()
     t_end = loop.time() + PREVIEW_SYNC_S
     while loop.time() < t_end:
         await asyncio.sleep(POLL_S)
-        g = await _query(request, "mission/preview/get", {"preview_id": pid})
+        g = await _query(ctx, "mission/preview/get", {"preview_id": pid})
         code = int(g.get("code", 0) or 0)
         if code:
             _check(g)
@@ -242,11 +246,11 @@ async def preview_mission(body: MissionPreview, request: Request, _p: Viewer) ->
 
 
 @router.post("/api/missions/{mid}/{op}")
-async def control_mission(mid: str, op: str, request: Request, p: Operator) -> dict[str, Any]:
+async def control_mission(mid: str, op: str, ctx: Ctx, p: Operator) -> dict[str, Any]:
     if op not in ("start", "pause", "resume", "abort") or not MID_RE.match(mid):
         raise ApiProblem(300, detail={"field": "op"})
     cid = "r-" + uuid7()
-    rep = await _query(request, "mission/control", {"mid": mid, "op": op}, principal=_signed(request, p, cid), cid=cid)
+    rep = await _query(ctx, "mission/control", {"mid": mid, "op": op}, principal=_signed(ctx, p, cid), cid=cid)
     code = int(rep.get("code", 0) or 0)
     if code:
         raise ApiProblem(code, detail=rep.get("detail"))

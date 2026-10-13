@@ -10,7 +10,11 @@
 - `public_policy()`：`/api/**` 的角色策略。演示站不提供的功能族（录制与回放、重建与任务、智能体、性能报告、rt 调试、
   进程表、OpenAPI）对 admin 以外的角色 404 `305`；写类请求（POST、PUT、PATCH、DELETE）对 operator 以下的角色只放行
   token 签发、`env/query` 与 world query 三个只读查询，其余 403 `115`；
-- `public_categories()`：公开模式追加的按客户端地址限流类别（`ratelimit.CATEGORIES` 的 public_api、auth、world_query）。
+- `public_categories()`：公开模式追加的按客户端地址限流类别（`ratelimit.CATEGORIES` 的 public_api、auth、world_query）；
+- `prefix_of()`、`agg_prefix_of()`（D2，M11-FR-209；AWR-04 §11.5；17 §17.3.4）：限流与配额按地址前缀计——IPv4 /32、IPv6 /64
+  （IPv4 映射的 IPv6 先还原为 IPv4），聚合前缀 IPv4 /24、IPv6 /48；不可解析的地址原样作为键。show-api 的公开类别与 WS 每地址
+  上限、sandbox-api 的公开路由与连接数都以前缀为键，同一 /64 内轮换 IPv6 地址不能绕过（D2-AC-23）。nginx 的 `$drone4d_prefix`
+  只做粗粒度限流（M17 PRD §6.6.7），精确计数以本函数为准。
 """
 
 from __future__ import annotations
@@ -19,9 +23,10 @@ import contextlib
 import ipaddress
 import re
 from collections.abc import Iterable
+from functools import lru_cache
 
-__all__ = ["HIDDEN_PREFIXES", "VIEWER_WRITES", "client_ip", "parse_networks", "public_categories", "public_policy",
-           "world_of_path"]
+__all__ = ["HIDDEN_PREFIXES", "VIEWER_WRITES", "agg_prefix_of", "client_ip", "parse_networks", "prefix_keys", "prefix_of",
+           "public_categories", "public_policy", "world_of_path"]
 
 Net = ipaddress.IPv4Network | ipaddress.IPv6Network
 
@@ -31,7 +36,10 @@ HIDDEN_PREFIXES = ("/api/runs", "/api/jobs", "/api/recon", "/api/agents", "/api/
                    "/api/openapi.json")
 # operator 以下角色唯一允许的写类请求（都是只读查询或 token 签发）
 VIEWER_WRITES = (re.compile(r"^/api/auth/token$"), re.compile(r"^/api/env/query$"),
-                 re.compile(r"^/api/world/[a-z0-9-]{1,63}/query$"))
+                 re.compile(r"^/api/world/[a-z0-9-]{1,63}/query$"),
+                 # D2.1（17 §17.20.3、§17.20.5）：R79、R80 内部身份；R81、R83 观看排队
+                 re.compile(r"^/api/auth/identity$"), re.compile(r"^/api/viewer/queue$"),
+                 re.compile(r"^/api/viewer/queue/vq-[a-z2-7]{10}$"))
 _WORLD_PATHS = (re.compile(r"^/worlds/([^/]+)/"), re.compile(r"^/api/worlds/([^/]+)/?$"),
                 re.compile(r"^/api/worlds/([^/]+)/"), re.compile(r"^/api/world/([^/]+)/"))
 _RANK = {"viewer": 0, "operator": 1, "admin": 2}
@@ -96,9 +104,12 @@ def world_of_path(path: str) -> str | None:
     return None
 
 
-def public_policy(method: str, path: str, role: str | None) -> tuple[int, int] | None:
-    """`/api/**` 在公开模式下的策略：返回 (HTTP 状态, 原因码) 表示拒绝，None 表示交给路由（路由依赖仍照常校验角色）。"""
+def public_policy(method: str, path: str, role: str | None, *, identity: bool = False) -> tuple[int, int] | None:
+    """`/api/**` 在公开模式下的策略：返回 (HTTP 状态, 原因码) 表示拒绝，None 表示交给路由（路由依赖仍照常校验角色）。
+    D2.1（ADR-123）：带有效身份令牌（`X-AWR-Identity`）的 GET、HEAD 按 admin 处理（隐藏功能族可读）；写入仍按 token 角色。"""
     rank = _RANK.get(role or "", -1)
+    if identity and method.upper() in ("GET", "HEAD"):
+        rank = _RANK["admin"]
     if rank < _RANK["admin"] and any(path == p or path.startswith(p + "/") for p in HIDDEN_PREFIXES):
         return 404, 305
     if method.upper() in WRITE_METHODS and rank < _RANK["operator"] and not any(rx.match(path) for rx in VIEWER_WRITES):
@@ -118,3 +129,31 @@ def public_categories(method: str, path: str) -> list[str]:
     elif m == "POST" and path.startswith("/api/world/") and path.endswith("/query"):
         cats.append("world_query")
     return cats
+
+
+def _norm(addr: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    a = _ip(addr) if addr else None
+    if isinstance(a, ipaddress.IPv6Address) and a.ipv4_mapped is not None:
+        return a.ipv4_mapped
+    return a
+
+
+@lru_cache(maxsize=4096)
+def prefix_of(addr: str, *, v4: int = 32, v6: int = 64) -> str:
+    """配额与限流的地址前缀键（IPv4 /32、IPv6 /64；`::ffff:a.b.c.d` 按 IPv4）；不可解析时原样返回。纯函数，按地址缓存
+    （每个请求两次 ipaddress 解析约占中间件开销的一半，D2-FX-R2）。"""
+    a = _norm(addr)
+    if a is None:
+        return addr or "?"
+    bits = v4 if a.version == 4 else v6
+    return str(ipaddress.ip_network(f"{a}/{bits}", strict=False))
+
+
+def agg_prefix_of(addr: str, *, v4: int = 24, v6: int = 48) -> str:
+    """聚合前缀键（IPv4 /24、IPv6 /48）。"""
+    return prefix_of(addr, v4=v4, v6=v6)
+
+
+def prefix_keys(addr: str) -> tuple[str, str]:
+    """(前缀, 聚合前缀)。"""
+    return prefix_of(addr), agg_prefix_of(addr)

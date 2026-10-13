@@ -15,15 +15,26 @@ EnvCache：`evt/sim-core/env`（kind `env.keyframe`，data 为完整 EnvKeyframe
 关键帧事件的缺口由 EventSubscriber 的 seq 补拉（`_replay`）处理，心跳 version 跳号只计数。
 
 任务状态：`state/sim-core/mission`（2 Hz，awr.mission.status.v1 的批）→ `mission/{mid}/status`（首次出现时创建并增量 advertise）。
+
+StreamDemux（D2，M11-FR-211；17 §17.7.2、§17.10.2）：
+- `state/sim-core/targets`（`{v, t_sim_ns, roster_version, rows: bin(32·n)}`，M08-FR-217）：行字节原样作为 `swarm/target/state`
+  一条记录的负载（`awr.TargetLite32.v1` × n，不重新编码）；
+- `state/sim-core/<stream>`（`{v, t_sim_ns, items: {<id>: <payload>}}`；也接受 `items` 为数组，项内以 `id`、`uav`、`tid`
+  给出实体）：按实体拆分为 `target/{id}/detail`、`uav/{id}/perception`、`uav/{id}/payload`、`uav/{id}/sensor/nav`、
+  `uav/{id}/sensor/radar/tracks`、`uav/{id}/sensor/acoustic/bearings`、`uav/{id}/sensor/lidar/scan`（blob，去掉 bin 头）、
+  `nest/{id}/status`、`task/{tid}/status`、`relay/{tid}/stats`。映射形式的子对象按字节区间切片、不重新编码；数组形式解码后逐项
+  重新打包。无人机流的键可以是 id 或 agent_no（经 roster），只为 roster 中的无人机建 channel；识别物流的键为 id 或 target_no；
+  机巢、任务与接力为全集，批中不再出现的实体其 channel 删除（增量 unadvertise）。channel 首次出现时增量 advertise。
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import msgpack
 
+from awr.contracts import bus_keys
 from awr.contracts.presets import PRESETS_SHA256
 
 from .channels import Channel
@@ -32,7 +43,7 @@ from .protocol import status_msg
 if TYPE_CHECKING:
     from .gateway import Gateway
 
-__all__ = ["DetailDemux", "EnvCache", "parse_pairs"]
+__all__ = ["DetailDemux", "EnvCache", "StreamDemux", "parse_pairs"]
 
 log = logging.getLogger("awr.api.detail")
 
@@ -176,7 +187,7 @@ class DetailDemux:
                 continue
             topic = f"mission/{it['mid']}/status"
             try:
-                ch = gw.registry.get_or_create(topic, entity=None, producer=gw.settings.producer)
+                ch = gw.registry.get_or_create(topic, entity=None, producer=gw.producer)
             except ValueError:
                 continue
             ch.publish(msgpack.packb(it, use_bin_type=True), int(it.get("t_ns") or gw.frame_t_sim_ns))
@@ -212,6 +223,149 @@ class DetailDemux:
         ch = self.gw.registry.by_topic.get("agent/tasks")
         if ch is not None:
             ch.publish(bytes(raw), self.gw.frame_t_sim_ns)
+
+
+class StreamDemux:
+    """D2 数据产品的拆分（见模块说明）。"""
+
+    # stream 名 → 总线 key（会话命名空间，生成物常量）
+    KEYS: ClassVar[dict[str, str]] = {"target_detail": bus_keys.STATE_TARGET_DETAIL, "perception": bus_keys.STATE_PERCEPTION,
+            "payload": bus_keys.STATE_PAYLOAD, "nav": bus_keys.STATE_NAV, "radar": bus_keys.STATE_RADAR,
+            "acoustic": bus_keys.STATE_ACOUSTIC, "lidar": bus_keys.STATE_LIDAR, "nests": bus_keys.STATE_NESTS,
+            "tasks": bus_keys.STATE_TASKS, "relay": bus_keys.STATE_RELAY,
+            # D2.1 场视图与读数（17 §17.20.6；d2-WP-19b-to-M11 第 2 条）
+            "field": bus_keys.STATE_FIELD, "target_quant": bus_keys.STATE_TARGET_QUANT}
+    # stream 名 → (topic 模板, 实体类别, 是否全集)
+    TOPICS: ClassVar[dict[str, tuple[str, str, bool]]] = {"target_detail": ("target/{id}/detail", "target", True), "perception": ("uav/{id}/perception", "uav", False),
+              "payload": ("uav/{id}/payload", "uav", True), "nav": ("uav/{id}/sensor/nav", "uav", False),
+              "radar": ("uav/{id}/sensor/radar/tracks", "uav", False),
+              "acoustic": ("uav/{id}/sensor/acoustic/bearings", "uav", False),
+              "lidar": ("uav/{id}/sensor/lidar/scan", "uav", False), "nests": ("nest/{id}/status", "nest", True),
+              "tasks": ("task/{id}/status", "task", True), "relay": ("relay/{id}/stats", "relay", True),
+              "field": ("field/{id}", "field", True), "target_quant": ("target/{id}/quant", "target", False)}
+    CAPS: ClassVar[dict[str, str]] = {"target_detail": "targets", "perception": "perception", "radar": "perception", "acoustic": "perception",
+            "nests": "tasking", "tasks": "tasking", "relay": "tasking", "field": "perception", "target_quant": "perception"}
+    FIELD_KEYS = ("acoustic", "visual", "thermal", "radar", "volumes")
+    ID_FIELDS = ("id", "uav", "tid", "target")
+    TARGET_TOPIC = "swarm/target/state"
+
+    def __init__(self, gw: Gateway) -> None:
+        self.gw = gw
+        self.stats: dict[str, int] = {"targets": 0, "malformed": 0, "unknown_entity": 0}
+
+    # ------------------------------------------------------------ 识别物摘要
+    def feed_targets(self, raw: bytes) -> None:
+        gw = self.gw
+        try:
+            m = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+            rows = bytes(m["rows"])
+            t = int(m.get("t_sim_ns", gw.frame_t_sim_ns))
+        except Exception:
+            self.stats["malformed"] += 1
+            return
+        if len(rows) % 32:
+            self.stats["malformed"] += 1
+            return
+        self.stats["targets"] += 1
+        try:
+            ch = gw.registry.get_or_create(self.TARGET_TOPIC, entity=None, producer=gw.producer)
+        except ValueError:
+            return
+        ch.publish(rows, t)
+        gw.note_cap("targets")
+
+    # ------------------------------------------------------------ 按实体拆分
+    def _entity_id(self, kind: str, key: Any) -> str | None:
+        gw = self.gw
+        if isinstance(key, bool):
+            return None
+        if isinstance(key, int):
+            if kind == "uav":
+                return gw.by_agent_no.get(key)
+            if kind == "target":
+                return gw.target_by_no.get(key)
+            return str(key)
+        if isinstance(key, str) and key and "/" not in key and "*" not in key and len(key) <= 64:
+            if kind == "uav" and key not in gw.roster:
+                return None
+            if kind == "field" and key not in self.FIELD_KEYS:
+                return None
+            return key
+        return None
+
+    def _items(self, name: str, raw: bytes) -> tuple[int, list[tuple[Any, bytes]]] | None:
+        """(t_sim_ns, [(键, 负载字节)])：映射形式按字节区间切片，数组形式逐项重新打包。"""
+        up = msgpack.Unpacker(raw=False, strict_map_key=False, max_buffer_size=max(1024, len(raw) + 16))
+        up.feed(raw)
+        n = up.read_map_header()
+        t: int | None = None
+        out: list[tuple[Any, bytes]] = []
+        for _ in range(n):
+            k = up.unpack()
+            if k == "t_sim_ns":
+                v = up.unpack()
+                t = int(v) if isinstance(v, int) and not isinstance(v, bool) else None
+            elif k == "items":
+                head = raw[up.tell()] if up.tell() < len(raw) else 0
+                if 0x80 <= head <= 0x8F or head in (0xDE, 0xDF):
+                    m = up.read_map_header()
+                    for _ in range(m):
+                        key = up.unpack()
+                        a = up.tell()
+                        up.skip()
+                        b = up.tell()
+                        hdr = _BIN_HDR.get(raw[a]) if a < len(raw) else None
+                        out.append((key, raw[a + hdr:b] if hdr is not None else raw[a:b]))
+                else:
+                    arr = up.unpack()
+                    for it in arr if isinstance(arr, list) else []:
+                        if isinstance(it, dict):
+                            key = next((it[f] for f in self.ID_FIELDS if f in it), None)
+                            out.append((key, msgpack.packb(it, use_bin_type=True)))
+            else:
+                up.skip()
+        return (t if t is not None else self.gw.frame_t_sim_ns), out
+
+    def feed(self, name: str, raw: bytes) -> None:
+        spec = self.TOPICS.get(name)
+        if spec is None:
+            return
+        tpl, kind, full = spec
+        try:
+            r = self._items(name, raw)
+        except Exception:
+            self.stats["malformed"] += 1
+            return
+        if r is None:
+            return
+        t, items = r
+        gw = self.gw
+        self.stats[name] = self.stats.get(name, 0) + 1
+        seen: set[str] = set()
+        for key, payload in items:
+            eid = self._entity_id(kind, key)
+            if eid is None:
+                self.stats["unknown_entity"] += 1
+                continue
+            seen.add(eid)
+            topic = tpl.format(id=eid)
+            try:
+                ch = gw.registry.get_or_create(topic, entity={"kind": kind, "id": eid}, producer=gw.producer)
+            except ValueError:
+                continue
+            ch.publish(payload, t)
+        if full and kind in ("nest", "task", "relay"):
+            head = tpl.split("/", 1)[0]
+            tail = tpl.rsplit("/", 1)[1]
+            stale = [c for c in list(gw.registry.by_topic.values())
+                     if c.topic.startswith(head + "/") and c.topic.endswith("/" + tail) and c.entity
+                     and c.entity.get("id") not in seen]
+            ids = [c.id for c in stale if gw.registry.remove(c.topic, announce=False) is not None]
+            if ids:
+                gw._unadvertise_delta(ids)
+        cap = self.CAPS.get(name)
+        if cap is not None and items:
+            gw.note_cap(cap)
 
 
 class EnvCache:

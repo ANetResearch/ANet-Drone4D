@@ -8,11 +8,18 @@ Host 白名单：{localhost, 127.0.0.1} 并上 `AWR_ALLOWED_HOSTS`（为空时�
 `AWR_ADMIN_SECRET_FILE`（不读 `runs/<run>/admin.token`），未配置时为空串，operator 与 admin 一律拒绝签发；`AWR_TRUSTED_PROXIES`
 （可信反向代理）决定限流与日志用的客户端地址；`AWR_WORLDS_ALLOW` 为世界白名单；`AWR_WS_MAX`、`AWR_WS_MAX_PER_IP` 为 WS 连接上限
 （全部、每个客户端地址）。后三项在任何模式下都可设置，缺省不限制世界、不按地址计连接。
+
+D2（M11-FR-201；AWR-04 §4.7 第 1 条）：本类是"进程级设置"（访问模式、Origin、Host、可信代理、世界白名单、连接上限、
+profile），run 相关字段（run_id、world_id、run_dir、persist_dir、secret、producer）由 `binding()` 归纳为 `RunBinding`；
+`Gateway` 按 RunBinding 实例化。show-api 只有一个绑定（D1 行为不变）；sandbox-api 为每个沙盒 run 以 `for_binding()` 派生一份
+进程级字段相同、run 字段换成该会话的设置（领域路由读 `ctx.settings.world_id` 等时得到会话的值）。WS 每地址上限按地址前缀计
+（`public.prefix_of`，FR-209）。
 """
 
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import ipaddress
 import os
 import re
@@ -22,8 +29,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from awr.contracts import CONTRACTS_VERSION, bus_keys
+from awr.runtime.binding import RunBinding
 
-from .public import client_ip, parse_networks
+from .public import client_ip, parse_networks, prefix_of
 
 __all__ = ["ACCESS_MODES", "LOOPBACK_ORIGIN_RE", "ROOT", "ApiSettings"]
 
@@ -90,7 +98,10 @@ class ApiSettings:
     procs_query: bool = False  # 未受监管时也经总线查询 sys/procs（测试与 --inproc 挂 supervisor 替身时使用）
     trusted_proxies: list[str] = field(default_factory=list)  # 可信反向代理（IP 或 CIDR），只影响限流与日志用的客户端地址
     worlds_allow: list[str] | None = None  # 世界白名单（None 不限制）：其余世界的 REST 与静态请求 404
-    max_conns_per_ip: int | None = None  # 每个客户端地址的 WS 连接上限（None 不限制；公开模式 4）
+    max_conns_per_ip: int | None = None  # 每个客户端地址前缀的 WS 连接上限（None 不限制；公开模式 4；D2 起按前缀计）
+    secret_file: Path | None = None  # AWR_SECRET_FILE（RunBinding.secret_path；秘密本身已读入 secret）
+    clock_profile: str = "d1_250"  # 时钟档（ADR-090）：共享展示 d1_250，沙盒 sandbox100
+    kind: str = "show"  # 进程角色：show（D1 api）或 sandbox（sandbox-api）
     _nets: list | None = field(default=None, init=False, repr=False, compare=False)
 
     @property
@@ -144,6 +155,27 @@ class ApiSettings:
     def ring_path(self) -> Path:
         return self.run_dir / f"state.{self.producer}"
 
+    def prefix_of(self, ip: str) -> str:
+        """WS 连接上限与公开类别限流的键：地址前缀（IPv4 /32、IPv6 /64，FR-209）。"""
+        return prefix_of(ip)
+
+    def binding(self) -> RunBinding:
+        """本进程（show-api）的唯一 run 绑定：由 run 相关字段构造（D1 的 `AWR_RUN` 等变量口径）。"""
+        rid = self.run_id
+        return RunBinding(run_id=rid, kind="sandbox" if self.kind == "sandbox" else "shared", world_id=self.world_id,
+                          run_dir=self.run_dir, ring_path=self.ring_path, namespace=self.namespace,
+                          secret_path=self.secret_file, producer=self.producer, clock_profile=self.clock_profile,
+                          persist_dir=self.persist_dir)
+
+    def for_binding(self, b: RunBinding, secret: bytes) -> ApiSettings:
+        """进程级字段不变、run 字段换成 b 的一份设置（sandbox-api 的 SessionContext；秘密为该 run 的 per-run secret）。"""
+        sandbox = b.kind == "sandbox"
+        # 沙盒 run 的命名空间里没有 supervisor（sim-core 由 sandbox-pool 监管）：不查询 sys/procs，事件探测不等待它
+        return dataclasses.replace(self, run_id=b.run_id, world_id=b.world_id, run_dir=b.run_dir, persist_dir=b.persist_dir,
+                                   secret=secret, producer=b.producer, secret_file=b.secret_path,
+                                   clock_profile=b.clock_profile, admin_password="",
+                                   supervised=self.supervised and not sandbox, procs_query=self.procs_query and not sandbox)
+
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> ApiSettings:
         """由 supervisor 注入的环境变量构造（supervised 时读取秘密文件与管理口令文件）。"""
@@ -169,6 +201,8 @@ class ApiSettings:
                 worlds_allow=allow or None, max_conns=_int(e.get("AWR_WS_MAX"), 32) or 32,
                 max_conns_per_ip=_int(e.get("AWR_WS_MAX_PER_IP"), None))
         sf = e.get("AWR_SECRET_FILE")
+        if sf:
+            s.secret_file = Path(sf)
         if sf and Path(sf).exists():
             s.secret = Path(sf).read_bytes()
         if mode == "public":

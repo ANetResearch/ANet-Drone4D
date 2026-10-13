@@ -15,7 +15,7 @@ from fastapi import APIRouter, Request
 
 from awr.contracts.enums import TimeState
 
-from ..deps import Viewer, app_ctx
+from ..deps import Viewer, ctx_for
 from ..problem import ApiProblem
 from ..rt.clock import Health
 
@@ -39,7 +39,7 @@ def session_state(health: str, time_state: int) -> str:
 
 @router.get("/current")
 async def current(request: Request, _p: Viewer) -> dict[str, Any]:
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     gw = ctx.gateway
     if gw is None:
         raise ApiProblem(211, status=503)

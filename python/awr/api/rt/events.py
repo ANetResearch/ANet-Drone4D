@@ -263,9 +263,9 @@ class EventRing:
 
 
 class EventIngest:
-    def __init__(self, gw: Gateway, *, subscribe: bool = True) -> None:
+    def __init__(self, gw: Gateway, *, subscribe: bool = True, ring: int = EVENT_RING) -> None:
         self.gw = gw
-        self.ring = EventRing(EVENT_RING)
+        self.ring = EventRing(ring)  # D1 65 536；沙盒上下文 8192（M17-FR-041）
         self.gseq = 0
         self.sub = EventSubscriber(gw.bus, on_events=self._on_events, on_gap=self._on_gap, subscribe=subscribe,
                                    backfill_first_max=BACKFILL_FIRST_MAX)
@@ -302,14 +302,16 @@ class EventIngest:
             if kind in NOT_IN_RING:
                 continue
             data = ev.get("data") if isinstance(ev.get("data"), dict) else {}
-            if kind in ("sim.started", "sim.reset") and producer == gw.settings.producer:
+            if kind in ("sim.started", "sim.reset") and producer == gw.producer:
                 gw.on_producer_started(ev)
                 if isinstance(data.get("segment"), int) and isinstance(data.get("epoch"), int):
                     self._epoch_checks.append((data["segment"], data["epoch"], time.monotonic_ns(),
                                                str(data.get("reason", ""))))
             elif kind == "proc.state":
                 gw.on_proc_state(data)
-            elif kind.startswith("seat.") and producer == gw.settings.producer:
+            elif producer == "sandbox-pool" and gw.policy is not None:
+                gw.policy.on_direct_pool_event(kind)  # 池在会话命名空间直接发布（M17-FR-029）：hub 不再转发同类事件
+            elif kind.startswith("seat.") and producer == gw.producer:
                 gw.on_seat_event(kind, data)
             self.append(kind, ev.get("t_sim_ns", 0), ev.get("t_wall_ns", 0), ev.get("severity", 0), producer,
                         ev.get("uav"), ev.get("cid"), data)

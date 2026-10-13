@@ -18,13 +18,13 @@ import hmac
 import secrets
 from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from awr.contracts import bus_keys
 from awr.runtime.bus import BusError, BusTimeout
 
-from ..deps import Operator, Viewer, app_ctx
+from ..deps import Operator, Viewer, ctx_for
 from ..problem import ApiProblem
 from ..security import principal_id_from_hint
 
@@ -37,6 +37,7 @@ class TokenRequest(BaseModel):
     principal_hint: str | None = Field(default=None, max_length=64)
     admin_secret: str | None = Field(default=None, max_length=256)
     client: str | None = Field(default=None, max_length=64)
+    identity_token: str | None = Field(default=None, max_length=4096)  # D2.1 R01 增量：代替 admin_secret（17 §17.20.5）
 
 
 class TokenResponse(BaseModel):
@@ -57,10 +58,11 @@ class WhoAmI(BaseModel):
     seat: Literal["held", "none", "other"]
     exp_unix_ns: str
     access_mode: str
+    identity: dict | None = None  # D2.1 R02 增量：{tier, exp_unix_ns}（带有效 X-AWR-Identity 时）
 
 
 async def _claim_seat(request: Request, pid: str, role: str) -> None:
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     bus = ctx.bus
     if bus is None:
         raise ApiProblem(211, status=503)
@@ -89,14 +91,30 @@ async def _claim_seat(request: Request, pid: str, role: str) -> None:
 
 @router.post("/token", response_model=TokenResponse)
 async def issue_token(body: TokenRequest, request: Request) -> TokenResponse:
-    s = app_ctx(request).settings
+    s = ctx_for(request).settings
     need_secret = body.role == "admin" or (body.role == "operator" and s.access_mode in ("lan", "public"))
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     source = getattr(request.state, "client_ip", None) or (request.client.host if request.client else "?")
-    if need_secret and s.is_public and not s.admin_password:
+    idsvc = getattr(ctx, "identity", None)
+    if need_secret and body.identity_token:
+        # D2.1：内部身份换取 admin（或 operator）token（占席位，D1 语义）；口令不经过本路径
+        ident = idsvc.verify(body.identity_token) if idsvc is not None else None
+        if ident is None:
+            why = idsvc.why(body.identity_token) if idsvc is not None else "disabled"
+            ctx.audit.deny(source, "identity_token", code=302, detail={"role": body.role, "why": why})
+            raise ApiProblem(302, status=401, detail={"why": f"identity_{why}"})
+        ctx.audit.write("auth.identity_exchange", principal_id=str(ident.get("sub")), role=body.role,
+                        detail={"jti": ident.get("jti"), "role": body.role})
+    elif need_secret and s.is_public and not s.admin_password:
         ctx.audit.deny(source, "public_readonly", code=115, detail={"role": body.role})
         raise ApiProblem(115, status=403, detail={"why": "PUBLIC_READONLY", "role": body.role})
-    if need_secret:
+    elif need_secret and s.is_public and idsvc is not None and idsvc.enabled:
+        # 公开模式的管理口令与内部身份共用同一比对、限流与锁定（AWR-04 §15.9.2；M11-FR-226）
+        v = await idsvc.check_admin_secret(body.admin_secret or "", source)
+        if not v.ok:
+            status, code, detail, headers = v.problem()
+            raise ApiProblem(code, status=status, detail=detail, headers=headers)
+    elif need_secret:
         given = (body.admin_secret or "").encode("utf-8")
         if not given or not hmac.compare_digest(given, s.admin_password.encode("utf-8")):
             ctx.audit.deny(source, "admin_secret", code=304, detail={"role": body.role})
@@ -137,7 +155,7 @@ class ConfirmResponse(BaseModel):
 @router.post("/confirm", response_model=ConfirmResponse)
 async def confirm(body: ConfirmRequest, request: Request, p: Operator) -> ConfirmResponse:
     """R03（ext）：确认令牌绑定 principal、action、target，10 s（墙钟），单次使用（17 §3.2）。"""
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     gw = ctx.gateway
     if gw is None:
         raise ApiProblem(211, status=503)
@@ -151,7 +169,50 @@ async def confirm(body: ConfirmRequest, request: Request, p: Operator) -> Confir
 
 @router.get("/whoami", response_model=WhoAmI)
 async def whoami(request: Request, p: Viewer) -> WhoAmI:
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     seat = ctx.gateway.seat_for(p.id) if ctx.gateway is not None else "none"
+    ident = getattr(request.state, "identity", None)
+    iv = {"tier": "internal", "exp_unix_ns": str(int(ident.get("exp") or 0) * 1_000_000_000)} if ident else None
     return WhoAmI(principal_id=p.id, role=p.role, run_id=ctx.settings.run_id, seat=seat,  # type: ignore[arg-type]
-                  exp_unix_ns=str(p.exp * 1_000_000_000), access_mode=ctx.settings.access_mode)
+                  exp_unix_ns=str(p.exp * 1_000_000_000), access_mode=ctx.settings.access_mode, identity=iv)
+
+
+# ---------------------------------------------------------------- D2.1 内部身份（R79、R80；17 §17.20.5；ADR-123）
+class IdentityRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    secret: str = Field(min_length=1, max_length=256)
+    principal_hint: str | None = Field(default=None, max_length=64)
+
+
+@router.post("/identity")
+async def identity_unlock(body: IdentityRequest, request: Request) -> dict:
+    """R79：show-api 是唯一比对点（M17 身份库：常量时间比对、补足 300 ms ± 25 ms、前缀、聚合前缀与全站锁定）。
+    成功 200 `{identity_token, exp_unix_ns, tier}`；错误 401 `304`；未配置 403 `115`；锁定 429 `516`；速率 429 `111`。"""
+    ctx = ctx_for(request)
+    idsvc = getattr(ctx, "identity", None)
+    if idsvc is None:
+        raise ApiProblem(115, status=403, detail={"why": "PUBLIC_READONLY"})
+    pid, _hint = principal_id_from_hint(body.principal_hint)
+    source = getattr(request.state, "client_ip", None) or (request.client.host if request.client else None)
+    secret = body.secret
+    body.secret = ""                                    # 口令只在本次比对中被引用
+    v = await idsvc.unlock(secret, source, pid)
+    del secret
+    if not v.ok or not v.token or not v.payload:
+        status, code, detail, headers = v.problem()
+        raise ApiProblem(code, status=status, detail=detail, headers=headers)
+    return {"identity_token": v.token, "exp_unix_ns": str(int(v.payload["exp"]) * 1_000_000_000), "tier": "internal"}
+
+
+@router.delete("/identity", status_code=204)
+async def identity_logout(request: Request) -> Response:
+    """R80：撤销身份令牌（jti 写入 `var/identity/revoked.json`；两个 api 与池 ≤ 1 Hz 重载）。"""
+    ctx = ctx_for(request)
+    idsvc = getattr(ctx, "identity", None)
+    tok = (request.headers.get("x-awr-identity") or "").strip()
+    if not tok:
+        raise ApiProblem(301, status=401)
+    if idsvc is None or idsvc.revoke(tok) is None:
+        why = idsvc.why(tok) if idsvc is not None else "disabled"
+        raise ApiProblem(302, status=401, detail={"why": f"identity_{why}"})
+    return Response(status_code=204)

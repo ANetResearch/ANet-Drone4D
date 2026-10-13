@@ -5,12 +5,20 @@ pydantic 校验（op 白名单、各 op 上限、坐标有限、方向为单位�
 （否则 409 `123`，detail `WORLD_NOT_IN_SESSION`）→ 每 principal 令牌桶 10 次/s、突发 10（超限 429 `111`）→
 经 `Bus.call` 转发 `svc/geo/{height,ray_hit}`，超时 1 s、同一 id 重试 2 次，仍失败 503 `211`。
 
-与 M11 的接线（见 `.cache/impl/requests/M04-to-M11.md`）：
-- `request.app.state.bus`：`awr.runtime.bus.ZenohBus`（`async call(key, msg, *, timeout, retries, retry_gap)`，总线内按同一
-  请求体重试，无回复抛 `BusTimeout`（211），错误回复抛 `BusReplyError`（213））；也接受只带 `call(key, payload, *, timeout_s)`
-  的替身（由本路由重试）；key 为相对 key；
-- `request.app.state.session_world_id`（str）或 `request.app.state.session.world_id`：当前运行世界；
-- `request.state.principal`（带 `id`）：鉴权中间件写入；缺省按客户端地址限流。
+D2（AWR-04 §4.7 第 1 条、§14.3；M11-FR-202）：运行上下文改由请求级依赖 `ctx_for(request)` 解析，不再读进程级的
+`app.state`：
+- show-api 中 `ctx_for` 恒返回唯一上下文（D1 的 `ApiContext`：`.bus` 与 `.settings.world_id`），行为不变；
+- sandbox-api 中按路径 sid 返回 `SessionContext`（`.bus` 为该会话自己的总线会话，世界取 `.binding.world_id`），
+  未知 sid、已结束与 SPAWNING 的状态码由 `ctx_for` 给出（404 `305`、410 `506`、503 `211`）；
+- M11 交付 `awr.api.deps.ctx_for` 之前退回 `awr.api.deps.app_ctx`（show-api 的同一上下文）。
+`build_sandbox_router()` 给出相对路径 `/world/{world_id}/query` 的同一处理（挂载到 `/api/sandbox/v1/sessions/{sid}`，
+供沙盒前端点选放置时 `ray_hit`）；该路由不在沙盒 REST 冻结表（SB-00 至 SB-68）中，故不以 `sandbox_router` 名称导出，
+由 M17 与 M00 在契约中登记后挂载（`.cache/impl/requests/d2-WP-14-to-M17.md`）。
+
+总线约定：`ctx.bus` 为 `awr.runtime.bus.ZenohBus`（`async call(key, msg, *, timeout, retries, retry_gap)`，总线内按同一
+请求体重试，无回复抛 `BusTimeout`（211），错误回复抛 `BusReplyError`（213））；也接受只带 `call(key, payload, *, timeout_s)`
+的替身（由本路由重试）；key 为相对 key（命名空间由总线会话决定）。`request.state.principal`（带 `id`）由鉴权中间件写入；
+缺省按客户端地址限流。
 """
 
 from __future__ import annotations
@@ -23,11 +31,16 @@ import time
 import uuid
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from awr.contracts.bus_keys import svc_geo
+
+try:  # M11（WP-03）：请求级上下文依赖
+    from awr.api.deps import ctx_for
+except ImportError:  # pragma: no cover - M11 交付前：show-api 的唯一上下文
+    from awr.api.deps import app_ctx as ctx_for
 
 try:
     from awr.runtime.bus import BusError, BusTimeout
@@ -221,12 +234,18 @@ def validate_body(body: Any) -> _Base:
     return m
 
 
-def _session_world(request: Request) -> str | None:
-    st = request.app.state
-    wid = getattr(st, "session_world_id", None)
-    if wid is None and getattr(st, "session", None) is not None:
-        wid = getattr(st.session, "world_id", None)
-    return wid
+def ctx_world(ctx: Any) -> str | None:
+    """上下文的当前世界：沙盒 `SessionContext.binding.world_id`；共享展示 `ApiContext.settings.world_id`；其余取 `world_id`。"""
+    if ctx is None:
+        return None
+    b = getattr(ctx, "binding", None)
+    if b is not None and getattr(b, "world_id", None):
+        return str(b.world_id)
+    s = getattr(ctx, "settings", None)
+    if s is not None and getattr(s, "world_id", None):
+        return str(s.world_id)
+    wid = getattr(ctx, "world_id", None)
+    return None if wid is None else str(wid)
 
 
 def _bus_retries_inside(fn) -> bool:
@@ -266,7 +285,22 @@ async def _bus_call(bus, key: str, payload: dict, timeout_s: float):
 
 
 @router.post("/api/world/{world_id}/query")
-async def world_query(world_id: str, request: Request):
+async def world_query(world_id: str, request: Request, ctx: Annotated[Any, Depends(ctx_for)]):
+    return await handle_query(world_id, request, ctx)
+
+
+def build_sandbox_router() -> APIRouter:
+    """沙盒会话内的同一路由（相对路径，挂载前缀 `/api/sandbox/v1/sessions/{sid}`）；待契约登记后由 sandbox-api 挂载。"""
+    r = APIRouter()
+
+    @r.post("/world/{world_id}/query")
+    async def sandbox_world_query(world_id: str, request: Request, ctx: Annotated[Any, Depends(ctx_for)]):
+        return await handle_query(world_id, request, ctx)
+
+    return r
+
+
+async def handle_query(world_id: str, request: Request, ctx: Any) -> JSONResponse:
     rid = request.headers.get("X-Request-Id") or str(uuid.uuid4())
     try:
         if not WORLD_ID_RE.match(world_id):
@@ -276,7 +310,7 @@ async def world_query(world_id: str, request: Request):
         except (ValueError, UnicodeDecodeError) as e:
             raise ProblemError(300, "请求体不是合法 JSON", {"reason": "SCHEMA"}) from e
         m = validate_body(body)
-        sess = _session_world(request)
+        sess = ctx_world(ctx)
         if sess is None:
             raise ProblemError(123, "当前没有运行会话", {"reason": "GEO_NOT_READY"})
         if sess != world_id:
@@ -285,7 +319,7 @@ async def world_query(world_id: str, request: Request):
         wait = BUCKETS.take(str(principal))
         if wait is not None:
             raise ProblemError(111, "几何探针请求过于频繁", {"limit_per_s": RATE_PER_S}, retry_after_ms=wait)
-        bus = getattr(request.app.state, "bus", None)
+        bus = getattr(ctx, "bus", None)
         if bus is None:
             raise ProblemError(211, "bus 不可用", None)
         op = m.op

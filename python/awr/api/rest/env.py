@@ -8,6 +8,10 @@ api 进程只做缓存读取、校验与转发（AWR-03 §4.2：不 import `awr.
 - `POST /api/env/query`：同 WS `call env/query`（≤ 256 点），经 RpcRouter 入口（限流、结构校验）转发 `ctl/sim-core/query`。
 - `POST /api/env/set`、`/api/env/preset`（ext 镜像）：同 WS `call`（席位、角色、限流 2 次/s、幂等 id），响应为首个 result。
 - `GET /api/env/streamlines/{lib}/d{deg}.awsl`（ext）：经 `ctl/sim-core/query` op `env/streamlines` 取 AWSL 字节，immutable。
+- D2（WP-09；AWR-04 §11.1、§14.3；17 §17.5 SB-60 至 SB-63、§17.6.9）：全部路由经请求级上下文 `ctx_for(request)` 取 Gateway 与总线（ADR-092，M11-FR-202：show-api 恒为唯一上下文，sandbox-api 按
+  路径 sid）；`sandbox_router`（相对路径 `/env/state`、`/env/preset`、`/env/calendar`、`/env/query`）由 sandbox-api 以前缀
+  `/api/sandbox/v1/sessions/{sid}` 挂载（M17-FR-038），鉴权为沙盒 token（`SandboxViewer`、`SandboxOperator`，M11-FR-208）。
+  show-api 的 D1 REST 面不变（OpenAPI 快照不变）：共享展示的日历由剧本或 operator 经 WS `call env/calendar` 设置。
 """
 
 from __future__ import annotations
@@ -24,18 +28,23 @@ from pydantic import BaseModel, ConfigDict, Field
 from awr.contracts import bus_keys
 from awr.contracts.presets import FIELD_PATHS, PRESETS, PRESETS_JSON, PRESETS_SHA256
 
-from ..deps import Operator, Viewer, app_ctx
+from ..deps import Operator, SandboxOperator, SandboxViewer, Viewer, ctx_for
 from ..problem import ApiProblem, uuid7
 from .commands import RestCaller
 
 router = APIRouter(prefix="/api/env", tags=["env"])
+sandbox_router = APIRouter(tags=["env"])
 
 ETAG = f'"{PRESETS_SHA256}"'
 BUS_TIMEOUT_S = 1.0
 
 
+def _ctx(request: Request) -> Any:
+    return ctx_for(request)  # 模块级名称（测试可替换）
+
+
 def _latest_frame(request: Request) -> dict[str, Any]:
-    gw = app_ctx(request).gateway
+    gw = _ctx(request).gateway
     env = getattr(gw, "env", None) if gw is not None else None
     payload = getattr(getattr(env, "ch", None), "payload", None)
     if not payload:
@@ -70,7 +79,7 @@ def expand(frame: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _sim_query(request: Request, op: str, args: dict[str, Any]) -> dict[str, Any]:
-    bus = getattr(request.app.state, "bus", None)
+    bus = getattr(_ctx(request), "bus", None) or getattr(request.app.state, "bus", None)
     if bus is None:
         raise ApiProblem(211, status=503)
     try:
@@ -86,8 +95,7 @@ async def _sim_query(request: Request, op: str, args: dict[str, Any]) -> dict[st
     return rep
 
 
-@router.get("/state")
-async def get_state(request: Request, _p: Viewer, t_ns: int | None = None) -> JSONResponse:
+async def _state(request: Request, t_ns: int | None) -> JSONResponse:
     want_expand = request.query_params.get("expand") in ("1", "true")
     if t_ns is None:
         frame = _latest_frame(request)
@@ -95,6 +103,11 @@ async def get_state(request: Request, _p: Viewer, t_ns: int | None = None) -> JS
         rep = await _sim_query(request, "env/state", {"t_ns": int(t_ns)})
         frame = rep.get("frame") or {}
     return JSONResponse(expand(frame) if want_expand else frame)
+
+
+@router.get("/state")
+async def get_state(request: Request, _p: Viewer, t_ns: int | None = None) -> JSONResponse:
+    return await _state(request, t_ns)
 
 
 @router.get("/presets")
@@ -129,8 +142,16 @@ class PresetBody(BaseModel):
     duration_s: float | None = None
 
 
+class CalendarBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str | None = Field(default=None, max_length=96)
+    start_utc: str = Field(min_length=1, max_length=64)
+    tz: str = Field(min_length=1, max_length=64)
+    jump: bool = True
+
+
 async def _call(request: Request, p: Any, service: str, args: dict[str, Any], cid: str | None, timeout_s: float = 3.0) -> JSONResponse:
-    gw = app_ctx(request).gateway
+    gw = _ctx(request).gateway
     if gw is None:
         raise ApiProblem(211, status=503)
     cid = cid or ("r-" + uuid7())
@@ -152,12 +173,16 @@ async def _call(request: Request, p: Any, service: str, args: dict[str, Any], ci
     return JSONResponse(res)
 
 
-@router.post("/query")
-async def post_query(body: QueryBody, request: Request, p: Viewer) -> JSONResponse:
+async def _query(body: QueryBody, request: Request, p: Any) -> JSONResponse:
     if len(body.points) > 256:
         raise ApiProblem(110, detail={"field": "points", "max": 256})
     args = body.model_dump(exclude_none=True)
     return await _call(request, p, "env/query", args, None)
+
+
+@router.post("/query")
+async def post_query(body: QueryBody, request: Request, p: Viewer) -> JSONResponse:
+    return await _query(body, request, p)
 
 
 @router.post("/set")
@@ -170,6 +195,33 @@ async def post_set(body: SetBody, request: Request, p: Operator) -> JSONResponse
 async def post_preset(body: PresetBody, request: Request, p: Operator) -> JSONResponse:
     args = body.model_dump(exclude_none=True, exclude={"id"})
     return await _call(request, p, "env/preset", args, body.id)
+
+
+# ---------------------------------------------------------------- 沙盒路由（SB-60 至 SB-63，17 §17.5）
+@sandbox_router.get("/env/state")
+async def sb_get_state(request: Request, _p: SandboxViewer, t_ns: int | None = None) -> JSONResponse:
+    """SB-60：EnvKeyframe（含日历、太阳、照度档）。"""
+    return await _state(request, t_ns)
+
+
+@sandbox_router.post("/env/preset")
+async def sb_post_preset(body: PresetBody, request: Request, p: SandboxOperator) -> JSONResponse:
+    """SB-61：天气预设（同 `call env/preset`）。"""
+    args = body.model_dump(exclude_none=True, exclude={"id"})
+    return await _call(request, p, "env/preset", args, body.id)
+
+
+@sandbox_router.post("/env/calendar")
+async def sb_post_calendar(body: CalendarBody, request: Request, p: SandboxOperator) -> JSONResponse:
+    """SB-62：仿真日历（同 `call env/calendar`）。"""
+    args = body.model_dump(exclude={"id"})
+    return await _call(request, p, "env/calendar", args, body.id)
+
+
+@sandbox_router.post("/env/query")
+async def sb_post_query(body: QueryBody, request: Request, p: SandboxViewer) -> JSONResponse:
+    """SB-63：环境场点查询（同 D1 R29）。"""
+    return await _query(body, request, p)
 
 
 @router.get("/streamlines/{lib}/{name}")

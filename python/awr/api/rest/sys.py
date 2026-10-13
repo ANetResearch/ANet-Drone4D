@@ -36,7 +36,7 @@ from awr.contracts import layouts as L
 from awr.contracts import topics as T
 from awr.runtime.bus import BusError, BusTimeout
 
-from ..deps import Admin, Viewer, app_ctx
+from ..deps import Admin, Viewer, ctx_for
 from ..problem import ApiProblem, uuid7
 from ..rt.clock import Health
 from ..rt.protocol import PROTOCOL
@@ -60,9 +60,17 @@ async def live() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@router.get("/api/health")
+async def health() -> JSONResponse:
+    """D2.1（M11-FR-229；17 §17.20.1）：公开的构建信息 `build{version, channel, release}`（部署目录 RELEASE 与 pyproject.toml）。"""
+    from awr.runtime.buildinfo import public_build
+
+    return JSONResponse({"status": "ok", "build": public_build()}, headers={"Cache-Control": "no-store"})
+
+
 @router.get("/api/health/ready")
 async def ready(request: Request) -> JSONResponse:
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     gw = ctx.gateway
     h = gw.last_health if gw is not None else Health.UNATTACHED
     attached = gw is not None and gw.source.p.ring is not None
@@ -81,14 +89,17 @@ def _optional_principal(request: Request) -> ApiPrincipal | None:
 
 @router.get("/api/sys/info")
 async def info(request: Request) -> dict[str, Any]:
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     s = ctx.settings
+    from awr.runtime.buildinfo import build_info, public_build
+
     out: dict[str, Any] = {"name": "awr", "version": _ver("awr") or "0.0.0", "protocol": PROTOCOL, "api_version": 1,
-                           "contracts": CONTRACTS_VERSION, "access_mode": s.access_mode}
+                           "contracts": CONTRACTS_VERSION, "access_mode": s.access_mode, "build": public_build()}
     p = _optional_principal(request)
     if p is None or (s.is_public and not p.at_least("admin")):  # 公开模式：版本与绑定细节只给 admin（ADR-082）
         return out
     gw = ctx.gateway
+    out["build"] = build_info()
     out.update({"git_commit": os.environ.get("AWR_GIT_COMMIT"), "layout_id": f"{L.LAYOUT_ID:08x}",
                 "schemas": dict(L.SCHEMA_HASH), "kernel": (gw.sim_perf.get("kernel") if gw else None) or "numpy",
                 "run_id": s.run_id, "world_id": s.world_id, "bind": s.bind, "origins": list(s.origins),
@@ -99,14 +110,14 @@ async def info(request: Request) -> dict[str, Any]:
 
 @router.get("/api/sys/config")
 async def config(request: Request) -> dict[str, Any]:
-    s = app_ctx(request).settings
+    s = ctx_for(request).settings
     return {"worlds_base": "/worlds", "static_split": False, "access_mode": s.access_mode, "tick_hz": T.TICK_HZ,
             "rate_classes": list(T.RATE_CLASSES)}
 
 
 @router.get("/api/sys/procs")
 async def procs(request: Request, p: Viewer) -> dict[str, Any]:
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     if not ctx.settings.has_supervisor or ctx.bus is None:
         raise ApiProblem(213, status=503, detail={"why": "SUPERVISOR_ABSENT"})
     msg: dict[str, Any] = {"v": 1}
@@ -130,7 +141,7 @@ async def procs(request: Request, p: Viewer) -> dict[str, Any]:
 async def events(request: Request, _p: Viewer, since: Annotated[int, Query(ge=0)] = 0,
                  limit: Annotated[int, Query(ge=1, le=1000)] = 1000, types: str | None = None,
                  level_min: Annotated[int, Query(ge=0, le=3)] = 0) -> dict[str, Any]:
-    gw = app_ctx(request).gateway
+    gw = ctx_for(request).gateway
     if gw is None:
         raise ApiProblem(211, status=503)
     ev = gw.events
@@ -160,7 +171,7 @@ class RestartRequest(BaseModel):
 @router.post("/api/sys/restart", status_code=202)
 async def restart(body: RestartRequest, request: Request, p: Admin) -> dict[str, Any]:
     """R54：重启进程或复位熔断（admin）；经 supervisor `sys/restart{name, reset_breaker, cid}`。"""
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     if not ctx.settings.has_supervisor or ctx.bus is None:
         raise ApiProblem(213, status=503, detail={"why": "SUPERVISOR_ABSENT"})
     cid = "rst-" + uuid7()
@@ -184,7 +195,7 @@ async def perf_window(request: Request, _p: Viewer, window_s: int = 60) -> dict[
     """R60：`perf/server` 数值字段的窗口聚合（600 s 的 1 Hz 环）。"""
     if not 5 <= window_s <= 600:
         raise ApiProblem(110, status=422, detail={"field": "window_s", "value": window_s, "range": [5, 600]})
-    gw = app_ctx(request).gateway
+    gw = ctx_for(request).gateway
     if gw is None:
         raise ApiProblem(211, status=503)
     out = gw.metrics.window(window_s)
@@ -223,7 +234,7 @@ def _reports_root(ctx: Any) -> Path:
 @router.post("/api/sys/perf-report", status_code=201)
 async def perf_report(request: Request, p: Viewer) -> JSONResponse:
     """R47（ext）：`awr.perf.report.v1` 全量校验后存盘；每 principal 每分钟 1 次（中间件限流）。"""
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     try:
         doc = json.loads(await request.body())
     except ValueError:
@@ -252,7 +263,7 @@ async def perf_report(request: Request, p: Viewer) -> JSONResponse:
 @router.get("/api/sys/perf-reports")
 async def perf_reports(request: Request, _p: Viewer, limit: Annotated[int, Query(ge=1, le=1000)] = 100) -> dict[str, Any]:
     """R48（ext）：报告列表 `{rid, device_class, gate, created_unix_ns, summary}`（新者在前）。"""
-    root = _reports_root(app_ctx(request))
+    root = _reports_root(ctx_for(request))
 
     def scan() -> list[dict]:
         out = []
@@ -273,7 +284,7 @@ async def perf_report_get(rid: str, request: Request, _p: Viewer) -> JSONRespons
     """R49（ext）：报告原文。"""
     if not _RID_RE.match(rid):
         raise ApiProblem(305, status=404, detail={"rid": rid})
-    root = _reports_root(app_ctx(request))
+    root = _reports_root(ctx_for(request))
     hits = [q for q in root.glob(f"*/{rid}.json")]
     if not hits:
         raise ApiProblem(305, status=404, detail={"rid": rid})
@@ -285,7 +296,7 @@ async def perf_report_get(rid: str, request: Request, _p: Viewer) -> JSONRespons
 async def audit_tail(request: Request, _p: Admin, limit: Annotated[int, Query(ge=1, le=5000)] = 500,
                      kind: str | None = None) -> dict[str, Any]:
     """R55（ext，admin）：`runs/<run>/audit.jsonl` 的尾部（可按 kind 前缀过滤）。"""
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     base = ctx.settings.persist_dir if ctx.settings.persist_dir is not None else ctx.settings.run_dir
     path = Path(base) / "audit.jsonl"
 

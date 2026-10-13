@@ -42,8 +42,9 @@ MIME = {".json": "application/json", ".geojson": "application/geo+json", ".bin":
         ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".html": "text/html; charset=utf-8",
         ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp",
         ".woff2": "font/woff2", ".woff": "font/woff", ".wasm": "application/wasm", ".txt": "text/plain; charset=utf-8",
-        ".map": "application/json"}
-SPA_RESERVED = ("api", "assets", "vehicles", "models", "demo")
+        ".map": "application/json", ".webmanifest": "application/manifest+json", ".ico": "image/x-icon"}
+SPA_RESERVED = ("api", "assets", "vehicles", "models", "demo", "build-info.json", "manifest.webmanifest")
+ROOT_FILES = ("build-info.json", "manifest.webmanifest")  # D2.1（ADR-118；AWR-04 §15.8.7；d2-WP-16-to-M11 第 4 条）
 MODEL_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 FILE_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}\.glb$")
 
@@ -255,6 +256,20 @@ def build_static_router(worlds_dir: Path, web_dist: Path | None) -> tuple[APIRou
                     return _file_response(request, p, st, {"ETag": etag, "Cache-Control": "no-cache"})
                 return pub
             r.add_api_route(f"/{top}/{{path:path}}", make(top), methods=["GET", "HEAD"])
+
+        for name in ROOT_FILES:
+            def make_root(name: str):
+                async def root_file(request: Request) -> Response:
+                    p = dist / name
+                    st = await anyio.to_thread.run_sync(_stat_file, p)
+                    if st is None:
+                        return problem(305, request_id=getattr(request.state, "request_id", None))
+                    etag = f'"{st.st_size}-{st.st_mtime_ns}"'
+                    if _etag_match(request, etag):
+                        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache"})
+                    return _file_response(request, p, st, {"ETag": etag, "Cache-Control": "no-cache"})
+                return root_file
+            r.add_api_route(f"/{name}", make_root(name), methods=["GET", "HEAD"])
 
         @r.api_route("/models/{file}", methods=["GET", "HEAD"])
         async def web_model(request: Request, file: str) -> Response:

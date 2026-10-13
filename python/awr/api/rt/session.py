@@ -59,6 +59,7 @@ class ClientSession:
         self.principal = principal
         self.role = principal.role
         self.client_ip: str | None = None  # 客户端地址（限流与连接计数，ws.rt_endpoint 填写；ADR-082）
+        self.client_prefix: str | None = None  # 地址前缀（IPv4 /32、IPv6 /64；连接上限的键，M11-FR-209）
         self.ctrl: deque[str | bytes] = deque()
         self.wake = asyncio.Event()
         self.closing = False
@@ -104,6 +105,17 @@ class ClientSession:
         self.t_open = time.monotonic()
         self.sender_task: asyncio.Task | None = None
         self._bg: asyncio.Future | None = None
+        # D2.1 节能（M11-FR-220；rt/presence.py）：最近交互（墙钟 ns，握手时为当前）、可见性、presence 限频与节能状态；
+        # 身份档（M11-FR-227，WS 子协议 ident.<令牌>）；是否占用观看席位（show-api，M11-FR-223）
+        self.last_input_ns = time.time_ns()
+        self.visible = True
+        self.presence_seen = False
+        self.presence_last_ns = 0
+        self.presence_dropped = 0
+        self.power_state = "active"
+        self.identity_tier = "public"
+        self.identity_exp: int | None = None
+        self.seat_held = False
 
     # ------------------------------------------------------------ 控制面
     def send_ctrl(self, m: dict | str | bytes) -> None:
@@ -428,7 +440,7 @@ class ClientSession:
             if update:
                 self._unref(sid)
             self.subs[sid] = {"topic": topic, "rate": rate, "mode": mode, "prio": prio,
-                              "channels": [c.id for c in chans]}
+                              "channels": [c.id for c in chans], "t_ns": time.monotonic_ns()}
             for c in chans:
                 self._ref(sid, c, fresh=not update)
             self._resort()
@@ -582,7 +594,11 @@ class ClientSession:
                 "credit_skips": self.stats["credit_skips"], "bucket_defers": self.stats["bucket_defers"],
                 "slot_overwrites": self.stats["slot_overwrites"], "srtt_ms": round(self.srtt_s() * 1e3, 3),
                 "kbps": round(self.kbps, 1), "ctrl_queue_len": len(self.ctrl), "congested": self.congested,
-                "bucket_rate_bps": round(self.bucket.rate), "client_stats": dict(self.client_stats)}
+                "bucket_rate_bps": round(self.bucket.rate), "client_stats": dict(self.client_stats),
+                "power": {"state": self.power_state, "visible": self.visible, "presence": self.presence_seen,
+                          "input_age_s": round(max(0.0, (time.time_ns() - self.last_input_ns) / 1e9), 1),
+                          "presence_dropped": self.presence_dropped},
+                "identity_tier": self.identity_tier, "seat_held": self.seat_held}
 
 
 def _wild_msgpack(pattern: str) -> bool:

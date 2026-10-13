@@ -22,7 +22,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..deps import Operator, Viewer, app_ctx
+from ..deps import Operator, Viewer, ctx_for
 from ..problem import ApiProblem, uuid7
 from ..security import ApiPrincipal
 
@@ -69,7 +69,7 @@ def _problem_from_result(r: dict) -> ApiProblem:
 
 @router.post("")
 async def post_command(body: CommandRequest, request: Request, p: Operator) -> JSONResponse:
-    ctx = app_ctx(request)
+    ctx = ctx_for(request)
     gw = ctx.gateway
     if gw is None:
         raise ApiProblem(211, status=503)
@@ -92,7 +92,7 @@ async def post_command(body: CommandRequest, request: Request, p: Operator) -> J
 @router.get("")
 async def list_commands(request: Request, _p: Viewer, uav: str | None = None,
                         active: bool = True) -> dict[str, Any]:
-    gw = app_ctx(request).gateway
+    gw = ctx_for(request).gateway
     if gw is None:
         raise ApiProblem(211, status=503)
     items = []
@@ -109,7 +109,7 @@ async def list_commands(request: Request, _p: Viewer, uav: str | None = None,
 @router.get("/{cid}")
 async def get_command(cid: str, request: Request, _p: Viewer,
                       wait_final_ms: Annotated[int, Query(ge=0, le=25000)] = 0) -> dict[str, Any]:
-    gw = app_ctx(request).gateway
+    gw = ctx_for(request).gateway
     if gw is None:
         raise ApiProblem(211, status=503)
     f = gw.rpc.inflight.get(cid)
@@ -124,7 +124,7 @@ async def get_command(cid: str, request: Request, _p: Viewer,
 
 @router.post("/{cid}/cancel")
 async def cancel_command(cid: str, request: Request, p: Operator) -> dict[str, Any]:
-    gw = app_ctx(request).gateway
+    gw = ctx_for(request).gateway
     if gw is None:
         raise ApiProblem(211, status=503)
     caller = RestCaller(p, p.role)

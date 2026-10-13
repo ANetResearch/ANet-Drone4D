@@ -58,16 +58,20 @@ import yaml
 from awr.contracts import CONTRACTS_VERSION, LAYOUT_ID, bus_keys
 from awr.contracts.presets import PRESETS_SHA256
 
+from . import procutil
 from .bus import Bus, LocalBus, Request, ZenohBus
 from .config import DEFAULT_CONFIG_PATH, ROOT, ConfigError, ProcCfg, RuntimeConfig, load_runtime_config
 from .events import EventPublisher
-from .heartbeat import read as hb_read
 from .logjson import setup_logging
 from .principal import new_admin_password, new_secret
 from .quota import RUN_ID_RE, disk_status, gc_runs
-from .statering import LayoutMismatch, RingNotReady, StateRing
+from .statering import StateRing
 
 __all__ = ["EXIT_CORE_PROC_FAILED", "STATES", "Proc", "Supervisor", "main", "new_run_id"]
+
+# D2 共享展示会话配置剧本（S7）追加的 sim-core 插件（`.plugin` 入口，顺序同 d2-WP-13-to-M11 第 2 条）
+SHOW_D2_PLUGINS = ("awr.sim.catalog.plugin", "awr.sim.fixedwing.plugin", "awr.sim.targets.plugin", "awr.sim.perception.plugin",
+                   "awr.sim.tasking.plugin")
 
 log = logging.getLogger("awr.runtime.supervisor")
 
@@ -83,24 +87,13 @@ STANDBY_DELAY_S = 0.0  # 主进程启动（或接替）时即起热备用进程�
 STANDBY_RETRY_S = 10.0  # 热备用进程在接替前退出时的重起间隔
 STANDBY_READY = b"AWR_STANDBY_READY"  # 热备用进程完成预热后在 stdout 打印的一行
 STOP_ORDER_FIRST = ("api", "sim-core")
-_CLK_TCK = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
-_PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
 
 
 def new_run_id() -> str:
     return f"r{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(2)}"
 
 
-def _pid_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+_pid_alive = procutil.pid_alive  # 公共原语已抽取到 awr.runtime.procutil（M17 的 sandbox-pool 复用，WP-03）
 
 
 def _read_admin_secret(path: str | None) -> str:
@@ -114,23 +107,8 @@ def _read_admin_secret(path: str | None) -> str:
     return lines[0].strip() if lines else ""
 
 
-def _write_private(path: Path, data: bytes) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    try:
-        os.write(fd, data)
-    finally:
-        os.close(fd)
-    os.chmod(path, 0o600)
-
-
-def _atomic_write(path: Path, data: bytes, mode: int = 0o644) -> None:
-    tmp = path.with_name(f".{path.name}.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
-    try:
-        os.write(fd, data)
-    finally:
-        os.close(fd)
-    os.replace(tmp, path)
+_write_private = procutil.write_private
+_atomic_write = procutil.atomic_write
 
 
 # ---------------------------------------------------------------- 日志收集
@@ -391,11 +369,8 @@ class Supervisor:
     def _render_child_zenoh(self) -> Path | None:
         if self.bus_kind != "zenoh":
             return None
-        cfg = ZenohBus.build_config(namespace=self.namespace, listen=["tcp/127.0.0.1:0"],
-                                    connect=[self.cfg.rendezvous_effective], lease_ms=self.cfg.bus.lease_ms)
-        path = self.run_dir / "zenoh.json5"
-        _atomic_write(path, str(cfg).encode("utf-8"), 0o600)
-        return path
+        return procutil.render_child_zenoh(self.run_dir / "zenoh.json5", namespace=self.namespace,
+                                           rendezvous=self.cfg.rendezvous_effective, lease_ms=self.cfg.bus.lease_ms)
 
     def _open_bus(self) -> None:
         if self.bus_kind == "zenoh":
@@ -467,30 +442,61 @@ class Supervisor:
             "AWR_SUPERVISOR_PID": str(os.getpid()), "AWR_ID_BASE": str(id_base), "AWR_ID_COUNT": str(id_count),
             "AWR_RESTART_COUNT": str(p.restarts), "AWR_LAST_EXIT": "" if p.last_exit is None else str(p.last_exit),
             "AWR_SECRET_FILE": str(self.persist_dir / "secret"), "AWR_WORLD": c.run.world, "AWR_SCENARIO": c.run.scenario,
-            "AWR_PROFILE": c.profile, "AWR_PROC": p.name, "AWR_PORT_OFFSET": str(c.net.port_offset),
-            "AWR_BIND": c.net.bind, "AWR_ACCESS_MODE": c.access_mode, "AWR_RUNS_DIR": str(self.persist_root),
-            "AWR_CONFIG": str(c.source_path or ""),
+            "AWR_PROC": p.name, "AWR_RUNS_DIR": str(self.persist_root),
         })
-        if c.net.origins:
-            env["AWR_ORIGINS"] = ",".join(c.net.origins)
-        if c.net.allowed_hosts:
-            env["AWR_ALLOWED_HOSTS"] = ",".join(c.net.allowed_hosts)
-        if c.net.trusted_proxies:
-            env["AWR_TRUSTED_PROXIES"] = ",".join(c.net.trusted_proxies)
-        if c.net.worlds_allow:
-            env["AWR_WORLDS_ALLOW"] = ",".join(c.net.worlds_allow)
-        env["AWR_WS_MAX"] = str(c.net.ws_max)
-        if c.net.ws_max_per_ip is not None:
-            env["AWR_WS_MAX_PER_IP"] = str(c.net.ws_max_per_ip)
-        if c.run.scenario_profile:
-            env["AWR_SCENARIO_PROFILE"] = c.run.scenario_profile
+        env.update(procutil.config_env(c))
+        # D2.1（d2-WP-04b-to-M11 第 10 条）：show-api、sandbox-pool 与 sandbox-api 共用身份库状态目录与观看状态文件；测试栈经
+        # 环境变量给出的值优先
+        sd = Path(c.identity.state_dir)
+        env.setdefault("AWR_IDENTITY_STATE_DIR", str(sd if sd.is_absolute() else self.root / sd))
+        env.setdefault("AWR_SHOW_STATUS_FILE", str(Path(c.run.shm_root) / "_status" / "show.json"))
+        if p.spec.layer == "sandbox":
+            env.update(procutil.sandbox_env(c, self.root))
         if p.spec.plugins:
             env["AWR_PLUGINS"] = ",".join(p.spec.plugins)
+        if p.spec.plugins and p.spec.run_scoped:
+            env.update(self._session_config_env(list(p.spec.plugins)))
         zc = self.run_dir / "zenoh.json5"
         if zc.exists():
             env["AWR_ZENOH_CONFIG"] = str(zc)
         env.update(self.extra_env)
         return env
+
+    def _session_config_env(self, plugins: list[str]) -> dict[str, str]:
+        """D2 共享展示的会话配置剧本（ADR-094，S7；d2-WP-13-to-M11 第 1、2 条）：`run.scenario` 指向的文件为
+        `awr.sandbox.snapshot.v1`（机巢、机队、识别物与任务，D1 剧本 schema 不能表达）时，为 sim-core 写一份副本
+        `<persist>/session.json`（`calendar.start_utc` 改为首次启动时刻的 UTC：仿真日历与北京时间同步；崩溃接替沿用首次写入的副本，
+        不重算日历），设 `AWR_SESSION_CONFIG` 由 M08 冷启动装配、`AWR_SCENARIO_LOAD=0`（M10 不按 D1 剧本加载），并在插件表后追加
+        D2 插件（`.plugin` 入口）。D1 剧本（S0–S6）不受影响。
+
+        `AWR_SHOW_CALENDAR_START`（`YYYY-MM-DDTHH:MM[:SS]Z`，可选）：首次写副本时以它代替启动时刻（浸泡工具的日切功能自检以此让
+        短运行跨过当地 04:00，`tools/bench/sandbox/soak.py --calendar-start-local`；D2-FX-R2-other）；格式不符时忽略并记日志。"""
+        sc = self.cfg.run.scenario
+        if not sc or "/" in sc or sc.startswith("."):
+            return {}
+        root = Path(os.environ.get("AWR_SCENARIOS_DIR") or self.root / "scenarios")
+        try:
+            doc = json.loads((root / f"{sc}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        if not isinstance(doc, dict) or doc.get("schema") != "awr.sandbox.snapshot.v1":
+            return {}
+        dst = self.persist_dir / "session.json"
+        if not dst.exists():
+            cal = dict(doc.get("calendar") or {})
+            cal["start_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            forced = os.environ.get("AWR_SHOW_CALENDAR_START", "").strip()
+            if forced and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?Z", forced):
+                cal["start_utc"] = forced
+            elif forced:
+                log.warning("AWR_SHOW_CALENDAR_START ignored", extra={"kv": {"value": forced[:40]}})
+            cal.setdefault("tz", "Asia/Shanghai")
+            doc["calendar"] = cal
+            with contextlib.suppress(OSError):
+                self.persist_dir.mkdir(parents=True, exist_ok=True)
+                procutil.atomic_write(dst, json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), 0o600)
+        extra = [m for m in SHOW_D2_PLUGINS if m not in plugins]
+        return {"AWR_SESSION_CONFIG": str(dst), "AWR_SCENARIO_LOAD": "0", "AWR_PLUGINS": ",".join([*plugins, *extra])}
 
     def _module_missing(self, argv: list[str]) -> str | None:
         if len(argv) >= 3 and argv[0] == sys.executable and argv[1] == "-m":
@@ -733,9 +739,7 @@ class Supervisor:
     def _reap_group(self, name: str, pgid: int) -> None:
         """子进程（新会话，pgid = pid）退出后回收其进程组的残留后代：立即 SIGTERM，`REAP_GRACE_S` 后 SIGKILL 仍存活者。
         组内已无进程时 killpg 返回 ESRCH，什么都不做；组 id 在仍有成员时不会被内核复用，不会误杀无关进程。"""
-        try:
-            os.killpg(pgid, signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
+        if not procutil.reap_group(pgid):
             return
         self.reaped_groups += 1
         log.warning("reaping leftover descendants of exited child", extra={"kv": {"name": name, "pgid": pgid}})
@@ -813,24 +817,15 @@ class Supervisor:
         proc = p.process
         if proc is None or proc.returncode is not None:
             return
-        if dump:
-            with contextlib.suppress(ProcessLookupError):
-                os.kill(proc.pid, signal.SIGUSR1)  # faulthandler 转储全部线程栈（子进程已布置时）
-            await asyncio.sleep(0.1)
-        with contextlib.suppress(ProcessLookupError):
-            proc.send_signal(sig)
-            if sig == signal.SIGKILL:
-                with contextlib.suppress(ProcessLookupError):
-                    os.kill(proc.pid, signal.SIGCONT)  # 被 SIGSTOP 挂起的进程也要能收到 SIGKILL 后回收
-        try:
-            await asyncio.wait_for(asyncio.shield(p.exited.wait()), grace_s if grace_s > 0 else 5.0)
-        except TimeoutError:
-            with contextlib.suppress(ProcessLookupError):
-                proc.kill()
-                with contextlib.suppress(ProcessLookupError):
-                    os.kill(proc.pid, signal.SIGCONT)  # 被 SIGSTOP 挂起的进程也要能收到 SIGKILL 后回收
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(asyncio.shield(p.exited.wait()), 5.0)
+
+        async def wait_exit(timeout: float) -> bool:
+            try:
+                await asyncio.wait_for(asyncio.shield(p.exited.wait()), timeout)
+                return True
+            except TimeoutError:
+                return False
+
+        await procutil.signal_and_wait(proc.pid, wait_exit, grace_s=grace_s, dump=dump, sig=sig)
 
     async def _kill_hung(self, p: Proc, reason: str) -> None:
         p.kill_reason = reason
@@ -849,33 +844,15 @@ class Supervisor:
         rel = p.spec.liveness.ring
         if not rel:
             return None
-        path = self.run_dir / rel
-        if p.ring is not None:
-            try:
-                if p.ring.identity()[0] != p.ring.mapped_ino:
-                    p.ring.close()
-                    p.ring = None
-            except Exception:
-                p.ring = None
-        if p.ring is None:
-            try:
-                p.ring = StateRing.attach(path, expect_layout_id=LAYOUT_ID)
-            except (RingNotReady, LayoutMismatch, OSError):
-                return None
-        hb = p.ring.header().heartbeat_ns
-        if hb <= p.spawn_mono_ns:
-            return None
-        return (time.monotonic_ns() - hb) / 1e6
+        age, p.ring = procutil.ring_age_ms(p.ring, self.run_dir / rel, p.spawn_mono_ns)
+        return age
 
     def _hb_age_ms(self, p: Proc) -> float | None:
         lv = p.spec.liveness
         if lv.mode == "ring":
             return self._ring_age_ms(p)
         if lv.mode == "heartbeat" and lv.heartbeat:
-            r = hb_read(self.run_dir / lv.heartbeat)
-            if r is None or r[1] != p.pid or r[0] <= p.spawn_mono_ns:
-                return None
-            return (time.monotonic_ns() - r[0]) / 1e6
+            return procutil.hb_age_ms(self.run_dir / lv.heartbeat, p.pid, p.spawn_mono_ns)
         return None
 
     def _sample_resources(self, p: Proc) -> None:
@@ -883,19 +860,15 @@ class Supervisor:
         if pid is None:
             p.cpu_pct = p.rss_mb = None
             return
-        try:
-            stat = Path(f"/proc/{pid}/stat").read_text()
-            fields = stat.rsplit(")", 1)[1].split()
-            ticks = int(fields[11]) + int(fields[12])
-            rss_pages = int(Path(f"/proc/{pid}/statm").read_text().split()[1])
-        except (OSError, ValueError, IndexError):
+        r = procutil.sample(pid)
+        if r is None:
             return
+        t, rss = r
         now = time.monotonic()
-        t = ticks / _CLK_TCK
         if p._cpu_prev is not None and now > p._cpu_prev[0]:
             p.cpu_pct = round(100.0 * (t - p._cpu_prev[1]) / (now - p._cpu_prev[0]), 1)
         p._cpu_prev = (now, t)
-        p.rss_mb = round(rss_pages * _PAGE / (1 << 20), 1)
+        p.rss_mb = round(rss, 1)
 
     async def _monitor(self) -> None:
         period = 1.0 / MONITOR_HZ

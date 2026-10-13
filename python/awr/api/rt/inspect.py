@@ -16,7 +16,7 @@ from fastapi import APIRouter, Request
 from awr.contracts import frame as F
 from awr.contracts import topics as T
 
-from ..deps import Viewer, app_ctx
+from ..deps import Viewer, app_ctx, identity_read
 from ..problem import ApiProblem
 
 __all__ = ["router"]
@@ -45,7 +45,7 @@ async def inspect(request: Request, p: Viewer, dump: str | None = None) -> dict[
     if gw is None:
         raise ApiProblem(211, status=503)
     debug = ctx.settings.profile in DEBUG_PROFILES
-    if not debug and not p.at_least("admin"):
+    if not debug and not (p.at_least("admin") or identity_read(request)):
         raise ApiProblem(115, status=403, detail={"need": "admin"})
     out = gw.inspect()
     if dump is not None:
