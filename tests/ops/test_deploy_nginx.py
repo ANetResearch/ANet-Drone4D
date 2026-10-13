@@ -168,7 +168,7 @@ def test_proxy_routes(server, uri, want):
 
 
 def test_websocket_locations(server):
-    for uri, zone in (("/api/rt", "drone4d_ws"), ("/api/sandbox/v1/sessions/sb-abcdefghij/rt", "drone4d_sbws")):
+    for uri, zone in (("/api/rt", "drone4d_ws_v2"), ("/api/sandbox/v1/sessions/sb-abcdefghij/rt", "drone4d_sbws")):
         loc = resolve(server, uri)
         assert loc.values("proxy_buffering") == [["off"]]
         assert loc.values("proxy_read_timeout") == [["3600s"]] and loc.values("proxy_send_timeout") == [["3600s"]]
