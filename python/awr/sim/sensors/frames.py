@@ -62,9 +62,15 @@ def mount_R(rpy_deg: Sequence[float]) -> np.ndarray:
 
 
 def gimbal_R(az: np.ndarray | float, el: np.ndarray | float, out: np.ndarray | None = None) -> np.ndarray:
-    """`Rz(az)·Ry(−el)`；az、el 为标量时返回 3×3，为 (n,) 时返回 (n, 3, 3)。"""
+    """`Rz(az)·Ry(−el)`；az、el 为标量时返回 3×3，为 (n,) 时返回 (n, 3, 3)。
+
+    单个角对（D2-FX-R2-sim 第 2 次）：走标量 `gimbal_R_s`（同式；math 与 numpy 的三角函数在 libm 上逐位相同，与 M13 n ≤ 8 的标量
+    路径同一约定；此前 9 次省略号下标赋值约 30 µs，M19 每次评估一个平台调用 1–3 次）。"""
     az_a = np.asarray(az, np.float64)
     el_a = np.asarray(el, np.float64)
+    if out is None and az_a.size == 1 and el_a.size == 1:
+        shape = np.broadcast(az_a, el_a).shape
+        return np.array(gimbal_R_s(az_a.item(), el_a.item())).reshape((*shape, 3, 3))
     ca, sa, ce, se = np.cos(az_a), np.sin(az_a), np.cos(el_a), np.sin(el_a)
     shape = np.broadcast(az_a, el_a).shape
     R = out if out is not None else np.empty((*shape, 3, 3))
@@ -87,8 +93,13 @@ def gimbal_R_s(az: float, el: float) -> tuple[float, ...]:
 
 
 def quat_to_R(q: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
-    """[x, y, z, w] (n, 4) -> (n, 3, 3)（输入须已归一化）。"""
+    """[x, y, z, w] (n, 4) -> (n, 3, 3)（输入须已归一化）。
+
+    单个四元数（形状 (4,) 或 (1, 4)）走标量同式（只有乘加，结果逐位相同；D2-FX-R2-sim 第 2 次：此前约 25 次 0 维 numpy 运算与 9 次
+    省略号下标赋值，约 60 µs）。"""
     q = np.asarray(q, np.float64)
+    if out is None and q.size == 4 and q.shape[-1] == 4:
+        return np.array(quat_to_R_s(*q.ravel().tolist())).reshape((*q.shape[:-1], 3, 3))
     x, y, z, w = q[..., 0], q[..., 1], q[..., 2], q[..., 3]
     R = out if out is not None else np.empty((*q.shape[:-1], 3, 3))
     xx, yy, zz = x * x, y * y, z * z

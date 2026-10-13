@@ -5,6 +5,10 @@ SimClock（tick、state、rate）、RNG 流状态、幽灵机游标。主循环�
 时跳过），序列化与写盘在 M11 CheckpointStore 的后台线程；每 1 s【仿真】一次（慢任务），SIGTERM 时 `close(final=True)`。
 恢复：supervisor 重启 sim-core 时（StateRing 复用）读取最新有效代恢复，发 `sim.restarted`；恢复后 5 s 内再次崩溃则把该代标记
 为毒性，连续 3 代中毒时从剧本起点重开（M11-FR-017）。
+
+D2（M08-FR-201、FR-206、FR-208、FR-216）：元数据记录时钟档（档位不一致的代拒绝恢复，`355 RESIM_INCOMPATIBLE`，按冷启动处理）、
+机型表的表键与限速档顺序（存档版本与会话克隆在恢复时按原顺序重建，`profile_id`、`limits_id` 下标不一致时按表键重映射）、
+识别物实体表（数组与条目）、沙盒机队实例配置。
 """
 
 from __future__ import annotations
@@ -21,7 +25,8 @@ from awr.contracts import LAYOUT_ID
 from awr.contracts.enums import Lifecycle
 from awr.runtime.checkpoint import yield_point
 
-__all__ = ["SimCheckpointer", "attach_checkpoint", "capture", "capture_ext", "restore", "restore_ext"]
+__all__ = ["CheckpointIncompatible", "SimCheckpointer", "attach_checkpoint", "capture", "capture_ext", "restore",
+           "restore_ext"]
 
 log = logging.getLogger("awr.sim.runtime.ckpt")
 
@@ -45,6 +50,12 @@ def _big_in(x: Any) -> Any:
             return int(x["__bigint__"])
         return {k: _big_in(v) for k, v in x.items()}
     return x
+
+
+class CheckpointIncompatible(RuntimeError):
+    """checkpoint 与当前进程的时钟档不一致（355 RESIM_INCOMPATIBLE，M08-FR-201）。"""
+
+    code = 355
 
 
 _YIELD_EVERY = 64  # 后台编码每批条目数：批间让出（M11 `yield_point`：缺省 `time.sleep(0)`，有 gate 时等主循环休眠）
@@ -156,7 +167,7 @@ def _roster_meta(core: Any) -> list[dict]:
     roster = [{"slot": e.slot, "id": e.id, "agent_no": e.agent_no, "kind": e.kind, "model": e.model,
                "profile_id": e.profile_id, "limits_profile": e.limits_profile, "home_enu_m": list(e.home_enu_m),
                "yaw_rad": e.yaw_rad, "initial_soc": e.initial_soc, "backend": e.backend, "lifecycle": e.lifecycle,
-               "lc_t_ns": e.lc_t_ns, "sensors": [dict(x) for x in e.sensors]} for e in ros.by_slot.values()]
+               "lc_t_ns": e.lc_t_ns, "sensors": [dict(x) for x in e.sensors], "label": e.label} for e in ros.by_slot.values()]
     roster = _CachedList(roster)  # 键不变的各代复用同一对象，编码只做一次（ADR-070）
     core._ck_roster = (key, roster)
     return roster
@@ -210,6 +221,9 @@ def capture(core: Any) -> tuple[dict[str, np.ndarray], dict]:
     """主线程：收集 checkpoint 数组与小对象（数组不拷贝：CheckpointStore.save 拷贝进空闲缓冲；元数据字典交出后只读）。"""
     f, eng, tb = core.fleet, core.engine, core.engine.table
     arrays = dict(f.checkpoint_arrays(copy=False))
+    ents = getattr(core, "entities", None)
+    if ents is not None:
+        arrays.update(ents.checkpoint_arrays(copy=False))
     live = np.flatnonzero(tb.live)
     hi = int(live[-1]) + 1 if live.size else 0  # 调用表只存活动行高水位以下（容量 8192 行约 1.5 MB；其余行均已释放）
     for k in _CT:
@@ -229,7 +243,12 @@ def capture(core: Any) -> tuple[dict[str, np.ndarray], dict]:
             "idem": _idem_meta(core, eng),
             "roster": roster, "roster_version": ros.roster_version, "next_no": ros._next_no,
             "model_seq": dict(ros._model_seq), "seat": core.lease.seat.to_json(), "leases": leases,
-            "clock": {"tick": clk.tick, "state": clk.state, "rate": clk.rate},
+            "clock": {"tick": clk.tick, "state": clk.state, "rate": clk.rate,
+                      "profile": getattr(getattr(clk, "profile", None), "name", "d1_250")},
+            "profiles": {"ids": list(core.T.ids), "limit_ids": list(core.T.limit_ids),
+                         "sessions": core.T.session_specs() if hasattr(core.T, "session_specs") else []},
+            "entities": ents.checkpoint_meta() if ents is not None else None,
+            "vehicle_cfg": {k: dict(v) for k, v in getattr(core, "vehicle_cfg", {}).items()},
             "rng": {k: _big_out(g.bit_generator.state) for k, g in core.ctx.rng.items()},
             "epoch": core.epoch, "segment": core.segment, "removing": {str(k): v for k, v in core._removing.items()},
             "stopped": list(core._stopped), "ext": capture_ext(core)}
@@ -241,7 +260,8 @@ def capture_ext(core: Any) -> dict[str, Any]:
 
     - `safety`：M09 `SafetyHooks.checkpoint()`（故障登记、链路源累计量、间距最小值与事件计数；状态块已随 FleetState）；
     - `env`：M07 `EnvironmentService.checkpoint()`（关键帧、锚点、待生效操作、阵风调度器与 RNG、Dryden 状态）；
-    - `metrics`：外部度量的最新值（ADR-058）。
+    - `metrics`：外部度量的最新值（ADR-058）；
+    - `x.<name>`：插件经 `register_checkpoint_extension` 登记的段（M20 `x.tasking`，M20-FR-075）。
     某段取不到（插件未装配或抛异常）时省略，恢复时对应插件保持冷启动状态。"""
     from ..core import metrics as MET
 
@@ -263,6 +283,12 @@ def capture_ext(core: Any) -> dict[str, Any]:
     snap = MET.external_snapshot()
     if snap:
         out["metrics"] = snap
+    # 插件登记的扩展段（`register_checkpoint_extension`；M20 的 tasking 段：机巢、任务、工作项、架次与接力，M20-FR-075）
+    for name, spec in sorted((getattr(core.reg, "ckpt_exts", None) or {}).items()):
+        try:
+            out[f"x.{name}"] = bytes(spec.save())
+        except Exception:
+            log.exception("checkpoint extension segment failed", extra={"kv": {"segment": name}})
     return out
 
 
@@ -298,6 +324,17 @@ def restore_ext(core: Any, ext: dict[str, Any] | None) -> list[str]:
     MET.external_restore(ext.get("metrics"))
     if ext.get("metrics"):
         done.append("metrics")
+    # 插件扩展段：在机群、识别物实体表、roster、租约与调用表都已恢复之后（本函数在 `restore` 的最后调用）
+    exts = getattr(core.reg, "ckpt_exts", None) or {}
+    for key in sorted(k for k in ext if isinstance(k, str) and k.startswith("x.")):
+        spec = exts.get(key[2:])
+        if spec is None or not ext.get(key):
+            continue
+        try:
+            spec.restore(bytes(ext[key]))
+            done.append(key[2:])
+        except Exception:
+            log.exception("checkpoint extension restore failed", extra={"kv": {"segment": key[2:]}})
     return done
 
 
@@ -308,16 +345,26 @@ def restore(core: Any, arrays: dict[str, np.ndarray], meta: dict) -> None:
     from ..core.roster import RosterEntry
 
     f, eng, tb = core.fleet, core.engine, core.engine.table
+    want = (meta.get("clock") or {}).get("profile", "d1_250")
+    have = getattr(getattr(core.clock, "profile", None), "name", "d1_250")
+    if want != have:
+        raise CheckpointIncompatible(f"clock profile {want} != {have}")
+    arrays = _remap_profiles(core, arrays, meta.get("profiles"))
     for s in list(core.roster.by_slot):
         f.remove(s)
     core.roster.by_slot.clear()
     core.roster.by_id.clear()
-    f.restore({k: v for k, v in arrays.items() if not k.startswith(("ct.", "lease."))}, meta["fleet"])
+    f.restore({k: v for k, v in arrays.items() if not k.startswith(("ct.", "lease.", "ent."))}, meta["fleet"])
+    ents = getattr(core, "entities", None)
+    if ents is not None:
+        ents.restore(arrays, meta.get("entities"))
+    if isinstance(meta.get("vehicle_cfg"), dict):
+        core.vehicle_cfg = {k: dict(v) for k, v in meta["vehicle_cfg"].items()}
     for e in meta["roster"]:
         re = RosterEntry(int(e["slot"]), e["id"], int(e["agent_no"]), e["kind"], e["model"], e["profile_id"],
                          e["limits_profile"], tuple(e["home_enu_m"]), float(e["yaw_rad"]), float(e["initial_soc"]),
                          backend=e["backend"], producer=core.roster.producer, lifecycle=int(e["lifecycle"]),
-                         lc_t_ns=int(e["lc_t_ns"]), sensors=[dict(x) for x in (e.get("sensors") or [])])
+                         lc_t_ns=int(e["lc_t_ns"]), sensors=[dict(x) for x in (e.get("sensors") or [])], label=e.get("label"))
         core.roster.by_slot[re.slot] = re
         core.roster.by_id[re.id] = re
     core.roster._free_lo = 0  # free_slot 的扫描下界随 roster 整体替换而复位
@@ -377,6 +424,30 @@ def restore(core: Any, arrays: dict[str, np.ndarray], meta: dict) -> None:
     for e in core.roster.by_slot.values():
         f.S.lifecycle[e.slot] = e.lifecycle
     core.restored_ext = restore_ext(core, meta.get("ext"))
+
+
+def _remap_profiles(core: Any, arrays: dict[str, np.ndarray], pm: dict | None) -> dict[str, np.ndarray]:
+    """按 checkpoint 的表键顺序重建存档版本与会话克隆，并把 `profile_id`、`limits_id` 下标重映射到当前表（M08-FR-206、FR-208）。"""
+    if not pm:
+        return arrays
+    T = core.T
+    if pm.get("sessions") and hasattr(T, "restore_sessions"):
+        T.restore_sessions(pm["sessions"])
+    for k in pm.get("ids") or []:
+        if "@" in str(k):
+            with contextlib.suppress(Exception):
+                T.resolve(str(k))
+    out = dict(arrays)
+    old_ids, old_lims = list(pm.get("ids") or []), list(pm.get("limit_ids") or [])
+    if old_ids and old_ids != list(T.ids) and "profile_id" in arrays:
+        m = np.array([T.ids.index(k) if k in T.ids else 0 for k in old_ids], np.int64)
+        a = np.asarray(arrays["profile_id"])
+        out["profile_id"] = m[np.minimum(a.astype(np.int64), len(m) - 1)].astype(a.dtype)
+    if old_lims and old_lims != list(T.limit_ids) and "limits_id" in arrays:
+        m = np.array([T.limit_ids.index(k) if k in T.limit_ids else 0 for k in old_lims], np.int64)
+        a = np.asarray(arrays["limits_id"])
+        out["limits_id"] = m[np.minimum(a.astype(np.int64), len(m) - 1)].astype(a.dtype)
+    return out
 
 
 class _BgCapture:
@@ -535,7 +606,11 @@ def attach_checkpoint(core: Any, ctx: Any) -> None:
 
     def start_and_restore() -> None:
         orig_start()
-        restore(core, ck.arrays, ck.meta)
+        try:
+            restore(core, ck.arrays, ck.meta)
+        except CheckpointIncompatible as e:  # 时钟档不一致（355）：拒绝恢复，按冷启动继续
+            log.error("checkpoint rejected", extra={"kv": {"code": e.code, "detail": str(e)}})
+            return
         lost_ms = 0
         core.events.emit("sim.restarted", t_sim_ns=ck.t_sim_ns, severity=2, epoch=core.epoch,
                          restored_t_sim_ns=int(ck.t_sim_ns), lost_ms=lost_ms, restart_count=restart_count,

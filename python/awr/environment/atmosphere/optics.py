@@ -1,8 +1,12 @@
 """光学厚度与点消光（M07-FR-006、FR-020；M07 §6.3.4、§6.3.12；g06 §4.3、§4.4；ADR-023）。
 
 `optical_depth(z0_agl, rd_z, L)`：指数霾（标高 H = 1500 m）的 Quilez 解析积分 + 平顶雾层 + 云底以下的均匀降水层；
-光学层一律以 `coordinate.ground.zM` 为 AGL 基准（两端无需 DTM）。透过率 T = exp(−tau)。Kim 波长换算与 LiDAR 双程
-透过率为 D1 桩（V0.4 由 M13 接入），V2 = ln50 / sigma_bg 以 km 代入。与 `engine/environment/atmosphere/optics.ts` 逐行对应。
+光学层一律以 `coordinate.ground.zM` 为 AGL 基准（两端无需 DTM）。透过率 T = exp(−tau)。Kim 波长换算以
+V2 = ln50 / sigma_bg（km）代入。与 `engine/environment/atmosphere/optics.ts` 逐行对应。
+
+D2（WP-09，AWR-04 §6.3 第 4 步、ADR-101）：按波长的消光 `sigma_lambda(d, λ, rho_v)` 与路径光学厚度 `optical_depth_lambda_arr`：
+气溶胶（霾与雾层）按 Kim 指数 `(λ/550)^−q(V2)` 缩放，降水与波长无关；LWIR（λ ≥ 8 µm）另加水汽项
+`sigma_wv = (0.03 + 0.012·rho_v) /km`，rho_v（g/m³）由相对湿度与日均气温按 Magnus 式求得（`water_vapour_gm3`）。550 nm 与 D1 逐位相同。
 """
 
 from __future__ import annotations
@@ -14,8 +18,9 @@ import numpy as np
 from ..weather.derive import K_V2, Derived
 from ..weather.presets import C
 
-__all__ = ["FLAG_BELOW_CLOUD_PRECIP", "FLAG_IN_FOG_LAYER", "H_HAZE", "flat_len", "kim_q", "lidar_two_way", "optical_depth",
-           "optical_depth_arr", "sigma_at", "sigma_at_arr", "sigma_lambda"]
+__all__ = ["FLAG_BELOW_CLOUD_PRECIP", "FLAG_IN_FOG_LAYER", "H_HAZE", "LWIR_MIN_NM", "flat_len", "kim_factor", "kim_q", "lidar_two_way",
+           "optical_depth", "optical_depth_arr", "optical_depth_lambda_arr", "sigma_at", "sigma_at_arr", "sigma_lambda", "sigma_wv_per_m",
+           "water_vapour_gm3"]
 
 H_HAZE = float(C["haze_scale_h_m"])
 FLAG_IN_FOG_LAYER = 16  # rt/enums.json EnvFlags
@@ -72,9 +77,34 @@ def kim_q(v2_km: float) -> float:
     return 0.0
 
 
-def sigma_lambda(d: Derived, lam_nm: float) -> float:
+LWIR_MIN_NM = 8000.0
+
+
+def water_vapour_gm3(rh: float, t_c: float) -> float:
+    """水汽密度 rho_v（g/m³）：Magnus 饱和水汽压 `e_s = 6.112·exp(17.62·T/(243.12 + T))` hPa，`rho_v = 216.7·rh·e_s/(T + 273.15)`。"""
+    t = float(t_c)
+    es = 6.112 * math.exp(17.62 * t / (243.12 + t))
+    return 216.7 * min(1.0, max(0.0, float(rh))) * es / (t + 273.15)
+
+
+def sigma_wv_per_m(rho_v_gm3: float) -> float:
+    """LWIR 水汽吸收（1/m）：0.03 + 0.012·rho_v /km（AWR-04 §6.3；中纬度夏季约 0.15–0.27 /km）。"""
+    return (0.03 + 0.012 * max(0.0, float(rho_v_gm3))) / 1000.0
+
+
+def kim_factor(d: Derived, lam_nm: float) -> float:
+    """气溶胶消光的波长比 (λ/550)^−q，q 按 Kim 由 V2 = ln50/sigma_bg（km）给出。"""
     v2_km = K_V2 / d.sigma_bg / 1000.0
-    return d.sigma_bg * (lam_nm / 550.0) ** -kim_q(v2_km) + d.sigma_precip
+    return (lam_nm / 550.0) ** -kim_q(v2_km)
+
+
+def sigma_lambda(d: Derived, lam_nm: float, rho_v_gm3: float = 0.0) -> float:
+    """地面点消光（1/m）：sigma_bg·(λ/550)^−q + sigma_precip，LWIR 另加水汽项。"""
+    v2_km = K_V2 / d.sigma_bg / 1000.0
+    s = d.sigma_bg * (lam_nm / 550.0) ** -kim_q(v2_km) + d.sigma_precip
+    if lam_nm >= LWIR_MIN_NM:
+        s += sigma_wv_per_m(rho_v_gm3)
+    return s
 
 
 def lidar_two_way(d: Derived, lam_nm: float, r_m: float) -> float:
@@ -104,6 +134,28 @@ def optical_depth_arr(z0_agl: np.ndarray, rd_z: np.ndarray, L: np.ndarray, d: De
         od = od + d.sigma_fog * _flat_len_arr(z0_agl, rd_z, L, fog_top)
     if d.sigma_precip > 0:
         od = od + d.sigma_precip * _flat_len_arr(z0_agl, rd_z, L, cloud_base)
+    return od
+
+
+def optical_depth_lambda_arr(z0_agl: np.ndarray, rd_z: np.ndarray, L: np.ndarray, d: Derived, fog_top: float, cloud_base: float,
+                             lam_nm: float, rho_v_gm3: float = 0.0) -> np.ndarray:
+    """按波长的路径光学厚度：气溶胶（霾与雾层）× Kim 波长比 + 降水 + LWIR 水汽（沿程均匀）；550 nm 时与 optical_depth_arr 逐位相同。"""
+    if lam_nm == 550.0:
+        return optical_depth_arr(z0_agl, rd_z, L, d, fog_top, cloud_base)
+    z0_agl, rd_z, L = (np.asarray(x, np.float64) for x in (z0_agl, rd_z, L))
+    a = d.sigma_haze0 * np.exp(-z0_agl / H_HAZE)
+    k = rd_z * L / H_HAZE
+    small = np.abs(k) <= 1e-4
+    with np.errstate(divide="ignore", invalid="ignore"):
+        f = np.where(small, 1.0, (1.0 - np.exp(-k)) / np.where(small, 1.0, k))
+    aer = a * L * f
+    if d.sigma_fog > 0:
+        aer = aer + d.sigma_fog * _flat_len_arr(z0_agl, rd_z, L, fog_top)
+    od = kim_factor(d, lam_nm) * aer
+    if d.sigma_precip > 0:
+        od = od + d.sigma_precip * _flat_len_arr(z0_agl, rd_z, L, cloud_base)
+    if lam_nm >= LWIR_MIN_NM:
+        od = od + sigma_wv_per_m(rho_v_gm3) * L
     return od
 
 

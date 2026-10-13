@@ -110,7 +110,7 @@ def pos_ctrl(S: FleetState, PT: np.ndarray, LT: np.ndarray, idx: np.ndarray, fal
     s = np.minimum(1.0, LT[lim, K.L_VXY] / np.maximum(nxy, 1e-6))
     vs0 = vs0 * s
     vs1 = vs1 * s
-    vs2 = _clip(vs2, -np.where(mode == K.M_TAKEOFF, K.TKO_SPEED, K.Z_VEL_MAX_UP), K.Z_VEL_MAX_DN)  # PX4 起飞 speed_up 约束
+    vs2 = _clip(vs2, -np.where(mode == K.M_TAKEOFF, K.TKO_SPEED, LT[lim, K.L_ZUP]), LT[lim, K.L_ZDN])  # PX4 起飞 speed_up 约束
     vi0 = S.vel_int[i, 0]
     vi1 = S.vel_int[i, 1]
     vi2 = _clip(S.vel_int[i, 2], -K.G, K.G)

@@ -6,6 +6,10 @@
 内核选择（M08-FR-040；ADR-038）：`FleetConfig.kernel`（环境变量 `AWR_KERNEL` 覆盖）为 numba 且 numba 可用时用融合核，否则
 退回 oracle（`kernel_fallback` 记原因，机群上限钳到 300 架）。M09 登记了 `fsm` stage 或 `safety` 状态块时不装配兜底 `fsm_min`。
 状态块：插件登记的块优先；未登记的 safety、battery、mission 使用 M08 的兜底定义（`state.FALLBACK_BLOCKS`）。
+
+D2（M08-FR-201、FR-202、FR-210 至 FR-212）：时钟档由 `FleetConfig.clock_profile`（空串为进程当前档位，`AWR_CLOCK_PROFILE`）给出；
+`step` 按档位的 tick 长度推进 `t_sim_ns`，pipeline 按档调度表解析（L1 every 1 @ 100 Hz 等）。spawn 时写构型列 `frame_kind`，
+固定翼的 slot 置 `L1 | FW`（VTOL 以 MC 模式出生）；`set_fidelity` 入队、由 ingest 在步边界执行（`kinematic_write.FidelityOps`）。
 """
 
 from __future__ import annotations
@@ -21,9 +25,11 @@ import numpy as np
 from awr.world.georef.frames import enu_to_ned, yaw_ned_from_enu
 
 from ..backends.base import EntitySpec
+from ..runtime import clock_profile as CP
 from . import kernels_l1 as KL
+from .kinematic_write import FidelityOps
 from .path import PathBuffer
-from .pipeline import TICK_NS, Pipeline, StageCtx
+from .pipeline import Pipeline, StageCtx
 from .profiles import ProfileTable
 from .px4lite import quat_from_yaw
 from .setpoint import p_stop as _p_stop
@@ -37,7 +43,7 @@ from .stages.ingest import IngestStage, SetpointMailbox
 from .stages.kinematic import KinematicStage
 from .stages.l1 import L1Oracle, L1Stage
 from .stages.tap import TapStage
-from .state import CAPACITY, FALLBACK_BLOCKS, CtrlMode, FleetState
+from .state import CAPACITY, FALLBACK_BLOCKS, FRAME_FIXED_WING, CtrlMode, FleetState
 
 __all__ = ["NUMPY_MAX_VEHICLES", "FleetConfig", "FleetSim", "resolve_kernel"]
 
@@ -70,6 +76,7 @@ class FleetConfig:
     land_detect_land_s: float = 0.5
     faults: bool = True
     omega_fail_rad_s: float = 4.0
+    clock_profile: str = ""  # 时钟档（M08-FR-201）：空串按 AWR_CLOCK_PROFILE（缺省 d1_250）；写入 meta.json 与输入日志头
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -81,7 +88,23 @@ class FleetConfig:
         k = (e.get("AWR_KERNEL") or "").strip().lower()
         if k in ("numba", "numpy"):
             c = replace(c, kernel=k)
+        cp = (e.get("AWR_CLOCK_PROFILE") or "").strip()
+        if cp and not c.clock_profile:
+            c = replace(c, clock_profile=CP.get(cp).name)
+        if "capacity" not in over:
+            # 容量：AWR_FLEET_CAPACITY，否则按时钟档（sandbox100 为 64，ClockProfile.fleet_capacity；D2-AC-08），否则 1024
+            cap_env = (e.get("AWR_FLEET_CAPACITY") or "").strip()
+            if cap_env.isdigit() and int(cap_env) > 0:
+                c = replace(c, capacity=int(cap_env))
+            else:
+                fc = c.profile().fleet_capacity
+                if fc > 0:
+                    c = replace(c, capacity=int(fc))
         return c
+
+    def profile(self) -> CP.ClockProfile:
+        """显式档位，否则按 `AWR_CLOCK_PROFILE`（缺省 d1_250）；不取进程当前档位（同一进程内先后构造的测试台互不影响）。"""
+        return CP.get(self.clock_profile) if self.clock_profile else CP.from_env()
 
 
 def resolve_kernel(requested: str) -> tuple[str, str | None]:
@@ -96,8 +119,9 @@ def resolve_kernel(requested: str) -> tuple[str, str | None]:
 class FleetSim:
     def __init__(self, cfg: FleetConfig | None = None, env: Any = None, world: Any = None, events: Any = None,
                  profiles: ProfileTable | None = None, seed: int = 0, *, reg: R.Registry | None = None,
-                 paths: PathBuffer | None = None) -> None:
+                 paths: PathBuffer | None = None, profile: CP.ClockProfile | str | None = None) -> None:
         self.cfg = cfg or FleetConfig()
+        self.clock_profile = CP.get(profile) if profile is not None else self.cfg.profile()
         self.env = env
         self.world = world
         self.events = events
@@ -121,6 +145,16 @@ class FleetSim:
         self.oracle: L1Oracle | None = None
         self.kinematic = KinematicStage()
         self.uses_fallback_fsm = False
+        self.fidelity_ops = FidelityOps()  # VTOL 保真度切换（M08-FR-212）：M21 经 set_fidelity 入队，ingest 执行
+
+    def set_fidelity(self, slots: Any, *, add: int = 0, remove: int = 0) -> None:
+        """VTOL 保真度切换（M08-FR-212）：只入队，下一步边界由 ingest 执行（写输入日志）。"""
+        self.fidelity_ops.set_fidelity(slots, add=add, remove=remove)
+
+    def frame_kind_view(self) -> np.ndarray:
+        v = self.S.frame_kind.view()
+        v.flags.writeable = False
+        return v
 
     @property
     def max_vehicles(self) -> int:
@@ -130,17 +164,28 @@ class FleetSim:
     def build_pipeline(self, *, engine: Any = None, supervisor: Any = None, ring: Any = None,
                        lease_owner: Callable[[], np.ndarray] | None = None, roster_version: Callable[[], int] = lambda: 0,
                        lifecycle: Callable[[FleetState, StageCtx], None] | None = None,
-                       wall_ns: Callable[[], int] | None = None, timer: Callable[[], int] | None = None) -> Pipeline:
+                       wall_ns: Callable[[], int] | None = None, timer: Callable[[], int] | None = None,
+                       extra: tuple = ()) -> Pipeline:
+        """装配 M08 的 stage 与插件登记的 stage（M08 §6.4.1），按时钟档解析调度（M08-FR-202）。`extra` 为组合根追加的 M08
+        stage（`tap_targets` 等，StageSpec 列表）。"""
         c = self.cfg
+        prof = self.clock_profile
         cc = ContactCfg(c.wall_step_m, c.pen_m, c.impact_vz_mps, c.land_detect_s, c.land_detect_land_s)
         self.tap = TapStage(ring, lease_owner=lease_owner or (lambda: np.zeros(self.S.capacity, np.uint8)),
-                            roster_version=roster_version, wall_ns=wall_ns, every=c.tap_every)
+                            roster_version=roster_version, wall_ns=wall_ns, every=c.tap_every, idle_opt=prof.tap_idle_opt)
         mk = R.make_stage
         L1_FID = R.Fidelity.L1 | R.Fidelity.L2
+        fops = self.fidelity_ops
+        T_ref = self
+
+        def pre(S: FleetState, ctx: StageCtx) -> None:
+            if fops.pending:
+                fops.apply(S, T_ref.T, ctx.tick, ctx.t_ns * 1e-9)
+
         builtin = [
             *mk("clock", 1, 0, 0, st_clock, owner="M08", builtin=True),
             *mk("ingest", 1, 0, 10, IngestStage(engine=engine, supervisor=supervisor, lifecycle=lifecycle,
-                                                mailbox=self.mailbox, watchdog_s=c.stream_watchdog_s),
+                                                mailbox=self.mailbox, watchdog_s=c.stream_watchdog_s, pre=pre),
                 owner="M08", builtin=True),
         ]
         self.l1 = L1Stage(self.T, self.PB, every=c.l1_every, time_stretch=c.time_stretch, stop_motion=c.stop_motion,
@@ -151,7 +196,8 @@ class FleetSim:
             self.oracle = self.l1.oracle
             for name, order, fn in self.oracle.stages():
                 builtin += mk(name, c.l1_every, 0, order, fn, owner="M08", fidelity=L1_FID, builtin=True)
-        contact = ContactStage(self.world, cc, PT=self.T.PT, kernel=self.kernel, capacity=self.S.capacity)
+        # PT 每次调用取 ctx.profiles.PT（ProfileTable 加入存档版本或会话克隆时写时复制重建矩阵，M08-FR-208）
+        contact = ContactStage(self.world, cc, PT=None, kernel=self.kernel, capacity=self.S.capacity)
         builtin += [
             *mk("kinematic", c.l1_every, 0, 85, self.kinematic, owner="M08", fidelity=R.Fidelity.L0, builtin=True),
             *mk("contact", c.l1_every, 0, 90, contact, owner="M08", fidelity=L1_FID, builtin=True),
@@ -160,23 +206,37 @@ class FleetSim:
             *mk("cmd_watch", 5, 4, 128, st_cmd_watch, owner="M08", builtin=True),
             *mk("tap", c.tap_every, 0, 140, self.tap, owner="M08", builtin=True),
         ]
+        builtin += list(extra)
         names = {B.base_name(s.name) for s in self.reg.stages}
         self.uses_fallback_fsm = "fsm" not in names and "safety" not in self.reg.blocks
         if self.uses_fallback_fsm:
             builtin += mk("fsm_min", c.l1_every, 0, 95, FsmMin(), owner="M08", builtin=True)
-        self.pipeline = Pipeline.build(builtin, self.reg, timer=timer)
+        self.pipeline = Pipeline.build(builtin, self.reg, timer=timer, profile=prof)
+        # 按档解析后的 every 回写到按 every 计步长的 M08 stage 对象（L1 物理与控制、oracle 6 段、tap 节流）
+        sp = self.pipeline.spec("l1") or self.pipeline.spec("refgen")
+        if sp is not None:
+            self.l1.every = sp.every
+            self.l1.oracle.every = sp.every
+        sp = self.pipeline.spec("tap")
+        if sp is not None:
+            self.tap.every = sp.every
         return self.pipeline
 
     def step(self, ctx: StageCtx, n_ticks: int = 1) -> None:
-        """推进 n 个主时钟 tick；ctx.tick 为已执行的 tick 数，本函数先 +1 再执行（t_sim_ns = tick × 4 ms）。"""
+        """推进 n 个主时钟 tick；ctx.tick 为已执行的 tick 数，本函数先 +1 再执行（t_sim_ns = tick × tick_ns，按时钟档）。"""
         assert self.pipeline is not None, "build_pipeline() 未调用"
         if ctx.profiles is None:
             ctx.profiles = self.T
         if ctx.paths is None:
             ctx.paths = self.PB
+        prof = self.clock_profile
+        if ctx.profile is not prof:
+            ctx.profile = prof
+            ctx.dt_tick = prof.dt_tick
+        tick_ns = prof.tick_ns
         for k in range(n_ticks):
             ctx.tick += 1
-            ctx.t_ns = ctx.tick * TICK_NS
+            ctx.t_ns = ctx.tick * tick_ns
             ctx.batch_remaining = n_ticks - 1 - k
             self.pipeline.run_tick(self.S, ctx)
 
@@ -187,12 +247,16 @@ class FleetSim:
         if S.active[slot]:
             raise ValueError(f"slot {slot} 已在用")
         pid = self.T.index(spec.profile_id)
+        fk = int(self.T.frame_kind[pid]) if pid < self.T.frame_kind.size else 0
+        if fk == FRAME_FIXED_WING and fidelity == R.Fidelity.L1:
+            fidelity = R.Fidelity.L1 | R.Fidelity.FW  # 固定翼：运动学由 M21 fw_kin 驱动（M08-FR-210）
         z = spec.home_enu_m[2]
         home_enu = np.array([spec.home_enu_m[0], spec.home_enu_m[1], 0.0 if z is None else z], np.float64)
         home = enu_to_ned(home_enu)
         yaw = float(yaw_ned_from_enu(spec.yaw_rad))
         S.active[slot] = True
         S.fidelity[slot] = int(fidelity)
+        S.frame_kind[slot] = fk
         S.agent_no[slot] = agent_no
         S.ids[slot] = entity_id
         S.profile_id[slot] = pid
@@ -257,6 +321,7 @@ class FleetSim:
             S.path_len[slot] = 0
         S.active[slot] = False
         S.ids[slot] = None
+        S.frame_kind[slot] = 0
         S.ctrl_mode[slot] = CtrlMode.IDLE
         S.vel_sess[slot] = False
         self.kinematic.drop(slot)

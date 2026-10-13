@@ -26,6 +26,7 @@ from awr.sim.core.interfaces import EstimatePath, EstimateResult, RtlPlan, Vehic
 from awr.sim.fleet import kernels_l1 as KL
 from awr.sim.fleet import params_px4 as PX
 
+from . import kernels as KN
 from .flight_fsm import Origin
 from .state import COND, FS
 
@@ -43,6 +44,7 @@ _EMERG_OK = np.zeros(256, np.bool_)
 _EMERG_OK[list(_EMERG_SRC)] = True
 _RTL_OK = np.zeros(256, np.bool_)
 _RTL_OK[[*_RTL_SRC, int(FS.RTL)]] = True
+_NO_HOVER = np.zeros(1)
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,18 @@ class BatteryModel:
         P = rt.params.battery
         dt = self.dt_s
         hb = act[bb["has_bat"][act]]
+        if hb.size and KN.HAVE_NUMBA:
+            # D2-FX-R2-sim 第 2 次：能量积分在 `kernels.bat_step` 中逐机一次遍历（与下面的 numpy 实现逐位相同）；判据只在核给出
+            # 候选（任一档位条件接近或机体在地面）时执行，结果与每次都执行相同
+            T = rt.profiles
+            sb = rt.sb
+            need = KN.bat_step(hb.astype(np.int64), S.thrust, S.profile_id, T.hover if T is not None else _NO_HOVER, T is not None,
+                               S.in_air, bb["p_hover_w"], bb["drain_pct_s"], bb["e_use_wh"], bb["wh_used"], bb["soc"], bb["soc_min"],
+                               bb["battery_pct"], bb["p_avg_w"], bb["cells"], bb["current_a"], bb["voltage_v"], bb["t_rem_s"], float(dt),
+                               float(P.p_avg_alpha), float(P.r_int_per_cell_ohm), float(P.emerg), sb["fs"], bb["bat_once"],
+                               bb["rtl_valid"], bb["t_rtl_s"], float(P.low), float(P.crit), float(P.rtl_margin), _EMERG_OK, _RTL_OK)
+            self._finish(act, need, hb)
+            return
         if hb.size:
             T = rt.profiles
             hover = T.hover[S.profile_id[hb]] if T is not None else np.full(hb.size, 0.5)
@@ -171,6 +185,11 @@ class BatteryModel:
             bb["current_a"][hb] = cur
             bb["voltage_v"][hb] = voc - cur * P.r_int_per_cell_ohm * cells
             bb["t_rem_s"][hb] = np.maximum(soc - P.emerg, 0.0) * e * 3600.0 / np.maximum(pa, 1e-6)
+        self._finish(act, True, hb)
+
+    def _finish(self, act: np.ndarray, need: bool, hb: np.ndarray) -> None:
+        """无电池机体的固定值、无效 RTL 缓存的立即刷新与判据（`step` 的后半段）。"""
+        bb = self.bb
         nb = act[~bb["has_bat"][act]]
         if nb.size:
             bb["soc"][nb] = 1.0
@@ -181,7 +200,8 @@ class BatteryModel:
         inv = act[~bb["rtl_valid"][act]]
         if inv.size:
             self.refresh(inv)
-        if hb.size:
+            need = True
+        if hb.size and need:
             self._criteria(hb)
 
     def step_rtl(self, ctx: Any) -> None:

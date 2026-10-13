@@ -2,13 +2,19 @@
 
 全部查询为纯函数：不使用线程、不使用 BLAS、不修改内部状态（非默认 buffer 的膨胀栅格缓存除外，对结果无影响）。
 坐标一律 world ENU、float64；栅格值 float32。只读 `geometry/**` 与 `semantic/zones.geojson`（P-03）。
+
+D2 增补（AWR-04 §3.2 M04 行、ADR-113 第 5 条）：
+- `grid25(alt_min_agl_m)`：Grid25 规划栅格来自派生缓存（memmap，文件页共享），不再在规划进程内构建；
+- `los_batch` 走 numba 核（`kernels.py`，与 numpy 参考实现 `los_batch_np` 逐位一致），核未预热时退回 numpy；
+- `open_world_query(allow_derive=None)` 取环境变量 `AWR_GEO_ALLOW_DERIVE`（公开与沙盒部署置 0：缓存缺失即
+  `GEO_CACHE_MISS`，绝不在线派生），缓存根缺省取 `AWR_GEO_CACHE_DIR`；可用性探测见 `status.py`。
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 import math
+import os
+import sys
 import time
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -16,11 +22,13 @@ from typing import Literal, Protocol
 
 import numpy as np
 
+from . import grid25 as _g25
 from . import path as _path
-from .cache import derive_key, entry_dir, load_entry, verify_entry, write_entry
+from .cache import default_cache_root, derive_key, entry_dir, load_entry, map_array, verify_entry, write_entry
 from .derive import derive_arrays, obs_counts
 from .grids import Grid
 from .heightmap import corridor_max_sampled, inflate, max_pyramid
+from .status import read_world_header
 from .traverse import exit_param, first_hit, first_hit_iter, max_along
 from .types import (
     DERIVE_VERSION,
@@ -30,6 +38,7 @@ from .types import (
     GeoError,
     GeoLoadError,
     GeoParams,
+    Grid25View,
     GridView,
     Hit,
     PathValidResult,
@@ -42,6 +51,34 @@ MAX_RADIUS_M = 50.0
 MAX_CONTACT_R_M = 2.0
 MAX_FREE_RAYS = 16
 MAX_LOS_BATCH = 64
+ENV_ALLOW_DERIVE = "AWR_GEO_ALLOW_DERIVE"
+_G25_ALT_RANGE = (0.0, 1000.0)
+
+
+def env_allow_derive() -> bool:
+    """`AWR_GEO_ALLOW_DERIVE` 为 0、false、no、off 时不允许在线派生（公开与沙盒部署）；缺省允许（本机开发）。"""
+    return os.environ.get(ENV_ALLOW_DERIVE, "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+_KERNELS = None
+
+
+def _kernels():
+    """惰性导入 numba 核模块（只在需要时导入 numba）。"""
+    global _KERNELS
+    if _KERNELS is None:
+        from . import kernels
+
+        _KERNELS = kernels
+    return _KERNELS
+
+
+def warm_kernels() -> bool:
+    """预热 M04 的 numba 核（`los_batch`）；返回核是否可用。供 sim-core、共享规划服务与 numba 预热入口调用。"""
+    try:
+        return bool(_kernels().warmup())
+    except Exception:  # pragma: no cover - numba 不可用等
+        return False
 
 
 class WorldQuery(Protocol):
@@ -79,6 +116,8 @@ class WorldQuery(Protocol):
     def terrain_profile(self, polyline: np.ndarray, ds_m: float = 2.0) -> dict[str, np.ndarray]: ...
     def grid_2p5d(self, res_m: float = 4.0) -> tuple[np.ndarray, dict]: ...
     def iter_op(self, op: str, args: dict) -> Iterator[None]: ...
+    # D2 追加（V0.2-demo）
+    def grid25(self, alt_min_agl_m: float | None = None, *, copy_on_write: bool = False) -> Grid25View: ...
 
 
 def _xy(a) -> np.ndarray:
@@ -110,7 +149,8 @@ class DsmWorldQuery:
 
     def __init__(self, *, world_id: str, content_version: str, coordinate_sha256: str, derive_sha8: str,
                  bounds_m: np.ndarray, dsm_raw: Grid, dtm: Grid, arrays: dict[str, np.ndarray], zones: ZoneIndex,
-                 params: GeoParams, qa: dict, cache_dir: Path | None = None, cache_state: str = "built", load_ms: float = 0.0):
+                 params: GeoParams, qa: dict, cache_dir: Path | None = None, cache_state: str = "built", load_ms: float = 0.0,
+                 manifest: dict | None = None, allow_derive: bool = True):
         self.world_id = world_id
         self.content_version = content_version
         self.coordinate_sha256 = coordinate_sha256
@@ -122,6 +162,8 @@ class DsmWorldQuery:
         self.cache_dir = cache_dir
         self.cache_state = cache_state
         self.load_ms = load_ms
+        self.allow_derive = bool(allow_derive)
+        self.manifest = manifest or {}
         x0, y0, cell = dsm_raw.x0, dsm_raw.y0, dsm_raw.cell
         self.dsm_raw = dsm_raw
         self.dtm = dtm
@@ -148,6 +190,15 @@ class DsmWorldQuery:
             zones.raster = ZoneRaster.from_mask(arrays["zone_raster_8m"], x0, y0, params.zone_raster_cell_m)
         if not (params.hm_dilate_cells * cell >= 1.0 and params.hm_safe_m >= 1.0):   # FR-020 单调性前提（默认 buffer 1 m）
             raise GeoLoadError("GEO_GRID_INVALID", "hm_dilate_cells*cell and hm_safe_m must be >= 1 m (coarse/fine monotonicity)")
+        # Grid25（D2）：manifest 的 `grid25` 与四个数组；缺省高度直接用 load_entry 的只读 memmap
+        self._g25_meta: dict | None = self.manifest.get("grid25") if "grid25" in arrays else None
+        self._g25_arrays = {k: arrays[k] for k in ("grid25", "grid25_base", "grid25_floor", "grid25_blocked") if k in arrays}
+        self._g25_proc: tuple[float, Grid25View] | None = None
+        # los_batch 的 numba 核：DSM 的只读视图（签名恒定）；进程已导入 numba 时同步预热（启动期，不在查询路径上编译）
+        self._eff_ro = _ro(np.ascontiguousarray(np.asarray(self.eff.a), np.float32))
+        self.kernel_ready = False
+        if "numba" in sys.modules:
+            self.kernel_ready = warm_kernels()
 
     # ---------------------------------------------------------------- 只读栅格
     def dsm_grid(self) -> GridView:
@@ -317,14 +368,34 @@ class DsmWorldQuery:
         except StopIteration as done:
             return bool(done.value[0])
 
-    def los_batch(self, A, B, step_m: float = 1.0, eps_m: float = 0.5) -> np.ndarray:
-        """向量化采样视线（≤ 64 对）；1 m 步长只保证弦长 ≥ 1 m 的格被采到（已知近似，M04-FR-014）。"""
+    def _los_args(self, A, B, step_m: float) -> tuple[np.ndarray, np.ndarray]:
         A = _xyz(A)
         B = _xyz(B)
         if len(A) != len(B) or len(A) > MAX_LOS_BATCH:
             raise GeoError(PARAM_OUT_OF_RANGE, f"pairs must be <= {MAX_LOS_BATCH}")
         if step_m <= 0:
             raise GeoError(PARAM_OUT_OF_RANGE, "step_m must be > 0")
+        return A, B
+
+    def los_batch(self, A, B, step_m: float = 1.0, eps_m: float = 0.5) -> np.ndarray:
+        """采样视线（≤ 64 对）；1 m 步长只保证弦长 ≥ 1 m 的格被采到（已知近似，M04-FR-014）。
+
+        D2：numba 核（命中即停、无中间数组）与 numpy 参考实现 `los_batch_np` 逐位一致；核未预热时走 numpy。
+        """
+        A, B = self._los_args(A, B, step_m)
+        if self.kernel_ready:
+            g = self.eff
+            out = _kernels().los_batch(A, B, self._eff_ro, g.x0, g.y0, g.cell, step_m, eps_m)
+            if out is not None:
+                return out
+        return self._los_batch_np(A, B, step_m, eps_m)
+
+    def los_batch_np(self, A, B, step_m: float = 1.0, eps_m: float = 0.5) -> np.ndarray:
+        """numpy 参考实现（D1 实现原样保留；numba 核的 oracle，也是 numba 不可用时的路径）。"""
+        A, B = self._los_args(A, B, step_m)
+        return self._los_batch_np(A, B, step_m, eps_m)
+
+    def _los_batch_np(self, A: np.ndarray, B: np.ndarray, step_m: float, eps_m: float) -> np.ndarray:
         L = np.linalg.norm(B - A, axis=1)
         n = np.maximum(2, np.ceil(np.maximum(L - 2 * eps_m, 0) / step_m).astype(np.int64) + 1)
         start = np.zeros(len(A), np.int64)
@@ -402,6 +473,44 @@ class DsmWorldQuery:
     def grid_2p5d(self, res_m: float = 4.0) -> tuple[np.ndarray, dict]:
         return _path.grid_2p5d(self, res_m)
 
+    # ---------------------------------------------------------------- Grid25（D2，M10-FR-205）
+    def grid25(self, alt_min_agl_m: float | None = None, *, copy_on_write: bool = False) -> Grid25View:
+        """4 m 2.5D 规划栅格 `Hf = max(grid_2p5d(4), dtm + alt_min_agl_m)`，禁飞区与界外 +inf（外扩 1 格）。
+
+        缺省高度（`GeoParams.grid25_alt_min_agl_m`，20 m）返回派生缓存的只读 memmap（文件页；`copy_on_write = True`
+        时为新的写时复制映射，便于调用方就地临时改写个别格）；其他高度由缓存的地板与阻塞掩码在进程内合成（匿名页，
+        最近一个高度的结果复用）。与 M10 `Grid25.from_world` 逐位相同。世界不足一个金字塔层时为 110。
+        """
+        m = self._g25_meta
+        if m is None:
+            raise GeoError(PARAM_OUT_OF_RANGE, "grid25 is not available for this world (smaller than one pyramid level)")
+        alt0 = float(m["alt_min_agl_m"])
+        alt = alt0 if alt_min_agl_m is None else float(alt_min_agl_m)
+        if not (math.isfinite(alt) and _G25_ALT_RANGE[0] <= alt <= _G25_ALT_RANGE[1]):
+            raise GeoError(PARAM_OUT_OF_RANGE, f"alt_min_agl_m must be in [{_G25_ALT_RANGE[0]:g}, {_G25_ALT_RANGE[1]:g}]")
+        x0, y0, cell = float(m["x0"]), float(m["y0"]), float(m["cell"])
+        if alt == alt0:
+            if copy_on_write:
+                specs = {a["name"]: a for a in self.manifest.get("arrays", [])}
+                a = map_array(self.cache_dir, specs["grid25"], "c")
+                base = map_array(self.cache_dir, specs["grid25_base"], "c") if "grid25_base" in specs else None
+            else:
+                a = self._g25_arrays["grid25"]
+                base = self._g25_arrays.get("grid25_base")
+            return Grid25View(a, base, x0, y0, cell, alt0, "cache")
+        got = self._g25_proc
+        if got is not None and got[0] == alt:
+            return got[1]
+        L = int(m["level"])
+        a, base = _g25.compose(self.pyr_hm[L], self._g25_arrays["grid25_floor"], self._g25_arrays["grid25_blocked"], alt)
+        v = Grid25View(a, base, x0, y0, cell, alt, "process")
+        self._g25_proc = (alt, v)
+        return v
+
+    def grid25_info(self) -> dict | None:
+        """Grid25 的栅格参数（manifest `grid25`）；不可用时 None。"""
+        return None if self._g25_meta is None else dict(self._g25_meta)
+
     # ---------------------------------------------------------------- 探针服务的生成器接口
     def iter_op(self, op: str, args: dict) -> Iterator[None]:
         from .probe import op_generator
@@ -422,52 +531,31 @@ class DsmWorldQuery:
 # ==================================================================== 装载
 
 
-def _sha256(p: Path) -> str:
-    h = hashlib.sha256()
-    with open(p, "rb") as f:
-        for blk in iter(lambda: f.read(1 << 20), b""):
-            h.update(blk)
-    return h.hexdigest()
-
-
 def open_world_query(world_dir: Path, cache_root: Path | None = None, params: GeoParams | None = None,
-                     allow_derive: bool = True) -> DsmWorldQuery:
+                     allow_derive: bool | None = None) -> DsmWorldQuery:
     """读取 world.json 定位图层、校验 sidecar 与坐标绑定、映射或派生缓存（M04-FR-001、FR-005）。
 
-    `cache_root` 缺省为 `<worlds>/.geo-cache`（与世界目录同级）。任一不符抛 GeoLoadError。
+    `cache_root` 缺省为 `AWR_GEO_CACHE_DIR`，未设置时为 `<worlds>/.geo-cache`（与世界目录同级）。`allow_derive` 缺省取
+    `AWR_GEO_ALLOW_DERIVE`（未设置为允许）；不允许时缓存缺失、键不一致或条目损坏一律抛 `GEO_CACHE_MISS`
+    （`GeoLoadError.reason == "derived_cache_missing"`），绝不在线派生。任一不符抛 GeoLoadError。
     """
     t0 = time.perf_counter()
     params = params or GeoParams()
+    allow = env_allow_derive() if allow_derive is None else bool(allow_derive)
     world_dir = Path(world_dir)
-    try:
-        w = json.loads((world_dir / "world.json").read_text(encoding="utf-8"))
-    except FileNotFoundError as e:
-        raise GeoLoadError("GEO_MISSING_FILE", str(world_dir / "world.json")) from e
-    except (OSError, json.JSONDecodeError) as e:
-        raise GeoLoadError("GEO_GRID_INVALID", f"world.json: {e}") from e
-    layers = {L.get("id"): L for L in w.get("layers", [])}
-    for lid in ("terrain.dtm", "terrain.dsm", "semantic.zones"):
-        L = layers.get(lid)
-        if L is None or L.get("status") != "ready":
-            raise GeoLoadError("GEO_MISSING_FILE", f"layer {lid} missing or not ready")
-    coord_sha = (w.get("coordinate") or {}).get("sha256")
-    cpath = world_dir / (w.get("coordinate") or {}).get("href", "coordinate.json")
-    if not cpath.exists():
-        raise GeoLoadError("GEO_MISSING_FILE", str(cpath))
-    if _sha256(cpath) != coord_sha:
-        raise GeoLoadError("GEO_SHA_MISMATCH", "coordinate.json sha256 != world.coordinate.sha256")
-    cv = str(w.get("contentVersion"))
+    hdr = read_world_header(world_dir)
+    w, layers, coord_sha, cv = hdr.doc, hdr.layers, hdr.coordinate_sha256, hdr.content_version
     dsm = Grid.open(world_dir / layers["terrain.dsm"]["href"], expect_kind="dsm", expect_cell=2.0)
     dtm = Grid.open(world_dir / layers["terrain.dtm"]["href"], expect_kind="dtm", expect_cell=10.0)
     if abs(dsm.x0 - dtm.x0) > 1e-6 or abs(dsm.y0 - dtm.y0) > 1e-6:
         raise GeoLoadError("GEO_GRID_INVALID", "dsm and dtm originXY differ")
     zones = ZoneIndex.load(world_dir / layers["semantic.zones"]["href"], expect_coord_sha=coord_sha)
     key = derive_key(cv, coord_sha, params)
-    root = Path(cache_root) if cache_root is not None else world_dir.parent / ".geo-cache"
+    root = Path(cache_root) if cache_root is not None else default_cache_root(world_dir)
     d = entry_dir(root, str(w["id"]), cv, key)
     state = "hit"
     if not verify_entry(d):
-        if not allow_derive:
+        if not allow:
             raise GeoLoadError("GEO_CACHE_MISS", str(d))
         n, src = obs_counts(world_dir, dsm, layers)
         tb = time.perf_counter()
@@ -484,4 +572,4 @@ def open_world_query(world_dir: Path, cache_root: Path | None = None, params: Ge
     return DsmWorldQuery(world_id=str(w["id"]), content_version=cv, coordinate_sha256=coord_sha, derive_sha8=key,
                          bounds_m=np.array([b["min"], b["max"]], np.float64), dsm_raw=dsm, dtm=dtm, arrays=arrays, zones=zones,
                          params=params, qa=m.get("qa", {}), cache_dir=d, cache_state=state,
-                         load_ms=(time.perf_counter() - t0) * 1000)
+                         load_ms=(time.perf_counter() - t0) * 1000, manifest=m, allow_derive=allow)

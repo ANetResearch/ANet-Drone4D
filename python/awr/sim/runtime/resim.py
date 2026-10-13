@@ -90,7 +90,7 @@ def resim(run_dir: Path, *, kernel: str | None = None, extra_ticks: int = 0, fra
             core.ctx.tick = core.clock.tick
             core.fleet.step(core.ctx, 1)
             core.clock.tick = core.ctx.tick
-            W[0] += 4_000_000
+            W[0] += core.clock.tick_ns  # 按时钟档（d1_250 4 ms、sandbox100 10 ms）
             core.events.flush()
             if tap.published != pub0:
                 pub0 = tap.published

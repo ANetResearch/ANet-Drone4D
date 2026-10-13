@@ -7,6 +7,10 @@
 KeyframeManager 实现 §6.6.1 K01–K09：`apply` 在 env 网格点生效，from = eval_env(kf, t_apply)，按路由生成 via（仅稳态且
 to_preset 等于起点时），version + 1；过渡中新操作以当前求值态为起点（路由不启用）；`config` 补丁为 step 帧并对活跃锋面
 按 f_adv 变化重基；锋面事件每次版本变化先修剪过期项再追加（≤ 4 项）。
+
+D2（WP-09，AWR-17 §17.6.9、ADR-102，1.x 只增可选字段）：`d2` 为顶层可选字段 `humidity_pct`、`surface`、`acoustic_bg`，`cal`
+为仿真日历；二者只在 SkyModel 启用后出现（D1 帧逐字节不变）。线上 `calendar.t_cal_unix_ns` 为本条消息 `t_ns` 处的日历时刻，
+心跳随 `t_ns` 更新。`touch` 生成只改 config 与 D2 字段的新版本（过渡、锋面不变，与 `add_event` 同一规则）。
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import msgpack
 import numpy as np
 
 from .anchors import Anchors, anchors_initial
+from .sky.calendar import Calendar, parse_utc_ms
 from .weather.presets import NF, USER_AXIS, EnvError, Presets, presets
 from .weather.transitions import TransitionKf, eval_env, exp_t1_ns
 from .wind.gust import GustEvent, gust_expired
@@ -55,7 +60,7 @@ def canon(x: Any) -> Any:
 
 @dataclass(frozen=True, slots=True)
 class EnvOp:
-    kind: Literal["set", "preset", "gust", "reset"]
+    kind: Literal["set", "preset", "gust", "reset", "calendar", "d2"]
     patch: dict | None = None
     name: str | None = None
     amp_mps: float | None = None
@@ -64,6 +69,7 @@ class EnvOp:
     duration_s: float | None = None
     mode: Literal["smooth", "step", "exp"] = "smooth"
     by: str = ""
+    d2: dict | None = None  # D2：日历 {cal0_unix_ms, tz} 或 {start_utc, tz, jump}；声学剖面、地表类别（WP-09）
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +100,8 @@ class EnvKeyframe:
     events: list[GustEvent] = field(default_factory=list)
     vis: dict[str, Any] = field(default_factory=lambda: {"streamlines": None, "vmax_mps": 20})
     _tr: TransitionKf | None = None
+    d2: dict[str, Any] | None = None
+    cal: Calendar | None = None
 
     def transition(self) -> TransitionKf:
         if self._tr is None:
@@ -105,12 +113,17 @@ class EnvKeyframe:
                 and np.array_equal(self.from_, other.from_) and np.array_equal(self.to, other.to))
 
     def to_wire(self) -> dict[str, Any]:
-        return canon({
+        w = {
             "schema": SCHEMA, "world_id": self.world_id, "version": self.version, "epoch": self.epoch, "seed": self.seed,
             "t_ns": self.t_ns, "t_apply_ns": self.t_apply_ns, "config": self.config, "mode": self.mode, "t0_ns": self.t0_ns,
             "t1_ns": self.t1_ns, "from": list(self.from_), "to": list(self.to), "via": list(self.via), "to_preset": self.to_preset,
             "anchors": self.anchors.to_json(), "events": [ev.to_list() for ev in self.events], "vis": self.vis,
-        })
+        }
+        if self.d2 is not None:
+            if self.cal is not None:
+                w["calendar"] = self.cal.to_wire(self.t_ns)
+            w.update(self.d2)
+        return canon(w)
 
     def encode(self) -> bytes:
         return encode(self.to_wire())
@@ -129,15 +142,34 @@ def encode(wire: Mapping[str, Any]) -> bytes:
     return b
 
 
+D2_TOP_KEYS = ("humidity_pct", "surface", "acoustic_bg")
+
+
+def _d2_from_wire(d: Mapping[str, Any]) -> tuple[dict[str, Any] | None, Calendar | None]:
+    cal = None
+    c = d.get("calendar")
+    if isinstance(c, Mapping):
+        t_ns = int(d["t_ns"])
+        if c.get("t_cal_unix_ns") is not None:
+            cal = Calendar((int(c["t_cal_unix_ns"]) - t_ns) // 1_000_000, str(c["tz"]))
+        else:
+            cal = Calendar(parse_utc_ms(str(c["start_utc"])), str(c["tz"]))
+    top = {k: d[k] for k in D2_TOP_KEYS if k in d}
+    if cal is None and not top:
+        return None, None
+    return top, cal
+
+
 def from_wire(d: Mapping[str, Any]) -> EnvKeyframe:
     if d.get("schema") != SCHEMA:
         raise ValueError(f"not an EnvKeyframe: {d.get('schema')!r}")
+    d2, cal = _d2_from_wire(d)
     return EnvKeyframe(
         world_id=str(d["world_id"]), version=int(d["version"]), epoch=int(d["epoch"]), seed=int(d["seed"]), t_ns=int(d["t_ns"]),
         t_apply_ns=int(d["t_apply_ns"]), config=dict(d["config"]), mode=str(d["mode"]), t0_ns=int(d["t0_ns"]), t1_ns=int(d["t1_ns"]),
         from_=np.asarray(d["from"][:NF], np.float64), to=np.asarray(d["to"][:NF], np.float64), via=[str(v) for v in d["via"]],
         to_preset=d["to_preset"], anchors=Anchors.from_json(d["anchors"]), events=[GustEvent.from_list(e) for e in d["events"]],
-        vis=dict(d["vis"]))
+        vis=dict(d["vis"]), d2=d2, cal=cal)
 
 
 def decode(b: bytes) -> EnvKeyframe:
@@ -166,6 +198,8 @@ class KeyframeManager:
         self.version = 0
         self.next_event_id = 1
         self.streamlines: str | None = None  # AWSL URL prefix of the analytic field (D1-ext), appended /d{deg:03d}.awsl
+        self.d2: dict[str, Any] | None = None  # D2 顶层字段（SkyModel 启用后由 EnvironmentService 维护）
+        self.cal: Calendar | None = None
         self.initial = np.asarray(initial, np.float64).copy()
         self.initial_preset = initial_preset
         self.kf = self._new(0, config, "step", 0, 0, self.initial, self.initial, [], initial_preset,
@@ -177,7 +211,10 @@ class KeyframeManager:
         self.version += 1
         return EnvKeyframe(self.world_id, self.version, self.epoch, self.seed, int(t_ns), int(t_ns), config, mode, int(t0), int(t1),
                            np.array(fr, np.float64), np.array(to, np.float64), list(via), to_preset, anchors.copy(), list(events),
-                           {"streamlines": self.streamlines, "vmax_mps": self.vmax})
+                           {"streamlines": self.streamlines, "vmax_mps": self.vmax}, d2=self._d2(), cal=self.cal)
+
+    def _d2(self) -> dict[str, Any] | None:
+        return None if self.d2 is None else {k: (dict(v) if isinstance(v, Mapping) else v) for k, v in self.d2.items()}
 
     @property
     def f_adv(self) -> float:
@@ -257,7 +294,19 @@ class KeyframeManager:
         events = [*self.live_events(anchors.s_m)[-3:], ev]
         self.version += 1
         self.kf = EnvKeyframe(self.world_id, self.version, self.epoch, self.seed, int(t_ns), int(t_ns), cur.config, cur.mode, cur.t0_ns,
-                              cur.t1_ns, cur.from_, cur.to, list(cur.via), cur.to_preset, anchors.copy(), events, dict(cur.vis))
+                              cur.t1_ns, cur.from_, cur.to, list(cur.via), cur.to_preset, anchors.copy(), events, dict(cur.vis),
+                              d2=self._d2(), cal=self.cal)
+        self.kf._tr = cur._tr
+        return self.kf
+
+    def touch(self, t_ns: int, anchors: Anchors, config: dict[str, Any] | None = None) -> EnvKeyframe:
+        """D2：新版本只换 config（太阳）与 D2 字段，过渡与锋面不变（锋面先修剪过期项）。"""
+        cur = self.kf
+        events = self.live_events(anchors.s_m)
+        self.version += 1
+        self.kf = EnvKeyframe(self.world_id, self.version, self.epoch, self.seed, int(t_ns), int(t_ns), config or cur.config, cur.mode,
+                              cur.t0_ns, cur.t1_ns, cur.from_, cur.to, list(cur.via), cur.to_preset, anchors.copy(), events,
+                              dict(cur.vis), d2=self._d2(), cal=self.cal)
         self.kf._tr = cur._tr
         return self.kf
 

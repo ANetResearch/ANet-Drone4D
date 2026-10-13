@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from awr.sim.fleet import actions as ACT
+from awr.sim.fleet import kernels_sel as KS
 from awr.sim.planning import bspline as BS
 from awr.sim.planning import kernels_track as KT
 
@@ -414,6 +415,14 @@ class Tracker:
         self.rt.publish_path(s, e, m.path_rev)
         return True
 
+    def braking(self, s: int) -> bool:
+        """刹停段仍在减速（静止点尚未到达）：规划结果此时装入会让参考点从机体处跳到静止点（D2-INT）。"""
+        B = self.B
+        if int(B["kind"][s]) != KT.K_BRAKE:
+            return False
+        sp = float(np.linalg.norm(B["orb"][s, 3:6]))
+        return sp > 1e-9 and float(B["orb"][s, 6]) < sp / A_BRAKE
+
     def start_brake(self, S: Any, s: int) -> np.ndarray:
         """按 a_brake 刹停到静止点（等待规划结果）；返回静止点（ENU）。"""
         p = np.asarray(S.enu.pos[s], np.float64).copy()
@@ -507,14 +516,22 @@ class Tracker:
             return
         self.stats["calls"] += 1
         kind = B["kind"]
-        idx = np.flatnonzero(kind != 0)
+        if KS.HAVE_NUMBA:
+            # 一次融合遍历（逐位相同；D2-AC-08：sandbox100 每 tick 调用，三步 numpy 筛选在主循环中约 45 µs）
+            buf = np.empty(kind.shape[0], np.int32)
+            idx = buf[:KS.sel_eq_nonzero(kind, S.ctrl_mode, M_TRAJ, buf)]
+        else:
+            idx = np.flatnonzero(kind != 0)
+            if idx.size == 0:
+                return
+            traj = S.ctrl_mode[idx] == M_TRAJ
+            idx = idx[traj].astype(np.int32)
         if idx.size == 0:
             return
-        traj = S.ctrl_mode[idx] == M_TRAJ
-        idx = idx[traj].astype(np.int32)
-        if idx.size == 0:
-            return
-        dt = ctx.dt_tick * 2.0
+        # 本 stage 的步长（M08 置位：every / tick_hz）。d1_250 为每 2 tick（8 ms）；sandbox100 为每 tick（10 ms），此前写死
+        # `dt_tick * 2` 使沙盒中的轨迹时钟快一倍：参考点以两倍速度领先，时间伸缩把速率压到很低后在复核改道时一步拉开，
+        # FastGuard 以 POS_ERR_ELAND / FAILSAFE 迫降（d2-WP-02-to-M10 第 1 条、d2-WP-13-to-M20-M21 第 6 条；D2-INT）
+        dt = float(getattr(ctx, "stage_dt", 0.0) or 0.0) or ctx.dt_tick * 2.0
         pe = S.enu.pos
         self.kernel(idx, kind, B["off"], B["nseg"], B["ts"], B["tau"], B["rate"], B["rate_tgt"], B["rate_dot"],
                     B["yaw_mode"], B["yaw_arg"], B["psi"], B["group"], B["orb"], B["orb_dir"], B["orb_turns"],
@@ -523,7 +540,11 @@ class Tracker:
                     A_BRAKE, 1.0, A_TAN, B["out_p"], B["out_v"], B["out_a"], B["out_psi"])
         # 输出按 slot 行直接写入（不先花式下标拷贝四个 N 行数组，与 set_traj_enu 逐位相同；FX2-R3）
         ACT.set_traj_enu_rows(S, idx, B["out_p"], B["out_v"], B["out_a"], B["out_psi"])
-        fin = idx[B["done"][idx] != 0]
+        if KS.HAVE_NUMBA:
+            fbuf = np.empty(idx.shape[0], np.int32)
+            fin = fbuf[:KS.take_nonzero(idx, B["done"], fbuf)]
+        else:
+            fin = idx[B["done"][idx] != 0]
         if fin.size:
             self._on_done(S, ctx, fin)
         self._hold_paused(S, ctx, idx)

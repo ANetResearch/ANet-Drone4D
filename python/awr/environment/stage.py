@@ -9,8 +9,13 @@
 - 查询 `env/query`（`ctl/sim-core/query`）。
 
 EnvironmentService 由首个调用（stage 或慢任务）按世界构造并挂到 `ctx.env`（M08 组合根可改为显式注入，见
-`.cache/impl/requests/M07-to-M08.md`）；`env/set`、`env/preset`、`env/gust` 经 M08 的 `register_command_handler` 登记到
-`handle_command`（CommandEngine 验签、角色与席位检查之后在步顶同步调用）。
+`.cache/impl/requests/M07-to-M08.md`）；`env/set`、`env/preset`、`env/gust`、`env/calendar`（D2）经 M08 的
+`register_command_handler` 登记到 `handle_command`（CommandEngine 验签、角色与席位检查之后在步顶同步调用）。
+
+D2 时钟档（ADR-090、M08-FR-202、AWR-04 §14.3）：tick 长度经 `ctx.dt_tick`（或 `ctx.clock.tick_ns`）读取，不再写死 4 ms；
+全量求值相位按 env 网格序号 `k = t_ns // 20 ms` 的 `k % 10 ∈ {1, 7}`（d1_250 下与原 `tick % 50 ∈ {5, 35}` 逐 tick 相同，
+sandbox100 下同为 10 Hz）；stage 的 `(every, phase)` 由 M08 的按档调度表重映射（d1_250 为 5/0，sandbox100 为 2/0）。
+会话配置（沙盒 `session.json` 的 `calendar`、`acoustic_bg`）经 `configure_session(ctx, cfg)` 或 `ctx.session_config` 装入。
 """
 
 from __future__ import annotations
@@ -44,8 +49,10 @@ FULL_EVERY = 5  # env tick 数：rho、env_flags 与行缓存的全量求值周�
 # 全量求值所在的 tick（tick % 50）：5 与 35，都是奇数 tick（与 l1 组错开），间隔 80/120 ms 交替、平均仍为 10 Hz（ADR-070；
 # 此前 tick % 25 == 0，即 0 与 25，tick 0 为偶数，N = 1000 时该 tick 约 3 ms）
 FULL_TICKS = (5, 35)
+FULL_GRID = (1, 7)  # env 网格序号 k % 10：与 FULL_TICKS 在 d1_250 下等价（tick = 5k），与时钟档无关
 WIND_ONLY_FIELDS = int(Fields.WIND_PARTS)  # 只求风（均值、阵风、湍流）：不含光学、湍流谱、降水与热力
-TICK_NS = 4_000_000
+TICK_NS = 4_000_000  # d1_250 的缺省值；实际值经 tick_ns_of(ctx)
+H_GRID_NS = 20_000_000
 
 _st: dict[str, Any] = {"env": None, "ctx": None, "S": None, "pub_hb": None, "pub_detail": None, "bus": None, "keyframe_sent": 0}
 
@@ -55,10 +62,12 @@ def _warm_kernels() -> None:
     4.1；行缓存写入核 ADR-070）。"""
     try:
         from . import kernels_rows
+        from .atmosphere import kernels_od
         from .wind import turbulence as _turb
 
         _turb.warmup()
         kernels_rows.warmup()
+        kernels_od.warmup()
     except Exception:  # 预热失败不阻止装配：运行期按需编译
         log.exception("environment numba warmup failed")
 
@@ -96,10 +105,30 @@ def service() -> EnvironmentServiceImpl | None:
     return _st["env"]
 
 
+def tick_ns_of(ctx: Any) -> int:
+    """时钟档的 tick 长度（ns）：`ctx.dt_tick`（M08 StageCtx 冻结字段）优先，其次 `ctx.clock.tick_ns`，缺省 4 ms（d1_250）。"""
+    dt = getattr(ctx, "dt_tick", None)
+    if isinstance(dt, (int, float)) and not isinstance(dt, bool) and dt > 0:
+        return round(float(dt) * 1e9)
+    clk = getattr(ctx, "clock", None)
+    v = getattr(clk, "tick_ns", None) if clk is not None else None
+    if isinstance(v, int) and not isinstance(v, bool) and v > 0:
+        return v
+    return TICK_NS
+
+
+def configure_session(ctx: Any, cfg: dict | None) -> None:
+    """沙盒会话配置的 M07 部分（`calendar`、`acoustic_bg`、`surface_class`、`env{preset, overrides}`；M08 冷启动加载
+    `session.json` 或 `sim/reset{sandbox_config}` 时调用）。非法值抛 EnvError（code 为 reasons.json 数值码）。"""
+    env = ensure_service(ctx)
+    env.configure_session(cfg, int(getattr(ctx, "t_ns", 0) or 0) or None)
+
+
 def ensure_service(ctx: Any, S: Any = None) -> EnvironmentServiceImpl:
     env = getattr(ctx, "env", None)
     if isinstance(env, EnvironmentServiceImpl):
         _st["env"] = env
+        env.tick_ns = tick_ns_of(ctx)
         return env
     env = _st["env"] if _st["ctx"] is ctx else None
     if env is None:
@@ -108,6 +137,13 @@ def ensure_service(ctx: Any, S: Any = None) -> EnvironmentServiceImpl:
         cap = int(getattr(S, "capacity", 0) or getattr(getattr(ctx, "cfg", None), "capacity", 0) or 1024)
         env = build_service(getattr(ctx, "world", None), epoch=int(getattr(ev, "epoch", 1) or 1), capacity=cap,
                             rng=getattr(ctx, "rng", None))
+        env.tick_ns = tick_ns_of(ctx)
+        sc = getattr(ctx, "session_config", None)
+        if isinstance(sc, dict) and sc:
+            try:
+                env.configure_session(sc)
+            except EnvError as ex:
+                log.warning("session config rejected by the environment", extra={"kv": {"code": ex.code, "detail": ex.detail}})
         _st["env"] = env
         _st["keyframe_sent"] = 0
         log.info("environment service ready", extra={"kv": {"world": env.world_id, "seed": env.seed, "assets": env.assets,
@@ -149,6 +185,7 @@ def env_stage(S: Any, ctx: Any) -> None:
     _st["S"] = S
     tick = int(ctx.tick)
     frames = env.on_env_tick_all(tick)
+    k_grid = (tick * env.tick_ns) // H_GRID_NS
     if frames or env.outbox or _st["keyframe_sent"] == 0:
         _emit_frames(ctx, env, frames)
     act = S.active_idx()
@@ -157,7 +194,7 @@ def env_stage(S: Any, ctx: Any) -> None:
     pos = S.enu.pos[act]
     vel = S.enu.vel[act]
     env.step_dryden(act, pos, vel, DT_ENV_S)
-    full = (tick % (10 * FULL_EVERY)) in FULL_TICKS or bool(frames) or not env.row_valid[act].all()
+    full = (k_grid % (2 * FULL_EVERY)) in FULL_GRID or bool(frames) or not env.row_valid[act].all()
     q = env.query(pos, int(ctx.t_ns), fields=ENV_STAGE_FIELDS if full else WIND_ONLY_FIELDS, vel=vel, agent_idx=act,
                   out=env.buf)
     n = q.n
@@ -228,7 +265,7 @@ def query_route(req: Any, ctx: Any) -> dict:
 
 
 def handle_command(msg: dict, apply_tick: int, ctx: Any = None) -> dict:
-    """CommandEngine 接线（M07-to-M08）：`env/set`、`env/preset`、`env/gust` -> {status, code, detail?, result?}。"""
+    """CommandEngine 接线（M07-to-M08）：`env/set`、`env/preset`、`env/gust`、`env/calendar` -> {status, code, detail?, result?}。"""
     env = ensure_service(ctx) if ctx is not None else _st["env"]
     if env is None:
         return {"status": "rejected", "code": 211, "detail": {"why": "ENV_NOT_READY"}}
@@ -275,5 +312,5 @@ register_query("env/streamlines", streamlines_route)
 # signature fn(msg, apply_tick, ctx) -> {status, code, detail?, warnings?, result?}); guarded while M08 lands it
 _reg_cmd = getattr(_R, "register_command_handler", None)
 if _reg_cmd is not None:
-    for _op in ("env/set", "env/preset", "env/gust"):
+    for _op in ("env/set", "env/preset", "env/gust", "env/calendar"):
         _reg_cmd(_op, handle_command, owner="M07")

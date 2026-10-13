@@ -11,10 +11,11 @@ k = sm(k ^ tick); k = sm(k ^ ch)`。每级对下一个分量都是双射，分�
 from __future__ import annotations
 
 import itertools
+import sys
 
 import numpy as np
 
-__all__ = ["CHANNELS", "check_channels", "key", "normal", "normal_elem", "sm", "u64", "uniform", "uniform_elem"]
+__all__ = ["CHANNELS", "check_channels", "key", "normal", "normal_elem", "sm", "u64", "uniform", "uniform_elem", "warmup"]
 
 U = np.uint64
 C1, C2, C3 = U(0x9E3779B97F4A7C15), U(0xBF58476D1CE4E5B9), U(0x94D049BB133111EB)
@@ -30,6 +31,8 @@ CHANNELS: dict[tuple[int, str], tuple[int, int]] = {
     (3, "imu_zb0"): (18, 23),
     (3, "baro"): (24, 25),
     (3, "battery_meas"): (26, 31),
+    (3, "nav_vel"): (32, 34),              # D2 `sensor/nav` 的 GNSS 速度白噪声（nav_pub）
+    (3, "lidar_scan"): (1 << 24, (1 << 24) + 32767),  # D2 MID-360 扫描测距噪声：键的 tick 取帧序号，通道 = base + 点序号
     (4, "detect_draw"): (256, 511),        # 256 + idx·2 + d（idx < 64 为目标表行号；d = 0 相机、1 热成像）
     (4, "detect_extra"): (1024, 1535),     # 1024 + idx·8 + j（首检 conf、位置误差 3、热成像帧种子）
     (4, "thermal_pixel"): (1 << 20, (1 << 20) + 160 * 120 - 1),  # 热成像帧 NETD 噪声（以像素下标为通道，流取 4）
@@ -74,11 +77,34 @@ def key(seed, stream, agent, tick, ch):
     return sm(k ^ u64(ch))
 
 
+_KC_NAME = __package__ + ".kernels_cbrng"
+
+
+def _outer(seed, stream, agent: np.ndarray, tick, ch: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
+    """agent (n,)、ch (m,)、tick 标量时以 numba 核（`kernels_cbrng`，插件安装时导入）求外积键 (n, m) 与 Box–Muller 第二键；
+    核未导入、numba 不可用或 tick 非标量时返回 None（走 numpy，结果逐位相同）。本模块自身不导入 numba（M13-NFR-010）。"""
+    kc = sys.modules.get(_KC_NAME)
+    if kc is None or not kc.HAVE_NUMBA or np.ndim(tick) != 0:
+        return None
+    au = u64(agent)
+    cu = u64(ch)
+    K = np.empty((au.shape[0], cu.shape[0]), np.uint64)
+    B = np.empty_like(K)
+    kc.outer_keys(u64(seed), u64(stream), np.ascontiguousarray(au), u64(tick), np.ascontiguousarray(cu), K, B)
+    return K, B
+
+
 def normal(seed, stream, agent, tick, ch) -> np.ndarray:
     """N(0, 1)；agent (n,)、ch (m,) 时返回 (n, m)（二者都为标量时返回 0 维数组）。"""
     a = np.asarray(agent)
     c = np.asarray(ch)
     if a.ndim == 1 and c.ndim == 1:
+        kb = _outer(seed, stream, a, tick, c)
+        if kb is not None:
+            k, b = kb
+            u1 = ((k >> U(11)).astype(np.float64) + 0.5) * INV53
+            u2 = (b >> U(11)).astype(np.float64) * INV53
+            return np.sqrt(-2.0 * np.log(u1)) * np.cos(2.0 * np.pi * u2)
         a, c = a[:, None], c[None, :]
     k = key(seed, stream, a, tick, c)
     b = sm(k ^ C3)
@@ -92,6 +118,9 @@ def uniform(seed, stream, agent, tick, ch) -> np.ndarray:
     a = np.asarray(agent)
     c = np.asarray(ch)
     if a.ndim == 1 and c.ndim == 1:
+        kb = _outer(seed, stream, a, tick, c)
+        if kb is not None:
+            return (kb[0] >> U(11)).astype(np.float64) * INV53
         a, c = a[:, None], c[None, :]
     return (key(seed, stream, a, tick, c) >> U(11)).astype(np.float64) * INV53
 
@@ -108,3 +137,14 @@ def normal_elem(seed, stream, agent, tick, ch) -> np.ndarray:
 def uniform_elem(seed, stream, agent, tick, ch) -> np.ndarray:
     """逐元素版 U[0, 1)。"""
     return (key(seed, stream, np.asarray(agent), np.asarray(tick), np.asarray(ch)) >> U(11)).astype(np.float64) * INV53
+
+
+def warmup() -> None:
+    """导入外积键核并按运行期签名编译或读缓存（uint64 标量、uint64 一维数组）；由插件安装时调用。"""
+    import importlib
+
+    kc = importlib.import_module(_KC_NAME)
+    if not kc.HAVE_NUMBA:
+        return
+    normal(1, 3, np.arange(2, dtype=np.int64), 5, np.arange(3))
+    uniform(1, 17, np.arange(2, dtype=np.int64), 5, np.arange(3))

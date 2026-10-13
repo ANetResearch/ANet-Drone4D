@@ -4,6 +4,9 @@ numba 模式调用 `kernels_contact.contact`；oracle 模式调用本文件的 `
 `dsm_grid()`（柱体最近格）与 `dtm_grid()`（格心双线性）的只读栅格视图；世界未加载时退化为各机出生点高度的水平面。
 事件：`sim.contact.collision{kind, pos_enu_m, speed_mps}`（severity 3）、`sim.contact.touchdown{pos_enu_m}`（机体 id 在外层 uav）。
 坐标：内部 NED；ENU 栅格高度 h 换算为 `ground_z = −h`（M08 §6.5.1）。
+
+D2（M08-FR-213）：带 FW 位的 slot（固定翼、FW 模式的 VTOL）不进入多旋翼判据，改走 `contact_fw`：地表夹持与触地；伞降（或任何
+下降）触地垂直速度 ≤ `FW_TOUCHDOWN_VZ_MAX`（6 m/s）按正常触地处理（LANDED、`sim.contact.touchdown`），超过判硬着陆（IMPACT）。
 """
 
 from __future__ import annotations
@@ -15,14 +18,17 @@ import numpy as np
 
 from .. import kernels_contact as KC
 from .. import kernels_l1 as K
+from .. import kernels_sel as KS
 from ..collide import UavCollider
-from .l1 import l1_indices, rtl_phase_of
+from .l1 import air_indices, fw_indices, l1_indices, rtl_phase_of
 
 if TYPE_CHECKING:
     from ..pipeline import StageCtx
     from ..state import FleetState
 
-__all__ = ["ContactCfg", "ContactStage", "contact_numpy"]
+__all__ = ["FW_TOUCHDOWN_VZ_MAX", "ContactCfg", "ContactStage", "contact_fw", "contact_numpy"]
+
+FW_TOUCHDOWN_VZ_MAX = 6.0  # m/s：伞降 5 m/s 加 1 m/s 余量（M08 §15.4.4）
 
 
 @dataclass(frozen=True)
@@ -198,6 +204,58 @@ def contact_numpy(S: FleetState, idx: np.ndarray, t_s: float, dsm, dsm_aff, dtm,
     return _write_events(events, ev_out)
 
 
+def contact_fw(S: FleetState, idx: np.ndarray, dsm, dsm_aff, flat: float, ev_out: np.ndarray) -> int:
+    """带 FW 位的 slot 的地表判据（M08-FR-213）：地表取 DSM 最近格（世界未加载时为出生点高度的水平面）；穿透地表时夹持，
+    下降速度 ≤ FW_TOUCHDOWN_VZ_MAX 为正常触地（LANDED），否则硬着陆（IMPACT，KILLED）；离地 0.1 m 以上为空中。
+    返回写入 ev_out 的事件数（按 slot 升序）。"""
+    if idx.size == 0:
+        return 0
+    i = idx.astype(np.int64)
+    p, v = S.p, S.v
+    h = -S.home[i, 2] if flat != 0.0 else _nearest(dsm, dsm_aff, p[i, 1], p[i, 0])
+    S.ground_z[i] = -h
+    z_u = -p[i, 2]
+    S.agl[i] = z_u - h
+    events: list[tuple[int, int]] = []
+    pen = h - z_u
+    touch = (pen > 0.0) & S.in_air[i]
+    if touch.any():
+        ti = i[touch]
+        hard = v[ti, 2] > FW_TOUCHDOWN_VZ_MAX
+        p[ti, 2] = -h[touch]
+        hi = ti[hard]
+        if hi.size:
+            S.crash_sub[hi] = KC.CRASH_IMPACT
+            S.ctrl_mode[hi] = K.M_KILLED
+            S.thrust[hi] = 0.0
+            S.mode_evt[hi] |= K.E_COLLISION
+            events += [(int(s), KC.EV_IMPACT) for s in hi]
+        oi = ti[~hard]
+        if oi.size:
+            S.mode_evt[oi] |= K.E_TOUCHDOWN
+            S.ctrl_mode[oi] = K.M_IDLE
+            S.ctrl_phase[oi] = 0
+            events += [(int(s), KC.EV_TOUCHDOWN) for s in oi]
+        v[ti] = 0.0
+        S.omega[ti] = 0.0
+        S.in_contact[ti] = True
+        S.landed[ti] = True
+        S.in_air[ti] = False
+        S.contact_t[ti] = np.nan
+    ground = ~S.in_air[i]
+    gi = i[ground & (pen > 0.0)]
+    if gi.size:  # 地面上（未起飞或已触地）：贴地
+        p[gi, 2] = -h[ground & (pen > 0.0)]
+    up = i[~S.in_air[i] & (z_u - h > 0.1)]
+    if up.size:
+        S.landed[up] = False
+        S.in_contact[up] = False
+        S.in_air[up] = True
+        S.mode_evt[up] |= K.E_LIFTOFF
+        events += [(int(s), KC.EV_LIFTOFF) for s in up]
+    return _write_events(events, ev_out)
+
+
 def _write_events(events: list[tuple[int, int]], ev_out: np.ndarray) -> int:
     events.sort()
     for k, (s, c) in enumerate(events):
@@ -237,6 +295,14 @@ class ContactStage:
             self.flat = 0.0
 
     def __call__(self, S: FleetState, ctx: StageCtx) -> None:
+        fw_any = KS.any_bits(S.fidelity, 16) if KS.HAVE_NUMBA else bool((S.fidelity & 16).any())
+        if fw_any:  # 带 FW 位的 slot（M08-FR-213）：先于多旋翼判据，事件同样经 _emit
+            fi = fw_indices(S)
+            nfw = contact_fw(S, fi, self.dsm, self.dsm_aff, self.flat, self.ev)
+            if nfw:
+                S.touch()
+                if ctx.events is not None:
+                    self._emit(S, ctx, int(nfw))
         c = getattr(S, "l1_tick_cache", None)
         if c is not None and c[0] == S.tick:
             idx, rs = c[1], c[2]
@@ -300,7 +366,7 @@ class CollideStage:
     def __call__(self, S: FleetState, ctx: StageCtx) -> None:
         if ctx.profiles is None:
             return
-        idx = l1_indices(S)
+        idx = air_indices(S)  # 含 FW 位的 slot（固定翼也参与机间碰撞）
         if idx.size == 0:
             return
         self.contact.check_uav(S, ctx, idx)

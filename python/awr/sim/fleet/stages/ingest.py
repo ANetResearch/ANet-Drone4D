@@ -19,7 +19,7 @@ import numpy as np
 from ...core.supervisor_queue import SupAction
 from .. import actions as ACT
 from .. import params_px4 as P
-from .registry import energy_model, safety_hooks
+from .registry import energy_model, registry, safety_hooks
 
 if TYPE_CHECKING:
     from ..pipeline import StageCtx
@@ -61,16 +61,19 @@ class SetpointMailbox:
 class IngestStage:
     def __init__(self, *, engine: Any = None, supervisor: Any = None,
                  lifecycle: Callable[[FleetState, StageCtx], None] | None = None, mailbox: SetpointMailbox | None = None,
-                 watchdog_s: float = 0.25) -> None:
+                 watchdog_s: float = 0.25, pre: Callable[[FleetState, StageCtx], None] | None = None) -> None:
         self.engine = engine
         self.supervisor = supervisor
         self.lifecycle = lifecycle
         self.mailbox = mailbox
         self.watchdog_ns = int(watchdog_s * 1e9)
+        self.pre = pre  # D2：步边界的保真度切换（VTOL，M08-FR-212），在生命周期之后、SupervisorQueue 之前执行
 
     def __call__(self, S: FleetState, ctx: StageCtx) -> None:
         if self.lifecycle is not None:
             self.lifecycle(S, ctx)
+        if self.pre is not None:
+            self.pre(S, ctx)
         if self.supervisor is not None and self.supervisor.items:
             apply_supervisor(S, self.supervisor.take(), ctx.t_ns * 1e-9, ctx.paths)
         if self.engine is not None:
@@ -92,6 +95,12 @@ class IngestStage:
             S.vel_yawrate[fresh] = -mb.yaw_rate[fresh]  # ψ_ned = π/2 − ψ_enu
             S.sp_wall_ns[fresh] = mb.wall_ns[fresh]
             mb.fresh[fresh] = False
+            filters = registry().setpoint_filters
+            if filters:  # D2：软围栏钩子（keepout_guard，M18 登记）
+                guard = getattr(self.engine, "vel_guard", None) or {}
+                modes = [guard.get(int(s), "off") for s in fresh.tolist()]
+                for _owner, fn in filters:
+                    fn(S, fresh.astype(np.int64), modes, ctx)
         clk = ctx.clock
         if clk is None:
             return
@@ -111,12 +120,28 @@ class IngestStage:
 
 
 def apply_supervisor(S: FleetState, items: list, t_s: float, PB: Any = None) -> None:
-    """执行 SupervisorQueue（M09 `SafetyActuator` 的 Mock 实现，M08 §6.3.4；按 slot 升序）。"""
+    """执行 SupervisorQueue（M09 `SafetyActuator` 的 Mock 实现，M08 §6.3.4；按 slot 升序）。
+
+    D2（M08-FR-213）：`frame_kind ≠ 0` 的 slot 交给 M21 经 `register_motion_provider(..., frames=...)` 登记的固定翼提供者的
+    `safety_action(action, slots, t_s, item)`（HOLD 为盘旋、RTL 为返航、LAND 为进近伞降、ELAND 与 FAILSAFE_DESCENT 为立即开伞）；
+    没有登记提供者时按多旋翼动作执行（只在测试与过渡期出现）。"""
+    fw = None
+    if S.frame_kind.any():
+        from ...core.command import fw_provider
+
+        fw = fw_provider()
     for it in items:
         sl = it.slots[S.active[it.slots]].astype(np.int64)
         if sl.size == 0:
             continue
         a = it.action
+        if fw is not None and callable(getattr(fw, "safety_action", None)):
+            fwm = S.frame_kind[sl] != 0
+            if fwm.any():
+                fw.safety_action(SupAction(a).name, sl[fwm].astype(np.int32), t_s, it)
+                sl = sl[~fwm]
+                if sl.size == 0:
+                    continue
         if a in (SupAction.HOLD, SupAction.RESUME):
             ACT.release_path(S, PB, sl)
             ACT.begin_hold(S, sl, t_s)

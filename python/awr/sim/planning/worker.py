@@ -1,9 +1,17 @@
-"""plan-pool 进程入口（M10-FR-030、FR-031、FR-032；M10 §6.3.3、§7.4.3）。
+"""plan-pool 与共享规划服务的 worker 入口（M10-FR-030、FR-031、FR-032；D2：M10-FR-201、FR-204、FR-205；M10 §6.3.3、§7.4.3、§15）。
 
-`init_worker(worlds_dir, world_key, cpu, parent_pid, parent_cpus)` 在 spawn 出的进程中执行一次：PDEATHSIG 并复核父进程 pid
-（父进程已先行死亡即退出，不留孤儿）、亲和性避开 sim-core 所钉的核、负 nice 恢复为 0、`OMP_NUM_THREADS = 1`（spawn 前已由父进程
-设置，这里复核）、按 (world_id, contentVersion, coordinate.sha256) 打开并缓存 GeoWorld（M04 `open_world_query`，只映射
-派生缓存，不派生）；绑定不一致时拒绝（123 PLAN_GRID_MISMATCH，P-01）。`worker_main(req)` 按作业类别分派：
+两种进程初始化：
+- `init_worker(worlds_dir, world_key, cpu, parent_pid, parent_cpus)`：D1 plan-pool（每 sim-core 一个，spawn）。PDEATHSIG 并复核
+  父进程 pid（父进程已先行死亡即退出，不留孤儿）、亲和性避开 sim-core 所钉的核、负 nice 恢复为 0、`OMP_NUM_THREADS = 1`；
+  进程绑定会话世界 (world_id, contentVersion, coordinate.sha256)，按需以 M04 `open_world_query(allow_derive=False)` 只映射
+  派生缓存；其他世界的作业拒绝（123 PLAN_GRID_MISMATCH，P-01）。
+- `init_server_worker(cfg)`：沙盒共享规划服务（`server.PlanServer`）的可杀 worker。不绑定世界：按作业的
+  (world_id, contentVersion, coordinate.sha256) 打开并以 LRU 缓存（容量 `lru_worlds`，≤ 4，M10-FR-204）；公开模式
+  `allow_derive = false` 时派生缓存缺失的作业以 123 WORLD_NOT_READY（detail = derived_cache_missing）失败；可选 `nice`、
+  cgroup 叶子组（`sandbox/plan/`，经 `awr.runtime.cgroup.join`）。
+
+`worker_main(req)` 查作业注册表分派（`jobs.register_plan_kind`，ADR-113 第 ② 条）：未登记的类别 300 BAD_REQUEST
+（detail = UNKNOWN_KIND）。D1 的 11 种作业由 `kinds_builtin` 登记，处理函数即本模块的 `_do_*`：
 
 | kind | 输入 payload | 输出 |
 |---|---|---|
@@ -14,6 +22,10 @@
 | generator、preview | generator、params、vehicles、constraints | 每机作业项与轨迹、剖面、统计 |
 | resume | start、ctrl_pts、ts_s、tau_s | 转场 + 当前项剩余部分（从静止重新 TOPP） |
 
+Grid25（4 m 规划栅格，M10-FR-205）：优先取 M04 派生缓存 `world.grid25(alt_min_agl_m)`（memmap，不占匿名页）；世界未提供时，
+D1 plan-pool 与本机开发（`allow_derive = true`）在进程内构建（`Grid25.from_world`），共享规划服务在公开模式下以 123 拒绝。
+栅格按 (世界, alt_min_agl_m) 缓存，随世界一起淘汰。
+
 结果的 `result_sha256` 为轨迹字节与作业项的哈希（不含耗时），同一输入逐字节相同（NFR-010）。本模块在 plan-pool
 进程中执行，可读墙钟（作业耗时统计）；sim-core 侧只经 `pool.PlanPoolClient` 调用。
 """
@@ -23,9 +35,12 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import logging
 import math
 import os
+import re
 import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -33,17 +48,34 @@ import numpy as np
 
 from . import bspline as BS
 from . import smooth as SM
-from .jobs import PlanRequest, PlanResult, result_digest
+from .jobs import PlanRequest, PlanResult, ensure_plan_kinds, get_plan_kind, result_digest
 from .transit import plan_transit
 
-__all__ = ["PlanGridMismatch", "get_world", "init_worker", "set_world", "traj_key", "worker_cpus", "worker_main"]
+__all__ = ["PlanGridMismatch", "WorldNotReady", "configure_worlds", "get_world", "grid25_for", "init_server_worker",
+           "init_worker", "job_t0", "preload_world", "release_scratch", "retain_worlds", "set_world", "traj_key", "warm_kernels", "worker_cpus",
+           "worker_main"]
 
-_STATE: dict[str, Any] = {"world": None, "key": None, "worlds_dir": None, "grid25": None}
+log = logging.getLogger("awr.sim.planning.worker")
+
+# world：注入（inline/thread）或 D1 绑定世界已打开的 WorldQuery；key：D1 绑定的会话世界键（None 为多世界模式）；
+# worlds：多世界 LRU（共享规划服务）；grids：(世界键, alt_min) → Grid25；grid_build：是否允许在进程内构建 Grid25
+_STATE: dict[str, Any] = {"world": None, "key": None, "worlds_dir": None, "cache_root": None, "allow_derive": False,
+                          "lru_worlds": 1, "worlds": OrderedDict(), "grids": {}, "grid_build": True, "t0": None}
 MAX_PREVIEW_PTS = 2000
+MAX_LRU_WORLDS = 4
+WORLD_ID_RE = re.compile(r"^[a-z0-9-]{1,63}$")
 
 
 class PlanGridMismatch(RuntimeError):
     pass
+
+
+class WorldNotReady(RuntimeError):
+    """世界或其派生缓存不可用（123 WORLD_NOT_READY；detail 例如 derived_cache_missing）。"""
+
+    def __init__(self, detail: str, msg: str = "") -> None:
+        super().__init__(f"{detail}: {msg}" if msg else detail)
+        self.detail = detail
 
 
 def _pdeathsig() -> None:
@@ -88,13 +120,148 @@ def init_worker(worlds_dir: str | None, world_key: tuple[str, str, str] | None, 
             os.setpriority(os.PRIO_PROCESS, 0, 0)
     _STATE["worlds_dir"] = worlds_dir
     _STATE["key"] = tuple(world_key) if world_key else None
+    _STATE["grid_build"] = True
+    ensure_plan_kinds()
+
+
+def init_server_worker(cfg: dict) -> None:
+    """共享规划服务 worker 的初始化（M10-FR-203、FR-204；M17-FR-032）：PDEATHSIG 与父进程复核、`OMP_NUM_THREADS = 1`、
+    `nice`（缺省 +10）、可选 cgroup 叶子组，多世界 LRU，导入插件。"""
+    os.environ["OMP_NUM_THREADS"] = "1"
+    _pdeathsig()
+    ppid = cfg.get("parent_pid")
+    if ppid is not None and os.getppid() != int(ppid):
+        os._exit(0)
+    leaf = cfg.get("cgroup_leaf")
+    if leaf:
+        try:
+            from awr.runtime import cgroup  # type: ignore[attr-defined]  # M11（WP-03）
+
+            cgroup.join(str(leaf))
+        except Exception as e:  # 不可委派或模块未交付：不阻断，宿主以 RSS 看门狗兜底（M17-FR-026）
+            log.warning("plan worker cgroup join failed", extra={"kv": {"leaf": leaf, "err": str(e)[:160]}})
+    nice = int(cfg.get("nice", 10) or 0)
+    if nice:
+        with contextlib.suppress(OSError, AttributeError):
+            os.setpriority(os.PRIO_PROCESS, 0, max(os.getpriority(os.PRIO_PROCESS, 0), 0) + nice)
+    configure_worlds(cfg.get("worlds_dir"), allow_derive=bool(cfg.get("allow_derive", False)),
+                     lru_worlds=int(cfg.get("lru_worlds", MAX_LRU_WORLDS)), cache_root=cfg.get("cache_root"))
+    ensure_plan_kinds()
+    if cfg.get("warm", True):
+        warm_kernels()
+
+
+def warm_kernels() -> None:
+    """就绪前装载 numba 核（`NUMBA_CACHE_DIR` 中的编译结果；缺失时编译）：TOPP-lite、2.5D A* 与 M04 几何核。冷启动成本
+    计入 worker 重建时长，不计入作业预算（否则新 worker 的第一个作业会被 3 × 预算强杀）。"""
+    import importlib
+
+    for name in ("awr.sim.planning.smooth", "awr.sim.planning.astar25", "awr.world.geometry.kernels"):
+        try:
+            importlib.import_module(name).warmup()
+        except Exception:  # pragma: no cover - 核缺失时只影响首个作业的时延
+            log.debug("warmup %s failed", name, exc_info=True)
+    _warm_cover()
+    _warm_imports()
+
+
+WARM_MODULES = ("awr.tasking.model", "awr.tasking.decompose", "awr.tasking.allocator", "awr.tasking.greedy", "awr.tasking.station",
+                "awr.tasking.sustain", "awr.tasking.scan", "awr.tasking.keepout", "awr.tasking.energy", "awr.tasking.check")
+
+
+def _warm_imports() -> None:
+    """M20 作业处理函数内部延迟导入的算法模块（`awr.tasking.plan_kinds`）在就绪前导入（D2-FX-R2）：首个作业不再使 worker 的匿名页
+    增长（第 1 轮驻留后沙盒组比创建前基线高 14 MB 中，worker 首个作业的一次性增长约 3–5 MB，D2-AC-06/45）。"""
+    import importlib
+
+    for name in WARM_MODULES:
+        try:
+            importlib.import_module(name)
+        except Exception:  # pragma: no cover - 模块缺失只影响首个作业
+            log.debug("warm import %s failed", name, exc_info=True)
+
+
+def _warm_cover() -> None:
+    """M20 可见格覆盖核（`awr.tasking.kernels_cover`，GSD 扫描作业）：D2-ACC-1 记录它在首个扫描作业中才编译或装载（numba 缓存
+    新增签名、worker 匿名页随之增长，D2-AC-28/45）；就绪前以 1 格 1 段的输入装载同一签名（D2-FX-R2）。"""
+    try:
+        import numpy as np
+
+        from awr.tasking import kernels_cover as kc
+
+        if not kc.have_numba():
+            return
+        cells = np.zeros((1, 3), np.float64)
+        strips = np.array([[0.0, 0.0, 10.0, 0.0, 50.0]], np.float64)
+        p = kc.CoverParams(0.5, 0.5, 1.0, 1e-3, 1.0, 5.0)
+        kc.cover_cells(cells, strips, p, np.zeros((4, 4), np.float64), (-4.0, -4.0, 2.0))
+    except Exception:  # pragma: no cover - 只影响首个扫描作业的时延与内存
+        log.debug("warmup kernels_cover failed", exc_info=True)
+
+
+def release_scratch() -> None:
+    """共享规划服务每个作业之后释放 2.5D A* 的整栅格工作数组（`astar25._PLANNERS`：sanfrancisco 约 50 MB 被触及的匿名页）。
+    worker 在作业之间只保留解释器、numba 核与世界映射，匿名页 PSS ≤ 90 MB（M10-FR-204、D2-AC-28）；下一个 A* 作业重新
+    分配（约 10 ms）。D1 plan-pool 不调用（每 sim-core 一个世界，保留以省分配）。"""
+    import sys
+
+    a = sys.modules.get("awr.sim.planning.astar25")
+    if a is not None:
+        a._PLANNERS.clear()
+
+
+def preload_world(world_key: tuple[str, str, str] | None, payload: dict | None = None) -> None:
+    """作业计时开始前打开（或命中 LRU）作业的世界：世界装载属于服务成本，不计入作业的 3 × 预算（共享规划服务）。
+    失败不抛出，由随后的 `worker_main` 按 123 回复。测试钩子（`AWR_PLAN_TEST_HOOKS=1`）：`payload._test_load_sleep_s`
+    模拟慢装载。"""
+    if payload and os.environ.get("AWR_PLAN_TEST_HOOKS") == "1" and payload.get("_test_load_sleep_s"):
+        time.sleep(float(payload["_test_load_sleep_s"]))
+    with contextlib.suppress(Exception):
+        get_world(world_key)
+
+
+def retain_worlds(world_ids: list[str] | set[str]) -> int:
+    """只保留给定世界（共享规划服务在会话结束后下发活动世界集合，AWR-04 §4.4.2"只映射活动世界"）：其余世界连同其
+    Grid25 从 LRU 移除并回收（memmap 随之解除映射）；返回移除的世界数。"""
+    import gc
+
+    keep = {str(x) for x in world_ids}
+    lru: OrderedDict = _STATE["worlds"]
+    gone = [k for k in lru if k[0] not in keep]
+    for k in gone:
+        lru.pop(k, None)
+        for gk in [g for g in _STATE["grids"] if g[0] == k]:
+            _STATE["grids"].pop(gk, None)
+    if gone:
+        release_scratch()
+        gc.collect()
+    return len(gone)
+
+
+def configure_worlds(worlds_dir: str | os.PathLike | None, *, allow_derive: bool, lru_worlds: int = MAX_LRU_WORLDS,
+                     cache_root: str | os.PathLike | None = None) -> None:
+    """多世界模式（共享规划服务）：不绑定会话世界，按作业键打开并以 LRU 缓存（容量 1..4）。"""
+    _STATE.update(world=None, key=None, worlds_dir=str(worlds_dir) if worlds_dir else None,
+                  cache_root=str(cache_root) if cache_root else None, allow_derive=bool(allow_derive),
+                  lru_worlds=max(1, min(MAX_LRU_WORLDS, int(lru_worlds))), grid_build=bool(allow_derive))
+    _STATE["worlds"].clear()
+    _STATE["grids"].clear()
 
 
 def set_world(world_key: tuple[str, str, str] | None, world: Any) -> None:
     """inline/thread 模式：直接注入 sim-core 已打开的 WorldQuery（同一只读栅格）。"""
     _STATE["key"] = tuple(world_key) if world_key else None
     _STATE["world"] = world
-    _STATE["grid25"] = None
+    _STATE["grids"].clear()
+
+
+def job_t0() -> float | None:
+    """当前作业在 `worker_main` 入口记录的 perf_counter（内置作业的 plan_ms 统计口径与 D1 相同）。"""
+    return _STATE.get("t0")
+
+
+def _wkey(w: Any) -> tuple[str, str, str]:
+    return (w.world_id, w.content_version, w.coordinate_sha256)
 
 
 def get_world(world_key: tuple[str, str, str] | None) -> Any:
@@ -103,32 +270,122 @@ def get_world(world_key: tuple[str, str, str] | None) -> Any:
         return w
     key = tuple(world_key)
     if w is not None:
-        if (w.world_id, w.content_version, w.coordinate_sha256) != key:
-            raise PlanGridMismatch(f"world binding {key} != loaded {(w.world_id, w.content_version, w.coordinate_sha256)}")
+        if _wkey(w) != key:
+            raise PlanGridMismatch(f"world binding {key} != loaded {_wkey(w)}")
         return w
+    bound = _STATE["key"]
+    if bound is not None and key != bound:              # D1：plan-pool 只服务本会话的世界
+        raise PlanGridMismatch(f"world {key} != session binding {bound}")
     wd = _STATE["worlds_dir"]
     if not wd:
         return None
-    from awr.world.geometry.query import open_world_query
-
-    w = open_world_query(Path(wd) / key[0], allow_derive=False)
-    if (w.world_id, w.content_version, w.coordinate_sha256) != key:
-        raise PlanGridMismatch(f"world on disk {(w.world_id, w.content_version, w.coordinate_sha256)} != session {key}")
-    _STATE["world"] = w
+    if bound is not None:                               # D1 绑定模式：首次打开后常驻
+        w = _open_world(wd, key)
+        _STATE["world"] = w
+        return w
+    lru: OrderedDict = _STATE["worlds"]
+    w = lru.get(key)
+    if w is not None:
+        lru.move_to_end(key)
+        return w
+    w = _open_world(wd, key)
+    lru[key] = w
+    while len(lru) > int(_STATE["lru_worlds"]):
+        old, _ = lru.popitem(last=False)                # 解除映射：引用释放后 memmap 随之关闭
+        for gk in [k for k in _STATE["grids"] if k[0] == old]:
+            _STATE["grids"].pop(gk, None)
     return w
 
 
-def _grid25(world: Any, alt_min_agl_m: float) -> Any:
-    g = _STATE.get("grid25")
-    if g is None and world is not None:
-        try:
-            from .grid25 import Grid25
+def _open_world(wd: str, key: tuple) -> Any:
+    from awr.world.geometry.query import open_world_query
+    from awr.world.geometry.types import GeoLoadError
 
-            g = Grid25.from_world(world, alt_min_agl_m)
-            _STATE["grid25"] = g
-        except Exception:
-            g = None
+    if not WORLD_ID_RE.match(str(key[0])):
+        raise PlanGridMismatch(f"bad world id {key[0]!r}")
+    cr = _STATE.get("cache_root")
+    allow = bool(_STATE.get("allow_derive")) if _STATE["key"] is None else False
+    try:
+        w = open_world_query(Path(wd) / key[0], Path(cr) if cr else None, allow_derive=allow)
+    except GeoLoadError as e:
+        if e.code == "GEO_CACHE_MISS":
+            raise WorldNotReady("derived_cache_missing", str(e)) from None
+        raise WorldNotReady(str(e.code).lower(), str(e)) from None
+    if _wkey(w) != key:
+        raise PlanGridMismatch(f"world on disk {_wkey(w)} != session {key}")
+    return w
+
+
+def _as_grid25(obj: Any, alt_min_agl_m: float) -> Any:
+    """M04 `world.grid25()` 的返回值（`Grid25View`，或 `(a, meta)`）→ M10 `Grid25`（数组不复制）。只读 memmap 改以写时复制
+    重新映射：2.5D A* 在 search 期间临时改写起终点格，触及的页才成为私有匿名页。"""
+    from .grid25 import Grid25
+
+    if obj is None:
+        return None
+    if isinstance(obj, Grid25):
+        g = obj
+    elif isinstance(obj, tuple) and len(obj) == 2:
+        a, meta = obj
+        x0, y0 = (float(v) for v in meta["originXY"])
+        g = Grid25(a, x0, y0, float(meta["cellM"]), float(alt_min_agl_m), meta.get("base"))
+    else:
+        x0 = getattr(obj, "x0_m", None)
+        g = Grid25(obj.a, float(obj.x0 if x0 is None else x0), float(getattr(obj, "y0_m", getattr(obj, "y0", 0.0))),
+                   float(getattr(obj, "cell_m", getattr(obj, "cell", 4.0))),
+                   float(getattr(obj, "alt_min_agl_m", alt_min_agl_m)), getattr(obj, "base", None))
+    a = g.a
+    if isinstance(a, np.memmap) and not a.flags.writeable and getattr(a, "filename", None):
+        g.a = np.memmap(a.filename, dtype=a.dtype, mode="c", shape=a.shape, offset=int(getattr(a, "offset", 0) or 0))
     return g
+
+
+def grid25_for(world: Any, alt_min_agl_m: float) -> Any:
+    """4 m 规划栅格（M10-FR-205）：优先取派生缓存（`world.grid25`，写时复制映射）；世界未提供该接口时按 `grid_build`
+    在进程内构建（D1 plan-pool、本机开发）或以 123 derived_cache_missing 拒绝（公开模式共享规划服务）。世界本身不支持
+    Grid25（小于一个金字塔层）或构建失败时返回 None，调用方按 D1 行为退回不用栅格的规划器。"""
+    if world is None:
+        return None
+    ck = (_wkey(world), round(float(alt_min_agl_m), 3))
+    if ck in _STATE["grids"]:
+        return _STATE["grids"][ck]
+    g = None
+    fn = getattr(world, "grid25", None)
+    if callable(fn):
+        from awr.world.geometry.types import GeoLoadError
+
+        try:
+            try:
+                v = fn(float(alt_min_agl_m), copy_on_write=True)
+            except TypeError:
+                v = fn(float(alt_min_agl_m))
+            g = _as_grid25(v, alt_min_agl_m)
+        except GeoLoadError as e:                       # 派生缓存缺失或损坏
+            if not _STATE["grid_build"]:
+                raise WorldNotReady("derived_cache_missing", str(e)) from None
+            g = _build_grid25(world, alt_min_agl_m)
+        except Exception as e:                          # GeoError（世界过小、高度越界）等：与 D1 构建失败同样处理
+            log.debug("grid25 unavailable: %s", e)
+            g = None
+    elif _STATE["grid_build"]:
+        g = _build_grid25(world, alt_min_agl_m)
+    else:
+        raise WorldNotReady("derived_cache_missing", "world has no grid25 cache")
+    _STATE["grids"][ck] = g
+    return g
+
+
+def _build_grid25(world: Any, alt_min_agl_m: float) -> Any:
+    try:
+        from .grid25 import Grid25
+
+        return Grid25.from_world(world, alt_min_agl_m)
+    except Exception:
+        return None
+
+
+def _grid25(world: Any, alt_min_agl_m: float) -> Any:
+    return grid25_for(world, alt_min_agl_m)
 
 
 def traj_key(world_cv: str, limits: dict, geometry: Any, extra: dict | None = None) -> str:
@@ -560,40 +817,33 @@ def _do_deconflict(req: PlanRequest, world: Any) -> PlanResult:
 
 
 def worker_main(req: PlanRequest) -> PlanResult:
+    """按作业注册表分派（M10-FR-201）。未登记的类别 300（UNKNOWN_KIND）；世界不可用 123；处理函数抛错 320。"""
     t0 = time.perf_counter()
     _test_hooks(req)
+    ensure_plan_kinds()
+    spec = get_plan_kind(req.kind)
+    if spec is None:
+        res = _fail(req, "error", 300, "UNKNOWN_KIND", f"未登记的规划作业类别 {str(req.kind)[:64]!r}", {"kind": req.kind})
+        res.stats["t_ms"] = round((time.perf_counter() - t0) * 1000.0, 3)
+        return res
     try:
         world = get_world(req.world_key)
     except PlanGridMismatch as e:
         return PlanResult(req.job_id, "error", (), None, {}, "PLAN_GRID_MISMATCH", str(e), "", 123)
+    except WorldNotReady as e:
+        return PlanResult(req.job_id, "error", (), None, {}, e.detail, str(e)[:200], "", 123)
     except Exception as e:  # GeoLoadError 等
         return PlanResult(req.job_id, "error", (), None, {}, "WORLD_LOAD_FAILED", str(e)[:200], "", 123)
+    _STATE["t0"] = t0
     try:
-        k = req.kind
-        if k == "warm":
-            SM.make_trajectory(np.array([[0, 0, 10.0], [10, 0, 10.0], [10, 10, 12.0]]), SM.Limits(), None)
-            if req.payload.get("grid25"):
-                _grid25(world, float(req.payload.get("alt_min_agl_m", 20.0)))
-            res = PlanResult(req.job_id, "ok", (), None, {}, None, None, result_digest((), None))
-        elif k == "path_valid":
-            res = _do_path_valid(req, world)
-        elif k in ("safe_transit", "astar25"):
-            res = _do_transit(req, world, t0)
-        elif k == "follow_path":
-            res = _do_follow_path(req, world, t0)
-        elif k == "formation" and req.payload.get("op") == "assemble":
-            res = _do_assemble(req, world, t0)
-        elif k in ("generator", "coverage", "formation"):
-            res = _do_generator(req, world, t0)
-        elif k == "preview":
-            res = _do_generator(req, world, t0, preview=True)
-        elif k == "resume":
-            res = _do_resume(req, world, t0)
-        elif k == "deconflict":
-            res = _do_deconflict(req, world)
-        else:
-            res = _fail(req, "error", 300, f"UNKNOWN_KIND:{k}")
+        res = spec.fn(req, world)
+        if not isinstance(res, PlanResult):
+            res = _fail(req, "error", 320, f"BAD_RESULT: {type(res).__name__}")
+    except WorldNotReady as e:
+        res = _fail(req, "error", 123, e.detail, str(e)[:200])
     except Exception as e:
         res = _fail(req, "error", 320, f"{type(e).__name__}: {str(e)[:200]}")
+    finally:
+        _STATE["t0"] = None
     res.stats["t_ms"] = round((time.perf_counter() - t0) * 1000.0, 3)
     return res

@@ -11,6 +11,12 @@ FIXED(az, el) 常量；LOOK_AT(p) `az = atan2(d_y, d_x)`、`el = atan2(d_z, √(
 来源：M10 任务项 `gimbal` 动作与生成器缺省（`set_gimbal`、`set_default_for`、`apply_item_gimbal`，sim-core 内部调用，当步生效，
 不写日志）；外部来源（V0.2 起 operator 与 agent）经 `external=True` 在步边界按 apply_tick 锁存（D1 无外部来源，
 日志回调 `on_external` 留给 V0.2）。
+
+D2 指向源与仲裁（M13-FR-206–208；§15.5 第 2、3 步）：每个云台列有四层目标，`operator`（`uav/{id}/cmd/gimbal`，最后一条命令后
+保持 60 s【仿真】或至 `release`）> `tasking`（M20 `set_tasking_pointing`，至释放）> `cue`（M19 雷达或声阵列引导，保持 5 s
+【仿真】）> `default`（D1 的任务项动作与生成器缺省）。D1 来源只写缺省层（`payload` 块 `df_*`），当前源为 default 时同时写入
+生效字段（`g_mode` 等，与 D1 逐位相同）；其余各层变化或到期时由 `arbitrate` 把当前最高层写入生效字段，云台随后按 D1 的限位与
+90°/s 推进。云台列按有效传感器组的 `col_specs` 取所有者（D1 组与按 kind 取相同），`on_gimbal_of` 的跟随者（照明器）共享该列指向。
 """
 
 from __future__ import annotations
@@ -22,8 +28,10 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from awr.sim.fleet import kernels_sel as KS
+
 from . import kernels_gimbal as KG
-from .enums import GimbalMode, SensorKind, SensorState
+from .enums import GimbalMode, PointSrc, SensorKind, SensorState
 from .frames import gimbal_R, quat_to_R, quat_to_R_s
 
 if TYPE_CHECKING:
@@ -32,6 +40,9 @@ if TYPE_CHECKING:
 __all__ = ["COL_OF_KIND", "SCALAR_MAX", "GimbalBank", "SensorError", "generator_default", "mode_from_item"]
 
 SCALAR_MAX = 8
+OP_HOLD_NS = 60_000_000_000   # operator 源保持 60 s【仿真】（M13 §15.4）
+CUE_HOLD_NS = 5_000_000_000   # cue 源保持 5 s【仿真】
+CUE_DEFAULT_RANGE_M = 300.0   # 无距离的引导：方位射线与地面无交点时取 300 m 处（M13-FR-207）
 ENTER_EPS = math.radians(0.1)
 EXIT_EPS = math.radians(0.01)
 COL_OF_KIND = {SensorKind.CAMERA: 0, SensorKind.THERMAL: 1}
@@ -127,18 +138,27 @@ class GimbalBank:
             raise SensorError(110, "SENSOR_UNKNOWN", slot=slot)
         cols = []
         for k, kind in KIND_OF_COL.items():
-            s = rig.by_kind(kind)
+            s = rig.col_specs[k]
             if s is None or s.gimbal is None or not (self.rt.blk["has"][slot] & s.bit):
                 continue
-            if sensor is None or sensor == s.name or sensor == kind.name.lower():
+            if sensor is None or sensor == s.name or sensor == kind.name.lower() or sensor == f"g{k}" or \
+                    any(f.name == sensor for f in rig.followers(k)):
                 cols.append(k)
         if sensor is not None and not cols:
             raise SensorError(110, "SENSOR_UNKNOWN", slot=slot, sensor=sensor)
         return cols
 
+    def primary_col(self, slot: int) -> int | None:
+        """主云台列（`uav/{id}/cmd/gimbal` 不带 gimbal_id 时）：首个有云台且已挂载的列。"""
+        try:
+            cols = self._cols(int(slot), None)
+        except SensorError:
+            return None
+        return cols[0] if cols else None
+
     def spec_of(self, slot: int, k: int):
         rig = self.rt.rig_of(slot)
-        return None if rig is None else rig.by_kind(KIND_OF_COL[k])
+        return None if rig is None else rig.col_specs[k]
 
     # ------------------------------------------------------------ API（sim-core 内部调用，当步生效）
     def set_mode(self, slot: int, sensor: str | None, mode: GimbalMode | int | str, args: dict | None = None, *,
@@ -157,7 +177,20 @@ class GimbalBank:
 
     def _apply_mode(self, slot: int, sensor: str | None, m: GimbalMode, args: dict) -> None:
         b = self.rt.blk
+        P = self.rt.pblk
         for k in self._cols(slot, sensor):
+            if P is not None:  # 缺省层（D2 仲裁；当前源不是 default 时只记录）
+                P["df_mode"][slot, k] = int(m)
+                P["df_t"][slot, k] = np.nan
+                if m == GimbalMode.FIXED:
+                    P["df_a"][slot, k] = (float(args.get("az_rad", 0.0)), float(args.get("el_rad", 0.0)))
+                elif m == GimbalMode.LOOK_AT:
+                    P["df_t"][slot, k] = _vec3(args["p_enu_m"])
+                elif m == GimbalMode.LOOK_AT_AXIS:
+                    c = _vec3(args["center_enu_m"])
+                    P["df_t"][slot, k] = (c[0], c[1], np.nan)
+                if int(P["src"][slot, k]) != PointSrc.DEFAULT:
+                    continue
             b["g_mode"][slot, k] = int(m)
             b["g_tgt"][slot, k] = np.nan
             if m == GimbalMode.FIXED:
@@ -432,7 +465,7 @@ class GimbalBank:
         MR = np.zeros((T, 3, 3))
         for r_, rg in enumerate(rl):
             for k_ in range(N_COLS):
-                sp = None if rg is None else rg.by_kind(KIND_OF_COL[k_])
+                sp = None if rg is None else rg.col_specs[k_]
                 if sp is None or sp.gimbal is None:
                     continue
                 i = r_ * N_COLS + k_
@@ -480,7 +513,7 @@ class GimbalBank:
             m = key == u
             r_, k_ = divmod(int(u), N_COLS)
             rg = self.rt.rig_list[r_] if r_ >= 0 else None
-            sp = None if rg is None else rg.by_kind(KIND_OF_COL[k_])
+            sp = None if rg is None else rg.col_specs[k_]
             if sp is None or sp.gimbal is None:
                 continue
             g = sp.gimbal
@@ -541,6 +574,135 @@ class GimbalBank:
         b["g_az"][S_, K_] = az
         b["g_el"][S_, K_] = el
         b["g_dyn"][S_[done], K_[done]] = False
+
+    # ------------------------------------------------------------ D2 指向源与仲裁（M13-FR-206–208）
+    def _write_layer(self, s: int, k: int, src: PointSrc) -> None:
+        """把指向源 src 那一层的目标写入生效字段（g_mode、g_paz/g_pel、g_tgt），云台随后按限位与角速度推进。"""
+        b, P = self.rt.blk, self.rt.pblk
+        b["g_tgt"][s, k] = np.nan
+        if src == PointSrc.OPERATOR:
+            w = int(P["op_w"][s, k])
+            if w in (1, 2):  # look_at、track
+                b["g_mode"][s, k] = int(GimbalMode.LOOK_AT)
+                b["g_tgt"][s, k] = P["op_t"][s, k]
+            else:  # angles、stow
+                b["g_mode"][s, k] = int(GimbalMode.FIXED)
+                b["g_paz"][s, k], b["g_pel"][s, k] = P["op_a"][s, k]
+        elif src == PointSrc.TASKING:
+            b["g_mode"][s, k] = int(GimbalMode.LOOK_AT)
+            b["g_tgt"][s, k] = P["tk_t"][s, k]
+        elif src == PointSrc.CUE:
+            b["g_mode"][s, k] = int(GimbalMode.LOOK_AT)
+            b["g_tgt"][s, k] = P["cu_t"][s, k]
+        else:
+            m = int(P["df_mode"][s, k])
+            b["g_mode"][s, k] = m
+            if m == GimbalMode.FIXED:
+                b["g_paz"][s, k], b["g_pel"][s, k] = P["df_a"][s, k]
+            elif m in (GimbalMode.LOOK_AT, GimbalMode.LOOK_AT_AXIS):
+                b["g_tgt"][s, k] = P["df_t"][s, k]
+        b["g_dyn"][s, k] = True
+
+    def arbitrate(self, s: int, k: int, t_ns: int, *, force: bool = False) -> PointSrc:
+        """按优先级取当前有效源（operator > tasking > cue > default），到期的 operator、cue 层随之失效；源变化或 force 时写入。"""
+        P = self.rt.pblk
+        if P is None:
+            return PointSrc.DEFAULT
+        new = PointSrc.DEFAULT
+        if P["op_on"][s, k]:
+            if int(t_ns) - int(P["t_op"][s, k]) <= OP_HOLD_NS:
+                new = PointSrc.OPERATOR
+            else:
+                P["op_on"][s, k] = 0
+        if new == PointSrc.DEFAULT and P["tk_on"][s, k]:
+            new = PointSrc.TASKING
+        if P["cu_on"][s, k]:
+            if int(t_ns) - int(P["t_cue"][s, k]) > CUE_HOLD_NS:
+                P["cu_on"][s, k] = 0
+            elif new == PointSrc.DEFAULT:
+                new = PointSrc.CUE
+        old = int(P["src"][s, k])
+        P["src"][s, k] = int(new)
+        if new != PointSrc.DEFAULT:
+            self.rt.d2_live = True
+        if force or old != int(new):
+            self._write_layer(s, k, new)
+        return new
+
+    def step_sources(self, t_ns: int) -> int:
+        """每次 stage 调用：operator、cue 到期回落；track 模式的目标位置跟随识别物（M18 实体表）。"""
+        P = self.rt.pblk
+        if P is None:
+            return 0
+        src = P["src"]
+        if KS.HAVE_NUMBA and src.ndim == 2:
+            # 行主序的一次遍历（与 np.nonzero 逐位相同；D2-AC-08：50 Hz 调用约 29 µs → 数 µs）
+            bi = np.empty(src.size, np.int64)
+            bk = np.empty(src.size, np.int64)
+            m = KS.nonzero2(src, bi, bk)
+            ii, kk = bi[:m], bk[:m]
+        else:
+            ii, kk = np.nonzero(src)
+        n = 0
+        for s, k in zip(ii.tolist(), kk.tolist(), strict=True):
+            cur = int(src[s, k])
+            if cur == PointSrc.OPERATOR and int(P["op_w"][s, k]) == 2:
+                p = self.rt.target_pos(int(P["op_trk"][s, k]))
+                if p is not None:
+                    P["op_t"][s, k] = p
+                    self.rt.blk["g_tgt"][s, k] = p
+            if (cur == PointSrc.OPERATOR and int(t_ns) - int(P["t_op"][s, k]) > OP_HOLD_NS) or \
+                    (cur == PointSrc.CUE and int(t_ns) - int(P["t_cue"][s, k]) > CUE_HOLD_NS):
+                self.arbitrate(s, k, t_ns)
+                n += 1
+        return n
+
+    def set_operator(self, s: int, k: int, mode: str, args: dict, t_ns: int) -> None:
+        """operator 层（`uav/{id}/cmd/gimbal`；角度为弧度，yaw 相对机头、左为正，pitch 向上为正）。"""
+        P, b = self.rt.pblk, self.rt.blk
+        if mode == "release":
+            P["op_on"][s, k] = 0
+            self.arbitrate(s, k, t_ns, force=True)
+            return
+        w = {"angles": 0, "fixed": 0, "look_at": 1, "track": 2, "stow": 3}[mode]
+        P["op_w"][s, k] = w
+        P["op_trk"][s, k] = -1
+        if w == 0:
+            az = float(args["yaw_rad"]) if args.get("yaw_rad") is not None else float(b["g_az"][s, k])
+            el = float(args["pitch_rad"]) if args.get("pitch_rad") is not None else float(b["g_el"][s, k])
+            P["op_a"][s, k] = (az, el)
+        elif w == 3:
+            P["op_a"][s, k] = (0.0, 0.0)
+        elif w == 1:
+            P["op_t"][s, k] = _vec3(args["look_at_enu_m"])
+        else:
+            P["op_trk"][s, k] = int(args["target_no"])
+            P["op_t"][s, k] = args["p_enu_m"]
+        P["op_on"][s, k] = 1
+        P["t_op"][s, k] = int(t_ns)
+        self.arbitrate(s, k, t_ns, force=True)
+
+    def set_tasking(self, s: int, k: int, look_at_enu_m: Any | None, t_ns: int) -> None:
+        P = self.rt.pblk
+        if look_at_enu_m is None:
+            P["tk_on"][s, k] = 0
+        else:
+            P["tk_on"][s, k] = 1
+            P["tk_t"][s, k] = _vec3(look_at_enu_m)
+        self.arbitrate(s, k, t_ns, force=int(P["src"][s, k]) == PointSrc.TASKING or look_at_enu_m is not None)
+
+    def cue_point(self, s: int, k: int, p_enu: Any, t_ns: int) -> bool:
+        """cue 层（M13-FR-207）：operator 或 tasking 生效时只记录不执行。"""
+        P = self.rt.pblk
+        cur = self.arbitrate(s, k, t_ns)
+        if cur in (PointSrc.OPERATOR, PointSrc.TASKING):
+            self.stats["cue_ignored"] = self.stats.get("cue_ignored", 0) + 1
+            return False
+        P["cu_on"][s, k] = 1
+        P["t_cue"][s, k] = int(t_ns)
+        P["cu_t"][s, k] = _vec3(p_enu)
+        self.arbitrate(s, k, t_ns, force=True)
+        return True
 
     # ------------------------------------------------------------ 位姿
     def R_gimbal(self, slots: np.ndarray, k: int) -> np.ndarray:

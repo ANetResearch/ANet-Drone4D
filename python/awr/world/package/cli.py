@@ -1,6 +1,7 @@
 """`worldpkg` 命令行（M03 §7.1；AWR-16 §15.4、§18.1）。
 
-子命令：ingest、grid、tile、package、zones、env、qa、validate、build、status、default-world、clean、export（V0.5 预留）。
+子命令：ingest、grid、tile、package、zones、env、qa、validate、build、status、dataset、default-world、clean、export（V0.5 预留）。
+`dataset` 只重写已构建六城 world.json 的数据集说明（ADR-109 第 3 条，contentVersion 与派生缓存键不变）。
 `ingest synthetic` 与 `build synthcity` 生成合成演示城市（ADR-077，`awr.world.ingest.synthetic`）。
 退出码：0 成功；1 校验失败；2 ingest 门禁失败；3 参数、I/O 或锁冲突；4 原始数据缺失或 sha256 不符。
 输出只用 ASCII 与中文。
@@ -296,6 +297,33 @@ def cmd_status(a) -> int:
     return 0
 
 
+def cmd_dataset(a) -> int:
+    """只重写 world.json 的数据集说明（ADR-109 第 3 条；`awr.world.package.dataset`）。--check 只报告，过期时退出码 1。"""
+    from ..ingest.urbanscene3d import CITIES
+    from .dataset import refresh_all
+
+    worlds = _safe_path(a.worlds) if a.worlds else default_worlds_dir()
+    for c in a.ids or []:
+        if c not in CITIES:
+            _err(f"未知城市 {c}：dataset 只处理 UrbanScene3D 六城 {sorted(CITIES)}")
+            return 3
+    res = refresh_all(worlds, a.ids or None, check=a.check)
+    if a.json:
+        _p(json.dumps([{"world_id": r.world_id, "action": r.action, "detail": r.detail} for r in res], ensure_ascii=False, indent=1))
+    else:
+        for r in res:
+            _p(f"{r.world_id:<13} {r.action}{'  ' + r.detail if r.detail else ''}")
+    if any(r.action == "failed" for r in res):
+        return 1
+    if any(r.action == "busy" for r in res):
+        _err("提示：有世界正在构建（构建锁被占用），构建结束后再执行")
+        return 3
+    if a.check and any(r.action == "stale" for r in res):
+        _err("提示：python -m awr.world.package.cli dataset（make worlds-dataset）只重写数据集说明，不需要重建世界")
+        return 1
+    return 0
+
+
 def cmd_default_world(a) -> int:
     """打印生效的默认世界（ADR-077 回退规则；mk/m03.mk 与 make run 预检使用）。--json 输出完整判定。"""
     from .defaults import resolve_default_world
@@ -409,6 +437,12 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--worlds")
     p.add_argument("--raw")
     p.set_defaults(fn=cmd_status)
+    p = sub.add_parser("dataset", help="只重写已构建六城 world.json 的数据集说明（ADR-109；contentVersion 不变）")
+    p.add_argument("ids", nargs="*")
+    p.add_argument("--check", action="store_true", help="只报告；有过期的说明时退出码 1")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--worlds")
+    p.set_defaults(fn=cmd_dataset)
     p = sub.add_parser("default-world", help="生效的默认世界（AWR_WORLD 显式优先；深圳未构建且合成城市可用时回退，ADR-077）")
     p.add_argument("--json", action="store_true")
     p.add_argument("--field", choices=["world", "scenario"], default="world")

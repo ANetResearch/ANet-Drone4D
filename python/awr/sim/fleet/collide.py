@@ -2,7 +2,8 @@
 
 两机在最近一次检查以来的线性运动段上的最近距离（CPA）小于两机碰撞半径之和即判 CRASHED/COLLISION_UAV（`crash_sub = 3`），
 两机均置 KILLED、推力 0。候选对由 8 套半格平移网格的同格配对给出（格宽 C 时距离 < C/2 的任意一对至少在一套网格中同格），
-全部向量化（排序 + 相邻比较），N = 1000 时每次约数百 µs，按 25 Hz 执行（contact 每 5 次调用一次）。M09 FleetGuard 的
+全部向量化（排序 + 相邻比较），N = 1000 时每次约数百 µs，按 25 Hz 执行（contact 每 5 次调用一次）。有 numba 时任意机数都走
+排序扫描核 `kernels_contact.uav_hits`（同一候选覆盖与判据，逐对等价见 tests/sim/test_contact.py）。M09 FleetGuard 的
 间距与让行（10 Hz 网格哈希 + CPA）属 M09；本模块只做几何碰撞后果。
 """
 
@@ -55,6 +56,17 @@ class UavCollider:
         self.primed[S.landed] = False
         if i.size < 2:
             return []
+        if self.use_kernel:
+            # numba 排序扫描（中点各轴之差 < CELL_M 为候选，覆盖网格法的全部候选）与 CPA 判定一次完成；命中对按 (a, b) 升序，
+            # 与下方网格法同一判据、同一施加顺序（FX2-R2：N = 1000 时约 3 ms → 数十 µs）。小机群同样走核：sandbox100 的 10 架
+            # 时网格法约 0.2 ms/次（8 套网格的 numpy 广播），核约 10 µs（D2-AC-08）
+            rad = radius[S.profile_id[i]].astype(np.float64)
+            nh = KC.uav_hits(p0, p1, rad, CELL_M, self._hits_buf)
+            if nh >= 0:
+                if nh == 0:
+                    return []
+                h = self._hits_buf[:nh]
+                return self._apply(S, i, h[:, 0], h[:, 1])
         mid = 0.5 * (p0 + p1)
         if i.size <= SMALL_N:
             # 小机群：全部无序对逐套网格比较同格（与下方排序配对得到同一候选集与同一升序，FX-SIM1 固定开销优化）
@@ -64,16 +76,6 @@ class UavCollider:
             if not same.any():
                 return []
             return self._hits(S, i, p0, p1, iu[same].astype(np.int64), ju[same].astype(np.int64), radius)
-        if self.use_kernel:
-            # 大机群：numba 排序扫描（中点各轴之差 < CELL_M 为候选，覆盖网格法的全部候选）与 CPA 判定一次完成；命中对按
-            # (a, b) 升序，与下方网格法同一判据、同一施加顺序（FX2-R2：N = 1000 时约 3 ms → 数十 µs）
-            rad = radius[S.profile_id[i]].astype(np.float64)
-            nh = KC.uav_hits(p0, p1, rad, CELL_M, self._hits_buf)
-            if nh >= 0:
-                if nh == 0:
-                    return []
-                h = self._hits_buf[:nh]
-                return self._apply(S, i, h[:, 0], h[:, 1])
         cand: set[tuple[int, int]] = set()
         for sh in _SHIFTS:
             key = np.floor((mid + sh) / CELL_M).astype(np.int64)

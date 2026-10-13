@@ -9,6 +9,14 @@ EnvSample32；`handle_query` 服务 `env/query`。
 
 风合成（§6.3.5）：W = s*f(z_agl)*e(theta) + w_mean*z_hat + sum G_k*(e_k, 0) + g(z_agl)*T；物理侧 z_agl = z − dtm(x, y)（M04
 `ground_dtm`，地形跟随）；光学层以 `coordinate.ground.zM` 为 AGL 基准。本模块不读墙钟（ADR-049）。
+
+D2（WP-09；AWR-04 §6.2、§6.3、§6.5、§7.3；ADR-090、ADR-101、ADR-102）：
+- 时钟档：tick 长度取 `self.tick_ns`（stage 按 `ctx.dt_tick` 设置，d1_250 为 4 ms、sandbox100 为 10 ms），不再写死；
+- 日历、太阳、照度档、热背景与声学背景由 SkyModel 维护：`env/calendar` 与 `env/set{patch: {acoustic_bg, humidity_pct,
+  surface: {class}}}` 在网格点生效并发新版本；1 Hz【仿真】复核，太阳方向变化 ≥ 0.5°、照度档变化等时发新版本（只改 config.sun 与
+  D2 字段）；SkyModel 启用前关键帧逐字节同 D1；
+- EnvPerceptionView（M18-M19 PRD §6.11）：`optical_depth(..., wavelength_nm)`（550、850、905 nm 与 LWIR）、`illuminance`、
+  `thermal_bg`、`acoustic_bg_bands`、`rain_rate_mmph`，另有 `sky_sample`（M19 EnvSample 的超集）与 `forecast`（M20 昼夜预报）。
 """
 
 from __future__ import annotations
@@ -26,12 +34,29 @@ import numpy as np
 
 from . import kernels_rows as KR
 from .anchors import H_NS, AnchorIntegrator, Anchors
+from .atmosphere import kernels_od as _KOD
 from .atmosphere.isa import isa_arr
-from .atmosphere.optics import FLAG_BELOW_CLOUD_PRECIP, FLAG_IN_FOG_LAYER, H_HAZE, optical_depth_arr, sigma_at_arr
+from .atmosphere.optics import (
+    FLAG_BELOW_CLOUD_PRECIP,
+    FLAG_IN_FOG_LAYER,
+    H_HAZE,
+    LWIR_MIN_NM,
+    kim_factor,
+    optical_depth_arr,
+    optical_depth_lambda_arr,
+    sigma_at_arr,
+    sigma_wv_per_m,
+)
 from .conventions import e
 from .io.assets import ensure_turb_box, ensure_weather_map
 from .keyframe import ApplyResult, EnvKeyframe, EnvOp, KeyframeManager
 from .query import EnvFlags, EnvSampleSoA, Fields, Frame, QueryError, parse_query, soa_to_reply
+from .sky import acoustic as AC
+from .sky.calendar import Calendar, CalendarError
+from .sky.illum import BAND_NAMES, illum_band_arr, illuminance_lx_arr
+from .sky.solar import solar_position_arr
+from .sky.state import SEC_NS, SkyInputs, SkyModel, SkySample
+from .sky.thermal import SURFACE_CLASSES, ThermalBg
 from .weather.derive import K_MOR, Derived, derive
 from .weather.presets import (
     BASE,
@@ -69,7 +94,7 @@ from .wind.turbulence import (
     wind_fused,
 )
 
-__all__ = ["EnvironmentServiceImpl", "env_seed_of", "world_config"]
+__all__ = ["EnvironmentServiceImpl", "env_seed_of", "sky_geo_of", "world_config"]
 
 log = logging.getLogger("awr.environment")
 
@@ -89,6 +114,19 @@ WARN_RAIN_MMH = 7.6
 def env_seed_of(world_seed: int) -> int:
     """env_seed = hash32(world_seed, "env")：sha256("env|world_seed=<s>") 前 4 字节小端（本文设定，与 field_version 同式）。"""
     return int.from_bytes(hashlib.sha256(f"env|world_seed={int(world_seed)}".encode()).digest()[:4], "little")
+
+
+def sky_geo_of(coordinate: Mapping[str, Any] | None) -> tuple[float, float, float]:
+    """coordinate.json -> (lat_deg, lon_deg, yaw_offset_deg)；缺省为 synthcity 示意锚点 30°N、120°E（ADR-077）。"""
+    from .sky.state import DEFAULT_LATLON
+
+    c = coordinate or {}
+    a = c.get("anchor") or {}
+    lat, lon = a.get("latDeg"), a.get("lonDeg")
+    ok = isinstance(lat, (int, float)) and isinstance(lon, (int, float)) and math.isfinite(lat) and math.isfinite(lon)
+    yaw = (c.get("trueNorth") or {}).get("yawOffsetDeg")
+    yaw = float(yaw) if isinstance(yaw, (int, float)) and math.isfinite(yaw) else 0.0
+    return (float(lat), float(lon), yaw) if ok else (DEFAULT_LATLON[0], DEFAULT_LATLON[1], yaw)
 
 
 def world_config(env_world: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -190,6 +228,7 @@ class EnvironmentServiceImpl:
         self._s = np.empty(NF)
         self._d = Derived()
         self._s_t = -1
+        self._eval_key: tuple = (None, None)  # _eval_now 的稳态缓存键（TransitionKf、风剖面配置对象）
         self._kf_key = 0
         self.buf = EnvSampleSoA.alloc(self.capacity)
         self._qbuf: EnvSampleSoA | None = None
@@ -201,6 +240,16 @@ class EnvironmentServiceImpl:
         self.row_valid = np.zeros(self.capacity, bool)
         self._warn_state = {"mor_low": False, "wind_high": False, "precip_heavy": False}
         self.stats = {"ticks": 0, "versions": 1, "queries": 0}
+        self.tick_ns = TICK_NS  # 时钟档 tick 长度（stage 按 ctx 设置，ADR-090）
+        # D2 SkyModel（WP-09）：世界锚点经纬度、真北偏差与地面海拔
+        lat, lon, yaw = sky_geo_of(self.coordinate)
+        self.sky = SkyModel(lat_deg=lat, lon_deg=lon, yaw_offset_deg=yaw, h_ground_msl_m=self.h_anchor + self.ground_z)
+        surf = (self.env_world.get("surface") or {}).get("class") if isinstance(self.env_world.get("surface"), Mapping) else None
+        if surf in SURFACE_CLASSES:
+            self.sky.set_surface(str(surf))
+        self._fixed_sun = (float(cfg["sun"]["azimuth_deg"]), float(cfg["sun"]["elevation_deg"]))
+        self._sky_last_s = -1
+        self._kf_out = False
         self._eval_now()
 
     # ------------------------------------------------------------ 状态访问
@@ -231,14 +280,39 @@ class EnvironmentServiceImpl:
     def derived(self, t_sim_ns: int) -> Derived:
         return derive(self.scalars(t_sim_ns), self.kf.config["wind"]["profile"])
 
+    def _sd_at(self, t_sim_ns: int) -> tuple[np.ndarray, Derived]:
+        """t 时刻的 (标量, 派生量)。稳态关键帧（`step` 或已过 t1）下与时刻无关，按 (过渡, 剖面) 缓存（与 `_eval_now` 同一判据，
+        结果逐位相同；D2-FX-R2-sim 第 2 次：`optical_depth` 每次调用重算约 50 µs）。"""
+        tr = self.kf.transition()
+        prof = self.kf.config["wind"]["profile"]
+        t = int(t_sim_ns)
+        steady = tr.mode == "step" or t >= tr.t1_ns
+        c = self.__dict__.get("_sd_cache")
+        if steady and c is not None and c[0] is tr and c[1] is prof:
+            return c[2], c[3]
+        s = self.scalars(t)
+        d = derive(s, prof)
+        if steady:
+            self.__dict__["_sd_cache"] = (tr, prof, s, d)
+        return s, d
+
     def _eval_now(self) -> None:
         t = self.t_grid_ns
-        eval_env(self.kf.transition(), t, self._s)
-        derive(self._s, self.kf.config["wind"]["profile"], self._d)
+        tr = self.kf.transition()
+        prof = self.kf.config["wind"]["profile"]
+        # 稳态关键帧（`step` 或已过 t1）下 eval_env 恒为 kf.to：同一关键帧与剖面时 _s、_d 已是该值，跳过重算（逐位相同；
+        # D2-AC-08：每个 50 Hz env tick 约 40 µs）
+        if (tr.mode == "step" or t >= tr.t1_ns) and self._eval_key[0] is tr and self._eval_key[1] is prof:
+            self._s_t = t
+            return
+        eval_env(tr, t, self._s)
+        derive(self._s, prof, self._d)
         self._s_t = t
+        self._eval_key = (tr, prof)
 
     def keyframe(self) -> EnvKeyframe:
         """当前完整帧（心跳形态：t_ns 为最近已推进的网格时刻，anchors 为该时刻的积分值）。"""
+        self._kf_out = True  # 已对外给出（会话配置此后改走新版本，见 configure_session）
         return self.kf.with_heartbeat(self.t_grid_ns, self.anchors.A)
 
     def heartbeat_bytes(self) -> bytes:
@@ -253,7 +327,23 @@ class EnvironmentServiceImpl:
             mode = args.get("mode", "smooth")
             if mode not in ("smooth", "step", "exp"):
                 raise EnvError(110, {"field": "mode"})
-            return EnvOp("set", patch=args.get("patch"), duration_s=args.get("duration_s"), mode=mode, by=by)
+            patch, d2 = _split_d2_patch(args.get("patch"))
+            if d2 and not patch:
+                return EnvOp("d2", d2=d2, by=by)
+            return EnvOp("set", patch=patch, duration_s=args.get("duration_s"), mode=mode, by=by, d2=d2 or None)
+        if op in ("env/calendar", "env.calendar"):
+            start, tz, jump = args.get("start_utc"), args.get("tz"), args.get("jump", True)
+            if not isinstance(start, str):
+                raise EnvError(300, {"field": "start_utc"})
+            if not isinstance(tz, str):
+                raise EnvError(300, {"field": "tz"})
+            if not isinstance(jump, bool):
+                raise EnvError(300, {"field": "jump"})
+            try:
+                Calendar.from_request(start, tz, jump=False)  # 形状、年份与时区校验（生效时刻在 apply 中确定）
+            except CalendarError as ex:
+                raise EnvError(110, ex.detail) from ex
+            return EnvOp("calendar", d2={"start_utc": start, "tz": tz, "jump": jump}, by=by)
         if op in ("env/preset", "env.preset"):
             if not isinstance(args.get("name"), str):
                 raise EnvError(300, {"field": "name"})
@@ -266,7 +356,7 @@ class EnvironmentServiceImpl:
         raise EnvError(300, {"field": "op", "op": op})
 
     def _t_apply(self, apply_tick: int) -> int:
-        t_cmd = int(apply_tick) * TICK_NS
+        t_cmd = int(apply_tick) * self.tick_ns
         t = -(-t_cmd // H_NS) * H_NS
         return max(t, self.t_grid_ns + H_NS)
 
@@ -300,6 +390,15 @@ class EnvironmentServiceImpl:
                 warns.append("GUST_DEFERRED")
         elif op.kind == "reset":
             pass
+        elif op.kind == "calendar":
+            a = op.d2 or {}
+            try:
+                cal = Calendar.from_request(str(a.get("start_utc")), str(a.get("tz")), jump=bool(a.get("jump", True)), t_apply_ns=t_apply)
+            except CalendarError as ex:
+                raise EnvError(110, ex.detail) from ex
+            op = EnvOp("calendar", d2={"cal0_unix_ms": cal.cal0_unix_ms, "tz": cal.tz}, by=op.by)
+        elif op.kind == "d2":
+            pass
         else:
             s_to, route, *_ = self.km.prepare(op, t_apply)
             if s_to[SPEED_REF] > WARN_WIND_MPS:
@@ -312,7 +411,7 @@ class EnvironmentServiceImpl:
 
     def apply_now(self, op: EnvOp) -> ApplyResult:
         """测试与剧本初值：在下一个网格点生效（等价于 apply_tick = 当前网格 tick）。"""
-        return self.apply(op, (self.t_grid_ns // TICK_NS) + 1)
+        return self.apply(op, (self.t_grid_ns // self.tick_ns) + 1)
 
     # ------------------------------------------------------------ 网格推进
     def reset(self, t_ns: int = 0) -> EnvKeyframe:
@@ -326,6 +425,7 @@ class EnvironmentServiceImpl:
         self.row_valid[:] = False
         self._kf_key += 1
         self._eval_now()
+        self._stamp(kf, self.k_done * H_NS)
         self.outbox.append(("env.changed", {"version": kf.version, "by": "scenario", "reason": "reset"}))
         return kf
 
@@ -334,7 +434,7 @@ class EnvironmentServiceImpl:
         return frames[-1] if frames else None
 
     def on_env_tick_all(self, tick: int) -> list[EnvKeyframe]:
-        t = int(tick) * TICK_NS
+        t = int(tick) * self.tick_ns
         k = t // H_NS
         out: list[EnvKeyframe] = []
         if self.last_tick >= 0 and tick < self.last_tick:
@@ -369,6 +469,11 @@ class EnvironmentServiceImpl:
                 kf = self.reset(tg)
                 out.append(kf)
                 continue
+            elif op.kind in ("calendar", "d2"):
+                self.pending.pop(0)
+                self._apply_d2(op)
+                kf = self.km.touch(tg, A)
+                reason = "calendar" if op.kind == "calendar" else "scenario" if op.by == "scenario" else "d2"
             else:
                 self.pending.pop(0)
                 try:
@@ -376,8 +481,11 @@ class EnvironmentServiceImpl:
                 except EnvError as ex:  # 排队期间状态变化使操作失效（例如云底约束）：丢弃并告警
                     log.warning("env op dropped at apply", extra={"kv": {"code": ex.code, "detail": ex.detail}})
                     continue
+                if op.d2:
+                    self._apply_d2(op)
                 reason = "scenario" if op.by == "scenario" else op.kind
             self._kf_key += 1
+            self._stamp(kf, tg)
             out.append(kf)
             self.outbox.append(("env.changed", {"version": kf.version, "by": op.by or "operator", "reason": reason}))
         # 阵风调度（RNG 流 6）
@@ -392,9 +500,11 @@ class EnvironmentServiceImpl:
             self.km.next_event_id += 1
             kf = self.km.add_event(ev, tg, A)
             self._kf_key += 1
+            self._stamp(kf, tg)
             out.append(kf)
             self.outbox.append(("env.changed", {"version": kf.version, "by": "scheduler", "reason": "gust"}))
         self._eval_now()
+        self._sky_tick(tg, out)
         self._check_warnings()
         self.stats["ticks"] += 1
         self.stats["versions"] = self.kf.version
@@ -402,6 +512,207 @@ class EnvironmentServiceImpl:
 
     def _s_at(self, t_ns: int) -> np.ndarray:
         return np.asarray(eval_env(self.kf.transition(), t_ns, np.empty(NF)))
+
+    # ------------------------------------------------------------ D2：日历、太阳、热与声学背景（WP-09）
+    def _apply_d2(self, op: EnvOp) -> None:
+        a = op.d2 or {}
+        if op.kind == "calendar":
+            self.sky.set_calendar(Calendar(int(a["cal0_unix_ms"]), str(a["tz"])))
+        if a.get("acoustic_bg") is not None:
+            self.sky.set_acoustic(str(a["acoustic_bg"]))
+        if a.get("surface_class") is not None:
+            self.sky.set_surface(str(a["surface_class"]))
+            self.sky.enabled = True
+        self._sky_last_s = -1
+
+    def _sky_inputs(self, s: np.ndarray, d: Derived) -> SkyInputs:
+        return SkyInputs(cover=float(s[COVER]), rain_eff_mmh=float(d.rain_eff_mmh), rh=float(s[RH]), isa_dt_c=float(s[ISA_DT]),
+                         cloud_base_m=float(s[BASE]), mor_m=float(d.mor_m), wetness=float(self.anchors.A.wetness))
+
+    def sky_sample(self, t_sim_ns: int) -> SkySample:
+        """t 所在仿真秒的环境感知量（1 s 量化，与订阅无关；M19 EnvSample 的超集）。"""
+        tq = (int(t_sim_ns) // SEC_NS) * SEC_NS
+        hit = self.sky.peek(tq, self.kf.version)
+        if hit is not None:
+            return hit
+        if tq == self._s_t:
+            s, d = self._s, self._d
+        else:
+            s = self._s_at(tq)
+            d = derive(s, self.kf.config["wind"]["profile"])
+        return self.sky.sample(tq, self._sky_inputs(s, d), self._fixed_sun, key=self.kf.version)
+
+    def _stamp(self, kf: EnvKeyframe, t_ns: int) -> None:
+        """新版本（尚未发出）写入 t_ns 处的 config.sun 与 D2 字段；SkyModel 未启用时不动（D1 帧不变）。"""
+        if not self.sky.enabled:
+            return
+        tq = (int(t_ns) // SEC_NS) * SEC_NS
+        s = np.asarray(eval_env(kf.transition(), tq, np.empty(NF)))
+        d = derive(s, kf.config["wind"]["profile"])
+        smp = self.sky.sample(tq, self._sky_inputs(s, d), self._fixed_sun, key=("stamp", kf.version))
+        sun, top = SkyModel.wire(smp)
+        cfg = dict(kf.config)
+        cfg["sun"] = sun
+        kf.config = cfg
+        kf.d2 = {k: (dict(v) if isinstance(v, Mapping) else v) for k, v in top.items()}
+        kf.cal = self.sky.calendar
+        self.km.d2 = kf.d2
+        self.km.cal = kf.cal
+        prev = self.sky.published
+        self.sky.mark_published(sun, top)
+        if prev is not None and prev["sun"]["band"] != sun["band"]:
+            self.outbox.append(("env.changed", {"version": kf.version, "by": "calendar", "reason": "illum_band", "band": sun["band"]}))
+
+    def _sky_tick(self, tg: int, out: list[EnvKeyframe]) -> None:
+        """1 Hz【仿真】复核：太阳方向变化 ≥ 0.5°、照度档、热交叉等变化时发新版本（只改 config.sun 与 D2 字段）。"""
+        if not self.sky.enabled:
+            return
+        sec = tg // SEC_NS
+        if sec == self._sky_last_s:
+            return
+        self._sky_last_s = sec
+        sun, top = SkyModel.wire(self.sky_sample(tg))
+        if not self.sky.changed(sun, top):
+            return
+        kf = self.km.touch(tg, self.anchors.A)
+        self._kf_key += 1
+        self._stamp(kf, tg)
+        out.append(kf)
+
+    def configure_session(self, cfg: Mapping[str, Any] | None, t_ns: int | None = None) -> None:
+        """会话配置（沙盒 `session.json`、`sim/reset{sandbox_config}`、配置快照恢复；AWR-17 §17.4.5）：
+        `{calendar?: {start_utc, tz}, acoustic_bg?, surface_class?, env?: {preset?, overrides?}}`。日历按 `t_cal = start_utc + t_sim`
+        解释（jump = false）。尚未推进任何网格点且初始帧尚未对外给出时直接改写初始版本（不另发版本），否则在下一个网格点生效。
+        非法值抛 EnvError。"""
+        if not cfg:
+            return
+        ops: list[EnvOp] = []
+        c = cfg.get("calendar")
+        if c:
+            if not isinstance(c, Mapping):
+                raise EnvError(300, {"field": "calendar"})
+            ops.append(self.op_from_msg("env/calendar", {"start_utc": c.get("start_utc"), "tz": c.get("tz"), "jump": False}, by="scenario"))
+        d2: dict[str, Any] = {}
+        if cfg.get("acoustic_bg") is not None:
+            _, d2 = _split_d2_patch({"acoustic_bg": cfg["acoustic_bg"]})
+        if cfg.get("surface_class") is not None:
+            _, sc = _split_d2_patch({"surface": {"class": cfg["surface_class"]}})
+            d2.update(sc)
+        if d2:
+            ops.append(EnvOp("d2", d2=d2, by="scenario"))
+        env = cfg.get("env") if isinstance(cfg.get("env"), Mapping) else {}
+        if env.get("preset"):
+            ops.append(EnvOp("preset", name=str(env["preset"]), duration_s=0.0, by="scenario"))
+        if env.get("overrides"):
+            ops.append(EnvOp("set", patch=dict(env["overrides"]), duration_s=0.0, mode="step", by="scenario"))
+        if self.stats["ticks"] == 0 and self.k_done == 0 and t_ns in (None, 0) and not self._kf_out:
+            for op in ops:
+                if op.kind == "calendar":
+                    a = op.d2 or {}
+                    cal = Calendar.from_request(str(a["start_utc"]), str(a["tz"]), jump=False)
+                    self._apply_d2(EnvOp("calendar", d2={"cal0_unix_ms": cal.cal0_unix_ms, "tz": cal.tz}))
+                elif op.kind == "d2":
+                    self._apply_d2(op)
+                else:
+                    self.km.kf = self.km.apply(op, 0, self.anchors.A)
+                    self.km.version -= 1  # 初始帧仍为版本 1
+                    self.km.kf.version = self.km.version
+                    self.km.initial = self.km.kf.to.copy()  # 剧本重置回到会话配置的天气
+                    self.km.initial_preset = self.km.kf.to_preset
+                    self._kf_key += 1
+            self._eval_now()
+            self._stamp(self.km.kf, 0)
+            return
+        for op in ops:
+            self.apply_now(op)
+
+    def session_snapshot(self, t_ns: int | None = None) -> dict[str, Any]:
+        """配置快照中 M07 负责的部分（`awr.sandbox.snapshot.v1` 的 calendar、acoustic_bg、env）：日历取 t 处的日历时刻。"""
+        t = self.t_grid_ns if t_ns is None else int(t_ns)
+        P = self.P
+        to = self.kf.to
+        preset = self.kf.to_preset
+        base = P.preset_vector(preset) if preset in P.ids else None
+        overrides: dict[str, Any] = {}
+        for i, f in enumerate(P.fields):
+            if base is None or float(to[i]) != float(base[i]) or f.user_axis:
+                g, k = f.path.split(".", 1)
+                overrides.setdefault(g, {})[k] = float(to[i])
+        out: dict[str, Any] = {"acoustic_bg": self.sky.acoustic, "env": {"preset": preset, "overrides": overrides}}
+        if self.sky.calendar is not None:
+            out["calendar"] = self.sky.calendar.to_config(t)
+        return out
+
+    # ------------------------------------------------------------ EnvPerceptionView（M18-M19 PRD §6.11）
+    def illuminance(self, pos: np.ndarray, t_sim_ns: int) -> tuple[np.ndarray, np.ndarray]:
+        n = np.asarray(pos).reshape(-1, 3).shape[0] if np.asarray(pos).size else 0
+        smp = self.sky_sample(t_sim_ns)
+        return np.full(n, smp.illum_lx), np.full(n, smp.band_code, np.uint8)
+
+    def thermal_bg(self, xy: np.ndarray, t_sim_ns: int) -> ThermalBg:
+        n = np.asarray(xy).reshape(-1, 2).shape[0] if np.asarray(xy).size else 0
+        smp = self.sky_sample(t_sim_ns)
+        return ThermalBg(np.full(n, smp.t_bg_c), np.full(n, smp.eps_bg), np.full(n, smp.t_sky_c), np.full(n, smp.k_cross))
+
+    def acoustic_bg_bands(self, xy: np.ndarray, t_sim_ns: int) -> np.ndarray:
+        n = np.asarray(xy).reshape(-1, 2).shape[0] if np.asarray(xy).size else 0
+        return np.broadcast_to(self.sky_sample(t_sim_ns).l_bg_bands_dba, (n, AC.N_BANDS)).copy()
+
+    def rain_rate_mmph(self, t_sim_ns: int) -> float:
+        return float(self.sky_sample(t_sim_ns).rain_mmph)
+
+    def sigma_lambda_ground(self, t_sim_ns: int, wavelength_nm: float) -> float:
+        """地面（z_agl = 0）按波长的点消光（1/m），含降水；LWIR 含水汽项。"""
+        tq = (int(t_sim_ns) // SEC_NS) * SEC_NS
+        s = self._s_at(tq)
+        d = derive(s, self.kf.config["wind"]["profile"])
+        k = 1.0 if wavelength_nm == 550.0 else kim_factor(d, wavelength_nm)
+        sig = (d.sigma_haze0 + (d.sigma_fog if float(s[FOG_TOP]) > 0 else 0.0)) * k + (d.sigma_precip if float(s[BASE]) > 0 else 0.0)
+        if wavelength_nm >= LWIR_MIN_NM:
+            sig += sigma_wv_per_m(self.sky_sample(tq).rho_v_gm3)
+        return float(sig)
+
+    def forecast(self, t0_ns: int, horizon_s: float, step_s: float = 3600.0) -> dict[str, np.ndarray]:
+        """昼夜预报（M20 §9.3、可持续性评估）：太阳为确定量，天气取当前状态（会话天气时间表由调用方叠加）。
+        -> {t_ns, az_deg, el_deg, illum_lx, band, k_cross}；未设日历时太阳固定。"""
+        n = int(max(0.0, horizon_s) // max(step_s, 1e-3)) + 1
+        t = int(t0_ns) + (np.arange(n, dtype=np.int64) * round(step_s * 1e9))
+        cal = self.sky.calendar
+        cover = float(self._s_at(int(t0_ns))[COVER])
+        if cal is None:
+            az = np.full(n, self._fixed_sun[0])
+            el = np.full(n, self._fixed_sun[1])
+            kc = np.ones(n)
+        else:
+            ms = cal.cal0_unix_ms + t / 1e6
+            az, el = solar_position_arr(ms, self.sky.lat, self.sky.lon)
+            az = np.mod(az - self.sky.yaw_off, 360.0)
+            _, eb = solar_position_arr(ms - 3_600_000.0, self.sky.lat, self.sky.lon)
+            _, ea = solar_position_arr(ms + 3_600_000.0, self.sky.lat, self.sky.lon)
+            h0 = -0.833
+            kc = np.where((el >= h0) & ((eb < h0) | (ea < h0)), 0.5, 1.0)
+        return {"t_ns": t, "az_deg": az, "el_deg": el, "illum_lx": illuminance_lx_arr(el, cover, self.sky.moon_lx),
+                "band": illum_band_arr(el), "k_cross": kc}
+
+    def next_band_change(self, t_ns: int, horizon_s: float = 86400.0) -> tuple[int, str, str] | None:
+        """t 之后 horizon 内第一次照度档变化：-> (t_change_ns, band_from, band_to)，按 60 s 步长搜索再二分到 1 s。"""
+        if self.sky.calendar is None:
+            return None
+        f = self.forecast(t_ns, horizon_s, 60.0)
+        b = f["band"]
+        idx = np.nonzero(b != b[0])[0]
+        if idx.size == 0:
+            return None
+        j = int(idx[0])
+        lo, hi = int(f["t_ns"][j - 1]), int(f["t_ns"][j])
+        b0 = int(b[0])
+        while hi - lo > SEC_NS:
+            mid = (lo + hi) // 2
+            if int(self.forecast(mid, 0.0)["band"][0]) == b0:
+                lo = mid
+            else:
+                hi = mid
+        return hi, BAND_NAMES[b0], BAND_NAMES[int(b[j])]
 
     def _check_warnings(self) -> None:
         d, s = self._d, self._s
@@ -589,15 +900,32 @@ class EnvironmentServiceImpl:
         return o
 
     def optical_depth(self, p0: np.ndarray, p1: np.ndarray, t_sim_ns: int, *, wavelength_nm: float = 550.0) -> np.ndarray:
-        """p0 → p1 的 550 nm 光学厚度（其他波长 V0.4）。"""
+        """p0 → p1 的光学厚度：550 nm 为 sigma = ln20/MOR（ADR-023，D1 逐位不变）；850、905 nm 气溶胶按 Kim 缩放；
+        LWIR（≥ 8 µm，传 10000）另加水汽项（D2，AWR-04 §6.3 第 4 步）。透过率 T = exp(−od)。"""
         p0 = np.asarray(p0, np.float64).reshape(-1, 3)
         p1 = np.asarray(p1, np.float64).reshape(-1, 3)
-        s = self.scalars(t_sim_ns)
-        d = derive(s, self.kf.config["wind"]["profile"])
+        s, d = self._sd_at(t_sim_ns)
+        lam = float(wavelength_nm)
+        if _KOD.HAVE_NUMBA:
+            # D2-FX-R2-sim 第 2 次：逐对核（与下面的 numpy 实现逐元素同式）
+            if lam == 550.0:
+                mode, kim, wv = 0, 1.0, 0.0
+            else:
+                lwir = lam >= LWIR_MIN_NM
+                rho_v = self.sky_sample(t_sim_ns).rho_v_gm3 if lwir else 0.0
+                mode, kim, wv = (3 if lwir else 1), kim_factor(d, lam), (sigma_wv_per_m(rho_v) if lwir else 0.0)
+            out = np.empty(p1.shape[0])
+            _KOD.od_pairs(np.ascontiguousarray(p0), np.ascontiguousarray(p1), float(self.ground_z), float(d.sigma_haze0), H_HAZE,
+                          float(d.sigma_fog), float(s[FOG_TOP]), float(d.sigma_precip), float(s[BASE]), mode, float(kim), float(wv), out)
+            return out
         dv = p1 - p0
         L = np.linalg.norm(dv, axis=1)
         rd_z = np.where(L > 0, dv[:, 2] / np.where(L > 0, L, 1.0), 0.0)
-        return optical_depth_arr(p0[:, 2] - self.ground_z, rd_z, L, d, float(s[FOG_TOP]), float(s[BASE]))
+        if float(wavelength_nm) == 550.0:
+            return optical_depth_arr(p0[:, 2] - self.ground_z, rd_z, L, d, float(s[FOG_TOP]), float(s[BASE]))
+        rho_v = self.sky_sample(t_sim_ns).rho_v_gm3 if float(wavelength_nm) >= LWIR_MIN_NM else 0.0
+        return optical_depth_lambda_arr(p0[:, 2] - self.ground_z, rd_z, L, d, float(s[FOG_TOP]), float(s[BASE]), float(wavelength_nm),
+                                        rho_v)
 
     # ------------------------------------------------------------ env stage 辅助
     def step_dryden(self, slots: np.ndarray, pos: np.ndarray, vel: np.ndarray, dt: float) -> None:
@@ -705,10 +1033,11 @@ class EnvironmentServiceImpl:
         st = {"v": 1, "kf": self.kf.to_wire(), "anchors": self.anchors.A.to_json(), "k_done": self.k_done, "last_tick": self.last_tick,
               "version": self.km.version, "next_event_id": self.km.next_event_id,
               "pending": [[t, q, {"kind": op.kind, "patch": op.patch, "name": op.name, "amp_mps": op.amp_mps, "length_m": op.length_m,
-                                  "dir_from_deg": op.dir_from_deg, "duration_s": op.duration_s, "mode": op.mode, "by": op.by}]
+                                  "dir_from_deg": op.dir_from_deg, "duration_s": op.duration_s, "mode": op.mode, "by": op.by,
+                                  "d2": op.d2}]
                           for t, q, op in self.pending],
               "seq": self._seq, "gusts": _pack_state(self.gusts.state()), "dryden": _pack_state(self.dryden.state()),
-              "warn": dict(self._warn_state)}
+              "warn": dict(self._warn_state), "sky": self.sky.state(), "sky_last_s": self._sky_last_s}
         return msgpack.packb(st, use_bin_type=True, default=_np_default)
 
     def restore(self, blob: bytes) -> None:
@@ -728,8 +1057,45 @@ class EnvironmentServiceImpl:
         self.gusts.restore(_unpack_state(st["gusts"]))
         self.dryden.restore(_unpack_state(st["dryden"]))
         self._warn_state.update(st.get("warn", {}))
+        self.sky.restore(st.get("sky"))
+        self._sky_last_s = int(st.get("sky_last_s", -1))
+        self.km.d2 = self.km.kf.d2
+        self.km.cal = self.km.kf.cal
         self._kf_key += 1
         self._eval_now()
+
+
+def _split_d2_patch(patch: Any) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """`env/set` 补丁中的 D2 键：`acoustic_bg`（剖面名或 `{profile}`）、`humidity_pct`（0–100，换算为 `atmosphere.rh`）、
+    `surface: {class}`（地表类别）。-> (其余补丁或 None, D2 设置)。非法值抛 EnvError 110。"""
+    if not isinstance(patch, Mapping):
+        return patch, {}
+    rest = dict(patch)
+    d2: dict[str, Any] = {}
+    if "acoustic_bg" in rest:
+        v = rest.pop("acoustic_bg")
+        if isinstance(v, Mapping):
+            v = v.get("profile")
+        if v not in AC.PROFILES:
+            raise EnvError(110, {"field": "acoustic_bg", "allowed": list(AC.PROFILES)})
+        d2["acoustic_bg"] = v
+    if "humidity_pct" in rest:
+        v = rest.pop("humidity_pct")
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(float(v)) or not 0.0 <= float(v) <= 100.0:
+            raise EnvError(110, {"field": "humidity_pct", "min": 0, "max": 100})
+        a = rest.get("atmosphere")
+        if a is not None and not isinstance(a, Mapping):
+            raise EnvError(300, {"field": "patch.atmosphere"})
+        atm = dict(a or {})
+        atm["rh"] = float(v) / 100.0
+        rest["atmosphere"] = atm
+    if "surface" in rest:
+        v = rest.pop("surface")
+        cls = v.get("class") if isinstance(v, Mapping) else None
+        if cls not in SURFACE_CLASSES:
+            raise EnvError(110, {"field": "surface.class", "allowed": list(SURFACE_CLASSES)})
+        d2["surface_class"] = cls
+    return (rest or None), d2
 
 
 def _rotate_inv(q_xyzw: np.ndarray, v: np.ndarray) -> np.ndarray:

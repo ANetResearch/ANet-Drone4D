@@ -97,7 +97,7 @@ E_MODE, E_ARRIVED, E_PHASE, E_TOUCHDOWN, E_LIFTOFF, E_COLLISION = 1, 2, 4, 8, 16
 # ProfileTable 矩阵列
 P_MASS, P_TMAX, P_HOVER, P_TAU, P_NROT, P_WMAX, P_AERO, P_KDV, P_CDA, P_CRD = range(10)
 # 限速配置矩阵列
-L_VXY, L_CRUISE, L_ACC, L_YAWRATE = range(4)
+L_VXY, L_CRUISE, L_ACC, L_YAWRATE, L_ZUP, L_ZDN = range(6)  # 限速表 LT 的列（D2：垂直速度按机型，M08 §14.3）
 # orb 列
 O_CX, O_CY, O_CZ, O_R, O_W, O_TH, O_TURN, O_GOAL, O_V, O_DIR, O_YAWB, O_YAW = range(12)
 # PathBuffer 段表列（TOPP-lite 输出，`kernels_path.topp_lite_nb`）
@@ -180,7 +180,7 @@ def _goto(i, tx, ty, tz, speed, lim, dt, ts_on, p, tr_x, tr_v, tr_a, stopping, L
     cr = LT[lim, L_CRUISE] if math.isnan(speed) else speed
     cr = min(cr, vxy_max)
     vxy = min(cr, _vmax(JERK, acc, dxy, 0.0))
-    vzc = Z_V_AUTO_UP if dz < 0.0 else Z_V_AUTO_DN
+    vzc = LT[lim, L_ZUP] if dz < 0.0 else LT[lim, L_ZDN]  # D1 限速档缺省 3.0、1.5（= Z_V_AUTO_UP/DN）
     vz = min(vzc, _vmax(JERK, ACC_UP, abs(dz), 0.0))
     ux = 0.0
     uy = 0.0
@@ -599,7 +599,7 @@ def tick_l1(idx, cfg,
                 s = min(1.0, vm / max(nxy, 1e-6))
                 vx = vx * s
                 vy = vy * s
-                vz = _clip(vz, -Z_VEL_MAX_UP, Z_VEL_MAX_DN)
+                vz = _clip(vz, -LT[lim, L_ZUP], LT[lim, L_ZDN])
                 lk = int(axis_lock[i])
                 for k in range(3):
                     bit = 1 << k
@@ -690,7 +690,7 @@ def tick_l1(idx, cfg,
             s = min(1.0, LT[lim, L_VXY] / max(nxy, 1e-6))
             vs0 = vs0 * s
             vs1 = vs1 * s
-            vs2 = _clip(vs2, -(TKO_SPEED if mode == M_TAKEOFF else Z_VEL_MAX_UP), Z_VEL_MAX_DN)  # PX4 起飞 speed_up 约束
+            vs2 = _clip(vs2, -(TKO_SPEED if mode == M_TAKEOFF else LT[lim, L_ZUP]), LT[lim, L_ZDN])  # PX4 起飞 speed_up 约束
             vi0 = vel_int[i, 0]
             vi1 = vel_int[i, 1]
             vi2 = _clip(vel_int[i, 2], -G, G)
@@ -921,11 +921,13 @@ def warmup() -> bool:
     仿真路径不读墙钟（ADR-045、ADR-049 不变量 5）。numba 不可用时返回 False。"""
     if not HAVE_NUMBA:
         return False
+    from . import kernels_sel
     from .kernels_contact import contact
     from .kernels_path import topp_lite_nb
     from .kernels_tap import enu_convert
     from .state import FleetState
 
+    kernels_sel.warmup()
     S = FleetState(4)
     S.active[:2] = True
     S.fidelity[:2] = 1
@@ -933,7 +935,7 @@ def warmup() -> bool:
     S.landed[:2] = False
     PT = np.zeros((1, 10))
     PT[0] = (2.0, 34.0, 0.58, 0.03, 4.0, 1000.0, 1.0, 0.0, 0.02, 8e-5)
-    LT = np.array([[12.0, 5.0, 3.0, 3.49]])
+    LT = np.array([[12.0, 5.0, 3.0, 3.49, 3.0, 1.5]])
     idx = np.arange(2, dtype=np.int32)
     run_l1(S, PT, LT, None, idx, 0.008, 0.0, 3.0, 0.0, 0.0, np.zeros(S.capacity, np.uint8))
     g = np.zeros((2, 2), np.float32)
@@ -981,6 +983,13 @@ def warmup() -> bool:
     tap = TapStage(None, lease_owner=lambda: np.zeros(St.capacity, np.uint8), roster_version=lambda: 0)
     if tap.use_kernel and tap._kernel_ok(St):
         tap.fill(St, np.zeros(4, DRONE_STATE64), np.zeros(4, SWARM_LITE32), idx)
+    # D2：固定翼运动学写入核（write_kinematic，M08-FR-211；运行期签名：slot int64、各量 C 连续 float64 k×3 / k×4）
+    from .kernels_kin import kin_write
+
+    sl = np.arange(2, dtype=np.int64)
+    z3 = np.ascontiguousarray(np.zeros((2, 3)))
+    q4 = np.ascontiguousarray(np.tile([0.0, 0.0, 0.0, 1.0], (2, 1)))
+    kin_write(sl, z3, z3, q4, z3, z3, z3, St.p, St.p_prev, St.v, St.q, St.omega, St.a_meas, St.pos_ref)
     return True
 
 

@@ -257,7 +257,7 @@ GNSS_BITS = {6: F_LOC_OK, 3: F_LOC_OK, 5: F_LOC_OK | F_LOC_DEG, 4: F_LOC_OK | F_
 
 # ---------------------------------------------------------------- 准入（命令 × FlightState，AWR-12 §5.2）
 SAFETY_CLASS = {"land", "rtl", "hover", "safety_stop", "kill"}          # 免租约（operator 角色），对 agent 另有限制
-NAV_CMDS = {"goto", "follow_path", "orbit", "velocity"}
+NAV_CMDS = {"goto", "follow_path", "orbit", "velocity", "loiter"}  # loiter：D2，准入行同 orbit（17 §17.7.6）
 def admit(cmd: str, fs: FS, s: int, flags: int, has_task: bool = False, agl: float = 10.0) -> str | None:
     """规范态上的准入（租约、围栏、参数在别处检查）；返回 None 表示通过，否则为原因名。"""
     auto = bool(flags & F_FAILSAFE)

@@ -39,10 +39,12 @@ def project(pts_enu: np.ndarray, pos: np.ndarray, R_ws: np.ndarray, spec: Sensor
 
 
 def world_pose(pq_enu: np.ndarray, spec: SensorSpec, az: np.ndarray | None = None,
-               el: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
-    """机体位姿 k×7（ENU + [x,y,z,w] WORLD←FLU）与云台角 -> 传感器原点 (k,3) 与 R_ws (k,3,3)。"""
+               el: np.ndarray | None = None, *, Rb: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """机体位姿 k×7（ENU + [x,y,z,w] WORLD←FLU）与云台角 -> 传感器原点 (k,3) 与 R_ws (k,3,3)。Rb 为调用方已按同一位姿算出的
+    `quat_to_R(pq[:, 3:])`（同一机体的多个传感器共用，结果相同）。"""
     PQ = np.asarray(pq_enu, np.float64).reshape(-1, 7)
-    Rb = quat_to_R(PQ[:, 3:])
+    if Rb is None:
+        Rb = quat_to_R(PQ[:, 3:])
     Rm = Rb @ spec.mount_R
     if spec.gimbal is not None and az is not None and el is not None:
         Rm = Rm @ gimbal_R(np.asarray(az, np.float64).reshape(-1), np.asarray(el, np.float64).reshape(-1))

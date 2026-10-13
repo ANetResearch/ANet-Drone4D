@@ -48,11 +48,22 @@ class Anchors:
                    float(d["wetness"]), float(d["puddle"]))
 
 
+# 稳态关键帧（`step` 或已过 t1）的锚点速率与时刻无关（eval_env 恒为 kf.to）：按关键帧对象缓存最近一个，结果逐位相同
+# （D2-AC-08：env stage 每个 50 Hz env tick 推进一个网格步，此前每步重算 eval_env 与 derive，约 70 µs）
+_RATES_SS: list = [None, None]
+
+
 def rates(kf: TransitionKf, t_ns: int, prof: dict | None = None) -> tuple[float, ...]:
+    steady = prof is None and (kf.mode == "step" or t_ns >= kf.t1_ns)
+    if steady and _RATES_SS[0] is kf:
+        return _RATES_SS[1]
     s = eval_env(kf, t_ns, [0.0] * 21)
     d = derive(s, prof)
     ex, ey = e(s[DIR])
-    return (s[SPEED_REF], s[SPEED_REF] * ex, s[SPEED_REF] * ey, s[W_MEAN], d.v_rain_mps, d.v_snow_mps, d.wet_target, puddle_target(d))
+    r = (s[SPEED_REF], s[SPEED_REF] * ex, s[SPEED_REF] * ey, s[W_MEAN], d.v_rain_mps, d.v_snow_mps, d.wet_target, puddle_target(d))
+    if steady:
+        _RATES_SS[0], _RATES_SS[1] = kf, r
+    return r
 
 
 def anchors_initial(kf: TransitionKf, t_ns: int) -> Anchors:

@@ -14,6 +14,12 @@ M09、M10、M13 的插件模块，执行注册；未交付的插件记 WARNING �
 `events.flush()` → 慢任务轮转（`slow.py`：state_ext 2 Hz 分片打包、perf 1 Hz、估价、细校验、GeoProbeServer 分片、查询、
 插件登记的慢任务、幂等表清理、gc gen2 每 ≥ 30 s【墙钟】、checkpoint 拷贝（ext）；预算 `min(1000, 2800 − 已用) µs`，下限
 100 µs）→ 1 Hz 写步长统计 → `sleep_until(下一 tick 的墙钟时刻)`；暂停时在 inbox 上以 50 ms 超时阻塞（照写心跳）。
+
+D2（M08 §15；WP-02）：时钟档（`AWR_CLOCK_PROFILE`，sandbox100 的主时钟 100 Hz，M08-FR-201）；识别物实体层与 roster
+（`kind = target`，`tap_targets` 发布 `state/sim-core/targets`，M08-FR-216、FR-217）；手动控制时钟锁（FR-220）；`state/sim-core/perf`
+自报 `cost_core_per_rate` 等（FR-224）；会话配置（`AWR_SESSION_CONFIG` 冷启动装配、`sim/reset{sandbox_config}`、
+`ctl/sim-core/snapshot` 导出）；`ctl/sim-core/{target,tasking}` 查询按登记的 `target/<op>`、`tasking/<op>` 路由；
+`fleet/update`、沙盒机队实例与机体全部状态查询；批处理自由运行见 `batch.py`（FR-221）。
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ from ..backends.base import EntitySpec, Kind, load_caps
 from ..core import state_model as SM
 from ..core.authority import LeaseManager
 from ..core.command import CommandEngine
+from ..core.entities import EntityTables
 from ..core.estimate import EstimateService
 from ..core.roster import Roster
 from ..core.supervisor_queue import SupervisorQueue
@@ -60,8 +67,15 @@ from ..fleet.pipeline import StageCtx
 from ..fleet.profiles import ProfileError, ProfileTable
 from ..fleet.stages import budgets as B
 from ..fleet.stages import registry as R
-from .clock import TICK_NS, SimClock
+from ..fleet.stages.tap_targets import TapTargets
+from . import clock_profile as CP
+from .clock import (  # noqa: F401  TICK_NS：d1_250 的兼容名（D1 测试与工具引用 main.TICK_NS；实例按 clock.tick_ns）
+    TICK_NS,
+    SimClock,
+)
 from .config import SimConfig
+from .perfwin import PerfWindow
+from .session_cfg import SessionConfig
 from .slow import SlowTask, SlowTasks
 
 __all__ = ["SimCore", "compose_plugins", "defer_numba_blas_probe", "main", "run"]
@@ -108,6 +122,9 @@ EXT_US_DECAY = 0.1  # state_ext 逐机耗时上包络的衰减（_slow_state_ext
 SPAWN_R_SAFE_M = 1.5
 SPAWN_LINE_MAX = 64  # 骨架布设：N ≤ 64 时一字排开，更大的 N 排成网格（_spawn_plan）
 QUERY_Q_MAX = 8
+# 兴趣下推的按需流（bus/interest.schema.json streams）；D2.1 场视图：field（指标码）、quant（target_no）、fsub（订阅代数）
+# （d2-WP-19b-to-M08 第 1 条，D2-INT）
+STREAM_NAMES = ("perception", "nav", "radar", "acoustic", "lidar", "field", "quant", "fsub")
 # fleet/vehicles 全表查询的分片（ADR-074 第 2 条）：N > VEH_SYNC_MAX 时不在一次慢任务内同步构造，按剩余预算每次编码一片
 # （VEH_SLICE_MIN–VEH_SLICE_MAX 架，各条目即时 msgpack 编码），全部片完成后只拼接映射头与各条目字节回复。此前 N = 1000
 # 时一次构造并编码约 30–60 ms 落在一轮内（D1 验收第 4 轮 D1-AC-27 link_drop 注入前 `GET /api/fleet/vehicles` 的单步最大
@@ -199,6 +216,35 @@ class Inbox:
 
     def __len__(self) -> int:
         return len(self._q)
+
+
+class _NsRequest:
+    """`ctl/sim-core/{target,tasking}` 的请求包装：`msg()` 的 op 加命名空间前缀（`target/get` 等），回复原样转交。"""
+
+    __slots__ = ("_m", "ns", "req")
+
+    def __init__(self, ns: str, req: Any) -> None:
+        self.ns = ns
+        self.req = req
+        self._m: dict | None = None
+
+    def msg(self) -> dict:
+        if self._m is None:
+            m = self.req.msg() if hasattr(self.req, "msg") else {}
+            m = dict(m or {})
+            m["op"] = f"{self.ns}/{m.get('op')}"
+            self._m = m
+        return self._m
+
+    def reply(self, data: bytes) -> None:
+        self.req.reply(data)
+
+    def reply_msg(self, msg: Any) -> None:
+        self.req.reply_msg(msg)
+
+    def close(self) -> None:
+        if hasattr(self.req, "close"):
+            self.req.close()
 
 
 class AuditLog:
@@ -313,7 +359,14 @@ class SimCore:
         self.handles: list[Any] = []
         self.plugins_loaded: list[str] = []
         self.plugins_missing: list[str] = []
-        self.clock = SimClock(wall_ns=wall_ns, max_batch_base=cfg.fleet.max_batch_base)
+        # 时钟档（M08-FR-201）：进程生命周期内不可变，由 FleetConfig.clock_profile（AWR_CLOCK_PROFILE）选定
+        self.profile = cfg.fleet.profile()
+        self._profile_prev = CP.set_current(self.profile)  # 进程档位（sim-core 进程内唯一；stop() 时恢复，便于进程内测试台）
+        if cfg.fleet.clock_profile != self.profile.name:  # 档位名写回 FleetConfig（meta.json、输入日志头与重仿真据此重建）
+            from dataclasses import replace as _replace
+
+            cfg = self.cfg = _replace(cfg, fleet=_replace(cfg.fleet, clock_profile=self.profile.name))
+        self.clock = SimClock(wall_ns=wall_ns, max_batch_base=cfg.fleet.max_batch_base, profile=self.profile)
         h = ring.header()
         if reused:
             self.epoch, self.segment = h.epoch + 1, h.segment + 1
@@ -401,6 +454,18 @@ class SimCore:
         self.state_lock = threading.Lock()  # 仿真状态锁：主循环每轮迭代持有；后台 checkpoint 拷贝在空闲窗口内持有（ADR-073）
         self.iter_cost_ns = [float(BG_ITER_TARGET_NS)] * 50  # 按 tick % 50 相位的迭代耗时上包络（run()，IdleGate slack）
         self.aux_pinner: Any = None
+        # D2
+        self.entities: EntityTables | None = None  # 识别物实体层（start() 在插件登记之后构造，M08-FR-216）
+        self.tap_targets: TapTargets | None = None
+        self._pub_targets = None
+        self.perfwin = PerfWindow()  # FR-224 窗口 CPU、实际倍速与 cost_core_per_rate
+        self.session = SessionConfig(self)  # 会话配置装配与导出（session.json、sim/reset{sandbox_config}、snapshot）
+        self.vehicle_cfg: dict[str, dict] = {}  # 沙盒机队实例的配置（label、nest_id、sensors、limits_profile、lights）
+        self.limits = {"targets": 30, "vehicles": 12, "clones": 8}  # 会话 limits（AWR-04 §4.4.3）
+        with contextlib.suppress(ValueError, TypeError, AttributeError):  # sandbox-pool 经 AWR_SANDBOX_LIMITS（JSON）或 session.json 的 limits 覆盖
+            lim = json.loads(os.environ.get("AWR_SANDBOX_LIMITS") or "{}")
+            self.limits.update({k: int(v) for k, v in lim.items() if k in self.limits and isinstance(v, int)})
+        self.batch: Any = None  # 批处理自由运行（batch.py）
 
     # ------------------------------------------------------------ 启动
     def start(self) -> None:
@@ -409,8 +474,11 @@ class SimCore:
         self.plugins_loaded, self.plugins_missing = compose_plugins(cfg.plugins)
         if self.world is None and cfg.load_world:
             self._load_world()
-        self.fleet = FleetSim(cfg.fleet, None, self.world, self.events, self.T, cfg.world_seed, reg=self.reg)
+        self.fleet = FleetSim(cfg.fleet, None, self.world, self.events, self.T, cfg.world_seed, reg=self.reg,
+                              profile=self.profile)
         self.T = self.fleet.T
+        self._validate_sensor_rigs()
+        self._setup_entities()
         hooks = self.reg.hooks
         self.lease.hooks = hooks
         self.engine = CommandEngine(self.fleet.S, self.T, self.roster, self.lease, events=self.events, clock=self.clock,
@@ -421,13 +489,17 @@ class SimCore:
                                     replay_caps=self.replay_caps, inputlog=self.inputlog)
         self.fleet.build_pipeline(engine=self.engine, supervisor=self.supq, ring=self.ring,
                                   lease_owner=self.lease.owner_codes, roster_version=lambda: self.roster.roster_version,
-                                  lifecycle=self._lifecycle, wall_ns=self.wall_ns, timer=self.perf_ns)
+                                  lifecycle=self._lifecycle, wall_ns=self.wall_ns, timer=self.perf_ns,
+                                  extra=self._extra_stages())
+        if self.fleet.tap is not None:
+            self.fleet.tap.mono_ns = time.monotonic_ns  # 读者心跳时基（FR-223 ③；运行时可读墙钟）
         self.engine.fallback_fsm = self.fleet.uses_fallback_fsm
         self.engine.ctx = self.ctx
         self.estimator = EstimateService(self.fleet.S, self.T, self.roster, world=self.world, energy=lambda: self.reg.energy)
         c = self.ctx
         c.events, c.calls, c.clock, c.world, c.profiles = self.events, self.engine, self.clock, self.world, self.T
         c.supervisor, c.cfg, c.lease, c.paths = self.supq, cfg.fleet, self.lease, self.fleet.PB
+        c.profile, c.dt_tick, c.entities = self.profile, self.profile.dt_tick, self.entities
         c.rng = self._rng_streams(cfg.world_seed)
         if self.fleet.kernel == "numba":
             t0 = self.perf_ns()
@@ -441,6 +513,7 @@ class SimCore:
         self._register_metrics()
         self._serve()
         self.spawn_default()
+        self.session.cold_start()  # AWR_SESSION_CONFIG（sandbox-pool 写入的 session.json）：原地装配机巢、机队、识别物与任务
         if cfg.autoplay:
             self.clock.apply("play")
         self.ring.heartbeat(self.clock.t_ns, self.clock.state, self.clock.rate_milli, step_seq=self.clock.tick)
@@ -539,6 +612,11 @@ class SimCore:
         except Exception as e:  # 世界缺失或几何缓存异常：退化为水平地面，GeoProbeServer 不可用（探针回复 123）
             self.world = None
             self.world_error = f"{type(e).__name__}: {e}"
+            reason = str(getattr(e, "reason", "") or "")
+            if self.profile.manual_lock and (reason == "derived_cache_missing" or os.environ.get("AWR_GEO_ALLOW_DERIVE") == "0"):
+                # 沙盒档（WP-14 → M08 第 3 条）：派生缓存缺失时不退化为水平地面，启动失败并上报原因（池据此回 502 或标记世界不可用）
+                log.error("world geometry unavailable", extra={"kv": {"world": self.cfg.world_id, "error": self.world_error}})
+                raise WorldUnavailable(self.cfg.world_id, reason or "load_failed", self.world_error) from e
             log.warning("world geometry unavailable", extra={"kv": {"world": self.cfg.world_id, "error": self.world_error}})
 
     def _serve(self) -> None:
@@ -550,6 +628,10 @@ class SimCore:
             b.serve(bus_keys.ctl_roster("sim-core"), lambda r: q.put(("roster", r))),
             b.serve(bus_keys.CTL_ESTIMATE, lambda r: q.put(("estimate", r))),
             b.serve(bus_keys.CTL_QUERY, lambda r: q.put(("query", r))),
+            # D2：识别物与编排的查询（按登记的 `target/<op>`、`tasking/<op>` 路由）与会话配置快照导出
+            b.serve(bus_keys.CTL_TARGET, lambda r: q.put(("query_ns", "target", r))),
+            b.serve(bus_keys.CTL_TASKING, lambda r: q.put(("query_ns", "tasking", r))),
+            b.serve(bus_keys.CTL_SNAPSHOT, lambda r: q.put(("snapshot", r))),
             b.serve(bus_keys.svc_geo("height"), lambda r: q.put(("geo", "height", r))),
             b.serve(bus_keys.svc_geo("ray_hit"), lambda r: q.put(("geo", "ray_hit", r))),
             b.subscribe(bus_keys.CTL_GCS, lambda k, raw: q.put(("gcs", raw))),
@@ -619,11 +701,13 @@ class SimCore:
 
     def add_vehicle(self, profile_id: str, home_enu_m: tuple[float, float, float], yaw_rad: float, *,
                     vehicle_id: str | None = None, limits_profile: str | None = None, initial_soc: float = 1.0,
-                    backend: str = "mock", track: Any = None, sensors: list[str] | None = None) -> str:
+                    backend: str = "mock", track: Any = None, sensors: list[str] | None = None,
+                    label: str | None = None) -> str:
         prof = self.T.get(profile_id)
+        profile_id = prof.ref  # 表键（`<id>@<当前版本>` 归一为 `<id>`；存档版本与会话克隆原样）
         e = self.roster.add(vehicle_id=vehicle_id, model=prof.model, profile_id=profile_id, limits_profile=limits_profile,
                             home_enu_m=home_enu_m, yaw_rad=yaw_rad, initial_soc=initial_soc, t_ns=self.clock.t_ns,
-                            emit=self.events.emit, backend=backend, sensor_names=sensors)
+                            emit=self.events.emit, backend=backend, sensor_names=sensors, label=label)
         spec = EntitySpec(e.id, Kind.UAV, profile_id, limits_profile, home_enu_m, yaw_rad, initial_soc)
         fid = R.Fidelity.L0 if backend == "replay" else R.Fidelity.L1
         self.fleet.add(spec, slot=e.slot, agent_no=e.agent_no, entity_id=e.id, t_s=self.clock.t_ns * 1e-9, fidelity=fid)
@@ -640,15 +724,41 @@ class SimCore:
                            np.array([initial_soc], np.float64))
         return e.id
 
-    # ---- fleet/add 与 fleet/remove（CommandEngine 委托，AWR-12 §5.14）
+    # ---- fleet/add、fleet/remove 与 fleet/update（CommandEngine 委托，AWR-12 §5.14；D2：M08-FR-218、§15.3.8）
     def admit_add(self, args: dict) -> tuple[int, Any]:
+        """D1 `fleet/add{profile_id, home_enu_m, …}`；D2 沙盒机队实例 `{model_id, nest_id | pos_enu_m, yaw_rad?, label?,
+        limits_profile? = catalog.limits_default, sensors_cfg?, lights?}`（`model_id` 的写法：未知机型 520、机队上限 505、
+        机巢不收该机型 525；`nest_id` 的出生点由 M20 登记的查询 `nest/home` 给出）。"""
         S = self.fleet.S
-        pid = str(args.get("profile_id") or "p600_mid360")
-        if pid not in self.T.profiles:
+        sandbox = "model_id" in args
+        pid = str(args.get("model_id") or args.get("profile_id") or "p600_mid360")
+        if not self.T.has(pid):
+            if sandbox:
+                return int(Reason.MODEL_UNKNOWN), {"model_id": pid}
             return int(Reason.PARAM_OUT_OF_RANGE), {"why": "UNKNOWN_PROFILE", "profile_id": pid}
-        lp = args.get("speed_profile")
-        if lp is not None and lp not in self.T.get(pid).limits:
+        prof = self.T.get(pid)
+        lp = args.get("speed_profile", args.get("limits_profile"))
+        if lp is None and sandbox:
+            lp = prof.sandbox_limits  # 沙盒实例缺省限速档（catalog.limits_default，M08-FR-209）
+        if lp is not None and lp not in prof.limits and lp not in self.T.limits:
             return int(Reason.PARAM_OUT_OF_RANGE), {"why": "UNKNOWN_PROFILE", "speed_profile": lp}
+        if prof.frame_kind != 0 and prof.frame_kind not in self.reg.power:
+            return int(Reason.PARAM_OUT_OF_RANGE), {"why": "NO_POWER_MODEL", "frame_kind": prof.frame_kind}  # FR-214
+        if sandbox and len(self.roster.by_slot) >= int(self.limits.get("vehicles", 12)):
+            return int(Reason.SANDBOX_ENTITY_LIMIT), {"kind": "vehicle", "max": int(self.limits.get("vehicles", 12))}
+        if sandbox and args.get("home_enu_m") is None:
+            nest = args.get("nest_id")
+            if nest is not None:
+                spec = self.reg.queries.get("nest/home")
+                if spec is None:
+                    return int(Reason.PARAM_OUT_OF_RANGE), {"why": "NEST_UNSUPPORTED", "nest_id": nest}
+                rep_ = spec.fn({"v": 1, "op": "nest/home", "args": {"nest_id": nest, "model_id": pid}}, self.ctx)
+                rep_ = rep_ if isinstance(rep_, dict) else {}
+                if int(rep_.get("code") or 0):
+                    return int(rep_["code"]), rep_.get("detail")
+                args = dict(args, home_enu_m=rep_.get("pos_enu_m"), yaw_rad=rep_.get("yaw_rad", args.get("yaw_rad")))
+            else:
+                args = dict(args, home_enu_m=args.get("pos_enu_m"))
         n = len(self.roster.by_slot)
         if n >= self.fleet.max_vehicles:
             why = "KERNEL_LIMIT" if self.fleet.kernel == "numpy" and n < self.cfg.fleet.capacity else "CAPACITY"
@@ -688,10 +798,102 @@ class SimCore:
             if dmin < lim:
                 return int(Reason.PARAM_OUT_OF_RANGE), {"why": "SPAWN_TOO_CLOSE", "min_m": round(lim, 3),
                                                         "dist_m": round(dmin, 3)}
+        label = args.get("label")
+        if label is not None and (not isinstance(label, str) or len(label) > 32):
+            return int(Reason.PARAM_OUT_OF_RANGE), {"field": "label", "range": [0, 32]}
+        rt = self._sensor_rt()
+        if sandbox and rt is not None:  # 机队实例挂载（M13-FR-202；MT 规则由 M13 判定，spawn 之前配置）
+            vid = vid or self.roster.new_id(prof.model)
+            code, detail = self._configure_mounts(rt, vid, args.get("sensors_cfg"), prof.ref)
+            if code:
+                return code, detail
+            ms = self.vehicle_cfg.get(vid, {}).get("mount_summary")
+            if sensors is None and isinstance(ms, dict):  # roster sensors[] 只列已挂载槽位（WP-10 → M08 第 8 条）
+                sensors = [str(x["slot"]) for x in ms.get("slots") or [] if x.get("mounted")]
         vid = self.add_vehicle(pid, (x, y, z), float(args.get("yaw_rad") or 0.0), vehicle_id=vid, limits_profile=lp,
-                               initial_soc=float(args.get("initial_soc", 1.0)), sensors=sensors)
+                               initial_soc=float(args.get("initial_soc", 1.0)), sensors=sensors, label=label)
         e = self.roster.resolve(vid)
-        return 0, {"id": vid, "agent_no": e.agent_no, "lifecycle": "STARTING"}
+        if sandbox or label is not None:
+            self.vehicle_cfg[vid] = {**{k: v for k, v in self.vehicle_cfg.get(vid, {}).items() if k == "mount_summary"},
+                                     **{k: args.get(k) for k in ("label", "nest_id", "lights") if args.get(k) is not None}}
+            if args.get("sensors_cfg") is not None:
+                self.vehicle_cfg[vid]["sensors"] = args.get("sensors_cfg")
+        return 0, {"id": vid, "vehicle_id": vid, "agent_no": e.agent_no, "lifecycle": "STARTING",
+                   "model_ref": e.profile_id, "limits_profile": lp}
+
+    @staticmethod
+    def _sensor_rt() -> Any:
+        """M13 的 SensorRuntime（按模块名取 `awr.sim.sensors.plugin.runtime()`，组合根不静态导入插件）；未装配为 None。"""
+        fn = getattr(sys.modules.get("awr.sim.sensors.plugin"), "runtime", None)
+        try:
+            return fn() if callable(fn) else None
+        except Exception:
+            return None
+
+    def _configure_mounts(self, rt: Any, vid: str, mounts: Any, profile_id: str) -> tuple[int, Any]:
+        """`SensorRuntime.configure_mounts`（WP-10 → M08 第 4 条）：SensorError（560、561、522）原样作为拒绝；返回值（挂载质量与
+        功率汇总）记入实例配置，供 MT-3 与续航复算。"""
+        try:
+            summary = rt.configure_mounts(vid, mounts, profile_id=profile_id)
+        except Exception as ex:
+            code = getattr(ex, "code", None)
+            if isinstance(code, int) and code:
+                return code, getattr(ex, "detail", None) or str(ex)
+            log.exception("configure_mounts failed", extra={"kv": {"vehicle": vid}})
+            return int(Reason.SERVICE_UNAVAILABLE), {"why": type(ex).__name__}
+        if isinstance(summary, dict) and not summary.get("deferred"):
+            self.vehicle_cfg.setdefault(vid, {})["mount_summary"] = summary
+        return 0, None
+
+    def fleet_update(self, uav: str, patch: dict) -> tuple[int, Any]:
+        """`fleet/update{vehicle, patch{label?, nest_id?, sensors?, limits_profile?, lights?}}`（17 §17.7.6；M08-FR-218）：
+        label、nest_id、lights 随时可改；改挂载（sensors）与限速档只在 LANDED 且上锁（DISARMED）时允许，否则 105
+        （detail NOT_LANDED_LOCKED）。挂载的物理与型号校验由登记的 `fleet/update` 钩子（M13、M21）执行。生效于下一步边界之前。"""
+        e = self.roster.resolve(uav)
+        if e is None:
+            return int(Reason.NO_VEHICLE), {"vehicle": uav}
+        bad = sorted(set(patch) - {"label", "nest_id", "sensors", "limits_profile", "lights"})
+        if bad:
+            return int(Reason.PARAM_OUT_OF_RANGE), {"field": f"patch.{bad[0]}"}
+        S = self.fleet.S
+        s = e.slot
+        if "label" in patch and patch["label"] is not None and (not isinstance(patch["label"], str) or
+                                                                 len(patch["label"]) > 32):
+            return int(Reason.PARAM_OUT_OF_RANGE), {"field": "patch.label", "range": [0, 32]}
+        if ("sensors" in patch or "limits_profile" in patch) and \
+                not (int(S.blocks["safety"]["fs"][s]) == int(SM.FS.DISARMED) and not bool(S.in_air[s])):
+            return int(Reason.STATE), {"why": "NOT_LANDED_LOCKED"}
+        lp = patch.get("limits_profile")
+        if lp is not None and lp not in self.T.limits:
+            return int(Reason.PARAM_OUT_OF_RANGE), {"field": "patch.limits_profile", "value": lp}
+        rt = self._sensor_rt()
+        if "sensors" in patch and rt is not None:
+            code, detail = self._configure_mounts(rt, uav, patch["sensors"], e.profile_id)
+            if code:
+                return code, detail
+        for fn in getattr(self.reg, "fleet_update_hooks", []):  # 在 M13 换装之后调用（钩子可读挂载汇总做 MT-3 等）
+            try:
+                r = fn(uav, s, patch, self.ctx)
+            except Exception as ex:
+                return int(Reason.SERVICE_UNAVAILABLE), {"why": type(ex).__name__}
+            if isinstance(r, dict) and int(r.get("code") or 0):
+                return int(r["code"]), r.get("detail")
+        if lp is not None:  # 全部检查通过之后才生效（拒绝时不留部分修改）
+            S.limits_id[s] = self.T.limits_index(lp, e.profile_id)
+            e.limits_profile = lp
+        if "sensors" in patch and rt is not None:
+            with contextlib.suppress(Exception):
+                self.roster.set_sensors(s, rt.mounted_names(uav), self.clock.t_ns, self.events.emit)
+        vc = self.vehicle_cfg.setdefault(uav, {})
+        for k in ("nest_id", "sensors", "lights"):
+            if k in patch:
+                vc[k] = patch[k]
+        if "label" in patch:
+            vc["label"] = patch["label"]
+            self.roster.set_label(s, patch["label"], self.clock.t_ns, self.events.emit)
+        if self.inputlog is not None:
+            self.inputlog.append("roster", self.clock.tick + 1, {"op": "update", "id": uav, "patch": patch})
+        return 0, {"vehicle": uav, "patch": patch}
 
     def remove(self, uav: str, force: bool) -> tuple[int, Any]:
         """fleet/remove（L05–L09）：地面或强制 → STOPPED（下一 tick REMOVED）；空中 → DRAINING（以 safety 名义降落）。"""
@@ -714,6 +916,31 @@ class SimCore:
         self.engine.submit_internal({"cid": f"drain-{uav}-{self.clock.tick}", "op": "land", "uav": uav, "args": {}},
                                     {"principal_id": "safety", "role": "safety", "entry": "scenario", "seat": False})
         return 0, {"id": uav, "lifecycle": "DRAINING"}
+
+    def _clear_session_state(self) -> None:
+        """`sim/reset{sandbox_config}` 前清空：全部机体、识别物、会话克隆与机队实例配置（步边界）。"""
+        emit = self.events.emit
+        for s in list(self.roster.by_slot):
+            e = self.roster.by_slot[s]
+            self.engine.cancel_slot(s, int(Reason.CANCELLED), "reset")
+            self.lease.free(s)
+            self.fleet.remove(s)
+            self.roster.remove(s, self.clock.t_ns, emit, "reset")
+            hooks = self.reg.hooks
+            if hooks is not None:
+                with contextlib.suppress(Exception):
+                    hooks.on_remove(np.array([s], np.int32))
+            self.vehicle_cfg.pop(e.id, None)
+        self._stopped.clear()
+        self._removing.clear()
+        self.agent_slot = {}
+        if self.entities is not None:
+            for t in self.entities.tables.values():
+                t.clear()
+        for cid in list(getattr(self.T, "sessions", {})):
+            with contextlib.suppress(Exception):
+                self.T.remove_session(cid)
+        self.vehicle_cfg.clear()
 
     def _lifecycle(self, S, ctx) -> None:
         emit = self.events.emit
@@ -766,8 +993,12 @@ class SimCore:
         self.inbox.put(("reset", str(reason), dict(args or {})))
 
     def reset(self, reason: str = "scenario_reset", args: dict | None = None) -> None:
-        """剧本重置（C09；M08-FR-008）：segment + 1、epoch + 1，机群重生（RESTARTING → READY），租约 FREE，在途调用 canceled 6。"""
+        """剧本重置（C09；M08-FR-008）：segment + 1、epoch + 1，机群重生（RESTARTING → READY），租约 FREE，在途调用 canceled 6。
+        D2：`args.sandbox_config`（`awr.sandbox.snapshot.v1` 或场景模板）时先清空机队、识别物与会话克隆，重置后按配置装配。"""
+        sbx = (args or {}).get("sandbox_config")
         self.engine.cancel_all(int(Reason.CANCELLED), "reset")
+        if isinstance(sbx, dict):
+            self._clear_session_state()
         from ..core import metrics as MET
 
         MET.clear_external()  # 外部度量随剧本重置清空（ADR-058）
@@ -807,6 +1038,8 @@ class SimCore:
         for fn in self._reset_hooks:
             with contextlib.suppress(Exception):
                 fn(dict(args or {}))
+        if isinstance(sbx, dict):
+            self.session.apply(sbx)
         if self.cfg.autoplay:
             self.clock.apply("play")
         self.events.emit("sim.reset", t_sim_ns=0, severity=1, epoch=self.epoch, segment=self.segment, reason=reason,
@@ -826,6 +1059,8 @@ class SimCore:
         clk = self.clock
         self.ring.heartbeat(clk.t_ns, clk.state, clk.rate_milli, step_seq=clk.tick)  # FR-003：先写心跳（时钟组）
         self._drain()
+        if self.profile.manual_lock:
+            self._manual_poll()
         n = clk.steps_due()
         if n:
             ts = self.perf_ns()
@@ -888,11 +1123,78 @@ class SimCore:
             # 暂停：有被顺延的不可分片请求时不阻塞等待，下一轮立即续做（ADR-057 有界时延；AWR-10 §4.2）
             return 0.0 if self.slow.backlog or self._veh_jobs else IDLE_WAIT_S
         nd = clk.next_deadline_ns()
-        if self.pair_ticks and clk.tick % 2 == 0 and clk.rate == 1.0 and not self.post_step_hooks:
-            # 成对推进（ADR-070）：下一 tick 为奇数时等到其后的偶数 tick（L1 与 StateRing 发布所在的 tick）到期再一并推进，
-            # 主循环按 125 Hz 唤醒。不提前 150 µs 醒来：提前醒来时偶数 tick 尚未到期，只会先单独推进奇数 tick
-            return max(0.0, (nd + TICK_NS - self.wall_ns()) / 1e9)
+        if self.pair_ticks and self.profile.pair_wake and clk.tick % 2 == 0 and clk.rate == 1.0 and \
+                not self.post_step_hooks:
+            # 成对推进（ADR-070）：下一 tick 为奇数时等到其后的偶数 tick（StateRing 发布所在的 tick；d1_250 另为 L1 所在）到期
+            # 再一并推进，主循环按 125 Hz（d1_250）或 50 Hz（sandbox100）唤醒。不提前 150 µs 醒来：提前醒来时偶数 tick 尚未到期，
+            # 只会先单独推进奇数 tick（ClockProfile.pair_wake，D2-AC-08）
+            return max(0.0, (nd + clk.tick_ns - self.wall_ns()) / 1e9)
         return max(0.0, (nd - self.wall_ns() - 150_000) / 1e9)
+
+    # ------------------------------------------------------------ D2：手动控制时钟锁（M08-FR-220，§15.6.1）
+    def _manual_poll(self) -> None:
+        """任一 slot 处于 OPERATOR 持有的 VELOCITY 会话（velocity 调用在途；setpoint 只在会话内生效，250 ms 看门狗结束会话）
+        时保持锁定；全部离开后 2 s【墙钟】解锁（UNLOCKING 期间重新进入则取消计时）。转移时发
+        `sim.clock{reason: manual_lock | manual_unlock}`。"""
+        S = self.fleet.S
+        clk = self.clock
+        vs = S.vel_sess & S.active
+        anyv = bool(vs.any()) and bool(np.any(self.lease.owner_codes()[vs] == int(Owner.OPERATOR)))
+        ev = clk.manual_poll(anyv)
+        if ev is not None:
+            self.events.emit("sim.clock", t_sim_ns=clk.t_ns, severity=0, state=TIMESTATE_NAMES[clk.state], rate=clk.rate,
+                             reason=ev)
+
+    def _validate_sensor_rigs(self) -> None:
+        """M13 传感器组的机型级校验（WP-10 → M08 第 13 条；AWR-20 §8.1"任一文件级失败 sim-core 拒绝启动"）：M13 已装配时调用
+        `SensorRuntime.validate_profiles(T)`，非空即 353（ProfileError）。"""
+        if "awr.sim.sensors.plugin" not in self.plugins_loaded:
+            return
+        sr = getattr(sys.modules.get("awr.sim.sensors.runtime"), "SensorRuntime", None)
+        fn = getattr(sr, "validate_profiles", None)
+        if not callable(fn):
+            return
+        bad = {k: list(v) for k, v in (fn(self.T) or {}).items() if v}
+        if bad:
+            first = sorted(bad)[0]
+            raise ProfileError(first, [f"{k}: {x}" for k in sorted(bad) for x in bad[k]])
+
+    def features(self) -> list[str]:
+        """sim-core 在本构建中恒提供的 D2 能力（serverInfo.capabilities 的来源之一，17 §17.7.1）：`calendar`（M07 登记了
+        `env/calendar`）、`targets`（M18 登记了识别物实体块）、`sandbox`（沙盒时钟档）。"""
+        out = []
+        if "env/calendar" in self.reg.commands:
+            out.append("calendar")
+        if self.reg.entity_blocks.get("target"):
+            out.append("targets")
+        if self.profile.manual_lock:
+            out.append("sandbox")
+        return out
+
+    # ------------------------------------------------------------ D2：识别物实体层（M08-FR-216、FR-217）
+    def _setup_entities(self) -> None:
+        self.entities = EntityTables(self.reg.entity_blocks, limits={"target": self.limits["targets"]})
+        self.entities["target"].on_change = self._entity_changed
+        self.roster.extra = self.entities.roster_entries
+        self.ctx.entities = self.entities
+        self.ctx.roster = self.roster
+
+    def _entity_changed(self, kind: str, op: str, m: Any) -> None:
+        self.roster.bump(self.clock.t_ns, self.events.emit)
+
+    def _extra_stages(self) -> list:
+        """组合根追加的 M08 stage：M18 登记了识别物实体块时装配 `tap_targets`（D1 剧本的调度不变）。"""
+        if not self.reg.entity_blocks.get("target"):
+            return []
+        self.tap_targets = TapTargets(lambda: self.entities["target"] if self.entities is not None else None,
+                                      self._publish_targets, roster_version=lambda: self.roster.roster_version,
+                                      wall_ns=self.wall_ns, min_wall_ns=self.profile.pub_min_wall_ns)
+        return R.make_stage("tap_targets", 25, 21, 141, self.tap_targets, owner="M08", builtin=True)
+
+    def _publish_targets(self, raw: bytes) -> None:
+        if self._pub_targets is None:
+            self._pub_targets = self.bus.publisher(bus_keys.STATE_TARGETS)
+        self._pub_targets.put(raw)
 
     def register_post_step_hook(self, fn: Callable[[int, int, int], Any]) -> Callable[[], None]:
         """锁步钩子（`--inproc` 与测试；M14-to-M08 第 5 条）：`fn(t_sim_ns, epoch, segment)` 在每个 tick 的 pipeline 结束、
@@ -1003,6 +1305,20 @@ class SimCore:
                     item[1].reply_msg({"v": 1, "code": int(Reason.RATE_LIMITED), "detail": {"queue": len(self._query_q)}})
                 return
             self._query_q.append(item[1])
+        elif kind == "query_ns":  # ctl/sim-core/{target,tasking}：op 加命名空间前缀后与 ctl/sim-core/query 同一路径
+            if len(self._query_q) >= QUERY_Q_MAX:
+                with contextlib.suppress(Exception):
+                    item[2].reply_msg({"v": 1, "code": int(Reason.RATE_LIMITED), "detail": {"queue": len(self._query_q)}})
+                return
+            self._query_q.append(_NsRequest(item[1], item[2]))
+        elif kind == "snapshot":
+            req = item[1]
+            m = req.msg() if hasattr(req, "msg") else {}
+            op = str((m or {}).get("op") or "export")
+            if op != "export":
+                req.reply_msg({"v": 1, "code": int(Reason.BAD_REQUEST), "detail": {"op": op}})
+            else:
+                req.reply_msg({"v": 1, "code": 0, "snapshot": self.session.export()})
         elif kind == "geo":
             if self.geo is not None:
                 self.geo.enqueue(item[1], item[2])
@@ -1032,6 +1348,10 @@ class SimCore:
                     ids = sorted(set(m.get("detail", [])) | set(m.get("marks", [])))[:80]
                     self.interest = np.asarray(ids, np.uint16)
                     self.ctx.interest = self.interest
+                    st = m.get("streams") if isinstance(m.get("streams"), dict) else {}
+                    # D2 按需流（AWR-04 §11.2）：保持网关给出的顺序（最近订阅在前；lidar 至多 1 个），生产者自行取用
+                    self.ctx.streams = {k: np.asarray([int(a) for a in v][:64], np.uint16) for k, v in st.items()
+                                        if k in STREAM_NAMES and isinstance(v, list)}
 
     # ------------------------------------------------------------ 时钟与租约服务
     def _principal_ok(self, msg: dict, *, need_seat: bool, roles: tuple[str, ...] = ("operator", "admin")) -> int:
@@ -1059,21 +1379,28 @@ class SimCore:
 
     def _clock_json(self) -> dict:
         c = self.clock
-        return {"state": TIMESTATE_NAMES[c.state], "rate": c.rate, "t_sim_ns": c.t_ns, "epoch": self.epoch,
-                "segment": self.segment}
+        out = {"state": TIMESTATE_NAMES[c.state], "rate": c.rate, "t_sim_ns": c.t_ns, "epoch": self.epoch,
+               "segment": self.segment}
+        if self.profile.name != "d1_250":  # D2：沙盒档另报档位、tick 频率与手动锁（D1 回复不变）
+            out.update({"clock_profile": self.profile.name, "tick_hz": self.profile.tick_hz,
+                        "clock_lock": "manual" if c.manual_locked else None})
+        return out
 
     def _clock_op(self, msg: dict) -> dict:
         cid = str(msg.get("cid", ""))
         code = self._principal_ok(msg, need_seat=True)
         op = str(msg.get("op", ""))
         args = msg.get("args") or {}
+        detail: dict | None = None
         if not code:
             if op == "reset":
                 self.reset(args=args)
             elif op == "checkpoint":
                 code = 0 if self.checkpoint_now() else int(Reason.SERVICE_UNAVAILABLE)
             else:
-                code = self.clock.apply(op, args).code
+                r = self.clock.apply(op, args)
+                code = r.code
+                detail = r.detail
                 if not code and op == "speed":
                     self.engine.on_rate_change(self.clock.rate)
             if not code:
@@ -1081,8 +1408,13 @@ class SimCore:
                                  rate=self.clock.rate)
                 if self.inputlog is not None and op != "reset":
                     self.inputlog.append("clock", self.clock.tick + 1, {"op": op, "args": args})
-        return {"v": 1, "cid": cid, "status": "rejected" if code else "accepted", "code": int(code),
-                "clock": self._clock_json()}
+        rep = {"v": 1, "cid": cid, "status": "rejected" if code else "accepted", "code": int(code),
+               "clock": self._clock_json()}
+        if detail:
+            rep["detail"] = detail
+        if op == "reset" and not code and isinstance(args.get("sandbox_config"), dict):
+            rep["problems"] = list(self.session.problems)
+        return rep
 
     def _lease_op(self, msg: dict) -> dict:
         """`ctl/sim-core/lease`（17 §9.4 leaseOp；M08-FR-062；ADR-027；M14-to-M08 第 1 条）。
@@ -1251,14 +1583,160 @@ class SimCore:
             return {"v": 1, "code": 0, "items": self.T.summary()}
         if op == "fleet/profile":
             pid = str(args.get("profile_id"))
-            if pid not in self.T.profiles:
+            if not self.T.has(pid):
                 return {"v": 1, "code": int(Reason.NOT_FOUND), "detail": {"profile_id": pid}}
             return {"v": 1, "code": 0, "item": self.T.describe(pid)}
         if op == "fleet/caps":
-            return {"v": 1, "code": 0, "items": {"mock": dict(self.caps.raw), "replay": dict(self.replay_caps.raw)}}
+            items = {"mock": dict(self.caps.raw), "replay": dict(self.replay_caps.raw)}
+            for k in items:  # caps.clock 增加 tick_hz（ADR-090）
+                if isinstance(items[k].get("clock"), dict):
+                    items[k]["clock"] = {**items[k]["clock"], "tick_hz": self.profile.tick_hz}
+            return {"v": 1, "code": 0, "items": items, "features": self.features()}
         if op == "fleet/vehicles":
             return {"v": 1, "code": 0, "items": self.vehicle_items(args.get("id"))}
+        # D2（M08-FR-226、FR-227；§15.3.8 沙盒车辆路由的数据来源）
+        if op == "fleet/instances":
+            return {"v": 1, "code": 0, "items": self.instance_items(args.get("id"))}
+        if op == "fleet/vehicle_state":
+            st = self.vehicle_state(str(args.get("id")))
+            if st is None:
+                return {"v": 1, "code": int(Reason.NO_VEHICLE), "detail": {"id": args.get("id")}}
+            return {"v": 1, "code": 0, "item": st}
+        if op == "fleet/vehicle_sensors":
+            st = self.vehicle_sensors(str(args.get("id")))
+            if st is None:
+                return {"v": 1, "code": int(Reason.NO_VEHICLE), "detail": {"id": args.get("id")}}
+            return {"v": 1, "code": 0, "item": st}
+        if op == "sim/session_config":
+            return {"v": 1, "code": 0, "problems": list(self.session.problems), "template_id": self.session.template_id}
         return None
+
+    # ------------------------------------------------------------ D2：沙盒机队实例与机体全部状态（M08-FR-227）
+    _CATEGORY = ("multirotor", "fixed_wing", "vtol")
+
+    def _work_of(self) -> dict:
+        """各机当前工作项（M20 登记的查询 `tasking/vehicle_work` → {vehicle_id: {tid, wid, kind}}；未登记时为空）。"""
+        spec = self.reg.queries.get("tasking/vehicle_work")
+        if spec is None:
+            return {}
+        try:
+            r = spec.fn({"v": 1, "op": "tasking/vehicle_work", "args": {}}, self.ctx)
+        except Exception:
+            return {}
+        items = r.get("items") if isinstance(r, dict) else None
+        return items if isinstance(items, dict) else {}
+
+    def instance_items(self, vid: str | None = None) -> list[dict]:
+        """沙盒 `GET /vehicles` 的条目（契约 `vehicle/instance.schema.json` 根：D1 R12 的字段加 model_id、category、label、
+        nest_id、work、manual，17 §17.6.3）。"""
+        S = self.fleet.S
+        sb = S.blocks["safety"]
+        bb = S.blocks.get("battery")
+        slots = self.roster.slots_in_order()
+        if vid is not None:
+            e = self.roster.resolve(vid)
+            slots = [e.slot] if e is not None else []
+        work = self._work_of() if slots else {}
+        owner = self.lease.owner_codes()
+        out = []
+        for s in slots:
+            e = self.roster.by_slot[s]
+            vc = self.vehicle_cfg.get(e.id, {})
+            pct = None
+            if bb is not None and "battery_pct" in bb and int(bb["battery_pct"][s]) != 255:
+                pct = int(bb["battery_pct"][s])
+            p = self.T.get(e.profile_id)
+            fs, sub = int(sb["fs"][s]), int(sb["sub"][s])
+            L = self.lease.lease_json(s)
+            w = work.get(e.id)
+            out.append({"id": e.id, "agent_no": e.agent_no, "kind": e.kind, "model": e.model, "profile_id": e.profile_id,
+                        "backend": e.backend, "simulated": True, "lifecycle": LIFECYCLE_NAMES[e.lifecycle],
+                        "flight_state": SM.FS(fs).name,
+                        "sub": SM.SUB[SM.FS(fs)][sub] if sub < len(SM.SUB[SM.FS(fs)]) else None, "battery_pct": pct,
+                        "lease": {"owner": L["owner"], "holder": L["holder"], "expires_unix_ms": None},
+                        "model_id": p.ref if "@" not in p.ref else p.profile_id,
+                        "category": self._CATEGORY[int(S.frame_kind[s])] if int(S.frame_kind[s]) < 3 else "multirotor",
+                        "label": vc.get("label", e.label), "nest_id": vc.get("nest_id"),
+                        "work": dict(w) if isinstance(w, dict) else None,
+                        "manual": bool(S.vel_sess[s]) and int(owner[s]) == int(Owner.OPERATOR)})
+        return out
+
+    def vehicle_state(self, vid: str) -> dict | None:
+        """机体全部状态（M08-FR-227；17 §17.6.3 SB-33 `{t_sim_ns, state, state_ext, fw}`）：`state` 为 D1 R13 的单机快照加
+        Full64 的解码值（ENU、单位后缀），`state_ext` 与 `uav/{id}/state_ext` 同一来源。"""
+        e = self.roster.resolve(vid)
+        if e is None:
+            return None
+        S = self.fleet.S
+        s = e.slot
+        from ..fleet.state import CtrlMode
+
+        base = self.vehicle_items(vid)
+        st = dict(base[0]) if base else {}
+        ext = st.pop("state_ext", None)
+        if ext is None:
+            rows = self._ext_rows([s])
+            ext = rows[0][1] if rows else None
+        E = S.enu
+        vel = E.vel[s]
+        p = self.T.get(e.profile_id)
+        vc = self.vehicle_cfg.get(e.id, {})
+        st.update({"model_version": p.version, "frame_kind": int(S.frame_kind[s]),
+                   "vel_enu_mps": [round(float(x), 3) for x in vel], "speed_mps": round(float(np.linalg.norm(vel)), 3),
+                   "q_xyzw": [round(float(x), 6) for x in E.q_xyzw[s]],
+                   "omega_flu_rad_s": [round(float(x), 5) for x in E.omega_flu[s]],
+                   "acc_enu_mps2": [round(float(x), 3) for x in E.acc[s]], "agl_m": round(float(S.agl[s]), 3),
+                   "in_air": bool(S.in_air[s]), "landed": bool(S.landed[s]), "ctrl_mode": CtrlMode(int(S.ctrl_mode[s])).name,
+                   "fidelity": int(S.fidelity[s]), "limits_profile": e.limits_profile or p.default_limits,
+                   "lease": self.lease.lease_json(s), "label": vc.get("label", e.label), "nest_id": vc.get("nest_id"),
+                   "lights": vc.get("lights")})
+        fw = None
+        if int(S.frame_kind[s]) != 0:
+            fw = {"mode": "FW" if int(S.fidelity[s]) & 16 else "MC"}
+            spec = self.reg.queries.get("fw/state")  # M21：空速、滚转、航迹倾角、悬停累计
+            if spec is not None:
+                with contextlib.suppress(Exception):
+                    r = spec.fn({"v": 1, "op": "fw/state", "args": {"id": vid}}, self.ctx)
+                    if isinstance(r, dict) and isinstance(r.get("item"), dict):
+                        fw.update(r["item"])
+        return {"t_sim_ns": str(int(self.clock.t_ns)), "state": st, "state_ext": ext, "fw": fw}
+
+    def vehicle_sensors(self, vid: str) -> dict | None:
+        """`GET .../vehicles/{vid}/sensors`（SB-34 `{payload, sensors[]}`）：传感器列表取 M13 的描述（ProfileTable.describe 的
+        `sensors{}`）与实例挂载配置，载荷状态取 M13 登记的查询 `payload/state`（未登记时省略）。"""
+        e = self.roster.resolve(vid)
+        if e is None:
+            return None
+        rt = self._sensor_rt()
+        if rt is not None:  # M13 的权威描述（WP-10 → M08 第 7 条）；机体未装配完成时退回下面的静态描述
+            with contextlib.suppress(Exception):
+                r = rt.sensors_rest(vid)
+                if isinstance(r, dict) and isinstance(r.get("sensors"), list):
+                    return r
+        desc: dict = {}
+        with contextlib.suppress(Exception):
+            desc = self.T.describe(e.profile_id).get("sensors") or {}
+        cfg = {str(x.get("name")): x for x in (self.vehicle_cfg.get(vid, {}).get("sensors") or []) if isinstance(x, dict)}
+        names = [x.get("name") for x in e.sensors] or [k for k in desc if isinstance(desc.get(k), dict) and "kind" in desc[k]]
+        items = []
+        for n in names:
+            d = desc.get(n) if isinstance(desc.get(n), dict) else {}
+            mnt = d.get("mount") or {}
+            en = bool(cfg.get(n, {}).get("enabled", True))
+            item = {"name": str(n), "type": str(d.get("type") or d.get("kind") or "unknown"),
+                    "kind": str(d.get("kind") or "unknown"), "spec_ref": d.get("spec_ref"),
+                    "state": "ACTIVE" if en else "STANDBY", "mode": None, "enabled": en}
+            if isinstance(mnt.get("xyz_m"), list) and len(mnt["xyz_m"]) == 3:
+                item["mount"] = {"pos_m": [float(v) for v in mnt["xyz_m"]]}
+            items.append(item)
+        out: dict = {"sensors": items}
+        spec = self.reg.queries.get("payload/state")
+        if spec is not None:
+            with contextlib.suppress(Exception):
+                r = spec.fn({"v": 1, "op": "payload/state", "args": {"id": vid}}, self.ctx)
+                if isinstance(r, dict) and isinstance(r.get("item"), dict):
+                    out["payload"] = r["item"]
+        return out
 
     def vehicle_items(self, vid: str | None = None) -> list[dict]:
         """`fleet/vehicles` 查询（慢任务内同步执行）。state_ext 取最近一次 2 Hz 分片发布的行（≤ 0.5 s【墙钟】，与网关
@@ -1796,8 +2274,9 @@ class SimCore:
             dt_sim_s = 1.0
         ms_per_s = {k: round(v / 1e6 / dt_sim_s, 3) for k, v in stage.items()}
         slow_ms = {k: round(v / dt_sim_s, 3) for k, v in self.slow.busy_ms().items()}
+        btab = self.fleet.pipeline.budget_table()  # 告警线按所在档位的预算（M08-FR-203）
         for k, v in ms_per_s.items():
-            b = B.BUDGET_CORE.get(k)
+            b = btab.get(k, B.BUDGET_CORE.get(k))
             over = b is not None and v > 1.25 * b * 1000.0
             if over and k not in self._overbudget:
                 self._overbudget.add(k)
@@ -1826,7 +2305,31 @@ class SimCore:
                "slow_defer_max": {t.name: t.defer_max for t in self.slow.tasks if t.atomic and t.defer_max}}
         if self.geo is not None:
             msg["geo"] = self.geo.metrics()
+        msg.update(self._perf_d2(now_cpu, now_w))
         return msg
+
+    def _perf_d2(self, cpu_s: float, wall_ns: int) -> dict:
+        """M08-FR-224 的追加字段（M08 §15.3.7）。"""
+        from ..core import metrics as MET
+
+        pw = self.perfwin
+        pw.sample(cpu_s, wall_ns, self.clock.t_ns)
+
+        def metric(name: str) -> Any:
+            try:
+                v = MET.metric(name)
+            except Exception:
+                return None
+            return v if isinstance(v, (int, float)) else None
+
+        from .perfwin import rss_anon_mb
+
+        return {"clock_profile": self.profile.name, **pw.fields(), "rate_set": float(self.clock.rate),
+                "n_uav": len(self.roster.by_slot),
+                "n_target": len(self.entities["target"]) if self.entities is not None else 0,
+                "ray_rate_hz": metric("ray_rate_hz"), "rays_dropped": metric("rays_dropped"), "rss_anon_mb": rss_anon_mb(),
+                "clock_lock": "manual" if self.clock.manual_locked else None,
+                "budget_total_core": round(self.fleet.pipeline.budget_total(), 4)}
 
     def _write_step_stats(self, now: int) -> None:
         a = np.asarray(self._step_us, np.float64) if self._step_us else np.zeros(1)
@@ -1848,6 +2351,7 @@ class SimCore:
         if self.persist_dir is None:
             return
         side = {"sim_kernel": self.fleet.kernel, "kernel_fallback": self.fleet.kernel_fallback,
+                "clock_profile": self.profile.name, "tick_hz": self.profile.tick_hz,
                 "fleet_config": self.cfg.fleet.to_json(), "world_seed": self.cfg.world_seed,
                 "warmup_s": round(getattr(self, "warmup_s", 0.0), 3), "affinity": sorted(os.sched_getaffinity(0)),
                 "nice": os.getpriority(os.PRIO_PROCESS, 0), "plugins": self.plugins_loaded,
@@ -1859,7 +2363,8 @@ class SimCore:
             meta = json.loads(mp.read_text(encoding="utf-8"))
             sim = meta.setdefault("sim", {})
             sim["kernel"] = self.fleet.kernel
-            sim["fleet_config"] = {**self.cfg.fleet.to_json(), "affinity": side["affinity"], "nice": side["nice"]}
+            sim["fleet_config"] = {**self.cfg.fleet.to_json(), "affinity": side["affinity"], "nice": side["nice"],
+                                   "clock_profile": self.profile.name}  # 时钟档（M08-FR-201；sim 段的 schema 不含独立键）
             sim["world_seed"] = int(self.cfg.world_seed)
             sim["fastmath"] = False
             sim.update(_versions())
@@ -1905,6 +2410,8 @@ class SimCore:
         with contextlib.suppress(Exception):
             self.events.close()
         self.audit.close()
+        with contextlib.suppress(Exception):
+            CP.set_current(self._profile_prev)
         # start() 的 gc.freeze() 把当时存活的对象（含本 SimCore 自身的环）移入永久代；停止后解冻，使其随后可被回收。
         # sim-core 进程中 stop 之后即退出，不受影响；同一进程内反复启停（--inproc、测试）每次约泄漏 3.6 MB。
         gc.unfreeze()
@@ -1959,6 +2466,30 @@ def _write_profile_failure(persist_dir: Path, err: ProfileError) -> None:
              "problems": err.problems}, ensure_ascii=False, indent=1) + "\n")
 
 
+def _profile_failed(e: ProfileError, bus: Any, ctx: Any) -> int:
+    log.error("vehicle profile invalid", extra={"kv": {"code": e.code, "profile": e.profile_id, "problems": e.problems}})
+    with contextlib.suppress(Exception):
+        ev = EventPublisher(bus, "sim-core", 1)
+        ev.emit("sim.stopped", t_sim_ns=0, severity=3, epoch=1, segment=0, reason="profile_invalid",
+                kernel="numpy", n=0, code=e.code, detail=e.problems[:4])
+        ev.flush()
+    if ctx.supervised:
+        _write_profile_failure(ctx.persist_dir, e)
+    return 3
+
+
+class WorldUnavailable(RuntimeError):
+    """沙盒档的世界几何不可用（派生缓存缺失等）：sim-core 拒绝启动（502 SANDBOX_SPAWN_FAILED，`detail.reason`）。"""
+
+    code = int(Reason.SANDBOX_SPAWN_FAILED)
+
+    def __init__(self, world_id: str, reason: str, error: str) -> None:
+        self.world_id = world_id
+        self.reason = reason
+        self.error = error
+        super().__init__(f"world {world_id} unavailable: {reason}")
+
+
 STANDBY_READY_LINE = "AWR_STANDBY_READY"  # 与 supervisor `STANDBY_READY` 一致（AWR-19 §4.2，ADR-070）
 
 
@@ -1968,6 +2499,7 @@ def _standby_preload() -> dict[str, Any]:
     运行状态无关（世界、剧本、StateRing、总线在接替之后才打开），接替后由 SimCore 复用（compose_plugins 对已导入模块不重复
     执行，机型表经 `profiles=` 传入）。冷启动 sim-core 约 2 s，其中这些约 1.5 s（FX2-R3-sim 自测，D1-AC-11b）。"""
     cfg = SimConfig.from_env()
+    CP.set_current(cfg.fleet.profile())  # 预热沙盒 sim-core 以 AWR_CLOCK_PROFILE=sandbox100 拉起（M08-FR-225）
     defer_numba_blas_probe()
     compose_plugins(cfg.plugins)
     out: dict[str, Any] = {}
@@ -1986,17 +2518,40 @@ def _standby_preload() -> dict[str, Any]:
     return out
 
 
-def _standby_wait() -> dict[str, Any] | None:
-    """`AWR_STANDBY=1`（supervisor 的热备用进程，AWR-19 §4.2，ADR-070）：预热后打印 `AWR_STANDBY_READY`，阻塞读 stdin 的
-    一行 JSON `{"env": {...}}`（接替时 supervisor 写入的当前子进程环境）；读到 EOF（supervisor 停止备用进程或已退出）时
-    返回 None。等待期间设 PDEATHSIG，supervisor 退出时随之退出。"""
-    with contextlib.suppress(Exception):
-        import ctypes
+def standby_env(payload: dict) -> dict[str, str]:
+    """热备用接替载荷 → 进程环境（M08-FR-225）。`env` 原样；D2 预热沙盒 sim-core 另带 `binding{run_id, world_id, ring_path,
+    namespace, secret_path}`（RunBinding，映射为 AWR_RUN、AWR_WORLD、AWR_RUN_DIR、AWR_SECRET_FILE）与 `config_snapshot`
+    （session.json 路径，映射为 AWR_SESSION_CONFIG：领取后按快照或模板原地装配）。"""
+    env = {str(k): str(v) for k, v in (payload.get("env") or {}).items()}
+    b = payload.get("binding")
+    if isinstance(b, dict):
+        if b.get("run_id"):
+            env["AWR_RUN"] = str(b["run_id"])
+        if b.get("world_id"):
+            env["AWR_WORLD"] = str(b["world_id"])
+        if b.get("ring_path"):
+            env["AWR_RUN_DIR"] = str(Path(str(b["ring_path"])).parent)
+        if b.get("secret_path"):
+            env["AWR_SECRET_FILE"] = str(b["secret_path"])
+    if payload.get("config_snapshot"):
+        env["AWR_SESSION_CONFIG"] = str(payload["config_snapshot"])
+    return env
 
-        ctypes.CDLL("libc.so.6", use_errno=True).prctl(1, int(signal.SIGTERM), 0, 0, 0)
-    sup = os.environ.get("AWR_SUPERVISOR_PID")
-    if sup and sup.isdigit() and os.getppid() != int(sup):
-        return None
+
+def _standby_wait() -> dict[str, Any] | None:
+    """`AWR_STANDBY=1`（supervisor 的热备用进程，AWR-19 §4.2，ADR-070；D2 sandbox-pool 的预热沙盒 sim-core，M08-FR-225）：
+    预热后打印 `AWR_STANDBY_READY`，阻塞读 stdin 的一行 JSON `{"env": {...}, "binding"?: {...}, "config_snapshot"?: path}`
+    （接替时写入；见 `standby_env`）；读到 EOF（监管者停止备用进程或已退出）时返回 None。等待期间设 PDEATHSIG，监管者退出时
+    随之退出；`AWR_DETACHED=1`（sandbox-pool 拉起的预热进程）不设 PDEATHSIG、不核对 `AWR_SUPERVISOR_PID`。"""
+    detached = os.environ.get("AWR_DETACHED") == "1"  # sandbox-pool 的预热进程：不随父进程退出，不核对监管者（init_child 脱离模式）
+    if not detached:
+        with contextlib.suppress(Exception):
+            import ctypes
+
+            ctypes.CDLL("libc.so.6", use_errno=True).prctl(1, int(signal.SIGTERM), 0, 0, 0)
+        sup = os.environ.get("AWR_SUPERVISOR_PID")
+        if sup and sup.isdigit() and os.getppid() != int(sup):
+            return None
     pre = _standby_preload()
     sys.stdout.write(STANDBY_READY_LINE + "\n")
     sys.stdout.flush()
@@ -2004,10 +2559,11 @@ def _standby_wait() -> dict[str, Any] | None:
     if not line.strip():
         return None
     try:
-        env = json.loads(line).get("env") or {}
+        payload = json.loads(line)
+        env = standby_env(payload if isinstance(payload, dict) else {})
     except (ValueError, AttributeError):
         return None
-    os.environ.update({str(k): str(v) for k, v in env.items()})
+    os.environ.update(env)
     os.environ.pop("AWR_STANDBY", None)
     return pre
 
@@ -2015,6 +2571,11 @@ def _standby_wait() -> dict[str, Any] | None:
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
+    args_ = list(sys.argv[1:] if argv is None else argv)
+    if "--batch" in args_:  # 批处理自由运行（M08-FR-221）
+        from .batch import batch_main
+
+        return batch_main(args_)
     ap = argparse.ArgumentParser(prog="python -m awr.sim.runtime")
     ap.add_argument("--resim", default=None, help="runs/<run>：按输入日志批处理重仿真（D1-ext，M08-FR-084）")
     ap.add_argument("--out", default=None, help="重仿真输出的 Full64 帧摘要路径")
@@ -2050,15 +2611,7 @@ def main(argv: list[str] | None = None) -> int:
                            audit_path=ctx.persist_dir / "audit.jsonl" if ctx.supervised else None,
                            persist_dir=ctx.persist_dir if ctx.supervised else None, profiles=pre.get("profiles"))
         except ProfileError as e:  # 353 VEHICLE_PROFILE_INVALID：拒绝启动（M08-FR-042）
-            log.error("vehicle profile invalid", extra={"kv": {"code": e.code, "profile": e.profile_id, "problems": e.problems}})
-            with contextlib.suppress(Exception):
-                ev = EventPublisher(bus, "sim-core", 1)
-                ev.emit("sim.stopped", t_sim_ns=0, severity=3, epoch=1, segment=0, reason="profile_invalid",
-                        kernel="numpy", n=0, code=e.code, detail=e.problems[:4])
-                ev.flush()
-            if ctx.supervised:
-                _write_profile_failure(ctx.persist_dir, e)
-            return 3
+            return _profile_failed(e, bus, ctx)
         from .ckpt import attach_checkpoint
         from .inputlog import attach_inputlog
 
@@ -2075,7 +2628,17 @@ def main(argv: list[str] | None = None) -> int:
             core.ext_pub_bg = GatedPublisher(core.idle_gate)  # state_ext 在空闲窗口内发布（ADR-073 第 3 条）；roster 与 fleet/vehicles
             #                                                    的大回复同此（ADR-074 第 1、2 条）
         sys.setswitchinterval(SWITCH_INTERVAL_S)
-        core.start()
+        try:
+            core.start()
+        except ProfileError as e:  # 插件装配后的机型级校验（M13 传感器组）同样 353
+            return _profile_failed(e, bus, ctx)
+        except WorldUnavailable as e:
+            with contextlib.suppress(Exception):
+                ev = EventPublisher(bus, "sim-core", 1)
+                ev.emit("sim.stopped", t_sim_ns=0, severity=3, epoch=1, segment=0, reason="world_unavailable",
+                        kernel="numpy", n=0, code=e.code, detail={"world_id": e.world_id, "reason": e.reason})
+                ev.flush()
+            return 4
         core.run(lambda: ctx.stopping)
     except Exception:
         log.exception("sim-core crashed")

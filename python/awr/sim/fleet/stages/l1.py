@@ -5,7 +5,7 @@
   `motor`（060）、`aero`（070）、`integrate`（080），顺序与数学相同（M08-FR-039）；`L1Oracle.run_all()` 一次执行全部 6 段
   （对拍用）。
 
-只处理 fidelity 含 L1 或 L2 的 slot；TRAJ 槽位的参考由运动提供者的跟踪器（order 027）写入。RTL 阶段取 safety 块的 `sub`
+只处理 fidelity 含 L1 或 L2 且不含 FW 的 slot（固定翼与 FW 模式的 VTOL 由 M21 的 `fw_kin` 驱动，M08-FR-210）；TRAJ 槽位的参考由运动提供者的跟踪器（order 027）写入。RTL 阶段取 safety 块的 `sub`
 （FlightState 为 RTL 时，否则视为 CLIMB）；Velocity 槽位的方向自由距离 `d_free` 取 M04 `free_distance(p, dir, 200 m)` 与 M09
 `d_free_fence_m` 的较小者（仅对活动 Velocity 会话计算）。
 """
@@ -20,6 +20,7 @@ from awr.contracts.enums import FlightState
 
 from .. import aero as AE
 from .. import kernels_l1 as K
+from .. import kernels_sel as KS
 from .. import params_px4 as P
 from .. import px4lite, setpoint
 from .registry import Fidelity
@@ -30,12 +31,29 @@ if TYPE_CHECKING:
     from ..profiles import ProfileTable
     from ..state import FleetState
 
-__all__ = ["L1Oracle", "L1Stage", "l1_indices", "prepare_inputs"]
+__all__ = ["L1Oracle", "L1Stage", "air_indices", "fw_indices", "l1_indices", "prepare_inputs"]
 
 _L12 = int(Fidelity.L1 | Fidelity.L2)
+_FW = int(Fidelity.FW)
 
 
 def l1_indices(S: FleetState) -> np.ndarray:
+    """多旋翼 L1 物理与控制处理的 slot（含 L1 或 L2 位、不含 FW 位）。numba 可用时一次融合遍历（kernels_sel，逐位相同；
+    D2-AC-08：整容量的多步 numpy 筛选在 sandbox100 主循环中约 30 µs/次）。"""
+    f = S.fidelity
+    if KS.HAVE_NUMBA:
+        out = np.empty(S.capacity, np.int32)
+        return out[:KS.sel_bits(S.active, f, _L12, _FW, out)]
+    return np.flatnonzero(S.active & ((f & _L12) != 0) & ((f & _FW) == 0)).astype(np.int32)
+
+
+def fw_indices(S: FleetState) -> np.ndarray:
+    """带 FW 位的活动 slot（固定翼与 FW 模式的 VTOL，M08-FR-210）。"""
+    return np.flatnonzero(S.active & ((S.fidelity & _FW) != 0)).astype(np.int32)
+
+
+def air_indices(S: FleetState) -> np.ndarray:
+    """参与机间碰撞的 slot：L1 / L2（含 FW 位）。"""
     return np.flatnonzero(S.active & ((S.fidelity & _L12) != 0)).astype(np.int32)
 
 
@@ -43,11 +61,18 @@ def rtl_phase_of(S: FleetState) -> np.ndarray:
     sb = S.blocks.get("safety")
     if sb is None:
         return np.zeros(S.capacity, np.uint8)
-    return np.where(sb["fs"] == int(FlightState.RTL), sb["sub"], 0).astype(np.uint8)
+    fs, sub = sb["fs"], sb["sub"]
+    if KS.HAVE_NUMBA and fs.dtype == np.uint8 and sub.dtype == np.uint8:
+        out = np.empty(S.capacity, np.uint8)
+        KS.rtl_phase(fs, sub, int(FlightState.RTL), out)
+        return out
+    return np.where(fs == int(FlightState.RTL), sub, 0).astype(np.uint8)
 
 
 def prepare_inputs(S: FleetState, idx: np.ndarray, world: Any) -> None:
-    """Velocity 槽位的方向自由距离（M08-FR-029）。"""
+    """Velocity 槽位的方向自由距离（M08-FR-029）。没有 Velocity 槽位时一次融合判断后返回（kernels_sel；D2-AC-08：每 tick 调用）。"""
+    if KS.HAVE_NUMBA and idx.dtype == np.int32 and not KS.any_eq_at(idx, S.ctrl_mode, K.M_VELOCITY):
+        return
     vi = idx[S.ctrl_mode[idx] == K.M_VELOCITY]
     if vi.size == 0:
         return

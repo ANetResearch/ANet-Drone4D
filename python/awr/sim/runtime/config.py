@@ -3,7 +3,7 @@
 来源优先级：显式参数 > `AWR_*` 环境变量（supervisor 注入）> 内置默认。FleetConfig 字段写入 `meta.json` 供重仿真比对（ext）。
 walking skeleton 没有剧本加载器（M10）与剧本文件（M16）：启动时按 `AWR_SIM_N`（缺省 1）在出生点布设 p600_mid360，
 出生点缺省取世界原点附近的平坦开阔格（DSM 与 DTM 高差 < 0.5 m），可用 `AWR_SIM_SPAWN="x,y"` 指定；时钟缺省自动播放
-（AWR-03 §8.5"时钟自动开始播放"），`AWR_SIM_AUTOPLAY=0` 关闭。
+（AWR-03 §8.5"时钟自动开始播放"），`AWR_SIM_AUTOPLAY=0` 关闭。插件组合根为 `AWR_PLUGINS` 加 `AWR_PLUGINS_EXTRA`（`_plugins`）。
 """
 
 from __future__ import annotations
@@ -24,6 +24,18 @@ def _bool(v: str | None, default: bool) -> bool:
     if v is None or v == "":
         return default
     return v.strip().lower() not in ("0", "false", "no", "off")
+
+
+def _plugins(e: Mapping[str, str]) -> tuple[str, ...]:
+    """`AWR_PLUGINS`（supervisor 按 procs[].plugins 注入的组合根）之后追加 `AWR_PLUGINS_EXTRA`（去重、保持顺序）：基准与诊断在
+    supervisor 的组合根之外追加插件（fleet_ladder `--clock sandbox100` 按沙盒 sim-core 的组合追加 D2 插件，D2-AC-08）。"""
+    out: list[str] = []
+    for var in ("AWR_PLUGINS", "AWR_PLUGINS_EXTRA"):
+        for p in (e.get(var) or "").split(","):
+            p = p.strip()
+            if p and p not in out:
+                out.append(p)
+    return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -61,7 +73,7 @@ class SimConfig:
                   profile_id=e.get("AWR_SIM_PROFILE", "p600_mid360"),
                   spawn_xy=spawn,
                   autoplay=_bool(e.get("AWR_SIM_AUTOPLAY"), True),
-                  plugins=tuple(p for p in (e.get("AWR_PLUGINS") or "").split(",") if p),
+                  plugins=_plugins(e),
                   world_seed=int(e.get("AWR_WORLD_SEED", "0") or 0),
                   load_world=_bool(e.get("AWR_SIM_LOAD_WORLD"), True),
                   scenario=e.get("AWR_SCENARIO") or None)

@@ -1,5 +1,5 @@
 """装载期派生（M04 §6.4.1、FR-002 至 FR-004）：观测计数、观测感知闭运算 dsm_eff、Height_map、金字塔、
-1 格膨胀、默认 1 m 细校验栅格与 zone 栅格，以及派生 QA。"""
+1 格膨胀、默认 1 m 细校验栅格与 zone 栅格，以及派生 QA；D2 加入 Grid25（`grid25.py`，ADR-113 第 5 条）。"""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import grid25 as _g25
 from .grids import Grid
 from .heightmap import _ndi, dilate3, heightmap, inflate, max_pyramid
 from .types import GeoLoadError, GeoParams
@@ -28,6 +29,7 @@ class DerivedSet:
     pyr_inflated_1m: list[np.ndarray]
     zone_raster: np.ndarray
     qa: dict
+    grid25: _g25.Grid25Parts | None = None
 
 
 def obs_counts(world_dir: Path, dsm: Grid, layers: dict[str, dict]) -> tuple[np.ndarray, str]:
@@ -74,8 +76,10 @@ def derive_arrays(dsm: Grid, dtm: Grid, zones: ZoneIndex, p: GeoParams, n: np.nd
     zones.build_raster(dsm.x0, dsm.y0, width_m, height_m, p.zone_raster_cell_m)
     zr = zones.raster.mask.astype(np.uint8)
     qa = derive_qa(a, eff, hag, n)
+    g25 = _g25.build(pyr_hm, dtm, zones, dsm.x0, dsm.y0, dsm.cell, res_m=p.grid25_res_m,
+                     alt_min_agl_m=p.grid25_alt_min_agl_m, dilate=p.grid25_zone_dilate)
     return DerivedSet(obs_n=n, dsm_eff=eff, dsm_dil1=dsm_dil1, hm=hm, pyr_dsm=pyr_dsm, pyr_hm=pyr_hm, pyrdil_hm=pyrdil_hm,
-                      inflated_1m=infl, pyr_inflated_1m=pyr_infl, zone_raster=zr, qa=qa)
+                      inflated_1m=infl, pyr_inflated_1m=pyr_infl, zone_raster=zr, qa=qa, grid25=g25)
 
 
 def derive_qa(dsm: np.ndarray, eff: np.ndarray, hag: np.ndarray, n: np.ndarray) -> dict:

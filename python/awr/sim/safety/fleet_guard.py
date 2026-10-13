@@ -11,6 +11,12 @@
   悬停的一方；本文设定，见实现报告偏差表）。
 - 让行状态：YIELD（HOLD/SEPARATION）→ 距离 > 5 m 且 CPA > 3 m 持续 2 s 后恢复 FLYING/HOVER；同一对 60 s 内第 3 次让行时
   发 OSCILLATION 并保持 HOLD（等待操作员）。双方 K1 都为 2 时无人可让，只发事件。
+- 解锁（D2-FX-R2-tasking 第 2 次，D2-AC-16 验收第 1 轮：两机互相让行悬停在 1.8–2.7 m 处约 290 s 不解锁，随后一方能量 RTL 撞机）：让行悬停的
+  多旋翼（含 MC 模式的 VTOL）在下列情形由本守卫下发一次避让位移（SafetyActuator `correct`，状态保持 HOLD/SEPARATION，到点后悬停，
+  间距恢复后按上一条照常恢复）：①与对端都已静止而间距 ≤ recover_m 持续 `ESC_AFTER_S`（双方都让行时由优先级低的一方位移）；
+  ②对端不让行（自动 RTL、着陆、起飞等 K1 较高者）且仍在逼近（CPA < min_sep）。位移方向：对端在作垂直运动（如 RTL 爬升）时水平
+  离开 `ESC_DH_M`，否则垂直错开 `ESC_DZ_M`（对端在上方时下降，否则爬升；越过高度上限或 DSM 净空不足时取另一方向或水平）；同一机
+  `ESC_RETRY_S` 内至多一次。事件 `SAF.SEP.AVOIDING`，detail 为 `ESCAPE:<对端>`。
 """
 
 from __future__ import annotations
@@ -31,6 +37,13 @@ if TYPE_CHECKING:
 __all__ = ["FleetGuard", "priority_keys"]
 
 YIELD_NONE, YIELD_ON, YIELD_OSC = 0, 1, 2
+ESC_AFTER_S = 2.0      # 双方都静止让行而间距未恢复的持续时间（之后位移解锁）
+ESC_RETRY_S = 6.0      # 同一机两次避让位移的最小间隔
+ESC_DZ_M = 8.0         # 垂直错开（> recover_m，与水平残余间距合成后可恢复）
+ESC_DH_M = 8.0         # 水平离开（对端在作垂直运动时）
+ESC_CLEAR_M = 5.0      # 避让目标点的 DSM 净空
+ESC_STILL_MPS = 0.5    # 静止判据（水平与垂直速度）
+FW_BIT = 16            # Fidelity.FW：固定翼与 FW 模式的 VTOL（不能悬停，不做避让位移）
 _K4 = np.zeros(8, np.int64)
 _K4[int(Owner.OPERATOR)] = 4
 _K4[int(Owner.AGENT)] = 3
@@ -68,6 +81,9 @@ class FleetGuard:
         # 约 1.5 ms）。`min_separation(slots)` 求"涉及 slots 中任一机的机对"的最小值，等于各机最小值的最小值，两种存法结果相同
         self.slot_min = np.full(rt.S.capacity, np.inf)
         self.pair_gen = 0  # 修改代数（诊断）
+        self._stuck: dict[int, float] = {}   # 让行悬停而间距未恢复的起始时刻（解锁判定，非 checkpoint 状态：恢复后重新计时）
+        self._esc: dict[int, float] = {}     # 最近一次避让位移的时刻
+        self.escapes = 0
 
     def reset(self) -> None:
         self.min_sep_seen = np.inf
@@ -100,6 +116,12 @@ class FleetGuard:
     def step(self, ctx: Any, k: int) -> None:
         rt, S, sb = self.rt, self.rt.S, self.rt.sb
         P = rt.params.sep
+        # 片数取 M08 按档展开后的实际值（ctx.shard = (k, n)）：sandbox100 档 N ≤ 12 时只有 1 片（stages/rates.py），此前仍按
+        # params 的 4 片扫描与定稿——只检查 slot % 4 == 0 为主机的机对，且第 3 片从不运行，`_finalize`（间距定稿、CONFLICT、让行
+        # 恢复）永不执行，让行悬停的两机永不恢复（D2-FX-R2-tasking 第 2 次：第 1 轮 D2-AC-16 区域巡查 + 巡边的 290 s 死锁与随后的撞机）
+        sh = getattr(ctx, "shard", None)
+        n = int(sh[1]) if isinstance(sh, (tuple, list)) and len(sh) == 2 and int(sh[1]) >= 1 else int(P.n_shards)
+        k = int(k) % n
         idx = self._idx()
         if k == 0:
             act = rt.act_idx
@@ -112,14 +134,14 @@ class FleetGuard:
             vel = np.ascontiguousarray(S.enu.vel)
             rcol = rt.collision_r
             fn = KN.fleet_scan if self.use_numba else KN.fleet_scan_np
-            npairs, ncand = fn(pos, vel, idx.astype(np.int64), int(k), int(P.n_shards), float(P.cell_m),
+            npairs, ncand = fn(pos, vel, idx.astype(np.int64), int(k), n, float(P.cell_m),
                                float(P.cpa_horizon_s), float(P.min_sep_m), float(P.warn_m), float(P.zband_m), rcol,
                                float(P.sweep_s), sb["cyc_sep"], sb["cyc_mate"], sb["cyc_cpa"], sb["cyc_cpa_mate"],
                                self.pairs, MAX_PAIRS)
             self.last_cand = int(ncand)
             if npairs:
                 self._conflicts(self.pairs[:int(npairs)].copy())
-        if k == P.n_shards - 1:
+        if k == n - 1:
             self._finalize()
 
     # ---------------------------------------------------------------- 冲突对（本片立即提出候选）
@@ -247,6 +269,111 @@ class FleetGuard:
                 rt.fsm.propose(done, int(FS.FLYING), S_FLY_HOVER, Origin.AUTO, "SAF.SEP.RESTORED")
         other = act[~((sb["fs"][act] == FS.HOLD) & (sb["sub"][act] == S_HOLD_SEP))]
         sb["sep_ok_since"][other] = np.nan
+        self._unlock(act, t_s)
+
+    # ---------------------------------------------------------------- 解锁：让行悬停的避让位移
+    def _hovers(self, s: int) -> bool:
+        S = self.rt.S
+        return int(S.frame_kind[s]) != 1 and not (int(S.fidelity[s]) & FW_BIT)
+
+    def _unlock(self, act: np.ndarray, t_s: float) -> None:
+        rt, S, sb = self.rt, self.rt.S, self.rt.sb
+        P = rt.params.sep
+        hold = act[(sb["fs"][act] == FS.HOLD) & (sb["sub"][act] == S_HOLD_SEP)]
+        live = {int(x) for x in hold}
+        for k in [k for k in self._stuck if k not in live]:
+            del self._stuck[k]
+        for k in [k for k in self._esc if k not in live and t_s - self._esc[k] > ESC_RETRY_S]:
+            del self._esc[k]
+        if not live:
+            return
+        vel = S.enu.vel
+        for s in sorted(live):
+            mate = int(sb["sep_mate"][s])
+            cmate = int(sb["sep_cpa_mate"][s])
+            sep = float(sb["sep_m"][s])
+            if mate < 0 or not np.isfinite(sep):
+                self._stuck.pop(s, None)
+                continue
+            v_m = np.asarray(vel[mate], float)
+            moving = float(np.linalg.norm(v_m[:3])) > 1.0
+            threat = (cmate >= 0 and float(sb["cpa_min_m"][s]) < P.min_sep_m and cmate not in live and sb["fs"][cmate] != FS.FLYING
+                      and float(np.linalg.norm(np.asarray(vel[cmate], float)[:3])) > 1.0)
+            if sep > P.recover_m and not threat:
+                self._stuck.pop(s, None)
+                continue
+            if threat:
+                other, esc = cmate, s            # 对端不让行而仍在逼近：本机立即离开
+            else:
+                t0 = self._stuck.setdefault(s, t_s)
+                if moving or t_s - t0 < ESC_AFTER_S - 1e-9:
+                    continue
+                other, esc = mate, s
+                if mate in live:                  # 双方都让行：优先级低者位移
+                    both = np.array([s, mate])
+                    keys = priority_keys(sb["fs"][both], sb["fs_auto"][both], self.task_prio[both],
+                                         S.blocks["battery"]["soc"][both], rt.owner_codes()[both], S.agent_no[both])
+                    if not _lex_less(keys[0], keys[1]):
+                        other, esc = s, mate
+            if not self._hovers(esc):
+                if not self._hovers(other) or other not in live:
+                    continue
+                esc, other = other, esc
+            if t_s - self._esc.get(esc, -np.inf) < ESC_RETRY_S or t_s - self._esc.get(other, -np.inf) < ESC_RETRY_S:
+                continue
+            tgt = self._escape_target(esc, other)
+            if tgt is None:
+                continue
+            rt.act_.correct(np.array([esc], np.int32), tgt[None], S_HOLD_SEP, "sep_escape")
+            self._esc[esc] = t_s
+            self._stuck.pop(esc, None)
+            self.escapes += 1
+            rt.sink.add(esc, rt.code("SAF.SEP.AVOIDING"), rt.t_ns, value=float(sb["sep_m"][esc]), threshold=P.recover_m,
+                        detail="ESCAPE:" + str(S.ids[other]))
+
+    def _escape_target(self, s: int, other: int) -> np.ndarray | None:
+        """避让位移的目标点（ENU）：对端在作垂直运动时水平离开，否则垂直错开（对端在上方时下降）；高度上限与 DSM 净空复核，
+        不满足时依次试另一方向。"""
+        rt, S = self.rt, self.rt.S
+        p = np.asarray(S.enu.pos[s], float)
+        q = np.asarray(S.enu.pos[other], float)
+        vq = np.asarray(S.enu.vel[other], float)
+        geo = rt.geo
+        z_hi = float(geo.max_z) - 2.0 if geo is not None and np.isfinite(getattr(geo, "max_z", np.inf)) else np.inf
+
+        def ground(xy: np.ndarray) -> float:
+            w = rt.world
+            if w is None:
+                return -np.inf
+            try:
+                return float(np.asarray(w.height_dsm(np.asarray(xy, float).reshape(1, 2)), float)[0])
+            except Exception:
+                return -np.inf
+
+        d = p[:2] - q[:2]
+        n = float(np.hypot(*d))
+        if n < 0.3:
+            vh = vq[:2]
+            d = np.array([-vh[1], vh[0]]) if float(np.hypot(*vh)) > 0.3 else np.array([1.0, 0.0])
+            n = float(np.hypot(*d))
+        u = d / max(n, 1e-9)
+        horiz = p.copy()
+        horiz[:2] = p[:2] + u * ESC_DH_M
+        up = p + np.array([0.0, 0.0, ESC_DZ_M])
+        down = p - np.array([0.0, 0.0, ESC_DZ_M])
+        if abs(float(vq[2])) > ESC_STILL_MPS * 2:
+            order = (horiz, down if vq[2] > 0 else up, up if vq[2] > 0 else down)
+        elif q[2] > p[2] + 0.5:
+            order = (down, horiz, up)
+        else:
+            order = (up, down, horiz)
+        for c in order:
+            if c[2] > z_hi or c[2] < ground(c[:2]) + ESC_CLEAR_M:
+                continue
+            if c is horiz and ground(c[:2]) + ESC_CLEAR_M > p[2]:
+                continue
+            return c
+        return None
 
     def set_task_priority(self, slots: np.ndarray, prio: np.ndarray) -> None:
         """M10 提供的任务优先级（K2，0–9）。"""

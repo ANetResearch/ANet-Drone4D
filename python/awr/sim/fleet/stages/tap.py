@@ -6,6 +6,10 @@ battery 块，位置、速度、姿态、角速度取 ENU 只读视图（与 M02
 `lite_from_full` 量化。写入用零拷贝 `begin_publish()/commit_publish()`。快进时按墙钟间隔 ≥ 4 ms 节流（≤ 250 Hz），
 同一批内只在最后一次 tap 调用发布，并置 SlotHeader `flags.FASTFWD`；单步（C04）结束于非 tap tick 时由主循环补发一次。
 tick 末清零 `mode_evt`。
+
+D2 空载优化（M08-FR-223；只在 `idle_opt` 的时钟档启用，即 sandbox100，d1_250 行为不变）：①发布频率由按档调度表给出（50 Hz）；
+②活动机体为 0 且上一帧也为 0、roster_version 未变时不发布（头部时钟组由主循环心跳照写）；③读者游标表连续 2 s【墙钟】
+没有活动读者（已登记且 2 s 内读过帧）时降为 5 Hz，出现活动读者后下一次 tap 恢复全速；④换算视图预计算（`_views` 缓存）。
 """
 
 from __future__ import annotations
@@ -27,6 +31,9 @@ if TYPE_CHECKING:
 __all__ = ["TapStage"]
 
 MIN_PUB_NS = 4_000_000
+IDLE_AFTER_NS = 2_000_000_000  # 无活动读者达此墙钟时长即降频（M08 §15.4.4）
+IDLE_PUB_NS = 200_000_000  # 降频后的发布间隔【墙钟】（5 Hz）
+READER_FRESH_NS = 2_000_000_000  # 读者心跳新鲜度（与 LOSSLESS_STALE_NS 同口径）
 _FLAG_FIELDS = ("flag_loc_ok", "flag_failsafe", "flag_gcs", "flag_fcu", "flag_loc_deg", "flag_alert", "locked")
 _EMPTY_U16 = np.zeros(0, np.uint16)
 _EMPTY_U8 = np.zeros(0, np.uint8)
@@ -40,8 +47,18 @@ def _have_kernel() -> bool:
 
 class TapStage:
     def __init__(self, ring: Any, *, lease_owner: Callable[[], np.ndarray], roster_version: Callable[[], int],
-                 wall_ns: Callable[[], int] | None = None, every: int = 2) -> None:
+                 wall_ns: Callable[[], int] | None = None, every: int = 2, idle_opt: bool = False) -> None:
         self.ring = ring
+        self.idle_opt = bool(idle_opt)
+        self.enabled = True  # 批处理自由运行时关闭（M08-FR-221：不写 StateRing 槽）
+        self._last_n = -1
+        self._last_rv = -1
+        self._reader_seen_wall = 0  # 最近一次看到活动读者的墙钟时刻
+        self.idle = False
+        self.skipped_empty = 0
+        self.skipped_idle = 0
+        # 读者心跳的时基（CLOCK_MONOTONIC，跨进程可比）由运行时注入（本模块不读墙钟，ADR-049）；None 时视为有活动读者
+        self.mono_ns: Callable[[], int] | None = None
         self.every = int(every)
         self.lease_owner = lease_owner
         self.roster_version = roster_version
@@ -136,8 +153,48 @@ class TapStage:
         lite_from_full(f, out=lite[:n])
         return n
 
+    def _readers_active(self, wall: int) -> bool:
+        """读者游标表中是否有活动读者（已登记、心跳在 READER_FRESH_NS 内；心跳为 CLOCK_MONOTONIC，跨进程可比）。"""
+        ring = self.ring
+        if self.mono_ns is None:
+            return True
+        cur = getattr(ring, "_cur", None)
+        now = self.mono_ns()
+        if cur is not None:
+            try:
+                return bool(np.any((cur["mode"] != 0) & (now - cur["heartbeat_ns"].astype(np.int64) < READER_FRESH_NS)))
+            except Exception:
+                pass
+        fn = getattr(ring, "reader_cursors", None)
+        if fn is None:
+            return True
+        return any(c["mode"] != 0 and now - int(c["heartbeat_ns"]) < READER_FRESH_NS for c in fn())
+
+    def _idle_skip(self, S: FleetState, wall: int, n_active: int) -> bool:
+        """M08-FR-223 ②③：返回本次是否不发布。"""
+        rv = self.roster_version()
+        if n_active == 0 and self._last_n == 0 and rv == self._last_rv:
+            self.skipped_empty += 1
+            return True
+        if self.ring is None:
+            return False
+        if self._readers_active(wall):
+            self._reader_seen_wall = wall
+            self.idle = False
+            return False
+        if self._reader_seen_wall == 0:
+            self._reader_seen_wall = wall
+        if wall - self._reader_seen_wall >= IDLE_AFTER_NS:
+            self.idle = True
+        if self.idle and wall - self.last_pub_wall < IDLE_PUB_NS and rv == self._last_rv:
+            self.skipped_idle += 1
+            return True
+        return False
+
     def __call__(self, S: FleetState, ctx: StageCtx) -> None:
         try:
+            if not self.enabled:
+                return
             wall = self.wall_ns() if self.wall_ns is not None else 0
             fastfwd = ctx.clock is not None and getattr(ctx.clock, "rate", 1.0) > 1.0
             # 快进：墙钟间隔 ≥ 4 ms 才发布；同一批内稍后还有 tap 调用时推迟到批内最后一次（发布最新状态）
@@ -145,6 +202,8 @@ class TapStage:
                 self.skipped += 1
                 return
             idx = np.flatnonzero(S.active).astype(np.int32)
+            if self.idle_opt and self._idle_skip(S, wall, idx.size):
+                return
             flags = SLOT_FASTFWD if fastfwd else 0
             if self.ring is None:
                 full = np.zeros(idx.size, DRONE_STATE64)
@@ -161,5 +220,7 @@ class TapStage:
                 self.ring.commit_publish(ticket, n, S.t_ns, self.roster_version(), flags)
             self.last_pub_wall = wall
             self.published += 1
+            self._last_n = idx.size
+            self._last_rv = self.roster_version()
         finally:
             S.mode_evt[:] = 0

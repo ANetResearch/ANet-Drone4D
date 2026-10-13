@@ -18,6 +18,16 @@ hold）、rtl、velocity、velocity_stop、safety_stop、pause、resume、arm、
 
 幂等：cid 表保留 60 s【墙钟】、最多 4096 条，重复调用返回 `status = duplicate` 与 `call_state`。本模块不读墙钟：墙钟时刻经
 注入的 SimClock（`wall_mono_ns()`）取得（ADR-045、ADR-049）。坐标：准入边界做 ENU → NED 换算（M08 §6.5.1）。
+
+D2（M08-FR-213、FR-218 至 FR-220；M08 §15.3.6）：
+- `loiter{center, radius_m, dir, alt_m, alt_ref, turns | duration_s}`：多旋翼映射为 ORBIT（速度 `min(v_cruise, √(3R))`，半径
+  [5, 500] m；二者都缺省时直到取消）；固定翼与 VTOL 交固定翼运动提供者；
+- 按构型分派：`register_motion_provider` 的提供者带 `frames`（固定翼、VTOL）时，`frame_kind ≠ 0` 的机体的运动命令全部交给它
+  （置 TRAJ，完成由提供者经 `provider_done` 报告；SupervisorQueue 动作经其 `safety_action`）；
+- 准入第 ⑥ 步登记检查（`register_admission_check(6, …, frames=)`），M21 的固定翼空速、盘旋半径与 VTOL 悬停上限在此判定；
+- 机体范围的插件命令（`register_command_handler(…, vehicle=True)`：`gimbal`、`zoom`、`sensor/mode`）先做准入 ④⑤⑦ 再交处理函数；
+- `fleet/update{vehicle, patch}`（17 §17.7.6）委托组合根（改挂载与限速档须 LANDED 且上锁，否则 105）；
+- 手动控制时钟锁：沙盒档（`clock.profile.manual_lock`）下 velocity 不因倍率 ≠ 1 被拒，生效时由时钟锁定 ×1（M08-FR-220）。
 """
 
 from __future__ import annotations
@@ -31,7 +41,15 @@ from typing import Any
 
 import numpy as np
 
-from awr.contracts.enums import FLIGHTSTATE_NAMES, FlightFlags, FlightState, Lifecycle, sub_name, sub_value
+from awr.contracts.enums import (
+    FLIGHTSTATE_NAMES,
+    TIMESTATE_NAMES,
+    FlightFlags,
+    FlightState,
+    Lifecycle,
+    sub_name,
+    sub_value,
+)
 from awr.contracts.reasons import Reason
 from awr.contracts.reasons import info as reason_info
 from awr.runtime.principal import Principal, verify_principal
@@ -62,8 +80,11 @@ PROGRESS_MIN_NS = 500_000_000  # progress ≤ 2 Hz【墙钟】
 PROGRESS_MAX_PER_TICK = 4  # 每次 cmd_watch 至多发出的 cmd.progress（取最久未发者；单个调用仍 ≤ 2 Hz【墙钟】，ADR-060）
 RUNNING_MAX_PER_WATCH = 16  # cmd_watch：每次至多把这么多条调用读回为 running（1000 架批量同时生效时分散到后续几次，ADR-065）
 VEC_MIN_ROWS = 32  # cmd_watch：在途调用不少于该数时逐行判据改走向量化预筛（与逐行实现等价，ADR-060；小机群保持逐行）
+# numba 融合核（kernels_watch）的门槛：核调用的固定开销低于逐行 Python 判据（10 架 sandbox100 时逐行段约 0.5 ms/次，融合核约
+# 0.15 ms/次；D2-AC-08），因此有 numba 时任意行数都走融合核；numpy 向量实现仍按 VEC_MIN_ROWS（逐位等价见 test_cmd_watch_vec）
+VEC_MIN_ROWS_NB = 1
 VEHICLE_OPS = frozenset({"takeoff", "land", "goto", "follow_path", "orbit", "hover", "rtl", "velocity", "velocity_stop",
-                         "safety_stop", "pause", "resume", "arm", "disarm", "cancel", "kill", "escalate"})
+                         "safety_stop", "pause", "resume", "arm", "disarm", "cancel", "kill", "escalate", "loiter"})
 BATCH_OPS = frozenset({"rtl", "land", "hover", "safety_stop", "pause", "resume", "takeoff"})
 NAV_OPS = frozenset({"goto", "follow_path", "orbit", "velocity"})
 SAFETY_OPS = frozenset({"land", "hover", "rtl", "safety_stop"})
@@ -78,20 +99,39 @@ _RUN_FS: dict[str, tuple[int, ...]] = {
     "goto": (FS.FLYING,), "follow_path": (FS.FLYING,), "orbit": (FS.FLYING,), "hover": (FS.FLYING, FS.HOLD),
     "rtl": (FS.RTL, FS.LANDING, FS.LANDED, FS.DISARMED), "velocity": (FS.FLYING,), "safety_stop": (FS.HOLD,),
     "pause": (FS.FLYING, FS.HOLD), "arm": (FS.READY, FS.TAKING_OFF), "disarm": (FS.DISARMED,),
+    "loiter": (FS.FLYING,),
 }
+LOITER_R_MR = (5.0, 500.0)  # 多旋翼盘旋半径（m，M08 §15.3.6）
+FW_OPS = frozenset({"takeoff", "land", "goto", "follow_path", "orbit", "hover", "rtl", "velocity", "loiter", "safety_stop",
+                    "pause"})  # frame_kind ≠ 0 时交固定翼提供者的运动命令（M08-FR-213）
+_FRAME_NAMES = {"multirotor": 0, "fixed_wing": 1, "vtol": 2, "vtol_quadplane": 2}
 
 _PROVIDERS: dict[str, MotionProvider] = {}
+_FW_PROVIDERS: dict[int, MotionProvider] = {}  # frame_kind -> 固定翼与 VTOL 的运动提供者（M21）
 _FINE: list[Callable[..., Any]] = []
 
 
 def register_motion_provider(provider: MotionProvider) -> None:
-    """M10 登记接管某些命令运动的提供者（`ops` 例如 `("follow_path", "orbit", "goto:route!=direct")`）；同一 op 只允许一个。"""
-    for op in provider.ops:
-        if op in _PROVIDERS:
-            raise ValueError(f"运动提供者重复登记：{op!r}（已由 {_PROVIDERS[op].name} 登记）")
+    """M10 登记接管某些命令运动的提供者（`ops` 例如 `("follow_path", "orbit", "goto:route!=direct")`）；同一 op 只允许一个。
+    D2（M08-FR-213）：提供者带属性 `frames`（`{"fixed_wing", "vtol"}` 或 `{1, 2}`）时登记为这些构型的运动提供者：
+    `frame_kind ≠ 0` 的机体的运动命令（FW_OPS）与 SupervisorQueue 动作全部交给它，`ops` 不参与按 op 的登记。"""
     for m in ("start", "cancel"):
         if not callable(getattr(provider, m, None)):
             raise TypeError(f"MotionProvider 缺少方法 {m}")
+    frames = getattr(provider, "frames", None)
+    if frames:
+        kinds = {int(f) if not isinstance(f, str) else _FRAME_NAMES[f] for f in frames}
+        if 0 in kinds:
+            raise ValueError("构型运动提供者不能接管多旋翼（frame_kind 0）")
+        for k in kinds:
+            if k in _FW_PROVIDERS:
+                raise ValueError(f"构型运动提供者重复登记：frame_kind={k}")
+        for k in kinds:
+            _FW_PROVIDERS[k] = provider
+        return
+    for op in provider.ops:
+        if op in _PROVIDERS:
+            raise ValueError(f"运动提供者重复登记：{op!r}（已由 {_PROVIDERS[op].name} 登记）")
     for op in provider.ops:
         _PROVIDERS[op] = provider
 
@@ -100,8 +140,16 @@ def motion_providers() -> dict[str, MotionProvider]:
     return dict(_PROVIDERS)
 
 
+def fw_provider(frame_kind: int | None = None) -> MotionProvider | None:
+    """固定翼与 VTOL 的运动提供者（frame_kind 为 None 时取任一已登记者）。"""
+    if frame_kind is None:
+        return next(iter(_FW_PROVIDERS.values()), None)
+    return _FW_PROVIDERS.get(int(frame_kind))
+
+
 def reset_motion_providers() -> None:
     _PROVIDERS.clear()
+    _FW_PROVIDERS.clear()
 
 
 def register_fine_checker(fn: Callable[..., Any]) -> None:
@@ -265,6 +313,7 @@ class CommandEngine:
         self.stats = {"admitted": 0, "rejected": 0, "duplicates": 0, "succeeded": 0, "failed": 0, "canceled": 0}
         self._wp_cache: tuple | None = None  # (航点列表对象, float64 数组)：_wp_array
         self.admission_us: list[float] = []
+        self.vel_guard: dict[int, str] = {}  # D2：velocity 会话的 keepout_guard（slot -> clamp|warn|off，ingest 的软围栏钩子读取）
 
     # ------------------------------------------------------------ 兼容视图
     @property
@@ -539,7 +588,7 @@ class CommandEngine:
             return self._reject(msg, int(Reason.ROLE_FORBIDDEN), detail={"field": "principal.sig"})
         principal = msg["principal"]
         args = msg.get("args") if isinstance(msg.get("args"), dict) else {}
-        if op in ("fleet/add", "fleet/remove"):
+        if op in ("fleet/add", "fleet/remove", "fleet/update"):
             return self._fleet_op(msg, op, args, principal)
         if op == "scenario/metric":
             return self._metric_op(msg, args)
@@ -549,6 +598,8 @@ class CommandEngine:
             if isinstance(msg.get("uav"), str) and msg.get("uav") != "*":
                 msg = dict(msg, uav=[msg["uav"]])
         elif self.reg is not None and op in getattr(self.reg, "commands", {}):
+            if self.reg.commands[op].vehicle:
+                return self._vehicle_plugin_op(msg, op, principal)
             return self._plugin_op(msg, op, principal)
         if op not in VEHICLE_OPS:
             return self._reject(msg, int(Reason.BACKEND_UNSUPPORTED), detail={"op": op, "why": "UNKNOWN_OP"})
@@ -587,6 +638,8 @@ class CommandEngine:
             return adm, []
         acc_slots = slots[ok]
         acc_entries = [e for e, o in zip(known, ok, strict=True) if o]
+        if op == "loiter":
+            args = self._loiter_args(args, int(acc_slots[0]))
         adm, calls = self._dispatch(msg, cid, op, args, principal, acc_slots, acc_entries, batch)
         if batch:
             rej = [[e.id, int(c)] for e, c in zip(known, codes, strict=True) if c != 0] + \
@@ -645,7 +698,7 @@ class CommandEngine:
         # Replay 幽灵机（L0）没有 FSM，准入矩阵不适用：任何命令直接 109（M08-AC-031；与 ⑦ 同码，提前判定）
         ghost = (S.fidelity[slots] & 8) != 0
         put(ghost, int(Reason.BACKEND_UNSUPPORTED), {"op": op, "backend": "replay"})
-        if op == "velocity" and self.clock.rate != 1.0:
+        if op == "velocity" and self.clock.rate != 1.0 and not self._manual_lock_enabled():
             put(np.ones(n, bool), int(Reason.CLOCK_CONSTRAINT), {"rate": self.clock.rate})
         fs = sb["fs"][slots]
         sub = sb["sub"][slots]
@@ -695,8 +748,27 @@ class CommandEngine:
             bad = self._check_params(op, args, slots[codes == 0])
             if bad is not None:
                 put(np.ones(n, bool), int(Reason.PARAM_OUT_OF_RANGE), bad)
-        # ⑦ 后端能力
-        if op in A.MOTION_OPS and self.caps.cmd_impl(op) == "none":
+        if self.reg is not None and self.reg.admission_checks(6):  # D2：登记的第 ⑥ 步检查（M08-FR-219），按构型过滤
+            fk = S.frame_kind[slots]
+            for k in np.flatnonzero(codes == 0):
+                s = int(slots[k])
+                chk = [c for c in self.reg.admission_checks(6) if c.frames is None or int(fk[k]) in c.frames]
+                if not chk:
+                    continue
+                req = A.AdmitReq(cid, op, s, entries[k].id, args, principal, int(fs[k]), int(sub[k]), int(flags[k]))
+                r = A.run_registered(chk, req, A.AdmitCtx(S.tick, S.t_ns, S, self.world, self.T))
+                if r.code:
+                    codes[k] = r.code
+                    details[k] = r.detail
+        # ⑦ 后端能力（固定翼与 VTOL 的运动命令须有构型运动提供者；loiter 按 orbit 的能力判定）
+        fwk = np.flatnonzero((codes == 0) & (S.frame_kind[slots] != 0))
+        if fwk.size and op in FW_OPS:
+            for k in fwk:
+                if fw_provider(int(S.frame_kind[slots[k]])) is None:
+                    codes[k] = int(Reason.BACKEND_UNSUPPORTED)
+                    details[k] = {"op": op, "why": "NO_FW_PROVIDER"}
+        cap_op = "orbit" if op == "loiter" else op
+        if cap_op in A.MOTION_OPS and self.caps.cmd_impl(cap_op) == "none":
             put(np.ones(n, bool), int(Reason.BACKEND_UNSUPPORTED), {"op": op, "backend": self.caps.backend})
         if op in ("arm", "disarm") and args.get("force"):
             put(np.ones(n, bool), int(Reason.BACKEND_UNSUPPORTED), {"field": "args.force"})
@@ -733,7 +805,9 @@ class CommandEngine:
                 return np.vstack([p[None], self._wp_array(args)])
             except ValueError:
                 return None
-        if op == "orbit" and A.finite_vec(args.get("center"), 3) and _num(args.get("radius_m")):
+        if op == "loiter" and isinstance(args.get("center"), (list, tuple)) and _num(args.get("radius_m")):
+            args = self._loiter_args(args, slot)
+        if op in ("orbit", "loiter") and A.finite_vec(args.get("center"), 3) and _num(args.get("radius_m")):
             c = np.asarray(args["center"], np.float64)
             r = float(args["radius_m"])
             th = np.linspace(0, 2 * np.pi, 17)
@@ -814,9 +888,40 @@ class CommandEngine:
             b = self._bounds_bad(args["center"])
             if b is not None:
                 return b
+        elif op == "loiter":
+            c = args.get("center")
+            if not (isinstance(c, (list, tuple)) and len(c) == 3 and A.finite_vec(list(c[:2]), 2)
+                    and (c[2] is None or _num(c[2]))):
+                return {"field": "args.center"}
+            r = args.get("radius_m")
+            mr = slots.size and bool((self.S.frame_kind[slots] == 0).all())
+            lo, hi = LOITER_R_MR if mr else (1.0, 2000.0)
+            if not _num(r) or not lo <= r <= hi:
+                return {"field": "args.radius_m", "value": r, "range": [lo, hi], "why": "LOITER_RADIUS"}
+            if args.get("dir", "cw") not in ("cw", "ccw"):
+                return {"field": "args.dir"}
+            if args.get("alt_ref", "agl") not in ("agl", "amsl"):
+                return {"field": "args.alt_ref"}
+            alt = args.get("alt_m")
+            if alt is not None and not _num(alt):
+                return {"field": "args.alt_m"}
+            tr, du = args.get("turns"), args.get("duration_s")
+            if tr is not None and du is not None:
+                return {"field": "args.turns", "why": "TURNS_DURATION_EXCLUSIVE"}
+            if tr is not None and (not _num(tr) or not 0 <= tr <= 1000):
+                return {"field": "args.turns", "value": tr, "range": [0, 1000]}
+            if du is not None and (not _num(du) or du < 0):
+                return {"field": "args.duration_s", "value": du, "range": [0, None]}
+            b = self._bounds_bad([c[0], c[1], 0.0])
+            if b is not None:
+                return b
         elif op == "velocity":
-            if args.get("frame", "world") not in ("world", "body"):
+            if args.get("frame", "world") not in ("world", "body", "fw"):
                 return {"field": "args.frame"}
+            if args.get("frame") == "fw" and slots.size and bool((self.S.frame_kind[slots] == 0).any()):
+                return {"field": "args.frame", "why": "FW_FRAME_ON_MULTIROTOR"}
+            if args.get("keepout_guard") not in (None, "clamp", "warn", "off"):
+                return {"field": "args.keepout_guard"}
             vm = args.get("vmax_mps")
             if vm is not None:
                 lim = float(np.min(self.T.LT[self.S.limits_id[slots], K.L_VXY])) if slots.size else 12.0
@@ -848,7 +953,12 @@ class CommandEngine:
         S = self.S
         now_w = self.clock.wall_mono_ns()
         source = self._source(p)
-        prov = _provider_for(op, args)
+        prov = _provider_for(op, args) if op != "loiter" else None
+        fwk = S.frame_kind[slots]
+        if op in FW_OPS and bool((fwk != 0).any()):
+            fp = fw_provider(int(fwk[fwk != 0][0]))
+            if fp is not None and bool((fwk != 0).all()):
+                prov = fp  # 全部为固定翼类机体：整条命令交构型运动提供者（混合批量在 _execute 内按构型拆分）
         lane = 1 if op in LANE1 else 0
         warnings: list[str] = []
         args_n = _compact_points(op, dict(args))
@@ -878,9 +988,12 @@ class CommandEngine:
                     if old1 is not None and not old1.final:
                         self._finish(old1, "canceled", int(Reason.SUPERSEDED),
                                      {"status": "UNVERIFIED", "verify_trust": 1, "message": "superseded"})
+            pv = prov
+            if op in FW_OPS and int(S.frame_kind[s]) != 0:
+                pv = fw_provider(int(S.frame_kind[s])) or prov
             call = Call(cid if not batch else f"{cid}:{e.id}", op, s, e.id, pid, p.get("role"), source, args_n, S.t_ns,
                         now_w, lane=lane, batch_id=cid if batch else msg.get("batch_id"),
-                        provider=getattr(prov, "name", None), warnings=list(warnings))
+                        provider=getattr(pv, "name", None), warnings=list(warnings))
             call.effect = {"status": "UNVERIFIED", "verify_trust": 1, "native_ack": True, "protocol": "inproc",
                            "requested": self._requested(op, args)}
             call.ck_static()  # checkpoint 不变部分随准入生成（分摊到分片准入，checkpoint 主线程只拼可变字段）
@@ -936,6 +1049,9 @@ class CommandEngine:
             w = self._wp_array(args)
             tb.goal[r] = w[-1]
             tb.aux[r, 0] = float(np.linalg.norm(np.diff(np.vstack([S.enu.pos[slot], w]), axis=0), axis=1).sum())
+        elif op == "loiter":
+            tb.goal[r] = np.asarray(args["center"], np.float64)
+            tb.aux[r] = (float(args["radius_m"]), float(args["speed_mps"]), float(args["_turns_done"]), 0.0)
         elif op == "orbit":
             tb.goal[r] = np.asarray(args["center"], np.float64)
             lim = int(S.limits_id[slot])
@@ -957,6 +1073,8 @@ class CommandEngine:
             return f"cancel {args.get('call_id')}"
         if op == "orbit":
             return f"orbit r={args.get('radius_m')} turns={args.get('turns', 0)}"
+        if op == "loiter":
+            return f"loiter r={args.get('radius_m')} dir={'cw' if args.get('cw', True) else 'ccw'}"
         if op == "follow_path":
             return f"follow_path n={len(args.get('waypoints') or [])}"
         return op
@@ -1007,6 +1125,16 @@ class CommandEngine:
             return int(5e9)
         if op == "velocity":
             return int(1e18)
+        if op == "loiter":
+            td = float(args.get("_turns_done", math.inf))
+            if not math.isfinite(td):
+                return int(1e18)  # 直到取消
+            R = float(args["radius_m"])
+            v = max(float(args["speed_mps"]), 0.1)
+            p = S.enu.pos[slot]
+            c = np.asarray(args["center"], np.float64)
+            d_in = abs(float(np.linalg.norm(p[:2] - c[:2])) - R) + abs(float(p[2] - c[2]))
+            return int((1.5 * (d_in / v + 2 * math.pi * R * td / v) + 20.0) * 1e9)
         return int(10e9)
 
     def _t_rtl(self, slot: int, args: dict) -> float:
@@ -1096,6 +1224,22 @@ class CommandEngine:
 
     def _execute(self, sc: StagedCmd, slots: np.ndarray, rws: list[int], t_s: float, ctx) -> None:
         S, tb, op, args = self.S, self.table, sc.op, sc.args
+        if op in FW_OPS and _FW_PROVIDERS:
+            fwm = S.frame_kind[slots] != 0
+            if fwm.any():  # 固定翼类机体交构型运动提供者（M08-FR-213）：置 TRAJ，完成由提供者经 provider_done 报告
+                fs_, fr_ = slots[fwm], [r for r, m in zip(rws, fwm, strict=True) if m]
+                for s, r in zip(fs_, fr_, strict=True):
+                    prov = fw_provider(int(S.frame_kind[s]))
+                    if prov is None:
+                        continue
+                    ACT.release_path(S, self.PB, np.array([s]))
+                    ACT.begin_traj(S, np.array([s]), t_s)
+                    c = tb.meta[r]
+                    prov.start(CallRef(c.cid, op, c.source), np.array([s], np.int32), args, sc.apply_tick)
+                slots = slots[~fwm]
+                rws = [r for r, m in zip(rws, fwm, strict=True) if not m]
+                if slots.size == 0:
+                    return
         if sc.provider is not None:
             prov = _PROVIDERS.get(op) or _PROVIDERS.get("goto:route!=direct")
             if prov is not None:
@@ -1123,6 +1267,11 @@ class CommandEngine:
                                  {"status": "FAILED", "verify_trust": 2, "message": "PATH_BUFFER_FULL"})
                 else:
                     tb.deadline[r] = max(tb.deadline[r], S.t_ns + int((1.5 * T + 10.0) * 1e9))
+        elif op == "loiter":
+            c = enu_to_ned(np.asarray(args["center"], np.float64))
+            for s, r in zip(slots, rws, strict=True):
+                ACT.begin_orbit(S, np.array([s]), c, float(args["radius_m"]), float(tb.aux[r, 1]), bool(args.get("cw", True)),
+                                float(args.get("turns", 0) or 0), "center", None, t_s)
         elif op == "orbit":
             c = enu_to_ned(np.asarray(args["center"], np.float64))
             yb = args.get("yaw_behavior", "center")
@@ -1152,6 +1301,12 @@ class CommandEngine:
             ACT.begin_velocity(S, slots, args.get("frame", "world") == "body", float(vm) if _num(vm) else math.inf,
                                bool(args.get("hold_alt", True)), t_s)
             S.sp_wall_ns[slots] = self.clock.wall_mono_ns()
+            kg = args.get("keepout_guard") or ("clamp" if self._manual_lock_enabled() else "off")  # 沙盒缺省 clamp，D1 off
+            for s in slots.tolist():
+                self.vel_guard[int(s)] = kg
+            if self._manual_lock_enabled() and self.clock.manual_enter():  # 手动控制时钟锁（M08-FR-220）
+                self.events.emit("sim.clock", t_sim_ns=int(ctx.t_ns), severity=0, state=TIMESTATE_NAMES[self.clock.state],
+                                 rate=self.clock.rate, reason="manual_lock")
             self._sp_paused = getattr(self, "_sp_paused", {})
             for s in slots:
                 self._sp_paused[int(s)] = self.clock.paused_total_ns()
@@ -1249,7 +1404,8 @@ class CommandEngine:
         s = call.slot
         args = call.args
         if call.provider is not None:
-            prov = _PROVIDERS.get(call.op) or _PROVIDERS.get("goto:route!=direct")
+            prov = (fw_provider(int(S.frame_kind[s])) if int(S.frame_kind[s]) != 0 else None) or \
+                _PROVIDERS.get(call.op) or _PROVIDERS.get("goto:route!=direct")
             if prov is not None:
                 ACT.begin_traj(S, np.array([s]), t_s)
                 prov.start(CallRef(call.cid, call.op, call.source), np.array([s], np.int32), args, S.tick)
@@ -1257,7 +1413,7 @@ class CommandEngine:
         if call.op == "goto":
             sp = args.get("speed_mps")
             ACT.begin_goto(S, np.array([s]), enu_to_ned(tb.goal[call.row]), np.nan if sp is None else float(sp), None, t_s)
-        elif call.op == "orbit":
+        elif call.op in ("orbit", "loiter"):
             ACT.begin_orbit(S, np.array([s]), enu_to_ned(tb.goal[call.row]), float(tb.aux[call.row, 0]), float(tb.aux[call.row, 1]),
                             bool(args.get("cw", True)), float(args.get("turns", 0) or 0),
                             args.get("yaw_behavior", "center"), None, t_s)
@@ -1339,13 +1495,14 @@ class CommandEngine:
                 self._event("cmd.running", call, 0, call.effect)
         run = tb.status[rows] == ST_RUNNING
         r_rows, r_slots, r_fs = rows[run], slots[run], fs[run]
+        vmin = VEC_MIN_ROWS_NB if self.watch_kernel else VEC_MIN_ROWS
         if r_rows.size:
-            if r_rows.size >= VEC_MIN_ROWS:
+            if r_rows.size >= vmin:
                 (self._done_nb if self.watch_kernel else self._done_np)(r_rows, r_slots, r_fs, t)
             else:
                 self._done_vector(r_rows, r_slots, r_fs, t)
         prog = self._progress_pick(rows, now_w)
-        if rows.size >= VEC_MIN_ROWS:
+        if rows.size >= vmin:
             (self._watch_rows_nb if self.watch_kernel else self._watch_rows_np)(rows, slots, t, now_w, ctx, prog)
             E = S.enu
             tb.max_dev[rows] = np.maximum(tb.max_dev[rows], np.linalg.norm(E.pos_ref[slots] - E.pos[slots], axis=1))
@@ -1358,7 +1515,7 @@ class CommandEngine:
             if tb.paused[r]:
                 tb.deadline[r] += int(ctx.dt_tick * 5 * 1e9) if ctx is not None else 0
                 continue
-            if tb.status[r] == ST_RUNNING and call.op in ("goto", "follow_path", "orbit"):
+            if tb.status[r] == ST_RUNNING and call.op in ("goto", "follow_path", "orbit", "loiter"):
                 # 停滞：自上次前进 ≥ 0.2 m 起 5 s【仿真】内未再前进 0.2 m（滑动判据）。提供者接管（TRAJ）时按参考进度判定
                 # （M10-to-M08 第 5 条）：参考在窗口内前进过 ≥ 0.2 m 而机体不动才判 203；规划中或等待时参考静止，不判停滞
                 pe = S.enu.pos[s]
@@ -1373,7 +1530,7 @@ class CommandEngine:
                     tb.stall_t[r] = t
                     tb.stall_rmove[r] = False
                 elif t - tb.stall_t[r] >= 5_000_000_000:
-                    far = _dist3(pe, tb.goal[r]) > max(1.0, tb.tol[r] * 2) if call.op != "orbit" else True
+                    far = _dist3(pe, tb.goal[r]) > max(1.0, tb.tol[r] * 2) if call.op not in ("orbit", "loiter") else True
                     if far and S.ctrl_mode[s] not in (CtrlMode.HOLD,) and (not traj or bool(tb.stall_rmove[r])):
                         self._fail_motion(call, int(s), int(Reason.STALLED))
                         continue
@@ -1390,7 +1547,7 @@ class CommandEngine:
 
     def _watch_fast(self, S, ctx) -> bool:
         """watch_tick 的大机群快速路径（FX2-R3，ADR-070）：一次遍历（`kernels_watch.watch_triage`）取在途行；只要有一行需要
-        原实现的分支（未 apply、失联或坠毁、ELAND/FAILSAFE 升级、待读回 running）或在途行少于 VEC_MIN_ROWS，返回 False 由
+        原实现的分支（未 apply、失联或坠毁、ELAND/FAILSAFE 升级、待读回 running）或在途行少于 VEC_MIN_ROWS_NB，返回 False 由
         原实现整段处理。否则其后各段与原实现相同（完成判据、进度挑选、停滞与截止、最大偏差），只是行筛选与掩码运算不再
         逐个 numpy 调用（N = 1000、50 Hz，此前约 1 ms/次）。三段都只读写同一组调用表与机群状态，前段无副作用。"""
         tb = self.table
@@ -1403,17 +1560,14 @@ class CommandEngine:
         n, spec = KW.watch_triage(tb.live, tb.slot, tb.applied, S.active, S.lifecycle, int(Lifecycle.LOST), sb["fs"], tb.status,
                                   tb.fine_pending, int(FS.CRASHED), int(FS.ELAND), int(FS.FAILSAFE), ST_ACCEPTED, ST_RUNNING,
                                   buf[0], buf[1], buf[2], buf[3])
-        if spec or n < VEC_MIN_ROWS:
+        if spec or n < VEC_MIN_ROWS_NB:
             return False
         t = int(S.t_ns)
         now_w = self.clock.wall_mono_ns()
         rows, slots, fs, run = buf[0][:n].copy(), buf[1][:n].copy(), buf[2][:n].copy(), buf[3][:n]
         r_rows, r_slots, r_fs = rows[run], slots[run], fs[run]
         if r_rows.size:
-            if r_rows.size >= VEC_MIN_ROWS:
-                self._done_nb(r_rows, r_slots, r_fs, t)
-            else:
-                self._done_vector(r_rows, r_slots, r_fs, t)
+            self._done_nb(r_rows, r_slots, r_fs, t)
         prog = self._progress_pick(rows, now_w)
         self._watch_rows_nb(rows, slots, t, now_w, ctx, prog)
         E = S.enu
@@ -1646,7 +1800,7 @@ class CommandEngine:
             done = self._hold(r, arrived and dist < 0.5 and sp < 0.5, t, 1.0)
             mk = lambda r=r, dist=dist: {"path_len_m": round(float(tb.aux[r, 0]), 2),  # noqa: E731
                                          "max_dev_m": round(float(tb.max_dev[r]), 3), "dist_err_m": round(dist, 3)}
-        elif op == "orbit":
+        elif op in ("orbit", "loiter"):
             R, v, turns = float(tb.aux[r, 0]), float(tb.aux[r, 1]), float(tb.aux[r, 2])
             c = tb.goal[r]
             if turns > 0:
@@ -1792,7 +1946,7 @@ class CommandEngine:
             z_t = float(S.enu.ground_up(s)) + float(tb.alt[r])
             d = abs(float(S.enu.pos[s, 2]) - z_t)
             return {"phase": "executing", "dist_m": round(d, 2), "eta_s": round(d / 1.5, 1)}
-        if call.op == "orbit":
+        if call.op in ("orbit", "loiter"):
             return {"phase": "paused" if tb.paused[r] else "executing", "turns": round(float(S.orb[s, K.O_TURN]), 3)}
         if call.op in ("land", "rtl"):
             return {"phase": "executing", "dist_m": round(float(S.agl[s]), 2)}
@@ -1838,9 +1992,107 @@ class CommandEngine:
     def _cancel_provider(self, call: Call) -> None:
         if call.provider is None:
             return
-        prov = _provider_for(call.op, call.args)
+        fk = int(self.S.frame_kind[call.slot]) if 0 <= call.slot < self.S.capacity else 0
+        prov = fw_provider(fk) if fk else None
+        if prov is None:
+            prov = _provider_for(call.op, call.args)
         if prov is not None:
             prov.cancel(call.cid, np.array([call.slot], np.int32))
+
+    # ------------------------------------------------------------ D2：构型运动提供者的完成报告（M08-FR-213）
+    def provider_done(self, cid: str, slot: int, status: str = "succeeded", code: int = 0,
+                      metrics: dict | None = None, message: str | None = None) -> bool:
+        """固定翼与 VTOL 的运动提供者报告某机的调用终态（succeeded 或 failed）；在 stage 内或步边界调用。返回是否找到在途调用。"""
+        c = self.table.current(int(slot)) if 0 <= int(slot) < self.table.by_slot.shape[0] else None
+        if c is None or c.cid != cid or c.final:
+            ent = self.idem.get(cid)
+            c = next((x for x in (ent.calls if ent else []) if x.slot == int(slot) and not x.final), None)
+        if c is None:
+            return False
+        t = int(self.S.t_ns)
+        if status == "succeeded":
+            m = {k: v for k, v in (metrics or {}).items() if _num(v)}
+            m["t_exec_s"] = round((t - int(c.t_accept_ns)) * 1e-9, 3)
+            c.metrics = m
+            self._finish(c, "succeeded", 0, {"status": "OK", "verify_trust": 4, "simulated": True, "metrics": m,
+                                             "latency_ms": self._latency_ms(c)})
+        else:
+            self._finish(c, "failed", int(code or Reason.PROGRESS_TIMEOUT),
+                         {"status": "FAILED", "verify_trust": 2, "observed_state": self._obs(int(slot)),
+                          "message": message or ""})
+        return True
+
+    # ------------------------------------------------------------ D2：loiter 与手动锁
+    def _manual_lock_enabled(self) -> bool:
+        prof = getattr(self.clock, "profile", None)
+        return bool(getattr(prof, "manual_lock", False))
+
+    def _loiter_args(self, args: dict, slot: int) -> dict:
+        """loiter 参数规范化（M08-FR-218）：中心高度（`center.z` 为 null 时按 `alt_m`/`alt_ref`，二者都缺省取当前高度）、
+        速度 `min(v_cruise, √(3R))`、方向、圈数（`duration_s` 换算为圈数；二者都缺省时直到取消，完成判据圈数为 ∞）。"""
+        S = self.S
+        c = list(args["center"])
+        R = float(args["radius_m"])
+        alt = args.get("alt_m")
+        if alt is not None:
+            if args.get("alt_ref", "agl") == "agl":
+                g = 0.0
+                if self.world is not None:
+                    with contextlib.suppress(Exception):
+                        g = float(self.world.height_dsm(np.array([[float(c[0]), float(c[1])]]))[0])
+                c[2] = g + float(alt)
+            else:
+                c[2] = float(alt)
+        elif c[2] is None:
+            c[2] = float(S.enu.pos[slot, 2])
+        lim = int(S.limits_id[slot])
+        v = min(float(self.T.LT[lim, K.L_CRUISE]), float(self.T.LT[lim, K.L_VXY]), math.sqrt(3.0 * R))
+        tr, du = args.get("turns"), args.get("duration_s")
+        if tr is not None:
+            turns = float(tr)
+        elif du is not None:
+            turns = float(du) * v / (2.0 * math.pi * R)
+        else:
+            turns = 0.0
+        out = dict(args)
+        out.update({"center": [float(c[0]), float(c[1]), float(c[2])], "radius_m": R, "cw": args.get("dir", "cw") == "cw",
+                    "speed_mps": v, "turns": turns, "_turns_done": turns if (tr is not None or du is not None) else math.inf})
+        if out["_turns_done"] == 0.0:
+            out["_turns_done"] = 1e-9  # turns = 0 或 duration_s = 0：入圈即完成
+        return out
+
+    # ------------------------------------------------------------ D2：机体范围的插件命令（M08-FR-218）
+    def _vehicle_plugin_op(self, msg: dict, op: str, p: dict) -> tuple[dict, list[Call]]:
+        """`uav/{id}/cmd/gimbal`、`zoom`、`sensor/mode`：准入 ④（107 机体不存在、108 生命周期、105 状态行 UNKNOWN 与 CRASHED）
+        ⑤（租约：operator 须持席位，按租约类命令隐式取得 OPERATOR）⑦（回放幽灵机 109）之后交 M13 处理函数（msg 另带 `_slot`）。"""
+        uav = msg.get("uav")
+        if not isinstance(uav, str):
+            return self._reject(msg, int(Reason.NO_VEHICLE), detail={"uav": uav})
+        e = self.roster.resolve(uav)
+        if e is None:
+            return self._reject(msg, int(Reason.NO_VEHICLE), detail={"uav": uav})
+        S = self.S
+        s = int(e.slot)
+        if int(S.lifecycle[s]) != int(Lifecycle.READY):
+            return self._reject(msg, int(Reason.LINK_ERROR), detail={"lifecycle": int(S.lifecycle[s])})
+        fs = int(S.blocks["safety"]["fs"][s])
+        if fs in (int(FS.UNKNOWN), int(FS.CRASHED)):
+            return self._reject(msg, int(Reason.STATE), detail={"flight_state": FLIGHTSTATE_NAMES[fs]})
+        if not p.get("_internal") and p.get("role") not in ("operator", "admin", "agent"):
+            return self._reject(msg, int(Reason.ROLE_FORBIDDEN))
+        code = self.lease.check(s, op, p, uav=e.id, t_ns=S.t_ns, emit=self.events.emit, commit=False)
+        if code:
+            return self._reject(msg, code, detail={"lease": self.lease.lease_json(s)})
+        if (int(S.fidelity[s]) & 8) != 0:
+            return self._reject(msg, int(Reason.BACKEND_UNSUPPORTED), detail={"op": op, "backend": "replay"})
+        m2 = dict(msg)
+        m2["_slot"] = s
+        adm, calls = self._plugin_op(m2, op, p, seat_checked=True)
+        if adm.get("status") == "accepted":
+            self.lease.check(s, op, p, uav=e.id, t_ns=S.t_ns, emit=self.events.emit, commit=True)
+            for c in calls:
+                c.slot, c.uav = s, e.id
+        return adm, calls
 
     def resolve_calls(self, slots: np.ndarray, status: str, code: int, reason: str) -> None:
         """M09 回调（204、208、209、安全类取代的 206）：同一调用只结束一次，先到者为准（FR-057）。"""
@@ -1918,6 +2170,14 @@ class CommandEngine:
         cid = str(msg.get("cid") or "")
         if op == "fleet/add":
             code, detail = self.fleet_ops.admit_add(args)
+        elif op == "fleet/update":
+            uav = args.get("vehicle") if isinstance(args.get("vehicle"), str) else msg.get("uav")
+            if not isinstance(uav, str) or self.roster.resolve(uav) is None:
+                return self._reject(msg, int(Reason.NO_VEHICLE), detail={"vehicle": uav})
+            fn = getattr(self.fleet_ops, "fleet_update", None)
+            if fn is None:
+                return self._reject(msg, int(Reason.BACKEND_UNSUPPORTED), detail={"op": op})
+            code, detail = fn(uav, args.get("patch") if isinstance(args.get("patch"), dict) else {})
         else:
             uav = msg.get("uav") if isinstance(msg.get("uav"), str) else args.get("id")
             if not isinstance(uav, str) or self.roster.resolve(uav) is None:
@@ -1950,7 +2210,7 @@ class CommandEngine:
                 hit = True
         return hit
 
-    def _plugin_op(self, msg: dict, op: str, p: dict) -> tuple[dict, list[Call]]:
+    def _plugin_op(self, msg: dict, op: str, p: dict, *, seat_checked: bool = False) -> tuple[dict, list[Call]]:
         """登记的非机体命令（`register_command_handler`）：验签后按角色与席位放行，同步调用处理者（准入与排程）。
 
         生命周期（ADR-058，与机体命令同一套 `cmd.*` 事件）：准入通过即 `cmd.accepted`（V1，native_ack）；apply_tick 的 ingest
@@ -1958,7 +2218,7 @@ class CommandEngine:
         simulated，data 带 `result`）；有 `watch(ctx) -> None | {status: succeeded|failed, code?, result?, message?}` 时
         每步判定，截止（`deadline_s`，缺省 10 s【仿真】）未决以 `failed 202` 结束；剧本重置时 `canceled 6`。"""
         spec = self.reg.commands[op]
-        if not p.get("_internal"):
+        if not p.get("_internal") and not seat_checked:
             if p.get("role") not in ("operator", "admin"):
                 return self._reject(msg, int(Reason.ROLE_FORBIDDEN))
             if spec.need_seat and not self.lease.is_seat_holder(str(p.get("principal_id"))):
@@ -1981,9 +2241,9 @@ class CommandEngine:
         adm = self._base_adm(cid) | {"status": "accepted", "code": 0, "reason": None, "detail": det or None, "remedy": None,
                                      "apply_tick": apply_tick}
         now_w = self.clock.wall_mono_ns()
-        call = Call(cid, op, -1, None, p.get("principal_id"), p.get("role"), self._source(p),  # type: ignore[arg-type]
-                    dict(msg.get("args") or {}), int(self.S.t_ns), now_w, batch_id=msg.get("batch_id"),
-                    warnings=list(r.get("warnings") or []))
+        call = Call(cid, op, -1, msg.get("uav") if spec.vehicle else None, p.get("principal_id"),  # type: ignore[arg-type]
+                    p.get("role"), self._source(p), dict(msg.get("args") or {}), int(self.S.t_ns), now_w,
+                    batch_id=msg.get("batch_id"), warnings=list(r.get("warnings") or []))
         call.effect = {"status": "UNVERIFIED", "verify_trust": 1, "native_ack": True, "protocol": "inproc", "requested": op}
         dl = r.get("deadline_s")
         dl_s = float(dl) if _num(dl) and dl > 0 else PLUGIN_DEADLINE_S

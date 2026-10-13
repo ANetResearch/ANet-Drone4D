@@ -22,7 +22,7 @@ __all__ = ["ADMIT_NAME_CODE", "MOTION_OPS", "NAV_OPS", "AdmitCtx", "AdmitReq", "
 
 ADMIT_NAME_CODE = {"STATE": int(Reason.STATE), "SAFETY_ACTIVE": int(Reason.SAFETY_ACTIVE),
                    "DUPLICATE": int(Reason.DUPLICATE), "UNSUPPORTED": int(Reason.BACKEND_UNSUPPORTED)}
-NAV_OPS = frozenset({"goto", "follow_path", "orbit", "velocity"})
+NAV_OPS = frozenset({"goto", "follow_path", "orbit", "velocity", "loiter"})
 MOTION_OPS = frozenset({"takeoff", "land", "goto", "follow_path", "orbit", "hover", "rtl", "velocity", "safety_stop",
                         "pause", "kill"})  # AWR-17 §7.6 的 10 个命令 + kill：第 ⑦ 步按 caps 检查
 

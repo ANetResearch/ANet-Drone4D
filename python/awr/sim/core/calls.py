@@ -17,6 +17,7 @@ __all__ = ["OP_CODES", "OP_NAMES", "ST_ACCEPTED", "ST_FINAL", "ST_RUNNING", "Cal
 OP_NAMES = ("takeoff", "land", "goto", "follow_path", "orbit", "hover", "rtl", "velocity", "velocity_stop", "safety_stop",
             "pause", "resume", "arm", "disarm", "cancel", "kill", "escalate")
 OP_CODES = {n: k for k, n in enumerate(OP_NAMES)}
+OP_CODES["loiter"] = OP_CODES["orbit"]  # D2：多旋翼 loiter 以 ORBIT 执行，调用表按 orbit 判据（完成圈数见 aux[2]，M08-FR-218）
 ST_ACCEPTED, ST_RUNNING, ST_FINAL = 0, 1, 2
 
 

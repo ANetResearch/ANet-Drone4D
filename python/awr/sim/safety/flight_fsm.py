@@ -21,6 +21,7 @@ import numpy as np
 
 from awr.contracts.enums import SEVERITY, Lifecycle
 from awr.contracts.reasons import Reason
+from awr.sim.fleet import kernels_sel as KS
 from awr.sim.fleet.state import EVT_ARRIVED, EVT_COLLISION, EVT_MODE, EVT_TOUCHDOWN, CtrlMode
 
 from . import codes as C
@@ -384,17 +385,19 @@ class FlightFSM:
             a.dirty = False
         else:
             exp = None
-        lc = S.lifecycle[act]
-        if (lc != self.lc_shadow[act]).any():
+        # 每 tick 的三项活动集判据：numba 可用时各一次融合遍历（逐位相同；D2-AC-08：sandbox100 每 tick 三次花式下标约 30 µs）
+        nb = KS.HAVE_NUMBA and act.dtype == np.int64
+        if (KS.any_ne_at(act, S.lifecycle, self.lc_shadow) if nb else bool((S.lifecycle[act] != self.lc_shadow[act]).any())):
+            lc = S.lifecycle[act]
             self._lifecycle(act, t)
             self.lc_shadow[act] = lc
             self.flags_dirty = True
-        if S.mode_evt[act].any():
+        if (KS.any_nonzero_at(act, S.mode_evt) if nb else bool(S.mode_evt[act].any())):
             self._motion(act, np.full(act.size, -1, np.int16) if exp is None else exp, t)
             self._crash(act)
         if t >= self.next_deadline:
             self._timers(act, t)
-        if (sb["fs"][act] == FS.RTL).any():
+        if (KS.any_eq_at(act, sb["fs"], int(FS.RTL)) if nb else bool((sb["fs"][act] == FS.RTL).any())):
             self._rtl_phase(act, t)
         if self.C.pending:
             self.resolve(t)

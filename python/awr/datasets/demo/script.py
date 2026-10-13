@@ -45,7 +45,9 @@ def card_lines(items: list[CheckItem], *, port: int = 8000, host: str = "<host>"
         else:
             lines.append(f"[demo] {label.split()[0]}  {label.split(maxsplit=1)[1]}：跳过（{ac} 无通过记录，DEMO-E006）")
     lines.append("[demo]     S3 在纽约：make run WORLD=newyork SCENARIO=s3-newyork-sar")
-    lines.append("[demo] D7  打开关于对话框：数据来源 UrbanScene3D（Lin et al., ECCV 2022），科研用途；示意坐标，不得用于真实导航")
+    # ADR-109 第 3 条（D2）：关于对话框写"经数据集权利方授权使用"并附 ECCV 2022 BibTeX，不再写"科研用途"
+    lines.append("[demo] D7  打开关于对话框：数据来源 UrbanScene3D（Lin et al., ECCV 2022），经数据集权利方授权使用，附 BibTeX；"
+                 "示意坐标，不得用于真实导航")
     if rehearsal_webm:
         lines.append(f"[demo] 兜底录屏：{rehearsal_webm}")
     else:

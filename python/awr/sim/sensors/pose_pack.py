@@ -3,7 +3,8 @@
 慢任务 `m13.sensor_pose`（M08 `register_slow_task`，自计时）：仿真时间每跨过一个 100 ms 网格点开始一轮，取当时的
 `ctx.interest`（detail 并 marks ≤ 80 架）中已装配、带视场传感器的 slot，按 slot 升序每次执行一片（≤ 16 架），打成
 `awr.SensorPose48.v1` 行后立即发布到 `state/sim-core/sensor`（msgpack `{v: 1, t_sim_ns, rows: bin(n·48)}`，行内含 agent_no、
-sensor_no；每条消息的 t_sim_ns 为该片的打包时刻）。D1 只打包 camera、thermal 两列（LiDAR 列从 V0.2 起）。
+sensor_no；每条消息的 t_sim_ns 为该片的打包时刻）。只打包两个云台列的所有者（`Rig.col_specs`：D1 为 camera、thermal；D2 沙盒
+实例为 eo 与可能的 lwir；LiDAR 列从 V0.2 起）；光学变焦传感器的 hfov、vfov 取 `payload` 块的当前焦距（M13-FR-217）。
 flags：bit0 ACTIVE = `act` 位；bit1 FOV_VALID = ACTIVE 且状态 ∈ {ACTIVE, DEGRADED} 且内参有效（提请的 bit2 GIMBAL_LIMIT、
 bit3 DEGRADED 在 17 登记前不置位）。
 
@@ -23,6 +24,7 @@ from awr.contracts.layouts import SENSOR_POSE48
 from .enums import SensorKind, SensorState
 from .frames import R_to_quat_xyzw, gimbal_R, quat_to_R
 from .gimbal import COL_OF_KIND
+from .payload import PAYLOAD_BLOCK
 
 if TYPE_CHECKING:
     from .runtime import SensorRuntime
@@ -77,10 +79,11 @@ class SensorPosePacker:
         PQ = S.enu.pose_enu_flu(slots)
         good = np.all(np.isfinite(PQ), axis=1)  # 姿态含 NaN 的 slot 本轮跳过（M13 §7.5）
         row = 0
+        P = S.blocks.get(PAYLOAD_BLOCK)
         for kind in COLS:
             k = COL_OF_KIND[kind]
             for rig_i, sel in rt.group_by_rig(slots):
-                spec = rt.rig_list[rig_i].by_kind(kind)
+                spec = rt.rig_list[rig_i].col_specs[k]
                 if spec is None:
                     continue
                 ss = slots[sel]
@@ -102,8 +105,15 @@ class SensorPosePacker:
                 out["_pad"][sl] = 0
                 out["pos"][sl] = pos
                 out["q"][sl] = R_to_quat_xyzw(Rs)
-                out["hfov_rad"][sl] = spec.hfov_rad
-                out["vfov_rad"][sl] = spec.vfov_rad
+                if spec.zoom is not None and P is not None:
+                    z = spec.zoom
+                    f = np.where(np.isfinite(P["f"][ss, k]), P["f"][ss, k], z.f_min_mm)
+                    res = np.where(P["res"][ss, k] == 1, "4k", z.analysis_default)
+                    out["hfov_rad"][sl] = [z.hfov(float(fi), str(r)) for fi, r in zip(f.tolist(), res.tolist(), strict=True)]
+                    out["vfov_rad"][sl] = [z.vfov(float(fi), str(r)) for fi, r in zip(f.tolist(), res.tolist(), strict=True)]
+                else:
+                    out["hfov_rad"][sl] = spec.hfov_rad
+                    out["vfov_rad"][sl] = spec.vfov_rad
                 out["range_m"][sl] = spec.range_m
                 row += n
         return row
@@ -114,6 +124,11 @@ class SensorPosePacker:
         if rt.S is None or rt.blk is None:
             return False
         t = int(getattr(ctx, "t_ns", 0))
+        if self.next_due - t > PERIOD_NS:
+            # 仿真时间回退（`sim/reset`、循环剧本 S0 的 on_complete = reset、驻留恢复）：重新按 10 Hz 对齐；此前要等仿真时间追上
+            # 重置前的网格时刻，循环剧本每轮重置后视锥位姿停发一整轮（D2-INT，d2-FX-R2-other-to-M13 第 5 条）
+            self.next_due = 0
+            self.pos = self.queue.size
         if self.pos >= self.queue.size:
             if t < self.next_due:
                 return False

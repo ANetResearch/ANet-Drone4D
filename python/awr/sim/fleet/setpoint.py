@@ -120,7 +120,7 @@ def _goto(S: FleetState, LT: np.ndarray, i: np.ndarray, tx, ty, tz, speed, dt: f
     cr = np.where(np.isnan(speed), LT[lim, K.L_CRUISE], speed)
     cr = np.minimum(cr, vxy_max)
     vxy = np.minimum(cr, vmax_from_dist(K.JERK, acc, dxy, 0.0))
-    vzc = np.where(dz < 0.0, K.Z_V_AUTO_UP, K.Z_V_AUTO_DN)
+    vzc = np.where(dz < 0.0, LT[lim, K.L_ZUP], LT[lim, K.L_ZDN])
     vz = np.minimum(vzc, vmax_from_dist(K.JERK, K.ACC_UP, np.abs(dz), 0.0))
     big = dxy > 1e-3
     dd = np.maximum(dxy, 1e-6)
@@ -477,7 +477,7 @@ def _ref_velocity(S: FleetState, LT: np.ndarray, i: np.ndarray, dt: float) -> No
     s = np.minimum(1.0, vm / np.maximum(nxy, 1e-6))
     vx = vx * s
     vy = vy * s
-    vz = _clip(vz, -K.Z_VEL_MAX_UP, K.Z_VEL_MAX_DN)
+    vz = _clip(vz, -LT[lim, K.L_ZUP], LT[lim, K.L_ZDN])
     lk = S.axis_lock[i].astype(np.int64)
     comps = [vx, vy, vz]
     for k in range(3):

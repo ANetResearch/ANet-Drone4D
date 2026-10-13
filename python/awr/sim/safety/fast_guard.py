@@ -6,6 +6,11 @@
 （指令推力 ≥ 0.95·MPC_THR_MAX·thr_cap 且低于参考 0.5 m）持续 1 s ELAND；航向误差 > 90° ELAND；状态缺失（`est_age_s`
 > 0.1 s）FAILSAFE（宽限期内照常）；控制劣化（VELOCITY 下 `|v_sp − v| > 3 m/s` 持续 2 s）只告警。
 
+D2（D2-INT，d2-WP-08-to-M09 第 1 条；AWR-04 §5.3）：带 FW 位的 slot（固定翼、FW 模式的 VTOL）由 M21 运动学驱动，没有姿态与
+位置控制器：倾角误差（盘旋滚转 30°–35°）、绝对倾角、航向误差与油门饱和不适用，一律跳过；pos_err 为相对参考航迹的偏差（入圈、逆风
+接近、转弯与换航线时参考点跳到新航线，实测 > 100 m），同样跳过——固定翼的航迹保持与失速、过载保护由 M21 运动学自身的包线负责
+（AWR-04 §5.3）。状态缺失（EST timeout）照常。
+
 位姿只读 M08 的 ENU 视图（`enu.pos`、`pos_ref`、`q_xyzw`、`q_sp_xyzw`、`vel`），标量取 `thrust`、`thr_cap`、`est_age_s`；
 控制劣化的参考速度取 ENU 参考点的差分；
 只写候选与持续计时器，不修改任何控制状态（FR-023）。航向误差只在 FLYING/HOVER 与 HOLD 下评估：M08 的 PATH、ORBIT
@@ -18,7 +23,9 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from awr.sim.fleet import kernels_sel as KS
 from awr.sim.fleet import params_px4 as PX
+from awr.sim.fleet.stages.registry import Fidelity
 
 from . import kernels as KN
 from .flight_fsm import KILL_RANK, Origin
@@ -45,6 +52,9 @@ _TRK_SUB = np.zeros((14, 8), np.bool_)
 _TRK_SUB[FS.FLYING, SUBV[(FS.FLYING, "VELOCITY")]] = True
 _TRK_SUB[FS.FLYING, SUBV[(FS.FLYING, "EXTERNAL")]] = True
 S_SPOOL = SUBV[(FS.TAKING_OFF, "SPOOLUP")]
+_FW_BIT = int(Fidelity.FW)
+FW_SKIP = frozenset({"SAF.CTRL.TILT_ERR_KILL", "SAF.CTRL.THROTTLE_SAT", "SAF.CTRL.YAW_ERR", "SAF.CTRL.TILT_ELAND",
+                     "SAF.CTRL.TILT_KILL", "SAF.CTRL.POS_ERR_ELAND", "SAF.CTRL.POS_ERR_FAILSAFE"})
 
 
 def body_up(q: np.ndarray) -> np.ndarray:
@@ -88,10 +98,34 @@ class FastGuard:
         return self._prm
 
     def step(self, ctx: Any) -> None:
+        fid = getattr(self.rt.S, "fidelity", None)
+        act = self.rt.act_idx
+        self._fw = None
+        if fid is not None and act.size and (KS.any_bits_at(act, fid, _FW_BIT) if KS.HAVE_NUMBA and act.dtype == np.int64
+                                             else bool(np.any((fid[act] & _FW_BIT) != 0))):
+            self._fw = (fid & _FW_BIT) != 0
         if self.use_kernel:
             self._step_kernel()
             return
         self._step_numpy()
+
+    def _propose(self, slots: np.ndarray, state: int, prio: int, origin: Any, code: str, **kw: Any) -> None:
+        """提出候选；带 FW 位的 slot 按固定翼口径过滤（见模块说明）。"""
+        fw = getattr(self, "_fw", None)
+        if fw is not None:
+            m = fw[slots]
+            if m.any():
+                keep = ~m
+                if code not in FW_SKIP:
+                    keep[:] = True
+                if not keep.any():
+                    return
+                if not keep.all():
+                    v = kw.get("value")
+                    if isinstance(v, np.ndarray) and v.shape == slots.shape:
+                        kw = {**kw, "value": v[keep]}
+                    slots = slots[keep]
+        self.rt.fsm.propose(slots, state, prio, origin, code, **kw)
 
     def _step_kernel(self) -> None:
         """numba 路径（`kernels.fast_guard_scan`）：逐机判定在核内完成，只有置位的机体才回到 Python 提出候选；候选的
@@ -128,20 +162,20 @@ class FastGuard:
         for m, code, val, thr in ((kill_tilt, "SAF.CTRL.TILT_KILL", tilt, G.tilt_kill_rad),
                                   (on(KN.FG_KILL_TE) & ~kill_tilt, "SAF.CTRL.TILT_ERR_KILL", terr, G.tilt_err_rad)):
             if m.any():
-                rt.fsm.propose(act[m], int(FS.DISARMED), 2, Origin.AUTO, code, key=KILL_RANK, value=np.degrees(val[m]),
+                self._propose(act[m], int(FS.DISARMED), 2, Origin.AUTO, code, key=KILL_RANK, value=np.degrees(val[m]),
                                thr=float(np.degrees(thr)))
         for m, code, val, thr in ((on(KN.FG_STALE), "SAF.EST.TIMEOUT", age, G.state_age_s),
                                   (on(KN.FG_PEF), "SAF.CTRL.POS_ERR_FAILSAFE", pe, G.pe_fail_m)):
             if m.any():
                 if code == "SAF.EST.TIMEOUT":
                     rt.set_cond(act[m], "EST_TIMEOUT", True)
-                rt.fsm.propose(act[m], int(FS.FAILSAFE), 0, Origin.AUTO, code, value=val[m], thr=thr)
+                self._propose(act[m], int(FS.FAILSAFE), 0, Origin.AUTO, code, value=val[m], thr=thr)
         for m, code, val, thr in ((on(KN.FG_EL_TILT), "SAF.CTRL.TILT_ELAND", np.degrees(tilt), G.tilt_eland_deg),
                                   (on(KN.FG_PEL), "SAF.CTRL.POS_ERR_ELAND", pe, G.pe_eland_m),
                                   (on(KN.FG_TS), "SAF.CTRL.THROTTLE_SAT", S.thrust[act].astype(np.float64), G.thr_frac),
                                   (on(KN.FG_YAW), "SAF.CTRL.YAW_ERR", np.degrees(yerr), G.yaw_err_deg)):
             if m.any():
-                rt.fsm.propose(act[m], int(FS.ELAND), 0, Origin.AUTO, code, value=val[m], thr=thr)
+                self._propose(act[m], int(FS.ELAND), 0, Origin.AUTO, code, value=val[m], thr=thr)
         new = on(KN.FG_TRK_NEW)
         if new.any():
             rt.set_cond(act[new], "TRACK_DEGRADED", True)
@@ -214,7 +248,7 @@ class FastGuard:
         for m, code, val, thr in ((kill_tilt, "SAF.CTRL.TILT_KILL", tilt, G.tilt_kill_rad),
                                   (kill_te & ~kill_tilt, "SAF.CTRL.TILT_ERR_KILL", terr, G.tilt_err_rad)):
             if m.any():
-                rt.fsm.propose(act[m], int(FS.DISARMED), 2, Origin.AUTO, code, key=KILL_RANK, value=np.degrees(val[m]),
+                self._propose(act[m], int(FS.DISARMED), 2, Origin.AUTO, code, key=KILL_RANK, value=np.degrees(val[m]),
                                thr=float(np.degrees(thr)))
         # ---- FAILSAFE 类
         pef = in_fs & ~grace & (pe > G.pe_fail_m)
@@ -224,7 +258,7 @@ class FastGuard:
             if m.any():
                 if code == "SAF.EST.TIMEOUT":
                     rt.set_cond(act[m], "EST_TIMEOUT", True)
-                rt.fsm.propose(act[m], int(FS.FAILSAFE), 0, Origin.AUTO, code, value=val[m], thr=thr)
+                self._propose(act[m], int(FS.FAILSAFE), 0, Origin.AUTO, code, value=val[m], thr=thr)
         # ---- ELAND 类（宽限期外）
         el_tilt = in_el & ~grace & (tilt > G.tilt_eland_rad) & ~kill_tilt
         for m, code, val, thr in ((el_tilt, "SAF.CTRL.TILT_ELAND", np.degrees(tilt), G.tilt_eland_deg),
@@ -232,7 +266,7 @@ class FastGuard:
                                   (in_el & ts, "SAF.CTRL.THROTTLE_SAT", S.thrust[act].astype(np.float64), G.thr_frac),
                                   (in_el & yaw, "SAF.CTRL.YAW_ERR", np.degrees(yerr), G.yaw_err_deg)):
             if m.any():
-                rt.fsm.propose(act[m], int(FS.ELAND), 0, Origin.AUTO, code, value=val[m], thr=thr)
+                self._propose(act[m], int(FS.ELAND), 0, Origin.AUTO, code, value=val[m], thr=thr)
         # ---- 控制劣化（只告警，边沿）
         bit = np.uint64(1 << 15)
         was = (sb["cond"][act] & bit) != 0

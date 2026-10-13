@@ -30,7 +30,7 @@ except Exception:  # pragma: no cover - 取决于环境
             return f
         return deco if not (a and callable(a[0])) else a[0]
 
-__all__ = ["HAVE_NUMBA", "PAIR_COLS", "fast_guard_scan", "fleet_scan", "fleet_scan_np", "geofence_scan", "geofence_scan_np",
+__all__ = ["HAVE_NUMBA", "PAIR_COLS", "bat_step", "fast_guard_scan", "fleet_scan", "fleet_scan_np", "geofence_scan", "geofence_scan_np",
            "warmup"]
 
 BIG = 1e30
@@ -592,6 +592,61 @@ def fence_core(air, margin_all, nofly_all, restr_all, near_all, near_d_all, pos,
     return hits
 
 
+# ====================================================================== 电量积分（battery stage，10 Hz）
+@njit(cache=True, fastmath=False)
+def bat_step(hb, thrust, pid, hover, has_tab, in_air, p_hover_w, drain_pct_s, e_use_wh, wh_used, soc, soc_min, battery_pct, p_avg_w,
+             cells, current_a, voltage_v, t_rem_s, dt, alpha, r_int, emerg, fs, once, rtl_valid, t_rtl_s, low, crit, rtl_margin,
+             emerg_ok, rtl_ok_tab):
+    """`BatteryModel.step` 中有电池机体的能量积分（与 numpy 实现逐元素同式、同一 float32 写回；D2-FX-R2-sim 第 2 次：10 架时此前
+    约 40 次小数组运算，约 0.2–0.5 ms/次）。返回是否需要执行判据 `_criteria`（任一机满足 LOW、EMERG、CRIT 或 ENERGY 的候选条件，
+    或在地面）：门限放宽 1e−6 量级以覆盖 float32 存储值的比较，只多不少。"""
+    need = False
+    for i in range(hb.shape[0]):
+        r = hb[i]
+        hv = hover[pid[r]] if has_tab else 0.5
+        th = thrust[r]
+        th = 0.0 if th < 0.0 else th
+        hvm = 1e-6 if hv < 1e-6 else hv
+        ratio = th / hvm
+        p = p_hover_w[r] * math.pow(ratio, 1.5)
+        drain = np.float64(drain_pct_s[r]) * 0.01 * e_use_wh[r] * dt
+        wh = wh_used[r] + (p * dt / 3600.0 + drain)
+        wh_used[r] = wh
+        e = e_use_wh[r]
+        e = 1e-9 if e < 1e-9 else e
+        s = 1.0 - wh / e
+        s = 0.0 if s < 0.0 else (1.0 if s > 1.0 else s)
+        soc[r] = s
+        sm = np.float64(soc_min[r])
+        soc_min[r] = s if s < sm else sm
+        pc = np.round(100.0 * s)
+        pc = 0.0 if pc < 0.0 else (100.0 if pc > 100.0 else pc)
+        battery_pct[r] = np.uint8(pc)
+        air = in_air[r]
+        pa = (1.0 - alpha) * np.float64(p_avg_w[r]) + alpha * p if air else p_hover_w[r]
+        p_avg_w[r] = pa
+        c = np.float64(cells[r])
+        voc = c * (3.3 + 0.9 * s - 0.2 * math.exp(-20.0 * s) + 0.1 * math.pow(s, 3.0))
+        cur = p / (1e-6 if voc < 1e-6 else voc) if voc > 0 else 0.0
+        current_a[r] = cur
+        voltage_v[r] = voc - cur * r_int * c
+        x = s - emerg
+        x = 0.0 if x < 0.0 else x
+        t_rem_s[r] = x * e * 3600.0 / (1e-6 if pa < 1e-6 else pa)
+        if need:
+            continue
+        o = once[r]
+        sf = np.float64(soc[r])
+        lo = sf <= low * (1.0 + 1e-6) + 1e-7 and (o & 1) == 0
+        em = sf <= emerg * (1.0 + 1e-6) + 1e-7 and air and emerg_ok[fs[r]] and (o & 4) == 0
+        rok = air and rtl_ok_tab[fs[r]] and (o & 2) == 0
+        cr = rok and sf <= crit * (1.0 + 1e-6) + 1e-7
+        en = rok and rtl_valid[r] and np.float64(t_rem_s[r]) <= rtl_margin * np.float64(t_rtl_s[r]) * (1.0 + 1e-6) + 1e-6
+        if lo or em or cr or en or not air:
+            need = True
+    return need
+
+
 def warmup() -> None:
     """启动预热（numba 首次编译约数秒，cache=True 后读缓存；ADR-021、R4）。"""
     if not HAVE_NUMBA:
@@ -631,6 +686,17 @@ def warmup() -> None:
     f32 = np.zeros(4, np.float32)
     f64 = np.zeros(4)
     tab2 = np.zeros((14, 8), np.bool_)
+    from .state import BATTERY_FIELDS
+
+    bbw = {k: np.zeros((4, *shape), dt) for k, (dt, shape) in BATTERY_FIELDS.items()}
+    bat_step(idx, np.zeros(4), np.zeros(4, np.uint16), np.zeros((3, 8))[:, 1], True, np.zeros(4, np.bool_), bbw["p_hover_w"],
+             bbw["drain_pct_s"], bbw["e_use_wh"], bbw["wh_used"], bbw["soc"], bbw["soc_min"], bbw["battery_pct"], bbw["p_avg_w"],
+             bbw["cells"], bbw["current_a"], bbw["voltage_v"], bbw["t_rem_s"], 0.1, 0.02, 0.01, 0.05, np.zeros(4, np.uint8),
+             bbw["bat_once"], bbw["rtl_valid"], bbw["t_rtl_s"], 0.15, 0.07, 1.3, np.zeros(256, np.bool_), np.zeros(256, np.bool_))
+    bat_step(idx, np.zeros(4), np.zeros(4, np.uint16), np.zeros(3), True, np.zeros(4, np.bool_), bbw["p_hover_w"],
+             bbw["drain_pct_s"], bbw["e_use_wh"], bbw["wh_used"], bbw["soc"], bbw["soc_min"], bbw["battery_pct"], bbw["p_avg_w"],
+             bbw["cells"], bbw["current_a"], bbw["voltage_v"], bbw["t_rem_s"], 0.1, 0.02, 0.01, 0.05, np.zeros(4, np.uint8),
+             bbw["bat_once"], bbw["rtl_valid"], bbw["t_rtl_s"], 0.15, 0.07, 1.3, np.zeros(256, np.bool_), np.zeros(256, np.bool_))
     fast_guard_scan(idx, np.zeros(4, np.uint8), np.zeros(4, np.uint8), np.zeros(4, np.bool_), np.zeros(4, np.uint64),
                     np.zeros(4, np.int64), ro[0], ro[1], ro[2], ro[3], ro[4], f32, f64, f32.copy(), f32.copy(), f32.copy(),
                     f32.copy(), f32.copy(), f64.copy(), f64.copy(), f64.copy(), f64.copy(), np.zeros((4, 3)), f64.copy(),

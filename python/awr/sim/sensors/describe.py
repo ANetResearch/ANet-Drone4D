@@ -3,6 +3,10 @@
 内容：每个传感器的内参、FOV、挂载、云台限位与缺省、检测器、速率、置信度与来源；`rig`（sensor_no、名称、kind，全部传感器）；
 `twin`（Camera、LiDAR、RTK 三项的状态：present / missing / invalid 与 conf）。前端 `engine/sensors/specs.gen.ts` 由同一函数
 生成（`tests/sensors/gen_web_specs.py`），因此浏览器与 sim-core 看到的传感器参数同源。纯函数，无副作用。
+
+D2（M13-FR-216）：每个传感器另给槽位属性（`slot{legacy, default, removable}`）、型号（`model_id`、`spec_ref`）、质量与功率、
+派生值（eo_zoom 两端的 HFOV、VFOV、DFOV、F 数、各输出档的等效像元与 4K 门槛；照明器的参考作用距离；LWIR 各镜头视场；雷达
+`R_ref` 对 1 m²、人 0.5 m²、车 10 m² 的检测距离；MID-360 反射率量程与角密度），`mounts` 为缺省挂载的质量与功率汇总。
 """
 
 from __future__ import annotations
@@ -65,7 +69,93 @@ def spec_json(s: SensorSpec) -> dict[str, Any]:
         doc = s.doc
         d["lidar"] = {"fov": dict(doc.get("fov") or {}), "pattern": dict(doc.get("pattern") or {}),
                       "frame_rate_hz": doc.get("frame_rate_hz"), "mount_presets": dict(doc.get("mount_presets") or {})}
+    d2 = d2_json(s)
+    if d2:
+        d.update(d2)
     return d
+
+
+# 雷达参考截面（AWR-04 §6.1、AWR-20 §6.9）
+RCS_REF = {"m2_1": 1.0, "person": 0.5, "dog": 0.1, "uav_small": 0.01, "car": 10.0}
+
+
+def d2_json(s: SensorSpec) -> dict[str, Any]:
+    """D2 字段（M13-FR-216）；D1 文件只给槽位属性。"""
+    out: dict[str, Any] = {"slot": {"legacy": s.slot.legacy, "default": s.slot.default, "removable": s.slot.removable}}
+    if s.schema_id:
+        out["type"] = s.schema_id.split(".")[2]
+    if s.model_id or s.spec_ref:
+        out["model_id"] = s.model_id or None
+        out["spec_ref"] = s.spec_ref or None
+    if math.isfinite(s.mass_kg):
+        out["mass_kg"] = _r(s.mass_kg)
+    if math.isfinite(s.power_w):
+        out["power_w"] = _r(s.power_w)
+    if s.env_limits is not None:
+        out["env_limits"] = {"temp_c": list(s.env_limits)}
+    if s.on_gimbal_of:
+        out["on_gimbal_of"] = s.on_gimbal_of
+    z = s.zoom
+    if z is not None:
+        f0, f1 = z.f_min_mm, z.f_max_mm
+        out["zoom"] = {"f_mm": [f0, f1], "f_number": [_r(z.fnum(f0), 4), _r(z.fnum(f1), 4)], "law": z.law,
+                       "zoom_time_s": z.zoom_time_s, "pixel_um": z.pixel_um, "sensor_px": [z.width_px, z.height_px],
+                       "sensor_mm": [_r(z.sensor_w_mm, 4), _r(z.sensor_h_mm, 4)],
+                       "hfov_deg": [_r(math.degrees(z.hfov(f0)), 3), _r(math.degrees(z.hfov(f1)), 3)],
+                       "vfov_deg": [_r(math.degrees(z.vfov(f0)), 3), _r(math.degrees(z.vfov(f1)), 3)],
+                       "dfov_deg": [_r(math.degrees(z.dfov(f0)), 3), _r(math.degrees(z.dfov(f1)), 3)],
+                       "analysis_default": z.analysis_default, "k4_requires": z.k4_requires,
+                       "outputs": [{"name": o.name, "w_px": o.w, "h_px": o.h, "crop_w_px": o.crop_w, "crop_h_px": o.crop_h,
+                                    "fps": o.fps, "p_eff_um": _r(z.p_eff_um(o.name), 4),
+                                    "hfov_deg": [_r(math.degrees(z.hfov(f0, o.name)), 3), _r(math.degrees(z.hfov(f1, o.name)), 3)]}
+                                   for o in z.outputs],
+                       "exposure": dict(z.exposure), "jitter_urad": dict(z.jitter_urad)}
+        night = s.doc.get("night") or {}
+        if night:
+            out["night"] = {"e_min_color_lx": night.get("e_min_color_lx"), "e_min_mono_lx": night.get("e_min_mono_lx")}
+    il = s.illum
+    if il is not None:
+        if il.follow_hfov and z is not None:
+            th = (z.hfov(z.f_min_mm), z.hfov(z.f_max_mm))
+            rng = [_r(il.range_m(th[0]), 2), _r(il.range_m(th[1]), 2)]
+            div = [_r(math.degrees(th[0]), 3), _r(math.degrees(th[1]), 3)]
+        else:
+            rng = [_r(il.range_m(il.divergence_rad), 2)]
+            div = [_r(math.degrees(il.divergence_rad), 3)]
+        out["illuminator"] = {"builtin": il.builtin, "wavelength_nm": il.wavelength_nm, "power_w": il.p_w,
+                              "divergence": "follow_hfov" if il.follow_hfov else "fixed", "divergence_deg": div,
+                              "range_m": rng, "ref": {"r_m": il.r_ref_m, "p_w": il.p_ref_w,
+                                                     "theta_deg": _r(math.degrees(il.theta_ref_rad), 4), "rho": il.rho_ref}}
+    if s.lenses:
+        det = s.doc.get("detector") or {}
+        w, h, p = int(det.get("width_px", 640)), int(det.get("height_px", 512)), float(det.get("pixel_um", 12.0))
+        out["lenses"] = [{"f_mm": ln.f_mm, "f_number": ln.f_number, "mass_kg": _r(ln.mass_kg), "power_w": _r(ln.power_w),
+                          "hfov_deg": _r(math.degrees(2 * math.atan(w * p * 1e-3 / (2 * ln.f_mm))), 3),
+                          "vfov_deg": _r(math.degrees(2 * math.atan(h * p * 1e-3 / (2 * ln.f_mm))), 3),
+                          "ifov_urad": _r(p / ln.f_mm * 1e3, 2)} for ln in s.lenses]
+        out["lens_mm"] = _r(s.lens_mm)
+    if s.kind == SensorKind.RADAR:
+        doc = s.doc
+        r_ref = float(doc.get("r_ref_m", float("nan")))
+        sig = float(doc.get("sigma_ref_m2", 1.0))
+        out["radar"] = {"freq_ghz": doc.get("freq_ghz"), "fov": dict(doc.get("fov") or {}), "r_ref_m": r_ref,
+                        "snr_req_db": doc.get("snr_req_db"), "rate_hz": doc.get("rate_hz"), "r_max_m": doc.get("r_max_m"),
+                        "r_detect_m": {k: _r(r_ref * (v / sig) ** 0.25, 2) for k, v in RCS_REF.items()}}
+    if s.kind == SensorKind.ACOUSTIC:
+        doc = s.doc
+        out["acoustic"] = {k: doc.get(k) for k in ("n_mics", "aperture_m", "band_hz", "array_gain_db", "nr_db", "r_ego_m",
+                                                   "az_acc_deg", "rate_hz", "detect_snr_db") if k in doc}
+    if s.kind == SensorKind.LIDAR:
+        rg = s.doc.get("range") or {}
+        r10, ex, hm = float(rg.get("r_at_rho10_m", 40.0)), float(rg.get("exponent", 0.269)), float(rg.get("hard_max_m", s.range_m))
+        fov = s.doc.get("fov") or {}
+        omega = 2 * math.pi * (math.sin(math.radians(float(fov.get("v_max_deg", 52.2)))) +
+                               math.sin(math.radians(-float(fov.get("v_min_deg", -7.2)))))
+        pts = float((s.doc.get("pattern") or {}).get("point_rate_hz", 200000)) / float(s.doc.get("frame_rate_hz", 10) or 10)
+        out["lidar_range"] = {"hard_max_m": hm, "r_max_m": {str(rho): _r(min(hm, r10 * (rho / 0.1) ** ex), 2)
+                                                            for rho in (0.1, 0.2, 0.3, 0.5, 0.8, 1.0)},
+                              "points_per_frame": int(pts), "density_pts_sr": _r(pts / omega, 1)}
+    return out
 
 
 def describe_rig(rig: Rig) -> dict[str, Any]:
@@ -78,6 +168,8 @@ def _twin(d: Path, sensors_map: dict) -> list[dict]:
     rows = []
     for item, key in (("Camera", "camera"), ("LiDAR", "mid360"), ("RTK", "gnss")):
         rel = sensors_map.get(key)
+        if isinstance(rel, dict):  # D2 对象形式槽位
+            rel = rel.get("file")
         if rel is None:
             rows.append({"item": item, "status": "missing", "conf": None})
             continue
@@ -121,7 +213,12 @@ def describe_model(model_dir: Path | str) -> dict[str, Any]:
         params = {}
     smap = dict(params.get("sensors") or {})
     try:
-        out = describe_rig(load_rig(d, smap))
+        rig = load_rig(d, smap)
+        out = describe_rig(rig)
+        if rig.d2:
+            from .mounts import mount_summary
+
+            out["mounts"] = mount_summary(rig, rig.default_mask(sandbox=True))
     except SensorSpecError as e:
         out = {"error": e.to_json()}
     out["twin"] = _twin(d, smap)

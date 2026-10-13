@@ -1,4 +1,4 @@
-"""M04 结果类型、参数与异常（M04 §6.2.3、§7.1、§7.8；MS1 冻结签名）。"""
+"""M04 结果类型、参数与异常（M04 §6.2.3、§7.1、§7.8；MS1 冻结签名；D2 增补：Grid25 视图与派生缓存可用性原因）。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,13 @@ from typing import Literal, NamedTuple
 
 import numpy as np
 
-DERIVE_VERSION = "m04-derive@1"
+# @2（D2，AWR-04 ADR-113 第 5 条）：派生集加入 Grid25（4 m 规划栅格及其地板、阻塞掩码），旧键的条目随之失效
+DERIVE_VERSION = "m04-derive@2"
 NEG = np.float32(-1.0e9)
+
+# 派生缓存不可用的原因（AWR-04 §4.4.7 第 2 条；M17 `507{why: cache_missing}`、M10 `123{detail: derived_cache_missing}`）
+DERIVED_CACHE_MISSING = "derived_cache_missing"
+WORLD_INVALID = "world_invalid"
 
 # 错误码（17 reasons.json）
 PARAM_OUT_OF_RANGE = 110
@@ -19,11 +24,19 @@ INTERNAL_ERROR = 320
 
 
 class GeoLoadError(RuntimeError):
-    """装载期错误（不走 reasons.json）：code ∈ GEO_MISSING_FILE、GEO_GRID_INVALID、GEO_SHA_MISMATCH、GEO_CACHE_MISS。"""
+    """装载期错误（不走 reasons.json）：code ∈ GEO_MISSING_FILE、GEO_GRID_INVALID、GEO_SHA_MISMATCH、GEO_CACHE_MISS。
+
+    `reason` 是给沙盒与共享规划服务的归类：GEO_CACHE_MISS 为 `derived_cache_missing`（缓存缺失、键不一致或条目损坏，
+    `allow_derive = false` 时不在线派生），其余为 `world_invalid`（世界包本身不可用）。
+    """
 
     def __init__(self, code: str, msg: str = ""):
         super().__init__(f"{code}: {msg}" if msg else code)
         self.code = code
+
+    @property
+    def reason(self) -> str:
+        return DERIVED_CACHE_MISSING if self.code == "GEO_CACHE_MISS" else WORLD_INVALID
 
 
 class GeoError(ValueError):
@@ -45,9 +58,45 @@ class GeoParams:
     hm_safe_m: float = 10.0
     pyr_min_cells: int = 64
     zone_raster_cell_m: float = 8.0
+    # Grid25（M10-FR-034 的 Hf = max(grid_2p5d(4), dtm + alt_min_agl_m)，禁飞区与界外置 +inf 并 8 邻域外扩）：缺省高度的
+    # 栅格整体进入派生缓存，其他高度由缓存中的地板与阻塞掩码合成（D2，ADR-113 第 5 条）
+    grid25_res_m: float = 4.0
+    grid25_alt_min_agl_m: float = 20.0
+    grid25_zone_dilate: int = 1
 
     def to_json(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class Grid25View:
+    """2.5D 规划栅格（D2，M10-FR-205）：`a` 为 Hf（float64，行主序、第 0 行在南；禁飞区与界外格为 +inf），`base` 为叠加
+    区域阻塞前的 Hf（无阻塞格时为 None；A* 用它恢复起终点格）。
+
+    `source = "cache"`：缺省高度，两个数组都是派生缓存文件的 memmap（文件页，多进程共享，不计匿名页）；只读，
+    `copy_on_write = True` 时为写时复制映射（写入只在本映射内私有化被写的页）。`source = "process"`：非缺省高度，
+    由缓存中的地板与阻塞掩码在进程内合成（匿名页 2 × H × W × 8 B），可写。
+    """
+
+    a: np.ndarray
+    base: np.ndarray | None
+    x0_m: float
+    y0_m: float
+    cell_m: float
+    alt_min_agl_m: float
+    source: Literal["cache", "process"]
+
+    @property
+    def h(self) -> int:
+        return int(self.a.shape[0])
+
+    @property
+    def w(self) -> int:
+        return int(self.a.shape[1])
+
+    @property
+    def nbytes(self) -> int:
+        return int(self.a.nbytes + (0 if self.base is None else self.base.nbytes))
 
 
 class GridView(NamedTuple):

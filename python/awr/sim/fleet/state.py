@@ -7,6 +7,10 @@
 
 他模块的状态块经 `register_state_block()` 登记、由本类统一分配（`blocks[name][field]`，形状 (N, *shape)）。M09 未装配时
 （walking skeleton），M08 以兜底定义分配 `safety`、`battery`、`mission` 三个块（字段按 M08 §6.3.1 的契约）。
+
+D2（M08-FR-210）：构型列 `frame_kind`（u8：0 多旋翼、1 固定翼、2 VTOL，spawn 时按机型写入）；固定翼与 FW 模式的 VTOL 的
+fidelity 置 `L1 | FW`，M08 的 L1 物理 stage 与融合核跳过带 FW 位的 slot，运动学由 M21 的 `fw_kin` stage 经
+`kinematic_write.write_kinematic` 写入。
 """
 
 from __future__ import annotations
@@ -30,6 +34,9 @@ __all__ = [
     "EVT_PHASE",
     "EVT_TOUCHDOWN",
     "FALLBACK_BLOCKS",
+    "FRAME_FIXED_WING",
+    "FRAME_MULTIROTOR",
+    "FRAME_VTOL",
     "ORB_COLS",
     "YAWB",
     "CtrlMode",
@@ -39,6 +46,7 @@ __all__ = [
 
 CAPACITY = 1024
 ORB_COLS = 12
+FRAME_MULTIROTOR, FRAME_FIXED_WING, FRAME_VTOL = 0, 1, 2
 YAWB = {"center": 0.0, "tangent": 1.0, "fixed": 2.0}
 
 
@@ -198,7 +206,7 @@ CORE_ARRAYS = (
     "rtl_via", "wind", "rho", "env_flags", "env_gust", "ground_z", "agl", "in_contact", "landed", "in_air", "contact_t", "crash_sub",
     "td_t", "thrust_scale", "motor_ok", "est_age_s", "sp_wall_ns", "vel_sess", "axis_anchor", "axis_lock", "path_off",
     "path_len", "path_seg", "path_tau", "orb", "desc_v", "vel_frame", "vel_vmax", "vel_yawrate", "hold_alt", "d_free",
-    "force", "kin_t0",
+    "force", "kin_t0", "frame_kind",
 )
 
 
@@ -212,6 +220,7 @@ class FleetState:
         self.version = 0  # 每次写 p/v/q/omega/pos_ref 后 +1（ENU 视图的脏标志）
         self.active = np.zeros(n, _B)
         self.fidelity = np.zeros(n, np.uint8)
+        self.frame_kind = np.zeros(n, np.uint8)  # 0 多旋翼、1 固定翼、2 VTOL（M08-FR-210）
         self.lifecycle = np.zeros(n, np.uint8)  # A 轴（Lifecycle 枚举值），由 roster 同步（ingest）
         self.ids: list[str | None] = [None] * n  # 机体 id（事件外层 uav 字段用）
         self.agent_no = np.zeros(n, np.int32)

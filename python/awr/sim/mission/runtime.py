@@ -128,8 +128,11 @@ class M10Runtime:
         self.run_dir = Path(rd) if rd else None
         inputlog = getattr(self.cmd, "inputlog", None)
         cpu = os.environ.get("AWR_PLAN_POOL_CPU")
+        # bus：remote 模式（沙盒 sim-core，AWR_PLAN_POOL=remote）经本会话总线提交到共享规划服务（M10-FR-202）
         self.pool = PlanPoolClient(self.world_key if self.world is not None else None, worlds_dir=worlds_dir,
-                                   world=self.world, cpu=int(cpu) if cpu else None, inputlog=inputlog)
+                                   world=self.world, cpu=int(cpu) if cpu else None, inputlog=inputlog,
+                                   bus=getattr(self.events, "bus", None))
+        self.pool.batch_of = self._batch_ctl  # 批处理：结果按固定延迟生效、未返回即阻塞（pool 模块文档末段；D2-AC-32）
         self.tracker.bind(S)
         if self.cmd is not None:
             self.cmd.subscribe_results("m10:", self.missions.on_call_result)
@@ -151,6 +154,10 @@ class M10Runtime:
         self.pending_starts.clear()
         self._autoload()
 
+    def _batch_ctl(self) -> Any:
+        """批处理自由运行时的 BatchCtl（`ctx.batch`，M08-FR-221）；实时运行为 None。"""
+        return getattr(self.ctx, "batch", None) if self.ctx is not None else None
+
     def _on_warm(self, res: PlanResult, tick: int) -> None:
         self.emit("plan.warm", world_id=self.world_key[0], t_ms=res.stats.get("t_ms"), ok=res.ok, level=1)
 
@@ -167,8 +174,19 @@ class M10Runtime:
             return
         from .scenario_loader import scenario_path
 
-        if scenario_path(sid) is None:
+        path = scenario_path(sid)
+        if path is None:
             log.info("scenario file not found; skeleton spawn kept", extra={"kv": {"scenario": sid}})
+            return
+        try:
+            import json
+
+            schema = json.loads(path.read_text(encoding="utf-8")).get("schema")
+        except (OSError, ValueError, AttributeError):
+            schema = None
+        if schema not in (None, "awr.scenario.v1"):
+            # 会话配置（awr.sandbox.snapshot.v1，例如 S7）由 M08 经 AWR_SESSION_CONFIG 冷启动装配，不按 D1 剧本校验（d2-WP-13-to-M10 第 1 条）
+            log.info("scenario file is not a D1 scenario; skipped", extra={"kv": {"scenario": sid, "schema": schema}})
             return
         self.load_scenario(sid, os.environ.get("AWR_SCENARIO_PROFILE") or None)
 
@@ -379,7 +397,8 @@ class M10Runtime:
 
             self.pool = PlanPoolClient(self.world_key if self.world is not None else None,
                                        worlds_dir=self.pool.worlds_dir, world=self.world, cpu=self.pool.cpu,
-                                       inputlog=self.pool.inputlog)
+                                       inputlog=self.pool.inputlog, bus=self.pool.bus)
+            self.pool.batch_of = self._batch_ctl
         if self.coverage is not None:
             self.coverage.reset()
         sid = (args or {}).get("scenario_id")
@@ -699,9 +718,14 @@ class M10Runtime:
                 self.cmd.fine_result(cid, False, code)
             return
         e = self.tracker.cache.put_traj(res.trajectories[0])
-        self.tracker.load_bspline(self.S, s, e, cid=cid)
-        if then is not None:
-            self.tracker.slot_meta(s).next_phase = then
+        if self.tracker.braking(s):
+            # D2-INT（d2-WP-13-to-M20-M21 第 6 条）：轨迹从刹停静止点 p_stop 起算；机体仍在减速时立即装入会使参考点
+            # 一步跳到 p_stop（巡航 8–10 m/s 时 16–25 m），FastGuard 以 POS_ERR_FAILSAFE（> 5 m）迫降。刹停到位后再装入
+            self.tracker.slot_meta(s).next_phase = {"phase": "bspline", "entry": e, "then": then}
+        else:
+            self.tracker.load_bspline(self.S, s, e, cid=cid)
+            if then is not None:
+                self.tracker.slot_meta(s).next_phase = then
         self.extend_deadline(cid, e.duration_s + (60.0 if then else 0.0))
         self.emit("plan.ready", job_id=res.job_id, fields={"kind": res.job_id.split(":", 1)[0]}, vehicle_id=str(self.S.ids[s]),
                   planner=res.stats.get("planner"), t_ms=res.stats.get("t_ms"), apply_tick=int(tick),

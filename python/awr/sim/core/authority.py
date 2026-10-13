@@ -207,7 +207,8 @@ class LeaseManager:
         if principal.get("_internal"):
             if role in ("safety", "scenario", "supervisor"):
                 return 0
-            own = {"mission": Owner.MISSION, "swarm": Owner.SWARM, "agent": Owner.AGENT}.get(str(role))
+            # D2：M20 编排以 `tasking:<tid>` principal（role tasking）提交，按 MISSION 类别取得租约（AWR-04 §14.3）
+            own = {"mission": Owner.MISSION, "tasking": Owner.MISSION, "swarm": Owner.SWARM, "agent": Owner.AGENT}.get(str(role))
             if own is None:
                 return int(Reason.ROLE_FORBIDDEN)
             if op in LEASE_EXEMPT:

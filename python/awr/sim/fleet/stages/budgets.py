@@ -5,6 +5,10 @@ M07、M09、M10、M13 的行是分配给对应模块的上限；表值的修改�
 
 `fsm_min` 是 walking skeleton 的兜底 FSM（M09 未装配时由 M08 提供，见 `stages/fsm_min.py`），不在 §5.2 表内，
 预算按 M09 `fsm` 行的一半登记（本工作包设定，MS4 装配 M09 后该 stage 不再注册）。
+
+本表是 d1_250 档（N = 1000）的预算；sandbox100 档（N ≤ 12、识别物 ≤ 30）的预算与调度在 `stages/rates.py`（M08-FR-203）。
+D2 追加的行（M08 §15.4.2 末段）：fw_kin 0.004（N = 1000 全为固定翼的上界）、tap_targets 0.001、targets 0.004、perception
+0.025；order 区段追加 M21 086–089（自 M08 区段让出）、M18 170–174、M19 175–184、M20 185–194（M08-FR-204）。
 """
 
 from __future__ import annotations
@@ -41,6 +45,11 @@ BUDGET_CORE: dict[str, float] = {
     "mission_engine": 0.003,
     "coverage": 0.005,
     "director": 0.002,
+    # D2（M08 §15.4.2）
+    "fw_kin": 0.004,
+    "tap_targets": 0.001,
+    "targets": 0.004,
+    "perception": 0.025,
 }
 
 # 不属于 pipeline stage 但计入合计的项（inbox drain、events.flush、M08 慢任务）
@@ -51,11 +60,16 @@ GATE_TOTAL_CORE = 0.60
 
 # order 区段（M08 §6.4.2）：所有者 -> [(lo, hi)]（含端点）
 ORDER_RANGES: dict[str, tuple[tuple[int, int], ...]] = {
-    "M08": ((0, 14), (30, 99), (128, 129), (140, 149)),
+    "M08": ((0, 14), (30, 85), (90, 99), (128, 129), (140, 149)),
     "M07": ((15, 24),),
     "M09": ((25, 25), (110, 124), (130, 139)),
     "M10": ((26, 29), (150, 169)),
     "M13": ((100, 109),),
+    # D2（M08-FR-204）：125–127、195–199 保留
+    "M21": ((86, 89),),
+    "M18": ((170, 174),),
+    "M19": ((175, 184),),
+    "M20": ((185, 194),),
 }
 
 # 包前缀 -> 所有者（`owner` 缺省推断；M08 §6.4.2）
@@ -69,6 +83,12 @@ PACKAGE_OWNER: tuple[tuple[str, str], ...] = (
     ("awr.sim.mission", "M10"),
     ("awr.sim.planning", "M10"),
     ("awr.sim.sensors", "M13"),
+    # D2（M08-FR-204）
+    ("awr.sim.fixedwing", "M21"),
+    ("awr.sim.catalog", "M21"),
+    ("awr.sim.targets", "M18"),
+    ("awr.sim.perception", "M19"),
+    ("awr.sim.tasking", "M20"),
 )
 
 

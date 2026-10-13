@@ -9,6 +9,10 @@
 - `c % 10 == 9`：剧本事件桥（`scenario.event` 的 `target.spawn` 与带 `caps`/`sensors` 的 `vehicle.add`，5 Hz；M10 改为直接调用
   `spawn_target`、`configure_vehicle` 后同名目标按 TARGET_ID_DUP 忽略）。
 检测 tick 与 IMU 分片不同相位，任一次调用至多叠加 GNSS、IMU、检测中的两项。快进时 stage 频率不变。
+
+D2（M13-FR-203–206，§15.5）：每次调用先执行到期的机体命令（`gimbal`、`zoom`、`sensor/mode`，按 apply_tick），再推进指向源
+到期与 track 跟随、照度档变化时的 auto 成像模式切换（同一 tick 生效）、变焦（`dt` = 本 stage 步长），最后才是 D1 云台推进。
+调用序号与步长：M08 给出 D2 时钟档（`ctx.profile`）时取 `ctx.call_index`、`ctx.stage_dt`（M08 §15.7 变更请求 ②），否则按 d1_250 推算。
 """
 
 from __future__ import annotations
@@ -16,6 +20,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+
+import numpy as np
 
 if TYPE_CHECKING:
     from .runtime import SensorRuntime
@@ -28,6 +34,17 @@ log = logging.getLogger("awr.sim.sensors")
 
 def call_index(tick: int) -> int:
     return (int(tick) - PHASE) // EVERY
+
+
+def _call_and_dt(ctx: Any, tick: int) -> tuple[int, float]:
+    """(调用序号, 本 stage 步长 s)：M08 给出 D2 时钟档（`ctx.profile` 非空）时取 `ctx.call_index` 与 `ctx.stage_dt`，否则按 d1_250
+    的 `(tick − 2) // 5` 与 5 tick（D1 行为逐位不变；`call_index` 随流水线重建归零，D1 不用它）。"""
+    if getattr(ctx, "profile", None) is not None:
+        ci = getattr(ctx, "call_index", None)
+        sdt = float(getattr(ctx, "stage_dt", 0.0) or 0.0)
+        c = int(ci) if isinstance(ci, (int, np.integer)) else call_index(tick)
+        return c, (sdt if sdt > 0.0 else EVERY * float(ctx.dt_tick))
+    return call_index(tick), EVERY * float(ctx.dt_tick)
 
 
 def make_stage(rt: SensorRuntime) -> Callable[[Any, Any], None]:
@@ -46,9 +63,17 @@ def make_stage(rt: SensorRuntime) -> Callable[[Any, Any], None]:
         rt.sync(S, ctx)
         tick = int(ctx.tick)
         rt.gimbal.apply_pending(tick)
-        c = call_index(tick)
+        c, dt = _call_and_dt(ctx, tick)
         rt.stats["calls"] += 1
-        rt.gimbal.step(S, EVERY * float(ctx.dt_tick))
+        if rt.pblk is not None:
+            if rt.pending_cmds:
+                rt.apply_pending_cmds(tick)
+            if rt.d2_live or rt.pblk["src"].any():  # D1 机型（挂载掩码 0、只有缺省指向源）不进入 D2 推进
+                t_ns = int(getattr(ctx, "t_ns", 0))
+                rt.gimbal.step_sources(t_ns)
+                rt.payload.step_modes(ctx)
+                rt.payload.step_zoom(dt)
+        rt.gimbal.step(S, dt)
         gp = c % 5
         rt.gnss.step_part(S, ctx, gp)
         ip = None

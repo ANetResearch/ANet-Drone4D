@@ -50,14 +50,24 @@ RAW_FILES = {"shenzhen": "Shenzhen_sampled_5m.ply", "shanghai": "shanghai_sample
 NAMES = {"shenzhen": ("Shenzhen", "深圳"), "shanghai": ("Shanghai", "上海"), "newyork": ("New York", "纽约"),
          "sanfrancisco": ("San Francisco", "旧金山"), "suzhou": ("Suzhou", "苏州"), "chicago": ("Chicago", "芝加哥")}
 
+# ADR-109 第 3 条（R-D2-28）：六城经数据集权利方授权，在本项目自己的部署（含公开站与部署包）中使用；授权不经仓库或其
+# 许可证转授第三方，因此 `redistribution` 仍为 false（事实记录，ADR-034）。`name` 保持 "UrbanScene3D"：部署套件据此识别
+# 授权范围（tools/deploy/emax/worldpack.py）。world.json 不参与 contentVersion（manifest.NON_CONTENT），改写本段不改变内容版本
+# 与派生缓存键；已构建的世界用 `worldpkg dataset` 只重写元数据（awr.world.package.dataset）。
+AUTH_TERMS = ("经数据集权利方授权使用 (used under authorization of the dataset rights holders): ANet-Drone4D deployments, "
+              "including the public demo and its deployment bundles, serve World Packages built from UrbanScene3D; the "
+              "authorization is not passed on by the repository or its license (ADR-109, R-D2-28)")
 DATASET = {
     "name": "UrbanScene3D",
     "version": "virtual_cities-sampled (GitHub Release v0.0.1)",
     "url": "https://vcc.tech/UrbanScene3D",
     "citation": "Lin et al., Capturing, Reconstructing, and Simulating: the UrbanScene3D Dataset, ECCV 2022",
-    "license": "UrbanScene3D terms of use: non-commercial research only; see url",
+    "license": ("Used in ANet-Drone4D deployments under authorization of the dataset rights holders; anyone who downloads "
+                "the dataset remains bound by the UrbanScene3D terms of use (see url)"),
+    "terms": AUTH_TERMS,
     "redistribution": False,
-    "notice": "Recorded for provenance only; distribution follows ADR-034.",
+    "notice": ("Not included in the repository; ANet-Drone4D deployment bundles carry this World Package under the "
+               "authorization (ADR-109). Works that use it cite the ECCV 2022 paper (NOTICE, THIRD_PARTY_NOTICES.md section 4)."),
 }
 SOURCE_DATASET_LABEL = "UrbanScene3D (virtual cities, sampled 5M)"
 DESCRIPTION = "UrbanScene3D virtual city, sampled 5M points, normalised to world ENU (m, Z-up)."
