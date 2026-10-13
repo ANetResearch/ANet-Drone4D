@@ -12,7 +12,9 @@ import tailwindcss from '@tailwindcss/vite'
 const DEMO = process.env.VITE_AWR_DEMO === 'public'
 if (process.env.VITE_AWR_DEMO && !DEMO) throw new Error(`VITE_AWR_DEMO=${process.env.VITE_AWR_DEMO}: only "public" is defined (ADR-083)`)
 if (DEMO && process.env.VITE_AWR_TEST_SWITCHES === '1') throw new Error('VITE_AWR_DEMO=public cannot be combined with VITE_AWR_TEST_SWITCHES=1 (ADR-083)')
-const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\.tsx|app[\\/]i18n[\\/]|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|testSwitches)\.ts)|vite[\\/]preload-helper/
+// D2.2-L1: the landing page modules are app/demo/Landing*.ts(x) (header, sections, content, backdrop host); the mobile menu adds
+// sheet.tsx and its icon shim. The voxel renderer app/demo/voxelField.ts stays out on purpose (its own lazy chunk).
+const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\w*\.tsx?|app[\\/]i18n[\\/]|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|sheet|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types|lucide-compat)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|testSwitches)\.ts)|vite[\\/]preload-helper/
 const DEMO_MEDIA = ['demo-flight.webp', 'screenshot-hero.jpg', 'screenshot-streaming.jpg', 'screenshot-weather.jpg', 'screenshot-swarm.jpg',
   'screenshot-follow.jpg', 'screenshot-perf.jpg']
 
@@ -422,9 +424,11 @@ export default defineConfig({
             // the first module script of index.html loads before the application chunks (D2-FX-R2-web, D2-AC-41)
             { name: 'boot', test: BOOT_MODULES },
             { name: 'three', test: /node_modules[\\/]three[\\/]/ },
-            { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            // React's own useSyncExternalStore shim sits with React (D2.2-L1): Base UI's Dialog store (the landing page's
+            // mobile menu Sheet) needs it on the first screen, which may load only index, landing, react and the runtime
+            { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler|use-sync-external-store)[\\/]/ },
             // stores (zustand) are shared by the open interface page and the application, not part of r3f (WP-12 request)
-            { name: 'state', test: /node_modules[\\/](zustand|use-sync-external-store)[\\/]/ },
+            { name: 'state', test: /node_modules[\\/]zustand[\\/]/ },
             { name: 'r3f', test: /node_modules[\\/]@react-three[\\/]/ },
             // demo build: exactly the modules of the landing page (and, recursively, their dependencies not captured above)
             // form their own chunk; otherwise the landing page would import the whole ui chunk and, through it, the

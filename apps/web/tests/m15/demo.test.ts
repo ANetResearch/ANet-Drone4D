@@ -46,7 +46,7 @@ describe('public demo build switch', () => {
     i18n.setLocale('en')
     try {
       expect(i18n.t('hint.readOnly')).toBe('The shared show is read-only; open your own sandbox to issue commands')
-      expect(i18n.t('landing.launch')).toBe('Launch demo')
+      expect(i18n.t('landing.launch')).toBe('Enter shared show')
     } finally {
       i18n.setLocale('zh-CN')
     }

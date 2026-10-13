@@ -45,7 +45,7 @@ export const DEMO_ROUTES: ReadonlySet<string> = new Set(['root', 'world', 'world
 export const DEMO_HIDDEN_ACTIONS: ReadonlySet<string> = new Set(['replay.runs', 'jobs.open'])
 
 export const DEMO_REPO_URL = 'https://github.com/ANetResearch/ANet-Drone4D'
-export const DEMO_DOCS_URL = 'https://github.com/ANetResearch/ANet-Drone4D/tree/main/docs'
+export const DEMO_DOCS_URL = 'https://docs.agentnetwork.org.cn/drone4d/'
 
 /** world ids of a list allowed in this build (the seven worlds in the demo build, all of them outside it) */
 export function demoWorlds<T extends { id: string }>(list: readonly T[]): T[] {
