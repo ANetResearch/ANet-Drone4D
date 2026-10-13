@@ -166,7 +166,8 @@ def test_inside_all_kernel_matches_numpy(monkeypatch: pytest.MonkeyPatch) -> Non
             b_in, b_rows, b_r3 = rt._inside_all_r3(Ts, P)
             monkeypatch.setattr(KM, "HAVE_NUMBA", True)
             assert a_rows == b_rows
-            assert a_in.tobytes() == b_in.tobytes() and a_r3.tobytes() == b_r3.tobytes()
+            assert a_in.tobytes() == b_in.tobytes()
+            np.testing.assert_allclose(a_r3, b_r3, rtol=1e-12, atol=1e-15)  # numba 与 numpy 在不同 CPU 指令集上末位可能不同：浮点按 1e-12 相对容差比较
             IN, rows = rt._inside_all(Ts, P)               # 既有两元接口
             assert IN.tobytes() == a_in.tobytes() and rows == a_rows
             hits += int(a_in.sum())

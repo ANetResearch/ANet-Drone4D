@@ -23,7 +23,10 @@ def _assert_same(got: np.ndarray, ref: np.ndarray, name: str) -> None:
     Byte equality only holds on one CPU: numpy dispatches SIMD exp/log/pow (AVX-512 builds on CI runners) whose last ulp
     differs from the scalar libm path that the numba kernel and AVX2 machines use.
     """
-    if np.issubdtype(got.dtype, np.floating):
+    if got.dtype.names:  # structured rows: compare field by field
+        for f in got.dtype.names:
+            _assert_same(got[f], ref[f], f"{name}.{f}")
+    elif np.issubdtype(got.dtype, np.floating):
         np.testing.assert_allclose(got, ref, rtol=1e-12, atol=1e-12, err_msg=name)
     else:
         assert np.array_equal(got, ref), name
@@ -133,7 +136,7 @@ def test_full_query_fused_wind_matches_numpy(kind: str, model: str, with_wq: boo
             env.store_rows(agent, b)
         finally:
             KR.HAVE_NUMBA = True
-        assert env.rows.tobytes() == rows_nb.tobytes()
+        _assert_same(env.rows, rows_nb, "rows")
 
 
 @pytest.mark.parametrize("preset", ["fog", "thunderstorm", "blizzard", "sandstorm", "clear"])

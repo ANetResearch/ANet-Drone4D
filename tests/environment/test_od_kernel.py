@@ -46,4 +46,6 @@ def test_kernel_matches_numpy(preset: str, monkeypatch: pytest.MonkeyPatch) -> N
         b = env.optical_depth(p0, p1, t, wavelength_nm=lam)
         monkeypatch.setattr(EF._KOD, "HAVE_NUMBA", True)
         assert a.dtype == b.dtype and a.shape == b.shape
-        assert a.tobytes() == b.tobytes(), (preset, lam, np.flatnonzero(a != b)[:5])
+        # numba 内核与 numpy 参考在不同 CPU 指令集（AVX-512 与 AVX2 的向量化与 FMA 融合）上末位可能不同：按 1e-12 相对容差比较
+        # （与 test_wind_fused、test_gimbal 的口径一致），逐位一致只在固定开发机的基线中出现，不作为跨 CPU 判据
+        np.testing.assert_allclose(a, b, rtol=1e-12, atol=1e-15, err_msg=f"{preset} {lam}")

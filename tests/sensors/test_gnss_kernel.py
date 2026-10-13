@@ -40,5 +40,5 @@ def test_gnss_kernel_matches_numpy(bench_factory):
     a, ea = _run(bench_factory, False)
     b, eb = _run(bench_factory, True)
     for k in a:
-        assert a[k].tobytes() == b[k].tobytes(), k
+        np.testing.assert_allclose(a[k], b[k], rtol=1e-12, atol=1e-15, err_msg=k)  # numba 与 numpy 在不同 CPU 指令集上末位可能不同：浮点按 1e-12 相对容差比较
     assert ea == eb and len(ea) > 20
