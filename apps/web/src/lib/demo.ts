@@ -51,3 +51,24 @@ export const DEMO_DOCS_URL = 'https://docs.agentnetwork.org.cn/drone4d/'
 export function demoWorlds<T extends { id: string }>(list: readonly T[]): T[] {
   return DEMO_PUBLIC ? list.filter((w) => DEMO_WORLDS.includes(w.id)) : [...list]
 }
+
+// D2.2-W2: a recorded monitoring run for each of the six UrbanScene3D cities (shared drone fleet, nests, targets and
+// tasking, generated and captured offline by tools/sim/gen_city_watch.py and tools/sim/capture_city_watch.py; see
+// docs/impl/D2.2-W2-report.md §4). Deployed next to the world package at `/worlds/<id>/show/show.awrrt` (served as a
+// static file, worlds/ is outside git); replayed client-side from a `fake:` source (net/rt/FakeSource.ts), the same
+// in-process replay path the world-isolation test suite and perf/m15/tasks-d2.spec.ts already use for fixtures, now
+// reached through a production URL instead of a test-only switch. synthcity keeps the live shared show (scenario S7);
+// a city with no entry here falls back to static browsing (app/shell/surface.ts).
+export const CITY_SHOW_FIXTURE: Readonly<Record<string, string>> = {
+  shenzhen: '/worlds/shenzhen/show/show.awrrt',
+  suzhou: '/worlds/suzhou/show/show.awrrt',
+  newyork: '/worlds/newyork/show/show.awrrt',
+  chicago: '/worlds/chicago/show/show.awrrt',
+  shanghai: '/worlds/shanghai/show/show.awrrt',
+  sanfrancisco: '/worlds/sanfrancisco/show/show.awrrt',
+}
+/** the `fake:` realtime URL of a city's recorded show, or null when it has none (app/shell/surface.ts resolveSurface) */
+export function cityShowRtUrl(worldId: string | null): string | null {
+  const fixture = worldId ? CITY_SHOW_FIXTURE[worldId] : undefined
+  return fixture ? `fake:?world=${encodeURIComponent(worldId as string)}&fixture=${encodeURIComponent(fixture)}&loop=1` : null
+}

@@ -75,6 +75,17 @@ make deploy-nginx-check          # 可选：站点文件有改动时，在一次
 | `anet-drone4d-<release>.tar.gz` | 代码、配置、剧本、机型、演示前端（含 `build-info.json`）、`tools/deploy/`、`tools/sdk/`、许可与通知文件；顶层 `RELEASE`（构建信息：release、version、channel、commit、dirty、built_at）与 `MANIFEST.sha256`（约 15 MB） |
 | `worlds/` | 每个世界一个世界包 `world-<id>-<contentVersion>-<world.json 摘要>.tar.gz`（含构建状态）与一个派生缓存包 `geo-<id>-<cv>-<derive_sha8>.tar.gz`（含 Grid25），共享环境资产 `shared-env-<sha8>.tar.gz`，索引 `WORLDS.json` 与 `WORLDS.sha256`（七个世界合计约 1 GB，派生缓存压缩率高） |
 
+**D2.2-W2 六城模拟监测展示**：`tools/sim/gen_city_watch.py` 与 `tools/sim/capture_city_watch.py` 生成并离线录制的
+`worlds/<六城之一>/show/show.awrrt`（各约 3–4 MB）随世界包一并打包——`worldpack.py` 对每个世界整目录打包
+（`world-<id>-...tar.gz` 含 `<id>/**`），不需要为此改动打包脚本。**唯一要注意**：若开发机上已有该世界的旧世界包缓存在
+`.cache/deploy/emax/worlds/` 下（世界包按 `contentVersion` 与 `world.json` 摘要命名，而生成 `show/` 不改这两者），
+`worldpack.py` 的内容寻址复用会跳过重新打包；首次发布六城监测展示前，先删除这六个世界的旧包再执行 `make deploy-pack`：
+
+```bash
+rm -f .cache/deploy/emax/worlds/world-{shenzhen,suzhou,newyork,chicago,shanghai,sanfrancisco}-*.tar.gz
+make deploy-pack
+```
+
 `<release>` 形如 `20261012-083000-3f9a1c2d4e`（UTC 时刻与提交；没有 git 时为 `nogit`，工作区有改动时带 `-dirty`），启动屏显示
 `V0.2.0-demo · 3f9a1c2 · 2026-10-12`。世界包按内容版本与派生键命名：世界没变就复用同一个文件，rsync 只传新增的包。脚本会复核部署
 包内没有 `worlds/`、`data/`、`refs/`、`.cache/`、点云文件、超过 5 MB 的文件、本机凭据与部署口令，前端是演示构建且通过生产包

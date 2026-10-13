@@ -17,7 +17,10 @@ from .jsonio import sha256_file
 
 COORDINATE_HREF = "coordinate.json"
 NON_CONTENT = ("world.json", "qa/report.json")
-NON_CONTENT_DIRS = ("export/", ".work/")
+# D2.2-G: show/ holds the D2.2-W2 recorded monitoring show (tools/sim/capture_city_watch.py's show.awrrt) — a demo-time
+# realtime recording for the frontend, not point-cloud/terrain content; it carries no layers[] entry and must not move
+# contentVersion or fail V-W-11, so it is excluded from the manifest scan like export/ and .work/ (deploy README §2.1).
+NON_CONTENT_DIRS = ("export/", ".work/", "show/")
 CONVENTIONS = {"matrix": "row-major T_to_from", "quaternion": "xyzw, WORLD<-BODY(FLU)",
                "heading": "deg, north=0, clockwise", "windDirection": "meteorological-from",
                "render": "three Y-up: (x,y,z)=(E,U,-N)", "px4Boundary": "NED/FRD at PX4 adapter boundary only",

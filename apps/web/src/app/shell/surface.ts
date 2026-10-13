@@ -10,7 +10,7 @@
 // adds the `internal` modifier (hidden entries of the demo build come back, lazily loaded; app/shell/internal.ts).
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
-import { DEMO_PUBLIC, DEMO_WORLD } from '@/lib/demo'
+import { cityShowRtUrl, DEMO_PUBLIC, DEMO_WORLD } from '@/lib/demo'
 import { SANDBOX_API, SHARED_API } from '@/net/endpoint'
 import { currentRoute, onRoute, type RouteMatch } from '@/app/router/router'
 import { sandbox, sandboxStore, type SandboxSessionView } from '@/ui/sandbox/session'
@@ -54,14 +54,28 @@ export function resolveSurface(route: RouteLike | null, sess: Sess, showWorld: s
   if (id === 'world' || id === 'replay') {
     const w = route?.params.id ?? null
     if (!demo) return { surface: 'local', role: 'operator', rtPath: `${SHARED_API}/rt`, worldId: w, sid: null }
-    return w === (showWorld ?? DEMO_WORLD)
-      ? { surface: 'shared', role: 'viewer', rtPath: `${SHARED_API}/rt`, worldId: w, sid: null }
+    if (w === (showWorld ?? DEMO_WORLD)) return { surface: 'shared', role: 'viewer', rtPath: `${SHARED_API}/rt`, worldId: w, sid: null }
+    // D2.2-W2: a world with a recorded show (lib/demo CITY_SHOW_FIXTURE) is shared too, played back client-side
+    // (fake: source) instead of static point-cloud-only browsing; a world with none keeps the D2.2-W1 static surface
+    const replay = cityShowRtUrl(w)
+    return replay
+      ? { surface: 'shared', role: 'viewer', rtPath: replay, worldId: w, sid: null }
       : { surface: 'static', role: 'viewer', rtPath: null, worldId: w, sid: null }
   }
   if (prev) return prev
   return demo
     ? { surface: 'shared', role: 'viewer', rtPath: `${SHARED_API}/rt`, worldId: showWorld ?? DEMO_WORLD, sid: null }
     : { surface: 'local', role: 'operator', rtPath: `${SHARED_API}/rt`, worldId: null, sid: null }
+}
+
+// D2.2-W2: a city's recorded show plays back through the same 'shared' surface as the live demo (lib/demo
+// cityShowRtUrl sets rtPath to a `fake:` replay source), told apart only by that prefix. D2.2-FX-world: this used to
+// be the same three-line expression copied into AppHeader.tsx, ui/mobile/parts.tsx (RoleChip) and
+// ui/mobile/TabletShell.tsx (the breadcrumb) separately, and the third copy was missed when the other two were added
+// (TabletTopBar still read "shared demo" while the role chip next to it already said "simulated replay") — one
+// shared, directly testable function instead, so the three callers cannot drift again.
+export function isCityReplay(surface: Surface, rtPath: string | null): boolean {
+  return surface === 'shared' && typeof rtPath === 'string' && rtPath.startsWith('fake:')
 }
 
 /** session role of FR-202 (`sandbox-viewer` is the P1 watch link) */

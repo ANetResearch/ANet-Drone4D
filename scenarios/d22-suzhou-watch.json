@@ -1,0 +1,565 @@
+{
+  "schema": "awr.sandbox.snapshot.v1",
+  "contracts": "1.1.0",
+  "world_id": "suzhou",
+  "template_id": "d22-suzhou-watch",
+  "calendar": {
+    "start_utc": "2026-10-05T00:00:00Z",
+    "tz": "Asia/Shanghai"
+  },
+  "acoustic_bg": "urban",
+  "seed": 2202,
+  "env": {
+    "preset": "clear",
+    "overrides": {}
+  },
+  "nests": [
+    {
+      "id": "nest-a",
+      "name": "机巢箱 A",
+      "pos": [
+        810.0,
+        296.77,
+        0.02
+      ],
+      "kind": "box",
+      "slots": 6,
+      "energy": {
+        "mode": "swap",
+        "swap_s": 180,
+        "packs": [
+          {
+            "cells": 6,
+            "count": 8,
+            "capacity_ah": 10
+          }
+        ]
+      },
+      "chargers": [
+        {
+          "model": "c1_xr",
+          "count": 8,
+          "channels": 1,
+          "i_max_a": 10,
+          "cells_max": 6
+        }
+      ],
+      "turnaround_s": 60,
+      "launch_interval_s": 30,
+      "link_range_m": 3500
+    },
+    {
+      "id": "nest-b",
+      "name": "VTOL 起降台 B",
+      "pos": [
+        330.0,
+        -105.23,
+        0.01
+      ],
+      "kind": "vtol_pad",
+      "slots": 2,
+      "energy": {
+        "mode": "swap",
+        "swap_s": 180,
+        "packs": [
+          {
+            "cells": 12,
+            "count": 2,
+            "capacity_ah": 22
+          }
+        ]
+      },
+      "chargers": [
+        {
+          "model": "chg12s_ref",
+          "count": 2,
+          "channels": 1,
+          "i_max_a": 10,
+          "cells_max": 12
+        }
+      ],
+      "turnaround_s": 60,
+      "launch_interval_s": 30,
+      "link_range_m": 3500
+    }
+  ],
+  "vehicles": [
+    {
+      "id": "p600-01",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 一号",
+      "sensors": [
+        {
+          "name": "nir_ill",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "p600-02",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 二号",
+      "sensors": [
+        {
+          "name": "nir_ill",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "p600-03",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 三号",
+      "sensors": [
+        {
+          "name": "nir_ill",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "p600-04",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 四号",
+      "sensors": [
+        {
+          "name": "nir_ill",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "p600-05",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 五号",
+      "sensors": [
+        {
+          "name": "nir_ill",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "v1-01",
+      "model_id": "awr_v1",
+      "nest_id": "nest-b",
+      "label": "AWR-V1 一号"
+    },
+    {
+      "id": "v1-02",
+      "model_id": "awr_v1",
+      "nest_id": "nest-b",
+      "label": "AWR-V1 二号"
+    }
+  ],
+  "targets": [
+    {
+      "id": "person-01",
+      "label": "静止的人",
+      "class": "person",
+      "pos": [
+        -148.0,
+        86.0,
+        null
+      ],
+      "yaw_rad": 2.6,
+      "motion": {
+        "mode": "static"
+      },
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "person-02",
+      "label": "游走的人",
+      "class": "person",
+      "pos": [
+        -64.0,
+        -52.0,
+        null
+      ],
+      "motion": {
+        "mode": "random_walk",
+        "region": [
+          [
+            -92.0,
+            -80.0
+          ],
+          [
+            -36.0,
+            -80.0
+          ],
+          [
+            -36.0,
+            -24.0
+          ],
+          [
+            -92.0,
+            -24.0
+          ]
+        ],
+        "speed_mps": 1.0
+      },
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "vehicle-03",
+      "label": "沿路车辆",
+      "class": "vehicle",
+      "pos": [
+        170.0,
+        134.0,
+        null
+      ],
+      "yaw_rad": 0,
+      "motion": {
+        "mode": "path",
+        "loop": "pingpong",
+        "speed_mps": 3.0,
+        "path": [
+          [
+            130.0,
+            134.0,
+            null
+          ],
+          [
+            210.0,
+            134.0,
+            null
+          ]
+        ]
+      },
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 80,
+          "z_min_m": 0,
+          "z_max_m": 80,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 50,
+          "z_min_m": 0,
+          "z_max_m": 50,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "person-04",
+      "label": "静止的人",
+      "class": "person",
+      "pos": [
+        182.0,
+        158.0,
+        null
+      ],
+      "yaw_rad": 1.645,
+      "motion": {
+        "mode": "static"
+      },
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "person-05",
+      "label": "游走的人",
+      "class": "person",
+      "pos": [
+        176.0,
+        -190.0,
+        null
+      ],
+      "motion": {
+        "mode": "random_walk",
+        "region": [
+          [
+            148.0,
+            -218.0
+          ],
+          [
+            204.0,
+            -218.0
+          ],
+          [
+            204.0,
+            -162.0
+          ],
+          [
+            148.0,
+            -162.0
+          ]
+        ],
+        "speed_mps": 1.0
+      },
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "vehicle-06",
+      "label": "沿路车辆",
+      "class": "vehicle",
+      "pos": [
+        32.0,
+        -58.0,
+        null
+      ],
+      "yaw_rad": 0,
+      "motion": {
+        "mode": "path",
+        "loop": "pingpong",
+        "speed_mps": 3.0,
+        "path": [
+          [
+            32.0,
+            -98.0,
+            null
+          ],
+          [
+            32.0,
+            -18.0,
+            null
+          ]
+        ]
+      },
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 80,
+          "z_min_m": 0,
+          "z_max_m": 80,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 50,
+          "z_min_m": 0,
+          "z_max_m": 50,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "person-07",
+      "label": "静止的人",
+      "class": "person",
+      "pos": [
+        206.0,
+        26.0,
+        null
+      ],
+      "yaw_rad": -2.685,
+      "motion": {
+        "mode": "static"
+      },
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "type": "polyline_patrol",
+      "label": "巡线",
+      "params": {
+        "waypoints": [
+          [
+            -342.0,
+            -165.23,
+            null
+          ],
+          [
+            -324.0,
+            -213.23,
+            null
+          ],
+          [
+            -168.0,
+            -237.23,
+            null
+          ],
+          [
+            0.0,
+            -273.23,
+            null
+          ]
+        ],
+        "mode": "loop",
+        "speed_mps": 8.0,
+        "alt_m": 180.4,
+        "sensor_facing": "down",
+        "auto_detour": true
+      },
+      "common": {
+        "priority": "normal",
+        "on_detect": "notify",
+        "allowed_nests": [
+          "nest-a"
+        ],
+        "allowed_models": [
+          "p600_mid360"
+        ]
+      }
+    },
+    {
+      "type": "point_watch",
+      "label": "定点监视",
+      "params": {
+        "point": [
+          -8.43,
+          225.45,
+          null
+        ],
+        "alt_m": 79.7,
+        "alt_ref": "agl",
+        "dwell_s": null,
+        "look": {
+          "mode": "target",
+          "target": "person-01"
+        }
+      },
+      "common": {
+        "priority": "normal",
+        "on_detect": "notify",
+        "allowed_nests": [
+          "nest-a"
+        ],
+        "allowed_models": [
+          "p600_mid360"
+        ]
+      }
+    }
+  ]
+}

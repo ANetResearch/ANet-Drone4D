@@ -13,7 +13,7 @@ import { useT } from '@/app/i18n'
 import { useFormFactor } from '@/lib/formFactor'
 import { INPUT } from '@/lib/tokens/input.gen'
 import { prefs, prefsStore, usePrefs } from '@/stores/prefs'
-import { useSurface } from '@/app/shell/surface'
+import { isCityReplay, useSurface } from '@/app/shell/surface'
 import { BrandLockup } from '@/ui/brand'
 import { Button } from '@/ui/components/ui/button'
 import { BottomDrawer, BottomSheet, DRAWER_SNAPS } from '@/ui/components/ui/bottom-sheet'
@@ -63,12 +63,17 @@ export function TabletTopBar() {
   const world = useSurface((s) => s.worldId)
   const surface = useSurface((s) => s.surface)
   const sid = useSurface((s) => s.sid)
+  const rtPath = useSurface((s) => s.rtPath)
+  // D2.2-FX-world: isCityReplay (app/shell/surface.ts) is the same test AppHeader.tsx and parts.tsx RoleChip use, so
+  // the breadcrumb and the role chip right next to it always agree — a city's recorded show used to read "shared
+  // demo" here while the chip already said "simulated replay".
+  const crumbKey = surface === 'static' ? 'role.static' : isCityReplay(surface, rtPath) ? 'role.cityReplay' : 'mobile.shared'
   return (
     <header data-figure="header" data-mobile-header="tablet" className="mobile-top border-b bg-card">
       <div className="flex h-12 items-center gap-2 px-2">
       <BrandLockup compact />
       <span className="min-w-0 truncate text-hud-sub text-muted-foreground" data-crumb="world">
-        {`${world ?? '—'} › ${surface === 'sandbox' ? (sid ?? '') : t(surface === 'static' ? 'role.static' : 'mobile.shared')}`}
+        {`${world ?? '—'} › ${surface === 'sandbox' ? (sid ?? '') : t(crumbKey)}`}
       </span>
       <ConnDot />
       <div className="ml-auto flex shrink-0 items-center gap-1">

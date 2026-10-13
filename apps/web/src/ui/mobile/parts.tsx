@@ -17,7 +17,7 @@ import { rtClient } from '@/net/rt'
 import { usePrefs } from '@/stores/prefs'
 import { selectionStore } from '@/stores/selection'
 import { targetsActions } from '@/stores/targets'
-import { useSurface } from '@/app/shell/surface'
+import { isCityReplay, useSurface } from '@/app/shell/surface'
 import { useIdentity } from '@/stores/identity'
 import { touch } from '@/viewport/facade'
 import { Badge } from '@/ui/components/ui/badge'
@@ -90,6 +90,7 @@ export function EntityPages({ visible = true, emptyWhenList = false, forced }: {
 export function RoleChip({ compact = false }: { compact?: boolean }) {
   const t = useT()
   const surface = useSurface((s) => s.surface)
+  const rtPath = useSurface((s) => s.rtPath)
   const internal = useIdentity((s) => s.tier === 'internal')
   if (internal) {
     return (
@@ -99,12 +100,19 @@ export function RoleChip({ compact = false }: { compact?: boolean }) {
       </Badge>
     )
   }
-  const key = surface === 'sandbox' ? 'role.sandbox' : surface === 'static' ? 'role.static' : surface === 'local' ? 'role.local' : 'role.shared'
-  const icon: IconKey = surface === 'sandbox' ? 'sandbox.mine' : surface === 'static' ? 'layer.pointcloud' : 'layer.visible'
+  // D2.2-W2: a city's recorded show (surface 'shared', a `fake:` replay rtPath) is labelled as a simulated replay
+  const replay = isCityReplay(surface, rtPath)
+  const key = surface === 'sandbox' ? 'role.sandbox' : surface === 'static' ? 'role.static' : surface === 'local' ? 'role.local'
+    : replay ? 'role.cityReplay' : 'role.shared'
+  const icon: IconKey = surface === 'sandbox' ? 'sandbox.mine' : surface === 'static' ? 'layer.pointcloud' : replay ? 'tl.history' : 'layer.visible'
+  // D2.2-FX-world: compact (phone top bar) drops the label for every other role, but the live shared demo and a
+  // city's recorded replay only differed by this icon's shape there — add a short label for the replay case so it
+  // reads from text, not only from recognizing `tl.history` vs `layer.visible`.
+  const compactLabel = compact && replay ? t('role.cityReplay.short') : null
   return (
     <Badge variant={surface === 'sandbox' ? 'secondary' : 'outline'} className="h-6 gap-1" data-role-chip={surface}>
       <Icon icon={icon} />
-      {compact ? null : t(key)}
+      {compact ? compactLabel : t(key)}
     </Badge>
   )
 }

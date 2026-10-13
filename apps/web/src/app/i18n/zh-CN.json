@@ -2577,5 +2577,8 @@
  "landing.open.data": "UrbanScene3D 六城经数据集权利方授权在本项目部署中使用（Lin et al., ECCV 2022），仓库不包含其点云数据；使用该数据集请引用原论文。",
  "landing.open.citeSwitch": "引用条目",
  "landing.open.copy": "复制 BibTeX",
- "landing.open.copied": "已复制"
+ "landing.open.copied": "已复制",
+ "role.cityReplay": "模拟回放 · 只读",
+ "role.cityReplay.short": "回放",
+ "hint.cityReplay": "本城市为离线生成的模拟监测录制，循环回放；开启我的沙盒即可操作"
 }
