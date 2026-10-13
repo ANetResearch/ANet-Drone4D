@@ -1,0 +1,82 @@
+{
+ "schema": "awr.sandbox.world_costs.v1",
+ "generator": "tools/bench/sandbox/world_costs.py (M16), run world-costs-20261006T185053Z (D2-ACC-1 round 1, ADR-033 protocol); committed by D2-FX-R2",
+ "generated_unix_ns": "1791313589579983984",
+ "host": {
+  "cpu_model": "Intel(R) Xeon(R) CPU E5-2603 v4 @ 1.70GHz",
+  "cores": 8,
+  "mem_mb": 64303.8
+ },
+ "worlds": [
+  {
+   "world": "synthcity",
+   "world_class": "S",
+   "anon_mb": 152.2,
+   "ws_mb": 1.4,
+   "c0": 0.658,
+   "available": true,
+   "measured": true,
+   "src": "tools/bench/sandbox/world_costs.py run world-costs-20261006T185053Z"
+  },
+  {
+   "world": "shenzhen",
+   "world_class": "S",
+   "anon_mb": 151.4,
+   "ws_mb": 2.8,
+   "c0": 0.3536,
+   "available": true,
+   "measured": true,
+   "src": "tools/bench/sandbox/world_costs.py run world-costs-20261006T185053Z"
+  },
+  {
+   "world": "suzhou",
+   "world_class": "S",
+   "anon_mb": 152.2,
+   "ws_mb": 3.1,
+   "c0": 0.5378,
+   "available": true,
+   "measured": true,
+   "src": "tools/bench/sandbox/world_costs.py run world-costs-20261006T185053Z"
+  },
+  {
+   "world": "newyork",
+   "world_class": "S",
+   "anon_mb": 153.4,
+   "ws_mb": 3.2,
+   "c0": 0.3751,
+   "available": true,
+   "measured": true,
+   "src": "tools/bench/sandbox/world_costs.py run world-costs-20261006T185053Z"
+  },
+  {
+   "world": "chicago",
+   "world_class": "L",
+   "anon_mb": 161.2,
+   "ws_mb": 5.1,
+   "c0": 0.4692,
+   "available": true,
+   "measured": true,
+   "src": "tools/bench/sandbox/world_costs.py run world-costs-20261006T185053Z"
+  },
+  {
+   "world": "shanghai",
+   "world_class": "L",
+   "anon_mb": 167.6,
+   "ws_mb": 12.5,
+   "c0": 0.6687,
+   "available": true,
+   "measured": true,
+   "src": "tools/bench/sandbox/world_costs.py run world-costs-20261006T185053Z"
+  },
+  {
+   "world": "sanfrancisco",
+   "world_class": "L",
+   "anon_mb": 168.0,
+   "ws_mb": 10.7,
+   "c0": 0.3864,
+   "available": true,
+   "measured": true,
+   "src": "tools/bench/sandbox/world_costs.py run world-costs-20261006T185053Z"
+  }
+ ]
+}

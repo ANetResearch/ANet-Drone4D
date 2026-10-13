@@ -1,0 +1,78 @@
+{
+  "schema": "awr.sandbox.template.v1",
+  "template_id": "t6_manual",
+  "world_id": "sanfrancisco",
+  "name_zh": "T6 手动飞行与传感器视图",
+  "summary_zh": "1 架已起飞的 P600 在识别物附近悬停：可接管手动飞行，切换日视、夜视与热像",
+  "first_feedback_zh": "接管提示",
+  "recommended": false,
+  "calendar_default": {"start_local": "10:00", "tz": "America/Los_Angeles"},
+  "acoustic_bg": "urban",
+  "env": {"preset": "clear", "overrides": {}},
+  "seed": 16,
+  "nests": [
+    {
+      "id": "nest-a",
+      "name": "机巢箱 A",
+      "pos": [-424.9, -219.7, -15.91],
+      "kind": "box",
+      "slots": 1,
+      "energy": {"mode": "swap", "swap_s": 180, "packs": [{"cells": 6, "count": 1, "capacity_ah": 10}]},
+      "chargers": [{"model": "c1_xr", "count": 1, "channels": 1, "i_max_a": 10, "cells_max": 6}],
+      "turnaround_s": 60,
+      "launch_interval_s": 30,
+      "link_range_m": 3500
+    }
+  ],
+  "vehicles": [{"id": "p600-01", "model_id": "p600_mid360", "nest_id": "nest-a", "label": "P600 一号"}],
+  "targets": [
+    {
+      "id": "person-01",
+      "label": "静止的人",
+      "class": "person",
+      "pos": [-361, 20, null],
+      "yaw_rad": 1.526,
+      "motion": {"mode": "static"},
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "type": "point_watch",
+      "label": "悬停待接管",
+      "params": {
+        "point": [-369, -159.8],
+        "alt_m": 60,
+        "alt_ref": "agl",
+        "dwell_s": null,
+        "look": {"mode": "target", "target": "person-01"}
+      },
+      "common": {"priority": "low", "on_detect": "notify"}
+    }
+  ],
+  "camera": {"center_enu_m": [-361, 20, 0], "range_m": 900, "pitch_deg": -40, "yaw_deg": 0},
+  "anchors_ref": "scenarios/sandbox/anchors/sanfrancisco.json"
+}

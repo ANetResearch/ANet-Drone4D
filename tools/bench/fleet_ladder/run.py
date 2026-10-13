@@ -18,6 +18,12 @@ loadavg。输出 `bench-result.json`（schema `awr.bench.result.v1`）与 `fleet
 协议（ADR-033）：`flock runs/.perf.lock`；开跑前 1 分钟 loadavg ≤ 4（最长等 10 min）；每档 `--runs` 次取中位；运行期间 load
 均值 ≥ 6 时 CPU 阈值不判定。`--smoke`：跳过锁与负载等待、单次短跑，只做功能自检。
 失败（supervisor 未就绪、sim-core 未运行、机群未就绪、窗口内重启）时该规模点记为失败、不写 NaN，退出码 1（D1 验收第 1 轮 4.4）。
+D2（M08-FR-228）：`--clock {d1_250,sandbox100}` 选时钟档（`AWR_CLOCK_PROFILE`）；sandbox100 档（或 `--targets`、`--perception full`）
+按沙盒 sim-core 的组合根追加 D2 插件（M21、M18、M19、M20，`AWR_PLUGINS_EXTRA`，`--d2-plugins` 可关闭）；`--targets n` 在机群
+就绪后（骨架布设为起飞后，剧本口径为测量起点标记之后）放置 n 个识别物（M18 `target/add`，模板类别轮转、环形分布），实际放置
+数（perf 自报 `n_target`）不足时本次运行无效；`--perception {off,full}`（`AWR_PERCEPTION_MODE`，`full` 时 M19 让接力与巡查几何
+下的射线预算打满）。记录写入 `clock_profile`、`n_target`、`perception` 与逐 stage 成本（含 targets、perception、tap_targets）；
+sandbox100 的门禁（10 架 + 30 识别物、×1）：sim-core ≤ 0.16 核、单步 p99 ≤ 8 ms（D2-AC-08、M08-AC-202）。
 门禁（N = 1000）：RTF ≥ 0.99、CPU ≤ 0.6 核（> 0.40 告警）、单步 p99 ≤ 3 ms、最大 ≤ 12 ms、追帧饱和 0；并发口径另判 tick 数据
 年龄 p99 ≤ 15 ms、recorder ≤ 0.1 核、写入 ≤ 60 MB/min。
 """
@@ -57,6 +63,11 @@ from awr.contracts import LAYOUT_ID, bus_keys  # noqa: E402
 GATES_1000 = [("rtf", ">=", 0.99), ("cpu_core", "<=", 0.6), ("step_p99_us", "<=", 3000.0), ("step_max_us", "<=", 12000.0),
               ("catchup_saturated", "==", 0)]
 GATES_CONCURRENT = [("tick_age_p99_ms", "<=", 15.0), ("cpu_recorder_core", "<=", 0.1), ("rec_write_mb_per_min", "<=", 60.0)]
+GATES_SANDBOX100 = [("rtf", ">=", 0.99), ("cpu_core", "<=", 0.16), ("step_p99_us", "<=", 8000.0)]  # D2-AC-08（10 架 + 30 识别物）
+# 沙盒 sim-core 的组合根追加的 D2 插件（与 sandbox-pool `spawner.D2_PLUGINS` 相同；`--d2-plugins auto` 时 sandbox100 档追加，
+# 经 `AWR_PLUGINS_EXTRA` 叠加在 supervisor 按 procs[].plugins 注入的 D1 组合之后）
+D2_PLUGINS = ("awr.sim.catalog.plugin", "awr.sim.fixedwing.plugin", "awr.sim.targets.plugin", "awr.sim.perception.plugin",
+              "awr.sim.tasking.plugin")
 
 
 class LadderError(RuntimeError):
@@ -159,6 +170,19 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
     """单次运行；失败抛 LadderError（不写 NaN 记录）。返回 {record, detail}。"""
     scenario = a.scenario if a.scenario and a.scenario != "none" else None
     env = dict(os.environ, AWR_KERNEL=a.kernel, AWR_SIM_AUTOPLAY="1", AWR_RUNS_DIR=str(runs_dir), PYTHONUNBUFFERED="1")
+    if a.clock:
+        env["AWR_CLOCK_PROFILE"] = a.clock  # D2：时钟档（M08-FR-201、FR-228）
+    if a.clock == "sandbox100" and n > 48:
+        env["AWR_FLEET_CAPACITY"] = "1024"  # sandbox100 缺省容量 64（ClockProfile.fleet_capacity）：大机群表征档放大
+    else:
+        env.pop("AWR_FLEET_CAPACITY", None)
+    if a.perception:
+        env["AWR_PERCEPTION_MODE"] = a.perception
+    d2 = a.d2_plugins == "on" or (a.d2_plugins == "auto" and (a.clock == "sandbox100" or a.targets > 0 or a.perception == "full"))
+    if d2:
+        env["AWR_PLUGINS_EXTRA"] = ",".join(D2_PLUGINS)  # 沙盒 sim-core 的组合根（D2-AC-08 第 1 轮：未装配 M18/M19，n_target = 0）
+    else:
+        env.pop("AWR_PLUGINS_EXTRA", None)
     env.pop("AWR_SUPERVISOR_PID", None)
     if scenario:
         env.update(AWR_SCENARIO=scenario, AWR_SIM_N="0", AWR_SCENARIO_LOAD="1")
@@ -172,7 +196,7 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
         env["AWR_REC_AUTOSTART"] = "1"  # 骨架布设没有剧本的 record 开关：recorder 就绪即开始录制（M12）
     sup = _Supervisor(env, only)
     bus = load = cl = guard = None
-    detail: dict[str, Any] = {"n": n, "rate": rate, "scenario": scenario, "procs": only}
+    detail: dict[str, Any] = {"n": n, "rate": rate, "scenario": scenario, "procs": only, "d2_plugins": d2}
     try:
         run_id = sup.wait_ready()
         detail["run_id"] = run_id
@@ -212,7 +236,11 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
                 w = load.wait_mark(a.wait_mark, a.fleet_timeout)
                 if w is None:
                     raise LadderError(f"剧本标记 {a.wait_mark} 未在 {a.fleet_timeout:.0f} s 内出现")
-            ids = [e["id"] for e in load.roster()]
+            ids = [e["id"] for e in load.roster() if e.get("kind", "uav") != "target"]
+            if a.targets:  # 剧本口径同样放置识别物（D2-AC-08 第 1 轮：只有骨架布设放置，剧本口径 n_target = 0）
+                homes = load.positions()
+                detail["targets"] = load.place_targets(a.targets, homes)
+                time.sleep(a.settle)
         else:
             ros: list[dict] = []
             while time.monotonic() - t_fleet < a.fleet_timeout:
@@ -230,6 +258,8 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
                 raise LadderError(f"起飞未完成：{fly}")
             homes = load.positions()
             load.orbit_all(ids, homes)
+            if a.targets:
+                detail["targets"] = load.place_targets(a.targets, homes)
             time.sleep(a.settle)
         detail["fleet_ready_s"] = round(time.monotonic() - t_fleet, 1)
         if rate != 1.0:
@@ -297,6 +327,9 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
         load_stats = sampler.stop()
         if c1 is None or c0 is None or _proc_pid(b"awr.sim.runtime", run_id) != pid:
             raise LadderError("测量窗口内 sim-core 重启或退出（PERF-E008）")
+        n_tgt = int((perf[-1] if perf else {}).get("n_target", 0) or 0)
+        if a.targets and n_tgt < a.targets:  # 要求的识别物没有放置时本次无效（不得以 n_target = 0 的结果判定 D2-AC-08）
+            raise LadderError(f"识别物未全部放置：n_target {n_tgt}/{a.targets}（{detail.get('targets')}）")
         win = w1 - w0
         tick_age = None
         if a.clients > 0 and token:
@@ -309,12 +342,20 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
             if isinstance(p50, (int, float)) and isinstance(p99, (int, float)):
                 tick_age = {"p50": float(p50), "p99": float(p99)}
         stage: dict[str, float] = {}
+        slow: dict[str, float] = {}
         tail = perf[-max(1, int(dur)):]
         for p in tail:
             for k, v in (p.get("stage_ms_per_s") or {}).items():
                 stage[k] = stage.get(k, 0.0) + v / len(tail)
+            # 慢任务成本（D2-INT，d2-FX-R2-other-to-M16 第 2 条：第 1 轮 N = 1000 的尖峰在慢任务 `m13.payload_pub` 中，只看 stage 无法定位）
+            for k, v in (p.get("slow_ms_per_s") or {}).items():
+                if isinstance(v, (int, float)):
+                    slow[k] = slow.get(k, 0.0) + float(v) / len(tail)
         kern = perf[-1].get("kernel", a.kernel) if perf else a.kernel
+        last = perf[-1] if perf else {}
         rec = {"n": n, "rate": rate, "clients": a.clients, "with_flight60": bool(a.with_flight60), "dur_s": round(win, 2),
+               "clock_profile": last.get("clock_profile") or a.clock or "d1_250", "n_target": last.get("n_target", 0),
+               "perception": a.perception or "off", "cost_core_per_rate": last.get("cost_core_per_rate"),
                "rtf": round((h1.t_sim_ns - h0.t_sim_ns) / 1e9 / win, 4),
                "cpu_core": round((c1 - c0) / win, 4),
                "api_cpu_core": None if ac0 is None or ac1 is None else round((ac1 - ac0) / win, 4),
@@ -323,7 +364,8 @@ def run_one(n: int, dur: float, a: argparse.Namespace, *, rate: float, runs_dir:
                "step_us": {"p50": float(max(s[0] for s in steps)), "p99": float(max(s[1] for s in steps)),
                            "max": float(max(s[2] for s in steps))},
                "catchup_saturated": int(h1.catchup_saturated - h0.catchup_saturated),
-               "stage_ms_per_s": {k: round(v, 3) for k, v in stage.items()}, "tick_age_ms": tick_age,
+               "stage_ms_per_s": {k: round(v, 3) for k, v in stage.items()},
+               "slow_ms_per_s": {k: round(v, 3) for k, v in slow.items()}, "tick_age_ms": tick_age,
                "rss_mb": {"start": rss0, "end": C.rss_mb(pid)}, "kernel": kern if kern in ("numba", "numpy") else "numba",
                "load": load_stats, "ipc": {"cmd_failed": load.failed, "cmd_sent": load.n_cmd,
                                            "fleet_ready_s": detail["fleet_ready_s"], "n_vehicles": len(ids)}}
@@ -372,6 +414,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rate", default="1")
     ap.add_argument("--kernel", default="numba", choices=("numba", "numpy"))
     ap.add_argument("--scenario", default="ladder-shenzhen", help="剧本 id（缺省 ladder-shenzhen）；none 为骨架布设")
+    ap.add_argument("--clock", default=None, choices=("d1_250", "sandbox100"), help="时钟档（D2，M08-FR-228）")
+    ap.add_argument("--targets", type=int, default=0, help="放置的识别物数（D2；需 M18 插件）")
+    ap.add_argument("--perception", default=None, choices=("off", "full"), help="感知负载（D2；full 时射线预算打满）")
+    ap.add_argument("--d2-plugins", default="auto", choices=("auto", "on", "off"),
+                    help="追加沙盒 sim-core 的 D2 插件（auto：sandbox100 档、--targets 或 --perception full 时追加）")
     ap.add_argument("--profile", default=None, help="剧本 profile（例如 n1000，M16 §6.4.8）；缺省为 n<N>")
     ap.add_argument("--wait-mark", default="ladder.steady", help="剧本口径的测量起点标记")
     ap.add_argument("--churn", type=float, default=None)
@@ -444,6 +491,12 @@ def main(argv: list[str] | None = None) -> int:
     (out / "fleet-ladder.json").write_text(json.dumps({"schema": "awr.bench.fleet_ladder.v1", "runs": details},
                                                       ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     for rec in records:
+        if rec.get("clock_profile") == "sandbox100" and rec.get("rate", 1.0) == 1.0 and not a.smoke and rec["n"] <= 12:
+            vals = {"rtf": rec["rtf"], "cpu_core": rec["cpu_core"], "step_p99_us": rec["step_us"]["p99"]}
+            res, ok1 = C.judge([(k, vals[k], op, thr) for k, op, thr in GATES_SANDBOX100], rec["load"]["mean"] < 6)
+            ok &= ok1
+            print(json.dumps(res, ensure_ascii=False))
+            continue
         if rec["n"] == 1000 and rec.get("rate", 1.0) == 1.0 and not a.smoke:
             vals = {"rtf": rec["rtf"], "cpu_core": rec["cpu_core"], "step_p99_us": rec["step_us"]["p99"],
                     "step_max_us": rec["step_us"]["max"], "catchup_saturated": rec["catchup_saturated"]}

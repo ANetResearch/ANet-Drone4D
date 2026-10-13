@@ -188,6 +188,7 @@ function genScene() {
     trailDefault: color('--trail-default'), trailSelected: color('--trail-selected'), pathPlanned: color('--path-planned'), pathDone: color('--path-done'),
     fovEdge: color('--fov-edge'), fovFill: color('--fov-fill'),
     windRamp: [1, 2, 3, 4, 5].map((i) => color(`--wind-ramp-${i}`)),
+    fieldRamp: [1, 2, 3, 4, 5].map((i) => color(`--field-ramp-${i}`)),
     precipRain: color('--precip-rain'), precipSnow: color('--precip-snow'), precipDust: color('--precip-dust'), cloud2d: color('--cloud-2d'),
     classColors: Array.from({ length: 16 }, (_x, i) => color(`--pc-class-${i}`)),
   }
@@ -206,6 +207,8 @@ function genScene() {
     '  glyphPalette: readonly Lin3[]',
     '  trailDefault: Lin3; trailSelected: Lin3; pathPlanned: Lin3; pathDone: Lin3; fovEdge: LinA; fovFill: LinA',
     '  windRamp: readonly Lin3[]; precipRain: LinA; precipSnow: LinA; precipDust: LinA; cloud2d: Lin3',
+    '  /** D2.1 field-view grey bands 1-5 (AWR-04 §15.11.2) */',
+    '  fieldRamp: readonly Lin3[]',
     '  /** anet-classes@1 index 0-15 (15 is reserved, g600 placeholder) */',
     '  classColors: readonly Lin3[]',
     '}',

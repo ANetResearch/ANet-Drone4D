@@ -1,0 +1,155 @@
+{
+  "schema": "awr.sandbox.template.v1",
+  "template_id": "t3_area_patrol",
+  "world_id": "sanfrancisco",
+  "name_zh": "T3 多机区域巡查",
+  "summary_zh": "2 个机巢箱、3 架无人机（P600 与 AWR-Q1）分区巡查，区内 3 个游走的人",
+  "first_feedback_zh": "子区与检测",
+  "recommended": false,
+  "calendar_default": {"start_local": "10:00", "tz": "America/Los_Angeles"},
+  "acoustic_bg": "urban",
+  "env": {"preset": "clear", "overrides": {}},
+  "seed": 13,
+  "nests": [
+    {
+      "id": "nest-a",
+      "name": "机巢箱 A",
+      "pos": [-375.1, -295.9, -15.66],
+      "kind": "box",
+      "slots": 4,
+      "energy": {"mode": "swap", "swap_s": 180, "packs": [{"cells": 6, "count": 2, "capacity_ah": 10}]},
+      "chargers": [{"model": "c1_xr", "count": 2, "channels": 1, "i_max_a": 10, "cells_max": 6}],
+      "turnaround_s": 60,
+      "launch_interval_s": 30,
+      "link_range_m": 3500
+    },
+    {
+      "id": "nest-b",
+      "name": "机巢箱 B",
+      "pos": [-305.2, -299, -15.4],
+      "kind": "box",
+      "slots": 2,
+      "energy": {"mode": "swap", "swap_s": 180, "packs": [{"cells": 6, "count": 0, "capacity_ah": 10}]},
+      "chargers": [{"model": "c1_xr", "count": 1, "channels": 1, "i_max_a": 10, "cells_max": 6}],
+      "turnaround_s": 60,
+      "launch_interval_s": 30,
+      "link_range_m": 3500
+    }
+  ],
+  "vehicles": [
+    {"id": "p600-01", "model_id": "p600_mid360", "nest_id": "nest-a", "label": "P600 一号"},
+    {"id": "p600-02", "model_id": "p600_mid360", "nest_id": "nest-a", "label": "P600 二号"},
+    {"id": "q1-01", "model_id": "awr_q1", "nest_id": "nest-b", "label": "AWR-Q1 一号"}
+  ],
+  "targets": [
+    {
+      "id": "person-01",
+      "label": "游走的人 一",
+      "class": "person",
+      "pos": [-347, 134, null],
+      "motion": {"mode": "random_walk", "region": [[-377, 104], [-317, 104], [-317, 164], [-377, 164]]},
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "person-02",
+      "label": "游走的人 二",
+      "class": "person",
+      "pos": [-467, 74, null],
+      "motion": {"mode": "random_walk", "region": [[-497, 44], [-437, 44], [-437, 104], [-497, 104]]},
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "person-03",
+      "label": "游走的人 三",
+      "class": "person",
+      "pos": [-267, 54, null],
+      "motion": {"mode": "random_walk", "region": [[-297, 24], [-237, 24], [-237, 84], [-297, 84]]},
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "type": "area_patrol",
+      "label": "多机区域巡查",
+      "params": {
+        "polygon": [[-561, -180], [-161, -180], [-161, 220], [-561, 220]],
+        "n_vehicles": "auto",
+        "target_class": "person",
+        "level_req": "R",
+        "revisit_s": 300
+      },
+      "common": {"priority": "normal", "on_detect": "notify"}
+    }
+  ],
+  "camera": {"center_enu_m": [-361, 20, 0], "range_m": 900, "pitch_deg": -40, "yaw_deg": 0},
+  "anchors_ref": "scenarios/sandbox/anchors/sanfrancisco.json"
+}

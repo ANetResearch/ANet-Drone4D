@@ -50,3 +50,6 @@ blob-report/
 *.swp
 .DS_Store
 *.log
+
+# Local runtime state (identity lockout and signing keys written by local runs)
+/var/

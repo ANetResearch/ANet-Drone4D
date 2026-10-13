@@ -1,12 +1,18 @@
-# /etc/systemd/system/anet-drone4d.service：ANet Drone4D 公开演示站（T4，AWR-19 §3.7、§4.4；ADR-085）。
-# 由 tools/deploy/emax/install.sh 安装（不要手改已安装的副本：下次安装会覆盖）。外层 systemd 只保活 supervisor，
-# sim-core 与 api 的启动顺序、心跳、退避与熔断由 supervisor 负责（AWR-19 §4.2）；supervisor 收到 SIGTERM 后按 api、sim-core
-# 的顺序优雅停止子进程（每步 5 s），因此 KillMode=mixed 只把 SIGTERM 发给主进程，超时后再一并 SIGKILL。
-# 日志：supervisor 的 stdout 与 stderr（READY 行、状态转移、告警，JSON 行）进 journal（journalctl -u anet-drone4d）；
-# 子进程日志另写 /opt/anet-drone4d/var/runs/<run>/logs/*.log（10 MB × 5 轮转）。
+# /etc/systemd/system/anet-drone4d.service：ANet Drone4D 公开演示站 V0.2-demo（T4，AWR-19 §3.7、§4.4；ADR-085、ADR-091）。
+# 由 tools/deploy/emax/install.sh 安装（不要手改已安装的副本：下次安装会覆盖；调整配额请用 install.sh --cpu-quota、
+# --memory-high，它们写入 drop-in anet-drone4d.service.d/limits.conf，安装时不覆盖）。
+# 外层 systemd 只保活 supervisor；sim-core、show-api、sandbox-pool、sandbox-api 的启动顺序、心跳、退避与熔断由 supervisor
+# 负责（AWR-19 §4.2），沙盒 sim-core 由 sandbox-pool 拉起与监管。supervisor 收到 SIGTERM 后按 api、sim-core、其余逆启动序
+# 优雅停止子进程（池 12 s 内结束全部沙盒），因此 KillMode=mixed 只把 SIGTERM 发给主进程，超时后再一并 SIGKILL（含委派子树
+# 中的沙盒 sim-core）。
+# cgroup（AWR-04 §4.4.4）：Delegate=yes 把单元子树委派给 awr；ExecStart 先经 cgroup-exec.sh 建立 core/ 与 sandbox/{ctl,plan,sb}、
+# 把自身移入 core/、启用 cpu 与 memory 控制器并写入子组限值，再 exec supervisor。无委派或非 cgroup v2 时脚本跳过并照常启动
+# （池按 N_max − 1、nice 与 RSS 看门狗兜底，M17-FR-026）。
+# 日志：supervisor 的 stdout 与 stderr（READY 行、状态转移、告警、cgroup-exec 的一行结论，JSON 行）进 journal
+# （journalctl -u anet-drone4d）；子进程日志另写 /opt/anet-drone4d/var/runs/<run>/logs/*.log 与 var/sandbox/runs/<sid>/。
 
 [Unit]
-Description=ANet Drone4D public demo (World Runtime, synthcity, read-only)
+Description=ANet Drone4D public demo V0.2-demo (World Runtime: shared show S7 and multi-tenant sandboxes)
 Documentation=https://github.com/ANetResearch/ANet-Drone4D/blob/main/tools/deploy/emax/README.md
 After=network-online.target
 Wants=network-online.target
@@ -17,7 +23,7 @@ User=awr
 Group=awr
 WorkingDirectory=/opt/anet-drone4d
 EnvironmentFile=/etc/anet-drone4d/env
-ExecStart=/opt/anet-drone4d/current/.venv/bin/python -m awr.runtime.supervisor -c /opt/anet-drone4d/current/configs/runtime.yaml
+ExecStart=/opt/anet-drone4d/current/tools/deploy/emax/cgroup-exec.sh /opt/anet-drone4d/current/.venv/bin/python -m awr.runtime.supervisor -c /opt/anet-drone4d/current/configs/runtime.yaml
 Restart=always
 RestartSec=5
 KillMode=mixed
@@ -25,13 +31,18 @@ KillSignal=SIGTERM
 TimeoutStartSec=120
 TimeoutStopSec=30
 
-# 资源：4 核、约 2.8 GB 可用内存的共用主机，不与 ANet 生产服务争抢（实测 sim-core 约 0.25 核、全部进程约 0.6 GB）
-CPUQuota=200%
+# 资源（AWR-04 §4.4，Q-D2-01、Q-D2-09）：4 核、约 2.6 GB 可用内存的共用主机。CPUQuota 250% 时 N_max = 4（本机口径），
+# 200% 时 N_max = 2；MemoryHigh 让页缓存在触及 MemoryMax 之前先被回收，core/ 的 memory.min 450M 使回收优先落在沙盒组。
+# 运维未批准时以 install.sh --cpu-quota 200% --memory-high 1.6G 写 drop-in（cgroup-exec.sh 与池按实际值重算子组限值与 N_max）
+CPUQuota=250%
+MemoryHigh=1.8G
 MemoryMax=2G
+Delegate=yes
 Nice=5
 LimitNOFILE=65536
 
-# 加固：不提权；/usr、/boot、/etc 只读（/opt/anet-drone4d 与 /dev/shm 可写）；不可见其他用户的家目录与 /tmp
+# 加固：不提权；/usr、/boot、/etc 只读（/opt/anet-drone4d 与 /dev/shm 可写）；不可见其他用户的家目录与 /tmp。
+# 不设 ProtectControlGroups：委派的 cgroup 子树必须可写（cgroup-exec.sh、sandbox-pool 的叶子组）
 NoNewPrivileges=true
 ProtectSystem=full
 ProtectHome=true

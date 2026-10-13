@@ -1,0 +1,46 @@
+{
+  "schema": "awr.sandbox.template.v1",
+  "template_id": "t2_polyline",
+  "world_id": "sanfrancisco",
+  "name_zh": "T2 多点巡线",
+  "summary_zh": "1 架 P600 沿四个航点循环巡线，可切换 FPV 与传感器视图",
+  "first_feedback_zh": "航段与 FPV",
+  "recommended": false,
+  "calendar_default": {"start_local": "10:00", "tz": "America/Los_Angeles"},
+  "acoustic_bg": "urban",
+  "env": {"preset": "clear", "overrides": {}},
+  "seed": 12,
+  "nests": [
+    {
+      "id": "nest-a",
+      "name": "机巢箱 A",
+      "pos": [-375.1, -295.9, -15.66],
+      "kind": "box",
+      "slots": 4,
+      "energy": {"mode": "swap", "swap_s": 180, "packs": [{"cells": 6, "count": 2, "capacity_ah": 10}]},
+      "chargers": [{"model": "c1_xr", "count": 2, "channels": 1, "i_max_a": 10, "cells_max": 6}],
+      "turnaround_s": 60,
+      "launch_interval_s": 30,
+      "link_range_m": 3500
+    }
+  ],
+  "vehicles": [{"id": "p600-01", "model_id": "p600_mid360", "nest_id": "nest-a", "label": "P600 一号"}],
+  "targets": [],
+  "tasks": [
+    {
+      "type": "polyline_patrol",
+      "label": "四点循环巡线",
+      "params": {
+        "waypoints": [[-511, -90], [-211, -90], [-211, 130], [-511, 130]],
+        "mode": "loop",
+        "alt_m": 70,
+        "sensor_facing": "forward",
+        "auto_detour": true,
+        "duration_s": null
+      },
+      "common": {"priority": "normal", "on_detect": "notify"}
+    }
+  ],
+  "camera": {"center_enu_m": [-361, 20, 0], "range_m": 900, "pitch_deg": -40, "yaw_deg": 0},
+  "anchors_ref": "scenarios/sandbox/anchors/sanfrancisco.json"
+}

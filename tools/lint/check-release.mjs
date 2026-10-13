@@ -8,12 +8,18 @@
 //          redistribution and World Packages are rebuilt locally (ADR-034)
 //   REL-03 a credential: private-key blocks and common token shapes, and every value of ~/.config/awr/*.env (12 characters or
 //          more) found verbatim in a text file; values are compared in memory and never printed, only the file and the key name
-// Usage: node tools/lint/check-release.mjs [--files <list-file>]   (the list file holds one repository-relative path per line)
+//   REL-04 the deployment admin secret (internal identity passphrase, ADR-123; AWR-04 §15.9.5 item 2): when this machine has a
+//          deployment secret file (~/.config/awr/admin.secret, or the file AWR_ADMIN_SECRET_FILE points to), its first line
+//          (6 characters or more) must not appear verbatim in any text file of the release set; compared in memory, never
+//          printed (only the file, line and column are reported); without git the rule still runs, over the lint scope
+// Usage: node tools/lint/check-release.mjs [--files <list-file>] [--secret-file <path>]
+//   the list file holds one path per line (repository-relative or absolute); --secret-file overrides the deployment secret
+//   file for REL-04 (tests use a temporary file with a random value)
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { ROOT, Reporter, isBinaryPath, isMain, lineCol, run } from './_common.mjs'
+import { isAbsolute, join } from 'node:path'
+import { ROOT, Reporter, isBinaryPath, isMain, lineCol, run, scopeFiles } from './_common.mjs'
 
 export const MAX_BYTES = 5_000_000
 const DATA_DIRS = /^(worlds|data\/raw|runs|refs|\.cache|apps\/web\/dist)\//
@@ -52,6 +58,25 @@ export function localSecrets(dir = join(homedir(), '.config', 'awr')) {
   return out
 }
 
+export const DEPLOY_SECRET_MIN = 6
+
+/** the deployment admin secret for REL-04: { source, value } or null. Candidates in order: an explicit path, then
+ *  AWR_ADMIN_SECRET_FILE, then ~/.config/awr/admin.secret; the first readable one counts. Never printed. */
+export function deploySecret(explicit = null, env = process.env, home = homedir()) {
+  const cands = explicit ? [explicit] : [env.AWR_ADMIN_SECRET_FILE, join(home, '.config', 'awr', 'admin.secret')].filter(Boolean)
+  for (const p of cands) {
+    let text
+    try {
+      text = readFileSync(p, 'utf8')
+    } catch {
+      continue
+    }
+    const value = text.split('\n', 1)[0].replace(/\r$/, '')
+    return value.length >= DEPLOY_SECRET_MIN ? { source: p, value } : null
+  }
+  return null
+}
+
 /** the release set, or null when git cannot tell (no git, not a repository) */
 export function releaseSet() {
   try {
@@ -63,8 +88,8 @@ export function releaseSet() {
   }
 }
 
-/** checks of one release entry (pure apart from the reporter): size, data paths, credentials */
-export function checkEntry(f, size, text, secrets, R) {
+/** checks of one release entry (pure apart from the reporter): size, data paths, credentials, deployment secret */
+export function checkEntry(f, size, text, secrets, R, deploy = null) {
   if (size > MAX_BYTES) R.add(f, 1, 1, 'REL-01', `${size} bytes > ${MAX_BYTES} (5 MB); shrink it or keep it out of the repository`)
   if (DATA_DIRS.test(f)) R.add(f, 1, 1, 'REL-02', 'generated or third-party data directory (worlds, data/raw, runs, refs, .cache, dist) must not be published')
   else if (DATA_FILES.test(f)) R.add(f, 1, 1, 'REL-02', 'point-cloud or Potree container file must not be published (UrbanScene3D terms, ADR-034)')
@@ -83,6 +108,13 @@ export function checkEntry(f, size, text, secrets, R) {
       R.add(f, line, col, 'REL-03', `contains the value of ${s.key} from ~/.config/awr/${s.file}; remove it and rotate the credential`)
     }
   }
+  if (deploy && deploy.value.length >= DEPLOY_SECRET_MIN) {
+    const i = text.indexOf(deploy.value)
+    if (i >= 0) {
+      const [line, col] = lineCol(text, i)
+      R.add(f, line, col, 'REL-04', 'contains the deployment admin secret (internal identity passphrase); remove it and rotate the secret with install.sh --admin-secret-file')
+    }
+  }
 }
 
 if (isMain(import.meta.url)) {
@@ -91,15 +123,35 @@ if (isMain(import.meta.url)) {
     const R = new Reporter('check-release')
     const i = args.indexOf('--files')
     const files = i >= 0 ? readFileSync(args[i + 1], 'utf8').split('\n').map((s) => s.trim()).filter(Boolean) : releaseSet()
+    const j = args.indexOf('--secret-file')
+    const deploy = deploySecret(j >= 0 ? args[j + 1] : null)
     if (files === null) {
       R.note('git is not available or this is not a repository; release set not checked (set GIT_DIR and GIT_WORK_TREE)')
-      R.finish({ files: 0 })
+      if (deploy) {
+        // REL-04 does not wait for git: with a deployment secret on this machine, scan the lint scope (sources, docs and
+        // release-facing documents) for it; the other rules need the exact release set
+        const scope = scopeFiles({ docs: true })
+        for (const f of scope) {
+          let text = null
+          try {
+            const buf = readFileSync(join(ROOT, f))
+            if (!isBinaryPath(f) && !buf.includes(0)) text = buf.toString('utf8')
+          } catch {
+            continue
+          }
+          if (text !== null) checkEntry(f, 0, text, [], R, deploy)
+        }
+        R.note(`REL-04 only: scanned ${scope.length} files of the lint scope for the deployment secret`)
+        R.finish({ files: scope.length, deploy_secret: true, scope: 'lint' })
+        return
+      }
+      R.finish({ files: 0, deploy_secret: false })
       return
     }
     const secrets = localSecrets()
     let bytes = 0
     for (const f of files) {
-      const abs = join(ROOT, f)
+      const abs = isAbsolute(f) ? f : join(ROOT, f)
       let st
       try {
         st = statSync(abs)
@@ -113,8 +165,8 @@ if (isMain(import.meta.url)) {
         const buf = readFileSync(abs)
         if (!buf.includes(0)) text = buf.toString('utf8')
       }
-      checkEntry(f, st.size, text, secrets, R)
+      checkEntry(f, st.size, text, secrets, R, deploy)
     }
-    R.finish({ files: files.length, bytes, local_secret_values: secrets.length })
+    R.finish({ files: files.length, bytes, local_secret_values: secrets.length, deploy_secret: Boolean(deploy) })
   })
 }

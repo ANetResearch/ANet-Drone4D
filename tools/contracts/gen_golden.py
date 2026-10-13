@@ -5,6 +5,7 @@ Python (numpy dtypes and awr.contracts.frame) is the reference; TS and Python te
     packages/contracts/golden/layouts/<schemaName>.bin   N random records per layout (seeded)
     packages/contracts/golden/layouts/values.json        decoded raw values of the first rows of every .bin
     packages/contracts/golden/layouts/vectors.json       g04 §5.5 golden byte vectors
+    packages/contracts/golden/layouts/target_vectors.json  AWR-17 §17.7.3 TargetLite32 golden vectors (D2)
     packages/contracts/golden/rt/time.json               TIME frames: every TimeState x bit7 x reserved bits
     packages/contracts/golden/rt/batch.json              BATCH frames incl. unknown encodings and reserved bits
     packages/contracts/golden/commands/admission.json    admission symbol for every (op, FlightState, FAILSAFE)
@@ -127,7 +128,41 @@ def gen_layouts() -> dict[Path, bytes]:
                          "pose_src": int(ctrl[3]), "full64_hex": rec.tobytes().hex(), "lite32_hex": lite.tobytes().hex()})
         out.append(item)
     files[GOLDEN / "layouts" / "vectors.json"] = (json.dumps({"schema": "awr.golden.state_vectors.v1", "source": "g04 §5.5; AWR-17 §6.5", "vectors": out}, indent=1) + "\n").encode()
+    files[GOLDEN / "layouts" / "target_vectors.json"] = gen_target_vectors()
     return files
+
+
+def gen_target_vectors() -> bytes:
+    """AWR-17 §17.7.3 golden vectors of awr.TargetLite32.v1 (class, state, best and flags bytes are frozen; D2 contracts 1.1.0)."""
+    TC, AW, CR, PL, PS = enums.TargetClass, enums.Awareness, enums.CriterionMode, enums.PerceptionLevel, enums.PerceptionSensor
+    B = layouts.TARGET_LITE32_BITS
+    cases = [
+        # name, class, (awareness, criterion, moving, occupied, sound_on, enabled), (level, captured, relay, sensor), flags bits, expected bytes
+        ("person_static_unaware", TC.PERSON, (AW.UNAWARE, CR.GEOMETRIC, 0, 0, 0, 1), (PL.NONE, 0, 0, PS.NONE), (0, 0, 0), (0x01, 0x80, 0x00, 0x00)),
+        ("person_walk_eo_captured_relay", TC.PERSON, (AW.UNAWARE, CR.GEOMETRIC, 1, 0, 0, 1), (PL.R, 1, 1, PS.EO), (0, 0, 0), (0x01, 0x90, 0x1E, 0x00)),
+        ("dog_reacting_physical_barking_lwir", TC.DOG, (AW.REACTING, CR.PHYSICAL, 1, 1, 1, 1), (PL.D, 0, 0, PS.LWIR), (0, 1, 0), (0x04, 0xFA, 0x31, 0x02)),
+    ]
+    out = []
+    for i, (name, cls, st, best, fl, exp) in enumerate(cases):
+        rec = np.zeros(1, layouts.TARGET_LITE32)
+        rec["agent_no"], rec["class"] = i, int(cls)
+        rec["state"] = layouts.pack_bits(B["state"], awareness=st[0], criterion=st[1], moving=st[2], occupied=st[3], sound_on=st[4], enabled=st[5])
+        rec["best"] = layouts.pack_bits(B["best"], level=best[0], captured=best[1], relay=best[2], sensor=best[3])
+        rec["flags"] = layouts.pack_bits(B["flags"], hidden=fl[0], discovered_recent=fl[1], cfg_rev=fl[2])
+        rec["pos"] = [120.5 + 10 * i, -40.25, 3.5]
+        rec["heading_rad"] = 0.5 * i
+        rec["speed_cms"] = [0, 120, 150][i]
+        rec["alertness_u8"] = [128, 128, 230][i]
+        rec["discovered_n"] = [0, 0, 3][i]
+        rec["n_vol"] = [2, 2, 2][i]
+        rec["keepout_r_m"] = [320.0, 320.0, 270.0][i]
+        got = (int(rec["class"][0]), int(rec["state"][0]), int(rec["best"][0]), int(rec["flags"][0]))
+        assert got == exp, (name, [hex(x) for x in got])
+        out.append({"name": name, "class": got[0], "state": got[1], "best": got[2], "flags": got[3], "hex": rec.tobytes().hex(),
+                    "decoded": record_values(rec[0], next(s for s in L.load_json("rt/layouts.json")["schemas"] if s["schemaName"] == "awr.TargetLite32.v1"))})
+    doc = {"schema": "awr.golden.target_vectors.v1", "source": "AWR-17 §17.7.3", "layout": "awr.TargetLite32.v1",
+           "schema_hash": layouts.SCHEMA_HASH["awr.TargetLite32.v1"], "vectors": out}
+    return (json.dumps(doc, indent=1, ensure_ascii=False) + "\n").encode()
 
 
 def gen_time() -> bytes:

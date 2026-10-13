@@ -9,7 +9,11 @@ up as a small diff. `--check` exits 1 when the committed snapshot differs from t
 tests/contracts/test_openapi_snapshot.py runs the same comparison and also checks that every REST error code raised by the
 api is registered in reasons.json.
 
-Usage: python tools/contracts/gen_openapi.py [--check]
+Sandbox (D2, AWR-17 §17.5, API-AC-046): `--app sandbox` writes packages/contracts/rest/sandbox.openapi.snapshot.json. While
+`awr.api.sandbox_main.openapi_for_snapshot()` (M11, WP-03) does not exist the document is the design table of
+tools/contracts/sandbox_api.py (SB-00 to SB-78); afterwards it is the live schema of the sandbox-api, like the D1 snapshot.
+
+Usage: python tools/contracts/gen_openapi.py [--check] [--app show|sandbox|all]   (default all)
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = ROOT / "packages" / "contracts" / "rest" / "openapi.snapshot.json"
+SANDBOX_SNAPSHOT = ROOT / "packages" / "contracts" / "rest" / "sandbox.openapi.snapshot.json"
 # environment the app reads while it is built; cleared so that the snapshot does not depend on the caller's shell
 _ENV_KEYS = ("AWR_PROFILE", "AWR_SUPERVISOR_PID", "AWR_SCENARIOS_DIR", "AWR_WORLDS_DIR", "AWR_RUNS_DIR", "AWR_WEB_DIST")
 
@@ -63,25 +68,54 @@ def canonical(spec: dict) -> str:
     return json.dumps(spec, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="OpenAPI snapshot of the api (packages/contracts/rest/openapi.snapshot.json)")
-    ap.add_argument("--check", action="store_true")
-    a = ap.parse_args(argv)
-    text = canonical(live_schema())
-    if a.check:
-        old = SNAPSHOT.read_text(encoding="utf-8") if SNAPSHOT.exists() else ""
+def sandbox_schema() -> dict:
+    """Live sandbox-api schema when the M11 hook exists, else the frozen design table (tools/contracts/sandbox_api.py)."""
+    sys.path.insert(0, str(ROOT / "python"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        from awr.api.sandbox_main import openapi_for_snapshot  # type: ignore[attr-defined]
+    except ImportError:
+        openapi_for_snapshot = None
+    if openapi_for_snapshot is not None:
+        saved = {k: os.environ.pop(k) for k in _ENV_KEYS if k in os.environ}
+        try:
+            return _stable_operation_ids(openapi_for_snapshot())
+        finally:
+            os.environ.update(saved)
+    import contracts_lib
+    import sandbox_api
+
+    return sandbox_api.design_openapi(contracts_lib.contracts_version())
+
+
+def _one(path: Path, text: str, check: bool, label: str) -> int:
+    if check:
+        old = path.read_text(encoding="utf-8") if path.exists() else ""
         if old != text:
             diff = difflib.unified_diff(old.splitlines(), text.splitlines(), "snapshot", "live", lineterm="", n=1)
             sys.stderr.write("\n".join(list(diff)[:60]) + "\n")
-            print("gen_openapi.py --check: REST surface differs from packages/contracts/rest/openapi.snapshot.json; "
+            print(f"gen_openapi.py --check: {label} REST surface differs from {path.relative_to(ROOT)}; "
                   "review the change and run python tools/contracts/gen_openapi.py (or make contracts)", file=sys.stderr)
             return 1
         return 0
-    SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-    SNAPSHOT.write_text(text, encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
     spec = json.loads(text)
-    print(f"wrote {SNAPSHOT.relative_to(ROOT)}: {len(spec.get('paths', {}))} paths")
+    print(f"wrote {path.relative_to(ROOT)}: {len(spec.get('paths', {}))} paths")
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="OpenAPI snapshots (packages/contracts/rest/{openapi,sandbox.openapi}.snapshot.json)")
+    ap.add_argument("--check", action="store_true")
+    ap.add_argument("--app", choices=("show", "sandbox", "all"), default="all")
+    a = ap.parse_args(argv)
+    rc = 0
+    if a.app in ("show", "all"):
+        rc |= _one(SNAPSHOT, canonical(live_schema()), a.check, "api")
+    if a.app in ("sandbox", "all"):
+        rc |= _one(SANDBOX_SNAPSHOT, canonical(sandbox_schema()), a.check, "sandbox-api")
+    return rc
 
 
 if __name__ == "__main__":

@@ -1,0 +1,81 @@
+{
+  "schema": "awr.sandbox.template.v1",
+  "template_id": "t1_point_watch",
+  "world_id": "shanghai",
+  "name_zh": "T1 定点巡航",
+  "summary_zh": "1 个机巢箱、2 架 P600：定点悬停并以云台锁定 1 个静止的人",
+  "first_feedback_zh": "约 40 s 明确捕获",
+  "recommended": false,
+  "calendar_default": {"start_local": "10:00", "tz": "Asia/Shanghai"},
+  "acoustic_bg": "urban",
+  "env": {"preset": "clear", "overrides": {}},
+  "seed": 11,
+  "nests": [
+    {
+      "id": "nest-a",
+      "name": "机巢箱 A",
+      "pos": [-1030.4, -1061.5, 0],
+      "kind": "box",
+      "slots": 4,
+      "energy": {"mode": "swap", "swap_s": 180, "packs": [{"cells": 6, "count": 2, "capacity_ah": 10}]},
+      "chargers": [{"model": "c1_xr", "count": 2, "channels": 1, "i_max_a": 10, "cells_max": 6}],
+      "turnaround_s": 60,
+      "launch_interval_s": 30,
+      "link_range_m": 3500
+    }
+  ],
+  "vehicles": [
+    {"id": "p600-01", "model_id": "p600_mid360", "nest_id": "nest-a", "label": "P600 一号"},
+    {"id": "p600-02", "model_id": "p600_mid360", "nest_id": "nest-a", "label": "P600 二号"}
+  ],
+  "targets": [
+    {
+      "id": "person-01",
+      "label": "静止的人",
+      "class": "person",
+      "pos": [-781, -905, null],
+      "yaw_rad": 0.439,
+      "motion": {"mode": "static"},
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "type": "point_watch",
+      "label": "定点巡航",
+      "params": {
+        "point": [-943.9, -981.6],
+        "alt_m": 60,
+        "alt_ref": "agl",
+        "dwell_s": null,
+        "look": {"mode": "target", "target": "person-01"}
+      },
+      "common": {"priority": "normal", "on_detect": "notify"}
+    }
+  ],
+  "camera": {"center_enu_m": [-781, -905, 0], "range_m": 900, "pitch_deg": -40, "yaw_deg": 0},
+  "anchors_ref": "scenarios/sandbox/anchors/shanghai.json"
+}

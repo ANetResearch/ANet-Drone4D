@@ -4,6 +4,11 @@
 两档写入同一 glb 的两个 mesh：`lowpoly`（≤ 300 三角形）与 `lowpoly_s`（≤ 150 三角形，Tier S）。尺寸取自 params.yaml：
 `geometry.arm_xy_m`（桨轴 x/y 偏移）、`geometry.rotor_z_m`（桨盘高度，缺省 0.12 m）、`prop.d_m`（桨径）、`geometry.wheelbase_m`；
 PX4 quad_x 桨位（FLU）：(+a, −a)、(−a, +a)、(+a, +a)、(−a, −a)；hex_x 按 60° 均布。glTF (x, y, z) = (y_flu, z_flu, x_flu)。
+
+D2（AWR-20 §7.1；AWR-04 §14.2 WP-02 的"固定翼低模"）：`fixed_wing` 为机身盒 + 主翼 + 平尾 + 垂尾 + 推进桨盘（机尾）；
+`vtol_quadplane` 另加两根纵向升力杆与 4 个升力电机和桨盘（升力桨位取 `geometry.arm_xy_m`、桨径取 `prop.d_m`）。尺寸取
+`airframe.span_m`、`airframe.length_m`、`airframe.wing_area_m2`（平均弦长 = S / b），缺省回退 `geometry.size_m`。参考机型的
+`model/model.yaml` 取 `source: null`，以 `--as-hero` 同时写 hero 档（fallback lowpoly_only）。
 用法：python tools/vehicles/lowpoly.py [--vehicle vehicles/p600] [--out <dir>] [--as-hero] [--copy-web]
 """
 
@@ -81,7 +86,57 @@ def rotor_positions(frame: str, n: int, a: float) -> list[tuple[float, float]]:
     return [(r * math.cos(math.radians(30 + 360 * i / n)), r * math.sin(math.radians(30 + 360 * i / n))) for i in range(n)]
 
 
+def _merge(parts: list[tuple[np.ndarray, np.ndarray]]) -> tuple[np.ndarray, np.ndarray]:
+    vs, fs, off = [], [], 0
+    for v, f in parts:
+        vs.append(v)
+        fs.append(f + off)
+        off += len(v)
+    return np.vstack(vs), np.vstack(fs)
+
+
+def _fw_dims(params: dict) -> tuple[float, float, float]:
+    """(翼展 b、机长 L、平均弦长 c)，单位 m。"""
+    af = params.get("airframe") or {}
+    size = val((params.get("geometry") or {}).get("size_m")) or {}
+    b = float(val(af.get("span_m")) or max(float(size.get("w", 0.0)), 1.0))
+    L = float(val(af.get("length_m")) or max(float(size.get("l", 0.0)), 0.6))
+    S = val(af.get("wing_area_m2"))
+    c = float(S) / b if S else 0.12 * b
+    return b, L, c
+
+
+def build_fixed_wing(params: dict, *, small: bool) -> tuple[np.ndarray, np.ndarray]:
+    """固定翼与 VTOL 的低模（FLU，原点在重心附近，x 向前）。"""
+    b, L, c = _fw_dims(params)
+    h = 0.11 * L  # 机身高与宽
+    parts = [_box((0.0, 0.0, 0.0), (L / 2, h / 2, h / 2)),                                     # 机身
+             _box((0.05 * L, 0.0, 0.35 * h), (c / 2, b / 2, 0.012)),                         # 主翼
+             _box((-0.42 * L, 0.0, 0.25 * h), (0.3 * c, 0.18 * b, 0.008)),                   # 平尾
+             _box((-0.42 * L, 0.0, 0.25 * h + 0.06 * b), (0.3 * c, 0.008, 0.06 * b))]        # 垂尾
+    prop_r = max(0.12, 0.08 * b)
+    disc = _disc((0.0, 0.0, 0.0), prop_r, 8 if small else 16, double=not small)
+    # 推进桨盘在机尾，桨盘平面垂直于 x：(y, z) 平面上的圆
+    v = disc[0][:, [2, 0, 1]].copy()
+    v[:, 0] = -L / 2 - 0.02
+    parts.append((v, disc[1]))
+    if (params.get("frame") or {}).get("type") == "vtol_quadplane":
+        geo = params.get("geometry") or {}
+        a = float(val(geo.get("arm_xy_m")) or 0.3 * b)
+        d = float(val((params.get("prop") or {}).get("d_m")) or 0.4)
+        zr = 0.35 * h + 0.06
+        for y in (-a, a):
+            parts.append(_arm((a, y, zr - 0.04), (-a, y, zr - 0.04), 0.035, 0.03))           # 纵向升力杆
+            for x in (-a, a):
+                if not small:
+                    parts.append(_prism((x, y, zr - 0.02), 0.03, 0.05, 6))
+                parts.append(_disc((x, y, zr + 0.01), d / 2, 8 if small else 16, double=not small))
+    return _merge(parts)
+
+
 def build(params: dict, *, small: bool) -> tuple[np.ndarray, np.ndarray]:
+    if (params.get("frame") or {}).get("type") in ("fixed_wing", "vtol_quadplane"):
+        return build_fixed_wing(params, small=small)
     geo = params["geometry"]
     a = float(val(geo["arm_xy_m"]))
     rz = float(val(geo.get("rotor_z_m", {"value": 0.12})))
@@ -139,7 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     if name is None and my.exists():
         model = yaml.safe_load(my.read_text(encoding="utf-8"))
         name = Path(next(o for o in model["outputs"] if o["name"] == "lowpoly")["path"]).name
-    name = name or f"{params['id'].split('_')[0]}_lowpoly.glb"
+    name = name or (f"{params['id']}_lowpoly.glb" if str(params["id"]).startswith("awr_") else
+                    f"{params['id'].split('_')[0]}_lowpoly.glb")
     out = out_dir / name
     tris = write_glb(params, out)
     print(f"lowpoly {out} triangles={tris}")

@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url'
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-// AWR-18 §13.2 scan scope (D1-AC-20; release-facing documents added by ADR-079)
+// AWR-18 §13.2 scan scope (D1-AC-20; release-facing documents added by ADR-079; D2 baseline docs/04 and docs/20 added, AWR-04 appendix B.3 L-09)
 export const INCLUDE_DIRS = ['apps', 'python', 'packages', 'tools', 'scenarios', 'configs', 'vehicles', 'tests', 'mk']
 export const INCLUDE_FILES = ['Makefile']
-export const DOC_GLOBS = [/^docs\/03-[^/]*\.md$/, /^docs\/1[0-9]-[^/]*\.md$/, /^docs\/modules\//, /^docs\/README\.md$/, /^docs\/impl\//]
+export const DOC_GLOBS = [/^docs\/0[34]-[^/]*\.md$/, /^docs\/[12][0-9]-[^/]*\.md$/, /^docs\/modules\//, /^docs\/README\.md$/, /^docs\/impl\//]
 // release-facing documents outside docs/ (ADR-079: the repository front page, contribution and security notes, notices and the
 // hosted CI workflow); like the docs they get the emoji and glyph rules only
 export const RELEASE_DOCS = ['README.md', 'README.zh-CN.md', 'CONTRIBUTING.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md', 'NOTICE', 'CITATION.cff']

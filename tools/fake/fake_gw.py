@@ -9,6 +9,11 @@
 
 `--record <out.awrrt>` 把第一个连接双向的全部帧写成 `.awrrt`（格式 AWR-16 §13.9，读写库 `awr.contracts.frame`）。
 
+D2（WP-01，AWR-17 §17.11 末段）：`--d2` 追加 D2 topic（识别物摘要 TargetLite32、识别物详情、感知、载荷、导航、雷达、声阵列、机巢、任务、
+接力统计）、roster 的 `kind = target` 条目与 22 种 D2 事件（数据由 `d2_synth.py` 按仿真时刻确定性生成，前 12 架机有逐机 D2 通道）；
+`--sandbox` 另提供沙盒端点 `/api/sandbox/v1/sessions/<sid>/rt`（serverInfo 带 `sandbox` 与 `clock.tick_hz = 100`，topic `sandbox/session`）
+与最小沙盒 REST（meta、worlds、templates、openapi.json、target_classes、创建与读取会话、续期、结束、识别物、机巢与任务列表），供 UI 先行开发。
+
 握手（17 §6.2）：子协议必须含 `awr.rt.v1`（否则 HTTP 400 与 `AWR-Supported-Protocols`）；`bearer.<token>` 接受任意值（替身不鉴权）；
 依次发送 serverInfo、全量 advertise、TIME；10 s 内未收到 hello 以 4408 关闭；hello 之前的其他 op 回 `error{300}`；
 contracts 主版本不同回 `error{311}` 并以 4426 关闭。另提供最小 REST：`POST /api/auth/token`、`GET /api/auth/whoami`、
@@ -21,6 +26,7 @@ contracts 主版本不同回 `error{311}` 并以 4426 关闭。另提供最小 R
   python tools/fake/fake_gw.py --n 200 [--port 8000] [--host 127.0.0.1] [--cpu 0]
   python tools/fake/fake_gw.py --replay packages/contracts/fixtures/rt/swarm_n200.awrrt [--loop]
   python tools/fake/fake_gw.py --n 1 --record /tmp/session.awrrt --record-max-s 5
+  python tools/fake/fake_gw.py --n 4 --world synthcity --sandbox
 """
 
 from __future__ import annotations
@@ -64,6 +70,20 @@ WILDCARD_MSGPACK_MAX_HZ = 2
 INFO_SCHEMAS = ["awr.DroneState64.v1", "awr.SwarmLite32.v1", "awr.EnvSample32.v1", "awr.VelSetpoint16.v1", "awr.SensorPose48.v1",
                 "awr.rt.BatchHeader.v1", "awr.rt.RecordHeader.v1", "awr.rt.Time.v1", "awr.rt.ClientDataHeader.v1"]
 ENC = {"raw": F.ENC_RAW, "msgpack": F.ENC_MSGPACK, "json": F.ENC_JSON, "blob": F.ENC_BLOB}
+D2_MAX_UAV = 12  # per-vehicle D2 channels only for the first 12 vehicles (sandbox limit)
+
+
+def d2_synth_jsonable(x: Any) -> Any:
+    """numpy scalars to Python numbers before msgpack."""
+    if isinstance(x, dict):
+        return {k: d2_synth_jsonable(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [d2_synth_jsonable(v) for v in x]
+    if isinstance(x, np.floating):
+        return float(x)
+    if isinstance(x, np.integer):
+        return int(x)
+    return x
 
 
 def jdump(obj: Any) -> str:
@@ -219,7 +239,8 @@ class Channel:
         self.native_hz = spec.native_hz
         self.default_rate = (spec.default_rate or {}).get("S", 1)
         self.self_contained = spec.self_contained
-        self.entity = {"kind": "uav", "id": topic.split("/")[1]} if topic.startswith("uav/") else None
+        head = topic.split("/")[0]
+        self.entity = {"kind": head, "id": topic.split("/")[1]} if head in ("uav", "target", "nest", "task", "relay") else None
         self.seq = 0
         self.t_sim_ns = 0
         self.payload = b""
@@ -510,7 +531,7 @@ class FakeGateway:
                  env_period_s: float = 20.0, event_period_s: float = 2.0, detail_channels: bool = True,
                  replay: Path | None = None, loop_replay: bool = False, record: Path | None = None,
                  record_max_s: float | None = None, hello_timeout_s: float = HELLO_TIMEOUT_S,
-                 calls: str = "reject") -> None:
+                 calls: str = "reject", d2: bool = False, sandbox: bool = False) -> None:
         self.n, self.world, self.rate, self.window = n, world, rate, window
         self.calls = calls
         self.env_period_s, self.event_period_s = env_period_s, event_period_s
@@ -531,6 +552,12 @@ class FakeGateway:
         self.record_max_s = record_max_s
         self._recorded = False
         self.synth = Synth(n, world, seed) if self.replay is None else None
+        self.sandbox = sandbox
+        self.d2 = None
+        if (d2 or sandbox) and self.synth is not None:
+            import d2_synth
+
+            self.d2 = d2_synth.D2Synth(self.synth.ids[:D2_MAX_UAV], seed, world)
         self.channels: dict[int, Channel] = {}
         self.by_topic: dict[str, Channel] = {}
         self._build_channels(detail_channels)
@@ -564,6 +591,20 @@ class FakeGateway:
             if detail:
                 self.uav_ext.append(self._add(100 + n + a, f"uav/{uid}/state_ext", a))
                 self.uav_env.append(self._add(100 + 2 * n + a, f"uav/{uid}/env", a))
+        self.d2_ch: dict[str, list[Channel]] = {}
+        if self.d2 is not None:
+            d = self.d2
+            self.target_ch = self._add(7, "swarm/target/state")
+            ch = self.d2_ch
+            ch["detail"] = [self._add(4000 + i, f"target/{c.id}/detail", i) for i, c in enumerate(d.targets.cfgs)]
+            for base, key, fmt in ((4100, "perception", "uav/{}/perception"), (4200, "payload", "uav/{}/payload"), (4300, "nav", "uav/{}/sensor/nav"),
+                                   (4400, "radar", "uav/{}/sensor/radar/tracks"), (4500, "acoustic", "uav/{}/sensor/acoustic/bearings")):
+                ch[key] = [self._add(base + a, fmt.format(uid), a) for a, uid in enumerate(d.uav_ids)]
+            ch["nest"] = [self._add(3900, "nest/nest-01/status")]
+            ch["task"] = [self._add(3910, "task/task-01/status", 0), self._add(3911, "task/task-02/status", 1)]
+            ch["relay"] = [self._add(3920, "relay/task-02/stats")]
+            if self.sandbox:
+                ch["session"] = [self._add(3930, "sandbox/session")]
 
     def match(self, pattern: str) -> list[Channel]:
         if "*" not in pattern:
@@ -582,7 +623,21 @@ class FakeGateway:
                 "layouts": {k: L.SCHEMA_HASH[k] for k in INFO_SCHEMAS},
                 "limits": {"maxSubs": MAX_SUBS, "maxHighRateFull": 64, "ctrlQueue": CTRL_MAX, "maxTextBytes": 262144,
                            "maxBinaryBytes": 4096},
-                "serverUnix_ns": str(time.time_ns())}
+                "serverUnix_ns": str(time.time_ns()), **self._d2_info()}
+
+    def _d2_info(self) -> dict:
+        """serverInfo increments (AWR-17 §17.7.1): capabilities, sandbox, clock.tick_hz and rate_cap."""
+        if self.d2 is None:
+            return {}
+        caps = ["time", "credit", "rpc", "events", "targets", "perception", "tasking", "calendar"] + (["sandbox"] if self.sandbox else [])
+        out: dict = {"capabilities": caps,
+                     "clock": {"mode": "lockstep", "pausable": True, "max_speed": 10, "steppable": True, "tick_hz": 100 if self.sandbox else 250,
+                               "rate_cap": 5.6 if self.sandbox else 10}}
+        if self.sandbox:
+            s = self.d2.session()
+            out["sandbox"] = {k: s[k] for k in ("sid", "state", "world_id", "template_id", "expires_unix_ns", "renewable", "limits")}
+            out["run"] = {"id": s["sid"], "segment": 0}
+        return out
 
     def time_frame(self) -> bytes:
         return F.encode_time(int(self.state), self.epoch, float(self.rate), self.t_sim_ns, time.monotonic_ns() - self.gw_t0)
@@ -622,7 +677,10 @@ class FakeGateway:
             return
         syn.step(t_sim_ns)
         if k == 1:
-            self.roster_ch.publish(msgpack.packb(syn.roster()), t_sim_ns)
+            ro = syn.roster()
+            if self.d2 is not None:
+                ro["entries"] += self.d2.roster_entries()
+            self.roster_ch.publish(msgpack.packb(ro), t_sim_ns)
         self.swarm_ch.publish(syn.lite.tobytes(), t_sim_ns)
         fb = None
         for c in self.uav_state:
@@ -657,6 +715,8 @@ class FakeGateway:
             self.procs_ch.publish(msgpack.packb({"items": [
                 {"name": "sim-core", "pid": None, "state": "RUNNING", "restarts": 0},
                 {"name": "api", "pid": os.getpid(), "state": "RUNNING", "restarts": 0}]}), t_sim_ns)
+        if self.d2 is not None:
+            self._d2_tick(k, t_sim_ns)
         if self.event_period_s > 0 and k % max(1, int(self.event_period_s * TICK_HZ)) == 0:
             a = (k // TICK_HZ) % syn.n
             self.emit("mission.item_reached", 0, {"mid": "m-fake", "item": int(k // TICK_HZ) % 4}, uav=syn.ids[a])
@@ -667,6 +727,36 @@ class FakeGateway:
             if k % TIME_EVERY_TICKS == 0:
                 s.send_ctrl(self.time_frame())
             s.mark_due(k)
+
+    def _d2_tick(self, k: int, t_sim_ns: int) -> None:
+        """D2 channels at their native rates (60 Hz tick): targets 10 Hz, perception and radar 5 Hz, nav 10 Hz, payload, detail and acoustic
+        2 Hz, nests, tasks, relay and session 1 Hz; per-entity channels only while subscribed (lazy production)."""
+        d, syn, ch = self.d2, self.synth, self.d2_ch
+        m = len(d.uav_ids)
+        d.step(t_sim_ns, syn.full["pos"][:m].astype(float), syn.full["vel"][:m].astype(float))
+
+        def each(key: str, every: int, fn) -> None:
+            if k % every != 1 % every:
+                return
+            for c in ch.get(key, []):
+                if c.subscribers or c.topic.startswith(("nest/", "task/", "relay/", "sandbox/")):
+                    c.publish(msgpack.packb(d2_synth_jsonable(fn(c.row))), t_sim_ns)
+
+        if k % 6 == 1:
+            self.target_ch.publish(d.target_rows(), t_sim_ns)
+        each("detail", 30, lambda i: d.target_detail(i, with_cfg=(k % 600 == 1)))
+        each("perception", 12, d.perception)
+        each("payload", 30, d.payload)
+        each("nav", 6, d.nav)
+        each("radar", 12, d.radar)
+        each("acoustic", 30, d.acoustic)
+        each("nest", 60, lambda _r: d.nest_status())
+        each("task", 60, d.task_status)
+        each("relay", 60, lambda _r: d.relay_stats())
+        each("session", 60, lambda _r: d.session_state())
+        if k % TICK_HZ == 0:
+            for typ, lvl, data, uav in d.events_at(float((k // TICK_HZ) % 8)):
+                self.emit(typ, lvl, data, uav=uav)
 
     def perf_payload(self) -> dict:
         return {"api": {"cpu_pct": 0.0, "tick_overruns": self.stats["tick_overruns"], "encodes_per_s": 0.0,
@@ -889,11 +979,91 @@ def build_app(gw: FakeGateway):
             if gw._tick_task is not None:
                 gw._tick_task.cancel()
 
-    return Starlette(routes=[
+    routes = [
         Route("/api/auth/token", token, methods=["POST"]), Route("/api/auth/whoami", whoami),
         Route("/api/sys/config", sys_config), Route("/api/sys/info", sys_info), Route("/api/health/live", live),
-        Route("/api/health/ready", ready), WebSocketRoute("/api/rt", gw.serve_ws)],
-        lifespan=lifespan)
+        Route("/api/health/ready", ready), WebSocketRoute("/api/rt", gw.serve_ws)]
+    if gw.sandbox and gw.d2 is not None:
+        routes += sandbox_routes(gw)
+    return Starlette(routes=routes, lifespan=lifespan)
+
+
+def sandbox_routes(gw: FakeGateway) -> list:
+    """Minimal sandbox REST (AWR-17 §17.4-§17.6 shapes from d2_synth) and the sandbox WS endpoint; the fake does not authenticate."""
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, Response
+    from starlette.routing import Route, WebSocketRoute
+
+    d = gw.d2
+    pre = "/api/sandbox/v1"
+    root = Path(__file__).resolve().parents[2] / "packages" / "contracts"
+    hdr = {"AWR-API-Version": "1", "AWR-Sandbox-API": "1"}
+
+    def js(obj: Any, status: int = 200) -> JSONResponse:
+        return JSONResponse(d2_synth_jsonable(obj), status_code=status, headers=hdr)
+
+    def gone(sid: str) -> JSONResponse | None:
+        if sid != d.sid:
+            return js({"type": "urn:awr:reason:305", "title": "NOT_FOUND", "status": 404, "code": 305, "reason": "NOT_FOUND",
+                       "message": "沙盒不存在", "request_id": "fake"}, 404)
+        return None
+
+    async def meta(req: Request) -> JSONResponse:
+        return js(d.meta())
+
+    async def worlds(req: Request) -> JSONResponse:
+        return js(d.worlds())
+
+    async def templates(req: Request) -> JSONResponse:
+        return js(d.templates(req.query_params.get("world")))
+
+    async def openapi(req: Request) -> Response:
+        return Response((root / "rest" / "sandbox.openapi.snapshot.json").read_bytes(), media_type="application/json", headers=hdr)
+
+    async def classes(req: Request) -> Response:
+        return Response((root / "target" / "class_defaults.json").read_bytes(), media_type="application/json", headers=hdr)
+
+    async def create(req: Request) -> JSONResponse:
+        s = d.session("SPAWNING")
+        return js({"session": s, "token": "v1.fake." + secrets.token_hex(8), "token_exp_unix_ns": s["expires_unix_ns"]}, 201)
+
+    async def get_session(req: Request) -> JSONResponse:
+        return gone(req.path_params["sid"]) or js(d.session())
+
+    async def keepalive(req: Request) -> JSONResponse:
+        s = d.session()
+        return gone(req.path_params["sid"]) or js({"session": s, "renewed": True, "token": "v1.fake." + secrets.token_hex(8),
+                                                    "token_exp_unix_ns": s["expires_unix_ns"]})
+
+    async def end(req: Request) -> JSONResponse:
+        return gone(req.path_params["sid"]) or js({"state": "DRAINING"}, 202)
+
+    async def targets(req: Request) -> JSONResponse:
+        return gone(req.path_params["sid"]) or js({"items": [c.to_dict() for c in d.targets.cfgs], "rev": sum(d.targets.cfg_rev)})
+
+    async def nests(req: Request) -> JSONResponse:
+        import d2_synth
+
+        return gone(req.path_params["sid"]) or js({"items": [d2_synth.NEST]})
+
+    async def tasks(req: Request) -> JSONResponse:
+        import d2_synth
+
+        items = [{**task, "state": "RUNNING", "revision": 1, "common": {"on_detect": "relay"}} for task in (d2_synth.TASK_GUARD, d2_synth.TASK_RELAY)]
+        return gone(req.path_params["sid"]) or js({"items": items})
+
+    async def ws(websocket) -> None:
+        if websocket.path_params.get("sid") != d.sid:
+            await websocket.close(code=4410)
+            return
+        await gw.serve_ws(websocket)
+
+    return [Route(f"{pre}/meta", meta), Route(f"{pre}/worlds", worlds), Route(f"{pre}/templates", templates),
+            Route(f"{pre}/openapi.json", openapi), Route(f"{pre}/target_classes", classes),
+            Route(f"{pre}/sessions", create, methods=["POST"]), Route(f"{pre}/sessions/{{sid}}", get_session),
+            Route(f"{pre}/sessions/{{sid}}", end, methods=["DELETE"]), Route(f"{pre}/sessions/{{sid}}/keepalive", keepalive, methods=["POST"]),
+            Route(f"{pre}/sessions/{{sid}}/targets", targets), Route(f"{pre}/sessions/{{sid}}/nests", nests),
+            Route(f"{pre}/sessions/{{sid}}/tasks", tasks), WebSocketRoute(f"{pre}/sessions/{{sid}}/rt", ws)]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -914,6 +1084,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--record-max-s", type=float, default=None)
     ap.add_argument("--cpu", type=int, default=None, help="钉核（18 PR-6：fake_gw 钉 core0）")
     ap.add_argument("--hello-timeout-s", type=float, default=HELLO_TIMEOUT_S, help="hello 超时（默认 10 s，测试可缩短）")
+    ap.add_argument("--d2", action="store_true", help="追加 D2 topic、roster 识别物条目与 D2 事件（AWR-17 §17.7）")
+    ap.add_argument("--sandbox", action="store_true", help="另提供沙盒 REST 与 /api/sandbox/v1/sessions/<sid>/rt（隐含 --d2）")
     ap.add_argument("--calls", choices=("reject", "ack"), default="reject",
                     help="命令口径：reject（缺省，211 SIM_UNAVAILABLE，M16 §4）| ack（确认后 0.5 s succeeded，协议冒烟）")
     a = ap.parse_args(argv)
@@ -925,7 +1097,8 @@ def main(argv: list[str] | None = None) -> int:
             os.sched_setaffinity(0, {a.cpu})
     gw = FakeGateway(n=a.n, world=a.world, seed=a.seed, rate=a.rate, window=a.window, env_period_s=a.env_period_s,
                      event_period_s=a.event_period_s, detail_channels=not a.no_detail, replay=a.replay, loop_replay=a.loop,
-                     record=a.record, record_max_s=a.record_max_s, hello_timeout_s=a.hello_timeout_s, calls=a.calls)
+                     record=a.record, record_max_s=a.record_max_s, hello_timeout_s=a.hello_timeout_s, calls=a.calls,
+                     d2=a.d2, sandbox=a.sandbox)
     import warnings
 
     import uvicorn
@@ -943,8 +1116,10 @@ def main(argv: list[str] | None = None) -> int:
     cfg = uvicorn.Config(build_app(gw), loop="uvloop", ws="websockets", ws_per_message_deflate=False, ws_max_size=262144,
                          log_level="warning", lifespan="on")
     server = uvicorn.Server(cfg)
-    mode = f"replay {a.replay}" if a.replay else f"synthetic n={a.n}"
+    mode = f"replay {a.replay}" if a.replay else f"synthetic n={a.n}" + (" d2" if gw.d2 is not None else "")
     print(f"fake_gw READY ws://{a.host}:{port}/api/rt ({mode})", flush=True)
+    if gw.sandbox and gw.d2 is not None:
+        print(f"fake_gw sandbox ws://{a.host}:{port}/api/sandbox/v1/sessions/{gw.d2.sid}/rt", flush=True)
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(server.serve(sockets=[sock]))
     return 0

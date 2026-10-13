@@ -12,7 +12,8 @@ import { checkSources as brand } from './check-brand.mjs'
 import { checkImports } from './check-deps.mjs'
 import { checkName } from './check-units.mjs'
 import { checkSource as perfFlags } from '../ci/check-perf-flags.mjs'
-import { checkEntry as release, MAX_BYTES } from './check-release.mjs'
+import { checkEntry as release, MAX_BYTES, deploySecret } from './check-release.mjs'
+import { checkVersions } from './check-version.mjs'
 import { readText } from './_common.mjs'
 
 class Collect {
@@ -173,6 +174,36 @@ expect('units bad', [checkName('speed_ms', undefined) !== null, checkName('delay
     release('c.ts', 10, 'const k = "local-value"', local, R)
   })
   expect('release rules', got, ['REL-01', 'REL-02', 'REL-02', 'REL-03', 'REL-03', 'REL-03', 'REL-03'])
+}
+
+// REL-04 (ADR-123): the deployment secret is generated at runtime; a short value is ignored; a missing file gives null
+{
+  const value = 'Dep' + Math.random().toString(36).slice(2, 10) + 'Z9'
+  const dep = { source: 'tmp', value }
+  const got = rules((R) => {
+    release('d.ts', 10, `const p = "${value}"`, [], R, dep)
+    release('e.ts', 10, 'const p = "unrelated"', [], R, dep)
+    release('f.ts', 10, 'abc12', [], R, { source: 'tmp', value: 'abc12' })
+  })
+  expect('release deploy secret', got, ['REL-04'])
+  expect('deploy secret missing', deploySecret('/nonexistent/awr/admin.secret'), null)
+}
+
+// check-version (ADR-118)
+{
+  const py = (v) => ({ file: 'pyproject.toml', text: `[build-system]\nrequires = []\n\n[project]\nname = "awr"\nversion = "${v}"\n\n[tool.x]\nversion = "9.9.9"\n` })
+  const pkg = (f, v) => ({ file: f, text: `{\n  "name": "x",\n  "version": "${v}",\n  "dependencies": {"a": {"version": "1.0.0"}}\n}\n` })
+  const init = (v) => ({ file: 'python/awr/__init__.py', text: `"doc"\n\n__version__ = "${v}"\n` })
+  const check = (srcs) => {
+    let ref
+    const got = rules((R) => {
+      ref = checkVersions(srcs, R)
+    })
+    return [ref, got]
+  }
+  expect('version ok', check([py('0.2.0'), pkg('apps/web/package.json', '0.2.0'), pkg('package.json', '0.2.0'), init('0.2.0')]), ['0.2.0', []])
+  expect('version mismatch', check([py('0.2.0'), pkg('apps/web/package.json', '0.1.0'), pkg('package.json', '0.2.0'), init('0.2.0')]), ['0.2.0', ['VER-02']])
+  expect('version format', check([py('0.2'), pkg('apps/web/package.json', '0.2.0-rc1')]), [null, ['VER-01', 'VER-01']])
 }
 
 if (failures) {

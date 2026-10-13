@@ -6,8 +6,11 @@
 # 由 MS1/MS2 集成验证补齐（AWR-18 §13.1）；MMD-01（check-mermaid.mjs，只报告）需要 mermaid 11 依赖，尚未接入。
 # REL-01/02/03（check-release.mjs，ADR-079）检查发布集合（git ls-files --cached --others --exclude-standard）：单文件 ≤ 5 MB、不含世界与点云数据、
 # 不含凭据；不在 git 仓库内（或 git 不可用）时给出提示并通过，git 目录在工作树之外时设置 GIT_DIR 与 GIT_WORK_TREE。
+# REL-04（D2.1，ADR-123）：本机有部署口令文件（~/.config/awr/admin.secret 或 AWR_ADMIN_SECRET_FILE）时其内容不得出现在发布集合中。
+# VER-01/02（check-version.mjs，D2.1，ADR-118）：pyproject.toml、apps/web/package.json、根 package.json 与 awr.__version__ 的产品版本
+# 相等且为 X.Y.Z。
 
-LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units check-release
+LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units check-release check-version
 
 .PHONY: lint-tools lint-selftest lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds $(addprefix lint-,$(LINT_SCRIPTS))
 
@@ -21,7 +24,7 @@ lint-selftest:
 lint-lint-lf:
 	@cd $(ROOT) && node tools/lint/lint-lf.mjs --palette
 
-lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units lint-check-release:
+lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units lint-check-release lint-check-version:
 	@cd $(ROOT) && node tools/lint/$(patsubst lint-%,%,$@).mjs
 
 lint-py-imports:

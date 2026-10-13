@@ -1,6 +1,7 @@
 """fleet_ladder 负载驱动（M08-FR-078；M16 §6.4.8 `ladder-shenzhen` 的等价载荷）：以席位持有者（operator，入口签名）经总线向
 sim-core 下发命令：按层批量起飞到 4 层交错高度，全部进入 FLYING 后每架绕出生点小半径环绕（orbit，持续）；`--churn <s>` 时每
 s 秒【仿真】在本机单元内随机 goto（按 slot 升序、固定种子）。剧本口径另见 `run.py --scenario ladder-shenzhen`。
+D2（M08-FR-228）：`--targets n` 时在机群周围的环上放置 n 个识别物（`place_targets`，M18 的 `target/add`）。
 
 FX2-R2 修订（D1 验收第 1 轮 4.4、4.7）：
 - 只启动 sim-core 时没有网关发 GCS 信标，operator 租约的链路源判为丢失，全部机体 HOLD 后 RTL（"机体基本停在地面"）：
@@ -172,6 +173,27 @@ class LadderLoad:
                 continue
             self.cmd("orbit", vid, {"center": [p[0] - radius_m, p[1], p[2]], "radius_m": radius_m, "speed_mps": 3.0,
                                     "turns": 0, "cw": bool(k % 2)})
+
+    def place_targets(self, n: int, pos: dict[str, list[float]], *, classes: tuple[str, ...] = ("person", "vehicle", "dog"),
+                      ring_m: float = 60.0) -> dict:
+        """`--targets n`（M08-FR-228）：按类别模板在机群周围的环上均匀放置 n 个识别物（`target/add`，M18 登记的命令；静止，
+        敏感体取模板）。返回 {added, rejected{code: n}}；M18 未装配时全部以 109（UNKNOWN_OP）拒绝。"""
+        if n <= 0:
+            return {"added": 0, "rejected": {}}
+        pts = np.array(list(pos.values()), np.float64) if pos else np.zeros((1, 3))
+        c = pts.mean(axis=0)
+        r = max(ring_m, float(np.max(np.hypot(pts[:, 0] - c[0], pts[:, 1] - c[1]))) + ring_m)
+        added, rej = 0, {}
+        for k in range(n):
+            a = 2.0 * np.pi * k / n
+            tgt = {"class": classes[k % len(classes)], "pos": [float(c[0] + r * np.cos(a)), float(c[1] + r * np.sin(a)), None]}
+            rep = self.cmd("target/add", None, {"target": tgt})
+            if rep is not None and rep.get("status") == "accepted":
+                added += 1
+            else:
+                code = str((rep or {}).get("code", "timeout"))
+                rej[code] = rej.get(code, 0) + 1
+        return {"added": added, "rejected": rej}
 
     def churn(self, ids: list[str], pos: dict[str, list[float]]) -> None:
         """在各机 ±3 m 单元内随机 goto（按 slot 升序、固定种子）。"""

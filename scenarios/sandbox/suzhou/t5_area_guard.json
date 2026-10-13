@@ -1,0 +1,168 @@
+{
+  "schema": "awr.sandbox.template.v1",
+  "template_id": "t5_area_guard",
+  "world_id": "suzhou",
+  "name_zh": "T5 区域值守与接力",
+  "summary_zh": "机巢箱与 VTOL 起降台、P600 与 AWR-V1：区域值守发现识别物后自动转入 7×24 接力",
+  "first_feedback_zh": "会话开始后约 60 s【仿真】内首次明确捕获，随后转入接力",
+  "recommended": true,
+  "calendar_default": {"start_local": "10:00", "tz": "Asia/Shanghai"},
+  "acoustic_bg": "suburban",
+  "env": {"preset": "clear", "overrides": {}},
+  "seed": 15,
+  "nests": [
+    {
+      "id": "nest-a",
+      "name": "机巢箱 A",
+      "pos": [32.9, 254.8, 0],
+      "kind": "box",
+      "slots": 6,
+      "energy": {"mode": "swap", "swap_s": 180, "packs": [{"cells": 6, "count": 8, "capacity_ah": 10}]},
+      "chargers": [{"model": "c1_xr", "count": 8, "channels": 1, "i_max_a": 10, "cells_max": 6}],
+      "turnaround_s": 60,
+      "launch_interval_s": 30,
+      "link_range_m": 3500
+    },
+    {
+      "id": "nest-b",
+      "name": "VTOL 起降台 B",
+      "pos": [-35.7, 279.8, 0],
+      "kind": "vtol_pad",
+      "slots": 2,
+      "energy": {"mode": "swap", "swap_s": 180, "packs": [{"cells": 12, "count": 2, "capacity_ah": 22}]},
+      "chargers": [{"model": "chg12s_ref", "count": 2, "channels": 1, "i_max_a": 10, "cells_max": 12}],
+      "turnaround_s": 60,
+      "launch_interval_s": 30,
+      "link_range_m": 3500
+    }
+  ],
+  "vehicles": [
+    {
+      "id": "p600-01",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 一号",
+      "sensors": [{"name": "nir_ill", "enabled": true}]
+    },
+    {
+      "id": "p600-02",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 二号",
+      "sensors": [{"name": "nir_ill", "enabled": true}]
+    },
+    {
+      "id": "p600-03",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 三号",
+      "sensors": [{"name": "nir_ill", "enabled": true}]
+    },
+    {
+      "id": "p600-04",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 四号",
+      "sensors": [{"name": "nir_ill", "enabled": true}]
+    },
+    {
+      "id": "p600-05",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 五号",
+      "sensors": [{"name": "nir_ill", "enabled": true}]
+    },
+    {
+      "id": "p600-06",
+      "model_id": "p600_mid360",
+      "nest_id": "nest-a",
+      "label": "P600 六号",
+      "sensors": [{"name": "nir_ill", "enabled": true}]
+    },
+    {"id": "v1-01", "model_id": "awr_v1", "nest_id": "nest-b", "label": "AWR-V1 一号"}
+  ],
+  "targets": [
+    {
+      "id": "person-01",
+      "label": "静止的人",
+      "class": "person",
+      "pos": [341.9, 139.5, null],
+      "yaw_rad": -0.357,
+      "motion": {"mode": "static"},
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "person-02",
+      "label": "游走的人",
+      "class": "person",
+      "pos": [318.8, -13.5, null],
+      "motion": {
+        "mode": "random_walk",
+        "region": [[288.8, -43.5], [348.8, -43.5], [348.8, 16.5], [288.8, 16.5]],
+        "speed_mps": 1.0
+      },
+      "sensitivity": [
+        {
+          "kind": "visual",
+          "shape": "sector",
+          "radius_max_m": 150,
+          "z_min_m": 0,
+          "z_max_m": 150,
+          "half_angle_deg": 60,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        },
+        {
+          "kind": "acoustic",
+          "shape": "hemisphere",
+          "radius_max_m": 120,
+          "z_min_m": 0,
+          "z_max_m": 120,
+          "half_angle_deg": 180,
+          "azimuth_offset_deg": 0,
+          "gain_back_db": 0,
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "type": "area_guard",
+      "label": "区域值守",
+      "params": {
+        "polygon": [[124.8, -87.5], [524.8, -87.5], [524.8, 312.5], [124.8, 312.5]],
+        "target_class": "person",
+        "level_req": "R",
+        "revisit_s": 600
+      },
+      "common": {"priority": "normal", "on_detect": "relay", "allowed_models": ["p600_mid360"]}
+    }
+  ],
+  "camera": {"center_enu_m": [324.8, 112.5, 0], "range_m": 900, "pitch_deg": -40, "yaw_deg": 0},
+  "anchors_ref": "scenarios/sandbox/anchors/suzhou.json"
+}

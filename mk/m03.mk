@@ -4,6 +4,8 @@
 #                               未构建时自动生成合成演示城市 synthcity，并以它为默认世界（ADR-077）
 #   make demo-world             生成或刷新合成演示城市 synthcity（不需要任何下载，约 25 s，ADR-077）
 #   make worlds-force           无条件重建六城（与已有的合成世界）
+#   make worlds-dataset         只重写已构建六城 world.json 的数据集说明（ADR-109 第 3 条；contentVersion 与派生缓存键不变；
+#                               make worlds 构建后也会执行）
 #   make validate               worldpkg validate worlds/* --deep（D1-AC-01）
 #   make fetch-data [VERIFY=1]  下载并校验 UrbanScene3D 原始数据（awr data fetch urbanscene3d [--verify]）
 #   make test-world             只运行 tests/world 与 tests/jobs（make test 已包含，便捷目标）
@@ -14,13 +16,14 @@ J         ?= 3
 
 WORLDS_TARGETS += worlds-build
 
-.PHONY: worlds-build worlds-force demo-world validate fetch-data test-world perf-world worlds-status
+.PHONY: worlds-build worlds-force worlds-dataset demo-world validate fetch-data test-world perf-world worlds-status
 
 # 构建失败的世界只标 INVALID/failed，不阻塞 make run；只有默认世界不可用时按 19 §16.2 以 4（缺数据）或 6（世界无效）中止。
 # 默认世界由 `worldpkg default-world` 判定（ADR-077）：显式 AWR_WORLD 优先；否则 configs/runtime.yaml 的 run.world（深圳），
 # 它未构建而 run.fallback_world（synthcity）已构建时回退为 synthcity（supervisor 用同一规则）
 worlds-build: ## 构建缺失或失效的世界（--missing，最多 $(J) 城并行；无原始数据时生成 synthcity）
 	@cd $(ROOT) && $(WORLDPKG) build --missing --jobs $(J); rc=$$?; \
+	$(WORLDPKG) dataset >/dev/null || echo "警告：数据集说明未能更新（$(WORLDPKG) dataset）" >&2; \
 	w=$$($(WORLDPKG) default-world); \
 	if [ $$rc -eq 4 ]; then echo "提示：有城市缺少原始数据，运行 make fetch-data" >&2; fi; \
 	if [ ! -f "$(AWR_WORLDS_DIR)/$$w/world.json" ]; then \
@@ -35,6 +38,9 @@ demo-world: _need-installed ## 生成或刷新合成演示城市 synthcity（无
 
 worlds-force: ## 无条件重建六城（不做 --missing 判定）
 	@$(call with_lock_sh,cd $(ROOT) && $(WORLDPKG) build --jobs $(J))
+
+worlds-dataset: ## 只重写已构建六城 world.json 的数据集说明（ADR-109；CHECK=1 只报告，过期时失败）
+	@cd $(ROOT) && $(WORLDPKG) dataset $(if $(CHECK),--check,)
 
 validate: ## worldpkg validate worlds/* --deep 与 Ajv strict 结构校验（错误为 0 才通过，D1-AC-01）
 	@cd $(ROOT) && $(WORLDPKG) validate $(AWR_WORLDS_DIR)/* --deep || \

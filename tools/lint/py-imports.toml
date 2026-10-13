@@ -1,4 +1,6 @@
 # awr.api 的纯函数白名单（AWR-10 §3.3 规则 2；AWR-03 §4.2 第 1 条）：执行 < 1 ms、不做 numpy 大数组运算的模块，
 # 登记后 awr.api 才可以 import。由 tools/lint/check_py_imports.py 读取；新增条目需说明依据。
 [api]
-whitelist = []
+# awr.sandbox.identity（D2.1，ADR-123；d2-WP-04b-to-M00 第 7 条）：show-api 的 R79、R80 与 R01 经 M17 身份库比对（唯一比对点）；
+# 只用标准库与 awr.runtime.{config,principal,procutil}、awr.sandbox.{prefix,config}，单次判定 < 1 ms，固定时延由 await 补足
+whitelist = ["awr.sandbox.identity"]

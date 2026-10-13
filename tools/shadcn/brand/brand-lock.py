@@ -20,6 +20,11 @@ SOURCES = {
     "avatar-460.png": f"{AVATAR}?s=460&v=4",
     "favicon-32.png": "avatar-96.png, 3x3 premultiplied box filter (tools/shadcn/brand/make-favicons.py)",
     "favicon-16.png": "avatar-96.png, 6x6 premultiplied box filter (tools/shadcn/brand/make-favicons.py)",
+    # D2.1 PWA and home-screen icons (AWR-04 §15.8.7; M15-FR-234)
+    "pwa-192.png": "avatar-460.png, premultiplied area resample (tools/shadcn/brand/make-pwa-icons.py)",
+    "pwa-512.png": "avatar-460.png, premultiplied bilinear resample (tools/shadcn/brand/make-pwa-icons.py)",
+    "pwa-maskable-512.png": "avatar-460.png in the 80 % safe zone on --g950 (tools/shadcn/brand/make-pwa-icons.py)",
+    "apple-touch-icon.png": "avatar-460.png at 160 px on --g950, 180 x 180 (tools/shadcn/brand/make-pwa-icons.py)",
 }
 
 
