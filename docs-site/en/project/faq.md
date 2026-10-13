@@ -43,7 +43,10 @@ full, visitors queue and see their position and the estimated wait. You can keep
 **After switching the world, where did my targets and tasks go?**
 Switching the world restarts the simulation in the new world and loads that world's template of the same name; targets, nests, tasks and
 view settings of the previous world are not carried over, because coordinates and geometry differ between worlds. To keep a configuration,
-export a configuration snapshot first; it can be restored later in the original world.
+export a configuration snapshot first; it can be restored later in the original world. Known issue: in the 0.2.0 release currently serving
+the public instance, this isolation does not fully hold on every switching path, and entities or view settings from the previous world
+could remain visible after the switch; the defect is fixed in the development line and ships with the next release, see
+{doc}`../guide/sandbox`.
 
 **The image is sparse or the frame rate is low. What can I do?**
 The quality controller lowers the point budget from the measured frame time to hold the frame rate. Without a hardware GPU, or with an

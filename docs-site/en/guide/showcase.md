@@ -33,16 +33,21 @@ Interactions in the shared show run in the browser or use read-only subscription
 
 The role badge reads "Public demo · read-only". To place drones or targets or issue tasks, open your own sandbox ({doc}`sandbox`).
 
-## Static browsing of other worlds
+## The other six worlds: each city's own simulated monitoring demonstration
 
-Opening `/world/<id>` for a world other than the one the shared show runs (for example `/world/shanghai`) enters **static browsing**:
-only the point cloud and terrain load, no realtime connection is opened, and the status bar notes that a sandbox can be opened in that
-city. The ids of the seven worlds are `synthcity`, `shenzhen`, `shanghai`, `newyork`, `sanfrancisco`, `suzhou` and `chicago`.
+Opening `/world/<id>` for one of the six UrbanScene3D cities (for example `/world/shanghai`) plays back that city's own simulated drone
+monitoring demonstration: its own fleet, nests, targets and tasking, generated and verified against that city's geometry, recorded once
+and then replayed client-side on a continuous loop. No realtime connection is opened for it; the role badge reads "Simulated replay ·
+read-only" with a reminder that it is an offline recording, and you still open your own sandbox to issue commands in that city. A world
+with no recorded demonstration of its own (for instance a world package built locally without the packaged recording) falls back to
+**static browsing**: only the point cloud and terrain load. The ids of the seven worlds are `synthcity`, `shenzhen`, `shanghai`,
+`newyork`, `sanfrancisco`, `suzhou` and `chicago`.
 
 ## Viewer seats and queueing
 
 Live viewing connections are limited by a seat cap (24 on the public instance); when full, visitors join the viewer queue and see their
-position and the estimated wait. Static browsing, the landing page and visitors in power saving take no seat. After 5 min without
+position and the estimated wait. Static browsing, a city's own recorded replay, the landing page and visitors in power saving take no
+seat. After 5 min without
 interaction (2 min when the seats are full and someone is queued) or 60 s hidden, the page enters power saving: it closes the realtime
 connection, keeps the last frame and releases the seat; any interaction reconnects.
 

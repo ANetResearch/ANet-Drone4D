@@ -110,8 +110,10 @@ make setup 完成
 下一步生成的合成演示城市会成为回退世界。
 
 完整输出中还有两类与功能无关的告警，上面未列出：npm 对 `react-doctor`、`eslint-scope` 等四个开发期工具包给出的
-`EBADENGINE`（它们声明需要 Node 22.13 或更高，不参与构建与运行），以及 FastAPI 生成 OpenAPI 时关于
-`segment_file_api_runs__run__segments__name__get` 的 `Duplicate Operation ID` 提示。
+`EBADENGINE`（它们声明需要 Node 22.13 或更高，不参与构建与运行），以及 FastAPI 生成 OpenAPI 时，对唯一一条同时服务 `GET` 与 `HEAD`
+的接口（`segment_file`，运行分段下载）给出的 `Duplicate Operation ID` 提示。生成的操作 id 以 `_get` 或 `_head` 结尾取决于解释器的
+哈希种子，两次运行可能不同（`segment_file_api_runs__run__segments__name__get` 或 `..._head`）；两种形式都是预期且无害的，已提交的
+OpenAPI 快照不受影响（`tools/contracts/gen_openapi.py` 会将其规范化）。
 
 ## 生成合成演示城市：`make demo-world`
 

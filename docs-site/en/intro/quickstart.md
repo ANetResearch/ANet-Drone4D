@@ -118,7 +118,10 @@ city generated in the next step becomes the fallback world.
 
 The full output also contains two kinds of warnings unrelated to function, omitted above: npm `EBADENGINE` warnings for four development
 tool packages such as `react-doctor` and `eslint-scope` (they declare Node 22.13 or later and take no part in the build or runtime), and a
-`Duplicate Operation ID` notice for `segment_file_api_runs__run__segments__name__get` while FastAPI generates the OpenAPI schema.
+`Duplicate Operation ID` notice from FastAPI while it generates the OpenAPI schema, for the one REST route that serves both `GET` and `HEAD`
+(`segment_file`, run segment downloads). The generated id ends in `_get` or `_head` depending on the interpreter's hash seed, so the exact
+suffix in your output can differ from a previous run (`segment_file_api_runs__run__segments__name__get` or `..._head`); either form is
+expected and harmless, and the committed OpenAPI snapshot is not affected (`tools/contracts/gen_openapi.py` normalizes it).
 
 ## Generate the synthetic demo city: `make demo-world`
 

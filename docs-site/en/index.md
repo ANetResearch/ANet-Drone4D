@@ -54,7 +54,8 @@ guide/identity
 ```
 
 {doc}`guide/showcase`
-: The read-only shared show: scenario S7, cameras and sensor views, targets and relay statistics, static browsing.
+: The read-only shared show: scenario S7, cameras and sensor views, targets and relay statistics; each of the other six cities plays
+  back its own recorded monitoring demonstration.
 
 {doc}`guide/sandbox`
 : One isolated sandbox per visitor: worlds and scenario templates, management panels, clock and rate, manual control, snapshots and
