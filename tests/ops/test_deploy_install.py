@@ -266,6 +266,31 @@ def test_pack_verify_install_idempotent(tmp_path, tiny_worlds):
     assert json.loads((dest / "tiny" / "world.json").read_text())["dataset"]["notice"] == "metadata only"
 
 
+def test_show_recording_change_repacks_and_reinstalls(tmp_path, tiny_worlds):
+    """城市演示录制 show/show.awrrt 不计入 contentVersion：只换录制时包名与索引摘要随之变化，安装时重装该世界（D2.2-W2）。"""
+    w, cv, _key = tiny_worlds
+    out, dest = tmp_path / "packs", tmp_path / "server-worlds"
+    idx = worldpack.pack(w, out, ["tiny"], log=lambda *_: None)
+    assert idx["worlds"][0]["show_sha256"] is None and "-s" not in idx["worlds"][0]["world_pack"]["file"][len("world-tiny-"):]
+    worldpack.install(out, dest, log=lambda *_: None)
+    show = w / "tiny" / "show" / "show.awrrt"
+    show.parent.mkdir()
+    show.write_bytes(b"recording-1")
+    idx1 = worldpack.pack(w, out, ["tiny"], log=lambda *_: None)
+    e1 = idx1["worlds"][0]
+    assert e1["content_version"] == cv and e1["show_sha256"] == hashlib.sha256(b"recording-1").hexdigest()
+    assert e1["world_pack"]["file"].endswith(f"-s{e1['show_sha256'][:8]}.tar.gz")
+    rep = worldpack.install(out, dest, log=lambda *_: None)
+    assert rep["worlds"][0]["world"] == "installed" and rep["worlds"][0]["cache"] == "skip"
+    assert (dest / "tiny" / "show" / "show.awrrt").read_bytes() == b"recording-1"
+    assert worldpack.install(out, dest, log=lambda *_: None)["worlds"][0]["world"] == "skip"
+    show.write_bytes(b"recording-2")
+    idx2 = worldpack.pack(w, out, ["tiny"], log=lambda *_: None)
+    assert idx2["worlds"][0]["world_pack"]["file"] != e1["world_pack"]["file"]
+    assert worldpack.install(out, dest, log=lambda *_: None)["worlds"][0]["world"] == "installed"
+    assert (dest / "tiny" / "show" / "show.awrrt").read_bytes() == b"recording-2"
+
+
 def test_install_prunes_old_cache_entries(tmp_path, tiny_worlds):
     w, cv, key = tiny_worlds
     out = tmp_path / "packs"

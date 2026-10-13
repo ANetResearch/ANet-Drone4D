@@ -38,6 +38,7 @@ from pathlib import Path
 
 SCHEMA = "awr.deploy.worlds.v1"
 INDEX = "WORLDS.json"
+SHOW_REL = "show/show.awrrt"  # D2.2-W2 city show recording; not part of contentVersion (awr/world/package/manifest.py)
 SUMS = "WORLDS.sha256"
 WORLD_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 HEX = re.compile(r"^[0-9a-f]+$")
@@ -203,7 +204,9 @@ def describe_world(worlds_dir: Path, wid: str, cache_root: Path | None, status_f
     if not cs.available or not cs.entry:
         raise PackError(f"{wid}: 派生缓存不可用（{cs.reason}/{cs.detail}）：先 make geo-warm")
     entry = Path(cs.entry)
+    show = wd / SHOW_REL
     return {"world_id": wid, "content_version": cv, "world_json_sha256": sha256_file(wj), "coordinate_sha256": cs.coordinate_sha256,
+            "show_sha256": sha256_file(show) if show.is_file() else None,
             "derive_sha8": cs.derive_sha8, "derive_version": cs.derive_version, "entry": entry,
             "cache_bytes": int(cs.cache_bytes), "grid25_bytes": int(cs.grid25_bytes), "terms": world_terms(w),
             "dataset": (w.get("dataset") or {}).get("name")}
@@ -223,7 +226,9 @@ def pack(worlds_dir: Path, out_dir: Path, ids: list[str], *, cache_root: Path | 
         derive_version = derive_version or d["derive_version"]
         cv, key = d["content_version"], d["derive_sha8"]
         # 包名含 world.json 的摘要：只改元数据（例如数据集说明）而 contentVersion 不变时也换包
-        wp = out_dir / f"world-{wid}-{cv}-{d['world_json_sha256'][:8]}.tar.gz"
+        # 包名再含城市演示录制的摘要（show/ 不计入 contentVersion，只换录制时也必须换包，否则复用旧包而漏发录制）
+        show8 = f"-s{d['show_sha256'][:8]}" if d["show_sha256"] else ""
+        wp = out_dir / f"world-{wid}-{cv}-{d['world_json_sha256'][:8]}{show8}.tar.gz"
         rec_w = _reuse(wp, old)
         if rec_w is None:
             t0 = time.monotonic()
@@ -248,7 +253,7 @@ def pack(worlds_dir: Path, out_dir: Path, ids: list[str], *, cache_root: Path | 
         else:
             log(f"    {cp.name}  复用")
         keep.update({wp.name, cp.name})
-        entries.append({k: d[k] for k in ("world_id", "content_version", "world_json_sha256", "coordinate_sha256", "derive_sha8",
+        entries.append({k: d[k] for k in ("world_id", "content_version", "world_json_sha256", "show_sha256", "coordinate_sha256", "derive_sha8",
                                           "cache_bytes", "grid25_bytes", "dataset", "terms")}
                        | {"world_pack": rec_w, "cache_pack": rec_c})
     shared = None
@@ -391,6 +396,12 @@ def _world_json_sha(worlds_dir: Path, wid: str) -> str | None:
     return None
 
 
+def _show_sha(worlds_dir: Path, wid: str) -> str | None:
+    with contextlib.suppress(OSError):
+        return sha256_file(worlds_dir / wid / SHOW_REL)
+    return None
+
+
 def _status_cv(worlds_dir: Path, wid: str) -> str | None:
     with contextlib.suppress(OSError, ValueError, PackError):
         return str(_read_json(worlds_dir / ".status" / f"{wid}.json").get("content_version"))
@@ -460,8 +471,10 @@ def install(src: Path, worlds_dir: Path, *, owner: str | None = None, keep: int 
             row = {"world_id": wid, "content_version": cv, "derive_sha8": key, "world": "skip", "cache": "skip",
                    "pruned": []}
             want_wj = e.get("world_json_sha256")
+            want_show = e.get("show_sha256")  # 只有新索引才有；城市演示录制只换录制时也重装该世界
             stale = _installed_cv(worlds_dir, wid) != cv or _status_cv(worlds_dir, wid) != cv
-            if stale or (want_wj and _world_json_sha(worlds_dir, wid) != want_wj):
+            if (stale or (want_wj and _world_json_sha(worlds_dir, wid) != want_wj)
+                    or (want_show and _show_sha(worlds_dir, wid) != want_show)):
                 p = src / e["world_pack"]["file"]
                 t = tmp_root / f"w-{wid}"
                 t.mkdir()
