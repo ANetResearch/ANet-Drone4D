@@ -12,7 +12,7 @@
 // No react-query here: the landing page mounts this without the application providers.
 import type { SessionMeta, SessionTemplateItem, SessionWorldItem, Snapshot } from '@awr/contracts/types'
 import * as React from 'react'
-import { reasonText, useT } from '@/app/i18n'
+import { getLocale, reasonText, useT } from '@/app/i18n'
 import { sanitizeText } from '@/lib/sanitize'
 import { Alert, AlertAction, AlertDescription } from '@/ui/components/ui/alert'
 import { Badge } from '@/ui/components/ui/badge'
@@ -36,15 +36,18 @@ export const DEFAULT_TEMPLATE = 't5_area_guard'
 export const MANUAL_TEMPLATE = 't6_manual'
 const PERIODS: readonly DayPeriod[] = ['day', 'dusk', 'night']
 
-/** template label: the server's Chinese name, else the i18n name of the known ids */
+/** template label: the server's Chinese name under the zh-CN UI, else the i18n name of the known ids (the server has
+ *  no English name, so the English UI always uses the i18n dictionary, never the zh_ fields: ANET-PERM-landing-02) */
 export function templateLabel(t: (k: string) => string, tpl: { template_id: string; name_zh?: string }): string {
-  return tpl.name_zh ? sanitizeText(tpl.name_zh, 40) : t(`sandbox.template.${tpl.template_id}`)
+  return getLocale() === 'zh-CN' && tpl.name_zh ? sanitizeText(tpl.name_zh, 40) : t(`sandbox.template.${tpl.template_id}`)
 }
-/** the template's one-line description (when it says more than the name) and its first feedback (AWR-14 §20.13.1) */
+/** the template's one-line description (when it says more than the name) and its first feedback (AWR-14 §20.13.1);
+ *  the server's zh_ fields are only used under the zh-CN UI (no English equivalent exists yet) */
 export function TemplateLines({ tpl }: { tpl: { template_id: string; name_zh?: string; summary_zh?: string; first_feedback_zh?: string } }) {
   const t = useT()
-  const summary = tpl.summary_zh && tpl.summary_zh !== tpl.name_zh ? sanitizeText(tpl.summary_zh, 120) : null
-  const first = tpl.first_feedback_zh ? sanitizeText(tpl.first_feedback_zh, 60) : t(`sandbox.template.${tpl.template_id}.first`)
+  const zh = getLocale() === 'zh-CN'
+  const summary = zh && tpl.summary_zh && tpl.summary_zh !== tpl.name_zh ? sanitizeText(tpl.summary_zh, 120) : null
+  const first = zh && tpl.first_feedback_zh ? sanitizeText(tpl.first_feedback_zh, 60) : t(`sandbox.template.${tpl.template_id}.first`)
   return (
     <>
       {summary ? <span className="text-muted-foreground">{summary}</span> : null}

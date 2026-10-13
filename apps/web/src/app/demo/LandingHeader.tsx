@@ -3,7 +3,7 @@
 // same navigation, the language switch, both main actions and the repository links (touch targets >= 44 px). A section
 // link in the Sheet closes it first and scrolls once the close transition has finished (the modal scroll lock is gone).
 import * as React from 'react'
-import { useT, type Locale } from '@/app/i18n'
+import { useT, type Locale } from './LandingI18n'
 import { DEMO_DOCS_URL, DEMO_ENTRY, DEMO_REPO_URL } from '@/lib/demo'
 import { BRAND } from '@/ui/brand/assets'
 import { Badge } from '@/ui/components/ui/badge'

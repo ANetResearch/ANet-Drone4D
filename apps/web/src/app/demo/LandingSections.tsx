@@ -3,7 +3,7 @@
 // (Available, In development, Research) and follow the V0.2.0 release and the D3 design baseline (docs/05). Images are
 // lazy with their intrinsic sizes (no layout shift); grids keep min-w-0 so code blocks scroll inside their card.
 import * as React from 'react'
-import { useT } from '@/app/i18n'
+import { useT } from './LandingI18n'
 import { cn } from '@/lib/utils'
 import { DEMO_DOCS_URL, DEMO_REPO_URL } from '@/lib/demo'
 import { BRAND } from '@/ui/brand/assets'
@@ -112,13 +112,29 @@ export function Capabilities() {
 }
 
 // ---------------------------------------------------------------- showcase
+// D2.2-FX-landing (D2.2-R-landing §2.5): a lazy-loaded capture occasionally stayed an unexplained blank muted block
+// (intermittent, not every load; a direct re-fetch of the same image completed normally, so most likely a native
+// loading="lazy" timing quirk under a fast or programmatic scroll rather than a real network failure). data-media-loaded
+// makes that loading state explicit and inspectable (it was already visually a neutral bg-muted block, just with no
+// signal that it was still pending rather than finished or broken); a resident animated skeleton (animate-pulse) was
+// considered but the app is already at its two-loop budget (ShimmerText, MatrixLoader; motion-lint MOT-03, ADR-029),
+// so this stays a plain static block rather than adding a third. onError retries the request once before falling
+// back to the browser's own broken-image presentation (the alt text stays readable either way).
 function Figure({ m, wide = false, sizes }: { m: Media; wide?: boolean; sizes: string }) {
   const t = useT()
   const text = t(`landing.media.${m.key}`)
+  const [loaded, setLoaded] = React.useState(false)
+  const retried = React.useRef(false)
+  const onError = (e: React.SyntheticEvent<HTMLImageElement>): void => {
+    if (retried.current) return
+    retried.current = true
+    e.currentTarget.src = `/demo/${m.file}?retry=1`
+  }
   return (
     <figure className={cn('landing-reveal flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card', wide && 'md:col-span-2')}
       data-media={m.key}>
       <img src={`/demo/${m.file}`} alt={text} width={m.w} height={m.h} sizes={sizes} loading="lazy" decoding="async"
+        data-media-loaded={loaded} onLoad={() => setLoaded(true)} onError={onError}
         className="block h-auto w-full bg-muted" />
       <figcaption className="border-t border-border px-4 py-3 text-xs leading-relaxed text-pretty text-muted-foreground">{text}</figcaption>
     </figure>

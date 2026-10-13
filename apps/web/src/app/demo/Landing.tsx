@@ -5,7 +5,7 @@
 // opens the world and template Sheet (loaded on demand, so the first screen chunks stay the same).
 // D2.1 (ADR-119, ADR-122; AWR-04 §15.5.3, §15.6.5; M15-FR-225; UX-FR-150): the capacity line ("live viewing x / N · sandboxes
 // a / b · y queued · about t" and the "needs queue" badge) under the buttons, refreshed every 10 s while the page is visible;
-// the request is the store-free one of app/i18n/capacity (the landing chunk must not load zustand); "open my sandbox"
+// the request is the store-free one of landingI18n (the landing chunk must not load zustand); "open my sandbox"
 // says "needs queue · position y + 1 · about t" when the pool is full. Only windows narrower than 360 CSS px disable the
 // sandbox button ("window too narrow").
 // D2.2-L1 (redesign): one-line positioning, one subtitle and the two main actions in the hero, then four sections
@@ -14,14 +14,17 @@
 // chunk); phone and tablet layouts with a Sheet menu below 1280 CSS px and touch targets of at least 44 px. Test hooks of
 // D2 and D2.1 are kept (data-view, data-demo-launch, data-sandbox-open, data-launch-hint, data-landing-capacity,
 // data-capacity-queue, data-landing-queue-hint, data-sandbox-small).
+// D2.2-FX-landing: the eager surface reads its own trimmed dictionary (./landingI18n, ./landing.zh-CN.json,
+// ./landing.en.json) instead of the shared app/i18n module, which otherwise put the full bilingual dictionary
+// (~230 KB raw) in this chunk; openSheet() syncs the shared app/i18n locale right before the sandbox Sheet (and the
+// full dictionary it needs) lazily loads, so the Sheet opens in the language chosen here.
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
-import { setLocale, useT, type Locale } from '@/app/i18n'
+import { bootCapacityFetch, capacityLine, sandboxQueueHint, setLocale, useT, type CapacityLine, type Locale } from './LandingI18n'
 import { DEMO_ENTRY } from '@/lib/demo'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
 import { Icon } from '@/ui/icons/Icon'
-import { bootCapacityFetch, capacityLine, sandboxQueueHint, type CapacityLine } from '@/app/i18n/capacity'
 import type { CapacityView } from '@/net/sandbox/client'
 import { buildVersion } from './LandingContent'
 import { LandingHeader } from './LandingHeader'
@@ -81,28 +84,67 @@ function useBigWindow(): boolean {
   return ok
 }
 
-/** sections fade and rise once when they enter the viewport (not under reduced motion, not without IntersectionObserver) */
+const REVEAL_SETTLE_MS = 400
+
+/** sections fade and rise once when they enter the viewport (not under reduced motion). The IntersectionObserver is
+ * the primary trigger, but it is a single asynchronous callback whose exact timing the page does not control: a fast
+ * or programmatic scroll (and a screenshot taken mid-scroll) can land between two of its samples and never mark an
+ * element in view. A scroll/resize sweep plus a settle timer is a deterministic backstop that reveals any element the
+ * viewport has already reached or passed, so real content (incl. the showcase screenshots) is never left invisible
+ * waiting on that one callback (D2.2-FX-landing, ANET-PERM-landing-01). */
 function useReveal(): void {
   React.useEffect(() => {
     const root = document.documentElement
-    if (typeof IntersectionObserver !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const io = new IntersectionObserver((es) => {
-      for (const e of es) {
-        if (!e.isIntersecting) continue
-        e.target.setAttribute('data-in', '')
-        io.unobserve(e.target)
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const pending = new Set<Element>(document.querySelectorAll('[data-view="landing"] .landing-reveal'))
+    let io: IntersectionObserver | null = null
+    let raf = 0
+    let settle: ReturnType<typeof setInterval> | null = null
+    const stop = (): void => {
+      io?.disconnect()
+      io = null
+      removeEventListener('scroll', onScroll)
+      removeEventListener('resize', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+      if (settle) clearInterval(settle)
+      settle = null
+    }
+    const reveal = (el: Element): void => {
+      el.setAttribute('data-in', '')
+      pending.delete(el)
+      io?.unobserve(el)
+      if (pending.size === 0) stop()
+    }
+    // any element the viewport has already reached or scrolled past (its top is above the viewport's bottom edge);
+    // at the very bottom of the page every remaining element qualifies, regardless of its own layout
+    const sweep = (): void => {
+      if (pending.size === 0) return
+      const vh = innerHeight
+      const atBottom = scrollY + vh >= root.scrollHeight - 1
+      for (const el of [...pending]) if (atBottom || el.getBoundingClientRect().top < vh) reveal(el)
+    }
+    function onScroll(): void {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        sweep()
+      })
+    }
+    sweep() // elements already on screen at mount, shown without the transition
+    if (pending.size > 0) {
+      if (typeof IntersectionObserver === 'function') {
+        io = new IntersectionObserver((es) => {
+          for (const e of es) if (e.isIntersecting) reveal(e.target)
+        }, { rootMargin: '0px 0px 12% 0px', threshold: 0 })
+        for (const el of pending) io.observe(el)
       }
-    }, { rootMargin: '0px 0px 12% 0px', threshold: 0 })
-    const els = document.querySelectorAll('[data-view="landing"] .landing-reveal')
-    // elements already on screen are shown without the transition
-    const vh = innerHeight
-    for (const el of els) {
-      if (el.getBoundingClientRect().top < vh) el.setAttribute('data-in', '')
-      else io.observe(el)
+      addEventListener('scroll', onScroll, { passive: true })
+      addEventListener('resize', onScroll)
+      settle = setInterval(sweep, REVEAL_SETTLE_MS)
     }
     root.setAttribute('data-landing-reveal', '')
     return () => {
-      io.disconnect()
+      stop()
       root.removeAttribute('data-landing-reveal')
     }
   }, [])
@@ -128,10 +170,15 @@ export function Landing() {
   const queueHint = sandboxQueueHint(capacity.data)
   const [sheet, setSheet] = React.useState(false)
   const [sheetLoaded, setSheetLoaded] = React.useState(false)
+  // the sandbox Sheet (and the shared app/i18n module it reads text from) loads lazily; the shared locale is set here,
+  // right before that chunk loads, so the Sheet never renders a moment of the browser-detected default language
   const openSheet = (): void => {
     if (!big) return
-    setSheetLoaded(true)
-    setSheet(true)
+    void import('@/app/i18n').then((m) => {
+      m.setLocale(locale)
+      setSheetLoaded(true)
+      setSheet(true)
+    })
   }
   const version = React.useMemo(() => buildVersion(), [])
   useReveal()

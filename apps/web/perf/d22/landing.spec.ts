@@ -183,6 +183,21 @@ test('first screen: no application chunk; the backdrop renderer is a lazy chunk'
   await close()
 })
 
+test('first screen: the landing chunk carries its own trimmed dictionary, not the full bilingual one (D2.2-R-landing §2.3)', async ({ browser }) => {
+  const { page, w, close } = await open(browser, 'desktop')
+  await page.waitForTimeout(1000)
+  const landingPath = w.requests.find((p) => /\/assets\/landing-.*\.js$/.test(p))
+  expect(landingPath, 'the landing chunk was not requested').toBeTruthy()
+  const body = await (await page.request.get(`${server!.url}${landingPath}`)).text()
+  // the full zh-CN.json/en.json have ~2500 keys each (~230 KB raw combined); a key that exists only there (never on
+  // the landing page itself) must not appear, and the chunk as a whole must stay far below the full-dictionary size
+  expect(body).not.toContain('"fleet.count"')
+  expect(body).not.toContain('"sandbox.endReason.failed"')
+  expect(body.length).toBeLessThan(350_000)
+  expect(w.errors).toEqual([])
+  await close()
+})
+
 for (const [dev, set] of [['desktop', 'min'], ['iphone15', 'mobile'], ['ipad11l', 'mobile']] as const) {
   test(`WebGL2 specification minimum (${set}) on ${dev}: no WebGL error`, async ({ browser }) => {
     const { page, w, close } = await open(browser, dev, { limits: set })
@@ -211,6 +226,42 @@ test('reduced motion: one still frame, sections shown at once', async ({ browser
   await expect(bg).toHaveAttribute('data-voxel-state', 'still')
   const hidden = await page.evaluate(() => [...document.querySelectorAll('.landing-reveal')].filter((e) => getComputedStyle(e).opacity !== '1').length)
   expect(hidden).toBe(0)
+  expect(w.errors).toEqual([])
+  await close()
+})
+
+test('showcase: every lazy image reaches data-media-loaded=true, none stuck pending (D2.2-R-landing §2.5)', async ({ browser }) => {
+  // the loading state is now explicit and inspectable (data-media-loaded) rather than an unlabelled bg-muted block;
+  // no resident loop animation is added for it (the app is already at its two-loop budget, motion-lint MOT-03)
+  const { page, w, close } = await open(browser, 'desktop')
+  const total = await page.locator('figure[data-media] img').count()
+  expect(total).toBeGreaterThan(0)
+  await page.evaluate(() => document.getElementById('showcase')!.scrollIntoView())
+  await expect.poll(() => page.locator('figure[data-media] img[data-media-loaded="true"]').count(), { timeout: 10_000 }).toBe(total)
+  expect(w.errors).toEqual([])
+  await close()
+})
+
+test('reveal: a fast scroll to the bottom (400 px every 60 ms, no backtrack) reveals every section (D2.2-R-landing §2.1)', async ({ browser }) => {
+  // the adversarial review reproduced 4/33 .landing-reveal elements (3 of them the showcase screenshots) left
+  // permanently at opacity:0 after this exact scroll rhythm, because they never happened to intersect between two of
+  // the IntersectionObserver's samples; useReveal() now backstops that with a scroll/resize sweep plus a settle timer
+  const { page, w, close } = await open(browser, 'desktop')
+  const total = await page.locator('[data-view="landing"] .landing-reveal').count()
+  expect(total).toBeGreaterThan(10)
+  await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }))
+  for (let i = 0; i < 60; i++) {
+    const done = await page.evaluate(() => {
+      const before = scrollY
+      scrollBy({ top: 400, behavior: 'instant' }) // instant: html[data-landing] sets scroll-behavior: smooth
+      return scrollY === before // true once scrolled past the end (no further movement)
+    })
+    await page.waitForTimeout(60)
+    if (done) break
+  }
+  await page.waitForTimeout(1200) // dwell at the bottom without scrolling further, exactly as the review did
+  const revealed = await page.locator('[data-view="landing"] .landing-reveal[data-in]').count()
+  expect(revealed).toBe(total)
   expect(w.errors).toEqual([])
   await close()
 })

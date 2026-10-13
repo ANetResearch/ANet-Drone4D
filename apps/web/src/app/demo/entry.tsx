@@ -17,15 +17,18 @@
 // (static text of index.html) copies the full build information on click or long press (lib/build is loaded on that click,
 // so it stays out of the static closure). Only modules of the landing group are imported statically: the landing chunk set
 // stays {index, landing, react, rolldown-runtime} plus the early module and its boot chunk (no three, no store).
+// D2.2-FX-landing: `t` of the shared app/i18n module (and its full bilingual dictionary) is only read on application
+// routes (the `else` branch below), so it is imported dynamically there instead of at module scope: a static top-level
+// import here would otherwise pull the whole dictionary into this always-loaded entry module, undoing the landing
+// page's own trimmed dictionary (./landingI18n).
 import '@/styles/index.css'
-import { t } from '@/app/i18n'
 import { renderLanding } from './Landing'
 
 const BUNDLE_WEIGHT = 0.15
 const WRITE_MIN_MS = 100
 
 /** bundle segment of the boot bar before the application runs; returns the stop function */
-function watchBundleInline(): () => void {
+function watchBundleInline(t: (key: string) => string): () => void {
   const bar = document.querySelector<HTMLElement>('#boot-mask .boot-progress > i')
   const seg = bar?.querySelector<HTMLElement>('[data-seg="bundle"]') ?? null
   const phase = document.querySelector<HTMLElement>('#boot-mask .boot-phase')
@@ -71,7 +74,7 @@ function watchBundleInline(): () => void {
 }
 
 /** the version line copies the full build information (click, or the long press of touch screens) */
-function bindVersionCopy(): void {
+function bindVersionCopy(t: (key: string) => string): void {
   const el = document.querySelector<HTMLElement>('#boot-mask .boot-version')
   if (!el) return
   el.title = t('build.copy')
@@ -96,7 +99,9 @@ else {
   // import first: the preload helper inserts the modulepreload links of the application chunks synchronously, so the
   // watcher counts them from its first look (otherwise the three static chunks alone would read as a complete bundle)
   const app = import('../../main')
-  bindVersionCopy()
-  const stop = watchBundleInline()
-  void app.finally(stop)
+  void import('@/app/i18n').then(({ t }) => {
+    bindVersionCopy(t)
+    const stop = watchBundleInline(t)
+    void app.finally(stop)
+  })
 }

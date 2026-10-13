@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path'
 import { build, defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { LANDING_I18N_KEYS } from './src/app/demo/landingKeys.ts'
 
 // 公开演示构建（ADR-083；M15-FR-120；AWR-19 §3.7）：VITE_AWR_DEMO=public。默认构建不受影响；与测试开关互斥（生产包中不得
 // 残留演示以外的测试开关）。入口换成 src/app/demo/entry.tsx（"/" 为不加载 three 的落地页，其余路由按需加载应用），
@@ -12,9 +13,13 @@ import tailwindcss from '@tailwindcss/vite'
 const DEMO = process.env.VITE_AWR_DEMO === 'public'
 if (process.env.VITE_AWR_DEMO && !DEMO) throw new Error(`VITE_AWR_DEMO=${process.env.VITE_AWR_DEMO}: only "public" is defined (ADR-083)`)
 if (DEMO && process.env.VITE_AWR_TEST_SWITCHES === '1') throw new Error('VITE_AWR_DEMO=public cannot be combined with VITE_AWR_TEST_SWITCHES=1 (ADR-083)')
-// D2.2-L1: the landing page modules are app/demo/Landing*.ts(x) (header, sections, content, backdrop host); the mobile menu adds
-// sheet.tsx and its icon shim. The voxel renderer app/demo/voxelField.ts stays out on purpose (its own lazy chunk).
-const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\w*\.tsx?|app[\\/]i18n[\\/]|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|sheet|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types|lucide-compat)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|testSwitches)\.ts)|vite[\\/]preload-helper/
+// D2.2-L1: the landing page modules are app/demo/Landing*.ts(x) (header, sections, content, backdrop host, its own
+// trimmed LandingI18n.ts); the mobile menu adds sheet.tsx and its icon shim. The voxel renderer app/demo/voxelField.ts
+// stays out on purpose (its own lazy chunk). D2.2-FX-landing: the shared app/i18n module (zh-CN.json + en.json, ~2500
+// keys) is no longer part of this group — Landing*.tsx reads its own virtual:awr-landing-i18n instead (landingI18nPlugin
+// below), so the full bilingual dictionary stays out of the landing chunk; the lazily loaded start Sheet still reads
+// app/i18n directly and gets it in its own chunk, the way it always has.
+const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\w*\.tsx?|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|sheet|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types|lucide-compat)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|testSwitches)\.ts)|vite[\\/]preload-helper|virtual:awr-landing-i18n/
 const DEMO_MEDIA = ['demo-flight.webp', 'screenshot-hero.jpg', 'screenshot-streaming.jpg', 'screenshot-weather.jpg', 'screenshot-swarm.jpg',
   'screenshot-follow.jpg', 'screenshot-perf.jpg']
 
@@ -326,6 +331,39 @@ function bootI18nPlugin(): Plugin {
     },
   }
 }
+
+// 落地页的精简词典（D2.2-FX-landing）：落地页只读 landingKeys.ts 列出的一百多个键，之前却把完整的中英文词典（约 2500
+// 键，约 230 KB 原始字节）一起打进了落地页首屏分块（约占该分块 92% 的字节）。这个虚拟模块在构建期按同样的键清单从
+// zh-CN.json/en.json 筛出两份小词典，供 src/app/demo/LandingI18n.ts 读取，仓库里的两份完整词典保持唯一数据源，不另外
+// 手抄一份（避免走样）；apps/web/tests/m15/landingDict.test.ts 用 LandingContent.ts 真实的 id 复核该键清单有没有漏改。
+export const LANDING_I18N_ID = 'virtual:awr-landing-i18n'
+export function landingI18nDict(zh: Readonly<Record<string, string>>, en: Readonly<Record<string, string>>,
+  keys: readonly string[] = LANDING_I18N_KEYS): { 'zh-CN': Record<string, string>; en: Record<string, string> } {
+  const pick = (d: Readonly<Record<string, string>>): Record<string, string> => {
+    const out: Record<string, string> = {}
+    for (const k of keys) {
+      if (!(k in d)) throw new Error(`virtual:awr-landing-i18n: missing key ${k}`)
+      out[k] = d[k]
+    }
+    return out
+  }
+  return { 'zh-CN': pick(zh), en: pick(en) }
+}
+function landingI18nPlugin(): Plugin {
+  const RESOLVED = `\0${LANDING_I18N_ID}`
+  return {
+    name: 'awr-landing-i18n',
+    resolveId(id) {
+      return id === LANDING_I18N_ID ? RESOLVED : null
+    },
+    load(id) {
+      if (id !== RESOLVED) return null
+      const zh = JSON.parse(readFileSync(resolve(import.meta.dirname, 'src/app/i18n/zh-CN.json'), 'utf8')) as Record<string, string>
+      const en = JSON.parse(readFileSync(resolve(import.meta.dirname, 'src/app/i18n/en.json'), 'utf8')) as Record<string, string>
+      return `export default ${JSON.stringify(landingI18nDict(zh, en))}\n`
+    },
+  }
+}
 const BOOT_MODULES = /[\\/]src[\\/]app[\\/](boot[\\/]capacityText\.ts|i18n[\\/]plural\.ts)$|virtual:awr-boot-i18n/
 // 早期模块内联（D2-FX-R2-web，D2-AC-41）：模块脚本要等 HTML 解析结束（domInteractive，被样式表与内联脚本阻塞，本机冷启动
 // 实测 0.3–1.1 s）才执行，而 vite 又把 index.html 里的全部模块脚本合成一个入口，因此 src/app/boot/early.ts 在构建时单独打成
@@ -396,7 +434,7 @@ const PROXY = {
 }
 
 export default defineConfig({
-  plugins: [r3fClockPlugin(), threeProgramsPlugin(), bootI18nPlugin(), earlyInlinePlugin(BUILD_INFO), react(), tailwindcss(), buildInfoPlugin(BUILD_INFO), ...(DEMO ? [demoPlugin()] : [])],
+  plugins: [r3fClockPlugin(), threeProgramsPlugin(), bootI18nPlugin(), landingI18nPlugin(), earlyInlinePlugin(BUILD_INFO), react(), tailwindcss(), buildInfoPlugin(BUILD_INFO), ...(DEMO ? [demoPlugin()] : [])],
   resolve: { tsconfigPaths: true },
   server: {
     host: '127.0.0.1',
