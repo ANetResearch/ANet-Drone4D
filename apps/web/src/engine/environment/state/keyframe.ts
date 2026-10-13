@@ -22,7 +22,8 @@ export interface EnvKeyframeWire {
   t_apply_ns: number
   config: {
     wind: { level: number; profile: ProfileCfg; library: unknown; turbulence: { model: 'box' | 'dryden' | 'off'; n: number; dx_m: number; l_m: number }; gust: { model: string; max_active: number } }
-    sun: { azimuth_deg: number; elevation_deg: number }
+    /** D2: mode clock = NOAA position from the simulation calendar, illuminance and band (optional, 1.x) */
+    sun: { azimuth_deg: number; elevation_deg: number; mode?: 'fixed' | 'clock'; illum_lx?: number; band?: 'day' | 'low' | 'night' }
     weather_map: { n: number; scale_m: number }
     presets_sha256: string
   }
@@ -36,6 +37,11 @@ export interface EnvKeyframeWire {
   anchors: AnchorsWire
   events: number[][]
   vis: { streamlines: string | null; vmax_mps: number }
+  /** D2 optional fields (AWR-17 §17.6.9; present once the server's sky model is configured) */
+  calendar?: { start_utc: string; tz: string; t_cal_unix_ns?: string }
+  humidity_pct?: number
+  surface?: { t_c: number; emissivity: number; k_cross?: number }
+  acoustic_bg?: { profile: 'rural' | 'suburban' | 'urban'; l_bg_dba: number }
 }
 
 /** gust front (M07 §6.2.4), fields in wire order */

@@ -4,20 +4,29 @@
 // the shader zoo collects warmupVariants(), the PerfGovernor collects knobs, and device loss calls onBackendLost/Ready.
 // Channels (three Layers): CH_MAIN 0, CH_CLOUD 1, CH_PICK 2, CH_BENCH 3. The point cloud always lives on CH_CLOUD
 // (Tier S renders MAIN | CLOUD in one pass; Tier B/A renders CLOUD into cloudRT first).
+// D2 (ADR-110, WP-11): the domain layers register here too: 'targets' (targets and their sensitive volumes, M18; a separate
+// 'keepout' id is also accepted), 'tasking' (stations, strips, re-shoot points, M20). A layer's appearance in the sensor
+// views (viewport/sensorView/pass.ts) defaults by id and can be set with sensorClass: 'world' layers are drawn into the
+// sensor image (grey in the night and LWIR views), 'overlay' layers over it in the EO view only, 'hidden' ones never.
+// D2.1 (WP-11b): 'field' (the field view and perception volumes, M06 layers/field.tsx; hidden in the sensor views).
 import type { Object3D, RenderTarget } from 'three'
 import type { FrameCtx, PerfLayerId, RenderBackendView, RTName } from '@/engine'
 import type { GovernorKnob } from '@/engine'
 import { checkLayerRoot, GUARDS_ON } from '../backend/guards'
 
 export type LayerId = 'pointcloud' | 'drones' | 'trails' | 'frustums' | 'mission' | 'zones' | 'environment' | 'groundSky' | 'labels' | 'glyphs' | 'debug'
+  | 'targets' | 'keepout' | 'tasking' | 'field'
 export const CH_MAIN = 0
 export const CH_CLOUD = 1
 export const CH_PICK = 2
 export const CH_BENCH = 3
 
 export interface LayerCaps { maxInstances?: number; maxQuads?: number; maxSegments?: number; maxLabels?: number }
-/** a shader-zoo entry: the object is rendered (made drawable by before()) to every target it uses at run time */
-export type WarmTarget = 'screen' | RTName
+/**
+ * a shader-zoo entry: the object is rendered (made drawable by before()) to every target it uses at run time; 'sensor' is
+ * the sensor view target (added by the backend for the world layers, viewport/sensorView/pass.ts)
+ */
+export type WarmTarget = 'screen' | 'sensor' | RTName
 export interface WarmupItem {
   object: Object3D
   targets?: readonly WarmTarget[]
@@ -42,7 +51,7 @@ export interface EdlCompositeLike {
 
 export interface LayerSpec {
   id: LayerId
-  owner: 'M05' | 'M06' | 'M07' | 'M10' | 'M13'
+  owner: 'M05' | 'M06' | 'M07' | 'M10' | 'M13' | 'M18' | 'M19' | 'M20' | 'M21'
   perfKey: PerfLayerId
   /** mounted under WorldRoot (layer frame = world ENU); null for DOM layers */
   root: Object3D | null
@@ -56,6 +65,8 @@ export interface LayerSpec {
   onBackendLost?(): void
   onBackendReady?(be: RenderBackendView): void
   knobs?: GovernorKnob[]
+  /** sensor views (D2): drawn into the sensor image, over it (EO only) or not at all; default by id (sensorView/pass.ts) */
+  sensorClass?: 'world' | 'overlay' | 'hidden'
   /** M05 only: CAS, EDL composite, DTM sampler and prefetch (M05 §7.1) */
   services?: PointCloudServices
   dispose(): void

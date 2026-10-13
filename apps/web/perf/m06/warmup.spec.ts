@@ -1,12 +1,13 @@
 // D1-AC-25 / M06-AC-008, M06-NFR-004 (PERF-AC-028; ADR-007, g01 §4.3): after the mask is lifted the first use of each
 // feature compiles no program: weather preset (M07, when its test hook exists), selecting a drone, Third, FPV (or its
 // no_camera_sensor refusal), the P600 hero appearing (procedural stand-in, ?hero=procedural), a click pick, a point
-// colour mode switch (M05 __pc hook) and an in-app world switch. gpu.programs stays at gpu.programsAtReveal and
+// colour mode switch (M05 __pc hook), an in-app world switch and, in FPV, the D2 sensor views EO, night and LWIR (white-hot
+// and black-hot; D2-AC-21, WP-11). gpu.programs stays at gpu.programsAtReveal and
 // gpu.compiledAfterReveal stays 0. The 150 ms maximum frame interval within 1 s of each step is a performance
 // threshold: measured always, asserted only under M06_PERF=1 (acceptance phase, exclusive lock); with M06_PERF=1 the
 // steps start once the PerfGovernor walk after the reveal is over (ADR-076).
 import { expect, test, type Page } from '@playwright/test'
-import { firstVehicle, frames, maxGapMs, openWorld, PERF, perf, watch, type VpHooks } from './common'
+import { firstVehicle, frames, maxGapMs, openWorld, PERF, perf, watch, type SvHooks, type VpHooks } from './common'
 import { startM06Server, type M06Server } from './server'
 
 let srv: M06Server | null = null
@@ -57,10 +58,24 @@ test('no program is compiled after the reveal (M06-AC-008)', async ({ page }) =>
     const r = await page.evaluate(() => (window as unknown as VpHooks).__vp.setMode('third'))
     expect(r.ok).toBe(true)
   }, log)
+  let fpv = false
   await step(page, 'fpv', async () => {
     const r = await page.evaluate(() => (window as unknown as VpHooks).__vp.setMode('fpv'))
     expect(r.ok || r.reason === 'no_camera_sensor').toBe(true)
+    fpv = r.ok
   }, log)
+  // D2 sensor views of the FPV camera (one composite program warmed in the zoo; the world layers draw into the sensor
+  // target with their canvas programs)
+  if (fpv) {
+    for (const m of ['eo', 'nir', 'lwir'] as const) {
+      await step(page, `sensor view ${m}`, async () => {
+        const r = await page.evaluate((mm) => (window as unknown as SvHooks).__vp.sensorView.set(mm), m)
+        expect(r.ok || r.reason === 'no_thermal_sensor').toBe(true)
+      }, log)
+    }
+    await step(page, 'lwir black-hot', () => page.evaluate(() => (window as unknown as SvHooks).__vp.sensorView.setPalette('black_hot')), log)
+    await step(page, 'sensor view fpv', () => page.evaluate(() => (window as unknown as SvHooks).__vp.sensorView.set('fpv')), log)
+  }
   // P600 hero: orbit 3.5 m from the selected drone (screen radius well above 48 px), re-aimed every 100 ms because
   // FakeSource vehicles keep moving
   await step(page, 'hero', async () => {

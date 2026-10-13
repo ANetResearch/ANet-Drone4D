@@ -710,6 +710,13 @@ export class PointCloudEngine {
     return Math.max(1, Math.floor(Math.min(B, PC.capacityFrac * this.poolCapacityPts)))
   }
 
+  /**
+   * first-frame target set and its upload size. targetPts is the burst quota of the cold start, so it counts what
+   * drainUploads uploads (whole nodes, t.numPoints), not what is drawn (sel.cnt, cut to the budget B): with the drawn
+   * count the last target node missed the burst whenever the budget cut a node (synthcity: 20 000 drawn of 22 074 to
+   * upload), the first-screen Progress = 1 frame was always the frame after the first non-WARMING frame and TTFP
+   * carried the compositor's frame gap in between (D2-FX-R2-web round 2, D2-AC-01)
+   */
   private captureTarget(sel: Selection): void {
     const t = this.t!
     if (this.targetSet.length < sel.n) this.targetSet = new Int32Array(Math.max(sel.n, 64))
@@ -719,7 +726,7 @@ export class PointCloudEngine {
       const i = sel.idx[k]
       if (t.numPoints[i] === 0) continue
       this.targetSet[n++] = i
-      pts += sel.cnt[k]
+      pts += t.numPoints[i]
     }
     this.targetN = n
     this.targetPts = pts

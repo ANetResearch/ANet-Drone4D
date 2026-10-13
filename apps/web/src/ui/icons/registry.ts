@@ -3,7 +3,7 @@
 // Semantic icon registry (M15-FR-059; AWR-15 §7.6; ADR-030). Business code writes semantic keys only; geometry is
 // lucide@1.48.0 canonical IconNode data or one of the custom icons. PARTNERS holds the alternate geometry of a key
 // (the other end of a whitelisted morph pair or an explicit swap partner) for <StateIcon icon={key} alt>.
-import { Activity, Anchor, ArrowDownUp, Axis3d, BadgeCheck, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bell, BellOff, BellRing, Binoculars, Blend, Bookmark, Bot, BotOff, Box, BrainCircuit, Bug, BuildingComplex, Camera, ChartLine, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleCheck, CircleDashed, CircleDot, CirclePause, CirclePlay, CircleQuestionMark, CircleUser, CircleX, Clock, Cloud, CloudDownload, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudRainWind, CloudSnow, CloudSun, CloudSunRain, Cloudy, Command, Compass, Cone, Copy, Cpu, Crosshair, Database, Download, Drone, Droplets, Earth, Ellipsis, EllipsisVertical, ExternalLink, Eye, EyeOff, FastForward, FileBox, FileBraces, Flag, FlaskConical, Focus, FolderOpen, Fullscreen, Funnel, Gamepad2, Gauge, Ghost, Grid3x3, GripVertical, Hand, Handshake, HardDrive, Haze, HeartPulse, Hourglass, House, ImageDown, Info, KeyRound, Keyboard, Layers, Link, Link2Off, ListChecks, LoaderCircle, Locate, LocateFixed, LocateOff, Lock, LockOpen, LogOut, Map as MapIcon, MapPin, MapPinPlus, MapPinX, Maximize, MemoryStick, Menu, MessagesSquare, Minimize, Minus, Monitor, Moon, Mountain, MousePointer2, Move3d, MoveVertical, Navigation2, Network, OctagonAlert, OctagonX, Orbit, Package, Palette, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pause, Pencil, Pin, PinOff, PlaneLanding, PlaneTakeoff, Play, Plus, Power, PowerOff, Radar, Radio, RadioTower, Redo2, RefreshCw, Repeat, Repeat1, Rewind, Rotate3d, RotateCcw, RotateCcwClock, Route, Ruler, Satellite, Scan, ScanEye, ScanLine, ScanSearch, Scissors, Search, Server, Settings, Share2, ShieldAlert, ShieldBan, ShieldCheck, ShieldHalf, SignalHigh, SignalLow, SignalMedium, SignalZero, Siren, SkipBack, SkipForward, Slice, SlidersHorizontal, Snowflake, Sparkles, Spline, Square, SquareDashed, SquareDashedMousePointer, Star, StepBack, StepForward, Sun, SunMoon, Sunrise, Sunset, SwitchCamera, Tags, Target, Thermometer, ThermometerSun, Timer, TimerOff, Tornado, Trash, TrendingDown, TriangleAlert, Undo2, Upload, Video, VideoOff, WavesHorizontal, Waypoints, Wifi, WifiOff, Wind, WindArrowDown, Workflow, X, Zap, ZoomIn, ZoomOut } from 'lucide'
+import { Activity, Anchor, ArrowDownUp, AudioWaveform, Axis3d, BadgeCheck, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, Bell, BellOff, BellRing, Binoculars, Blend, Bookmark, Bot, BotOff, Box, BrainCircuit, Bug, BuildingComplex, Camera, Car, ChartLine, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, CircleAlert, CircleCheck, CircleDashed, CircleDot, CirclePause, CirclePlay, CircleQuestionMark, CircleSlash, CircleUser, CircleX, Clock, Cloud, CloudDownload, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudRainWind, CloudSnow, CloudSun, CloudSunRain, Cloudy, Cog, Command, Compass, Cone, Copy, Cpu, Crosshair, Database, Dog, Download, Drone, Droplets, Ear, Earth, Ellipsis, EllipsisVertical, ExternalLink, Eye, EyeOff, FastForward, FileBox, FileBraces, Flag, Flashlight, FlaskConical, Focus, FolderOpen, Fullscreen, Funnel, Gamepad2, Gauge, Ghost, Grid3x3, GripHorizontal, GripVertical, Hand, Handshake, HardDrive, Haze, HeartPulse, Hourglass, House, ImageDown, Info, Joystick, KeyRound, Keyboard, LandPlot, Layers, Layers2, Leaf, Link, Link2Off, ListChecks, LoaderCircle, Locate, LocateFixed, LocateOff, Lock, LockOpen, LogOut, Map as MapIcon, MapPin, MapPinPlus, MapPinX, Maximize, MemoryStick, Menu, MessagesSquare, Mic, Minimize, Minus, Monitor, Moon, Mountain, MousePointer2, Move3d, MoveVertical, Navigation2, Network, OctagonAlert, OctagonX, Orbit, Package, Palette, PanelBottomClose, PanelBottomOpen, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Pause, Pencil, PersonStanding, Pin, PinOff, Plane, PlaneLanding, PlaneTakeoff, Play, Plus, Power, PowerOff, Radar, Radio, RadioTower, Redo2, RefreshCw, Repeat, Repeat1, Repeat2, Rewind, Rocket, Rotate3d, RotateCcw, RotateCcwClock, RotateCcwKey, Route, Ruler, Satellite, Scan, ScanEye, ScanLine, ScanSearch, Scissors, Search, Server, Settings, Share2, ShieldAlert, ShieldBan, ShieldCheck, ShieldHalf, ShieldUser, SignalHigh, SignalLow, SignalMedium, SignalZero, Siren, SkipBack, SkipForward, Slice, SlidersHorizontal, Snowflake, Sparkles, Spline, Square, SquareDashed, SquareDashedMousePointer, Star, StepBack, StepForward, Sun, SunMoon, Sunrise, Sunset, SwitchCamera, TabletSmartphone, Tags, Target, Thermometer, ThermometerSun, Timer, TimerOff, Tornado, Trash, TrendingDown, TriangleAlert, Undo2, Upload, Video, VideoOff, View, Warehouse, WavesHorizontal, Waypoints, Wifi, WifiOff, Wind, WindArrowDown, Workflow, X, Zap, ZoomIn, ZoomOut } from 'lucide'
 import { DroneHexa, Formation, OctreeLod, PointCloud, SandDust } from './custom'
 import type { IconNode } from './types'
 
@@ -240,6 +240,55 @@ export const ICONS = {
   'env.blizzard': Snowflake, // N
   'sensor.imu': Rotate3d, // N
   'sensor.baro': MoveVertical, // N
+  'sandbox.mine': Box, // O
+  'target.person': PersonStanding, // O
+  'target.dog': Dog, // O
+  'target.vehicle': Car, // O
+  'target.uav': Drone, // O
+  'target.machine': Cog, // O
+  'target.object': Package, // O
+  'target.keepout': ShieldBan, // O
+  'sens.visual': Eye, // O
+  'sens.acoustic': Ear, // O
+  'sens.radar': Radar, // O
+  'nest.box': Warehouse, // O
+  'nest.launcher': Rocket, // O
+  'nest.vtol': LandPlot, // O
+  'sensor.radar': RadioTower, // O
+  'sensor.acoustic': Mic, // O
+  'sensor.nir': Flashlight, // O
+  'fw.plane': Plane, // O
+  'task.point': MapPin, // O
+  'task.polyline': Waypoints, // O
+  'task.area': Scan, // O
+  'task.scan': ScanLine, // O
+  'task.perimeter': SquareDashed, // O
+  'task.relay': Repeat2, // O
+  'task.guard': ShieldHalf, // O
+  'manual.stick': Joystick, // O
+  'api.doc': FileBraces, // O
+  'sound.wave': AudioWaveform, // O
+  'ui.fullscreen': Maximize, // P
+  'ui.fullscreen-exit': Minimize, // P
+  'ui.orientation-lock': RotateCcwKey, // P
+  'ui.dock': Pin, // P
+  'ui.undock': PinOff, // P
+  'ui.drag-handle': GripHorizontal, // P
+  'ui.more': Ellipsis, // P
+  'power.saving': Leaf, // P
+  'power.resume': Zap, // P
+  'identity.shield': ShieldUser, // P
+  'field.off': CircleSlash, // P
+  'field.acoustic': Ear, // P
+  'field.visual': Eye, // P
+  'field.thermal': Thermometer, // P
+  'field.radar': Radar, // P
+  'field.layers': Layers2, // P
+  'cmd.watch': ScanEye, // P
+  'cmd.quick': Command, // P
+  'device.pair': TabletSmartphone, // P
+  'tab.viewport': View, // P
+  'tab.tasks': ListChecks, // P
 } as const satisfies Record<string, IconNode>
 
 export type IconKey = keyof typeof ICONS
@@ -294,10 +343,11 @@ export const PARTNERS: Readonly<Partial<Record<IconKey, IconNode>>> = {
   'copy': Check,
   'pin': PinOff,
   'link': Link2Off,
+  'ui.fullscreen': Minimize,
 }
 
 /** keys whose angle is shown with the CSS rotate property, never a morph (d03 §3.6; AWR-15 §7.5) */
 export const ROTATE_KEYS: ReadonlySet<IconKey> = new Set<IconKey>(['env.wind.dir', 'heading'])
 
-export const ICON_KEY_COUNT = 232
-export const ICON_GEOMETRY_COUNT = 208
+export const ICON_KEY_COUNT = 281
+export const ICON_GEOMETRY_COUNT = 232

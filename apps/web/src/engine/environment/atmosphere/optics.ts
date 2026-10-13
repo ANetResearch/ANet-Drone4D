@@ -2,6 +2,9 @@
 // Mirror of python/awr/environment/atmosphere/optics.py (golden optical_depth.json): exponential haze (scale height
 // H = 1500 m, Quilez closed form) + flat fog layer + uniform precipitation layer below the cloud base; optical layers use
 // coordinate.ground.zM as the AGL origin. Web fog and sky use T = exp(-tau) (atmosphere/fogNode.ts, same formula in TSL).
+// D2 (WP-09; AWR-04 §6.3 step 4; ADR-101): per-wavelength extinction (aerosol scaled by Kim, precipitation unchanged, LWIR
+// >= 8 um adds water vapour (0.03 + 0.012 rho_v) per km, rho_v from relative humidity and the mean air temperature by
+// Magnus), for the frontend perception calculator (M19 TS port).
 import type { EnvDerived } from '../state/derive'
 
 export const H_HAZE = 1500.0
@@ -53,9 +56,29 @@ export function kimQ(v2Km: number): number {
   return 0.0
 }
 
-export function sigmaLambda(d: EnvDerived, lamNm: number, kV2: number): number {
+export const LWIR_MIN_NM = 8000.0
+
+/** water vapour density (g/m3) from relative humidity (0-1) and temperature (degC), Magnus saturation pressure */
+export function waterVapourGm3(rh: number, tC: number): number {
+  const es = 6.112 * Math.exp((17.62 * tC) / (243.12 + tC))
+  return (216.7 * Math.min(1, Math.max(0, rh)) * es) / (tC + 273.15)
+}
+
+/** LWIR water vapour absorption (1/m): 0.03 + 0.012 rho_v per km */
+export function sigmaWvPerM(rhoVGm3: number): number {
+  return (0.03 + 0.012 * Math.max(0, rhoVGm3)) / 1000.0
+}
+
+/** aerosol wavelength ratio (lambda / 550)^-q with Kim's q at V2 = ln50 / sigma_bg (km) */
+export function kimFactor(d: EnvDerived, lamNm: number, kV2: number): number {
+  return (lamNm / 550.0) ** -kimQ(kV2 / d.sigma_bg / 1000.0)
+}
+
+export function sigmaLambda(d: EnvDerived, lamNm: number, kV2: number, rhoVGm3 = 0): number {
   const v2Km = kV2 / d.sigma_bg / 1000.0
-  return d.sigma_bg * (lamNm / 550.0) ** -kimQ(v2Km) + d.sigma_precip
+  let s = d.sigma_bg * (lamNm / 550.0) ** -kimQ(v2Km) + d.sigma_precip
+  if (lamNm >= LWIR_MIN_NM) s += sigmaWvPerM(rhoVGm3)
+  return s
 }
 
 export function lidarTwoWay(d: EnvDerived, lamNm: number, rM: number, kV2: number): number {

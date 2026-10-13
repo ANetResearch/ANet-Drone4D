@@ -4,7 +4,7 @@
 // hasCamera = false -> no_camera_sensor without switching.
 import { describe, expect, it } from 'vitest'
 import { Matrix4, PerspectiveCamera, Quaternion, Vector3 } from 'three'
-import { CameraRig, ctx as frameCtx, WORLD_ROOT, type SensorsApi, type SensorView } from '@/engine'
+import { CameraRig, ctx as frameCtx, reverseDepthRow, WORLD_ROOT, type SensorsApi, type SensorView } from '@/engine'
 
 const S: SensorView = { agentNo: 7, sensorNo: 0, name: 'cam', kind: 0, rangeM: 80, hfov: 1.2, vfov: 0.8, ring: new Float64Array(36), ringHead: 0, valid: true }
 const PROJ = new Matrix4().makePerspective(-0.3, 0.32, 0.2, -0.18, 0.2, 20000)
@@ -93,5 +93,35 @@ describe('Third and FPV (M06-AC-040)', () => {
     r.setMode('orbit', 7)
     expect(cam.matrixAutoUpdate).toBe(true)
     expect(r.controls.enabled).toBe(true)
+  })
+
+  it('FPV under the reversed depth buffer: the M13 projection gets three\'s reversed z row (D2 WP-11)', () => {
+    const cam = new PerspectiveCamera(60, 16 / 9, 0.5, 20000)
+    ;(cam as unknown as { _reversedDepth: boolean })._reversedDepth = true
+    const r = new CameraRig(cam, null, {
+      motionTier: () => 'reduced', sensors: () => sensors(true),
+      focusPose: (_a, p, qq, v) => {
+        p.set([0, 0, 50])
+        qq.set([0, 0, 0, 1])
+        v.set([0, 0, 0])
+        return true
+      },
+    })
+    expect(r.setMode('fpv', 7).ok).toBe(true)
+    r.update({ ...frameCtx, nowMs: 16, dtMs: 16, cssW: 1280, cssH: 720, camera: cam })
+    const e = cam.projectionMatrix.elements
+    const n = 0.2
+    const f = 20000
+    expect(e[10]).toBeCloseTo(n / (f - n), 12)
+    expect(e[14]).toBeCloseTo((f * n) / (f - n), 9)
+    for (const i of [0, 5, 8, 9, 11]) expect(e[i]).toBeCloseTo(PROJ.elements[i], 12)
+    // a point 100 m ahead lies at depth n / 100 (reversed: near -> 1, far -> 0)
+    const ref = new Matrix4().fromArray(Array.from(e))
+    const ndc = new Vector3(0, 0, -100).applyMatrix4(ref)
+    expect(ndc.z).toBeCloseTo((f * n) / (f - n) / 100 - n / (f - n), 9)
+    expect(r.fpvSensor?.name).toBe('cam')
+    const e2 = new Float64Array(16)
+    reverseDepthRow(e2, n, f)
+    expect(e2[10]).toBeCloseTo(e[10], 15)
   })
 })

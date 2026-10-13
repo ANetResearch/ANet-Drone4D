@@ -13,7 +13,18 @@ export {
 } from './state/keyframe'
 export { EnvStore, QUEUE_MAX, MAX_STEPS_PER_FRAME, type EnvSyncState } from './state/EnvStore'
 export { isa, sectorSlots } from './state/isa'
-export { opticalDepth, flatLen, sigmaAt, kimQ, sigmaLambda, lidarTwoWay, H_HAZE } from './atmosphere/optics'
+export {
+  opticalDepth, flatLen, sigmaAt, kimQ, sigmaLambda, lidarTwoWay, H_HAZE, LWIR_MIN_NM, kimFactor, sigmaWvPerM, waterVapourGm3,
+} from './atmosphere/optics'
+export { solarPosition, refractionDeg, sunDirEnu, newSunPos, type SunPos } from './sky/solar'
+export { illuminanceLx, illumBand, BAND_NAMES, BAND_DAY, BAND_LOW, BAND_NIGHT, MOON_FULL_LX, type BandName } from './sky/illum'
+export { parseUtcMs, formatLocal, validTz, cal0Ms } from './sky/calendar'
+export { SURFACE_CLASSES, tMeanC, airTempC, surfaceTempC, skyTempC, kCrossOf, type SurfaceClass } from './sky/thermal'
+export {
+  BANDS_HZ, N_BANDS, PROFILES as ACOUSTIC_PROFILES, LEVELS_DBA, aWeightDb, levelDba, bandLevelsDba, totalDba, rainBoostDb, isAcousticProfile,
+  type AcousticProfile,
+} from './sky/acoustic'
+export { SkyEval, daylightK, type GeoAnchor } from './sky/skyEval'
 export { fogFactorNode, opticalDepthNode, sceneFogNode, transmittanceNode } from './atmosphere/fogNode'
 export { profile, profileCfg, fAdv } from './wind/profile'
 export { gust, gustExpired, gustCreate } from './wind/gust'
@@ -30,4 +41,5 @@ export { ENV_TIERS, type EnvLevel } from './quality/envTiers'
 export { PrecipAnchor } from './precip/PrecipAnchor'
 export { EnvironmentRuntime, arrowSpacingIdx, type EnvSubLayers, type EnvPerf } from './EnvRuntime'
 export { EnvBinding } from './binding'
+export { skySummary, type EnvSkySummary } from './summary'
 export { buildSummary, localReadings, sampleReadings, EnvSampleCache, ES32, profileCurve, EnvSeries, beaufort, type EnvSummaryData, type EnvSelectedData } from './summary'

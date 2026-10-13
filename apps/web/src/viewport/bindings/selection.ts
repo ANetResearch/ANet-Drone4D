@@ -1,7 +1,8 @@
 // stores/selection -> drone highlights and the 60 Hz state channel of the selected vehicles (M06 §7.1
 // drones.setHighlights; AWR-03 §8.5; AWR-17 §6.6). Owner: M06. Selection to 3D highlight <= 2 frames: the highlight is
 // applied synchronously on the store change and read by the next drones phase. Up to 8 selected vehicles (the primary
-// first) get uav/<id>/state@60; the roster may arrive after the selection, so unresolved ids are retried at 4 Hz.
+// first) get uav/<id>/state@60 (D2.1: the phone and tablet profiles 30, AWR-04 §15.8.6); the roster may arrive after the
+// selection, so unresolved ids are retried at 4 Hz.
 import { register } from '@/engine'
 import { rtClient } from '@/net/rt'
 import { selectionStore } from '@/stores/selection'
@@ -48,7 +49,8 @@ export function installSelectionBinding(): () => void {
         subs.delete(id)
       }
     }
-    if (rt) for (const id of want) if (!subs.has(id)) subs.set(id, rt.subscribe(`uav/${id}/state`, { rate: SELECTION.rateHz }))
+    const rate = (vp.be && vp.be.quality.selectedHz > 0 ? Math.min(SELECTION.rateHz, vp.be.quality.selectedHz) : SELECTION.rateHz) as 30 | 60
+    if (rt) for (const id of want) if (!subs.has(id)) subs.set(id, rt.subscribe(`uav/${id}/state`, { rate }))
     // the focus vehicle of third/fpv stays fixed while the mode runs; otherwise it follows the primary selection
     if (vp.rig && vp.rig.mode !== 'third' && vp.rig.mode !== 'fpv') vp.rig.focusAgent = primary
   }

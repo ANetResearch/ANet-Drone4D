@@ -11,8 +11,29 @@ import { F } from './state/presets'
 import { windCPU, type WindCpuOpts } from './wind/windCPU'
 import { fAdv, profileCfg } from './wind/profile'
 import type { TelemetryFrame } from '@/net/rt/types'
+import { formatLocal } from './sky/calendar'
 
 export interface EnvSelectedData { windMps: number; speedMps: number; dirFromDeg: number; gustMps: number; morM: number; rainEffMmh: number; airspeedMps: number; stale: boolean; source: 'sample32' | 'local' }
+
+/** D2 sky summary (14 §20.5.4, UX-FR-114): calendar time and band for the ENVIRONMENT group and the session bar; HoverCard
+ * values (sun elevation and azimuth, illuminance); server humidity, surface and acoustic background. null when the
+ * keyframe carries no D2 fields (D1 show sessions without a calendar). */
+export interface EnvSkySummary {
+  mode: 'fixed' | 'clock'
+  /** calendar instant at tRender (UNIX ms), null without a calendar */
+  tCalUnixMs: number | null
+  tz: string
+  /** 'YYYY-MM-DD HH:mm' in tz, '' without a calendar */
+  localTime: string
+  startUtc: string
+  sunAzDeg: number
+  sunElDeg: number
+  illumLx: number
+  band: 'day' | 'low' | 'night'
+  humidityPct: number
+  surface: { tC: number; emissivity: number; kCross: number } | null
+  acoustic: { profile: 'rural' | 'suburban' | 'urban'; lBgDba: number } | null
+}
 
 export interface EnvSummaryData {
   activePreset: string | null
@@ -29,6 +50,23 @@ export interface EnvSummaryData {
   staleS: number
   version: number
   advanced: { turbSigmaRefMps: number; gustAmpMps: number; gustRateHz: number; wMeanMps: number; fogTopAglM: number; dust: number; level: number; turbModel: 'box' | 'dryden' | 'off' }
+  sky: EnvSkySummary | null
+}
+
+const r = (x: number, k: number): number => Math.round(x * k) / k
+
+/** sky summary rounded for display (the adapter writes the store only when a displayed value changed) */
+export function skySummary(store: EnvStore): EnvSkySummary | null {
+  const k = store.sky
+  if (!store.current || !k.d2) return null
+  const hasCal = Number.isFinite(k.tCalUnixMs)
+  const tCal = hasCal ? Math.floor(k.tCalUnixMs / 60000) * 60000 : null
+  return {
+    mode: k.mode, tCalUnixMs: tCal, tz: k.tz, localTime: tCal !== null ? formatLocal(tCal, k.tz) : '', startUtc: k.startUtc,
+    sunAzDeg: r(k.azDeg, 10), sunElDeg: r(k.elDeg, 10), illumLx: k.illumLx >= 10 ? Math.round(k.illumLx) : r(k.illumLx, 1000), band: k.bandName,
+    humidityPct: k.humidityPct, surface: Number.isFinite(k.surfaceTC) ? { tC: k.surfaceTC, emissivity: k.surfaceEmissivity, kCross: k.kCross } : null,
+    acoustic: k.acousticProfile ? { profile: k.acousticProfile, lBgDba: k.lBgDba } : null,
+  }
 }
 
 const BEAUFORT = [0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7]
@@ -135,6 +173,7 @@ export function buildSummary(store: EnvStore, nowMs: number, selected: EnvSelect
     advanced: ok ? { turbSigmaRefMps: s[F.SIGMA_REF], gustAmpMps: s[F.GUST_AMP], gustRateHz: s[F.GUST_RATE], wMeanMps: s[F.W_MEAN], fogTopAglM: s[F.FOG_TOP],
       dust: s[F.DUST], level: kf.level, turbModel: kf.turbModel }
       : { turbSigmaRefMps: nan, gustAmpMps: nan, gustRateHz: nan, wMeanMps: nan, fogTopAglM: nan, dust: nan, level: 1, turbModel: 'box' },
+    sky: skySummary(store),
   }
 }
 

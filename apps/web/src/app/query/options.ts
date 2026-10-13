@@ -98,9 +98,14 @@ export const worldsQuery = () =>
 /** world.json `dataset` block (AWR-16; M16-FR-006 / FR-010 data source and citation shown in the WORLD group and About) */
 export interface WorldDataset {
   name?: string; version?: string; url?: string; citation?: string; license?: string; redistribution?: boolean
+  /** deployment terms (ADR-109 rule 3: "used under authorization of the dataset rights holders"); absent before ADR-109 */
+  terms?: string
   /** engine of a reconstructed world (world.json generator.params.recon.engine; "mock" is simulated data, M01-to-M15 item 2) */
   reconEngine?: string | null
   tags?: string[]
+  /** D2: world.json stats and names (the World panel of the D2 surfaces, which do not read the D1 world list) */
+  stats?: { points?: number; areaKm2?: number; maxHeightM?: number } | null
+  nameZh?: string | null
 }
 export const worldDatasetQuery = (id: string) =>
   queryOptions({
@@ -111,8 +116,9 @@ export const worldDatasetQuery = (id: string) =>
       // world.json is the content-version authority (AWR-17 §5.1 no-cache): revalidate like every other reader
       const r = await fetch(`/worlds/${encodeURIComponent(id)}/world.json`, { signal, cache: 'no-cache', headers: { accept: 'application/json' } })
       if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) return null
-      const w = (await r.json()) as { dataset?: WorldDataset; tags?: unknown; generator?: { params?: { recon?: { engine?: unknown } } } }
+      const w = (await r.json()) as { dataset?: WorldDataset; tags?: unknown; generator?: { params?: { recon?: { engine?: unknown } } }; stats?: WorldDataset['stats']; nameZh?: unknown }
       const engine = w.generator?.params?.recon?.engine
-      return { ...(w.dataset ?? {}), reconEngine: typeof engine === 'string' ? engine : null, tags: Array.isArray(w.tags) ? w.tags.filter((x): x is string => typeof x === 'string') : [] }
+      return { ...(w.dataset ?? {}), reconEngine: typeof engine === 'string' ? engine : null, tags: Array.isArray(w.tags) ? w.tags.filter((x): x is string => typeof x === 'string') : [],
+        stats: w.stats && typeof w.stats === 'object' ? w.stats : null, nameZh: typeof w.nameZh === 'string' ? w.nameZh : null }
     },
   })

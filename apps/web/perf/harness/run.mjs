@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Harness CLI (M16-FR-040; M16 §7.1; AWR-18 §3). Performance cases run only through this entry point.
 //   node perf/harness/run.mjs --case <id|glob|alias> [--city --scene --n --net --clients --minutes] [--source live|fake]
-//                             [--runs 1|3] [--gate G2d|G2w|G3|G4|local] [--run-id <id>] [--locked] [--keep-backend]
+//                             [--runs n] [--gate G2d|G2w|G3|G4|local] [--run-id <id>] [--locked] [--keep-backend]
+//   (--runs overrides the registered number of runs, up or down: 1 for a smoke, 3 for ADR-033 judgements)
 //   node perf/harness/run.mjs --list [--gate G2d]            list registered cases (no lock)
 //   node perf/harness/run.mjs --check                        validate the registry (exit 2 on PERF-E017)
 // Exit codes (19 §16.2): 0 judged (see result.json, may be FAIL); 1 tool error; 2 registry or argument error (PERF-E017);

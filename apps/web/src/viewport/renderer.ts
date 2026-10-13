@@ -7,14 +7,17 @@
 //      Software rasterisers by UNMASKED_RENDERER (adapter info only when the string is masked) are Tier S / software;
 //      other hardware is Tier B, iGPU by family name, otherwise the 300 ms microbench (or its 30-day cache).
 // Start rung: software 0, iGPU 3, dGPU 4 (+1 with microbench headroom), minus the FR-013 start-rung memory.
+// D2.1 (WP-11b; AWR-04 §15.8.6): deviceClass = mobile (a mobile GPU family on a coarse pointer) and the form factor give the
+// quality profile (viewport/quality.ts); its start-rung ceiling applies here, the rest is read from be.quality.
 import { WebGLRenderer } from 'three'
 import { events, perfProbe, type DeviceClass, type Tier } from '@/engine'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { AnetNodesHandler } from './anetNodesHandler'
 import { M06Error } from './backend/guards'
 import {
-  classifyByMicrobench, classifyByName, isSoftware, readCache, rendererKey, startRungFor, writeCache, type AdapterText, type DeviceCache,
+  classifyByMicrobench, classifyByName, isMobileDevice, isSoftware, readCache, rendererKey, startRungFor, writeCache, type AdapterText, type DeviceCache,
 } from './backend/deviceClass'
+import { coarsePointer, profileForPage, qualityStartRung } from './quality'
 import { runMicrobench } from './backend/microbench'
 import { wrapGl, type BackendInfo, type RenderBackend } from './backend/webgl2'
 import type { Forced } from './backend/testSwitches'
@@ -100,5 +103,6 @@ export async function createRenderBackend(canvas: HTMLCanvasElement, opts: Backe
   }
   const p = perfProbe()
   if (mbMs !== null) p.meta.microbenchMs = mbMs
-  return wrapGl(r, tier, dc, startRungFor(dc, bonus, cache?.startMinus ?? 0), info)
+  const quality = profileForPage(isMobileDevice(name, coarsePointer()))
+  return wrapGl(r, tier, dc, qualityStartRung(startRungFor(dc, bonus, cache?.startMinus ?? 0), quality), info, quality)
 }

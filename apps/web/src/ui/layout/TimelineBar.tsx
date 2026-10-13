@@ -11,6 +11,7 @@
 //                 red), "index loading", "RTF limited x3.4" and the Dock toggle.
 // Every disabled control keeps its reason in the Tooltip (guards from timelineGuards(); read-only, offline and
 // other-world reasons from ui/shell/guards). The bar never writes the clock itself: all actions are M12's.
+import { PausedNote } from '@/ui/power/PowerOverlay'
 import * as React from 'react'
 import { useT } from '@/app/i18n'
 import { fmt } from '@/lib/format'
@@ -160,6 +161,7 @@ function StatusBadges({ state, compact }: { state: number; compact: boolean }) {
           <SwapText value={t(buffering ? 'time.state.4' : `time.state.${state}`)} />
         </Badge>
       ) : null}
+      <PausedNote />
       <Badge variant="outline" data-mode={mode} className="gap-1 font-mono">
         <Icon icon={mode === 'live' ? 'tl.live' : 'tl.history'} />
         {mode === 'live' ? 'LIVE' : 'REPLAY'}

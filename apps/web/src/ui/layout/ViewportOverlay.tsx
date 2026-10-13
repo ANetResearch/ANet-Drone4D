@@ -4,6 +4,11 @@
 // ("focus low latency" in Third and FPV; "offline, last update 12 s ago" while the link is down), the performance HUD
 // and the ground readout of the last pick. Everything is anchored to the unobscured rect through --uo-* variables and
 // moves by transform only; the layer itself takes no pointer events (children do).
+// D2: the loading layer of world switches and static browsing (ui/boot/LoadingLayer.tsx), the queue card (top right,
+// under the camera tools) and the manual control overlay (bar, key hints, virtual sticks); in the FPV camera the sensor
+// view toolbar, the perception HUD (capture boxes, pixel progress, limiting factor) and the "visual approximation" mark.
+// D2.1: the queue stack (viewer, sandbox and resume tickets), the power-save countdown and overlay, the field-view toolbar
+// and legend (ui/field), and the update banner.
 import * as React from 'react'
 import { t as tr, useT } from '@/app/i18n'
 import { fmt } from '@/lib/format'
@@ -25,11 +30,16 @@ import { ToolHint, ToolPopovers } from '@/ui/tools/ToolLayer'
 import { EditViewportMount } from '@/ui/panels/mission-edit/EditViewportLayer'
 import { connViewStore, useConnView } from '@/ui/shell/connView'
 import { useSelection } from '@/stores/selection'
-import { useWorld } from '@/stores/world'
-import { navigate } from '@/app/router/router'
-import { Button } from '@/ui/components/ui/button'
-import { Progress } from '@/ui/components/ui/progress'
-import { boot } from '@/app/boot/BootController'
+import { LoadingLayer } from '@/ui/boot/LoadingLayer'
+import { QueueStack } from '@/ui/sandbox/QueueCard'
+import { PowerBanner, PowerOverlay } from '@/ui/power/PowerOverlay'
+import { usePower } from '@/app/power/store'
+import { FieldLegend, FieldToolbar } from '@/ui/field/FieldToolbar'
+import { LongPressMenu } from '@/ui/mobile/parts'
+import { sandboxDialogs } from '@/ui/sandbox/dialogs'
+import { ManualOverlay } from '@/ui/manual/ManualOverlay'
+import { FpvApproxBadge, SensorViewBar } from '@/ui/fpv/SensorViewBar'
+import { PerceptionHud } from '@/ui/fpv/PerceptionHud'
 import { IconButton } from './IconButton'
 
 const MODES: readonly { id: CameraMode; icon: IconKey; key: string }[] = [
@@ -69,87 +79,83 @@ function GroundReadout() {
   )
 }
 
-/** compact world loading card (M15-FR-005; AWR-14 §7.3 "switching worlds"): after the reveal, while a world opens or failed */
-function WorldLoadingCard() {
-  const t = useT()
-  const phase = useWorld((s) => s.phase)
-  const progress = useWorld((s) => s.progress)
-  const error = useWorld((s) => s.error)
-  const worldId = useWorld((s) => s.worldId)
-  const [revealed, setRevealed] = React.useState(boot.state === 'REVEALED')
-  React.useEffect(() => boot.subscribe((s) => setRevealed(s === 'REVEALED')), [])
-  if (!revealed || (phase !== 'manifest' && phase !== 'first_screen' && phase !== 'error')) return null
-  return (
-    <div data-anchor="center" data-world-loading={phase}>
-      <Card size="sm" className="w-72 gap-2 rounded-xl bg-hud px-3 py-2">
-        <span className="text-hud-title font-semibold">{worldId ?? ''}</span>
-        {phase === 'error' ? (
-          <>
-            <span className="text-hud-sub text-muted-foreground">{error?.message ? `${error.code} ${error.message}` : t('world.phase.error')}</span>
-            <div className="flex justify-end gap-2">
-              <Button size="xs" variant="outline" onClick={() => navigate('/worlds')}>{t('world.backToList')}</Button>
-              <Button size="xs" onClick={() => location.reload()}>{t('common.retry')}</Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <Progress value={Math.round(progress * 100)} aria-label={t('world.phase.first_screen')} />
-            <span className="text-hud-sub text-muted-foreground">{t(`world.phase.${phase}`)}</span>
-          </>
-        )}
-      </Card>
-    </div>
-  )
-}
-
 /**
  * the overlay follows the focused vehicle in a deferred render: a selection key press (select all on 1000 rows) answers with
  * the row highlights, and the toolbar (six tooltip triggers, the follow toggle), badges and HUD re-render in React's
  * time-sliced pass instead of inside the key handler (ADR-069; D1-AC-27)
  */
-export function ViewportOverlay({ compactBp }: { compactBp: boolean }) {
-  const primary = React.useDeferredValue(useSelection((s) => s.primary))
-  return <ViewportOverlayBody compactBp={compactBp} primary={primary} />
-}
-
-const ViewportOverlayBody = React.memo(function ViewportOverlayBody({ compactBp, primary }: { compactBp: boolean; primary: string | null }) {
+/** the camera mode toolbar (5 modes with hotkeys 1-5, follow lock); also the phone's layers drawer (D2.1) */
+export function CameraModes({ primary }: { primary: string | null }) {
   const t = useT()
   const { mode, followLock } = useCameraMode()
-  const down = useConnView((s) => Number.isFinite(s.downSinceMs))
+  return (
+    <>
+      <ToggleGroup spacing={0} size="sm" value={[mode]} aria-label={t('camera.modes')}
+        onValueChange={(v: unknown[]) => typeof v[0] === 'string' && runAction(`camera.mode.${v[0]}`)}>
+        {MODES.map((m) => {
+          const needFocus = (m.id === 'third' || m.id === 'fpv') && !primary
+          const label = needFocus ? `${t(`camera.${m.id}`)} · ${t('hint.noFocus')}` : t(`camera.${m.id}`)
+          return (
+            <Tooltip key={m.id}>
+              <TooltipTrigger render={<ToggleGroupItem value={m.id} aria-label={label} disabled={needFocus} />}>
+                <Icon icon={m.icon} />
+              </TooltipTrigger>
+              <TooltipContent>{label}<Kbd>{m.key}</Kbd></TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </ToggleGroup>
+      <Tooltip>
+        <TooltipTrigger render={<Toggle size="sm" pressed={followLock} aria-label={t('camera.follow')} disabled={!primary || (mode !== 'orbit' && mode !== 'bird')}
+          onPressedChange={(on: boolean) => camera.setFollowLock(on)} />}>
+          <StateIcon icon="cam.follow" alt={followLock} />
+        </TooltipTrigger>
+        <TooltipContent>{t('camera.follow')}<Kbd>L</Kbd></TooltipContent>
+      </Tooltip>
+    </>
+  )
+}
+
+/** focus F, north up N, home (vertical group; the phone's layers drawer lays it out in a row) */
+export function ViewTools({ orientation = 'vertical' }: { orientation?: 'vertical' | 'horizontal' }) {
+  const t = useT()
+  return (
+    <ButtonGroup orientation={orientation} className="rounded-lg bg-hud ring-1 ring-foreground/10">
+      <IconButton icon="cmd.track" label={t('camera.focus')} hotkey="KeyF" onClick={() => runAction('camera.focus')} />
+      <IconButton icon="heading" label={t('camera.north')} hotkey="KeyN" onClick={() => camera.northUp()} />
+      <IconButton icon="cam.reset" label={t('camera.home')} hotkey="Home" onClick={() => camera.home()} />
+    </ButtonGroup>
+  )
+}
+
+/** D2.1 (ADR-122): which shell hosts the overlay; the phone drops the HUD, the sticks and the field toolbar (drawer) */
+export type OverlayVariant = 'desktop' | 'tablet' | 'phone'
+
+export function ViewportOverlay({ compactBp, variant = 'desktop' }: { compactBp: boolean; variant?: OverlayVariant }) {
+  const primary = React.useDeferredValue(useSelection((s) => s.primary))
+  return <ViewportOverlayBody compactBp={compactBp} primary={primary} variant={variant} />
+}
+
+const ViewportOverlayBody = React.memo(function ViewportOverlayBody({ compactBp, primary, variant }: { compactBp: boolean; primary: string | null; variant: OverlayVariant }) {
+  const phone = variant === 'phone'
+  const t = useT()
+  const { mode } = useCameraMode()
+  // D2.1: no "offline" badge while power saving closed the link on purpose (the overlay says so)
+  const saving = usePower((st) => st.frozen)
+  const down = useConnView((s) => Number.isFinite(s.downSinceMs)) && !saving
   const degraded = useConnView((s) => s.conn === 'DEGRADED')
   return (
     <div className="app-layer-viewport-ui" data-slot="viewport-overlay">
-      <div data-anchor="top-center" className="flex items-center gap-1 rounded-lg bg-hud p-1 ring-1 ring-foreground/10">
-        <ToggleGroup spacing={0} size="sm" value={[mode]} aria-label={t('camera.modes')}
-          onValueChange={(v: unknown[]) => typeof v[0] === 'string' && runAction(`camera.mode.${v[0]}`)}>
-          {MODES.map((m) => {
-            const needFocus = (m.id === 'third' || m.id === 'fpv') && !primary
-            const label = needFocus ? `${t(`camera.${m.id}`)} · ${t('hint.noFocus')}` : t(`camera.${m.id}`)
-            return (
-              <Tooltip key={m.id}>
-                <TooltipTrigger render={<ToggleGroupItem value={m.id} aria-label={label} disabled={needFocus} />}>
-                  <Icon icon={m.icon} />
-                </TooltipTrigger>
-                <TooltipContent>{label}<Kbd>{m.key}</Kbd></TooltipContent>
-              </Tooltip>
-            )
-          })}
-        </ToggleGroup>
-        <Tooltip>
-          <TooltipTrigger render={<Toggle size="sm" pressed={followLock} aria-label={t('camera.follow')} disabled={!primary || (mode !== 'orbit' && mode !== 'bird')}
-            onPressedChange={(on: boolean) => camera.setFollowLock(on)} />}>
-            <StateIcon icon="cam.follow" alt={followLock} />
-          </TooltipTrigger>
-          <TooltipContent>{t('camera.follow')}<Kbd>L</Kbd></TooltipContent>
-        </Tooltip>
-      </div>
-      <div data-anchor="top-right">
-        <ButtonGroup orientation="vertical" className="rounded-lg bg-hud ring-1 ring-foreground/10">
-          <IconButton icon="cmd.track" label={t('camera.focus')} hotkey="KeyF" onClick={() => runAction('camera.focus')} />
-          <IconButton icon="heading" label={t('camera.north')} hotkey="KeyN" onClick={() => camera.northUp()} />
-          <IconButton icon="cam.reset" label={t('camera.home')} hotkey="Home" onClick={() => camera.home()} />
-        </ButtonGroup>
-      </div>
+      {phone ? null : (
+        <div data-anchor="top-center" className="flex items-center gap-1 rounded-lg bg-hud p-1 ring-1 ring-foreground/10">
+          <CameraModes primary={primary} />
+        </div>
+      )}
+      {phone ? null : (
+        <div data-anchor="top-right">
+          <ViewTools />
+        </div>
+      )}
       <div data-anchor="top-left" className="flex flex-col items-start gap-1">
         {FAKE_SOURCE ? (
           <Badge variant="outline" className="gap-1 bg-hud" data-badge="synthetic-source">
@@ -164,6 +170,7 @@ const ViewportOverlayBody = React.memo(function ViewportOverlayBody({ compactBp,
           </Badge>
         ) : null}
         {mode === 'third' || mode === 'fpv' ? <Badge variant="outline" data-badge="focus-low-latency">{t('badge.focusLowLatency', { id: primary ?? '' })}</Badge> : null}
+        {mode === 'fpv' ? <FpvApproxBadge /> : null}
         {down ? (
           <Badge variant="outline" className="gap-1 border-dashed" data-badge="offline">
             <Icon icon="state.stale" />
@@ -171,12 +178,21 @@ const ViewportOverlayBody = React.memo(function ViewportOverlayBody({ compactBp,
           </Badge>
         ) : null}
       </div>
-      <WorldLoadingCard />
+      {mode === 'fpv' && primary ? <PerceptionHud /> : null}
+      {mode === 'fpv' && primary ? <SensorViewBar /> : null}
+      <LoadingLayer />
+      <QueueStack onRequeue={() => sandboxDialogs.open('start')} />
+      <PowerBanner />
+      <PowerOverlay />
+      {phone ? null : <ManualOverlay />}
       <ToolHint />
       <ToolPopovers />
       <EditViewportMount />
-      <PerfHud compactBp={compactBp} />
-      <GroundReadout />
+      {phone ? null : <PerfHud compactBp={compactBp} />}
+      {variant === 'desktop' ? <GroundReadout /> : null}
+      {variant === 'desktop' ? <FieldToolbar /> : null}
+      {phone ? null : <FieldLegend />}
+      <LongPressMenu />
     </div>
   )
 })

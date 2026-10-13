@@ -10,7 +10,8 @@
 // For the spec minimum (24/12/12/24) and a middle set (36/14/14/28), on Tier S and Tier B, with a test build and the
 // public demo build, it opens /world/synthcity on FakeSource (6 vehicles on the ground ring; step keyframes every 3 s run
 // twice through the 12 weather presets, then clear holds) and runs: reveal, all 12 presets (recorded from the environment
-// store or the environment panel), select a vehicle, Third and FPV, the P600 close-up,
+// store or the environment panel), select a vehicle, Third and FPV (test build: the D2 sensor views EO, night with an
+// illuminator, LWIR with emitters in white-hot and black-hot, and the catalog vehicle shapes; D2 WP-11), the P600 close-up,
 // every layer off and on, a pick, the colour modes. It asserts no WebGL error and no three warning or error in the
 // console (the THREE.Clock and AttributeNode warnings included), the limits reached the page (__perf.gpu.ubo), the
 // binding points and per-program block counts stay within them, nothing was over budget, the point cloud and a vehicle
@@ -25,18 +26,29 @@
 // the low-poly cases read back what the GPU draws with and compare it with instanceMatrix. More limit sets and the plain
 // production build: GPU_LIMITS_SETS=min,wide,mid,swiftshader (or all; default min,mid) and GPU_LIMITS_BUILDS=test,default,demo
 // (default test,demo); the production build is driven through the UI like the demo build (GPU_LIMITS_DEFAULT_DIST).
+// D2.1 (WP-11b; AWR-04 §15.8.6, §15.11.6; D2-AC-49, D2-AC-54): a mobile limit set (the minimum blocks plus
+// ALIASED_POINT_SIZE_RANGE [1, 1], MAX_TEXTURE_SIZE 4096 and no EXT_color_buffer_float, EXT_float_blend or
+// OES_texture_float_linear) and the field-view cases: the four field views, the perception volumes (all, selected, physical
+// reference) and the readout highlight on phone, tablet and desktop viewports (canvas only, test build; the phone and tablet
+// with touch, the Tier B ones with an Adreno renderer string, i.e. deviceClass = mobile): WebGL errors 0, three warnings 0,
+// binding points and blocks within the limits, pointSizeMode quad under the mobile set (the field points drawn as instanced
+// quads), the field drawn, no program compiled after the reveal. GPU_LIMITS_FIELD=all runs Tier S and B x min and mobile x
+// desktop, phone and tablet; the default runs four of them. The demo build has no field-view UI before WP-12c (M15).
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { inflateSync } from 'node:zlib'
 import { expect, test, type Page } from '@playwright/test'
-import { frames } from './common'
+import { frames, type SvHooks } from './common'
 import { startM06Server, type M06Server } from './server'
 
 const WEB = resolve(import.meta.dirname, '../..')
 const ROOT = resolve(WEB, '../..')
 interface Limits { bindings: number; vertex: number; fragment: number; combined: number; blockSize: number }
 type LimitSet = 'min' | 'wide' | 'mid' | 'swiftshader'
+/** D2.1 mobile extras over a limit set: point size ceiling, texture size, float colour-buffer extensions withheld */
+interface MobileExtras { pointSize: number; maxTexture: number; noFloat: boolean }
+const MOBILE: MobileExtras = { pointSize: 1, maxTexture: 4096, noFloat: true }
 /** null: no emulation (the device's own limits; SwiftShader 72 / 14 / 14 / 60, 65 536 B) */
 const LIMITS: Record<LimitSet, Limits | null> = {
   min: { bindings: 24, vertex: 12, fragment: 12, combined: 24, blockSize: 16384 },
@@ -92,7 +104,7 @@ test.afterAll(async () => {
  * strict emulation of the uniform-block limits (and optionally a hardware renderer string), before any page script;
  * L null: the device's own limits, still enforced the same way
  */
-function emulate(o: { L: Limits | null; renderer: string | null }): void {
+function emulate(o: { L: Limits | null; renderer: string | null; mobile?: MobileExtras | null }): void {
   const P = WebGL2RenderingContext.prototype
   // the original methods, taken from their property descriptors (called with the context as `this`)
   const own = <K extends keyof WebGL2RenderingContext>(k: K): WebGL2RenderingContext[K] => Object.getOwnPropertyDescriptor(P, k)!.value as WebGL2RenderingContext[K]
@@ -103,8 +115,21 @@ function emulate(o: { L: Limits | null; renderer: string | null }): void {
     combined: gp.call(gl, 0x8a2e) as number, blockSize: gp.call(gl, 0x8a30) as number,
   })
   ;(window as unknown as { __gpuLimitsOf: (gl: WebGL2RenderingContext) => Limits }).__gpuLimitsOf = limits
+  const mob = o.mobile ?? null
+  if (mob?.noFloat) {
+    const ge = own('getExtension')
+    const gse = own('getSupportedExtensions')
+    P.getExtension = function (this: WebGL2RenderingContext, name: string) {
+      return ['EXT_color_buffer_float', 'EXT_float_blend', 'OES_texture_float_linear'].includes(name) ? null : (ge as (this: WebGL2RenderingContext, n: string) => unknown).call(this, name)
+    } as typeof P.getExtension
+    P.getSupportedExtensions = function (this: WebGL2RenderingContext) {
+      return (gse.call(this) ?? []).filter((x) => !['EXT_color_buffer_float', 'EXT_float_blend', 'OES_texture_float_linear'].includes(x))
+    } as typeof P.getSupportedExtensions
+  }
   P.getParameter = function (this: WebGL2RenderingContext, n: number) {
     if (o.renderer !== null && n === 0x9246) return o.renderer // UNMASKED_RENDERER_WEBGL
+    if (mob && n === 0x846d) return new Float32Array([1, mob.pointSize]) // ALIASED_POINT_SIZE_RANGE
+    if (mob && n === 0x0d33) return mob.maxTexture // MAX_TEXTURE_SIZE
     if (o.L === null) return gp.call(this, n)
     if (n === 0x8a2f) return o.L.bindings // MAX_UNIFORM_BUFFER_BINDINGS
     if (n === 0x8a2b) return o.L.vertex // MAX_VERTEX_UNIFORM_BLOCKS
@@ -422,6 +447,30 @@ async function exercise(page: Page, build: Build, tier: 'S' | 'B', set: LimitSet
     for (const m of ['third', 'fpv', 'orbit']) {
       expect((await page.evaluate((mm) => (window as unknown as Hooks).__vp.setMode(mm), m)).ok).toBe(true)
       await frames(page, 20)
+      if (m !== 'fpv') continue
+      // D2 sensor views (WP-11): the composite program and the world layers into the sensor target under the limits
+      await page.evaluate(() => {
+        const sv = (window as unknown as SvHooks).__vp.sensorView
+        sv.setIlluminators([{ on: true, divergenceRad: 0.4, rangeM: 150 }])
+        sv.setEmittersAhead([[15, 0, 0, 0.6, 0.6, 1.8, 0, 31, Number.NaN, 0.97, 1], [30, 4, -1, 4.5, 1.8, 1.5, 0.4, Number.NaN, 25, 0.9, 0.3]])
+      })
+      for (const v of ['eo', 'nir', 'lwir'] as const) {
+        expect((await page.evaluate((vv) => (window as unknown as SvHooks).__vp.sensorView.set(vv), v)).ok).toBe(true)
+        await frames(page, 10)
+      }
+      await page.evaluate(() => (window as unknown as SvHooks).__vp.sensorView.setPalette('black_hot'))
+      await frames(page, 10)
+      await page.evaluate(() => {
+        const sv = (window as unknown as SvHooks).__vp.sensorView
+        sv.set('fpv')
+        sv.setEmittersAhead([])
+        sv.setIlluminators(null)
+      })
+    }
+    // the catalog shapes (fixed wing, VTOL, quad) on the FakeSource vehicles, then the D1 hexacopter again
+    for (const [f, sz] of [['fixed_wing', [1.4, 2.6, 0.35]], ['vtol_quadplane', [1.6, 2.8, 0.45]], ['quad_x', [0.9, 0.9, 0.43]], ['hex', [1.22, 1.22, 0.14]]] as const) {
+      await page.evaluate(([ff, s]) => (window as unknown as SvHooks).__vp.registerModel('p600', ff, s as [number, number, number]), [f, sz] as const)
+      await frames(page, 6)
     }
   } else {
     await page.locator('[data-rail-row]').first().click()
@@ -662,5 +711,95 @@ for (const tier of BUILDS.includes('test') ? (['S', 'B'] as const) : []) {
     expect(w.three, w.three.join('\n')).toEqual([])
     expect(w.errors, w.errors.join('\n')).toEqual([])
     expect(w.pageErrors, w.pageErrors.join('\n')).toEqual([])
+  })
+}
+
+// ---------------------------------------------------------------- D2.1 field views and mobile viewports (WP-11b)
+type FF = 'desktop' | 'phone' | 'tablet'
+interface FieldCase { tier: 'S' | 'B'; set: 'min' | 'mobile'; ff: FF }
+const FIELD_ALL: FieldCase[] = (['S', 'B'] as const).flatMap((tier) => (['min', 'mobile'] as const).flatMap((set) => (['desktop', 'phone', 'tablet'] as const).map((ff) => ({ tier, set, ff }))))
+const FIELD_DEFAULT: FieldCase[] = [{ tier: 'S', set: 'min', ff: 'desktop' }, { tier: 'S', set: 'mobile', ff: 'phone' }, { tier: 'S', set: 'mobile', ff: 'tablet' },
+  { tier: 'B', set: 'mobile', ff: 'phone' }]
+const FIELD_CASES = !BUILDS.includes('test') ? [] : process.env.GPU_LIMITS_FIELD === 'all' ? FIELD_ALL : process.env.GPU_LIMITS_FIELD === 'none' ? [] : FIELD_DEFAULT
+const VIEWPORTS: Record<FF, { width: number; height: number; dpr: number; touch: boolean }> = {
+  desktop: { width: 1280, height: 720, dpr: 1, touch: false },
+  phone: { width: 390, height: 844, dpr: 2, touch: true },
+  tablet: { width: 1180, height: 820, dpr: 2, touch: true },
+}
+const ADRENO = 'ANGLE (Qualcomm, Adreno (TM) 740, OpenGL ES 3.2)'
+type FieldHooks = Hooks & { __vp: Hooks['__vp'] & {
+  field: { view(k: string, o?: { volumes?: string; physicalRef?: boolean }): Promise<string>; targets(n: number): Promise<string[]>; highlight(id: string | null): void
+    setLevel(l: number | null): void; stats(): { points: number; uavAnchors: number; bodyAnchors: number; circles: number } | null
+    renderer(): { mode: string; draws: number } | null }
+  quality(): { formFactor: string; mobile: boolean; pointSizeMode: string; maxPointSize: number }
+  backendInfo(): { caps: { maxTextureSize: number; floatColorRT: boolean } } } }
+
+for (const fc of FIELD_CASES) {
+  test(`D2.1 field views: test build, Tier ${fc.tier}, limits ${fc.set}, ${fc.ff}`, async ({ browser }, info) => {
+    test.setTimeout(480_000)
+    const v = VIEWPORTS[fc.ff]
+    const ctx = await browser.newContext({ viewport: { width: v.width, height: v.height }, deviceScaleFactor: v.dpr, isMobile: fc.ff === 'phone', hasTouch: v.touch })
+    const page = await ctx.newPage()
+    const w = watchConsole(page)
+    const L = LIMITS.min!
+    await page.addInitScript(emulate, { L, renderer: fc.tier === 'B' && fc.ff !== 'desktop' ? ADRENO : null, mobile: fc.set === 'mobile' ? MOBILE : null })
+    await page.goto(`${servers.test!.url}/world/synthcity?source=fake&fakeWorld=synthcity&fakeN=6&chrome=0${fc.tier === 'B' && fc.ff === 'desktop' ? '&tier=B' : ''}`)
+    await expect(page.locator('#boot-mask')).toHaveCount(0, { timeout: 240_000 })
+    await page.waitForFunction(() => {
+      const p = (window as unknown as Hooks).__perf
+      return !!p && p.gpu.passPlan > 0 && p.frame.count > 20
+    }, null, { timeout: 240_000 })
+    expect(await page.evaluate(() => (window as unknown as Hooks).__perf.meta.tier)).toBe(fc.tier)
+    const q = await page.evaluate(() => (window as unknown as FieldHooks).__vp.quality())
+    expect(q.formFactor).toBe(fc.ff)
+    expect(q.pointSizeMode).toBe(fc.set === 'mobile' ? 'quad' : 'glpoint')
+    if (fc.set === 'mobile') {
+      const caps = await page.evaluate(() => (window as unknown as FieldHooks).__vp.backendInfo().caps)
+      expect(caps.maxTextureSize).toBe(4096)
+      expect(caps.floatColorRT).toBe(false)
+    }
+    const programsAtReveal = await page.evaluate(() => (window as unknown as Hooks).__perf.gpu.programs)
+    await page.waitForFunction(() => (window as unknown as Hooks).__vp.roster().length >= 1, null, { timeout: 30_000 })
+    await page.evaluate(() => (window as unknown as FieldHooks).__vp.field.setLevel(0))
+    await page.evaluate(() => (window as unknown as FieldHooks).__vp.field.targets(2))
+    const seen: Record<string, { points: number; draws: number; mode: string }> = {}
+    for (const k of ['acoustic', 'visual', 'thermal', 'radar']) {
+      await page.evaluate((kk) => (window as unknown as FieldHooks).__vp.field.view(kk, { volumes: 'all' }), k)
+      await frames(page, 12)
+      const st = await page.evaluate(() => ({ s: (window as unknown as FieldHooks).__vp.field.stats(), r: (window as unknown as FieldHooks).__vp.field.renderer() }))
+      seen[k] = { points: st.s?.points ?? 0, draws: st.r?.draws ?? 0, mode: st.r?.mode ?? '' }
+      expect(seen[k].points, k).toBeGreaterThan(0)
+      expect(seen[k].draws, k).toBeGreaterThanOrEqual(1)
+      expect(seen[k].mode, k).toBe(q.pointSizeMode === 'quad' ? 'quad' : 'glpoint')
+    }
+    await page.evaluate(() => (window as unknown as FieldHooks).__vp.field.view('visual', { volumes: 'selected', physicalRef: true }))
+    await frames(page, 8)
+    const id = await page.evaluate(() => (window as unknown as Hooks).__vp.roster()[0].id)
+    await page.evaluate((i) => (window as unknown as FieldHooks).__vp.field.highlight(i), id)
+    await frames(page, 8)
+    await page.evaluate(() => (window as unknown as FieldHooks).__vp.field.view('none', { volumes: 'off' }))
+    await frames(page, 8)
+    await page.evaluate(() => (window as unknown as FieldHooks).__vp.field.setLevel(null))
+    const end = await page.evaluate(() => {
+      const g = window as unknown as Hooks
+      const gl = document.querySelector<HTMLCanvasElement>('[data-viewport] canvas')!.getContext('webgl2')!
+      return { ubo: g.__perf.gpu.ubo!, programs: g.__perf.gpu.programs, emulated: g.__gpuLimits, glError: gl.getError() }
+    })
+    info.annotations.push({ type: 'gpu-limits-field', description: JSON.stringify({ fc, q, seen, ubo: end.ubo, emulated: end.emulated, programsAtReveal, programsEnd: end.programs }) })
+    console.log(`[gpu-limits] field ${fc.tier} ${fc.set} ${fc.ff}: pointSizeMode ${q.pointSizeMode}, points ${Object.values(seen).map((x) => x.points).join('/')}, `
+      + `binding points ${end.ubo.points}, V ${end.emulated.maxV} F ${end.emulated.maxF}, programs ${programsAtReveal} -> ${end.programs}, gl ${w.gl.length}, three ${w.three.length}`)
+    expect(end.glError).toBe(0)
+    expect(end.ubo.points).toBeLessThanOrEqual(L.bindings)
+    expect(end.ubo.violations).toBe(0)
+    expect(end.ubo.pruned).toEqual([])
+    expect(end.emulated.maxV).toBeLessThanOrEqual(L.vertex)
+    expect(end.emulated.maxF).toBeLessThanOrEqual(L.fragment)
+    expect(end.emulated.maxBlockSize).toBeLessThanOrEqual(L.blockSize)
+    expect(end.programs - programsAtReveal).toBeLessThanOrEqual(0)
+    expect(w.gl, w.gl.join('\n')).toEqual([])
+    expect(w.three, w.three.join('\n')).toEqual([])
+    expect(w.errors, w.errors.join('\n')).toEqual([])
+    expect(w.pageErrors, w.pageErrors.join('\n')).toEqual([])
+    await ctx.close()
   })
 }

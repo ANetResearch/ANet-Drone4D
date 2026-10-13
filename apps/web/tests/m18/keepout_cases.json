@@ -1,0 +1,443 @@
+{
+ "schema": "awr.test.m18.keepout_cases.v1",
+ "source": "tests/targets/test_keepout.py",
+ "cases": [
+  {
+   "cfg": {
+    "class": "person",
+    "motion": {
+     "mode": "static",
+     "speed_mps": 1.4,
+     "speed_max_mps": 2.5,
+     "accel_mps2": 1.5,
+     "turn_rate_max_rad_s": 1.0,
+     "speed_sigma_mps": 0.2,
+     "turn_tau_s": 4.0,
+     "pause_prob": 0.02
+    },
+    "sensitivity": [
+     {
+      "kind": "visual",
+      "shape": "sector",
+      "radius_max_m": 300,
+      "z_min_m": 0.0,
+      "z_max_m": 300.0,
+      "half_angle_deg": 60,
+      "azimuth_offset_deg": 0,
+      "gain_back_db": 0,
+      "enabled": true
+     },
+     {
+      "kind": "acoustic",
+      "shape": "hemisphere",
+      "radius_max_m": 300,
+      "z_min_m": 0,
+      "z_max_m": 300,
+      "half_angle_deg": 180,
+      "azimuth_offset_deg": 0,
+      "gain_back_db": 0.0,
+      "enabled": true
+     }
+    ]
+   },
+   "pos": [
+    12.5,
+    -7.0,
+    3.0
+   ],
+   "yaw_rad": -2.0,
+   "speed_mps": 0.0,
+   "margin_m": 20.06,
+   "volumes": [
+    {
+     "id": "person/0",
+     "shape": "sector",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 320.06,
+     "z_min_m": -17.06,
+     "z_max_m": 323.06,
+     "source": {
+      "kind": "target",
+      "id": "person",
+      "vol_idx": 0
+     },
+     "yaw_rad": -2.0,
+     "half_angle_rad": 1.1099144065294384
+    },
+    {
+     "id": "person/1",
+     "shape": "hemisphere",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 320.06,
+     "z_min_m": 3.0,
+     "z_max_m": 323.06,
+     "source": {
+      "kind": "target",
+      "id": "person",
+      "vol_idx": 1
+     }
+    }
+   ]
+  },
+  {
+   "cfg": {
+    "class": "person",
+    "motion": {
+     "mode": "random_walk",
+     "speed_mps": 1.4,
+     "speed_max_mps": 2.5,
+     "accel_mps2": 1.5,
+     "turn_rate_max_rad_s": 1.0,
+     "speed_sigma_mps": 0.2,
+     "turn_tau_s": 4.0,
+     "pause_prob": 0.02
+    },
+    "sensitivity": [
+     {
+      "kind": "visual",
+      "shape": "sector",
+      "radius_max_m": 300,
+      "z_min_m": 0.0,
+      "z_max_m": 300.0,
+      "half_angle_deg": 60,
+      "azimuth_offset_deg": 0,
+      "gain_back_db": 0,
+      "enabled": true
+     },
+     {
+      "kind": "acoustic",
+      "shape": "hemisphere",
+      "radius_max_m": 300,
+      "z_min_m": 0,
+      "z_max_m": 300,
+      "half_angle_deg": 180,
+      "azimuth_offset_deg": 0,
+      "gain_back_db": 0.0,
+      "enabled": true
+     }
+    ]
+   },
+   "pos": [
+    12.5,
+    -7.0,
+    3.0
+   ],
+   "yaw_rad": -2.0,
+   "speed_mps": 0.0,
+   "margin_m": 20.06,
+   "volumes": [
+    {
+     "id": "person/0",
+     "shape": "cylinder",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 320.06,
+     "z_min_m": -17.06,
+     "z_max_m": 323.06,
+     "source": {
+      "kind": "target",
+      "id": "person",
+      "vol_idx": 0
+     }
+    },
+    {
+     "id": "person/1",
+     "shape": "hemisphere",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 320.06,
+     "z_min_m": 3.0,
+     "z_max_m": 323.06,
+     "source": {
+      "kind": "target",
+      "id": "person",
+      "vol_idx": 1
+     }
+    }
+   ]
+  },
+  {
+   "cfg": {
+    "class": "dog",
+    "motion": {
+     "mode": "static",
+     "speed_mps": 1.5,
+     "speed_max_mps": 8.0,
+     "accel_mps2": 1.5,
+     "turn_rate_max_rad_s": 2.0,
+     "speed_sigma_mps": 0.3,
+     "turn_tau_s": 4.0,
+     "pause_prob": 0.02
+    },
+    "sensitivity": [
+     {
+      "kind": "visual",
+      "shape": "sector",
+      "radius_max_m": 200,
+      "z_min_m": 0.0,
+      "z_max_m": 300.0,
+      "half_angle_deg": 90,
+      "azimuth_offset_deg": 0,
+      "gain_back_db": 0,
+      "enabled": true
+     },
+     {
+      "kind": "acoustic",
+      "shape": "hemisphere",
+      "radius_max_m": 250,
+      "z_min_m": 0,
+      "z_max_m": 250,
+      "half_angle_deg": 180,
+      "azimuth_offset_deg": 0,
+      "gain_back_db": 0.0,
+      "enabled": true
+     }
+    ]
+   },
+   "pos": [
+    12.5,
+    -7.0,
+    3.0
+   ],
+   "yaw_rad": -2.0,
+   "speed_mps": 1.2,
+   "margin_m": 5.0,
+   "volumes": [
+    {
+     "id": "dog/0",
+     "shape": "cylinder",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 205.0,
+     "z_min_m": -2.0,
+     "z_max_m": 308.0,
+     "source": {
+      "kind": "target",
+      "id": "dog",
+      "vol_idx": 0
+     }
+    },
+    {
+     "id": "dog/1",
+     "shape": "hemisphere",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 255.0,
+     "z_min_m": 3.0,
+     "z_max_m": 258.0,
+     "source": {
+      "kind": "target",
+      "id": "dog",
+      "vol_idx": 1
+     }
+    }
+   ]
+  },
+  {
+   "cfg": {
+    "class": "vehicle",
+    "motion": {
+     "mode": "static",
+     "speed_mps": 10.0,
+     "speed_max_mps": 15.0,
+     "accel_mps2": 1.0,
+     "turn_rate_max_rad_s": 0.5
+    },
+    "sensitivity": [
+     {
+      "kind": "visual",
+      "shape": "sector",
+      "radius_max_m": 150,
+      "z_min_m": 0.0,
+      "z_max_m": 300.0,
+      "half_angle_deg": 60,
+      "azimuth_offset_deg": 0,
+      "gain_back_db": 0,
+      "enabled": true
+     },
+     {
+      "kind": "acoustic",
+      "shape": "hemisphere",
+      "radius_max_m": 100,
+      "z_min_m": 0,
+      "z_max_m": 100,
+      "half_angle_deg": 180,
+      "azimuth_offset_deg": 0,
+      "gain_back_db": 0.0,
+      "enabled": true
+     }
+    ]
+   },
+   "pos": [
+    12.5,
+    -7.0,
+    3.0
+   ],
+   "yaw_rad": -2.0,
+   "speed_mps": 3.0,
+   "margin_m": 0.0,
+   "volumes": [
+    {
+     "id": "vehicle/0",
+     "shape": "cylinder",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 150.0,
+     "z_min_m": 3.0,
+     "z_max_m": 303.0,
+     "source": {
+      "kind": "target",
+      "id": "vehicle",
+      "vol_idx": 0
+     }
+    },
+    {
+     "id": "vehicle/1",
+     "shape": "hemisphere",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 100.0,
+     "z_min_m": 3.0,
+     "z_max_m": 103.0,
+     "source": {
+      "kind": "target",
+      "id": "vehicle",
+      "vol_idx": 1
+     }
+    }
+   ]
+  },
+  {
+   "cfg": {
+    "class": "uav",
+    "motion": {
+     "mode": "static",
+     "speed_mps": 5.0,
+     "speed_max_mps": 8.0,
+     "accel_mps2": 1.0,
+     "turn_rate_max_rad_s": 1.5
+    },
+    "sensitivity": [
+     {
+      "kind": "visual",
+      "shape": "sector",
+      "radius_max_m": 800,
+      "z_min_m": -50,
+      "z_max_m": 300,
+      "half_angle_deg": 40,
+      "azimuth_offset_deg": 0,
+      "gain_back_db": 0,
+      "enabled": true
+     }
+    ]
+   },
+   "pos": [
+    12.5,
+    -7.0,
+    3.0
+   ],
+   "yaw_rad": -2.0,
+   "speed_mps": 0.0,
+   "margin_m": 25.0,
+   "volumes": [
+    {
+     "id": "uav/0",
+     "shape": "sector",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 825.0,
+     "z_min_m": -72.0,
+     "z_max_m": 328.0,
+     "source": {
+      "kind": "target",
+      "id": "uav",
+      "vol_idx": 0
+     },
+     "yaw_rad": -2.0,
+     "half_angle_rad": 0.7284393707639186
+    }
+   ]
+  },
+  {
+   "cfg": {
+    "class": "object",
+    "motion": {
+     "mode": "static",
+     "speed_mps": 0.0,
+     "speed_max_mps": 0.0,
+     "accel_mps2": 1.0,
+     "turn_rate_max_rad_s": 0.5
+    },
+    "sensitivity": [
+     {
+      "kind": "visual",
+      "shape": "cylinder",
+      "radius_max_m": 40,
+      "z_min_m": -5,
+      "z_max_m": 60,
+      "half_angle_deg": 60.0,
+      "azimuth_offset_deg": 0.0,
+      "gain_back_db": 0.0,
+      "enabled": true
+     }
+    ]
+   },
+   "pos": [
+    12.5,
+    -7.0,
+    3.0
+   ],
+   "yaw_rad": -2.0,
+   "speed_mps": 0.0,
+   "margin_m": 10.0,
+   "volumes": [
+    {
+     "id": "object/0",
+     "shape": "cylinder",
+     "center_enu_m": [
+      12.5,
+      -7.0,
+      3.0
+     ],
+     "r_m": 50.0,
+     "z_min_m": -12.0,
+     "z_max_m": 73.0,
+     "source": {
+      "kind": "target",
+      "id": "object",
+      "vol_idx": 0
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -13,6 +13,10 @@
 //   imu (ext)        accMps2, gyroRadS, biasAccMps2, biasGyroRadS (FLU; display conversion only in lib/format.ts)
 //   detections (ext) latest sensor.detect per target: targetId, kind, state (suspect | confirmed), conf, uav, capability,
 //                    posEnuM, rangeM, count (repeat detections fold into the count), tSimMs
+//   payload (D2)     uav/{id}/payload of the primary (M13-FR-209, FR-217): gimbal {src: operator | tasking | cue | default,
+//                    mode, trackTarget, yawDeg, pitchDeg} and per sensor {sensor, kind, active, fMm, hfovDeg, vfovDeg,
+//                    mode (day | lowlight | nir; lidar off | active | paused), resolution, palette, cue, illumOn, illumRangeM};
+//                    null until the first sample (only vehicles with an optical zoom sensor subscribe it)
 // Writers: while a consumer is mounted (useSensors attaches a reference-counted feed) an overlay task at 4 Hz reads
 // engine/sensors (views, smoothed gimbal, staleness) and uav/{id}/state_ext (subscribed at 2 Hz for the primary only), and
 // writes only when something changed (<= 4 writes/s, Tier S budget; nothing while the tab is hidden, AWR-14 §4.4).
@@ -87,6 +91,28 @@ export interface DetectionRow {
   count: number
   tSimMs: number
 }
+export interface PayloadSensorInfo {
+  sensor: string
+  kind: string
+  active: boolean
+  fMm: number | null
+  hfovDeg: number | null
+  vfovDeg: number | null
+  mode: string | null
+  resolution: string | null
+  palette: string | null
+  cue: string | null
+  illumOn: boolean | null
+  illumRangeM: number | null
+}
+export interface PayloadInfo {
+  gimbalSrc: string | null
+  gimbalMode: string | null
+  trackTarget: string | null
+  yawDeg: number | null
+  pitchDeg: number | null
+  sensors: readonly PayloadSensorInfo[]
+}
 export interface SensorsState {
   vehicleId: string | null
   sensors: readonly SensorInfo[]
@@ -98,12 +124,13 @@ export interface SensorsState {
   gnss: GnssInfo | null
   imu: ImuInfo | null
   detections: readonly DetectionRow[]
+  payload: PayloadInfo | null
   version: number
 }
 
 export const sensorsStore = createAwrStore<SensorsState>('sensors', () => ({
   vehicleId: null, sensors: [], gimbal: null, gimbals: [], frameRect: null, stale: false, staleS: null, gnss: null, imu: null,
-  detections: [], version: 0,
+  detections: [], payload: null, version: 0,
 }))
 
 export const FIX_NAMES: readonly GnssFixName[] = ['NO_FIX', 'SINGLE', 'DGPS', 'RTK_FLOAT', 'RTK_FIXED']
@@ -189,6 +216,33 @@ export function frameRectFraction(v: sensorsEngine.SensorView, aspect: number): 
   return { x: (r[0] + 1) / 2, y: (1 - r[3]) / 2, w: (r[2] - r[0]) / 2, h: (r[3] - r[1]) / 2 }
 }
 
+function str(x: unknown, n = 32): string | null {
+  return typeof x === 'string' ? sanitizeText(x, n) : null
+}
+
+/** store view of one uav/{id}/payload sample (angles to degrees, wire text sanitised) */
+export function payloadFromMsg(m: sensorsEngine.PayloadMsg | undefined): PayloadInfo | null {
+  if (!m || typeof m !== 'object') return null
+  const g = m.gimbal
+  const sensors: PayloadSensorInfo[] = []
+  for (const e of Array.isArray(m.sensors) ? m.sensors : []) {
+    if (!e || typeof e.sensor !== 'string') continue
+    const il = e.illuminator
+    sensors.push({
+      sensor: sanitizeText(e.sensor, 32), kind: str(e.kind) ?? '', active: e.active !== false, fMm: num(e.f_mm),
+      hfovDeg: num(e.hfov_rad) === null ? null : (e.hfov_rad as number) * R2D,
+      vfovDeg: num(e.vfov_rad) === null ? null : (e.vfov_rad as number) * R2D,
+      mode: str(e.mode), resolution: str(e.resolution), palette: str(e.palette), cue: str(e.cue),
+      illumOn: il && typeof il === 'object' ? il.on === true : null, illumRangeM: il && typeof il === 'object' ? num(il.range_m) : null,
+    })
+  }
+  return {
+    gimbalSrc: str(g?.src), gimbalMode: str(g?.mode), trackTarget: str(g?.track_target, 64),
+    yawDeg: num(g?.yaw_rad) === null ? null : (g!.yaw_rad as number) * R2D,
+    pitchDeg: num(g?.pitch_rad) === null ? null : (g!.pitch_rad as number) * R2D, sensors,
+  }
+}
+
 export function detectionRows(list: readonly sensorsEngine.Detection[]): DetectionRow[] {
   return list.map((d) => ({
     targetId: sanitizeText(d.targetId, 32), kind: sanitizeText(d.kind, 32), state: d.state, conf: d.conf, uav: sanitizeText(d.uav, 64),
@@ -225,7 +279,7 @@ function tick(ctx: FrameCtx | null, rt: RtClient | null): void {
   const s = sensorsStore.getState()
   const patch: Partial<SensorsState> = {}
   if (!primary || !rt) {
-    if (s.vehicleId !== null) Object.assign(patch, { vehicleId: null, sensors: [], gimbal: null, gimbals: [], frameRect: null, gnss: null, imu: null })
+    if (s.vehicleId !== null) Object.assign(patch, { vehicleId: null, sensors: [], gimbal: null, gimbals: [], frameRect: null, gnss: null, imu: null, payload: null })
   } else {
     const a = rt.roster.agentNoOf(primary)
     const model = a >= 0 ? rt.roster.get(a)?.model : undefined
@@ -248,7 +302,7 @@ function tick(ctx: FrameCtx | null, rt: RtClient | null): void {
     Object.assign(patch, {
       vehicleId: primary, sensors: rows, gimbals, gimbal: g0 ? { pitchDeg: g0.pitchDeg, yawDeg: g0.yawDeg, mode: g0.mode, limited: g0.limited } : null,
       frameRect: cam ? frameRectFraction(cam, aspect) : null, stale: staleS !== null && staleS > 0.3, staleS,
-      gnss: gnssFromExt(ext), imu: imuFromExt(ext),
+      gnss: gnssFromExt(ext), imu: imuFromExt(ext), payload: a >= 0 ? payloadFromMsg(sensorsEngine.payloadOf(a)) : null,
     })
   }
   const dv = sensorsEngine.detectionsVersion()

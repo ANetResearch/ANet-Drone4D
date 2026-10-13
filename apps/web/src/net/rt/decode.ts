@@ -22,6 +22,11 @@ export const K_ENV32 = 3
 export const K_POSE48 = 4
 export const K_DATA = 5
 export const K_ROSTER = 6
+/** D2: raw records without a slot layout (awr.TargetLite32.v1 rows) and blobs (LidarScan8, polyline4, grid_u8, AwrvHeader)
+ * are delivered as bytes on the data path (`data: Uint8Array`, one copy; d2-WP-05-to-M11 item 1, d2-WP-11-to-M11 item 1) */
+export const K_BYTES = 7
+/** raw schemas delivered as bytes (the slot composer has no layout for them) */
+export const BYTES_SCHEMAS: ReadonlySet<string> = new Set(['awr.TargetLite32.v1'])
 /** selected-vehicle and focus-set rates (AWR-17 §6.6 default subscription set) */
 export const SEL_RATE = 60
 export const FOCUS_RATE = 30
@@ -68,6 +73,7 @@ export class ChannelTable {
     else if (enc === 'raw' && schema === 'awr.EnvSample32.v1') kind = K_ENV32
     else if (enc === 'raw' && schema === 'awr.SensorPose48.v1') kind = K_POSE48
     else if (enc === 'msgpack' || enc === 'json') kind = K_DATA
+    else if (enc === 'blob' || (enc === 'raw' && BYTES_SCHEMAS.has(schema))) kind = K_BYTES
     if (this.kind[id] === K_NONE && kind !== K_NONE) this.size++
     this.kind[id] = kind
     this.enc[id] = enc === 'json' ? ENC_JSON : enc === 'msgpack' ? ENC_MSGPACK : ENC_RAW
@@ -374,10 +380,22 @@ export class Decoder {
         }
       } else if (kind === K_DATA || kind === K_ROSTER) {
         this.decodeData(c, kind, src, off, len, sink)
+      } else if (kind === K_BYTES) {
+        this.deliverBytes(c, src, off, len, sink)
       }
     }
     this.dirtyN = 0
     return out
+  }
+
+  /** raw rows and blobs: one copy of the payload onto the data path (the main thread decodes them, e.g. M18 targets) */
+  private deliverBytes(c: number, src: ArrayBuffer, off: number, len: number, sink: (m: CtrlMsg) => void): void {
+    if (len < 0 || off + len > src.byteLength) {
+      this.malformedFrames++
+      return
+    }
+    const data = new Uint8Array(src.slice(off, off + len))
+    sink({ op: 'data', topic: this.ch.topic[c] ?? '', channelId: c, seq: this.refSeq[c], tSimMs: this.refT[c], data })
   }
 
   /** dirty msgpack/json channels waiting for decode (roster, env/state, perf/server, sys/procs, state_ext ...) */
@@ -385,7 +403,7 @@ export class Decoder {
     let n = 0
     for (let i = 0; i < this.dirtyN; i++) {
       const k = this.ch.kind[this.dirty[i]]
-      if (k === K_DATA || k === K_ROSTER) n++
+      if (k === K_DATA || k === K_ROSTER || k === K_BYTES) n++
     }
     return n
   }
@@ -406,6 +424,11 @@ export class Decoder {
         this.refBuf[c] = null
         this.decodeData(c, kind, src, this.refOff[c], this.refLen[c], sink)
         n++
+      } else if (kind === K_BYTES && src) {
+        this.mark[c] = 0
+        this.refBuf[c] = null
+        this.deliverBytes(c, src, this.refOff[c], this.refLen[c], sink)
+        n++
       } else this.dirty[w++] = c
     }
     this.dirtyN = w
@@ -422,9 +445,10 @@ export class Decoder {
       return
     }
     if (kind === K_ROSTER) {
-      const r = (data ?? {}) as { roster_version?: number; entries?: { agent_no: number; id: string }[] }
+      const r = (data ?? {}) as { roster_version?: number; entries?: { agent_no: number; id: string; kind?: string }[] }
       const entries = Array.isArray(r.entries) ? r.entries : []
-      this.ch.setRoster(entries)
+      // D2: targets share fleet/roster with their own agent_no numbering; only vehicles map channels to agents
+      this.ch.setRoster(entries.filter((e) => e.kind !== 'target'))
       this.flags |= SF.ROSTER_CHANGED
       sink({ op: 'roster', version: r.roster_version ?? 0, entries })
       return

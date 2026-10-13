@@ -7,6 +7,7 @@ import { notify } from '@/app/providers/ToastProvider'
 import { updateSearch } from '@/app/router/router'
 import { parseCam, parseSel } from '@/app/router/search'
 import { INPUT, LIMITS } from '@/lib/tokens/input.gen'
+import { freezableInterval } from '@/lib/powerFreeze'
 import { rtClient } from '@/net/rt'
 import { selection, selectionStore } from '@/stores/selection'
 import { camera, type CameraMode } from '@/viewport/facade'
@@ -30,7 +31,8 @@ export function installUrlSync(onRevealed: (cb: () => void) => void): () => void
       dirty = true
     }
   })
-  const timer = setInterval(() => {
+  // frozen with the power-save mode (nothing selects or moves the camera mode then; D2-AC-44, D2-AC-46)
+  const stopTimer = freezableInterval(() => {
     if (!dirty || typeof location === 'undefined' || !location.pathname.startsWith('/world/')) return
     dirty = false
     const q = new URLSearchParams(location.search)
@@ -60,7 +62,7 @@ export function installUrlSync(onRevealed: (cb: () => void) => void): () => void
   return () => {
     offSel()
     offCam()
-    clearInterval(timer)
+    stopTimer()
     if (rosterCheck) clearInterval(rosterCheck)
   }
 }

@@ -25,7 +25,8 @@ import { alarms, isActive, useAlarms, type AlarmItem } from './alarms'
 import { useRedOwner } from './redFigures'
 import { subjectsText } from './toastMerger'
 
-type Filter = 'all' | 'critical' | 'warning'
+export type AlarmFilter = 'all' | 'critical' | 'warning'
+type Filter = AlarmFilter
 const ROW_PX = 64
 
 function AlarmRow({ a }: { a: AlarmItem }) {
@@ -57,7 +58,8 @@ function AlarmRow({ a }: { a: AlarmItem }) {
   )
 }
 
-function AlarmList({ filter }: { filter: Filter }) {
+/** the alarm list (also the phone's "alerts" window, D2.1 ui/mobile) */
+export function AlarmList({ filter, className }: { filter: Filter; className?: string }) {
   const t = useT()
   const version = useAlarms((s) => s.version)
   // alarms is a mutable module; `version` is the cache key of the list
@@ -69,7 +71,7 @@ function AlarmList({ filter }: { filter: Filter }) {
   const v = useVirtualizer({ count: virtual ? list.length : 0, getScrollElement: () => scrollRef.current, estimateSize: () => ROW_PX, overscan: 6 })
   if (!list.length) return <PanelEmpty brand={false} title={t('alarm.empty')} />
   return (
-    <div ref={scrollRef} className="max-h-96 overflow-auto">
+    <div ref={scrollRef} className={cn('max-h-96 overflow-auto', className)}>
       {virtual ? (
         <div style={{ height: v.getTotalSize(), position: 'relative' }}>
           {v.getVirtualItems().map((it) => (

@@ -8,6 +8,9 @@ import { LAYOUT } from '@/lib/tokens/input.gen'
 import { Tabs, TabsContent, TabsList, TabsPanels, TabsTrigger } from '@/ui/components/ui/tabs'
 import { Icon } from '@/ui/icons/Icon'
 import { PanelBody, usePanels } from '@/ui/panels/PanelHost'
+import { useSurface } from '@/app/shell/surface'
+import { useConnView } from '@/ui/shell/connView'
+import { dockPanelsFor } from './dockTabs'
 import { RailHost } from './RailHost'
 
 export function BottomDock({ viewportW, viewportH }: { viewportW: number; viewportH: number }) {
@@ -19,7 +22,10 @@ export function BottomDock({ viewportW, viewportH }: { viewportW: number; viewpo
   const rightOpen = usePrefs((s) => s.layout.right.open)
   const rightW = usePrefs((s) => s.layout.right.width)
   const dock = usePrefs((s) => s.layout.dock)
-  const panels = usePanels('bottom')
+  const all = usePanels('bottom')
+  const surface = useSurface((s) => s.surface)
+  const caps = useConnView((s) => s.caps)
+  const panels = React.useMemo(() => dockPanelsFor(all, surface, caps), [all, surface, caps])
   const tab = panels.some((p) => p.id === dock.tab) ? dock.tab : (panels[0]?.id ?? '')
   const G = LAYOUT.gapPx
   const x0 = leftOpen ? G + leftW + G : G

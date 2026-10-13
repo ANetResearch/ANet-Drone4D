@@ -1,0 +1,16 @@
+{
+  "name": "ANet Drone4D",
+  "short_name": "Drone4D",
+  "description": "ANet Drone4D World Runtime: digital sand table of UAV swarms",
+  "lang": "zh-CN",
+  "start_url": "/world/synthcity?source=pwa",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "icons": [
+    { "src": "/brand/pwa-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/pwa-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/pwa-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

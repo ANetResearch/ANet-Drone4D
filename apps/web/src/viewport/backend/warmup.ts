@@ -8,11 +8,18 @@
 // On SwiftShader every target is rendered a second time through o.bare (each draw first in its own command buffer), so
 // both vertex-routine variants of every program are compiled here (attribSlots.ts; ADR-071 item 1).
 // Report: warmupMs (wall) and programs (renderer.info.programs.length) as the baseline of D1-AC-25.
-import type { Camera, Object3D, RenderTarget, Scene, WebGLRenderTarget, WebGLRenderer } from 'three'
+// Progress (D2.1 WP-11b; request d2-WP-12-to-M06 item 1; AWR-04 §15.5.2): o.progress(x) after the parallel compile (0.25),
+// after each target of the first pass (up to 0.75) and at the end (1): the boot mask's "warming" segment advances while
+// the zoo runs instead of jumping at the gate.
+// Targets in `once` (D2: the sensor view target, whose programs are the canvas ones) are rendered in the first pass only
+// and never through o.bare: a framebuffer format only adds SwiftShader pixel routines, the vertex-routine variants and the
+// buffer uploads are target-independent and already covered by the other targets, and rasterised into a 16 x 16 corner of
+// the target only (the routines are compiled per draw, not per pixel; keeps the zoo short, D2-AC-01).
+import { Vector4, type Camera, type Object3D, type RenderTarget, type Scene, type WebGLRenderTarget, type WebGLRenderer } from 'three'
 import type { WarmTarget, WarmupItem } from '../layers/registry'
 
 export interface WarmupReport { warmupMs: number; programs: number; items: number; targets: number }
-export interface ExtraPass { scene: Scene; camera: Camera; target: RenderTarget | null; before?(): void; after?(): void }
+export interface ExtraPass { scene: Scene; camera: Camera; target: RenderTarget | null; before?(): void; after?(): void; once?: boolean }
 
 interface Saved { o: Object3D; parent: Object3D | null; visible: boolean; frustumCulled: boolean; mask: number }
 
@@ -22,9 +29,18 @@ function isAncestor(a: Object3D, b: Object3D): boolean {
   return false
 }
 
+const SMALL_PX = 16
+/** a once-target is rasterised into its SMALL_PX corner only; returns the viewport to restore */
+function shrink(t: RenderTarget): Vector4 {
+  const saved = t.viewport.clone()
+  t.viewport.set(0, 0, Math.min(SMALL_PX, t.width), Math.min(SMALL_PX, t.height))
+  return saved
+}
+
 export async function warmupZoo(r: WebGLRenderer, scene: Scene, camera: Camera, items: readonly WarmupItem[],
   targetOf: (t: WarmTarget) => RenderTarget | null | undefined,
-  o: { parallelCompile: boolean; extra?: readonly ExtraPass[]; programs: () => number; bare?: (fn: () => void) => void; sync?: boolean }): Promise<WarmupReport> {
+  o: { parallelCompile: boolean; extra?: readonly ExtraPass[]; programs: () => number; bare?: (fn: () => void) => void; sync?: boolean; once?: ReadonlySet<WarmTarget>
+    progress?: (x: number) => void }): Promise<WarmupReport> {
   const t0 = performance.now()
   const saved: Saved[] = []
   const itemMask = items.map((it) => it.object.layers.mask)
@@ -72,8 +88,13 @@ export async function warmupZoo(r: WebGLRenderer, scene: Scene, camera: Camera, 
       }
       prepare()
     }
+    o.progress?.(0.25)
     const renderAll = (bare: boolean): void => {
+      let done = 0
       for (const t of wanted) {
+        if (bare) o.progress?.(0.25 + (0.5 * done++) / Math.max(1, wanted.size))
+        const once = o.once?.has(t) === true
+        if (once && !bare) continue
         const target = t === 'screen' ? null : targetOf(t)
         if (target === undefined) continue
         // only the objects that use this target draw; an item that is an ancestor of one that does (the point-pick object
@@ -87,16 +108,19 @@ export async function warmupZoo(r: WebGLRenderer, scene: Scene, camera: Camera, 
         }
         r.setRenderTarget(target as WebGLRenderTarget | null)
         r.autoClear = true
+        const small = once && target ? shrink(target) : null
         r.render(scene, camera)
+        if (small) target!.viewport.copy(small)
         // SwiftShader: the same draws once more, each as the first draw of a fresh submission (the second vertex
         // routine variant, viewport/backend/attribSlots.ts; P4-WEB, ADR-071 item 1)
-        if (bare) o.bare?.(() => r.render(scene, camera))
+        if (bare && !once) o.bare?.(() => r.render(scene, camera))
       }
       for (const x of o.extra ?? []) {
+        if (x.once && !bare) continue
         x.before?.()
         r.setRenderTarget(x.target as WebGLRenderTarget | null)
         r.render(x.scene, x.camera)
-        if (bare) o.bare?.(() => r.render(x.scene, x.camera))
+        if (bare && !x.once) o.bare?.(() => r.render(x.scene, x.camera))
         x.after?.()
       }
     }
@@ -110,6 +134,7 @@ export async function warmupZoo(r: WebGLRenderer, scene: Scene, camera: Camera, 
       prepare()
       renderAll(false)
     }
+    o.progress?.(1)
   } finally {
     r.setRenderTarget(prevTarget)
     r.autoClear = autoClear

@@ -6,6 +6,9 @@
 // newest SensorPose48 sample is older than 3 / f; far plane: 2 triangles g50 5 %, collapsed when FOV_VALID = 0;
 // sensors with ACTIVE = 0 are skipped. Tier S draws the selected vehicle only, Tier B/A <= 16. PerfGovernor step 2
 // (selected only, then off) fades the edges out over --duration-quick (uniform, no recompile).
+// D2 (WP-11, M13-FR-217 request item 2): the 850 nm illuminators of the primary vehicle's payload (the eo built-in one,
+// divergence = HFOV, and the external nir_ill_l) are drawn as dashed cones (pyramids of the illuminator's divergence along
+// the eo camera axis, length min(R_nir, 60 m), no fill) in up to two extra slots of the same two draws.
 import { BufferAttribute, BufferGeometry, DoubleSide, LineSegments, Mesh, Quaternion, Sphere, Vector3 } from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { Fn, attribute, float, mod, uniform, varying, vec4 } from 'three/tsl'
@@ -30,6 +33,22 @@ export interface SensorView {
   valid: boolean
   w?: number
   h?: number
+  /** D2 (M13-FR-217): optical zoom geometry (null for fixed lenses) and the drawn focal length (mm, NaN when fixed) */
+  zoom?: unknown
+  fMm?: number
+}
+/** the fields of uav/{id}/payload (awr.uav.payload.v1, M13) the sensor views read: imaging modes and illuminators */
+export interface PayloadView {
+  sensors?: readonly {
+    sensor: string
+    kind?: string
+    active?: boolean
+    enabled?: boolean
+    mode?: string | null
+    palette?: string | null
+    hfov_rad?: number | null
+    illuminator?: { on: boolean; kind?: string; divergence_rad?: number; range_m?: number } | null
+  }[]
 }
 /** M13 engine/sensors/intrinsics.ts (M13 §7.4) */
 export interface SensorsApi {
@@ -48,9 +67,11 @@ export interface SensorsApi {
   setOrientationSource?(fn: ((agentNo: number, tMs: number, out4: Float64Array) => boolean) | null): void
   /** motion tier of the page (reduced drops the gimbal damping) */
   setMotionTier?(fn: (() => 'full' | 'lite' | 'reduced') | null): void
+  /** D2: latest uav/{id}/payload of an agent (M13-FR-217), read by the night view for the illuminators */
+  payloadOf?(agentNo: number): PayloadView | undefined
 }
 
-export const FRUSTUM = { maxLenM: 60, capS: 1, capBA: 16, staleIntervals: 3, poseHz: 10, dashM: 1.5, gapM: 1.5 } as const
+export const FRUSTUM = { maxLenM: 60, capS: 1, capBA: 16, staleIntervals: 3, poseHz: 10, dashM: 1.5, gapM: 1.5, illumSlots: 2 } as const
 export const SENSOR_ACTIVE = 1
 export const SENSOR_FOV_VALID = 2
 
@@ -60,6 +81,39 @@ const FILL_VERTS = 6
 /** frustum length L = min(range, 60 m); NaN or non-positive range -> 60 m */
 export function frustumLength(rangeM: number): number {
   return Number.isFinite(rangeM) && rangeM > 0 ? Math.min(rangeM, FRUSTUM.maxLenM) : FRUSTUM.maxLenM
+}
+
+/** an 850 nm illuminator of a payload: divergence (full angle, rad) and the effective range R_nir (m) */
+export interface IlluminatorView { on: boolean; divergenceRad: number; rangeM: number }
+const NIR_ILL_DIV_RAD = (5.5 * Math.PI) / 180 // nir_ill_l (AWR-04 §6.1)
+const NIR_ILL_RANGE_M = 464.8
+
+/**
+ * the illuminators switched on in a payload (uav/{id}/payload, M13): an imaging entry's illuminator{on, divergence_rad,
+ * range_m} (the eo built-in one, divergence = current HFOV) and nir_illuminator entries; at most out.length; returns the count
+ */
+export function payloadIlluminators(pl: PayloadView | undefined, out: IlluminatorView[]): number {
+  let k = 0
+  const sens = pl?.sensors ?? []
+  for (let i = 0; i < sens.length && k < out.length; i++) {
+    const s = sens[i]
+    const il = s.illuminator
+    let div = Number.NaN
+    let range = Number.NaN
+    if (il && il.on) {
+      div = il.divergence_rad ?? s.hfov_rad ?? NIR_ILL_DIV_RAD
+      range = il.range_m ?? NIR_ILL_RANGE_M
+    } else if (!il && s.kind === 'nir_illuminator' && (s.active === true || s.enabled === true)) {
+      div = NIR_ILL_DIV_RAD
+      range = NIR_ILL_RANGE_M
+    }
+    if (!(div > 0) || !(range > 0)) continue
+    out[k].on = true
+    out[k].divergenceRad = div
+    out[k].rangeM = range
+    k++
+  }
+  return k
 }
 
 /** newest SensorPose48 sample (t_ms, flags) into out; false when there is none */
@@ -90,11 +144,12 @@ export class FrustumLayer {
   /** multiplier for the governor fade (1 visible, 0 hidden) */
   fade = 1
 
-  constructor(readonly cap: number) {
+  constructor(readonly cap: number, readonly extra: number = FRUSTUM.illumSlots) {
     const eg = new BufferGeometry()
-    this.ePos = new BufferAttribute(new Float32Array(cap * EDGE_VERTS * 3), 3)
-    this.eDash = new BufferAttribute(new Float32Array(cap * EDGE_VERTS), 1)
-    this.eDist = new BufferAttribute(new Float32Array(cap * EDGE_VERTS), 1)
+    const slots = cap + extra
+    this.ePos = new BufferAttribute(new Float32Array(slots * EDGE_VERTS * 3), 3)
+    this.eDash = new BufferAttribute(new Float32Array(slots * EDGE_VERTS), 1)
+    this.eDist = new BufferAttribute(new Float32Array(slots * EDGE_VERTS), 1)
     for (const a of [this.ePos, this.eDash, this.eDist]) a.setUsage(35048)
     eg.setAttribute('position', this.ePos)
     eg.setAttribute('dashed', this.eDash)
@@ -120,7 +175,7 @@ export class FrustumLayer {
     this.edges.name = 'FrustumEdges'
     this.edges.visible = false
     const fg = new BufferGeometry()
-    this.fPos = new BufferAttribute(new Float32Array(cap * FILL_VERTS * 3), 3)
+    this.fPos = new BufferAttribute(new Float32Array(slots * FILL_VERTS * 3), 3)
     this.fPos.setUsage(35048)
     fg.setAttribute('position', this.fPos)
     fg.boundingSphere = new Sphere(new Vector3(), 1e7)
@@ -158,6 +213,40 @@ export class FrustumLayer {
     if ((flags & SENSOR_ACTIVE) === 0) return false
     const stale = !has || tRenderS * 1000 - this.smp.tMs > (FRUSTUM.staleIntervals * 1000) / FRUSTUM.poseHz
     const c = api.frustumCorners(s, frustumLength(s.rangeM), this.corners)
+    this.write(c, px, py, pz, qx, qy, qz, qw, stale, (flags & SENSOR_FOV_VALID) !== 0)
+    return true
+  }
+
+  /**
+   * D2: an illuminator cone along the camera s (its pose and gimbal): the camera's far rectangle rescaled about its centre
+   * to the divergence (half diagonal = L tan(div / 2) sqrt(2)), L = min(R_nir, 60 m); dashed edges, no fill.
+   * Uses the extra slots after the sensor frustums; false when they are full.
+   */
+  addIlluminator(api: SensorsApi, s: SensorView, divergenceRad: number, rangeM: number, px: number, py: number, pz: number,
+    qx: number, qy: number, qz: number, qw: number): boolean {
+    if (this.count >= this.cap + this.extra || !(divergenceRad > 0)) return false
+    const L = frustumLength(rangeM)
+    const c = api.frustumCorners(s, L, this.corners)
+    let ax = 0, ay = 0, az = 0
+    for (let k = 1; k <= 4; k++) {
+      ax += c[3 * k] / 4
+      ay += c[3 * k + 1] / 4
+      az += c[3 * k + 2] / 4
+    }
+    const len = hypot3(ax - c[0], ay - c[1], az - c[2])
+    const target = len * Math.tan(Math.min(divergenceRad, 3) / 2) * Math.SQRT2
+    for (let k = 1; k <= 4; k++) {
+      const dx = c[3 * k] - ax, dy = c[3 * k + 1] - ay, dz = c[3 * k + 2] - az
+      const r = hypot3(dx, dy, dz) || 1
+      c[3 * k] = ax + (dx * target) / r
+      c[3 * k + 1] = ay + (dy * target) / r
+      c[3 * k + 2] = az + (dz * target) / r
+    }
+    this.write(c, px, py, pz, qx, qy, qz, qw, true, false)
+    return true
+  }
+
+  private write(c: Float64Array, px: number, py: number, pz: number, qx: number, qy: number, qz: number, qw: number, dashed: boolean, fov: boolean): void {
     this.q.set(qx, qy, qz, qw)
     const P = this.ePos.array as Float32Array
     const D = this.eDash.array as Float32Array
@@ -182,18 +271,16 @@ export class FrustumLayer {
         P[3 * i0 + j] = w[3 * a + j]
         P[3 * (i0 + 1) + j] = w[3 * b + j]
       }
-      D[i0] = D[i0 + 1] = stale ? 1 : 0
+      D[i0] = D[i0 + 1] = dashed ? 1 : 0
       L[i0] = 0
       L[i0 + 1] = hypot3(w[3 * b] - w[3 * a], w[3 * b + 1] - w[3 * a + 1], w[3 * b + 2] - w[3 * a + 2])
     }
-    const fov = (flags & SENSOR_FOV_VALID) !== 0
     const tri = FrustumLayer.FILL
     for (let k = 0; k < 6; k++) {
       const src = fov ? tri[k] : 1
       for (let j = 0; j < 3; j++) F[3 * (fo + k) + j] = w[3 * src + j]
     }
     this.count++
-    return true
   }
 
   commit(): void {

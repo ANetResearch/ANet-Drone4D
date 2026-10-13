@@ -2,6 +2,7 @@
 // scroll-driven edge fades of .fade-scroll-y (animation-timeline on a scroll container) report playState 'running' as long
 // as they exist and never change with html[data-motion]; a time-driven animation or transition does count.
 import { afterEach, describe, expect, it } from 'vitest'
+import { setPowerFrozen } from '@/lib/powerFreeze'
 import { installAnimationSampler, motionAffected } from '@/viewport/animationSampler'
 
 const nodes: Element[] = []
@@ -63,6 +64,34 @@ describe('animationSampler (ADR-076)', () => {
       a.cancel()
     } finally {
       s.dispose()
+    }
+  })
+
+  // D2-INT (d2-WP-12c-to-M06 item 5; D2-AC-44, D2-AC-46): no sampling while the power-save mode freezes the page, one sample
+  // at once when it resumes
+  it('stops while the page is power-frozen and samples at once on resume', async () => {
+    const calls = { n: 0 }
+    const orig = document.getAnimations.bind(document)
+    document.getAnimations = () => {
+      calls.n++
+      return orig()
+    }
+    const s = installAnimationSampler(50)
+    try {
+      await new Promise((ok) => setTimeout(ok, 200))
+      expect(calls.n).toBeGreaterThan(0)
+      setPowerFrozen(true)
+      await new Promise((ok) => setTimeout(ok, 80))
+      const n0 = calls.n
+      await new Promise((ok) => setTimeout(ok, 400))
+      expect(calls.n).toBe(n0)
+      setPowerFrozen(false)
+      await new Promise((ok) => setTimeout(ok, 200))
+      expect(calls.n).toBeGreaterThan(n0)
+    } finally {
+      setPowerFrozen(false)
+      s.dispose()
+      document.getAnimations = orig
     }
   })
 })

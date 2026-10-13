@@ -26,13 +26,20 @@
 // never takes to step 6, a command result before it, or a storm whose first visible step is step 1, ACC-5 4.3), and
 // it runs when the palette was already open; ?chrome=0 mounts no toaster (its notices never reach the DOM), so there is
 // nothing to rehearse there.
+// D2 progress bar (R-D2-01; M15-FR-201): the phase line belongs to the bar writer (app/boot/progress.ts) except for the
+// error text; the slow hint gets its own line below it. The mask attaches the observable segment sources once
+// (progressSources.ts: gate floors and the opened-world snapshot) and reports the uiWarm sub-phases (pre-raster stage,
+// palette rehearsal, toast rehearsal) as the ui part of the warming segment.
 import * as React from 'react'
 import { t } from '@/app/i18n'
 import { MOTION } from '@/lib/tokens/motion.gen'
 import { overlays, overlaysStore } from '@/ui/shell/overlays'
 import { toast } from '@/ui/components/ui/toast'
 import { getGovernorMotion, getMotionTier, setGovernorMotion } from '@/ui/motion/tier'
+import { reportBootProgress, reportWarmPart } from '@/lib/bootProgress'
 import { boot } from './BootController'
+import { bootProgress } from './progress'
+import { floorOfGate, followWorldProgress } from './progressSources'
 import { hideWarmStage, showWarmStage, warmStep } from './WarmStage'
 
 export const UI_WARM_GATE = 'uiWarm'
@@ -211,22 +218,54 @@ function typePaletteQuery(q: string): void {
   el.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
+let sourcesAttached = false
+/** the observable segment sources, once per page (they outlive the mask: the loading layers read the same reports) */
+function attachProgressSources(): void {
+  if (sourcesAttached) return
+  sourcesAttached = true
+  bootProgress.start()
+  // the application chunk is executing: the bundle segment is complete (the demo entry reported its steps before)
+  reportBootProgress('bundle', 1)
+  boot.onGate(floorOfGate)
+  followWorldProgress()
+}
+
+/** the slow hint line under the phase text (created on demand; the phase line itself belongs to the bar writer) */
+function slowLine(el: HTMLElement): HTMLElement {
+  let n = el.querySelector<HTMLElement>('.boot-hint')
+  if (!n) {
+    n = document.createElement('div')
+    n.className = 'boot-hint'
+    el.appendChild(n)
+  }
+  return n
+}
+
 export function BootMask({ prewarm = false }: { prewarm?: boolean }) {
   React.useEffect(() => {
     const el = document.getElementById('boot-mask')
     if (!el) return
+    attachProgressSources()
     const phase = el.querySelector<HTMLElement>('.boot-phase')
     let removeTimer: ReturnType<typeof setTimeout> | null = null
     let offWarm: (() => void) | null = null
     if (prewarm && boot.state !== 'REVEALED' && boot.state !== 'BOOT_ERROR') {
       boot.addGate(UI_WARM_GATE)
       offWarm = boot.whenReadyExcept(UI_WARM_GATE, () => {
-        void runPrewarm(el).then(rehearsePalette).then(() => boot.resolveGate(UI_WARM_GATE))
+        reportWarmPart('ui', 0.05)
+        void runPrewarm(el)
+          .then(() => reportWarmPart('ui', 0.34))
+          .then(rehearsePalette)
+          .then(() => {
+            reportWarmPart('ui', 1)
+            boot.resolveGate(UI_WARM_GATE)
+          })
       })
-    }
+    } else if (!prewarm) reportWarmPart('ui', 1)
     const un = boot.subscribe((s, info) => {
       el.dataset.boot = s
-      if (phase) phase.textContent = info.error ? t(info.error) : info.slow ? t('boot.slow') : t(info.phaseKey)
+      if (phase && info.error) phase.textContent = t(info.error)
+      if (info.slow && !info.error && s !== 'REVEALED') slowLine(el).textContent = t('boot.slow')
       // an error page must be readable: back to the fully opaque mask
       if (s === 'BOOT_ERROR') {
         delete el.dataset.prewarm

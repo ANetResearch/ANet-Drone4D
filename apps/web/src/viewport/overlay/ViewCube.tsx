@@ -12,6 +12,9 @@
 // ADR-028 whitelist of no-raw-controls covers this file). Faces use g800 (muted in the dark viewport), ring
 // foreground/10, text-hud-cap, the north face g50 bold, never red; hover and focus change lightness only over
 // --duration-quick. Face and direction texts come from M15 (viewCube.setLabels); defaults are E/W/N/S/U/D.
+// D2.1 (WP-11b; AWR-04 §15.8.5): the cube keeps clear of M15's view-tools column on its right, 32 px buttons plus a 4 px
+// gap (mr-9); on coarse pointers the column is 44 px wide (touch targets), so the gap becomes 44 px plus 4 px (mr-12)
+// except on phones, whose view tools live in the layers drawer (request d2-WP-12c-to-M06 item 2).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Matrix4 } from 'three'
 import { events, register } from '@/engine'
@@ -168,7 +171,7 @@ export function ViewCube() {
   const go = (d: [number, number, number]): void => vp.rig?.viewFrom(d)
   return (
     <div ref={box} data-anchor="top-right" data-viewcube="" hidden={hidden} className="pointer-events-auto pr-(--rail-gap)">
-      <div className="mr-9 size-18">
+      <div className="mr-9 size-18 [html[data-coarse]:not([data-ff=phone])_&]:mr-12">
       <div ref={cube} className="relative size-full">
         {faces.map(({ f, regions }) => (
           <div key={f} data-face={f} className="invisible absolute inset-0 grid grid-cols-3 grid-rows-3 overflow-hidden rounded-sm bg-muted ring-1 ring-foreground/10 will-change-transform">

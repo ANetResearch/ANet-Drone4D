@@ -7,6 +7,11 @@
 //   waypoints (planned hollow 10 px, reached solid 6 px g400, current solid 8 px + 14 px ring), formation slots
 //   (hollow diamond 10 px g200) and S3 targets (crosshair + ring 16 px; r500 when the red is free) -> GlyphLayer.
 // Executed and planned parts are split at the path's done index. The overlay owns three draw objects at most.
+// Large fleets (D2-FX-R2-other; AWR-03 §3.8: trails and overlays on Tier S only for the selected vehicles and the focus
+// set): when more than allPathsMax vehicles have paths (Tier S 16, Tier B/A 64, the trail vehicle limits), only the paths
+// of setPathVehicles() are drawn (the adapter passes the vehicles that have trails: selected and the focus-set slots, so
+// the PerfGovernor trails step thins them too). The ladder n200 published 200 orbit paths (about 14 000 segments, 8192
+// planned drawn) and the trails layer group cost 8.2 ms on Tier S (D2 acceptance round 1, D2-AC-26 -> D1-AC-03b).
 import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShapeUtils, Sphere, Vector2, Vector3 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { attribute, uniform, varying, vec4 } from 'three/tsl'
@@ -53,7 +58,12 @@ export interface MissionDraft {
   preview: readonly ArrayLike<number>[]
 }
 
-export const MISSION = { thinCap: 16384, wideCap: 8192, patchTris: 8192, patchLiftM: 0.3, rebuildHz: 4, fillA: 0.05, coverA: 0.1 } as const
+export const MISSION = {
+  thinCap: 16384, wideCap: 8192, patchTris: 8192, patchLiftM: 0.3, rebuildHz: 4, fillA: 0.05, coverA: 0.1,
+  /** vehicles with paths up to which every path is drawn (Tier S, Tier B/A: the trail vehicle limits, viewport/layers/trails.tsx) */
+  allPathsS: 16, allPathsBA: 64,
+} as const
+const NO_VEHICLES: ReadonlySet<string> = new Set()
 
 export class MissionOverlay {
   readonly root = new Group()
@@ -71,6 +81,11 @@ export class MissionOverlay {
   private lastBuild = Number.NEGATIVE_INFINITY
   private pathSegs = 0
   private groundZ: (x: number, y: number) => number = () => 0
+  /** above this many vehicles with paths only the paths of pathVehicles are drawn (the adapter sets it per tier) */
+  allPathsMax = Number.POSITIVE_INFINITY
+  private pathVehicles: ReadonlySet<string> | null = null
+  /** paths drawn and left out by the vehicle limit in the last rebuild (tests, diagnostics) */
+  readonly pathStats = { drawn: 0, skipped: 0 }
 
   constructor() {
     this.thin = new ThinLineBatch(MISSION.thinCap, 'MissionLines', 30)
@@ -112,6 +127,14 @@ export class MissionOverlay {
     this.dirty = true
     this.urgent = true
   }
+  /**
+   * the vehicles whose paths are drawn while more than allPathsMax vehicles have paths (null: none chosen yet, the limit
+   * then draws no path). Rebuilds only when the limit is in effect.
+   */
+  setPathVehicles(ids: ReadonlySet<string> | null): void {
+    this.pathVehicles = ids
+    if (this.data.paths.length > this.allPathsMax) this.dirty = true
+  }
   /** ground height for area patches (M05 dtm.sample, else coordinate ground.zM) */
   setGround(fn: (x: number, y: number) => number): void {
     this.groundZ = fn
@@ -126,7 +149,15 @@ export class MissionOverlay {
     const thin = this.thin
     thin.begin()
     this.planned.begin()
+    const only = d.paths.length > this.allPathsMax ? (this.pathVehicles ?? NO_VEHICLES) : null
+    this.pathStats.drawn = 0
+    this.pathStats.skipped = 0
     for (const p of d.paths) {
+      if (only !== null && !only.has(p.vehicle)) {
+        this.pathStats.skipped++
+        continue
+      }
+      this.pathStats.drawn++
       const k = p.stride ?? 3
       const n = Math.floor(p.pts.length / k)
       let dist = 0

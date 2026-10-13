@@ -31,6 +31,8 @@ import { serverPerf } from '@/ui/hud/serverPerf'
 import { governorText } from '@/ui/hud/governorToasts'
 import { PERF_UI } from '@/ui/shell/perfUi'
 import { usePerf } from '@/stores/perf'
+import { usePower } from '@/app/power/store'
+import { freezableInterval } from '@/lib/powerFreeze'
 import { useWorld } from '@/stores/world'
 
 const EDGES = [0, 8.3, 16.7, 33.3, 50, 100, Number.POSITIVE_INFINITY]
@@ -50,12 +52,13 @@ function useVisibleTick(ref: React.RefObject<HTMLElement | null>, ms: number): n
       visible = es.some((e) => e.isIntersecting)
     })
     io.observe(el)
-    const h = setInterval(() => {
+    // frozen with the power-save mode (nothing changes the rings while the loop is suspended; D2-AC-44)
+    const stop = freezableInterval(() => {
       if (visible && !document.hidden) setN((x) => x + 1)
     }, ms)
     return () => {
       io.disconnect()
-      clearInterval(h)
+      stop()
     }
   }, [ref, ms])
   return n
@@ -93,12 +96,15 @@ function IntervalCard({ targetMs }: { targetMs: number }) {
   const series = React.useMemo(() => frameSeries(), [])
   const p50 = usePerf((s) => s.p50Ms)
   const p95 = usePerf((s) => s.p95Ms)
+  // power saving: the intervals measure the suspended loop; no figures and no red until live frames fill the window again
+  const powerPaused = usePower((s) => s.perfPaused)
   const T = Number.isFinite(targetMs) ? targetMs : 33.3
   return (
-    <LfChartCard title={t('perf.card.interval')} sub={t('perf.sub.interval', { t: fmt.num(T, 1) })} src="FRAME · __PERF" figureId="perf-interval" paused={paused}>
-      <div className="grid grid-cols-2 gap-2">
-        <LfStat label="P50" value={p50} format={ms1} unit="ms" />
-        <LfStat label="P95" value={p95} format={ms1} unit="ms" hero={Number.isFinite(p95) && p95 > 1.5 * T} />
+    <LfChartCard title={t('perf.card.interval')} sub={powerPaused ? t('perf.paused') : t('perf.sub.interval', { t: fmt.num(T, 1) })} src="FRAME · __PERF"
+      figureId="perf-interval" paused={paused || powerPaused}>
+      <div className="grid grid-cols-2 gap-2" data-perf-interval-paused={powerPaused ? '' : undefined}>
+        <LfStat label="P50" value={powerPaused ? Number.NaN : p50} format={ms1} unit="ms" />
+        <LfStat label="P95" value={powerPaused ? Number.NaN : p95} format={ms1} unit="ms" hero={!powerPaused && Number.isFinite(p95) && p95 > 1.5 * T} />
       </div>
       <div ref={ref}>
         {series && w > 0 ? (

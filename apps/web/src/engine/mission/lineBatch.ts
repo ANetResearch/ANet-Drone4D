@@ -33,6 +33,9 @@ export class ThinLineBatch {
   private readonly pos: BufferAttribute
   private readonly info: BufferAttribute // palette, dashed, distance, alpha
   n = 0
+  /** the line info written since the last upload differs from the uploaded one (seg() always marks it) */
+  private infoDirty = true
+  private committedN = -1
   private readonly uDash: N
   private readonly uGap: N
 
@@ -93,7 +96,51 @@ export class ThinLineBatch {
     I[k + 6] = d1
     I[k + 7] = alpha
     this.n++
+    this.infoDirty = true
     return true
+  }
+
+  /**
+   * n solid segments of a local mesh (6 floats each, src) rotated about the up axis by (c, s) = (cos, sin of the yaw) and
+   * translated by (tx, ty, tz): the bulk path of the target overlay, which re-places cached local meshes at 10 Hz
+   * (D2-FX-R2-web round 2, D2-AC-30). Solid lines do not use the line distance (only the dash test reads it), so it is 0;
+   * the line info is only written where it differs, and commitMoved() uploads it only then. Returns the segments written.
+   */
+  segsXform(src: Float32Array, n: number, tx: number, ty: number, tz: number, c: number, s: number, palette: number, alpha: number): number {
+    const m = Math.min(n, this.capSegments - this.n)
+    if (m <= 0) return 0
+    const P = this.pos.array as Float32Array
+    const I = this.info.array as Float32Array
+    // compared as stored: a float32 never equals a double such as 0.8
+    const pf = Math.fround(palette)
+    const af = Math.fround(alpha)
+    let o = this.n * 6
+    let k = this.n * 8
+    for (let j = 0; j < m; j++) {
+      const q = 6 * j
+      const ax = src[q], ay = src[q + 1], bx = src[q + 3], by = src[q + 4]
+      P[o] = tx + c * ax - s * ay
+      P[o + 1] = ty + s * ax + c * ay
+      P[o + 2] = tz + src[q + 2]
+      P[o + 3] = tx + c * bx - s * by
+      P[o + 4] = ty + s * bx + c * by
+      P[o + 5] = tz + src[q + 5]
+      if (I[k] !== pf || I[k + 1] !== 0 || I[k + 2] !== 0 || I[k + 3] !== af || I[k + 4] !== pf || I[k + 5] !== 0 || I[k + 6] !== 0 || I[k + 7] !== af) {
+        I[k] = pf
+        I[k + 1] = 0
+        I[k + 2] = 0
+        I[k + 3] = af
+        I[k + 4] = pf
+        I[k + 5] = 0
+        I[k + 6] = 0
+        I[k + 7] = af
+        this.infoDirty = true
+      }
+      o += 6
+      k += 8
+    }
+    this.n += m
+    return m
   }
 
   /** upload segments [fromSeg, n) (only what changed) and set the draw range */
@@ -108,6 +155,29 @@ export class ThinLineBatch {
       this.pos.needsUpdate = true
       this.info.needsUpdate = true
     }
+    this.infoDirty = false
+    this.committedN = this.n
+  }
+
+  /**
+   * a rebuild through segsXform: the positions of [0, n) are uploaded, the line info only when a value or the count
+   * changed (a target that only moved re-uploads 24 instead of 56 bytes per segment)
+   */
+  commitMoved(): void {
+    this.obj.geometry.setDrawRange(0, 2 * this.n)
+    this.obj.visible = this.n > 0
+    if (this.n > 0) {
+      this.pos.clearUpdateRanges()
+      this.pos.addUpdateRange(0, this.n * 6)
+      this.pos.needsUpdate = true
+      if (this.infoDirty || this.n !== this.committedN) {
+        this.info.clearUpdateRanges()
+        this.info.addUpdateRange(0, this.n * 8)
+        this.info.needsUpdate = true
+      }
+    }
+    this.infoDirty = false
+    this.committedN = this.n
   }
 
   drawCount(): number {

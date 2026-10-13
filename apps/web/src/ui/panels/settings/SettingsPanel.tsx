@@ -1,6 +1,9 @@
 // Settings content (M15-FR-026; AWR-14 §5.6): six tabs (general, render, motion, shortcuts, account, about); changes apply
 // immediately and persist (no save button); render items that need a renderer rebuild carry the "applies after reload"
 // badge; the motion tab shows the effective tier and its source (os, user, governor or test).
+// D2.1 (ADR-123; AWR-14 §20.26.6; M15-FR-235): the folded "advanced" section with the internal identity sits at the very
+// bottom under every tab (ui/settings/IdentitySection.tsx); the render tab shows the device form factor and quality
+// profile (ADR-122).
 import { useT } from '@/app/i18n'
 import { Badge } from '@/ui/components/ui/badge'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/ui/components/ui/field'
@@ -21,6 +24,9 @@ import { usePerf } from '@/stores/perf'
 import { setUserMotion, useMotionSource, useMotionTier, type UserMotion } from '@/ui/motion/tier'
 import type { SettingsTab } from '@/app/router/search'
 import { prefs, usePrefs } from '@/stores/prefs'
+import { IdentitySection } from '@/ui/settings/IdentitySection'
+import { useFormFactor } from '@/lib/formFactor'
+import { quality } from '@/viewport/facade'
 
 export const SETTINGS_TABS: readonly SettingsTab[] = ['general', 'render', 'motion', 'shortcuts', 'account', 'about']
 
@@ -32,7 +38,10 @@ export function SettingsPanel({ tab, onTab }: { tab: SettingsTab; onTab: (t: Set
   const tier3 = usePerf((s) => s.tier)
   const deviceClass = usePerf((s) => s.deviceClass)
   const edl = useLayers((s) => s.edl)
+  const ff = useFormFactor()
+  const profile = quality.profile
   return (
+    <div className="flex flex-col gap-4">
     <Tabs value={tab} onValueChange={(v) => onTab(v as SettingsTab)}>
       <TabsList>
         {SETTINGS_TABS.map((k) => <TabsTrigger key={k} value={k}>{t(`settings.tab.${k}`)}</TabsTrigger>)}
@@ -70,6 +79,11 @@ export function SettingsPanel({ tab, onTab }: { tab: SettingsTab; onTab: (t: Set
               <FieldLabel>{t('settings.tier')}</FieldLabel>
               <FieldDescription data-settings-tier={tier3 ?? ''}>{tier3 ? t('settings.tierValue', { tier: tier3, device: deviceClass ?? '—' }) : t('hud.tierUnknown')}</FieldDescription>
             </Field>
+            <Field>
+              <FieldLabel>{t('settings.formFactor')}</FieldLabel>
+              <FieldDescription data-settings-ff={ff.ff}>{t('settings.formFactorValue', { ff: t(`ff.name.${ff.ff}`), input: t(ff.coarse ? 'ff.input.touch' : 'ff.input.pointer'),
+                fps: profile?.fps ? `${profile.fps}` : t('ff.fpsAuto'), mobile: quality.mobile ? t('ff.mobileGpu') : '' })}</FieldDescription>
+            </Field>
             <Field orientation="horizontal" className="justify-between">
               <FieldLabel htmlFor="set-edl">{tier3 === 'S' ? t('layers.edlSoft') : t('layers.edl')}</FieldLabel>
               <Switch id="set-edl" checked={edl && tier3 !== 'S'} disabled={tier3 === 'S'} onCheckedChange={(on: boolean) => layers.setEdl(on)} />
@@ -106,6 +120,8 @@ export function SettingsPanel({ tab, onTab }: { tab: SettingsTab; onTab: (t: Set
         </TabsContent>
       </TabsPanels>
     </Tabs>
+    <IdentitySection />
+    </div>
   )
 }
 

@@ -9,6 +9,11 @@
 // Hot path: no allocation per frame (preallocated FrameCtx and timing arrays, index loops over task arrays).
 // Freeze (ADR-012): a frame cap, an explicit freeze counter (reveal + 30 frames, world switch) or a program compile in
 // the previous frame set ctx.frozen; CAS and PerfGovernor do not evaluate frozen frames.
+// D2.1 (AWR-04 §15.7.7, §15.8.6; ADR-121, ADR-122; WP-11b): suspension stops the rAF chain itself (no callback per
+// display frame in the power-save mode); requestFrame() renders exactly one frame while suspended (resize, theme, the
+// overlay's first paint) and wake(ms) keeps frames running until ms after the last call (camera interaction in the static
+// browse of the viewer queue); both frames are frozen (CAS and PerfGovernor skip them). The quality frame rate
+// (setQualityFps, the phone's 30 fps profile) limits frames like a cap but does not freeze: the governor keeps working.
 import type { Box2, DataTexture, PerspectiveCamera, RenderTarget, Texture, Vector2 } from 'three'
 import type { PointsNodeMaterial } from 'three/webgpu'
 
@@ -33,6 +38,8 @@ export interface BackendCaps {
   readonly readbackTopDown: boolean
   readonly maxTextureSize: number
   readonly floatColorRT: boolean
+  /** ALIASED_POINT_SIZE_RANGE[1] (D2.1: below 8 the point layers that need a size draw quads, pointSizeMode 'quad') */
+  readonly maxPointSize?: number
 }
 /** M05 PointPool upload without a CPU mirror (M05 §7.2; three r186 initTexture, copyTextureToTexture) */
 export interface TextureOps {
@@ -60,6 +67,36 @@ export interface RenderBackendView {
   programsCount(): number
   /** WARMING until the shader zoo finished (M06 §6.4); layers may hold their first draw on it (optional for test doubles) */
   readonly state?: 'WARMING' | 'READY' | 'LOST' | 'FAILED'
+  /** D2.1 quality profile of the device form factor (viewport/quality.ts; AWR-04 §15.8.6), optional for test doubles */
+  readonly quality?: QualityView
+}
+
+/** D2.1 form factor of the page (AWR-04 §15.8.1) */
+export type FormFactor = 'phone' | 'tablet' | 'desktop'
+/**
+ * the quality profile engine modules read (AWR-04 §15.8.6; ADR-122): null limits mean "the D1 desktop value". M05 reads
+ * pointBudgetMax and startRung (the backend already applies the latter), M07 envLevel, M06 the rest.
+ */
+export interface QualityView {
+  readonly formFactor: FormFactor
+  /** renderer string of a mobile GPU family (Adreno, Mali, PowerVR, Apple GPU) on a coarse pointer (deviceClass = mobile) */
+  readonly mobile: boolean
+  /** frame rate limit (0: the display rate) */
+  readonly fps: number
+  /** drawing-buffer pixel limit (megapixels; 0: none) */
+  readonly maxMegapixels: number
+  /** point budget ceiling of the point cloud (points; 0: none) */
+  readonly pointBudgetMax: number
+  /** EDL of the point cloud: on, off, or only while the PerfGovernor has not degraded */
+  readonly edl: 'on' | 'off' | 'undegraded'
+  /** environment visual level ceiling (M07): null keeps the D1 choice */
+  readonly envLevel: 'low' | null
+  readonly labelsMax: number
+  readonly heroMax: number
+  readonly lowPolyMax: number
+  /** swarm/state and selected-vehicle subscription rates (Hz; 0: the D1 rate) */
+  readonly swarmHz: number
+  readonly selectedHz: number
 }
 
 export const PHASES: readonly Phase[] = ['telemetry', 'clock', 'drones', 'camera', 'world', 'render', 'overlay', 'governor']
@@ -192,7 +229,13 @@ let handle = 0
 let running = false
 let suspended = false
 let capFps = 0
+let qualityFps = 0
 let freezeFrames = 0
+/** D2.1: rAF handle of a single requested frame or a wake period while suspended, and the wake deadline (performance.now) */
+let oneShot = 0
+let wakeUntil = Number.NEGATIVE_INFINITY
+/** frames rendered while suspended (requestFrame, wake): tests and the power-save HUD (D2-AC-44) */
+let suspendedFrames = 0
 let lastRunMs = Number.NEGATIVE_INFINITY
 let advance: ((timestampS: number) => void) | null = null
 const listeners: Array<(running: boolean) => void> = []
@@ -206,16 +249,22 @@ export const cbStarts = new Float64Array(256)
 let cbN = 0
 
 export function frame(nowMs: number): void {
-  if (running) handle = requestAnimationFrame(frame) // schedule first: a throwing frame never stops the loop
+  if (running && !suspended) handle = requestAnimationFrame(frame) // schedule first: a throwing frame never stops the loop
   if (suspended) return
-  if (capFps > 0 && nowMs - lastRunMs < 1000 / capFps - 2) return
+  const minGap = capFps > 0 ? 1000 / capFps : qualityFps > 0 ? 1000 / qualityFps : 0
+  if (minGap > 0 && nowMs - lastRunMs < minGap - 2) return
+  runFrame(nowMs, capFps > 0)
+}
+
+/** one executed frame (frame() after its gates, or a requested frame while suspended) */
+function runFrame(nowMs: number, frozenByCap: boolean): void {
   const t0 = performance.now()
   frameTiming.cbStart = t0
   cbStarts[cbN++ & 255] = t0
   ctx.frameNo++
   ctx.dtMs = lastRunMs === Number.NEGATIVE_INFINITY ? 0 : nowMs - lastRunMs
   ctx.nowMs = nowMs
-  ctx.frozen = capFps > 0 || freezeFrames > 0 || ctx.compiledThisFrame
+  ctx.frozen = frozenByCap || freezeFrames > 0 || ctx.compiledThisFrame || suspended
   if (freezeFrames > 0) freezeFrames--
   onFrameStart?.(nowMs)
   layerMs.fill(0)
@@ -232,6 +281,21 @@ export function frame(nowMs: number): void {
   onFrameEnd?.(nowMs)
 }
 
+/** a frame while suspended: one for requestFrame(), then more while a wake period lasts */
+function suspendedFrame(nowMs: number): void {
+  oneShot = 0
+  if (!running) return
+  if (!suspended) return
+  suspendedFrames++
+  runFrame(nowMs, false)
+  if (performance.now() < wakeUntil) oneShot = requestAnimationFrame(suspendedFrame)
+}
+
+function scheduleSuspended(): void {
+  if (oneShot !== 0 || !running || !suspended || typeof requestAnimationFrame !== 'function') return
+  oneShot = requestAnimationFrame(suspendedFrame)
+}
+
 export const loop = {
   register,
   runPhase,
@@ -245,6 +309,8 @@ export const loop = {
     if (!running) return
     running = false
     cancelAnimationFrame(handle)
+    if (oneShot !== 0) cancelAnimationFrame(oneShot)
+    oneShot = 0
     for (const l of listeners) l(false)
   },
   get running(): boolean {
@@ -264,13 +330,50 @@ export const loop = {
   get frameCap(): number {
     return capFps
   },
+  /**
+   * suspension (overlay pages, the small-window Empty, D2.1 power save): the rAF chain stops, no callback runs per display
+   * frame; resuming restarts it with dt 0 and freezes CAS and PerfGovernor for 30 frames (the gap is not a slow frame)
+   */
   setSuspended(on: boolean): void {
     if (suspended === on) return
     suspended = on
+    if (typeof requestAnimationFrame === 'function') {
+      if (on) {
+        cancelAnimationFrame(handle)
+        handle = 0
+      } else if (running) {
+        if (oneShot !== 0) cancelAnimationFrame(oneShot)
+        oneShot = 0
+        wakeUntil = Number.NEGATIVE_INFINITY
+        lastRunMs = Number.NEGATIVE_INFINITY
+        freezeFrames = Math.max(freezeFrames, 30)
+        handle = requestAnimationFrame(frame)
+      }
+    }
     for (const l of listeners) l(!on && running)
   },
   get suspended(): boolean {
     return suspended
+  },
+  /** D2.1: render one frame while suspended (resize, theme change, the first paint of an overlay); no-op otherwise */
+  requestFrame(): void {
+    scheduleSuspended()
+  },
+  /** D2.1: while suspended, keep rendering until ms after this call (camera interaction in static browsing) */
+  wake(ms: number): void {
+    wakeUntil = Math.max(wakeUntil, performance.now() + Math.max(0, ms))
+    scheduleSuspended()
+  },
+  /** frames rendered while suspended since the page loaded (requestFrame and wake) */
+  get suspendedFrames(): number {
+    return suspendedFrames
+  },
+  /** D2.1 quality frame rate (phone 30 fps; 0 = display rate): limits like a cap without freezing CAS and PerfGovernor */
+  setQualityFps(fps: number): void {
+    qualityFps = fps > 0 ? fps : 0
+  },
+  get qualityFps(): number {
+    return qualityFps
   },
   /** freeze CAS and PerfGovernor for the next n frames (reveal + 30, world switch; ADR-012) */
   freeze(frames: number): void {

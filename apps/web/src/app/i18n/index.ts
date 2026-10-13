@@ -49,6 +49,12 @@ export function hasKey(key: string): boolean {
   return dict[key] !== undefined || fallback[key] !== undefined
 }
 
+/** text of `key`, or `fallback` when the dictionaries do not have it (open enums from the wire: work item kinds and
+ *  states, warning and reason names; the raw value is shown instead of the key name) */
+export function tOr(key: string, fallback: string, params?: Record<string, string | number>): string {
+  return hasKey(key) ? t(key, params) : fallback
+}
+
 export function setLocale(l: Locale): void {
   locale = l
   dict = DICTS[l]

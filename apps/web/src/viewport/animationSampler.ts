@@ -3,6 +3,8 @@
 // about once per second in an idle callback (style is clean after the frame's rendering update, so
 // document.getAnimations() does not force a recalculation inside the loop callback, ADR-071 item 5) and only animations on
 // the document timeline count: scroll-driven ones never change with html[data-motion] (ADR-076).
+import { onPowerFrozen, powerFrozen } from '@/lib/powerFreeze'
+
 /**
  * whether an animation is one the motion tier changes: running on the document timeline (time-driven CSS animations,
  * transitions and WAAPI). Scroll-driven animations (ScrollTimeline, ViewTimeline: the edge fades of .fade-scroll-y) are
@@ -34,17 +36,29 @@ export function installAnimationSampler(periodMs = 1000): { readonly animating: 
   const sample = (): void => {
     idle = 0
     st.animating = document.getAnimations().some((x) => motionAffected(x))
-    timer = setTimeout(schedule, periodMs)
+    // power-save mode (D2-INT, d2-WP-12c-to-M06 item 5; D2-AC-44, D2-AC-46): the loop is suspended and PerfGovernor does not
+    // step, so the sampler stops until the page resumes (then it samples at once)
+    timer = powerFrozen() ? null : setTimeout(schedule, periodMs)
   }
   const schedule = (): void => {
     timer = null
     if (ric) idle = ric(sample, { timeout: periodMs })
     else timer = setTimeout(sample, 0)
   }
-  schedule()
-  st.dispose = () => {
+  const cancel = (): void => {
     if (timer) clearTimeout(timer)
     if (idle && cic) cic(idle)
+    timer = null
+    idle = 0
+  }
+  const offFreeze = onPowerFrozen((on) => {
+    if (on) cancel()
+    else if (!timer && !idle) schedule()
+  })
+  if (!powerFrozen()) schedule()
+  st.dispose = () => {
+    offFreeze()
+    cancel()
   }
   return st
 }

@@ -4,6 +4,10 @@
 // drones.setRedOwner), `drone-rail` (critical rows only: list selection never uses red), `event-table` (the latest
 // unacknowledged critical row), `header` (the alarm count badge while unacknowledged criticals exist). The store holds
 // the owners and is written only when one changes; window.__ux.red mirrors it in dev and test builds.
+// D2 (AWR-04 §10.7; AWR-14 §20.11.2; M15-FR-219): unconfirmed target discoveries are critical candidates of the viewport
+// with rank 5 (the ELAND rank, the latest wins among equals); a target owner is published in the store for the targets
+// layer of M18 (viewport/layers/targets.tsx reads redStore.owners.viewport when kind is 'target'), the drones layer then
+// has no red owner.
 import { useStore } from 'zustand'
 import { SEVERITY } from '@awr/contracts/enums'
 import { createAwrStore } from '@/lib/createStore'
@@ -15,6 +19,8 @@ import { drones } from '@/viewport/facade'
 import { UX } from '@/ui/testing/uxProbe'
 import { alarms, alarmsStore } from './alarms'
 import { eventLog } from './eventLog'
+import { unconfirmedDiscoveries } from './discoveries'
+import { freezableInterval } from '@/lib/powerFreeze'
 
 export const FIGURES = ['viewport', 'drone-rail', 'event-table', 'header'] as const
 export type FigureId = (typeof FIGURES)[number]
@@ -54,12 +60,14 @@ function criticalCandidates(now: number, out: RedCandidate[]): void {
 export function evaluateRed(now = Date.now()): void {
   const crit: RedCandidate[] = []
   criticalCandidates(now, crit)
+  for (const [id, at] of unconfirmedDiscoveries()) crit.push({ entity: { kind: 'target', id }, level: 'critical', rank: 5, tLastWallMs: at })
   const primary = selectionStore.getState().primary
   if (primary !== selectedId) {
     selectedId = primary
     selectedSince = now
   }
   const vp: RedCandidate[] = primary ? [...crit, { entity: { kind: 'drone', id: primary }, level: 'selected', rank: 0, tLastWallMs: selectedSince }] : crit
+  const droneCrit = crit.filter((c) => c.entity.kind === 'drone')
   const table: RedCandidate[] = []
   for (let k = 0; k < eventLog.len && table.length === 0; k++) {
     const slot = eventLog.slotOfNewest(k)
@@ -73,7 +81,7 @@ export function evaluateRed(now = Date.now()): void {
   const header: RedCandidate[] = alarmsStore.getState().critUnacked > 0 ? [{ entity: { kind: 'cell', id: 'alarm-count' }, level: 'critical', rank: 1, tLastWallMs: 0 }] : []
   const next = {
     viewport: arbitrate(states.viewport, vp, now),
-    'drone-rail': arbitrate(states['drone-rail'], crit, now),
+    'drone-rail': arbitrate(states['drone-rail'], droneCrit, now),
     'event-table': arbitrate(states['event-table'], table, now),
     header: arbitrate(states.header, header, now),
   }
@@ -90,11 +98,12 @@ export function evaluateRed(now = Date.now()): void {
   for (const f of FIGURES) UX.red[f] = owners[f] ? { kind: owners[f].kind, id: owners[f].id } : null
 }
 
-let timer: ReturnType<typeof setInterval> | null = null
+let stopTimer: (() => void) | null = null
 export function installRedFigures(): () => void {
-  if (!timer) timer = setInterval(() => evaluateRed(), INPUT.redEvalIntervalMs)
+  // not while the power-save mode froze the page (D2-AC-44)
+  if (!stopTimer) stopTimer = freezableInterval(() => evaluateRed(), INPUT.redEvalIntervalMs)
   return () => {
-    if (timer) clearInterval(timer)
-    timer = null
+    stopTimer?.()
+    stopTimer = null
   }
 }

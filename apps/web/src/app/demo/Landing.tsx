@@ -6,6 +6,15 @@
 // four highlights, the demo notes (public read-only, synthcity generated, no server-side GPU features, frame rate on the
 // visitor's GPU), a lieflat table of what runs here, repository and docs links, and a zh-CN / English switch kept in this
 // browser. Colours are theme tokens (ANet Graphite, dark); the entrance uses the brand-enter recipe (transitions.dev).
+// D2 (ADR-111, ADR-112; M15-FR-121 as revised, FR-204, FR-205; AWR-14 §20.4.1): a second main button "open my sandbox"
+// opens the world and template Sheet (loaded on demand, so the first screen chunks stay the same); it is disabled below
+// 1280 x 720 with the reason, and the demo notes describe the shared show (S7), the per-visitor sandbox and the seven
+// worlds with the UrbanScene3D authorisation.
+// D2.1 (ADR-119, ADR-122; AWR-04 §15.5.3, §15.6.5; M15-FR-225; UX-FR-150): the capacity line ("live viewing x / N · sandboxes
+// a / b · y queued · about t" and the "needs queue" badge) under the buttons, refreshed every 10 s while the page is visible;
+// the request is the store-free one of app/i18n/capacity (the landing chunk must not load zustand); "open my sandbox"
+// says "needs queue · position y + 1 · about t" when the pool is full. The button works on phones and tablets too; only
+// windows narrower than 360 CSS px disable it ("window too narrow").
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { setLocale, useT, type Locale } from '@/app/i18n'
@@ -19,7 +28,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { Icon } from '@/ui/icons/Icon'
 import type { IconKey } from '@/ui/icons/registry'
+import { bootCapacityFetch, capacityLine, sandboxQueueHint, type CapacityLine } from '@/app/i18n/capacity'
+import type { CapacityView } from '@/net/sandbox/client'
 
+const SandboxLaunchSheet = React.lazy(() => import('./SandboxLaunchSheet'))
 const LANG_KEY = 'awr.demo.lang'
 const ANET_URL = 'https://github.com/ANetResearch/ANet'
 
@@ -41,10 +53,49 @@ const FEATURES: readonly { id: string; icon: IconKey }[] = [
 ]
 const NOTES: readonly { id: string; icon: IconKey }[] = [
   { id: 'readonly', icon: 'layer.visible' },
+  { id: 'sandbox', icon: 'sandbox.mine' },
   { id: 'synth', icon: 'layer.building' },
   { id: 'server', icon: 'data.server' },
   { id: 'gpu', icon: 'perf.gpu' },
 ]
+const MIN_W = 360
+const MIN_H = 0
+const CAPACITY_POLL_MS = 10_000
+/** the capacity answer of the landing page: now, then every 10 s while visible (no store, no token) */
+function useLandingCapacity(): { data: CapacityView | null; line: CapacityLine | null } {
+  const [data, setData] = React.useState<CapacityView | null>(null)
+  const [failed, setFailed] = React.useState(false)
+  React.useEffect(() => {
+    let alive = true
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const tick = (): void => {
+      timer = null
+      if (document.visibilityState === 'visible') {
+        bootCapacityFetch().then((d) => {
+          if (!alive) return
+          setData(d)
+          setFailed(false)
+        }, () => alive && setFailed(true))
+      }
+      timer = setTimeout(tick, CAPACITY_POLL_MS)
+    }
+    tick()
+    return () => {
+      alive = false
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
+  return { data, line: data ? capacityLine(data) : failed ? capacityLine(null) : null }
+}
+function useBigWindow(): boolean {
+  const [ok, setOk] = React.useState(() => (globalThis.innerWidth || 0) >= MIN_W && (globalThis.innerHeight || 0) >= MIN_H)
+  React.useEffect(() => {
+    const on = () => setOk(innerWidth >= MIN_W && innerHeight >= MIN_H)
+    addEventListener('resize', on)
+    return () => removeEventListener('resize', on)
+  }, [])
+  return ok
+}
 const SHOTS: readonly { file: string; key: string; w: number; h: number }[] = [
   { file: 'screenshot-hero.jpg', key: 'hero', w: 1920, h: 1080 },
   { file: 'screenshot-swarm.jpg', key: 'swarm', w: 1920, h: 1080 },
@@ -101,10 +152,27 @@ export function Landing() {
       // not persisted in private mode
     }
   }
+  const big = useBigWindow()
+  const capacity = useLandingCapacity()
+  const queueHint = sandboxQueueHint(capacity.data)
+  const [sheet, setSheet] = React.useState(false)
+  const [sheetLoaded, setSheetLoaded] = React.useState(false)
+  const openSheet = () => {
+    if (!big) return
+    setSheetLoaded(true)
+    setSheet(true)
+  }
   const launch = (
     <Button size="lg" nativeButton={false} render={<a href={DEMO_ENTRY} data-demo-launch="" />} className="h-10 px-4 text-sm">
       <Icon icon="tl.play" data-icon="inline-start" />
       {t('landing.launch')}
+    </Button>
+  )
+  const sandboxButton = (
+    <Button size="lg" variant="outline" className="h-10 px-4 text-sm" disabled={!big} onClick={openSheet} data-sandbox-open=""
+      aria-describedby={big ? undefined : 'landing-sandbox-small'}>
+      <Icon icon="sandbox.mine" data-icon="inline-start" />
+      {t('landing.sandbox.open')}
     </Button>
   )
   return (
@@ -137,10 +205,19 @@ export function Landing() {
             <p className="max-w-3xl text-base leading-relaxed text-pretty text-muted-foreground">{t('landing.tagline')}</p>
             <div className="flex flex-wrap items-center gap-3 pt-2">
               {launch}
+              {sandboxButton}
               <ExtButton href={DEMO_REPO_URL}>{t('landing.repo')}</ExtButton>
               <ExtButton href={DEMO_DOCS_URL} variant="ghost">{t('landing.docs')}</ExtButton>
             </div>
             <p className="text-ed-sub text-muted-foreground" data-launch-hint="">{t('landing.launchHint')}</p>
+            {capacity.line ? (
+              <p className="flex flex-wrap items-center gap-2 text-ed-sub text-muted-foreground tabular-nums" data-landing-capacity={capacity.line.kind}>
+                <span>{capacity.line.text}</span>
+                {capacity.line.badge ? <Badge variant="outline" data-capacity-queue="">{capacity.line.badge}</Badge> : null}
+                {queueHint ? <span data-landing-queue-hint="">{queueHint}</span> : null}
+              </p>
+            ) : null}
+            {big ? null : <p id="landing-sandbox-small" className="text-ed-sub text-muted-foreground" data-sandbox-small="">{t('sandbox.smallWindow')}</p>}
           </div>
         </section>
 
@@ -209,6 +286,11 @@ export function Landing() {
         </section>
       </main>
 
+      {sheetLoaded ? (
+        <React.Suspense fallback={null}>
+          <SandboxLaunchSheet open={sheet} onOpenChange={setSheet} />
+        </React.Suspense>
+      ) : null}
       <footer className="border-t">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-6 text-ed-sub text-muted-foreground">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

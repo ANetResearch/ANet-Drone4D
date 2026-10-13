@@ -1,6 +1,8 @@
 // The single LfScheduler of the application (M15-FR-072; ADR-031; d01 §3.6.2; AWR-10 §6.7 item 3). It runs as the
 // overlay-phase task 'lf-scheduler' of the engine loop and falls back to its own requestAnimationFrame only while the loop
-// is not running (report pages, the small-window Empty state). Per frame at most 2 charts are redrawn and at most 2 ms are
+// is not running (report pages, the small-window Empty state, the phone's non-viewport windows); never while the power-save
+// mode suspends the loop (D2-AC-44, D2-FX-R2-web: the charts are frozen there like the 1 Hz texts, and the fallback's
+// 60 Hz frames took 3.7 % of the main thread in the saving state). Per frame at most 2 charts are redrawn and at most 2 ms are
 // spent; a chart is redrawn only when its data version changed and its rate allows it (HUD 4 Hz, focused chart <= 10 Hz,
 // Tier S <= 4 Hz); invisible charts (IntersectionObserver, document.hidden, hidden tab or collapsed rail via setVisible)
 // are never drawn. Tier S shows at most 4 streaming charts; slots go to focused > HUD > detail > others. On Tier S the
@@ -10,6 +12,7 @@
 import { ctx as frameCtx, loop, type FrameCtx, type Tier } from '@/engine'
 import { LF } from '@/lib/tokens/input.gen'
 import { PERF_UI } from '@/ui/shell/perfUi'
+import { frameCap } from '@/ui/shell/frameCap'
 import { uiTickDue } from '@/stores/uiTick'
 
 export type LfPrio = 0 | 1 | 2 | 3
@@ -101,18 +104,22 @@ function loopTask(c: FrameCtx): void {
 }
 function fallback(now: number): void {
   fallbackRaf = 0
-  if (loop.running || jobs.length === 0) return
+  if (loop.running || powerFrozen() || jobs.length === 0) return
   schedulerFrame(now, frameCtx.tier)
   fallbackRaf = requestAnimationFrame(fallback)
 }
+/** the power-save mode froze the page (frames on demand only): no chart frames of our own either */
+const powerFrozen = (): boolean => frameCap.suspendedBy('power')
 function kick(): void {
   if (!unregister) {
     unregister = loop.register('overlay', 'lf-scheduler', loopTask, { layer: 'hudCharts' })
     loop.onRunningChange((running) => {
       if (!running) kick()
     })
+    // leaving the power-save mode while another source still suspends the loop (phone window, report page)
+    frameCap.onChange(() => kick())
   }
-  if (!loop.running && !fallbackRaf && jobs.length && typeof requestAnimationFrame === 'function') fallbackRaf = requestAnimationFrame(fallback)
+  if (!loop.running && !powerFrozen() && !fallbackRaf && jobs.length && typeof requestAnimationFrame === 'function') fallbackRaf = requestAnimationFrame(fallback)
 }
 
 export const lfScheduler = {

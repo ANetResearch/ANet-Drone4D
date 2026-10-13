@@ -9,9 +9,13 @@ import { setRoutes, type RouteDef } from './router'
 const mods = import.meta.glob<{ route: RouteDef }>('../routes/*.tsx', { eager: true })
 const EXT_DELIVERED = new Set(['bench', 'runs', 'replay', 'jobs', ...String(import.meta.env.VITE_AWR_EXT_ROUTES ?? '').split(',').filter(Boolean)])
 
-export function installRoutes(): readonly RouteDef[] {
+/**
+ * register the route table; `internal` (D2.1, ADR-123; M15-FR-236) also registers the pages the demo build hides (Jobs,
+ * Runs, replay, Bench, reports) for the internal identity; locking it again re-installs the demo table
+ */
+export function installRoutes(internal = false): readonly RouteDef[] {
   const list = Object.values(mods).map((m) => m.route).filter((r) => (r.d1 === 'core' || EXT_DELIVERED.has(r.id)) && (!r.testOnly || TEST_SWITCHES)
-    && (!DEMO_PUBLIC || DEMO_ROUTES.has(r.id)))
+    && (!DEMO_PUBLIC || internal || DEMO_ROUTES.has(r.id)))
   setRoutes(list)
   return list
 }

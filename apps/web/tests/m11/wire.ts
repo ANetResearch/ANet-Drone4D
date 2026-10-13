@@ -40,9 +40,9 @@ export class ScriptSocket implements SocketLike {
     const d = typeof data === 'string' || data instanceof ArrayBuffer ? data : JSON.stringify(data)
     this.onmessage?.({ data: d })
   }
-  serverClose(code: number): void {
+  serverClose(code: number, reason?: string): void {
     this.readyState = WS_CLOSED
-    this.onclose?.({ code })
+    this.onclose?.({ code, reason })
   }
   json(): Record<string, unknown>[] {
     return this.sent.filter((x): x is string => typeof x === 'string').map((x) => JSON.parse(x) as Record<string, unknown>)

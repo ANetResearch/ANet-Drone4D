@@ -29,6 +29,7 @@ import { runService } from '@/ui/actions/vehicleCommands'
 import { useConnView } from '@/ui/shell/connView'
 import { writeDeniedKey } from '@/ui/shell/guards'
 import { envStore, useEnv, type PresetId } from '@/stores/env'
+import { CalendarPopover } from '@/ui/sandbox/CalendarPopover'
 
 export const PRESETS: readonly { id: PresetId; icon: IconKey }[] = [
   { id: 'clear', icon: 'env.clear' }, { id: 'partlyCloudy', icon: 'env.partly' }, { id: 'overcast', icon: 'env.overcast' },
@@ -181,6 +182,8 @@ export function EnvPanel() {
   const effNote = precip === 'rain' && Number.isFinite(derived.rainEffMmh) && derived.rainEffMmh < (sc.rainMmh || 0) - 0.05
   return (
     <div className="flex flex-col gap-2" data-env-panel="" data-readonly={ro ? '' : undefined}>
+      {/* D2 (AWR-14 §20.5.4): the simulated calendar, light band and acoustic background of the session */}
+      <CalendarPopover variant="panel" />
       {!hashOk ? (
         <Alert><Icon icon="alert.warning" /><AlertDescription>{t('env.hashMismatch')}</AlertDescription></Alert>
       ) : null}

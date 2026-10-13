@@ -18,6 +18,7 @@ import { perfStore, usePerf } from '@/stores/perf'
 import { prefs, prefsStore, usePrefs } from '@/stores/prefs'
 import { layoutActions } from '@/ui/layout/layoutState'
 import { governorText } from './governorToasts'
+import { usePower } from '@/app/power/store'
 
 const EMPTY = new LfRing(2)
 /** the __perf frame ring exists once the governor has picked a tier (M06); before that the sparkline is empty */
@@ -70,7 +71,10 @@ export function PerfHud({ compactBp }: { compactBp: boolean }) {
   const open = usePrefs((s) => s.layout.hud.open) && !compactBp
   const tier = usePerf((s) => s.tier)
   const targetMs = usePerf((s) => s.targetMs)
-  const hot = usePerf(isHot)
+  // power saving suspends the loop: the presented interval then measures the pause, not the renderer; the figure shows
+  // "paused" without the red until the 2 s window holds live frames again (d2-WP-13b-to-M15 item 5)
+  const paused = usePower((s) => s.perfPaused)
+  const hot = usePerf(isHot) && !paused
   const forced = usePerf((s) => s.forced)
   const series = React.useMemo(() => frameSeries(tier), [tier])
   const bind = React.useCallback(() => perfStore.getState().p95Ms, [])
@@ -90,8 +94,9 @@ export function PerfHud({ compactBp }: { compactBp: boolean }) {
         <div className="flex flex-col gap-1.5">
           <div className="flex items-end justify-between gap-2">
             <span className="flex items-baseline gap-1">
-              <HudText bind={bind} className={hot ? 'text-lf-hero-text' : undefined} />
-              <span className="text-hud-sub font-semibold text-muted-foreground">ms</span>
+              <HudText bind={bind} paused={paused} className={hot ? 'text-lf-hero-text' : undefined} />
+              {paused ? <span className="text-hud-sub font-semibold text-muted-foreground" data-perf-paused="">{t('perf.paused')}</span>
+                : <span className="text-hud-sub font-semibold text-muted-foreground">ms</span>}
             </span>
             {open ? <LfSparkline series={series} target={Number.isFinite(targetMs) ? targetMs : undefined} hero={false} ariaLabel={t('hud.sparkline')} /> : null}
           </div>
@@ -104,12 +109,12 @@ export function PerfHud({ compactBp }: { compactBp: boolean }) {
 
 /** the KPI text is written in the store write itself (the governor phase of the UI tick frame, ADR-066), never a frame
  * later, so the HUD changes in the same frame as the rest of the shell */
-function HudText({ bind, className }: { bind: () => number; className?: string }) {
+function HudText({ bind, className, paused = false }: { bind: () => number; className?: string; paused?: boolean }) {
   const ref = React.useRef<HTMLSpanElement>(null)
   React.useEffect(() => {
     let last = ''
     const write = () => {
-      const s = fmt.num(bind(), 1)
+      const s = paused ? '' : fmt.num(bind(), 1)
       if (s !== last && ref.current) {
         ref.current.textContent = s
         last = s
@@ -117,7 +122,7 @@ function HudText({ bind, className }: { bind: () => number; className?: string }
     }
     write()
     return perfStore.subscribe(write)
-  }, [bind])
+  }, [bind, paused])
   return <span ref={ref} data-numeric="" className={`text-hud-kpi font-extrabold ${className ?? ''}`} />
 }
 

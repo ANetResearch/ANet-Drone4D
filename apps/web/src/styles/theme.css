@@ -56,6 +56,9 @@
     --path-planned: var(--g300); --path-done: var(--g500);
     --fov-edge: oklch(from var(--g300) l c h / 0.7); --fov-fill: oklch(from var(--g50) l c h / 0.05);
     --wind-ramp-1: var(--g500); --wind-ramp-2: var(--g400); --wind-ramp-3: var(--g300); --wind-ramp-4: var(--g200); --wind-ramp-5: var(--g50);
+    /* D2.1 field views (ADR-125; AWR-04 §15.11.2 item 2): five grey bands of the radiation fields, same values as the wind
+       ramp; the legend swatches read the same tokens; no hue (R2) */
+    --field-ramp-1: var(--g500); --field-ramp-2: var(--g400); --field-ramp-3: var(--g300); --field-ramp-4: var(--g200); --field-ramp-5: var(--g50);
     --precip-rain: oklch(from var(--g200) l c h / 0.3);
     --precip-snow: oklch(from var(--g50) l c h / 0.8);
     --precip-dust: oklch(from var(--g300) l c h / 0.35);

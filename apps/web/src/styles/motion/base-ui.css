@@ -47,6 +47,12 @@
     transition: opacity var(--duration-quick) var(--ease-smooth-out);
     &:is([data-starting-style], [data-ending-style]) { opacity: 0; }
   }
+  /* a closing modal never takes the next input (D2-FX-R2-web, D2-AC-48): its full-viewport backdrop stayed hit-testable
+     for the whole exit transition (longer on Tier S, where the first frames after a confirm are slow), so the first drag of
+     a virtual stick right after the takeover confirmation landed on it */
+  :is([data-slot$="-overlay"], [data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"])[data-ending-style] {
+    pointer-events: none;
+  }
 
   /* 07 panel-reveal: Sheet slides by data-side; full height surface, never blurred */
   [data-slot="sheet-content"] {

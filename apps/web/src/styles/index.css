@@ -16,6 +16,7 @@
 @import "./lf.css";
 @import "./icons.css";
 @import "./boot.css";
+@import "./mobile.css";
 
 @custom-variant dark (&:is(.dark *));
 @source not "../../public";

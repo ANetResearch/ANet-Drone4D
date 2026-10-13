@@ -1,7 +1,12 @@
 // REST fetchers and token (AWR-03 §4.1: net/api.ts holds only fetchers and the token; QueryClient, keys and
 // queryOptions live in app/query, M15). Owner: M11. Errors are problem+json (AWR-17 §4.4): ApiError carries the HTTP
 // status, the reason code and the Chinese message and remedy from the server.
+// D2 (M11-FR-219): paths go through net/endpoint (configurable API origin); sandbox session paths
+// (`/api/sandbox/v1/sessions/{sid}/...`) carry the sandbox token of the current sandbox endpoint and refresh it once
+// through the endpoint's onAuthExpired after a 401; public sandbox routes go out without a token; shared-show paths keep
+// the page token of POST /api/auth/token.
 import { DEMO_PUBLIC } from '@/lib/demo'
+import { apiUrl, getEndpoint, isSandboxPath, sandboxTokenFor, sidOfPath } from './endpoint'
 
 export class ApiError extends Error {
   constructor(
@@ -17,6 +22,21 @@ export class ApiError extends Error {
 }
 
 interface Problem { code?: number; reason?: number; name?: string; message?: string; remedy?: string; detail?: unknown }
+
+// ------------------------------------------------------------ D2.1 internal identity (AWR-17 §17.20.5; M11-FR-231)
+/** the page's identity token (M15 stores/identity.ts registers it; same shape as net/sandbox setSandboxIdentityProvider) */
+let identityProviderFn: () => string | null = () => null
+export function setIdentityProvider(fn: (() => string | null) | null): void {
+  identityProviderFn = fn ?? (() => null)
+}
+/** the current identity token or null (REST header `X-AWR-Identity`, WS subprotocol `ident.<token>`; never in the URL) */
+export function identityProvider(): string | null {
+  try {
+    return identityProviderFn() || null
+  } catch {
+    return null
+  }
+}
 
 async function toError(r: Response, path: string): Promise<ApiError> {
   let p: Problem = {}
@@ -34,37 +54,63 @@ async function toError(r: Response, path: string): Promise<ApiError> {
  * token, shared with the realtime client), so early REST calls such as GET /api/worlds are not sent unauthenticated
  * (401 before SK-E2E); without a gateway getToken() resolves '' and the request goes out without authorization.
  */
-async function withAuth(init?: RequestInit): Promise<Headers> {
+async function withAuth(init?: RequestInit, path = ''): Promise<Headers> {
   const headers = new Headers(init?.headers)
   if (!headers.has('accept')) headers.set('accept', 'application/json')
   if (!headers.has('authorization')) {
-    const token = await getToken()
+    // sandbox routes: the session token of the current sandbox endpoint (none for public sandbox routes)
+    const token = isSandboxPath(path) ? sandboxTokenFor(path) : await getToken()
     if (token) headers.set('authorization', `Bearer ${token}`)
+  }
+  // D2.1: shared-show requests carry the identity token so the hidden families are readable (writes still need the run
+  // token); sandbox creation attaches it in net/sandbox (setSandboxIdentityProvider)
+  if (!isSandboxPath(path) && !headers.has('x-awr-identity')) {
+    const ident = identityProvider()
+    if (ident) headers.set('x-awr-identity', ident)
   }
   return headers
 }
 
-/** one retry with a fresh token after 401 (token expired, or a new run with a new secret) */
+/** one retry with a fresh token after 401 (token expired, or a new run with a new secret; sandbox: keepalive renewal) */
 async function send(path: string, init: RequestInit, headers: Headers): Promise<Response> {
-  const r = await fetch(path, { ...init, headers })
-  if (r.status !== 401 || !cached || new Headers(init.headers).has('authorization')) return r
+  const url = apiUrl(path)
+  const r = await fetch(url, { ...init, headers })
+  if (r.status !== 401 || new Headers(init.headers).has('authorization')) return r
+  if (isSandboxPath(path)) {
+    const ep = getEndpoint()
+    if (ep.kind !== 'sandbox' || sidOfPath(path) !== ep.sid || !ep.onAuthExpired) return r
+    const token = await ep.onAuthExpired()
+    if (!token) return r
+    headers.set('authorization', `Bearer ${token}`)
+    return fetch(url, { ...init, headers })
+  }
+  if (!cached) return r
   cached = null
   const token = await getToken()
   if (!token) return r
   headers.set('authorization', `Bearer ${token}`)
-  return fetch(path, { ...init, headers })
+  return fetch(url, { ...init, headers })
 }
 
 export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await send(path, init ?? {}, await withAuth(init))
+  const r = await send(path, init ?? {}, await withAuth(init, path))
   if (!r.ok) throw await toError(r, path)
   return (await r.json()) as T
 }
 
 export async function apiPost<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
-  const headers = await withAuth(init)
+  const headers = await withAuth(init, path)
   headers.set('content-type', 'application/json')
   const r = await send(path, { ...init, method: 'POST', body: JSON.stringify(body) }, headers)
+  if (!r.ok) throw await toError(r, path)
+  return (await r.json()) as T
+}
+
+/** PATCH (sandbox resource edits, AWR-17 §17.5; `If-Match` passes through init.headers) */
+export async function apiPatch<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
+  const headers = await withAuth(init, path)
+  headers.set('content-type', 'application/json')
+  const r = await send(path, { ...init, method: 'PATCH', body: JSON.stringify(body) }, headers)
   if (!r.ok) throw await toError(r, path)
   return (await r.json()) as T
 }
@@ -72,7 +118,7 @@ export async function apiPost<T>(path: string, body: unknown, init?: RequestInit
 /** DELETE with the page token (AWR-17 §4.3.5 R15, R62; M15-to-M11 item 1, INT-1): resolves to the HTTP status on 2xx,
  * rejects with ApiError (problem+json) otherwise */
 export async function apiDelete(path: string, init?: RequestInit): Promise<number> {
-  const headers = await withAuth(init)
+  const headers = await withAuth(init, path)
   const r = await send(path, { ...init, method: 'DELETE' }, headers)
   if (!r.ok) throw await toError(r, path)
   return r.status
@@ -140,7 +186,7 @@ export async function getToken(role: 'viewer' | 'operator' | 'admin' = DEMO_PUBL
       const body: Record<string, unknown> = { role, client: 'web/0.1.0' }
       const hint = readHint()
       if (hint) body.principal_hint = hint
-      const r = await fetch('/api/auth/token', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body) })
+      const r = await fetch(apiUrl('/api/auth/token'), { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body) })
       if (!r.ok) {
         if (role === 'operator' && r.status === 409) return getTokenAs('viewer')
         if (r.status === 404 || r.status >= 500) noGatewayUntil = Date.now() + NO_GATEWAY_RETRY_MS
@@ -180,7 +226,7 @@ export async function whoami(): Promise<{ status: number; body: Record<string, u
   const headers = new Headers({ accept: 'application/json' })
   if (cached) headers.set('authorization', `Bearer ${cached.token}`)
   try {
-    const r = await fetch('/api/auth/whoami', { headers, cache: 'no-store' })
+    const r = await fetch(apiUrl('/api/auth/whoami'), { headers, cache: 'no-store' })
     let body: Record<string, unknown> | null = null
     try {
       body = r.ok ? ((await r.json()) as Record<string, unknown>) : null

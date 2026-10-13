@@ -19,6 +19,64 @@ export interface SensorGeom {
   hasGimbal: boolean
   /** smoothed gimbal angles (rad) */
   gimbal: { az: number; el: number }
+  /** D2 optical zoom of the current output (eo_zoom); absent or null for fixed lenses (M13-FR-217) */
+  zoom?: ZoomGeom | null
+}
+
+/** optical zoom geometry of one output: the crop on the sensor (mm) that maps to the w x h image, and the focal range */
+export interface ZoomGeom {
+  cropWmm: number
+  cropHmm: number
+  fMinMm: number
+  fMaxMm: number
+}
+
+/** the generated zoom block (specs.gen.ts SensorSpecZoom) as far as the geometry needs it */
+export interface ZoomSpecLike {
+  fMinMm: number
+  fMaxMm: number
+  pixelUm: number
+  analysisDefault: string
+  outputs: readonly { name: string; w: number; h: number; cropW: number; cropH: number }[]
+}
+
+/** zoom geometry of an output (default: the analysis output), with the image size of that output */
+export function zoomGeomOf(z: ZoomSpecLike, output?: string): ZoomGeom & { w: number; h: number } {
+  const name = output ?? z.analysisDefault
+  const o = z.outputs.find((x) => x.name === name) ?? z.outputs[0]
+  return { cropWmm: (o.cropW * z.pixelUm) / 1000, cropHmm: (o.cropH * z.pixelUm) / 1000, fMinMm: z.fMinMm, fMaxMm: z.fMaxMm, w: o.w, h: o.h }
+}
+
+/** HFOV and VFOV (rad) at focal length fMm: 2·atan(crop / 2f); out [hfov, vfov] */
+export function fovAtFocal(z: ZoomGeom, fMm: number, out: Float64Array): Float64Array {
+  out[0] = 2 * Math.atan(z.cropWmm / (2 * fMm))
+  out[1] = 2 * Math.atan(z.cropHmm / (2 * fMm))
+  return out
+}
+
+/**
+ * Intrinsics at focal length fMm (M13-FR-217, M13-AC-208): the image size and principal point stay, fx = f·w / cropW and
+ * fy = f·h / cropH (the same pinhole as the server's ZoomSpec.intrinsics). Writes w, h, cx, cy, fx, fy into out and copies
+ * mount, hasGimbal, gimbal and zoom by reference; a sensor without zoom is copied unchanged. No allocation; out may be s.
+ */
+export function withFocal(s: SensorGeom, fMm: number, out: SensorGeom): SensorGeom {
+  out.w = s.w
+  out.h = s.h
+  out.cx = s.cx
+  out.cy = s.cy
+  out.mount = s.mount
+  out.hasGimbal = s.hasGimbal
+  out.gimbal = s.gimbal
+  out.zoom = s.zoom
+  const z = s.zoom
+  if (!z || !(fMm > 0)) {
+    out.fx = s.fx
+    out.fy = s.fy
+    return out
+  }
+  out.fx = (fMm * s.w) / z.cropWmm
+  out.fy = (fMm * s.h) / z.cropHmm
+  return out
 }
 
 /** FLU -> three camera RUB, 3x3 row-major [[0,0,-1],[-1,0,0],[0,1,0]] */

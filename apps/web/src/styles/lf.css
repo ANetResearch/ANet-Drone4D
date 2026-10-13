@@ -25,6 +25,7 @@
   .lf-svg text { font-family: var(--font-sans); font-variant-numeric: tabular-nums lining-nums; }
   .lf-floor { stroke: var(--lf-floor); stroke-width: .6; }
   .lf-grid { stroke: var(--lf-grid); stroke-width: 1; }
+  .lf-ref { stroke: var(--lf-mut); stroke-width: 1; stroke-dasharray: 4 3; }
   .lf-line { fill: none; stroke: var(--lf-data); stroke-width: 1.5; stroke-linejoin: round; }
   .lf-line-faint { fill: none; stroke: var(--lf-faintdata); stroke-width: .65; }
   .lf-solid { fill: var(--lf-data); }

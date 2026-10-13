@@ -8,6 +8,8 @@
 // selection is bg-muted plus a foreground bar (never red; the focused row's bar is thicker). Click selects and opens
 // the detail page, Mod+click toggles, Shift+click selects the range; double click focuses the camera. With two or more
 // selected the batch bar sends one fleet/cmd call per action. Row roots carry data-rail-row for DOM counting.
+// D2 (M15-FR-211; AWR-14 §20.6.1): the fleet bar above the search (count against the session limit, "add", "model
+// catalogue"; ui/panels/fleet/FleetBar.tsx).
 import * as React from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useT } from '@/app/i18n'
@@ -15,7 +17,7 @@ import { fmt } from '@/lib/format'
 import { LAYOUT } from '@/lib/tokens/input.gen'
 import { cn } from '@/lib/utils'
 import { rtClient } from '@/net/rt'
-import { camera } from '@/viewport/facade'
+import { camera, viewport } from '@/viewport/facade'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/ui/components/ui/dropdown-menu'
@@ -35,9 +37,11 @@ import { connViewStore, isOnline, useConnView } from '@/ui/shell/connView'
 import { otherWorld } from '@/ui/shell/guards'
 import { useRoute, navigate } from '@/app/router/router'
 import { fleetIdOf, fleetRows, useFleet } from '@/stores/fleet'
-import { prefs } from '@/stores/prefs'
+import { prefs, prefsStore } from '@/stores/prefs'
+import { powerStore } from '@/app/power/store'
 import { selection, selectionStore, useSelection } from '@/stores/selection'
 import { BatchBar } from './BatchBar'
+import { FleetBar } from '@/ui/panels/fleet/FleetBar'
 import { buildOrder, railStore, useRail, type RailSort, type StateGroup } from './railModel'
 
 /** owner enum -> icon (AWR-14 §6.12) */
@@ -52,9 +56,24 @@ function swarmIndex(agentNo: number, hint: number): number {
   for (let i = 0; i < sw.n; i++) if (sw.agentNo[i] === agentNo) return i
   return -1
 }
+/**
+ * the altitude of the row in the reference of Settings › altitude reference: AGL (default) is the height above the
+ * terrain under the vehicle (M06 viewport.groundZ: the world's DTM, 0 before a world), MSL the world z. The rail used to
+ * show the world z whatever the setting (a vehicle on the San Francisco nest read -15.8 m; d2-INT-to-M15-M17 item 4)
+ */
 function altOf(agentNo: number, hint: number): number {
   const i = swarmIndex(agentNo, hint)
-  return i < 0 ? Number.NaN : rtClient()!.swarm.pos[3 * i + 2]
+  if (i < 0) return Number.NaN
+  const p = rtClient()!.swarm.pos
+  return railAltitude(p[3 * i + 2], prefsStore.getState().ui.altRef, () => viewport.groundZ(p[3 * i], p[3 * i + 1]))
+}
+
+/** the rail altitude of a world z in a reference (pure; the terrain is read only for AGL) */
+export function railAltitude(z: number, ref: 'AGL' | 'MSL', ground: () => number): number {
+  if (!Number.isFinite(z)) return Number.NaN
+  if (ref !== 'AGL') return z
+  const g = ground()
+  return Number.isFinite(g) ? z - g : z
 }
 function speedOf(agentNo: number, hint: number): number {
   const i = swarmIndex(agentNo, hint)
@@ -65,6 +84,8 @@ function speedOf(agentNo: number, hint: number): number {
 const fmtAlt = (v: number) => (Number.isFinite(v) ? `${fmt.num(v, 1)} m` : fmt.num(v))
 /** data age in seconds while the link is down (the rows keep their last values with STALE, AWR-14 §7.9) */
 const staleOf = () => {
+  // power saving closed the link on purpose: the rows keep their last values without a STALE age (d2-WP-13b-to-M15 item 5)
+  if (powerStore.getState().frozen) return 0
   const since = connViewStore.getState().downSinceMs
   return Number.isFinite(since) ? Math.max(0.1, (Date.now() - since) / 1000) : 0
 }
@@ -150,6 +171,7 @@ export function DronesPanel() {
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2" data-drone-list="">
+      <FleetBar />
       <div className="flex items-center gap-1">
         <InputGroup className="h-7">
           <InputGroupAddon><Icon icon="cmd.search" /></InputGroupAddon>

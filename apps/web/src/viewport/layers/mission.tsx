@@ -3,8 +3,11 @@
 // stores/mission.ts (M10: paths[vehicle] = {pts, rev}; rows' tracks give the executed index) with event-driven rebuilds
 // (<= 4 Hz inside the overlay), pushes its glyphs in the world phase before the glyph commit, and registers the
 // 'mission' LayerSpec (thin lines, planned dashed path, area patches) with warm-up variants.
+// Large fleets (D2-FX-R2-other; AWR-03 §3.8): above MISSION.allPathsS (Tier S) / allPathsBA vehicles with paths, the
+// overlay draws the paths of the vehicles that have trails (selected, primary and the focus-set trail slots of the drone
+// layer, read in the world phase after the drones phase assigned them; the PerfGovernor trails step thins both).
 import { useEffect } from 'react'
-import { MissionOverlay, register, type MissionData, type MissionPath } from '@/engine'
+import { MISSION, MissionOverlay, register, type DroneLayer, type MissionData, type MissionPath } from '@/engine'
 import { missionStore, type MissionStore } from '@/stores/mission'
 import { registerLayer } from './registry'
 import { useVp, vp } from '../session'
@@ -31,18 +34,53 @@ export function missionDataOf(s: MissionStore): MissionData {
   return { paths, waypoints, areas, slots, targets }
 }
 
+/** key of the trail vehicles of the drone layer (selected, primary, focus-set trail slots) and of the roster size */
+export function trailVehiclesKey(L: DroneLayer): number {
+  let h = 17
+  const sel = L.selected
+  for (let i = 0; i < sel.length; i++) h = (Math.imul(h, 31) + sel[i] + 1) | 0
+  h = (Math.imul(h, 31) + L.primary + 2) | 0
+  const f = L.trailFocus.slotAgent
+  for (let i = 0; i < f.length; i++) h = (Math.imul(h, 31) + f[i] + 1) | 0
+  return (Math.imul(h, 31) + (L.o.roster()?.size ?? -1)) | 0
+}
+
+/** vehicle ids of the trail vehicles (allocates; called when trailVehiclesKey changes) */
+export function trailVehicleIds(L: DroneLayer): Set<string> {
+  const ids = new Set<string>()
+  const ro = L.o.roster()
+  const add = (a: number): void => {
+    if (a < 0) return
+    const id = ro?.idOf(a)
+    if (id !== undefined) ids.add(id)
+  }
+  for (let i = 0; i < L.selected.length; i++) add(L.selected[i])
+  add(L.primary)
+  const f = L.trailFocus.slotAgent
+  for (let i = 0; i < f.length; i++) add(f[i])
+  return ids
+}
+
 export function MissionLayer() {
   const drones = useVp((s) => s.drones)
   useEffect(() => {
     if (!drones) return
     const m = new MissionOverlay()
     vp.mission = m
+    m.allPathsMax = vp.be?.tier === 'S' ? MISSION.allPathsS : MISSION.allPathsBA
     m.setGround((x, y) => vp.groundAt(x, y, pointCloudServices()?.dtm ? (a, b) => pointCloudServices()!.dtm!.sample(a, b) : null))
     m.setData(missionDataOf(missionStore.getState()))
     const offStore = missionStore.subscribe((s) => m.setData(missionDataOf(s)))
-    const glyphs = drones.layer.glyphs
+    const L = drones.layer
+    const glyphs = L.glyphs
+    let trailKey = Number.NaN
     const offs = [
       register('world', 'mission.update', (ctx) => {
+        const k = trailVehiclesKey(L)
+        if (k !== trailKey) {
+          trailKey = k
+          m.setPathVehicles(trailVehicleIds(L))
+        }
         const o = redOwner()
         m.update(ctx, glyphs, o === null || o.kind === 'target')
       }, { order: 100, layer: 'trails' }),

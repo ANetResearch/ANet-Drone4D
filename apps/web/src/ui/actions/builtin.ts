@@ -29,6 +29,7 @@ import { removeVehicles } from './removeVehicles'
 import { registerAction, type ActionDescriptor } from './registry'
 import { runForSelection } from './vehicleCommands'
 import { DEMO_HIDDEN_ACTIONS, DEMO_PUBLIC } from '@/lib/demo'
+import { entities } from '@/ui/sandbox/entities'
 
 const primary = () => selectionStore.getState().primary
 const hasSel = () => selectionStore.getState().ids.length > 0
@@ -111,6 +112,8 @@ export function escapeChain(): void {
     camera.setFollowLock(false)
     return
   }
+  // D2 (AWR-14 §20.7.1): the target selection is cleared before the vehicle selection
+  if (entities.clearTarget()) return
   selection.clear()
 }
 
@@ -250,4 +253,4 @@ export function registerBuiltinActions(): void {
     deniedKey: () => null, run: escapeChain,
   })
 }
-const OPEN_LAYER = '[data-slot="dialog-content"],[data-slot="alert-dialog-content"],[role="menu"],[data-slot="popover-content"]'
+const OPEN_LAYER = '[data-slot="dialog-content"],[data-slot="sheet-content"],[data-slot="alert-dialog-content"],[role="menu"],[data-slot="popover-content"]'

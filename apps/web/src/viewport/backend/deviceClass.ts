@@ -13,6 +13,20 @@ const IGPU_FAMILY: readonly RegExp[] = [
 const INTEL_ARC_IGPU = /intel.*arc.*graphics/i
 const INTEL_ARC_DGPU = /arc(?:\(tm\))?\s*a\d/i
 
+/**
+ * D2.1 mobile GPU families (AWR-04 §15.8.6; ADR-122): Qualcomm Adreno, Arm Mali, Imagination PowerVR and Apple's iOS / iPadOS
+ * GPU ("Apple GPU"; desktop Apple Mx parts stay iGPU). deviceClass = mobile is this family on a coarse pointer; the hardware
+ * class (iGPU, dGPU, software) is unchanged and keeps steering the D1 rules
+ */
+export const MOBILE_GPU_RE = /adreno|mali|powervr|apple gpu/i
+export function isMobileGpu(rendererName: string): boolean {
+  return MOBILE_GPU_RE.test(rendererName)
+}
+/** deviceClass = mobile (AWR-04 §15.8.6): a mobile GPU family and a coarse primary pointer */
+export function isMobileDevice(rendererName: string, coarse: boolean): boolean {
+  return coarse && isMobileGpu(rendererName)
+}
+
 export const MICROBENCH = { budgetMs: 300, runs: 5, points: 1_000_000, sizePx: 2, w: 960, h: 540, igpuMs: 4.0, dgpuPlusMs: 1.5, abortMs: 100 } as const
 export const START_RUNG: Readonly<Record<DeviceClass, number>> = { software: 0, iGPU: 3, dGPU: 4 }
 export const CACHE_KEY = 'awr.render.v1'

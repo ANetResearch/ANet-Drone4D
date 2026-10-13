@@ -34,7 +34,13 @@ export interface LfStaticProps {
   data: readonly LfStaticPoint[]
   peaks?: number
   peakGap?: number
-  hero?: 'peak' | 'last' | 'none'
+  /** 'index': the point at heroIndex is the hero (a chosen value, e.g. the preview's vehicle count) */
+  hero?: 'peak' | 'last' | 'none' | 'index'
+  heroIndex?: number
+  /** dashed horizontal reference line (a limit such as T_max) with its label at the right end */
+  refLine?: { v: number; label: string }
+  /** one label per point under the floor ticks (categorical x axis) */
+  xLabels?: readonly string[]
   width?: number
   height?: number
   ariaLabel: string
@@ -145,17 +151,21 @@ function LiveLine({ series, windowSec = 60, domain, target, guides, staleMs = 20
   )
 }
 
-function StaticLine({ data, peaks = 2, peakGap = 5, hero = 'peak', width = 400, height = 160, ariaLabel, format = String, className }: LfStaticProps) {
+function StaticLine({ data, peaks = 2, peakGap = 5, hero = 'peak', heroIndex = -1, refLine, xLabels, width = 400, height = 160, ariaLabel, format = String, className }: LfStaticProps) {
   const tier = useMotionTier()
   const animate = tier === 'full' || tier === 'lite'
   const n = data.length
-  const padX = 12
-  const base = height - 22
+  const padX = xLabels ? 20 : 12
+  const base = height - (xLabels ? 30 : 22)
   let lo = Number.POSITIVE_INFINITY
   let hi = Number.NEGATIVE_INFINITY
   for (const p of data) {
     if (p.v < lo) lo = p.v
     if (p.v > hi) hi = p.v
+  }
+  if (refLine && Number.isFinite(refLine.v)) {
+    lo = Math.min(lo, refLine.v)
+    hi = Math.max(hi, refLine.v)
   }
   if (!(hi > lo)) {
     hi = lo + 1
@@ -168,13 +178,20 @@ function StaticLine({ data, peaks = 2, peakGap = 5, hero = 'peak', width = 400, 
     if (top.every((t) => Math.abs(t - i) >= peakGap)) top.push(i)
     if (top.length >= peaks) break
   }
-  const heroIdx = hero === 'peak' ? (top[0] ?? -1) : hero === 'last' ? n - 1 : -1
+  const heroIdx = hero === 'peak' ? (top[0] ?? -1) : hero === 'last' ? n - 1 : hero === 'index' ? heroIndex : -1
   const d = data.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.v).toFixed(1)}`).join(' ')
   return (
     <svg className={cn('lf-svg', className)} viewBox={`0 0 ${width} ${height}`} width="100%" role="img" aria-label={ariaLabel}>
       <g aria-hidden="true" pointerEvents="none">
         {data.map((_, i) => <line key={`f${i}`} className="lf-floor" x1={x(i)} x2={x(i)} y1={base} y2={base - 7} />)}
         <line className="lf-grid" x1={padX / 2} x2={width - padX / 2} y1={base} y2={base} />
+        {xLabels ? xLabels.map((l, i) => i < n ? <text key={`x${i}`} x={x(i)} y={base + 13} textAnchor="middle" fontSize={9.5} className="lf-axis">{l}</text> : null) : null}
+        {refLine && Number.isFinite(refLine.v) ? (
+          <g data-lf-ref="">
+            <line className="lf-ref" x1={padX / 2} x2={width - padX / 2} y1={y(refLine.v)} y2={y(refLine.v)} />
+            <text x={width - padX / 2} y={y(refLine.v) - 4} textAnchor="end" fontSize={9.5} className="lf-label lf-halo">{refLine.label}</text>
+          </g>
+        ) : null}
       </g>
       <path className={cn('lf-line', animate && 'lf-draw')} d={d} pathLength={1} strokeWidth={1} />
       {data.map((p, i) => {

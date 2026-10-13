@@ -2,6 +2,7 @@
 // LoopDriver installs the R3F advance hook (seconds: frameloop="never" derives delta as timestamp - elapsedTime) and
 // starts the engine loop; RenderSubscriber is the only priority-1 useFrame subscriber, so R3F never calls gl.render
 // itself and the render phase (RenderBackend.renderFrame) is the single renderer.render caller (AWR-03 §3.6 rule 2).
+// D2.1: a resize clears the drawing buffer; while the loop is suspended (power save) one frame is rendered for it.
 import { useEffect, type RefObject } from 'react'
 import { advance, useFrame, useThree } from '@react-three/fiber'
 import { Color, type PerspectiveCamera } from 'three'
@@ -39,6 +40,7 @@ export function LoopDriver({ be, hostRef }: { be: RenderBackend; hostRef: RefObj
     vp.cssW = size.width
     vp.cssH = size.height
     vp.changed()
+    if (loop.suspended) loop.requestFrame()
   }, [size])
   return null
 }

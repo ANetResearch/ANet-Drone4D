@@ -40,7 +40,15 @@ export function perfProbe(): AwrPerf {
     probe.meta.crossOriginIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated
     w.__perf = probe as unknown as Record<string, unknown>
     const p = probe
-    loop.setFrameHook((now) => frameStart(p, now))
+    // D2-INT (d2-WP-12c-to-M06 item 6): a suspension gap (power save, queued static browsing, overlay pages) is not a frame
+    // interval; frames rendered while suspended (requestFrame, wake) and the first frame after resuming record none
+    loop.setFrameHook((now) => {
+      if (loop.suspended) p.frame.lastNow = -1
+      frameStart(p, now)
+    })
+    loop.onRunningChange(() => {
+      p.frame.lastNow = -1
+    })
     loop.setFrameEndHook(() => frameEnd(p))
     observeLoaf(p)
     if (TEST_SWITCHES) {

@@ -58,6 +58,8 @@ export function SensorsLayer() {
         warmupVariants: () => [
           { object: L.frustums.edges, before: () => L.frustums.edges.geometry.setDrawRange(0, 2), after: () => L.frustums.commit() },
           { object: L.frustums.fill, before: () => L.frustums.fill.geometry.setDrawRange(0, 3), after: () => L.frustums.commit() },
+          // D2 MID-360 scan points (one point drawn; the live state comes back with the next update)
+          { object: L.scan.points, before: () => L.scan.points.geometry.setDrawRange(0, 1), after: () => L.scan.update(performance.now() / 1000) },
         ],
         setVisible: (v) => {
           L.frustumRoot.visible = v

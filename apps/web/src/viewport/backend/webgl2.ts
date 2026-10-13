@@ -12,6 +12,13 @@
 // of one program) and checks every program against the device limits read at start-up; gpu.ubo publishes both. A program
 // over the budget draws nothing, and after the frame its layer is hidden unless essential (UBO_ESSENTIAL), with one
 // console warning per layer (M06-E017).
+// D2 sensor views (WP-11, viewport/sensorView/pass.ts): while an EO, night or LWIR view is shown in the FPV camera, the
+// world layers render into the sensor target (Tier B/A: P2 composites into it), the view's composite quad draws it to the
+// canvas (one draw more in the plan), and the EO view adds the overlay layers on top; the shader zoo also renders the
+// world items into the sensor target and the three composite materials to the canvas.
+// D2.1 (WP-11b; AWR-04 §15.8.6, §15.11.6): the backend carries the quality profile of the form factor (be.quality) and
+// chooses pointSizeMode from ALIASED_POINT_SIZE_RANGE: below 8 px (the WebGL2 minimum is 1) the point layers that need a
+// size draw instanced quads ('quad'; the field view does, engine/field), otherwise gl_PointSize ('glpoint').
 import {
   Color, DepthTexture, FloatType, UnsignedByteType, HalfFloatType, WebGLRenderTarget, type Box2, type Camera, type DataTexture, type Material, type Scene, type Texture,
   type Vector2, type WebGLRenderer, type RenderTarget, type Object3D,
@@ -21,16 +28,18 @@ import { events, onSceneShading, perfProbe, type BackendCaps, type DeviceClass, 
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { AnetNodesHandler, type UboViolation } from '../anetNodesHandler'
 import { GLPointsNodeMaterial } from '../glPointsNodeMaterial'
-import { channelOf, CH_CLOUD, CH_MAIN, listLayers, type EdlCompositeLike, type LayerId, type LayerSpec, type WarmupItem } from '../layers/registry'
+import { channelOf, CH_CLOUD, CH_MAIN, listLayers, type EdlCompositeLike, type LayerId, type LayerSpec, type WarmTarget, type WarmupItem } from '../layers/registry'
 import { makeComposite, type Composite } from './composite'
 import { skyColor } from '../layers/groundSky.materials'
 import { lowestRungFor } from './deviceClass'
+import { qualityProfile, type QualityProfile } from '../quality'
 import { runSelftest, type SelftestResult } from './selftest'
 import { warmupZoo, type ExtraPass, type WarmupReport } from './warmup'
 import { makeBenchFinish } from './benchFinish'
 import { installAttribSlotReset } from './attribSlots'
 import { WEBGL2_MIN_LIMITS } from './uboBinder'
 import type { Forced } from './testSwitches'
+import { SensorViewPass, sensorClassOf } from '../sensorView/pass'
 
 export type BackendState = 'WARMING' | 'READY' | 'LOST' | 'FAILED'
 export interface BackendInfo {
@@ -42,8 +51,9 @@ export interface BackendInfo {
   selftest: SelftestResult | null
   rendererKey: string
 }
-export interface PassPlan { draws: number; cloudDraws: number; compositeDraws: number; mainDraws: number; pickDraws: number }
-export const newPassPlan = (): PassPlan => ({ draws: 0, cloudDraws: 0, compositeDraws: 0, mainDraws: 0, pickDraws: 0 })
+/** sensorDraws: the sensor view composite quad (1 while a sensor view is shown, D2); overlayDraws: its EO overlays */
+export interface PassPlan { draws: number; cloudDraws: number; compositeDraws: number; mainDraws: number; pickDraws: number; sensorDraws: number; overlayDraws: number }
+export const newPassPlan = (): PassPlan => ({ draws: 0, cloudDraws: 0, compositeDraws: 0, mainDraws: 0, pickDraws: 0, sensorDraws: 0, overlayDraws: 0 })
 
 /** side length of the point pick target in raster px (M05-FR-047, M06-FR-064) */
 export const PICK_PX = 5
@@ -68,11 +78,15 @@ export interface RenderBackend {
   readonly startRung: number
   readonly lowestAllowedRung: number
   readonly textures: TextureOps
+  /** D2.1 quality profile of the form factor at creation (viewport/quality.ts) */
+  readonly quality: QualityProfile
   readonly renderer: WebGLRenderer
   readonly info: BackendInfo
   state: BackendState
   cloudScale: number
   readonly composite: Composite | null
+  /** D2 sensor views (EO, night, LWIR) of the FPV camera */
+  readonly sensor: SensorViewPass
   createRT(name: RTName, o?: RTOptions): RenderTarget
   readPixels(rt: RenderTarget, x: number, y: number, w: number, h: number, out: Uint8Array): Promise<Uint8Array>
   createPointsMaterial(): PointsNodeMaterial
@@ -81,7 +95,7 @@ export interface RenderBackend {
   attach(scene: Scene): void
   selftest(): Promise<SelftestResult>
   /** sync: no compileAsync first, so the renders happen inside the call (late layers warmed inside a frame) */
-  warmup(camera: Parameters<WebGLRenderer['render']>[1], items: readonly WarmupItem[], o?: { sync?: boolean }): Promise<WarmupReport>
+  warmup(camera: Parameters<WebGLRenderer['render']>[1], items: readonly WarmupItem[], o?: { sync?: boolean; progress?: (x: number) => void }): Promise<WarmupReport>
   plan(ctx: FrameCtx, out: PassPlan): void
   /** the only place that calls renderer.render at run time (AWR-03 §3.6 rule 2) */
   renderFrame(ctx: FrameCtx, plan: PassPlan): void
@@ -98,6 +112,7 @@ export interface RenderBackend {
   dispose(): Promise<void>
 }
 
+const SENSOR_ONCE: ReadonlySet<WarmTarget> = new Set<WarmTarget>(['sensor'])
 const MASK_S = (1 << CH_MAIN) | (1 << CH_CLOUD)
 const MASK_CLOUD = 1 << CH_CLOUD
 const MASK_MAIN = 1 << CH_MAIN
@@ -138,16 +153,38 @@ function planDiagnosis(r: WebGLRenderer, scene: Scene, ctx: FrameCtx): string {
   return `planned ${planned}; drawn ${drawn.join(', ')}`
 }
 
-export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, startRung: number, info: BackendInfo): RenderBackend {
+/** three's extension query without the warning for EXT_color_buffer_float (see wrapGl) */
+function quietFloatColorQuery(r: WebGLRenderer): void {
+  const ext = r.extensions as unknown as { get(name: string): unknown; has(name: string): boolean }
+  const get = ext.get.bind(ext)
+  ext.get = (name: string): unknown => (name === 'EXT_color_buffer_float' && !ext.has(name) ? null : get(name))
+}
+
+/** largest point size the device rasterises (ALIASED_POINT_SIZE_RANGE[1]); 'quad' below POINT_SPRITE_MIN_PX */
+export const POINT_SPRITE_MIN_PX = 8
+export function maxPointSizeOf(gl: WebGL2RenderingContext): number {
+  const r = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as ArrayLike<number> | null
+  return r && r.length >= 2 && Number.isFinite(r[1]) ? r[1] : 1
+}
+
+export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, startRung: number, info: BackendInfo,
+  quality: QualityProfile = qualityProfile('desktop', false)): RenderBackend {
   const gl = r.getContext() as WebGL2RenderingContext
+  const maxPointSize = maxPointSizeOf(gl)
   // SwiftShader keys its vertex routines on stale vertex-input slots of earlier draws: normalise them before every draw so
   // no program is compiled again after the reveal (P4-WEB, ADR-071 item 1; attribSlots.ts)
   const slotReset = deviceClass === 'software' && /swiftshader/i.test(info.rendererString) ? installAttribSlotReset(gl) : null
   const caps: BackendCaps = {
     reversedZ: r.capabilities.reversedDepthBuffer, timerQuery: gl.getExtension('EXT_disjoint_timer_query_webgl2') !== null,
     parallelCompile: gl.getExtension('KHR_parallel_shader_compile') !== null, compute: false, mrt: false, readbackTopDown: false,
-    maxTextureSize: r.capabilities.maxTextureSize, floatColorRT: gl.getExtension('EXT_color_buffer_float') !== null,
+    maxTextureSize: r.capabilities.maxTextureSize, floatColorRT: gl.getExtension('EXT_color_buffer_float') !== null, maxPointSize,
   }
+  // D2.1 (AWR-04 §15.8.6): without EXT_color_buffer_float (many mobile GPUs, the WebGL2 minimum) three r186 still asks for
+  // it, with a console warning, whenever it uploads any float texture, also the sampled-only ones (DTM, draw tables, the
+  // sensor-view emitter table, the field anchors; WebGL2 samples R32F and RGBA32F with nearest filtering without it). The
+  // viewport never renders into a float colour target when caps.floatColorRT is false, so the query is answered quietly;
+  // a float colour target would still fail as framebuffer incomplete and show up as a GL error.
+  if (!caps.floatColorRT) quietFloatColorQuery(r)
   const probe = perfProbe()
   // uniform-block budget (FX-UBO, ADR-086): limits read by the handler at start-up, counts as programs are built
   const nh = AnetNodesHandler.of(r)
@@ -207,14 +244,18 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
     edl?.bindTargets(cloudRT.texture, cloudRT.depthTexture)
   }
   const rtsByName = new Map<RTName, RenderTarget>()
+  // D2 sensor views: the pass (materials, target allocated with the shader zoo) and whether plan() chose it this frame
+  const sensor = new SensorViewPass(caps.reversedZ, () => probe.gpu.rtAllocs++)
+  let sensorPlanned = false
+  const isCloud = (s: LayerSpec): boolean => channelOf(s) === CH_CLOUD
   // point pick (M06-FR-064): the queued request, whether plan() prepared it this frame, and the saved clear colour
   let pickReq: PickPassRequest | null = null
   let pickPlanned = false
   const clear0 = new Color()
 
   const be: RenderBackend = {
-    tier, deviceClass, kind: 'webgl2', pointSizeMode: 'glpoint', caps, startRung, lowestAllowedRung: lowestRungFor(tier), textures,
-    renderer: r, info, state: 'WARMING', cloudScale: 1, composite,
+    tier, deviceClass, kind: 'webgl2', pointSizeMode: maxPointSize >= POINT_SPRITE_MIN_PX ? 'glpoint' : 'quad', caps, startRung,
+    lowestAllowedRung: lowestRungFor(tier), textures, quality, renderer: r, info, state: 'WARMING', cloudScale: 1, composite, sensor,
     createRT(name: RTName, o: RTOptions = {}): RenderTarget {
       const w = Math.max(1, Math.round(o.width ?? r.domElement.width * (o.scaleOfCanvas ?? 1)))
       const h = Math.max(1, Math.round(o.height ?? r.domElement.height * (o.scaleOfCanvas ?? 1)))
@@ -241,7 +282,7 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
     async selftest(): Promise<SelftestResult> {
       const res = await runSelftest(r, (w, h) => be.createRT('selftest', { width: w, height: h }), (rt, x, y, w, h, o) => be.readPixels(rt, x, y, w, h, o), { noFix: TEST_SWITCHES && info.forced?.selftestNoFix === true })
       info.selftest = res
-      if (!res.pointSizeOk) {
+      if (!res.pointSizeOk && be.pointSizeMode === 'glpoint') {
         be.pointSizeMode = 'pixel'
         console.warn(`M06-E004 point size self test lit ${res.litPx} px (< 4): pointSizeMode = pixel`)
         events.emit('backend.notice', 'pointsize.degraded')
@@ -257,20 +298,36 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       // test builds with ?quality=1: the coverage-mask target of viewport/qualityMask.ts, so its point program (render
       // target output) compiles under the mask and not at the first quality sample (FX-WEB1)
       if (TEST_SWITCHES && !rtsByName.has('quality') && items.some((it) => it.targets?.includes('quality'))) be.createRT('quality', { width: 8, height: 8 })
+      // D2 sensor views: the sensor target exists before the reveal; the world items render into it as well (SwiftShader
+      // keys its routines on the framebuffer formats, the GL programs are the canvas ones), the composite materials to
+      // the canvas
+      // allocated once with the zoo (a late-layer warm-up after a resize keeps it: the format is what the routines need;
+      // the size follows the canvas lazily in the first sensor-view frame, so a resize allocates nothing here, D1-AC-24)
+      const sv = sensor.rt ?? sensor.ensure(r.domElement.width, r.domElement.height)
+      const zoo = items.map((it) => {
+        const spec = layerOf(it.object)
+        const t = it.targets ?? ['screen']
+        return spec && sensorClassOf(spec) === 'world' && t.includes('screen') && !t.includes('sensor') ? { ...it, targets: [...t, 'sensor' as const] } : it
+      })
       const extra: ExtraPass[] = []
       if (composite && cloudRT) {
-        // both P2 materials (the built-in composite and M05's EDL composite) with the scene camera, as at run time
+        // both P2 materials (the built-in composite and M05's EDL composite) with the scene camera, as at run time, to the
+        // canvas and to the sensor target
         const c = composite
-        extra.push({ scene: c.scene, camera, target: null, before: () => (c.quad.material = c.material) })
-        if (edl) {
-          const e = edl as unknown as Material
-          extra.push({ scene: c.scene, camera, target: null, before: () => (c.quad.material = e), after: () => (c.quad.material = e) })
+        for (const tgt of [null, sv]) {
+          const once = tgt !== null
+          extra.push({ scene: c.scene, camera, target: tgt, once, before: () => (c.quad.material = c.material) })
+          if (edl) {
+            const e = edl as unknown as Material
+            extra.push({ scene: c.scene, camera, target: tgt, once, before: () => (c.quad.material = e), after: () => (c.quad.material = e) })
+          }
         }
       }
+      extra.push({ scene: sensor.scene, camera, target: null })
       const bench = TEST_SWITCHES ? rtsByName.get('bench') : undefined
-      const rep = await warmupZoo(r, scene, camera, items, (t) => (t === 'cloud' ? cloudRT : t === 'bench' ? bench : t === 'screen' ? null : rtsByName.get(t)), {
+      const rep = await warmupZoo(r, scene, camera, zoo, (t) => (t === 'cloud' ? cloudRT : t === 'bench' ? bench : t === 'sensor' ? sv : t === 'screen' ? null : rtsByName.get(t)), {
         parallelCompile: caps.parallelCompile === true && wo.sync !== true, sync: wo.sync === true, extra, programs: () => be.programsCount(),
-        bare: slotReset ? (fn) => slotReset.bare(fn) : undefined,
+        bare: slotReset ? (fn) => slotReset.bare(fn) : undefined, once: SENSOR_ONCE, progress: wo.progress,
       })
       probe.gpu.programs = rep.programs
       probe.meta.warmupMs = rep.warmupMs
@@ -281,11 +338,22 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       let cloud = 0
       let main = 0
       const ls = listLayers()
-      for (let i = 0; i < ls.length; i++) {
-        const s = ls[i]
-        const n = s.drawCount(ctx)
-        if (channelOf(s) === CH_CLOUD) cloud += n
-        else main += n
+      sensorPlanned = be.state === 'READY' && sensor.active()
+      out.sensorDraws = 0
+      out.overlayDraws = 0
+      if (sensorPlanned) {
+        const d = sensor.plannedDraws(ctx, ls, isCloud)
+        cloud = d.cloud
+        main = d.world
+        out.sensorDraws = 1
+        out.overlayDraws = d.overlay
+      } else {
+        for (let i = 0; i < ls.length; i++) {
+          const s = ls[i]
+          const n = s.drawCount(ctx)
+          if (channelOf(s) === CH_CLOUD) cloud += n
+          else main += n
+        }
       }
       out.cloudDraws = tier === 'S' ? 0 : cloud
       out.compositeDraws = tier === 'S' ? 0 : 1
@@ -301,14 +369,54 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
         pickPlanned = ok
         out.pickDraws = ok ? 1 : 0
       }
-      out.draws = out.cloudDraws + out.compositeDraws + out.mainDraws + out.pickDraws
+      out.draws = out.cloudDraws + out.compositeDraws + out.mainDraws + out.pickDraws + out.sensorDraws + out.overlayDraws
     },
     renderFrame(ctx: FrameCtx, plan: PassPlan): void {
       const cam = ctx.camera
       if (!scene || !cam || be.state === 'LOST' || be.state === 'FAILED') return
       const before = be.programsCount()
       r.info.reset()
-      if (tier === 'S') {
+      const sensorOn = sensorPlanned && sensor.rt !== null
+      if (sensorOn) {
+        // S1 world layers into the sensor target, S2 the view's composite to the canvas, S3 the EO overlays on top
+        const ls = listLayers()
+        const svRT = sensor.ensure(ctx.dbW, ctx.dbH)
+        sensor.hideFor('world', ls)
+        if (tier === 'S') {
+          cam.layers.mask = MASK_S
+          r.setRenderTarget(svRT)
+          r.render(scene, cam)
+        } else {
+          if (!cloudRT || rtW !== ctx.dbW || rtH !== ctx.dbH) be.resizeRTs(ctx.dbW, ctx.dbH)
+          const rt = cloudRT!
+          const s = be.cloudScale
+          rt.viewport.set(0, 0, Math.max(1, Math.round(rtW * s)), Math.max(1, Math.round(rtH * s)))
+          r.setRenderTarget(rt)
+          r.clear()
+          cam.layers.mask = MASK_CLOUD
+          r.render(scene, cam)
+          r.setRenderTarget(svRT)
+          const c = composite!
+          if (edl) {
+            edl.uniforms.uvScale.value = s
+            if (c.quad.material !== (edl as unknown)) c.quad.material = edl as unknown as Material
+          } else c.uvScale.value = s
+          cam.layers.mask = MASK_MAIN
+          r.render(c.scene, cam)
+          r.autoClear = false
+          r.render(scene, cam)
+          r.autoClear = true
+        }
+        sensor.restore()
+        r.setRenderTarget(null)
+        r.render(sensor.scene, cam)
+        sensor.hideFor('overlay', ls)
+        r.autoClear = false
+        cam.layers.mask = MASK_MAIN
+        r.render(scene, cam)
+        r.autoClear = true
+        sensor.restore()
+      } else if (tier === 'S') {
         cam.layers.mask = MASK_S
         r.setRenderTarget(null)
         r.render(scene, cam)
@@ -376,7 +484,7 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
         probe.gpu.planMismatches++
         probe.gpu.glErrors++
         if (TEST_SWITCHES && mismatchLogged++ < 20) {
-          console.error(`M06-E007 render.calls ${calls} != pass plan ${plan.draws} (cloud ${plan.cloudDraws}, composite ${plan.compositeDraws}, main ${plan.mainDraws}); ${planDiagnosis(r, scene, ctx)}`)
+          console.error(`M06-E007 render.calls ${calls} != pass plan ${plan.draws} (cloud ${plan.cloudDraws}, composite ${plan.compositeDraws}, main ${plan.mainDraws}, sensor ${plan.sensorDraws}, overlay ${plan.overlayDraws}); ${planDiagnosis(r, scene, ctx)}`)
         }
       }
     },
@@ -419,6 +527,7 @@ export function wrapGl(r: WebGLRenderer, tier: Tier, deviceClass: DeviceClass, s
       cloudRT?.dispose()
       for (const rt of rtsByName.values()) rt.dispose()
       composite?.dispose()
+      sensor.dispose()
       r.dispose()
     },
   }

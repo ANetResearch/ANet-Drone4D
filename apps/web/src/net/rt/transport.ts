@@ -1,6 +1,9 @@
 // Transport seam of rt.worker (M11 §6.4.14, §6.6.3; AWR-17 §6.13 item 2). Owner: M11.
 // SocketLike is the subset of the WebSocket API the worker uses, so FakeSource (and tests) can stand in for the network.
 // Backoff follows partysocket's shape: minDelay 500 ms, grow 1.5, max 10 s, +-20 % jitter, connection timeout 4 s.
+// D2: the refused-upgrade triage asks whoami for the shared show and the session object (SB-08) for a sandbox
+// (AWR-17 §17.9.3), on the host of the realtime URL (the worker has no page state; the URL already carries the origin).
+import { authCheckPath } from '../endpoint'
 export const WS_CONNECTING = 0
 export const WS_OPEN = 1
 export const WS_CLOSING = 2
@@ -28,9 +31,12 @@ export function backoffDelay(attempt: number, rnd: number): number {
   return Math.round(base * (1 + BACKOFF.jitter * (2 * rnd - 1)))
 }
 
-/** subprotocol list of AWR-17 §6.2: awr.rt.v1 first, bearer token second (omitted when empty) */
-export function protocolsFor(token: string): string[] {
-  return token ? ['awr.rt.v1', `bearer.${token}`] : ['awr.rt.v1']
+/** subprotocol list of AWR-17 §6.2: awr.rt.v1 first, bearer token second (omitted when empty); D2.1 internal identity
+ * token third as `ident.<token>` (AWR-17 §17.20.5; never in the URL) */
+export function protocolsFor(token: string, identity?: string | null): string[] {
+  const out = token ? ['awr.rt.v1', `bearer.${token}`] : ['awr.rt.v1']
+  if (identity) out.push(`ident.${identity}`)
+  return out
 }
 
 /** http(s) URL on the same host as a ws(s) URL (whoami triage after 1006, AWR-17 §3.3 item 4) */
@@ -47,9 +53,13 @@ export function httpUrlOf(wsUrl: string, path: string): string {
   }
 }
 
-/** GET /api/auth/whoami with the bearer token; the HTTP status, 0 on a network error */
+/** GET /api/auth/whoami (shared show) or GET /api/sandbox/v1/sessions/{sid} (sandbox) with the bearer token; the HTTP
+ * status, 0 on a network error */
 export function whoamiStatus(wsUrl: string, token: string): Promise<number> {
   const headers: Record<string, string> = { accept: 'application/json' }
   if (token) headers.authorization = `Bearer ${token}`
-  return fetch(httpUrlOf(wsUrl, '/api/auth/whoami'), { headers, cache: 'no-store' }).then((r) => r.status, () => 0)
+  return fetch(httpUrlOf(wsUrl, authCheckPath(wsUrl)), { headers, cache: 'no-store' }).then((r) => r.status, () => 0)
 }
+
+/** close reason of a sandbox world switch (AWR-17 §17.4.6; M11-FR-205): reconnect, then the new hello.world */
+export const WORLD_SWITCH_REASON = 'world_switch'

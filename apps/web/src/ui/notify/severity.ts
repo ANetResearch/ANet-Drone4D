@@ -43,6 +43,10 @@ export function eventSeverity(e: Pick<RtEvent, 'type' | 'level' | 'data'>, out: 
     rank = Math.max(rank, r)
   } else if (e.type === 'cmd.rejected' || e.type === 'cmd.failed' || e.type === 'cmd.timeout') {
     if (sev === 'info') sev = 'warning'
+  } else if (e.type === 'target.discovered') {
+    // D2 (AWR-04 §10.7): a discovery is critical with rank 5 (the ELAND rank; equal ranks: the latest wins)
+    sev = 'critical'
+    rank = Math.max(rank, 5)
   } else if (e.type === 'proc.state' && e.data?.state === 'FAILED') {
     sev = 'critical'
     rank = Math.max(rank, 9)
@@ -58,9 +62,11 @@ export const sourceOf = (type: string): string => {
   return i > 0 ? type.slice(0, i) : type
 }
 
-/** reason code of an event (0 when none): data.code, else a reason name */
-export function reasonOf(e: Pick<RtEvent, 'data'>): string {
+/** reason code of an event (0 when none): data.code, else a reason name; a target discovery merges per target (D2,
+ * AWR-14 §20.11.1 merge key target:discovered:<target>) */
+export function reasonOf(e: Pick<RtEvent, 'data'> & Partial<Pick<RtEvent, 'type'>>): string {
   const d = e.data ?? {}
+  if (e.type === 'target.discovered' && typeof d.target === 'string') return d.target
   if (typeof d.code === 'number' && d.code > 0) return String(d.code)
   if (typeof d.reason === 'string' && d.reason) return d.reason
   if (typeof d.to === 'string') return subOf(d.to) || String(d.to).split('/')[0]
@@ -103,10 +109,84 @@ export function describeEvent(e: Pick<RtEvent, 'type' | 'data' | 'uav'>): string
       return t('event.cmd', { who, op: opText(d.op), status: t(`command.state.${status}`), reason })
     }
     default: {
+      const d2 = describeD2(e)
+      if (d2 !== null) return d2
       const key = `event.type.${e.type}`
       const msg = typeof d.message === 'string' ? sanitizeText(d.message) : ''
       const base = hasKey(key) ? t(key) : sanitizeText(e.type, 64)
       return [who, base, msg].filter(Boolean).join(' · ')
     }
   }
+}
+
+const d2s = (v: unknown): string => (typeof v === 'string' ? sanitizeText(v, 64) : '')
+const d2n = (v: unknown, digits = 0): string => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(digits) : '—')
+const d2kind = (v: unknown): string => (v === 'visual' || v === 'acoustic' || v === 'radar' || v === 'rf' ? t(`sens.kind.${v}`) : d2s(v))
+const d2level = (v: unknown): string => (v === 'D' || v === 'R' || v === 'I' ? t(`perception.level.${v}`) : d2s(v))
+
+/** event table text of the D2 events (AWR-17 §17.7.5; AWR-14 §20.11.1), null for other types */
+export function describeD2(e: Pick<RtEvent, 'type' | 'data' | 'uav'>): string | null {
+  const d = e.data ?? {}
+  const uav = d2s(d.uav ?? e.uav)
+  switch (e.type) {
+    case 'target.discovered':
+      return t('target.discovered', { target: d2s(d.target), uav, kind: d2kind(d.kind), range: d2n(d.range_m) })
+    case 'target.state':
+      return t('event.d2.targetState', { target: d2s(d.target), to: t(`awareness.${typeof d.to === 'string' ? d.to : 'UNAWARE'}`) })
+    case 'perception.capture':
+      return t('perception.captured', { target: d2s(d.target), uav, sensor: d2s(d.sensor), level: d2level(d.level_to) })
+    case 'perception.capture_lost':
+      return t('event.d2.captureLost', { target: d2s(d.target), uav, sensor: d2s(d.sensor) })
+    case 'perception.level':
+      return t('event.d2.level', { target: d2s(d.target), uav, level: d2level(d.level_to), n: d2n(d.n_eff, 1), req: d2n(d.n_req, 0) })
+    case 'perception.detect':
+      return t('event.d2.detect', { uav, sensor: d2s(d.sensor), level: d2level(d.level) })
+    case 'uav.keepout_guard':
+      return t('event.d2.keepout', { uav, target: d2s(d.target), d: d2n(d.d_m, 1) })
+    case 'nest.dispatch_delayed':
+      return t('event.d2.nestDelayed', { nest: d2s(d.nest), reason: d2s(d.reason), s: d2n(d.delay_s) })
+    case 'nest.launch':
+    case 'nest.recover':
+    case 'nest.swap_done':
+      return t(`event.d2.${e.type === 'nest.launch' ? 'nestLaunch' : e.type === 'nest.recover' ? 'nestRecover' : 'nestSwap'}`, { nest: d2s(d.nest), uav })
+    case 'relay.dispatch':
+      return t('event.d2.relayDispatch', { uav, target: d2s(d.target), reason: d2s(d.reason) })
+    case 'relay.handover':
+      return t('event.d2.relayHandover', { from: d2s(d.from_uav), to: d2s(d.to_uav), s: d2n(d.overlap_s) })
+    case 'relay.gap':
+      return t('event.d2.relayGap', { s: d2n(d.duration_s), cause: d2s(d.cause) })
+    case 'task.created':
+    case 'task.state':
+      return t('event.d2.task', { tid: d2s(d.tid), to: d2s(d.to) })
+    case 'task.allocated':
+    case 'task.reallocated':
+      return t('event.d2.taskAllocated', { tid: d2s(d.tid) })
+    case 'fw.wind_exceeds':
+      return t('event.d2.fwWind', { uav, wind: d2n(d.wind_mps, 1) })
+    case 'sensor.mode': {
+      // d2-WP-10-to-M15 item 2: {uav, sensor, from, to, reason}
+      const mode = (v: unknown): string => (typeof v === 'string' && hasKey(`sensor.mode.${v}`) ? t(`sensor.mode.${v}`) : d2s(v))
+      const why = d2s(d.reason)
+      const args = { uav, sensor: d2s(d.sensor), from: mode(d.from), to: mode(d.to), why }
+      return why ? t('event.d2.sensorModeWhy', args) : t('event.d2.sensorMode', args)
+    }
+    case 'sandbox.expiring':
+      return t('event.d2.expiring', { s: d2n(d.in_s), reason: t(`sandbox.endReason.${typeof d.reason === 'string' ? d.reason : 'lifetime'}`) })
+    case 'sandbox.rate':
+      return t('event.d2.rate', { granted: d2n(d.granted, 2), requested: d2n(d.requested, 2) })
+    case 'sandbox.state':
+      return t('event.d2.sandboxState', { to: d2s(d.to) })
+    default:
+      return null
+  }
+}
+
+/** the four D2 filters of the events tab (AWR-14 §20.11.1): perception, targets, tasking, sandbox */
+export type D2Filter = 'perception' | 'targets' | 'tasking' | 'sandbox'
+export function d2FilterOf(type: string): D2Filter | null {
+  if (type.startsWith('perception.')) return 'perception'
+  if (type.startsWith('target.') || type === 'uav.keepout_guard') return 'targets'
+  if (type.startsWith('task.') || type.startsWith('relay.') || type.startsWith('nest.') || type === 'fw.wind_exceeds') return 'tasking'
+  if (type.startsWith('sandbox.') || type === 'session.switched') return 'sandbox'
+  return null
 }

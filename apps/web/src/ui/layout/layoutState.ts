@@ -27,7 +27,7 @@ export function useWindowSize(): { w: number; h: number } {
   return size
 }
 
-export function useShellLayout(bannerHeight = 0): LayoutState & { breakpoint: BreakpointId; small: boolean; w: number; h: number } {
+export function useShellLayout(bannerHeight = 0, enabled = true): LayoutState & { breakpoint: BreakpointId; small: boolean; w: number; h: number } {
   // the geometry fields only: a page change of the right rail, the Dock tab or the HUD switch re-rendered the whole shell
   // (header, rails, Dock, timeline) through RouterOutlet (P4-UI, D1-AC-25)
   const leftOpen = usePrefs((s) => s.layout.left.open)
@@ -46,15 +46,21 @@ export function useShellLayout(bannerHeight = 0): LayoutState & { breakpoint: Br
   }), [leftOpen, leftW, rightOpen, rightW, dockOpen, dockH, bannerHeight, bp.id])
   const lastBp = React.useRef<BreakpointId | null>(null)
   React.useEffect(() => {
+    if (!enabled) return
     const before = lastBp.current
     lastBp.current = bp.id
     if (before === bp.id || (before === null && layoutRestored)) return
     applyBreakpointDefaults(bp, h, before)
     // h is read at the crossing only; later height changes do not re-apply defaults
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [bp.id])
+  }, [bp.id, enabled])
   const prev = React.useRef<LayoutState | null>(null)
   React.useEffect(() => {
+    // D2.1: the phone and tablet shells commit their own rect (ui/mobile); a return to the desktop shell commits again
+    if (!enabled) {
+      prev.current = null
+      return
+    }
     const p = prev.current
     let reason: CommitReason = 'resize'
     if (p) {
@@ -64,7 +70,7 @@ export function useShellLayout(bannerHeight = 0): LayoutState & { breakpoint: Br
     }
     prev.current = state
     commitUnobscured(state, reason)
-  }, [state, w, h])
+  }, [state, w, h, enabled])
   return { ...state, small: tooSmall(w, h), w, h }
 }
 

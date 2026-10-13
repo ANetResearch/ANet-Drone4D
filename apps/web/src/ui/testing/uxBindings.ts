@@ -6,6 +6,7 @@ import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { selectionStore } from '@/stores/selection'
 import { camera } from '@/viewport/facade'
 import { UX } from './uxProbe'
+import { freezableInterval } from '@/lib/powerFreeze'
 
 export function installUxBindings(): () => void {
   if (!TEST_SWITCHES || typeof window === 'undefined') return () => {}
@@ -20,12 +21,13 @@ export function installUxBindings(): () => void {
     UX.camera.mode = m.mode
     UX.camera.followLock = m.followLock
   })
-  const t = setInterval(() => {
+  // frozen with the page in the power-save mode like the production timers (D2-AC-44 measures the test build)
+  const stopTimer = freezableInterval(() => {
     UX.toasts.visible = document.querySelectorAll('[data-slot="toast"]:not([data-limited])').length
   }, INPUT.bridgeFlushMs)
   return () => {
     offSel()
     offCam()
-    clearInterval(t)
+    stopTimer()
   }
 }

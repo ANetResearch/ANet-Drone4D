@@ -97,7 +97,9 @@ export async function runCase(c, o) {
   const backendSpec = source === 'fake' && c.backend.kind === 'live' ? { ...c.backend, kind: 'fake', fakeN: Number(params.n ?? 2) } : c.backend
   const caseDir = join(o.outRoot, c.id)
   mkdirSync(caseDir, { recursive: true })
-  const nRuns = Math.min(c.runs, o.runs ?? c.runs)
+  // an explicit --runs wins over the registry in both directions (d2-ACC-1-to-M16 item 3: the D2 and D2.1 live cases are
+  // registered with 1 run for the functional gate and need 3 under ADR-033 when their time bounds are judged)
+  const nRuns = Math.max(1, Math.trunc(Number.isFinite(o.runs) ? Number(o.runs) : c.runs))
   const fp = deps.fingerprint(FLAGS[c.browser ?? 'C1'])
   const result = {
     schema: 'awr.perf.result.v1',

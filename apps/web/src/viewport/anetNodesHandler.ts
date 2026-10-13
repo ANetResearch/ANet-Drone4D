@@ -62,6 +62,31 @@ const NULL_FS = 'precision highp float;\nlayout( location = 0 ) out vec4 awrNull
 
 const handlers = new WeakMap<object, AnetNodesHandler>()
 
+// fix 7 (D2-FX-R2-web, D2-AC-01): one program for structurally identical instanced materials. GLSLNodeBuilder names the
+// uniform block of a buffer node after the node id (`uniform NodeBuffer_6825 { mat4 buffer6825[32]; };`), so the five
+// low-poly vehicle batches (one InstancedMesh and one material per model, M06 §6.3 rule 1) generated five programs whose
+// sources differ only in that name, each compiled and linked under the boot mask (about 0.25 s each on SwiftShader). The
+// build renames them by order of first appearance (`NodeBuffer_awr<k>`, `awrBuf<k>`; the block keeps its NodeBuffer prefix,
+// perf/m06/gpu-limits.spec.ts reads it), so the source-keyed program cache
+// (vite.config.ts threeProgramsPlugin) shares one program; the groups of the (material, program) entry get the same names
+// in onUpdateProgram (UboBinder finds blocks by name). A material whose later build brings other buffer nodes (a second
+// object, a rebuilt instance node) keeps the generated names: its program stays its own, as in stock three.
+const BUFFER_BLOCK_RE = /\bNodeBuffer_(\d+)\b/g
+const BUFFER_NAME_RE = /\bbuffer(\d+)\b/g
+
+/** canonical buffer block and array names of one generated program; null when it declares no buffer block */
+export function canonicalBufferNames(vs: string, fs: string): { vs: string; fs: string; groups: Map<string, string>; sig: string } | null {
+  const ids: string[] = []
+  for (const src of [vs, fs]) for (const m of src.matchAll(BUFFER_BLOCK_RE)) if (!ids.includes(m[1])) ids.push(m[1])
+  if (ids.length === 0) return null
+  const k = new Map(ids.map((id, i) => [id, i]))
+  const rename = (src: string): string => src
+    .replace(BUFFER_BLOCK_RE, (s, id: string) => (k.has(id) ? `NodeBuffer_awr${k.get(id)}` : s))
+    .replace(BUFFER_NAME_RE, (s, id: string) => (k.has(id) ? `awrBuf${k.get(id)}` : s))
+  const groups = new Map(ids.map((id, i) => [`NodeBuffer_${id}`, `NodeBuffer_awr${i}`]))
+  return { vs: rename(vs), fs: rename(fs), groups, sig: ids.join(',') }
+}
+
 export class AnetNodesHandler extends WebGLNodesHandler {
   /** the handler installed on a renderer (set in setRenderer) */
   static of(renderer: object): AnetNodesHandler | null {
@@ -121,8 +146,23 @@ export class AnetNodesHandler extends WebGLNodesHandler {
     return this.ubo?.stats ?? null
   }
 
+  /** fix 7: buffer node ids of the first canonicalised build of each material; group renames per builder */
+  private readonly bufferSig = new WeakMap<Material, string>()
+  private readonly bufferGroupNames = new WeakMap<object, Map<string, string>>()
+
   build(material: Material, object: Object3D, parameters: WebGLProgramParametersWithUniforms): void {
     super.build(material, object, parameters)
+    const canon = canonicalBufferNames(parameters.vertexShader, parameters.fragmentShader)
+    if (canon) {
+      const sig = this.bufferSig.get(material)
+      const builder = (material as unknown as { _latestBuilder?: object })._latestBuilder
+      if ((sig === undefined || sig === canon.sig) && builder) {
+        this.bufferSig.set(material, canon.sig)
+        this.bufferGroupNames.set(builder, canon.groups)
+        parameters.vertexShader = canon.vs
+        parameters.fragmentShader = canon.fs
+      }
+    }
     const ubo = this.ubo
     if (!ubo) return
     const b = programBlocks(parameters.vertexShader, parameters.fragmentShader)
@@ -144,6 +184,10 @@ export class AnetNodesHandler extends WebGLNodesHandler {
     // fix 6: keep the program's updateBefore nodes with its cache entry (the stock entry takes the same builder)
     const entry = self.programCache.get(material)?.get(program)
     if (entry && fresh) {
+      // fix 7: the buffer groups take the canonical block names of the program built from the same builder
+      const builder = (material as unknown as { _latestBuilder?: object })._latestBuilder
+      const names = builder ? this.bufferGroupNames.get(builder) : undefined
+      if (names) for (const g of entry.uniformsGroups) g.name = names.get(g.name) ?? g.name
       const before = (material as unknown as { _latestBuilder?: { updateBeforeNodes?: UpdateNode[] } })._latestBuilder?.updateBeforeNodes ?? []
       if (before.length > 0) {
         entry.awrBefore = before.slice()

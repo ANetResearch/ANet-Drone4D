@@ -49,6 +49,46 @@
   [data-anchor="bottom-right"] { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) - 100% - var(--rail-gap)), calc(var(--uo-y, 0px) + var(--uo-h, 100vh) - 100% - var(--rail-gap))); }
   [data-anchor="top-left"]     { transform: translate(calc(var(--uo-x, 0px) + var(--rail-gap)), calc(var(--uo-y, 0px) + var(--rail-gap))); }
   [data-anchor="center"]       { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) / 2 - 50%), calc(var(--uo-y, 0px) + var(--uo-h, 100vh) / 2 - 50%)); }
+  /* D2 anchors (AWR-14 §20.4.3, §20.10): the queue card below the camera tools (top right), the manual-control bar below
+     the camera toolbar, its key hints below the status badges (top left) and the two virtual sticks above the bottom
+     corners' readouts; the onboarding steps anchor at the top centre of the unobscured rect when their target is hidden */
+  [data-anchor="queue"]        { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) - 100% - var(--rail-gap)), calc(var(--uo-y, 0px) + var(--rail-gap) + 7rem)); }
+  /* D2.1: the power-save countdown under the camera toolbar; the field-view toolbar above the bottom-left readouts and its
+     legend in the bottom-right corner (bottom-centre toolbar, the legend above the ground readout) (AWR-14 §20.26.4, §20.26.7) */
+  [data-anchor="power-banner"] { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) / 2 - 50%), calc(var(--uo-y, 0px) + var(--rail-gap) + 3rem)); }
+  [data-anchor="field-bar"]    { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) / 2 - 50%), calc(var(--uo-y, 0px) + var(--uo-h, 100vh) - 100% - var(--rail-gap))); }
+  [data-anchor="field-legend"] { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) - 100% - var(--rail-gap)), calc(var(--uo-y, 0px) + var(--uo-h, 100vh) - 100% - var(--rail-gap) - 3rem)); }
+  [data-anchor="manual-bar"]   { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) / 2 - 50%), calc(var(--uo-y, 0px) + var(--rail-gap) + 3rem)); }
+  [data-anchor="manual-hints"] { transform: translate(calc(var(--uo-x, 0px) + var(--rail-gap)), calc(var(--uo-y, 0px) + var(--rail-gap) + 5rem)); }
+  [data-anchor="stick-left"]   { transform: translate(calc(var(--uo-x, 0px) + var(--rail-gap) + 1rem), calc(var(--uo-y, 0px) + var(--uo-h, 100vh) - 100% - var(--rail-gap) - 7rem)); }
+  /* virtual stick knob (#45 of AWR-14 §20.15.4): transform only, recentres with --duration-quick; no lag while dragged */
+  .stick-knob { transition: transform var(--duration-quick) var(--ease-smooth-out); }
+  [data-dragging] > .stick-knob { transition: none; }
+  html:is([data-motion="reduced"], [data-motion="off"]) .stick-knob { transition: none; }
+  [data-anchor="stick-right"]  { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) - 100% - var(--rail-gap) - 1rem), calc(var(--uo-y, 0px) + var(--uo-h, 100vh) - 100% - var(--rail-gap) - 4rem)); }
+  /* FPV sensor views (AWR-14 §20.10.5, §20.10.6): the view toolbar below the camera toolbar (below the manual-control bar
+     while a vehicle is under manual control), the HUD readout under the toolbar (clear of the bottom toasts and the perf
+     HUD), the operator's zoom rail on the right edge; capture boxes are positioned by transform in viewport CSS px */
+  [data-anchor="fpv-bar"]      { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) / 2 - 50%), calc(var(--uo-y, 0px) + var(--rail-gap) + 3rem)); }
+  [data-anchor="fpv-bar"][data-below-manual] { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) / 2 - 50%), calc(var(--uo-y, 0px) + var(--rail-gap) + 6rem)); }
+  [data-anchor="fpv-zoom"]     { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) - 100% - var(--rail-gap)), calc(var(--uo-y, 0px) + var(--uo-h, 100vh) / 2 - 50%)); }
+  [data-anchor="fpv-hud"]      { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) / 2 - 50%), calc(var(--uo-y, 0px) + var(--rail-gap) + 6.25rem)); }
+  [data-anchor="fpv-hud"][data-below-manual] { transform: translate(calc(var(--uo-x, 0px) + var(--uo-w, 100vw) / 2 - 50%), calc(var(--uo-y, 0px) + var(--rail-gap) + 9.25rem)); }
+  .fpv-boxes { position: absolute; inset: 0; pointer-events: none; overflow: hidden; color: var(--foreground); }
+  .fpv-corner { position: absolute; left: 0; top: 0; width: 10px; height: 10px; border: 0 solid currentColor; }
+  .fpv-corner[data-c="tl"] { border-top-width: 1px; border-left-width: 1px; }
+  .fpv-corner[data-c="tr"] { border-top-width: 1px; border-right-width: 1px; }
+  .fpv-corner[data-c="bl"] { border-bottom-width: 1px; border-left-width: 1px; }
+  .fpv-corner[data-c="br"] { border-bottom-width: 1px; border-right-width: 1px; }
+  [data-state="captured"] > .fpv-corner { border-width: 0; }
+  [data-state="captured"] > .fpv-corner[data-c="tl"] { border-top-width: 2px; border-left-width: 2px; }
+  [data-state="captured"] > .fpv-corner[data-c="tr"] { border-top-width: 2px; border-right-width: 2px; }
+  [data-state="captured"] > .fpv-corner[data-c="bl"] { border-bottom-width: 2px; border-left-width: 2px; }
+  [data-state="captured"] > .fpv-corner[data-c="br"] { border-bottom-width: 2px; border-right-width: 2px; }
+  [data-state="arming"] > .fpv-corner { border-style: dashed; }
+  .fpv-box[data-hero] { color: var(--lf-hero); }
+  .fpv-box[data-hidden] { visibility: hidden; }
+  .fpv-box-label { position: absolute; left: 0; top: 0; white-space: nowrap; }
   /* Raster islands (ADR-066; AWR-18 §6.1 item 5): content that changes by itself while nothing else moves (C and D class
      telemetry text, the perf HUD, the timeline track and readout, streaming canvases) sits on its own small compositor
      layer. A 4 Hz write then re-rasters only that island, never the 1280 px wide header or timeline strip or the overlay

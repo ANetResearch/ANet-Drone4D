@@ -14,7 +14,12 @@
 // tests) or on request, the same RtHost runs in-process behind a message-passing shim. `?source=fake[&fakeN=200]`
 // replaces the WebSocket by FakeSource (D1-AC-35; AWR-18 §8.6 `source=`); `?bench=flight60&scene=full&source=fake`
 // without fakeN uses `n` or the 2 vehicles of scenario S1.
-import { getToken } from '../api'
+// D2 (M11-FR-219): the default token refresher follows net/endpoint (sandbox: the endpoint's onAuthExpired or token
+// getter; shared show: POST /api/auth/token); updateToken() swaps the token for the next reconnect without dropping the
+// link (keepalive renewal); close 1012 `world_switch` and 4410 reach onWorldSwitch and onSandboxGone; roster entries of
+// kind `target` are kept apart from the vehicles (their agent_no is numbered within targets).
+import { getToken, identityProvider } from '../api'
+import { getEndpoint } from '../endpoint'
 import { openFake, type FakeSourceOptions, type FakeWorld } from './FakeSource'
 import { FrameFront, SF } from './frame'
 import { RtHost, CALL_TIMEOUT_MS, type HostEnv, type SubSpec, type WorkerIn, type WorkerOut, type CtrlMsg } from './session'
@@ -22,7 +27,9 @@ import type { SocketLike } from './transport'
 import {
   CONN_STATES, str, type BatchOp, type CallHandle, type CallOptions, type CallResult, type ClientStats, type ConnErrorKind, type ConnInfo,
   type ConnState, type DataMsg, type EventGap, type PlaybackArgs, type PlaybackCmd, type PlaybackState, type Progress, type RosterEntry,
-  type RosterView, type RtClient, type RtErrorMsg, type RtEvent, type RtInitOptions, type ServerInfoView, type StatusItem, type SubscribeOpts,
+  type PresenceReport, type RosterTargetEntry, type RosterView, type RtClient, type RtErrorMsg, type RtEvent, type RtInitOptions,
+  type ServerInfoSandbox, type ServerInfoView, type StatusItem,
+  type SubscribeOpts,
   type SwarmSnapshot, type TelemetryFrame, type TimeFrameView,
 } from './types'
 
@@ -129,23 +136,36 @@ interface CallEntry { id: string; resolve: (r: CallResult) => void; results: ((r
 class Roster implements RosterView {
   version = 0
   private list: RosterEntry[] = []
+  private tlist: RosterTargetEntry[] = []
   private readonly byNo = new Map<number, RosterEntry>()
   private readonly byId = new Map<string, RosterEntry>()
+  private readonly tByNo = new Map<number, string>()
   get size(): number {
     return this.list.length
   }
   set(version: number, entries: Record<string, unknown>[]): void {
     this.version = version
-    this.list = entries.map((e) => ({
+    const vehicles = entries.filter((e) => e.kind !== 'target')
+    this.list = vehicles.map((e) => ({
       agentNo: Number(e.agent_no), id: String(e.id), model: str(e.model), kind: str(e.kind, 'uav'),
       producer: str(e.producer), simulated: e.simulated !== false, lifecycle: str(e.lifecycle),
     }))
+    this.tlist = entries.filter((e) => e.kind === 'target')
+      .map((e) => ({ targetNo: Number(e.agent_no), id: String(e.id), cls: str(e.model), label: str(e.label, String(e.id)) }))
     this.byNo.clear()
     this.byId.clear()
+    this.tByNo.clear()
     for (const e of this.list) {
       this.byNo.set(e.agentNo, e)
       this.byId.set(e.id, e)
     }
+    for (const t of this.tlist) this.tByNo.set(t.targetNo, t.id)
+  }
+  targets(): readonly RosterTargetEntry[] {
+    return this.tlist
+  }
+  targetIdOf(targetNo: number): string | undefined {
+    return this.tByNo.get(targetNo)
   }
   get(agentNo: number): RosterEntry | undefined {
     return this.byNo.get(agentNo)
@@ -173,6 +193,11 @@ function serverInfoView(m: CtrlMsg): ServerInfoView {
     role: (m.role as ServerInfoView['role']) ?? 'viewer', seat: (m.seat as ServerInfoView['seat']) ?? 'none',
     window: Number(m.window ?? 6), layouts: (m.layouts ?? {}) as Record<string, string>,
     principal: str(m.principal), capabilities: Array.isArray(m.capabilities) ? (m.capabilities as unknown[]).map((x) => String(x)) : [],
+    ...(m.sandbox && typeof m.sandbox === 'object' ? { sandbox: m.sandbox as ServerInfoSandbox } : {}),
+    ...(typeof clock.tick_hz === 'number' ? { tickHz: clock.tick_hz } : {}),
+    ...(typeof clock.rate_cap === 'number' ? { rateCap: clock.rate_cap } : {}),
+    ...(m.power && typeof m.power === 'object' ? { power: m.power as Record<string, number> } : {}),
+    ...(m.identity && typeof m.identity === 'object' ? { identity: m.identity as ServerInfoView['identity'] & object } : {}),
   }
 }
 
@@ -188,6 +213,7 @@ export class RtClientImpl implements RtClient {
   private ready: ArrayBuffer | null = null
   private pending = false
   private lastInit: RtInitOptions | null = null
+  private identity: string | null = null
   private readonly subsByTopic = new Map<string, SubEntry>()
   private nextSubId = 1
   private readonly subQueue: SubSpec[] = []
@@ -205,6 +231,8 @@ export class RtClientImpl implements RtClient {
   private readonly lInfo = new Set<(s: ServerInfoView) => void>()
   private readonly lPlayback = new Set<(s: PlaybackState) => void>()
   private readonly lError = new Set<(e: RtErrorMsg) => void>()
+  private readonly lWorldSwitch = new Set<() => void>()
+  private readonly lGone = new Set<(code: number) => void>()
   private readonly playbackWaiters = new Map<string, { resolve: (s: PlaybackState) => void; timer: ReturnType<typeof setTimeout> }>()
   private readonly timeView: TimeFrameView = { state: 0, epoch: 0, rate: 0, tSimMs: 0, tSrvMs: 0 }
   private evPending: RtEvent[] = []
@@ -248,7 +276,9 @@ export class RtClientImpl implements RtClient {
     this.held = null
     this.ready = null
     this.pending = false
-    w.postMessage({ cmd: 'init', url, token: o.token, tier: o.tier, deviceClass: o.deviceClass, timeOriginMain: performance.timeOrigin, slots }, slots)
+    const identity = o.identity !== undefined ? o.identity : identityProvider()
+    this.identity = identity ?? null
+    w.postMessage({ cmd: 'init', url, token: o.token, tier: o.tier, deviceClass: o.deviceClass, timeOriginMain: performance.timeOrigin, slots, identity: this.identity }, slots)
     // re-send the live subscriptions (a close()/init() pair keeps the component subscriptions)
     const again: SubSpec[] = []
     this.posted.clear()
@@ -304,6 +334,20 @@ export class RtClientImpl implements RtClient {
 
   reauthenticate(token: string, role: 'operator' | 'viewer'): void {
     this.worker?.postMessage({ cmd: 'reauth', token, role })
+  }
+
+  updateToken(token: string): void {
+    this.worker?.postMessage({ cmd: 'token', token })
+  }
+
+  presence(m: PresenceReport): void {
+    this.worker?.postMessage({ cmd: 'presence', m: { input_age_s: m.input_age_s, visible: m.visible, power: m.power } })
+  }
+
+  setIdentity(token: string | null): void {
+    if ((token ?? null) === this.identity) return
+    this.identity = token ?? null
+    this.worker?.postMessage({ cmd: 'identity', token: this.identity })
   }
 
   setHidden(hidden: boolean): void {
@@ -461,6 +505,12 @@ export class RtClientImpl implements RtClient {
           for (const cb of this.lError) cb(e)
           break
         }
+        case 'worldSwitch':
+          for (const cb of this.lWorldSwitch) cb()
+          break
+        case 'sandboxGone':
+          for (const cb of this.lGone) cb(Number(m.code) || 4410)
+          break
         case 'defect':
           this.counters.defects++
           console.warn(`awr rt: ${str(m.message)}`)
@@ -497,7 +547,7 @@ export class RtClientImpl implements RtClient {
   }
 
   private refreshToken(role: 'operator' | 'viewer'): void {
-    const f = this.opts.refreshToken ?? ((r: 'operator' | 'viewer') => getToken(r, { force: true }))
+    const f = this.opts.refreshToken ?? defaultRefresh
     f(role).then(
       (token) => this.worker?.postMessage({ cmd: 'token', token }),
       () => this.worker?.postMessage({ cmd: 'token', token: '' }),
@@ -693,6 +743,12 @@ export class RtClientImpl implements RtClient {
   onError(cb: (e: RtErrorMsg) => void): () => void {
     return add(this.lError, cb)
   }
+  onWorldSwitch(cb: () => void): () => void {
+    return add(this.lWorldSwitch, cb)
+  }
+  onSandboxGone(cb: (code: number) => void): () => void {
+    return add(this.lGone, cb)
+  }
   /** the current status banners */
   statusList(): readonly StatusItem[] {
     return [...this.statusItems.values()]
@@ -709,6 +765,13 @@ export class RtClientImpl implements RtClient {
   fakeWorld(): FakeWorld | null {
     return this.worker instanceof LocalPort ? ([...this.worker.fakeWorlds.values()][0] ?? null) : null
   }
+}
+
+/** token refresher by endpoint: sandbox -> onAuthExpired (or the current token), shared show -> a fresh page token */
+function defaultRefresh(role: 'operator' | 'viewer'): Promise<string> {
+  const ep = getEndpoint()
+  if (ep.kind === 'sandbox') return ep.onAuthExpired ? ep.onAuthExpired().then((t) => t ?? '') : Promise.resolve(ep.token())
+  return getToken(role, { force: true })
 }
 
 function add<T>(set: Set<T>, cb: T): () => void {

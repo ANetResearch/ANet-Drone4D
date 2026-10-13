@@ -35,6 +35,34 @@
       "bytes": 679,
       "source": "avatar-96.png, 6x6 premultiplied box filter (tools/shadcn/brand/make-favicons.py)",
       "date": "2026-09-29"
+    },
+    {
+      "name": "pwa-192.png",
+      "sha256": "e4dd8efdb2a517571215d34b6c99bab35590777721c65d7d220460856f2157a3",
+      "bytes": 34050,
+      "source": "avatar-460.png, premultiplied area resample (tools/shadcn/brand/make-pwa-icons.py)",
+      "date": "2026-10-05"
+    },
+    {
+      "name": "pwa-512.png",
+      "sha256": "bcf9458de88c507129a64da322b0cf0517b070da3ef98ea6994a8a5a494dfd23",
+      "bytes": 180174,
+      "source": "avatar-460.png, premultiplied bilinear resample (tools/shadcn/brand/make-pwa-icons.py)",
+      "date": "2026-10-05"
+    },
+    {
+      "name": "pwa-maskable-512.png",
+      "sha256": "9a04eac01da81c2d41467babe297390c41581cc157ade25b8e54815863518256",
+      "bytes": 127084,
+      "source": "avatar-460.png in the 80 % safe zone on --g950 (tools/shadcn/brand/make-pwa-icons.py)",
+      "date": "2026-10-05"
+    },
+    {
+      "name": "apple-touch-icon.png",
+      "sha256": "db6ca42dc79a73db1e856ae5ee68092b90d7d96cbc5a6ec709226df284e3e8e0",
+      "bytes": 24756,
+      "source": "avatar-460.png at 160 px on --g950, 180 x 180 (tools/shadcn/brand/make-pwa-icons.py)",
+      "date": "2026-10-05"
     }
   ]
 }

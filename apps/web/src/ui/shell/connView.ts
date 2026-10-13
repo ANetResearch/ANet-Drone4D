@@ -29,6 +29,8 @@ export interface ConnViewState {
   connId: string | null
   mode: 'live' | 'replay'
   clock: { pausable: boolean; maxSpeed: number; steppable: boolean }
+  /** serverInfo capabilities (D2: targets, perception, tasking, calendar, sandbox; AWR-17 §17.7.1) */
+  caps: readonly string[]
   epoch: number
   /** time state (TIME.state with bit7 masked) and rate, written only when they change */
   timeState: number
@@ -40,7 +42,7 @@ export interface ConnViewState {
 export const connViewStore = createAwrStore<ConnViewState>('ui.conn', () => ({
   conn: 'IDLE', attempt: 0, nextInMs: 0, code: null, downSinceMs: Number.NaN, bannerVisible: false,
   role: null, seat: null, sessionWorldId: null, runId: null, connId: null, mode: 'live',
-  clock: { pausable: true, maxSpeed: 10, steppable: true }, epoch: -1, timeState: 0, rate: 1, status: [], version: 0,
+  clock: { pausable: true, maxSpeed: 10, steppable: true }, caps: [], epoch: -1, timeState: 0, rate: 1, status: [], version: 0,
 }))
 
 export function useConnView<T>(sel: (s: ConnViewState) => T): T {
@@ -68,12 +70,15 @@ export function roleKeyOf(s: Pick<ConnViewState, 'role' | 'seat'>): 'role.viewer
   return s.role === 'admin' ? 'role.admin' : 'role.operator'
 }
 
+const sameList = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((x, i) => x === b[i])
+
 function applyServerInfo(si: ServerInfoView | null): Partial<ConnViewState> {
   if (!si) return {}
   return {
     role: si.role, seat: si.seat, sessionWorldId: si.worldId || null, runId: si.runId || null, connId: si.connId || null,
     mode: si.mode === 'replay' ? 'replay' : 'live',
     clock: { pausable: si.clock?.pausable !== false, maxSpeed: si.clock?.maxSpeed ?? 10, steppable: si.clock?.steppable !== false },
+    caps: sameList(connViewStore.getState().caps, si.capabilities ?? []) ? connViewStore.getState().caps : [...(si.capabilities ?? [])],
   }
 }
 

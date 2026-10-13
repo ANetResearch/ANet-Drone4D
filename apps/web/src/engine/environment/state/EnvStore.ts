@@ -6,12 +6,15 @@
 // damped visual scalars. States: EMPTY -> SYNCED (C01) -> STALE after 3 s wall without frames (C04) -> SYNCED on any
 // frame (C05); a global or producer epoch change freezes visuals and waits for a frame of the new epoch (C06, C07);
 // a presets hash mismatch asks the adapter to fetch GET /api/env/presets and evaluates with the server model (C08).
+// D2 (WP-09): `sky` holds the calendar instant, sun, illuminance band and the server's humidity, surface and acoustic
+// background at tRender (sky/skyEval.ts); `setGeoAnchor` lets the sun follow the NOAA function between keyframes.
+import { SkyEval, type GeoAnchor } from '../sky/skyEval'
 import { advance, backstep, H_NS, partial } from './anchors'
 import { AnchorSmoother, VisualDamper } from './damping'
 import { derive, newDerived, type EnvDerived } from './derive'
 import { evalEnv } from './evalEnv'
 import { copyAnchors, decodeKeyframe, MODE_STEP, newAnchors, type Anchors, type EnvKeyframe, type EnvKeyframeWire } from './keyframe'
-import { NF, PRESETS_MODEL, type PresetsModel } from './presets'
+import { F, NF, PRESETS_MODEL, type PresetsModel } from './presets'
 
 export type EnvSyncState = 'EMPTY' | 'SYNCED' | 'STALE' | 'EPOCH_WAIT'
 export const QUEUE_MAX = 4
@@ -52,6 +55,10 @@ export class EnvStore {
   switches = 0
   /** anchor drift of the last heartbeat check (m), for __perf.env */
   anchorDriftM = 0
+  /** D2 sky state at tRender (calendar, sun, illuminance band, server surface and acoustic background) */
+  readonly sky = new SkyEval()
+  /** world anchor for the local NOAA sun (null: keyframe az/el) */
+  geo: GeoAnchor | null = null
   lastRecvMs = Number.NEGATIVE_INFINITY
   globalEpoch = -1
   private readonly A: Anchors = newAnchors() // grid-aligned anchors of the current keyframe
@@ -69,6 +76,11 @@ export class EnvStore {
       snapM: o.snapM ?? c.anchor_snap_m ?? 1,
       snapWetness: o.snapWetness ?? c.anchor_snap_wetness ?? 0.02,
     }
+  }
+
+  /** world anchor latitude/longitude (coordinate.json anchor) and true-north offset; null to follow the keyframe values */
+  setGeoAnchor(geo: GeoAnchor | null): void {
+    this.geo = geo && Number.isFinite(geo.latDeg) && Number.isFinite(geo.lonDeg) ? { ...geo, yawOffsetDeg: geo.yawOffsetDeg || 0 } : null
   }
 
   /** C09: world switch or disconnect */
@@ -290,6 +302,7 @@ export class EnvStore {
     else copyAnchors(this.A, this.anchors)
     evalEnv(cur, tNs, this.scalars)
     derive(this.scalars, this.derived, cur.profile, cur.P)
+    this.sky.update(cur.wire, tNs, this.scalars[F.COVER], this.geo)
     if (snapped) this.damper.snap(this.scalars)
     else this.damper.update(this.scalars, nowMs, cur.P)
     derive(this.damper.vis, this.derivedVis, cur.profile, cur.P)

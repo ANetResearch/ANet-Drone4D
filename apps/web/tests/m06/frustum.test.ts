@@ -3,7 +3,7 @@
 // older than 3 / f, a collapsed far plane when FOV_VALID = 0, inactive sensors skipped, L = 60 m for a NaN range.
 import { describe, expect, it } from 'vitest'
 import { Quaternion, Vector3 } from 'three'
-import { FrustumLayer, frustumLength, SENSOR_ACTIVE, SENSOR_FOV_VALID, type SensorsApi, type SensorView } from '@/engine'
+import { FrustumLayer, frustumLength, payloadIlluminators, SENSOR_ACTIVE, SENSOR_FOV_VALID, type SensorsApi, type SensorView } from '@/engine'
 
 function sensor(flags: number, tMs: number, rangeM = 80): SensorView {
   const ring = new Float64Array(36)
@@ -76,5 +76,36 @@ describe('sensor frustums (M06-AC-035)', () => {
     expect(frustumLength(Number.NaN)).toBe(60)
     expect(frustumLength(25)).toBe(25)
     expect(frustumLength(500)).toBe(60)
+  })
+
+  it('illuminator cones (D2 WP-11): divergence about the camera axis, dashed, no fill, in the extra slots', () => {
+    const f = new FrustumLayer(1)
+    const s = sensor(SENSOR_ACTIVE | SENSOR_FOV_VALID, 1000, 80)
+    const q = new Quaternion()
+    f.begin()
+    expect(f.add(api, s, 0, 0, 10, q.x, q.y, q.z, q.w, 1.0)).toBe(true)
+    expect(f.add(api, s, 0, 0, 10, q.x, q.y, q.z, q.w, 1.0)).toBe(false) // sensor slots full
+    const div = (5.5 * Math.PI) / 180
+    expect(f.addIlluminator(api, s, div, 464.8, 0, 0, 10, q.x, q.y, q.z, q.w)).toBe(true)
+    expect(f.addIlluminator(api, s, 0.3, 30, 0, 0, 10, q.x, q.y, q.z, q.w)).toBe(true)
+    expect(f.addIlluminator(api, s, 0.3, 30, 0, 0, 10, q.x, q.y, q.z, q.w)).toBe(false)
+    f.commit()
+    const c = f.cornersOf(1, new Float64Array(15))
+    const ax = [(c[3] + c[6] + c[9] + c[12]) / 4 - c[0], (c[4] + c[7] + c[10] + c[13]) / 4 - c[1], (c[5] + c[8] + c[11] + c[14]) / 4 - c[2]]
+    const L = Math.hypot(ax[0], ax[1], ax[2])
+    expect(L).toBeCloseTo(60, 6) // min(R_nir, 60 m)
+    for (let k = 1; k <= 4; k++) {
+      const d = Math.hypot(c[3 * k] - c[0] - ax[0], c[3 * k + 1] - c[1] - ax[1], c[3 * k + 2] - c[2] - ax[2])
+      expect(d).toBeCloseTo(L * Math.tan(div / 2) * Math.SQRT2, 3)
+    }
+    const dash = (f as unknown as { eDash: { array: Float32Array } }).eDash.array
+    expect(dash[16]).toBe(1)
+    expect(dash[0]).toBe(0)
+    expect(f.count).toBe(3)
+    expect(f.drawCount()).toBe(2)
+    const out = [{ on: false, divergenceRad: 0, rangeM: 0 }, { on: false, divergenceRad: 0, rangeM: 0 }]
+    expect(payloadIlluminators({ sensors: [{ sensor: 'eo', hfov_rad: 0.2, illuminator: { on: true, divergence_rad: 0.2, range_m: 200 } },
+      { sensor: 'nir_ill', kind: 'nir_illuminator', active: true }] }, out)).toBe(2)
+    expect(out[1].rangeM).toBeCloseTo(464.8, 6)
   })
 })

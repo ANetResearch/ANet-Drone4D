@@ -12,7 +12,10 @@
 //     34 ms, with fps, decodeMs, lagMs; ADR-067); ClockSync pings with srttMs; DEGRADED after 1 s without TIME; clientStats
 //     at 1 Hz;
 //   * control messages batched per frame; while the page is hidden events stay in the worker (cap 8192, local gap);
-//   * CLIENT_DATA setpoints (per-vehicle client channels, one preallocated 32 B frame) and playback pass-through.
+//   * CLIENT_DATA setpoints (per-vehicle client channels, one preallocated 32 B frame) and playback pass-through;
+//   * sandbox endpoint (D2, AWR-17 §17.9.3; M11-FR-219): 4410 SANDBOX_GONE is final (no reconnect, `sandboxGone` to the
+//     main thread, FATAL `sandbox_gone`); 1012 with reason `world_switch` reconnects at once (first attempt without
+//     backoff) and tells the main thread (`worldSwitch`), the new serverInfo carries the new world.
 import { Reason, REASONS, WS_CLOSE } from '@awr/contracts/reasons'
 import {
   BATCH_SNAPSHOT, CD_FINAL, CONTRACTS_VERSION, OP_BATCH, OP_TIME, SCHEMA_HASH, TimeState, newRecordView, newRtBatchHeader,
@@ -22,7 +25,7 @@ import { ClockSync } from './clockSync'
 import { CtrlQueue } from './ctrl'
 import { Decoder, type CtrlMsg } from './decode'
 import { H, RESET_MAX, SF, SLOT_MAGIC, SlotWriter } from './frame'
-import { BACKOFF, WS_OPEN, backoffDelay, protocolsFor, type SocketFactory, type SocketLike } from './transport'
+import { BACKOFF, WORLD_SWITCH_REASON, WS_OPEN, backoffDelay, protocolsFor, type SocketFactory, type SocketLike } from './transport'
 import { CONN_STATES, str, type ClientStats, type ConnErrorKind, type ConnState } from './types'
 
 export type { CtrlMsg } from './decode'
@@ -47,13 +50,20 @@ export const AUTH_RETRY_MAX = 2
 export const TOKEN_WAIT_MS = 5000
 /** client-publish channel ids (AWR-17 §6.4 CLIENT_DATA: 1-255) */
 export const CLIENT_CH_MAX = 255
+/** setpoint keepalive of a streaming vehicle (spKeepTick): check period, repeat window, hold window (ms) */
+export const SP_KEEP_MS = 80
+export const SP_REPEAT_MS = 500
+export const SP_HOLD_MAX_MS = 1500
+
+/** RFC 6455 1012 Service Restart (not in contracts WS_CLOSE: the gateway uses it for the sandbox world switch) */
+const SERVICE_RESTART = 1012
 
 // connection state codes (index in CONN_STATES)
 const C_IDLE = 0, C_CONNECTING = 1, C_SYNCING = 2, C_LIVE = 3, C_DEGRADED = 4, C_RECONNECTING = 5, C_FATAL = 6, C_CLOSED = 7
 
 export interface SubSpec { id: number; topic: string; rate: number; mode: 'latest' | 'all'; priority?: number; filter?: { types?: readonly string[]; levelMin?: number } }
 export type WorkerIn =
-  | { cmd: 'init'; url: string; token: string; tier: 'A' | 'B' | 'S'; deviceClass: string; timeOriginMain: number; slots: ArrayBuffer[] }
+  | { cmd: 'init'; url: string; token: string; tier: 'A' | 'B' | 'S'; deviceClass: string; timeOriginMain: number; slots: ArrayBuffer[]; identity?: string | null }
   | { cmd: 'pull'; returned: ArrayBuffer | null }
   | { cmd: 'sub'; subs: SubSpec[] }
   | { cmd: 'unsub'; ids: number[] }
@@ -67,6 +77,13 @@ export type WorkerIn =
   | { cmd: 'stats'; stats: ClientStats }
   | { cmd: 'visibility'; hidden: boolean }
   | { cmd: 'reauth'; token: string; role: 'operator' | 'viewer' }
+  | { cmd: 'presence'; m: PresenceMsg }
+  | { cmd: 'identity'; token: string | null }
+/** D2.1 presence control message body (AWR-17 §17.20.4): the page sends it through the worker; the server never replies */
+export interface PresenceMsg { input_age_s: number; visible: boolean; power: 'active' | 'quiet' | 'warning' | 'saving' }
+/** D2.1 close codes (AWR-17 §17.20.7): never reconnect; the power-save controller resumes (4430) or queues (4431) */
+export const CLOSE_IDLE_RECLAIMED = 4430
+export const CLOSE_VIEWER_SEATS_FULL = 4431
 export interface WorkerOut { slot: ArrayBuffer | null; ctrl: CtrlMsg[] | null }
 
 export interface HostEnv {
@@ -94,6 +111,8 @@ export class RtHost {
   private authFails = 0
   private url = ''
   private token = ''
+  /** D2.1 internal identity token: WS subprotocol `ident.<token>` next to `bearer.<token>` (AWR-17 §17.20.5) */
+  private identity: string | null = null
   private role: 'operator' | 'viewer' = 'operator'
   private tier = 'S'
   private deviceClass = 'software'
@@ -144,6 +163,9 @@ export class RtHost {
   private readonly sink = (m: CtrlMsg): void => this.ctrl.push(m)
   // client publish (CLIENT_DATA)
   private readonly setpointCh = new Map<number, { ch: number; seq: number }>()
+  /** D2-FX-R2-web (D2-AC-48): the last non-final setpoint of every streaming vehicle and when the main thread sent it */
+  private readonly spLast = new Map<number, { vx: number; vy: number; vz: number; yawRate: number; atMs: number }>()
+  private tSpKeep: unknown = null
   private nextClientCh = 1
   private readonly cdBuf = new ArrayBuffer(32)
   private readonly cdView = new DataView(this.cdBuf)
@@ -172,6 +194,7 @@ export class RtHost {
       case 'init':
         this.url = m.url
         this.token = m.token
+        this.identity = m.identity ?? null
         this.tier = m.tier
         this.deviceClass = m.deviceClass
         this.originMain = m.timeOriginMain
@@ -252,6 +275,20 @@ export class RtHost {
           this.connect()
         }
         break
+      case 'presence':
+        // at most one per presence_min_s per connection is the page's rule (PowerController); here only sent while open
+        if (this.helloSent) this.sendJson({ op: 'presence', input_age_s: m.m.input_age_s, visible: m.m.visible, power: m.m.power })
+        break
+      case 'identity':
+        if ((m.token ?? null) === this.identity) break
+        this.identity = m.token ?? null
+        // the subprotocol only travels with the handshake: reconnect at once with it (as reauth)
+        if (!this.closedByUs && this.conn !== C_IDLE && this.conn !== C_CLOSED) {
+          this.attempt = 0
+          this.abortSilently()
+          this.connect()
+        }
+        break
       case 'visibility':
         this.hidden = m.hidden
         if (this.ctrl.length || this.ctrl.dropped) {
@@ -268,12 +305,13 @@ export class RtHost {
     this.helloSent = false
     this.stash = null
     this.setpointCh.clear()
+    this.spLast.clear()
     this.nextClientCh = 1
     this.dec.ch.resetSubscriptions()
     this.setConn(C_CONNECTING, { error: this.lastError })
     let s: SocketLike
     try {
-      s = this.env.socket(this.url, protocolsFor(this.token))
+      s = this.env.socket(this.url, protocolsFor(this.token, this.identity))
     } catch {
       this.onClose(WS_CLOSE.ABNORMAL)
       return
@@ -291,7 +329,7 @@ export class RtHost {
       if (this.sock === s) this.onSocketMessage(e.data)
     }
     s.onclose = (e) => {
-      if (this.sock === s) this.onClose(e.code)
+      if (this.sock === s) this.onClose(e.code, e.reason)
     }
     s.onerror = () => {}
   }
@@ -311,7 +349,7 @@ export class RtHost {
     this.onClose(code)
   }
 
-  private onClose(code: number): void {
+  private onClose(code: number, reason?: string): void {
     this.sock = null
     this.helloSent = false
     this.lastCloseCode = code
@@ -321,7 +359,28 @@ export class RtHost {
       return
     }
     if (this.conn === C_FATAL) return // our own 1000 after a version or layout mismatch
+    if (code === SERVICE_RESTART && reason === WORLD_SWITCH_REASON) {
+      // sandbox world switch: same sid, new world; reconnect at once (the server answers 503-like waits while spawning)
+      this.ctrl.push({ op: 'worldSwitch', code })
+      this.scheduleCtrl()
+      this.attempt = 0
+      this.retry(code, 0)
+      return
+    }
     switch (code) {
+      case CLOSE_IDLE_RECLAIMED:
+      case CLOSE_VIEWER_SEATS_FULL:
+        // D2.1 power saving (4430, after error 518) and full viewer seats (4431, after error 517): no reconnect; the main
+        // thread's power-save controller resumes after an interaction or joins the viewer queue (d2-WP-12c-to-M11 item 2)
+        this.clearTimers()
+        this.setConn(C_CLOSED, { code })
+        return
+      case WS_CLOSE.SANDBOX_GONE:
+        // the sandbox ended, expired, was preempted or the token belongs to another sid: never reconnect
+        this.ctrl.push({ op: 'sandboxGone', code })
+        this.scheduleCtrl()
+        this.fatal(code, 'sandbox_gone')
+        return
       case WS_CLOSE.POLICY_VIOLATION:
         this.fatal(code, 'policy')
         return
@@ -705,13 +764,47 @@ export class RtHost {
       this.setpointCh.set(m.agentNo, e)
       this.sendJson({ op: 'advertise', channels: [{ id: e.ch, topic: `uav/${m.id}/setpoint`, encoding: 'raw', schemaName: 'awr.VelSetpoint16.v1' }] })
     }
-    e.seq = (e.seq + 1) >>> 0
-    writeClientData(this.cdView, e.ch, e.seq, Math.round(this.simNowNs()), m.final ? CD_FINAL : 0, m.vx, m.vy, m.vz, m.yawRate)
-    s.send(this.cdBuf) // send() copies the bytes: the 32 B frame is reused
+    this.sendSetpoint(e, m.final, m.vx, m.vy, m.vz, m.yawRate)
     if (m.final) {
       this.sendJson({ op: 'unadvertise', ids: [e.ch] })
       this.setpointCh.delete(m.agentNo)
+      this.spLast.delete(m.agentNo)
+      return
     }
+    this.spLast.set(m.agentNo, { vx: m.vx, vy: m.vy, vz: m.vz, yawRate: m.yawRate, atMs: this.env.now() })
+    if (this.tSpKeep === null) this.tSpKeep = this.env.setTimeout(this.spKeepTick, SP_KEEP_MS)
+  }
+
+  private sendSetpoint(e: { ch: number; seq: number }, final: boolean, vx: number, vy: number, vz: number, yawRate: number): void {
+    const s = this.sock
+    if (!s || s.readyState !== WS_OPEN) return
+    e.seq = (e.seq + 1) >>> 0
+    writeClientData(this.cdView, e.ch, e.seq, Math.round(this.simNowNs()), final ? CD_FINAL : 0, vx, vy, vz, yawRate)
+    s.send(this.cdBuf) // send() copies the bytes: the 32 B frame is reused
+  }
+
+  /**
+   * D2-FX-R2-web (D2-AC-48): the manual-control pump runs on the main thread (ui/manual/controller.ts) and a long task there
+   * (a rotation reflow, a GC, the shader zoo) left the stream without a setpoint for more than the server's 250 ms stream
+   * watchdog, which ended the takeover (209). While a stream is open the worker repeats the last setpoint when the main
+   * thread sent none for SP_KEEP_MS, for at most SP_REPEAT_MS, then sends zero velocities (the vehicle holds) up to
+   * SP_HOLD_MAX_MS, then stops (the server's watchdog holds the vehicle and ends the call, as for a lost link)
+   */
+  private readonly spKeepTick = (): void => {
+    this.tSpKeep = null
+    const now = this.env.now()
+    for (const [agentNo, l] of this.spLast) {
+      const e = this.setpointCh.get(agentNo)
+      const age = now - l.atMs
+      if (!e || age > SP_HOLD_MAX_MS) {
+        this.spLast.delete(agentNo)
+        continue
+      }
+      if (age < SP_KEEP_MS) continue
+      if (age <= SP_REPEAT_MS) this.sendSetpoint(e, false, l.vx, l.vy, l.vz, l.yawRate)
+      else this.sendSetpoint(e, false, 0, 0, 0, 0)
+    }
+    if (this.spLast.size > 0) this.tSpKeep = this.env.setTimeout(this.spKeepTick, SP_KEEP_MS)
   }
 
   /** client estimate of the simulation time (AWR-17 §6.10): t_sim + rate * (srvNow - t_srv) while advancing */

@@ -8,7 +8,7 @@
 //            (exception: viewport/backend/microbench.ts, 1 px before the reveal)
 //   M06-L-04 drei imports only from the ADR-008 white list actually used in D1 (View, Html) src/**
 //   M06-L-05 no RenderPipeline, pass(), mrt(), storage textures or compute on the shared path engine/**, viewport/**
-//   M06-L-06 no `.internalFormat =` assignments                                          engine/**, viewport/**
+//   M06-L-06 no `.internalFormat =` assignments (exception: the sensor target's RGBA8)    engine/**, viewport/**
 //   M06-L-07 no per-object onObjectUpdate on engine hot paths                              engine/**
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -63,7 +63,11 @@ export function checkText(f, text) {
   add(/import\s+\*\s+as\s+\w+\s+from\s*['"]@react-three\/drei['"]/g, 'M06-L-04', 'namespace import of drei (white list: View, Html)')
   add(/\b(?:RenderPipeline|PostProcessing|StorageTexture|Storage3DTexture|StorageBufferAttribute)\b|\bpass\s*\(|\bmrt\s*\(|\bstorageTexture\s*\(|\binstancedArray\s*\(|\.compute\s*\(|\bcomputeAsync\s*\(/g,
     'M06-L-05', 'RenderPipeline, pass(), MRT, storage textures and compute are not allowed on the shared path (M06 §6.3 rule 9)', shared)
-  add(/\.internalFormat\s*=(?!=)/g, 'M06-L-06', 'never set texture.internalFormat (M06 §6.3 rule 8)', shared)
+  // exception (D2-FX-R2-web, D2-AC-01): the colour storage of the sensor-view target is the canvas's RGBA8 so SwiftShader reuses
+  // the canvas routines of every world program (viewport/sensorView/pass.ts SENSOR_COLOR_FORMAT; an UNORM colour attachment
+  // of the WebGL2 path, not an integer texture: the WebGPU concern of rule 8 does not apply); any other assignment fails
+  const ifRe = f === `${SRC}/viewport/sensorView/pass.ts` ? /\.internalFormat\s*=(?!=)(?!\s*SENSOR_COLOR_FORMAT\b)/g : /\.internalFormat\s*=(?!=)/g
+  add(ifRe, 'M06-L-06', 'never set texture.internalFormat (M06 §6.3 rule 8)', shared)
   add(/\.onObjectUpdate\s*\(/g, 'M06-L-07', 'per-object onObjectUpdate on an engine hot path; use instance attributes, textures or matrices', inEngine(f))
   return out
 }

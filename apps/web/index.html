@@ -2,29 +2,56 @@
 <html lang="zh-CN" class="dark" data-motion="lite" data-tier="">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Drone4D" />
     <title>ANet Drone4D</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/brand/favicon-16.png" />
     <style>
       /* critical boot mask CSS (M15-FR-006; styles/boot.css is the full version): paints before JavaScript runs.
-         Colours are the g950 / g300 / g50 primitives of styles/theme.css written as OKLCH (no hex outside theme.css). */
+         Colours are the g950 / g300 / g50 primitives of styles/theme.css written as OKLCH (no hex outside theme.css).
+         D2.1 (AWR-04 §15.4, §15.5; ADR-118, ADR-119): the version line (filled at build time by vite.config.ts
+         buildInfoPlugin, visible even when no script runs), the five-segment track (segment widths follow the weights
+         bundle 0.15, world 0.10, points 0.40, warming 0.30, reveal 0.05; 2 px gaps; each segment fills with --seg-p) and the
+         capacity line (written by the early boot module from GET /api/sandbox/v1/capacity). The track element .boot-track is the
+         first child of .boot-progress, so the D2 single-bar writers that scale `.boot-progress > i` by --boot-p keep working
+         until the segment writer (app/boot/progress.ts, M15) takes over. */
       html, body { margin: 0; height: 100%; background: oklch(0.149 0.005 264.5); }
       #boot-mask { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 1rem; background: oklch(0.149 0.005 264.5); color: oklch(0.740 0.012 264.5);
+        gap: 1rem; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        background: oklch(0.149 0.005 264.5); color: oklch(0.740 0.012 264.5);
         font: 500 12px/18px "Inter Variable", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
       #boot-mask .boot-badge { width: 480px; max-width: calc(100vw - 2rem); height: auto; }
-      #boot-mask .boot-progress { width: 320px; height: 2px; background: oklch(1 0 0 / 0.06); }
-      #boot-mask .boot-progress > i { display: block; height: 100%; width: 0; background: oklch(0.964 0.003 264.5); }
+      #boot-mask .boot-version { margin-top: -0.5rem; min-height: 16px; font-size: 11px; line-height: 16px; letter-spacing: 0.02em;
+        font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+      #boot-mask .boot-progress { width: 320px; max-width: calc(100vw - 2rem); height: 2px; }
+      #boot-mask .boot-progress > i { display: block; width: 100%; height: 100%; }
+      html #boot-mask .boot-progress > i.boot-track { display: flex; gap: 2px; }
+      #boot-mask .boot-track > i { display: block; flex: 0 1 0; height: 100%; background: oklch(1 0 0 / 0.06); }
+      #boot-mask .boot-track > i::after { content: ""; display: block; height: 100%; background: oklch(0.964 0.003 264.5);
+        transform-origin: left center; transform: scaleX(var(--seg-p, 0)); }
+      #boot-mask .boot-track > [data-seg="bundle"] { flex-grow: 15; }
+      #boot-mask .boot-track > [data-seg="world"] { flex-grow: 10; }
+      #boot-mask .boot-track > [data-seg="points"] { flex-grow: 40; }
+      #boot-mask .boot-track > [data-seg="warming"] { flex-grow: 30; }
+      #boot-mask .boot-track > [data-seg="reveal"] { flex-grow: 5; }
+      #boot-mask .boot-capacity { min-height: 18px; max-width: calc(100vw - 2rem); text-align: center; font-variant-numeric: tabular-nums lining-nums; }
+      #boot-mask .boot-capacity[hidden] { display: none; }
       @media (max-width: 1279px) { #boot-mask .boot-badge { width: 320px; } }
     </style>
   </head>
   <body>
     <div id="boot-mask" data-boot="SHELL" role="status" aria-live="polite">
       <img class="boot-badge" src="/brand/anet-logo.svg" width="480" height="83" alt="ANet" />
-      <div class="boot-progress"><i></i></div>
+      <div class="boot-version"></div>
+      <div class="boot-progress"><i class="boot-track"><i data-seg="bundle"></i><i data-seg="world"></i><i data-seg="points"></i><i data-seg="warming"></i><i data-seg="reveal"></i></i></div>
       <div class="boot-phase">ANet Drone4D · World Runtime</div>
+      <div class="boot-capacity" hidden></div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

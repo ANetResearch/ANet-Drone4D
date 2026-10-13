@@ -1,0 +1,64 @@
+/* D2.1 phone and tablet shells, touch targets and safe areas (R-D2-35 to R-D2-37; ADR-122; AWR-04 §15.8.4, §15.8.5, §15.8.7;
+   AWR-14 §20.26.5; M15-FR-229 to FR-233; UX-NFR-033). Owner: M15.
+   The rules of this file are deliberately unlayered: they must win over component utilities only where the page is touch
+   first (`html[data-coarse]`, written by lib/formFactor) or inside the mobile shells (`[data-shell]`). */
+
+/* bars and safe areas (index.html: viewport-fit=cover) */
+.mobile-top { position: fixed; inset: 0 0 auto 0; z-index: var(--z-header); padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-left { padding-left: env(safe-area-inset-left); }
+.safe-probe { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+/* gestures: the canvas host takes every touch (M06, touch-action none); the interface drops the double-tap zoom delay; no
+   pull-to-refresh or scroll chaining of the page; page zoom stays enabled (accessibility) */
+html[data-ff="phone"] body, html[data-ff="tablet"] body, html[data-coarse] body { overscroll-behavior: none; }
+html[data-coarse] :is([data-slot], [data-shell], header, aside, section) { touch-action: manipulation; }
+
+/* touch targets >= 44 x 44 CSS px on coarse pointers (AWR-04 §15.8.5; audited by perf/m15/d21-mobile.spec.ts): controls
+   grow to the minimum, small controls (switch, checkbox, radio, slider thumb) keep their look and get a 44 px hit area */
+html[data-coarse] :is(button, [role="button"], [role="tab"], [role="combobox"], [data-slot="select-trigger"]):not([data-slot="switch"], [data-slot="checkbox"],
+  [data-slot="radio-group-item"], [data-slot="slider-thumb"]) { min-height: 44px; min-width: 44px; }
+html[data-coarse] :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="dropdown-menu-radio-item"],
+  [data-slot="dropdown-menu-sub-trigger"], [data-slot="menubar-item"], [data-slot="select-item"], [data-slot="combobox-item"], [data-slot="command-item"],
+  [data-slot="context-menu-item"], [data-slot="input"], [data-slot="textarea"], [data-slot="native-select"]) { min-height: 44px; }
+html[data-coarse] input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"], [aria-hidden="true"]) { min-height: 44px; }
+html[data-coarse] [data-slot="input-group"] { height: auto; min-height: 44px; }
+html[data-coarse] :is([data-slot="switch"], [data-slot="checkbox"], [data-slot="radio-group-item"], [data-slot="slider-thumb"])::after {
+  content: ""; position: absolute; inset: auto; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+html[data-coarse] [data-slot="slider-thumb"] { width: 28px; height: 28px; }
+/* rows of a small control and its label get the 44 px height, so the grown hit area never reaches the row above */
+html[data-coarse] [data-slot="field"][data-orientation="horizontal"] { min-height: 44px; align-items: center; }
+/* the button group of the desktop camera tools keeps its rows aligned */
+html[data-coarse] [data-slot="button-group"] > [data-slot="button"] { min-width: 44px; }
+
+/* the ViewCube's 44 px offset on coarse pointers is M06's own (viewport/overlay/ViewCube.tsx mr-12, d2-WP-11b-to-M15 item 9) */
+
+/* phone landscape: the tab rail takes the left edge from top to bottom, the status bar starts right of it */
+[data-shell="phone"][data-orient="landscape"] .mobile-top { left: calc(4rem + env(safe-area-inset-left)); padding-left: 0; }
+
+/* phone: the queue stack sits above the tab bar, full width (AWR-14 §20.26.3); the field legend lives in the layers drawer */
+[data-shell="phone"] [data-anchor="queue"] { transform: none; left: 0.5rem; right: 0.5rem; top: auto;
+  bottom: calc(3.5rem + env(safe-area-inset-bottom) + 0.5rem); align-items: stretch; }
+[data-shell="phone"][data-orient="landscape"] [data-anchor="queue"] { left: calc(4rem + env(safe-area-inset-left) + 0.5rem); bottom: 0.5rem; }
+[data-shell="phone"] [data-anchor="queue"] [data-slot="card"] { width: 100%; }
+
+/* the bottom sheet and drawer heights animate with the transitions.dev tokens; dragging and reduced motion jump */
+.bottom-sheet, .bottom-drawer { transition: height var(--duration-fast) var(--ease-smooth-out); }
+.bottom-sheet[data-dragging], .bottom-drawer[data-dragging] { transition: none; }
+html:is([data-motion="reduced"], [data-motion="off"]) :is(.bottom-sheet, .bottom-drawer) { transition: none; }
+@media (prefers-reduced-motion: reduce) { :is(.bottom-sheet, .bottom-drawer) { transition: none; } }
+
+/* Toasts on phones (round 2; d2-WP-13b-to-M15 phone run): the page toaster sits at the bottom right of the unobscured rect
+   (styles/layout.css), which on a phone is where the viewport window keeps its own controls (layers and commands, two
+   48 px buttons with their gap, ui/mobile/MobileShell.tsx); a toast there covered the commands button. Phones lift the
+   stack above those controls and narrow it to the rect (360 px phones), everything else as on the desktop. */
+html[data-ff="phone"] [data-slot="toast-viewport"]:not([data-warm-stage] *) {
+  --toast-lift: 8rem;
+  --toast-w: min(22.5rem, calc(var(--uo-w, 100vw) - 1.5rem));
+  inset: auto calc(100vw - var(--uo-x, 0px) - var(--uo-w, 100vw) + 0.75rem - var(--toast-bleed))
+    calc(100vh - var(--uo-y, 0px) - var(--uo-h, 100vh) + 0.75rem + var(--toast-lift) - var(--toast-bleed)) auto;
+  width: calc(var(--toast-w) + 2 * var(--toast-bleed));
+}
+html[data-ff="phone"] [data-slot="toast-viewport"]:not([data-warm-stage] *) > [data-slot="toast"] { width: var(--toast-w); }

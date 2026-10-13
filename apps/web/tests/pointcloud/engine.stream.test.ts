@@ -194,6 +194,36 @@ describe.skipIf(!haveFlight)('PointCloudEngine streaming in Node', { timeout: 30
   })
 })
 
+describe.skipIf(!haveFlight)('first-frame target set: one burst, committed in the frame that draws it (D2-AC-01, D1-AC-02)', { timeout: 300_000 }, () => {
+  // D2-FX-R2-web round 2: the cold-start burst quota counted the drawn points of the target set (sel.cnt, cut to the
+  // budget), not the points uploaded (whole nodes), so the last target node waited for the next frame whenever the
+  // budget cut a node, and TTFP carried the compositor's frame gap; every city's first screen now uploads in one frame
+  for (const city of ['synthcity', 'shenzhen', 'sanfrancisco', 'suzhou']) {
+    it(city, async () => {
+      const r = (rig = makeRig())
+      const fl = flightOf(city)
+      sampleFlight60(fl, 0, EYE, TGT)
+      r.look(EYE, TGT)
+      await r.engine.open(worldBase(city))
+      let uploads = 0
+      let commitAt = -1
+      let k = 0
+      r.engine.on('pc.first.frame', () => { commitAt = k })
+      for (; k < 60 && r.engine.enginePhase !== 'streaming'; k++) {
+        const before = r.engine.stats().residentPts
+        await r.frame()
+        if (r.engine.stats().residentPts > before) uploads++
+      }
+      expect(r.engine.enginePhase).toBe('streaming')
+      expect(uploads).toBe(1)
+      // the commit is in the frame of the (only) upload: no frame without new points before it
+      expect(commitAt).toBe(k - 1)
+      r.dispose()
+      rig = null
+    })
+  }
+})
+
 describe.skipIf(!haveWorlds)('shader-zoo warm-up across a world open (ACC-4 4.2b; ADR-076)', { timeout: 120_000 }, () => {
   it('a world opened while the zoo awaits compileAsync stays drawn after warmupEnd', async () => {
     const r = makeRig()

@@ -15,6 +15,12 @@ import { ChartsPanel } from './charts/ChartsPanel'
 import { PerfPanel } from './perf/PerfPanel'
 import { AgentsPanel } from './agents/AgentsPanel'
 import { MissionEditPanel } from './mission-edit/MissionEditPanel'
+import { TargetsPanel } from './targets/TargetsPanel'
+import { TargetDetailPanel } from './targets/TargetDetailPanel'
+import { NestDetailPanel, NestsPanel } from './nests/NestsPanel'
+import { TasksPanel } from './tasks/TasksPanel'
+import { RelayPanel } from './tasks/RelayPanel'
+import { TaskNewPanel } from './tasks/TaskNewPanel'
 
 let done = false
 export function registerCorePanels(): void {
@@ -32,6 +38,18 @@ export function registerCorePanels(): void {
   registerPanel({ id: 'perf', titleKey: 'panel.perf.title', icon: 'nav.perf', home: 'bottom', allowed: ['bottom', 'right'], minSize: { w: 0, h: 200 }, layer: 'core', order: 2, streaming: 2, render: () => createElement(PerfPanel) })
   registerPanel({ id: 'mission', titleKey: 'panel.mission.title', icon: 'mission.list', home: 'bottom', allowed: ['bottom', 'right'], minSize: { w: 280, h: 160 }, layer: 'core', order: 3, render: () => createElement(MissionPanel) })
   registerPanel({ id: 'timeline', titleKey: 'panel.timeline.title', icon: 'tl.clock', home: 'bottom', allowed: ['bottom'], minSize: { w: 0, h: 160 }, layer: 'core', order: 4, render: () => createElement(TimelinePanel) })
+  // D2 entity pages of the right rail (AWR-14 §20.5.2; M15-FR-211 to FR-213): targets and nests lists with their detail
+  // pages, switched by the rail's entity ToggleGroup (ui/layout/DroneRail.tsx)
+  registerPanel({ id: 'targets', titleKey: 'panel.targets.title', icon: 'target.person', home: 'right', allowed: ['right', 'left'], minSize: { w: 280, h: 0 }, layer: 'core', order: 3, render: () => createElement(TargetsPanel) })
+  registerPanel({ id: 'target-detail', titleKey: 'panel.targetDetail.title', icon: 'target.person', home: 'right', allowed: ['right'], minSize: { w: 320, h: 0 }, layer: 'core', order: 4, render: () => createElement(TargetDetailPanel) })
+  registerPanel({ id: 'nests', titleKey: 'panel.nests.title', icon: 'nest.box', home: 'right', allowed: ['right', 'left'], minSize: { w: 280, h: 0 }, layer: 'core', order: 5, render: () => createElement(NestsPanel) })
+  registerPanel({ id: 'nest-detail', titleKey: 'panel.nestDetail.title', icon: 'nest.box', home: 'right', allowed: ['right'], minSize: { w: 320, h: 0 }, layer: 'core', order: 6, render: () => createElement(NestDetailPanel) })
+  // D2 tasking (AWR-14 §20.5.2, §20.9; M15-FR-214): the "new task" page (right rail page 3, drawn in the viewport) and the
+  // Dock task and relay tabs; the Dock shows them instead of the D1 mission tab on runs with the `tasking` capability
+  // (ui/layout/BottomDock.tsx dockPanelsFor)
+  registerPanel({ id: 'task-new', titleKey: 'panel.taskNew.title', icon: 'task.area', home: 'right', allowed: ['right'], minSize: { w: 360, h: 0 }, layer: 'core', order: 7, render: () => createElement(TaskNewPanel) })
+  registerPanel({ id: 'tasks', titleKey: 'panel.tasks.title', icon: 'task.guard', home: 'bottom', allowed: ['bottom', 'right'], minSize: { w: 320, h: 200 }, layer: 'core', order: 3, render: () => createElement(TasksPanel) })
+  registerPanel({ id: 'relay', titleKey: 'panel.relay.title', icon: 'task.relay', home: 'bottom', allowed: ['bottom', 'right'], minSize: { w: 320, h: 200 }, layer: 'core', order: 3.5, streaming: 1, render: () => createElement(RelayPanel) })
 }
 
 let extDone = false

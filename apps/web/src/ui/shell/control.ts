@@ -48,3 +48,32 @@ export async function requestControl(rt: RtClient): Promise<boolean> {
 export function releaseControl(): void {
   runService('seat:release', 'seat/release', {}, t('control.release'), { toastSuccess: true })
 }
+
+/**
+ * D2.1 internal identity (ADR-123; AWR-17 §17.20.5 R01 increment): "request control" of the shared show exchanges the
+ * identity token for a run admin token (POST /api/auth/token {role: admin, identity_token}); it takes the seat like the D1
+ * admin path. The identity token itself never writes.
+ */
+export async function requestInternalControl(rt: RtClient, identityToken: string): Promise<boolean> {
+  const body: Record<string, unknown> = { role: 'admin', identity_token: identityToken, client: 'web/0.2.0' }
+  const h = hint()
+  if (h) body.principal_hint = h
+  try {
+    const r = await fetch('/api/auth/token', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'x-awr-identity': identityToken }, body: JSON.stringify(body) })
+    const j = (await r.json().catch(() => ({}))) as { token?: string; code?: number; detail?: { holder_since_unix_ns?: string | number } }
+    if (!r.ok || !j.token) {
+      const code = typeof j.code === 'number' ? j.code : r.status === 409 ? 116 : 0
+      const since = j.detail?.holder_since_unix_ns !== undefined ? fmt.wallTime(Number(j.detail.holder_since_unix_ns) / 1e6) : '—'
+      notify('seat:request', 'warning', code === 116 ? t('control.taken', { since }) : t('control.failed'), code ? `${code} ${reasonText(code).short}` : undefined)
+      return false
+    }
+    invalidateToken()
+    if (rt.status === 'IDLE' || rt.status === 'CLOSED') initRt(rt, j.token)
+    else rt.reauthenticate(j.token, 'operator')
+    notify('seat:request', 'success', t('control.granted'))
+    return true
+  } catch {
+    notify('seat:request', 'warning', t('control.failed'))
+    return false
+  }
+}

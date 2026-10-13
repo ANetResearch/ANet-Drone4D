@@ -10,6 +10,7 @@ import { resolveRtUrl } from '@/net/rt/client'
 import { batchCountsOf, batchSummaryOf } from '@/net/rt/batch'
 import type { CallResult } from '@/net/rt/types'
 import { ctrlOps, frames, rig } from '../net/harness'
+import { SP_HOLD_MAX_MS } from '@/net/rt/session'
 
 const eventSeqs = (ctrl: { op: string }[]): number[] => {
   const out: number[] = []
@@ -179,7 +180,13 @@ describe('single-vehicle commands', () => {
     const adv = r.fake.received.filter((m) => m.op === 'advertise')
     expect(adv[0]).toMatchObject({ channels: [{ id: 1, topic: 'uav/p600-01/setpoint', encoding: 'raw', schemaName: 'awr.VelSetpoint16.v1' }] })
     expect(r.fake.stats.setpoints).toBeGreaterThan(15)
-    await frames(r, 30) // silence > 250 ms
+    // D2-FX-R2-web (D2-AC-48): a main thread that stops sending is bridged by the worker (the last setpoint for up to
+    // SP_REPEAT_MS, then zero velocities up to SP_HOLD_MAX_MS), so a long task on the page does not end the takeover
+    const n0 = r.fake.stats.setpoints
+    await frames(r, 30) // 0.5 s of main-thread silence: the worker kept the stream alive
+    expect(results(r.ctrl, 'v-1').map((x) => x.status)).toEqual(['accepted', 'running'])
+    expect(r.fake.stats.setpoints).toBeGreaterThan(n0 + 3)
+    await frames(r, Math.ceil(((SP_HOLD_MAX_MS - 500 + 400) / 1000) * 60)) // past the hold window and the 250 ms watchdog
     expect(results(r.ctrl, 'v-1').at(-1)).toMatchObject({ status: 'canceled', code: 209, final: true })
   })
 

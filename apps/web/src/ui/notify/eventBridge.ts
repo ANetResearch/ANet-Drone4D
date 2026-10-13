@@ -16,6 +16,7 @@ import { noteUiWork } from './afterLayout'
 import { commitAlarms, consumeAlarm, type AlarmItem } from './alarms'
 import { commitEventLog, eventLog } from './eventLog'
 import { skipAlarmToast, toastAlarm, toastInfoEvent } from './toastMerger'
+import { freezableInterval } from '@/lib/powerFreeze'
 
 type BatchListener = (e: RtEvent) => void
 const batchListeners = new Set<BatchListener>()
@@ -103,22 +104,21 @@ export function flushEvents(): void {
   }
 }
 
-let timer: ReturnType<typeof setInterval> | null = null
+let stopTimer: (() => void) | null = null
 /** attach to the page RtClient (RtProvider effect); returns the detach function */
 export function installEventBridge(rt: RtClient): () => void {
   rtRef = rt
   const off = rt.onEvents(pushEvents)
-  if (!timer) timer = setInterval(flushEvents, INPUT.bridgeFlushMs)
+  // not while the power-save mode froze the page (D2-AC-44: the link is closed there; buffered events flush on resume)
+  if (!stopTimer) stopTimer = freezableInterval(flushEvents, INPUT.bridgeFlushMs)
   if (TEST_SWITCHES && typeof window !== 'undefined') {
     const w = window as unknown as { __uxInject?: Record<string, unknown> }
     w.__uxInject = { ...w.__uxInject, events: (b: RtEvent[]) => pushEvents(b), flush: () => flushEvents() }
   }
   return () => {
     off()
-    if (timer) {
-      clearInterval(timer)
-      timer = null
-    }
+    stopTimer?.()
+    stopTimer = null
     rtRef = null
   }
 }

@@ -6,7 +6,8 @@
 // The canvas CSS size is 100 % of the host, the drawing buffer follows the 120 ms debounced resize only. WorldRoot holds
 // every registered layer root on the layer's channel. No R3F pointer events anywhere (picking is the engine Picker).
 // Device loss or viewport.rebuild() remount the canvas (generation key) and re-create the backend.
-import { useEffect, useRef, useState, type ComponentType } from 'react'
+// D2.1: the host is touch-none by class (camera-controls clears its inline touch-action when disabled, in FPV; WP-11b).
+import { useEffect, useRef, useState } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import type { PerspectiveCamera } from 'three'
 import { perfProbe } from '@/engine'
@@ -14,6 +15,7 @@ import { boot } from '@/app/boot/BootController'
 import { useRoute } from '@/app/router/router'
 import { parseChrome } from '@/app/router/search'
 import { createRenderBackend, dprFor, type RenderBackend } from './renderer'
+import { qualityDpr } from './quality'
 import { CH_PICK, channelOf, listLayers, onLayersChanged } from './layers/registry'
 import { vp } from './session'
 import { forcedFlags, preference } from './backend/testSwitches'
@@ -29,6 +31,8 @@ import { ZonesLayer } from './layers/zones'
 import { GroundSkyLayer } from './layers/groundSky'
 import { DebugLayer } from './layers/debug'
 import { PointCloudLayer } from './layers/pointcloud'
+import { EnvironmentLayer, TargetsLayer, TaskingLayer } from './layers/optional'
+import { FieldLayer } from './layers/field'
 import { LabelHost } from './overlay/LabelHost'
 import { ViewCube } from './overlay/ViewCube'
 import { installInteraction } from './interaction'
@@ -38,9 +42,7 @@ import { installBindings } from './bindings'
 boot.addGate('warmup')
 installTestHooks()
 
-// M07 environment adapter (viewport/layers/environment.tsx, owner M07): mounted when present
-const envModules = import.meta.glob<{ EnvironmentLayer?: ComponentType<{ be: RenderBackend }> }>('./layers/environment.tsx', { eager: true })
-const EnvironmentLayer = Object.values(envModules)[0]?.EnvironmentLayer ?? null
+// other modules' adapters (M07 environment; D2 targets M18, tasking M20): mounted when present (layers/optional.ts)
 
 function LayerMounts() {
   const internal = useThree((s) => s.internal)
@@ -88,7 +90,7 @@ export function WorldCanvas() {
   useEffect(() => {
     backendReady = (b) => {
       setBe(b)
-      const d = dprFor(b.deviceClass, window.devicePixelRatio || 1)
+      const d = qualityDpr(dprFor(b.deviceClass, window.devicePixelRatio || 1), b.quality, host.current?.clientWidth || window.innerWidth, host.current?.clientHeight || window.innerHeight)
       if (d !== 0.5) setDpr(d) // at most once, before the mask is revealed (M06 §6.6)
     }
     onRebuildRequest(() => {
@@ -106,7 +108,7 @@ export function WorldCanvas() {
     }
   }, [])
   return (
-    <div ref={host} data-viewport="" data-figure="viewport" data-backend={be ? `${be.tier}-${be.deviceClass}` : 'pending'} className="dark app-layer-canvas viewport-root [&_canvas]:h-full! [&_canvas]:w-full!">
+    <div ref={host} data-viewport="" data-figure="viewport" data-backend={be ? `${be.tier}-${be.deviceClass}` : 'pending'} className="dark app-layer-canvas viewport-root touch-none [&_canvas]:h-full! [&_canvas]:w-full!">
       <Canvas key={gen} flat frameloop="never" dpr={dpr} eventSource={host} eventPrefix="client"
         resize={{ scroll: false, debounce: { scroll: 50, resize: 120 } }} camera={{ fov: 60, near: 0.5, far: 20000, position: [0, 120, 240] }}
         style={{ width: '100%', height: '100%' }}
@@ -132,6 +134,9 @@ export function WorldCanvas() {
             <GlyphsLayer />
             <SensorsLayer />
             <MissionLayer />
+            {TargetsLayer ? <TargetsLayer be={be} /> : null}
+            {TaskingLayer ? <TaskingLayer be={be} /> : null}
+            <FieldLayer be={be} />
             <DebugLayer />
             <WarmupTrigger be={be} />
           </>

@@ -75,7 +75,8 @@ describe('engine/sensors facade', () => {
     const f = fakeRt()
     S.ensureInstalled(() => f.rt)
     const l = S.sensorsOf(1)
-    expect(l.map((v) => [v.name, v.kind, v.sensorNo])).toEqual([['camera', 0, 0], ['thermal', 2, 1], ['mid360', 1, 2]])
+    // P600 2.0.0 对象形式映射（D2-INT）：D1 三个有视场的槽位之后为 GX40 吊舱 eo（sensor_no 5）
+    expect(l.map((v) => [v.name, v.kind, v.sensorNo])).toEqual([['camera', 0, 0], ['thermal', 2, 1], ['mid360', 1, 2], ['eo', 0, 5]])
     expect(S.hasCamera(1)).toBe(true)
     expect(S.sensorsOf(9).map((v) => v.name)).toEqual(['camera'])
     expect(S.sensorsOf(0)).toEqual([])
@@ -121,7 +122,8 @@ describe('engine/sensors facade', () => {
     const ctx = { nowMs: 0, dtMs: 16, tRenderS: 0 } as unknown as FrameCtx
     S.sensorsOf(2)
     runPhase('world', ctx)
-    expect([...f.subs].sort()).toEqual(['uav/v2/sensor/camera/pose', 'uav/v2/sensor/thermal/pose'])
+    // P600 2.0.0（D2-INT）：eo 的位姿与变焦载荷（uav/{id}/payload）同样订阅
+    expect([...f.subs].sort()).toEqual(['uav/v2/payload', 'uav/v2/sensor/camera/pose', 'uav/v2/sensor/eo/pose', 'uav/v2/sensor/thermal/pose'])
     ;(ctx as { nowMs: number }).nowMs = 1500
     runPhase('world', ctx)
     expect(f.subs.size).toBe(0)

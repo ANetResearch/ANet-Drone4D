@@ -16,6 +16,20 @@ export function commitUnobscured(state: LayoutState, reason: CommitReason, root:
   const W = globalThis.innerWidth || 0
   const H = globalThis.innerHeight || 0
   const rect = computeUnobscured(W, H, state, scratch)
+  UX.layout.breakpoint = state.breakpoint
+  return commitRect(rect, reason, root)
+}
+
+/**
+ * D2.1 (ADR-122; M15-FR-229 to FR-231): the phone and tablet shells compute their own rect (status bar, tab bar, docked
+ * side panels, the portrait drawer) and commit it the same way
+ */
+export function commitRect(r: Readonly<Rect>, reason: CommitReason, root: HTMLElement | null = typeof document !== 'undefined' ? document.documentElement : null): boolean {
+  const rect = scratch
+  rect.x = Math.round(r.x)
+  rect.y = Math.round(r.y)
+  rect.w = Math.max(0, Math.round(r.w))
+  rect.h = Math.max(0, Math.round(r.h))
   if (rectEq(rect, last)) return false
   const tier = getMotionTier()
   const durationMs = tier === 'reduced' || tier === 'off' ? 0
@@ -35,7 +49,6 @@ export function commitUnobscured(state: LayoutState, reason: CommitReason, root:
   UX.layout.unobscured.y = rect.y
   UX.layout.unobscured.w = rect.w
   UX.layout.unobscured.h = rect.h
-  UX.layout.breakpoint = state.breakpoint
   UX.layout.unobscuredCommits++
   return true
 }

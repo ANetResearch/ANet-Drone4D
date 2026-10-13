@@ -8,10 +8,15 @@
 // waits for the WebSocket. Test builds accept ?reveal=shell: only the shell and canvas gates count, so UI specs driven
 // by FakeSource can run while a renderer or point cloud change is still in progress (never in production builds,
 // TEST_SWITCHES folds).
+// D2 (R-D2-01; M15-FR-201): the controller also drives the progress bar of the mask (app/boot/progress.ts): start() starts
+// it, every resolved gate is announced to onGate() listeners (app/boot/progressSources.ts turns them into segment
+// floors), the reveal writes 100 % synchronously before the fade and BOOT_ERROR freezes the bar. The gates and the reveal
+// rule are unchanged: the bar never gates anything and never waits for the WebSocket or a sandbox session.
 import { perf } from '@/engine'
 import { INPUT } from '@/lib/tokens/input.gen'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { UX } from '@/ui/testing/uxProbe'
+import { bootProgress } from './progress'
 
 const SHELL_ONLY = TEST_SWITCHES && typeof location !== 'undefined' && new URLSearchParams(location.search).get('reveal') === 'shell'
 
@@ -20,6 +25,7 @@ type Listener = (s: BootState, info: { slow: boolean; error: string | null; phas
 
 const gates = new Map<string, boolean>()
 const listeners = new Set<Listener>()
+const gateListeners = new Set<(name: string) => void>()
 /** callbacks of whenReadyExcept: gate -> callbacks run once when every other registered gate is resolved */
 const readyExcept = new Map<string, Set<() => void>>()
 let state: BootState = 'SHELL'
@@ -51,6 +57,7 @@ function evaluate(): void {
   if (gates.size > 0 && pending === 0) {
     state = 'REVEALED'
     if (slowTimer) clearTimeout(slowTimer)
+    bootProgress.reveal()
     perf.markReveal()
     UX.boot.revealAt = performance.now()
   } else if (gates.get('shell')) {
@@ -64,6 +71,7 @@ export const boot = {
   start(): void {
     if (slowTimer) return
     for (const g of ['shell', 'canvas']) if (!gates.has(g)) gates.set(g, false)
+    bootProgress.start()
     slowTimer = setTimeout(() => {
       slow = true
       emit()
@@ -76,8 +84,18 @@ export const boot = {
   },
   resolveGate(name: string): void {
     if (!gates.has(name)) return
+    const was = gates.get(name)
     gates.set(name, true)
+    if (!was) for (const cb of gateListeners) cb(name)
     evaluate()
+  },
+  /** resolved gates are announced here (progress floors); already resolved gates are announced at once */
+  onGate(cb: (name: string) => void): () => void {
+    gateListeners.add(cb)
+    for (const [k, v] of gates) if (v) cb(k)
+    return () => {
+      gateListeners.delete(cb)
+    }
   },
   /**
    * run `cb` once when every registered gate except `gate` is resolved (ADR-069: the shell's pre-raster phase starts when
@@ -98,10 +116,12 @@ export const boot = {
   fail(reasonKey: string): void {
     state = 'BOOT_ERROR'
     error = reasonKey
+    bootProgress.freeze()
     emit()
   },
   retry(): void {
     error = null
+    bootProgress.resume()
     state = 'SHELL'
     evaluate()
   },

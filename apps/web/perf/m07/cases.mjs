@@ -20,6 +20,11 @@ export default [
     acIds: ['M07-AC-020', 'M07-AC-021', 'M07-AC-023', 'M07-AC-045'], priority: 'P0', gates: ['G2d', 'G3'],
   },
   {
+    // D2 (WP-09): clock sun from the simulation calendar drives the scene sun; no new programs (D2-AC-15 client part)
+    ...base, id: 'm07.env-sky', spec: 'perf/m07/env-sky.spec.ts', runs: 1, timeoutS: 300,
+    acIds: ['D2-AC-15'], priority: 'P0', gates: ['G2d'],
+  },
+  {
     // env stage per-tick cost with N = 1000 (box <= 1.6 ms, dryden <= 2.0 ms p99; CPU judged when load < 6) and the query budget
     id: 'm07.stage-bench', kind: 'pytest', cmd: ['tests/environment/test_stage_bench.py', 'tests/environment/test_query.py', '-m', 'perf'],
     build: 'none', backend: { kind: 'none', world: 'shenzhen' }, params: {}, runs: 3, timeoutS: 900, layer: 'core', owner: 'M07',

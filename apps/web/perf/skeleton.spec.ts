@@ -133,7 +133,10 @@ test.describe('walking skeleton full chain (D1-AC-34)', () => {
     let ranges = 0
     page.on('response', (r) => {
       const u = new URL(r.url())
-      if (r.status() >= 400) httpErrors.push(`${r.status()} ${r.request().method()} ${u.pathname}`)
+      // SB-71 capacity is served by sandbox-api only: without it (`--only sim-core,api`) the boot screen's request gets 404
+      // and shows nothing (AWR-04 §15.5.3, ADR-119; D2-INT)
+      const capacity404 = r.status() === 404 && u.pathname === '/api/sandbox/v1/capacity'
+      if (r.status() >= 400 && !capacity404) httpErrors.push(`${r.status()} ${r.request().method()} ${u.pathname}`)
       if (r.status() === 206 && u.pathname.startsWith('/worlds/shenzhen/')) ranges++
     })
     try {

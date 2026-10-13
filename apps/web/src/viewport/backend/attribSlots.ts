@@ -111,6 +111,17 @@ export function installAttribSlotReset(gl: WebGL2RenderingContext, slots = SLOT_
     cur.vao = a
     proto.bindVertexArray.call(gl, a)
   }
+  // deleting the bound vertex array (or program) unbinds it in GL; three then keeps going without a bind call (geometry
+  // disposed by the nodes handler right after a build, viewport/README rule 4), so the cached one must be dropped too,
+  // or the next reset rebinds a deleted object ("bindVertexArray: attempt to use a deleted object"; D2 WP-11)
+  own.deleteVertexArray = (a: WebGLVertexArrayObject | null): void => {
+    if (a !== null && a === cur.vao) cur.vao = null
+    proto.deleteVertexArray.call(gl, a)
+  }
+  own.deleteProgram = (p: WebGLProgram | null): void => {
+    if (p !== null && p === cur.prog) cur.prog = null
+    proto.deleteProgram.call(gl, p)
+  }
   const reset = (): void => {
     proto.useProgram.call(gl, prog)
     proto.bindVertexArray.call(gl, vaos[flip])
@@ -174,7 +185,7 @@ export function installAttribSlotReset(gl: WebGL2RenderingContext, slots = SLOT_
       gl.flush()
     },
     dispose(): void {
-      for (const name of [...DRAWS, 'useProgram', 'bindVertexArray']) delete own[name]
+      for (const name of [...DRAWS, 'useProgram', 'bindVertexArray', 'deleteVertexArray', 'deleteProgram']) delete own[name]
       for (const vao of vaos) gl.deleteVertexArray(vao)
       gl.deleteBuffer(buf)
       gl.deleteFramebuffer(fbo)

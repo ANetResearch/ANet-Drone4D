@@ -100,6 +100,25 @@ export interface ServerInfoView {
   readonly layouts: Readonly<Record<string, string>>
   readonly principal: string
   readonly capabilities: readonly string[]
+  /** D2 sandbox block (sandbox-api only, AWR-17 §17.7.1; d2-WP-12-to-M11 item 2) */
+  readonly sandbox?: ServerInfoSandbox
+  /** D2 main clock rate (d1_250 = 250, sandbox100 = 100) and the governor's reachable rate (sandbox) */
+  readonly tickHz?: number
+  readonly rateCap?: number
+  /** D2.1 power-saving thresholds in wall seconds (AWR-17 §17.20.4); the server is authoritative */
+  readonly power?: Readonly<Record<string, number>>
+  /** D2.1 internal identity of this connection (AWR-17 §17.20.5) */
+  readonly identity?: { readonly tier: 'public' | 'internal'; readonly exp_unix_ns?: string }
+}
+
+export interface ServerInfoSandbox {
+  readonly sid: string
+  readonly state: string
+  readonly world_id: string
+  readonly template_id: string | null
+  readonly expires_unix_ns?: string
+  readonly renewable?: boolean
+  readonly limits?: Readonly<Record<string, unknown>>
 }
 
 export interface RosterEntry {
@@ -111,25 +130,40 @@ export interface RosterEntry {
   simulated: boolean
   lifecycle: string
 }
+/** a target (D2 recognition object) of `fleet/roster`: `kind = target` entries, numbered within targets from 0 (AWR-17
+ * §17.7.2 rule 4); `cls` is the target class (the entry's `model`) */
+export interface RosterTargetEntry {
+  targetNo: number
+  id: string
+  cls: string
+  label: string
+}
 export interface RosterView {
   readonly size: number
   readonly version: number
+  /** vehicles only (D2: target entries share fleet/roster but have their own numbering, see targets()) */
   get(agentNo: number): RosterEntry | undefined
   idOf(agentNo: number): string | undefined
   agentNoOf(id: string): number
   entries(): readonly RosterEntry[]
+  /** D2 targets of the roster (M18 stores/targets.ts reads these); optional so that D1 test doubles stay valid */
+  targets?(): readonly RosterTargetEntry[]
+  targetIdOf?(targetNo: number): string | undefined
 }
 
 /**
  * Why the link is down or degraded (AWR-14 §7.6, §7.7): `version` E-07 (4426, contracts major or layout hash mismatch),
  * `auth` E-08 (401 after a token refresh, or 403 from whoami after 1006), `backlog` E-09 (1013), `seat_revoked` E-16
  * (4403, reconnecting as viewer), `conn_limit` E-17 (4429, retry after 30 s), `protocol` (1002 three times in a row),
- * `policy` (1008), `too_big` (1009, reported as a defect).
+ * `policy` (1008), `too_big` (1009, reported as a defect), `sandbox_gone` (D2, 4410: the sandbox ended, expired, was
+ * preempted or the token belongs to another sid; never reconnects, AWR-14 §20.4.5 "会话已结束" dialog).
  */
 export type ConnErrorKind = 'version' | 'auth' | 'backlog' | 'seat_revoked' | 'conn_limit' | 'protocol' | 'policy' | 'too_big'
+  | 'sandbox_gone'
 /** AWR-14 §7.6 UI error identifiers of the error kinds (front-end only, never on the wire) */
 export const CONN_ERROR_UI: Readonly<Record<ConnErrorKind, string>> = {
   version: 'E-07', auth: 'E-08', backlog: 'E-09', seat_revoked: 'E-16', conn_limit: 'E-17', protocol: 'E-07', policy: 'E-07', too_big: 'E-09',
+  sandbox_gone: 'E-18',
 }
 export interface ConnInfo {
   /** reconnect attempt counter (0 after a successful handshake) */
@@ -230,6 +264,15 @@ export interface RtInitOptions {
   token: string
   tier: 'A' | 'B' | 'S'
   deviceClass: 'dGPU' | 'iGPU' | 'software'
+  /** D2.1 internal identity token (WS subprotocol `ident.<token>`); omitted: the identity provider of net/api.ts */
+  identity?: string | null
+}
+
+/** D2.1 presence (AWR-17 §17.20.4) */
+export interface PresenceReport {
+  input_age_s: number
+  visible: boolean
+  power: 'active' | 'quiet' | 'warning' | 'saving'
 }
 
 export interface RtClient {
@@ -274,6 +317,17 @@ export interface RtClient {
   reconnectNow(): void
   /** reconnect now with a new token and role (seat acquired, or released back to viewer; AWR-14 §6.12) */
   reauthenticate(token: string, role: 'operator' | 'viewer'): void
+  /** replace the token used by the next (re)connection without dropping the link (sandbox keepalive, M11-FR-219) */
+  updateToken(token: string): void
+  /** sandbox world switch (close 1012 `world_switch`): the client reconnects at once; the next serverInfo carries the
+   * new world (M15 switches the base map) */
+  onWorldSwitch(cb: () => void): () => void
+  /** the sandbox is gone (close 4410): no reconnect; M15 shows the "session ended" dialog (AWR-14 §20.4.5) */
+  onSandboxGone(cb: (code: number) => void): () => void
+  /** D2.1 presence to the server (no reply; the page limits the rate to presence_min_s per connection) */
+  presence(m: PresenceReport): void
+  /** D2.1 internal identity token for the WS handshake (`ident.<token>`); a change reconnects at once */
+  setIdentity(token: string | null): void
   close(): void
 }
 

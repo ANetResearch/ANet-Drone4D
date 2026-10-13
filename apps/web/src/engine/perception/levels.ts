@@ -1,0 +1,134 @@
+// Perception parameters (ADR-100; AWR-04 §6.2-§6.4; M18-M19 PRD §6.15). Owner: M19.
+// A literal copy of the contract packages/contracts/sensor/perception_levels.json (the web bundle cannot import JSON outside
+// apps/web; Python reads the file itself); apps/web/tests/m19/levels.test.ts fails when it drifts from the contract.
+// Regenerate: paste the JSON object below.
+
+export const PERCEPTION_LEVELS = {
+  "schema": "awr.sensor.perception_levels.v1",
+  "doc": "Johnson N50 and TTPF parameters of the unified criterion (ADR-100; AWR-04 §6.2; M18-M19 PRD §6.7, §6.15); one source for Python and TS.",
+  "pixels_per_cycle": 2,
+  "ttpf": {
+    "e0": 2.7,
+    "e1": 0.7,
+    "p_definite": 0.9,
+    "ratio_at_p_definite": 1.75,
+    "form": "P(N) = (N/N50)^E / (1 + (N/N50)^E), E = e0 + e1 * N/N50 (N50 in pixels)"
+  },
+  "levels": {
+    "D": {
+      "n50_cycles": 1.0,
+      "n50_px": 2.0,
+      "n_p90_px": 3.5
+    },
+    "R": {
+      "n50_cycles": 4.0,
+      "n50_px": 8.0,
+      "n_p90_px": 14.0
+    },
+    "I": {
+      "n50_cycles": 6.4,
+      "n50_px": 12.8,
+      "n_p90_px": 22.4
+    }
+  },
+  "contrast": {
+    "c_min": 0.05,
+    "c_full": 0.25
+  },
+  "lwir": {
+    "snr_min": 1.0,
+    "snr_span": 3.0,
+    "sigma_clutter_k": {
+      "day": 2.0,
+      "night": 1.0
+    },
+    "pixel_um": 12.0,
+    "f_number": 1.0
+  },
+  "light": {
+    "e_min_color_lx": 0.5,
+    "e_min_mono_lx": 0.05,
+    "decades": 2.0,
+    "nir_edge_frac": 0.2
+  },
+  "blur": {
+    "t_exp_day_s": 0.001,
+    "t_exp_low_s": 0.0333,
+    "t_exp_lwir_s": 0.01,
+    "switch_lx": 50.0,
+    "jitter_short_urad": 10.0,
+    "jitter_long_urad": 30.0,
+    "jitter_lwir_urad": 20.0,
+    "t_short_max_s": 0.004,
+    "track_residual": 0.1
+  },
+  "capture": {
+    "t_hold_s": 1.0,
+    "t_lost_s": 2.0,
+    "t_up_s": 1.0,
+    "t_down_s": 2.0,
+    "k_los_min": 0.6666666666666666,
+    "toast_dedup_s": 30.0
+  },
+  "los": {
+    "rays_per_s": 250,
+    "bucket": 8,
+    "quota_m18_per_s": 25,
+    "quota_m20_per_s": 25,
+    "ttl_s": 1.0,
+    "stale_max_s": 2.0
+  },
+  "feasibility": {
+    "w_min_m": 10.0,
+    "agl_m": [
+      40,
+      60,
+      80,
+      100,
+      120
+    ],
+    "margin_base_m": 20.0,
+    "margin_sigma_k": 3.0,
+    "zoom_margin": 1.3
+  },
+  "wavelength_nm": {
+    "eo": 550,
+    "nir": 850,
+    "lidar": 905,
+    "lwir": 10000
+  },
+  "k_mor": 2.995732273553991,
+  "lidar": {
+    "pts_per_sr": 3500,
+    "frame_hz": 10,
+    "n_d": 10,
+    "n_r": 100,
+    "r_ref_m": 40.0,
+    "rho_ref": 0.1,
+    "rho_exp": 0.269,
+    "hard_max_m": 100.0
+  },
+  "radar": {
+    "snr_d_db": 13.2,
+    "snr_r_db": 20.0,
+    "dwell_r_s": 2.0
+  },
+  "acoustic": {
+    "snr_d_db": 6.0,
+    "snr_r_db": 10.0,
+    "n_harm": 3
+  }
+} as const
+
+export type LevelName = 'none' | 'D' | 'R' | 'I'
+export type ReqLevel = 'D' | 'R' | 'I'
+export const LEVEL_NAMES: readonly LevelName[] = ['none', 'D', 'R', 'I']
+export const N_P90: Readonly<Record<ReqLevel, number>> = {
+  D: PERCEPTION_LEVELS.levels.D.n_p90_px, R: PERCEPTION_LEVELS.levels.R.n_p90_px, I: PERCEPTION_LEVELS.levels.I.n_p90_px,
+}
+export const N50_PX: Readonly<Record<ReqLevel, number>> = {
+  D: PERCEPTION_LEVELS.levels.D.n50_px, R: PERCEPTION_LEVELS.levels.R.n50_px, I: PERCEPTION_LEVELS.levels.I.n50_px,
+}
+export const K_MOR = PERCEPTION_LEVELS.k_mor
+export const LIMITING = ['fov', 'los', 'pixels', 'light', 'contrast', 'blur'] as const
+export type Limiting = (typeof LIMITING)[number]

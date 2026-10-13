@@ -55,3 +55,11 @@ Further rules of this module:
   `lib/tokens/motion.gen.ts`; no hex, no motion literals (D1-AC-20).
 - New materials after the reveal must reuse an existing program (same node graph): the shader zoo warms every layer's
   variants under the mask (`warmupVariants`), D1-AC-25.
+- Sensor views (D2 WP-11, `sensorView/`): the world layers render into the sensor target, an XR-flagged render target with
+  an sRGB colour texture, so three gives them their canvas programs (no compile on a view switch); the composite is one
+  program whose views are uniform-selected branches. TSL values shared by several `If` branches must be `toVar()` in the
+  main scope (a node is emitted where it is first used, i.e. inside the first branch, and the others read it unassigned).
+  The same holds for values first used inside a `Loop` body: hoist them before the loop.
+- A new layer declares how it appears in the sensor views (`LayerSpec.sensorClass`, default by id in
+  `sensorView/pass.ts`): 'world' layers are drawn into the sensor image, 'overlay' layers over the EO view only, 'hidden'
+  layers not at all. Layers must keep `drawCount()` exact while their root is hidden by the backend for a pass.

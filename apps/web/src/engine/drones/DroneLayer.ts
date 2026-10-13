@@ -6,11 +6,13 @@
 //      FAILSAFE, CRASHED; warning: CORRECTING, HOLD, RTL, LANDING; or levels injected by M09/M15) and staleness (HOLD
 //      or data older than input.staleAfterMs);
 //   3. screen radii every frame, buckets at 10 Hz (marker / low-poly / hero, caps per tier, PerfGovernor step 4);
-//   4. marker texture, low-poly instances per model, hero instances and the red-entity hull;
+//   4. marker texture, low-poly instances per shape (D2: hex, quad, fixed wing, VTOL; instance scale per model,
+//      engine/drones/vehicleShapes.ts), hero instances and the red-entity hull;
 //   5. glyphs of the drones (red entity, other critical, warning, selection, focus double ring, hover, stale);
 //   6. CPU trail history for every vehicle, GPU trail slots for the selected vehicles (halo + 2 px) and the focus set;
 //   7. focus set at 4 Hz with incremental 30 Hz subscriptions.
-// World phase (after m13.gimbal): sensor frustums of the selected vehicle (Tier S) or up to 16 (Tier B/A).
+// World phase (after m13.gimbal): sensor frustums of the selected vehicle (Tier S) or up to 16 (Tier B/A); D2: the
+// illuminator cones of the primary vehicle and the MID-360 scan points (lidarScan.ts) in the same SensorLayer root.
 import { Group, Matrix4, Quaternion, Vector3, type PerspectiveCamera } from 'three'
 import { FlightFlags, FlightState } from '@awr/contracts/enums'
 import { INPUT } from '@/lib/tokens/input.gen'
@@ -19,14 +21,16 @@ import type { FrameCtx, RenderBackendView } from '../loop'
 import { newDronePoseSoA, type DronePoseSoA } from '../time/interpRing'
 import { BUCKET, BUCKETS, Buckets, type BucketInputs } from './buckets'
 import { FocusSet } from './focusSet'
-import { FRUSTUM, FrustumLayer, type SensorsApi } from './frustums'
+import { FRUSTUM, FrustumLayer, payloadIlluminators, type IlluminatorView, type SensorsApi } from './frustums'
 import { GLYPH, GlyphClass, GlyphLayer, Palette, Shape } from './glyph/GlyphLayer'
-import { makeLowPolyGeometry } from './lowpoly'
+import { makeShapeGeometry } from './lowpoly'
 import { MARKER, MarkerBatch, MarkerStyle } from './markers'
 import { HeroBatch, LowPolyBatch } from './models'
 import { TrailBatch, TRAIL_STYLES } from './trails/TrailBatch'
 import { TrailRing } from './trails/TrailRing'
 import { heroOf, onHeroReady } from './vehicleModels'
+import { SHAPES, shapeOf, vehicleShapesVersion } from './vehicleShapes'
+import { LIDAR_SCAN, LidarScanLayer } from './lidarScan'
 import { makeHeroPlaceholderGeometry } from './lowpoly'
 
 export const DRONES = {
@@ -94,6 +98,8 @@ export class DroneLayer {
   readonly trailSel: TrailBatch
   readonly trailHalo: TrailBatch
   readonly frustums: FrustumLayer
+  /** D2: MID-360 scan points (uav/{id}/sensor/lidar/scan, one vehicle per session) */
+  readonly scan: LidarScanLayer
   readonly hero: HeroBatch
   private readonly low = new Map<string, LowPolyBatch>()
   readonly poses: DronePoseSoA
@@ -101,8 +107,20 @@ export class DroneLayer {
   readonly mark = new Uint8Array(65536)
   readonly alert = new Uint8Array(65536)
   private readonly extAlert = new Uint8Array(65536)
+  /** 0 hero-capable (p600), 1 other vehicle model, 2 not a vehicle (generic marker), keyed by agentNo */
   private readonly modelIdx = new Uint8Array(65536)
-  private readonly models: string[] = ['p600', 'x500']
+  /** low-poly shape index (SHAPES), instance scale and R_vis per agentNo (D2: per model, vehicleShapes.ts) */
+  readonly shapeIdx = new Uint8Array(65536)
+  readonly scaleOf = new Float32Array(65536).fill(1)
+  readonly rVisOf = new Float32Array(65536).fill(DRONES.rVisM)
+  private readonly models: readonly string[] = SHAPES
+  private readonly scaleV = new Vector3(1, 1, 1)
+  private shapesVersion = -1
+  private rosterRef: unknown = null
+  private rosterVer = -1
+  /** interned roster model per agentNo (-1 unknown): the shape is re-derived only when it changes */
+  private readonly agentModel = new Int32Array(65536).fill(-1)
+  private readonly modelIds = new Map<string, number>()
   private readonly lowCount: Int32Array
   private readonly m4 = new Matrix4()
   private readonly q = new Quaternion()
@@ -152,7 +170,7 @@ export class DroneLayer {
     this.frustums = new FrustumLayer(S ? FRUSTUM.capS : FRUSTUM.capBA)
     this.lowCount = new Int32Array(this.models.length)
     for (let i = 0; i < this.models.length; i++) {
-      const b = new LowPolyBatch(makeLowPolyGeometry(S ? 's' : 'full'), S ? BUCKETS.lowCapS : BUCKETS.lowCapBA, `DroneLowPoly.${this.models[i]}`)
+      const b = new LowPolyBatch(makeShapeGeometry(SHAPES[i], S ? 's' : 'full'), S ? BUCKETS.lowCapS : BUCKETS.lowCapBA, `DroneLowPoly.${this.models[i]}`)
       this.low.set(this.models[i], b)
       this.lowList.push(b)
       this.root.add(b.mesh)
@@ -171,15 +189,17 @@ export class DroneLayer {
     this.root.name = 'DroneLayer'
     this.trailRoot.add(this.trailHalo.mesh, this.trailSel.mesh, this.trailFocus.mesh)
     this.trailRoot.name = 'TrailLayer'
-    this.frustumRoot.add(this.frustums.edges, this.frustums.fill)
+    this.scan = new LidarScanLayer(S ? LIDAR_SCAN.capS : LIDAR_SCAN.capBA, o.be.createPointsMaterial(), o.be.pointSizeMode === 'pixel' ? 'pixel' : 'glpoint')
+    this.frustumRoot.add(this.frustums.edges, this.frustums.fill, this.scan.points)
     this.frustumRoot.name = 'SensorLayer'
     const mark = this.mark
     const alert = this.alert
     const heroOk = (): boolean => this.heroesAvailable
     const kindOk = this.modelIdx
+    const rv = this.rVisOf
     this.binputs = {
       mark, alert,
-      rVisOf: () => DRONES.rVisM,
+      rVisOf: (i: number) => rv[this.poses.agentNo[i]],
       heroOf: (i: number) => heroOk() && kindOk[this.poses.agentNo[i]] === 0,
     }
   }
@@ -205,6 +225,11 @@ export class DroneLayer {
   setFocus(agentNo: number, mode: 'none' | 'third' | 'fpv'): void {
     this.focusAgent = agentNo
     this.focusMode = agentNo >= 0 ? mode : 'none'
+  }
+  /** D2.1 quality profile: hero (close-up model) instances (phone 1, tablet 2) */
+  setHeroCap(n: number): void {
+    this.buckets.heroCap = Math.max(0, n)
+    this.buckets.lastMs = Number.NEGATIVE_INFINITY
   }
   /** PerfGovernor step 4 */
   setLowCap(n: number): void {
@@ -258,8 +283,7 @@ export class DroneLayer {
       if (this.focus.has(a)) m |= MARK.FOCUSSET
       mark[a] = m
       this.alert[a] = Math.max(alertLevelOf(p.state[i], p.flags[i]), this.extAlert[a])
-      const e = roster?.get(a)
-      this.modelIdx[a] = e && e.kind !== 'uav' && e.kind !== '' ? 2 : e && /x500/i.test(e.model) ? 1 : 0
+      this.classify(a, roster)
     }
     const cam = ctx.camera as PerspectiveCamera | null
     if (cam && n > 0) {
@@ -275,6 +299,39 @@ export class DroneLayer {
       this.focus.update(n, p.agentNo, this.buckets.rpx, ctx.nowMs, this.selFlag)
     }
     this.drawn = n
+  }
+
+  /**
+   * kind (hero-capable, other model, not a vehicle), shape, instance scale and R_vis of an agent from its roster model;
+   * re-read only when the roster or the registered shapes change (one string compare per agent otherwise)
+   */
+  private classify(a: number, roster: RosterLike | null): void {
+    const sv = vehicleShapesVersion()
+    const rv = (roster as { version?: number } | null)?.version ?? -1
+    if (roster !== this.rosterRef || rv !== this.rosterVer || sv !== this.shapesVersion) {
+      this.rosterRef = roster
+      this.rosterVer = rv
+      this.shapesVersion = sv
+      this.agentModel.fill(-1)
+    }
+    const e = roster?.get(a)
+    const model = e?.model ?? ''
+    let id = this.modelIds.get(model)
+    if (id === undefined) {
+      id = this.modelIds.size
+      this.modelIds.set(model, id)
+    }
+    if (this.agentModel[a] === id && e !== undefined) return
+    this.agentModel[a] = e !== undefined ? id : -1
+    if (e && e.kind !== 'uav' && e.kind !== '') {
+      this.modelIdx[a] = 2
+      return
+    }
+    const sh = shapeOf(model || 'p600')
+    this.modelIdx[a] = e && sh.shape === 'hex' && /^p600/i.test(model) ? 0 : e ? 1 : 0
+    this.shapeIdx[a] = Math.max(0, SHAPES.indexOf(sh.shape))
+    this.scaleOf[a] = sh.scale
+    this.rVisOf[a] = sh.rVis
   }
 
   private copyPose(src: DronePoseSoA, si: number, dst: DronePoseSoA, di: number): void {
@@ -346,7 +403,8 @@ export class DroneLayer {
       if (model !== BUCKET.LOW && model !== BUCKET.HERO) continue
       this.v.set(x, y, z)
       this.q.set(p.quat[4 * i], p.quat[4 * i + 1], p.quat[4 * i + 2], p.quat[4 * i + 3])
-      this.m4.compose(this.v, this.q, this.one)
+      const sc = this.scaleOf[a]
+      this.m4.compose(this.v, this.q, sc === 1 ? this.one : this.scaleV.set(sc, sc, sc))
       if (b === BUCKET.HERO && heroN < this.hero.cap) {
         this.hero.setAt(heroN++, this.m4)
         if ((m & MARK.RED) !== 0 && ctx.camera) {
@@ -357,7 +415,7 @@ export class DroneLayer {
         }
         continue
       }
-      const mi = Math.min(this.modelIdx[a], 1)
+      const mi = this.shapeIdx[a]
       const batch = this.low.get(this.models[mi])!
       const k = this.lowCount[mi]
       if (k >= batch.cap) continue
@@ -467,6 +525,7 @@ export class DroneLayer {
 
   // ---------------------------------------------------------------- world phase: frustums
   updateFrustums(ctx: FrameCtx): void {
+    this.scan.update(ctx.nowMs / 1000)
     const api = this.o.sensors?.() ?? null
     const f = this.frustums
     f.fade = this.frustumFade
@@ -488,8 +547,33 @@ export class DroneLayer {
         }
         if (this.frustumCap <= 1) break
       }
+      this.addIlluminators(api, ctx)
     }
     f.commit()
+  }
+
+  private readonly ills: IlluminatorView[] = [{ on: false, divergenceRad: 0, rangeM: 0 }, { on: false, divergenceRad: 0, rangeM: 0 }]
+  /** D2: the switched-on 850 nm illuminators of the primary vehicle, as dashed cones along its eo camera (payload, M13) */
+  private addIlluminators(api: SensorsApi, ctx: FrameCtx): void {
+    const a = this.primary
+    if (a < 0 || !api.payloadOf || (this.mark[a] & MARK.HIDDEN) !== 0) return
+    const n = payloadIlluminators(api.payloadOf(a), this.ills)
+    if (n === 0) return
+    const i = this.poseIndexOf(a)
+    if (i < 0) return
+    const list = api.sensorsOf(a)
+    let cam = null
+    for (let s = 0; s < list.length; s++) {
+      if (list[s].kind !== 0) continue
+      if (cam === null || (list[s].zoom && !cam.zoom)) cam = list[s]
+    }
+    if (!cam) return
+    const p = this.poses
+    void ctx
+    for (let k = 0; k < n; k++) {
+      this.frustums.addIlluminator(api, cam, this.ills[k].divergenceRad, this.ills[k].rangeM, p.pos[3 * i], p.pos[3 * i + 1], p.pos[3 * i + 2],
+        p.quat[4 * i], p.quat[4 * i + 1], p.quat[4 * i + 2], p.quat[4 * i + 3])
+    }
   }
 
   // ---------------------------------------------------------------- epoch / reset
@@ -517,7 +601,7 @@ export class DroneLayer {
     return this.trailFocus.drawCount() + this.trailSel.drawCount() + this.trailHalo.drawCount()
   }
   drawCountFrustums(): number {
-    return this.frustums.drawCount()
+    return this.frustums.drawCount() + this.scan.drawCount()
   }
   lowBatches(): readonly LowPolyBatch[] {
     return this.lowList
@@ -534,6 +618,7 @@ export class DroneLayer {
     this.trailSel.dispose()
     this.trailHalo.dispose()
     this.frustums.dispose()
+    this.scan.dispose()
   }
 }
 

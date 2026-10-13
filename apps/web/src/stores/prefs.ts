@@ -14,7 +14,9 @@ export interface LayoutPrefsV1 {
   v: 1
   preset: 'demo' | 'debug' | 'replay' | 'edit'
   left: { open: boolean; width: number }
-  right: { open: boolean; width: number; page: 'list' | 'detail' | 'edit' }
+  /** D2: `ent` is the entity switch of the right rail root page (drones, targets, nests; AWR-14 §20.5.2); page `task` is
+   *  the "new task" page (right rail page 3, AWR-14 §20.9.1) */
+  right: { open: boolean; width: number; page: 'list' | 'detail' | 'edit' | 'task'; ent?: 'drones' | 'targets' | 'nests' }
   dock: { open: boolean; height: number; tab: string }
   panels: Record<string, { slot: DockSlot; order: number }>
   hud: { open: boolean }
@@ -28,6 +30,13 @@ export interface UiPrefsV1 {
   lastWorld: string | null
   camByWorld: Record<string, { mode: 'orbit' | 'free' | 'bird'; pose: CameraPoseV1 }>
   locale: 'zh-CN' | 'en'
+  /** D2.1 (AWR-04 §15.11.3; AWR-14 §20.26.7; M15-FR-237): the field view, the perception volumes and the physical
+   *  reference of the viewport toolbar (the perception store, M19, is set from these at start-up) */
+  fieldView: 'none' | 'acoustic' | 'visual' | 'thermal' | 'radar'
+  fieldVolumes: 'off' | 'selected' | 'all'
+  fieldPhysicalRef: boolean
+  /** D2.1 (AWR-04 §15.8.3; M15-FR-231): the phone's current window */
+  mobileTab: 'viewport' | 'fleet' | 'tasks' | 'targets' | 'alerts'
 }
 export interface PrefsState { layout: LayoutPrefsV1; ui: UiPrefsV1 }
 
@@ -37,19 +46,23 @@ export const PREFS_KEY = 'awr.ui.prefs.v1'
 export const DEFAULT_LAYOUT: LayoutPrefsV1 = {
   v: 1, preset: 'demo',
   left: { open: true, width: LAYOUT.leftDefaultPx },
-  right: { open: true, width: LAYOUT.rightDefaultPx, page: 'list' },
+  right: { open: true, width: LAYOUT.rightDefaultPx, page: 'list', ent: 'drones' },
   dock: { open: false, height: LAYOUT.dockDefaultPx, tab: 'events' },
   panels: {}, hud: { open: true },
 }
 export const DEFAULT_UI: UiPrefsV1 = {
   v: 1, motion: 'system', altRef: 'AGL', coord: 'enu', labels: true, lastWorld: null, camByWorld: {}, locale: 'zh-CN',
+  fieldView: 'none', fieldVolumes: 'off', fieldPhysicalRef: false, mobileTab: 'viewport',
 }
+const FIELD_VIEWS_P = ['none', 'acoustic', 'visual', 'thermal', 'radar'] as const
+const VOLUMES_P = ['off', 'selected', 'all'] as const
+const TABS_P = ['viewport', 'fleet', 'tasks', 'targets', 'alerts'] as const
 
 const WORLD_ID = /^[a-z0-9-]{1,63}$/
 export function clampLayout(x: LayoutPrefsV1): LayoutPrefsV1 {
   const maxDock = Math.max(LAYOUT.dockMinPx, Math.round((globalThis.innerHeight || 1080) * LAYOUT.dockMaxFrac))
   const presets = ['demo', 'debug', 'replay', 'edit'] as const
-  const pages = ['list', 'detail', 'edit'] as const
+  const pages = ['list', 'detail', 'edit', 'task'] as const
   return {
     v: 1,
     preset: presets.includes(x.preset) ? x.preset : 'demo',
@@ -57,6 +70,7 @@ export function clampLayout(x: LayoutPrefsV1): LayoutPrefsV1 {
     right: {
       open: x.right?.open !== false, width: clampNum(x.right?.width, LAYOUT.rightMinPx, LAYOUT.rightMaxPx, LAYOUT.rightDefaultPx),
       page: pages.includes(x.right?.page) ? x.right.page : 'list',
+      ent: x.right?.ent === 'targets' || x.right?.ent === 'nests' ? x.right.ent : 'drones',
     },
     dock: {
       open: x.dock?.open === true, height: clampNum(x.dock?.height, LAYOUT.dockMinPx, maxDock, LAYOUT.dockDefaultPx),
@@ -76,6 +90,10 @@ export function clampUi(x: UiPrefsV1): UiPrefsV1 {
     lastWorld: typeof x.lastWorld === 'string' && WORLD_ID.test(x.lastWorld) ? x.lastWorld : null,
     camByWorld: x.camByWorld && typeof x.camByWorld === 'object' ? x.camByWorld : {},
     locale: 'zh-CN', // D1: zh-CN is the only locale (M15-FR-102)
+    fieldView: FIELD_VIEWS_P.includes(x.fieldView) ? x.fieldView : 'none',
+    fieldVolumes: VOLUMES_P.includes(x.fieldVolumes) ? x.fieldVolumes : 'off',
+    fieldPhysicalRef: x.fieldPhysicalRef === true,
+    mobileTab: TABS_P.includes(x.mobileTab) ? x.mobileTab : 'viewport',
   }
 }
 

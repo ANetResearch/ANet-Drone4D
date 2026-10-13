@@ -4,6 +4,7 @@
 // grid layout; overlay phase: DOM writes. Texts: sanitised roster names (lib/sanitize.ts, cached per roster version),
 // FlightState short text from the formatter injected by M15 (labels.setFormatter; the engine never imports ui/**),
 // numbers through lib/format. Registers the DOM layer 'labels' (no draws) and PerfGovernor step 3.
+// D2.1 (AWR-04 §15.8.6): the quality profile caps the labels (phone 8, tablet 16) below every governor level.
 import { useEffect, useRef } from 'react'
 import { DECLUTTER, LABEL_PRIO, LabelIcon, LabelKind, LabelLayer, MARK, perf, projectEnu, register, type GovernorKnob, type LabelText } from '@/engine'
 import { fmt } from '@/lib/format'
@@ -13,8 +14,10 @@ import { registerLayer } from '../layers/registry'
 import { useVp, vp } from '../session'
 import { applyLayerVisibility } from '../bindings'
 import { labelFormatter } from './labelFormatter'
+import { sensorViewActive } from '../sensorView/state'
 import { Vector3 } from 'three'
 import { hypot3 } from '@/engine/hypot'
+import { capOf } from '../quality'
 
 export function LabelHost() {
   const ref = useRef<HTMLDivElement>(null!)
@@ -76,13 +79,16 @@ export function LabelHost() {
       } else out.sub = f(fs, 'state', 'zh-CN')
     })
     const levels = tier === 'S' ? DECLUTTER.levelsS : DECLUTTER.levelsBA
-    const knob: GovernorKnob = { step: 3, id: 'labels', levels: levels.length, labelKey: 'perf.governor.labels', apply: (l) => L.setCap(levels[l]),
+    const qMax = vp.be?.quality.labelsMax ?? 0
+    L.setCap(capOf(levels[0], qMax))
+    const knob: GovernorKnob = { step: 3, id: 'labels', levels: levels.length, labelKey: 'perf.governor.labels', apply: (l) => L.setCap(capOf(levels[l], qMax)),
       visible: (l) => visible && L.acceptedN > levels[l] }
     const offs = [
       register('world', 'labels.layout', (ctx) => {
         const c = L.cand
         c.clear()
-        if (!visible) {
+        // no world labels over a sensor image (D2 sensor views: the HUD is M15's)
+        if (!visible || sensorViewActive()) {
           L.acceptedN = 0
           return
         }

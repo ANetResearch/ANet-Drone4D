@@ -3,12 +3,20 @@
 // camera: modes 1-5 with guards, follow lock, focus, north up, home, ViewCube directions, pose read/write;
 // pick: click/hover/preview picking and the ground pick of the last click; mission: GoTo and single-vehicle commands,
 // GoTo marker state; drones: highlights and the red owner (normally the viewport RedArbiter binding); layers: visibility;
-// labels: M15 text formatter; governor and registry extension points. Signatures only grow (M15, SK-E2E callers).
+// labels: M15 text formatter; governor and registry extension points; D2 (WP-11): sensorView (FPV, EO, night and LWIR
+// views of the FPV camera, sensor choice, palette, digital zoom, environment and thermal emitter inputs, capture-box
+// projection for the HUD), vehicleModels (catalog shapes of the drone layer) and lidarScan (MID-360 scan points). D2.1
+// (WP-11b): viewport.requestFrame / setWakeOnInput (power save and static browsing), quality (form factor, deviceClass
+// mobile, profile), field (the field view renderer: stats, readout-row highlight, governor notice), touch (long-press
+// menu) and fpv (drag in the FPV camera for the gimbal, M15-FR-218). Signatures only grow (M15, SK-E2E callers).
 import { events, loop, perf, projectEnu, type CameraPose, type GotoState, type GovernorKnob, type MissionDraft, type PickOptions, type PickResult } from '@/engine'
 import type { CallHandle, CallStatus } from '@/net/rt'
 import { selectionStore } from '@/stores/selection'
 import { vp, type PointPickInfo } from './session'
-import { clickAt, pointInfoAt, setClickConsumer, type ClickConsumer } from './interaction'
+import { clickAt, fpvRadPerPx, pointInfoAt, setClickConsumer, setWakeOnInput, type ClickConsumer, type FpvDrag, type LongPress } from './interaction'
+import { fieldLayer } from './layers/field'
+import { currentFormFactor, onFormFactorChange, type FormFactor, type QualityProfile } from './quality'
+import type { FieldStats } from '@/engine/field'
 import { sendGoto, gotoResults, gotoTargetFor, primaryAgentNo, sendVehicleCommand, vehicleCmdState, type GotoOptions, type GotoRequest, type VehicleCmd, type VehicleCmdState } from './gotoRule'
 import { getLayer, pointCloudServices, registerLayer, type LayerId, type LayerSpec } from './layers/registry'
 import { requestRebuild } from './hostRuntime'
@@ -18,12 +26,20 @@ import { setLabelFormatter, type LabelFormatter } from './overlay/labelFormatter
 import { viewCube as viewCubeApi } from './overlay/ViewCube'
 import { skyControl } from './layers/groundSky'
 import { Vector3 } from 'three'
-import type { SensorsApi } from '@/engine'
+import { registerVehicleModel, type FrameType, type SensorsApi } from '@/engine'
+import {
+  availableNow, cycleSensorView, projectBox, selectSensor, sensorViewActive, sensorViewInfo, setDigitalZoom, setEmitterSource, setPalette, setSensorEnv,
+  setSensorView, sv, type EmitterSource, type LwirPalette, type SensorEnv, type SensorViewInfo, type SensorViewMode, type SensorViewResult,
+} from './sensorView'
 
 export type { GotoOptions, GotoRoute, VehicleCmd, VehicleCmdState } from './gotoRule'
 export type { CameraPose, MissionDraft } from '@/engine'
 export type { LabelFormatter } from './overlay/labelFormatter'
-export type { ClickConsumer } from './interaction'
+export type { ClickConsumer, FpvDrag, LongPress } from './interaction'
+export type { FormFactor, QualityProfile } from './quality'
+export type { FieldStats } from '@/engine/field'
+export type { EmitterSource, LwirPalette, SensorEnv, SensorViewInfo, SensorViewMode, SensorViewResult } from './sensorView'
+export { EMITTER, EMITTER_STRIDE } from './sensorView'
 
 export interface Rect { x: number; y: number; w: number; h: number }
 export type CameraMode = 'orbit' | 'free' | 'third' | 'fpv' | 'bird'
@@ -54,6 +70,17 @@ export const viewport = {
   },
   setSuspended(on: boolean): void {
     loop.setSuspended(on)
+  },
+  get suspended(): boolean {
+    return loop.suspended
+  },
+  /** D2.1: one frame while suspended (theme change, the first paint of the power-save overlay); a resize does it itself */
+  requestFrame(): void {
+    loop.requestFrame()
+  },
+  /** D2.1 static browsing (viewer queue): input on the canvas renders frames for 2 s while suspended (AWR-04 §15.7.7) */
+  setWakeOnInput(on: boolean): void {
+    setWakeOnInput(on)
   },
   /** writes CSS px (origin top-left of the viewport) into out; false when the point is outside the frustum */
   projectToScreen(enu: ArrayLike<number>, out: Float32Array): boolean {
@@ -317,5 +344,156 @@ export const governor = {
 export const registry = {
   register(spec: LayerSpec): () => void {
     return registerLayer(spec)
+  },
+}
+
+/**
+ * D2 sensor views of the FPV camera (AWR-04 §10.5; AWR-14 §20.10.5, URL `sv`): visual approximations only (ADR-108), local
+ * display state that never writes to the simulation (the viewer uses them freely, D2-AC-37). The night view reads the
+ * illuminators of uav/{id}/payload (M13); the LWIR view the environment (setEnv, from M07 or M15) and the emitter sources
+ * (M18 targets; the other vehicles are added by the viewport).
+ */
+export const sensorView = {
+  /** switch the view of the FPV camera; enterFpv first switches the camera to FPV on the focus vehicle */
+  set(mode: SensorViewMode, o?: { enterFpv?: boolean; sensorNo?: number }): SensorViewResult {
+    return setSensorView(mode, o)
+  },
+  get mode(): SensorViewMode {
+    return sv.mode
+  },
+  /** a sensor view (not FPV) is drawn this frame */
+  get active(): boolean {
+    return sensorViewActive()
+  },
+  /** B key: FPV -> EO -> night -> LWIR over the views the focus vehicle's sensors allow */
+  cycle(): SensorViewMode {
+    return cycleSensorView()
+  },
+  /** views available on the FPV focus vehicle (camera sensor: FPV, EO, night; thermal sensor: LWIR) */
+  available(): Record<SensorViewMode, boolean> {
+    return availableNow()
+  },
+  /** look through an imaging sensor of the focus vehicle (a thermal one selects LWIR) */
+  selectSensor(sensorNo: number): SensorViewResult {
+    return selectSensor(sensorNo)
+  },
+  setPalette(p: LwirPalette): void {
+    setPalette(p)
+  },
+  get palette(): LwirPalette {
+    return sv.palette
+  },
+  /** LWIR digital zoom 1-4 (display only) */
+  setDigitalZoom(z: number): void {
+    setDigitalZoom(z)
+  },
+  /** environment inputs: illuminance, air / surface / sky temperatures, emissivity, LWIR extinction, sun direction */
+  setEnv(e: Partial<SensorEnv>): void {
+    setSensorEnv(e)
+  },
+  /** thermal emitter source (M18 targets); null removes; returns the unregister function */
+  setEmitterSource(id: string, fn: EmitterSource | null): () => void {
+    return setEmitterSource(id, fn)
+  },
+  /** view, sensor (name, kind, focal length, FOV), palette, digital zoom, available views */
+  info(): SensorViewInfo {
+    return sensorViewInfo()
+  },
+  /** HUD capture box: CSS px rectangle of a target's yawed box (ENU centre, l w h, yaw) in the current camera */
+  projectBox(center: ArrayLike<number>, sizeLwh: ArrayLike<number>, yawRad: number, out: Float32Array): boolean {
+    return projectBox(center, sizeLwh, yawRad, out)
+  },
+  onChange(cb: () => void): () => void {
+    return sv.subscribe(cb)
+  },
+}
+
+/** D2 vehicle catalog shapes (M21 catalog: frame.type, geometry.size_m, ir.motor_delta_t_k) for the drone layer */
+export const vehicleModels = {
+  register(model: string, info: { frame: FrameType; sizeM: readonly [number, number, number]; motorDeltaTK?: number }): void {
+    registerVehicleModel(model, info)
+  },
+}
+
+/**
+ * D2 MID-360 scan display (AWR-14 §20.6.5 "扫描显示"; M13 PRD §6.5.12): the caller subscribes uav/{id}/sensor/lidar/scan
+ * (one vehicle per session) and hands every LidarScan8 message to ingest; the points fade out over the persistence
+ */
+export const lidarScan = {
+  ingest(bytes: ArrayBufferView): number {
+    return vp.drones?.layer.scan.ingest(bytes, performance.now() / 1000) ?? 0
+  },
+  /** fade time 0.1-2 s (the "余晖" slider; default 0.6 s) */
+  setPersist(s: number): void {
+    vp.drones?.layer.scan.setPersist(s)
+  },
+  clear(): void {
+    vp.drones?.layer.scan.clear()
+  },
+  stats(): { frames: number; written: number; visible: boolean; persistS: number } | null {
+    const s = vp.drones?.layer.scan
+    return s ? { frames: s.frames, written: s.written, visible: s.points.visible, persistS: s.persistS } : null
+  },
+}
+
+/** D2.1 form factor and quality profile (AWR-04 §15.8.1, §15.8.6; viewport/quality.ts) */
+export const quality = {
+  /** live form factor (M15 <html data-ff>, else the window size rule) */
+  get formFactor(): FormFactor {
+    return currentFormFactor()
+  },
+  /** the profile fixed at backend creation (frame rate, pixel limit, point budget, caps, rates); null before the backend */
+  get profile(): QualityProfile | null {
+    return vp.be?.quality ?? null
+  },
+  /** deviceClass = mobile: a mobile GPU family on a coarse pointer */
+  get mobile(): boolean {
+    return vp.be?.quality.mobile ?? false
+  },
+  onFormFactorChange(cb: (ff: FormFactor) => void): () => void {
+    return onFormFactorChange(cb)
+  },
+}
+
+/**
+ * D2.1 field view (AWR-04 §15.11; UX-FR-159, FR-160): the view, the volumes and the physical reference are set through the
+ * perception store (perceptionActions, M19), the renderer follows engine/perception fieldModel
+ */
+export const field = {
+  /** counts of the last rebuild: anchors, points, points in the solid shell, circles, segments; null when not mounted */
+  stats(): FieldStats | null {
+    return fieldLayer.renderer?.stats ?? null
+  },
+  /** readout-row click: the solid shell of this vehicle in the top grey (null clears) */
+  highlight(uavId: string | null): void {
+    const r = fieldLayer.renderer
+    if (r) r.highlight = uavId
+  },
+  /** the PerfGovernor switched the field view off (M15: "已为保持流畅关闭场视图") */
+  onGovernorOff(cb: () => void): () => void {
+    return events.on('field.governorOff', () => cb())
+  },
+}
+
+/** D2.1 touch (AWR-04 §15.8.4): the long press on the canvas (500 ms, < 10 px) for M15's anchored context menu */
+export const touch = {
+  onLongPress(cb: (p: LongPress) => void): () => void {
+    return events.on<LongPress>('viewport.longpress', cb)
+  },
+}
+
+/**
+ * D2 FPV drag (M15-FR-218; request d2-WP-12b-to-M06 item 5): in the FPV camera, a primary-button drag past the click
+ * tolerance or a one-finger touch drag on the canvas. dxRad, dyRad: the angles the pointer moved through in the FPV image
+ * since the previous event (x right, y down; 'start' since the press, 'end' zeros). The caller throttles the gimbal
+ * commands (5 Hz) and keeps the pose after release; picking, selection and the camera are unaffected in FPV.
+ */
+export const fpv = {
+  onDrag(cb: (d: FpvDrag) => void): () => void {
+    return events.on<FpvDrag>('fpv.drag', cb)
+  },
+  /** CSS px to radians of the FPV image at its centre, [x, y]; [0, 0] outside the FPV camera */
+  radPerPx(): [number, number] {
+    return fpvRadPerPx([0, 0])
   },
 }

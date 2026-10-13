@@ -24,5 +24,6 @@ export function dockDefaultHeight(b: Breakpoint, h: number): { open: boolean; h:
   return { open: b.dock.open, h: h >= 1200 ? b.dock.h + 40 : b.dock.h }
 }
 
-/** below 1280 x 720 the shell shows a full-screen Empty and suspends the viewport (AWR-14 §14.1) */
-export const tooSmall = (w: number, h: number): boolean => w < 1280 || h < 720
+/** D2.1 (ADR-122; AWR-04 §15.8.1): only windows narrower than 360 CSS px show the full-screen Empty ("too narrow") and
+ *  suspend the viewport; phones and tablets get their own shells (ui/mobile), D1's 1280 x 720 limit is revised */
+export const tooSmall = (w: number, _h: number): boolean => w < 360

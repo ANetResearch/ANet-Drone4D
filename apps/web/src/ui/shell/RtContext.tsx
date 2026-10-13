@@ -4,11 +4,26 @@
 // session view (ui/shell/connView.ts), the event bridge (ui/notify/eventBridge.ts, 4 Hz) and the one-red figures.
 // A new epoch after the first one raises one toast ("simulation restarted from the scenario start") and prunes the
 // selection once the roster follows (AWR-14 §7.7).
+// D2 (ADR-111; M11-to-M15 d2-WP-03 items 1 and 3; AWR-14 §20.2.3): the realtime endpoint follows the run-time surface
+// (app/shell/surface.ts): the shared show and the local build connect to /api/rt with the page token, the sandbox surface
+// to /api/sandbox/v1/sessions/{sid}/rt with the sandbox token (net/endpoint setEndpoint; renewed tokens reach the client
+// through updateToken), static browsing and an unavailable sandbox have no realtime link at all. A surface change only
+// closes and re-initialises the client (the canvas is never unmounted); close 4410 ends the sandbox session, close 1012
+// `world_switch` reconnects inside the client and the next serverInfo carries the new world.
+// D2.1 (ADR-121; AWR-04 §15.7; M15-FR-227): the link also follows the power-save controller (app/power/PowerController.ts):
+// `linkOpen` false (saving, or waiting in the viewer queue) closes the client with 1000 and true connects it again; a
+// parked sandbox has no rt path (app/shell/surface.ts) but keeps its sandbox REST endpoint. Connection states and close
+// codes go to the controller (LIVE completes a resume, 4430 is the server's reclaim, 4431 the full viewer seats),
+// serverInfo.power sets the thresholds, and presence goes out through the client when it supports the op (M11 net).
 import * as React from 'react'
 import { reasonText, t } from '@/app/i18n'
 import { notify } from '@/app/providers/ToastProvider'
 import { createRtClient, type ConnState, type RtClient } from '@/net/rt'
 import { getToken } from '@/net/api'
+import { getEndpoint, rtUrl as endpointRtUrl, setEndpoint } from '@/net/endpoint'
+import { setShowWorld, surfaceStore, type SurfaceState } from '@/app/shell/surface'
+import { bindSandboxRt, onSandboxToken, sandbox, sandboxStore } from '@/ui/sandbox/session'
+import { installCaptureNotices } from '@/ui/notify/d2Notices'
 import { perfStore } from '@/stores/perf'
 import { bindSafety } from '@/stores/safety'
 import { bindAgents } from '@/stores/agents'
@@ -20,6 +35,8 @@ import { labels, viewCube } from '@/viewport/facade'
 import { installEventBridge } from '@/ui/notify/eventBridge'
 import { installRedFigures } from '@/ui/notify/redFigures'
 import { installServerPerf } from '@/ui/hud/serverPerf'
+import { probeRtCalls, UX } from '@/ui/testing/uxProbe'
+import { power, powerStore, type Presence } from '@/app/power/PowerController'
 import { connViewStore, installConnView, useConnView } from './connView'
 
 const RtContext = React.createContext<RtClient | null>(null)
@@ -30,9 +47,9 @@ export function setAgentsPanelOpen(open: boolean): void {
   agentsBinding?.setPanelOpen(open)
 }
 
+/** realtime URL of the current endpoint (net/endpoint: /api/rt, or the sandbox session's rt path) */
 export function rtUrl(): string {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${location.host}/api/rt`
+  return endpointRtUrl()
 }
 
 /** (re)initialise the client with a token (also used after "request control" issued a new operator token) */
@@ -41,8 +58,61 @@ export function initRt(client: RtClient, token: string): void {
   client.init({ url: rtUrl(), token, tier: p.tier ?? 'S', deviceClass: p.deviceClass ?? 'software' })
 }
 
+/** the endpoint key of a surface (null: no realtime link); `linkOpen` false (power saving) closes the link too */
+export function endpointKeyOf(s: Pick<SurfaceState, 'rtPath' | 'surface' | 'sid'>, linkOpen = true): string | null {
+  return s.rtPath && linkOpen ? `${s.surface === 'sandbox' ? `sandbox:${s.sid}` : 'shared'}` : null
+}
+
+/** presence through the page client when the net layer has the op (AWR-17 §17.20.4; M11 d2-WP-12c-to-M11 item 1) */
+function presenceSink(client: RtClient): (p: Presence) => boolean {
+  return (p) => {
+    // RtClient.presence (M11, AWR-17 §17.20.4) sends through the worker while the link is open; nothing otherwise
+    if (client.status !== 'LIVE' && client.status !== 'DEGRADED') return false
+    client.presence({ input_age_s: p.input_age_s, visible: p.visible, power: p.power })
+    return true
+  }
+}
+
+/**
+ * connect the client for a surface: sandbox -> the session token and endpoint; shared or local -> the page token;
+ * no rt path -> closed. Returns a cleanup that detaches the sandbox binding.
+ */
+function connectFor(client: RtClient, s: SurfaceState, alive: () => boolean, linkOpen = true): () => void {
+  client.close()
+  if (s.surface === 'sandbox' && s.sid && (!s.rtPath || !linkOpen)) {
+    // parked or power saving: no link, but the sandbox REST endpoint stays (GET session, resume)
+    const sid = s.sid
+    setEndpoint({ kind: 'sandbox', sid, token: () => sandboxStore.getState().token ?? '' })
+    return () => {}
+  }
+  if (!s.rtPath || !linkOpen) {
+    setEndpoint({ kind: 'shared' })
+    return () => {}
+  }
+  if (s.surface === 'sandbox' && s.sid) {
+    const sid = s.sid
+    setEndpoint({
+      kind: 'sandbox', sid,
+      token: () => sandboxStore.getState().token ?? '',
+      onAuthExpired: async () => ((await sandbox.keepalive()) || sandboxStore.getState().token ? sandboxStore.getState().token : null),
+    })
+    initRt(client, sandboxStore.getState().token ?? '')
+    const offBind = bindSandboxRt(client)
+    const offToken = onSandboxToken((tok) => client.updateToken(tok))
+    return () => {
+      offBind()
+      offToken()
+    }
+  }
+  if (getEndpoint().kind !== 'shared') setEndpoint({ kind: 'shared' })
+  void getToken().then((token) => {
+    if (alive() && endpointKeyOf(surfaceStore.getState()) === 'shared') initRt(client, token)
+  })
+  return () => {}
+}
+
 export function RtProvider({ children }: { children: React.ReactNode }) {
-  const [client] = React.useState(() => createRtClient())
+  const [client] = React.useState(() => probeRtCalls(createRtClient()))
   React.useEffect(() => {
     let alive = true
     // replay open, seek and close each start a new epoch: only live epoch changes (restart, scenario reset) are news
@@ -80,11 +150,40 @@ export function RtProvider({ children }: { children: React.ReactNode }) {
       const text = n.key.startsWith('reason.') && n.code ? reasonText(n.code).short : t(n.key)
       notify(`timeline:${n.key}`, n.level, text)
     })
-    void getToken().then((token) => {
-      if (alive) initRt(client, token)
+    // the endpoint follows the surface (D2) and the power-save gate (D2.1): connect now and again whenever the key changes
+    let key = endpointKeyOf(surfaceStore.getState(), powerStore.getState().linkOpen)
+    let offConn = connectFor(client, surfaceStore.getState(), () => alive, powerStore.getState().linkOpen)
+    const reconnect = (): void => {
+      const s = surfaceStore.getState()
+      const open = powerStore.getState().linkOpen
+      UX.power.link = open
+      const k = endpointKeyOf(s, open)
+      if (k === key) return
+      key = k
+      offConn()
+      offConn = connectFor(client, s, () => alive, open)
+    }
+    const offSurface = surfaceStore.subscribe(reconnect)
+    const offPowerLink = powerStore.subscribe((p, prev) => {
+      if (p.linkOpen !== prev.linkOpen) reconnect()
     })
+    const offPowerConn = client.onConnState((st, info) => power.onConn(st, info.code ?? null))
+    power.setPresenceSink(presenceSink(client))
+    // the shared show's run world decides which /world/:id is the show and which is static browsing
+    const offInfo = client.onServerInfo((si) => {
+      if (getEndpoint().kind === 'shared') setShowWorld(si.worldId || null)
+      power.setServerPower(((si as unknown as { power?: Record<string, unknown> }).power) ?? null)
+    })
+    const offNotices = installCaptureNotices(client)
     return () => {
       alive = false
+      offSurface()
+      offPowerLink()
+      offPowerConn()
+      power.setPresenceSink(null)
+      offConn()
+      offInfo()
+      offNotices()
       offView()
       offMode()
       offBridge()

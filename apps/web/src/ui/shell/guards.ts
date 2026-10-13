@@ -1,6 +1,7 @@
 // Write guards shared by buttons, menus, hotkeys and the Timeline (AWR-14 §7.8, §6.17): the reason a server-state change
 // is refused right now (offline, replay, read-only), as an i18n key, or null when the session may write.
 import { connViewStore, isOnline } from './connView'
+import { powerStore } from '@/app/power/store'
 
 /** simulation rates of the live clock (AWR-03 §8.5; commands.json sim/speed) */
 export const SIM_RATES = [0.25, 0.5, 1, 2, 5, 10] as const
@@ -15,6 +16,9 @@ export function otherWorld(): string | null {
 
 export function writeDeniedKey(): string | null {
   const s = connViewStore.getState()
+  // D2.1 power saving closed the link on purpose (SAVING, RESUMING, QUEUED): a neutral reason, not "disconnected"
+  // (d2-WP-13b-to-M15 item 5: the same connection rule for every frozen state)
+  if (!isOnline(s.conn) && powerStore.getState().frozen) return 'hint.powerSaving'
   if (!isOnline(s.conn)) return 'hint.offline'
   if (s.mode === 'replay') return 'hint.replay'
   if (s.role === 'viewer' || s.seat !== 'held') return 'hint.readOnly'

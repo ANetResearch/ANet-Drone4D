@@ -10,15 +10,16 @@ import { SP48 } from '@awr/contracts/layouts'
 import { register, type FrameCtx } from '../loop'
 import { rtClient } from '@/net/rt'
 import type { RtClient, RtEvent, TelemetryFrame } from '@/net/rt/types'
-import { SensorCache, type OrientationSource, type SensorView } from './sensorCache'
+import { SensorCache, type OrientationSource, type PayloadMsg, type SensorView } from './sensorCache'
 import { frameRect as frameRectImpl, frustumCorners as frustumCornersImpl, projectionFor as projectionForImpl, T_base_cam as tBaseCamImpl } from './intrinsics'
 import type { SensorSpecJson } from './specs.gen'
 
 export * from './intrinsics'
 export * from './gimbalTrack'
 export * from './mid360Pattern'
-export { SensorCache, KIND, FLAG_ACTIVE, FLAG_FOV_VALID, POSE_HZ, RING, STRIDE, STALE_INTERVALS, type OrientationSource, type SensorView } from './sensorCache'
-export { SENSOR_SPECS, type SensorSpecJson, type SensorSpecGimbal } from './specs.gen'
+export * from './zoomTrack'
+export { SensorCache, KIND, FLAG_ACTIVE, FLAG_FOV_VALID, POSE_HZ, RING, STRIDE, STALE_INTERVALS, applyFocal, type OrientationSource, type PayloadMsg, type PayloadSensorMsg, type SensorView } from './sensorCache'
+export { SENSOR_MODELS, SENSOR_SPECS, type SensorModelJson, type SensorSpecJson, type SensorSpecGimbal, type SensorSpecZoom } from './specs.gen'
 
 /** raw item schema code of SensorPose48 in the TelemetryFrame (M11 §6.3.8, net/rt/frame.ts RAW_SCHEMA) */
 const RAW_POSE48 = 2
@@ -129,6 +130,26 @@ export function setModelSpecs(model: string, specs: readonly SensorSpecJson[]): 
   cache.setModelSpecs(model, specs)
 }
 
+/** latest uav/{id}/payload of an agent (gimbal source, focal lengths, imaging modes, illuminators) */
+export function payloadOf(agentNo: number): PayloadMsg | undefined {
+  return cache.payloadOf(agentNo)
+}
+export function payloadVersion(): number {
+  return cache.payloadVersion
+}
+
+const PAYLOAD_TOPIC = /^uav\/([^/]+)\/payload$/
+
+/** control-path data message: uav/{id}/payload samples go to the cache (other topics are ignored) */
+export function onPayloadData(m: { topic: string; data: unknown }, agentNoOf: (id: string) => number): boolean {
+  const g = PAYLOAD_TOPIC.exec(m.topic)
+  if (!g || !m.data || typeof m.data !== 'object') return false
+  const a = agentNoOf(g[1])
+  if (!(a >= 0)) return false
+  cache.onPayload(a, m.data as PayloadMsg)
+  return true
+}
+
 // ------------------------------------------------------------ samples
 /**
  * TelemetryFrame of this frame (call right after RtClient.swapFrame()): SensorPose48 raw items, plus the body
@@ -206,9 +227,12 @@ function syncSubscriptions(rt: RtClient): void {
     const id = rt.roster.idOf(a)
     if (id === undefined) continue
     const list: (() => void)[] = []
+    let zoom = false
     for (const v of cache.sensorsOf(a)) {
       if (v.kind === 0 || v.kind === 2) list.push(rt.subscribe(`uav/${id}/sensor/${v.name}/pose`, { rate: 10 }))
+      if (v.zoom) zoom = true
     }
+    if (zoom) list.push(rt.subscribe(`uav/${id}/payload`, { rate: 2 }))
     subs.set(a, list)
   }
 }
@@ -244,6 +268,7 @@ export function ensureInstalled(getRt: () => RtClient | null = rtGetter): void {
     offs.push(rt.onEvents((batch) => {
       for (const ev of batch) if (ev.type === 'sensor.detect') onDetectEvent(ev)
     }))
+    if (typeof rt.onData === 'function') offs.push(rt.onData((m) => void onPayloadData(m, (id) => rtGetter()?.roster.agentNoOf(id) ?? -1)))
     offs.push(rt.onTime((t) => {
       if (t.epoch !== lastEpoch) {
         if (lastEpoch >= 0) clearDetections()

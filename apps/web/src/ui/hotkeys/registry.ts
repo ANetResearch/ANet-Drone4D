@@ -6,7 +6,11 @@
 // open only Esc passes. A binding whose `when` guard fails is not handled, except that `deniedKey` may name a hint that
 // is flashed once (for example "read-only mode" when a viewer presses H). Sidebar's built-in Mod+B listener is removed
 // by the sidebar-overlay codemod, so this is the only listener.
-export type HotkeyScope = 'global' | 'viewport' | 'list' | 'timeline' | 'tool' | 'editor'
+// D2 (AWR-04 §10.6 item 2; M15-FR-216; UX-FR-133; AWR-14 §20.10.2): the scope `manual` (registered only while a vehicle is
+// under manual control) outranks the tool, the editor, lists, the viewport and the global bindings: its bindings are kept
+// at the high-priority end of the table whatever their registration order. The flight keys carry no Shift, so the global
+// safety keys Shift+R, Shift+L and Shift+X keep working; F, Space, G and 1-5 are swallowed with a hint.
+export type HotkeyScope = 'global' | 'viewport' | 'list' | 'timeline' | 'tool' | 'editor' | 'manual'
 export interface HotkeyBinding {
   id: string
   /** combo on physical keys, e.g. 'mod+KeyB', 'Backslash', 'Backquote', 'KeyP', 'mod+KeyK', 'Escape', 'shift+Slash' */
@@ -34,7 +38,13 @@ export function setDeniedSink(fn: (key: string) => void): void {
 export function registerHotkey(b: HotkeyBinding): () => void {
   const i = bindings.findIndex((x) => x.id === b.id)
   if (i >= 0) bindings.splice(i, 1)
-  bindings.push(b)
+  // the table is searched from the end: manual-scope bindings stay after every other binding (highest priority)
+  if (b.scope === 'manual') bindings.push(b)
+  else {
+    const firstManual = bindings.findIndex((x) => x.scope === 'manual')
+    if (firstManual < 0) bindings.push(b)
+    else bindings.splice(firstManual, 0, b)
+  }
   return () => {
     const k = bindings.indexOf(b)
     if (k >= 0) bindings.splice(k, 1)
@@ -67,7 +77,8 @@ export function isComponentKey(code: string, t: EventTarget | null): boolean {
 
 // a popup in its exit transition (Base UI data-closed / data-ending-style) no longer counts as open: Esc followed at once
 // by Mod+K must open the palette (INT-1, D1-AC-21)
-const OPEN_MODAL = ['[data-slot="dialog-content"]', '[data-slot="alert-dialog-content"]', '[role="menu"]']
+// D2: the Sheets of the management panels (catalogue, advanced properties, start) are modal dialogs as well
+const OPEN_MODAL = ['[data-slot="dialog-content"]', '[data-slot="sheet-content"]', '[data-slot="alert-dialog-content"]', '[role="menu"]']
   .map((s) => `${s}:not([data-closed]):not([data-ending-style])`).join(',')
 /** the default modal probe: an open dialog, alert dialog or menu that is not in its exit transition */
 export function modalOpenInDom(doc: ParentNode): boolean {

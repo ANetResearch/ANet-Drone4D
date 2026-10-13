@@ -46,7 +46,7 @@ describe('prefs', () => {
     const { clampLayout, clampUi, DEFAULT_LAYOUT, DEFAULT_UI } = await import('@/stores/prefs')
     const l = clampLayout({ ...DEFAULT_LAYOUT, left: { open: true, width: 9999 }, right: { open: false, width: -5, page: 'bogus' as never } })
     expect(l.left.width).toBe(400)
-    expect(l.right).toEqual({ open: false, width: 280, page: 'list' })
+    expect(l.right).toEqual({ open: false, width: 280, page: 'list', ent: 'drones' })
     const u = clampUi({ ...DEFAULT_UI, lastWorld: '../etc', motion: 'wild' as never })
     expect(u.lastWorld).toBeNull()
     expect(u.motion).toBe('system')

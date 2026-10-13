@@ -9,6 +9,9 @@
 // sessions see one explanation with "request control" instead of greyed buttons (AWR-14 §7.8).
 // DOM hooks kept for the walking-skeleton gate: [data-cmd=<op>], [data-cmd-confirm=<op>], [data-goto-target], the
 // "fly here" button name.
+// D2 (M15-FR-211, FR-215; UX-FR-118, UX-FR-132): the sensors tab adds the payload controls of the mounted D2 sensors
+// (ui/panels/fleet/PayloadControls.tsx) and the sandbox operator gets "manual control" (takeover confirmation, then the
+// manual key scope and the virtual sticks; ui/manual).
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useT } from '@/app/i18n'
@@ -54,6 +57,9 @@ import { prefs } from '@/stores/prefs'
 import { useMission, selectMissionRows } from '@/stores/mission'
 import { useSensors } from '@/stores/sensors'
 import { useSelection } from '@/stores/selection'
+import { PayloadControls } from '@/ui/panels/fleet/PayloadControls'
+import { manual, useManual } from '@/ui/manual/controller'
+import { useSurface } from '@/app/shell/surface'
 
 const TAKEOFF_ALT = { defaultM: 2.5, minM: 0.5, maxM: 120 } as const // commands.json takeoff.alt_m
 
@@ -282,8 +288,10 @@ function SensorsTab({ id }: { id: string }) {
   const t = useT()
   const vehicleId = useSensors((s) => s.vehicleId)
   const sensors = useSensors((s) => s.sensors)
-  if (vehicleId !== id || !sensors.length) return <PanelEmpty brand={false} title={t('detail.noSensors')} />
+  const payload = useSensors((s) => s.payload)
+  if (vehicleId !== id || (!sensors.length && !payload)) return <PanelEmpty brand={false} title={t('detail.noSensors')} />
   return (
+    <div className="flex flex-col gap-2">
     <div data-lf-table="">
       <Table>
         <TableBody>
@@ -297,6 +305,24 @@ function SensorsTab({ id }: { id: string }) {
         </TableBody>
       </Table>
     </div>
+    <PayloadControls id={id} />
+    </div>
+  )
+}
+
+/** "manual control" of the sandbox operator (takeover confirmation first) */
+function ManualButton({ id }: { id: string }) {
+  const t = useT()
+  const operator = useSurface((s) => s.surface === 'sandbox')
+  const state = useManual((s) => s.state)
+  const held = useManual((s) => s.vehicle === id && s.state !== 'IDLE')
+  if (!operator) return null
+  return (
+    <Button size="xs" variant={held ? 'secondary' : 'outline'} disabled={state !== 'IDLE' && !held} data-manual-takeover={id}
+      onClick={() => (held ? void manual.release() : manual.request(id))}>
+      <Icon icon="manual.stick" data-icon="inline-start" />
+      {held ? t('manual.release') : t('manual.takeover')}
+    </Button>
   )
 }
 
@@ -344,7 +370,10 @@ export function DroneDetailPanel() {
             {v && ownerIcon ? <Badge variant="outline" className="gap-1"><Icon icon={ownerIcon} />{t(`owner.${v.owner}`)}</Badge> : null}
             {v ? <FlightStateBadge fs={v.fs} sub={v.sub} flags={v.flags} redOwner={red?.id === primary} className="ml-auto" /> : null}
           </div>
-          <CameraRow id={primary} />
+          <div className="flex items-center gap-1.5">
+            <CameraRow id={primary} />
+            <ManualButton id={primary} />
+          </div>
           <Tabs defaultValue="telemetry">
             <TabsList variant="line">
               <TabsTrigger value="telemetry">{t('detail.telemetry')}</TabsTrigger>

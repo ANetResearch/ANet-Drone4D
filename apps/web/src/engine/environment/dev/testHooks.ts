@@ -6,6 +6,9 @@
 //   __env.injectStepAt(id, s) a step keyframe applied at absolute time s with zero anchors (env-fixed-time)
 //   __env.wantTurbulence()   load the shared turbulence box (env-gpu turbulence term)
 //   __env.gpuParity()        GPU windAtEnu vs windCPU at 32 x 32 points (env-gpu)
+//   __env.injectSky(o)       D2: a keyframe with the simulation calendar and a clock sun (config.sun, calendar, humidity,
+//                            surface, acoustic background), version + 1, applied at the next 20 ms grid (env-sky)
+//   __env.sky()              D2: EnvStore sky state, the scene sun vector and sun visibility actually written to EnvParams
 import { FloatType, WebGLRenderTarget, type PerspectiveCamera, type Scene, type WebGLRenderer } from 'three'
 import type { FrameCtx } from '../../loop'
 import type { EnvironmentRuntime } from '../EnvRuntime'
@@ -50,6 +53,28 @@ export function installEnvTestHooks(env: EnvironmentRuntime, renderer: WebGLRend
         anchors: { t_ns: t, s_m: 0, d_enu_m: [0, 0, 0], fall_rain_m: 0, fall_snow_m: 0, wetness: 0, puddle: 0 } } as typeof cur.wire
       st.ingest(w, performance.now())
       return w.version
+    },
+    injectSky: (o: { azDeg: number; elDeg: number; band: 'day' | 'low' | 'night'; startUtc: string; tz: string; tCalUnixNs: string;
+      acoustic?: 'rural' | 'suburban' | 'urban' }): number => {
+      const st = env.store
+      const cur = st.current
+      if (!cur) return -1
+      const t = Math.ceil((st.tRenderNs + 50e6) / 20e6) * 20e6
+      const w = { ...cur.wire, version: cur.version + 1 + st.queue.length, t_ns: t, t_apply_ns: t, mode: 'step', t0_ns: t, t1_ns: t,
+        from: Array.from(st.scalars), to: Array.from(st.scalars), via: [],
+        anchors: { t_ns: t, s_m: st.anchors.sM, d_enu_m: Array.from(st.anchors.d), fall_rain_m: st.anchors.fallRain, fall_snow_m: st.anchors.fallSnow,
+          wetness: st.anchors.wetness, puddle: st.anchors.puddle },
+        config: { ...cur.wire.config, sun: { azimuth_deg: o.azDeg, elevation_deg: o.elDeg, mode: 'clock', band: o.band } },
+        calendar: { start_utc: o.startUtc, tz: o.tz, t_cal_unix_ns: o.tCalUnixNs }, humidity_pct: 50,
+        surface: { t_c: 20, emissivity: 0.93, k_cross: 1 }, acoustic_bg: { profile: o.acoustic ?? 'rural', l_bg_dba: 40 } } as typeof cur.wire
+      st.ingest(w, performance.now())
+      return w.version
+    },
+    sky: () => {
+      const k = env.store.sky
+      const p = env.params
+      return { mode: k.mode, d2: k.d2, band: k.bandName, azDeg: k.azDeg, elDeg: k.elDeg, illumLx: k.illumLx, tCalUnixMs: k.tCalUnixMs, source: k.source,
+        sunVis: p.sunVis, sunDirEnu: [p.sunDirEnu.x, p.sunDirEnu.y, p.sunDirEnu.z], version: env.store.version }
     },
     wantTurbulence: () => env.wantTurbulence(),
     gpuParity: (seed?: number, waitTurbMs = 0) => runGpuParity(env, frameCtx, focus(), {

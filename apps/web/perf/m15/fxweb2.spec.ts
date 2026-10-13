@@ -1,7 +1,7 @@
 // FX-WEB2 UI functional cases on a test build with FakeSource and mocked REST (no backend; `?viewport=off&reveal=shell`
 // like the other M15 specs):
 //   brand       page title and header lock-up say "ANet Drone4D" (ADR-056); About names the licence, the repository,
-//               the UrbanScene3D source with "research use" and the copyright line (LICENSE 1b; M16-FR-006);
+//               the UrbanScene3D source with the D2 licence wording (ADR-109) and the copyright line (LICENSE 1b; M16-FR-006);
 //   timeline    the bar has the readout, the overview and detail tracks and the live rate table; markers of the M12
 //               track model show a hover tooltip; the context menu offers "add a bookmark here"; the Timeline tab has the
 //               legend, the facts and the bookmark list;
@@ -88,7 +88,7 @@ test('brand name, About content and the synthetic-source honesty badge', async (
   await expect(about.locator('[data-about-license]')).toContainText('ANet Open Source License')
   await expect(about.getByRole('link', { name: /ANetResearch\/ANet-Drone4D/ })).toHaveAttribute('href', 'https://github.com/ANetResearch/ANet-Drone4D')
   await expect(about.locator('[data-about-data]')).toContainText('UrbanScene3D')
-  await expect(about.locator('[data-about-data]')).toContainText('科研')
+  await expect(about.locator('[data-about-data]')).toContainText('经数据集权利方授权') // D2 ADR-109 (14 §20.16 about.dataset.d2)
   await expect(about.locator('[data-about-copyright]')).toContainText('Copyright (c) 2026 Agent Network Research')
   expect(await glyphScan(page)).toEqual([])
   await shot(page, 'fx-web2-ui-about')

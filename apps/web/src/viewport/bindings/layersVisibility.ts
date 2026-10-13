@@ -20,7 +20,15 @@ export function applyLayerVisibility(): void {
     spec.setVisible(!pcOnly && (lk === 'labels' ? v.labels && labelsPref : v[sk]))
   }
   if (pcOnly) for (const id of PC_ONLY_OFF) getLayer(id)?.setVisible(false)
+  // D2 domain layers (targets M18, tasking M20): bound once stores/layers carries their keys (M15; d2-WP-05-to-M06 item 4)
+  const vv = v as unknown as Record<string, boolean | undefined>
+  for (const id of D2_LAYERS) {
+    const on = vv[id]
+    if (typeof on === 'boolean') getLayer(id)?.setVisible(!pcOnly && on)
+    else if (pcOnly) getLayer(id)?.setVisible(false)
+  }
 }
+const D2_LAYERS: readonly LayerId[] = ['targets', 'keepout', 'tasking']
 const PC_ONLY_OFF: readonly LayerId[] = ['groundSky', 'glyphs', 'debug']
 
 export function installLayersBinding(): () => void {

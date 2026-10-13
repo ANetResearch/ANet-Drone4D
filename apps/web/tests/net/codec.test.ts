@@ -8,6 +8,7 @@ import { H, REGION, SF, SLOT_BYTES, SLOT_CAP, SLOT_FULL, SLOT_ITEM, SLOT_RAW } f
 import { parseFakeUrl } from '@/net/rt/FakeSource'
 import { resolveRtUrl } from '@/net/rt/client'
 import { BACKOFF, backoffDelay, protocolsFor } from '@/net/rt/transport'
+import { readJson } from '../contracts/util'
 import { ctrlOps, rig } from './harness'
 
 describe('TelemetryFrame slot layout (M11 §6.3.8)', () => {
@@ -196,6 +197,9 @@ describe('transport', () => {
     expect(o.start).toEqual([1, 2, 3])
   })
   it('contracts expose the layout id used by the fixtures', () => {
-    expect(L.LAYOUT_ID).toBe(0x3d5e08d0)
+    // compared with the fixture header instead of a literal: contracts 1.1.0 added awr.TargetLite32.v1 and the global
+    // layout id changed by design (AWR-17 §17.11; d2-WP-01-to-M11 item 1)
+    const head = readJson<{ header: { layout_id: string } }>('fixtures/payloads/smoke_n1.json').header
+    expect(L.LAYOUT_ID).toBe(parseInt(head.layout_id, 16))
   })
 })

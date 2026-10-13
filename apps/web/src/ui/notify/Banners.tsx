@@ -12,12 +12,20 @@ import { useRt } from '@/ui/shell/RtContext'
 import { useConnView } from '@/ui/shell/connView'
 import { useTimeline } from '@/stores/timeline'
 import { leaveReplay } from '@/ui/views/replayFlow'
+import { useSurface } from '@/app/shell/surface'
+import { ExpiringBanner, SessionBar } from '@/ui/sandbox/SessionBar'
+import { StaticBanner } from '@/ui/sandbox/banners'
+import { usePower } from '@/app/power/store'
+import { power } from '@/app/power/PowerController'
 
 export const BANNER_PX = 36
 
 /** number of visible banners (the shell reserves BANNER_PX each) */
 export function useBannerCount(): number {
-  const conn = useConnView((s) => s.bannerVisible)
+  const linked = useSurface((s) => s.rtPath !== null)
+  // D2.1: a power-save disconnect is intentional, not an outage (no "reconnecting" banner); hooks first, then the logic
+  const frozen = usePower((s) => s.frozen)
+  const conn = useConnView((s) => s.bannerVisible) && linked && !frozen
   const status = useConnView((s) => s.status.length)
   const replay = useTimeline((s) => s.mode === 'replay')
   return (conn ? 1 : 0) + status + (replay ? 1 : 0)
@@ -59,20 +67,27 @@ function ReplayBanner() {
   )
 }
 
-export function Banners() {
+export function Banners({ compact = false, session = true }: { compact?: boolean; session?: boolean }) {
   const t = useT()
   const rt = useRt()
-  const visible = useConnView((s) => s.bannerVisible)
+  const linked = useSurface((s) => s.rtPath !== null)
+  const surface = useSurface((s) => s.surface)
+  const frozen = usePower((s) => s.frozen)
+  const visible = useConnView((s) => s.bannerVisible) && linked && !frozen
   const conn = useConnView((s) => s.conn)
   const attempt = useConnView((s) => s.attempt)
   const nextInMs = useConnView((s) => s.nextInMs)
   const code = useConnView((s) => s.code)
   const status = useConnView((s) => s.status)
   const replay = useTimeline((s) => s.mode === 'replay')
-  if (!visible && !status.length && !replay) return null
+  const d2 = surface === 'sandbox' || surface === 'static'
+  if (!visible && !status.length && !replay && !d2) return null
   const fatal = conn === 'FATAL'
   return (
     <div data-banners="" className="app-layer-banner fixed top-(--header-height) left-(--uo-x) flex w-(--uo-w) flex-col gap-1 px-2 pt-1">
+      {surface === 'sandbox' && session ? <SessionBar compact={compact} /> : null}
+      {surface === 'sandbox' ? <ExpiringBanner /> : null}
+      {surface === 'static' ? <StaticBanner /> : null}
       {visible ? (
         <Alert variant={fatal ? 'destructive' : 'default'} data-conn-banner={conn} className="flex h-8 items-center gap-2 py-1">
           <Icon icon="alert.linklost" />
@@ -82,7 +97,7 @@ export function Banners() {
           </AlertDescription>
           <AlertAction>
             {fatal ? (
-              <Button size="xs" variant="outline" onClick={() => location.reload()}>{t('banner.reload')}</Button>
+              <Button size="xs" variant="outline" onClick={() => { power.expectNavigation(); location.reload() }}>{t('banner.reload')}</Button>
             ) : (
               <Button size="xs" variant="outline" onClick={() => rt.reconnectNow()}>{t('banner.reconnectNow')}</Button>
             )}

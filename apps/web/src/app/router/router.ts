@@ -101,6 +101,9 @@ const subscribe = (cb: () => void) => {
   }
 }
 const snap = () => current
+/** route changes outside React (app/shell/surface.ts); returns the unsubscribe function */
+export const onRoute = (cb: () => void): (() => void) => subscribe(cb)
+export const currentRoute = (): RouteMatch | null => current
 export function useRoute(): RouteMatch | null {
   return useSyncExternalStore(subscribe, snap, snap)
 }

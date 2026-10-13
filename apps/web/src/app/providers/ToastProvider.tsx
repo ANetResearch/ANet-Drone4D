@@ -32,7 +32,15 @@ export type ToastLevel = 'info' | 'warning' | 'critical' | 'success'
 /** a live toast is rewritten at most this often (its merged count is still the latest one when it is) */
 export const TOAST_UPDATE_MIN_MS = 1000
 
-interface ToastData { title: string; description: string | undefined; type: string; timeout: number }
+/** one action button of a toast (D2: "confirm" of a target discovery, AWR-14 §20.11.1) */
+export interface ToastActionSpec { label: string; onClick: () => void; id?: string }
+interface ToastData {
+  title: string
+  description: string | undefined
+  type: string
+  timeout: number
+  actionProps?: { children: string; onClick: () => void; 'data-toast-action'?: string }
+}
 interface Slot { live: boolean; lastMs: number; shown: ToastData | null; pending: ToastData | null; timer: ReturnType<typeof setTimeout> | null }
 const slots = new Map<string, Slot>()
 const dirty = new Set<string>()
@@ -41,6 +49,7 @@ let scheduled = false
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 const same = (a: ToastData | null, b: ToastData): boolean =>
   a !== null && a.title === b.title && a.description === b.description && a.type === b.type && a.timeout === b.timeout
+  && (a.actionProps?.children ?? '') === (b.actionProps?.children ?? '')
 
 /**
  * whether the page has a toast surface (false on ?chrome=0): taken from the address at start, so a notice raised before
@@ -200,11 +209,12 @@ function drop(key: string): void {
   dirty.delete(key)
 }
 
-/** add or update the toast of a merge key; texts are sanitised (M15-FR-108) */
-export function notify(key: string, level: ToastLevel, title: string, description?: string): void {
+/** add or update the toast of a merge key; texts are sanitised (M15-FR-108); an optional action button (D2) */
+export function notify(key: string, level: ToastLevel, title: string, description?: string, action?: ToastActionSpec): void {
   const timeout = level === 'critical' ? 0 : level === 'warning' ? INPUT.toastWarnMs : INPUT.toastInfoMs
   const type = level === 'critical' ? 'error' : level === 'warning' ? 'warning' : level === 'success' ? 'success' : 'info'
   const data: ToastData = { title: sanitizeText(title), description: description ? sanitizeText(description) : undefined, type, timeout }
+  if (action) data.actionProps = { children: sanitizeText(action.label), onClick: action.onClick, 'data-toast-action': action.id ?? key }
   UX.toasts.merged[key] = (UX.toasts.merged[key] ?? 0) + 1
   if (!surfaceOn) {
     recordHeadless(key, level, data.title)
@@ -235,6 +245,14 @@ function recordHeadless(key: string, level: ToastLevel, title: string): void {
 /** notices raised while the page had no toast surface, oldest first (the last HEADLESS_KEEP; tests, diagnostics) */
 export function headlessNotices(): readonly HeadlessNotice[] {
   return headless
+}
+
+/** close the toast of a merge key (a confirmed discovery, an expired notice) */
+export function dismiss(key: string): void {
+  const s = slots.get(key)
+  if (!s) return
+  if (s.live) toast.close(key)
+  drop(key)
 }
 
 /** deliver every pending toast now (tests; normally one write per frame, in its post-layout slot) */

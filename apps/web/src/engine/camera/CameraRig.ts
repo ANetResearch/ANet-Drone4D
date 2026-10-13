@@ -8,6 +8,9 @@
 // with T = clamp(0.4 + 0.15 ln(1 + d/20), 0.4, 1.2) s on --ease-smooth-out, interrupted by any user input; reduced and
 // off motion tiers cut. Ground clamp: outside FPV the eye stays >= DTM + 2 m (not during flight60). Unobscured rect:
 // the projection centre tweens to the rect centre via setViewOffset (not in FPV, which keeps the sensor principal point).
+// D2.1 touch (WP-11b; AWR-04 §15.8.4): camera-controls' own touch actions are off; viewport/input/touch.ts recognises the
+// gestures and calls touchRotate (Bird: pan), touchPan, touchDolly (pinch about the midpoint), touchTwist (yaw in Orbit and
+// Bird) with the mouse's damping while a gesture runs (draggingSmoothTime).
 import CameraControls from 'camera-controls'
 import { Box3, Matrix4, PerspectiveCamera, Quaternion, Raycaster, Sphere, Spherical, Vector2, Vector3, Vector4 } from 'three'
 import { EASE, MOTION } from '@/lib/tokens/motion.gen'
@@ -84,6 +87,15 @@ export interface CameraDeps {
 
 const wrapPi = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a))
 
+/**
+ * z row of a perspective projection (column-major elements) rewritten for the reversed depth buffer: near -> 1, far -> 0
+ * in the 0..1 clip range (three r186 Matrix4.makePerspective with reversedDepth: c = n / (f - n), d = f n / (f - n))
+ */
+export function reverseDepthRow(e: { [i: number]: number }, near: number, far: number): void {
+  e[10] = near / (far - near)
+  e[14] = (far * near) / (far - near)
+}
+
 export class CameraRig {
   readonly controls: CameraControls
   mode: CameraMode = 'orbit'
@@ -115,7 +127,7 @@ export class CameraRig {
   private offH = 0
   private psiSmooth = Number.NaN
   private psiApplied = Number.NaN
-  private fpvSensor: SensorView | null = null
+  private fpvView: SensorView | null = null
   private readonly keys = new Set<string>()
   private shift = false
   freeSpeedMul = 1
@@ -178,6 +190,9 @@ export class CameraRig {
     c.mouseButtons.right = A.TRUCK
     c.mouseButtons.middle = A.DOLLY
     c.mouseButtons.wheel = A.DOLLY
+    c.touches.one = A.NONE
+    c.touches.two = A.NONE
+    c.touches.three = A.NONE
     if (m === 'free') {
       c.minDistance = CAMERA.free.dist
       c.maxDistance = CAMERA.free.dist
@@ -237,6 +252,86 @@ export class CameraRig {
       this.keys.add(e.code)
       this.userInput()
     } else this.keys.delete(e.code)
+  }
+
+  // ------------------------------------------------------------------ touch (D2.1)
+  /** a gesture starts or ends: the mouse drag's damping while it runs */
+  touchActive(on: boolean): void {
+    this.controls.smoothTime = on ? CAMERA.orbit.draggingSmoothTime : CAMERA.orbit.smoothTime
+  }
+  private get touchable(): boolean {
+    return this.mode !== 'fpv' && !this.driven
+  }
+  /** one-finger drag (CSS px of this move): orbit like the left mouse button; Bird pans */
+  touchRotate(dx: number, dy: number, hPx: number): void {
+    if (!this.touchable) return
+    if (this.mode === 'bird') {
+      this.touchPan(dx, dy, hPx)
+      return
+    }
+    this.userInput()
+    const c = this.controls
+    const k = (2 * Math.PI) / Math.max(1, hPx)
+    void c.rotate(-dx * k * c.azimuthRotateSpeed, -dy * k * c.polarRotateSpeed, true)
+  }
+  /** two-finger drag: truck like the right mouse button (the scene follows the fingers) */
+  touchPan(dx: number, dy: number, hPx: number): void {
+    if (!this.touchable || this.mode === 'free' || this.mode === 'third') return
+    const c = this.controls
+    const k = (c.truckSpeed * c.distance * Math.tan((this.camera.getEffectiveFOV() * Math.PI) / 360)) / Math.max(1, hPx)
+    void c.truck(-dx * k, -dy * k, true)
+    this.userInputPan()
+  }
+  /** pinch (scale > 1: fingers apart, closer) about the CSS point (cx, cy) of the viewport */
+  touchDolly(scale: number, cx: number, cy: number, wPx: number, hPx: number): void {
+    if (!this.touchable || !(scale > 0) || this.mode === 'free') return
+    this.userInput()
+    const c = this.controls
+    const d0 = c.distance
+    const d1 = Math.min(c.maxDistance, Math.max(c.minDistance, d0 / scale))
+    if (d1 === d0) return
+    if (this.mode === 'third' || wPx <= 0 || hPx <= 0) {
+      void c.dollyTo(d1, true)
+      return
+    }
+    // scale eye and target about the point of the midpoint ray at the target's distance: that point stays under the fingers
+    const eye = this.tmpA
+    const tgt = this.tmpB
+    c.getPosition(eye, true)
+    c.getTarget(tgt, true)
+    const p = this.touchP.set((cx / wPx) * 2 - 1, 1 - (cy / hPx) * 2, 0.5).unproject(this.camera).sub(eye).normalize().multiplyScalar(d0).add(eye)
+    const f = d1 / d0
+    eye.sub(p).multiplyScalar(f).add(p)
+    tgt.sub(p).multiplyScalar(f).add(p)
+    void c.setLookAt(eye.x, eye.y, eye.z, tgt.x, tgt.y, tgt.z, true)
+  }
+  /** two-finger twist (rad, screen angle change, clockwise positive): yaw about the target in Orbit and Bird */
+  touchTwist(dRad: number): void {
+    if (!this.touchable || (this.mode !== 'orbit' && this.mode !== 'bird')) return
+    this.userInput()
+    const c = this.controls
+    if (this.mode === 'bird') {
+      // the north-up lock follows the twist (northUp() restores it)
+      const az = c.azimuthAngle + dRad
+      c.minAzimuthAngle = az
+      c.maxAzimuthAngle = az
+      void c.rotateAzimuthTo(az, true)
+      return
+    }
+    void c.rotate(dRad, 0, true)
+  }
+  private readonly touchP = new Vector3()
+  /** a touch pan releases the follow lock like a mouse truck */
+  private userInputPan(): void {
+    if (this.flight.active) {
+      this.flight.cancel()
+      this.deps.onFlight?.('cancel', this.flight.reason)
+    }
+    if (this.followLock) {
+      this.followLock = false
+      this.deps.setFocus?.(-1)
+      this.emitMode()
+    }
   }
 
   // ------------------------------------------------------------------ pose helpers (ENU)
@@ -299,8 +394,8 @@ export class CameraRig {
     if (m === 'fpv') {
       const api = this.deps.sensors?.() ?? null
       if (!api || !api.hasCamera(focusAgent)) return { ok: false, reason: 'no_camera_sensor' }
-      this.fpvSensor = api.sensorsOf(focusAgent).find((s) => s.kind === 0) ?? null
-      if (!this.fpvSensor) return { ok: false, reason: 'no_camera_sensor' }
+      this.fpvView = api.sensorsOf(focusAgent).find((s) => s.kind === 0) ?? null
+      if (!this.fpvView) return { ok: false, reason: 'no_camera_sensor' }
     }
     const prev = this.mode
     const cur = this.currentPose(new Float64Array(6))
@@ -371,6 +466,21 @@ export class CameraRig {
     return Math.atan2(fy, fx)
   }
 
+  /** the sensor the FPV camera looks through (null outside FPV) */
+  get fpvSensor(): SensorView | null {
+    return this.mode === 'fpv' ? this.fpvView : null
+  }
+
+  /**
+   * D2 sensor views (viewport/sensorView): look through another sensor of the focus vehicle while in FPV (EO or night on
+   * the zoom camera, LWIR on the thermal camera); false outside FPV or for a sensor of another vehicle
+   */
+  setFpvSensor(s: SensorView): boolean {
+    if (this.mode !== 'fpv' || s.agentNo !== this.focusAgent) return false
+    this.fpvView = s
+    return true
+  }
+
   setFollowLock(on: boolean, focusAgent: number = this.focusAgent): boolean {
     if (this.mode !== 'orbit' && this.mode !== 'bird') return false
     if (on && focusAgent < 0) return false
@@ -392,7 +502,7 @@ export class CameraRig {
     this.tmpA.setFromMatrixPosition(cam.matrixWorld)
     this.tmpB.set(0, 0, -1).transformDirection(cam.matrixWorld).multiplyScalar(10).add(this.tmpA)
     void this.controls.setLookAt(this.tmpA.x, this.tmpA.y, this.tmpA.z, this.tmpB.x, this.tmpB.y, this.tmpB.z, false)
-    this.fpvSensor = null
+    this.fpvView = null
   }
 
   /** the focus vehicle was removed or crashed: back to orbit at its last position */
@@ -441,6 +551,11 @@ export class CameraRig {
 
   northUp(nowMs = performance.now()): void {
     if (this.mode === 'fpv') return
+    if (this.mode === 'bird') {
+      // a touch twist moved the north-up lock (touchTwist)
+      this.controls.minAzimuthAngle = 0
+      this.controls.maxAzimuthAngle = 0
+    }
     const cur = this.currentPose(new Float64Array(6))
     const dh = hypot2(cur[0] - cur[3], cur[1] - cur[4])
     // eye south of the target: screen top = +N
@@ -611,7 +726,7 @@ export class CameraRig {
 
   private updateFpv(ctx: FrameCtx): void {
     const api = this.deps.sensors?.() ?? null
-    const s = this.fpvSensor
+    const s = this.fpvView
     const cam = this.camera
     if (!api || !s || !this.deps.focusPose?.(this.focusAgent, this.fPos, this.fQuat, this.fVel)) return
     cam.matrixAutoUpdate = false
@@ -628,6 +743,11 @@ export class CameraRig {
     cam.near = CAMERA.nearFpv
     if (cam.view !== null) cam.clearViewOffset()
     cam.projectionMatrix.fromArray(api.projectionFor(s, aspect, CAMERA.nearFpv, CAMERA.far, this.m16))
+    // M13 writes the OpenGL projection (near -> -1, far -> 1). Under the reversed depth buffer (EXT_clip_control, depth
+    // range 0..1, GREATER) three switches every camera to its reversed form once (camera.reversedDepth) and never again,
+    // so the per-frame sensor projection must carry the same z row (near -> 1, far -> 0; three Matrix4.makePerspective):
+    // with the OpenGL row the nearest 0.4 m were clipped and farther surfaces won the depth test (D2 WP-11)
+    if (cam.reversedDepth) reverseDepthRow(cam.projectionMatrix.elements, CAMERA.nearFpv, CAMERA.far)
     cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert()
     cam.position.setFromMatrixPosition(this.mA)
     cam.quaternion.setFromRotationMatrix(this.mA)

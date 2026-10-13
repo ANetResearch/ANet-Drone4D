@@ -409,7 +409,7 @@ async function backfillEvents(): Promise<void> {
 /** recording state from GET /api/runs/{run}: an OPEN segment of the current live run means "recording" */
 async function probeRecording(): Promise<void> {
   const s = timelineStore.getState()
-  if (!s.runId || s.mode !== 'live' || DEMO_PUBLIC) return  // the public demo runs no recorder and offers no runs REST (ADR-083)
+  if (!s.runId || s.mode !== 'live' || noRunsRest(s.runId)) return  // the public demo runs no recorder and offers no runs REST (ADR-083)
   try {
     const meta = await apiGet<Record<string, unknown>>(`/api/runs/${encodeURIComponent(s.runId)}`)
     const segs = Array.isArray(meta.segments) ? (meta.segments as Record<string, unknown>[]) : []
@@ -759,10 +759,14 @@ async function apiSend<T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, bod
   return r.status === 204 ? null : ((await r.json()) as T)
 }
 
+/** runs REST (R33-R39) is the shared show's recorder: the public demo has none (ADR-083) and a sandbox session (`sb-…`, its run
+ *  id is the sid) is not recorded, so GET /api/runs/<sid> only answers 422 (D2-INT) */
+const noRunsRest = (run: string): boolean => DEMO_PUBLIC || run.startsWith('sb-')
+
 async function loadBookmarks(run: string): Promise<void> {
   let shared: Bookmark[] = []
-  // the public demo offers no runs REST (ADR-083): local bookmarks only
-  if (!DEMO_PUBLIC) {
+  // the public demo offers no runs REST (ADR-083), neither does a sandbox session: local bookmarks only
+  if (!noRunsRest(run)) {
     try {
       const r = await apiGet<{ items: Record<string, unknown>[] }>(`/api/runs/${encodeURIComponent(run)}/bookmarks`)
       shared = (r.items ?? []).map((x) => fromWire(x, 'user'))

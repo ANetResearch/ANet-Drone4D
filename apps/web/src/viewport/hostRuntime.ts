@@ -5,6 +5,10 @@
 // start-rung memory), runs self test and shader zoo under the mask (gate 'warmup'), and handles device loss (layers
 // release GPU resources, 250 ms later the canvas is remounted and the backend re-created; 3 losses within 60 s are
 // fatal, M06-E003).
+// D2.1 (WP-11b; AWR-04 §15.7.7, §15.8.6): the quality profile's frame-rate limit (phone 30 fps; tablet 30 fps once the
+// PerfGovernor stepped down) and frame-time target, its EDL rule (phone off, tablet while undegraded), and the power-save
+// interplay: a canvas resize while the loop is suspended renders one frame (LoopDriver), input on the canvas in static
+// browsing wakes the loop for 2 s (viewport.setWakeOnInput).
 import type { PerspectiveCamera, Scene } from 'three'
 import {
   CameraRig, ctx as frameCtx, events, governor, loop, perf, perfProbe, Picker, refreshMs, register, setSoftware, onRefreshChange, type CameraPose, type FrameCtx,
@@ -24,6 +28,18 @@ import { makePointPick } from './pickPass'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
 import { parseInject } from './backend/testSwitches'
 import { readCache, rememberFloorHeld, PREF_FLOOR_MS } from './backend/deviceClass'
+import { installSensorViewCamera, sensorViewActive } from './sensorView/state'
+import { drawsIn, sensorClassOf } from './sensorView/pass'
+import { sv } from './sensorView/state'
+import { qualityEdlNow, qualityFpsNow } from './quality'
+import { reportWarmPart } from '@/lib/bootProgress'
+
+/** frame-time target (ms) of the backend: software 33.3, else the display refresh, never below the profile's frame-rate limit */
+export function targetMsOf(be: Pick<RenderBackend, 'deviceClass' | 'quality'>, refresh: number, governorStep = 0): number {
+  if (be.deviceClass === 'software') return 33.3
+  const fps = qualityFpsNow(be.quality, governorStep)
+  return fps > 0 ? Math.max(refresh, 1000 / fps) : refresh
+}
 
 export const HOST = { lostDelayMs: 250, lostWindowMs: 60_000, lostMax: 3, motionFactor: 0.75, motionRestoreMs: 200, motionRadS: 0.5, motionLinFrac: 0.5 } as const
 
@@ -123,7 +139,8 @@ export async function warmupBackend(be: RenderBackend, camera: PerspectiveCamera
     p.mark('boot.zoo')
     warmedLayers.clear()
     for (const l of listLayers()) warmedLayers.add(l.id)
-    const rep = await be.warmup(camera, collectZoo())
+    // the boot mask's warming segment follows the zoo (d2-WP-12-to-M06 item 1; AWR-04 §15.5.2)
+    const rep = await be.warmup(camera, collectZoo(), { progress: (x) => reportWarmPart('shaders', x) })
     p.mark('boot.warm')
     p.meta.warmupMs = rep.warmupMs
     const st = await stP
@@ -183,7 +200,8 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
   p.meta.deviceClass = be.deviceClass
   p.meta.renderer = be.info.rendererString
   p.meta.adapterArch = be.info.adapterArch
-  p.meta.targetMs = be.deviceClass === 'software' ? 33.3 : refreshMs()
+  p.meta.targetMs = targetMsOf(be, refreshMs())
+  loop.setQualityFps(qualityFpsNow(be.quality, 0))
   // test switches only in dev/test builds (TEST_SWITCHES folds to false in production and drops the branch: M06-AC-010)
   if (TEST_SWITCHES) {
     const f = be.info.forced
@@ -234,8 +252,10 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
   let lastMoveMs = Number.NEGATIVE_INFINITY
   let floorTotalMs = 0
   let floorSaved = false
+  let qualityStep = 0
   onRefreshChange((ms) => {
-    if (be.deviceClass !== 'software') pointCloudServices()?.cas?.setTarget?.(ms, p.meta.tailK)
+    p.meta.targetMs = targetMsOf(be, ms, qualityStep)
+    if (be.deviceClass !== 'software') pointCloudServices()?.cas?.setTarget?.(p.meta.targetMs, p.meta.tailK)
   })
   const offs = [
     register('camera', 'viewport.ctx', (ctx: FrameCtx) => {
@@ -279,21 +299,35 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
       if (cv !== undefined && m.contentVersion !== cv) m.contentVersion = cv
     }, { order: -100 }),
     register('render', 'backend.render', (ctx: FrameCtx) => {
-      // M05 EDL composite for P2 once the point-cloud layer exposes it (Tier B/A)
-      if (be.tier !== 'S') be.setEdl(pointCloudServices()?.edlMaterial ?? null)
+      // M05 EDL composite for P2 once the point-cloud layer exposes it (Tier B/A); D2.1: the profile may switch it off
+      if (be.tier !== 'S') be.setEdl(qualityEdlNow(be.quality, qualityStep) ? pointCloudServices()?.edlMaterial ?? null : null)
       be.plan(ctx, plan)
       be.renderFrame(ctx, plan)
+      const svOn = plan.sensorDraws > 0
       for (const s of listLayers()) {
         const L = p.layers[s.perfKey]
-        if (L) L.draws = s.drawCount(ctx)
+        if (!L) continue
+        const c = svOn ? sensorClassOf(s) : 'world'
+        L.draws = !svOn || s.id === 'pointcloud' || drawsIn(c, 'world', sv.mode) || drawsIn(c, 'overlay', sv.mode) ? s.drawCount(ctx) : 0
       }
     }),
+    // D2 sensor views: uniforms of the shown view after the drones and their frustums (world phase, camera final)
+    register('world', 'sensorView.update', (ctx: FrameCtx) => {
+      if (sensorViewActive()) be.sensor.update(ctx)
+    }, { order: 20 }),
     register('governor', 'perf.governor', (ctx: FrameCtx) => {
       const g = governor()
       const cas = pointCloudServices()?.cas ?? null
       g.setCas(cas)
       g.evaluate(ctx)
       if (g.labelKey !== perfStore.getState().governorLabelKey) perfStore.setState({ governorStep: g.step, governorLabelKey: g.labelKey })
+      // D2.1 quality profile: the tablet's 30 fps limit once the governor stepped down, and the frame-time target with it
+      if (g.step !== qualityStep) {
+        qualityStep = g.step
+        loop.setQualityFps(qualityFpsNow(be.quality, qualityStep))
+        p.meta.targetMs = targetMsOf(be, refreshMs(), qualityStep)
+        if (be.deviceClass !== 'software') cas?.setTarget?.(p.meta.targetMs, p.meta.tailK)
+      }
       statsFrom = reportClientStats(stats, statsFrom)
       // FR-013 start-rung memory: CAS held at the floor > 30 s in this session
       const st = cas?.state() as { atFloorTotalMs?: number } | undefined
@@ -358,6 +392,7 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
       ;(lateIds ??= new Set()).add(l.id)
     }
   })
+  const offSensorCam = installSensorViewCamera()
   const offQuality = installQualityMasks(be)
   const offBench = installBench(be, rig, camera)
   const offReveal = perf.onReveal(() => vp.changed())
@@ -369,10 +404,12 @@ export function installHost(be: RenderBackend, scene: Scene, camera: Perspective
     uiAnim.dispose()
     offLate()
     offLateTask()
+    offSensorCam()
     offQuality()
     offBench()
     offReveal()
     onRefreshChange(null)
+    loop.setQualityFps(0)
     rig.dispose()
     if (vp.rig === rig) vp.rig = null
     vp.picker = null

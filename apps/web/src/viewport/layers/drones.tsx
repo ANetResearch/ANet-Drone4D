@@ -4,6 +4,7 @@
 // step 4 low-poly cap) and the default subscription set: fleet/roster 10, swarm/state 10 (Tier S) or 20 (B/A),
 // env/state 10, event all, perf/server 1, sys/procs 1 (selected vehicles at 60 Hz come from bindings/selection).
 // __perf.net.creditSkips follows perf/server clients[] of this connection (M11-FR-096).
+// D2.1 (AWR-04 §15.8.6): the quality profile lowers swarm/state (phone 5, tablet 10 Hz) and caps hero and low-poly instances.
 import { useEffect } from 'react'
 import { BUCKETS, createDroneRuntime, perf, perfProbe, setProceduralHero, type GovernorKnob } from '@/engine'
 import { TEST_SWITCHES } from '@/lib/testSwitches'
@@ -13,6 +14,7 @@ import { registerLayer, type WarmupItem } from './registry'
 import { vp } from '../session'
 import { applyLayerVisibility } from '../bindings'
 import { pcOnlyScene } from '../bench'
+import { capOf } from '../quality'
 
 if (TEST_SWITCHES && typeof location !== 'undefined' && new URLSearchParams(location.search).get('hero') === 'procedural') setProceduralHero(true)
 
@@ -28,7 +30,8 @@ export function DronesLayer({ be }: { be: RenderBackend }) {
     drones.setSensors(vp.sensors)
     vp.drones = drones
     const L = drones.layer
-    const swarmRate = be.tier === 'S' ? 10 : 20
+    const q = be.quality
+    const swarmRate = capOf(be.tier === 'S' ? 10 : 20, q.swarmHz) as 5 | 10 | 20
     // system channels always; simulation channels only while the route shows the session's world (FR-030)
     const subs = [
       rt.subscribe('event', { rate: 0, mode: 'all' }),
@@ -64,7 +67,9 @@ export function DronesLayer({ be }: { be: RenderBackend }) {
     })
     const S = be.tier === 'S'
     const lowLevels = S ? BUCKETS.lowLevelsS : BUCKETS.lowLevelsBA
-    const knob: GovernorKnob = { step: 4, id: 'lowpoly', levels: lowLevels.length, labelKey: 'perf.governor.lowpoly', apply: (l) => L.setLowCap(lowLevels[l]),
+    L.setLowCap(capOf(lowLevels[0], q.lowPolyMax))
+    L.setHeroCap(capOf(L.buckets.heroCap, q.heroMax))
+    const knob: GovernorKnob = { step: 4, id: 'lowpoly', levels: lowLevels.length, labelKey: 'perf.governor.lowpoly', apply: (l) => L.setLowCap(capOf(lowLevels[l], q.lowPolyMax)),
       visible: (l) => L.root.visible && L.buckets.lowN > lowLevels[l] }
     const warm = (): WarmupItem[] => {
       const items: WarmupItem[] = []

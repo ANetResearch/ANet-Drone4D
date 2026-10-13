@@ -1064,9 +1064,9 @@ export class FakeSource implements SocketLike {
     queueMicrotask(() => this.onclose?.({ code, reason }))
   }
 
-  /** test hook: server-side close with a code (for reconnect tests) */
-  serverClose(code: number): void {
-    this.close(code, 'server')
+  /** test hook: server-side close with a code and reason (reconnect tests; D2 sandbox `world_switch` with 1012) */
+  serverClose(code: number, reason = 'server'): void {
+    this.close(code, reason)
   }
 
   /** advance one 60 Hz tick (drives the shared world, or the replay) */

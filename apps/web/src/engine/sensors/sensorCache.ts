@@ -5,9 +5,13 @@
 // with the body orientation at the sample time (orientation source: injected interpolator, else the swarm/Full64 history
 // kept here); samples older than 3 / f leave FOV_VALID = 0 (the frustum turns dashed). Views are allocated once per agent,
 // the per-frame paths write in place (zero allocation). Memory: about 0.6 KB per view (<= 64 KB for the Tier B/A 16 + 2).
+// D2 (M13-FR-217): optical zoom sensors (eo_zoom) carry a focal state; uav/{id}/payload samples (onPayload) set its target
+// and the world task damps it (tau = 0.15 s) and rewrites fx, fy, hfov, vfov of the view in place, so the FPV projection
+// and the frustum follow the zoom. The latest payload per agent is kept for the sensors store (payloadOf).
 import { type GimbalState, dampGimbal, gimbalFromSample, nlerp } from './gimbalTrack'
-import type { SensorGeom } from './intrinsics'
+import { type SensorGeom, zoomGeomOf } from './intrinsics'
 import { SENSOR_SPECS, type SensorSpecJson } from './specs.gen'
+import { type FocalState, dampFocal, focalMm, focalState, setFocalTarget } from './zoomTrack'
 
 export const RING = 4
 export const STRIDE = 9
@@ -50,6 +54,32 @@ export interface SensorView extends SensorGeom {
   /** sample time whose gimbal angles still wait for the body orientation (NaN when none) */
   pendingT: number
   pendingTries: number
+  /** D2: drawn focal length state of an optical zoom sensor (null for fixed lenses) */
+  focal: FocalState | null
+  /** drawn focal length (mm); NaN for fixed lenses */
+  fMm: number
+}
+
+/** uav/{id}/payload (awr.uav.payload.v1) as far as the engine reads it */
+export interface PayloadSensorMsg {
+  sensor: string
+  kind?: string
+  enabled?: boolean
+  active?: boolean
+  f_mm?: number | null
+  hfov_rad?: number | null
+  vfov_rad?: number | null
+  mode?: string | null
+  resolution?: string | null
+  palette?: string | null
+  cue?: string | null
+  illuminator?: { on: boolean; kind: string; power_w?: number; divergence_rad?: number; range_m?: number } | null
+}
+export interface PayloadMsg {
+  uav?: string
+  t_sim_ns?: number
+  gimbal?: { pitch_rad: number; yaw_rad: number; mode: string; track_target?: string | null; src?: string }
+  sensors?: PayloadSensorMsg[]
 }
 
 /** body orientation at a simulation time: out = [x, y, z, w]; false when unknown */
@@ -69,7 +99,8 @@ function viewOf(agentNo: number, sp: SensorSpecJson): SensorView {
   }
   const az = g ? g.default_yaw_deg * D2R : 0
   const el = g ? g.default_pitch_deg * D2R : 0
-  return {
+  const zg = sp.zoom ? zoomGeomOf(sp.zoom) : null
+  const v: SensorView = {
     agentNo, sensorNo: sp.sensorNo, name: sp.name, kind: sp.kindCode,
     w: sp.w, h: sp.h, fx: sp.fx, fy: sp.fy, cx: sp.cx, cy: sp.cy,
     hfov: sp.hfov ?? Number.NaN, vfov: sp.vfov ?? Number.NaN, rangeM: sp.rangeM ?? Number.NaN, rateHz: sp.rateHz ?? Number.NaN,
@@ -77,12 +108,29 @@ function viewOf(agentNo: number, sp: SensorSpecJson): SensorView {
     hasGimbal: g !== null, gimbal: { az, el, azT: az, elT: el, vaz: 0, vel: 0 }, limits: lim, defaultAz: az, defaultEl: el,
     ring: new Float64Array(RING * STRIDE).fill(Number.NaN), ringHead: 0, valid: false, fovValid: true, active: true,
     poseAgeS: Number.NaN, pendingT: Number.NaN, pendingTries: 0,
+    zoom: zg ? { cropWmm: zg.cropWmm, cropHmm: zg.cropHmm, fMinMm: zg.fMinMm, fMaxMm: zg.fMaxMm } : null,
+    focal: zg ? focalState(zg.fMinMm) : null, fMm: zg ? zg.fMinMm : Number.NaN,
   }
+  if (zg) applyFocal(v, zg.fMinMm)
+  return v
+}
+
+/** fx, fy, hfov, vfov of a zoom view at focal length fMm (in place; same pinhole as intrinsics.withFocal) */
+export function applyFocal(v: SensorView, fMm: number): void {
+  const z = v.zoom
+  if (!z || !(fMm > 0)) return
+  v.fMm = fMm
+  v.fx = (fMm * v.w) / z.cropWmm
+  v.fy = (fMm * v.h) / z.cropHmm
+  v.hfov = 2 * Math.atan(z.cropWmm / (2 * fMm))
+  v.vfov = 2 * Math.atan(z.cropHmm / (2 * fMm))
 }
 
 export class SensorCache {
   private readonly views = new Map<number, SensorView[]>()
   private readonly models = new Map<number, string>()
+  private readonly payloads = new Map<number, PayloadMsg>()
+  payloadVersion = 0
   private readonly overrides = new Map<string, readonly SensorSpecJson[]>()
   /** agent -> ring of [t, x, y, z, w] body orientations (history for the gimbal derivation) */
   private readonly orient = new Map<number, { buf: Float64Array; head: number; n: number }>()
@@ -135,12 +183,33 @@ export class SensorCache {
     this.views.delete(agentNo)
     this.models.delete(agentNo)
     this.orient.delete(agentNo)
+    this.payloads.delete(agentNo)
   }
 
   clear(): void {
     this.views.clear()
     this.models.clear()
     this.orient.clear()
+    this.payloads.clear()
+  }
+
+  /** one uav/{id}/payload sample (M13-FR-209, FR-217): focal targets of the zoom views; the message is kept for payloadOf */
+  onPayload(agentNo: number, msg: PayloadMsg): void {
+    this.payloads.set(agentNo, msg)
+    this.payloadVersion++
+    const list = this.views.get(agentNo)
+    if (!list || !Array.isArray(msg.sensors)) return
+    for (const e of msg.sensors) {
+      if (typeof e.f_mm !== 'number') continue
+      for (let i = 0; i < list.length; i++) {
+        const v = list[i]
+        if (v.name === e.sensor && v.focal) setFocalTarget(v.focal, e.f_mm)
+      }
+    }
+  }
+
+  payloadOf(agentNo: number): PayloadMsg | undefined {
+    return this.payloads.get(agentNo)
   }
 
   agents(): IterableIterator<number> {
@@ -287,6 +356,10 @@ export class SensorCache {
         const v = list[i]
         if (Number.isFinite(v.pendingT)) this.resolve(v, v.pendingTries >= 3)
         if (v.hasGimbal) dampGimbal(v.gimbal, dt, reduced)
+        if (v.focal && (v.focal.lnF !== v.focal.lnFT || v.focal.v !== 0)) {
+          dampFocal(v.focal, dt, reduced)
+          applyFocal(v, focalMm(v.focal))
+        }
         if (!v.valid) {
           v.poseAgeS = Number.NaN
           v.fovValid = true

@@ -37,5 +37,6 @@ export function toastInfoEvent(e: RtEvent): void {
   notify(`event:${e.type}`, e.type === 'lease.preempted' || e.type === 'seat.takeover' ? 'warning' : 'info', describeEvent(e))
 }
 
-/** alarms whose toasts are owned elsewhere */
-export const skipAlarmToast = (a: AlarmItem): boolean => a.source === 'cmd'
+/** alarms whose toasts are owned elsewhere: command results (the tracker), target discoveries (ui/notify/d2Notices.ts, a
+ * toast with a "confirm" action) and the sandbox expiry (the session bar banner with its countdown) */
+export const skipAlarmToast = (a: AlarmItem): boolean => a.source === 'cmd' || a.type === 'target.discovered' || a.type === 'sandbox.expiring'

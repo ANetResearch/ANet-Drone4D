@@ -64,6 +64,8 @@ describe('stores/sensors builders', () => {
     const rows = buildSensorRows('p600', [])
     expect(rows.map((r) => [r.name, r.kind, r.state])).toEqual([
       ['camera', 'camera', 'online'], ['thermal', 'thermal', 'online'], ['mid360', 'lidar', 'planned'], ['gnss', 'gnss', 'online'], ['imu', 'imu', 'online'],
+      // P600 profile 2.0.0 对象形式映射（AWR-20 §7.4；D2-INT）：GX40 吊舱 eo 与可选外挂照明器 nir_ill
+      ['eo', 'camera', 'online'], ['nir_ill', 'camera', 'online'],
     ])
     expect(rows[0].hfovDeg).toBeCloseTo(60, 3)
     expect(rows[0].vfovDeg).toBeCloseTo(42.103, 3)
@@ -98,7 +100,7 @@ describe('stores/sensors feed', () => {
     sensorsFeedTick(ctx, f.rt)
     const s = sensorsStore.getState()
     expect(s.vehicleId).toBe('p600-01')
-    expect(s.sensors.length).toBe(5)
+    expect(s.sensors.length).toBe(7) // P600 2.0.0：D1 五个槽位 + eo + nir_ill（D2-INT）
     expect(s.gimbal).toMatchObject({ mode: 'nadir', limited: false })
     expect(s.gimbal?.pitchDeg).toBeCloseTo(-15, 9) // no SensorPose48 yet: the default gimbal of the spec
     expect(s.gnss?.fix).toBe('RTK_FIXED')

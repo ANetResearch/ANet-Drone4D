@@ -7,6 +7,13 @@
 // release control); the alarm centre (the only solid red of the header); the command palette and settings.
 // Public demo build (ADR-083): the role badge reads "public demo · read-only" with the read-only Tooltip and offers no
 // control request; the Jobs, Runs, replay and Bench entries are left out and Help links back to the demo home page.
+// D2 (ADR-111; M15-FR-202, FR-205; UX-FR-104, UX-FR-105; AWR-14 §20.2.3, §20.2.4): the role badge follows the run-time
+// surface ("public demo · read-only", "static browsing", "my sandbox · operable"); the shared show and static browsing
+// offer "open my sandbox"; the World menu gains the sandbox entries (open, switch world, load scenario, export snapshot)
+// and Help the open interface page and the onboarding restart.
+// D2.1 (ADR-123; AWR-14 §20.26.6; M15-FR-235, FR-236): with the internal identity the role badge reads "internal · full
+// access" (identity.shield) and offers "request control" of the shared show (identity token -> run admin token, R01) and
+// the way to the identity settings; the Jobs, Runs, replay and Bench entries hidden by the demo build come back.
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useT } from '@/app/i18n'
@@ -40,6 +47,13 @@ import { REPO_URL } from '@/ui/views/AboutDialog'
 import { useSelection } from '@/stores/selection'
 import { DEMO_PUBLIC } from '@/lib/demo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/components/ui/tooltip'
+import { useSurface } from '@/app/shell/surface'
+import { sandboxDialogs } from '@/ui/sandbox/dialogs'
+import { onboarding } from '@/ui/sandbox/Onboarding'
+import { useInternal } from '@/app/shell/surface'
+import { identityToken } from '@/stores/identity'
+import { requestInternalControl } from '@/ui/shell/control'
+import { usePower } from '@/app/power/store'
 import { layoutActions } from './layoutState'
 import { IconButton } from './IconButton'
 
@@ -76,12 +90,15 @@ function Clock() {
   const rate = useConnView((s) => s.rate)
   const epoch = useConnView((s) => s.epoch)
   const online = useConnView((s) => isOnline(s.conn))
+  // D2.1 (D2-INT, d2-WP-13b-to-M15 item 5): power save (SAVING, RESUMING, QUEUED) closed the link on purpose; the clock
+  // keeps the last value without the STALE age (the power overlay gives the time of the last update)
+  const frozen = usePower((st) => st.frozen)
   return (
     <HoverCard>
       <HoverCardTrigger render={<Badge variant="secondary" className="gap-1 font-mono" data-clock="" />}>
         <Icon icon="tl.clock" />
         <span className="text-muted-foreground">SIM</span>
-        <BoundText read={simTimeNs} format={fmt.simTime} stale={timeAgeS} className={cn(!online && 'underline decoration-dashed')} />
+        <BoundText read={simTimeNs} format={fmt.simTime} stale={frozen ? undefined : timeAgeS} className={cn(!online && !frozen && 'underline decoration-dashed')} />
         <span>{`×${fmt.num(rate, rate < 1 ? 2 : 0)}`}</span>
         <SwapText value={t(`time.state.${state}`)} className="font-sans" />
       </HoverCardTrigger>
@@ -106,12 +123,14 @@ function ConnBadge() {
   const run = useConnView((s) => s.runId)
   const connId = useConnView((s) => s.connId)
   const online = isOnline(conn)
+  // D2.1: the power-save disconnect is intentional: neutral, never the red outline of an outage
+  const saving = usePower((st) => st.frozen)
   const p = perfProbe()
   return (
     <HoverCard>
-      <HoverCardTrigger render={<Badge variant="outline" data-conn={conn} className={cn('gap-1', !online && conn !== 'IDLE' && 'border-brand text-brand-text')} />}>
-        <StateIcon icon="conn.online" alt={!online} label={t(`conn.${conn}`)} />
-        <SwapText value={t(`conn.${conn}`)} />
+      <HoverCardTrigger render={<Badge variant="outline" data-conn={conn} data-power-saving={saving ? '' : undefined} className={cn('gap-1', !online && conn !== 'IDLE' && !saving && 'border-brand text-brand-text')} />}>
+        <StateIcon icon="conn.online" alt={!online} label={t(saving && !online ? 'power.badge' : `conn.${conn}`)} />
+        <SwapText value={t(saving && !online ? 'power.badge' : `conn.${conn}`)} />
         {online ? <BoundText read={rttMs} format={fmtRtt} className="text-muted-foreground" /> : null}
       </HoverCardTrigger>
       <HoverCardContent className="w-72 text-hud-sub">
@@ -130,18 +149,84 @@ function ConnBadge() {
   )
 }
 
-/** public demo: the visitor is always a viewer; the badge explains the read-only mode instead of offering control */
-function DemoRoleBadge() {
+/**
+ * the role badge of the D2 surfaces: shared show "public demo · read-only" and static browsing "static browsing" (both
+ * with "open my sandbox"), sandbox "my sandbox · operable"; the shared show never offers "request control"
+ */
+/** D2.1: the internal identity's badge with "request control" of the shared show and the identity settings */
+function InternalBadge() {
+  const t = useT()
+  const rt = useRt()
+  const role = useConnView((s) => s.role)
+  const seat = useConnView((s) => s.seat)
+  const surface = useSurface((s) => s.surface)
+  const holds = seat === 'held' && (role === 'admin' || role === 'operator')
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button size="sm" variant="outline" className="gap-1" data-identity-badge="" data-role={role ?? ''} data-seat={seat ?? ''} />}>
+        <Icon icon="identity.shield" data-icon="inline-start" />
+        {t('identity.badge')}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{t('identity.badge')}</DropdownMenuLabel>
+          {surface === 'shared' || surface === 'local' ? (
+            holds ? (
+              <DropdownMenuItem onClick={() => releaseControl()}><Icon icon="logout" />{t('control.release')}</DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem data-identity-control="" onClick={() => {
+                const tok = identityToken()
+                if (tok) void requestInternalControl(rt, tok)
+              }}><Icon icon="lease.held" />{t('identity.requestControl')}</DropdownMenuItem>
+            )
+          ) : null}
+          <DropdownMenuItem onClick={() => updateSearch({ settings: 'general' })}><Icon icon="nav.settings" />{t('identity.section')}</DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function SurfaceRoleBadge() {
   const t = useT()
   const role = useConnView((s) => s.role)
+  const surface = useSurface((s) => s.surface)
+  const world = useSurface((s) => s.worldId)
+  const internal = useInternal()
+  if (internal && surface !== 'sandbox') {
+    return (
+      <span className="flex items-center gap-1.5">
+        <InternalBadge />
+        <Button size="sm" variant="outline" onClick={() => sandboxDialogs.open('start', { world: surface === 'static' ? world : null })} data-header-open-sandbox="">
+          <Icon icon="sandbox.mine" data-icon="inline-start" />
+          {t('landing.sandbox.open')}
+        </Button>
+      </span>
+    )
+  }
+  if (surface === 'sandbox') {
+    return (
+      <Badge variant="secondary" className="h-6 gap-1" data-role={role ?? ''} data-demo-role="" data-surface="sandbox">
+        <Icon icon="sandbox.mine" />
+        {t('role.sandbox')}
+      </Badge>
+    )
+  }
+  const stat = surface === 'static'
   return (
-    <Tooltip>
-      <TooltipTrigger render={<Badge variant="outline" tabIndex={0} className="h-6 gap-1" data-role={role ?? ''} data-demo-role="" />}>
-        <Icon icon="layer.visible" />
-        {t('demo.role')}
-      </TooltipTrigger>
-      <TooltipContent>{t('demo.readOnly')}</TooltipContent>
-    </Tooltip>
+    <span className="flex items-center gap-1.5">
+      <Tooltip>
+        <TooltipTrigger render={<Badge variant="outline" tabIndex={0} className="h-6 gap-1" data-role={role ?? ''} data-demo-role="" data-surface={surface} />}>
+          <Icon icon={stat ? 'layer.pointcloud' : 'layer.visible'} />
+          {t(stat ? 'role.static' : 'role.shared')}
+        </TooltipTrigger>
+        <TooltipContent>{t(stat ? 'hint.staticBrowse' : 'hint.sharedReadOnly')}</TooltipContent>
+      </Tooltip>
+      <Button size="sm" variant="outline" onClick={() => sandboxDialogs.open('start', { world: stat ? world : null })} data-header-open-sandbox="">
+        <Icon icon="sandbox.mine" data-icon="inline-start" />
+        {t('landing.sandbox.open')}
+      </Button>
+    </span>
   )
 }
 
@@ -229,12 +314,40 @@ function FocusCrumb() {
   )
 }
 
+/** World menu entries of the sandbox (AWR-14 §20.2.4): open (shared, static), switch world, load scenario, export (op) */
+function SandboxMenuItems() {
+  const t = useT()
+  const surface = useSurface((s) => s.surface)
+  const world = useSurface((s) => s.worldId)
+  if (surface === 'local') return null
+  return (
+    <>
+      <MenubarSeparator />
+      <MenubarGroup>
+        {surface === 'sandbox' ? (
+          <>
+            <MenubarItem onClick={() => sandboxDialogs.open('world')}>{t('sandbox.bar.world')}</MenubarItem>
+            <MenubarItem onClick={() => sandboxDialogs.open('template')}>{t('sandbox.bar.template')}</MenubarItem>
+            <MenubarItem onClick={() => void sandboxDialogs.downloadSnapshot()}>{t('sandbox.exportSnapshot')}</MenubarItem>
+            <MenubarItem onClick={() => sandboxDialogs.open('pair')} data-menu-pair=""><Icon icon="device.pair" />{t('pair.title')}</MenubarItem>
+          </>
+        ) : (
+          <MenubarItem onClick={() => sandboxDialogs.open('start', { world: surface === 'static' ? world : null })}>{t('landing.sandbox.open')}</MenubarItem>
+        )}
+      </MenubarGroup>
+    </>
+  )
+}
+
 export function AppHeader({ compact }: { compact: boolean }) {
   const t = useT()
   const route = useRoute()
+  const surface = useSurface((s) => s.surface)
   const sessionWorld = useConnView((s) => s.sessionWorldId)
-  // overlay pages (World Hub, Runs, Jobs) keep the sandbox's world in the breadcrumb
-  const worldId = route?.params.id ?? sessionWorld ?? null
+  // overlay pages (World Hub, Runs, Jobs) keep the sandbox's world in the breadcrumb; the sandbox route shows the
+  // session's world (its route parameter is the sid)
+  const surfaceWorld = useSurface((s) => s.worldId)
+  const worldId = (route?.route.id === 'sandbox' ? surfaceWorld : route?.params.id) ?? sessionWorld ?? null
   const runId = useConnView((s) => s.runId)
   // the four panel switches of the View menu, not the whole layout: a rail page change or a resize (row click -> detail
   // page) no longer re-renders the header and its six menus (P4-UI, D1-AC-25)
@@ -242,10 +355,16 @@ export function AppHeader({ compact }: { compact: boolean }) {
   const rightOpen = usePrefs((s) => s.layout.right.open)
   const dockOpen = usePrefs((s) => s.layout.dock.open)
   const hudOpen = usePrefs((s) => s.layout.hud.open)
+  // D2 surfaces and runs with the tasking capability use the task and relay tabs instead of the D1 mission tab
+  const tasking = useConnView((s) => surface !== 'local' || s.caps.includes('tasking'))
   // menus re-evaluate their guards when the session changes
   useConnView((s) => s.version)
   const replay = useTimeline((s) => s.mode === 'replay')
   const replayRun = useTimeline((s) => (s.mode === 'replay' ? s.runId : null))
+  // D2.1: the internal identity brings back the entries the demo build hides
+  const internalOn = useInternal()
+  const hidden = DEMO_PUBLIC && !internalOn
+  const internalLocal = internalOn && surface === 'local'
   const shownRun = replayRun ?? runId
   return (
     <header data-figure="header" className="app-layer-header flex items-center gap-2 border-b bg-card px-2">
@@ -258,6 +377,7 @@ export function AppHeader({ compact }: { compact: boolean }) {
               <MenubarLabel>{t('menu.world')}</MenubarLabel>
               <MenubarItem onClick={() => navigate('/worlds')}>{t('menu.world.open')}</MenubarItem>
             </MenubarGroup>
+            <SandboxMenuItems />
           </MenubarContent>
         </MenubarMenu>
         <MenubarMenu>
@@ -299,7 +419,7 @@ export function AppHeader({ compact }: { compact: boolean }) {
             </MenubarGroup>
             <MenubarSeparator />
             <MenubarGroup>
-              {replay ? <ActionItem id="replay.exit" /> : DEMO_PUBLIC ? null : <MenubarItem onClick={() => navigate('/runs')}><Icon icon="tl.history" />{t('menu.sim.replay')}</MenubarItem>}
+              {replay ? <ActionItem id="replay.exit" /> : hidden ? null : <MenubarItem onClick={() => navigate('/runs')}><Icon icon="tl.history" />{t('menu.sim.replay')}</MenubarItem>}
               <ActionItem id="timeline.bookmark" />
             </MenubarGroup>
           </MenubarContent>
@@ -308,7 +428,9 @@ export function AppHeader({ compact }: { compact: boolean }) {
           <MenubarTrigger>{t('menu.mission')}</MenubarTrigger>
           <MenubarContent>
             <MenubarGroup>
-              <MenubarItem onClick={() => layoutActions.openDockTab('mission')}>{t('menu.mission.panel')}</MenubarItem>
+              <MenubarItem onClick={() => layoutActions.openDockTab(tasking ? 'tasks' : 'mission')}>{t('menu.mission.panel')}</MenubarItem>
+              {tasking ? <ActionItem id="task.new" /> : null}
+              {tasking ? <ActionItem id="panel.relay" /> : null}
               <ActionItem id="cmd.goto" />
               <ActionItem id="cmd.hover" />
               <ActionItem id="cmd.rtl" />
@@ -325,12 +447,13 @@ export function AppHeader({ compact }: { compact: boolean }) {
               <MenubarItem onClick={() => layoutActions.openDockTab('events')}>{t('menu.tools.events')}</MenubarItem>
               <MenubarItem onClick={() => layoutActions.openDockTab('charts')}>{t('panel.charts.title')}</MenubarItem>
               <MenubarItem onClick={() => layoutActions.openDockTab('timeline')}>{t('panel.timeline.title')}</MenubarItem>
+              <ActionItem id="tool.gsd" />
             </MenubarGroup>
-            {DEMO_PUBLIC ? null : (
+            {hidden ? null : (
               <>
                 <MenubarSeparator />
                 <MenubarGroup>
-                  <MenubarItem onClick={() => navigate('/jobs')}><Icon icon="nav.recon" />{t('menu.tools.jobs')}</MenubarItem>
+                  <MenubarItem onClick={() => navigate('/jobs')} data-menu-jobs=""><Icon icon="nav.recon" />{t('menu.tools.jobs')}</MenubarItem>
                   <MenubarItem onClick={() => navigate('/runs')}><Icon icon="data.folder" />{t('menu.tools.runs')}</MenubarItem>
                 </MenubarGroup>
               </>
@@ -342,9 +465,12 @@ export function AppHeader({ compact }: { compact: boolean }) {
           <MenubarContent>
             <MenubarGroup>
               <MenubarItem onClick={() => overlays.set('help', true)}>{t('menu.help.shortcuts')}<Shortcut combo="shift+Slash" /></MenubarItem>
+              <MenubarItem onClick={() => navigate('/sandbox/api')} data-menu-api=""><Icon icon="api.doc" />{t('menu.help.api')}</MenubarItem>
+              {surface === 'sandbox' ? <MenubarItem onClick={() => onboarding.start(true)}>{t('menu.help.onboarding')}</MenubarItem> : null}
               {DEMO_PUBLIC ? (
                 <MenubarItem onClick={() => location.assign('/')} data-demo-home=""><Icon icon="nav.world" />{t('demo.home')}</MenubarItem>
-              ) : <MenubarItem onClick={() => navigate('/bench')}>{t('menu.help.bench')}</MenubarItem>}
+              ) : null}
+              {hidden ? null : <MenubarItem onClick={() => navigate('/bench')}>{t('menu.help.bench')}</MenubarItem>}
             </MenubarGroup>
             <MenubarSeparator />
             <MenubarGroup>
@@ -379,7 +505,7 @@ export function AppHeader({ compact }: { compact: boolean }) {
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <Clock />
         <ConnBadge />
-        {DEMO_PUBLIC ? <DemoRoleBadge /> : <RoleBadge />}
+        {DEMO_PUBLIC || surface === 'sandbox' ? <SurfaceRoleBadge /> : internalLocal ? <InternalBadge /> : <RoleBadge />}
         <AlarmCenter />
         <Button variant="outline" size="sm" onClick={() => overlays.set('palette', true)} aria-label={t('header.search')}>
           <Icon icon="cmd.search" data-icon="inline-start" />

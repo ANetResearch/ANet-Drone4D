@@ -10,6 +10,7 @@ import { PALETTE_LINEAR } from '@/lib/tokens/palette.gen'
 import type { FrameCtx, RenderBackendView } from '../loop'
 import { eDir, mod } from './state/conventions'
 import { EnvStore } from './state/EnvStore'
+import { daylightK, type GeoAnchor } from './sky/skyEval'
 import { F } from './state/presets'
 import { weatherUrl, turbUrl } from './state/keyframe'
 import { EnvParams, horizonColor, MAX_GUSTS } from './lighting/EnvUniforms'
@@ -141,6 +142,12 @@ export class EnvironmentRuntime {
     this.params.groundZ = groundZ
   }
 
+  /** D2: world anchor (coordinate.json anchor lat/lon, trueNorth.yawOffsetDeg) so the sky sun follows the NOAA function at
+   * tRender between keyframes; without it the keyframe's az/el are used (published every >= 0.5 deg) */
+  setGeoAnchor(geo: GeoAnchor | null): void {
+    this.store.setGeoAnchor(geo)
+  }
+
   setUserQuality(l: EnvUserLevel): void {
     this.quality.setUserLevel(l)
   }
@@ -218,9 +225,10 @@ export class EnvironmentRuntime {
       this.focus[1] = focusEnu[1]
       this.focus[2] = focusEnu[2]
     } else this.focus.set(this.cam)
-    // sun (azimuth clockwise from north, elevation)
-    const az = (cfg.sun.azimuth_deg * Math.PI) / 180
-    const el = (cfg.sun.elevation_deg * Math.PI) / 180
+    // sun (azimuth clockwise from north, elevation): config.sun, or the simulation calendar (D2 sky, NOAA at tRender)
+    const sky = st.sky
+    const az = (sky.azDeg * Math.PI) / 180
+    const el = (sky.elDeg * Math.PI) / 180
     const se = this.sunEnu
     se[0] = Math.sin(az) * Math.cos(el)
     se[1] = Math.cos(az) * Math.cos(el)
@@ -239,7 +247,7 @@ export class EnvironmentRuntime {
     const on = this.masterVisible && this.quality.level !== 'off'
     P.visualOn = on ? 1 : 0
     P.cloudsOn = this.sub.clouds ? 1 : 0
-    P.sunVis = d.sun_vis
+    P.sunVis = d.sun_vis * daylightK(sky.elDeg) // direct light fades at sunset (fixed sun 50 deg: factor exactly 1)
     P.cloudCover = vis[F.COVER]
     P.cloudOD = d.cloud_od
     P.cloudHmid = vis[F.BASE] + ENV_TIERS.cloudHmidFrac * (vis[F.TOP] - vis[F.BASE])

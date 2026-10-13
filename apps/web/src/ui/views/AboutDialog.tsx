@@ -1,11 +1,14 @@
 // About (M15-FR-110, FR-026; AWR-15 §4.2; AWR-14 §5.6 "关于"; M16-FR-006 honesty; LICENSE condition 1b): the full badge
 // at 320 px on the popover surface (never removed or altered), the product name "ANet Drone4D" (the ANetResearch/
 // ANet-Drone4D repository) with its version, the licence summary, the repository link, the data source and citation of
-// the built-in worlds (UrbanScene3D, non-commercial research use, not redistributed), the fidelity statement
+// the built-in worlds (UrbanScene3D, used under authorization of the dataset rights holders with the ECCV 2022 BibTeX,
+// ADR-109; World Packages not in the repository), the fidelity statement
 // (simulated results, schematic coordinates), the copyright line and the component versions (contracts, world
 // content version, session). AboutContent is the single About placement, shared by the Help > About dialog and the
 // About tab of Settings. The public demo build adds the demo-site row first (read-only, synthcity only, no server-side
 // GPU features; ADR-083).
+// D2.1 (R-D2-29; ADR-118; M15-FR-223; UX-FR-148): the version is the build's (lib/build.ts, the same line as the boot mask:
+// `V0.2.0-demo · 3f9a1c2 · 2026-10-12`) with "copy diagnostic information" (every build field including the release).
 import type * as React from 'react'
 import { useT } from '@/app/i18n'
 import { CONTRACTS_VERSION } from '@awr/contracts/layouts'
@@ -17,10 +20,13 @@ import { BrandBadge } from '@/ui/brand'
 import { overlays, useOverlays } from '@/ui/shell/overlays'
 import { useConnView } from '@/ui/shell/connView'
 import { useWorld } from '@/stores/world'
-import { DEMO_PUBLIC } from '@/lib/demo'
+import { DEMO_PUBLIC, URBANSCENE_BIBTEX } from '@/lib/demo'
 import { useModalFrameCap } from './useModalFrameCap'
+import { BUILD, buildDisplay, copyText, diagnostics } from '@/lib/build'
+import { Button } from '@/ui/components/ui/button'
+import { notify } from '@/app/providers/ToastProvider'
 
-export const APP_VERSION = '0.1.0'
+export const APP_VERSION = BUILD.version
 export const REPO_URL = 'https://github.com/ANetResearch/ANet-Drone4D'
 export const DATASET_URL = 'https://vcc.tech/UrbanScene3D'
 
@@ -58,6 +64,14 @@ export function AboutContent({ showVersion = true }: { showVersion?: boolean }) 
           <span className="text-hud-sub text-muted-foreground">{t('brand.runtime')}</span>
         </div>
         {showVersion ? <span className="font-mono text-hud-sub text-muted-foreground">{t('about.version', { version: APP_VERSION })}</span> : null}
+        <span className="flex items-center gap-2">
+          <span className="font-mono text-hud-sub text-muted-foreground tabular-nums" data-about-build="">{buildDisplay()}</span>
+          <Button size="xs" variant="outline" data-copy-build="" onClick={() => void copyText(diagnostics({ world: world ?? null, run: run ?? null })).then((ok) =>
+            notify('build:copy', ok ? 'success' : 'warning', t(ok ? 'build.copied' : 'build.copyFailed')))}>
+            <Icon icon="copy" data-icon="inline-start" />
+            {t('build.copy')}
+          </Button>
+        </span>
       </div>
       <Separator />
       <dl className="grid grid-cols-[5.5rem_1fr] gap-x-4 gap-y-2.5 text-hud-sub leading-relaxed">
@@ -77,6 +91,15 @@ export function AboutContent({ showVersion = true }: { showVersion?: boolean }) 
             <span>{t('about.dataSummary')}</span>
             <span className="text-muted-foreground">{t('about.citation')}</span>
             <ExtLink href={DATASET_URL}>vcc.tech/UrbanScene3D</ExtLink>
+            {/* the ECCV 2022 BibTeX (ADR-109 rule 3; D2-AC-24: NOTICE, THIRD_PARTY_NOTICES, README and About carry it) */}
+            <pre className="overflow-x-auto rounded-md bg-muted p-2 font-mono text-hud-sub whitespace-pre" data-about-bibtex="">{URBANSCENE_BIBTEX}</pre>
+            <span>
+              <Button size="xs" variant="outline" data-copy-bibtex="" onClick={() => void copyText(URBANSCENE_BIBTEX).then((ok) =>
+                notify('about:bibtex', ok ? 'success' : 'warning', t(ok ? 'about.bibtexCopied' : 'build.copyFailed')))}>
+                <Icon icon="copy" data-icon="inline-start" />
+                {t('hub.copyCite')}
+              </Button>
+            </span>
             <span data-about-synthetic="">{t('about.dataSynthetic')}</span>
           </span>
         </Row>
