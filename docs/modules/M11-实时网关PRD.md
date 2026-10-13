@@ -2705,3 +2705,87 @@ sequenceDiagram
 | D2F-04 | §10.2"会话内切换底图 = 在新世界重启 sim-core"、§4.7 | 同一 sid 换世界后 namespace 与环都变化，未规定已连接客户端的行为 | 以 1012（`world_switch`）关闭，客户端重连后按新 `hello.world` 切换（FR-205、219） | 在 §4.6 状态表补"底图切换"行（ACTIVE → SPAWNING → ACTIVE，sid 不变） |
 | D2F-05 | §11.1 `POST .../vehicles/{vid}:{acquire,release}` | 冒号动词在 Starlette 中可以工作，但 `GET /vehicles/{vid}` 的路径参数会把 `u01:acquire` 整体匹配为 id，OpenAPI 生成与 SDK 也不友好 | 本节按基线实现（`vid` 禁止含冒号），并在 OpenAPI 中显式列出 | 建议改为 `POST/DELETE .../vehicles/{vid}/lease` |
 | D2F-06 | §11.3 `503 SANDBOX_SCOPE` 与 HTTP 403 | 原因码 503 与 HTTP 状态 503 同号，客户端日志易误读 | 照基线使用 | 可改为 511（码段内空位），或在 17 中注明 |
+
+### 15.12 D2.1 增补
+
+> 依据 [AWR-04](../04-D2-设计增补与决策记录.md) v1.3 §15.4 至 §15.9（ADR-118 至 ADR-123）与 [17 §17.20](../17-接口与实时协议规范.md)（线上形式的定义方）。本小节只写 M11 在 D2.1 新增或修订的部分（WP-03b）；编号 M11-FR-220 起、M11-NFR-204 起、M11-AC-213 起。
+
+#### 15.12.1 功能需求（D2.1）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M11-FR-220 | presence：两个 api 的 WS 接收 `{"op": "presence", input_age_s, visible, power}`，每连接 ≥ 15 s 一条（超出忽略并计数 `rt_presence_dropped`）；连接记录 `last_input_unix_ns`（握手时为当前、presence 时为 `now − input_age_s`、`call` 时为当前）与 `visible` | P0 | V0.2-demo | 是 | M11-AC-213 | ADR-121；17 §17.20.4 |
+| M11-FR-221 | viewer 兜底回收（show-api）：每 10 s 扫描，`now − last_input > viewer_idle_s + grace_s`（`visible = false` 时 `hidden_s + grace_s`；operator、admin 与带身份令牌的连接用 `internal_idle_s`）的连接先发 `error{518, detail{reason}}` 再以 4430 关闭，释放观看席位并派发观看排队；不支持 presence 的客户端以握手、订阅变更与 `call` 计活动 | P0 | V0.2-demo | 是 | M11-AC-213 | ADR-121 |
+| M11-FR-222 | 沙盒活动聚合（sandbox-api）：每会话取全部连接 `last_input` 的最大值与会话内 REST 与命令时刻，随每 1 s 的 `activity` 报告给池（字段 `last_input_unix_ns`）；池通知驻留时以 `error{518, reason: "parked"}` + 4430 关闭该会话的连接并销毁 SessionContext；PARKING、PARKED 期间需要 sim-core 的端点返回 409 `515` | P0 | V0.2-demo | 是 | M11-AC-214 | ADR-121 |
+| M11-FR-223 | 观看席位（show-api）：实时观看连接数 ≥ `viewer_seats.max`（不计 operator、admin、带身份令牌的连接）时握手以 `error{517}` + 4431 拒绝；`viewer_seats.max = auto` 时取 `ws_max_show` | P0 | V0.2-demo | 是 | M11-AC-215 | ADR-120 |
+| M11-FR-224 | 观看排队（show-api 内存，`api/viewer_queue.py` 与 `rest/viewer_queue.py`）：R81 发票（同一 principal 幂等、每前缀 ≤ 2、队列 ≤ 100）、R82 长轮询（≤ 25 s）、R83 离队；票据令牌 `vq1.` 只存 SHA-256；席位释放时 FIFO 派发 `seat_ready` 并为该 principal 预留 30 s；票 60 s 无轮询作废（`519`）；`eta_s` 按最近 10 min 席位释放速率估计 | P0 | V0.2-demo | 是 | M11-AC-215 | ADR-120；AWR-04 §15.6.3 |
+| M11-FR-225 | 状态文件：show-api 每 1 s 原子写 `/dev/shm/awr/_status/show.json`（`{t_unix_ns, live, max, queue, eta_s, releases_per_s}`，0644）；sandbox-api 读取并合并到 SB-71（由 M17 组装） | P0 | V0.2-demo | 是 | M11-AC-216 | ADR-119 |
+| M11-FR-226 | 内部身份端点（show-api，`rest/auth.py`）：R79 解锁（调用 M17 `awr.sandbox.identity.verify`，唯一比对点）、R80 撤销；R01 增加 `identity_token` 换取 admin（占席位），`admin_secret` 路径改走同一 `verify`（共用限流与锁定）；R02 增加 `identity` 字段；新限流类别 `identity`（每前缀 0.5 次/s、突发 3） | P0 | V0.2-demo | 是 | M11-AC-217 | ADR-123 |
+| M11-FR-227 | 身份令牌校验（两个 api，`api/security.py`）：REST 读 `X-AWR-Identity`、WS 读子协议 `ident.<令牌>`；`K_ident` 由密钥文件派生（启动时与文件变更时）；撤销表按修改时间 ≤ 1 Hz 重载；公开策略（`public.py`）对带有效身份令牌的 GET 按 admin 处理，写入仍需 run 级 admin token；viewer 写入白名单增加 R79、R80、R81、R83；sandbox-api 在 `POST /sessions` 时把身份传给池（`tier = internal`） | P0 | V0.2-demo | 是 | M11-AC-217 | ADR-123 |
+| M11-FR-228 | 日志屏蔽：中间件对 `/api/auth/identity`、`/api/auth/token` 不记录请求体；任何日志不记录 `Authorization`、`X-AWR-Identity` 头与 WS 子协议中的令牌；problem+json 不回显输入 | P0 | V0.2-demo | 是 | M11-AC-217 | ADR-123 |
+| M11-FR-229 | `serverInfo` 增加 `power{viewer_idle_s, sandbox_idle_s, hidden_s, warn_s, grace_s, presence_min_s}` 与 `identity{tier}`；`GET /api/health` 与 SB-00 增加 `build{version, channel, release}`（读部署目录 `RELEASE`） | P0 | V0.2-demo | 是 | M11-AC-216 | ADR-118、ADR-121 |
+| M11-FR-230 | 配置：`configs/runtime.yaml` 新段 `power:`、`viewer_seats:`、`identity:`（键与缺省见 AWR-04 §15.7.2、§15.6.2、§15.9.2），public profile 取缺省；supervisor 以环境变量注入子进程；`sandbox:` 段的 `park:`、`internal:` 内容由 M17 定义 | P0 | V0.2-demo | 是 | M11-AC-216 | ADR-121、ADR-123 |
+| M11-FR-231 | 前端 `net/**`：presence 发送器（订阅 M15 PowerController 的交互时间戳与可见性）、4430（不重连，交给 PowerController）与 4431（不重连，交给观看排队）处理、`X-AWR-Identity` 与 `ident.` 子协议附加、观看排队客户端（R81 至 R83）、容量接口客户端（供 M17 `stores/capacity.ts`） | P0 | V0.2-demo | 是 | M11-AC-218 | ADR-120、ADR-121、ADR-123 |
+| M11-FR-232 | 扩展进程组按需启用：R84 `POST /api/sys/procs/ext{enable, ttl_s ≤ 3600, agent?: bool}`（admin）；supervisor 启停 `ext` 组（recorder、replay-worker、job-worker，`agent` 为真时加 agent-runtime），启用前向池申请把沙盒组内存额度临时下调 250 MB（`sys/session/reserve`），不满足时 409；到期自动停止并归还额度 | P1 | V0.2-demo | 是 | M11-AC-219 | AWR-04 §15.9.4 |
+| M11-NFR-204 | presence 与兜底：每连接内存 ≤ 64 B；扫描 ≤ 1 ms/次（24 连接）；观看排队每项 ≤ 200 B | P0 | V0.2-demo | 是 | M11-AC-213、215 | 本文设定 |
+| M11-NFR-205 | 身份端点：正确与错误口令的响应时延中位数差 ≤ 10 ms；口令与令牌在日志、审计中出现 0 次 | P0 | V0.2-demo | 是 | M11-AC-217 | ADR-123 |
+
+#### 15.12.2 算法
+
+```python
+# python/awr/api/rt/presence.py（M11）
+def on_presence(conn, msg, now_ns):
+    if now_ns - conn.presence_last_ns < PRESENCE_MIN_NS:
+        metrics.inc("rt_presence_dropped"); return
+    conn.presence_last_ns = now_ns
+    age = min(max(float(msg.get("input_age_s", 0.0)), 0.0), 86400.0)
+    conn.last_input_ns = max(conn.last_input_ns, now_ns - int(age * 1e9))
+    conn.visible = bool(msg.get("visible", True))
+
+def reap_idle(conns, cfg, now_ns):                         # show-api，每 10 s
+    for c in conns:
+        if c.role in ("operator", "admin") or c.identity_tier == "internal":
+            limit = cfg.internal_idle_s
+        elif not c.visible:
+            limit = cfg.hidden_s
+        else:
+            limit = cfg.viewer_idle_busy_s if seats_full_and_queue() else cfg.viewer_idle_s
+        if now_ns - c.last_input_ns > (limit + cfg.grace_s) * 1e9:
+            c.send_error(518, {"reason": "hidden" if not c.visible else "idle"})
+            c.close(4430)
+            viewer_queue.release_one()                      # 派发 seat_ready（FIFO），预留 30 s
+```
+
+#### 15.12.3 实现指引
+
+| 文件 | 改动 |
+|---|---|
+| `python/awr/api/rt/presence.py`（新）、`rt/ws.py`、`rt/hub.py` | presence 处理、`last_input` 与 `visible`、兜底扫描（show-api）、活动聚合（sandbox-api）、4430 与 4431 |
+| `python/awr/api/viewer_queue.py`（新）、`python/awr/api/rest/viewer_queue.py`（新，只在 show-api 挂载） | 观看席位计数与排队、R81 至 R83 |
+| `python/awr/api/rest/auth.py`、`security.py`、`public.py`、`middleware.py` | R79、R80、R01 与 R02 增量、身份令牌校验、公开策略、日志屏蔽 |
+| `python/awr/api/status_file.py`（新） | `show.json` 原子写 |
+| `python/awr/api/sandbox_main.py` | 身份令牌校验、创建端点传递 `tier`、驻留时关闭连接 |
+| `python/awr/runtime/supervisor.py`（P1） | `ext` 组按需启停与 TTL |
+| `configs/runtime.yaml` | `power:`、`viewer_seats:`、`identity:` 段 |
+| `apps/web/src/net/**` | presence 发送器、关闭码处理、身份头与子协议、观看排队与容量客户端 |
+
+#### 15.12.4 验收（D2.1）
+
+| 编号 | 度量 | 阈值 | 测试方法 | 环境 | 优先级 | 追溯 |
+|---|---|---|---|---|---|---|
+| M11-AC-213 | presence 与兜底 | 限频生效；无 presence 的连接在阈值 + 余量 ± 2 s 收到 518 + 4430；隐藏上报后按 `hidden_s` 回收；operator 与内部身份按 `internal_idle_s`；扫描 ≤ 1 ms | `pytest tests/rt/test_presence.py` | 本机 CPU | P0 | FR-220、221；D2-AC-44 |
+| M11-AC-214 | 沙盒活动与驻留 | `activity` 报告含 `last_input_unix_ns` 且等于各连接最大值；驻留时连接收到 518 + 4430、上下文销毁；PARKED 时会话端点 409 515 | `pytest tests/api/test_sandbox_park_gw.py` | 本机 CPU | P0 | FR-222；D2-AC-45 |
+| M11-AC-215 | 观看席位与排队 | V_max = 3：第 4 条握手 517 + 4431；R81 幂等、每前缀 2 张、队列 100；释放后 ≤ 5 s `seat_ready`、预留 30 s、超时转下一位；60 s 无轮询 519；operator 与内部连接不计 | `pytest tests/rt/test_viewer_queue.py` | 本机 CPU | P0 | FR-223、224；D2-AC-43 |
+| M11-AC-216 | 状态文件、serverInfo 与配置 | `show.json` 每秒更新、原子；`serverInfo.power` 与配置一致；`/api/health.build` 与 `RELEASE` 一致；public profile 加载新段 | `pytest tests/rt/test_status_file.py`、`tests/runtime/test_config.py` | 本机 CPU | P0 | FR-225、229、230；D2-AC-40、42 |
+| M11-AC-217 | 身份 | R79 正确 200、错误 401 304、锁定 429 516、未配置 403 115；R01 `admin_secret` 共用计数；两个 api 验签与撤销 ≤ 2 s；带身份令牌的 GET 可读隐藏功能族、写入仍需 admin token；时延中位数差 ≤ 10 ms；日志、审计、problem+json 中测试口令与令牌出现 0 次 | `pytest tests/rt/test_identity.py` | 本机 CPU | P0 | FR-226 至 228；D2-AC-51 |
+| M11-AC-218 | 前端网络 | presence 发送频率与内容；4430 不重连并通知 PowerController；4431 进入观看排队；身份头与子协议附加 | `vitest apps/web/tests/m11/` | Node | P0 | FR-231；D2-AC-43、44 |
+| M11-AC-219 | 扩展组（P1） | 只对 admin；内存额度不满足时 409；启用后 recorder 与 replay-worker 可用；TTL 到期停止并归还额度 | `pytest tests/runtime/test_ext_on_demand.py` | 本机 CPU | P1 | FR-232 |
+
+#### 15.12.5 追溯
+
+| 需求 | ADR | 本小节条款 | 验收 |
+|---|---|---|---|
+| R-D2-29 | 118 | FR-229 | M11-AC-216；D2-AC-40 |
+| R-D2-31、R-D2-32 | 119、120 | FR-223 至 225 | M11-AC-215、216；D2-AC-42、43 |
+| R-D2-33、R-D2-34 | 121 | FR-220 至 222、231 | M11-AC-213、214、218；D2-AC-44、45 |
+| R-D2-38、R-D2-39 | 123 | FR-226 至 228、232 | M11-AC-217、219；D2-AC-51 |

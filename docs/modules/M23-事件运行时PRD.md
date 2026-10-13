@@ -1953,7 +1953,7 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 
 依据用户 2026-10-12 第二次交互式讨论确认的设计决定 R-D3-54（排行榜拆分为多个赛道，各赛道分别报告四项指标，合成主得分待定）与 R-D3-56（基于网格的选择交互复用于事件编辑器的区域、锚点与几何不完整标注），以及 AWR-05 v1.4 的 ADR-191、ADR-192。对本模块的影响限于赛道归属与编辑器后端，事件 DSL、编译门、磁带格式与哈希规则不变。
 
-1. 赛道归属：排行榜的事件类型赛道与 `event_type` 一一对应：`reid` ↔ `reid_occlusion`、`handoff` ↔ `rendezvous_handoff`、`vehicle` ↔ `vehicle_track`、`search` ↔ `target_search`；榜单版本按 `event_type` 把 test 事件登记到同名赛道（AWR-05 §5.6.9）。每个事件只有一个 `event_type`（门 1 已校验），因此每个 test 事件只属于一个事件类型赛道。
+1. 赛道归属：排行榜的事件类型赛道与 `event_type` 一一对应：`reid` 对应 `reid_occlusion`、`handoff` 对应 `rendezvous_handoff`、`vehicle` 对应 `vehicle_track`、`search` 对应 `target_search`；榜单版本按 `event_type` 把 test 事件登记到同名赛道（AWR-05 §5.6.9）。每个事件只有一个 `event_type`（门 1 已校验），因此每个 test 事件只属于一个事件类型赛道。
 2. 编辑器区域：背景人群 `zone`、通信干扰区与目标搜索的任务区由事件编辑器以多边形、套索、盒体三种方式绘制（命中测试对象为网格或 `dsm_2m`，不在高斯上进行），写入 DSL 时一律为 3–64 顶点的简单多边形，校验规则不变（M23-FR-005、007）。
 3. 几何不完整标注提议：事件草稿增加可选段 `quality_proposals[]`，只用于提交管理员审核（经 M22 质量层覆写产生新的世界版本），不进入编译输入、磁带与任何哈希。
 

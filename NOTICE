@@ -13,7 +13,26 @@ This product includes and adapts third-party software and assets that
 remain under their own licenses. They are listed, with their copyright
 notices and license texts, in THIRD_PARTY_NOTICES.md.
 
-This product does not include the UrbanScene3D dataset or any World
+This repository does not include the UrbanScene3D dataset or any World
 Package built from it. UrbanScene3D (Lin et al., ECCV 2022,
 https://vcc.tech/UrbanScene3D) is made available by its authors for
 non-commercial use only and may not be redistributed.
+
+UrbanScene3D is used in ANet-Drone4D deployments under authorization of
+the dataset rights holders (经数据集权利方授权使用): the project's own
+deployments, including the public demo at
+https://drone4d.agentnetwork.org.cn and its deployment bundles, serve
+World Packages built from the six UrbanScene3D cities. The authorization
+covers the project's deployments only; it is not passed on by this
+repository or its license, and anyone who downloads the dataset (for
+example with `make fetch-data`) remains bound by the authors' terms.
+Works that use UrbanScene3D cite the ECCV 2022 paper (the same entry is
+in THIRD_PARTY_NOTICES.md section 4, README.md, README.zh-CN.md and the
+about page of the web app):
+
+@inproceedings{UrbanScene3D,
+  title     = {Capturing, Reconstructing, and Simulating: the UrbanScene3D Dataset},
+  author    = {Liqiang Lin and Yilin Liu and Yue Hu and Xingguang Yan and Ke Xie and Hui Huang},
+  booktitle = {ECCV},
+  year      = {2022}
+}

@@ -2201,7 +2201,7 @@ class BoardVersion:                     # bench/board.v1
 
 | 步骤 | 规则 | 依据 |
 |---|---|---|
-| 归属 | 每个 test 事件按 `event_type` 归入同名事件类型赛道（`reid` ↔ `reid_occlusion`、`handoff` ↔ `rendezvous_handoff`、`vehicle` ↔ `vehicle_track`、`search` ↔ `target_search`）；研究任务赛道由榜单版本登记事件组合与独立种子集 | AWR-05 §5.6.9；M23-FR-084 |
+| 归属 | 每个 test 事件按 `event_type` 归入同名事件类型赛道（`reid` 对应 `reid_occlusion`、`handoff` 对应 `rendezvous_handoff`、`vehicle` 对应 `vehicle_track`、`search` 对应 `target_search`）；研究任务赛道由榜单版本登记事件组合与独立种子集 | AWR-05 §5.6.9；M23-FR-084 |
 | 聚合 | 对每项指标 m：事件级 `m_e = mean_{seed, rep} m(r)`，赛道级 `m_lane = mean_{e ∈ lane} m_e`；不跨赛道、不跨指标合成；`ranked_valid = false` 的 Run 分量记 0 | ADR-191 |
 | 置信区间 | 赛道内两阶段分层自助法（事件内对种子、种子内对重复，10,000 次），四项指标共用重采样序列；随机数以 `HMAC(K_board, entry_id ‖ board_version ‖ lane)` 派生 | ADR-191 |
 | 逐项名次 | 按点估计降序；相邻条目按配对自助法计算该项差值的 95% 区间，含 0 者归入同一并列组并显示同一名次 | ADR-191 |

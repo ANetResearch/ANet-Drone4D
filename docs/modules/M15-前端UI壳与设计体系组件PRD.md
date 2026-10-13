@@ -2310,3 +2310,92 @@ sequenceDiagram
 | D2F-04 | §10.6 第 2 条键位清单 | 未提 G（D1 点选 GoTo）：接管期间若触发 GoTo 会以导航调用取代速度控制 | `manual` 作用域屏蔽 G（FR-216） | 键位清单补 G |
 | D2F-05 | R-D2-07、R-D2-13 原文为"管理页面"，§10.5 落为浮层面板 | 面板不可直接分享或收藏，与"页面"的字面要求有差距 | 面板支持 `?panel=<id>` 深链（FR-203） | §10.5 注明"面板可经 URL 深链打开，满足'管理页面'的访问方式" |
 | D2F-06 | ADR-111 第 ④ 条"FR-120 至 FR-124 与 AC-070 至 AC-073 按本 ADR 修订" | `lib/demo.ts` 的注释与常量仍写"UrbanScene3D 不得再分发、只有 synthcity"，属于 ADR-109 的修订范围但未列入 §14.3 | 本节 §15.3 一并修订 | §14.3 增加 `apps/web/src/lib/demo.ts` 一行（M15） |
+
+### 15.12 D2.1 增补
+
+> 依据 [AWR-04](../04-D2-设计增补与决策记录.md) v1.3 §15（ADR-117 至 ADR-126）与 [14 §20.26](../14-UI交互设计PRD.md)（交互与文案的定义方）。本小节只写 M15 在 D2.1 新增或修订的部分（WP-12c）；编号 M15-FR-223 起、M15-NFR-203 起、M15-AC-220 起。
+
+#### 15.12.1 页面与组件清单（D2.1）
+
+| 页面或组件 | 挂载点 | 角色 | 主要数据 | 文件（新或改） |
+|---|---|---|---|---|
+| 启动屏版本号与容量行、五段写入器 | `index.html` 的 `.boot-version`、`.boot-capacity`、五段轨道（标记由 M00 插件放入） | 全部 | `__AWR_BUILD__`、`stores/capacity.ts`（M17） | `app/boot/progress.ts`（改）、`app/boot/capacity.ts`（新）、`styles/boot.css`（改）、`lib/build.ts`（新） |
+| 站点已更新横条 | 顶栏下方 | 全部 | `stores/capacity.ts` 的 `updated` | `ui/notify/UpdateBanner.tsx` |
+| 节能控制器、倒计时横条、覆盖层、恢复加载层 | 应用根、视口 | 全部 | 交互事件、可见性、`serverInfo.power`、`stores/sandboxSession.ts` | `app/power/PowerController.ts`、`ui/power/{PowerBanner,PowerOverlay}.tsx`、`ui/boot/LoadingLayer.tsx`（改） |
+| 排队卡片三种类型 | 视口右上（手机为标签栏上方） | 全部 | 沙盒票、观看票、恢复票 | `ui/sandbox/QueueCard.tsx`（改） |
+| 设备档与布局 | 应用根 | 全部 | `lib/formFactor.ts` | `ui/mobile/{TabBar,MobileShell,QuickCommand,DockPanel,TaskStrip}.tsx`、`ui/components/ui/bottom-sheet.tsx`、`ui/layout/AppShell.tsx`（改） |
+| 全屏、横屏锁、PWA 清单与图标 | 顶栏 | 全部 | Fullscreen API、`screen.orientation` | `ui/layout/FullscreenButton.tsx`、`public/manifest.webmanifest`、`public/brand/**`（图标生成物） |
+| 设置页"高级 › 身份" | `/settings` 末尾 | 全部（入口隐藏） | R79、R80（M11） | `ui/settings/IdentitySection.tsx`、`stores/identity.ts`（M15 新，令牌存储与徽标状态） |
+| 内部身份恢复的入口 | 菜单、命令面板、时间轴 | 内部身份 | 身份令牌 | `app/shell/surface.ts`（改：`internal` 界面）、懒加载分块 |
+| 场视图工具条、感知体开关、图例卡 | 视口工具条、视口右下 | 全部 | `stores/perception.ts`（M19） | `ui/field/{FieldToolbar,FieldLegend}.tsx` |
+| 感知读数卡 | 识别物详情"感知读数"标签 | 全部 | `target/{id}/quant` | `ui/panels/targets/QuantCard.tsx` |
+| 指挥器配对（P1） | 菜单"配对指挥器"、路由 `/pair` | 沙盒 operator | SB-76、SB-77 | `ui/sandbox/PairDialog.tsx`、`app/routes/pair.tsx` |
+
+#### 15.12.2 功能需求（D2.1）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M15-FR-223 | 版本号：`lib/build.ts` 读取 `__AWR_BUILD__`；启动屏版本行（静态文本由 M00 写入，M15 负责样式与复制交互）；关于、设置 › 关于与错误页显示同一串；"复制诊断信息"包含完整构建信息 | P0 | V0.2-demo | 是 | M15-AC-220 | ADR-118；14 §20.26.2 |
+| M15-FR-224 | 五段分格进度条：写入器改为逐段写 `--seg-p`，段宽按权重；单调、≤ 10 Hz、减少动效、错误冻结规则沿用 FR-201；节能恢复与底图切换的加载层同组件 | P0 | V0.2-demo | 是 | M15-AC-221 | ADR-119 |
+| M15-FR-225 | 载入期容量行：入口模块发起的容量请求结果写入 `.boot-capacity`（文案 `capacity.*`），遮罩期间每 5 s 刷新；不进入门控；揭开后落地页与开启沙盒 Sheet 显示同一口径；`updated` 时显示站点已更新横条 | P0 | V0.2-demo | 是 | M15-AC-221 | ADR-119 |
+| M15-FR-226 | 排队卡片 `kind ∈ {sandbox, viewer, resume}`：观看票轮到即自动连接；恢复票在页面可见时自动认领；两张卡可堆叠 | P0 | V0.2-demo | 是 | M15-AC-222 | ADR-120、ADR-121 |
+| M15-FR-227 | PowerController：交互检测口径（AWR-04 §15.7.1，含 8 px 抖动阈值与持续操作）、可见性与 `pagehide`、`freeze`；状态 ACTIVE、QUIET、WARNING、SAVING、RESUMING、QUEUED（AWR-04 §15.7.3）；SAVING 时调用 `net` 关闭连接（viewer）或 `sandboxSession.park()`、M06 `loop.setSuspended(true)`、冻结 SimClockView、暂停点云请求与 1 Hz 文本；恢复时显示加载层并刷新 store；阈值取 `serverInfo.power` 或容量接口 | P0 | V0.2-demo | 是 | M15-AC-223 | ADR-121 |
+| M15-FR-228 | 倒计时横条与节能覆盖层（14 §20.26.4）：覆盖层不抢焦点，第一次交互照常生效并触发恢复；静态期间 HUD、会话条、时间轴显示"已暂停 · 最后更新"；内部身份的"保持运行"开关 | P0 | V0.2-demo | 是 | M15-AC-223 | ADR-121 |
+| M15-FR-229 | 设备档：`lib/formFactor.ts` 以 `matchMedia` 计算 phone、tablet、desktop、narrow 与 `coarse`，写 `<html data-ff data-coarse>`；切换只重排，不重建视口与连接，保留选中、相机与面板状态 | P0 | V0.2-demo | 是 | M15-AC-224 | ADR-122 |
+| M15-FR-230 | 平板布局：可停靠左右侧栏（停靠与浮动切换、状态存 `awr.ui.dock.v1`）、底部任务条、竖屏吸附抽屉；虚拟摇杆位置与尺寸（120 px）；顶栏 48 px | P0 | V0.2-demo | 是 | M15-AC-224 | 14 §20.26.5 |
+| M15-FR-231 | 手机布局：底部五标签单窗口切换（横屏为左侧竖向标签）、状态条 36 px、标签窗口内二级页；视口窗口离开时降帧或挂起；告警未确认数 | P0 | V0.2-demo | 是 | M15-AC-224 | 14 §20.26.5 |
+| M15-FR-232 | 快捷指令三步流程与状态机（前往、悬停、返航、盯防），命令与 `point_watch` 任务经 `ui/actions` 发送，结果 Toast | P0 | V0.2-demo | 是 | M15-AC-225 | 14 §20.26.5 |
+| M15-FR-233 | 触控：全部交互控件在 `data-coarse` 下命中区 ≥ 44 × 44；Tooltip 改为长按或信息按钮的 Popover；`bottom-sheet.tsx`（`Sheet side="bottom"` + 自研拖拽把手与吸附点，不引入新依赖）；界面区域 `touch-action: manipulation`，`body` `overscroll-behavior: none` | P0 | V0.2-demo | 是 | M15-AC-224 | ADR-122 |
+| M15-FR-234 | 全屏按钮、锁定横屏、添加到主屏幕提示；`manifest.webmanifest` 与图标（色值由构建插件从 token 生成） | P1 | V0.2-demo | 是 | M15-AC-226 | AWR-04 §15.8.7 |
+| M15-FR-235 | 身份区：缺省折叠的"高级"、口令只存在组件局部状态并在提交后清空、四种结果状态、徽标、退出确认、"记住此设备 12 h"（缺省关，令牌存 sessionStorage；开启存 localStorage）、"保持运行"；不登记命令面板、快捷键、帮助与深链 | P0 | V0.2-demo | 是 | M15-AC-227 | ADR-123 |
+| M15-FR-236 | 内部界面：`resolveSurface` 增加 `internal` 修饰，恢复演示构建隐藏的入口（重建任务、录制列表、回放、GPU 自检、Perf 报告、申请控制），这些入口与其页面一律懒加载；`prod-bundle-scan` 增加检查：viewer 首屏分块不含这些入口与身份区以外的身份代码 | P0 | V0.2-demo | 是 | M15-AC-227 | ADR-123、ADR-111 |
+| M15-FR-237 | 场视图工具条（五选一，Shift+V 循环，`manual` 作用域屏蔽）、感知体（关、选中、全部）与"物理参考"、图例卡（灰阶、单位、档位、线型、点形、脚注）；手机在"图层"抽屉中 | P0 | V0.2-demo | 是 | M15-AC-228 | ADR-125 |
+| M15-FR-238 | 感知读数卡：列与行联动（聚焦该机、高亮该对的等值壳）、概率说明 Popover、空状态；2 Hz（手机 1 Hz）≤ 10 Hz 写 store | P0 | V0.2-demo | 是 | M15-AC-229 | ADR-124 |
+| M15-FR-239 | 指挥器配对对话框与 `/pair` 输入页 | P1 | V0.2-demo | 是 | M15-AC-226 | AWR-04 §15.8.2 |
+| M15-FR-240 | i18n 与图标：14 §20.26.9 的键（zh-CN 与 en 键集对齐）；AWR-04 §15.8.8 的 morphicons 语义键登记到 `tools/shadcn/icons/inventory.mjs` | P0 | V0.2-demo | 是 | M15-AC-230 | R2 |
+| M15-NFR-203 | 节能期间 10 s 内渲染帧增量 ≤ 1、主线程忙碌 ≤ 2%；容量与版本不推迟揭开（劣化 ≤ 5%） | P0 | V0.2-demo | 是 | M15-AC-221、223 | ADR-119、ADR-121 |
+| M15-NFR-204 | 口令不进入任何 store、存储、日志与错误文本；身份令牌只在 `stores/identity.ts` 与请求头中 | P0 | V0.2-demo | 是 | M15-AC-227 | ADR-123 |
+| M15-NFR-205 | 设备档切换与旋转重排 ≤ 300 ms，无横向滚动，无 > 50 ms 长任务 | P0 | V0.2-demo | 是 | M15-AC-224 | ADR-122 |
+
+#### 15.12.3 对 D2 条款的修订
+
+| 条款 | 修订 |
+|---|---|
+| FR-201（单条 2 px 轨道） | 五段分格（FR-224） |
+| FR-204 与 AC-203 的"视口小于 1280 × 720 时按钮禁用" | 三档均可用，只在宽 < 360 时禁用（ADR-122） |
+| FR-208 的会话结束原因 `idle` | 改为驻留，界面为节能覆盖层而不是结束对话框（ADR-121） |
+| §15.0 第 2 条"数据与几何不在 M15" | 不变：场值、剖面与读数来自 M19，点位与绘制在 M06；M15 只做控件、图例与读数卡 |
+
+#### 15.12.4 实现指引
+
+1. **PowerController** 是单例，由 `app/providers` 安装；对外只暴露 `state`（zustand slice `power`）与 `onResume(cb)`；交互监听用 `{passive: true, capture: true}` 挂在 `window` 上，计时用单调时钟，不用 `setInterval` 轮询（每次交互只更新时间戳，到期判断由一个 1 Hz 定时器在可见时进行）。
+2. **按需渲染**：只调用 M06 的 `loop.setSuspended`、`loop.requestFrame`；不直接操作渲染器。
+3. **设备档**：`formFactor` 只在 `resize`、`orientationchange` 与 `matchMedia` 变化时重算；布局组件按 `data-ff` 选择，视口组件不随档位卸载。
+4. **身份区**：口令输入使用受控组件的局部 `useState`，提交函数取值后立即置空，再发请求；不使用表单库、不进入 `ui/actions` 日志；错误映射只用原因码。
+5. **复用**：排队卡片、加载层、`Sheet`、`Tabs`、`ToggleGroup`、`LfTable`、`Badge`、`Alert` 均沿用 D2 组件；新增 shadcn 组件只有 `bottom-sheet.tsx`（在 `ui/components/ui/` 内封装）。
+
+#### 15.12.5 验收（D2.1）
+
+| 编号 | 度量 | 阈值 | 测试方法 | 环境 | 优先级 | 对应 |
+|---|---|---|---|---|---|---|
+| M15-AC-220 | 版本号 | 禁用 JS 时版本行可见；关于、设置、错误页一致；复制诊断信息含 release | Playwright `perf/m15/boot-version.spec.ts` | 本机 Tier S | P0 | FR-223；D2-AC-40 |
+| M15-AC-221 | 进度条与容量 | 5 段宽度比与权重一致（±2 px）；三种容量响应文案正确；容量不可达时揭开劣化 ≤ 5%；站点已更新横条只出现一次 | Playwright | 本机 Tier S | P0 | FR-224、225；D2-AC-41 |
+| M15-AC-222 | 排队卡片 | 三种 `kind` 正确；观看自动连接；恢复自动认领（页面可见时） | Playwright + FakeSource | 本机 Tier S | P0 | FR-226；D2-AC-43 |
+| M15-AC-223 | 节能 | 状态机全部转移；8 px 内抖动不重置；隐藏 60 s 进入；覆盖层首次交互生效；帧增量 ≤ 1；恢复后 store 刷新 | Playwright `tests/m15/power.spec.ts` | 本机 Tier S | P0 | FR-227、228；D2-AC-44、45 |
+| M15-AC-224 | 设备档与布局 | 六种设备模拟的档位、布局、命中区审计、无横向滚动、旋转保留状态 | Playwright `tests/m15/mobile-layout.spec.ts`、`touch-targets.spec.ts` | 本机 Tier S | P0 | FR-229 至 231、233；D2-AC-47 |
+| M15-AC-225 | 快捷指令 | 四种指令 ≤ 4 次点按并收到结果；viewer 无入口 | Playwright | 本机 Tier S | P0 | FR-232；D2-AC-48 |
+| M15-AC-226 | PWA、全屏与配对 | 清单可安装；全屏与横屏锁按支持显示；配对码流程 | Playwright | 本机 Tier S | P1 | FR-234、239；D2-AC-50 |
+| M15-AC-227 | 身份 | 入口缺省折叠且不在命令面板、帮助与快捷键中；结果状态与徽标；退出后隐藏入口消失；viewer 首屏分块不含隐藏入口；对测试口令扫描 store、存储、控制台与分块为 0 次 | Playwright、`prod-bundle-scan` | 本机 Tier S | P0 | FR-235、236；D2-AC-51 |
+| M15-AC-228 | 场视图控件 | 五种视图与感知体三档切换 ≤ 300 ms、`programs` 增量 0；图例正确；Shift+V 在 `manual` 内无效 | Playwright | 本机 Tier S | P0 | FR-237；D2-AC-53 |
+| M15-AC-229 | 读数卡 | 与 `target/{id}/quant` 一致；行联动；空状态 | Playwright | 本机 Tier S | P0 | FR-238；D2-AC-52 |
+| M15-AC-230 | 设计体系 | `make lint` 全过；新图标键齐全；zh-CN 与 en 键集对齐；axe 无 serious 及以上（含手机与平板布局） | `make lint`、vitest、Playwright a11y | 本机 | P0 | FR-240；D2-AC-25 |
+
+#### 15.12.6 追溯
+
+| 需求 | ADR | 本小节条款 | 验收 |
+|---|---|---|---|
+| R-D2-29、R-D2-30、R-D2-32 | 118、119 | FR-223 至 225 | M15-AC-220、221；D2-AC-40、41 |
+| R-D2-31、R-D2-33、R-D2-34 | 120、121 | FR-226 至 228 | M15-AC-222、223；D2-AC-43、44、45 |
+| R-D2-35 至 R-D2-37 | 122 | FR-229 至 234、239 | M15-AC-224 至 226；D2-AC-47、48、50 |
+| R-D2-38、R-D2-39 | 123 | FR-235、236 | M15-AC-227；D2-AC-51 |
+| R-D2-40 至 R-D2-42 | 124、125 | FR-237、238 | M15-AC-228、229；D2-AC-52、53 |

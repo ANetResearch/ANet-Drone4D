@@ -1171,3 +1171,199 @@ supervisor 的停止顺序为"api → sim-core → 其余逆启动序"，因此 
 | 12 | §4.9 的 `ctl/plan/submit` 只给了提交方向；规划作业可达数秒，不能用 1 s 超时的总线调用等待结果 | `bus/keys.json` 增加 `ctl/sim-core/plan_done`（池回传、job_id 幂等），sim-core 侧等待上限 30 s（本文 FR-032） |
 | 13 | §11.5 写"nginx 以 map 从客户端地址截取前缀作为 limit_req 键"并配"6 次/h"，但 nginx 速率最小单位为 r/m，且无法从压缩文本形式精确截取 IPv6 /64 | nginx 只做粗粒度限流（`2r/m`、近似前缀键），精确的前缀计数与 6 次/h 由池执行（本文 §6.6.7、§8.2） |
 | 14 | §4.4.1 的每会话 api 份额按 2 条 operator 连接（0.08 核）计，而每会话 WS 上限为 4 | `B_sim` 的 api 项改用实测值（池可从 sandbox-api 的活动报告得到每会话连接数）：`0.02 + 0.03·ws_i`，或把每会话 WS 上限降为 2；本文先按基线实现并在 MS1 实测后取舍 |
+
+---
+
+## 14. D2.1 增补（V0.2-demo）
+
+> 本节是 M17 对 D2.1（用户在 D2 实现期间追加的需求，[D2.1 需求原文](../inputs/D2.1-需求原文-2026-10-05.md)）的增补，依据 [AWR-04](../04-D2-设计增补与决策记录.md) v1.3 §15（重点为 §15.5 至 §15.7、§15.9、ADR-119 至 ADR-121、ADR-123）。§1–§13 在未被本节修改处继续有效；与 AWR-04 冲突时以 AWR-04 为准。线上形式以 [17 §17.20](../17-接口与实时协议规范.md) 为准。
+
+### 14.0 定位与编号
+
+1. M17 在 D2.1 交付（WP-04b）：公开容量接口与池统计、节能驻留（PARKING、PARKED）与恢复、恢复票、抢占与回收改为驻留、内部档会话与预留槽位、内部身份库（比对、限流、锁定、令牌、撤销表；由 M11 的 `rest/auth.py` 调用）、前端 `stores/capacity.ts` 与 `stores/sandboxSession.ts` 的驻留与恢复、SDK 自动恢复；指挥器配对为 P1。
+2. 编号：功能需求 M17-FR-068 起，非功能 M17-NFR-016 起，验收 M17-AC-025 起。
+
+### 14.1 功能需求（D2.1）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M17-FR-068 | 容量接口 `GET /capacity`（SB-71）：合并池统计 `sys/session/stats`（1 Hz 本地缓存）与 show-api 状态文件，返回 `awr.capacity.v1`（含 `build` 与 `power`）；公开、`max-age=1`；状态文件超过 5 s 未更新时 `viewers.state = unknown` | P0 | V0.2-demo | 是 | M17-AC-025 | AWR-04 §15.5.4；ADR-119 |
+| M17-FR-069 | 实例口径：槽位计数含 SPAWNING、READY、ACTIVE、IDLE、PARKING、DRAINING；PARKED 不计；内部预留槽位 `internal.reserved_slots`（缺省 1）不计入 N_max，受世界内存准入约束 | P0 | V0.2-demo | 是 | M17-AC-026 | ADR-120 |
+| M17-FR-070 | 驻留请求：`POST /sessions/{sid}/park`（SB-69）与同源信标 SB-72；池执行 §14.3.2 的驻留步骤，状态 PARKING → PARKED；需要 sim-core 的端点在 PARKING、PARKED 时返回 409 `515` | P0 | V0.2-demo | 是 | M17-AC-027 | ADR-121 |
+| M17-FR-071 | 服务端兜底驻留：ACTIVE 且全部连接的 `last_input` 超过 `sandbox_idle_s + grace_s`（队列非空时用 `sandbox_idle_busy_s`）且无手动控制租约 → 提前 `warn_s` 推送 `sandbox.expiring{reason: idle, action: park}`，到时驻留；IDLE 达 `park.idle_disconnected_s`（队列非空 `idle_disconnected_busy_s`）→ 驻留（替代 FR-005 的 IDLE → DRAINING） | P0 | V0.2-demo | 是 | M17-AC-027 | ADR-121；修订 FR-005 |
+| M17-FR-072 | 抢占（FR 中"队列非空时持有超过 30 min 者被抢占"）与 L3、L4 回收改为驻留（原因 `preempted`、`reclaimed_cpu`、`reclaimed_mem`）；checkpoint 失败时退回配置快照驻留；只有 `failed`、`user`、`maintenance`、`parked_expired` 直接结束 | P0 | V0.2-demo | 是 | M17-AC-028 | ADR-121；修订 FR-007 |
+| M17-FR-073 | 恢复：`POST /sessions/{sid}/resume`（SB-70）；有空位且世界准入与前缀活动数通过时以 `AWR_RESUME_FROM` 拉起（冷启动串行规则不变），寿命 `expires = now + max(remaining_s, 300 s)`、`held_since = now`；满员时发恢复票（`kind = resume`，与新建票同一 FIFO 与认领规则，不占该前缀的新建票名额）；checkpoint 不兼容时以配置快照装配并发 `session.switched{reason: resume_snapshot}` | P0 | V0.2-demo | 是 | M17-AC-029 | ADR-121 |
+| M17-FR-074 | 驻留保留与上限：PARKED 保留 `park.retention_s`（3600 s）后结束（`parked_expired`，配置快照另保留 600 s）；每前缀 ≤ 2、全站 ≤ 64、驻留目录合计 ≤ 512 MB，超出时最早驻留者结束；驻留会话与驻留目录随 `state.json` 持久化，池重启后可恢复 | P0 | V0.2-demo | 是 | M17-AC-029 | AWR-04 §15.6.2 |
+| M17-FR-075 | 活动聚合：sandbox-api 的 `activity` 报告每会话增加 `last_input_unix_ns`（全部连接 presence 的最大值、命令与会话内 REST 调用）；会话对象增加 §17.20.4 的字段 | P0 | V0.2-demo | 是 | M17-AC-027 | AWR-04 §15.7.6 |
+| M17-FR-076 | 内部档会话：`POST /sessions` 带有效 `X-AWR-Identity` 时 `tier = internal`：先用预留槽位，预留已用或内存准入不满足时排在队首（`kind = internal`，不抢占公开会话）；免工作量证明；寿命上限 `internal.lifetime_max_s`（28 800 s）；不被抢占，L3、L4 回收时排在最后；节能阈值 `power.internal_idle_s`；每个身份同时 ≤ 2 个会话；身份撤销后在下一次生命周期检查时降为公开档（寿命按公开上限截断，超出者告知 60 s 后驻留） | P0 | V0.2-demo | 是 | M17-AC-030 | ADR-123 |
+| M17-FR-077 | 身份库 `awr.sandbox.identity`：密钥文件读取与权限检查、等长摘要常量时间比较、固定时延、前缀与聚合前缀与全站三级失败计数与锁定（状态落盘 `var/identity/lockout.json`）、身份令牌签发与验签（`K_ident`）、撤销表（`var/identity/revoked.json`，两个 api 按修改时间 ≤ 1 Hz 重载）；纯库，不含路由，由 M11 的 R79、R80、R01 调用 | P0 | V0.2-demo | 是 | M17-AC-031 | AWR-04 §15.9.2、§15.9.3 |
+| M17-FR-078 | 前端 `stores/capacity.ts`：载入期由入口模块发起首个请求（超时 1.5 s），揭开后只在落地页、排队卡片、节能覆盖层与开启沙盒 Sheet 可见时每 10 s 轮询；发现 `build.release` 与 `__AWR_BUILD__.release` 不一致时置位 `updated` | P0 | V0.2-demo | 是 | M17-AC-032 | AWR-04 §15.5.3 |
+| M17-FR-079 | 前端 `stores/sandboxSession.ts`：`park(reason)`、`parkBeacon()`、`resume()`（201、200、202 恢复票、410）、PARKED 状态与恢复票长轮询；与 M15 PowerController 的接口 `onPowerState(state)` | P0 | V0.2-demo | 是 | M17-AC-032 | ADR-121 |
+| M17-FR-080 | SDK：`Sandbox.park()`、`resume()`；会话端点返回 `515` 时自动调用一次 `resume()`（满员时按恢复票等待，`resume(wait=True)`）；`create(identity_token=...)`（内部档） | P0 | V0.2-demo | 是 | M17-AC-033 | AWR-04 §15.7.4 |
+| M17-FR-081 | 指挥器配对：`POST /sessions/{sid}/pair-code`（SB-76，8 位 base32、120 s、单次）与 `POST /sessions/{sid}/pair`（SB-77，签发同一 principal 的沙盒 token）；每会话 5 次/10 min | P1 | V0.2-demo | 是 | M17-AC-034 | AWR-04 §15.8.2 第 4 条 |
+| M17-FR-082 | 内存额度预留：池命名空间 `sys/session/reserve{mem_mb, ttl_s}`（只接受 supervisor 的内部 principal）把 `M_sb` 临时下调 `mem_mb`，当前已运行会话不受影响、新会话按新额度准入；当前占用使下调后超额时返回 `{ok: false, why: insufficient}`；到期或撤销时恢复；供扩展进程组按需启用（M11-FR-232） | P1 | V0.2-demo | 是 | M17-AC-034 | AWR-04 §15.9.4 |
+| M17-NFR-016 | 驻留开销：PARKING 到 PARKED ≤ 5 s（checkpoint ≤ 5 MB）；驻留目录每会话 ≤ 8 MB；恢复到 READY ≤ 6 s（与冷启动同口径） | P0 | V0.2-demo | 是 | M17-AC-027、029 | ADR-121 |
+| M17-NFR-017 | 容量接口：池统计计算 ≤ 1 ms；sandbox-api 处理 ≤ 2 ms；响应 ≤ 1 KiB；不含访客标识 | P0 | V0.2-demo | 是 | M17-AC-025 | ADR-119 |
+| M17-NFR-018 | 身份库：比对恒定时延（中位数差 ≤ 10 ms）；任何代码路径不记录输入与令牌 | P0 | V0.2-demo | 是 | M17-AC-031 | ADR-123 |
+
+### 14.2 数据结构增量
+
+```python
+# python/awr/sandbox/model.py（增量）
+@dataclass
+class SessionRecord:  # 原字段不变，增加：
+    tier: str                       # "public" | "internal"
+    identity_jti: str | None        # 内部档：签发会话的身份令牌 jti（撤销检查）
+    held_since_unix_ns: int         # 本次持有槽位的起点（抢占按此计算持有时长）
+    held_total_s: float             # 累计持有时长（lifetime_max 只计持有时间）
+    last_input_unix_ns: int         # sandbox-api 上报的最近交互
+    parked_unix_ns: int | None
+    park_reason: str | None         # idle | hidden | user | idle_disconnected | preempted | reclaimed_cpu | reclaimed_mem
+    resume_mode: str | None         # "checkpoint" | "snapshot"
+    remaining_s: float | None       # 驻留时冻结的剩余寿命
+    park_dir: str | None            # var/sandbox/parked/<sid>/
+    t_sim_ns_parked: int | None
+
+@dataclass
+class Ticket:  # 原字段不变，增加：
+    kind: str                       # "new" | "resume" | "internal"
+    sid: str | None                 # kind = resume 时为原会话 sid
+```
+
+驻留目录 `var/sandbox/parked/<sid>/`（0700）：`checkpoint.bin`（sim-core checkpoint 一代，≤ 5 MB）、`snapshot.json`（配置快照）、`meta.json`（`{sid, world, template, tier, epoch, t_sim_ns, layout_hashes, contracts_version, release, parked_unix_ns, reason}`）；写入用临时目录加 `os.replace`。
+
+### 14.3 算法
+
+#### 14.3.1 容量统计
+
+```python
+# python/awr/sandbox/capacity.py（M17）
+def stats(pool) -> dict:
+    active = [s for s in pool.sessions if s.state in SLOT_STATES]            # SPAWNING … DRAINING，含 PARKING
+    pub = [s for s in active if s.tier == "public"]
+    q = [t for t in pool.tickets if t.state in ("WAITING", "OFFERED")]
+    eta = eta_s(position=1, sessions=pub, now_s=now()) if q or len(pub) >= pool.n_max else 0
+    return {"active": len(pub), "max": pool.n_max,
+            "reserved_internal": pool.cfg.internal.reserved_slots,
+            "parked": sum(s.state == "PARKED" for s in pool.sessions),
+            "queue": len(q), "eta_s": eta,
+            "admit_now": len(pub) < pool.n_max and not q and pool.accepting,
+            "worlds_admit_now": [w for w in pool.worlds if pool.admit_world(w)] if not q else [],
+            "state": "closed" if not pool.accepting else ("queue" if q else ("full" if len(pub) >= pool.n_max else "open"))}
+```
+
+#### 14.3.2 驻留
+
+1. 状态置 PARKING，推送 `sandbox.parking`；经会话总线调用 `sim/pause`，再调用 `ctl/sim-core/checkpoint{to: "disk", path: <临时目录>/checkpoint.bin}`（超时 5 s）。
+2. 成功：写 `snapshot.json`（`ctl/sim-core/snapshot`）与 `meta.json`，`os.replace` 到 `park_dir`，`resume_mode = checkpoint`；失败或超时：只写快照，`resume_mode = snapshot`。
+3. `remaining_s = max(0, expires − now)`，`held_total_s += now − held_since`；SIGTERM sim-core，5 s 后 SIGKILL；删除 `/dev/shm/awr/<sid>`、cgroup 叶子组与 `var/sandbox/runs/<sid>` 中除日志外的内容；通知 sandbox-api 以 4430 关闭残余连接并销毁上下文。
+4. 状态 PARKED，推送（经事件补拉可见）`sandbox.parked`；释放槽位并立即调用派发（§6.6.2），驻留上限检查（FR-074）。
+
+#### 14.3.3 恢复
+
+```python
+# python/awr/sandbox/park.py（M17）
+def resume(s: SessionRecord, pool) -> Result:
+    if s.state != "PARKED":
+        return ok_existing(s)                                   # 已活动：200
+    if now() > s.parked_unix_ns + pool.cfg.park.retention_s:
+        return end(s, "parked_expired")                         # 410 506
+    if pool.slot_free(tier=s.tier) and pool.admit_world(s.world, exclude_sid=None) and pool.prefix_ok(s):
+        s.state, s.held_since_unix_ns = "SPAWNING", now_ns()
+        s.expires_unix_ns = now_ns() + int(max(s.remaining_s, 300.0) * 1e9)
+        env = {"AWR_RESUME_FROM": f"{s.park_dir}/checkpoint.bin"} if s.resume_mode == "checkpoint" else {}
+        pool.spawn(s, session_json=load_snapshot(s.park_dir), env=env)   # 不兼容退出 → 以快照重拉，resume_snapshot
+        return created(s)                                       # 201
+    t = pool.issue_ticket(kind="resume", sid=s.sid, principal=s.principal_id, prefix_h=s.prefix_h)
+    return queued(t)                                            # 202
+```
+
+#### 14.3.4 身份锁定
+
+```python
+# python/awr/sandbox/identity.py（M17；由 M11 rest/auth.py 调用；只在 show-api 进程中比对）
+def verify(secret_in: bytes, prefix: str, agg: str, now_s: float) -> Verdict:
+    started = monotonic()
+    lock = lockout.active(prefix, agg, now_s)                  # 前缀、聚合前缀、全站（回环来源免全站锁定）
+    if lock:
+        return pad(started, Verdict.locked(lock.scope, lock.until - now_s))
+    if not SECRET:                                             # 未配置或权限不符
+        return pad(started, Verdict.disabled())
+    ok = hmac.compare_digest(sha256(secret_in), sha256(SECRET))
+    if ok:
+        lockout.reset(prefix)
+        return pad(started, Verdict.ok(issue_identity_token()))
+    lockout.fail(prefix, agg, now_s)                           # 5 次/10 min → 前缀 30 min；10 次 → 聚合 30 min；全站 30 次/h → 15 min
+    audit("auth.identity_denied", prefix=prefix)
+    return pad(started, Verdict.wrong())
+
+def pad(started: float, v: Verdict) -> Verdict:               # 固定时延 300 ms ± 25 ms（随机抖动只在补足部分）
+    sleep(max(0.0, 0.300 + uniform(-0.025, 0.025) - (monotonic() - started)))
+    return v
+```
+
+### 14.4 默认参数（`sandbox:` 段与相关段增量）
+
+| 参数 | 键 | 缺省 | 单位 | 依据 |
+|---|---|---|---|---|
+| 无连接驻留 | `park.idle_disconnected_s`、`park.idle_disconnected_busy_s` | 120、60 | s | AWR-04 §15.7.2（替代 `idle.ttl_s`、`idle.ttl_busy_s`） |
+| 驻留保留 | `park.retention_s` | 3600 | s | 同上 |
+| 驻留上限 | `park.per_prefix`、`park.total_max`、`park.disk_mb` | 2、64、512 | 个、MB | AWR-04 §15.6.2 |
+| checkpoint 超时 | `park.checkpoint_timeout_s` | 5 | s | 本文设定 |
+| 内部预留 | `internal.reserved_slots`、`internal.lifetime_max_s`、`internal.max_per_identity` | 1、28800、2 | 个、s、个 | ADR-123 |
+| 节能阈值 | `power.*`（M11 文件，见 M11 §15.12） | AWR-04 §15.7.2 | s | — |
+| 身份 | `identity.token_ttl_s`、`identity.delay_ms`、`identity.lockout{prefix_fail, window_s, prefix_lock_s, agg_fail, agg_lock_s, global_fail_h, global_lock_s}` | 43200、300、{5, 600, 1800, 10, 1800, 30, 900} | s、ms、次 | AWR-04 §15.9.2 |
+| 配对（P1） | `pair{code_ttl_s, per_session_10min}` | 120、5 | s、次 | AWR-04 §15.8.2 |
+
+### 14.5 部署配置增量
+
+1. `configs/runtime.yaml` 的 `sandbox:` 段增加 `park:`、`internal:`（本节 §14.4），public profile 取缺省值；本机 profile 同缺省；测试 profile 缩短阈值。
+2. nginx（M00，WP-16 扩展）：`location = /api/sandbox/v1/capacity` 开启 `proxy_cache`（键为 URI，`proxy_cache_valid 200 1s`、`proxy_cache_lock on`、`proxy_cache_use_stale updating`）；`/build-info.json` 与 `/manifest.webmanifest` 为 `no-cache`。
+3. 密钥：身份库读取 `AWR_ADMIN_SECRET_FILE`（`install.sh --admin-secret-file` 写入 `/etc/anet-drone4d/admin.secret`，0600，AWR-04 §15.9.5）；`var/identity/` 目录 0700。
+
+### 14.6 目录与文件（M17，D2.1 新增）
+
+| 文件 | 内容 |
+|---|---|
+| `python/awr/sandbox/capacity.py` | 池统计与 `awr.capacity.v1` 组装（sandbox-api 侧合并状态文件） |
+| `python/awr/sandbox/park.py` | 驻留、恢复、恢复票、驻留目录与上限 |
+| `python/awr/sandbox/identity.py` | 身份库（§14.3.4） |
+| `python/awr/api/rest/sandbox.py`（改） | SB-69、SB-70、SB-71、SB-72；P1：SB-76、SB-77；创建端点读取 `X-AWR-Identity` |
+| `apps/web/src/stores/capacity.ts`（新）、`apps/web/src/stores/sandboxSession.ts`（改）、`apps/web/src/net/sandbox/**`（改） | §14.1 FR-078、079 |
+| `tools/sdk/awr_sandbox.py`（改） | FR-080 |
+| `tests/sandbox/test_{capacity,park,identity_lib}.py` | 单元与集成 |
+
+跨所有权：M08 `ctl/sim-core/checkpoint{to: disk}` 与 `AWR_RESUME_FROM`（`.cache/impl/requests/d2.1-WP-04b-to-M08.md`）；M11 状态文件、presence 聚合、R79 至 R84 的路由（WP-03b）。
+
+### 14.7 验收（D2.1）
+
+| 编号 | 度量与阈值 | 方法 | 环境 | D2-AC |
+|---|---|---|---|---|
+| M17-AC-025 | SB-71 无 token 200、schema 通过、≤ 1 KiB；与池真值 2 s 内一致；状态文件停更 5 s 为 `unknown`；池统计 ≤ 1 ms | `tests/sandbox/test_capacity.py` | 本机 | 42 |
+| M17-AC-026 | 槽位口径：PARKED 不计、PARKING 与 DRAINING 计；内部会话使占用至多 N_max + 1；内存准入不满足时内部请求为队首 `kind = internal` 且不抢占 | pytest（注入时钟） | 本机 | 43 |
+| M17-AC-027 | SB-69 后 ≤ 5 s PARKED，进程退出、shm 与叶子组删除、槽位释放并 ≤ 5 s 派发；兜底驻留在阈值 + 余量 ± 2 s 发生且提前 30 s 告知；无连接 120 s 驻留；PARKED 时会话端点 409 515；同源信标生效 | e2e `tests/e2e/test_sandbox_park.py` | 本机（cgroup 模拟） | 45 |
+| M17-AC-028 | 队列非空时持有超过阈值（测试缩短）的会话被驻留而非结束，可排队恢复；L3、L4 回收同样驻留；checkpoint 超时时以快照驻留 | e2e、`tests/chaos/` | 本机（cgroup 模拟） | 45 |
+| M17-AC-029 | 恢复：有空位 ≤ 6 s READY，`t_sim` 差 ≤ 0.1 s，实体与任务状态逐字段一致，epoch + 1；满员 202 恢复票按 FIFO；不兼容 checkpoint 退回快照并发 `resume_snapshot`；保留到期 410 506；驻留上限生效；kill -9 池后 PARKED 会话仍可恢复 | e2e、chaos | 本机（cgroup 模拟） | 45 |
+| M17-AC-030 | 内部档：预留槽位、免工作量证明、寿命 8 h、免抢占、阈值 3600 s；撤销后降为公开档 | pytest、e2e | 本机 | 51 |
+| M17-AC-031 | 身份库：三级锁定阈值与时长、落盘与重启保留、回环免全站锁定；正确与错误的时延中位数差 ≤ 10 ms；令牌签发与验签、撤销表重载 ≤ 2 s；对测试口令扫描日志、审计与 `state.json` 为 0 次 | `tests/sandbox/test_identity_lib.py` | 本机 | 51 |
+| M17-AC-032 | 前端 store：载入期首个请求时机与超时、揭开后轮询条件、`updated` 置位；驻留与恢复的状态转换与恢复票长轮询 | `vitest apps/web/tests/m17/` | Node | 41、45 |
+| M17-AC-033 | SDK：515 时自动恢复一次；满员时 `resume(wait=True)` 等到恢复；`create(identity_token=...)` 为内部档 | `tools/sdk/examples/` 脚本 | 本机 | 45、51 |
+| M17-AC-034 | 配对码单次使用、120 s 过期、每会话 5 次/10 min；配对设备与原设备共享席位；`sys/session/reserve` 下调与恢复额度、超额时拒绝 | pytest | 本机 | —（P1） |
+
+### 14.8 风险
+
+| 风险 | 对策 |
+|---|---|
+| checkpoint 落盘与 sim-core 版本耦合 | `meta.json` 记录布局哈希与契约版本，不兼容退回快照；混沌用例覆盖 |
+| 驻留目录占满磁盘 | 每会话 ≤ 8 MB、合计 ≤ 512 MB、保留 60 min、超限淘汰最早者；纳入 §4.13 的磁盘配额 |
+| 内部预留槽位挤占快进余量 | 治理器把预留会话计入 `B_sim`；L2 降档；预留只有 1 个 |
+| 身份库被绕过（其他路径比对口令） | 比对只在 `identity.verify`；R01 的 `admin_secret` 改走同一函数；静态检查（`check_py_imports` 规则）禁止其他模块读取 `AWR_ADMIN_SECRET_FILE` |
+
+### 14.9 追溯
+
+| 需求 | ADR | 本节 | 验收 |
+|---|---|---|---|
+| R-D2-31、R-D2-32 | 119、120 | FR-068、069、078 | M17-AC-025、026、032；D2-AC-42、43 |
+| R-D2-33、R-D2-34 | 121 | FR-070 至 075、079、080 | M17-AC-027 至 029、032、033；D2-AC-45 |
+| R-D2-36 | 122 | FR-081 | M17-AC-034 |
+| R-D2-39 | 123 | FR-076、077 | M17-AC-030、031；D2-AC-51 |

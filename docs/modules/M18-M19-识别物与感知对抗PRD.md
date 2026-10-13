@@ -1007,7 +1007,7 @@ viewer 可看识别物列表与详情（只读，表单禁用、无放置工具�
 | 运动识别物方向性导致意外被发现 | 被发现计数非 0 | 规划禁入体对运动识别物按整圆；硬优先级"不进入优先于保持捕获"（M20） |
 | 被发现与捕获事件过多 | 网关与 UI 压力 | 事件上限 50 条/s、Toast 去重、`perception.level` 默认折叠 |
 | 前端 30 识别物 + 64 敏感体拖慢 Tier S | D1-AC-03b 回退 | 图层上限、PerfGovernor 降级顺序（§8.2）、D2-AC-30 |
-| 对人员持续监视的伦理与合规误读 | 公共形象 | 仅合成识别物；文案标注仿真；真机接入另行合规评审（AWR-04 §15.1） |
+| 对人员持续监视的伦理与合规误读 | 公共形象 | 仅合成识别物；文案标注仿真；真机接入另行合规评审（AWR-04 §16.1） |
 
 ---
 
@@ -1060,3 +1060,142 @@ viewer 可看识别物列表与详情（只读，表单禁用、无放置工具�
 | 10 | D2-AC-13 夜间运动平台用例 | 未指定传感器与焦距，而结果强依赖二者：EO 1/30 s、48 mm 时 `k_blur ≈ 0.20`，16 mm 时 0.53，LWIR 75 mm 时 0.85；且模糊使 `N·k_blur → d_c/b` 饱和（该用例约 9 px），夜间被动或 NIR EO 从 15 m/s 盘旋平台无论如何变焦都达不到 R 级 | 用例写明"EO f = 16 mm 与 LWIR 75 mm 两档"（§10 M19-AC-004）；在 §9.2 注明固定翼夜间接力须用 LWIR |
 | 11 | AWR-04 §11.6 `rt/rng_streams.json` | 新流 `targets_motion`、`perception` 未给 stream_id；D1 已占用 1–6、8–16 | 建议 17 归 M18、18 归 M19 |
 | 12 | AWR-04 §7.1 与 ADR-100 | D1 Mock 检测器的状态块 `sensor_targets` 字段前缀为 `tg_`、类名 `TargetTable`，与 D2 识别物的命名易混淆，基线未说明二者是否互相可见 | 明确二者隔离：M18 使用块名 `targets`、前缀 `tgt_`；Mock 检测器不看 M18 识别物，M19 不看 Mock 目标（M19-FR-027） |
+
+---
+
+## 15. D2.1 增补（V0.2-demo）
+
+> 本节是 M18 与 M19 对 D2.1（[D2.1 需求原文](../inputs/D2.1-需求原文-2026-10-05.md) R-D2-40 至 R-D2-42）的增补，依据 [AWR-04](../04-D2-设计增补与决策记录.md) v1.3 §15.10、§15.11（ADR-124、ADR-125）。§1–§14 在未被本节修改处继续有效；判据（§6.3、§6.7）不变。线上形式以 [17 §17.20.6](../17-接口与实时协议规范.md) 为准。
+
+### 15.0 定位与编号
+
+1. **M18**：识别物感知参数显式化（新增 `visual_acuity_arcmin`、`hearing_band_adj_db`、`radar_rx`（P1）、`rf_rx`（P2））与类别缺省；雷达敏感体按 `radar_rx` 生效（P1）；前端几何导出配置体掩码供场视图使用。
+2. **M19**（WP-19b）：逐对量化读数 `perception/quant.py`；飞行器辐射场剖面与识别物感知体表 `perception/field.py`；三类 topic 与 SB-73 至 SB-75、SB-78（P1）；`stores/perception.ts` 的场与读数订阅；参考实现与对拍。
+3. 编号：M18-FR-028 起、M19-FR-030 起、M19-NFR-007 起、M18-AC-023 起、M19-AC-021 起。
+
+### 15.1 功能需求（D2.1）
+
+| 编号 | 需求描述 | 优先级 | 目标版本 | D2 | 验收要点 | 依据 |
+|---|---|---|---|---|---|---|
+| M18-FR-028 | 识别物字段 `visual_acuity_arcmin`（0.3–20′，类别缺省：person 1.0、uav 2.5、dog 4.0、vehicle 1.0，machine 与 object 无视觉）：只用于等效像素与读数，不进入判据；`visual_theta0_arcmin` 缺省值不变 | P0 | V0.2-demo | 是 | M18-AC-023 | AWR-04 §15.10.1；ADR-124 |
+| M18-FR-029 | 识别物字段 `hearing_band_adj_db[24]`（每带 −20 至 +20 dB，缺省全 0）：加到 A 计权上作为类别频段权重；缺省时判据与 D2 逐位一致 | P0 | V0.2-demo | 是 | M18-AC-023 | 同上 |
+| M18-FR-030 | `radar_rx{snr_ref_db, r_ref_m, snr_req_db, fov_az_deg, fov_el_deg}`：识别物挂 `radar` 敏感体且配置 `radar_rx` 时，physical 模式的雷达准则 `SNR = snr_ref + 10·lg σ_U − 40·lg(r/r_ref) − 2·γ_rain·r/1000 ≥ snr_req` 生效（geometric 模式同其他敏感体，只看配置体）；有效半径与建议半径同口径 | P1 | V0.2-demo | 是 | M18-AC-024 | 同上 |
+| M18-FR-031 | `rf_rx{sens_dbm, f_mhz, bw_mhz}` 与 `rf` 敏感体只入 schema（P2，不参与判定） | P2 | V0.2-demo | 桩 | M18-AC-023 | 同上 |
+| M18-FR-032 | 前端 `engine/targets/geometry.ts` 导出 `bodyMask(body, target, pts)`（与禁入预测同一实现），供 M06 场视图筛选感知体点位 | P0 | V0.2-demo | 是 | M18-AC-025 | AWR-04 §15.11.2 |
+| M19-FR-030 | 逐对量化 `quant_pairs(target, uavs, env)`：声学（合成到达声压、主导带、阈值、余量、P）、视觉（角尺寸、可见尺寸、等效像素、检测阈、比值、表观对比度、照度档、灯光、角向覆盖、P）、雷达（P1）、合成 P、`would_discover`、驻留与反向感知；公式与概率见 AWR-04 §15.10.3 | P0 | V0.2-demo | 是 | M19-AC-021 | ADR-124 |
+| M19-FR-031 | 判据一致性：physical 模式下 `would_discover` 与 §6.3.2 的确定性判据逐项一致（"在配置体内且某模态门控通过且 P ≥ 0.5"）；声学 P 在余量 0 处为 0.5、视觉 P 在 θ = θ_th 处为 0.5 | P0 | V0.2-demo | 是 | M19-AC-021 | ADR-099、ADR-124 |
+| M19-FR-032 | 辐射场剖面 `field_profile(kind, uav)`：声学、视觉、热（参考 `lwir640` 25 mm）、雷达（参考 `mmw77`）四种；径向 32 点（对数等距）、仰角因子 6 个、每仰角截止距离 6 个；按会话订阅生成，按 rev 缓存（变化 ≤ 0.5 dB 或 ≤ 2% 不升 rev） | P0 | V0.2-demo | 是 | M19-AC-022 | ADR-125 |
+| M19-FR-033 | 感知体表 `field_volumes(target, body, model)`：有效半径表 8 方位 × 6 仰角与过渡宽度 `w_m`；以 M18 `effective_radius` 的同一参数计算（声学按方位计入 `g_back`，视觉按仰角取顶面或侧面与对天或对地对比度）；缓存键同 M18 §6.3.3 再加方位与仰角 | P0 | V0.2-demo | 是 | M19-AC-023 | ADR-125 |
+| M19-FR-034 | topic `field/{acoustic,visual,thermal,radar}`（1 Hz）、`field/volumes`（0.5 Hz，变更时与 30 s 关键帧）、`target/{id}/quant`（2 Hz）：只在有订阅时生成与编码；共享展示与沙盒同一实现；viewer 可订阅 | P0 | V0.2-demo | 是 | M19-AC-024 | 17 §17.20.6 |
+| M19-FR-035 | REST（`rest/perception.py`）：SB-73 逐对读数、SB-74 剖面、SB-75 感知体表；P1：SB-78 按确定性图案的显式采样点（≤ 4096，非法参数 422 `564`） | P0（SB-78 P1） | V0.2-demo | 是 | M19-AC-024 | 同上 |
+| M19-FR-036 | 前端 `stores/perception.ts`：按场视图模式订阅 `field/*` 与 `field/volumes`、按选中识别物订阅 `target/{id}/quant`；解码后交给 M06 `engine/field`（值缓冲 ≤ 1 Hz 更新）与 M15 读数卡；手机档 0.5 Hz、1 Hz | P0 | V0.2-demo | 是 | M19-AC-025 | AWR-04 §15.11.5 |
+| M19-FR-037 | 参考实现 `tests/perception/ref_quant.py`（独立于运行时代码的逐带声学、视觉与雷达量化与剖面），用于对拍与生成夹具 `packages/contracts/fixtures/perception/field_*.json` | P0 | V0.2-demo | 是 | M19-AC-021、022 | AWR-04 §15.11.4 第 4 条 |
+| M19-NFR-007 | 成本：剖面 ≤ 0.5 ms/次（12 架、单指标）；感知体表未命中 ≤ 3 ms/（体，机型）；逐对读数 ≤ 0.3 ms/次；会话合计 ≤ 2 ms/仿真秒，S7 ≤ 3 ms/仿真秒；无订阅时为 0 | P0 | V0.2-demo | 是 | M19-AC-026 | AWR-04 §15.11.5 |
+| M19-NFR-008 | 带宽：剖面帧 ≤ 1.2 KB（12 架）、感知体关键帧 ≤ 20 KB（30 识别物）、读数帧 ≤ 1.5 KB；每订阅者平均 ≤ 4 KB/s | P0 | V0.2-demo | 是 | M19-AC-024 | 同上 |
+| M19-NFR-009 | 一致性：前端插值与 SB-78 显式采样 ≤ 0.5 dB 或 ≤ 2%；感知体表在各方向与 `effective_radius` 一致（≤ 1 m） | P0 | V0.2-demo | 是 | M19-AC-022、023 | 同上 |
+
+### 15.2 设计
+
+#### 15.2.1 接口（Python，sim-core 进程内）
+
+```python
+# awr.sim.perception.quant（M19）
+@dataclass(frozen=True)
+class PairQuant:
+    uav: str; model_id: str; range_m: float; elev_deg: float; az_rel_deg: float
+    los: bool; los_age_s: float
+    acoustic: AcousticQ | None      # lp_dba, lp_band_db, band_hz, thr_dba, l_bg_dba, margin_db, p, in_body
+    visual: VisualQ | None          # theta_arcmin, d_vis_m, n_eq_px, theta_th_arcmin, ratio, c_app, light_band, lights_on, in_fov, p, in_body
+    radar: RadarQ | None            # P1
+    p_any: float; would_discover: bool; dwell_s: float; t_dwell_s: float
+    reverse: ReverseQ | None        # 取自 uav/{id}/perception 的最佳等级
+
+def quant_pairs(t: TargetConfig, uavs: Sequence[UavView], env: TargetEnv, los: LosCache) -> list[PairQuant]: ...
+
+# awr.sim.perception.field（M19）
+FieldKind = Literal["acoustic", "visual", "thermal", "radar"]
+EL_DEG = (-75.0, -45.0, -15.0, 15.0, 45.0, 75.0)     # 自采样点（观察者）看飞行器的仰角
+@dataclass(frozen=True)
+class Profile:
+    kind: FieldKind; unit: str; combine: Literal["add", "mul"]
+    r_m: NDArray      # [32]，对数等距
+    v_r: NDArray      # [32]，NaN 为不绘制
+    f_el: NDArray     # [6]
+    cut_el_m: NDArray # [6]，0 为不截止
+    rev: int
+
+def field_profile(kind: FieldKind, sig: VehicleSignature, thrust_ratio: float, env: TargetEnv) -> Profile: ...
+def field_volumes(t: TargetConfig, body: int, model: VehicleSignature, env: TargetEnv) -> VolumeTable: ...   # r_eff_m[8, 6], w_m
+```
+
+#### 15.2.2 剖面算法
+
+```text
+acoustic：r_max = 解 L_pA(r) = max(20, L_bg,A − 10) 的 r（上限 2000 m）；r_k = 2·(r_max/2)^(k/31)
+          L_p,b(r) = L_W,b(T) − 20·lg r − 11 − α_b·r/1000；L_pA(r) = 10·lg Σ_b 10^((L_p,b + A_b)/10)
+          v_r = L_pA；f_el = 0；cut_el_m = 0（自由场，无方向性）
+visual：  D_side = √A_side；θ(r) = D_side/r × 3437.75（′）；r_max = D_side/(0.5′)（上限 2000 m）
+          f_el(e) = √(A(e)/A_side)，A(e) = A_top（|e| ≥ 45°）否则 A_side（e 为观察者看飞行器的仰角；e > 0 时背景为天空）
+          cut_el_m(e) = ln(abs(C(e))/0.05)/σ_550（C(e) = contrast_sky 若 e > 0，否则 contrast_ground）；夜间未开灯为 night_visible_m，开灯为 0
+thermal： 参考热像仪 IFOV = 12 µm / 25 mm；d_hot = √(A_side·hot_fraction)；N_th(r) = d_hot/(r·IFOV)
+          表观温差 ΔT_app(r) = τ_LW(r)·ε·ΔT·min(1, N_th²)；v_r = N_th，ΔT_app < NETD 处置 NaN；f_el(e) = √(A(e)/A_side)；cut_el_m = 0
+radar：   SNR(r) = 13.2 + 10·lg σ_U − 40·lg(r/180) − 2·γ_rain·r/1000；r_max = SNR 为 −10 dB 处；f_el = 0；cut_el_m = 0
+rev：     与上次发出的剖面相比，dB 量最大差 > 0.5 dB 或线性量最大相对差 > 2% 时 rev + 1（推力变化、昼夜、天气、灯光切换）
+```
+
+#### 15.2.3 感知体表算法
+
+```text
+对每个（识别物 T，启用的敏感体 b，机型 M）：
+  方位格 a_i = i·45°（相对 T 航向），仰角格 e_j ∈ EL_DEG
+  acoustic：r_eff[i, j] = acoustic_radius(L_W,M, thr_T, g_back = gain_back_db·(1 − cos a_i)/2)（与 M18 effective_radius 同一函数，不受 radius_max 截断，上限 2000 m）
+            w_m = 2.197·s_ac / (8.686/r_eff + α_b*/1000)，s_ac = 2.0 dB，b* 为 r_eff 处的主导带
+  visual：  r_eff[i, j] = min(√A(e_j)/θ_th, r_c(e_j))（夜间规则同 §6.3.2）；w_m = 0.73·r_eff（TTPF 在 x = 1.75 与 0.49 处的半宽，近似）
+  radar（P1）：r_eff = r_ref·10^((snr_ref + 10·lg σ_M − snr_req)/40)；w_m = 2.197·1.0 dB / (17.37/r_eff)
+  前端在点位上显示 P = 1/(1 + exp((r − r_eff(dir))/(w_m/2.197)))，乘以配置体掩码；P = 0.5 恰在 r_eff（与判据边界一致）
+  机型集合：会话机队中出现的机型（≤ 8）；缓存键：(T 参数哈希, b, M, 照度档, round(L_bg), round(a, 2))
+```
+
+#### 15.2.4 默认参数
+
+| 参数 | 值 | 依据 |
+|---|---|---|
+| 声学概率尺度 `s_ac` | 2.0 dB | ISO 9613-2 自由场估计精度约 ±3 dB |
+| 雷达概率尺度 | 1.0 dB | Swerling 0 检测概率随 SNR 的陡峭过渡 |
+| 剖面点数、仰角格 | 32、6 | AWR-04 §15.11.4 |
+| 感知体表 | 8 方位 × 6 仰角 | 同上 |
+| 剖面 r_min | 2 m（飞行器）；感知体 1 m | AWR-04 §15.11.2 |
+| 剖面上限 | 2000 m | 本文设定（emax 世界尺度与 DSM 范围） |
+| 参考热像仪 | `lwir640`，25 mm，NETD 50 mK | AWR-04 §6.1 |
+| 参考雷达 | `mmw77`，13.2 dB @ 180 m、1 m² | AWR-04 §6.1 |
+| rev 阈值 | 0.5 dB / 2% | 本文设定 |
+| 读数对上限 | 每识别物 12 对（斜距升序） | AWR-04 §4.4.3 机群上限 |
+
+### 15.3 测试与验收（D2.1）
+
+| 编号 | 度量 | 阈值 | 测试方法 | 环境 | 优先级 | 对应 D2-AC |
+|---|---|---|---|---|---|---|
+| M18-AC-023 | 新字段与类别缺省 | schema 通过；缺省 `hearing_band_adj_db` 时 D2 判据结果逐位不变（M18-AC-009 至 011 复跑）；`visual_acuity_arcmin` 不改变判据 | `pytest tests/targets/test_schema.py`、回归 | 本机 CPU | P0 | 52 |
+| M18-AC-024 | 雷达敏感体（P1） | `radar_rx` 配置下 physical 判据与解析值一致（≤ 1 m）；未配置时只给 warning | `pytest tests/targets/test_radar_body.py` | 本机 CPU | P1 | 52 |
+| M18-AC-025 | 掩码导出 | `bodyMask` 与 Python `inside()` 在 10⁴ 个随机点上一致 | `vitest apps/web/tests/m18/geom` | Node | P0 | 53 |
+| M19-AC-021 | 逐对量化 | 与 `ref_quant.py` 一致：声压 ≤ 0.1 dB、角尺寸与等效像素 ≤ 1%、对比度 ≤ 1%；1000 组随机对上 `would_discover` 与判据一致率 100%；单带锚点 145.7 m 处 `P_ac = 0.50 ± 0.01` | `pytest tests/perception/test_quant.py` | 本机 CPU | P0 | 52 |
+| M19-AC-022 | 剖面 | 四种剖面与参考实现逐点一致（≤ 0.1 dB 或 ≤ 0.5%）；声学单调不增；视觉截止与夜间规则正确；rev 只在超过阈值时增加；前端插值与 SB-78 ≤ 0.5 dB 或 2% | `pytest tests/perception/test_field.py`、vitest | 本机 CPU、Node | P0 | 53 |
+| M19-AC-023 | 感知体表 | 各方向半径与 `effective_radius`（同参数）一致 ≤ 1 m；背向衰减使背后方位半径减小；P(r_eff) = 0.5 | `pytest tests/perception/test_volumes.py` | 本机 CPU | P0 | 53 |
+| M19-AC-024 | 线上 | 三类载荷通过 schema；无订阅不生成；rev 未变只发 rev；帧大小与每订阅者带宽符合 NFR-008；SB-73 至 75 与 topic 同值 | `pytest tests/perception/test_field_wire.py` | 本机 CPU | P0 | 52、53 |
+| M19-AC-025 | 前端 store | 场视图模式切换时订阅随之切换；手机档频率减半；读数卡数据与 topic 一致 | `vitest apps/web/tests/m19/` | Node | P0 | 52、53 |
+| M19-AC-026 | 成本 | 12 架、30 识别物、全部指标轮流订阅：会话 ≤ 2 ms/仿真秒，S7 ≤ 3 ms/仿真秒；无订阅 0 | `pytest tests/perception/test_field_budget.py` | 本机 CPU | P0 | 55 |
+
+### 15.4 风险
+
+| 风险 | 对策 |
+|---|---|
+| 显示用概率被误读为判据 | 读数卡与图例注明"显示用概率，判定以确定性判据为准"；geometric 识别物的概率标为"物理参考" |
+| 视觉感知体的 logistic 近似与 TTPF 不完全相同 | P = 0.5 处严格对齐判据边界；精确值以逐对读数为准 |
+| 自由空间场忽略地形遮挡 | 图例标注；逐对读数计入视线 |
+
+### 15.5 追溯
+
+| 需求 | ADR | 本节 | 验收 |
+|---|---|---|---|
+| R-D2-40 | 124 | M18-FR-028 至 031、M19-FR-030、031、037 | M18-AC-023、024，M19-AC-021；D2-AC-52 |
+| R-D2-41、R-D2-42 | 125 | M18-FR-032、M19-FR-032 至 036 | M18-AC-025，M19-AC-022 至 026；D2-AC-53、55 |

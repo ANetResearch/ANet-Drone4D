@@ -162,6 +162,24 @@ If you use it in research, cite:
 本仓库不包含这些数据的点，也不包含由其生成的 World Package、栅格与录制（少量测试夹具只保留八叉树计数、包围盒、清单字段与一条测试相机路径等元数据）；
 `make fetch-data` 从作者发布页下载，`make worlds` 在本机生成，生成物不入库。使用时请引用上面的论文。
 
+**Authorization for ANet-Drone4D deployments.** The ANet-Drone4D project has obtained authorization from the rights
+holders of the UrbanScene3D dataset to use World Packages built from it in the project's own deployments (decision
+recorded on 2026-10-05, AWR-04 R-D2-28 and ADR-109). Since V0.2-demo the public demo at
+https://drone4d.agentnetwork.org.cn serves all six UrbanScene3D cities next to the synthetic city: the deployment
+bundle (`tools/deploy/emax/build-local.sh`) carries their World Packages and derived geometry caches to the server,
+and the README and product screenshots may show them. The authorization covers the project's own deployments only.
+It is not sublicensed by this repository or by [LICENSE](LICENSE): the repository still contains no UrbanScene3D
+points and no World Package built from them (`worlds/` and `data/raw/` stay out of git), and if you download the
+dataset yourself the authors' terms quoted above apply to you. The ECCV 2022 citation above is kept wherever the
+cities are shown (the About page of the application, this file and the README).
+
+中文：UrbanScene3D 经数据集权利方授权使用。ANet-Drone4D 项目已获得 UrbanScene3D 数据集权利方的授权（2026-10-05 记录，
+AWR-04 R-D2-28、ADR-109），在本项目自己的部署中使用由六城构建的 World Package：V0.2-demo 起公开演示站
+（https://drone4d.agentnetwork.org.cn）与合成城市一并开放六城，部署包附带六城的世界包与派生几何缓存，README 与产品截图
+可以使用六城画面。该授权只适用于本项目自己的部署，不经本仓库或 LICENSE 转授：仓库仍不包含任何 UrbanScene3D 点数据与由其
+生成的 World Package（`worlds/` 与 `data/raw/` 不入库），你自行下载该数据集时仍须遵守上面引用的作者条款。展示六城的地方
+（应用的关于页、本文件与 README）都保留上面的 ECCV 2022 引用。
+
 ## 5. Brand assets
 
 The ANet logo (`apps/web/public/brand/anet-logo.svg`, a byte-identical copy of `docs/media/anet-logo.svg` in
@@ -268,4 +286,4 @@ reimplemented in Python.
 | lieflat-charts | PolyForm Noncommercial License 1.0.0 | https://polyformproject.org/licenses/noncommercial/1.0.0 |
 | openlidarviewer | GNU Affero General Public License v3.0 only | https://www.gnu.org/licenses/agpl-3.0.html |
 | WindNinja | Public domain statement of the Rocky Mountain Research Station | https://github.com/firelab/windninja/blob/master/LICENSE |
-| UrbanScene3D | Dataset terms quoted in section 4 | https://github.com/Linxius/UrbanScene3D |
+| UrbanScene3D | Dataset terms quoted in section 4; ANet-Drone4D deployments use it under authorization of the rights holders | https://github.com/Linxius/UrbanScene3D |
