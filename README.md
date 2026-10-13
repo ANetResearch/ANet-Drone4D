@@ -7,12 +7,13 @@
 A real-world grounded 4D world runtime for autonomous multi-agent drones.<br/>
 Stream a city-scale point cloud into any browser, fly a simulated fleet of up to 1,000 drones through wind and
 weather on one server clock, and let the drones discover and delegate work to each other over <a href="https://github.com/ANetResearch/ANet">ANet</a>.<br/>
-No GPU needed on the server.
+Each visitor can open an isolated sandbox with targets, nests and tasks, operated from the browser or through the open API.<br/>
+The server requires no GPU.
 
 [![License](https://img.shields.io/badge/license-modified%20Apache--2.0-1f1f1f)](LICENSE)
 [![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
 [![Live demo](https://img.shields.io/badge/live%20demo-drone4d.agentnetwork.org.cn-e0322d)](https://drone4d.agentnetwork.org.cn)
-[![Status](https://img.shields.io/badge/status-V0.1%20%28D1%29%20%C2%B7%20P0%2025%2F25-1f1f1f)](#d1-acceptance)
+[![Status](https://img.shields.io/badge/status-V0.2--demo%20%28D2%29%20%C2%B7%20build%200.2.0-1f1f1f)](#d2-acceptance)
 [![Python](https://img.shields.io/badge/Python-3.12-1f1f1f)](pyproject.toml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-7.0-1f1f1f)](apps/web/package.json)
 [![React](https://img.shields.io/badge/React-19-1f1f1f)](apps/web/package.json)
@@ -22,7 +23,7 @@ No GPU needed on the server.
 [![Specs](https://img.shields.io/badge/design%20specs-26%20%2B%2085%20ADRs-1f1f1f)](#documentation)
 [![ANet](https://img.shields.io/badge/agents-ANet-1f1f1f)](https://github.com/ANetResearch/ANet)
 
-[Live demo](https://drone4d.agentnetwork.org.cn) · [Quick start](#quick-start) · [Features](#features) · [Acceptance](#d1-acceptance) · [How it works](#how-it-works) · [Roadmap](#roadmap) · [Docs](#documentation) · [ANet](https://github.com/ANetResearch/ANet)
+[Live demo](https://drone4d.agentnetwork.org.cn) · [Quick start](#quick-start) · [Features](#features) · [Open API](#open-api-and-python-sdk) · [Acceptance](#d2-acceptance) · [How it works](#how-it-works) · [Roadmap](#roadmap) · [Docs](#documentation) · [ANet](https://github.com/ANetResearch/ANet)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -32,7 +33,7 @@ No GPU needed on the server.
 
 <img src="docs/media/screenshot-hero.jpg" alt="The ANet Drone4D sandbox on ANet Synthetic City: world, layer and weather panels, a fleet list of seven P600 drones, the timeline and the performance HUD around the point-cloud city" width="100%" />
 
-<sub>**Screenshot of the current build**, not concept art. The city is **ANet Synthetic City**, the synthetic demo city
+<sub>**Screenshot of the V0.1 (D1) build**, not concept art. The city is **ANet Synthetic City**, the synthetic demo city
 that `make demo-world` generates in about 25 s (no real place, no third-party data), running scenario S0: two P600s
 spiral around the 318 m ANet Tower (red trail) while two more cover city blocks. Captured on an 8-core machine with no
 GPU (SwiftShader software rendering), with the point budget fixed at 1.5 M points by a test switch (the badge on the
@@ -47,21 +48,33 @@ frame on the same no-GPU machine (0.1 s of simulation per frame) and played back
 
 ## Try it online
 
-**[drone4d.agentnetwork.org.cn](https://drone4d.agentnetwork.org.cn)** is a public instance of the current build. There
-is nothing to install and no sign-in: **Launch demo** on the landing page opens the sandbox at `/world/synthcity`.
+**[drone4d.agentnetwork.org.cn](https://drone4d.agentnetwork.org.cn)** is the public instance of the current release,
+V0.2-demo (build 0.2.0). No installation or sign-in is required. The landing page offers two entry points:
+**Launch demo** opens the shared show at `/world/synthcity`, and **Open my sandbox** starts a private simulation.
 
-- **Read-only.** Every visitor is a viewer: orbit and switch cameras, follow and select drones, and inspect telemetry,
-  layers, the timeline and the performance panel. Sending commands and changing the weather are disabled.
-- **What runs there.** ANet Synthetic City and scenario S0 on a loop: seven P600s scan the ANet Tower, cover two city
-  blocks and fly a V formation along the river, and each run starts over with the weather order (clear, light rain,
-  fog) rotated by one.
-- **What it leaves out.** Only the synthetic city is served, since the six UrbanScene3D cities may not be
-  redistributed. Heavy server-side features (GPU reconstruction, recording and replay, the agent runtime) are not
-  offered.
-- **Where it renders.** The server is a 4-core machine with no GPU that runs physics, safety, missions and the
-  environment. The point cloud, weather and interface render in your browser, so image quality and frame rate depend
-  on your device's GPU. Desktop Chrome or Edge works best, on a machine with a discrete or integrated GPU; phones are
-  not supported yet.
+- **Shared show.** A read-only session runs scenario S7 continuously: an area guard over ANet Synthetic City that
+  hands detected targets to a 7×24 relay watch, on a simulation calendar that follows Beijing time. Visitors can
+  switch cameras, follow and select drones, open the FPV and the day, night and thermal sensor views, and inspect
+  targets, relay statistics, the vehicle catalogue and the GSD calculator. Viewing does not occupy a sandbox slot.
+- **My sandbox.** Each visitor may open one isolated sandbox with its own simulation process: choose one of seven
+  worlds and a scenario template (T1 to T6), then place drones, targets and nests, run tasks, take manual control
+  and switch sensor views. A sandbox starts with 30 min and can be renewed up to 120 min; renewal is paused while
+  other visitors are queued.
+- **Capacity and queues.** Sandbox slots and live viewing seats are capped. When they are full, visitors join a queue
+  with a position and an estimated wait; the landing page and the boot screen show the current capacity. After a
+  period without interaction (5 min when viewing, 10 min in a sandbox) the page enters energy-saving mode: a viewer
+  releases its seat, and a sandbox is saved to disk and resumed on the next interaction.
+- **Seven worlds.** ANet Synthetic City and the six UrbanScene3D cities, which the project uses under authorization
+  from the dataset's rights holders (see [Data and citation](#data-and-citation)).
+- **Devices.** Desktop browsers get the full interface. Tablets get a landscape commander layout with touch gestures
+  and virtual sticks, and phones a five-tab layout with quick commands.
+- **Open API.** [`/sandbox/api`](https://drone4d.agentnetwork.org.cn/sandbox/api) documents every sandbox operation,
+  and the [Python SDK](#open-api-and-python-sdk) drives the same API.
+- **Where it renders.** The server is a 4-core machine without a GPU that runs physics, safety, missions, perception
+  and the environment. The point cloud, weather and interface render in the visitor's browser, so image quality and
+  frame rate depend on the device's GPU.
+- **Not offered.** Heavy server-side features (GPU reconstruction, recording and replay, the agent runtime) are not
+  available on the public instance.
 
 The deployment kit is in [tools/deploy/emax/](tools/deploy/emax/) and the topology in
 [docs/19 §3.7](docs/19-部署与运维说明书.md) (both Chinese).
@@ -92,9 +105,9 @@ and the timeline share one simulation clock, so any moment can be paused, steppe
 ## Features
 
 > [!NOTE]
-> The illustration at the top of each feature is concept art, made for this README with an image model and graded to
-> the ANet Graphite palette. Images captioned **Screenshot** are real captures of the current build in ANet Synthetic
-> City, the synthetic demo city (see [Quick start](#quick-start)).
+> Where a feature opens with an illustration, it is concept art, made for this README with an image model and graded
+> to the ANet Graphite palette. Images captioned **Screenshot** are real captures of the V0.1 (D1) build in ANet
+> Synthetic City, the synthetic demo city (see [Quick start](#quick-start)).
 
 ### Reality → World
 
@@ -173,7 +186,91 @@ estimator, and delegates the confirmation to the best one; the result is checked
 predicate (TSIR, from ANetCore). V0.1 runs this on an in-process Mock ANet; S3 passes end to end with real processes
 (sim-core, api and agent-runtime) and makes the same decisions at ×1 and ×10. Real ANet arrives in V1.0.
 
-### And also
+### Interactive sandbox (V0.2-demo)
+
+Each sandbox is an isolated session with its own sim-core on the sandbox100 clock profile, supervised by
+**sandbox-pool** and served by **sandbox-api**, while the D1 shared show runs unchanged beside it. A session holds up
+to 12 drones, 30 targets and 4 nests, starts from a per-world scenario template (T1 point watch to T6 manual flight
+with sensor views), and can export its configuration as a snapshot, restore it, or move to another world. Admission
+follows a capacity model: the number of concurrent sandboxes is derived from measured session cost (hard cap 6),
+further requests wait in a long-poll queue, and a requested simulation rate is granted only within the CPU budget.
+Manual control takes over a drone from the keyboard or virtual sticks, and a soft fence slows the drone before it
+enters a sensitivity range.
+
+### Targets and quantified perception
+
+Targets come in six classes (person, drone, machine, dog, vehicle and object) with size, motion, appearance,
+reflectance, thermal signature, radar cross-section and a periodic sound source. Each target carries visual and
+acoustic sensitivity ranges: by default a drone that enters a configured range and dwells there is discovered
+(geometric mode), and a physical mode based on signal margins is available. Perception applies Johnson criteria and
+TTPF to detection, recognition and identification across EO, night (near infrared with an 850 nm illuminator), LWIR,
+MID-360, millimetre-wave radar and acoustic array sensors; a confirmed capture requires an imaging sensor to hold
+P ≥ 0.9 at the required level for 1 s. For every target and drone pair, the perception readout reports received sound
+pressure, threshold and margin, angular size, equivalent pixels, contrast, and per-modality and combined display
+probabilities.
+
+### Nests, tasking and 7×24 relay watch
+
+Nests (box, launcher and VTOL pad) hold drones, batteries and charging channels, and support battery swap or charging.
+Six task types (point watch, polyline patrol, multi-vehicle area patrol, GSD area scan, perimeter patrol and relay
+watch) and the composite area guard are decomposed into work items and assigned by a greedy allocator across nests
+and models under capability and energy constraints; an Allocator interface is reserved for model-, LLM- and
+agent-based allocators. The GSD scan derives altitude and strip width from the required ground sample distance,
+removes obstacle cells, fills gaps, and dispatches several vehicles whenever one sortie or one distant viewpoint
+cannot cover the area. The relay watch keeps a target under continuous observation from stations outside its
+sensitivity ranges: it consults a feasibility window table, dispatches relief ahead of time from a day and night
+forecast, and accounts for battery and charger throughput; a dry run reports whether a configuration is sustainable
+7×24 and which resource is the bottleneck.
+
+### Open API and Python SDK
+
+The sandbox exposes REST v1 under `/api/sandbox/v1` together with the `awr.rt.v1` realtime protocol. The web
+interface and the API carry the same permissions, and every command passes the same admission and safety checks. The OpenAPI 3.1
+document is served at `/api/sandbox/v1/openapi.json` and rendered, with copyable examples, at
+[`/sandbox/api`](https://drone4d.agentnetwork.org.cn/sandbox/api). The single-file Python SDK
+[`tools/sdk/awr_sandbox.py`](tools/sdk/awr_sandbox.py) (Python 3.9 to 3.13; httpx, websockets and msgpack) handles
+queuing, proof of work, renewal, resumption after energy saving and binary frame decoding:
+
+```sh
+pip install "httpx>=0.24" "websockets>=12" "msgpack>=1.0"
+curl -O https://drone4d.agentnetwork.org.cn/sdk/awr_sandbox.py
+```
+
+```python
+from awr_sandbox import Sandbox
+
+sb = Sandbox("https://drone4d.agentnetwork.org.cn")
+with sb.create("synthcity", "t5_area_guard") as s:   # queues when full; solves the proof of work when required
+    print(s.state()["state"])
+    s.clock("speed", rate=5)                          # a capped request returns the granted rate
+    for msg in s.stream(["sandbox/session"], seconds=3):
+        print(msg.topic, msg.data)
+```
+
+The examples in [tools/sdk/examples/](tools/sdk/examples/) cover manual velocity control, sensors, targets and
+capture, a GSD scan dry run and an external allocator; [tools/sdk/README.md](tools/sdk/README.md) (Chinese) lists
+every call.
+
+### Vehicle catalogue, fixed-wing and VTOL
+
+The catalogue contains the P600 digital twin in its MID-360 configuration (profile v2) and four generic reference
+models: two quadrotors (AWR-Q1 and AWR-Q9), a long-endurance fixed-wing (AWR-F1) and a VTOL (AWR-V1). Preset models
+are read-only; a session may clone and edit them within validated ranges. Fixed-wing flight uses coordinated-turn
+kinematics and an energy model, with the loiter radius adjusted for wind, and the VTOL model includes transition and
+hover limits. All reference values are simulation parameters, not specifications of real products.
+
+### Boot, capacity and devices (D2.1)
+
+The boot screen shows the version line (`V<version>-<channel> · <commit> · <date>`) before any application script
+runs, together with a five-segment progress bar and the current live viewing and sandbox capacity, including any
+queue. Concurrency is counted in sandbox slots and live viewing seats, each with its own queue. An idle page enters
+energy-saving mode, closes its realtime connection and renders the last state statically; an idle sandbox is
+checkpointed to disk and releases its slot. Phone and tablet layouts, touch gestures, mobile quality tiers and PWA
+full screen extend the sandbox to mobile devices. Field views (acoustic, visual, thermal and radar) draw the emission
+field of each drone as a spherical point field with iso-shells, and perception volumes around a selected target show
+where a drone would be heard or seen.
+
+### Further capabilities
 
 - **Time as an axis.** Pause, single-step and speeds from ×0.25 to ×10; recording and replay (MCAP) with replayed
   frames byte-identical to the recording; deterministic re-simulation from the input log.
@@ -191,6 +288,44 @@ predicate (TSIR, from ANetCore). V0.1 runs this on an in-process Mock ANet; S3 p
   [live demo](#try-it-online), are opt-in.
 - **Contracts first.** 75 JSON Schemas generate the Python and TypeScript types, and golden files keep both sides in
   step. A supervisor with heartbeats, backoff and circuit breaking runs every process.
+
+## D2 acceptance
+
+V0.2-demo (D2 and D2.1) is accepted against 55 items, D2-AC-01 to D2-AC-55 in
+[docs/04](docs/04-D2-设计增补与决策记录.md) §13 and §15.14; 50 are P0 and 5 are P1. Round 1 (2026-10-11 to 10-12)
+measured every item. After the D2-FX-R2 fixes, round 2 (2026-10-12 to 10-13, build 0.2.0) re-measured the 18 items
+that had failed or were not measured, and the full regression suite covered the rest:
+
+| Items | Pass | Fail | Not measured |
+|---|---|---|---|
+| P0 (50) | **41** | 9 | 0 |
+| P1 (5) | **3** | 0 | 2 |
+| **All (55)** | **44** | **9** | **2** |
+
+Round 2 ran the 24 h soak (D2-AC-39) at its full duration: S7 relay watch with 24 viewers for 24.5 h, with no
+unexpected restarts, no out-of-memory events, sim-core memory growth of 0.48 MB/h and the 04:00 day rollover on time.
+After the fixes, first-frame time is 64% shorter than in D1, per-session simulation cost fell from 0.46 to 0.22 cores,
+the fixed-wing wind and concurrent patrol defects are resolved, and task and relay state match field by field after
+parking and resuming.
+
+V0.2-demo is released with the remaining 9 items as known issues. They trace to three causes:
+
+1. **Sandbox capacity on the public host.** With four fully loaded sessions the sandbox CPU group reaches its 1.36-core
+   limit, per-session real-time factor drops to about 0.58 and new sessions take more than 6 s to become ready
+   (D2-AC-02, 04, 07, 08, 55). The public deployment caps concurrent sandbox sessions at two; further visitors queue.
+2. **Relay gaps in daytime.** Random-walk targets briefly leave the on-station observer's line of sight, producing
+   short monitoring gaps in the 24 h batches (D2-AC-19, 20, 35).
+3. **Software-rendered frame pacing.** Without a hardware GPU, the synthetic-city default view renders at a median of
+   50 ms per frame (D2-AC-30).
+
+D2-AC-27 (72 h and 7-day observation of the public site) and D2-AC-46 (measured power-saving on the public host) are
+measured after this deployment.
+
+> [!NOTE]
+> **Test setup.** The same 8-core virtual machine without a GPU as D1, under the ADR-033 performance protocol; the
+> public host's resources are simulated with cgroups (CPUQuota 250%, MemoryMax 2 GiB, 4 cores). Per-item results,
+> evidence and diagnosis: [D2 acceptance report, round 2](docs/impl/D2-验收报告-第2轮.md) and
+> [round 1](docs/impl/D2-验收报告-第1轮.md).
 
 ## D1 acceptance
 
@@ -275,11 +410,11 @@ six cities and a browser.
 
 ## Quick start
 
-**You need** Linux x86-64 (Ubuntu 22.04 or 24.04), Python 3.12, Node 22.12 (`.nvmrc`), make and git, about 20 GB of
+**Requirements:** Linux x86-64 (Ubuntu 22.04 or 24.04), Python 3.12, Node 22.12 (`.nvmrc`), make and git, about 20 GB of
 disk and 1 GiB free in `/dev/shm`. The server needs no GPU. Any desktop browser with WebGL2 can connect; a GPU on the
 viewing machine unlocks the higher quality rungs.
 
-**Try it with no download.** `make demo-world` generates ANet Synthetic City, the synthetic demo city, from a fixed
+**Run without downloading data.** `make demo-world` generates ANet Synthetic City, the synthetic demo city, from a fixed
 seed; nothing is fetched:
 
 ```sh
@@ -327,6 +462,10 @@ ssh -N -L 8000:127.0.0.1:8000 -o ExitOnForwardFailure=yes -o Compression=no <use
 ```
 
 For a LAN demo, `AWR_BIND=0.0.0.0 AWR_ORIGINS=http://<server-ip>:8000 make run` opens the port to the network.
+
+**Sandboxes on your own machine.** `AWR_PROFILE=sandbox make run` starts the stack with the sandbox control plane
+(sandbox-pool and sandbox-api, defined as the `sandbox` profile in [configs/runtime.yaml](configs/runtime.yaml)). The
+sandbox API then listens on `http://127.0.0.1:8002`, the default address of the SDK examples.
 
 <details>
 <summary><b>More commands</b></summary>
@@ -409,16 +548,22 @@ flowchart LR
 6. **Act.** Clicking the ground runs a `ray_hit` query on the DSM. The GoTo command passes admission (lease,
    parameters, capabilities, geofence) and comes back as `accepted`, `running`, then `succeeded`.
 
+V0.2-demo adds a sandbox layer next to this pipeline. **sandbox-pool** admits, queues, parks and reclaims sessions,
+governs their simulation rates and runs a shared planning service; **sandbox-api** instantiates one Gateway per
+session behind the same `awr.rt.v1` protocol. Each sandbox runs its own sim-core on the sandbox100 clock profile, the
+shared show keeps its own CPU group, and in deployment nginx routes requests by path and serves the world files
+statically.
+
 ### The chain, today and next
 
-| Stage | What it means | In V0.1 | Next |
+| Stage | What it means | Current | Next |
 |---|---|---|---|
 | **Reality** | Point clouds, images, LiDAR and GNSS from a real place | UrbanScene3D sampled city point clouds (6 cities, about 5 M points each), plus the generated ANet Synthetic City | Capture sessions with a Livox MID-360 and RTK (V0.5) |
 | **Reconstruction** | Turn captures into metric 3D | Engine Adapter v2, Recon IR and the job state machine, end to end with a mock engine (CLI) | LingBot-Map, DA3-Streaming and MapAnything on a GPU worker (V0.5) |
 | **World** | The core asset, versioned | World Package v1 with geometry queries; progressive Web streaming | COPC and 3D Tiles export (V0.5); 3DGS visual layer (V0.8) |
-| **Environment** | One field E(x, y, z, t) | L0/L1 wind with turbulence, 12 presets, wind as force, Low visuals, streamlines | L2 wind field library (V0.3); sensor degradation (V0.4) |
-| **Simulation** | Many drones, one clock | FleetSim L1 for 1 to 1,000 drones (1,000 in real time on about half a core), safety, missions, recording and replay | PX4 SIH (V0.2), SITL lockstep (V0.4), HITL (V0.6) |
-| **Agent** | Drones discover and delegate | In-process Mock ANet, contract net, scenario S3 | Real ANet: ANetHub plus a daemon per drone, CBBA (V1.0) |
+| **Environment** | One field E(x, y, z, t) | L0/L1 wind with turbulence, 12 presets, wind as force, Low visuals, streamlines; simulation calendar, sun position, illuminance and per-wavelength extinction (V0.2-demo) | L2 wind field library (V0.3); sensor degradation (V0.4) |
+| **Simulation** | Many drones, one clock | FleetSim L1 for 1 to 1,000 drones (1,000 in real time on about half a core), safety, missions, recording and replay; per-session sandboxes, fixed-wing and VTOL kinematics, targets and perception (V0.2-demo) | PX4 SIH (V0.2), SITL lockstep (V0.4), HITL (V0.6) |
+| **Agent** | Drones discover and delegate | In-process Mock ANet, contract net, scenario S3; greedy allocator behind an Allocator interface (V0.2-demo) | Real ANet: ANetHub plus a daemon per drone, CBBA (V1.0) |
 
 ## Design system
 
@@ -466,24 +611,28 @@ The design documents are written in Chinese, with technical terms in English. St
 
 | | |
 |---|---|
-| **[03 Design baseline and decision record](docs/03-设计基线与决策记录.md)** | The single baseline: principles, architecture, path ownership, 85 ADRs, the version plan, D1 scope and acceptance (D1-AC-01 to D1-AC-35) |
+| **[03 Design baseline and decision record](docs/03-设计基线与决策记录.md)** | The D1 baseline: principles, architecture, path ownership, 85 ADRs, the version plan, D1 scope and acceptance (D1-AC-01 to D1-AC-35) |
+| **[04 D2 design supplement and decision record](docs/04-D2-设计增补与决策记录.md)** · **[20 Vehicle and sensor catalogue](docs/20-机型与传感器目录.md)** | The D2 and D2.1 baseline: multi-tenant sandbox and capacity model, vehicle catalogue, targets, perception, tasking and relay watch, open API, ADR-088 to ADR-126, acceptance D2-AC-01 to D2-AC-55; airframe and sensor parameters |
 | **[10 Architecture](docs/10-系统架构说明书.md)** · **[11 Technology selection](docs/11-技术选型说明书.md)** | Process topology, data flow, concurrency and capacity; every technology choice with locked versions |
 | **[12 Business logic](docs/12-业务逻辑设计说明书.md)** · **[13 Product PRD](docs/13-产品设计PRD.md)** · **[14 UI interaction](docs/14-UI交互设计PRD.md)** | Flight states, command admission, leases, safety, scenarios and contract net; product scope; layout and interaction |
 | **[15 Visual design and palette](docs/15-视觉设计规范与色卡.md)** · **[16 World data](docs/16-World数据规范.md)** · **[17 API and realtime protocol](docs/17-接口与实时协议规范.md)** | ANet Graphite tokens; World Package v1, ANET_Q16 and every file format; REST and `awr.rt.v1` byte layouts |
 | **[18 Performance and testing](docs/18-性能与测试方案.md)** · **[19 Deployment and operations](docs/19-部署与运维说明书.md)** | Budgets, flight60, fleet ladder, performance protocol and lint rules; install, run, access and monitoring |
-| **Module PRDs** | [M01 Reconstruction](docs/modules/M01-重建引擎PRD.md) · [M02 LiDAR fusion and georeferencing](docs/modules/M02-LiDAR融合与地理配准PRD.md) · [M03 World model and tiling](docs/modules/M03-World模型与Ingest切片PRD.md) · [M04 Geometry queries](docs/modules/M04-几何世界查询服务PRD.md) · [M05 Web point cloud engine](docs/modules/M05-Web点云引擎PRD.md) · [M06 Viewport and render backends](docs/modules/M06-Web视口与渲染后端PRD.md) · [M07 Environment](docs/modules/M07-环境引擎PRD.md) · [M08 Simulation core and vehicles](docs/modules/M08-仿真内核与飞行器适配PRD.md) · [M09 Safety and health](docs/modules/M09-安全与健康PRD.md) · [M10 Missions, planning and swarms](docs/modules/M10-任务规划与集群PRD.md) · [M11 Realtime gateway](docs/modules/M11-实时网关PRD.md) · [M12 Timeline, recording and replay](docs/modules/M12-时间轴录制与回放PRD.md) · [M13 Sensor simulation](docs/modules/M13-传感器仿真PRD.md) · [M14 Agent runtime and ANet](docs/modules/M14-智能体运行时与ANet-PRD.md) · [M15 UI shell and design system](docs/modules/M15-前端UI壳与设计体系组件PRD.md) · [M16 Demo data, scenarios and smoothness tests](docs/modules/M16-演示数据剧本与流畅性测试PRD.md) |
+| **Module PRDs** | [M01 Reconstruction](docs/modules/M01-重建引擎PRD.md) · [M02 LiDAR fusion and georeferencing](docs/modules/M02-LiDAR融合与地理配准PRD.md) · [M03 World model and tiling](docs/modules/M03-World模型与Ingest切片PRD.md) · [M04 Geometry queries](docs/modules/M04-几何世界查询服务PRD.md) · [M05 Web point cloud engine](docs/modules/M05-Web点云引擎PRD.md) · [M06 Viewport and render backends](docs/modules/M06-Web视口与渲染后端PRD.md) · [M07 Environment](docs/modules/M07-环境引擎PRD.md) · [M08 Simulation core and vehicles](docs/modules/M08-仿真内核与飞行器适配PRD.md) · [M09 Safety and health](docs/modules/M09-安全与健康PRD.md) · [M10 Missions, planning and swarms](docs/modules/M10-任务规划与集群PRD.md) · [M11 Realtime gateway](docs/modules/M11-实时网关PRD.md) · [M12 Timeline, recording and replay](docs/modules/M12-时间轴录制与回放PRD.md) · [M13 Sensor simulation](docs/modules/M13-传感器仿真PRD.md) · [M14 Agent runtime and ANet](docs/modules/M14-智能体运行时与ANet-PRD.md) · [M15 UI shell and design system](docs/modules/M15-前端UI壳与设计体系组件PRD.md) · [M16 Demo data, scenarios and smoothness tests](docs/modules/M16-演示数据剧本与流畅性测试PRD.md) · [M17 Sandbox sessions and open API](docs/modules/M17-沙盒会话与开放接口PRD.md) · [M18 and M19 Targets and perception](docs/modules/M18-M19-识别物与感知对抗PRD.md) · [M20 Tasking, nests and relay watch](docs/modules/M20-任务编排机巢与接力监控PRD.md) |
 | **[Research notes](docs/research/00-index.md)** | 46 notes behind the decisions: reconstruction, Web point clouds, flight stacks, swarms, weather, realtime transport, the design system and ANet |
-| **[Implementation reports](docs/impl/)** | What each work package built and tested; start with the [D1 delivery summary](docs/impl/D1-交付总结.md) (scope, architecture, final acceptance status, known issues, how to run and test); the [D1 acceptance report, round 6](docs/impl/D1-验收报告-第6轮.md) holds the measurements |
+| **[Implementation reports](docs/impl/)** | What each work package built and tested; start with the [D1 delivery summary](docs/impl/D1-交付总结.md) (scope, architecture, final acceptance status, known issues, how to run and test); the [D1 acceptance report, round 6](docs/impl/D1-验收报告-第6轮.md) and the [D2 acceptance report, round 2](docs/impl/D2-验收报告-第2轮.md) hold the measurements |
 | **[Original design](docs/01-design.md)** | The founding design (read-only), from which the baseline was derived |
 
 ## Roadmap
 
 One complete chain first, then every layer covered by a mock, then real backends swapped in one layer at a time
 behind interfaces that do not change ([docs/03](docs/03-设计基线与决策记录.md) §8.1).
+V0.2-demo is a demonstration and open-interface slice that runs alongside the V0.2 theme and leaves its exit criteria
+unchanged (ADR-088 in [docs/04](docs/04-D2-设计增补与决策记录.md)).
 
 | Version | Theme | Highlights | Status |
 |---|---|---|---|
-| **V0.1 (D1)** | A world runtime with every layer in place | Six cities and a generated demo city, point-cloud streaming, FleetSim for 1 to 1,000 drones, safety, missions, L0/L1 environment, recording and replay, Mock ANet | **P0 25/25; 36 of 38 items pass**; 2 P1 known issues remain ([D1 acceptance](#d1-acceptance)) |
+| **V0.1 (D1)** | A world runtime with every layer in place | Six cities and a generated demo city, point-cloud streaming, FleetSim for 1 to 1,000 drones, safety, missions, L0/L1 environment, recording and replay, Mock ANet | **Released.** P0 25/25; 36 of 38 items pass; 2 P1 known issues remain ([D1 acceptance](#d1-acceptance)) |
+| **V0.2-demo (D2)** | Interactive sandbox and open API | Per-visitor sandboxes with a concurrency cap and queue, target management and quantified perception, nests with greedy allocation, 7×24 relay watch, open API with a Python SDK, vehicle catalogue with fixed-wing and VTOL, seven world base maps; D2.1: boot screen with version, progress and queue, energy-saving mode, phone and tablet layouts, field views for acoustic, visual, thermal and radar perception | **Released** (build 0.2.0). Round 1: 37 of 55 items pass; exit criteria not yet met ([D2 acceptance](#d2-acceptance)) |
 | V0.2 | The real flight stack in the loop | PX4 SIH (up to 8 drones) through MAVSDK, Prometheus backend, virtual MID-360, ingest of any PLY or LAS cloud, a Python `awr.rt.v1` client | Planned |
 | V0.3 | Environment physics and planning | L2 mass-consistent wind library, GPU wind sampling, High environment tier, B-spline and ESDF planning | Planned |
 | V0.4 | Environment into sensors and dynamics | Camera and LiDAR degradation, L2 aerodynamic moments, PX4 SITL lockstep, rewind and what-if forks, P600 parameter identification | Planned |
@@ -505,7 +654,9 @@ Here a drone is the first kind of **physical agent**. It publishes what it can d
 quotes and delegate tasks, and the outcome is checked against a receipt and an acceptance predicate. ANet is the
 collaboration plane, not the control plane: a delegated task becomes an AGENT lease and ordinary commands, which pass
 the same admission and safety checks as any operator's. V0.1 runs an in-process Mock ANet with these semantics
-(agent-runtime); V1.0 moves to real ANet with a self-hosted ANetHub and one daemon per drone.
+(agent-runtime); V1.0 moves to real ANet with a self-hosted ANetHub and one daemon per drone. The task allocation of
+V0.2-demo sits behind an Allocator interface whose default is a greedy allocator; an ANet contract-net allocator is
+planned for V1.0.
 
 ## Data and citation
 
@@ -519,6 +670,13 @@ node counts and bounding boxes, manifest fields and a test camera path), never p
 [authors' release](https://github.com/Linxius/UrbanScene3D/releases/tag/v0.0.1) and checks every sha256 against
 [configs/data.yaml](configs/data.yaml). The commercial permission in our LICENSE does not extend to the dataset. The
 authors' terms are quoted in full in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) §4.
+
+**Used under authorization in our deployments (经数据集权利方授权使用).** The ANet-Drone4D project has obtained authorization from the rights
+holders of UrbanScene3D to use World Packages built from it in the project's own deployments. From V0.2-demo the
+[public demo](https://drone4d.agentnetwork.org.cn) offers all six cities next to the synthetic city, its deployment
+bundle carries their World Packages, and screenshots in this README may show them. The authorization does not pass to
+you through this repository or its license: the repository still holds no UrbanScene3D data, and when you download it
+yourself the authors' terms above apply. Please keep citing the ECCV 2022 paper below.
 
 ```bibtex
 @inproceedings{UrbanScene3D,
@@ -536,7 +694,7 @@ authors' terms are quoted in full in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICE
   title   = {ANet-Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.1.0},
+  version = {0.2.0},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```
@@ -593,15 +751,17 @@ especially welcome. Security reports go to hi@anet0.com ([SECURITY.md](SECURITY.
 
 ANet-Drone4D is released under the **ANet Open Source License (ANet-Drone4D)**, a modified Apache License 2.0:
 
-- **Use it commercially.** Embed the world runtime, the World Package tools or the Web sandbox in your product, or
-  run it on your own infrastructure.
+- **Commercial use.** The world runtime, the World Package tools and the Web sandbox may be embedded in your product
+  or run on your own infrastructure.
 - **Two added conditions.** Operating a *multi-tenant hosted simulation or digital twin service*, offered to unrelated
   organizations or individuals, needs written authorization (a service for one person or inside one organization, a
   free research or teaching service run by or for a university, a school or a public or non-profit research body,
   and letting others watch an instance you run are exempt); and the ANet logo and copyright notices in the Web
   sandbox and the `awr` CLI stay in place.
 - **Data and third-party parts keep their own terms.** UrbanScene3D is non-commercial only and may not be
-  redistributed; included and adapted components are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+  redistributed (our own deployments use it under authorization of its rights holders, see
+  [Data and citation](#data-and-citation)); included and adapted components are listed in
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 See [LICENSE](LICENSE) and [NOTICE](NOTICE) for the full terms. Commercial licensing and questions: hi@anet0.com.
 
