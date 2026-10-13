@@ -1,0 +1,9 @@
+# vehicles/awr_q9/sensors/nir_ill_l.yaml（awr.sensor.nir_illuminator.v1 挂载文件；槽位 nir_ill，可选挂载；AWR-20 §6.3、§7.5）
+# 与 eo 槽位同轴（on_gimbal_of: eo）；加挂后 9.18 kg、863.3 W、31.0 min（AWR-20 §5.5）。
+schema: awr.sensor.nir_illuminator.v1
+sensor_id: nir_ill
+spec_ref: nir_ill_l@1.0.0
+mount: {xyz_m: [0.20, 0.0, -0.15], rpy_deg: [0, 0, 0]}
+on_gimbal_of: eo
+conf: D
+src: "AWR-20 §6.3：可选挂载，随 GX40 云台转动（随动支架，D）"

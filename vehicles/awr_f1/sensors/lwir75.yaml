@@ -1,0 +1,12 @@
+# vehicles/awr_f1/sensors/lwir75.yaml（awr.sensor.lwir.v1 挂载文件；槽位 lwir，缺省挂载、可拆；AWR-20 §6.4、§7.5）
+# 吊舱内 LWIR 75 mm（HFOV 5.86°），与 EO 同一吊舱云台（on_gimbal_of: eo，共用云台列 0）；质量 0.35 kg、功率 2 W（镜头表）。
+schema: awr.sensor.lwir.v1
+sensor_id: lwir
+spec_ref: lwir640@1.0.0
+mount: {xyz_m: [0.25, 0.05, -0.12], rpy_deg: [0, 0, 0]}
+on_gimbal_of: eo
+lens_mm: 75
+mass_kg: {value: 0.35, conf: D, src: "AWR-20 §6.4 镜头表：75 mm 模块 0.35 kg（吊舱内，不含独立云台）"}
+power_w: {value: 2.0, conf: D, src: "AWR-20 §6.4"}
+conf: D
+src: "AWR-20 §6.1：F1 吊舱 GX40 级 EO + LWIR 75 mm"

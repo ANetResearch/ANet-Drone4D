@@ -1,0 +1,34 @@
+# vehicles/sensor_models/eo_gx40.yaml：传感器型号库（M21，ADR-115；AWR-20 §6.2、§6.3、§7.5、§7.8）。
+# GX40 光电吊舱：1/2.8" 3840 × 2160、1.45 µm、光学变焦 4.8–48 mm（10×）、F1.7–3.2、5 个输出档、机内 850 nm 补光 0.8 W（≤ 200 m）。
+# 光学、输出档与补光取自用户 D2 随附规格（B）；云台角、照度门限、曝光与抖动为模拟参考值（D）。挂载文件以 spec_ref: eo_gx40@1.0.0
+# 引用，只允许覆盖 overridable[] 中的字段（SN-4）。
+schema: awr.sensor.eo_zoom.v1
+model_id: eo_gx40
+model_version: 1.0.0
+display_name: "GX40 光电吊舱"
+reference: false
+mass_kg: {value: 0.4236, conf: B, src: "用户规格：云台 405 g + GCU 18.6 g"}
+power_w: {value: 8.0, conf: D, src: "本文设定（14–53 V 宽压，规格未给功耗）"}
+env_limits: {temp_c: [-20, 50]}
+sensor: {format_in: "1/2.8", width_px: 3840, height_px: 2160, pixel_um: 1.45}
+optics: {f_min_mm: 4.8, f_max_mm: 48.0, f_number: {at_min: 1.7, at_max: 3.2, law: linear_f}, zoom_time_s: 4.0}
+outputs:
+  - {name: 4k,    width_px: 3840, height_px: 2160, crop_w_px: 3840, crop_h_px: 2160, fps: 30}
+  - {name: 1080p, width_px: 1920, height_px: 1080, crop_w_px: 3840, crop_h_px: 2160, fps: 30}
+  - {name: 720p,  width_px: 1280, height_px: 720,  crop_w_px: 3840, crop_h_px: 2160, fps: 30}
+  - {name: sxga,  width_px: 1280, height_px: 1024, crop_w_px: 2700, crop_h_px: 2160, fps: 30}
+  - {name: 1p3m,  width_px: 1280, height_px: 960,  crop_w_px: 2880, crop_h_px: 2160, fps: 30}
+analysis: {default: 1080p, k4_requires: compute.orin_nx}
+exposure: {day_s: 0.001, lowlight_s: 0.0333, shutter_min_s: 3.3e-5, shutter_max_s: 1.0}
+jitter_urad: {fast: 10, slow: 30, fast_max_exposure_s: 0.004}
+gimbal: {pitch_min_deg: -90, pitch_max_deg: 30, yaw_min_deg: -160, yaw_max_deg: 160, rate_max_deg_s: 90, integrated: true}
+night:
+  e_min_color_lx: 0.5
+  e_min_mono_lx: 0.05
+  illuminator: {wavelength_nm: 850, p_w: 0.8, divergence: follow_hfov, r_ref_m: 200, p_ref_w: 0.8,
+                theta_ref_deg: 6.6, rho_ref: 0.3, r_spec_max_m: 200}
+spec_fov: {hfov_deg: [60.2, 6.6], vfov_deg: [36.1, 3.7], dfov_deg: [67.2, 7.6]}
+stream: {protocol: rtsp, codecs: [h264, h264h, h264b, h265, mjpeg], bitrate_mbps: {h265: [0.25, 10], h264: [0.5, 16]}}
+overridable: [mount, gimbal, mass_kg, power_w, analysis.default]
+conf: B
+src: "用户 D2 随附规格（光学、输出档、补光）；云台角、照度、曝光与抖动为 AWR-04 §6.1、§6.2 的模拟参考值（D）"

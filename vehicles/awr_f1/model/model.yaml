@@ -1,0 +1,14 @@
+# vehicles/awr_f1/model/model.yaml（awr.vehicle_model.v1；AWR-16 §11.5；AWR-20 §7.1）
+# 参考机型没有源网格（source: null）：低模由 tools/vehicles/lowpoly.py 按 frame.type 程序化生成（≤ 300 三角形，Tier S 档 ≤ 150），
+# hero 档以同一低模写出（fallback lowpoly_only）。生成：python tools/vehicles/lowpoly.py --vehicle vehicles/awr_f1 --as-hero
+schema: awr.vehicle_model.v1
+source: null
+outputs:
+  - {name: hero, path: awr_f1.glb, max_triangles: 300, method: "tools/vehicles/lowpoly.py（机身盒 + 主翼 + 平尾 + 垂尾 + 推进桨盘），hero 档同低模"}
+  - {name: lowpoly, path: awr_f1_lowpoly.glb, max_triangles: 300, method: "tools/vehicles/lowpoly.py（机身盒 + 主翼 + 平尾 + 垂尾 + 推进桨盘）"}
+  - {name: lowpoly_s, path: awr_f1_lowpoly.glb, max_triangles: 150, method: "tools/vehicles/lowpoly.py（同文件第二个 mesh，Tier S）"}
+axes:
+  gltf_from_flu: [[0, 1, 0], [0, 0, 1], [1, 0, 0]]
+origin: base_link
+material: {base_color_token: g300, rotor_color_token: g100}
+fallback: lowpoly_only

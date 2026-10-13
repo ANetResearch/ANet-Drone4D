@@ -1,0 +1,23 @@
+# vehicles/sensor_models/mic8.yaml：传感器型号库（M21，ADR-115；AWR-04 §6.1；AWR-20 §6.6）。8 麦克风声阵列。
+# 阵列增益 9 dB（10·lg 8），自噪声抑制与等效距离按构型（多旋翼 25 dB、0.5 m；固定翼 35 dB、1.0 m）。模拟参考值，非任何真实产品（D）。
+schema: awr.sensor.acoustic_array.v1
+model_id: mic8
+model_version: 1.0.0
+display_name: "8 麦克风声阵列"
+reference: true
+mass_kg: {value: 0.30, conf: D, src: "AWR-20 §6.1"}
+power_w: {value: 2.0, conf: D, src: "AWR-20 §6.1"}
+env_limits: {temp_c: [-20, 60]}
+n_mics: 8
+aperture_m: 0.3
+band_hz: [100, 8000]
+array_gain_db: 9
+nr_db: {multirotor: 25, fixed_wing: 35}
+r_ego_m: {multirotor: 0.5, fixed_wing: 1.0}
+az_acc_deg: 5
+rate_hz: 2
+detect_snr_db: 6
+classify: {bands: 3, snr_db: 10}
+overridable: [mount, nr_db, r_ego_m]
+conf: D
+src: "AWR-20 §6.6：模拟参考值，非任何真实产品"

@@ -1,0 +1,8 @@
+# vehicles/awr_q9/sensors/mic8.yaml（awr.sensor.acoustic_array.v1 挂载文件；槽位 mic，缺省挂载、可拆；AWR-20 §6.6、§7.5）
+# 8 麦克风平面阵列（孔径 0.3 m）装于机身下方；多旋翼自噪声抑制 25 dB、等效距离 0.5 m（型号缺省）。
+schema: awr.sensor.acoustic_array.v1
+sensor_id: mic
+spec_ref: mic8@1.0.0
+mount: {xyz_m: [0.0, 0.0, -0.20], rpy_deg: [0, 0, 0]}
+conf: D
+src: "AWR-20 §6.6：Q9 缺省挂载，挂点为本文设定"

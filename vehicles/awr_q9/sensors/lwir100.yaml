@@ -1,0 +1,13 @@
+# vehicles/awr_q9/sensors/lwir100.yaml（awr.sensor.lwir.v1 挂载文件；槽位 lwir，缺省挂载、可拆；AWR-20 §6.1、§6.4、§7.5）
+# lwir640 + 100 mm 镜头（HFOV 4.40°）于独立云台（占云台列 1）：质量 0.48 + 0.15 = 0.63 kg、功率 2 W（镜头表 + gimbal_mass_kg）。
+schema: awr.sensor.lwir.v1
+sensor_id: lwir
+spec_ref: lwir640@1.0.0
+mount: {xyz_m: [0.20, 0.12, -0.12], rpy_deg: [0, 0, 0]}
+lens_mm: 100
+gimbal: {pitch_min_deg: -90, pitch_max_deg: 30, yaw_min_deg: -160, yaw_max_deg: 160, rate_max_deg_s: 90, integrated: false,
+         default_mode: fixed, default_yaw_deg: 0, default_pitch_deg: -15}
+mass_kg: {value: 0.63, conf: D, src: "AWR-20 §6.1：100 mm 模块 0.48 kg + 独立云台 0.15 kg"}
+power_w: {value: 2.0, conf: D, src: "AWR-20 §6.4"}
+conf: D
+src: "AWR-20 §6.1：Q9 缺省挂载 LWIR 100 mm（独立云台），挂点为本文设定"

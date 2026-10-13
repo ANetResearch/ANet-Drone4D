@@ -1,0 +1,9 @@
+# vehicles/awr_v1/sensors/nir_ill_l.yaml（awr.sensor.nir_illuminator.v1 挂载文件；槽位 nir_ill，缺省挂载、可拆；AWR-20 §6.3、§7.5）
+# 与 eo 槽位同轴（on_gimbal_of: eo），吊舱内随云台转动；规格经 spec_ref 取自型号库 nir_ill_l@1.0.0（3 W、5.5°、464.8 m）。
+schema: awr.sensor.nir_illuminator.v1
+sensor_id: nir_ill
+spec_ref: nir_ill_l@1.0.0
+mount: {xyz_m: [0.30, -0.05, -0.15], rpy_deg: [0, 0, 0]}
+on_gimbal_of: eo
+conf: D
+src: "AWR-20 §6.1：V1 缺省挂载"

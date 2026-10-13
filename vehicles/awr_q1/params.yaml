@@ -1,0 +1,72 @@
+# vehicles/awr_q1/params.yaml —— profile awr_q1 1.0.0（awr.vehicle.v1，schema 1.1；AWR-20 §4、§7.3；ADR-115）
+# AWR-Q1 轻型四旋翼：通用化名称的模拟参考机型（catalog.reference = true），全部参数为 D 级，UI 与 API 标注"模拟参考值，非任何真实
+# 产品"。L1 字段按 AWR-20 §4.2 的缩放规则生成：t_max_n 由目标推重比反推；omega_max_rad_s 由桨推力式取整；k_f = t_max/ω²；
+# ΣΩ_hover·c_rd = 0.120·m；CdA/m = 0.0100；惯量 J_x500 × (m/2.064) × (L/0.246)²。悬停功率按 ADR-052 由"可用能量 ÷ 悬停续航"反推。
+schema: awr.vehicle.v1
+profile_version: 1.0.0
+id: awr_q1
+display_name: "AWR-Q1 轻型四旋翼"
+kind: uav
+status: placeholder
+frame: {type: quad_x, rotor_order: px4, body: frd}
+mass_kg: {value: 0.95, conf: D, src: "模拟参考值（AWR-04 §5.2、AWR-20 §4.1）", check: "<= mtow_kg"}
+mtow_kg: {value: 1.05, conf: D, src: "模拟参考值（AWR-20 §4.1）"}
+inertia_kgm2: {value: {xx: 0.00596, yy: 0.00596, zz: 0.01098}, conf: D, src: "J_x500 × (m/2.064) × (0.190/0.246)^2（AWR-20 §4.2 缩放规则）"}
+geometry:
+  wheelbase_m: {value: 0.380, conf: D, src: "模拟参考值（AWR-20 §4.2）"}
+  arm_xy_m: {value: 0.1344, conf: D, src: "0.380/2/√2"}
+  collision_radius_m: {value: 0.31, conf: D, src: "派生：√2·arm_xy + prop.d/2"}
+  size_m: {value: {l: 0.35, w: 0.29, h: 0.11}, conf: D, src: "模拟参考值（AWR-20 §4.2）"}
+motor:
+  n: 4
+  t_max_n: {value: 5.59, conf: D, src: "由目标推重比 2.40 反推（AWR-20 §4.2）"}
+  omega_max_rad_s: {value: 800.0, conf: D, src: "桨推力式 T = C_T·ρ·n²·D⁴（C_T ≈ 0.1）取整"}
+  k_f: {value: 8.734e-6, conf: D, src: "派生：t_max_n / omega_max_rad_s^2"}
+  km_m: {value: 0.016, conf: D, src: "x500 momentConstant"}
+  tau_s: {value: 0.025, conf: D, src: "9–10 in 桨的电机时间常数估计"}
+prop:
+  d_m: {value: 0.239, conf: D, src: "模拟参考值（约 9.4 in）"}
+  c_rd: {value: 5.52e-5, conf: D, src: "ΣΩ_hover·c_rd = 0.120·m（ADR-022 同一口径）"}
+aero:
+  model: composite
+  cda_m2: {value: 0.0095, conf: D, src: "CdA/m = 0.0100（x500 SIH 标定）"}
+battery:
+  cells: 4
+  chemistry: lihv
+  capacity_ah: {value: 5.0, conf: D, src: "模拟参考值"}
+  v_nominal_v: {value: 15.4, conf: D, src: "HV 电芯 3.85 V/节"}
+  capacity_wh: {value: 77.0, conf: D, src: "派生：15.4 V × 5.0 Ah"}
+  usable_frac: {value: 0.85, conf: D, src: "ADR-052"}
+  p_hover_w: {value: 112.2, conf: D, src: "派生：0.85 × 77 Wh / (2100/3600 h)"}
+  hover_endurance_s: {value: 2100, conf: D, src: "模拟参考值：悬停 35 min"}
+  mass_kg: {value: 0.335, conf: D, src: "230 Wh/kg"}
+  v_range_v: [14.0, 17.4]
+  v_storage_v: 15.4
+  pack_id: awr_p4s5
+  packs_per_swap: 1
+limits_profiles:
+  default: awr_q1_std
+  awr_q1_std: {px4_params: {MPC_XY_VEL_MAX: 15.0, MPC_XY_CRUISE: 10.0, MPC_ACC_HOR: 4.0, MC_YAWRATE_MAX: 90.0, MPC_Z_VEL_MAX_UP: 6.0, MPC_Z_VEL_MAX_DN: 5.0}, src: "AWR-20 §4.3 沙盒缺省（模拟参考值）"}
+wind_rating_mps: {value: 12.0, conf: D, src: "模拟参考值（AWR-20 §4.3）"}
+fidelity: {default: l1, supported: [l0, l1]}
+model: model/model.yaml
+sensors:
+  eo: {file: sensors/eo_z8.yaml, default: true, removable: false}
+  lwir: {file: sensors/lwir13.yaml, default: false}
+  gnss: {file: sensors/gnss.yaml, default: true, removable: false}
+  imu: {file: sensors/imu.yaml, default: true, removable: false}
+acoustic: {lwa_hover_dba: 82.0, thrust_exp: 1.5, bpf_hz: 220.0, blades: 2, tonal_db: 12.0, f_pk_hz: 1414.0, conf: D,
+           src: "模拟参考值（AWR-04 §5.2、ADR-097；AWR-20 §4.4）；BPF 为独立参数"}
+visual: {area_m2: {top: 0.07, side: 0.03, front: 0.03}, contrast_sky: -0.7, contrast_ground: 0.2,
+         lights_installed: {nav: true, strobe: true}, night_visible_m: 30}
+rcs_m2: {value: 0.01, conf: D, src: "模拟参考值（77 GHz 量级，AWR-04 §5.2）"}
+ir: {motor_delta_t_k: 15.0}
+link: {model: awr_link_8k, range_m: 8000}
+nav: {hold_sigma_m: {gnss: {h: 0.5, v: 0.3}}}
+env_limits: {temp_c: [-10, 40]}
+capabilities: [flight.hover]
+labels:
+  reference: "模拟参考值，非任何真实产品"
+catalog: {reference: true, category: multirotor, size_class: light, limits_default: awr_q1_std}
+derived: {hover_thrust: 0.417, twr: 2.40, tilt_at_8mps_deg: 7.85, cda_per_mass_m2kg: 0.0100, endurance_check_s: 2100,
+          airframe_residual_kg: 0.515}

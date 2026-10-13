@@ -1,0 +1,75 @@
+# vehicles/awr_q9/params.yaml —— profile awr_q9 1.0.0（awr.vehicle.v1，schema 1.1；AWR-20 §4、§7.3；ADR-115）
+# AWR-Q9 重载四旋翼：通用化名称的模拟参考机型（catalog.reference = true），全部参数为 D 级。起飞重量 9.0 kg 含 1.6 kg 缺省载荷
+# （GX40 0.4236 + LWIR 100 mm 带独立云台 0.63 + mmw77 0.25 + mic8 0.30，AWR-20 §6.1）；2 × 12S 5.9 Ah 并联，每次换电 2 块。
+# L1 字段按 AWR-20 §4.2 的缩放规则生成；悬停功率按 ADR-052 由"可用能量 ÷ 悬停续航"反推（32 min 对应 92.8 W/kg）。
+schema: awr.vehicle.v1
+profile_version: 1.0.0
+id: awr_q9
+display_name: "AWR-Q9 重载四旋翼"
+kind: uav
+status: placeholder
+frame: {type: quad_x, rotor_order: px4, body: frd}
+mass_kg: {value: 9.0, conf: D, src: "模拟参考值：含 1.6 kg 缺省载荷（AWR-04 §5.2、AWR-20 §6.1）", check: "<= mtow_kg"}
+mtow_kg: {value: 9.5, conf: D, src: "模拟参考值（AWR-20 §4.1）"}
+inertia_kgm2: {value: {xx: 0.3166, yy: 0.3166, zz: 0.5836}, conf: D, src: "J_x500 × (m/2.064) × (0.450/0.246)^2（AWR-20 §4.2 缩放规则）"}
+geometry:
+  wheelbase_m: {value: 0.900, conf: D, src: "模拟参考值（AWR-20 §4.2）"}
+  arm_xy_m: {value: 0.3182, conf: D, src: "0.900/2/√2"}
+  collision_radius_m: {value: 0.72, conf: D, src: "派生：√2·arm_xy + prop.d/2"}
+  size_m: {value: {l: 0.81, w: 0.67, h: 0.43}, conf: D, src: "模拟参考值（AWR-20 §4.2）"}
+motor:
+  n: 4
+  t_max_n: {value: 44.13, conf: D, src: "由目标推重比 2.00 反推（AWR-20 §4.2）"}
+  omega_max_rad_s: {value: 450.0, conf: D, src: "桨推力式 T = C_T·ρ·n²·D⁴（C_T ≈ 0.1）取整"}
+  k_f: {value: 2.179e-4, conf: D, src: "派生：t_max_n / omega_max_rad_s^2"}
+  km_m: {value: 0.016, conf: D, src: "x500 momentConstant"}
+  tau_s: {value: 0.06, conf: D, src: "21 in 桨的电机时间常数估计"}
+prop:
+  d_m: {value: 0.533, conf: D, src: "模拟参考值（约 21 in）"}
+  c_rd: {value: 8.49e-4, conf: D, src: "ΣΩ_hover·c_rd = 0.120·m（ADR-022 同一口径）"}
+aero:
+  model: composite
+  cda_m2: {value: 0.090, conf: D, src: "CdA/m = 0.0100（x500 SIH 标定）"}
+battery:
+  cells: 12
+  chemistry: lipo
+  capacity_ah: {value: 11.8, conf: D, src: "2 × 5.9 Ah 并联（awr_p12s6 × 2）"}
+  v_nominal_v: {value: 44.4, conf: D, src: "LiPo 3.7 V/节"}
+  capacity_wh: {value: 524.0, conf: D, src: "2 × 262 Wh（AWR-20 §4.5）"}
+  usable_frac: {value: 0.85, conf: D, src: "ADR-052"}
+  p_hover_w: {value: 835.1, conf: D, src: "派生：0.85 × 524 Wh / (1920/3600 h)"}
+  hover_endurance_s: {value: 1920, conf: D, src: "模拟参考值：典型载荷悬停 32 min"}
+  mass_kg: {value: 2.7, conf: D, src: "2 × 1.35 kg（194 Wh/kg）"}
+  v_range_v: [39.6, 50.4]
+  v_storage_v: 45.6
+  pack_id: awr_p12s6
+  packs_per_swap: 2
+limits_profiles:
+  default: awr_q9_std
+  awr_q9_std: {px4_params: {MPC_XY_VEL_MAX: 20.0, MPC_XY_CRUISE: 12.0, MPC_ACC_HOR: 3.0, MC_YAWRATE_MAX: 45.0, MPC_Z_VEL_MAX_UP: 6.0, MPC_Z_VEL_MAX_DN: 5.0}, src: "AWR-20 §4.3 沙盒缺省（模拟参考值）"}
+wind_rating_mps: {value: 15.0, conf: D, src: "模拟参考值（AWR-20 §4.3）"}
+fidelity: {default: l1, supported: [l0, l1]}
+model: model/model.yaml
+sensors:
+  eo: {file: sensors/eo_gx40.yaml, default: true, removable: false}
+  lwir: {file: sensors/lwir100.yaml, default: true, removable: true}
+  radar: {file: sensors/mmw77.yaml, default: true, removable: true}
+  mic: {file: sensors/mic8.yaml, default: true, removable: true}
+  nir_ill: {file: sensors/nir_ill_l.yaml, default: false}
+  gnss: {file: sensors/gnss.yaml, default: true, removable: false}
+  imu: {file: sensors/imu.yaml, default: true, removable: false}
+acoustic: {lwa_hover_dba: 94.0, thrust_exp: 1.5, bpf_hz: 120.0, blades: 2, tonal_db: 12.0, f_pk_hz: 1414.0, conf: D,
+           src: "模拟参考值（AWR-04 §5.2、ADR-097；AWR-20 §4.4）；BPF 为独立参数"}
+visual: {area_m2: {top: 0.45, side: 0.25, front: 0.25}, contrast_sky: -0.8, contrast_ground: 0.3,
+         lights_installed: {nav: true, strobe: true}, night_visible_m: 30}
+rcs_m2: {value: 0.10, conf: D, src: "模拟参考值（77 GHz 量级，AWR-04 §5.2）"}
+ir: {motor_delta_t_k: 25.0}
+link: {model: awr_link_15k, range_m: 15000}
+nav: {hold_sigma_m: {rtk: {h: 0.01, v: 0.015}, gnss: {h: 0.6, v: 0.3}}}
+env_limits: {temp_c: [-20, 50]}
+capabilities: [nav.rtk, flight.hover]
+labels:
+  reference: "模拟参考值，非任何真实产品"
+catalog: {reference: true, category: multirotor, size_class: heavy, limits_default: awr_q9_std}
+derived: {hover_thrust: 0.500, twr: 2.00, tilt_at_8mps_deg: 7.85, cda_per_mass_m2kg: 0.0100, endurance_check_s: 1920,
+          airframe_residual_kg: 4.6964}

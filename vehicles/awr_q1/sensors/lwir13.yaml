@@ -1,0 +1,13 @@
+# vehicles/awr_q1/sensors/lwir13.yaml（awr.sensor.lwir.v1 挂载文件；槽位 lwir，可选挂载；AWR-20 §5.5、§7.5）
+# lwir640 + 13 mm 镜头（HFOV 32.9°），与 EO 一体化云台同指向（on_gimbal_of: eo，不占独立云台列）；质量与功率取镜头表
+# （0.09 kg、1.5 W），Q1 加挂后 1.04 kg、130.0 W、30.2 min（AWR-20 §5.5）。模拟参考值，非任何真实产品（D）。
+schema: awr.sensor.lwir.v1
+sensor_id: lwir
+spec_ref: lwir640@1.0.0
+mount: {xyz_m: [0.10, 0.0, -0.06], rpy_deg: [0, 0, 0]}
+on_gimbal_of: eo
+lens_mm: 13
+mass_kg: {value: 0.09, conf: D, src: "AWR-20 §6.4 镜头表：13 mm 模块 0.09 kg（随 EO 云台，不含独立云台）"}
+power_w: {value: 1.5, conf: D, src: "AWR-20 §6.4"}
+conf: D
+src: "AWR-20 §5.5、§6.4：可选挂载，挂点为本文设定"

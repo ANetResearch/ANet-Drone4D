@@ -1,0 +1,266 @@
+{
+  "schema": "awr.vehicle_catalog.v1",
+  "catalog_version": "1.0.0",
+  "disclaimer_zh": "模拟参考值，非任何真实产品",
+  "models": [
+    {
+      "id": "p600_mid360",
+      "dir": "p600",
+      "profile_version": "2.0.0",
+      "display_name": "P600 (MID-360)",
+      "display_name_zh": "P600（MID-360 配置）",
+      "category": "multirotor",
+      "size_class": "medium",
+      "reference": false,
+      "visible": true,
+      "order": 0,
+      "nest_kinds": [
+        "box",
+        "vtol_pad"
+      ],
+      "versions": [
+        "1.0.0"
+      ],
+      "summary_zh": "四旋翼，3.825 kg，悬停 29 min，GX40 光电吊舱与 MID-360 激光雷达；规格来自用户随附硬件指标"
+    },
+    {
+      "id": "awr_q1",
+      "dir": "awr_q1",
+      "profile_version": "1.0.0",
+      "display_name": "AWR-Q1 轻型四旋翼",
+      "display_name_zh": "AWR-Q1 轻型四旋翼",
+      "category": "multirotor",
+      "size_class": "light",
+      "reference": true,
+      "visible": true,
+      "order": 1,
+      "nest_kinds": [
+        "box",
+        "vtol_pad"
+      ],
+      "summary_zh": "轻型四旋翼，0.95 kg，悬停 35 min，一体化 EO 变焦；可选 LWIR 13 mm"
+    },
+    {
+      "id": "awr_q9",
+      "dir": "awr_q9",
+      "profile_version": "1.0.0",
+      "display_name": "AWR-Q9 重载四旋翼",
+      "display_name_zh": "AWR-Q9 重载四旋翼",
+      "category": "multirotor",
+      "size_class": "heavy",
+      "reference": true,
+      "visible": true,
+      "order": 2,
+      "nest_kinds": [
+        "box",
+        "vtol_pad"
+      ],
+      "summary_zh": "重载四旋翼，9.0 kg（含 1.6 kg 载荷），悬停 32 min，GX40、LWIR 100 mm、毫米波雷达与声阵列"
+    },
+    {
+      "id": "awr_f1",
+      "dir": "awr_f1",
+      "profile_version": "1.0.0",
+      "display_name": "AWR-F1 长航时固定翼",
+      "display_name_zh": "AWR-F1 长航时固定翼",
+      "category": "fixed_wing",
+      "size_class": "medium",
+      "reference": true,
+      "visible": true,
+      "order": 3,
+      "nest_kinds": [
+        "launcher"
+      ],
+      "summary_zh": "推进式固定翼，6.0 kg，巡航 120 min、盘旋 190 min，吊舱 EO 与 LWIR 75 mm；弹射起飞、伞降回收"
+    },
+    {
+      "id": "awr_v1",
+      "dir": "awr_v1",
+      "profile_version": "1.0.0",
+      "display_name": "AWR-V1 垂起固定翼",
+      "display_name_zh": "AWR-V1 垂起固定翼",
+      "category": "vtol",
+      "size_class": "heavy",
+      "reference": true,
+      "visible": true,
+      "order": 4,
+      "nest_kinds": [
+        "vtol_pad"
+      ],
+      "summary_zh": "4 + 1 复合翼，9.5 kg，纯巡航 112 min、任务剖面巡航段 102 min、盘旋 189 min，吊舱 EO、LWIR 100 mm 与远距照明器"
+    },
+    {
+      "id": "x500",
+      "dir": "x500",
+      "profile_version": "1.0.0",
+      "display_name": "X500 (SIH 回归机体)",
+      "display_name_zh": "X500（SIH 回归机体）",
+      "category": "multirotor",
+      "size_class": "medium",
+      "reference": false,
+      "visible": false,
+      "order": 90,
+      "nest_kinds": [
+        "box"
+      ],
+      "summary_zh": "CI 回归机体，目录中隐藏"
+    },
+    {
+      "id": "x500_sih",
+      "dir": "x500",
+      "profile_version": "1.0.0",
+      "display_name": "X500 SIH（linear 气动）",
+      "display_name_zh": "X500 SIH（linear 气动）",
+      "category": "multirotor",
+      "size_class": "medium",
+      "reference": false,
+      "visible": false,
+      "order": 91,
+      "nest_kinds": [
+        "box"
+      ],
+      "summary_zh": "SIH 回归变体，目录中隐藏"
+    }
+  ],
+  "sensor_models": [
+    {
+      "id": "eo_gx40",
+      "file": "sensor_models/eo_gx40.yaml",
+      "type": "eo_zoom",
+      "model_version": "1.0.0",
+      "reference": false,
+      "visible": true
+    },
+    {
+      "id": "eo_z8",
+      "file": "sensor_models/eo_z8.yaml",
+      "type": "eo_zoom",
+      "model_version": "1.0.0",
+      "reference": true,
+      "visible": true
+    },
+    {
+      "id": "nir_ill_l",
+      "file": "sensor_models/nir_ill_l.yaml",
+      "type": "nir_illuminator",
+      "model_version": "1.0.0",
+      "reference": true,
+      "visible": true
+    },
+    {
+      "id": "lwir640",
+      "file": "sensor_models/lwir640.yaml",
+      "type": "lwir",
+      "model_version": "1.0.0",
+      "reference": true,
+      "visible": true
+    },
+    {
+      "id": "mmw77",
+      "file": "sensor_models/mmw77.yaml",
+      "type": "radar_mmw",
+      "model_version": "1.0.0",
+      "reference": true,
+      "visible": true
+    },
+    {
+      "id": "mic8",
+      "file": "sensor_models/mic8.yaml",
+      "type": "acoustic_array",
+      "model_version": "1.0.0",
+      "reference": true,
+      "visible": true
+    },
+    {
+      "id": "mid360",
+      "file": "sensor_models/mid360.yaml",
+      "type": "lidar_livox",
+      "model_version": "2.0.0",
+      "reference": false,
+      "visible": true
+    }
+  ],
+  "packs": [
+    {
+      "pack_id": "lpb610hv",
+      "cells": 6,
+      "chemistry": "lihv",
+      "capacity_ah": 10.0,
+      "capacity_wh": 228.0,
+      "mass_kg": 1.2,
+      "c_max": 1.0,
+      "packs_per_swap": 1,
+      "conf": "B",
+      "src": "用户规格 LPB610HV：10000 mAh、1.2 kg、22–26.1 V（充电倍率上限为 D）"
+    },
+    {
+      "pack_id": "awr_p4s5",
+      "cells": 4,
+      "chemistry": "lihv",
+      "capacity_ah": 5.0,
+      "capacity_wh": 77.0,
+      "mass_kg": 0.335,
+      "c_max": 1.0,
+      "packs_per_swap": 1,
+      "conf": "D",
+      "src": "AWR-20 §4.5 模拟参考值"
+    },
+    {
+      "pack_id": "awr_p12s6",
+      "cells": 12,
+      "chemistry": "lipo",
+      "capacity_ah": 5.9,
+      "capacity_wh": 262.0,
+      "mass_kg": 1.35,
+      "c_max": 1.0,
+      "packs_per_swap": 2,
+      "conf": "D",
+      "src": "AWR-20 §4.5 模拟参考值（Q9 每次换电 2 块）"
+    },
+    {
+      "pack_id": "awr_l6s22",
+      "cells": 6,
+      "chemistry": "liion",
+      "capacity_ah": 22.0,
+      "capacity_wh": 475.2,
+      "mass_kg": 1.9,
+      "c_max": 0.5,
+      "packs_per_swap": 1,
+      "conf": "D",
+      "src": "AWR-20 §4.5 模拟参考值"
+    },
+    {
+      "pack_id": "awr_l12s22",
+      "cells": 12,
+      "chemistry": "liion",
+      "capacity_ah": 22.0,
+      "capacity_wh": 950.4,
+      "mass_kg": 3.8,
+      "c_max": 0.5,
+      "packs_per_swap": 1,
+      "conf": "D",
+      "src": "AWR-20 §4.5 模拟参考值"
+    }
+  ],
+  "chargers": [
+    {
+      "model": "c1_xr",
+      "channels": 1,
+      "i_max_a": 10.0,
+      "cells_min": 1,
+      "cells_max": 6,
+      "mass_kg": 0.38,
+      "conf": "B",
+      "src": "用户规格 C1-XR：AC 100–240 V、DC 11–18 V、0.1–10 A、1–6 节、380 g、130 × 115 × 61 mm（充电时间模型为 D）"
+    },
+    {
+      "model": "chg12s_ref",
+      "channels": 1,
+      "i_max_a": 10.0,
+      "cells_min": 1,
+      "cells_max": 12,
+      "conf": "D",
+      "src": "AWR-20 §4.5：参考 12S 充电器（Q9、V1 机巢用）"
+    }
+  ]
+}

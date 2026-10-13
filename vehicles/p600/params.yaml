@@ -1,22 +1,28 @@
-# vehicles/p600/params.yaml —— profile p600_mid360（awr.vehicle.v1；AWR-16 §11.2、§11.4；M08 §6.7；ADR-022、ADR-043）
-# 由 g08 草稿 .cache/research/g08/vehicles/p600/params.yaml 按 AWR-16 键名规范化，取值不变。
+# vehicles/p600/params.yaml —— profile p600_mid360 2.0.0（awr.vehicle.v1，schema 1.1；AWR-16 §11.2、§11.4；M08 §6.7、§15.4.3）
+# 依据：用户 D2 随附"硬件指标（以 MID360 配置）"（docs/inputs/D2-需求原文-2026-10-05.md），判读与逐项整理见 AWR-20 §3.1–§3.3、
+# AWR-04 §5.1；ADR-095（profile 2.0.0）、ADR-115（schema 1.1、history 存档）。v1 存档：history/params-1.0.0.yaml（只按
+# `p600_mid360@1.0.0` 显式加载）。v1 → v2：质量 3.5 → 3.825 kg、MTOW 4.0 → 4.1 kg、6S HV 222 → 228 Wh（标称 22.8 V）、悬停续航
+# 22 → 29 min（派生悬停功率 515 → 401 W），惯量按同一缩放规则重算，新增签名、链路、导航、运行限、能力与目录字段（AWR-20 §3.4）。
 # 置信度：A 实测 > B 厂商规格 > C 同型号几何或执行器参数（通过自洽检查）> D 按 x500 标定缩放或经验推断；E 只进 rejected[]。
-# status = placeholder：UI 标注"参数未辨识"；V0.4 按 g08 §10.4 辨识后改为 identified 并递增 profile_version。
+# status = placeholder：参数未辨识（ADR-043 不变）；V0.4 辨识后改为 identified 并递增 profile_version。
+# sensors 映射暂保持 D1 的字符串形式（D1 槽位与 sensor_no 不变）；GX40 新槽位 eo（缺省）与 nir_ill（可选，nir_ill_l）的对象形式
+# 由 M13（WP-10）交付挂载文件后改写（AWR-20 §7.4；见 .cache/impl/requests/d2-WP-02-to-M13.md）。
 schema: awr.vehicle.v1
-profile_version: 1.0.0
+profile_version: 2.0.0
 id: p600_mid360
 display_name: "P600 (MID-360)"
 kind: uav
 status: placeholder
 frame: {type: quad_x, rotor_order: px4, body: frd}
-mass_kg: {value: 3.5, conf: B, src: "amovlab p600u-v2 规格 3.3 kg（含电池、G1 104 g、Allspark 213 g、RTK）；G1 换 MID-360 265 g 后约 3.46 kg", check: "<= mtow_kg"}
-mtow_kg: {value: 4.0, conf: B, src: "厂商规格：最大起飞重量 4 kg"}
-inertia_kgm2: {value: {xx: 0.0548, yy: 0.0548, zz: 0.101}, conf: D, src: "J_x500 × (m/2.064) × (0.300/0.246)^2"}
+mass_kg: {value: 3.825, conf: B, src: "用户 D2 随附规格：起飞重量约 3.825 kg（含电池与缺省挂载）", check: "<= mtow_kg"}
+mtow_kg: {value: 4.1, conf: B, src: "用户 D2 随附规格：最大起飞重量 4.1 kg（挂载余量 0.275 kg）"}
+inertia_kgm2: {value: {xx: 0.0598, yy: 0.0598, zz: 0.1102}, conf: D, src: "J_x500 × (m/2.064) × (0.300/0.246)^2（ADR-022 同一缩放，m = 3.825，AWR-20 §3.3）"}
 geometry:
-  wheelbase_m: {value: 0.600, conf: B, src: "对角轴距 600 mm"}
-  arm_xy_m: {value: 0.2121, conf: B, src: "Prometheus p600.sdf 桨位 ±0.212132"}
+  wheelbase_m: {value: 0.600, conf: B, src: "用户规格：对角轴距 600 mm"}
+  arm_xy_m: {value: 0.2121, conf: B, src: "Prometheus p600.sdf 桨位 ±0.212132（= 0.600/2/√2）"}
   rotor_z_m: {value: 0.243, conf: C, src: "Prometheus p600.sdf 桨位 z"}
   collision_radius_m: {value: 0.49, conf: D, src: "派生：√2·arm_xy + prop.d/2"}
+  size_m: {value: {l: 0.469, w: 0.469, h: 0.400}, conf: B, src: "用户规格：469 × 469 × 400 mm"}
 motor:
   n: 4
   t_max_n: {value: 19.23, conf: C, src: "p600.sdf motorConstant 8.54858e-6 × maxRotVelocity 1500^2"}
@@ -29,26 +35,67 @@ prop:
   c_rd: {value: 1.05e-4, conf: D, src: "k_rd/m = 0.120 1/s（x500 8.06428e-5 × 3077 rad/s / 2.064 kg）"}
 aero:
   model: composite
-  cda_m2: {value: 0.035, conf: D, src: "CdA/m = 0.0100 m2/kg（x500 SIH 标定 0.02065/2.064）"}
-  sih_kdv_equiv: {value: 0.59, conf: D, src: "F(8 m/s)/8，供 SIH 机架文件（linear）"}
+  cda_m2: {value: 0.035, conf: D, src: "CdA 不随质量变化（AWR-20 §3.3 VH-3、VH-5）；x500 SIH 标定 CdA/m 0.0100 × 3.5 kg"}
+  sih_kdv_equiv: {value: 0.61, conf: D, src: "F(8 m/s)/8 = 4.89/8，供 SIH 机架文件（linear）"}
 battery:
   cells: 6
-  capacity_ah: {value: 10.0, conf: B, src: "厂商：10000 mAh、1.2 kg、20–26.1 V"}
-  v_nominal_v: {value: 22.2, conf: B, src: "6S 标称电压"}
-  capacity_wh: {value: 222.0, conf: B, src: "派生：22.2 V × 10 Ah"}
-  usable_frac: {value: 0.85, conf: D, src: "g08 §10.4 反推 P_hover 所用系数"}
-  p_hover_w: {value: 515.0, conf: D, src: "0.85 × 22.2 V × 10 Ah / (22/60 h)"}
-  hover_endurance_s: {value: 1320, conf: B, src: "厂商：P600-MID360 定点悬停约 22 min"}
+  chemistry: lihv
+  capacity_ah: {value: 10.0, conf: B, src: "用户规格：LPB610HV 10000 mAh"}
+  v_nominal_v: {value: 22.8, conf: C, src: "HV 电芯 3.8 V/节（规格 22–26.1 V，存放 23.1 V；Q-D2-05 默认决策）"}
+  capacity_wh: {value: 228.0, conf: B, src: "派生：22.8 V × 10 Ah"}
+  usable_frac: {value: 0.85, conf: D, src: "ADR-052 可用能量口径（E_use = 193.8 Wh）"}
+  p_hover_w: {value: 401.0, conf: D, src: "派生：0.85 × 228 Wh / (1740/3600 h)（ADR-052 由悬停续航反推）"}
+  hover_endurance_s: {value: 1740, conf: B, src: "用户规格：悬停续航约 29 min"}
+  mass_kg: {value: 1.2, conf: B, src: "用户规格：LPB610HV 1.2 kg"}
+  v_range_v: [22.0, 26.1]
+  v_storage_v: 23.1
+  size_m: [0.180, 0.090, 0.063]
+  pack_id: lpb610hv
+  packs_per_swap: 1
 limits_profiles:
   default: prometheus_outdoor
   px4_default: {px4_params: {MPC_XY_VEL_MAX: 12.0, MPC_XY_CRUISE: 5.0, MPC_ACC_HOR: 3.0, MC_YAWRATE_MAX: 200.0}, src: "PX4 v1.18 默认"}
   prometheus_outdoor: {px4_params: {MPC_XY_VEL_MAX: 3.0, MPC_XY_CRUISE: 3.0, MPC_ACC_HOR: 3.0, MC_YAWRATE_MAX: 30.0}, src: "Prometheus uav_control_outdoor.yaml px4_params（VEL_MAX、ACC_HOR、YAWRATE_MAX）；该文件未设 MPC_XY_CRUISE，PX4 将其钳到 MPC_XY_VEL_MAX（MulticopterPositionControl.cpp）"}
   prometheus_command: {px4_params: {MPC_XY_VEL_MAX: 1.0, MPC_XY_CRUISE: 1.0, MPC_ACC_HOR: 2.0, MC_YAWRATE_MAX: 30.0}, src: "同文件 COMMAND_MPC_XY_VEL_MAX、COMMAND_MPC_ACC_HOR；CRUISE 同上钳制，YAWRATE_MAX 沿用 px4_params"}
+  p600_std: {px4_params: {MPC_XY_VEL_MAX: 12.0, MPC_XY_CRUISE: 8.0, MPC_ACC_HOR: 3.0, MC_YAWRATE_MAX: 60.0, MPC_Z_VEL_MAX_UP: 5.0, MPC_Z_VEL_MAX_DN: 3.0}, src: "AWR-04 §5.1、§5.2 沙盒缺省（巡航 8、最大 12 m/s，爬升 5、下降 3 m/s；偏航 60°/s 为本文设定，便于手动控制）；AWR-20 §4.3"}
 wind_rating_mps: {value: 13.8, conf: B, src: "厂商：抗风 6 级（10.8–13.8 m/s）"}
 fidelity: {default: l1, supported: [l0, l1]}
 model: model/model.yaml
-sensors: {camera: sensors/camera.yaml, thermal: sensors/thermal.yaml, mid360: sensors/mid360.yaml, gnss: sensors/gnss.yaml, imu: sensors/imu.yaml}
-derived: {hover_thrust: 0.446, twr: 2.24, tilt_at_8mps_deg: 7.85, cda_per_mass_m2kg: 0.0100, endurance_check_s: 1319}
+# 传感器槽位（AWR-20 §7.4 对象形式；D2-INT 按 d2-WP-08-to-M08 第 1 条切换）：camera、thermal 为 D1 字符串槽位；mid360 可拆；
+# eo（GX40 吊舱）缺省挂载、不可拆；nir_ill（850 nm 外挂照明器）可选、缺省不装。sensor_no 按映射顺序：camera 0、thermal 1、
+# mid360 2、gnss 3、imu 4、eo 5、nir_ill 6（D1 槽位编号不变）。eo_gx40 与 mid360 的质量改由槽位计入（MT-2），payload 只留 orin_nx
+sensors:
+  camera: sensors/camera.yaml
+  thermal: sensors/thermal.yaml
+  mid360: {file: sensors/mid360.yaml, default: true, removable: true}
+  gnss: {file: sensors/gnss.yaml, default: true, removable: false}
+  imu: {file: sensors/imu.yaml, default: true, removable: false}
+  eo: {file: sensors/eo_gx40.yaml, default: true, removable: false}
+  nir_ill: {file: sensors/nir_ill_l.yaml, default: false}
+payload:
+  - {name: orin_nx, mass_kg: 0.188, capability_id: compute.orin_nx}
+nav: {hold_sigma_m: {rtk: {h: 0.01, v: 0.015}, slam: {h: 0.1, v: 0.2}}}
+env_limits: {temp_c: [6, 40]}
+link: {model: gr01, range_m: 3500}
+acoustic: {lwa_hover_dba: 88.0, thrust_exp: 1.5, bpf_hz: 150.0, blades: 2, tonal_db: 12.0, f_pk_hz: 1414.0, conf: D,
+           src: "模拟参考值（AWR-04 §5.2、ADR-097；AWR-20 §4.4）；BPF 为独立参数，不由 L1 参数派生（AWR-20 §3.3）"}
+visual: {area_m2: {top: 0.22, side: 0.19, front: 0.19}, contrast_sky: -0.8, contrast_ground: 0.3,
+         lights_installed: {nav: true, strobe: true}, night_visible_m: 30}
+rcs_m2: {value: 0.05, conf: D, src: "模拟参考值（77 GHz 量级，AWR-04 §5.2）"}
+ir: {motor_delta_t_k: 20.0}
+capabilities: [compute.orin_nx, nav.rtk, nav.slam3d, flight.hover]
+compute_tops: 100
+labels:
+  fcu: "STM32H743VIT6、ICM20689、BMP388、AT24C64、PX4IO-v2、8 PWM、1 RC（SBUS/PPM/DSM）、3 UART、1 CAN、USB-C"
+  compute: "Allspark-Orin NX（IA160_V1）：Jetson Orin NX 16 GB、100 TOPS、128 GB SSD、10–26 V @ 3 A、188 g"
+  rc: "G16：16 通道、2.4/5.8 GHz、续航 9–10 h（D2 不模拟射频）"
+  link: "GR01 数传：3.5 km、7.2–72 V"
+  stream: "GX40：RTSP；H.264/H.264H/H.264B/H.265/MJPEG；H.265 0.25–10 Mbps、H.264 0.5–16 Mbps"
+  rtk: "RTK405 地面基站：1408 通道、BDS/GPS/GLONASS/Galileo/QZSS/SBAS、410–490 MHz、650 g、8–12 h"
+  charger: "C1-XR：AC 100–240 V、DC 11–18 V、0.1–10 A、1–6 节"
+  lidar: "MID-360：905 nm；40 m @ 10%（100 klx）；截止 100 m；盲区 0.1 m；360° × (−7°～52°)；20 万点/s；10 Hz；6.5 W；265 g"
+catalog: {reference: false, category: multirotor, size_class: medium, limits_default: p600_std}
+derived: {hover_thrust: 0.488, twr: 2.05, tilt_at_8mps_deg: 7.43, cda_per_mass_m2kg: 0.00915, endurance_check_s: 1740}
 rejected:
   - {param: mass_kg, value: 1.505, src: "p600.sdf base 1.47 + imu 0.015 + 4×0.005", why: "Iris 模板；悬停 0.19、TWR 5.2，不过 VH-1、VH-2"}
   - {param: mass_kg, value: 2.064, src: "x500（r20）", why: "不同机体；x500 保留为 SIH 回归机体"}

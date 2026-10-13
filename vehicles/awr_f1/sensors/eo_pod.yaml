@@ -1,0 +1,11 @@
+# vehicles/awr_f1/sensors/eo_pod.yaml（awr.sensor.eo_zoom.v1 挂载文件；槽位 eo，缺省挂载、不可拆；AWR-20 §7.8 示例）
+# 两轴吊舱内的 GX40 级 EO：规格经 spec_ref 取自型号库 eo_gx40@1.0.0；吊舱云台俯仰 −90°~+10°、偏航 ±180°、60°/s；
+# 质量取吊舱内模块 0.25 kg（不含两轴吊舱结构，结构计入机型 mass_kg）。
+schema: awr.sensor.eo_zoom.v1
+sensor_id: eo
+spec_ref: eo_gx40@1.0.0
+mount: {xyz_m: [0.25, 0.0, -0.12], rpy_deg: [0, 0, 0]}
+gimbal: {pitch_min_deg: -90, pitch_max_deg: 10, yaw_min_deg: -180, yaw_max_deg: 180, rate_max_deg_s: 60, integrated: false}
+mass_kg: {value: 0.25, conf: D, src: "吊舱内模块质量，不含两轴吊舱结构（计入机型 mass_kg）"}
+conf: D
+src: "两轴吊舱，AWR-20 §7.8 设定"

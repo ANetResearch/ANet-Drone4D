@@ -1,0 +1,11 @@
+# vehicles/p600/sensors/nir_ill_l.yaml（awr.sensor.nir_illuminator.v1 挂载文件；槽位 nir_ill，可选、缺省不装；AWR-20 §7.4、§7.5；
+# M13-FR-201、FR-215；AWR-04 §14.3 `nir_ill_l` 可选挂载；WP-10）。规格经 spec_ref 取自型号库 vehicles/sensor_models/nir_ill_l.yaml
+# （M21）：850 nm、3 W、固定 5.5°、无消光有效距离 464.8 m、0.18 kg（模拟参考值）。与 eo 槽位同轴（on_gimbal_of: eo，
+# 照明锥跟随 GX40 云台指向，AWR-20 §6.3 第 1 条）。
+schema: awr.sensor.nir_illuminator.v1
+sensor_id: nir_ill
+spec_ref: nir_ill_l@1.0.0
+mount: {xyz_m: [0.12, 0.0, -0.10], rpy_deg: [0, 0, 0]}
+on_gimbal_of: eo
+conf: D
+src: "AWR-04 §6.1 模拟参考值；挂于 GX40 吊舱下方、随云台转动（随动支架，D）"

@@ -1,0 +1,10 @@
+# vehicles/awr_q9/sensors/eo_gx40.yaml（awr.sensor.eo_zoom.v1 挂载文件；槽位 eo，缺省挂载、不可拆；AWR-20 §6.1、§7.5）
+# 规格经 spec_ref 取自型号库 vehicles/sensor_models/eo_gx40.yaml；独立三轴吊舱挂于机头下方，云台角与角速率同型号（D）。
+schema: awr.sensor.eo_zoom.v1
+sensor_id: eo
+spec_ref: eo_gx40@1.0.0
+mount: {xyz_m: [0.20, 0.0, -0.12], rpy_deg: [0, 0, 0]}
+gimbal: {pitch_min_deg: -90, pitch_max_deg: 30, yaw_min_deg: -160, yaw_max_deg: 160, rate_max_deg_s: 90, integrated: true,
+         default_mode: fixed, default_yaw_deg: 0, default_pitch_deg: -15}
+conf: D
+src: "AWR-20 §6.1：Q9 缺省挂载 GX40，挂点为本文设定"

@@ -1,0 +1,12 @@
+# vehicles/p600/sensors/eo_gx40.yaml（awr.sensor.eo_zoom.v1 挂载文件；槽位 eo；AWR-20 §3.2、§7.5；M13-FR-201、FR-215；WP-10）
+# 规格经 spec_ref 取自型号库 vehicles/sensor_models/eo_gx40.yaml（M21）：1/2.8" 3840 × 2160、1.45 µm、4.8–48 mm（10×）、
+# F1.7–3.2、全程变焦 4 s、机内 850 nm 补光 0.8 W（≤ 200 m）。本文件只给挂载与云台（型号 overridable[] 内的字段）：
+# 吊舱位于机头下方，与 D1 camera 槽位同一挂点；云台俯仰 −90°~+30°、偏航 ±160°、90°/s（AWR-04 §6.1，D），缺省 FIXED(0, −15°)。
+schema: awr.sensor.eo_zoom.v1
+sensor_id: eo
+spec_ref: eo_gx40@1.0.0
+mount: {xyz_m: [0.12, 0.0, -0.08], rpy_deg: [0, 0, 0]}
+gimbal: {pitch_min_deg: -90, pitch_max_deg: 30, yaw_min_deg: -160, yaw_max_deg: 160, rate_max_deg_s: 90, integrated: true,
+         default_mode: fixed, default_yaw_deg: 0, default_pitch_deg: -15}
+conf: B
+src: "用户 D2 随附规格（GX40 光学、输出档、补光，B）；挂点同 D1 camera 槽位；云台角与角速率为模拟参考值（D）"

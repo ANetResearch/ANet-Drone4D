@@ -1,0 +1,8 @@
+# vehicles/awr_q9/sensors/mmw77.yaml（awr.sensor.radar_mmw.v1 挂载文件；槽位 radar，缺省挂载、可拆；AWR-20 §6.5、§7.5）
+# 固定安装，机头前向、俯仰 −15°（AWR-20 §6.5 缺省），视场方位 ±60°、俯仰 ±15°（型号 fov 为半角）。
+schema: awr.sensor.radar_mmw.v1
+sensor_id: radar
+spec_ref: mmw77@1.0.0
+mount: {xyz_m: [0.30, 0.0, -0.05], rpy_deg: [0, -15, 0]}
+conf: D
+src: "AWR-20 §6.5：Q9 缺省挂载，挂点为本文设定"
