@@ -28,10 +28,11 @@ describe('zero allocation per frame', () => {
       if (T_base_cam(cam, m16) !== m16 || projectionFor(cam, 16 / 9, 0.2, 5000, p16) !== p16 || frameRect(cam, 16 / 9, r4) !== r4) throw new Error('out')
     }
     for (let i = 0; i < 3000; i++) frame(i) // warm up the JIT
-    // background compilation may still land code objects in one window: take the best of 6 windows of 1000 frames
-    // (a per-frame allocation shows in every window: 1000 x >= 64 B)
+    // background compilation may still land code objects in one window, and on a busy CI runner the optimizing compile
+    // of frame() can land late (until then the interpreter boxes doubles in every window): take the best of up to 12
+    // windows of 1000 frames, stopping at the first clean one (a per-frame allocation shows in every window: 1000 x >= 64 B)
     let best = Number.POSITIVE_INFINITY
-    for (let w = 0; w < 6; w++) {
+    for (let w = 0; w < 12 && best >= 16 * 1024; w++) {
       const before = getHeapStatistics().used_heap_size
       for (let i = 0; i < 1000; i++) frame(3000 + 1000 * w + i)
       best = Math.min(best, getHeapStatistics().used_heap_size - before)
