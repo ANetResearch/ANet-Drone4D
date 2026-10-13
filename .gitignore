@@ -53,3 +53,4 @@ blob-report/
 
 # Local runtime state (identity lockout and signing keys written by local runs)
 /var/
+/docs-site/_build/

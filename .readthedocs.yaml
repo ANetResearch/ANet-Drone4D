@@ -1,0 +1,19 @@
+# Read the Docs 构建配置（ANet Drone4D 文档站，docs-site/）。
+# 主项目为英文（语言 en，URL /en/latest/）；中文为其翻译项目（语言 zh-cn，URL /zh-cn/latest/），在项目设置中把
+# "Build configuration file" 指向 docs-site/zh_CN/.readthedocs.yaml。两份配置除 Sphinx 配置文件外相同。
+# 本机与自托管发布使用同一套源与依赖：make docs-site（见 mk/docs-site.mk 与 tools/deploy/docs/publish.sh）。
+version: 2
+
+build:
+  os: ubuntu-24.04
+  tools:
+    python: "3.12"
+
+sphinx:
+  configuration: docs-site/en/conf.py
+  builder: html
+  fail_on_warning: true
+
+python:
+  install:
+    - requirements: docs-site/requirements.txt

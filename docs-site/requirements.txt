@@ -1,0 +1,37 @@
+# ANet Drone4D 文档站构建依赖（Sphinx + sphinx-rtd-theme + MyST）。
+# 只用于 docs-site/，安装在独立虚拟环境 .venv-docs 中，不影响项目主依赖（requirements.lock）。
+# Read the Docs 构建读取本文件（.readthedocs.yaml 的 python.install）。
+sphinx==9.1.0
+sphinx-rtd-theme==3.1.0
+myst-parser==5.1.0
+sphinx-copybutton==0.5.2
+# 中文全文检索分词（Sphinx 的 zh 检索语言在存在 jieba 时使用它）
+jieba==0.42.1
+
+# 传递依赖（固定为 2026-10-13 的解析结果，保证本机与 Read the Docs 构建一致）
+alabaster==1.0.0
+babel==2.18.0
+docutils==0.22.4
+imagesize==2.0.1
+Jinja2==3.1.6
+markdown-it-py==4.2.0
+MarkupSafe==3.0.4
+mdit-py-plugins==0.6.1
+mdurl==0.1.2
+packaging==26.3
+Pygments==2.21.0
+PyYAML==6.0.3
+requests==2.34.2
+certifi==2026.7.22
+charset-normalizer==3.5.2
+idna==3.20
+urllib3==2.8.0
+roman-numerals==4.1.0
+snowballstemmer==3.1.1
+sphinxcontrib-applehelp==2.0.0
+sphinxcontrib-devhelp==2.0.0
+sphinxcontrib-htmlhelp==2.1.0
+sphinxcontrib-jquery==4.1
+sphinxcontrib-jsmath==1.0.1
+sphinxcontrib-qthelp==2.0.0
+sphinxcontrib-serializinghtml==2.0.0

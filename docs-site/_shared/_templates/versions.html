@@ -1,0 +1,37 @@
+{#- ANet Drone4D：Read the Docs 风格的语言与版本浮层（静态实现）。
+    在 Read the Docs 上构建时（READTHEDOCS=True）由平台注入的浮层代替，这里不输出。 -#}
+{%- if not READTHEDOCS %}
+{%- set _zh = (language or '').startswith('zh') %}
+<div class="rst-versions drone4d-flyout" data-toggle="rst-versions" role="note" aria-label="{{ '语言与版本' if _zh else 'Languages and versions' }}">
+  <span class="rst-current-version" data-toggle="rst-current-version" role="button" tabindex="0" aria-expanded="false"
+        aria-controls="drone4d-flyout-panel">
+    <span class="drone4d-flyout-brand">ANet Drone4D</span>
+    <span class="drone4d-flyout-current">
+      {%- for a in drone4d_alternates if a.current %}{{ a.slug }}{% endfor %} · {{ drone4d_current_version }}
+    </span>
+    <span class="drone4d-caret" aria-hidden="true"></span>
+  </span>
+  <div class="rst-other-versions" id="drone4d-flyout-panel">
+    <dl>
+      <dt>{{ '语言' if _zh else 'Languages' }}</dt>
+      {%- for a in drone4d_alternates %}
+      <dd{% if a.current %} class="rtd-current-item"{% endif %}><a href="{{ a.href }}" hreflang="{{ a.slug }}" lang="{{ a.slug }}"{% if a.current %} aria-current="true"{% endif %}>{{ a.slug }}</a></dd>
+      {%- endfor %}
+    </dl>
+    <dl>
+      <dt>{{ '版本' if _zh else 'Versions' }}</dt>
+      {%- for v in drone4d_versions_links %}
+      <dd{% if v.current %} class="rtd-current-item"{% endif %}><a href="{{ v.href }}"{% if v.current %} aria-current="true"{% endif %}>{{ v.name }}</a></dd>
+      {%- endfor %}
+    </dl>
+    <dl>
+      <dt>{{ '项目' if _zh else 'Project' }}</dt>
+      <dd><a href="{{ drone4d_github_url }}">GitHub</a></dd>
+      <dd><a href="{{ drone4d_demo_url }}">{{ '在线演示' if _zh else 'Live demo' }}</a></dd>
+      <dd><a href="{{ drone4d_github_url }}/releases">{{ '发布' if _zh else 'Releases' }}</a></dd>
+    </dl>
+    <hr/>
+    <small>{{ '文档托管于' if _zh else 'Hosted at' }} <a href="https://docs.agentnetwork.org.cn/drone4d/">docs.agentnetwork.org.cn/drone4d</a></small>
+  </div>
+</div>
+{%- endif %}

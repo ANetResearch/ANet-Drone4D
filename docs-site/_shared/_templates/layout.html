@@ -1,0 +1,18 @@
+{#- ANet Drone4D：在 sphinx_rtd_theme 的布局上增加 hreflang 备用链接与语言属性，其余沿用主题。 -#}
+{% extends "!layout.html" %}
+{% block extrahead %}
+  {{ super() }}
+  {%- for a in drone4d_alternates %}
+  <link rel="alternate" hreflang="{{ 'zh-CN' if a.code == 'zh_CN' else a.slug }}" href="{{ a.abs }}" />
+  {%- endfor %}
+  <meta name="theme-color" content="#111214" />
+{% endblock %}
+
+{#- 窄屏顶栏：左上角同样显示 Agent Network 标志 -#}
+{% block mobile_nav %}
+  <i data-toggle="wy-nav-top" class="fa fa-bars" role="button" tabindex="0" aria-label="{{ '打开导航' if (language or '').startswith('zh') else 'Open navigation' }}"></i>
+  <a href="{{ pathto(master_doc) }}" class="drone4d-mobile-brand">
+    <img src="{{ pathto('_static/img/anet-logo.svg', 1) }}" alt="Agent Network" class="drone4d-mobile-logo" />
+    <span>Drone4D</span>
+  </a>
+{% endblock %}
