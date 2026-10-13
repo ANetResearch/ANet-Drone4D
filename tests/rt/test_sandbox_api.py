@@ -48,7 +48,9 @@ async def probe_entity(request: Request, _p: SandboxOperator) -> dict:
 
 @pytest.fixture(scope="module")
 def sbx():
-    s = SbStack(extra_routers=[probe], sb_over={"rest": {"rps": 50, "burst": 8, "entity_rps": 2},
+    # 会话 REST 桶的突发设得足够大：鉴权矩阵对同一会话连发约 10 个请求，快速 runner 上 burst 8 会在补充前耗尽而返回 429；
+    # 限流行为只由 test_rest_rate_limits_by_sid_and_prefix 用实体类别（2/s）与公开前缀（突发 3）断言
+    s = SbStack(extra_routers=[probe], sb_over={"rest": {"rps": 50, "burst": 64, "entity_rps": 2},
                                                "public_rps": 1, "public_burst": 3,
                                                "ws": {"per_session": 2, "per_prefix": 3}})
     yield s
