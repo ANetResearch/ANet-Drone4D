@@ -1,0 +1,24 @@
+# M13 测试用型号库（WP-10）：红外热像 lwir640（AWR-04 §6.1、AWR-20 §6.4）。正式型号库归 M21（WP-08）。
+schema: awr.sensor.lwir.v1
+model_id: lwir640
+model_version: 1.0.0
+display_name: "LWIR 640 非制冷热像"
+reference: true
+mass_kg: {value: 0.12, conf: D, src: "AWR-20 §6.1（25 mm 镜头）"}
+power_w: {value: 1.5, conf: D, src: "AWR-20 §6.1"}
+env_limits: {temp_c: [-20, 60]}
+detector: {type: vox, width_px: 640, height_px: 512, pixel_um: 12, band_um: [8, 14], netd_mk: 50, netd_f_number: 1.0,
+           frame_hz: 30, integration_s: 0.01}
+lenses:
+  - {f_mm: 13, f_number: 1.0, mass_kg: 0.09, power_w: 1.5}
+  - {f_mm: 25, f_number: 1.0, mass_kg: 0.12, power_w: 1.5}
+  - {f_mm: 75, f_number: 1.0, mass_kg: 0.35, power_w: 2.0}
+  - {f_mm: 100, f_number: 1.0, mass_kg: 0.48, power_w: 2.0}
+digital_zoom_max: 4
+jitter_urad: 20
+palettes: [white_hot, black_hot]
+gimbal_mass_kg: 0.15
+gimbal: {pitch_min_deg: -90, pitch_max_deg: 30, yaw_min_deg: -160, yaw_max_deg: 160, rate_max_deg_s: 90, integrated: false}
+overridable: [mount, gimbal, lens_mm, gimbal_mass_kg]
+conf: D
+src: "AWR-20 §6.4：模拟参考值，非任何真实产品"

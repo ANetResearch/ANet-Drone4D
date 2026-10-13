@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "python"))
 from awr.environment.anchors import H_NS, AnchorIntegrator, Anchors  # noqa: E402
 from awr.environment.field import world_config  # noqa: E402
 from awr.environment.keyframe import EnvKeyframe, EnvOp, KeyframeManager  # noqa: E402
+from awr.environment.sky.calendar import Calendar  # noqa: E402
 from awr.environment.weather.presets import CLOUD2D, DIR, MOR_BG, SPEED_REF, presets  # noqa: E402
 from awr.environment.wind.gust import GustEvent  # noqa: E402
 
@@ -75,6 +76,14 @@ def keyframe_cases() -> list[dict]:
     out.append({"name": "d1_worst", "limit": 1536, "frame": kf5})
     kf6 = steady.with_heartbeat(t, _anch(t, 0.0, frac=False))
     out.append({"name": "zero_anchors_integers", "limit": 1024, "frame": kf6})
+    # D2（WP-09）：D1 最坏帧加日历、clock 太阳、湿度、地表与声学背景（AWR-17 §17.6.9），硬上限 2048 B
+    kf7 = EnvKeyframe(**{f: getattr(kf5, f) for f in ("world_id", "version", "epoch", "seed", "t_ns", "t_apply_ns", "config", "mode",
+                                                      "t0_ns", "t1_ns", "from_", "to", "via", "to_preset", "anchors", "events", "vis")})
+    kf7.config = {**kf5.config, "sun": {"azimuth_deg": 247.123, "elevation_deg": -3.456, "mode": "clock", "illum_lx": 18.53, "band": "low"}}
+    kf7.d2 = {"humidity_pct": 87.25, "surface": {"t_c": 12.34, "emissivity": 0.93, "k_cross": 0.5},
+              "acoustic_bg": {"profile": "suburban", "l_bg_dba": 51.23}}
+    kf7.cal = Calendar(1_791_190_800_123 - t // 1_000_000, "America/Los_Angeles")
+    out.append({"name": "d2_clock_worst", "limit": 2048, "frame": kf7})
     return out
 
 

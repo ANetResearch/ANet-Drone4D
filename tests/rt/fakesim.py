@@ -77,6 +77,7 @@ class FakeSim:
                                   "sensors": [{"sensor_no": 0, "name": "cam0", "kind": "camera"}] if sensors else [],
                                   "t_world_local": None, "caps_ref": "mock"})
         self.roster_version = 1
+        self.targets_roster: list[dict] = []  # D2：roster 中 kind = target 的条目（agent_no 在 target 内编号）
         self.roster_delay_s = 0.0  # > 0：roster 回复延迟（FX-GW：回放 open 时实时 roster 查询在途的竞态）
         self.lock = threading.RLock()
         self.inbox: queue.SimpleQueue = queue.SimpleQueue()
@@ -224,7 +225,7 @@ class FakeSim:
                 x.reply_msg(self._lease(x.msg()))
             elif kind == "roster":
                 rep = {"v": 1, "producer": PROD, "roster_version": self.roster_version, "id_base": 0,
-                       "id_count": 1024, "entries": [dict(v) for v in self.vehicles]}
+                       "id_count": 1024, "entries": [dict(v) for v in self.vehicles] + [dict(t) for t in self.targets_roster]}
                 if self.roster_delay_s > 0:
                     t = threading.Timer(self.roster_delay_s, x.reply_msg, args=(rep,))
                     t.daemon = True
@@ -406,6 +407,26 @@ class FakeSim:
             self.vehicles.append({**self.vehicles[0], "agent_no": no, "id": vid} if self.vehicles else
                                  {"agent_no": no, "id": vid, "kind": "uav", "producer": PROD, "sensors": []})
             self.roster_version += 1
+
+    def add_target(self, tid: str, cls: str = "person") -> int:
+        """D2：识别物进入 roster（kind = target，agent_no 从 0 计，与无人机的编号独立）；返回 target_no。"""
+        with self.lock:
+            no = len(self.targets_roster)
+            self.targets_roster.append({"agent_no": no, "id": tid, "kind": "target", "model": cls, "label": tid})
+            self.roster_version += 1
+            return no
+
+    def remove_target(self, tid: str) -> None:
+        with self.lock:
+            self.targets_roster = [t for t in self.targets_roster if t["id"] != tid]
+            self.roster_version += 1
+
+    def put(self, key: str, obj: Any) -> None:
+        """在本 run 命名空间发布一条 msgpack（D2 数据产品：`state/sim-core/{targets, perception, …}`）。"""
+        pub = self.pubs.get(key)
+        if pub is None:
+            pub = self.pubs[key] = self.bus.publisher(key)
+        pub.put(msgpack.packb(obj, use_bin_type=True))
 
     def remove_vehicle(self, vid: str) -> None:
         with self.lock:

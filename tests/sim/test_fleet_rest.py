@@ -145,7 +145,7 @@ def test_profile_queries(h: CoreHarness) -> None:
     items = h.core._local_query("fleet/profiles", {})["items"]
     assert {"x500", "x500_sih", "p600_mid360"} <= {i["profile_id"] for i in items}
     d = h.core._local_query("fleet/profile", {"profile_id": "p600_mid360"})["item"]
-    assert len(d["twin"]) == 11 and len(d["checks"]) == 7
+    assert len(d["twin"]) == 11 and [c["id"] for c in d["checks"]][-1] == "MNT-1" and len(d["checks"]) == 8
     assert h.core._local_query("fleet/profile", {"profile_id": "zz"})["code"] == int(Reason.NOT_FOUND)
     caps = h.core._local_query("fleet/caps", {})["items"]
     assert set(caps) == {"mock", "replay"}

@@ -98,10 +98,10 @@ def test_lidar_imu_unit_stays_g():
 
 
 def test_rig_order_and_bits(tmp_path: Path):
-    rig = rig_for_model("p600")
-    assert [s.name for s in rig.specs] == ["camera", "thermal", "mid360", "gnss", "imu"]
-    assert [s.sensor_no for s in rig.specs] == [0, 1, 2, 3, 4]
-    assert rig.has_bits == 1 | 2 | 4 | 8 | 16 | 32
+    rig = rig_for_model("p600")  # P600 2.0.0 对象形式（AWR-20 §7.4；D2-INT）：D1 槽位编号不变，eo、nir_ill 接续
+    assert [s.name for s in rig.specs][:5] == ["camera", "thermal", "mid360", "gnss", "imu"]
+    assert [s.sensor_no for s in rig.specs] == [0, 1, 2, 3, 4, 5, 6]
+    assert rig.has_bits & (1 | 2 | 4 | 8 | 16 | 32) == 1 | 2 | 4 | 8 | 16 | 32
     # 目录里只有 gnss 与 camera 时，有视场的仍在前
     (tmp_path / "sensors").mkdir()
     for n in ("gnss", "camera"):

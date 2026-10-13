@@ -8,7 +8,8 @@ from safelib import Harness
 
 
 def test_energy_rtl_lands_home() -> None:
-    h = Harness(limits="px4_default")
+    # D1 门禁口径固定 p600_mid360@1.0.0（AWR-20 §3.4；d2-WP-02-to-M09 第 3 条，D2-INT）：v2 电池更大、悬停功率更低
+    h = Harness(limits="px4_default", profile="p600_mid360@1.0.0")
     try:
         h.ready()
         h.gcs_age_ms = 0

@@ -29,7 +29,7 @@ class Harness:
 
     def __init__(self, *, n: int = 1, world: Any = None, params: Any = None, spawn: tuple[float, float] | None = None,
                  kernel: str | None = None, profile: str = "p600_mid360", spacing: float = 6.0,
-                 fleet_kernel: str | None = None, limits: str | None = None) -> None:
+                 fleet_kernel: str | None = None, limits: str | None = None, clock: str | None = None) -> None:
         self._stack = contextlib.ExitStack()
         self.reg = self._stack.enter_context(R.isolated_registry())
         self._stack.enter_context(MET.isolated_metrics())
@@ -46,6 +46,10 @@ class Harness:
         from awr.sim.fleet.fleet import FleetConfig
 
         fc = FleetConfig() if fleet_kernel is None else FleetConfig(kernel=fleet_kernel)
+        if clock is not None:
+            from dataclasses import replace
+
+            fc = replace(fc, clock_profile=clock)
         cfg = SimConfig(run_id=self.run_id, n_vehicles=n, load_world=False, autoplay=True, spawn_xy=spawn,
                         profile_id=profile, spawn_spacing_m=spacing, fleet=fc, limits_profile=limits)
         self.core = SimCore(cfg, self.bus, self.ring, secret=self.secret, wall_ns=lambda: self.W[0], reg=self.reg,

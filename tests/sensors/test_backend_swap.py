@@ -36,7 +36,8 @@ def test_protocols(bench):
     from awr.sim.sensors.spec import rig_for_model
 
     ms = models_for(rig, rig_for_model("p600").specs)
-    assert [m.kind.name for m in ms] == ["CAMERA", "THERMAL", "LIDAR", "GNSS", "IMU"]
+    # P600 2.0.0 对象形式（AWR-20 §7.4；D2-INT）：D1 五个槽位之后为 eo（GX40，CAMERA）与 nir_ill（照明器，无测量模型）
+    assert [m.kind.name for m in ms][:6] == ["CAMERA", "THERMAL", "LIDAR", "GNSS", "IMU", "CAMERA"]
     assert all(isinstance(m, SensorModel) for m in ms)
     assert ms[0].describe()["caps"]["pose"] is True and ms[2].caps.raycast == "none"
     fb.open(None, {0: [rig_for_model("p600").by_name("camera")]})

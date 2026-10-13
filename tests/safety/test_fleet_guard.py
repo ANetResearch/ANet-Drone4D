@@ -180,3 +180,61 @@ def test_oscillation_third_yield() -> None:
         r.rt.run("fleet_guard", r.ctx)
         r.tick(1)
     assert r.fs(1) == (int(FS.HOLD), 3)
+
+
+@pytest.mark.parametrize("clock", [None, "sandbox100"])
+def test_mutual_hold_deadlock_unlocks(clock: str | None) -> None:
+    """D2-FX-R2-tasking 第 2 次（D2-AC-16）：两机互相让行悬停在 recover_m 以内（双方都静止）时，优先级低者在 ESC_AFTER_S 后作一次避让位移
+    （垂直错开），间距恢复后双方回到 FLYING/HOVER；全程不碰撞（此前两机在 1.8–2.7 m 处死锁约 290 s，随后能量 RTL 撞机）。
+    sandbox100 档 fleet_guard 只有 1 片：扫描全部机对并定稿（此前按 4 片处理，只查 slot % 4 == 0 为主机的机对、从不定稿）。"""
+    from awr.sim.safety.fleet_guard import ESC_AFTER_S
+
+    h = Harness(n=2, spacing=6.0, limits="px4_default", clock=clock)
+    try:
+        h.ready()
+        h.gcs_age_ms = 0
+        a, b = h.takeoff_all(20.0)
+        pa, pb = h.pos(a), h.pos(b)
+        u = (pb - pa) / float(np.linalg.norm(pb - pa))
+        q = pb - u * 2.0                                               # 慢速逼近到悬停的 b 旁 2 m（CPA < 3 m）
+        h.goto([q[0], q[1], pa[2]], uav=a, wait=False, speed_mps=0.3)
+        assert h.until(lambda: h.fs(a) == ("HOLD", "SEPARATION") and h.fs(b) == ("HOLD", "SEPARATION"), 40.0, 0.1), \
+            (h.state(a), h.state(b), float(np.linalg.norm(h.pos(a) - h.pos(b))))
+        d_hold = float(np.linalg.norm(h.pos(a) - h.pos(b)))
+        assert d_hold <= 5.0, d_hold                                   # 双方都已让行且间距不足以自行恢复
+        dmin = d_hold
+        t_end = h.core.clock.t_ns + int((ESC_AFTER_S + 20.0) * 1e9)
+        while h.core.clock.t_ns < t_end and not (h.fs(a)[0] == "FLYING" and h.fs(b)[0] == "FLYING"):
+            h.advance(0.1)
+            dmin = min(dmin, float(np.linalg.norm(h.pos(a) - h.pos(b))))
+        assert h.fs(a)[0] == "FLYING" and h.fs(b)[0] == "FLYING", (h.state(a), h.state(b))
+        assert float(np.linalg.norm(h.pos(a) - h.pos(b))) > 5.0
+        assert dmin >= 1.0 and "CRASHED" not in h.states(a) + h.states(b)
+        assert h.svc.rt.fg.escapes == 1
+    finally:
+        h.close()
+
+
+def test_sandbox100_single_shard_checks_all_pairs_and_restores() -> None:
+    """sandbox100（fleet_guard 1 片）：slot 1、2 的机对（主机 slot % 4 ≠ 0）同样受间隔保护，相向让行后恢复 FLYING/HOVER。"""
+    h = Harness(n=3, spacing=60.0, limits="px4_default", clock="sandbox100")
+    try:
+        assert h.core.ctx is not None
+        h.ready()
+        h.gcs_age_ms = 0
+        _a, b, c = h.takeoff_all(10.0)
+        pb, pc = h.pos(b), h.pos(c)
+        h.goto([pc[0], pc[1], 10.0], uav=b, wait=False, speed_mps=5.0)
+        h.goto([pb[0], pb[1], 10.0], uav=c, wait=False, speed_mps=5.0)
+        dmin, held = np.inf, False
+        t_end = h.core.clock.t_ns + int(30e9)
+        while h.core.clock.t_ns < t_end:
+            h.advance(0.1)
+            dmin = min(dmin, float(np.linalg.norm(h.pos(b) - h.pos(c))))
+            held |= h.fs(c) == ("HOLD", "SEPARATION") or h.fs(b) == ("HOLD", "SEPARATION")
+            if held and h.fs(b)[0] == "FLYING" and h.fs(c)[0] == "FLYING" and h.fs(b) == ("FLYING", "HOVER"):
+                break
+        assert held and dmin >= 3.0, dmin
+        assert h.fs(b)[0] == "FLYING" and h.fs(c)[0] == "FLYING", (h.state(b), h.state(c))
+    finally:
+        h.close()

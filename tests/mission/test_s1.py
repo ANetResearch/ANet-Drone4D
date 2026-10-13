@@ -38,7 +38,8 @@ def test_s1_end_to_end() -> None:
         prec = {mid: eng.missions[mid].energy for mid in ("m-lower", "m-upper")}          # 启动时的能量预检
         # 12 §7.2：落地 SOC 预检 p600-01 0.36 ± 0.03、p600-02 0.32 ± 0.03（M10-AC-014）
         soc = {p["id"]: p["soc_after"] for m in prec.values() for p in (m or {}).get("per_vehicle", [])}
-        assert soc["p600-01"] == pytest.approx(0.36, abs=0.03) and soc["p600-02"] == pytest.approx(0.32, abs=0.03)
+        # P600 profile 2.0.0（D2-INT 以 v2 重定基线；v1 为 0.36、0.32）
+        assert soc["p600-01"] == pytest.approx(0.505, abs=0.03) and soc["p600-02"] == pytest.approx(0.473, abs=0.03)
         cov = sim.rt.coverage.facade_ratio(["m-lower", "m-upper"])
         assert cov is not None and cov >= 0.9
         results = [e[2] for e in sim.kinds("scenario.result")]

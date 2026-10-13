@@ -69,7 +69,8 @@ def test_started_events_and_meta(tmp_path) -> None:
                 assert started and started[0]["n"] == 2 and started[0]["kernel"] in ("numba", "numpy")
                 assert started[0]["epoch"] == h.core.epoch
                 loaded = {kw["profile_id"] for k, kw in seen if k == "sim.profile.loaded"}
-                assert loaded == {"x500", "x500_sih", "p600_mid360"}
+                # D2 目录（M21）另有四个参考机型（d2-WP-08-to-M08 第 3 条）
+                assert loaded == {"x500", "x500_sih", "p600_mid360", "awr_q1", "awr_q9", "awr_f1", "awr_v1"}
                 meta = json.loads((tmp_path / "meta.json").read_text(encoding="utf-8"))
                 sim = meta["sim"]
                 assert sim["kernel"] == h.core.fleet.kernel and sim["fastmath"] is False

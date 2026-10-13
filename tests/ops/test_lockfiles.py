@@ -153,7 +153,10 @@ def test_package_lock_matches_package_json() -> None:
     assert not drift, f"package-lock.json 与 apps/web/package.json 不一致：{drift}"
     lock = _npm_lock()["packages"]
     assert lock["node_modules/@awr/contracts"].get("link") is True
-    assert lock["packages/contracts"]["version"] == "1.0.0"
+    # 工作区包的版本与其 package.json 一致（契约 1.1.0 起随 D2 升级；产品版本见 test_skeleton 与 tools/lint/check-version.mjs）
+    assert lock["packages/contracts"]["version"] == _pkg_json("packages/contracts/package.json")["version"]
+    assert lock["apps/web"]["version"] == web["version"]
+    assert lock[""]["version"] == _pkg_json("package.json")["version"]
 
 
 def test_version_drift_rules() -> None:

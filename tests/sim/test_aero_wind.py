@@ -1,7 +1,7 @@
 """气动与风（M08-AC-011、AC-012；M08-FR-032 至 FR-035；ADR-024）。
 
 - 风致倾角：悬停中逆风阶跃（来自北方，机头朝北），稳态俯仰：x500 composite 4/8/12/14 m/s 为 3.38/7.85/13.31/16.36° ± 0.3°；
-  P600 8 m/s 为 7.85° ± 0.3°；
+  P600 8 m/s 为 7.43° ± 0.3°（profile 2.0.0，AWR-20 §3.3 VH-3；1.0.0 存档为 7.85°，按 `p600_mid360@1.0.0` 复核）；
 - 密度：rho 降低 10% 时悬停推力比为 1/0.9（± 0.5%）；
 - 风只经相对空速：同一状态下"机体 v = 5 m/s、无风"与"机体静止、风 −5 m/s"的气动合力差 ≤ 1e-12 N（oracle 与融合核）；
 - `set_wind_from_enu()` 写入的 NED 风与 M02 golden（`packages/contracts/golden/frames/enu_ned.json`）满足轴置换。
@@ -54,7 +54,9 @@ def test_wind_tilt_x500_composite() -> None:
 
 def test_wind_tilt_p600() -> None:
     (g,) = _steady_pitch("p600_mid360", [8.0])
-    assert abs(g - 7.85) <= 0.3, g
+    assert abs(g - 7.43) <= 0.3, g  # profile 2.0.0（3.825 kg；VH-3 派生 7.43°）
+    (g1,) = _steady_pitch("p600_mid360@1.0.0", [8.0])
+    assert abs(g1 - 7.85) <= 0.3, g1  # 1.0.0 存档（3.5 kg）
 
 
 def test_rho_hover_thrust_ratio() -> None:

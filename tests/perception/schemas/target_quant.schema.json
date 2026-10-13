@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/rt/1/target_quant.schema.json",
+  "title": "awr.target.quant.v1",
+  "description": "Pair readings of one target against our vehicles (<= 12 pairs, ascending slant range; AWR-17 §17.20.6; semantics AWR-04 §15.10.3, §15.10.4; drafted by M19 WP-19b). Expanded form (this schema): SB-73 and the decoded topic. Topic target/{id}/quant (2 Hz sim, on subscription) carries the columnar form enc = soa1: one array per field (sub-objects acoustic, visual, radar, reverse hold column objects; `_has` marks pairs without the sub-object), a column whose values are all equal is folded into a scalar, numbers are integers scaled by the fixed table QUANT_SCALE (python/awr/sim/perception/quant.py; apps/web/src/engine/perception/field.ts) and decode to exactly the expanded values. Probabilities are for display; the discovery decision stays the deterministic criterion (would_discover).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "t_sim_ns": {
+      "$ref": "../../world/1/common.schema.json#/$defs/int64"
+    },
+    "target": {
+      "$ref": "../../world/1/common.schema.json#/$defs/slug"
+    },
+    "criterion_mode": {
+      "enum": [
+        "geometric",
+        "physical"
+      ]
+    },
+    "pairs": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "uav": {
+            "$ref": "../../world/1/common.schema.json#/$defs/slug"
+          },
+          "model_id": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "range_m": {
+            "type": "number",
+            "minimum": 0
+          },
+          "elev_deg": {
+            "type": "number"
+          },
+          "az_rel_deg": {
+            "type": "number"
+          },
+          "los": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "los_age_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "acoustic": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "lp_dba": {
+                    "type": "number"
+                  },
+                  "lp_band_db": {
+                    "type": "number"
+                  },
+                  "band_hz": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "thr_dba": {
+                    "type": "number"
+                  },
+                  "l_bg_dba": {
+                    "type": "number"
+                  },
+                  "margin_db": {
+                    "type": "number"
+                  },
+                  "p": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "in_body": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "lp_dba",
+                  "lp_band_db",
+                  "band_hz",
+                  "thr_dba",
+                  "l_bg_dba",
+                  "margin_db",
+                  "p",
+                  "in_body"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visual": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "theta_arcmin": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "d_vis_m": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "n_eq_px": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "theta_th_arcmin": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "ratio": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "c_app": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "light_band": {
+                    "enum": [
+                      "day",
+                      "low",
+                      "night"
+                    ]
+                  },
+                  "lights_on": {
+                    "type": "boolean"
+                  },
+                  "in_fov": {
+                    "type": "boolean"
+                  },
+                  "p": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "in_body": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "theta_arcmin",
+                  "d_vis_m",
+                  "n_eq_px",
+                  "theta_th_arcmin",
+                  "ratio",
+                  "c_app",
+                  "light_band",
+                  "lights_on",
+                  "in_fov",
+                  "p",
+                  "in_body"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "radar": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "snr_db": {
+                    "type": "number"
+                  },
+                  "snr_req_db": {
+                    "type": "number"
+                  },
+                  "margin_db": {
+                    "type": "number"
+                  },
+                  "p": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "in_body": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "snr_db",
+                  "snr_req_db",
+                  "margin_db",
+                  "p",
+                  "in_body"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reverse": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sensor": {
+                    "type": "string",
+                    "maxLength": 24
+                  },
+                  "level": {
+                    "enum": [
+                      "none",
+                      "D",
+                      "R",
+                      "I"
+                    ]
+                  },
+                  "n_eff": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "n_req": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "p": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "limiting": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "sensor",
+                  "level"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "p_any": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "would_discover": {
+            "type": "boolean"
+          },
+          "dwell_s": {
+            "type": "number",
+            "minimum": 0
+          },
+          "t_dwell_s": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "uav",
+          "model_id",
+          "range_m",
+          "elev_deg",
+          "az_rel_deg",
+          "los",
+          "acoustic",
+          "visual",
+          "p_any",
+          "would_discover",
+          "dwell_s",
+          "t_dwell_s"
+        ]
+      }
+    }
+  },
+  "required": [
+    "t_sim_ns",
+    "target",
+    "criterion_mode",
+    "pairs"
+  ]
+}

@@ -8,7 +8,7 @@ from awr.sim.sensors.spec import rig_entries, rig_for_model
 def test_roster_entries_only_fov_kinds():
     e = rig_entries(rig_for_model("p600"))
     assert e == [{"sensor_no": 0, "name": "camera", "kind": "camera"}, {"sensor_no": 1, "name": "thermal", "kind": "thermal"},
-                 {"sensor_no": 2, "name": "mid360", "kind": "lidar"}]
+                 {"sensor_no": 2, "name": "mid360", "kind": "lidar"}, {"sensor_no": 5, "name": "eo", "kind": "camera"}]
     assert rig_entries(rig_for_model("x500")) == [{"sensor_no": 0, "name": "camera", "kind": "camera"}]
 
 

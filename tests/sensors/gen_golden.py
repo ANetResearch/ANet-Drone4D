@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """M13 golden（Python 与 TS 对拍的共同基准；M13-AC-003、AC-008、AC-010、AC-024）。
 
-写出 `tests/sensors/golden/{frames,intrinsics,mid360}.json`：帧常量与云台旋转、相机投影/视锥角点/T_base_cam/画幅框/像素、
-MID-360 参考公式采样点。数值全部由 `awr.sim.sensors`（frames、camera、lidar.pattern）计算；TS 用例
+写出 `tests/sensors/golden/{frames,intrinsics,mid360,zoom}.json`：帧常量与云台旋转、相机投影/视锥角点/T_base_cam/画幅框/像素、
+MID-360 参考公式采样点、D2 光学变焦（GX40 五个焦距 × 两个输出档的内参、视场与像素，M13-AC-208）。数值全部由 `awr.sim.sensors`（frames、camera、lidar.pattern）计算；TS 用例
 （apps/web/tests/sensors）读取同一文件。`--check` 只比较不写入。
 用法：.venv/bin/python tests/sensors/gen_golden.py [--check]
 """
@@ -121,9 +121,39 @@ def mid360_golden() -> dict:
     return {"doc": "MID-360 r04 reference formula samples (every 97th point)", "frames": frames}
 
 
+ZOOM_F_MM = (4.8, 10.63, 24.0, 31.7, 48.0)
+
+
+def zoom_golden() -> dict:
+    """P600 `eo_gx40.yaml` 挂载（型号库 vehicles/sensor_models，交付前取 tests/sensors/fixtures/sensor_models）在五个焦距、两个
+    输出档下的内参、视场与 32 个传感器系点的像素（`camera.project`，与 TS `withFocal` 对拍，≤ 1e-6 px）。"""
+    from dataclasses import replace
+
+    from awr.sim.sensors.spec import load_sensor_file
+
+    lib = ROOT / "vehicles" / "sensor_models"
+    dirs = [lib] if lib.is_dir() and any(lib.glob("*.yaml")) else [ROOT / "tests" / "sensors" / "fixtures" / "sensor_models"]
+    sp = load_sensor_file(ROOT / "vehicles" / "p600" / "sensors" / "eo_gx40.yaml", "eo", 5, model_dirs_=dirs)
+    z = sp.zoom
+    rng = np.random.default_rng(29)
+    pts = np.stack([rng.uniform(20, 900, 32), rng.uniform(-40, 40, 32), rng.uniform(-25, 25, 32)], axis=1)
+    cases = []
+    for out in ("1080p", "sxga"):
+        w_mm, h_mm = z.crop_mm(out)
+        for f in ZOOM_F_MM:
+            it = z.intrinsics(f, out)
+            u, v, _z = project(pts, np.zeros(3), np.eye(3), replace(sp, intr=it))
+            cases.append({"output": out, "f_mm": f, "crop_mm": [w_mm, h_mm], "w": it.w, "h": it.h, "fx": it.fx, "fy": it.fy,
+                          "cx": it.cx, "cy": it.cy, "hfov_rad": z.hfov(f, out), "vfov_rad": z.vfov(f, out),
+                          "uv": lst(np.stack([u, v], axis=1))})
+    return {"doc": "M13 D2 zoom golden (gen_golden.py): GX40 intrinsics, FOV and pixels at five focal lengths",
+            "f_range_mm": [z.f_min_mm, z.f_max_mm], "pts_flu": lst(pts), "cases": cases}
+
+
 def main() -> int:
     GOLD.mkdir(parents=True, exist_ok=True)
-    files = {"frames.json": frames_golden(), "intrinsics.json": intrinsics_golden(), "mid360.json": mid360_golden()}
+    files = {"frames.json": frames_golden(), "intrinsics.json": intrinsics_golden(), "mid360.json": mid360_golden(),
+             "zoom.json": zoom_golden()}
     bad = 0
     for name, doc in files.items():
         text = json.dumps(doc, indent=None, separators=(",", ":")) + "\n"

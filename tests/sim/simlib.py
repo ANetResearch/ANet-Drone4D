@@ -18,7 +18,7 @@ from awr.sim.backends.base import EntitySpec, Kind
 from awr.sim.fleet import actions as ACT
 from awr.sim.fleet import kernels_l1 as K
 from awr.sim.fleet.fleet import FleetConfig, FleetSim
-from awr.sim.fleet.pipeline import TICK_NS, StageCtx
+from awr.sim.fleet.pipeline import StageCtx
 from awr.sim.fleet.px4lite import quat_from_yaw
 from awr.sim.fleet.stages import registry as R
 
@@ -48,19 +48,22 @@ class Rig:
     def __init__(self, profile_id: str = "x500", n: int = 1, *, l1_every: int = 2, kernel: str = "numba",
                  time_stretch: bool = True, stop_motion: bool = True, world=None, spacing: float = 50.0,
                  home_z: float = 0.0, aero_override: str | None = None, yaw_enu: float = math.pi / 2,
-                 env=None) -> None:
+                 env=None, clock_profile: str = "d1_250") -> None:
         cfg = FleetConfig(l1_every=l1_every, tap_every=l1_every, kernel=kernel, time_stretch=time_stretch,
-                          stop_motion=stop_motion, aero_override=aero_override, path_capacity=65536)
+                          stop_motion=stop_motion, aero_override=aero_override, path_capacity=65536,
+                          clock_profile=clock_profile)
         self._reg_ctx = R.isolated_registry()
         self.reg = self._reg_ctx.__enter__()
-        if env is not None:  # M07 env stage 的测试替身（order 020、every 5、phase 0，50 Hz）
+        if env is not None:  # M07 env stage 的测试替身（d1_250：order 020、every 5、phase 0，50 Hz；sandbox100 按档调度表 2/0）
             R.register_stage("env", 5, 0, 20, owner="M07")(env)
         self.events = Events()
         self.fleet = FleetSim(cfg, None, world, self.events, None, 0, reg=self.reg)
         self.fleet.build_pipeline(ring=None)
         self.S = self.fleet.S
         self.T = self.fleet.T
-        self.ctx = StageCtx(events=self.events, profiles=self.T, paths=self.fleet.PB, cfg=cfg)
+        self.tick_ns = self.fleet.clock_profile.tick_ns
+        self.ctx = StageCtx(events=self.events, profiles=self.T, paths=self.fleet.PB, cfg=cfg,
+                            dt_tick=self.fleet.clock_profile.dt_tick, profile=self.fleet.clock_profile)
         for k in range(n):
             spec = EntitySpec(f"u{k}", Kind.UAV, profile_id, None, (k * spacing, 0.0, home_z), yaw_enu)  # 缺省朝北（SIH 同）
             self.fleet.add(spec, slot=k, agent_no=k, entity_id=f"u{k}")
@@ -93,7 +96,7 @@ class Rig:
         self.fleet.step(self.ctx, n)
 
     def step_s(self, s: float) -> None:
-        self.step(round(s * 1e9 / TICK_NS))
+        self.step(round(s * 1e9 / self.tick_ns))
 
 
 # ---------------------------------------------------------------- 测试用 FastGuard（M09 的替身，g08 st_guard）
@@ -254,10 +257,11 @@ def run_mock_all(profile_id: str, tests=("offboard_step", "reposition", "wind"),
         base0 = S.p[:n].copy()
         rec_t, rec_p, rec_v, rec_q = [], [], [], []
         nxt = 0.0
-        for _ in range(round(T * 1e9 / TICK_NS)):
+        g_every = max(1, round(20_000_000 / rig.tick_ns))  # 测试用 FastGuard 50 Hz（d1_250 每 5 tick、sandbox100 每 2 tick）
+        for _ in range(round(T * 1e9 / rig.tick_ns)):
             rig.step(1)
             tt = rig.t - t_cmd
-            if (rig.ctx.tick % 5) == 1:
+            if (rig.ctx.tick % g_every) == 1 % g_every:
                 guard(S, rig.t)
             if tt >= nxt - 1e-9:
                 rec_t.append(tt)
@@ -406,7 +410,7 @@ class CoreHarness:
 
     def __init__(self, *, n: int = 1, reg=None, profile_id: str = "p600_mid360", spawn_xy=(0.0, 0.0), spacing: float = 10.0,
                  world=None, kernel: str = "numba", limits: str | None = None, seat: bool = True, ready: bool = True,
-                 fleet_cfg: dict | None = None, persist_dir=None, cfg_over: dict | None = None) -> None:
+                 fleet_cfg: dict | None = None, persist_dir=None, cfg_over: dict | None = None, profiles=None) -> None:
         import secrets
 
         from awr.contracts import LAYOUT_ID
@@ -428,7 +432,7 @@ class CoreHarness:
               "spawn_xy": spawn_xy, "spawn_spacing_m": spacing, "fleet": fc, "limits_profile": limits} | dict(cfg_over or {})
         cfg = SimConfig(**kw)
         self.core = SimCore(cfg, self.bus, self.ring, secret=self.secret, wall_ns=lambda: self.W[0], reg=reg, world=world,
-                            persist_dir=persist_dir)
+                            persist_dir=persist_dir, profiles=profiles)
         self.core.start()
         self.k_entry = derive_key(self.secret, self.run_id, "entry")
         self.n = 0
@@ -456,8 +460,9 @@ class CoreHarness:
     def advance(self, seconds: float, *, wall_step_ticks: int = 8) -> None:
         end = self.core.clock.t_ns + int(seconds * 1e9)
         guard = 0
+        tick_ns = self.core.clock.tick_ns  # 按时钟档（d1_250 4 ms、sandbox100 10 ms）
         while self.core.clock.t_ns < end and guard < 1_000_000:
-            self.W[0] += wall_step_ticks * TICK_NS
+            self.W[0] += wall_step_ticks * tick_ns
             self.core.iterate()
             guard += 1
 

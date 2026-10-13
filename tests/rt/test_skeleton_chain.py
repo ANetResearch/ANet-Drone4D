@@ -28,6 +28,7 @@ import rtc
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
+from awr.contracts import LAYOUT_ID
 from awr.contracts import frame as F
 from awr.contracts.layouts import DRONE_STATE64, SWARM_LITE32
 
@@ -265,7 +266,7 @@ def test_rest_and_static(stack) -> None:
         assert c.get("/api/sessions/current", headers=H).json()["world_id"] == "shenzhen"
         assert c.get("/api/sys/config").json()["worlds_base"] == "/worlds"
         pub, priv = c.get("/api/sys/info").json(), c.get("/api/sys/info", headers=H).json()
-        assert "layout_id" not in pub and priv["layout_id"] == "3d5e08d0" and priv["protocol"] == PROTO
+        assert "layout_id" not in pub and priv["layout_id"] == f"{LAYOUT_ID:08x}" and priv["protocol"] == PROTO
         r = c.post("/api/auth/token", json={"role": "admin"})
         assert r.status_code == 401 and r.json()["code"] == 304
         r = c.get("/api/auth/whoami", headers={"Authorization": "Bearer v1.x.y"})

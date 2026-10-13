@@ -60,8 +60,9 @@ def test_s1_precheck_soc() -> None:
             per, ok = sim.rt.missions.energy_precheck(m)
             assert ok, per
             soc[per[0]["id"]] = per[0]["soc_after"]
-        assert soc["p600-01"] == pytest.approx(0.36, abs=0.03)
-        assert soc["p600-02"] == pytest.approx(0.32, abs=0.03)
+        # P600 profile 2.0.0（用户 D2 规格：3.825 kg、401 W、193.8 Wh；D2-INT 以 v2 重定基线，v1 为 0.36、0.32）
+        assert soc["p600-01"] == pytest.approx(0.505, abs=0.03)
+        assert soc["p600-02"] == pytest.approx(0.473, abs=0.03)
         # x01 原参数：两机都不可行，detail 列出缺口 Wh
         eng = sim.rt.missions
         for vid, z0, z1 in (("p600-01", 10, 195), ("p600-02", 190, 391)):

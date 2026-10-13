@@ -6,7 +6,10 @@ from __future__ import annotations
 def test_stage_registration(bench):
     st = bench.stage
     assert (st.every, st.phase, st.order, st.owner, st.budget_core) == (5, 2, 100, "M13", 0.010)
-    assert "sensors" in bench.reg.blocks and {t.name for t in bench.reg.slow} == {"m13.sensor_pose", "m13.noisy_obs"}
+    assert "sensors" in bench.reg.blocks and "payload" in bench.reg.blocks
+    # D1 两个慢任务 + D2 的载荷 2 Hz、nav 10 Hz（订阅时）与 MID-360 限频扫描（M13 §15.7 plugin 行）
+    assert {t.name for t in bench.reg.slow} == {"m13.sensor_pose", "m13.noisy_obs", "m13.payload_pub", "m13.nav_pub",
+                                               "m13.lidar_scan"}
 
 
 def test_schedule_ticks_0_to_199(bench):

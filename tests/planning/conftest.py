@@ -18,3 +18,21 @@ if _HERE not in sys.path:
 def _m10_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AWR_PLAN_POOL", "inline")
     monkeypatch.setenv("AWR_SCENARIO_LOAD", "0")
+
+
+PLUGINS = "awr.sim.planning.kinds_builtin,plan_test_kinds"
+
+
+@pytest.fixture
+def plan_plugins(monkeypatch: pytest.MonkeyPatch) -> str:
+    """测试插件 `plan_test_kinds`（test.* 类别）：本进程导入并登记；spawn 出的 worker 经 PYTHONPATH 与 AWR_PLAN_PLUGINS
+    导入同一模块（D2 注册表，M10-FR-201）。"""
+    import os
+
+    from awr.sim.planning.jobs import load_plan_plugins
+
+    monkeypatch.setenv("AWR_PLAN_PLUGINS", PLUGINS)
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join([_HERE, *[p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep)
+                                                               if p]]))
+    load_plan_plugins(PLUGINS, strict=True)
+    return PLUGINS

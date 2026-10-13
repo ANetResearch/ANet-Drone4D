@@ -1,0 +1,28 @@
+# M13 测试用型号库（WP-10）：77 GHz 毫米波雷达 mmw77（AWR-04 §6.1、AWR-20 §6.5）。正式型号库归 M21（WP-08）。
+schema: awr.sensor.radar_mmw.v1
+model_id: mmw77
+model_version: 1.0.0
+display_name: "77 GHz 毫米波雷达"
+reference: true
+mass_kg: {value: 0.25, conf: D, src: "AWR-20 §6.1"}
+power_w: {value: 6.0, conf: D, src: "AWR-20 §6.1"}
+env_limits: {temp_c: [-30, 70]}
+freq_ghz: 77
+fov: {az_deg: 60, el_deg: 15}
+r_ref_m: 180
+sigma_ref_m2: 1.0
+pd_ref: 0.9
+pfa: 1.0e-6
+snr_req_db: 13.2
+range_res_m: 0.3
+az_res_deg: 4
+vel_res_mps: 0.1
+az_acc_deg: 1
+rate_hz: 5
+r_max_m: 400
+rain: {k: 1.0, alpha: 0.7}
+clutter: {sigma0_db: -20, k: 10}
+classify: {snr_db: 20, dwell_s: 2}
+overridable: [mount]
+conf: D
+src: "AWR-20 §6.5：模拟参考值，非任何真实产品"

@@ -78,6 +78,7 @@ class Bench:
         self.tick = 0
         self.slow_pose = True
         self.slow_obs = True
+        self.slow_d2 = False  # D2 慢任务（payload 2 Hz、nav 10 Hz、MID-360 扫描）；bench_d2 置 True
 
     # ---------------------------------------------------------------- 机体
     def spawn(self, slot: int, agent_no: int, profile: str = "p600_mid360", pos=(0.0, 0.0, 60.0), yaw_deg: float = 0.0,
@@ -128,6 +129,11 @@ class Bench:
                 pass
         if self.slow_obs and (t % 125 == 0):
             self.rt.obs.run_slow(c)
+        if self.slow_d2:
+            self.rt.payload_pub.run_slow(c)
+            self.rt.nav.run_slow(c)
+            while self.rt.scanner.run_slow(c) is not False and self.rt.scanner.frame is not None:
+                pass
         self.tick += 1
 
     def block_bytes(self) -> bytes:
@@ -158,3 +164,47 @@ def bench_factory(profiles):
 @pytest.fixture
 def bench(bench_factory) -> Bench:
     return bench_factory()
+
+
+# ---------------------------------------------------------------- D2（WP-10）：schema 1.1 机型库与沙盒实例
+@pytest.fixture(scope="session")
+def d2_vehicles(tmp_path_factory):
+    """临时机型库：P600 v2 传感器映射、测试机型 tq9（Q9 挂载组合）与 tq1（EO-Z8 + LWIR 13 mm）、型号库（d2lib）。"""
+    from d2lib import make_d2_vehicles
+
+    return make_d2_vehicles(tmp_path_factory.mktemp("d2") / "vehicles")
+
+
+@pytest.fixture(scope="session")
+def profiles_d2(d2_vehicles):
+    from awr.sim.fleet.profiles import ProfileTable
+
+    return ProfileTable(vehicles=d2_vehicles)
+
+
+@pytest.fixture
+def bench_d2_factory(profiles_d2):
+    """bench_d2_factory(sandbox=True, **Bench 参数) -> Bench（D2 机型库；sandbox 为 True 时按沙盒实例的缺省挂载）。"""
+    made: list[Any] = []
+
+    def make(sandbox: bool = True, **kw) -> Bench:
+        from awr.sim.sensors import plugin
+
+        cm = R.isolated_registry()
+        reg = cm.__enter__()
+        rt = plugin.install()
+        rt.sandbox = sandbox
+        made.append((cm, plugin))
+        bn = Bench(reg, rt, profiles_d2, **kw)
+        bn.slow_d2 = True
+        return bn
+
+    yield make
+    for cm, plugin in reversed(made):
+        plugin.uninstall()
+        cm.__exit__(None, None, None)
+
+
+@pytest.fixture
+def bench_d2(bench_d2_factory) -> Bench:
+    return bench_d2_factory()

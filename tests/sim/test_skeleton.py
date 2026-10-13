@@ -41,12 +41,22 @@ def _params(fn) -> list[tuple[str, str]]:
     return [(p.name, p.kind.name) for p in inspect.signature(fn).parameters.values()]
 
 
+def _frozen_prefix(fn, frozen: list[tuple[str, str]]) -> None:
+    """D1-MS1 冻结的参数原样在前；D2 只允许在末尾追加带缺省值的仅关键字参数（M08-FR-065、§15.3.1）。"""
+    ps = list(inspect.signature(fn).parameters.values())
+    assert [(p.name, p.kind.name) for p in ps[:len(frozen)]] == frozen
+    for p in ps[len(frozen):]:
+        assert p.kind.name == "KEYWORD_ONLY" and p.default is not inspect.Parameter.empty, p
+
+
 def test_extension_signatures_frozen() -> None:
-    assert _params(R.register_stage) == [
+    _frozen_prefix(R.register_stage, [
         ("name", "POSITIONAL_OR_KEYWORD"), ("every", "POSITIONAL_OR_KEYWORD"), ("phase", "POSITIONAL_OR_KEYWORD"),
         ("order", "POSITIONAL_OR_KEYWORD"), ("owner", "KEYWORD_ONLY"), ("fidelity", "KEYWORD_ONLY"),
-        ("budget_core", "KEYWORD_ONLY"), ("writes", "KEYWORD_ONLY"), ("reads", "KEYWORD_ONLY"), ("shards", "KEYWORD_ONLY")]
-    assert [n for n, _ in _params(R.register_admission_check)] == ["step", "name", "fn", "owner"]
+        ("budget_core", "KEYWORD_ONLY"), ("writes", "KEYWORD_ONLY"), ("reads", "KEYWORD_ONLY"), ("shards", "KEYWORD_ONLY")])
+    assert [n for n, _ in _params(R.register_stage)][-2:] == ["hz", "phase_slot"]  # D2（M08-FR-202）
+    _frozen_prefix(R.register_admission_check, [("step", "POSITIONAL_OR_KEYWORD"), ("name", "POSITIONAL_OR_KEYWORD"),
+                                                ("fn", "POSITIONAL_OR_KEYWORD"), ("owner", "KEYWORD_ONLY")])
     assert [n for n, _ in _params(R.register_slow_task)] == ["name", "fn", "period_wall_s", "period_sim_s", "budget_us"]
     assert [n for n, _ in _params(R.register_query)] == ["name", "fn"]
     assert [n for n, _ in _params(R.register_energy_model)] == ["model"]

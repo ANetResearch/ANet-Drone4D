@@ -1,6 +1,7 @@
 """机型 profile 加载与 Digital Twin（M08-AC-009；M08-FR-042 至 FR-048；AWR-16 §11.3、§11.4）。
 
-- x500、x500_sih、p600_mid360 通过 schema 与 VH-1..VH-7，`derived` 与文件值相对差 ≤ 1%，关键参数等于 PRD 与黄金数据注入值；
+- x500、x500_sih、p600_mid360 通过 schema 与 VH-1..VH-7（D2 另有挂载质量 MNT-1），`derived` 与文件值相对差 ≤ 1%，关键参数等于
+  PRD 与黄金数据注入值（P600 为 profile 2.0.0，AWR-20 §3；1.0.0 存档经 `p600_mid360@1.0.0` 加载，见 test_profiles_catalog）；
 - P600 质量改为 1.505 kg：VH-1、VH-2 失败且 `ProfileError.code == 353`（sim-core 拒绝启动，另见 test_startup）；
 - E 级值（rejected[] 中的值）出现在参数位时拒绝；schema 不合法（conf E）拒绝；id 重复拒绝；
 - `describe()`：11 行孪生表（M08 7 行、M09 1 行、M13 3 行）与 7 条检查；限速配置三套取值（FR-046）；
@@ -22,12 +23,17 @@ ROOT = Path(__file__).resolve().parents[2]
 VEH = ROOT / "vehicles"
 
 
+D1_IDS = {"x500", "x500_sih", "p600_mid360"}
+# D2 目录（vehicles/catalog.json，M21）另有 AWR-Q1、Q9、F1、V1（d2-WP-08-to-M08 第 3 条：按目录断言；构型检查见 tests/catalog）
+CATALOG_IDS = D1_IDS | {"awr_q1", "awr_q9", "awr_f1", "awr_v1"}
+
+
 def test_three_profiles_load_and_pass_checks() -> None:
     T = ProfileTable()
-    assert set(T.ids) == {"x500", "x500_sih", "p600_mid360"}
-    for pid in T.ids:
+    assert set(T.ids) == CATALOG_IDS
+    for pid in sorted(D1_IDS):
         d = T.describe(pid)
-        assert [c["id"] for c in d["checks"]] == ["VH-1", "VH-2", "VH-3", "VH-4", "VH-5", "VH-6", "VH-7"]
+        assert [c["id"] for c in d["checks"]] == ["VH-1", "VH-2", "VH-3", "VH-4", "VH-5", "VH-6", "VH-7", "MNT-1"]
         assert all(c["pass"] for c in d["checks"]), d["checks"]
         doc = d["profile"]
         for k, v in (doc.get("derived") or {}).items():
@@ -41,10 +47,10 @@ def test_regression_and_p600_parameters() -> None:
     assert (x.mass_kg, x.t_max_rotor_n, x.tau_motor_s, x.cda_m2, x.c_rd) == (2.064, 8.55, 0.03, 0.02065, 8.06428e-5)
     assert (xs.aero, xs.k_dv) == ("linear", 0.35)
     assert x.status == "regression" and x.default_limits == "px4_default"
-    assert (p.mass_kg, p.t_max_rotor_n, p.tau_motor_s, p.cda_m2, p.c_rd) == (3.5, 19.23, 0.04, 0.035, 1.05e-4)
-    assert p.inertia_kgm2 == (0.0548, 0.0548, 0.101)
-    assert p.status == "placeholder" and p.default_limits == "prometheus_outdoor"
-    assert round(p.twr, 2) == 2.24 and round(p.hover, 3) == 0.446
+    assert (p.mass_kg, p.t_max_rotor_n, p.tau_motor_s, p.cda_m2, p.c_rd) == (3.825, 19.23, 0.04, 0.035, 1.05e-4)
+    assert p.inertia_kgm2 == (0.0598, 0.0598, 0.1102)
+    assert p.status == "placeholder" and p.default_limits == "prometheus_outdoor" and p.version == "2.0.0"
+    assert round(p.twr, 2) == 2.05 and round(p.hover, 3) == 0.488
     L = {k: T.limits[k] for k in T.limit_ids}
     assert (L["px4_default"].vxy_max_mps, L["px4_default"].cruise_mps, L["px4_default"].acc_hor_mps2) == (12.0, 5.0, 3.0)
     assert (L["prometheus_outdoor"].vxy_max_mps, L["prometheus_outdoor"].cruise_mps) == (3.0, 3.0)
@@ -98,11 +104,11 @@ def test_duplicate_id_rejected(tmp_path: Path) -> None:
 def test_vh_formulas() -> None:
     doc = _p600_doc()
     d = derived_values(doc)
-    assert d["hover_thrust"] == pytest.approx(3.5 * 9.80665 / (4 * 19.23))
-    assert d["endurance_check_s"] == pytest.approx(0.85 * 222 * 3600 / 515)
+    assert d["hover_thrust"] == pytest.approx(3.825 * 9.80665 / (4 * 19.23))
+    assert d["endurance_check_s"] == pytest.approx(0.85 * 228 * 3600 / 401)
     so = 4 * 1500 * np.sqrt(d["hover_thrust"])
     F = 0.5 * 1.225 * 0.035 * 64 + so * 1.05e-4 * 8
-    assert d["tilt_at_8mps_deg"] == pytest.approx(np.degrees(np.arctan(F / (3.5 * 9.80665))))
+    assert d["tilt_at_8mps_deg"] == pytest.approx(np.degrees(np.arctan(F / (3.825 * 9.80665))))
     c = {x["id"]: x for x in run_checks(doc)}
     assert c["VH-7"]["pass"] and c["VH-4"]["pass"]
 
@@ -119,7 +125,7 @@ def test_describe_twin_table() -> None:
     assert by["Mass"]["conf"] == "B" and by["Inertia"]["conf"] == "D" and by["Motor"]["conf"] == "D"
     assert by["Mass"]["status"] == "placeholder"
     s = ProfileTable().summary()
-    assert {x["profile_id"] for x in s} == {"x500", "x500_sih", "p600_mid360"}
+    assert {x["profile_id"] for x in s} == CATALOG_IDS
 
 
 def test_model_glb_triangle_budgets() -> None:

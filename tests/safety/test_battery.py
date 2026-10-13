@@ -19,7 +19,8 @@ def _hover(r: UnitRig, slot: int) -> None:
 
 
 def test_p600_hover_endurance() -> None:
-    r = UnitRig(n=1)
+    # D1 门禁口径固定 p600_mid360@1.0.0（AWR-20 §3.4；d2-WP-02-to-M09 第 3 条，D2-INT）：v2 为 193.8 Wh、401 W、1740 s
+    r = UnitRig(n=1, profile="p600_mid360@1.0.0")
     _hover(r, 0)
     bb = r.bb
     assert bool(bb["has_bat"][0]) and bb["e_use_wh"][0] == pytest.approx(0.85 * 222.0)

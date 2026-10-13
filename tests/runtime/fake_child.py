@@ -53,10 +53,10 @@ def main() -> int:
     if a.grandchild:
         import subprocess
 
-        code = ("import signal, time\n" + ("signal.signal(signal.SIGTERM, signal.SIG_IGN)\n" if a.grandchild_ignore_term else "")
-                + "time.sleep(120)\n")
-        gc = subprocess.Popen([sys.executable, "-c", code])  # 不新建会话：与本进程同组，如同 multiprocessing spawn
-        Path(a.grandchild).write_text(str(gc.pid))
+        # 后代先完成信号设置再自行写 pid 文件：测试读到 pid 时 SIG_IGN 已生效（否则慢机器上 SIGTERM 可能先于设置到达）
+        code = ("import os, pathlib, signal, time\n" + ("signal.signal(signal.SIGTERM, signal.SIG_IGN)\n" if a.grandchild_ignore_term else "")
+                + f"pathlib.Path({str(a.grandchild)!r}).write_text(str(os.getpid()))\n" + "time.sleep(120)\n")
+        subprocess.Popen([sys.executable, "-c", code])  # 不新建会话：与本进程同组，如同 multiprocessing spawn
     bus = None
     if a.bus:
         from awr.runtime.bus import ZenohBus

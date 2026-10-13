@@ -104,8 +104,9 @@ def test_supervisor_cli_exits_2_on_bad_config(tmp_path: Path) -> None:
 
 
 def test_public_profile_for_demo_site() -> None:
-    """公开演示站 profile（ADR-082、ADR-085；AWR-19 §3.7）：只起核心进程、关闭热备用与钉核、synthcity 与循环剧本、
-    回环 18640、世界白名单与连接上限；部署域名必须由环境给出，绑定非回环地址拒绝启动。"""
+    """公开演示站 profile v2（ADR-082、ADR-085；D2：ADR-089、ADR-094、ADR-109；M11-FR-217、M11-AC-210；AWR-19 §3.7）：核心进程
+    加沙盒控制面、关闭热备用与钉核、synthcity 与接力剧本 S7、回环 18640（show-api）与 18641（sandbox-api）、七个世界的白名单、
+    show-api 连接上限 24；部署域名必须由环境给出，绑定非回环地址拒绝启动。"""
     with pytest.raises(ConfigError) as ei:
         load_runtime_config(profile="public", env={})
     assert ei.value.path == "net.origins"
@@ -113,11 +114,17 @@ def test_public_profile_for_demo_site() -> None:
     c = load_runtime_config(profile="public", env=env, world_fallback=True)
     assert c.access_mode == "public" and c.net.bind == "127.0.0.1" and c.port_effective == 18640
     assert c.rendezvous_effective == "tcp/127.0.0.1:18647" and c.cpu_pin_enabled is False
-    assert [p.name for p in c.enabled_procs() if not p.on_demand] == ["sim-core", "api"]
+    assert [p.name for p in c.enabled_procs() if not p.on_demand] == ["sim-core", "api", "sandbox-pool", "sandbox-api"]
     assert all(not p.standby for p in c.procs) and c.defaults.standby is False
     assert (c.run.world, c.run.scenario, c.run.scenario_profile, c.run.fallback_world) == (
-        "synthcity", "s0-synthcity-showcase", "public", None)
-    assert c.net.worlds_allow == ["synthcity"] and c.net.ws_max == 64 and c.net.ws_max_per_ip == 4
+        "synthcity", "s7-synthcity-relay", "public", None)
+    seven = ["synthcity", "shenzhen", "suzhou", "newyork", "chicago", "shanghai", "sanfrancisco"]
+    assert c.net.worlds_allow == seven and c.net.ws_max == 24 and c.net.ws_max_per_ip == 4
+    sb = c.sandbox
+    assert sb.enabled and sb.quota_profile == "public" and c.sandbox_port_effective == 18641 and sb.worlds_allow == seven
+    assert sb.batch.enabled is False and c.expand("${sandbox.port_effective}") == "18641"
+    assert c.proc("sandbox-api").env == {"AWR_CGROUP": "sandbox/ctl", "MALLOC_ARENA_MAX": "2"} and \
+        c.proc("sandbox-api").start_after == ["sandbox-pool"]          # arena 上限（D2-FX-R2）
     assert c.net.trusted_proxies == ["127.0.0.1", "::1"]
     assert "drone4d.agentnetwork.org.cn" in c.allowed_hosts
     with pytest.raises(ConfigError) as ei:

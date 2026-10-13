@@ -106,7 +106,7 @@ def test_topics_reference_known_layouts_and_schemas():
     for t in load("rt/topics.json")["topics"]:
         if t["encoding"] == "raw" and t.get("d1") in ("core", "ext"):
             assert t["schemaName"] in lay, t["pattern"]
-        assert topics.match_topic(t["pattern"].replace("{id}", "uav0001").replace("{mid}", "m1").replace("{aid}", "a1").replace("{name}", "cam0")) is not None
+        assert topics.match_topic(re.sub(r"\{\w+\}", "x1", t["pattern"].replace("{id}", "uav0001").replace("{mid}", "m1"))) is not None
     assert topics.quantize_rate(12) in topics.RATE_CLASSES
 
 

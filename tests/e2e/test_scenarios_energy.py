@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import pytest
 
-from awr.datasets.scenarios.energy import SX_LEGS, EnergyModel, simulate_sortie
+from awr.datasets.scenarios.energy import ROOT, SX_LEGS, EnergyModel, simulate_sortie
 
 pytestmark = pytest.mark.ext
+P600_V1 = ROOT / "vehicles" / "p600" / "history" / "params-1.0.0.yaml"
 
 
 @pytest.mark.parametrize("key", sorted(SX_LEGS))
@@ -32,5 +33,10 @@ def test_rejected_variants_stay_rejected() -> None:
 
 
 def test_vehicle_package_constants() -> None:
-    m = EnergyModel.from_vehicle()
+    """D1 剧本按 P600 1.0.0 复算（AWR-20 §3.4 第 1 条：D1 门禁固定 `p600_mid360@1.0.0`，存档 `history/params-1.0.0.yaml`）；
+    当前版本 2.0.0（ADR-095，AWR-04 §5.1）的数值另行核对。"""
+    m = EnergyModel.from_vehicle(P600_V1)
     assert m.mass_kg == pytest.approx(3.5) and m.p_hover_w == pytest.approx(515.0) and m.e_use_wh == pytest.approx(188.7)
+    v2 = EnergyModel.from_vehicle()
+    assert v2.mass_kg == pytest.approx(3.825) and v2.p_hover_w == pytest.approx(401.0, abs=1.0)
+    assert v2.e_use_wh == pytest.approx(193.8, abs=0.05)

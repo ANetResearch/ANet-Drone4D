@@ -252,7 +252,9 @@ def test_pong_and_clock_caps(st) -> None:
             st.sim.roster_version += 1
         _, si = await c.until(lambda k, x: k == "json" and x["op"] == "serverInfo" and x is not info
                               and x["clock"]["mode"] != "lockstep", 3)
-        assert si["clock"] == {"mode": "slaved_realtime", "pausable": False, "max_speed": 1, "steppable": False}
+        # D2：clock 增加 tick_hz（主时钟频率；共享展示 d1_250 为 250，17 §17.7.1）
+        assert si["clock"] == {"mode": "slaved_realtime", "pausable": False, "max_speed": 1, "steppable": False,
+                               "tick_hz": 250}
         st.sim.remove_vehicle("sih1")
         await c.until(lambda k, x: k == "json" and x["op"] == "serverInfo" and x["clock"]["mode"] == "lockstep", 3)
         await c.ws.close()

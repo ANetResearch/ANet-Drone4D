@@ -185,3 +185,43 @@ def test_uav_collider_kernel_matches_grid_pairing() -> None:
         h2 = c2.check(S2, idx, rad)
         assert h1 == h2 and len(g1) > 0 and len(h1) > 0, (trial, len(h1), len(h2))
         assert np.array_equal(S1.crash_sub, S2.crash_sub) and np.array_equal(S1.ctrl_mode, S2.ctrl_mode)
+
+
+@pytest.mark.parametrize("n", [2, 5, 12, 40])
+def test_uav_collider_kernel_matches_small_fleet_path(n: int) -> None:
+    """小机群（n ≤ SMALL_N）同样走 numba 核（D2-AC-08 sandbox100 的固定开销）：与逐对网格比较给出同一组命中与同一顺序。"""
+    from awr.sim.fleet.collide import SMALL_N, UavCollider
+    from awr.sim.fleet.state import FleetState
+
+    if not K.HAVE_NUMBA:
+        pytest.skip("numba unavailable")
+    assert n <= SMALL_N
+    rng = np.random.default_rng(100 + n)
+    hits = 0
+    for trial in range(20):
+        S1, S2 = FleetState(64), FleetState(64)
+        idx = np.sort(rng.choice(64, n, replace=False)).astype(np.int32)
+        half = 1.0 + 0.15 * n  # 机数越少区域越小，保证有命中与跨格的近对
+        p0 = rng.uniform(-half, half, (64, 3))
+        p0[:, 2] = rng.uniform(-12.0 - half, -12.0 + half, 64)
+        step = rng.normal(0.0, 0.4, (64, 3))
+        rad = np.array([0.49, 0.6])
+        pid = rng.integers(0, 2, 64)
+        for S in (S1, S2):
+            S.p[:] = p0
+            S.profile_id[:] = pid
+            S.landed[:] = False
+            S.crash_sub[:] = 0
+        c1, c2 = UavCollider(64), UavCollider(64)
+        c2.use_kernel = False
+        for k in range(2):
+            if k:
+                for S in (S1, S2):
+                    S.p[:] = p0 + step
+                    S.crash_sub[:] = 0
+            g1 = c1.check(S1, idx, rad)
+            g2 = c2.check(S2, idx, rad)
+            assert g1 == g2, (trial, k, g1, g2)
+            hits += len(g1)
+        assert np.array_equal(S1.crash_sub, S2.crash_sub) and np.array_equal(S1.ctrl_mode, S2.ctrl_mode)
+    assert hits > 0

@@ -1,4 +1,4 @@
-"""SIH 黄金数据回归（M08-AC-005；D1-AC-12；M08-FR-016 至 FR-021、FR-030、FR-075、FR-076；g08 §9.2–§9.3）。
+"""SIH 黄金数据回归（M08-AC-005、D2：M08-AC-202；D1-AC-12；M08-FR-016 至 FR-021、FR-030、FR-075、FR-076；g08 §9.2–§9.3）。
 
 参数化配置矩阵（M08 §6.13.3）：A linear（x500_sih）l1_every 1、B linear 2、C composite（x500）1、D composite 2（产品默认形态）、
 E composite 2 numpy oracle —— 17 项指标全部落在容差内且测试用 FastGuard 事件 0；反例 F（composite，`time_stretch` 与
@@ -34,3 +34,13 @@ def test_counterexample_f_must_fail() -> None:
     _ref, row, fails = evaluate("x500", l1_every=2, time_stretch=False, stop_motion=False)
     assert any(f.startswith("goto.rmse_x") for f in fails), (fails, row)
     assert row["goto"]["rmse_x"] > 0.5
+
+
+# D2（M08-AC-202；ADR-090；D2-AC-08 前半）：sandbox100 档（主时钟 100 Hz、L1 every 1，dt = 10 ms）下 17 项全部在容差内、
+# 测试用 FastGuard 事件 0（进入 sandbox100 的前提，不满足时退回 125 Hz 主时钟）
+@pytest.mark.parametrize(("profile", "kernel"), [pytest.param("x500", "numba", id="S1-composite-sandbox100"),
+                                                 pytest.param("x500_sih", "numba", id="S2-linear-sandbox100"),
+                                                 pytest.param("x500", "numpy", id="S3-composite-sandbox100-oracle")])
+def test_sih_parity_sandbox100(profile: str, kernel: str) -> None:
+    _ref, row, fails = evaluate(profile, l1_every=1, kernel=kernel, clock_profile="sandbox100")
+    assert not fails, (fails, row)

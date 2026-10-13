@@ -7,7 +7,7 @@ from awr.sim.sensors.describe import describe, dir_for_profile
 
 def test_describe_fields_p600():
     d = describe("p600_mid360", {})
-    assert [r["name"] for r in d["rig"]] == ["camera", "thermal", "mid360", "gnss", "imu"]
+    assert [r["name"] for r in d["rig"]] == ["camera", "thermal", "mid360", "gnss", "imu", "eo", "nir_ill"]  # P600 2.0.0
     cam = d["camera"]
     assert cam["intrinsics"] == {"w": 6000, "h": 4000, "fx": 5196.152, "fy": 5196.152, "cx": 3000.0, "cy": 2000.0, "dist": []}
     assert abs(cam["hfov_deg"] - 60.0) < 1e-3 and abs(cam["vfov_deg"] - 42.103) < 1e-3
@@ -39,7 +39,7 @@ def test_plugin_hooks_for_m08(bench):
 
     from awr.sim.sensors.plugin import _conf_expected, _rig_entries_for_profile
 
-    assert [e["name"] for e in _rig_entries_for_profile("p600_mid360")] == ["camera", "thermal", "mid360"]
+    assert [e["name"] for e in _rig_entries_for_profile("p600_mid360")] == ["camera", "thermal", "mid360", "eo"]
     assert _rig_entries_for_profile("x500_sih", ["camera"]) == [{"sensor_no": 0, "name": "camera", "kind": "camera"}]
     v = _conf_expected("p600_mid360", [0, 0, 60], [0, 0, 0], "thermal.imaging")
     assert v is not None and abs(v - 0.95 * math.exp(-(60 / 150) ** 2)) < 1e-12

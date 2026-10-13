@@ -13,10 +13,19 @@ import numpy as np
 import pytest
 
 from awr.datasets.scenarios.authoring import s1_scenario
-from awr.datasets.scenarios.energy import S1_PLAN, EnergyModel, WindProfile, WorldTerrain, helix_sortie, s1_segment_1d
+from awr.datasets.scenarios.energy import (
+    ROOT,
+    S1_PLAN,
+    EnergyModel,
+    WindProfile,
+    WorldTerrain,
+    helix_sortie,
+    s1_segment_1d,
+)
 from awr.datasets.scenarios.geometry import min_pairwise_separation, s1_tracks
 
 ORACLE_SOC = {"p600-01": 0.36, "p600-02": 0.32}
+P600_V1 = ROOT / "vehicles" / "p600" / "history" / "params-1.0.0.yaml"   # D1 剧本固定 p600_mid360@1.0.0（M08-FR-206）
 
 
 @pytest.fixture(scope="module")
@@ -46,7 +55,7 @@ def test_plan_matches_scenario_file() -> None:
 @pytest.mark.needs_data
 @pytest.mark.parametrize("vid", ["p600-01", "p600-02"])
 def test_s1_energy_drag_model(terrain, vid: str) -> None:
-    m = EnergyModel.from_vehicle()
+    m = EnergyModel.from_vehicle(P600_V1)                                                       # D1 门禁按 P600 1.0.0（AWR-20 §3.4）
     assert m.e_use_wh == pytest.approx(188.7, abs=0.05)                                         # ADR-052 可用口径
     r = _sortie(terrain, vid, m)
     assert r.soc_land == pytest.approx(ORACLE_SOC[vid], abs=0.03)

@@ -1,0 +1,49 @@
+"""路径光学厚度逐对核与 numpy 实现逐位相同（M07-FR-006、FR-020；D2-FX-R2-sim 第 2 次，`atmosphere/kernels_od.py`）。
+
+`EnvironmentField.optical_depth` 在 numba 可用时走 `kernels_od.od_pairs`，否则走 `optics.optical_depth_arr` /
+`optical_depth_lambda_arr`；两条路径对全部天气预设、550/850/905 nm 与 LWIR、含零长度与水平射线的随机线段逐位相同。
+"""
+
+from __future__ import annotations
+
+import zlib
+
+import numpy as np
+import pytest
+
+from awr.environment import field as EF
+from awr.environment.atmosphere import kernels_od as KOD
+from awr.environment.field import EnvironmentServiceImpl
+from awr.environment.weather.presets import presets
+
+BOUNDS = ((-900.0, -1000.0, 0.0), (900.0, 1000.0, 300.0))
+COORD = {"ground": {"zM": 2.0}, "anchor": {"hMslM": 12.2}}
+
+pytestmark = pytest.mark.skipif(not KOD.HAVE_NUMBA, reason="numba 不可用（AWR_KERNEL=numpy）")
+
+
+def _segments(rng: np.random.Generator, n: int) -> tuple[np.ndarray, np.ndarray]:
+    p0 = rng.uniform([-800, -800, 0.0], [800, 800, 400.0], (n, 3))
+    p1 = rng.uniform([-800, -800, 0.0], [800, 800, 400.0], (n, 3))
+    p1[0] = p0[0]                                   # 零长度
+    p1[1, 2] = p0[1, 2]                             # 水平
+    p1[2, :2] = p0[2, :2]                           # 竖直
+    p0[3, 2], p1[3, 2] = 2.0, 1500.0                # 穿越雾顶与云底
+    return p0, p1
+
+
+@pytest.mark.parametrize("preset", list(presets().ids))
+def test_kernel_matches_numpy(preset: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    env = EnvironmentServiceImpl(world_id="t", world_seed=1, bounds=BOUNDS, initial_preset=preset, coordinate=COORD,
+                                 load_assets=False)
+    env.on_env_tick_all(0)
+    rng = np.random.default_rng(zlib.crc32(preset.encode()))
+    p0, p1 = _segments(rng, 64)
+    t = env.t_grid_ns
+    for lam in (550.0, 850.0, 905.0, 10000.0):
+        a = env.optical_depth(p0, p1, t, wavelength_nm=lam)
+        monkeypatch.setattr(EF._KOD, "HAVE_NUMBA", False)
+        b = env.optical_depth(p0, p1, t, wavelength_nm=lam)
+        monkeypatch.setattr(EF._KOD, "HAVE_NUMBA", True)
+        assert a.dtype == b.dtype and a.shape == b.shape
+        assert a.tobytes() == b.tobytes(), (preset, lam, np.flatnonzero(a != b)[:5])

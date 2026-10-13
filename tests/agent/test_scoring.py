@@ -37,7 +37,8 @@ def test_golden_groups(g: dict) -> None:
 
 def test_norms_by_profile() -> None:
     p600 = norm_for(vehicle_data("p600_mid360").params)
-    assert p600.eta_s == pytest.approx(200.0) and p600.energy_wh == pytest.approx(18.87)
+    # P600 profile 2.0.0（可用能量 193.8 Wh 的 10%；D2-INT 以 v2 重定，v1 为 18.87）
+    assert p600.eta_s == pytest.approx(200.0) and p600.energy_wh == pytest.approx(19.38)
     x500 = norm_for(vehicle_data("x500").params)
     assert x500.eta_s == pytest.approx(120.0) and x500.energy_wh is None
     assert norm_for({"anet": {"score_norm": {"eta_s": 150, "energy_wh": None}}}) == ScoreNorm(150.0, None)

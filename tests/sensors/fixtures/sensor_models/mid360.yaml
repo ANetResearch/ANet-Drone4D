@@ -1,0 +1,25 @@
+# M13 测试用型号库（WP-10）：MID-360 型号 2.0.0（AWR-20 §6.7；M13-FR-212）。正式型号库归 M21（WP-08）。
+# 沿用 D1 mid360.yaml 的全部字段，只改 range.hard_max_m 70 -> 100，新增质量、功率、工作温度与防护等级。
+schema: awr.sensor.lidar_livox.v1
+model_id: mid360
+model_version: 2.0.0
+display_name: "Livox MID-360"
+reference: false
+mass_kg: {value: 0.265, conf: B, src: "用户 D2 随附规格：265 g"}
+power_w: {value: 6.5, conf: B, src: "用户 D2 随附规格：6.5 W"}
+env_limits: {temp_c: [-20, 55]}
+ip: 67
+sensor: livox_mid360
+dev_type: 9
+frame_id: livox_frame
+pattern: {mode: non_repetitive, point_rate_hz: 200000, beams: 4}
+frame_rate_hz: 10
+fov: {h_deg: 360, v_min_deg: -7.2, v_max_deg: 52.2}
+range: {blind_m: 0.1, r_at_rho10_m: 40, r_at_rho80_m: 70, exponent: 0.269, hard_max_m: 100}
+noise: {range_sigma_far_m: 0.02, range_sigma_near_m: 0.03, angle_sigma_deg: 0.1, false_alarm: 1.0e-4}
+imu: {rate_hz: 200, acc_unit: g, gyro_unit: rad_s, lidar_in_imu: {t: [-0.011, -0.02329, 0.04412], rpy_deg: [0, 0, 0]}}
+mount: {xyz_m: [0.13, 0.0, 0.28], rpy_deg: [0, 20, 0]}
+output: {web_decimation_pts_per_frame: 4000}
+overridable: [mount, output]
+conf: B
+src: "用户 D2 随附规格（905 nm、40 m @ 10%、截止 100 m、20 万点/s、10 Hz、265 g、6.5 W）；量程拟合 r04 §3.1（C）"

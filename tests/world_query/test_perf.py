@@ -96,3 +96,27 @@ def test_memory():
                          capture_output=True, text=True, check=True).stdout.split()
     r_open, r_used = float(out[0]), float(out[1])
     assert r_open <= 50.0 and r_used * 2**20 <= 200e6, (r_open, r_used)
+
+
+@pytest.mark.parametrize("city", ["synthcity", "sanfrancisco"])
+def test_los_batch_numba_budget(city_wq, city):
+    """M04-AC-202 的性能部分（D2，AWR-04 §4.2 第 4 条、§6.3）：64 对、斜距 100–500 m、对地目标、1 m 步长时 numba 核每条
+    射线 p50 ≤ 10 µs（numpy 参考实现 2 m 步长约 33 µs/条），且不慢于 numpy 的 1/3。"""
+    from awr.world.geometry import warm_kernels
+
+    assert warm_kernels()
+    wq = city_wq(city)
+    wq.kernel_ready = True
+    b = wq.bounds_m
+    rng = np.random.default_rng(3)
+    batches = []
+    for _ in range(16):
+        T = np.c_[rng.uniform(b[0, 0] + 60, b[1, 0] - 60, 64), rng.uniform(b[0, 1] + 60, b[1, 1] - 60, 64)]
+        T = np.c_[T, wq.ground_dtm(T) + 0.9]
+        az = rng.uniform(0, 2 * np.pi, 64)
+        r = rng.uniform(100, 500, 64)
+        batches.append((np.c_[T[:, 0] + r * np.cos(az), T[:, 1] + r * np.sin(az), T[:, 2] + rng.uniform(40, 150, 64)], T))
+    it = iter(range(10**9))
+    p50_n = _t(lambda: wq.los_batch(*batches[next(it) % 16]), 400)[0]
+    p50_p = _t(lambda: wq.los_batch_np(*batches[next(it) % 16]), 100)[0]
+    assert p50_n * 1e3 / 64 <= 10.0 and p50_n * 3 <= p50_p, (p50_n, p50_p)

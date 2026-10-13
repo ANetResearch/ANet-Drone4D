@@ -1,0 +1,19 @@
+# M13 测试用型号库（WP-10）：远距 850 nm 照明器 nir_ill_l（AWR-04 §6.1、AWR-20 §6.1、§6.3；M13 §15.3.1）。
+# 正式型号库归 M21（WP-08），交付前本文件供 tests/sensors 与 specs.gen.ts 生成器回退使用，取值须与 AWR-20 一致。
+# R_nir = R_ref·(θ_ref/θ)·√(P/P_ref)·√(ρ/ρ_ref)·τ(R)：参考点取 GX40 规格长焦端（200 m、0.8 W、6.6°、ρ 0.3），
+# 3 W、5.5° 时无消光 464.8 m（AWR-20 §6.3 表）。
+schema: awr.sensor.nir_illuminator.v1
+model_id: nir_ill_l
+model_version: 1.0.0
+display_name: "远距 850 nm 照明器"
+reference: true
+mass_kg: {value: 0.18, conf: D, src: "AWR-04 §6.1 模拟参考值"}
+power_w: {value: 3.0, conf: D, src: "AWR-04 §5.1：标称 3 W，与 GX40 机内 0.8 W 同一电光效率假设（Q-D2-10）"}
+env_limits: {temp_c: [-20, 50]}
+wavelength_nm: 850
+p_w: 3.0
+divergence_deg: 5.5
+ref: {r_m: 200, p_w: 0.8, theta_deg: 6.6, rho: 0.3}
+overridable: [mount, on_gimbal_of]
+conf: D
+src: "AWR-04 §6.1、AWR-20 §6.3：模拟参考值，非任何真实产品"
