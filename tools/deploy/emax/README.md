@@ -111,7 +111,7 @@ GeoParams、DERIVE_VERSION 一致，逐数组 sha256）与世界状态，失败�
 |---|---|---|
 | `/opt/anet-drone4d/releases/<release>/` | root | 代码、配置、演示前端、SDK、`RELEASE` 与该发布的 `.venv` |
 | `/opt/anet-drone4d/current` | root | 指向当前发布的符号链接 |
-| `/opt/anet-drone4d/var/worlds/` | awr | 七个世界、`_shared/env/`、`.status/`（构建状态）、`.geo-cache/`（派生缓存，含 Grid25） |
+| `/opt/anet-drone4d/var/worlds/` | awr，0751（与 `var/` 同为只可穿越，nginx 以 alias 直出 `/worlds/`） | 七个世界、`_shared/env/`、`.status/`（构建状态）、`.geo-cache/`（派生缓存，含 Grid25） |
 | `/opt/anet-drone4d/var/sandbox/` | awr，0700 | 沙盒池：`token.key`、`pool.secret`、`state.json`、`audit.jsonl`、`runs/<sid>/`、`snapshots/`、`parked/<sid>/` |
 | `/opt/anet-drone4d/var/identity/` | awr，0700 | 内部身份的锁定表与撤销表 |
 | `/opt/anet-drone4d/var/runs/` | awr | 共享展示每次启动一个 run：子进程日志、审计、生效配置（配额 2 GB） |

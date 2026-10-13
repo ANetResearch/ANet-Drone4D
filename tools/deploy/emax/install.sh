@@ -338,8 +338,10 @@ getent passwd "$SVC_USER" >/dev/null || useradd --system --gid "$SVC_USER" --hom
   --shell /usr/sbin/nologin --comment "ANet Drone4D public demo" "$SVC_USER"
 install -d -o root -g root -m 0755 "$PREFIX" "$PREFIX/releases" "$PREFIX/tools"
 install -d -o root -g root -m 0700 "$PREFIX/.uv-cache"
-install -d -o "$SVC_USER" -g "$SVC_USER" -m 0750 "$PREFIX/var" "$PREFIX/var/worlds" "$PREFIX/var/runs" "$PREFIX/var/cache" \
-  "$PREFIX/var/cache/numba"
+# var 与 var/worlds 为 0751：nginx（www-data）以 alias 直出 /worlds/ 需要穿越这两级目录（只穿越、不可列目录）；世界目录
+# 本身由 worldpack 以 0755 写出，隐藏目录（.geo-cache、.staging 等）由站点文件拒绝。其余目录保持 0750
+install -d -o "$SVC_USER" -g "$SVC_USER" -m 0751 "$PREFIX/var" "$PREFIX/var/worlds"
+install -d -o "$SVC_USER" -g "$SVC_USER" -m 0750 "$PREFIX/var/runs" "$PREFIX/var/cache" "$PREFIX/var/cache/numba"
 # 沙盒池状态（token.key、pool.secret、state.json、audit.jsonl、runs/、snapshots/、parked/，池首次启动时创建）与内部身份状态
 # （lockout.json、revoked.json）：只有 awr 可读写（M17 PRD §8.4、§14.5）
 install -d -o "$SVC_USER" -g "$SVC_USER" -m 0700 "$PREFIX/var/sandbox" "$PREFIX/var/identity"
