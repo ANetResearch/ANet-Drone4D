@@ -1,0 +1,920 @@
+{
+ "concept": "页面是一条连续航线：一架小型体素飞机从真实城市的点云起飞，穿过天气、机群、感知与接力任务，抵达可操作的沙盒，最后停在研发路线图前。桌面端以常驻舞台承载飞行，文字随滚动逐章进入；飞机始终是同一个 WebGL 对象，不在章节交界处重新出现。每一章只改变环境、编队与飞机姿态，让技术能力通过空间关系而非夸张特效呈现。已交付、开发中与研究中的内容在画面和文案上始终明确区分。",
+ "motion_principles": [
+  "以每章滚动距离映射本章进度 t=0–1；飞机关键帧按连续路径插值，章节首尾关键帧的位置和姿态完全衔接。",
+  "滚动控制位置，不使用延迟追赶滚动的惯性；场景进入与文字显隐使用约 150–400 ms 的标准缓动。",
+  "每章保留一段低变化的阅读区间；扫描、编队和接力只在相应叙事段发生。",
+  "停止滚动时冻结叙事状态；不自动推进章节。",
+  "prefers-reduced-motion 下关闭滚动插值和循环运动，每章显示该章中间关键帧的静态飞机与场景。"
+ ],
+ "plane": {
+  "description": "57 个单位立方体组成的低翼飞机，机头朝 +x、上方为 +y、左右机翼沿 z 展开。机身为浅石墨色，座舱为白色，机鼻与翼尖使用少量红色；所有章节复用同一组体素。",
+  "voxels": [
+   [
+    -4,
+    0,
+    0,
+    "body"
+   ],
+   [
+    -3,
+    0,
+    0,
+    "body"
+   ],
+   [
+    -2,
+    0,
+    0,
+    "body"
+   ],
+   [
+    -1,
+    0,
+    0,
+    "body"
+   ],
+   [
+    0,
+    0,
+    0,
+    "body"
+   ],
+   [
+    1,
+    0,
+    0,
+    "body"
+   ],
+   [
+    2,
+    0,
+    0,
+    "body"
+   ],
+   [
+    3,
+    0,
+    0,
+    "body"
+   ],
+   [
+    4,
+    0,
+    0,
+    "body"
+   ],
+   [
+    -2,
+    1,
+    0,
+    "body"
+   ],
+   [
+    -1,
+    1,
+    0,
+    "body"
+   ],
+   [
+    0,
+    1,
+    0,
+    "body"
+   ],
+   [
+    5,
+    0,
+    0,
+    "accent"
+   ],
+   [
+    -1,
+    0,
+    1,
+    "wing"
+   ],
+   [
+    0,
+    0,
+    1,
+    "wing"
+   ],
+   [
+    1,
+    0,
+    1,
+    "wing"
+   ],
+   [
+    -1,
+    0,
+    2,
+    "wing"
+   ],
+   [
+    0,
+    0,
+    2,
+    "wing"
+   ],
+   [
+    1,
+    0,
+    2,
+    "wing"
+   ],
+   [
+    -1,
+    0,
+    3,
+    "wing"
+   ],
+   [
+    0,
+    0,
+    3,
+    "wing"
+   ],
+   [
+    1,
+    0,
+    3,
+    "wing"
+   ],
+   [
+    -1,
+    0,
+    4,
+    "wing"
+   ],
+   [
+    0,
+    0,
+    4,
+    "wing"
+   ],
+   [
+    -1,
+    0,
+    -1,
+    "wing"
+   ],
+   [
+    0,
+    0,
+    -1,
+    "wing"
+   ],
+   [
+    1,
+    0,
+    -1,
+    "wing"
+   ],
+   [
+    -1,
+    0,
+    -2,
+    "wing"
+   ],
+   [
+    0,
+    0,
+    -2,
+    "wing"
+   ],
+   [
+    1,
+    0,
+    -2,
+    "wing"
+   ],
+   [
+    -1,
+    0,
+    -3,
+    "wing"
+   ],
+   [
+    0,
+    0,
+    -3,
+    "wing"
+   ],
+   [
+    1,
+    0,
+    -3,
+    "wing"
+   ],
+   [
+    -1,
+    0,
+    -4,
+    "wing"
+   ],
+   [
+    0,
+    0,
+    -4,
+    "wing"
+   ],
+   [
+    -4,
+    0,
+    1,
+    "wing"
+   ],
+   [
+    -3,
+    0,
+    1,
+    "wing"
+   ],
+   [
+    -4,
+    0,
+    2,
+    "wing"
+   ],
+   [
+    -3,
+    0,
+    2,
+    "wing"
+   ],
+   [
+    -4,
+    0,
+    -1,
+    "wing"
+   ],
+   [
+    -3,
+    0,
+    -1,
+    "wing"
+   ],
+   [
+    -4,
+    0,
+    -2,
+    "wing"
+   ],
+   [
+    -3,
+    0,
+    -2,
+    "wing"
+   ],
+   [
+    -4,
+    1,
+    0,
+    "body"
+   ],
+   [
+    -3,
+    1,
+    0,
+    "body"
+   ],
+   [
+    -4,
+    2,
+    0,
+    "body"
+   ],
+   [
+    -1,
+    -1,
+    2,
+    "engine"
+   ],
+   [
+    0,
+    -1,
+    2,
+    "engine"
+   ],
+   [
+    -1,
+    -1,
+    -2,
+    "engine"
+   ],
+   [
+    0,
+    -1,
+    -2,
+    "engine"
+   ],
+   [
+    -1,
+    -1,
+    0,
+    "body"
+   ],
+   [
+    0,
+    -1,
+    0,
+    "body"
+   ],
+   [
+    1,
+    -1,
+    0,
+    "body"
+   ],
+   [
+    1,
+    1,
+    0,
+    "canopy"
+   ],
+   [
+    2,
+    1,
+    0,
+    "canopy"
+   ],
+   [
+    0,
+    0,
+    5,
+    "accent"
+   ],
+   [
+    0,
+    0,
+    -5,
+    "accent"
+   ]
+  ],
+  "trail": "飞机后方最多保留一条由稀疏石墨色小体素构成的短航迹；执行 scan 时短暂切换为红色扇形采样线。航迹只表示叙事方向或扫描动作，不作为产品数据可视化。"
+ },
+ "hero": {
+  "eyebrow_en": "AGENT NETWORK RESEARCH · RELEASE v0.2.0",
+  "eyebrow_zh": "AGENT NETWORK RESEARCH · v0.2.0",
+  "title_en": "ANet Drone4D",
+  "title_zh": "ANet Drone4D",
+  "subtitle_en": "Reality in, swarms out. A real-world 4D simulation platform for multi-agent drones.",
+  "subtitle_zh": "从真实世界，到无人机集群。面向多智能体无人机的真实世界 4D 仿真平台。",
+  "plane_keyframes": [
+   {
+    "t": 0,
+    "x": -0.9,
+    "y": -0.3,
+    "scale": 0.7,
+    "yaw": 0,
+    "pitch": 8,
+    "roll": 0,
+    "action": "climb"
+   },
+   {
+    "t": 0.55,
+    "x": -0.25,
+    "y": 0.15,
+    "scale": 1,
+    "yaw": 0,
+    "pitch": 4,
+    "roll": 0,
+    "action": "cruise"
+   },
+   {
+    "t": 1,
+    "x": -0.55,
+    "y": 0.1,
+    "scale": 1,
+    "yaw": 0,
+    "pitch": 0,
+    "roll": 0,
+    "action": "cruise"
+   }
+  ]
+ },
+ "chapters": [
+  {
+   "id": "digital-twin",
+   "eyebrow_en": "01 / AVAILABLE · DIGITAL TWIN",
+   "eyebrow_zh": "01 / 已提供 · 数字孪生",
+   "title_en": "The world, resolved as you move",
+   "title_zh": "视角所至，城市逐层呈现",
+   "body_en": "Seven worlds stream into the browser as octree point clouds. Density follows the viewpoint and frame budget, while a GPU point pool renders them in one draw call.",
+   "body_zh": "七个世界以八叉树点云流送至浏览器。点密度随视角和帧预算调整，并由 GPU 点池以一次绘制调用呈现。",
+   "points": [
+    {
+     "en": "ANet Synthetic City and six UrbanScene3D cities",
+     "zh": "ANet Synthetic City 与六座 UrbanScene3D 城市",
+     "status": "available"
+    },
+    {
+     "en": "About 5 million points per city",
+     "zh": "每座城市约 500 万个点",
+     "status": "available"
+    },
+    {
+     "en": "CPU build: 27–35 s per city",
+     "zh": "每座城市的 CPU 构建耗时 27–35 秒",
+     "status": "available"
+    }
+   ],
+   "keywords": [
+    "Digital Twin",
+    "Simulation"
+   ],
+   "scene": "深灰色城市街区由稀疏体素块搭建；飞机接近时，近处建筑从大块分裂为较小点状体素，远处保持粗粒度。画面角落用细线标注“示意场景”，不将体素舞台冒充实际点云渲染。",
+   "plane_keyframes": [
+    {
+     "t": 0,
+     "x": -0.55,
+     "y": 0.1,
+     "scale": 1,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    },
+    {
+     "t": 0.45,
+     "x": 0,
+     "y": 0.05,
+     "scale": 0.9,
+     "yaw": 8,
+     "pitch": 0,
+     "roll": 4,
+     "action": "bank"
+    },
+    {
+     "t": 1,
+     "x": 0.5,
+     "y": 0.1,
+     "scale": 0.8,
+     "yaw": 10,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    }
+   ],
+   "illustration": null,
+   "layout_desktop": "左侧文案占约 38%，右侧常驻舞台占约 62%；事实列表下方放六城截图的可横向切换缩略图，顺序为深圳、上海、纽约、旧金山、苏州、芝加哥。",
+   "layout_mobile": "章节顶部为高 220 px 的舞台，正文与事实列表顺序排列其下；六城截图采用单列卡片与可触控切换，不让页面产生横向溢出。"
+  },
+  {
+   "id": "environment",
+   "eyebrow_en": "02 / AVAILABLE · 4D ENVIRONMENT",
+   "eyebrow_zh": "02 / 已提供 · 4D 环境",
+   "title_en": "Conditions become part of the simulation",
+   "title_zh": "把环境条件纳入仿真",
+   "body_en": "Wind combines a height profile with turbulence; visibility and precipitation shape operating conditions. Physics samples the environment at 50 Hz, with 12 weather presets from clear to sandstorm.",
+   "body_zh": "风场由高度剖面与湍流共同构成，能见度和降水也进入运行环境。物理系统以 50 Hz 采样环境，提供从晴朗到沙尘暴的 12 种天气预设。",
+   "points": [
+    {
+     "en": "Wind height profile and turbulence",
+     "zh": "风速高度剖面与湍流",
+     "status": "available"
+    },
+    {
+     "en": "Visibility, precipitation and 12 presets",
+     "zh": "能见度、降水与 12 种预设",
+     "status": "available"
+    },
+    {
+     "en": "Environment sampled at 50 Hz",
+     "zh": "环境采样频率 50 Hz",
+     "status": "available"
+    }
+   ],
+   "keywords": [
+    "Simulation"
+   ],
+   "scene": "城市体素退至背景；不同高度的稀疏水平体素线显示风向，少量垂直短线表示降水。只用明暗与密度区分条件，不使用蓝色天气特效或连续渐变。",
+   "plane_keyframes": [
+    {
+     "t": 0,
+     "x": 0.5,
+     "y": 0.1,
+     "scale": 0.8,
+     "yaw": 10,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    },
+    {
+     "t": 0.5,
+     "x": 0.1,
+     "y": 0.4,
+     "scale": 0.85,
+     "yaw": 0,
+     "pitch": 12,
+     "roll": -8,
+     "action": "climb"
+    },
+    {
+     "t": 1,
+     "x": -0.35,
+     "y": 0.25,
+     "scale": 0.85,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    }
+   ],
+   "illustration": {
+    "prompt": "An industrial visualization of a small voxel airplane crossing a sparse voxel city in turbulent wind. Show wind as discrete horizontal graphite voxel traces at several heights and precipitation as restrained vertical marks. A single small red accent identifies the aircraft path. Dark background, precise geometry, generous negative space, no text, no numbers, no logos.",
+    "aspect": "16:9"
+   },
+   "layout_desktop": "文案保持左侧；舞台右侧的风层从飞机飞行高度向上下展开。插画作为正文下方的静态辅助图，不覆盖舞台。",
+   "layout_mobile": "舞台在章节顶部展示静态或低帧率风层；插画置于事实列表之后，宽度不超过内容容器。"
+  },
+  {
+   "id": "fleet-control",
+   "eyebrow_en": "03 / AVAILABLE · DRONE SWARM",
+   "eyebrow_zh": "03 / 已提供 · 无人机集群",
+   "title_en": "One clock for the fleet",
+   "title_zh": "让机群运行在同一时钟上",
+   "body_en": "FleetSim steps 1 to 1,000 drones on a shared 250 Hz clock; at 1,000 drones it keeps real time on about half a CPU core. Flight control includes a PX4-style position and attitude cascade checked against PX4 SIH recordings, alongside formations, coverage and mission controls.",
+   "body_zh": "FleetSim 在共享的 250 Hz 时钟上推进 1 至 1,000 架无人机；运行 1,000 架时，约半个 CPU 核心即可保持实时。飞控采用对照 PX4 SIH 飞行记录检验过的 PX4 风格位置与姿态级联，并提供编队、覆盖与任务控制。",
+   "points": [
+    {
+     "en": "PX4-lite cascade checked against PX4 SIH recordings",
+     "zh": "PX4-lite 级联控制，对照 PX4 SIH 记录检验",
+     "status": "available"
+    },
+    {
+     "en": "Formations, area coverage and eight mission generators",
+     "zh": "编队、区域覆盖与八种任务生成器",
+     "status": "available"
+    },
+    {
+     "en": "Geofences, fleet separation and a 14-state flight state machine",
+     "zh": "地理围栏、机群间隔与 14 状态飞行状态机",
+     "status": "available"
+    }
+   ],
+   "keywords": [
+    "Drone Swarm",
+    "Swarm Control",
+    "PX4",
+    "Simulation"
+   ],
+   "scene": "主飞机保持完整的 57 体素形状；四周以更小、更简化的机形体素组成编队。地面只绘制细线网格与覆盖路径，避免用舞台飞机数量暗示性能上限。",
+   "plane_keyframes": [
+    {
+     "t": 0,
+     "x": -0.35,
+     "y": 0.25,
+     "scale": 0.85,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    },
+    {
+     "t": 0.4,
+     "x": 0.05,
+     "y": 0.2,
+     "scale": 0.85,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "formation"
+    },
+    {
+     "t": 1,
+     "x": 0.45,
+     "y": -0.05,
+     "scale": 0.85,
+     "yaw": -8,
+     "pitch": 0,
+     "roll": -6,
+     "action": "bank"
+    }
+   ],
+   "illustration": null,
+   "layout_desktop": "事实列表采用 lieflat 式发丝线分隔；右侧舞台保留充足空白，让编队关系可辨认。",
+   "layout_mobile": "只显示主飞机与少量示意僚机；数字事实作为纵向列表，不把 1,000 架无人机画成一千个图标。"
+  },
+  {
+   "id": "perception",
+   "eyebrow_en": "04 / AVAILABLE · TARGET PERCEPTION",
+   "eyebrow_zh": "04 / 已提供 · 目标感知",
+   "title_en": "From observation to detection probability",
+   "title_zh": "从观测条件到发现概率",
+   "body_en": "Target perception covers six target classes across EO, night, LWIR, LiDAR, radar and acoustic sensors. Johnson criteria and TTPF inform reports of sound pressure, angular size, equivalent pixels and detection probability.",
+   "body_zh": "目标感知覆盖人、无人机、机器、犬、车辆和物体六类目标，涉及可见光、夜间、长波红外、LiDAR、雷达与声学传感器。系统结合 Johnson 准则与 TTPF，报告声压、角尺寸、等效像素及发现概率。",
+   "points": [
+    {
+     "en": "Six target classes and six sensor modalities",
+     "zh": "六类目标与六种传感方式",
+     "status": "available"
+    },
+    {
+     "en": "Johnson criteria and TTPF",
+     "zh": "Johnson 准则与 TTPF",
+     "status": "available"
+    },
+    {
+     "en": "Detection probability and underlying observation measures",
+     "zh": "发现概率及其观测量",
+     "status": "available"
+    }
+   ],
+   "keywords": [
+    "LiDAR",
+    "Simulation"
+   ],
+   "scene": "飞机下方出现由离散红色体素点构成的窄扫描扇面；远处目标仅为无标签的简化体素轮廓。侧边使用细线和短刻度表现观测量，不绘制未经提供的示例读数。",
+   "plane_keyframes": [
+    {
+     "t": 0,
+     "x": 0.45,
+     "y": -0.05,
+     "scale": 0.85,
+     "yaw": -8,
+     "pitch": 0,
+     "roll": -6,
+     "action": "bank"
+    },
+    {
+     "t": 0.4,
+     "x": 0.1,
+     "y": 0.3,
+     "scale": 0.9,
+     "yaw": 0,
+     "pitch": -8,
+     "roll": 0,
+     "action": "scan"
+    },
+    {
+     "t": 1,
+     "x": -0.35,
+     "y": 0.3,
+     "scale": 0.9,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    }
+   ],
+   "illustration": {
+    "prompt": "A restrained technical still showing one recognizable voxel airplane observing a small, distant voxel target above a dark graphite ground plane. Depict a LiDAR-like sampling fan using sparse discrete red voxel points, with thin white hairlines suggesting measurement geometry. Do not depict a camera photograph or a detection result. Precise industrial composition, no text, no numbers, no logos.",
+    "aspect": "4:3"
+   },
+   "layout_desktop": "正文与辅助插画左右并列于文案栏下部；舞台扫描扇面只在本章 scan 区间出现。",
+   "layout_mobile": "舞台扫描扇面控制在可见区域内；事实、插画依次排列，不使用悬浮数据面板。"
+  },
+  {
+   "id": "relay-agents",
+   "eyebrow_en": "05 / AVAILABLE · NESTS & AGENTS",
+   "eyebrow_zh": "05 / 已提供 · 机巢与智能体",
+   "title_en": "Coordinate beyond a single flight",
+   "title_zh": "从单次飞行走向持续协同",
+   "body_en": "Nests support greedy allocation across seven task types and 7×24 relay watch from stations outside each target’s sensitivity range. As physical agents, drones can discover capabilities and delegate tasks over Mock ANet, verified against receipts; this agent-swarm function is not enabled on the public site.",
+   "body_zh": "机巢以贪心策略分配七类任务，并由目标敏感范围之外的站点接力执行 7×24 监测。无人机也可作为物理智能体，通过 Mock ANet 发现能力、委派任务并核验回执；这项智能体集群能力未在公开站点开放。",
+   "points": [
+    {
+     "en": "Seven task types and greedy allocation",
+     "zh": "七类任务与贪心分配",
+     "status": "available"
+    },
+    {
+     "en": "7×24 relay watch from outside target sensitivity range",
+     "zh": "在目标敏感范围外执行 7×24 接力监测",
+     "status": "available"
+    },
+    {
+     "en": "Agent swarm verified with receipts; not enabled publicly",
+     "zh": "智能体集群通过回执核验；公开站点未开放",
+     "status": "available"
+    }
+   ],
+   "keywords": [
+    "Agent Swarm",
+    "Swarm Control"
+   ],
+   "scene": "地面布置少量机巢体素结构，以断续细线表示站点之间的交接；主飞机经过交接点时，一个简化僚机接续航线。Mock ANet 的代理关系只作为示意，不出现可点击的公开功能入口。",
+   "plane_keyframes": [
+    {
+     "t": 0,
+     "x": -0.35,
+     "y": 0.3,
+     "scale": 0.9,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    },
+    {
+     "t": 0.5,
+     "x": 0.05,
+     "y": 0.1,
+     "scale": 0.9,
+     "yaw": 8,
+     "pitch": 0,
+     "roll": 6,
+     "action": "relay"
+    },
+    {
+     "t": 1,
+     "x": 0.45,
+     "y": 0.15,
+     "scale": 0.85,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    }
+   ],
+   "illustration": null,
+   "layout_desktop": "将“公开站点未开放”紧贴 Agent Swarm 事实显示为状态说明，不藏入脚注；舞台接力线保持细而克制。",
+   "layout_mobile": "事实列表完整呈现状态说明；交接场景简化为两个机巢与一条路径。"
+  },
+  {
+   "id": "sandbox",
+   "eyebrow_en": "06 / AVAILABLE · INTERACTIVE SANDBOX",
+   "eyebrow_zh": "06 / 已提供 · 交互沙盒",
+   "title_en": "A simulation core for each visitor",
+   "title_zh": "为每位访问者分配独立仿真",
+   "body_en": "Each visitor receives an isolated simulation core supporting up to 12 drones, 30 targets and 4 nests. The experience runs on browser, phone and tablet, with REST v1 and a Python SDK; each UrbanScene3D city also plays its own recorded drone-monitoring show.",
+   "body_zh": "每位访问者使用独立的仿真核心，最多容纳 12 架无人机、30 个目标和 4 座机巢。沙盒支持浏览器、手机和平板，也提供 REST v1 与 Python SDK；每座 UrbanScene3D 城市均有各自录制的无人机监测展示。",
+   "points": [
+    {
+     "en": "Up to 12 drones, 30 targets and 4 nests per sandbox",
+     "zh": "每个沙盒最多 12 架无人机、30 个目标、4 座机巢",
+     "status": "available"
+    },
+    {
+     "en": "Admission control, visible queue and energy-saving mode",
+     "zh": "准入控制、可见队列与节能模式",
+     "status": "available"
+    },
+    {
+     "en": "No server GPU required; live rendering in the browser",
+     "zh": "服务端无需 GPU；画面在浏览器内实时渲染",
+     "status": "available"
+    }
+   ],
+   "keywords": [
+    "Simulation",
+    "Drone Swarm"
+   ],
+   "scene": "体素城市收束成一个边界清晰的沙盒平面，飞机进入后缓慢下降。舞台旁保留真实产品入口；示意舞台不仿造实际沙盒界面。",
+   "plane_keyframes": [
+    {
+     "t": 0,
+     "x": 0.45,
+     "y": 0.15,
+     "scale": 0.85,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    },
+    {
+     "t": 0.5,
+     "x": 0,
+     "y": 0.05,
+     "scale": 0.9,
+     "yaw": 0,
+     "pitch": -6,
+     "roll": 0,
+     "action": "land"
+    },
+    {
+     "t": 1,
+     "x": -0.3,
+     "y": -0.2,
+     "scale": 0.9,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "land"
+    }
+   ],
+   "illustration": null,
+   "layout_desktop": "正文下方展示现有 demo-flight.webp 动图及简短图注；动图不得覆盖主操作按钮或实时容量信息。",
+   "layout_mobile": "先显示操作入口和实时容量，再显示 demo-flight.webp；动图在 reduced-motion 下改为静态首帧。"
+  },
+  {
+   "id": "roadmap",
+   "eyebrow_en": "07 / IN DEVELOPMENT & RESEARCH",
+   "eyebrow_zh": "07 / 开发中与研究中",
+   "title_en": "The next fidelity tiers",
+   "title_zh": "下一阶段的保真度",
+   "body_en": "The D3 Event Lab for V0.3 is in development: Gazebo Sim lockstep, event-level observation benchmarks, mesh sensors, 4D reconstruction evaluation and Rerun inspection. A 3DGS appearance layer over mesh geometry and PX4 SITL with Gazebo remain research directions, not available capabilities.",
+   "body_zh": "面向 V0.3 的 D3 Event Lab 正在开发：包括 Gazebo Sim 锁步、事件级观测策略基准、网格传感器、4D 重建评估及 Rerun 数据检查。叠加于网格几何之上的 3DGS 外观层，以及结合 Gazebo 的 PX4 SITL，仍属于研究方向，并非现有功能。",
+   "points": [
+    {
+     "en": "Gazebo Sim lockstep and event-level benchmarks",
+     "zh": "Gazebo Sim 锁步与事件级基准",
+     "status": "dev"
+    },
+    {
+     "en": "Mesh LiDAR with Livox MID-360 pattern; mesh cameras; FAST-LIVO2 reconstruction compared with mesh ground truth; Rerun inspection",
+     "zh": "Livox MID-360 扫描模式的网格 LiDAR、网格相机；以网格真值对照 FAST-LIVO2 重建，并通过 Rerun 检查数据",
+     "status": "dev"
+    },
+    {
+     "en": "3DGS appearance over mesh geometry",
+     "zh": "叠加于网格几何之上的 3DGS 外观层",
+     "status": "research"
+    },
+    {
+     "en": "PX4 SITL with Gazebo",
+     "zh": "结合 Gazebo 的 PX4 SITL",
+     "status": "research"
+    }
+   ],
+   "keywords": [
+    "Gazebo",
+    "LiDAR",
+    "4D Reconstruction",
+    "3DGS",
+    "PX4"
+   ],
+   "scene": "飞机从已交付沙盒旁起飞，前方出现两道不相连的稀疏体素框架：近处框架标记“开发中”，远处框架标记“研究中”。不绘制写实 3DGS 成果、重建结果或可运行的研发功能界面。",
+   "plane_keyframes": [
+    {
+     "t": 0,
+     "x": -0.3,
+     "y": -0.2,
+     "scale": 0.9,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "land"
+    },
+    {
+     "t": 0.45,
+     "x": 0,
+     "y": 0.1,
+     "scale": 0.9,
+     "yaw": 0,
+     "pitch": 10,
+     "roll": 0,
+     "action": "climb"
+    },
+    {
+     "t": 1,
+     "x": 0.35,
+     "y": 0.25,
+     "scale": 0.8,
+     "yaw": 0,
+     "pitch": 0,
+     "roll": 0,
+     "action": "cruise"
+    }
+   ],
+   "illustration": null,
+   "layout_desktop": "路线图分为“开发中”和“研究中”两列，每条技术项保留独立状态标签；舞台中的两个框架与两列对应。",
+   "layout_mobile": "路线图改为纵向两组，先开发中、后研究中；每条技术项的状态标签与名称处于同一可读卡片。"
+  }
+ ],
+ "closing": {
+  "title_en": "Enter the simulation",
+  "title_zh": "进入仿真现场",
+  "body_en": "Watch the shared show or open an isolated sandbox. Current admission and availability are shown before entry.",
+  "body_zh": "观看共享展示，或开启独立沙盒。进入前可查看当前容量与接入状态。",
+  "actions": [
+   {
+    "label_en": "Enter shared show",
+    "label_zh": "进入共享展示",
+    "kind": "primary",
+    "href": "existing shared-show route"
+   },
+   {
+    "label_en": "Open my sandbox",
+    "label_zh": "开启我的沙盒",
+    "kind": "primary",
+    "href": "existing sandbox route"
+   },
+   {
+    "label_en": "Documentation",
+    "label_zh": "文档",
+    "kind": "link",
+    "href": "https://docs.agentnetwork.org.cn/drone4d/"
+   },
+   {
+    "label_en": "GitHub",
+    "label_zh": "GitHub",
+    "kind": "link",
+    "href": "existing GitHub link"
+   }
+  ]
+ },
+ "illustration_style": "所有新插画共享同一工业级体素语言：近黑背景、石墨灰几何、白色结构线与克制的 #e0322d 系红色重点；硬边、离散采样、发丝线标注区域与充足留白。采用一致的斜俯视透视和单一方向的柔和照明，不使用幻灯片式渐变、玻璃拟态、霓虹光晕、文字、数字或标志。插画仅解释概念，不冒充实际产品截图或研发成果。",
+ "implementation": {
+  "page_structure": "桌面端使用一个贯穿 hero、七章及结尾的常驻舞台；内容区逐章滚动，舞台始终只挂载一个 canvas。hero 使用现有 drone4d-banner.jpg 作为独立静态图片区域；不把它作为体素舞台纹理。结尾保持飞机在路线图末帧的位置，不重置航线。",
+  "navigation": "顶部保留中英语言切换、GitHub 与文档入口。hero 和结尾均呈现两项主要操作；共享展示与沙盒链接接入现有路由，不根据设计稿猜测 URL。",
+  "capacity": "两项主要操作旁保留实时容量行，显示接口返回的观看人数与可用沙盒数；加载或接口异常时显示相应状态，不填写推测数值。队列与准入状态沿用真实服务响应。",
+  "rendering": "舞台与飞机使用原生 WebGL2：预建单位立方体几何，将飞机、环境及短航迹合并到同一实例数组，每帧一次 instanced draw call；使用少量实例属性传递位置、尺度及材质索引。限制体素场景复杂度并复用缓冲区，不引入 three.js；WebGL2 不可用时以 Canvas2D 绘制相同章节构图的简化投影。",
+  "performance": "动效层以约 60 KB gzip 为预算；桌面端按需绘制，移动端降低环境体素数量及目标帧率，页面或舞台不可见时停止绘制。不得依赖高于 WebGL2 规范最低保证值的纹理尺寸、属性数量或扩展。",
+  "responsive": "375–430 px 手机采用章内舞台置顶、文字在下的布局，舞台不遮挡正文；768–1279 px 平板优先使用章内舞台，空间足够时才使用窄版常驻舞台。所有布局无横向溢出，切换、链接及操作按钮的触控区域至少 44 px。",
+  "components_and_motion": "按钮、状态标签、语言切换及卡片使用 shadcn/ui；图标使用 morphicons/lucide 几何风格。非滚动过渡采用 Transitions.dev 风格的标准缓动与约 150–400 ms 时长；事实分隔与示意刻度使用 lieflat 式发丝线。",
+  "accessibility": "canvas 提供章节级文字替代说明且不截获滚动；状态同时以文字呈现，不仅依靠红色区分。键盘可访问全部操作与语言切换；reduced-motion 模式不播放 demo-flight.webp 动图或滚动驱动的飞机运动。"
+ }
+}

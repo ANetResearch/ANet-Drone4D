@@ -1,0 +1,205 @@
+{
+ "hero": {
+  "eyebrow_en": "AGENT NETWORK RESEARCH · RELEASE v0.2.0",
+  "eyebrow_zh": "AGENT NETWORK RESEARCH · 版本 v0.2.0",
+  "title_en": "ANet Drone4D",
+  "title_zh": "ANet Drone4D",
+  "subtitle_en": "A real-world 4D simulation platform for multi-agent drones, from environments to coordinated swarms.",
+  "subtitle_zh": "以真实世界环境为基础，推演多智能体无人机集群协同的 4D 仿真平台。"
+ },
+ "chapters": [
+  {
+   "id": "digital-twin",
+   "eyebrow_en": "01 / AVAILABLE · DIGITAL TWIN",
+   "eyebrow_zh": "01 / 已交付 · 数字孪生",
+   "title_en": "Urban worlds in motion",
+   "title_zh": "动态呈现城市环境",
+   "body_en": "Seven urban worlds stream to the browser as octree point clouds. Point density adapts to the viewpoint and frame budget; a GPU point pool renders the result in a single draw call.",
+   "body_zh": "七个世界以八叉树点云形式流式传输至浏览器。点云密度随视点和帧预算调整，由 GPU 点池通过单次绘制调用完成渲染。",
+   "points": [
+    {
+     "en": "ANet Synthetic City and six UrbanScene3D cities",
+     "zh": "ANet Synthetic City 与六座 UrbanScene3D 城市",
+     "status": "available"
+    },
+    {
+     "en": "Approximately 5 million points per city",
+     "zh": "每座城市约 500 万个点",
+     "status": "available"
+    },
+    {
+     "en": "CPU build time of 27–35 s per city",
+     "zh": "每座城市的 CPU 构建耗时 27–35 秒",
+     "status": "available"
+    }
+   ]
+  },
+  {
+   "id": "environment",
+   "eyebrow_en": "02 / AVAILABLE · 4D ENVIRONMENT",
+   "eyebrow_zh": "02 / 已交付 · 4D 环境",
+   "title_en": "Weather as simulation state",
+   "title_zh": "将气象纳入仿真状态",
+   "body_en": "Wind fields combine vertical profiles and turbulence, while visibility and precipitation define operating conditions. The physics engine samples the environment at 50 Hz across 12 weather presets, from clear skies to sandstorms.",
+   "body_zh": "风场结合垂直风速剖面与湍流模型，能见度和降水共同构成运行条件。物理引擎以 50 Hz 的频率采样环境，支持从晴朗到沙尘暴的 12 种天气预设。",
+   "points": [
+    {
+     "en": "Vertical wind profile and turbulence",
+     "zh": "垂直风速剖面与湍流模型",
+     "status": "available"
+    },
+    {
+     "en": "Visibility, precipitation, and 12 weather presets",
+     "zh": "能见度、降水与 12 种天气预设",
+     "status": "available"
+    },
+    {
+     "en": "50 Hz environmental sampling",
+     "zh": "50 Hz 环境采样频率",
+     "status": "available"
+    }
+   ]
+  },
+  {
+   "id": "fleet-control",
+   "eyebrow_en": "03 / AVAILABLE · DRONE SWARM",
+   "eyebrow_zh": "03 / 已交付 · 无人机集群",
+   "title_en": "One clock for the fleet",
+   "title_zh": "全机群共用仿真时钟",
+   "body_en": "FleetSim advances 1 to 1,000 drones on a shared 250 Hz clock, sustaining real-time execution at 1,000 drones on roughly half a CPU core. Flight control combines a PX4-style position-and-attitude cascade, verified against PX4 SIH flight logs, with formation, area coverage, and mission primitives.",
+   "body_zh": "FleetSim 在共享的 250 Hz 时钟下同步推演 1 至 1,000 架无人机；运行 1,000 架时，约半个 CPU 核心即可维持实时执行。飞控将经 PX4 SIH 飞行记录校验的 PX4 风格位置与姿态级联控制，与编队、区域覆盖及任务控制模块相结合。",
+   "points": [
+    {
+     "en": "PX4-lite cascade verified against PX4 SIH logs",
+     "zh": "经 PX4 SIH 记录校验的 PX4-lite 级联控制",
+     "status": "available"
+    },
+    {
+     "en": "Formations, area coverage, and eight mission generators",
+     "zh": "编队、区域覆盖与八种任务生成器",
+     "status": "available"
+    },
+    {
+     "en": "Geofences, fleet separation, and a 14-state flight state machine",
+     "zh": "地理围栏、机群间距控制与 14 状态飞行状态机",
+     "status": "available"
+    }
+   ]
+  },
+  {
+   "id": "perception",
+   "eyebrow_en": "04 / AVAILABLE · TARGET PERCEPTION",
+   "eyebrow_zh": "04 / 已交付 · 目标感知",
+   "title_en": "From sensing to detection probability",
+   "title_zh": "从传感观测到发现概率",
+   "body_en": "Target perception covers six classes—people, drones, machines, dogs, vehicles, and objects—across EO, night-vision, LWIR, LiDAR, radar, and acoustic modalities. Based on Johnson criteria and TTPF, the model outputs sound pressure, angular subtense, equivalent pixels, and detection probability.",
+   "body_zh": "目标感知覆盖人、无人机、机器、犬只、车辆与物体六类目标，支持可见光、夜视、长波红外（LWIR）、LiDAR、雷达及声学六种传感模态。模型基于 Johnson 准则与 TTPF，输出声压、角尺寸、等效像素及发现概率。",
+   "points": [
+    {
+     "en": "Six target classes across six sensor modalities",
+     "zh": "六类目标与六种传感模态",
+     "status": "available"
+    },
+    {
+     "en": "Johnson criteria and TTPF modeling",
+     "zh": "Johnson 准则与 TTPF 建模",
+     "status": "available"
+    },
+    {
+     "en": "Detection probability and underlying physical observables",
+     "zh": "发现概率与底层物理观测量",
+     "status": "available"
+    }
+   ]
+  },
+  {
+   "id": "relay-agents",
+   "eyebrow_en": "05 / AVAILABLE · NESTS & AGENTS",
+   "eyebrow_zh": "05 / 已交付 · 机巢与智能体",
+   "title_en": "Coordination beyond single flights",
+   "title_zh": "跨越单次飞行的持续协同",
+   "body_en": "Automated nests use greedy allocation across seven task types and maintain 7×24 relay watch from stations outside each target’s sensitivity range. As physical agents, drones can discover capabilities and delegate tasks over Mock ANet, verified against receipts; this agent-swarm layer is disabled on the public site.",
+   "body_zh": "自动化机巢以贪心策略分配七类任务，并通过部署在各目标敏感范围之外的站点执行 7×24 小时接力监测。无人机也可作为物理智能体，通过 Mock ANet 发现能力、委派任务，并依据回执核验结果；这一智能体集群功能未在公开站点开放。",
+   "points": [
+    {
+     "en": "Seven task types with greedy allocation",
+     "zh": "七类任务，采用贪心策略分配",
+     "status": "available"
+    },
+    {
+     "en": "7×24 relay watch from beyond target sensitivity range",
+     "zh": "在目标敏感范围外执行 7×24 小时接力监测",
+     "status": "available"
+    },
+    {
+     "en": "Receipt-verified agent swarm; disabled on public site",
+     "zh": "基于回执核验的智能体集群；公开站点未开放",
+     "status": "available"
+    }
+   ]
+  },
+  {
+   "id": "sandbox",
+   "eyebrow_en": "06 / AVAILABLE · INTERACTIVE SANDBOX",
+   "eyebrow_zh": "06 / 已交付 · 交互沙盒",
+   "title_en": "An isolated core for each visitor",
+   "title_zh": "每位访客独享仿真内核",
+   "body_en": "Each session provisions an isolated simulation core for up to 12 drones, 30 targets, and 4 nests. The sandbox supports desktop browsers, phones, and tablets, with a REST v1 API and Python SDK; each UrbanScene3D city also includes a recorded drone-monitoring demonstration.",
+   "body_zh": "每次会话均分配独立的仿真内核，至多支持 12 架无人机、30 个目标与 4 座机巢。沙盒支持桌面浏览器、手机和平板，并提供 REST v1 API 与 Python SDK；每座 UrbanScene3D 城市还设有预录制的无人机监测演示。",
+   "points": [
+    {
+     "en": "Up to 12 drones, 30 targets, and 4 nests per sandbox",
+     "zh": "每个沙盒至多支持 12 架无人机、30 个目标与 4 座机巢",
+     "status": "available"
+    },
+    {
+     "en": "Admission control, live queue visibility, and energy-saving mode",
+     "zh": "准入控制、实时队列状态与节能模式",
+     "status": "available"
+    },
+    {
+     "en": "No server GPU required; browser-side rendering",
+     "zh": "服务端无需 GPU；由浏览器端完成实时渲染",
+     "status": "available"
+    }
+   ]
+  },
+  {
+   "id": "roadmap",
+   "eyebrow_en": "07 / IN DEVELOPMENT & RESEARCH",
+   "eyebrow_zh": "07 / 开发中与研究中",
+   "title_en": "Next tiers of simulation fidelity",
+   "title_zh": "仿真保真度的下一阶段",
+   "body_en": "In development for V0.3, the D3 Event Lab includes Gazebo Sim lockstep, event-level observation benchmarks, mesh sensors, 4D reconstruction evaluation, and Rerun inspection. A 3DGS appearance layer over mesh geometry and PX4 SITL integration with Gazebo remain research directions, not available features.",
+   "body_zh": "面向 V0.3 的 D3 Event Lab 正在开发中，涵盖 Gazebo Sim 锁步仿真、事件级观测基准、网格传感器、4D 重建评估与 Rerun 数据检视。叠加于网格几何之上的 3DGS 外观层，以及 PX4 SITL 与 Gazebo 的集成仍处于研究阶段，尚未作为可用功能提供。",
+   "points": [
+    {
+     "en": "Gazebo Sim lockstep and event-level benchmarks",
+     "zh": "Gazebo Sim 锁步仿真与事件级基准",
+     "status": "dev"
+    },
+    {
+     "en": "Livox MID-360-pattern mesh LiDAR, mesh cameras, FAST-LIVO2 evaluation against mesh ground truth, and Rerun inspection",
+     "zh": "Livox MID-360 扫描模式的网格 LiDAR、网格相机、基于网格真值的 FAST-LIVO2 评估与 Rerun 数据检视",
+     "status": "dev"
+    },
+    {
+     "en": "3DGS appearance layer over mesh geometry",
+     "zh": "叠加于网格几何之上的 3DGS 外观层",
+     "status": "research"
+    },
+    {
+     "en": "PX4 SITL integration with Gazebo",
+     "zh": "PX4 SITL 与 Gazebo 集成",
+     "status": "research"
+    }
+   ]
+  }
+ ],
+ "closing": {
+  "title_en": "Enter the simulation",
+  "title_zh": "进入仿真环境",
+  "body_en": "Watch the shared show or launch an isolated sandbox. Real-time capacity and queue status are displayed before entry.",
+  "body_zh": "观看共享展示，或启动独立沙盒。进入前可查看实时容量与排队状态。"
+ }
+}
