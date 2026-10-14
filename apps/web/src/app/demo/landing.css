@@ -1,27 +1,44 @@
-/* Public demo landing page (D2.2-L1). Colours are theme tokens, durations and easings the transitions.dev tokens
-   (styles/motion/tokens.css): the backdrop canvas fades in with --duration-very-slow, sections reveal with the "texts
+/* Public demo landing page (D2.2). Colours are theme tokens, durations and easings the transitions.dev tokens
+   (styles/motion/tokens.css): the story stage canvas fades in with --duration-very-slow, sections reveal with the "texts
    reveal" recipe (--stagger-dur, --stagger-distance, --stagger-ease; opacity and transform only, no blur over the
    canvas). Reduced motion: no reveal, no fade, no smooth scrolling, no brand entrance. */
 @layer components {
-  /* fixed, non-interactive layer behind the page; 100lvh so the mobile URL bar never resizes the canvas */
-  .landing-backdrop {
-    position: fixed; inset: 0 0 auto 0; height: 100vh; height: 100lvh; z-index: var(--z-canvas);
-    pointer-events: none; overflow: hidden; contain: strict;
+  /* the story: text column and sticky stage (desktop), or a sticky stage band above the text (phones and tablets) */
+  .landing-story-grid { display: block; }
+  .landing-stage {
+    position: sticky; top: 3.5rem; z-index: var(--z-labels); height: clamp(13.75rem, 38svh, 22.5rem);
+    margin-inline: -1rem; pointer-events: none;
+    background: var(--background); border-bottom: 1px solid var(--border);
   }
   /* the static grid: shown at once, and the only layer when neither WebGL2 nor Canvas2D is available */
-  .landing-backdrop::before {
+  .landing-stage::before {
     content: ""; position: absolute; inset: 0;
     background-image: linear-gradient(var(--lf-grid) 1px, transparent 1px), linear-gradient(90deg, var(--lf-grid) 1px, transparent 1px);
-    background-size: 56px 56px; background-position: center top;
-    mask-image: radial-gradient(ellipse 70% 65% at 68% 42%, var(--foreground) 0%, transparent 80%);
+    background-size: 40px 40px; background-position: center;
+    mask-image: radial-gradient(ellipse 75% 70% at 50% 55%, var(--foreground) 0%, transparent 85%);
+  }
+  /* phones and tablets: the text scrolling under the band fades out at its lower edge instead of being cut */
+  .landing-stage::after {
+    content: ""; position: absolute; inset: 100% 0 auto 0; height: 1.75rem; pointer-events: none;
+    background: linear-gradient(to bottom, var(--background), transparent);
   }
   .landing-voxel {
     position: relative; display: block; width: 100%; height: 100%; opacity: 0;
     transition: opacity var(--duration-very-slow) var(--ease-smooth-out);
   }
   .landing-voxel:is([data-voxel-mode="webgl2"], [data-voxel-mode="canvas2d"]) { opacity: 1; }
-  @media (max-width: 767px) {
-    .landing-backdrop::before { mask-image: radial-gradient(ellipse 90% 45% at 50% 78%, var(--foreground) 0%, transparent 80%); }
+  .landing-chapter { display: flex; flex-direction: column; justify-content: center; min-height: 92svh; padding-block: 2.5rem; }
+  .landing-chapter-intro { min-height: 80svh; }
+  @media (min-width: 640px) { .landing-stage { margin-inline: -1.5rem; } }
+  @media (min-width: 1024px) {
+    .landing-story-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); column-gap: 3rem; }
+    .landing-stage {
+      grid-column: 2; grid-row: 1; align-self: start; height: calc(100svh - 3.5rem); margin-inline: 0;
+      background: transparent; border-bottom: 0; overflow: hidden; contain: strict;
+    }
+    .landing-stage::after { display: none; }
+    .landing-story-text { grid-column: 1; grid-row: 1; }
+    .landing-chapter { min-height: 100svh; padding-block: 4rem; }
   }
   /* figures and code blocks never widen the page */
   [data-view="landing"] pre { max-width: 100%; overflow-x: auto; }

@@ -1,6 +1,7 @@
-// Scroll-driven voxel backdrop of the landing page (D2.2-L1): a fixed, non-interactive layer behind the content. The CSS
-// grid of .landing-backdrop paints at once (and stays as the static fallback); the renderer (./voxelField, its own lazy
-// chunk) starts on idle so it never competes with the first paint, and the canvas fades in on its first frame.
+// Host of the story stage (D2.2 landing story): the canvas of the voxel airplane, inside the sticky .landing-stage of
+// ./LandingStory. The CSS grid of .landing-stage paints at once (and stays as the static fallback); the renderer
+// (./voxelField, its own lazy chunk) starts on idle so it never competes with the first paint, and the canvas fades in
+// on its first frame.
 import * as React from 'react'
 
 type IdleWindow = typeof globalThis & {
@@ -34,9 +35,5 @@ export function LandingVoxel() {
       stop?.()
     }
   }, [])
-  return (
-    <div aria-hidden="true" className="landing-backdrop" data-landing-backdrop="">
-      <canvas ref={ref} className="landing-voxel" data-voxel-bg="" />
-    </div>
-  )
+  return <canvas ref={ref} className="landing-voxel" data-voxel-bg="" />
 }

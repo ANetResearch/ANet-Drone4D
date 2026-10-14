@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { landingI18nDict, LANDING_I18N_ID } from '../../vite.config.ts'
 import { LANDING_I18N_KEYS } from '@/app/demo/landingKeys'
-import { CAPS_DELIVERED, CAPS_NEXT, MEDIA_FLIGHT, MEDIA_SHOTS, MEDIA_WIDE, ROADMAP, STACK_ROWS } from '@/app/demo/LandingContent'
+import { MEDIA_FLIGHT, MEDIA_SHOTS, MEDIA_WIDE, STORY } from '@/app/demo/LandingContent'
 
 const WEB = resolve(import.meta.dirname, '../..')
 const zhCN = JSON.parse(readFileSync(resolve(WEB, 'src/app/i18n/zh-CN.json'), 'utf8')) as Record<string, string>
@@ -41,24 +41,20 @@ describe('landing i18n dictionary stays trimmed and in sync with the real conten
     expect(() => landingI18nDict(zhCN, incomplete, LANDING_I18N_KEYS)).toThrow(/missing key/)
   })
 
-  it('the allowlist has not drifted from LandingContent.ts\'s real capability, media, stack and roadmap ids', () => {
+  it('the allowlist has not drifted from LandingContent.ts\'s real story chapters and media ids', () => {
     const expected = new Set(LANDING_I18N_KEYS)
-    for (const c of [...CAPS_DELIVERED, ...CAPS_NEXT]) {
-      expect(expected.has(`landing.cap.${c.id}.title`), `landing.cap.${c.id}.title not in the landing allowlist`).toBe(true)
-      expect(expected.has(`landing.cap.${c.id}.body`), `landing.cap.${c.id}.body not in the landing allowlist`).toBe(true)
-      expect(expected.has(`landing.status.${c.status}`), `landing.status.${c.status} not in the landing allowlist`).toBe(true)
+    for (const c of STORY) {
+      for (const f of ['eyebrow', 'title', 'body', 'alt']) {
+        expect(expected.has(`landing.story.${c.id}.${f}`), `landing.story.${c.id}.${f} not in the landing allowlist`).toBe(true)
+      }
+      c.points.forEach((status, i) => {
+        expect(expected.has(`landing.story.${c.id}.p${i + 1}`), `landing.story.${c.id}.p${i + 1} not in the landing allowlist`).toBe(true)
+        expect(expected.has(`landing.status.${status}`), `landing.status.${status} not in the landing allowlist`).toBe(true)
+      })
+      expect(expected.has(`landing.story.${c.id}.p${c.points.length + 1}`), `landing.story.${c.id} lists more points than it has`).toBe(false)
     }
     for (const m of [MEDIA_FLIGHT, ...MEDIA_SHOTS, ...MEDIA_WIDE]) {
       expect(expected.has(`landing.media.${m.key}`), `landing.media.${m.key} not in the landing allowlist`).toBe(true)
-    }
-    for (const row of STACK_ROWS) {
-      expect(expected.has(`landing.stack.${row}`), `landing.stack.${row} not in the landing allowlist`).toBe(true)
-      expect(expected.has(`landing.stack.${row}Value`), `landing.stack.${row}Value not in the landing allowlist`).toBe(true)
-    }
-    for (const r of ROADMAP) {
-      expect(expected.has(`landing.road.${r.id}.name`), `landing.road.${r.id}.name not in the landing allowlist`).toBe(true)
-      expect(expected.has(`landing.road.${r.id}.body`), `landing.road.${r.id}.body not in the landing allowlist`).toBe(true)
-      expect(expected.has(`landing.status.${r.status}`), `landing.status.${r.status} not in the landing allowlist`).toBe(true)
     }
   })
 })

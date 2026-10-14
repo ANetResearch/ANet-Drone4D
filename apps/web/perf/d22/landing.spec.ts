@@ -138,12 +138,19 @@ for (const dev of Object.keys(DEVICES) as Device[]) {
     await expect(page.locator('[data-launch-hint]')).toBeVisible()
     await noOverflow(page, 'top')
     // every section is present and the page grows the backdrop while scrolling
-    for (const id of ['capabilities', 'showcase', 'stack', 'open-source']) await expect(page.locator(`#${id}`)).toHaveCount(1)
-    await expect(page.locator('[data-feature]')).toHaveCount(16)
+    for (const id of ['story', 'showcase', 'closing', 'open-source']) await expect(page.locator(`#${id}`)).toHaveCount(1)
+    // the index chapter plus seven capability chapters, each read by the voxel stage
+    await expect(page.locator('[data-story-chapter]')).toHaveCount(8)
+    // the stage draws while a chapter is under it (and pauses once it scrolls away with the story)
+    await page.evaluate(() => document.getElementById('story-perception')!.scrollIntoView({ block: 'center', behavior: 'instant' }))
+    await page.waitForTimeout(600)
     const f0 = await frames(page)
-    await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }))
+    await page.evaluate(() => scrollBy({ top: 240, behavior: 'instant' }))
     await page.waitForTimeout(800)
     expect(await frames(page)).toBeGreaterThan(f0)
+    await expect(page.locator('[data-voxel-bg]')).toHaveAttribute('data-voxel-chapter', /^(perception|relay-agents)$/)
+    await page.evaluate(() => scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }))
+    await page.waitForTimeout(500)
     await noOverflow(page, 'bottom')
     if (dev !== 'desktop') expect(await smallTargets(page), 'touch targets below 44 px').toEqual([])
     await page.waitForTimeout(500)
@@ -213,16 +220,23 @@ for (const [dev, set] of [['desktop', 'min'], ['iphone15', 'mobile'], ['ipad11l'
   })
 }
 
-test('reduced motion: one still frame, sections shown at once', async ({ browser }) => {
+test('reduced motion: one still frame per chapter, no clock, sections shown at once', async ({ browser }) => {
   const { page, w, close } = await open(browser, 'pixel8', { reduced: true })
   const bg = page.locator('[data-voxel-bg]')
   await expect(bg).toHaveAttribute('data-voxel-state', 'still')
   const f0 = await frames(page)
   expect(f0).toBeGreaterThanOrEqual(1)
-  await page.evaluate(() => scrollTo({ top: 3000, behavior: 'instant' }))
+  // no scroll: nothing is drawn (no loop, no wind or rain clock)
   await page.mouse.move(100, 100)
   await page.waitForTimeout(1500)
   expect(await frames(page)).toBe(f0)
+  // crossing chapters draws at most one still frame per chapter
+  await page.evaluate(() => scrollTo({ top: 3000, behavior: 'instant' }))
+  await page.waitForTimeout(1500)
+  const f1 = await frames(page)
+  expect(f1 - f0).toBeLessThanOrEqual(8)
+  await page.waitForTimeout(1500)
+  expect(await frames(page)).toBe(f1)
   await expect(bg).toHaveAttribute('data-voxel-state', 'still')
   const hidden = await page.evaluate(() => [...document.querySelectorAll('.landing-reveal')].filter((e) => getComputedStyle(e).opacity !== '1').length)
   expect(hidden).toBe(0)

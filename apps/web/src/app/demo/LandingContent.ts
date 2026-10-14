@@ -1,42 +1,33 @@
-// Static content of the public demo landing page (D2.2-L1). Texts live in the i18n dictionaries under landing.*; this
-// module holds the structure: the capability keywords with their delivery status (V0.1 and V0.2.0 delivered; D3 scope in
-// development or research per docs/05 and docs/research/d3), the captured media with their intrinsic sizes, the stack
-// rows, the roadmap and the citation entries. Keyword labels are the official spellings (Gazebo Sim, Rerun, FAST-LIVO2,
-// PX4), the same in both locales.
+// Static content of the public demo landing page (D2.2). Texts live in the i18n dictionaries under landing.*; this module
+// holds the structure: the chapters of the scroll narrative with the delivery status of each point (V0.1 and V0.2.0
+// delivered; D3 scope in development or research per docs/05 and docs/research/d3), the captured media with their
+// intrinsic sizes and the citation entries. Keyword labels are the official spellings, the same in both locales.
 import type { IconKey } from '@/ui/icons/registry'
 import { URBANSCENE_BIBTEX } from '@/lib/demo'
 
 export type CapStatus = 'available' | 'dev' | 'research'
 
-export interface Capability {
+/** one chapter of the scroll narrative (D2.2 landing story, designed with gpt-6-sol): texts under landing.story.<id>.*
+ * (eyebrow, title, body, p1..pN), the delivery status of each point, the concept illustration (public/demo/story/<id>.webp,
+ * generated with gpt-image-2.5-sunburst) and the promoted keywords. The voxel airplane's keyframes per chapter live in
+ * ./storyScene (read only by the lazily loaded stage renderer), keyed by the same ids. */
+export interface StoryChapter {
   id: string
-  /** official keyword label, shown in both locales */
-  kw: string
   icon: IconKey
-  status: CapStatus
+  points: readonly CapStatus[]
+  image: string | null
+  /** official keyword labels, the same in both locales */
+  keywords: readonly string[]
 }
 
-/** delivered in V0.1 (D1) and V0.2.0 (D2) */
-export const CAPS_DELIVERED: readonly Capability[] = [
-  { id: 'twin', kw: 'Digital Twin', icon: 'layer.pointcloud', status: 'available' },
-  { id: 'swarm', kw: 'Drone Swarm Simulation', icon: 'nav.fleet', status: 'available' },
-  { id: 'px4lite', kw: 'PX4-lite', icon: 'drone.quad', status: 'available' },
-  { id: 'control', kw: 'Swarm Control', icon: 'cmd.formation', status: 'available' },
-  { id: 'perception', kw: 'Target Perception', icon: 'mission.target', status: 'available' },
-  { id: 'relay', kw: 'Relay Watch', icon: 'task.relay', status: 'available' },
-  { id: 'api', kw: 'Open API', icon: 'api.doc', status: 'available' },
-  { id: 'agents', kw: 'Agent Swarm', icon: 'agent.network', status: 'available' },
-]
-
-/** D3 Event Lab scope (docs/05) and later research */
-export const CAPS_NEXT: readonly Capability[] = [
-  { id: 'gazebo', kw: 'Gazebo Sim', icon: 'sensor.compute', status: 'dev' },
-  { id: 'bench', kw: 'Event Benchmark', icon: 'perf.bench', status: 'dev' },
-  { id: 'sensors', kw: 'Mesh Camera · LiDAR', icon: 'sensor.lidar', status: 'dev' },
-  { id: 'recon', kw: '4D Reconstruction', icon: 'layer.mesh', status: 'dev' },
-  { id: 'rerun', kw: 'Rerun', icon: 'perf.chart', status: 'dev' },
-  { id: 'gs', kw: '3DGS', icon: 'layer.splat', status: 'research' },
-  { id: 'sitl', kw: 'PX4 SITL', icon: 'drone.hexa', status: 'research' },
+export const STORY: readonly StoryChapter[] = [
+  { id: 'digital-twin', icon: 'layer.pointcloud', points: ['available', 'available', 'available'], image: 'digital-twin', keywords: ['Digital Twin', 'Simulation'] },
+  { id: 'environment', icon: 'env.wind', points: ['available', 'available', 'available'], image: 'environment', keywords: ['Simulation'] },
+  { id: 'fleet-control', icon: 'cmd.formation', points: ['available', 'available', 'available'], image: 'fleet-control', keywords: ['Drone Swarm', 'Swarm Control', 'PX4', 'Simulation'] },
+  { id: 'perception', icon: 'mission.target', points: ['available', 'available', 'available'], image: 'perception', keywords: ['LiDAR', 'Simulation'] },
+  { id: 'relay-agents', icon: 'agent.network', points: ['available', 'available', 'available'], image: 'relay-agents', keywords: ['Agent Swarm', 'Swarm Control'] },
+  { id: 'sandbox', icon: 'sandbox.mine', points: ['available', 'available', 'available'], image: null, keywords: ['Simulation', 'Drone Swarm'] },
+  { id: 'roadmap', icon: 'sensor.lidar', points: ['dev', 'dev', 'research', 'research'], image: 'roadmap', keywords: ['Gazebo', 'LiDAR', '4D Reconstruction', '3DGS', 'PX4'] },
 ]
 
 export interface Media { file: string; key: string; w: number; h: number }
@@ -55,17 +46,6 @@ export const MEDIA_WIDE: readonly Media[] = [
   { file: 'screenshot-weather.jpg', key: 'weather', w: 1920, h: 613 },
 ]
 
-/** rows of the stack table (label and value both in the dictionaries: landing.stack.<row> and landing.stack.<row>Value) */
-export const STACK_ROWS = ['world', 'sim', 'safety', 'client', 'api', 'site', 'd3'] as const
-
-export interface RoadItem { id: string; version: string; status: CapStatus }
-export const ROADMAP: readonly RoadItem[] = [
-  { id: 'v01', version: 'V0.1 · D1', status: 'available' },
-  { id: 'v02', version: 'V0.2.0 · D2', status: 'available' },
-  { id: 'v03', version: 'V0.3 · D3', status: 'dev' },
-  { id: 'later', version: 'P3 · V1.0', status: 'research' },
-]
-
 /** BibTeX of the software (README.md "Data and citation", CITATION.cff) */
 export const DRONE4D_BIBTEX = `@software{anet_drone4d_2026,
   title   = {ANet-Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
@@ -81,13 +61,12 @@ export const CITATIONS: readonly { id: string; label: string; bibtex: string }[]
 ]
 
 /** the sections of the page in reading order (header navigation and the mobile menu) */
-export const NAV = ['capabilities', 'showcase', 'stack', 'open-source'] as const
+export const NAV = ['story', 'showcase', 'open-source'] as const
 export type NavId = (typeof NAV)[number]
 /** i18n key of each section's navigation label */
 export const NAV_KEY: Record<NavId, string> = {
-  capabilities: 'landing.nav.capabilities',
+  story: 'landing.nav.capabilities',
   showcase: 'landing.nav.showcase',
-  stack: 'landing.nav.stack',
   'open-source': 'landing.nav.open',
 }
 

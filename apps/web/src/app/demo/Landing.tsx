@@ -21,15 +21,15 @@
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { bootCapacityFetch, capacityLine, sandboxQueueHint, setLocale, useT, type CapacityLine, type Locale } from './LandingI18n'
-import { DEMO_ENTRY } from '@/lib/demo'
+import { DEMO_DOCS_URL, DEMO_ENTRY, DEMO_REPO_URL } from '@/lib/demo'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
 import { Icon } from '@/ui/icons/Icon'
 import type { CapacityView } from '@/net/sandbox/client'
 import { buildVersion } from './LandingContent'
 import { LandingHeader } from './LandingHeader'
-import { Capabilities, LandingFooter, OpenSource, Showcase, StackRoadmap } from './LandingSections'
-import { LandingVoxel } from './LandingVoxel'
+import { LandingFooter, OpenSource, Showcase } from './LandingSections'
+import { LandingStory } from './LandingStory'
 import './landing.css'
 
 const SandboxLaunchSheet = React.lazy(() => import('./SandboxLaunchSheet'))
@@ -184,7 +184,6 @@ export function Landing() {
   useReveal()
   return (
     <div data-view="landing" className="relative isolate min-h-full bg-background text-foreground">
-      <LandingVoxel />
       <LandingHeader locale={locale} onLocale={choose} onSandbox={big ? openSheet : null} />
 
       <main id="top" className="relative z-(--z-labels)">
@@ -234,9 +233,33 @@ export function Landing() {
           </div>
         </section>
 
-        <Capabilities />
+        <LandingStory />
         <Showcase />
-        <StackRoadmap />
+        <section id="closing" className="scroll-mt-14 py-16 md:py-24" aria-labelledby="closing-title" data-landing-closing="">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <div className="landing-reveal flex flex-col gap-5 rounded-xl border border-border bg-card p-6 sm:p-10">
+              <h2 id="closing-title" className="text-2xl font-semibold tracking-tight text-balance md:text-3xl">{t('landing.closing.title')}</h2>
+              <p className="max-w-2xl text-sm leading-relaxed text-pretty text-muted-foreground md:text-base">{t('landing.closing.body')}</p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Button nativeButton={false} render={<a href={DEMO_ENTRY} data-closing-launch="" />} className="h-11 w-full px-5 text-sm sm:w-auto">
+                  <Icon icon="tl.play" data-icon="inline-start" />
+                  {t('landing.launch')}
+                </Button>
+                <Button variant="outline" className="h-11 w-full px-5 text-sm sm:w-auto dark:bg-card dark:hover:bg-muted" disabled={!big} onClick={openSheet} data-closing-sandbox="">
+                  <Icon icon="sandbox.mine" data-icon="inline-start" />
+                  {t('landing.sandbox.open')}
+                </Button>
+                <Button variant="ghost" nativeButton={false} render={<a href={DEMO_DOCS_URL} target="_blank" rel="noreferrer noopener" />} className="h-11 w-full px-4 text-sm sm:w-auto">
+                  {t('landing.docs')}
+                </Button>
+                <Button variant="ghost" nativeButton={false} render={<a href={DEMO_REPO_URL} target="_blank" rel="noreferrer noopener" />} className="h-11 w-full px-4 text-sm sm:w-auto">
+                  {t('landing.repo')}
+                </Button>
+              </div>
+              {capacity.line ? <p className="text-xs text-muted-foreground tabular-nums" data-closing-capacity="">{capacity.line.text}</p> : null}
+            </div>
+          </div>
+        </section>
         <OpenSource />
       </main>
 

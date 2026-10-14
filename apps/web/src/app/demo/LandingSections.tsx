@@ -1,5 +1,5 @@
-// Sections of the landing page below the hero (D2.2-L1): capabilities (keywords with delivery status), captured media,
-// stack and roadmap (lieflat table), open source and citation, footer. Status labels are the same three in every place
+// Sections of the landing page around the story (D2.2): captured media, open source and citation, footer, and the
+// shared status badge and section frame. Status labels are the same three in every place
 // (Available, In development, Research) and follow the V0.2.0 release and the D3 design baseline (docs/05). Images are
 // lazy with their intrinsic sizes (no layout shift); grids keep min-w-0 so code blocks scroll inside their card.
 import * as React from 'react'
@@ -10,13 +10,11 @@ import { BRAND } from '@/ui/brand/assets'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
 import { Separator } from '@/ui/components/ui/separator'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/ui/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { Icon } from '@/ui/icons/Icon'
 import type { IconKey } from '@/ui/icons/registry'
 import {
-  ANET_URL, API_DOCS_PATH, CAPS_DELIVERED, CAPS_NEXT, CITATIONS, MEDIA_FLIGHT, MEDIA_SHOTS, MEDIA_WIDE, ROADMAP, STACK_ROWS,
-  type CapStatus, type Capability, type Media,
+  ANET_URL, API_DOCS_PATH, CITATIONS, MEDIA_FLIGHT, MEDIA_SHOTS, MEDIA_WIDE, type CapStatus, type Media,
 } from './LandingContent'
 
 const COPIED_MS = 1600
@@ -50,64 +48,6 @@ export function Section({ id, index, eyebrow, title, sub, children, ...rest }: {
         {children}
       </div>
     </section>
-  )
-}
-
-// ---------------------------------------------------------------- capabilities
-function CapTile({ c }: { c: Capability }) {
-  const t = useT()
-  return (
-    <article data-feature={c.id} className="landing-reveal flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <Icon icon={c.icon} className={cn('size-5', c.status === 'available' ? 'text-foreground' : 'text-muted-foreground')} />
-        <StatusBadge status={c.status} />
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        <p className="font-mono text-xs tracking-wider break-words text-muted-foreground uppercase">{c.kw}</p>
-        <h3 className="text-base font-semibold tracking-tight text-card-foreground">{t(`landing.cap.${c.id}.title`)}</h3>
-      </div>
-      <p className="text-sm leading-relaxed text-pretty text-muted-foreground">{t(`landing.cap.${c.id}.body`)}</p>
-    </article>
-  )
-}
-
-function CapGroup({ title, sub, children, ...rest }: { title: string; sub: string; children: React.ReactNode } & Record<`data-${string}`, string>) {
-  return (
-    <div className="flex flex-col gap-5" {...rest}>
-      <div className="landing-reveal flex flex-col gap-1 border-b border-border pb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-        <h3 className="text-base font-semibold tracking-tight">{title}</h3>
-        <p className="text-sm text-muted-foreground">{sub}</p>
-      </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">{children}</div>
-    </div>
-  )
-}
-
-export function Capabilities() {
-  const t = useT()
-  return (
-    <Section id="capabilities" index="01" eyebrow={t('landing.nav.capabilities')} title={t('landing.cap.title')} sub={t('landing.cap.sub')}
-      data-landing-features="">
-      <div className="flex flex-col gap-12">
-        <CapGroup title={t('landing.cap.group.delivered')} sub={t('landing.cap.group.deliveredSub')} data-cap-group="delivered">
-          {CAPS_DELIVERED.map((c) => <CapTile key={c.id} c={c} />)}
-        </CapGroup>
-        <CapGroup title={t('landing.cap.group.next')} sub={t('landing.cap.group.nextSub')} data-cap-group="next">
-          {CAPS_NEXT.map((c) => <CapTile key={c.id} c={c} />)}
-          <article className="landing-reveal flex min-w-0 flex-col justify-between gap-4 rounded-lg border border-dashed border-border p-4 sm:p-5" data-feature="baseline">
-            <div className="flex flex-col gap-2">
-              <h3 className="text-base font-semibold tracking-tight">{t('landing.cap.more.title')}</h3>
-              <p className="text-sm leading-relaxed text-pretty text-muted-foreground">{t('landing.cap.more.body')}</p>
-            </div>
-            <Button variant="outline" className="h-11 w-full text-sm sm:w-auto sm:self-start" nativeButton={false}
-              render={<a href={DEMO_DOCS_URL} target="_blank" rel="noreferrer noopener" />}>
-              {t('landing.cap.more.link')}
-              <Icon icon="external" data-icon="inline-end" />
-            </Button>
-          </article>
-        </CapGroup>
-      </div>
-    </Section>
   )
 }
 
@@ -150,61 +90,6 @@ export function Showcase() {
         <Figure m={MEDIA_FLIGHT} wide sizes="(min-width: 1152px) 1104px, 100vw" />
         {MEDIA_SHOTS.map((m) => <Figure key={m.key} m={m} sizes="(min-width: 768px) 50vw, 100vw" />)}
         {MEDIA_WIDE.map((m) => <Figure key={m.key} m={m} wide sizes="(min-width: 1152px) 1104px, 100vw" />)}
-      </div>
-    </Section>
-  )
-}
-
-// ---------------------------------------------------------------- stack and roadmap
-export function StackRoadmap() {
-  const t = useT()
-  return (
-    <Section id="stack" index="03" eyebrow={t('landing.nav.stack')} title={t('landing.stack.title')} sub={t('landing.stack.sub')}
-      data-landing-notes="">
-      <div className="grid grid-cols-1 gap-10 xl:grid-cols-5 xl:gap-12">
-        <div className="landing-reveal min-w-0 xl:col-span-3">
-          <h3 className="mb-3 text-base font-semibold tracking-tight">{t('landing.stack.table')}</h3>
-          <div data-lf-table="" data-figure="landing-spec">
-            <Table className="text-sm">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-28 md:w-36">{t('landing.stack.layer')}</TableHead>
-                  <TableHead>{t('landing.stack.tech')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {STACK_ROWS.map((k) => (
-                  <TableRow key={k} data-stack-row={k}>
-                    <TableCell className="align-top whitespace-normal text-muted-foreground">{t(`landing.stack.${k}`)}</TableCell>
-                    <TableCell className="py-2.5 leading-relaxed whitespace-normal">{t(`landing.stack.${k}Value`)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-        <div className="landing-reveal min-w-0 xl:col-span-2">
-          <h3 className="mb-4 text-base font-semibold tracking-tight">{t('landing.road.title')}</h3>
-          <ol className="flex flex-col" data-landing-roadmap="">
-            {ROADMAP.map((r, i) => (
-              <li key={r.id} className="grid grid-cols-[auto_1fr] gap-x-4" data-road={r.id}>
-                <div className="flex flex-col items-center pt-1.5" aria-hidden="true">
-                  <span className={cn('size-2.5 rounded-full',
-                    r.status === 'available' ? 'bg-brand' : r.status === 'dev' ? 'ring-1 ring-foreground ring-inset' : 'bg-muted-foreground')} />
-                  {i < ROADMAP.length - 1 ? <span className="mt-1.5 w-px flex-1 bg-border" /> : null}
-                </div>
-                <div className={cn('flex min-w-0 flex-col gap-1.5', i < ROADMAP.length - 1 && 'pb-7')}>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                    <span className="font-mono text-xs tracking-wider text-muted-foreground">{r.version}</span>
-                    <span className="text-base font-semibold tracking-tight">{t(`landing.road.${r.id}.name`)}</span>
-                    <StatusBadge status={r.status} />
-                  </div>
-                  <p className="text-sm leading-relaxed text-pretty text-muted-foreground">{t(`landing.road.${r.id}.body`)}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
       </div>
     </Section>
   )
