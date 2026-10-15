@@ -231,7 +231,7 @@ The vehicle catalogue includes the P600 digital twin in its MID-360 configuratio
 | V0.3 | D3 Event Lab: GLB worlds, event tapes, Gazebo Sim lockstep, mesh cameras and LiDAR, FAST-LIVO2, benchmark | In development |
 | P3 and V1.0 | 3DGS appearance layer, PX4 SITL, real ANet with a self-hosted ANetHub | Planned |
 
-See [Roadmap](https://docs.agentnetwork.org.cn/drone4d/en/latest/project/roadmap.html) and the
+Progress is tracked in [GitHub milestones](https://github.com/ANetResearch/ANet-Drone4D/milestones) and the pinned [roadmap issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1). See [Roadmap](https://docs.agentnetwork.org.cn/drone4d/en/latest/project/roadmap.html) and the
 [D3 design](docs/05-D3-设计增补与决策记录.md).
 
 </details>

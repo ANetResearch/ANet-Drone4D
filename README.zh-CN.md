@@ -231,7 +231,7 @@ with sb.create("synthcity", "t5_area_guard") as s:   # 公开站满载时自动�
 | V0.3 | D3 事件实验室：GLB 世界、事件磁带、Gazebo Sim 锁步、网格相机与 LiDAR、FAST-LIVO2、基准评测 | 开发中 |
 | P3 与 V1.0 | 3DGS 外观层、PX4 SITL、配备自托管 ANetHub 的真实 ANet | 规划中 |
 
-参见[版本路线](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/project/roadmap.html)与[D3 设计](docs/05-D3-设计增补与决策记录.md)。
+进度以 [GitHub Milestone](https://github.com/ANetResearch/ANet-Drone4D/milestones) 与置顶的[路线图 Issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1) 为准。参见[版本路线](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/project/roadmap.html)与[D3 设计](docs/05-D3-设计增补与决策记录.md)。
 
 </details>
 
