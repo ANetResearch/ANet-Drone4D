@@ -11,7 +11,7 @@ function poses(pts: number[][]): DronePoseSoA {
   const n = pts.length
   const p: DronePoseSoA = { n, agentNo: new Uint16Array(n), pos: new Float32Array(3 * n), quat: new Float32Array(4 * n), vel: new Float32Array(3 * n),
     state: new Uint8Array(n), flags: new Uint8Array(n), battery: new Uint8Array(n), hold: new Uint8Array(n), clamped: new Uint8Array(n),
-    sampleT: new Float64Array(n), ageS: new Float32Array(n) }
+    sampleT: new Float64Array(n), ageS: new Float32Array(n), lagS: new Float32Array(n) }
   pts.forEach((q, i) => {
     p.agentNo[i] = i + 1
     p.pos.set(q, 3 * i)

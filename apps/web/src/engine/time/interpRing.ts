@@ -6,8 +6,10 @@
 // out-of-order samples between the oldest and the newest are inserted in time order (at most K - 1 moves); samples older
 // than the oldest are dropped. Sampling at t: bracket a.t <= t < b.t gives the cubic Hermite position (sample velocities
 // as tangents), linear velocity and slerp attitude; beyond the newest sample the position extrapolates with the velocity
-// and the attitude integrates ω (Full64) for at most E_max = rate × 3 / hz_eff (simulation ms), after which the vehicle
-// is HOLD (frozen at E_max); before the oldest sample it clamps to it. ingest and sampling allocate nothing.
+// and the attitude integrates ω (Full64) for at most E_max = rate × 3 / hz_eff (simulation ms), frozen there; the vehicle
+// is HOLD only beyond max(E_max, 3 of its own sample intervals), so a vehicle published at a lower rate than the swarm
+// (parked, idle) or a recording with a slower cadence is not taken for a link delay (issue #6); before the oldest sample
+// it clamps to it. ingest and sampling allocate nothing.
 import { DS64 } from '@awr/contracts/layouts'
 import type { TelemetryFrame } from '@/net/rt/types'
 import { hermiteRing, integrateOmegaInto, slerpInto } from './hermite'
@@ -32,13 +34,15 @@ export interface DronePoseSoA {
   sampleT: Float64Array
   /** wall-clock seconds since the sample the pose rests on ("signal delay") */
   ageS: Float32Array
+  /** wall-clock seconds past the vehicle's next expected sample (newest + its own interval); 0 while interpolating */
+  lagS: Float32Array
 }
 
 export function newDronePoseSoA(cap: number): DronePoseSoA {
   return {
     n: 0, agentNo: new Uint16Array(cap), pos: new Float32Array(3 * cap), quat: new Float32Array(4 * cap), vel: new Float32Array(3 * cap),
     state: new Uint8Array(cap), flags: new Uint8Array(cap), battery: new Uint8Array(cap), hold: new Uint8Array(cap), clamped: new Uint8Array(cap),
-    sampleT: new Float64Array(cap), ageS: new Float32Array(cap),
+    sampleT: new Float64Array(cap), ageS: new Float32Array(cap), lagS: new Float32Array(cap),
   }
 }
 
@@ -356,6 +360,18 @@ export class InterpRing implements Interp {
     return true
   }
 
+  /** the slot's own sample interval (simulation ms): the shorter of its two newest gaps, so one late sample after a
+   *  stall does not widen it; 0 with a single sample, at most P.cadenceMaxMs */
+  private cadenceMs(base: number, h: number, cnt: number): number {
+    if (cnt < 2) return 0
+    const K = this.K
+    const t0 = this.t[base + h]
+    const t1 = this.t[base + ((h - 1 + K) % K)]
+    let g = t0 - t1
+    if (cnt >= 3) g = Math.min(g, t1 - this.t[base + ((h - 2 + K) % K)])
+    return Math.min(Math.max(g, 0), P.cadenceMaxMs)
+  }
+
   /** returns 1 when extrapolating (t beyond the newest sample), -1 when clamped, 0 when interpolated */
   private sampleSlot(s: number, t: number, out: DronePoseSoA, o: number): number {
     const K = this.K
@@ -368,6 +384,7 @@ export class InterpRing implements Interp {
     out.battery[o] = this.battery[s]
     out.hold[o] = 0
     out.clamped[o] = 0
+    out.lagS[o] = 0
     const rate = Math.max(this.rate, 1e-3)
     const ni = base + h
     const tn = this.t[ni]
@@ -385,9 +402,11 @@ export class InterpRing implements Interp {
       out.vel[o3 + 2] = this.v[n3 + 2]
       if (f > 0 && this.w[n3] === this.w[n3]) integrateOmegaInto(this.q, 4 * ni, this.w, n3, f, out.quat, 4 * o)
       else for (let j = 0; j < 4; j++) out.quat[4 * o + j] = this.q[4 * ni + j]
-      out.hold[o] = age > this.eMaxMs ? 1 : 0
+      const cad = this.cadenceMs(base, h, cnt)
+      out.hold[o] = age > Math.max(this.eMaxMs, P.extrapIntervals * cad) ? 1 : 0
       out.sampleT[o] = tn
       out.ageS[o] = age / 1000 / rate
+      out.lagS[o] = Math.max(0, age - cad) / 1000 / rate
       return age > 0 ? 1 : 0
     }
     // walk back to the bracket a.t <= t < b.t

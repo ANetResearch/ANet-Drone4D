@@ -40,7 +40,7 @@ describe('drone data path (M06-AC-024, AC-030, AC-031)', () => {
       layer.update({ ...frameCtx, nowMs: tS * 1000, tRenderS: tS, tFocusS: tS, camera: cam, cssW: 1280, cssH: 720, dbW: 640, dbH: 360, dpr: 0.5 })
       const probe = { n: 0, agentNo: new Uint16Array(256), pos: new Float32Array(768), quat: new Float32Array(1024), vel: new Float32Array(768),
         state: new Uint8Array(256), flags: new Uint8Array(256), battery: new Uint8Array(256), hold: new Uint8Array(256), clamped: new Uint8Array(256),
-        sampleT: new Float64Array(256), ageS: new Float32Array(256) }
+        sampleT: new Float64Array(256), ageS: new Float32Array(256), lagS: new Float32Array(256) }
       interp.sampleSwarm(tS, probe)
       expect(layer.poses.n).toBe(200)
       const tex = layer.markers.data

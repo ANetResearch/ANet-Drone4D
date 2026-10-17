@@ -33,6 +33,8 @@ export const TIME_PARAMS = {
   focusWorkerGraceMs: 1500,
   /** extrapolation limit: 3 sample intervals (ADR-046) */
   extrapIntervals: 3,
+  /** upper bound of a vehicle's own sample interval used for HOLD and the signal delay (simulation ms, issue #6) */
+  cadenceMaxMs: 2000,
   /** default recording block interval (x1 recording, 25 Hz), used as the extrapolation floor after a frozen seek */
   blockIntervalMs: 40,
   /** interpolation ring depth per vehicle and capacity step (M12 §6.4) */

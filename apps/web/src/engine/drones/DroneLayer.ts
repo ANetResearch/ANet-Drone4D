@@ -4,7 +4,7 @@
 //      vehicles missing from a non-empty roster are dropped (removal takes effect on the next frame, FR-040);
 //   2. per-agent marks (selected, primary, hover, red entity, FPV-hidden), alert level (critical: ALERT flag, ELAND,
 //      FAILSAFE, CRASHED; warning: CORRECTING, HOLD, RTL, LANDING; or levels injected by M09/M15) and staleness (HOLD
-//      or data older than input.staleAfterMs);
+//      or the next expected sample of the vehicle overdue by more than input.staleAfterMs);
 //   3. screen radii every frame, buckets at 10 Hz (marker / low-poly / hero, caps per tier, PerfGovernor step 4);
 //   4. marker texture, low-poly instances per shape (D2: hex, quad, fixed wing, VTOL; instance scale per model,
 //      engine/drones/vehicleShapes.ts), hero instances and the red-entity hull;
@@ -279,7 +279,7 @@ export class DroneLayer {
       if (a === this.hover) m |= MARK.HOVER
       if (a === this.redOwner) m |= MARK.RED
       if (a === this.focusAgent && this.focusMode === 'fpv') m |= MARK.HIDDEN
-      if (!frozen && (p.hold[i] || p.ageS[i] > staleS)) m |= MARK.STALE
+      if (!frozen && (p.hold[i] || p.lagS[i] > staleS)) m |= MARK.STALE
       if (this.focus.has(a)) m |= MARK.FOCUSSET
       mark[a] = m
       this.alert[a] = Math.max(alertLevelOf(p.state[i], p.flags[i]), this.extAlert[a])
@@ -343,6 +343,7 @@ export class DroneLayer {
     dst.hold[di] = src.hold[si]
     dst.sampleT[di] = src.sampleT[si]
     dst.ageS[di] = src.ageS[si]
+    dst.lagS[di] = src.lagS[si]
   }
 
   /** vehicles missing from a non-empty roster are removed in place (trail rows and buckets recycled) */

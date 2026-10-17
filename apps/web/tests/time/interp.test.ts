@@ -124,6 +124,41 @@ describe('extrapolation and HOLD (M12-AC-011)', () => {
     expect(out.pos[0]).toBeCloseTo(4, 5)
   })
 
+  it('HOLD and the signal delay follow the vehicle\'s own interval: a low-rate parked vehicle is not stale (issue #6)', () => {
+    const ring = new InterpRing()
+    ring.eMaxMs = 120 // swarm at 25 Hz
+    const fast = ring.slotFor(1)
+    const parked = ring.slotFor(2)
+    for (let k = 0; k <= 50; k++) ring.push(fast, k * 40, 0, 0, 10, 0, 0, 0, 0, 0, 0, 1, 0)
+    for (let k = 0; k <= 4; k++) ring.push(parked, k * 500, 5, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0)
+    const out = newDronePoseSoA(4)
+    ring.sampleSwarm(2.45, out) // parked: 450 ms after its newest sample, inside its 500 ms interval
+    expect(out.hold[1]).toBe(0)
+    expect(out.lagS[1]).toBe(0)
+    expect(out.ageS[1]).toBeCloseTo(0.45, 5)
+    ring.sampleSwarm(3.4, out) // both silent: the 25 Hz vehicle holds after 3 x 40 ms, the parked one after 3 x 500 ms
+    expect(out.hold[0]).toBe(1)
+    expect(out.hold[1]).toBe(0)
+    expect(out.lagS[1]).toBeCloseTo(0.9, 5)
+    ring.sampleSwarm(3.6, out)
+    expect(out.hold[1]).toBe(1)
+    // one late sample after a stall does not widen the interval
+    ring.push(parked, 6000, 5, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0)
+    ring.sampleSwarm(7.6, out)
+    expect(out.hold[1]).toBe(1)
+  })
+
+  it('interpolating between sparse recorded samples is no signal delay (replay, issue #6)', () => {
+    const ring = new InterpRing()
+    const s = ring.slotFor(1)
+    for (let k = 0; k <= 5; k++) ring.push(s, k * 1500, k * 15, 0, 50, 10, 0, 0, 0, 0, 0, 1, 0)
+    const out = newDronePoseSoA(2)
+    ring.sampleSwarm(4.4, out)
+    expect(out.ageS[0]).toBeCloseTo(1.4, 5)
+    expect(out.lagS[0]).toBe(0)
+    expect(out.hold[0]).toBe(0)
+  })
+
   it('clamps before the oldest sample', () => {
     const ring = new InterpRing()
     const s = ring.slotFor(1)
