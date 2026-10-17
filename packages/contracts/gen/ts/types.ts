@@ -1924,7 +1924,7 @@ export interface Capacity {
  * via the `definition` "Caps".
  */
 export interface Caps {
-  backend: 'mock' | 'replay' | 'px4_sih' | 'prometheus'
+  backend: 'mock' | 'replay' | 'px4_sih' | 'prometheus' | 'gz_sim' | 'px4_gz'
   version: 1
   kinds: ('uav' | 'ugv' | 'robot' | 'vehicle' | 'sensor' | 'human')[]
   max_vehicles: number
@@ -1963,6 +1963,18 @@ export interface Caps {
   }
   trust_ceiling: number
   truth: boolean
+  /**
+   * D3 physics step rate (gz_sim, px4_gz)
+   */
+  physics_hz?: number
+  /**
+   * D3 PoseHistory truth channel rate
+   */
+  pose_history_hz?: number
+  /**
+   * D3: runs on this backend may produce ranked results (only gz_sim lockstep, AWR-05 ADR-137)
+   */
+  ranked?: boolean
 }
 /**
  * awr.scenario_catalog.v1 (scenarios/catalog.json). AWR-16 §12.1; M16 §7.3.1. V-SC-13 checks references statically.
@@ -2043,7 +2055,10 @@ export interface Target {
   }
   critical_dim_m?: number | null
   motion?: {
-    mode: 'static' | 'path' | 'random_walk'
+    /**
+     * timeline (D3, AWR-05 §12.3 #2-#4): position, velocity and enabled come from the registered motion source (M23 tape)
+     */
+    mode: 'static' | 'path' | 'random_walk' | 'timeline'
     speed_mps?: number
     speed_max_mps?: number
     accel_mps2?: number
@@ -2108,6 +2123,10 @@ export interface Target {
   level_req?: 'D' | 'R' | 'I'
   n_req_px?: number | null
   reaction?: Reaction
+  /**
+   * D3: interactive (default) applies reaction overrides; exogenous keeps the criteria and state machine but never overrides motion and never broadcasts (AWR-05 ADR-135)
+   */
+  reaction_policy?: 'interactive' | 'exogenous'
   calm_s?: number
   alert_radius_m?: number
   /**
@@ -7311,7 +7330,7 @@ export interface RngStreams {
     name: string
     owner: string
     purpose: string
-    d1: 'core' | 'ext' | 'stub' | 'no' | 'V0.2-demo'
+    d1: 'core' | 'ext' | 'stub' | 'no' | 'V0.2-demo' | 'V0.3'
   }[]
   reserved?: {
     from?: number

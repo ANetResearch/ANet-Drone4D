@@ -11,7 +11,9 @@
         "mock",
         "replay",
         "px4_sih",
-        "prometheus"
+        "prometheus",
+        "gz_sim",
+        "px4_gz"
       ]
     },
     "version": {
@@ -158,6 +160,22 @@
     },
     "truth": {
       "type": "boolean"
+    },
+    "physics_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "unit": "Hz",
+      "description": "D3 physics step rate (gz_sim, px4_gz)"
+    },
+    "pose_history_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "unit": "Hz",
+      "description": "D3 PoseHistory truth channel rate"
+    },
+    "ranked": {
+      "type": "boolean",
+      "description": "D3: runs on this backend may produce ranked results (only gz_sim lockstep, AWR-05 ADR-137)"
     }
   },
   "required": [

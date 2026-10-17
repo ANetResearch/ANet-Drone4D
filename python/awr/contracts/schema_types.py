@@ -1648,7 +1648,7 @@ class CapacityViewers(TypedDict):
 
 # rt/caps.schema.json# Backend capability declaration (rt/caps/*.json)
 class Caps(TypedDict):
-    backend: Literal["mock", "replay", "px4_sih", "prometheus"]
+    backend: Literal["mock", "replay", "px4_sih", "prometheus", "gz_sim", "px4_gz"]
     version: Literal[1]
     kinds: list[Literal["uav", "ugv", "robot", "vehicle", "sensor", "human"]]
     max_vehicles: int
@@ -1659,6 +1659,9 @@ class Caps(TypedDict):
     ack: CapsAck
     trust_ceiling: int
     truth: bool
+    physics_hz: NotRequired[float]
+    pose_history_hz: NotRequired[float]
+    ranked: NotRequired[bool]
 
 
 # rt/caps.schema.json#/properties/ack
@@ -5543,7 +5546,7 @@ class RngStreamsStreams(TypedDict):
     name: str
     owner: str
     purpose: str
-    d1: Literal["core", "ext", "stub", "no", "V0.2-demo"]
+    d1: Literal["core", "ext", "stub", "no", "V0.2-demo", "V0.3"]
 
 
 # bus/roster.schema.json# Roster reply (ctl/<producer>/roster)
@@ -6579,7 +6582,7 @@ class TargetList(TypedDict):
 
 # target/target.schema.json#/properties/motion
 class TargetMotion(TypedDict):
-    mode: Literal["static", "path", "random_walk"]
+    mode: Literal["static", "path", "random_walk", "timeline"]
     speed_mps: NotRequired[float]
     speed_max_mps: NotRequired[float]
     accel_mps2: NotRequired[float]
@@ -9057,6 +9060,7 @@ Target = TypedDict("Target", {
     "level_req": NotRequired[Literal["D", "R", "I"]],
     "n_req_px": NotRequired[float | None],
     "reaction": NotRequired[Reaction],
+    "reaction_policy": NotRequired[Literal["interactive", "exogenous"]],
     "calm_s": NotRequired[float],
     "alert_radius_m": NotRequired[float],
     "sensitivity": NotRequired[list[Sensitivity]],

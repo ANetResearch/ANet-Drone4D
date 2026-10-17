@@ -98,8 +98,10 @@
           "enum": [
             "static",
             "path",
-            "random_walk"
-          ]
+            "random_walk",
+            "timeline"
+          ],
+          "description": "timeline (D3, AWR-05 §12.3 #2-#4): position, velocity and enabled come from the registered motion source (M23 tape)"
         },
         "speed_mps": {
           "type": "number",
@@ -364,6 +366,13 @@
     },
     "reaction": {
       "$ref": "reaction.schema.json"
+    },
+    "reaction_policy": {
+      "enum": [
+        "interactive",
+        "exogenous"
+      ],
+      "description": "D3: interactive (default) applies reaction overrides; exogenous keeps the criteria and state machine but never overrides motion and never broadcasts (AWR-05 ADR-135)"
     },
     "calm_s": {
       "type": "number",

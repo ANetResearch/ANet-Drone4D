@@ -27,6 +27,10 @@ class Stream(IntEnum):
     RECON_SELFCHECK = 16
     TARGETS_MOTION = 17
     PERCEPTION = 18
+    EVENT_RUNTIME = 19
+    COMM_LINK = 20
+    OBS_FAST = 21
+    SENSOR_GEN = 22
 
 
 def rng(world_seed: int, stream: int, *keys: int) -> np.random.Generator:

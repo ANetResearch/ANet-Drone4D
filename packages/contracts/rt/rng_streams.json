@@ -120,11 +120,39 @@
       "owner": "M19",
       "purpose": "measurement noise, Swerling draws and bearing noise: keys (seed, 18, uav_no, tick, 64*sensor_no + target_no)",
       "d1": "V0.2-demo"
+    },
+    {
+      "stream_id": 19,
+      "name": "event_runtime",
+      "owner": "M23",
+      "purpose": "D3 background crowd goals, speeds, dwell and appearance: keys (seed, 19, actor_no, goal_n, ch) (AWR-05 §8.5, ADR-136)",
+      "d1": "V0.3"
+    },
+    {
+      "stream_id": 20,
+      "name": "comm_link",
+      "owner": "M26",
+      "purpose": "D3 link loss and latency jitter: keys (seed, 20, src_no, dst_no, msg_seq, ch)",
+      "d1": "V0.3"
+    },
+    {
+      "stream_id": 21,
+      "name": "obs_fast",
+      "owner": "M26",
+      "purpose": "D3 L1 detection sampling, measurement and appearance noise: keys (seed, 21, uav_no, actor_no, frame_seq, ch)",
+      "d1": "V0.3"
+    },
+    {
+      "stream_id": 22,
+      "name": "sensor_gen",
+      "owner": "M25",
+      "purpose": "D3 camera, thermal, LiDAR, IMU and GNSS noise, navigation solution and gimbal encoder readings: keys (run_seed, 22, uav_no, index, ch), index = frame or sample index; channel table M25 §6.17.2",
+      "d1": "V0.3"
     }
   ],
   "reserved": {
-    "from": 19,
+    "from": 23,
     "to": 63,
-    "note": "7 is unassigned; 11-16 M01 reconstruction (ext); 17 targets_motion (M18), 18 perception (M19); 19-63 reserved"
+    "note": "7 is unassigned; 11-16 M01 reconstruction (ext); 17 targets_motion (M18), 18 perception (M19); 19-22 D3 (M23, M26, M25; AWR-05 §8.5); 23-63 reserved"
   }
 }
