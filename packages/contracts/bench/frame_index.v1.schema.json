@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/frame_index.v1.schema.json",
+  "title": "Frame index (drone4d.bench.frame_index.v1)",
+  "description": "AWR-17 §18.8.1 (BN-49) and M27 §7.5.3 (contracts 1.3.0, d1 V0.3). JSON response built from the run's frames.idx; items ascending by seq, at most 1000 per page (seq_from, seq_to inclusive). t_ns is the frame timestamp from the event zero (camera: middle-row exposure midpoint; LiDAR: frame start). Depth channels use sensor_id <cam>.depth. x-layout describes the on-disk frames.idx (little-endian, sorted by (uav_no, sensor_no, seq), trailer sha256 over header and records).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.bench.frame_index.v1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "uav_id": {
+      "type": "string"
+    },
+    "sensor_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_]+(\\.depth)?$"
+    },
+    "channel": {
+      "type": "string"
+    },
+    "encoding": {
+      "enum": [
+        "foxglove.CompressedImage",
+        "foxglove.RawImage",
+        "awr.sensor.lidar_frame.v2"
+      ]
+    },
+    "codec": {
+      "enum": [
+        "jpeg",
+        "raw",
+        "32FC1",
+        "lidar_v2"
+      ]
+    },
+    "agent_delivered": {
+      "type": "boolean"
+    },
+    "period_ns": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "t_ns": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "seq",
+          "t_ns",
+          "bytes",
+          "sha256"
+        ]
+      },
+      "maxItems": 1000
+    },
+    "next_seq": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    }
+  },
+  "required": [
+    "schema",
+    "run_id",
+    "uav_id",
+    "sensor_id",
+    "channel",
+    "encoding",
+    "codec",
+    "agent_delivered",
+    "period_ns",
+    "items",
+    "next_seq"
+  ],
+  "x-layout": {
+    "file": "frames.idx",
+    "magic": "D3FIDX01",
+    "header": [
+      [
+        "magic",
+        "u8[8]"
+      ],
+      [
+        "header_len",
+        "u32"
+      ],
+      [
+        "header_json",
+        "utf8[header_len]"
+      ]
+    ],
+    "header_json": [
+      "raw_mcap_sha256",
+      "uavs",
+      "sensors",
+      "n_records"
+    ],
+    "record": {
+      "bytes": 32,
+      "fields": [
+        [
+          "uav_no",
+          "u16"
+        ],
+        [
+          "sensor_no",
+          "u16"
+        ],
+        [
+          "seq",
+          "u32"
+        ],
+        [
+          "t_ns",
+          "i64"
+        ],
+        [
+          "chunk_offset",
+          "u64"
+        ],
+        [
+          "msg_offset",
+          "u32"
+        ],
+        [
+          "size",
+          "u32"
+        ]
+      ]
+    },
+    "order": [
+      "uav_no",
+      "sensor_no",
+      "seq"
+    ],
+    "trailer": [
+      [
+        "sha256",
+        "u8[32]"
+      ]
+    ]
+  }
+}

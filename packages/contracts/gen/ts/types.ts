@@ -4993,6 +4993,33 @@ export interface Flight60 {
   }
 }
 /**
+ * Frame index (drone4d.bench.frame_index.v1). AWR-17 §18.8.1 (BN-49) and M27 §7.5.3 (contracts 1.3.0, d1 V0.3). JSON response built from the run's frames.idx; items ascending by seq, at most 1000 per page (seq_from, seq_to inclusive). t_ns is the frame timestamp from the event zero (camera: middle-row exposure midpoint; LiDAR: frame start). Depth channels use sensor_id <cam>.depth. x-layout describes the on-disk frames.idx (little-endian, sorted by (uav_no, sensor_no, seq), trailer sha256 over header and records).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "FrameIndexV1".
+ */
+export interface FrameIndexV1 {
+  schema: 'drone4d.bench.frame_index.v1'
+  run_id: string
+  uav_id: string
+  sensor_id: string
+  channel: string
+  encoding: 'foxglove.CompressedImage' | 'foxglove.RawImage' | 'awr.sensor.lidar_frame.v2'
+  codec: 'jpeg' | 'raw' | '32FC1' | 'lidar_v2'
+  agent_delivered: boolean
+  period_ns: number
+  /**
+   * @maxItems 1000
+   */
+  items: {
+    seq: number
+    t_ns: number
+    bytes: number
+    sha256: string
+  }[]
+  next_seq: number | null
+}
+/**
  * Camera frame record (drone4d.frame.v1). AWR-05 §8.1, M25 §7.2.1 (contracts 1.3.0, d1 V0.3). Three partitions: agent_view (the source set that M26 projects into bench/obs.v1 CameraObs), ground_truth (evaluation store and truth files only, ADR-161) and internal (provenance). Units: times in ns, K in px with pixel centres at 0.5, distances in m, angles in deg. Thermal fields (temp_ck, dT_app_k) are added in P0b.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -5234,6 +5261,23 @@ export interface FrameV1 {
      */
     derived: boolean
   }
+}
+/**
+ * Frame range container header (d3frames.v1). AWR-17 §18.8.2 (BN-51; contracts 1.3.0, d1 V0.3). Content-Type application/x-d3frames. This schema validates the header JSON; x-layout gives the container. Payloads are the raw.mcap message bytes (the bytes the agent received, ADR-163). Missing seqs take no record. Limits: seq_to - seq_from + 1 <= 300 * stride and response <= 64 MiB, otherwise 422 698.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "FramesV1".
+ */
+export interface FramesV1 {
+  run_id: string
+  uav_id: string
+  sensor_id: string
+  encoding: string
+  codec: string
+  n: number
+  seq_from: number
+  seq_to: number
+  stride: number
 }
 /**
  * Gcs link heartbeat (ctl/sim-core/gcs). AWR-17 §9.4, §9.6: 5 Hz wall clock.
@@ -12628,6 +12672,31 @@ export interface Topics {
    * sandbox browser defaults on top of default_subscriptions (AWR-17 §17.7.7)
    */
   default_subscriptions_sandbox?: string[]
+}
+/**
+ * Fleet tracks header (drone4d.bench.tracks.v1). AWR-17 §18.8.3 (BN-48 and public tracks_obs.bin; contracts 1.3.0, d1 V0.3). Content-Type application/x-d3-tracks. layer 0 (obs): noisy navigation solution and noisy gimbal reading of the primary camera, any role; layer 1 (truth): /uav/{id}/state truth poses, evaluators only. Default hz 10. flags: bit0 on ground, bit1 link lost. This schema validates the header JSON; x-layout gives the binary.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TracksV1".
+ */
+export interface TracksV1 {
+  run_id: string
+  hz: number
+  t0_ns: number
+  n_samples: number
+  /**
+   * @minItems 1
+   */
+  uavs: [
+    {
+      uav_id: string
+      primary_camera: string
+    },
+    ...{
+      uav_id: string
+      primary_camera: string
+    }[]
+  ]
 }
 /**
  * Semantic event truth event_truth.json (drone4d.event_truth.v1). M23 §6.10.1 (contracts 1.3.0, d1 V0.3). Truth layer: evaluators and admins only. truth_sha256 = JCS hash without perf.

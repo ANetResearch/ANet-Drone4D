@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/tracks.v1.schema.json",
+  "title": "Fleet tracks header (drone4d.bench.tracks.v1)",
+  "description": "AWR-17 §18.8.3 (BN-48 and public tracks_obs.bin; contracts 1.3.0, d1 V0.3). Content-Type application/x-d3-tracks. layer 0 (obs): noisy navigation solution and noisy gimbal reading of the primary camera, any role; layer 1 (truth): /uav/{id}/state truth poses, evaluators only. Default hz 10. flags: bit0 on ground, bit1 link lost. This schema validates the header JSON; x-layout gives the binary.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "hz": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10
+    },
+    "t0_ns": {
+      "type": "integer"
+    },
+    "n_samples": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "uavs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "uav_id": {
+            "type": "string"
+          },
+          "primary_camera": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "uav_id",
+          "primary_camera"
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "run_id",
+    "hz",
+    "t0_ns",
+    "n_samples",
+    "uavs"
+  ],
+  "x-layout": {
+    "content_type": "application/x-d3-tracks",
+    "magic": "D3TK",
+    "header": [
+      [
+        "magic",
+        "u8[4]"
+      ],
+      [
+        "version",
+        "u16"
+      ],
+      [
+        "layer",
+        "u16"
+      ],
+      [
+        "header_len",
+        "u32"
+      ],
+      [
+        "header_json",
+        "utf8[header_len]"
+      ]
+    ],
+    "version": 1,
+    "layers": {
+      "0": "obs",
+      "1": "truth"
+    },
+    "record": {
+      "bytes": 56,
+      "per": "uav, n_samples records in uavs order",
+      "fields": [
+        [
+          "e_m",
+          "f64"
+        ],
+        [
+          "n_m",
+          "f64"
+        ],
+        [
+          "u_m",
+          "f64"
+        ],
+        [
+          "qx",
+          "f32"
+        ],
+        [
+          "qy",
+          "f32"
+        ],
+        [
+          "qz",
+          "f32"
+        ],
+        [
+          "qw",
+          "f32"
+        ],
+        [
+          "gimbal_pitch_deg",
+          "f32"
+        ],
+        [
+          "gimbal_yaw_deg",
+          "f32"
+        ],
+        [
+          "zoom_x",
+          "f32"
+        ],
+        [
+          "link_quality",
+          "u8"
+        ],
+        [
+          "flags",
+          "u8"
+        ],
+        [
+          "reserved",
+          "u16"
+        ]
+      ]
+    },
+    "trailer": [
+      [
+        "sha256",
+        "u8[32]"
+      ]
+    ]
+  }
+}

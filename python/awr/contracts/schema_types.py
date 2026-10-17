@@ -279,6 +279,8 @@ __all__ = [
     "Flight60Peak",
     "Flight60Segments",
     "Flight60Stats",
+    "FrameIndexV1",
+    "FrameIndexV1_",
     "FrameV1",
     "FrameV1AgentView",
     "FrameV1AgentViewDepth",
@@ -296,6 +298,7 @@ __all__ = [
     "FrameV1GroundTruthTWorldSensor",
     "FrameV1GroundTruthTiming",
     "FrameV1Internal",
+    "FramesV1",
     "Gcs",
     "Geo",
     "GeoRep",
@@ -948,6 +951,8 @@ __all__ = [
     "TopicsDeprecated",
     "TopicsTopics",
     "TopicsTopicsDefaultRateOneOf0",
+    "TracksV1",
+    "TracksV1Uavs",
     "TruthV1",
     "TruthV1AnnotationChecks",
     "TruthV1Events",
@@ -3648,6 +3653,29 @@ class Flight60Stats(TypedDict):
     alt_max_m: float
 
 
+# bench/frame_index.v1.schema.json# Frame index (drone4d.bench.frame_index.v1)
+class FrameIndexV1(TypedDict):
+    schema: Literal["drone4d.bench.frame_index.v1"]
+    run_id: str
+    uav_id: str
+    sensor_id: str
+    channel: str
+    encoding: Literal["foxglove.CompressedImage", "foxglove.RawImage", "awr.sensor.lidar_frame.v2"]
+    codec: Literal["jpeg", "raw", "32FC1", "lidar_v2"]
+    agent_delivered: bool
+    period_ns: int
+    items: list[FrameIndexV1_]
+    next_seq: int | None
+
+
+# bench/frame_index.v1.schema.json#/properties/items/items
+class FrameIndexV1_(TypedDict):
+    seq: int
+    t_ns: int
+    bytes: int
+    sha256: str
+
+
 # sensor/v2/frame.v1.schema.json# Camera frame record (drone4d.frame.v1)
 class FrameV1(TypedDict):
     schema: Literal["drone4d.frame.v1"]
@@ -3796,6 +3824,19 @@ class FrameV1Internal(TypedDict):
     driver: str
     run_seed: NotRequired[int]
     derived: bool
+
+
+# bench/frames.v1.schema.json# Frame range container header (d3frames.v1)
+class FramesV1(TypedDict):
+    run_id: str
+    uav_id: str
+    sensor_id: str
+    encoding: str
+    codec: str
+    n: int
+    seq_from: int
+    seq_to: int
+    stride: int
 
 
 # bus/gcs.schema.json# Gcs link heartbeat (ctl/sim-core/gcs)
@@ -9710,6 +9751,21 @@ class TopicsTopicsDefaultRateOneOf0(TypedDict):
     S: int
     B: int
     A: int
+
+
+# bench/tracks.v1.schema.json# Fleet tracks header (drone4d.bench.tracks.v1)
+class TracksV1(TypedDict):
+    run_id: str
+    hz: int
+    t0_ns: int
+    n_samples: int
+    uavs: list[TracksV1Uavs]
+
+
+# bench/tracks.v1.schema.json#/properties/uavs/items
+class TracksV1Uavs(TypedDict):
+    uav_id: str
+    primary_camera: str
 
 
 # event/truth.v1.schema.json# Semantic event truth event_truth.json (drone4d.event_truth.v1)
