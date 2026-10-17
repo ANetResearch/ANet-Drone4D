@@ -822,6 +822,18 @@ class SimCore:
                    "model_ref": e.profile_id, "limits_profile": lp}
 
     @staticmethod
+    def _tasking_counts() -> dict:
+        """M20 的机巢数与活动任务数（PLANNING、READY、RUNNING、PAUSED，与会话上限同一口径）；未装配 M20 时省略（issue #7）。"""
+        fn = getattr(sys.modules.get("awr.sim.tasking.plugin"), "runtime", None)
+        try:
+            rt = fn(create=False) if callable(fn) else None
+        except Exception:
+            rt = None
+        if rt is None:
+            return {}
+        return {"n_nest": len(rt.nests), "n_task_active": sum(1 for T in rt.tasks.values() if T.active)}
+
+    @staticmethod
     def _sensor_rt() -> Any:
         """M13 的 SensorRuntime（按模块名取 `awr.sim.sensors.plugin.runtime()`，组合根不静态导入插件）；未装配为 None。"""
         fn = getattr(sys.modules.get("awr.sim.sensors.plugin"), "runtime", None)
@@ -2336,6 +2348,7 @@ class SimCore:
         return {"clock_profile": self.profile.name, **pw.fields(), "rate_set": float(self.clock.rate),
                 "n_uav": len(self.roster.by_slot),
                 "n_target": len(self.entities["target"]) if self.entities is not None else 0,
+                **self._tasking_counts(),
                 "ray_rate_hz": metric("ray_rate_hz"), "rays_dropped": metric("rays_dropped"), "rss_anon_mb": rss_anon_mb(),
                 "clock_lock": "manual" if self.clock.manual_locked else None,
                 "budget_total_core": round(self.fleet.pipeline.budget_total(), 4)}

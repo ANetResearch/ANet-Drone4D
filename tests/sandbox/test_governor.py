@@ -61,3 +61,16 @@ def test_regrant_upward_when_first_measured_cost_arrives() -> None:
     clk.adv(11.0)
     b.on_perf(rec2.sid, {"cost_core_per_rate": 0.01, "rtf_win": 1.0})
     assert rec2.granted_rate == 1.0                       # 实测回调降档后不回升
+
+
+def test_perf_counts_fill_session_usage() -> None:
+    """issue #7：sim-core 的 perf 带机巢数与活动任务数，会话用量（GET /sessions/{sid} 与 sandbox/session）随之更新。"""
+    from brokerkit import create, make_broker, ready
+
+    b, _fx, _clk = make_broker(n_max=2)
+    sid = create(b, 1)["result"]["session"]["sid"]
+    ready(b, sid)
+    b.on_perf(sid, {"n_uav": 2, "n_target": 1, "n_nest": 1, "n_task_active": 2})
+    rec = b.sessions[sid]
+    w = b.wire(rec)["usage"]
+    assert (w["vehicles"], w["targets"], w["nests"], w["tasks_active"]) == (2, 1, 1, 2)

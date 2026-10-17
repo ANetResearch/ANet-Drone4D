@@ -1061,7 +1061,7 @@ class Broker(BrokerParkMixin):
         if isinstance(a, (int, float)):
             rec.anon_mb = float(a)
         rec.manual = perf.get("clock_lock") == "manual"
-        for k, key in (("n_uav", "vehicles"), ("n_target", "targets")):
+        for k, key in (("n_uav", "vehicles"), ("n_target", "targets"), ("n_nest", "nests"), ("n_task_active", "tasks_active")):
             if isinstance(perf.get(k), int):
                 rec.usage[key] = int(perf[k])
 
