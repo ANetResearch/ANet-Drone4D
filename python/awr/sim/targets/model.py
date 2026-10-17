@@ -60,7 +60,10 @@ TOP_FIELDS = frozenset((
     "criterion_mode", "alertness", "hearing_th_dba", "acoustic_adv_db", "visual_theta0_arcmin", "level_req", "n_req_px", "reaction",
     "calm_s", "alert_radius_m", "sensitivity", "cfg_rev",
     "visual_acuity_arcmin", "hearing_band_adj_db", "radar_rx", "rf_rx",   # D2.1
+    "reaction_policy",                                                       # D3 扩展点 2（AWR-05 §12.3）
 ))
+# D3 扩展点 2：`interactive`（缺省，D2 行为）或 `exogenous`（判据与状态机照跑，运动覆盖不生效、不广播；AWR-05 ADR-135）
+REACTION_POLICIES = ("interactive", "exogenous")
 MOTION_FIELDS = frozenset(("mode", "speed_mps", "speed_max_mps", "accel_mps2", "turn_rate_max_rad_s", "path", "loop", "dwell_s", "region",
                            "speed_sigma_mps", "turn_tau_s", "pause_prob", "vz_mps"))
 SOUND_FIELDS = frozenset(("waveform", "f0_hz", "harmonics_db", "lw_dba", "period_s", "duty", "phase_s", "bandwidth_hz"))
@@ -243,7 +246,8 @@ def validate_body(b: Any, i: int) -> None:
 def validate_motion(m: Any) -> None:
     """§6.5.1 的参数部分（544；区域面积与含起点在 placement.py 以 540 判定）。"""
     _keys(544, "motion", m, MOTION_FIELDS)
-    mode = _enum(544, "motion.mode", m.get("mode"), ("static", "path", "random_walk"))
+    # `timeline`（D3 扩展点 2）：位置、速度与 enabled 取自已登记的运动源（M23 磁带），不使用本模块的运动参数
+    mode = _enum(544, "motion.mode", m.get("mode"), ("static", "path", "random_walk", "timeline"))
     for k, hi in (("speed_mps", 40.0), ("speed_max_mps", 40.0), ("speed_sigma_mps", 10.0)):
         if m.get(k) is not None:
             _num(544, f"motion.{k}", m[k], 0.0, hi)
@@ -367,6 +371,8 @@ def validate_config(c: dict) -> list[str]:
     if c.get("n_req_px") is not None:
         _num(110, "n_req_px", c["n_req_px"], 1.0, 200.0)
     validate_reaction(c.get("reaction") or {})
+    if c.get("reaction_policy") is not None:
+        _enum(110, "reaction_policy", c["reaction_policy"], REACTION_POLICIES)
     validate_d21(c)
     bodies = c.get("sensitivity")
     if not isinstance(bodies, list):

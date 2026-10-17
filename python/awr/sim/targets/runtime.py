@@ -10,6 +10,9 @@ FR-022、FR-027；M18-M19 PRD §6、§7.1；AWR-04 §7）。
   驻留计一次，轮次在回到 UNAWARE（或平复中再次被发现）时结束（M18-FR-015）。
 - 只读接口：`view()`（TargetView，M19、M20）、`config(id)`、`state1(id)`、`keepout(id, ...)`、`sound_bands_now(id, t)`、`detail(...)`；
   D2.1（WP-19b）：`fleet(S, ctx)`（全部在场机体与参与者标记、带灯光的签名）、`quant_view(id)`（逐对读数所需的识别物状态与驻留）。
+- D3 扩展点 3（AWR-05 §12.3，M23 §6.12）：`motion.mode = timeline` 的识别物每 tick 由 `set_motion_source` 登记的运动源给出位置、
+  航向、速度、enabled 与 hidden，跳过 `step_motion` 与行为覆盖；`reaction_policy = exogenous` 时覆盖恒为 (None, True) 且不广播，
+  判据与状态机照跑。运动源可只读调用 `state1(id)` 与 `config(id)`。缺省无运动源、无 timeline 识别物，D2 行为逐位不变。
 - D2.1 判据增补（M18-FR-029、FR-030）：声学带余量计入 `hearing_band_adj_db`（缺省不修正，逐位不变）；配置 `radar_rx` 的识别物其
   radar 敏感体参与判据（geometric 只看配置体；physical 另要求接收视场内且 SNR ≥ snr_req，`radar.py`）。
 """
@@ -19,8 +22,9 @@ from __future__ import annotations
 import copy
 import math
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -115,6 +119,21 @@ class TargetQuantView:
     rev: int
 
 
+class MotionSource(Protocol):
+    """D3 运动源（M23 `TapeMotionSource` 等）：t_ns 时刻识别物 `tid` 的 (pos_enu_m, yaw_rad, vel_enu_mps, enabled, hidden)；
+    不认识该识别物时返回 None（保持上一位置、速度归零）。"""
+
+    def pose(self, tid: str, t_ns: int) -> tuple[Sequence[float], float, Sequence[float], bool, bool] | None: ...
+
+
+def _timeline(T: Any) -> bool:
+    return (T.cfg.raw.get("motion") or {}).get("mode") == "timeline"
+
+
+def _exogenous(T: Any) -> bool:
+    return T.cfg.raw.get("reaction_policy") == "exogenous"
+
+
 class TargetRuntime:
     def __init__(self) -> None:
         self.tab: Any = None
@@ -139,6 +158,31 @@ class TargetRuntime:
         self._pub = None
         self._bus = None
         self.events_log: list[tuple[str, dict]] = []   # 最近事件（测试与 SB-45 的 last_discovered 外的诊断，≤ 256）
+        self.motion_source: MotionSource | None = None  # D3 扩展点 3（timeline 识别物的位置来源）
+        self._src_off: set[str] = set()                 # 运动源本 tick 给出 enabled = false 的 timeline 识别物
+
+    # ------------------------------------------------------------ D3 运动源（扩展点 3）
+    def set_motion_source(self, src: MotionSource | None) -> None:
+        """登记（或以 None 撤销）timeline 识别物的运动源；在步边界调用（会话装配）。"""
+        self.motion_source = src
+
+    def _timeline_step(self, T: Any, t_ns: int) -> None:
+        """timeline 识别物的一步：取运动源的位姿写入 MotionState，不推进 `step_motion`、不取流 17、不应用行为覆盖。"""
+        src = self.motion_source
+        p = src.pose(T.id, t_ns) if src is not None else None
+        if p is None:
+            T.ms.speed, T.ms.vz = 0.0, 0.0
+            return
+        pos, yaw, vel, enabled, hidden = p
+        T.ms.pos = np.asarray(pos, np.float64)
+        T.ms.yaw = float(yaw)
+        T.ms.speed = float(math.hypot(float(vel[0]), float(vel[1])))
+        T.ms.vz = float(vel[2])
+        T.hidden = bool(hidden)
+        if enabled:
+            self._src_off.discard(T.id)
+        else:
+            self._src_off.add(T.id)
 
     # ------------------------------------------------------------ 绑定
     def bind(self, ctx: Any) -> bool:
@@ -586,14 +630,20 @@ class TargetRuntime:
                 continue
             if T.focus is not None and T.focus in pos_of:
                 T.focus_pt = pos_of[T.focus]
-            if T.aware == UNAWARE and not T.look_until > t_s:
+            if _timeline(T):
+                self._timeline_step(T, t_ns)
+            elif T.aware == UNAWARE and not T.look_until > t_s:
                 ov, base = None, True        # TState.override 的首两条均不成立时的结果（无覆盖、原运动）
             else:
                 ov, base = T.override(t_s, pos_of.get(T.focus) if T.focus else None, world)
+                if _exogenous(T):
+                    ov, base = None, True    # D3 扩展点 3：响应的计时照常推进，运动不被覆盖
             # 运动：静止、随机游走与路径三种模式在核内一次推进（`kernels_motion.step_all`，与 step_motion 逐位相同）；识别物之间的
             # 运动互不依赖，批量与逐个的结果相同。合成世界（无 DSM 栅格）与 numba 不可用时逐个调用 step_motion
             kp = ts[5] if kern is not None else None
-            if kp is not None:
+            if _timeline(T):
+                pass
+            elif kp is not None:
                 if ov is None and (kp[0] == KM.MODE_STATIC or not base) and T.ms.speed == 0.0:
                     T.ms.vz = 0.0   # step_motion 的首个早退：静止且无行为覆盖，本步无事可做（不进核）
                 else:
@@ -632,8 +682,9 @@ class TargetRuntime:
         r3l = R3.tolist() if nu and anyhit else None
         ordl = ORD.tolist() if anyhit else None
         qql = QQ.tolist() if anyhit else None
+        off = self._src_off
         for k, T in enumerate(Ts):
-            if not T._ts[1]:
+            if not T._ts[1] or (off and T.id in off):
                 continue
             s0, s1, meta = rows.get(k, (0, 0, ()))
             if T._ts[3]:
@@ -647,7 +698,8 @@ class TargetRuntime:
             if T.aware == UNAWARE and T.alert > T.base_alert:
                 T.alert = max(T.base_alert, T.alert - DECAY_PER_S * dt)
         for src, pt in broadcasts:
-            self._broadcast(ctx, src, pt, t_s)
+            if not _exogenous(src):
+                self._broadcast(ctx, src, pt, t_s)
         self._write_rows([T for T in Ts if T.row in self.tab.meta], t_s)
 
     # ------------------------------------------------------------ 运动核（D2-FX-R2-sim 第 2 次）
