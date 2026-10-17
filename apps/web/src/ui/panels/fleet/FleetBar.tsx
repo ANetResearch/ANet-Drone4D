@@ -1,7 +1,7 @@
 // Fleet list header of D2 (R-D2-13, R-D2-20; M15-FR-211; UX-FR-117; AWR-14 §20.6.1, §20.6.4, §20.6.6): "vehicles n / 12",
 // "add" for the sandbox operator (Dialog: model from the catalogue and the session's clones with endurance and link
 // range, placement "in a nest" (only compatible nests: box multirotor, launcher fixed wing, vtol_pad VTOL and
-// multirotor) or "on the map" (VEHICLE_PLACE), label and initial charge; POST /sessions/{sid}/vehicles, the new vehicle
+// multirotor; a full nest is disabled too, issue #8) or "on the map" (VEHICLE_PLACE), label and initial charge; POST /sessions/{sid}/vehicles, the new vehicle
 // shows within the next roster update; 505, 525, 102 and 520 explain themselves) and "model catalogue" for everyone
 // (the Sheet; the shared show browses it read-only). Models from M21's stores/catalog.ts (presets and the session's
 // clones), nests from M20's stores/tasking.ts; the vehicle itself is created through the sandbox REST (SB-31).
@@ -13,7 +13,7 @@ import { sanitizeText } from '@/lib/sanitize'
 import { ApiError } from '@/net/api'
 import { catalog, useCatalog, type ModelSummary } from '@/stores/catalog'
 import { useFleet } from '@/stores/fleet'
-import { refreshNests } from '@/stores/tasking'
+import { refreshNests, useTasking } from '@/stores/tasking'
 import { Button } from '@/ui/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/ui/components/ui/dialog'
 import { Field, FieldDescription, FieldLabel } from '@/ui/components/ui/field'
@@ -31,7 +31,7 @@ import { labelOk } from '@/ui/panels/targets/targetModel'
 import { useModalFrameCap } from '@/ui/views/useModalFrameCap'
 import { CatalogSheet } from './CatalogSheet'
 import { fleetDialogs, useFleetDialogs } from './fleetDialogs'
-import { nestAccepts } from './fleetModel'
+import { nestBlock } from './fleetModel'
 
 const errText = (e: unknown): string => (e instanceof ApiError && e.reason ? reasonText(e.reason).short : String(e))
 
@@ -46,6 +46,7 @@ function AddVehicleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
     if (sid) void catalog.loadSession(sid)
   }, [open, sid])
   const nests = useNests()
+  const nestStatus = useTasking((s) => s.nestStatus)
   const [model, setModel] = React.useState<string | null>(null)
   const [where, setWhere] = React.useState<'nest' | 'map'>('nest')
   const [nest, setNest] = React.useState<string | null>(null)
@@ -55,7 +56,8 @@ function AddVehicleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   const cap = useModalFrameCap('modal:add-vehicle')
   const all: ModelSummary[] = [...models, ...mine]
   const m = all.find((x) => x.model_id === model) ?? null
-  const nestItems = nests.map((n) => ({ n, ok: m ? nestAccepts(n.kind ?? 'box', m.category) : true }))
+  const nestItems = nests.map((n) => ({ n, why: nestBlock(n, n.id ? nestStatus[n.id] : undefined, m?.category ?? null) }))
+  const nestWhy = nestItems.find(({ n }) => n.id === nest)?.why ?? null
   const add = async (body: { nest_id?: string | null; home_enu_m?: (number | null)[] | null }) => {
     if (!model) return
     setBusy(true)
@@ -110,10 +112,11 @@ function AddVehicleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             <Select items={nestItems.map(({ n }) => ({ value: n.id ?? '', label: n.name ?? n.id ?? '' }))} value={nest ?? ''} onValueChange={(v) => typeof v === 'string' && setNest(v)}>
               <SelectTrigger className="w-full" data-add-nest=""><SelectValue placeholder={t('fleet.add.nest')} /></SelectTrigger>
               <SelectContent>
-                {nestItems.map(({ n, ok }) => <SelectItem key={n.id} value={n.id ?? ''} disabled={!ok}>{`${sanitizeText(n.name ?? n.id ?? '', 24)} · ${t(`nest.kind.${n.kind ?? 'box'}`)}${ok ? '' : ` · ${t('fleet.add.incompatible')}`}`}</SelectItem>)}
+                {nestItems.map(({ n, why }) => <SelectItem key={n.id} value={n.id ?? ''} disabled={why !== null}>{`${sanitizeText(n.name ?? n.id ?? '', 24)} · ${t(`nest.kind.${n.kind ?? 'box'}`)}${why === null ? '' : ` · ${t(why === 'kind' ? 'fleet.add.incompatible' : 'fleet.add.full')}`}`}</SelectItem>)}
               </SelectContent>
             </Select>
             {nestItems.length === 0 ? <FieldDescription>{t('fleet.add.noNest')}</FieldDescription> : null}
+            {nestWhy !== null ? <FieldDescription data-add-nest-why={nestWhy}>{t(nestWhy === 'kind' ? 'fleet.add.whyKind' : 'fleet.add.whyFull')}</FieldDescription> : null}
           </Field>
         ) : <FieldDescription>{t('fleet.add.mapHint')}</FieldDescription>}
         <div className="grid grid-cols-2 gap-2">
@@ -128,7 +131,7 @@ function AddVehicleDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button disabled={!model || busy || (where === 'nest' && !nest)} onClick={go} data-add-go="">{busy ? <Spinner data-icon="inline-start" /> : null}{t('fleet.add.go')}</Button>
+          <Button disabled={!model || busy || (where === 'nest' && (!nest || nestWhy !== null))} onClick={go} data-add-go="">{busy ? <Spinner data-icon="inline-start" /> : null}{t('fleet.add.go')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

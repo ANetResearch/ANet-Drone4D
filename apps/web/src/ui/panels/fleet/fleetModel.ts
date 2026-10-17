@@ -84,6 +84,20 @@ export function nestAccepts(kind: 'box' | 'launcher' | 'vtol_pad', cat: Category
   return cat === 'vtol' || cat === 'multirotor'
 }
 
+/** why the server would refuse an added vehicle in a nest (525, issue #8): `kind` by category, `full` when every slot is
+ *  taken (each vehicle assigned to the nest holds one, airborne ones included, as `nest_home` counts them; the 1 Hz status
+ *  inventory when there is one, else the nest object's); null when it fits (pure, tests) */
+export function nestBlock(
+  n: { kind?: 'box' | 'launcher' | 'vtol_pad'; slots?: number; inventory?: readonly { count: number }[] },
+  status: { slots: { total: number }; inventory: readonly { count: number }[] } | undefined,
+  cat: Category | null,
+): 'kind' | 'full' | null {
+  if (cat && !nestAccepts(n.kind ?? 'box', cat)) return 'kind'
+  const total = status?.slots.total ?? n.slots
+  const used = (status?.inventory ?? n.inventory ?? []).reduce((a, x) => a + (x.count || 0), 0)
+  return total !== undefined && used >= total ? 'full' : null
+}
+
 /** fields the server never changes on a clone (CL-4: frame, cell count, chemistry): shown read-only */
 export const LOCKED: ReadonlySet<string> = new Set(['battery.cells'])
 

@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { isoUtc, periodCalendar, tzOffsetMs, zonedToUtcMs } from '@/ui/sandbox/calendar'
 import { curlOf, groupOperations, listOperations, sdkOf } from '@/ui/views/apiDocsModel'
 import { buildRows, filterRows, keepVolumes, labelOk, NO_FILTER, sensitivityErrors, waveform } from '@/ui/panels/targets/targetModel'
-import { cloneErrors, derived, filterModels, mapViolations, nestAccepts } from '@/ui/panels/fleet/fleetModel'
+import { cloneErrors, derived, filterModels, mapViolations, nestAccepts, nestBlock } from '@/ui/panels/fleet/fleetModel'
 
 vi.setConfig({ testTimeout: 30_000 })
 
@@ -136,6 +136,17 @@ describe('fleet', () => {
     expect(nestDefaults('launcher', 1, 2)).toMatchObject({ pos: [1, 2, null], kind: 'launcher', crewed: true })
     expect(chargerMismatch({ energy: { mode: 'swap', packs: [{ cells: 12, count: 2 }] }, chargers: [{ model: 'c', count: 1, channels: 1, i_max_a: 10, cells_max: 6 }] })).toBe(true)
     expect(chargerMismatch(nestDefaults('box', 0, 0))).toBe(false)
+  })
+
+  it('nestBlock mirrors the server 525: kind first, then a full nest counts airborne vehicles too (issue #8)', () => {
+    const box = { kind: 'box' as const, slots: 6, inventory: [{ count: 6 }] }
+    expect(nestBlock(box, undefined, 'fixed_wing')).toBe('kind')
+    expect(nestBlock(box, undefined, 'multirotor')).toBe('full')
+    expect(nestBlock({ ...box, inventory: [{ count: 5 }] }, undefined, 'multirotor')).toBeNull()
+    const st = { slots: { total: 6 }, inventory: [{ count: 4 }, { count: 2 }] }
+    expect(nestBlock({ kind: 'box', slots: 6 }, st, 'multirotor')).toBe('full')
+    expect(nestBlock({ kind: 'box', slots: 6 }, { ...st, inventory: [{ count: 3 }] }, null)).toBeNull()
+    expect(nestBlock({ kind: 'launcher' }, undefined, null)).toBeNull()
   })
 })
 
