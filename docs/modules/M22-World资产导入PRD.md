@@ -1219,7 +1219,7 @@ FeatureCollection，坐标为世界帧 (E, N)。顶层 `awr`：`{schema: "awr.na
 | `event/anchors.schema.json` | 新增（与 M23 共同起草，§7.3.5） | 新文件 |
 | `schemas/world/glb-recipe.schema.json`、`glb-registration.schema.json` | 新增（输入文件） | 新文件 |
 | `rt/reasons.json` | 600–602 已登记；本文提议 603–605（§7.9） | 加法式 |
-| `python/requirements-d3.lock` | D3 依赖（open3d、meshoptimizer、Pillow、scikit-image、shapely）列入 D3 独立锁文件；`pyproject.toml` 与 D2 锁文件不变（AWR-05 v1.2 §4.8） | M00 文件（M27 起草） |
+| `requirements-d3.in`、`requirements-d3.lock`（仓库根目录，`make lock-d3`；以 `requirements.lock` 为约束） | D3 依赖（open3d、meshoptimizer、Pillow、scikit-image、shapely，随各派生阶段加入）列入 D3 独立锁文件，装入 `.venv-d3`（`make setup-d3`）；`pyproject.toml` 与 D2 锁文件不变（AWR-05 v1.2 §4.8） | M00 文件（M27 起草） |
 
 ### 7.5 Python 接口
 
