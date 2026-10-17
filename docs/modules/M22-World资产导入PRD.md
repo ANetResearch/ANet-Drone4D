@@ -826,15 +826,16 @@ else: hints.bakedSunAzElDeg = None; confidence = "unknown"; qa.warn("baked sun n
 #### 6.6.14 彩色点云采样
 
 ```python
-density = 5_000_000 / total_area(appearance)
-for t in range(T):                                              # 外观三角形序
-    m = area[t] * density
-    n = floor(m) + (u01(cbrng(SEED, "pc", t, 0)) < m - floor(m))
-    for j in range(n):
-        r1, r2 = u01(cbrng(SEED, "pc", t, 1 + 2j)), u01(cbrng(SEED, "pc", t, 2 + 2j))
-        b = (1 - sqrt(r1), sqrt(r1) * (1 - r2), sqrt(r1) * r2)
-        emit(xyz=b @ V[t], rgb=bilinear_srgb(tex[t], b @ UV[t]), normal=n_t, cls=cls[t])
-# cbrng 为 M13 awr.sim.sensors.cbrng 的 SplitMix64 逐级派生；结果与遍历并行度无关
+N = recipe.build.pointcloud.target_points                        # 缺省 5,000,000
+cdf = cumsum(area)                                              # 外观三角形序
+for i in range(N):
+    t = searchsorted(cdf, u(SEED, i, 0) * cdf[-1], side="right")
+    r1, r2 = sqrt(u(SEED, i, 1)), u(SEED, i, 2)
+    b = (1 - r1, r1 * (1 - r2), r1 * r2)
+    emit(xyz=b @ V[t], rgb=nearest_srgb(tex[t], frac(b @ UV[t])), normal=n_t)
+# u(seed, i, ch)：SplitMix64 键派生 sm(sm(sm(sm(seed) ^ "M22PC") ^ i) ^ ch) 的高 53 位，与 awr.sim.sensors.cbrng 同式；
+# world 包不得 import awr.sim（import 方向规则），实现位于 awr.world.glb.derive.pointcloud。点数恰为 N，结果与线程、批次划分无关。
+# 纹素取最近邻（UV 原点左上，REPEAT），无纹理的面取灰 128；语义类别 cls 在语义阶段（§6.6.9）落地后写入，本版由 D2 规则分类。
 ```
 
 #### 6.6.15 瓦片化求交与结果合并（geosvc）
@@ -1067,7 +1068,7 @@ D1 必需图层按 16 §3.2 原次序写出（`pointcloud.visual`、`pointcloud.
 | `anchor.uncertaintyM` | `{horizontal: 5, vertical: 5}` | r2 §2.5 |
 | `trueNorth` | `{yawOffsetDeg: 0, confidence: "verified", evidence: [...]}` | 偏航已烘焙进 `T_world_source` |
 | `scaleStatus` | `landmark`（OSM、控制点、共帧）或 `assumed`（地物统计） | FR-006 至 FR-010 |
-| `source.kind`、`crs` | `dataset`、`LOCAL` | — |
+| `source.kind`、`crs` | `reconstruction`、`LOCAL`（摄影测量重建，尺度来自配准：G-01 按 M03 §14 降为 warn） | — |
 | `source.upAxis`、`handedness` | `+y`、`right` | glTF 场景帧 |
 | `source.unitsToMeters`、`yawDeg`、`leveledDeg` | 配准与调平结果 | V-C-04 |
 | `source.T_world_source` | 4 × 4 行主序，含尺度 | §6.6.5 |
@@ -1534,7 +1535,7 @@ tests/d3/world/、tests/d3/quality/        # 本模块测试
 | 报告 | `world/qa/report.py` | 增加 `glb` 段 |
 | 异常与退出码 | `world/ingest/types.py`（`WorldpkgError` 族、`StageContext`） | 原样 |
 | 查询 | `world/geometry/query.py`（`DsmWorldQuery`、`GeoError`、限额常量）、`world/geometry/types.py`（`Hit`） | `MeshWorldQuery` 继承；限额与码值复用 |
-| 计数器随机数 | `sim/sensors/cbrng.py`（SplitMix64） | 点云采样、语义与太阳估计的抽样 |
+| 计数器随机数 | `sim/sensors/cbrng.py`（SplitMix64） | 同式在 `world/glb/derive/pointcloud.py` 内重写（world 包不 import awr.sim），用于点云采样、语义与太阳估计的抽样 |
 | 作业上下文 | `awr/jobs/context.py`（`JobContext`） | `run_world_build` 的进度、取消与心跳 |
 
 ### 9.3 原型迁移

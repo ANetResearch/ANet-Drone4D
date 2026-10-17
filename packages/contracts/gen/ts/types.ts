@@ -9323,7 +9323,21 @@ export interface QaReport {
   }
   inputs?: WorldCommonSourceFile[]
   stages?: {
-    name: 'read' | 'ingest' | 'dtm' | 'normals' | 'classify' | 'tile' | 'dsm' | 'zones' | 'hash' | 'validate'
+    name:
+      | 'read'
+      | 'ingest'
+      | 'dtm'
+      | 'normals'
+      | 'classify'
+      | 'tile'
+      | 'dsm'
+      | 'zones'
+      | 'hash'
+      | 'validate'
+      | 'normalize'
+      | 'pointcloud'
+      | 'raycast'
+      | 'appearance'
     seconds: number
     peak_rss_mb?: number
   }[]

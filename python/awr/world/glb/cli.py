@@ -1,4 +1,4 @@
-"""M22 CLI（§7.7）：`inspect`、`register`；`build`、`validate`、`status`、`anchors`、`summary` 等子命令随各阶段加入。
+"""M22 CLI（§7.7）：`inspect`、`register`、`build`；`validate`、`status`、`anchors`、`summary` 等子命令随各阶段加入。
 退出码沿用 M03（`WorldpkgError.exit_code`：1 校验、2 门禁、3 配置与 IO、4 原始数据）。"""
 
 from __future__ import annotations
@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from awr.world.ingest.types import WorldpkgError
 
@@ -55,6 +56,19 @@ def _register(a: argparse.Namespace) -> int:
     return 0
 
 
+def _build(a: argparse.Namespace) -> int:
+    from awr.world.glb.pipeline import GlbAdapter
+    from awr.world.ingest.types import StageContext
+    from awr.world.package.build import build_world
+    from awr.world.package.params import BuildParams
+
+    params = BuildParams.from_config(keep_staging=True if a.keep_staging else None)
+    res = build_world(GlbAdapter(a.world_id, points=a.points), Path(a.worlds_dir), params=params, ctx=StageContext(world_id=a.world_id))
+    print(json.dumps(res.to_json(), ensure_ascii=False) if a.json else
+          f"{a.world_id}: exit {res.exit_code}, contentVersion {res.content_version}, {res.seconds:.1f} s {res.message or ''}".rstrip())
+    return res.exit_code
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m awr.world.glb", description="GLB world import (M22)")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -76,6 +90,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--evidence", action="append", help="evidence summary line (up to 8)")
     p.add_argument("--accept", metavar="BY", help="accept the record (status accepted, accepted_by BY)")
     p.set_defaults(fn=_register)
+    p = sub.add_parser("build", help="build worlds/<id> (World Package 1.1.0, d3-glb)")
+    p.add_argument("world_id")
+    p.add_argument("--worlds-dir", default=str(Path(__file__).resolve().parents[4] / "worlds"))
+    p.add_argument("--points", type=int, help="point cloud sample count (default: recipe build.pointcloud.target_points)")
+    p.add_argument("--keep-staging", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=_build)
     a = ap.parse_args(argv)
     try:
         return a.fn(a)

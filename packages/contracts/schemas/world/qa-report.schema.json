@@ -74,7 +74,11 @@
               "dsm",
               "zones",
               "hash",
-              "validate"
+              "validate",
+              "normalize",
+              "pointcloud",
+              "raycast",
+              "appearance"
             ]
           },
           "seconds": {

@@ -6744,7 +6744,7 @@ class QaReportSizes(TypedDict):
 
 # schemas/world/qa-report.schema.json#/properties/stages/items
 class QaReportStages(TypedDict):
-    name: Literal["read", "ingest", "dtm", "normals", "classify", "tile", "dsm", "zones", "hash", "validate"]
+    name: Literal["read", "ingest", "dtm", "normals", "classify", "tile", "dsm", "zones", "hash", "validate", "normalize", "pointcloud", "raycast", "appearance"]
     seconds: float
     peak_rss_mb: NotRequired[float]
 

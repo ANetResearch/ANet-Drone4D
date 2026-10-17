@@ -72,8 +72,10 @@ def load_registration(path: Path, *, require_accepted: bool = True) -> dict[str,
     return doc
 
 
-def verify_raw(rel: str, sha256: str | None = None, raw_dir: Path = RAW_DIR, manifest: Path = RAW_MANIFEST) -> Path:
-    """校验 `data/raw/d3-glb/<rel>`：清单登记的字节数与 sha256（以及调用方给出的 sha256）。"""
+def verify_raw(rel: str, sha256: str | None = None, raw_dir: Path | None = None, manifest: Path | None = None) -> Path:
+    """校验 `data/raw/d3-glb/<rel>`：清单登记的字节数与 sha256（以及调用方给出的 sha256）。缺省目录在调用时读取模块变量。"""
+    raw_dir = RAW_DIR if raw_dir is None else raw_dir
+    manifest = RAW_MANIFEST if manifest is None else manifest
     p = raw_dir / rel
     if not p.exists():
         raise RawDataError(f"raw file missing: {p}", missing=True)
