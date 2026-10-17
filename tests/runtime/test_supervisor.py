@@ -444,8 +444,7 @@ def test_children_exit_within_1s_when_supervisor_killed(tmp_path: Path) -> None:
         os.kill(sup.pid, signal.SIGKILL)
         sup.wait(5)
         t0 = time.monotonic()
-        alive = lambda: [k for k in kids if Path(f"/proc/{k}").exists() and "Z" not in  # noqa: E731
-                         Path(f"/proc/{k}/stat").read_text().split(")")[1].split()[0]]
+        alive = lambda: [k for k in kids if _alive(k)]  # noqa: E731  # 退出与读取 /proc/<pid>/stat 之间的竞态按已退出处理
         assert rtlib.wait_until(lambda: not alive(), 3)
         assert time.monotonic() - t0 <= 1.0
     finally:
