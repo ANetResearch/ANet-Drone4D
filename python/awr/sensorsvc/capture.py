@@ -158,7 +158,8 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
             jpeg = blocks[rec["agent_view"]["rgb"]["ref"]]
             raw.write_camera(uav, c.name, seq, tm, jpeg, depth_m=out.depth_m if "depth" in c.outputs else None,
                              period_ns=int(NS / parse_rate(c.fps)))
-            tru.write_camera_truth(uav, c.name, seq, tm, rec, {k: v for k, v in blocks.items() if not k.endswith(("rgb.jpg", "depth.f32"))})
+            agent = {rec["agent_view"]["rgb"]["ref"], rec["agent_view"].get("depth", {}).get("ref")}      # 观测载荷只进 raw.mcap
+            tru.write_camera_truth(uav, c.name, seq, tm, rec, {k: v for k, v in blocks.items() if k not in agent})
             if (i + 1) % 100 == 0:
                 log(f"[capture] {i + 1}/{len(jobs)} frames, render p50 {np.median(ms):.1f} ms")
     build_frames_idx(run_dir / "raw.mcap", run_dir / "frames.idx")

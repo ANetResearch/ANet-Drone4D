@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drone4d"
+version = "0.1.0.dev0"
+description = "Drone4D benchmark SDK: frame retrieval from the bench API (agent interfaces follow in P0a-3)"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = ["httpx>=0.27"]
+
+[project.optional-dependencies]
+images = ["numpy>=1.26", "pillow>=10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
