@@ -1,0 +1,57 @@
+# crop-handoff-001：首个固定事件（M23 §2.1，rendezvous_handoff）。沿用 r6 原型的情节：两人在中心路口广场会合，
+# B 在东侧路缘登上车辆 C 离开，A 进入 Z 楼；40 名背景行人在镇中心游走。
+schema: drone4d.event.v1
+event_id: crop-handoff-001
+version: 1
+event_type: rendezvous_handoff
+world: {id: oryahovo-crop1}
+anchors_ref: event:anchors.json
+seed: 20261017
+duration_s: 360
+mode: exogenous
+time_origin_utc: "2026-06-15T09:00:00Z"
+actors:
+  - id: person_A
+    class: person
+    appearance: {preset: civilian, top_rgb: [42, 93, 176], bottom_rgb: [40, 40, 40], height_m: 1.76, accessories: [backpack]}
+    gait: {speed_mps: [0.9, 1.8], accel_mps2: 1.0}
+    route:
+      - {t: 0, at: ev_market_exit, do: spawn}
+      - {t: 85, at: ev_north_street}
+      - {t: 225, at: ev_plaza, dwell_s: 7, do: wait}
+      - {t: 290, at: ev_building_z_door, do: enter_building}
+  - id: person_B
+    class: person
+    appearance: {preset: civilian, top_rgb: [176, 52, 44], bottom_rgb: [70, 70, 80], height_m: 1.68}
+    route:
+      - {t: 60, at: ev_north_gate, do: spawn}
+      - {t: 120, at: ev_east_street}
+      - {t: 215, at: ev_plaza, dwell_s: 20, do: wait}
+      - {t: 255, at: ev_plaza_curb, do: board, target: vehicle_C}
+  - id: vehicle_C
+    class: vehicle
+    appearance: {preset: sedan, body_rgb: [210, 210, 214], length_m: 4.6}
+    gait: {speed_mps: [2.0, 11.0], accel_mps2: 2.5}
+    route:
+      - {t: 150, at: ev_road_west, do: spawn}
+      - {t: 235, at: ev_plaza_curb_road, dwell_s: 30, do: wait}
+      - {t: 330, at: ev_road_east, do: despawn}
+background:
+  - {class: person, count: 40, zone: ev_town_center, speed_mps: [0.8, 1.6], pause_s: [0, 20], stream: 1}
+environment:
+  interpolation: smooth
+  keyframes:
+    - {t: 0, wind_mps: 2.0, wind_dir_deg: 270, gust_sigma_mps: 0.5, rain_mm_h: 0, visibility_m: 20000}
+    - {t: 180, wind_mps: 7.0, wind_dir_deg: 300, gust_sigma_mps: 2.0, rain_mm_h: 4, visibility_m: 6000}
+    - {t: 300, wind_mps: 3.0, wind_dir_deg: 280, gust_sigma_mps: 0.8, rain_mm_h: 0, visibility_m: 15000}
+annotations:
+  - {id: encounter_AB, type: proximity_encounter, participants: [person_A, person_B], window: [195, 250]}
+  - {id: board_BC, type: board_vehicle, participants: [person_B, vehicle_C], window: [240, 275]}
+  - {id: enter_AZ, type: enter_building, participants: [person_A], window: [290, 320], params: {anchor: ev_building_z_door}}
+relations:
+  - {src: encounter_AB, rel: before, dst: board_BC}
+  - {src: board_BC, rel: before, dst: enter_AZ}
+brief:
+  public_anchors: [ev_plaza, ev_building_z_door]
+  targets:
+    - {actor: person_A, description_zh: "蓝色上衣、深色裤装、背包，身高约 1.76 m", description_en: "Blue top, dark trousers, backpack, approx. 1.76 m"}

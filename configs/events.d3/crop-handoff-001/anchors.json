@@ -1,0 +1,19 @@
+{
+ "schema": "awr.anchors.v1",
+ "extends": "world",
+ "world_id": "oryahovo-crop1",
+ "anchors": [
+  {"id": "ev_market_exit", "kind": "point", "category": "plaza", "profile": "person", "xy": [-48.0, 36.0], "seed": true, "label_zh": "西侧集市出口"},
+  {"id": "ev_north_street", "kind": "point", "category": "manual", "profile": "person", "xy": [12.0, 126.0], "label_zh": "北街"},
+  {"id": "ev_north_gate", "kind": "point", "category": "entrance", "profile": "person", "xy": [62.0, 150.0], "label_zh": "北路口院门"},
+  {"id": "ev_east_street", "kind": "point", "category": "manual", "profile": "person", "xy": [76.0, 60.0], "label_zh": "东北斜街"},
+  {"id": "ev_plaza", "kind": "zone", "category": "plaza", "profile": "person", "polygon": [[2.0, -52.0], [24.0, -52.0], [24.0, -30.0], [2.0, -30.0]], "public": true, "label_zh": "中心路口广场"},
+  {"id": "ev_plaza_curb", "kind": "curb", "category": "manual", "profile": "person", "xy": [42.0, -50.0], "pair": "ev_plaza_curb_road", "label_zh": "广场东侧路缘"},
+  {"id": "ev_plaza_curb_road", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [44.0, -55.0], "label_zh": "广场东侧停车点"},
+  {"id": "ev_road_west", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [-108.0, 58.0], "label_zh": "西路入口"},
+  {"id": "ev_road_east", "kind": "point", "category": "manual", "profile": "vehicle", "xy": [186.0, -96.0], "label_zh": "东路出口"},
+  {"id": "ev_building_z_door", "kind": "door", "category": "entrance", "profile": "person", "xy": [70.0, -56.0], "building": "ev_building_z", "public": true, "label_zh": "Z 楼南门"},
+  {"id": "ev_town_center", "kind": "zone", "category": "manual", "profile": "person", "polygon": [[-115.0, -110.0], [195.0, -110.0], [195.0, 170.0], [-115.0, 170.0]], "label_zh": "镇中心"}
+ ],
+ "remove": []
+}
