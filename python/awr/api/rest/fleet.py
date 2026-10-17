@@ -26,7 +26,7 @@ D2（M08-FR-226、FR-227；M08 §15.3.8；17 §17.6.3；AWR-04 §14.3）：全�
 | SB-31 | `PATCH /vehicles/{vid}` | operator | cmd `fleet/update{vehicle, patch}`；挂载与限速档须 LANDED 且上锁（105） |
 | SB-32 | `DELETE /vehicles/{vid}` | operator | cmd `fleet/remove`；空中 202 DRAINING |
 | SB-33 | `GET /vehicles/{vid}/state` | viewer | query `fleet/vehicle_state`：`{t_sim_ns, state, state_ext, fw?, energy?}` |
-| SB-34 | `GET /vehicles/{vid}/sensors` | viewer | query `fleet/vehicle_sensors`：`{payload, sensors[]}` |
+| SB-34 | `GET /vehicles/{vid}/sensors` | viewer | query `fleet/vehicle_sensors`：`{payload, sensors[]}`；M13 装配前（`payload_pending`）重查，见 `PAYLOAD_WAIT_S` |
 | SB-35 | `POST /vehicles/{vid}/commands` | operator | 同 WS `call`（服务 `uav/{vid}/cmd/{op}`，同一准入与幂等），响应为首个 `result` |
 | SB-36、SB-37 | `POST /vehicles/{vid}:acquire`、`:release` | operator | 同 WS `call` 的 `uav/{vid}/cmd/acquire|release`（`ctl/sim-core/lease`） |
 """
@@ -44,6 +44,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from awr.contracts import bus_keys
+from awr.contracts.enums import TimeState
 
 from ..deps import Operator, Viewer, ctx_for
 from ..problem import ApiProblem, uuid7
@@ -60,6 +61,10 @@ BUS_TIMEOUT_S = 1.5
 HTTP_OF = {110: 422, 102: 422, 105: 409, 107: 404, 112: 428, 115: 403, 116: 409, 305: 404, 505: 409, 520: 404, 522: 422,
            525: 409, 560: 409, 561: 422}
 RunCtx = Annotated[Any, Depends(ctx_for)]
+# SB-34：M13 在 sensors stage 中装配机体（新会话认领后时钟才开始、暂停中添加、驻留恢复后的首个 stage 之前没有载荷状态），
+# 查询回复 `payload_pending` 时每 PAYLOAD_POLL_S 重查，至多 PAYLOAD_WAIT_S【墙钟】（新会话的认领经 1 s 活动报告，issue #60）
+PAYLOAD_WAIT_S = 2.0
+PAYLOAD_POLL_S = 0.05
 
 
 def _ctx(request: Request) -> Any:
@@ -394,11 +399,27 @@ async def sbx_vehicle_state(vid: str, request: Request, _p: SbxViewer) -> dict[s
     return rep.get("item") or {}
 
 
+def _assembly_due(request: Request) -> bool:
+    """下一次 sensors stage 会到来：时钟不处于暂停，或会话尚未认领（认领后开始播放）。会话已认领且时钟暂停时不等待。"""
+    gw = _ctx(request).gateway
+    st = int(getattr(getattr(gw, "clock", None), "state", TimeState.STOPPED)) & 0x0F
+    if st != TimeState.PAUSED:
+        return True
+    hub = getattr(getattr(request.app.state, "awr", None), "hub", None)
+    sid = getattr(request.state, "sandbox_sid", None)
+    v = hub.view(sid) if hub is not None and sid else None
+    return v is not None and v.state == "READY"
+
+
 @sandbox_router.get("/vehicles/{vid}/sensors")
 async def sbx_vehicle_sensors(vid: str, request: Request, _p: SbxViewer) -> dict[str, Any]:
     _vid_ok(vid)
-    rep = _ok(await _query(request, "fleet/vehicle_sensors", {"id": vid}))
-    return rep.get("item") or {}
+    end = time.monotonic() + PAYLOAD_WAIT_S
+    while True:
+        rep = _ok(await _query(request, "fleet/vehicle_sensors", {"id": vid}))
+        if not rep.get("payload_pending") or time.monotonic() >= end or not _assembly_due(request):
+            return rep.get("item") or {}
+        await asyncio.sleep(PAYLOAD_POLL_S)
 
 
 @sandbox_router.post("/vehicles/{vid}/commands")

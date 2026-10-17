@@ -1606,7 +1606,8 @@ class SimCore:
             st = self.vehicle_sensors(str(args.get("id")))
             if st is None:
                 return {"v": 1, "code": int(Reason.NO_VEHICLE), "detail": {"id": args.get("id")}}
-            return {"v": 1, "code": 0, "item": st}
+            pending = bool(st.pop("_payload_pending", False))
+            return {"v": 1, "code": 0, "item": st} | ({"payload_pending": True} if pending else {})
         if op == "sim/session_config":
             return {"v": 1, "code": 0, "problems": list(self.session.problems), "template_id": self.session.template_id}
         return None
@@ -1703,16 +1704,22 @@ class SimCore:
 
     def vehicle_sensors(self, vid: str) -> dict | None:
         """`GET .../vehicles/{vid}/sensors`（SB-34 `{payload, sensors[]}`）：传感器列表取 M13 的描述（ProfileTable.describe 的
-        `sensors{}`）与实例挂载配置，载荷状态取 M13 登记的查询 `payload/state`（未登记时省略）。"""
+        `sensors{}`）与实例挂载配置，载荷状态取 M13 登记的查询 `payload/state`（未登记时省略）。
+
+        M13 在 sensors stage 中绑定状态并装配 slot（`init`），装配之前（会话时钟尚未开始、暂停中添加的机体、驻留恢复后的首个
+        stage 之前）没有载荷状态：此时回复带内部标记 `_payload_pending`（查询回复的 `payload_pending`，不进入 HTTP 正文），
+        由 REST 路由等到下一次 sensors stage 后重查（issue #60）。"""
         e = self.roster.resolve(vid)
         if e is None:
             return None
         rt = self._sensor_rt()
+        pending = False
         if rt is not None:  # M13 的权威描述（WP-10 → M08 第 7 条）；机体未装配完成时退回下面的静态描述
             with contextlib.suppress(Exception):
                 r = rt.sensors_rest(vid)
                 if isinstance(r, dict) and isinstance(r.get("sensors"), list):
                     return r
+                pending = r is None
         desc: dict = {}
         with contextlib.suppress(Exception):
             desc = self.T.describe(e.profile_id).get("sensors") or {}
@@ -1736,6 +1743,8 @@ class SimCore:
                 r = spec.fn({"v": 1, "op": "payload/state", "args": {"id": vid}}, self.ctx)
                 if isinstance(r, dict) and isinstance(r.get("item"), dict):
                     out["payload"] = r["item"]
+        if pending and "payload" not in out:
+            out["_payload_pending"] = True
         return out
 
     def vehicle_items(self, vid: str | None = None) -> list[dict]:
