@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 
 __all__ = ["CameraModel", "GnssModel", "ImuModel", "LidarStub", "SensorCaps", "SensorModel", "ThermalModel", "models_for"]
 
-Raycast = Literal["none", "dsm", "geo", "gz", "isaac"]
+# D3 扩展点 5（AWR-05 §12.3）：`mesh` 为 M25 网格求交（MeshLidar），`render` 为 M25 光栅相机；只是类型注解，运行期不分派
+Raycast = Literal["none", "dsm", "geo", "gz", "isaac", "mesh", "render"]
 
 
 @dataclass(frozen=True)
