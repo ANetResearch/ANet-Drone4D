@@ -5594,6 +5594,7 @@ class SandboxSessionState(TypedDict):
     queue_len: int
     degrade_level: Literal["L0", "L1", "L2", "L3", "L4"]
     expiring: SandboxSessionStateExpiringOneOf0 | None
+    api_activity_age_s: NotRequired[float]
 
 
 # rt/payloads/sandbox_session_state.schema.json#/properties/clock

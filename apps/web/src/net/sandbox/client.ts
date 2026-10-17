@@ -7,6 +7,7 @@
 // already active, 202 with a resume ticket when full). The internal identity token rides on session creation as
 // `X-AWR-Identity`; the identity store (M15) registers a provider with setSandboxIdentityProvider (net never imports stores).
 import { ApiError } from '../api'
+import { CLIENT_HEADER, CLIENT_NAME } from '../clientName'
 import { apiUrl, SANDBOX_API } from '../endpoint'
 
 export interface SandboxLimits {
@@ -125,7 +126,7 @@ async function toError(r: Response, path: string): Promise<ApiError> {
 }
 
 async function call<T>(method: string, path: string, opts: { token?: string; body?: unknown; signal?: AbortSignal; identity?: boolean } = {}): Promise<{ status: number; body: T; headers: Headers }> {
-  const headers = new Headers({ accept: 'application/json' })
+  const headers = new Headers({ accept: 'application/json', [CLIENT_HEADER]: CLIENT_NAME })
   if (opts.token) headers.set('authorization', `Bearer ${opts.token}`)
   const ident = opts.identity ? identityToken() : null
   if (ident) headers.set('x-awr-identity', ident)

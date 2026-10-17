@@ -6,6 +6,7 @@
 // through the endpoint's onAuthExpired after a 401; public sandbox routes go out without a token; shared-show paths keep
 // the page token of POST /api/auth/token.
 import { DEMO_PUBLIC } from '@/lib/demo'
+import { CLIENT_HEADER, CLIENT_NAME } from './clientName'
 import { apiUrl, getEndpoint, isSandboxPath, sandboxTokenFor, sidOfPath } from './endpoint'
 
 export class ApiError extends Error {
@@ -57,6 +58,7 @@ async function toError(r: Response, path: string): Promise<ApiError> {
 async function withAuth(init?: RequestInit, path = ''): Promise<Headers> {
   const headers = new Headers(init?.headers)
   if (!headers.has('accept')) headers.set('accept', 'application/json')
+  headers.set(CLIENT_HEADER, CLIENT_NAME)
   if (!headers.has('authorization')) {
     // sandbox routes: the session token of the current sandbox endpoint (none for public sandbox routes)
     const token = isSandboxPath(path) ? sandboxTokenFor(path) : await getToken()

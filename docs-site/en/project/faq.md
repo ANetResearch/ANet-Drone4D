@@ -59,8 +59,10 @@ rate.
 
 **Why was my session parked automatically?**
 After a period without interaction (10 min for a sandbox, 5 min when the queue is not empty), or when a REST-only client stays idle for long,
-the session enters power-save parking: it is saved to disk and its slot released, with simulation time and lifetime frozen. Any interaction or
-session request resumes it, and parked sessions are kept for 60 min.
+the session enters power-save parking: it is saved to disk and its slot released, with simulation time and lifetime frozen. Calls to the
+session API from external clients such as the SDK or scripts count as activity: while they continue, an open page does not enter power saving
+and does not park the session, even when the page is hidden. Any interaction or session request resumes a parked session, and parked sessions
+are kept for 60 min.
 
 **How do simulation time and time zones work?**
 The sandbox and the shared show have their own simulation calendars (start time and time zone), which determine the sun position,

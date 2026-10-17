@@ -27,13 +27,13 @@ function memoryStorage(): Storage {
 }
 
 type Reply = { status: number; body?: unknown; headers?: Record<string, string> }
-const calls: { method: string; url: string; body: unknown; auth: string | null }[] = []
+const calls: { method: string; url: string; body: unknown; auth: string | null; client: string | null }[] = []
 function script(handler: (method: string, url: string, body: unknown) => Reply) {
   return async (url: string, init: RequestInit): Promise<Response> => {
     const method = init.method ?? 'GET'
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined
     const h = new Headers(init.headers)
-    calls.push({ method, url, body, auth: h.get('authorization') })
+    calls.push({ method, url, body, auth: h.get('authorization'), client: h.get('x-awr-client') })
     const r = handler(method, url, body)
     return new Response(r.body === undefined ? null : JSON.stringify(r.body), { status: r.status, headers: r.headers })
   }
@@ -171,6 +171,26 @@ describe('session life', () => {
     expect(s.session?.usage?.vehicles).toBe(3)
     expect(s.expiring?.reason).toBe('preempted')
     await vi.waitFor(() => expect(m.localSnapshot('synthcity')?.snapshot.world_id).toBe('synthcity'))
+  })
+
+  it('external API activity of the topic becomes the page-clock time of the store; every request names the web client (issue #59)', async () => {
+    const m = await created()
+    m.sandbox.applySession(sessionFixture as never)
+    const topic = { sid: SID, state: 'ACTIVE' as const, expires_unix_ns: future, expires_in_s: 100, renewable: true, renew_block_reason: null,
+      clock: { rate_granted: 1, rate_cap: 5, limited_by: null }, usage: { vehicles: 2, targets: 1, nests: 1, tasks_active: 0, ws: 1 }, queue_len: 0,
+      degrade_level: 'L0' as const, expiring: null }
+    m.sandbox.applyTopic(topic)
+    expect(m.sandboxStore.getState().apiActivityMs).toBe(0)
+    const t0 = Date.now()
+    m.sandbox.applyTopic({ ...topic, api_activity_age_s: 4 })
+    const at = m.sandboxStore.getState().apiActivityMs
+    expect(Math.abs(at - (t0 - 4000))).toBeLessThan(500)
+    m.sandbox.applyTopic({ ...topic, api_activity_age_s: 4.2 }) // the same activity one topic later
+    expect(m.sandboxStore.getState().apiActivityMs).toBe(at)
+    m.sandbox.applyTopic({ ...topic, api_activity_age_s: 0 })
+    expect(m.sandboxStore.getState().apiActivityMs).toBeGreaterThanOrEqual(at + 3000)
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls.every((c) => c.client?.startsWith('awr-web/'))).toBe(true)
   })
 
   it('the end beacon path: DELETE then draining; ENDED clears the stored token', async () => {

@@ -12,6 +12,9 @@
   轻量 tick（不读环、不编码）；单轮耗时 > 8 ms 计 `hub_overrun`；事件循环延迟 10 Hz 采样，写入各上下文的 perf；
 - 1 Hz：为每个 LIVE 上下文发布 `sandbox/session`（`awr.sandbox.session_state.v1`，FR-214），并以一条
   `sys/session/activity{items: {sid: {ws_n, api_calls, last_api_unix_ns}}}` 向池批量上报活动（M17-FR-042）；
+- 外部接口活动（issue #59）：不带 `X-AWR-Client: awr-web/…` 的会话内 REST 调用，以及客户端名不是 `awr-web` 的实时连接上的握手、
+  presence 与 `call`（SDK、脚本与其他工具）；`sandbox/session.api_activity_age_s` 给出距最近一次的秒数，页面的节能空闲计时
+  据此重置（页面自身的后台请求与连接不计入，空闲标签页照常节能）；
 - 池事件 `sandbox.*`（带 `data.sid`）转发到对应上下文的 EventRing（producer `sandbox-pool`），池若已在会话命名空间直接发布
   同类事件（M17-FR-029）则不再转发，避免重复；
 - 连接上限（FR-210）：全站 `ws_max_sbx = 4·N_max`（N_max 取池的 list 回复，缺省按 `sandbox:` 段公式）、每地址前缀与每会话
@@ -61,6 +64,7 @@ ACTIVITY_S = 1.0
 ENDED_KEEP_S = 600.0
 LIVE_STATES = ("READY", "ACTIVE", "IDLE", "DRAINING")
 END_STATES = ("ENDED", "FAILED")
+WEB_CLIENT = "awr-web"  # 页面客户端名的前缀（apps/web/src/net/clientName.ts）
 PARK_STATES = ("PARKING", "PARKED")  # D2.1（17 §17.20.4）：不在 LIVE_STATES，不记入 ended
 CLOSE_IDLE_RECLAIMED = 4430
 DENY_PREFIXES = ("sys/", "rec/")
@@ -162,8 +166,15 @@ class SessionView:
         return out
 
 
-def build_session_state(view: SessionView, summary: dict | None, gw: Gateway | None, *, now_ns: int | None = None) -> dict:
-    """`sandbox/session` 载荷（`awr.sandbox.session_state.v1`，17 §17.7.4）：池摘要优先，缺项由镜像与网关补齐。"""
+def is_web_client(name: str | None) -> bool:
+    """页面客户端（REST 请求头 `X-AWR-Client` 与实时 hello 的 `client` 为 `awr-web/<版本>`）。"""
+    return bool(name) and str(name).startswith(WEB_CLIENT)
+
+
+def build_session_state(view: SessionView, summary: dict | None, gw: Gateway | None, *, now_ns: int | None = None,
+                        api_activity_ns: int = 0) -> dict:
+    """`sandbox/session` 载荷（`awr.sandbox.session_state.v1`，17 §17.7.4）：池摘要优先，缺项由镜像与网关补齐。
+    `api_activity_ns` > 0 时给出 `api_activity_age_s`（距最近一次外部接口活动的秒数，与客户端时钟偏差无关，issue #59）。"""
     sm = summary or {}
     now = time.time_ns() if now_ns is None else now_ns
     exp = _int_ns(sm.get("expires_unix_ns")) or view.expires_unix_ns or now
@@ -209,6 +220,8 @@ def build_session_state(view: SessionView, summary: dict | None, gw: Gateway | N
         out["max_expires_unix_ns"] = str(mx)
     if isinstance(sm.get("limits_rev"), int):
         out["limits_rev"] = int(sm["limits_rev"])
+    if api_activity_ns > 0:
+        out["api_activity_age_s"] = round(max(0.0, (now - api_activity_ns) / 1e9), 1)
     return out
 
 
@@ -404,6 +417,7 @@ class GatewayHub:
         self.ended: dict[str, tuple[float, str, bool]] = {}  # sid -> (单调秒, 结束原因, 快照可取)
         self.api_calls: dict[str, int] = {}
         self.last_api_ns: dict[str, int] = {}
+        self.last_ext_ns: dict[str, int] = {}  # 外部接口活动（非页面客户端的会话内 REST，issue #59）
         self.n_max: int | None = None
         self.pool_up = False
         self.inbox: asyncio.Queue | None = None
@@ -439,9 +453,22 @@ class GatewayHub:
         v = self.views.get(sid)
         return v is not None and bool(v.raw.get("snapshot_available", v.state not in END_STATES))
 
-    def note_api(self, sid: str) -> None:
+    def note_api(self, sid: str, client: str | None = None) -> None:
+        """一次会话内 REST 调用（全部计入池的兜底驻留）；`client` 为请求头 `X-AWR-Client`，不是页面客户端时另记外部接口活动。"""
+        now = time.time_ns()
         self.api_calls[sid] = self.api_calls.get(sid, 0) + 1
-        self.last_api_ns[sid] = time.time_ns()
+        self.last_api_ns[sid] = now
+        if not is_web_client(client):
+            self.last_ext_ns[sid] = now
+
+    def external_activity_ns(self, sid: str, gw: Gateway | None) -> int:
+        """最近一次外部接口活动（墙钟 ns，0 为没有）：外部 REST 与非页面客户端连接的最近交互（握手、presence、call）的最大值；
+        hello 之前的连接不计（客户端名未知，页面重连时不算外部活动）。"""
+        t = self.last_ext_ns.get(sid, 0)
+        for s in list(gw.sessions) if gw is not None else []:
+            if getattr(s, "hello", False) and not s.closing and not is_web_client(getattr(s, "client", "")):
+                t = max(t, int(getattr(s, "last_input_ns", 0) or 0))
+        return t
 
     @property
     def ws_max(self) -> int:
@@ -604,6 +631,7 @@ class GatewayHub:
         self.summaries.pop(sid, None)
         self.api_calls.pop(sid, None)
         self.last_api_ns.pop(sid, None)
+        self.last_ext_ns.pop(sid, None)
 
     async def apply(self, views: list[SessionView], *, full: bool) -> None:
         """镜像更新与上下文生命周期（FR-205）。full = True 时未列出的会话视为结束。"""
@@ -832,8 +860,9 @@ class GatewayHub:
             ch = gw.registry.by_topic.get("sandbox/session")
             if ch is None:
                 continue
-            ch.publish(msgpack.packb(build_session_state(v, self.summaries.get(sid), gw, now_ns=now), use_bin_type=True),
-                       gw.frame_t_sim_ns)
+            st = build_session_state(v, self.summaries.get(sid), gw, now_ns=now,
+                                     api_activity_ns=self.external_activity_ns(sid, gw))
+            ch.publish(msgpack.packb(st, use_bin_type=True), gw.frame_t_sim_ns)
 
     def activity_items(self) -> dict[str, dict]:
         """每会话 `{ws_n, api_calls, last_api_unix_ns, last_input_unix_ns}`；D2.1 的 `last_input_unix_ns` 为全部连接最近交互

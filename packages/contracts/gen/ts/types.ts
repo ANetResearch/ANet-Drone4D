@@ -7398,6 +7398,10 @@ export interface SandboxSessionState {
     reason: 'idle' | 'lifetime' | 'preempted' | 'reclaimed' | 'user'
     in_s: number
   } | null
+  /**
+   * Seconds since the latest external API activity of the session: session REST calls without X-AWR-Client awr-web and realtime connections of other clients (handshake, presence, call). Absent when none was seen. The web client's power-save idle clock follows it (D2.2, issue #59).
+   */
+  api_activity_age_s?: number
 }
 export interface Scenario2 {
   schema: 'awr.scenario.v1'

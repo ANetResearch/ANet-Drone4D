@@ -154,7 +154,7 @@ async def require_sandbox_session(request: Request, sid: SidPath) -> ApiPrincipa
         raise _ended(hub, sid) or ApiProblem(305, status=404)
     if view.state == "DRAINING" and request.method not in ("GET", "HEAD", "DELETE") and not lenient:
         raise ApiProblem(513, status=409, detail={"state": view.state})
-    hub.note_api(sid)
+    hub.note_api(sid, request.headers.get("x-awr-client"))  # 页面客户端的请求不计外部接口活动（issue #59）
     st.sandbox_sid = sid
     return p
 

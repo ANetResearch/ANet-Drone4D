@@ -10,6 +10,10 @@
 //   RESUMING --link live / sandbox resumed-->        ACTIVE
 //   RESUMING --viewer seats full / sandbox queued--> QUEUED
 //   QUEUED --seat_ready / slot_ready-->              RESUMING
+// External API activity of the sandbox session (issue #59; `sandbox/session.api_activity_age_s`: SDK, scripts and other
+// clients, never the page's own requests) counts like an interaction for the idle and hidden rules: it restarts the idle
+// clock, cancels the warning and keeps a hidden page from saving while it lasts; QUIET (the frame cap) and presence follow the
+// local input only.
 // Static browsing, the landing page, pages without a realtime link and the local build (role `none`) never save (nothing
 // to reclaim) and keep their frame rate (no quiet cap: benchmarks and soak runs of the local build run unattended). The
 // internal identity's "keep running" never warns or saves (the quiet cap still applies).
@@ -52,7 +56,7 @@ export interface PowerContext {
   keepRunning: boolean
 }
 
-export interface Transition { from: PowerState; to: PowerState; reason: SaveReason | 'input' | 'quiet' | 'warn' | 'live' | 'queued' | 'ready' }
+export interface Transition { from: PowerState; to: PowerState; reason: SaveReason | 'input' | 'activity' | 'quiet' | 'warn' | 'live' | 'queued' | 'ready' }
 
 /** idle threshold (s) of a context */
 export function idleThresholdS(th: PowerThresholds, c: PowerContext): number {
@@ -65,6 +69,8 @@ export class PowerMachine {
   state: PowerState = 'ACTIVE'
   reason: SaveReason | null = null
   lastInputMs: number
+  /** wall ms of the latest external API activity of the session (-Infinity: none) */
+  activityMs = Number.NEGATIVE_INFINITY
   /** wall ms when the page became hidden (NaN while visible) */
   hiddenSinceMs = Number.NaN
   th: PowerThresholds = { ...POWER_DEFAULTS }
@@ -80,10 +86,15 @@ export class PowerMachine {
     return this.ctx.role !== 'none' && !(this.ctx.internal && this.ctx.keepRunning)
   }
 
+  /** the idle clock's reference: the latest local input or external API activity */
+  idleSinceMs(): number {
+    return Math.max(this.lastInputMs, this.activityMs)
+  }
+
   /** seconds left of the warning countdown (0 outside WARNING) */
   warnLeftS(nowMs: number): number {
     if (this.state !== 'WARNING') return 0
-    const left = idleThresholdS(this.th, this.ctx) - (nowMs - this.lastInputMs) / 1000
+    const left = idleThresholdS(this.th, this.ctx) - (nowMs - this.idleSinceMs()) / 1000
     return Math.max(0, Math.ceil(left))
   }
 
@@ -108,6 +119,17 @@ export class PowerMachine {
     if (this.state === 'QUIET' || this.state === 'WARNING') return this.go('ACTIVE', 'input')
     if (this.state === 'SAVING') return this.go('RESUMING', 'input')
     return null
+  }
+
+  /** external API activity at `atMs` (wall ms; clamped to now): restarts the idle clock and cancels the warning (back to QUIET
+   *  when the local input is older than quiet_s, else ACTIVE); nothing to do while saving, resuming or queued */
+  activity(atMs: number, nowMs: number): Transition | null {
+    const at = Math.min(atMs, nowMs)
+    if (!(at > this.activityMs)) return null
+    this.activityMs = at
+    if (this.state !== 'WARNING') return null
+    if ((nowMs - this.idleSinceMs()) / 1000 >= idleThresholdS(this.th, this.ctx) - this.th.warnS) return null
+    return this.go((nowMs - this.lastInputMs) / 1000 >= this.th.quietS ? 'QUIET' : 'ACTIVE', 'activity')
   }
 
   /** visibility changes (hidden starts the hidden timer; visible clears it) */
@@ -150,16 +172,20 @@ export class PowerMachine {
   tick(nowMs: number): Transition | null {
     const s = this.state
     if (s === 'SAVING' || s === 'RESUMING' || s === 'QUEUED') return null
-    if (this.canSave() && Number.isFinite(this.hiddenSinceMs) && nowMs - this.hiddenSinceMs >= this.th.hiddenS * 1000) return this.go('SAVING', 'hidden')
+    // hidden: saves once both the page has been hidden and the session has seen no external API activity for hidden_s
+    const hiddenMs = this.th.hiddenS * 1000
+    if (this.canSave() && Number.isFinite(this.hiddenSinceMs) && nowMs - this.hiddenSinceMs >= hiddenMs && nowMs - this.activityMs >= hiddenMs) {
+      return this.go('SAVING', 'hidden')
+    }
     if (Number.isFinite(this.hiddenSinceMs)) return null // hidden: no quiet or warning while nobody looks
-    const idleS = (nowMs - this.lastInputMs) / 1000
+    const idleS = (nowMs - this.idleSinceMs()) / 1000
     if (this.canSave()) {
       const limit = idleThresholdS(this.th, this.ctx)
       if (idleS >= limit) return this.go('SAVING', 'idle')
       if (s !== 'WARNING' && idleS >= limit - this.th.warnS) return this.go('WARNING', 'warn')
     }
     // the quiet cap belongs to the power-save roles too: the local build's benchmarks and soak runs keep their frame rate
-    if (s === 'ACTIVE' && this.ctx.role !== 'none' && idleS >= this.th.quietS) return this.go('QUIET', 'quiet')
+    if (s === 'ACTIVE' && this.ctx.role !== 'none' && (nowMs - this.lastInputMs) / 1000 >= this.th.quietS) return this.go('QUIET', 'quiet')
     return null
   }
 }

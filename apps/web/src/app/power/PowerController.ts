@@ -2,9 +2,12 @@
 // Owner: M15. One singleton installed from main.tsx; it owns the pure PowerMachine (app/power/machine.ts) and performs the
 // side effects of its transitions:
 //   * interaction detection (AWR-04 §15.7.1): pointerdown, pointermove while pressed or after >= 8 px accumulated, wheel,
-//     touchstart, keydown (a lone modifier only with another key within 2 s), orientation changes and window resizes of
-//     >= 10 %, manual control in progress; listeners are `{passive: true, capture: true}` on window and only write a
-//     timestamp; a 1 Hz timer runs the machine while the page is visible (no per-frame work);
+//     touchstart, touchmove (a touch drag the browser took over for scrolling sends no pointermove), keydown (a lone modifier
+//     only with another key within 2 s), text input (IME, paste, autofill), orientation changes and window resizes of >= 10 %,
+//     manual control in progress; listeners are `{passive: true, capture: true}` on window and only write a timestamp; a 1 Hz
+//     timer runs the machine while the page is visible (no per-frame work);
+//   * external API activity of the sandbox session (issue #59; `sandbox/session.api_activity_age_s` through the sandbox store:
+//     SDK, scripts, other clients) restarts the idle clock, cancels the warning and holds off the hidden rule;
 //   * visibility: hidden for hidden_s saves; Page Lifecycle `freeze` and a pagehide into the bfcache save at once (the
 //     sandbox through the SB-72 park beacon); a pagehide that discards the document (reload, tab close) does not park
 //     (D2-AC-38: a reload is back on the same sid; the server parks a closed tab after idle_disconnected_s);
@@ -242,7 +245,7 @@ function apply(t: Transition | null, beacon = false): void {
   switch (t.to) {
     case 'QUIET':
       quietCap(true)
-      set({ state: 'QUIET' })
+      set({ state: 'QUIET', warnLeftS: 0 })
       break
     case 'WARNING':
       set({ state: 'WARNING', warnLeftS: machine.warnLeftS(Date.now()) })
@@ -462,7 +465,9 @@ export function installPowerController(): () => void {
   window.addEventListener('pointermove', onPointerMove, o)
   window.addEventListener('wheel', onInput, o)
   window.addEventListener('touchstart', onInput, o)
+  window.addEventListener('touchmove', onInput, o)
   window.addEventListener('keydown', onKey, o)
+  window.addEventListener('input', onInput, o)
   window.addEventListener('orientationchange', onInput, o)
   window.addEventListener('resize', onResize, o)
   window.addEventListener('pagehide', onPageHide, o)
@@ -475,6 +480,8 @@ export function installPowerController(): () => void {
   const offCap = capacityStore.subscribe(() => applyThresholds())
   // a sandbox that resumed reaches LIVE through the new link; a sandbox ended while parked leaves the overlay
   const offSb = sandboxStore.subscribe((s, p) => {
+    if (s.sid !== p.sid) machine.activityMs = Number.NEGATIVE_INFINITY
+    if (s.apiActivityMs !== p.apiActivityMs && s.apiActivityMs > 0 && machine.ctx.role === 'sandbox') apply(machine.activity(s.apiActivityMs, Date.now()))
     if (s.phase === p.phase) return
     if (machine.state === 'QUEUED' && machine.ctx.role === 'sandbox' && (s.phase === 'spawning' || s.phase === 'ready' || s.phase === 'active')) {
       apply(machine.ready())
@@ -512,7 +519,9 @@ export function installPowerController(): () => void {
     window.removeEventListener('pointermove', onPointerMove, o)
     window.removeEventListener('wheel', onInput, o)
     window.removeEventListener('touchstart', onInput, o)
+    window.removeEventListener('touchmove', onInput, o)
     window.removeEventListener('keydown', onKey, o)
+    window.removeEventListener('input', onInput, o)
     window.removeEventListener('orientationchange', onInput, o)
     window.removeEventListener('resize', onResize, o)
     window.removeEventListener('pagehide', onPageHide, o)

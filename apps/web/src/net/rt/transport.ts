@@ -3,6 +3,7 @@
 // Backoff follows partysocket's shape: minDelay 500 ms, grow 1.5, max 10 s, +-20 % jitter, connection timeout 4 s.
 // D2: the refused-upgrade triage asks whoami for the shared show and the session object (SB-08) for a sandbox
 // (AWR-17 §17.9.3), on the host of the realtime URL (the worker has no page state; the URL already carries the origin).
+import { CLIENT_HEADER, CLIENT_NAME } from '../clientName'
 import { authCheckPath } from '../endpoint'
 export const WS_CONNECTING = 0
 export const WS_OPEN = 1
@@ -56,7 +57,7 @@ export function httpUrlOf(wsUrl: string, path: string): string {
 /** GET /api/auth/whoami (shared show) or GET /api/sandbox/v1/sessions/{sid} (sandbox) with the bearer token; the HTTP
  * status, 0 on a network error */
 export function whoamiStatus(wsUrl: string, token: string): Promise<number> {
-  const headers: Record<string, string> = { accept: 'application/json' }
+  const headers: Record<string, string> = { accept: 'application/json', [CLIENT_HEADER]: CLIENT_NAME }
   if (token) headers.authorization = `Bearer ${token}`
   return fetch(httpUrlOf(wsUrl, authCheckPath(wsUrl)), { headers, cache: 'no-store' }).then((r) => r.status, () => 0)
 }

@@ -21,6 +21,7 @@ import {
   BATCH_SNAPSHOT, CD_FINAL, CONTRACTS_VERSION, OP_BATCH, OP_TIME, SCHEMA_HASH, TimeState, newRecordView, newRtBatchHeader,
   newTimeView, readFrameHeader, readTime, writeClientData,
 } from './layouts'
+import { CLIENT_NAME } from '../clientName'
 import { ClockSync } from './clockSync'
 import { CtrlQueue } from './ctrl'
 import { Decoder, type CtrlMsg } from './decode'
@@ -31,7 +32,7 @@ import { CONN_STATES, str, type ClientStats, type ConnErrorKind, type ConnState 
 export type { CtrlMsg } from './decode'
 export { EVENT_BUFFER_CAP } from './ctrl'
 
-export const CLIENT_NAME = 'awr-web/0.1.0'
+export { CLIENT_NAME }
 /** schemas this client decodes with generated accessors (hash checked against serverInfo.layouts, M11-FR-100) */
 export const DECODED_SCHEMAS = ['awr.SwarmLite32.v1', 'awr.DroneState64.v1', 'awr.EnvSample32.v1', 'awr.SensorPose48.v1',
   'awr.rt.BatchHeader.v1', 'awr.rt.RecordHeader.v1', 'awr.rt.Time.v1', 'awr.rt.ClientDataHeader.v1', 'awr.VelSetpoint16.v1'] as const

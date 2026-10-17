@@ -184,6 +184,47 @@ describe('power-save state machine (D2-AC-44, 45, M15-FR-227)', () => {
     const th = thresholdsFrom(POWER_DEFAULTS, { viewer_idle_s: 20, warn_s: 5, hidden_s: -1, sandbox_idle_s: 'x' })
     expect(th).toMatchObject({ viewerIdleS: 20, warnS: 5, hiddenS: 60, sandboxIdleS: 600 })
   })
+  it('external API activity restarts the idle clock and cancels the warning; quiet follows the local input (issue #59)', () => {
+    const sb = (m: PowerMachine) => {
+      m.ctx = { role: 'sandbox', busy: false, internal: false, keepRunning: false }
+      m.th = { ...POWER_DEFAULTS, sandboxIdleS: 20, warnS: 5, quietS: 8, hiddenS: 3 }
+      return m
+    }
+    const m = sb(new PowerMachine(0))
+    expect(m.activity(6_000, 6_000)).toBeNull()
+    expect(m.tick(8_000)?.to).toBe('QUIET') // no local input for quiet_s: the frame cap still applies
+    expect(m.tick(15_000)).toBeNull() // the idle clock runs from the activity at 6 s
+    expect(m.tick(21_000)?.to).toBe('WARNING')
+    expect(m.warnLeftS(21_000)).toBe(5)
+    expect(m.activity(22_000, 22_500)).toMatchObject({ from: 'WARNING', to: 'QUIET', reason: 'activity' })
+    expect(m.activity(20_000, 23_000)).toBeNull() // older than the latest: ignored
+    expect(m.tick(36_000)).toBeNull()
+    expect(m.tick(37_000)?.to).toBe('WARNING')
+    expect(m.tick(42_000)?.to).toBe('SAVING')
+    expect(m.reason).toBe('idle')
+    expect(m.activity(43_000, 43_000)).toBeNull() // saving: only an input resumes
+    expect(m.state).toBe('SAVING')
+    const a = sb(new PowerMachine(0))
+    a.th = { ...a.th, quietS: 30 }
+    a.input(10_000)
+    a.tick(25_000)
+    expect(a.state).toBe('WARNING')
+    expect(a.activity(26_000, 26_000)?.to).toBe('ACTIVE') // local input within quiet_s: back to ACTIVE
+    const f = sb(new PowerMachine(0))
+    expect(f.activity(99_000, 50_000)).toBeNull() // a future time is clamped to now
+    expect(f.activityMs).toBe(50_000)
+  })
+  it('a hidden page saves only once the session saw no external API activity for hidden_s (issue #59)', () => {
+    const m = new PowerMachine(0)
+    m.ctx = { role: 'sandbox', busy: false, internal: false, keepRunning: false }
+    m.th = { ...POWER_DEFAULTS, sandboxIdleS: 600, hiddenS: 3 }
+    m.visibility(false, 1_000)
+    m.activity(2_500, 2_500)
+    expect(m.tick(4_000)).toBeNull()
+    m.activity(5_000, 5_000)
+    expect(m.tick(7_999)).toBeNull()
+    expect(m.tick(8_000)).toMatchObject({ to: 'SAVING', reason: 'hidden' })
+  })
   it('pointer jitter below 8 px accumulated is not an interaction', () => {
     const j = new JitterFilter()
     expect(j.move(100, 100, false)).toBe(false)

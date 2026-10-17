@@ -21,6 +21,7 @@
 import type { Session, SessionCreated, SessionChallenge, SessionKeepaliveReply, SessionQueued, Snapshot, Ticket, SandboxSessionState } from '@awr/contracts/types'
 import { useStore } from 'zustand'
 import { createAwrStore } from '@/lib/createStore'
+import { CLIENT_HEADER, CLIENT_NAME } from '@/net/clientName'
 import { apiUrl, SANDBOX_API } from '@/net/endpoint'
 import type { RtClient, RtEvent } from '@/net/rt'
 import { UX } from '@/ui/testing/uxProbe'
@@ -94,6 +95,9 @@ export interface SandboxSessionView {
   parked: ParkedView | null
   /** D2.1: tier of the session (internal identity sessions: reserved slot, 8 h, never preempted) */
   tier: 'public' | 'internal' | null
+  /** wall ms (page clock) of the latest external API activity of the session (topic `api_activity_age_s`; SDK, scripts and
+   *  other clients; 0: none seen); the power-save idle clock follows it (issue #59) */
+  apiActivityMs: number
   version: number
 }
 export interface ParkedView {
@@ -108,9 +112,11 @@ export interface ParkedView {
 const INITIAL: SandboxSessionView = {
   phase: 'none', sid: null, token: null, tokenExpUnixMs: 0, world: null, template: null, session: null, updatedAtMs: 0, queue: null,
   expiring: null, endReason: null, error: null, verifying: false, verifyHint: false, phaseSinceMs: 0, retryUntilMs: 0, anotherTab: false,
-  switching: null, parked: null, tier: null, version: 0,
+  switching: null, parked: null, tier: null, apiActivityMs: 0, version: 0,
 }
 export const VERIFY_HINT_MS = 300
+/** external API activity newer than the stored one by at least this much updates the store (the 1 Hz topic repeats the age) */
+export const API_ACTIVITY_STEP_MS = 1000
 
 export const sandboxStore = createAwrStore<SandboxSessionView>('ui.sandbox', () => ({ ...INITIAL }))
 export const useSandbox = <T,>(sel: (s: SandboxSessionView) => T): T => useStore(sandboxStore, sel)
@@ -263,7 +269,7 @@ export function setSandboxFetcher(f: Fetcher | null): void {
 }
 
 export async function sbFetch<T>(method: string, path: string, body?: unknown, token?: string | null, signal?: AbortSignal, identity?: string | null): Promise<HttpReply<T>> {
-  const headers: Record<string, string> = { accept: 'application/json' }
+  const headers: Record<string, string> = { accept: 'application/json', [CLIENT_HEADER]: CLIENT_NAME }
   if (body !== undefined) headers['content-type'] = 'application/json'
   if (token) headers.authorization = `Bearer ${token}`
   if (identity) headers['x-awr-identity'] = identity
@@ -648,6 +654,12 @@ export const sandbox = {
     }
     sandbox.applySession(session)
     if (st.expiring && !sandboxStore.getState().expiring) sandbox.noteExpiring(st.expiring.reason, st.expiring.in_s)
+    // the age is relative to the server's publish time (no clock skew); a change below API_ACTIVITY_STEP_MS is the same activity
+    const age = st.api_activity_age_s
+    if (typeof age === 'number' && Number.isFinite(age) && age >= 0) {
+      const at = Date.now() - age * 1000
+      if (at - sandboxStore.getState().apiActivityMs >= API_ACTIVITY_STEP_MS) set({ apiActivityMs: at })
+    }
   },
 
   /** `sandbox.expiring` (event or topic): 60 s countdown and one automatic snapshot export (AWR-14 §20.4.6 item 2) */

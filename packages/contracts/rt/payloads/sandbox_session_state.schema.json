@@ -170,6 +170,12 @@
           "type": "null"
         }
       ]
+    },
+    "api_activity_age_s": {
+      "type": "number",
+      "minimum": 0,
+      "unit": "s",
+      "description": "Seconds since the latest external API activity of the session: session REST calls without X-AWR-Client awr-web and realtime connections of other clients (handshake, presence, call). Absent when none was seen. The web client's power-save idle clock follows it (D2.2, issue #59)."
     }
   },
   "required": [

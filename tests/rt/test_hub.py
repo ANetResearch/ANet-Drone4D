@@ -322,3 +322,48 @@ def test_parking_closes_with_518_4430_and_domain_routes_answer_515(sbx: SbStack)
     asyncio.run(go())
     items = [(a.get("items") or {}).get(sid) for a in sbx.pool.activity[n0:]]
     assert any(it and it.get("ws_n") == 1 and int(it.get("last_input_unix_ns") or 0) > 0 for it in items), items[-3:]
+
+
+def test_external_api_activity_excludes_the_web_client(sbx: SbStack) -> None:
+    """issue #59：外部接口活动只计不带 `X-AWR-Client: awr-web/…` 的会话 REST 与非页面客户端的实时连接；`sandbox/session` 的
+    `api_activity_age_s` 为距最近一次的秒数（全部 REST 仍计入池的兜底驻留）。"""
+    sid = sbx.pool.add()
+    sbx.wait_live(sid)
+    tok = sbx.pool.token(sid)
+    url = f"{sbx.base}/api/sandbox/v1/sessions/{sid}/vehicles"
+    ext = lambda: sbx.call_in_loop(lambda: sbx.hub.last_ext_ns.get(sid, 0))  # noqa: E731
+    api = lambda: sbx.call_in_loop(lambda: sbx.hub.last_api_ns.get(sid, 0))  # noqa: E731
+    httpx.get(url, headers={"authorization": f"Bearer {tok}", "x-awr-client": "awr-web/0.1.0"}, timeout=10)
+    assert ext() == 0 and api() > 0
+    t0 = time.time_ns()
+    httpx.get(url, headers={"authorization": f"Bearer {tok}"}, timeout=10)
+    assert ext() >= t0
+
+    def ext_now() -> int:
+        c = sbx.hub.get(sid)
+        return sbx.hub.external_activity_ns(sid, c.gateway if c is not None else None)
+
+    async def go() -> None:
+        sbx.call_in_loop(lambda: sbx.hub.last_ext_ns.pop(sid, None))
+        protos = [rtc.PROTO, f"bearer.{tok}"]
+        ws = await connect(sbx.ws_url(sid), subprotocols=protos, origin=sbx.origin, max_size=None, compression=None, open_timeout=10)
+        web = rtc.Client(ws)
+        await web.until(lambda k, x: k == "json" and x["op"] == "serverInfo", 10)
+        await web.send({"op": "hello", "client": "awr-web/0.1.0", "contracts": CONTRACTS_VERSION})
+        await web.drain(0.3)
+        assert sbx.call_in_loop(ext_now) == 0  # 页面自己的连接不计
+        t1 = time.time_ns()
+        sdk = await open_sb(sbx, sid, tok)  # 客户端名 tests-sbx：外部连接，握手计一次
+        await sdk.drain(0.3)
+        assert sbx.call_in_loop(ext_now) >= t1 - 10**9
+        await sdk.ws.close()
+        await web.ws.close()
+
+    asyncio.run(go())
+    v = SessionView.from_msg({"sid": sid, "state": "ACTIVE", "world_id": "synthcity", "expires_unix_ns": str(time.time_ns() + 60 * 10**9)})
+    assert v is not None
+    now = time.time_ns()
+    st = build_session_state(v, {}, None, now_ns=now, api_activity_ns=now - 12_340_000_000)
+    assert st["api_activity_age_s"] == 12.3
+    assert rtc.schema_errors("rt/payloads/sandbox_session_state.schema.json", st) == []
+    assert "api_activity_age_s" not in build_session_state(v, {}, None, now_ns=now)
