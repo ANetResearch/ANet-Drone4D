@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import threading
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Query, Request, Response
 
@@ -16,6 +17,7 @@ from awr.api.problem import ApiProblem
 from awr.bench.api.deps import FrameReader, Researcher, TruthReader
 from awr.bench.recorder.read import FrameLimitError, FrameStore, TruthStore
 from awr.bench.recorder.truth import CONTENT_TYPE as GT_CONTENT_TYPE
+from awr.bench.recorder.truth import decode_blocks, pack_camera_gt, unpack_camera_gt
 from awr.bench.runs_store import find_run, list_runs, truth_paths
 
 router = APIRouter()
@@ -146,11 +148,16 @@ def frame(rid: str, uav: str, sensor: str, seq: int, request: Request,
 
 
 @router.get("/runs/{rid}/truth/frames/{uav}/{sensor}/{seq}")
-def truth_frame(rid: str, uav: str, sensor: str, seq: int, request: Request, p: TruthReader) -> Response:
-    """BN-52：`awr.sensor.camera_gt.v1` 容器（frame.v1 记录 + 实例、语义、invalid_mask 等块）；只对评测员及以上。"""
+def truth_frame(rid: str, uav: str, sensor: str, seq: int, request: Request, p: TruthReader,
+                decode: Literal["none", "raw"] = "none") -> Response:
+    """BN-52：`awr.sensor.camera_gt.v1` 容器（frame.v1 记录 + 实例、语义、invalid_mask 等块）；只对评测员及以上。
+    `decode=raw` 返回块已解压的同格式容器（观测墙评测视图使用）。"""
     d = find_run(request.app.state.settings.dataset_dir, rid)
     ts = request.app.state.frame_stores.truth(d, rid) if d else None
     hit = ts.get(uav, sensor, seq) if ts else None
     if hit is None:
         raise ApiProblem(305, detail={"run_id": rid, "uav": uav, "sensor": sensor, "seq": seq})
-    return Response(hit[1], media_type=GT_CONTENT_TYPE, headers={"X-Frame-T-Ns": str(hit[0]), "Cache-Control": _IMMUTABLE})
+    body = hit[1]
+    if decode == "raw":
+        body = pack_camera_gt(*decode_blocks(*unpack_camera_gt(body)))
+    return Response(body, media_type=GT_CONTENT_TYPE, headers={"X-Frame-T-Ns": str(hit[0]), "Cache-Control": _IMMUTABLE})

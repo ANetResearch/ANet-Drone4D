@@ -83,3 +83,40 @@ describe('lab login next', () => {
     for (const bad of [null, '', '//evil.example/lab', 'https://evil.example/lab', '/worlds', '/lab\\..\\x', '/labx']) expect(safeNext(bad)).toBe('/lab/runs')
   })
 })
+
+describe('truth overlay (camera_gt.v1, decode=raw)', () => {
+  const pack = (rec: object, blocks: [string, Uint8Array][]): ArrayBuffer => {
+    const enc = new TextEncoder()
+    const js = enc.encode(JSON.stringify(rec))
+    const parts: Uint8Array[] = [enc.encode('D3GT'), new Uint8Array(new Uint16Array([1, blocks.length]).buffer), new Uint8Array(new Uint32Array([js.length]).buffer), js]
+    for (const [name, b] of blocks) {
+      const nb = enc.encode(name)
+      parts.push(new Uint8Array(new Uint16Array([nb.length]).buffer), nb, new Uint8Array(new Uint32Array([b.length]).buffer), b)
+    }
+    const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0))
+    let o = 0
+    for (const p of parts) { out.set(p, o); o += p.length }
+    return out.buffer
+  }
+
+  it('parses blocks and outlines instances, hatches invalid pixels', async () => {
+    const { parseD3GT, truthOverlay } = await import('@/ui/lab/wall/truth')
+    const w = 8
+    const h = 8
+    const inst = new Uint16Array(w * h)
+    for (let y = 2; y < 6; y++) for (let x = 2; x < 6; x++) inst[y * w + x] = 7
+    const mask = new Uint8Array(w * h).fill(1)
+    const rec = { frame_id: 'r/u/c/1', agent_view: { width: w, height: h },
+      ground_truth: { instance: { ref: 'i', codec: 'raw' }, invalid_mask: { ref: 'm', codec: 'raw' }, objects: [] } }
+    const fr = parseD3GT(pack(rec, [['i', new Uint8Array(inst.buffer)], ['m', mask]]))
+    expect(fr.rec.frame_id).toBe('r/u/c/1')
+    const px = truthOverlay(fr, [250, 250, 250], [90, 90, 90])!
+    const at = (x: number, y: number) => Array.from(px.subarray((y * w + x) * 4, (y * w + x) * 4 + 4))
+    expect(at(2, 2)).toEqual([250, 250, 250, 255])                  // instance boundary
+    expect(at(3, 3)[3]).toBe(0)                                      // instance interior stays clear
+    expect(at(0, 0)).toEqual([90, 90, 90, 160])                     // hatch on (x + y) % 8 == 0
+    expect(at(1, 0)[3]).toBe(0)
+    const zipped = parseD3GT(pack({ ...rec, ground_truth: { instance: { ref: 'i', codec: 'zstd' } } }, [['i', new Uint8Array(3)]]))
+    expect(truthOverlay(zipped, [0, 0, 0], [0, 0, 0])).toBeNull()      // compressed blocks are not decoded in the browser
+  })
+})

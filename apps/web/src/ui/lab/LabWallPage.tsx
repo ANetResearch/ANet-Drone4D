@@ -6,11 +6,12 @@ import { useQuery } from '@tanstack/react-query'
 import * as React from 'react'
 import { useT } from '@/app/i18n'
 import { navigate, type RouteProps } from '@/app/router/router'
-import { benchGet, type BenchRun } from '@/net/bench'
+import { benchGet, ROLE_RANK, type BenchRun } from '@/net/bench'
 import { usePlayhead } from '@/stores/lab/playhead'
 import { PanelEmpty } from '@/ui/brand'
 import { Button } from '@/ui/components/ui/button'
 import { Slider } from '@/ui/components/ui/slider'
+import { toast } from '@/ui/components/ui/toast'
 import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { Icon } from '@/ui/icons/Icon'
 import { useWindowSize } from '@/ui/layout/layoutState'
@@ -31,6 +32,14 @@ export function LabWallPage({ params, search }: RouteProps) {
     return (GRIDS as readonly number[]).includes(g) ? (g as GridSize) : 'auto'
   })
   const [mode, setMode] = React.useState<'rgb' | 'depth'>('rgb')
+  const canEval = session !== null && ROLE_RANK[session.role] >= ROLE_RANK.evaluator
+  const [evalWanted, setEvalWanted] = React.useState(search.get('view') === 'eval')
+  const evalView = evalWanted && canEval
+  const denied = evalWanted && session !== null && !canEval
+  React.useEffect(() => {
+    // view=eval without the role shows the observation view with one notice (AWR-14 §21.2.3 item 2)
+    if (denied) toast.add({ type: 'info', title: t('lab.wall.evalDenied') })
+  }, [denied, t])
   const [page, setPage] = React.useState(0)
   const [sel, setSel] = React.useState<string | null>(null)
   const [zoom, setZoom] = React.useState<string | null>(null)
@@ -89,6 +98,9 @@ export function LabWallPage({ params, search }: RouteProps) {
         </Button>
         <h1 className="font-mono text-ed-title font-bold">{rid}</h1>
         <span className="text-hud-sub text-muted-foreground">{run.data?.world_id ?? ''}</span>
+        {evalView ? (
+          <span data-eval-tag className="rounded-sm border border-foreground px-1.5 text-hud-sub font-bold">{t('lab.wall.evalView')}</span>
+        ) : null}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <span className="text-hud-sub text-muted-foreground">{t('lab.wall.grid')}</span>
           <ToggleGroup spacing={0} size="sm" variant="outline" value={[String(grid)]} aria-label={t('lab.wall.grid')}
@@ -113,6 +125,12 @@ export function LabWallPage({ params, search }: RouteProps) {
             <ToggleGroupItem value="rgb">{t('lab.wall.rgb')}</ToggleGroupItem>
             <ToggleGroupItem value="depth" disabled={!hasDepth}>{t('lab.wall.depth')}</ToggleGroupItem>
           </ToggleGroup>
+          {canEval ? (
+            <Button size="sm" variant={evalView ? 'secondary' : 'outline'} aria-pressed={evalView} onClick={() => setEvalWanted(!evalView)}>
+              <Icon icon="layer.bbox" data-icon="inline-start" />
+              {t('lab.wall.evalView')}
+            </Button>
+          ) : null}
         </div>
       </header>
       <div ref={box} className="min-h-0 flex-1 overflow-hidden p-4">
@@ -121,7 +139,8 @@ export function LabWallPage({ params, search }: RouteProps) {
         ) : (
           <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${L.cols}, ${L.tileW}px)` }}>
             {tiles.map((u) => (
-              <WallTile key={`${u}/${camSel}/${mode}`} rid={rid} uav={u} cam={camSel} mode={mode} w={L.tileW} h={L.tileH} selected={sel === u}
+              <WallTile key={`${u}/${camSel}/${mode}`} rid={rid} uav={u} cam={camSel} mode={mode} evalView={evalView} w={L.tileW} h={L.tileH}
+                selected={sel === u}
                 onSelect={() => setSel(u)} onZoom={() => setZoom(zoom ? null : u)} onSpan={onSpan} />
             ))}
           </div>

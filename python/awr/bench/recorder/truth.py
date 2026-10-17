@@ -5,7 +5,8 @@
     magic "D3GT" | version u16 = 1 | n_blocks u16 | json_len u32 | frame.v1 JSON (UTF-8)
     n_blocks × ( name_len u16 | name (UTF-8，= ref) | len u32 | bytes )
 
-小端；块按 ref 字典序。真值帧接口（BN-52）原样返回本容器（`application/x-d3gt`）。
+小端；块按 ref 字典序。真值帧接口（BN-52）原样返回本容器（`application/x-d3gt`）；`decode=raw` 时先经 `decode_blocks`
+把 zstd 与 bshuf4-zstd 块解成原始小端数组，记录中对应条目的 `codec` 改为 `raw`（浏览器侧无需 zstd 解码器）。
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from __future__ import annotations
 import json
 import struct
 
-__all__ = ["CONTENT_TYPE", "pack_camera_gt", "unpack_camera_gt"]
+__all__ = ["CONTENT_TYPE", "decode_blocks", "pack_camera_gt", "unpack_camera_gt"]
 
 MAGIC = b"D3GT"
 CONTENT_TYPE = "application/x-d3gt"
@@ -46,3 +47,27 @@ def unpack_camera_gt(b: bytes) -> tuple[dict, dict[str, bytes]]:
         blocks[name] = b[p + 4:p + 4 + ln]
         p += 4 + ln
     return rec, blocks
+
+
+def decode_blocks(rec: dict, blocks: dict[str, bytes]) -> tuple[dict, dict[str, bytes]]:
+    """返回新的 (记录, 块)：`ground_truth` 中 codec 为 zstd 或 bshuf4-zstd 的条目解为原始字节，codec 记为 raw。"""
+    import copy
+
+    import zstandard
+
+    from awr.bench.recorder.depthcodec import DEPTH_COMPRESSION, bshuf4_unzstd
+
+    rec = copy.deepcopy(rec)
+    out = dict(blocks)
+    dz = zstandard.ZstdDecompressor()
+    for ent in (rec.get("ground_truth") or {}).values():
+        if not isinstance(ent, dict) or ent.get("ref") not in out:
+            continue
+        if ent.get("codec") == "zstd":
+            out[ent["ref"]] = dz.decompress(out[ent["ref"]])
+        elif ent.get("codec") == DEPTH_COMPRESSION:
+            out[ent["ref"]] = bshuf4_unzstd(out[ent["ref"]])
+        else:
+            continue
+        ent["codec"] = "raw"
+    return rec, out

@@ -140,3 +140,37 @@ def test_truth_frames_evaluator_only(env) -> None:
     rec, blocks = unpack_camera_gt(r.content)
     assert rec["frame_id"] == "cap-0001/uav-01/cam0/3" and np.frombuffer(blocks["inst"], "<u2")[0] == 3
     assert c.get(f"{P}/runs/cap-0001/truth/frames/uav-01/cam0/9", headers={"Authorization": f"Bearer {app.state.tok_eval}"}).json()["code"] == 305
+
+
+def test_truth_frame_decode_raw(tmp_path: Path) -> None:
+    """BN-52 `decode=raw`：zstd 与 bshuf4-zstd 块解为原始数组，codec 记为 raw；未知取值 400。"""
+    import zstandard
+
+    from awr.bench.recorder.depthcodec import bshuf4_zstd
+
+    s = BenchSettings(data_root=tmp_path / "d3", allowed_origins=(ORIGIN,), secure_cookie=False)
+    run = s.dataset_dir / "capture" / "runs" / "cap-0002"
+    with RunWriter(run / "raw.mcap") as w:
+        w.write_camera("uav-01", "cam0", 1, 100_000_000, _jpeg(1))
+    build_frames_idx(run / "raw.mcap", run / "frames.idx")
+    inst = np.arange(6, dtype="<u2")
+    dep = np.linspace(1, 6, 6, dtype="<f4")
+    rec = {"schema": "drone4d.frame.v1", "frame_id": "cap-0002/uav-01/cam0/1", "agent_view": {"width": 3, "height": 2},
+           "ground_truth": {"instance": {"dtype": "u16", "codec": "zstd", "ref": "i.zst"},
+                            "gt_depth": {"dtype": "f32", "unit": "m", "codec": "bshuf4-zstd", "ref": "d.zst"}, "objects": []}}
+    tm, ti = truth_paths(run)
+    with RunWriter(tm) as w:
+        w.write_camera_truth("uav-01", "cam0", 1, 100_000_000, rec, {"i.zst": zstandard.ZstdCompressor().compress(inst.tobytes()),
+                                                                     "d.zst": bshuf4_zstd(dep.tobytes())})
+    build_frames_idx(tm, ti, parse=parse_truth_topic)
+    (run / "run_manifest.json").write_text(json.dumps({"state": "SUCCEEDED", "kind": "capture"}))
+    app = create_app(s)
+    h = {"Authorization": f"Bearer {app.state.auth.issue_token('eve', 'evaluator')[1]}"}
+    c = TestClient(app)
+    url = f"{P}/runs/cap-0002/truth/frames/uav-01/cam0/1"
+    r2, b2 = unpack_camera_gt(c.get(url + "?decode=raw", headers=h).content)
+    assert r2["ground_truth"]["instance"]["codec"] == "raw" and b2["i.zst"] == inst.tobytes()
+    assert r2["ground_truth"]["gt_depth"]["codec"] == "raw" and b2["d.zst"] == dep.tobytes()
+    r0, _ = unpack_camera_gt(c.get(url, headers=h).content)
+    assert r0["ground_truth"]["instance"]["codec"] == "zstd"
+    assert c.get(url + "?decode=png", headers=h).status_code == 400                             # 参数校验失败（problem+json）
