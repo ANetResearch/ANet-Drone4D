@@ -78,8 +78,10 @@ def _gimbal(g: tuple[float, float, float]) -> dict:
 def camera_frame(ctx: FrameContext, *, uav: str, sensor_id: str, seq: int, t_mid_ns: int, exposure_ns: int, readout_ns: int,
                  cm: CameraModel, mount: Mount, gimbal_reading: tuple[float, float, float], gimbal_true: tuple[float, float, float],
                  pos_enu_m: np.ndarray, R_ws: np.ndarray, out: RenderOut, outputs: frozenset[str] | set[str],
-                 ref_prefix: str = "") -> tuple[dict, dict[str, bytes]]:
-    """返回 (frame.v1 记录, {ref: 字节})。`outputs` 取 render_req.v1 的取值；真值分区总是写出（只进入评测库与真值文件，ADR-161）。"""
+                 ref_prefix: str = "", depth_obs: np.ndarray | None = None,
+                 depth_range_m: tuple[float, float] | None = None) -> tuple[dict, dict[str, bytes]]:
+    """返回 (frame.v1 记录, {ref: 字节})。`outputs` 取 render_req.v1 的取值；真值分区总是写出（只进入评测库与真值文件，ADR-161）。
+    `depth_obs` 为经 L2-depth 传感器模型的观测深度（缺省即渲染深度），`gt_depth` 总是渲染深度。"""
     blocks: dict[str, bytes] = {}
 
     def put(name: str, b: bytes) -> str:
@@ -95,9 +97,9 @@ def camera_frame(ctx: FrameContext, *, uav: str, sensor_id: str, seq: int, t_mid
           "rgb": {"codec": "jpeg", "quality": cm.isp.jpeg_quality, "ref": put("rgb.jpg", jpg), "sha256": _sha(jpg)}}
     depth = np.ascontiguousarray(out.depth_m, "<f4")
     if "depth" in outputs:
-        b = depth.tobytes()
-        av["depth"] = {"dtype": "f32", "unit": "m", "type": "planar_z", "range_m": [cm.near_m, cm.far_m], "ref": put("depth.f32", b),
-                       "sha256": _sha(b)}
+        b = (depth if depth_obs is None else np.ascontiguousarray(depth_obs, "<f4")).tobytes()
+        rng = list(depth_range_m) if depth_range_m else [cm.near_m, cm.far_m]
+        av["depth"] = {"dtype": "f32", "unit": "m", "type": "planar_z", "range_m": rng, "ref": put("depth.f32", b), "sha256": _sha(b)}
     void = (depth <= 0) & (ray_elevation(cm, R_ws, cm.width, cm.height) < 0)
     mask = void.astype(np.uint8)                                   # 第 0 位；其余位随质量位附件与效果链落地
     zeros_inst = np.zeros_like(out.instance)

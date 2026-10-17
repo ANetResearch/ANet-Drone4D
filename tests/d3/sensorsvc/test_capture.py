@@ -31,13 +31,14 @@ class _StubCamera:
         self.info = {"GL_RENDERER": "stub", "GL_VERSION": "4.5.0 stub 1.0"}
         self.n = 0
 
-    def render(self, cm, R, pos) -> RenderOut:
+    def render(self, cm, R, pos, *, linear: bool = False) -> RenderOut:
         self.n += 1
         h, w = cm.height, cm.width
         rgb = np.zeros((h, w, 3), np.uint8)
         rgb[..., 1] = self.n % 256
         depth = np.full((h, w), float(pos[2]), np.float32)
-        return RenderOut(rgb, depth, np.zeros((h, w), np.uint16), np.zeros((h, w), np.uint8), 1.0, 1.0, 1)
+        lin = np.full((h, w, 3), 0.2, np.float32) if linear else None
+        return RenderOut(rgb, depth, np.zeros((h, w), np.uint16), np.zeros((h, w), np.uint8), 1.0, 1.0, 1, rgb_lin=lin)
 
     def release(self) -> None:
         pass
@@ -74,14 +75,23 @@ def test_capture_run_outputs_and_readback(tmp_path: Path, monkeypatch: pytest.Mo
     assert fs.latest_seq("uav-01", "cam0") == 20 and fs.latest_seq("uav-02", "cam0") == 30
     f = fs.frame("uav-02", "cam0", 3)
     assert f.t_ns == 200_000_000 - 4_000_000 and f.payload[:2] == b"\xff\xd8"           # 15 Hz 第 3 帧 t_end = 200 ms
-    d = fs.frame("uav-01", "cam0.depth", 5)
-    assert np.frombuffer(d.payload, "<f4")[0] == pytest.approx(50.0 - 0.05, abs=1e-3)   # 离地 50 m（DSM 缺省 0）减挂载 −0.05 m
+    d = np.frombuffer(fs.frame("uav-01", "cam0.depth", 5).payload, "<f4")
+    # realistic 档：离地 50 m（DSM 缺省 0）减挂载 −0.05 m，sigma(50 m) = 0.25 + 1.25 = 1.5 m；3072 像素的均值误差 < 0.15 m
+    assert d.mean() == pytest.approx(50.0 - 0.05, abs=0.15) and d.std() == pytest.approx(1.5, rel=0.1)
     assert fs.frame("uav-02", "cam0.depth", 1) is None                                  # 只输出 rgb
     ts = TruthStore(*truth_paths(run))
     rec, blocks = unpack_camera_gt(ts.get("uav-01", "cam0", 7)[1])
     assert rec["frame_id"] == "cap-test/uav-01/cam0/7" and rec["ground_truth"]["T_world_sensor"]["frame"] == "ENU<-RDF"
     assert not any(k.endswith("rgb.jpg") for k in blocks) and any(k.endswith("instance.u16.zst") for k in blocks)
     assert "gt_depth.f32.bshuf.zst" in blocks and "depth.f32" not in blocks                      # 真值深度保留，观测深度只在 raw.mcap
+    from awr.bench.recorder.depthcodec import bshuf4_unzstd
+
+    gd = rec["ground_truth"]["gt_depth"]
+    assert gd["codec"] == "bshuf4-zstd" and gd["ref"] in blocks
+    assert np.allclose(np.frombuffer(bshuf4_unzstd(blocks[gd["ref"]]), "<f4"), 50.0 - 0.05, atol=1e-3)     # 真值深度不加噪
+    assert rec["internal"]["noise_tier"] == "realistic" and rec["internal"]["fx_version"] == "fx-basic@1"
+    gr, gtr = rec["agent_view"]["gimbal_reading"], rec["ground_truth"]["gimbal_true"]
+    assert gr != gtr
     assert json.loads((run / "run_manifest.json").read_text())["fleet"][1]["cameras"][0]["fps"] == "15"
     with pytest.raises(Exception, match="already exists"):
         cap.run_capture(SPEC, tmp_path, log=lambda s: None)

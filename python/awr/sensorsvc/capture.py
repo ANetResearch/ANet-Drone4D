@@ -2,7 +2,9 @@
 
 输入为采集规格（JSON）：世界、时长、机队；每机一条脚本航迹（`orbit` 环绕或 `waypoints` 航点，高度为离地高度，按 DSM 2 m 栅格
 贴地）与若干相机（交付分辨率、水平视场、有理数帧率、标称挂载、固定云台角、输出集合）。位姿以 250 Hz 写入 PoseHistory（P0a-1
-允许脚本位姿，P0a-3 切换为 PoseHistory 真值通道时相机接口不变，ADR-193）。
+允许脚本位姿，P0a-3 切换为 PoseHistory 真值通道时相机接口不变，ADR-193）。规格顶层 `noise_profile`（clean、realistic、harsh，
+缺省 realistic）与 `seed`（run_seed，缺省 0）选择效果链与噪声档（M25 §6.5；`camera.effects`）：RGB 经曝光、渐晕、噪声与 ISP，
+观测深度经 L2-depth 传感器模型，云台读数加编码器噪声；真值深度与真值云台角不变。
 
 输出（`<data_root>/dataset/<event_id>/`）：`runs/<run_id>/{raw.mcap, frames.idx, run_manifest.json}` 与
 `truth/run_<run_id>.{mcap, frames.idx}`。用法：`python -m awr.sensorsvc.capture spec.json [--data-root /data/d3]`。
@@ -14,11 +16,21 @@ import argparse
 import json
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
 
+from awr.sensorsvc.camera.effects import (
+    FX_VERSION,
+    NOISE_TABLE_VERSION,
+    AeState,
+    apply_rgb,
+    depth_sensor,
+    gimbal_reading,
+    profile,
+    with_profile,
+)
 from awr.sensorsvc.camera.model import CameraModel, IspConfig
 from awr.sensorsvc.camera.snap import ground_z
 from awr.sensorsvc.errors import SensorSvcError
@@ -115,6 +127,9 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     from awr.sensorsvc.camera.scene import load_appearance
 
     doc, fleet = load_spec(spec)
+    prof = profile(str(doc.get("noise_profile", "realistic")))
+    seed = int(doc.get("seed", 0))
+    fleet = [UavSpec(u.uav, u.path, tuple(replace(c, model=with_profile(c.model, prof)) for c in u.cameras)) for u in fleet]
     run_id, event_id = doc["run_id"], doc.get("event_id", "capture")
     wdir = Path(worlds_dir or data_root / "worlds") / doc["world_id"]
     world = json.loads((wdir / "world.json").read_text(encoding="utf-8"))
@@ -130,7 +145,8 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     t0 = time.perf_counter()
     cam = RasterCamera(load_appearance(wdir))
     log(f"[capture] world {doc['world_id']} loaded in {time.perf_counter() - t0:.1f} s ({cam.info.get('GL_RENDERER')})")
-    ctx = FrameContext(run_id, run_id, world["contentVersion"], str(cam.info.get("GL_RENDERER")), str(cam.info.get("GL_VERSION")).split()[-1])
+    ctx = FrameContext(run_id, run_id, world["contentVersion"], str(cam.info.get("GL_RENDERER")), str(cam.info.get("GL_VERSION")).split()[-1],
+                       fx_version=FX_VERSION, noise_tier=prof.name, noise_table_version=NOISE_TABLE_VERSION)
     hist = {u.uav: build_history(u, duration, gz) for u in fleet}
     # 全部 (t_mid, uav, cam, seq) 按时刻排序后渲染：与锁步运行中逐 tick 交付的顺序一致
     jobs = []
@@ -144,24 +160,33 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     jobs.sort(key=lambda j: (j[0], j[1], j[2].sensor_no))
     if max_frames:
         jobs = jobs[:max_frames]
-    ms = []
+    ms: list[float] = []
+    fx_ms: list[float] = []
     uav_of = {u.uav: u for u in fleet}
+    uav_no = {u.uav: i for i, u in enumerate(fleet)}
+    ae = {(u.uav, c.name): AeState() for u in fleet for c in u.cameras}
     with RunWriter(run_dir / "raw.mcap") as raw, RunWriter(truth_dir / f"run_{run_id}.mcap") as tru:
         raw.metadata("run", {"run_id": run_id, "event_id": event_id, "kind": "capture", "world_content_version": world["contentVersion"]})
         for i, (tm, uav, c, seq) in enumerate(jobs):
             pos, R, g = sensor_pose(hist[uav], c.mount, c.sensor_no, tm)
-            out = cam.render(c.model, R, pos)
+            out = cam.render(c.model, R, pos, linear=True)
             ms.append(out.draw_ms + out.readback_ms)
+            t1 = time.perf_counter()
+            kw = {"seed": seed, "uav_no": uav_no[uav], "sensor_no": c.sensor_no, "frame_index": seq}
+            out.rgb8 = apply_rgb(out.rgb_lin, c.model, ae[(uav, c.name)], t_mid_s=tm / NS, **kw)
+            d_obs = depth_sensor(out.depth_m, prof.depth, **kw) if "depth" in c.outputs else None
+            g_read = gimbal_reading(g, prof.gimbal_sigma_deg, **kw)
+            fx_ms.append((time.perf_counter() - t1) * 1e3)
             rec, blocks = camera_frame(ctx, uav=uav, sensor_id=c.name, seq=seq, t_mid_ns=tm, exposure_ns=round(c.model.exposure_s * NS),
-                                       readout_ns=0, cm=c.model, mount=c.mount, gimbal_reading=g, gimbal_true=g, pos_enu_m=pos, R_ws=R,
-                                       out=out, outputs=c.outputs | {"gt_depth"})
+                                       readout_ns=0, cm=c.model, mount=c.mount, gimbal_reading=g_read, gimbal_true=g, pos_enu_m=pos, R_ws=R,
+                                       out=out, outputs=c.outputs | {"gt_depth"}, depth_obs=d_obs,
+                                       depth_range_m=(prof.depth.d_min_m, prof.depth.d_max_m))
             jpeg = blocks[rec["agent_view"]["rgb"]["ref"]]
-            raw.write_camera(uav, c.name, seq, tm, jpeg, depth_m=out.depth_m if "depth" in c.outputs else None,
-                             period_ns=int(NS / parse_rate(c.fps)))
+            raw.write_camera(uav, c.name, seq, tm, jpeg, depth_m=d_obs, period_ns=int(NS / parse_rate(c.fps)))
             agent = {rec["agent_view"]["rgb"]["ref"], rec["agent_view"].get("depth", {}).get("ref")}      # 观测载荷只进 raw.mcap
             tru.write_camera_truth(uav, c.name, seq, tm, rec, {k: v for k, v in blocks.items() if k not in agent})
             if (i + 1) % 100 == 0:
-                log(f"[capture] {i + 1}/{len(jobs)} frames, render p50 {np.median(ms):.1f} ms")
+                log(f"[capture] {i + 1}/{len(jobs)} frames, render p50 {np.median(ms):.1f} ms, effects p50 {np.median(fx_ms):.0f} ms")
     build_frames_idx(run_dir / "raw.mcap", run_dir / "frames.idx")
     build_frames_idx(truth_dir / f"run_{run_id}.mcap", truth_dir / f"run_{run_id}.frames.idx", parse=parse_truth_topic)
     cam.release()
@@ -169,6 +194,8 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
                 "world_id": doc["world_id"], "world_content_version": world["contentVersion"], "duration_s": duration,
                 "created_unix_ns": t_start, "ended_unix_ns": time.time_ns(), "renderer": ctx.renderer_version, "gpu_model": ctx.gpu_model,
                 "frames": len(jobs), "render_ms_p50": round(float(np.median(ms)), 2) if ms else None,
+                "effects_ms_p50": round(float(np.median(fx_ms)), 1) if fx_ms else None, "noise_profile": prof.name, "seed": seed,
+                "fx_version": FX_VERSION, "noise_table_version": NOISE_TABLE_VERSION,
                 "fleet": [{"uav": u.uav, "path": u.path, "cameras": [{"name": c.name, "width": c.model.width, "height": c.model.height,
                                                                        "fps": c.fps, "hfov_deg": round(c.model.hfov_deg, 3),
                                                                        "K": [c.model.fx, 0.0, c.model.cx, 0.0, c.model.fy, c.model.cy, 0.0, 0.0, 1.0],

@@ -52,7 +52,7 @@ def test_sdk_frame_retrieval(bench) -> None:
     f = bc.frame("cap-test", "uav-01", "cam0", 5)
     assert f.t_ns == items[4]["t_ns"] and f.sha256 == items[4]["sha256"] and f.image().shape == (48, 64, 3)
     d = bc.frame("cap-test", "uav-01", "cam0.depth", 5)
-    assert d.depth().shape == (48, 64) and float(d.depth()[0, 0]) == pytest.approx(49.95, abs=1e-3)
+    assert d.depth().shape == (48, 64) and float(d.depth().mean()) == pytest.approx(49.95, abs=0.15)     # realistic 档观测深度带噪
     seqs = [x.seq for x in bc.frames("cap-test", "uav-02", "cam0", 1, 30, stride=7)]
     assert seqs == [1, 8, 15, 22, 29]
     with pytest.raises(BenchError) as e:
@@ -60,7 +60,7 @@ def test_sdk_frame_retrieval(bench) -> None:
     assert e.value.code == 115
     t = BenchClient(token=ev, client=http).truth_frame("cap-test", "uav-01", "cam0", 5)
     assert t.array("instance").shape == (48, 64) and (t.array("semantic") == 0).all()
-    assert np.allclose(t.array("gt_depth"), d.depth())
+    assert np.allclose(t.array("gt_depth"), 49.95, atol=1e-3) and not np.allclose(t.array("gt_depth"), d.depth())
     with pytest.raises(BenchError) as e:
         BenchClient(token="d3bt_" + "x" * 43, client=http).runs()
     assert e.value.status == 401 and e.value.code == 302
