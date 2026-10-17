@@ -6,7 +6,7 @@ Rules (reported as imports/boundary unless noted):
   - `import zenoh` only in awr/runtime/bus.py;
   - open3d nowhere in python/awr during D1 (AWR-11 §3.4: V0.2 at the earliest);
   - numba not in the supervisor (awr/runtime), api, recorder or agent processes;
-  - fastapi only in awr/api; mcap only in awr/recorder and awr/bench/recorder (D3 run writer, M27 §7.5);
+  - fastapi only in awr/api and awr/bench/api (bench-api); mcap only in awr/recorder and awr/bench/recorder (D3 run writer, M27 §7.5);
   - awr.swarm and awr.environment.weather must not import awr.sim;
   - awr.* must not import tools;
   - package boundaries of AWR-10 §3.3 rule 2 (the expansion of AWR-03 §4.2 rule 1, AD-08): awr.contracts imports no
@@ -58,7 +58,7 @@ RULES = [
     Rule("zenoh", allowed=("runtime/bus.py",), why="zenoh only through awr.runtime.bus (AWR-17 §10.5 item 11)"),
     Rule("open3d", why="Open3D is not a D1 dependency (AWR-11 §3.4)"),
     *(Rule("numba", denied=(p,), why="numba is not allowed in this process (AWR-11 §3.4)") for p in ("runtime/", "recorder/", "agent/")),
-    Rule("fastapi", allowed=("api/",), why="fastapi only in the api process (AWR-11 §3.4)"),
+    Rule("fastapi", allowed=("api/", "bench/api/"), why="fastapi only in the api and bench-api processes (AWR-11 §3.4; AWR-17 §18.4)"),
     Rule("mcap", allowed=("recorder/", "bench/recorder/"),
          why="MCAP only in recorder and replay-worker (AWR-11 §3.4) and the D3 run writer (M27 §7.5)"),
     Rule("tools", why="awr.* must not import tools (AWR-03 §4.2)"),
