@@ -2870,3 +2870,31 @@ sequenceDiagram
 | D2F-08 | §11.3 `521 ENV_LIMIT` | 与 D1 已登记的 `120 ENV_LIMIT`（`reasons.json`）重名 | 本节不使用 521 | 改名为 `521 ENV_TEMP_LIMIT` 或复用 120 |
 | D2F-09 | ADR-090 后果"`TICK_NS` 由时钟档给出" | 未说明 D1 插件 stage 在 100 Hz 档下的 `every` 与 `phase` 由谁给出；若由各模块改注册代码，会触及 M07、M09、M10、M13 的冻结实现 | 由 M08 维护按档调度表，D1 插件不改注册代码（FR-202） | 在 ADR-090 中写明调度表归 M08 |
 | D2F-10 | §13 D2-AC-08 方法列 `make test-golden` | 仓库没有该 make 目标；SIH 黄金回归的目标是 `make regress-sih` | 本节 AC-202 用 `make regress-sih` 并加时钟档参数 | D2-AC-08 方法列改为 `make regress-sih` |
+
+## 16. D3 增补（V0.3，扩展点 1）
+
+> 本节是 M08 对 D3（V0.3）的增补，依据 [AWR-05 D3 设计增补与决策记录](../05-D3-设计增补与决策记录.md)（D3 唯一基线，v1.5）§12.3 的跨所有权变更请求。本节只写 M08 在 D3 新增或改变的部分；缺省路径（D1、D2 行为）逐位不变，证明方法列在各小节的“缺省不变”中。实现位于 `d3-dev` 分支（ADR-193）。
+
+### 16.1 D3 stage 区段、所有者与预算（扩展点 1）
+
+| 项 | 内容 |
+|---|---|
+| order 区段 | `ORDER_RANGES["M24"] = ((195, 198),)`：195 `mesh_contact`、198 `pose_history`，196–197 保留；`ORDER_RANGES["M23"] = ((199, 199),)`：199 `event_clock` |
+| 包前缀 | `PACKAGE_OWNER` 加 `("awr.phys", "M24")`、`("awr.sim.events", "M23")` |
+| 预算 | `BUDGET_CORE`：`mesh_contact 0.020`、`pose_history 0.006`（M24-NFR-003）、`event_clock 0.0005`（M23 §6.12.1）；加入后 Σbudget 仍 ≤ 0.40 |
+| 登记 | D3 stage 只由 `D3_PLUGINS` 中的插件登记；D2 组合根（`runtime.yaml` 的 sim-core `plugins`、沙盒 `default_plugins()`）不登记 |
+| 缺省不变 | D2 组合根的 pipeline stage 集合与 Σbudget 不变（`tests/sim/test_d3_stage_ranges.py::test_d2_composition_root_registers_no_d3_stage`、`tests/sim/test_pipeline.py`） |
+
+### 16.2 `mesh_contact` 的写入授权
+
+`mesh_contact` 声明 `writes = ("d3phys.*",)`，pipeline 的"一字段一写者"规则（M08-FR-011）只对声明字段生效。它对下列 M08 字段的写入是本模块授权的例外，登记在 `budgets.MESH_CONTACT_WRITES`：
+
+| 字段 | 写入语义 |
+|---|---|
+| `p`、`v`、`omega` | 网格接触后的位置回退与速度、角速度清零，与 `contact` 撞墙分支一致 |
+| `thrust`、`thr_sp` | 坠毁时推力与推力设定置 0 |
+| `ctrl_mode` | 坠毁时置 KILLED |
+| `crash_sub` | 置 2（COLLISION_WORLD），FlightState 由 M09 FSM 据此设为 CRASHED |
+| `mode_evt` | 模式事件位，供 `sim.contact.collision` 发布 |
+
+时序：`mesh_contact`（195）在 `contact`（090）之后执行，接触结果对后续 stage 有一个物理步的可见延迟（M24 §9.4 第 1 条），`pose_history`（198）读取接触处理后的状态。

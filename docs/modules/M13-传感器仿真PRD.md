@@ -1813,3 +1813,11 @@ sequenceDiagram
 | D2F-05 | §11.7"每会话同时 ≤ 1 路"扫描 | 没有规定 sim-core 如何得知"哪架机的扫描被订阅"；D1 的兴趣下推（`ctl/sim-core/interest`）只有 detail 兴趣集 | 增加扫描兴趣并由 M11 下推（`SensorRuntime.scan_interest`） | 在 §11.2 或 M11 增补中登记扫描兴趣的下推字段 |
 | D2F-06 | §11.7"导航"行 | MID-360 自带 IMU（ICM40609，200 Hz）不在数据产品表中；"所有 sensor 信息"若被解读为含该 IMU，会缺项 | `sensor/nav` 只给飞控 IMU 的 10 Hz 取样；MID-360 IMU 不单独输出 | 表中注明"MID-360 内置 IMU 不单独输出（V0.4 HIL 起提供）" |
 | D2F-07 | §2.2、§2.3 的字段名 `lw_dba`、`lwa_hover_dba`、`tonal_db`、`band_shape_db`、`gain_back_db`、`eirp_dbm` | 单位后缀 `_db`、`_dba`、`_dbm` 不在 `rt/units.json` 的后缀字典中，`check-units` 对带 `unit` 注记的 schema 属性会报 UNIT-01 | 本节的 `payload.acoustic.nr_db` 沿用同一写法 | 由 M00 在 `units.json` 登记 `_db`（dB）、`_dba`（dB(A)）、`_dbm`（dBm）三个后缀 |
+
+## 16. D3 增补（V0.3，扩展点 5）
+
+> 本节是 M13 对 D3（V0.3）的增补，依据 [AWR-05 D3 设计增补与决策记录](../05-D3-设计增补与决策记录.md)（D3 唯一基线，v1.5）§12.3 的跨所有权变更请求。本节只写 M13 在 D3 新增或改变的部分；缺省路径（D1、D2 行为）逐位不变，证明方法列在各小节的“缺省不变”中。实现位于 `d3-dev` 分支（ADR-193）。
+
+### 16.1 `Raycast` 取值（扩展点 5）
+
+`awr.sim.sensors.models.Raycast` 增加 `mesh`（M25 网格求交，MeshLidar）与 `render`（M25 光栅相机）。只是 `SensorCaps.raycast` 的类型注解，运行期不分派；SensorBackend v1、`scan_rt.py` 与 `backends/base.py` 不变（AWR-05 §4.8 明确不触及），保留给公开站预览。MID-360 花样与 `cbrng` 由 M25 复用，随机流 22 `sensor_gen` 的键与通道表见 M25 §6.17.2，D2 的 `cbrng.CHANNELS` 不改。

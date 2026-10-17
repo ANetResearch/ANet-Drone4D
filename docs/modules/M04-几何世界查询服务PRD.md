@@ -1388,3 +1388,18 @@ numba 不在 M04 使用（11 TECH-FR-004）；本文实测证明 numpy 实现满
 | 14 | M13 §5.2、§6.5.9 按"`los_batch` 16 对 ≤ 0.6 ms（M04 实测）"编制检测器预算 | 本文复测 16 对 p50 0.75 ms、p99 1.04 ms；原 0.6 ms 无实测出处 | M13 检测器预算按 p99 1.2 ms 计（5 Hz 时约 0.006 核，不改变其门禁结论） | M13 §5.2、§6.5.9；本文 M04-AC-023 | 待处理 |
 | 15 | 12 §5.3 `goto.pos` 只要求 `z ≥ dsm(x,y) + 2 m`，M10 §14 第 12 条指出贴墙目标会通过准入却必然无法通过整格膨胀的细校验 | 点选楼顶目标误拒（纽约 22.5%） | 12 §5.3 改为 `z ≥ column_max_within(goal, r_col) + 2 m`（M09 以 `goal_radius_m = r_col` 调用粗校验）；细校验对首末竖直段用端点规则（M04-FR-018）；M04 已按此提供参数 | 12 §5.3、§5.7.3；M10 §6.5.7、§14 第 12 条 | 待处理 |
 | 16 | M09 §7.4 按 `path_coarse_check(P, border, nofly, buffer_m)` 描述签名，M09 §14 第 9 条要求 M04 表述第 ⑧ 步边界 | 调用方式不一致 | 边界按 M09 的划分：棱柱、DSM、heightmap_top 的几何判定归 M04；折线构造、有效上限、目标阈值、`zones.active` 选择、原因映射与 remedy 归 M09；M09 以 `active_zone_ids` 与 `goal_radius_m` 传入策略参数 | M09 §7.4、§14 第 9 条；ADR-016 | 本文已按此表述，待 M09 对齐签名 |
+
+## 15. D3 增补（V0.3，扩展点 7）
+
+> 本节是 M04 对 D3（V0.3）的增补，依据 [AWR-05 D3 设计增补与决策记录](../05-D3-设计增补与决策记录.md)（D3 唯一基线，v1.5）§12.3 的跨所有权变更请求。本节只写 M04 在 D3 新增或改变的部分；缺省路径（D1、D2 行为）逐位不变，证明方法列在各小节的“缺省不变”中。实现位于 `d3-dev` 分支（ADR-193）。
+
+### 15.1 MeshWorldQuery 分派（扩展点 7）
+
+| 项 | 内容 |
+|---|---|
+| 入口 | `open_world_query(world_dir, cache_root, params, allow_derive)`：`AWR_D3_ENABLED = 1` 且 `world.json` 有 `role = geometry`、`type = mesh`、`format = awr-trimesh@1` 的图层（`has_mesh_geometry`）时，以 `importlib` 按字符串加载 `awr.world.mesh.query:open_mesh_world_query`（`MESH_FACTORY`，M22-FR-047）并返回其结果（MeshWorldQuery，`DsmWorldQuery` 的子类）；否则返回 `open_dsm_world_query(...)` |
+| 拆分 | `open_dsm_world_query`：不分派的 DSM 装载（原 `open_world_query` 的全部行为），供 MeshWorldQuery 继承栅格部分；由 `awr.world.geometry` 导出 |
+| 开关 | `d3_enabled()` 读 `AWR_D3_ENABLED`（缺省 0，只有 `d3` profile 置 1）；开关关闭时不多读任何文件 |
+| import 方向 | `awr.world.geometry` 不 import D3 包（import 方向规则，D3-AC-01 第 5 条） |
+| 缺省不变 | 七个 D2 世界没有网格几何图层；`tests/world_query` 全部用例不变 |
+| 验收 | `tests/world_query/test_d3_dispatch.py`（开关关闭不分派、无网格图层走 DSM、按名加载工厂、判据三要素、import 方向） |

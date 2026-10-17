@@ -1199,3 +1199,27 @@ rev：     与上次发出的剖面相比，dB 量最大差 > 0.5 dB 或线性�
 |---|---|---|---|
 | R-D2-40 | 124 | M18-FR-028 至 031、M19-FR-030、031、037 | M18-AC-023、024，M19-AC-021；D2-AC-52 |
 | R-D2-41、R-D2-42 | 125 | M18-FR-032、M19-FR-032 至 036 | M18-AC-025，M19-AC-022 至 026；D2-AC-53、55 |
+
+## 16. D3 增补（V0.3，扩展点 2、3、4）
+
+> 本节是 M18 对 D3（V0.3）的增补，依据 [AWR-05 D3 设计增补与决策记录](../05-D3-设计增补与决策记录.md)（D3 唯一基线，v1.5）§12.3 的跨所有权变更请求。本节只写 M18 在 D3 新增或改变的部分；缺省路径（D1、D2 行为）逐位不变，证明方法列在各小节的“缺省不变”中。实现位于 `d3-dev` 分支（ADR-193）。
+
+### 16.1 配置与契约（扩展点 2、4）
+
+| 字段 | 取值 | 说明 |
+|---|---|---|
+| `motion.mode` | 增加 `timeline` | 位置、航向、速度、`enabled` 与 `hidden` 取自已登记的运动源（M23 磁带），不使用本模块的运动参数 |
+| `reaction_policy`（顶层，可选） | `interactive`（缺省）、`exogenous` | `exogenous`：判据、状态机与"被发现"计数照常，运动覆盖不生效、不广播（ADR-135）；非法取值返回 110 |
+
+契约 `target/target.schema.json` 同步增加两处取值（只增）；随机流 19–22 登记在 `rt/rng_streams.json`（M23、M26、M25 使用，本模块的流 17 不变）。
+
+### 16.2 运行期（扩展点 3）
+
+| 项 | 内容 |
+|---|---|
+| 钩子 | `TargetRuntime.set_motion_source(src)`，在步边界调用（M23 会话段 order 45）；`src.pose(tid, t_ns) -> (pos_enu_m, yaw_rad, vel_enu_mps, enabled, hidden) | None`（`MotionSource` 协议） |
+| timeline | 每个 targets stage 取运动源位姿写入 MotionState，跳过 `step_motion`、运动核与行为覆盖；运动源返回 None 或未登记时保持位置、速度归零；`enabled = false` 的识别物本 tick 不参与判据 |
+| exogenous | 覆盖恒为 `(None, True)`（响应计时照常推进），状态机进入 ALERTED 后不向同类广播 |
+| 只读接口 | 运动源可调用 `state1(id)` 与 `config(id)`（Interactive 模式在 M23 运动源中执行反应，滞后一个 M18 周期） |
+| 缺省不变 | 无运动源、无 `timeline` 与 `exogenous` 时代码路径与 D2 相同；`tests/targets` 全部用例与 `test_determinism.py` 轨迹哈希不变 |
+| 验收 | `tests/targets/test_d3_timeline.py`（跟随运动源、无运动源保持、运动源禁用不判定、exogenous 不移动不广播、interactive 对照、校验） |

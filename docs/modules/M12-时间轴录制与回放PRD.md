@@ -1949,3 +1949,17 @@ replay:
 | F-20 | ADR-040 第 ③ 条"录制通道集合 = LiveSource 对外发布的全部 channel"与 16 §13.3 channel 清单 | `state/sim-core/detail`（WS `uav/{id}/env`，EnvSample32）不在录制清单中，回放中该 channel 缺失 | D1 不录；回放中需要机体处环境值的界面用客户端 `eval_env` 求值（§6.6.3） | ADR-040 注明例外；V0.2 评估由 replay-worker 调用 M07 `eval_env` 生成 |
 | F-21 | ADR-029 motion-lint 与 ADR-045 计时器 | motion-lint 扫描 TS 中全部时长常量，而 SimClockView 与 DelayController 的控制律参数（τ、平滑、回升、过期）属计时器，不是动效，无法取自 transitions.dev token | 呈现类时长取 token（冻结衰减 `--duration-quick`、单步过渡 `--duration-fast`）；控制律参数集中在 `engine/time/params.ts`，与 §6.2 计时器表逐项对应 | ADR-029 注明 motion-lint 对按 ADR-045 登记的计时器放行（M00 在 `tools/lint/**` 实现） |
 | F-22 | 12 §4.10 R01 守卫"非机群阶梯剧本"与 D1-AC-28 | D1-AC-28 以 `fleet_ladder --with-recorder` 在 ladder 下开启录制，与 R01 守卫字面冲突 | 守卫只作用于自动开录；ladder 下经 `rec/start` 显式开录（§6.6.1 R01） | 12 R01 守卫改为"自动开录只对非 ladder 剧本" |
+
+## 15. D3 增补（V0.3，扩展点 10、11）
+
+> 本节是 M12 对 D3（V0.3）的增补，依据 [AWR-05 D3 设计增补与决策记录](../05-D3-设计增补与决策记录.md)（D3 唯一基线，v1.5）§12.3 的跨所有权变更请求。本节只写 M12 在 D3 新增或改变的部分；缺省路径（D1、D2 行为）逐位不变，证明方法列在各小节的“缺省不变”中。实现位于 `d3-dev` 分支（ADR-193）。
+
+### 15.1 D3 录制通道登记（扩展点 10）
+
+`rec/mcap_channels.json` 增加 `d3_channels[]`（M27 §7.5.1 全表）：每项 `{topic, schema, message_encoding ∈ {msgpack, json, protobuf, awr-raw, binary}, file ∈ {raw, truth}, rate, layer ∈ {observation, run, truth}, rrd_entity}`。这些通道只由 M27 写入器写入 `raw.mcap` 或 `truth/run_<id>.mcap`（test 划分在 `hidden/`），真值通道（含 `/eval/hidden/**`）不得写入 `raw.mcap`。
+
+缺省不变：D2 录制器（`awr.recorder.formats`）只读 `channels[]`；同名通道（如 `/uav/{id}/state`）的 D2 解析结果不变（`tests/contracts/test_d3_topics_channels.py`）。
+
+### 15.2 回放的磁带演员源（扩展点 11，P0a）
+
+`recorder/replay.py` 增加可选的"磁带演员源"：给出磁带时，回放以 M23 `TapeReader` 提供脚本演员与背景演员的状态；未给出磁带时不启用，回放行为不变。实现随 WP-D3-09 在 P0a 交付，接口以 M23 §6.12 的 `TapeReader` 为准。

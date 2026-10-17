@@ -2789,3 +2789,26 @@ def reap_idle(conns, cfg, now_ns):                         # show-api，每 10 s
 | R-D2-31、R-D2-32 | 119、120 | FR-223 至 225 | M11-AC-215、216；D2-AC-42、43 |
 | R-D2-33、R-D2-34 | 121 | FR-220 至 222、231 | M11-AC-213、214、218；D2-AC-44、45 |
 | R-D2-38、R-D2-39 | 123 | FR-226 至 228、232 | M11-AC-217、219；D2-AC-51 |
+
+## 16. D3 增补（V0.3，扩展点 10、12）
+
+> 本节是 M11 对 D3（V0.3）的增补，依据 [AWR-05 D3 设计增补与决策记录](../05-D3-设计增补与决策记录.md)（D3 唯一基线，v1.5）§12.3 的跨所有权变更请求。本节只写 M11 在 D3 新增或改变的部分；缺省路径（D1、D2 行为）逐位不变，证明方法列在各小节的“缺省不变”中。实现位于 `d3-dev` 分支（ADR-193）。
+
+### 16.1 lab-gateway topic（扩展点 10）
+
+| 项 | 内容 |
+|---|---|
+| 登记 | `rt/topics.json` 增加 17 §18.11 的五个 topic：`bench/run/{rid}/status`、`uav/{id}/sensor/{name}/preview`、`uav/{id}/lidar/{name}/v2`、`event/status`、`actor/state`；各条 `d1 = V0.3`、`apis = ["lab"]`，并以 `scope ∈ {lab_researcher, lab_evaluator}` 标注最低订阅角色（`topics.schema.json` 增加 `scope`，`apis` 枚举增加 `lab`） |
+| 生成物 | `tools/contracts/gen.py`、`gen.mjs` 把 `apis = ["lab"]` 的条目生成到独立的 `LAB_TOPICS`（Python 另有 `LAB_SCOPES`、`match_lab_topic`）；`TOPICS` 与 `match_topic` 不含它们 |
+| 缺省不变 | show-api 与 sandbox-api 的 advertise、订阅校验（未登记 topic 返回 314）、API 文档页与前端 `matchTopic` 均基于 `TOPICS`，行为不变；D2 网关文件不改（17 §18.11） |
+| 验收 | `tests/contracts/test_d3_topics_channels.py`、`tests/contracts/test_catalogs.py::test_topics_reference_known_layouts_and_schemas` |
+
+### 16.2 `d3` profile（扩展点 12）
+
+| 项 | 内容 |
+|---|---|
+| 进程 | `runtime.yaml` 以新层 `d3` 声明 `bench-api`（`python -m awr.api.bench_main`，入口文件归 M27）、`bench-scheduler`（`awr.bench.sched`）、`geosvc`（`awr.world.mesh.geosvc`，按需，每活跃世界一个，M22-FR-048）、`lab-gateway`（`awr.bench.rt_main`）、`rerun-proxy`（`awr.bench.rerun_proxy`）；入口模块随各工作包交付 |
+| profile | `d3: {procs_enable: [core, ext, dev, d3], defaults: {env: {AWR_D3_ENABLED: "1"}}}`；`config.py` 的 `LAYERS` 与层字面量增加 `d3` |
+| 部署 | dmax 上以 `d3-*` 容器运行（19 号文档 D3 增补，WP-D3-12）；本机 `d3` profile 用于开发 |
+| 缺省不变 | dev、demo、ci、perf、public、sandbox 六个 profile 的进程集合与环境不变，`AWR_D3_ENABLED` 不出现 |
+| 验收 | `tests/runtime/test_d3_profile.py`、`tests/runtime/test_config.py`、`tests/rt/test_public_mode.py` |

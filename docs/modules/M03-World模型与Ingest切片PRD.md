@@ -1495,3 +1495,18 @@ numba 不进入 `worldpkg`：本文实测纯 numpy 已满足 NFR-002，且 numba
 7. 16 §15.2 的 sim-core 加载失败码仍写 `450 WORLD_INVALID`，按 17 §8.4 应为 `350`；16 DATA-AC-017 的 `worldpkg ingest recon` 与本文 §7.1 一致，M01 走库接口 `build_world(ArraysAdapter(...))`，两条路径共用同一适配器。
 8. 18 §14.3、PERF-AC-062 与 19 §8.1 写作 `make fetch-data --verify`，GNU make 会把 `--verify` 当作 make 自身的选项而报错；本文统一为 `make fetch-data VERIFY=1`（等价 `awr data fetch urbanscene3d --verify`），建议 18、19 同步改写。
 9. 16 DATA-NFR-003 为每城 ≤ 220 MB，本文初稿写 200 MB，已改为 220 MB（NFR-010）；旧金山估算约 206 MB（含 `dsm_2m_n`）。
+
+## 15. D3 增补（V0.3，扩展点 6）
+
+> 本节是 M03 对 D3（V0.3）的增补，依据 [AWR-05 D3 设计增补与决策记录](../05-D3-设计增补与决策记录.md)（D3 唯一基线，v1.5）§12.3 的跨所有权变更请求。本节只写 M03 在 D3 新增或改变的部分；缺省路径（D1、D2 行为）逐位不变，证明方法列在各小节的“缺省不变”中。实现位于 `d3-dev` 分支（ADR-193）。
+
+### 15.1 实测颜色（扩展点 6）
+
+| 项 | 内容 |
+|---|---|
+| 输入 | `RawCloud.rgb`：可选，`uint8 (N, 3)` sRGB 实测颜色（M22 由 GLB 纹理表面采样给出）；形状与点数不符时 `ConfigError` |
+| 传递 | ingest 的非有限点筛选同时作用于颜色；`NormalizedCloud.rgb` 与点逐一对应；`.work` 交换写 `rgb.u8`，`meta.json` 记 `has_rgb` |
+| 写出 | `tile(..., rgb=)` 按森林根的掩码切分颜色，`write_container(..., rgb=)` 以点序写入 `anet:col` 的 rgb 三字节，`metadata.json` 的 `anet.col.rgb = srgb`（16 §4.4 已登记的取值）；未给出时仍为 `baked-height` |
+| 不改 | `pointcloud.source` 旁车（`source.json`、`xyz.f32`、`normal.u16`、`class.u8`）不携带颜色；CLI、配置与 `contentVersion` 规则不变 |
+| 缺省不变 | 七个 D2 世界没有 `rgb`，切片字节与 `contentVersion` 不变（回归门 D3-AC-01 第 2 条与 `make validate` 对拍） |
+| 验收 | `tests/world/test_tiler.py::test_measured_rgb_is_written_as_srgb`（单根与 6 根森林）、`tests/world/test_rgb_ingest.py`（筛选、`.work` 往返、形状校验） |

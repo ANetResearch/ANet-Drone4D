@@ -2399,3 +2399,20 @@ worldpkg validate <world_dir>... [--deep] [--json] [--strict-warn] [--rules <ID,
 2. AWR-12 §7.1.2–§7.1.3 的事件与度量名（`t_s`、`gust{dv_mps, duration_s}`、`spawn_target`、`min_sep_m`、`coverage_ratio`、`gust_max_pos_err_m`、`formation_rms_m` 等）与本文 §12.3 的文件名不同；本文 §12.3 给出一一对照，请 AWR-12 在业务文本中引用该对照表，文件与校验器只接受本文的名字（与 M16 §14 第 4 条一致）。
 3. M03 §7.6 的原因码表引用了本文草稿的 300、302、304、305、307；现以 17 §8.4 为准：350 `WORLD_INVALID`、352 `COORDINATE_MISMATCH`（合并 M07 的 444）、354 `ASSET_MISSING`、340 `RECON_IR_INVALID`（M01）、356 `EXPORT_FAILED`（§18.2），请 M03 同步。
 4. M13 §14 第 4 条：LiDAR 帧 schema 名统一为本文的 `awr.sensor.lidar_frame.v1`（与文件名 `lidar_frame.schema.json` 一致），请 M02 §6.3.2 同步。
+
+## 24. D3 增补（V0.3，扩展点 8）
+
+> 本节是 16 号文档 对 D3（V0.3）的增补，依据 [AWR-05 D3 设计增补与决策记录](05-D3-设计增补与决策记录.md)（D3 唯一基线，v1.5）§12.3 的跨所有权变更请求。本节只写 16 号文档 在 D3 新增或改变的部分；缺省路径（D1、D2 行为）逐位不变，证明方法列在各小节的“缺省不变”中。实现位于 `d3-dev` 分支（ADR-193）。
+
+### 24.1 World Package 1.1.0（只做加法）
+
+`schemas/world/*.schema.json` 的加法式变更（字段定义与取值以 [M22 §7.1](modules/M22-World资产导入PRD.md) 为准）：
+
+| 文件 | 变更 |
+|---|---|
+| `world.schema.json` | 顶层可选 `profile`（`d3-glb`）、`sensorHints`（`texelM`、`meshEdgeP50M`、`textureLimitedRangeM`、`multiLayerColumnFrac`、`bakedSunAzElDeg`、`bakedSunConfidence`、`captureSeason`）；`dataset.derivedFrom[]`（`name`、`version`、`license`、`use`、`sha256`、`attribution`、`url?`）；`layers[].type` 增加 `navmesh`、`navgraph`、`anchors`、`quality`；`layers[]` 可选 `axes`（`enu`、`gltf-y-up-enu`、`recast-y-up-enu`）与 `note`（≤ 256 字符） |
+| `coordinate.schema.json` | `registration.method` 增加 `osm-road-correlation`、`osm-footprint-correlation`、`control-points`、`inherit-frame` |
+| `grid.schema.json` | `kind` 增加 `quality`（`dtype = uint8`） |
+| `qa-report.schema.json` | 可选 `glb` 段（配准、调平、拓扑、阶段、质量、语义、碰撞、NavMesh、锚点、`sensor_hints`、`vglb`） |
+
+读者接受任意 `1.*` 的 `schemaVersion`；七个 D2 世界的包与派生缓存不变，D2 夹具照常通过（`tests/contracts/test_d3_world_schema.py`）。world.json 字段为 camelCase，单位写在字段名后缀与说明中（不加 `unit` 注解）。点云 `col.rgb = srgb` 的实测颜色见 M03 §15.1（扩展点 6）。
