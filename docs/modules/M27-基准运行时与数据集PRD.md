@@ -1677,7 +1677,7 @@ python -m awr.bench.publish release --set <name> --version X.Y.Z | check-release
 | 686 | `WRITE_BUDGET_EXCEEDED` | — | 写带宽已达预算，新作业暂缓准入 | Write bandwidth budget reached; admission is paused | 基线 |
 | 687 | `RECORDING_INTEGRITY_FAILED` | — | 录制完整性校验未通过 | Recording integrity verification failed | 建议 |
 | 688 | `EVALUATION_FAILED` | — | 评测作业失败，录制已保留 | Evaluation failed; the recording has been retained | 建议 |
-| 689 | `EXPORT_FAILED` | — | 数据导出作业失败 | The export job failed | 建议 |
+| 689 | `BENCH_EXPORT_FAILED` | — | 数据导出作业失败 | The export job failed | 建议 |
 | 690 | `PUBLIC_READ_ONLY` | 403 | 公开站为只读视图 | The public site is read-only | 基线 |
 | 691 | `TEST_SPLIT_ACCESS_DENIED` | 403 | 无权访问测试集数据 | Access to test split data is not permitted | 基线 |
 | 692 | `SUBMISSION_REJECTED` | 422 | 提交未通过边界或镜像检查 | The submission did not pass boundary or image checks | 基线 |
@@ -2023,7 +2023,7 @@ M27 不修改任何 D2 文件。以下内容由 M27 起草，经所有者合入�
 | 10 | §5.4.6 的 RPE100 写"报告中位数与分布"，D3-AC-14 的阈值来自 r1 `eval_sim.py` 的段均值（`rpe100_mean_pct`），两级统计量未区分 | 明确：单次运行标量取段均值（与阈值来源一致），跨"种子 × 重复"取中位数与分布；另报段中位数作参考 |
 | 11 | 路径所有权冲突：(a) `python/awr/api/bench_main.py` 在 §5.6.8、§12.2 归 M27，在 §12.3 第 12 处归 M11；(b) `tools/bench/d3/**` 在 §5.6.8 为"与 M16 共有"，§12.2 只归 M16；(c) lab-gateway（`rt_main.py`）与 rerun-proxy 代码在 §12.2 归 M27，而 WP-D3-10（M15、M06）承担其实现与部署 | `bench_main.py` 归 M27，M11 只登记 `runtime.yaml`；`tools/bench/d3/{batch_matrix,eval_perf,writer_throughput,fio_d3}` 归 M27，其余归 M16；lab-gateway 与 rerun-proxy 代码归 M27 并计入 WP-D3-09 或 WP-D3-11（约 +1.0 人周），WP-D3-10 只负责部署接入与前端 |
 | 12 | §8.2 缺少本模块需要的端点：`DELETE /session`、`POST /runs/estimate`、`GET /runs/{rid}/{manifest,evaluation}`、观测墙回放的帧接口、评测视图的真值帧接口、`POST /runs/{rid}/exports`、`POST /runs/{rid}/slam_eval`、`GET /jobs/{jid}`、`GET /experiments[/{xid}]`、`GET /datasets/{event}/releases`、`GET /queue`（§7.1 `/lab` 首页的队列状态无数据来源）、内部 `POST/GET /submissions`、`GET /leaderboard`、`GET /healthz` | 按本文 §7.7 补入 §8.2 与 OpenAPI 快照 |
-| 13 | §8.4 的 680–699 子段只登记了 681–686、690–692 | 在 17 号文档登记 680 `RUN_STATE_CONFLICT`、687 `RECORDING_INTEGRITY_FAILED`、688 `EVALUATION_FAILED`、689 `EXPORT_FAILED`、693 `RUN_WALL_LIMIT_EXCEEDED`、694 `RERUN_VERSION_MISMATCH`、695 `SEED_ACCESS_DENIED`、696 `PUBLISH_BUDGET_EXCEEDED`（文案见 §7.11） |
+| 13 | §8.4 的 680–699 子段只登记了 681–686、690–692 | 在 17 号文档登记 680 `RUN_STATE_CONFLICT`、687 `RECORDING_INTEGRITY_FAILED`、688 `EVALUATION_FAILED`、689 `BENCH_EXPORT_FAILED`、693 `RUN_WALL_LIMIT_EXCEEDED`、694 `RERUN_VERSION_MISMATCH`、695 `SEED_ACCESS_DENIED`、696 `PUBLISH_BUDGET_EXCEEDED`（文案见 §7.11） |
 | 14 | §5.6.1 `policy.kind ∈ {sdk, image}`，而 §5.6.7 允许"只使用参考策略白名单的 Run 规格"，§7.3 列出参考策略 | 增加 `reference` 枚举，名称白名单由 M26 维护 |
 | 15 | D3 依赖（rerun-sdk 0.38、mcap-protobuf-support、rosbags、av、open3d 等）须进入 `pyproject.toml`，该文件是 D2 文件且不在 17 处扩展点内 | 登记第 18 处扩展点：`pyproject.toml` 增加可选依赖组 `d3`，D2 安装与锁文件不变；或 D3 镜像使用独立锁文件 `python/requirements-d3.lock` |
 | 16 | §5.6.4 的 LiDAR 体积按"有效点"计（约 0.2 MB/帧），而 SLAM 合同要求每帧 20,000 点并以零占位（§5.4.6）；bag 重建依赖每个有效点的扫描序号 | 在 `lidar_frame.v2` 契约中把 `offset_time`（或点序号）列为必填，并声明 `offset_time = i·5000 ns` 与点序号一一对应 |

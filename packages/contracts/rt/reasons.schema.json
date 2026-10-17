@@ -91,7 +91,13 @@
               "catalog",
               "targets",
               "perception",
-              "tasking"
+              "tasking",
+              "world",
+              "event",
+              "physics",
+              "sensor",
+              "agent",
+              "bench"
             ]
           },
           "step": {
@@ -115,7 +121,8 @@
               "V0.2",
               "V0.5",
               "V1.0",
-              "V0.2-demo"
+              "V0.2-demo",
+              "V0.3"
             ]
           }
         },

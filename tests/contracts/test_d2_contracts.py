@@ -109,7 +109,7 @@ def test_reasons_500_599():
     got = {int(r): r.name for r in reasons.Reason if 500 <= int(r) <= 599}
     assert got == REASONS_D2
     rng = {(g["from"], g["to"]): g["category"] for g in load("rt/reasons.json")["ranges"]}
-    assert {k: v for k, v in rng.items() if k[0] >= 500} == {(500, 519): "sandbox", (520, 539): "catalog", (540, 559): "targets",
+    assert {k: v for k, v in rng.items() if 500 <= k[0] <= 599} == {(500, 519): "sandbox", (520, 539): "catalog", (540, 559): "targets",
                                                             (560, 579): "perception", (580, 599): "tasking"}
     http = {c: reasons.REASONS[c].http for c in (501, 503, 506, 510, 511, 512, 520, 523, 586)}
     assert http == {501: None, 503: 403, 506: 410, 510: 410, 511: 410, 512: 422, 520: 404, 523: None, 586: 429}
@@ -117,7 +117,7 @@ def test_reasons_500_599():
     assert {"SANDBOX_RATE_LIMITED", "KEEPOUT_CLAMPED", "VEHICLE_ENV_LIMIT", "PREVIEW_RECOMPUTED"} <= set(reasons.WARNINGS)
     assert reasons.WS_CLOSE["SANDBOX_GONE"] == 4410
     for r in load("rt/reasons.json")["reasons"]:
-        if r["code"] >= 500:
+        if 500 <= r["code"] <= 599:
             assert r["d1"] == D2
 
 

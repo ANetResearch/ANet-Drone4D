@@ -1,6 +1,6 @@
 {
   "schema": "awr.reasons.v1",
-  "doc": "Reason codes (AWR-17 §8). Codes never change meaning; only additions. Ranges and module sub-ranges follow AWR-17 §8.1 and §8.4. D2 adds 500-599 (AWR-04 §11.3, AWR-17 §17.9): codes 500-599 are unrelated to HTTP 5xx.",
+  "doc": "Reason codes (AWR-17 §8). Codes never change meaning; only additions. Ranges and module sub-ranges follow AWR-17 §8.1 and §8.4. D2 adds 500-599 (AWR-04 §11.3, AWR-17 §17.9): codes 500-599 are unrelated to HTTP 5xx. D3 adds 600-699 (AWR-05 §8.4, AWR-17 §18.12; d1 = V0.3): world, event, physics, sensor, agent and bench sub-ranges; 606-610, 622-629, 653-660, 668-679 and 699 are reserved. Agent WS close codes 4460 and 4462-4464 (4461 reserved).",
   "ranges": [
     {
       "from": 0,
@@ -103,6 +103,42 @@
       "to": 599,
       "category": "tasking",
       "owner": "M20 (tasks, planning, relay)"
+    },
+    {
+      "from": 600,
+      "to": 609,
+      "category": "world",
+      "owner": "M22 (world import, calibration, geometry service)"
+    },
+    {
+      "from": 610,
+      "to": 629,
+      "category": "event",
+      "owner": "M23 (event compile, tapes, drafts)"
+    },
+    {
+      "from": 630,
+      "to": 639,
+      "category": "physics",
+      "owner": "M24 (physics tiers, gz, SITL)"
+    },
+    {
+      "from": 640,
+      "to": 659,
+      "category": "sensor",
+      "owner": "M25 (sensor service, appearance layer, rigs)"
+    },
+    {
+      "from": 660,
+      "to": 679,
+      "category": "agent",
+      "owner": "M26 (observation egress, agent sessions, links)"
+    },
+    {
+      "from": 680,
+      "to": 699,
+      "category": "bench",
+      "owner": "M27 (runs, storage, publishing, submissions, downloads)"
     }
   ],
   "detail_only": [
@@ -2046,6 +2082,666 @@
       "message_zh": "10 min 内 3 次规划超时，规划冻结 5 min",
       "remedy_zh": "等待 Retry-After",
       "d1": "V0.2-demo"
+    },
+    {
+      "code": 600,
+      "name": "WORLD_UNCALIBRATED",
+      "http": 422,
+      "category": "world",
+      "step": "world",
+      "message_zh": "世界不满足米制标定，不得加载事件",
+      "remedy_zh": "完成 M22 标定",
+      "d1": "V0.3"
+    },
+    {
+      "code": 601,
+      "name": "WORLD_BUILD_FAILED",
+      "http": null,
+      "category": "world",
+      "step": "world",
+      "message_zh": "世界构建失败",
+      "remedy_zh": "查看构建日志",
+      "d1": "V0.3"
+    },
+    {
+      "code": 602,
+      "name": "WORLD_LICENSE_MISSING",
+      "http": 422,
+      "category": "world",
+      "step": "world",
+      "message_zh": "许可、署名或派生来源字段缺失",
+      "remedy_zh": "补全 dataset 字段",
+      "d1": "V0.3"
+    },
+    {
+      "code": 603,
+      "name": "WORLD_REGISTRATION_REJECTED",
+      "http": 422,
+      "category": "world",
+      "step": "world",
+      "message_zh": "配准门限未通过或配准记录缺失、未接受",
+      "remedy_zh": "补充控制点或重新配准",
+      "d1": "V0.3"
+    },
+    {
+      "code": 604,
+      "name": "GEOSVC_UNAVAILABLE",
+      "http": 503,
+      "category": "world",
+      "step": "geosvc",
+      "message_zh": "共享几何服务不可达或超时",
+      "remedy_zh": "稍后重试",
+      "d1": "V0.3"
+    },
+    {
+      "code": 605,
+      "name": "GEOSVC_BINDING_MISMATCH",
+      "http": 409,
+      "category": "world",
+      "step": "geosvc",
+      "message_zh": "客户端与服务的世界版本或坐标绑定不一致",
+      "remedy_zh": "重新打开世界",
+      "d1": "V0.3"
+    },
+    {
+      "code": 611,
+      "name": "EVENT_COMPILE_FAILED",
+      "http": null,
+      "category": "event",
+      "step": "event",
+      "message_zh": "门 1 或吸附失败",
+      "remedy_zh": "按 errors[] 修改 DSL",
+      "d1": "V0.3"
+    },
+    {
+      "code": 612,
+      "name": "EVENT_INFEASIBLE",
+      "http": null,
+      "category": "event",
+      "step": "event",
+      "message_zh": "门 2 不可行",
+      "remedy_zh": "采纳建议时刻或调整锚点",
+      "d1": "V0.3"
+    },
+    {
+      "code": 613,
+      "name": "EVENT_SEMANTIC_MISMATCH",
+      "http": null,
+      "category": "event",
+      "step": "event",
+      "message_zh": "strict 下声明或关系不成立",
+      "remedy_zh": "查看声明与实算对照",
+      "d1": "V0.3"
+    },
+    {
+      "code": 614,
+      "name": "TAPE_HASH_MISMATCH",
+      "http": 409,
+      "category": "event",
+      "step": "tape",
+      "message_zh": "磁带内容哈希不一致",
+      "remedy_zh": "重新获取或重新编译",
+      "d1": "V0.3"
+    },
+    {
+      "code": 615,
+      "name": "TAPE_WORLD_MISMATCH",
+      "http": 409,
+      "category": "event",
+      "step": "tape",
+      "message_zh": "磁带与世界版本、网格或 NavMesh 不一致",
+      "remedy_zh": "以新版本重新编译",
+      "d1": "V0.3"
+    },
+    {
+      "code": 616,
+      "name": "EVENT_NAVMESH_UNAVAILABLE",
+      "http": 422,
+      "category": "event",
+      "step": "event",
+      "message_zh": "世界包缺少所需 profile 的 NavMesh",
+      "remedy_zh": "重建世界包",
+      "d1": "V0.3"
+    },
+    {
+      "code": 617,
+      "name": "EVENT_VERSION_FROZEN",
+      "http": 409,
+      "category": "event",
+      "step": "event",
+      "message_zh": "修改已发布或已被引用的版本",
+      "remedy_zh": "创建新版本",
+      "d1": "V0.3"
+    },
+    {
+      "code": 618,
+      "name": "EVENT_LIMIT_EXCEEDED",
+      "http": 422,
+      "category": "event",
+      "step": "event",
+      "message_zh": "超出事件限额（演员、时长、文本体积）",
+      "remedy_zh": "减少规模",
+      "d1": "V0.3"
+    },
+    {
+      "code": 619,
+      "name": "EVENT_FEATURE_UNAVAILABLE",
+      "http": 422,
+      "category": "event",
+      "step": "event",
+      "message_zh": "当前阶段不支持的模式、类别或动作",
+      "remedy_zh": "见阶段计划",
+      "d1": "V0.3"
+    },
+    {
+      "code": 620,
+      "name": "TAPE_FORMAT_UNSUPPORTED",
+      "http": 415,
+      "category": "event",
+      "step": "tape",
+      "message_zh": "磁带魔数、schema 或编解码版本不受支持",
+      "remedy_zh": "升级读取端",
+      "d1": "V0.3"
+    },
+    {
+      "code": 621,
+      "name": "EVENT_DRAFT_CONFLICT",
+      "http": 409,
+      "category": "event",
+      "step": "draft",
+      "message_zh": "草稿 ETag 不一致",
+      "remedy_zh": "重新加载后合并",
+      "d1": "V0.3"
+    },
+    {
+      "code": 630,
+      "name": "PHYSICS_TIER_UNAVAILABLE",
+      "http": 422,
+      "category": "physics",
+      "step": "phys",
+      "message_zh": "物理档未启用、未交付或不支持该构型与机数",
+      "remedy_zh": "改用可用档位",
+      "d1": "V0.3"
+    },
+    {
+      "code": 631,
+      "name": "GZ_NOT_READY",
+      "http": 503,
+      "category": "physics",
+      "step": "gz",
+      "message_zh": "gz 实例启动或就绪屏障超时",
+      "remedy_zh": "自动重试",
+      "d1": "V0.3"
+    },
+    {
+      "code": 632,
+      "name": "GZ_STEP_TIMEOUT",
+      "http": 504,
+      "category": "physics",
+      "step": "gz",
+      "message_zh": "单 tick 等待 step_done 超时",
+      "remedy_zh": "自动重试",
+      "d1": "V0.3"
+    },
+    {
+      "code": 633,
+      "name": "SITL_NOT_RANKED",
+      "http": 422,
+      "category": "physics",
+      "step": "sitl",
+      "message_zh": "SITL 运行进入排名或 test 提交",
+      "remedy_zh": "关闭排名",
+      "d1": "V0.3"
+    },
+    {
+      "code": 634,
+      "name": "POSE_HISTORY_OVERFLOW",
+      "http": null,
+      "category": "physics",
+      "step": "phys",
+      "message_zh": "无损位姿缓冲将覆盖未释放样本",
+      "remedy_zh": "运行失败，报告缺陷",
+      "d1": "V0.3"
+    },
+    {
+      "code": 635,
+      "name": "PHYS_PROTOCOL_ERROR",
+      "http": null,
+      "category": "physics",
+      "step": "phys",
+      "message_zh": "gz 控制协议版本、序号或负载错误",
+      "remedy_zh": "运行失败，报告缺陷",
+      "d1": "V0.3"
+    },
+    {
+      "code": 636,
+      "name": "GZ_EXPORT_INVALID",
+      "http": 422,
+      "category": "physics",
+      "step": "gz",
+      "message_zh": "SDF 导出自动验收未通过",
+      "remedy_zh": "查看导出报告",
+      "d1": "V0.3"
+    },
+    {
+      "code": 637,
+      "name": "PHYS_CLOCK_INVALID",
+      "http": 422,
+      "category": "physics",
+      "step": "phys",
+      "message_zh": "时钟档与输出不相容或 tick 不是物理步长整数倍",
+      "remedy_zh": "改用 {d1_250, 250, 250, 250}",
+      "d1": "V0.3"
+    },
+    {
+      "code": 638,
+      "name": "GZ_INSTANCE_EXITED",
+      "http": null,
+      "category": "physics",
+      "step": "gz",
+      "message_zh": "gz 或 PX4 进程异常退出",
+      "remedy_zh": "自动重试",
+      "d1": "V0.3"
+    },
+    {
+      "code": 639,
+      "name": "SITL_LINK_LOST",
+      "http": null,
+      "category": "physics",
+      "step": "sitl",
+      "message_zh": "MAVLink 心跳丢失",
+      "remedy_zh": "自动重试",
+      "d1": "V0.3"
+    },
+    {
+      "code": 640,
+      "name": "SENSOR_SESSION_INVALID",
+      "http": null,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "传感器会话不存在、已关闭或协议不兼容",
+      "remedy_zh": "重新打开会话",
+      "d1": "V0.3"
+    },
+    {
+      "code": 641,
+      "name": "SENSOR_BACKPRESSURE",
+      "http": null,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "传感器服务在途超限（Benchmark 下阻塞仿真时钟，不降频）",
+      "remedy_zh": "无需操作",
+      "d1": "V0.3"
+    },
+    {
+      "code": 642,
+      "name": "SENSOR_CONTRACT_VIOLATION",
+      "http": 422,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "请求或输出违反契约（含 SLAM 合同测试失败）",
+      "remedy_zh": "查看合同测试报告",
+      "d1": "V0.3"
+    },
+    {
+      "code": 643,
+      "name": "APPEARANCE_UNAVAILABLE",
+      "http": 422,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "外观层不存在或未通过配准验收",
+      "remedy_zh": "改用 mesh",
+      "d1": "V0.3"
+    },
+    {
+      "code": 644,
+      "name": "OBS_SCHEMA_VIOLATION",
+      "http": null,
+      "category": "sensor",
+      "step": "obs",
+      "message_zh": "bench/obs.v1 投影失败（运行中止）",
+      "remedy_zh": "报告缺陷",
+      "d1": "V0.3"
+    },
+    {
+      "code": 645,
+      "name": "SENSOR_WORLD_LOAD_FAILED",
+      "http": null,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "世界包缺失、损坏或缺少传感器侧表",
+      "remedy_zh": "重建世界包",
+      "d1": "V0.3"
+    },
+    {
+      "code": 646,
+      "name": "SENSOR_POSE_UNAVAILABLE",
+      "http": null,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "请求时刻超出已推进的位姿历史（禁止外推）",
+      "remedy_zh": "报告缺陷",
+      "d1": "V0.3"
+    },
+    {
+      "code": 647,
+      "name": "SENSOR_GPU_UNAVAILABLE",
+      "http": 503,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "无可用 GPU 或显存",
+      "remedy_zh": "排队",
+      "d1": "V0.3"
+    },
+    {
+      "code": 648,
+      "name": "SENSOR_WORKER_LOST",
+      "http": null,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "传感器 Worker 失联或帧看门狗超时",
+      "remedy_zh": "自动重试",
+      "d1": "V0.3"
+    },
+    {
+      "code": 649,
+      "name": "SENSOR_RIG_INVALID",
+      "http": 422,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "rig 或输出组合不合法",
+      "remedy_zh": "修改传感器覆盖项",
+      "d1": "V0.3"
+    },
+    {
+      "code": 650,
+      "name": "SENSOR_DYNAMIC_SOURCE_MISMATCH",
+      "http": 409,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "磁带或世界版本与会话声明不一致",
+      "remedy_zh": "重新提交运行",
+      "d1": "V0.3"
+    },
+    {
+      "code": 651,
+      "name": "SENSOR_ASSET_LICENSE_MISSING",
+      "http": 422,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "动态实体资产无许可登记",
+      "remedy_zh": "登记资产许可",
+      "d1": "V0.3"
+    },
+    {
+      "code": 652,
+      "name": "SENSOR_DETERMINISM_MISMATCH",
+      "http": null,
+      "category": "sensor",
+      "step": "sensor",
+      "message_zh": "复核运行帧摘要与基准不一致",
+      "remedy_zh": "回归调查",
+      "d1": "V0.3"
+    },
+    {
+      "code": 661,
+      "name": "AGENT_TIMEOUT",
+      "http": null,
+      "category": "agent",
+      "step": "agent",
+      "message_zh": "Agent 未在墙钟预算内返回动作",
+      "remedy_zh": "缩短决策时间或声明决策时延",
+      "d1": "V0.3"
+    },
+    {
+      "code": 662,
+      "name": "OBS_LEVEL_FORBIDDEN",
+      "http": 422,
+      "category": "agent",
+      "step": "agent",
+      "message_zh": "观测档不允许用于该运行类型",
+      "remedy_zh": "改用 L1、L2 或 L2-depth",
+      "d1": "V0.3"
+    },
+    {
+      "code": 663,
+      "name": "ACTION_REJECTED",
+      "http": null,
+      "category": "agent",
+      "step": "agent",
+      "message_zh": "动作项被拒",
+      "remedy_zh": "修正动作",
+      "d1": "V0.3"
+    },
+    {
+      "code": 664,
+      "name": "AGENT_ISOLATION_VIOLATION",
+      "http": 422,
+      "category": "agent",
+      "step": "agent",
+      "message_zh": "隔离条件不满足（排名运行使用 SDK 或进程内 Agent 等）",
+      "remedy_zh": "使用镜像提交",
+      "d1": "V0.3"
+    },
+    {
+      "code": 665,
+      "name": "AGENT_CRASHED",
+      "http": null,
+      "category": "agent",
+      "step": "agent",
+      "message_zh": "Agent 退出、握手超时或连接中断超出宽限",
+      "remedy_zh": "检查 Agent 日志",
+      "d1": "V0.3"
+    },
+    {
+      "code": 666,
+      "name": "AGENT_PROTOCOL_ERROR",
+      "http": null,
+      "category": "agent",
+      "step": "agent",
+      "message_zh": "帧格式、长度、解码、版本或 k 不一致",
+      "remedy_zh": "升级 SDK",
+      "d1": "V0.3"
+    },
+    {
+      "code": 667,
+      "name": "COMM_MESSAGE_REJECTED",
+      "http": null,
+      "category": "agent",
+      "step": "comm",
+      "message_zh": "消息超长、主题超长、目的方不存在或通信关闭",
+      "remedy_zh": "修正消息",
+      "d1": "V0.3"
+    },
+    {
+      "code": 680,
+      "name": "RUN_STATE_CONFLICT",
+      "http": 409,
+      "category": "bench",
+      "step": "run",
+      "message_zh": "当前状态不允许该操作",
+      "remedy_zh": "刷新状态",
+      "d1": "V0.3"
+    },
+    {
+      "code": 681,
+      "name": "RUN_QUOTA_EXCEEDED",
+      "http": 429,
+      "category": "bench",
+      "step": "run",
+      "message_zh": "运行配额或队列上限",
+      "remedy_zh": "等待配额恢复",
+      "d1": "V0.3"
+    },
+    {
+      "code": 682,
+      "name": "RUN_SPEC_INVALID",
+      "http": 422,
+      "category": "bench",
+      "step": "run",
+      "message_zh": "运行规格校验未通过",
+      "remedy_zh": "按 why 修改",
+      "d1": "V0.3"
+    },
+    {
+      "code": 683,
+      "name": "RUN_RESOURCE_UNAVAILABLE",
+      "http": 503,
+      "category": "bench",
+      "step": "run",
+      "message_zh": "计算资源不可用",
+      "remedy_zh": "排队或稍后重试",
+      "d1": "V0.3"
+    },
+    {
+      "code": 684,
+      "name": "SLAM_JOB_FAILED",
+      "http": null,
+      "category": "bench",
+      "step": "slam",
+      "message_zh": "SLAM 作业异常结束（含 OOM）",
+      "remedy_zh": "查看作业日志",
+      "d1": "V0.3"
+    },
+    {
+      "code": 685,
+      "name": "STORAGE_QUOTA_EXCEEDED",
+      "http": 507,
+      "category": "bench",
+      "step": "storage",
+      "message_zh": "存储配额不足",
+      "remedy_zh": "清理或等待保留期",
+      "d1": "V0.3"
+    },
+    {
+      "code": 686,
+      "name": "WRITE_BUDGET_EXCEEDED",
+      "http": null,
+      "category": "bench",
+      "step": "storage",
+      "message_zh": "写带宽达到预算，暂缓准入",
+      "remedy_zh": "无需操作",
+      "d1": "V0.3"
+    },
+    {
+      "code": 687,
+      "name": "RECORDING_INTEGRITY_FAILED",
+      "http": null,
+      "category": "bench",
+      "step": "rec",
+      "message_zh": "录制完整性校验未通过",
+      "remedy_zh": "重试运行",
+      "d1": "V0.3"
+    },
+    {
+      "code": 688,
+      "name": "EVALUATION_FAILED",
+      "http": null,
+      "category": "bench",
+      "step": "eval",
+      "message_zh": "评测失败（录制保留）",
+      "remedy_zh": "重新评测",
+      "d1": "V0.3"
+    },
+    {
+      "code": 689,
+      "name": "BENCH_EXPORT_FAILED",
+      "http": null,
+      "category": "bench",
+      "step": "export",
+      "message_zh": "导出作业失败",
+      "remedy_zh": "重试导出",
+      "d1": "V0.3"
+    },
+    {
+      "code": 690,
+      "name": "PUBLIC_READ_ONLY",
+      "http": 403,
+      "category": "bench",
+      "step": "static",
+      "message_zh": "公开站为只读视图",
+      "remedy_zh": "改用内部工作区",
+      "d1": "V0.3"
+    },
+    {
+      "code": 691,
+      "name": "TEST_SPLIT_ACCESS_DENIED",
+      "http": 403,
+      "category": "bench",
+      "step": "access",
+      "message_zh": "无权访问测试集数据",
+      "remedy_zh": "使用有权限的角色",
+      "d1": "V0.3"
+    },
+    {
+      "code": 692,
+      "name": "SUBMISSION_REJECTED",
+      "http": 422,
+      "category": "bench",
+      "step": "submission",
+      "message_zh": "提交未通过边界或镜像检查",
+      "remedy_zh": "修正后重新提交",
+      "d1": "V0.3"
+    },
+    {
+      "code": 693,
+      "name": "RUN_WALL_LIMIT_EXCEEDED",
+      "http": null,
+      "category": "bench",
+      "step": "run",
+      "message_zh": "运行超过墙钟上限",
+      "remedy_zh": "减少负载",
+      "d1": "V0.3"
+    },
+    {
+      "code": 694,
+      "name": "RERUN_VERSION_MISMATCH",
+      "http": 409,
+      "category": "bench",
+      "step": "rec",
+      "message_zh": "录制的 Rerun 版本与服务不一致",
+      "remedy_zh": "迁移录制",
+      "d1": "V0.3"
+    },
+    {
+      "code": 695,
+      "name": "SEED_ACCESS_DENIED",
+      "http": 403,
+      "category": "bench",
+      "step": "access",
+      "message_zh": "无权查看排名运行种子",
+      "remedy_zh": "使用有权限的角色",
+      "d1": "V0.3"
+    },
+    {
+      "code": 696,
+      "name": "PUBLISH_BUDGET_EXCEEDED",
+      "http": null,
+      "category": "bench",
+      "step": "publish",
+      "message_zh": "静态制品超出磁盘或单文件预算",
+      "remedy_zh": "调整发布目录",
+      "d1": "V0.3"
+    },
+    {
+      "code": 697,
+      "name": "ARTIFACT_EXPIRED",
+      "http": 410,
+      "category": "bench",
+      "step": "storage",
+      "message_zh": "录制或派生物已按保留策略清理",
+      "remedy_zh": "重新派生或重新运行",
+      "d1": "V0.3"
+    },
+    {
+      "code": 698,
+      "name": "FRAME_REQUEST_LIMIT",
+      "http": 422,
+      "category": "bench",
+      "step": "frames",
+      "message_zh": "帧区间请求超出帧数或字节上限",
+      "remedy_zh": "缩小区间或增大 stride",
+      "d1": "V0.3"
     }
   ],
   "ws_close_codes": [
@@ -2137,6 +2833,27 @@
       "name": "VIEWER_SEATS_FULL",
       "reason": 517,
       "client": "do not reconnect; join the viewer queue (R81), reconnect on seat_ready"
+    },
+    {
+      "code": 4460,
+      "name": "RUN_ENDED",
+      "client": "do not reconnect; the SDK ends the episode"
+    },
+    {
+      "code": 4462,
+      "name": "AGENT_PROTOCOL_ERROR",
+      "reason": 666,
+      "client": "do not reconnect; the SDK raises ProtocolError"
+    },
+    {
+      "code": 4463,
+      "name": "AGENT_SUPERSEDED",
+      "client": "do not reconnect; another connection took over the agent"
+    },
+    {
+      "code": 4464,
+      "name": "AGENT_NOT_ACCEPTED",
+      "client": "do not reconnect; check policy.kind and the run state"
     }
   ]
 }

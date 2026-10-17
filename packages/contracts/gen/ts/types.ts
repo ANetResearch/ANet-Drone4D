@@ -7156,10 +7156,16 @@ export interface Reasons {
       | 'targets'
       | 'perception'
       | 'tasking'
+      | 'world'
+      | 'event'
+      | 'physics'
+      | 'sensor'
+      | 'agent'
+      | 'bench'
     step: string | null
     message_zh: string
     remedy_zh: string
-    d1: 'core' | 'ext' | 'V0.2' | 'V0.5' | 'V1.0' | 'V0.2-demo'
+    d1: 'core' | 'ext' | 'V0.2' | 'V0.5' | 'V1.0' | 'V0.2-demo' | 'V0.3'
   }[]
   ws_close_codes: {
     code: number

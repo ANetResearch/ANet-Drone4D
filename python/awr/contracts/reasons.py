@@ -200,6 +200,72 @@ class Reason(IntEnum):
     PLAN_REJECTED = 584
     PLAN_INPUT_TOO_LARGE = 585
     PLAN_THROTTLED = 586
+    WORLD_UNCALIBRATED = 600
+    WORLD_BUILD_FAILED = 601
+    WORLD_LICENSE_MISSING = 602
+    WORLD_REGISTRATION_REJECTED = 603
+    GEOSVC_UNAVAILABLE = 604
+    GEOSVC_BINDING_MISMATCH = 605
+    EVENT_COMPILE_FAILED = 611
+    EVENT_INFEASIBLE = 612
+    EVENT_SEMANTIC_MISMATCH = 613
+    TAPE_HASH_MISMATCH = 614
+    TAPE_WORLD_MISMATCH = 615
+    EVENT_NAVMESH_UNAVAILABLE = 616
+    EVENT_VERSION_FROZEN = 617
+    EVENT_LIMIT_EXCEEDED = 618
+    EVENT_FEATURE_UNAVAILABLE = 619
+    TAPE_FORMAT_UNSUPPORTED = 620
+    EVENT_DRAFT_CONFLICT = 621
+    PHYSICS_TIER_UNAVAILABLE = 630
+    GZ_NOT_READY = 631
+    GZ_STEP_TIMEOUT = 632
+    SITL_NOT_RANKED = 633
+    POSE_HISTORY_OVERFLOW = 634
+    PHYS_PROTOCOL_ERROR = 635
+    GZ_EXPORT_INVALID = 636
+    PHYS_CLOCK_INVALID = 637
+    GZ_INSTANCE_EXITED = 638
+    SITL_LINK_LOST = 639
+    SENSOR_SESSION_INVALID = 640
+    SENSOR_BACKPRESSURE = 641
+    SENSOR_CONTRACT_VIOLATION = 642
+    APPEARANCE_UNAVAILABLE = 643
+    OBS_SCHEMA_VIOLATION = 644
+    SENSOR_WORLD_LOAD_FAILED = 645
+    SENSOR_POSE_UNAVAILABLE = 646
+    SENSOR_GPU_UNAVAILABLE = 647
+    SENSOR_WORKER_LOST = 648
+    SENSOR_RIG_INVALID = 649
+    SENSOR_DYNAMIC_SOURCE_MISMATCH = 650
+    SENSOR_ASSET_LICENSE_MISSING = 651
+    SENSOR_DETERMINISM_MISMATCH = 652
+    AGENT_TIMEOUT = 661
+    OBS_LEVEL_FORBIDDEN = 662
+    ACTION_REJECTED = 663
+    AGENT_ISOLATION_VIOLATION = 664
+    AGENT_CRASHED = 665
+    AGENT_PROTOCOL_ERROR = 666
+    COMM_MESSAGE_REJECTED = 667
+    RUN_STATE_CONFLICT = 680
+    RUN_QUOTA_EXCEEDED = 681
+    RUN_SPEC_INVALID = 682
+    RUN_RESOURCE_UNAVAILABLE = 683
+    SLAM_JOB_FAILED = 684
+    STORAGE_QUOTA_EXCEEDED = 685
+    WRITE_BUDGET_EXCEEDED = 686
+    RECORDING_INTEGRITY_FAILED = 687
+    EVALUATION_FAILED = 688
+    BENCH_EXPORT_FAILED = 689
+    PUBLIC_READ_ONLY = 690
+    TEST_SPLIT_ACCESS_DENIED = 691
+    SUBMISSION_REJECTED = 692
+    RUN_WALL_LIMIT_EXCEEDED = 693
+    RERUN_VERSION_MISMATCH = 694
+    SEED_ACCESS_DENIED = 695
+    PUBLISH_BUDGET_EXCEEDED = 696
+    ARTIFACT_EXPIRED = 697
+    FRAME_REQUEST_LIMIT = 698
 
 
 class ReasonInfo(NamedTuple):
@@ -405,11 +471,77 @@ REASONS: dict[int, ReasonInfo] = {
     584: ReasonInfo(584, "PLAN_REJECTED", 422, "tasking", "plan_check", "外部分配计划未通过可行性检查", "按 detail.violations 逐项修改计划", "V0.2-demo"),
     585: ReasonInfo(585, "PLAN_INPUT_TOO_LARGE", 422, "tasking", "quota", "规划输入超过规模配额", "缩小区域、减少顶点或放宽 GSD", "V0.2-demo"),
     586: ReasonInfo(586, "PLAN_THROTTLED", 429, "tasking", "quota", "10 min 内 3 次规划超时，规划冻结 5 min", "等待 Retry-After", "V0.2-demo"),
+    600: ReasonInfo(600, "WORLD_UNCALIBRATED", 422, "world", "world", "世界不满足米制标定，不得加载事件", "完成 M22 标定", "V0.3"),
+    601: ReasonInfo(601, "WORLD_BUILD_FAILED", None, "world", "world", "世界构建失败", "查看构建日志", "V0.3"),
+    602: ReasonInfo(602, "WORLD_LICENSE_MISSING", 422, "world", "world", "许可、署名或派生来源字段缺失", "补全 dataset 字段", "V0.3"),
+    603: ReasonInfo(603, "WORLD_REGISTRATION_REJECTED", 422, "world", "world", "配准门限未通过或配准记录缺失、未接受", "补充控制点或重新配准", "V0.3"),
+    604: ReasonInfo(604, "GEOSVC_UNAVAILABLE", 503, "world", "geosvc", "共享几何服务不可达或超时", "稍后重试", "V0.3"),
+    605: ReasonInfo(605, "GEOSVC_BINDING_MISMATCH", 409, "world", "geosvc", "客户端与服务的世界版本或坐标绑定不一致", "重新打开世界", "V0.3"),
+    611: ReasonInfo(611, "EVENT_COMPILE_FAILED", None, "event", "event", "门 1 或吸附失败", "按 errors[] 修改 DSL", "V0.3"),
+    612: ReasonInfo(612, "EVENT_INFEASIBLE", None, "event", "event", "门 2 不可行", "采纳建议时刻或调整锚点", "V0.3"),
+    613: ReasonInfo(613, "EVENT_SEMANTIC_MISMATCH", None, "event", "event", "strict 下声明或关系不成立", "查看声明与实算对照", "V0.3"),
+    614: ReasonInfo(614, "TAPE_HASH_MISMATCH", 409, "event", "tape", "磁带内容哈希不一致", "重新获取或重新编译", "V0.3"),
+    615: ReasonInfo(615, "TAPE_WORLD_MISMATCH", 409, "event", "tape", "磁带与世界版本、网格或 NavMesh 不一致", "以新版本重新编译", "V0.3"),
+    616: ReasonInfo(616, "EVENT_NAVMESH_UNAVAILABLE", 422, "event", "event", "世界包缺少所需 profile 的 NavMesh", "重建世界包", "V0.3"),
+    617: ReasonInfo(617, "EVENT_VERSION_FROZEN", 409, "event", "event", "修改已发布或已被引用的版本", "创建新版本", "V0.3"),
+    618: ReasonInfo(618, "EVENT_LIMIT_EXCEEDED", 422, "event", "event", "超出事件限额（演员、时长、文本体积）", "减少规模", "V0.3"),
+    619: ReasonInfo(619, "EVENT_FEATURE_UNAVAILABLE", 422, "event", "event", "当前阶段不支持的模式、类别或动作", "见阶段计划", "V0.3"),
+    620: ReasonInfo(620, "TAPE_FORMAT_UNSUPPORTED", 415, "event", "tape", "磁带魔数、schema 或编解码版本不受支持", "升级读取端", "V0.3"),
+    621: ReasonInfo(621, "EVENT_DRAFT_CONFLICT", 409, "event", "draft", "草稿 ETag 不一致", "重新加载后合并", "V0.3"),
+    630: ReasonInfo(630, "PHYSICS_TIER_UNAVAILABLE", 422, "physics", "phys", "物理档未启用、未交付或不支持该构型与机数", "改用可用档位", "V0.3"),
+    631: ReasonInfo(631, "GZ_NOT_READY", 503, "physics", "gz", "gz 实例启动或就绪屏障超时", "自动重试", "V0.3"),
+    632: ReasonInfo(632, "GZ_STEP_TIMEOUT", 504, "physics", "gz", "单 tick 等待 step_done 超时", "自动重试", "V0.3"),
+    633: ReasonInfo(633, "SITL_NOT_RANKED", 422, "physics", "sitl", "SITL 运行进入排名或 test 提交", "关闭排名", "V0.3"),
+    634: ReasonInfo(634, "POSE_HISTORY_OVERFLOW", None, "physics", "phys", "无损位姿缓冲将覆盖未释放样本", "运行失败，报告缺陷", "V0.3"),
+    635: ReasonInfo(635, "PHYS_PROTOCOL_ERROR", None, "physics", "phys", "gz 控制协议版本、序号或负载错误", "运行失败，报告缺陷", "V0.3"),
+    636: ReasonInfo(636, "GZ_EXPORT_INVALID", 422, "physics", "gz", "SDF 导出自动验收未通过", "查看导出报告", "V0.3"),
+    637: ReasonInfo(637, "PHYS_CLOCK_INVALID", 422, "physics", "phys", "时钟档与输出不相容或 tick 不是物理步长整数倍", "改用 {d1_250, 250, 250, 250}", "V0.3"),
+    638: ReasonInfo(638, "GZ_INSTANCE_EXITED", None, "physics", "gz", "gz 或 PX4 进程异常退出", "自动重试", "V0.3"),
+    639: ReasonInfo(639, "SITL_LINK_LOST", None, "physics", "sitl", "MAVLink 心跳丢失", "自动重试", "V0.3"),
+    640: ReasonInfo(640, "SENSOR_SESSION_INVALID", None, "sensor", "sensor", "传感器会话不存在、已关闭或协议不兼容", "重新打开会话", "V0.3"),
+    641: ReasonInfo(641, "SENSOR_BACKPRESSURE", None, "sensor", "sensor", "传感器服务在途超限（Benchmark 下阻塞仿真时钟，不降频）", "无需操作", "V0.3"),
+    642: ReasonInfo(642, "SENSOR_CONTRACT_VIOLATION", 422, "sensor", "sensor", "请求或输出违反契约（含 SLAM 合同测试失败）", "查看合同测试报告", "V0.3"),
+    643: ReasonInfo(643, "APPEARANCE_UNAVAILABLE", 422, "sensor", "sensor", "外观层不存在或未通过配准验收", "改用 mesh", "V0.3"),
+    644: ReasonInfo(644, "OBS_SCHEMA_VIOLATION", None, "sensor", "obs", "bench/obs.v1 投影失败（运行中止）", "报告缺陷", "V0.3"),
+    645: ReasonInfo(645, "SENSOR_WORLD_LOAD_FAILED", None, "sensor", "sensor", "世界包缺失、损坏或缺少传感器侧表", "重建世界包", "V0.3"),
+    646: ReasonInfo(646, "SENSOR_POSE_UNAVAILABLE", None, "sensor", "sensor", "请求时刻超出已推进的位姿历史（禁止外推）", "报告缺陷", "V0.3"),
+    647: ReasonInfo(647, "SENSOR_GPU_UNAVAILABLE", 503, "sensor", "sensor", "无可用 GPU 或显存", "排队", "V0.3"),
+    648: ReasonInfo(648, "SENSOR_WORKER_LOST", None, "sensor", "sensor", "传感器 Worker 失联或帧看门狗超时", "自动重试", "V0.3"),
+    649: ReasonInfo(649, "SENSOR_RIG_INVALID", 422, "sensor", "sensor", "rig 或输出组合不合法", "修改传感器覆盖项", "V0.3"),
+    650: ReasonInfo(650, "SENSOR_DYNAMIC_SOURCE_MISMATCH", 409, "sensor", "sensor", "磁带或世界版本与会话声明不一致", "重新提交运行", "V0.3"),
+    651: ReasonInfo(651, "SENSOR_ASSET_LICENSE_MISSING", 422, "sensor", "sensor", "动态实体资产无许可登记", "登记资产许可", "V0.3"),
+    652: ReasonInfo(652, "SENSOR_DETERMINISM_MISMATCH", None, "sensor", "sensor", "复核运行帧摘要与基准不一致", "回归调查", "V0.3"),
+    661: ReasonInfo(661, "AGENT_TIMEOUT", None, "agent", "agent", "Agent 未在墙钟预算内返回动作", "缩短决策时间或声明决策时延", "V0.3"),
+    662: ReasonInfo(662, "OBS_LEVEL_FORBIDDEN", 422, "agent", "agent", "观测档不允许用于该运行类型", "改用 L1、L2 或 L2-depth", "V0.3"),
+    663: ReasonInfo(663, "ACTION_REJECTED", None, "agent", "agent", "动作项被拒", "修正动作", "V0.3"),
+    664: ReasonInfo(664, "AGENT_ISOLATION_VIOLATION", 422, "agent", "agent", "隔离条件不满足（排名运行使用 SDK 或进程内 Agent 等）", "使用镜像提交", "V0.3"),
+    665: ReasonInfo(665, "AGENT_CRASHED", None, "agent", "agent", "Agent 退出、握手超时或连接中断超出宽限", "检查 Agent 日志", "V0.3"),
+    666: ReasonInfo(666, "AGENT_PROTOCOL_ERROR", None, "agent", "agent", "帧格式、长度、解码、版本或 k 不一致", "升级 SDK", "V0.3"),
+    667: ReasonInfo(667, "COMM_MESSAGE_REJECTED", None, "agent", "comm", "消息超长、主题超长、目的方不存在或通信关闭", "修正消息", "V0.3"),
+    680: ReasonInfo(680, "RUN_STATE_CONFLICT", 409, "bench", "run", "当前状态不允许该操作", "刷新状态", "V0.3"),
+    681: ReasonInfo(681, "RUN_QUOTA_EXCEEDED", 429, "bench", "run", "运行配额或队列上限", "等待配额恢复", "V0.3"),
+    682: ReasonInfo(682, "RUN_SPEC_INVALID", 422, "bench", "run", "运行规格校验未通过", "按 why 修改", "V0.3"),
+    683: ReasonInfo(683, "RUN_RESOURCE_UNAVAILABLE", 503, "bench", "run", "计算资源不可用", "排队或稍后重试", "V0.3"),
+    684: ReasonInfo(684, "SLAM_JOB_FAILED", None, "bench", "slam", "SLAM 作业异常结束（含 OOM）", "查看作业日志", "V0.3"),
+    685: ReasonInfo(685, "STORAGE_QUOTA_EXCEEDED", 507, "bench", "storage", "存储配额不足", "清理或等待保留期", "V0.3"),
+    686: ReasonInfo(686, "WRITE_BUDGET_EXCEEDED", None, "bench", "storage", "写带宽达到预算，暂缓准入", "无需操作", "V0.3"),
+    687: ReasonInfo(687, "RECORDING_INTEGRITY_FAILED", None, "bench", "rec", "录制完整性校验未通过", "重试运行", "V0.3"),
+    688: ReasonInfo(688, "EVALUATION_FAILED", None, "bench", "eval", "评测失败（录制保留）", "重新评测", "V0.3"),
+    689: ReasonInfo(689, "BENCH_EXPORT_FAILED", None, "bench", "export", "导出作业失败", "重试导出", "V0.3"),
+    690: ReasonInfo(690, "PUBLIC_READ_ONLY", 403, "bench", "static", "公开站为只读视图", "改用内部工作区", "V0.3"),
+    691: ReasonInfo(691, "TEST_SPLIT_ACCESS_DENIED", 403, "bench", "access", "无权访问测试集数据", "使用有权限的角色", "V0.3"),
+    692: ReasonInfo(692, "SUBMISSION_REJECTED", 422, "bench", "submission", "提交未通过边界或镜像检查", "修正后重新提交", "V0.3"),
+    693: ReasonInfo(693, "RUN_WALL_LIMIT_EXCEEDED", None, "bench", "run", "运行超过墙钟上限", "减少负载", "V0.3"),
+    694: ReasonInfo(694, "RERUN_VERSION_MISMATCH", 409, "bench", "rec", "录制的 Rerun 版本与服务不一致", "迁移录制", "V0.3"),
+    695: ReasonInfo(695, "SEED_ACCESS_DENIED", 403, "bench", "access", "无权查看排名运行种子", "使用有权限的角色", "V0.3"),
+    696: ReasonInfo(696, "PUBLISH_BUDGET_EXCEEDED", None, "bench", "publish", "静态制品超出磁盘或单文件预算", "调整发布目录", "V0.3"),
+    697: ReasonInfo(697, "ARTIFACT_EXPIRED", 410, "bench", "storage", "录制或派生物已按保留策略清理", "重新派生或重新运行", "V0.3"),
+    698: ReasonInfo(698, "FRAME_REQUEST_LIMIT", 422, "bench", "frames", "帧区间请求超出帧数或字节上限", "缩小区间或增大 stride", "V0.3"),
 }
 
 DETAIL_ONLY: frozenset[str] = frozenset(("SENSOR_SPEC_INVALID", "SENSOR_UNKNOWN", "TARGET_TABLE_FULL", "TARGET_ID_DUP", "JOB_WORKER_UNAVAILABLE", "PREVIEW_EXPIRED", "PREDICATE_MALFORMED", "KERNEL_LIMIT", "WORLD_NOT_IN_SESSION", "GEO_CEILING", "INVENTORY_READONLY", "NOT_READY", "MODEL_IN_USE", "NOT_LANDED_LOCKED", "STALE_SNAPSHOT", "MANUAL_CONTROL", "RATE_ABOVE_GRANT", "WORLD_MISMATCH", "SNAPSHOT_TOO_LARGE", "PLAN_TIMEOUT", "LOITER_RADIUS_MIN", "MOUNT_CHANGE_IN_FLIGHT"))
 WARNINGS: frozenset[str] = frozenset(("SPEED_CLAMPED", "SANDBOX_RATE_LIMITED", "KEEPOUT_CLAMPED", "VEHICLE_ENV_LIMIT", "PREVIEW_RECOMPUTED"))
-WS_CLOSE: dict[str, int] = {"NORMAL": 1000, "GOING_AWAY": 1001, "PROTOCOL_ERROR": 1002, "ABNORMAL": 1006, "POLICY_VIOLATION": 1008, "MESSAGE_TOO_BIG": 1009, "INTERNAL_ERROR": 1011, "CONTROL_BACKLOG": 1013, "AUTH": 4401, "SEAT_REVOKED": 4403, "HELLO_TIMEOUT": 4408, "SANDBOX_GONE": 4410, "VERSION_MISMATCH": 4426, "CONN_LIMIT": 4429, "IDLE_RECLAIMED": 4430, "VIEWER_SEATS_FULL": 4431}
+WS_CLOSE: dict[str, int] = {"NORMAL": 1000, "GOING_AWAY": 1001, "PROTOCOL_ERROR": 1002, "ABNORMAL": 1006, "POLICY_VIOLATION": 1008, "MESSAGE_TOO_BIG": 1009, "INTERNAL_ERROR": 1011, "CONTROL_BACKLOG": 1013, "AUTH": 4401, "SEAT_REVOKED": 4403, "HELLO_TIMEOUT": 4408, "SANDBOX_GONE": 4410, "VERSION_MISMATCH": 4426, "CONN_LIMIT": 4429, "IDLE_RECLAIMED": 4430, "VIEWER_SEATS_FULL": 4431, "RUN_ENDED": 4460, "AGENT_PROTOCOL_ERROR": 4462, "AGENT_SUPERSEDED": 4463, "AGENT_NOT_ACCEPTED": 4464}
 
 
 def info(code: int) -> ReasonInfo:

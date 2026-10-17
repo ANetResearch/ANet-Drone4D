@@ -5320,11 +5320,11 @@ class ReasonsReasons(TypedDict):
     code: int
     name: str
     http: int | None
-    category: Literal["ok", "native", "call_control", "admission", "runtime", "protocol", "job", "data", "browser", "module", "sandbox", "catalog", "targets", "perception", "tasking"]
+    category: Literal["ok", "native", "call_control", "admission", "runtime", "protocol", "job", "data", "browser", "module", "sandbox", "catalog", "targets", "perception", "tasking", "world", "event", "physics", "sensor", "agent", "bench"]
     step: str | None
     message_zh: str
     remedy_zh: str
-    d1: Literal["core", "ext", "V0.2", "V0.5", "V1.0", "V0.2-demo"]
+    d1: Literal["core", "ext", "V0.2", "V0.5", "V1.0", "V0.2-demo", "V0.3"]
 
 
 # rt/reasons.schema.json#/properties/ws_close_codes/items
