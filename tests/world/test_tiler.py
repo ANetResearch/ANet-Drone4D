@@ -172,3 +172,25 @@ def test_hierarchy_paging_roundtrip():
         assert int(e[r.rec][0]) == i % 65536
         assert name_to_key(r.name)[0] == keys[i][0]
     assert any(r.type == PROXY for r in records)
+
+
+@pytest.mark.parametrize("extent", [[600, 400, 100], [4000, 600, 100]])            # 单根与 6 根森林（掩码路径）
+def test_measured_rgb_is_written_as_srgb(tmp_path, extent):
+    """D3 扩展点 6（AWR-05 §12.3）：给出 rgb 时 `col.rgb = srgb`，逐点颜色随点写出；未给出时仍为 baked-height。"""
+    rng = np.random.default_rng(7)
+    P = rng.random((30_000, 3)) * extent
+    C = rng.integers(0, 8, len(P)).astype(np.uint8)
+    pal = rng.integers(0, 256, (8, 3)).astype(np.uint8)
+    roots = tile(P, None, C, tmp_path / "c", G=16, leaf=2000, z_range=(0.0, 100.0), hag_range=None, nn_median_m=1.0,
+                 rgb=pal[C])
+    n = 0
+    for r in roots:
+        c = read_container(tmp_path / "c" / ("" if len(roots) == 1 else r.name))
+        assert c.metadata["anet"]["col"]["rgb"] == "srgb"
+        for v in iter_nodes(c, decode=True):
+            if v.num_points:
+                assert np.array_equal(v.col_u8[:, :3], pal[v.classes])
+                n += v.num_points
+    assert n == len(P)
+    plain = tile(P, None, C, tmp_path / "p", G=16, leaf=2000, z_range=(0.0, 100.0), hag_range=None, nn_median_m=1.0)
+    assert {r.metadata["anet"]["col"]["rgb"] for r in plain} == {"baked-height"}

@@ -114,9 +114,11 @@ def save_work(stage: Path, nc: NormalizedCloud, extras: dict, created_at: str) -
     if nc.normal is not None:
         np.ascontiguousarray(nc.normal, "<f4").tofile(w / "normal.f32")
     nc.cls.astype(np.uint8).tofile(w / "cls.u8")
+    if nc.rgb is not None:
+        np.ascontiguousarray(nc.rgb, np.uint8).tofile(w / "rgb.u8")
     np.ascontiguousarray(nc.hag, "<f4").tofile(w / "hag.f32")
     np.ascontiguousarray(nc.terrain.dtm, "<f4").tofile(w / "dtm.f32")
-    meta = {"world_id": nc.world_id, "n": len(nc.xyz), "has_normal": nc.normal is not None,
+    meta = {"world_id": nc.world_id, "n": len(nc.xyz), "has_normal": nc.normal is not None, "has_rgb": nc.rgb is not None,
             "T_world_source": nc.T_world_source.tolist(), "origin": nc.origin.tolist(), "anchor": nc.anchor,
             "terrain": {"shape": list(nc.terrain.dtm.shape), "origin_xy": list(nc.terrain.dtm_origin_xy),
                         "cell_m": nc.terrain.dtm_cell_m, "ground_type": nc.terrain.ground_type},
@@ -147,7 +149,8 @@ def load_work(stage: Path) -> tuple[NormalizedCloud, dict, str]:
         origin=np.asarray(m["origin"]), anchor=m["anchor"],
         terrain=TerrainGrids(dtm=dtm, dtm_origin_xy=tuple(t["origin_xy"]), dtm_cell_m=t["cell_m"], ground_type=t["ground_type"]),
         stats=CloudStats(**st), gates=gates, config=_cfg_from_json(m["config"]), provenance=m["provenance"],
-        source_files=m["source_files"], timings=m.get("timings", {}), peak_rss_mb=m.get("peak_rss_mb", {}))
+        source_files=m["source_files"], timings=m.get("timings", {}), peak_rss_mb=m.get("peak_rss_mb", {}),
+        rgb=np.fromfile(w / "rgb.u8", np.uint8).reshape(n, 3) if m.get("has_rgb") else None)
     return nc, m["extras"], m["created_at"]
 
 
@@ -268,7 +271,7 @@ class BuildPipeline:
         self.roots = tile(nc.xyz, nc.normal, nc.cls, self.stage / VISUAL_HREF, G=p.G, leaf=p.leaf, compression=p.compression,
                           forest=p.forest, seed=p.seed, z_range=(s.z_p1, s.z_p99), hag_range=(s.hag_p1, s.hag_p99),
                           nn_median_m=s.nn_median_m, name=nc.world_id, normals_flipped_frac=round(s.normals_flipped_frac, 4),
-                          presorted=self.morton, normals_oct16=getattr(self, "oct16", None))
+                          presorted=self.morton, normals_oct16=getattr(self, "oct16", None), rgb=nc.rgb)
         self.morton = None
         self.oct16 = None
         nodes = sum(r.metadata["anet"]["nodeCount"] for r in self.roots)

@@ -77,11 +77,17 @@ def ingest(adapter: IngestAdapter, ctx: StageContext | None = None, *, dtm_cell_
         if raw.class_index is None or np.shape(raw.class_index) != (n_raw,):
             raise ConfigError("semantic = provided 需要 RawCloud.class_index（长度与点数相同）")
         cls_in = np.asarray(raw.class_index, np.uint8)
+    rgb_in = None
+    if raw.rgb is not None:
+        if np.shape(raw.rgb) != (n_raw, 3):
+            raise ConfigError("RawCloud.rgb 须为 (N, 3) 的 sRGB 字节（长度与点数相同）")
+        rgb_in = np.asarray(raw.rgb, np.uint8)
     keep = np.isfinite(P[:, 0]) & np.isfinite(P[:, 1]) & np.isfinite(P[:, 2])
     n_nonfinite = int(n_raw - keep.sum())
     if n_nonfinite:
         P, N0 = P[keep], N0[keep]
         cls_in = None if cls_in is None else cls_in[keep]
+        rgb_in = None if rgb_in is None else rgb_in[keep]
     N0[~(np.isfinite(N0[:, 0]) & np.isfinite(N0[:, 1]) & np.isfinite(N0[:, 2]))] = 0.0
     T["read"] = time.perf_counter() - t0
     rss["read"] = peak_rss_mb()
@@ -191,4 +197,5 @@ def ingest(adapter: IngestAdapter, ctx: StageContext | None = None, *, dtm_cell_
         stats=stats, gates=gates, config=cfg, provenance=adapter.provenance(), source_files=list(raw.files),
         timings=T, peak_rss_mb=rss)
     nc.grid_cache = (ci, top, grid_origin)
+    nc.rgb = rgb_in
     return nc

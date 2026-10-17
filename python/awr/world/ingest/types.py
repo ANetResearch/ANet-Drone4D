@@ -93,6 +93,7 @@ class RawCloud:
     class_las: np.ndarray | None = None
     files: list[dict] = field(default_factory=list)   # [{name, bytes, points, sha256, header_bytes}]
     class_index: np.ndarray | None = None              # uint8 (N,)，anet-classes@1 紧凑索引（semantic = provided 时使用）
+    rgb: np.ndarray | None = None                      # uint8 (N,3) sRGB 实测颜色（D3 扩展点 6，AWR-05 §12.3）；None 时 col.rgb = baked-height
 
 
 class IngestAdapter(Protocol):
@@ -178,6 +179,7 @@ class NormalizedCloud:
     timings: dict[str, float] = field(default_factory=dict)
     peak_rss_mb: dict[str, float] = field(default_factory=dict)
     grid_cache: Any = None             # (CellIndex 2 m, 原始顶面 f32, 网格原点)：法线修正与 DSM 共用（M03 O-4）
+    rgb: np.ndarray | None = None      # uint8 [N,3] sRGB（RawCloud.rgb 经同一筛选；D3 扩展点 6）
 
 
 @dataclass(slots=True)

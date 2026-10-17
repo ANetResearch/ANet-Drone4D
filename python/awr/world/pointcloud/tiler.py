@@ -19,7 +19,8 @@ def tile(points_world: np.ndarray, normals: np.ndarray | None, cls_index: np.nda
          hag_range: tuple[float, float] | None, nn_median_m: float, twin_default: bool = False,
          name: str = "world", normals_flipped_frac: float | None = None,
          presorted: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
-         href_prefix: str = VISUAL_HREF, normals_oct16: np.ndarray | None = None) -> list[RootEntry]:
+         href_prefix: str = VISUAL_HREF, normals_oct16: np.ndarray | None = None,
+         rgb: np.ndarray | None = None) -> list[RootEntry]:
     """切片 float64 world 点（m）；`out_dir` 为 `visual/pointcloud/` 目录。
 
     `presorted` 是世界立方体上的 Morton 排序结果（源点云写出时得到），只在单根世界复用（立方体相同）。
@@ -40,17 +41,18 @@ def tile(points_world: np.ndarray, normals: np.ndarray | None, cls_index: np.nda
         sub = out_dir if k == 1 else out_dir / rname
         href = href_prefix if k == 1 else f"{href_prefix}{rname}/"
         if mask is None:
-            Pm, Nm, Cm, pre, Wm = P, normals, cls_index, presorted, normals_oct16
+            Pm, Nm, Cm, pre, Wm, Rm = P, normals, cls_index, presorted, normals_oct16, rgb
         else:
             Pm = P[mask]
             Nm = None if normals is None else np.asarray(normals)[mask]
             Cm = np.asarray(cls_index)[mask]
             Wm = None if normals_oct16 is None else np.asarray(normals_oct16)[mask]
+            Rm = None if rgb is None else np.asarray(rgb)[mask]
             pre = None
         md = write_container(sub, name if k == 1 else f"{name}-{ri}", Pm, Nm, Cm, z_range, cm, size, G=G, leaf=leaf,
                              seed=seed, compression=compression, forest=(ri, k), hag_range=hag_range,
                              nn_median_m=nn_median_m, normals_flipped_frac=normals_flipped_frac, presorted=pre,
-                             normals_oct16=Wm)
+                             normals_oct16=Wm, rgb=Rm)
         a = md["anet"]
         entries.append(RootEntry(name=rname, href=href, cube_min=np.asarray(cm, np.float64), cube_size=float(size),
                                  points=int(md["points"]), depth=int(md["hierarchy"]["depth"]),

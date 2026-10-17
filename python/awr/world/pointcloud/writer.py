@@ -69,10 +69,12 @@ def write_container(out_dir: Path, name: str, P: np.ndarray, normals: np.ndarray
                     z_range: tuple[float, float], cube_min: np.ndarray, size: float, *, G: int = 64, leaf: int = 20000,
                     seed: int = 1, compression: str = "none", forest: tuple[int, int] = (0, 1),
                     hag_range: tuple[float, float] | None = None, nn_median_m: float = 1.0,
-                    normals_flipped_frac: float | None = None, presorted=None, normals_oct16: np.ndarray | None = None) -> dict:
+                    normals_flipped_frac: float | None = None, presorted=None, normals_oct16: np.ndarray | None = None,
+                    rgb: np.ndarray | None = None) -> dict:
     """写出一个根的完整容器；返回 metadata（dict）。P 为 float64 world 坐标。
 
     `normals_oct16` 为已编码的 oct16（与 P 同序），给出时不再重复编码（源点云与切片器共用一次编码）。
+    `rgb` 为 uint8 (N,3) sRGB 实测颜色（与 P 同序；D3 扩展点 6）：给出时 `col.rgb = srgb`，否则为 `baked-height`。
     """
     if compression not in ("none", "gzip"):
         raise ValueError(f"compression {compression!r}")
@@ -121,7 +123,8 @@ def write_container(out_dir: Path, name: str, P: np.ndarray, normals: np.ndarray
             np.minimum(p.mn, c.mn, out=p.mn)
             np.maximum(p.mx, c.mx, out=p.mx)
     z1, z99 = float(z_range[0]), float(z_range[1])
-    rgb = baked_height(Ps[:, 2], z1, z99)
+    rgb_mode = "baked-height" if rgb is None else "srgb"
+    rgb = baked_height(Ps[:, 2], z1, z99) if rgb is None else np.asarray(rgb, np.uint8)[order]
     if normals_oct16 is not None:
         w = np.asarray(normals_oct16, np.uint16)[order]
         w_mode = "oct16"
@@ -199,7 +202,7 @@ def write_container(out_dir: Path, name: str, P: np.ndarray, normals: np.ndarray
         "anet": {
             "formatVersion": 1, "frame": "world", "streams": ["pos", "col"], "bytesPerPoint": 12,
             "pos": {"format": "unorm16x4", "xyz": "node-cube", "w": w_mode},
-            "col": {"format": "unorm8x4", "rgb": "baked-height", "a": "class-index"},
+            "col": {"format": "unorm8x4", "rgb": rgb_mode, "a": "class-index"},
             "ext": None, "compression": compression, "pointOrder": "shuffled", "shuffleSeed": int(seed),
             "sampling": {"method": "grid-center", "G": int(G), "leaf": int(leaf), "minChild": 0, "B": B, "seed": int(seed)},
             "classTable": {"id": "anet-classes@1", "href": "semantic/anet-classes@1.json"},
