@@ -3,12 +3,14 @@
  "event_id": "capture",
  "world_id": "oryahovo-crop1",
  "duration_s": 30,
+ "noise_profile": "realistic",
+ "seed": 1,
  "fleet": [
   {"uav": "uav-01", "path": {"kind": "orbit", "center": [0, 0], "radius_m": 300, "agl_m": 120, "period_s": 240, "phase_deg": 0},
    "cameras": [{"name": "cam0", "size": [1280, 720], "hfov_deg": 84, "fps": "10", "gimbal": {"az_deg": 90, "el_deg": -25}, "outputs": ["rgb", "depth"]}]},
   {"uav": "uav-02", "path": {"kind": "orbit", "center": [0, 0], "radius_m": 450, "agl_m": 150, "period_s": 300, "phase_deg": 120, "ccw": false},
    "cameras": [{"name": "cam0", "size": [1280, 720], "hfov_deg": 84, "fps": "10", "gimbal": {"az_deg": -90, "el_deg": -20}, "outputs": ["rgb", "depth"]}]},
-  {"uav": "uav-03", "path": {"kind": "waypoints", "points": [[0, -600, -300, 60, 30], [15, -150, 0, 60, 30], [30, 300, 250, 60, 30]]},
-   "cameras": [{"name": "cam0", "size": [1280, 720], "hfov_deg": 84, "fps": "10", "gimbal": {"az_deg": 0, "el_deg": -15}, "outputs": ["rgb", "depth"]}]}
+  {"uav": "uav-03", "path": {"kind": "waypoints", "points": [[0, -600, -300, 30, 30], [15, -150, 0, 30, 30], [30, 300, 250, 30, 30]]},
+   "cameras": [{"name": "cam0", "size": [1280, 720], "hfov_deg": 84, "fps": "10", "gimbal": {"az_deg": 0, "el_deg": -35}, "outputs": ["rgb", "depth"]}]}
  ]
 }

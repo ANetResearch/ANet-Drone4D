@@ -31,14 +31,17 @@ class _StubCamera:
         self.info = {"GL_RENDERER": "stub", "GL_VERSION": "4.5.0 stub 1.0"}
         self.n = 0
 
-    def render(self, cm, R, pos, *, linear: bool = False) -> RenderOut:
+    def render(self, cm, R, pos, *, linear: bool = False, fx=None) -> RenderOut:
+        """GPU 效果链的替身：线性常量图经参考实现得到交付 RGB 与观测深度。"""
+        from awr.sensorsvc.camera.effects import apply_fx_reference
+
         self.n += 1
         h, w = cm.height, cm.width
-        rgb = np.zeros((h, w, 3), np.uint8)
-        rgb[..., 1] = self.n % 256
+        lin = np.full((h, w, 3), 0.02 * (self.n % 10 + 1), np.float32)
         depth = np.full((h, w), float(pos[2]), np.float32)
-        lin = np.full((h, w, 3), 0.2, np.float32) if linear else None
-        return RenderOut(rgb, depth, np.zeros((h, w), np.uint16), np.zeros((h, w), np.uint8), 1.0, 1.0, 1, rgb_lin=lin)
+        rgb, d_obs = apply_fx_reference(lin, depth, cm, fx)
+        return RenderOut(rgb, depth, np.zeros((h, w), np.uint16), np.zeros((h, w), np.uint8), 1.0, 1.0, 1,
+                         depth_obs=d_obs, meter_sub=lin[::8, ::8] if fx.meter else None)
 
     def release(self) -> None:
         pass

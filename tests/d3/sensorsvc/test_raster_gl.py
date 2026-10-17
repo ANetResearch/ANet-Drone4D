@@ -72,3 +72,30 @@ def test_reversed_z_keeps_far_detail(cam) -> None:
     r = cam.render(cm, gimbal_R(0.0, 0.0), p)
     hit = r.depth_m[120, 160]
     assert hit == pytest.approx(1040.0, abs=1e-2)
+
+
+@pytest.mark.parametrize("profile", ["clean", "realistic", "harsh"])
+def test_gpu_effects_match_reference(cam, profile: str) -> None:
+    """GPU 效果链遍与 numpy 参考实现（M25 §6.5、§6.17.2）：RGB 差 ≤ 1 DN 且 ≥ 99% 像素逐值相同；L2-depth 有效掩码相同、
+    数值差 ≤ 1e-4·sigma(d) + 1e-5 m；测光小图与参考的 1/8 降采样逐值相同。"""
+    from dataclasses import replace
+
+    from awr.sensorsvc.camera import effects as fx
+
+    prof = fx.profile(profile)
+    cm = fx.with_profile(CameraModel.from_hfov(640, 480, 60.0), prof)
+    p = np.array([0.0, 0.0, 35.0])
+    R = gimbal_R(0.0, -35.0)
+    st = fx.AeState()
+    fp = fx.frame_params(cm, st, seed=11, uav_no=2, sensor_no=0, frame_index=9, t_mid_s=4.2,
+                         depth=replace(prof.depth, d_max_m=80.0))
+    gpu = cam.render(cm, R, p, linear=True, fx=fp)
+    rgb, dob = fx.apply_fx_reference(gpu.rgb_lin, gpu.depth_m, cm, fp)
+    diff = np.abs(gpu.rgb8.astype(int) - rgb.astype(int))
+    assert diff.max() <= 1 and (diff == 0).mean() >= 0.99, (profile, diff.max(), (diff == 0).mean())
+    assert np.array_equal(gpu.depth_obs > 0, dob > 0) and (dob > 0).mean() > 0.2
+    d = gpu.depth_m
+    tol = 1e-4 * prof.depth.a * (0.005 * d + 0.0005 * d * d) + 1e-5
+    assert (np.abs(gpu.depth_obs - dob) <= tol).all()
+    if fp.meter:
+        assert np.array_equal(gpu.meter_sub, gpu.rgb_lin[::8, ::8])

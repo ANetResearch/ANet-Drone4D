@@ -22,8 +22,9 @@ import numpy as np
 from awr.sensorsvc.camera.model import CameraModel, IspConfig, NoiseConfig
 from awr.sim.sensors.cbrng import C3, key, sm, uniform
 
-__all__ = ["CHANNELS_V2", "FX_VERSION", "NOISE_TABLE_VERSION", "PROFILES", "STREAM_M25", "AeState", "DepthSensorConfig", "NoiseProfile",
-           "apply_rgb", "depth_sensor", "gimbal_reading", "meter", "pixel_normals", "profile", "with_profile"]
+__all__ = ["CHANNELS_V2", "FX_VERSION", "NOISE_TABLE_VERSION", "PROFILES", "STREAM_M25", "AeState", "DepthSensorConfig", "FxParams",
+           "NoiseProfile", "apply_fx_reference", "apply_rgb", "depth_sensor", "finish_frame", "frame_params", "gimbal_reading", "meter",
+           "meter_sub", "pixel_normals", "profile", "with_profile"]
 
 FX_VERSION = "fx-basic@1"
 NOISE_TABLE_VERSION = "d3-noise-1-draft"
@@ -99,7 +100,12 @@ def pixel_normals(seed: int, uav_no: int, frame_index: int, ch: int, n: int, m: 
 
 def meter(lin: np.ndarray) -> float:
     """测光：1/8 降采样的中心加权 64 档 log2 直方图的加权平均（整数计数，确定）。"""
-    s = lin[::8, ::8].astype(np.float32)
+    return meter_sub(lin[::8, ::8])
+
+
+def meter_sub(sub: np.ndarray) -> float:
+    """`meter` 的直方图部分；`sub` 为已按 1/8 降采样的线性图像（GPU 路径读回的小图）。"""
+    s = np.asarray(sub, np.float32)
     Y = 0.2126 * s[..., 0] + 0.7152 * s[..., 1] + 0.0722 * s[..., 2]
     lo, hi = AE_LOG2_RANGE
     b = np.clip(((np.log2(np.maximum(Y, 2.0 ** lo)) - lo) / (hi - lo) * AE_BINS).astype(np.int64), 0, AE_BINS - 1)
@@ -138,39 +144,79 @@ def _srgb_q(x: np.ndarray) -> np.ndarray:
     return np.floor(y * np.float32(255.0) + np.float32(0.5)).astype(np.uint8)
 
 
-def apply_rgb(lin: np.ndarray, cm: CameraModel, state: AeState, *, seed: int, uav_no: int, sensor_no: int, frame_index: int,
-              t_mid_s: float) -> np.ndarray:
-    """线性渲染 (H, W, 3) → 交付 sRGB8；推进 `state`（自动曝光）。"""
-    lin = np.asarray(lin, np.float32)
+@dataclass(frozen=True)
+class FxParams:
+    """一帧效果链的全部参数（CPU 计算，GPU 着色器与参考实现共用）。"""
+    gain: float                           # 含曝光误差的增益
+    gain_base: float                      # 测光用的基础增益
+    vignette_k: float
+    read_sigma_dn: float
+    shot_k_dn: float
+    key_noise: int                        # 像素噪声帧键（uint64）
+    depth: DepthSensorConfig | None       # None：不输出观测深度
+    key_depth: int
+    meter: bool                           # 自动曝光：本帧需要测光
+
+
+def frame_params(cm: CameraModel, state: AeState, *, seed: int, uav_no: int, sensor_no: int, frame_index: int, t_mid_s: float,
+                 depth: DepthSensorConfig | None = None) -> FxParams:
+    """计算一帧的效果链参数并推进自动曝光状态（测光结果由 `finish_frame` 写回）。"""
     g, ge = exposure_gain(state, cm.isp, t_mid_s, seed=seed, uav_no=uav_no, sensor_no=sensor_no)
-    if cm.isp.ae == "auto":
-        state.meter_prev = meter(lin * np.float32(g))
     state.gain_prev = g
     state.frames += 1
     state.history.append(ge)
-    img = lin * np.float32(ge)
-    if cm.isp.vignette_k:
-        img = img * (np.float32(1.0) - np.float32(cm.isp.vignette_k) * (np.float32(1.0) - _cos4(cm)))[..., None]
-    nz = cm.noise
-    if nz.read_sigma_dn > 0 or nz.shot_k_dn > 0:
+    kn = int(key(seed, STREAM_M25, uav_no, frame_index, CHANNELS_V2["cam_noise"][0] + sensor_no))
+    kd = int(key(seed, STREAM_M25, uav_no, frame_index, CHANNELS_V2["depth_noise"][0] + sensor_no))
+    return FxParams(ge, g, cm.isp.vignette_k, cm.noise.read_sigma_dn, cm.noise.shot_k_dn, kn, depth, kd, cm.isp.ae == "auto")
+
+
+def finish_frame(state: AeState, p: FxParams, sub: np.ndarray | None) -> None:
+    """自动曝光：以本帧 1/8 降采样线性图像（未乘增益）乘基础增益测光，供下一帧使用。"""
+    if p.meter and sub is not None:
+        state.meter_prev = meter_sub(np.asarray(sub, np.float32) * np.float32(p.gain_base))
+
+
+def _rgb_fx(lin: np.ndarray, cm: CameraModel, p: FxParams) -> np.ndarray:
+    img = np.asarray(lin, np.float32) * np.float32(p.gain)
+    if p.vignette_k:
+        img = img * (np.float32(1.0) - np.float32(p.vignette_k) * (np.float32(1.0) - _cos4(cm)))[..., None]
+    if p.read_sigma_dn > 0 or p.shot_k_dn > 0:
         h, w = img.shape[:2]
         x = np.float32(255.0) * np.clip(img, np.float32(0.0), np.float32(1.0))
-        sigma = np.sqrt(np.float32(nz.shot_k_dn) * x + np.float32(nz.read_sigma_dn) ** 2)
-        n = pixel_normals(seed, uav_no, frame_index, CHANNELS_V2["cam_noise"][0] + sensor_no, h * w, 3).reshape(h, w, 3)
+        sigma = np.sqrt(np.float32(p.shot_k_dn) * x + np.float32(p.read_sigma_dn) ** 2)
+        n = _normals(_U(p.key_noise), np.arange(h * w * 3, dtype=np.uint64)).reshape(h, w, 3)
         img = (x + sigma * n) / np.float32(255.0)
     return _srgb_q(img)
 
 
-def depth_sensor(depth_m: np.ndarray, cfg: DepthSensorConfig, *, seed: int, uav_no: int, sensor_no: int, frame_index: int) -> np.ndarray:
-    """L2-depth（M25 §6.5.6）：越界、无几何为 0；其余加 sigma(d)·n，加噪后不低于 d_min（不产生负深度或 0 以外的越界值）。"""
+def _depth_fx(depth_m: np.ndarray, cfg: DepthSensorConfig, key_depth: int) -> np.ndarray:
     d = np.asarray(depth_m, np.float32)
     ok = (d >= np.float32(cfg.d_min_m)) & (d <= np.float32(cfg.d_max_m))
     out = np.where(ok, d, np.float32(0.0)).astype(np.float32)
     if cfg.a > 0:
-        n = pixel_normals(seed, uav_no, frame_index, CHANNELS_V2["depth_noise"][0] + sensor_no, d.size, 1).reshape(d.shape)
+        n = _normals(_U(key_depth), np.arange(d.size, dtype=np.uint64)).reshape(d.shape)
         sig = np.float32(cfg.a) * (np.float32(0.005) * d + np.float32(0.0005) * d * d)
         out = np.where(ok, np.maximum(out + sig * n, np.float32(cfg.d_min_m)), np.float32(0.0)).astype(np.float32)
     return out
+
+
+def apply_fx_reference(lin: np.ndarray, depth_m: np.ndarray, cm: CameraModel, p: FxParams) -> tuple[np.ndarray, np.ndarray | None]:
+    """参考实现：线性渲染与平面深度 → (交付 sRGB8, 观测深度或 None)；GPU 编码遍与之逐值一致（容差见一致性测试）。"""
+    return _rgb_fx(lin, cm, p), (None if p.depth is None else _depth_fx(depth_m, p.depth, p.key_depth))
+
+
+def apply_rgb(lin: np.ndarray, cm: CameraModel, state: AeState, *, seed: int, uav_no: int, sensor_no: int, frame_index: int,
+              t_mid_s: float) -> np.ndarray:
+    """线性渲染 (H, W, 3) → 交付 sRGB8；推进 `state`（自动曝光）。"""
+    lin = np.asarray(lin, np.float32)
+    p = frame_params(cm, state, seed=seed, uav_no=uav_no, sensor_no=sensor_no, frame_index=frame_index, t_mid_s=t_mid_s)
+    finish_frame(state, p, lin[::8, ::8])
+    return _rgb_fx(lin, cm, p)
+
+
+def depth_sensor(depth_m: np.ndarray, cfg: DepthSensorConfig, *, seed: int, uav_no: int, sensor_no: int, frame_index: int) -> np.ndarray:
+    """L2-depth（M25 §6.5.6）：越界、无几何为 0；其余加 sigma(d)·n，加噪后不低于 d_min（不产生负深度或 0 以外的越界值）。"""
+    return _depth_fx(depth_m, cfg, int(key(seed, STREAM_M25, uav_no, frame_index, CHANNELS_V2["depth_noise"][0] + sensor_no)))
 
 
 def gimbal_reading(g_true: tuple[float, float, float], sigma_deg: float, *, seed: int, uav_no: int, sensor_no: int,

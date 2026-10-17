@@ -5,13 +5,18 @@
 解码到线性，三线性 mip 与 16× 各向异性。读回第 0 行即图像顶部。
 
 几何之后两遍全屏三角形：天空遍以 `GEQUAL` 只覆盖深度仍为清除值 0 的像素（仰角 ≥ 0 为天空渐变，否则为远景雾色，语义 255；§6.4.3
-天空）；编码遍把线性颜色按 sRGB 量化为 8 位（效果链与 ISP 落地后在此遍之前插入，§6.5.1）。读回 8 位 RGB、R32F 深度、实例与语义。
+天空）；编码遍把线性颜色按 sRGB 量化为 8 位。读回 8 位 RGB、R32F 深度、实例与语义。
+
+`render(..., fx=FxParams)` 时编码遍换成效果链遍（M25 §6.5：增益、渐晕、Poisson–Gaussian 噪声、sRGB 与量化；逐像素正态以
+`GL_ARB_gpu_shader_int64` 的 SplitMix64 与 `camera.effects` 参考实现同式），另加 L2-depth 遍（观测深度写入单独的 R32F）与
+自动曝光测光用的 1/8 降采样遍（读回小图，直方图在 CPU 上按参考实现计算）。
 
 moderngl 负责程序、顶点数组与纹理；它不提供的 clip control、深度浮点附件与整型附件清除经 EGL 取函数地址以 ctypes 调用。
 """
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import ctypes.util
 import time
@@ -19,13 +24,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from awr.sensorsvc.camera.effects import FxParams
 from awr.sensorsvc.camera.model import CameraModel
 from awr.sensorsvc.camera.proj import mv_tile, proj_reversed_z, world_to_opt
 from awr.sensorsvc.camera.scene import AppearanceScene
 
 __all__ = ["RENDERER_VERSION", "RasterCamera", "RenderOut", "linear_to_srgb8", "srgb8_to_linear"]
 
-RENDERER_VERSION = "raster-gl@0.1.0"
+RENDERER_VERSION = "raster-gl@0.2.0"
 SEM_NONE = 255
 _GL_TEXTURE_2D, _GL_DEPTH32F, _GL_FRAMEBUFFER = 0x0DE1, 0x8CAC, 0x8D40
 _GL_COLOR_ATTACHMENT0, _GL_DEPTH_ATTACHMENT, _GL_FB_COMPLETE = 0x8CE0, 0x8D00, 0x8CD5
@@ -109,6 +115,84 @@ void main() {
 }
 """
 
+_GLSL_H64 = """
+#extension GL_ARB_gpu_shader_int64 : require
+uint64_t sm(uint64_t z) {
+    z += 0x9E3779B97F4A7C15UL;
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+    return z ^ (z >> 31);
+}
+float gauss(uint64_t K, uint64_t i) {
+    uint64_t k = sm(K ^ i);
+    uint64_t b = sm(k ^ 0x94D049BB133111EBUL);
+    float u1 = (float(uint(k >> 40)) + 0.5) * (1.0 / 16777216.0);
+    float u2 = float(uint(b >> 40)) * (1.0 / 16777216.0);
+    return sqrt(-2.0 * log(u1)) * cos(6.2831855 * u2);
+}
+"""
+FX_FS = """
+#version 450
+""" + _GLSL_H64 + """
+uniform sampler2D u_col;
+uniform float u_gain;
+uniform float u_vig;
+uniform vec4 u_K;
+uniform float u_read;
+uniform float u_shot;
+uniform uvec2 u_key;
+uniform uint u_W;
+layout(location = 0) out vec4 o_rgb;
+void main() {
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    vec3 I = texelFetch(u_col, p, 0).rgb * u_gain;
+    if (u_vig > 0.0) {
+        float x = (gl_FragCoord.x - u_K.z) / u_K.x;
+        float y = (gl_FragCoord.y - u_K.w) / u_K.y;
+        float c = 1.0 / (1.0 + (x * x + y * y));
+        I *= 1.0 - u_vig * (1.0 - c * c);
+    }
+    if (u_read > 0.0 || u_shot > 0.0) {
+        uint64_t K = packUint2x32(u_key);
+        uint64_t i0 = (uint64_t(p.y) * uint64_t(u_W) + uint64_t(p.x)) * 3UL;
+        vec3 x = 255.0 * clamp(I, 0.0, 1.0);
+        vec3 s = sqrt(u_shot * x + u_read * u_read);
+        I = (x + s * vec3(gauss(K, i0), gauss(K, i0 + 1UL), gauss(K, i0 + 2UL))) / 255.0;
+    }
+    vec3 c = clamp(I, 0.0, 1.0);
+    vec3 y = mix(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308))));
+    o_rgb = vec4(floor(y * 255.0 + 0.5) / 255.0, 1.0);
+}
+"""
+DEPTH_FS = """
+#version 450
+""" + _GLSL_H64 + """
+uniform sampler2D u_z;
+uniform vec3 u_d;
+uniform uvec2 u_key;
+uniform uint u_W;
+layout(location = 0) out float o_z;
+void main() {
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    float d = texelFetch(u_z, p, 0).r;
+    bool ok = d >= u_d.y && d <= u_d.z;
+    float o = ok ? d : 0.0;
+    if (ok && u_d.x > 0.0) {
+        uint64_t i = uint64_t(p.y) * uint64_t(u_W) + uint64_t(p.x);
+        o = max(d + u_d.x * (0.005 * d + 0.0005 * d * d) * gauss(packUint2x32(u_key), i), u_d.y);
+    }
+    o_z = o;
+}
+"""
+SUB_FS = """
+#version 450
+uniform sampler2D u_col;
+layout(location = 0) out vec4 o_col;
+void main() {
+    o_col = texelFetch(u_col, ivec2(gl_FragCoord.xy) * 8, 0);
+}
+"""
+
 
 def srgb8_to_linear(c: np.ndarray) -> np.ndarray:
     x = np.asarray(c, np.float64) / 255.0
@@ -146,6 +230,8 @@ class RenderOut:
     readback_ms: float
     batches_drawn: int
     rgb_lin: np.ndarray | None = None     # (H, W, 3) float32 线性，`render(..., linear=True)` 时读回
+    depth_obs: np.ndarray | None = None   # (H, W) float32 L2-depth 观测深度，`fx.depth` 给出时
+    meter_sub: np.ndarray | None = None   # (⌈H/8⌉, ⌈W/8⌉, 3) float32 线性 1/8 降采样，`fx.meter` 时
 
 
 class _GL:
@@ -208,6 +294,11 @@ class _Target:
         self.fbo = ctx.detect_framebuffer(f.value)
         self.rgb = ctx.texture((w, h), 4, dtype="f1")
         self.enc = ctx.framebuffer(color_attachments=[self.rgb])
+        self.zobs = ctx.texture((w, h), 1, dtype="f4")
+        self.zfb = ctx.framebuffer(color_attachments=[self.zobs])
+        self.sw, self.sh = -(-w // 8), -(-h // 8)
+        self.sub = ctx.texture((self.sw, self.sh), 4, dtype="f2")
+        self.subfb = ctx.framebuffer(color_attachments=[self.sub])
 
 
 class RasterCamera:
@@ -224,11 +315,20 @@ class RasterCamera:
         self.prog = self.ctx.program(vertex_shader=VS, fragment_shader=FS)
         self.sky = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=SKY_FS)
         self.enc = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=ENCODE_FS)
+        self.fxp = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=FX_FS)
+        self.dep = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=DEPTH_FS)
+        self.subp = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=SUB_FS)
+        self.fxp["u_col"].value = 1
+        self.subp["u_col"].value = 1
+        self.dep["u_z"].value = 2
         for k, v in (("u_horizon", SKY_HORIZON), ("u_zenith", SKY_ZENITH), ("u_fog", FOG)):
             self.sky[k].value = tuple(float(x) for x in v)
         self.enc["u_col"].value = 1
         self.sky_vao = self.ctx.vertex_array(self.sky, [])
         self.enc_vao = self.ctx.vertex_array(self.enc, [])
+        self.fx_vao = self.ctx.vertex_array(self.fxp, [])
+        self.dep_vao = self.ctx.vertex_array(self.dep, [])
+        self.sub_vao = self.ctx.vertex_array(self.subp, [])
         t0 = time.perf_counter()
         Image.MAX_IMAGE_PIXELS = None
         self.textures = []
@@ -275,7 +375,33 @@ class RasterCamera:
                | (x * cm.fx > (cm.width - cm.cx) * z).all(1) | (y * cm.fy < -cm.cy * z).all(1) | (y * cm.fy > (cm.height - cm.cy) * z).all(1))
         return ~out
 
-    def render(self, cm: CameraModel, R_ws: np.ndarray, p_w: np.ndarray, *, linear: bool = False) -> RenderOut:
+    def _fx_passes(self, tg: _Target, cm: CameraModel, fx: FxParams) -> None:
+        def key2(k: int) -> tuple[int, int]:
+            return (k & 0xFFFFFFFF, (k >> 32) & 0xFFFFFFFF)
+
+        def put(prog, k: str, v) -> None:
+            with contextlib.suppress(KeyError):                           # 驱动裁掉的未使用 uniform
+                prog[k].value = v
+
+        tg.col.use(1)
+        if fx.meter:
+            tg.subfb.use()
+            self.ctx.viewport = (0, 0, tg.sw, tg.sh)
+            self.sub_vao.render(self._mgl.TRIANGLES, vertices=3)
+        tg.enc.use()
+        self.ctx.viewport = (0, 0, tg.w, tg.h)
+        for k, v in (("u_gain", fx.gain), ("u_vig", fx.vignette_k), ("u_K", (cm.fx, cm.fy, cm.cx, cm.cy)), ("u_read", fx.read_sigma_dn),
+                     ("u_shot", fx.shot_k_dn), ("u_key", key2(fx.key_noise)), ("u_W", tg.w)):
+            put(self.fxp, k, v)
+        self.fx_vao.render(self._mgl.TRIANGLES, vertices=3)
+        if fx.depth is not None:
+            tg.zfb.use()
+            tg.z.use(2)
+            for k, v in (("u_d", (fx.depth.a, fx.depth.d_min_m, fx.depth.d_max_m)), ("u_key", key2(fx.key_depth)), ("u_W", tg.w)):
+                put(self.dep, k, v)
+            self.dep_vao.render(self._mgl.TRIANGLES, vertices=3)
+
+    def render(self, cm: CameraModel, R_ws: np.ndarray, p_w: np.ndarray, *, linear: bool = False, fx: FxParams | None = None) -> RenderOut:
         mgl = self._mgl
         W, H = cm.width, cm.height
         tg = self._target(W, H)
@@ -320,9 +446,12 @@ class RasterCamera:
         self.sky["u_K"].value = (cm.fx, cm.fy, cm.cx, cm.cy)
         self.sky_vao.render(mgl.TRIANGLES, vertices=3)
         self.ctx.disable(mgl.DEPTH_TEST)
-        tg.enc.use()
-        tg.col.use(1)
-        self.enc_vao.render(mgl.TRIANGLES, vertices=3)
+        if fx is None:
+            tg.enc.use()
+            tg.col.use(1)
+            self.enc_vao.render(mgl.TRIANGLES, vertices=3)
+        else:
+            self._fx_passes(tg, cm, fx)
         self.ctx.finish()
         t1 = time.perf_counter()
         rgb = np.frombuffer(tg.rgb.read(), np.uint8).reshape(H, W, 4)[..., :3].copy()
@@ -330,8 +459,11 @@ class RasterCamera:
         inst = np.frombuffer(tg.inst.read(), np.uint16).reshape(H, W).copy()
         sem = np.frombuffer(tg.sem.read(), np.uint8).reshape(H, W).copy()
         lin = np.frombuffer(tg.col.read(), np.float16).reshape(H, W, 4)[..., :3].astype(np.float32) if linear else None
+        zo = np.frombuffer(tg.zobs.read(), np.float32).reshape(H, W).copy() if fx is not None and fx.depth is not None else None
+        sub = (np.frombuffer(tg.sub.read(), np.float16).reshape(tg.sh, tg.sw, 4)[..., :3].astype(np.float32)
+               if fx is not None and fx.meter else None)
         t2 = time.perf_counter()
-        return RenderOut(rgb, z, inst, sem, (t1 - t0) * 1e3, (t2 - t1) * 1e3, n, lin)
+        return RenderOut(rgb, z, inst, sem, (t1 - t0) * 1e3, (t2 - t1) * 1e3, n, lin, zo, sub)
 
     def release(self) -> None:
         for t in self._targets.values():
