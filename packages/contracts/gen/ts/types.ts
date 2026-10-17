@@ -42,6 +42,13 @@ export type WorldCommonSlug = string
  */
 export type WorldCommonInt64 = number | string
 /**
+ * Anchors awr-anchors@1 (world layer semantic/anchors.json and event overlays). M22 §7.3.5 (world layer, drafted by M22) and M23 §6.3 (event overlay: extends, remove, public). Contracts 1.3.0, d1 V0.3. A world layer carries the full provenance; an overlay (extends = world) overrides world anchors by id, removes ids listed in remove and adds anchors. The resolved set is sorted by id and hashed with JCS (anchors_sha256). Units: m, world frame.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "Anchors".
+ */
+export type Anchors = Anchors1
+/**
  * Recording block messages (awr.StateExtBlock.v1, awr.SafetyBlock.v1). AWR-16 §13.4 (msgpack snake_case).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -1201,6 +1208,94 @@ export interface Effect {
     media_type?: string
   }[]
 }
+export interface Anchors1 {
+  schema: 'awr.anchors.v1'
+  schema_version?: string
+  world_id: string
+  frame?: 'world'
+  units?: 'm'
+  coordinate_sha256?: string
+  license?: string
+  attribution?: string
+  sources?: {
+    name: string
+    sha256: string
+  }[]
+  /**
+   * Event overlay over the world anchors layer
+   */
+  extends?: 'world'
+  remove?: string[]
+  anchors: {
+    /**
+     * Pure function of the source for generated anchors (M22-FR-036); overlay additions use an ev_ or event-unique prefix
+     */
+    id: string
+    kind: 'point' | 'zone' | 'door' | 'curb'
+    category?: string
+    profile?: 'person' | 'vehicle'
+    /**
+     * m, world frame (point, door, curb)
+     *
+     * @minItems 2
+     * @maxItems 2
+     */
+    xy?: [number, number, ...number[]]
+    /**
+     * m, world frame, outer ring counter-clockwise (zone)
+     *
+     * @minItems 3
+     * @maxItems 256
+     */
+    polygon?: [
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      ...[number, number, ...number[]][]
+    ]
+    /**
+     * m, highest hit surface at the anchor
+     */
+    z?: number
+    /**
+     * Defaults: point 3, door 1.5, curb 4
+     */
+    radius_m?: number
+    nav_snap?: {
+      person: null | [number, number, number, ...number[]]
+      vehicle: null | [number, number, number, ...number[]]
+    }
+    snap_dist_m?: {
+      person: number | null
+      vehicle: number | null
+    }
+    relocated_m?: number
+    /**
+     * Building anchor id; required for door
+     */
+    building?: string | null
+    /**
+     * Paired anchor for curb
+     */
+    pair?: string | null
+    /**
+     * NavMesh crop seed
+     */
+    seed?: boolean
+    name?: string
+    label_zh?: string
+    source?: string
+    status?: 'auto' | 'review' | 'confirmed' | 'deprecated'
+    quality?: {
+      in_coverage: boolean
+      bits: number
+    }
+    /**
+     * May appear in task briefs (M23 overlay field)
+     */
+    public?: boolean
+  }[]
+}
 /**
  * awr.bench.result.v1. AWR-18 §7.6 (fleet_ladder, bench_state, bench_cmd). records[].ipc is an optional addition (AWR-03 §5.11 rule 1) for the IPC benchmarks of M11 (tools/bench/ipc): a flat map of snake_case metric names with unit suffixes (AWR-03 §5.4, for example publish_p99_us, read_cpu_core, cmd_rtt_p99_ms, event_gaps, recover_max_ms) to numbers or null, so the M16 harness can aggregate them.
  *
@@ -1581,6 +1676,45 @@ export interface UavSafety {
     since_t_ns: number
     params?: {}
   }[]
+}
+/**
+ * Task brief brief.json (drone4d.event_brief.v1). M23-FR-009 (contracts 1.3.0, d1 V0.3). Not truth: references only anchors the author marked public and appearance descriptions, never times or routes. M26 projects it into the agent configuration.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "BriefV1".
+ */
+export interface BriefV1 {
+  schema: 'drone4d.event_brief.v1'
+  event_id: string
+  event_version: number
+  truth_rev: number
+  event_type: 'reid_occlusion' | 'rendezvous_handoff' | 'vehicle_track' | 'target_search'
+  public_anchors: {
+    id: string
+    kind?: string
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    pos_enu_m: [number, number, number, ...number[]]
+  }[]
+  targets: {
+    actor: string
+    description_zh?: string
+    description_en?: string
+  }[]
+  /**
+   * World-frame polygon (m)
+   *
+   * @minItems 3
+   * @maxItems 64
+   */
+  task_area: [
+    [number, number, ...number[]],
+    [number, number, ...number[]],
+    [number, number, ...number[]],
+    ...[number, number, ...number[]][]
+  ]
 }
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -3266,6 +3400,466 @@ export interface Nir {
   }
 }
 /**
+ * Event DSL (drone4d.event.v1). AWR-05 §8.1, M23 §6.2 (contracts 1.3.0, d1 V0.3; P-1 draft, frozen in P0a week 6). Authored as YAML or JSON. The schema checks shapes and ranges; cross-field rules (route times within duration_s and non-decreasing, duration_s a multiple of 0.1 s, unique actor ids, anchor resolution, phase-gated values returning 619) are compile gate 1 (M23 §6.4). v1.3 adds event_type; appearance_ref, thermal, drive, search, air_temp_c and rh_pct are added in P0b (additive).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "EventV1".
+ */
+export interface EventV1 {
+  schema: 'drone4d.event.v1'
+  /**
+   * Versioned address <event_id>@v<N>
+   */
+  event_id: string
+  version?: number
+  /**
+   * v1.3 (ADR-181); P0a implements one fixed rendezvous_handoff event
+   */
+  event_type?: 'reid_occlusion' | 'rendezvous_handoff' | 'vehicle_track' | 'target_search'
+  world: {
+    id: string
+    region?: string
+    package_sha256?: string
+  }
+  anchors_ref?: string
+  /**
+   * Background actors and appearance sampling only
+   */
+  seed: number
+  duration_s: number
+  /**
+   * 20 and 30 are reserved
+   */
+  tick_hz?: 10
+  /**
+   * interactive returns 619 before P2
+   */
+  mode?: 'exogenous' | 'interactive'
+  time_origin_utc?: string
+  /**
+   * @minItems 1
+   * @maxItems 30
+   */
+  actors: [
+    {
+      id: string
+      /**
+       * Support matrix M23 §6.2.3; uav is P1
+       */
+      class: 'person' | 'vehicle' | 'dog' | 'machine' | 'object' | 'uav'
+      appearance?: {
+        preset?: string
+        /**
+         * Asset id under assets/actors/**; overrides preset
+         */
+        asset?: string
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        top_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        bottom_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        body_rgb?: [number, number, number, ...number[]]
+        height_m?: number
+        length_m?: number
+        /**
+         * @maxItems 8
+         */
+        accessories?: string[]
+      }
+      gait?: {
+        /**
+         * [lo, hi], 0 < lo <= hi <= 40
+         *
+         * @minItems 2
+         * @maxItems 2
+         */
+        speed_mps?: [number, number, ...number[]]
+        accel_mps2?: number
+      }
+      /**
+       * @minItems 1
+       * @maxItems 64
+       */
+      route: [
+        {
+          /**
+           * Arrival time (s)
+           */
+          t: number
+          /**
+           * Anchor id (awr-anchors@1)
+           */
+          at: string
+          /**
+           * pickup and drop are P1
+           */
+          do?: 'spawn' | 'pass' | 'wait' | 'enter_building' | 'exit_building' | 'board' | 'alight' | 'despawn' | 'pickup' | 'drop'
+          dwell_s?: number
+          /**
+           * @maxItems 8
+           *
+           * Items: Anchor id (awr-anchors@1)
+           */
+          via?: string[]
+          target?: string
+          tol_s?: number
+          /**
+           * uav class only (P1)
+           */
+          alt_agl_m?: number
+        },
+        ...{
+          /**
+           * Arrival time (s)
+           */
+          t: number
+          /**
+           * Anchor id (awr-anchors@1)
+           */
+          at: string
+          /**
+           * pickup and drop are P1
+           */
+          do?: 'spawn' | 'pass' | 'wait' | 'enter_building' | 'exit_building' | 'board' | 'alight' | 'despawn' | 'pickup' | 'drop'
+          dwell_s?: number
+          /**
+           * @maxItems 8
+           *
+           * Items: Anchor id (awr-anchors@1)
+           */
+          via?: string[]
+          target?: string
+          tol_s?: number
+          /**
+           * uav class only (P1)
+           */
+          alt_agl_m?: number
+        }[]
+      ]
+      reaction?: Reaction1
+    },
+    ...{
+      id: string
+      /**
+       * Support matrix M23 §6.2.3; uav is P1
+       */
+      class: 'person' | 'vehicle' | 'dog' | 'machine' | 'object' | 'uav'
+      appearance?: {
+        preset?: string
+        /**
+         * Asset id under assets/actors/**; overrides preset
+         */
+        asset?: string
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        top_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        bottom_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        body_rgb?: [number, number, number, ...number[]]
+        height_m?: number
+        length_m?: number
+        /**
+         * @maxItems 8
+         */
+        accessories?: string[]
+      }
+      gait?: {
+        /**
+         * [lo, hi], 0 < lo <= hi <= 40
+         *
+         * @minItems 2
+         * @maxItems 2
+         */
+        speed_mps?: [number, number, ...number[]]
+        accel_mps2?: number
+      }
+      /**
+       * @minItems 1
+       * @maxItems 64
+       */
+      route: [
+        {
+          /**
+           * Arrival time (s)
+           */
+          t: number
+          /**
+           * Anchor id (awr-anchors@1)
+           */
+          at: string
+          /**
+           * pickup and drop are P1
+           */
+          do?: 'spawn' | 'pass' | 'wait' | 'enter_building' | 'exit_building' | 'board' | 'alight' | 'despawn' | 'pickup' | 'drop'
+          dwell_s?: number
+          /**
+           * @maxItems 8
+           *
+           * Items: Anchor id (awr-anchors@1)
+           */
+          via?: string[]
+          target?: string
+          tol_s?: number
+          /**
+           * uav class only (P1)
+           */
+          alt_agl_m?: number
+        },
+        ...{
+          /**
+           * Arrival time (s)
+           */
+          t: number
+          /**
+           * Anchor id (awr-anchors@1)
+           */
+          at: string
+          /**
+           * pickup and drop are P1
+           */
+          do?: 'spawn' | 'pass' | 'wait' | 'enter_building' | 'exit_building' | 'board' | 'alight' | 'despawn' | 'pickup' | 'drop'
+          dwell_s?: number
+          /**
+           * @maxItems 8
+           *
+           * Items: Anchor id (awr-anchors@1)
+           */
+          via?: string[]
+          target?: string
+          tol_s?: number
+          /**
+           * uav class only (P1)
+           */
+          alt_agl_m?: number
+        }[]
+      ]
+      reaction?: Reaction1
+    }[]
+  ]
+  /**
+   * @maxItems 8
+   */
+  background?: {
+    /**
+     * dog is P1
+     */
+    class: 'person' | 'vehicle' | 'dog'
+    count: number
+    zone:
+      | string
+      | [[number, number, ...number[]], [number, number, ...number[]], [number, number, ...number[]], ...[number, number, ...number[]][]]
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    speed_mps?: [number, number, ...number[]]
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    pause_s?: [number, number, ...number[]]
+    stream?: number
+    appearance?: {
+      distractor_frac?: number
+    }
+  }[]
+  /**
+   * Environment track mapped to M07 (M23 §6.11); keyframes strictly increasing in t, the first at t = 0 (compile gate 1)
+   */
+  environment?: {
+    interpolation?: 'smooth' | 'step' | 'linear'
+    /**
+     * @minItems 1
+     */
+    keyframes?: [
+      {
+        t: number
+        wind_mps?: number
+        wind_dir_deg?: number
+        gust_sigma_mps?: number
+        rain_mm_h?: number
+        visibility_m?: number
+        /**
+         * Fog top (m AGL)
+         */
+        fog?: number
+        cloud?: number
+      },
+      ...{
+        t: number
+        wind_mps?: number
+        wind_dir_deg?: number
+        gust_sigma_mps?: number
+        rain_mm_h?: number
+        visibility_m?: number
+        /**
+         * Fog top (m AGL)
+         */
+        fog?: number
+        cloud?: number
+      }[]
+    ]
+  }
+  comms?: {
+    /**
+     * @maxItems 32
+     */
+    zones?: {
+      id: string
+      /**
+       * World-frame polygon (m), simple, 3-64 vertices
+       *
+       * @minItems 3
+       * @maxItems 64
+       */
+      polygon: [
+        [number, number, ...number[]],
+        [number, number, ...number[]],
+        [number, number, ...number[]],
+        ...[number, number, ...number[]][]
+      ]
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      t?: [number, number, ...number[]]
+      extra_loss?: number
+      extra_latency_ms?: number
+      bandwidth_scale?: number
+    }[]
+  }
+  /**
+   * @maxItems 256
+   */
+  annotations?: {
+    id: string
+    /**
+     * Detectors M23 §6.9.1; object_handover, follow, loiter and run are P1
+     */
+    type:
+      | 'proximity_encounter'
+      | 'board_vehicle'
+      | 'alight_vehicle'
+      | 'enter_building'
+      | 'exit_building'
+      | 'zone_enter'
+      | 'zone_exit'
+      | 'zone_pass'
+      | 'aerial_occlusion'
+      | 'object_handover'
+      | 'follow'
+      | 'loiter'
+      | 'run'
+    /**
+     * @minItems 1
+     * @maxItems 8
+     */
+    participants: [string, ...string[]]
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    window: [number, number, ...number[]]
+    params?: {}
+    salience?: number
+    label_zh?: string
+    label_en?: string
+  }[]
+  /**
+   * @maxItems 512
+   */
+  relations?: {
+    src: string
+    rel: 'before' | 'after' | 'during' | 'overlaps' | 'causes' | 'enables'
+    dst: string
+  }[]
+  /**
+   * Task brief (not truth): appearance descriptions only, no times or routes
+   */
+  brief?: {
+    /**
+     * Items: Anchor id (awr-anchors@1)
+     */
+    public_anchors?: string[]
+    targets?: {
+      actor: string
+      description_zh?: string
+      description_en?: string
+    }[]
+    /**
+     * World-frame polygon (m), simple, 3-64 vertices
+     *
+     * @minItems 3
+     * @maxItems 64
+     */
+    task_area?: [
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      ...[number, number, ...number[]][]
+    ]
+  }
+  interactive?: {
+    reactions?: boolean
+    replan_on_block?: boolean
+    max_deviation_m?: number
+    background?: 'exogenous' | 'local_deviation'
+  }
+  /**
+   * Display names, not part of the tape
+   */
+  labels?: {
+    zh?: string
+    en?: string
+  }
+}
+/**
+ * awr.target.reaction.v1 (behaviour after being discovered). Two phases (AWR-04 §7.4; M18-M19 PRD §6.4.2): onset once on entering REACTING, response during ALERTED and CALMING (up to two parallel items, e.g. a dog emits and approaches); alert_others broadcasts to the same class within alert_radius_m.
+ */
+export interface Reaction1 {
+  onset?: {
+    kind: 'none' | 'freeze' | 'look_at'
+    duration_s?: number
+  }
+  /**
+   * @maxItems 2
+   */
+  response?: {
+    kind: 'ignore' | 'flee' | 'approach' | 'return' | 'emit' | 'hide'
+    speed_mps?: number
+    dist_m?: number
+    duration_s?: number
+    sound?: {
+      duty?: number
+      lw_dba?: number
+      period_s?: number
+    }
+    /**
+     * hide (P1)
+     */
+    search_m?: number
+  }[]
+  alert_others?: boolean
+}
+/**
  * World export manifest (V0.5 stub). Non-content export manifest under export/ (AWR-16 §17): 3dtiles@1.1 and copc@1.0. D1 freezes only the envelope.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -3930,6 +4524,42 @@ export interface Gnss {
   hdop?: number
   conf?: 'A' | 'B' | 'C' | 'D'
   src?: string
+}
+/**
+ * Event graph event_graph.json (drone4d.event_graph.v1). M23 §6.10.2 (contracts 1.3.0, d1 V0.3). Entity and event nodes; participates_in edges plus verified relation edges. OpenLABEL mapping is P3.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "GraphV1".
+ */
+export interface GraphV1 {
+  schema: 'drone4d.event_graph.v1'
+  event_id: string
+  event_version: number
+  truth_rev: number
+  nodes: (
+    | {
+        id: string
+        kind: 'entity'
+        class: string
+        scripted: boolean
+      }
+    | {
+        id: string
+        kind: 'event'
+        type: string
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        interval_ms: [number, number, ...number[]]
+        declared: boolean
+      }
+  )[]
+  edges: {
+    src: string
+    rel: 'participates_in' | 'before' | 'after' | 'during' | 'overlaps' | 'causes' | 'enables'
+    dst: string
+  }[]
 }
 export interface Grid1 {
   schemaVersion: WorldCommonSemver
@@ -9137,6 +9767,233 @@ export interface SysProcs {
   }[]
 }
 /**
+ * Tape manifest tape.json (drone4d.tape_manifest.v1). M23 §6.7.6 (contracts 1.3.0, d1 V0.3). Not part of the content hash; the header in tape.bin is authoritative.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TapeManifestV1".
+ */
+export interface TapeManifestV1 {
+  schema: 'drone4d.tape_manifest.v1'
+  content_sha256: string
+  body_sha256: string
+  header_sha256: string
+  /**
+   * Transport check only
+   */
+  file_sha256: string
+  bytes: number
+  n_actors: number
+  n_ticks: number
+  header: TapeV1
+  provenance: {
+    generator: string
+    generator_version: string
+    recast_navigation: string
+    wasm_sha256: string
+    node: string
+    host: string
+    wall_ms: number
+    rss_mb: number
+    created_at: string
+  }
+  report: {
+    arrivals: {
+      actor: string
+      at: string
+      t_plan_s: number
+      t_arrive_s: number
+      late_s: number
+    }[]
+    boards: {}[]
+    warnings: string[]
+    min_dist_m: {
+      scripted_scripted: number | null
+      bg_scripted: number | null
+    }
+  }
+}
+/**
+ * Canonical event tape header (drone4d.tape.v1). AWR-05 §8.1, M23 §6.7 (contracts 1.3.0, d1 V0.3). The header is stored as JCS bytes in tape.bin and hashed as stored (content_sha256 = SHA-256(header_bytes || F), F = canonical frames in tick-major order). Records are 22 B little-endian per actor per tick; container 255 = none. Provenance is never part of the header (tape_manifest.v1).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TapeV1".
+ */
+export interface TapeV1 {
+  schema: 'drone4d.tape.v1'
+  event_id: string
+  event_version: number
+  /**
+   * JCS hash of the tape input subset (M23 §6.7.5)
+   */
+  event_sha256: string
+  mode: 'exogenous' | 'interactive'
+  seed: number
+  tick_hz: 10
+  n_ticks: number
+  /**
+   * n_ticks = duration_ms / 100
+   */
+  duration_ms: number
+  record: {
+    bytes: 22
+    endian: 'le'
+    fields: [
+      ['x_mm', 'i32'],
+      ['y_mm', 'i32'],
+      ['z_mm', 'i32'],
+      ['yaw_cdeg', 'i16'],
+      ['vx_cmps', 'i16'],
+      ['vy_cmps', 'i16'],
+      ['vz_cmps', 'i16'],
+      ['state', 'u8'],
+      ['container', 'u8']
+    ]
+    states: {'0': 'absent'; '1': 'moving'; '2': 'waiting'; '3': 'in_vehicle'; '4': 'inside'; '5': 'gone'}
+    frame: 'world-enu'
+  }
+  /**
+   * Descriptive; does not affect canonical frames
+   */
+  codec: {
+    name: 'col-delta-zstd@1'
+    block_ticks: 100
+  }
+  /**
+   * Scripted actors first (idx <= 29)
+   *
+   * @minItems 1
+   * @maxItems 1030
+   */
+  actors: [
+    {
+      idx: number
+      id: string
+      class: 'person' | 'vehicle' | 'dog' | 'machine' | 'object' | 'uav'
+      scripted: boolean
+      /**
+       * NavMesh profile (person, vehicle) or null for static and 3D classes
+       */
+      profile: string | null
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      size_mm: [number, number, number, ...number[]]
+      appearance: {
+        asset: string
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        tint_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        top_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        bottom_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        body_rgb?: [number, number, number, ...number[]]
+        height_mm?: number
+      }
+    },
+    ...{
+      idx: number
+      id: string
+      class: 'person' | 'vehicle' | 'dog' | 'machine' | 'object' | 'uav'
+      scripted: boolean
+      /**
+       * NavMesh profile (person, vehicle) or null for static and 3D classes
+       */
+      profile: string | null
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      size_mm: [number, number, number, ...number[]]
+      appearance: {
+        asset: string
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        tint_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        top_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        bottom_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        body_rgb?: [number, number, number, ...number[]]
+        height_mm?: number
+      }
+    }[]
+  ]
+  /**
+   * Checked against the loaded world package (615 on mismatch)
+   */
+  world: {
+    id: string
+    content_version: string
+    raycast_sha256: string
+    navmesh_sha256: {
+      person: string
+      vehicle?: string
+    }
+    navgraph_sha256?: string
+    anchors_sha256: string
+  }
+  /**
+   * Normalised keyframes (display and audit)
+   */
+  environment: {}
+  /**
+   * Compiled M07 operation sequence; the only authority for the environment
+   */
+  env_track: {
+    t_ms: number
+    /**
+     * M07 operation {kind, patch?, d2?, mode, duration_s} (M23 §6.11)
+     */
+    op: {}
+  }[]
+  /**
+   * Normalised comms zones (times in ms)
+   */
+  comms: {}
+  /**
+   * P1 animation sidecar tape.anim
+   */
+  anim: null | {
+    sha256: string
+    codec: 'anim-u16@1'
+  }
+  /**
+   * Interactive realised tape
+   */
+  realized: null | {
+    base_content_sha256: string
+    run_id: string
+    attempt: number
+    inputlog_sha256: string
+  }
+}
+/**
  * SB-41 201 (command accepted, effective next tick)
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -10014,6 +10871,81 @@ export interface Topics {
    * sandbox browser defaults on top of default_subscriptions (AWR-17 §17.7.7)
    */
   default_subscriptions_sandbox?: string[]
+}
+/**
+ * Semantic event truth event_truth.json (drone4d.event_truth.v1). M23 §6.10.1 (contracts 1.3.0, d1 V0.3). Truth layer: evaluators and admins only. truth_sha256 = JCS hash without perf.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TruthV1".
+ */
+export interface TruthV1 {
+  schema: 'drone4d.event_truth.v1'
+  event_id: string
+  event_version: number
+  truth_rev: number
+  tape_content_sha256: string
+  dsl_sha256: string
+  strict: boolean
+  /**
+   * All detector parameters in effect, defaults included
+   */
+  detector_params: {}
+  events: {
+    id: string
+    type: string
+    /**
+     * @minItems 1
+     */
+    participants: [string, ...string[]]
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    interval_ms: [number, number, ...number[]]
+    declared: boolean
+    annotation?: string
+    salience: number
+    in_incomplete_region: boolean
+    evidence: {
+      min_dist_m?: number
+      door?: string
+      door_dist_m?: number
+      sky_vis_min?: number
+      zone?: string
+    }
+  }[]
+  annotation_checks: {
+    id: string
+    type: string
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    window_ms: [number, number, ...number[]]
+    verified: boolean
+    computed_ms: [number, number, ...number[]][]
+    n_candidates: number
+  }[]
+  relation_checks: {
+    src: string
+    rel: string
+    dst: string
+    verified: boolean
+  }[]
+  /**
+   * Per actor, 3 decimals
+   */
+  skyvis_1hz: {
+    [k: string]: (number | null)[]
+  }
+  /**
+   * M23 §6.9.4 statistics and worst values
+   */
+  consistency: {}
+  /**
+   * Ray counts and timings; excluded from truth_sha256
+   */
+  perf?: {}
 }
 /**
  * units.json meta-schema. AWR-03 §5.4; AWR-17 §10.5.

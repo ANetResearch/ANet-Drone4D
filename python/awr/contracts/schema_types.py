@@ -22,6 +22,12 @@ __all__ = [
     "AgentStatus",
     "AgentStatusTrust",
     "AgentTasks",
+    "Anchors",
+    "AnchorsAnchors",
+    "AnchorsAnchorsNavSnap",
+    "AnchorsAnchorsQuality",
+    "AnchorsAnchorsSnapDistM",
+    "AnchorsSources",
     "BenchResult",
     "BenchResultHost",
     "BenchResultRecords",
@@ -32,6 +38,9 @@ __all__ = [
     "Blocks",
     "BlocksSafetyBlock",
     "BlocksStateExtBlock",
+    "BriefV1",
+    "BriefV1PublicAnchors",
+    "BriefV1Targets",
     "BusCommand",
     "BusCommandAdmission",
     "BusCommandAdmissionPerUav",
@@ -158,6 +167,24 @@ __all__ = [
     "EoZoomPowerWOneOf1",
     "EoZoomSensor",
     "EoZoomSpecFov",
+    "EventV1",
+    "EventV1Actors",
+    "EventV1ActorsAppearance",
+    "EventV1ActorsGait",
+    "EventV1ActorsRoute",
+    "EventV1Annotations",
+    "EventV1Background",
+    "EventV1BackgroundAppearance",
+    "EventV1Brief",
+    "EventV1BriefTargets",
+    "EventV1Comms",
+    "EventV1CommsZones",
+    "EventV1Environment",
+    "EventV1EnvironmentKeyframes",
+    "EventV1Interactive",
+    "EventV1Labels",
+    "EventV1Relations",
+    "EventV1World",
     "Export",
     "Faults",
     "FaultsOneOf0",
@@ -213,6 +240,10 @@ __all__ = [
     "GnssGaussMarkov",
     "GnssRtk",
     "GnssTiming",
+    "GraphV1",
+    "GraphV1Edges",
+    "GraphV1NodesOneOf0",
+    "GraphV1NodesOneOf1",
     "Grid",
     "Imu",
     "ImuAccel",
@@ -661,6 +692,21 @@ __all__ = [
     "SustainabilityWindows",
     "SysProcs",
     "SysProcs_",
+    "TapeManifestV1",
+    "TapeManifestV1Provenance",
+    "TapeManifestV1Report",
+    "TapeManifestV1ReportArrivals",
+    "TapeManifestV1ReportMinDistM",
+    "TapeV1",
+    "TapeV1Actors",
+    "TapeV1ActorsAppearance",
+    "TapeV1AnimOneOf1",
+    "TapeV1Codec",
+    "TapeV1EnvTrack",
+    "TapeV1RealizedOneOf1",
+    "TapeV1Record",
+    "TapeV1World",
+    "TapeV1WorldNavmeshSha256",
     "Target",
     "TargetCreateRequest",
     "TargetCreated",
@@ -757,6 +803,11 @@ __all__ = [
     "TopicsDeprecated",
     "TopicsTopics",
     "TopicsTopicsDefaultRateOneOf0",
+    "TruthV1",
+    "TruthV1AnnotationChecks",
+    "TruthV1Events",
+    "TruthV1EventsEvidence",
+    "TruthV1RelationChecks",
     "UavSafety",
     "UavSafetyActive",
     "UavSafetyBatteryRtlOneOf0",
@@ -1251,6 +1302,70 @@ class AgentTasks(TypedDict):
     tasks: list[TaskStatusLite]
 
 
+# event/anchors.schema.json# Anchors awr-anchors@1 (world layer semantic/anchors.json and event overlays)
+class Anchors(TypedDict):
+    schema: Literal["awr.anchors.v1"]
+    schema_version: NotRequired[str]
+    world_id: str
+    frame: NotRequired[Literal["world"]]
+    units: NotRequired[Literal["m"]]
+    coordinate_sha256: NotRequired[str]
+    license: NotRequired[str]
+    attribution: NotRequired[str]
+    sources: NotRequired[list[AnchorsSources]]
+    extends: NotRequired[Literal["world"]]
+    remove: NotRequired[list[str]]
+    anchors: list[AnchorsAnchors]
+
+
+# event/anchors.schema.json#/properties/anchors/items
+class AnchorsAnchors(TypedDict):
+    id: str
+    kind: Literal["point", "zone", "door", "curb"]
+    category: NotRequired[str]
+    profile: NotRequired[Literal["person", "vehicle"]]
+    xy: NotRequired[list[float]]
+    polygon: NotRequired[list[list[float]]]
+    z: NotRequired[float]
+    radius_m: NotRequired[float]
+    nav_snap: NotRequired[AnchorsAnchorsNavSnap]
+    snap_dist_m: NotRequired[AnchorsAnchorsSnapDistM]
+    relocated_m: NotRequired[float]
+    building: NotRequired[str | None]
+    pair: NotRequired[str | None]
+    seed: NotRequired[bool]
+    name: NotRequired[str]
+    label_zh: NotRequired[str]
+    source: NotRequired[str]
+    status: NotRequired[Literal["auto", "review", "confirmed", "deprecated"]]
+    quality: NotRequired[AnchorsAnchorsQuality]
+    public: NotRequired[bool]
+
+
+# event/anchors.schema.json#/properties/anchors/items/properties/nav_snap
+class AnchorsAnchorsNavSnap(TypedDict):
+    person: list[float] | None
+    vehicle: list[float] | None
+
+
+# event/anchors.schema.json#/properties/anchors/items/properties/quality
+class AnchorsAnchorsQuality(TypedDict):
+    in_coverage: bool
+    bits: int
+
+
+# event/anchors.schema.json#/properties/anchors/items/properties/snap_dist_m
+class AnchorsAnchorsSnapDistM(TypedDict):
+    person: float | None
+    vehicle: float | None
+
+
+# event/anchors.schema.json#/properties/sources/items
+class AnchorsSources(TypedDict):
+    name: str
+    sha256: str
+
+
 # perf/bench-result.schema.json# awr.bench.result.v1
 class BenchResult(TypedDict):
     schema: Literal["awr.bench.result.v1"]
@@ -1330,6 +1445,32 @@ class BlocksStateExtBlock(TypedDict):
     roster_version: int
     keyframe: bool
     items: dict[str, UavStateExt]
+
+
+# event/brief.v1.schema.json# Task brief brief.json (drone4d.event_brief.v1)
+class BriefV1(TypedDict):
+    schema: Literal["drone4d.event_brief.v1"]
+    event_id: str
+    event_version: int
+    truth_rev: int
+    event_type: Literal["reid_occlusion", "rendezvous_handoff", "vehicle_track", "target_search"]
+    public_anchors: list[BriefV1PublicAnchors]
+    targets: list[BriefV1Targets]
+    task_area: list[list[float]]
+
+
+# event/brief.v1.schema.json#/properties/public_anchors/items
+class BriefV1PublicAnchors(TypedDict):
+    id: str
+    kind: NotRequired[str]
+    pos_enu_m: list[float]
+
+
+# event/brief.v1.schema.json#/properties/targets/items
+class BriefV1Targets(TypedDict):
+    actor: str
+    description_zh: NotRequired[str]
+    description_en: NotRequired[str]
 
 
 # bus/command.schema.json#/$defs/admission
@@ -2407,6 +2548,152 @@ class EoZoomSpecFov(TypedDict):
     dfov_deg: NotRequired[list[float]]
 
 
+# event/event.v1.schema.json# Event DSL (drone4d.event.v1)
+class EventV1(TypedDict):
+    schema: Literal["drone4d.event.v1"]
+    event_id: str
+    version: NotRequired[int]
+    event_type: NotRequired[Literal["reid_occlusion", "rendezvous_handoff", "vehicle_track", "target_search"]]
+    world: EventV1World
+    anchors_ref: NotRequired[str]
+    seed: int
+    duration_s: float
+    tick_hz: NotRequired[Literal[10]]
+    mode: NotRequired[Literal["exogenous", "interactive"]]
+    time_origin_utc: NotRequired[str]
+    actors: list[EventV1Actors]
+    background: NotRequired[list[EventV1Background]]
+    environment: NotRequired[EventV1Environment]
+    comms: NotRequired[EventV1Comms]
+    annotations: NotRequired[list[EventV1Annotations]]
+    relations: NotRequired[list[EventV1Relations]]
+    brief: NotRequired[EventV1Brief]
+    interactive: NotRequired[EventV1Interactive]
+    labels: NotRequired[EventV1Labels]
+
+
+# event/event.v1.schema.json#/properties/actors/items/properties/appearance
+class EventV1ActorsAppearance(TypedDict):
+    preset: NotRequired[str]
+    asset: NotRequired[str]
+    top_rgb: NotRequired[list[int]]
+    bottom_rgb: NotRequired[list[int]]
+    body_rgb: NotRequired[list[int]]
+    height_m: NotRequired[float]
+    length_m: NotRequired[float]
+    accessories: NotRequired[list[str]]
+
+
+# event/event.v1.schema.json#/properties/actors/items/properties/gait
+class EventV1ActorsGait(TypedDict):
+    speed_mps: NotRequired[list[float]]
+    accel_mps2: NotRequired[float]
+
+
+# event/event.v1.schema.json#/properties/actors/items/properties/route/items
+class EventV1ActorsRoute(TypedDict):
+    t: float
+    at: str
+    do: NotRequired[Literal["spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn", "pickup", "drop"]]
+    dwell_s: NotRequired[float]
+    via: NotRequired[list[str]]
+    target: NotRequired[str]
+    tol_s: NotRequired[float]
+    alt_agl_m: NotRequired[float]
+
+
+# event/event.v1.schema.json#/properties/annotations/items
+class EventV1Annotations(TypedDict):
+    id: str
+    type: Literal["proximity_encounter", "board_vehicle", "alight_vehicle", "enter_building", "exit_building", "zone_enter", "zone_exit", "zone_pass", "aerial_occlusion", "object_handover", "follow", "loiter", "run"]
+    participants: list[str]
+    window: list[float]
+    params: NotRequired[dict[str, Any]]
+    salience: NotRequired[float]
+    label_zh: NotRequired[str]
+    label_en: NotRequired[str]
+
+
+# event/event.v1.schema.json#/properties/background/items/properties/appearance
+class EventV1BackgroundAppearance(TypedDict):
+    distractor_frac: NotRequired[float]
+
+
+# event/event.v1.schema.json#/properties/brief
+class EventV1Brief(TypedDict):
+    public_anchors: NotRequired[list[str]]
+    targets: NotRequired[list[EventV1BriefTargets]]
+    task_area: NotRequired[list[list[float]]]
+
+
+# event/event.v1.schema.json#/properties/brief/properties/targets/items
+class EventV1BriefTargets(TypedDict):
+    actor: str
+    description_zh: NotRequired[str]
+    description_en: NotRequired[str]
+
+
+# event/event.v1.schema.json#/properties/comms
+class EventV1Comms(TypedDict):
+    zones: NotRequired[list[EventV1CommsZones]]
+
+
+# event/event.v1.schema.json#/properties/comms/properties/zones/items
+class EventV1CommsZones(TypedDict):
+    id: str
+    polygon: list[list[float]]
+    t: NotRequired[list[float]]
+    extra_loss: NotRequired[float]
+    extra_latency_ms: NotRequired[float]
+    bandwidth_scale: NotRequired[float]
+
+
+# event/event.v1.schema.json#/properties/environment
+class EventV1Environment(TypedDict):
+    interpolation: NotRequired[Literal["smooth", "step", "linear"]]
+    keyframes: NotRequired[list[EventV1EnvironmentKeyframes]]
+
+
+# event/event.v1.schema.json#/properties/environment/properties/keyframes/items
+class EventV1EnvironmentKeyframes(TypedDict):
+    t: float
+    wind_mps: NotRequired[float]
+    wind_dir_deg: NotRequired[float]
+    gust_sigma_mps: NotRequired[float]
+    rain_mm_h: NotRequired[float]
+    visibility_m: NotRequired[float]
+    fog: NotRequired[float]
+    cloud: NotRequired[float]
+
+
+# event/event.v1.schema.json#/properties/interactive
+class EventV1Interactive(TypedDict):
+    reactions: NotRequired[bool]
+    replan_on_block: NotRequired[bool]
+    max_deviation_m: NotRequired[float]
+    background: NotRequired[Literal["exogenous", "local_deviation"]]
+
+
+# event/event.v1.schema.json#/properties/labels
+class EventV1Labels(TypedDict):
+    zh: NotRequired[str]
+    en: NotRequired[str]
+
+
+# event/event.v1.schema.json#/properties/relations/items
+class EventV1Relations(TypedDict):
+    src: str
+    rel: Literal["before", "after", "during", "overlaps", "causes", "enables"]
+    dst: str
+
+
+# event/event.v1.schema.json#/properties/world
+class EventV1World(TypedDict):
+    id: str
+    region: NotRequired[str]
+    package_sha256: NotRequired[str]
+
+
 # schemas/world/export.schema.json# World export manifest (V0.5 stub)
 class Export(TypedDict):
     schema: Literal["awr.world.export.v1"]
@@ -2886,6 +3173,32 @@ class GnssTiming(TypedDict):
     t_acq_s: NotRequired[float]
     t_float_s: NotRequired[float]
     t_fixed_s: NotRequired[float]
+
+
+# event/graph.v1.schema.json# Event graph event_graph.json (drone4d.event_graph.v1)
+class GraphV1(TypedDict):
+    schema: Literal["drone4d.event_graph.v1"]
+    event_id: str
+    event_version: int
+    truth_rev: int
+    nodes: list[GraphV1NodesOneOf0 | GraphV1NodesOneOf1]
+    edges: list[GraphV1Edges]
+
+
+# event/graph.v1.schema.json#/properties/edges/items
+class GraphV1Edges(TypedDict):
+    src: str
+    rel: Literal["participates_in", "before", "after", "during", "overlaps", "causes", "enables"]
+    dst: str
+
+
+# event/graph.v1.schema.json#/properties/nodes/items/oneOf/1
+class GraphV1NodesOneOf1(TypedDict):
+    id: str
+    kind: Literal["event"]
+    type: str
+    interval_ms: list[int]
+    declared: bool
 
 
 # vehicle/imu.schema.json# IMU file sensors/imu.yaml (awr.sensor.imu.v1)
@@ -6909,6 +7222,140 @@ class SysProcs_(TypedDict):
     since_wall_ns: NotRequired[str]
 
 
+# event/tape_manifest.v1.schema.json# Tape manifest tape.json (drone4d.tape_manifest.v1)
+class TapeManifestV1(TypedDict):
+    schema: Literal["drone4d.tape_manifest.v1"]
+    content_sha256: str
+    body_sha256: str
+    header_sha256: str
+    file_sha256: str
+    bytes: int
+    n_actors: int
+    n_ticks: int
+    header: TapeV1
+    provenance: TapeManifestV1Provenance
+    report: TapeManifestV1Report
+
+
+# event/tape_manifest.v1.schema.json#/properties/provenance
+class TapeManifestV1Provenance(TypedDict):
+    generator: str
+    generator_version: str
+    recast_navigation: str
+    wasm_sha256: str
+    node: str
+    host: str
+    wall_ms: int
+    rss_mb: float
+    created_at: str
+
+
+# event/tape_manifest.v1.schema.json#/properties/report
+class TapeManifestV1Report(TypedDict):
+    arrivals: list[TapeManifestV1ReportArrivals]
+    boards: list[dict[str, Any]]
+    warnings: list[str]
+    min_dist_m: TapeManifestV1ReportMinDistM
+
+
+# event/tape_manifest.v1.schema.json#/properties/report/properties/arrivals/items
+class TapeManifestV1ReportArrivals(TypedDict):
+    actor: str
+    at: str
+    t_plan_s: float
+    t_arrive_s: float
+    late_s: float
+
+
+# event/tape_manifest.v1.schema.json#/properties/report/properties/min_dist_m
+class TapeManifestV1ReportMinDistM(TypedDict):
+    scripted_scripted: float | None
+    bg_scripted: float | None
+
+
+# event/tape.v1.schema.json# Canonical event tape header (drone4d.tape.v1)
+class TapeV1(TypedDict):
+    schema: Literal["drone4d.tape.v1"]
+    event_id: str
+    event_version: int
+    event_sha256: str
+    mode: Literal["exogenous", "interactive"]
+    seed: int
+    tick_hz: Literal[10]
+    n_ticks: int
+    duration_ms: int
+    record: TapeV1Record
+    codec: TapeV1Codec
+    actors: list[TapeV1Actors]
+    world: TapeV1World
+    environment: dict[str, Any]
+    env_track: list[TapeV1EnvTrack]
+    comms: dict[str, Any]
+    anim: TapeV1AnimOneOf1 | None
+    realized: TapeV1RealizedOneOf1 | None
+
+
+# event/tape.v1.schema.json#/properties/actors/items/properties/appearance
+class TapeV1ActorsAppearance(TypedDict):
+    asset: str
+    tint_rgb: NotRequired[list[int]]
+    top_rgb: NotRequired[list[int]]
+    bottom_rgb: NotRequired[list[int]]
+    body_rgb: NotRequired[list[int]]
+    height_mm: NotRequired[int]
+
+
+# event/tape.v1.schema.json#/properties/anim/oneOf/1
+class TapeV1AnimOneOf1(TypedDict):
+    sha256: str
+    codec: Literal["anim-u16@1"]
+
+
+# event/tape.v1.schema.json#/properties/codec
+class TapeV1Codec(TypedDict):
+    name: Literal["col-delta-zstd@1"]
+    block_ticks: Literal[100]
+
+
+# event/tape.v1.schema.json#/properties/env_track/items
+class TapeV1EnvTrack(TypedDict):
+    t_ms: int
+    op: dict[str, Any]
+
+
+# event/tape.v1.schema.json#/properties/realized/oneOf/1
+class TapeV1RealizedOneOf1(TypedDict):
+    base_content_sha256: str
+    run_id: str
+    attempt: int
+    inputlog_sha256: str
+
+
+# event/tape.v1.schema.json#/properties/record
+class TapeV1Record(TypedDict):
+    bytes: Literal[22]
+    endian: Literal["le"]
+    fields: Any
+    states: Any
+    frame: Literal["world-enu"]
+
+
+# event/tape.v1.schema.json#/properties/world
+class TapeV1World(TypedDict):
+    id: str
+    content_version: str
+    raycast_sha256: str
+    navmesh_sha256: TapeV1WorldNavmeshSha256
+    navgraph_sha256: NotRequired[str]
+    anchors_sha256: str
+
+
+# event/tape.v1.schema.json#/properties/world/properties/navmesh_sha256
+class TapeV1WorldNavmeshSha256(TypedDict):
+    person: str
+    vehicle: NotRequired[str]
+
+
 # target/target.schema.json#/$defs/created
 class TargetCreated(TypedDict):
     id: WorldCommonSlug
@@ -7862,6 +8309,64 @@ class TopicsTopicsDefaultRateOneOf0(TypedDict):
     S: int
     B: int
     A: int
+
+
+# event/truth.v1.schema.json# Semantic event truth event_truth.json (drone4d.event_truth.v1)
+class TruthV1(TypedDict):
+    schema: Literal["drone4d.event_truth.v1"]
+    event_id: str
+    event_version: int
+    truth_rev: int
+    tape_content_sha256: str
+    dsl_sha256: str
+    strict: bool
+    detector_params: dict[str, Any]
+    events: list[TruthV1Events]
+    annotation_checks: list[TruthV1AnnotationChecks]
+    relation_checks: list[TruthV1RelationChecks]
+    skyvis_1hz: dict[str, list[float | None]]
+    consistency: dict[str, Any]
+    perf: NotRequired[dict[str, Any]]
+
+
+# event/truth.v1.schema.json#/properties/annotation_checks/items
+class TruthV1AnnotationChecks(TypedDict):
+    id: str
+    type: str
+    window_ms: list[int]
+    verified: bool
+    computed_ms: list[list[int]]
+    n_candidates: int
+
+
+# event/truth.v1.schema.json#/properties/events/items
+class TruthV1Events(TypedDict):
+    id: str
+    type: str
+    participants: list[str]
+    interval_ms: list[int]
+    declared: bool
+    annotation: NotRequired[str]
+    salience: float
+    in_incomplete_region: bool
+    evidence: TruthV1EventsEvidence
+
+
+# event/truth.v1.schema.json#/properties/events/items/properties/evidence
+class TruthV1EventsEvidence(TypedDict):
+    min_dist_m: NotRequired[float]
+    door: NotRequired[str]
+    door_dist_m: NotRequired[float]
+    sky_vis_min: NotRequired[float]
+    zone: NotRequired[str]
+
+
+# event/truth.v1.schema.json#/properties/relation_checks/items
+class TruthV1RelationChecks(TypedDict):
+    src: str
+    rel: str
+    dst: str
+    verified: bool
 
 
 # rt/payloads/uav_safety.schema.json# awr.uav.safety.v1
@@ -9386,6 +9891,29 @@ EnvState = TypedDict("EnvState", {
 })
 
 
+# event/event.v1.schema.json#/properties/actors/items
+EventV1Actors = TypedDict("EventV1Actors", {
+    "id": str,
+    "class": Literal["person", "vehicle", "dog", "machine", "object", "uav"],
+    "appearance": NotRequired[EventV1ActorsAppearance],
+    "gait": NotRequired[EventV1ActorsGait],
+    "route": list[EventV1ActorsRoute],
+    "reaction": NotRequired[Reaction],
+})
+
+
+# event/event.v1.schema.json#/properties/background/items
+EventV1Background = TypedDict("EventV1Background", {
+    "class": Literal["person", "vehicle", "dog"],
+    "count": int,
+    "zone": str | list[list[float]],
+    "speed_mps": NotRequired[list[float]],
+    "pause_s": NotRequired[list[float]],
+    "stream": NotRequired[int],
+    "appearance": NotRequired[EventV1BackgroundAppearance],
+})
+
+
 # sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/objects/items
 FrameV1GroundTruthObjects = TypedDict("FrameV1GroundTruthObjects", {
     "inst": int,
@@ -9400,6 +9928,15 @@ FrameV1GroundTruthObjects = TypedDict("FrameV1GroundTruthObjects", {
     "bbox_unocc_xywh": list[int],
     "occluder_sem_px": dict[str, int],
     "flags": list[Literal["truncated"]],
+})
+
+
+# event/graph.v1.schema.json#/properties/nodes/items/oneOf/0
+GraphV1NodesOneOf0 = TypedDict("GraphV1NodesOneOf0", {
+    "id": str,
+    "kind": Literal["entity"],
+    "class": str,
+    "scripted": bool,
 })
 
 
@@ -9481,6 +10018,18 @@ RngStreamsReserved = TypedDict("RngStreamsReserved", {
 # scenario/scenario.schema.json#/$defs/predicate/oneOf/2
 ScenarioPredicateOneOf2 = TypedDict("ScenarioPredicateOneOf2", {
     "not": ScenarioPredicate,
+})
+
+
+# event/tape.v1.schema.json#/properties/actors/items
+TapeV1Actors = TypedDict("TapeV1Actors", {
+    "idx": int,
+    "id": str,
+    "class": Literal["person", "vehicle", "dog", "machine", "object", "uav"],
+    "scripted": bool,
+    "profile": str | None,
+    "size_mm": list[int],
+    "appearance": TapeV1ActorsAppearance,
 })
 
 

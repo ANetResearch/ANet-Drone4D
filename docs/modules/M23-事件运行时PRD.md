@@ -514,7 +514,7 @@ brief:
 **解析**：`anchors_ref = world` 时读取世界包 `anchors` 图层（`awr-anchors@1`，M22 产出，id 跨重建稳定）。`anchors_ref = event:<file>` 时读取事件目录中的覆盖层：
 
 ```json
-{"schema": "awr-anchors@1", "extends": "world", "world": "oryahovo-crop1",
+{"schema": "awr.anchors.v1", "extends": "world", "world_id": "oryahovo-crop1",
  "anchors": [{"id": "plaza_curb", "kind": "curb", "profile": "person", "xy": [128.0, -112.0], "radius_m": 3, "pair": "plaza_curb_road", "public": false}],
  "remove": []}
 ```

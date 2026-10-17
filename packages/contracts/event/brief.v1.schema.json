@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/event/1/brief.v1.schema.json",
+  "title": "Task brief brief.json (drone4d.event_brief.v1)",
+  "description": "M23-FR-009 (contracts 1.3.0, d1 V0.3). Not truth: references only anchors the author marked public and appearance descriptions, never times or routes. M26 projects it into the agent configuration.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.event_brief.v1"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "event_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "truth_rev": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "event_type": {
+      "enum": [
+        "reid_occlusion",
+        "rendezvous_handoff",
+        "vehicle_track",
+        "target_search"
+      ]
+    },
+    "public_anchors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "pos_enu_m": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "id",
+          "pos_enu_m"
+        ]
+      }
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "description_zh": {
+            "type": "string"
+          },
+          "description_en": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "actor"
+        ]
+      }
+    },
+    "task_area": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "minItems": 3,
+      "maxItems": 64,
+      "description": "World-frame polygon (m)"
+    }
+  },
+  "required": [
+    "schema",
+    "event_id",
+    "event_version",
+    "truth_rev",
+    "event_type",
+    "public_anchors",
+    "targets",
+    "task_area"
+  ]
+}

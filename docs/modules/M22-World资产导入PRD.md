@@ -1148,7 +1148,7 @@ FeatureCollection，坐标为世界帧 (E, N)。顶层 `awr`：`{schema: "awr.na
 
 | 字段 | 类型 | 单位 | 取值 | 说明 |
 |---|---|---|---|---|
-| `id` | string | — | `^[a-z][a-z0-9-]{1,47}$` | 来源的纯函数（FR-036） |
+| `id` | string | — | 生成锚点 `^[a-z][a-z0-9-]{1,47}$`；契约接受 `^[A-Za-z][A-Za-z0-9_-]{1,47}$`（覆盖层与手工锚点，如 `building_X_exit`） | 来源的纯函数（FR-036） |
 | `kind` | enum | — | `point`、`zone`、`door`、`curb` | DSL 语义（05 §5.2.1） |
 | `category` | string | — | `junction`、`building`、`entrance`、`poi:<osm 标签值>`、`plaza`、`manual` | 来源语义 |
 | `profile` | enum | — | `person`、`vehicle` | — |

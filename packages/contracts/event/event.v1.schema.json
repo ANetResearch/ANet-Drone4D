@@ -1,0 +1,711 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/event/1/event.v1.schema.json",
+  "title": "Event DSL (drone4d.event.v1)",
+  "description": "AWR-05 §8.1, M23 §6.2 (contracts 1.3.0, d1 V0.3; P-1 draft, frozen in P0a week 6). Authored as YAML or JSON. The schema checks shapes and ranges; cross-field rules (route times within duration_s and non-decreasing, duration_s a multiple of 0.1 s, unique actor ids, anchor resolution, phase-gated values returning 619) are compile gate 1 (M23 §6.4). v1.3 adds event_type; appearance_ref, thermal, drive, search, air_temp_c and rh_pct are added in P0b (additive).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.event.v1"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "description": "Versioned address <event_id>@v<N>"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 1
+    },
+    "event_type": {
+      "enum": [
+        "reid_occlusion",
+        "rendezvous_handoff",
+        "vehicle_track",
+        "target_search"
+      ],
+      "default": "rendezvous_handoff",
+      "description": "v1.3 (ADR-181); P0a implements one fixed rendezvous_handoff event"
+    },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "region": {
+          "type": "string"
+        },
+        "package_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "anchors_ref": {
+      "type": "string",
+      "pattern": "^(world|event:[^/].*)$",
+      "default": "world"
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "Background actors and appearance sampling only"
+    },
+    "duration_s": {
+      "type": "number",
+      "maximum": 3600,
+      "exclusiveMinimum": 0
+    },
+    "tick_hz": {
+      "enum": [
+        10
+      ],
+      "default": 10,
+      "description": "20 and 30 are reserved"
+    },
+    "mode": {
+      "enum": [
+        "exogenous",
+        "interactive"
+      ],
+      "default": "exogenous",
+      "description": "interactive returns 619 before P2"
+    },
+    "time_origin_utc": {
+      "type": "string",
+      "format": "date-time",
+      "default": "2026-06-15T09:00:00Z"
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{0,47}$"
+          },
+          "class": {
+            "enum": [
+              "person",
+              "vehicle",
+              "dog",
+              "machine",
+              "object",
+              "uav"
+            ],
+            "description": "Support matrix M23 §6.2.3; uav is P1"
+          },
+          "appearance": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "preset": {
+                "type": "string"
+              },
+              "asset": {
+                "type": "string",
+                "description": "Asset id under assets/actors/**; overrides preset"
+              },
+              "top_rgb": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "bottom_rgb": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "body_rgb": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "height_m": {
+                "type": "number",
+                "maximum": 12,
+                "exclusiveMinimum": 0
+              },
+              "length_m": {
+                "type": "number",
+                "maximum": 12,
+                "exclusiveMinimum": 0
+              },
+              "accessories": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                "maxItems": 8
+              }
+            }
+          },
+          "gait": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "speed_mps": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "maximum": 40,
+                  "exclusiveMinimum": 0
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "[lo, hi], 0 < lo <= hi <= 40"
+              },
+              "accel_mps2": {
+                "type": "number",
+                "maximum": 10,
+                "exclusiveMinimum": 0
+              }
+            }
+          },
+          "route": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "t": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Arrival time (s)"
+                },
+                "at": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "description": "Anchor id (awr-anchors@1)"
+                },
+                "do": {
+                  "enum": [
+                    "spawn",
+                    "pass",
+                    "wait",
+                    "enter_building",
+                    "exit_building",
+                    "board",
+                    "alight",
+                    "despawn",
+                    "pickup",
+                    "drop"
+                  ],
+                  "default": "pass",
+                  "description": "pickup and drop are P1"
+                },
+                "dwell_s": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 0
+                },
+                "via": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "Anchor id (awr-anchors@1)"
+                  },
+                  "maxItems": 8
+                },
+                "target": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{0,47}$"
+                },
+                "tol_s": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 60,
+                  "default": 3
+                },
+                "alt_agl_m": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 500,
+                  "description": "uav class only (P1)"
+                }
+              },
+              "required": [
+                "t",
+                "at"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 64
+          },
+          "reaction": {
+            "$ref": "../../target/1/reaction.schema.json",
+            "description": "Interactive mode only"
+          }
+        },
+        "required": [
+          "id",
+          "class",
+          "route"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 30
+    },
+    "background": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "class": {
+            "enum": [
+              "person",
+              "vehicle",
+              "dog"
+            ],
+            "description": "dog is P1"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "zone": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "Anchor id (awr-anchors@1)"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 3,
+                "maxItems": 64,
+                "description": "World-frame polygon (m), simple, 3-64 vertices"
+              }
+            ]
+          },
+          "speed_mps": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "maximum": 40,
+              "exclusiveMinimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "pause_s": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "stream": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "appearance": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "distractor_frac": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.5,
+                "default": 0.1
+              }
+            }
+          }
+        },
+        "required": [
+          "class",
+          "count",
+          "zone"
+        ]
+      },
+      "maxItems": 8
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Environment track mapped to M07 (M23 §6.11); keyframes strictly increasing in t, the first at t = 0 (compile gate 1)",
+      "properties": {
+        "interpolation": {
+          "enum": [
+            "smooth",
+            "step",
+            "linear"
+          ],
+          "default": "smooth"
+        },
+        "keyframes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "t": {
+                "type": "number",
+                "minimum": 0
+              },
+              "wind_mps": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 40
+              },
+              "wind_dir_deg": {
+                "type": "number",
+                "minimum": 0,
+                "exclusiveMaximum": 360
+              },
+              "gust_sigma_mps": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 8
+              },
+              "rain_mm_h": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 150
+              },
+              "visibility_m": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 50000
+              },
+              "fog": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 500,
+                "description": "Fog top (m AGL)"
+              },
+              "cloud": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "t"
+            ]
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "comms": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "zones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{0,47}$"
+              },
+              "polygon": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 3,
+                "maxItems": 64,
+                "description": "World-frame polygon (m), simple, 3-64 vertices"
+              },
+              "t": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "extra_loss": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 0
+              },
+              "extra_latency_ms": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5000,
+                "default": 0
+              },
+              "bandwidth_scale": {
+                "type": "number",
+                "maximum": 1,
+                "exclusiveMinimum": 0,
+                "default": 1
+              }
+            },
+            "required": [
+              "id",
+              "polygon"
+            ]
+          },
+          "maxItems": 32
+        }
+      }
+    },
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{0,47}$"
+          },
+          "type": {
+            "enum": [
+              "proximity_encounter",
+              "board_vehicle",
+              "alight_vehicle",
+              "enter_building",
+              "exit_building",
+              "zone_enter",
+              "zone_exit",
+              "zone_pass",
+              "aerial_occlusion",
+              "object_handover",
+              "follow",
+              "loiter",
+              "run"
+            ],
+            "description": "Detectors M23 §6.9.1; object_handover, follow, loiter and run are P1"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1,
+            "maxItems": 8
+          },
+          "window": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "params": {
+            "type": "object"
+          },
+          "salience": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 1
+          },
+          "label_zh": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "label_en": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "participants",
+          "window"
+        ]
+      },
+      "maxItems": 256
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "src": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{0,47}$"
+          },
+          "rel": {
+            "enum": [
+              "before",
+              "after",
+              "during",
+              "overlaps",
+              "causes",
+              "enables"
+            ]
+          },
+          "dst": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{0,47}$"
+          }
+        },
+        "required": [
+          "src",
+          "rel",
+          "dst"
+        ]
+      },
+      "maxItems": 512
+    },
+    "brief": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Task brief (not truth): appearance descriptions only, no times or routes",
+      "properties": {
+        "public_anchors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Anchor id (awr-anchors@1)"
+          }
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "actor": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{0,47}$"
+              },
+              "description_zh": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "description_en": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "actor"
+            ]
+          }
+        },
+        "task_area": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 3,
+          "maxItems": 64,
+          "description": "World-frame polygon (m), simple, 3-64 vertices"
+        }
+      }
+    },
+    "interactive": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reactions": {
+          "type": "boolean",
+          "default": true
+        },
+        "replan_on_block": {
+          "type": "boolean",
+          "default": true
+        },
+        "max_deviation_m": {
+          "type": "number",
+          "minimum": 0,
+          "default": 150
+        },
+        "background": {
+          "enum": [
+            "exogenous",
+            "local_deviation"
+          ],
+          "default": "exogenous"
+        }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Display names, not part of the tape",
+      "properties": {
+        "zh": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "en": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "event_id",
+    "world",
+    "seed",
+    "duration_s",
+    "actors"
+  ]
+}

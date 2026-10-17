@@ -1,0 +1,343 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/event/1/anchors.schema.json",
+  "title": "Anchors awr-anchors@1 (world layer semantic/anchors.json and event overlays)",
+  "description": "M22 §7.3.5 (world layer, drafted by M22) and M23 §6.3 (event overlay: extends, remove, public). Contracts 1.3.0, d1 V0.3. A world layer carries the full provenance; an overlay (extends = world) overrides world anchors by id, removes ids listed in remove and adds anchors. The resolved set is sorted by id and hashed with JCS (anchors_sha256). Units: m, world frame.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.anchors.v1"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+    },
+    "world_id": {
+      "type": "string"
+    },
+    "frame": {
+      "const": "world"
+    },
+    "units": {
+      "const": "m"
+    },
+    "coordinate_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "license": {
+      "type": "string"
+    },
+    "attribution": {
+      "type": "string"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "name",
+          "sha256"
+        ]
+      }
+    },
+    "extends": {
+      "const": "world",
+      "description": "Event overlay over the world anchors layer"
+    },
+    "remove": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_-]{1,47}$"
+      },
+      "uniqueItems": true
+    },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{1,47}$",
+            "description": "Pure function of the source for generated anchors (M22-FR-036); overlay additions use an ev_ or event-unique prefix"
+          },
+          "kind": {
+            "enum": [
+              "point",
+              "zone",
+              "door",
+              "curb"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "pattern": "^(junction|building|entrance|plaza|manual|poi:[a-z0-9_:-]+)$"
+          },
+          "profile": {
+            "enum": [
+              "person",
+              "vehicle"
+            ]
+          },
+          "xy": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "m, world frame (point, door, curb)"
+          },
+          "polygon": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 3,
+            "maxItems": 256,
+            "description": "m, world frame, outer ring counter-clockwise (zone)"
+          },
+          "z": {
+            "type": "number",
+            "description": "m, highest hit surface at the anchor"
+          },
+          "radius_m": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Defaults: point 3, door 1.5, curb 4"
+          },
+          "nav_snap": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "person": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                ]
+              },
+              "vehicle": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                ]
+              }
+            },
+            "required": [
+              "person",
+              "vehicle"
+            ]
+          },
+          "snap_dist_m": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "person": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "vehicle": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "person",
+              "vehicle"
+            ]
+          },
+          "relocated_m": {
+            "type": "number",
+            "minimum": 0
+          },
+          "building": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Building anchor id; required for door"
+          },
+          "pair": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Paired anchor for curb"
+          },
+          "seed": {
+            "type": "boolean",
+            "description": "NavMesh crop seed"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "label_zh": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^(osm:(node|way|relation)/[0-9]+|manual|derived:[a-z]+\\(osm:(node|way|relation)/[0-9]+\\))$"
+          },
+          "status": {
+            "enum": [
+              "auto",
+              "review",
+              "confirmed",
+              "deprecated"
+            ]
+          },
+          "quality": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "in_coverage": {
+                "type": "boolean"
+              },
+              "bits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              }
+            },
+            "required": [
+              "in_coverage",
+              "bits"
+            ]
+          },
+          "public": {
+            "type": "boolean",
+            "default": false,
+            "description": "May appear in task briefs (M23 overlay field)"
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "zone"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "polygon"
+              ]
+            },
+            "else": {
+              "required": [
+                "xy"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "door"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "building"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "world_id",
+    "anchors"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "extends"
+        ]
+      },
+      "then": {
+        "description": "Event overlay"
+      },
+      "else": {
+        "required": [
+          "schema_version",
+          "frame",
+          "units",
+          "coordinate_sha256",
+          "license",
+          "attribution",
+          "sources"
+        ],
+        "properties": {
+          "remove": false,
+          "anchors": {
+            "items": {
+              "required": [
+                "category",
+                "profile",
+                "z",
+                "source",
+                "status",
+                "quality"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
