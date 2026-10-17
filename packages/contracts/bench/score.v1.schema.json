@@ -334,7 +334,9 @@
           "s": false,
           "ci95": false,
           "lanes": {
+            "type": "array",
             "items": {
+              "type": "object",
               "properties": {
                 "composite": {
                   "type": "null"

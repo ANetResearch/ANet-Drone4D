@@ -19,6 +19,9 @@ walk(root, '')
 const ajv = new Ajv2020({ strict: true, allErrors: true, strictTuples: false, strictRequired: false, allowUnionTypes: true })
 ajv.addKeyword({ keyword: 'x-note' })
 ajv.addKeyword({ keyword: 'unit' })
+// D3 bench and event annotations (contracts 1.3.0): binary field layout of the wire codec, frame and index container
+// layouts, cross-field run rules (awr.bench.spec_rules) and the agent-visible task subset; no validation semantics
+for (const keyword of ['x-awr-bin', 'x-awr-frames', 'x-awr-header', 'x-awr-limits', 'x-layout', 'x-rules', 'x-agent-visible']) ajv.addKeyword({ keyword })
 ajv.addFormat('date-time', /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/)
 const ids = new Map<string, string>()
 for (const f of files) {
