@@ -207,6 +207,93 @@
       },
       "maxItems": 6
     },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "version",
+        "tape_uri",
+        "tape_content_sha256",
+        "mode"
+      ],
+      "description": "D3 event binding (AWR-05 §12.3 #9; M23 §7.5, assembled by the M23 session loader at order 45). The D2 sandbox ignores it.",
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tape_uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tape_content_sha256": {
+          "$ref": "../../world/1/common.schema.json#/$defs/sha256"
+        },
+        "mode": {
+          "enum": [
+            "exogenous",
+            "interactive"
+          ]
+        },
+        "truth_rev": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "agents": {
+      "type": "array",
+      "maxItems": 64,
+      "description": "D3 agent bindings per vehicle (AWR-05 §12.3 #9; M26 §7.12). The D2 sandbox ignores it.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "uav_id",
+          "policy",
+          "obs_level"
+        ],
+        "properties": {
+          "uav_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "policy": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "ref"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "reference",
+                  "image",
+                  "sdk"
+                ]
+              },
+              "ref": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "obs_level": {
+            "enum": [
+              "L1",
+              "L2",
+              "L2-depth"
+            ]
+          }
+        }
+      }
+    },
     "created_unix_ns": {
       "type": "string",
       "pattern": "^[0-9]{1,20}$",

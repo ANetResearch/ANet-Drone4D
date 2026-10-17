@@ -605,8 +605,11 @@ __all__ = [
     "SessionWorldsDataset",
     "SessionWorlds_",
     "Snapshot",
+    "SnapshotAgents",
+    "SnapshotAgentsPolicy",
     "SnapshotCalendar",
     "SnapshotEnv",
+    "SnapshotEvent",
     "SnapshotVehicle",
     "SnapshotVehicleLights",
     "SnapshotVehicleSensorsOneOf0",
@@ -6380,7 +6383,22 @@ class Snapshot(TypedDict):
     vehicles: list[SnapshotVehicles]
     targets: list[TargetCreateRequest]
     tasks: list[TaskingTaskRequest]
+    event: NotRequired[SnapshotEvent]
+    agents: NotRequired[list[SnapshotAgents]]
     created_unix_ns: NotRequired[str]
+
+
+# sandbox/snapshot.schema.json#/properties/agents/items
+class SnapshotAgents(TypedDict):
+    uav_id: str
+    policy: SnapshotAgentsPolicy
+    obs_level: Literal["L1", "L2", "L2-depth"]
+
+
+# sandbox/snapshot.schema.json#/properties/agents/items/properties/policy
+class SnapshotAgentsPolicy(TypedDict):
+    kind: Literal["reference", "image", "sdk"]
+    ref: str
 
 
 # sandbox/snapshot.schema.json#/properties/calendar
@@ -6393,6 +6411,16 @@ class SnapshotCalendar(TypedDict):
 class SnapshotEnv(TypedDict):
     preset: NotRequired[str | None]
     overrides: NotRequired[dict[str, Any]]
+
+
+# sandbox/snapshot.schema.json#/properties/event
+class SnapshotEvent(TypedDict):
+    event_id: str
+    version: str
+    tape_uri: str
+    tape_content_sha256: WorldCommonSha256
+    mode: Literal["exogenous", "interactive"]
+    truth_rev: NotRequired[int]
 
 
 # sandbox/snapshot.schema.json#/$defs/vehicle

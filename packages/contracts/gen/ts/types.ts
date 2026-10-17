@@ -7964,6 +7964,30 @@ export interface Snapshot {
    */
   tasks: TaskingTaskRequest[]
   /**
+   * D3 event binding (AWR-05 §12.3 #9; M23 §7.5, assembled by the M23 session loader at order 45). The D2 sandbox ignores it.
+   */
+  event?: {
+    event_id: string
+    version: string
+    tape_uri: string
+    tape_content_sha256: WorldCommonSha256
+    mode: 'exogenous' | 'interactive'
+    truth_rev?: number
+  }
+  /**
+   * D3 agent bindings per vehicle (AWR-05 §12.3 #9; M26 §7.12). The D2 sandbox ignores it.
+   *
+   * @maxItems 64
+   */
+  agents?: {
+    uav_id: string
+    policy: {
+      kind: 'reference' | 'image' | 'sdk'
+      ref: string
+    }
+    obs_level: 'L1' | 'L2' | 'L2-depth'
+  }[]
+  /**
    * UNIX time in ns as a decimal string (AWR-17 §1.3)
    */
   created_unix_ns?: string
