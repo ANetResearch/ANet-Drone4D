@@ -19,6 +19,45 @@ __all__ = [
     "AcousticBearings",
     "AcousticBearingsBearings",
     "AcousticBearingsBearingsBands",
+    "ActV1",
+    "ActV1GimbalCmd",
+    "ActV1GimbalCmdOneOf0",
+    "ActV1GimbalCmdOneOf1",
+    "ActV1NavCmd",
+    "ActV1NavCmdOneOf0",
+    "ActV1NavCmdOneOf1",
+    "ActV1NavCmdOneOf2",
+    "ActV1NavCmdOneOf3",
+    "ActV1NavCmdOneOf4",
+    "ActV1NavCmdOneOf5",
+    "ActV1NavCmdOneOf6",
+    "ActV1NavCmdOneOf7",
+    "ActV1OutMessage",
+    "ActV1Report",
+    "ActV1ReportParticipants",
+    "ActV1ReportParticipantsEvidence",
+    "ActV1ReportWindow",
+    "ActV1SensorModeCmd",
+    "ActV1ZoomCmd",
+    "AgentConfigV1",
+    "AgentConfigV1Brief",
+    "AgentConfigV1BriefAnchors",
+    "AgentConfigV1BriefArea",
+    "AgentConfigV1BriefKeepouts",
+    "AgentConfigV1BriefMaps",
+    "AgentConfigV1BriefTargets",
+    "AgentConfigV1BriefTargetsAppearance",
+    "AgentConfigV1BriefTask",
+    "AgentConfigV1Comm",
+    "AgentConfigV1Decision",
+    "AgentConfigV1Episode",
+    "AgentConfigV1Sensors",
+    "AgentConfigV1SensorsGimbal",
+    "AgentConfigV1Start",
+    "AgentConfigV1Vehicle",
+    "AgentConfigV1VehicleLimits",
+    "AgentConfigV1World",
+    "AgentConfigV1WorldOrigin",
     "AgentStatus",
     "AgentStatusTrust",
     "AgentTasks",
@@ -355,6 +394,32 @@ __all__ = [
     "NirIlluminatorPowerWOneOf1",
     "NirIlluminatorRef",
     "NirIlluminator_",
+    "ObsPrivilegedV1",
+    "ObsPrivilegedV1Features",
+    "ObsPrivilegedV1Oracle",
+    "ObsPrivilegedV1OracleActors",
+    "ObsPrivilegedV1OracleTruePose",
+    "ObsV1",
+    "ObsV1ActionAck",
+    "ObsV1CameraObs",
+    "ObsV1CommStatus",
+    "ObsV1DepthImage",
+    "ObsV1Detection",
+    "ObsV1DetectionAppearance",
+    "ObsV1Gimbal",
+    "ObsV1GnssObs",
+    "ObsV1GroundHint",
+    "ObsV1Image",
+    "ObsV1ImuObs",
+    "ObsV1LidarObs",
+    "ObsV1Message",
+    "ObsV1Mount",
+    "ObsV1NavSolution",
+    "ObsV1Observation",
+    "ObsV1ObservationSensors",
+    "ObsV1TermInfo",
+    "ObsV1ThermalObs",
+    "ObsV1VehicleStatus",
     "Ops",
     "OpsAck",
     "OpsAdvertise",
@@ -939,6 +1004,12 @@ __all__ = [
     "WindManifestRef",
     "WindManifestStats",
     "WindManifestVis",
+    "WireV1",
+    "WireV1Close",
+    "WireV1Empty",
+    "WireV1Error",
+    "WireV1Hello",
+    "WireV1HelloPrefs",
     "World",
     "WorldCamera",
     "WorldCameraHome",
@@ -987,6 +1058,14 @@ __all__ = [
     "ZonesFeatureGeometryOneOf1",
     "ZonesFeature_",
 ]
+
+# bench/act.v1.schema.json#/$defs/GimbalCmd
+type ActV1GimbalCmd = ActV1GimbalCmdOneOf0 | ActV1GimbalCmdOneOf1
+
+
+# bench/act.v1.schema.json#/$defs/NavCmd
+type ActV1NavCmd = ActV1NavCmdOneOf0 | ActV1NavCmdOneOf1 | ActV1NavCmdOneOf2 | ActV1NavCmdOneOf3 | ActV1NavCmdOneOf4 | ActV1NavCmdOneOf5 | ActV1NavCmdOneOf6 | ActV1NavCmdOneOf7
+
 
 # rec/blocks.schema.json# Recording block messages (awr.StateExtBlock.v1, awr.SafetyBlock.v1)
 type Blocks = BlocksStateExtBlock | BlocksSafetyBlock
@@ -1094,6 +1173,14 @@ type TargetCreateRequest = dict[str, Any]
 
 # agent/task.schema.json# Agent task (TaskSpec, TaskStatus, TaskStatusLite)
 type Task = TaskSpec | TaskStatus_
+
+
+# bench/wire.v1.schema.json# Agent wire protocol (drone4d.bench.wire.v1)
+type WireV1 = WireV1Hello | WireV1Close | WireV1Error | WireV1Empty
+
+
+# bench/wire.v1.schema.json#/$defs/Empty
+type WireV1Empty = dict[str, Any]
 
 
 # schemas/world/common.schema.json# AWR common definitions (v1)
@@ -1273,6 +1360,303 @@ class AcousticBearingsBearings(TypedDict):
 class AcousticBearingsBearingsBands(TypedDict):
     fc_hz: float
     snr_db: float
+
+
+# bench/act.v1.schema.json# Agent action (drone4d.bench.act.v1)
+class ActV1(TypedDict):
+    schema: Literal["drone4d.bench.act.v1"]
+    k: int
+    nav: NotRequired[ActV1NavCmd]
+    gimbal: NotRequired[ActV1GimbalCmd]
+    zoom: NotRequired[list[ActV1ZoomCmd]]
+    sensor_mode: NotRequired[list[ActV1SensorModeCmd]]
+    msgs: NotRequired[list[ActV1OutMessage]]
+    report: NotRequired[list[ActV1Report]]
+    tau_ms: NotRequired[int]
+
+
+# bench/act.v1.schema.json#/$defs/GimbalCmd/oneOf/0
+class ActV1GimbalCmdOneOf0(TypedDict):
+    sensor_id: str
+    mode: Literal["angles"]
+    pitch_deg: float
+    yaw_deg: float
+
+
+# bench/act.v1.schema.json#/$defs/GimbalCmd/oneOf/1
+class ActV1GimbalCmdOneOf1(TypedDict):
+    sensor_id: str
+    mode: Literal["look_at"]
+    target_enu_m: list[float]
+
+
+# bench/act.v1.schema.json#/$defs/NavCmd/oneOf/0
+class ActV1NavCmdOneOf0(TypedDict):
+    mode: Literal["velocity"]
+    vel_mps: list[float | None]
+    yaw_rate_rps: NotRequired[float | None]
+    frame: Literal["world", "body"]
+    hold_alt: NotRequired[bool]
+
+
+# bench/act.v1.schema.json#/$defs/NavCmd/oneOf/1
+class ActV1NavCmdOneOf1(TypedDict):
+    mode: Literal["goto"]
+    pos_enu_m: list[float]
+    speed_mps: NotRequired[float]
+    yaw_deg: NotRequired[float]
+    accept_m: NotRequired[float]
+
+
+# bench/act.v1.schema.json#/$defs/NavCmd/oneOf/2
+class ActV1NavCmdOneOf2(TypedDict):
+    mode: Literal["hover"]
+
+
+# bench/act.v1.schema.json#/$defs/NavCmd/oneOf/3
+class ActV1NavCmdOneOf3(TypedDict):
+    mode: Literal["takeoff"]
+    alt_agl_m: float
+
+
+# bench/act.v1.schema.json#/$defs/NavCmd/oneOf/4
+class ActV1NavCmdOneOf4(TypedDict):
+    mode: Literal["land"]
+
+
+# bench/act.v1.schema.json#/$defs/NavCmd/oneOf/5
+class ActV1NavCmdOneOf5(TypedDict):
+    mode: Literal["orbit"]
+    center_enu_m: list[float]
+    alt_m: float
+    radius_m: float
+    speed_mps: float
+    cw: bool
+
+
+# bench/act.v1.schema.json#/$defs/NavCmd/oneOf/6
+class ActV1NavCmdOneOf6(TypedDict):
+    mode: Literal["path"]
+    waypoints_enu_m: list[list[float]]
+    speed_mps: float
+
+
+# bench/act.v1.schema.json#/$defs/NavCmd/oneOf/7
+class ActV1NavCmdOneOf7(TypedDict):
+    mode: Literal["rtl"]
+
+
+# bench/act.v1.schema.json#/$defs/OutMessage
+class ActV1OutMessage(TypedDict):
+    dst: str
+    topic: str
+    payload: Any
+
+
+# bench/act.v1.schema.json#/$defs/Report
+class ActV1Report(TypedDict):
+    type: str
+    participants: list[ActV1ReportParticipants]
+    window: ActV1ReportWindow
+    position_enu_m: NotRequired[list[float]]
+    confidence: NotRequired[float]
+
+
+# bench/act.v1.schema.json#/$defs/Report/properties/participants/items
+class ActV1ReportParticipants(TypedDict):
+    track_id: str
+    appearance: NotRequired[dict[str, Any]]
+    evidence: list[ActV1ReportParticipantsEvidence]
+
+
+# bench/act.v1.schema.json#/$defs/Report/properties/participants/items/properties/evidence/items
+class ActV1ReportParticipantsEvidence(TypedDict):
+    uav: str
+    sensor: str
+    frame_seq: int
+    bbox_xywh: NotRequired[list[float]]
+    point_xy: NotRequired[list[float]]
+    det_id: NotRequired[str]
+
+
+# bench/act.v1.schema.json#/$defs/Report/properties/window
+class ActV1ReportWindow(TypedDict):
+    t_start_ns: int
+    t_end_ns: int
+
+
+# bench/act.v1.schema.json#/$defs/SensorModeCmd
+class ActV1SensorModeCmd(TypedDict):
+    sensor_id: str
+    mode: str
+    active: bool
+
+
+# bench/act.v1.schema.json#/$defs/ZoomCmd
+class ActV1ZoomCmd(TypedDict):
+    sensor_id: str
+    zoom_x: float
+
+
+# bench/agent_config.v1.schema.json# Agent configuration (drone4d.bench.agent_config.v1)
+class AgentConfigV1(TypedDict):
+    schema: Literal["drone4d.bench.agent_config.v1"]
+    uav_id: str
+    kind: Literal["uav", "gcs"]
+    peers: list[str]
+    vehicle: AgentConfigV1Vehicle
+    sensors: list[AgentConfigV1Sensors]
+    start: AgentConfigV1Start
+    obs_level: Literal["L1", "L2", "L2-depth", "L3"]
+    control_hz: Literal[10]
+    decision: AgentConfigV1Decision
+    comm: AgentConfigV1Comm
+    episode: AgentConfigV1Episode
+    world: AgentConfigV1World
+    brief: AgentConfigV1Brief
+    agent_seed: NotRequired[int]
+    protocol: Literal["drone4d.bench.wire.v1"]
+
+
+# bench/agent_config.v1.schema.json#/properties/brief
+class AgentConfigV1Brief(TypedDict):
+    task: AgentConfigV1BriefTask
+    area: AgentConfigV1BriefArea
+    keepouts: list[AgentConfigV1BriefKeepouts]
+    anchors: list[AgentConfigV1BriefAnchors]
+    targets: list[AgentConfigV1BriefTargets]
+    report_vocab: list[str]
+    maps: AgentConfigV1BriefMaps
+    known_targets: NotRequired[list[dict[str, Any]]]
+    nominal_noise: dict[str, Any]
+
+
+# bench/agent_config.v1.schema.json#/properties/brief/properties/anchors/items
+class AgentConfigV1BriefAnchors(TypedDict):
+    id: str
+    kind: str
+    name: str
+    pos_enu_m: list[float]
+
+
+# bench/agent_config.v1.schema.json#/properties/brief/properties/area
+class AgentConfigV1BriefArea(TypedDict):
+    polygon_enu_m: list[list[float]]
+    alt_agl_range_m: list[float]
+
+
+# bench/agent_config.v1.schema.json#/properties/brief/properties/keepouts/items
+class AgentConfigV1BriefKeepouts(TypedDict):
+    polygon_enu_m: list[list[float]]
+    z_range_m: list[float]
+
+
+# bench/agent_config.v1.schema.json#/properties/brief/properties/maps
+class AgentConfigV1BriefMaps(TypedDict):
+    dsm: Literal["point", "raster"]
+    raster: NotRequired[str]
+
+
+# bench/agent_config.v1.schema.json#/properties/brief/properties/targets/items/properties/appearance
+class AgentConfigV1BriefTargetsAppearance(TypedDict):
+    top_rgb: NotRequired[list[int]]
+    bottom_rgb: NotRequired[list[int]]
+    text: NotRequired[str]
+
+
+# bench/agent_config.v1.schema.json#/properties/brief/properties/task
+class AgentConfigV1BriefTask(TypedDict):
+    type: Literal["event_capture", "event_understanding", "explore", "track"]
+    description: str
+
+
+# bench/agent_config.v1.schema.json#/properties/comm
+class AgentConfigV1Comm(TypedDict):
+    enabled: bool
+    bucket_Bps: int
+    burst_B: int
+    msg_max_B: int
+    model: str
+
+
+# bench/agent_config.v1.schema.json#/properties/decision
+class AgentConfigV1Decision(TypedDict):
+    mode: Literal["fixed", "per_step"]
+    tau_ms: int
+    tau_min_ms: int
+    step_budget_s: float
+    wall_ratio: float
+
+
+# bench/agent_config.v1.schema.json#/properties/episode
+class AgentConfigV1Episode(TypedDict):
+    duration_s: float
+
+
+# bench/agent_config.v1.schema.json#/properties/sensors/items
+class AgentConfigV1Sensors(TypedDict):
+    sensor_id: str
+    kind: Literal["camera", "thermal", "lidar", "imu", "gnss"]
+    model_ref: str
+    rate_hz: float
+    mount_nominal: ObsV1Mount
+    width: NotRequired[int]
+    height: NotRequired[int]
+    K: NotRequired[list[float]]
+    dist: NotRequired[list[float]]
+    exposure_s: NotRequired[float]
+    readout_s: NotRequired[float]
+    zoom_range: NotRequired[list[float]]
+    gimbal: NotRequired[AgentConfigV1SensorsGimbal]
+    controllable: NotRequired[bool]
+    pattern: NotRequired[str]
+    rays_per_frame: NotRequired[int]
+    range_m: NotRequired[list[float]]
+    fix: NotRequired[Literal["none", "single", "rtk_float", "rtk_fixed"]]
+
+
+# bench/agent_config.v1.schema.json#/properties/sensors/items/properties/gimbal
+class AgentConfigV1SensorsGimbal(TypedDict):
+    pitch_range_deg: list[float]
+    yaw_range_deg: list[float]
+    rate_max_dps: float
+
+
+# bench/agent_config.v1.schema.json#/properties/start
+class AgentConfigV1Start(TypedDict):
+    kind: Literal["anchor", "nest", "pose"]
+    state: Literal["landed", "airborne"]
+    nav_pos_enu_m: list[float]
+
+
+# bench/agent_config.v1.schema.json#/properties/vehicle
+class AgentConfigV1Vehicle(TypedDict):
+    ref: str
+    limits: AgentConfigV1VehicleLimits
+    endurance_s: float
+
+
+# bench/agent_config.v1.schema.json#/properties/vehicle/properties/limits
+class AgentConfigV1VehicleLimits(TypedDict):
+    vmax_h_mps: float
+    vup_mps: float
+    vdown_mps: float
+    yaw_rate_max_rps: float
+    acc_h_mps2: float
+
+
+# bench/agent_config.v1.schema.json#/properties/world
+class AgentConfigV1World(TypedDict):
+    id: str
+    content_version: str
+    origin: AgentConfigV1WorldOrigin
+
+
+# bench/agent_config.v1.schema.json#/properties/world/properties/origin
+class AgentConfigV1WorldOrigin(TypedDict):
+    lat_deg: float
+    lon_deg: float
+    alt_m: float
 
 
 # agent/agent_status.schema.json# awr.agent.status.v1
@@ -4280,6 +4664,225 @@ class NirIlluminator_(TypedDict):
     theta_ref_deg: NotRequired[float]
     rho_ref: NotRequired[float]
     r_spec_max_m: NotRequired[float]
+
+
+# bench/obs_privileged.v1.schema.json# Privileged observation (drone4d.bench.obs_privileged.v1)
+class ObsPrivilegedV1(TypedDict):
+    obs: ObsV1Observation
+    inbox: list[ObsV1Message]
+    oracle: ObsPrivilegedV1Oracle
+    features: NotRequired[list[ObsPrivilegedV1Features]]
+
+
+# bench/obs_privileged.v1.schema.json#/properties/features/items
+class ObsPrivilegedV1Features(TypedDict):
+    sensor_id: str
+    seq: int
+    n: int
+    uv_px: Any
+    xyz_cam_m: Any
+    ids: Any
+
+
+# bench/obs_privileged.v1.schema.json#/properties/oracle
+class ObsPrivilegedV1Oracle(TypedDict):
+    actors: list[ObsPrivilegedV1OracleActors]
+    true_pose: ObsPrivilegedV1OracleTruePose
+
+
+# bench/obs_privileged.v1.schema.json#/properties/oracle/properties/true_pose
+class ObsPrivilegedV1OracleTruePose(TypedDict):
+    pos_enu_m: list[float]
+    q_wb_xyzw: list[float]
+
+
+# bench/obs.v1.schema.json# Agent observation (drone4d.bench.obs.v1)
+class ObsV1(TypedDict):
+    obs: ObsV1Observation
+    inbox: list[ObsV1Message]
+
+
+# bench/obs.v1.schema.json#/$defs/ActionAck
+class ObsV1ActionAck(TypedDict):
+    k: int
+    item: Literal["nav", "gimbal", "zoom", "sensor_mode", "msg", "report", "act"]
+    index: int
+    result: Literal["applied", "clamped", "rejected", "dropped", "late", "timeout"]
+    code: int
+    why: NotRequired[str]
+
+
+# bench/obs.v1.schema.json#/$defs/CameraObs
+class ObsV1CameraObs(TypedDict):
+    sensor_id: str
+    seq: int
+    t_mid_ns: int
+    exposure_ns: int
+    readout_ns: int
+    width: int
+    height: int
+    K: list[float]
+    dist: list[float]
+    mount_nominal: ObsV1Mount
+    gimbal_reading: ObsV1Gimbal
+    rgb: ObsV1Image
+    depth: NotRequired[ObsV1DepthImage]
+
+
+# bench/obs.v1.schema.json#/$defs/CommStatus
+class ObsV1CommStatus(TypedDict):
+    enabled: bool
+    bucket_B: int
+    sent: int
+    dropped_budget: int
+    rejected: int
+
+
+# bench/obs.v1.schema.json#/$defs/DepthImage
+class ObsV1DepthImage(TypedDict):
+    encoding: Literal["f32le"]
+    data: Any
+
+
+# bench/obs.v1.schema.json#/$defs/Detection/properties/appearance
+class ObsV1DetectionAppearance(TypedDict):
+    top_rgb: list[int]
+    bottom_rgb: NotRequired[list[int]]
+
+
+# bench/obs.v1.schema.json#/$defs/Gimbal
+class ObsV1Gimbal(TypedDict):
+    roll_deg: float
+    pitch_deg: float
+    yaw_deg: float
+
+
+# bench/obs.v1.schema.json#/$defs/GnssObs
+class ObsV1GnssObs(TypedDict):
+    sensor_id: str
+    seq: int
+    t_ns: int
+    pos_enu_m: list[float]
+    vel_enu_mps: list[float]
+    fix: Literal["none", "single", "rtk_float", "rtk_fixed"]
+    pos_std_m: list[float]
+
+
+# bench/obs.v1.schema.json#/$defs/GroundHint
+class ObsV1GroundHint(TypedDict):
+    dsm_m: float
+    dtm_m: float
+
+
+# bench/obs.v1.schema.json#/$defs/Image
+class ObsV1Image(TypedDict):
+    codec: Literal["jpeg", "raw_rgb8"]
+    data: Any
+
+
+# bench/obs.v1.schema.json#/$defs/ImuObs
+class ObsV1ImuObs(TypedDict):
+    sensor_id: str
+    seq: int
+    t0_ns: int
+    dt_ns: int
+    n: int
+    acc_mps2: Any
+    gyro_rps: Any
+    mount_nominal: ObsV1Mount
+
+
+# bench/obs.v1.schema.json#/$defs/LidarObs
+class ObsV1LidarObs(TypedDict):
+    sensor_id: str
+    seq: int
+    t_start_ns: int
+    mount_nominal: ObsV1Mount
+    n: int
+    xyz_m: Any
+    reflectivity: Any
+    tag: Any
+    offset_time_ns: Any
+
+
+# bench/obs.v1.schema.json#/$defs/Message
+class ObsV1Message(TypedDict):
+    src: str
+    seq: int
+    topic: str
+    t_sent_ns: int
+    t_recv_ns: int
+    payload: Any
+
+
+# bench/obs.v1.schema.json#/$defs/Mount
+class ObsV1Mount(TypedDict):
+    t_bs_m: list[float]
+    q_bs_xyzw: list[float]
+
+
+# bench/obs.v1.schema.json#/$defs/NavSolution
+class ObsV1NavSolution(TypedDict):
+    t_ns: int
+    pos_enu_m: list[float]
+    vel_enu_mps: list[float]
+    q_wb_xyzw: list[float]
+    omega_b_rps: list[float]
+    pos_std_m: list[float]
+    fix: Literal["none", "single", "rtk_float", "rtk_fixed"]
+    battery_soc: float
+
+
+# bench/obs.v1.schema.json#/$defs/Observation
+class ObsV1Observation(TypedDict):
+    schema: Literal["drone4d.bench.obs.v1"]
+    k: int
+    t_ns: int
+    nav: ObsV1NavSolution
+    status: ObsV1VehicleStatus
+    ground_hint: ObsV1GroundHint
+    sensors: NotRequired[ObsV1ObservationSensors]
+    acks: list[ObsV1ActionAck]
+    comm: ObsV1CommStatus
+    dropped: dict[str, int]
+    term: ObsV1TermInfo
+
+
+# bench/obs.v1.schema.json#/$defs/Observation/properties/sensors
+class ObsV1ObservationSensors(TypedDict):
+    detections: NotRequired[list[ObsV1Detection]]
+
+
+# bench/obs.v1.schema.json#/$defs/TermInfo
+class ObsV1TermInfo(TypedDict):
+    terminated: bool
+    truncated: bool
+    reason: Literal["none", "landed", "battery", "contact", "out_of_bounds", "agent_crash", "time_limit"]
+
+
+# bench/obs.v1.schema.json#/$defs/ThermalObs
+class ObsV1ThermalObs(TypedDict):
+    sensor_id: str
+    seq: int
+    t_mid_ns: int
+    width: int
+    height: int
+    K: list[float]
+    dist: list[float]
+    mount_nominal: ObsV1Mount
+    gimbal_reading: ObsV1Gimbal
+    temp_ck: Any
+    codec: Literal["radiometric_u16", "agc_jpeg"]
+
+
+# bench/obs.v1.schema.json#/$defs/VehicleStatus
+class ObsV1VehicleStatus(TypedDict):
+    mode: Literal["landed", "takeoff", "airborne", "landing", "failsafe"]
+    nav_cmd: Literal["velocity", "goto", "orbit", "path", "rtl", "hover", "takeoff", "land"]
+    goto_reached: bool
+    contact: bool
+    safety: Literal["normal", "low_battery", "critical_battery", "failsafe_land"]
+    locked_sensors: list[str]
 
 
 # rt/ops.schema.json#/$defs/ack
@@ -9565,6 +10168,31 @@ class WindManifestVis(TypedDict):
     vmax_per_ref: float
 
 
+# bench/wire.v1.schema.json#/$defs/Close
+class WireV1Close(TypedDict):
+    reason: Literal["run_ended", "superseded", "not_accepted", "protocol_error", "shutdown"]
+
+
+# bench/wire.v1.schema.json#/$defs/Error
+class WireV1Error(TypedDict):
+    code: int
+    why: str
+
+
+# bench/wire.v1.schema.json#/$defs/Hello
+class WireV1Hello(TypedDict):
+    protocol: Literal["drone4d.bench.wire.v1"]
+    sdk_version: str
+    prefs: NotRequired[WireV1HelloPrefs]
+
+
+# bench/wire.v1.schema.json#/$defs/Hello/properties/prefs
+class WireV1HelloPrefs(TypedDict):
+    camera: NotRequired[Literal["latest", "all"]]
+    lidar: NotRequired[Literal["latest", "all"]]
+    max_per_sensor: NotRequired[int]
+
+
 # schemas/world/world.schema.json#/properties/camera
 class WorldCamera(TypedDict):
     home: NotRequired[WorldCameraHome]
@@ -9817,6 +10445,14 @@ class ZonesFeature_(TypedDict):
     valid_to_s: NotRequired[float]
 
 
+# bench/agent_config.v1.schema.json#/properties/brief/properties/targets/items
+AgentConfigV1BriefTargets = TypedDict("AgentConfigV1BriefTargets", {
+    "label": str,
+    "class": str,
+    "appearance": AgentConfigV1BriefTargetsAppearance,
+})
+
+
 # schemas/world/class-table.schema.json# Point class table anet-classes@N (compact runtime index <-> ASPRS LAS 1.4 code)
 ClassTable = TypedDict("ClassTable", {
     "$schema": NotRequired[str],
@@ -9957,6 +10593,32 @@ Grid = TypedDict("Grid", {
     "scale": NotRequired[float],
     "offset": NotRequired[float],
     "method": NotRequired[str],
+})
+
+
+# bench/obs_privileged.v1.schema.json#/properties/oracle/properties/actors/items
+ObsPrivilegedV1OracleActors = TypedDict("ObsPrivilegedV1OracleActors", {
+    "actor_id": str,
+    "class": str,
+    "pos_enu_m": list[float],
+    "vel_enu_mps": list[float],
+    "yaw_rad": float,
+    "state": str,
+})
+
+
+# bench/obs.v1.schema.json#/$defs/Detection
+ObsV1Detection = TypedDict("ObsV1Detection", {
+    "det_id": str,
+    "sensor_id": str,
+    "seq": int,
+    "t_mid_ns": int,
+    "class": Literal["person", "vehicle"],
+    "bbox_xywh": list[float],
+    "h_px": float,
+    "slant_range_m": float,
+    "ground_xy_noisy": list[float],
+    "appearance": NotRequired[ObsV1DetectionAppearance],
 })
 
 

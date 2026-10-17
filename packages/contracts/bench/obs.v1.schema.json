@@ -1,0 +1,908 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/obs.v1.schema.json",
+  "title": "Agent observation (drone4d.bench.obs.v1)",
+  "description": "AWR-05 §8.1, M26 §7.3 (contracts 1.3.0, d1 V0.3). The OBS frame body {obs, inbox}. Agent-side whitelist: every object is closed (ADR-161) and the serialiser is generated from this schema; ObsFrame, SensorRequest, PoseHistory, FrameMeta, ground truth and backend metadata never appear. Optional fields are absent rather than null. x-awr-bin marks msgpack bin fields with their little-endian layout.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "obs": {
+      "$ref": "#/$defs/Observation"
+    },
+    "inbox": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Message"
+      }
+    }
+  },
+  "required": [
+    "obs",
+    "inbox"
+  ],
+  "$defs": {
+    "Mount": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Nominal mount: sensor origin in the body frame and sensor-to-body rotation",
+      "properties": {
+        "t_bs_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "q_bs_xyzw": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "t_bs_m",
+        "q_bs_xyzw"
+      ]
+    },
+    "Gimbal": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Relative to the mount zero",
+      "properties": {
+        "roll_deg": {
+          "type": "number"
+        },
+        "pitch_deg": {
+          "type": "number"
+        },
+        "yaw_deg": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "roll_deg",
+        "pitch_deg",
+        "yaw_deg"
+      ]
+    },
+    "NavSolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Noisy navigation solution; pos_std_m is the nominal noise-tier parameter, not the error realisation",
+      "properties": {
+        "t_ns": {
+          "type": "integer"
+        },
+        "pos_enu_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "vel_enu_mps": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "q_wb_xyzw": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "omega_b_rps": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "pos_std_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "fix": {
+          "enum": [
+            "none",
+            "single",
+            "rtk_float",
+            "rtk_fixed"
+          ]
+        },
+        "battery_soc": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "t_ns",
+        "pos_enu_m",
+        "vel_enu_mps",
+        "q_wb_xyzw",
+        "omega_b_rps",
+        "pos_std_m",
+        "fix",
+        "battery_soc"
+      ]
+    },
+    "VehicleStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "landed",
+            "takeoff",
+            "airborne",
+            "landing",
+            "failsafe"
+          ]
+        },
+        "nav_cmd": {
+          "enum": [
+            "velocity",
+            "goto",
+            "orbit",
+            "path",
+            "rtl",
+            "hover",
+            "takeoff",
+            "land"
+          ]
+        },
+        "goto_reached": {
+          "type": "boolean"
+        },
+        "contact": {
+          "type": "boolean"
+        },
+        "safety": {
+          "enum": [
+            "normal",
+            "low_battery",
+            "critical_battery",
+            "failsafe_land"
+          ]
+        },
+        "locked_sensors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "mode",
+        "nav_cmd",
+        "goto_reached",
+        "contact",
+        "safety",
+        "locked_sensors"
+      ]
+    },
+    "GroundHint": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Public 2 m DSM and 10 m DTM heights at the navigation position",
+      "properties": {
+        "dsm_m": {
+          "type": "number"
+        },
+        "dtm_m": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "dsm_m",
+        "dtm_m"
+      ]
+    },
+    "Image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codec": {
+          "enum": [
+            "jpeg",
+            "raw_rgb8"
+          ]
+        },
+        "data": {
+          "x-awr-bin": "u8[*]",
+          "description": "JPEG (whitelisted segments only) or raw RGB8 bytes (msgpack bin, little-endian; length given by the counts in the same object)"
+        }
+      },
+      "required": [
+        "codec",
+        "data"
+      ]
+    },
+    "DepthImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "encoding": {
+          "const": "f32le"
+        },
+        "data": {
+          "x-awr-bin": "f32le[W*H]",
+          "description": "Planar z in m, 0 = invalid (msgpack bin, little-endian; length given by the counts in the same object)"
+        }
+      },
+      "required": [
+        "encoding",
+        "data"
+      ]
+    },
+    "CameraObs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "t_mid_ns is the exposure midpoint of the middle row; readout_ns 0 = global shutter; depth only at L2-depth",
+      "properties": {
+        "sensor_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "t_mid_ns": {
+          "type": "integer"
+        },
+        "exposure_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "readout_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "K": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 9,
+          "maxItems": 9
+        },
+        "dist": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 5,
+          "maxItems": 5
+        },
+        "mount_nominal": {
+          "$ref": "#/$defs/Mount"
+        },
+        "gimbal_reading": {
+          "$ref": "#/$defs/Gimbal"
+        },
+        "rgb": {
+          "$ref": "#/$defs/Image"
+        },
+        "depth": {
+          "$ref": "#/$defs/DepthImage"
+        }
+      },
+      "required": [
+        "sensor_id",
+        "seq",
+        "t_mid_ns",
+        "exposure_ns",
+        "readout_ns",
+        "width",
+        "height",
+        "K",
+        "dist",
+        "mount_nominal",
+        "gimbal_reading",
+        "rgb"
+      ]
+    },
+    "ThermalObs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "v1.3 (P0b)",
+      "properties": {
+        "sensor_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "t_mid_ns": {
+          "type": "integer"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "K": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 9,
+          "maxItems": 9
+        },
+        "dist": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 5,
+          "maxItems": 5
+        },
+        "mount_nominal": {
+          "$ref": "#/$defs/Mount"
+        },
+        "gimbal_reading": {
+          "$ref": "#/$defs/Gimbal"
+        },
+        "temp_ck": {
+          "x-awr-bin": "u16le[W*H] (zstd when codec = radiometric_u16)",
+          "description": "Apparent temperature, 0.01 K per LSB (msgpack bin, little-endian; length given by the counts in the same object)"
+        },
+        "codec": {
+          "enum": [
+            "radiometric_u16",
+            "agc_jpeg"
+          ],
+          "description": "agc_jpeg only in development runs and previews"
+        }
+      },
+      "required": [
+        "sensor_id",
+        "seq",
+        "t_mid_ns",
+        "width",
+        "height",
+        "K",
+        "dist",
+        "mount_nominal",
+        "gimbal_reading",
+        "temp_ck",
+        "codec"
+      ]
+    },
+    "LidarObs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "P0b; frame window [t_start, t_start + 100 ms]",
+      "properties": {
+        "sensor_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "t_start_ns": {
+          "type": "integer"
+        },
+        "mount_nominal": {
+          "$ref": "#/$defs/Mount"
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "xyz_m": {
+          "x-awr-bin": "f32le[3n]",
+          "description": "Sensor frame, m (msgpack bin, little-endian; length given by the counts in the same object)"
+        },
+        "reflectivity": {
+          "x-awr-bin": "u8[n]",
+          "description": "Livox convention (msgpack bin, little-endian; length given by the counts in the same object)"
+        },
+        "tag": {
+          "x-awr-bin": "u8[n]",
+          "description": "Livox bit field; bits 7:6 must be 0 (msgpack bin, little-endian; length given by the counts in the same object)"
+        },
+        "offset_time_ns": {
+          "x-awr-bin": "u32le[n]",
+          "description": "From frame start, ns (msgpack bin, little-endian; length given by the counts in the same object)"
+        }
+      },
+      "required": [
+        "sensor_id",
+        "seq",
+        "t_start_ns",
+        "mount_nominal",
+        "n",
+        "xyz_m",
+        "reflectivity",
+        "tag",
+        "offset_time_ns"
+      ]
+    },
+    "ImuObs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "P0b",
+      "properties": {
+        "sensor_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "t0_ns": {
+          "type": "integer"
+        },
+        "dt_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "acc_mps2": {
+          "x-awr-bin": "f32le[3n]",
+          "description": "Specific force, sensor frame (msgpack bin, little-endian; length given by the counts in the same object)"
+        },
+        "gyro_rps": {
+          "x-awr-bin": "f32le[3n]",
+          "description": "Sensor frame (msgpack bin, little-endian; length given by the counts in the same object)"
+        },
+        "mount_nominal": {
+          "$ref": "#/$defs/Mount"
+        }
+      },
+      "required": [
+        "sensor_id",
+        "seq",
+        "t0_ns",
+        "dt_ns",
+        "n",
+        "acc_mps2",
+        "gyro_rps",
+        "mount_nominal"
+      ]
+    },
+    "GnssObs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "P0b",
+      "properties": {
+        "sensor_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "t_ns": {
+          "type": "integer"
+        },
+        "pos_enu_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "vel_enu_mps": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "fix": {
+          "enum": [
+            "none",
+            "single",
+            "rtk_float",
+            "rtk_fixed"
+          ]
+        },
+        "pos_std_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "sensor_id",
+        "seq",
+        "t_ns",
+        "pos_enu_m",
+        "vel_enu_mps",
+        "fix",
+        "pos_std_m"
+      ]
+    },
+    "Detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "L1; appearance only at identification level",
+      "properties": {
+        "det_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "Random per frame; never links to an actor across frames"
+        },
+        "sensor_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "t_mid_ns": {
+          "type": "integer"
+        },
+        "class": {
+          "enum": [
+            "person",
+            "vehicle"
+          ]
+        },
+        "bbox_xywh": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "h_px": {
+          "type": "number"
+        },
+        "slant_range_m": {
+          "type": "number"
+        },
+        "ground_xy_noisy": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "appearance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top_rgb": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "bottom_rgb": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          },
+          "required": [
+            "top_rgb"
+          ]
+        }
+      },
+      "required": [
+        "det_id",
+        "sensor_id",
+        "seq",
+        "t_mid_ns",
+        "class",
+        "bbox_xywh",
+        "h_px",
+        "slant_range_m",
+        "ground_xy_noisy"
+      ]
+    },
+    "ActionAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "k": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "item": {
+          "enum": [
+            "nav",
+            "gimbal",
+            "zoom",
+            "sensor_mode",
+            "msg",
+            "report",
+            "act"
+          ]
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "result": {
+          "enum": [
+            "applied",
+            "clamped",
+            "rejected",
+            "dropped",
+            "late",
+            "timeout"
+          ]
+        },
+        "code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Reason code, 0 = none"
+        },
+        "why": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,32}$",
+          "description": "M26 §7.9 enumerations"
+        }
+      },
+      "required": [
+        "k",
+        "item",
+        "index",
+        "result",
+        "code"
+      ]
+    },
+    "CommStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "bucket_B": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "sent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "dropped_budget": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "rejected": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "enabled",
+        "bucket_B",
+        "sent",
+        "dropped_budget",
+        "rejected"
+      ]
+    },
+    "TermInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "terminated": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "reason": {
+          "enum": [
+            "none",
+            "landed",
+            "battery",
+            "contact",
+            "out_of_bounds",
+            "agent_crash",
+            "time_limit"
+          ]
+        }
+      },
+      "required": [
+        "terminated",
+        "truncated",
+        "reason"
+      ]
+    },
+    "Message": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "src": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "t_sent_ns": {
+          "type": "integer"
+        },
+        "t_recv_ns": {
+          "type": "integer"
+        },
+        "payload": {
+          "x-awr-bin": "u8[<=65536]",
+          "description": "Message body (msgpack bin, little-endian; length given by the counts in the same object)"
+        }
+      },
+      "required": [
+        "src",
+        "seq",
+        "topic",
+        "t_sent_ns",
+        "t_recv_ns",
+        "payload"
+      ]
+    },
+    "Observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "drone4d.bench.obs.v1"
+        },
+        "k": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "t_ns": {
+          "type": "integer"
+        },
+        "nav": {
+          "$ref": "#/$defs/NavSolution"
+        },
+        "status": {
+          "$ref": "#/$defs/VehicleStatus"
+        },
+        "ground_hint": {
+          "$ref": "#/$defs/GroundHint"
+        },
+        "sensors": {
+          "type": "object",
+          "properties": {
+            "detections": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Detection"
+              }
+            }
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/CameraObs"
+                },
+                {
+                  "$ref": "#/$defs/ThermalObs"
+                },
+                {
+                  "$ref": "#/$defs/LidarObs"
+                },
+                {
+                  "$ref": "#/$defs/ImuObs"
+                },
+                {
+                  "$ref": "#/$defs/GnssObs"
+                }
+              ]
+            }
+          },
+          "description": "Keyed by sensor_id, frames in ascending seq; L1 adds detections"
+        },
+        "acks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActionAck"
+          }
+        },
+        "comm": {
+          "$ref": "#/$defs/CommStatus"
+        },
+        "dropped": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          }
+        },
+        "term": {
+          "$ref": "#/$defs/TermInfo"
+        }
+      },
+      "required": [
+        "schema",
+        "k",
+        "t_ns",
+        "nav",
+        "status",
+        "ground_hint",
+        "acks",
+        "comm",
+        "dropped",
+        "term"
+      ]
+    }
+  }
+}

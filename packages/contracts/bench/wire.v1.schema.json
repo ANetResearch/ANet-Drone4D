@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/wire.v1.schema.json",
+  "title": "Agent wire protocol (drone4d.bench.wire.v1)",
+  "description": "M26 §7.7 (contracts 1.3.0, d1 V0.3). Local socket frame: u32le body_len | u8 type | u8 flags | u16le version (= 1) | msgpack body; a WS binary message is one frame without body_len. Decoder limits: max_bin_len up to the frame limit, max_str_len 4 KiB, max_array_len 2^20, max_map_len 4096, nesting depth <= 16; violations are 666. This document validates the message table (x-awr-frames) and the small frame bodies; CONFIG, OBS and ACT bodies are agent_config.v1, obs.v1 and act.v1. Golden vectors under bench/golden/wire/ come with the M26 encoder (P0a).",
+  "x-awr-frames": [
+    {
+      "name": "HELLO",
+      "type": 1,
+      "dir": "A2E",
+      "body": "#/$defs/Hello",
+      "max_body_B": 65536
+    },
+    {
+      "name": "CONFIG",
+      "type": 2,
+      "dir": "E2A",
+      "body": "agent_config.v1.schema.json",
+      "max_body_B": 16777216
+    },
+    {
+      "name": "READY",
+      "type": 3,
+      "dir": "A2E",
+      "body": "#/$defs/Empty",
+      "max_body_B": 65536
+    },
+    {
+      "name": "OBS",
+      "type": 16,
+      "dir": "E2A",
+      "body": "obs.v1.schema.json",
+      "max_body_B": 134217728
+    },
+    {
+      "name": "ACT",
+      "type": 17,
+      "dir": "A2E",
+      "body": "act.v1.schema.json",
+      "max_body_B": 8388608
+    },
+    {
+      "name": "CLOSE",
+      "type": 32,
+      "dir": "E2A",
+      "body": "#/$defs/Close",
+      "max_body_B": 4096
+    },
+    {
+      "name": "BYE",
+      "type": 33,
+      "dir": "A2E",
+      "body": "#/$defs/Empty",
+      "max_body_B": 4096
+    },
+    {
+      "name": "ERROR",
+      "type": 48,
+      "dir": "E2A",
+      "body": "#/$defs/Error",
+      "max_body_B": 4096
+    },
+    {
+      "name": "PING",
+      "type": 64,
+      "dir": "both (WS only)",
+      "body": "#/$defs/Empty",
+      "max_body_B": 64
+    },
+    {
+      "name": "PONG",
+      "type": 65,
+      "dir": "both (WS only)",
+      "body": "#/$defs/Empty",
+      "max_body_B": 64
+    }
+  ],
+  "x-awr-header": {
+    "bytes": 8,
+    "fields": [
+      [
+        "body_len",
+        "u32le"
+      ],
+      [
+        "type",
+        "u8"
+      ],
+      [
+        "flags",
+        "u8"
+      ],
+      [
+        "version",
+        "u16le"
+      ]
+    ],
+    "version": 1
+  },
+  "x-awr-limits": {
+    "max_str_len": 4096,
+    "max_array_len": 1048576,
+    "max_map_len": 4096,
+    "max_depth": 16
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Hello"
+    },
+    {
+      "$ref": "#/$defs/Close"
+    },
+    {
+      "$ref": "#/$defs/Error"
+    },
+    {
+      "$ref": "#/$defs/Empty"
+    }
+  ],
+  "$defs": {
+    "Hello": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "const": "drone4d.bench.wire.v1"
+        },
+        "sdk_version": {
+          "type": "string"
+        },
+        "prefs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "camera": {
+              "enum": [
+                "latest",
+                "all"
+              ]
+            },
+            "lidar": {
+              "enum": [
+                "latest",
+                "all"
+              ]
+            },
+            "max_per_sensor": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            }
+          },
+          "required": []
+        }
+      },
+      "required": [
+        "protocol",
+        "sdk_version"
+      ]
+    },
+    "Empty": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "required": []
+    },
+    "Close": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "enum": [
+            "run_ended",
+            "superseded",
+            "not_accepted",
+            "protocol_error",
+            "shutdown"
+          ]
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
+    "Error": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "No free text",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "why": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,32}$"
+        }
+      },
+      "required": [
+        "code",
+        "why"
+      ]
+    }
+  }
+}

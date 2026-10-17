@@ -1,0 +1,612 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/agent_config.v1.schema.json",
+  "title": "Agent configuration (drone4d.bench.agent_config.v1)",
+  "description": "AWR-05 §8.1, M26 §7.4 (contracts 1.3.0, d1 V0.3). CONFIG frame body. Never contains run_id, run_seed, event id or version, tape hashes, split, the ranked flag or backend and renderer versions.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.bench.agent_config.v1"
+    },
+    "uav_id": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "uav",
+        "gcs"
+      ]
+    },
+    "peers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "vehicle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "vmax_h_mps": {
+              "type": "number"
+            },
+            "vup_mps": {
+              "type": "number"
+            },
+            "vdown_mps": {
+              "type": "number"
+            },
+            "yaw_rate_max_rps": {
+              "type": "number"
+            },
+            "acc_h_mps2": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "vmax_h_mps",
+            "vup_mps",
+            "vdown_mps",
+            "yaw_rate_max_rps",
+            "acc_h_mps2"
+          ]
+        },
+        "endurance_s": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "ref",
+        "limits",
+        "endurance_s"
+      ]
+    },
+    "sensors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sensor_id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "camera",
+              "thermal",
+              "lidar",
+              "imu",
+              "gnss"
+            ]
+          },
+          "model_ref": {
+            "type": "string"
+          },
+          "rate_hz": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "mount_nominal": {
+            "$ref": "obs.v1.schema.json#/$defs/Mount"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "K": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 9,
+            "maxItems": 9
+          },
+          "dist": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 5,
+            "maxItems": 5
+          },
+          "exposure_s": {
+            "type": "number"
+          },
+          "readout_s": {
+            "type": "number"
+          },
+          "zoom_range": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "gimbal": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pitch_range_deg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "yaw_range_deg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "rate_max_dps": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "pitch_range_deg",
+              "yaw_range_deg",
+              "rate_max_dps"
+            ]
+          },
+          "controllable": {
+            "type": "boolean"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "rays_per_frame": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295
+          },
+          "range_m": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "fix": {
+            "enum": [
+              "none",
+              "single",
+              "rtk_float",
+              "rtk_fixed"
+            ]
+          }
+        },
+        "required": [
+          "sensor_id",
+          "kind",
+          "model_ref",
+          "rate_hz",
+          "mount_nominal"
+        ]
+      }
+    },
+    "start": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "anchor",
+            "nest",
+            "pose"
+          ]
+        },
+        "state": {
+          "enum": [
+            "landed",
+            "airborne"
+          ]
+        },
+        "nav_pos_enu_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "kind",
+        "state",
+        "nav_pos_enu_m"
+      ]
+    },
+    "obs_level": {
+      "enum": [
+        "L1",
+        "L2",
+        "L2-depth",
+        "L3"
+      ]
+    },
+    "control_hz": {
+      "const": 10
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "fixed",
+            "per_step"
+          ]
+        },
+        "tau_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "tau_min_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "step_budget_s": {
+          "type": "number"
+        },
+        "wall_ratio": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "mode",
+        "tau_ms",
+        "tau_min_ms",
+        "step_budget_s",
+        "wall_ratio"
+      ]
+    },
+    "comm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "bucket_Bps": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "burst_B": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "msg_max_B": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "model": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "bucket_Bps",
+        "burst_B",
+        "msg_max_B",
+        "model"
+      ]
+    },
+    "episode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "duration_s": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "duration_s"
+      ]
+    },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "content_version": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "lat_deg": {
+              "type": "number"
+            },
+            "lon_deg": {
+              "type": "number"
+            },
+            "alt_m": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "lat_deg",
+            "lon_deg",
+            "alt_m"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "content_version",
+        "origin"
+      ]
+    },
+    "brief": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Agent-visible projection of bench/task.v1",
+      "properties": {
+        "task": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "event_capture",
+                "event_understanding",
+                "explore",
+                "track"
+              ]
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "description"
+          ]
+        },
+        "area": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "polygon_enu_m": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "minItems": 3,
+              "maxItems": 256
+            },
+            "alt_agl_range_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "required": [
+            "polygon_enu_m",
+            "alt_agl_range_m"
+          ]
+        },
+        "keepouts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "polygon_enu_m": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 3,
+                "maxItems": 256
+              },
+              "z_range_m": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "required": [
+              "polygon_enu_m",
+              "z_range_m"
+            ]
+          }
+        },
+        "anchors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "pos_enu_m": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "name",
+              "pos_enu_m"
+            ]
+          }
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "class": {
+                "type": "string"
+              },
+              "appearance": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "top_rgb": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 255
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "bottom_rgb": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 255
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": []
+              }
+            },
+            "required": [
+              "label",
+              "class",
+              "appearance"
+            ]
+          }
+        },
+        "report_vocab": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "maps": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dsm": {
+              "enum": [
+                "point",
+                "raster"
+              ]
+            },
+            "raster": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "dsm"
+          ]
+        },
+        "known_targets": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "nominal_noise": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "task",
+        "area",
+        "keepouts",
+        "anchors",
+        "targets",
+        "report_vocab",
+        "maps",
+        "nominal_noise"
+      ]
+    },
+    "agent_seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "protocol": {
+      "const": "drone4d.bench.wire.v1"
+    }
+  },
+  "required": [
+    "schema",
+    "uav_id",
+    "kind",
+    "peers",
+    "vehicle",
+    "sensors",
+    "start",
+    "obs_level",
+    "control_hz",
+    "decision",
+    "comm",
+    "episode",
+    "world",
+    "brief",
+    "protocol"
+  ]
+}

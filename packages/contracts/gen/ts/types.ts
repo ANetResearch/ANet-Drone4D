@@ -42,6 +42,89 @@ export type WorldCommonSlug = string
  */
 export type WorldCommonInt64 = number | string
 /**
+ * Positions are in the estimated frame
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ActV1NavCmd".
+ */
+export type ActV1NavCmd =
+  | {
+      mode: 'velocity'
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      vel_mps: [number | null, number | null, number | null, ...(number | null)[]]
+      yaw_rate_rps?: number | null
+      frame: 'world' | 'body'
+      hold_alt?: boolean
+    }
+  | {
+      mode: 'goto'
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      pos_enu_m: [number, number, number, ...number[]]
+      speed_mps?: number
+      yaw_deg?: number
+      accept_m?: number
+    }
+  | {
+      mode: 'hover'
+    }
+  | {
+      mode: 'takeoff'
+      alt_agl_m: number
+    }
+  | {
+      mode: 'land'
+    }
+  | {
+      mode: 'orbit'
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      center_enu_m: [number, number, ...number[]]
+      alt_m: number
+      radius_m: number
+      speed_mps: number
+      cw: boolean
+    }
+  | {
+      mode: 'path'
+      /**
+       * @minItems 1
+       * @maxItems 64
+       */
+      waypoints_enu_m: [[number, number, number, ...number[]], ...[number, number, number, ...number[]][]]
+      speed_mps: number
+    }
+  | {
+      mode: 'rtl'
+    }
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ActV1GimbalCmd".
+ */
+export type ActV1GimbalCmd =
+  | {
+      sensor_id: string
+      mode: 'angles'
+      pitch_deg: number
+      yaw_deg: number
+    }
+  | {
+      sensor_id: string
+      mode: 'look_at'
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      target_enu_m: [number, number, number, ...number[]]
+    }
+/**
  * Anchors awr-anchors@1 (world layer semantic/anchors.json and event overlays). M22 §7.3.5 (world layer, drafted by M22) and M23 §6.3 (event overlay: extends, remove, public). Contracts 1.3.0, d1 V0.3. A world layer carries the full provenance; an overlay (extends = world) overrides world anchors by id, removes ids listed in remove and adds anchors. The resolved set is sorted by id and hashed with JCS (anchors_sha256). Units: m, world frame.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -981,6 +1064,13 @@ export type VehicleCatalogModelDetail = VehicleCatalogModelSummary & VehicleCata
  */
 export type VehicleProfile = VehicleProfile1
 /**
+ * Agent wire protocol (drone4d.bench.wire.v1). M26 §7.7 (contracts 1.3.0, d1 V0.3). Local socket frame: u32le body_len | u8 type | u8 flags | u16le version (= 1) | msgpack body; a WS binary message is one frame without body_len. Decoder limits: max_bin_len up to the frame limit, max_str_len 4 KiB, max_array_len 2^20, max_map_len 4096, nesting depth <= 16; violations are 666. This document validates the message table (x-awr-frames) and the small frame bodies; CONFIG, OBS and ACT bodies are agent_config.v1, obs.v1 and act.v1. Golden vectors under bench/golden/wire/ come with the M26 encoder (P0a).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "WireV1".
+ */
+export type WireV1 = WireV1Hello | WireV1Close | WireV1Error | WireV1Empty
+/**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "WorldLayer".
  */
@@ -1113,6 +1203,510 @@ export interface AcousticBearings {
      */
     harmonic_f0_hz?: number | null
   }[]
+}
+/**
+ * Agent action (drone4d.bench.act.v1). AWR-05 §8.1, M26 §7.5 (contracts 1.3.0, d1 V0.3). k must equal the observation k; an absent nav keeps the previous command; tau_ms only when decision.mode = per_step. Report types per event type (v1.3) are a runtime whitelist (M23 report_types).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ActV1".
+ */
+export interface ActV1 {
+  schema: 'drone4d.bench.act.v1'
+  k: number
+  nav?: ActV1NavCmd
+  gimbal?: ActV1GimbalCmd
+  zoom?: ActV1ZoomCmd[]
+  sensor_mode?: ActV1SensorModeCmd[]
+  msgs?: ActV1OutMessage[]
+  report?: ActV1Report[]
+  tau_ms?: number
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ActV1ZoomCmd".
+ */
+export interface ActV1ZoomCmd {
+  sensor_id: string
+  zoom_x: number
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ActV1SensorModeCmd".
+ */
+export interface ActV1SensorModeCmd {
+  sensor_id: string
+  mode: string
+  active: boolean
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ActV1OutMessage".
+ */
+export interface ActV1OutMessage {
+  dst: string
+  topic: string
+  /**
+   * Message body (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  payload: {
+    [k: string]: unknown
+  }
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ActV1Report".
+ */
+export interface ActV1Report {
+  /**
+   * Must be in brief.report_vocab and the task report_types (663 report_type otherwise)
+   */
+  type: string
+  /**
+   * @minItems 1
+   */
+  participants: [
+    {
+      track_id: string
+      appearance?: {}
+      /**
+       * @minItems 1
+       *
+       * Items: Exactly one of bbox_xywh, point_xy, det_id
+       */
+      evidence: [
+        (
+          | {
+              [k: string]: unknown
+            }
+          | {
+              [k: string]: unknown
+            }
+          | {
+              [k: string]: unknown
+            }
+        ) & {
+          uav: string
+          sensor: string
+          frame_seq: number
+          /**
+           * @minItems 4
+           * @maxItems 4
+           */
+          bbox_xywh?: [number, number, number, number, ...number[]]
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          point_xy?: [number, number, ...number[]]
+          det_id?: string
+        } & (
+            | {
+                [k: string]: unknown
+              }
+            | {
+                [k: string]: unknown
+              }
+            | {
+                [k: string]: unknown
+              }
+          ) & {
+            uav: string
+            sensor: string
+            frame_seq: number
+            /**
+             * @minItems 4
+             * @maxItems 4
+             */
+            bbox_xywh?: [number, number, number, number, ...number[]]
+            /**
+             * @minItems 2
+             * @maxItems 2
+             */
+            point_xy?: [number, number, ...number[]]
+            det_id?: string
+          },
+        ...((
+          | {
+              [k: string]: unknown
+            }
+          | {
+              [k: string]: unknown
+            }
+          | {
+              [k: string]: unknown
+            }
+        ) & {
+          uav: string
+          sensor: string
+          frame_seq: number
+          /**
+           * @minItems 4
+           * @maxItems 4
+           */
+          bbox_xywh?: [number, number, number, number, ...number[]]
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          point_xy?: [number, number, ...number[]]
+          det_id?: string
+        } & (
+            | {
+                [k: string]: unknown
+              }
+            | {
+                [k: string]: unknown
+              }
+            | {
+                [k: string]: unknown
+              }
+          ) & {
+            uav: string
+            sensor: string
+            frame_seq: number
+            /**
+             * @minItems 4
+             * @maxItems 4
+             */
+            bbox_xywh?: [number, number, number, number, ...number[]]
+            /**
+             * @minItems 2
+             * @maxItems 2
+             */
+            point_xy?: [number, number, ...number[]]
+            det_id?: string
+          })[]
+      ]
+    },
+    ...{
+      track_id: string
+      appearance?: {}
+      /**
+       * @minItems 1
+       *
+       * Items: Exactly one of bbox_xywh, point_xy, det_id
+       */
+      evidence: [
+        (
+          | {
+              [k: string]: unknown
+            }
+          | {
+              [k: string]: unknown
+            }
+          | {
+              [k: string]: unknown
+            }
+        ) & {
+          uav: string
+          sensor: string
+          frame_seq: number
+          /**
+           * @minItems 4
+           * @maxItems 4
+           */
+          bbox_xywh?: [number, number, number, number, ...number[]]
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          point_xy?: [number, number, ...number[]]
+          det_id?: string
+        } & (
+            | {
+                [k: string]: unknown
+              }
+            | {
+                [k: string]: unknown
+              }
+            | {
+                [k: string]: unknown
+              }
+          ) & {
+            uav: string
+            sensor: string
+            frame_seq: number
+            /**
+             * @minItems 4
+             * @maxItems 4
+             */
+            bbox_xywh?: [number, number, number, number, ...number[]]
+            /**
+             * @minItems 2
+             * @maxItems 2
+             */
+            point_xy?: [number, number, ...number[]]
+            det_id?: string
+          },
+        ...((
+          | {
+              [k: string]: unknown
+            }
+          | {
+              [k: string]: unknown
+            }
+          | {
+              [k: string]: unknown
+            }
+        ) & {
+          uav: string
+          sensor: string
+          frame_seq: number
+          /**
+           * @minItems 4
+           * @maxItems 4
+           */
+          bbox_xywh?: [number, number, number, number, ...number[]]
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          point_xy?: [number, number, ...number[]]
+          det_id?: string
+        } & (
+            | {
+                [k: string]: unknown
+              }
+            | {
+                [k: string]: unknown
+              }
+            | {
+                [k: string]: unknown
+              }
+          ) & {
+            uav: string
+            sensor: string
+            frame_seq: number
+            /**
+             * @minItems 4
+             * @maxItems 4
+             */
+            bbox_xywh?: [number, number, number, number, ...number[]]
+            /**
+             * @minItems 2
+             * @maxItems 2
+             */
+            point_xy?: [number, number, ...number[]]
+            det_id?: string
+          })[]
+      ]
+    }[]
+  ]
+  window: {
+    t_start_ns: number
+    t_end_ns: number
+  }
+  /**
+   * @minItems 2
+   * @maxItems 3
+   */
+  position_enu_m?: [number, number, ...number[]]
+  confidence?: number
+}
+/**
+ * Agent configuration (drone4d.bench.agent_config.v1). AWR-05 §8.1, M26 §7.4 (contracts 1.3.0, d1 V0.3). CONFIG frame body. Never contains run_id, run_seed, event id or version, tape hashes, split, the ranked flag or backend and renderer versions.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AgentConfigV1".
+ */
+export interface AgentConfigV1 {
+  schema: 'drone4d.bench.agent_config.v1'
+  uav_id: string
+  kind: 'uav' | 'gcs'
+  peers: string[]
+  vehicle: {
+    ref: string
+    limits: {
+      vmax_h_mps: number
+      vup_mps: number
+      vdown_mps: number
+      yaw_rate_max_rps: number
+      acc_h_mps2: number
+    }
+    endurance_s: number
+  }
+  sensors: {
+    sensor_id: string
+    kind: 'camera' | 'thermal' | 'lidar' | 'imu' | 'gnss'
+    model_ref: string
+    rate_hz: number
+    mount_nominal: ObsV1Mount
+    width?: number
+    height?: number
+    /**
+     * @minItems 9
+     * @maxItems 9
+     */
+    K?: [number, number, number, number, number, number, number, number, number, ...number[]]
+    /**
+     * @minItems 5
+     * @maxItems 5
+     */
+    dist?: [number, number, number, number, number, ...number[]]
+    exposure_s?: number
+    readout_s?: number
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    zoom_range?: [number, number, ...number[]]
+    gimbal?: {
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      pitch_range_deg: [number, number, ...number[]]
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      yaw_range_deg: [number, number, ...number[]]
+      rate_max_dps: number
+    }
+    controllable?: boolean
+    pattern?: string
+    rays_per_frame?: number
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    range_m?: [number, number, ...number[]]
+    fix?: 'none' | 'single' | 'rtk_float' | 'rtk_fixed'
+  }[]
+  start: {
+    kind: 'anchor' | 'nest' | 'pose'
+    state: 'landed' | 'airborne'
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    nav_pos_enu_m: [number, number, number, ...number[]]
+  }
+  obs_level: 'L1' | 'L2' | 'L2-depth' | 'L3'
+  control_hz: 10
+  decision: {
+    mode: 'fixed' | 'per_step'
+    tau_ms: number
+    tau_min_ms: number
+    step_budget_s: number
+    wall_ratio: number
+  }
+  comm: {
+    enabled: boolean
+    bucket_Bps: number
+    burst_B: number
+    msg_max_B: number
+    model: string
+  }
+  episode: {
+    duration_s: number
+  }
+  world: {
+    id: string
+    content_version: string
+    origin: {
+      lat_deg: number
+      lon_deg: number
+      alt_m: number
+    }
+  }
+  /**
+   * Agent-visible projection of bench/task.v1
+   */
+  brief: {
+    task: {
+      type: 'event_capture' | 'event_understanding' | 'explore' | 'track'
+      description: string
+    }
+    area: {
+      /**
+       * @minItems 3
+       * @maxItems 256
+       */
+      polygon_enu_m: [
+        [number, number, ...number[]],
+        [number, number, ...number[]],
+        [number, number, ...number[]],
+        ...[number, number, ...number[]][]
+      ]
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      alt_agl_range_m: [number, number, ...number[]]
+    }
+    keepouts: {
+      /**
+       * @minItems 3
+       * @maxItems 256
+       */
+      polygon_enu_m: [
+        [number, number, ...number[]],
+        [number, number, ...number[]],
+        [number, number, ...number[]],
+        ...[number, number, ...number[]][]
+      ]
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      z_range_m: [number, number, ...number[]]
+    }[]
+    anchors: {
+      id: string
+      kind: string
+      name: string
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      pos_enu_m: [number, number, number, ...number[]]
+    }[]
+    targets: {
+      label: string
+      class: string
+      appearance: {
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        top_rgb?: [number, number, number, ...number[]]
+        /**
+         * @minItems 3
+         * @maxItems 3
+         */
+        bottom_rgb?: [number, number, number, ...number[]]
+        text?: string
+      }
+    }[]
+    report_vocab: string[]
+    maps: {
+      dsm: 'point' | 'raster'
+      raster?: string
+    }
+    known_targets?: {}[]
+    nominal_noise: {}
+  }
+  agent_seed?: number
+  protocol: 'drone4d.bench.wire.v1'
+}
+/**
+ * Nominal mount: sensor origin in the body frame and sensor-to-body rotation
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1Mount".
+ */
+export interface ObsV1Mount {
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  t_bs_m: [number, number, number, ...number[]]
+  /**
+   * @minItems 4
+   * @maxItems 4
+   */
+  q_bs_xyzw: [number, number, number, number, ...number[]]
 }
 /**
  * awr.agent.status.v1. Topic agent/{aid}/status, 1 Hz self-contained (M14 §7.2.1).
@@ -5818,6 +6412,451 @@ export interface NirIlluminator2 {
     theta_deg?: number
     rho?: number
   }
+}
+/**
+ * Privileged observation (drone4d.bench.obs_privileged.v1). M26 §7.11 (contracts 1.3.0, d1 V0.3). L0 and T0 only, privileged runs only: the encoder refuses ranked = true or split = test (662). obs.v1 plus oracle and features.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsPrivilegedV1".
+ */
+export interface ObsPrivilegedV1 {
+  obs: ObsV1Observation
+  inbox: ObsV1Message[]
+  oracle: {
+    actors: {
+      actor_id: string
+      class: string
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      pos_enu_m: [number, number, number, ...number[]]
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      vel_enu_mps: [number, number, number, ...number[]]
+      yaw_rad: number
+      state: string
+    }[]
+    true_pose: {
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      pos_enu_m: [number, number, number, ...number[]]
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      q_wb_xyzw: [number, number, number, number, ...number[]]
+    }
+  }
+  /**
+   * T0
+   */
+  features?: {
+    sensor_id: string
+    seq: number
+    n: number
+    /**
+     * Pixel coordinates (msgpack bin, little-endian; length given by the counts in the same object)
+     */
+    uv_px: {
+      [k: string]: unknown
+    }
+    /**
+     * Camera frame points (msgpack bin, little-endian; length given by the counts in the same object)
+     */
+    xyz_cam_m: {
+      [k: string]: unknown
+    }
+    /**
+     * Track ids (msgpack bin, little-endian; length given by the counts in the same object)
+     */
+    ids: {
+      [k: string]: unknown
+    }
+  }[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1Observation".
+ */
+export interface ObsV1Observation {
+  schema: 'drone4d.bench.obs.v1'
+  k: number
+  t_ns: number
+  nav: ObsV1NavSolution
+  status: ObsV1VehicleStatus
+  ground_hint: ObsV1GroundHint
+  /**
+   * Keyed by sensor_id, frames in ascending seq; L1 adds detections
+   */
+  sensors?: {
+    detections?: ObsV1Detection[]
+    [k: string]: (ObsV1CameraObs | ObsV1ThermalObs | ObsV1LidarObs | ObsV1ImuObs | ObsV1GnssObs)[] | ObsV1Detection[] | undefined
+  }
+  acks: ObsV1ActionAck[]
+  comm: ObsV1CommStatus
+  dropped: {
+    [k: string]: number
+  }
+  term: ObsV1TermInfo
+}
+/**
+ * Noisy navigation solution; pos_std_m is the nominal noise-tier parameter, not the error realisation
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1NavSolution".
+ */
+export interface ObsV1NavSolution {
+  t_ns: number
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  pos_enu_m: [number, number, number, ...number[]]
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  vel_enu_mps: [number, number, number, ...number[]]
+  /**
+   * @minItems 4
+   * @maxItems 4
+   */
+  q_wb_xyzw: [number, number, number, number, ...number[]]
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  omega_b_rps: [number, number, number, ...number[]]
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  pos_std_m: [number, number, number, ...number[]]
+  fix: 'none' | 'single' | 'rtk_float' | 'rtk_fixed'
+  battery_soc: number
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1VehicleStatus".
+ */
+export interface ObsV1VehicleStatus {
+  mode: 'landed' | 'takeoff' | 'airborne' | 'landing' | 'failsafe'
+  nav_cmd: 'velocity' | 'goto' | 'orbit' | 'path' | 'rtl' | 'hover' | 'takeoff' | 'land'
+  goto_reached: boolean
+  contact: boolean
+  safety: 'normal' | 'low_battery' | 'critical_battery' | 'failsafe_land'
+  locked_sensors: string[]
+}
+/**
+ * Public 2 m DSM and 10 m DTM heights at the navigation position
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1GroundHint".
+ */
+export interface ObsV1GroundHint {
+  dsm_m: number
+  dtm_m: number
+}
+/**
+ * L1; appearance only at identification level
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1Detection".
+ */
+export interface ObsV1Detection {
+  /**
+   * Random per frame; never links to an actor across frames
+   */
+  det_id: string
+  sensor_id: string
+  seq: number
+  t_mid_ns: number
+  class: 'person' | 'vehicle'
+  /**
+   * @minItems 4
+   * @maxItems 4
+   */
+  bbox_xywh: [number, number, number, number, ...number[]]
+  h_px: number
+  slant_range_m: number
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  ground_xy_noisy: [number, number, ...number[]]
+  appearance?: {
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    top_rgb: [number, number, number, ...number[]]
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    bottom_rgb?: [number, number, number, ...number[]]
+  }
+}
+/**
+ * t_mid_ns is the exposure midpoint of the middle row; readout_ns 0 = global shutter; depth only at L2-depth
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1CameraObs".
+ */
+export interface ObsV1CameraObs {
+  sensor_id: string
+  seq: number
+  t_mid_ns: number
+  exposure_ns: number
+  readout_ns: number
+  width: number
+  height: number
+  /**
+   * @minItems 9
+   * @maxItems 9
+   */
+  K: [number, number, number, number, number, number, number, number, number, ...number[]]
+  /**
+   * @minItems 5
+   * @maxItems 5
+   */
+  dist: [number, number, number, number, number, ...number[]]
+  mount_nominal: ObsV1Mount
+  gimbal_reading: ObsV1Gimbal
+  rgb: ObsV1Image
+  depth?: ObsV1DepthImage
+}
+/**
+ * Relative to the mount zero
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1Gimbal".
+ */
+export interface ObsV1Gimbal {
+  roll_deg: number
+  pitch_deg: number
+  yaw_deg: number
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1Image".
+ */
+export interface ObsV1Image {
+  codec: 'jpeg' | 'raw_rgb8'
+  /**
+   * JPEG (whitelisted segments only) or raw RGB8 bytes (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  data: {
+    [k: string]: unknown
+  }
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1DepthImage".
+ */
+export interface ObsV1DepthImage {
+  encoding: 'f32le'
+  /**
+   * Planar z in m, 0 = invalid (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  data: {
+    [k: string]: unknown
+  }
+}
+/**
+ * v1.3 (P0b)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1ThermalObs".
+ */
+export interface ObsV1ThermalObs {
+  sensor_id: string
+  seq: number
+  t_mid_ns: number
+  width: number
+  height: number
+  /**
+   * @minItems 9
+   * @maxItems 9
+   */
+  K: [number, number, number, number, number, number, number, number, number, ...number[]]
+  /**
+   * @minItems 5
+   * @maxItems 5
+   */
+  dist: [number, number, number, number, number, ...number[]]
+  mount_nominal: ObsV1Mount
+  gimbal_reading: ObsV1Gimbal
+  /**
+   * Apparent temperature, 0.01 K per LSB (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  temp_ck: {
+    [k: string]: unknown
+  }
+  /**
+   * agc_jpeg only in development runs and previews
+   */
+  codec: 'radiometric_u16' | 'agc_jpeg'
+}
+/**
+ * P0b; frame window [t_start, t_start + 100 ms]
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1LidarObs".
+ */
+export interface ObsV1LidarObs {
+  sensor_id: string
+  seq: number
+  t_start_ns: number
+  mount_nominal: ObsV1Mount
+  n: number
+  /**
+   * Sensor frame, m (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  xyz_m: {
+    [k: string]: unknown
+  }
+  /**
+   * Livox convention (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  reflectivity: {
+    [k: string]: unknown
+  }
+  /**
+   * Livox bit field; bits 7:6 must be 0 (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  tag: {
+    [k: string]: unknown
+  }
+  /**
+   * From frame start, ns (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  offset_time_ns: {
+    [k: string]: unknown
+  }
+}
+/**
+ * P0b
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1ImuObs".
+ */
+export interface ObsV1ImuObs {
+  sensor_id: string
+  seq: number
+  t0_ns: number
+  dt_ns: number
+  n: number
+  /**
+   * Specific force, sensor frame (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  acc_mps2: {
+    [k: string]: unknown
+  }
+  /**
+   * Sensor frame (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  gyro_rps: {
+    [k: string]: unknown
+  }
+  mount_nominal: ObsV1Mount
+}
+/**
+ * P0b
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1GnssObs".
+ */
+export interface ObsV1GnssObs {
+  sensor_id: string
+  seq: number
+  t_ns: number
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  pos_enu_m: [number, number, number, ...number[]]
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  vel_enu_mps: [number, number, number, ...number[]]
+  fix: 'none' | 'single' | 'rtk_float' | 'rtk_fixed'
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  pos_std_m: [number, number, number, ...number[]]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1ActionAck".
+ */
+export interface ObsV1ActionAck {
+  k: number
+  item: 'nav' | 'gimbal' | 'zoom' | 'sensor_mode' | 'msg' | 'report' | 'act'
+  index: number
+  result: 'applied' | 'clamped' | 'rejected' | 'dropped' | 'late' | 'timeout'
+  /**
+   * Reason code, 0 = none
+   */
+  code: number
+  /**
+   * M26 §7.9 enumerations
+   */
+  why?: string
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1CommStatus".
+ */
+export interface ObsV1CommStatus {
+  enabled: boolean
+  bucket_B: number
+  sent: number
+  dropped_budget: number
+  rejected: number
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1TermInfo".
+ */
+export interface ObsV1TermInfo {
+  terminated: boolean
+  truncated: boolean
+  reason: 'none' | 'landed' | 'battery' | 'contact' | 'out_of_bounds' | 'agent_crash' | 'time_limit'
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1Message".
+ */
+export interface ObsV1Message {
+  src: string
+  seq: number
+  topic: string
+  t_sent_ns: number
+  t_recv_ns: number
+  /**
+   * Message body (msgpack bin, little-endian; length given by the counts in the same object)
+   */
+  payload: {
+    [k: string]: unknown
+  }
+}
+/**
+ * Agent observation (drone4d.bench.obs.v1). AWR-05 §8.1, M26 §7.3 (contracts 1.3.0, d1 V0.3). The OBS frame body {obs, inbox}. Agent-side whitelist: every object is closed (ADR-161) and the serialiser is generated from this schema; ObsFrame, SensorRequest, PoseHistory, FrameMeta, ground truth and backend metadata never appear. Optional fields are absent rather than null. x-awr-bin marks msgpack bin fields with their little-endian layout.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ObsV1".
+ */
+export interface ObsV1 {
+  obs: ObsV1Observation
+  inbox: ObsV1Message[]
 }
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -11849,6 +12888,41 @@ export interface WindManifest {
   created_at?: string
   source?: string
 }
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "WireV1Hello".
+ */
+export interface WireV1Hello {
+  protocol: 'drone4d.bench.wire.v1'
+  sdk_version: string
+  prefs?: {
+    camera?: 'latest' | 'all'
+    lidar?: 'latest' | 'all'
+    max_per_sensor?: number
+  }
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "WireV1Close".
+ */
+export interface WireV1Close {
+  reason: 'run_ended' | 'superseded' | 'not_accepted' | 'protocol_error' | 'shutdown'
+}
+/**
+ * No free text
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "WireV1Error".
+ */
+export interface WireV1Error {
+  code: number
+  why: string
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "WireV1Empty".
+ */
+export interface WireV1Empty {}
 /**
  * World Package manifest world.json (v1). Entry point of worlds/<id>/ (AWR-16 §3.2, camelCase). Served with Cache-Control: no-cache; every other file is immutable and requested with ?v=<contentVersion>. world.json, qa/report.json and export/** are non-content files.
  *
