@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from awr.bench.recorder.depthcodec import DEPTH_COMPRESSION, bshuf4_zstd
+from awr.sensorsvc.camera.actors import visibility_objects
 from awr.sensorsvc.camera.model import CameraModel
 from awr.sensorsvc.camera.proj import ray_elevation
 from awr.sensorsvc.camera.raster import RENDERER_VERSION, RS_NODES, RenderOut
@@ -79,9 +80,10 @@ def camera_frame(ctx: FrameContext, *, uav: str, sensor_id: str, seq: int, t_mid
                  cm: CameraModel, mount: Mount, gimbal_reading: tuple[float, float, float], gimbal_true: tuple[float, float, float],
                  pos_enu_m: np.ndarray, R_ws: np.ndarray, out: RenderOut, outputs: frozenset[str] | set[str],
                  ref_prefix: str = "", depth_obs: np.ndarray | None = None,
-                 depth_range_m: tuple[float, float] | None = None) -> tuple[dict, dict[str, bytes]]:
+                 depth_range_m: tuple[float, float] | None = None, actors: list[dict] | None = None) -> tuple[dict, dict[str, bytes]]:
     """返回 (frame.v1 记录, {ref: 字节})。`outputs` 取 render_req.v1 的取值；真值分区总是写出（只进入评测库与真值文件，ADR-161）。
-    `depth_obs` 为经 L2-depth 传感器模型的观测深度（缺省即渲染深度），`gt_depth` 总是渲染深度。"""
+    `depth_obs` 为经 L2-depth 传感器模型的观测深度（缺省即渲染深度），`gt_depth` 总是渲染深度。`actors` 为磁带演员表（按 idx），
+    给出且渲染带有 `instance_unocc` 时做可见度归约（M25 §6.6.1）。"""
     blocks: dict[str, bytes] = {}
 
     def put(name: str, b: bytes) -> str:
@@ -102,14 +104,15 @@ def camera_frame(ctx: FrameContext, *, uav: str, sensor_id: str, seq: int, t_mid
         av["depth"] = {"dtype": "f32", "unit": "m", "type": "planar_z", "range_m": rng, "ref": put("depth.f32", b), "sha256": _sha(b)}
     void = (depth <= 0) & (ray_elevation(cm, R_ws, cm.width, cm.height) < 0)
     mask = void.astype(np.uint8)                                   # 第 0 位；其余位随质量位附件与效果链落地
-    zeros_inst = np.zeros_like(out.instance)
+    unocc = out.instance_unocc if out.instance_unocc is not None else np.zeros_like(out.instance)
+    objects = visibility_objects(out.instance, unocc, out.semantic, mask, actors) if actors and out.instance_unocc is not None else []
     gt = {"T_world_sensor": {"pos_enu_m": [float(v) for v in pos_enu_m], "q_ws_xyzw": [float(v) for v in q_world_opt(R_ws)], "frame": "ENU<-RDF"},
           "gimbal_true": _gimbal(gimbal_true),
           "instance": {"dtype": "u16", "codec": "zstd", "ref": put("instance.u16.zst", _zstd(out.instance.astype("<u2")))},
-          "instance_unocc": {"dtype": "u16", "codec": "zstd", "ref": put("instance_unocc.u16.zst", _zstd(zeros_inst.astype("<u2")))},
+          "instance_unocc": {"dtype": "u16", "codec": "zstd", "ref": put("instance_unocc.u16.zst", _zstd(unocc.astype("<u2")))},
           "semantic": {"dtype": "u8", "codec": "zstd", "code_table": "d3-semantic@1", "ref": put("semantic.u8.zst", _zstd(out.semantic))},
           "invalid_mask": {"dtype": "u8", "codec": "zstd", "bits": list(INVALID_BITS), "ref": put("invalid_mask.u8.zst", _zstd(mask))},
-          "objects": [],
+          "objects": objects,
           "timing": {"t_truth_ns": [int(t_mid_ns)], "blur_subframes": cm.blur_subframes, "rs_bands": cm.rs_bands, "rs_method": "vertex"}}
     if readout_ns > 0:                                             # 卷帘：节点数与读出窗口（M25 §15.4）
         gt["timing"]["rs_nodes"] = RS_NODES

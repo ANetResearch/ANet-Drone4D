@@ -24,6 +24,7 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import ctypes.util
+import math
 import time
 from dataclasses import dataclass
 
@@ -36,7 +37,7 @@ from awr.sensorsvc.camera.scene import AppearanceScene
 
 __all__ = ["RENDERER_VERSION", "RS_NODES", "RasterCamera", "RenderOut", "linear_to_srgb8", "srgb8_to_linear"]
 
-RENDERER_VERSION = "raster-gl@0.3.0"
+RENDERER_VERSION = "raster-gl@0.4.0"
 SEM_NONE = 255
 _GL_TEXTURE_2D, _GL_DEPTH32F, _GL_FRAMEBUFFER = 0x0DE1, 0x8CAC, 0x8D40
 _GL_COLOR_ATTACHMENT0, _GL_DEPTH_ATTACHMENT, _GL_FB_COMPLETE = 0x8CE0, 0x8D00, 0x8CD5
@@ -108,6 +109,81 @@ layout(location = 3) out uint o_sem;
 void main() {
     vec3 c = u_has_tex ? texture(u_tex, v_uv).rgb : vec3(0.2158);
     o_col = vec4(c, 1.0);
+    o_z = v_z;
+    o_inst = u_inst;
+    o_sem = u_sem;
+}
+"""
+
+# 演员（M25 §6.4.4）：模型视图逐演员给出；深度测试值朝相机偏置 1 cm，平面深度附件写无偏置值
+ACTOR_VS = """
+#version 450
+uniform mat4 u_P;
+uniform mat4 u_mv;
+uniform mat3 u_Rw;
+uniform vec3 u_sun;
+in vec3 in_pos;
+in vec3 in_nrm;
+in vec3 in_col;
+out vec3 v_col;
+out float v_z;
+void main() {
+    vec3 n = normalize(u_Rw * in_nrm);
+    v_col = in_col * (0.55 + 0.45 * max(0.0, dot(n, u_sun)));
+    vec4 q = u_mv * vec4(in_pos, 1.0);
+    v_z = q.z;
+    gl_Position = u_P * vec4(q.xyz * ((q.z - 0.01) / max(q.z, 1e-3)), 1.0);
+}
+"""
+ACTOR_VS_RS = """
+#version 450
+const int NC = 9;
+uniform mat4 u_P;
+uniform mat4 u_mvn[NC];
+uniform vec2 u_fycy;
+uniform float u_H;
+uniform mat3 u_Rw;
+uniform vec3 u_sun;
+in vec3 in_pos;
+in vec3 in_nrm;
+in vec3 in_col;
+out vec3 v_col;
+out float v_z;
+mat4 mv_at(float s) {
+    float c = clamp(s, 0.0, float(NC - 1));
+    int k = min(int(floor(c)), NC - 2);
+    float f = c - float(k);
+    return u_mvn[k] * (1.0 - f) + u_mvn[k + 1] * f;
+}
+float s_of(mat4 mv, vec4 p) {
+    vec4 q = mv * p;
+    float y = q.z > 1e-3 ? u_fycy.x * q.y / q.z + u_fycy.y : 0.5 * u_H;
+    float i = clamp(y - 0.5, 0.0, u_H - 1.0);
+    return ((i - 0.5 * (u_H - 1.0)) / u_H + 0.5) * float(NC - 1);
+}
+void main() {
+    vec3 n = normalize(u_Rw * in_nrm);
+    v_col = in_col * (0.55 + 0.45 * max(0.0, dot(n, u_sun)));
+    vec4 p = vec4(in_pos, 1.0);
+    float s = 0.5 * float(NC - 1);
+    for (int it = 0; it < 2; ++it) s = s_of(mv_at(s), p);
+    vec4 q = mv_at(s) * p;
+    v_z = q.z;
+    gl_Position = u_P * vec4(q.xyz * ((q.z - 0.01) / max(q.z, 1e-3)), 1.0);
+}
+"""
+ACTOR_FS = """
+#version 450
+uniform uint u_inst;
+uniform uint u_sem;
+in vec3 v_col;
+in float v_z;
+layout(location = 0) out vec4 o_col;
+layout(location = 1) out float o_z;
+layout(location = 2) out uint o_inst;
+layout(location = 3) out uint o_sem;
+void main() {
+    o_col = vec4(v_col, 1.0);
     o_z = v_z;
     o_inst = u_inst;
     o_sem = u_sem;
@@ -271,6 +347,16 @@ class RenderOut:
     rgb_lin: np.ndarray | None = None     # (H, W, 3) float32 线性，`render(..., linear=True)` 时读回
     depth_obs: np.ndarray | None = None   # (H, W) float32 L2-depth 观测深度，`fx.depth` 给出时
     meter_sub: np.ndarray | None = None   # (⌈H/8⌉, ⌈W/8⌉, 3) float32 线性 1/8 降采样，`fx.meter` 时
+    instance_unocc: np.ndarray | None = None   # (H, W) uint16 只渲染演员的实例（`actors` 给出时）
+    actors_drawn: int = 0
+
+
+@dataclass(frozen=True)
+class ActorFrame:
+    """一帧的演员位姿（只含可见演员）：idx 为磁带演员序号（实例号 idx + 1），pos (n, 3) world ENU，yaw (n,) rad。"""
+    idx: np.ndarray
+    pos: np.ndarray
+    yaw: np.ndarray
 
 
 class _GL:
@@ -304,9 +390,10 @@ class _GL:
         self.ClearBufferuiv = fn("glClearBufferuiv", u, i, p)
 
 
-class _Target:
+class _Mrt:
+    """MRT 帧缓冲：颜色 f16×4、平面深度 f32、实例 u16、语义 u8，加 DEPTH32F 深度附件（reversed-Z）。"""
+
     def __init__(self, ctx, gl: _GL, w: int, h: int) -> None:
-        self.w, self.h = w, h
         self.col = ctx.texture((w, h), 4, dtype="f2")
         self.z = ctx.texture((w, h), 1, dtype="f4")
         self.inst = ctx.texture((w, h), 1, dtype="u2")
@@ -331,6 +418,28 @@ class _Target:
             raise RuntimeError(f"framebuffer incomplete: 0x{st:04X}")
         self.fbo_glo = f.value
         self.fbo = ctx.detect_framebuffer(f.value)
+
+    def clear(self, gl: _GL) -> None:
+        gl.BindFramebuffer(_GL_FRAMEBUFFER, self.fbo_glo)
+        zero_f = (ctypes.c_float * 4)(0.0, 0.0, 0.0, 0.0)
+        gl.ClearBufferfv(_GL_COLOR, 0, zero_f)
+        gl.ClearBufferfv(_GL_COLOR, 1, zero_f)
+        gl.ClearBufferuiv(_GL_COLOR, 2, (ctypes.c_uint * 4)(0, 0, 0, 0))
+        gl.ClearBufferuiv(_GL_COLOR, 3, (ctypes.c_uint * 4)(SEM_NONE, 0, 0, 0))
+        gl.ClearBufferfv(_GL_DEPTH, 0, zero_f)
+
+    def release(self, gl: _GL) -> None:
+        gl.DeleteFramebuffers(1, ctypes.byref(ctypes.c_uint(self.fbo_glo)))
+        gl.DeleteTextures(1, ctypes.byref(ctypes.c_uint(self.depth_glo)))
+
+
+class _Target:
+    def __init__(self, ctx, gl: _GL, w: int, h: int) -> None:
+        self.w, self.h = w, h
+        m = self.mrt = _Mrt(ctx, gl, w, h)
+        self.col, self.z, self.inst, self.sem = m.col, m.z, m.inst, m.sem
+        self.depth_glo, self.fbo_glo, self.fbo = m.depth_glo, m.fbo_glo, m.fbo
+        self.unocc: _Mrt | None = None                                     # 只渲染演员的通道，首次使用时创建
         self.rgb = ctx.texture((w, h), 4, dtype="f1")
         self.enc = ctx.framebuffer(color_attachments=[self.rgb])
         self.zobs = ctx.texture((w, h), 1, dtype="f4")
@@ -358,6 +467,10 @@ class RasterCamera:
         self.fxp = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=FX_FS)
         self.dep = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=DEPTH_FS)
         self.subp = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=SUB_FS)
+        self.actp = self.ctx.program(vertex_shader=ACTOR_VS, fragment_shader=ACTOR_FS)
+        self.actp_rs = self.ctx.program(vertex_shader=ACTOR_VS_RS, fragment_shader=ACTOR_FS)
+        self.actor_vaos: list[tuple[object, object, int]] = []
+        self.actor_sem: list[int] = []
         self.fxp["u_col"].value = 1
         self.subp["u_col"].value = 1
         self.dep["u_z"].value = 2
@@ -401,6 +514,58 @@ class RasterCamera:
         self.gl.ClipControl(_GL_LOWER_LEFT, _GL_ZERO_TO_ONE)
         self._targets: dict[tuple[int, int], _Target] = {}
         self.scene = scene
+        self.set_sun(None)
+
+    def set_sun(self, az_el_deg: tuple[float, float] | None) -> None:
+        from awr.sensorsvc.camera.actors import sun_dir
+
+        L = tuple(float(v) for v in sun_dir(az_el_deg))
+        for prog in (self.actp, self.actp_rs):
+            prog["u_sun"].value = L
+
+    def set_actors(self, actors: list[dict]) -> None:
+        """磁带演员表（按 idx）→ 每名演员一个代理网格 VAO（全局快门与卷帘各一）。"""
+        from awr.sensorsvc.camera.actors import SEM_CODE, proxy_mesh
+
+        for vbo, vao, vao_rs in self.actor_vaos:
+            for o in (vao, vao_rs, vbo):
+                o.release()
+        self.actor_vaos, self.actor_sem = [], []
+        for a in actors:
+            P, N, C = proxy_mesh(a)
+            vbo = self.ctx.buffer(np.hstack([P, N, C]).astype("<f4").tobytes())
+            fmt = [(vbo, "3f 3f 3f", "in_pos", "in_nrm", "in_col")]
+            self.actor_vaos.append((vbo, self.ctx.vertex_array(self.actp, fmt), self.ctx.vertex_array(self.actp_rs, fmt)))
+            self.actor_sem.append(SEM_CODE.get(a["class"], 13))
+
+    def _draw_actors(self, act: ActorFrame, cm: CameraModel, P: np.ndarray, R_ws, p_w, rs_nodes) -> int:
+        rs = rs_nodes is not None
+        prog = self.actp_rs if rs else self.actp
+        prog["u_P"].write(P.T.astype("<f4").tobytes())
+        if rs:
+            prog["u_fycy"].value = (cm.fy, cm.cy)
+            prog["u_H"].value = float(cm.height)
+            views = [world_to_opt(Rk, pk) for Rk, pk in rs_nodes]
+        else:
+            view = world_to_opt(R_ws, p_w)
+        n = 0
+        for i, pos, yaw in zip(act.idx, act.pos, act.yaw, strict=True):
+            c, s_ = math.cos(float(yaw)), math.sin(float(yaw))
+            Rz = np.array([[c, -s_, 0.0], [s_, c, 0.0], [0.0, 0.0, 1.0]])
+            Mm = np.eye(4)
+            Mm[:3, :3] = Rz
+            Mm[:3, 3] = pos
+            prog["u_Rw"].write(Rz.T.astype("<f4").tobytes())
+            prog["u_inst"].value = int(i) + 1
+            prog["u_sem"].value = self.actor_sem[int(i)]
+            if rs:
+                prog["u_mvn"].write(np.stack([(V @ Mm).T for V in views]).astype("<f4").tobytes())
+            else:
+                prog["u_mv"].write((view @ Mm).T.astype("<f4").tobytes())
+            _vbo, vao, vao_rs = self.actor_vaos[int(i)]
+            (vao_rs if rs else vao).render()
+            n += 1
+        return n
 
     def _target(self, w: int, h: int) -> _Target:
         t = self._targets.get((w, h))
@@ -443,21 +608,16 @@ class RasterCamera:
             self.dep_vao.render(self._mgl.TRIANGLES, vertices=3)
 
     def render(self, cm: CameraModel, R_ws: np.ndarray, p_w: np.ndarray, *, linear: bool = False, fx: FxParams | None = None,
-               rs_nodes: list[tuple[np.ndarray, np.ndarray]] | None = None) -> RenderOut:
-        """`R_ws`、`p_w` 为 t_mid 位姿；`rs_nodes` 给出时按卷帘逐顶点投影（9 个节点，时间升序，覆盖读出窗口）。"""
+               rs_nodes: list[tuple[np.ndarray, np.ndarray]] | None = None, actors: ActorFrame | None = None) -> RenderOut:
+        """`R_ws`、`p_w` 为 t_mid 位姿；`rs_nodes` 给出时按卷帘逐顶点投影（9 个节点，时间升序，覆盖读出窗口）；`actors` 给出时
+        在静态场景之后绘制演员，并另以只渲染演员的通道得到 `instance_unocc`。"""
         mgl = self._mgl
         W, H = cm.width, cm.height
         tg = self._target(W, H)
         t0 = time.perf_counter()
         tg.fbo.use()
         self.ctx.viewport = (0, 0, W, H)
-        self.gl.BindFramebuffer(_GL_FRAMEBUFFER, tg.fbo_glo)
-        zero_f = (ctypes.c_float * 4)(0.0, 0.0, 0.0, 0.0)
-        self.gl.ClearBufferfv(_GL_COLOR, 0, zero_f)
-        self.gl.ClearBufferfv(_GL_COLOR, 1, zero_f)
-        self.gl.ClearBufferuiv(_GL_COLOR, 2, (ctypes.c_uint * 4)(0, 0, 0, 0))
-        self.gl.ClearBufferuiv(_GL_COLOR, 3, (ctypes.c_uint * 4)(SEM_NONE, 0, 0, 0))
-        self.gl.ClearBufferfv(_GL_DEPTH, 0, zero_f)
+        tg.mrt.clear(self.gl)
         self.ctx.enable(mgl.DEPTH_TEST)
         self.ctx.disable(mgl.CULL_FACE)
         self.ctx.depth_func = ">"
@@ -503,6 +663,9 @@ class RasterCamera:
                 bound = b.texture
             (vao_rs if rs else vao).render()
             n += 1
+        na = 0
+        if actors is not None and len(actors.idx):
+            na = self._draw_actors(actors, cm, P, R_ws, p_w, rs_nodes)
         self.ctx.depth_func = ">="                                       # 天空遍：只覆盖深度仍为 0 的像素
         self.sky["u_Rwo"].write(Mw[:3, :3].astype("<f4").tobytes())     # 列主序写入 R_woᵀ 的转置，即 R_wo
         self.sky["u_K"].value = (cm.fx, cm.fy, cm.cx, cm.cy)
@@ -514,8 +677,22 @@ class RasterCamera:
             self.enc_vao.render(mgl.TRIANGLES, vertices=3)
         else:
             self._fx_passes(tg, cm, fx)
+        unocc = None
+        if actors is not None:
+            if tg.unocc is None:
+                tg.unocc = _Mrt(self.ctx, self.gl, W, H)
+            tg.unocc.fbo.use()
+            self.ctx.viewport = (0, 0, W, H)
+            tg.unocc.clear(self.gl)
+            if len(actors.idx):
+                self.ctx.enable(mgl.DEPTH_TEST)
+                self.ctx.depth_func = ">"
+                self._draw_actors(actors, cm, P, R_ws, p_w, rs_nodes)
+                self.ctx.disable(mgl.DEPTH_TEST)
         self.ctx.finish()
         t1 = time.perf_counter()
+        if actors is not None:
+            unocc = np.frombuffer(tg.unocc.inst.read(), np.uint16).reshape(H, W).copy()
         rgb = np.frombuffer(tg.rgb.read(), np.uint8).reshape(H, W, 4)[..., :3].copy()
         z = np.frombuffer(tg.z.read(), np.float32).reshape(H, W).copy()
         inst = np.frombuffer(tg.inst.read(), np.uint16).reshape(H, W).copy()
@@ -525,11 +702,12 @@ class RasterCamera:
         sub = (np.frombuffer(tg.sub.read(), np.float16).reshape(tg.sh, tg.sw, 4)[..., :3].astype(np.float32)
                if fx is not None and fx.meter else None)
         t2 = time.perf_counter()
-        return RenderOut(rgb, z, inst, sem, (t1 - t0) * 1e3, (t2 - t1) * 1e3, n, lin, zo, sub)
+        return RenderOut(rgb, z, inst, sem, (t1 - t0) * 1e3, (t2 - t1) * 1e3, n, lin, zo, sub, unocc, na)
 
     def release(self) -> None:
         for t in self._targets.values():
-            self.gl.DeleteFramebuffers(1, ctypes.byref(ctypes.c_uint(t.fbo_glo)))
-            self.gl.DeleteTextures(1, ctypes.byref(ctypes.c_uint(t.depth_glo)))
+            t.mrt.release(self.gl)
+            if t.unocc is not None:
+                t.unocc.release(self.gl)
         self._targets.clear()
         self.ctx.release()

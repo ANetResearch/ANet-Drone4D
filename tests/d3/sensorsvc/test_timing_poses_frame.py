@@ -104,3 +104,33 @@ def test_camera_frame_record_validates_against_frame_v1() -> None:
     mask = np.frombuffer(zstandard.ZstdDecompressor().decompress(blocks["u1/cam0/7/invalid_mask.u8.zst"]), np.uint8).reshape(48, 64)
     assert mask[20].sum() == 0                                                  # 有几何：无标记
     assert set(rec["agent_view"]) >= {"K", "dist", "gimbal_reading"} and "T_world_sensor" not in rec["agent_view"]
+
+
+def test_camera_frame_objects_from_unoccluded_pass() -> None:
+    """有演员时 `instance_unocc` 写出真实掩膜、`objects[]` 按 §6.6.1 归约且满足 frame.v1。"""
+    pytest.importorskip("PIL")
+    pytest.importorskip("zstandard")
+    import jsonschema
+    import zstandard
+
+    from awr.sensorsvc.camera.raster import RenderOut
+    from awr.sensorsvc.frame import FrameContext, camera_frame
+
+    cm = CameraModel.from_hfov(64, 48, 84.0)
+    inst = np.zeros((48, 64), np.uint16)
+    unocc = np.zeros((48, 64), np.uint16)
+    unocc[20:30, 30:34] = 1
+    inst[20:25, 30:34] = 1
+    sem = np.zeros((48, 64), np.uint8)
+    sem[20:25, 30:34] = 32
+    out = RenderOut(np.zeros((48, 64, 3), np.uint8), np.full((48, 64), 50.0, np.float32), inst, sem, 1.0, 1.0, 3, instance_unocc=unocc,
+                    actors_drawn=1)
+    acts = [{"idx": 0, "id": "person_A", "class": "person"}]
+    rec, blocks = camera_frame(FrameContext("run-1", "sess-1", "v", "gpu", "drv", dynamic_source_id="ab" * 32), uav="u1", sensor_id="cam0",
+                               seq=1, t_mid_ns=0, exposure_ns=1_000_000, readout_ns=0, cm=cm, mount=Mount(), gimbal_reading=(0.0, 0.0, 0.0),
+                               gimbal_true=(0.0, 0.0, 0.0), pos_enu_m=np.zeros(3), R_ws=np.eye(3), out=out, outputs={"rgb"}, actors=acts)
+    jsonschema.Draft202012Validator(json.loads((ROOT / "packages/contracts/sensor/v2/frame.v1.schema.json").read_text())).validate(rec)
+    (o,) = rec["ground_truth"]["objects"]
+    assert (o["actor"], o["px_unoccluded"], o["px_visible"], o["h_px_unocc"], o["occluder_sem_px"]) == ("person_A", 40, 20, 10, {"0": 20})
+    ref = rec["ground_truth"]["instance_unocc"]["ref"]
+    assert np.array_equal(np.frombuffer(zstandard.ZstdDecompressor().decompress(blocks[ref]), "<u2").reshape(48, 64), unocc)

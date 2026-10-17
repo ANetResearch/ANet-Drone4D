@@ -163,3 +163,48 @@ def test_rolling_shutter_yaw_skews_vertical_edge(wall_cam) -> None:
         cols.append(hit[0])
     assert max(errs) <= 1.0, max(errs)
     assert cols[-1] - cols[0] > 10                       # 左转（yaw 增大）时后读出的下方行看到的边更靠右：竖直边明显倾斜
+
+
+ACTORS = [
+    {"idx": 0, "id": "p0", "class": "person", "scripted": True, "profile": "person", "size_mm": [500, 300, 1750],
+     "appearance": {"asset": "person-proxy@1", "top_rgb": [42, 93, 176], "bottom_rgb": [40, 40, 40]}},
+    {"idx": 1, "id": "v0", "class": "vehicle", "scripted": True, "profile": "vehicle", "size_mm": [4500, 1800, 1500],
+     "appearance": {"asset": "vehicle-proxy@1", "body_rgb": [210, 210, 214]}},
+    {"idx": 2, "id": "p1", "class": "person", "scripted": False, "profile": "person", "size_mm": [500, 300, 1700],
+     "appearance": {"asset": "person-proxy@1", "tint_rgb": [180, 60, 40]}},
+]
+
+
+def test_actors_instances_unoccluded_pass_and_visibility(cam) -> None:
+    """M25 §6.4.4、§6.6.1：实例号 idx + 1、语义 32/33、深度偏置不改平面深度；盒后演员只出现在无遮挡通道，遮挡物计入静态类别。"""
+    with cam.ctx:                                            # 本模块另有 wall_cam 上下文：切回 cam 的 EGL 上下文
+        _actors_case(cam)
+
+
+def _actors_case(cam) -> None:
+    from awr.sensorsvc.camera.actors import visibility_objects
+    from awr.sensorsvc.camera.raster import ActorFrame
+
+    cam.set_actors(ACTORS)
+    cm = CameraModel.from_hfov(640, 480, 30.0)
+    p = np.array([0.0, 0.0, 1.5])
+    af = ActorFrame(np.array([0, 1, 2]), np.array([[20.0, 0.0, 0.0], [30.0, 6.0, 0.0], [60.0, 3.0, 0.0]]), np.array([0.0, 1.57, 0.0]))
+    r = cam.render(cm, gimbal_R(0.0, 0.0), p, actors=af)
+    assert r.actors_drawn == 3 and r.instance_unocc is not None
+    m0 = r.instance == 1
+    assert m0.any() and (r.semantic[m0] == 32).all() and (r.semantic[r.instance == 2] == 33).all()
+    assert not (r.instance == 3).any() and (r.instance_unocc == 3).any()                       # 盒后的人：只在无遮挡通道
+    d = r.depth_m[m0]
+    assert d.min() > 19.6 and d.max() < 20.3                                                   # 平面深度无偏置
+    rgb = r.rgb8[m0].astype(int)
+    assert np.median(rgb[:, 2]) > np.median(rgb[:, 0])                                         # 蓝色上装可辨
+    objs = {o["inst"]: o for o in visibility_objects(r.instance, r.instance_unocc, r.semantic, None, ACTORS)}
+    assert set(objs) == {1, 2, 3}
+    o1, o3 = objs[1], objs[3]
+    assert o1["visible_ratio"] == 1.0 and o1["h_px_unocc"] == pytest.approx(1.75 * cm.fy / 20.0, abs=4)
+    assert o3["px_visible"] == 0 and o3["bbox_xywh"] == [0, 0, 0, 0] and o3["occluder_sem_px"] == {"0": o3["px_unoccluded"]}
+    assert objs[2]["class"] == 33 and o1["flags"] == []
+    rs = cam.render(cm, gimbal_R(0.0, 0.0), p, actors=af, rs_nodes=[(gimbal_R(0.0, 0.0), p)] * 9)
+    assert np.array_equal(rs.instance, r.instance) and np.array_equal(rs.instance_unocc, r.instance_unocc)
+    none = cam.render(cm, gimbal_R(0.0, 0.0), p)
+    assert none.instance_unocc is None and not (none.instance > 0).any()
