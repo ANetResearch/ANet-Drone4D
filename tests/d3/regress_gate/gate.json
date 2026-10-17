@@ -1,0 +1,24 @@
+{
+ "schema": "awr.d3.regress_gate.v1",
+ "doc": "D3 regression gate (AWR-05 §4.8, D3-AC-01). Run before merging every D3 work package: python tools/bench/d3/regress_gate.py. Steps run in order; kind = cmd runs argv in cwd, kind = builtin runs a step of the gate script.",
+ "steps": [
+  {"id": "pytest", "item": 1, "kind": "cmd", "argv": ["{py}", "-m", "pytest", "-q", "-m", "not perf"], "cwd": ".", "timeout_s": 14400},
+  {"id": "contracts", "item": 1, "kind": "cmd", "argv": ["make", "test-contracts"], "cwd": ".", "timeout_s": 1800},
+  {"id": "web-unit", "item": 1, "kind": "cmd", "argv": ["npx", "vitest", "run", "--project", "unit"], "cwd": "apps/web", "timeout_s": 1800},
+  {"id": "zero-impact", "item": 2, "kind": "builtin", "timeout_s": 7200},
+  {"id": "perf", "item": 3, "kind": "builtin", "timeout_s": 3600, "default": false,
+   "doc": "D2 perf subset; needs an exclusive host (ADR-033 run protocol), off by default on shared hosts"},
+  {"id": "lint", "item": 4, "kind": "cmd", "argv": ["make", "lint"], "cwd": ".", "timeout_s": 1800,
+   "doc": "ruff, oxlint, lint-m06 and the import direction rule (lint-py-imports; item 5)"},
+  {"id": "imports", "item": 5, "kind": "cmd", "argv": ["{py}", "tools/lint/check_py_imports.py"], "cwd": ".", "timeout_s": 600},
+  {"id": "public-build", "item": 6, "kind": "cmd", "argv": ["make", "demo-build"], "cwd": ".", "timeout_s": 3600,
+   "doc": "public demo build with the K9 production bundle scan (ADR-111); the public site e2e and Tier S first screen run in the perf harness"}
+ ],
+ "zero_impact": {
+  "relay_batch": {"case": "b", "hours": 1, "seed": 11},
+  "files": ["relay_stats.json", "events.jsonl"],
+  "flags": [{"AWR_D3_ENABLED": "0"}, {"AWR_D3_ENABLED": "1"}],
+  "pytest": ["tests/targets/test_determinism.py"]
+ },
+ "perf": {"pytest": ["tests/targets/test_budget.py", "tests/perception"], "max_regression": 0.05}
+}

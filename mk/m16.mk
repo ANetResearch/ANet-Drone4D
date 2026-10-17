@@ -111,3 +111,8 @@ remote-smoke: ## SSH 转发下的 WS 与 Range 冒烟（HOST=user@host；缺省�
 
 first-use-time: ## 首次可用时间：干净克隆 -> make setup -> make run -> 远程首屏（P1，约 30 min）
 	@cd $(ROOT) && bash tests/e2e/first_use_time.sh
+
+# D3 回归门（AWR-05 §4.8、D3-AC-01；WP-D3-00）：每个 D3 工作包合入 d3-dev 前运行；STEPS=zero-impact,lint 只跑部分步骤
+.PHONY: d3-gate
+d3-gate: ## D3 回归门（tools/bench/d3/regress_gate.py；STEPS=<id,…>；报告 runs/perf/d3-gate-<UTC>/report.json）
+	cd $(ROOT) && $(PY) tools/bench/d3/regress_gate.py $(if $(STEPS),--steps $(STEPS),)
