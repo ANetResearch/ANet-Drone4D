@@ -1,8 +1,10 @@
 # requirements-d3.in（M00；AWR-05 v1.2 §4.8、M22 §7.4）：D3 专用依赖，只装入 .venv-d3（make setup-d3），不进入 pyproject.toml 与
 # requirements.lock，D2 环境（.venv）不变。锁文件以 requirements.lock 为约束生成，两者共有的包版本一致：
 #   make lock-d3
-# 本版：GLB 世界导入的纹理解码（pillow）；录制的 Foxglove protobuf 通道（mcap-protobuf-support、foxglove-schemas-protobuf，M27-FR-045）。
-# open3d、meshoptimizer、scikit-image、shapely 随各派生阶段加入；moderngl 只在 sensorsvc 镜像内安装（需要 EGL）。
+# 本版：GLB 世界导入的纹理解码（pillow）；录制的 Foxglove protobuf 通道（mcap-protobuf-support、foxglove-schemas-protobuf，M27-FR-045）；
+# MeshWorldQuery 的 CPU 网格求交（open3d-cpu 的 RaycastingScene，Embree；AWR-05 §5.1.6，M22-FR-047）。
+# meshoptimizer、scikit-image、shapely 随各派生阶段加入；moderngl 只在 sensorsvc 镜像内安装（需要 EGL）。
 pillow==11.3.0
 mcap-protobuf-support==0.5.3
 foxglove-schemas-protobuf==0.3.0
+open3d-cpu==0.19.0

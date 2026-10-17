@@ -4,7 +4,7 @@
 Rules (reported as imports/boundary unless noted):
   - awr.api must not import open3d, small_gicp, scipy.optimize, numba, mcap or zstandard (MCAP decompression);
   - `import zenoh` only in awr/runtime/bus.py;
-  - open3d nowhere in python/awr during D1 (AWR-11 §3.4: V0.2 at the earliest);
+  - open3d only in awr/world/mesh (D3 MeshWorldQuery, .venv-d3; AWR-11 §3.4 keeps it out of D1/D2);
   - numba not in the supervisor (awr/runtime), api, recorder or agent processes;
   - fastapi only in awr/api and awr/bench/api (bench-api); mcap only in awr/recorder and awr/bench/recorder (D3 run writer, M27 §7.5);
   - awr.swarm and awr.environment.weather must not import awr.sim;
@@ -56,7 +56,8 @@ RULES = [
     *(Rule(m, denied=("api/",), why="awr.api event loop must stay free of heavy work (AWR-03 §4.2)")
       for m in ("open3d", "small_gicp", "scipy.optimize", "numba", "mcap", "zstandard")),
     Rule("zenoh", allowed=("runtime/bus.py",), why="zenoh only through awr.runtime.bus (AWR-17 §10.5 item 11)"),
-    Rule("open3d", why="Open3D is not a D1 dependency (AWR-11 §3.4)"),
+    Rule("open3d", allowed=("world/mesh/",),
+         why="Open3D is not a D1/D2 dependency (AWR-11 §3.4); D3 uses it only for MeshWorldQuery ray casting (AWR-05 §5.1.6, .venv-d3)"),
     *(Rule("numba", denied=(p,), why="numba is not allowed in this process (AWR-11 §3.4)") for p in ("runtime/", "recorder/", "agent/")),
     Rule("fastapi", allowed=("api/", "bench/api/"), why="fastapi only in the api and bench-api processes (AWR-11 §3.4; AWR-17 §18.4)"),
     Rule("mcap", allowed=("recorder/", "bench/recorder/"),
