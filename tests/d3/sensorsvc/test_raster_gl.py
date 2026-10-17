@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from appfix import write_world
+from appfix import wall_enu, write_world
 
 from awr.sensorsvc.camera import CameraModel, look_at_R
 from awr.sensorsvc.camera.proj import gimbal_R
@@ -99,3 +99,67 @@ def test_gpu_effects_match_reference(cam, profile: str) -> None:
     assert (np.abs(gpu.depth_obs - dob) <= tol).all()
     if fp.meter:
         assert np.array_equal(gpu.meter_sub, gpu.rgb_lin[::8, ::8])
+
+
+@pytest.fixture(scope="module")
+def wall_cam(tmp_path_factory):
+    moderngl = pytest.importorskip("moderngl")
+    pytest.importorskip("PIL")
+    try:
+        ctx = moderngl.create_standalone_context(backend="egl", require=450)
+    except Exception as e:
+        pytest.skip(f"EGL unavailable: {e}")
+    from awr.sensorsvc.camera.raster import RasterCamera
+
+    root = write_world(tmp_path_factory.mktemp("wall"), scene=wall_enu(), world_id="wall-fixture")
+    c = RasterCamera(load_appearance(root, tile_m=64.0), ctx=ctx)
+    yield c
+    c.release()
+
+
+def _rs(cm, pose, T: float):
+    """读出窗口 [−T/2, T/2]（相对 t_mid）内 9 个节点与行时刻函数。"""
+    from awr.sensorsvc.camera.raster import RS_NODES
+
+    nodes = [pose(-T / 2 + k * T / (RS_NODES - 1)) for k in range(RS_NODES)]
+    t_row = lambda i: (np.asarray(i, np.float64) - (cm.height - 1) / 2) * T / cm.height  # noqa: E731
+    return nodes, t_row
+
+
+def test_rolling_shutter_translation_depth_per_row(wall_cam) -> None:
+    """沿光轴 50 m/s 平移、读出 20 ms：每行平面深度 = 40 − x(t_row(i))（M25 §15.4）；全局快门各行相同。"""
+    cm = CameraModel.from_hfov(640, 480, 60.0, readout_s=0.020)
+    v, x0 = 50.0, 0.0
+    pose = lambda t: (gimbal_R(0.0, 0.0), np.array([x0 + v * t, 0.0, 30.0]))  # noqa: E731
+    nodes, t_row = _rs(cm, pose, 0.020)
+    r = wall_cam.render(cm, *pose(0.0), rs_nodes=nodes)
+    gs = wall_cam.render(cm, *pose(0.0))
+    rows = np.arange(40, 440)
+    want = 40.0 - (x0 + v * t_row(rows))
+    got = r.depth_m[rows, 320]
+    assert np.abs(got - want).max() < 2e-3, np.abs(got - want).max()
+    assert np.abs(gs.depth_m[rows, 320] - 40.0).max() < 1e-3 and abs(float(got[0] - got[-1])) > 0.8
+
+
+def test_rolling_shutter_yaw_skews_vertical_edge(wall_cam) -> None:
+    """90°/s 偏航、读出 20 ms：墙左缘（y = +10）在每行的列位置与逐行真值投影一致（≤ 1 px，量化 0.5 px 内另加插值误差）。"""
+    from awr.sensorsvc.camera.proj import project_points
+
+    cm = CameraModel.from_hfov(640, 480, 60.0, readout_s=0.020)
+    w = np.radians(90.0)
+    pose = lambda t: (gimbal_R(np.degrees(w * t), 0.0), np.array([0.0, 0.0, 30.0]))  # noqa: E731
+    nodes, t_row = _rs(cm, pose, 0.020)
+    r = wall_cam.render(cm, *pose(0.0), rs_nodes=nodes)
+    zs = np.linspace(0.0, 60.0, 6001)
+    edge = np.stack([np.full_like(zs, 40.0), np.full_like(zs, 10.0), zs], 1)
+    errs, cols = [], []
+    for i in range(60, 420, 6):
+        uv, _ = project_points(cm, *pose(float(t_row(i))), edge)
+        k = int(np.argmin(np.abs(uv[:, 1] - (i + 0.5))))
+        u = uv[k, 0]
+        hit = np.flatnonzero(r.depth_m[i] > 0)
+        assert hit.size
+        errs.append(abs(hit[0] - (u - 0.5)))
+        cols.append(hit[0])
+    assert max(errs) <= 1.0, max(errs)
+    assert cols[-1] - cols[0] > 10                       # 左转（yaw 增大）时后读出的下方行看到的边更靠右：竖直边明显倾斜

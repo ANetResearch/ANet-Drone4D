@@ -7,6 +7,11 @@
 几何之后两遍全屏三角形：天空遍以 `GEQUAL` 只覆盖深度仍为清除值 0 的像素（仰角 ≥ 0 为天空渐变，否则为远景雾色，语义 255；§6.4.3
 天空）；编码遍把线性颜色按 sRGB 量化为 8 位。读回 8 位 RGB、R32F 深度、实例与语义。
 
+卷帘（M25 §15.4，`rs_method = vertex`）：`render(..., rs_nodes=[(R, p)] × 9)` 时几何遍换用逐顶点行时刻投影的顶点着色器：
+读出窗口 [t_mid − T_ro/2, t_mid + T_ro/2] 内 9 个等间隔相机位姿节点以瓦片相对的模型视图矩阵传入，顶点按 2 次不动点迭代求自身
+所在行的时刻，节点间对矩阵线性插值（节点间隔 T_ro/8，旋转量很小，插值误差远小于 0.01 px）；深度、实例、语义与颜色同一遍
+写出。天空遍取 t_mid 位姿。
+
 `render(..., fx=FxParams)` 时编码遍换成效果链遍（M25 §6.5：增益、渐晕、Poisson–Gaussian 噪声、sRGB 与量化；逐像素正态以
 `GL_ARB_gpu_shader_int64` 的 SplitMix64 与 `camera.effects` 参考实现同式），另加 L2-depth 遍（观测深度写入单独的 R32F）与
 自动曝光测光用的 1/8 降采样遍（读回小图，直方图在 CPU 上按参考实现计算）。
@@ -29,9 +34,9 @@ from awr.sensorsvc.camera.model import CameraModel
 from awr.sensorsvc.camera.proj import mv_tile, proj_reversed_z, world_to_opt
 from awr.sensorsvc.camera.scene import AppearanceScene
 
-__all__ = ["RENDERER_VERSION", "RasterCamera", "RenderOut", "linear_to_srgb8", "srgb8_to_linear"]
+__all__ = ["RENDERER_VERSION", "RS_NODES", "RasterCamera", "RenderOut", "linear_to_srgb8", "srgb8_to_linear"]
 
-RENDERER_VERSION = "raster-gl@0.2.0"
+RENDERER_VERSION = "raster-gl@0.3.0"
 SEM_NONE = 255
 _GL_TEXTURE_2D, _GL_DEPTH32F, _GL_FRAMEBUFFER = 0x0DE1, 0x8CAC, 0x8D40
 _GL_COLOR_ATTACHMENT0, _GL_DEPTH_ATTACHMENT, _GL_FB_COMPLETE = 0x8CE0, 0x8D00, 0x8CD5
@@ -52,6 +57,40 @@ void main() {
     v_uv = in_uv;
     v_z = (u_mv * p).z;
     gl_Position = u_mvp * p;
+}
+"""
+RS_NODES = 9
+VS_RS = """
+#version 450
+const int NC = 9;
+uniform mat4 u_P;
+uniform mat4 u_mvn[NC];
+uniform vec2 u_fycy;
+uniform float u_H;
+in vec3 in_pos;
+in vec2 in_uv;
+out vec2 v_uv;
+out float v_z;
+mat4 mv_at(float s) {
+    float c = clamp(s, 0.0, float(NC - 1));
+    int k = min(int(floor(c)), NC - 2);
+    float f = c - float(k);
+    return u_mvn[k] * (1.0 - f) + u_mvn[k + 1] * f;
+}
+float s_of(mat4 mv, vec4 p) {
+    vec4 q = mv * p;
+    float y = q.z > 1e-3 ? u_fycy.x * q.y / q.z + u_fycy.y : 0.5 * u_H;
+    float i = clamp(y - 0.5, 0.0, u_H - 1.0);
+    return ((i - 0.5 * (u_H - 1.0)) / u_H + 0.5) * float(NC - 1);
+}
+void main() {
+    vec4 p = vec4(in_pos, 1.0);
+    float s = 0.5 * float(NC - 1);
+    for (int it = 0; it < 2; ++it) s = s_of(mv_at(s), p);
+    vec4 q = mv_at(s) * p;
+    v_uv = in_uv;
+    v_z = q.z;
+    gl_Position = u_P * q;
 }
 """
 FS = """
@@ -313,6 +352,7 @@ class RasterCamera:
         self.gl = _GL()
         self.info = {k: self.ctx.info.get(k) for k in ("GL_RENDERER", "GL_VERSION", "GL_VENDOR")}
         self.prog = self.ctx.program(vertex_shader=VS, fragment_shader=FS)
+        self.prog_rs = self.ctx.program(vertex_shader=VS_RS, fragment_shader=FS)
         self.sky = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=SKY_FS)
         self.enc = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=ENCODE_FS)
         self.fxp = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=FX_FS)
@@ -350,10 +390,11 @@ class RasterCamera:
             vbo = self.ctx.buffer(np.hstack([b.pos, b.uv]).astype("<f4").tobytes())
             ibo = self.ctx.buffer(b.idx.astype("<u4").tobytes())
             vao = self.ctx.vertex_array(self.prog, [(vbo, "3f 2f", "in_pos", "in_uv")], ibo)
+            vao_rs = self.ctx.vertex_array(self.prog_rs, [(vbo, "3f 2f", "in_pos", "in_uv")], ibo)
             lo = b.origin + b.pos.min(0)
             hi = b.origin + b.pos.max(0)
             corners.append([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
-            self.draws.append((b, vao))
+            self.draws.append((b, vao, vao_rs))
         self.corners = np.asarray(corners, np.float64).reshape(-1, 8, 3)
         self.ctx.finish()
         self.upload_s = time.perf_counter() - t1
@@ -401,7 +442,9 @@ class RasterCamera:
                 put(self.dep, k, v)
             self.dep_vao.render(self._mgl.TRIANGLES, vertices=3)
 
-    def render(self, cm: CameraModel, R_ws: np.ndarray, p_w: np.ndarray, *, linear: bool = False, fx: FxParams | None = None) -> RenderOut:
+    def render(self, cm: CameraModel, R_ws: np.ndarray, p_w: np.ndarray, *, linear: bool = False, fx: FxParams | None = None,
+               rs_nodes: list[tuple[np.ndarray, np.ndarray]] | None = None) -> RenderOut:
+        """`R_ws`、`p_w` 为 t_mid 位姿；`rs_nodes` 给出时按卷帘逐顶点投影（9 个节点，时间升序，覆盖读出窗口）。"""
         mgl = self._mgl
         W, H = cm.width, cm.height
         tg = self._target(W, H)
@@ -420,26 +463,45 @@ class RasterCamera:
         self.ctx.depth_func = ">"
         P = proj_reversed_z(cm)
         Mw = world_to_opt(R_ws, p_w)
-        self.prog["u_inst"].value = 0
-        self.prog["u_sem"].value = 0
+        rs = rs_nodes is not None
+        if rs and len(rs_nodes) != RS_NODES:
+            raise ValueError(f"rolling shutter needs {RS_NODES} pose nodes")
+        prog = self.prog_rs if rs else self.prog
+        prog["u_inst"].value = 0
+        prog["u_sem"].value = 0
+        if rs:
+            prog["u_P"].write(P.T.astype("<f4").tobytes())
+            prog["u_fycy"].value = (cm.fy, cm.cy)
+            prog["u_H"].value = float(H)
         n = 0
         bound = None
         tile = None
-        vis = self._visible(cm, Mw) if self.draws else np.zeros(0, bool)
-        for (b, vao), ok in zip(self.draws, vis, strict=True):
+        if not self.draws:
+            vis = np.zeros(0, bool)
+        elif rs:                                                         # 读出窗口首、中、末三个位姿的视锥并集
+            vis = np.zeros(len(self.draws), bool)
+            for Rk, pk in (rs_nodes[0], rs_nodes[RS_NODES // 2], rs_nodes[-1]):
+                vis |= self._visible(cm, world_to_opt(Rk, pk))
+        else:
+            vis = self._visible(cm, Mw)
+        for (b, vao, vao_rs), ok in zip(self.draws, vis, strict=True):
             if not ok:
                 continue
             if b.tile != tile:
-                mv = mv_tile(R_ws, p_w, b.origin)
-                self.prog["u_mv"].write(mv.T.astype("<f4").tobytes())
-                self.prog["u_mvp"].write((P @ mv).T.astype("<f4").tobytes())
+                if rs:
+                    mvs = np.stack([mv_tile(Rk, pk, b.origin).T for Rk, pk in rs_nodes]).astype("<f4")
+                    prog["u_mvn"].write(mvs.tobytes())
+                else:
+                    mv = mv_tile(R_ws, p_w, b.origin)
+                    prog["u_mv"].write(mv.T.astype("<f4").tobytes())
+                    prog["u_mvp"].write((P @ mv).T.astype("<f4").tobytes())
                 tile = b.tile
             if b.texture != bound:
-                self.prog["u_has_tex"].value = b.texture is not None
+                prog["u_has_tex"].value = b.texture is not None
                 if b.texture is not None:
                     self.textures[b.texture].use(0)
                 bound = b.texture
-            vao.render()
+            (vao_rs if rs else vao).render()
             n += 1
         self.ctx.depth_func = ">="                                       # 天空遍：只覆盖深度仍为 0 的像素
         self.sky["u_Rwo"].write(Mw[:3, :3].astype("<f4").tobytes())     # 列主序写入 R_woᵀ 的转置，即 R_wo

@@ -70,3 +70,11 @@ class CameraModel:
 
     def has_distortion(self) -> bool:
         return any(v != 0.0 for v in self.dist)
+
+
+# 相机档位（AWR-20 §15.6.6、§15.16.3）：交付分辨率、卷帘读出与缺省曝光（日间 1 ms）；采集规格中相机的 `profile` 取其一，
+# 显式给出的 size、readout_s、exposure_s 覆盖档位值。
+CAMERA_PROFILES: dict[str, dict] = {
+    "rgb720-gs": {"size": (1280, 720), "readout_s": 0.0, "exposure_s": 0.008},
+    "rgb1080-rs": {"size": (1920, 1080), "readout_s": 0.020, "exposure_s": 0.001},
+}

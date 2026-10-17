@@ -5292,6 +5292,17 @@ export interface FrameV1 {
        * Rolling shutter method (ADR-179): vertex (default) or bands (reference)
        */
       rs_method: 'vertex' | 'bands'
+      /**
+       * Rolling shutter (vertex): camera pose nodes across the readout window (M25 §15.4)
+       */
+      rs_nodes?: number
+      /**
+       * Rolling shutter readout window [t_mid - T_ro/2, t_mid + T_ro/2] in ns
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      readout_window_ns?: [number, number, ...number[]]
     }
   }
   internal: {

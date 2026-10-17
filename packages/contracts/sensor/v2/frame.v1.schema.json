@@ -520,6 +520,20 @@
                 "bands"
               ],
               "description": "Rolling shutter method (ADR-179): vertex (default) or bands (reference)"
+            },
+            "rs_nodes": {
+              "type": "integer",
+              "minimum": 2,
+              "description": "Rolling shutter (vertex): camera pose nodes across the readout window (M25 §15.4)"
+            },
+            "readout_window_ns": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Rolling shutter readout window [t_mid - T_ro/2, t_mid + T_ro/2] in ns"
             }
           },
           "required": [

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -19,7 +20,8 @@ SPEC = {
     "run_id": "cap-test", "event_id": "capture", "world_id": "w1", "duration_s": 2.0,
     "fleet": [
         {"uav": "uav-01", "path": {"kind": "orbit", "center": [0, 0], "radius_m": 100, "agl_m": 50, "period_s": 60},
-         "cameras": [{"name": "cam0", "size": [64, 48], "hfov_deg": 84, "fps": "10", "gimbal": {"az_deg": 90, "el_deg": -30}}]},
+         "cameras": [{"name": "cam0", "size": [64, 48], "hfov_deg": 84, "fps": "10", "gimbal": {"az_deg": 90, "el_deg": -30}},
+                     {"name": "cam1", "profile": "rgb1080-rs", "size": [64, 48], "outputs": ["rgb"]}]},
         {"uav": "uav-02", "path": {"kind": "waypoints", "points": [[0, 0, 0, 20, 0], [2, 20, 0, 20, 90]]},
          "cameras": [{"name": "cam0", "size": [64, 48], "fps": "15", "outputs": ["rgb"]}]},
     ],
@@ -27,15 +29,19 @@ SPEC = {
 
 
 class _StubCamera:
+    rs_calls: ClassVar[list[int]] = []
+
     def __init__(self, scene) -> None:
         self.info = {"GL_RENDERER": "stub", "GL_VERSION": "4.5.0 stub 1.0"}
         self.n = 0
 
-    def render(self, cm, R, pos, *, linear: bool = False, fx=None) -> RenderOut:
+    def render(self, cm, R, pos, *, linear: bool = False, fx=None, rs_nodes=None) -> RenderOut:
         """GPU 效果链的替身：线性常量图经参考实现得到交付 RGB 与观测深度。"""
         from awr.sensorsvc.camera.effects import apply_fx_reference
 
         self.n += 1
+        if rs_nodes is not None:
+            _StubCamera.rs_calls.append(len(rs_nodes))
         h, w = cm.height, cm.width
         lin = np.full((h, w, 3), 0.02 * (self.n % 10 + 1), np.float32)
         depth = np.full((h, w), float(pos[2]), np.float32)
@@ -72,7 +78,8 @@ def test_capture_run_outputs_and_readback(tmp_path: Path, monkeypatch: pytest.Mo
     w.mkdir(parents=True)
     (w / "world.json").write_text(json.dumps({"contentVersion": "abc123def456"}))
     m = cap.run_capture(SPEC, tmp_path, log=lambda s: None)
-    assert m["frames"] == 20 + 30 and m["state"] == "SUCCEEDED"
+    assert m["frames"] == 20 + 20 + 30 and m["state"] == "SUCCEEDED"
+    assert _StubCamera.rs_calls == [9] * 20                                              # 只有 rgb1080-rs 相机走卷帘
     run = tmp_path / "dataset/capture/runs/cap-test"
     fs = FrameStore(run)
     assert fs.latest_seq("uav-01", "cam0") == 20 and fs.latest_seq("uav-02", "cam0") == 30
@@ -96,6 +103,12 @@ def test_capture_run_outputs_and_readback(tmp_path: Path, monkeypatch: pytest.Mo
     gr, gtr = rec["agent_view"]["gimbal_reading"], rec["ground_truth"]["gimbal_true"]
     assert gr != gtr
     assert json.loads((run / "run_manifest.json").read_text())["fleet"][1]["cameras"][0]["fps"] == "15"
+    assert fs.frame("uav-01", "cam1", 1).t_ns == 100_000_000 - (1_000_000 + 20_000_000) // 2              # t_mid = t_end − ⌊(e + T_ro)/2⌋
+    rec1, _ = unpack_camera_gt(ts.get("uav-01", "cam1", 1)[1])
+    tm1 = rec1["ground_truth"]["timing"]
+    assert rec1["agent_view"]["readout_ns"] == 20_000_000 and tm1["rs_nodes"] == 9
+    assert tm1["readout_window_ns"] == [89_500_000 - 10_000_000, 89_500_000 + 10_000_000]
+    assert "rs_nodes" not in rec["ground_truth"]["timing"]                                # 全局快门不写卷帘字段
     with pytest.raises(Exception, match="already exists"):
         cap.run_capture(SPEC, tmp_path, log=lambda s: None)
     fs.close()

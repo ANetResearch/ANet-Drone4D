@@ -1,7 +1,8 @@
 """按机采集作业（docs/05 §10.2 P0a-1；M25 §6.2、§6.4、§6.7；M27 §7.5、§7.6）：脚本位姿驱动光栅相机，产出一个 capture Run。
 
 输入为采集规格（JSON）：世界、时长、机队；每机一条脚本航迹（`orbit` 环绕或 `waypoints` 航点，高度为离地高度，按 DSM 2 m 栅格
-贴地）与若干相机（交付分辨率、水平视场、有理数帧率、标称挂载、固定云台角、输出集合）。位姿以 250 Hz 写入 PoseHistory（P0a-1
+贴地）与若干相机（档位 `profile`：`rgb720-gs` 缺省或 `rgb1080-rs` 卷帘；交付分辨率、水平视场、有理数帧率、标称挂载、固定云台角、
+输出集合）。位姿以 250 Hz 写入 PoseHistory（P0a-1
 允许脚本位姿，P0a-3 切换为 PoseHistory 真值通道时相机接口不变，ADR-193）。规格顶层 `noise_profile`（clean、realistic、harsh，
 缺省 realistic）与 `seed`（run_seed，缺省 0）选择效果链与噪声档（M25 §6.5；`camera.effects`）：RGB 经曝光、渐晕、噪声与 ISP，
 观测深度经 L2-depth 传感器模型（均在 GPU 编码遍内），云台读数加编码器噪声；真值深度与真值云台角不变。
@@ -31,7 +32,7 @@ from awr.sensorsvc.camera.effects import (
     profile,
     with_profile,
 )
-from awr.sensorsvc.camera.model import CameraModel, IspConfig
+from awr.sensorsvc.camera.model import CAMERA_PROFILES, CameraModel, IspConfig
 from awr.sensorsvc.camera.snap import ground_z
 from awr.sensorsvc.errors import SensorSvcError
 from awr.sensorsvc.frame import FrameContext, camera_frame
@@ -68,10 +69,15 @@ def load_spec(doc: dict) -> tuple[dict, list[UavSpec]]:
     for u in doc["fleet"]:
         cams = []
         for k, c in enumerate(u["cameras"]):
-            w, h = c.get("size", [1280, 720])
+            prof = CAMERA_PROFILES.get(str(c.get("profile", "rgb720-gs")))
+            if prof is None:
+                raise SensorSvcError(649, f"unknown camera profile {c.get('profile')!r}")
+            w, h = c.get("size", prof["size"])
             cm = CameraModel.from_hfov(int(w), int(h), float(c.get("hfov_deg", 84.0)), fps=str(c.get("fps", "10")),
-                                       exposure_s=float(c.get("exposure_s", 0.008)), isp=IspConfig(jpeg_quality=int(c.get("jpeg_quality", 90))))
-            check_exposure(parse_rate(cm.fps), round(cm.exposure_s * NS), 0)
+                                       exposure_s=float(c.get("exposure_s", prof["exposure_s"])),
+                                       readout_s=float(c.get("readout_s", prof["readout_s"])),
+                                       isp=IspConfig(jpeg_quality=int(c.get("jpeg_quality", 90))))
+            check_exposure(parse_rate(cm.fps), round(cm.exposure_s * NS), round(cm.readout_s * NS))
             g = c.get("gimbal", {})
             cams.append(CameraSpec(c.get("name", f"cam{k}"), k, cm, cm.fps, Mount(tuple(c.get("mount_xyz_m", (0.1, 0.0, -0.05))),
                                                                                  tuple(c.get("mount_rpy_deg", (0.0, 0.0, 0.0)))),
@@ -123,7 +129,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     from awr.bench.recorder.channels import parse_truth_topic
     from awr.bench.recorder.frames_idx import build_frames_idx
     from awr.bench.recorder.writer import RunWriter
-    from awr.sensorsvc.camera.raster import RasterCamera
+    from awr.sensorsvc.camera.raster import RS_NODES, RasterCamera
     from awr.sensorsvc.camera.scene import load_appearance
 
     doc, fleet = load_spec(spec)
@@ -155,7 +161,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
             rate = parse_rate(c.fps)
             k = 1
             while (te := t_end_ns(0, rate, k)) <= duration * NS:
-                jobs.append((t_mid_ns(te, round(c.model.exposure_s * NS)), u.uav, c, k))
+                jobs.append((t_mid_ns(te, round(c.model.exposure_s * NS), round(c.model.readout_s * NS)), u.uav, c, k))
                 k += 1
     jobs.sort(key=lambda j: (j[0], j[1], j[2].sensor_no))
     if max_frames:
@@ -171,13 +177,20 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
             kw = {"seed": seed, "uav_no": uav_no[uav], "sensor_no": c.sensor_no, "frame_index": seq}
             st = ae[(uav, c.name)]
             fxp = frame_params(c.model, st, t_mid_s=tm / NS, depth=prof.depth if "depth" in c.outputs else None, **kw)
-            out = cam.render(c.model, R, pos, fx=fxp)
+            ro = round(c.model.readout_s * NS)
+            rs = None
+            if ro > 0:                                           # 卷帘：读出窗口内 9 个位姿节点（M25 §15.4）
+                rs = []
+                for k in range(RS_NODES):
+                    pk, Rk, _ = sensor_pose(hist[uav], c.mount, c.sensor_no, tm - ro // 2 + (k * ro) // (RS_NODES - 1))
+                    rs.append((Rk, pk))
+            out = cam.render(c.model, R, pos, fx=fxp, rs_nodes=rs)
             finish_frame(st, fxp, out.meter_sub)
             ms.append(out.draw_ms + out.readback_ms)
             d_obs = out.depth_obs
             g_read = gimbal_reading(g, prof.gimbal_sigma_deg, **kw)
             rec, blocks = camera_frame(ctx, uav=uav, sensor_id=c.name, seq=seq, t_mid_ns=tm, exposure_ns=round(c.model.exposure_s * NS),
-                                       readout_ns=0, cm=c.model, mount=c.mount, gimbal_reading=g_read, gimbal_true=g, pos_enu_m=pos, R_ws=R,
+                                       readout_ns=ro, cm=c.model, mount=c.mount, gimbal_reading=g_read, gimbal_true=g, pos_enu_m=pos, R_ws=R,
                                        out=out, outputs=c.outputs | {"gt_depth"}, depth_obs=d_obs,
                                        depth_range_m=(prof.depth.d_min_m, prof.depth.d_max_m))
             jpeg = blocks[rec["agent_view"]["rgb"]["ref"]]

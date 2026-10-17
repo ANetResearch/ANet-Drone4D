@@ -18,7 +18,7 @@ import numpy as np
 from awr.bench.recorder.depthcodec import DEPTH_COMPRESSION, bshuf4_zstd
 from awr.sensorsvc.camera.model import CameraModel
 from awr.sensorsvc.camera.proj import ray_elevation
-from awr.sensorsvc.camera.raster import RENDERER_VERSION, RenderOut
+from awr.sensorsvc.camera.raster import RENDERER_VERSION, RS_NODES, RenderOut
 from awr.sensorsvc.poses import Mount, q_world_opt
 
 __all__ = ["INVALID_BITS", "FrameContext", "camera_frame", "encode_jpeg"]
@@ -111,6 +111,9 @@ def camera_frame(ctx: FrameContext, *, uav: str, sensor_id: str, seq: int, t_mid
           "invalid_mask": {"dtype": "u8", "codec": "zstd", "bits": list(INVALID_BITS), "ref": put("invalid_mask.u8.zst", _zstd(mask))},
           "objects": [],
           "timing": {"t_truth_ns": [int(t_mid_ns)], "blur_subframes": cm.blur_subframes, "rs_bands": cm.rs_bands, "rs_method": "vertex"}}
+    if readout_ns > 0:                                             # 卷帘：节点数与读出窗口（M25 §15.4）
+        gt["timing"]["rs_nodes"] = RS_NODES
+        gt["timing"]["readout_window_ns"] = [int(t_mid_ns) - int(readout_ns) // 2, int(t_mid_ns) + int(readout_ns) // 2]
     if "gt_depth" in outputs:
         gt["gt_depth"] = {"dtype": "f32", "unit": "m", "codec": DEPTH_COMPRESSION,
                           "ref": put("gt_depth.f32.bshuf.zst", bshuf4_zstd(depth.tobytes()))}

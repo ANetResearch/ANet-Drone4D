@@ -3847,6 +3847,8 @@ class FrameV1GroundTruthTiming(TypedDict):
     blur_subframes: int
     rs_bands: int
     rs_method: Literal["vertex", "bands"]
+    rs_nodes: NotRequired[int]
+    readout_window_ns: NotRequired[list[int]]
 
 
 # sensor/v2/frame.v1.schema.json#/properties/internal

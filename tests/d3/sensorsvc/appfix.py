@@ -37,8 +37,24 @@ def scene_enu() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return V, np.asarray(F, np.uint32), UV.astype(np.float32)
 
 
-def write_world(root: Path, *, rgb: tuple[int, int, int] = (200, 30, 30), world_id: str = "app-fixture") -> Path:
-    V, F, UV = scene_enu()
+def wall_enu(x: float = 40.0, half_w: float = 10.0, height: float = 60.0, step: float = 1.0):
+    """竖直墙面 x = const（y ∈ [−half_w, half_w]，z ∈ [0, height]），按 step 细分（卷帘测试：三角形跨行少）。"""
+    ys = np.arange(-half_w, half_w + 1e-9, step)
+    zs = np.arange(0.0, height + 1e-9, step)
+    yy, zz = np.meshgrid(ys, zs)
+    V = np.stack([np.full(yy.size, x), yy.ravel(), zz.ravel()], 1)
+    UV = np.stack([(yy.ravel() + half_w) / (2 * half_w), 1.0 - zz.ravel() / height], 1).astype(np.float32)
+    n = len(ys)
+    F = []
+    for i in range(len(zs) - 1):
+        for j in range(n - 1):
+            a, b, c, d = i * n + j, i * n + j + 1, (i + 1) * n + j + 1, (i + 1) * n + j
+            F += [[a, b, c], [a, c, d]]
+    return V, np.asarray(F, np.uint32), UV
+
+
+def write_world(root: Path, *, rgb: tuple[int, int, int] = (200, 30, 30), world_id: str = "app-fixture", scene=None) -> Path:
+    V, F, UV = scene if scene is not None else scene_enu()
     d = root / "visual/mesh/appearance"
     d.mkdir(parents=True, exist_ok=True)
     G = np.stack([V[:, 0], V[:, 2], -V[:, 1]], 1).astype(np.float32)
