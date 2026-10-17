@@ -129,6 +129,27 @@ class FrameStore:
         return body + hashlib.sha256(body).digest()
 
 
+class TruthStore:
+    """真值文件 `<event>/truth/run_<id>.mcap` 与其索引 `run_<id>.frames.idx` 的只读视图（BN-52）：按 (uav, cam, seq) 返回
+    `camera_gt.v1` 消息字节。"""
+
+    def __init__(self, mcap_path: Path, idx_path: Path) -> None:
+        self.idx = FramesIdx.open(idx_path)
+        self.seg = SegmentIndex.build(mcap_path, allow_open=False)
+        self.cache = ChunkCache(self.seg)
+        self.chunk_no = {c.start: i for i, c in enumerate(self.seg.chunks)}
+
+    def close(self) -> None:
+        self.seg.close()
+
+    def get(self, uav: str, cam: str, seq: int) -> tuple[int, bytes] | None:
+        r = self.idx.find(uav, cam, seq)
+        if r is None:
+            return None
+        m = self.cache.message(MsgRef(int(r["t_ns"]), self.chunk_no[int(r["chunk_offset"])], int(r["msg_offset"])))
+        return int(r["t_ns"]), bytes(m.data)
+
+
 def topic_for(uav: str, sensor: str) -> str:
     cam, _, kind = sensor.partition(".")
     return camera_topic(uav, cam, "depth" if kind == "depth" else "image")

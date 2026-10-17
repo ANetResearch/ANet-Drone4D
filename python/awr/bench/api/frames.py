@@ -1,4 +1,4 @@
-"""BN-42、BN-43、BN-49 至 BN-51：运行列表与状态、帧索引、单帧与区间帧（AWR-17 §18.8；M27-FR-052）。
+"""BN-42、BN-43、BN-49 至 BN-52：运行列表与状态、帧索引、单帧、区间帧与真值帧（AWR-17 §18.8；M27-FR-052）。
 
 单帧返回交付字节（`Content-Type` 按通道，`X-Frame-T-Ns`），`ETag` 为内容 sha256，支持单区间 `Range` 与 `If-None-Match`。
 帧接口接受会话、bench token 或 `aud = frames` 的短期令牌。
@@ -13,35 +13,42 @@ from pathlib import Path
 from fastapi import APIRouter, Query, Request, Response
 
 from awr.api.problem import ApiProblem
-from awr.bench.api.deps import FrameReader, Researcher
-from awr.bench.recorder.read import FrameLimitError, FrameStore
-from awr.bench.runs_store import find_run, list_runs
+from awr.bench.api.deps import FrameReader, Researcher, TruthReader
+from awr.bench.recorder.read import FrameLimitError, FrameStore, TruthStore
+from awr.bench.recorder.truth import CONTENT_TYPE as GT_CONTENT_TYPE
+from awr.bench.runs_store import find_run, list_runs, truth_paths
 
 router = APIRouter()
 _IMMUTABLE = "private, max-age=31536000, immutable"
 
 
 class StoreCache:
-    """每个 Run 一个 FrameStore；frames.idx 变化（重新生成）时重开。"""
+    """每个 Run 一个 FrameStore（键 run_id）与一个 TruthStore（键 "truth:" + run_id）；索引文件变化（重新生成）时重开。"""
 
     def __init__(self, cap: int = 16) -> None:
         self.cap = cap
-        self.items: dict[str, tuple[float, FrameStore]] = {}
+        self.items: dict[str, tuple[float, FrameStore | TruthStore]] = {}
         self.lock = threading.Lock()
 
     def get(self, run_dir: Path, run_id: str) -> FrameStore | None:
-        idx = run_dir / "frames.idx"
+        return self._get(run_id, run_dir / "frames.idx", lambda: FrameStore(run_dir, run_id))
+
+    def truth(self, run_dir: Path, run_id: str) -> TruthStore | None:
+        mc, idx = truth_paths(run_dir)
+        return self._get("truth:" + run_id, idx, lambda: TruthStore(mc, idx))
+
+    def _get(self, key: str, idx: Path, make):
         if not idx.exists():
             return None
         m = idx.stat().st_mtime
         with self.lock:
-            hit = self.items.get(run_id)
+            hit = self.items.get(key)
             if hit and hit[0] == m:
                 return hit[1]
             if hit:
                 hit[1].close()
-            fs = FrameStore(run_dir, run_id)
-            self.items[run_id] = (m, fs)
+            fs = make()
+            self.items[key] = (m, fs)
             while len(self.items) > self.cap:
                 _k, (_m, old) = self.items.pop(next(iter(self.items)))
                 old.close()
@@ -136,3 +143,14 @@ def frame(rid: str, uav: str, sensor: str, seq: int, request: Request,
         hdr["Content-Range"] = f"bytes {r[0]}-{r[1]}/{len(f.payload)}"
         return Response(f.payload[r[0]:r[1] + 1], status_code=206, media_type=f.content_type, headers=hdr)
     return Response(f.payload, media_type=f.content_type, headers=hdr)
+
+
+@router.get("/runs/{rid}/truth/frames/{uav}/{sensor}/{seq}")
+def truth_frame(rid: str, uav: str, sensor: str, seq: int, request: Request, p: TruthReader) -> Response:
+    """BN-52：`awr.sensor.camera_gt.v1` 容器（frame.v1 记录 + 实例、语义、invalid_mask 等块）；只对评测员及以上。"""
+    d = find_run(request.app.state.settings.dataset_dir, rid)
+    ts = request.app.state.frame_stores.truth(d, rid) if d else None
+    hit = ts.get(uav, sensor, seq) if ts else None
+    if hit is None:
+        raise ApiProblem(305, detail={"run_id": rid, "uav": uav, "sensor": sensor, "seq": seq})
+    return Response(hit[1], media_type=GT_CONTENT_TYPE, headers={"X-Frame-T-Ns": str(hit[0]), "Cache-Control": _IMMUTABLE})

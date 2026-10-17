@@ -10,7 +10,7 @@ from fastapi import Depends, Request
 from awr.api.problem import ApiProblem
 from awr.bench.auth import AuthError, BenchAuth, Principal
 
-__all__ = ["COOKIE", "AnyMember", "FrameReader", "Researcher", "authenticate", "require"]
+__all__ = ["COOKIE", "AnyMember", "FrameReader", "Researcher", "TruthReader", "authenticate", "require"]
 
 COOKIE = "d3_session"
 _SAFE = ("GET", "HEAD", "OPTIONS")
@@ -53,3 +53,4 @@ def require(role: str, *, aud: str | None = None):
 AnyMember = Annotated[Principal, Depends(require("invited"))]
 Researcher = Annotated[Principal, Depends(require("researcher"))]
 FrameReader = Annotated[Principal, Depends(require("researcher", aud="frames"))]
+TruthReader = Annotated[Principal, Depends(require("evaluator", aud="frames"))]

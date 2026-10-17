@@ -1,7 +1,8 @@
 """Run 写入器（M27 §6.7.4、§7.5）：每个 Run 一个无损 `raw.mcap`，zstd chunk；相机帧写入 `/uav/{id}/camera/{name}/{image,depth}`，
 `log_time = publish_time = t_ns`（帧时间戳：中间行曝光中点），MCAP `sequence` 为帧序号 seq。
 
-本版为同步写入（相机帧由 sensorsvc 会话逐帧交付）；关闭时写 `run` 元数据并可选生成 `frames.idx`。
+本版为同步写入（相机帧由 sensorsvc 会话逐帧交付）。真值文件 `truth/run_<id>.mcap` 用同一类写入 `/eval/hidden/camera/{uav}/{name}`
+（`awr.sensor.camera_gt.v1`，无 schema 的二进制消息，见 `truth.py`）。
 """
 
 from __future__ import annotations
@@ -11,8 +12,9 @@ from pathlib import Path
 import numpy as np
 from mcap.writer import CompressionType, IndexType, Writer
 
-from awr.bench.recorder.channels import camera_topic
+from awr.bench.recorder.channels import camera_topic, truth_camera_topic
 from awr.bench.recorder.foxglove import compressed_image, raw_image_f32, schema_data
+from awr.bench.recorder.truth import pack_camera_gt
 
 __all__ = ["RunWriter"]
 
@@ -31,14 +33,23 @@ class RunWriter:
         self.n_messages = 0
         self.closed = False
 
-    def _channel(self, topic: str, schema: str, meta: dict[str, str]) -> int:
+    def _channel(self, topic: str, schema: str, meta: dict[str, str], *, encoding: str = "protobuf") -> int:
         cid = self._channels.get(topic)
         if cid is None:
-            sid = self._schemas.get(schema)
-            if sid is None:
-                sid = self._schemas[schema] = self._w.register_schema(name=schema, encoding="protobuf", data=schema_data(schema))
-            cid = self._channels[topic] = self._w.register_channel(topic=topic, message_encoding="protobuf", schema_id=sid, metadata=meta)
+            if encoding == "protobuf":
+                sid = self._schemas.get(schema)
+                if sid is None:
+                    sid = self._schemas[schema] = self._w.register_schema(name=schema, encoding="protobuf", data=schema_data(schema))
+            else:
+                sid = 0                                        # 无 schema 的二进制消息；schema 名写入通道元数据
+                meta = {**meta, "schema": schema}
+            cid = self._channels[topic] = self._w.register_channel(topic=topic, message_encoding=encoding, schema_id=sid, metadata=meta)
         return cid
+
+    def write_camera_truth(self, uav: str, cam: str, seq: int, t_ns: int, rec: dict, blocks: dict[str, bytes]) -> None:
+        cid = self._channel(truth_camera_topic(uav, cam), "awr.sensor.camera_gt.v1", {"codec": "d3gt"}, encoding="binary")
+        self._w.add_message(channel_id=cid, log_time=int(t_ns), publish_time=int(t_ns), sequence=int(seq), data=pack_camera_gt(rec, blocks))
+        self.n_messages += 1
 
     def write_camera(self, uav: str, cam: str, seq: int, t_ns: int, jpeg: bytes, *, depth_m: np.ndarray | None = None,
                      period_ns: int | None = None, agent_delivered: bool = True) -> None:

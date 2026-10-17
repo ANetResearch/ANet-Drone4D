@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["CAMERA_TOPIC", "camera_topic", "parse_camera_topic", "sensor_of"]
+__all__ = ["CAMERA_TOPIC", "TRUTH_CAMERA_TOPIC", "camera_topic", "parse_camera_topic", "parse_truth_topic", "sensor_of", "truth_camera_topic"]
 
 CAMERA_TOPIC = re.compile(r"^/uav/([^/]+)/camera/([A-Za-z0-9_]+)/(image|depth)$")
+TRUTH_CAMERA_TOPIC = re.compile(r"^/eval/hidden/camera/([^/]+)/([A-Za-z0-9_]+)$")
 
 
 def camera_topic(uav: str, cam: str, kind: str = "image") -> str:
@@ -23,3 +24,12 @@ def parse_camera_topic(topic: str) -> tuple[str, str] | None:
     """返回 (uav, sensor_id)；非相机通道返回 None。"""
     m = CAMERA_TOPIC.match(topic)
     return (m.group(1), sensor_of(m.group(2), m.group(3))) if m else None
+
+
+def truth_camera_topic(uav: str, cam: str) -> str:
+    return f"/eval/hidden/camera/{uav}/{cam}"
+
+
+def parse_truth_topic(topic: str) -> tuple[str, str] | None:
+    m = TRUTH_CAMERA_TOPIC.match(topic)
+    return (m.group(1), m.group(2)) if m else None

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,14 +36,15 @@ def _file_sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def build_frames_idx(raw_mcap: Path, out: Path) -> dict:
-    """扫描已关闭的 `raw.mcap` 的相机通道（image、depth），写出 `frames.idx`，返回头 JSON。"""
+def build_frames_idx(raw_mcap: Path, out: Path, *, parse: Callable[[str], tuple[str, str] | None] = parse_camera_topic) -> dict:
+    """扫描已关闭的 `raw.mcap` 的相机通道（image、depth），写出 `frames.idx`，返回头 JSON。真值文件以
+    `parse = parse_truth_topic` 生成同格式的 `truth/frames.idx`（头中 `raw_mcap_sha256` 为真值文件的摘要）。"""
     ix = SegmentIndex.build(Path(raw_mcap), allow_open=False)
     cache = ChunkCache(ix)
     rows: list[tuple[str, str, int, int, int, int, int]] = []
     try:
         for cid, ch in ix.channels.items():
-            us = parse_camera_topic(ch.topic)
+            us = parse(ch.topic)
             if us is None or cid not in ix.idx:
                 continue
             t, c, o, _ = ix.idx[cid]

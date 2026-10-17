@@ -16,8 +16,11 @@ pytest.importorskip("foxglove_schemas_protobuf")
 from fastapi.testclient import TestClient
 
 from awr.api.bench_main import create_app
+from awr.bench.recorder.channels import parse_truth_topic
 from awr.bench.recorder.frames_idx import build_frames_idx
+from awr.bench.recorder.truth import unpack_camera_gt
 from awr.bench.recorder.writer import RunWriter
+from awr.bench.runs_store import truth_paths
 from awr.bench.settings import BenchSettings
 
 P = "/api/bench/v1"
@@ -36,11 +39,18 @@ def env(tmp_path: Path):
         for seq in range(1, 6):
             w.write_camera("uav-01", "cam0", seq, seq * 100_000_000, _jpeg(seq), depth_m=np.full((2, 3), seq, np.float32))
     build_frames_idx(run / "raw.mcap", run / "frames.idx")
+    tm, ti = truth_paths(run)
+    with RunWriter(tm) as w:
+        for seq in range(1, 6):
+            rec = {"schema": "drone4d.frame.v1", "frame_id": f"cap-0001/uav-01/cam0/{seq}", "ground_truth": {"objects": []}}
+            w.write_camera_truth("uav-01", "cam0", seq, seq * 100_000_000, rec, {"inst": np.full(6, seq, "<u2").tobytes()})
+    build_frames_idx(tm, ti, parse=parse_truth_topic)
     (run / "run_manifest.json").write_text(json.dumps({"state": "SUCCEEDED", "kind": "capture", "world_id": "oryahovo-crop1"}))
     app = create_app(s)
     c = TestClient(app)
     _tid, tok = app.state.auth.issue_token("alice", "researcher", ("d3",))
     _tid2, tok_inv = app.state.auth.issue_token("bob", "invited")
+    app.state.tok_eval = app.state.auth.issue_token("eve", "evaluator")[1]
     return c, app, tok, tok_inv
 
 
@@ -118,3 +128,15 @@ def test_revoked_token_kills_sessions_and_short_tokens(env) -> None:
     assert TestClient(app).get(f"{P}/runs/cap-0001/frames/uav-01/cam0/1", headers={"Authorization": f"Bearer {st}"}).json()["code"] == 302
     keys = app.state.settings.keys_dir
     assert (keys / "bench_tokens.json").stat().st_mode & 0o777 == 0o600 and tok not in (keys / "bench_tokens.json").read_text()
+
+
+def test_truth_frames_evaluator_only(env) -> None:
+    c, app, tok, _ = env
+    url = f"{P}/runs/cap-0001/truth/frames/uav-01/cam0/3"
+    r = c.get(url, headers={"Authorization": f"Bearer {tok}"})
+    assert r.status_code == 403 and r.json()["code"] == 115
+    r = c.get(url, headers={"Authorization": f"Bearer {app.state.tok_eval}"})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/x-d3gt" and r.headers["x-frame-t-ns"] == "300000000"
+    rec, blocks = unpack_camera_gt(r.content)
+    assert rec["frame_id"] == "cap-0001/uav-01/cam0/3" and np.frombuffer(blocks["inst"], "<u2")[0] == 3
+    assert c.get(f"{P}/runs/cap-0001/truth/frames/uav-01/cam0/9", headers={"Authorization": f"Bearer {app.state.tok_eval}"}).json()["code"] == 305
