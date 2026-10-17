@@ -423,11 +423,14 @@ const COI_HEADERS = {
 // 端口规划（AWR-19 OPS-FR-002）：api 8000、vite 5173、preview 4173，AWR_PORT_OFFSET = k 时各加 10·k
 const offset = Number.parseInt(process.env.AWR_PORT_OFFSET ?? '0', 10) || 0
 const apiTarget = `http://127.0.0.1:${8000 + 10 * offset}`
+// D3 bench-api（AWR-17 §18.3；内部工作区 /lab/**）：缺省本机 18650，可由 AWR_BENCH_TARGET 指向其它实例
+const benchTarget = process.env.AWR_BENCH_TARGET ?? 'http://127.0.0.1:18650'
 
 // 代理表（AWR-03 §3.3）：/api（含 /api/rt 的 WS 升级）与 /worlds/<id>/**、/worlds/_shared/** 数据路径转发到 api 进程。
 // /assets/ 是 Vite 构建产物前缀，不作代理（AWR-03 §3.3、AWR-16 F-09、R2-42）；/worlds 本身是前端路由（World Hub，
 // M15-FR-003），因此 /worlds 只以正则匹配带子路径的数据请求。preview 显式使用同一张表（默认会继承 server.proxy）。
 const PROXY = {
+  '/api/bench': { target: benchTarget }, // 须在 /api 之前（前缀按声明序匹配）
   '/api': { target: apiTarget, ws: true },
   '^/worlds/.+': { target: apiTarget },
   '^/vehicles/.+': { target: apiTarget }, // vehicle model glb (AWR-17 §5; INT-1)

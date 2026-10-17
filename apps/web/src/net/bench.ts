@@ -1,0 +1,78 @@
+// bench-api client (AWR-17 §18.3, §18.4; D3 internal workspace, M15 lab pages). Auth is the workspace session cookie
+// `d3_session` (HttpOnly, SameSite=Strict), so requests go out with credentials 'same-origin' and never carry a token in
+// the URL; writes add `X-D3-CSRF: 1` and a JSON body (§18.3.1 item 3). Errors are problem+json: BenchError carries the
+// HTTP status, the reason code and its name (600-699 codes are not in the D2 web dictionary, the page shows code + name).
+export const BENCH = '/api/bench/v1'
+
+export class BenchError extends Error {
+  constructor(readonly status: number, readonly code: number | null, readonly reasonName: string | null, message: string,
+    readonly detail: unknown = null) {
+    super(message)
+  }
+}
+
+interface Problem { code?: number; name?: string; message?: string; detail?: unknown }
+
+async function toError(r: Response, path: string): Promise<BenchError> {
+  let p: Problem = {}
+  try {
+    p = (await r.json()) as Problem
+  } catch {
+    p = {}
+  }
+  return new BenchError(r.status, typeof p.code === 'number' ? p.code : null, p.name ?? null, p.message ?? `${r.status} ${path}`, p.detail ?? null)
+}
+
+async function req(path: string, init: RequestInit = {}): Promise<Response> {
+  const write = init.method !== undefined && init.method !== 'GET'
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) }
+  if (write) {
+    headers['X-D3-CSRF'] = '1'
+    if (init.body !== undefined) headers['Content-Type'] = 'application/json'
+  }
+  const r = await fetch(BENCH + path, { ...init, headers, credentials: 'same-origin' })
+  if (!r.ok && r.status !== 304) throw await toError(r, path)
+  return r
+}
+
+export async function benchGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return (await (await req(path, { signal })).json()) as T
+}
+
+export interface BenchBytes { buf: ArrayBuffer; headers: Headers }
+export async function benchBytes(path: string, signal?: AbortSignal): Promise<BenchBytes> {
+  const r = await req(path, { signal })
+  return { buf: await r.arrayBuffer(), headers: r.headers }
+}
+
+export async function benchPost<T>(path: string, body: unknown): Promise<T | null> {
+  const r = await req(path, { method: 'POST', body: JSON.stringify(body) })
+  return r.status === 204 ? null : ((await r.json()) as T)
+}
+
+export async function benchDelete(path: string): Promise<void> {
+  await req(path, { method: 'DELETE' })
+}
+
+export interface BenchSession { principal: string; role: 'invited' | 'researcher' | 'evaluator' | 'admin'; projects: string[]; via: string }
+export interface BenchRunItem { run_id: string; event_id: string; state: string; has_frames: boolean; created_unix_ns: number | null; kind: string | null; world_id: string | null }
+export interface BenchRunChannel { uav_id: string; sensor_id: string; latest_seq: number | null }
+export interface BenchRun { run_id: string; event_id: string; state: string; kind: string | null; world_id: string | null; frames?: BenchRunChannel[] }
+export interface FrameIndexItem { seq: number; t_ns: number; bytes: number; sha256: string }
+export interface FrameIndexPage { run_id: string; uav_id: string; sensor_id: string; period_ns: number; items: FrameIndexItem[]; next_seq: number | null }
+
+/** all index items of one channel (follows next_seq; 1000 items per page) */
+export async function frameIndex(rid: string, uav: string, sensor: string, signal?: AbortSignal): Promise<{ periodNs: number; items: FrameIndexItem[] }> {
+  const items: FrameIndexItem[] = []
+  let next: number | null = 0
+  let periodNs = 100_000_000
+  while (next !== null) {
+    const page: FrameIndexPage = await benchGet<FrameIndexPage>(`/runs/${encodeURIComponent(rid)}/frames/${encodeURIComponent(uav)}/${encodeURIComponent(sensor)}?seq_from=${next}`, signal)
+    items.push(...page.items)
+    periodNs = page.period_ns
+    next = page.next_seq
+  }
+  return { periodNs, items }
+}
+
+export const ROLE_RANK: Readonly<Record<BenchSession['role'], number>> = { invited: 0, researcher: 1, evaluator: 2, admin: 3 }
