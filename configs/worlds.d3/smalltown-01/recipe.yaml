@@ -1,0 +1,14 @@
+schema: awr.glb.recipe.v1
+world_id: smalltown-01
+name: Oryahovo small town (photogrammetry)
+name_zh: 奥里亚霍沃小镇（摄影测量）
+role: lidar-explore
+source:
+  glb: {path: smalltown-01/an_entire_small_town_scanned_by_a_drone.glb, sha256: d1e3effce66add4e4a7b0239d1764bf030fb908b066831f9db75dae79a9085ec}
+  sketchfab: {uid: ebdd505832c745e081f03d8e29d17f84, author: "Mitko (https://sketchfab.com/bg3d)", license: CC-BY-4.0}
+registration: registration.json
+build:
+  profile: full
+  tiling_m: 512
+  quality_cell_m: 2.0
+  voxel_m: 2.0

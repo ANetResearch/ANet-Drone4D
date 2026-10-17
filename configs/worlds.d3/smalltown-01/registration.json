@@ -1,0 +1,91 @@
+{
+ "schema": "awr.glb.registration.v1",
+ "world_id": "smalltown-01",
+ "status": "accepted",
+ "inputs": {
+  "glb": {
+   "name": "an_entire_small_town_scanned_by_a_drone.glb",
+   "sha256": "d1e3effce66add4e4a7b0239d1764bf030fb908b066831f9db75dae79a9085ec"
+  }
+ },
+ "method": "manual",
+ "result": {
+  "m_per_unit": 8.373987138020217,
+  "yaw_deg": 168.03644038133228,
+  "t_osm_m": [
+   -833.5269562059044,
+   -1240.6384374895765
+  ],
+  "osm_ref": {
+   "lat_deg": 43.7333,
+   "lon_deg": 23.9667
+  },
+  "leveling": {
+   "primary": "dem",
+   "applied_g": [
+    -0.0006703954383413535,
+    -0.021797485396994665
+   ],
+   "tilt_deg": 1.2493,
+   "needs_control_points": false
+  },
+  "T_world_source": [
+   [
+    -8.192111924781,
+    0.005612548329,
+    1.735779738009,
+    -512.812150103998
+   ],
+   [
+    1.735487567784,
+    0.182488473598,
+    8.190142944223,
+    -1006.454773209488
+   ],
+   [
+    -0.032337310451,
+    8.371996598425,
+    -0.179688180044,
+    123.514137755877
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "origin_osm_m": [
+   -320.705557,
+   -233.882949,
+   -95.919108
+  ],
+  "bounds_m": {
+   "min": [
+    -2287.27,
+    -1392.92,
+    -167.544
+   ],
+   "max": [
+    2287.27,
+    1392.92,
+    82.856
+   ]
+  },
+  "anchor": {
+   "lat_deg": 43.7311949,
+   "lon_deg": 23.9627194,
+   "h_msl_m": 165.2
+  },
+  "leveled_deg": 1.2493
+ },
+ "metrics": {},
+ "scale_status": "landmark",
+ "evidence": [
+  "osm-road-correlation (r2 E03/E03b): s=8.374 m/u, yaw=168.04 deg, chamfer inliers 51% within 1 u",
+  "levelling dem srtm30m (r2 E03c): 1.25 deg; wall 0.88 deg",
+  "hMsl at origin from srtm30m (r2 E16), spread 4.1 m"
+ ],
+ "accepted_by": "M22 (r2 measurement import)",
+ "accepted_at": "2026-10-17T12:51:35Z"
+}

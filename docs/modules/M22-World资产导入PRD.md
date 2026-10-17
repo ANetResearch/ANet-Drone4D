@@ -146,7 +146,7 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-181、ADR-186）重排；v1.0 的阶段对�
 
 | 编号 | 需求描述 | 优先级 | 阶段 | 目标版本 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
-| M22-FR-001 | 原始资产登记：GLB、OSM 抽取、DEM 瓦片放在 `data/raw/d3-glb/<world_id>/`（不入库），清单 `data/raw/d3-glb/MANIFEST.json` 入库并逐文件记录 `{name, bytes, sha256, kind, source_url, license, author, title, retrieved}`；任一阶段读取前校验字节数与 sha256，不符时退出码 4（`RAW_CHECKSUM`），缺失时退出码 4（`RAW_MISSING`） | P0 | P0a | V0.3 | M22-AC-021 | 16 §10.4 同构；ADR-034 |
+| M22-FR-001 | 原始资产登记：GLB、OSM 抽取、DEM 瓦片放在 `data/raw/d3-glb/<world_id>/`（不入库，`/data/raw/` 整体忽略），清单 `configs/worlds.d3/raw-manifest.json` 入库并逐文件记录 `{name, bytes, sha256, kind, source_url, license, author, title, retrieved}`；任一阶段读取前校验字节数与 sha256，不符时退出码 4（`RAW_CHECKSUM`），缺失时退出码 4（`RAW_MISSING`） | P0 | P0a | V0.3 | M22-AC-021 | 16 §10.4 同构；ADR-034 |
 | M22-FR-002 | 世界配方：每个世界一份 `configs/worlds.d3/<id>/recipe.yaml`（字段见 §7.6.1），声明源文件、OSM 与 DEM、配准记录、构建参数、导航种子与 off-mesh 连接、锚点覆写、舞台定义与发布范围；`world_build` 作业只读配方，CLI 参数只用于开发期覆盖且覆盖项写入 `generator.params.d3.overrides` | P0 | P0a | V0.3 | M22-AC-021 | 本文设定：保证构建输入可审计、可复现 |
 | M22-FR-003 | 外部数据离线化：`register` 与 `build` 不访问网络；OSM 取 Geofabrik 区域抽取，以 osmium 按世界包围盒外扩 2 km 裁剪为 `.osm`（XML）；DEM 取本地 SRTM 1″ 或 EU-DEM 瓦片；每个输入的 sha256 写入配方与 `dataset.derivedFrom[]`；检测到网络访问（测试中以无网络命名空间运行）即判失败 | P0 | P0a | V0.3 | M22-AC-021 | r2 §2.2（Overpass 不稳定）；05 §13 第 21 条；ADR-130 |
 | M22-FR-004 | `inspect`：输出节点矩阵展平结果、上轴投票（面积加权法线 ±X/±Y/±Z 占比）、镜像检测（各节点 `det` 符号）、三角形、顶点、去重位置与图元数、索引类型、纹理数量与尺寸与总纹素、材质扩展、估算主存与 GPU 纹理显存、`asset.extras` 中的作者、来源与许可；`--json` 输出机器可读报告 | P0 | P-1 | V0.3 | M22-AC-001 | r2 §1、§6 |
@@ -616,7 +616,7 @@ def register_roads(scene, osm, prior_s=None) -> Registration:   # python/awr/wor
 
 ```python
 def register_frame_of(scene, ref_world) -> Registration:
-    S_rel = root_matrix(ref_scene) ** -1 @ root_matrix(scene)      # 两份 GLB 根节点矩阵求本场景到参照场景帧的相似变换
+    S_rel = root_matrix(ref_scene) @ root_matrix(scene) ** -1      # 本场景坐标 → 参照场景坐标（共用 OBJ 局部帧；r2 E04 复核）
     T = ref_registration.T_osm_from_gltf @ S_rel                   # 复合参照世界已接受的结果
     d = closest_distance(sample(scene.V, 50_000, key=vertex_index), ref_mesh)   # 验证（Embree，只写 qa）
     gate(median(d) <= 0.5 and p90(d) <= 1.0)                         # R6
@@ -1346,7 +1346,7 @@ publish: {public_browser_layer: true}
 | `accepted_by`、`accepted_at` | string | 接受人与 RFC 3339 时刻（输入文件，不进入世界包） |
 | `inputs` | `{glb, osm, dem, control_points?}` 各含 `{name, sha256}` | `build` 校验 |
 | `method`、`frame_of` | string | §7.2 枚举；共帧时为参照世界 id 与其配准 sha256 |
-| `result` | `{units_to_meters, yaw_deg, t_osm_m: [E, N], leveling: {primary, g_dem, g_wall, delta_deg, ci95_deg, applied_g, tilt_deg, needs_control_points}, T_world_source, anchor: {lat_deg, lon_deg, h_msl_m}}` | 构建直接使用 |
+| `result` | `{m_per_unit, yaw_deg, t_osm_m: [E, N], leveling: {primary, g_dem, g_wall, delta_deg, ci95_deg, applied_g, tilt_deg, needs_control_points}, T_world_source, anchor: {lat_deg, lon_deg, h_msl_m}}` | 构建直接使用 |
 | `metrics` | R1–R6、L1–L4 的值 | 门限复核 |
 | `scale_status` | enum | `landmark` 或 `assumed` |
 
@@ -1512,7 +1512,7 @@ tools/worldglb/                           # M22（Node 22.12.0，独立 package.
 └── web/                                  # P1、P2：图集重排、gltfpack、3D Tiles 写出（← r2 e11b_uv_charts.py、web/bench.mjs）
 configs/worldpkg.d3.yaml                  # D3 派生器登记与缺省参数（只由 D3 CLI 读取）
 configs/worlds.d3/<id>/                   # recipe.yaml、registration.json、anchors.overrides.json、nav_seeds.json、offmesh.json、horizontal_planes.geojson
-data/raw/d3-glb/MANIFEST.json             # 入库；同目录下的原始资产不入库
+configs/worlds.d3/raw-manifest.json       # 入库；原始资产在 data/raw/d3-glb/，不入库
 packages/contracts/schemas/world/*.schema.json、packages/contracts/event/anchors.schema.json   # M22 起草，M00 合入
 tests/d3/world/、tests/d3/quality/        # 本模块测试
 ```

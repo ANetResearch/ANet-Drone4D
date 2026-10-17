@@ -1,0 +1,28 @@
+{
+ "schema": "awr.glb.raw_manifest.v1",
+ "doc": "Raw D3 GLB world assets (M22-FR-001). Files live in data/raw/d3-glb/ (not committed); every stage checks bytes and sha256 before reading.",
+ "files": [
+  {
+   "name": "oryahovo-crop1/oryahovo_-_crop_1_-_metashape_texture_problems.glb",
+   "bytes": 289706900,
+   "sha256": "2798ed0444712af1df66219dcc79471e57bd55489828800ecba48ae4cb983a63",
+   "kind": "glb",
+   "source_url": "https://sketchfab.com/3d-models/oryahovo-crop-1-metashape-texture-problems-979b09bd0b7744989d5786c2635f24ba",
+   "license": "CC-BY-4.0",
+   "author": "Mitko (https://sketchfab.com/bg3d)",
+   "title": "oryahovo - crop #1 - metashape texture problems",
+   "retrieved": "2025-11-23"
+  },
+  {
+   "name": "smalltown-01/an_entire_small_town_scanned_by_a_drone.glb",
+   "bytes": 230581656,
+   "sha256": "d1e3effce66add4e4a7b0239d1764bf030fb908b066831f9db75dae79a9085ec",
+   "kind": "glb",
+   "source_url": "https://sketchfab.com/3d-models/an-entire-small-town-scanned-by-a-drone-ebdd505832c745e081f03d8e29d17f84",
+   "license": "CC-BY-4.0",
+   "author": "Mitko (https://sketchfab.com/bg3d)",
+   "title": "An entire small town scanned by a drone",
+   "retrieved": "2025-10-05"
+  }
+ ]
+}

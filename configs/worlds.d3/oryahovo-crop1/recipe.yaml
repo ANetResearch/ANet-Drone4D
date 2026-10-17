@@ -1,0 +1,14 @@
+schema: awr.glb.recipe.v1
+world_id: oryahovo-crop1
+name: Oryahovo town centre (photogrammetry)
+name_zh: 奥里亚霍沃镇中心（摄影测量）
+role: event-main
+source:
+  glb: {path: oryahovo-crop1/oryahovo_-_crop_1_-_metashape_texture_problems.glb, sha256: 2798ed0444712af1df66219dcc79471e57bd55489828800ecba48ae4cb983a63}
+  sketchfab: {uid: 979b09bd0b7744989d5786c2635f24ba, author: "Mitko (https://sketchfab.com/bg3d)", license: CC-BY-4.0}
+registration: registration.json
+build:
+  profile: full
+  tiling_m: 512
+  quality_cell_m: 2.0
+  voxel_m: 1.0

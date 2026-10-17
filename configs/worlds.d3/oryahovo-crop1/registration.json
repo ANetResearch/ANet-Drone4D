@@ -1,0 +1,120 @@
+{
+ "schema": "awr.glb.registration.v1",
+ "world_id": "oryahovo-crop1",
+ "status": "accepted",
+ "inputs": {
+  "glb": {
+   "name": "oryahovo_-_crop_1_-_metashape_texture_problems.glb",
+   "sha256": "2798ed0444712af1df66219dcc79471e57bd55489828800ecba48ae4cb983a63"
+  }
+ },
+ "method": "inherit-frame",
+ "result": {
+  "m_per_unit": 20.93496754388466,
+  "yaw_deg": 168.03644038133228,
+  "t_osm_m": [
+   -833.5269562059044,
+   -1240.6384374895765
+  ],
+  "osm_ref": {
+   "lat_deg": 43.7333,
+   "lon_deg": 23.9667
+  },
+  "leveling": {
+   "primary": "inherited",
+   "applied_g": [
+    -0.0006703954383413535,
+    -0.021797485396994665
+   ],
+   "tilt_deg": 1.2493,
+   "needs_control_points": false
+  },
+  "T_world_source": [
+   [
+    -20.497999203157,
+    0.014031370823,
+    4.254960816107,
+    -397.86191365667
+   ],
+   [
+    4.254250694765,
+    0.456221183995,
+    20.493073781767,
+    -1457.121676394209
+   ],
+   [
+    -0.078990202233,
+    20.929991496062,
+    -0.449549982819,
+    179.827794204366
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "origin_osm_m": [
+   -435.655794,
+   216.783954,
+   -152.232764
+  ],
+  "bounds_m": {
+   "min": [
+    -1256.034,
+    -850.442,
+    -102.195
+   ],
+   "max": [
+    1256.034,
+    850.442,
+    139.5
+   ]
+  },
+  "anchor": {
+   "lat_deg": 43.735251,
+   "lon_deg": 23.9612923,
+   "h_msl_m": 115.2
+  },
+  "leveled_deg": 1.2493
+ },
+ "metrics": {},
+ "scale_status": "landmark",
+ "evidence": [
+  "inherit-frame from smalltown-01 (shared OBJ frame, r2 E04: median 0.26 m, p90 0.80 m to the town mesh)",
+  "hMsl at origin from srtm30m (r2 E16), spread 3.9 m"
+ ],
+ "frame_of": {
+  "world_id": "smalltown-01",
+  "registration_sha256": "788142060f8fd39a43f3479f83527ed9fc1f6076b20638bc7b2109686a91efb3",
+  "S_rel": [
+   [
+    2.499978691339,
+    -0.0,
+    0.010308885248,
+    0.0
+   ],
+   [
+    -0.0,
+    2.5,
+    0.0,
+    0.0
+   ],
+   [
+    -0.010308885248,
+    0.0,
+    2.499978691339,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ]
+ },
+ "accepted_by": "M22 (r2 measurement import)",
+ "accepted_at": "2026-10-17T12:51:56Z"
+}
