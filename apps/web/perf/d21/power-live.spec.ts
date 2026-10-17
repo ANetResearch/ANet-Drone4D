@@ -11,7 +11,9 @@
 //      the resume queue card ("恢复沙盒需排队 · 第 1 位") inside the power overlay; when the other session ends the page claims
 //      the slot by itself (page visible) and is ACTIVE again on the same sid, epoch + 1;
 //   3. public demo build: the shared show follows the server's thresholds from the capacity endpoint (no test switches):
-//      countdown banner and saving overlay, resumed by a drag.
+//      countdown banner and saving overlay, resumed by a drag;
+//   4. sandbox with an external API client (issue #59): session REST calls without X-AWR-Client every 4 s for twice the idle
+//      threshold keep the page out of the countdown and of saving; once they stop the page saves and the session parks (idle).
 // The frame and request bounds of D2-AC-44 are checked in every run; the main-thread share while saving (Chromium TaskDuration)
 // is recorded always and asserted with M16_PERF=1 over 60 s (<= 1 %, D2-AC-46 P1, which implies the 10 s <= 2 % of D2-AC-44);
 // the server-side savings are measured by tools/bench/sandbox/power.py.
@@ -215,6 +217,40 @@ test('sandbox operator: parked through SB-69, resume queues behind a full pool, 
     const h = await pageHeld(page).catch(() => null)
     await endSession(live!, h ?? a)
     await endSession(live!, b)
+    await waitPoolEmpty(live!).catch(() => null)
+  }
+})
+
+test('sandbox: external API calls hold off power saving; the page saves once they stop (issue #59)', async ({ page }) => {
+  test.setTimeout(300_000)
+  const w = watch(page)
+  let a: Held | null = null
+  try {
+    a = await createSession(live!, 'MSIXPOWERCHINTAAAAAAAAAA', 't1_point_watch')
+    await waitState(live!, a, ['READY', 'ACTIVE'])
+    await holdSession(page, a)
+    await page.goto(`/sandbox/${a.sid}?power=sandbox&${Q}`)
+    await revealed(page)
+    test.skip(!(await isTestBuild(page)), 'needs a test build')
+    await expect(page.locator('[data-session-bar]')).toBeVisible({ timeout: 60_000 })
+    await waitState(live!, a, ['ACTIVE'])
+    // an SDK-like client (no X-AWR-Client header) calls the session API every 4 s for twice the idle threshold
+    const end = Date.now() + 2 * POWER.sandbox_idle_s * 1000
+    while (Date.now() < end) {
+      const r = await fetch(`${live!.base}/api/sandbox/v1/sessions/${a.sid}/vehicles`, { headers: { authorization: `Bearer ${a.token}` } })
+      expect(r.status).toBe(200)
+      expect(['ACTIVE', 'QUIET']).toContain(await powerState(page))
+      await page.waitForTimeout(4_000)
+    }
+    await expect(page.locator('[data-power-overlay]')).toHaveCount(0)
+    // the calls stop: the countdown, then saving after the idle threshold, and the session parks with reason idle
+    await expect(page.locator('[data-power-overlay="SAVING"]')).toBeVisible({ timeout: 40_000 })
+    const parked = await waitState(live!, a, ['PARKED'], 30_000)
+    expect(parked.park_reason).toBe('idle')
+    expect(w.errors).toEqual([])
+  } finally {
+    const h = await pageHeld(page).catch(() => null)
+    await endSession(live!, h ?? a)
     await waitPoolEmpty(live!).catch(() => null)
   }
 })
