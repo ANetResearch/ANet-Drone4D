@@ -13,7 +13,7 @@ import numpy as np
 from mcap.writer import CompressionType, IndexType, Writer
 
 from awr.bench.recorder.channels import camera_topic, truth_camera_topic
-from awr.bench.recorder.foxglove import compressed_image, raw_image_f32, schema_data
+from awr.bench.recorder.foxglove import DEPTH_COMPRESSION, compressed_image, raw_image_f32, schema_data
 from awr.bench.recorder.truth import pack_camera_gt
 
 __all__ = ["RunWriter"]
@@ -22,8 +22,9 @@ CHUNK_BYTES = 4 << 20
 
 
 class RunWriter:
-    def __init__(self, path: Path, *, profile: str = "drone4d-d3") -> None:
+    def __init__(self, path: Path, *, profile: str = "drone4d-d3", depth_compression: str | None = DEPTH_COMPRESSION) -> None:
         self.path = Path(path)
+        self.depth_compression = depth_compression           # None 只用于兼容测试（D3 首版写出的未压缩深度）
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._f = self.path.open("wb")
         self._w = Writer(self._f, chunk_size=CHUNK_BYTES, compression=CompressionType.ZSTD, index_types=IndexType.ALL)
@@ -62,9 +63,10 @@ class RunWriter:
                             data=compressed_image(t_ns, fid, jpeg))
         self.n_messages += 1
         if depth_m is not None:
-            cid = self._channel(camera_topic(uav, cam, "depth"), "foxglove.RawImage", {**meta, "codec": "32FC1"})
+            dm = {**meta, "codec": "32FC1"} | ({"compression": self.depth_compression} if self.depth_compression else {})
+            cid = self._channel(camera_topic(uav, cam, "depth"), "foxglove.RawImage", dm)
             self._w.add_message(channel_id=cid, log_time=int(t_ns), publish_time=int(t_ns), sequence=int(seq),
-                                data=raw_image_f32(t_ns, fid, depth_m))
+                                data=raw_image_f32(t_ns, fid, depth_m, compression=self.depth_compression))
             self.n_messages += 1
 
     def metadata(self, name: str, data: dict[str, str]) -> None:

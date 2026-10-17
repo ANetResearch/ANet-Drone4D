@@ -99,3 +99,38 @@ def test_range_container_layout_stride_and_limits(run_dir: Path) -> None:
         fs.range_container("uav-01", "cam0", 0, 300)
     assert fs.range_container("uav-01", "cam0", 0, 599, stride=2) is not None
     fs.close()
+
+
+def test_depth_archive_is_lossless_bshuf4_zstd(tmp_path: Path) -> None:
+    """L2-depth 存档为 f32 + 字节重排 + zstd（AWR-05 §1154）：解码逐位相同（含 0、inf、NaN），平滑深度明显变小；未压缩的旧 Run 仍可读。"""
+    from mcap.reader import make_reader
+
+    from awr.bench.recorder.foxglove import bshuf4_unzstd, bshuf4_zstd
+
+    y, x = np.mgrid[0:180, 0:320]
+    depth = (5.0 + 0.05 * x + 0.2 * y).astype(np.float32)
+    depth[:20] = 0.0
+    depth[20, :3] = [np.inf, np.nan, -0.0]
+    raw = depth.astype("<f4").tobytes()
+    assert bshuf4_unzstd(bshuf4_zstd(raw)) == raw
+    d = tmp_path / "run-d"
+    with RunWriter(d / "raw.mcap") as w:
+        w.write_camera("uav-01", "cam0", 1, 100_000_000, _jpeg(1), depth_m=depth)
+    build_frames_idx(d / "raw.mcap", d / "frames.idx")
+    with open(d / "raw.mcap", "rb") as fh:
+        msgs = [(c, m) for _s, c, m in make_reader(fh).iter_messages() if c.topic.endswith("/depth")]
+    assert msgs[0][0].metadata["compression"] == "bshuf4-zstd" and len(msgs[0][1].data) < len(raw) / 3
+    fs = FrameStore(d)
+    f = fs.frame("uav-01", "cam0.depth", 1)
+    assert f is not None and f.payload == raw and (f.width, f.height) == (320, 180)
+    page = fs.index_page("uav-01", "cam0.depth")
+    assert page["items"][0]["bytes"] == len(raw) and page["items"][0]["sha256"] == hashlib.sha256(raw).hexdigest()
+    fs.close()
+
+    plain = tmp_path / "run-p"
+    with RunWriter(plain / "raw.mcap", depth_compression=None) as w:
+        w.write_camera("uav-01", "cam0", 1, 100_000_000, _jpeg(1), depth_m=depth)
+    build_frames_idx(plain / "raw.mcap", plain / "frames.idx")
+    fs = FrameStore(plain)
+    assert fs.frame("uav-01", "cam0.depth", 1).payload == raw
+    fs.close()

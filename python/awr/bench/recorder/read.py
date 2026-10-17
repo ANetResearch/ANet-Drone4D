@@ -1,7 +1,8 @@
 """帧读取（M27-FR-052；AWR-17 §18.8：BN-49 帧索引、BN-50 单帧、BN-51 区间帧 `d3frames.v1`）。
 
 按 `frames.idx` 定位 `raw.mcap` 中的消息，块缓存复用 D2 `ChunkCache`；返回交付字节（`foxglove.CompressedImage.data` 即 Agent 收到
-的 JPEG；深度为 f32 行主序），索引与容器中的 sha256 取交付字节。
+的 JPEG；深度为 f32 行主序，存档的字节重排 + zstd 在此解开），索引与容器中的 sha256 取交付字节。交付字节的长度与 sha256 按帧缓存，
+索引分页不重复解码。
 """
 
 from __future__ import annotations
@@ -64,6 +65,7 @@ class FrameStore:
         self.cache = ChunkCache(self.seg)
         self.chunk_no = {c.start: i for i, c in enumerate(self.seg.chunks)}
         self.meta: dict[tuple[str, str], dict] = {}
+        self._digest: dict[tuple[str, str, int], tuple[int, str]] = {}
         for ch in self.seg.channels.values():
             us = parse_camera_topic(ch.topic)
             if us is not None:
@@ -76,10 +78,19 @@ class FrameStore:
         return self.meta.get((uav, sensor))
 
     def _frame(self, uav: str, sensor: str, r) -> Frame:
-        codec = self.meta[(uav, sensor)].get("codec", "jpeg")
+        info = self.meta[(uav, sensor)]
+        codec = info.get("codec", "jpeg")
         m = self.cache.message(MsgRef(int(r["t_ns"]), self.chunk_no[int(r["chunk_offset"])], int(r["msg_offset"])))
-        d = decode_image(_SCHEMA_OF_CODEC[codec], m.data)
-        return Frame(int(r["seq"]), int(r["t_ns"]), d["codec"], d["payload"], d.get("width"), d.get("height"))
+        d = decode_image(_SCHEMA_OF_CODEC[codec], m.data, info.get("compression"))
+        f = Frame(int(r["seq"]), int(r["t_ns"]), d["codec"], d["payload"], d.get("width"), d.get("height"))
+        self._digest[(uav, sensor, f.seq)] = (len(f.payload), f.sha256)
+        return f
+
+    def _digest_of(self, uav: str, sensor: str, r) -> tuple[int, str]:
+        k = (uav, sensor, int(r["seq"]))
+        if k not in self._digest:
+            self._frame(uav, sensor, r)
+        return self._digest[k]
 
     def frame(self, uav: str, sensor: str, seq: int) -> Frame | None:
         r = self.idx.find(uav, sensor, seq)
@@ -96,8 +107,8 @@ class FrameStore:
             return None
         rs = self.idx.span(uav, sensor, seq_from, 2 ** 32 - 1 if seq_to is None else seq_to)
         page, more = rs[:MAX_INDEX_ITEMS], rs[MAX_INDEX_ITEMS:MAX_INDEX_ITEMS + 1]
-        items = [{"seq": int(r["seq"]), "t_ns": int(r["t_ns"]), "bytes": len(f.payload), "sha256": f.sha256}
-                 for r in page for f in [self._frame(uav, sensor, r)]]
+        items = [{"seq": int(r["seq"]), "t_ns": int(r["t_ns"]), "bytes": n, "sha256": h}
+                 for r in page for n, h in [self._digest_of(uav, sensor, r)]]
         codec = info.get("codec", "jpeg")
         return {"schema": "drone4d.bench.frame_index.v1", "run_id": self.run_id, "uav_id": uav, "sensor_id": sensor, "channel": info["channel"],
                 "encoding": _SCHEMA_OF_CODEC[codec], "codec": codec, "agent_delivered": info.get("agent_delivered", "true") == "true",
