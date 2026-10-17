@@ -623,6 +623,18 @@ export type WorldPropertiesDataset = {
    * Raw inputs with sha256; must match data/raw/urbanscene3d/MANIFEST.json (AWR-16 §10.4).
    */
   sourceFiles: WorldCommonSourceFile[]
+  /**
+   * D3: external inputs used to derive layers (OSM, DEM; M22 §7.1.4, M22-FR-003).
+   */
+  derivedFrom?: {
+    name: string
+    version: string
+    license: string
+    use: string
+    sha256: WorldCommonSha256
+    attribution: string
+    url?: string
+  }[]
 } | null
 /**
  * Input log runs/<run>/inputs.msgpack (awr.inputlog.v1). AWR-16 §13.8 (D1-ext, ADR-049): header object followed by entries.
@@ -2612,7 +2624,18 @@ export interface Coordinate1 {
    * Only for worlds built from a reconstruction / LIO map: the frame the map was estimated in ('map' or 'engine') and its Sim3 into world. Per-session alignments live in reconstruction/<session>/alignment.json as T_world_engine.
    */
   registration?: {
-    method: 'none' | 'rtk-sim3' | 'gnss-sim3' | 'rtk-4dof' | 'lidar-icp' | 'pose-prior-ba' | 'manual'
+    method:
+      | 'none'
+      | 'rtk-sim3'
+      | 'gnss-sim3'
+      | 'rtk-4dof'
+      | 'lidar-icp'
+      | 'pose-prior-ba'
+      | 'manual'
+      | 'osm-road-correlation'
+      | 'osm-footprint-correlation'
+      | 'control-points'
+      | 'inherit-frame'
     T_world_map: WorldCommonSim3
     rmseM?: number
     inliers?: number
@@ -3633,7 +3656,7 @@ export interface Gnss {
 }
 export interface Grid1 {
   schemaVersion: WorldCommonSemver
-  kind: 'dtm' | 'dsm' | 'hag' | 'heightmap' | 'occupancy' | 'nofly' | 'plan-cost'
+  kind: 'dtm' | 'dsm' | 'hag' | 'heightmap' | 'occupancy' | 'nofly' | 'plan-cost' | 'quality'
   dtype: 'float32' | 'float16' | 'uint8' | 'uint16'
   href: WorldCommonRelHref1
   width: number
@@ -6944,6 +6967,58 @@ export interface QaReport {
     dtm_bytes?: number
     total_bytes?: number
   }
+  /**
+   * D3 GLB world evidence (M22 §7.3.8, M22-FR-022); qa.status takes the strictest of V-GLB and the D2 rules.
+   */
+  glb?: {
+    /**
+     * method, coarse and fine search peaks, R1-R6, scale uncertainty, frame-of cross check
+     */
+    registration?: {}
+    /**
+     * primary method, gradients and tilt of both methods, difference, CI95, per-plane slopes, control point residuals, needs_control_points
+     */
+    leveling?: {}
+    /**
+     * vertices before and after welding, duplicate and degenerate faces, boundary and non-manifold edges, components, fragments
+     */
+    topology?: {}
+    stages?: {
+      name: string
+      seconds: number
+      peak_rss_mb?: number
+      input_sha256?: WorldCommonSha256
+      output_sha256?: WorldCommonSha256
+    }[]
+    /**
+     * coverage, area share of each quality bit, coverage polygon vertex count
+     */
+    quality?: {}
+    /**
+     * area share of each class
+     */
+    semantic?: {}
+    /**
+     * two-way error p50, p95, p99 (m)
+     */
+    collision?: {}
+    /**
+     * per profile: islands, walkable area before and after trimming, random path reachability and corridor, vegetation share
+     */
+    navmesh?: {}
+    /**
+     * counts per class, snap distance quantiles, warnings, relocations, difference to the previous version
+     */
+    anchors?: {}
+    /**
+     * texel and edge length distributions, sun estimate score surface summary
+     */
+    sensor_hints?: {}
+    /**
+     * result of every V-GLB rule
+     */
+    vglb?: {}[]
+  }
 }
 export interface RadarMmw2 {
   schema: 'awr.sensor.radar_mmw.v1'
@@ -10196,6 +10271,10 @@ export interface WindManifest {
  */
 export interface World {
   schemaVersion: WorldCommonSemver
+  /**
+   * D3 world package profile (AWR-05 §12.3 #8, M22 §7.1.1); readers accept any 1.* schemaVersion. Absent in D1 and D2 packages.
+   */
+  profile?: 'd3-glb'
   id: WorldCommonId
   name: string
   nameZh?: string
@@ -10249,9 +10328,53 @@ export interface World {
      * Raw inputs with sha256; must match data/raw/urbanscene3d/MANIFEST.json (AWR-16 §10.4).
      */
     sourceFiles: WorldCommonSourceFile[]
+    /**
+     * D3: external inputs used to derive layers (OSM, DEM; M22 §7.1.4, M22-FR-003).
+     */
+    derivedFrom?: {
+      name: string
+      version: string
+      license: string
+      use: string
+      sha256: WorldCommonSha256
+      attribution: string
+      url?: string
+    }[]
   } | null
   coordinate: WorldCommonHrefWithHash
   scaleStatus: WorldCommonScaleStatus
+  /**
+   * D3 sensor resolution limits of a mesh world (M22 §7.1.2, M22-FR-039); datasets declare resolution bounds from them.
+   */
+  sensorHints?: {
+    /**
+     * area-weighted median texel size (m)
+     */
+    texelM: number
+    /**
+     * median edge length of the raycast mesh (m)
+     */
+    meshEdgeP50M: number
+    /**
+     * range beyond which the texture limits the image, per camera profile (M22 §6.6.12) (m)
+     */
+    textureLimitedRangeM: {
+      '720p_hfov60'?: number
+      '720p_hfov84'?: number
+      '1080p_hfov84'?: number
+      '4k_hfov84'?: number
+    }
+    multiLayerColumnFrac?: number
+    /**
+     * azimuth [0, 360) clockwise from north and elevation (0, 90) of the sun baked into the texture; null when not solved (deg)
+     *
+     * @minItems 2
+     * @maxItems 2
+     */
+    bakedSunAzElDeg?: [number, number, ...number[]] | null
+    bakedSunConfidence?: 'estimated' | 'unknown'
+    captureSeason?: 'spring' | 'summer' | 'autumn' | 'winter' | null
+  }
   bounds: WorldCommonAabb3
   /**
    * @minItems 1
@@ -10361,6 +10484,10 @@ export interface WorldLayer1 {
     | 'missions'
     | 'scenarios'
     | 'recordings'
+    | 'navmesh'
+    | 'navgraph'
+    | 'anchors'
+    | 'quality'
   role: 'visual' | 'geometry' | 'semantic' | 'environment' | 'reconstruction' | 'localization' | 'mission' | 'archive' | 'export' | 'debug'
   /**
    * Registered format name <family>/<variant>@<ver> (AWR-16 §2.2): potree2/anet-q16@1, potree2/default, awr-pts@1, f32-grid@1, anet-classes@1, geojson/awr-zones@1, awr-env-world@1, awrv@1, anet-wind@1, awsl@1, recon-ir@1, 3dtiles@1.1, copc@1.0, spz@2
@@ -10372,6 +10499,14 @@ export interface WorldLayer1 {
    * Loaded/visible at startup.
    */
   default?: boolean
+  /**
+   * D3: axis convention of the layer data; omitted = enu (M22 §7.1.1)
+   */
+  axes?: 'enu' | 'gltf-y-up-enu' | 'recast-y-up-enu'
+  /**
+   * D3: short notice, e.g. the ODbL attribution of OSM-derived layers
+   */
+  note?: string
   T_world_layer?: WorldCommonRigid
   bytes?: number
   points?: number

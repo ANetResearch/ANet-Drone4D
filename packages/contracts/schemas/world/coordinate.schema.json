@@ -384,7 +384,11 @@
             "rtk-4dof",
             "lidar-icp",
             "pose-prior-ba",
-            "manual"
+            "manual",
+            "osm-road-correlation",
+            "osm-footprint-correlation",
+            "control-points",
+            "inherit-frame"
           ]
         },
         "T_world_map": {

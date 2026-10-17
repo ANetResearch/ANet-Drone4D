@@ -27,6 +27,12 @@
     "schemaVersion": {
       "$ref": "common.schema.json#/$defs/semver"
     },
+    "profile": {
+      "enum": [
+        "d3-glb"
+      ],
+      "description": "D3 world package profile (AWR-05 §12.3 #8, M22 §7.1.1); readers accept any 1.* schemaVersion. Absent in D1 and D2 packages."
+    },
     "id": {
       "$ref": "common.schema.json#/$defs/id"
     },
@@ -135,6 +141,50 @@
             "$ref": "common.schema.json#/$defs/sourceFile"
           },
           "description": "Raw inputs with sha256; must match data/raw/urbanscene3d/MANIFEST.json (AWR-16 §10.4)."
+        },
+        "derivedFrom": {
+          "type": "array",
+          "description": "D3: external inputs used to derive layers (OSM, DEM; M22 §7.1.4, M22-FR-003).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "version",
+              "license",
+              "use",
+              "sha256",
+              "attribution"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1
+              },
+              "license": {
+                "type": "string",
+                "minLength": 1
+              },
+              "use": {
+                "type": "string",
+                "pattern": "^(registration|anchors|navgraph|levelling|hMsl)(,(registration|anchors|navgraph|levelling|hMsl))*$"
+              },
+              "sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              },
+              "attribution": {
+                "type": "string",
+                "minLength": 1
+              },
+              "url": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -144,6 +194,83 @@
     },
     "scaleStatus": {
       "$ref": "common.schema.json#/$defs/scaleStatus"
+    },
+    "sensorHints": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "D3 sensor resolution limits of a mesh world (M22 §7.1.2, M22-FR-039); datasets declare resolution bounds from them.",
+      "required": [
+        "texelM",
+        "meshEdgeP50M",
+        "textureLimitedRangeM"
+      ],
+      "properties": {
+        "texelM": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "area-weighted median texel size (m)"
+        },
+        "meshEdgeP50M": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "median edge length of the raycast mesh (m)"
+        },
+        "textureLimitedRangeM": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "range beyond which the texture limits the image, per camera profile (M22 §6.6.12) (m)",
+          "properties": {
+            "720p_hfov60": {
+              "type": "number",
+              "minimum": 0
+            },
+            "720p_hfov84": {
+              "type": "number",
+              "minimum": 0
+            },
+            "1080p_hfov84": {
+              "type": "number",
+              "minimum": 0
+            },
+            "4k_hfov84": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "multiLayerColumnFrac": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "bakedSunAzElDeg": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "azimuth [0, 360) clockwise from north and elevation (0, 90) of the sun baked into the texture; null when not solved (deg)"
+        },
+        "bakedSunConfidence": {
+          "enum": [
+            "estimated",
+            "unknown"
+          ]
+        },
+        "captureSeason": {
+          "enum": [
+            "spring",
+            "summer",
+            "autumn",
+            "winter",
+            null
+          ]
+        }
+      }
     },
     "bounds": {
       "$ref": "common.schema.json#/$defs/aabb",
@@ -378,7 +505,11 @@
             "localization",
             "missions",
             "scenarios",
-            "recordings"
+            "recordings",
+            "navmesh",
+            "navgraph",
+            "anchors",
+            "quality"
           ]
         },
         "role": {
@@ -414,6 +545,19 @@
         "default": {
           "type": "boolean",
           "description": "Loaded/visible at startup."
+        },
+        "axes": {
+          "enum": [
+            "enu",
+            "gltf-y-up-enu",
+            "recast-y-up-enu"
+          ],
+          "description": "D3: axis convention of the layer data; omitted = enu (M22 §7.1.1)"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "D3: short notice, e.g. the ODbL attribution of OSM-derived layers"
         },
         "T_world_layer": {
           "$ref": "common.schema.json#/$defs/rigid",

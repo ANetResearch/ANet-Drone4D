@@ -305,6 +305,87 @@
           "minimum": 0
         }
       }
+    },
+    "glb": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "D3 GLB world evidence (M22 §7.3.8, M22-FR-022); qa.status takes the strictest of V-GLB and the D2 rules.",
+      "properties": {
+        "registration": {
+          "type": "object",
+          "description": "method, coarse and fine search peaks, R1-R6, scale uncertainty, frame-of cross check"
+        },
+        "leveling": {
+          "type": "object",
+          "description": "primary method, gradients and tilt of both methods, difference, CI95, per-plane slopes, control point residuals, needs_control_points"
+        },
+        "topology": {
+          "type": "object",
+          "description": "vertices before and after welding, duplicate and degenerate faces, boundary and non-manifold edges, components, fragments"
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "seconds"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "seconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "peak_rss_mb": {
+                "type": "number",
+                "minimum": 0
+              },
+              "input_sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              },
+              "output_sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              }
+            }
+          }
+        },
+        "quality": {
+          "type": "object",
+          "description": "coverage, area share of each quality bit, coverage polygon vertex count"
+        },
+        "semantic": {
+          "type": "object",
+          "description": "area share of each class"
+        },
+        "collision": {
+          "type": "object",
+          "description": "two-way error p50, p95, p99 (m)"
+        },
+        "navmesh": {
+          "type": "object",
+          "description": "per profile: islands, walkable area before and after trimming, random path reachability and corridor, vegetation share"
+        },
+        "anchors": {
+          "type": "object",
+          "description": "counts per class, snap distance quantiles, warnings, relocations, difference to the previous version"
+        },
+        "sensor_hints": {
+          "type": "object",
+          "description": "texel and edge length distributions, sun estimate score surface summary"
+        },
+        "vglb": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "result of every V-GLB rule"
+        }
+      }
     }
   },
   "required": [

@@ -31,7 +31,8 @@
         "heightmap",
         "occupancy",
         "nofly",
-        "plan-cost"
+        "plan-cost",
+        "quality"
       ]
     },
     "dtype": {

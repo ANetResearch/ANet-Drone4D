@@ -456,6 +456,8 @@ __all__ = [
     "QaReportFirstScreenTierS",
     "QaReportGates",
     "QaReportGenerator",
+    "QaReportGlb",
+    "QaReportGlbStages",
     "QaReportSizes",
     "QaReportStages",
     "QaReportValidation",
@@ -875,6 +877,7 @@ __all__ = [
     "WorldCostsHost",
     "WorldCostsWorlds",
     "WorldDataset",
+    "WorldDatasetDerivedFrom",
     "WorldGenerator",
     "WorldLayer",
     "WorldLayerRoots",
@@ -883,6 +886,8 @@ __all__ = [
     "WorldLodFirstScreen",
     "WorldQa",
     "WorldRender",
+    "WorldSensorHints",
+    "WorldSensorHintsTextureLimitedRangeM",
     "WorldStats",
     "Zones",
     "ZonesAwr",
@@ -1898,7 +1903,7 @@ class CoordinateQa(TypedDict):
 
 # schemas/world/coordinate.schema.json#/properties/registration
 class CoordinateRegistration(TypedDict):
-    method: Literal["none", "rtk-sim3", "gnss-sim3", "rtk-4dof", "lidar-icp", "pose-prior-ba", "manual"]
+    method: Literal["none", "rtk-sim3", "gnss-sim3", "rtk-4dof", "lidar-icp", "pose-prior-ba", "manual", "osm-road-correlation", "osm-footprint-correlation", "control-points", "inherit-frame"]
     T_world_map: WorldCommonSim3
     rmseM: NotRequired[float]
     inliers: NotRequired[int]
@@ -5027,6 +5032,7 @@ class QaReport(TypedDict):
     validation: QaReportValidation
     first_screen: NotRequired[QaReportFirstScreen]
     sizes: NotRequired[QaReportSizes]
+    glb: NotRequired[QaReportGlb]
 
 
 # schemas/world/qa-report.schema.json#/properties/first_screen
@@ -5063,6 +5069,30 @@ class QaReportGenerator(TypedDict):
     version: str
     commit: NotRequired[str | None]
     params: NotRequired[dict[str, Any]]
+
+
+# schemas/world/qa-report.schema.json#/properties/glb
+class QaReportGlb(TypedDict):
+    registration: NotRequired[dict[str, Any]]
+    leveling: NotRequired[dict[str, Any]]
+    topology: NotRequired[dict[str, Any]]
+    stages: NotRequired[list[QaReportGlbStages]]
+    quality: NotRequired[dict[str, Any]]
+    semantic: NotRequired[dict[str, Any]]
+    collision: NotRequired[dict[str, Any]]
+    navmesh: NotRequired[dict[str, Any]]
+    anchors: NotRequired[dict[str, Any]]
+    sensor_hints: NotRequired[dict[str, Any]]
+    vglb: NotRequired[list[dict[str, Any]]]
+
+
+# schemas/world/qa-report.schema.json#/properties/glb/properties/stages/items
+class QaReportGlbStages(TypedDict):
+    name: str
+    seconds: float
+    peak_rss_mb: NotRequired[float]
+    input_sha256: NotRequired[WorldCommonSha256]
+    output_sha256: NotRequired[WorldCommonSha256]
 
 
 # schemas/world/qa-report.schema.json#/properties/sizes
@@ -8735,6 +8765,18 @@ class WorldDataset(TypedDict):
     redistribution: bool
     notice: NotRequired[str]
     sourceFiles: list[WorldCommonSourceFile]
+    derivedFrom: NotRequired[list[WorldDatasetDerivedFrom]]
+
+
+# schemas/world/world.schema.json#/properties/dataset/properties/derivedFrom/items
+class WorldDatasetDerivedFrom(TypedDict):
+    name: str
+    version: str
+    license: str
+    use: str
+    sha256: WorldCommonSha256
+    attribution: str
+    url: NotRequired[str]
 
 
 # schemas/world/world.schema.json#/properties/generator
@@ -8748,12 +8790,14 @@ class WorldGenerator(TypedDict):
 # schemas/world/world.schema.json#/$defs/layer
 class WorldLayer(TypedDict):
     id: WorldCommonLayerId
-    type: Literal["pointcloud", "terrain", "collision", "voxel", "sdf", "semantic-zones", "class-table", "environment", "reconstruction", "gaussian", "mesh", "tiles3d", "localization", "missions", "scenarios", "recordings"]
+    type: Literal["pointcloud", "terrain", "collision", "voxel", "sdf", "semantic-zones", "class-table", "environment", "reconstruction", "gaussian", "mesh", "tiles3d", "localization", "missions", "scenarios", "recordings", "navmesh", "navgraph", "anchors", "quality"]
     role: Literal["visual", "geometry", "semantic", "environment", "reconstruction", "localization", "mission", "archive", "export", "debug"]
     format: str
     href: WorldCommonRelHref
     status: Literal["ready", "building", "missing", "stale"]
     default: NotRequired[bool]
+    axes: NotRequired[Literal["enu", "gltf-y-up-enu", "recast-y-up-enu"]]
+    note: NotRequired[str]
     T_world_layer: NotRequired[WorldCommonRigid]
     bytes: NotRequired[int]
     points: NotRequired[int]
@@ -8810,6 +8854,17 @@ class WorldRender(TypedDict):
     pointSizeK: NotRequired[float]
     edl: NotRequired[bool]
     syntheticGroundZ: NotRequired[float | None]
+
+
+# schemas/world/world.schema.json#/properties/sensorHints
+class WorldSensorHints(TypedDict):
+    texelM: float
+    meshEdgeP50M: float
+    textureLimitedRangeM: WorldSensorHintsTextureLimitedRangeM
+    multiLayerColumnFrac: NotRequired[float]
+    bakedSunAzElDeg: NotRequired[list[float] | None]
+    bakedSunConfidence: NotRequired[Literal["estimated", "unknown"]]
+    captureSeason: NotRequired[Literal["spring", "summer", "autumn", "winter"] | None]
 
 
 # schemas/world/world.schema.json#/properties/stats
@@ -8950,7 +9005,7 @@ EnvState = TypedDict("EnvState", {
 Grid = TypedDict("Grid", {
     "$schema": NotRequired[str],
     "schemaVersion": WorldCommonSemver,
-    "kind": Literal["dtm", "dsm", "hag", "heightmap", "occupancy", "nofly", "plan-cost"],
+    "kind": Literal["dtm", "dsm", "hag", "heightmap", "occupancy", "nofly", "plan-cost", "quality"],
     "dtype": Literal["float32", "float16", "uint8", "uint16"],
     "href": WorldCommonRelHref,
     "width": int,
@@ -9102,6 +9157,7 @@ TargetDetail = TypedDict("TargetDetail", {
 World = TypedDict("World", {
     "$schema": NotRequired[str],
     "schemaVersion": WorldCommonSemver,
+    "profile": NotRequired[Literal["d3-glb"]],
     "id": WorldCommonId,
     "name": str,
     "nameZh": NotRequired[str],
@@ -9113,6 +9169,7 @@ World = TypedDict("World", {
     "dataset": WorldDataset | None,
     "coordinate": WorldCommonHrefWithHash,
     "scaleStatus": WorldCommonScaleStatus,
+    "sensorHints": NotRequired[WorldSensorHints],
     "bounds": WorldCommonAabb,
     "layers": list[WorldLayer],
     "lod": WorldLod,
@@ -9122,4 +9179,13 @@ World = TypedDict("World", {
     "stats": NotRequired[WorldStats],
     "qa": NotRequired[WorldQa],
     "files": NotRequired[list[WorldCommonFileRef]],
+})
+
+
+# schemas/world/world.schema.json#/properties/sensorHints/properties/textureLimitedRangeM
+WorldSensorHintsTextureLimitedRangeM = TypedDict("WorldSensorHintsTextureLimitedRangeM", {
+    "720p_hfov60": NotRequired[float],
+    "720p_hfov84": NotRequired[float],
+    "1080p_hfov84": NotRequired[float],
+    "4k_hfov84": NotRequired[float],
 })
