@@ -27,7 +27,7 @@ __all__ = ["DEFAULT_CONFIG_PATH", "ConfigError", "ProcCfg", "RuntimeConfig", "Sa
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG_PATH = ROOT / "configs" / "runtime.yaml"
 D1_PROFILES = ("dev", "demo", "ci", "perf", "public")
-LAYERS = ("core", "ext", "dev", "sandbox")
+LAYERS = ("core", "ext", "dev", "sandbox", "d3")   # d3：D3 dmax 进程，只由 d3 profile 启用（AWR-05 §12.3 扩展点 12）
 WORLD_ID_RE = r"[a-z0-9][a-z0-9_-]*"
 
 
@@ -213,7 +213,7 @@ class LivenessCfg(_M):
 
 class ProcCfg(_M):
     name: str
-    layer: Literal["core", "ext", "dev", "sandbox"] = "core"
+    layer: Literal["core", "ext", "dev", "sandbox", "d3"] = "core"
     cmd: list[str] = Field(min_length=1)
     cwd: str | None = None
     run_scoped: bool = True
@@ -589,7 +589,7 @@ class RuntimeConfig(_M):
     # 不参与校验的解析结果（load_runtime_config 填写）
     world_fallback_note: str | None = None
     profile: str = "dev"
-    procs_enable: list[Literal["core", "ext", "dev", "sandbox"]] = Field(default_factory=lambda: ["core", "ext"])
+    procs_enable: list[Literal["core", "ext", "dev", "sandbox", "d3"]] = Field(default_factory=lambda: ["core", "ext"])
     source_path: str | None = None
 
     @model_validator(mode="after")

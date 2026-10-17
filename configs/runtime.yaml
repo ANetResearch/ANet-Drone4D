@@ -169,6 +169,38 @@ procs:
     start_after: [sandbox-pool]
     env: {AWR_CGROUP: sandbox/ctl, MALLOC_ARENA_MAX: "2"}
     liveness: {heartbeat: hb.sandbox-api, stale_s: 5.0, startup_grace_s: 15}
+  # D3（AWR-05 §12.3 扩展点 12；M27 §4.2 进程表、M22-FR-048）：只由 d3 profile 启用；dmax 上以 d3-* 容器部署（19 号文档 D3 增补），
+  # 本机 d3 profile 用于开发。入口模块随各工作包交付（bench_main 归 M27）；公开与缺省 profile 不包含这些进程
+  - name: bench-api
+    layer: d3
+    cmd: [python, -m, awr.api.bench_main]
+    run_scoped: false
+    liveness: {heartbeat: hb.bench-api, stale_s: 5.0, startup_grace_s: 30}
+  - name: bench-scheduler
+    layer: d3
+    cmd: [python, -m, awr.bench.sched]
+    run_scoped: false
+    start_after: [bench-api]
+    liveness: {heartbeat: hb.bench-scheduler, stale_s: 10.0, startup_grace_s: 30}
+  - name: geosvc
+    layer: d3
+    on_demand: true             # 每个活跃世界一个，由 bench-scheduler 经 sys/start{name, args{world}} 启动（M22-FR-048）
+    cmd: [python, -m, awr.world.mesh.geosvc]
+    run_scoped: false
+    restart: {policy: on-failure}
+    liveness: {heartbeat: hb.geosvc, stale_s: 10.0, startup_grace_s: 60}
+  - name: lab-gateway
+    layer: d3
+    cmd: [python, -m, awr.bench.rt_main]
+    run_scoped: false
+    start_after: [bench-api]
+    liveness: {heartbeat: hb.lab-gateway, stale_s: 5.0, startup_grace_s: 30}
+  - name: rerun-proxy
+    layer: d3
+    cmd: [python, -m, awr.bench.rerun_proxy]
+    run_scoped: false
+    restart: {policy: on-failure}
+    liveness: {heartbeat: hb.rerun-proxy, stale_s: 10.0, startup_grace_s: 30}
   - name: vite
     layer: dev
     cmd: [npx, vite, --port, "${net.vite_port_effective}", --strictPort, --host, 127.0.0.1]
@@ -196,4 +228,6 @@ profiles:
            identity: {state_dir: /opt/anet-drone4d/var/identity}}   # install.sh 以 0700 awr 创建（D2.1）
   # 本机沙盒（D2 开发与验收）：dev 进程加沙盒控制面，quota_profile local（无前缀配额与工作量证明），批处理开放
   sandbox: {procs_enable: [core, ext, dev, sandbox], sandbox: {enabled: true, batch: {enabled: true}}}
+  # D3 开发（AWR-05 §12.3 扩展点 12）：dev 进程加 D3 进程，AWR_D3_ENABLED = 1（M04 扩展点 7 的网格分派开关）；公开与缺省 profile 不变
+  d3: {procs_enable: [core, ext, dev, d3], defaults: {env: {AWR_D3_ENABLED: "1"}}}
   field: {}                     # V0.5 起定义；D1 中选择 field 即以退出码 2 拒绝
