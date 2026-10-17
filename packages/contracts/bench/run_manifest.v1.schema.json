@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/run_manifest.v1.schema.json",
+  "title": "Run manifest run_manifest.json (drone4d.bench.run_manifest.v1)",
+  "description": "M27 §7.3 (contracts 1.3.0, d1 V0.3). Ranked runs carry seed_commit only (seed is admin-only and audited, 695 otherwise). v1.3 adds eval_ref and frames_digest_ref.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.bench.run_manifest.v1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "experiment_id": {
+      "type": "string"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "restart_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "spec": {
+      "$ref": "run_spec.v1.schema.json"
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "seed_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "config_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "spec_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "run_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "versions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "determinism_level": {
+      "enum": [
+        "1b",
+        "2",
+        "3",
+        "none"
+      ]
+    },
+    "split": {
+      "enum": [
+        "dev",
+        "test"
+      ]
+    },
+    "ranked": {
+      "type": "boolean"
+    },
+    "ranked_valid": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "invalid_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "queued_unix_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "started_unix_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ended_unix_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wall_s": {
+          "type": "number"
+        },
+        "sim_s": {
+          "type": "number"
+        },
+        "rtf": {
+          "type": "number"
+        }
+      },
+      "required": []
+    },
+    "backpressure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "m25_wait_s": {
+          "type": "number"
+        },
+        "writer_block_s": {
+          "type": "number"
+        },
+        "writer_block_frac": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "m25_wait_s",
+        "writer_block_s",
+        "writer_block_frac"
+      ]
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "agent_timeouts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "agent_exit_tick": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "agent_timeouts"
+        ]
+      }
+    },
+    "bytes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "raw": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frames_idx": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "raw",
+        "truth",
+        "frames_idx"
+      ]
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "raw_mcap_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "truth_mcap_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "frames_idx_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "raw_mcap_sha256",
+        "truth_mcap_sha256",
+        "frames_idx_sha256"
+      ]
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "model": {
+          "type": "string"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "shared_card": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "index",
+        "model",
+        "driver"
+      ]
+    },
+    "eval_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "submission_id": {
+          "type": "string"
+        },
+        "board_version": {
+          "type": "string"
+        },
+        "track": {
+          "type": "string"
+        },
+        "lane": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "submission_id",
+        "board_version",
+        "track"
+      ]
+    },
+    "frames_digest_ref": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "run_id",
+    "experiment_id",
+    "attempt",
+    "restart_count",
+    "spec",
+    "seed_commit",
+    "config_sha256",
+    "spec_sha256",
+    "run_hash",
+    "versions",
+    "determinism_level",
+    "split",
+    "ranked",
+    "ranked_valid",
+    "invalid_reasons",
+    "timing"
+  ]
+}

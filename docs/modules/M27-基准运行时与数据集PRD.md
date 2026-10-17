@@ -1413,7 +1413,7 @@ def leaderboard(obs_level: str, evaluator_major: int) -> list[Row]:
 | `fleet[].sensors[]` | array of SensorRef | — | 机型缺省挂载 | 字段见 §6.2.1；`overrides` 由 M25 RigSpec 校验（分辨率 px、帧率 Hz、挂载 rpy_deg） |
 | `fleet[].start` | object | `{kind: anchor, anchor_id}`、`{kind: nest, nest_id}`、`{kind: pose, pos_enu_m[3], yaw_deg}`（面向人的配置项用 `_deg`，17 §1.3） | 必填 | 锚点与机巢须存在于世界包 |
 | `policy` | object | `{kind, image_digest?, name?, params?}` | 必填 | §6.2.1；`params` ≤ 64 KiB |
-| `physics` | string | `fast`、`realistic`、`sitl` | `fast` | 阶段可用性见 V05 |
+| `physics` | string | `fast`、`realistic`、`sitl` | `realistic`（v1.3，M27-FR-159） | 阶段可用性见 V05 |
 | `clock_profile` | string \| object | 档名或四元组 `{name, main_hz, physics_hz, l1_hz}` | `{d1_250, 250, 250, 250}`（`l1_every = 1`，AWR-05 ADR-169） | 服务端回填完整四元组；四元组（不是名称）进入运行哈希 |
 | `obs_level` | string | `L1`、`L2`、`L2-depth`、`L3`、`T0` | 必填 | `T0` 只用于开发运行 |
 | `appearance` | string | `mesh`、`3dgs` | `mesh` | `3dgs` 自 P3（v1.2 定稿为结论 C0，AWR-05 ADR-187、ADR-188）；另带 `appearance_source`（§14.9） |
@@ -2075,7 +2075,7 @@ M27 不修改任何 D2 文件。以下内容由 M27 起草，经所有者合入�
 
 | 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
 |---|---|---|---|---|---|
-| M27-FR-159 | 缺省与排名约束：实验规格未给 `physics` 时取 `realistic`（`physics_opts.export = physics`）；`ranked = true` 只允许 Realistic 锁步档，否则 682（`why = ranked_requires_realistic`）；正式评测 Run 由 `submission_eval` 生成并带 `eval_ref{submission_id, board_version, track, lane}`（v1.2 增加 `lane`），研究者提交的实验规格不得携带 `eval_ref`（682） | P0 | P0a | M27-AC-043 | ADR-176 |
+| M27-FR-159 | 缺省与排名约束：实验规格未给 `physics` 时取 `realistic`（`physics_opts.gz_profile = physics`）；`ranked = true` 只允许 Realistic 锁步档，否则 682（`why = ranked_requires_realistic`）；正式评测 Run 由 `submission_eval` 生成并带 `eval_ref{submission_id, board_version, track, lane}`（v1.2 增加 `lane`），研究者提交的实验规格不得携带 `eval_ref`（682） | P0 | P0a | M27-AC-043 | ADR-176 |
 | M27-FR-160 | `submission_eval` 作业：按分轨展开"test 事件 × 秘密种子 × 重复"的 `realistic_run`（优先级类 `eval`），平台原因失败的 Run 自动重跑且不计入提交方，全部完成后提交 `score` 作业 | P0 | P0a | M27-AC-043 | ADR-183 |
 | M27-FR-161 | 分量：`evaluation.json` 输出 `ec`、`eu_f1`、`ao_real`、`ce`（`ce = ĝ · f_res`）、`g_hat`、`f_res`、`v_union`、`v_best_single`、`budget_ratio` 与 `ranked_valid`；`ranked_valid = false` 时分量全部记 0 | P0 | P0a | M27-AC-044 | ADR-182 |
 | M27-FR-162 | CE 归一化：`Ĝ = clip((V(U) − max_u V({u})) / (1 − 1/\|U\|), 0, 1)`，V 为联合覆盖（1 s 分桶，每名在场参与者被至少一架机识别）；`f_res = clip(1 − 0.5·max(0, ρ − 1), 0, 1)`，`ρ = ½(ΣD/ΣD_budget + ΣB/ΣB_budget)`，预算取 `bench/task.v1.budget`（缺省每机每 360 s 航程 2.4 km、发送 10 MB，按时长线性缩放）；\|U\| = 1 的分轨不计 CE | P0 | P0a | M27-AC-044 | ADR-182 |

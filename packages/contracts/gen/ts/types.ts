@@ -1031,6 +1031,13 @@ export type ScenarioMetrics =
   | 't_conf_s'
   | 'link_quality_min'
 /**
+ * Score definition and result (drone4d.bench.score.v1). AWR-17 §18.23 and §18.24 (contracts 1.3.0, d1 V0.3). Components in [0, 1]. weights = null (v1.4 default) means composite is always null and the v1.3 top-level s and ci95 must not appear.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ScoreV1".
+ */
+export type ScoreV1 = ScoreV11
+/**
  * POST /sessions/{sid}/targets and target/add: class and pos are required, the rest comes from the class template
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -2269,6 +2276,91 @@ export interface UavSafety {
     kind: 'thrust_loss' | 'motor_fail' | 'link_drop' | 'state_drop' | 'gnss_denied' | 'battery_drain'
     since_t_ns: number
     params?: {}
+  }[]
+}
+/**
+ * Internal leaderboard (drone4d.bench.board.v1). AWR-17 §18.23 and §18.24 (contracts 1.3.0, d1 V0.3). Internal only (minimum role invited), no static copy. Lanes: reid, handoff, vehicle, search (event types) plus research task lanes registered by the board version. tracks[].appearance is mesh (aerial 3dgs from P3 when registered); mesh_distilled and generative never appear.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "BoardV1".
+ */
+export interface BoardV1 {
+  schema: 'drone4d.bench.board.v1'
+  board_version: string
+  tracks: {
+    track: string
+    fleet_ref: string
+    obs_level: 'L1' | 'L2' | 'L2-depth'
+    physics: 'realistic'
+    mode: 'exogenous'
+    agent_class: string
+    appearance: 'mesh' | '3dgs-aerial'
+  }[]
+  lanes: {
+    lane: string
+    kind: 'event_type' | 'task'
+    event_type?: 'reid_occlusion' | 'rendezvous_handoff' | 'vehicle_track' | 'target_search'
+    test_events: string[]
+    seed_set_commit: string
+  }[]
+  seed_set_commit?: string
+  evaluator_major: number
+  platform_digest: string
+  entries: {
+    entry_id: string
+    team: string
+    display_name: string
+    track: string
+    lane: string
+    metrics: {
+      ec?: {
+        value: number | null
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        ci95: [number, number, ...number[]]
+        rank?: number
+        tie_group?: number
+        repeat_delta?: number | null
+      }
+      eu?: {
+        value: number | null
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        ci95: [number, number, ...number[]]
+        rank?: number
+        tie_group?: number
+        repeat_delta?: number | null
+      }
+      ao?: {
+        value: number | null
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        ci95: [number, number, ...number[]]
+        rank?: number
+        tie_group?: number
+        repeat_delta?: number | null
+      }
+      ce?: {
+        value: number | null
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        ci95: [number, number, ...number[]]
+        rank?: number
+        tie_group?: number
+        repeat_delta?: number | null
+      }
+    }
+    dominance_tier: number
+    first_listed_unix_ns: number
+    baseline: boolean
   }[]
 }
 /**
@@ -3991,6 +4083,126 @@ export interface Nir {
     theta_ref_deg?: number
     rho_ref?: number
     r_spec_max_m?: number
+  }
+}
+/**
+ * Evaluation result (drone4d.bench.evaluation.v1). M27 §7.4 (contracts 1.3.0, d1 V0.3). eu and ce from P1, slam from P0b, interactive from P2; v1.3 adds the score components (bench/score.v1).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "EvaluationV1".
+ */
+export interface EvaluationV1 {
+  schema: 'drone4d.bench.evaluation.v1'
+  run_id: string
+  evaluator_version: string
+  thresholds_version: string
+  oracle_version: string
+  inputs: {
+    raw_mcap_sha256: string
+    truth_sha256: string
+    tape_sha256: string
+    event_truth_sha256: string
+  }
+  obs_level: 'L1' | 'L2' | 'L2-depth' | 'L3' | 'T0'
+  ranked: boolean
+  ranked_valid: boolean
+  invalid_reasons: string[]
+  ec: {
+    value: number
+    coverage: number
+    events: {
+      id: string
+      type: string
+      captured: boolean
+      coverage: number
+      by: string[]
+    }[]
+  }
+  excluded: {
+    event_id: string
+    reason: 'incomplete_region' | 'inside_building'
+  }[]
+  eu?: {
+    precision: number
+    recall: number
+    f1: number
+    matches: {
+      report_idx: number
+      event_id: string
+      dt_s: number
+    }[]
+    participants: {
+      resolved: number
+      unresolved: number
+    }
+  }
+  ao: {
+    ao_real: number
+    ao_pos_los: number
+    ao_pos: number
+    oracle: {
+      version: string
+      camera_models: string[]
+      grid_m: number
+      alt_step_m: number
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      envelope_agl_m: [number, number, ...number[]]
+    }
+  }
+  ce?: {
+    gain: number
+    gain_per_extra_uav: number
+    redundancy: number
+    flight_km: number
+    comm_kb: number
+    loss_rate: number
+    dec_per_km: number
+    dec_per_kb: number
+  }
+  safety: {
+    ground_alerts: number
+    nofly_incursions: number
+    detected_count: number
+    min_sep_m: {
+      person: number | null
+      vehicle: number | null
+    }
+    violations: {
+      person: number
+      vehicle: number
+    }
+    penetrations: number
+  }
+  actors: {
+    [k: string]: {
+      observed_frac: number
+      first_s: number | null
+      redundancy: number
+      max_gap_s: number
+    }
+  }
+  /**
+   * v1.3 score components
+   */
+  components?: {
+    ec: number
+    eu: number | null
+    ao: number | null
+    ce: number | null
+  }
+  /**
+   * P0b; per uav and mode
+   */
+  slam?: {}
+  /**
+   * P2
+   */
+  interactive?: {
+    deviation_mean_m: {}
+    event_set_diff: {}
   }
 }
 /**
@@ -9723,6 +9935,255 @@ export interface Roster {
   entries: FleetRosterPropertiesEntriesItems[]
 }
 /**
+ * Run manifest run_manifest.json (drone4d.bench.run_manifest.v1). M27 §7.3 (contracts 1.3.0, d1 V0.3). Ranked runs carry seed_commit only (seed is admin-only and audited, 695 otherwise). v1.3 adds eval_ref and frames_digest_ref.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "RunManifestV1".
+ */
+export interface RunManifestV1 {
+  schema: 'drone4d.bench.run_manifest.v1'
+  run_id: string
+  experiment_id: string
+  attempt: number
+  restart_count: number
+  spec: RunSpecV1
+  seed?: number
+  seed_commit: string
+  config_sha256: string
+  spec_sha256: string
+  run_hash: string
+  versions: {
+    [k: string]: string
+  }
+  determinism_level: '1b' | '2' | '3' | 'none'
+  split: 'dev' | 'test'
+  ranked: boolean
+  ranked_valid: boolean | null
+  invalid_reasons: string[]
+  timing: {
+    queued_unix_ns?: number
+    started_unix_ns?: number
+    ended_unix_ns?: number
+    wall_s?: number
+    sim_s?: number
+    rtf?: number
+  }
+  backpressure?: {
+    m25_wait_s: number
+    writer_block_s: number
+    writer_block_frac: number
+  }
+  agents?: {
+    [k: string]: {
+      agent_timeouts: number
+      agent_exit_tick?: number
+    }
+  }
+  bytes?: {
+    raw: number
+    truth: number
+    frames_idx: number
+  }
+  files?: {
+    raw_mcap_sha256: string
+    truth_mcap_sha256: string
+    frames_idx_sha256: string
+  }
+  gpu?: {
+    index: number
+    model: string
+    driver: string
+    shared_card?: boolean
+  }
+  eval_ref?: {
+    submission_id: string
+    board_version: string
+    track: string
+    lane?: string
+  }
+  frames_digest_ref?: string
+}
+/**
+ * Run specification (drone4d.bench.run_spec.v1). AWR-17 §18.5.4 and M27 §7.2 (contracts 1.3.0, d1 V0.3). Validation order: (1) this schema (400, 300); (2) role and quota (115, 681); (3) world and event references (305, 600, 614, 615, 691); (4) the x-rules combination matrix and phase gates (630, 633, 643, 662, 664); (5) clock profile and outputs (682, 637); (6) vehicle and rig (649); (7) resource feasibility (683 as a warning only). x-rules: if every listed path takes one of the listed values (outputs: any listed member; '*': present), the rule checks allow (path in values), forbid (paths absent), require (paths present), min (path >= n) or exactly_one, and fails with code and detail.why; scope = external rules apply to API requests only (not to runs created by jobs). Reference evaluator: awr.bench.spec_rules.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "RunSpecV1".
+ */
+export interface RunSpecV1 {
+  schema: 'drone4d.bench.run_spec.v1'
+  experiment: {
+    name: string
+    project?: string
+    note?: string
+  }
+  world: {
+    id: string
+    content_version?: string
+  }
+  event: {
+    id: string
+    version?: number
+    tape_content_sha256?: string
+  }
+  task?: string | null
+  /**
+   * @minItems 1
+   * @maxItems 64
+   */
+  fleet: [
+    {
+      uav_id: string
+      vehicle_ref: string
+      sensors?: {
+        sensor_id: string
+        enabled?: boolean
+        overrides?: {
+          width_px?: number
+          height_px?: number
+          /**
+           * Rational frame rate as a decimal string
+           */
+          fps?: string
+          mount_preset?: string
+          role?: 'agent' | 'slam'
+        }
+      }[]
+      start:
+        | {
+            kind: 'anchor'
+            anchor_id: string
+          }
+        | {
+            kind: 'nest'
+            nest_id: string
+          }
+        | {
+            kind: 'pose'
+            /**
+             * @minItems 3
+             * @maxItems 3
+             */
+            pos_enu_m: [number, number, number, ...number[]]
+            yaw_deg: number
+          }
+    },
+    ...{
+      uav_id: string
+      vehicle_ref: string
+      sensors?: {
+        sensor_id: string
+        enabled?: boolean
+        overrides?: {
+          width_px?: number
+          height_px?: number
+          /**
+           * Rational frame rate as a decimal string
+           */
+          fps?: string
+          mount_preset?: string
+          role?: 'agent' | 'slam'
+        }
+      }[]
+      start:
+        | {
+            kind: 'anchor'
+            anchor_id: string
+          }
+        | {
+            kind: 'nest'
+            nest_id: string
+          }
+        | {
+            kind: 'pose'
+            /**
+             * @minItems 3
+             * @maxItems 3
+             */
+            pos_enu_m: [number, number, number, ...number[]]
+            yaw_deg: number
+          }
+    }[]
+  ]
+  policy: {
+    kind: 'reference' | 'image' | 'sdk'
+    name?: 'hover' | 'guard' | 'coverage' | 'track' | 'track_share' | 'static_guard' | 'coverage_scan'
+    image_digest?: string
+    params?: {}
+  }
+  physics?: 'realistic' | 'fast' | 'sitl'
+  /**
+   * M24 §7.2 (optional; defaults keep the baseline behaviour)
+   */
+  physics_opts?: {
+    gz_profile?: 'physics' | 'xval'
+    wind_mode?: 'uniform' | 'field'
+    drag_law?: 'linear' | 'composite'
+    collision_source?: 'collision' | 'raycast'
+    vehicle_collision?: boolean
+    reuse_policy?: 'per_run' | 'same_seed'
+    step_timeout_s?: number
+  }
+  clock_profile?:
+    | ('d1_250' | 'sandbox100')
+    | {
+        name: string
+        main_hz: number
+        physics_hz: number
+        l1_hz: number
+      }
+  obs_level: 'L1' | 'L2' | 'L2-depth' | 'L3' | 'T0'
+  appearance?: 'mesh' | '3dgs'
+  appearance_source?: 'aerial' | 'mesh_distilled' | 'generative'
+  noise?: 'clean' | 'realistic' | 'harsh'
+  comm?: {
+    enabled?: boolean
+    bucket_Bps?: number
+    burst_B?: number
+    msg_max_B?: number
+    model?: string
+  }
+  mode?: 'exogenous' | 'interactive'
+  /**
+   * @minItems 1
+   * @maxItems 1000
+   */
+  seeds?: [number, ...number[]]
+  seed_count?: number
+  outputs?: (
+    'rgb' | 'thermal' | 'depth' | 'gt_depth' | 'seg' | 'lidar' | 'imu' | 'gnss' | 'bag' | 'rrd' | 'files' | 'lerobot' | 'openlabel'
+  )[]
+  rgb_codec?: 'jpeg' | 'raw'
+  raycast?: 'cpu' | 'gpu'
+  retention?: 'transient' | 'standard' | 'pinned' | 'ranked_eval'
+  eval_ref?: {
+    submission_id: string
+    board_version: string
+    track: string
+    lane?: string
+  }
+  ranked?: boolean
+  duration_s?: number
+  /**
+   * SlamSpec (P0b)
+   */
+  slam?: {
+    enabled: boolean
+    uavs?: string[]
+    /**
+     * @minItems 1
+     */
+    modes?: ['livo' | 'lio', ...('livo' | 'lio')[]]
+    repeats?: number
+    rate?: number
+    l0_map?: {
+      voxel_m: number
+      depth_max_m: number
+    }
+    noise_override?: null
+  }
+  priority?: 'research' | 'batch'
+}
+/**
  * safety_codes.json meta-schema. M09 §6.13.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -10104,6 +10565,90 @@ export interface ScenarioGenTerrainFollow {
   max_slope_deg?: number
   clearance_m?: number
   speed_mps?: number
+}
+export interface ScoreV11 {
+  schema: 'drone4d.bench.score.v1'
+  score_version: string
+  /**
+   * @minItems 1
+   */
+  components: ['ec' | 'eu' | 'ao' | 'ce' | 'g_hat' | 'f_res', ...('ec' | 'eu' | 'ao' | 'ce' | 'g_hat' | 'f_res')[]]
+  normalization?: {}
+  weights: null | {
+    ec: number
+    eu: number
+    ao: number
+    ce: number
+  }
+  n?: {
+    events: number
+    seeds: number
+    repeats: number
+  }
+  lanes?: {
+    lane: string
+    metrics: {
+      ec?: {
+        value: number | null
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        ci95: [number, number, ...number[]]
+        rank?: number
+        tie_group?: number
+        repeat_delta?: number | null
+      }
+      eu?: {
+        value: number | null
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        ci95: [number, number, ...number[]]
+        rank?: number
+        tie_group?: number
+        repeat_delta?: number | null
+      }
+      ao?: {
+        value: number | null
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        ci95: [number, number, ...number[]]
+        rank?: number
+        tie_group?: number
+        repeat_delta?: number | null
+      }
+      ce?: {
+        value: number | null
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        ci95: [number, number, ...number[]]
+        rank?: number
+        tie_group?: number
+        repeat_delta?: number | null
+      }
+    }
+    dominance_tier?: number
+    runs: {
+      total: number
+      valid: number
+      invalid: number
+      platform_rerun?: number
+    }
+    status?: string
+    composite?: number | null
+  }[]
+  s?: number
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  ci95?: [number, number, ...number[]]
 }
 /**
  * awr.sandbox.session.v1 (sandbox session object and session API bodies). Session object returned by SB-04, SB-06, SB-08 and SB-10 (AWR-17 §17.4.1); $defs hold the session API request and reply bodies (§17.3, §17.4, §17.6.1). Times on the wire are UNIX ns decimal strings; queueing is not a session state (see ticket.schema.json).
@@ -10611,6 +11156,21 @@ export interface SessionTokenPayload {
   jti: string
 }
 /**
+ * Workspace session (drone4d.bench.session.v1). AWR-17 §18.5.1 and §18.23 (contracts 1.3.0, d1 V0.3). GET /api/bench/v1/session; token_label is the note given at issue time and never the token.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SessionV1".
+ */
+export interface SessionV1 {
+  schema: 'drone4d.bench.session.v1'
+  principal: string
+  role: 'invited' | 'researcher' | 'evaluator' | 'admin'
+  projects: string[]
+  iat_unix_ns: number
+  exp_unix_ns: number
+  token_label?: string
+}
+/**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "SessionWorldItem".
  */
@@ -10739,6 +11299,97 @@ export interface SnapshotVehicle {
   lights?: {
     nav?: boolean
     strobe?: boolean
+  }
+}
+/**
+ * Internal submission (drone4d.bench.submission.v1). AWR-17 §18.23 and §18.24 (contracts 1.3.0, d1 V0.3): internal submissions (invited members and above); public submissions are withdrawn. The request carries track, lanes?, image_digest, entry and notes; the server adds the rest. No composite value.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SubmissionV1".
+ */
+export interface SubmissionV1 {
+  schema?: 'drone4d.bench.submission.v1'
+  submission_id?: string
+  track: string
+  lanes?: string[]
+  image_digest: string
+  entry: {
+    /**
+     * @minItems 1
+     */
+    cmd: [string, ...string[]]
+    env?: {
+      [k: string]: string
+    }
+  }
+  notes?: string
+  state?: 'RECEIVED' | 'SCANNING' | 'VALIDATING' | 'EVALUATING' | 'SCORING' | 'DONE' | 'REJECTED' | 'FAILED' | 'WITHDRAWN'
+  visibility?: 'private' | 'board'
+  position?: number
+  reason?: {
+    code: number
+    name: string
+    detail?: {}
+  }
+  result?: {
+    lanes: {
+      lane: string
+      metrics: {
+        ec?: {
+          value: number | null
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          ci95: [number, number, ...number[]]
+          rank?: number
+          tie_group?: number
+          repeat_delta?: number | null
+        }
+        eu?: {
+          value: number | null
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          ci95: [number, number, ...number[]]
+          rank?: number
+          tie_group?: number
+          repeat_delta?: number | null
+        }
+        ao?: {
+          value: number | null
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          ci95: [number, number, ...number[]]
+          rank?: number
+          tie_group?: number
+          repeat_delta?: number | null
+        }
+        ce?: {
+          value: number | null
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          ci95: [number, number, ...number[]]
+          rank?: number
+          tie_group?: number
+          repeat_delta?: number | null
+        }
+      }
+      dominance_tier?: number
+      runs: {
+        total: number
+        valid: number
+        invalid: number
+        platform_rerun?: number
+      }
+      status?: string
+      composite?: number | null
+    }[]
   }
 }
 /**
@@ -11311,6 +11962,73 @@ export interface TaskStatus {
     risk?: number
     score?: number
     t_quote_ns?: number
+  }[]
+}
+/**
+ * Benchmark task (drone4d.bench.task.v1). M27 §7.2 and AWR-17 §18.23 (contracts 1.3.0, d1 V0.3). x-agent-visible lists the fields M26 projects into agent_config.brief; scored_event_types never reaches agents. prior and reference_chips carry priors and reference appearance only, never actual positions or actor ids (API-FR-135).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "TaskV1".
+ */
+export interface TaskV1 {
+  schema: 'drone4d.bench.task.v1'
+  task_id: string
+  event_ref: string
+  version: number
+  event_type: 'reid_occlusion' | 'rendezvous_handoff' | 'vehicle_track' | 'target_search'
+  brief: {
+    anchors_public: string[]
+    targets: {
+      appearance_desc: string
+      class: string
+    }[]
+    /**
+     * @minItems 3
+     * @maxItems 256
+     */
+    region_polygon_enu_m: [
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      ...[number, number, ...number[]][]
+    ]
+    duration_s: number
+  }
+  known_targets: boolean
+  min_obs_level: 'L1' | 'L2' | 'L2-depth' | 'L3' | 'T0'
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  altitude_envelope_agl_m: [number, number, ...number[]]
+  /**
+   * @minItems 1
+   */
+  scored_event_types: [string, ...string[]]
+  /**
+   * @minItems 1
+   */
+  report_types: [string, ...string[]]
+  safety: {
+    min_sep_person_m: number
+    min_sep_vehicle_m: number
+    no_fly: {}[]
+  }
+  budget: {
+    distance_km_per_uav: number
+    comm_kb_per_uav: number
+  }
+  /**
+   * target_search only (P0b)
+   */
+  prior?: {
+    kind: 'region_weights' | 'heatmap'
+    ref: string
+  }
+  reference_chips?: {
+    ref: string
+    sha256: string
+    class: string
   }[]
 }
 /**

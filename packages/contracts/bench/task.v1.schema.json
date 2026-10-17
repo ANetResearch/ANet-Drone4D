@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/task.v1.schema.json",
+  "title": "Benchmark task (drone4d.bench.task.v1)",
+  "description": "M27 §7.2 and AWR-17 §18.23 (contracts 1.3.0, d1 V0.3). x-agent-visible lists the fields M26 projects into agent_config.brief; scored_event_types never reaches agents. prior and reference_chips carry priors and reference appearance only, never actual positions or actor ids (API-FR-135).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.bench.task.v1"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "event_ref": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "event_type": {
+      "enum": [
+        "reid_occlusion",
+        "rendezvous_handoff",
+        "vehicle_track",
+        "target_search"
+      ]
+    },
+    "brief": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "anchors_public": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "appearance_desc": {
+                "type": "string"
+              },
+              "class": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "appearance_desc",
+              "class"
+            ]
+          }
+        },
+        "region_polygon_enu_m": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 3,
+          "maxItems": 256
+        },
+        "duration_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "anchors_public",
+        "targets",
+        "region_polygon_enu_m",
+        "duration_s"
+      ]
+    },
+    "known_targets": {
+      "type": "boolean"
+    },
+    "min_obs_level": {
+      "enum": [
+        "L1",
+        "L2",
+        "L2-depth",
+        "L3",
+        "T0"
+      ]
+    },
+    "altitude_envelope_agl_m": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "scored_event_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "report_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_sep_person_m": {
+          "type": "number"
+        },
+        "min_sep_vehicle_m": {
+          "type": "number"
+        },
+        "no_fly": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "min_sep_person_m",
+        "min_sep_vehicle_m",
+        "no_fly"
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "distance_km_per_uav": {
+          "type": "number"
+        },
+        "comm_kb_per_uav": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "distance_km_per_uav",
+        "comm_kb_per_uav"
+      ]
+    },
+    "prior": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "target_search only (P0b)",
+      "properties": {
+        "kind": {
+          "enum": [
+            "region_weights",
+            "heatmap"
+          ]
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "ref"
+      ]
+    },
+    "reference_chips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "class": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "sha256",
+          "class"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "task_id",
+    "event_ref",
+    "version",
+    "event_type",
+    "brief",
+    "known_targets",
+    "min_obs_level",
+    "altitude_envelope_agl_m",
+    "scored_event_types",
+    "report_types",
+    "safety",
+    "budget"
+  ],
+  "x-agent-visible": [
+    "task_id",
+    "event_ref",
+    "version",
+    "event_type",
+    "brief",
+    "known_targets",
+    "min_obs_level",
+    "altitude_envelope_agl_m",
+    "report_types",
+    "safety",
+    "budget",
+    "prior",
+    "reference_chips"
+  ]
+}

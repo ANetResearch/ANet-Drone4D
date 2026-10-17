@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/score.v1.schema.json",
+  "title": "Score definition and result (drone4d.bench.score.v1)",
+  "description": "AWR-17 §18.23 and §18.24 (contracts 1.3.0, d1 V0.3). Components in [0, 1]. weights = null (v1.4 default) means composite is always null and the v1.3 top-level s and ci95 must not appear.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.bench.score.v1"
+    },
+    "score_version": {
+      "type": "string"
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "ec",
+          "eu",
+          "ao",
+          "ce",
+          "g_hat",
+          "f_res"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "normalization": {
+      "type": "object"
+    },
+    "weights": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ec": {
+              "type": "number"
+            },
+            "eu": {
+              "type": "number"
+            },
+            "ao": {
+              "type": "number"
+            },
+            "ce": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "ec",
+            "eu",
+            "ao",
+            "ce"
+          ]
+        }
+      ]
+    },
+    "n": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seeds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "repeats": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "events",
+        "seeds",
+        "repeats"
+      ]
+    },
+    "lanes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lane": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "ec": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "ci95": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "rank": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tie_group": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repeat_delta": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "ci95"
+                ]
+              },
+              "eu": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "ci95": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "rank": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tie_group": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repeat_delta": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "ci95"
+                ]
+              },
+              "ao": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "ci95": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "rank": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tie_group": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repeat_delta": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "ci95"
+                ]
+              },
+              "ce": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "ci95": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "rank": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tie_group": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repeat_delta": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "ci95"
+                ]
+              }
+            },
+            "required": []
+          },
+          "dominance_tier": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "runs": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "valid": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "invalid": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "platform_rerun": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "total",
+              "valid",
+              "invalid"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "composite": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "lane",
+          "metrics",
+          "runs"
+        ]
+      }
+    },
+    "s": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "ci95": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    }
+  },
+  "required": [
+    "schema",
+    "score_version",
+    "components",
+    "weights"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "weights": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "s": false,
+          "ci95": false,
+          "lanes": {
+            "items": {
+              "properties": {
+                "composite": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

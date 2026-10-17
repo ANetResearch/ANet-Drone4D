@@ -77,6 +77,15 @@ __all__ = [
     "Blocks",
     "BlocksSafetyBlock",
     "BlocksStateExtBlock",
+    "BoardV1",
+    "BoardV1Entries",
+    "BoardV1EntriesMetrics",
+    "BoardV1EntriesMetricsAo",
+    "BoardV1EntriesMetricsCe",
+    "BoardV1EntriesMetricsEc",
+    "BoardV1EntriesMetricsEu",
+    "BoardV1Lanes",
+    "BoardV1Tracks",
     "BriefV1",
     "BriefV1PublicAnchors",
     "BriefV1Targets",
@@ -206,6 +215,23 @@ __all__ = [
     "EoZoomPowerWOneOf1",
     "EoZoomSensor",
     "EoZoomSpecFov",
+    "EvaluationV1",
+    "EvaluationV1Actors",
+    "EvaluationV1Ao",
+    "EvaluationV1AoOracle",
+    "EvaluationV1Ce",
+    "EvaluationV1Components",
+    "EvaluationV1Ec",
+    "EvaluationV1EcEvents",
+    "EvaluationV1Eu",
+    "EvaluationV1EuMatches",
+    "EvaluationV1EuParticipants",
+    "EvaluationV1Excluded",
+    "EvaluationV1Inputs",
+    "EvaluationV1Interactive",
+    "EvaluationV1Safety",
+    "EvaluationV1SafetyMinSepM",
+    "EvaluationV1SafetyViolations",
     "EventV1",
     "EventV1Actors",
     "EventV1ActorsAppearance",
@@ -649,6 +675,31 @@ __all__ = [
     "RngStreamsReserved",
     "RngStreamsStreams",
     "Roster",
+    "RunManifestV1",
+    "RunManifestV1Agents",
+    "RunManifestV1Backpressure",
+    "RunManifestV1Bytes",
+    "RunManifestV1EvalRef",
+    "RunManifestV1Files",
+    "RunManifestV1Gpu",
+    "RunManifestV1Timing",
+    "RunSpecV1",
+    "RunSpecV1ClockProfileOneOf1",
+    "RunSpecV1Comm",
+    "RunSpecV1EvalRef",
+    "RunSpecV1Event",
+    "RunSpecV1Experiment",
+    "RunSpecV1Fleet",
+    "RunSpecV1FleetSensors",
+    "RunSpecV1FleetSensorsOverrides",
+    "RunSpecV1FleetStartOneOf0",
+    "RunSpecV1FleetStartOneOf1",
+    "RunSpecV1FleetStartOneOf2",
+    "RunSpecV1PhysicsOpts",
+    "RunSpecV1Policy",
+    "RunSpecV1Slam",
+    "RunSpecV1SlamL0Map",
+    "RunSpecV1World",
     "SafetyCodes",
     "SafetyCodesCodes",
     "SandboxSessionState",
@@ -686,6 +737,16 @@ __all__ = [
     "ScenarioVehicleSetsMissionOneOfStart0",
     "ScenarioVehicles",
     "ScenarioZones",
+    "ScoreV1",
+    "ScoreV1Lanes",
+    "ScoreV1LanesMetrics",
+    "ScoreV1LanesMetricsAo",
+    "ScoreV1LanesMetricsCe",
+    "ScoreV1LanesMetricsEc",
+    "ScoreV1LanesMetricsEu",
+    "ScoreV1LanesRuns",
+    "ScoreV1N",
+    "ScoreV1WeightsOneOf1",
     "Sensitivity",
     "Session",
     "SessionBatchRequest",
@@ -725,6 +786,7 @@ __all__ = [
     "SessionTemplates_",
     "SessionTokenPayload",
     "SessionUsage",
+    "SessionV1",
     "SessionWorldItem",
     "SessionWorldItemAnchor",
     "SessionWorldItemBoundsM",
@@ -750,6 +812,17 @@ __all__ = [
     "SnapshotVehiclesLights",
     "SnapshotVehiclesSensorsOneOf0",
     "Sound",
+    "SubmissionV1",
+    "SubmissionV1Entry",
+    "SubmissionV1Reason",
+    "SubmissionV1Result",
+    "SubmissionV1ResultLanes",
+    "SubmissionV1ResultLanesMetrics",
+    "SubmissionV1ResultLanesMetricsAo",
+    "SubmissionV1ResultLanesMetricsCe",
+    "SubmissionV1ResultLanesMetricsEc",
+    "SubmissionV1ResultLanesMetricsEu",
+    "SubmissionV1ResultLanesRuns",
     "Sustainability",
     "SustainabilityBottlenecks",
     "SustainabilityChargers",
@@ -809,6 +882,13 @@ __all__ = [
     "TaskStatusQuotes",
     "TaskStatus_",
     "TaskStatus__",
+    "TaskV1",
+    "TaskV1Brief",
+    "TaskV1BriefTargets",
+    "TaskV1Budget",
+    "TaskV1Prior",
+    "TaskV1ReferenceChips",
+    "TaskV1Safety",
     "TaskingSnapshot",
     "TaskingSnapshotVehicles",
     "TaskingSnapshotWorkItems",
@@ -1829,6 +1909,95 @@ class BlocksStateExtBlock(TypedDict):
     roster_version: int
     keyframe: bool
     items: dict[str, UavStateExt]
+
+
+# bench/board.v1.schema.json# Internal leaderboard (drone4d.bench.board.v1)
+class BoardV1(TypedDict):
+    schema: Literal["drone4d.bench.board.v1"]
+    board_version: str
+    tracks: list[BoardV1Tracks]
+    lanes: list[BoardV1Lanes]
+    seed_set_commit: NotRequired[str]
+    evaluator_major: int
+    platform_digest: str
+    entries: list[BoardV1Entries]
+
+
+# bench/board.v1.schema.json#/properties/entries/items
+class BoardV1Entries(TypedDict):
+    entry_id: str
+    team: str
+    display_name: str
+    track: str
+    lane: str
+    metrics: BoardV1EntriesMetrics
+    dominance_tier: int
+    first_listed_unix_ns: int
+    baseline: bool
+
+
+# bench/board.v1.schema.json#/properties/entries/items/properties/metrics
+class BoardV1EntriesMetrics(TypedDict):
+    ec: NotRequired[BoardV1EntriesMetricsEc]
+    eu: NotRequired[BoardV1EntriesMetricsEu]
+    ao: NotRequired[BoardV1EntriesMetricsAo]
+    ce: NotRequired[BoardV1EntriesMetricsCe]
+
+
+# bench/board.v1.schema.json#/properties/entries/items/properties/metrics/properties/ao
+class BoardV1EntriesMetricsAo(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/board.v1.schema.json#/properties/entries/items/properties/metrics/properties/ce
+class BoardV1EntriesMetricsCe(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/board.v1.schema.json#/properties/entries/items/properties/metrics/properties/ec
+class BoardV1EntriesMetricsEc(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/board.v1.schema.json#/properties/entries/items/properties/metrics/properties/eu
+class BoardV1EntriesMetricsEu(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/board.v1.schema.json#/properties/lanes/items
+class BoardV1Lanes(TypedDict):
+    lane: str
+    kind: Literal["event_type", "task"]
+    event_type: NotRequired[Literal["reid_occlusion", "rendezvous_handoff", "vehicle_track", "target_search"]]
+    test_events: list[str]
+    seed_set_commit: str
+
+
+# bench/board.v1.schema.json#/properties/tracks/items
+class BoardV1Tracks(TypedDict):
+    track: str
+    fleet_ref: str
+    obs_level: Literal["L1", "L2", "L2-depth"]
+    physics: Literal["realistic"]
+    mode: Literal["exogenous"]
+    agent_class: str
+    appearance: Literal["mesh", "3dgs-aerial"]
 
 
 # event/brief.v1.schema.json# Task brief brief.json (drone4d.event_brief.v1)
@@ -2930,6 +3099,155 @@ class EoZoomSpecFov(TypedDict):
     hfov_deg: NotRequired[list[float]]
     vfov_deg: NotRequired[list[float]]
     dfov_deg: NotRequired[list[float]]
+
+
+# bench/evaluation.v1.schema.json# Evaluation result (drone4d.bench.evaluation.v1)
+class EvaluationV1(TypedDict):
+    schema: Literal["drone4d.bench.evaluation.v1"]
+    run_id: str
+    evaluator_version: str
+    thresholds_version: str
+    oracle_version: str
+    inputs: EvaluationV1Inputs
+    obs_level: Literal["L1", "L2", "L2-depth", "L3", "T0"]
+    ranked: bool
+    ranked_valid: bool
+    invalid_reasons: list[str]
+    ec: EvaluationV1Ec
+    excluded: list[EvaluationV1Excluded]
+    eu: NotRequired[EvaluationV1Eu]
+    ao: EvaluationV1Ao
+    ce: NotRequired[EvaluationV1Ce]
+    safety: EvaluationV1Safety
+    actors: dict[str, EvaluationV1Actors]
+    components: NotRequired[EvaluationV1Components]
+    slam: NotRequired[dict[str, Any]]
+    interactive: NotRequired[EvaluationV1Interactive]
+
+
+# bench/evaluation.v1.schema.json#/properties/actors/additionalProperties
+class EvaluationV1Actors(TypedDict):
+    observed_frac: float
+    first_s: float | None
+    redundancy: float
+    max_gap_s: float
+
+
+# bench/evaluation.v1.schema.json#/properties/ao
+class EvaluationV1Ao(TypedDict):
+    ao_real: float
+    ao_pos_los: float
+    ao_pos: float
+    oracle: EvaluationV1AoOracle
+
+
+# bench/evaluation.v1.schema.json#/properties/ao/properties/oracle
+class EvaluationV1AoOracle(TypedDict):
+    version: str
+    camera_models: list[str]
+    grid_m: float
+    alt_step_m: float
+    envelope_agl_m: list[float]
+
+
+# bench/evaluation.v1.schema.json#/properties/ce
+class EvaluationV1Ce(TypedDict):
+    gain: float
+    gain_per_extra_uav: float
+    redundancy: float
+    flight_km: float
+    comm_kb: float
+    loss_rate: float
+    dec_per_km: float
+    dec_per_kb: float
+
+
+# bench/evaluation.v1.schema.json#/properties/components
+class EvaluationV1Components(TypedDict):
+    ec: float
+    eu: float | None
+    ao: float | None
+    ce: float | None
+
+
+# bench/evaluation.v1.schema.json#/properties/ec
+class EvaluationV1Ec(TypedDict):
+    value: float
+    coverage: float
+    events: list[EvaluationV1EcEvents]
+
+
+# bench/evaluation.v1.schema.json#/properties/ec/properties/events/items
+class EvaluationV1EcEvents(TypedDict):
+    id: str
+    type: str
+    captured: bool
+    coverage: float
+    by: list[str]
+
+
+# bench/evaluation.v1.schema.json#/properties/eu
+class EvaluationV1Eu(TypedDict):
+    precision: float
+    recall: float
+    f1: float
+    matches: list[EvaluationV1EuMatches]
+    participants: EvaluationV1EuParticipants
+
+
+# bench/evaluation.v1.schema.json#/properties/eu/properties/matches/items
+class EvaluationV1EuMatches(TypedDict):
+    report_idx: int
+    event_id: str
+    dt_s: float
+
+
+# bench/evaluation.v1.schema.json#/properties/eu/properties/participants
+class EvaluationV1EuParticipants(TypedDict):
+    resolved: int
+    unresolved: int
+
+
+# bench/evaluation.v1.schema.json#/properties/excluded/items
+class EvaluationV1Excluded(TypedDict):
+    event_id: str
+    reason: Literal["incomplete_region", "inside_building"]
+
+
+# bench/evaluation.v1.schema.json#/properties/inputs
+class EvaluationV1Inputs(TypedDict):
+    raw_mcap_sha256: str
+    truth_sha256: str
+    tape_sha256: str
+    event_truth_sha256: str
+
+
+# bench/evaluation.v1.schema.json#/properties/interactive
+class EvaluationV1Interactive(TypedDict):
+    deviation_mean_m: dict[str, Any]
+    event_set_diff: dict[str, Any]
+
+
+# bench/evaluation.v1.schema.json#/properties/safety
+class EvaluationV1Safety(TypedDict):
+    ground_alerts: int
+    nofly_incursions: int
+    detected_count: int
+    min_sep_m: EvaluationV1SafetyMinSepM
+    violations: EvaluationV1SafetyViolations
+    penetrations: int
+
+
+# bench/evaluation.v1.schema.json#/properties/safety/properties/min_sep_m
+class EvaluationV1SafetyMinSepM(TypedDict):
+    person: float | None
+    vehicle: float | None
+
+
+# bench/evaluation.v1.schema.json#/properties/safety/properties/violations
+class EvaluationV1SafetyViolations(TypedDict):
+    person: int
+    vehicle: int
 
 
 # event/event.v1.schema.json# Event DSL (drone4d.event.v1)
@@ -6864,6 +7182,243 @@ class Roster(TypedDict):
     entries: list[FleetRosterEntries]
 
 
+# bench/run_manifest.v1.schema.json# Run manifest run_manifest.json (drone4d.bench.run_manifest.v1)
+class RunManifestV1(TypedDict):
+    schema: Literal["drone4d.bench.run_manifest.v1"]
+    run_id: str
+    experiment_id: str
+    attempt: int
+    restart_count: int
+    spec: RunSpecV1
+    seed: NotRequired[int]
+    seed_commit: str
+    config_sha256: str
+    spec_sha256: str
+    run_hash: str
+    versions: dict[str, str]
+    determinism_level: Literal["1b", "2", "3", "none"]
+    split: Literal["dev", "test"]
+    ranked: bool
+    ranked_valid: bool | None
+    invalid_reasons: list[str]
+    timing: RunManifestV1Timing
+    backpressure: NotRequired[RunManifestV1Backpressure]
+    agents: NotRequired[dict[str, RunManifestV1Agents]]
+    bytes: NotRequired[RunManifestV1Bytes]
+    files: NotRequired[RunManifestV1Files]
+    gpu: NotRequired[RunManifestV1Gpu]
+    eval_ref: NotRequired[RunManifestV1EvalRef]
+    frames_digest_ref: NotRequired[str]
+
+
+# bench/run_manifest.v1.schema.json#/properties/agents/additionalProperties
+class RunManifestV1Agents(TypedDict):
+    agent_timeouts: int
+    agent_exit_tick: NotRequired[int]
+
+
+# bench/run_manifest.v1.schema.json#/properties/backpressure
+class RunManifestV1Backpressure(TypedDict):
+    m25_wait_s: float
+    writer_block_s: float
+    writer_block_frac: float
+
+
+# bench/run_manifest.v1.schema.json#/properties/bytes
+class RunManifestV1Bytes(TypedDict):
+    raw: int
+    truth: int
+    frames_idx: int
+
+
+# bench/run_manifest.v1.schema.json#/properties/eval_ref
+class RunManifestV1EvalRef(TypedDict):
+    submission_id: str
+    board_version: str
+    track: str
+    lane: NotRequired[str]
+
+
+# bench/run_manifest.v1.schema.json#/properties/files
+class RunManifestV1Files(TypedDict):
+    raw_mcap_sha256: str
+    truth_mcap_sha256: str
+    frames_idx_sha256: str
+
+
+# bench/run_manifest.v1.schema.json#/properties/gpu
+class RunManifestV1Gpu(TypedDict):
+    index: int
+    model: str
+    driver: str
+    shared_card: NotRequired[bool]
+
+
+# bench/run_manifest.v1.schema.json#/properties/timing
+class RunManifestV1Timing(TypedDict):
+    queued_unix_ns: NotRequired[int]
+    started_unix_ns: NotRequired[int]
+    ended_unix_ns: NotRequired[int]
+    wall_s: NotRequired[float]
+    sim_s: NotRequired[float]
+    rtf: NotRequired[float]
+
+
+# bench/run_spec.v1.schema.json# Run specification (drone4d.bench.run_spec.v1)
+class RunSpecV1(TypedDict):
+    schema: Literal["drone4d.bench.run_spec.v1"]
+    experiment: RunSpecV1Experiment
+    world: RunSpecV1World
+    event: RunSpecV1Event
+    task: NotRequired[str | None]
+    fleet: list[RunSpecV1Fleet]
+    policy: RunSpecV1Policy
+    physics: NotRequired[Literal["realistic", "fast", "sitl"]]
+    physics_opts: NotRequired[RunSpecV1PhysicsOpts]
+    clock_profile: NotRequired[Literal["d1_250", "sandbox100"] | RunSpecV1ClockProfileOneOf1]
+    obs_level: Literal["L1", "L2", "L2-depth", "L3", "T0"]
+    appearance: NotRequired[Literal["mesh", "3dgs"]]
+    appearance_source: NotRequired[Literal["aerial", "mesh_distilled", "generative"]]
+    noise: NotRequired[Literal["clean", "realistic", "harsh"]]
+    comm: NotRequired[RunSpecV1Comm]
+    mode: NotRequired[Literal["exogenous", "interactive"]]
+    seeds: NotRequired[list[int]]
+    seed_count: NotRequired[int]
+    outputs: NotRequired[list[Literal["rgb", "thermal", "depth", "gt_depth", "seg", "lidar", "imu", "gnss", "bag", "rrd", "files", "lerobot", "openlabel"]]]
+    rgb_codec: NotRequired[Literal["jpeg", "raw"]]
+    raycast: NotRequired[Literal["cpu", "gpu"]]
+    retention: NotRequired[Literal["transient", "standard", "pinned", "ranked_eval"]]
+    eval_ref: NotRequired[RunSpecV1EvalRef]
+    ranked: NotRequired[bool]
+    duration_s: NotRequired[float]
+    slam: NotRequired[RunSpecV1Slam]
+    priority: NotRequired[Literal["research", "batch"]]
+
+
+# bench/run_spec.v1.schema.json#/properties/clock_profile/oneOf/1
+class RunSpecV1ClockProfileOneOf1(TypedDict):
+    name: str
+    main_hz: int
+    physics_hz: int
+    l1_hz: int
+
+
+# bench/run_spec.v1.schema.json#/properties/comm
+class RunSpecV1Comm(TypedDict):
+    enabled: NotRequired[bool]
+    bucket_Bps: NotRequired[int]
+    burst_B: NotRequired[int]
+    msg_max_B: NotRequired[int]
+    model: NotRequired[str]
+
+
+# bench/run_spec.v1.schema.json#/properties/eval_ref
+class RunSpecV1EvalRef(TypedDict):
+    submission_id: str
+    board_version: str
+    track: str
+    lane: NotRequired[str]
+
+
+# bench/run_spec.v1.schema.json#/properties/event
+class RunSpecV1Event(TypedDict):
+    id: str
+    version: NotRequired[int]
+    tape_content_sha256: NotRequired[str]
+
+
+# bench/run_spec.v1.schema.json#/properties/experiment
+class RunSpecV1Experiment(TypedDict):
+    name: str
+    project: NotRequired[str]
+    note: NotRequired[str]
+
+
+# bench/run_spec.v1.schema.json#/properties/fleet/items
+class RunSpecV1Fleet(TypedDict):
+    uav_id: str
+    vehicle_ref: str
+    sensors: NotRequired[list[RunSpecV1FleetSensors]]
+    start: RunSpecV1FleetStartOneOf0 | RunSpecV1FleetStartOneOf1 | RunSpecV1FleetStartOneOf2
+
+
+# bench/run_spec.v1.schema.json#/properties/fleet/items/properties/sensors/items
+class RunSpecV1FleetSensors(TypedDict):
+    sensor_id: str
+    enabled: NotRequired[bool]
+    overrides: NotRequired[RunSpecV1FleetSensorsOverrides]
+
+
+# bench/run_spec.v1.schema.json#/properties/fleet/items/properties/sensors/items/properties/overrides
+class RunSpecV1FleetSensorsOverrides(TypedDict):
+    width_px: NotRequired[int]
+    height_px: NotRequired[int]
+    fps: NotRequired[str]
+    mount_preset: NotRequired[str]
+    role: NotRequired[Literal["agent", "slam"]]
+
+
+# bench/run_spec.v1.schema.json#/properties/fleet/items/properties/start/oneOf/0
+class RunSpecV1FleetStartOneOf0(TypedDict):
+    kind: Literal["anchor"]
+    anchor_id: str
+
+
+# bench/run_spec.v1.schema.json#/properties/fleet/items/properties/start/oneOf/1
+class RunSpecV1FleetStartOneOf1(TypedDict):
+    kind: Literal["nest"]
+    nest_id: str
+
+
+# bench/run_spec.v1.schema.json#/properties/fleet/items/properties/start/oneOf/2
+class RunSpecV1FleetStartOneOf2(TypedDict):
+    kind: Literal["pose"]
+    pos_enu_m: list[float]
+    yaw_deg: float
+
+
+# bench/run_spec.v1.schema.json#/properties/physics_opts
+class RunSpecV1PhysicsOpts(TypedDict):
+    gz_profile: NotRequired[Literal["physics", "xval"]]
+    wind_mode: NotRequired[Literal["uniform", "field"]]
+    drag_law: NotRequired[Literal["linear", "composite"]]
+    collision_source: NotRequired[Literal["collision", "raycast"]]
+    vehicle_collision: NotRequired[bool]
+    reuse_policy: NotRequired[Literal["per_run", "same_seed"]]
+    step_timeout_s: NotRequired[float]
+
+
+# bench/run_spec.v1.schema.json#/properties/policy
+class RunSpecV1Policy(TypedDict):
+    kind: Literal["reference", "image", "sdk"]
+    name: NotRequired[Literal["hover", "guard", "coverage", "track", "track_share", "static_guard", "coverage_scan"]]
+    image_digest: NotRequired[str]
+    params: NotRequired[dict[str, Any]]
+
+
+# bench/run_spec.v1.schema.json#/properties/slam
+class RunSpecV1Slam(TypedDict):
+    enabled: bool
+    uavs: NotRequired[list[str]]
+    modes: NotRequired[list[Literal["livo", "lio"]]]
+    repeats: NotRequired[int]
+    rate: NotRequired[float]
+    l0_map: NotRequired[RunSpecV1SlamL0Map]
+    noise_override: NotRequired[None]
+
+
+# bench/run_spec.v1.schema.json#/properties/slam/properties/l0_map
+class RunSpecV1SlamL0Map(TypedDict):
+    voxel_m: float
+    depth_max_m: float
+
+
+# bench/run_spec.v1.schema.json#/properties/world
+class RunSpecV1World(TypedDict):
+    id: str
+    content_version: NotRequired[str]
+
+
 # rt/safety_codes.schema.json# safety_codes.json meta-schema
 class SafetyCodes(TypedDict):
     schema: Literal["awr.safety_codes.v1"]
@@ -7196,6 +7751,96 @@ class ScenarioVehicles(TypedDict):
 # scenario/scenario.schema.json#/properties/zones
 class ScenarioZones(TypedDict):
     active: NotRequired[list[WorldCommonSlug]]
+
+
+# bench/score.v1.schema.json# Score definition and result (drone4d.bench.score.v1)
+class ScoreV1(TypedDict):
+    schema: Literal["drone4d.bench.score.v1"]
+    score_version: str
+    components: list[Literal["ec", "eu", "ao", "ce", "g_hat", "f_res"]]
+    normalization: NotRequired[dict[str, Any]]
+    weights: ScoreV1WeightsOneOf1 | None
+    n: NotRequired[ScoreV1N]
+    lanes: NotRequired[list[ScoreV1Lanes]]
+    s: NotRequired[float]
+    ci95: NotRequired[list[float]]
+
+
+# bench/score.v1.schema.json#/properties/lanes/items
+class ScoreV1Lanes(TypedDict):
+    lane: str
+    metrics: ScoreV1LanesMetrics
+    dominance_tier: NotRequired[int]
+    runs: ScoreV1LanesRuns
+    status: NotRequired[str]
+    composite: NotRequired[float | None]
+
+
+# bench/score.v1.schema.json#/properties/lanes/items/properties/metrics
+class ScoreV1LanesMetrics(TypedDict):
+    ec: NotRequired[ScoreV1LanesMetricsEc]
+    eu: NotRequired[ScoreV1LanesMetricsEu]
+    ao: NotRequired[ScoreV1LanesMetricsAo]
+    ce: NotRequired[ScoreV1LanesMetricsCe]
+
+
+# bench/score.v1.schema.json#/properties/lanes/items/properties/metrics/properties/ao
+class ScoreV1LanesMetricsAo(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/score.v1.schema.json#/properties/lanes/items/properties/metrics/properties/ce
+class ScoreV1LanesMetricsCe(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/score.v1.schema.json#/properties/lanes/items/properties/metrics/properties/ec
+class ScoreV1LanesMetricsEc(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/score.v1.schema.json#/properties/lanes/items/properties/metrics/properties/eu
+class ScoreV1LanesMetricsEu(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/score.v1.schema.json#/properties/lanes/items/properties/runs
+class ScoreV1LanesRuns(TypedDict):
+    total: int
+    valid: int
+    invalid: int
+    platform_rerun: NotRequired[int]
+
+
+# bench/score.v1.schema.json#/properties/n
+class ScoreV1N(TypedDict):
+    events: int
+    seeds: int
+    repeats: int
+
+
+# bench/score.v1.schema.json#/properties/weights/oneOf/1
+class ScoreV1WeightsOneOf1(TypedDict):
+    ec: float
+    eu: float
+    ao: float
+    ce: float
 
 
 # target/sensitivity.schema.json# awr.target.sensitivity.v1 (sensitivity volume)
@@ -7543,6 +8188,17 @@ class SessionUsage(TypedDict):
     cloned_models: NotRequired[int]
 
 
+# bench/session.v1.schema.json# Workspace session (drone4d.bench.session.v1)
+class SessionV1(TypedDict):
+    schema: Literal["drone4d.bench.session.v1"]
+    principal: str
+    role: Literal["invited", "researcher", "evaluator", "admin"]
+    projects: list[str]
+    iat_unix_ns: int
+    exp_unix_ns: int
+    token_label: NotRequired[str]
+
+
 # sandbox/session.schema.json#/$defs/world_item
 class SessionWorldItem(TypedDict):
     world_id: WorldCommonId
@@ -7759,6 +8415,102 @@ class Sound(TypedDict):
     duty: float
     phase_s: NotRequired[float]
     bandwidth_hz: NotRequired[float]
+
+
+# bench/submission.v1.schema.json# Internal submission (drone4d.bench.submission.v1)
+class SubmissionV1(TypedDict):
+    schema: NotRequired[Literal["drone4d.bench.submission.v1"]]
+    submission_id: NotRequired[str]
+    track: str
+    lanes: NotRequired[list[str]]
+    image_digest: str
+    entry: SubmissionV1Entry
+    notes: NotRequired[str]
+    state: NotRequired[Literal["RECEIVED", "SCANNING", "VALIDATING", "EVALUATING", "SCORING", "DONE", "REJECTED", "FAILED", "WITHDRAWN"]]
+    visibility: NotRequired[Literal["private", "board"]]
+    position: NotRequired[int]
+    reason: NotRequired[SubmissionV1Reason]
+    result: NotRequired[SubmissionV1Result]
+
+
+# bench/submission.v1.schema.json#/properties/entry
+class SubmissionV1Entry(TypedDict):
+    cmd: list[str]
+    env: NotRequired[dict[str, str]]
+
+
+# bench/submission.v1.schema.json#/properties/reason
+class SubmissionV1Reason(TypedDict):
+    code: int
+    name: str
+    detail: NotRequired[dict[str, Any]]
+
+
+# bench/submission.v1.schema.json#/properties/result
+class SubmissionV1Result(TypedDict):
+    lanes: list[SubmissionV1ResultLanes]
+
+
+# bench/submission.v1.schema.json#/properties/result/properties/lanes/items
+class SubmissionV1ResultLanes(TypedDict):
+    lane: str
+    metrics: SubmissionV1ResultLanesMetrics
+    dominance_tier: NotRequired[int]
+    runs: SubmissionV1ResultLanesRuns
+    status: NotRequired[str]
+    composite: NotRequired[float | None]
+
+
+# bench/submission.v1.schema.json#/properties/result/properties/lanes/items/properties/metrics
+class SubmissionV1ResultLanesMetrics(TypedDict):
+    ec: NotRequired[SubmissionV1ResultLanesMetricsEc]
+    eu: NotRequired[SubmissionV1ResultLanesMetricsEu]
+    ao: NotRequired[SubmissionV1ResultLanesMetricsAo]
+    ce: NotRequired[SubmissionV1ResultLanesMetricsCe]
+
+
+# bench/submission.v1.schema.json#/properties/result/properties/lanes/items/properties/metrics/properties/ao
+class SubmissionV1ResultLanesMetricsAo(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/submission.v1.schema.json#/properties/result/properties/lanes/items/properties/metrics/properties/ce
+class SubmissionV1ResultLanesMetricsCe(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/submission.v1.schema.json#/properties/result/properties/lanes/items/properties/metrics/properties/ec
+class SubmissionV1ResultLanesMetricsEc(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/submission.v1.schema.json#/properties/result/properties/lanes/items/properties/metrics/properties/eu
+class SubmissionV1ResultLanesMetricsEu(TypedDict):
+    value: float | None
+    ci95: list[float]
+    rank: NotRequired[int]
+    tie_group: NotRequired[int]
+    repeat_delta: NotRequired[float | None]
+
+
+# bench/submission.v1.schema.json#/properties/result/properties/lanes/items/properties/runs
+class SubmissionV1ResultLanesRuns(TypedDict):
+    total: int
+    valid: int
+    invalid: int
+    platform_rerun: NotRequired[int]
 
 
 # tasking/sustainability.schema.json# awr.tasking.sustainability.v1
@@ -8326,6 +9078,52 @@ class TaskStatus__(TypedDict):
     state: str
     eta_s: NotRequired[float | None]
     reason: NotRequired[str | None]
+
+
+# bench/task.v1.schema.json# Benchmark task (drone4d.bench.task.v1)
+class TaskV1(TypedDict):
+    schema: Literal["drone4d.bench.task.v1"]
+    task_id: str
+    event_ref: str
+    version: int
+    event_type: Literal["reid_occlusion", "rendezvous_handoff", "vehicle_track", "target_search"]
+    brief: TaskV1Brief
+    known_targets: bool
+    min_obs_level: Literal["L1", "L2", "L2-depth", "L3", "T0"]
+    altitude_envelope_agl_m: list[float]
+    scored_event_types: list[str]
+    report_types: list[str]
+    safety: TaskV1Safety
+    budget: TaskV1Budget
+    prior: NotRequired[TaskV1Prior]
+    reference_chips: NotRequired[list[TaskV1ReferenceChips]]
+
+
+# bench/task.v1.schema.json#/properties/brief
+class TaskV1Brief(TypedDict):
+    anchors_public: list[str]
+    targets: list[TaskV1BriefTargets]
+    region_polygon_enu_m: list[list[float]]
+    duration_s: float
+
+
+# bench/task.v1.schema.json#/properties/budget
+class TaskV1Budget(TypedDict):
+    distance_km_per_uav: float
+    comm_kb_per_uav: float
+
+
+# bench/task.v1.schema.json#/properties/prior
+class TaskV1Prior(TypedDict):
+    kind: Literal["region_weights", "heatmap"]
+    ref: str
+
+
+# bench/task.v1.schema.json#/properties/safety
+class TaskV1Safety(TypedDict):
+    min_sep_person_m: float
+    min_sep_vehicle_m: float
+    no_fly: list[dict[str, Any]]
 
 
 # tasking/snapshot.schema.json# awr.tasking.snapshot.v1 (Allocator snapshot)
@@ -10763,6 +11561,21 @@ TargetDetail = TypedDict("TargetDetail", {
     "capture": NotRequired[TargetDetailCaptureOneOf0 | None],
     "cfg_rev": int,
     "cfg": NotRequired[Target],
+})
+
+
+# bench/task.v1.schema.json#/properties/brief/properties/targets/items
+TaskV1BriefTargets = TypedDict("TaskV1BriefTargets", {
+    "appearance_desc": str,
+    "class": str,
+})
+
+
+# bench/task.v1.schema.json#/properties/reference_chips/items
+TaskV1ReferenceChips = TypedDict("TaskV1ReferenceChips", {
+    "ref": str,
+    "sha256": str,
+    "class": str,
 })
 
 

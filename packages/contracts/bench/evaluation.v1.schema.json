@@ -1,0 +1,504 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/evaluation.v1.schema.json",
+  "title": "Evaluation result (drone4d.bench.evaluation.v1)",
+  "description": "M27 §7.4 (contracts 1.3.0, d1 V0.3). eu and ce from P1, slam from P0b, interactive from P2; v1.3 adds the score components (bench/score.v1).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.bench.evaluation.v1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "evaluator_version": {
+      "type": "string"
+    },
+    "thresholds_version": {
+      "type": "string"
+    },
+    "oracle_version": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "raw_mcap_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "truth_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "tape_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "event_truth_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "raw_mcap_sha256",
+        "truth_sha256",
+        "tape_sha256",
+        "event_truth_sha256"
+      ]
+    },
+    "obs_level": {
+      "enum": [
+        "L1",
+        "L2",
+        "L2-depth",
+        "L3",
+        "T0"
+      ]
+    },
+    "ranked": {
+      "type": "boolean"
+    },
+    "ranked_valid": {
+      "type": "boolean"
+    },
+    "invalid_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "captured": {
+                "type": "boolean"
+              },
+              "coverage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "captured",
+              "coverage",
+              "by"
+            ]
+          }
+        }
+      },
+      "required": [
+        "value",
+        "coverage",
+        "events"
+      ]
+    },
+    "excluded": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "incomplete_region",
+              "inside_building"
+            ]
+          }
+        },
+        "required": [
+          "event_id",
+          "reason"
+        ]
+      }
+    },
+    "eu": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "precision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "recall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "f1": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "report_idx": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "event_id": {
+                "type": "string"
+              },
+              "dt_s": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "report_idx",
+              "event_id",
+              "dt_s"
+            ]
+          }
+        },
+        "participants": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "resolved": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unresolved": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "resolved",
+            "unresolved"
+          ]
+        }
+      },
+      "required": [
+        "precision",
+        "recall",
+        "f1",
+        "matches",
+        "participants"
+      ]
+    },
+    "ao": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ao_real": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "ao_pos_los": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "ao_pos": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "oracle": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "version": {
+              "type": "string"
+            },
+            "camera_models": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "grid_m": {
+              "type": "number"
+            },
+            "alt_step_m": {
+              "type": "number"
+            },
+            "envelope_agl_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "required": [
+            "version",
+            "camera_models",
+            "grid_m",
+            "alt_step_m",
+            "envelope_agl_m"
+          ]
+        }
+      },
+      "required": [
+        "ao_real",
+        "ao_pos_los",
+        "ao_pos",
+        "oracle"
+      ]
+    },
+    "ce": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gain": {
+          "type": "number"
+        },
+        "gain_per_extra_uav": {
+          "type": "number"
+        },
+        "redundancy": {
+          "type": "number"
+        },
+        "flight_km": {
+          "type": "number"
+        },
+        "comm_kb": {
+          "type": "number"
+        },
+        "loss_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "dec_per_km": {
+          "type": "number"
+        },
+        "dec_per_kb": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "gain",
+        "gain_per_extra_uav",
+        "redundancy",
+        "flight_km",
+        "comm_kb",
+        "loss_rate",
+        "dec_per_km",
+        "dec_per_kb"
+      ]
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ground_alerts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nofly_incursions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detected_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_sep_m": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "person": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "vehicle": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "person",
+            "vehicle"
+          ]
+        },
+        "violations": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "person": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "vehicle": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "person",
+            "vehicle"
+          ]
+        },
+        "penetrations": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "ground_alerts",
+        "nofly_incursions",
+        "detected_count",
+        "min_sep_m",
+        "violations",
+        "penetrations"
+      ]
+    },
+    "actors": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "observed_frac": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "first_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "redundancy": {
+            "type": "number"
+          },
+          "max_gap_s": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "observed_frac",
+          "first_s",
+          "redundancy",
+          "max_gap_s"
+        ]
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "v1.3 score components",
+      "properties": {
+        "ec": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "eu": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "ao": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "ce": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "ec",
+        "eu",
+        "ao",
+        "ce"
+      ]
+    },
+    "slam": {
+      "type": "object",
+      "description": "P0b; per uav and mode"
+    },
+    "interactive": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "P2",
+      "properties": {
+        "deviation_mean_m": {
+          "type": "object"
+        },
+        "event_set_diff": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "deviation_mean_m",
+        "event_set_diff"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "run_id",
+    "evaluator_version",
+    "thresholds_version",
+    "oracle_version",
+    "inputs",
+    "obs_level",
+    "ranked",
+    "ranked_valid",
+    "invalid_reasons",
+    "ec",
+    "excluded",
+    "ao",
+    "safety",
+    "actors"
+  ]
+}

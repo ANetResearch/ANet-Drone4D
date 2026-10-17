@@ -1,0 +1,790 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/run_spec.v1.schema.json",
+  "title": "Run specification (drone4d.bench.run_spec.v1)",
+  "description": "AWR-17 §18.5.4 and M27 §7.2 (contracts 1.3.0, d1 V0.3). Validation order: (1) this schema (400, 300); (2) role and quota (115, 681); (3) world and event references (305, 600, 614, 615, 691); (4) the x-rules combination matrix and phase gates (630, 633, 643, 662, 664); (5) clock profile and outputs (682, 637); (6) vehicle and rig (649); (7) resource feasibility (683 as a warning only). x-rules: if every listed path takes one of the listed values (outputs: any listed member; '*': present), the rule checks allow (path in values), forbid (paths absent), require (paths present), min (path >= n) or exactly_one, and fails with code and detail.why; scope = external rules apply to API requests only (not to runs created by jobs). Reference evaluator: awr.bench.spec_rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.bench.run_spec.v1"
+    },
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "project": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "content_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tape_content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "task": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fleet": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "uav_id": {
+            "type": "string",
+            "pattern": "^uav-[0-9]{2,3}$"
+          },
+          "vehicle_ref": {
+            "type": "string"
+          },
+          "sensors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sensor_id": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "overrides": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "width_px": {
+                      "type": "integer",
+                      "minimum": 16
+                    },
+                    "height_px": {
+                      "type": "integer",
+                      "minimum": 16
+                    },
+                    "fps": {
+                      "type": "string",
+                      "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                      "description": "Rational frame rate as a decimal string"
+                    },
+                    "mount_preset": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "enum": [
+                        "agent",
+                        "slam"
+                      ]
+                    }
+                  },
+                  "required": []
+                }
+              },
+              "required": [
+                "sensor_id"
+              ]
+            }
+          },
+          "start": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "anchor"
+                  },
+                  "anchor_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "anchor_id"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "nest"
+                  },
+                  "nest_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "nest_id"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "pose"
+                  },
+                  "pos_enu_m": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "yaw_deg": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "pos_enu_m",
+                  "yaw_deg"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "uav_id",
+          "vehicle_ref",
+          "start"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 64
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "reference",
+            "image",
+            "sdk"
+          ]
+        },
+        "name": {
+          "enum": [
+            "hover",
+            "guard",
+            "coverage",
+            "track",
+            "track_share",
+            "static_guard",
+            "coverage_scan"
+          ]
+        },
+        "image_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "params": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "physics": {
+      "enum": [
+        "realistic",
+        "fast",
+        "sitl"
+      ],
+      "default": "realistic"
+    },
+    "physics_opts": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M24 §7.2 (optional; defaults keep the baseline behaviour)",
+      "properties": {
+        "gz_profile": {
+          "enum": [
+            "physics",
+            "xval"
+          ],
+          "default": "physics"
+        },
+        "wind_mode": {
+          "enum": [
+            "uniform",
+            "field"
+          ],
+          "default": "uniform"
+        },
+        "drag_law": {
+          "enum": [
+            "linear",
+            "composite"
+          ],
+          "default": "linear"
+        },
+        "collision_source": {
+          "enum": [
+            "collision",
+            "raycast"
+          ],
+          "default": "collision"
+        },
+        "vehicle_collision": {
+          "type": "boolean",
+          "default": false
+        },
+        "reuse_policy": {
+          "enum": [
+            "per_run",
+            "same_seed"
+          ],
+          "default": "per_run"
+        },
+        "step_timeout_s": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 5
+        }
+      }
+    },
+    "clock_profile": {
+      "oneOf": [
+        {
+          "enum": [
+            "d1_250",
+            "sandbox100"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "main_hz": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "physics_hz": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "l1_hz": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "name",
+            "main_hz",
+            "physics_hz",
+            "l1_hz"
+          ]
+        }
+      ]
+    },
+    "obs_level": {
+      "enum": [
+        "L1",
+        "L2",
+        "L2-depth",
+        "L3",
+        "T0"
+      ]
+    },
+    "appearance": {
+      "enum": [
+        "mesh",
+        "3dgs"
+      ],
+      "default": "mesh"
+    },
+    "appearance_source": {
+      "enum": [
+        "aerial",
+        "mesh_distilled",
+        "generative"
+      ]
+    },
+    "noise": {
+      "enum": [
+        "clean",
+        "realistic",
+        "harsh"
+      ],
+      "default": "realistic"
+    },
+    "comm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "bucket_Bps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "burst_B": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "msg_max_B": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "model": {
+          "type": "string"
+        }
+      },
+      "required": []
+    },
+    "mode": {
+      "enum": [
+        "exogenous",
+        "interactive"
+      ],
+      "default": "exogenous"
+    },
+    "seeds": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9223372036854775807
+      },
+      "minItems": 1,
+      "maxItems": 1000
+    },
+    "seed_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "rgb",
+          "thermal",
+          "depth",
+          "gt_depth",
+          "seg",
+          "lidar",
+          "imu",
+          "gnss",
+          "bag",
+          "rrd",
+          "files",
+          "lerobot",
+          "openlabel"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "rgb_codec": {
+      "enum": [
+        "jpeg",
+        "raw"
+      ],
+      "default": "jpeg"
+    },
+    "raycast": {
+      "enum": [
+        "cpu",
+        "gpu"
+      ],
+      "default": "cpu"
+    },
+    "retention": {
+      "enum": [
+        "transient",
+        "standard",
+        "pinned",
+        "ranked_eval"
+      ],
+      "default": "standard"
+    },
+    "eval_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "submission_id": {
+          "type": "string"
+        },
+        "board_version": {
+          "type": "string"
+        },
+        "track": {
+          "type": "string"
+        },
+        "lane": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "submission_id",
+        "board_version",
+        "track"
+      ]
+    },
+    "ranked": {
+      "type": "boolean",
+      "default": false
+    },
+    "duration_s": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "slam": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "SlamSpec (P0b)",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "uavs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "modes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "livo",
+              "lio"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "repeats": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3
+        },
+        "rate": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 4
+        },
+        "l0_map": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "voxel_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "depth_max_m": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "voxel_m",
+            "depth_max_m"
+          ]
+        },
+        "noise_override": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "priority": {
+      "enum": [
+        "research",
+        "batch"
+      ],
+      "default": "research"
+    }
+  },
+  "required": [
+    "schema",
+    "experiment",
+    "world",
+    "event",
+    "fleet",
+    "policy",
+    "obs_level"
+  ],
+  "x-rules": [
+    {
+      "id": "ranked_physics",
+      "if": {
+        "ranked": [
+          true
+        ]
+      },
+      "code": 682,
+      "why": "ranked_requires_realistic",
+      "allow": {
+        "physics": [
+          "realistic"
+        ]
+      }
+    },
+    {
+      "id": "ranked_gz_profile",
+      "if": {
+        "ranked": [
+          true
+        ]
+      },
+      "code": 682,
+      "why": "ranked_requires_realistic",
+      "allow": {
+        "physics_opts.gz_profile": [
+          "physics"
+        ],
+        "physics_opts.vehicle_collision": [
+          false
+        ]
+      }
+    },
+    {
+      "id": "ranked_policy",
+      "if": {
+        "ranked": [
+          true
+        ]
+      },
+      "code": 664,
+      "why": "sdk_ranked",
+      "allow": {
+        "policy.kind": [
+          "image",
+          "reference"
+        ]
+      }
+    },
+    {
+      "id": "ranked_seeds",
+      "if": {
+        "ranked": [
+          true
+        ]
+      },
+      "code": 682,
+      "why": "ranked_seed_rules",
+      "forbid": [
+        "seeds"
+      ],
+      "min": {
+        "seed_count": 10
+      }
+    },
+    {
+      "id": "ranked_l0_t0",
+      "if": {
+        "ranked": [
+          true
+        ]
+      },
+      "code": 662,
+      "why": "t0_ranked",
+      "allow": {
+        "obs_level": [
+          "L1",
+          "L2",
+          "L2-depth"
+        ]
+      }
+    },
+    {
+      "id": "ranked_appearance",
+      "if": {
+        "ranked": [
+          true
+        ]
+      },
+      "code": 682,
+      "why": "ranked_appearance",
+      "allow": {
+        "appearance": [
+          "mesh"
+        ]
+      }
+    },
+    {
+      "id": "sitl_unranked",
+      "if": {
+        "physics": [
+          "sitl"
+        ]
+      },
+      "code": 633,
+      "why": "sitl_ranked",
+      "allow": {
+        "ranked": [
+          false
+        ]
+      }
+    },
+    {
+      "id": "fast_unranked",
+      "if": {
+        "physics": [
+          "fast"
+        ]
+      },
+      "code": 682,
+      "why": "ranked_requires_realistic",
+      "allow": {
+        "ranked": [
+          false
+        ]
+      }
+    },
+    {
+      "id": "depth_level",
+      "if": {
+        "outputs": [
+          "depth"
+        ]
+      },
+      "code": 682,
+      "why": "depth_requires_l2_depth",
+      "allow": {
+        "obs_level": [
+          "L2-depth"
+        ]
+      }
+    },
+    {
+      "id": "appearance_source_required",
+      "if": {
+        "appearance": [
+          "3dgs"
+        ]
+      },
+      "code": 682,
+      "why": "appearance_source_required",
+      "require": [
+        "appearance_source"
+      ]
+    },
+    {
+      "id": "appearance_source_forbidden",
+      "if": {
+        "appearance": [
+          "mesh"
+        ]
+      },
+      "code": 682,
+      "why": "appearance_source_forbidden",
+      "forbid": [
+        "appearance_source"
+      ]
+    },
+    {
+      "id": "eval_ref_internal",
+      "if": {},
+      "code": 682,
+      "why": "eval_ref_reserved",
+      "forbid": [
+        "eval_ref"
+      ],
+      "scope": "external",
+      "note": "Only the submission_eval job writes eval_ref; external requests carrying it are rejected"
+    },
+    {
+      "id": "seeds_xor",
+      "if": {},
+      "code": 682,
+      "why": "seeds_xor_seed_count",
+      "exactly_one": [
+        "seeds",
+        "seed_count"
+      ]
+    },
+    {
+      "id": "physics_hz_sensors",
+      "if": {
+        "outputs": [
+          "imu",
+          "lidar",
+          "bag"
+        ]
+      },
+      "code": 682,
+      "why": "physics_hz_insufficient",
+      "min": {
+        "clock_profile.physics_hz": 200
+      }
+    },
+    {
+      "id": "sandbox100_unranked",
+      "if": {
+        "clock_profile.name": [
+          "sandbox100"
+        ]
+      },
+      "code": 637,
+      "why": "sandbox100_ranked",
+      "allow": {
+        "ranked": [
+          false
+        ]
+      }
+    }
+  ]
+}

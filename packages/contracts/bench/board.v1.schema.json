@@ -1,0 +1,330 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/board.v1.schema.json",
+  "title": "Internal leaderboard (drone4d.bench.board.v1)",
+  "description": "AWR-17 §18.23 and §18.24 (contracts 1.3.0, d1 V0.3). Internal only (minimum role invited), no static copy. Lanes: reid, handoff, vehicle, search (event types) plus research task lanes registered by the board version. tracks[].appearance is mesh (aerial 3dgs from P3 when registered); mesh_distilled and generative never appear.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.bench.board.v1"
+    },
+    "board_version": {
+      "type": "string"
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "track": {
+            "type": "string"
+          },
+          "fleet_ref": {
+            "type": "string"
+          },
+          "obs_level": {
+            "enum": [
+              "L1",
+              "L2",
+              "L2-depth"
+            ]
+          },
+          "physics": {
+            "const": "realistic"
+          },
+          "mode": {
+            "const": "exogenous"
+          },
+          "agent_class": {
+            "type": "string"
+          },
+          "appearance": {
+            "enum": [
+              "mesh",
+              "3dgs-aerial"
+            ]
+          }
+        },
+        "required": [
+          "track",
+          "fleet_ref",
+          "obs_level",
+          "physics",
+          "mode",
+          "agent_class",
+          "appearance"
+        ]
+      }
+    },
+    "lanes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lane": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "event_type",
+              "task"
+            ]
+          },
+          "event_type": {
+            "enum": [
+              "reid_occlusion",
+              "rendezvous_handoff",
+              "vehicle_track",
+              "target_search"
+            ]
+          },
+          "test_events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "seed_set_commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "lane",
+          "kind",
+          "test_events",
+          "seed_set_commit"
+        ]
+      }
+    },
+    "seed_set_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "evaluator_major": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "platform_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entry_id": {
+            "type": "string"
+          },
+          "team": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "track": {
+            "type": "string"
+          },
+          "lane": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "ec": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "ci95": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "rank": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tie_group": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repeat_delta": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "ci95"
+                ]
+              },
+              "eu": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "ci95": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "rank": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tie_group": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repeat_delta": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "ci95"
+                ]
+              },
+              "ao": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "ci95": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "rank": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tie_group": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repeat_delta": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "ci95"
+                ]
+              },
+              "ce": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "value": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "ci95": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "rank": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tie_group": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "repeat_delta": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "ci95"
+                ]
+              }
+            },
+            "required": []
+          },
+          "dominance_tier": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "first_listed_unix_ns": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "baseline": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entry_id",
+          "team",
+          "display_name",
+          "track",
+          "lane",
+          "metrics",
+          "dominance_tier",
+          "first_listed_unix_ns",
+          "baseline"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "board_version",
+    "tracks",
+    "lanes",
+    "evaluator_major",
+    "platform_digest",
+    "entries"
+  ]
+}

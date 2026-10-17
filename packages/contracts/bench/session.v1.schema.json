@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/session.v1.schema.json",
+  "title": "Workspace session (drone4d.bench.session.v1)",
+  "description": "AWR-17 §18.5.1 and §18.23 (contracts 1.3.0, d1 V0.3). GET /api/bench/v1/session; token_label is the note given at issue time and never the token.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.bench.session.v1"
+    },
+    "principal": {
+      "type": "string"
+    },
+    "role": {
+      "enum": [
+        "invited",
+        "researcher",
+        "evaluator",
+        "admin"
+      ]
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "iat_unix_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "exp_unix_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "token_label": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "principal",
+    "role",
+    "projects",
+    "iat_unix_ns",
+    "exp_unix_ns"
+  ]
+}
