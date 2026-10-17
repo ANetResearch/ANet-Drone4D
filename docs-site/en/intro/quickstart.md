@@ -492,8 +492,9 @@ idempotency and quota aggregation and is not a credential.
 httpx.ReadTimeout: timed out
 ```
 
-The server is full and creation is queued; the SDK waits with long polls of up to 25 s each, while the default per-request timeout of
-`Sandbox()` is 10 s. Pass `timeout_s=30` when creating `Sandbox` (as in the example on this page).
+The server is full and creation is queued; SDK 1.1.0 and earlier wait with long polls of up to 25 s each but keep the default
+per-request timeout of `Sandbox()`, 10 s. Upgrade to SDK 1.1.1 (the long polls use their own read timeout), or pass `timeout_s=30` when
+creating `Sandbox` (as in the example on this page).
 
 ### Messages about the six cities failing to build
 

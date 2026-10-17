@@ -461,8 +461,8 @@ awr_sandbox.AwrError: 409 SANDBOX_EXISTS: an active session already exists for t
 httpx.ReadTimeout: timed out
 ```
 
-服务器满员，创建请求进入排队；SDK 以单次最长 25 s 的长轮询等待，而 `Sandbox()` 缺省的单次请求超时为 10 s。创建 `Sandbox` 时传入
-`timeout_s=30`（本页示例的写法）。
+服务器满员，创建请求进入排队；SDK 1.1.0 及更早版本以单次最长 25 s 的长轮询等待，却沿用 `Sandbox()` 缺省的单次请求超时 10 s。
+升级到 SDK 1.1.1（长轮询使用单独的读超时），或在创建 `Sandbox` 时传入 `timeout_s=30`（本页示例的写法）。
 
 ### 六城构建失败的提示
 

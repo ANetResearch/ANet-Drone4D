@@ -72,8 +72,9 @@ interface are always simulation nanoseconds `t_sim_ns`, and calendars are given 
 ## Interface and SDK
 
 **The SDK raises `httpx.ReadTimeout` while queueing.**
-Queueing uses long polls of up to 25 s each, while the default per-request timeout of `Sandbox()` is 10 s. Pass `timeout_s=30` when
-creating it. See the troubleshooting section of {doc}`../intro/quickstart`.
+In SDK 1.1.0 and earlier, the queue long polls (up to 25 s each) used the default per-request timeout of `Sandbox()`, 10 s. From 1.1.1
+the long polls use their own read timeout (the wait plus 10 s), so the defaults queue correctly; with an older SDK pass `timeout_s=30`
+when creating it. See the troubleshooting section of {doc}`../intro/quickstart`.
 
 **Why does creating a session return 409 `SANDBOX_EXISTS`?**
 The same principal and address prefix already have a session that has not ended. Reattach with `attach()` if you hold its token, or create a

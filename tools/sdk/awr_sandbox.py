@@ -48,7 +48,7 @@ from typing import Any, NamedTuple
 import httpx
 import msgpack
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 API_VERSION = "v1"
 PREFIX = "/api/sandbox/v1"
 SUBPROTOCOL = "awr.rt.v1"
@@ -115,6 +115,9 @@ def decode_rows(schema: str, buf: bytes) -> list[dict[str, Any]]:
         out.append(row)
     return out
 
+
+QUEUE_WAIT_S = 25          # 排队长轮询的服务端等待（SB-05 `wait_s`）
+LONG_POLL_MARGIN_S = 10.0  # 长轮询读超时 = 等待 + 余量，与客户端缺省超时无关（issue #14）
 
 class Msg(NamedTuple):
     topic: str
@@ -222,13 +225,16 @@ class _Http:
                    p.get("detail"), str(p.get("remedy") or ""), r.status_code, ra_s)
 
     def request(self, method: str, path: str, *, token: str | None = None, json_body: Any = None,
-                params: dict | None = None, retries: int = 3, headers: dict | None = None) -> httpx.Response:
+                params: dict | None = None, retries: int = 3, headers: dict | None = None,
+                timeout_s: float | None = None) -> httpx.Response:
+        """`timeout_s` 覆盖客户端缺省读超时（长轮询按等待时长加余量，issue #14）。"""
         h = dict(headers or {})
         if token:
             h["authorization"] = f"Bearer {token}"
         attempt = 0
         while True:
-            r = self.client.request(method, path, json=json_body, params=params, headers=h)
+            kw: dict[str, Any] = {} if timeout_s is None else {"timeout": timeout_s}
+            r = self.client.request(method, path, json=json_body, params=params, headers=h, **kw)
             if r.status_code < 400:
                 return r
             err = self._error(r)
@@ -1010,7 +1016,8 @@ class Sandbox:
         if on_queue:
             on_queue("sandbox.queued", dict(q))
         while time.monotonic() < end:
-            v = self.http.get(f"{PREFIX}/queue/{tid}", params={"wait_s": 25}, headers=auth)
+            v = self.http.get(f"{PREFIX}/queue/{tid}", params={"wait_s": QUEUE_WAIT_S}, headers=auth,
+                              timeout_s=QUEUE_WAIT_S + LONG_POLL_MARGIN_S)
             if v.get("state") == "slot_ready":
                 if on_queue:
                     on_queue("sandbox.slot_ready", v)

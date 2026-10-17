@@ -58,7 +58,7 @@ SDK、脚本等外部客户端对会话接口的调用计为活动：调用持�
 ## 接口与 SDK
 
 **SDK 排队时报 `httpx.ReadTimeout`？**
-排队使用单次最长 25 s 的长轮询，而 `Sandbox()` 的缺省单次请求超时为 10 s。创建时传入 `timeout_s=30`。见 {doc}`../intro/quickstart` 的排错一节。
+SDK 1.1.0 及更早版本中，排队的长轮询（单次最长 25 s）沿用 `Sandbox()` 的缺省单次请求超时 10 s。1.1.1 起长轮询使用单独的读超时（等待时长加 10 s），缺省配置即可排队；旧版本请在创建时传入 `timeout_s=30`。见 {doc}`../intro/quickstart` 的排错一节。
 
 **为什么创建会话返回 409 `SANDBOX_EXISTS`？**
 同一主体与地址前缀已有未结束的会话。持有其令牌时用 `attach()` 接回，否则以 `force_new=True` 新建。

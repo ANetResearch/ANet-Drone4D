@@ -32,7 +32,7 @@ def test_single_file_and_py39_syntax() -> None:
     mods = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     mods |= {n.module.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
     assert "awr" not in mods and {"httpx", "msgpack", "websockets"} <= mods | {"websockets"}
-    assert A.__version__ == "1.1.0" and A.API_VERSION == "v1"
+    assert A.__version__ == "1.1.1" and A.API_VERSION == "v1"
     for ex in sorted((SDK / "examples").glob("*.py")):
         ast.parse(ex.read_text(encoding="utf-8"), feature_version=(3, 9))
 
@@ -158,3 +158,26 @@ def test_sdk_park_auto_resume_and_capacity(st: SbxStack) -> None:
     s.close()
     sb.close()
     other.close()
+
+
+def test_queue_long_poll_uses_its_own_read_timeout() -> None:
+    """issue #14：排队长轮询的读超时为等待时长加余量，不受客户端缺省 10 s 的限制。"""
+    import httpx
+
+    seen: list[tuple[str, float | None]] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append((req.url.path, req.extensions.get("timeout", {}).get("read")))
+        if req.url.path.endswith("/claim"):
+            return httpx.Response(201, json={"session": {"sid": "sb-abcdefghij"}, "token": "v1.x.y"})
+        return httpx.Response(200, json={"state": "slot_ready"})
+
+    h = A._Http("http://sbx.test", timeout_s=10.0, verify_tls=True)
+    h.client = httpx.Client(base_url="http://sbx.test", timeout=10.0, transport=httpx.MockTransport(handler))
+    sb = A.Sandbox.__new__(A.Sandbox)
+    sb.http, sb.principal_hint = h, "p" * 32
+    d = sb._wait_queue({"ticket_id": "t-1", "ticket_token": "tk"}, 5.0, None)
+    assert d["token"] == "v1.x.y"
+    poll = [t for p, t in seen if p.endswith("/queue/t-1")]
+    claim = [t for p, t in seen if p.endswith("/claim")]
+    assert poll == [A.QUEUE_WAIT_S + A.LONG_POLL_MARGIN_S] and claim == [10.0]
