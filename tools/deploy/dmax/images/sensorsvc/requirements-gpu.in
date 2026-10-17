@@ -1,0 +1,3 @@
+# d3-sensorsvc 镜像专用（需要 EGL 的 GPU 依赖）；锁定：
+#   uv pip compile requirements-gpu.in -c ../../../../../requirements.lock --generate-hashes -o requirements-gpu.lock
+moderngl==5.12.0
