@@ -235,3 +235,19 @@ console.log(JSON.stringify({ msgs: R.violations.map((v) => v.msg), rules: [...ne
         assert needle in msgs, (needle, msgs)
     assert "e (items[4])" not in msgs  # self 条目无移植来源时 stars 与 lastCommit 可为 null
     assert out["py"] == ["numpy", "pytest", "uv"], out
+
+
+def test_d3_import_direction_rule():
+    """D3-AC-01 第 5 条（AWR-05 §4.8）：D2 文件不得 import D3 包；D3 包之间、bench-api 入口不受 D2 api 规则约束。"""
+    m = _load_checker()
+    rule = "D2 code must not import D3 packages"
+    for rel, mod in (("sim/fleet/a.py", "awr.phys.fast"), ("world/geometry/query.py", "awr.world.mesh.query"),
+                     ("api/main.py", "awr.api.bench_main"), ("sandbox/pool.py", "awr.bench.sched"),
+                     ("sim/targets/runtime.py", "awr.sim.events.runtime"), ("agent/x.py", "awr.agentsdk")):
+        assert any(rule in v for v in m._pkg_violations(rel, mod)), (rel, mod)
+    for rel, mod in (("phys/fast/capture.py", "awr.sim.events.tape"), ("bench/sched.py", "awr.agentsdk.env"),
+                     ("world/mesh/query.py", "awr.world.geometry.query"), ("sim/events/plugin.py", "awr.sim.targets"),
+                     ("api/bench_main.py", "awr.bench.api")):
+        assert m._pkg_violations(rel, mod) == [], (rel, mod)
+    assert m._pkg_violations("api/main.py", "awr.world.meshes") != []   # 前缀匹配按包边界，awr.world.meshes 不是 D3 包，但仍受 api 规则约束
+    assert not any(rule in v for v in m._pkg_violations("sim/fleet/a.py", "awr.world.meshes"))

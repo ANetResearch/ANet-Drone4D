@@ -15,6 +15,9 @@ Rules (reported as imports/boundary unless noted):
     awr.sim.* not awr.api, awr.recorder or awr.agent; the M08 core (sim/{runtime,fleet,core,backends}) not the plugin
     packages; awr.world.*, awr.swarm and the pure awr.environment packages not awr.sim or awr.api; awr.agent not awr.sim;
     awr.reconstruction and awr.jobs not awr.sim or awr.api (relative imports are resolved);
+  - D3 import direction (AWR-05 §4.8, ADR-129; D3-AC-01 item 5): no D2 file imports a D3 package (awr.world.glb, awr.world.mesh,
+    awr.sim.events, awr.phys, awr.sensorsvc, awr.agentsdk, awr.bench, awr.api.bench_main); D3 code is loaded only through
+    D3_PLUGINS, the d3 runtime profile and importlib strings (M04 extension point 7);
   - wall clock in simulation paths (AWR-10 §3.3 ADR-049 invariant 5, ADR-045): awr.sim.{fleet,core,safety,mission,
     sensors} and awr.environment must not call time.time, time.monotonic, time.perf_counter (or their _ns forms) or
     datetime.now;
@@ -68,6 +71,7 @@ class PkgRule:
     deny: tuple[str, ...] = ()  # awr.* module prefixes these files must not import
     unless: tuple[str, ...] = ()  # exceptions to deny
     why: str = ""
+    skip: tuple[str, ...] = ()  # file path prefixes exempt from the rule
 
 
 def _api_whitelist() -> tuple[str, ...]:
@@ -78,6 +82,10 @@ def _api_whitelist() -> tuple[str, ...]:
 
 
 _B = "AWR-10 §3.3 rule 2"
+# D3 packages and their paths (AWR-05 §4.8, §12.2)
+D3_PACKAGES = ("awr.world.glb", "awr.world.mesh", "awr.sim.events", "awr.phys", "awr.sensorsvc", "awr.agentsdk", "awr.bench",
+               "awr.api.bench_main")
+_D3_PATHS = ("world/glb/", "world/mesh/", "sim/events/", "phys/", "sensorsvc/", "agentsdk/", "bench/", "api/bench_main.py")
 _M08_CORE = ("sim/runtime/", "sim/fleet/", "sim/core/", "sim/backends/")
 _PURE = ("environment/conventions/", "environment/weather/", "environment/wind/", "environment/atmosphere/", "environment/io/",
          "swarm/", "world/")
@@ -86,7 +94,7 @@ PKG_RULES = [
     PkgRule(("runtime/",), only=("awr.runtime", "awr.contracts"), why=f"awr.runtime depends only on awr.contracts ({_B})"),
     PkgRule(("api/",), only=("awr.api", "awr.runtime", "awr.contracts", "awr.world.package"),
             why="awr.api depends only on awr.runtime, awr.contracts, awr.api, awr.world.package and whitelisted pure functions "
-                "(AWR-03 §4.2 rule 1; tools/lint/py-imports.toml)"),
+                "(AWR-03 §4.2 rule 1; tools/lint/py-imports.toml)", skip=("api/bench_main.py",)),
     PkgRule(("recorder/",), only=("awr.recorder", "awr.runtime", "awr.contracts"), why=f"awr.recorder depends only on awr.runtime and awr.contracts ({_B})"),
     PkgRule(("sim/",), deny=("awr.api", "awr.recorder", "awr.agent"), why=f"awr.sim must not depend on api, recorder or agent ({_B})"),
     PkgRule(_M08_CORE, deny=("awr.sim.safety", "awr.sim.mission", "awr.sim.planning", "awr.sim.sensors", "awr.environment.field",
@@ -98,6 +106,8 @@ PKG_RULES = [
             why=f"EnvironmentService may use only the M08 interfaces and registries ({_B})"),
     PkgRule(("agent/",), deny=("awr.sim",), why=f"awr.agent talks to sim-core only over the Bus and a StateRing reader ({_B})"),
     PkgRule(("reconstruction/", "jobs/"), deny=("awr.sim", "awr.api"), why=f"awr.reconstruction and awr.jobs must not depend on awr.sim or awr.api ({_B})"),
+    PkgRule(("",), deny=D3_PACKAGES, skip=_D3_PATHS,
+            why="D2 code must not import D3 packages; load them through D3_PLUGINS, the d3 profile or importlib strings (AWR-05 §4.8)"),
 ]
 WALL_CLOCK_PATHS = ("sim/fleet/", "sim/core/", "sim/safety/", "sim/mission/", "sim/sensors/", "environment/")
 WALL_CLOCK_CALLS = {"time.time", "time.time_ns", "time.monotonic", "time.monotonic_ns", "time.perf_counter", "time.perf_counter_ns",
@@ -119,7 +129,7 @@ def _pkg_violations(rel_awr: str, mod: str) -> list[str]:
     if not (mod == "awr" or mod.startswith("awr.")) or mod == "awr":
         return out
     for r in PKG_RULES:
-        if not any(rel_awr.startswith(w) for w in r.where):
+        if not any(rel_awr.startswith(w) for w in r.where) or any(rel_awr.startswith(s) for s in r.skip):
             continue
         if r.only is not None:
             allowed = r.only + (_api_whitelist() if r.where == ("api/",) else ())
