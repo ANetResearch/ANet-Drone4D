@@ -1,8 +1,7 @@
 """Foxglove protobuf 封装（M27-FR-045）：`foxglove.CompressedImage`（data 为 Agent 收到的 JPEG 原样）与 `foxglove.RawImage`
 （`32FC1` 平面深度，小端 f32）。MCAP schema 数据为含依赖的 FileDescriptorSet。
 
-L2-depth 深度的权威存档为 f32 + 字节重排 + zstd（AWR-05 §1154、AWR-17 §18.8.1，无损）：4 字节按字节位拆成 4 个平面后整体 zstd，
-通道元数据 `compression = "bshuf4-zstd"` 标记；RawImage 的 `encoding`、`width`、`height`、`step` 仍描述解码后的 32FC1 图像。
+L2-depth 深度的权威存档为 f32 + 字节重排 + zstd（`depthcodec`，无损），通道元数据 `compression = "bshuf4-zstd"` 标记；RawImage 的 `encoding`、`width`、`height`、`step` 仍描述解码后的 32FC1 图像。
 """
 
 from __future__ import annotations
@@ -14,11 +13,9 @@ from foxglove_schemas_protobuf.CompressedImage_pb2 import CompressedImage
 from foxglove_schemas_protobuf.RawImage_pb2 import RawImage
 from mcap_protobuf.schema import build_file_descriptor_set
 
-__all__ = ["DEPTH_COMPRESSION", "SCHEMAS", "bshuf4_unzstd", "bshuf4_zstd", "compressed_image", "decode_image", "raw_image_f32",
-           "schema_data"]
+from awr.bench.recorder.depthcodec import DEPTH_COMPRESSION, bshuf4_unzstd, bshuf4_zstd
 
-DEPTH_COMPRESSION = "bshuf4-zstd"
-ZSTD_LEVEL = 3
+__all__ = ["DEPTH_COMPRESSION", "SCHEMAS", "compressed_image", "decode_image", "raw_image_f32", "schema_data"]
 
 SCHEMAS = {"foxglove.CompressedImage": CompressedImage, "foxglove.RawImage": RawImage}
 
@@ -36,21 +33,6 @@ def compressed_image(t_ns: int, frame_id: str, data: bytes, fmt: str = "jpeg") -
     m = CompressedImage(frame_id=frame_id, data=data, format=fmt)
     _stamp(m, t_ns)
     return m.SerializeToString()
-
-
-def bshuf4_zstd(raw: bytes) -> bytes:
-    """4 字节元素按字节位重排（b0 平面、b1 平面……）后 zstd。"""
-    import zstandard
-
-    planes = np.frombuffer(raw, np.uint8).reshape(-1, 4).T
-    return zstandard.ZstdCompressor(level=ZSTD_LEVEL).compress(np.ascontiguousarray(planes).tobytes())
-
-
-def bshuf4_unzstd(data: bytes) -> bytes:
-    import zstandard
-
-    planes = np.frombuffer(zstandard.ZstdDecompressor().decompress(data), np.uint8).reshape(4, -1)
-    return np.ascontiguousarray(planes.T).tobytes()
 
 
 def raw_image_f32(t_ns: int, frame_id: str, depth: np.ndarray, *, compression: str | None = DEPTH_COMPRESSION) -> bytes:

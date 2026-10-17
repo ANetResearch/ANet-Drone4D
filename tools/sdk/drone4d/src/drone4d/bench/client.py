@@ -75,10 +75,12 @@ class TruthFrame:
         h, w = av["height"], av["width"]
         ent = gt[kind]
         raw = self.blocks[ent["ref"]]
-        if ent.get("codec") == "zstd":
+        if ent.get("codec") in ("zstd", "bshuf4-zstd"):
             import zstandard
 
             raw = zstandard.ZstdDecompressor().decompress(raw)
+            if ent["codec"] == "bshuf4-zstd":                 # f32 的 4 个字节平面还原为逐元素小端序
+                raw = np.ascontiguousarray(np.frombuffer(raw, np.uint8).reshape(4, -1).T).tobytes()
         dt = {"u16": "<u2", "u8": "u1", "f32": "<f4"}[ent["dtype"]]
         return np.frombuffer(raw, dt).reshape(h, w)
 

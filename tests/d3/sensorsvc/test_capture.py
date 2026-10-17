@@ -81,7 +81,7 @@ def test_capture_run_outputs_and_readback(tmp_path: Path, monkeypatch: pytest.Mo
     rec, blocks = unpack_camera_gt(ts.get("uav-01", "cam0", 7)[1])
     assert rec["frame_id"] == "cap-test/uav-01/cam0/7" and rec["ground_truth"]["T_world_sensor"]["frame"] == "ENU<-RDF"
     assert not any(k.endswith("rgb.jpg") for k in blocks) and any(k.endswith("instance.u16.zst") for k in blocks)
-    assert "gt_depth.f32" in blocks and "depth.f32" not in blocks                       # 真值深度保留，观测深度只在 raw.mcap
+    assert "gt_depth.f32.bshuf.zst" in blocks and "depth.f32" not in blocks                      # 真值深度保留，观测深度只在 raw.mcap
     assert json.loads((run / "run_manifest.json").read_text())["fleet"][1]["cameras"][0]["fps"] == "15"
     with pytest.raises(Exception, match="already exists"):
         cap.run_capture(SPEC, tmp_path, log=lambda s: None)

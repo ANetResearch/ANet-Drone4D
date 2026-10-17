@@ -105,7 +105,7 @@ def test_depth_archive_is_lossless_bshuf4_zstd(tmp_path: Path) -> None:
     """L2-depth 存档为 f32 + 字节重排 + zstd（AWR-05 §1154）：解码逐位相同（含 0、inf、NaN），平滑深度明显变小；未压缩的旧 Run 仍可读。"""
     from mcap.reader import make_reader
 
-    from awr.bench.recorder.foxglove import bshuf4_unzstd, bshuf4_zstd
+    from awr.bench.recorder.depthcodec import bshuf4_unzstd, bshuf4_zstd
 
     y, x = np.mgrid[0:180, 0:320]
     depth = (5.0 + 0.05 * x + 0.2 * y).astype(np.float32)

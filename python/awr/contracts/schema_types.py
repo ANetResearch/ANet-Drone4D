@@ -3800,6 +3800,7 @@ class FrameV1GroundTruthGimbalTrue(TypedDict):
 class FrameV1GroundTruthGtDepth(TypedDict):
     dtype: Literal["f32"]
     unit: Literal["m"]
+    codec: NotRequired[Literal["bshuf4-zstd"]]
     ref: str
 
 

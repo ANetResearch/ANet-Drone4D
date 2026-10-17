@@ -5236,6 +5236,10 @@ export interface FrameV1 {
       dtype: 'f32'
       unit: 'm'
       /**
+       * Lossless archive form: the 4 byte planes of the f32le image, zstd compressed; absent = plain f32le
+       */
+      codec?: 'bshuf4-zstd'
+      /**
        * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
        */
       ref: string

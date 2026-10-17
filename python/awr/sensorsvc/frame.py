@@ -2,7 +2,7 @@
 
 - agent_view：交付图像（JPEG，sha256 取交付字节）、L2-depth（f32 平面深度，`depth` 在输出集合中时）、内参与标称挂载、云台读数；
 - ground_truth：真值外参（ENU←RDF）、真实云台角、实例与无遮挡实例（u16）、语义（u8，`d3-semantic@1`）、`invalid_mask`（u8），
-  均为 zstd 压缩；`gt_depth`（f32）；可见度归约 `objects`（无演员时为空表）；真值时刻；
+  均为 zstd 压缩；`gt_depth`（f32，bshuf4-zstd 无损）；可见度归约 `objects`（无演员时为空表）；真值时刻；
 - internal：版本与来源。载荷块以 `ref` 命名（同一 MCAP 消息的附加段或文件导出中的相对路径）。
 """
 
@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from awr.bench.recorder.depthcodec import DEPTH_COMPRESSION, bshuf4_zstd
 from awr.sensorsvc.camera.model import CameraModel
 from awr.sensorsvc.camera.proj import ray_elevation
 from awr.sensorsvc.camera.raster import RENDERER_VERSION, RenderOut
@@ -109,7 +110,8 @@ def camera_frame(ctx: FrameContext, *, uav: str, sensor_id: str, seq: int, t_mid
           "objects": [],
           "timing": {"t_truth_ns": [int(t_mid_ns)], "blur_subframes": cm.blur_subframes, "rs_bands": cm.rs_bands, "rs_method": "vertex"}}
     if "gt_depth" in outputs:
-        gt["gt_depth"] = {"dtype": "f32", "unit": "m", "ref": put("gt_depth.f32", depth.tobytes())}
+        gt["gt_depth"] = {"dtype": "f32", "unit": "m", "codec": DEPTH_COMPRESSION,
+                          "ref": put("gt_depth.f32.bshuf.zst", bshuf4_zstd(depth.tobytes()))}
     rec = {"schema": "drone4d.frame.v1", "frame_id": f"{ctx.run_id}/{uav}/{sensor_id}/{int(seq)}", "kind": "camera", "agent_view": av,
            "ground_truth": gt, "internal": ctx.internal()}
     return rec, blocks
