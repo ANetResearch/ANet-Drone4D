@@ -57,3 +57,9 @@ def test_d2_front_end_texts_exclude_d3_codes() -> None:
     texts = json.loads((ROOT / "apps/web/src/app/i18n/reasons.zh-CN.gen.json").read_text(encoding="utf-8"))
     assert not [k for k in texts if re.match(r"reason\.6\d\d\.", k)]
     assert "reason.586.short" in texts
+
+
+def test_d3_bus_event_kinds() -> None:
+    ev = json.loads((ROOT / "packages/contracts/bus/event.schema.json").read_text(encoding="utf-8"))["$defs"]
+    d3 = {"phys.contact.mesh", "phys.coverage.exit", "phys.instance", "phys.sitl.vehicle"}
+    assert d3 <= set(ev["known_kinds"]["enum"]) and set(ev["phys_payloads"]["properties"]) == d3

@@ -210,8 +210,147 @@
         "sandbox.state",
         "sandbox.expiring",
         "sandbox.rate",
-        "sandbox.slot_ready", "sensor.mode", "task.warning", "vtol.hover_limit", "sandbox.parking", "sandbox.parked", "sandbox.resumed", "relay.day_rollover"
+        "sandbox.slot_ready", "sensor.mode", "task.warning", "vtol.hover_limit", "sandbox.parking", "sandbox.parked", "sandbox.resumed", "relay.day_rollover",
+        "phys.contact.mesh", "phys.coverage.exit", "phys.instance", "phys.sitl.vehicle"
       ]
+    },
+    "phys_payloads": {
+      "description": "D3 data payloads by kind (AWR-17 §18.12.4, M24 §7.8; d1 V0.3). Run layer: written to MCAP and run statistics, never delivered to agents; D2 clients do not subscribe.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phys.contact.mesh": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "uav": {
+              "type": "string"
+            },
+            "t_sim_ns": {
+              "type": "integer"
+            },
+            "detector": {
+              "enum": [
+                "mesh",
+                "gz"
+              ]
+            },
+            "pos_enu_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "normal_enu": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "speed_mps": {
+              "type": "number"
+            },
+            "prim_id": {
+              "type": "integer"
+            },
+            "semantic": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "required": [
+            "uav",
+            "t_sim_ns",
+            "detector",
+            "pos_enu_m",
+            "normal_enu",
+            "speed_mps",
+            "prim_id",
+            "semantic"
+          ]
+        },
+        "phys.coverage.exit": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "uav": {
+              "type": "string"
+            },
+            "t_sim_ns": {
+              "type": "integer"
+            },
+            "pos_enu_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "reason": {
+              "enum": [
+                "outside_coverage",
+                "hole"
+              ]
+            }
+          },
+          "required": [
+            "uav",
+            "t_sim_ns",
+            "pos_enu_m",
+            "reason"
+          ]
+        },
+        "phys.instance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "run_id": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "integer"
+            },
+            "startup_s": {
+              "type": "number"
+            },
+            "warmup_steps": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "run_id",
+            "state"
+          ]
+        },
+        "phys.sitl.vehicle": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "uav": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "uav",
+            "state"
+          ]
+        }
+      }
     }
   }
 }

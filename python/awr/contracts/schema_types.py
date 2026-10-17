@@ -110,6 +110,11 @@ __all__ = [
     "BusDetailOneOf1",
     "BusEvent",
     "BusEventKnownKinds",
+    "BusEventPhysPayloads",
+    "BusEventPhysPayloadsPhysContactMesh",
+    "BusEventPhysPayloadsPhysCoverageExit",
+    "BusEventPhysPayloadsPhysInstance",
+    "BusEventPhysPayloadsPhysSitlVehicle",
     "Camera",
     "CameraDetector",
     "CameraDistortion",
@@ -1165,7 +1170,7 @@ type BusDetail = BusDetailOneOf0 | BusDetailOneOf1
 
 
 # bus/event.schema.json#/$defs/known_kinds
-type BusEventKnownKinds = Literal["sim.started", "sim.reset", "sim.stopped", "sim.restarted", "sim.clock", "sim.vehicle.state", "sim.frame.reset", "roster.changed", "uav.state", "cmd.accepted", "cmd.running", "cmd.succeeded", "cmd.failed", "cmd.canceled", "cmd.timeout", "cmd.rejected", "fleet.batch.progress", "safety.geofence", "safety.separation", "safety.battery", "safety.link", "safety.fastguard", "safety.fsm", "safety.loc", "safety.env", "safety.fault", "safety.health", "mission.state", "mission.item_reached", "mission.energy_warning", "mission.aborted", "lease.acquired", "lease.released", "lease.preempted", "lease.expired", "seat.acquired", "seat.released", "seat.expired", "seat.takeover", "env.changed", "env.warning", "env.keyframe", "env.presets_mismatch", "proc.state", "session.switching", "session.switched", "session.error", "sys.shutting_down", "rec.started", "rec.stopped", "recorder.gap", "job.state", "job.progress", "world.added", "world.updated", "sensor.detect", "sensor.gnss_fix", "sensor.state", "vehicle.added", "vehicle.removed", "vehicle.spawn_failed", "scenario.agent_task", "scenario.mark", "sim.kernel.fallback", "sim.stage.overbudget", "sim.rtf_limited", "sim.profile.loaded", "sim.contact.collision", "sim.contact.touchdown", "cmd.progress", "geo.ready", "mission.created", "mission.start_failed", "mission.warning", "track.state", "track.lagging", "plan.ready", "plan.failed", "plan.degraded", "plan.warm", "path.changed", "coverage.progress", "coverage.changed", "scenario.loaded", "scenario.event", "scenario.result", "scenario.invalid", "formation.phase", "formation.member_lost", "formation.member_lagging", "deconflict.result", "deconflict.partial", "rec.lineage", "replay.opened", "replay.closed", "replay.error", "job.log", "agent.registered", "agent.task.submitted", "agent.task.find", "agent.task.quote", "agent.task.awarded", "agent.task.state", "agent.task.phase", "agent.task.effect", "agent.task.accepted", "agent.task.rejected", "agent.task.escalated", "agent.board.unit", "agent.board.incidental", "agent.lease.acquired", "agent.lease.released", "agent.lease.preempted", "agent.guard.rejected", "agent.session.reset", "anet.evidence.gap", "agent.health", "agent.runtime.state", "target.discovered", "target.state", "perception.level", "perception.capture", "perception.capture_lost", "perception.detect", "uav.keepout_guard", "fw.wind_exceeds", "nest.launch", "nest.recover", "nest.swap_done", "nest.dispatch_delayed", "task.created", "task.state", "task.allocated", "task.reallocated", "relay.dispatch", "relay.handover", "relay.gap", "sandbox.state", "sandbox.expiring", "sandbox.rate", "sandbox.slot_ready", "sensor.mode", "task.warning", "vtol.hover_limit", "sandbox.parking", "sandbox.parked", "sandbox.resumed", "relay.day_rollover"]
+type BusEventKnownKinds = Literal["sim.started", "sim.reset", "sim.stopped", "sim.restarted", "sim.clock", "sim.vehicle.state", "sim.frame.reset", "roster.changed", "uav.state", "cmd.accepted", "cmd.running", "cmd.succeeded", "cmd.failed", "cmd.canceled", "cmd.timeout", "cmd.rejected", "fleet.batch.progress", "safety.geofence", "safety.separation", "safety.battery", "safety.link", "safety.fastguard", "safety.fsm", "safety.loc", "safety.env", "safety.fault", "safety.health", "mission.state", "mission.item_reached", "mission.energy_warning", "mission.aborted", "lease.acquired", "lease.released", "lease.preempted", "lease.expired", "seat.acquired", "seat.released", "seat.expired", "seat.takeover", "env.changed", "env.warning", "env.keyframe", "env.presets_mismatch", "proc.state", "session.switching", "session.switched", "session.error", "sys.shutting_down", "rec.started", "rec.stopped", "recorder.gap", "job.state", "job.progress", "world.added", "world.updated", "sensor.detect", "sensor.gnss_fix", "sensor.state", "vehicle.added", "vehicle.removed", "vehicle.spawn_failed", "scenario.agent_task", "scenario.mark", "sim.kernel.fallback", "sim.stage.overbudget", "sim.rtf_limited", "sim.profile.loaded", "sim.contact.collision", "sim.contact.touchdown", "cmd.progress", "geo.ready", "mission.created", "mission.start_failed", "mission.warning", "track.state", "track.lagging", "plan.ready", "plan.failed", "plan.degraded", "plan.warm", "path.changed", "coverage.progress", "coverage.changed", "scenario.loaded", "scenario.event", "scenario.result", "scenario.invalid", "formation.phase", "formation.member_lost", "formation.member_lagging", "deconflict.result", "deconflict.partial", "rec.lineage", "replay.opened", "replay.closed", "replay.error", "job.log", "agent.registered", "agent.task.submitted", "agent.task.find", "agent.task.quote", "agent.task.awarded", "agent.task.state", "agent.task.phase", "agent.task.effect", "agent.task.accepted", "agent.task.rejected", "agent.task.escalated", "agent.board.unit", "agent.board.incidental", "agent.lease.acquired", "agent.lease.released", "agent.lease.preempted", "agent.guard.rejected", "agent.session.reset", "anet.evidence.gap", "agent.health", "agent.runtime.state", "target.discovered", "target.state", "perception.level", "perception.capture", "perception.capture_lost", "perception.detect", "uav.keepout_guard", "fw.wind_exceeds", "nest.launch", "nest.recover", "nest.swap_done", "nest.dispatch_delayed", "task.created", "task.state", "task.allocated", "task.reallocated", "relay.dispatch", "relay.handover", "relay.gap", "sandbox.state", "sandbox.expiring", "sandbox.rate", "sandbox.slot_ready", "sensor.mode", "task.warning", "vtol.hover_limit", "sandbox.parking", "sandbox.parked", "sandbox.resumed", "relay.day_rollover", "phys.contact.mesh", "phys.coverage.exit", "phys.instance", "phys.sitl.vehicle"]
 
 
 # rt/commands.schema.json#/$defs/category
@@ -2209,6 +2214,42 @@ class BusEvent(TypedDict):
     cid: str | None
     batch_id: NotRequired[str | None]
     data: dict[str, Any]
+
+
+# bus/event.schema.json#/$defs/phys_payloads/properties/phys.contact.mesh
+class BusEventPhysPayloadsPhysContactMesh(TypedDict):
+    uav: str
+    t_sim_ns: int
+    detector: Literal["mesh", "gz"]
+    pos_enu_m: list[float]
+    normal_enu: list[float]
+    speed_mps: float
+    prim_id: int
+    semantic: int
+
+
+# bus/event.schema.json#/$defs/phys_payloads/properties/phys.coverage.exit
+class BusEventPhysPayloadsPhysCoverageExit(TypedDict):
+    uav: str
+    t_sim_ns: int
+    pos_enu_m: list[float]
+    reason: Literal["outside_coverage", "hole"]
+
+
+# bus/event.schema.json#/$defs/phys_payloads/properties/phys.instance
+class BusEventPhysPayloadsPhysInstance(TypedDict):
+    run_id: str
+    state: str
+    reason: NotRequired[int]
+    startup_s: NotRequired[float]
+    warmup_steps: NotRequired[int]
+
+
+# bus/event.schema.json#/$defs/phys_payloads/properties/phys.sitl.vehicle
+class BusEventPhysPayloadsPhysSitlVehicle(TypedDict):
+    uav: str
+    state: str
+    reason: NotRequired[int]
 
 
 # vehicle/camera.schema.json# Camera sensor file sensors/camera.yaml (awr.sensor.camera.v1)
@@ -11304,6 +11345,15 @@ AgentConfigV1BriefTargets = TypedDict("AgentConfigV1BriefTargets", {
     "label": str,
     "class": str,
     "appearance": AgentConfigV1BriefTargetsAppearance,
+})
+
+
+# bus/event.schema.json#/$defs/phys_payloads
+BusEventPhysPayloads = TypedDict("BusEventPhysPayloads", {
+    "phys.contact.mesh": NotRequired[BusEventPhysPayloadsPhysContactMesh],
+    "phys.coverage.exit": NotRequired[BusEventPhysPayloadsPhysCoverageExit],
+    "phys.instance": NotRequired[BusEventPhysPayloadsPhysInstance],
+    "phys.sitl.vehicle": NotRequired[BusEventPhysPayloadsPhysSitlVehicle],
 })
 
 

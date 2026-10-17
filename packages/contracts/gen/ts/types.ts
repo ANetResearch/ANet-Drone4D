@@ -351,6 +351,10 @@ export type BusEventKnownKinds =
   | 'sandbox.parked'
   | 'sandbox.resumed'
   | 'relay.day_rollover'
+  | 'phys.contact.mesh'
+  | 'phys.coverage.exit'
+  | 'phys.instance'
+  | 'phys.sitl.vehicle'
 /**
  * TSIR predicate (numeric form, ANetCore v0.14 tsir/predicate.go). M14 §6.7.1: op 1 AND, 2 OR, 3 NOT, 10 ARTIFACT, 11 TEST, 12 THRESHOLD, 13 SCOPE; depth <= 16, AND/OR children 2..64; validation failure = MALFORMED (fail closed). Private resource kinds: 101 zone, 102 vehicle, 103 capability.
  */
@@ -2581,6 +2585,54 @@ export interface BusEvent {
    */
   batch_id?: string | null
   data: {}
+}
+/**
+ * D3 data payloads by kind (AWR-17 §18.12.4, M24 §7.8; d1 V0.3). Run layer: written to MCAP and run statistics, never delivered to agents; D2 clients do not subscribe.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "BusEventPhysPayloads".
+ */
+export interface BusEventPhysPayloads {
+  'phys.contact.mesh'?: {
+    uav: string
+    t_sim_ns: number
+    detector: 'mesh' | 'gz'
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    pos_enu_m: [number, number, number, ...number[]]
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    normal_enu: [number, number, number, ...number[]]
+    speed_mps: number
+    prim_id: number
+    semantic: number
+  }
+  'phys.coverage.exit'?: {
+    uav: string
+    t_sim_ns: number
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    pos_enu_m: [number, number, number, ...number[]]
+    reason: 'outside_coverage' | 'hole'
+  }
+  'phys.instance'?: {
+    run_id: string
+    state: string
+    reason?: number
+    startup_s?: number
+    warmup_steps?: number
+  }
+  'phys.sitl.vehicle'?: {
+    uav: string
+    state: string
+    reason?: number
+  }
 }
 /**
  * Camera sensor file sensors/camera.yaml (awr.sensor.camera.v1). AWR-16 §11.6; values owned by M13. Pixel intrinsics follow the COLMAP convention; optical frame RDF.
