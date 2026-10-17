@@ -1,0 +1,18 @@
+{
+ "schema": "awr.d3.regress_gate.baseline.v1",
+ "relay_batch": {
+  "case": "b",
+  "hours": 1,
+  "seed": 11
+ },
+ "digests": {
+  "relay_stats.json": "c7354dc2fa9b07b451ba70a50acd36140d7d9a40fb64a81c98de047578b9370f",
+  "events.jsonl": "88de54fa95083adbf555cd910a9bdb6e1f63ad89c072b355a9a0072042882b9e"
+ },
+ "source": {
+  "branch": "d2",
+  "commit": "928c57b",
+  "recorded_utc": "2026-10-17",
+  "note": "relay-b-1h r1 = r2 (determinism PASS); gap quality checks fail identically on d2 and d3-dev"
+ }
+}
