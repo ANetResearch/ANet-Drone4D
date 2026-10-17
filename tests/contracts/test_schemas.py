@@ -27,6 +27,8 @@ DATA = {
     "agent/capability_catalog.json": "agent/capability_catalog.schema.json", "classes/anet-classes-v1.json": "schemas/world/class-table.schema.json",
     # D2（AWR-04 §11.6，WP-01）
     "target/class_defaults.json": "target/class_defaults.schema.json", "sensor/perception_levels.json": "sensor/perception_levels.schema.json",
+    # D3（AWR-05 §8.1，WP-D3-01）
+    "classes/d3-semantic-v1.json": "classes/d3-semantic.schema.json",
 }
 
 

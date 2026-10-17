@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor-v2/1/pose_history.v1.schema.json",
+  "title": "Pose history header (drone4d.pose_history.v1)",
+  "description": "AWR-05 §8.1, M25 §7.2.3, M24 (contracts 1.3.0, d1 V0.3). JSON header plus little-endian SoA blocks, one row per physics step end (MCAP and IPC). vel, omega and f_b are constant within (t_{n-1}, t_n]. Units: t in ns, pos in m (ENU), vel in m/s, omega in rad/s (body), f_b in m/s^2 (specific force at the body origin), gimbal angles in rad.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.pose_history.v1"
+    },
+    "uav": {
+      "type": "string"
+    },
+    "hz": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Equals caps.pose_history_hz of the physics tier (250 for d1_250 and gz)"
+    },
+    "frame": {
+      "const": "ENU<-FLU"
+    },
+    "n": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "t_ns": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Step end times, strictly increasing",
+      "properties": {
+        "dtype": {
+          "const": "i64"
+        },
+        "cols": {
+          "const": 1
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+        }
+      },
+      "required": [
+        "dtype",
+        "cols",
+        "ref"
+      ]
+    },
+    "pos_enu_m": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Step end positions",
+      "properties": {
+        "dtype": {
+          "const": "f64"
+        },
+        "cols": {
+          "const": 3
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+        }
+      },
+      "required": [
+        "dtype",
+        "cols",
+        "ref"
+      ]
+    },
+    "q_ws_xyzw": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Step end attitude, unit quaternion",
+      "properties": {
+        "dtype": {
+          "const": "f64"
+        },
+        "cols": {
+          "const": 4
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+        }
+      },
+      "required": [
+        "dtype",
+        "cols",
+        "ref"
+      ]
+    },
+    "vel_enu_mps": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Step-constant velocity",
+      "properties": {
+        "dtype": {
+          "const": "f32"
+        },
+        "cols": {
+          "const": 3
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+        }
+      },
+      "required": [
+        "dtype",
+        "cols",
+        "ref"
+      ]
+    },
+    "omega_b_rps": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Step-constant body rates",
+      "properties": {
+        "dtype": {
+          "const": "f32"
+        },
+        "cols": {
+          "const": 3
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+        }
+      },
+      "required": [
+        "dtype",
+        "cols",
+        "ref"
+      ]
+    },
+    "f_b_mps2": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Step-constant specific force R_wb^T (a_w - g_w)",
+      "properties": {
+        "dtype": {
+          "const": "f32"
+        },
+        "cols": {
+          "const": 3
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+        }
+      },
+      "required": [
+        "dtype",
+        "cols",
+        "ref"
+      ]
+    },
+    "gimbal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "m": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "t_ns": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Sample times (gimbal state changes)",
+          "properties": {
+            "dtype": {
+              "const": "i64"
+            },
+            "cols": {
+              "const": 1
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "cols",
+            "ref"
+          ]
+        },
+        "sensor_no": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Sensor number",
+          "properties": {
+            "dtype": {
+              "const": "u16"
+            },
+            "cols": {
+              "const": 1
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "cols",
+            "ref"
+          ]
+        },
+        "az_rad": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Azimuth",
+          "properties": {
+            "dtype": {
+              "const": "f32"
+            },
+            "cols": {
+              "const": 1
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "cols",
+            "ref"
+          ]
+        },
+        "el_rad": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Elevation",
+          "properties": {
+            "dtype": {
+              "const": "f32"
+            },
+            "cols": {
+              "const": 1
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "cols",
+            "ref"
+          ]
+        },
+        "zoom_f_mm": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Focal length",
+          "properties": {
+            "dtype": {
+              "const": "f32"
+            },
+            "cols": {
+              "const": 1
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "cols",
+            "ref"
+          ]
+        }
+      },
+      "required": [
+        "m",
+        "t_ns",
+        "sensor_no",
+        "az_rad",
+        "el_rad",
+        "zoom_f_mm"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "uav",
+    "hz",
+    "frame",
+    "n",
+    "t_ns",
+    "pos_enu_m",
+    "q_ws_xyzw",
+    "vel_enu_mps",
+    "omega_b_rps",
+    "f_b_mps2"
+  ]
+}

@@ -1,0 +1,143 @@
+{
+ "schema": "awr.classes.d3_semantic.v1",
+ "id": "d3-semantic@1",
+ "description": "Camera semantic map and LiDAR truth class codes (M25 §6.4.6, AWR-16 §24.2). 0-15 follow anet-classes@1 index, 32-37 are M23 actor classes, 255 is sky or no geometry (camera only; LiDAR truth never uses it). 16-31 and 38-254 are reserved. reflect_905 is the default 905 nm reflectance (sem_table_v1); actor values are design settings (confidence C) that asset manifests may override.",
+ "classes": [
+  {
+   "code": 0,
+   "key": "unclassified",
+   "source": "anet-classes@1",
+   "reflect_905": 0.35
+  },
+  {
+   "code": 1,
+   "key": "ground",
+   "source": "anet-classes@1",
+   "reflect_905": 0.25
+  },
+  {
+   "code": 2,
+   "key": "low_vegetation",
+   "source": "anet-classes@1",
+   "reflect_905": 0.3
+  },
+  {
+   "code": 3,
+   "key": "medium_vegetation",
+   "source": "anet-classes@1",
+   "reflect_905": 0.32
+  },
+  {
+   "code": 4,
+   "key": "high_vegetation",
+   "source": "anet-classes@1",
+   "reflect_905": 0.35
+  },
+  {
+   "code": 5,
+   "key": "building_roof",
+   "source": "anet-classes@1",
+   "reflect_905": 0.6
+  },
+  {
+   "code": 6,
+   "key": "building_facade",
+   "source": "anet-classes@1",
+   "reflect_905": 0.45
+  },
+  {
+   "code": 7,
+   "key": "low_object",
+   "source": "anet-classes@1",
+   "reflect_905": 0.4
+  },
+  {
+   "code": 8,
+   "key": "water",
+   "source": "anet-classes@1",
+   "reflect_905": 0.05
+  },
+  {
+   "code": 9,
+   "key": "road_surface",
+   "source": "anet-classes@1",
+   "reflect_905": 0.2
+  },
+  {
+   "code": 10,
+   "key": "bridge_deck",
+   "source": "anet-classes@1",
+   "reflect_905": 0.4
+  },
+  {
+   "code": 11,
+   "key": "wire_conductor",
+   "source": "anet-classes@1",
+   "reflect_905": 0.3
+  },
+  {
+   "code": 12,
+   "key": "transmission_tower",
+   "source": "anet-classes@1",
+   "reflect_905": 0.5
+  },
+  {
+   "code": 13,
+   "key": "dynamic_object",
+   "source": "anet-classes@1",
+   "reflect_905": 0.4
+  },
+  {
+   "code": 14,
+   "key": "noise",
+   "source": "anet-classes@1",
+   "reflect_905": 0.1
+  },
+  {
+   "code": 15,
+   "key": "reserved",
+   "source": "anet-classes@1"
+  },
+  {
+   "code": 32,
+   "key": "person",
+   "source": "actor",
+   "reflect_905": 0.3
+  },
+  {
+   "code": 33,
+   "key": "vehicle",
+   "source": "actor",
+   "reflect_905": 0.2
+  },
+  {
+   "code": 34,
+   "key": "dog",
+   "source": "actor",
+   "reflect_905": 0.25
+  },
+  {
+   "code": 35,
+   "key": "uav",
+   "source": "actor",
+   "reflect_905": 0.15
+  },
+  {
+   "code": 36,
+   "key": "machine",
+   "source": "actor",
+   "reflect_905": 0.35
+  },
+  {
+   "code": 37,
+   "key": "object",
+   "source": "actor",
+   "reflect_905": 0.3
+  },
+  {
+   "code": 255,
+   "key": "sky_or_void",
+   "source": "none"
+  }
+ ]
+}

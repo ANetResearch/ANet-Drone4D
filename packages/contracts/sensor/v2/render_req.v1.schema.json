@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor-v2/1/render_req.v1.schema.json",
+  "title": "Sensor render request (drone4d.render_req.v1)",
+  "description": "AWR-05 §8.1, M25 §7.2.2 (contracts 1.3.0, d1 V0.3). (run_id, uav, sensor, seq) is part of the counter-based random key (stream 22). Times in ns.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.render_req.v1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "uav": {
+      "type": "string"
+    },
+    "sensor": {
+      "type": "string"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "t_trigger_ns": {
+      "type": "integer",
+      "description": "End of the capture window t_end,k"
+    },
+    "exposure_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "readout_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "quality": {
+      "enum": [
+        "preview",
+        "online",
+        "offline"
+      ]
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "rgb",
+          "depth",
+          "gt_depth",
+          "seg",
+          "vis",
+          "lidar",
+          "imu",
+          "gnss",
+          "nav",
+          "features"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "pose_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Referenced PoseHistory interval within the session",
+      "properties": {
+        "t_from_ns": {
+          "type": "integer"
+        },
+        "t_to_ns": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "t_from_ns",
+        "t_to_ns"
+      ]
+    },
+    "pose_samples": {
+      "$ref": "pose_history.v1.schema.json",
+      "description": "Embedded pose_history.v1 fragment for offline or cross-host requests"
+    },
+    "dynamic_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "id is the tape content_sha256 or the realised tape id",
+      "properties": {
+        "kind": {
+          "enum": [
+            "tape",
+            "realized"
+          ]
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ]
+    },
+    "rig_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vehicle_ref": {
+          "type": "string"
+        },
+        "sensor_no": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "model_ref": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "vehicle_ref",
+        "sensor_no",
+        "model_ref"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "run_id",
+    "session_id",
+    "uav",
+    "sensor",
+    "seq",
+    "t_trigger_ns",
+    "exposure_ns",
+    "readout_ns",
+    "quality",
+    "outputs",
+    "pose_window",
+    "dynamic_ref",
+    "rig_ref"
+  ]
+}

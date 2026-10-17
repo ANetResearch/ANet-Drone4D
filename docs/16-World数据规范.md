@@ -2416,3 +2416,18 @@ worldpkg validate <world_dir>... [--deep] [--json] [--strict-warn] [--rules <ID,
 | `qa-report.schema.json` | 可选 `glb` 段（配准、调平、拓扑、阶段、质量、语义、碰撞、NavMesh、锚点、`sensor_hints`、`vglb`） |
 
 读者接受任意 `1.*` 的 `schemaVersion`；七个 D2 世界的包与派生缓存不变，D2 夹具照常通过（`tests/contracts/test_d3_world_schema.py`）。world.json 字段为 camelCase，单位写在字段名后缀与说明中（不加 `unit` 注解）。点云 `col.rgb = srgb` 的实测颜色见 M03 §15.1（扩展点 6）。
+
+### 24.2 语义码表 `d3-semantic@1`
+
+相机语义图（`frame.v1` 的 `ground_truth.semantic`）与 LiDAR 真值（`lidar_gt.v1`）的类别码，定义见 [M25 §6.4.6](modules/M25-传感器生成服务PRD.md)，数据文件为 `packages/contracts/classes/d3-semantic-v1.json`（schema `classes/d3-semantic.schema.json`）。
+
+| 码 | 类别 | 来源 |
+|---|---|---|
+| 0–15 | 与 `anet-classes@1` 的 `index` 相同（键与反射率逐项一致，契约测试比对） | M22 逐三角形语义 |
+| 16–31 | 保留 | — |
+| 32–37 | `person`、`vehicle`、`dog`、`uav`、`machine`、`object` | M23 演员类别 |
+| 38–254 | 保留 | — |
+| 255 | `sky_or_void`：天空或无几何（只用于相机；LiDAR 真值不使用） | — |
+
+`reflect_905` 为 905 nm 缺省反射率（`sem_table_v1`）：静态类取 `anet-classes@1.pseudoReflectance`，演员类为设定值（置信度 C），可由演员资产清单的 `reflect_905` 覆盖。
+

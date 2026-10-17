@@ -1,0 +1,622 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor-v2/1/frame.v1.schema.json",
+  "title": "Camera frame record (drone4d.frame.v1)",
+  "description": "AWR-05 §8.1, M25 §7.2.1 (contracts 1.3.0, d1 V0.3). Three partitions: agent_view (the source set that M26 projects into bench/obs.v1 CameraObs), ground_truth (evaluation store and truth files only, ADR-161) and internal (provenance). Units: times in ns, K in px with pixel centres at 0.5, distances in m, angles in deg. Thermal fields (temp_ck, dT_app_k) are added in P0b.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "drone4d.frame.v1"
+    },
+    "frame_id": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+/[^/]+/[0-9]+$",
+      "description": "<run_id>/<uav>/<sensor>/<seq>; internal identifier, never part of obs.v1"
+    },
+    "kind": {
+      "const": "camera",
+      "description": "This version defines camera frames only; LiDAR uses lidar_frame.v2"
+    },
+    "agent_view": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sensor_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "t_mid_ns": {
+          "type": "integer",
+          "description": "Exposure midpoint of the middle row"
+        },
+        "exposure_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readout_ns": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Rolling shutter readout window; 0 for a global shutter"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "K": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 9,
+          "maxItems": 9,
+          "description": "Row-major intrinsics of the delivered image"
+        },
+        "dist": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 5,
+          "maxItems": 5,
+          "description": "OpenCV k1 k2 p1 p2 k3 of the delivered image"
+        },
+        "pixel_convention": {
+          "const": "colmap_center_0.5"
+        },
+        "mount_nominal": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Nominal mount, ZYX, FLU",
+          "properties": {
+            "xyz_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "rpy_deg": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          },
+          "required": [
+            "xyz_m",
+            "rpy_deg"
+          ]
+        },
+        "gimbal_reading": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "az_deg": {
+              "type": "number"
+            },
+            "el_deg": {
+              "type": "number"
+            },
+            "zoom_f_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "az_deg",
+            "el_deg"
+          ],
+          "description": "Gimbal reading with encoder noise"
+        },
+        "rgb": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "sha256 over the delivered bytes; the archive stores the same bytes",
+          "properties": {
+            "codec": {
+              "enum": [
+                "jpeg",
+                "raw"
+              ]
+            },
+            "quality": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "codec",
+            "ref",
+            "sha256"
+          ]
+        },
+        "depth": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "L2-depth only",
+          "properties": {
+            "dtype": {
+              "const": "f32"
+            },
+            "unit": {
+              "const": "m"
+            },
+            "type": {
+              "const": "planar_z"
+            },
+            "range_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "dtype",
+            "unit",
+            "type",
+            "range_m",
+            "ref",
+            "sha256"
+          ]
+        }
+      },
+      "required": [
+        "sensor_id",
+        "seq",
+        "t_mid_ns",
+        "exposure_ns",
+        "readout_ns",
+        "width",
+        "height",
+        "K",
+        "dist",
+        "pixel_convention",
+        "mount_nominal",
+        "gimbal_reading",
+        "rgb"
+      ]
+    },
+    "ground_truth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "T_world_sensor": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "pos_enu_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "q_ws_xyzw": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "frame": {
+              "const": "ENU<-RDF"
+            }
+          },
+          "required": [
+            "pos_enu_m",
+            "q_ws_xyzw",
+            "frame"
+          ]
+        },
+        "gimbal_true": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "az_deg": {
+              "type": "number"
+            },
+            "el_deg": {
+              "type": "number"
+            },
+            "zoom_f_mm": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "az_deg",
+            "el_deg"
+          ]
+        },
+        "instance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dtype": {
+              "const": "u16"
+            },
+            "codec": {
+              "const": "zstd"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "codec",
+            "ref"
+          ],
+          "description": "0 static, actor idx + 1"
+        },
+        "instance_unocc": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dtype": {
+              "const": "u16"
+            },
+            "codec": {
+              "const": "zstd"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "codec",
+            "ref"
+          ],
+          "description": "Actors-only pass (unoccluded), same coding as instance"
+        },
+        "semantic": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dtype": {
+              "const": "u8"
+            },
+            "codec": {
+              "const": "zstd"
+            },
+            "code_table": {
+              "const": "d3-semantic@1"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "codec",
+            "code_table",
+            "ref"
+          ]
+        },
+        "invalid_mask": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dtype": {
+              "const": "u8"
+            },
+            "codec": {
+              "const": "zstd"
+            },
+            "bits": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "void_below_horizon",
+                  "stretched",
+                  "outside_coverage",
+                  "hole_edge",
+                  "water"
+                ]
+              },
+              "description": "Bit names in order from bit 0 (M25 §6.6.2); bits 5-7 reserved"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "codec",
+            "bits",
+            "ref"
+          ]
+        },
+        "gt_depth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dtype": {
+              "const": "f32"
+            },
+            "unit": {
+              "const": "m"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            }
+          },
+          "required": [
+            "dtype",
+            "unit",
+            "ref"
+          ]
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Visibility reduction over the delivered image (M25 §6.6.1); actors with px_unoccluded > 0",
+            "properties": {
+              "inst": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "actor": {
+                "type": "string"
+              },
+              "class": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255,
+                "description": "d3-semantic@1 code"
+              },
+              "px_visible": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "px_unoccluded": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "h_px_unocc": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "h_px_visible": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "visible_ratio": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "bbox_xywh": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "bbox_unocc_xywh": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "occluder_sem_px": {
+                "type": "object",
+                "propertyNames": {
+                  "pattern": "^[0-9]{1,3}$"
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "description": "Occluding foreground pixels by d3-semantic@1 code"
+              },
+              "flags": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "truncated"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "inst",
+              "actor",
+              "class",
+              "px_visible",
+              "px_unoccluded",
+              "h_px_unocc",
+              "h_px_visible",
+              "visible_ratio",
+              "bbox_xywh",
+              "bbox_unocc_xywh",
+              "occluder_sem_px",
+              "flags"
+            ]
+          }
+        },
+        "timing": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Truth-layer sample times",
+          "properties": {
+            "t_truth_ns": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "blur_subframes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rs_bands": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rs_method": {
+              "enum": [
+                "vertex",
+                "bands"
+              ],
+              "description": "Rolling shutter method (ADR-179): vertex (default) or bands (reference)"
+            }
+          },
+          "required": [
+            "t_truth_ns",
+            "blur_subframes",
+            "rs_bands",
+            "rs_method"
+          ]
+        }
+      },
+      "required": [
+        "T_world_sensor",
+        "gimbal_true",
+        "instance",
+        "instance_unocc",
+        "semantic",
+        "invalid_mask",
+        "objects",
+        "timing"
+      ]
+    },
+    "internal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "world_content_version": {
+          "type": "string"
+        },
+        "dynamic_source_id": {
+          "type": "string"
+        },
+        "backend": {
+          "type": "string"
+        },
+        "renderer_version": {
+          "type": "string"
+        },
+        "fx_version": {
+          "type": "string"
+        },
+        "appearance": {
+          "enum": [
+            "mesh",
+            "gs"
+          ]
+        },
+        "noise_tier": {
+          "type": "string"
+        },
+        "noise_table_version": {
+          "type": "string"
+        },
+        "encoder": {
+          "type": "string"
+        },
+        "gpu_model": {
+          "type": "string"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "run_seed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Filled in by M27 when writing the evaluation store; kept from agents in ranked runs"
+        },
+        "derived": {
+          "type": "boolean",
+          "description": "true for offline re-rendering"
+        }
+      },
+      "required": [
+        "run_id",
+        "session_id",
+        "world_content_version",
+        "dynamic_source_id",
+        "backend",
+        "renderer_version",
+        "fx_version",
+        "appearance",
+        "noise_tier",
+        "noise_table_version",
+        "encoder",
+        "gpu_model",
+        "driver",
+        "derived"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "frame_id",
+    "kind",
+    "agent_view",
+    "ground_truth",
+    "internal"
+  ]
+}

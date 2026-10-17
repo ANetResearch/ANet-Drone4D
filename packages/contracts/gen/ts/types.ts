@@ -2716,6 +2716,40 @@ export interface WorldCommonAabb {
   max: WorldCommonVec3
 }
 /**
+ * Semantic code table d3-semantic@N (camera semantic maps and LiDAR truth). M25 §6.4.6; registered in AWR-16 §24.2.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "D3Semantic".
+ */
+export interface D3Semantic {
+  schema: 'awr.classes.d3_semantic.v1'
+  id: string
+  description?: string
+  /**
+   * @minItems 1
+   */
+  classes: [
+    {
+      code: number
+      key: string
+      source: 'anet-classes@1' | 'actor' | 'none'
+      /**
+       * Default reflectance at 905 nm
+       */
+      reflect_905?: number
+    },
+    ...{
+      code: number
+      key: string
+      source: 'anet-classes@1' | 'actor' | 'none'
+      /**
+       * Default reflectance at 905 nm
+       */
+      reflect_905?: number
+    }[]
+  ]
+}
+/**
  * awr.sensor.detection.v1. Detection record of the session detection ring (8192, AWR-17 §17.6.4; SB-39). Imaging sensors give the target id; radar and acoustic give track_id or bearing_id and target null.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -3556,6 +3590,249 @@ export interface Flight60 {
     name: string
     version: string
     git_sha?: string
+  }
+}
+/**
+ * Camera frame record (drone4d.frame.v1). AWR-05 §8.1, M25 §7.2.1 (contracts 1.3.0, d1 V0.3). Three partitions: agent_view (the source set that M26 projects into bench/obs.v1 CameraObs), ground_truth (evaluation store and truth files only, ADR-161) and internal (provenance). Units: times in ns, K in px with pixel centres at 0.5, distances in m, angles in deg. Thermal fields (temp_ck, dT_app_k) are added in P0b.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "FrameV1".
+ */
+export interface FrameV1 {
+  schema: 'drone4d.frame.v1'
+  /**
+   * <run_id>/<uav>/<sensor>/<seq>; internal identifier, never part of obs.v1
+   */
+  frame_id: string
+  /**
+   * This version defines camera frames only; LiDAR uses lidar_frame.v2
+   */
+  kind: 'camera'
+  agent_view: {
+    sensor_id: string
+    seq: number
+    /**
+     * Exposure midpoint of the middle row
+     */
+    t_mid_ns: number
+    exposure_ns: number
+    /**
+     * Rolling shutter readout window; 0 for a global shutter
+     */
+    readout_ns: number
+    width: number
+    height: number
+    /**
+     * Row-major intrinsics of the delivered image
+     *
+     * @minItems 9
+     * @maxItems 9
+     */
+    K: [number, number, number, number, number, number, number, number, number, ...number[]]
+    /**
+     * OpenCV k1 k2 p1 p2 k3 of the delivered image
+     *
+     * @minItems 5
+     * @maxItems 5
+     */
+    dist: [number, number, number, number, number, ...number[]]
+    pixel_convention: 'colmap_center_0.5'
+    /**
+     * Nominal mount, ZYX, FLU
+     */
+    mount_nominal: {
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      xyz_m: [number, number, number, ...number[]]
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      rpy_deg: [number, number, number, ...number[]]
+    }
+    /**
+     * Gimbal reading with encoder noise
+     */
+    gimbal_reading: {
+      az_deg: number
+      el_deg: number
+      zoom_f_mm?: number
+    }
+    /**
+     * sha256 over the delivered bytes; the archive stores the same bytes
+     */
+    rgb: {
+      codec: 'jpeg' | 'raw'
+      quality?: number
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+      sha256: string
+    }
+    /**
+     * L2-depth only
+     */
+    depth?: {
+      dtype: 'f32'
+      unit: 'm'
+      type: 'planar_z'
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      range_m: [number, number, ...number[]]
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+      sha256: string
+    }
+  }
+  ground_truth: {
+    T_world_sensor: {
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      pos_enu_m: [number, number, number, ...number[]]
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      q_ws_xyzw: [number, number, number, number, ...number[]]
+      frame: 'ENU<-RDF'
+    }
+    gimbal_true: {
+      az_deg: number
+      el_deg: number
+      zoom_f_mm?: number
+    }
+    /**
+     * 0 static, actor idx + 1
+     */
+    instance: {
+      dtype: 'u16'
+      codec: 'zstd'
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Actors-only pass (unoccluded), same coding as instance
+     */
+    instance_unocc: {
+      dtype: 'u16'
+      codec: 'zstd'
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    semantic: {
+      dtype: 'u8'
+      codec: 'zstd'
+      code_table: 'd3-semantic@1'
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    invalid_mask: {
+      dtype: 'u8'
+      codec: 'zstd'
+      /**
+       * Bit names in order from bit 0 (M25 §6.6.2); bits 5-7 reserved
+       */
+      bits: ('void_below_horizon' | 'stretched' | 'outside_coverage' | 'hole_edge' | 'water')[]
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    gt_depth?: {
+      dtype: 'f32'
+      unit: 'm'
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Items: Visibility reduction over the delivered image (M25 §6.6.1); actors with px_unoccluded > 0
+     */
+    objects: {
+      inst: number
+      actor: string
+      /**
+       * d3-semantic@1 code
+       */
+      class: number
+      px_visible: number
+      px_unoccluded: number
+      h_px_unocc: number
+      h_px_visible: number
+      visible_ratio: number
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      bbox_xywh: [number, number, number, number, ...number[]]
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      bbox_unocc_xywh: [number, number, number, number, ...number[]]
+      /**
+       * Occluding foreground pixels by d3-semantic@1 code
+       */
+      occluder_sem_px: {
+        [k: string]: number
+      }
+      flags: 'truncated'[]
+    }[]
+    /**
+     * Truth-layer sample times
+     */
+    timing: {
+      /**
+       * @minItems 1
+       * @maxItems 1
+       */
+      t_truth_ns: [number, ...number[]]
+      blur_subframes: number
+      rs_bands: number
+      /**
+       * Rolling shutter method (ADR-179): vertex (default) or bands (reference)
+       */
+      rs_method: 'vertex' | 'bands'
+    }
+  }
+  internal: {
+    run_id: string
+    session_id: string
+    world_content_version: string
+    dynamic_source_id: string
+    backend: string
+    renderer_version: string
+    fx_version: string
+    appearance: 'mesh' | 'gs'
+    noise_tier: string
+    noise_table_version: string
+    encoder: string
+    gpu_model: string
+    driver: string
+    /**
+     * Filled in by M27 when writing the evaluation store; kept from agents in ranked runs
+     */
+    run_seed?: number
+    /**
+     * true for offline re-rendering
+     */
+    derived: boolean
   }
 }
 /**
@@ -6537,6 +6814,146 @@ export interface PointcloudSource {
   coordinate_sha256: WorldCommonSha256
 }
 /**
+ * Pose history header (drone4d.pose_history.v1). AWR-05 §8.1, M25 §7.2.3, M24 (contracts 1.3.0, d1 V0.3). JSON header plus little-endian SoA blocks, one row per physics step end (MCAP and IPC). vel, omega and f_b are constant within (t_{n-1}, t_n]. Units: t in ns, pos in m (ENU), vel in m/s, omega in rad/s (body), f_b in m/s^2 (specific force at the body origin), gimbal angles in rad.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "PoseHistoryV1".
+ */
+export interface PoseHistoryV1 {
+  schema: 'drone4d.pose_history.v1'
+  uav: string
+  /**
+   * Equals caps.pose_history_hz of the physics tier (250 for d1_250 and gz)
+   */
+  hz: number
+  frame: 'ENU<-FLU'
+  n: number
+  /**
+   * Step end times, strictly increasing
+   */
+  t_ns: {
+    dtype: 'i64'
+    cols: 1
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step end positions
+   */
+  pos_enu_m: {
+    dtype: 'f64'
+    cols: 3
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step end attitude, unit quaternion
+   */
+  q_ws_xyzw: {
+    dtype: 'f64'
+    cols: 4
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step-constant velocity
+   */
+  vel_enu_mps: {
+    dtype: 'f32'
+    cols: 3
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step-constant body rates
+   */
+  omega_b_rps: {
+    dtype: 'f32'
+    cols: 3
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step-constant specific force R_wb^T (a_w - g_w)
+   */
+  f_b_mps2: {
+    dtype: 'f32'
+    cols: 3
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  gimbal?: {
+    m: number
+    /**
+     * Sample times (gimbal state changes)
+     */
+    t_ns: {
+      dtype: 'i64'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Sensor number
+     */
+    sensor_no: {
+      dtype: 'u16'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Azimuth
+     */
+    az_rad: {
+      dtype: 'f32'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Elevation
+     */
+    el_rad: {
+      dtype: 'f32'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Focal length
+     */
+    zoom_f_mm: {
+      dtype: 'f32'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+  }
+}
+/**
  * awr.env.presets.v1. Environment presets and constants (AWR-16 §8.1 structure; values M07 §6.4, §6.5). The file bytes are copied verbatim into generated code; config.presets_sha256 = sha256(file bytes). fields[] order is the EnvKeyframe position encoding and may only grow at the tail.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -7383,6 +7800,191 @@ export interface RelayStats {
     eta_s?: number | null
     reason?: string
   } | null
+}
+/**
+ * Sensor render request (drone4d.render_req.v1). AWR-05 §8.1, M25 §7.2.2 (contracts 1.3.0, d1 V0.3). (run_id, uav, sensor, seq) is part of the counter-based random key (stream 22). Times in ns.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "RenderReqV1".
+ */
+export interface RenderReqV1 {
+  schema: 'drone4d.render_req.v1'
+  run_id: string
+  session_id: string
+  uav: string
+  sensor: string
+  seq: number
+  /**
+   * End of the capture window t_end,k
+   */
+  t_trigger_ns: number
+  exposure_ns: number
+  readout_ns: number
+  quality: 'preview' | 'online' | 'offline'
+  /**
+   * @minItems 1
+   */
+  outputs: [
+    'rgb' | 'depth' | 'gt_depth' | 'seg' | 'vis' | 'lidar' | 'imu' | 'gnss' | 'nav' | 'features',
+    ...('rgb' | 'depth' | 'gt_depth' | 'seg' | 'vis' | 'lidar' | 'imu' | 'gnss' | 'nav' | 'features')[]
+  ]
+  /**
+   * Referenced PoseHistory interval within the session
+   */
+  pose_window: {
+    t_from_ns: number
+    t_to_ns: number
+  }
+  pose_samples?: PoseHistoryV11
+  /**
+   * id is the tape content_sha256 or the realised tape id
+   */
+  dynamic_ref: {
+    kind: 'tape' | 'realized'
+    id: string
+  }
+  rig_ref: {
+    vehicle_ref: string
+    sensor_no: number
+    model_ref: string
+  }
+}
+/**
+ * Embedded pose_history.v1 fragment for offline or cross-host requests
+ */
+export interface PoseHistoryV11 {
+  schema: 'drone4d.pose_history.v1'
+  uav: string
+  /**
+   * Equals caps.pose_history_hz of the physics tier (250 for d1_250 and gz)
+   */
+  hz: number
+  frame: 'ENU<-FLU'
+  n: number
+  /**
+   * Step end times, strictly increasing
+   */
+  t_ns: {
+    dtype: 'i64'
+    cols: 1
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step end positions
+   */
+  pos_enu_m: {
+    dtype: 'f64'
+    cols: 3
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step end attitude, unit quaternion
+   */
+  q_ws_xyzw: {
+    dtype: 'f64'
+    cols: 4
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step-constant velocity
+   */
+  vel_enu_mps: {
+    dtype: 'f32'
+    cols: 3
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step-constant body rates
+   */
+  omega_b_rps: {
+    dtype: 'f32'
+    cols: 3
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  /**
+   * Step-constant specific force R_wb^T (a_w - g_w)
+   */
+  f_b_mps2: {
+    dtype: 'f32'
+    cols: 3
+    /**
+     * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+     */
+    ref: string
+  }
+  gimbal?: {
+    m: number
+    /**
+     * Sample times (gimbal state changes)
+     */
+    t_ns: {
+      dtype: 'i64'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Sensor number
+     */
+    sensor_no: {
+      dtype: 'u16'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Azimuth
+     */
+    az_rad: {
+      dtype: 'f32'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Elevation
+     */
+    el_rad: {
+      dtype: 'f32'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+    /**
+     * Focal length
+     */
+    zoom_f_mm: {
+      dtype: 'f32'
+      cols: 1
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+    }
+  }
 }
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema

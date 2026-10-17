@@ -106,6 +106,8 @@ __all__ = [
     "CoordinateSource",
     "CoordinateSourceFiles",
     "CoordinateTrueNorth",
+    "D3Semantic",
+    "D3SemanticClasses",
     "Detection",
     "DetectionPage",
     "Effect",
@@ -185,6 +187,23 @@ __all__ = [
     "Flight60Peak",
     "Flight60Segments",
     "Flight60Stats",
+    "FrameV1",
+    "FrameV1AgentView",
+    "FrameV1AgentViewDepth",
+    "FrameV1AgentViewGimbalReading",
+    "FrameV1AgentViewMountNominal",
+    "FrameV1AgentViewRgb",
+    "FrameV1GroundTruth",
+    "FrameV1GroundTruthGimbalTrue",
+    "FrameV1GroundTruthGtDepth",
+    "FrameV1GroundTruthInstance",
+    "FrameV1GroundTruthInstanceUnocc",
+    "FrameV1GroundTruthInvalidMask",
+    "FrameV1GroundTruthObjects",
+    "FrameV1GroundTruthSemantic",
+    "FrameV1GroundTruthTWorldSensor",
+    "FrameV1GroundTruthTiming",
+    "FrameV1Internal",
     "Gcs",
     "Geo",
     "GeoRep",
@@ -426,6 +445,19 @@ __all__ = [
     "PointcloudSource",
     "PointcloudSourceStats",
     "PointcloudSourceStreams",
+    "PoseHistoryV1",
+    "PoseHistoryV1FBMps2",
+    "PoseHistoryV1Gimbal",
+    "PoseHistoryV1GimbalAzRad",
+    "PoseHistoryV1GimbalElRad",
+    "PoseHistoryV1GimbalSensorNo",
+    "PoseHistoryV1GimbalTNs",
+    "PoseHistoryV1GimbalZoomFMm",
+    "PoseHistoryV1OmegaBRps",
+    "PoseHistoryV1PosEnuM",
+    "PoseHistoryV1QWsXyzw",
+    "PoseHistoryV1TNs",
+    "PoseHistoryV1VelEnuMps",
     "Predicate",
     "PredicateNode",
     "PredicateNodeOneOf0",
@@ -509,6 +541,10 @@ __all__ = [
     "RelayStatsHandovers",
     "RelayStatsNextOneOf0",
     "RelayStatsOnStation",
+    "RenderReqV1",
+    "RenderReqV1DynamicRef",
+    "RenderReqV1PoseWindow",
+    "RenderReqV1RigRef",
     "Replay",
     "ReplayReplayRep",
     "ReplayReplayReq",
@@ -1945,6 +1981,22 @@ class CoordinateTrueNorth(TypedDict):
     evidence: NotRequired[list[str]]
 
 
+# classes/d3-semantic.schema.json# Semantic code table d3-semantic@N (camera semantic maps and LiDAR truth)
+class D3Semantic(TypedDict):
+    schema: Literal["awr.classes.d3_semantic.v1"]
+    id: str
+    description: NotRequired[str]
+    classes: list[D3SemanticClasses]
+
+
+# classes/d3-semantic.schema.json#/properties/classes/items
+class D3SemanticClasses(TypedDict):
+    code: int
+    key: str
+    source: Literal["anet-classes@1", "actor", "none"]
+    reflect_905: NotRequired[float]
+
+
 # sensor/detection.schema.json# awr.sensor.detection.v1
 class Detection(TypedDict):
     seq: int
@@ -2605,6 +2657,156 @@ class Flight60Stats(TypedDict):
     yawrate_max_dps: float
     alt_min_m: float
     alt_max_m: float
+
+
+# sensor/v2/frame.v1.schema.json# Camera frame record (drone4d.frame.v1)
+class FrameV1(TypedDict):
+    schema: Literal["drone4d.frame.v1"]
+    frame_id: str
+    kind: Literal["camera"]
+    agent_view: FrameV1AgentView
+    ground_truth: FrameV1GroundTruth
+    internal: FrameV1Internal
+
+
+# sensor/v2/frame.v1.schema.json#/properties/agent_view
+class FrameV1AgentView(TypedDict):
+    sensor_id: str
+    seq: int
+    t_mid_ns: int
+    exposure_ns: int
+    readout_ns: int
+    width: int
+    height: int
+    K: list[float]
+    dist: list[float]
+    pixel_convention: Literal["colmap_center_0.5"]
+    mount_nominal: FrameV1AgentViewMountNominal
+    gimbal_reading: FrameV1AgentViewGimbalReading
+    rgb: FrameV1AgentViewRgb
+    depth: NotRequired[FrameV1AgentViewDepth]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/agent_view/properties/depth
+class FrameV1AgentViewDepth(TypedDict):
+    dtype: Literal["f32"]
+    unit: Literal["m"]
+    type: Literal["planar_z"]
+    range_m: list[float]
+    ref: str
+    sha256: str
+
+
+# sensor/v2/frame.v1.schema.json#/properties/agent_view/properties/gimbal_reading
+class FrameV1AgentViewGimbalReading(TypedDict):
+    az_deg: float
+    el_deg: float
+    zoom_f_mm: NotRequired[float]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/agent_view/properties/mount_nominal
+class FrameV1AgentViewMountNominal(TypedDict):
+    xyz_m: list[float]
+    rpy_deg: list[float]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/agent_view/properties/rgb
+class FrameV1AgentViewRgb(TypedDict):
+    codec: Literal["jpeg", "raw"]
+    quality: NotRequired[int]
+    ref: str
+    sha256: str
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth
+class FrameV1GroundTruth(TypedDict):
+    T_world_sensor: FrameV1GroundTruthTWorldSensor
+    gimbal_true: FrameV1GroundTruthGimbalTrue
+    instance: FrameV1GroundTruthInstance
+    instance_unocc: FrameV1GroundTruthInstanceUnocc
+    semantic: FrameV1GroundTruthSemantic
+    invalid_mask: FrameV1GroundTruthInvalidMask
+    gt_depth: NotRequired[FrameV1GroundTruthGtDepth]
+    objects: list[FrameV1GroundTruthObjects]
+    timing: FrameV1GroundTruthTiming
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/gimbal_true
+class FrameV1GroundTruthGimbalTrue(TypedDict):
+    az_deg: float
+    el_deg: float
+    zoom_f_mm: NotRequired[float]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/gt_depth
+class FrameV1GroundTruthGtDepth(TypedDict):
+    dtype: Literal["f32"]
+    unit: Literal["m"]
+    ref: str
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/instance
+class FrameV1GroundTruthInstance(TypedDict):
+    dtype: Literal["u16"]
+    codec: Literal["zstd"]
+    ref: str
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/instance_unocc
+class FrameV1GroundTruthInstanceUnocc(TypedDict):
+    dtype: Literal["u16"]
+    codec: Literal["zstd"]
+    ref: str
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/invalid_mask
+class FrameV1GroundTruthInvalidMask(TypedDict):
+    dtype: Literal["u8"]
+    codec: Literal["zstd"]
+    bits: list[Literal["void_below_horizon", "stretched", "outside_coverage", "hole_edge", "water"]]
+    ref: str
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/semantic
+class FrameV1GroundTruthSemantic(TypedDict):
+    dtype: Literal["u8"]
+    codec: Literal["zstd"]
+    code_table: Literal["d3-semantic@1"]
+    ref: str
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/T_world_sensor
+class FrameV1GroundTruthTWorldSensor(TypedDict):
+    pos_enu_m: list[float]
+    q_ws_xyzw: list[float]
+    frame: Literal["ENU<-RDF"]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/timing
+class FrameV1GroundTruthTiming(TypedDict):
+    t_truth_ns: list[int]
+    blur_subframes: int
+    rs_bands: int
+    rs_method: Literal["vertex", "bands"]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal
+class FrameV1Internal(TypedDict):
+    run_id: str
+    session_id: str
+    world_content_version: str
+    dynamic_source_id: str
+    backend: str
+    renderer_version: str
+    fx_version: str
+    appearance: Literal["mesh", "gs"]
+    noise_tier: str
+    noise_table_version: str
+    encoder: str
+    gpu_model: str
+    driver: str
+    run_seed: NotRequired[int]
+    derived: bool
 
 
 # bus/gcs.schema.json# Gcs link heartbeat (ctl/sim-core/gcs)
@@ -4866,6 +5068,109 @@ class PointcloudSourceStreams(TypedDict):
     unit: NotRequired[str]
 
 
+# sensor/v2/pose_history.v1.schema.json# Pose history header (drone4d.pose_history.v1)
+class PoseHistoryV1(TypedDict):
+    schema: Literal["drone4d.pose_history.v1"]
+    uav: str
+    hz: int
+    frame: Literal["ENU<-FLU"]
+    n: int
+    t_ns: PoseHistoryV1TNs
+    pos_enu_m: PoseHistoryV1PosEnuM
+    q_ws_xyzw: PoseHistoryV1QWsXyzw
+    vel_enu_mps: PoseHistoryV1VelEnuMps
+    omega_b_rps: PoseHistoryV1OmegaBRps
+    f_b_mps2: PoseHistoryV1FBMps2
+    gimbal: NotRequired[PoseHistoryV1Gimbal]
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/f_b_mps2
+class PoseHistoryV1FBMps2(TypedDict):
+    dtype: Literal["f32"]
+    cols: Literal[3]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/gimbal
+class PoseHistoryV1Gimbal(TypedDict):
+    m: int
+    t_ns: PoseHistoryV1GimbalTNs
+    sensor_no: PoseHistoryV1GimbalSensorNo
+    az_rad: PoseHistoryV1GimbalAzRad
+    el_rad: PoseHistoryV1GimbalElRad
+    zoom_f_mm: PoseHistoryV1GimbalZoomFMm
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/gimbal/properties/az_rad
+class PoseHistoryV1GimbalAzRad(TypedDict):
+    dtype: Literal["f32"]
+    cols: Literal[1]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/gimbal/properties/el_rad
+class PoseHistoryV1GimbalElRad(TypedDict):
+    dtype: Literal["f32"]
+    cols: Literal[1]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/gimbal/properties/sensor_no
+class PoseHistoryV1GimbalSensorNo(TypedDict):
+    dtype: Literal["u16"]
+    cols: Literal[1]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/gimbal/properties/t_ns
+class PoseHistoryV1GimbalTNs(TypedDict):
+    dtype: Literal["i64"]
+    cols: Literal[1]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/gimbal/properties/zoom_f_mm
+class PoseHistoryV1GimbalZoomFMm(TypedDict):
+    dtype: Literal["f32"]
+    cols: Literal[1]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/omega_b_rps
+class PoseHistoryV1OmegaBRps(TypedDict):
+    dtype: Literal["f32"]
+    cols: Literal[3]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/pos_enu_m
+class PoseHistoryV1PosEnuM(TypedDict):
+    dtype: Literal["f64"]
+    cols: Literal[3]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/q_ws_xyzw
+class PoseHistoryV1QWsXyzw(TypedDict):
+    dtype: Literal["f64"]
+    cols: Literal[4]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/t_ns
+class PoseHistoryV1TNs(TypedDict):
+    dtype: Literal["i64"]
+    cols: Literal[1]
+    ref: str
+
+
+# sensor/v2/pose_history.v1.schema.json#/properties/vel_enu_mps
+class PoseHistoryV1VelEnuMps(TypedDict):
+    dtype: Literal["f32"]
+    cols: Literal[3]
+    ref: str
+
+
 # agent/predicate.schema.json#/$defs/node/oneOf/0
 class PredicateNodeOneOf0(TypedDict):
     op: Literal[1, 2]
@@ -5551,6 +5856,44 @@ class RelayStatsOnStation(TypedDict):
     uav: WorldCommonSlug
     station: str
     since_t_sim_ns: NotRequired[WorldCommonInt64]
+
+
+# sensor/v2/render_req.v1.schema.json# Sensor render request (drone4d.render_req.v1)
+class RenderReqV1(TypedDict):
+    schema: Literal["drone4d.render_req.v1"]
+    run_id: str
+    session_id: str
+    uav: str
+    sensor: str
+    seq: int
+    t_trigger_ns: int
+    exposure_ns: int
+    readout_ns: int
+    quality: Literal["preview", "online", "offline"]
+    outputs: list[Literal["rgb", "depth", "gt_depth", "seg", "vis", "lidar", "imu", "gnss", "nav", "features"]]
+    pose_window: RenderReqV1PoseWindow
+    pose_samples: NotRequired[PoseHistoryV1]
+    dynamic_ref: RenderReqV1DynamicRef
+    rig_ref: RenderReqV1RigRef
+
+
+# sensor/v2/render_req.v1.schema.json#/properties/dynamic_ref
+class RenderReqV1DynamicRef(TypedDict):
+    kind: Literal["tape", "realized"]
+    id: str
+
+
+# sensor/v2/render_req.v1.schema.json#/properties/pose_window
+class RenderReqV1PoseWindow(TypedDict):
+    t_from_ns: int
+    t_to_ns: int
+
+
+# sensor/v2/render_req.v1.schema.json#/properties/rig_ref
+class RenderReqV1RigRef(TypedDict):
+    vehicle_ref: str
+    sensor_no: int
+    model_ref: str
 
 
 # bus/replay.schema.json#/$defs/replayRep
@@ -9040,6 +9383,23 @@ EnvState = TypedDict("EnvState", {
     "humidity_pct": NotRequired[float],
     "surface": NotRequired[EnvStateSurface],
     "acoustic_bg": NotRequired[EnvStateAcousticBg],
+})
+
+
+# sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/objects/items
+FrameV1GroundTruthObjects = TypedDict("FrameV1GroundTruthObjects", {
+    "inst": int,
+    "actor": str,
+    "class": int,
+    "px_visible": int,
+    "px_unoccluded": int,
+    "h_px_unocc": int,
+    "h_px_visible": int,
+    "visible_ratio": float,
+    "bbox_xywh": list[int],
+    "bbox_unocc_xywh": list[int],
+    "occluder_sem_px": dict[str, int],
+    "flags": list[Literal["truncated"]],
 })
 
 
