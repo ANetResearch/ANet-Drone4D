@@ -62,8 +62,9 @@ HTTP_OF = {110: 422, 102: 422, 105: 409, 107: 404, 112: 428, 115: 403, 116: 409,
            525: 409, 560: 409, 561: 422}
 RunCtx = Annotated[Any, Depends(ctx_for)]
 # SB-34：M13 在 sensors stage 中装配机体（新会话认领后时钟才开始、暂停中添加、驻留恢复后的首个 stage 之前没有载荷状态），
-# 查询回复 `payload_pending` 时每 PAYLOAD_POLL_S 重查，至多 PAYLOAD_WAIT_S【墙钟】（新会话的认领经 1 s 活动报告，issue #60）
-PAYLOAD_WAIT_S = 2.0
+# 查询回复 `payload_pending` 时每 PAYLOAD_POLL_S 重查，至多 PAYLOAD_WAIT_S【墙钟】（issue #60）。新会话的认领经 1 s 活动报告，
+# 公开站实测 READY 之后约 2.5 s 完成装配（emax，2026-10-17），上限取 5 s
+PAYLOAD_WAIT_S = 5.0
 PAYLOAD_POLL_S = 0.05
 
 
