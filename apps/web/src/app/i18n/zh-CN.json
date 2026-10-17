@@ -1286,6 +1286,8 @@
  "boot.phase.pointsBytes": "加载首屏点云 · {received} / {total} MB",
  "boot.phase.reveal": "即将就绪",
  "boot.phase.sandbox": "正在新城市中启动沙盒",
+ "boot.loadFailed": "应用资源加载失败，请检查网络连接后重新载入",
+ "boot.reload": "重新载入",
  "landing.sandbox.open": "开启我的沙盒",
  "sandbox.smallWindow": "窗口过窄（宽度小于 360 CSS px），沙盒无法开启",
  "role.shared": "公开演示 · 只读",

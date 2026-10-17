@@ -1286,6 +1286,8 @@
  "boot.phase.pointsBytes": "Loading the initial point cloud · {received} / {total} MB",
  "boot.phase.reveal": "Finalizing",
  "boot.phase.sandbox": "Starting the sandbox in the new city",
+ "boot.loadFailed": "Application resources failed to load. Check the network connection and reload.",
+ "boot.reload": "Reload",
  "landing.sandbox.open": "Open my sandbox",
  "sandbox.smallWindow": "Window too narrow (under 360 CSS px wide) for a sandbox",
  "role.shared": "Public demo · read-only",

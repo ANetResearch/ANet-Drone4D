@@ -42,11 +42,16 @@
       #boot-mask .boot-track > [data-seg="reveal"] { flex-grow: 5; }
       #boot-mask .boot-capacity { min-height: 18px; max-width: calc(100vw - 2rem); text-align: center; font-variant-numeric: tabular-nums lining-nums; }
       #boot-mask .boot-capacity[hidden] { display: none; }
+      #boot-mask .boot-reload { height: 32px; padding: 0 16px; border: 1px solid oklch(1 0 0 / 0.16); border-radius: 6px; background: transparent;
+        color: oklch(0.964 0.003 264.5); font: inherit; cursor: pointer; }
+      #boot-mask .boot-reload:hover { background: oklch(1 0 0 / 0.06); }
       @media (max-width: 1279px) { #boot-mask .boot-badge { width: 320px; } }
     </style>
   </head>
   <body>
-    <div id="boot-mask" data-boot="SHELL" role="status" aria-live="polite">
+    <div id="boot-mask" data-boot="SHELL" role="status" aria-live="polite" data-fail-zh="应用资源加载失败，请检查网络连接后重新载入"
+      data-fail-reload-zh="重新载入" data-fail-en="Application resources failed to load. Check the network connection and reload."
+      data-fail-reload-en="Reload">
       <img class="boot-badge" src="/brand/anet-logo.svg" width="480" height="83" alt="ANet" />
       <div class="boot-version"></div>
       <div class="boot-progress"><i class="boot-track"><i data-seg="bundle"></i><i data-seg="world"></i><i data-seg="points"></i><i data-seg="warming"></i><i data-seg="reveal"></i></i></div>

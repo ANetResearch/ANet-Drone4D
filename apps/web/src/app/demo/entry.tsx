@@ -23,6 +23,7 @@
 // page's own trimmed dictionary (./landingI18n).
 import '@/styles/index.css'
 import { renderLanding } from './Landing'
+import { clearReloadMark, fallbackTexts, importWithRetry, onAppLoadFailed } from './loadApp'
 
 const BUNDLE_WEIGHT = 0.15
 const WRITE_MIN_MS = 100
@@ -98,10 +99,24 @@ else if (location.pathname === '/sandbox/api') void import('./apiDocsEntry').the
 else {
   // import first: the preload helper inserts the modulepreload links of the application chunks synchronously, so the
   // watcher counts them from its first look (otherwise the three static chunks alone would read as a complete bundle)
-  const app = import('../../main')
+  // (issue #9: retried with backoff; after the last failure one automatic reload, then an error line and a reload button)
+  const app = importWithRetry(() => import('../../main'))
+  let tr: ((key: string) => string) | null = null
+  const session = ((): Storage | null => {
+    try {
+      return sessionStorage
+    } catch {
+      return null
+    }
+  })()
+  app.then(() => clearReloadMark(session), () => {
+    const texts = tr ? { message: tr('boot.loadFailed'), reload: tr('boot.reload') } : fallbackTexts(navigator.language || 'zh', document.getElementById('boot-mask'))
+    onAppLoadFailed(document, session, () => location.reload(), texts)
+  })
   void import('@/app/i18n').then(({ t }) => {
+    tr = t
     bindVersionCopy(t)
     const stop = watchBundleInline(t)
-    void app.finally(stop)
+    void app.finally(stop).catch(() => undefined)
   })
 }
