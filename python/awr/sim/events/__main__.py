@@ -1,4 +1,7 @@
-"""`python -m awr.sim.events verify|inspect <tape.bin | 事件版本目录>`：校验内容哈希、打印头与块统计。"""
+"""`python -m awr.sim.events compile|preflight|verify|inspect`（M23 §7.2）。
+
+compile、preflight 的退出码：0 通过，2 门 1 失败，3 门 2 不可行，4 其他编译错误；verify、inspect 失败为 2。
+"""
 
 from __future__ import annotations
 
@@ -23,7 +26,23 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for c in ("verify", "inspect"):
         sub.add_parser(c).add_argument("path", type=Path)
+    for c in ("compile", "preflight"):
+        p = sub.add_parser(c)
+        p.add_argument("event", type=Path)
+        p.add_argument("--world", type=Path, required=True, help="world package directory")
+        p.add_argument("--anchors", type=Path)
+        p.add_argument("--retime", choices=("minimal", "median"), default="minimal")
+        p.add_argument("--lenient", action="store_true")
+        p.add_argument("--out", type=Path)
+        p.add_argument("--cache", type=Path)
     a = ap.parse_args(argv)
+    if a.cmd in ("compile", "preflight"):
+        from awr.sim.events.compile import CompileOptions, compile_event
+
+        r = compile_event(a.event, a.world, opts=CompileOptions(strict=not a.lenient, retime_mode=a.retime, anchors_overlay=a.anchors,
+                                                                out=a.out, cache_dir=a.cache, preflight_only=a.cmd == "preflight"))
+        print(json.dumps(r.as_dict(), ensure_ascii=False, indent=2))
+        return {"compiled": 0, "preflight": 0, "infeasible": 3}.get(r.status, 2 if r.gates and r.gates[0]["status"] == "fail" else 4)
     try:
         r, expect = _reader(a.path)
         if a.cmd == "verify":
