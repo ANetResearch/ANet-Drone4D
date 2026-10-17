@@ -257,6 +257,7 @@ __all__ = [
     "MarkersBookmark",
     "McapChannels",
     "McapChannelsChannels",
+    "McapChannelsD3Channels",
     "McapChannelsSchemas",
     "Meta",
     "MetaBinding",
@@ -3300,6 +3301,7 @@ class McapChannels(TypedDict):
     schemas: list[McapChannelsSchemas]
     channels: list[McapChannelsChannels]
     metadata: NotRequired[list[str]]
+    d3_channels: NotRequired[list[McapChannelsD3Channels]]
 
 
 # rec/mcap_channels.schema.json#/properties/channels/items
@@ -3310,6 +3312,17 @@ class McapChannelsChannels(TypedDict):
     record_policy: str
     backfill: Literal["latest", "keyframe+delta", "none"]
     group: str
+
+
+# rec/mcap_channels.schema.json#/properties/d3_channels/items
+class McapChannelsD3Channels(TypedDict):
+    topic: str
+    schema: str
+    message_encoding: Literal["msgpack", "json", "protobuf", "awr-raw", "binary"]
+    file: Literal["raw", "truth"]
+    rate: str
+    layer: Literal["observation", "run", "truth"]
+    rrd_entity: NotRequired[str | None]
 
 
 # rec/mcap_channels.schema.json#/properties/schemas/items
@@ -7497,7 +7510,8 @@ class TopicsTopics(TypedDict):
     role: NotRequired[Literal["viewer", "operator", "admin"]]
     deprecated: NotRequired[bool]
     interest: NotRequired[bool]
-    apis: NotRequired[list[Literal["show", "sandbox"]]]
+    apis: NotRequired[list[Literal["show", "sandbox", "lab"]]]
+    scope: NotRequired[Literal["lab_researcher", "lab_evaluator"]]
 
 
 # rt/topics.schema.json#/properties/topics/items/properties/default_rate/oneOf/0

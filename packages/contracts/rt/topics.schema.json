@@ -177,10 +177,18 @@
             "items": {
               "enum": [
                 "show",
-                "sandbox"
+                "sandbox",
+                "lab"
               ]
             },
-            "description": "api processes that advertise the topic; absent = both (AWR-17 §17.7.2 rule 3)"
+            "description": "api processes that advertise the topic; absent = both (AWR-17 §17.7.2 rule 3); lab = D3 lab-gateway only (AWR-17 §18.11)"
+          },
+          "scope": {
+            "enum": [
+              "lab_researcher",
+              "lab_evaluator"
+            ],
+            "description": "D3 lab topics: lowest workspace role allowed to subscribe (AWR-17 §18.11, §18.13); Agent principals and public viewers never subscribe"
           }
         },
         "required": [

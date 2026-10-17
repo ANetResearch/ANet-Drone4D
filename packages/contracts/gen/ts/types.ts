@@ -4520,6 +4520,24 @@ export interface McapChannels {
     group: string
   }[]
   metadata?: string[]
+  /**
+   * D3 benchmark run recording channels (M27 §7.5.1, AWR-05 §12.3 #10). Written only by the M27 writer to raw.mcap or truth/run_<id>.mcap; the D2 recorder reads channels[] only.
+   */
+  d3_channels?: {
+    topic: string
+    schema: string
+    message_encoding: 'msgpack' | 'json' | 'protobuf' | 'awr-raw' | 'binary'
+    /**
+     * truth channels only appear in truth/run_<id>.mcap (hidden/ for the test split), never in raw.mcap
+     */
+    file: 'raw' | 'truth'
+    rate: string
+    layer: 'observation' | 'run' | 'truth'
+    /**
+     * Rerun entity path of the .rrd derivative; null = not derived
+     */
+    rrd_entity?: string | null
+  }[]
 }
 /**
  * Run metadata runs/<run>/meta.json (awr.run.meta.v1). AWR-16 §13.7 (snake_case). McapSource rejects a recording whose binding differs (122); contracts minor differences only warn.
@@ -9376,9 +9394,13 @@ export interface Topics {
      */
     interest?: boolean
     /**
-     * api processes that advertise the topic; absent = both (AWR-17 §17.7.2 rule 3)
+     * api processes that advertise the topic; absent = both (AWR-17 §17.7.2 rule 3); lab = D3 lab-gateway only (AWR-17 §18.11)
      */
-    apis?: ('show' | 'sandbox')[]
+    apis?: ('show' | 'sandbox' | 'lab')[]
+    /**
+     * D3 lab topics: lowest workspace role allowed to subscribe (AWR-17 §18.11, §18.13); Agent principals and public viewers never subscribe
+     */
+    scope?: 'lab_researcher' | 'lab_evaluator'
   }[]
   /**
    * sandbox browser defaults on top of default_subscriptions (AWR-17 §17.7.7)

@@ -92,6 +92,65 @@
       "items": {
         "type": "string"
       }
+    },
+    "d3_channels": {
+      "type": "array",
+      "description": "D3 benchmark run recording channels (M27 §7.5.1, AWR-05 §12.3 #10). Written only by the M27 writer to raw.mcap or truth/run_<id>.mcap; the D2 recorder reads channels[] only.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "topic",
+          "schema",
+          "message_encoding",
+          "file",
+          "rate",
+          "layer"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "schema": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message_encoding": {
+            "enum": [
+              "msgpack",
+              "json",
+              "protobuf",
+              "awr-raw",
+              "binary"
+            ]
+          },
+          "file": {
+            "enum": [
+              "raw",
+              "truth"
+            ],
+            "description": "truth channels only appear in truth/run_<id>.mcap (hidden/ for the test split), never in raw.mcap"
+          },
+          "rate": {
+            "type": "string"
+          },
+          "layer": {
+            "enum": [
+              "observation",
+              "run",
+              "truth"
+            ]
+          },
+          "rrd_entity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Rerun entity path of the .rrd derivative; null = not derived"
+          }
+        }
+      }
     }
   },
   "required": [

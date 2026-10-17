@@ -388,13 +388,28 @@ def gen_topics(c: dict) -> str:
            "def _rx(p: str) -> re.Pattern[str]:\n"
            '    return re.compile("^" + re.sub(r"\\\\\\{\\w+\\\\\\}", "[a-z0-9][a-z0-9_-]*", re.escape(p)) + "$")\n\n\n',
            "TOPICS: tuple[Topic, ...] = (\n"]
-    out.extend(f"    Topic({pylit(t['pattern'])}, {pylit(t['kind'])}, {pylit(t['encoding'])}, {pylit(t['schemaName'])}, {pylit(t['native_hz'])}, "
-                   f"{pylit(t['default_rate'])}, {pylit(t['mode'])}, {pylit(t['priority'])}, {pylit(t['self_contained'])}, {pylit(t['owner'])}, "
-                   f"{pylit(t['d1'])}, {pylit(t.get('aliases', []))}, _rx({pylit(t['pattern'])})),\n" for t in T["topics"])
-    out.append(")\n\n\n")
+
+    def row(t: dict) -> str:
+        return (f"    Topic({pylit(t['pattern'])}, {pylit(t['kind'])}, {pylit(t['encoding'])}, {pylit(t['schemaName'])}, {pylit(t['native_hz'])}, "
+                f"{pylit(t['default_rate'])}, {pylit(t['mode'])}, {pylit(t['priority'])}, {pylit(t['self_contained'])}, {pylit(t['owner'])}, "
+                f"{pylit(t['d1'])}, {pylit(t.get('aliases', []))}, _rx({pylit(t['pattern'])})),\n")
+
+    # D3 lab-gateway topics (`apis = ["lab"]`, AWR-17 §18.11) form a separate table: the D1 and D2 gateways never match them
+    lab = [t for t in T["topics"] if t.get("apis") == ["lab"]]
+    out.extend(row(t) for t in T["topics"] if t not in lab)
+    out.append(")\n\n")
+    out.append("# D3 lab-gateway topics (AWR-17 §18.11): (topic, lowest workspace role allowed to subscribe)\n")
+    out.append("LAB_TOPICS: tuple[Topic, ...] = (\n")
+    out.extend(row(t) for t in lab)
+    out.append(")\n")
+    out.append(f"LAB_SCOPES: dict[str, str] = {pylit({t['pattern']: t['scope'] for t in lab})}\n\n\n")
     out.append("def match_topic(topic: str) -> Topic | None:\n"
                "    for t in TOPICS:\n"
                "        if t.regex.match(topic) or topic in t.aliases:\n            return t\n"
+               "    return None\n\n\n"
+               "def match_lab_topic(topic: str) -> Topic | None:\n"
+               "    for t in LAB_TOPICS:\n"
+               "        if t.regex.match(topic):\n            return t\n"
                "    return None\n\n\n"
                "def quantize_rate(rate: float) -> int:\n"
                '    """Round a requested rate up to the nearest rate class; 0 means native rate capped by the tick (AWR-17 §6.7)."""\n'

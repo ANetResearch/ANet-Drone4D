@@ -166,5 +166,223 @@
     "awr.lineage",
     "awr.segment_end",
     "awr.marks"
+  ],
+  "d3_channels": [
+    {
+      "topic": "/uav/{id}/obs/nav",
+      "schema": "bench/obs.v1#NavSolution",
+      "message_encoding": "msgpack",
+      "file": "raw",
+      "rate": "10 Hz",
+      "layer": "observation",
+      "rrd_entity": "/fleet/<uav>"
+    },
+    {
+      "topic": "/uav/{id}/obs/detections",
+      "schema": "bench/obs.v1#Detection[]",
+      "message_encoding": "json",
+      "file": "raw",
+      "rate": "sensor rate",
+      "layer": "observation",
+      "rrd_entity": "/fleet/<uav>/cam<k>/image/det"
+    },
+    {
+      "topic": "/uav/{id}/camera/{name}/image",
+      "schema": "foxglove.CompressedImage",
+      "message_encoding": "protobuf",
+      "file": "raw",
+      "rate": "sensor rate",
+      "layer": "observation",
+      "rrd_entity": "/fleet/<uav>/cam<k>/image/rgb"
+    },
+    {
+      "topic": "/uav/{id}/camera/{name}/depth",
+      "schema": "foxglove.RawImage",
+      "message_encoding": "protobuf",
+      "file": "raw",
+      "rate": "sensor rate",
+      "layer": "observation",
+      "rrd_entity": "/fleet/<uav>/cam<k>/image/depth"
+    },
+    {
+      "topic": "/uav/{id}/camera/{name}/calib",
+      "schema": "foxglove.CameraCalibration",
+      "message_encoding": "protobuf",
+      "file": "raw",
+      "rate": "static and on zoom change",
+      "layer": "observation",
+      "rrd_entity": "/fleet/<uav>/cam<k>/image"
+    },
+    {
+      "topic": "/uav/{id}/gimbal/{name}",
+      "schema": "foxglove.FrameTransform",
+      "message_encoding": "protobuf",
+      "file": "raw",
+      "rate": "50 Hz",
+      "layer": "observation",
+      "rrd_entity": "/fleet/<uav>/cam<k>"
+    },
+    {
+      "topic": "/uav/{id}/lidar/{name}",
+      "schema": "awr.sensor.lidar_frame.v2",
+      "message_encoding": "binary",
+      "file": "raw",
+      "rate": "10 Hz",
+      "layer": "observation",
+      "rrd_entity": "/fleet/<uav>/lidar<k>"
+    },
+    {
+      "topic": "/uav/{id}/imu/{name}",
+      "schema": "bench/obs.v1#ImuObs",
+      "message_encoding": "msgpack",
+      "file": "raw",
+      "rate": "200 Hz",
+      "layer": "observation",
+      "rrd_entity": "/fleet/<uav>/telemetry/imu"
+    },
+    {
+      "topic": "/uav/{id}/gnss/{name}",
+      "schema": "bench/obs.v1#GnssObs",
+      "message_encoding": "msgpack",
+      "file": "raw",
+      "rate": "10 Hz",
+      "layer": "observation",
+      "rrd_entity": "/fleet/<uav>/telemetry/gnss"
+    },
+    {
+      "topic": "/uav/{id}/action",
+      "schema": "bench/act.v1",
+      "message_encoding": "json",
+      "file": "raw",
+      "rate": "10 Hz",
+      "layer": "run",
+      "rrd_entity": "/agents/<uav>/plan"
+    },
+    {
+      "topic": "/uav/{id}/report",
+      "schema": "bench/act.v1",
+      "message_encoding": "json",
+      "file": "raw",
+      "rate": "on event",
+      "layer": "run",
+      "rrd_entity": null
+    },
+    {
+      "topic": "/net/records",
+      "schema": "awr.bench.net_record.v1",
+      "message_encoding": "json",
+      "file": "raw",
+      "rate": "per delivery",
+      "layer": "run",
+      "rrd_entity": "/eval/metrics/comm_*"
+    },
+    {
+      "topic": "/env",
+      "schema": "awr.env.keyframe.v1",
+      "message_encoding": "msgpack",
+      "file": "raw",
+      "rate": "keyframes and 1 Hz",
+      "layer": "run",
+      "rrd_entity": "/truth/env/<field>"
+    },
+    {
+      "topic": "/run/status",
+      "schema": "awr.bench.run_status.v1",
+      "message_encoding": "json",
+      "file": "raw",
+      "rate": "1 Hz",
+      "layer": "run",
+      "rrd_entity": null
+    },
+    {
+      "topic": "/uav/{id}/state",
+      "schema": "awr.DroneState64.v1",
+      "message_encoding": "awr-raw",
+      "file": "truth",
+      "rate": "50 Hz",
+      "layer": "truth",
+      "rrd_entity": "/truth/fleet/<uav>"
+    },
+    {
+      "topic": "/eval/hidden/camera/{uav}/{name}",
+      "schema": "awr.sensor.camera_gt.v1",
+      "message_encoding": "binary",
+      "file": "truth",
+      "rate": "sensor rate",
+      "layer": "truth",
+      "rrd_entity": "/fleet/<uav>/cam<k>/image/{instance,semantic}"
+    },
+    {
+      "topic": "/eval/hidden/lidar/{uav}/{name}",
+      "schema": "awr.sensor.lidar_gt.v1",
+      "message_encoding": "binary",
+      "file": "truth",
+      "rate": "10 Hz",
+      "layer": "truth",
+      "rrd_entity": "/truth/fleet/<uav>/lidar<k>"
+    },
+    {
+      "topic": "/eval/hidden/det_map/{uav}",
+      "schema": "awr.bench.det_map.v1",
+      "message_encoding": "json",
+      "file": "truth",
+      "rate": "sensor rate",
+      "layer": "truth",
+      "rrd_entity": null
+    },
+    {
+      "topic": "/eval/hidden/extrinsics/{uav}",
+      "schema": "awr.bench.extrinsics.v1",
+      "message_encoding": "json",
+      "file": "truth",
+      "rate": "frame rate",
+      "layer": "truth",
+      "rrd_entity": null
+    },
+    {
+      "topic": "/event/actors",
+      "schema": "awr.event.actors.v1",
+      "message_encoding": "binary",
+      "file": "truth",
+      "rate": "10 Hz",
+      "layer": "truth",
+      "rrd_entity": "/truth/actors/<id>"
+    },
+    {
+      "topic": "/event/semantic",
+      "schema": "awr.event.semantic.v1",
+      "message_encoding": "json",
+      "file": "truth",
+      "rate": "on event",
+      "layer": "truth",
+      "rrd_entity": "/truth/events/<id>"
+    },
+    {
+      "topic": "/truth/phys/{uav}/pose_history",
+      "schema": "awr.phys.pose_history.v1",
+      "message_encoding": "binary",
+      "file": "truth",
+      "rate": "physics rate",
+      "layer": "truth",
+      "rrd_entity": null
+    },
+    {
+      "topic": "/phys/clearance",
+      "schema": "awr.phys.clearance.v1",
+      "message_encoding": "json",
+      "file": "truth",
+      "rate": "10 Hz",
+      "layer": "truth",
+      "rrd_entity": "/eval/metrics/clearance_*"
+    },
+    {
+      "topic": "/phys/tick_stats",
+      "schema": "awr.phys.tick_stats.v1",
+      "message_encoding": "json",
+      "file": "raw",
+      "rate": "1 Hz",
+      "layer": "run",
+      "rrd_entity": null
+    }
   ]
 }

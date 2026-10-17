@@ -72,10 +72,27 @@ TOPICS: tuple[Topic, ...] = (
     Topic("target/{id}/quant", "state", "msgpack", "awr.target.quant.v1", 2, {"S": 2, "B": 2, "A": 2}, "latest", 2, True, "M19", "V0.2-demo", (), _rx("target/{id}/quant")),
 )
 
+# D3 lab-gateway topics (AWR-17 §18.11): (topic, lowest workspace role allowed to subscribe)
+LAB_TOPICS: tuple[Topic, ...] = (
+    Topic("bench/run/{rid}/status", "state", "msgpack", "awr.bench.run_status.v1", 1, {"S": 1, "B": 1, "A": 1}, "latest", 1, True, "M27", "V0.3", (), _rx("bench/run/{rid}/status")),
+    Topic("uav/{id}/sensor/{name}/preview", "blob", "blob", "awr.sensor.preview.v1", 2, {"S": 2, "B": 2, "A": 2}, "latest", 3, True, "M27", "V0.3", (), _rx("uav/{id}/sensor/{name}/preview")),
+    Topic("uav/{id}/lidar/{name}/v2", "blob", "raw", "awr.sensor.lidar_frame.v2", 2, {"S": 2, "B": 2, "A": 2}, "latest", 3, True, "M25", "V0.3", (), _rx("uav/{id}/lidar/{name}/v2")),
+    Topic("event/status", "state", "msgpack", "awr.event.status.v1", 1, {"S": 1, "B": 1, "A": 1}, "latest", 2, True, "M23", "V0.3", (), _rx("event/status")),
+    Topic("actor/state", "state", "raw", "awr.actor.state.v1", 10, {"S": 10, "B": 10, "A": 10}, "latest", 2, True, "M23", "V0.3", (), _rx("actor/state")),
+)
+LAB_SCOPES: dict[str, str] = {"bench/run/{rid}/status": "lab_researcher", "uav/{id}/sensor/{name}/preview": "lab_researcher", "uav/{id}/lidar/{name}/v2": "lab_researcher", "event/status": "lab_researcher", "actor/state": "lab_evaluator"}
+
 
 def match_topic(topic: str) -> Topic | None:
     for t in TOPICS:
         if t.regex.match(topic) or topic in t.aliases:
+            return t
+    return None
+
+
+def match_lab_topic(topic: str) -> Topic | None:
+    for t in LAB_TOPICS:
+        if t.regex.match(topic):
             return t
     return None
 

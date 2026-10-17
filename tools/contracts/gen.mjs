@@ -501,8 +501,15 @@ function genTopics(c) {
   const out = [BANNER, '// Topic table from packages/contracts/rt/topics.json (AWR-17 §6.6).\n\n']
   out.push(`export const RATE_CLASSES: readonly number[] = ${lit(T.rate_classes)}\nexport const TICK_HZ = ${T.tick_hz}\n\n`)
   out.push('export interface TopicInfo {\n  pattern: string\n  kind: string\n  encoding: string\n  schemaName: string\n  nativeHz: number\n  defaultRate: Readonly<Record<string, number>> | null\n  mode: string | null\n  priority: number | null\n  selfContained: boolean\n  owner: string\n  d1: string\n  aliases: readonly string[]\n}\n\n')
+  const row = (t) => `  { pattern: ${lit(t.pattern)}, kind: ${lit(t.kind)}, encoding: ${lit(t.encoding)}, schemaName: ${lit(t.schemaName)}, nativeHz: ${t.native_hz}, defaultRate: ${lit(t.default_rate)}, mode: ${lit(t.mode)}, priority: ${lit(t.priority)}, selfContained: ${lit(t.self_contained)}, owner: ${lit(t.owner)}, d1: ${lit(t.d1)}, aliases: ${lit(t.aliases ?? [])} },\n`
+  // D3 lab-gateway topics (apis = ["lab"], AWR-17 §18.11) form a separate table: the D1 and D2 clients never list or match them
+  const isLab = (t) => Array.isArray(t.apis) && t.apis.length === 1 && t.apis[0] === 'lab'
   out.push('export const TOPICS: readonly TopicInfo[] = [\n')
-  for (const t of T.topics) out.push(`  { pattern: ${lit(t.pattern)}, kind: ${lit(t.kind)}, encoding: ${lit(t.encoding)}, schemaName: ${lit(t.schemaName)}, nativeHz: ${t.native_hz}, defaultRate: ${lit(t.default_rate)}, mode: ${lit(t.mode)}, priority: ${lit(t.priority)}, selfContained: ${lit(t.self_contained)}, owner: ${lit(t.owner)}, d1: ${lit(t.d1)}, aliases: ${lit(t.aliases ?? [])} },\n`)
+  for (const t of T.topics) if (!isLab(t)) out.push(row(t))
+  out.push(']\n\n')
+  out.push('/** D3 lab-gateway topics (AWR-17 §18.11); `scope` is the lowest workspace role allowed to subscribe */\n')
+  out.push('export const LAB_TOPICS: readonly (TopicInfo & { scope: string })[] = [\n')
+  for (const t of T.topics) if (isLab(t)) out.push(row(t).replace(/ },\n$/, `, scope: ${lit(t.scope)} },\n`))
   out.push(']\n\n')
   out.push(`const CHUNK = new RegExp(${lit(T.chunk_pattern)})
 const TOPIC_RE: ReadonlyArray<readonly [RegExp, TopicInfo]> = TOPICS.map((t) => [

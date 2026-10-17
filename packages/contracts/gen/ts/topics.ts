@@ -59,6 +59,15 @@ export const TOPICS: readonly TopicInfo[] = [
   { pattern: "target/{id}/quant", kind: "state", encoding: "msgpack", schemaName: "awr.target.quant.v1", nativeHz: 2, defaultRate: {"S":2,"B":2,"A":2}, mode: "latest", priority: 2, selfContained: true, owner: "M19", d1: "V0.2-demo", aliases: [] },
 ]
 
+/** D3 lab-gateway topics (AWR-17 §18.11); `scope` is the lowest workspace role allowed to subscribe */
+export const LAB_TOPICS: readonly (TopicInfo & { scope: string })[] = [
+  { pattern: "bench/run/{rid}/status", kind: "state", encoding: "msgpack", schemaName: "awr.bench.run_status.v1", nativeHz: 1, defaultRate: {"S":1,"B":1,"A":1}, mode: "latest", priority: 1, selfContained: true, owner: "M27", d1: "V0.3", aliases: [], scope: "lab_researcher" },
+  { pattern: "uav/{id}/sensor/{name}/preview", kind: "blob", encoding: "blob", schemaName: "awr.sensor.preview.v1", nativeHz: 2, defaultRate: {"S":2,"B":2,"A":2}, mode: "latest", priority: 3, selfContained: true, owner: "M27", d1: "V0.3", aliases: [], scope: "lab_researcher" },
+  { pattern: "uav/{id}/lidar/{name}/v2", kind: "blob", encoding: "raw", schemaName: "awr.sensor.lidar_frame.v2", nativeHz: 2, defaultRate: {"S":2,"B":2,"A":2}, mode: "latest", priority: 3, selfContained: true, owner: "M25", d1: "V0.3", aliases: [], scope: "lab_researcher" },
+  { pattern: "event/status", kind: "state", encoding: "msgpack", schemaName: "awr.event.status.v1", nativeHz: 1, defaultRate: {"S":1,"B":1,"A":1}, mode: "latest", priority: 2, selfContained: true, owner: "M23", d1: "V0.3", aliases: [], scope: "lab_researcher" },
+  { pattern: "actor/state", kind: "state", encoding: "raw", schemaName: "awr.actor.state.v1", nativeHz: 10, defaultRate: {"S":10,"B":10,"A":10}, mode: "latest", priority: 2, selfContained: true, owner: "M23", d1: "V0.3", aliases: [], scope: "lab_evaluator" },
+]
+
 const CHUNK = new RegExp("^[a-z0-9][a-z0-9_-]*$")
 const TOPIC_RE: ReadonlyArray<readonly [RegExp, TopicInfo]> = TOPICS.map((t) => [
   new RegExp('^' + t.pattern.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{\w+\}/g, '[a-z0-9][a-z0-9_-]*') + '$'), t] as const)

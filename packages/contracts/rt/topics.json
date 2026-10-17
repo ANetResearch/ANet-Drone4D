@@ -724,6 +724,121 @@
       "clock": "sim",
       "interest": true,
       "doc": "pair readings of the selected target (<= 12 pairs), columnar enc soa1"
+    },
+    {
+      "pattern": "bench/run/{rid}/status",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.bench.run_status.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 1,
+      "self_contained": true,
+      "owner": "M27",
+      "d1": "V0.3",
+      "clock": "wall",
+      "doc": "D3 run controller, 1 Hz plus state transitions: state, attempt, restart_count, t_sim_ns, progress_pct, frames_delivered, agent_timeouts, m25_wait_s, writer_block_s, blocked_by, reason (AWR-17 §18.11, M27-FR-041)",
+      "apis": [
+        "lab"
+      ],
+      "scope": "lab_researcher"
+    },
+    {
+      "pattern": "uav/{id}/sensor/{name}/preview",
+      "kind": "blob",
+      "encoding": "blob",
+      "schemaName": "awr.sensor.preview.v1",
+      "native_hz": 2,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 3,
+      "self_contained": true,
+      "owner": "M27",
+      "d1": "V0.3",
+      "clock": "sim",
+      "doc": "D3 low-resolution preview: u32 seq, i64 t_ns, u16 w, u16 h + JPEG 480 x 270 q75; bound to a run by subscribe params run_id, at most 16 per run (AWR-17 §18.11)",
+      "apis": [
+        "lab"
+      ],
+      "scope": "lab_researcher"
+    },
+    {
+      "pattern": "uav/{id}/lidar/{name}/v2",
+      "kind": "blob",
+      "encoding": "raw",
+      "schemaName": "awr.sensor.lidar_frame.v2",
+      "native_hz": 2,
+      "default_rate": {
+        "S": 2,
+        "B": 2,
+        "A": 2
+      },
+      "mode": "latest",
+      "priority": 3,
+      "self_contained": true,
+      "owner": "M25",
+      "d1": "V0.3",
+      "clock": "sim",
+      "doc": "D3 LiDAR preview, lidar_frame.v2 downsampled to at most 5,000 points per frame (P0b)",
+      "apis": [
+        "lab"
+      ],
+      "scope": "lab_researcher"
+    },
+    {
+      "pattern": "event/status",
+      "kind": "state",
+      "encoding": "msgpack",
+      "schemaName": "awr.event.status.v1",
+      "native_hz": 1,
+      "default_rate": {
+        "S": 1,
+        "B": 1,
+        "A": 1
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M23",
+      "d1": "V0.3",
+      "clock": "sim",
+      "doc": "D3 event track: event_id, version, t_ms, mode, env, comms_active[]; phase[] only for evaluators and administrators (M23 §6.12.4)",
+      "apis": [
+        "lab"
+      ],
+      "scope": "lab_researcher"
+    },
+    {
+      "pattern": "actor/state",
+      "kind": "state",
+      "encoding": "raw",
+      "schemaName": "awr.actor.state.v1",
+      "native_hz": 10,
+      "default_rate": {
+        "S": 10,
+        "B": 10,
+        "A": 10
+      },
+      "mode": "latest",
+      "priority": 2,
+      "self_contained": true,
+      "owner": "M23",
+      "d1": "V0.3",
+      "clock": "sim",
+      "doc": "D3 background actor state block, truth class (P1)",
+      "apis": [
+        "lab"
+      ],
+      "scope": "lab_evaluator"
     }
   ],
   "default_subscriptions_sandbox": [
