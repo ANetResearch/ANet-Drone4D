@@ -8,10 +8,15 @@ D2 增补（AWR-04 §3.2 M04 行、ADR-113 第 5 条）：
 - `los_batch` 走 numba 核（`kernels.py`，与 numpy 参考实现 `los_batch_np` 逐位一致），核未预热时退回 numpy；
 - `open_world_query(allow_derive=None)` 取环境变量 `AWR_GEO_ALLOW_DERIVE`（公开与沙盒部署置 0：缓存缺失即
   `GEO_CACHE_MISS`，绝不在线派生），缓存根缺省取 `AWR_GEO_CACHE_DIR`；可用性探测见 `status.py`。
+
+D3 扩展点 7（AWR-05 §12.3，M22-FR-047）：`open_world_query` 只在 `AWR_D3_ENABLED = 1` 且世界包有 `role = geometry`、
+`type = mesh`、`format = awr-trimesh@1` 的图层时，以 `importlib` 按字符串加载 `awr.world.mesh.query:open_mesh_world_query`
+并返回 MeshWorldQuery（D2 包不 import D3 包）；其余情况与不分派的 `open_dsm_world_query` 相同，D2 七个世界走原路径。
 """
 
 from __future__ import annotations
 
+import importlib
 import math
 import os
 import sys
@@ -52,6 +57,8 @@ MAX_CONTACT_R_M = 2.0
 MAX_FREE_RAYS = 16
 MAX_LOS_BATCH = 64
 ENV_ALLOW_DERIVE = "AWR_GEO_ALLOW_DERIVE"
+ENV_D3_ENABLED = "AWR_D3_ENABLED"
+MESH_FACTORY = "awr.world.mesh.query:open_mesh_world_query"
 _G25_ALT_RANGE = (0.0, 1000.0)
 
 
@@ -531,9 +538,30 @@ class DsmWorldQuery:
 # ==================================================================== 装载
 
 
+def d3_enabled() -> bool:
+    """`AWR_D3_ENABLED = 1`（D3 `d3` profile）；缺省关闭。"""
+    return os.environ.get(ENV_D3_ENABLED, "0").strip() == "1"
+
+
+def has_mesh_geometry(doc: dict) -> bool:
+    """world.json 是否有网格几何图层（扩展点 7 的判据，M22 §7.1.3）。"""
+    return any(L.get("role") == "geometry" and L.get("type") == "mesh" and L.get("format") == "awr-trimesh@1"
+               for L in doc.get("layers") or [])
+
+
 def open_world_query(world_dir: Path, cache_root: Path | None = None, params: GeoParams | None = None,
                      allow_derive: bool | None = None) -> DsmWorldQuery:
-    """读取 world.json 定位图层、校验 sidecar 与坐标绑定、映射或派生缓存（M04-FR-001、FR-005）。
+    """装载世界几何查询：D3 开关打开且有网格几何图层时分派到 MeshWorldQuery（DsmWorldQuery 的子类），否则同
+    `open_dsm_world_query`（扩展点 7）。开关关闭时不多读任何文件。"""
+    if d3_enabled() and has_mesh_geometry(read_world_header(Path(world_dir)).doc):
+        mod, fn = MESH_FACTORY.split(":")
+        return getattr(importlib.import_module(mod), fn)(world_dir, cache_root, params, allow_derive)
+    return open_dsm_world_query(world_dir, cache_root, params, allow_derive)
+
+
+def open_dsm_world_query(world_dir: Path, cache_root: Path | None = None, params: GeoParams | None = None,
+                         allow_derive: bool | None = None) -> DsmWorldQuery:
+    """不分派的 DSM 装载（MeshWorldQuery 由此继承栅格部分）：读取 world.json 定位图层、校验 sidecar 与坐标绑定、映射或派生缓存（M04-FR-001、FR-005）。
 
     `cache_root` 缺省为 `AWR_GEO_CACHE_DIR`，未设置时为 `<worlds>/.geo-cache`（与世界目录同级）。`allow_derive` 缺省取
     `AWR_GEO_ALLOW_DERIVE`（未设置为允许）；不允许时缓存缺失、键不一致或条目损坏一律抛 `GEO_CACHE_MISS`

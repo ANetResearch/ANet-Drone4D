@@ -7,7 +7,7 @@
 
 from .grids import Grid
 from .probe import BusQuery, GeoProbeServer
-from .query import DsmWorldQuery, WorldQuery, env_allow_derive, open_world_query, warm_kernels
+from .query import DsmWorldQuery, WorldQuery, env_allow_derive, open_dsm_world_query, open_world_query, warm_kernels
 from .status import CacheStatus, cache_status, cache_status_all
 from .types import (
     DERIVE_VERSION,
@@ -49,6 +49,7 @@ __all__ = [
     "cache_status",
     "cache_status_all",
     "env_allow_derive",
+    "open_dsm_world_query",
     "open_world_query",
     "warm_kernels",
 ]
