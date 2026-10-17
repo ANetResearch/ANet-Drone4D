@@ -9,6 +9,10 @@ M07、M09、M10、M13 的行是分配给对应模块的上限；表值的修改�
 本表是 d1_250 档（N = 1000）的预算；sandbox100 档（N ≤ 12、识别物 ≤ 30）的预算与调度在 `stages/rates.py`（M08-FR-203）。
 D2 追加的行（M08 §15.4.2 末段）：fw_kin 0.004（N = 1000 全为固定翼的上界）、tap_targets 0.001、targets 0.004、perception
 0.025；order 区段追加 M21 086–089（自 M08 区段让出）、M18 170–174、M19 175–184、M20 185–194（M08-FR-204）。
+
+D3 扩展点 1（AWR-05 §12.3，M24 §9.4 第 1 条）：order 195–198 归 M24（195 `mesh_contact`、198 `pose_history`，196–197 保留），
+199 归 M23（`event_clock`）；包前缀 `awr.phys` → M24、`awr.sim.events` → M23；预算 mesh_contact 0.020、pose_history 0.006、
+event_clock 0.0005。D3 stage 只由 `D3_PLUGINS` 登记，D2 组合根不登记，Σbudget 与构建结果不变。
 """
 
 from __future__ import annotations
@@ -50,7 +54,15 @@ BUDGET_CORE: dict[str, float] = {
     "tap_targets": 0.001,
     "targets": 0.004,
     "perception": 0.025,
+    # D3（AWR-05 §12.3 扩展点 1；M24-NFR-003、M23 §6.12.1）
+    "mesh_contact": 0.020,
+    "pose_history": 0.006,
+    "event_clock": 0.0005,
 }
+
+# D3：`mesh_contact` 声明 `writes = ("d3phys.*",)`；它对下列 M08 字段的写入是 M08 授权的例外（一字段一写者规则之外），
+# 语义与 `contact` 撞墙分支相同，接受一个物理步的可见延迟（AWR-05 §12.3 扩展点 1，M24 §9.4 第 1 条）
+MESH_CONTACT_WRITES: tuple[str, ...] = ("p", "v", "omega", "thrust", "thr_sp", "ctrl_mode", "crash_sub", "mode_evt")
 
 # 不属于 pipeline stage 但计入合计的项（inbox drain、events.flush、M08 慢任务）
 BUDGET_LOOP: dict[str, float] = {"drain": 0.002, "flush": 0.003, "slow": 0.010}
@@ -65,11 +77,14 @@ ORDER_RANGES: dict[str, tuple[tuple[int, int], ...]] = {
     "M09": ((25, 25), (110, 124), (130, 139)),
     "M10": ((26, 29), (150, 169)),
     "M13": ((100, 109),),
-    # D2（M08-FR-204）：125–127、195–199 保留
+    # D2（M08-FR-204）：125–127 保留
     "M21": ((86, 89),),
     "M18": ((170, 174),),
     "M19": ((175, 184),),
     "M20": ((185, 194),),
+    # D3（扩展点 1）：195 mesh_contact、198 pose_history（196–197 保留）、199 event_clock
+    "M24": ((195, 198),),
+    "M23": ((199, 199),),
 }
 
 # 包前缀 -> 所有者（`owner` 缺省推断；M08 §6.4.2）
@@ -89,6 +104,9 @@ PACKAGE_OWNER: tuple[tuple[str, str], ...] = (
     ("awr.sim.targets", "M18"),
     ("awr.sim.perception", "M19"),
     ("awr.sim.tasking", "M20"),
+    # D3（扩展点 1）
+    ("awr.phys", "M24"),
+    ("awr.sim.events", "M23"),
 )
 
 
