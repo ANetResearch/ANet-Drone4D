@@ -2,6 +2,7 @@
 # 在 dmax 上运行内部提交流水线（`python -m awr.bench.subworker`，d3-gz 容器，宿主与 gz 同容器，Agent 为隔离容器）。
 # 用法（本机仓库根目录）：tools/deploy/dmax/run_subworker.sh [--once] [其它 subworker 参数]；后台运行，日志 $D/<BENCH_ROOT>/subworker.log。
 # 数据根 $D/<BENCH_ROOT>（缺省 benchroot）须已发布榜单（bench_ctl.sh board publish … --current）。Agent 套接字放在 $D/run/as（AF_UNIX 路径上限）。
+# 漏洞扫描（D3-AC-59，ADR-204）：离线库 $D/trivy-cache 只读挂载，扫描镜像 d3-trivy:dev（images/trivy/fetch.sh 与 build.sh）。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 D=/data/anet-drone4d-d3/d3dev
@@ -13,6 +14,6 @@ rsync -a --mkpath --delete "$ROOT/packages/contracts/" "dmax:$D/contracts/"
 rsync -a --mkpath "$ROOT/native/gz/proto/" "dmax:$D/native/gz/proto/"
 ssh dmax "mkdir -p $D/$BR $D/run/as && docker rm -f d3-subworker >/dev/null 2>&1; docker run -d --rm --name d3-subworker --network none --cpus $CPUS --memory $MEM \
   --user \$(id -u):\$(id -g) -e HOME=/tmp -e PYTHONPATH=/repo/pylib-gz:/repo/python -e AWR_CONTRACTS_DIR=/repo/contracts \
-  -e AWR_HOST_PATH_MAP=/repo=$D -e AWR_AGENT_SOCK_ROOT=/repo/run/as \
-  -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker:ro -v $D:/repo -w /repo d3-gz:dev \
+  -e AWR_HOST_PATH_MAP=/repo=$D -e AWR_AGENT_SOCK_ROOT=/repo/run/as -e AWR_TRIVY_CACHE=/repo/trivy-cache \
+  -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker:ro -v $D:/repo -v $D/trivy-cache:/repo/trivy-cache:ro -w /repo d3-gz:dev \
   sh -c 'python3 -m awr.bench.subworker --data-root /repo/$BR $* >> /repo/$BR/subworker.log 2>&1'"
