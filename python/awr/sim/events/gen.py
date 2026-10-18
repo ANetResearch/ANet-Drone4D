@@ -3,10 +3,16 @@
 P0a 过渡实现（Python）：路径来自 `nav.NavGrid`（栅格 A*，同一路径函数供预检与生成，`len_m` 逐位相同）；背景演员按 §6.6.4 的
 目标点抽样、速度与停留抽样（流 19）沿路径匀速行走，暂不做 DetourCrowd 互避（最小间距写入报告供 M27 评测）。脚本演员的轨迹
 只由 plan 决定，与背景人数无关。全部时刻为整数毫秒，帧时刻 t_k = 100·k ms。
+
+到达（§6.9.4 `S-ARRIVAL`）：`arrivals` 由实现的时间线逐路点给出实际到达时刻与定点化后的到达位置误差，清单 `report.arrivals`
+取自同一结果（不再照抄计划时刻）。真值骨架（§6.10.1）：`dsl_sha256` 覆盖规范化后的完整 DSL，`build_truth` 组装
+`event_truth.json`，`truth_sha256` 为去掉 `perf` 后的 JCS 哈希；门 3 的检测器、声明核对与关系核对接入前，`events`、
+`annotation_checks`、`relation_checks` 由调用方给出（缺省为空）。
 """
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import math
 from dataclasses import dataclass, field
@@ -15,17 +21,20 @@ import numpy as np
 
 from awr.sim.events.anchors import anchor_xy, point_in_polygon
 from awr.sim.events.dsl import Issue
+from awr.sim.events.jcs import jcs
 from awr.sim.events.nav import NavGrid, Snap, rounded_length
 from awr.sim.events.tape import NO_CONTAINER, RECORD, fold_yaw, record_spec
 from awr.sim.sensors import cbrng
 
-__all__ = ["STREAM", "Stage", "build_header", "compile_env_track", "generate_frames", "preflight", "t_min", "v_peak"]
+__all__ = ["STREAM", "TRUTH_SCHEMA", "Stage", "arrivals", "build_header", "build_truth", "compile_env_track", "dsl_sha256", "generate_frames",
+           "preflight", "t_min", "truth_sha256", "v_peak"]
 
 STREAM = 19
 TICK_MS = 100
 BOARD_DIST_M = 8.0
 ZONE_SLOT_R = 0.8
 INF_MS = 1 << 62
+TRUTH_SCHEMA = "drone4d.event_truth.v1"
 for _n, _r in (("bg_goal", (0, 1)), ("bg_speed", (2, 2)), ("bg_pause", (3, 3)), ("bg_look", (4, 7)), ("bg_phase", (8, 8)),
                ("interactive", (16, 19)), ("local_dev", (20, 23))):
     cbrng.CHANNELS.setdefault((STREAM, _n), _r)
@@ -280,6 +289,7 @@ class Phase:
     v: float = 0.0
     a: float | None = None        # None：匀速（背景）
     container: int = -1
+    wp: int = -1                  # 移动阶段的目标路点下标（脚本演员）；其余为 −1
 
 
 def _move(t0_ms: int, T_s: float, path: np.ndarray, v: float, a: float | None) -> Phase:
@@ -342,6 +352,7 @@ def scripted_timeline(a: dict, legs: list[Leg], pts: list[Snap], board_t: dict[i
             ph.append(Phase("wait", t, td, p=p))
         mv = _move(td, (r[i + 1]["t_ms"] - td) / 1000.0, lg.path, v, acc)
         mv.p = pts[i + 1].p
+        mv.wp = i + 1
         ph.append(mv)
         t, i = mv.t1, i + 1
     return ph
@@ -391,6 +402,46 @@ def eval_timeline(ph: list[Phase], n_ticks: int, z_nav) -> dict[str, np.ndarray]
             ct[m] = p.container
     zh = z_nav(xy)                                           # z_hint：高度场（可走面）高度
     return {"xy": xy, "vxy": vxy, "state": st, "container": ct, "z_hint": zh}
+
+
+def _scripted_tracks(pf: dict, order: list[dict]) -> list[list[Phase]]:
+    vidx = {a["id"]: i for i, a in enumerate(order) if a["class"] == "vehicle"}
+    out = []
+    for a in order:
+        bt = {b["waypoint"]: b["t_board_s"] for b in pf["boards"] if b["actor"] == a["id"] and b["kind"] == "board" and b["t_board_s"] is not None}
+        out.append(scripted_timeline(a, pf["legs"].get(a["id"], []), pf["points"][a["id"]], bt, vidx))
+    return out
+
+
+def _arrivals(order: list[dict], pf: dict, tracks: list[list[Phase]]) -> list[dict]:
+    """逐路点的实际到达：移动段终点取该段在 t1 的运动学求值（毫米定点化后与计划点比较）；首路点、出建筑与下车点为
+    出现于吸附点（位置即计划点）。返回 [{actor, waypoint, at, do, t_plan_ms, t_arrive_ms, late_ms, xy_plan_m, xy_mm, err_mm}]。"""
+    out = []
+    for a, ph in zip(order, tracks, strict=True):
+        pts = pf["points"][a["id"]]
+        mv = {p.wp: p for p in ph if p.kind == "move" and p.wp >= 0}
+        for j, w in enumerate(a["route"]):
+            p = pts[j].p
+            if j in mv:
+                m = mv[j]
+                t_arr = m.t1
+                xy, _v = _eval_move(m, np.array([m.t1], np.int64))
+                xy = xy[0]
+            else:
+                t_arr, xy = w["t_ms"], np.asarray(p[:2], np.float64)
+            q = _fix(xy, 1000.0, np.int64)
+            err = math.hypot(float(q[0]) - p[0] * 1000.0, float(q[1]) - p[1] * 1000.0)
+            out.append({"actor": a["id"], "waypoint": j, "at": w["at"], "do": w["do"], "t_plan_ms": w["t_ms"], "t_arrive_ms": int(t_arr),
+                        "late_ms": int(t_arr) - w["t_ms"], "xy_plan_m": [float(p[0]), float(p[1])], "xy_mm": [int(q[0]), int(q[1])],
+                        "err_mm": err})
+    return out
+
+
+def arrivals(plan: dict, pf: dict) -> list[dict]:
+    """§6.9.4 `S-ARRIVAL` 的生成侧量：按 `actor_order` 重建脚本演员时间线并逐路点求实际到达（与 `generate_frames` 同一时间线，
+    与背景无关）。运动学排时下 `late_ms` 恒为 0、`err_mm` 只含毫米定点化误差（≤ √2/2 mm）。"""
+    order = actor_order(plan)
+    return _arrivals(order, pf, _scripted_tracks(pf, order))
 
 
 # ---------------------------------------------------------------------- 背景
@@ -469,12 +520,9 @@ def _yaw_cdeg(vxy: np.ndarray, state: np.ndarray, first_dir: float) -> np.ndarra
     """移动时取速度方向；静止保持上一值；首帧取首段方向。"""
     sp = np.hypot(vxy[:, 0], vxy[:, 1])
     ang = np.degrees(np.arctan2(vxy[:, 1], vxy[:, 0]))
-    out = np.empty(len(sp))
-    cur = first_dir
-    for k in range(len(sp)):
-        if sp[k] > 1e-6 and state[k] == 1:
-            cur = ang[k]
-        out[k] = cur
+    upd = (sp > 1e-6) & (state == 1)
+    last = np.maximum.accumulate(np.where(upd, np.arange(len(sp)), -1))      # 至 k 为止最近一次更新的帧（无则 −1）
+    out = np.where(last >= 0, ang[np.maximum(last, 0)], first_dir)
     return fold_yaw(_fix(out, 100.0, np.int64))
 
 
@@ -482,12 +530,11 @@ def generate_frames(plan: dict, stage: Stage, pf: dict) -> tuple[np.ndarray, lis
     """返回 (frames (n_ticks, n) RECORD, 演员表, 报告)。"""
     n_t = plan["duration_ms"] // TICK_MS
     order = actor_order(plan)
-    vidx = {a["id"]: i for i, a in enumerate(order) if a["class"] == "vehicle"}
     seed = plan["seed"]
     tracks, table, bg_rgb = [], [], []
+    scripted = _scripted_tracks(pf, order)
     for i, a in enumerate(order):
-        bt = {b["waypoint"]: b["t_board_s"] for b in pf["boards"] if b["actor"] == a["id"] and b["kind"] == "board" and b["t_board_s"] is not None}
-        ph = scripted_timeline(a, pf["legs"].get(a["id"], []), pf["points"][a["id"]], bt, vidx)
+        ph = scripted[i]
         nav = stage.nav[a["profile"] or "person"]
         tracks.append((ph, nav))
         ap = {k: v for k, v in a["appearance"].items() if k in ("asset", "tint_rgb", "top_rgb", "bottom_rgb", "body_rgb", "height_mm")}
@@ -553,7 +600,7 @@ def generate_frames(plan: dict, stage: Stage, pf: dict) -> tuple[np.ndarray, lis
             fr["yaw_cdeg"][m, i] = fr["yaw_cdeg"][m, c]
     _finalize_vz(fr)
     vis = np.isin(fr["state"], (1, 2))
-    report = _report(plan, order, pf, fr, vis, n_s, found)
+    report = _report(order, pf, fr, vis, n_s, found, _arrivals(order, pf, scripted))
     return fr, table, report
 
 
@@ -570,22 +617,26 @@ def _finalize_vz(fr: np.ndarray) -> None:
     fr["vz_cmps"] = np.where(vis, np.clip(vz, -32768, 32767), 0).astype(np.int16)
 
 
-def _report(plan, order, pf, fr, vis, n_s, found) -> dict:
-    # 运动学排时按计划时刻到达（W-SLOW 亦然），到达偏差为 0；Interactive 的实现磁带另行计算
-    arr = [{"actor": a["id"], "at": w["at"], "t_plan_s": w["t_ms"] / 1000.0, "t_arrive_s": w["t_ms"] / 1000.0, "late_s": 0.0}
-           for a in order for w in a["route"]]
+def _report(order, pf, fr, vis, n_s, found, arr_rows) -> dict:
+    # 到达取自实现的时间线（运动学排时下 late_s 为 0，W-SLOW 亦然）；Interactive 的实现磁带另行计算
+    arr = [{"actor": r["actor"], "at": r["at"], "t_plan_s": r["t_plan_ms"] / 1000.0, "t_arrive_s": r["t_arrive_ms"] / 1000.0,
+            "late_s": r["late_ms"] / 1000.0} for r in arr_rows]
     P = np.stack([fr["x_mm"], fr["y_mm"], fr["z_mm"]], -1).astype(np.float64) / 1000.0
     ss = bs = math.inf
-    for k in range(len(fr)):
-        s = np.nonzero(vis[k, :n_s])[0]
-        if len(s) >= 2:
-            d = np.linalg.norm(P[k, s][:, None] - P[k, s][None], axis=-1)
-            d[np.arange(len(s)), np.arange(len(s))] = np.inf
-            ss = min(ss, float(d.min()))
-        b = np.nonzero(vis[k, n_s:])[0] + n_s
-        if len(s) and len(b):
-            d = np.linalg.norm(P[k, b][:, None] - P[k, s][None], axis=-1)
-            bs = min(bs, float(d.min()))
+    off = ~np.eye(n_s, dtype=bool)
+    step = max(1, (1 << 21) // max(1, (fr.shape[1] - n_s) * n_s))              # 按 tick 分块，块内 (k, 背景, 脚本) 距离张量约 ≤ 48 MB
+    for k0 in range(0, len(fr), step):
+        Ps, vs = P[k0:k0 + step, :n_s], vis[k0:k0 + step, :n_s]
+        d = np.linalg.norm(Ps[:, :, None] - Ps[:, None], axis=-1)
+        m = vs[:, :, None] & vs[:, None] & off
+        if m.any():
+            ss = min(ss, float(d[m].min()))
+        Pb, vb = P[k0:k0 + step, n_s:], vis[k0:k0 + step, n_s:]
+        if Pb.shape[1] and vs.any() and vb.any():
+            d = np.linalg.norm(Pb[:, :, None] - Ps[:, None], axis=-1)
+            m = vb[:, :, None] & vs[:, None]
+            if m.any():
+                bs = min(bs, float(d[m].min()))
     nz = int((~found & vis).sum())
     warns = sorted({w.code for w in pf["warnings"]}) + (["S-ZGROUND-CANDIDATE"] if nz else [])
     return {"arrivals": arr, "boards": pf["boards"], "warnings": warns,
@@ -630,3 +681,28 @@ def build_header(plan: dict, table: list[dict], world: dict, event_sha: str) -> 
             "duration_ms": plan["duration_ms"], "record": record_spec(), "codec": {"name": "col-delta-zstd@1", "block_ticks": 100},
             "actors": table, "world": world, "environment": plan["environment"], "env_track": compile_env_track(plan["environment"]),
             "comms": plan["comms"], "anim": None, "realized": None}
+
+
+# ---------------------------------------------------------------------- 真值骨架（§6.10.1）
+def dsl_sha256(plan: dict) -> str:
+    """规范化后完整 DSL（plan，含注释、关系、显示名与简报）的 JCS 哈希；磁带输入子集见 `dsl.event_sha256`。"""
+    return hashlib.sha256(jcs(plan)).hexdigest()
+
+
+def truth_sha256(truth: dict) -> str:
+    """§6.10.1：去掉 `perf` 后的 JCS 哈希。"""
+    return hashlib.sha256(jcs({k: v for k, v in truth.items() if k != "perf"})).hexdigest()
+
+
+def build_truth(plan: dict, tape_content_sha256: str, *, strict: bool = True, truth_rev: int = 1, detector_params: dict | None = None,
+                events: list[dict] | None = None, annotation_checks: list[dict] | None = None, relation_checks: list[dict] | None = None,
+                skyvis_1hz: dict | None = None, consistency: dict | None = None, perf: dict | None = None) -> dict:
+    """组装 `event_truth.json`（`drone4d.event_truth.v1`）。真值随 `dsl_sha256` 绑定完整 DSL：只改注释、关系、显示名或简报时
+    磁带与 `content_sha256` 不变，`dsl_sha256` 与 `truth_sha256` 改变（§6.7.5）。门 3 的结果经关键字参数传入。"""
+    doc = {"schema": TRUTH_SCHEMA, "event_id": plan["event_id"], "event_version": plan["version"], "truth_rev": int(truth_rev),
+           "tape_content_sha256": tape_content_sha256, "dsl_sha256": dsl_sha256(plan), "strict": bool(strict),
+           "detector_params": dict(detector_params or {}), "events": list(events or []), "annotation_checks": list(annotation_checks or []),
+           "relation_checks": list(relation_checks or []), "skyvis_1hz": dict(skyvis_1hz or {}), "consistency": dict(consistency or {})}
+    if perf is not None:
+        doc["perf"] = dict(perf)
+    return doc
