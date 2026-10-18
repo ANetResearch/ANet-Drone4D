@@ -4,8 +4,9 @@
 
 - 相机 `eo`：帧 seq = k，帧末 `t_end = k·100 ms`，`t_mid = t_end − ⌊(e + T_ro)/2⌋`；云台为三轴增稳（相机姿态 = 机体航向 ·
   云台偏航 · 云台俯仰，不随机体横滚与俯仰），位姿取物理档 250 Hz 样本插值，卷帘读出窗口 9 个位姿节点；演员按 t_mid 的磁带状态
-  绘制；效果链与自动曝光按噪声档（M25 §6.5）；`rgb.data` 为 JPEG 字节（只含 SOI、APP0、DQT、SOF0、DHT、SOS、EOI），L2-depth
-  另附观测深度；
+  绘制；效果链与自动曝光按噪声档（M25 §6.5）；`rgb.data` 为 JPEG 字节（只含 SOI、APP0、DQT、SOF0、DHT、SOS、EOI；q90 4:2:0，
+  按档位取 `camera.encode.shared_encoder`：`rgb1080-rs` 与在线作用域只用 GPU nvJPEG，其余档位 GPU 不可用时回退 CPU），交付字节
+  即 raw.mcap 存档字节；L2-depth 另附观测深度；
 - LiDAR `lidar0`：窗口 [t_k − 100 ms, t_k]，11 个机体固连位姿节点（M25 §6.8）；
 - IMU `lidar0_imu`：同一窗口内 200 Hz 绝对网格样本（M25 §6.9），比力与角速度取物理档样本（含杆臂与抗混叠，前 1 s 样本预热）；
 - GNSS `gnss0`：t_k 的位置（真值 + 导航误差过程，与导航解同源）、速度与精度。
@@ -192,6 +193,7 @@ class L2Sensors:
             hints = (world_meta or {}).get("sensorHints") or {}
             renderer.set_sun(tuple(hints.get("bakedSunAzElDeg") or ()) or None)
         self.cam = renderer
+        self.encoder: str | None = None           # 最近一帧的 JPEG 编码器身份（`<库>-<版本>/jpeg/q90/420`）
         if self.cfg.imu:
             from awr.sensorsvc.imu import MID360_IMU_IN_LIDAR, load_imu_model
 
@@ -309,22 +311,26 @@ class L2Sensors:
 
     def _finish_camera(self, uav: str, k: int, out, meta) -> tuple[dict, list[dict]]:
         from awr.sensorsvc.camera.actors import visibility_objects
-        from awr.sensorsvc.frame import encode_jpeg
+        from awr.sensorsvc.camera.encode import shared_encoder
 
         tm, gr = meta
         cm = self.cm
-        obs = {"sensor_id": CAM_SENSOR, "seq": int(k), "t_mid_ns": int(tm), "exposure_ns": self.exp_ns, "readout_ns": self.ro_ns,
-               "width": cm.width, "height": cm.height, "K": [cm.fx, 0.0, cm.cx, 0.0, cm.fy, cm.cy, 0.0, 0.0, 1.0],
-               "dist": [float(x) for x in cm.dist], "mount_nominal": self.mount_cam(),
-               "gimbal_reading": {"roll_deg": 0.0, "pitch_deg": round(math.degrees(gr[1]), 6), "yaw_deg": round(math.degrees(gr[0]), 6)},
-               "rgb": {"codec": "jpeg", "data": encode_jpeg(out.rgb8, cm.isp.jpeg_quality)}}
-        if self.depth:
-            d = out.depth_obs if out.depth_obs is not None else out.depth_m
-            obs["depth"] = {"encoding": "f32le", "data": np.ascontiguousarray(d, "<f4").tobytes()}
+        # 按相机档位选择进程常驻编码器（docs/05 §5.4.3：rgb1080-rs 与在线作用域只用 GPU nvJPEG，不可用时报错、不回退 CPU）；
+        # 先提交编码，可见度归约与掩膜编码在 CPU 上与 GPU 编码并行；交付字节即 raw.mcap 存档字节（D3-AC-60）
+        tk = shared_encoder(self.cfg.camera_profile, cm.width, cm.height, quality=cm.isp.jpeg_quality).submit(out.rgb8)
+        self.encoder = tk.identity
         objs = visibility_objects(out.instance, out.instance_unocc, out.semantic, None, self.actors) \
             if out.instance_unocc is not None and self.actors else []
         rows = [{"uav": uav, "sensor": CAM_SENSOR, "seq": int(k), "t_ns": int(tm), "actor": o["actor"], "h_unocc_px": o["h_px_unocc"],
                  "vis": o["visible_ratio"], "bbox_xywh": o["bbox_xywh"], "mask": mask_code(out.instance, o["inst"], o["bbox_xywh"])} for o in objs]
+        obs = {"sensor_id": CAM_SENSOR, "seq": int(k), "t_mid_ns": int(tm), "exposure_ns": self.exp_ns, "readout_ns": self.ro_ns,
+               "width": cm.width, "height": cm.height, "K": [cm.fx, 0.0, cm.cx, 0.0, cm.fy, cm.cy, 0.0, 0.0, 1.0],
+               "dist": [float(x) for x in cm.dist], "mount_nominal": self.mount_cam(),
+               "gimbal_reading": {"roll_deg": 0.0, "pitch_deg": round(math.degrees(gr[1]), 6), "yaw_deg": round(math.degrees(gr[0]), 6)},
+               "rgb": {"codec": "jpeg", "data": tk.result()}}
+        if self.depth:
+            d = out.depth_obs if out.depth_obs is not None else out.depth_m
+            obs["depth"] = {"encoding": "f32le", "data": np.ascontiguousarray(d, "<f4").tobytes()}
         return obs, rows
 
     def _imu(self, uav: str, uav_no: int, k: int, t_from: int, t_to: int) -> dict | None:
