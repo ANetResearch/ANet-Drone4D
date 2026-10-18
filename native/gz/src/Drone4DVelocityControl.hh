@@ -13,6 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
+ * Drone4D modifications (M24 §6.5.4): derived from gz-sim 8.15.0
+ * src/systems/multicopter_control/MulticopterVelocityControl.hh; the class is renamed Drone4DVelocityControl, the
+ * gz-transport command and enable topics are replaced by the D4dVelocityCmd component, the commandFrame and
+ * init_hover parameters are added, and the namespace and include guard are renamed.
  */
 #ifndef D4D_VC_HH_
 #define D4D_VC_HH_
