@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hasKey, I18N_KEYS, reasonText, setLocale, t } from '@/app/i18n'
 import { formatMessage } from '@/app/i18n/plural'
+import { LAB_DICTS } from '@/app/lab-public/i18n'
 
 const SRC = join(import.meta.dirname, '..', '..', 'src')
 function files(dir: string): string[] {
@@ -17,13 +18,16 @@ function files(dir: string): string[] {
   return out
 }
 const UI_FILES = [...files(join(SRC, 'app')), ...files(join(SRC, 'ui'))].filter((f) => !f.includes('/components/ui/'))
+// the public read-only build (app/lab-public, AWR-14 §21.14) ships its own lab.public.* shard instead of the app dictionary
+const LAB_PUBLIC = join(SRC, 'app', 'lab-public')
+const keyDefined = (f: string, k: string): boolean => (f.startsWith(LAB_PUBLIC + '/') ? LAB_DICTS['zh-CN'][k] !== undefined : hasKey(k))
 
 describe('dictionaries', () => {
   it('define every static key used by t()', () => {
     const missing: string[] = []
     for (const f of UI_FILES) {
       const src = readFileSync(f, 'utf8')
-      for (const m of src.matchAll(/\bt\('([a-zA-Z0-9_.-]+)'/g)) if (!hasKey(m[1])) missing.push(`${m[1]} (${f.slice(SRC.length + 1)})`)
+      for (const m of src.matchAll(/\bt\('([a-zA-Z0-9_.-]+)'/g)) if (!keyDefined(f, m[1])) missing.push(`${m[1]} (${f.slice(SRC.length + 1)})`)
     }
     expect(missing).toEqual([])
   })

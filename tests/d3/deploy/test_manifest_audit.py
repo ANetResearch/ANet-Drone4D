@@ -63,12 +63,14 @@ def test_repo_manifests_have_no_errors(audit, report) -> None:
     errs = [f for f in report["findings"] if f["level"] == "error"]
     assert report["pass"] and not errs, errs
     assert report["schema"] == "awr.d3.manifest_audit.v1" and set(report["rules"]) == {"CM-00", *RULES}
-    # 每个登记变体都实际渲染：4 个脚本、6 个非拒绝变体各发出 1 条 docker run，3 个拒绝变体 0 条
+    # 每个登记变体都实际渲染：5 个脚本、8 个非拒绝变体（run_d3_tests.sh 各发出主阶段、gz 阶段与合并阶段 3 条 docker run，
+    # 其余各 1 条），6 个拒绝变体 0 条
     reg = tuple(f"sh:{k}[" for k in sorted(audit.SHELL_SITES))
     rs = {r["site"]: r for r in report["renders"] if r["site"].startswith(reg)}
-    assert len(rs) == 9
+    assert len(rs) == 14
     for site, r in rs.items():
-        assert r["docker_runs"] == (0 if any(k in site for k in ("multi-card", "all-cards", "foreign-card")) else 1), site
+        n = 3 if "run_d3_tests.sh" in site else 1
+        assert r["docker_runs"] == (0 if any(k in site for k in ("multi-card", "all-cards", "foreign-card")) else n), site
         assert (r["exit"] != 0) == (r["docker_runs"] == 0), site
     s = report["summary"]
     assert s["python"] == 6 and s["scripts"] >= 6 and s["errors"] == 0
@@ -108,6 +110,14 @@ def test_scripts_bind_at_most_one_card(report) -> None:
     assert by["sh:tools/deploy/dmax/run_proto_board.sh[l2-gpu3]"]["gpus"] == ["device=3"]
     for site in ("bench_ctl.sh[default]", "run_gz_tests.sh[default]", "run_subworker.sh[default]"):
         assert by[f"sh:tools/deploy/dmax/{site}"]["gpus"] == [], site
+    # 统一测试入口：只有主阶段绑定 GPU 参数指定的一张卡，gz 阶段与合并阶段不挂载 GPU
+    d3t = {(lc["site"], lc["name"]): lc["gpus"] for lc in _by_site(report, "sh:tools/deploy/dmax/run_d3_tests.sh")}
+    assert d3t == {("sh:tools/deploy/dmax/run_d3_tests.sh[default]", "d3-test-main"): ["device=2"],
+                   ("sh:tools/deploy/dmax/run_d3_tests.sh[default]", "d3-test-main-gz"): [],
+                   ("sh:tools/deploy/dmax/run_d3_tests.sh[default]", "d3-test-main-sum"): [],
+                   ("sh:tools/deploy/dmax/run_d3_tests.sh[gpu3]", "d3-test-audit"): ["device=3"],
+                   ("sh:tools/deploy/dmax/run_d3_tests.sh[gpu3]", "d3-test-audit-gz"): [],
+                   ("sh:tools/deploy/dmax/run_d3_tests.sh[gpu3]", "d3-test-audit-sum"): []}
     # 运行 gz 的宿主容器（local launcher）不在容器层设 GZ_PARTITION；d3-gz-* 命名空间不被测试或宿主容器占用
     for lc in by.values():
         assert "GZ_PARTITION" not in lc["env"] and not lc["name"].startswith("d3-gz-"), lc["site"]
@@ -301,6 +311,17 @@ def test_audit_detects_unregistered_python_launcher(audit, tmp_path: Path) -> No
     _, fs = audit.audit_python(tmp_path / "w", root)
     assert [(f.rule, f.site) for f in fs] == [("CM-00", "python:python/awr/x/launch.py")]
     assert sorted(audit.discover_python_launchers()) == sorted(audit.PY_LAUNCHERS)
+
+
+def test_python_launcher_scan_ignores_comments_and_docstrings(audit, tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    (root / "python/awr").mkdir(parents=True)
+    (root / "tools/bench").mkdir(parents=True)
+    (root / "tools/bench/doc.py").write_text('"""实例启动（docker run 至 HelloAck）。"""\n\n\ndef f():\n'
+                                              '    """同上：docker run。"""\n    return 1  # 不经 docker run\n')
+    (root / "tools/bench/real.py").write_text('"""说明。"""\nCMD = "docker run --rm img"  # 真实启动\n')
+    (root / "tools/bench/broken.py").write_text('docker run (\n')                     # 语法错误：按原文扫描
+    assert audit.discover_python_launchers(root) == ["tools/bench/broken.py", "tools/bench/real.py"]
 
 
 def test_cli_exit_codes(audit, tmp_path: Path) -> None:

@@ -3,8 +3,8 @@
 
 审计对象（逐个渲染出真实的 `docker run` 参数表，再按 `awr.agentsdk.env.containers.RULES` 的 CM-01 至 CM-08 逐项断言）：
   1. Python 启动点：gz 实例（`GzInstance.command()`，physics 档 docker 启动，按两个 Run 渲染）与 `launcher = local` 的子进程环境、
-     Agent 隔离容器（`AgentContainers.argv()`，两个 Run × 两架机）；另扫描 python/awr 与 tools 下的 `.py`，出现未登记的
-     `docker run` 启动点即报错（CM-00）。
+     Agent 隔离容器（`AgentContainers.argv()`，两个 Run × 两架机）；另扫描 python/awr 与 tools 下的 `.py`（不计注释与文档字符串），
+     出现未登记的 `docker run` 启动点即报错（CM-00）。
   2. dmax 启动脚本：`tools/deploy/dmax/**/*.sh` 中含 `docker run` 的脚本按 `SHELL_SITES` 登记的变体（参数与环境变量）执行，
      `ssh`、`rsync`、`scp` 与 `docker` 由记录桩替换：远端命令串在本机受限 PATH 的 bash 中展开，`docker` 桩只记录参数表，
      不连接 dmax、不启动任何容器；变体声明 `reject = True` 时断言脚本拒绝该参数（如 `GPU=2,3`）且没有发出 `docker run`。
@@ -28,6 +28,8 @@ CM-00 启动点登记与可渲染。
 from __future__ import annotations
 
 import argparse
+import ast
+import io
 import json
 import os
 import re
@@ -36,6 +38,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tokenize
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -78,12 +81,20 @@ class Variant:
     args: tuple[str, ...] = ()
     env: dict[str, str] = field(default_factory=dict)
     gpu: int | None = None                                       # 期望绑定的卡（None：不挂载 GPU）
+    gpu_by_name: dict[str, int | None] = field(default_factory=dict)  # 按容器名覆盖期望卡（同一脚本含 GPU 阶段与 CPU 池阶段时）
     reject: bool = False                                         # 期望脚本拒绝该变体、不发出 docker run
 
 
 # dmax 启动脚本的登记变体（仓库相对路径 → 变体）
 SHELL_SITES: dict[str, tuple[Variant, ...]] = {
     f"{SCRIPT_ROOT}/bench_ctl.sh": (Variant("default", "bench", ("board", "list")),),
+    f"{SCRIPT_ROOT}/run_d3_tests.sh": (                         # 主阶段绑定一张卡；gz 阶段与合并阶段在 CPU 池
+        Variant("default", "test", gpu_by_name={"d3-test-main": 2}),
+        Variant("gpu3", "test", (), {"GPU": "3", "TASK_ID": "audit"}, gpu_by_name={"d3-test-audit": 3}),
+        Variant("multi-card", "test", (), {"GPU": "2,3"}, reject=True),
+        Variant("all-cards", "test", (), {"GPU": "all"}, reject=True),
+        Variant("foreign-card", "test", (), {"GPU": "0"}, reject=True),
+    ),
     f"{SCRIPT_ROOT}/run_gz_tests.sh": (Variant("default", "test"),),
     f"{SCRIPT_ROOT}/run_proto_board.sh": (
         Variant("l1", "board", ("audit",)),
@@ -133,8 +144,29 @@ def _render_agents(tmp: Path) -> tuple[list[Launch], list[Finding]]:
     return out, []
 
 
+def _code_only(txt: str) -> str:
+    """去掉注释与文档字符串（模块、类、函数体首个字符串表达式）后的源码；只用于启动模式扫描，语法错误时原样返回。"""
+    try:
+        tree = ast.parse(txt)
+        toks = list(tokenize.generate_tokens(io.StringIO(txt).readline))
+    except (SyntaxError, tokenize.TokenError, ValueError):
+        return txt
+    lines = txt.splitlines()
+    for tk in reversed(toks):                                    # 同一行内自右向左截断，列号不受影响
+        if tk.type == tokenize.COMMENT:
+            r, c = tk.start
+            lines[r - 1] = lines[r - 1][:c]
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
+            d = node.body[0]
+            if isinstance(d, ast.Expr) and isinstance(d.value, ast.Constant) and isinstance(d.value.value, str):
+                for i in range(d.lineno - 1, (d.end_lineno or d.lineno)):
+                    lines[i] = ""
+    return "\n".join(lines)
+
+
 def discover_python_launchers(root: Path = ROOT) -> list[str]:
-    """python/awr 与 tools 下出现 docker run 启动模式的 `.py`（仓库相对路径；本脚本除外）。"""
+    """python/awr 与 tools 下出现 docker run 启动模式的 `.py`（仓库相对路径；本脚本除外；注释与文档字符串中的叙述不计）。"""
     hits = []
     for base in (root / "python" / "awr", root / "tools"):
         for p in sorted(base.rglob("*.py")):
@@ -144,7 +176,7 @@ def discover_python_launchers(root: Path = ROOT) -> list[str]:
                 txt = p.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-            if _PY_LAUNCH.search(txt):
+            if _PY_LAUNCH.search(txt) and _PY_LAUNCH.search(_code_only(txt)):      # 先按原文粗筛，命中再去注释与文档字符串复核
                 hits.append(p.relative_to(root).as_posix())
     return hits
 
@@ -269,7 +301,8 @@ def audit_scripts(root: Path = ROOT, sites: dict[str, tuple[Variant, ...]] | Non
             for c in runs:
                 lc = parse_docker_run(["docker", *c], site, component=v.component)
                 launches.append(lc)
-                want = [] if v.gpu is None else [f"device={v.gpu}"]
+                g = v.gpu_by_name.get(lc.name, v.gpu)
+                want = [] if g is None else [f"device={g}"]
                 got = [g.strip().strip("'\"") for g in lc.gpus]
                 if registered and got != want:
                     finds.append(Finding("CM-03", "error", site, lc.name, f"GPU binding {got} differs from the variant's {want}"))
