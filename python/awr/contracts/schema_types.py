@@ -7547,7 +7547,7 @@ class RunSpecV1PhysicsOpts(TypedDict):
 # bench/run_spec.v1.schema.json#/properties/policy
 class RunSpecV1Policy(TypedDict):
     kind: Literal["reference", "image", "sdk"]
-    name: NotRequired[Literal["hover", "guard", "coverage", "track", "track_share", "static_guard", "coverage_scan"]]
+    name: NotRequired[Literal["hover", "guard", "coverage", "track", "track_share", "static_guard", "coverage_scan", "hover_plaza", "track_solo", "hover1_plaza", "hover3_anchors", "lawn3_cover", "track3_nocomm", "track3_share", "track5_share"]]
     image_digest: NotRequired[str]
     params: NotRequired[dict[str, Any]]
 

@@ -10368,7 +10368,22 @@ export interface RunSpecV1 {
   ]
   policy: {
     kind: 'reference' | 'image' | 'sdk'
-    name?: 'hover' | 'guard' | 'coverage' | 'track' | 'track_share' | 'static_guard' | 'coverage_scan'
+    name?:
+      | 'hover'
+      | 'guard'
+      | 'coverage'
+      | 'track'
+      | 'track_share'
+      | 'static_guard'
+      | 'coverage_scan'
+      | 'hover_plaza'
+      | 'track_solo'
+      | 'hover1_plaza'
+      | 'hover3_anchors'
+      | 'lawn3_cover'
+      | 'track3_nocomm'
+      | 'track3_share'
+      | 'track5_share'
     image_digest?: string
     params?: {}
   }
