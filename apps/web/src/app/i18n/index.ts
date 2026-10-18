@@ -25,8 +25,18 @@ function withDemo(d: Dict): Dict {
   for (const [k, v] of Object.entries(DEMO_ALIASES)) if (d[v]) out[k] = d[v]
   return out
 }
-const ZH: Dict = withDemo({ ...(zhCN as Dict), ...(reasonsZh as Dict) })
-const DICTS: Record<Locale, Dict> = { 'zh-CN': ZH, en: withDemo(en as Dict) }
+// D3 lab texts are sharded by feature (app/i18n/lab/<feature>.<locale>.json, keys lab.<feature>.*; AWR-14 §21.2.2): each lab
+// feature adds its own pair of files and never edits zh-CN.json or en.json. The demo build empties the glob (vite.config.ts
+// labStripPlugin) and folds the DEMO_PUBLIC branch away, so its dictionaries are the D2 ones byte for byte.
+const LAB_SHARDS = import.meta.glob<Dict>('./lab/*.json', { eager: true, import: 'default' })
+/** merged lab shards of one locale, in file name order */
+function labShards(l: Locale): Dict {
+  const out: Record<string, string> = {}
+  for (const f of Object.keys(LAB_SHARDS).sort()) if (f.endsWith(`.${l}.json`)) Object.assign(out, LAB_SHARDS[f])
+  return out
+}
+const ZH: Dict = withDemo(DEMO_PUBLIC ? { ...(zhCN as Dict), ...(reasonsZh as Dict) } : { ...(zhCN as Dict), ...(reasonsZh as Dict), ...labShards('zh-CN') })
+const DICTS: Record<Locale, Dict> = { 'zh-CN': ZH, en: withDemo(DEMO_PUBLIC ? (en as Dict) : { ...(en as Dict), ...labShards('en') }) }
 
 let locale: Locale = 'zh-CN'
 let dict: Dict = ZH
@@ -82,4 +92,4 @@ export function reasonText(code: number): { short: string; remedy: string } {
   return { short: t(k), remedy: t(`reason.${code}.remedy`) }
 }
 
-export const I18N_KEYS = { zh: Object.keys(ZH), en: Object.keys(en as Dict) }
+export const I18N_KEYS = { zh: Object.keys(ZH), en: Object.keys(DEMO_PUBLIC ? (en as Dict) : DICTS.en) }
