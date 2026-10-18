@@ -1,0 +1,7 @@
+# d3-sensorsvc 镜像的 GPU JPEG 编码栈（M25-FR-060、183；docs/05 §5.4.3）：nvImageCodec + nvJPEG + cuda-bindings（驱动 API，
+# 两条 CUDA 流与固定页内存）。镜像构建时离线安装（build.sh 先在本机按锁文件哈希下载 wheel，再同步到构建上下文）。锁定：
+#   uv pip compile requirements-nvjpeg.in -c ../../../../../requirements.lock --generate-hashes --python-version 3.12 \
+#     --python-platform x86_64-manylinux_2_28 -o requirements-nvjpeg.lock
+nvidia-nvimgcodec-cu12[nvjpeg]==0.9.0.20
+nvidia-cuda-runtime-cu12
+cuda-bindings==12.9.4
