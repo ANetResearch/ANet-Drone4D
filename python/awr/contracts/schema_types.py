@@ -3876,7 +3876,9 @@ class FrameV1Internal(TypedDict):
     backend: str
     renderer_version: str
     fx_version: str
-    appearance: Literal["mesh", "gs"]
+    appearance: Literal["mesh", "3dgs"]
+    appearance_source: NotRequired[Literal["mesh", "aerial", "mesh_distilled", "generative"]]
+    appearance_version: NotRequired[str | None]
     noise_tier: str
     noise_table_version: str
     encoder: str
@@ -6786,6 +6788,7 @@ class QaReportGenerator(TypedDict):
 class QaReportGlb(TypedDict):
     registration: NotRequired[dict[str, Any]]
     leveling: NotRequired[dict[str, Any]]
+    scale: NotRequired[dict[str, Any] | None]
     topology: NotRequired[dict[str, Any]]
     stages: NotRequired[list[QaReportGlbStages]]
     quality: NotRequired[dict[str, Any]]

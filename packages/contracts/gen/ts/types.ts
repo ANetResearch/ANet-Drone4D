@@ -5087,7 +5087,7 @@ export interface FrameIndexV1 {
   next_seq: number | null
 }
 /**
- * Camera frame record (drone4d.frame.v1). AWR-05 §8.1, M25 §7.2.1 (contracts 1.3.0, d1 V0.3). Three partitions: agent_view (the source set that M26 projects into bench/obs.v1 CameraObs), ground_truth (evaluation store and truth files only, ADR-161) and internal (provenance). Units: times in ns, K in px with pixel centres at 0.5, distances in m, angles in deg. Thermal fields (temp_ck, dT_app_k) are added in P0b.
+ * Camera frame record (drone4d.frame.v1). AWR-05 §8.1, M25 §7.2.1 (contracts 1.3.0, d1 V0.3). Three partitions: agent_view (the source set that M26 projects into bench/obs.v1 CameraObs), ground_truth (evaluation store and truth files only, ADR-161) and internal (provenance). Units: times in ns, K in px with pixel centres at 0.5, distances in m, angles in deg. Thermal fields (temp_ck, dT_app_k) are added in P0b. internal.appearance uses the run_spec values (mesh, 3dgs); appearance_source and appearance_version are added in contracts 1.3.x (additive, M25-FR-194, FR-201).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "FrameV1".
@@ -5328,7 +5328,18 @@ export interface FrameV1 {
     backend: string
     renderer_version: string
     fx_version: string
-    appearance: 'mesh' | 'gs'
+    /**
+     * Same values as bench/run_spec.v1 appearance
+     */
+    appearance: 'mesh' | '3dgs'
+    /**
+     * M25-FR-194: mesh when appearance = mesh, otherwise the run_spec appearance_source; mesh_distilled and generative frames are never presented as real imagery
+     */
+    appearance_source?: 'mesh' | 'aerial' | 'mesh_distilled' | 'generative'
+    /**
+     * M25-FR-201: sha256 of the appearance layer visual/gaussian/provenance.json; null when appearance = mesh
+     */
+    appearance_version?: string | null
     noise_tier: string
     noise_table_version: string
     encoder: string
@@ -9558,6 +9569,10 @@ export interface QaReport {
      */
     leveling?: {}
     /**
+     * independent scale measurement (OSM footprint chamfer fit), difference to the r2 reference and restart spread (R5); null when no OSM input
+     */
+    scale?: {} | null
+    /**
      * vertices before and after welding, duplicate and degenerate faces, boundary and non-manifold edges, components, fragments
      */
     topology?: {}
@@ -10266,7 +10281,7 @@ export interface RunManifestV1 {
   frames_digest_ref?: string
 }
 /**
- * Run specification (drone4d.bench.run_spec.v1). AWR-17 §18.5.4 and M27 §7.2 (contracts 1.3.0, d1 V0.3). Validation order: (1) this schema (400, 300); (2) role and quota (115, 681); (3) world and event references (305, 600, 614, 615, 691); (4) the x-rules combination matrix and phase gates (630, 633, 643, 662, 664); (5) clock profile and outputs (682, 637); (6) vehicle and rig (649); (7) resource feasibility (683 as a warning only). x-rules: if every listed path takes one of the listed values (outputs: any listed member; '*': present), the rule checks allow (path in values), forbid (paths absent), require (paths present), min (path >= n) or exactly_one, and fails with code and detail.why; scope = external rules apply to API requests only (not to runs created by jobs). Reference evaluator: awr.bench.spec_rules.
+ * Run specification (drone4d.bench.run_spec.v1). AWR-17 §18.5.4 and M27 §7.2 (contracts 1.3.0, d1 V0.3). Validation order: (1) this schema (400, 300); (2) role and quota (115, 681); (3) world and event references (305, 600, 614, 615, 691); (4) the x-rules combination matrix and phase gates (630, 633, 643, 662, 664); (5) clock profile and outputs (682, 637); (6) vehicle and rig (649); (7) resource feasibility (683 as a warning only). x-rules: if every listed path takes one of the listed values (outputs: any listed member; '*': present), the rule checks allow (path in values), forbid (paths absent), require (paths present), min (path >= n) or exactly_one, and fails with code and detail.why; a request is answered with the first failing layer (code precedence 630, 633, 643, 662, 664, 682, 637) and detail.violations[] lists every problem of that layer; scope = external rules apply to API requests only (not to runs created by jobs). Reference evaluator: awr.bench.spec_rules.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "RunSpecV1".
