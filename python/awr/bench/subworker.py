@@ -114,7 +114,7 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
                     return sid
                 reruns += 1
         ev = json.loads((Path(res["run_dir"]) / "evaluation.json").read_text(encoding="utf-8"))
-        rows.append({"entry_id": f"{team}/{sid}", "team": team, "display_name": team, "baseline": False, "track": cfg["track_id"],
+        rows.append({"entry_id": f"{team}/{sid}", "team": team, "display_name": sid, "baseline": False, "track": cfg["track_id"],
                      "lane": cfg["lane"], "event_type": cfg.get("event_type", cfg["lane"]), "event": event, "seed": k, "submission_id": sid,
                      "evaluation": slim_evaluation(ev)})
     st.transition(sid, "SCORING", expect="EVALUATING")
