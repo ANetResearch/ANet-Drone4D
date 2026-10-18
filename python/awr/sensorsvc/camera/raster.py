@@ -37,7 +37,7 @@ from awr.sensorsvc.camera.scene import AppearanceScene
 
 __all__ = ["RENDERER_VERSION", "RS_NODES", "RasterCamera", "RenderOut", "linear_to_srgb8", "srgb8_to_linear"]
 
-RENDERER_VERSION = "raster-gl@0.4.0"
+RENDERER_VERSION = "raster-gl@0.4.1"
 SEM_NONE = 255
 _GL_TEXTURE_2D, _GL_DEPTH32F, _GL_FRAMEBUFFER = 0x0DE1, 0x8CAC, 0x8D40
 _GL_COLOR_ATTACHMENT0, _GL_DEPTH_ATTACHMENT, _GL_FB_COMPLETE = 0x8CE0, 0x8D00, 0x8CD5
@@ -132,7 +132,7 @@ void main() {
     v_col = in_col * (0.55 + 0.45 * max(0.0, dot(n, u_sun)));
     vec4 q = u_mv * vec4(in_pos, 1.0);
     v_z = q.z;
-    gl_Position = u_P * vec4(q.xyz * ((q.z - 0.01) / max(q.z, 1e-3)), 1.0);
+    gl_Position = u_P * vec4(q.z > 0.02 ? q.xyz * ((q.z - 0.01) / q.z) : q.xyz, 1.0);   // 相机后方的顶点不缩放（交给裁剪）
 }
 """
 ACTOR_VS_RS = """
@@ -169,7 +169,7 @@ void main() {
     for (int it = 0; it < 2; ++it) s = s_of(mv_at(s), p);
     vec4 q = mv_at(s) * p;
     v_z = q.z;
-    gl_Position = u_P * vec4(q.xyz * ((q.z - 0.01) / max(q.z, 1e-3)), 1.0);
+    gl_Position = u_P * vec4(q.z > 0.02 ? q.xyz * ((q.z - 0.01) / q.z) : q.xyz, 1.0);   // 相机后方的顶点不缩放（交给裁剪）
 }
 """
 ACTOR_FS = """

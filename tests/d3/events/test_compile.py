@@ -58,6 +58,7 @@ EVENT = {
     ],
     "background": [{"class": "person", "count": 12, "zone": "ev_town", "pause_s": [0, 5]}],
     "environment": {"keyframes": [{"t": 0, "wind_mps": 2.0}, {"t": 100, "wind_mps": 6.0, "wind_dir_deg": 300, "rain_mm_h": 2.0}]},
+    "comms": {"zones": [{"id": "jam", "polygon": [[-10, -10], [10, -10], [10, 10], [-10, 10]], "t": [30, 60], "extra_loss": 0.4}]},
 }
 
 
@@ -220,6 +221,12 @@ def test_header_env_track_and_contracts(compiled) -> None:
     jsonschema.Draft202012Validator(tm, registry=reg).validate(json.loads((r.out / "tape.json").read_text()))
     assert {p.name for p in r.out.iterdir()} == {"event.json", "plan.json", "anchors.json", "tape.bin", "tape.json", "compile_report.json"}
     assert r.tape["bytes_per_actor_s"] <= 25.0
+    assert t.comm_zones_at(29_999_999_999) == [] and t.comm_zones_at(70_000_000_000) == []
+    (z,) = t.comm_zones_at(30_000_000_000)
+    assert z["id"] == "jam" and z["extra_loss"] == 0.4 and z["polygon_m"].shape == (4, 2) and z["t_to_ns"] == 60_000_000_000
+    info = {a["id"]: a for a in t.actors_info()}
+    assert info["person_a"]["size_m"] == (0.5, 0.3, 1.76) and info["person_a"]["pos0_enu_m"][0] == pytest.approx(-60.0)
+    assert [a["id"] for a in t.actors_info(scripted_only=True)] == [a["id"] for a in hd["actors"][:5]]
 
 
 def test_determinism_and_background_decoupling(world, compiled) -> None:

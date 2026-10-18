@@ -208,3 +208,18 @@ def _actors_case(cam) -> None:
     assert np.array_equal(rs.instance, r.instance) and np.array_equal(rs.instance_unocc, r.instance_unocc)
     none = cam.render(cm, gimbal_R(0.0, 0.0), p)
     assert none.instance_unocc is None and not (none.instance > 0).any()
+
+
+def test_actor_behind_camera_is_clipped(cam) -> None:
+    """相机后方与跨越相机平面的演员不得被深度偏置翻到前方（M25 §6.4.4 深度偏置只作用于 z > 0）。"""
+    from awr.sensorsvc.camera.raster import ActorFrame
+
+    with cam.ctx:
+        cam.set_actors(ACTORS)
+        cm = CameraModel.from_hfov(640, 480, 60.0)
+        p = np.array([0.0, 0.0, 1.5])
+        af = ActorFrame(np.array([0, 1]), np.array([[-5.0, 0.0, 0.0], [0.5, 0.0, 0.0]]), np.array([0.0, 0.0]))
+        r = cam.render(cm, gimbal_R(0.0, 0.0), p, actors=af)
+        assert not (r.instance == 1).any()                                     # 完全在后方
+        ys, xs = np.nonzero(r.instance == 2)                                   # 跨越相机平面的车：只出现在画面下部近处
+        assert len(ys) == 0 or (r.depth_m[ys, xs] < 3.0).all()

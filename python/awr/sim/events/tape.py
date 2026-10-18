@@ -230,6 +230,28 @@ class TapeReader:
                              {"tape": {"content_version": w.get("content_version"), "raycast_sha256": w.get("raycast_sha256")},
                               "loaded": {"content_version": content_version, "raycast_sha256": raycast_sha256}})
 
+    # ---------------------------------------------------------------- 演员表与通信区
+    def actors_info(self, *, scripted_only: bool = False) -> list[dict]:
+        """§7.1 ActorInfo：{idx, id, cls, scripted, profile, size_m, appearance, pos0_enu_m}（pos0 为第 0 帧位置）。"""
+        f0 = self.frame(0, background=not scripted_only)
+        out = []
+        for a in self.actors[:self.n_scripted] if scripted_only else self.actors:
+            r = f0[a["idx"]]
+            out.append({"idx": a["idx"], "id": a["id"], "cls": a["class"], "scripted": a["scripted"], "profile": a["profile"],
+                        "size_m": tuple(s / 1000.0 for s in a["size_mm"]), "appearance": a["appearance"],
+                        "pos0_enu_m": (r["x_mm"] / 1000.0, r["y_mm"] / 1000.0, r["z_mm"] / 1000.0)})
+        return out
+
+    def comm_zones_at(self, t_ns: int) -> list[dict]:
+        """§6.11：t ∈ [from, to) 的通信区 {id, polygon_m (K, 2), extra_loss, extra_latency_ms, bandwidth_scale, t_from_ns, t_to_ns}。"""
+        out = []
+        for z in (self.header.get("comms") or {}).get("zones", []):
+            a, b = (int(v) * 1_000_000 for v in z["t_ms"])
+            if a <= int(t_ns) < b:
+                out.append({"id": z["id"], "polygon_m": np.asarray(z["polygon"], np.float64), "extra_loss": z["extra_loss"],
+                            "extra_latency_ms": z["extra_latency_ms"], "bandwidth_scale": z["bandwidth_scale"], "t_from_ns": a, "t_to_ns": b})
+        return out
+
     # ---------------------------------------------------------------- 读取与插值
     def frame(self, k: int, *, background: bool = True) -> np.ndarray:
         k = min(max(int(k), 0), self.n_ticks - 1)
