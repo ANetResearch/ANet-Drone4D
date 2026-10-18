@@ -6,6 +6,9 @@
 - `AO_pos`：同上但不计遮挡（只看距离），÷ 无遮挡 oracle 最优质量。
 oracle：以参与者质心为中心、半径 `fx · 1.6 / 16`、10 m 网格与任务高度包络（10 m 一档）的候选视点上取最大质量；视点可见性以
 身体 5 点视线计。P0a 的 oracle 按本 Run 的标称相机计算（版本 `ao-oracle-v0-grid@1`），P1 的 v1 按机队相机与云台范围计算。
+
+实际质量的检索按列数组进行（D3-AC-18 评测耗时）：识别真值行一次性转为按 `seq` 排序的（机、演员、质量）列，每个关键时刻以二分
+定位 τ ± 1 s 的行区间，再按（机、演员）分组取最大值；与逐行扫描的定义逐值一致。
 """
 
 from __future__ import annotations
@@ -43,9 +46,47 @@ def _quality(V: np.ndarray, persons: list[tuple[np.ndarray, float, np.ndarray]],
     return q
 
 
+class _RealIndex:
+    """识别真值行的列索引：按 `seq` 稳定排序的机序号、演员序号与证据质量 `min(1, h_unocc / 30 px) · vis`（只收 U 内的机）。"""
+
+    def __init__(self, rows: list[dict], U: list[str], th) -> None:
+        uix = {u: i for i, u in enumerate(U)}
+        self.n_u = len(U)
+        self.aix: dict[str, int] = {}
+        sel = [r for r in rows if r["uav"] in uix]
+        seq = np.fromiter((int(r["seq"]) for r in sel), np.int64, len(sel))
+        u = np.fromiter((uix[r["uav"]] for r in sel), np.int64, len(sel))
+        a = np.fromiter((self.aix.setdefault(r["actor"], len(self.aix)) for r in sel), np.int64, len(sel))
+        h = np.fromiter((r["h_unocc_px"] for r in sel), np.float64, len(sel))
+        v = np.fromiter((r["vis"] for r in sel), np.float64, len(sel))
+        o = np.argsort(seq, kind="stable")
+        self.seq, self.u, self.a = seq[o], u[o], a[o]
+        self.q = (np.minimum(1.0, h / th.ao_q_px) * v)[o]
+
+    def best(self, k0: int, ids: list[str], win: float) -> float:
+        """τ = k0 ± win（tick）内，同一架机对 `ids` 全部参与者都有证据时取各参与者最大质量的最小值，再对机取最大；无则 0。"""
+        codes = [self.aix.get(p, -1) for p in ids]
+        if not ids or min(codes) < 0 or not self.n_u:
+            return 0.0
+        i0 = int(np.searchsorted(self.seq, math.ceil(k0 - win), "left"))
+        i1 = int(np.searchsorted(self.seq, math.floor(k0 + win), "right"))
+        a = self.a[i0:i1]
+        col = np.full(len(self.aix), -1, np.int64)
+        col[codes] = np.arange(len(codes))
+        j = col[a]
+        m = j >= 0
+        per = np.zeros((self.n_u, len(codes)))
+        seen = np.zeros((self.n_u, len(codes)), bool)
+        np.maximum.at(per, (self.u[i0:i1][m], j[m]), self.q[i0:i1][m])
+        seen[self.u[i0:i1][m], j[m]] = True
+        ok = seen.all(axis=1)
+        return float(per[ok].min(axis=1).max()) if ok.any() else 0.0
+
+
 def active_observation(E: list[dict], U: list[str], run, world, *, fx: float, envelope_agl_m: tuple[float, float], th=TH) -> dict:
     info = {a["id"]: a for a in run.tape.actors_info()}
     pos = np.asarray(run.fleet["pos"], np.float64)
+    idx = _RealIndex(run.l1, U, th)
     real, pos_los, pos_only = [], [], []
     for e in E:
         k0 = round((e["a_s"] + e["b_s"]) / 2 * 10)
@@ -69,15 +110,7 @@ def active_observation(E: list[dict], U: list[str], run, world, *, fx: float, en
         V = np.concatenate([np.column_stack([xy, zg + a]) for a in np.arange(lo, hi + 1e-9, th.oracle_alt_step_m)])
         q_star = float(_quality(V, persons, fx, world, True, th).max())
         q_star_nl = float(_quality(V, persons, fx, world, False, th).max())
-        here_ids = {p for p, *_ in here}
-        best = 0.0
-        for u in U:
-            per: dict[str, float] = {}
-            for r in run.l1:
-                if r["uav"] == u and r["actor"] in here_ids and abs(int(r["seq"]) - k0) <= th.ao_window_s * 10:
-                    per[r["actor"]] = max(per.get(r["actor"], 0.0), min(1.0, r["h_unocc_px"] / th.ao_q_px) * r["vis"])
-            if len(per) == len(here_ids):
-                best = max(best, min(per.values()))
+        best = idx.best(k0, sorted({p for p, *_ in here}), th.ao_window_s * 10)
         Vu = pos[k0]
         real.append(min(1.0, best / max(q_star, 1e-9)))
         pos_los.append(min(1.0, float(_quality(Vu, persons, fx, world, True, th).max()) / max(q_star, 1e-9)))
