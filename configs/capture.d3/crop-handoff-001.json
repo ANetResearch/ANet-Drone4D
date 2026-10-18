@@ -8,10 +8,12 @@
  "event": {"path": "events/crop-handoff-001/v1", "offset_s": 200},
  "fleet": [
   {"uav": "uav-01", "path": {"kind": "orbit", "center": [13, -41], "radius_m": 70, "agl_m": 45, "period_s": 180, "phase_deg": 200},
-   "cameras": [{"name": "cam0", "profile": "rgb1080-rs", "hfov_deg": 60, "fps": "10", "gimbal": {"az_deg": 90, "el_deg": -33}, "outputs": ["rgb", "depth"]}]},
+   "cameras": [{"name": "cam0", "profile": "rgb1080-rs", "hfov_deg": 60, "fps": "10", "gimbal": {"az_deg": 90, "el_deg": -33}, "outputs": ["rgb", "depth"]}],
+   "lidars": [{"name": "lidar0"}]},
   {"uav": "uav-02", "path": {"kind": "orbit", "center": [40, -50], "radius_m": 90, "agl_m": 60, "period_s": 240, "phase_deg": 30, "ccw": false},
    "cameras": [{"name": "cam0", "profile": "rgb1080-rs", "hfov_deg": 50, "fps": "10", "gimbal": {"az_deg": -90, "el_deg": -33}, "outputs": ["rgb", "depth"]}]},
   {"uav": "uav-03", "path": {"kind": "waypoints", "points": [[0, -10, -60, 35, 0], [45, 30, -60, 35, 0], [90, 70, -70, 35, 0]]},
-   "cameras": [{"name": "cam0", "profile": "rgb720-gs", "hfov_deg": 70, "fps": "10", "gimbal": {"az_deg": 0, "el_deg": -55}, "outputs": ["rgb", "depth"]}]}
+   "cameras": [{"name": "cam0", "profile": "rgb720-gs", "hfov_deg": 70, "fps": "10", "gimbal": {"az_deg": 0, "el_deg": -55}, "outputs": ["rgb", "depth"]}],
+   "lidars": [{"name": "lidar0"}]}
  ]
 }

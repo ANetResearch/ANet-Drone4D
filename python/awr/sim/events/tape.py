@@ -25,7 +25,7 @@ import numpy as np
 from awr.sim.events.errors import EventError
 from awr.sim.events.jcs import jcs
 
-__all__ = ["BLOCK_TICKS", "MAGIC", "RECORD", "STATE_VISIBLE", "TICK_NS", "ActorStates", "TapeReader", "fold_yaw", "manifest", "open_tape",
+__all__ = ["BLOCK_TICKS", "MAGIC", "RECORD", "STATE_VISIBLE", "TICK_NS", "ActorStates", "EnvSample", "TapeReader", "fold_yaw", "manifest", "open_tape",
            "record_spec", "write_tape"]
 
 MAGIC = b"D4DTAPE\x01"
@@ -131,6 +131,21 @@ class ActorStates:
 
 
 @dataclass(frozen=True)
+class EnvSample:
+    """M25 §6.3.1 `env_at`：风为参考高度风速（来向，度，顺时针自北），`wind_enu_mps` 为去向矢量；`scalars` 为 M07 的 21 维标量。"""
+    t_ns: int
+    wind_enu_mps: np.ndarray
+    wind_speed_mps: float
+    wind_dir_from_deg: float
+    gust_sigma_mps: float
+    rain_mm_h: float
+    visibility_m: float
+    fog_top_agl_m: float
+    cloud: float
+    scalars: np.ndarray
+
+
+@dataclass(frozen=True)
 class _Block:
     off_s: int
     comp_s: int
@@ -167,6 +182,7 @@ class TapeReader:
         self.n_actors = len(self.actors)
         self.n_scripted = sum(1 for a in self.actors if a["scripted"])
         self._cache: OrderedDict[tuple[int, str], np.ndarray] = OrderedDict()
+        self._env: list | None = None
 
     # ---------------------------------------------------------------- 解码与校验
     def _sub(self, bi: int, which: str) -> np.ndarray:
@@ -251,6 +267,44 @@ class TapeReader:
                 out.append({"id": z["id"], "polygon_m": np.asarray(z["polygon"], np.float64), "extra_loss": z["extra_loss"],
                             "extra_latency_ms": z["extra_latency_ms"], "bandwidth_scale": z["bandwidth_scale"], "t_from_ns": a, "t_to_ns": b})
         return out
+
+    def _env_track(self) -> list:
+        """环境轨按 M07 关键帧状态机（`KeyframeManager.apply`）依次生效：[(t_apply_ns, TransitionKf)]，与线上 `env/set` 逐条投递一致。"""
+        if self._env is None:
+            import copy
+
+            from awr.environment.keyframe import EnvOp, KeyframeManager
+            from awr.environment.weather.presets import presets
+
+            P = presets()
+            km = KeyframeManager(world_id=str(self.header["world"].get("world_id", "")), seed=int(self.header.get("seed", 0)), epoch=0,
+                                 config=copy.deepcopy(P.doc["defaults"]["config"]), initial=P.default_vector(), initial_preset=None,
+                                 bounds_min=(0.0, 0.0), bounds_max=(1.0, 1.0), P=P)
+            out = []
+            for e in self.header.get("env_track") or []:
+                op = e["op"]
+                t = int(e["t_ms"]) * 1_000_000
+                kf = km.apply(EnvOp("set", patch=op["patch"], mode=op["mode"], duration_s=float(op["duration_s"])), t, km.kf.anchors)
+                out.append((t, kf.transition()))
+            self._env = out or [(0, km.kf.transition())]          # 无环境轨：M07 缺省标量
+        return self._env
+
+    def env_at(self, t_ns: int) -> EnvSample:
+        """事件时刻 t 的环境（M23 §6.11 环境轨经 M07 `eval_env` 求值）；t < 0 取首帧。"""
+        import bisect
+        import math
+
+        from awr.environment.weather import presets as wp
+        from awr.environment.weather.transitions import eval_env
+
+        trk = self._env_track()
+        i = max(bisect.bisect_right([t for t, _ in trk], int(t_ns)) - 1, 0)
+        S = np.asarray(eval_env(trk[i][1], int(t_ns), np.empty(wp.NF)), np.float64)
+        spd, d = float(S[wp.SPEED_REF]), float(S[wp.DIR])
+        a = math.radians(d)
+        w = np.array([-spd * math.sin(a), -spd * math.cos(a), float(S[wp.W_MEAN])])
+        return EnvSample(int(t_ns), w, spd, d, float(S[wp.SIGMA_REF]), float(S[wp.RAIN]), float(S[wp.MOR_BG]), float(S[wp.FOG_TOP]),
+                         float(S[wp.COVER]), S)
 
     # ---------------------------------------------------------------- 读取与插值
     def frame(self, k: int, *, background: bool = True) -> np.ndarray:

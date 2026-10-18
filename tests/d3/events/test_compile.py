@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import copy
+import itertools
 import json
 import sys
 from pathlib import Path
@@ -199,6 +200,18 @@ def test_header_env_track_and_contracts(compiled) -> None:
     info = {a["id"]: a for a in t.actors_info()}
     assert info["person_a"]["size_m"] == (0.5, 0.3, 1.76) and info["person_a"]["pos0_enu_m"][0] == pytest.approx(-60.0)
     assert [a["id"] for a in t.actors_info(scripted_only=True)] == [a["id"] for a in hd["actors"][:5]]
+
+
+def test_env_at_follows_m07_transitions(compiled) -> None:
+    """环境轨经 M07 求值：首帧阶跃生效，平滑过渡在 100 s 内单调到达终值，风矢量为来向的反向。"""
+    _r, t = compiled
+    e0, e1, e_end = t.env_at(0), t.env_at(100_000_000_000), t.env_at(150_000_000_000)
+    assert e0.wind_speed_mps == 2.0 and e0.rain_mm_h == 0.0 and np.allclose(e0.wind_enu_mps[:2], [2.0, 0.0], atol=1e-12)    # 来自正西
+    assert e1.wind_speed_mps == pytest.approx(6.0) and e1.wind_dir_from_deg == pytest.approx(300.0) and e1.rain_mm_h == pytest.approx(2.0)
+    assert e1.cloud == pytest.approx(0.9) and e_end.wind_speed_mps == pytest.approx(6.0)
+    sp = [t.env_at(k * 10_000_000_000).wind_speed_mps for k in range(11)]
+    assert all(b >= a for a, b in itertools.pairwise(sp)) and 2.0 < sp[5] < 6.0
+    assert t.env_at(-5).wind_speed_mps == 2.0 and t.env_at(50_000_000_000).scalars.shape == (21,)
 
 
 def test_determinism_and_background_decoupling(world, compiled) -> None:
