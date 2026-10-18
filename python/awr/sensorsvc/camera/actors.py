@@ -6,6 +6,10 @@ P0a 代理资产（`<class>-proxy@1`）由程序生成：人为腿、躯干、�
 
 可见度归约在交付分辨率的整数数组上进行（与线程调度无关）：`instance` 为可见实例（静态 0、演员 idx + 1），`instance_unocc`
 为只渲染演员的实例，`semantic` 为前景语义；`invalid` 非 0 的像素不计入。
+
+几何参照（D3-AC-09 投影与遮挡验收）：`proxy_centroid` 为代理网格的体积质心（各部件为闭合外法线棱柱，按有向四面体体积求和），
+`proxy_markers` 为代理主体盒的 8 个顶点（网格顶点，局部帧），`actor_to_world` 按渲染同一约定（绕 z 偏航后平移）换到世界系；
+`two_pass_composite` 为两遍合成参照（只静态一遍与只演员一遍按平面深度合成，演员深度同样朝相机偏置 1 cm），`mask_iou` 为掩膜 IoU。
 """
 
 from __future__ import annotations
@@ -14,7 +18,8 @@ import math
 
 import numpy as np
 
-__all__ = ["K_AMB", "K_DIF", "SEM_CODE", "SUN_AZ_EL_DEG", "proxy_mesh", "sun_dir", "visibility_objects"]
+__all__ = ["ACTOR_DEPTH_BIAS_M", "K_AMB", "K_DIF", "SEM_CODE", "SUN_AZ_EL_DEG", "actor_to_world", "mask_iou", "proxy_centroid", "proxy_markers",
+           "proxy_mesh", "sun_dir", "two_pass_composite", "visibility_objects"]
 
 SEM_CODE = {"person": 32, "vehicle": 33, "dog": 34, "uav": 35, "machine": 36, "object": 37}
 K_AMB, K_DIF = 0.55, 0.45
@@ -22,6 +27,7 @@ SUN_AZ_EL_DEG = (135.0, 50.0)          # 世界未给出 bakedSunAzElDeg 时的�
 SKIN = (205, 168, 140)
 DARK = (28, 30, 34)
 GLASS = (40, 52, 60)
+ACTOR_DEPTH_BIAS_M = 0.01             # 演员深度测试值朝相机的偏置（raster.ACTOR_VS），平面深度附件不偏置
 
 
 def _lin(rgb) -> np.ndarray:
@@ -136,3 +142,54 @@ def visibility_objects(inst: np.ndarray, inst_unocc: np.ndarray, sem: np.ndarray
              "flags": ["truncated"] if bu[0] == 0 or bu[1] == 0 or bu[2] == W - 1 or bu[3] == H - 1 else []}
         out.append(o)
     return out
+
+
+def proxy_centroid(actor: dict) -> np.ndarray:
+    """代理网格体积质心（局部帧，float64）：Σ Vᵢ·cᵢ / Σ Vᵢ，Vᵢ 为原点与三角形构成的有向四面体体积，cᵢ 为其质心。"""
+    P = proxy_mesh(actor)[0].astype(np.float64).reshape(-1, 3, 3)
+    a, b, c = P[:, 0], P[:, 1], P[:, 2]
+    v = np.einsum("ij,ij->i", a, np.cross(b, c)) / 6.0
+    if not v.sum() > 0:
+        raise ValueError(f"{actor.get('id')}: proxy mesh is not closed with outward winding")
+    return (v[:, None] * (a + b + c) / 4.0).sum(0) / v.sum()
+
+
+def proxy_markers(actor: dict) -> np.ndarray:
+    """代理主体盒的 8 个顶点（局部帧，(8, 3) float64，按 z、y、x 由小到大）：机器与物体为整个盒体，车为车身，狗为躯干；人无盒体部件，
+    返回包含全部顶点的轴对齐盒（不全是网格顶点，投影验收只对盒体类别使用）。"""
+    cls = actor["class"]
+    ln, w, h = (s / 1000.0 for s in actor["size_mm"])
+    if cls == "vehicle":
+        x0, x1, y0, y1, z0, z1 = -ln / 2, ln / 2, -w / 2, w / 2, 0.18 * h, 0.62 * h
+    elif cls == "dog":
+        x0, x1, y0, y1, z0, z1 = -ln / 2, 0.3 * ln, -w / 2, w / 2, 0.45 * h, 0.85 * h
+    elif cls == "person":
+        P = proxy_mesh(actor)[0].astype(np.float64)
+        (x0, y0, z0), (x1, y1, z1) = P.min(0), P.max(0)
+    else:
+        x0, x1, y0, y1, z0, z1 = -ln / 2, ln / 2, -w / 2, w / 2, 0.0, h
+    return np.array([[x, y, z] for z in (z0, z1) for y in (y0, y1) for x in (x0, x1)], np.float64)
+
+
+def actor_to_world(X_local: np.ndarray, pos_enu_m, yaw_rad: float) -> np.ndarray:
+    """局部帧点 → 世界 ENU：`R_z(yaw)·X + pos`（与光栅相机的演员模型矩阵相同）。"""
+    c, s_ = math.cos(float(yaw_rad)), math.sin(float(yaw_rad))
+    Rz = np.array([[c, -s_, 0.0], [s_, c, 0.0], [0.0, 0.0, 1.0]])
+    return np.asarray(X_local, np.float64) @ Rz.T + np.asarray(pos_enu_m, np.float64)
+
+
+def two_pass_composite(depth_static: np.ndarray, depth_actors: np.ndarray, inst_actors: np.ndarray,
+                       bias_m: float = ACTOR_DEPTH_BIAS_M) -> np.ndarray:
+    """两遍合成参照（r3 §5 C1）：只静态场景一遍的平面深度（几何外 0）与只演员一遍的平面深度、实例 → 合成实例图。演员像素在
+    静态无几何或 `d_actor − bias < d_static` 时可见（与联合 z-buffer 的 reversed-Z GREATER 比较同向）。"""
+    fg = inst_actors > 0
+    vis = fg & ((depth_static <= 0) | (depth_actors - bias_m < depth_static))
+    return np.where(vis, inst_actors, 0).astype(inst_actors.dtype)
+
+
+def mask_iou(a: np.ndarray, b: np.ndarray) -> float:
+    """布尔掩膜 IoU；两者皆空时为 1.0。"""
+    a = np.asarray(a, bool)
+    b = np.asarray(b, bool)
+    u = int((a | b).sum())
+    return 1.0 if u == 0 else int((a & b).sum()) / u
