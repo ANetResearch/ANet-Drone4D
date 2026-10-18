@@ -96,3 +96,59 @@ def test_kill_in_air_is_impact(tmp_path: Path) -> None:
     _tr, ev, st, _info = _fly(tmp_path, [UavSpawn("uav-01", (0.0, 0.0, 0.3))], plan, 140)
     assert [e.kind for e in ev if e.kind == "IMPACT"] == ["IMPACT"]
     assert st[-1]["uav-01"] == VehicleStatus.CRASHED
+
+
+WORLD = Path(__file__).resolve().parents[3] / "worlds" / "oryahovo-crop1"
+GEAR_Z = 0.227                                                                    # x500_d4d 静止时 base_link 离地高度（地面平面实测）
+
+
+def _flat_spot(world: Path) -> tuple[float, float, float]:
+    """DSM 上 4 m 窗口起伏 < 0.05 m（严于 A5 的 3.5 m 窗口 < 0.4 m）、距世界原点 150 m 内的最低处。"""
+    import json
+
+    meta = json.loads((world / "geometry/terrain/dsm_2m.json").read_text())
+    z = np.fromfile(world / "geometry/terrain/dsm_2m.f32", "<f4").reshape(meta["height"], meta["width"]).astype(np.float64)
+    w = np.lib.stride_tricks.sliding_window_view(z, (2, 2))
+    relief = w.max(axis=(2, 3)) - w.min(axis=(2, 3))
+    h, wd = relief.shape
+    yy, xx = np.mgrid[0:h, 0:wd]
+    c = meta["cellM"]
+    ex, ny = meta["originXY"][0] + (xx + 1) * c, meta["originXY"][1] + (yy + 1) * c
+    ok = (relief < 0.05) & (np.hypot(ex, ny) < 150.0)
+    zc = w.max(axis=(2, 3))
+    i = np.argmin(np.where(ok, zc, np.inf))
+    return float(ex.flat[i]), float(ny.flat[i]), float(zc.flat[i])
+
+
+@pytest.mark.skipif(not (WORLD / "geometry/mesh/raycast/index.json").exists(), reason="needs worlds/oryahovo-crop1")
+def test_land_on_world_mesh(tmp_path: Path) -> None:
+    """A5：平坦处上方 15 m 以 2 m/s 下降，静止高度与 DSM + 起落架高度之差 ≤ 0.3 m，不穿透。"""
+    pytest.importorskip("zmq")
+    from awr.phys.gz.backend import GzSimBackend
+    from awr.phys.gz.compose import UavSpawn, compose_run
+    from awr.phys.gz.instance import GzInstance
+    from awr.world.export.gz import export_world
+
+    exp = export_world(WORLD, out_root=tmp_path / "exp", check_sdf=True)
+    x, y, zg = _flat_spot(WORLD)
+    inst = GzInstance(tmp_path / "run", "local", launcher="local", world_export=exp.root)
+    inst.start(compose_run([UavSpawn("uav-01", (x, y, zg + 15.0))], world_static_uri=exp.uri, endpoint=inst.gz_endpoint,
+                           spherical=exp.spherical))
+    ev, zs = [], []
+    try:
+        inst.wait_socket(120)
+        be = GzSimBackend(["uav-01"], inst.endpoint, grounded=[])
+        be.open()
+        be.submit([TierCommand("uav-01", "velocity", 5, vel_enu_mps=(0.0, 0.0, -2.0))])
+        for k in range(160):
+            r = be.advance(k)
+            ev += r.contacts
+            zs.append(float(be.history.last_sample("uav-01").pos_enu_m[2]))
+        st = be.status()["uav-01"]
+        be.close()
+    finally:
+        inst.stop()
+    kinds = [e.kind for e in ev]
+    assert "TOUCHDOWN" in kinds and "IMPACT" not in kinds and "COLLISION_WORLD" not in kinds
+    assert st == VehicleStatus.GROUNDED
+    assert abs(zs[-1] - (zg + GEAR_Z)) <= 0.3 and min(zs) > zg                    # 不穿透

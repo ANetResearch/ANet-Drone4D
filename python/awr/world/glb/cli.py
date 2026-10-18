@@ -69,6 +69,20 @@ def _build(a: argparse.Namespace) -> int:
     return res.exit_code
 
 
+def _export_gazebo(a: argparse.Namespace) -> int:
+    from awr.world.export.gz import GzExportError, export_world
+
+    try:
+        exp = export_world(Path(a.worlds_dir) / a.world_id, a.profile, force=a.force)
+    except GzExportError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    m = exp.manifest
+    print(json.dumps(m, ensure_ascii=False) if a.json else
+          f"{a.world_id}: {exp.root} ({m['counts']['chunks']} chunks, {m['counts']['triangles']} triangles, A1 {m['qa']['A1_sdf_check']})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m awr.world.glb", description="GLB world import (M22)")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -97,6 +111,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--keep-staging", action="store_true")
     p.add_argument("--json", action="store_true")
     p.set_defaults(fn=_build)
+    p = sub.add_parser("export-gazebo", help="export the world collision for gz-sim (M24 §6.7, profile physics)")
+    p.add_argument("world_id")
+    p.add_argument("--worlds-dir", default=str(Path(__file__).resolve().parents[4] / "worlds"))
+    p.add_argument("--profile", default="physics", choices=["physics"])
+    p.add_argument("--force", action="store_true", help="re-export even if the export directory exists")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=_export_gazebo)
     a = ap.parse_args(argv)
     try:
         return a.fn(a)

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- x500_d4d (Drone4D physics export, M24 §6.5.1): x500_base by Rudis Laboratories (BSD-3-Clause, see LICENSE) with
-     visuals and sensors removed; inertials, collisions and rotor joints unchanged. Motor and velocity-control systems are
+     visuals and sensors removed; inertials, collision geometry and rotor joints unchanged; landing-gear collisions
+     renamed gear_* (Drone4DClock contact classification). Motor and velocity-control systems are
      added per vehicle by awr.phys.gz.compose. -->
 <sdf version='1.9'>
   <model name='x500_d4d'>
@@ -40,7 +41,7 @@
           </friction>
         </surface>
       </collision>
-      <collision name="base_link_collision_1">
+      <collision name="gear_leg_r">
         <pose>0 -0.098 -.123 -0.35 0 0</pose>
         <geometry>
           <box>
@@ -59,7 +60,7 @@
           </friction>
         </surface>
       </collision>
-      <collision name="base_link_collision_2">
+      <collision name="gear_leg_l">
         <pose>0 0.098 -.123 0.35 0 0</pose>
         <geometry>
           <box>
@@ -78,7 +79,7 @@
           </friction>
         </surface>
       </collision>
-      <collision name="base_link_collision_3">
+      <collision name="gear_skid_r">
         <pose>0 -0.132 -.2195 0 0 0</pose>
         <geometry>
           <box>
@@ -97,7 +98,7 @@
           </friction>
         </surface>
       </collision>
-      <collision name="base_link_collision_4">
+      <collision name="gear_skid_l">
         <pose>0 0.132 -.2195 0 0 0</pose>
         <geometry>
           <box>

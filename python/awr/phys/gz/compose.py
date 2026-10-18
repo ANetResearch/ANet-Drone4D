@@ -77,8 +77,9 @@ def _vehicle(u: UavSpawn) -> str:
 
 def compose_run(uavs: list[UavSpawn], *, world_static_uri: str | None = None, ground_plane: bool = False,
                 endpoint: str = "ipc:///run/d4d/ctl.sock", step_ns: int = STEP_NS, lockstep: bool = True, wind: bool = False,
-                world_name: str = "d4d") -> str:
-    """run.sdf 文本。`world_static_uri` 为世界碰撞模型（`model://...` 或文件 URI）；`ground_plane` 只用于测试（z = 0 平面）。"""
+                world_name: str = "d4d", spherical: dict | None = None) -> str:
+    """run.sdf 文本。`world_static_uri` 为世界碰撞模型（`model://world_static`，见 awr.world.export.gz）；`ground_plane` 只用于测试
+    （z = 0 平面）；`spherical` 为导出清单的 `spherical_coordinates`（world 帧 ENU 原点）。"""
     if step_ns % 1000:
         raise ValueError("step_ns must be a whole number of microseconds")
     static = f"""
@@ -87,6 +88,11 @@ def compose_run(uavs: list[UavSpawn], *, world_static_uri: str | None = None, gr
     <model name="ground"><static>true</static>
       <link name="l"><collision name="c"><geometry><plane><normal>0 0 1</normal><size>4000 4000</size></plane></geometry></collision></link>
     </model>""" if ground_plane else ""
+    sph = f"""
+    <spherical_coordinates><surface_model>EARTH_WGS84</surface_model><world_frame_orientation>ENU</world_frame_orientation>
+      <latitude_deg>{float(spherical["latitude_deg"])!r}</latitude_deg><longitude_deg>{float(spherical["longitude_deg"])!r}</longitude_deg>
+      <elevation>{float(spherical.get("elevation_m") or 0.0)!r}</elevation><heading_deg>0</heading_deg>
+    </spherical_coordinates>""" if spherical and spherical.get("latitude_deg") is not None else ""
     table = "".join(f'\n      <uav model="{u.uav}" link="base_link"/>' for u in uavs)
     wind_xml = """
     <wind><linear_velocity>0 0 0</linear_velocity></wind>
@@ -101,7 +107,7 @@ def compose_run(uavs: list[UavSpawn], *, world_static_uri: str | None = None, gr
       <real_time_factor>0</real_time_factor>
       <dart><collision_detector>bullet</collision_detector></dart>
     </physics>
-    <gravity>0 0 {-G}</gravity>
+    <gravity>0 0 {-G}</gravity>{sph}
     <plugin filename="libDrone4DGz.so" name="drone4d::Drone4DClock">
       <gz:system_priority>-200</gz:system_priority>
       <endpoint>{endpoint}</endpoint>

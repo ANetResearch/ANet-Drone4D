@@ -29,7 +29,8 @@ class GzInstance:
     image: str = "d3-gz:dev"
     cpus: float = 2.0
     mem_gb: float = 2.0
-    extra_mounts: dict[str, str] = field(default_factory=dict)      # 宿主路径 → 容器路径（只读），例如世界导出目录
+    world_export: Path | None = None                                # 世界级导出目录（含 world_static/）；docker 时挂载到 /opt/d4d/worlds
+    extra_mounts: dict[str, str] = field(default_factory=dict)      # 宿主路径 → 容器路径（只读）
     verbose: int = 1
     docker: str = "docker"
     launcher: str = "docker"                                       # docker | local
@@ -55,6 +56,8 @@ class GzInstance:
         cmd = [self.docker, "run", "-d", "--rm", "--name", self.name, "--user", uid, "--network", "none",
                "--cpus", f"{self.cpus:g}", "--memory", f"{self.mem_gb:g}g", "-e", "HOME=/tmp", "-e", "GZ_IP=127.0.0.1",
                "-v", f"{self.sock_dir}:/run/d4d", "-v", f"{Path(self.run_dir) / 'run.sdf'}:/run/d4d-sdf/run.sdf:ro"]
+        if self.world_export is not None:
+            cmd += ["-v", f"{self.world_export}:/opt/d4d/worlds:ro", "-e", "GZ_SIM_RESOURCE_PATH=/opt/d4d/models:/opt/d4d/worlds"]
         for host, ctr in sorted(self.extra_mounts.items()):
             cmd += ["-v", f"{host}:{ctr}:ro"]
         return [*cmd, self.image, "gz", "sim", "-s", "-r", "-v", str(self.verbose), "/run/d4d-sdf/run.sdf"]
@@ -69,6 +72,8 @@ class GzInstance:
             return cmd
         if self.launcher == "local":
             env = {**os.environ, "GZ_IP": "127.0.0.1"}
+            if self.world_export is not None:
+                env["GZ_SIM_RESOURCE_PATH"] = ":".join(p for p in (env.get("GZ_SIM_RESOURCE_PATH", ""), str(self.world_export)) if p)
             log = (Path(self.run_dir) / "gz.log").open("wb")
             self._proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
             return cmd

@@ -77,6 +77,7 @@ struct Uav
   std::string modelName, linkName;
   Entity model{kNullEntity}, link{kNullEntity};
   std::set<Entity> collisions;
+  std::set<Entity> gear;  // landing-gear collisions (name prefix "gear_")
   math::Vector3d vPrev;
   bool first{true};
   bool ground{false};   // ground-like contact in the previous step
@@ -179,6 +180,8 @@ private:
           if (!_ecm.Component<components::ContactSensorData>(c))
             _ecm.CreateComponent(c, components::ContactSensorData());
           u.collisions.insert(c);
+          const auto *nm = _ecm.Component<components::Name>(c);
+          if (nm != nullptr && nm->Data().rfind("gear_", 0) == 0) u.gear.insert(c);
           this->collisionOwner[c] = static_cast<size_t>(&u - &this->uavs[0]);
         }
       }
@@ -299,7 +302,7 @@ private:
   {
     Uav &u = this->uavs[_i];
     bool ground = false, other = false, uavHit = false;
-    math::Vector3d pos, nrm;
+    math::Vector3d posG, nrmG, posO, nrmO;
     for (const Entity &c : u.collisions)
     {
       const auto *data = _ecm.Component<components::ContactSensorData>(c);
@@ -307,17 +310,20 @@ private:
       for (const auto &k : data->Data().contact())
       {
         const Entity e1 = k.collision1().id(), e2 = k.collision2().id();
-        const Entity peer = (u.collisions.count(e1) ? e2 : e1);
+        const bool firstIsOwn = u.collisions.count(e1) > 0;
+        const Entity mine = firstIsOwn ? e1 : e2, peer = firstIsOwn ? e2 : e1;
         auto own = this->collisionOwner.find(peer);
         if (own != this->collisionOwner.end() && own->second == _i) continue;  // self contact
-        if (k.position_size() > 0) pos = msgs::Convert(k.position(0));
-        if (k.normal_size() > 0) nrm = msgs::Convert(k.normal(0));
-        if (own != this->collisionOwner.end()) uavHit = true;
-        else if (std::abs(nrm.Z()) >= kGroundCos * nrm.Length()) ground = true;
-        else other = true;
+        const math::Vector3d p = k.position_size() > 0 ? msgs::Convert(k.position(0)) : math::Vector3d::Zero;
+        const math::Vector3d n = k.normal_size() > 0 ? msgs::Convert(k.normal(0)) : math::Vector3d::Zero;
+        // Ground: normal within 45 degrees of vertical. Landing gear on uneven mesh terrain (triangle edges) reports lateral
+        // normals: gear contacts always count as ground, only body and rotor contacts with lateral normals are collisions.
+        if (own != this->collisionOwner.end()) { uavHit = true; posO = p; nrmO = n; }
+        else if (std::abs(n.Z()) >= kGroundCos * n.Length() || u.gear.count(mine)) { ground = true; posG = p; nrmG = n; }
+        else { other = true; posO = p; nrmO = n; }
       }
     }
-    auto emit = [&](uint32_t kind) {
+    auto emit = [&](uint32_t kind, const math::Vector3d &pos, const math::Vector3d &nrm) {
       pb::Contact ct;
       ct.set_uav_index(static_cast<uint32_t>(_i));
       ct.set_step(_step);
@@ -327,10 +333,10 @@ private:
       ct.set_speed(_v.Length());
       this->contacts.push_back(ct);
     };
-    if (uavHit) emit(kUav);
-    if (ground && !u.ground) emit(-_v.Z() > kImpactVz ? kImpact : kTouchdown);
-    if (!ground && u.ground) emit(kLiftoff);
-    if (other && !u.other) emit(kWorld);
+    if (uavHit) emit(kUav, posO, nrmO);
+    if (ground && !u.ground) emit(-_v.Z() > kImpactVz ? kImpact : kTouchdown, posG, nrmG);
+    if (!ground && u.ground) emit(kLiftoff, posG, nrmG);
+    if (other && !u.other) emit(kWorld, posO, nrmO);
     u.ground = ground;
     u.other = other;
   }
