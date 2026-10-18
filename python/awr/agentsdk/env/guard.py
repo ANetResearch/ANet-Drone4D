@@ -7,6 +7,10 @@
 - msgs：通信关闭（667 `comm_off`）、目的方不存在（667 `dst`）、载荷超长（667 `too_large`）。
 - report：类型不在任务契约 `report_types` 中（663 `report_type`，FR-125）；证据引用本机未收到的检测或帧（663 `evidence_unknown`）。
 守卫不调用 D2 TrustedGuard（§13 第 1 条），只以仿真时间实现同等语义。
+
+超时（D3-AC-17；AWR-17 §18.9.6）：Agent 在 `decision.step_budget_s` 内未返回动作时由 `timeout(k)` 处置：回执
+`{item: act, result: timeout, code: 661}` 并计数；物理档与云台保持上一次被接受的导航与云台指令（`held` 给出沿用的内容，
+写入动作流以便复跑对拍）；msgs、report、zoom 等一次性条目不重放。被拒绝的动作（schema、k 不一致、单项 rejected）不改变沿用的指令。
 """
 
 from __future__ import annotations
@@ -18,7 +22,9 @@ import numpy as np
 
 from awr.agentsdk.schemas import bench_validator
 
-__all__ = ["ActionGuard", "GuardResult", "Limits"]
+__all__ = ["TIMEOUT_CODE", "ActionGuard", "GuardResult", "Limits"]
+
+TIMEOUT_CODE = 661
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,7 @@ class GuardResult:
     msgs: list[dict] = field(default_factory=list)
     reports: list[dict] = field(default_factory=list)
     acks: list[dict] = field(default_factory=list)
+    held: dict | None = None                     # 超时时沿用的指令 {nav, gimbal}（None 表示该项从未下达）
 
     def ack(self, k: int, item: str, index: int, result: str, code: int = 0, why: str | None = None) -> None:
         a = {"k": int(k), "item": item, "index": int(index), "result": result, "code": int(code)}
@@ -58,6 +65,29 @@ class ActionGuard:
         self.comm_enabled, self.msg_max_B, self.cam = comm_enabled, msg_max_B, cam
         self.seen: dict[str, int] = {}           # det_id → 帧序号（本机已交付的检测）
         self.frames: set[tuple[str, int]] = set()
+        self.last_nav: dict | None = None        # 最近一次被接受的导航指令（GuardResult.nav）
+        self.last_gimbal: tuple[float, float] | None = None
+        self._prev_nav: dict | None = None
+        self.timeouts = 0
+
+    def timeout(self, k_obs: int) -> GuardResult:
+        """未在墙钟预算内返回动作：计数并回执 661 `timeout`，沿用上一导航与云台指令（不产生新的物理档指令）。"""
+        self.timeouts += 1
+        r = GuardResult(held={"nav": None if self.last_nav is None else dict(self.last_nav),
+                              "gimbal": None if self.last_gimbal is None else list(self.last_gimbal)})
+        r.ack(k_obs, "act", 0, "timeout", TIMEOUT_CODE)
+        return r
+
+    def tier_rejected(self) -> None:
+        """物理档拒收本次导航指令（回执改为 rejected `tier`）：沿用的导航恢复为此前一条。"""
+        self.last_nav = self._prev_nav
+
+    def _accept(self, r: GuardResult) -> None:
+        self._prev_nav = self.last_nav
+        if r.nav is not None:
+            self.last_nav = dict(r.nav)
+        if r.gimbal is not None:
+            self.last_gimbal = r.gimbal
 
     def saw(self, dets: list[dict]) -> None:
         for d in dets:
@@ -101,6 +131,7 @@ class ActionGuard:
                 continue
             r.reports.append(rep)
             r.ack(k_obs, "report", i, "applied")
+        self._accept(r)
         return r
 
     def _known(self, e: dict) -> bool:
