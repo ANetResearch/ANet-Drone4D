@@ -48,10 +48,10 @@ export const MEDIA_WIDE: readonly Media[] = [
 
 /** BibTeX of the software (README.md "Data and citation", CITATION.cff) */
 export const DRONE4D_BIBTEX = `@software{anet_drone4d_2026,
-  title   = {ANet-Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
+  title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.2.0},
+  version = {0.2.2},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }`
 
