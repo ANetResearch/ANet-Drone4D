@@ -8,37 +8,22 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from fastapi import APIRouter, Request
 
 from awr.api.problem import ApiProblem
 from awr.bench.api.deps import AnyMember, Researcher
+from awr.bench.boardstore import current_version as _current
+from awr.bench.boardstore import versions as _versions
 from awr.bench.eval.thresholds import SCORE_VERSION
 from awr.bench.runs_store import find_run
 
 router = APIRouter()
-_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 def _boards_dir(request: Request) -> Path:
     return Path(request.app.state.settings.data_root) / "boards"
-
-
-def _versions(root: Path) -> list[str]:
-    if not root.is_dir():
-        return []
-    return sorted(d.name for d in root.iterdir() if d.is_dir() and _VERSION.match(d.name) and (d / "board.json").is_file())
-
-
-def _current(root: Path, versions: list[str]) -> str | None:
-    p = root / "current"
-    if p.is_file():
-        v = p.read_text(encoding="utf-8").strip()
-        if v in versions:
-            return v
-    return versions[-1] if versions else None
 
 
 def _load(request: Request, version: str | None, name: str = "board.json") -> tuple[str, dict]:

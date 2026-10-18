@@ -12,11 +12,31 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from awr.bench.eval.aggregate import build_board, entry_details
 
-__all__ = ["append_rows", "load_config", "load_rows", "publish", "slim_evaluation"]
+__all__ = ["append_rows", "current_version", "load_config", "load_rows", "publish", "slim_evaluation", "versions"]
+
+_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def versions(root: Path) -> list[str]:
+    """已发布的榜单版本（`<root>/<ver>/board.json` 存在），按名称排序。"""
+    if not root.is_dir():
+        return []
+    return sorted(d.name for d in root.iterdir() if d.is_dir() and _VERSION.match(d.name) and (d / "board.json").is_file())
+
+
+def current_version(root: Path, vs: list[str]) -> str | None:
+    """`<root>/current` 所指版本；缺失或无效时取最新版本。"""
+    p = root / "current"
+    if p.is_file():
+        v = p.read_text(encoding="utf-8").strip()
+        if v in vs:
+            return v
+    return vs[-1] if vs else None
 
 
 def slim_evaluation(doc: dict) -> dict:

@@ -86,7 +86,7 @@ def _board_publish(s: BenchSettings, a) -> int:
 
 def _submission_create(s: BenchSettings, a) -> int:
     from awr.agentsdk.schemas import bench_validator
-    from awr.bench.api.board import _current, _versions
+    from awr.bench.boardstore import current_version, versions
     from awr.bench.submissions import SubmissionError, SubmissionStore
 
     env = dict(kv.split("=", 1) for kv in a.env)
@@ -96,7 +96,7 @@ def _submission_create(s: BenchSettings, a) -> int:
         print("; ".join(errs[:3]), file=sys.stderr)
         return 2
     root = s.data_root / "boards"
-    v = _current(root, _versions(root))
+    v = current_version(root, versions(root))
     if v is None:
         print("no board published (board_closed)", file=sys.stderr)
         return 2
