@@ -1,0 +1,478 @@
+{
+ "schema": "drone4d.refdet.model.v1",
+ "model": "ref_det_v1",
+ "input": [
+  960,
+  540
+ ],
+ "stride": 4,
+ "classes": [
+  "person",
+  "vehicle"
+ ],
+ "arch": [
+  [
+   "stem",
+   3,
+   32,
+   4,
+   1
+  ],
+  [
+   "b2",
+   32,
+   48,
+   2,
+   1
+  ],
+  [
+   "b3",
+   48,
+   48,
+   1,
+   1
+  ],
+  [
+   "b4",
+   48,
+   48,
+   1,
+   2
+  ],
+  [
+   "b5",
+   48,
+   48,
+   1,
+   4
+  ],
+  [
+   "b6",
+   48,
+   48,
+   1,
+   1
+  ]
+ ],
+ "train_frames": 21600,
+ "val_frames": 2400,
+ "epochs": 40,
+ "val": {
+  "precision": 0.8575,
+  "recall": 0.906,
+  "f1": 0.8811,
+  "per_class": {
+   "person": {
+    "tp": 13896,
+    "fp": 2022,
+    "fn": 1416
+   },
+   "vehicle": {
+    "tp": 224,
+    "fp": 325,
+    "fn": 49
+   }
+  }
+ },
+ "numpy_max_abs_err": 1.52587890625e-05,
+ "data_meta": {
+  "schema": "drone4d.refdet.data.v1",
+  "camera": {
+   "width": 1920,
+   "height": 1080,
+   "fx": 1662.7687752661222,
+   "fy": 1662.7687752661222,
+   "cx": 960.0,
+   "cy": 540.0,
+   "profile": "rgb1080-rs",
+   "noise": "realistic",
+   "jpeg_quality": 90
+  },
+  "classes": [
+   "person",
+   "vehicle"
+  ],
+  "min_px": 12,
+  "min_vis": 0.2,
+  "segments": 4000,
+  "seg_len": 8,
+  "seg_skip": 2,
+  "seed": 7,
+  "world_content_version": "efad268468de",
+  "event": "crop-handoff-001",
+  "alt_agl_m": [
+   25.0,
+   125.0
+  ]
+ },
+ "log": [
+  {
+   "epoch": 1,
+   "loss": 3.0208,
+   "val": null,
+   "t_s": 88
+  },
+  {
+   "epoch": 2,
+   "loss": 1.3027,
+   "val": null,
+   "t_s": 169
+  },
+  {
+   "epoch": 3,
+   "loss": 0.9557,
+   "val": null,
+   "t_s": 251
+  },
+  {
+   "epoch": 4,
+   "loss": 0.8117,
+   "val": null,
+   "t_s": 335
+  },
+  {
+   "epoch": 5,
+   "loss": 0.7269,
+   "val": {
+    "precision": 0.75,
+    "recall": 0.8537,
+    "f1": 0.7985,
+    "per_class": {
+     "person": {
+      "tp": 13102,
+      "fp": 4060,
+      "fn": 2210
+     },
+     "vehicle": {
+      "tp": 203,
+      "fp": 375,
+      "fn": 70
+     }
+    }
+   },
+   "t_s": 440
+  },
+  {
+   "epoch": 6,
+   "loss": 0.6746,
+   "val": null,
+   "t_s": 520
+  },
+  {
+   "epoch": 7,
+   "loss": 0.6401,
+   "val": null,
+   "t_s": 598
+  },
+  {
+   "epoch": 8,
+   "loss": 0.613,
+   "val": null,
+   "t_s": 679
+  },
+  {
+   "epoch": 9,
+   "loss": 0.5963,
+   "val": null,
+   "t_s": 759
+  },
+  {
+   "epoch": 10,
+   "loss": 0.5801,
+   "val": {
+    "precision": 0.853,
+    "recall": 0.8772,
+    "f1": 0.8649,
+    "per_class": {
+     "person": {
+      "tp": 13457,
+      "fp": 1986,
+      "fn": 1855
+     },
+     "vehicle": {
+      "tp": 214,
+      "fp": 370,
+      "fn": 59
+     }
+    }
+   },
+   "t_s": 858
+  },
+  {
+   "epoch": 11,
+   "loss": 0.5668,
+   "val": null,
+   "t_s": 937
+  },
+  {
+   "epoch": 12,
+   "loss": 0.5568,
+   "val": null,
+   "t_s": 1017
+  },
+  {
+   "epoch": 13,
+   "loss": 0.5449,
+   "val": null,
+   "t_s": 1095
+  },
+  {
+   "epoch": 14,
+   "loss": 0.5375,
+   "val": null,
+   "t_s": 1175
+  },
+  {
+   "epoch": 15,
+   "loss": 0.5307,
+   "val": {
+    "precision": 0.836,
+    "recall": 0.8914,
+    "f1": 0.8628,
+    "per_class": {
+     "person": {
+      "tp": 13681,
+      "fp": 2330,
+      "fn": 1631
+     },
+     "vehicle": {
+      "tp": 212,
+      "fp": 396,
+      "fn": 61
+     }
+    }
+   },
+   "t_s": 1278
+  },
+  {
+   "epoch": 16,
+   "loss": 0.5234,
+   "val": null,
+   "t_s": 1359
+  },
+  {
+   "epoch": 17,
+   "loss": 0.5155,
+   "val": null,
+   "t_s": 1439
+  },
+  {
+   "epoch": 18,
+   "loss": 0.5101,
+   "val": null,
+   "t_s": 1520
+  },
+  {
+   "epoch": 19,
+   "loss": 0.5046,
+   "val": null,
+   "t_s": 1601
+  },
+  {
+   "epoch": 20,
+   "loss": 0.4997,
+   "val": {
+    "precision": 0.8025,
+    "recall": 0.902,
+    "f1": 0.8493,
+    "per_class": {
+     "person": {
+      "tp": 13832,
+      "fp": 2977,
+      "fn": 1480
+     },
+     "vehicle": {
+      "tp": 225,
+      "fp": 482,
+      "fn": 48
+     }
+    }
+   },
+   "t_s": 1698
+  },
+  {
+   "epoch": 21,
+   "loss": 0.4951,
+   "val": null,
+   "t_s": 1779
+  },
+  {
+   "epoch": 22,
+   "loss": 0.4907,
+   "val": null,
+   "t_s": 1861
+  },
+  {
+   "epoch": 23,
+   "loss": 0.4855,
+   "val": null,
+   "t_s": 1941
+  },
+  {
+   "epoch": 24,
+   "loss": 0.4819,
+   "val": null,
+   "t_s": 2021
+  },
+  {
+   "epoch": 25,
+   "loss": 0.4787,
+   "val": {
+    "precision": 0.843,
+    "recall": 0.9034,
+    "f1": 0.8721,
+    "per_class": {
+     "person": {
+      "tp": 13864,
+      "fp": 2365,
+      "fn": 1448
+     },
+     "vehicle": {
+      "tp": 215,
+      "fp": 258,
+      "fn": 58
+     }
+    }
+   },
+   "t_s": 2122
+  },
+  {
+   "epoch": 26,
+   "loss": 0.475,
+   "val": null,
+   "t_s": 2201
+  },
+  {
+   "epoch": 27,
+   "loss": 0.4709,
+   "val": null,
+   "t_s": 2283
+  },
+  {
+   "epoch": 28,
+   "loss": 0.4675,
+   "val": null,
+   "t_s": 2368
+  },
+  {
+   "epoch": 29,
+   "loss": 0.4643,
+   "val": null,
+   "t_s": 2450
+  },
+  {
+   "epoch": 30,
+   "loss": 0.4607,
+   "val": {
+    "precision": 0.8407,
+    "recall": 0.9052,
+    "f1": 0.8717,
+    "per_class": {
+     "person": {
+      "tp": 13887,
+      "fp": 2379,
+      "fn": 1425
+     },
+     "vehicle": {
+      "tp": 220,
+      "fp": 294,
+      "fn": 53
+     }
+    }
+   },
+   "t_s": 2553
+  },
+  {
+   "epoch": 31,
+   "loss": 0.46,
+   "val": null,
+   "t_s": 2635
+  },
+  {
+   "epoch": 32,
+   "loss": 0.4569,
+   "val": null,
+   "t_s": 2716
+  },
+  {
+   "epoch": 33,
+   "loss": 0.4555,
+   "val": null,
+   "t_s": 2798
+  },
+  {
+   "epoch": 34,
+   "loss": 0.4545,
+   "val": null,
+   "t_s": 2881
+  },
+  {
+   "epoch": 35,
+   "loss": 0.4519,
+   "val": {
+    "precision": 0.8571,
+    "recall": 0.9045,
+    "f1": 0.8801,
+    "per_class": {
+     "person": {
+      "tp": 13874,
+      "fp": 2037,
+      "fn": 1438
+     },
+     "vehicle": {
+      "tp": 222,
+      "fp": 313,
+      "fn": 51
+     }
+    }
+   },
+   "t_s": 2982
+  },
+  {
+   "epoch": 36,
+   "loss": 0.4502,
+   "val": null,
+   "t_s": 3063
+  },
+  {
+   "epoch": 37,
+   "loss": 0.4494,
+   "val": null,
+   "t_s": 3145
+  },
+  {
+   "epoch": 38,
+   "loss": 0.4492,
+   "val": null,
+   "t_s": 3229
+  },
+  {
+   "epoch": 39,
+   "loss": 0.4481,
+   "val": null,
+   "t_s": 3313
+  },
+  {
+   "epoch": 40,
+   "loss": 0.4478,
+   "val": {
+    "precision": 0.8575,
+    "recall": 0.906,
+    "f1": 0.8811,
+    "per_class": {
+     "person": {
+      "tp": 13896,
+      "fp": 2022,
+      "fn": 1416
+     },
+     "vehicle": {
+      "tp": 224,
+      "fp": 325,
+      "fn": 49
+     }
+    }
+   },
+   "t_s": 3417
+  }
+ ]
+}
