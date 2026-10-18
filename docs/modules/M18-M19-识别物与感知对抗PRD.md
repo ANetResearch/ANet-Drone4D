@@ -1221,5 +1221,6 @@ rev：     与上次发出的剖面相比，dB 量最大差 > 0.5 dB 或线性�
 | timeline | 每个 targets stage 取运动源位姿写入 MotionState，跳过 `step_motion`、运动核与行为覆盖；运动源返回 None 或未登记时保持位置、速度归零；`enabled = false` 的识别物本 tick 不参与判据 |
 | exogenous | 覆盖恒为 `(None, True)`（响应计时照常推进），状态机进入 ALERTED 后不向同类广播 |
 | 只读接口 | 运动源可调用 `state1(id)` 与 `config(id)`（Interactive 模式在 M23 运动源中执行反应，滞后一个 M18 周期） |
+| 只读度量（D3 v1.6 补记，E04） | 登记运动源后，M18 以 `timeline_track(tids)` 与 `timeline_discovered()` 提供只读的事件度量（时间线目标的实现位置与"被发现"记录），供 M23 写出 `event_run.json`；不改变 M18 的运动与判据代码路径 |
 | 缺省不变 | 无运动源、无 `timeline` 与 `exogenous` 时代码路径与 D2 相同；`tests/targets` 全部用例与 `test_determinism.py` 轨迹哈希不变 |
 | 验收 | `tests/targets/test_d3_timeline.py`（跟随运动源、无运动源保持、运动源禁用不判定、exogenous 不移动不广播、interactive 对照、校验） |

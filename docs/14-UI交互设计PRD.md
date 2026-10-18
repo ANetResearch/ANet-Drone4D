@@ -4327,7 +4327,7 @@ flowchart TB
 #### 21.2.3 两种构建与界面解析
 
 ```ts
-// 伪代码：app/lab/surface.ts（M15）。只决定呈现；服务端按 x-d3-role 独立执行同样的策略（AWR-05 ADR-166）
+// 伪代码：app/lab-public/flags.ts（M15，v1.6 实际文件；构建常量 LAB_BUILD，原写 app/lab/surface.ts）。只决定呈现；服务端按 x-d3-role 独立执行同样的策略（AWR-05 ADR-166）
 type LabBuild = 'internal' | 'public'                       // VITE_AWR_LAB_ONLY = 1 时为 public
 type LabRole = 'visitor' | 'invited' | 'researcher' | 'evaluator' | 'admin'      // v1.3：public_submitter 废止，invited 新增
 interface LabSurface { build: LabBuild; role: LabRole; projects: string[]; canEdit: boolean; canEval: boolean;
@@ -4346,7 +4346,7 @@ async function resolveLabSurface(build: LabBuild, route: Route): Promise<LabSurf
 ```
 
 规则：
-1. 公开只读构建的代码分块不包含写入口：`ui/lab/editor/**`、`ui/lab/fleet/**`、`ui/lab/runs/RunsTable.tsx` 的操作列与 `ui/lab/eval/**` 在 `VITE_AWR_LAB_ONLY = 1` 时以构建期常量剔除（与 ADR-111 的运行期切换不同：公开只读构建没有任何可写角色，P3 的提交 Sheet 单独懒加载）；`prod-bundle-scan` 增加检查项"公开只读构建的分块中不含 `/api/bench/v1/runs`、`/events`、`/session` 字符串"（§21.26 K15）。
+1. 公开只读构建的代码分块不包含写入口（v1.6：禁用模块表为 `vite.config.ts` 中的 `LAB_PUBLIC_FORBIDDEN_RE`，组合根为 `apps/web/src/app/lab-public/`）：`ui/lab/editor/**`、`ui/lab/fleet/**`、`ui/lab/runs/RunsTable.tsx` 的操作列与 `ui/lab/eval/**` 在 `VITE_AWR_LAB_ONLY = 1` 时以构建期常量剔除（与 ADR-111 的运行期切换不同：公开只读构建没有任何可写角色，P3 的提交 Sheet 单独懒加载）；`prod-bundle-scan` 增加检查项"公开只读构建的分块中不含 `/api/bench/v1/runs`、`/events`、`/session` 字符串"（§21.26 K15）。
 2. 内部构建登录态以会话 Cookie 维持；前端不持有 bench token，也不把短期令牌写入任何存储（只在内存中，用于 lab-gateway 的 WS 子协议），页面刷新时重新换取。
 3. 会话剩余 ≤ 10 min 时顶栏右侧出现"会话将于 {m} 分钟后到期 · [重新登录]"（`Badge` + `Button size="sm"`）；到期后任一请求得到 401 时跳转登录页并保留 `next`。
 4. 角色变化（管理员撤销令牌）时下一次请求得到 401 或 403，前端统一进入登录页或在原页显示"当前角色无权执行（115 ROLE_FORBIDDEN）"。
@@ -4948,7 +4948,7 @@ function bufferingGate(req: FrameNeeds[]): boolean {                  // 播放�
 #### 21.14.2 数据加载
 
 ```ts
-// 伪代码：app/lab/staticData.ts（M15）。公开只读构建的唯一数据入口
+// 伪代码：app/lab-public/staticIndex.ts（M15，v1.6 实际文件，导出 loadStaticIndex、labGet；原写 app/lab/staticData.ts）。公开只读构建的唯一数据入口
 async function loadStaticIndex(): Promise<LabStaticIndex> {
   const r = await fetch('/lab-static/index.json', { cache: 'no-cache' })     // ETag 校验；版本目录内文件为 immutable
   const idx = await r.json() as LabStaticIndex                                  // drone4d.lab_static_index.v1
@@ -5087,6 +5087,24 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 | CL-ALL-03 | 全部 | 交付称谓（v1.6，AWR-05 §7.10、ADR-194）：以主版本号 2 指代下一大版本（`Drone4D 2.0`、`Drone4D v2`、`Drone4D 2` 后接非数字、"2.0 版"、"二代"、"新一代 Drone4D"），以及 `D3.5`、`D3 Plus` | error | 第三方许可与软件版本号（Apache License 2.0、Apache-2.0、glTF 2.0、OAuth 2.0）；契约与协议版本号（`board.v2`、`wire.v2`、`1.3.0`）；本项目已发布的版本号（"0.2.0 版本"）；引用外部文献原题 |
 
 扫描范围：`apps/web/src/app/i18n/{zh-CN,en}.json`、`README.md`、`README.zh-CN.md`、公开站落地页与关于页、GitHub 仓库 About 与 topics（`tools/release/repo-meta.json`）、release notes、`CITATION.cff`、数据集发布页（`README` 与 `GENERATORS.md`）、`drone4d-camera` 文档、OpenAPI 描述（`bench.openapi.snapshot.json` 的 `summary` 与 `description`）。基线例外在 `tools/lint/copy-lint.baseline.json` 逐条登记（文件、键、规则、理由、登记人），P0b 出口前清零（D3-AC-46、D3-AC-23）。
+
+规则编号对照（v1.6，L01）：本表的 CL-* 编号为设计编号；`tools/lint/copy-lint.mjs` 的实现编号为 COPY-01 至 COPY-10（含义见 AWR-05 §7.10），基线登记、`<!-- copy-lint-allow COPY-xx 理由 -->` 放行注释与 lint 输出一律使用实现编号。对照如下：
+
+| 设计编号 | 实现编号 |
+|---|---|
+| CL-ZH-01、CL-EN-01 | COPY-01 短语禁用表与白名单 |
+| CL-ZH-02 | COPY-02 感叹号与语气符号 |
+| （省略号；打开对话框的菜单省略号为白名单，AWR-05 §7.10） | COPY-03 |
+| CL-ALL-01 | COPY-04 emoji 与禁用字形 |
+| CL-ZH-03、CL-EN-03 | COPY-05 未注明条件的数字 |
+| CL-ALL-02 | COPY-06 产品名与专有名词写法 |
+| CL-EN-02 | COPY-07 英文 sentence case |
+| （D3-AC-53 最高级措辞） | COPY-08 |
+| （口号式标语，§21.15.8） | COPY-09 |
+| CL-ZH-04、CL-ALL-03 | COPY-10 称谓与术语表（交付称谓规则 CL-ALL-03 在 COPY-10 内实现） |
+| （基线登记） | COPY-BL-01 登记失效、COPY-BL-02 登记缺字段、COPY-BL-03 `--strict` 下仍有基线 |
+
+基线文件 `copy-lint.baseline.json` 的 `exceptions` 为 P-1 基线，由 `make lint-copy-strict` 判定清零；`allow` 为经评审的永久放行项，须填写 `reason` 与 `reviewed`。
 
 #### 21.15.8 README 与仓库元数据结构（D2 发布面复核与 D3 发布）
 
@@ -5320,7 +5338,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | 路径 | 内容 | 所有者（工作包） | 复用的 D1、D2 代码与研究原型 |
 |---|---|---|---|
 | `apps/web/src/app/routes/lab*.tsx`（新） | 14 条路由与参数解析 | M15（WP-D3-10） | `app/router/{table,match,search}.ts`、`app/routes/runs.tsx` 的覆盖页写法 |
-| `apps/web/src/app/lab/{surface,staticData,benchClient}.ts`（新） | 构建与界面解析（§21.2.3）、静态制品加载（§21.14.2）、bench REST 客户端（Cookie、CSRF 头、problem+json） | M15（WP-D3-10、26） | `net/api.ts` 的错误映射、`lib/demo.ts` 的构建开关写法 |
+| `apps/web/src/app/lab/{surface,staticData,benchClient}.ts`（新；v1.6：公开只读构建的对应文件为 `apps/web/src/app/lab-public/{flags,staticIndex}.ts`） | 构建与界面解析（§21.2.3）、静态制品加载（§21.14.2）、bench REST 客户端（Cookie、CSRF 头、problem+json） | M15（WP-D3-10、26） | `net/api.ts` 的错误映射、`lib/demo.ts` 的构建开关写法 |
 | `apps/web/src/ui/lab/shell/`（新） | 外壳、导航栏、面包屑、登录页、会话提示 | M15 | `ui/layout/AppHeader.tsx`、`ui/components/ui/{sidebar,breadcrumb}.tsx` |
 | `apps/web/src/ui/lab/{home,worlds}/`（新） | 首页与世界页 | M15 | `ui/views/WorldHub.tsx` 的卡片布局 |
 | `apps/web/src/ui/lab/editor/`（新）：`EventEditor.tsx`、`Inspector.tsx`、`toolModes.ts`、`preflightController.ts`、`navWorker.ts`、`draftSync.ts`、`ClaimsSheet.tsx` | §21.4 | M15（WP-D3-17） | `ui/panels/mission-edit/{EditViewportLayer,editModel}.ts`（`PolyEditor` 与撤销栈）、`ui/tools/toolMode.ts`；r6 原型 `.cache/research/d3/r6-event-benchmark/node/{build_navmesh,tape_gen}.mjs`（WASM 调用方式）、`schema/event.v1.schema.json` |

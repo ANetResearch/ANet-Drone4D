@@ -4,9 +4,9 @@
 |---|---|
 | 文档编号 | AWR-M23 |
 | 标题 | 事件运行时 |
-| 版本 | v1.2 |
-| 日期 | 2026-10-12 |
-| 状态 | 草案 v1.1（按 AWR-05 v1.3 修订：第一批四类事件、首个固定事件、车道图与驾驶行为及骨骼动画前移、搜索先验与 test 变体；修订内容汇总见 §15；v1.2 按 AWR-05 v1.4 同步：事件类型与排行榜赛道的对应、事件编辑器网格选择交互的区域与几何不完整标注提议，见 §16） |
+| 版本 | v1.3 |
+| 日期 | 2026-10-18 |
+| 状态 | 草案 v1.3（按 AWR-05 v1.6 修订：生成器为 Python 单一实现、预检与 NavMesh 查询经 navsvc（ADR-196、ADR-197）；世界检查改用 M22 `metric_ok()`；门 1 错误目录、磁带编码与哈希、`event_run.json`、命令行退出码与 REST 字段按实现登记，汇总见 §17）；v1.1 状态：草案 v1.1（按 AWR-05 v1.3 修订：第一批四类事件、首个固定事件、车道图与驾驶行为及骨骼动画前移、搜索先验与 test 变体；修订内容汇总见 §15；v1.2 按 AWR-05 v1.4 同步：事件类型与排行榜赛道的对应、事件编辑器网格选择交互的区域与几何不完整标注提议，见 §16） |
 | 上游文档 | 用户 D3 需求原文、补充要求与 2026-10-12 决策 [inputs/D3-需求原文-2026-10-11.md](../inputs/D3-需求原文-2026-10-11.md)（R-D3-01 至 04、06、11、19、21、27、30、38；v1.1 增加 2026-10-12 交互式确认的 R-D3-42、47、48、49）；用户设计讨论 design-r1（`/data/projs/anet-drone-data/design-r1.md` §五、§九）；[AWR-05](../05-D3-设计增补与决策记录.md)（§1.2、§2.3、§4.1、§4.3、§4.4、§4.5、§4.8、§5.0、§5.1.3 至 §5.1.6、§5.2、§5.4.1、§5.5.4、§5.5.5、§5.6.1 至 §5.6.6、§6.1.3、§7.1、§7.2、§7.8、§7.9、§7.11、§8、§10、§11、§12、§13；ADR-128 至 ADR-136、ADR-152、ADR-155、ADR-156、ADR-158、ADR-159、ADR-161）；[AWR-04](../04-D2-设计增补与决策记录.md)（ADR-099、ADR-110）；[AWR-03](../03-设计基线与决策记录.md)（ADR-047、ADR-049、§10.2）；[M07](M07-环境引擎PRD.md)、[M08](M08-仿真内核与飞行器适配PRD.md)、[M12](M12-时间轴录制与回放PRD.md)、[M18-M19](M18-M19-识别物与感知对抗PRD.md)；D3 研究 [00-index](../research/d3/00-index.md) §2.7、§3.3、§4.3，[r6](../research/d3/r6-event-runtime-benchmark.md) §3 至 §8、§11、§12.4、§14 至 §16，[r7](../research/d3/r7-d2-code-audit.md) §3.1、§4.2、§4.3、§8.2，[r2](../research/d3/r2-glb-world.md) §4，[r8](../research/d3/r8-rerun.md) §6 |
 | 下游文档 | M22（NavMesh、锚点与 `walkable_height` 的确定性实现）、M25（`DynamicSource` 消费者）、M26（通信区、任务简报、L1 观测的演员来源）、M27（`event_compile` 作业、真值、评测、数据集与 Rerun 派生）、M24（Realistic 档磁带回放与环境表）、M18（扩展点 2、3、4）、M07（环境轨）、M12（扩展点 11）、M15 与 M06（事件编辑器、事件回放、前端磁带解码器）、[17](../17-接口与实时协议规范.md)（原因码 610–629、topic、REST）、[18](../18-性能与测试方案.md) |
 | 适用版本范围 | V0.3（即本期交付 D3）至 V1.0 |
@@ -192,17 +192,17 @@
 | M23-FR-013 | 吸附：按锚点 `profile` 在对应 NavMesh 上取最近点（halfExtents 2 m、4 m、2 m），只接受种子洪泛主岛；吸附距离 ≤ 3 m 通过、3–8 m 告警 `W-SNAP`、> 8 m 或落在孤岛返回 611（`E-ANCHOR-UNSNAPPED`） | P0 | V0.3 | P0a | M23-AC-004 | AWR-05 §5.1.3 V-GLB；r6 §3.2 |
 | **门 1 静态校验** | | | | | | |
 | M23-FR-014 | 门 1 一次报出全部错误：schema、id 唯一、锚点与演员引用、时间严格递增、首末路点动作、类别与锚点 profile、上下车目标与窗口（静态部分）、注释参与者、关系引用、限额；失败返回 611，`errors[]` 逐条含 JSON 指针、错误码与中文说明，CLI 退出码 2 | P0 | V0.3 | P0a | M23-AC-002 | AWR-05 §5.2.2；r6 §4.3 |
-| M23-FR-015 | 世界检查：`scaleStatus ∉ {landmark, assumed}` 返回 600；所需 `navmesh` 图层缺失返回 616；`package_sha256` 与 `contentVersion` 由编译器填写 | P0 | V0.3 | P0a | M23-AC-003 | AWR-05 §5.1.2；ADR-130 |
+| M23-FR-015 | 世界检查（v1.3 按 W01 修订）：世界不满足 M22 `metric_ok()`（`scaleStatus ≠ relative` 且标定证据完整）时返回 600，排名编译（`CompileOptions.ranked`）另拒绝 `assumed`（`ranked_ok`）；本检查属门 1，错误码 `E-WORLD`，`detail` 为 `MetricStatus.to_json()` 加 `ranked`；615 与 600 同时出现时两者都报告，`reason` 取 615（原写"`scaleStatus ∉ {landmark, assumed}` 返回 600"）；所需 `navmesh` 图层缺失返回 616；`package_sha256` 与 `contentVersion` 由编译器填写 | P0 | V0.3 | P0a | M23-AC-003 | AWR-05 §5.1.2；ADR-130 |
 | **门 2 几何预检** | | | | | | |
 | M23-FR-016 | 逐段计算 NavMesh 实际行进路径长度、可用时间、所需峰值速度（含加速度约束），判定可行、过慢、不可行、不连通；车辆按 0.7 × 上限判定；上下车按车辆等待窗口判定；不可行返回 612 与 `segments[]`，过慢记 `W-SLOW` 并延后出发 | P0 | V0.3 | P0a | M23-AC-005 | AWR-05 §5.2.2；r6 §4.4 |
 | M23-FR-017 | 自动排时两种模式：`minimal`（只推迟必要的时刻，缺省）与 `median`（按步态中值重排）；输出逐演员建议时刻与因上下车约束建议的车辆停留延长量 | P0 | V0.3 | P0a | M23-AC-005 | r6 §4.4；本文设定 |
-| M23-FR-018 | 预检服务：每个活跃世界常驻预检进程，加载与浏览器相同的 Detour 二进制与 WASM；单路线（≤ 8 段）服务端 p95 ≤ 100 ms；结果与浏览器本地预检逐字段一致 | P0 | V0.3 | P0a（服务端）、P1（编辑器） | M23-AC-006 | AWR-05 §7.2；D3-AC-26 |
+| M23-FR-018 | 预检服务：每个活跃世界常驻预检进程（v1.3：即 navsvc，AWR-05 ADR-196），加载与浏览器相同的 Detour 二进制与 WASM；单路线（≤ 8 段）服务端 p95 ≤ 100 ms；结果与浏览器本地预检逐字段一致 | P0 | V0.3 | P0a（服务端）、P1（编辑器） | M23-AC-006 | AWR-05 §7.2；D3-AC-26 |
 | **磁带生成** | | | | | | |
 | M23-FR-019 | 脚本演员运动学：Detour 直线路径 → 受限圆角 → 弧长参数化 → 梯形速度；先排车辆、后排行人；到达误差 ≤ 1 mm；多人共用 zone 锚点分配环形站位并面向圆心 | P0 | V0.3 | P0a | M23-AC-007 | AWR-05 §5.2.3；r6 §5.1、§5.2 |
 | M23-FR-020 | 状态切换：`spawn`、`wait`、`board`、`alight`、`enter_building`、`exit_building`、`despawn` 按 §6.6.3 转移；乘客随车，车辆离场时乘客一并离场；进入建筑后位置保持在门锚点吸附点 | P0 | V0.3 | P0a | M23-AC-010 | AWR-05 §5.1.5；r6 §5.2 |
 | M23-FR-021 | 背景演员：DetourCrowd 推进，每名脚本演员在人群中设代理障碍（人 0.4 m、车 2.2 m）；目标点、速度、停留与外观以流 19 计数器随机数抽样；背景演员与脚本演员最小水平距离 ≥ 0.5 m | P0 | V0.3 | P0a | M23-AC-008、017 | ADR-134；r6 §5.1 |
 | M23-FR-022 | 贴地：全部演员 z 由确定性 `ground_z` 求值（§6.6.5），与 M22 `walkable_height` 同一算法；门 3 检查 \|z_tape − z_mesh\| ≤ 2 cm | P0 | V0.3 | P0a | M23-AC-009 | AWR-05 §5.2.3；§14 第 4 条 |
-| M23-FR-023 | 生成器确定性：WASM 单线程（禁用 relaxed SIMD）、无 `Math.random` 与墙钟、稳定排序、整数定点；Node 版本、recast-navigation 版本与 WASM sha256 只写 `provenance` | P0 | V0.3 | P0a | M23-AC-008 | AWR-05 §4.5；r6 §7.2 |
+| M23-FR-023 | 生成器确定性（v1.3 按 ADR-197 修订）：生成器为 Python 单一实现，无墙钟与全局随机数，稳定排序、整数定点（生成器内核不启用 numba `fastmath`，浮点结果在写入前量化）；NavMesh 查询经 navsvc 调用 Detour WASM（单线程、禁用 relaxed SIMD）；navsvc 的 Node 版本、recast-navigation 版本与 WASM sha256 只写 `provenance` | P0 | V0.3 | P0a | M23-AC-008 | AWR-05 §4.5；r6 §7.2 |
 | M23-FR-024 | 生成性能：43 名演员 360 s ≤ 10 s；背景 1,000 人 360 s 在 dmax CPU 池 ≤ 120 s | P0 | V0.3 | P0a | M23-AC-011 | D3-AC-07；r6 §5.3 |
 | **磁带格式** | | | | | | |
 | M23-FR-025 | 规范头字段按 §6.7.1（JCS，原样存储）：schema、事件标识与版本、`event_sha256`、种子、模式、频率、tick 数、记录布局、演员表（含外观与尺寸）、世界 `contentVersion`、raycast 网格与 NavMesh sha256、锚点 sha256、环境关键帧与编译后的环境轨、通信区、动画侧车引用 | P0 | V0.3 | P0a | M23-AC-012 | AWR-05 §5.2.3 |
@@ -590,10 +590,10 @@ sequenceDiagram
 | 1 | `E-FIRST-WAYPOINT` | 错误 | 首个路点不是 `spawn` 或 `exit_building`；`despawn`、`enter_building` 之后仍有路点 | 611 |
 | 1 | `E-CLASS-PROFILE` | 错误 | 锚点 profile 与类别不符（例如车辆使用 person 锚点） | 611 |
 | 1 | `E-CLASS-UNSUPPORTED` | 错误 | 类别或动作在当前阶段不支持 | 611 |
-| 1 | `E-BOARD-TARGET` | 错误 | `board`、`alight` 的目标不是车辆，或车辆在声明时刻没有 `wait` 路点覆盖（静态检查） | 611 |
+| 1 | `E-BOARD-TARGET` | 错误 | `board`、`alight` 的目标不是车辆（`detail.why = no_wait` 时为车辆无等待路点）；或按声明时刻的静态窗口不覆盖：车辆 `wait` 或 `dwell_s > 0` 路点 k 的窗口为 [t_k, t_{k+1})，末路点 pass 或 wait 到事件结束、其余到 t_k + `dwell_s`；上车只要求 t ≤ 车辆离开的声明时刻（乘客可先到等候），下车要求 t 落在窗口内（`detail.why = window`）。晚于等待结束但早于车辆下一路点的上车由门 2 `I-BOARD` 判定并给出延长停留建议（v1.3，E02） | 611 |
 | 1 | `E-PARTICIPANT-UNKNOWN` | 错误 | 注释参与者未知 | 611 |
 | 1 | `E-RELATION-REF` | 错误 | 关系引用未知注释 | 611 |
-| 1 | `E-LIMIT` | 错误 | 超出 §6.16 限额 | 618 |
+| 1 | `E-LIMIT` | 错误 | 超出 §6.16 限额；schema 中与 §6.16 对应的 `maxItems`、`maximum` 违例（`actors`、`route`、`annotations`、`relations`、`comms.zones`、`duration_s`、`background.count`）报 `E-LIMIT` 618，不阻断门 1 其余检查；只有结构性 schema 错误（`E-SCHEMA`）使门 1 提前返回（v1.3，E02） | 618 |
 | 1 | `E-WORLD` | 错误 | 世界未标定（600）、NavMesh 缺失（616）、`package_sha256` 不一致（615） | 600、615、616 |
 | 1 | `E-MODE` | 错误 | P2 之前 `mode = interactive` | 619 |
 | 2 | `E-ANCHOR-UNSNAPPED` | 错误 | 吸附失败、> 8 m 或在孤岛 | 611 |
@@ -861,7 +861,7 @@ offset  size        内容
 ...                 块数据（每块两个 zstd 帧：S 帧为脚本演员，B 帧为背景演员；无背景时 comp_B = raw_B = 0）
 ```
 
-块编码 `col-delta-zstd@1`：块 b 覆盖 tick [100b, min(100b + 100, n_ticks))，按演员拆为 S（idx < n_s）与 B（idx ≥ n_s）两个子块。子块原文按字段次序（x、y、z、yaw、vx、vy、vz、state、container）→ 演员次序 → tick 次序排列；每个演员在块内的首个值为绝对值，其余为与前一 tick 的差（按字段位宽二进制补码回绕，yaw 先折叠）；各以 zstd 压缩（级别 19、带内容校验、无字典、单帧）。拆分的目的是让 sim-core 只解码脚本演员（30 名演员一个 S 子块原文约 66 KB），M25 与 M27 按需读取 B 子块。打包由 Python `zstandard` 完成；压缩级别、库版本与拆分方式不改变规范帧数据与内容哈希，只改变 `file_sha256`。
+块编码 `col-delta-zstd@1`：块 b 覆盖 tick [100b, min(100b + 100, n_ticks))，按演员拆为 S（idx < n_s）与 B（idx ≥ n_s）两个子块。子块原文按字段次序（x、y、z、yaw、vx、vy、vz、state、container）→ 演员次序 → tick 次序排列；每个演员在块内的首个值为绝对值，其余为与前一 tick 的差（按字段位宽二进制补码回绕，yaw 先折叠）；各以 zstd 压缩（级别 19、带内容校验、无字典、单帧）。拆分的目的是让 sim-core 只解码脚本演员（30 名演员一个 S 子块原文约 66 KB），M25 与 M27 按需读取 B 子块。打包由 Python `zstandard` 完成；压缩级别、库版本与拆分方式不改变规范帧数据与内容哈希，只改变 `file_sha256`。v1.3（E03）：子块以并行线程压缩（`AWR_TAPE_THREADS`，至多 8），每个子块为独立 zstd 帧，线程数不改变压缩字节与 `file_sha256`。
 
 #### 6.7.4 哈希与校验
 
@@ -880,6 +880,8 @@ verify(tape.bin):                                    # 常量内存
 
 不一致返回 614；规范头中的 `world.content_version`、`raycast_sha256`、`navmesh_sha256` 与运行时加载的世界包不一致返回 615。
 
+脚本演员列哈希（v1.3，E03）：`scripted_sha256 = SHA-256(JCS(脚本演员表) ‖ 脚本演员 tick 主序的帧数据)`，即 D3-AC-07 所称"脚本演员列哈希"（背景 0 / 40 / 200 / 1,000 人时相同）。
+
 #### 6.7.5 版本规则与哈希子集
 
 **磁带输入子集**（`event_sha256` 的对象）：`world.id`、解析后锚点坐标集合的哈希、`seed`、`duration_ms`、`tick_hz`、`mode`、`actors`（含外观与步态）、`background`、`environment`、`comms`、`interactive`。不含：`annotations`、`relations`、`labels`、`brief`、`version`。`dsl_sha256` 覆盖规范化后的完整 DSL。
@@ -890,14 +892,14 @@ verify(tape.bin):                                    # 常量内存
 | 世界几何、NavMesh、锚点（世界层）变化 | 旧版本 DEPRECATED；须以新 `version` 重新编译；旧 Run 的评分不与新磁带混排 | 615 阻止旧磁带在新世界上加载 |
 | 只改注释、关系、显示名、简报 | 磁带不变，`truth_rev + 1`，重算真值与 `brief.json` | `dsl_sha256`、`truth_sha256` 变化，`content_sha256` 不变 |
 | 检测器参数缺省值变化（M23 升级） | 对受影响版本 `truth_rev + 1` | 同上 |
-| 生成器、recast-navigation、Node 升级 | 重新生成并比较 `content_sha256`；相同只更新出处；不同则视为新版本并记录最大位置偏差 | — |
+| 生成器、recast-navigation 或 navsvc 的 Node 升级 | 重新生成并比较 `content_sha256`；相同只更新出处；不同则视为新版本并记录最大位置偏差 | — |
 | 压缩级别或 zstd 版本变化 | 无需处理 | 只有 `file_sha256` 变化 |
 
 M27 的 `evaluation.json` 记录 `tape_content_sha256` 与 `truth_sha256`；排行榜只在同一 `truth_sha256` 下比较（§14 第 2 条）。
 
 #### 6.7.6 清单 `tape.json`
 
-`{schema: "drone4d.tape_manifest.v1", content_sha256, body_sha256, header_sha256, file_sha256, bytes, n_actors, n_ticks, header（规范头的解析副本，只供阅读）, provenance{generator, generator_version, recast_navigation, wasm_sha256, node, host, wall_ms, rss_mb, created_at}, report{arrivals[{actor, at, t_plan_s, t_arrive_s, late_s}], boards[], warnings[], min_dist_m{scripted_scripted, bg_scripted}}}`。清单不参与内容哈希，以 `tape.bin` 中的规范头为准。
+`{schema: "drone4d.tape_manifest.v1", content_sha256, body_sha256, header_sha256, file_sha256, bytes, n_actors, n_ticks, header（规范头的解析副本，只供阅读）, provenance{generator, generator_version, recast_navigation, wasm_sha256, node, host, wall_ms, rss_mb, created_at}, report{arrivals[{actor, at, t_plan_s, t_arrive_s, late_s}], boards[], warnings[], min_dist_m{scripted_scripted, bg_scripted}}}`。清单不参与内容哈希，以 `tape.bin` 中的规范头为准。v1.3：`provenance.node` 指 navsvc 的 Node 版本（ADR-197，生成器本身为 Python）；`report.arrivals` 取自实际时间线（`gen.arrivals`），`t_arrive_s` 与 `late_s` 由计算得出，不从计划复制（E03）。
 
 ### 6.8 读取与插值 `TapeReader`
 
@@ -980,6 +982,8 @@ strict 且（任一 check 未验证 或 任一关系不成立 或 一致性失�
 ### 6.10 真值产物
 
 #### 6.10.1 `event_truth.json`（`drone4d.event_truth.v1`）
+
+实现（v1.3，E03）：真值骨架实现于 `awr.sim.events.gen`（`build_truth`、`truth_sha256`、`dsl_sha256`）；门 3（E01）把事件与声明、关系检查结果传入。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -1117,7 +1121,7 @@ sequenceDiagram
 #### 6.12.4 状态发布与批处理输出
 
 - `event/status`（1 Hz，`lab-gateway` 承载）：`{event_id, version, t_ms, mode, env: EnvSample, comms_active: [zone_id], phase?: [{id, type, state: active}]}`；`phase` 字段只在评测员与管理员会话中填写；Agent principal 与公开 viewer 不得订阅（§7.4）。
-- `event_run.json`：`{tape_content_sha256, mode, scripted_track_sha256（sim-core 中脚本演员在磁带 tick 上的毫米定点轨迹哈希）, discovered: [{actor, uav, t_ms, criterion}], discovered_count{actor: n}, env_ops_applied: [{t_ms, cid}], realized?: {tape_content_sha256, deviation{}}}`。
+- `event_run.json`：`{tape_content_sha256, mode, scripted_track_sha256（sim-core 中脚本演员在磁带 tick 上的毫米定点轨迹哈希）, discovered: [{actor, uav, t_ms, criterion}], discovered_count{actor: n}, env_ops_applied: [{t_ms, cid}], realized?: {tape_content_sha256, deviation{}}}`。v1.3 实现口径（E04）：另含 `tape_track_sha256`（同一组磁带 tick 上的磁带插值位置，供对照）与 `realized_ticks`；`scripted_track_sha256` 取自 M18 时间线目标的实现位置（`MotionState.pos` 取整到毫米，`<i8` × 3，按演员 idx 拼接）；`discovered` 条目为 `{actor, uav, t_ms（事件时刻 = offset + 仿真时刻）, criterion, kind}`；`discovered_count` 含全部脚本演员（未被发现记 0）。
 
 ### 6.13 Exogenous 与 Interactive
 
@@ -1445,9 +1449,10 @@ python -m awr.sim.events diff     <a.bin> <b.bin>                               
 python -m awr.sim.events publish  <event_id>@v<N>
 python -m awr.sim.events export-openlabel <event_dir> [--out <file>]                        # P3
 python -m awr.sim.events family-sample <family.yaml> --n <k> --seed <s> [--out <dir>]       # P3
-node tools/events/tape_gen.mjs --plan <plan.json> --world <dir> --out <prefix>              # 内部；退出码 0/2/3/4
-node tools/events/preflight_worker.mjs --world <dir>                                        # 常驻；stdio 上的 JSON Lines
+# v1.3：不实现 Node 磁带生成器（ADR-197）；预检与 NavMesh 查询由常驻 navsvc（tools/events/**，W09）在 stdio 上以 JSON Lines 提供（ADR-196）
 ```
+
+退出码补充（v1.3，E02）：编译中抛出的 `EventError`（如 616）以 JSON 写到 stderr，退出码 4；YAML 输入的安全拒绝属门 1，退出码 2。
 
 ### 7.3 REST（bench-api 挂载，`/api/bench/v1`）
 
@@ -1456,11 +1461,11 @@ node tools/events/preflight_worker.mjs --world <dir>                            
 | 方法与路径 | 最低角色 | 请求 | 响应 | 登记状态 | 阶段 |
 |---|---|---|---|---|---|
 | `POST /events` | 研究者 | `{dsl: string（≤ 1 MiB）, format: "yaml" 或 "json", anchors?: awr-anchors@1, strict = true, retime_mode = "minimal", draft_id?}` | `202 {event_id, version, job_id}`；413（618）；400（文本解析失败） | AWR-05 §8.2 已登记 | P0a |
-| `GET /events` | 研究者 | `?world=&status=&owner=&q=&cursor=` | `{items: [{event_id, version, status, world, duration_s, n_scripted, n_background, strict, tape_content_sha256?, updated_at}], next}` | 已登记 | P0a |
-| `GET /events/{eid}` | 研究者 | `?version=`（缺省最新） | §7.3.1 | 已登记 | P0a |
+| `GET /events` | 研究者 | `?world=&status=&owner=&q=&cursor=` | `{items: [{event_id, version, status, world, duration_s, n_scripted, n_background, strict, tape_content_sha256?, updated_unix_ns}], next}`（v1.3 实现另含 `name`、`event_type`、`reason`、`versions`（版本数）；时间字段为 `updated_unix_ns`，原写 `updated_at`） | 已登记 | P0a |
+| `GET /events/{eid}` | 研究者 | `?version=`（缺省最新） | §7.3.1（v1.3 实现另含 `latest_version`、`versions[]{version, status}`、`published`、`artifacts[]{name, bytes}`） | 已登记 | P0a |
 | `POST /events/{eid}/preflight` | 研究者 | §7.3.2 | §7.3.2 | 已登记 | P0a |
 | `DELETE /events/{eid}/jobs/{job_id}` | 研究者（本人） | — | 204（只对 QUEUED）；409 | 建议增补 | P0a |
-| `POST /events/{eid}/versions/{v}/publish` | 研究者（本人）、管理员 | — | `200 {status: "published"}`；409（617） | 建议增补 | P0a |
+| `POST /events/{eid}/versions/{v}/publish` | 研究者（本人）、管理员 | — | `200 {status: "published"}`；409（617）；v1.3：发布与弃用标记为版本目录中的 `published.json`、`deprecated.json` | 建议增补 | P0a |
 | `GET /events/{eid}/versions` | 研究者 | — | `[{version, status, strict, content_sha256, truth_rev, truth_sha256, runs, created_at}]` | 建议增补 | P1 |
 | `GET /events/{eid}/versions/{v}/artifacts/{name}` | 按 §7.3.3 | — | 文件流，`ETag = sha256`，支持 Range | 建议增补 | P0a |
 | `PUT /events/{eid}/drafts/{did}` | 研究者 | DSL 文本；`If-Match: <etag>` | `200 {etag}`；409（621） | 建议增补 | P1 |
@@ -1532,7 +1537,7 @@ node tools/events/preflight_worker.mjs --world <dir>                            
 
 | 码 | 名称 | 触发 | 处置建议（`remedy`） | 状态 |
 |---|---|---|---|---|
-| 600 | `WORLD_UNCALIBRATED` | 世界包 `scaleStatus` 缺失或为 unknown | 先完成 M22 标定 | AWR-05 §8.4 已登记 |
+| 600 | `WORLD_UNCALIBRATED` | 世界不满足 M22 `metric_ok()`（`scaleStatus ≠ relative` 且标定证据完整）；排名编译（`CompileOptions.ranked`）另拒绝 `assumed`（`ranked_ok`）；门 1 `E-WORLD`，`detail` 为 `MetricStatus.to_json()` 加 `ranked`；与 615 同时出现时两者都报告，`reason` 取 615（v1.3；原写"`scaleStatus` 缺失或为 unknown"） | 先完成 M22 标定 | AWR-05 §8.4 已登记 |
 | 611 | `EVENT_COMPILE_FAILED` | 门 1 或吸附失败 | 按 `errors[]` 修改 DSL | 已登记 |
 | 612 | `EVENT_INFEASIBLE` | 门 2 不可行 | 采纳建议时刻或调整锚点 | 已登记 |
 | 613 | `EVENT_SEMANTIC_MISMATCH` | strict 下声明或关系不成立、一致性失败 | 查看声明与实算对照 | 已登记 |
@@ -1714,8 +1719,8 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 | 编号 | 优先级 | 阶段 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
 |---|---|---|---|---|---|---|---|
 | M23-AC-001 | P0 | P0a | DSL 与规范化 | 合法与非法 fixtures 各 ≥ 20 条按预期通过或拒绝；时间与长度全部为整数毫秒与毫米；拒绝 NaN、Inf、−0；Python `rfc8785` 与 Node JCS 对 50 个 plan fixtures 输出逐字节一致 | `tests/d3/events/test_dsl.py`、`tools/events/test/jcs.golden.test.mjs` | 本机 | 06 |
-| M23-AC-002 | P0 | P0a | 门 1 错误目录 | `events/crop/bad-001.yaml` 一次报出未知锚点、时间不单调、上车窗口、类别与 profile 不符、未知参与者 5 类错误，原因码 611，CLI 退出码 2；超限 618；不支持的类别 619；YAML 别名展开与 > 1 MiB 文本被拒绝 | `test_gate1.py` | 本机 | 06 |
-| M23-AC-003 | P0 | P0a | 世界检查 | 对 `scaleStatus = unknown` 的世界包编译返回 600；缺少 vehicle NavMesh 且事件含车辆返回 616；`package_sha256` 不一致返回 615 | `test_gate1.py` | 本机 | 02 |
+| M23-AC-002 | P0 | P0a | 门 1 错误目录 | `events/crop/bad-001.yaml` 一次报出未知锚点、时间不单调、上车窗口、类别与 profile 不符、未知参与者 5 类错误，原因码 611，CLI 退出码 2；超限 618；不支持的类别 619；YAML 别名展开与 > 1 MiB 文本被拒绝 | `tests/d3/events/test_compile_gate1.py`（v1.3；原写 `test_gate1.py`） | 本机 | 06 |
+| M23-AC-003 | P0 | P0a | 世界检查 | 对不满足 M22 `metric_ok()` 的世界包（`scaleStatus = relative` 或标定证据不完整）编译返回 600，排名编译对 `assumed` 世界返回 600（v1.3；原写"`scaleStatus = unknown`"）；600 与 615 同时出现时两者都报告、`reason` 取 615；缺少 vehicle NavMesh 且事件含车辆返回 616；`package_sha256` 不一致返回 615 | `test_gate1.py` | 本机 | 02 |
 | M23-AC-004 | P0 | P0a | 锚点吸附与覆盖层 | 吸附 ≤ 3 m 通过、3–8 m 告警、> 8 m 或孤岛错误；覆盖层 `extends`、覆盖、`remove` 生效，`anchors_sha256` 与锚点次序无关 | `test_preflight.py` | 本机 | 03 |
 | M23-AC-005 | P0 | P0a | 门 2 与自动排时 | `abc-first-draft.yaml`（r6 首版锚点与时刻）判定 8 段中 5 段不可行或不连通（所需速度最大 7.27 m/s 量级，按正确尺度复测值为准）；采纳 `minimal` 建议后编译通过；`median` 建议的每段速度等于步态中值 ± 1%；`board-miss.yaml` 返回 I-BOARD 与车辆停留延长建议，采纳后通过 | `test_preflight.py` | 本机 | 06 |
 | M23-AC-006 | P0 | P0a | 预检性能与一致性 | 服务端单路线（8 段）p95 ≤ 100 ms；浏览器 WASM 预检与服务端 `len_m` 逐位相同（Node 端模拟浏览器加载路径） | `test_api_events.py`、`tools/events/test/` | dmax CPU 池 | 26 |
@@ -1975,3 +1980,32 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 | 编号 | 优先级 | 阶段 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
 |---|---|---|---|---|---|---|---|
 | M23-AC-044 | P1 | P0b、P1 | 赛道归属与草稿提议 | 四类 test 事件的 `event_type` 与赛道一一对应；同一草稿在有无 `quality_proposals[]` 时编译得到的 `content_sha256` 与 `truth_sha256` 相同；套索与盒体绘制的区域写入 DSL 后为简单多边形且顶点数 ≤ 64 | `tests/d3/events/test_lane_map.py`、`test_draft_proposals.py` | 本机 | 26、57、62 |
+
+## 17. D3-SEAL 修订（v1.3，依据 AWR-05 v1.6）
+
+### 17.1 修订依据与摘要
+
+依据 AWR-05 v1.6 的 ADR-196（NavMesh 采用 Recast/Detour，查询服务 navsvc）、ADR-197（D3-AC-07 修订：Python 生成器与 TS 解码器逐字节对拍）与封板收尾批次（H02、W01、E02、E03、E04、F01）的实现结果。阈值不变。
+
+### 17.2 条款修订
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| FR-018 | 预检进程为 navsvc | H02（ADR-196） |
+| FR-023 | 生成器为 Python 单一实现；navsvc 的 Node 版本、recast-navigation 版本与 WASM sha256 只写 `provenance` | H02（ADR-197） |
+| §6.7.6 | `provenance.node` 指 navsvc 的 Node 版本；`report.arrivals` 取实际时间线 | H02、E03 |
+| FR-015、§7.6 第 600 行、M23-AC-003 | 世界检查改用 M22 `metric_ok()`，属门 1 `E-WORLD`；排名编译另拒绝 `assumed`；与 615 同时出现时 `reason` 取 615 | W01 |
+| §6.4 `E-BOARD-TARGET`、`E-LIMIT` | 静态窗口规则与 `detail.why`；`maxItems`、`maximum` 违例归 `E-LIMIT` 且不阻断门 1 | E02 |
+| §7.2 | `EventError` 退出码 4，YAML 安全拒绝退出码 2；删除 Node 生成器命令 | E02、ADR-197 |
+| M23-AC-002 | 测试文件为 `tests/d3/events/test_compile_gate1.py` | E02 |
+| §6.7.3、§6.7.4、§6.10.1 | 子块并行压缩；`scripted_sha256` 定义；真值骨架实现位置 | E03 |
+| §6.12.4 `event_run.json` | `tape_track_sha256`、`realized_ticks`、`discovered` 条目字段 | E04 |
+| §7.3 | 发布与弃用标记文件；`GET /events` 列表与详情字段 | F01 |
+
+### 17.3 D3-AC 映射变更
+
+| D3-AC | 变更 |
+|---|---|
+| D3-AC-02 | 600 判定改用 `metric_ok()`，测试 `tests/d3/events/test_world_gate.py` |
+| D3-AC-06 | 测试增加 `tests/d3/events/test_compile_gate1.py` |
+| D3-AC-07 | 按 ADR-197 修订；测试 `tests/d3/events/test_tape_determinism.py`，证据记入 RP0a（可引用 E03 与 B01 的结果记录） |
