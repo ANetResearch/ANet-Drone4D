@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- x500_d4d (Drone4D physics export, M24 §6.5.1): x500_base by Rudis Laboratories (BSD-3-Clause, see LICENSE) with
+     visuals and sensors removed; inertials, collisions and rotor joints unchanged. Motor and velocity-control systems are
+     added per vehicle by awr.phys.gz.compose. -->
+<sdf version='1.9'>
+  <model name='x500_d4d'>
+    <pose>0 0 .24 0 0 0</pose>
+    <self_collide>false</self_collide>
+    <static>false</static>
+    <link name="base_link">
+      <inertial>
+        <mass>2.0</mass>
+        <inertia>
+          <ixx>0.02166666666666667</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.02166666666666667</iyy>
+          <iyz>0</iyz>
+          <izz>0.04000000000000001</izz>
+        </inertia>
+      </inertial>
+      <gravity>true</gravity>
+      <velocity_decay />
+      <collision name="base_link_collision_0">
+        <pose>0 0 .007 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.35355339059327373 0.35355339059327373 0.05</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+      <collision name="base_link_collision_1">
+        <pose>0 -0.098 -.123 -0.35 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.015 0.015 0.21</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+      <collision name="base_link_collision_2">
+        <pose>0 0.098 -.123 0.35 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.015 0.015 0.21</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+      <collision name="base_link_collision_3">
+        <pose>0 -0.132 -.2195 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.25 0.015 0.015</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+      <collision name="base_link_collision_4">
+        <pose>0 0.132 -.2195 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.25 0.015 0.015</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+    </link>
+    <link name="rotor_0">
+      <gravity>true</gravity>
+      <self_collide>false</self_collide>
+      <velocity_decay />
+      <pose>0.174 -0.174 0.06 0 0 0</pose>
+      <inertial>
+        <mass>0.016076923076923075</mass>
+        <inertia>
+          <ixx>3.8464910483993325e-07</ixx>
+          <iyy>2.6115851691700804e-05</iyy>
+          <izz>2.649858234714004e-05</izz>
+        </inertia>
+      </inertial>
+      <collision name="rotor_0_collision">
+        <pose>0 0 0 0 0 0 </pose>
+        <geometry>
+          <box>
+            <size>0.2792307692307692 0.016923076923076923 0.0008461538461538462</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+    </link>
+    <joint name="rotor_0_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>rotor_0</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1e+16</lower>
+          <upper>1e+16</upper>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="rotor_1">
+      <gravity>true</gravity>
+      <self_collide>false</self_collide>
+      <velocity_decay />
+      <pose>-0.174 0.174 0.06 0 0 0</pose>
+      <inertial>
+        <mass>0.016076923076923075</mass>
+        <inertia>
+          <ixx>3.8464910483993325e-07</ixx>
+          <iyy>2.6115851691700804e-05</iyy>
+          <izz>2.649858234714004e-05</izz>
+        </inertia>
+      </inertial>
+      <collision name="rotor_1_collision">
+        <pose>0 0 0 0 0 0 </pose>
+        <geometry>
+          <box>
+            <size>0.2792307692307692 0.016923076923076923 0.0008461538461538462</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+    </link>
+    <joint name="rotor_1_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>rotor_1</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1e+16</lower>
+          <upper>1e+16</upper>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="rotor_2">
+      <gravity>true</gravity>
+      <self_collide>false</self_collide>
+      <velocity_decay />
+      <pose>0.174 0.174 0.06 0 0 0</pose>
+      <inertial>
+        <mass>0.016076923076923075</mass>
+        <inertia>
+          <ixx>3.8464910483993325e-07</ixx>
+          <iyy>2.6115851691700804e-05</iyy>
+          <izz>2.649858234714004e-05</izz>
+        </inertia>
+      </inertial>
+      <collision name="rotor_2_collision">
+        <pose>0 0 0 0 0 0 </pose>
+        <geometry>
+          <box>
+            <size>0.2792307692307692 0.016923076923076923 0.0008461538461538462</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+    </link>
+    <joint name="rotor_2_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>rotor_2</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1e+16</lower>
+          <upper>1e+16</upper>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="rotor_3">
+      <gravity>true</gravity>
+      <self_collide>false</self_collide>
+      <velocity_decay />
+      <pose>-0.174 -0.174 0.06 0 0 0</pose>
+      <inertial>
+        <mass>0.016076923076923075</mass>
+        <inertia>
+          <ixx>3.8464910483993325e-07</ixx>
+          <iyy>2.6115851691700804e-05</iyy>
+          <izz>2.649858234714004e-05</izz>
+        </inertia>
+      </inertial>
+      <collision name="rotor_3_collision">
+        <pose>0 0 0 0 0 0 </pose>
+        <geometry>
+          <box>
+            <size>0.2792307692307692 0.016923076923076923 0.0008461538461538462</size>
+          </box>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+    </link>
+    <joint name="rotor_3_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>rotor_3</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <lower>-1e+16</lower>
+          <upper>1e+16</upper>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+  </model>
+</sdf>

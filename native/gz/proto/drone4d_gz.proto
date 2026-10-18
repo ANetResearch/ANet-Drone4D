@@ -1,0 +1,97 @@
+// drone4d.gz.v1 control protocol (M24 §7.4): ZeroMQ REQ (host GzSimBackend) / REP (Drone4DClock), one Envelope per message.
+// samples: f64[n_steps][n_uav][16] little-endian, columns px py pz qx qy qz qw vx vy vz wx wy wz fx fy fz (ENU / FLU).
+syntax = "proto3";
+package drone4d.gz.v1;
+
+message Envelope {
+  uint32 protocol = 1;
+  oneof body {
+    Hello hello = 2;
+    HelloAck hello_ack = 3;
+    Control control = 4;
+    StepDone step_done = 5;
+    Reset reset = 6;
+    Shutdown shutdown = 7;
+    Bye bye = 8;
+    Error error = 9;
+  }
+}
+
+message Hello {
+  string run_id = 1;
+  uint32 attempt = 2;
+  repeated string uav_models = 3;  // index = uav_index
+  uint32 step_ns = 4;
+  uint32 tick_steps = 5;
+  string manifest_sha256 = 6;
+}
+
+message HelloAck {
+  string gz_sim_version = 1;
+  string plugin_build = 2;
+  uint32 n_uav = 3;
+  bytes initial_state = 4;  // f64[n_uav][16]
+  sfixed64 t_ns = 5;        // gz simulation time of the ready barrier
+}
+
+message VelSp {
+  uint32 uav_index = 1;
+  uint32 apply_step = 2;
+  double vx = 3;  // ENU m/s
+  double vy = 4;
+  double vz = 5;
+  double yaw_rate = 6;  // rad/s, counter-clockwise positive
+  bool enabled = 7;     // false: rotors stopped (kill, idle on ground)
+}
+
+message WindSp {
+  uint32 uav_index = 1;
+  uint32 apply_step = 2;
+  double wx = 3;
+  double wy = 4;
+  double wz = 5;
+}
+
+message Control {
+  uint64 seq = 1;
+  uint64 tick = 2;
+  uint32 grant_steps = 3;
+  repeated VelSp setpoints = 4;
+  repeated WindSp wind = 5;
+  double mean_wind_x = 6;
+  double mean_wind_y = 7;
+  double mean_wind_z = 8;
+  bytes actor_frames = 9;
+}
+
+message Contact {
+  uint32 uav_index = 1;
+  uint32 step = 2;
+  uint32 kind = 3;  // 1 TOUCHDOWN 2 LIFTOFF 3 WORLD 4 IMPACT 5 UAV
+  double px = 4;
+  double py = 5;
+  double pz = 6;
+  double nx = 7;
+  double ny = 8;
+  double nz = 9;
+  double speed = 10;
+}
+
+message StepDone {
+  uint64 seq = 1;
+  uint64 tick = 2;
+  uint32 n_steps = 3;
+  uint32 n_uav = 4;
+  repeated sfixed64 t_ns = 5;
+  bytes samples = 6;
+  repeated Contact contacts = 7;
+  float gz_rtf = 8;
+}
+
+message Reset { uint64 seed_check = 1; }
+message Shutdown {}
+message Bye { uint64 iterations = 1; }
+message Error {
+  uint32 code = 1;
+  string detail = 2;
+}

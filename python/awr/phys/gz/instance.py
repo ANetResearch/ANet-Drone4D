@@ -1,0 +1,118 @@
+"""gz 实例（M24 §6.8.1、§6.9；每 Run 重启）：一个 `d3-gz` 容器运行 `gz sim -s -r run.sdf`，控制套接字在运行目录的 `sock/`
+（容器内 /run/d4d）。宿主与容器以同一 uid 运行，ipc 套接字经绑定挂载共享；容器无网络（GZ_IP=127.0.0.1）。
+
+`GzInstance.start()` 写出 run.sdf 并启动容器，`wait_socket()` 等待 Drone4DClock 绑定控制端点（631）；`stop()` 停止并删除容器。
+`launcher = "local"` 时在本进程所在环境（例如 d3-gz 容器内的宿主侧测试）以子进程运行 `gz sim`，不经 docker。
+`dry_run = True` 时只返回命令行（测试与日志）。
+
+`endpoint` 为宿主侧端点，`gz_endpoint` 为写入 run.sdf 的 gz 侧端点（docker 时为容器内路径）。
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from awr.phys import PhysError
+
+__all__ = ["GzInstance"]
+
+
+@dataclass
+class GzInstance:
+    run_dir: Path
+    name: str
+    image: str = "d3-gz:dev"
+    cpus: float = 2.0
+    mem_gb: float = 2.0
+    extra_mounts: dict[str, str] = field(default_factory=dict)      # 宿主路径 → 容器路径（只读），例如世界导出目录
+    verbose: int = 1
+    docker: str = "docker"
+    launcher: str = "docker"                                       # docker | local
+    dry_run: bool = False
+    _proc: subprocess.Popen | None = field(default=None, init=False, repr=False)
+
+    @property
+    def sock_dir(self) -> Path:
+        return Path(self.run_dir) / "sock"
+
+    @property
+    def endpoint(self) -> str:
+        return f"ipc://{self.sock_dir / 'ctl.sock'}"
+
+    @property
+    def gz_endpoint(self) -> str:
+        return self.endpoint if self.launcher == "local" else "ipc:///run/d4d/ctl.sock"
+
+    def command(self) -> list[str]:
+        if self.launcher == "local":
+            return ["gz", "sim", "-s", "-r", "-v", str(self.verbose), str(Path(self.run_dir) / "run.sdf")]
+        uid = f"{os.getuid()}:{os.getgid()}"
+        cmd = [self.docker, "run", "-d", "--rm", "--name", self.name, "--user", uid, "--network", "none",
+               "--cpus", f"{self.cpus:g}", "--memory", f"{self.mem_gb:g}g", "-e", "HOME=/tmp", "-e", "GZ_IP=127.0.0.1",
+               "-v", f"{self.sock_dir}:/run/d4d", "-v", f"{Path(self.run_dir) / 'run.sdf'}:/run/d4d-sdf/run.sdf:ro"]
+        for host, ctr in sorted(self.extra_mounts.items()):
+            cmd += ["-v", f"{host}:{ctr}:ro"]
+        return [*cmd, self.image, "gz", "sim", "-s", "-r", "-v", str(self.verbose), "/run/d4d-sdf/run.sdf"]
+
+    def start(self, sdf_text: str) -> list[str]:
+        self.sock_dir.mkdir(parents=True, exist_ok=True)
+        (Path(self.run_dir) / "run.sdf").write_text(sdf_text, encoding="utf-8")
+        for p in self.sock_dir.glob("*.sock"):
+            p.unlink()
+        cmd = self.command()
+        if self.dry_run:
+            return cmd
+        if self.launcher == "local":
+            env = {**os.environ, "GZ_IP": "127.0.0.1"}
+            log = (Path(self.run_dir) / "gz.log").open("wb")
+            self._proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+            return cmd
+        if shutil.which(self.docker) is None:
+            raise PhysError(630, "docker is not available on this host")
+        r = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if r.returncode != 0:
+            raise PhysError(631, f"gz container failed to start: {r.stderr.strip()[:400]}")
+        return cmd
+
+    def wait_socket(self, timeout_s: float = 60.0) -> None:
+        sock = self.sock_dir / "ctl.sock"
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout_s:
+            if sock.exists():
+                return
+            if not self.alive():
+                raise PhysError(638, f"gz container exited before binding the control socket: {self.logs()[-600:]}")
+            time.sleep(0.1)
+        raise PhysError(631, f"control socket not ready after {timeout_s:g} s")
+
+    def alive(self) -> bool:
+        if self.launcher == "local":
+            return self._proc is not None and self._proc.poll() is None
+        r = subprocess.run([self.docker, "inspect", "-f", "{{.State.Running}}", self.name], capture_output=True, text=True, check=False)
+        return r.returncode == 0 and r.stdout.strip() == "true"
+
+    def logs(self) -> str:
+        if self.launcher == "local":
+            p = Path(self.run_dir) / "gz.log"
+            return p.read_text(errors="replace") if p.exists() else ""
+        r = subprocess.run([self.docker, "logs", self.name], capture_output=True, text=True, check=False)
+        return (r.stdout or "") + (r.stderr or "")
+
+    def stop(self, timeout_s: float = 10.0) -> None:
+        if self.dry_run:
+            return
+        if self.launcher == "local":
+            if self._proc is not None and self._proc.poll() is None:
+                os.killpg(self._proc.pid, 15)
+                try:
+                    self._proc.wait(timeout_s)
+                except subprocess.TimeoutExpired:
+                    os.killpg(self._proc.pid, 9)
+                    self._proc.wait()
+            return
+        subprocess.run([self.docker, "rm", "-f", self.name], capture_output=True, check=False)

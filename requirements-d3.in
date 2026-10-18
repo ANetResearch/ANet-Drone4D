@@ -3,8 +3,10 @@
 #   make lock-d3
 # 本版：GLB 世界导入的纹理解码（pillow）；录制的 Foxglove protobuf 通道（mcap-protobuf-support、foxglove-schemas-protobuf，M27-FR-045）；
 # MeshWorldQuery 的 CPU 网格求交（open3d-cpu 的 RaycastingScene，Embree；AWR-05 §5.1.6，M22-FR-047）。
+# gz-sim 锁步控制协议 drone4d.gz.v1 的宿主侧 ZeroMQ REQ（pyzmq，M24 §7.4；protobuf 已随 mcap-protobuf-support 锁定）。
 # meshoptimizer、scikit-image、shapely 随各派生阶段加入；moderngl 只在 sensorsvc 镜像内安装（需要 EGL）。
 pillow==11.3.0
 mcap-protobuf-support==0.5.3
 foxglove-schemas-protobuf==0.3.0
 open3d-cpu==0.19.0
+pyzmq==27.1.0
