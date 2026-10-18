@@ -1584,6 +1584,24 @@
    "new2026": "no",
    "status": "LOCKED",
    "collectedAt": "2026-10-01"
+  },
+  {
+   "id": "T83",
+   "upstream": "101arrowz/fzstd",
+   "ecosystem": "npm",
+   "name": "fzstd",
+   "version": "0.1.1",
+   "scope": "runtime",
+   "d1": "ext",
+   "adapterBoundary": [
+    "apps/web/src/engine/actors/tape/**"
+   ],
+   "fallback": "zstd 解压只在 engine/actors/tape/，换库（zstd WASM）只改该目录；磁带字节格式不变（M23 §6.7）",
+   "stars": 327,
+   "lastCommit": "2024-03-15",
+   "collectedAt": "2026-10-18",
+   "new2026": "yes",
+   "status": "LOCKED"
   }
  ]
 }
