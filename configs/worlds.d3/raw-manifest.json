@@ -23,6 +23,39 @@
    "author": "Mitko (https://sketchfab.com/bg3d)",
    "title": "An entire small town scanned by a drone",
    "retrieved": "2025-10-05"
+  },
+  {
+   "name": "osm/oryahovo_map.osm",
+   "bytes": 2388899,
+   "sha256": "48ae32393bec4a180a54f03ed7a0bb165a855fd53f6a07c22a7d2e2405dfe86e",
+   "kind": "osm",
+   "source_url": "https://api.openstreetmap.org/api/0.6/map?bbox=23.930,43.715,24.000,43.750",
+   "license": "ODbL-1.0",
+   "author": "OpenStreetMap contributors",
+   "title": "OpenStreetMap map export around Oryahovo",
+   "retrieved": "2026-10-11"
+  },
+  {
+   "name": "dem/N43E023.hgt",
+   "bytes": 25934402,
+   "sha256": "b0a0d087c0bc28d25223c46b9bf077448b8f0c7fc309c06b0a4eba947b96031a",
+   "kind": "dem",
+   "source_url": "https://doi.org/10.5067/MEaSUREs/SRTM/SRTMGL1.003",
+   "license": "public-domain",
+   "author": "NASA/USGS SRTM",
+   "title": "SRTM 1 arc-second tile N43E023 (SRTMGL1 v003)",
+   "retrieved": "2026-10-18"
+  },
+  {
+   "name": "osm/oryahovo_water.osm",
+   "bytes": 211395,
+   "sha256": "ba9fc9121d8da1d7e3ae0fca3e9374a6bd65cb8ad6ef5ff5db3497fae5c89048",
+   "kind": "osm",
+   "source_url": "https://overpass-api.de/api/interpreter (natural=water, leisure=pitch, place=square, area:highway, amenity=parking in bbox 43.72,23.93,43.75,23.99; recurse down)",
+   "license": "ODbL-1.0",
+   "author": "OpenStreetMap contributors",
+   "title": "OpenStreetMap water and open-area polygons around Oryahovo (Danube riverbank multipolygon)",
+   "retrieved": "2026-10-18"
   }
  ]
 }

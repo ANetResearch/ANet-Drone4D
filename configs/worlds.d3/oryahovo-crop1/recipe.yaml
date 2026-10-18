@@ -6,6 +6,14 @@ role: event-main
 source:
   glb: {path: oryahovo-crop1/oryahovo_-_crop_1_-_metashape_texture_problems.glb, sha256: 2798ed0444712af1df66219dcc79471e57bd55489828800ecba48ae4cb983a63}
   sketchfab: {uid: 979b09bd0b7744989d5786c2635f24ba, author: "Mitko (https://sketchfab.com/bg3d)", license: CC-BY-4.0}
+osm: {path: osm/oryahovo_map.osm, sha256: 48ae32393bec4a180a54f03ed7a0bb165a855fd53f6a07c22a7d2e2405dfe86e,
+     extract: "openstreetmap.org API 0.6 map 2026-10-11, bbox 23.930,43.715,24.000,43.750", use: "registration,anchors,navgraph"}
+dem: {path: dem/N43E023.hgt, sha256: b0a0d087c0bc28d25223c46b9bf077448b8f0c7fc309c06b0a4eba947b96031a, model: srtm30m, use: "levelling,hMsl"}
+qa:   # 标定 QA（awr.world.glb.qa；M22 §6.6.4、§6.7）：水面多边形补充抽取与 G-15 的 r2 对照尺度
+  osm_extra:
+    - {path: osm/oryahovo_water.osm, sha256: ba9fc9121d8da1d7e3ae0fca3e9374a6bd65cb8ad6ef5ff5db3497fae5c89048,
+       extract: "Overpass API 2026-10-18: water, square, pitch, parking areas in bbox 23.93,43.72,23.99,43.75", use: "levelling planes"}
+  reference_m_per_unit: 20.935
 registration: registration.json
 build:
   profile: full

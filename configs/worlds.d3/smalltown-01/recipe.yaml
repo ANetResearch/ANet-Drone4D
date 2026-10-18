@@ -6,6 +6,9 @@ role: lidar-explore
 source:
   glb: {path: smalltown-01/an_entire_small_town_scanned_by_a_drone.glb, sha256: d1e3effce66add4e4a7b0239d1764bf030fb908b066831f9db75dae79a9085ec}
   sketchfab: {uid: ebdd505832c745e081f03d8e29d17f84, author: "Mitko (https://sketchfab.com/bg3d)", license: CC-BY-4.0}
+osm: {path: osm/oryahovo_map.osm, sha256: 48ae32393bec4a180a54f03ed7a0bb165a855fd53f6a07c22a7d2e2405dfe86e,
+     extract: "openstreetmap.org API 0.6 map 2026-10-11, bbox 23.930,43.715,24.000,43.750", use: "registration,anchors,navgraph"}
+dem: {path: dem/N43E023.hgt, sha256: b0a0d087c0bc28d25223c46b9bf077448b8f0c7fc309c06b0a4eba947b96031a, model: srtm30m, use: "levelling,hMsl"}
 registration: registration.json
 build:
   profile: full

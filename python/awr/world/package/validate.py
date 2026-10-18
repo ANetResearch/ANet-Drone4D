@@ -1,8 +1,9 @@
-"""World Package v1 校验器（AWR-16 §15.3 的 84 条规则；M03-FR-047、FR-048、§6.11）。
+"""World Package v1 校验器（AWR-16 §15.3 的 84 条规则；M03-FR-047、FR-048、§6.11）与 D3 V-GLB 规则组（M22 §7.8 的 16 条）。
 
 三层：结构（JSON Schema）、语义（跨文件一致性）、deep（逐节点解码、全部 sha256）。规则以
 `@rule(id, layer, severity)` 注册，ID 稳定，供变异测试与 `qa/report.json` 使用。由 g03 `worldpkg_validate.py`
-迁移并编号；坐标与精度复算调用 M02 `frames`（M03-FR-050）。
+迁移并编号；坐标与精度复算调用 M02 `frames`（M03-FR-050）。V-GLB 规则以 `@glb_rule` 另表登记，只在 `profile = d3-glb`
+的世界上于 D2 规则之后执行（M22-FR-042），D2 世界的规则表与结果不变。
 """
 
 from __future__ import annotations
@@ -70,6 +71,7 @@ class Report:
     rules_checked: int = 0
     seconds: float = 0.0
     skipped: bool = False
+    skipped_rules: dict[str, str] = field(default_factory=dict)   # 规则 id → 不适用原因（Skip）；V-GLB 结果登记用
     _rule: str = ""
 
     def error(self, message: str, where: str = "", rule: str | None = None) -> None:
@@ -105,13 +107,18 @@ class RuleDef:
 
 
 RULES: dict[str, RuleDef] = {}
+GLB_RULES: dict[str, RuleDef] = {}     # V-GLB 规则组（M22 §7.8）：只对 profile = d3-glb 的世界执行，D2 的 84 条规则表不变
 
 
-def rule(rid: str, layer: str = "semantic", severity: str = "E"):
+def rule(rid: str, layer: str = "semantic", severity: str = "E", registry: dict[str, RuleDef] | None = None):
     def deco(fn):
-        RULES[rid] = RuleDef(rid, layer, severity, fn)
+        (RULES if registry is None else registry)[rid] = RuleDef(rid, layer, severity, fn)
         return fn
     return deco
+
+
+def glb_rule(rid: str, layer: str = "semantic", severity: str = "E"):
+    return rule(rid, layer, severity, registry=GLB_RULES)
 
 
 class Skip(Exception):
@@ -145,6 +152,7 @@ class WorldView:
         self.dir = Path(world_dir)
         self.staging = staging
         self._json_cache: dict[str, Any] = {}
+        self._cache: dict[Any, Any] = {}
 
     def load_json(self, rel: str):
         if rel not in self._json_cache:
@@ -1115,6 +1123,10 @@ def g06(w: WorldView, rep: Report):
         raise Skip("dsm unreadable")
     zmax = float(w.extent[1][2])
     m = float(dsm.max())
+    if w.world.get("profile") == "d3-glb":
+        # D3 GLB 世界：DSM 为网格竖向采样最高命中（M22 §6.6.6），包围盒取网格顶点，采样不必落在最高顶点上，只要求不超出
+        rep.check(m <= zmax + 1e-3, f"max(dsm) {m:.4f} > extent.max.z {zmax:.4f}", "geometry/terrain/dsm_2m.json")
+        return
     rep.check(abs(m - zmax) <= 1e-3, f"max(dsm) {m:.4f} != extent.max.z {zmax:.4f}", "geometry/terrain/dsm_2m.json")
 
 
@@ -1362,6 +1374,819 @@ def q02(w: WorldView, rep: Report):
     rep.check(r.get("status") != "fail", "a package with qa status fail is in the published directory", "qa/report.json")
 
 
+# ================================================================ V-GLB D3 GLB 世界（M22 §7.8；AWR-05 §5.1.3 第 13 行；D3-AC-02、24）
+#
+# 只对 `profile = d3-glb` 的世界生效，D2 世界整组跳过。本组不导入 D3 包（AWR-05 §4.8 导入方向）：竖向复算、GLB 解析、多边形
+# 栅格化与占据砖块解码均在本文件以 numpy 实现。规则所需图层不存在时记为不适用（`Report.skipped_rules`），qa 报告 `glb.vglb`
+# 逐条登记（`vglb_results`）。V-GLB-08 失败归原因码 602 WORLD_LICENSE_MISSING（`RULE_REASONS`）。
+
+VGLB_SCALE_EVIDENCE = ("landmark", "assumed", "gnss", "lidar", "rtk", "survey")
+VGLB_OSM_METHODS = ("osm-road-correlation", "osm-footprint-correlation", "control-points", "inherit-frame")
+VGLB_DSM_CELLS = 10_000           # V-GLB-04 抽样格数（M22-AC-007）
+VGLB_DSM_K = 4                    # 每格 4 × 4 采样（M22 §6.6.6）
+VGLB_DSM_TOL_M = 0.01
+VGLB_SEED = 20261012
+VGLB_BOUNDS_TOL_M = 1e-3
+VGLB_APPEARANCE_TOL_M = 0.01
+VGLB_SNAP_WARN_M = 3.0            # M22 §6.8 吸附告警阈值
+VGLB_SNAP_WARN_FRAC = 0.05
+VGLB_COVER_IOU = 0.98
+VGLB_COVER_CLOSING_CELLS = 2      # M22 §6.8 覆盖闭运算半径（格）
+VGLB_RING_MAX = 1024
+VGLB_OCC_SAMPLES = 10_000
+VGLB_KM_DIAG_M = 1000.0           # 公里级判据（M22-FR-012）
+VGLB_AGENTS = {"person": {"radius_m": 0.3, "height_m": 1.8, "max_climb_m": 0.4, "max_slope_deg": 35.0},
+               "vehicle": {"radius_m": 1.2, "height_m": 2.0, "max_climb_m": 0.3, "max_slope_deg": 20.0}}
+VGLB_RULE_IDS = tuple(f"V-GLB-{i:02d}" for i in range(1, 17))
+RULE_REASONS = {"V-GLB-08": 602}
+ODBL = "ODbL-1.0"
+D3_SIDECAR_SHA = {"awr-trimesh@1": True, "gltf-glb@2": True, "geojson/awr-navgraph@1": True, "awr-anchors@1": True,
+                  "geojson/awr-quality@1": True, "detour-navmesh@1": False, "awr-occ@1": False}   # True：格式规定必须写 coordinate_sha256
+OCC_UNKNOWN, OCC_FREE, OCC_OCCUPIED, OCC_BELOW = 0, 1, 2, 3
+OCC_IDX_DTYPE = np.dtype([("key", "<u8"), ("offset", "<u8"), ("length", "<u4"), ("flags", "u1")])
+
+
+def _glb(w: WorldView) -> None:
+    if w.world.get("profile") != "d3-glb":
+        raise Skip("not a d3-glb world")
+
+
+def _rel(a: float, b: float) -> float:
+    return abs(a - b) / max(abs(a), abs(b), 1e-300)
+
+
+def _layers_by(w: WorldView, *, fmt: str | None = None, type_: str | None = None) -> list[dict]:
+    return [L for L in w.world.get("layers", []) if isinstance(L, dict) and (fmt is None or L.get("format") == fmt)
+            and (type_ is None or L.get("type") == type_)]
+
+
+def _sidecar_rel(L: dict) -> str:
+    h = str(L.get("href", ""))
+    return h + "index.json" if h.endswith("/") else h
+
+
+def _qa_glb(w: WorldView) -> dict | None:
+    try:
+        r = w.load_json("qa/report.json")
+    except Skip:
+        return None
+    g = r.get("glb") if isinstance(r, dict) else None
+    return g if isinstance(g, dict) else None
+
+
+def _trimesh(w: WorldView, L: dict) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
+    """`awr-trimesh@1` 解码：(index.json, 世界坐标 float64 (n, 3), 全局顶点下标 int64 (m, 3), 每顶点所属瓦片 int64 (n,))。"""
+    key = ("trimesh", L.get("href"))
+    if key not in w._cache:
+        rel = _sidecar_rel(L)
+        doc = w.load_json(rel)
+        base = (w.dir / rel).parent
+        st = {s["name"]: s for s in doc.get("streams", [])}
+        xyz = np.fromfile(base / st["xyz"]["href"], "<f4").reshape(-1, 3)
+        tri = np.fromfile(base / st["tri"]["href"], "<u4").reshape(-1, 3)
+        V = np.empty(xyz.shape, np.float64)
+        F = np.empty(tri.shape, np.int64)
+        tile_of = np.empty(len(xyz), np.int64)
+        for t in doc["tiles"]:
+            v0, nv, t0, nt = int(t["v0"]), int(t["nv"]), int(t["t0"]), int(t["nt"])
+            V[v0:v0 + nv] = xyz[v0:v0 + nv].astype(np.float64) + np.asarray(t["origin_m"], np.float64)
+            F[t0:t0 + nt] = tri[t0:t0 + nt].astype(np.int64) + v0
+            tile_of[v0:v0 + nv] = int(t["id"])
+        w._cache[key] = (doc, V, F, tile_of)
+    return w._cache[key]
+
+
+def vertical_hits(V: np.ndarray, F: np.ndarray, origin_xy: tuple[float, float], cell: float, rows: np.ndarray, cols: np.ndarray,
+                  k: int = VGLB_DSM_K, *, max_pairs: int = 4_000_000) -> tuple[np.ndarray, np.ndarray]:
+    """抽样格的竖向射线复算（M22 §6.6.6 同一采样位置与覆盖测试）：返回每格 (最高命中 z（无命中为 −inf），有命中的采样数)。
+
+    采样点 `x = x0 + (j + 0.5) · cell / k`、`y = y0 + (i + 0.5) · cell / k`（j = c·k + a，i = r·k + b）；竖向射线命中等价于三角形在水平面
+    上的覆盖测试（边函数 float64，含边界），竖直面与退化面（|2A| < 1e-12）不命中；z 由重心插值。与构建侧栅格化核逐式相同。
+    """
+    rows = np.asarray(rows, np.int64)
+    cols = np.asarray(cols, np.int64)
+    n = len(rows)
+    top = np.full(n * k * k, -np.inf)
+    hit = np.zeros(n * k * k, bool)
+    if n == 0 or len(F) == 0:
+        return top.reshape(n, k * k).max(1) if n else np.zeros(0), np.zeros(n, np.int64)
+    ox, oy = float(origin_xy[0]), float(origin_xy[1])
+    H, W = int(rows.max()) + 1, int(cols.max()) + 1
+    ids = np.full((H, W), -1, np.int64)
+    ids[rows, cols] = np.arange(n)
+    integ = np.zeros((H + 1, W + 1), np.int64)
+    integ[1:, 1:] = np.cumsum(np.cumsum(ids >= 0, 0), 1)
+    P = V[F]                                                    # (m, 3, 3)
+    c0 = np.floor((P[:, :, 0].min(1) - ox) / cell).astype(np.int64)
+    c1 = np.floor((P[:, :, 0].max(1) - ox) / cell).astype(np.int64)
+    r0 = np.floor((P[:, :, 1].min(1) - oy) / cell).astype(np.int64)
+    r1 = np.floor((P[:, :, 1].max(1) - oy) / cell).astype(np.int64)
+    c0, r0 = np.maximum(c0, 0), np.maximum(r0, 0)
+    c1, r1 = np.minimum(c1, W - 1), np.minimum(r1, H - 1)
+    ok = (c0 <= c1) & (r0 <= r1)
+    cand = np.flatnonzero(ok)
+    a, b, cc, d = r0[cand], c0[cand], r1[cand] + 1, c1[cand] + 1
+    cnt = integ[cc, d] - integ[a, d] - integ[cc, b] + integ[a, b]
+    cand = cand[cnt > 0]
+    s = cell / k
+    sub = np.arange(k * k)
+    sa, sb = sub % k, sub // k                                    # a：列内序，b：行内序
+    nc = (c1[cand] - c0[cand] + 1) * (r1[cand] - r0[cand] + 1)
+    bounds = np.r_[0, np.cumsum(nc)]
+    start = 0
+    while start < len(cand):
+        stop = int(np.searchsorted(bounds, bounds[start] + max_pairs, "right")) - 1
+        stop = max(stop, start + 1)
+        ch = cand[start:stop]
+        m = nc[start:stop]
+        t = np.repeat(ch, m)
+        off = np.arange(int(m.sum())) - np.repeat(np.r_[0, np.cumsum(m)[:-1]], m)
+        wid = np.repeat(c1[ch] - c0[ch] + 1, m)
+        rr = np.repeat(r0[ch], m) + off // wid
+        cq = np.repeat(c0[ch], m) + off % wid
+        cid = ids[rr, cq]
+        keep = cid >= 0
+        t, rr, cq, cid = t[keep], rr[keep], cq[keep], cid[keep]
+        start = stop
+        if len(t) == 0:
+            continue
+        px = ox + ((cq[:, None] * k + sa[None, :]) + 0.5) * s
+        py = oy + ((rr[:, None] * k + sb[None, :]) + 0.5) * s
+        T = P[t]
+        ax, ay, az = T[:, 0, 0][:, None], T[:, 0, 1][:, None], T[:, 0, 2][:, None]
+        bx, by, bz = T[:, 1, 0][:, None], T[:, 1, 1][:, None], T[:, 1, 2][:, None]
+        cx, cy, cz = T[:, 2, 0][:, None], T[:, 2, 1][:, None], T[:, 2, 2][:, None]
+        A2 = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay)
+        w0 = (bx - px) * (cy - py) - (cx - px) * (by - py)
+        w1 = (cx - px) * (ay - py) - (ax - px) * (cy - py)
+        w2 = (ax - px) * (by - py) - (bx - px) * (ay - py)
+        pos = (w0 >= 0) & (w1 >= 0) & (w2 >= 0)
+        neg = (w0 <= 0) & (w1 <= 0) & (w2 <= 0)
+        inside = np.where(A2 > 0, pos, neg) & (np.abs(A2) >= 1e-12)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            z = (w0 * az + w1 * bz + w2 * cz) / A2
+        si = (cid[:, None] * (k * k) + sub[None, :])[inside]
+        np.maximum.at(top, si, z[inside])
+        hit[si] = True
+    return top.reshape(n, k * k).max(1), hit.reshape(n, k * k).sum(1)
+
+
+def _poly_rings(geom: dict) -> list[list[np.ndarray]]:
+    """GeoJSON Polygon / MultiPolygon → [[外环, 洞...], ...]（只取 E、N）。"""
+    t = geom.get("type")
+    polys = [geom["coordinates"]] if t == "Polygon" else list(geom.get("coordinates", [])) if t == "MultiPolygon" else []
+    return [[np.asarray(r, np.float64)[:, :2] for r in p] for p in polys]
+
+
+def rasterize_rings(rings: list[np.ndarray], origin_xy: tuple[float, float], cell: float, H: int, W: int) -> np.ndarray:
+    """偶奇规则把一组环栅格化到格心（行 0 在南）。"""
+    out = np.zeros((H, W), bool)
+    if not rings:
+        return out
+    seg = np.concatenate([np.stack([r[:-1], r[1:]], 1) if np.allclose(r[0], r[-1]) else np.stack([r, np.roll(r, -1, 0)], 1)
+                          for r in rings if len(r) >= 3])
+    x0, y0, x1, y1 = seg[:, 0, 0], seg[:, 0, 1], seg[:, 1, 0], seg[:, 1, 1]
+    cx = origin_xy[0] + (np.arange(W) + 0.5) * cell
+    for r in range(H):
+        y = origin_xy[1] + (r + 0.5) * cell
+        m = (y0 <= y) != (y1 <= y)
+        if not m.any():
+            continue
+        xs = np.sort(x0[m] + (y - y0[m]) * (x1[m] - x0[m]) / (y1[m] - y0[m]))
+        inside = (np.searchsorted(xs, cx, "right") % 2) == 1
+        out[r] = inside
+    return out
+
+
+def _points_in_rings(P: np.ndarray, rings: list[np.ndarray]) -> np.ndarray:
+    P = np.asarray(P, np.float64).reshape(-1, 2)
+    inside = np.zeros(len(P), bool)
+    for r in rings:
+        a, b = r, np.roll(r, -1, 0)
+        for (xa, ya), (xb, yb) in zip(a, b, strict=True):
+            m = (ya <= P[:, 1]) != (yb <= P[:, 1])
+            if m.any():
+                xi = xa + (P[m, 1] - ya) * (xb - xa) / (yb - ya)
+                inside[np.flatnonzero(m)[P[m, 0] < xi]] ^= True
+    return inside
+
+
+def coverage_mask(nhit: np.ndarray, radius: int = VGLB_COVER_CLOSING_CELLS) -> np.ndarray:
+    """`fill_holes(largest_component(binary_closing(dsm_2m_n > 0, disk(radius))))`（M22 §6.6.7 第 2 行）。"""
+    from scipy import ndimage
+
+    yy, xx = np.mgrid[-radius:radius + 1, -radius:radius + 1]
+    disk = (xx * xx + yy * yy) <= radius * radius
+    m = np.pad(np.asarray(nhit) > 0, radius + 1)
+    m = ndimage.binary_closing(m, structure=disk)[radius + 1:-radius - 1, radius + 1:-radius - 1]
+    lab, n = ndimage.label(m)
+    if n > 1:
+        sizes = np.bincount(lab.ravel())
+        sizes[0] = 0
+        m = lab == int(np.argmax(sizes))
+    return ndimage.binary_fill_holes(m)
+
+
+def _cover_rings(w: WorldView) -> list[np.ndarray] | None:
+    Ls = _layers_by(w, fmt="geojson/awr-quality@1")
+    if not Ls:
+        return None
+    fc = w.load_json(Ls[0]["href"])
+    rings: list[np.ndarray] = []
+    for f in fc.get("features", []):
+        if (f.get("properties") or {}).get("kind") == "scan-footprint":
+            for poly in _poly_rings(f.get("geometry") or {}):
+                rings.extend(poly)
+    return rings
+
+
+def _glb_json(p: Path) -> tuple[dict, int, int]:
+    """GLB 头与 JSON 块：(json, BIN 块数据起点, BIN 块长度)。"""
+    with open(p, "rb") as f:
+        magic, ver, _total = struct.unpack("<4sII", f.read(12))
+        if magic != b"glTF" or ver != 2:
+            raise ValueError("not a glTF 2.0 binary")
+        jl, jt = struct.unpack("<I4s", f.read(8))
+        if jt != b"JSON":
+            raise ValueError("first GLB chunk is not JSON")
+        js = json.loads(f.read(jl))
+        bin_off, bin_len = 12 + 8 + jl + 8, 0
+        hdr = f.read(8)
+        if len(hdr) == 8:
+            bin_len, bt = struct.unpack("<I4s", hdr)
+            if bt != b"BIN\0":
+                raise ValueError("second GLB chunk is not BIN")
+    return js, bin_off, bin_len
+
+
+@glb_rule("V-GLB-01", "semantic")
+def glb01(w: WorldView, rep: Report):
+    _glb(w)
+    src = w.coordinate["source"]
+    u = float(src["unitsToMeters"])
+    det = float(np.linalg.det(_mat(src["T_world_source"])[:3, :3]))
+    cbrt = math.copysign(abs(det) ** (1.0 / 3.0), det)
+    rep.check(det > 0 and _rel(u, cbrt) <= 1e-4, f"unitsToMeters {u} != cbrt(det(T_world_source)) {cbrt:.9g} (rel 1e-4)", "coordinate.json")
+    s = ((w.coordinate.get("registration") or {}).get("T_world_map") or {}).get("s")
+    rep.check(s is not None and _rel(u, float(s)) <= 1e-9, f"unitsToMeters {u} != registration.T_world_map.s {s} (rel 1e-9)",
+              "coordinate.json")
+
+
+@glb_rule("V-GLB-02", "semantic", "E/W")
+def glb02(w: WorldView, rep: Report):
+    _glb(w)
+    c = w.coordinate
+    ss = c.get("scaleStatus")
+    method = (c.get("registration") or {}).get("method")
+    if ss in VGLB_SCALE_EVIDENCE:
+        rep.check(bool((c.get("source") or {}).get("evidence")), f"scaleStatus {ss} without source.evidence[]", "coordinate.json")
+        rep.check(method not in (None, "none"), f"scaleStatus {ss} without registration.method", "coordinate.json")
+    if ss == "assumed":
+        rep.check(method == "manual", f"scaleStatus assumed requires registration.method manual, got {method}", "coordinate.json")
+    elif method in VGLB_OSM_METHODS:
+        rep.check(ss in VGLB_SCALE_EVIDENCE, f"registration.method {method} with scaleStatus {ss}", "coordinate.json")
+    elif method == "manual" and ss in VGLB_SCALE_EVIDENCE:
+        rep.warn(f"registration.method manual with scaleStatus {ss}: the evidence must name the measured reference", "coordinate.json")
+    if not w.staging:
+        g = _qa_glb(w)
+        rep.check(bool(g and isinstance(g.get("registration"), dict) and g["registration"]),
+                  "qa/report.json glb.registration missing", "qa/report.json")
+
+
+@glb_rule("V-GLB-03", "deep")
+def glb03(w: WorldView, rep: Report):
+    _glb(w)
+    Ls = [L for L in _layers_by(w, fmt="awr-trimesh@1") if L.get("id") == "mesh.raycast"]
+    if not Ls:
+        raise Skip("mesh.raycast missing")
+    b = w.world["bounds"]
+    lo, hi = np.asarray(b["min"], np.float64), np.asarray(b["max"], np.float64)
+    _doc, V, _F, _t = _trimesh(w, Ls[0])
+    ex = np.maximum(lo - V, V - hi).max(1) if len(V) else np.zeros(0)
+    bad = int((ex > VGLB_BOUNDS_TOL_M).sum())
+    rep.check(bad == 0, f"{bad} raycast vertices outside world.json bounds (max excess {float(ex.max(initial=0.0)):.4f} m, "
+              f"tolerance {VGLB_BOUNDS_TOL_M} m)", Ls[0]["href"])
+
+
+@glb_rule("V-GLB-04", "deep")
+def glb04(w: WorldView, rep: Report):
+    _glb(w)
+    Ls = [L for L in _layers_by(w, fmt="awr-trimesh@1") if L.get("id") == "mesh.raycast"]
+    if not Ls or "terrain.dsm-n" not in w.layers:
+        raise Skip("mesh.raycast or terrain.dsm-n missing")
+    dsc, dsm = w.grid("terrain.dsm")
+    _nsc, cnt = w.grid("terrain.dsm-n")
+    tsc, dtm = w.grid("terrain.dtm")
+    if dsm is None or cnt is None or dtm is None:
+        raise Skip("raster unreadable")
+    _doc, V, F, _t = _trimesh(w, Ls[0])
+    H, W = dsm.shape
+    cell = float(dsc["cellM"])
+    org = (float(dsc["originXY"][0]), float(dsc["originXY"][1]))
+    rng = np.random.default_rng(VGLB_SEED)
+    flat = np.arange(H * W) if H * W <= VGLB_DSM_CELLS else np.sort(rng.choice(H * W, VGLB_DSM_CELLS, replace=False))
+    rows, cols = flat // W, flat % W
+    top, nh = vertical_hits(V, F, org, cell, rows, cols)
+    fill = bilinear_on_centres(Grid(dtm, (float(tsc["originXY"][0]), float(tsc["originXY"][1])), float(tsc["cellM"])), org, cell, H, W)
+    t = fill[rows, cols]
+    want = np.where(nh > 0, np.maximum(top, t), t)
+    d = np.abs(dsm[rows, cols].astype(np.float64) - want)
+    bad = int((d >= VGLB_DSM_TOL_M).sum())
+    rep.check(bad == 0, f"{bad}/{len(flat)} sampled 2 m cells differ from the vertical mesh recompute by >= 1 cm "
+              f"(max {float(d.max(initial=0.0)):.4f} m)", "geometry/terrain/dsm_2m.json")
+    badn = int((cnt[rows, cols].astype(np.int64) != nh).sum())
+    rep.check(badn == 0, f"{badn}/{len(flat)} sampled cells: dsm_2m_n != recomputed hit samples (0-16)", "geometry/terrain/dsm_2m_n.json")
+    rep.info.setdefault("vglb", {})["V-GLB-04"] = {"cells": len(flat), "max_abs_m": round(float(d.max(initial=0.0)), 6),
+                                                    "hit_cells": int((nh > 0).sum())}
+
+
+@glb_rule("V-GLB-05", "semantic")
+def glb05(w: WorldView, rep: Report):
+    _glb(w)
+    Ls = _layers_by(w, type_="navmesh")
+    if not Ls:
+        raise Skip("no navmesh layer")
+    for L in Ls:
+        nm = w.load_json(L["href"])
+        isl = nm.get("islands") or {}
+        rep.check(int(isl.get("kept", 0)) >= 1, f"{nm.get('profile')}: islands.kept < 1", L["href"])
+        area = isl.get("seed_area_m2", isl.get("walkable_area_m2", 0.0))
+        rep.check(float(area or 0.0) > 0.0, f"{nm.get('profile')}: seed island area is 0", L["href"])
+        rep.check(bool(nm.get("seeds")), f"{nm.get('profile')}: seeds[] empty", L["href"])
+        b = nm.get("bin") or {}
+        p = (w.dir / L["href"]).parent / str(b.get("href", ""))
+        rep.check(bool(b.get("href")) and p.is_file() and p.stat().st_size == int(b.get("bytes", -1)),
+                  f"{nm.get('profile')}: navmesh bin missing or byte size differs", L["href"])
+
+
+@glb_rule("V-GLB-06", "semantic", "W")
+def glb06(w: WorldView, rep: Report):
+    _glb(w)
+    Ls = _layers_by(w, type_="anchors")
+    if not Ls:
+        raise Skip("no anchors layer")
+    doc = w.load_json(Ls[0]["href"])
+    pts = [a for a in doc.get("anchors", []) if a.get("kind") == "point" and a.get("status") != "deprecated"]
+    far = 0
+    for a in pts:
+        d = (a.get("snap_dist_m") or {}).get("person")
+        if d is None or not float(d) < VGLB_SNAP_WARN_M:
+            far += 1
+            rep.warn(f"anchor {a.get('id')}: snap_dist_m.person {d} >= {VGLB_SNAP_WARN_M} m", Ls[0]["href"])
+    if pts and far / len(pts) > VGLB_SNAP_WARN_FRAC:
+        rep.warn(f"{far}/{len(pts)} point anchors ({100.0 * far / len(pts):.1f}%) snap farther than {VGLB_SNAP_WARN_M} m "
+                 f"(> {100 * VGLB_SNAP_WARN_FRAC:.0f}%)", Ls[0]["href"])
+
+
+@glb_rule("V-GLB-07", "deep")
+def glb07(w: WorldView, rep: Report):
+    _glb(w)
+    rings = _cover_rings(w)
+    if rings is None:
+        raise Skip("no geojson/awr-quality@1 layer")
+    nsc, cnt = w.grid("terrain.dsm-n")
+    if cnt is None:
+        raise Skip("dsm_2m_n unreadable")
+    H, W = cnt.shape
+    org = (float(nsc["originXY"][0]), float(nsc["originXY"][1]))
+    poly = rasterize_rings(rings, org, float(nsc["cellM"]), H, W)
+    cov = coverage_mask(cnt)
+    inter, union = int((poly & cov).sum()), int((poly | cov).sum())
+    iou = inter / union if union else 0.0
+    rep.check(iou >= VGLB_COVER_IOU, f"coverage polygon IoU {iou:.4f} < {VGLB_COVER_IOU} against closing(dsm_2m_n > 0)",
+              _layers_by(w, fmt="geojson/awr-quality@1")[0]["href"])
+    rep.info.setdefault("vglb", {})["V-GLB-07"] = {"iou": round(iou, 5)}
+
+
+def _odbl_layers(w: WorldView) -> list[tuple[dict, dict]]:
+    """ODbL 派生层：锚点、道路图，以及声明了 OSM 来源的质量多边形（M22 §7.3.4–§7.3.6）。返回 (layer, 文件头)。"""
+    out = []
+    for L in w.world.get("layers", []):
+        fmt = L.get("format")
+        if fmt not in ("awr-anchors@1", "geojson/awr-navgraph@1", "geojson/awr-quality@1"):
+            continue
+        doc = w.load_json(L["href"])
+        head = doc.get("awr", {}) if fmt.startswith("geojson/") else doc
+        if fmt == "geojson/awr-quality@1" and not (head.get("license") or head.get("attribution")):
+            continue                                              # 不含 OSM 要素的质量多边形不属于 ODbL 派生层
+        out.append((L, head))
+    return out
+
+
+@glb_rule("V-GLB-08", "semantic")
+def glb08(w: WorldView, rep: Report):
+    _glb(w)
+    d = w.world.get("dataset")
+    if not isinstance(d, dict):
+        rep.error("dataset missing (602 WORLD_LICENSE_MISSING)", "world.json")
+        return
+    lic = str(d.get("license") or "")
+    for k in ("license", "citation", "notice"):
+        rep.check(bool(str(d.get(k) or "").strip()) and str(d.get(k)).strip().lower() != "unknown", f"dataset.{k} missing", "world.json")
+    rep.check(bool(d.get("sourceFiles")) and all(re.fullmatch(r"[0-9a-f]{64}", str(f.get("sha256", ""))) for f in d.get("sourceFiles", [])),
+              "dataset.sourceFiles[] missing or without sha256", "world.json")
+    if lic.startswith("CC-BY"):
+        rep.check(lic in str(d.get("citation", "")), f"dataset.citation must name the author and {lic}", "world.json")
+        rep.check(bool(d.get("url")), f"dataset.url missing for {lic} source", "world.json")
+    df = d.get("derivedFrom")
+    if not isinstance(df, list):
+        rep.error("dataset.derivedFrom[] missing", "world.json")
+        df = []
+    for i, e in enumerate(df):
+        miss = [k for k in ("name", "version", "license", "use", "attribution") if not str(e.get(k) or "").strip()]
+        rep.check(not miss, f"dataset.derivedFrom[{i}] missing {miss}", "world.json")
+        rep.check(bool(re.fullmatch(r"[0-9a-f]{64}", str(e.get("sha256", "")))), f"dataset.derivedFrom[{i}].sha256 missing", "world.json")
+    osm = [e for e in df if e.get("license") == ODBL and "OpenStreetMap" in str(e.get("attribution", ""))]
+    dem = [e for e in df if {"levelling", "hMsl"} & set(str(e.get("use", "")).split(","))]
+    method = (w.coordinate.get("registration") or {}).get("method")
+    odbl = _odbl_layers(w)
+    if method in VGLB_OSM_METHODS or odbl:
+        rep.check(bool(osm), "dataset.derivedFrom[] has no OpenStreetMap entry (ODbL-1.0, 'OpenStreetMap contributors')", "world.json")
+    if method in VGLB_OSM_METHODS:
+        rep.check(bool(dem), "dataset.derivedFrom[] has no DEM entry (use levelling or hMsl)", "world.json")
+    if osm:
+        rep.check("ODbL" in str(d.get("notice", "")), "dataset.notice must state that OpenStreetMap-derived layers are ODbL-1.0", "world.json")
+    for L, head in odbl:
+        rep.check(bool(head.get("license")) and bool(head.get("attribution")), f"{L.get('id')}: ODbL layer without license and attribution",
+                  L["href"])
+        if head.get("license") == ODBL:
+            rep.check(bool(osm), f"{L.get('id')}: ODbL layer but dataset.derivedFrom[] has no OpenStreetMap entry", L["href"])
+
+
+@glb_rule("V-GLB-09", "deep")
+def glb09(w: WorldView, rep: Report):
+    _glb(w)
+    Ls = _layers_by(w, fmt="awr-trimesh@1")
+    if not Ls:
+        raise Skip("no awr-trimesh@1 layer")
+    n_app = None
+    ap = _layers_by(w, fmt="gltf-glb@2")
+    if ap:
+        try:
+            n_app = int(w.load_json(_sidecar_rel(ap[0]))["triangles"])
+        except (Skip, KeyError, TypeError, ValueError):
+            n_app = None
+    for L in Ls:
+        rel = _sidecar_rel(L)
+        doc = w.load_json(rel)
+        base = (w.dir / rel).parent
+        cn = doc.get("counts") or {}
+        nv, nt = int(cn.get("vertices", -1)), int(cn.get("triangles", -1))
+        tiles = doc.get("tiles", [])
+        rep.check(int(cn.get("tiles", -1)) == len(tiles), "counts.tiles != len(tiles)", rel)
+        v0 = t0 = 0
+        for t in tiles:
+            if int(t["v0"]) != v0 or int(t["t0"]) != t0:
+                rep.error(f"tile {t.get('id')}: v0/t0 not contiguous", rel)
+                break
+            v0 += int(t["nv"])
+            t0 += int(t["nt"])
+        rep.check(v0 == nv and t0 == nt, f"tiles sum (vertices {v0}, triangles {t0}) != counts ({nv}, {nt})", rel)
+        per = {"xyz": nv, "tri": nt, "src": nt, "cls": nt, "q": nt}
+        for s in doc.get("streams", []):
+            if s.get("name") not in per:
+                continue
+            p = base / s["href"]
+            exp = per[s["name"]] * int(s.get("components", 1)) * {**ITEMSIZE, "uint32": 4}.get(s.get("dtype", ""), 0)
+            rep.check(p.is_file() and p.stat().st_size == exp, f"stream {s['name']}: bytes != {exp}", rel)
+        if not rep.ok and any(e["where"] == rel for e in rep.errors):
+            continue
+        st = {s["name"]: s for s in doc.get("streams", [])}
+        xyz = np.fromfile(base / st["xyz"]["href"], "<f4").reshape(-1, 3)
+        tri = np.fromfile(base / st["tri"]["href"], "<u4").reshape(-1, 3)
+        tiling = doc.get("tiling") or {}
+        for t in tiles:
+            a, n = int(t["v0"]), int(t["nv"])
+            loc = xyz[a:a + n, :2].astype(np.float64)
+            # 局部坐标以瓦片包围盒中心为参照取绝对值（origin_m 为瓦片网格角点，按重心分瓦片的三角形可越出网格边）
+            lo_t, hi_t = np.asarray(t["aabb_m"]["min"][:2], np.float64), np.asarray(t["aabb_m"]["max"][:2], np.float64)
+            ctr = (lo_t + hi_t) / 2.0 - np.asarray(t["origin_m"][:2], np.float64)
+            lim = float(tiling["size_m"]) if tiling.get("kind") == "grid" else float(np.max(hi_t - lo_t))
+            dev = float(np.abs(loc - ctr).max()) if n else 0.0
+            if dev > lim:
+                rep.error(f"tile {t['id']}: |local xy - tile centre| {dev:.3f} m > tile edge {lim} m", rel)
+            tt = tri[int(t["t0"]):int(t["t0"]) + int(t["nt"])]
+            if tt.size and int(tt.max()) >= n:
+                rep.error(f"tile {t['id']}: tri index {int(tt.max())} >= tile vertices {n}", rel)
+        if "src" in st and n_app is not None:
+            src = np.fromfile(base / st["src"]["href"], "<u4")
+            rep.check(src.size == 0 or int(src.max()) < n_app, f"src index >= appearance triangles {n_app}", rel)
+
+
+@glb_rule("V-GLB-10", "semantic")
+def glb10(w: WorldView, rep: Report):
+    _glb(w)
+    want = (w.world.get("coordinate") or {}).get("sha256")
+    seen = 0
+    for L in w.world.get("layers", []):
+        need = D3_SIDECAR_SHA.get(L.get("format"))
+        if need is None:
+            continue
+        rel = _sidecar_rel(L)
+        doc = w.load_json(rel)
+        got = doc.get("coordinate_sha256", (doc.get("awr") or {}).get("coordinate_sha256") if isinstance(doc.get("awr"), dict) else None)
+        if got is None and not need:
+            continue
+        seen += 1
+        rep.check(got == want, f"{L.get('id')}: coordinate_sha256 {str(got)[:12]} != world.coordinate.sha256 {str(want)[:12]}", rel)
+    if not seen:
+        raise Skip("no D3 sidecar")
+
+
+@glb_rule("V-GLB-11", "deep")
+def glb11(w: WorldView, rep: Report):
+    _glb(w)
+    Ls = _layers_by(w, fmt="gltf-glb@2", type_="mesh")
+    if not Ls:
+        raise Skip("no appearance layer")
+    rel = _sidecar_rel(Ls[0])
+    idx = w.load_json(rel)
+    p = (w.dir / rel).parent / idx["glb"]["href"]
+    js, bin_off, _bin_len = _glb_json(p)
+    mats = js.get("materials", [])
+    bad = [i for i, m in enumerate(mats) if "KHR_materials_unlit" not in (m.get("extensions") or {}) or m.get("doubleSided") is not True]
+    rep.check(bool(mats) and not bad, f"materials not unlit and double-sided: {bad[:5]}", rel)
+    acc = js.get("accessors", [])
+    ntri = 0
+    lo, hi = np.full(3, np.inf), np.full(3, -np.inf)
+    for mesh in js.get("meshes", []):
+        for pr in mesh.get("primitives", []):
+            if pr.get("mode", 4) != 4:
+                rep.error("primitive mode is not TRIANGLES", rel)
+            ntri += int(acc[pr["indices"]]["count"]) // 3
+            a = acc[pr["attributes"]["POSITION"]]
+            lo, hi = np.minimum(lo, a["min"]), np.maximum(hi, a["max"])
+    rep.check(ntri == int(idx.get("triangles", -1)), f"appearance triangles {ntri} != index.json {idx.get('triangles')}", rel)
+    rc = _layers_by(w, fmt="awr-trimesh@1")
+    rc = [L for L in rc if L.get("id") == "mesh.raycast"]
+    if rc:
+        n_rc = int(w.load_json(_sidecar_rel(rc[0]))["counts"]["triangles"])
+        rep.check(ntri == n_rc, f"appearance triangles {ntri} != raycast triangles {n_rc}", rel)
+    enu_lo = np.array([lo[0], -hi[2], lo[1]])                       # (E, U, −N) → (E, N, U)
+    enu_hi = np.array([hi[0], -lo[2], hi[1]])
+    b = w.world["bounds"]
+    dev = max(float(np.abs(enu_lo - np.asarray(b["min"])).max()), float(np.abs(enu_hi - np.asarray(b["max"])).max()))
+    rep.check(dev <= VGLB_APPEARANCE_TOL_M, f"appearance bounding box differs from bounds by {dev:.4f} m (> {VGLB_APPEARANCE_TOL_M} m)", rel)
+    rep.check(p.stat().st_size == int(idx["glb"]["bytes"]) and file_sha(p) == idx["glb"]["sha256"], "appearance.glb bytes or sha256 != index.json", rel)
+    want = {int(t["index"]): t["sha256"] for t in idx.get("textures", [])}
+    views = js.get("bufferViews", [])
+    with open(p, "rb") as f:
+        for i, im in enumerate(js.get("images", [])):
+            v = views[im["bufferView"]]
+            f.seek(bin_off + int(v.get("byteOffset", 0)))
+            got = hashlib.sha256(f.read(int(v["byteLength"]))).hexdigest()
+            rep.check(want.get(i) == got, f"image {i} sha256 {got[:12]} != source {str(want.get(i))[:12]}", rel)
+    rep.check(len(js.get("images", [])) == len(want), f"images {len(js.get('images', []))} != index.json textures {len(want)}", rel)
+
+
+@glb_rule("V-GLB-12", "semantic")
+def glb12(w: WorldView, rep: Report):
+    _glb(w)
+    z = _zones(w)
+    border = [f for f in z.get("features", []) if (f.get("properties") or {}).get("kind") == "border"]
+    if not border:
+        raise Skip("no border zone")
+    _sc, dsm = w.grid("terrain.dsm")
+    if dsm is None:
+        raise Skip("dsm unreadable")
+    head = float((w.world.get("generator") or {}).get("params", {}).get("borderHeadroomM", 50))
+    want = round(float(dsm.max()) + head, 2)
+    cover = _cover_rings(w)
+    for f in border:
+        polys = _poly_rings(f.get("geometry") or {})
+        n = max((len(r) for p in polys for r in p), default=0)
+        rep.check(n <= VGLB_RING_MAX, f"border ring has {n} vertices (> {VGLB_RING_MAX})", "semantic/zones.geojson")
+        got = (f.get("properties") or {}).get("max_z_m")
+        rep.check(got is not None and abs(float(got) - want) <= 0.005, f"border max_z_m {got} != round(max(dsm_2m) + {head:g}, 2) = {want}",
+                  "semantic/zones.geojson")
+        if cover:
+            P = np.concatenate([r for p in polys for r in p])
+            out = int((~_points_in_rings(P, cover)).sum())
+            rep.check(out == 0, f"{out} border vertices outside the coverage polygon", "semantic/zones.geojson")
+
+
+def _occ_state(w: WorldView, L: dict, doc: dict, vox: np.ndarray, cover_col: np.ndarray) -> np.ndarray:
+    """`awr-occ@1` 抽样解码（M22 §7.3.2）：vox (n, 3) 体素下标 → u8 状态。砖块键为 (bx, by, bz) 的 3D Morton 交织（x 在最低位），
+    砖块内体素按 (z, y, x) 行主序；`flags & 1` 的砖块数据为 1 字节全同值；`top = 0xFFFF` 的柱整柱 unknown，序号 > top 的砖块隐式
+    （覆盖内 free、覆盖外 unknown）。"""
+    import zstandard
+
+    base = (w.dir / _sidecar_rel(L)).parent
+    B = int(doc.get("brick", 16))
+    tp = doc["top"]
+    top = np.fromfile(base / tp["href"], "<u2").reshape(int(tp["height"]), int(tp["width"]))
+    bi = doc["bricks"]
+    idx = np.fromfile(base / bi["index"], OCC_IDX_DTYPE)
+    data = np.memmap(base / bi["data"], np.uint8, "r") if (base / bi["data"]).stat().st_size else np.zeros(0, np.uint8)
+    keys = idx["key"]
+    bricks = vox // B
+    out = np.full(len(vox), OCC_UNKNOWN, np.uint8)
+    dctx = zstandard.ZstdDecompressor()
+    cache: dict[int, np.ndarray] = {}
+    for i, (bx, by, bz) in enumerate(bricks):
+        t = int(top[by, bx])
+        if t == 0xFFFF:
+            continue
+        if bz > t:
+            out[i] = OCC_FREE if cover_col[i] else OCC_UNKNOWN
+            continue
+        key = _morton3(int(bx), int(by), int(bz))
+        j = int(np.searchsorted(keys, key))
+        if j >= len(keys) or int(keys[j]) != key:
+            out[i] = OCC_FREE if cover_col[i] else OCC_UNKNOWN
+            continue
+        if j not in cache:
+            off, ln, fl = int(idx["offset"][j]), int(idx["length"][j]), int(idx["flags"][j])
+            raw = bytes(data[off:off + ln])
+            if fl & 1:
+                cache[j] = np.full(B * B * B, raw[0] if len(raw) == 1 else dctx.decompress(raw)[0], np.uint8)
+            else:
+                cache[j] = np.frombuffer(dctx.decompress(raw, max_output_size=B * B * B), np.uint8)
+        lx, ly, lz = (vox[i] % B).tolist()
+        out[i] = cache[j][(lz * B + ly) * B + lx]
+    return out
+
+
+def _morton3(x: int, y: int, z: int) -> int:
+    k = 0
+    for b in range(21):
+        k |= ((x >> b) & 1) << (3 * b) | ((y >> b) & 1) << (3 * b + 1) | ((z >> b) & 1) << (3 * b + 2)
+    return k
+
+
+@glb_rule("V-GLB-13", "deep")
+def glb13(w: WorldView, rep: Report):
+    _glb(w)
+    Ls = [L for L in _layers_by(w, fmt="awr-occ@1", type_="voxel")]
+    rc = [L for L in _layers_by(w, fmt="awr-trimesh@1") if L.get("id") == "mesh.raycast"]
+    if not Ls or not rc or "terrain.dsm-n" not in w.layers:
+        raise Skip("occupancy, mesh.raycast or terrain.dsm-n missing")
+    L = Ls[0]
+    doc = w.load_json(_sidecar_rel(L))
+    if doc.get("kind", "occupancy") != "occupancy":
+        raise Skip("not an occupancy layer")
+    v = float(doc["voxel_m"])
+    o = np.asarray(doc["origin_m"], np.float64)
+    dims = np.asarray(doc["dims"], np.int64)
+    nsc, cnt = w.grid("terrain.dsm-n")
+    if cnt is None:
+        raise Skip("dsm_2m_n unreadable")
+    cov = coverage_mask(cnt)
+    H, W = cov.shape
+    c2 = float(nsc["cellM"])
+    n_org = np.asarray(nsc["originXY"], np.float64)
+    rng = np.random.default_rng(VGLB_SEED + 13)
+    # 覆盖外：距覆盖 > 2 格的 2 m 格内的体素柱（避开覆盖边界的栅格化差异）
+    from scipy import ndimage
+
+    far = ~ndimage.binary_dilation(cov, iterations=2)
+    fr, fc = np.nonzero(far)
+    pairs: list[tuple[str, np.ndarray, np.ndarray, int]] = []
+    if len(fr):
+        pick = rng.integers(0, len(fr), VGLB_OCC_SAMPLES)
+        xy = n_org + (np.stack([fc[pick], fr[pick]], 1) + rng.random((VGLB_OCC_SAMPLES, 2))) * c2
+        vx = np.floor((xy - o[:2]) / v).astype(np.int64)
+        vz = rng.integers(0, dims[2], VGLB_OCC_SAMPLES)
+        vox = np.column_stack([vx, vz])
+        m = np.all((vox >= 0) & (vox < dims), axis=1)
+        pairs.append(("outside", vox[m], np.zeros(int(m.sum()), bool), OCC_UNKNOWN))
+    _d, V, F, _t = _trimesh(w, rc[0])
+    used = np.unique(F.reshape(-1))
+    pv = V[used[rng.integers(0, len(used), VGLB_OCC_SAMPLES)]] if len(used) else np.zeros((0, 3))
+    vox = np.floor((pv - o) / v).astype(np.int64)
+    m = np.all((vox >= 0) & (vox < dims), axis=1)
+    cr = np.clip(np.floor((pv[m, 1] - n_org[1]) / c2).astype(np.int64), 0, H - 1)
+    cc = np.clip(np.floor((pv[m, 0] - n_org[0]) / c2).astype(np.int64), 0, W - 1)
+    pairs.append(("surface", vox[m], cov[cr, cc], OCC_OCCUPIED))
+    for name, vx, ccol, want in pairs:
+        if name == "surface":
+            vx, ccol = vx[ccol], ccol[ccol]                      # 覆盖外的表面体素按约定为 unknown，不计入
+        st = _occ_state(w, L, doc, vx, ccol)
+        bad = int((st != want).sum())
+        rep.check(bad == 0, f"{bad}/{len(st)} sampled {name} voxels are not {('unknown', 'free', 'occupied', 'below_surface')[want]}",
+                  _sidecar_rel(L))
+
+
+@glb_rule("V-GLB-14", "semantic")
+def glb14(w: WorldView, rep: Report):
+    _glb(w)
+    Ls = _layers_by(w, type_="navmesh")
+    if not Ls:
+        raise Skip("no navmesh layer")
+    from awr.world.ingest.manifest import repo_root
+
+    vf = repo_root() / "tools" / "worldglb" / "RECAST_VERSION"
+    want_v = vf.read_text(encoding="utf-8").strip() if vf.is_file() else None
+    recipe = {}
+    rp = repo_root() / "configs" / "worlds.d3" / str(w.world.get("id")) / "recipe.yaml"
+    if rp.is_file():
+        import yaml
+
+        recipe = yaml.safe_load(rp.read_text(encoding="utf-8")) or {}
+    for L in Ls:
+        nm = w.load_json(L["href"])
+        prof = nm.get("profile")
+        rep.check(want_v is not None and nm.get("recast_version") == want_v,
+                  f"{prof}: recast_version {nm.get('recast_version')} != tools/worldglb/RECAST_VERSION {want_v}", L["href"])
+        agent = {**VGLB_AGENTS.get(prof, {}), **(((recipe.get("build") or {}).get("nav") or {}).get(prof, {}).get("agent") or {})}
+        got = nm.get("agent") or {}
+        diff = [k for k, val in agent.items() if not (k in got and abs(float(got[k]) - float(val)) <= 1e-9)]
+        rep.check(not diff, f"{prof}: agent {diff} differ from the recipe ({agent})", L["href"])
+
+
+@glb_rule("V-GLB-15", "semantic", "W")
+def glb15(w: WorldView, rep: Report):
+    """调平证据：qa/report.json `glb.leveling`（L1–L4 判定位优先，缺省时按量复核）或 G-11/G-12/G-13 门禁；staging 中报告尚未写出，
+    由构建在报告后补验。"""
+    _glb(w)
+    if w.staging:
+        raise Skip("qa/report.json is written after validation")
+    g = _qa_glb(w) or {}
+    lv = g.get("leveling") if isinstance(g.get("leveling"), dict) else {}
+    try:
+        gates = {x.get("id"): x for x in w.load_json("qa/report.json").get("gates", [])}
+    except Skip:
+        gates = {}
+
+    def gate(*ids: str) -> bool | None:
+        x = next((gates[i] for i in ids if i in gates), None)
+        return None if x is None else bool(x.get("pass"))
+
+    b = w.world.get("bounds") or {}
+    diag = math.hypot(*(np.subtract(b["max"], b["min"])[:2])) if b else 0.0
+    km = bool(lv.get("km_scale", diag >= VGLB_KM_DIAG_M))
+    msgs = []
+    if km:
+        d = lv.get("delta_deg")
+        ok1 = lv["L1"] if "L1" in lv else (float(d) <= 0.5) if d is not None else gate("G-11", "G-L1")
+        if not ok1:
+            msgs.append(f"two-method levelling difference {d} deg > 0.5 deg or missing (L1)")
+    else:
+        sd, ci = lv.get("subset_delta_deg"), lv.get("ci95_deg")
+        ok2 = lv["L2"] if "L2" in lv else (float(sd) <= 0.3 and (ci is None or float(ci) <= 0.3)) if sd is not None else gate("G-12", "G-L2")
+        if not ok2:
+            msgs.append(f"wall-subset consistency {sd} deg / CI95 {ci} deg > 0.3 deg or missing (L2)")
+    lim = float(lv.get("planes_limit_deg", 0.2 if km else 0.5))
+    planes = [p for p in lv.get("planes", []) if isinstance(p, dict) and p.get("slope_deg") is not None and p.get("evaluated", True)]
+    cp = lv.get("control_points") if isinstance(lv.get("control_points"), dict) else {}
+    if "L3" in lv or "L4" in lv:
+        ok34 = bool(lv.get("L3")) or bool(lv.get("L4"))
+    elif planes or cp:
+        ok34 = (len(planes) >= 3 and max(float(p["slope_deg"]) for p in planes) <= lim) or \
+            (int(cp.get("n", 0)) >= 20 and cp.get("rms_m") is not None and float(cp["rms_m"]) <= 2.0)
+    else:
+        ok34 = gate("G-13", "G-L34")
+    if not ok34:
+        msgs.append(f"no acceptance: >= 3 horizontal planes with slope <= {lim:g} deg or >= 20 control points with AGL RMS <= 2 m (L3, L4)")
+    if lv.get("needs_control_points"):
+        msgs.append("needs_control_points = true")
+    for m in msgs:
+        rep.warn(f"levelling: {m}", "qa/report.json")
+
+
+@glb_rule("V-GLB-16", "structure")
+def glb16(w: WorldView, rep: Report):
+    _glb(w)
+    rep.check(w.world.get("schemaVersion") == "1.1.0", f"schemaVersion {w.world.get('schemaVersion')} != 1.1.0", "world.json")
+    rep.check((w.world.get("render") or {}).get("defaultColorMode") == "rgb", "render.defaultColorMode != rgb", "world.json")
+    for rv in w.roots:
+        if rv.metadata is None:
+            continue
+        col = ((rv.metadata.get("anet") or {}).get("col") or {})
+        rep.check(col.get("rgb") == "srgb", f"point cloud col.rgb {col.get('rgb')} != srgb", f"{rv.entry.get('href', '')}metadata.json")
+
+
+def vglb_results(rep: Report) -> list[dict]:
+    """V-GLB 每条规则的结果（qa/report.json `glb.vglb`，M22 §7.3.8）：status ∈ pass、warn、fail、n/a。"""
+    out = []
+    for rid in VGLB_RULE_IDS:
+        rd = GLB_RULES[rid]
+        errs = [e for e in rep.errors if e["rule"] == rid]
+        warns = [e for e in rep.warnings if e["rule"] == rid]
+        if rid in rep.skipped_rules or (rd.layer == "deep" and not rep.deep):
+            st = "n/a"
+        else:
+            st = "fail" if errs else "warn" if warns else "pass"
+        row = {"id": rid, "severity": rd.severity, "status": st}
+        if st == "n/a":
+            row["reason"] = rep.skipped_rules.get(rid, "deep rule not run")
+        msgs = [e["message"] for e in errs + warns][:5]
+        if msgs:
+            row["messages"] = msgs
+        if rid in RULE_REASONS and errs:
+            row["reason_code"] = RULE_REASONS[rid]
+        if rid in (rep.info.get("vglb") or {}):
+            row["measured"] = rep.info["vglb"][rid]
+        out.append(row)
+    return out
+
+
+def report_reason(rep: Report) -> int | None:
+    """失败报告对应的原因码：V-GLB-08 失败为 602（WORLD_LICENSE_MISSING），其余 error 为 None（构建退出码 1）。"""
+    codes = sorted({RULE_REASONS[e["rule"]] for e in rep.errors if e["rule"] in RULE_REASONS})
+    return codes[0] if codes else None
+
+
 # ---------------------------------------------------------------- 驱动
 
 
@@ -1369,8 +2194,17 @@ def is_world_dir(p: Path) -> bool:
     return p.is_dir() and bool(WORLD_ID_RE.match(p.name))
 
 
+def _rules_for(w: WorldView) -> dict[str, RuleDef]:
+    """D2 规则全部执行；`profile = d3-glb` 的世界其后追加 V-GLB 规则组（M22-FR-042：先 D2 再 V-GLB）。"""
+    try:
+        glb = isinstance(w.world, dict) and w.world.get("profile") == "d3-glb"
+    except Skip:
+        glb = False
+    return {**RULES, **GLB_RULES} if glb else RULES
+
+
 def validate_world(world_dir: Path, *, deep: bool = False, rules: set[str] | None = None, staging: bool = False) -> Report:
-    """`staging=True` 时跳过 V-Q 组，V-W-02 降为告警（16 §15.3）。"""
+    """`staging=True` 时跳过 V-Q 组，V-W-02 降为告警（16 §15.3）；D3 GLB 世界追加 V-GLB 规则组。"""
     t0 = time.perf_counter()
     world_dir = Path(world_dir)
     rep = Report(path=str(world_dir), deep=deep, staging=staging)
@@ -1379,7 +2213,7 @@ def validate_world(world_dir: Path, *, deep: bool = False, rules: set[str] | Non
         rep.world_id = w.world.get("id")
     except Skip:
         rep.world_id = None
-    for rid, rd in RULES.items():
+    for rid, rd in _rules_for(w).items():
         if rules is not None and rid not in rules:
             continue
         if rd.layer == "deep" and not deep:
@@ -1388,7 +2222,8 @@ def validate_world(world_dir: Path, *, deep: bool = False, rules: set[str] | Non
         rep._rule = rid
         try:
             rd.fn(w, rep)
-        except Skip:
+        except Skip as e:
+            rep.skipped_rules[rid] = str(e)
             continue
         except (KeyError, TypeError, ValueError, IndexError, AttributeError, OSError) as e:
             rep.error(f"cannot evaluate: {type(e).__name__}: {e}", "")
@@ -1402,8 +2237,8 @@ def validate_cli_json(reports: list[Report], skipped: list[str]) -> dict:
             "results": [r.to_json() for r in reports], "skipped": skipped}
 
 
-def rules_catalog() -> list[dict]:
-    return [{"id": r.id, "layer": r.layer, "severity": r.severity} for r in RULES.values()]
+def rules_catalog(*, glb: bool = False) -> list[dict]:
+    return [{"id": r.id, "layer": r.layer, "severity": r.severity} for r in ({**RULES, **GLB_RULES} if glb else RULES).values()]
 
 
 def file_sha(p: Path) -> str:
