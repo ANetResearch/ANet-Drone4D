@@ -4,8 +4,12 @@
 否则返回 600 `WORLD_UNCALIBRATED`、不装载舞台（D3-AC-02、M22-AC-008）；`CompileOptions.ranked` 为真时另要求
 `ranked_ok`（`scaleStatus ∉ {relative, assumed}`，AWR-05 §5.1.2），同样返回 600，`detail.ranked = true`。
 
-门 3（语义验证、oracle、事件图）由后续工作包接入；本编排对门 3 记 `skipped`。产物：`event.json`（原始 DSL 的 JSON 形式）、
-`plan.json`、`anchors.json`（解析后锚点）、`tape.bin`、`tape.json`、`compile_report.json`。
+门 3（§6.9，`awr.sim.events.verify`）：在流式复算之后对规范帧数据执行检测器、声明与关系核对、一致性检查与天空可见度；strict 下
+任一声明未验证、关系不成立或一致性失败返回 613 `EVENT_SEMANTIC_MISMATCH` 且不发布产物，lenient 下同一代码记为告警；未声明的显著
+事件以 `declared: false` 写入真值并告警 `W-UNDECLARED`。观测性 oracle、事件图与 `truth.mcap` 由后续工作包接入。
+
+产物：`event.json`（原始 DSL 的 JSON 形式）、`plan.json`、`anchors.json`（解析后锚点）、`tape.bin`、`tape.json`、
+`truth/r<truth_rev>/event_truth.json`（`drone4d.event_truth.v1`）、`compile_report.json`（含 `truth_summary`）。
 """
 
 from __future__ import annotations
@@ -58,6 +62,8 @@ class CompileOptions:
     cache_dir: Path | None = None
     preflight_only: bool = False
     ranked: bool = False                            # 排名运行的编译：另拒 scaleStatus ∈ {relative, assumed}
+    truth_rev: int = 1                              # 真值修订号（只改注释、关系时由版本服务递增，§6.14）
+    verify_params: dict | None = None               # 门 3 检测器与检查参数覆盖（verify_event 的 params）
 
 
 @dataclass
@@ -74,12 +80,15 @@ class CompileResult:
     tape: dict | None = None
     out: Path | None = None
     world_metric: dict | None = None                # M22 metric_ok() 的结果（MetricStatus.to_json）
+    strict: bool = True
+    truth: dict | None = None                       # 门 3 的 truth_summary（§7.3.1）；613 时 truth_sha256 为 None
 
     def as_dict(self) -> dict[str, Any]:
-        return {"event_id": self.event_id, "version": self.version, "status": self.status,
+        return {"event_id": self.event_id, "version": self.version, "status": self.status, "strict": self.strict,
                 "reason": None if self.reason is None else {"code": self.reason, "name": _reason_name(self.reason)},
                 "gates": self.gates, "segments": self.segments, "retime": self.retime, "snaps": self.snaps, "boards": self.boards,
-                "tape": self.tape, "out": None if self.out is None else str(self.out), "world_metric": self.world_metric}
+                "tape": self.tape, "truth_summary": self.truth, "out": None if self.out is None else str(self.out),
+                "world_metric": self.world_metric}
 
 
 def _gate(n: int, errs: list[Issue], warns: list[Issue], t0: float, status: str | None = None) -> dict:
@@ -189,7 +198,8 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     pf = preflight(plan, stage, mode=opts.retime_mode)
     segs = [lg.report() for a in sorted(pf["legs"]) for lg in pf["legs"][a]]
     gates.append(_gate(2, pf["errors"], pf["warnings"], t0))
-    res = CompileResult(eid, ver, "preflight", None, gates, segs, pf["retime"], pf["snaps"], pf["boards"], world_metric=ms.to_json())
+    res = CompileResult(eid, ver, "preflight", None, gates, segs, pf["retime"], pf["snaps"], pf["boards"], world_metric=ms.to_json(),
+                        strict=opts.strict)
     if pf["errors"]:
         res.status = "infeasible" if any(e.reason == 612 for e in pf["errors"]) else "failed"
         res.reason = 612 if res.status == "infeasible" else 611
@@ -197,8 +207,9 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     if opts.preflight_only:
         return res
     # ------------------------------------------------------------ 生成与打包
-    from awr.sim.events.gen import build_header, generate_frames
+    from awr.sim.events.gen import arrivals, build_header, build_truth, generate_frames, truth_sha256
     from awr.sim.events.tape import TapeReader, manifest, write_tape
+    from awr.sim.events.verify import load_quality, verify_event
 
     frames, table, report = generate_frames(plan, stage, pf)
     report["warnings"] = sorted(set(report["warnings"]) | {w.code for w in warns})
@@ -213,7 +224,22 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     n_s = sum(1 for a in table if a["scripted"])
     h = write_tape(tmp / "tape.bin", header, frames, n_scripted=n_s)
     TapeReader(tmp / "tape.bin").verify(h["content_sha256"])     # 流式复算（614）
-    gates.append({"gate": 3, "status": "skipped", "errors": [], "warnings": [], "duration_ms": 0})
+    # ------------------------------------------------------------ 门 3
+    t0 = time.perf_counter()
+    g3 = verify_event(plan, frames, table, anchors=anchors, n_scripted=n_s, stage=stage, mesh=q, arrivals=arrivals(plan, pf),
+                      quality=load_quality(world_dir), strict=opts.strict, params=opts.verify_params)
+    gates.append(_gate(3, g3.errors, g3.warnings, t0))
+    res.tape = {"content_sha256": h["content_sha256"], "body_sha256": h["body_sha256"], "n_actors": len(table), "n_ticks": header["n_ticks"],
+                "bytes": h["bytes"], "bytes_per_actor_s": round(h["bytes"] / max(1, len(table)) / (header["n_ticks"] / 10.0), 2)}
+    if g3.errors:
+        res.status, res.reason, res.truth = "failed", 613, g3.summary(None, None)
+        shutil.rmtree(tmp, ignore_errors=True)
+        return res
+    truth = build_truth(plan, h["content_sha256"], strict=opts.strict, truth_rev=opts.truth_rev, **g3.truth_kwargs(), perf=g3.perf)
+    t_sha = truth_sha256(truth)
+    (tmp / "truth" / f"r{opts.truth_rev}").mkdir(parents=True)
+    (tmp / "truth" / f"r{opts.truth_rev}" / "event_truth.json").write_text(json.dumps(truth, ensure_ascii=False, indent=1), encoding="utf-8")
+    res.truth = g3.summary(opts.truth_rev, t_sha)
     prov = {"generator": GENERATOR, "generator_version": GENERATOR_VERSION, "recast_navigation": "none (awr-navgrid@1)", "wasm_sha256": "0" * 64,
             "node": "none", "host": platform.node(), "wall_ms": int((time.perf_counter() - t_wall) * 1000),
             "rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1),
@@ -224,11 +250,10 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     (tmp / "plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf-8")
     (tmp / "anchors.json").write_text(json.dumps({"schema": "awr.anchors.v1", "world_id": wdoc["id"], "anchors": list(anchors.values())},
                                                  ensure_ascii=False, indent=1), encoding="utf-8")
-    n_t = header["n_ticks"]
     res.status, res.out = "compiled", out
-    res.tape = {"content_sha256": h["content_sha256"], "body_sha256": h["body_sha256"], "n_actors": len(table), "n_ticks": n_t,
-                "bytes": h["bytes"], "bytes_per_actor_s": round(h["bytes"] / max(1, len(table)) / (n_t / 10.0), 2)}
-    (tmp / "compile_report.json").write_text(json.dumps({**res.as_dict(), "out": None, "provenance": prov}, ensure_ascii=False, indent=1),
+    (tmp / "compile_report.json").write_text(json.dumps({**res.as_dict(), "out": None, "provenance": prov, "gate3": {"stats": g3.stats,
+                                                         "extra": g3.extra, "perf": g3.perf}},
+                                                        ensure_ascii=False, indent=1),
                                             encoding="utf-8")
     if out.exists():
         shutil.rmtree(out)

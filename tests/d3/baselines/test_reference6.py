@@ -108,7 +108,8 @@ def synth_event(tmp_path_factory):
     d.mkdir()
     (d / "anchors.json").write_text(json.dumps(OVERLAY))
     (d / "event.json").write_text(json.dumps(ev))
-    r = compile_event(d / "event.json", w, opts=CompileOptions(out=d / "v1", cache_dir=tmp / "cache"))
+    # meet_ab 为示意声明（合成路线中 a、b 不相遇）；夹具不核对语义，门 3 以 lenient 编译（strict 下为 613，E01）
+    r = compile_event(d / "event.json", w, opts=CompileOptions(out=d / "v1", cache_dir=tmp / "cache", strict=False))
     assert r.status == "compiled", r.as_dict()
     yield w, d / "v1"
     mp.undo()

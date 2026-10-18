@@ -48,6 +48,7 @@ annotations:
   - {id: encounter_AB, type: proximity_encounter, participants: [person_A, person_B], window: [195, 250]}
   - {id: board_BC, type: board_vehicle, participants: [person_B, vehicle_C], window: [240, 275]}
   - {id: enter_AZ, type: enter_building, participants: [person_A], window: [290, 320], params: {anchor: ev_building_z_door}}
+  - {id: cross_C, type: zone_pass, participants: [vehicle_C], window: [200, 290], params: {zone: ev_plaza, buffer_m: 25}}
 relations:
   - {src: encounter_AB, rel: before, dst: board_BC}
   - {src: board_BC, rel: before, dst: enter_AZ}
