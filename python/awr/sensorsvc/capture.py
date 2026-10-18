@@ -7,7 +7,8 @@
 缺省 realistic）与 `seed`（run_seed，缺省 0）选择效果链与噪声档（M25 §6.5；`camera.effects`）：RGB 经曝光、渐晕、噪声与 ISP，
 观测深度经 L2-depth 传感器模型（均在 GPU 编码遍内），云台读数加编码器噪声；真值深度与真值云台角不变。规格可选 `event`
 （`{path: 事件版本目录, offset_s}`，相对路径按 data_root 解析）：以该磁带为动态源（M25 §6.4.4），采集时刻 t 对应事件时刻
-offset_s + t，演员按 t_mid 的磁带状态绘制并写出 `instance_unocc` 与 `objects[]`。每台 LiDAR（`lidars[]`，M25 §6.8）附带其内置
+offset_s + t，演员按 t_mid 的磁带状态绘制并写出 `instance_unocc` 与 `objects[]`。相机与 LiDAR 的演员状态都经 `ActorClock` 以
+各自的整数采集时刻查询同一磁带时刻函数（D3-AC-10，ADR-198）。每台 LiDAR（`lidars[]`，M25 §6.8）附带其内置
 IMU（M25 §6.9，200 Hz，`<name>_imu`）：比力与角速度由脚本位姿差分得到，每个 LiDAR 帧周期写一个 ImuObs 块（`/uav/{id}/imu/<name>_imu`）。
 
 输出（`<data_root>/dataset/<event_id>/`）：`runs/<run_id>/{raw.mcap, frames.idx, run_manifest.json}` 与
@@ -20,6 +21,7 @@ import argparse
 import json
 import math
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -43,7 +45,7 @@ from awr.sensorsvc.lidar.model import MOUNT_INVERTED_MAPPING
 from awr.sensorsvc.poses import Mount, PoseHistory, sensor_pose
 from awr.sensorsvc.timing import check_exposure, parse_rate, t_end_ns, t_mid_ns
 
-__all__ = ["CameraSpec", "LidarSpec", "UavSpec", "build_history", "load_spec", "run_capture"]
+__all__ = ["ActorClock", "CameraSpec", "LidarSpec", "UavSpec", "build_history", "load_spec", "run_capture"]
 
 POSE_HZ = 250
 LIDAR_SENSOR_NO0 = 100                    # LiDAR 的传感器号（与相机号分开；无云台样本，即机体固连）
@@ -107,6 +109,54 @@ def load_spec(doc: dict) -> tuple[dict, list[UavSpec]]:
     return doc, fleet
 
 
+class ActorClock:
+    """采集作业读取演员状态的唯一入口（D3-AC-10，ADR-198 决策 (1)；M23 §6.8）：相机曝光中点 t_mid 与 LiDAR 逐点时刻都以各自的整数
+    采集时刻 t 查询同一磁带时刻函数 `TapeReader.actor_states(offset + t)`，不跨时刻共享实体状态。
+
+    缓存键为整数 t_ns（`assert type(t_ns) is int`，numpy 整数与浮点一律拒绝）：只有采样时刻精确到纳秒相同的查询复用同一次求值
+    （同一 tick 各机 LiDAR 帧的区间样本、同一曝光中点的多台相机），最多保留 `CACHE_TIMES` 个时刻，按最近使用淘汰。返回的数组
+    只读：任一使用方原地修改即报错，一帧的修改不会经缓存带到另一帧。`calls` 为磁带时刻函数调用次数，`hits` 为缓存命中次数。"""
+
+    CACHE_TIMES = 64
+
+    def __init__(self, tape, offset_ns: int = 0) -> None:
+        self.tape = tape
+        self.offset_ns = int(offset_ns)
+        self._cache: OrderedDict[int, object] = OrderedDict()
+        self.calls = 0
+        self.hits = 0
+
+    def __call__(self, t_ns: int):
+        """采集时刻 t_ns（整数纳秒）的 ActorStates（全部演员，数组只读）。"""
+        assert type(t_ns) is int, f"actor state key must be an integer t_ns, got {type(t_ns).__name__}"
+        st = self._cache.get(t_ns)
+        if st is not None:
+            self._cache.move_to_end(t_ns)
+            self.hits += 1
+            return st
+        self.calls += 1
+        st = self.tape.actor_states(self.offset_ns + t_ns)
+        for a in (st.ids, st.pos_enu_m, st.yaw_rad, st.vel_enu_mps, st.state, st.container):
+            a.setflags(write=False)
+        self._cache[t_ns] = st
+        if len(self._cache) > self.CACHE_TIMES:
+            self._cache.popitem(last=False)
+        return st
+
+    @property
+    def keys(self) -> list[int]:
+        """当前缓存中的时刻键（测试与性能记录用）。"""
+        return list(self._cache)
+
+    def frame(self, t_ns: int):
+        """相机帧的演员位姿（`raster.ActorFrame`，只含移动与等待状态的演员）：t_ns 为该帧的曝光中点 t_mid。"""
+        from awr.sensorsvc.camera.raster import ActorFrame
+
+        st = self(t_ns)
+        v = np.isin(st.state, (1, 2))
+        return ActorFrame(st.ids[v], st.pos_enu_m[v], st.yaw_rad[v])
+
+
 def _yaw_q(yaw: float) -> np.ndarray:
     return np.array([0.0, 0.0, math.sin(yaw / 2), math.cos(yaw / 2)])
 
@@ -158,7 +208,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     run_id, event_id = doc["run_id"], doc.get("event_id", "capture")
     wdir = Path(worlds_dir or data_root / "worlds") / doc["world_id"]
     world = json.loads((wdir / "world.json").read_text(encoding="utf-8"))
-    tape, ev_off_ns, ev_meta = None, 0, None
+    tape, ev_off_ns, ev_meta, clock = None, 0, None, None
     if doc.get("event"):
         from awr.sim.events.tape import open_tape
 
@@ -169,6 +219,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
         man = json.loads((tape.path.parent / "tape.json").read_text(encoding="utf-8"))
         ev_meta = {"event_id": tape.header["event_id"], "version": tape.header["event_version"], "content_sha256": man["content_sha256"],
                    "offset_s": ev_off_ns / NS}
+        clock = ActorClock(tape, ev_off_ns)
     run_dir = Path(data_root) / "dataset" / event_id / "runs" / run_id
     truth_dir = run_dir.parent.parent / "truth"
     if run_dir.exists():
@@ -227,7 +278,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
         raw.metadata("run", {"run_id": run_id, "event_id": event_id, "kind": "capture", "world_content_version": world["contentVersion"]})
         for i, (tm, uav, c, seq) in enumerate(jobs):
             if isinstance(c, LidarSpec):
-                _lidar_frame(lidar, raw, tru, hist[uav], uav, uav_no[uav], c, seq, tm - lidar.m.frame_ns, seed, prof.name, tape, ev_off_ns,
+                _lidar_frame(lidar, raw, tru, hist[uav], uav, uav_no[uav], c, seq, tm - lidar.m.frame_ns, seed, prof.name, clock,
                              run_id, ctx.dynamic_source_id)
                 _imu_block(raw, imus[(uav, c.name)], uav, c, seq, tm - lidar.m.frame_ns, tm)
                 continue
@@ -242,13 +293,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
                 for k in range(RS_NODES):
                     pk, Rk, _ = sensor_pose(hist[uav], c.mount, c.sensor_no, tm - ro // 2 + (k * ro) // (RS_NODES - 1))
                     rs.append((Rk, pk))
-            af = None
-            if tape is not None:
-                from awr.sensorsvc.camera.raster import ActorFrame
-
-                stt = tape.actor_states(ev_off_ns + tm)
-                v = np.isin(stt.state, (1, 2))
-                af = ActorFrame(stt.ids[v], stt.pos_enu_m[v], stt.yaw_rad[v])
+            af = clock.frame(tm) if clock is not None else None              # 演员取曝光中点 t_mid 的磁带状态（ADR-198 决策 (4)）
             out = cam.render(c.model, R, pos, fx=fxp, rs_nodes=rs, actors=af)
             finish_frame(st, fxp, out.meter_sub)
             ms.append(out.draw_ms + out.readback_ms)
@@ -288,9 +333,9 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     return manifest
 
 
-def _lidar_frame(lidar, raw, tru, H: PoseHistory, uav: str, uav_no: int, L: LidarSpec, seq: int, t_s: int, seed: int, tier: str, tape,
-                 ev_off_ns: int, run_id: str, source_id: str) -> None:
-    """一帧网格 LiDAR：11 个位姿节点（t_s + 10 ms·m）、演员取磁带状态，观测写 raw.mcap、槽位真值写真值文件。"""
+def _lidar_frame(lidar, raw, tru, H: PoseHistory, uav: str, uav_no: int, L: LidarSpec, seq: int, t_s: int, seed: int, tier: str,
+                 clock: ActorClock | None, run_id: str, source_id: str) -> None:
+    """一帧网格 LiDAR：11 个位姿节点（t_s + 10 ms·m）、演员按逐点时刻经 `clock` 取磁带状态，观测写 raw.mcap、槽位真值写真值文件。"""
     from awr.sensorsvc.poses import R_to_quat_xyzw
 
     m = lidar.m
@@ -300,8 +345,7 @@ def _lidar_frame(lidar, raw, tru, H: PoseHistory, uav: str, uav_no: int, L: Lida
         p, Rk, _ = sensor_pose(H, L.mount, L.sensor_no, t_s + k * seg)
         nodes.append((Rk, p))
         nd_meta.append({"t_ns": int(t_s + k * seg), "pos_enu_m": [float(v) for v in p], "q_ws_xyzw": [float(v) for v in R_to_quat_xyzw(Rk)]})
-    st_fn = (lambda t: tape.actor_states(ev_off_ns + t)) if tape is not None else None
-    sc = lidar.scan(seq, t_s, nodes, actor_states=st_fn, seed=seed, uav_no=uav_no, sensor_no=L.sensor_no - LIDAR_SENSOR_NO0, tier=tier)
+    sc = lidar.scan(seq, t_s, nodes, actor_states=clock, seed=seed, uav_no=uav_no, sensor_no=L.sensor_no - LIDAR_SENSOR_NO0, tier=tier)
     fid = f"{run_id}/{uav}/{L.name}/{seq}"
     hdr = {"schema": "awr.sensor.lidar_frame.v2", "sensor_id": L.name, "frame_id": fid, "frame_seq": int(seq), "timebase_ns": int(t_s),
            "point_dt_ns": m.point_dt_ns, "slots_per_frame": m.slots_per_frame, "point_count": len(sc.points), "model": L.model_id,
