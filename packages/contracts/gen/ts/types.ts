@@ -2362,7 +2362,14 @@ export interface BoardV1 {
         repeat_delta?: number | null
       }
     }
-    dominance_tier: number
+    /**
+     * Non-dominated tier; null when the entry is invalid or has no valid run (not tiered).
+     */
+    dominance_tier: number | null
+    /**
+     * invalid when more than 20% of the entry's runs are not ranked-valid: shown with metrics from valid runs, excluded from ranks and tiers.
+     */
+    status?: 'valid' | 'invalid'
     first_listed_unix_ns: number
     baseline: boolean
   }[]
@@ -10790,6 +10797,14 @@ export interface ScenarioGenLawnmower {
   sweep_angle_deg?: number | 'auto'
   speed_mps?: number
   min_lane_m?: number
+  perception?: {
+    level: 'D' | 'R' | 'I'
+    sigma_ext_per_m?: number
+    t_sortie_s?: number
+    h_cap_agl_m?: number
+    clearance_m?: number
+    side_overlap?: number
+  }
 }
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema

@@ -1,0 +1,22 @@
+{
+ "exp": "micro",
+ "run_id": "stages2",
+ "git_sha": "b1272fd5b10a28afed073eedca5b01ead5d7734e",
+ "started": "2026-10-08T23:07:20+0000",
+ "hardware": {
+  "host": "user",
+  "cpu": "Intel(R) Xeon(R) Gold 6426Y",
+  "cores": 64,
+  "mem_gb": 503,
+  "python": "3.12.3",
+  "os": "Linux-6.8.0-137-generic-x86_64-with-glibc2.39"
+ },
+ "config": {
+  "opts": {
+   "kinds": "stages",
+   "reps": 3
+  },
+  "n_tasks": 18,
+  "procs": 1
+ }
+}

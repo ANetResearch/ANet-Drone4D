@@ -1,0 +1,38 @@
+\begingroup\newcommand{\chtagf}{\tiny\bfseries\color{oursred}}%
+\begin{tikzpicture}[font=\scriptsize,
+  box/.style={execute at begin node={\hyphenpenalty=10000},draw=g2,fill=white,rounded corners=1.5pt,line width=0.4pt,align=center,inner sep=2.5pt,
+              minimum height=1.1cm},
+  inp/.style={box,text width=2.3cm,fill=g5,draw=g4},
+  mdl/.style={box,text width=2.9cm,draw=oursred,line width=0.7pt},
+  run/.style={box,text width=3.9cm,draw=oursred,line width=0.7pt},
+  arr/.style={-{Stealth[length=3pt]},g1,line width=0.45pt},
+  ]
+  % inputs
+  \node[inp] (src) at (1.25,3.2) {City point clouds, no-fly zones, borders};
+  \node[inp] (wx)  at (1.25,1.2) {Weather presets and keyframes};
+  \node[inp] (veh) at (1.25,-0.8) {Vehicle and sensor catalogue};
+  % shared models
+  \node[mdl] (d1) at (4.6,3.2) {\textbf{D1} World Package and geometry query service\\[1pt] {\chtagf C1}};
+  \node[mdl] (d2) at (4.6,1.2) {\textbf{D2} 4D environment field $E(x,y,z,t)$\\[1pt] {\chtagf C2}};
+  \node[mdl] (en) at (4.6,-0.8) {Energy and perception models\\[1pt] {\chtagf C2, C3}};
+  \foreach \a/\b in {src/d1, wx/d2, veh/en} \draw[arr] (\a) -- (\b);
+  % bus
+  \fill[oursred] (6.5,-1.35) rectangle (6.64,3.75);
+  \node[font=\tiny,text=oursred,align=center,anchor=north] at (6.57,-1.42) {one shared model,\\ batched queries};
+  \foreach \b in {d1,d2,en} \draw[arr] (\b.east) -- (\b.east -| 6.5,0);
+  % runtime side
+  \node[run] (d4) at (9.25,3.2) {\textbf{D4} Coupled decisions: precheck, return, scan plan, delegation\\[1pt] {\chtagf C3, C4}};
+  \node[run] (d3) at (9.25,1.2) {\textbf{D3} Fleet runtime: one clock, staged 4\,ms ticks, rotating refresh\\[1pt] {\chtagf C4}};
+  \node[run] (d5) at (9.25,-0.8) {\textbf{D5} Streaming access: gateway, budgeted point-cloud client\\[1pt] {\chtagf C5}};
+  \draw[arr] (6.64,3.2) -- (d4.west);
+  \draw[arr] (6.64,1.2) -- (d3.west);
+  \draw[arr,dashed] (6.64,-0.8) -- (d5.west);
+  % runtime internal arrows
+  \draw[arr,oursred] ([xshift=-10pt]d4.south) -- node[left,font=\tiny,text=oursred] {commands} ([xshift=-10pt]d3.north);
+  \draw[arr] ([xshift=10pt]d3.north) -- node[right,font=\tiny] {state} ([xshift=10pt]d4.south);
+  \draw[arr] (d3.south) -- node[right,font=\tiny] {snapshots, events} (d5.north);
+  % client
+  \node[box,text width=1.6cm,fill=g5,draw=g4] (br) at (12.75,-0.8) {Browser on an operator's device};
+  \draw[arr] (d5) -- (br);
+  \draw[arr,dashed] (br.north) |- node[pos=0.25,right,font=\tiny,text=g1,align=left] {operator\\commands} (d4.east);
+\end{tikzpicture}\endgroup

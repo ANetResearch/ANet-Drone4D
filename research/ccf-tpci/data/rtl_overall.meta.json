@@ -1,0 +1,22 @@
+{
+ "exp": "rtl",
+ "run_id": "overall",
+ "git_sha": "b1272fd5b10a28afed073eedca5b01ead5d7734e",
+ "started": "2026-10-08T18:39:55+0000",
+ "hardware": {
+  "host": "user",
+  "cpu": "Intel(R) Xeon(R) Gold 6426Y",
+  "cores": 64,
+  "mem_gb": 503,
+  "python": "3.12.3",
+  "os": "Linux-6.8.0-137-generic-x86_64-with-glibc2.39"
+ },
+ "config": {
+  "opts": {
+   "seeds": 6,
+   "policies": "coupled,px4,px4_time,no_geometry,no_detour,no_wind,no_energy,no_precheck"
+  },
+  "n_tasks": 4032,
+  "procs": 32
+ }
+}

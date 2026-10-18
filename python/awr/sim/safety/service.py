@@ -20,6 +20,7 @@ import numpy as np
 from awr.contracts.enums import FLIGHTSTATE_NAMES, GcsLossPolicy, Owner
 from awr.contracts.reasons import Reason
 from awr.sim.core.admission import AdmitResult
+from awr.sim.core.envwind import env_mean_wind
 from awr.sim.fleet.pipeline import TICK_NS
 from awr.sim.fleet.state import CtrlMode
 
@@ -252,8 +253,7 @@ class SafetyRuntime:
         if not ok.any():
             return out
         try:
-            w = env.query(P[ok], None, fields=1)
-            w = np.asarray(getattr(w, "wind_enu", w), np.float64).reshape(int(ok.sum()), -1)[:, :2]
+            w = env_mean_wind(env, P[ok], self.t_ns)[:, :2]
             u = d[ok] / n[ok, None]
             out[ok] = np.maximum(0.0, -(w * u).sum(1))
         except Exception:

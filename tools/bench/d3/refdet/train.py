@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "sdk" / "drone4d" / "src"))
 
 W_IN, H_IN, H_PAD, STRIDE = 960, 540, 544, 4
 HM_W, HM_H = W_IN // STRIDE, H_PAD // STRIDE

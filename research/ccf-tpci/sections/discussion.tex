@@ -1,0 +1,32 @@
+\section{Discussion and limitations}\label{sec:discussion}
+
+\paragraph{Reference models.} The energy, wind and perception models are reference models: a P600-class hexacopter
+power model, an analytic urban wind and visibility field driven by twelve weather presets, and the Johnson criteria with
+Koschmieder contrast attenuation. We report relative differences between policies on the same ground truth because
+these differences depend on the coupling, not on the calibration of one vehicle. Absolute endurance, wind loads near
+buildings and detection probabilities of a specific drone and camera will differ, and calibrating the models against
+flight logs, measured urban wind and camera imagery is the next step. Because every model sits behind one interface,
+a calibrated model replaces the reference one for all modules at once, which is the point of sharing it.
+
+\paragraph{Geometry.} Safety is certified against the city's surface model at 2\,m resolution, dilated by 4\,m and
+raised by a 10\,m margin. Wires, cranes, thin structures, overhangs and changes after the point cloud was captured are
+not in the model, and the margin is not a substitute for onboard sensing. The runtime treats the surface model as one
+input to the decision and the separation and contact stages as another; an onboard obstacle-avoidance layer remains
+necessary in real operations.
+
+\paragraph{Weather in time.} The environment field represents a forecast as a keyframe transition, and the space-time
+precheck uses it as if it were exact. Real forecasts are uncertain in timing and strength; a precheck that plans
+against an ensemble of transitions, and a return trigger that re-plans when the forecast changes in flight, are natural
+extensions. The precheck also samples the route wind at a few points per leg, which left 4--11\% of sorties meeting
+wind beyond the rating on the path they actually flew.
+
+\paragraph{Scope of the evaluation.} Scan plans are scored on their planned trajectories with the perception model
+rather than flown in closed loop, and the closed-loop campaigns use eight drones per task; the 1,000-drone measurements
+show that the runtime keeps the coupled return logic inside the real-time budget, not that decisions remain equally
+good when hundreds of drones interact. Browser access was measured on a laptop, a software renderer and a data-centre
+GPU, and the server's cost per additional viewer was not measured. These are limits of the present evaluation, not of
+the design, and the open-source release includes the harness to extend it.
+
+\paragraph{Safety and dual use.} The runtime is a planning and simulation tool for civil fleet operations. It does not
+replace airworthiness assessment, airspace authorisation or onboard safety functions, and its outputs should be used
+with the margins that local regulations require.

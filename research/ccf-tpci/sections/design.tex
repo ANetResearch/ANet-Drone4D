@@ -1,0 +1,219 @@
+\section{System Design}\label{sec:design}
+
+\subsection{Overview}\label{sec:design:overview}
+
+Figure~\ref{fig:arch} shows the architecture of Drone4D. Three shared models sit on the left: the World Package with its geometry
+query service (D1), the 4D environment field (D2), and the energy and perception models. Every consumer on the right
+queries the same models through batched interfaces: the coupled decision layer (D4), the fleet runtime that produces
+the simulated ground truth (D3), and the streaming access layer that feeds the operator's browser (D5). The design has
+one rule that follows from F2: \emph{a quantity that two modules need is computed by one function}. The precheck and
+the return trigger call the same energy model; the dynamics, the camera and the display read the same wind and optical
+depth; the decision that proves a return safe and the contact stage that detects a collision read the same height map.
+Table~\ref{tab:map} maps the modules to the challenges of Sect.~\ref{sec:bg:challenges}, and
+Fig.~\ref{fig:matrix} lists, for each decision, which model it queries.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/tikz_arch}}
+\caption{Architecture. Shared models (left) are queried in batches on the simulation clock by the decision layer and
+the fleet runtime (solid) and streamed to the browser (dashed). The tags C1--C5 give the challenge each module addresses}
+\label{fig:arch}
+\end{figure}
+
+\begin{table}[t]
+\caption{Design modules, the challenges they address and the mechanisms that address them.}
+\label{tab:map}
+\footnotesize
+\begin{tabular*}{\textwidth}{@{\extracolsep\fill}llp{6.3cm}@{}}
+\toprule
+Module & Challenge & Key mechanism \\
+\midrule
+D1 World Package, geometry service & C1 & Versioned package, max-pyramids, exact and bounded corridor queries \\
+D2 4D environment field & C2 & One analytic field for wind, visibility and optics; golden vectors for every client \\
+D3 Fleet runtime & C4 & One 250\,Hz clock, staged sub-rates, structure-of-arrays kernels, rotating return refresh \\
+D4 Coupled decision layer & C3, C4 & Shared-energy return trigger, wind-rated precheck, level-driven scan planner \\
+D5 Streaming access & C5 & Headless server, budgeted point-cloud selection with a cascade controller \\
+\botrule
+\end{tabular*}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\input{figures/tikz_matrix}
+\caption{Decision-coupling matrix. A filled dot means the decision queries that model, with the query it makes; an
+open dot means it does not. Every filled dot in a column is the same function call}
+\label{fig:matrix}
+\end{figure}
+
+\subsection{World Package and geometry query service}\label{sec:design:world}
+
+\paragraph{Package.} A city enters the system as a point cloud plus semantic layers (borders, no-fly zones). An
+offline pipeline normalises units, axes and origin, derives a 10\,m terrain model by morphological opening, classifies
+points by height above ground, tiles the visual cloud into an octree with a 12-byte quantised point encoding, and
+derives a 2\,m digital surface model (DSM). The result is published atomically as a World Package whose content version is
+the hash of its files. Six real cities from UrbanScene3D~\cite{lin2022urbanscene3d} and one procedural city are
+built this way; a city occupies 138--192\,MB.
+
+\paragraph{Derived geometry.} At load time the service derives, and caches under a key that combines the content
+version with the derivation parameters, a clearance height map $H = \mathrm{maxfilter}_{5\times5}(\mathrm{DSM}) + 10$\,m,
+max-pooled pyramids of the surface and of the height map, a dilated height-map pyramid for corridor queries, and an
+8\,m raster of no-fly zones. Because $H$ is dilated and raised, a path that clears $H$ also clears the inflated
+surface model; this monotonicity lets cheap coarse checks certify a path against the model and leaves fine checks for the few paths that need
+them.
+
+\paragraph{Queries.} Decisions use a small set of vectorised queries: surface and terrain height, the maximum of $H$
+along a segment (exact cell traversal or a bounded pyramid sample with a 100\,m tolerance), batched line of sight (up
+to 64 pairs per call), coarse path checks that classify each segment as proven safe, uncertain or violating against
+both $H$ and the zones, fine path validation at 20 samples per metre, and a safe-transit profile that climbs to
+$\max_{\text{line}} H + 5$\,m. The same height map drives the return altitude in D4 and the contact stage in D3, so
+the decision and the ground truth cannot disagree about what a building is.
+
+\subsection{4D environment field}\label{sec:design:env}
+
+\paragraph{One analytic field.} The environment is a function $E(x,y,z,t)$ evaluated on demand rather than a stored
+grid. Wind is composed as
+\begin{equation}
+\mathbf{w}(x,y,z,t) = s(t)\, f\big(z_{\mathrm{agl}}\big)\, \mathbf{e}(\theta(t)) + \textstyle\sum_k \mathbf{G}_k(x,y,z,t)
+ + g(z)\,\mathbf{T}(x,y,z,t),
+\end{equation}
+a reference speed $s$ and direction $\theta$ shaped by a logarithmic profile
+$f(z) = \ln\!\big((z-d)/z_0\big)/\ln\!\big((z_{\mathrm{ref}}-d)/z_0\big)$ with the city's roughness length $z_0$ and
+displacement height $d$, plus discrete gusts $\mathbf{G}_k$ and turbulence $\mathbf{T}$ from a periodic $64^3$ box and a
+Dryden filter bank~\cite{beal1993digital}; height above ground comes from the World Package's terrain model. The
+atmosphere carries the meteorological optical range, the extinction coefficient, precipitation and fog-top height, and
+the standard-atmosphere state. Slant optical depth $\tau(\mathbf{p}_0,\mathbf{p}_1,t)$ integrates an exponential haze
+profile, a fog slab and precipitation below the cloud base, and gives the transmittance $e^{-\tau}$ that perception uses.
+Twelve presets (clear to blizzard and sandstorm) set 21 scalar parameters; changes are applied as keyframes of at most
+2\,KB that interpolate over time, so a weather change is a few bytes on the wire.
+
+\paragraph{One field for every consumer.} The field is queried in batches of up to 256 points with a time argument.
+The fleet runtime evaluates it at 50\,Hz for every drone and writes wind and air density into the dynamics; the
+camera model evaluates optical depth per target; the decision layer evaluates it along candidate routes; and the
+browser evaluates the same equations in TypeScript for the display. A shared set of golden vectors (profiles, gusts,
+turbulence, keyframe evaluation, optical depth) is checked by both the Python and the TypeScript test suites, so the
+display evaluates the same field the drones fly in (Sect.~\ref{sec:eval:consistency}); how faithfully the rendered
+effects convey that field to an operator is a separate question we do not study here.
+
+\subsection{Fleet runtime on one clock}\label{sec:design:runtime}
+
+\paragraph{One clock, staged sub-rates.} All drones share one 250\,Hz simulation clock (4\,ms ticks). Work is split
+into stages that each declare a period in ticks and a phase: the environment and sensors run at 50\,Hz, the
+dynamics and contact at 125\,Hz, inter-drone collision at 25\,Hz, energy integration at 10\,Hz and return-plan refresh
+at 5\,Hz. Phases are staggered to spread the expensive stages over different ticks. Every stage declares a CPU budget in
+core-seconds per simulated second; the runtime refuses to build a pipeline whose budgets sum to more than 0.40 at
+1,000 drones and real time, and it reports the measured cost of each stage once per second.
+
+\paragraph{Structure of arrays.} The state of up to 1,024 drones lives in contiguous arrays (position, velocity,
+attitude, battery, safety state), and every stage is a vectorised kernel over all drones or over a subset. The flight
+controller is a PX4-like cascaded position and attitude controller; the power drawn is
+$P = P_{h}\,(T/T_{h})^{1.5}$ plus a climb term, evaluated with the airspeed implied by the local wind. Contact against
+the surface model, inter-drone separation with hold and resume, a flight state machine (flying, hold, return with
+climb, cruise, descend and final phases, landing, emergency landing) and seeded random streams complete the ground
+truth. No stage reads the wall clock, so a run is a deterministic function of its seed and its command log, and the
+recorder can replay it.
+
+\paragraph{Rotating refresh.} Return plans are the most expensive per-drone decision: each needs a corridor query
+along the line home, a wind query at the return altitude and an energy integral. Instead of refreshing every drone on
+every call, the 5\,Hz return stage refreshes a rotating fifth of the fleet, so each plan is at most one second old. Section~\ref{sec:eval:micro}
+measures what this buys.
+
+\subsection{Coupled decision layer}\label{sec:design:decisions}
+
+\subsubsection{Decision awareness}\label{sec:design:awareness}
+
+Each decision reads the shared models through a switchboard, \texttt{DecisionAwareness}, with one flag per factor:
+\texttt{geometry} (corridor height map), \texttt{detour} (detour candidates), \texttt{wind} (field wind instead of
+calm air), \texttt{visibility} and \texttt{los} (optical depth and line of sight in the detector quote),
+\texttt{energy\_rtl} (energy-based return trigger), \texttt{precheck\_env} (field wind in the precheck) and
+\texttt{shared\_energy} (return trigger on the precheck's energy model). A fixed-altitude policy reproduces the PX4
+default. The flags change only what a decision \emph{sees}; the simulated ground truth is always fully coupled. This
+makes every baseline and ablation of Sect.~\ref{sec:eval} a configuration of one system rather than a different
+code base.
+
+\subsubsection{Launch precheck}
+
+Before a sortie the precheck builds the route the planner will fly, take-off, a climb to the cruise altitude
+$z_c = \max(z_{\mathrm{op}}, z_{\mathrm{pad}} + 25, \max_{\text{route}} H + 5)$, the transit, the station time and the
+return, and integrates the shared energy model along it with the field wind. A sortie launches only if
+\begin{equation}
+\mathrm{soc}_0 - \frac{E_{\mathrm{out}} + E_{\mathrm{station}} + E_{\mathrm{back}}}{E_{\mathrm{use}}} \geq r
+\quad\text{and}\quad \max_{\text{route}} \lVert \mathbf{w}_{xy} \rVert \leq w_{\mathrm{rating}},
+\end{equation}
+with usable energy $E_{\mathrm{use}}$, reserve $r = 0.20$ and the vehicle's wind rating $w_{\mathrm{rating}}$
+(13.8\,m/s for the P600 profile). The second condition encodes F2: wind matters mainly through feasibility.
+
+\paragraph{Space-time precheck.} The environment field's keyframe defines the weather for the whole of its transition,
+so a forecast front is part of the shared model. The space-time variant evaluates each leg at the time it will be
+flown: the transit at launch time, the station and the return at their predicted start times $t_{\mathrm{back}} =
+t_{\mathrm{out}} + t_{\mathrm{station}}$, with wind sampled along each leg over its duration. If the requested station
+time would put the return into wind beyond the rating or below the reserve, the precheck shortens the station time in
+15\,s steps, down to 30\,s, and declines the sortie only if even that fails. It costs one batched field query per
+candidate station time.
+
+\subsubsection{Return planning}
+
+\paragraph{Altitude and path.} The return altitude is
+$z_{\mathrm{rtl}} = \max\big(z_{\mathrm{now}},\, z_{\mathrm{home}} + 30,\, \max_{[\mathbf{p},\mathbf{h}]} H + 5\big)$:
+the PX4 rule plus the corridor term that F1 shows to be necessary. When the corridor term forces a climb of more than
+10\,m, the planner evaluates single-waypoint detours $\mathbf{p} + fL\mathbf{u} + kw\mathbf{n}$ to either side of the
+line, each with its own corridor height and headwind, and keeps the one that shortens the return by at least 5\,s; at
+most 16 drones run the detour search per refresh to bound its cost.
+
+\paragraph{Trigger on the shared energy model.} The return starts when the remaining flight time falls below
+$1.3\,t_{\mathrm{rtl}}$ or the state of charge below 7\%. A stand-alone failsafe estimates $t_{\mathrm{rtl}}$ from
+distances and a cruise speed reduced by the headwind, which is the model disagreement of F2. With
+\texttt{shared\_energy}, $t_{\mathrm{rtl}}$ is instead the energy-equivalent time of the planned return under the same
+model the precheck uses:
+\begin{equation}
+t_{\mathrm{rtl}} = \frac{E_{\mathrm{climb}} + E_{\mathrm{cruise}}(\mathbf{w}) + E_{\mathrm{descent}}}{\max(\bar P,\, 0.5\,P_h)},
+\end{equation}
+where the cruise term integrates the power at the airspeed implied by the field wind at $z_{\mathrm{rtl}}$, the ground
+speed is held unless the headwind exceeds the wind rating, and $\bar P$ is the current average power. Both decisions
+now ask the same question of the same function, so the trigger fires when the energy, not a second model, runs out.
+
+\subsubsection{Perception-driven scan planning}
+
+\paragraph{From level to pixels.} For a target with projected critical dimension $d_c = \sqrt{A_{\mathrm{proj}}}$
+seen at range $R$ through a lens of focal length $f$ on pixels of pitch $p$, the number of pixels on target is
+$N = d_c f/(R\,p)$. The targeting task performance function~\cite{vollmerhausen2004new} gives the probability of a task
+as $P(N) = x^{E}/(1+x^{E})$ with $x = N/(2N_{50})$ and $E = 2.7 + 0.7x$, where the Johnson cycle criteria
+$N_{50} = 1, 4, 6.4$ correspond to detection, recognition and identification~\cite{sjaardema2015history}. At
+$P = 0.9$ this requires 3.5, 14.0 and 22.4 pixels. Atmospheric contrast $C = C_0\,e^{-\tau(R)}$, with $\tau$ from D2,
+scales the usable resolution by $k_c = \mathrm{clip}\big((C - 0.05)/(0.25 - 0.05), 0, 1\big)$, and a blocked line of
+sight sets it to zero.
+
+\paragraph{From pixels to a fleet.} For each candidate flying height $H$ above ground the planner (i) drops the cells
+whose buildings rise above $H$ minus the clearance and rejects $H$ if they exceed 5\% of the area, (ii) computes the
+slant range at the strip edge $R_e = H/\cos\theta_e$ ($\theta_e \leq 15^{\circ}$) and the focal length
+$f \geq N_{\mathrm{req}} R_e\, p/(d_c\, k_c)$ needed there under the current optical depth, rejecting $H$ if no lens
+reaches it, (iii) derives the ground sample distance, the strip width $w = \min(W g,\, 2H\tan\theta_{\max})$ and the
+spacing $(1-s)w$, and (iv) lays out boustrophedon strips~\cite{choset2000coverage} at the best sweep angle. It keeps the
+height with the shortest single-drone time, then picks the smallest number of drones whose balanced partition, assigned
+to depots with the Hungarian method~\cite{kuhn1955hungarian}, fits a sortie budget
+$T_{\max} = \min\big(t_{\mathrm{cap}},\, 0.8\,t_{\mathrm{sortie}}(\mathbf{w}) - 2\,t_{\mathrm{transit}}\big)$, where the
+sortie endurance comes from the shared energy model under the current wind. Visibility therefore propagates through the
+whole plan: lower visibility lowers the height, narrows the strips, lengthens the plan and raises the number of drones,
+and the planner reports this cost instead of silently losing targets (F3).
+
+\subsubsection{Capability-based task delegation}
+
+Tasks that need a specific sensor are delegated with the contract net protocol~\cite{smith1980contract}: the
+coordinator announces the task to the drones whose capability matches, each drone returns a quote, and the task is
+awarded to the best score
+$U = w_c\,\hat c - w_t\,\eta/\eta_0 - w_e\,E/E_0 - w_l\,\ell - w_r\,\rho$,
+where the expected confidence $\hat c$ comes from the detector quote with optical depth and line of sight, $\eta$ and
+$E$ come from the same precheck as a launch, $\ell$ is the drone's load and $\rho$ a weather-risk term from the field.
+Infeasible quotes score $-\infty$.
+
+\subsection{Streaming access without a server GPU}\label{sec:design:access}
+
+The server runs the simulation headless on CPUs and never renders. A gateway publishes compact per-drone state at up
+to 125\,Hz of simulation time (clients typically subscribe at 10--20\,Hz), events, keyframes of the environment field
+and a 10\,Hz time message, with credit-based back-pressure, and it reports the age of the data it serves. The browser
+renders the city point cloud with WebGL2 from HTTP range requests on the octree tiles and evaluates the environment
+field locally for weather effects. Its point budget is chosen by two controllers. APH (adaptive prefix with hysteresis)
+selects octree nodes best-first by screen-space error under a point budget $B$, always keeps the nodes required for a
+coherent view, and applies hysteresis to avoid popping. CAS (a cascade controller) adapts $B$: an inner loop adjusts
+$B$ in the log domain every 250\,ms from a 24-frame window against a 33.3\,ms frame target, and an outer loop moves
+between seven quality rungs. The client therefore holds its frame rate on a laptop GPU or a software renderer,
+without any GPU on the server (Sect.~\ref{sec:eval:access}).

@@ -732,6 +732,7 @@ __all__ = [
     "ScenarioGenHelixScan",
     "ScenarioGenLawnmower",
     "ScenarioGenLawnmowerAltitude",
+    "ScenarioGenLawnmowerPerception",
     "ScenarioGenOrbit",
     "ScenarioGenTerrainFollow",
     "ScenarioLeaf",
@@ -7761,6 +7762,7 @@ class ScenarioGenLawnmower(TypedDict):
     sweep_angle_deg: NotRequired[float | Literal["auto"]]
     speed_mps: NotRequired[float]
     min_lane_m: NotRequired[float]
+    perception: NotRequired[ScenarioGenLawnmowerPerception]
 
 
 # scenario/scenario.schema.json#/$defs/gen_lawnmower/properties/altitude
@@ -7768,6 +7770,16 @@ class ScenarioGenLawnmowerAltitude(TypedDict):
     mode: Literal["fly_over", "fixed_agl", "per_lane"]
     agl_m: NotRequired[float]
     clearance_m: NotRequired[float]
+
+
+# scenario/scenario.schema.json#/$defs/gen_lawnmower/properties/perception
+class ScenarioGenLawnmowerPerception(TypedDict):
+    level: Literal["D", "R", "I"]
+    sigma_ext_per_m: NotRequired[float]
+    t_sortie_s: NotRequired[float]
+    h_cap_agl_m: NotRequired[float]
+    clearance_m: NotRequired[float]
+    side_overlap: NotRequired[float]
 
 
 # scenario/scenario.schema.json#/$defs/gen_orbit

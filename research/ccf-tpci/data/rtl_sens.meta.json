@@ -1,0 +1,26 @@
+{
+ "exp": "rtl",
+ "run_id": "sens",
+ "git_sha": "b1272fd5b10a28afed073eedca5b01ead5d7734e",
+ "started": "2026-10-08T21:22:21+0000",
+ "hardware": {
+  "host": "user",
+  "cpu": "Intel(R) Xeon(R) Gold 6426Y",
+  "cores": 64,
+  "mem_gb": 503,
+  "python": "3.12.3",
+  "os": "Linux-6.8.0-137-generic-x86_64-with-glibc2.39"
+ },
+ "config": {
+  "opts": {
+   "worlds": "shenzhen,newyork,synthcity",
+   "presets": "clear,rain,thunderstorm",
+   "seeds": 3,
+   "policies": "coupled",
+   "rtl_margin": "1.0,1.1,1.3,1.5,1.8",
+   "top_margin": "0,2,5,10,20"
+  },
+  "n_tasks": 675,
+  "procs": 56
+ }
+}

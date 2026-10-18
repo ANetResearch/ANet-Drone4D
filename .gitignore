@@ -54,3 +54,9 @@ blob-report/
 # Local runtime state (identity lockout and signing keys written by local runs)
 /var/
 /docs-site/_build/
+# 论文编译中间文件
+/research/ccf-tpci/*.aux
+/research/ccf-tpci/*.log
+/research/ccf-tpci/*.out
+/research/ccf-tpci/*.blg
+/research/ccf-tpci/*.bbl

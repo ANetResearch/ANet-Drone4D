@@ -1,0 +1,202 @@
+\section{Evaluation}\label{sec:eval}
+
+We ask four research questions. 
+(1) Do coupled decisions make urban sorties safer and more productive than the decoupled practice
+of today (Sect.~\ref{sec:eval:overall})? 
+(2) Which coupling is responsible for which part of the gain (Sect.~\ref{sec:eval:ablation})? 
+(3) What does the coupling cost, and does the runtime keep it inside the real-time budget
+of a fleet (Sect.~\ref{sec:eval:micro})? 
+(4) Can operators reach the runtime from ordinary devices without a server GPU (Sect.~\ref{sec:eval:access})? 
+We then test how sensitive the results are to the decision parameters
+(Sect.~\ref{sec:eval:sens}) and whether the shared model is in fact the same model everywhere
+(Sect.~\ref{sec:eval:consistency}).
+
+\subsection{Setup}\label{sec:eval:setup}
+
+Table~\ref{tab:config} summarises the configuration. All campaigns run the complete runtime of Sect.~\ref{sec:design}
+in-process with a simulated clock that advances faster than real time; only the decision-awareness switches differ
+between policies, and the simulated ground truth (wind acting on the dynamics, contact with the surface model, battery
+discharge) is always fully coupled. A sortie is \emph{completed} if the drone lands within 25\,m of its depot,
+\emph{lost} if it collides with a building or the ground or ends away from home with an empty battery, \emph{returned
+early} if the battery logic recalls it before its station time ends, and \emph{not launched} if the precheck refuses
+it. We call a sortie \emph{unsafe} if it is lost or if it is launched although the field wind along its route exceeds
+the vehicle's 13.8\,m/s rating. Intervals are 95\% percentile bootstrap intervals; for closed-loop campaigns the bootstrap resamples whole
+tasks (city, weather and seed), because the sorties of one task share their conditions. Large language models were used
+to help search the literature and edit the text and to produce simulated reviewer critiques of a draft; they did not
+generate, select or analyse any experimental data.
+
+\begin{table}[t]
+\caption{Experiment configuration.}\label{tab:config}
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Server & 64-core Intel Xeon Gold 6426Y, 503\,GB RAM, Linux 6.8, Python 3.12; no GPU used by the runtime \\
+Clients & Apple M3 laptop (Chrome, Metal); headless Chromium on the server with SwiftShader (software) and with an NVIDIA A100 (Vulkan) \\
+Cities & Shenzhen, Shanghai, Suzhou, New York, Chicago, San Francisco (UrbanScene3D~\cite{lin2022urbanscene3d}) and SynthCity (procedural, 1.2\,km) \\
+Weather & the 12 presets of the environment field, from clear to thunderstorm; wind direction drawn per seed \\
+Vehicle & P600-class hexacopter reference model: 222\,Wh battery, 85\% usable, 20\% launch reserve, wind rating 13.8\,m/s \\
+Return campaign & 8 drones per task, on-station points at 40\,m above ground 300--1,100\,m from the depot, station time 30--300\,s, \RTLSEEDS{} seeds per city and preset, 9 policies (\RTLSORTIES{} sorties) \\
+Scan campaign & 500\,m area of interest, 400 standing persons on open ground, detection, recognition and identification plans, 3 seeds per city and preset, plus a MOR sweep from 100\,m to 5\,km \\
+Front campaign & sorties as above launched in clear air while the weather turns into rain, heavy rain or a thunderstorm over 10\,min; 5 seeds per city and front; PX4 default, snapshot and space-time precheck \\
+Delegation & 12 drones (half with a 4.8--48\,mm zoom, half with a fixed 4.8\,mm lens), state of charge 12--90\%, 30 observation requests per task, 5 seeds per city and preset \\
+Policies & PX4 default return (climb to 30\,m above home, straight line, battery thresholds) without mission precheck; a decoupled stack (wind-blind energy precheck, geometry- and wind-blind return); the coupled policy; and one ablation per coupling. Scan: weather-blind plan sized for clear air vs coupled plan. Delegation: nearest drone, contract net with clear-air perception quotes, and coupled contract net \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Overall performance}\label{sec:eval:overall}
+
+\paragraph{Launch and return.} Figure~\ref{fig:overall-heatmap} shows, for every city and weather preset, the share of
+sorties that end unsafe under the PX4 default and under the coupled policy, and the share the coupled policy completes.
+Under the PX4 default, \PXUNSAFE\% of all sorties are unsafe: in calm and wet weather most of them are returns that fly
+into buildings, between \PXCITYLO\% of sorties in \PXCITYLOW{} and \PXCITYHI\% in \PXCITYHIW{}, and in severe weather every launched
+sortie flies beyond the wind rating. The coupled policy reduces the unsafe share to \CPUNSAFE\% and at the same time
+completes \CPDONE\% of sorties instead of \PXDONE\%. Of its 34 residual collisions, 30 occur on one pad of the San
+Francisco depot, within one metre of the pad at lift-off or touchdown, and the same sorties collide under the other
+policies as well; they are a property of that pad cell in the surface model rather than of a decision. The other four
+are collisions between two returning drones in SynthCity, which the separation layer, not the return planner, has to
+resolve. The decoupled stack, which adds a wind-blind energy precheck to a geometry-
+and wind-blind return, behaves like the PX4 default (\DCUNSAFE\% unsafe, \DCDONE\% completed): an energy precheck
+alone does not help when the return it budgets for is the wrong one.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/pdf/overall_heatmap.pdf}
+\caption{Overall performance per city and weather preset (\RTLSEEDS{} seeds, 8 sorties each). Top: sorties lost or
+launched beyond the wind rating under the PX4 default. Middle: the same under the coupled policy. Bottom: sorties the
+coupled policy completes. Presets in which the field wind exceeds the rating are not launched by the coupled policy}
+\label{fig:overall-heatmap}
+\end{figure}
+
+Figure~\ref{fig:overall-outcomes}a breaks the outcomes down by weather group. In calm weather the coupled policy
+completes \CPCALMDONE\% of sorties against \PXCALMDONE\% for the PX4 default, because the PX4 default loses \PXCALMLOST\% of its sorties on the
+way home; the coupled policy declines \CPCALMDECL\% of the calm-weather sorties, whose cruise altitude over the
+buildings is about twice that of the launched ones and whose mission energy would break the launch reserve. In wet and windy weather the coupled policy declines \CPWETDECL\% of the sorties, those whose route wind
+exceeds the rating or whose return under the field wind would break the reserve, and completes \CPWETDONE\%; the PX4 default
+launches all of them, completes \PXWETDONE\% and flies \PXWETOVER\% beyond the rating. In severe weather the coupled policy launches
+nothing, while the PX4 default loses \PXSEVLOST\% of its sorties. Declining is the honest answer in these cases, and the
+precheck reports it before take-off instead of discovering it in flight.
+
+Where does the safety come from? Figure~\ref{fig:overall-outcomes}b shows how high the returns climb above the depot.
+The PX4 default returns at the higher of its current altitude and 30\,m above home, so a drone on station 40\,m above
+the ground flies home at about its station altitude (median \PXCLIMB\,m above the depot), and collides on
+\PXCOLL\% of sorties. Climbing over the highest point of the clearance envelope on the return line removes the collisions
+but makes the median return climb \NDCLIMB\,m. The coupled policy keeps the same collision rate with a median climb of
+\CPCLIMB\,m, because detours around tall buildings replace the largest climbs, and spends \CPRETWH\,Wh per return against
+\NDRETWH\,Wh.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/pdf/overall_outcomes.pdf}
+\caption{Outcome of every sortie. (a) Outcome shares per weather group; numbers with an upward arrow to the right are the sorties
+launched beyond the wind rating. (b) Distribution of the return climb above the depot, with each policy's collision
+rate over all sorties}
+\label{fig:overall-outcomes}
+\end{figure}
+
+\paragraph{Weather fronts.} The campaigns above hold the weather constant. To test the time dimension of the shared
+model, we launch the same sorties in clear air while the field holds a front that turns the weather into rain, heavy
+rain or a thunderstorm over the next 10 minutes (7 cities, 5 seeds, 840 sorties per policy and front). Because the
+transition is part of the field's keyframe, the space-time precheck of Sect.~\ref{sec:design:decisions} can query it
+at the times the legs will be flown, while the snapshot precheck of the coupled policy sees only the clear air at
+launch. We record the largest field wind at each drone's position during the flight and call a sortie unsafe if it is
+lost or meets wind beyond the rating (Fig.~\ref{fig:front}). The snapshot precheck launches nearly every sortie into
+the front: 40\%, 85\% and 89\% of its sorties are unsafe, and in the thunderstorm it loses 49\% of its sorties, 104 of the 137 lost in
+emergency landings away from home once the drone can no longer hold its position. The PX4 default is worse still (65\%,
+94\%, 96\%). The space-time precheck reduces the unsafe share to 11\%, 8\% and 4\%: it shortens the station time of
+60--76\% of the sorties it launches into heavy rain and thunderstorms, to about two thirds of the request, and declines
+those that cannot be back before the front. It delivers more safe station time than either alternative in heavy rain
+and thunderstorms, and 11 points less than the snapshot precheck in rain, where its route wind, sampled at the cruise
+altitude, is conservative. The precheck samples the route wind at three points of each leg; its remaining unsafe
+sorties met stronger wind elsewhere on the path they actually flew.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/pdf/front.pdf}
+\caption{Weather fronts: sorties launched in clear air while a front builds over 10 minutes. (a) Outcome of every
+sortie; ``completed beyond rating'' sorties came home but met field wind beyond the 13.8\,m/s rating. (b) Station
+time delivered by sorties that came home within the rating, as a share of the requested station time; the numbers above the bars
+are the unsafe sorties (lost or beyond the rating). Bars show 95\% task-level bootstrap intervals}
+\label{fig:front}
+\end{figure}
+
+\paragraph{Scan planning.} Figure~\ref{fig:coverage-eval} evaluates the perception-driven scan planner of
+Sect.~\ref{sec:design:decisions} in the three presets that reduce visibility. A weather-blind plan sized for clear air
+captures 34\% of targets at detection level in fog and 5\% at recognition and identification level, and almost none in
+a blizzard. The coupled planner flies lower and narrower strips under the field's optical depth and captures 82--91\%,
+within a few points of the clear-air ceiling set by building occlusion. In a sandstorm, where visibility is reduced
+less, the blind plan only loses recognition capture (73\% vs 89\%). The coupled plan reports the price of this capture
+before launch: 1.34--1.41 times as many drones for recognition and identification and 1.05--1.27 times the makespan
+(Fig.~\ref{fig:coverage-eval}b). In every other preset the two plans coincide, so the coupling costs nothing when the
+weather does not matter. Planners that see only one of the two inputs separate their roles: a plan that knows the
+visibility but not the wind captures as much as the coupled plan, while a plan that knows only the wind captures as
+little as the blind one. Wind instead decides whether the sorties fit the battery: the endurance under the field wind is
+6\% shorter than the blind plan's sortie budget on average and up to 29\% shorter, while the coupled budget matches
+it. Capture is scored on the planned trajectories with the perception model; flying the scans in closed loop
+is left to future work.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/pdf/coverage_eval.pdf}
+\caption{Scan planning in low visibility, 7 cities and 3 seeds per preset. (a) Targets captured at the required level
+(D detection, R recognition, I identification) by the weather-blind and the coupled plan; dotted lines are the
+clear-air capture of the same tasks. (b) Drones per scan and makespan of the coupled plan relative to the blind plan,
+over the feasible plans in the three presets}
+\label{fig:coverage-eval}
+\end{figure}
+
+\input{sections/eval_deleg}
+
+\subsection{Ablation}\label{sec:eval:ablation}
+
+Figure~\ref{fig:ablation} removes one coupling at a time from the coupled policy, on the same sorties. Each variant
+turns off one decision-visibility switch of Sect.~\ref{sec:design:awareness} (\texttt{geometry}, \texttt{detour},
+\texttt{wind}, \texttt{shared\_energy}, \texttt{energy\_rtl}) or the precheck; ``w/o detour'' is the
+climb-to-clear return, which flies over the highest point of the envelope on the return line.
+\begin{itemize}
+\item \textbf{Geometry} is responsible for the safety of the return: without the corridor term, \NGCOLL\% of sorties
+collide, and the share completed falls from \CPDONE\% to \NGDONE\%. The energy per completed sortie drops, but only because
+the completed sorties are the short, low ones.
+\item \textbf{Wind in the precheck} is responsible for launch safety: a wind-blind precheck launches more sorties and
+completes more (\NWDONE\%), but \NWUNSAFE\% of all sorties become unsafe, mostly by launching beyond the rating in severe
+weather.
+\item \textbf{The shared energy model} is responsible for productivity: when the return trigger uses its own time-based
+headwind model, \NSABORT\% of sorties are recalled early (against \CPABORT\%), the share completed falls to \NSDONE\%, and
+completed sorties use \NSWHPCT\% more energy because recalled drones re-fly their transit. Safety is unchanged; this is the
+model disagreement of F2, measured in closed loop.
+\item \textbf{Detours} save climb and energy (Fig.~\ref{fig:overall-outcomes}b) and add \NDGAIN{} points of completed sorties.
+\item \textbf{The energy-based trigger} matters only at the margin: with fixed battery thresholds alone, \NESTRAND\% of
+sorties strand, against none.
+\item \textbf{The precheck as a whole}: without it, every sortie launches; \NPUNSAFE\% are unsafe.
+\end{itemize}
+No single coupling delivers both safety and productivity; geometry, field wind and the shared energy model each remove a
+different failure.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/pdf/ablation.pdf}
+\caption{Ablation over all cities and presets (\RTLSORTIESPOL{} sorties per variant). (a) Sorties completed, (b)
+sorties unsafe (lost or launched beyond the wind rating), (c) energy per completed sortie. Dotted lines mark the
+coupled policy; bars show 95\% task-level bootstrap intervals}
+\label{fig:ablation}
+\end{figure}
+
+\input{sections/eval_micro}
+
+\input{sections/eval_access}
+
+\input{sections/eval_sens}
+
+\subsection{Consistency and reproducibility}\label{sec:eval:consistency}
+
+The design promises one model evaluated identically by the planner, the runtime and the display, and runs that are a
+deterministic function of their seed. Table~\ref{tab:consistency} tests both. For the environment field we evaluate the
+browser implementation on the golden vectors produced by the server implementation, over every function the display
+uses. Of 79,104 outputs, 98.7\% are bit-identical and the largest absolute difference is $3.6\times10^{-12}$, from
+floating-point reassociation in the wind composition; these differences are about ten orders of magnitude below the resolution of any decision threshold
+(centimetres, tenths of a metre per second) and below single-precision rendering. For the fleet
+runtime we run 18 configurations (three cities, clear, fog and thunderstorm weather, two seeds) three times each in
+separate processes, with 16 drones flying for 180\,s in gusty wind, and hash the full fleet state every simulated
+second. All 3,240 checkpoints agree across the three runs.
+
+\input{sections/table_consistency}

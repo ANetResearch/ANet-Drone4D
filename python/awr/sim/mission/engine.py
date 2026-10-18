@@ -638,7 +638,7 @@ class MissionEngine:
             h_top = max(rt.hm_top(pos, v3), rt.hm_top(v3, home))
         else:
             h_top = rt.hm_top(pos, home)
-        rtl, _z = EN.rtl_samples(pos, home, h_top, rt.wind, rt.dtm_at(home), 5.0, tk, via=via)
+        rtl, _z = EN.rtl_samples(pos, home, h_top, rt.rtl_wind(), rt.dtm_at(home), 5.0, tk, via=via)
         wh_work = sum(rt.path_wh(s, p) for p in parts if len(p) >= 2)
         wh_rtl = rt.path_wh(s, rtl) if len(rtl) >= 2 else 0.0
         need = wh_work + wh_rtl

@@ -1,0 +1,29 @@
+{
+ "exp": "energy",
+ "run_id": "pe2",
+ "git_sha": "b1272fd5b10a28afed073eedca5b01ead5d7734e",
+ "started": "2026-10-08T18:40:38+0000",
+ "hardware": {
+  "host": "user",
+  "cpu": "Intel(R) Xeon(R) Gold 6426Y",
+  "cores": 64,
+  "mem_gb": 503,
+  "python": "3.12.3",
+  "os": "Linux-6.8.0-137-generic-x86_64-with-glibc2.39"
+ },
+ "config": {
+  "opts": {
+   "worlds": "shenzhen",
+   "presets": "clear,rain,thunderstorm",
+   "seeds": 1,
+   "speeds": [
+    0,
+    8,
+    14
+   ],
+   "speed_seeds": 1
+  },
+  "n_tasks": 6,
+  "procs": 6
+ }
+}
