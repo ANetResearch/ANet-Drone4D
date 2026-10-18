@@ -38,12 +38,14 @@ from awr.sensorsvc.camera.model import CAMERA_PROFILES, CameraModel, IspConfig
 from awr.sensorsvc.camera.snap import ground_z
 from awr.sensorsvc.errors import SensorSvcError
 from awr.sensorsvc.frame import FrameContext, camera_frame
+from awr.sensorsvc.lidar.model import MOUNT_INVERTED_MAPPING
 from awr.sensorsvc.poses import Mount, PoseHistory, sensor_pose
 from awr.sensorsvc.timing import check_exposure, parse_rate, t_end_ns, t_mid_ns
 
-__all__ = ["CameraSpec", "UavSpec", "build_history", "load_spec", "run_capture"]
+__all__ = ["CameraSpec", "LidarSpec", "UavSpec", "build_history", "load_spec", "run_capture"]
 
 POSE_HZ = 250
+LIDAR_SENSOR_NO0 = 100                    # LiDAR 的传感器号（与相机号分开；无云台样本，即机体固连）
 NS = 1_000_000_000
 
 
@@ -60,10 +62,19 @@ class CameraSpec:
 
 
 @dataclass(frozen=True)
+class LidarSpec:
+    name: str
+    sensor_no: int
+    model_id: str
+    mount: Mount
+
+
+@dataclass(frozen=True)
 class UavSpec:
     uav: str
     path: dict
     cameras: tuple[CameraSpec, ...]
+    lidars: tuple[LidarSpec, ...] = ()
 
 
 def load_spec(doc: dict) -> tuple[dict, list[UavSpec]]:
@@ -84,7 +95,12 @@ def load_spec(doc: dict) -> tuple[dict, list[UavSpec]]:
             cams.append(CameraSpec(c.get("name", f"cam{k}"), k, cm, cm.fps, Mount(tuple(c.get("mount_xyz_m", (0.1, 0.0, -0.05))),
                                                                                  tuple(c.get("mount_rpy_deg", (0.0, 0.0, 0.0)))),
                                    float(g.get("az_deg", 0.0)), float(g.get("el_deg", -30.0)), frozenset(c.get("outputs", ["rgb", "depth"]))))
-        fleet.append(UavSpec(u["uav"], u["path"], tuple(cams)))
+        lids = []
+        for k, L in enumerate(u.get("lidars", [])):
+            mt = L.get("mount", "inverted_mapping")
+            xyz, rpy = MOUNT_INVERTED_MAPPING if mt == "inverted_mapping" else (mt["xyz_m"], mt["rpy_deg"])
+            lids.append(LidarSpec(L.get("name", f"lidar{k}"), LIDAR_SENSOR_NO0 + k, str(L.get("model", "mid360")), Mount(tuple(xyz), tuple(rpy))))
+        fleet.append(UavSpec(u["uav"], u["path"], tuple(cams), tuple(lids)))
     if len({u.uav for u in fleet}) != len(fleet):
         raise SensorSvcError(649, "duplicate uav ids")
     return doc, fleet
@@ -137,7 +153,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     doc, fleet = load_spec(spec)
     prof = profile(str(doc.get("noise_profile", "realistic")))
     seed = int(doc.get("seed", 0))
-    fleet = [UavSpec(u.uav, u.path, tuple(replace(c, model=with_profile(c.model, prof)) for c in u.cameras)) for u in fleet]
+    fleet = [replace(u, cameras=tuple(replace(c, model=with_profile(c.model, prof)) for c in u.cameras)) for u in fleet]
     run_id, event_id = doc["run_id"], doc.get("event_id", "capture")
     wdir = Path(worlds_dir or data_root / "worlds") / doc["world_id"]
     world = json.loads((wdir / "world.json").read_text(encoding="utf-8"))
@@ -181,6 +197,22 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
             while (te := t_end_ns(0, rate, k)) <= duration * NS:
                 jobs.append((t_mid_ns(te, round(c.model.exposure_s * NS), round(c.model.readout_s * NS)), u.uav, c, k))
                 k += 1
+    lidar = None
+    if any(u.lidars for u in fleet):                             # 网格 LiDAR（M25 §6.8）：帧末时刻排入同一时序
+        from awr.sensorsvc.lidar.mesh import MeshLidar
+        from awr.sensorsvc.lidar.model import load_lidar_model
+        from awr.world.mesh.query import open_mesh_world_query
+
+        lmodel = load_lidar_model()
+        t1 = time.perf_counter()
+        lidar = MeshLidar(open_mesh_world_query(wdir, Path(data_root) / "cache" / "worldquery"), lmodel, tape.actors if tape else None)
+        log(f"[capture] mesh lidar ready in {time.perf_counter() - t1:.1f} s")
+        for u in fleet:
+            for L in u.lidars:
+                k = 0
+                while (k + 1) * lmodel.frame_ns <= duration * NS:
+                    jobs.append(((k + 1) * lmodel.frame_ns, u.uav, L, k))
+                    k += 1
     jobs.sort(key=lambda j: (j[0], j[1], j[2].sensor_no))
     if max_frames:
         jobs = jobs[:max_frames]
@@ -191,6 +223,10 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     with RunWriter(run_dir / "raw.mcap") as raw, RunWriter(truth_dir / f"run_{run_id}.mcap") as tru:
         raw.metadata("run", {"run_id": run_id, "event_id": event_id, "kind": "capture", "world_content_version": world["contentVersion"]})
         for i, (tm, uav, c, seq) in enumerate(jobs):
+            if isinstance(c, LidarSpec):
+                _lidar_frame(lidar, raw, tru, hist[uav], uav, uav_no[uav], c, seq, tm - lidar.m.frame_ns, seed, prof.name, tape, ev_off_ns,
+                             run_id, ctx.dynamic_source_id)
+                continue
             pos, R, g = sensor_pose(hist[uav], c.mount, c.sensor_no, tm)
             kw = {"seed": seed, "uav_no": uav_no[uav], "sensor_no": c.sensor_no, "frame_index": seq}
             st = ae[(uav, c.name)]
@@ -222,7 +258,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
             raw.write_camera(uav, c.name, seq, tm, jpeg, depth_m=d_obs, period_ns=int(NS / parse_rate(c.fps)))
             agent = {rec["agent_view"]["rgb"]["ref"], rec["agent_view"].get("depth", {}).get("ref")}      # 观测载荷只进 raw.mcap
             tru.write_camera_truth(uav, c.name, seq, tm, rec, {k: v for k, v in blocks.items() if k not in agent})
-            if (i + 1) % 100 == 0:
+            if (i + 1) % 100 == 0 and ms:
                 log(f"[capture] {i + 1}/{len(jobs)} frames, render p50 {np.median(ms):.1f} ms")
     build_frames_idx(run_dir / "raw.mcap", run_dir / "frames.idx")
     build_frames_idx(truth_dir / f"run_{run_id}.mcap", truth_dir / f"run_{run_id}.frames.idx", parse=parse_truth_topic)
@@ -233,7 +269,10 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
                 "frames": len(jobs), "render_ms_p50": round(float(np.median(ms)), 2) if ms else None,
                 "noise_profile": prof.name, "seed": seed, "event": ev_meta,
                 "fx_version": FX_VERSION, "noise_table_version": NOISE_TABLE_VERSION,
-                "fleet": [{"uav": u.uav, "path": u.path, "cameras": [{"name": c.name, "width": c.model.width, "height": c.model.height,
+                "fleet": [{"uav": u.uav, "path": u.path,
+                           "lidars": [{"name": L.name, "model": L.model_id, "mount": {"xyz_m": list(L.mount.xyz_m), "rpy_deg": list(L.mount.rpy_deg)}}
+                                      for L in uav_of[u.uav].lidars],
+                           "cameras": [{"name": c.name, "width": c.model.width, "height": c.model.height,
                                                                        "fps": c.fps, "hfov_deg": round(c.model.hfov_deg, 3),
                                                                        "K": [c.model.fx, 0.0, c.model.cx, 0.0, c.model.fy, c.model.cy, 0.0, 0.0, 1.0],
                                                                        "gimbal": {"az_deg": c.gimbal_az_deg, "el_deg": c.gimbal_el_deg},
@@ -242,6 +281,33 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     (run_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     log(f"[capture] {run_id}: {len(jobs)} frames, p50 {manifest['render_ms_p50']} ms, raw {(run_dir / 'raw.mcap').stat().st_size >> 20} MiB")
     return manifest
+
+
+def _lidar_frame(lidar, raw, tru, H: PoseHistory, uav: str, uav_no: int, L: LidarSpec, seq: int, t_s: int, seed: int, tier: str, tape,
+                 ev_off_ns: int, run_id: str, source_id: str) -> None:
+    """一帧网格 LiDAR：11 个位姿节点（t_s + 10 ms·m）、演员取磁带状态，观测写 raw.mcap、槽位真值写真值文件。"""
+    from awr.sensorsvc.poses import R_to_quat_xyzw
+
+    m = lidar.m
+    seg = m.frame_ns // (m.pose_nodes - 1)
+    nodes, nd_meta = [], []
+    for k in range(m.pose_nodes):
+        p, Rk, _ = sensor_pose(H, L.mount, L.sensor_no, t_s + k * seg)
+        nodes.append((Rk, p))
+        nd_meta.append({"t_ns": int(t_s + k * seg), "pos_enu_m": [float(v) for v in p], "q_ws_xyzw": [float(v) for v in R_to_quat_xyzw(Rk)]})
+    st_fn = (lambda t: tape.actor_states(ev_off_ns + t)) if tape is not None else None
+    sc = lidar.scan(seq, t_s, nodes, actor_states=st_fn, seed=seed, uav_no=uav_no, sensor_no=L.sensor_no - LIDAR_SENSOR_NO0, tier=tier)
+    fid = f"{run_id}/{uav}/{L.name}/{seq}"
+    hdr = {"schema": "awr.sensor.lidar_frame.v2", "sensor_id": L.name, "frame_id": fid, "frame_seq": int(seq), "timebase_ns": int(t_s),
+           "point_dt_ns": m.point_dt_ns, "slots_per_frame": m.slots_per_frame, "point_count": len(sc.points), "model": L.model_id,
+           "pattern_id": "mid360-nonrep@1", "return_mode": "first", "sync_type": "sim",
+           "mount_nominal": {"xyz_m": list(L.mount.xyz_m), "rpy_deg": list(L.mount.rpy_deg)}, "noise_tier": tier}
+    raw.write_lidar(uav, L.name, seq, t_s, hdr, sc.points, period_ns=m.frame_ns)
+    gt = {"schema": "awr.sensor.lidar_gt.v1", "frame_id": fid, "frame_seq": int(seq), "timebase_ns": int(t_s), "slots": m.slots_per_frame,
+          "codec": "zstd", "T_world_sensor_nodes": nd_meta, "reflectance_model": "sem_table_v1", "beta_905_per_m": 0.0,
+          "dynamic_source_id": source_id, "actor_hits": sc.actor_hits,
+          "seed": {"run_seed": int(seed), "uav_no": int(uav_no), "sensor_no": int(L.sensor_no - LIDAR_SENSOR_NO0)}}
+    tru.write_lidar_truth(uav, L.name, seq, t_s, gt, sc.gt_inst, sc.gt_flags)
 
 
 def main(argv: list[str] | None = None) -> int:

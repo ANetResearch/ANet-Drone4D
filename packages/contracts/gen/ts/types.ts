@@ -6082,6 +6082,121 @@ export interface LidarFrame {
   simulated?: boolean
 }
 /**
+ * LiDAR observation frame header (awr.sensor.lidar_frame.v2). M25 §6.8.7, AWR-05 §8.1 (contracts 1.3.0, d1 V0.3). MCAP message = u32 header_len | header JSON (UTF-8) | point_count x 20 B little-endian records: f32 x, y, z (sensor FLU at the point time, m), u32 offset_time (ns from timebase_ns, = slot x point_dt_ns), u8 reflectivity (Livox diffuse scale 0-150), u8 tag (bits 1:0 = 01 for spurious returns), u8 line (= slot & 3), u8 pad. Valid points only, in slot order; the slot index is offset_time / point_dt_ns.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LidarFrameV2".
+ */
+export interface LidarFrameV2 {
+  schema: 'awr.sensor.lidar_frame.v2'
+  sensor_id: string
+  /**
+   * <run>/<uav>/<sensor>/<frame_seq>
+   */
+  frame_id: string
+  frame_seq: number
+  /**
+   * Frame start (slot 0) in sim time
+   */
+  timebase_ns: number
+  point_dt_ns: number
+  slots_per_frame: number
+  point_count: number
+  /**
+   * M21 sensor model id, e.g. mid360
+   */
+  model: string
+  /**
+   * Scan pattern id, e.g. mid360-nonrep@1
+   */
+  pattern_id: string
+  return_mode: 'first' | 'strongest' | 'dual'
+  sync_type: 'sim'
+  mount_nominal?: {
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    xyz_m: [number, number, number, ...number[]]
+    /**
+     * @minItems 3
+     * @maxItems 3
+     */
+    rpy_deg: [number, number, number, ...number[]]
+  }
+  noise_tier?: 'clean' | 'realistic' | 'harsh'
+}
+/**
+ * LiDAR slot truth header (awr.sensor.lidar_gt.v1). M25 §6.8.6, §6.8.7 (contracts 1.3.0, d1 V0.3). Truth file only (/eval/hidden/lidar/{uav}/{name}); never delivered to agents. MCAP message = u32 header_len | header JSON | zstd(inst u16[slots] | flags u8[slots]) little-endian. inst: 0 static, 1..65533 actor idx + 1, 65534 spurious return or false alarm, 65535 no return. flags: bits 0-5 d3-semantic@1 code of the hit surface, bit 6 void (geometry incomplete or missed below the horizon), bit 7 spurious.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LidarGtV1".
+ */
+export interface LidarGtV1 {
+  schema: 'awr.sensor.lidar_gt.v1'
+  frame_id: string
+  frame_seq: number
+  timebase_ns: number
+  slots: number
+  codec: 'zstd'
+  /**
+   * Pose nodes used for the frame (t_ns, pos_enu_m, q_ws_xyzw WORLD<-FLU)
+   *
+   * @minItems 2
+   * @maxItems 64
+   */
+  T_world_sensor_nodes: [
+    {
+      t_ns: number
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      pos_enu_m: [number, number, number, ...number[]]
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      q_ws_xyzw: [number, number, number, number, ...number[]]
+    },
+    {
+      t_ns: number
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      pos_enu_m: [number, number, number, ...number[]]
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      q_ws_xyzw: [number, number, number, number, ...number[]]
+    },
+    ...{
+      t_ns: number
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      pos_enu_m: [number, number, number, ...number[]]
+      /**
+       * @minItems 4
+       * @maxItems 4
+       */
+      q_ws_xyzw: [number, number, number, number, ...number[]]
+    }[]
+  ]
+  reflectance_model: 'sem_table_v1'
+  beta_905_per_m?: number
+  dynamic_source_id?: string
+  actor_hits?: number
+  seed: {
+    run_seed: number
+    uav_no: number
+    sensor_no: number
+  }
+}
+/**
  * Livox LiDAR file sensors/mid360.yaml (awr.sensor.lidar_livox.v1). AWR-16 §11.6 (D1 stub; r04 §3.1.7). imu.acc_unit stays g (converted at the gateway).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema

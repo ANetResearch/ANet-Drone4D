@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor-v2/1/lidar_gt.v1.schema.json",
+  "title": "LiDAR slot truth header (awr.sensor.lidar_gt.v1)",
+  "description": "M25 §6.8.6, §6.8.7 (contracts 1.3.0, d1 V0.3). Truth file only (/eval/hidden/lidar/{uav}/{name}); never delivered to agents. MCAP message = u32 header_len | header JSON | zstd(inst u16[slots] | flags u8[slots]) little-endian. inst: 0 static, 1..65533 actor idx + 1, 65534 spurious return or false alarm, 65535 no return. flags: bits 0-5 d3-semantic@1 code of the hit surface, bit 6 void (geometry incomplete or missed below the horizon), bit 7 spurious.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.lidar_gt.v1"
+    },
+    "frame_id": {
+      "type": "string"
+    },
+    "frame_seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timebase_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "slots": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 24000
+    },
+    "codec": {
+      "const": "zstd"
+    },
+    "T_world_sensor_nodes": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 64,
+      "description": "Pose nodes used for the frame (t_ns, pos_enu_m, q_ws_xyzw WORLD<-FLU)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "t_ns": {
+            "type": "integer"
+          },
+          "pos_enu_m": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "q_ws_xyzw": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          }
+        },
+        "required": [
+          "t_ns",
+          "pos_enu_m",
+          "q_ws_xyzw"
+        ]
+      }
+    },
+    "reflectance_model": {
+      "const": "sem_table_v1"
+    },
+    "beta_905_per_m": {
+      "type": "number",
+      "minimum": 0
+    },
+    "dynamic_source_id": {
+      "type": "string"
+    },
+    "actor_hits": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run_seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "uav_no": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sensor_no": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "run_seed",
+        "uav_no",
+        "sensor_no"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "frame_id",
+    "frame_seq",
+    "timebase_ns",
+    "slots",
+    "codec",
+    "T_world_sensor_nodes",
+    "reflectance_model",
+    "seed"
+  ]
+}

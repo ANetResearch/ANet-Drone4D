@@ -56,8 +56,9 @@ RULES = [
     *(Rule(m, denied=("api/",), why="awr.api event loop must stay free of heavy work (AWR-03 §4.2)")
       for m in ("open3d", "small_gicp", "scipy.optimize", "numba", "mcap", "zstandard")),
     Rule("zenoh", allowed=("runtime/bus.py",), why="zenoh only through awr.runtime.bus (AWR-17 §10.5 item 11)"),
-    Rule("open3d", allowed=("world/mesh/",),
-         why="Open3D is not a D1/D2 dependency (AWR-11 §3.4); D3 uses it only for MeshWorldQuery ray casting (AWR-05 §5.1.6, .venv-d3)"),
+    Rule("open3d", allowed=("world/mesh/", "sensorsvc/lidar/"),
+         why="Open3D is not a D1/D2 dependency (AWR-11 §3.4); D3 uses it only for MeshWorldQuery ray casting (AWR-05 §5.1.6) and the "
+             "MeshLidar CPU path (M25 §6.8.3), .venv-d3"),
     *(Rule("numba", denied=(p,), why="numba is not allowed in this process (AWR-11 §3.4)") for p in ("runtime/", "recorder/", "agent/")),
     Rule("fastapi", allowed=("api/", "bench/api/"), why="fastapi only in the api and bench-api processes (AWR-11 §3.4; AWR-17 §18.4)"),
     Rule("mcap", allowed=("recorder/", "bench/recorder/"),

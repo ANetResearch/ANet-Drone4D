@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 from mcap.writer import CompressionType, IndexType, Writer
 
-from awr.bench.recorder.channels import camera_topic, truth_camera_topic
+from awr.bench.recorder.channels import camera_topic, lidar_topic, truth_camera_topic, truth_lidar_topic
 from awr.bench.recorder.foxglove import DEPTH_COMPRESSION, compressed_image, raw_image_f32, schema_data
 from awr.bench.recorder.truth import pack_camera_gt
 
@@ -68,6 +68,25 @@ class RunWriter:
             self._w.add_message(channel_id=cid, log_time=int(t_ns), publish_time=int(t_ns), sequence=int(seq),
                                 data=raw_image_f32(t_ns, fid, depth_m, compression=self.depth_compression))
             self.n_messages += 1
+
+    def write_lidar(self, uav: str, name: str, seq: int, t_ns: int, header: dict, points: np.ndarray, *, period_ns: int | None = None,
+                    agent_delivered: bool = True) -> None:
+        """`awr.sensor.lidar_frame.v2`（log_time = 帧首 timebase_ns）。"""
+        from awr.bench.recorder.lidar import LIDAR_CODEC, pack_lidar_frame
+
+        meta = {"agent_delivered": "true" if agent_delivered else "false", "codec": LIDAR_CODEC}
+        if period_ns:
+            meta["period_ns"] = str(int(period_ns))
+        cid = self._channel(lidar_topic(uav, name), "awr.sensor.lidar_frame.v2", meta, encoding="binary")
+        self._w.add_message(channel_id=cid, log_time=int(t_ns), publish_time=int(t_ns), sequence=int(seq), data=pack_lidar_frame(header, points))
+        self.n_messages += 1
+
+    def write_lidar_truth(self, uav: str, name: str, seq: int, t_ns: int, header: dict, inst: np.ndarray, flags: np.ndarray) -> None:
+        from awr.bench.recorder.lidar import pack_lidar_gt
+
+        cid = self._channel(truth_lidar_topic(uav, name), "awr.sensor.lidar_gt.v1", {"codec": "lidar-gt"}, encoding="binary")
+        self._w.add_message(channel_id=cid, log_time=int(t_ns), publish_time=int(t_ns), sequence=int(seq), data=pack_lidar_gt(header, inst, flags))
+        self.n_messages += 1
 
     def metadata(self, name: str, data: dict[str, str]) -> None:
         self._w.add_metadata(name=name, data={k: str(v) for k, v in data.items()})

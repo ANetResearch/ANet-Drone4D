@@ -13,9 +13,10 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-from awr.bench.recorder.channels import camera_topic, parse_camera_topic
+from awr.bench.recorder.channels import camera_topic, parse_obs_topic
 from awr.bench.recorder.foxglove import decode_image
 from awr.bench.recorder.frames_idx import FramesIdx
+from awr.bench.recorder.lidar import LIDAR_CODEC
 from awr.recorder.chunk_cache import ChunkCache
 from awr.recorder.mcap_index import MsgRef, SegmentIndex
 
@@ -67,7 +68,7 @@ class FrameStore:
         self.meta: dict[tuple[str, str], dict] = {}
         self._digest: dict[tuple[str, str, int], tuple[int, str]] = {}
         for ch in self.seg.channels.values():
-            us = parse_camera_topic(ch.topic)
+            us = parse_obs_topic(ch.topic)
             if us is not None:
                 self.meta[us] = {"channel": ch.topic, **ch.metadata}
 
@@ -81,6 +82,10 @@ class FrameStore:
         info = self.meta[(uav, sensor)]
         codec = info.get("codec", "jpeg")
         m = self.cache.message(MsgRef(int(r["t_ns"]), self.chunk_no[int(r["chunk_offset"])], int(r["msg_offset"])))
+        if codec == LIDAR_CODEC:                                     # awr.sensor.lidar_frame.v2：消息即载荷
+            f = Frame(int(r["seq"]), int(r["t_ns"]), codec, bytes(m.data), None, None)
+            self._digest[(uav, sensor, f.seq)] = (len(f.payload), f.sha256)
+            return f
         d = decode_image(_SCHEMA_OF_CODEC[codec], m.data, info.get("compression"))
         f = Frame(int(r["seq"]), int(r["t_ns"]), d["codec"], d["payload"], d.get("width"), d.get("height"))
         self._digest[(uav, sensor, f.seq)] = (len(f.payload), f.sha256)

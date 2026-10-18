@@ -357,6 +357,11 @@ __all__ = [
     "LayoutsSchemas",
     "LayoutsSchemasFields",
     "LidarFrame",
+    "LidarFrameV2",
+    "LidarFrameV2MountNominal",
+    "LidarGtV1",
+    "LidarGtV1Seed",
+    "LidarGtV1TWorldSensorNodes",
     "LidarLivox",
     "LidarLivoxFov",
     "LidarLivoxImu",
@@ -4364,6 +4369,60 @@ class LidarFrame(TypedDict):
     pattern_mode: NotRequired[Literal[0, 1, 2]]
     extrinsic_ref: NotRequired[str]
     simulated: NotRequired[bool]
+
+
+# sensor/v2/lidar_frame.v2.schema.json# LiDAR observation frame header (awr.sensor.lidar_frame.v2)
+class LidarFrameV2(TypedDict):
+    schema: Literal["awr.sensor.lidar_frame.v2"]
+    sensor_id: str
+    frame_id: str
+    frame_seq: int
+    timebase_ns: int
+    point_dt_ns: int
+    slots_per_frame: int
+    point_count: int
+    model: str
+    pattern_id: str
+    return_mode: Literal["first", "strongest", "dual"]
+    sync_type: Literal["sim"]
+    mount_nominal: NotRequired[LidarFrameV2MountNominal]
+    noise_tier: NotRequired[Literal["clean", "realistic", "harsh"]]
+
+
+# sensor/v2/lidar_frame.v2.schema.json#/properties/mount_nominal
+class LidarFrameV2MountNominal(TypedDict):
+    xyz_m: list[float]
+    rpy_deg: list[float]
+
+
+# sensor/v2/lidar_gt.v1.schema.json# LiDAR slot truth header (awr.sensor.lidar_gt.v1)
+class LidarGtV1(TypedDict):
+    schema: Literal["awr.sensor.lidar_gt.v1"]
+    frame_id: str
+    frame_seq: int
+    timebase_ns: int
+    slots: int
+    codec: Literal["zstd"]
+    T_world_sensor_nodes: list[LidarGtV1TWorldSensorNodes]
+    reflectance_model: Literal["sem_table_v1"]
+    beta_905_per_m: NotRequired[float]
+    dynamic_source_id: NotRequired[str]
+    actor_hits: NotRequired[int]
+    seed: LidarGtV1Seed
+
+
+# sensor/v2/lidar_gt.v1.schema.json#/properties/seed
+class LidarGtV1Seed(TypedDict):
+    run_seed: int
+    uav_no: int
+    sensor_no: int
+
+
+# sensor/v2/lidar_gt.v1.schema.json#/properties/T_world_sensor_nodes/items
+class LidarGtV1TWorldSensorNodes(TypedDict):
+    t_ns: int
+    pos_enu_m: list[float]
+    q_ws_xyzw: list[float]
 
 
 # vehicle/lidar_livox.schema.json# Livox LiDAR file sensors/mid360.yaml (awr.sensor.lidar_livox.v1)

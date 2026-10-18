@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from awr.bench.recorder.channels import parse_camera_topic
+from awr.bench.recorder.channels import parse_obs_topic
 from awr.recorder.chunk_cache import ChunkCache
 from awr.recorder.mcap_index import MsgRef, SegmentIndex
 
@@ -36,7 +36,7 @@ def _file_sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def build_frames_idx(raw_mcap: Path, out: Path, *, parse: Callable[[str], tuple[str, str] | None] = parse_camera_topic) -> dict:
+def build_frames_idx(raw_mcap: Path, out: Path, *, parse: Callable[[str], tuple[str, str] | None] = parse_obs_topic) -> dict:
     """扫描已关闭的 `raw.mcap` 的相机通道（image、depth），写出 `frames.idx`，返回头 JSON。真值文件以
     `parse = parse_truth_topic` 生成同格式的 `truth/frames.idx`（头中 `raw_mcap_sha256` 为真值文件的摘要）。"""
     ix = SegmentIndex.build(Path(raw_mcap), allow_open=False)

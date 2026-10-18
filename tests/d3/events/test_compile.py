@@ -64,39 +64,11 @@ EVENT = {
 
 @pytest.fixture(scope="module")
 def world(tmp_path_factory: pytest.TempPathFactory):
-    """与 tests/d3/world 的 glb_world 相同的合成场景，按模块构建一次。"""
-    import test_glb_build as g
-    from glbfix import png, write_glb
-
-    from awr.world.glb.pipeline import GlbAdapter
-    from awr.world.glb.recipe import file_sha256, load_recipe
-    from awr.world.glb.register import register_manual, write_registration
-    from awr.world.ingest.types import StageContext
-    from awr.world.package.build import build_world
+    from synthworld import build_synth_world
 
     tmp = tmp_path_factory.mktemp("w")
     mp = pytest.MonkeyPatch()
-    raw = tmp / "raw"
-    (raw / "synth").mkdir(parents=True)
-    V, F, UV = g._scene()
-    glb = write_glb(raw / "synth" / "synth.glb", V=V, F=F, UV=UV, tex=png(8, 8, (200, 30, 30)))
-    man = tmp / "raw-manifest.json"
-    man.write_text(json.dumps({"files": [{"name": "synth/synth.glb", "bytes": glb.stat().st_size, "sha256": file_sha256(glb)}]}))
-    mp.setattr(g.recipe_mod, "RAW_DIR", raw)
-    mp.setattr(g.recipe_mod, "RAW_MANIFEST", man)
-    rd = tmp / "recipes" / "synth-glb"
-    rd.mkdir(parents=True)
-    (rd / "recipe.yaml").write_text(
-        "schema: awr.glb.recipe.v1\nworld_id: synth-glb\nname: Synthetic GLB test world\nrole: event-main\n"
-        f"source:\n  glb: {{path: synth/synth.glb, sha256: {file_sha256(glb)}}}\n"
-        "  sketchfab: {uid: '', author: test, license: CC0-1.0}\nregistration: registration.json\n"
-        "build:\n  tiling_m: 128\n  pointcloud: {target_points: 60000, seed: 7}\n")
-    rec = load_recipe("synth-glb", tmp / "recipes")
-    doc = register_manual(rec, {"s": 1.0, "yaw_deg": 0.0, "g": (0.0, 0.0), "t_osm_m": (0.0, 0.0), "osm_ref": (43.73, 23.96)},
-                          h_msl_m=100.0, evidence=["synthetic fixture"])
-    write_registration(rec, doc, accept_by="test")
-    assert build_world(GlbAdapter("synth-glb", recipe=rec), tmp / "worlds", ctx=StageContext(world_id="synth-glb")).exit_code == 0
-    yield tmp / "worlds" / "synth-glb", tmp
+    yield build_synth_world(tmp, mp), tmp
     mp.undo()
 
 

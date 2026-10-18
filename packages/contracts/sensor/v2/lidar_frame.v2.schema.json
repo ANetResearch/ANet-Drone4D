@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/sensor-v2/1/lidar_frame.v2.schema.json",
+  "title": "LiDAR observation frame header (awr.sensor.lidar_frame.v2)",
+  "description": "M25 §6.8.7, AWR-05 §8.1 (contracts 1.3.0, d1 V0.3). MCAP message = u32 header_len | header JSON (UTF-8) | point_count x 20 B little-endian records: f32 x, y, z (sensor FLU at the point time, m), u32 offset_time (ns from timebase_ns, = slot x point_dt_ns), u8 reflectivity (Livox diffuse scale 0-150), u8 tag (bits 1:0 = 01 for spurious returns), u8 line (= slot & 3), u8 pad. Valid points only, in slot order; the slot index is offset_time / point_dt_ns.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "awr.sensor.lidar_frame.v2"
+    },
+    "sensor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "frame_id": {
+      "type": "string",
+      "description": "<run>/<uav>/<sensor>/<frame_seq>"
+    },
+    "frame_seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timebase_ns": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Frame start (slot 0) in sim time"
+    },
+    "point_dt_ns": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "slots_per_frame": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 24000
+    },
+    "point_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 24000
+    },
+    "model": {
+      "type": "string",
+      "description": "M21 sensor model id, e.g. mid360"
+    },
+    "pattern_id": {
+      "type": "string",
+      "description": "Scan pattern id, e.g. mid360-nonrep@1"
+    },
+    "return_mode": {
+      "enum": [
+        "first",
+        "strongest",
+        "dual"
+      ]
+    },
+    "sync_type": {
+      "const": "sim"
+    },
+    "mount_nominal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "xyz_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "rpy_deg": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "xyz_m",
+        "rpy_deg"
+      ]
+    },
+    "noise_tier": {
+      "enum": [
+        "clean",
+        "realistic",
+        "harsh"
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "sensor_id",
+    "frame_id",
+    "frame_seq",
+    "timebase_ns",
+    "point_dt_ns",
+    "slots_per_frame",
+    "point_count",
+    "model",
+    "pattern_id",
+    "return_mode",
+    "sync_type"
+  ]
+}

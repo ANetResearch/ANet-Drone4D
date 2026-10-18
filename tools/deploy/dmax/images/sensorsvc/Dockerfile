@@ -6,7 +6,7 @@ ARG PIP_INDEX_URL=https://mirrors.bfsu.edu.cn/pypi/web/simple
 ARG PIP_TRUSTED_HOST=mirrors.bfsu.edu.cn
 ENV PIP_INDEX_URL=${PIP_INDEX_URL} PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} PIP_DISABLE_PIP_VERSION_CHECK=1 \
     NVIDIA_DRIVER_CAPABILITIES=graphics,compute,utility PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/opt/awr/python
-RUN apt-get update && apt-get install -y --no-install-recommends libegl1 libgl1 libgles2 libglvnd0 \
+RUN apt-get update && apt-get install -y --no-install-recommends libegl1 libgl1 libgles2 libglvnd0 libgomp1 \
  && rm -rf /var/lib/apt/lists/*
 COPY 10_nvidia.json /usr/share/glvnd/egl_vendor.d/10_nvidia.json
 COPY requirements.lock requirements-d3.lock requirements-gpu.lock /tmp/req/
