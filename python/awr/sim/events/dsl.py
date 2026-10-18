@@ -1,5 +1,9 @@
 """事件 DSL `drone4d.event.v1`（M23 §6.2）：解析、规范化与门 1 静态校验（§6.4 错误目录）。
 
+输入安全（M23-NFR-008）：YAML 以安全加载器解析，拒绝别名引用（别名展开放大攻击），节点数 ≤ 100,000、单个标量 ≤ 4 KiB、
+文本 ≤ 1 MiB。门 1 一次报出全部静态错误（M23-AC-002、D3-AC-06）：schema 只在结构性错误时提前返回；§6.16 限额类的 schema 违例
+（`maxItems`、`maximum`）不阻断跨字段检查，统一由跨字段检查报为 `E-LIMIT`（618）。
+
 规范化：时刻换算为整数毫秒（`floor(t·1000 + 0.5)`），补全缺省值（§6.16），类别模板写入尺寸、步态；结果为 `plan`（纯 JSON），
 后续门 2、生成与哈希只读取 `plan`。`event_sha256` 按 §6.7.5 的磁带输入子集求 JCS 哈希；`dsl_sha256` 覆盖规范化后的完整 DSL。
 """
@@ -9,16 +13,21 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from awr.sim.events.jcs import jcs
 
-__all__ = ["CLASS_DEFAULTS", "LIMITS", "Issue", "event_sha256", "gate1", "load_doc", "ms", "normalize"]
+__all__ = ["CLASS_DEFAULTS", "LIMITS", "YAML_LIMITS", "Issue", "event_sha256", "gate1", "load_doc", "ms", "normalize", "stop_windows"]
 
 LIMITS = {"actors": 30, "background": 1000, "route": 64, "annotations": 256, "relations": 512, "zones": 32, "keyframes": 256,
           "duration_s": 3600.0, "dsl_bytes": 1 << 20}
+YAML_LIMITS = {"nodes": 100_000, "scalar_bytes": 4096}          # M23-NFR-008
+# schema 中与 §6.16 限额对应的约束（validator, JSON 指针模式）：违例报 E-LIMIT 618，并由门 1 跨字段检查统一复报
+_LIMIT_RULES = (("maxItems", re.compile(r"^/(actors|annotations|relations|comms/zones|actors/\d+/route)$")),
+                ("maximum", re.compile(r"^/(duration_s|background/\d+/count)$")))
 # l × w × h（m）、NavMesh profile、步态 [lo, hi]、加速度、中值速度（§6.2.3、§6.16）
 CLASS_DEFAULTS: dict[str, dict[str, Any]] = {
     "person": {"size": (0.5, 0.3, 1.75), "profile": "person", "speed": (0.9, 1.8), "accel": 1.0, "median": 1.35, "asset": "person-proxy@1"},
@@ -61,8 +70,24 @@ def ms(t_s: float) -> int:
     return math.floor(float(t_s) * 1000.0 + 0.5)
 
 
+def _yaml_guard(text: str) -> None:
+    """按事件流扫描 YAML（不构造对象）：出现别名、节点数或标量长度超限时抛 ValueError。锚点定义本身无害，别名引用一律拒绝。"""
+    import yaml
+
+    n = 0
+    for ev in yaml.parse(text, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader)):
+        if isinstance(ev, yaml.AliasEvent):
+            raise ValueError("YAML aliases are not allowed in event DSL")
+        if isinstance(ev, (yaml.ScalarEvent, yaml.SequenceStartEvent, yaml.MappingStartEvent)):
+            n += 1
+            if n > YAML_LIMITS["nodes"]:
+                raise ValueError(f"event DSL exceeds {YAML_LIMITS['nodes']} nodes")
+            if isinstance(ev, yaml.ScalarEvent) and len(ev.value.encode("utf-8")) > YAML_LIMITS["scalar_bytes"]:
+                raise ValueError("event DSL contains a string longer than 4 KiB")
+
+
 def load_doc(src: Path | str | dict) -> dict:
-    """事件文档：路径（.yaml、.yml、.json）、文本或已解析对象。"""
+    """事件文档：路径（.yaml、.yml、.json）、文本或已解析对象。文本先经 M23-NFR-008 输入安全检查。"""
     import yaml
 
     if isinstance(src, dict):
@@ -71,6 +96,7 @@ def load_doc(src: Path | str | dict) -> dict:
                                                                               and Path(src).exists()) else str(src)
     if len(text.encode("utf-8")) > LIMITS["dsl_bytes"]:
         raise ValueError("event DSL exceeds 1 MiB")
+    _yaml_guard(text)
     doc = yaml.safe_load(text)
     if not isinstance(doc, dict):
         raise ValueError("event DSL is not a mapping")
@@ -88,6 +114,9 @@ def _schema_issues(doc: dict) -> list[Issue]:
     out = []
     for e in sorted(v.iter_errors(doc), key=lambda e: (list(map(str, e.absolute_path)), e.message)):
         ptr = "/" + "/".join(str(p) for p in e.absolute_path)
+        if any(e.validator == kw and rx.match(ptr) for kw, rx in _LIMIT_RULES):
+            out.append(Issue("E-LIMIT", 618, ptr, f"超出 §6.16 限额：{e.message}", f"Exceeds the §6.16 limit: {e.message}"))
+            continue
         out.append(Issue("E-SCHEMA", 611, ptr, f"不符合 drone4d.event.v1：{e.message}", f"Does not match drone4d.event.v1: {e.message}"))
     return out
 
@@ -156,6 +185,31 @@ def event_sha256(plan: dict, anchors_sha256: str) -> str:
     return hashlib.sha256(jcs(sub)).hexdigest()
 
 
+def stop_windows(route: list[dict], dur_s: float) -> list[tuple[float, float, bool]]:
+    """车辆路线的声明停靠窗口（门 1 静态检查，只用作者给出的时刻）：`wait` 或 `dwell_s > 0` 的路点 k 给出 `(t_k, hi, closed)`。
+    中间路点的 hi 为下一路点的声明时刻（车辆须在该时刻已到达下一锚点，开区间）；末路点与门 2 一致：`pass`、`wait` 停留到事件结束，
+    其余（如带停留的 `despawn`）停留到 `t_k + dwell_s`（闭区间）。门 2 以实际到达时刻与 8 m 距离再判 `I-BOARD`。"""
+    out = []
+    for k, v in enumerate(route):
+        do, dwell = v.get("do", "pass"), float(v.get("dwell_s", 0))
+        if do != "wait" and dwell <= 0:
+            continue
+        lo = float(v["t"])
+        if k + 1 < len(route):
+            out.append((lo, float(route[k + 1]["t"]), False))
+        elif do in ("pass", "wait"):
+            out.append((lo, max(float(dur_s), lo), True))
+        else:
+            out.append((lo, lo + dwell, True))
+    return out
+
+
+def _covers(win: tuple[float, float, bool], t: float, board: bool) -> bool:
+    """上车：乘客可先到并等候，只要求车辆尚未离开（t 不晚于窗口终点）；下车：t 须落在窗口内。"""
+    lo, hi, closed = win
+    return (board or t >= lo) and (t <= hi if closed else t < hi)
+
+
 def _e(code: str, reason: int | None, path: str, zh: str, en: str, **detail) -> Issue:
     return Issue(code, reason, path, zh, en, detail)
 
@@ -163,9 +217,10 @@ def _e(code: str, reason: int | None, path: str, zh: str, en: str, **detail) -> 
 def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list[Issue], list[Issue]]:
     """门 1：schema、id、引用、时间、类别与动作、上车目标、限额、模式。`anchors` 为解析后的锚点表（id → 锚点；None 表示
     世界无锚点层且无覆盖层，锚点引用一律报未知）。返回 (plan 或 None, errors, warnings)。"""
-    errs = _schema_issues(doc)
-    if errs:
-        return None, errs, []
+    sch = _schema_issues(doc)
+    if any(e.code != "E-LIMIT" for e in sch):                     # 结构性错误：后续检查依赖结构，提前返回
+        return None, sch, []
+    errs: list[Issue] = []                                        # 限额类违例由下方跨字段检查统一报为 E-LIMIT（不重复）
     warns: list[Issue] = []
     anchors = anchors or {}
     dur_s = float(doc["duration_s"])
@@ -196,13 +251,13 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
     cls_of = {a["id"]: a["class"] for a in acts}
     for i, a in enumerate(acts):
         base = f"/actors/{i}"
+        route = a["route"]
+        if len(route) > LIMITS["route"]:
+            errs.append(_e("E-LIMIT", 618, f"{base}/route", "路点超过 64 个", "More than 64 waypoints"))
         if a["class"] not in P0A_CLASSES:
             errs.append(_e("E-CLASS-UNSUPPORTED", 619, f"{base}/class", f"类别 {a['class']} 在当前阶段不支持",
                            f"Class {a['class']} is not supported in this phase"))
             continue
-        route = a["route"]
-        if len(route) > LIMITS["route"]:
-            errs.append(_e("E-LIMIT", 618, f"{base}/route", "路点超过 64 个", "More than 64 waypoints"))
         prof = CLASS_DEFAULTS[a["class"]]["profile"]
         last_t = -1.0
         for j, w in enumerate(route):
@@ -230,10 +285,15 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
                 if cls_of.get(tgt) != "vehicle":
                     errs.append(_e("E-BOARD-TARGET", 611, f"{p}/target", "上下车目标须为车辆演员", "Board/alight target must be a vehicle actor"))
                 else:
-                    vr = acts[ids[tgt]]["route"]
-                    cover = any(v.get("do", "pass") == "wait" or v.get("dwell_s", 0) > 0 for v in vr)
-                    if not cover:
-                        errs.append(_e("E-BOARD-TARGET", 611, f"{p}/target", f"车辆 {tgt} 没有等待路点", f"Vehicle {tgt} has no waiting waypoint"))
+                    wins = stop_windows(acts[ids[tgt]]["route"], dur_s)
+                    t_p, zh = float(w["t"]), "上" if do == "board" else "下"
+                    if not wins:
+                        errs.append(_e("E-BOARD-TARGET", 611, f"{p}/target", f"车辆 {tgt} 没有等待路点", f"Vehicle {tgt} has no waiting waypoint",
+                                       vehicle=tgt, why="no_wait"))
+                    elif not any(_covers(win, t_p, do == "board") for win in wins):
+                        errs.append(_e("E-BOARD-TARGET", 611, f"{p}/t", f"{zh}车时刻 {t_p:g} s 不在车辆 {tgt} 的等待窗口内",
+                                       f"The {do} time {t_p:g} s is outside the waiting windows of vehicle {tgt}", vehicle=tgt, why="window",
+                                       t_s=t_p, windows_s=[[lo, hi] for lo, hi, _c in wins]))
         if route:
             first = route[0].get("do", "pass")
             if first not in ("spawn", "exit_building"):
@@ -253,10 +313,9 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
     kf = env.get("keyframes", [])
     if kf and kf[0]["t"] != 0:
         errs.append(_e("E-TIME-ORDER", 611, "/environment/keyframes/0/t", "首个关键帧须在 t = 0", "The first keyframe must be at t = 0"))
-    for j in range(1, len(kf)):
-        if kf[j]["t"] <= kf[j - 1]["t"] or kf[j]["t"] > dur_s:
-            errs.append(_e("E-TIME-ORDER", 611, f"/environment/keyframes/{j}/t", "关键帧时刻须严格递增且不超出时长",
-                           "Keyframe times must be strictly increasing within the duration"))
+    errs.extend(_e("E-TIME-ORDER", 611, f"/environment/keyframes/{j}/t", "关键帧时刻须严格递增且不超出时长",
+                   "Keyframe times must be strictly increasing within the duration")
+                for j in range(1, len(kf)) if kf[j]["t"] <= kf[j - 1]["t"] or kf[j]["t"] > dur_s)
     if len(kf) > LIMITS["keyframes"]:
         errs.append(_e("E-LIMIT", 618, "/environment/keyframes", "关键帧超过 256 个", "More than 256 keyframes"))
     cloud_given = any("cloud" in k for k in kf)
@@ -277,10 +336,8 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
             ref = (an.get("params") or {}).get(pk)
             if isinstance(ref, str) and ref not in anchors:
                 errs.append(_e("E-ANCHOR-UNKNOWN", 611, f"/annotations/{j}/params/{pk}", f"未知锚点：{ref}", f"Unknown anchor: {ref}", anchor=ref))
-    for j, r in enumerate(doc.get("relations", [])):
-        for side in ("src", "dst"):
-            if r[side] not in ann_ids:
-                errs.append(_e("E-RELATION-REF", 611, f"/relations/{j}/{side}", f"关系引用未知注释：{r[side]}", f"Relation references unknown annotation: {r[side]}"))
+    errs.extend(_e("E-RELATION-REF", 611, f"/relations/{j}/{side}", f"关系引用未知注释：{r[side]}", f"Relation references unknown annotation: {r[side]}")
+                for j, r in enumerate(doc.get("relations", [])) for side in ("src", "dst") if r[side] not in ann_ids)
     if errs:
         return None, errs, warns
     return normalize(doc), errs, warns
