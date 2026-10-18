@@ -474,5 +474,203 @@
    },
    "t_s": 3417
   }
- ]
+ ],
+ "release": {
+  "model": "ref_det_v1",
+  "version": "1.0.0",
+  "frozen_utc": "2026-10-18T17:35:03Z",
+  "weights": {
+   "file": "ref_det_v1.npz",
+   "bytes": 76750,
+   "sha256": "da68c6cb3e91e51bd389aefd4b25e482301fa5633a0c6ecb6ebf7d5e16b584ce",
+   "format": "numpy npz, float32, BatchNorm folded into convolutions"
+  }
+ },
+ "parity": {
+  "frames": 64,
+  "max_abs_err": 1.33514404296875e-05,
+  "tol": 0.001,
+  "passed": true,
+  "same_detections_frames": 64,
+  "numpy": "2.5.3",
+  "python": "3.12.15",
+  "reference": {
+   "frames": 64,
+   "val_frames": 2400,
+   "torch": "2.4.1+cu121",
+   "numpy": "2.1.1",
+   "python": "3.11.9",
+   "pt_sha256": "403ea542db62e24f926824b544749f643cf9736c3ab847de338819738226f93f"
+  }
+ },
+ "std_step_wall": {
+  "budget_s": 0.5,
+  "repeats": 3,
+  "passed": true,
+  "steps_per_uav": 3600,
+  "pooled": {
+   "p50_s": 0.100852,
+   "p90_s": 0.110081,
+   "p95_s": 0.116106,
+   "p99_s": 0.131004,
+   "max_s": 0.179035,
+   "mean_s": 0.100656,
+   "n": 10800,
+   "over_budget_max": 0
+  },
+  "worst_step_s": 0.18117,
+  "act_mismatches": 0,
+  "uavs": {
+   "uav-01": {
+    "p50_s": 0.100362,
+    "p95_s": 0.115393,
+    "p99_s": 0.12881,
+    "max_s": 0.176191
+   },
+   "uav-02": {
+    "p50_s": 0.102824,
+    "p95_s": 0.116703,
+    "p99_s": 0.131007,
+    "max_s": 0.166433
+   },
+   "uav-03": {
+    "p50_s": 0.099702,
+    "p95_s": 0.115083,
+    "p99_s": 0.130096,
+    "max_s": 0.1598
+   }
+  },
+  "trace": {
+   "obs_level": "L2",
+   "physics": "kinematic",
+   "policy": "track_share",
+   "run_id": "a05-capture-track_share-s1",
+   "seed": 1
+  },
+  "runs": [
+   {
+    "label": "rep-1",
+    "loadavg": [
+     11.59,
+     10.74,
+     10.7
+    ],
+    "pooled": {
+     "max_s": 0.179035,
+     "mean_s": 0.100656,
+     "n": 10800,
+     "over_budget": 0,
+     "p50_s": 0.100852,
+     "p90_s": 0.110071,
+     "p95_s": 0.115118,
+     "p99_s": 0.131168
+    },
+    "utc": "2026-10-18T17:09:06Z"
+   },
+   {
+    "label": "rep-2",
+    "loadavg": [
+     11.52,
+     11.17,
+     10.95
+    ],
+    "pooled": {
+     "max_s": 0.18117,
+     "mean_s": 0.100177,
+     "n": 10800,
+     "over_budget": 0,
+     "p50_s": 0.100102,
+     "p90_s": 0.110081,
+     "p95_s": 0.116106,
+     "p99_s": 0.131004
+    },
+    "utc": "2026-10-18T17:15:41Z"
+   },
+   {
+    "label": "rep-3",
+    "loadavg": [
+     10.47,
+     10.91,
+     10.88
+    ],
+    "pooled": {
+     "max_s": 0.169675,
+     "mean_s": 0.102243,
+     "n": 10800,
+     "over_budget": 0,
+     "p50_s": 0.102664,
+     "p90_s": 0.111998,
+     "p95_s": 0.116682,
+     "p99_s": 0.130219
+    },
+    "utc": "2026-10-18T17:22:13Z"
+   }
+  ],
+  "container": {
+   "host": "dmax",
+   "cpu_model": "Intel(R) Xeon(R) Gold 6326 CPU @ 2.90GHz",
+   "host_cpus": 64,
+   "image": "d3-agent-py:a05",
+   "image_id": "sha256:70d908bb1e3331ccb701a04ff9b5ee4257c9dd9c88c8005f12ae77ccac81a22a",
+   "gpu": null,
+   "agent_container": {
+    "CapDrop": [
+     "ALL"
+    ],
+    "DeviceRequests": null,
+    "Memory": 8589934592,
+    "MemorySwap": 8589934592,
+    "NanoCpus": 2000000000,
+    "NetworkMode": "none",
+    "PidsLimit": 256,
+    "ReadonlyRootfs": true,
+    "Ulimits": [
+     {
+      "Hard": 1024,
+      "Name": "nofile",
+      "Soft": 1024
+     }
+    ]
+   },
+   "blas_threads": 1
+  },
+  "capture": {
+   "run_id": "a05-capture-track_share-s1",
+   "policy": "track_share",
+   "seed": 1,
+   "physics": "kinematic",
+   "obs_level": "L2",
+   "duration_s": 360,
+   "pose_sha256": "3c9eed6dc4583eaec29e1ea4f63ae51819e26dd849fef8646ce2efc7ea2e9353"
+  },
+  "infer": {
+   "uav": "uav-01",
+   "frames": 3600,
+   "detections": 35091,
+   "decode_small": {
+    "p50_s": 0.013201,
+    "p95_s": 0.015583,
+    "p99_s": 0.017021,
+    "max_s": 0.038878
+   },
+   "detect": {
+    "p50_s": 0.048404,
+    "p95_s": 0.054206,
+    "p99_s": 0.057797,
+    "max_s": 0.081957
+   },
+   "decode_full": {
+    "p50_s": 0.021342,
+    "p95_s": 0.026641,
+    "p99_s": 0.029256,
+    "max_s": 0.04444
+   },
+   "frame_total": {
+    "p50_s": 0.08293,
+    "p95_s": 0.094654,
+    "p99_s": 0.100373,
+    "max_s": 0.124031
+   }
+  }
+ }
 }
