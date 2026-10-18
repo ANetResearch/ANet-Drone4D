@@ -5,11 +5,11 @@
 | 项 | 内容 |
 |---|---|
 | 文档 | 文档体系总览与阅读指南（本页只做导航与摘要，不定义任何新事实） |
-| 版本 | v1.4（对应基线 AWR-03 v1.1 与附录 E 的 ADR-054 至 ADR-087、D2 基线 AWR-04 v1.3 的 ADR-088 至 ADR-126，以及 D3 基线 AWR-05 v1.2 的 ADR-127 至 ADR-173） |
-| 日期 | 2026-10-05（v1.0 为 2026-09-28；v1.1 为 2026-10-03，补实现与验收报告索引、零下载试用与 ADR 数目；v1.2 加入 D2 文档与 `inputs/`；v1.3 登记 D2.1 追加需求原文与 AWR-04 §15 D2.1 增补；v1.4（2026-10-12）加入 D3 文档：用户 D3 需求原文、D3 研究、AWR-05、M22–M27 PRD 与 14、17、20 号的 D3 增补节） |
+| 版本 | v1.5（对应基线 AWR-03 v1.1 与附录 E 的 ADR-054 至 ADR-087、D2 基线 AWR-04 v1.3 的 ADR-088 至 ADR-126、D3 基线 AWR-05 v1.2 的 ADR-127 至 ADR-173，以及 D4 概念设计 AWR-06 v0.3 的 ADR-D4 提议） |
+| 日期 | 2026-10-05（v1.0 为 2026-09-28；v1.1 为 2026-10-03，补实现与验收报告索引、零下载试用与 ADR 数目；v1.2 加入 D2 文档与 `inputs/`；v1.3 登记 D2.1 追加需求原文与 AWR-04 §15 D2.1 增补；v1.4（2026-10-12）加入 D3 文档：用户 D3 需求原文、D3 研究、AWR-05、M22–M27 PRD 与 14、17、20 号的 D3 增补节；v1.5（2026-10-18，UTC）加入 D4 设计文档集：AWR-06 v0.3、M28–M34 PRD、契约草案、排行榜规格、S1–S3 与 X1 规格、D4 调研资料与文档集索引 `d4/README.md`） |
 | 维护 | 文档总编；事实以各文档的"定义方"为准（[AWR-03 §10.1](03-设计基线与决策记录.md)） |
 
-ANet Drone4D（代码与文档中称 World Runtime，缩写 AWR；产品显示名见 AWR-03 ADR-056）是一个"真实世界无人机数字孪生与多智能体仿真平台"，主链路为 **Reality → Reconstruction → World → Environment → Simulation → Agent**，核心理念是"World 是核心，而不是 Drone"。本期交付 D1（即 V0.1）在一台 8 核 CPU、无 GPU 的本机上运行：内置 UrbanScene3D 六城点云与 1–1000 架 Mock 无人机，支持渐进加载、点云疏密自动调节与流畅性测试。下一期交付 D2（V0.2-demo）在公开演示站上开放多租户沙盒、识别物与感知对抗、机巢与任务编排、7×24 接力监控与开放接口，文档见 §1.4。D3（V0.3）为事件沙盘与主动观测基准：在米制化的真实摄影测量世界上编排固定事件，由不同机队策略反复观测，生成观测、真值与评测数据集，文档见 §1.5。
+ANet Drone4D（代码与文档中称 World Runtime，缩写 AWR；产品显示名见 AWR-03 ADR-056）是一个"真实世界无人机数字孪生与多智能体仿真平台"，主链路为 **Reality → Reconstruction → World → Environment → Simulation → Agent**，核心理念是"World 是核心，而不是 Drone"。本期交付 D1（即 V0.1）在一台 8 核 CPU、无 GPU 的本机上运行：内置 UrbanScene3D 六城点云与 1–1000 架 Mock 无人机，支持渐进加载、点云疏密自动调节与流畅性测试。下一期交付 D2（V0.2-demo）在公开演示站上开放多租户沙盒、识别物与感知对抗、机巢与任务编排、7×24 接力监控与开放接口，文档见 §1.4。D3（V0.3）为事件沙盘与主动观测基准：在米制化的真实摄影测量世界上编排固定事件，由不同机队策略反复观测，生成观测、真值与评测数据集，文档见 §1.5。D4（v0.4.0）为多智能体协同实验平台与协作智能排行榜，处于概念设计阶段，文档见 §1.6。
 
 ---
 
@@ -32,6 +32,9 @@ flowchart TD
   RS3["research/d3 D3 研究（00-index 与 r1–r10）"]
   B3["05 D3 设计增补与决策记录（ADR-127 至 ADR-173）"]
   M3["M22–M27 D3 模块 PRD 与 14、17、20 号的 D3 增补节"]
+  RS4["research/d4 D4 调研（r01–r03 与工作笔记 n01–n03）"]
+  B4["06 D4 协同实验平台概念设计（总纲、XR 统一裁定、ADR-D4）"]
+  M4["D4 设计文档集：M28–M34 PRD、契约草案、排行榜规格、S1–S3 与 X1 规格、r04"]
   S["10–19 说明书（架构、选型、业务、产品、交互、视觉、数据、接口、性能、运维）"]
   M["M01–M16 模块 PRD"]
   I["实现：apps/web、python/awr、packages/contracts"]
@@ -54,6 +57,9 @@ flowchart TD
   B2 --> B3
   B3 --> M3
   M3 --> I
+  RS4 --> B4
+  B3 --> B4
+  B4 --> M4
   classDef hero stroke:#E93024,stroke-width:2px
   class B hero
 ```
@@ -75,7 +81,8 @@ flowchart TD
 | — | [inputs/D3-需求原文-2026-10-11.md](inputs/D3-需求原文-2026-10-11.md) | 用户 D3 需求原文、2026-10-11 补充要求（企业级文案、Rerun、gz-sim、RotorPy 与快速照片级相机）与 2026-10-12 的决策（网格渲染为主、公开站先只读、生产期独占 1 张 A40、LiDAR 提前到 P0 等）；R-D3 的追溯源 | 全体 | 用户原文，只读 |
 | — | [research/d3/00-index.md](research/d3/00-index.md) 与 r1–r10 | D3 研究：实测数字、推荐架构、阶段计划、风险与待决问题的默认值（FAST-LIVO2、GLB 世界、相机渲染、网格 LiDAR、Gazebo、事件运行时与基准、D2 代码审计、Rerun、gz-sim、RotorPy） | 架构、全体 | 只读 |
 | AWR-05 | [05 D3 设计增补与决策记录](05-D3-设计增补与决策记录.md) | D3（V0.3）唯一基线：定位与系统边界、需求追溯 R-D3、四权威架构、模块 M22–M27、Rerun、gz-sim 与 RotorPy、D3 工作区、契约 1.3.0 与原因码 600–699、ADR-127 至 ADR-173、阶段 P-1 至 P3、D3-AC-01 至 D3-AC-55、工作包、风险、许可、评审处置（§17）与模块反馈裁决（§18） | 全体 | 草案 v1.2 |
-| AWR-06 | [06 D4 协同实验平台概念设计](06-D4-协同实验平台概念设计.md) | D4 调研与概念设计（不进入实现；D3 封板后启动）：定位与 NS-2 类比取舍、与现有平台的差异、核心抽象与研究者接口、调度与确定性、交互网络三档、首批 Benchmark Suite、协作智能排行榜与统计协议、研究方向、分期路线图与 ADR-D4；调研报告见 [research/d4](research/d4/README.md) | 全体 | 概念设计评审稿 v0.2 |
+| — | [research/d4/README.md](research/d4/README.md) 与 r01–r04 | D4 调研：平台能力矩阵（r01）、协同问题族与标准问题库（r02）、NS-2 经验与排行榜规则（r03）、首篇论文实验设计（r04，AWR-R04，属 D4 设计文档集，草案 v0.2.1）与工作笔记 n01–n03 | 架构、全体 | 只读（r04 随文档集修订） |
+| AWR-06 | [06 D4 协同实验平台概念设计](06-D4-协同实验平台概念设计.md) | D4 调研与概念设计（不进入实现；D3 封板后启动）：定位与 NS-2 类比取舍、与现有平台的差异、核心抽象与研究者接口、调度与确定性、交互网络三档、首批 Benchmark Suite、协作智能排行榜与统计协议、研究方向、分期路线图与 ADR-D4；v0.3 起为 D4 设计文档集的总纲，含文档集清单（§0.4）、跨文档统一裁定 XR-01 至 XR-23（§0.5）与反馈处置记录（附录 F）；文档集索引见 [d4/README.md](d4/README.md)，调研报告见 [research/d4](research/d4/README.md) | 全体 | 概念设计评审稿 v0.3 |
 | AWR-10 | [10 系统架构说明书](10-系统架构说明书.md) | 分层与进程拓扑、部署视图、启停与崩溃恢复时序、端到端数据流、线程与并发模型、容量模型 | 架构、后端、前端负责人 | 草案 |
 | AWR-11 | [11 技术选型说明书](11-技术选型说明书.md) | 每个技术点的候选、实测、结论、锁定版本（BOM）、升级与替换条件；star 与 2026 新项目评估 | 架构、全体开发 | 草案 |
 | AWR-12 | [12 业务逻辑设计说明书](12-业务逻辑设计说明书.md) | 跨模块业务语义：FlightState、命令生命周期与准入、租约与席位、Safety 升级链、能量 RTL、环境过渡、剧本、合同网、回放与 seek | 后端、前端交互、测试 | 草案 |
@@ -113,6 +120,20 @@ flowchart TD
 | AWR-M25 | [M25 传感器生成服务](modules/M25-传感器生成服务PRD.md) | D3：SensorBackend v2、EGL 光栅相机与效果链、网格 LiDAR、IMU、GNSS 与导航解、噪声离散化、GPU Worker 调度、`drone4d-camera` 独立包、3DGS 外观层（P3） | 后端仿真、渲染 | 草案 v1.0 |
 | AWR-M26 | [M26 智能体观测 SDK](modules/M26-智能体观测SDK-PRD.md) | D3：唯一观测出口与 `bench/obs.v1` 白名单、lockstep Env 与决策时延、动作守卫、通信链路模型、隔离容器与线协议、私有地图助手、真值泄漏审计 | 后端、智能体 | 草案 v1.0 |
 | AWR-M27 | [M27 基准运行时与数据集](modules/M27-基准运行时与数据集PRD.md) | D3：实验与 Run 编排、队列与准入、MCAP 权威录制与存储治理、`.rrd` 派生与 catalog、评测与 SLAM 轨道、隐藏 test 集与提交、公开站只读制品与数据集分发、工作区服务进程 | 后端、测试、运维 | 草案 v1.0 |
+| AWR-M28 | [M28 实验内核](modules/M28-实验内核PRD.md) | D4：时钟档与阶段执行谓词、事件队列处理键、随机键派生、属性登记表、实体表与控制租约、决策校验、`message_id` 签发、资源账本、运行清单、检查点与动作重放、宿主、`planar@1` | K 线（内核与契约） | 草案 v0.2.1 |
+| AWR-M29 | [M29 交互网络](modules/M29-交互网络PRD.md) | D4：网络各档的模型与参数集、受理事务、收件箱、端点状态、拓扑快照、分区与区段控制、非网络交互仲裁、`DeliveryInterceptor`、网络原因码 730–749 | N 线（网络、trace、SDK） | 草案 v0.2.1 |
+| AWR-M30 | [M30 协同接口与基线](modules/M30-协同接口与基线PRD.md) | D4：`Policy`、`CentralPolicy`、`Solver`、`CoordinationPolicy` 协议与适配器、`policy_ref` 语法与登记表、消息方言、平台基线卡与确定性工作量单位 | S 线（Suite 与基线）、N 线 | 草案 v0.2.1 |
+| AWR-M31 | [M31 基准套件](modules/M31-基准套件PRD.md) | D4：Suite 框架与 `suite.v1`、问题族与生成器、实例包、视图分级、评测器协议、参考策略与缓存键、划分与种子派生、摘要族、第三方 Suite 沙箱化 | S 线 | 草案 v0.2.1 |
+| AWR-M32 | [M32 评测与统计](modules/M32-评测与统计PRD.md) | D4：`MetricSpec`、区间方法、共享下标与下标种子、检验族与判定词、失败与无效计分、Δ 族、支配分层、`board.v2` 计算、复核判据、蒙特卡洛验证方案 | E 线（评测、排行榜与前端） | 草案 v0.2.1 |
+| AWR-M33 | [M33 Trace 与复现](modules/M33-Trace与复现PRD.md) | D4：`trace.v1` 记录规则与 29 值 `kind`、层路由、摘要链与运行级摘要、规范编码、目录布局、D3 兼容视图、泄露审计、`MessageIndex`、回放包、MCAP Sink | N 线、K 线 | 草案 v0.2.1 |
+| AWR-M34 | [M34 研究者 SDK 与命令行](modules/M34-研究者SDK与命令行PRD.md) | D4：SDK 公开面、`experiment.v1`、命令行与退出码、训练框架适配、wheel 构建与 vendoring 规则、附加包、版本方案、文档站 | N 线 | 草案 v0.2.1 |
+| — | [d4/README.md](d4/README.md) | D4 设计文档集索引：文件清单、职责、定义方原则、阅读顺序与编号体例 | 全体 | v1.0 |
+| AWR-D4-CT | [D4 契约草案](d4/契约草案.md) | D4：`ct:coord/`、`ct:suite/` 下 14 份契约的字段、约束、JSON Schema 与编码规则，承诺与 `seed_tag` 的字节编码与测试向量，`wire.v2` 帧表，原因码段 700–899 | K 线、全体 | 草案 v0.2.1 |
+| AWR-D4-LB | [协作智能排行榜规格](d4/协作智能排行榜规格.md) | D4：赛道矩阵、榜单层次、赛季与预赛季、配额与评测算力、留出集轮换与秘密种子、防作弊与分诊、复核与申诉、版本与归档、`board.v2`/`submission.v2` 与 D3 迁移 | E 线、负责人 | 草案 v0.2.1 |
+| AWR-D4-S1 | [S1 TaskAlloc 规格](d4/suites/S1-TaskAlloc规格.md) | D4：动态多机器人任务分配（含联盟任务 TA-C）的定义、实例、难度与规模、指标、基线、执行器与验收 AC-S1-01 起 | S 线 | 草案 v0.2.1 |
+| AWR-D4-S2 | [S2 CoopSearch-Handoff 规格](d4/suites/S2-CoopSearch-Handoff规格.md) | D4：协同搜索、目标确认与跨平台交接（平面族与网格族）的定义、交接语义、指标、基线与验收 AC-S2-01 起 | S 线 | 草案 v0.2.1 |
+| AWR-D4-S3 | [S3 InfoShare 规格](d4/suites/S3-InfoShare规格.md) | D4：受限通信下的分布式信息融合的定义、偏差与噪声模型、`U_IS` 与一致性诊断、AoI、基线与验收 AC-S3-01 起 | S 线 | 草案 v0.2.1 |
+| AWR-D4-X1 | [X1 RobustCoord 协议](d4/suites/X1-RobustCoord协议.md) | D4：扰动协议，8 个扰动族、强度档 q = 0..4、`stress` 划分、鲁棒性指标、入榜规则与验收 AC-RC-01 起 | S 线、E 线 | 草案 v0.2.1 |
 
 工作包 M00（工程骨架与契约）不单独成文，其要求分布在 16、17、18、19 号文档（[AWR-03 §6.1、ADR-050](03-设计基线与决策记录.md)）。D2 增补节已写于 [14 §20](14-UI交互设计PRD.md)、[17 §17](17-接口与实时协议规范.md) 与 M08、M10、M11、M13、M15 的 §15；D2.1 增补节见 [AWR-04 §15](04-D2-设计增补与决策记录.md)、14 §20.26、17 §17.20、M17 §14、M18-M19 §15、M11 与 M15 的 §15.12；其余说明书与模块的 D2 增补节待写（[AWR-04 §1.3](04-D2-设计增补与决策记录.md)）。D3 增补节已写于 [14 §21](14-UI交互设计PRD.md)（事件沙盘工作区）、[17 §18](17-接口与实时协议规范.md)（bench-api、Agent 线协议、原因码 600–698 全表）与 [20 §15](20-机型与传感器目录.md)（长量程型号、D3 相机与噪声参数单一真源）；其余说明书与受影响模块的 D3 增补节待写（[AWR-05 §1.3](05-D3-设计增补与决策记录.md)）。
 
@@ -136,6 +157,9 @@ flowchart TD
 | 机型与传感器参数、Vehicle Package 的 D2 扩展 | [AWR-20](20-机型与传感器目录.md) |
 | 沙盒 REST 端点全表、新 topic、`awr.TargetLite32.v1`、原因码 500–599 | [17 §17](17-接口与实时协议规范.md) |
 | D3 范围、架构、ADR-127 起、D3-AC、阶段与工作包、模块反馈裁决 | [AWR-05](05-D3-设计增补与决策记录.md) |
+| D4 文档集成员、职责与跨文档统一裁定（XR-01 至 XR-23）、D4 原则、路线图、工作包、发布门禁与 ADR-D4 | [AWR-06 §0.4、§0.5](06-D4-协同实验平台概念设计.md)、[d4/README.md](d4/README.md) |
+| D4 契约字段、编码、`wire.v2` 帧表与原因码 700–899 | [D4 契约草案](d4/契约草案.md) |
+| D4 排行榜运营、赛季、配额与治理 | [协作智能排行榜规格](d4/协作智能排行榜规格.md) |
 | bench-api 端点全表（BN）、Agent 线协议 `drone4d.bench.wire.v1`、原因码 600–698、D3 topic | [17 §18](17-接口与实时协议规范.md) |
 | D3 传感器噪声档数值（相机、云台编码器、IMU、GNSS、导航解、LiDAR）、D3 相机参数、长量程 LiDAR 型号 | [AWR-20 §15](20-机型与传感器目录.md)（单一真源；离散化方法见 M25） |
 | 帧契约 `drone4d.frame.v1`、PoseHistory、SensorBackend v2 | [M25 §7](modules/M25-传感器生成服务PRD.md)、[M24 §6.3](modules/M24-物理后端PRD.md) |
@@ -156,6 +180,12 @@ D2.1（用户在 D2 实现期间追加，计入 V0.2-demo，[AWR-04 §15](04-D2-
 D3 是运行在 dmax（A40 GPU 与 CPU 池）上的事件沙盘与数据集生成系统，D2 原样保留为公开交互沙盒：M22 把三份摄影测量 GLB 转换为米制世界包；M23 以声明式 DSL 编排固定事件并编译出跨机逐字节一致的事件磁带；M24 提供 Fast（FleetSim）、Realistic（Gazebo Sim）与 SITL 三档物理；M25 按每架机的实际位姿生成相机、LiDAR、IMU、GNSS 观测与对应真值；M26 是 Agent 唯一的观测出口与动作入口；M27 负责编排、无损录制、评测、Rerun 派生与数据集。公开站在 P0b–P2 只提供只读视图，P3 起开放带配额的提交。
 
 建议阅读顺序：① [用户 D3 需求原文](inputs/D3-需求原文-2026-10-11.md) → ② [D3 研究总览 00-index](research/d3/00-index.md) 的 §0、§3、§4、§6 → ③ [AWR-05](05-D3-设计增补与决策记录.md) 的 §0、§2（定位与边界）、§3（需求追溯）、§4（架构）、§10（阶段）、§11（D3-AC）、§18（模块反馈裁决）→ ④ 按角色：世界与事件读 [M22](modules/M22-World资产导入PRD.md)、[M23](modules/M23-事件运行时PRD.md)；物理与传感器读 [M24](modules/M24-物理后端PRD.md)、[M25](modules/M25-传感器生成服务PRD.md) 与 [20 §15](20-机型与传感器目录.md)；智能体与评测读 [M26](modules/M26-智能体观测SDK-PRD.md)、[M27](modules/M27-基准运行时与数据集PRD.md)；前端读 AWR-05 §7 与 [14 §21](14-UI交互设计PRD.md)；接口与 SDK 读 AWR-05 §8 与 [17 §18](17-接口与实时协议规范.md)。
+
+### 1.6 D4 文档（v0.4.0）
+
+D4 是多智能体协同实验平台，处于深入调研与概念设计阶段，实现在 D3 封板之后启动：以确定性实验内核（M28）、实验内交互网络（M29）、协同算法接口与基线（M30）、标准问题库 Benchmark Suite（M31）、评测与统计（M32）、Trace 与复现（M33）、研究者 SDK 与命令行（M34）为基础，提供协作智能排行榜。设计由 AWR-06 与 14 份成员文件构成，统称 D4 设计文档集；文件清单、职责、定义方原则与阅读顺序见 [D4 设计文档集索引](d4/README.md) 与 [AWR-06 §0.4](06-D4-协同实验平台概念设计.md)，跨文档统一裁定见 AWR-06 §0.5，反馈处置记录见 AWR-06 附录 F。
+
+建议阅读顺序：① [D4 调研资料](research/d4/README.md) 的 r01 至 r03 → ② [AWR-06](06-D4-协同实验平台概念设计.md) 的 §0（含 §0.4、§0.5）、§1、§3 → ③ AWR-06 §10（路线图、工作包、§10.9 工作量复核与开放问题）与 §11（ADR-D4）→ ④ 按工作线：内核与契约读 [契约草案](d4/契约草案.md)、[M28](modules/M28-实验内核PRD.md)、[M33](modules/M33-Trace与复现PRD.md)；网络与 SDK 读 [M29](modules/M29-交互网络PRD.md)、[M34](modules/M34-研究者SDK与命令行PRD.md)；评测与排行榜读 [M32](modules/M32-评测与统计PRD.md)、[排行榜规格](d4/协作智能排行榜规格.md)；Suite 与基线读 [M31](modules/M31-基准套件PRD.md)、[M30](modules/M30-协同接口与基线PRD.md) 与 [S1](d4/suites/S1-TaskAlloc规格.md)、[S2](d4/suites/S2-CoopSearch-Handoff规格.md)、[S3](d4/suites/S3-InfoShare规格.md)、[X1](d4/suites/X1-RobustCoord协议.md)；论文实验读 [r04](research/d4/r04-首篇论文实验设计.md)。
 
 ---
 
@@ -200,6 +230,7 @@ D3 是运行在 dmax（A40 GPU 与 CPU 池）上的事件沙盘与数据集生�
 | 实时通信 | [r27 rosbridge、Foxglove ws-protocol、Zenoh](research/r27-realtime-bridges.md) |
 | 设计体系与 ANet | [d01 lieflat-charts](research/d01-lieflat-charts.md)；[d02 transitions.dev](research/d02-transitions-dev.md)；[d03 morphicons](research/d03-morphicons.md)；[d04 shadcn/ui](research/d04-shadcn-ui.md)；[d05 ANet](research/d05-anet.md) |
 | D3 研究（[research/d3/](research/d3/00-index.md)） | [00-index 研究总览](research/d3/00-index.md)；[r1 FAST-LIVO2](research/d3/r1-fast-livo2.md)；[r2 GLB 世界](research/d3/r2-glb-world.md)；[r3 相机渲染](research/d3/r3-camera-render.md)；[r4 网格 LiDAR](research/d3/r4-mesh-lidar.md)；[r5 Gazebo 高保真后端](research/d3/r5-gazebo-realistic-backend.md)；[r6 事件运行时与基准](research/d3/r6-event-runtime-benchmark.md)；[r7 D2 代码审计](research/d3/r7-d2-code-audit.md)；[r8 Rerun](research/d3/r8-rerun.md)；[r9 gz-sim](research/d3/r9-gz-sim.md)；[r10 RotorPy 与照片级相机](research/d3/r10-rotorpy-camera-sensor.md)。D3 研究之间的裁决以 00-index 为准，其结论被 AWR-05 修订之处以 AWR-05 为准 |
+| D4 调研（[research/d4/](research/d4/README.md)） | [r01 平台能力矩阵](research/d4/r01-平台能力矩阵.md)；[r02 协同问题族与标准问题库](research/d4/r02-协同问题族与标准问题库.md)；[r03 NS-2 经验与排行榜规则](research/d4/r03-NS-2经验与排行榜规则.md)；[r04 首篇论文实验设计](research/d4/r04-首篇论文实验设计.md)；工作笔记 [n01 现有代码映射](research/d4/notes/n01-现有代码映射.md)、[n02 D3 评测子系统泛化](research/d4/notes/n02-D3评测子系统泛化.md)、[n03 外部模型讨论纪要](research/d4/notes/n03-外部模型讨论纪要.md) |
 | 2026 新项目发现 | [n01 Web 点云与 3DGS](research/n01-discover-web-pointcloud.md)；[n02 重建、SLAM 与融合](research/n02-discover-recon-slam.md)；[n03 无人机仿真与多智能体](research/n03-discover-uav-sim-agents.md)；[n04 天气、风场与数字孪生](research/n04-discover-environment-twin.md)；[n05 前端工程栈核实](research/n05-discover-web-stack.md) |
 
 参考仓库清单见 [02-refs.md](02-refs.md)，仓库已克隆在 `refs/<group>/<repo>`（含 `refs/discovery/` 下 44 个 2026 新发现仓库）；选型结论与 star、最后提交日期见 [11 附录 A](11-技术选型说明书.md)。
