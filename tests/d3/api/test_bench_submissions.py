@@ -81,3 +81,25 @@ def test_quota_withdraw_and_visibility(env) -> None:
     assert lb == {"baseline/x", f"team-a/{sids[1]}"}
     c.post(f"{P}/submissions/{sids[1]}/visibility", json={"visibility": "private"}, headers=h["ann"])
     assert {e["entry_id"] for e in c.get(f"{P}/leaderboard", headers=h["bob"]).json()["entries"]} == {"baseline/x"}
+
+
+def test_ctl_board_publish_and_submission_create(tmp_path: Path, monkeypatch, capsys) -> None:
+    from awr.bench import ctl
+
+    src = tmp_path / "round"
+    src.mkdir()
+    (src / "config.json").write_text(json.dumps({"track": {"fleet_ref": "3x-x500"}}))
+    ev = {"components": {"ec": 0.5, "eu": 0.1, "ao": 0.4, "ce": 0.2}, "ranked_valid": True, "invalid_reasons": []}
+    append_rows(src, [{"entry_id": "baseline/x", "team": "D3 reference", "display_name": "X", "baseline": True, "track": "std3-l1",
+                       "lane": "rendezvous_handoff", "event": "e1", "seed": 0, "evaluation": ev}])
+    monkeypatch.setenv("AWR_BENCH_DATA_ROOT", str(tmp_path / "d3"))
+    assert ctl.main(["board", "publish", str(src), "--version", "round-1", "--current", "--n-boot", "100"]) == 0
+    assert (tmp_path / "d3/boards/current").read_text().strip() == "round-1"
+    assert (tmp_path / "d3/boards/round-1/board.json").exists()
+    capsys.readouterr()
+    assert ctl.main(["submission", "create", "--team", "t", "--owner", "o", "--track", "std3-l1", "--digest", "sha256:" + "c" * 64,
+                     "--cmd", "python -m drone4d.serve pkg:Agent", "--env", "MODE=eval", "--visibility", "board"]) == 0
+    sid = capsys.readouterr().out.strip()
+    d = SubmissionStore(tmp_path / "d3/submissions").get(sid)
+    assert d["entry"] == {"cmd": ["python", "-m", "drone4d.serve", "pkg:Agent"], "env": {"MODE": "eval"}} and d["visibility"] == "board"
+    assert ctl.main(["submission", "create", "--team", "t", "--owner", "o", "--track", "nope", "--digest", "sha256:" + "c" * 64, "--cmd", "x"]) == 1

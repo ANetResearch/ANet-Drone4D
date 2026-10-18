@@ -1,5 +1,11 @@
 """bench 管理命令（AWR-17 §18.3.1 第 1 条）：`python -m awr.bench.ctl token issue --principal <name> --role <role> [--projects a,b]`、
-`token revoke <id>`、`token list`。明文令牌只在签发时输出一次（stdout），服务端只存 sha256。"""
+`token revoke <id>`、`token list`。明文令牌只在签发时输出一次（stdout），服务端只存 sha256。
+
+榜单与提交（运维用，数据根取 `AWR_BENCH_DATA_ROOT`）：
+- `board publish <dir> [--version V] [--current]`：把评测轮次目录（proto_board 产出：config.json、rows.jsonl）发布为
+  `boards/<V>` 并重算 board.json、details.json；
+- `submission create --team T --owner O --track S --digest sha256:… --cmd "…" [--env K=V …] [--visibility board]`：代成员登记
+  内部提交（与 BN-95 相同的校验、配额与状态机），输出 submission_id。"""
 
 from __future__ import annotations
 
@@ -22,8 +28,28 @@ def main(argv: list[str] | None = None) -> int:
     r = t.add_parser("revoke")
     r.add_argument("id")
     t.add_parser("list")
+    b = sub.add_parser("board").add_subparsers(dest="op", required=True)
+    bp = b.add_parser("publish")
+    bp.add_argument("dir")
+    bp.add_argument("--version")
+    bp.add_argument("--current", action="store_true")
+    bp.add_argument("--n-boot", type=int, default=10_000)
+    sc = sub.add_parser("submission").add_subparsers(dest="op", required=True)
+    c = sc.add_parser("create")
+    c.add_argument("--team", required=True)
+    c.add_argument("--owner", required=True)
+    c.add_argument("--track", required=True)
+    c.add_argument("--digest", required=True)
+    c.add_argument("--cmd", dest="entry_cmd", required=True, help="entry command, whitespace separated")
+    c.add_argument("--env", action="append", default=[], help="KEY=VALUE (repeatable)")
+    c.add_argument("--notes", default="")
+    c.add_argument("--visibility", choices=("private", "board"), default="private")
     a = ap.parse_args(argv)
     s = BenchSettings.from_env()
+    if a.cmd == "board":
+        return _board_publish(s, a)
+    if a.cmd == "submission":
+        return _submission_create(s, a)
     auth = BenchAuth(s.keys_dir, s.db_path)
     if a.op == "issue":
         tid, tok = auth.issue_token(a.principal, a.role, tuple(p for p in a.projects.split(",") if p))
@@ -35,6 +61,55 @@ def main(argv: list[str] | None = None) -> int:
             return 1
     else:
         print(json.dumps(auth.list_tokens(), indent=1, ensure_ascii=False))
+    return 0
+
+
+def _board_publish(s: BenchSettings, a) -> int:
+    import shutil
+    from pathlib import Path
+
+    from awr.bench.boardstore import publish
+    from awr.bench.submissions import SubmissionStore
+
+    src = Path(a.dir)
+    v = a.version or src.name
+    dst = s.data_root / "boards" / v
+    dst.mkdir(parents=True, exist_ok=True)
+    for name in ("config.json", "rows.jsonl"):
+        shutil.copyfile(src / name, dst / name)
+    board = publish(dst, SubmissionStore(s.data_root / "submissions").board_view(), n_boot=a.n_boot)
+    if a.current:
+        (s.data_root / "boards" / "current").write_text(v + "\n", encoding="utf-8")
+    print(f"{v}: {len(board['entries'])} entries -> {dst}")
+    return 0
+
+
+def _submission_create(s: BenchSettings, a) -> int:
+    from awr.agentsdk.schemas import bench_validator
+    from awr.bench.api.board import _current, _versions
+    from awr.bench.submissions import SubmissionError, SubmissionStore
+
+    env = dict(kv.split("=", 1) for kv in a.env)
+    req = {"track": a.track, "image_digest": a.digest, "entry": {"cmd": a.entry_cmd.split(), **({"env": env} if env else {})}, "notes": a.notes}
+    errs = [e.message for e in bench_validator("submission").iter_errors({"schema": "drone4d.bench.submission.v1", **req})]
+    if errs:
+        print("; ".join(errs[:3]), file=sys.stderr)
+        return 2
+    root = s.data_root / "boards"
+    v = _current(root, _versions(root))
+    if v is None:
+        print("no board published (board_closed)", file=sys.stderr)
+        return 2
+    b = json.loads((root / v / "board.json").read_text(encoding="utf-8"))
+    st = SubmissionStore(s.data_root / "submissions")
+    try:
+        d = st.create(req, owner=a.owner, team=a.team, board_version=v, tracks={t["track"] for t in b["tracks"]}, lanes={x["lane"] for x in b["lanes"]})
+        if a.visibility == "board":
+            st.set_visibility(d["submission_id"], "board")
+    except SubmissionError as e:
+        print(f"{e.code} {e.detail}", file=sys.stderr)
+        return 1
+    print(d["submission_id"])
     return 0
 
 
