@@ -1,0 +1,20 @@
+{
+ "schema": "drone4d.bench.run_spec.v1",
+ "experiment": {"name": "proto-board crop-handoff-001 L1 3-UAV", "project": "d3-p0a",
+                "note": "P0a prototype board: reference baselines, L1 detection observations, gz-sim lockstep physics. Spawn pad at the open lot south-east of the plaza (>= 20 m from every actor path over the 360 s tape)."},
+ "world": {"id": "oryahovo-crop1"},
+ "event": {"id": "crop-handoff-001", "version": 1},
+ "fleet": [
+  {"uav_id": "uav-01", "vehicle_ref": "x500", "start": {"kind": "pose", "pos_enu_m": [66.0, -82.0, 0.0], "yaw_deg": 90.0}},
+  {"uav_id": "uav-02", "vehicle_ref": "x500", "start": {"kind": "pose", "pos_enu_m": [70.0, -82.0, 0.0], "yaw_deg": 90.0}},
+  {"uav_id": "uav-03", "vehicle_ref": "x500", "start": {"kind": "pose", "pos_enu_m": [74.0, -82.0, 0.0], "yaw_deg": 90.0}}
+ ],
+ "policy": {"kind": "reference", "name": "track_share"},
+ "physics": "realistic",
+ "obs_level": "L1",
+ "noise": "realistic",
+ "comm": {"enabled": true, "bucket_Bps": 125000, "burst_B": 125000, "msg_max_B": 4096, "model": "fspl-nlos@1"},
+ "seeds": [1, 2, 3, 4, 5],
+ "duration_s": 360,
+ "ranked": true
+}
