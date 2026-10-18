@@ -1,6 +1,6 @@
 """`track_share`（M26 §14.3）：从观察位出发，检测到与简报外观匹配的目标后转跟踪（后方站位，水平距 50 m、俯角约 55°），
 丢失后按最后已知速度外推搜索 10 s 再回观察位；每秒广播一次目击（目标轨迹）与跟踪声明，他机已声明且更近的目标不抢；
-声明方丢失且本机空闲且最近时接力（"最近空闲机"）。"""
+声明方丢失且本机空闲且最近时接力（"最近空闲机"）；本机发出 report 后广播告知，他机 30 s 内不重复报同类型。"""
 
 from __future__ import annotations
 
@@ -44,6 +44,8 @@ class TrackShare(StaticGuard):
                         self.shared[i] = (int(s["t"]), tuple(s["xy"]), tuple(s["vel"]), m["src"])
             elif p.get("kind") == "claim":
                 self.claims[int(p["target"])] = (int(p["t"]), m["src"], float(p["dist"]))
+            elif p.get("kind") == "reported":                  # 他机已报：同类型 30 s 内不再重复
+                self.suppress[str(p["type"])] = max(self.suppress.get(str(p["type"]), -1), int(p["t"]) + 30_000_000_000)
         return []
 
     def mission(self, obs, inbox):
@@ -75,10 +77,11 @@ class TrackShare(StaticGuard):
         return super().mission(obs, inbox)
 
     def messages(self, obs):
+        out = [out_msg("*", "reported", {"kind": "reported", "type": ty, "t": t1}) for ty, t1 in self.just_reported]
+        self.just_reported = []
         if obs["k"] % 10 != 0:
-            return []
+            return out
         t = obs["t_ns"]
-        out = []
         sights = [{"target": i, "t": ts, "xy": [round(xy[0], 1), round(xy[1], 1)], "vel": [round(v[0], 2), round(v[1], 2)]}
                   for i, (ts, xy, v, src) in sorted(self.shared.items()) if src == self.uav and (t - ts) / 1e9 < 2.0]
         if sights:

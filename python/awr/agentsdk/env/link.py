@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from awr.agentsdk.env.geom import los as los_batch
 from awr.agentsdk.rng import CH, STREAM_LINK, u01
 
 __all__ = ["CommCfg", "LinkModel"]
@@ -69,7 +70,7 @@ class LinkModel:
         if key in self._cache:
             return self._cache[key]
         d = max(float(np.linalg.norm(pa - pb)), 1.0)
-        los = bool(np.asarray(self.world.los_batch(pa[None], pb[None]))[0])
+        los = bool(los_batch(self.world, pa[None], pb[None])[0])
         pl = 20 * math.log10(d) + 20 * math.log10(self.f_mhz) - 27.55 + (0.0 if los else 20.0)
         margin = 20.0 - pl + 90.0
         per = 1.0 / (1.0 + math.exp((margin - 10.0) / 2.0))

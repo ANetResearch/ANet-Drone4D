@@ -18,6 +18,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from awr.agentsdk.env.camera import CameraModel, project
+from awr.agentsdk.env.geom import los
 from awr.agentsdk.rng import CH, STREAM_L1, hex64, nrm, u01
 
 __all__ = ["L1Model", "L1Params"]
@@ -101,7 +102,7 @@ class L1Model:
             np.stack([-0.35 * L * cy, -0.35 * L * sy, 0.5 * Hh], 1)], 1)             # (n, 5, 3)
         pts = (base[:, None, :] + off).reshape(-1, 3)
         org = np.repeat(o[None], len(pts), 0)
-        ok = np.asarray(self.world.los_batch(org, pts), bool)
+        ok = los(self.world, org, pts)
         self.n_rays += len(pts)
         for j in np.nonzero(self.cls[idx] == "vehicle")[0]:                           # 车辆盒遮挡（目标为车辆本身的点除外）
             a = idx[j]
