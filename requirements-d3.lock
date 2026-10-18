@@ -267,7 +267,9 @@ click==8.5.0 \
 cloudpickle==3.1.2 \
     --hash=sha256:7fda9eb655c9c230dab534f1983763de5835249750e85fbcef43aaa30a9a2414 \
     --hash=sha256:9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a
-    # via joblib
+    # via
+    #   datafusion
+    #   joblib
 comm==0.2.3 \
     --hash=sha256:2dc8048c10962d55d7ad693be1e7045d891b7ce8d999c97963a5e3e99c055971 \
     --hash=sha256:c615d91d75f7f04f095b30d1c1711babd43bdc6419c1be9886a85f2f4e489417
@@ -358,6 +360,19 @@ dash==4.4.1 \
     --hash=sha256:72120a91b10ee4d73f9446efd5d6a4ec218086feed7b1b479d2259844d1f658f \
     --hash=sha256:9356ca7856bc496c12c5b6de5978aaf783e090d07450ee395ade1c0c2cbdf816
     # via open3d-cpu
+datafusion==54.0.0 \
+    --hash=sha256:2a3bf43185c7e43e25242e5fb17b6a11b86bf976434c0bc493fdedbd9a080969 \
+    --hash=sha256:3bcd4d213fa74710e75e6e182cc468c2bdbc5ffc74a08c8155d414fbbfa1b3f6 \
+    --hash=sha256:574f642832a106456cfc4f32aa82484c504fc32f4be2b510202bcb579de8e6d1 \
+    --hash=sha256:64973c63874ec31670dd97b32b18af7b07fad679cb20d58ed154038e3a5c204e \
+    --hash=sha256:796fd5683927443c5bc61999d00b9007ef9b5ce107725ea8d241df718860985d \
+    --hash=sha256:9432bf162381e9282cbc74915b8b773895de18be836f7e3f6d0de4d981f24630 \
+    --hash=sha256:946f55e48b8d523d7b4ac106bdf588b4493c2c66f81877d6952aafeaf7c3ec73 \
+    --hash=sha256:b934e097e1bdca7d5768a81ac1bc4a1812cb459269f8b1a5d892a5d930f18376 \
+    --hash=sha256:c4e79048da82ad89b768bd0be7df39254cd2a0afe2b719d1f129e8a7229af683 \
+    --hash=sha256:cfe7e8dfc026efc05824f49b53ad6a72caf5c2d6820759b6212a09e245a427ed \
+    --hash=sha256:fe57038003b18e28b90752c1e32b44af74ec4f552a1904aee725e1129a00c447
+    # via -r requirements-d3.in
 executing==2.3.0 \
     --hash=sha256:15919cb5d667e5cb4e099511971d00d659573fff2dd5c4e6cd8b71636c7858d2 \
     --hash=sha256:736e859c9f8701f11fcf516856f26f562e04776387824b43a35a1dfe21c84122
@@ -1323,7 +1338,9 @@ pyarrow==26.0.0 \
     --hash=sha256:f800e9e722c145ccd18012d82a864cb21bfee4ba4ceffde77100d25eced511a9 \
     --hash=sha256:fcdd1e04982637c6042337d3e24d472f938f01fdc502e2b994844b726d12c3f4 \
     --hash=sha256:ff1e816af7abff71f289242e109217036723ce36aca74ad6691e52d964a74afa
-    # via rerun-sdk
+    # via
+    #   datafusion
+    #   rerun-sdk
 pydantic==2.13.5 \
     --hash=sha256:346a034f080da3755d8e9cb5e00e8b07de1d39e4f6e2c87d8ab7cafa0b269a73 \
     --hash=sha256:51a9c5f7b2f8e636f04c6cada605d9b6a3bf1348fdf945a3d8869b19bba0ee08
@@ -1936,6 +1953,7 @@ typing-extensions==4.16.0 \
     # via
     #   -c requirements.lock
     #   dash
+    #   datafusion
     #   pydantic
     #   pydantic-core
     #   referencing
