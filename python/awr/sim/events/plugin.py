@@ -1,7 +1,7 @@
 """M23 sim-core 插件（§6.12.1；只出现在 D3_PLUGINS，D2 组合根不导入）：导入即 `install()`，对当前登记表幂等。
 
 登记：会话配置段 `event`（order 45，vehicles 40 之后、targets 50 之前）、查询 `event/status`、慢任务 `m23.status`（1 s 墙钟，
-只刷新状态缓存，不影响仿真）、批处理输出 `event_run`、stage `event_clock`（every 1、order 199、预算 0.0005 核）。
+只刷新状态缓存，不影响仿真）、批处理输出 `event_run`（实现轨迹与被发现记录取自 M18 运行时）、stage `event_clock`（every 1、order 199、预算 0.0005 核）。
 `tape_uri` 为相对路径时按 `AWR_D3_EVENTS_DIR`（缺省 var/d3/events）解析。识别物经 `target/add` 以内部 principal
 `event:<event_id>` 加入（M18 须已安装）；运动源经 M18 扩展点 3 登记。世界版本取 `ctx.world` 的 `content_version`
 （或 `meta["contentVersion"]`）；世界查询没有版本信息时跳过 615 校验并记问题 `EVENT_WORLD_UNCHECKED`。
@@ -104,7 +104,8 @@ def install() -> EventRuntime:
         _STATUS[id(reg)] = rt.status()
 
     def event_run(ctx: Any) -> dict:
-        return rt.run_record()
+        tg = sys.modules.get("awr.sim.targets.plugin")
+        return rt.run_record(tg.runtime(create=False) if tg is not None else None)
 
     for fn in (load_event, event_clock, q_status, publish_status, event_run):
         fn.__module__ = __name__
