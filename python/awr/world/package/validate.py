@@ -1162,8 +1162,9 @@ def z02(w: WorldView, rep: Report):
     ring = np.asarray(b["geometry"]["coordinates"][0], np.float64)
     exp = np.array([[bmin[0] + inset, bmin[1] + inset], [bmax[0] - inset, bmin[1] + inset], [bmax[0] - inset, bmax[1] - inset],
                     [bmin[0] + inset, bmax[1] - inset], [bmin[0] + inset, bmin[1] + inset]])
-    rep.check(ring.shape == exp.shape and bool(np.allclose(ring, exp, atol=0.01, rtol=0)),
-              "border polygon != bounds inset by borderInsetM", "semantic/zones.geojson")
+    if w.world.get("profile") != "d3-glb":       # d3-glb：border 为覆盖多边形内缩（M22 §6.6.7），由 V-GLB-12 校验
+        rep.check(ring.shape == exp.shape and bool(np.allclose(ring, exp, atol=0.01, rtol=0)),
+                  "border polygon != bounds inset by borderInsetM", "semantic/zones.geojson")
     _sc, dsm = w.grid("terrain.dsm")
     if dsm is not None:
         want = float(dsm.max()) + head
