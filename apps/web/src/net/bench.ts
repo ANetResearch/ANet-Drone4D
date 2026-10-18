@@ -55,7 +55,36 @@ export async function benchDelete(path: string): Promise<void> {
 }
 
 export interface BenchSession { principal: string; role: 'invited' | 'researcher' | 'evaluator' | 'admin'; projects: string[]; via: string }
-export interface BenchRunItem { run_id: string; event_id: string; state: string; has_frames: boolean; created_unix_ns: number | null; kind: string | null; world_id: string | null }
+export type BoardMetricKey = 'ec' | 'eu' | 'ao' | 'ce'
+export type Components = Record<BoardMetricKey, number | null>
+export interface BenchRunEvaluation { components: Components; ranked_valid: boolean; invalid_reasons: string[] }
+export interface BenchRunItem {
+  run_id: string; event_id: string; state: string; has_frames: boolean; created_unix_ns: number | null; kind: string | null; world_id: string | null
+  /** Env benchmark runs only (kind = bench) */
+  policy?: string | null; physics?: string | null; obs_level?: string | null; ranked?: boolean; n_uav?: number; duration_s?: number | null
+  evaluation?: BenchRunEvaluation | null
+}
+/** bench/board.v1 (BN-97) */
+export interface BoardMetric { value: number | null; ci95: [number, number]; rank?: number; tie_group?: number }
+export interface BoardEntry {
+  entry_id: string; team: string; display_name: string; track: string; lane: string; metrics: Record<BoardMetricKey, BoardMetric>
+  dominance_tier: number; first_listed_unix_ns: number; baseline: boolean
+}
+export interface BoardTrack { track: string; fleet_ref: string; obs_level: string; physics: string; mode: string; agent_class: string; appearance: string }
+export interface BoardLane { lane: string; kind: string; event_type?: string; test_events: string[]; seed_set_commit: string }
+export interface Board {
+  schema: string; board_version: string; tracks: BoardTrack[]; lanes: BoardLane[]; seed_set_commit: string; evaluator_major: number
+  platform_digest: string; entries: BoardEntry[]
+}
+/** BN-83 */
+export interface BoardVersion { board_version: string; current: boolean; score_version: string; weights: null; tracks: BoardTrack[]; lanes: BoardLane[]; n_entries: number }
+export interface BoardIndex { current: string | null; versions: BoardVersion[] }
+/** BN-84 */
+export interface BoardEntryEvent { event: string; n_runs: number; invalid_runs: number; invalid_reasons: string[]; seeds: number[]; metrics: Components; repeat_delta: null }
+export interface BoardEntryDetail {
+  board_version: string; entry_id: string; track: string; display_name: string; team: string; baseline: boolean
+  lanes: { lane: string; metrics: Record<BoardMetricKey, BoardMetric>; dominance_tier: number; events: BoardEntryEvent[] }[]
+}
 export interface BenchRunChannel { uav_id: string; sensor_id: string; latest_seq: number | null }
 export interface BenchRunEvent { event_id: string; version: number; offset_s: number }
 export interface BenchRunFleet { uav: string; path: { kind: 'orbit'; center?: [number, number]; radius_m: number; period_s: number; phase_deg?: number; ccw?: boolean } | { kind: 'waypoints'; points: [number, number, number, number, number][] } }
