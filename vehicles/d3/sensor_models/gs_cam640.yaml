@@ -1,0 +1,30 @@
+# vehicles/d3/sensor_models/gs_cam640.yaml：SLAM 专用全局快门相机参考型号（awr.sensor.camera_fixed.v1；AWR-20 §15.6.3、§15.7.4；
+# M25 §6.20）。只由 D3 目录覆盖层加载器读取。slam_cam 机体固连、无云台，内参与外参在运行中恒定，不交付 Agent
+# （agent_delivered = false），写入 raw.mcap 观测层（M27-FR-047）。
+# 内参由光学推导：fx = fy = f_mm / (pixel_um·binning·10^-3) = 3.661 / 0.0096 = 381.35 px；cx = W/2、cy = H/2（像素中心 0.5 约定，
+# COLMAP）；HFOV = 2·atan(320/381.35) = 80.0°，VFOV = 2·atan(256/381.35) = 67.7°。给出的内参与推导值相差须 ≤ 1%（CM-1）。
+# 挂载约定同 D2：父帧 base_link（FLU），rpy 按 ZYX（Rz·Ry·Rx），零姿态视轴为机体 +x；光学帧（RDF）= 挂载旋转 · R_FLU_RDF。
+schema: awr.sensor.camera_fixed.v1
+model_id: gs_cam640
+model_version: 1.0.0
+display_name: "AWR GS-640 global-shutter SLAM camera"
+display_name_zh: "AWR GS-640 全局快门 SLAM 相机"
+reference: true
+sensor: {width_px: 1280, height_px: 1024, pixel_um: 4.8, shutter: global}
+optics: {f_mm: 3.661, f_number: 2.0}
+outputs:
+  - {name: vga512, width_px: 640, height_px: 512, binning: 2}
+intrinsics:
+  vga512: {fx: 381.36, fy: 381.36, cx: 320.0, cy: 256.0, dist: [0, 0, 0, 0, 0]}
+exposure: {mode: fixed, s: 0.008}
+fps: 10
+fps_max: 10
+isp: {ae: fixed, gain: fixed}
+encoding: {codec: jpeg, quality: 90, topic: /left_camera/image/compressed}
+role_allowed: [slam]
+mass_kg: {value: 0.06, conf: D, src: "模拟参考值（AWR-20 §15.6.3）"}
+power_w: {value: 1.5, conf: D, src: "模拟参考值（AWR-20 §15.6.3）"}
+env_limits: {temp_c: [-20, 55]}
+overridable: [mount, output]
+conf: D
+src: "模拟参考值，非任何真实产品；1/2 英寸全局快门、2 × 2 合并输出 640 × 512、f 3.661 mm（AWR-20 §15.6.3；M25 §6.20；r1 §4.2）"

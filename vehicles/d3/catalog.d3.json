@@ -1,0 +1,50 @@
+{
+  "schema": "awr.vehicle_catalog_overlay.v1",
+  "overlay_version": "1.0.0",
+  "base_catalog_version": "1.0.0",
+  "disclaimer_zh": "模拟参考值，非任何真实产品",
+  "sensor_models": [
+    {
+      "id": "gs_cam640",
+      "file": "sensor_models/gs_cam640.yaml",
+      "type": "camera_fixed",
+      "model_version": "1.0.0",
+      "reference": true,
+      "visible": true
+    },
+    {
+      "id": "imu_icm40609_livox",
+      "file": "sensor_models/imu_icm40609_livox.yaml",
+      "type": "imu_mems",
+      "model_version": "1.0.0",
+      "reference": false,
+      "visible": true
+    }
+  ],
+  "side_tables": [
+    {
+      "for": "mid360@2.0.0",
+      "file": "side_tables/mid360@2.0.0.d3.yaml",
+      "type": "lidar_d3"
+    }
+  ],
+  "variants": [
+    {
+      "id": "p600_mid360_inv",
+      "file": "variants/p600_mid360_inv.yaml",
+      "base": "p600_mid360@2.0.0",
+      "profile_version": "1.0.0",
+      "display_name": "P600 (MID-360 inverted, mapping)",
+      "display_name_zh": "P600（倒装 MID-360 建图配置）",
+      "category": "multirotor",
+      "reference": false,
+      "visible": true,
+      "order": 0,
+      "d3_tags": [
+        "mapping_default",
+        "slam_rig"
+      ],
+      "summary_zh": "四旋翼，3.885 kg，悬停 28.2 min，倒装 MID-360 激光雷达与下俯 45° 全局快门 SLAM 相机；D3 建图缺省机型"
+    }
+  ]
+}
