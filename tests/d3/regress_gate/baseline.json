@@ -14,5 +14,31 @@
   "commit": "928c57b",
   "recorded_utc": "2026-10-17",
   "note": "relay-b-1h r1 = r2 (determinism PASS); gap quality checks fail identically on d2 and d3-dev"
+ },
+ "resim": {
+  "spec_sha256": "2ece787873262bdf59358a9a490696e1ed6f4df19662dfc6f1cc0be02a74ac47",
+  "frames": "3750",
+  "frames_sha256": "f6d5a3fe6952d0d83c3a7836201c06acf8c9da606ca257d88ce7fd8f3705d4d0",
+  "inputs": "5",
+  "inputs_sha256": "0d979f76aa22ce00b085d96ea2fafc89b9a81879fed49af8157428743a5d49b8",
+  "chunks": [
+   "0f534ed08f92f210",
+   "a8af18b6e9e74a80",
+   "6442fd6e8e31cec3",
+   "10f36738a9ba084e",
+   "a2ca844acc12a245",
+   "f145dc733e60bb5c",
+   "7529724cce44526d",
+   "d0b33df4dd7cf54e"
+  ],
+  "source": {
+   "tree": "d2@928c57b (git archive; worlds/ of the working tree)",
+   "kernel": "numba",
+   "awr_version": "0.1.0",
+   "flags": {
+    "AWR_D3_ENABLED": "0"
+   },
+   "recorded_utc": "2026-10-18T14:14:45Z"
+  }
  }
 }

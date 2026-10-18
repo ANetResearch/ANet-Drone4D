@@ -6,19 +6,40 @@
   {"id": "contracts", "item": 1, "kind": "cmd", "argv": ["make", "test-contracts"], "cwd": ".", "timeout_s": 1800},
   {"id": "web-unit", "item": 1, "kind": "cmd", "argv": ["npx", "vitest", "run", "--project", "unit"], "cwd": "apps/web", "timeout_s": 1800},
   {"id": "zero-impact", "item": 2, "kind": "builtin", "timeout_s": 7200},
+  {"id": "resim", "item": 2, "kind": "builtin", "timeout_s": 1800,
+   "doc": "resim frame digest sequence under both flag sets vs the D2 baseline (d2@928c57b): record the fixed script below into an input log, resim it, compare"},
   {"id": "perf", "item": 3, "kind": "builtin", "timeout_s": 3600, "default": false,
    "doc": "D2 perf subset; needs an exclusive host (ADR-033 run protocol), off by default on shared hosts"},
   {"id": "lint", "item": 4, "kind": "cmd", "argv": ["make", "lint"], "cwd": ".", "timeout_s": 1800,
    "doc": "ruff, oxlint, lint-m06 and the import direction rule (lint-py-imports; item 5)"},
   {"id": "imports", "item": 5, "kind": "cmd", "argv": ["{py}", "tools/lint/check_py_imports.py"], "cwd": ".", "timeout_s": 600},
   {"id": "public-build", "item": 6, "kind": "cmd", "argv": ["make", "demo-build"], "cwd": ".", "timeout_s": 3600,
-   "doc": "public demo build with the K9 production bundle scan (ADR-111); the public site e2e and Tier S first screen run in the perf harness"}
+   "doc": "public demo build with the K9 production bundle scan (ADR-111); the public site e2e and Tier S first screen run in the perf harness"},
+  {"id": "k9-d3", "item": 6, "kind": "builtin", "timeout_s": 600,
+   "doc": "K9 D3 extension: the D2 public demo build carries no D3 entry strings (/lab/, /api/bench/v1 and its runs|events|session paths); run after public-build"}
  ],
  "zero_impact": {
   "relay_batch": {"case": "b", "hours": 1, "seed": 11},
   "files": ["relay_stats.json", "events.jsonl"],
   "flags": [{"AWR_D3_ENABLED": "0"}, {"AWR_D3_ENABLED": "1"}],
   "pytest": ["tests/targets/test_determinism.py"]
+ },
+ "resim": {
+  "doc": "fixed input script on the synthcity world package (open strip south of the nest; the world query runs under both flag sets): fake wall clock, deterministic apply ticks; changing it invalidates the D2 baseline (spec_sha256)",
+  "n_vehicles": 2, "world_id": "synthcity", "load_world": true, "world_seed": 11, "kernel": "numba", "profile_id": "p600_mid360",
+  "spawn_xy": [340.0, -540.0], "spawn_spacing_m": 15.0, "run_id": "gate-resim", "end_s": 30.0, "timeout_s": 1800,
+  "script": [
+   {"t_s": 2.0, "op": "takeoff", "uav": "*", "args": {"alt_m": 12.0}},
+   {"t_s": 14.0, "op": "goto", "uav": 0, "args": {"pos": [380.0, -530.0, 15.0]}},
+   {"t_s": 14.0, "op": "orbit", "uav": 1, "args": {"center": [365.0, -510.0, 12.0], "radius_m": 10.0, "turns": 1}},
+   {"t_s": 24.0, "op": "rtl", "uav": 0, "args": {}}
+  ]
+ },
+ "k9_d3": {
+  "dist": ".cache/deploy/emax/web-dist",
+  "forbidden": ["/lab/", "/api/bench/v1/runs", "/api/bench/v1/events", "/api/bench/v1/session", "/api/bench/v1"],
+  "doc_forbidden": "the bench client composes paths from the base literal (net/bench.ts BENCH + `/runs/...`), so the base /api/bench/v1 is forbidden too",
+  "text_ext": [".html", ".js", ".mjs", ".css", ".json", ".webmanifest", ".txt", ".map", ".svg", ".xml"]
  },
  "perf": {"pytest": ["tests/targets/test_budget.py", "tests/perception"], "max_regression": 0.05}
 }
