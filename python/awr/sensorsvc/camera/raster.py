@@ -10,7 +10,8 @@
 卷帘（M25 §15.4，`rs_method = vertex`）：`render(..., rs_nodes=[(R, p)] × 9)` 时几何遍换用逐顶点行时刻投影的顶点着色器：
 读出窗口 [t_mid − T_ro/2, t_mid + T_ro/2] 内 9 个等间隔相机位姿节点以瓦片相对的模型视图矩阵传入，顶点按 2 次不动点迭代求自身
 所在行的时刻，节点间对矩阵线性插值（节点间隔 T_ro/8，旋转量很小，插值误差远小于 0.01 px）；深度、实例、语义与颜色同一遍
-写出。天空遍取 t_mid 位姿。
+写出。天空遍取 t_mid 位姿。9 个节点相同（静止机体，`rs_static`）时改走全局快门程序，与全局快门输出逐字节一致。验收参照
+（Warp 逐行射线求交与行带方法）见 `camera.rowref`。
 
 `render(..., fx=FxParams)` 时编码遍换成效果链遍（M25 §6.5：增益、渐晕、Poisson–Gaussian 噪声、sRGB 与量化；逐像素正态以
 `GL_ARB_gpu_shader_int64` 的 SplitMix64 与 `camera.effects` 参考实现同式），另加 L2-depth 遍（观测深度写入单独的 R32F）与
@@ -307,6 +308,19 @@ void main() {
     o_col = texelFetch(u_col, ivec2(gl_FragCoord.xy) * 8, 0);
 }
 """
+
+
+RS_STATIC_ROT, RS_STATIC_POS_M = 1e-9, 1e-6
+
+
+def rs_static(rs_nodes: list[tuple[np.ndarray, np.ndarray]]) -> bool:
+    """读出窗口内位姿节点相同（旋转矩阵逐元素差 ≤ 1e-9、位置差 ≤ 1 µm，对应像素位移 < 1e-5 px）：静止机体。
+
+    逐顶点着色器对节点矩阵线性插值并单独乘投影矩阵，float32 舍入与全局快门的 `u_mvp` 不逐位相同（实测 1080p 约 30 个深度像素
+    差 1 ulp）；静止时直接走全局快门程序，卷帘与全局快门输出逐字节一致。"""
+    R0, p0 = (np.asarray(v, np.float64) for v in rs_nodes[0])
+    return all(np.abs(np.asarray(Rk, np.float64) - R0).max() <= RS_STATIC_ROT and np.abs(np.asarray(pk, np.float64) - p0).max() <= RS_STATIC_POS_M
+               for Rk, pk in rs_nodes[1:])
 
 
 def srgb8_to_linear(c: np.ndarray) -> np.ndarray:
@@ -626,6 +640,8 @@ class RasterCamera:
         rs = rs_nodes is not None
         if rs and len(rs_nodes) != RS_NODES:
             raise ValueError(f"rolling shutter needs {RS_NODES} pose nodes")
+        if rs and rs_static(rs_nodes):                                   # 静止机体：退化为全局快门，输出逐字节一致（D3-AC-60）
+            rs_nodes, rs = None, False
         prog = self.prog_rs if rs else self.prog
         prog["u_inst"].value = 0
         prog["u_sem"].value = 0

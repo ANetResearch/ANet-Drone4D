@@ -3,6 +3,7 @@
 # glvnd 以 10_nvidia.json 选择 NVIDIA 实现。GPU JPEG（nvImageCodec + nvJPEG，M25-FR-060、183）以离线 wheel 单独一层安装
 # （容器与构建环境不依赖外网；wheel 由 build.sh 按 requirements-nvjpeg.lock 的哈希预先下载到 wheels-nvjpeg/），并删除
 # nvImageCodec 的 CPU 编解码扩展（libjpeg-turbo、OpenCV、TIFF 等），只保留 libnvjpeg_ext：在线路径的 JPEG 只能由 nvJPEG 产生。
+# NVIDIA Warp 按 requirements-warp.lock 同样离线安装（wheels-warp/）。
 FROM python:3.12-slim
 ARG PIP_INDEX_URL=https://mirrors.bfsu.edu.cn/pypi/web/simple
 ARG PIP_TRUSTED_HOST=mirrors.bfsu.edu.cn
@@ -21,6 +22,11 @@ RUN pip install --no-cache-dir --no-index --find-links /tmp/wh --require-hashes 
  && X=$(python -c "import importlib.util as u, os; print(os.path.join(os.path.dirname(u.find_spec('nvidia.nvimgcodec').origin), 'extensions'))") \
  && find "$X" -name 'lib*_ext.so*' ! -name 'libnvjpeg_ext.so*' -delete && ls "$X" | grep -qx 'libnvjpeg_ext.so.*' \
  && test "$(ls "$X" | wc -l)" = 1
+# NVIDIA Warp（卷帘验收参照的逐行射线求交、Warp MeshLidar；D3-AC-60、12）：同样以离线 wheel 单独一层安装，依赖只有 numpy
+COPY requirements-warp.lock /tmp/req/
+COPY wheels-warp/ /tmp/wh/
+RUN pip install --no-cache-dir --no-index --find-links /tmp/wh --require-hashes --no-deps -r /tmp/req/requirements-warp.lock \
+ && rm -rf /tmp/wh /tmp/req && python -c "import warp"
 RUN useradd --uid 1000 --create-home awr
 WORKDIR /opt/awr
 USER awr

@@ -1,0 +1,5 @@
+# d3-sensorsvc 镜像的 NVIDIA Warp（docs/05 §5.4.3 卷帘验收参照：Warp 逐行射线求交，D3-AC-60；WP-D3-29 Warp MeshLidar，D3-AC-12）。
+# 依赖只有 numpy（已由 requirements.lock 锁定），以 --no-deps 离线安装；镜像构建时由 build.sh 先在本机按锁文件哈希下载 wheel。锁定：
+#   uv pip compile requirements-warp.in -c ../../../../../requirements.lock --generate-hashes --python-version 3.12 \
+#     --python-platform x86_64-manylinux_2_28 --no-deps -o requirements-warp.lock
+warp-lang==1.17.0
