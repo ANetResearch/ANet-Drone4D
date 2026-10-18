@@ -9,10 +9,13 @@
 # REL-04（D2.1，ADR-123）：本机有部署口令文件（~/.config/awr/admin.secret 或 AWR_ADMIN_SECRET_FILE）时其内容不得出现在发布集合中。
 # VER-01/02（check-version.mjs，D2.1，ADR-118）：pyproject.toml、apps/web/package.json、根 package.json 与 awr.__version__ 的产品版本
 # 相等且为 X.Y.Z。
+# COPY-01..10（copy-lint.mjs，docs/05 §7.10，ADR-153；D3-AC-46、D3-AC-23、D3-AC-53）：企业级文案中英文规则集，缺省扫描 D2 发布面
+# （README.md、README.zh-CN.md、zh-CN.json、en.json、CITATION.cff），tools/lint/copy-lint.scope.json 追加范围；P-1 基线例外登记在
+# tools/lint/copy-lint.baseline.json，P0b 出口前清零（lint-copy-strict 在仍有基线例外时失败）。
 
-LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units check-release check-version
+LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units check-release check-version copy-lint
 
-.PHONY: lint-tools lint-selftest lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds $(addprefix lint-,$(LINT_SCRIPTS))
+.PHONY: lint-tools lint-selftest lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds lint-copy-strict $(addprefix lint-,$(LINT_SCRIPTS))
 
 LINT_TARGETS += lint-selftest $(addprefix lint-,$(LINT_SCRIPTS)) lint-py-imports lint-py-callbacks lint-perf-flags lint-thresholds
 
@@ -24,8 +27,12 @@ lint-selftest:
 lint-lint-lf:
 	@cd $(ROOT) && node tools/lint/lint-lf.mjs --palette
 
-lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units lint-check-release lint-check-version:
+lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units lint-check-release lint-check-version lint-copy-lint:
 	@cd $(ROOT) && node tools/lint/$(patsubst lint-%,%,$@).mjs
+
+# P0b 出口（D3-AC-23）：基线例外须已清零
+lint-copy-strict:
+	@cd $(ROOT) && node tools/lint/copy-lint.mjs --strict
 
 lint-py-imports:
 	@cd $(ROOT) && $(PY) tools/lint/check_py_imports.py
