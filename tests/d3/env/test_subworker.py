@@ -43,7 +43,7 @@ def root(synth_event, tmp_path: Path, monkeypatch, request) -> Path:
                     {"uav_id": "uav-02", "vehicle_ref": "x500", "start": {"kind": "pose", "pos_enu_m": [10.0, 50.0, 0.0], "yaw_deg": 0.0}}],
           "policy": {"kind": "reference", "name": "track_share"}, "obs_level": "L1", "physics": "realistic", "duration_s": 20.0, "seeds": [11, 12]}
     cfg = {"run_spec": rs, "seeds": [11, 12], "events_root": str(ev.parent.parent), "worlds_root": str(w.parent), "physics": "kinematic", "gz": {},
-           "track": {"fleet_ref": "2x-x500", "obs_level": "L1", "allow_invalid": True}, "track_id": "std2-l1", "lane": "rendezvous_handoff",
+           "track": {"fleet_ref": "2x-x500", "obs_level": "L1", "dev": True}, "track_id": "std2-l1", "lane": "rendezvous_handoff",
            "event_type": "rendezvous_handoff", "event": ev.parent.name}
     (b / "config.json").write_text(json.dumps(cfg))
     append_rows(b, [{"entry_id": "baseline/static_guard", "team": "D3 reference", "display_name": "Static guard", "baseline": True, "track": "std2-l1",
@@ -105,3 +105,21 @@ def test_withdraw_skips_processing(root: Path, tmp_path: Path) -> None:
     sid = _submit(st)
     st.withdraw(sid)
     assert process_one(root, docker=_docker(tmp_path)) is None and st.get(sid)["state"] == "WITHDRAWN"
+
+
+def test_platform_failure_is_rerun_once_and_not_charged(root: Path, tmp_path: Path) -> None:
+    st = SubmissionStore(root / "submissions")
+    sid = _submit(st)
+    calls: list[str] = []
+
+    def flaky(rs, **kw):                                                  # r0 第一次因平台原因失败（如 gz 实例异常）
+        calls.append(kw["run_id"])
+        if kw["run_id"].endswith("-r0") and calls.count(kw["run_id"]) == 1:
+            raise RuntimeError("gz instance lost")
+        return run_job(rs, **kw)
+
+    assert process_one(root, docker=_docker(tmp_path), run_job=flaky, smoke_s=5.0, n_boot=100, log=lambda m: None) == sid
+    d = st.get(sid)
+    assert d["state"] == "DONE" and d["result"]["lanes"][0]["runs"]["platform_rerun"] == 1
+    assert d["result"]["lanes"][0]["runs"]["total"] == 2                                          # 重跑不计入提交方的 Run
+    assert calls == [f"{sid}-smoke", f"{sid}-r0", f"{sid}-r0", f"{sid}-r1"]

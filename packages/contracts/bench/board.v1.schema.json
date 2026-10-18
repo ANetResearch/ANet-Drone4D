@@ -293,8 +293,19 @@
             "required": []
           },
           "dominance_tier": {
-            "type": "integer",
-            "minimum": 1
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "Non-dominated tier; null when the entry is invalid or has no valid run (not tiered)."
+          },
+          "status": {
+            "enum": [
+              "valid",
+              "invalid"
+            ],
+            "description": "invalid when more than 20% of the entry's runs are not ranked-valid: shown with metrics from valid runs, excluded from ranks and tiers."
           },
           "first_listed_unix_ns": {
             "type": "integer",

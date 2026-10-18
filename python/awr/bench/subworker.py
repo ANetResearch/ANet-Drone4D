@@ -128,7 +128,9 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
         board = publish(bdir, st.board_view(), n_boot=n_boot)
         e = next((x for x in board["entries"] if x["entry_id"] == f"{team}/{sid}"), None)
         if e is not None:
-            lane["metrics"], lane["dominance_tier"] = e["metrics"], e["dominance_tier"]
+            lane["metrics"] = e["metrics"]
+            if e["dominance_tier"] is not None:
+                lane["dominance_tier"] = e["dominance_tier"]
             doc = st.get(sid)
             doc["result"] = {"lanes": [lane]}
             st._put(doc)

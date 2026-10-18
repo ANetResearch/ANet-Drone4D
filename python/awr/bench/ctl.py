@@ -3,7 +3,10 @@
 
 榜单与提交（运维用，数据根取 `AWR_BENCH_DATA_ROOT`）：
 - `board publish <dir> [--version V] [--current]`：把评测轮次目录（proto_board 产出：config.json、rows.jsonl）发布为
-  `boards/<V>` 并重算 board.json、details.json；
+  `boards/<V>` 并重算 board.json、details.json；开发榜（`track.dev`，Fast 档自检）不得 `--current`；评分版本或赛道集合与已发布版本
+  不同则拒绝（须新建版本）；
+- `board compose <V> --weights ec=…,eu=…,ao=…,ce=…`：以测试用评分版本的权重由存储的分量重算合成值与置信区间（不写文件、不重跑），
+  输出 JSON；
 - `submission create --team T --owner O --track S --digest sha256:… --cmd "…" [--env K=V …] [--visibility board]`：代成员登记
   内部提交（与 BN-95 相同的校验、配额与状态机），输出 submission_id。"""
 
@@ -34,6 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     bp.add_argument("--version")
     bp.add_argument("--current", action="store_true")
     bp.add_argument("--n-boot", type=int, default=10_000)
+    bc = b.add_parser("compose")
+    bc.add_argument("version")
+    bc.add_argument("--weights", required=True, help="ec=W,eu=W,ao=W,ce=W")
+    bc.add_argument("--n-boot", type=int, default=10_000)
     sc = sub.add_parser("submission").add_subparsers(dest="op", required=True)
     c = sc.add_parser("create")
     c.add_argument("--team", required=True)
@@ -47,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     s = BenchSettings.from_env()
     if a.cmd == "board":
-        return _board_publish(s, a)
+        return _board_publish(s, a) if a.op == "publish" else _board_compose(s, a)
     if a.cmd == "submission":
         return _submission_create(s, a)
     auth = BenchAuth(s.keys_dir, s.db_path)
@@ -68,19 +75,43 @@ def _board_publish(s: BenchSettings, a) -> int:
     import shutil
     from pathlib import Path
 
-    from awr.bench.boardstore import publish
+    from awr.bench.boardstore import BoardVersionError, load_config, publish
     from awr.bench.submissions import SubmissionStore
 
     src = Path(a.dir)
     v = a.version or src.name
+    if a.current and load_config(src).get("track", {}).get("dev"):
+        print(f"{src}: development board (track.dev) cannot be published as current", file=sys.stderr)
+        return 2
     dst = s.data_root / "boards" / v
     dst.mkdir(parents=True, exist_ok=True)
     for name in ("config.json", "rows.jsonl"):
         shutil.copyfile(src / name, dst / name)
-    board = publish(dst, SubmissionStore(s.data_root / "submissions").board_view(), n_boot=a.n_boot)
+    try:
+        board = publish(dst, SubmissionStore(s.data_root / "submissions").board_view(), n_boot=a.n_boot)
+    except BoardVersionError as e:
+        print(str(e), file=sys.stderr)
+        return 2
     if a.current:
         (s.data_root / "boards" / "current").write_text(v + "\n", encoding="utf-8")
     print(f"{v}: {len(board['entries'])} entries -> {dst}")
+    return 0
+
+
+def _board_compose(s: BenchSettings, a) -> int:
+    from awr.bench.boardstore import compose_board, versions
+    from awr.bench.submissions import SubmissionStore
+
+    if a.version not in versions(s.data_root / "boards"):
+        print(f"no board version {a.version}", file=sys.stderr)
+        return 2
+    try:
+        w = {k: float(x) for k, x in (kv.split("=", 1) for kv in a.weights.split(","))}
+        out = compose_board(s.data_root / "boards" / a.version, w, SubmissionStore(s.data_root / "submissions").board_view(), n_boot=a.n_boot)
+    except (KeyError, ValueError) as e:
+        print(f"weights: {e}", file=sys.stderr)
+        return 2
+    print(json.dumps(out, ensure_ascii=False, indent=1))
     return 0
 
 

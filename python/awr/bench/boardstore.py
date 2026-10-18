@@ -7,6 +7,9 @@
 
 上榜规则：基线行全部计入；内部提交只计入 `visibility = board` 且 `state = DONE` 的提交，同一团队在同一"分轨 × 赛道"只取最近完成
 的一个提交作为代表条目（D3-AC-57 e）。
+
+版本冻结（D3-AC-57）：`config.json.score_version`（缺省为当前 `SCORE_VERSION`）与本平台评分版本不同，或重算后的赛道集合与已发布的
+`board.json` 不同，`publish` 拒绝（`BoardVersionError`）：评分版本或赛道集合变更须发布为新榜单版本，旧版本只读。
 """
 
 from __future__ import annotations
@@ -15,9 +18,10 @@ import json
 import re
 from pathlib import Path
 
-from awr.bench.eval.aggregate import build_board, entry_details
+from awr.bench.eval.aggregate import build_board, compose, entry_details
+from awr.bench.eval.thresholds import SCORE_VERSION
 
-__all__ = ["append_rows", "current_version", "load_config", "load_rows", "publish", "slim_evaluation", "versions"]
+__all__ = ["BoardVersionError", "append_rows", "compose_board", "current_version", "load_config", "load_rows", "publish", "slim_evaluation", "versions"]
 
 _VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
@@ -39,8 +43,13 @@ def current_version(root: Path, vs: list[str]) -> str | None:
     return vs[-1] if vs else None
 
 
+class BoardVersionError(Exception):
+    """评分版本或赛道集合与已发布的榜单版本不一致（须新建榜单版本）。"""
+
+
 def slim_evaluation(doc: dict) -> dict:
-    return {"components": doc["components"], "ranked_valid": bool(doc["ranked_valid"]), "invalid_reasons": list(doc.get("invalid_reasons", []))}
+    return {"components": doc["components"], "ranked": bool(doc.get("ranked", True)), "ranked_valid": bool(doc["ranked_valid"]),
+            "invalid_reasons": list(doc.get("invalid_reasons", []))}
 
 
 def load_config(board_dir: Path) -> dict:
@@ -79,8 +88,24 @@ def _listed(rows: list[dict], subs: dict[str, dict]) -> list[dict]:
 def publish(board_dir: Path, subs: dict[str, dict] | None = None, *, n_boot: int = 10_000) -> dict:
     board_dir = Path(board_dir)
     cfg = load_config(board_dir)
+    sv = cfg.get("score_version", SCORE_VERSION)
+    if sv != SCORE_VERSION:
+        raise BoardVersionError(f"board {board_dir.name} is scored with {sv}, platform is {SCORE_VERSION}: publish a new board version")
     rows = _listed(load_rows(board_dir), subs or {})
     board = build_board(rows, board_version=board_dir.name, n_boot=n_boot, track=cfg.get("track"))
+    prev = board_dir / "board.json"
+    if prev.is_file():
+        old = {x["lane"] for x in json.loads(prev.read_text(encoding="utf-8"))["lanes"]}
+        new = {x["lane"] for x in board["lanes"]}
+        if old != new:
+            raise BoardVersionError(f"board {board_dir.name} lanes {sorted(old)} -> {sorted(new)}: publish a new board version")
     (board_dir / "board.json").write_text(json.dumps(board, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     (board_dir / "details.json").write_text(json.dumps(entry_details(rows), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return board
+
+
+def compose_board(board_dir: Path, weights: dict[str, float], subs: dict[str, dict] | None = None, *, n_boot: int = 10_000) -> list[dict]:
+    """以给定权重由存储的评测行重算合成值（不写文件、不重跑）。"""
+    board_dir = Path(board_dir)
+    cfg = load_config(board_dir)
+    return compose(_listed(load_rows(board_dir), subs or {}), weights, board_version=board_dir.name, n_boot=n_boot, track=cfg.get("track"))

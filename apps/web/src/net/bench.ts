@@ -68,7 +68,7 @@ export interface BenchRunItem {
 export interface BoardMetric { value: number | null; ci95: [number, number]; rank?: number; tie_group?: number }
 export interface BoardEntry {
   entry_id: string; team: string; display_name: string; track: string; lane: string; metrics: Record<BoardMetricKey, BoardMetric>
-  dominance_tier: number; first_listed_unix_ns: number; baseline: boolean
+  dominance_tier: number | null; status?: 'valid' | 'invalid'; first_listed_unix_ns: number; baseline: boolean
 }
 export interface BoardTrack { track: string; fleet_ref: string; obs_level: string; physics: string; mode: string; agent_class: string; appearance: string }
 export interface BoardLane { lane: string; kind: string; event_type?: string; test_events: string[]; seed_set_commit: string }

@@ -15,7 +15,7 @@ import { NativeSelect, NativeSelectOption } from '@/ui/components/ui/native-sele
 import { Skeleton } from '@/ui/components/ui/skeleton'
 import { Icon } from '@/ui/icons/Icon'
 import { LfTable, type LfColumn } from '@/ui/lf/LfTable'
-import { boardRows, fmtCi, fmtNum, fmtRank, fmtValue, METRICS } from './board'
+import { boardRows, fmtCi, fmtNum, fmtRank, fmtTier, fmtValue, METRICS } from './board'
 import { useBenchSession } from './useBenchSession'
 
 export function LabBoardPage() {
@@ -35,11 +35,12 @@ export function LabBoardPage() {
   const ln = lane ?? q.data?.lanes[0]?.lane ?? null
   const rows = boardRows(q.data, tr, ln)
   const cols: LfColumn<BoardEntry>[] = [
-    { key: 'tier', label: t('lab.board.col.tier'), align: 'right', width: '4rem', format: (e) => String(e.dominance_tier) },
+    { key: 'tier', label: t('lab.board.col.tier'), align: 'right', width: '4rem', format: fmtTier },
     { key: 'entry', label: t('lab.board.col.entry'), format: (e) => (
       <span className="flex items-center gap-1.5">
         <span>{sanitizeText(e.display_name, 64)}</span>
         {e.baseline ? <Badge variant="outline">{t('lab.board.reference')}</Badge> : null}
+        {e.status === 'invalid' ? <Badge variant="secondary">{t('lab.board.invalid')}</Badge> : null}
       </span>
     ) },
     { key: 'team', label: t('lab.board.col.team'), format: (e) => sanitizeText(e.team, 48) },

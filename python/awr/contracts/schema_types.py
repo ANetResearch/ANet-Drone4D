@@ -1947,7 +1947,8 @@ class BoardV1Entries(TypedDict):
     track: str
     lane: str
     metrics: BoardV1EntriesMetrics
-    dominance_tier: int
+    dominance_tier: int | None
+    status: NotRequired[Literal["valid", "invalid"]]
     first_listed_unix_ns: int
     baseline: bool
 
