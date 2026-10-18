@@ -1,0 +1,1731 @@
+{
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "SessionIn": {
+        "properties": {
+          "token": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "SessionIn",
+        "type": "object"
+      },
+      "ShortIn": {
+        "properties": {
+          "aud": {
+            "title": "Aud",
+            "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          }
+        },
+        "required": [
+          "aud"
+        ],
+        "title": "ShortIn",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "drone4d bench-api",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/bench/v1/board": {
+      "get": {
+        "operationId": "board_api_bench_v1_board_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Board Api Bench V1 Board Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Board",
+        "x-awr-reasons": [
+          301,
+          302
+        ],
+        "x-d3-bn": "BN-83",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/board/{track}/entries/{entry_id}": {
+      "get": {
+        "operationId": "entry_api_bench_v1_board__track__entries__entry_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "track",
+            "required": true,
+            "schema": {
+              "title": "Track",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "board_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Board Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Entry Api Bench V1 Board  Track  Entries  Entry Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Entry",
+        "x-awr-reasons": [
+          301,
+          302,
+          305,
+          682
+        ],
+        "x-d3-bn": "BN-84",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/events": {
+      "get": {
+        "description": "BN-20：事件列表与编译状态（每个事件的最新版本）；过滤 `world`、`status`（逗号分隔）、`q`（事件 id 或名称子串，不分大小写）。",
+        "operationId": "events_api_bench_v1_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "world",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "World"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Events Api Bench V1 Events Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events",
+        "x-awr-reasons": [
+          300,
+          301,
+          302
+        ],
+        "x-d3-bn": "BN-20",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/events/{eid}": {
+      "get": {
+        "description": "BN-22：编译状态与结果（M23 §7.3.1）；`versions[]` 为全部版本的 `{version, status}`。",
+        "operationId": "event_api_bench_v1_events__eid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eid",
+            "required": true,
+            "schema": {
+              "title": "Eid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Event Api Bench V1 Events  Eid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Event",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305,
+          691
+        ],
+        "x-d3-bn": "BN-22",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/leaderboard": {
+      "get": {
+        "operationId": "leaderboard_api_bench_v1_leaderboard_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "track",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Track"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lane",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lane"
+            }
+          },
+          {
+            "in": "query",
+            "name": "board_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Board Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Leaderboard Api Bench V1 Leaderboard Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leaderboard",
+        "x-awr-reasons": [
+          301,
+          302,
+          682
+        ],
+        "x-d3-bn": "BN-97",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/meta": {
+      "get": {
+        "operationId": "meta_api_bench_v1_meta_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Meta Api Bench V1 Meta Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Meta",
+        "x-awr-reasons": [
+          301,
+          302
+        ],
+        "x-d3-bn": "BN-00",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs": {
+      "get": {
+        "description": "BN-42：过滤 `event`、`experiment`、`policy`、`state`（逗号分隔）、`ranked`、`ids`（逗号分隔）；按（事件，run_id）排序，游标分页。",
+        "operationId": "runs_api_bench_v1_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "event",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Event"
+            }
+          },
+          {
+            "in": "query",
+            "name": "experiment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Experiment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "policy",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Policy"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ranked",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ranked"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Runs Api Bench V1 Runs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Runs",
+        "x-awr-reasons": [
+          300,
+          301,
+          302
+        ],
+        "x-d3-bn": "BN-42",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs/{rid}": {
+      "delete": {
+        "description": "BN-44：取消。重复取消一个已登记取消请求的运行仍返回 204。",
+        "operationId": "cancel_api_bench_v1_runs__rid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          303,
+          305,
+          680
+        ],
+        "x-d3-bn": "BN-44",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
+      },
+      "get": {
+        "description": "BN-43：运行状态。受管运行另带 `attempts[]` 与迁移审计 `transitions[]`；运行目录存在时并入帧通道与事件版本。",
+        "operationId": "run_api_bench_v1_runs__rid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Api Bench V1 Runs  Rid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305
+        ],
+        "x-d3-bn": "BN-43",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs/{rid}/evaluation": {
+      "get": {
+        "operationId": "evaluation_api_bench_v1_runs__rid__evaluation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Evaluation Api Bench V1 Runs  Rid  Evaluation Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Evaluation",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305,
+          691
+        ],
+        "x-d3-bn": "BN-47",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs/{rid}/frames/{uav}/{sensor}": {
+      "get": {
+        "operationId": "frame_index_api_bench_v1_runs__rid__frames__uav___sensor__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "uav",
+            "required": true,
+            "schema": {
+              "title": "Uav",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sensor",
+            "required": true,
+            "schema": {
+              "title": "Sensor",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seq_from",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Seq From",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seq_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seq To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Frame Index Api Bench V1 Runs  Rid  Frames  Uav   Sensor  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Frame Index",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305,
+          697
+        ],
+        "x-d3-bn": "BN-49",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs/{rid}/frames/{uav}/{sensor}/{seq}": {
+      "get": {
+        "operationId": "frame_api_bench_v1_runs__rid__frames__uav___sensor___seq__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "uav",
+            "required": true,
+            "schema": {
+              "title": "Uav",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sensor",
+            "required": true,
+            "schema": {
+              "title": "Sensor",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "seq",
+            "required": true,
+            "schema": {
+              "title": "Seq",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Frame",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305,
+          309,
+          697
+        ],
+        "x-d3-bn": "BN-50",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs/{rid}/frames/{uav}/{sensor}:range": {
+      "get": {
+        "operationId": "frame_range_api_bench_v1_runs__rid__frames__uav___sensor__range_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "uav",
+            "required": true,
+            "schema": {
+              "title": "Uav",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sensor",
+            "required": true,
+            "schema": {
+              "title": "Sensor",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seq_from",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Seq From",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seq_to",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Seq To",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stride",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Stride",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Frame Range",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305,
+          697,
+          698
+        ],
+        "x-d3-bn": "BN-51",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs/{rid}/retry": {
+      "post": {
+        "description": "BN-45：手动重试（新 attempt）。→ `{run_id, attempt}`。",
+        "operationId": "retry_api_bench_v1_runs__rid__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retry Api Bench V1 Runs  Rid  Retry Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          303,
+          305,
+          680,
+          681
+        ],
+        "x-d3-bn": "BN-45",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs/{rid}/truth/event/tape": {
+      "get": {
+        "description": "运行所用事件版本的 `tape.bin`（drone4d.tape.v1）；清单记录的 content_sha256 与事件目录不一致时 614。\n`X-Event-Offset-Ns`：采集时刻 t 对应事件时刻 offset + t。",
+        "operationId": "event_tape_api_bench_v1_runs__rid__truth_event_tape_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Event Tape",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305,
+          614
+        ],
+        "x-d3-bn": "BN-52.tape",
+        "x-d3-role": "evaluator",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs/{rid}/truth/frames/{uav}/{sensor}/{seq}": {
+      "get": {
+        "description": "BN-52：`awr.sensor.camera_gt.v1` 容器（frame.v1 记录 + 实例、语义、invalid_mask 等块）；只对评测员及以上。\n`decode=raw` 返回块已解压的同格式容器（观测墙评测视图使用）。",
+        "operationId": "truth_frame_api_bench_v1_runs__rid__truth_frames__uav___sensor___seq__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "uav",
+            "required": true,
+            "schema": {
+              "title": "Uav",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sensor",
+            "required": true,
+            "schema": {
+              "title": "Sensor",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "seq",
+            "required": true,
+            "schema": {
+              "title": "Seq",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "decode",
+            "required": false,
+            "schema": {
+              "default": "none",
+              "enum": [
+                "none",
+                "raw"
+              ],
+              "title": "Decode",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Truth Frame",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305,
+          691
+        ],
+        "x-d3-bn": "BN-52",
+        "x-d3-role": "evaluator",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/session": {
+      "delete": {
+        "operationId": "delete_session_api_bench_v1_session_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete Session",
+        "x-awr-reasons": [
+          301,
+          302,
+          303
+        ],
+        "x-d3-bn": "BN-03",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      },
+      "get": {
+        "description": "BN-02：会话以 Cookie 访问时带签发与到期时刻（`exp - iat` ≤ 12 h）；bench token 直接调用时两者为 null。",
+        "operationId": "get_session_api_bench_v1_session_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Session Api Bench V1 Session Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Session",
+        "x-awr-reasons": [
+          301,
+          302
+        ],
+        "x-d3-bn": "BN-02",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      },
+      "post": {
+        "operationId": "create_session_api_bench_v1_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Session",
+        "x-awr-reasons": [
+          111,
+          302
+        ],
+        "x-d3-bn": "BN-01",
+        "x-d3-role": "none",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/session/short-token": {
+      "post": {
+        "operationId": "short_token_api_bench_v1_session_short_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShortIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Short Token Api Bench V1 Session Short Token Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Short Token",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          303
+        ],
+        "x-d3-bn": "BN-04",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/submissions": {
+      "get": {
+        "operationId": "listing_api_bench_v1_submissions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "track",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Track"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Listing Api Bench V1 Submissions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Listing",
+        "x-awr-reasons": [
+          301,
+          302
+        ],
+        "x-d3-bn": "BN-85",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      },
+      "post": {
+        "operationId": "create_api_bench_v1_submissions_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Api Bench V1 Submissions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Create",
+        "x-awr-reasons": [
+          301,
+          302,
+          303,
+          681,
+          682,
+          692
+        ],
+        "x-d3-bn": "BN-95",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/submissions/{sid}": {
+      "delete": {
+        "operationId": "withdraw_api_bench_v1_submissions__sid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          303,
+          305,
+          680
+        ],
+        "x-d3-bn": "BN-98",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      },
+      "get": {
+        "operationId": "detail_api_bench_v1_submissions__sid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Detail Api Bench V1 Submissions  Sid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detail",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305
+        ],
+        "x-d3-bn": "BN-96",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/submissions/{sid}/visibility": {
+      "post": {
+        "operationId": "visibility_api_bench_v1_submissions__sid__visibility_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Visibility Api Bench V1 Submissions  Sid  Visibility Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Visibility",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          303,
+          305,
+          680,
+          682
+        ],
+        "x-d3-bn": "BN-99",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/worlds": {
+      "get": {
+        "description": "BN-10：世界包列表；`events_count` 为引用该世界的事件数（按事件最新版本计）。",
+        "operationId": "worlds_api_bench_v1_worlds_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Worlds Api Bench V1 Worlds Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Worlds",
+        "x-awr-reasons": [
+          301,
+          302
+        ],
+        "x-d3-bn": "BN-10",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/worlds/{wid}": {
+      "get": {
+        "description": "BN-11：`{world_id, summary, events[]}`；`events[]` 为该世界上的事件（最新版本摘要）。",
+        "operationId": "world_api_bench_v1_worlds__wid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "wid",
+            "required": true,
+            "schema": {
+              "title": "Wid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response World Api Bench V1 Worlds  Wid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "World",
+        "x-awr-reasons": [
+          301,
+          302,
+          305
+        ],
+        "x-d3-bn": "BN-11",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    }
+  }
+}

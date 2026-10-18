@@ -13,7 +13,12 @@ Sandbox (D2, AWR-17 §17.5, API-AC-046): `--app sandbox` writes packages/contrac
 `awr.api.sandbox_main.openapi_for_snapshot()` (M11, WP-03) does not exist the document is the design table of
 tools/contracts/sandbox_api.py (SB-00 to SB-78); afterwards it is the live schema of the sandbox-api, like the D1 snapshot.
 
-Usage: python tools/contracts/gen_openapi.py [--check] [--app show|sandbox|all]   (default all)
+Bench (D3, AWR-17 §18.4 rule 6, API-AC-070, D3-AC-51): `--app bench` writes packages/contracts/bench/openapi/bench.openapi.snapshot.json,
+the live schema of the bench-api (`awr.bench.api.app.create_bench_app` over a throw-away data root). Every operation carries
+`x-d3-role` (minimum role actually enforced), `x-d3-bn`, `x-d3-stage` and `x-awr-reasons` (awr.bench.api.deps.annotate). The bench
+app needs the D3 environment (.venv-d3: mcap etc.), so `all` does not include it.
+
+Usage: python tools/contracts/gen_openapi.py [--check] [--app show|sandbox|bench|all]   (default all = show + sandbox)
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = ROOT / "packages" / "contracts" / "rest" / "openapi.snapshot.json"
 SANDBOX_SNAPSHOT = ROOT / "packages" / "contracts" / "rest" / "sandbox.openapi.snapshot.json"
+BENCH_SNAPSHOT = ROOT / "packages" / "contracts" / "bench" / "openapi" / "bench.openapi.snapshot.json"
 # environment the app reads while it is built; cleared so that the snapshot does not depend on the caller's shell
 _ENV_KEYS = ("AWR_PROFILE", "AWR_SUPERVISOR_PID", "AWR_SCENARIOS_DIR", "AWR_WORLDS_DIR", "AWR_RUNS_DIR", "AWR_WEB_DIST")
 
@@ -88,6 +94,21 @@ def sandbox_schema() -> dict:
     return sandbox_api.design_openapi(contracts_lib.contracts_version())
 
 
+def bench_schema() -> dict:
+    """Live bench-api schema; the app is built over a temporary data root (keys and bench.sqlite are created there and removed)."""
+    import tempfile
+
+    sys.path.insert(0, str(ROOT / "python"))
+    from awr.bench.api.app import create_bench_app
+    from awr.bench.settings import BenchSettings
+
+    with tempfile.TemporaryDirectory(prefix="awr-bench-openapi-") as tmp:
+        app = create_bench_app(BenchSettings(data_root=Path(tmp) / "d3"))
+        spec = _stable_operation_ids(app.openapi())
+        app.state.auth._db.close()
+    return spec
+
+
 def _one(path: Path, text: str, check: bool, label: str) -> int:
     if check:
         old = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -108,13 +129,15 @@ def _one(path: Path, text: str, check: bool, label: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="OpenAPI snapshots (packages/contracts/rest/{openapi,sandbox.openapi}.snapshot.json)")
     ap.add_argument("--check", action="store_true")
-    ap.add_argument("--app", choices=("show", "sandbox", "all"), default="all")
+    ap.add_argument("--app", choices=("show", "sandbox", "bench", "all"), default="all")
     a = ap.parse_args(argv)
     rc = 0
     if a.app in ("show", "all"):
         rc |= _one(SNAPSHOT, canonical(live_schema()), a.check, "api")
     if a.app in ("sandbox", "all"):
         rc |= _one(SANDBOX_SNAPSHOT, canonical(sandbox_schema()), a.check, "sandbox-api")
+    if a.app == "bench":
+        rc |= _one(BENCH_SNAPSHOT, canonical(bench_schema()), a.check, "bench-api")
     return rc
 
 

@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from awr.api.problem import ApiProblem, problem, uuid7
 from awr.bench.api import board, frames, runs, session, submissions, worlds
+from awr.bench.api.deps import annotate
 from awr.bench.api.frames import StoreCache
 from awr.bench.auth import BenchAuth
 from awr.bench.settings import BenchSettings
@@ -28,6 +29,7 @@ def create_bench_app(settings: BenchSettings) -> FastAPI:
     app.state.frame_stores = StoreCache()
     for r in (session.router, worlds.router, runs.router, frames.router, board.router, submissions.router):
         app.include_router(r, prefix=PREFIX)
+    annotate(app, PREFIX)                                        # OpenAPI x-d3-role、x-d3-stage、x-awr-reasons（D3-AC-51）
 
     @app.middleware("http")
     async def _headers(request: Request, call_next):

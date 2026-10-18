@@ -70,7 +70,10 @@ def test_session_cookie_csrf_and_short_token(env) -> None:
     r = c.post(f"{P}/session", json={"token": tok})
     assert r.status_code == 204 and "d3_session" in r.cookies
     assert "httponly" in r.headers["set-cookie"].lower() and "samesite=strict" in r.headers["set-cookie"].lower()
-    assert c.get(f"{P}/session").json() == {"principal": "alice", "role": "researcher", "projects": ["d3"], "via": "session"}
+    ss = c.get(f"{P}/session").json()
+    assert {k: ss[k] for k in ("principal", "role", "projects", "via")} == {"principal": "alice", "role": "researcher", "projects": ["d3"],
+                                                                           "via": "session"}
+    assert int(ss["exp_unix_ns"]) - int(ss["iat_unix_ns"]) == 43_200 * 10**9                    # 12 h（D3-AC-51）
     r = c.post(f"{P}/session/short-token", json={"aud": "frames"})
     assert r.status_code == 403 and r.json()["code"] == 303                     # Cookie 写请求缺 Origin 与 X-D3-CSRF
     h = {"Origin": ORIGIN, "X-D3-CSRF": "1"}
@@ -81,8 +84,8 @@ def test_session_cookie_csrf_and_short_token(env) -> None:
     bare = TestClient(app)
     assert bare.get(f"{P}/runs/cap-0001/frames/uav-01/cam0/1", headers={"Authorization": f"Bearer {st}"}).status_code == 200
     assert bare.get(f"{P}/meta", headers={"Authorization": f"Bearer {st}"}).json()["code"] == 302    # 短期令牌只用于帧接口
-    r = bare.get(f"{P}/meta", headers={"Authorization": f"Bearer {tok_inv}"})
-    assert r.status_code == 403 and r.json()["code"] == 115
+    r = bare.post(f"{P}/session/short-token", json={"aud": "frames"}, headers={"Authorization": f"Bearer {tok_inv}"})
+    assert r.status_code == 403 and r.json()["code"] == 115                                  # 短期令牌最低角色 researcher
     assert c.delete(f"{P}/session", headers=h).status_code == 204
     c.cookies.clear()
     assert c.get(f"{P}/session").status_code == 401

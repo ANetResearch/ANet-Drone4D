@@ -25,7 +25,7 @@ class ShortIn(BaseModel):
 
 
 @router.get("/meta")
-def meta(request: Request, p: Researcher) -> dict:
+def meta(request: Request, p: AnyMember) -> dict:
     return {"api": "bench", "version": 1, "contracts": CONTRACTS_VERSION, "stage": "P0a-1",
             "features": {"frames": True, "runs": "manage", "worlds": True, "events": "read"}, "server_unix_ns": time.time_ns()}
 
@@ -46,7 +46,10 @@ def create_session(body: SessionIn, request: Request) -> Response:
 
 @router.get("/session")
 def get_session(p: AnyMember) -> dict:
-    return {"principal": p.name, "role": p.role, "projects": list(p.projects), "via": p.via}
+    """BN-02：会话以 Cookie 访问时带签发与到期时刻（`exp - iat` ≤ 12 h）；bench token 直接调用时两者为 null。"""
+    ns = 1_000_000_000
+    return {"principal": p.name, "role": p.role, "projects": list(p.projects), "via": p.via,
+            "iat_unix_ns": str(p.iat * ns) if p.exp else None, "exp_unix_ns": str(p.exp * ns) if p.exp else None}
 
 
 @router.delete("/session", status_code=204)

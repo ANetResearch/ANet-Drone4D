@@ -150,7 +150,7 @@ def test_worlds_list_and_summary(env) -> None:
     for bad in ("nope", "_shared", "..", "a%2F..%2Fkeys"):
         r = c.get(f"{P}/worlds/{bad}", headers=h)
         assert r.status_code == 404 and r.json()["code"] == 305, bad
-    assert c.get(f"{P}/worlds", headers=h_inv).json()["code"] == 115                  # 受邀成员无世界接口（最低角色 researcher）
+    assert c.get(f"{P}/worlds", headers=h_inv).status_code == 200                       # 世界只读接口最低角色 invited（D3-AC-51）
     assert c.get(f"{P}/worlds").json()["code"] == 301
 
 
@@ -194,7 +194,7 @@ def test_events_list_and_detail(env) -> None:
     for url in (f"{P}/events/abc-crossing?version=9", f"{P}/events/nope", f"{P}/events/..%2Fkeys"):
         r = c.get(url, headers=h)
         assert r.status_code == 404 and r.json()["code"] == 305, url
-    assert c.get(f"{P}/events", headers=h_inv).json()["code"] == 115
+    assert c.get(f"{P}/events", headers=h_inv).json()["total"] == 3                     # dev 事件对受邀成员只读（D3-AC-51）
 
 
 # ------------------------------------------------------------------------------------------------------------- 状态机（库）
@@ -290,7 +290,7 @@ def test_cancel_endpoint(env) -> None:
     assert r.status_code == 409 and r.json()["detail"]["why"] == "unmanaged"
     assert c.delete(f"{P}/runs/run-nope000000", headers=h).json()["code"] == 305
     assert c.delete(f"{P}/runs/run-f000000001", headers=h_inv).json()["code"] == 115
-    tok = app.state.auth.issue_token("carol", "researcher")[1]
+    tok = app.state.auth.issue_token("carol", "researcher", ("d3",))[1]                # 同项目研究者（写操作限本人及所属项目）
     assert c.post(f"{P}/session", json={"token": tok}).status_code == 204
     _enqueue(st, "run-c000000001")
     r = c.delete(f"{P}/runs/run-c000000001")                                            # Cookie 写请求缺 Origin 与 X-D3-CSRF

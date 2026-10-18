@@ -10,6 +10,11 @@ D3-AC-51 `/lab/worlds`、`/lab/worlds/:wid`、`/lab/events`）。
   详情为 §7.3.1 编译状态载荷（`?version=` 缺省最新）。编译类失败以载荷中的 `reason{code, name, message, remedy, detail}` 返回。
 
 解析结果按文件 mtime 缓存；路径参数只接受 `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`，其余一律 404 `305`。
+
+角色（AWR-17 §18.3.5、§18.23.3；14 §21.2.5；D3-AC-51）：四个接口的最低角色为 `invited`。事件载荷带划分 `split`（`event.json` 或
+`plan.json` 的 `split`，缺省 `dev`）；受邀成员只见 dev 事件（列表与世界详情的 `events[]` 过滤 test 事件，详情 403 `115`，
+`why = invited_scope`）。划分取 `splits.json` 登记与事件声明中最严格者（`awr.bench.api.truth.event_split`）；研究者读取 test 事件
+的编译详情（含路线诊断与制品清单）403 `691`（M23 §7.3.3），列表项不受影响。
 """
 
 from __future__ import annotations
@@ -23,7 +28,9 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 
 from awr.api.problem import ApiProblem
-from awr.bench.api.deps import Researcher
+from awr.bench.api.deps import Invited, scope_error
+from awr.bench.api.truth import event_split, guard_event
+from awr.bench.auth import Principal
 from awr.bench.runs_store import reason_view
 
 __all__ = ["event_versions", "router", "world_item", "world_summary_doc"]
@@ -164,10 +171,10 @@ def _world_dir(request: Request, wid: str) -> Path:
 
 
 @router.get("/worlds")
-def worlds(request: Request, p: Researcher) -> dict:
+def worlds(request: Request, p: Invited) -> dict:
     """BN-10：世界包列表；`events_count` 为引用该世界的事件数（按事件最新版本计）。"""
     counts: dict[str, int] = {}
-    for e in _event_items(request):
+    for e in _event_items(request, p):
         wid = (e.get("world") or {}).get("id")
         if wid:
             counts[wid] = counts.get(wid, 0) + 1
@@ -182,14 +189,14 @@ def worlds(request: Request, p: Researcher) -> dict:
 
 
 @router.get("/worlds/{wid}")
-def world(wid: str, request: Request, p: Researcher) -> dict:
+def world(wid: str, request: Request, p: Invited) -> dict:
     """BN-11：`{world_id, summary, events[]}`；`events[]` 为该世界上的事件（最新版本摘要）。"""
     d = _world_dir(request, wid)
     try:
         s = _cache.get(("summary", str(d)), _world_files(d), lambda: world_summary_doc(d))
     except (OSError, ValueError, KeyError) as e:
         raise ApiProblem(305, detail={"world_id": wid, "why": "world_invalid", "error": type(e).__name__}) from None
-    evs = [e for e in _event_items(request) if (e.get("world") or {}).get("id") == wid]
+    evs = [e for e in _event_items(request, p) if (e.get("world") or {}).get("id") == wid]
     return {"world_id": wid, "summary": s, "events": evs}
 
 
@@ -241,7 +248,7 @@ def _version_doc(eid: str, v: int, vdir: Path) -> dict:
     dur_ms = plan.get("duration_ms")
     t = (rep or {}).get("tape") or ({k: tape.get(k) for k in ("content_sha256", "body_sha256", "n_actors", "n_ticks", "bytes")} if tape else None)
     mt = max((f.stat().st_mtime_ns for f in _vfiles(vdir) if f.exists()), default=vdir.stat().st_mtime_ns)
-    return {"event_id": eid, "version": v, "status": _status(vdir, rep), "strict": bool((rep or {}).get("strict", src.get("strict", True))),
+    return {"event_id": eid, "version": v, "split": str(src.get("split") or plan.get("split") or "dev"), "status": _status(vdir, rep), "strict": bool((rep or {}).get("strict", src.get("strict", True))),
             "name": src.get("name") or src.get("title"), "event_type": plan.get("event_type") or src.get("event_type"),
             "world": {"id": world.get("id"), "content_version": world.get("content_version") or world.get("contentVersion")},
             "duration_s": dur_ms / 1000.0 if dur_ms is not None else src.get("duration_s"),
@@ -258,7 +265,7 @@ def _version(eid: str, v: int, vdir: Path) -> dict:
     return _cache.get(("event", str(vdir)), _vfiles(vdir), lambda: _version_doc(eid, v, vdir))
 
 
-_LIST_KEYS = ("event_id", "version", "status", "strict", "name", "event_type", "world", "duration_s", "n_scripted", "n_background",
+_LIST_KEYS = ("event_id", "version", "split", "status", "strict", "name", "event_type", "world", "duration_s", "n_scripted", "n_background",
               "tape_content_sha256", "reason", "updated_unix_ns")
 
 
@@ -266,7 +273,12 @@ def _events_root(request: Request) -> Path:
     return Path(request.app.state.settings.data_root) / "events"
 
 
-def _event_items(request: Request) -> list[dict]:
+def _dev_only(p: Principal | None) -> bool:
+    return p is not None and not p.at_least("researcher")
+
+
+def _event_items(request: Request, p: Principal | None = None) -> list[dict]:
+    """每个事件最新版本的列表项；`p` 为受邀成员时只含 dev 事件。"""
     root = _events_root(request)
     if not root.is_dir():
         return []
@@ -278,24 +290,27 @@ def _event_items(request: Request) -> list[dict]:
             doc = _version(edir.name, vs[-1], edir / f"v{vs[-1]}")
         except (OSError, ValueError, KeyError, TypeError):
             continue
+        doc = {**doc, "split": event_split(request, edir.name, doc["split"])}
+        if _dev_only(p) and doc["split"] != "dev":
+            continue
         out.append({**{k: doc[k] for k in _LIST_KEYS}, "versions": len(vs)})
     return out
 
 
 @router.get("/events")
-def events(request: Request, p: Researcher, world: str | None = None, status: str | None = None, q: str | None = Query(None, max_length=80),
+def events(request: Request, p: Invited, world: str | None = None, status: str | None = None, q: str | None = Query(None, max_length=80),
            limit: int = Query(200, ge=1, le=500)) -> dict:
     """BN-20：事件列表与编译状态（每个事件的最新版本）；过滤 `world`、`status`（逗号分隔）、`q`（事件 id 或名称子串，不分大小写）。"""
     sts = None if status is None else {s.strip() for s in status.split(",") if s.strip()}
     if sts is not None and (bad := sorted(sts - set(_EVENT_STATUSES))):
         raise ApiProblem(300, status=400, detail={"status": bad, "allowed": list(_EVENT_STATUSES)})
-    items = [e for e in _event_items(request) if (world is None or e["world"]["id"] == world) and (sts is None or e["status"] in sts)
+    items = [e for e in _event_items(request, p) if (world is None or e["world"]["id"] == world) and (sts is None or e["status"] in sts)
              and (q is None or q.lower() in e["event_id"].lower() or q.lower() in str(e.get("name") or "").lower())]
     return {"items": items[:limit], "next_cursor": None, "total": len(items)}
 
 
 @router.get("/events/{eid}")
-def event(eid: str, request: Request, p: Researcher, version: int | None = Query(None, ge=1)) -> dict:
+def event(eid: str, request: Request, p: Invited, version: int | None = Query(None, ge=1)) -> dict:
     """BN-22：编译状态与结果（M23 §7.3.1）；`versions[]` 为全部版本的 `{version, status}`。"""
     edir = _events_root(request) / eid
     vs = event_versions(edir) if _ID.match(eid) else []
@@ -305,4 +320,8 @@ def event(eid: str, request: Request, p: Researcher, version: int | None = Query
     if v not in vs:
         raise ApiProblem(305, detail={"event_id": eid, "version": version})
     doc = _version(eid, v, edir / f"v{v}")
+    doc = {**doc, "split": event_split(request, eid, doc["split"])}
+    if _dev_only(p) and doc["split"] != "dev":
+        raise scope_error("invited_scope", event_id=eid, split=doc["split"])
+    guard_event(request, p, eid, doc["split"])                 # test 事件：评测员以下 691
     return {**doc, "latest_version": vs[-1], "versions": [{"version": x, "status": _version(eid, x, edir / f"v{x}")["status"]} for x in vs]}
