@@ -1,7 +1,8 @@
 """BN-85、BN-95、BN-96、BN-98、BN-99 内部提交（AWR-17 §18.23；M27 §6.7.9）。最低角色 `invited`；受邀成员只能访问本团队的提交
 （越权 403 `115`，`why = invited_scope`），研究员及以上可查看全部。团队取会话的首个项目（无项目时为本人）。提交登记到当前榜单
 版本；`visibility = board` 且已完成的提交在可见性切换时立即重算该版本榜单。当前版本切换后，旧榜单版本只读（D3-AC-57）：登记在旧版本上的
-提交不可再切换可见性（680 `board_frozen`），旧版本的 board.json 与 details.json 不再被重算。"""
+提交不可再进入榜单（680 `board_frozen`），撤回（改回 `private`）仍允许并由榜单读取侧立即隐藏（D3-AC-43），旧版本的 board.json 与
+details.json 不再被重算。"""
 
 from __future__ import annotations
 
@@ -100,15 +101,17 @@ async def visibility(sid: str, request: Request, p: AnyMember) -> dict:
     except ValueError:
         raise ApiProblem(682, detail={"why": "body"}) from None
     root = _boards_dir(request)
+    want = str((body or {}).get("visibility", ""))
     try:
         v = _scoped(st.get(sid), p)["_meta"]["board_version"]
         vs = _versions(root)
-        if v in vs and v != _current(root, vs):
+        frozen = v in vs and v != _current(root, vs)
+        if frozen and want != "private":                     # 撤回（private）始终允许：旧版本不重算，由榜单读取侧隐藏（D3-AC-43）
             raise SubmissionError(680, "board_frozen", board_version=v)
-        doc = st.set_visibility(sid, str((body or {}).get("visibility", "")))
+        doc = st.set_visibility(sid, want)
     except SubmissionError as e:
         _raise(e)
     bdir = root / doc["_meta"]["board_version"]
-    if doc["state"] == "DONE" and (bdir / "config.json").exists():
+    if doc["state"] == "DONE" and not frozen and (bdir / "config.json").exists():
         publish(bdir, st.board_view())
     return public_view(st.view(sid))

@@ -76,7 +76,7 @@ def test_board_versions_and_leaderboard(env) -> None:
     assert c.get(f"{P}/leaderboard?track=std9-l2", headers=h_inv).json()["detail"]["why"] == "track_unknown"
     assert c.get(f"{P}/leaderboard?lane=nope", headers=h_inv).json()["detail"]["why"] == "lane_unknown"
     assert c.get(f"{P}/leaderboard?board_version=zzz", headers=h_inv).json()["code"] == 305
-    assert c.get(f"{P}/leaderboard").json()["code"] == 301
+    assert c.get(f"{P}/leaderboard").json()["code"] == 305                                  # 匿名访问 404（D3-AC-43，tests/d3/board/test_visibility.py）
 
 
 def test_board_entry_detail(env) -> None:
