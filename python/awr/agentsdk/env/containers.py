@@ -3,11 +3,13 @@
 容器参数：`--network none`、只读根文件系统（`/tmp` 为 tmpfs）、`--cap-drop ALL`、`no-new-privileges`、非 root 用户（65534）、
 CPU、内存与进程数上限；入口为镜像缺省 CMD 或提交的 `entry.cmd`，`entry.env` 以 `-e` 传入（键须为大写标识符）。
 运行器本身在容器中（dmax 的 d3-gz）时，`docker -v` 的源路径须为宿主路径：`AWR_HOST_PATH_MAP="/repo=/data/…/d3dev"` 按前缀换算。
+Unix 套接字路径上限约 108 字节：运行目录较深时以 `AWR_AGENT_SOCK_ROOT` 指定短根目录（每机子目录 `<run 摘要>-<uav>`）。
 回收时把各容器日志尾部（64 KiB）写入 `agents/<uav>/container.log`。
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import subprocess
@@ -49,8 +51,10 @@ class AgentContainers:
         return re.sub(r"[^A-Za-z0-9_.-]", "-", f"d3-agent-{self.run_id}-{uav}")[:120]
 
     def start(self) -> None:
+        root = os.environ.get("AWR_AGENT_SOCK_ROOT")
+        tag = hashlib.sha256(f"{self.run_dir.resolve()}|{self.run_id}".encode()).hexdigest()[:10]
         for u in self.uavs:
-            d = self.run_dir / "agent_sock" / u
+            d = Path(root) / f"{tag}-{u}" if root else self.run_dir / "agent_sock" / u
             d.mkdir(parents=True, exist_ok=True)
             os.chmod(d, 0o755)
             self.hosts[u] = SocketAgentHost(u, d / "agent.sock", hello_timeout_s=self.hello_timeout_s, ready_timeout_s=self.ready_timeout_s)
@@ -99,9 +103,11 @@ class AgentContainers:
 
 
 def run_container_episode(env, run_dir: Path, image: str, *, cmd: Sequence[str] | None = None, entry_env: dict[str, str] | None = None,
-                          cpus: float = 1.0, mem_gb: float = 2.0, step_budget_s: float | None = None, docker: str = "docker") -> tuple[dict, dict]:
+                          cpus: float = 1.0, mem_gb: float = 2.0, step_budget_s: float | None = None, docker: str = "docker",
+                          hello_timeout_s: float = 60.0) -> tuple[dict, dict]:
     """→ (运行清单, 每机线协议统计与容器退出码)。容器在 Env reset 之前启动并完成 HELLO（Env 预滚期间 Agent 已就绪）。"""
-    ac = AgentContainers(run_dir, env.spec.run_id, env.possible_agents, image, cmd=cmd, env=entry_env, cpus=cpus, mem_gb=mem_gb, docker=docker)
+    ac = AgentContainers(run_dir, env.spec.run_id, env.possible_agents, image, cmd=cmd, env=entry_env, cpus=cpus, mem_gb=mem_gb, docker=docker,
+                         hello_timeout_s=hello_timeout_s)
     ac.start()
     try:
         ac.accept()

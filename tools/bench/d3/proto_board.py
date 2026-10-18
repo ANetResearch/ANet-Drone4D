@@ -2,7 +2,8 @@
 """tools/bench/d3/proto_board.py：P0a 原型榜（WP-D3-09、WP-D3-30）。按 run_spec 对参考基线 × 种子逐一运行 Env、评测并聚合成榜。
 
 每个 (策略, 种子) 一个独立子进程（Realistic 档各自启动 gz 实例），产出写入 `<out>/runs/<policy>-s<seed>/`，评测写入同目录
-`evaluation.json`；全部完成后写 `<out>/index.json`（评测行索引）、`<out>/board.json`（`bench/board.v1`）与 `<out>/details.json`（BN-84 条目详情）。已存在
+`evaluation.json`；全部完成后写 `<out>/index.json`（评测行索引）、`config.json` 与 `rows.jsonl`（榜单版本目录，`awr.bench.boardstore`），并重算
+`board.json`（`bench/board.v1`）与 `details.json`（BN-84 条目详情）；把 `<out>` 复制为 `<data_root>/boards/<board_version>` 即发布。已存在
 `evaluation.json` 的运行跳过（断点续跑）；`--physics kinematic` 用于开发自检（评测标注 `physics_not_ranked`，榜单以
 `allow_invalid` 放宽）。
 
@@ -73,7 +74,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seeds", help="comma-separated; default: run_spec seeds")
     ap.add_argument("--jobs", type=int, default=3)
     ap.add_argument("--physics", choices=("realistic", "kinematic"))
-    ap.add_argument("--board-version", default="proto-0")
     ap.add_argument("--n-boot", type=int, default=10_000)
     ap.add_argument("--agents", choices=("inproc", "container"), default="inproc",
                     help="container: each UAV agent in an isolated container over drone4d.bench.wire.v1 (formal runs)")
@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     if failures:
         (a.out / "failures.json").write_text(json.dumps(failures, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     sys.path.insert(0, str(ROOT / "python"))
-    from awr.bench.eval.aggregate import build_board, entry_details
+    from awr.bench.boardstore import append_rows, publish, slim_evaluation
 
     plan = json.loads((a.events_root / tag / f"v{rs['event'].get('version', 1)}" / "plan.json").read_text(encoding="utf-8"))
     index = [{"entry_id": f"baseline/{r['policy']}", "team": "D3 reference", "display_name": DISPLAY.get(r["policy"], r["policy"]), "baseline": True,
@@ -116,13 +116,19 @@ def main(argv: list[str] | None = None) -> int:
               "seed": r["seed"],
               "evaluation": str(Path(r["run_dir"]) / "evaluation.json")} for r in sorted(done, key=lambda r: (r["policy"], r["seed"]))]
     (a.out / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    rows = [{**r, "evaluation": json.loads(Path(r["evaluation"]).read_text(encoding="utf-8"))} for r in index]
     vehicles = sorted({f.get("vehicle_ref", "x500") for f in rs["fleet"]})
     track = {"fleet_ref": f"{len(rs['fleet'])}x-{'+'.join(vehicles)}", "obs_level": rs["obs_level"], "allow_invalid": physics != "realistic"}
-    board = build_board(rows, board_version=a.board_version, n_boot=a.n_boot, track=track)
-    (a.out / "board.json").write_text(json.dumps(board, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    (a.out / "details.json").write_text(json.dumps(entry_details(rows), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"{len(board['entries'])} entries, {len(rows)} runs, {len(failures)} failures -> {a.out / 'board.json'}")
+    gz_cfg = {k: v for k, v in gz.items() if v is not None}
+    cfg = {"run_spec": {**rs, "seeds": seeds}, "seeds": seeds, "events_root": str(a.events_root.resolve()), "worlds_root": str(a.worlds_root.resolve()),
+           "physics": physics,
+           "gz": gz_cfg, "agent_image": a.agent_image, "track": track, "track_id": index[0]["track"] if index else None,
+           "lane": plan["event_type"], "event_type": plan["event_type"], "event": tag}
+    (a.out / "config.json").write_text(json.dumps(cfg, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    (a.out / "rows.jsonl").unlink(missing_ok=True)
+    append_rows(a.out, [{**{k: v for k, v in r.items() if k != "evaluation"}, "evaluation": slim_evaluation(json.loads(Path(r["evaluation"]).read_text(encoding="utf-8")))}
+                        for r in index])
+    board = publish(a.out, n_boot=a.n_boot)
+    print(f"{len(board['entries'])} entries, {len(index)} runs, {len(failures)} failures -> {a.out / 'board.json'}")
     return 1 if failures else 0
 
 

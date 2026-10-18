@@ -25,6 +25,8 @@ class SocketAgentHost:
     def __init__(self, uav: str, sock_path: Path, *, hello_timeout_s: float = 60.0, ready_timeout_s: float = 30.0) -> None:
         self.uav, self.path = uav, Path(sock_path)
         self.hello_timeout_s, self.ready_timeout_s = hello_timeout_s, ready_timeout_s
+        if len(os.fsencode(self.path)) > 100:
+            raise ValueError(f"agent socket path is {len(os.fsencode(self.path))} bytes (AF_UNIX limit ~108); set AWR_AGENT_SOCK_ROOT to a short directory")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists():
             self.path.unlink()

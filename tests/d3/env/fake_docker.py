@@ -76,6 +76,12 @@ elif cmd == "kill":
     if pid:
         with contextlib.suppress(ProcessLookupError):
             os.killpg(pid, signal.SIGKILL)
+elif cmd == "image" and a[1] == "inspect":
+    ref = a[2]
+    if ref == "sha256:" + "0" * 64:
+        print("No such image", file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps({"Id": ref, "Os": "linux", "Architecture": "amd64", "Size": 123456}))
 elif cmd == "rm":
     for f in st.glob(f"{a[-1]}.pid"):
         f.unlink()

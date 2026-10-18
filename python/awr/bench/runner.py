@@ -28,7 +28,8 @@ def _agent(policy: dict, agent_image: str) -> tuple[str, list[str], dict[str, st
 
 def run_job(rs: dict, *, policy: dict, seed: int, run_id: str, run_dir: Path, worlds_root: Path, events_root: Path,
             physics: str | None = None, gz: dict | None = None, agent_image: str = AGENT_IMAGE, cpus: float = 1.0, mem_gb: float = 2.0,
-            step_budget_s: float | None = None, duration_s: float | None = None) -> dict:
+            step_budget_s: float | None = None, duration_s: float | None = None, docker: str = "docker",
+            hello_timeout_s: float = 60.0) -> dict:
     from awr.agentsdk.env.containers import run_container_episode
     from awr.agentsdk.env.core import BenchEnv, _open_world
     from awr.agentsdk.env.spec import EnvSpec
@@ -43,7 +44,7 @@ def run_job(rs: dict, *, policy: dict, seed: int, run_id: str, run_dir: Path, wo
     image, cmd, env = _agent(policy, agent_image)
     t0 = time.time()
     manifest, stats = run_container_episode(BenchEnv(spec), run_dir, image, cmd=cmd, entry_env=env, cpus=cpus, mem_gb=mem_gb,
-                                            step_budget_s=step_budget_s)
+                                            step_budget_s=step_budget_s, docker=docker, hello_timeout_s=hello_timeout_s)
     t1 = time.time()
     (run_dir / "agents").mkdir(parents=True, exist_ok=True)
     (run_dir / "agents" / "wire_stats.json").write_text(json.dumps(stats, indent=1, sort_keys=True) + "\n", encoding="utf-8")
