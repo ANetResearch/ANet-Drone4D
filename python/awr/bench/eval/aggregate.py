@@ -16,7 +16,7 @@ import numpy as np
 
 from awr.bench.eval.thresholds import EVALUATOR_VERSION, SCORE_VERSION
 
-__all__ = ["METRICS", "build_board", "lane_metrics"]
+__all__ = ["METRICS", "build_board", "entry_details", "lane_metrics"]
 
 METRICS = ("ec", "eu", "ao", "ce")
 N_BOOT = 10_000
@@ -155,3 +155,26 @@ def _dominates(a: dict, b: dict, ba: np.ndarray, bb: np.ndarray) -> bool:
     if any(x < y for x, y in zip(va, vb, strict=True)):
         return False
     return any(_paired_diff_ci(ba[:, j], bb[:, j])[0] > 0 for j in range(len(METRICS)))
+
+
+def entry_details(rows: list[dict]) -> dict[str, dict]:
+    """BN-84 条目详情：entry_id → 按（分轨、赛道、test 事件）分解的四项指标均值、Run 数与无效 Run 数（不含合成值；
+    `repeat_delta` 在 P0a 无重复运行，为 null）。"""
+    groups: dict[tuple[str, str, str, str], list[dict]] = defaultdict(list)
+    for r in rows:
+        groups[(r["entry_id"], r["track"], r["lane"], r["event"])].append(r)
+    out: dict[str, dict] = {}
+    for (eid, tr, lane, ev), rs in sorted(groups.items()):
+        valid = [r for r in rs if r["evaluation"]["ranked_valid"]]
+        use = valid or rs
+        met = {}
+        for m in METRICS:
+            vals = [r["evaluation"]["components"][m] for r in use if r["evaluation"]["components"].get(m) is not None]
+            met[m] = float(np.mean(vals)) if vals else None
+        reasons = sorted({x for r in rs for x in r["evaluation"].get("invalid_reasons", [])})
+        d = out.setdefault(eid, {"entry_id": eid, "display_name": rs[0].get("display_name", eid), "baseline": bool(rs[0].get("baseline")),
+                                 "tracks": {}})
+        lanes = d["tracks"].setdefault(tr, {})
+        lanes.setdefault(lane, []).append({"event": ev, "n_runs": len(rs), "invalid_runs": len(rs) - len(valid), "invalid_reasons": reasons,
+                                           "seeds": sorted({int(r.get("seed", 0)) for r in rs}), "metrics": met, "repeat_delta": None})
+    return out

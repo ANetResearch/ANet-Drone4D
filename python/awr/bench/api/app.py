@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from awr.api.problem import ApiProblem, problem, uuid7
-from awr.bench.api import frames, session
+from awr.bench.api import board, frames, session
 from awr.bench.api.frames import StoreCache
 from awr.bench.auth import BenchAuth
 from awr.bench.settings import BenchSettings
@@ -22,7 +22,7 @@ def create_bench_app(settings: BenchSettings) -> FastAPI:
     app.state.settings = settings
     app.state.auth = BenchAuth(settings.keys_dir, settings.db_path, session_ttl_s=settings.session_ttl_s, short_ttl_s=settings.short_ttl_s)
     app.state.frame_stores = StoreCache()
-    for r in (session.router, frames.router):
+    for r in (session.router, frames.router, board.router):
         app.include_router(r, prefix=PREFIX)
 
     @app.middleware("http")

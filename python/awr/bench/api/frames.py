@@ -19,7 +19,7 @@ from awr.bench.api.deps import FrameReader, Researcher, TruthReader
 from awr.bench.recorder.read import FrameLimitError, FrameStore, TruthStore
 from awr.bench.recorder.truth import CONTENT_TYPE as GT_CONTENT_TYPE
 from awr.bench.recorder.truth import decode_blocks, pack_camera_gt, unpack_camera_gt
-from awr.bench.runs_store import find_run, list_runs, truth_paths
+from awr.bench.runs_store import env_run_item, find_run, list_runs, truth_paths
 
 router = APIRouter()
 _IMMUTABLE = "private, max-age=31536000, immutable"
@@ -81,6 +81,10 @@ def run(rid: str, request: Request, p: Researcher) -> dict:
     doc = json.loads(m.read_text(encoding="utf-8")) if m.exists() else {}
     out = {"run_id": rid, "event_id": d.parent.parent.name, "state": doc.get("state", "UNKNOWN"), "kind": doc.get("kind"),
            "world_id": doc.get("world_id"), "fleet": doc.get("fleet", [])}
+    env = d / "manifest.json"
+    if not doc and env.exists():
+        man = json.loads(env.read_text(encoding="utf-8"))
+        out.update(env_run_item(d, man))
     ev = doc.get("event")
     if ev:
         out["event"] = {"event_id": ev["event_id"], "version": ev["version"], "offset_s": ev.get("offset_s", 0.0)}

@@ -2,7 +2,7 @@
 """tools/bench/d3/proto_board.py：P0a 原型榜（WP-D3-09、WP-D3-30）。按 run_spec 对参考基线 × 种子逐一运行 Env、评测并聚合成榜。
 
 每个 (策略, 种子) 一个独立子进程（Realistic 档各自启动 gz 实例），产出写入 `<out>/runs/<policy>-s<seed>/`，评测写入同目录
-`evaluation.json`；全部完成后写 `<out>/index.json`（评测行索引）与 `<out>/board.json`（`bench/board.v1`）。已存在
+`evaluation.json`；全部完成后写 `<out>/index.json`（评测行索引）、`<out>/board.json`（`bench/board.v1`）与 `<out>/details.json`（BN-84 条目详情）。已存在
 `evaluation.json` 的运行跳过（断点续跑）；`--physics kinematic` 用于开发自检（评测标注 `physics_not_ranked`，榜单以
 `allow_invalid` 放宽）。
 
@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     if failures:
         (a.out / "failures.json").write_text(json.dumps(failures, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     sys.path.insert(0, str(ROOT / "python"))
-    from awr.bench.eval.aggregate import build_board
+    from awr.bench.eval.aggregate import build_board, entry_details
 
     plan = json.loads((a.events_root / tag / f"v{rs['event'].get('version', 1)}" / "plan.json").read_text(encoding="utf-8"))
     index = [{"entry_id": f"baseline/{r['policy']}", "team": "D3 reference", "display_name": DISPLAY.get(r["policy"], r["policy"]), "baseline": True,
@@ -111,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     track = {"fleet_ref": f"{len(rs['fleet'])}x-{'+'.join(vehicles)}", "obs_level": rs["obs_level"], "allow_invalid": physics != "realistic"}
     board = build_board(rows, board_version=a.board_version, n_boot=a.n_boot, track=track)
     (a.out / "board.json").write_text(json.dumps(board, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    (a.out / "details.json").write_text(json.dumps(entry_details(rows), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"{len(board['entries'])} entries, {len(rows)} runs, {len(failures)} failures -> {a.out / 'board.json'}")
     return 1 if failures else 0
 
