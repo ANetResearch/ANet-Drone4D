@@ -1,4 +1,7 @@
-"""运行数据装载（Env 运行目录 + 事件版本目录）：检测真值映射、report、真值机队轨迹、链路记录与磁带状态。"""
+"""运行数据装载（Env 运行目录 + 事件版本目录）：检测真值映射、report、真值机队轨迹、链路记录与磁带状态。
+
+识别真值行 `l1`：L1 运行取检测真值映射（truth/l1.jsonl），L2 运行取相机帧可见度归约（truth/l2.jsonl，含 `bbox_xywh`），两者键相同
+（uav、seq、actor、h_unocc_px、vis）；`vis_boxes[(uav, seq)]` 为 L2 帧内可见演员框，供 EU 的框证据关联。"""
 
 from __future__ import annotations
 
@@ -42,6 +45,7 @@ class RunData:
     fleet: dict
     tape: object
     det_actor: dict[tuple[str, int, str], dict]
+    vis_boxes: dict[tuple[str, int], list[dict]]
 
     @property
     def uavs(self) -> list[str]:
@@ -76,8 +80,12 @@ def load_run(run_dir: Path, event_dir: Path) -> RunData:
 
     d = Path(run_dir)
     l1 = _jsonl(d / "truth" / "l1.jsonl")
+    l2 = _jsonl(d / "truth" / "l2.jsonl")
+    boxes: dict[tuple[str, int], list[dict]] = {}
+    for r in l2:
+        boxes.setdefault((r["uav"], int(r["seq"])), []).append(r)
     fz = np.load(d / "truth" / "fleet.npz")
     fleet = {k: fz[k] for k in fz.files}
-    return RunData(d, Path(event_dir), json.loads((d / "manifest.json").read_text()), json.loads((d / "task.json").read_text()), l1,
+    return RunData(d, Path(event_dir), json.loads((d / "manifest.json").read_text()), json.loads((d / "task.json").read_text()), l2 or l1,
                    _jsonl(d / "reports.jsonl"), _jsonl(d / "net" / "records.jsonl"), _jsonl(d / "truth" / "contacts.jsonl"), fleet,
-                   open_tape(Path(event_dir)), {(r["uav"], int(r["seq"]), r["det_id"]): r for r in l1})
+                   open_tape(Path(event_dir)), {(r["uav"], int(r["seq"]), r["det_id"]): r for r in l1}, boxes)

@@ -1,4 +1,5 @@
-"""BenchEnv（M26 §6.6.1；P0a）：lockstep 主循环、观测投影（L1）、决策时延与动作注入，PettingZoo Parallel 风格接口。
+"""BenchEnv（M26 §6.6.1；P0a）：lockstep 主循环、观测投影（L1 检测级；L2、L2-depth 渲染级见 `env.l2`）、决策时延与动作注入，
+PettingZoo Parallel 风格接口。
 
     env = BenchEnv(spec)
     obs, infos = env.reset()                      # {uav: {"obs": Observation, "inbox": [Message]}}，只含本 tick 应调用的 Agent
@@ -9,7 +10,8 @@
 
 时序：控制步 100 ms；tick k 的观测取 t_k 的真值与导航解，L1 检测取 (t_last, t_k] 内的相机帧（10 Hz，帧序号 = tick）；动作在
 `apply_tick = k_obs + max(1, ⌈τ / 100 ms⌉)` 生效（固定延迟生效、未到即阻塞），在途期间不再调用该 Agent；物理档 `advance(k)` 推进
-(t_k, t_{k+1}]。goto 目标解释在本机导航系，每个控制步按当前导航误差换算为真值系目标（变化 ≥ 5 cm 时更新跟踪器）。
+(t_k, t_{k+1}]。L2 的传感器帧在 tick 末按物理档样本渲染，Agent 未被调用的 tick 的帧累积到下一次观测（按 seq 升序）。
+goto 目标解释在本机导航系，每个控制步按当前导航误差换算为真值系目标（变化 ≥ 5 cm 时更新跟踪器）。
 未返回动作的 Agent 计超时（回执 `timeout`），沿用上一导航指令。回合在事件时长到达或全部机体终止时结束。
 """
 
@@ -53,6 +55,7 @@ class _Agent:
         self.acks: list[dict] = []
         self.inbox: list[dict] = []
         self.dets: list[dict] = []
+        self.frames: dict[str, list[dict]] = {}
         self.cmd_kind = "hover"
         self.goto_nav: np.ndarray | None = None
         self.goto_true: np.ndarray | None = None
@@ -65,11 +68,13 @@ class _Agent:
 
 
 class BenchEnv:
-    def __init__(self, spec: EnvSpec, *, world=None, tape=None, tier=None, cam: CameraModel | None = None, limits: Limits | None = None) -> None:
+    def __init__(self, spec: EnvSpec, *, world=None, tape=None, tier=None, cam: CameraModel | None = None, limits: Limits | None = None,
+                 l2=None) -> None:
+        """`l2`：L2 传感器工厂 `(env) -> L2Sensors`（测试注入 CPU 渲染替身）；缺省按 `spec.l2` 构造 EGL 光栅相机。"""
         from awr.sim.events.tape import open_tape
 
-        if spec.obs_level != "L1":
-            raise ValueError(f"obs_level {spec.obs_level!r}: the P0a Env projects L1 only (L2 via the M25 frame path)")
+        if spec.obs_level not in ("L1", "L2", "L2-depth"):
+            raise ValueError(f"obs_level {spec.obs_level!r}: ranked Env runs are L1, L2 or L2-depth")
         self.spec = spec
         self.uavs = [f.uav for f in spec.fleet]
         self.tape = tape or open_tape(Path(spec.event_dir))
@@ -84,11 +89,35 @@ class BenchEnv:
         self.link = LinkModel(spec.seed, tuple(self.uavs), self.world, self.tape, spec.comm)
         self.rec = EnvRecorder(spec.out_dir)
         self._tier = tier
+        self._l2_factory = l2
+        self.l2 = None
         self.possible_agents = list(self.uavs)
         self.agents: list[str] = []
         self.k = 0
 
     # ------------------------------------------------------------------ 组装
+    def _make_l2(self):
+        import json as _json
+
+        from awr.agentsdk.env.l2 import L2Config, L2Sensors
+
+        wd = Path(self.spec.world_dir)
+        meta = _json.loads((wd / "world.json").read_text(encoding="utf-8")) if (wd / "world.json").is_file() else {}
+        cfg = L2Config(**{k: v for k, v in (self.spec.l2 or {}).items() if k in ("camera_profile", "jpeg_quality", "lidar", "imu", "gnss")})
+        return L2Sensors(world_dir=wd, tape=self.tape, uavs=self.uavs, seed=self.spec.seed, noise=self.spec.noise, obs_level=self.spec.obs_level,
+                         nav=self.nav, mount_t_bs_m=self.cam.mount_t_bs_m, hfov_deg=self.cam.hfov_deg, cfg=cfg, world_meta=meta)
+
+    def _feed_l2(self, k_prev: int) -> None:
+        """物理档 (t_{k_prev}, t_k] 的样本与 t_k 的云台角交给 L2 传感器。"""
+        if self.l2 is None:
+            return
+        t = self.k * TICK_NS
+        for u in self.uavs:
+            sl = self.tier.history.slice(u, k_prev * TICK_NS, t)
+            self.l2.ingest(u, sl.t_ns, sl.state)
+            g = self.gim[u]
+            self.l2.gimbal(u, t, g.yaw_deg, g.pitch_deg)
+
     def _make_tier(self):
         if self._tier is not None:
             return self._tier
@@ -111,7 +140,7 @@ class BenchEnv:
         e = self.nav.error(self.uavs.index(uav), 0)
         return {"schema": "drone4d.bench.agent_config.v1", "uav_id": uav, "kind": "uav", "peers": [u for u in self.uavs if u != uav],
                 "vehicle": {"ref": f.vehicle_ref, "limits": self.lim.config(), "endurance_s": self.nav.endurance_s},
-                "sensors": [self.cam.config()],
+                "sensors": self.l2.configs(self.cam.config()) if self.l2 is not None else [self.cam.config()],
                 "start": {"kind": "pose", "state": "airborne" if f.airborne else "landed",
                           "nav_pos_enu_m": [float(x) for x in np.asarray(f.pos_enu_m) + e]},
                 "obs_level": self.spec.obs_level, "control_hz": 10, "decision": self.spec.decision.config(),
@@ -128,6 +157,8 @@ class BenchEnv:
             raise ValueError("the run seed is fixed by the run specification")
         self.tier = self._make_tier()
         self.tier.open()
+        if self.spec.obs_level != "L1":
+            self.l2 = self._l2_factory(self) if self._l2_factory is not None else self._make_l2()
         self.st = {u: _Agent(u, i) for i, u in enumerate(self.uavs)}
         self.gim = {u: Gimbal(cam=self.cam) for u in self.uavs}
         self.guard = {u: ActionGuard(u, [p for p in self.uavs if p != u], self.lim, self.task["report_types"], self.spec.comm.enabled,
@@ -144,6 +175,7 @@ class BenchEnv:
         for u, c in self.configs.items():
             self.rec.write_json(f"agents/{u}/config.json", c)
         self._t0 = time.perf_counter()
+        self._feed_l2(0)
         self._sense(0)
         self._log_fleet()
         return self._observe(), {u: {"config": self.configs[u]} for u in self.uavs}
@@ -245,6 +277,7 @@ class BenchEnv:
         for item in [p for p in self.pending_gim if p[0] <= self.k]:
             self.gim[item[1]].command(*item[2])
         self.pending_gim = [p for p in self.pending_gim if p[0] > self.k]
+        self._feed_l2(k)
         self.link.refill(TICK_MS / 1000.0)
         pos = {u: self._row(u)[0:3] for u in self.uavs}
         for apply_tick, u, msgs in [p for p in self.pending_tx if p[0] <= self.k]:
@@ -266,6 +299,13 @@ class BenchEnv:
         env = self.tape.env_at(t)
         for u, a in self.st.items():
             if a.done or self.status[u] == VehicleStatus.CRASHED:
+                continue
+            if self.l2 is not None:
+                frames, truth = self.l2.sense(u, a.no, k)
+                for sid, fs in frames.items():
+                    a.frames.setdefault(sid, []).extend(fs)
+                for tr in truth:
+                    self.rec.on_vis(tr)
                 continue
             row = self._row(u)
             yaw = _yaw(row[3:7])
@@ -294,13 +334,13 @@ class BenchEnv:
                               "contact": st in (VehicleStatus.GROUNDED, VehicleStatus.CRASHED),
                               "safety": "low_battery" if nav["battery_soc"] < 0.2 else "normal", "locked_sensors": []},
                    "ground_hint": {"dsm_m": float(self.world.height_dsm(xy)[0]), "dtm_m": float(self.world.ground_dtm(xy)[0])},
-                   "sensors": {"detections": a.dets}, "acks": a.acks, "comm": self.link.status(u), "dropped": {},
+                   "sensors": a.frames if self.l2 is not None else {"detections": a.dets}, "acks": a.acks, "comm": self.link.status(u), "dropped": {},
                    "term": a.term if (a.term["terminated"] or a.term["truncated"]) else {"terminated": False, "truncated": False, "reason": "none"}}
             msg = {"obs": obs, "inbox": a.inbox}
             self.guard[u].saw(a.dets)
             self.rec.on_obs(u, self.k, msg)
             out[u] = msg
-            a.dets, a.acks, a.inbox = [], [], []
+            a.dets, a.acks, a.inbox, a.frames = [], [], [], {}
             a.k_obs = self.k
         return out
 
@@ -315,6 +355,8 @@ class BenchEnv:
 
     def close(self) -> dict:
         info = self.tier.close() if hasattr(self, "tier") else {}
+        if self.l2 is not None:
+            self.l2.close()
         wall = time.perf_counter() - self._t0 if hasattr(self, "_t0") else 0.0
         self.rec.net(self.link.records)
         self.rec.fleet(self.uavs, self._fleet_t, self._fleet["pos"], self._fleet["vel"], self._fleet["yaw"], self._fleet["nav"],

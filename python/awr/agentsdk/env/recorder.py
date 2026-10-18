@@ -10,6 +10,7 @@
       net/records.jsonl             链路逐条记录
       truth/fleet.npz               每 tick 末真值位姿与导航位置（t_ns、pos、vel、yaw、nav、status）
       truth/l1.jsonl                L1 检测的真值映射（uav、seq、t_ns、det_id、actor、h_px、h_unocc_px、vis、ident、delivered）
+      truth/l2.jsonl                L2 相机帧的可见度归约（uav、sensor、seq、t_ns、actor、h_unocc_px、vis、bbox_xywh）
       truth/contacts.jsonl          接触事件
       truth/run_seed.json           运行种子（真值层；评测与审计用，不对 Agent 可见）
 """
@@ -87,6 +88,9 @@ class EnvRecorder:
     def on_l1(self, uav: str, seq: int, t_ns: int, det: dict, truth: dict) -> None:
         self._line("truth/l1.jsonl", {"uav": uav, "seq": seq, "t_ns": t_ns, "det_id": det["det_id"], "class": det["class"], "h_px": det["h_px"],
                                       **{k: truth[k] for k in ("actor", "h_unocc_px", "vis", "ident")}})
+
+    def on_vis(self, row: dict) -> None:
+        self._line("truth/l2.jsonl", row)
 
     def on_contact(self, ev) -> None:
         self._line("truth/contacts.jsonl", {"uav": ev.uav, "t_ns": ev.t_ns, "kind": ev.kind, "detector": ev.detector,

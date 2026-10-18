@@ -1,4 +1,4 @@
-"""事件理解 EU v0（M27 §6.7.6 `event_understanding`）：参与者以证据多数表决关联到演员（平票为未解析），
+"""事件理解 EU v0（M27 §6.7.6 `event_understanding`）：参与者以证据多数表决关联到演员（平票为未解析；L1 按 det_id，L2 按框 IoU），
 report 与计分事件一对一匹配（类型对应、时间差 ≤ 15 s、参与者集合相等），先最大化匹配数再最小化 Σ dt。时间差取 report 区间
 与事件区间的间隔（重叠为 0；长时段事件不因区间中点偏移而误判），同间隔以区间中点差的千分之一定序。"""
 
@@ -14,13 +14,29 @@ from awr.bench.eval.thresholds import TH
 __all__ = ["event_understanding", "resolve"]
 
 
-def resolve(par: dict, run) -> str | None:
+def _iou(a, b) -> float:
+    ax, ay, aw, ah = (float(v) for v in a)
+    bx, by, bw, bh = (float(v) for v in b)
+    iw = max(0.0, min(ax + aw, bx + bw) - max(ax, bx))
+    ih = max(0.0, min(ay + ah, by + bh) - max(ay, by))
+    inter = iw * ih
+    union = aw * ah + bw * bh - inter
+    return inter / union if union > 0 else 0.0
+
+
+def resolve(par: dict, run, th=TH) -> str | None:
+    """证据多数表决：L1 `det_id` 经检测真值映射；L2 `bbox_xywh` 取同帧可见演员框中 IoU 最大且 ≥ `eu_iou` 者。"""
     votes: Counter = Counter()
     for ev in par["evidence"]:
         if "det_id" in ev:
             r = run.det_actor.get((ev["uav"], int(ev["frame_seq"]), ev["det_id"]))
             if r is not None:
                 votes[r["actor"]] += 1
+        elif "bbox_xywh" in ev:
+            best = max(((_iou(ev["bbox_xywh"], b["bbox_xywh"]), b["actor"]) for b in run.vis_boxes.get((ev["uav"], int(ev["frame_seq"])), [])),
+                       default=(0.0, None))
+            if best[1] is not None and best[0] >= th.eu_iou:
+                votes[best[1]] += 1
     top = votes.most_common(2)
     if not top or (len(top) == 2 and top[0][1] == top[1][1]):
         return None

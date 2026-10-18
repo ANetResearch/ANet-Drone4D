@@ -57,6 +57,7 @@ class EnvSpec:
     policy: dict = field(default_factory=lambda: {"kind": "sdk"})
     out_dir: Path | None = None                  # 运行目录；None 不写盘
     gz: dict = field(default_factory=dict)       # GzInstance 选项（launcher、image、run_dir、export_root）
+    l2: dict = field(default_factory=dict)       # L2 传感器开关（lidar、imu、gnss；env.l2.L2Config），取自 fleet[].sensors[].enabled
 
     @classmethod
     def from_run_spec(cls, rs: dict, *, run_id: str, seed: int, worlds_root: Path, events_root: Path, out_dir: Path | None = None,
@@ -73,8 +74,10 @@ class EnvSpec:
         comm = CommCfg(enabled=c.get("enabled", True), bucket_Bps=c.get("bucket_Bps", 125_000), burst_B=c.get("burst_B", 125_000),
                        msg_max_B=c.get("msg_max_B", 4096), model=c.get("model", "fspl-nlos@1"))
         ev = rs["event"]
+        en = {x["sensor_id"]: bool(x.get("enabled", True)) for f in rs["fleet"] for x in f.get("sensors", [])}
+        l2 = {k: en[sid] for k, sid in (("lidar", "lidar0"), ("imu", "lidar0_imu"), ("gnss", "gnss0")) if sid in en}
         return cls(run_id=run_id, seed=int(seed), world_dir=Path(worlds_root) / rs["world"]["id"],
                    event_dir=Path(events_root) / ev["id"] / f"v{ev.get('version', 1)}", fleet=tuple(fleet),
                    obs_level=rs["obs_level"], noise=rs.get("noise", "realistic"), physics=physics or rs.get("physics", "realistic"),
                    duration_s=rs.get("duration_s"), decision=DecisionCfg(**dec), comm=comm, ranked=bool(rs.get("ranked", False)),
-                   policy=dict(rs.get("policy", {"kind": "sdk"})), out_dir=out_dir, gz=dict(gz or {}))
+                   policy=dict(rs.get("policy", {"kind": "sdk"})), out_dir=out_dir, gz=dict(gz or {}), l2=l2)
