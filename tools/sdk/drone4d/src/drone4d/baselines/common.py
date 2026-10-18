@@ -7,7 +7,10 @@
   其间至少 20 帧两人同帧被检测（排除同一人的分裂轨迹）；
 - `board`：人员轨迹在静止车辆（轨迹拟合 ≥ 2 s、速度 < 1 m/s）4 m 内消失（≥ 2 s 未再关联），该车随后 60 s 内启动（> 1.5 m/s）时确认；
 - `enter_building`：人员轨迹在公开门锚点 4 m 内消失 ≥ 5 s，其后门旁未再出现人员，附近无车辆。
-每条 report 附各参与者最近 3 个检测作为证据（uav、sensor、frame_seq、det_id）；每辆车、每个门只报一次，同类型 30 s 内只报一次。
+每条 report 附各参与者最近 3 个检测作为证据（uav、sensor、frame_seq、det_id；L2 为 bbox_xywh）；每辆车、每个门只报一次，同类型 30 s
+内只报一次。
+
+L2、L2-depth：检测由参考检测器 `ref_det_v1` 与感知适配层（`drone4d.perception.ref_det.L2Perception`）从相机图像得到，形同 L1 检测。
 """
 
 from __future__ import annotations
@@ -103,7 +106,8 @@ class Tracks:
                 best.fit()
                 if "appearance" in d:
                     best.rgb = tuple(d["appearance"]["top_rgb"])
-                best.ev = ([*best.ev, {"uav": self.uav, "sensor": d["sensor_id"], "frame_seq": d["seq"], "det_id": d["det_id"]}])[-3:]
+                ev = {"bbox_xywh": d["bbox_xywh"]} if d.get("l2") else {"det_id": d["det_id"]}
+                best.ev = ([*best.ev, {"uav": self.uav, "sensor": d["sensor_id"], "frame_seq": d["seq"], **ev}])[-3:]
                 used.add(best.tid)
                 touched.append(best)
         for tr in self.items:
@@ -141,6 +145,11 @@ class BaselineAgent(DroneAgent):
         self.vocab = set(b["report_vocab"])
         self.cam = next(s["sensor_id"] for s in config["sensors"] if s["kind"] == "camera")
         self.tracks = Tracks(self.uav)
+        self.perception = None
+        if config.get("obs_level") in ("L2", "L2-depth"):
+            from drone4d.perception.ref_det import L2Perception
+
+            self.perception = L2Perception(config)
         self.reported: set[tuple] = set()
         self.board_cand: dict[str, tuple[str, int]] = {}
         self.suppress: dict[str, int] = {}
@@ -156,7 +165,7 @@ class BaselineAgent(DroneAgent):
         self.pos = nav["pos_enu_m"]
         if self.ground_ref is None:
             self.ground_ref = obs["ground_hint"]["dtm_m"]
-        dets = obs["sensors"].get("detections", [])
+        dets = self.perception.detect(obs) if self.perception is not None else obs["sensors"].get("detections", [])
         self.tracks.update(dets, obs["t_ns"])
         msgs, reports = self.on_inbox(inbox), self.reports(obs["t_ns"])
         st = obs["status"]["mode"]
