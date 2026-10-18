@@ -7,7 +7,8 @@
 缺省 realistic）与 `seed`（run_seed，缺省 0）选择效果链与噪声档（M25 §6.5；`camera.effects`）：RGB 经曝光、渐晕、噪声与 ISP，
 观测深度经 L2-depth 传感器模型（均在 GPU 编码遍内），云台读数加编码器噪声；真值深度与真值云台角不变。规格可选 `event`
 （`{path: 事件版本目录, offset_s}`，相对路径按 data_root 解析）：以该磁带为动态源（M25 §6.4.4），采集时刻 t 对应事件时刻
-offset_s + t，演员按 t_mid 的磁带状态绘制并写出 `instance_unocc` 与 `objects[]`。
+offset_s + t，演员按 t_mid 的磁带状态绘制并写出 `instance_unocc` 与 `objects[]`。每台 LiDAR（`lidars[]`，M25 §6.8）附带其内置
+IMU（M25 §6.9，200 Hz，`<name>_imu`）：比力与角速度由脚本位姿差分得到，每个 LiDAR 帧周期写一个 ImuObs 块（`/uav/{id}/imu/<name>_imu`）。
 
 输出（`<data_root>/dataset/<event_id>/`）：`runs/<run_id>/{raw.mcap, frames.idx, run_manifest.json}` 与
 `truth/run_<run_id>.{mcap, frames.idx}`。用法：`python -m awr.sensorsvc.capture spec.json [--data-root /data/d3]`。
@@ -197,7 +198,8 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
             while (te := t_end_ns(0, rate, k)) <= duration * NS:
                 jobs.append((t_mid_ns(te, round(c.model.exposure_s * NS), round(c.model.readout_s * NS)), u.uav, c, k))
                 k += 1
-    lidar = None
+    lidar, imus = None, {}
+    uav_no_of = {u.uav: i for i, u in enumerate(fleet)}
     if any(u.lidars for u in fleet):                             # 网格 LiDAR（M25 §6.8）：帧末时刻排入同一时序
         from awr.sensorsvc.lidar.mesh import MeshLidar
         from awr.sensorsvc.lidar.model import load_lidar_model
@@ -207,6 +209,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
         t1 = time.perf_counter()
         lidar = MeshLidar(open_mesh_world_query(wdir, Path(data_root) / "cache" / "worldquery"), lmodel, tape.actors if tape else None)
         log(f"[capture] mesh lidar ready in {time.perf_counter() - t1:.1f} s")
+        imus = {(u.uav, L.name): _imu_track(hist[u.uav], L, duration, seed, uav_no_of[u.uav], prof.name) for u in fleet for L in u.lidars}
         for u in fleet:
             for L in u.lidars:
                 k = 0
@@ -226,6 +229,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
             if isinstance(c, LidarSpec):
                 _lidar_frame(lidar, raw, tru, hist[uav], uav, uav_no[uav], c, seq, tm - lidar.m.frame_ns, seed, prof.name, tape, ev_off_ns,
                              run_id, ctx.dynamic_source_id)
+                _imu_block(raw, imus[(uav, c.name)], uav, c, seq, tm - lidar.m.frame_ns, tm)
                 continue
             pos, R, g = sensor_pose(hist[uav], c.mount, c.sensor_no, tm)
             kw = {"seed": seed, "uav_no": uav_no[uav], "sensor_no": c.sensor_no, "frame_index": seq}
@@ -270,7 +274,8 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
                 "noise_profile": prof.name, "seed": seed, "event": ev_meta,
                 "fx_version": FX_VERSION, "noise_table_version": NOISE_TABLE_VERSION,
                 "fleet": [{"uav": u.uav, "path": u.path,
-                           "lidars": [{"name": L.name, "model": L.model_id, "mount": {"xyz_m": list(L.mount.xyz_m), "rpy_deg": list(L.mount.rpy_deg)}}
+                           "lidars": [{"name": L.name, "model": L.model_id, "mount": {"xyz_m": list(L.mount.xyz_m), "rpy_deg": list(L.mount.rpy_deg)},
+                                       "imu": {"name": f"{L.name}_imu", "rate_hz": 200, "mount_xyz_m": imus[(u.uav, L.name)][1]}}
                                       for L in uav_of[u.uav].lidars],
                            "cameras": [{"name": c.name, "width": c.model.width, "height": c.model.height,
                                                                        "fps": c.fps, "hfov_deg": round(c.model.hfov_deg, 3),
@@ -308,6 +313,31 @@ def _lidar_frame(lidar, raw, tru, H: PoseHistory, uav: str, uav_no: int, L: Lida
           "dynamic_source_id": source_id, "actor_hits": sc.actor_hits,
           "seed": {"run_seed": int(seed), "uav_no": int(uav_no), "sensor_no": int(L.sensor_no - LIDAR_SENSOR_NO0)}}
     tru.write_lidar_truth(uav, L.name, seq, t_s, gt, sc.gt_inst, sc.gt_flags)
+
+
+def _imu_track(H: PoseHistory, L: LidarSpec, duration_s: float, seed: int, uav_no: int, tier: str):
+    """LiDAR 内置 IMU 的整段样本（M25 §6.9）：IMU 帧与 LiDAR 帧同向，杆臂取挂载点加 mid360 外参。"""
+    from awr.sensorsvc.imu import MID360_IMU_IN_LIDAR, kinematics_from_poses, load_imu_model, synth_imu
+
+    t = np.asarray(H.t, np.int64)
+    omega, f_b = kinematics_from_poses(t, np.asarray(H.p), np.asarray(H.q))
+    R_bl = L.mount.R
+    r = np.asarray(L.mount.xyz_m, np.float64) + R_bl @ np.asarray(MID360_IMU_IN_LIDAR)
+    s = synth_imu(t, omega, f_b, R_bi=R_bl, r_imu_b=r, model=load_imu_model(), t_from_ns=int(t[0]), t_to_ns=round(duration_s * NS),
+                  tier=tier, seed=seed, uav_no=uav_no, sensor_no=L.sensor_no - LIDAR_SENSOR_NO0)
+    return s, [float(v) for v in r]
+
+
+def _imu_block(raw, track, uav: str, L: LidarSpec, seq: int, t_from: int, t_to: int) -> None:
+    s, r = track
+    i0, i1 = np.searchsorted(s.t_ns, [t_from, t_to])
+    if i1 <= i0:
+        return
+    name = f"{L.name}_imu"
+    obs = {"sensor_id": name, "seq": int(seq), "t0_ns": int(s.t_ns[i0]), "dt_ns": int(NS // 200), "n": int(i1 - i0),
+           "acc_mps2": s.acc_mps2[i0:i1].astype("<f4").tobytes(), "gyro_rps": s.gyro_rps[i0:i1].astype("<f4").tobytes(),
+           "mount_nominal": {"xyz_m": r, "rpy_deg": list(L.mount.rpy_deg)}}
+    raw.write_imu(uav, name, seq, int(s.t_ns[i0]), obs)
 
 
 def main(argv: list[str] | None = None) -> int:

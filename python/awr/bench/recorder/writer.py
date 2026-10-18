@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 from mcap.writer import CompressionType, IndexType, Writer
 
-from awr.bench.recorder.channels import camera_topic, lidar_topic, truth_camera_topic, truth_lidar_topic
+from awr.bench.recorder.channels import camera_topic, imu_topic, lidar_topic, truth_camera_topic, truth_lidar_topic
 from awr.bench.recorder.foxglove import DEPTH_COMPRESSION, compressed_image, raw_image_f32, schema_data
 from awr.bench.recorder.truth import pack_camera_gt
 
@@ -86,6 +86,15 @@ class RunWriter:
 
         cid = self._channel(truth_lidar_topic(uav, name), "awr.sensor.lidar_gt.v1", {"codec": "lidar-gt"}, encoding="binary")
         self._w.add_message(channel_id=cid, log_time=int(t_ns), publish_time=int(t_ns), sequence=int(seq), data=pack_lidar_gt(header, inst, flags))
+        self.n_messages += 1
+
+    def write_imu(self, uav: str, name: str, seq: int, t_ns: int, obs: dict) -> None:
+        """ImuObs 块（bench/obs.v1，msgpack；`acc_mps2`、`gyro_rps` 为 f32le bin），log_time = 块首样本时刻。"""
+        import msgpack
+
+        cid = self._channel(imu_topic(uav, name), "awr.bench.ImuObs", {"codec": "msgpack"}, encoding="msgpack")
+        self._w.add_message(channel_id=cid, log_time=int(t_ns), publish_time=int(t_ns), sequence=int(seq),
+                            data=msgpack.packb(obs, use_bin_type=True))
         self.n_messages += 1
 
     def metadata(self, name: str, data: dict[str, str]) -> None:

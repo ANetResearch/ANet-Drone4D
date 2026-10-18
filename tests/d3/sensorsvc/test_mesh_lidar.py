@@ -166,3 +166,15 @@ def test_capture_writes_lidar_frames_and_slot_truth(synth, tmp_path: Path, monke
     assert gh["T_world_sensor_nodes"][0]["t_ns"] == 200_000_000 and gh["T_world_sensor_nodes"][-1]["t_ns"] == 300_000_000
     fs.close()
     ts.close()
+    import msgpack
+    from mcap.reader import make_reader
+
+    with (run / "raw.mcap").open("rb") as fh:
+        blocks = [(ch.topic, ch.message_encoding, msgpack.unpackb(msg.data)) for _, ch, msg in make_reader(fh).iter_messages()
+                  if "/imu/" in ch.topic]
+    assert len(blocks) == 5 and all(t == "/uav/uav-01/imu/lidar0_imu" and e == "msgpack" for t, e, _ in blocks)
+    b = blocks[2][2]
+    assert (b["seq"], b["t0_ns"], b["dt_ns"], b["n"]) == (2, 200_000_000, 5_000_000, 20)
+    acc = np.frombuffer(b["acc_mps2"], "<f4").reshape(-1, 3)
+    assert np.allclose(acc.mean(0), [0.0, 0.0, -9.80665], atol=0.05)                        # 倒装：IMU z 朝下，匀速平飞读 −g
+    assert m["fleet"][0]["lidars"][0]["imu"]["name"] == "lidar0_imu"

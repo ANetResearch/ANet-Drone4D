@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["CAMERA_TOPIC", "LIDAR_TOPIC", "TRUTH_CAMERA_TOPIC", "TRUTH_LIDAR_TOPIC", "camera_topic", "lidar_topic", "parse_camera_topic",
+__all__ = ["CAMERA_TOPIC", "LIDAR_TOPIC", "TRUTH_CAMERA_TOPIC", "TRUTH_LIDAR_TOPIC", "camera_topic", "imu_topic", "lidar_topic", "parse_camera_topic",
            "parse_obs_topic", "parse_truth_topic", "sensor_of", "truth_camera_topic", "truth_lidar_topic"]
 
 CAMERA_TOPIC = re.compile(r"^/uav/([^/]+)/camera/([A-Za-z0-9_]+)/(image|depth)$")
@@ -40,6 +40,10 @@ def lidar_topic(uav: str, name: str) -> str:
 
 def truth_lidar_topic(uav: str, name: str) -> str:
     return f"/eval/hidden/lidar/{uav}/{name}"
+
+
+def imu_topic(uav: str, name: str) -> str:
+    return f"/uav/{uav}/imu/{name}"
 
 
 def parse_obs_topic(topic: str) -> tuple[str, str] | None:
