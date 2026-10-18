@@ -4206,7 +4206,7 @@ viewer 界面（共享展示、静态浏览）不出现以上任何写入口；D
 
 | 项 | 内容 |
 |---|---|
-| 增补版本 | v1.3-D3（2026-10-12），追加在 §20.26 之后；§0 至 §20 原文不改，D3 范围内与之冲突处以本节为准；同日按 AWR-05 v1.2 §18 裁决同步（§21.4.4 锚点交互、§21.20 第 44 行、§21.27 裁决说明）；同日按 AWR-05 v1.3（用户 2026-10-12 交互式确认的设计决定）修订：内部排行榜与提交前移、受邀成员角色、公开站只读样例、热成像显示、数据检视面板前移，见 §21.29；同日按 AWR-05 v1.4 定稿修订：多赛道排行榜、事件编辑器的网格选择交互与几何不完整标注、P3 高斯检视视图与内部高斯编辑工具，见 §21.30 |
+| 增补版本 | v1.3-D3（2026-10-12），追加在 §20.26 之后；§0 至 §20 原文不改，D3 范围内与之冲突处以本节为准；同日按 AWR-05 v1.2 §18 裁决同步（§21.4.4 锚点交互、§21.20 第 44 行、§21.27 裁决说明）；同日按 AWR-05 v1.3（用户 2026-10-12 交互式确认的设计决定）修订：内部排行榜与提交前移、受邀成员角色、公开站只读样例、热成像显示、数据检视面板前移，见 §21.29；同日按 AWR-05 v1.4 定稿修订：多赛道排行榜、事件编辑器的网格选择交互与几何不完整标注、P3 高斯检视视图与内部高斯编辑工具，见 §21.30；2026-10-18 按 AWR-05 v1.6（ADR-194）修订 §21.15 的交付称谓（D1 至 D4）与 copy-lint 规则，见 §21.31 |
 | 基线 | [AWR-05](05-D3-设计增补与决策记录.md) v1.1（D3 唯一基线）；直接上游为 AWR-05 §7（前端：D3 工作区）、§6.1.6（数据检视面板）、§5.6.7（公开提交边界）、§7.9（公开站只读范围）、§7.10（企业级文案规范）、§7.11（部署形态与角色），ADR-149、ADR-152、ADR-153、ADR-164、ADR-166；冲突以 AWR-05 为准，基线问题列在 §21.27 |
 | 需求来源 | [D3 需求原文](inputs/D3-需求原文-2026-10-11.md)：R-D3-01 至 R-D3-40（AWR-05 §3）；本节主要承接 R-D3-05、R-D3-11、R-D3-12、R-D3-19、R-D3-21、R-D3-22、R-D3-27、R-D3-29、R-D3-36 |
 | 下游 | M15（`ui/lab/**`、`stores/lab/**`、`app/routes/lab*.tsx`；WP-D3-10、WP-D3-17、WP-D3-26、WP-D3-23 前端部分、WP-D3-13）；M06（`engine/actors/**`、`engine/droneview/**`、`viewport/layers/{actors,worldMesh}.tsx`）；M12（`engine/time` 库被 lab 播放头复用）；M23（编辑器后端）；M27（静态制品与工作区服务）；M16（Playwright 用例） |
@@ -4984,7 +4984,7 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 4. 不作无法验证的比较（"首创""唯一""最强""业界领先"；"first-ever""best-in-class"）；与外部工作的比较只在有系统对照报告时给出（D3-AC-53）。
 5. 状态一律以文字与 morphicons 图标表达；严禁 emoji 与状态字形（勾号、叉号、星号等）。
 6. 空状态、加载与错误提示说明"发生了什么"与"可以做什么"；错误附原因码（"码 名称"格式）。
-7. 用户可见称谓统一：D1 视图称"三维场景视图（Scene View）"，D2 称"交互沙盒（Interactive Sandbox）"，D3 称"事件沙盘（Event Lab）"；"沙盘"只用于 D3。
+7. 用户可见称谓统一：D1 视图称"三维场景视图（Scene View）"，D2 称"交互沙盒（Interactive Sandbox）"，D3 与 D3.x 称"事件沙盘（Event Lab）"；"沙盘"只用于 D3。交付称谓与版本号按 AWR-05 §7.10 交付称谓表（D1 = V0.1、D2 = V0.2、D3 = V0.3、D3.x = V0.3.x、D4 为下一大版本，处于调研与概念设计阶段）；界面、README 与 release notes 以版本号与产品称谓表述，不使用"Drone4D 2.0"一类以主版本号 2 指代下一大版本的称谓（v1.6，ADR-194）。
 
 #### 21.15.2 术语与称谓（D3）
 
@@ -4993,6 +4993,9 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 | 产品 | ANet Drone4D（首次）、Drone4D | ANet Drone4D, Drone4D | 正文中的 ANet-Drone4D；仿真神器 |
 | 基准全称 | 面向协同空中智能体的真实世界事件仿真与主动观测基准 | A World-Grounded Event Simulation and Active Observation Benchmark for Collaborative Aerial Agents | 口号式标语 |
 | D3 工作区 | 事件沙盘 | Event Lab | 数字沙盘、沙盒 |
+| D1 视图 | 三维场景视图 | Scene View | 数字沙盘、沙盘 |
+| D2 | 交互沙盒 | Interactive Sandbox | 沙盘 |
+| 交付称谓与版本（v1.6） | D1（V0.1）、D2（V0.2）、D3（V0.3）、D3.x（V0.3.x）、D4（下一大版本，调研与概念设计阶段）；对外文案称"V0.3 发布" | D1, D2, D3, D3.x, D4; "V0.3 release" | Drone4D 2.0、Drone4D v2、2.0 版、二代、新一代 Drone4D、D3.5、D3 Plus；对外文案中的"封板" |
 | 世界 | 世界、世界包 | world, world package | 地图包 |
 | 事件 | 事件、事件版本、事件磁带 | event, event version, event tape | 剧情、关卡 |
 | 实验、运行 | 实验、运行 | experiment, run | 任务（与 D2 任务混淆）、跑一次 |
@@ -5081,6 +5084,7 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 | CL-EN-03 | 英文 | 无条件性能数字（与 CL-ZH-03 同口径） | warning（对外页面为 error） | 同上 |
 | CL-ALL-01 | 全部 | emoji 与禁用字形（沿用 `no-emoji.mjs` 的字符集） | error | 无 |
 | CL-ALL-02 | 全部 | 产品名写法：正文中出现 `ANet-Drone4D`（URL 与包名除外） | error | URL、代码、包名 |
+| CL-ALL-03 | 全部 | 交付称谓（v1.6，AWR-05 §7.10、ADR-194）：以主版本号 2 指代下一大版本（`Drone4D 2.0`、`Drone4D v2`、`Drone4D 2` 后接非数字、"2.0 版"、"二代"、"新一代 Drone4D"），以及 `D3.5`、`D3 Plus` | error | 第三方许可与软件版本号（Apache License 2.0、Apache-2.0、glTF 2.0、OAuth 2.0）；契约与协议版本号（`board.v2`、`wire.v2`、`1.3.0`）；本项目已发布的版本号（"0.2.0 版本"）；引用外部文献原题 |
 
 扫描范围：`apps/web/src/app/i18n/{zh-CN,en}.json`、`README.md`、`README.zh-CN.md`、公开站落地页与关于页、GitHub 仓库 About 与 topics（`tools/release/repo-meta.json`）、release notes、`CITATION.cff`、数据集发布页（`README` 与 `GENERATORS.md`）、`drone4d-camera` 文档、OpenAPI 描述（`bench.openapi.snapshot.json` 的 `summary` 与 `description`）。基线例外在 `tools/lint/copy-lint.baseline.json` 逐条登记（文件、键、规则、理由、登记人），P0b 出口前清零（D3-AC-46、D3-AC-23）。
 
@@ -5089,7 +5093,7 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 | 章节（`README.md` / `README.zh-CN.md`） | 内容要求 |
 |---|---|
 | 标题与一句话定位 | "ANet Drone4D"；一句话定位分别说明交互沙盒（D2：服务器无需 GPU）与事件沙盘（D3：传感器生成需要服务器 GPU），不使用口号 |
-| Capabilities / 能力 | 能力表：能力、交付（D1、D2、D3）、运行前提；数字一律附条件 |
+| Capabilities / 能力 | 能力表：能力、交付（D1、D2、D3）、运行前提；数字一律附条件；D4 未发布前不列入能力表，不预告功能与日期（AWR-05 §7.10 交付称谓表） |
 | Requirements / 运行环境 | 浏览器与设备档、服务器（D2：4 核无 GPU；D3：NVIDIA GPU，驱动 ≥ 535） |
 | Quick start / 快速开始 | 命令块；不含口语化提示 |
 | Documentation / 文档 | 指向 `docs/` 与公开站 |
@@ -5103,7 +5107,7 @@ GitHub About：一句话描述（≤ 120 字符，无营销用语）；topics �
 1. 新增或修改的界面字符串均有中文与英文两份，键名符合 §13.7。
 2. 每个空状态、错误与确认对话框符合 §21.15.5 模板，错误带原因码。
 3. 页面上的每个性能或精度数字附条件；无"首创"类比较。
-4. 称谓符合 §21.15.1 第 7 条；"沙盘"只出现在 D3。
+4. 称谓符合 §21.15.1 第 7 条；"沙盘"只出现在 D3；交付称谓与版本号符合 AWR-05 §7.10 交付称谓表，不出现"Drone4D 2.0"一类称谓（CL-ALL-03）。
 5. 许可与署名在世界页、数据集页、公开站页脚与下载区可见（D3-AC-24）。
 6. copy-lint 无 error，warning 已逐条确认。
 
@@ -5713,3 +5717,24 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | UX-AC-117 | 事件编辑器：三种绘制方式产出 ≤ 64 顶点的简单多边形；本地命中测试 p95 ≤ 100 ms（Tier B 参考设备、舞台网格）；质量标注提议不改变编译结果，研究者看不到提升按钮 | P1 | Playwright `lab/event-editor` |
 | UX-AC-118 | 高斯检视视图：来源角标常驻；预算生效且显示渲染数量；与播放头偏差 ≤ 1 帧；离开页面后上下文释放；`m06.gpu-limits` 最小上限下 WebGL 错误为 0 | P3 | Playwright `lab/gaussian` |
 | UX-AC-119 | 公开构建中 `gaussian`、`gs-editor` 路由与相关字符串为 0 | P3 | 构建扫描 |
+
+### 21.31 D3-REV 修订（v1.6 同步，依据 AWR-05 v1.6 ADR-194）
+
+#### 21.31.1 修订依据与摘要
+
+依据用户 2026-10-18 决定 R-D3-61 至 R-D3-70 与 AWR-05 v1.6 的 ADR-194（先行生效，待 D3 封板前用户确认）：
+
+1. 交付称谓扩为 D1 至 D4：§21.15.1 第 7 条、§21.15.2 术语表、§21.15.8 README 能力表、§21.15.9 评审清单第 4 条同步修订；copy-lint 增设 CL-ALL-03（§21.15.7）。
+2. 封板范围为 P-1、P0a、P0b：本节需求表中"阶段"列为 P1、P2、P3 的 UX-FR 与 UX-AC（事件编辑器、机队与策略配置、舞台网格、全世界网格瓦片、协同探索演示、高斯检视视图与编辑工具等）随 AWR-05 §23.3 的 D3.x 顺延清单顺延，编号与阈值不变，不计入 D3 封板，交付时按原阈值验收。
+3. 公开站只读视图（§21.14）在 D3 封板前上线并以生产环境实测判定（AWR-05 D3-AC-21），不以演练代替。
+
+#### 21.31.2 对 §0 至 §20 中称谓的覆盖
+
+§0 至 §20 原文不改；下列称谓在 D3 范围内与发布面复核中按本节执行：
+
+| 位置 | 原文 | 按本节 |
+|---|---|---|
+| §1、§3 等 D1 章节 | "数字沙盘"（Web 应用主工作面的设计用语） | 用户可见称谓为"三维场景视图"；"数字沙盘"只作 D1 设计史用语，不进入界面字符串 |
+| §20.2.2 路由表"视图"列 | `/world/:id` 为"沙盘"；`/sandbox/:sid` 为"沙盘（沙盒）" | `/world/:id` 为"三维场景视图"；`/sandbox/:sid` 为"交互沙盒" |
+| UX-AC-039 | 按钮"在沙盘中打开" | "在三维场景视图中打开"；界面字符串与 e2e 断言随 D2 发布面文案复核同一变更修改（D3-AC-46） |
+| §0 至 §20 的界面字符串中以"沙盘"指 D1 视图的其他键 | 例如窗口过窄提示"数字沙盘要求窗口宽度……" | 改为"三维场景视图"或"本应用"，随 D2 发布面文案复核修改（CL-ZH-04） |
