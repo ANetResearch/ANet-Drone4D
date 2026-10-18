@@ -6,7 +6,8 @@
 - `board.json`、`details.json`：由 rows 重算（`publish`），同一输入逐字节一致。
 
 上榜规则：基线行全部计入；内部提交只计入 `visibility = board` 且 `state = DONE` 的提交，同一团队在同一"分轨 × 赛道"只取最近完成
-的一个提交作为代表条目（D3-AC-57 e）。
+的一个提交作为代表条目（D3-AC-57 e）。非排名运行（Fast 档、SITL 与开发运行，`aggregate.ranked_row` 为假）在选代表条目之前剔除，
+不进入 board.json 与 details.json，也不会以只含非排名运行的提交顶替团队的代表条目（D3-AC-57 f）；开发榜（`track.dev`）例外。
 
 版本冻结（D3-AC-57）：`config.json.score_version`（缺省为当前 `SCORE_VERSION`）与本平台评分版本不同，或重算后的赛道集合与已发布的
 `board.json` 不同，`publish` 拒绝（`BoardVersionError`）：评分版本或赛道集合变更须发布为新榜单版本，旧版本只读。
@@ -18,7 +19,7 @@ import json
 import re
 from pathlib import Path
 
-from awr.bench.eval.aggregate import build_board, compose, entry_details
+from awr.bench.eval.aggregate import build_board, compose, entry_details, ranked_row
 from awr.bench.eval.thresholds import SCORE_VERSION
 
 __all__ = ["BoardVersionError", "append_rows", "compose_board", "current_version", "load_config", "load_rows", "publish", "slim_evaluation", "versions"]
@@ -85,13 +86,19 @@ def _listed(rows: list[dict], subs: dict[str, dict]) -> list[dict]:
     return out + [r for r in rows if r.get("submission_id") in keep and not r.get("baseline")]
 
 
+def _board_rows(board_dir: Path, cfg: dict, subs: dict[str, dict] | None) -> list[dict]:
+    """上榜的评测行：剔除非排名运行（开发榜除外）后按上榜规则选出基线与代表条目。"""
+    dev = bool((cfg.get("track") or {}).get("dev"))
+    return _listed([r for r in load_rows(board_dir) if dev or ranked_row(r)], subs or {})
+
+
 def publish(board_dir: Path, subs: dict[str, dict] | None = None, *, n_boot: int = 10_000) -> dict:
     board_dir = Path(board_dir)
     cfg = load_config(board_dir)
     sv = cfg.get("score_version", SCORE_VERSION)
     if sv != SCORE_VERSION:
         raise BoardVersionError(f"board {board_dir.name} is scored with {sv}, platform is {SCORE_VERSION}: publish a new board version")
-    rows = _listed(load_rows(board_dir), subs or {})
+    rows = _board_rows(board_dir, cfg, subs)
     board = build_board(rows, board_version=board_dir.name, n_boot=n_boot, track=cfg.get("track"))
     prev = board_dir / "board.json"
     if prev.is_file():
@@ -108,4 +115,4 @@ def compose_board(board_dir: Path, weights: dict[str, float], subs: dict[str, di
     """以给定权重由存储的评测行重算合成值（不写文件、不重跑）。"""
     board_dir = Path(board_dir)
     cfg = load_config(board_dir)
-    return compose(_listed(load_rows(board_dir), subs or {}), weights, board_version=board_dir.name, n_boot=n_boot, track=cfg.get("track"))
+    return compose(_board_rows(board_dir, cfg, subs), weights, board_version=board_dir.name, n_boot=n_boot, track=cfg.get("track"))
