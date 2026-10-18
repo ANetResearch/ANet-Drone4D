@@ -9,7 +9,7 @@
 用法：
     python tools/bench/d3/proto_board.py --spec configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json \\
         --events-root data/d3/events --out runs/bench/proto-0 [--policies static_guard,track_share] [--seeds 1,2] [--jobs 3] \\
-        [--physics kinematic] [--gz-launcher local] [--gz-export-root DIR]
+        [--physics kinematic] [--gz-launcher local] [--gz-export-root DIR] [--agents container --agent-image d3-agent-py:dev]
 退出码 0 全部成功、1 有运行失败（失败项写入 `<out>/failures.json`，不进入榜单）。
 """
 
@@ -45,6 +45,13 @@ def _one(job: dict) -> dict:
     gz = {k: v for k, v in job["gz"].items() if v is not None}
     if gz:
         gz.setdefault("name", f"d3-gz-{job['tag']}-{pol}-s{seed}")
+    if job["agents"] == "container":                     # 隔离容器 + 线协议（正式运行的执行方式）
+        from awr.bench.runner import run_job
+
+        r = run_job(rs, policy=rs["policy"], seed=seed, run_id=f"{job['tag']}-{pol}-s{seed}", run_dir=run_dir, worlds_root=Path(job["worlds_root"]),
+                    events_root=Path(job["events_root"]), physics=job["physics"], gz=gz, agent_image=job["agent_image"])
+        return {"policy": pol, "seed": seed, "run_dir": str(run_dir), "skipped": False, "run_wall_s": r["run_wall_s"], "eval_wall_s": r["eval_wall_s"],
+                "pose_sha256": r["pose_sha256"], "components": r["components"]}
     spec = EnvSpec.from_run_spec(rs, run_id=f"{job['tag']}-{pol}-s{seed}", seed=seed, worlds_root=Path(job["worlds_root"]),
                                  events_root=Path(job["events_root"]), out_dir=run_dir, physics=job["physics"], gz=gz)
     t0 = time.time()
@@ -68,6 +75,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--physics", choices=("realistic", "kinematic"))
     ap.add_argument("--board-version", default="proto-0")
     ap.add_argument("--n-boot", type=int, default=10_000)
+    ap.add_argument("--agents", choices=("inproc", "container"), default="inproc",
+                    help="container: each UAV agent in an isolated container over drone4d.bench.wire.v1 (formal runs)")
+    ap.add_argument("--agent-image", default="d3-agent-py:dev")
     ap.add_argument("--gz-launcher", choices=("docker", "local"))
     ap.add_argument("--gz-image")
     ap.add_argument("--gz-export-root")
@@ -79,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     tag = rs["event"]["id"]
     gz = {"launcher": a.gz_launcher, "image": a.gz_image, "export_root": a.gz_export_root} if physics == "realistic" else {}
     jobs = [{"spec": rs, "policy": p, "seed": s, "out": str(a.out), "tag": tag, "physics": physics, "gz": gz, "worlds_root": str(a.worlds_root),
-             "events_root": str(a.events_root)} for p in a.policies.split(",") for s in seeds]
+             "events_root": str(a.events_root), "agents": a.agents, "agent_image": a.agent_image} for p in a.policies.split(",") for s in seeds]
     done, failures = [], []
     with ProcessPoolExecutor(max_workers=max(1, a.jobs)) as ex:
         futs = {ex.submit(_one, j): j for j in jobs}

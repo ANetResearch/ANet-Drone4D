@@ -347,6 +347,10 @@ def _open_world(world_dir: Path):
         return open_dsm_world_query(world_dir)
 
 
+SPAWN_FOOT = np.array([[dx, dy] for dx in (-0.7, -0.35, 0.0, 0.35, 0.7) for dy in (-0.7, -0.35, 0.0, 0.35, 0.7)])
+SPAWN_LEVEL_M = 0.15
+
+
 class _GzTier:
     """Realistic 档：每 Run 一个 gz 实例（GzInstance + compose_run + GzSimBackend），关闭时停止实例。"""
 
@@ -366,8 +370,13 @@ class _GzTier:
                           world_export=exp.root)
         spawns = []
         for u, (p, yaw) in spawn.items():
-            foot = np.asarray(p[:2], np.float64) + np.array([[0.0, 0.0], [0.3, 0.3], [0.3, -0.3], [-0.3, 0.3], [-0.3, -0.3]])
-            z = float(surface_z(world, foot).max()) + GEAR_Z_M + 0.01 if u in grounded else float(p[2])
+            z = float(p[2])
+            if u in grounded:
+                foot = np.asarray(p[:2], np.float64) + SPAWN_FOOT
+                zs = surface_z(world, foot)
+                if float(np.ptp(zs)) > SPAWN_LEVEL_M:            # 机体跨在台阶或坑上：起飞失败或侧向碰撞，运行无效
+                    raise ValueError(f"{u}: spawn surface not level ({np.ptp(zs):.2f} m over the airframe footprint)")
+                z = float(zs.max()) + GEAR_Z_M + 0.01
             spawns.append(UavSpawn(u, (float(p[0]), float(p[1]), z), yaw))
         inst.start(compose_run(spawns, world_static_uri=exp.uri, endpoint=inst.gz_endpoint, spherical=exp.spherical))
         try:

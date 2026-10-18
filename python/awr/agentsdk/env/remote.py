@@ -36,6 +36,7 @@ class SocketAgentHost:
         self.hello: dict | None = None
         self.k: int | None = None
         self.exited: str | None = None
+        self.closed = False
         self.stats = {"late": 0, "protocol_errors": 0, "acts": 0, "timeouts": 0}
         self._errs = 0
 
@@ -116,6 +117,9 @@ class SocketAgentHost:
         return None
 
     def close(self, reason: str = "episode_end") -> None:
+        if self.closed:
+            return
+        self.closed = True
         if self.ws is not None and not self.exited:
             try:
                 self.ws.send(T.CLOSE, {"reason": reason})

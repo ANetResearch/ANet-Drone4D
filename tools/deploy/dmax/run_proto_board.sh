@@ -3,6 +3,8 @@
 # 用法（本机仓库根目录）：tools/deploy/dmax/run_proto_board.sh <输出名> [proto_board.py 参数]；后台运行，日志在 $D/out/<输出名>/board.log。
 # 前提：tools/deploy/dmax/images/gz/build.sh 已构建镜像；$D/worlds/<world> 与 $D/d3data/events/<event>/v<N> 已就位；
 # 宿主侧依赖在 $D/pylib-gz（离线 wheel：pyzmq、protobuf、jsonschema、msgpack、scipy、open3d-cpu 及其依赖）。
+# `--agents container` 时运行器经挂载的 docker 套接字为每架机启动隔离 Agent 容器（镜像 d3-agent-py，images/agent/build.sh），
+# 套接字目录按 AWR_HOST_PATH_MAP 换算为宿主路径。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 D=/data/anet-drone4d-d3/d3dev
@@ -15,6 +17,7 @@ rsync -a --mkpath --delete "$ROOT/configs/bench.d3/" "dmax:$D/configs/bench.d3/"
 rsync -a --mkpath --delete "$ROOT/packages/contracts/" "dmax:$D/contracts/"
 rsync -a --mkpath "$ROOT/native/gz/proto/" "dmax:$D/native/gz/proto/"
 ssh dmax "mkdir -p $D/out/$NAME && docker run -d --rm --name d3-board-$NAME --network none --cpus $CPUS --user \$(id -u):\$(id -g) -e HOME=/tmp \
-  -e PYTHONPATH=/repo/pylib-gz:/repo/python -e AWR_CONTRACTS_DIR=/repo/contracts -v $D:/repo -w /repo d3-gz:dev \
+  -e PYTHONPATH=/repo/pylib-gz:/repo/python -e AWR_CONTRACTS_DIR=/repo/contracts -e AWR_HOST_PATH_MAP=/repo=$D \
+  -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker:ro -v $D:/repo -w /repo d3-gz:dev \
   sh -c 'python3 tools/bench/d3/proto_board.py --spec configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json \
     --events-root d3data/events --worlds-root worlds --out out/$NAME --gz-launcher local $* > out/$NAME/board.log 2>&1'"

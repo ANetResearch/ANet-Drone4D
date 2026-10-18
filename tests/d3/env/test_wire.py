@@ -108,3 +108,53 @@ def test_hello_timeout_and_version(tmp_path: Path) -> None:
     assert t == T.ERROR and body == {"code": 666, "why": "version"}
     c.close()
     h.close()
+
+
+def _fake_docker(tmp_path: Path, monkeypatch) -> str:
+    monkeypatch.setenv("FAKE_DOCKER_STATE", str(tmp_path / "docker-state"))
+    monkeypatch.setenv("PYTHONPATH", f"{SDK}{os.pathsep}{os.environ.get('PYTHONPATH', '')}")
+    w = tmp_path / "docker"
+    w.write_text(f"#!/bin/sh\nexec {sys.executable} {Path(__file__).with_name('fake_docker.py')} \"$@\"\n")
+    w.chmod(0o755)
+    return str(w)
+
+
+def test_container_episode_matches_in_process(synth_event, tmp_path: Path, monkeypatch) -> None:
+    from drone4d.baselines import BASELINES
+    from test_env import _run, _spec
+
+    from awr.agentsdk.env.containers import run_container_episode
+    from awr.agentsdk.env.core import BenchEnv
+
+    docker = _fake_docker(tmp_path, monkeypatch)
+    m0 = _run(_spec(synth_event, tmp_path / "local", dur=30.0), lambda u: BASELINES["static_guard"]())
+    spec = _spec(synth_event, tmp_path / "ctr", dur=30.0)
+    m1, stats = run_container_episode(BenchEnv(spec), tmp_path / "ctr", "d3-agent-py:dev", cmd=["python", "-m", "drone4d.serve", "--baseline", "static_guard"],
+                                      entry_env={"MY_FLAG": "1"}, step_budget_s=30.0, docker=docker)
+    assert m1["pose_sha256"] == m0["pose_sha256"]
+    assert all(s["exit_code"] == 0 and s["exited"] is None and s["timeouts"] == 0 for s in stats.values())
+    argv = json.loads((tmp_path / "docker-state" / f"d3-agent-{spec.run_id}-uav-01.argv.json").read_text())
+    a = argv["argv"]
+    for flag in ("--network", "--read-only", "--cap-drop", "--pids-limit", "--user"):
+        assert flag in a
+    assert a[a.index("--network") + 1] == "none" and a[a.index("--user") + 1] == "65534:65534"
+    assert argv["env"]["MY_FLAG"] == "1" and argv["env"]["DRONE4D_AGENT_SOCK"] == "/run/drone4d/agent.sock"
+    assert (tmp_path / "ctr/agents/uav-01/container.log").exists()
+
+
+def test_container_start_failure_and_env_keys(synth_event, tmp_path: Path, monkeypatch) -> None:
+    from test_env import _spec
+
+    from awr.agentsdk.env.containers import AgentContainers, host_path, run_container_episode
+    from awr.agentsdk.env.core import BenchEnv
+
+    assert host_path(Path("/repo/out/x"), "/repo=/data/d3dev") == "/data/d3dev/out/x"
+    assert host_path(Path("/repository/x"), "/repo=/data/d3dev") == "/repository/x"
+    with pytest.raises(ValueError):
+        AgentContainers(tmp_path, "r", ["uav-01"], "img", env={"DRONE4D_AGENT_SOCK": "/x"})
+    with pytest.raises(ValueError):
+        AgentContainers(tmp_path, "r", ["uav-01"], "img", env={"lower": "1"})
+    docker = _fake_docker(tmp_path, monkeypatch)
+    with pytest.raises(WireError) as e:
+        run_container_episode(BenchEnv(_spec(synth_event, tmp_path / "bad", dur=5.0)), tmp_path / "bad", "bad:image", docker=docker)
+    assert e.value.code == 664
