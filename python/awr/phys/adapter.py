@@ -13,8 +13,15 @@ import numpy as np
 
 from awr.phys import PhysError
 
-__all__ = ["CLOCK_PROFILES", "ClockProfile", "ContactEvent", "DispatchResult", "OrbitSpec", "PhysicsTier", "StatusSignals", "TickResult",
-           "TickTiming", "TierCommand", "VehicleStatus", "derive_status", "steps_per_tick", "validate_clock"]
+__all__ = ["CLOCK_PROFILES", "IMPACT_VZ_MPS", "LAND_STILL_S", "STILL_S", "STILL_V_MPS", "ClockProfile", "ContactEvent", "DispatchResult",
+           "OrbitSpec", "PhysicsTier", "StatusSignals", "TickResult", "TickTiming", "TierCommand", "VehicleStatus", "derive_status",
+           "steps_per_tick", "validate_clock"]
+
+# §6.5.9 接触阈值（与 D2 ContactCfg 一致）：落地 = 触地且 ‖v‖ < 0.25 m/s 持续 0.5 s（land）或 1.0 s（其他）；硬着陆竖直速度 > 3 m/s
+STILL_V_MPS = 0.25
+LAND_STILL_S = 0.5
+STILL_S = 1.0
+IMPACT_VZ_MPS = 3.0
 
 CmdKind = Literal["velocity", "goto", "follow_path", "orbit", "hover", "takeoff", "land", "kill"]
 ContactKind = Literal["TOUCHDOWN", "LIFTOFF", "COLLISION_WORLD", "IMPACT", "COLLISION_UAV"]

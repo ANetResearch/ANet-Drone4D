@@ -21,6 +21,9 @@ import numpy as np
 
 from awr.phys import PhysError
 from awr.phys.adapter import (
+    LAND_STILL_S,
+    STILL_S,
+    STILL_V_MPS,
     ContactEvent,
     DispatchResult,
     StatusSignals,
@@ -35,11 +38,8 @@ from awr.phys.gz.compose import STEP_NS
 from awr.phys.pose_history import PoseHistoryBuffer
 from awr.phys.tracker import Setpoint, Tracker
 
-__all__ = ["LAND_STILL_S", "STILL_S", "STILL_V_MPS", "GzSimBackend"]
+__all__ = ["GzSimBackend"]
 
-STILL_V_MPS = 0.25
-LAND_STILL_S = 0.5
-STILL_S = 1.0
 _KIND = {1: "TOUCHDOWN", 2: "LIFTOFF", 3: "COLLISION_WORLD", 4: "IMPACT", 5: "COLLISION_UAV"}
 _CRASH = {"COLLISION_WORLD": "world", "IMPACT": "impact", "COLLISION_UAV": "uav"}
 _FLY = frozenset({"takeoff", "goto", "velocity", "orbit", "follow_path"})
