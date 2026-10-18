@@ -1,5 +1,5 @@
-# libDrone4DGz.so (M24 §6.1): Drone4DClock and Drone4DVelocityControl in one library so the D4dVelocityCmd component is
-# registered once. Built inside the d3-gz image (tools/deploy/dmax/images/gz): gz-sim 8 (Harmonic, ROS 2 Jazzy vendor
+# libDrone4DGz.so (M24 §6.1): Drone4DClock, Drone4DVelocityControl and Drone4DWindDrag (plugins/wind, field wind mode)
+# in one library so the D4dVelocityCmd and D4dWind components are registered once. Built inside the d3-gz image (tools/deploy/dmax/images/gz): gz-sim 8 (Harmonic, ROS 2 Jazzy vendor
 # packages), libzmq + cppzmq, protobuf, Eigen.
 cmake_minimum_required(VERSION 3.22)
 project(drone4d_gz LANGUAGES CXX)
@@ -20,8 +20,9 @@ pkg_check_modules(ZMQ REQUIRED IMPORTED_TARGET libzmq)
 protobuf_generate_cpp(D4D_PROTO_SRCS D4D_PROTO_HDRS proto/drone4d_gz.proto)
 
 add_library(Drone4DGz SHARED
-  src/Drone4DClock.cc src/Drone4DVelocityControl.cc src/Common.cc src/LeeVelocityController.cc ${D4D_PROTO_SRCS})
-target_include_directories(Drone4DGz PRIVATE src ${CMAKE_CURRENT_BINARY_DIR})
+  src/Drone4DClock.cc src/Drone4DVelocityControl.cc src/Common.cc src/LeeVelocityController.cc
+  plugins/wind/Drone4DWindDrag.cc ${D4D_PROTO_SRCS})
+target_include_directories(Drone4DGz PRIVATE src plugins/wind ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_definitions(Drone4DGz PRIVATE D4D_PLUGIN_BUILD="${D4D_PLUGIN_BUILD}")
 target_link_libraries(Drone4DGz PRIVATE gz-sim8::gz-sim8 gz-plugin2::register Eigen3::Eigen protobuf::libprotobuf PkgConfig::ZMQ)
 install(TARGETS Drone4DGz LIBRARY DESTINATION lib)

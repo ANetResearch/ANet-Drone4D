@@ -4,7 +4,8 @@
  * with drone4d.gz.v1 messages; per granted batch the clock
  *   1. writes due velocity setpoints into the D4dVelocityCmd component of each vehicle model (PreUpdate, before
  *      Drone4DVelocityControl in the same iteration: gz:system_priority -200),
- *   2. sets the mean wind seed (uniform wind mode) when the world has a wind entity,
+ *   2. sets the mean wind seed (uniform wind mode) when the world has a wind entity, and writes the due per-vehicle wind
+ *      vectors (field wind mode, Control.wind) into the D4dWind component read by Drone4DWindDrag (plugins/wind),
  *   3. samples the step-end state of every vehicle (PostUpdate): position, attitude, linear and body angular velocity
  *      and body specific force R^T((v_n - v_{n-1})/dt - g), and classifies contacts,
  *   4. replies StepDone with all samples of the batch before blocking for the next Control.
@@ -51,6 +52,7 @@
 #include <gz/sim/config.hh>
 
 #include "D4dComponents.hh"
+#include "D4dWind.hh"
 #include "drone4d_gz.pb.h"
 
 #ifndef D4D_PLUGIN_BUILD
@@ -129,6 +131,7 @@ public:
     }
     if (this->lockstep) --this->budget;
     this->ApplyDue(_ecm);
+    this->ApplyDueWind(_ecm);
     this->ApplyWind(_ecm);
     ++this->stepInBatch;
   }
@@ -243,6 +246,8 @@ private:
       else if (c.grant_steps() < 1) why = "grant_steps < 1";
       for (const auto &sp : c.setpoints())
         if (sp.uav_index() >= this->uavs.size() || sp.apply_step() >= c.grant_steps()) why = "setpoint index out of range";
+      for (const auto &w : c.wind())
+        if (w.uav_index() >= this->uavs.size() || w.apply_step() >= c.grant_steps()) why = "wind index out of range";
       if (!why.empty())
       {
         this->SendError(635, why);
@@ -252,6 +257,10 @@ private:
       std::stable_sort(this->due.begin(), this->due.end(),
                        [](const pb::VelSp &a, const pb::VelSp &b) { return a.apply_step() < b.apply_step(); });
       this->dueNext = 0;
+      this->windDue.assign(c.wind().begin(), c.wind().end());
+      std::stable_sort(this->windDue.begin(), this->windDue.end(),
+                       [](const pb::WindSp &a, const pb::WindSp &b) { return a.apply_step() < b.apply_step(); });
+      this->windNext = 0;
       this->meanWind = math::Vector3d(c.mean_wind_x(), c.mean_wind_y(), c.mean_wind_z());
       this->budget = c.grant_steps();
       this->stepInBatch = 0;
@@ -280,6 +289,24 @@ private:
       {
         comp->Data() = cmd;
         _ecm.SetChanged(m, components::D4dVelocityCmd::typeId, ComponentState::OneTimeChange);
+      }
+    }
+  }
+
+  /// Field wind mode: due WindSp entries into D4dWind on the model entity (zero-order hold until replaced).
+  void ApplyDueWind(EntityComponentManager &_ecm)
+  {
+    while (this->windNext < this->windDue.size() && this->windDue[this->windNext].apply_step() == this->stepInBatch)
+    {
+      const pb::WindSp &w = this->windDue[this->windNext++];
+      const ::drone4d::WindCmd cmd{w.wx(), w.wy(), w.wz()};
+      const Entity m = this->uavs[w.uav_index()].model;
+      auto *comp = _ecm.Component<components::D4dWind>(m);
+      if (comp == nullptr) _ecm.CreateComponent(m, components::D4dWind(cmd));
+      else if (comp->Data() != cmd)
+      {
+        comp->Data() = cmd;
+        _ecm.SetChanged(m, components::D4dWind::typeId, ComponentState::OneTimeChange);
       }
     }
   }
@@ -430,6 +457,8 @@ private:
   uint32_t budget{0}, stepInBatch{0};
   std::vector<pb::VelSp> due;
   size_t dueNext{0};
+  std::vector<pb::WindSp> windDue;
+  size_t windNext{0};
   math::Vector3d meanWind;
   std::vector<double> samples;
   std::vector<int64_t> tNs;

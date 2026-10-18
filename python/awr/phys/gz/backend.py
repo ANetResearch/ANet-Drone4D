@@ -11,6 +11,8 @@
   记 632；等待期间每 `poll_s` 经 `alive()`（通常为 `GzInstance.alive`）检查实例，进程已退出记 638（≤ 1 s 识别）。Hello 与 Shutdown
   沿用 `timeout_s`。632 / 638 之后套接字作废（REQ 状态机已失步），由 `SupervisedGzBackend` 重启实例并重放。
 - 每 tick 记录控制消息与样本块的 sha256（`last_control_sha256`、`last_block_sha256`），供重放逐 tick 比对。
+- field 风模式（M24-FR-046，§6.5.8）：`wind` 为 `awr.phys.gz.wind.FieldWind` 时，每 tick 以 tick 起点状态求本 tick 的逐机风矢量
+  放入 `Control.wind`（`Drone4DClock` 写入 D4dWind，`Drone4DWindDrag` 施力）；重放时 FieldWind 返回缓存，控制消息逐字节相同。
 
 `SupervisedGzBackend`（M24-FR-078、§6.8.2 RUNNING → PREPARING；D3-AC-17、35）：包装 GzSimBackend 与 GzInstance，以同一 PhysicsTier
 接口推进；逐 tick 记录 submit 批次（控制日志的宿主侧来源）及控制消息、样本块摘要。632 / 638 时按进程组回收并重启实例，新建后端从回合
@@ -92,6 +94,7 @@ class GzSimBackend:
     alive: Callable[[], bool] | None = field(default=None, repr=False)   # 实例存活检查（638）；None 只靠超时
     poll_s: float = 0.2                              # 等待回复期间检查 alive() 的间隔
     name: str = "realistic"
+    wind: Any = None                                 # field 风模式采样器（FieldWind）；None 为 uniform / 无风
 
     def __post_init__(self) -> None:
         self.uavs = tuple(self.uavs)
@@ -212,7 +215,8 @@ class GzSimBackend:
                 sps.append(P.msg("VelSp", uav_index=v.idx, apply_step=0, vx=sp.v_enu[0], vy=sp.v_enu[1], vz=sp.v_enu[2],
                                  yaw_rate=sp.yaw_rate, enabled=sp.enabled))
                 v.sent = sp
-        ctl = P.msg("Control", seq=self.seq + 1, tick=k, grant_steps=self.n_steps, setpoints=sps)
+        wind = self.wind.for_tick(k, self.t_k_ns, self.n_steps, self.history) if self.wind is not None else []
+        ctl = P.msg("Control", seq=self.seq + 1, tick=k, grant_steps=self.n_steps, setpoints=sps, wind=wind)
         w1 = time.perf_counter_ns()
         tm.encode = w1 - w0
         raw_ctl: list[bytes] = []
@@ -299,6 +303,8 @@ class GzSimBackend:
     def close(self) -> dict:
         info = {"ticks": self._ticks, "t_end_ns": self.t_k_ns,
                 "gz_rtf_mean": float(np.mean(self._rtf)) if self._rtf else 0.0, "pose_sha256": self.digest.hexdigest()}
+        if self.wind is not None:
+            info["wind"] = self.wind.describe()
         if self._sock is not None:
             try:
                 body, bye = self._rpc("shutdown", P.msg("Shutdown"), self.timeout_s)
