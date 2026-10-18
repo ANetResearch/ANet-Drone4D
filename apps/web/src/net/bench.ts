@@ -57,7 +57,12 @@ export async function benchDelete(path: string): Promise<void> {
 export interface BenchSession { principal: string; role: 'invited' | 'researcher' | 'evaluator' | 'admin'; projects: string[]; via: string }
 export interface BenchRunItem { run_id: string; event_id: string; state: string; has_frames: boolean; created_unix_ns: number | null; kind: string | null; world_id: string | null }
 export interface BenchRunChannel { uav_id: string; sensor_id: string; latest_seq: number | null }
-export interface BenchRun { run_id: string; event_id: string; state: string; kind: string | null; world_id: string | null; frames?: BenchRunChannel[] }
+export interface BenchRunEvent { event_id: string; version: number; offset_s: number }
+export interface BenchRunFleet { uav: string; path: { kind: 'orbit'; center?: [number, number]; radius_m: number; period_s: number; phase_deg?: number; ccw?: boolean } | { kind: 'waypoints'; points: [number, number, number, number, number][] } }
+export interface BenchRun {
+  run_id: string; event_id: string; state: string; kind: string | null; world_id: string | null; frames?: BenchRunChannel[]
+  event?: BenchRunEvent; fleet?: BenchRunFleet[]
+}
 export interface FrameIndexItem { seq: number; t_ns: number; bytes: number; sha256: string }
 export interface FrameIndexPage { run_id: string; uav_id: string; sensor_id: string; period_ns: number; items: FrameIndexItem[]; next_seq: number | null }
 

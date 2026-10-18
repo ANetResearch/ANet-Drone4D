@@ -142,6 +142,36 @@ def test_truth_frames_evaluator_only(env) -> None:
     assert c.get(f"{P}/runs/cap-0001/truth/frames/uav-01/cam0/9", headers={"Authorization": f"Bearer {app.state.tok_eval}"}).json()["code"] == 305
 
 
+def test_event_tape_evaluator_only(env) -> None:
+    pytest.importorskip("zstandard")
+    from awr.sim.events import tape as tp
+
+    c, app, tok, _ = env
+    run = app.state.settings.dataset_dir / "capture" / "runs" / "cap-0001"
+    url = f"{P}/runs/cap-0001/truth/event/tape"
+    ev = {"Authorization": f"Bearer {app.state.tok_eval}"}
+    assert c.get(url, headers=ev).json()["code"] == 305                                   # 运行没有事件
+    tdir = app.state.settings.data_root / "events" / "ev-x" / "v3"
+    f = np.zeros((10, 1), tp.RECORD)
+    hd = {"schema": "drone4d.tape.v1", "event_id": "ev-x", "event_version": 3, "n_ticks": 10, "duration_ms": 1000,
+          "actors": [{"idx": 0, "id": "p", "class": "person", "scripted": True, "profile": "person", "size_mm": [1, 1, 1], "appearance": {}}]}
+    h = tp.write_tape(tdir / "tape.bin", hd, f, n_scripted=1)
+    (tdir / "tape.json").write_text(json.dumps({"content_sha256": h["content_sha256"]}))
+    m = json.loads((run / "run_manifest.json").read_text())
+    m["event"] = {"event_id": "ev-x", "version": 3, "content_sha256": h["content_sha256"], "offset_s": 12.5}
+    (run / "run_manifest.json").write_text(json.dumps(m))
+    assert c.get(f"{P}/runs/cap-0001", headers={"Authorization": f"Bearer {tok}"}).json()["event"] == {"event_id": "ev-x", "version": 3, "offset_s": 12.5}
+    r = c.get(url, headers={"Authorization": f"Bearer {tok}"})
+    assert r.status_code == 403 and r.json()["code"] == 115
+    r = c.get(url, headers=ev)
+    assert r.status_code == 200 and r.content == (tdir / "tape.bin").read_bytes() and r.headers["x-event-offset-ns"] == "12500000000"
+    assert r.headers["content-type"] == "application/x-d4dtape" and r.headers["etag"] == f'"{h["content_sha256"]}"'
+    m["event"]["content_sha256"] = "0" * 64
+    (run / "run_manifest.json").write_text(json.dumps(m))
+    r = c.get(url, headers=ev)
+    assert r.status_code == 409 and r.json()["code"] == 614
+
+
 def test_truth_frame_decode_raw(tmp_path: Path) -> None:
     """BN-52 `decode=raw`：zstd 与 bshuf4-zstd 块解为原始数组，codec 记为 raw；未知取值 400。"""
     import zstandard

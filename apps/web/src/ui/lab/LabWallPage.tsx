@@ -1,5 +1,6 @@
 // /lab/runs/:rid, multi-UAV observation wall (AWR-14 §21.7; R-D3-09, R-D3-11; P0a-1 replay of recorded runs). Each tile
-// is one UAV's private view (agent_view only; the evaluation view with truth overlays follows with actors in P0a-2).
+// is one UAV's private view (agent_view); the evaluation view adds truth overlays and, for runs with an event, the event
+// plan panel (tape decoded in the browser, P0a-2 event replay).
 // Grid 1/4/9/16 (automatic = smallest that fits), sensor and RGB/depth selection, paging over 16 tiles, double click to
 // zoom one tile. The lab playhead drives every tile; the footer timeline plays, pauses and seeks.
 import { useQuery } from '@tanstack/react-query'
@@ -16,6 +17,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { Icon } from '@/ui/icons/Icon'
 import { useWindowSize } from '@/ui/layout/layoutState'
 import { useElementWidth } from '@/ui/layout/useElementWidth'
+import { EventPlan } from './wall/EventPlan'
 import { GRIDS, layoutWall, type GridSize } from './wall/layout'
 import { WallTile } from './wall/WallTile'
 import { useBenchSession } from './useBenchSession'
@@ -133,6 +135,7 @@ export function LabWallPage({ params, search }: RouteProps) {
           ) : null}
         </div>
       </header>
+      <div className="flex min-h-0 flex-1">
       <div ref={box} className="min-h-0 flex-1 overflow-hidden p-4">
         {run.isPending ? null : !uavs.length ? (
           <PanelEmpty title={t('lab.wall.empty')} description={t('lab.wall.emptyHint')} />
@@ -145,6 +148,8 @@ export function LabWallPage({ params, search }: RouteProps) {
             ))}
           </div>
         )}
+      </div>
+      {evalView && run.data?.event ? <EventPlan rid={rid} event={run.data.event} fleet={run.data.fleet ?? []} /> : null}
       </div>
       <footer className="flex items-center gap-3 border-t px-4 py-2">
         <Button size="sm" variant="outline" aria-label={ph.playing ? t('lab.wall.pause') : t('lab.wall.play')} onClick={() => (ph.playing ? ph.pause() : ph.play())}>

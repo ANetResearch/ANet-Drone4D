@@ -1,4 +1,5 @@
 """BN-42、BN-43、BN-49 至 BN-52：运行列表与状态、帧索引、单帧、区间帧与真值帧（AWR-17 §18.8；M27-FR-052）。
+运行的事件磁带（`truth/event/tape`）等同事件真值，只对评测员及以上（M27 §7.9）。
 
 单帧返回交付字节（`Content-Type` 按通道，`X-Frame-T-Ns`），`ETag` 为内容 sha256，支持单区间 `Range` 与 `If-None-Match`。
 帧接口接受会话、bench token 或 `aud = frames` 的短期令牌。
@@ -80,6 +81,9 @@ def run(rid: str, request: Request, p: Researcher) -> dict:
     doc = json.loads(m.read_text(encoding="utf-8")) if m.exists() else {}
     out = {"run_id": rid, "event_id": d.parent.parent.name, "state": doc.get("state", "UNKNOWN"), "kind": doc.get("kind"),
            "world_id": doc.get("world_id"), "fleet": doc.get("fleet", [])}
+    ev = doc.get("event")
+    if ev:
+        out["event"] = {"event_id": ev["event_id"], "version": ev["version"], "offset_s": ev.get("offset_s", 0.0)}
     fs = request.app.state.frame_stores.get(d, rid)
     if fs is not None:
         out["frames"] = [{"uav_id": u, "sensor_id": s, "latest_seq": fs.latest_seq(u, s)} for u, s in fs.idx.channels()]
@@ -161,3 +165,23 @@ def truth_frame(rid: str, uav: str, sensor: str, seq: int, request: Request, p: 
     if decode == "raw":
         body = pack_camera_gt(*decode_blocks(*unpack_camera_gt(body)))
     return Response(body, media_type=GT_CONTENT_TYPE, headers={"X-Frame-T-Ns": str(hit[0]), "Cache-Control": _IMMUTABLE})
+
+
+@router.get("/runs/{rid}/truth/event/tape")
+def event_tape(rid: str, request: Request, p: TruthReader) -> Response:
+    """运行所用事件版本的 `tape.bin`（drone4d.tape.v1）；清单记录的 content_sha256 与事件目录不一致时 614。
+    `X-Event-Offset-Ns`：采集时刻 t 对应事件时刻 offset + t。"""
+    d = find_run(request.app.state.settings.dataset_dir, rid)
+    doc = json.loads((d / "run_manifest.json").read_text(encoding="utf-8")) if d and (d / "run_manifest.json").exists() else {}
+    ev = doc.get("event")
+    if not ev:
+        raise ApiProblem(305, detail={"run_id": rid, "event": None})
+    tdir = request.app.state.settings.data_root / "events" / str(ev["event_id"]) / f"v{int(ev['version'])}"
+    if not (tdir / "tape.bin").exists() or not (tdir / "tape.json").exists():
+        raise ApiProblem(305, detail={"run_id": rid, "event_id": ev["event_id"], "version": ev["version"]})
+    sha = json.loads((tdir / "tape.json").read_text(encoding="utf-8"))["content_sha256"]
+    if sha != ev["content_sha256"]:
+        raise ApiProblem(614, detail={"expected": ev["content_sha256"], "actual": sha})
+    return Response((tdir / "tape.bin").read_bytes(), media_type="application/x-d4dtape",
+                    headers={"ETag": f'"{sha}"', "X-Event-Offset-Ns": str(round(float(ev.get("offset_s", 0.0)) * 1e9)),
+                             "Cache-Control": _IMMUTABLE})
