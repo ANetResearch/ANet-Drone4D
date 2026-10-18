@@ -37,6 +37,12 @@ class GzInstance:
     dry_run: bool = False
     _proc: subprocess.Popen | None = field(default=None, init=False, repr=False)
 
+    def __post_init__(self) -> None:
+        # gz 按 GZ_SIM_RESOURCE_PATH 解析 model:// 时，相对路径会与模型目录二次拼接（网格找不到、静默无碰撞）；docker 挂载同样要求绝对路径
+        self.run_dir = Path(self.run_dir).resolve()
+        if self.world_export is not None:
+            self.world_export = Path(self.world_export).resolve()
+
     @property
     def sock_dir(self) -> Path:
         return Path(self.run_dir) / "sock"
@@ -89,6 +95,9 @@ class GzInstance:
         t0 = time.monotonic()
         while time.monotonic() - t0 < timeout_s:
             if sock.exists():
+                miss = [ln for ln in self.logs().splitlines() if "Unable to find file" in ln]
+                if miss:                                            # 世界网格缺失时 gz 照常运行但没有碰撞体
+                    raise PhysError(638, f"gz could not load {len(miss)} mesh file(s): {miss[0][-300:]}")
                 return
             if not self.alive():
                 raise PhysError(638, f"gz container exited before binding the control socket: {self.logs()[-600:]}")

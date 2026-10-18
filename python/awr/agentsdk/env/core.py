@@ -352,6 +352,7 @@ class _GzTier:
 
     @staticmethod
     def create(spec: EnvSpec, spawn: dict, grounded: list[str], world):
+        from awr.agentsdk.env.geom import surface_z
         from awr.phys.gz.backend import GzSimBackend
         from awr.phys.gz.compose import UavSpawn, compose_run
         from awr.phys.gz.instance import GzInstance
@@ -365,7 +366,8 @@ class _GzTier:
                           world_export=exp.root)
         spawns = []
         for u, (p, yaw) in spawn.items():
-            z = float(world.height_dsm(np.array([p[:2]]))[0]) + GEAR_Z_M + 0.01 if u in grounded else float(p[2])
+            foot = np.asarray(p[:2], np.float64) + np.array([[0.0, 0.0], [0.3, 0.3], [0.3, -0.3], [-0.3, 0.3], [-0.3, -0.3]])
+            z = float(surface_z(world, foot).max()) + GEAR_Z_M + 0.01 if u in grounded else float(p[2])
             spawns.append(UavSpawn(u, (float(p[0]), float(p[1]), z), yaw))
         inst.start(compose_run(spawns, world_static_uri=exp.uri, endpoint=inst.gz_endpoint, spherical=exp.spherical))
         try:

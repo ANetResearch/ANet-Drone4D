@@ -220,6 +220,8 @@ class GzSimBackend:
                 elif kind == "TOUCHDOWN":
                     v.in_contact = True
                 elif kind == "LIFTOFF":
+                    ps = state[j, v.idx, 0:3]                # 离地时已无接触点，取机体位置
+                    ev = ContactEvent(v.uav, int(t_rel[j]), kind, "gz", (float(ps[0]), float(ps[1]), float(ps[2])), (0.0, 0.0, 1.0), float(c.speed))
                     v.in_contact = False
                     v.still_ns = 0
                     if not v.landed:                     # 落地待机中的弹跳不作为离地事件

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["los"]
+__all__ = ["los", "surface_z"]
 
 _CHUNK = 64
 
@@ -28,3 +28,18 @@ def los(world, A, B, eps_m: float = 0.5) -> np.ndarray:
     for i in range(0, len(A), _CHUNK):
         out[i:i + _CHUNK] = np.asarray(world.los_batch(A[i:i + _CHUNK], B[i:i + _CHUNK]), bool)
     return out
+
+
+def surface_z(world, xy, *, above_m: float = 50.0) -> np.ndarray:
+    """静态几何表面高程：网格世界自 DSM 上方 `above_m` 竖直向下求交（DSM 栅格与网格面可差 0.1–0.3 m，起飞点按网格面放置），
+    未命中或 DSM 世界取 DSM。"""
+    xy = np.asarray(xy, np.float64).reshape(-1, 2)
+    z = np.asarray(world.height_dsm(xy), np.float64)
+    if not hasattr(world, "raycast_batch") or not len(xy):
+        return z
+    top = z + above_m
+    d = np.tile([0.0, 0.0, -1.0], (len(xy), 1))
+    t, _prim, _inst = world.raycast_batch(np.column_stack([xy, top]), d, 2 * above_m + 100.0)
+    t = np.asarray(t, np.float64)
+    hit = np.isfinite(t) & (t < 2 * above_m + 100.0)
+    return np.where(hit, top - t, z)
