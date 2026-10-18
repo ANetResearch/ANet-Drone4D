@@ -203,10 +203,11 @@ def test_published_world_passes_every_applicable_vglb_rule(world: Path) -> None:
     assert rep.ok, rep.errors
     rows = {r["id"]: r for r in vglb_results(rep)}
     assert [r for r in rows] == list(VGLB_RULE_IDS)
-    applicable = ("V-GLB-01", "V-GLB-02", "V-GLB-03", "V-GLB-04", "V-GLB-08", "V-GLB-09", "V-GLB-10", "V-GLB-11", "V-GLB-12", "V-GLB-16")
+    applicable = ("V-GLB-01", "V-GLB-02", "V-GLB-03", "V-GLB-04", "V-GLB-05", "V-GLB-07", "V-GLB-08", "V-GLB-09", "V-GLB-10", "V-GLB-11",
+                  "V-GLB-12", "V-GLB-13", "V-GLB-14", "V-GLB-16")             # 07、13：quality 与 occupancy 阶段（W10）；05、14：navmesh（W09）
     assert all(rows[r]["status"] in ("pass", "warn") for r in applicable), {r: rows[r] for r in applicable}
     assert rows["V-GLB-04"]["measured"]["cells"] == 10_000 and rows["V-GLB-04"]["measured"]["max_abs_m"] < 1e-3
-    for r in ("V-GLB-05", "V-GLB-06", "V-GLB-07", "V-GLB-13", "V-GLB-14"):          # 图层尚未生成
+    for r in ("V-GLB-06",):                                                          # 锚点图层尚未生成
         assert rows[r]["status"] == "n/a" and rows[r]["reason"]
     assert rows["V-GLB-02"]["status"] == "warn"                                      # manual 配准且 landmark：提示须写明量测参照
     assert rows["V-GLB-15"]["status"] == "warn"                                      # 合成世界无调平证据
@@ -306,7 +307,7 @@ def test_v_glb_08_odbl_layers_need_licence_and_attribution(copy: Path) -> None:
     fc = {"type": "FeatureCollection", "awr": {"schema": "awr.navgraph.v1", "world_id": WID, "frame": "world", "units": "m",
                                                "coordinate_sha256": w["coordinate"]["sha256"], "license": "ODbL-1.0",
                                                "attribution": "OpenStreetMap contributors", "source_sha256": "a" * 64}, "features": []}
-    (copy / "geometry/nav").mkdir(parents=True)
+    (copy / "geometry/nav").mkdir(parents=True, exist_ok=True)
     _jw(copy / "geometry/nav/graph.geojson", fc)
     w["layers"].append({"id": "nav.graph", "type": "navgraph", "role": "geometry", "format": "geojson/awr-navgraph@1",
                         "href": "geometry/nav/graph.geojson", "status": "ready", "note": "ODbL-1.0, OpenStreetMap contributors"})
@@ -487,6 +488,8 @@ def _add_layer(d: Path, layer: dict, rel: str, doc: dict | bytes) -> None:
 
 def _navmesh(d: Path, **over) -> dict:
     w = _j(d / "world.json")
+    w["layers"] = [x for x in w["layers"] if x.get("type") != "navmesh"]      # 以本夹具的清单替换构建生成的 NavMesh 图层（W09）
+    _jw(d / "world.json", w)
     _add_layer(d, {}, "geometry/nav/person.bin", b"\x01" * 64)
     doc = {"schema": "awr.navmesh.v1", "profile": "person", "agent": {"radius_m": 0.3, "height_m": 1.8, "max_climb_m": 0.4, "max_slope_deg": 35.0},
            "cs_m": 0.3, "ch_m": 0.2, "tile_size_cells": 128, "axes": "recast-y-up-enu", "recast_version": "recast-navigation-js 0.39.0",
@@ -647,6 +650,9 @@ def _occupancy(d: Path, *, corrupt: bool = False) -> None:
         raw = cctx.compress(blk.tobytes())
         rows.append((key, len(blob), len(raw), 0))
         blob += raw
+    w = _j(d / "world.json")                                                         # 替换构建写出的占据层
+    w["layers"] = [L for L in w["layers"] if L["id"] != "occupancy.voxels"]
+    _jw(d / "world.json", w)
     od = d / "geometry/voxel/occ_2m"
     od.mkdir(parents=True, exist_ok=True)
     top.astype("<u2").tofile(od / "top.u16")

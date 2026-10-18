@@ -3,9 +3,11 @@
 本版阶段：normalize（配准记录的 `T_world_source`）→ pointcloud（表面彩色采样，经扩展点 6 写 sRGB 点云；网格包围盒的极值顶点并入
 采样，使点云、`coordinate.extent` 与 `bounds` 取同一网格包围盒，V-GLB-03、V-GLB-11）→ raycast（`awr-trimesh@1`）→ grids（`dsm_2m`
 与 `dsm_2m_n` 由确定性竖向栅格化核在求交网格上生成，每格 4 × 4 采样，§6.6.6，V-GLB-04；`dtm_10m` 仍由采样点云按 D2 规则派生）
-→ D1 切片与派生（与六城同一代码）→ appearance（`gltf-glb@2`）→ package（world.json 1.1.0：`profile = d3-glb`、`sensorHints`、
+→ D1 切片与派生（与六城同一代码）→ quality（质量位栅格、`semantic/quality.geojson` 覆盖多边形、求交网格 `q.u8`，`zones.border`
+改为覆盖多边形内缩，§6.6.7）→ appearance（`gltf-glb@2`，`tri.q.u8`）→ occupancy（`awr-occ@1`，覆盖外 unknown，§6.6.10）→ navmesh（行人与车辆 `detour-navmesh@1`，
+Node recast-navigation WASM 烘焙，§6.6.11，ADR-196）→ package（world.json 1.1.0：`profile = d3-glb`、`sensorHints`、
 `dataset`（含 `derivedFrom[]` 与署名，M22-FR-065））→ D2 全部校验规则与 V-GLB 规则组（M22 §7.8）→ qa 报告 `glb` 段（配准、调平、
-V-GLB 逐条结果）。V-GLB-08（许可与署名）失败以 602 WORLD_LICENSE_MISSING 报告。质量、语义、碰撞、占据、NavMesh 与锚点阶段随后加入。
+V-GLB 逐条结果）。V-GLB-08（许可与署名）失败以 602 WORLD_LICENSE_MISSING 报告。语义、碰撞与锚点阶段随后加入。
 """
 
 from __future__ import annotations
@@ -23,7 +25,11 @@ import numpy as np
 from awr.world.georef.frames import mat_to_quat
 from awr.world.glb.derive.appearance import HREF as APPEARANCE_HREF
 from awr.world.glb.derive.appearance import write_appearance
+from awr.world.glb.derive.navmesh import write_navmesh
+from awr.world.glb.derive.occupancy import occ_href, write_occupancy
 from awr.world.glb.derive.pointcloud import sample_surface
+from awr.world.glb.derive.quality import GEOJSON_HREF as QUALITY_GEOJSON_HREF
+from awr.world.glb.derive.quality import QualityResult, border_ring, compute_quality, write_quality
 from awr.world.glb.derive.raycast import HREF as RAYCAST_HREF
 from awr.world.glb.derive.raycast import write_raycast
 from awr.world.glb.qa import calibrate, replace_gates
@@ -38,15 +44,19 @@ from awr.world.package.build import BuildPipeline
 from awr.world.package.derivers import LayerSpec
 from awr.world.package.jsonio import read_json, sha256_file, write_json
 from awr.world.package.manifest import DSM_HREF, DSMN_HREF, DTM_HREF, QA_HREF, build_coordinate
+from awr.world.package.streams import add_stream
 from awr.world.package.validate import report_reason, validate_world, vglb_results
 
-__all__ = ["CAMERA_PROFILES", "DEM_MODELS", "GlbAdapter", "GlbPipeline", "LicenseMissing", "derived_from", "mesh_bounds", "sensor_hints"]
+__all__ = ["CAMERA_PROFILES", "DEM_MODELS", "GlbAdapter", "GlbPipeline", "LicenseMissing", "derived_from", "face_texel_m", "mesh_bounds",
+           "sensor_hints"]
 
 DEFAULT_POINTS = 5_000_000
 DEFAULT_SEED = 20261012
 # 交付分辨率宽度与水平视场（M22 §6.6.12）：纹理受限距离 = texelM × f_px，f_px = (W / 2) / tan(hfov / 2)
 CAMERA_PROFILES = {"720p_hfov60": (1280, 60.0), "720p_hfov84": (1280, 84.0), "1080p_hfov84": (1920, 84.0), "4k_hfov84": (3840, 84.0)}
 DSM_SAMPLES_K = 4                     # dsm_2m 每格 4 × 4 采样（M22 §6.8）
+DEFAULT_VOXEL_M = 1.0                 # 占据体素边长缺省（crop 1 m；配方 build.voxel_m）
+NOTE_ODBL_QUALITY = "Water polygons derived from OpenStreetMap (ODbL-1.0, OpenStreetMap contributors)."
 NOTICE = "Modified from the original: metric calibration, levelling and derived assets."
 NOTICE_ODBL = "OpenStreetMap-derived layers are provided under ODbL-1.0."
 # 配方 `osm` 与 `dem` 输入的 derivedFrom 条目（M22 §7.1.4、FR-003、FR-065；05 §14）
@@ -189,6 +199,22 @@ def _anchor(reg: dict) -> dict:
             "label": f"illustrative: origin from {reg['method']} registration to OpenStreetMap; horizontal uncertainty about 5 m; not for navigation"}
 
 
+def face_texel_m(sc: Scene, Vw: np.ndarray, F: np.ndarray, uv: np.ndarray | None, tex_of_face: np.ndarray) -> np.ndarray | None:
+    """逐面纹素边长（m）：世界面积 / 纹理面积（texel²）开方；无纹理或零纹理面积的面为 NaN；场景没有纹理时返回 None。"""
+    if uv is None or not (tex_of_face >= 0).any():
+        return None
+    out = np.full(len(F), np.nan)
+    m = tex_of_face >= 0
+    f = F[m]
+    a = 0.5 * np.linalg.norm(np.cross(Vw[f[:, 1]] - Vw[f[:, 0]], Vw[f[:, 2]] - Vw[f[:, 0]]), axis=1)
+    d1, d2 = uv[f[:, 1]] - uv[f[:, 0]], uv[f[:, 2]] - uv[f[:, 0]]
+    wh = np.array([sc.textures[t].width * sc.textures[t].height for t in range(len(sc.textures))], np.float64)
+    ta = 0.5 * np.abs(d1[:, 0] * d2[:, 1] - d1[:, 1] * d2[:, 0]) * wh[tex_of_face[m]]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out[m] = np.where(ta > 0, np.sqrt(a / ta), np.nan)
+    return out
+
+
 def sensor_hints(sc: Scene, Vw: np.ndarray, F: np.ndarray, uv: np.ndarray | None, tex_of_face: np.ndarray, edge_p50_m: float) -> dict:
     """texelM：面积加权的纹素边长中位数（每个面：世界面积 / 纹理面积（texel²）开方）；纹理受限距离按相机档换算（M22 §6.6.12）。"""
     texel = None
@@ -320,6 +346,8 @@ class GlbPipeline(BuildPipeline):
                    f"2m number of the {DSM_SAMPLES_K * DSM_SAMPLES_K} vertical samples per cell that hit the mesh; 0 = DSM value is the DTM fill",
                    dtype="uint8", value_frame="unitless", scale=1.0, offset=0.0)
         self.grid_info = {"dsm_max_m": float(dsm.a.max()), "dsm_shape": [H, W], "dsm_hit_cells": int((count > 0).sum())}
+        self.rc_mesh = (V, F)                                   # quality、occupancy 阶段沿用写出后的求交网格（与校验器同一份几何）
+        self.dsm_n = (count, origin, cell)
         nc.grid_cache = None
         self._write_source()
         self._stage("dsm", time.perf_counter() - t1)
@@ -344,20 +372,118 @@ class GlbPipeline(BuildPipeline):
         super().run_derive()
         wid = self.nc.world_id
         rc = self.raycast
+        build = self.adapter.recipe.doc.get("build", {}) or {}
+        t0 = time.perf_counter()
+        q = self.run_quality(build)
+        self._stage("quality", time.perf_counter() - t0)
+        qs = q.stats
+        self.layers.append(LayerSpec("quality.raster", "quality", "semantic", "f32-grid@1", self.quality_info["raster_href"],
+                                     extra={"stats": {"cellM": q.cell_m, "bits": qs["bits"]}}))
         self.layers.append(LayerSpec("mesh.raycast", "mesh", "geometry", "awr-trimesh@1", RAYCAST_HREF,
                                      extra={"axes": "enu", "stats": {"triangles": rc["counts"]["triangles"], "tiles": rc["counts"]["tiles"]}}))
         t1 = time.perf_counter()
         ap = write_appearance(self.stage, wid, self.coordinate_sha, self.scene, self.Vw_by_prim, self.adapter.recipe.doc["source"]["glb"]["sha256"])
+        q_app = np.zeros(int(ap["triangles"]), np.uint8)
+        q_app[self.rc_src] = q.tri_q                                    # 外观三角形序（M25 invalid_mask）
+        add_stream(self.stage / APPEARANCE_HREF / "index.json", "q", "tri.q.u8", q_app, dtype="uint8", count=len(q_app))
+        self._stage("appearance", time.perf_counter() - t1)
+        t2 = time.perf_counter()
+        V, F = self.rc_mesh
+        ext = self.coordinate["extent"]
+        v = float(build.get("voxel_m", DEFAULT_VOXEL_M))
+        occ = write_occupancy(self.stage, wid, self.coordinate_sha, V, F, voxel_m=v, bounds_min=ext["min"], bounds_max=ext["max"],
+                              cover=q.cover, cover_origin_xy=q.dsm_origin_xy, cover_cell_m=q.dsm_cell_m,
+                              quality=(q.grid, q.origin_xy, q.cell_m))
+        self._stage("occupancy", time.perf_counter() - t2)
+        self.layers.append(LayerSpec("occupancy.voxels", "voxel", "geometry", "awr-occ@1", occ_href(v),
+                                     extra={"stats": {"voxelM": v, "dims": occ["dims"], "bricks": occ["stats"]["bricks"]}}))
+        t3 = time.perf_counter()                                        # navmesh（§6.6.11，ADR-196）：行人与车辆 Detour NavMesh
+        nav = write_navmesh(self.stage, wid, self.coordinate, self.coordinate_sha, self.adapter.recipe, mesh=(V, F), tri_q=q.tri_q)
+        self.navmesh_qa = nav.qa
+        self.layers.extend(nav.layers)
+        self._stage("navmesh", time.perf_counter() - t3)
+        qx: dict[str, Any] = {"stats": {"features": self.quality_info["features"], "coverAreaM2": qs["cover_area_m2"],
+                                        "footprintVertices": qs["footprint_vertices"]}}
+        if q.water:
+            qx["note"] = NOTE_ODBL_QUALITY
+        self.layers.append(LayerSpec("semantic.quality", "quality", "semantic", "geojson/awr-quality@1", QUALITY_GEOJSON_HREF, extra=qx))
         self.layers.append(LayerSpec("mesh.appearance", "mesh", "visual", "gltf-glb@2", APPEARANCE_HREF,
                                      extra={"axes": "gltf-y-up-enu", "bytes": ap["glb"]["bytes"], "stats": {"triangles": ap["triangles"]},
                                             "note": self.adapter.dataset()["citation"][:256]}))
-        self._stage("appearance", time.perf_counter() - t1)
+
+    def run_quality(self, build: dict) -> QualityResult:
+        """quality 阶段（M22 §6.6.7）：质量位栅格与覆盖多边形、求交网格 `q.u8`；`zones.border` 改为覆盖多边形内缩（V-GLB-12）。
+        配方 `build.quality_cell_m`（缺省同 DSM 格）、`build.quality_simplify_m`（缺省：格 ≥ 1 m 为 1.0 m，否则 0.25 m）。"""
+        V, F = self.rc_mesh
+        count, origin, cell = self.dsm_n
+        rcd = self.stage / RAYCAST_HREF
+        self.rc_src = np.fromfile(rcd / "src.u32", "<u4").astype(np.int64)
+        tex = face_texel_m(self.scene, self.Vw, self.F, self.uv, self.tex_of_face)
+        qcell = float(build.get("quality_cell_m", cell))
+        tol = build.get("quality_simplify_m")
+        res = compute_quality(V, F, count, origin, cell, cell_m=qcell, texel_m=None if tex is None else tex[self.rc_src],
+                              water_rings=self._water_rings(), simplify_m=None if tol is None else float(tol))
+        self.quality_info = write_quality(self.stage, self.nc.world_id, self.coordinate_sha, res,
+                                          simplify_m=None if tol is None else float(tol))
+        add_stream(rcd / "index.json", "q", "q.u8", res.tri_q, dtype="uint8", count=len(F))
+        self._inset_border(res, 1.0 if tol is None else float(tol))
+        self.quality = res
+        return res
+
+    def _water_rings(self) -> list[np.ndarray]:
+        """配方 `osm` 与 `qa.osm_extra` 中的水面多边形（世界帧 (E, N)；ODbL 派生）。无 OSM 输入时为空。"""
+        from awr.world.georef.types import Anchor
+        from awr.world.glb.qa import parse_osm, rings_to_world
+        from awr.world.glb.recipe import verify_raw
+
+        d = self.adapter.recipe.doc
+        ents = []
+        for v in (d.get("osm"), (d.get("qa") or {}).get("osm_extra")):
+            ents += [] if not v else ([v] if isinstance(v, dict) else list(v))
+        if not ents:
+            return []
+        osm = parse_osm([verify_raw(e["path"], e.get("sha256")) for e in ents])
+        water = [p["ring"] for p in osm.planes if p["kind"] == "water"]
+        if not water:
+            return []
+        a = self.adapter.reg["result"]["anchor"]
+        h = a.get("h_msl_m")
+        anchor = Anchor(kind="synthetic", datum="WGS84", lat_deg=float(a["lat_deg"]), lon_deg=float(a["lon_deg"]),
+                        h_ellipsoid_m=0.0 if h is None else float(h), h_msl_m=None if h is None else float(h))
+        return rings_to_world(water, anchor)
+
+    def _inset_border(self, res: QualityResult, tol: float) -> None:
+        """`zones.border = inset(footprint, borderInsetM)`（M22 §6.6.7）：保留 D2 的 `max_z_m` 与属性，只替换几何；内缩后为空或
+        简化后自交（V-Z-03）时依次减半容差，仍不成立则保留矩形边界。"""
+        from awr.world.semantic.zones import check_zone_geometry
+
+        zp = self.stage / "semantic" / "zones.geojson"
+        if not zp.exists():
+            return
+        fc = read_json(zp)
+        b = next((f for f in fc.get("features", []) if (f.get("properties") or {}).get("kind") == "border"), None)
+        if b is None:
+            return
+        for t in (tol, tol / 2, tol / 4):
+            ring = border_ring(res.cover, res.dsm_origin_xy, res.dsm_cell_m, float(self.params.border_inset_m), t)
+            if ring is None:
+                return
+            old = b["geometry"]
+            b["geometry"] = {"type": "Polygon", "coordinates": [[[round(float(x), 3) + 0.0, round(float(y), 3) + 0.0] for x, y in
+                                                                  np.vstack([ring, ring[:1]])]]}
+            if not [e for e in check_zone_geometry(fc) if e[0] == "V-Z-03"]:
+                write_json(zp, fc)
+                return
+            b["geometry"] = old
 
     def run_package(self) -> dict[str, Any]:
         w = super().run_package()
         w["schemaVersion"] = "1.1.0"
         w["profile"] = "d3-glb"
         w["sensorHints"] = sensor_hints(self.scene, self.Vw, self.F, self.uv, self.tex_of_face, self.raycast["stats"]["edge_p50_m"])
+        q = getattr(self, "quality", None)
+        if q is not None:
+            w["sensorHints"]["multiLayerColumnFrac"] = float(q.stats["multilayer_cover_frac"])
         w.setdefault("dataset", {}).setdefault("derivedFrom", [])
         write_json(self.stage / "world.json", w)
         self.world = w
@@ -386,6 +512,8 @@ class GlbPipeline(BuildPipeline):
                "scale": None if calib is None else calib.report["scale"],
                "stages": [{"name": s["name"], "seconds": s["seconds"], "peak_rss_mb": s.get("peak_rss_mb", 0.0)} for s in self.stages],
                "vglb": vglb_results(self.validation) if self.validation is not None else []}
+        if getattr(self, "navmesh_qa", None) is not None:
+            seg["navmesh"] = self.navmesh_qa
         return seg
 
     def run_report(self) -> dict:
@@ -393,8 +521,9 @@ class GlbPipeline(BuildPipeline):
         report = super().run_report()
         report["glb"] = self.glb_segment()
         write_json(self.stage / QA_HREF, report)
-        post = validate_world(self.stage, rules={"V-GLB-02", "V-GLB-15"}, staging=False)
-        rows = {x["id"]: x for x in vglb_results(post) if x["status"] != "n/a"}
+        again = {"V-GLB-02", "V-GLB-15"}
+        post = validate_world(self.stage, rules=again, staging=False)
+        rows = {x["id"]: x for x in vglb_results(post) if x["id"] in again and x["status"] != "n/a"}   # 未执行的规则不覆盖 staging 结果
         report["glb"]["vglb"] = [rows.get(x["id"], x) for x in report["glb"]["vglb"]]
         v = report["validation"]
         known = {(e["rule"], e["message"]) for e in v["errors"] + v["warnings"]}
