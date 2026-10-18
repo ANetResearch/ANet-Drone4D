@@ -8,7 +8,7 @@ version = "0.2.0.dev0"
 description = "Drone4D benchmark SDK: agent interface, baseline policies, local runner and bench API client"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
-dependencies = ["httpx>=0.27"]
+dependencies = ["httpx>=0.27", "msgpack>=1.0"]
 
 [project.optional-dependencies]
 images = ["numpy>=1.26", "pillow>=10"]
