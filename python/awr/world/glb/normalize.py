@@ -21,7 +21,7 @@ from awr.world.glb.reader import Mat4, Scene
 from awr.world.ingest.normalize import Mat3, apply_linear, compose3, exact_rz, rodrigues, scale3
 from awr.world.terrain.dtm import dtm_opening
 
-__all__ = ["R_ENU_GLTF", "WorldFrame", "frame_of_relative", "level_matrix", "linear_part", "synthesize"]
+__all__ = ["R_ENU_GLTF", "WorldFrame", "frame_of_relative", "level_matrix", "linear_part", "source_gradient", "synthesize", "tilt_deg"]
 
 R_ENU_GLTF: Mat3 = ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0), (0.0, 1.0, 0.0))     # E = x, N = −z, U = y
 DTM_CELL_M = 10.0
@@ -30,6 +30,23 @@ DTM_CELL_M = 10.0
 def level_matrix(g: tuple[float, float]) -> Mat3:
     """把模型地面法线 (gE, gN, 1) 旋到 +Z（M22 §6.6.4）；g = (0, 0) 时为单位阵。"""
     return rodrigues((float(g[0]), float(g[1]), 1.0), (0.0, 0.0, 1.0))
+
+
+def tilt_deg(g: tuple[float, float] | list[float]) -> float:
+    """水平梯度 g = (gE, gN) 对应的倾角：`atan(|g|)`（地面法线 (gE, gN, 1) 与 +Z 的夹角）。"""
+    return math.degrees(math.atan(math.hypot(float(g[0]), float(g[1]))))
+
+
+def source_gradient(applied_g: tuple[float, float] | list[float], residual_g: tuple[float, float] | list[float]) -> tuple[float, float]:
+    """世界帧剩余梯度换算回源帧梯度（精确合成，非小角相加）。
+
+    世界帧中复测得到的地面法线为 `n_w ∝ (rE, rN, 1)`；调平旋转 `R = level_matrix(applied_g)` 已作用于源帧，故源帧法线
+    `n_s = Rᵀ · n_w`，源帧梯度为 `(n_s.x / n_s.z, n_s.y / n_s.z)`。剩余梯度为 0 时返回 `applied_g`。
+    """
+    R = level_matrix((float(applied_g[0]), float(applied_g[1])))
+    w = (float(residual_g[0]), float(residual_g[1]), 1.0)
+    n = [sum(R[k][i] * w[k] for k in range(3)) for i in range(3)]
+    return (n[0] / n[2], n[1] / n[2])
 
 
 def _mat3(M: Mat4) -> Mat3:
