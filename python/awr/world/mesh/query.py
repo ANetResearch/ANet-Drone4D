@@ -393,6 +393,30 @@ class MeshWorldQuery(DsmWorldQuery):
             best[ii] = np.minimum(best[ii], dist)
         return best.astype(np.float32)
 
+    def closest_points_batch(self, p, max_m: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """到网格最近表面的最近点（M24 `mesh_contact` 的贴近判定）：(距离 float64，超过 max_m 记 max_m；最近点 (N, 3) float64
+        世界帧，未找到时为查询点本身；全局 prim_id uint32，未找到为 MISS)。瓦片筛选与 `closest_batch` 相同。"""
+        import open3d as o3d
+
+        P = np.asarray(p, np.float64).reshape(-1, 3)
+        best = np.full(len(P), float(max_m), np.float64)
+        pts = P.copy()
+        prim = np.full(len(P), MISS, np.uint32)
+        for tile in self.tiles:
+            gap = np.maximum(np.maximum(tile.lo - P, P - tile.hi), 0.0)
+            m = np.linalg.norm(gap, axis=1) < best
+            if not m.any():
+                continue
+            ii = np.flatnonzero(m)
+            r = tile.scene.compute_closest_points(o3d.core.Tensor((P[ii] - tile.origin).astype(np.float32)))
+            c = r["points"].numpy().astype(np.float64) + tile.origin
+            d = np.linalg.norm(c - P[ii], axis=1)
+            better = d < best[ii]
+            jj = ii[better]
+            best[jj], pts[jj] = d[better], c[better]
+            prim[jj] = (r["primitive_ids"].numpy()[better].astype(np.int64) + tile.t0).astype(np.uint32)
+        return best, pts, prim
+
     def semantic_of(self, prim_id) -> np.ndarray:
         """anet-classes@1 静态类码；无 `cls.u8` 流或未命中（MISS）时为 0（unclassified）。"""
         pid = np.asarray(prim_id, np.uint32)

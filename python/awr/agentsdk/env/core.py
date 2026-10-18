@@ -15,6 +15,8 @@ M25 会话（`sensorsvc`，L2 与 L2-depth）：到期帧以 `(uav, sensor, seq)
 观测（641 时按原键重提交，仿真时钟不推进、不降频、不转离线，ADR-162）；L2Sensors 为该会话的进程内 worker 后端，每个 tick 生成一次
 并按键交付，帧字节与不经会话时相同。观测墙预览（`wall_preview`）由写入器旁路从交付的相机帧降采样（2 Hz、480 × 270、JPEG 75），
 写入 `preview/<uav>/<seq>.jpg` 或交给回调，不进入 M25 预览队列（ADR-173）。
+物理档（`spec.physics`）：`realistic`（gz 锁步，正式成绩）、`fast`（FleetSim，`awr.phys.fast`）、`kinematic`（开发夹具）；同一 Agent
+代码与观测接口在各档不变，`clock_profile` 先按 M24 时钟档规则与输出集合校验（637）。
 goto 目标解释在本机导航系，每个控制步按当前导航误差换算为真值系目标（变化 ≥ 5 cm 时更新跟踪器）。
 未返回动作的 Agent 计超时（回执 `timeout`），沿用上一导航指令。回合在事件时长到达或全部机体终止时结束。
 """
@@ -139,9 +141,27 @@ class BenchEnv:
             from awr.phys.kinematic import KinematicTier
 
             return KinematicTier(self.uavs, spawn, lambda xy: self.world.height_dsm(np.asarray(xy, np.float64)), grounded=grounded)
+        if self.spec.physics == "fast":
+            from awr.phys.fast import FastTier
+
+            return FastTier(self.uavs, spawn, self.world, grounded=grounded, vehicles={f.uav: f.vehicle_ref for f in self.spec.fleet},
+                            clock_profile=self.spec.clock_profile, tick_ms=TICK_MS, outputs=self._tier_outputs())
         if self.spec.physics == "realistic":
+            from awr.phys.adapter import validate_clock
+            from awr.phys.fast import check_physics_hz, clock_of
+
+            cp = clock_of(self.spec.clock_profile)
+            validate_clock("realistic", cp, TICK_MS, self._tier_outputs())
+            check_physics_hz(cp, self._tier_outputs())
             return _GzTier.create(self.spec, spawn, grounded, self.world)
-        raise ValueError(f"physics {self.spec.physics!r} is not available in P0a")
+        raise ValueError(f"physics {self.spec.physics!r} is not available (kinematic, fast, realistic)")
+
+    def _tier_outputs(self) -> tuple[str, ...]:
+        """时钟档相容性校验用的输出集合（M24-FR-005）：L2 与 L2-depth 按 `spec.l2` 开关给出 camera、lidar、imu。"""
+        if self.spec.obs_level == "L1":
+            return ("detections",)
+        cfg = L2Config(**{k: v for k, v in (self.spec.l2 or {}).items() if k in ("lidar", "imu", "gnss")})
+        return ("camera", *(["lidar"] if cfg.lidar else []), *(["imu"] if cfg.imu else []))
 
     def agent_config(self, uav: str) -> dict:
         nominal = {"gnss_pos_std_m": self.nav.pos_std_m, "l1_ground_sigma_m": [self.l1.p.sig0_m, self.l1.p.sig_per_m]}
@@ -204,9 +224,11 @@ class BenchEnv:
                 continue
             if u in actions:
                 self._settle(a, actions[u])
-            else:
+            else:                                           # 超时：沿用上一导航与云台指令（不产生新的物理档指令），计数并回执 661
                 a.timeouts += 1
-                a.acks.append({"k": a.k_obs, "item": "act", "index": 0, "result": "timeout", "code": 661})
+                r = self.guard[u].timeout(a.k_obs)
+                a.acks.extend(r.acks)
+                self.rec.on_act(u, a.k_obs, None, r.acks, None)
                 a.next_k = a.k_obs + 1
             a.k_obs = None
         while True:
@@ -259,6 +281,7 @@ class BenchEnv:
                 cmd = TierCommand(a.uav, kind, apply_tick)
             res = self.tier.submit([cmd])[0]
             if not res.ok:
+                self.guard[a.uav].tier_rejected()
                 r.acks = [x for x in r.acks if x["item"] != "nav"] + [{"k": a.k_obs, "item": "nav", "index": 0, "result": "rejected",
                                                                      "code": res.code, "why": "tier"}]
         if r.gimbal is not None:
@@ -450,6 +473,8 @@ class BenchEnv:
                     "comm": {"enabled": self.spec.comm.enabled, "bucket_Bps": self.spec.comm.bucket_Bps},
                     "duration_s": self.duration_s, "n_ticks": self.k, "pose_sha256": info.get("pose_sha256"), "tier_info": info,
                     "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats}
+        if not self.spec.ranked or self.spec.seed_commit:     # 运行身份（M27-FR-007）；排名运行须有 M27 的种子承诺值
+            manifest.update(self.spec.identity())
         if svc is not None:
             manifest["sensorsvc"] = svc
         if self._wall is not None:
