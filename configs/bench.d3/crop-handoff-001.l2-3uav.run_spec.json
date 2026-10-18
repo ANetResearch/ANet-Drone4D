@@ -1,0 +1,20 @@
+{
+ "schema": "drone4d.bench.run_spec.v1",
+ "experiment": {"name": "proto-board crop-handoff-001 L2 3-UAV", "project": "d3-p0a",
+                "note": "P0a prototype board: reference baselines, L2 rendered observations (rgb1080-rs camera, inverted MID-360, IMU, GNSS), gz-sim lockstep physics. Spawn pads on the paved strip south-east of the plaza: mesh surface level within 3 cm over +-0.7 m, >= 15 m from every actor path over the 360 s tape."},
+ "world": {"id": "oryahovo-crop1"},
+ "event": {"id": "crop-handoff-001", "version": 1},
+ "fleet": [
+  {"uav_id": "uav-01", "vehicle_ref": "x500", "start": {"kind": "pose", "pos_enu_m": [76.0, -78.0, 0.0], "yaw_deg": 90.0}},
+  {"uav_id": "uav-02", "vehicle_ref": "x500", "start": {"kind": "pose", "pos_enu_m": [76.0, -82.0, 0.0], "yaw_deg": 90.0}},
+  {"uav_id": "uav-03", "vehicle_ref": "x500", "start": {"kind": "pose", "pos_enu_m": [76.0, -86.0, 0.0], "yaw_deg": 90.0}}
+ ],
+ "policy": {"kind": "reference", "name": "track_share"},
+ "physics": "realistic",
+ "obs_level": "L2",
+ "noise": "realistic",
+ "comm": {"enabled": true, "bucket_Bps": 125000, "burst_B": 125000, "msg_max_B": 4096, "model": "fspl-nlos@1"},
+ "seeds": [1, 2, 3, 4, 5],
+ "duration_s": 360,
+ "ranked": true
+}

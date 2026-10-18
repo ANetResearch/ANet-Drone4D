@@ -19,7 +19,18 @@ from pathlib import Path
 
 from awr.phys import PhysError
 
-__all__ = ["GzInstance"]
+__all__ = ["GzInstance", "host_path"]
+
+
+def host_path(p: Path, mapping: str | None = None) -> str:
+    """容器内路径 → 宿主路径（`AWR_HOST_PATH_MAP="/repo=/data/…/d3dev"`，逗号分隔多对，按前缀换算）：本进程在容器中经宿主
+    docker 启动兄弟容器时，`-v` 的源路径须为宿主路径。"""
+    s = str(Path(p).resolve())
+    for pair in (mapping if mapping is not None else os.environ.get("AWR_HOST_PATH_MAP", "")).split(","):
+        src, _, dst = pair.partition("=")
+        if src and dst and (s == src or s.startswith(src.rstrip("/") + "/")):
+            return dst.rstrip("/") + s[len(src.rstrip("/")):]
+    return s
 
 
 @dataclass
@@ -61,11 +72,11 @@ class GzInstance:
         uid = f"{os.getuid()}:{os.getgid()}"
         cmd = [self.docker, "run", "-d", "--rm", "--name", self.name, "--user", uid, "--network", "none",
                "--cpus", f"{self.cpus:g}", "--memory", f"{self.mem_gb:g}g", "-e", "HOME=/tmp", "-e", "GZ_IP=127.0.0.1",
-               "-v", f"{self.sock_dir}:/run/d4d", "-v", f"{Path(self.run_dir) / 'run.sdf'}:/run/d4d-sdf/run.sdf:ro"]
+               "-v", f"{host_path(self.sock_dir)}:/run/d4d", "-v", f"{host_path(Path(self.run_dir) / 'run.sdf')}:/run/d4d-sdf/run.sdf:ro"]
         if self.world_export is not None:
-            cmd += ["-v", f"{self.world_export}:/opt/d4d/worlds:ro", "-e", "GZ_SIM_RESOURCE_PATH=/opt/d4d/models:/opt/d4d/worlds"]
+            cmd += ["-v", f"{host_path(self.world_export)}:/opt/d4d/worlds:ro", "-e", "GZ_SIM_RESOURCE_PATH=/opt/d4d/models:/opt/d4d/worlds"]
         for host, ctr in sorted(self.extra_mounts.items()):
-            cmd += ["-v", f"{host}:{ctr}:ro"]
+            cmd += ["-v", f"{host_path(Path(host))}:{ctr}:ro"]
         return [*cmd, self.image, "gz", "sim", "-s", "-r", "-v", str(self.verbose), "/run/d4d-sdf/run.sdf"]
 
     def start(self, sdf_text: str) -> list[str]:

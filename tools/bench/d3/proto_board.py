@@ -39,6 +39,8 @@ def _one(job: dict) -> dict:
 
     rs, pol, seed, out = job["spec"], job["policy"], job["seed"], Path(job["out"])
     rs = {**rs, "policy": {"kind": "reference", "name": pol}}
+    if job.get("duration_s"):
+        rs["duration_s"] = float(job["duration_s"])
     run_dir = out / "runs" / f"{pol}-s{seed}"
     ev_path = run_dir / "evaluation.json"
     if ev_path.exists():
@@ -81,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gz-launcher", choices=("docker", "local"))
     ap.add_argument("--gz-image")
     ap.add_argument("--gz-export-root")
+    ap.add_argument("--duration-s", type=float, help="override the run duration (smoke runs; not for published boards)")
     a = ap.parse_args(argv)
     rs = json.loads(a.spec.read_text(encoding="utf-8"))
     seeds = [int(s) for s in a.seeds.split(",")] if a.seeds else list(rs["seeds"])
@@ -89,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     tag = rs["event"]["id"]
     gz = {"launcher": a.gz_launcher, "image": a.gz_image, "export_root": a.gz_export_root} if physics == "realistic" else {}
     jobs = [{"spec": rs, "policy": p, "seed": s, "out": str(a.out), "tag": tag, "physics": physics, "gz": gz, "worlds_root": str(a.worlds_root),
-             "events_root": str(a.events_root), "agents": a.agents, "agent_image": a.agent_image} for p in a.policies.split(",") for s in seeds]
+             "events_root": str(a.events_root), "agents": a.agents, "agent_image": a.agent_image, "duration_s": a.duration_s} for p in a.policies.split(",") for s in seeds]
     done, failures = [], []
     with ProcessPoolExecutor(max_workers=max(1, a.jobs)) as ex:
         futs = {ex.submit(_one, j): j for j in jobs}

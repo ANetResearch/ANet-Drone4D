@@ -18,20 +18,12 @@ from pathlib import Path
 
 from awr.agentsdk.env.remote import SocketAgentHost, run_remote_episode
 from awr.agentsdk.wire import WireError
+from awr.phys.gz.instance import host_path
 
 __all__ = ["AgentContainers", "host_path", "run_container_episode"]
 
 _ENV_KEY = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 LOG_TAIL_B = 64 * 1024
-
-
-def host_path(p: Path, mapping: str | None = None) -> str:
-    s = str(Path(p).resolve())
-    for pair in (mapping if mapping is not None else os.environ.get("AWR_HOST_PATH_MAP", "")).split(","):
-        src, _, dst = pair.partition("=")
-        if src and dst and (s == src or s.startswith(src.rstrip("/") + "/")):
-            return dst.rstrip("/") + s[len(src.rstrip("/")):]
-    return s
 
 
 class AgentContainers:

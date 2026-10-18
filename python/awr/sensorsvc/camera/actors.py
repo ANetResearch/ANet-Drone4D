@@ -105,14 +105,18 @@ def proxy_mesh(actor: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 def visibility_objects(inst: np.ndarray, inst_unocc: np.ndarray, sem: np.ndarray, invalid: np.ndarray | None,
                        actors: list[dict]) -> list[dict]:
-    """M25 §6.6.1 可见度归约：返回 px_unoccluded > 0 的演员（按 inst 升序）。"""
+    """M25 §6.6.1 可见度归约：返回 px_unoccluded > 0 的演员（按 inst 升序）。只遍历任一实例通道非 0 的像素（演员通常只占画面一小部分）。"""
     H, W = inst.shape
-    ok = np.ones((H, W), bool) if invalid is None else (invalid == 0)
-    iu, iv, sm = inst_unocc[ok].astype(np.int64), inst[ok].astype(np.int64), sem[ok].astype(np.int64)
-    yy, xx = np.nonzero(ok)
+    fg = (inst_unocc > 0) | (inst > 0)
+    if invalid is not None:
+        fg &= invalid == 0
+    pix = np.flatnonzero(fg)
+    iu = inst_unocc.ravel()[pix].astype(np.int64)
+    iv = inst.ravel()[pix].astype(np.int64)
+    sm = sem.ravel()[pix].astype(np.int64)
+    yy, xx = np.divmod(pix, W)
     out = []
-    ids = np.unique(iu[iu > 0])
-    for i in ids:
+    for i in np.unique(iu[iu > 0]):
         mu = iu == i
         mv = iv == i
         bu = (int(xx[mu].min()), int(yy[mu].min()), int(xx[mu].max()), int(yy[mu].max()))
