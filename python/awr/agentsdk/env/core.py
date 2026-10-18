@@ -11,6 +11,10 @@ PettingZoo Parallel 风格接口。
 时序：控制步 100 ms；tick k 的观测取 t_k 的真值与导航解，L1 检测取 (t_last, t_k] 内的相机帧（10 Hz，帧序号 = tick）；动作在
 `apply_tick = k_obs + max(1, ⌈τ / 100 ms⌉)` 生效（固定延迟生效、未到即阻塞），在途期间不再调用该 Agent；物理档 `advance(k)` 推进
 (t_k, t_{k+1}]。L2 的传感器帧在 tick 末按物理档样本渲染，Agent 未被调用的 tick 的帧累积到下一次观测（按 seq 升序）。
+M25 会话（`sensorsvc`，L2 与 L2-depth）：到期帧以 `(uav, sensor, seq)` 请求提交到 Benchmark 会话，`wait_all` 阻塞至全部就绪才放行
+观测（641 时按原键重提交，仿真时钟不推进、不降频、不转离线，ADR-162）；L2Sensors 为该会话的进程内 worker 后端，每个 tick 生成一次
+并按键交付，帧字节与不经会话时相同。观测墙预览（`wall_preview`）由写入器旁路从交付的相机帧降采样（2 Hz、480 × 270、JPEG 75），
+写入 `preview/<uav>/<seq>.jpg` 或交给回调，不进入 M25 预览队列（ADR-173）。
 goto 目标解释在本机导航系，每个控制步按当前导航误差换算为真值系目标（变化 ≥ 5 cm 时更新跟踪器）。
 未返回动作的 Agent 计超时（回执 `timeout`），沿用上一导航指令。回合在事件时长到达或全部机体终止时结束。
 """
@@ -26,6 +30,7 @@ import numpy as np
 from awr.agentsdk.env.camera import CameraModel, Gimbal, cam_axes
 from awr.agentsdk.env.guard import ActionGuard, Limits
 from awr.agentsdk.env.l1 import L1Model
+from awr.agentsdk.env.l2 import CAM_SENSOR, GNSS_SENSOR, IMU_SENSOR, LIDAR_SENSOR, L2Config
 from awr.agentsdk.env.link import LinkModel
 from awr.agentsdk.env.nav import NavModel
 from awr.agentsdk.env.recorder import EnvRecorder
@@ -69,8 +74,11 @@ class _Agent:
 
 class BenchEnv:
     def __init__(self, spec: EnvSpec, *, world=None, tape=None, tier=None, cam: CameraModel | None = None, limits: Limits | None = None,
-                 l2=None) -> None:
-        """`l2`：L2 传感器工厂 `(env) -> L2Sensors`（测试注入 CPU 渲染替身）；缺省按 `spec.l2` 构造 EGL 光栅相机。"""
+                 l2=None, sensorsvc=None, inflight_cap: int | None = None, wall_preview=False) -> None:
+        """`l2`：L2 传感器工厂 `(env) -> L2Sensors`（测试注入 CPU 渲染替身）；缺省按 `spec.l2` 构造 EGL 光栅相机。
+        `sensorsvc`：M25 调度器（`awr.sensorsvc.scheduler.Scheduler`；进程内 GL 渲染须 `threaded=False`），L2 帧经其 Benchmark 会话交付；
+        `inflight_cap` 为会话在途上限（缺省 2 个 tick 的到期帧数）。`wall_preview`：True 写入运行目录，或回调
+        `(uav, seq, t_ns, jpeg_bytes)`。"""
         from awr.sim.events.tape import open_tape
 
         if spec.obs_level not in ("L1", "L2", "L2-depth"):
@@ -91,6 +99,10 @@ class BenchEnv:
         self._tier = tier
         self._l2_factory = l2
         self.l2 = None
+        self._svc, self._svc_cap, self._sess = sensorsvc, inflight_cap, None
+        self._svc_wait = {"ticks": 0, "rejected_641": 0, "resubmits": 0, "wait_s": 0.0, "backpressure_s": 0.0, "blocked_ticks": 0}
+        self._svc_cache: tuple[int, dict] | None = None
+        self._wall = _WallPreview(spec.out_dir, wall_preview) if wall_preview else None
         self.possible_agents = list(self.uavs)
         self.agents: list[str] = []
         self.k = 0
@@ -99,7 +111,7 @@ class BenchEnv:
     def _make_l2(self):
         import json as _json
 
-        from awr.agentsdk.env.l2 import L2Config, L2Sensors
+        from awr.agentsdk.env.l2 import L2Sensors
 
         wd = Path(self.spec.world_dir)
         meta = _json.loads((wd / "world.json").read_text(encoding="utf-8")) if (wd / "world.json").is_file() else {}
@@ -159,6 +171,9 @@ class BenchEnv:
         self.tier.open()
         if self.spec.obs_level != "L1":
             self.l2 = self._l2_factory(self) if self._l2_factory is not None else self._make_l2()
+            if self._svc is not None:
+                cap = self._svc_cap or 2 * len(self.uavs) * len(self._l2_sensors(1))
+                self._sess = self._svc.open(f"{self.spec.run_id}/0", "benchmark", produce=self._produce, inflight_cap=cap)
         self.st = {u: _Agent(u, i) for i, u in enumerate(self.uavs)}
         self.gim = {u: Gimbal(cam=self.cam) for u in self.uavs}
         self.guard = {u: ActionGuard(u, [p for p in self.uavs if p != u], self.lim, self.task["report_types"], self.spec.comm.enabled,
@@ -294,16 +309,71 @@ class BenchEnv:
         self._sense(self.k)
         self._log_fleet()
 
+    # ------------------------------------------------------------------ M25 会话（Benchmark 锁步）
+    def _l2_sensors(self, k: int) -> list[tuple[str, int]]:
+        """tick k 每架机的到期帧 (sensor, seq)，顺序与 `L2Sensors.sense_all` 的 `sensors` 映射一致；集合只由规格与 k 决定。"""
+        cfg = getattr(self.l2, "cfg", None) or L2Config()
+        out = [(CAM_SENSOR, k)]
+        if k > 0 and cfg.lidar:
+            out.append((LIDAR_SENSOR, k - 1))
+        if k > 0 and cfg.imu:
+            out.append((IMU_SENSOR, k - 1))
+        if cfg.gnss:
+            out.append((GNSS_SENSOR, k))
+        return out
+
+    def _produce(self, batch):
+        """会话的 worker 后端：tick 的首个请求触发一次 `sense_all`（同一实现、同一顺序），其余请求按键取出。
+        帧为 `(frame | None, 真值行)`；IMU 窗口不足时为 None（与 `sense_all` 不输出该键一致）。"""
+        out = []
+        for r in batch:
+            k, live = r.payload
+            if self._svc_cache is None or self._svc_cache[0] != k:
+                self._svc_cache = (k, self.l2.sense_all(k, list(live)))
+            frames, truth = self._svc_cache[1][r.key.uav]
+            fs = frames.get(r.key.sensor) or []
+            fr = next((f for f in fs if int(f["seq"]) == r.key.seq), None)
+            out.append((r, (fr, truth if r.key.sensor == CAM_SENSOR else [])))
+        return out
+
+    def _sense_m25(self, k: int, live: list[tuple[str, int]]) -> dict:
+        from awr.sensorsvc.scheduler import FrameKey, Request, wait_all
+
+        payload = (k, tuple(live))
+        reqs = [Request(FrameKey(u, sid, seq), "online", payload) for u, _no in live for sid, seq in self._l2_sensors(k)]
+        got, st = wait_all(self._svc, self._sess, reqs)
+        self._svc_cache = None
+        w = self._svc_wait
+        w["ticks"] += 1
+        w["rejected_641"] += st.rejected_641
+        w["resubmits"] += st.resubmits
+        w["wait_s"] += st.wait_s
+        w["backpressure_s"] += st.backpressure_s
+        w["blocked_ticks"] += int(st.rejected_641 > 0)
+        res = {}
+        for u, _no in live:
+            sensors, truth = {}, []
+            for sid, seq in self._l2_sensors(k):
+                fr, tr = got[FrameKey(u, sid, seq)]
+                if fr is not None:
+                    sensors[sid] = [fr]
+                truth.extend(tr)
+            res[u] = (sensors, truth)
+        return res
+
     def _sense(self, k: int) -> None:
         t = k * TICK_NS
         if self.l2 is not None:
             live = [(u, a.no) for u, a in self.st.items() if not a.done and self.status[u] != VehicleStatus.CRASHED]
-            for u, (frames, truth) in self.l2.sense_all(k, live).items():
+            res = self._sense_m25(k, live) if self._sess is not None else self.l2.sense_all(k, live)
+            for u, (frames, truth) in res.items():
                 a = self.st[u]
                 for sid, fs in frames.items():
                     a.frames.setdefault(sid, []).extend(fs)
                 for tr in truth:
                     self.rec.on_vis(tr)
+                if self._wall is not None:
+                    self._wall.on_frames(u, k, frames.get(CAM_SENSOR) or [])
             return
         env = self.tape.env_at(t)
         for u, a in self.st.items():
@@ -357,6 +427,11 @@ class BenchEnv:
 
     def close(self) -> dict:
         info = self.tier.close() if hasattr(self, "tier") else {}
+        svc = None
+        if self._sess is not None:
+            svc = {**self._svc.close_session(self._sess), **{k: round(v, 3) if isinstance(v, float) else v for k, v in self._svc_wait.items()},
+                   "delay_s": self._svc.delay_s}
+            self._sess = None
         if self.l2 is not None:
             self.l2.close()
         wall = time.perf_counter() - self._t0 if hasattr(self, "_t0") else 0.0
@@ -375,9 +450,49 @@ class BenchEnv:
                     "comm": {"enabled": self.spec.comm.enabled, "bucket_Bps": self.spec.comm.bucket_Bps},
                     "duration_s": self.duration_s, "n_ticks": self.k, "pose_sha256": info.get("pose_sha256"), "tier_info": info,
                     "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats}
+        if svc is not None:
+            manifest["sensorsvc"] = svc
+        if self._wall is not None:
+            manifest["wall_preview"] = self._wall.summary()
         self.rec.write_json("manifest.json", manifest)
         self.rec.close()
         return manifest
+
+
+class _WallPreview:
+    """观测墙预览（ADR-173；M27 FR-171）：从交付给 Agent 的相机帧按仿真时间 2 Hz 降采样为 480 × 270 JPEG（质量 75），
+    写入 `preview/<uav>/<seq:06d>.jpg` 或交给回调；不经 M25 队列，不影响观测。"""
+
+    HZ, SIZE, QUALITY = 2.0, (480, 270), 75
+
+    def __init__(self, out_dir, target) -> None:
+        self.sink = target if callable(target) else None
+        self.dir = Path(out_dir) / "preview" if (self.sink is None and out_dir) else None
+        self.every = max(1, round(1000 / (self.HZ * TICK_MS)))
+        self.n: dict[str, int] = {}
+
+    def on_frames(self, uav: str, k: int, frames: list[dict]) -> None:
+        import io
+
+        from PIL import Image
+
+        for f in frames:
+            if int(f["seq"]) % self.every:
+                continue
+            im = Image.open(io.BytesIO(f["rgb"]["data"])).convert("RGB").resize(self.SIZE, Image.BILINEAR)
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=self.QUALITY)
+            b = buf.getvalue()
+            if self.sink is not None:
+                self.sink(uav, int(f["seq"]), int(f["t_mid_ns"]), b)
+            elif self.dir is not None:
+                p = self.dir / uav / f"{int(f['seq']):06d}.jpg"
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(b)
+            self.n[uav] = self.n.get(uav, 0) + 1
+
+    def summary(self) -> dict:
+        return {"hz": self.HZ, "size": list(self.SIZE), "jpeg_quality": self.QUALITY, "frames": dict(self.n), "source": "delivered"}
 
 
 def _open_world(world_dir: Path):
