@@ -19,6 +19,7 @@ class Thresholds:
     pad_s: float = 2.0               # EC 窗口前后各 2 s
     eu_dt_s: float = 15.0            # EU：report 区间与事件区间的间隔 ≤ 15 s（重叠为 0）
     eu_iou: float = 0.3
+    eu_dilate_px: int = 3            # EU：点证据落在膨胀 3 px 的可见掩膜内（M27 §6.8 `eval.eu.dilate_px`）
     ao_q_px: float = 30.0            # AO 质量 min(1, h / 30 px) · 可见比例
     ao_window_s: float = 1.0
     oracle_grid_m: float = 10.0

@@ -33,7 +33,7 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["CAM_SENSOR", "GNSS_SENSOR", "IMU_SENSOR", "LIDAR_SENSOR", "L2Config", "L2Sensors"]
+__all__ = ["CAM_SENSOR", "GNSS_SENSOR", "IMU_SENSOR", "LIDAR_SENSOR", "L2Config", "L2Sensors", "mask_code"]
 
 NS = 1_000_000_000
 TICK_NS = 100_000_000
@@ -51,6 +51,19 @@ class L2Config:
     gnss: bool = True
     lidar_proc: bool = True                   # 网格 LiDAR 在独立进程中与相机渲染并行
     cache_dir: Path | None = None             # MeshWorldQuery 缓存；缺省 <worlds>/../cache/worldquery
+
+
+def mask_code(inst: np.ndarray, i: int, bbox_xywh) -> str | None:
+    """演员 `i` 的可见实例掩膜（`inst == i`）按可见包围盒裁剪、行优先按位打包、zlib 压缩后 base64，写入 truth/l2.jsonl 的
+    `mask`，供 EU 点证据按膨胀 3 px 掩膜关联（M27-FR-091；解码 `awr.bench.eval.eu.decode_mask`）；不可见时 None。"""
+    import base64
+    import zlib
+
+    x, y, w, h = (int(v) for v in bbox_xywh)
+    if w <= 0 or h <= 0:
+        return None
+    crop = np.ascontiguousarray(inst[y:y + h, x:x + w] == i)
+    return base64.b64encode(zlib.compress(np.packbits(crop.ravel()).tobytes(), 6)).decode()
 
 
 def _q_of(R: np.ndarray) -> list[float]:
@@ -311,7 +324,7 @@ class L2Sensors:
         objs = visibility_objects(out.instance, out.instance_unocc, out.semantic, None, self.actors) \
             if out.instance_unocc is not None and self.actors else []
         rows = [{"uav": uav, "sensor": CAM_SENSOR, "seq": int(k), "t_ns": int(tm), "actor": o["actor"], "h_unocc_px": o["h_px_unocc"],
-                 "vis": o["visible_ratio"], "bbox_xywh": o["bbox_xywh"]} for o in objs]
+                 "vis": o["visible_ratio"], "bbox_xywh": o["bbox_xywh"], "mask": mask_code(out.instance, o["inst"], o["bbox_xywh"])} for o in objs]
         return obs, rows
 
     def _imu(self, uav: str, uav_no: int, k: int, t_from: int, t_to: int) -> dict | None:
