@@ -1,0 +1,17 @@
+<launch>
+  <!-- d3-livo：无 rviz 的通用启动（r1 §3.1）。cfg 为 FAST-LIVO2 参数 yaml，cam 为相机 yaml（同 mapping_avia.launch 的拆分方式）；
+       compressed 为 true 时以 image_transport republish 把 /left_camera/image/compressed 转为 raw。 -->
+  <arg name="cfg" default="$(find fast_livo)/config/avia.yaml" />
+  <arg name="cam" default="$(find fast_livo)/config/camera_pinhole.yaml" />
+  <arg name="compressed" default="false" />
+  <arg name="img_in" default="/left_camera/image" />
+  <arg name="sim_time" default="false" />
+  <param name="use_sim_time" value="$(arg sim_time)" />
+  <rosparam command="load" file="$(arg cfg)" />
+  <node pkg="fast_livo" type="fastlivo_mapping" name="laserMapping" output="screen" required="true">
+    <rosparam file="$(arg cam)" />
+  </node>
+  <group if="$(arg compressed)">
+    <node pkg="image_transport" type="republish" name="republish" args="compressed in:=$(arg img_in) raw out:=$(arg img_in)" output="log" respawn="true"/>
+  </group>
+</launch>
