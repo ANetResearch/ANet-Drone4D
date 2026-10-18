@@ -10,13 +10,24 @@
 - IMU `lidar0_imu`：同一窗口内 200 Hz 绝对网格样本（M25 §6.9），比力与角速度取物理档样本（含杆臂与抗混叠，前 1 s 样本预热）；
 - GNSS `gnss0`：t_k 的位置（真值 + 导航误差过程，与导航解同源）、速度与精度。
 
+执行：网格 LiDAR 在独立进程（`_lidar_main`）中运行：每个 tick 先把各机 11 个位姿节点发给它，主进程同时渲染各机相机、
+编码 JPEG（GL 上下文只在主进程），再收取点云；与进程内串行执行逐字节相同（同一 MeshLidar 实现与参数）。线程并行在 dmax 上实测
+更慢（GIL 与 open3d 内部线程争用），不采用。
+
 真值侧记录（只写入运行真值层）：每帧可见演员的 `{uav, seq, t_ns, actor, h_unocc_px, vis, bbox_xywh}`（M25 §6.6.1 可见度归约），
 供 EC 识别判定与 EU 的框证据关联（IoU）。渲染器可注入（`renderer`，测试用 CPU 替身）；缺省为 EGL 光栅相机（需 GPU）。
 """
 
 from __future__ import annotations
 
+import contextlib
 import math
+import os
+import pickle
+import struct
+import subprocess
+import sys
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +49,7 @@ class L2Config:
     lidar: bool = True
     imu: bool = True
     gnss: bool = True
+    lidar_proc: bool = True                   # 网格 LiDAR 在独立进程中与相机渲染并行
     cache_dir: Path | None = None             # MeshWorldQuery 缓存；缺省 <worlds>/../cache/worldquery
 
 
@@ -139,6 +151,25 @@ class L2Sensors:
         self.track = {u: _Track() for u in self.uavs}
         self.ae = {u: AeState() for u in self.uavs}
         self.actors = list(tape.actors)
+        self._lp = None
+        self.lidar = None
+        if self.cfg.lidar:
+            from awr.sensorsvc.lidar.model import MOUNT_INVERTED_MAPPING, load_lidar_model
+            from awr.sensorsvc.poses import Mount
+
+            self.lmount = Mount(*MOUNT_INVERTED_MAPPING)
+            self.lmodel = load_lidar_model()
+            if lidar is not None:
+                self.lidar = lidar
+            else:
+                cache = self.cfg.cache_dir or Path(world_dir).resolve().parent.parent / "cache" / "worldquery"
+                if self.cfg.lidar_proc:                       # 独立解释器（不继承 EGL 状态），先于渲染器启动以重叠装载
+                    self._lp = _LidarProc(Path(world_dir), cache, Path(tape.path).parent)
+                else:
+                    from awr.sensorsvc.lidar.mesh import MeshLidar
+                    from awr.world.mesh.query import open_mesh_world_query
+
+                    self.lidar = MeshLidar(open_mesh_world_query(Path(world_dir), cache), self.lmodel, self.actors)
         if renderer is None:
             from awr.sensorsvc.camera.raster import RasterCamera
             from awr.sensorsvc.camera.scene import load_appearance
@@ -148,19 +179,6 @@ class L2Sensors:
             hints = (world_meta or {}).get("sensorHints") or {}
             renderer.set_sun(tuple(hints.get("bakedSunAzElDeg") or ()) or None)
         self.cam = renderer
-        self.lidar = None
-        if self.cfg.lidar:
-            from awr.sensorsvc.lidar.model import MOUNT_INVERTED_MAPPING, load_lidar_model
-            from awr.sensorsvc.poses import Mount
-
-            self.lmount = Mount(*MOUNT_INVERTED_MAPPING)
-            if lidar is None:
-                from awr.sensorsvc.lidar.mesh import MeshLidar
-                from awr.world.mesh.query import open_mesh_world_query
-
-                cache = self.cfg.cache_dir or Path(world_dir).resolve().parent.parent / "cache" / "worldquery"
-                lidar = MeshLidar(open_mesh_world_query(Path(world_dir), cache), load_lidar_model(), self.actors)
-            self.lidar = lidar
         if self.cfg.imu:
             from awr.sensorsvc.imu import MID360_IMU_IN_LIDAR, load_imu_model
 
@@ -179,8 +197,8 @@ class L2Sensors:
         out = [{**cam_cfg, "model_ref": f"d4d_{self.cfg.camera_profile}@1", "width": cm.width, "height": cm.height,
                 "K": [cm.fx, 0.0, cm.cx, 0.0, cm.fy, cm.cy, 0.0, 0.0, 1.0], "dist": [float(v) for v in cm.dist],
                 "exposure_s": cm.exposure_s, "readout_s": cm.readout_s}]
-        if self.lidar is not None:
-            m = self.lidar.m
+        if self.cfg.lidar:
+            m = self.lmodel
             out.append({"sensor_id": LIDAR_SENSOR, "kind": "lidar", "model_ref": f"{m.model_id}@1", "rate_hz": float(m.frame_rate_hz),
                         "mount_nominal": {"t_bs_m": list(self.lmount.xyz_m), "q_bs_xyzw": _q_of(self.lmount.R)}, "pattern": "mid360-nonrep@1",
                         "rays_per_frame": int(m.slots_per_frame), "range_m": [float(m.blind_m), float(m.hard_max_m)], "controllable": False})
@@ -211,29 +229,51 @@ class L2Sensors:
 
     # ------------------------------------------------------------------ 一个控制步
     def sense(self, uav: str, uav_no: int, k: int) -> tuple[dict[str, list[dict]], list[dict]]:
-        """→ (`sensors` 映射, 真值行)。"""
-        sensors: dict[str, list[dict]] = {}
-        truth: list[dict] = []
-        cam, rows = self._camera(uav, uav_no, k)
-        sensors[CAM_SENSOR] = [cam]
-        truth.extend(rows)
-        t_k = k * TICK_NS
-        if k > 0 and self.lidar is not None:
-            sensors[LIDAR_SENSOR] = [self._lidar(uav, uav_no, k, t_k - TICK_NS)]
-        if k > 0 and self.cfg.imu:
-            imu = self._imu(uav, uav_no, k, t_k - TICK_NS, t_k)
-            if imu is not None:
-                sensors[IMU_SENSOR] = [imu]
-        if self.cfg.gnss:
-            sensors[GNSS_SENSOR] = [self._gnss(uav, uav_no, k, t_k)]
-        self.track[uav].trim_before(t_k - 2 * IMU_WARMUP_NS)
-        return sensors, truth
+        """单机 → (`sensors` 映射, 真值行)。"""
+        return self.sense_all(k, [(uav, uav_no)])[uav]
 
-    def _camera(self, uav: str, uav_no: int, k: int) -> tuple[dict, list[dict]]:
-        from awr.sensorsvc.camera.actors import visibility_objects
+    def sense_all(self, k: int, items: list[tuple[str, int]]) -> dict[str, tuple[dict[str, list[dict]], list[dict]]]:
+        """各机 (uav, uav_no) → (`sensors` 映射, 真值行)。"""
+        t_k = k * TICK_NS
+        jobs = [(u, no, t_k - TICK_NS, self._lidar_nodes(u, t_k - TICK_NS)) for u, no in items] if k > 0 and self.cfg.lidar else []
+        if jobs and self._lp is not None:
+            self._lp.submit(k, jobs, self.seed, self.prof.name)
+        cams = {u: self._finish_camera(u, k, *self._render(u, no, k)) for u, no in items}
+        lid = {}
+        if jobs:
+            lid = self._lp.result() if self._lp is not None else {u: _scan(self.lidar, u, no, k, t_s, nodes, self.tape.actor_states, self.seed,
+                                                                              self.prof.name) for u, no, t_s, nodes in jobs}
+        res = {}
+        for u, no in items:
+            sensors = {CAM_SENSOR: [cams[u][0]]}
+            if u in lid:
+                sensors[LIDAR_SENSOR] = [{**lid[u], "mount_nominal": {"t_bs_m": list(self.lmount.xyz_m), "q_bs_xyzw": _q_of(self.lmount.R)}}]
+            if k > 0 and self.cfg.imu:
+                imu = self._imu(u, no, k, t_k - TICK_NS, t_k)
+                if imu is not None:
+                    sensors[IMU_SENSOR] = [imu]
+            if self.cfg.gnss:
+                sensors[GNSS_SENSOR] = [self._gnss(u, no, k, t_k)]
+            res[u] = (sensors, cams[u][1])
+            self.track[u].trim_before(t_k - 2 * IMU_WARMUP_NS)
+        return res
+
+    def _lidar_nodes(self, uav: str, t_s: int) -> list[tuple[np.ndarray, np.ndarray]]:
+        from awr.sim.sensors.frames import quat_to_R
+
+        m = self.lmodel
+        seg = m.frame_ns // (m.pose_nodes - 1)
+        tr = self.track[uav]
+        nodes = []
+        for j in range(m.pose_nodes):
+            s = tr.state_at(t_s + j * seg)
+            R_wb = quat_to_R(s[3:7])
+            nodes.append((R_wb @ self.lmount.R, s[0:3] + R_wb @ np.asarray(self.lmount.xyz_m)))
+        return nodes
+
+    def _render(self, uav: str, uav_no: int, k: int):
         from awr.sensorsvc.camera.effects import finish_frame, frame_params, gimbal_reading
         from awr.sensorsvc.camera.raster import RS_NODES, ActorFrame
-        from awr.sensorsvc.frame import encode_jpeg
         from awr.sensorsvc.timing import t_mid_ns
 
         t_end = k * TICK_NS
@@ -252,7 +292,13 @@ class L2Sensors:
         v = np.isin(stt.state, (1, 2))
         out = self.cam.render(self.cm, R, pos, fx=fxp, rs_nodes=rs, actors=ActorFrame(stt.ids[v], stt.pos_enu_m[v], stt.yaw_rad[v]))
         finish_frame(st, fxp, out.meter_sub)
-        gr = gimbal_reading(g, self.prof.gimbal_sigma_deg, **kw)
+        return out, (tm, gimbal_reading(g, self.prof.gimbal_sigma_deg, **kw))
+
+    def _finish_camera(self, uav: str, k: int, out, meta) -> tuple[dict, list[dict]]:
+        from awr.sensorsvc.camera.actors import visibility_objects
+        from awr.sensorsvc.frame import encode_jpeg
+
+        tm, gr = meta
         cm = self.cm
         obs = {"sensor_id": CAM_SENSOR, "seq": int(k), "t_mid_ns": int(tm), "exposure_ns": self.exp_ns, "readout_ns": self.ro_ns,
                "width": cm.width, "height": cm.height, "K": [cm.fx, 0.0, cm.cx, 0.0, cm.fy, cm.cy, 0.0, 0.0, 1.0],
@@ -267,26 +313,6 @@ class L2Sensors:
         rows = [{"uav": uav, "sensor": CAM_SENSOR, "seq": int(k), "t_ns": int(tm), "actor": o["actor"], "h_unocc_px": o["h_px_unocc"],
                  "vis": o["visible_ratio"], "bbox_xywh": o["bbox_xywh"]} for o in objs]
         return obs, rows
-
-    def _lidar(self, uav: str, uav_no: int, k: int, t_s: int) -> dict:
-        m = self.lidar.m
-        seg = m.frame_ns // (m.pose_nodes - 1)
-        from awr.sim.sensors.frames import quat_to_R
-
-        tr = self.track[uav]
-        nodes = []
-        for j in range(m.pose_nodes):
-            s = tr.state_at(t_s + j * seg)
-            R_wb = quat_to_R(s[3:7])
-            nodes.append((R_wb @ self.lmount.R, s[0:3] + R_wb @ np.asarray(self.lmount.xyz_m)))
-        sc = self.lidar.scan(k - 1, t_s, nodes, actor_states=self.tape.actor_states, seed=self.seed, uav_no=uav_no, sensor_no=0,
-                             tier=self.prof.name)
-        p = sc.points
-        xyz = np.stack([p["x"], p["y"], p["z"]], 1).astype("<f4")
-        return {"sensor_id": LIDAR_SENSOR, "seq": int(k - 1), "t_start_ns": int(t_s),
-                "mount_nominal": {"t_bs_m": list(self.lmount.xyz_m), "q_bs_xyzw": _q_of(self.lmount.R)}, "n": len(p),
-                "xyz_m": xyz.tobytes(), "reflectivity": np.ascontiguousarray(p["reflectivity"], "u1").tobytes(),
-                "tag": np.ascontiguousarray(p["tag"], "u1").tobytes(), "offset_time_ns": np.ascontiguousarray(p["offset_time"], "<u4").tobytes()}
 
     def _imu(self, uav: str, uav_no: int, k: int, t_from: int, t_to: int) -> dict | None:
         from awr.sensorsvc.imu import synth_imu
@@ -310,6 +336,104 @@ class L2Sensors:
                 "vel_enu_mps": [float(v) for v in s[7:10]], "fix": self.nav.fix, "pos_std_m": list(self.nav.pos_std_m)}
 
     def close(self) -> None:
+        if self._lp is not None:
+            self._lp.close()
+            self._lp = None
         rel = getattr(self.cam, "release", None)
         if rel is not None:
             rel()
+
+
+def _scan(lidar, uav: str, uav_no: int, k: int, t_s: int, nodes, actor_states, seed: int, tier: str) -> dict:
+    """一帧网格 LiDAR（窗口 [t_s, t_s + 100 ms]，帧序号 k − 1）→ LidarObs（不含 mount_nominal）。"""
+    sc = lidar.scan(k - 1, t_s, nodes, actor_states=actor_states, seed=seed, uav_no=uav_no, sensor_no=0, tier=tier)
+    p = sc.points
+    xyz = np.stack([p["x"], p["y"], p["z"]], 1).astype("<f4")
+    return {"sensor_id": LIDAR_SENSOR, "seq": int(k - 1), "t_start_ns": int(t_s), "n": len(p), "xyz_m": xyz.tobytes(),
+            "reflectivity": np.ascontiguousarray(p["reflectivity"], "u1").tobytes(), "tag": np.ascontiguousarray(p["tag"], "u1").tobytes(),
+            "offset_time_ns": np.ascontiguousarray(p["offset_time"], "<u4").tobytes()}
+
+
+def _send(f, obj) -> None:
+    b = pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
+    f.write(struct.pack("<I", len(b)) + b)
+    f.flush()
+
+
+def _recv(f):
+    h = f.read(4)
+    if len(h) < 4:
+        raise EOFError("lidar worker pipe closed")
+    n = struct.unpack("<I", h)[0]
+    return pickle.loads(f.read(n))
+
+
+def _lidar_main() -> None:
+    """工作进程入口（`python -c "from awr.agentsdk.env.l2 import _lidar_main; _lidar_main()" <world> <cache> <event>`）：
+    stdin/stdout 为长度前缀的 pickle 帧；stdout 的其它输出改写到 stderr。"""
+    out = os.fdopen(os.dup(1), "wb")
+    os.dup2(2, 1)
+    inp = sys.stdin.buffer
+    world_dir, cache, event_dir = sys.argv[1:4]
+    try:
+        from awr.sensorsvc.lidar.mesh import MeshLidar
+        from awr.sensorsvc.lidar.model import load_lidar_model
+        from awr.sim.events.tape import open_tape
+        from awr.world.mesh.query import open_mesh_world_query
+
+        tape = open_tape(Path(event_dir))
+        lidar = MeshLidar(open_mesh_world_query(Path(world_dir), Path(cache)), load_lidar_model(), list(tape.actors))
+        _send(out, ("ready", None))
+    except Exception:
+        _send(out, ("err", traceback.format_exc()))
+        return
+    while True:
+        try:
+            msg = _recv(inp)
+        except EOFError:
+            return
+        if msg is None:
+            return
+        k, jobs, seed, tier = msg
+        try:
+            _send(out, ("ok", {u: _scan(lidar, u, no, k, t_s, nodes, tape.actor_states, seed, tier) for u, no, t_s, nodes in jobs}))
+        except Exception:
+            _send(out, ("err", traceback.format_exc()))
+
+
+class _LidarProc:
+    """网格 LiDAR 工作进程（独立解释器，不经 multiprocessing，不重新导入调用方主模块）：submit 后由主进程渲染相机，result 取回同一
+    tick 的点云。"""
+
+    def __init__(self, world_dir: Path, cache: Path, event_dir: Path) -> None:
+        cmd = [sys.executable, "-c", "from awr.agentsdk.env.l2 import _lidar_main; _lidar_main()", str(world_dir), str(cache), str(event_dir)]
+        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        self._ready = False
+
+    def _get(self):
+        try:
+            tag, val = _recv(self.proc.stdout)
+        except EOFError:
+            raise RuntimeError(f"lidar worker exited (code {self.proc.poll()})") from None
+        if tag == "err":
+            raise RuntimeError(f"lidar worker failed:\n{val}")
+        return val
+
+    def submit(self, k: int, jobs, seed: int, tier: str) -> None:
+        if not self._ready:
+            self._get()
+            self._ready = True
+        _send(self.proc.stdin, (k, jobs, seed, tier))
+
+    def result(self) -> dict:
+        return self._get()
+
+    def close(self) -> None:
+        with contextlib.suppress(BrokenPipeError, OSError, ValueError):
+            _send(self.proc.stdin, None)
+            self.proc.stdin.close()
+        try:
+            self.proc.wait(10)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+            self.proc.wait()

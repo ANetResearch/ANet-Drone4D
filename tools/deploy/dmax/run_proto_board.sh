@@ -23,7 +23,7 @@ rsync -a --mkpath --delete "$ROOT/packages/contracts/" "dmax:$D/contracts/"
 rsync -a --mkpath "$ROOT/native/gz/proto/" "dmax:$D/native/gz/proto/"
 rsync -a --mkpath "$ROOT/vehicles/sensor_models/" "dmax:$D/vehicles/sensor_models/"
 if [ -n "$GPU" ]; then
-  HOST="--gpus device=$GPU -e NVIDIA_DRIVER_CAPABILITIES=all -e PYTHONPATH=/repo/python d3-sensorsvc:dev"
+  HOST="--gpus device=$GPU -e NVIDIA_DRIVER_CAPABILITIES=all -e OMP_NUM_THREADS=8 -e OPENBLAS_NUM_THREADS=8 -e PYTHONPATH=/repo/python d3-sensorsvc:dev"
   LAUNCH="--gz-launcher docker"
 else
   HOST="-e PYTHONPATH=/repo/pylib-gz:/repo/python d3-gz:dev"

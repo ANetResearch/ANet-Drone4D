@@ -53,16 +53,16 @@ def _segments(jpg: bytes) -> set[int]:
     return seen
 
 
-def _l2(env: BenchEnv) -> L2Sensors:
+def _l2(env: BenchEnv, lidar_proc: bool = True) -> L2Sensors:
     return L2Sensors(world_dir=Path(env.spec.world_dir), tape=env.tape, uavs=env.uavs, seed=env.spec.seed, noise=env.spec.noise,
                      obs_level=env.spec.obs_level, nav=env.nav, mount_t_bs_m=env.cam.mount_t_bs_m, hfov_deg=env.cam.hfov_deg,
-                     cfg=L2Config(camera_profile="rgb720-gs", cache_dir=Path(env.spec.out_dir) / "wq"), renderer=FakeRaster())
+                     cfg=L2Config(camera_profile="rgb720-gs", cache_dir=Path(env.spec.out_dir) / "wq", lidar_proc=lidar_proc), renderer=FakeRaster())
 
 
-def _episode(synth_event, out: Path, obs_level: str = "L2") -> tuple[list[tuple[str, dict]], dict]:
+def _episode(synth_event, out: Path, obs_level: str = "L2", lidar_proc: bool = True) -> tuple[list[tuple[str, dict]], dict]:
     w, ev = synth_event
     spec = EnvSpec("t-l2", 3, w, ev, FLEET, obs_level=obs_level, physics="kinematic", duration_s=3.0, out_dir=out)
-    env = BenchEnv(spec, l2=_l2)
+    env = BenchEnv(spec, l2=lambda e: _l2(e, lidar_proc))
     obs, infos = env.reset()
     seen = [(u, o) for u, o in obs.items()]
     cfg = infos["uav-01"]["config"]
@@ -120,6 +120,14 @@ def test_l2_is_deterministic_and_l2_depth_adds_depth(synth_event, tmp_path: Path
     f = d[0][1]["obs"]["sensors"][CAM_SENSOR][0]
     assert f["depth"]["encoding"] == "f32le" and len(f["depth"]["data"]) == 4 * 1280 * 720
     assert cfg["obs_level"] == "L2-depth"
+
+
+def test_lidar_worker_process_matches_in_process(synth_event, tmp_path: Path) -> None:
+    a, _ = _episode(synth_event, tmp_path / "p", lidar_proc=True)
+    b, _ = _episode(synth_event, tmp_path / "i", lidar_proc=False)
+    la = [(u, f["seq"], f["xyz_m"], f["offset_time_ns"]) for u, m in a for f in m["obs"]["sensors"].get(LIDAR_SENSOR, [])]
+    lb = [(u, f["seq"], f["xyz_m"], f["offset_time_ns"]) for u, m in b for f in m["obs"]["sensors"].get(LIDAR_SENSOR, [])]
+    assert la == lb and len(la) == 60 and all(len(x[2]) > 0 for x in la)
 
 
 def test_bbox_evidence_resolves_by_iou() -> None:

@@ -296,16 +296,18 @@ class BenchEnv:
 
     def _sense(self, k: int) -> None:
         t = k * TICK_NS
-        env = self.tape.env_at(t)
-        for u, a in self.st.items():
-            if a.done or self.status[u] == VehicleStatus.CRASHED:
-                continue
-            if self.l2 is not None:
-                frames, truth = self.l2.sense(u, a.no, k)
+        if self.l2 is not None:
+            live = [(u, a.no) for u, a in self.st.items() if not a.done and self.status[u] != VehicleStatus.CRASHED]
+            for u, (frames, truth) in self.l2.sense_all(k, live).items():
+                a = self.st[u]
                 for sid, fs in frames.items():
                     a.frames.setdefault(sid, []).extend(fs)
                 for tr in truth:
                     self.rec.on_vis(tr)
+            return
+        env = self.tape.env_at(t)
+        for u, a in self.st.items():
+            if a.done or self.status[u] == VehicleStatus.CRASHED:
                 continue
             row = self._row(u)
             yaw = _yaw(row[3:7])
