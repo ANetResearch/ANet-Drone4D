@@ -4408,6 +4408,7 @@ class LidarGtV1(TypedDict):
     beta_905_per_m: NotRequired[float]
     dynamic_source_id: NotRequired[str]
     actor_hits: NotRequired[int]
+    actor_rays: NotRequired[int]
     seed: LidarGtV1Seed
 
 

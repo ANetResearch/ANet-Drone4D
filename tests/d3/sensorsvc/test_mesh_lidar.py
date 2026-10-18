@@ -108,11 +108,14 @@ def test_actor_hits_and_occlusion(q) -> None:
     nd = nodes((-100.0, 60.0, 6.0))
     sc = MeshLidar(q, m, actors).scan(0, 0, nd, actor_states=st, tier="clean")
     hit_p = sc.gt_inst == 1
-    assert hit_p.sum() > 8 and sc.actor_hits == hit_p.sum() and not (sc.gt_inst == 2).any()     # 离场车辆不参与
+    assert hit_p.sum() > 8 and sc.actor_hits == hit_p.sum() == sc.actor_rays and not (sc.gt_inst == 2).any()     # 离场车辆不参与
     assert ((sc.gt_flags[hit_p] & 0x3F) == 32).all()
     w = world_points(sc, nd, m)
     on_p = np.isin(sc.points["offset_time"] // 5000, np.nonzero(hit_p)[0])
     assert (w[on_p, 2] > 0.0).all() and (w[on_p, 2] < 1.76).all() and np.abs(w[on_p, 1] - 66.0).max() < 0.4
+    far = MeshLidar(q, replace(m, r_at_rho10_m=6.0), actors).scan(0, 0, nd, actor_states=st, tier="realistic", seed=3)   # 检测极限附近
+    n_act = int(((far.gt_inst > 0) & (far.gt_inst < 65534)).sum())
+    assert far.actor_hits == n_act < far.actor_rays
     plain = MeshLidar(q, m).scan(0, 0, nd, tier="clean")
     assert len(plain.points) >= len(sc.points) - 5                       # 演员只遮挡地面，不凭空增加回波
 

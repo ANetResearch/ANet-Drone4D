@@ -76,7 +76,13 @@
     },
     "actor_hits": {
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "description": "Slots whose first return is an actor (inst in 1..65533 and returned); equals the count of actor ids in the inst block"
+    },
+    "actor_rays": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Rays whose nearest intersection is an actor, including rays without a detected return"
     },
     "seed": {
       "type": "object",

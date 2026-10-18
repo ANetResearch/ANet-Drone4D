@@ -310,7 +310,7 @@ def _lidar_frame(lidar, raw, tru, H: PoseHistory, uav: str, uav_no: int, L: Lida
     raw.write_lidar(uav, L.name, seq, t_s, hdr, sc.points, period_ns=m.frame_ns)
     gt = {"schema": "awr.sensor.lidar_gt.v1", "frame_id": fid, "frame_seq": int(seq), "timebase_ns": int(t_s), "slots": m.slots_per_frame,
           "codec": "zstd", "T_world_sensor_nodes": nd_meta, "reflectance_model": "sem_table_v1", "beta_905_per_m": 0.0,
-          "dynamic_source_id": source_id, "actor_hits": sc.actor_hits,
+          "dynamic_source_id": source_id, "actor_hits": sc.actor_hits, "actor_rays": sc.actor_rays,
           "seed": {"run_seed": int(seed), "uav_no": int(uav_no), "sensor_no": int(L.sensor_no - LIDAR_SENSOR_NO0)}}
     tru.write_lidar_truth(uav, L.name, seq, t_s, gt, sc.gt_inst, sc.gt_flags)
 

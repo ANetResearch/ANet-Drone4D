@@ -55,7 +55,8 @@ class LidarScan:
     gt_flags: np.ndarray        # (N,) u8：bit0–5 语义码、bit6 void、bit7 spurious
     t_start_ns: int
     frame_seq: int
-    actor_hits: int
+    actor_hits: int             # 回波为演员的槽位数（与 gt_inst 一致）
+    actor_rays: int = 0         # 最近交点为演员的射线数（含未检出回波）
 
 
 def _quat(R: np.ndarray) -> np.ndarray:
@@ -177,7 +178,8 @@ class MeshLidar:
         pts["reflectivity"] = refl[out]
         pts["tag"] = np.where(spur[out], 1, 0)
         pts["line"] = i[out] & 3
-        return LidarScan(pts, gt_inst, gt_flags, int(t_start_ns), int(frame_seq), n_act)
+        n_ret = int((ret & (inst > 0)).sum())
+        return LidarScan(pts, gt_inst, gt_flags, int(t_start_ns), int(frame_seq), n_ret, n_act)
 
     def _actors(self, o, d, t, nrm, sem, inst, seg, t_start_ns, seg_ns, K, actor_states) -> int:
         """逐节点段：段中时刻的可见演员建 Open3D 场景（以段首传感器位置为局部原点，float32 相对坐标）。"""

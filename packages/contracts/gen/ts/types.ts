@@ -6189,7 +6189,14 @@ export interface LidarGtV1 {
   reflectance_model: 'sem_table_v1'
   beta_905_per_m?: number
   dynamic_source_id?: string
+  /**
+   * Slots whose first return is an actor (inst in 1..65533 and returned); equals the count of actor ids in the inst block
+   */
   actor_hits?: number
+  /**
+   * Rays whose nearest intersection is an actor, including rays without a detected return
+   */
+  actor_rays?: number
   seed: {
     run_seed: number
     uav_no: number
