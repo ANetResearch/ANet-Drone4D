@@ -1,4 +1,4 @@
-"""BN-42、BN-43、BN-49 至 BN-52：运行列表与状态、帧索引、单帧、区间帧与真值帧（AWR-17 §18.8；M27-FR-052）。
+"""BN-49 至 BN-52：帧索引、单帧、区间帧与真值帧（AWR-17 §18.8；M27-FR-052）；运行列表与状态（BN-42、BN-43）见 `runs`。
 运行的事件磁带（`truth/event/tape`）等同事件真值，只对评测员及以上（M27 §7.9）。
 
 单帧返回交付字节（`Content-Type` 按通道，`X-Frame-T-Ns`），`ETag` 为内容 sha256，支持单区间 `Range` 与 `If-None-Match`。
@@ -15,11 +15,11 @@ from typing import Literal
 from fastapi import APIRouter, Query, Request, Response
 
 from awr.api.problem import ApiProblem
-from awr.bench.api.deps import FrameReader, Researcher, TruthReader
+from awr.bench.api.deps import FrameReader, TruthReader
 from awr.bench.recorder.read import FrameLimitError, FrameStore, TruthStore
 from awr.bench.recorder.truth import CONTENT_TYPE as GT_CONTENT_TYPE
 from awr.bench.recorder.truth import decode_blocks, pack_camera_gt, unpack_camera_gt
-from awr.bench.runs_store import env_run_item, find_run, list_runs, truth_paths
+from awr.bench.runs_store import find_run, truth_paths
 
 router = APIRouter()
 _IMMUTABLE = "private, max-age=31536000, immutable"
@@ -64,34 +64,6 @@ def _store(request: Request, rid: str) -> FrameStore:
     if fs is None:
         raise ApiProblem(305, detail={"run_id": rid})
     return fs
-
-
-@router.get("/runs")
-def runs(request: Request, p: Researcher) -> dict:
-    items = list_runs(request.app.state.settings.dataset_dir)
-    return {"items": items, "next_cursor": None}
-
-
-@router.get("/runs/{rid}")
-def run(rid: str, request: Request, p: Researcher) -> dict:
-    d = find_run(request.app.state.settings.dataset_dir, rid)
-    if d is None:
-        raise ApiProblem(305, detail={"run_id": rid})
-    m = d / "run_manifest.json"
-    doc = json.loads(m.read_text(encoding="utf-8")) if m.exists() else {}
-    out = {"run_id": rid, "event_id": d.parent.parent.name, "state": doc.get("state", "UNKNOWN"), "kind": doc.get("kind"),
-           "world_id": doc.get("world_id"), "fleet": doc.get("fleet", [])}
-    env = d / "manifest.json"
-    if not doc and env.exists():
-        man = json.loads(env.read_text(encoding="utf-8"))
-        out.update(env_run_item(d, man))
-    ev = doc.get("event")
-    if ev:
-        out["event"] = {"event_id": ev["event_id"], "version": ev["version"], "offset_s": ev.get("offset_s", 0.0)}
-    fs = request.app.state.frame_stores.get(d, rid)
-    if fs is not None:
-        out["frames"] = [{"uav_id": u, "sensor_id": s, "latest_seq": fs.latest_seq(u, s)} for u, s in fs.idx.channels()]
-    return out
 
 
 @router.get("/runs/{rid}/frames/{uav}/{sensor}:range")

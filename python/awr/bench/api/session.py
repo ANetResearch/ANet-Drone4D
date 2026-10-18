@@ -27,7 +27,7 @@ class ShortIn(BaseModel):
 @router.get("/meta")
 def meta(request: Request, p: Researcher) -> dict:
     return {"api": "bench", "version": 1, "contracts": CONTRACTS_VERSION, "stage": "P0a-1",
-            "features": {"frames": True, "runs": "read", "worlds": False, "events": False}, "server_unix_ns": time.time_ns()}
+            "features": {"frames": True, "runs": "manage", "worlds": True, "events": "read"}, "server_unix_ns": time.time_ns()}
 
 
 @router.post("/session", status_code=204)
