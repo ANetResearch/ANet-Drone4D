@@ -67,6 +67,30 @@ __all__ = [
     "AnchorsAnchorsQuality",
     "AnchorsAnchorsSnapDistM",
     "AnchorsSources",
+    "AppearanceLibV1",
+    "AppearanceLibV1Attribute",
+    "AppearanceLibV1Classes",
+    "AppearanceLibV1Cls",
+    "AppearanceLibV1Entries",
+    "AppearanceLibV1EntriesAnimClips",
+    "AppearanceLibV1EntriesAsset",
+    "AppearanceLibV1EntriesAssetRender",
+    "AppearanceLibV1EntriesAssetRenderAccessory",
+    "AppearanceLibV1EntriesAssetRenderMarking",
+    "AppearanceLibV1EntriesAssetRenderPattern",
+    "AppearanceLibV1EntriesAssetRenderRoofRack",
+    "AppearanceLibV1EntriesDescription",
+    "AppearanceLibV1EntriesEmbedding",
+    "AppearanceLibV1EntriesGait",
+    "AppearanceLibV1EntriesRefImage",
+    "AppearanceLibV1EntriesThermalZones",
+    "AppearanceLibV1Generator",
+    "AppearanceLibV1License",
+    "AppearanceLibV1LicenseThirdParty",
+    "AppearanceLibV1Palette",
+    "AppearanceLibV1Rgb",
+    "AppearanceLibV1Rule",
+    "AppearanceLibV1Sha256",
     "BenchResult",
     "BenchResultHost",
     "BenchResultRecords",
@@ -1164,6 +1188,14 @@ type ActV1GimbalCmd = ActV1GimbalCmdOneOf0 | ActV1GimbalCmdOneOf1
 type ActV1NavCmd = ActV1NavCmdOneOf0 | ActV1NavCmdOneOf1 | ActV1NavCmdOneOf2 | ActV1NavCmdOneOf3 | ActV1NavCmdOneOf4 | ActV1NavCmdOneOf5 | ActV1NavCmdOneOf6 | ActV1NavCmdOneOf7
 
 
+# event/appearance_lib.v1.schema.json#/$defs/rgb
+type AppearanceLibV1Rgb = list[int]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/sha256
+type AppearanceLibV1Sha256 = str
+
+
 # rec/blocks.schema.json# Recording block messages (awr.StateExtBlock.v1, awr.SafetyBlock.v1)
 type Blocks = BlocksStateExtBlock | BlocksSafetyBlock
 
@@ -1845,6 +1877,165 @@ class AnchorsAnchorsSnapDistM(TypedDict):
 class AnchorsSources(TypedDict):
     name: str
     sha256: str
+
+
+# event/appearance_lib.v1.schema.json# Appearance library (drone4d.appearance_lib.v1)
+class AppearanceLibV1(TypedDict):
+    schema: Literal["drone4d.appearance_lib.v1"]
+    lib_id: str
+    generator: AppearanceLibV1Generator
+    license: AppearanceLibV1License
+    palette: dict[str, AppearanceLibV1Palette]
+    min_delta_e00: NotRequired[float]
+    classes: AppearanceLibV1Classes
+    rules: dict[str, AppearanceLibV1Rule]
+    min_hard_negatives: NotRequired[int]
+    entries: list[AppearanceLibV1Entries]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/attribute
+class AppearanceLibV1Attribute(TypedDict):
+    name: str
+    kind: Literal["color", "enum"]
+    values: list[str]
+
+
+# event/appearance_lib.v1.schema.json#/properties/classes
+class AppearanceLibV1Classes(TypedDict):
+    person: NotRequired[AppearanceLibV1Cls]
+    vehicle: NotRequired[AppearanceLibV1Cls]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/cls
+class AppearanceLibV1Cls(TypedDict):
+    count: int
+    min_pair_distance: int
+    asset: str
+    rig: NotRequired[str]
+    attributes: list[AppearanceLibV1Attribute]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/anim_clips/items
+class AppearanceLibV1EntriesAnimClips(TypedDict):
+    id: int
+    name: str
+    loop: bool
+    period_s: float
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset
+class AppearanceLibV1EntriesAsset(TypedDict):
+    kind: Literal["procedural", "gltf"]
+    generator: str
+    rig: NotRequired[str]
+    uri: NotRequired[str]
+    sha256: NotRequired[AppearanceLibV1Sha256]
+    render: AppearanceLibV1EntriesAssetRender
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render
+class AppearanceLibV1EntriesAssetRender(TypedDict):
+    top_rgb: NotRequired[AppearanceLibV1Rgb]
+    bottom_rgb: NotRequired[AppearanceLibV1Rgb]
+    skin_rgb: NotRequired[AppearanceLibV1Rgb]
+    body_rgb: NotRequired[AppearanceLibV1Rgb]
+    roof_rgb: NotRequired[AppearanceLibV1Rgb]
+    glass_rgb: NotRequired[AppearanceLibV1Rgb]
+    pattern: NotRequired[AppearanceLibV1EntriesAssetRenderPattern]
+    accessory: NotRequired[AppearanceLibV1EntriesAssetRenderAccessory]
+    roof_rack: NotRequired[AppearanceLibV1EntriesAssetRenderRoofRack]
+    marking: NotRequired[AppearanceLibV1EntriesAssetRenderMarking]
+    body_type: NotRequired[Literal["sedan", "hatchback", "suv", "van", "pickup"]]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render/properties/accessory
+class AppearanceLibV1EntriesAssetRenderAccessory(TypedDict):
+    kind: Literal["none", "backpack", "cap", "shoulder_bag"]
+    rgb: NotRequired[AppearanceLibV1Rgb]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render/properties/marking
+class AppearanceLibV1EntriesAssetRenderMarking(TypedDict):
+    kind: Literal["none", "side_stripe", "door_panel"]
+    rgb: NotRequired[AppearanceLibV1Rgb]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render/properties/pattern
+class AppearanceLibV1EntriesAssetRenderPattern(TypedDict):
+    kind: Literal["solid", "striped", "checked"]
+    accent_rgb: NotRequired[AppearanceLibV1Rgb]
+    period_m: NotRequired[float]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/asset/properties/render/properties/roof_rack
+class AppearanceLibV1EntriesAssetRenderRoofRack(TypedDict):
+    rgb: AppearanceLibV1Rgb
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/description
+class AppearanceLibV1EntriesDescription(TypedDict):
+    zh: str
+    en: str
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/embedding
+class AppearanceLibV1EntriesEmbedding(TypedDict):
+    model: str
+    values: list[float]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/gait
+class AppearanceLibV1EntriesGait(TypedDict):
+    speed_mps: list[float]
+    median_mps: float
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/ref_image
+class AppearanceLibV1EntriesRefImage(TypedDict):
+    uri: str
+    sha256: AppearanceLibV1Sha256
+    views: NotRequired[list[Literal["front", "side", "top45"]]]
+
+
+# event/appearance_lib.v1.schema.json#/properties/entries/items/properties/thermal_zones/items
+class AppearanceLibV1EntriesThermalZones(TypedDict):
+    zone: Literal["skin", "clothing", "body", "engine", "exhaust", "glass"]
+    emissivity: float
+    temp_model: str
+    parts: NotRequired[list[str]]
+
+
+# event/appearance_lib.v1.schema.json#/properties/generator
+class AppearanceLibV1Generator(TypedDict):
+    name: str
+    version: str
+    spec_sha256: AppearanceLibV1Sha256
+    seed: int
+    embedding_model: NotRequired[str]
+    rounds: NotRequired[dict[str, int]]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/license
+class AppearanceLibV1License(TypedDict):
+    kind: Literal["original", "third_party"]
+    spdx: str
+    holder: str
+    attribution: NotRequired[str]
+    third_party: NotRequired[list[AppearanceLibV1LicenseThirdParty]]
+
+
+# event/appearance_lib.v1.schema.json#/$defs/license/properties/third_party/items
+class AppearanceLibV1LicenseThirdParty(TypedDict):
+    name: str
+    spdx: str
+    source: NotRequired[str]
+
+
+# event/appearance_lib.v1.schema.json#/properties/palette/additionalProperties
+class AppearanceLibV1Palette(TypedDict):
+    rgb: AppearanceLibV1Rgb
+    zh: str
+    en: str
 
 
 # perf/bench-result.schema.json# awr.bench.result.v1
@@ -6821,7 +7012,7 @@ class QaReportSizes(TypedDict):
 
 # schemas/world/qa-report.schema.json#/properties/stages/items
 class QaReportStages(TypedDict):
-    name: Literal["read", "ingest", "dtm", "normals", "classify", "tile", "dsm", "zones", "hash", "validate", "normalize", "pointcloud", "raycast", "appearance"]
+    name: Literal["read", "ingest", "dtm", "normals", "classify", "tile", "dsm", "zones", "hash", "validate", "normalize", "pointcloud", "raycast", "appearance", "grids", "quality", "semantic", "collision", "occupancy", "navmesh", "anchors", "package"]
     seconds: float
     peak_rss_mb: NotRequired[float]
 
@@ -11436,6 +11627,33 @@ AgentConfigV1BriefTargets = TypedDict("AgentConfigV1BriefTargets", {
 })
 
 
+# event/appearance_lib.v1.schema.json#/properties/entries/items
+AppearanceLibV1Entries = TypedDict("AppearanceLibV1Entries", {
+    "id": str,
+    "class": Literal["person", "vehicle"],
+    "attrs": dict[str, str],
+    "vector": list[int],
+    "asset": AppearanceLibV1EntriesAsset,
+    "size_m": list[float],
+    "gait": NotRequired[AppearanceLibV1EntriesGait],
+    "anim_clips": list[AppearanceLibV1EntriesAnimClips],
+    "thermal_zones": list[AppearanceLibV1EntriesThermalZones],
+    "embedding": AppearanceLibV1EntriesEmbedding,
+    "description": AppearanceLibV1EntriesDescription,
+    "ref_image": NotRequired[AppearanceLibV1EntriesRefImage],
+    "license": AppearanceLibV1License,
+})
+
+
+# event/appearance_lib.v1.schema.json#/$defs/rule
+AppearanceLibV1Rule = TypedDict("AppearanceLibV1Rule", {
+    "class": Literal["person", "vehicle"],
+    "min_distance": int,
+    "min_shared": int,
+    "shared_any_of": NotRequired[list[str]],
+})
+
+
 # bus/event.schema.json#/$defs/phys_payloads
 BusEventPhysPayloads = TypedDict("BusEventPhysPayloads", {
     "phys.contact.mesh": NotRequired[BusEventPhysPayloadsPhysContactMesh],
@@ -11524,6 +11742,8 @@ EventV1Actors = TypedDict("EventV1Actors", {
     "id": str,
     "class": Literal["person", "vehicle", "dog", "machine", "object", "uav"],
     "appearance": NotRequired[EventV1ActorsAppearance],
+    "appearance_ref": NotRequired[str],
+    "roles": NotRequired[list[Literal["target", "distractor", "participant", "background_vehicle"]]],
     "gait": NotRequired[EventV1ActorsGait],
     "route": list[EventV1ActorsRoute],
     "reaction": NotRequired[Reaction],

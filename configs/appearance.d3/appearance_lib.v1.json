@@ -1,0 +1,6019 @@
+{
+ "schema": "drone4d.appearance_lib.v1",
+ "lib_id": "appearance_lib@1",
+ "generator": {
+  "name": "awr.sim.events.appearance",
+  "version": "1.0.0",
+  "spec_sha256": "2540221fd058e6f946b093f61a3f3f34a292b1947f26f20cb2a871c27828408a",
+  "seed": 20261018,
+  "rounds": {
+   "person": 0,
+   "vehicle": 3
+  },
+  "embedding_model": "awr-attr-descriptor@1"
+ },
+ "license": {
+  "kind": "original",
+  "spdx": "LicenseRef-ANet-OSL",
+  "holder": "Agent Network Research",
+  "attribution": "ANet-Drone4D appearance_lib@1 (procedurally generated, project-original)",
+  "third_party": []
+ },
+ "palette": {
+  "red": {
+   "rgb": [
+    190,
+    40,
+    40
+   ],
+   "zh": "红色",
+   "en": "red"
+  },
+  "orange": {
+   "rgb": [
+    230,
+    120,
+    30
+   ],
+   "zh": "橙色",
+   "en": "orange"
+  },
+  "yellow": {
+   "rgb": [
+    232,
+    200,
+    52
+   ],
+   "zh": "黄色",
+   "en": "yellow"
+  },
+  "green": {
+   "rgb": [
+    40,
+    140,
+    70
+   ],
+   "zh": "绿色",
+   "en": "green"
+  },
+  "blue": {
+   "rgb": [
+    40,
+    90,
+    180
+   ],
+   "zh": "蓝色",
+   "en": "blue"
+  },
+  "purple": {
+   "rgb": [
+    120,
+    60,
+    150
+   ],
+   "zh": "紫色",
+   "en": "purple"
+  },
+  "white": {
+   "rgb": [
+    236,
+    236,
+    232
+   ],
+   "zh": "白色",
+   "en": "white"
+  },
+  "black": {
+   "rgb": [
+    30,
+    30,
+    32
+   ],
+   "zh": "黑色",
+   "en": "black"
+  },
+  "gray": {
+   "rgb": [
+    128,
+    128,
+    128
+   ],
+   "zh": "灰色",
+   "en": "grey"
+  },
+  "navy": {
+   "rgb": [
+    32,
+    44,
+    100
+   ],
+   "zh": "藏青色",
+   "en": "navy"
+  },
+  "khaki": {
+   "rgb": [
+    190,
+    170,
+    120
+   ],
+   "zh": "卡其色",
+   "en": "khaki"
+  },
+  "brown": {
+   "rgb": [
+    112,
+    72,
+    40
+   ],
+   "zh": "棕色",
+   "en": "brown"
+  },
+  "silver": {
+   "rgb": [
+    168,
+    171,
+    176
+   ],
+   "zh": "银色",
+   "en": "silver"
+  },
+  "carmine": {
+   "rgb": [
+    160,
+    22,
+    32
+   ],
+   "zh": "暗红色",
+   "en": "dark red"
+  },
+  "cobalt": {
+   "rgb": [
+    28,
+    70,
+    150
+   ],
+   "zh": "深蓝色",
+   "en": "dark blue"
+  },
+  "olive": {
+   "rgb": [
+    86,
+    100,
+    50
+   ],
+   "zh": "橄榄绿",
+   "en": "olive green"
+  }
+ },
+ "min_delta_e00": 15.0,
+ "classes": {
+  "person": {
+   "count": 24,
+   "min_pair_distance": 3,
+   "asset": "person-proxy@1",
+   "rig": "awr-proxy-rig-person@1",
+   "attributes": [
+    {
+     "name": "top_color",
+     "kind": "color",
+     "values": [
+      "red",
+      "orange",
+      "yellow",
+      "green",
+      "blue",
+      "purple",
+      "white",
+      "black",
+      "gray"
+     ]
+    },
+    {
+     "name": "bottom_color",
+     "kind": "color",
+     "values": [
+      "black",
+      "navy",
+      "gray",
+      "khaki",
+      "brown"
+     ]
+    },
+    {
+     "name": "top_pattern",
+     "kind": "enum",
+     "values": [
+      "solid",
+      "striped",
+      "checked"
+     ]
+    },
+    {
+     "name": "accessory",
+     "kind": "enum",
+     "values": [
+      "none",
+      "backpack",
+      "cap",
+      "shoulder_bag"
+     ]
+    },
+    {
+     "name": "height_class",
+     "kind": "enum",
+     "values": [
+      "short",
+      "medium",
+      "tall"
+     ]
+    },
+    {
+     "name": "build",
+     "kind": "enum",
+     "values": [
+      "slim",
+      "average",
+      "sturdy"
+     ]
+    },
+    {
+     "name": "gait",
+     "kind": "enum",
+     "values": [
+      "slow",
+      "normal",
+      "brisk"
+     ]
+    }
+   ]
+  },
+  "vehicle": {
+   "count": 16,
+   "min_pair_distance": 2,
+   "asset": "vehicle-proxy@1",
+   "rig": "awr-proxy-rig-vehicle@1",
+   "attributes": [
+    {
+     "name": "body_type",
+     "kind": "enum",
+     "values": [
+      "sedan",
+      "hatchback",
+      "suv",
+      "van",
+      "pickup"
+     ]
+    },
+    {
+     "name": "body_color",
+     "kind": "color",
+     "values": [
+      "white",
+      "black",
+      "silver",
+      "carmine",
+      "cobalt",
+      "olive"
+     ]
+    },
+    {
+     "name": "roof",
+     "kind": "enum",
+     "values": [
+      "body",
+      "black",
+      "rack"
+     ]
+    },
+    {
+     "name": "marking",
+     "kind": "enum",
+     "values": [
+      "none",
+      "side_stripe",
+      "door_panel"
+     ]
+    }
+   ]
+  }
+ },
+ "rules": {
+  "reid_occlusion": {
+   "class": "person",
+   "min_distance": 2,
+   "min_shared": 1
+  },
+  "vehicle_track": {
+   "class": "vehicle",
+   "min_distance": 2,
+   "min_shared": 1,
+   "shared_any_of": [
+    "body_type",
+    "body_color"
+   ]
+  }
+ },
+ "min_hard_negatives": 3,
+ "entries": [
+  {
+   "id": "person-01",
+   "class": "person",
+   "attrs": {
+    "top_color": "purple",
+    "bottom_color": "brown",
+    "top_pattern": "checked",
+    "accessory": "shoulder_bag",
+    "height_class": "short",
+    "build": "sturdy",
+    "gait": "slow"
+   },
+   "vector": [
+    5,
+    4,
+    2,
+    3,
+    0,
+    2,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      120,
+      60,
+      150
+     ],
+     "bottom_rgb": [
+      112,
+      72,
+      40
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "checked",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.12
+     },
+     "accessory": {
+      "kind": "shoulder_bag",
+      "rgb": [
+       96,
+       62,
+       36
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.575,
+    0.345,
+    1.62
+   ],
+   "gait": {
+    "speed_mps": [
+     0.8,
+     1.4
+    ],
+    "median_mps": 1.1
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.301723,
+     0.343032,
+     -0.319408,
+     0.28262,
+     0.111245,
+     0.212581,
+     0.0,
+     0.0,
+     0.410016,
+     0.0,
+     0.0,
+     0.0,
+     0.410016,
+     -0.246009,
+     0.307512,
+     -0.246009
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.62 m，体型偏壮；上身紫色格纹上衣，下身棕色长裤；挎单肩包；步速较慢",
+    "en": "Approx. 1.62 m, sturdy build; checked purple top, brown trousers; shoulder bag; slow gait"
+   }
+  },
+  {
+   "id": "person-02",
+   "class": "person",
+   "attrs": {
+    "top_color": "gray",
+    "bottom_color": "navy",
+    "top_pattern": "checked",
+    "accessory": "cap",
+    "height_class": "medium",
+    "build": "slim",
+    "gait": "slow"
+   },
+   "vector": [
+    8,
+    1,
+    2,
+    2,
+    1,
+    0,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      128,
+      128,
+      128
+     ],
+     "bottom_rgb": [
+      32,
+      44,
+      100
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "checked",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.12
+     },
+     "accessory": {
+      "kind": "cap",
+      "rgb": [
+       200,
+       200,
+       196
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.44,
+    0.264,
+    1.74
+   ],
+   "gait": {
+    "speed_mps": [
+     0.8,
+     1.4
+    ],
+    "median_mps": 1.1
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.499491,
+     -0.0,
+     0.0,
+     0.187888,
+     0.140378,
+     -0.323499,
+     0.0,
+     0.0,
+     0.466073,
+     0.0,
+     0.0,
+     0.466073,
+     0.0,
+     0.0,
+     -0.279644,
+     -0.279644
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.74 m，体型偏瘦；上身灰色格纹上衣，下身藏青色长裤；戴浅色鸭舌帽；步速较慢",
+    "en": "Approx. 1.74 m, slim build; checked grey top, navy trousers; light cap; slow gait"
+   }
+  },
+  {
+   "id": "person-03",
+   "class": "person",
+   "attrs": {
+    "top_color": "yellow",
+    "bottom_color": "gray",
+    "top_pattern": "striped",
+    "accessory": "cap",
+    "height_class": "tall",
+    "build": "sturdy",
+    "gait": "brisk"
+   },
+   "vector": [
+    2,
+    2,
+    1,
+    2,
+    2,
+    2,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      232,
+      200,
+      52
+     ],
+     "bottom_rgb": [
+      128,
+      128,
+      128
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "striped",
+      "accent_rgb": [
+       30,
+       30,
+       32
+      ],
+      "period_m": 0.08
+     },
+     "accessory": {
+      "kind": "cap",
+      "rgb": [
+       200,
+       200,
+       196
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.575,
+    0.345,
+    1.86
+   ],
+   "gait": {
+    "speed_mps": [
+     1.1,
+     2.0
+    ],
+    "median_mps": 1.6
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.536064,
+     -0.020833,
+     0.478149,
+     0.35404,
+     -0.0,
+     0.0,
+     0.0,
+     0.330354,
+     0.0,
+     0.0,
+     0.0,
+     0.330354,
+     0.0,
+     0.198212,
+     0.247765,
+     0.198212
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.86 m，体型偏壮；上身黄色条纹上衣，下身灰色长裤；戴浅色鸭舌帽；步速较快",
+    "en": "Approx. 1.86 m, sturdy build; striped yellow top, grey trousers; light cap; brisk gait"
+   }
+  },
+  {
+   "id": "person-04",
+   "class": "person",
+   "attrs": {
+    "top_color": "purple",
+    "bottom_color": "gray",
+    "top_pattern": "checked",
+    "accessory": "none",
+    "height_class": "tall",
+    "build": "average",
+    "gait": "normal"
+   },
+   "vector": [
+    5,
+    2,
+    2,
+    0,
+    2,
+    1,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      120,
+      60,
+      150
+     ],
+     "bottom_rgb": [
+      128,
+      128,
+      128
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "checked",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.12
+     },
+     "accessory": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    0.5,
+    0.3,
+    1.86
+   ],
+   "gait": {
+    "speed_mps": [
+     0.9,
+     1.8
+    ],
+    "median_mps": 1.35
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.317945,
+     0.361475,
+     -0.336581,
+     0.463039,
+     -0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.43206,
+     0.43206,
+     0.0,
+     0.0,
+     0.0,
+     0.259236,
+     0.0,
+     0.0
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.86 m，体型中等；上身紫色格纹上衣，下身灰色长裤；无明显配饰；步速中等",
+    "en": "Approx. 1.86 m, medium build; checked purple top, grey trousers; no visible accessories; moderate gait"
+   }
+  },
+  {
+   "id": "person-05",
+   "class": "person",
+   "attrs": {
+    "top_color": "green",
+    "bottom_color": "navy",
+    "top_pattern": "checked",
+    "accessory": "none",
+    "height_class": "short",
+    "build": "sturdy",
+    "gait": "brisk"
+   },
+   "vector": [
+    3,
+    1,
+    2,
+    0,
+    0,
+    2,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      40,
+      140,
+      70
+     ],
+     "bottom_rgb": [
+      32,
+      44,
+      100
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "checked",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.12
+     },
+     "accessory": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    0.575,
+    0.345,
+    1.62
+   ],
+   "gait": {
+    "speed_mps": [
+     1.1,
+     2.0
+    ],
+    "median_mps": 1.6
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.412977,
+     -0.356492,
+     0.234371,
+     0.161832,
+     0.120911,
+     -0.278637,
+     0.0,
+     0.0,
+     0.401439,
+     0.401439,
+     0.0,
+     0.0,
+     0.0,
+     -0.240863,
+     0.301079,
+     0.240863
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.62 m，体型偏壮；上身绿色格纹上衣，下身藏青色长裤；无明显配饰；步速较快",
+    "en": "Approx. 1.62 m, sturdy build; checked green top, navy trousers; no visible accessories; brisk gait"
+   }
+  },
+  {
+   "id": "person-06",
+   "class": "person",
+   "attrs": {
+    "top_color": "blue",
+    "bottom_color": "navy",
+    "top_pattern": "striped",
+    "accessory": "shoulder_bag",
+    "height_class": "medium",
+    "build": "sturdy",
+    "gait": "brisk"
+   },
+   "vector": [
+    4,
+    1,
+    1,
+    3,
+    1,
+    2,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      40,
+      90,
+      180
+     ],
+     "bottom_rgb": [
+      32,
+      44,
+      100
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "striped",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.08
+     },
+     "accessory": {
+      "kind": "shoulder_bag",
+      "rgb": [
+       96,
+       62,
+       36
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.575,
+    0.345,
+    1.74
+   ],
+   "gait": {
+    "speed_mps": [
+     1.1,
+     2.0
+    ],
+    "median_mps": 1.6
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.338481,
+     0.137156,
+     -0.44851,
+     0.171954,
+     0.128474,
+     -0.296065,
+     0.0,
+     0.426548,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.426548,
+     0.0,
+     0.319911,
+     0.255929
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.74 m，体型偏壮；上身蓝色条纹上衣，下身藏青色长裤；挎单肩包；步速较快",
+    "en": "Approx. 1.74 m, sturdy build; striped blue top, navy trousers; shoulder bag; brisk gait"
+   }
+  },
+  {
+   "id": "person-07",
+   "class": "person",
+   "attrs": {
+    "top_color": "blue",
+    "bottom_color": "black",
+    "top_pattern": "checked",
+    "accessory": "shoulder_bag",
+    "height_class": "tall",
+    "build": "slim",
+    "gait": "brisk"
+   },
+   "vector": [
+    4,
+    0,
+    2,
+    3,
+    2,
+    0,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      40,
+      90,
+      180
+     ],
+     "bottom_rgb": [
+      30,
+      30,
+      32
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "checked",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.12
+     },
+     "accessory": {
+      "kind": "shoulder_bag",
+      "rgb": [
+       96,
+       62,
+       36
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.44,
+    0.264,
+    1.86
+   ],
+   "gait": {
+    "speed_mps": [
+     1.1,
+     2.0
+    ],
+    "median_mps": 1.6
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.355914,
+     0.144221,
+     -0.47161,
+     0.101699,
+     0.004607,
+     -0.012236,
+     0.0,
+     0.0,
+     0.448517,
+     0.0,
+     0.0,
+     0.0,
+     0.448517,
+     0.26911,
+     -0.26911,
+     0.26911
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.86 m，体型偏瘦；上身蓝色格纹上衣，下身黑色长裤；挎单肩包；步速较快",
+    "en": "Approx. 1.86 m, slim build; checked blue top, black trousers; shoulder bag; brisk gait"
+   }
+  },
+  {
+   "id": "person-08",
+   "class": "person",
+   "attrs": {
+    "top_color": "blue",
+    "bottom_color": "black",
+    "top_pattern": "solid",
+    "accessory": "backpack",
+    "height_class": "medium",
+    "build": "average",
+    "gait": "slow"
+   },
+   "vector": [
+    4,
+    0,
+    0,
+    1,
+    1,
+    1,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      40,
+      90,
+      180
+     ],
+     "bottom_rgb": [
+      30,
+      30,
+      32
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "solid"
+     },
+     "accessory": {
+      "kind": "backpack",
+      "rgb": [
+       36,
+       38,
+       44
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.5,
+    0.3,
+    1.74
+   ],
+   "gait": {
+    "speed_mps": [
+     0.8,
+     1.4
+    ],
+    "median_mps": 1.1
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.384877,
+     0.155957,
+     -0.509987,
+     0.109974,
+     0.004982,
+     -0.013231,
+     0.485015,
+     0.0,
+     0.0,
+     0.0,
+     0.485015,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     -0.291009
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.74 m，体型中等；上身蓝色纯色上衣，下身黑色长裤；背双肩包；步速较慢",
+    "en": "Approx. 1.74 m, medium build; plain blue top, black trousers; backpack; slow gait"
+   }
+  },
+  {
+   "id": "person-09",
+   "class": "person",
+   "attrs": {
+    "top_color": "blue",
+    "bottom_color": "brown",
+    "top_pattern": "striped",
+    "accessory": "backpack",
+    "height_class": "tall",
+    "build": "sturdy",
+    "gait": "slow"
+   },
+   "vector": [
+    4,
+    4,
+    1,
+    1,
+    2,
+    2,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      40,
+      90,
+      180
+     ],
+     "bottom_rgb": [
+      112,
+      72,
+      40
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "striped",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.08
+     },
+     "accessory": {
+      "kind": "backpack",
+      "rgb": [
+       36,
+       38,
+       44
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.575,
+    0.345,
+    1.86
+   ],
+   "gait": {
+    "speed_mps": [
+     0.8,
+     1.4
+    ],
+    "median_mps": 1.1
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.325625,
+     0.131947,
+     -0.431475,
+     0.282849,
+     0.111335,
+     0.212753,
+     0.0,
+     0.410348,
+     0.0,
+     0.0,
+     0.410348,
+     0.0,
+     0.0,
+     0.246209,
+     0.307761,
+     -0.246209
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.86 m，体型偏壮；上身蓝色条纹上衣，下身棕色长裤；背双肩包；步速较慢",
+    "en": "Approx. 1.86 m, sturdy build; striped blue top, brown trousers; backpack; slow gait"
+   }
+  },
+  {
+   "id": "person-10",
+   "class": "person",
+   "attrs": {
+    "top_color": "purple",
+    "bottom_color": "brown",
+    "top_pattern": "solid",
+    "accessory": "none",
+    "height_class": "tall",
+    "build": "sturdy",
+    "gait": "brisk"
+   },
+   "vector": [
+    5,
+    4,
+    0,
+    0,
+    2,
+    2,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      120,
+      60,
+      150
+     ],
+     "bottom_rgb": [
+      112,
+      72,
+      40
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "solid"
+     },
+     "accessory": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    0.575,
+    0.345,
+    1.86
+   ],
+   "gait": {
+    "speed_mps": [
+     1.1,
+     2.0
+    ],
+    "median_mps": 1.6
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.301723,
+     0.343032,
+     -0.319408,
+     0.28262,
+     0.111245,
+     0.212581,
+     0.410016,
+     0.0,
+     0.0,
+     0.410016,
+     0.0,
+     0.0,
+     0.0,
+     0.246009,
+     0.307512,
+     0.246009
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.86 m，体型偏壮；上身紫色纯色上衣，下身棕色长裤；无明显配饰；步速较快",
+    "en": "Approx. 1.86 m, sturdy build; plain purple top, brown trousers; no visible accessories; brisk gait"
+   }
+  },
+  {
+   "id": "person-11",
+   "class": "person",
+   "attrs": {
+    "top_color": "purple",
+    "bottom_color": "khaki",
+    "top_pattern": "checked",
+    "accessory": "backpack",
+    "height_class": "short",
+    "build": "slim",
+    "gait": "slow"
+   },
+   "vector": [
+    5,
+    3,
+    2,
+    1,
+    0,
+    0,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      120,
+      60,
+      150
+     ],
+     "bottom_rgb": [
+      190,
+      170,
+      120
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "checked",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.12
+     },
+     "accessory": {
+      "kind": "backpack",
+      "rgb": [
+       36,
+       38,
+       44
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.44,
+    0.264,
+    1.62
+   ],
+   "gait": {
+    "speed_mps": [
+     0.8,
+     1.4
+    ],
+    "median_mps": 1.1
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.273791,
+     0.311276,
+     -0.289839,
+     0.522472,
+     -0.000467,
+     0.211673,
+     0.0,
+     0.0,
+     0.372058,
+     0.0,
+     0.372058,
+     0.0,
+     0.0,
+     -0.223235,
+     -0.223235,
+     -0.223235
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.62 m，体型偏瘦；上身紫色格纹上衣，下身卡其色长裤；背双肩包；步速较慢",
+    "en": "Approx. 1.62 m, slim build; checked purple top, khaki trousers; backpack; slow gait"
+   }
+  },
+  {
+   "id": "person-12",
+   "class": "person",
+   "attrs": {
+    "top_color": "white",
+    "bottom_color": "gray",
+    "top_pattern": "solid",
+    "accessory": "shoulder_bag",
+    "height_class": "tall",
+    "build": "average",
+    "gait": "normal"
+   },
+   "vector": [
+    6,
+    2,
+    0,
+    3,
+    2,
+    1,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      236,
+      236,
+      232
+     ],
+     "bottom_rgb": [
+      128,
+      128,
+      128
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "solid"
+     },
+     "accessory": {
+      "kind": "shoulder_bag",
+      "rgb": [
+       96,
+       62,
+       36
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.5,
+    0.3,
+    1.86
+   ],
+   "gait": {
+    "speed_mps": [
+     0.9,
+     1.8
+    ],
+    "median_mps": 1.35
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.705669,
+     -0.005329,
+     0.014631,
+     0.405294,
+     -0.0,
+     0.0,
+     0.378179,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.378179,
+     0.226907,
+     0.0,
+     0.0
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.86 m，体型中等；上身白色纯色上衣，下身灰色长裤；挎单肩包；步速中等",
+    "en": "Approx. 1.86 m, medium build; plain white top, grey trousers; shoulder bag; moderate gait"
+   }
+  },
+  {
+   "id": "person-13",
+   "class": "person",
+   "attrs": {
+    "top_color": "red",
+    "bottom_color": "khaki",
+    "top_pattern": "checked",
+    "accessory": "shoulder_bag",
+    "height_class": "tall",
+    "build": "slim",
+    "gait": "normal"
+   },
+   "vector": [
+    0,
+    3,
+    2,
+    3,
+    2,
+    0,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      190,
+      40,
+      40
+     ],
+     "bottom_rgb": [
+      190,
+      170,
+      120
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "checked",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.12
+     },
+     "accessory": {
+      "kind": "shoulder_bag",
+      "rgb": [
+       96,
+       62,
+       36
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.44,
+    0.264,
+    1.86
+   ],
+   "gait": {
+    "speed_mps": [
+     0.9,
+     1.8
+    ],
+    "median_mps": 1.35
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.30498,
+     0.418885,
+     0.276071,
+     0.507587,
+     -0.000454,
+     0.205642,
+     0.0,
+     0.0,
+     0.361459,
+     0.0,
+     0.0,
+     0.0,
+     0.361459,
+     0.216875,
+     -0.216875,
+     0.0
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.86 m，体型偏瘦；上身红色格纹上衣，下身卡其色长裤；挎单肩包；步速中等",
+    "en": "Approx. 1.86 m, slim build; checked red top, khaki trousers; shoulder bag; moderate gait"
+   }
+  },
+  {
+   "id": "person-14",
+   "class": "person",
+   "attrs": {
+    "top_color": "orange",
+    "bottom_color": "brown",
+    "top_pattern": "striped",
+    "accessory": "cap",
+    "height_class": "short",
+    "build": "slim",
+    "gait": "normal"
+   },
+   "vector": [
+    1,
+    4,
+    1,
+    2,
+    0,
+    0,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      230,
+      120,
+      30
+     ],
+     "bottom_rgb": [
+      112,
+      72,
+      40
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "striped",
+      "accent_rgb": [
+       30,
+       30,
+       32
+      ],
+      "period_m": 0.08
+     },
+     "accessory": {
+      "kind": "cap",
+      "rgb": [
+       200,
+       200,
+       196
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.44,
+    0.264,
+    1.62
+   ],
+   "gait": {
+    "speed_mps": [
+     0.9,
+     1.8
+    ],
+    "median_mps": 1.35
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.461546,
+     0.278402,
+     0.467669,
+     0.256734,
+     0.101056,
+     0.19311,
+     0.0,
+     0.372461,
+     0.0,
+     0.0,
+     0.0,
+     0.372461,
+     0.0,
+     -0.223477,
+     -0.223477,
+     0.0
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.62 m，体型偏瘦；上身橙色条纹上衣，下身棕色长裤；戴浅色鸭舌帽；步速中等",
+    "en": "Approx. 1.62 m, slim build; striped orange top, brown trousers; light cap; moderate gait"
+   }
+  },
+  {
+   "id": "person-15",
+   "class": "person",
+   "attrs": {
+    "top_color": "gray",
+    "bottom_color": "khaki",
+    "top_pattern": "striped",
+    "accessory": "none",
+    "height_class": "tall",
+    "build": "slim",
+    "gait": "normal"
+   },
+   "vector": [
+    8,
+    3,
+    1,
+    0,
+    2,
+    0,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      128,
+      128,
+      128
+     ],
+     "bottom_rgb": [
+      190,
+      170,
+      120
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "striped",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.08
+     },
+     "accessory": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    0.44,
+    0.264,
+    1.86
+   ],
+   "gait": {
+    "speed_mps": [
+     0.9,
+     1.8
+    ],
+    "median_mps": 1.35
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.431653,
+     -0.0,
+     0.0,
+     0.565606,
+     -0.000505,
+     0.229148,
+     0.0,
+     0.402774,
+     0.0,
+     0.402774,
+     0.0,
+     0.0,
+     0.0,
+     0.241664,
+     -0.241664,
+     0.0
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.86 m，体型偏瘦；上身灰色条纹上衣，下身卡其色长裤；无明显配饰；步速中等",
+    "en": "Approx. 1.86 m, slim build; striped grey top, khaki trousers; no visible accessories; moderate gait"
+   }
+  },
+  {
+   "id": "person-16",
+   "class": "person",
+   "attrs": {
+    "top_color": "yellow",
+    "bottom_color": "khaki",
+    "top_pattern": "checked",
+    "accessory": "none",
+    "height_class": "short",
+    "build": "sturdy",
+    "gait": "normal"
+   },
+   "vector": [
+    2,
+    3,
+    2,
+    0,
+    0,
+    2,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      232,
+      200,
+      52
+     ],
+     "bottom_rgb": [
+      190,
+      170,
+      120
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "checked",
+      "accent_rgb": [
+       30,
+       30,
+       32
+      ],
+      "period_m": 0.12
+     },
+     "accessory": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    0.575,
+    0.345,
+    1.62
+   ],
+   "gait": {
+    "speed_mps": [
+     0.9,
+     1.8
+    ],
+    "median_mps": 1.35
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.514424,
+     -0.019992,
+     0.458847,
+     0.44518,
+     -0.000398,
+     0.180359,
+     0.0,
+     0.0,
+     0.317018,
+     0.317018,
+     0.0,
+     0.0,
+     0.0,
+     -0.190211,
+     0.237763,
+     0.0
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.62 m，体型偏壮；上身黄色格纹上衣，下身卡其色长裤；无明显配饰；步速中等",
+    "en": "Approx. 1.62 m, sturdy build; checked yellow top, khaki trousers; no visible accessories; moderate gait"
+   }
+  },
+  {
+   "id": "person-17",
+   "class": "person",
+   "attrs": {
+    "top_color": "green",
+    "bottom_color": "khaki",
+    "top_pattern": "solid",
+    "accessory": "cap",
+    "height_class": "short",
+    "build": "sturdy",
+    "gait": "slow"
+   },
+   "vector": [
+    3,
+    3,
+    0,
+    2,
+    0,
+    2,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      40,
+      140,
+      70
+     ],
+     "bottom_rgb": [
+      190,
+      170,
+      120
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "solid"
+     },
+     "accessory": {
+      "kind": "cap",
+      "rgb": [
+       200,
+       200,
+       196
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.575,
+    0.345,
+    1.62
+   ],
+   "gait": {
+    "speed_mps": [
+     0.8,
+     1.4
+    ],
+    "median_mps": 1.1
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.369156,
+     -0.318664,
+     0.209502,
+     0.503913,
+     -0.00045,
+     0.204154,
+     0.358842,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.358842,
+     0.0,
+     -0.215305,
+     0.269131,
+     -0.215305
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.62 m，体型偏壮；上身绿色纯色上衣，下身卡其色长裤；戴浅色鸭舌帽；步速较慢",
+    "en": "Approx. 1.62 m, sturdy build; plain green top, khaki trousers; light cap; slow gait"
+   }
+  },
+  {
+   "id": "person-18",
+   "class": "person",
+   "attrs": {
+    "top_color": "red",
+    "bottom_color": "gray",
+    "top_pattern": "checked",
+    "accessory": "cap",
+    "height_class": "medium",
+    "build": "slim",
+    "gait": "brisk"
+   },
+   "vector": [
+    0,
+    2,
+    2,
+    2,
+    1,
+    0,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      190,
+      40,
+      40
+     ],
+     "bottom_rgb": [
+      128,
+      128,
+      128
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "checked",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.12
+     },
+     "accessory": {
+      "kind": "cap",
+      "rgb": [
+       200,
+       200,
+       196
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.44,
+    0.264,
+    1.74
+   ],
+   "gait": {
+    "speed_mps": [
+     1.1,
+     2.0
+    ],
+    "median_mps": 1.6
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.330772,
+     0.45431,
+     0.299419,
+     0.420136,
+     -0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.392028,
+     0.0,
+     0.0,
+     0.392028,
+     0.0,
+     0.0,
+     -0.235217,
+     0.235217
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.74 m，体型偏瘦；上身红色格纹上衣，下身灰色长裤；戴浅色鸭舌帽；步速较快",
+    "en": "Approx. 1.74 m, slim build; checked red top, grey trousers; light cap; brisk gait"
+   }
+  },
+  {
+   "id": "person-19",
+   "class": "person",
+   "attrs": {
+    "top_color": "gray",
+    "bottom_color": "black",
+    "top_pattern": "solid",
+    "accessory": "backpack",
+    "height_class": "medium",
+    "build": "sturdy",
+    "gait": "brisk"
+   },
+   "vector": [
+    8,
+    0,
+    0,
+    1,
+    1,
+    2,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      128,
+      128,
+      128
+     ],
+     "bottom_rgb": [
+      30,
+      30,
+      32
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "solid"
+     },
+     "accessory": {
+      "kind": "backpack",
+      "rgb": [
+       36,
+       38,
+       44
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.575,
+    0.345,
+    1.74
+   ],
+   "gait": {
+    "speed_mps": [
+     1.1,
+     2.0
+    ],
+    "median_mps": 1.6
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.527777,
+     -0.0,
+     0.0,
+     0.111664,
+     0.005058,
+     -0.013435,
+     0.492467,
+     0.0,
+     0.0,
+     0.0,
+     0.492467,
+     0.0,
+     0.0,
+     0.0,
+     0.36935,
+     0.29548
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.74 m，体型偏壮；上身灰色纯色上衣，下身黑色长裤；背双肩包；步速较快",
+    "en": "Approx. 1.74 m, sturdy build; plain grey top, black trousers; backpack; brisk gait"
+   }
+  },
+  {
+   "id": "person-20",
+   "class": "person",
+   "attrs": {
+    "top_color": "green",
+    "bottom_color": "black",
+    "top_pattern": "striped",
+    "accessory": "cap",
+    "height_class": "medium",
+    "build": "slim",
+    "gait": "brisk"
+   },
+   "vector": [
+    3,
+    0,
+    1,
+    2,
+    1,
+    0,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      40,
+      140,
+      70
+     ],
+     "bottom_rgb": [
+      30,
+      30,
+      32
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "striped",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.08
+     },
+     "accessory": {
+      "kind": "cap",
+      "rgb": [
+       200,
+       200,
+       196
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.44,
+    0.264,
+    1.74
+   ],
+   "gait": {
+    "speed_mps": [
+     1.1,
+     2.0
+    ],
+    "median_mps": 1.6
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.461918,
+     -0.398738,
+     0.262145,
+     0.101811,
+     0.004612,
+     -0.012249,
+     0.0,
+     0.449012,
+     0.0,
+     0.0,
+     0.0,
+     0.449012,
+     0.0,
+     0.0,
+     -0.269407,
+     0.269407
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.74 m，体型偏瘦；上身绿色条纹上衣，下身黑色长裤；戴浅色鸭舌帽；步速较快",
+    "en": "Approx. 1.74 m, slim build; striped green top, black trousers; light cap; brisk gait"
+   }
+  },
+  {
+   "id": "person-21",
+   "class": "person",
+   "attrs": {
+    "top_color": "green",
+    "bottom_color": "brown",
+    "top_pattern": "solid",
+    "accessory": "backpack",
+    "height_class": "tall",
+    "build": "slim",
+    "gait": "slow"
+   },
+   "vector": [
+    3,
+    4,
+    0,
+    1,
+    2,
+    0,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      40,
+      140,
+      70
+     ],
+     "bottom_rgb": [
+      112,
+      72,
+      40
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "solid"
+     },
+     "accessory": {
+      "kind": "backpack",
+      "rgb": [
+       36,
+       38,
+       44
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.44,
+    0.264,
+    1.86
+   ],
+   "gait": {
+    "speed_mps": [
+     0.8,
+     1.4
+    ],
+    "median_mps": 1.1
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.417028,
+     -0.359988,
+     0.23667,
+     0.279422,
+     0.109986,
+     0.210175,
+     0.405376,
+     0.0,
+     0.0,
+     0.0,
+     0.405376,
+     0.0,
+     0.0,
+     0.243226,
+     -0.243226,
+     -0.243226
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.86 m，体型偏瘦；上身绿色纯色上衣，下身棕色长裤；背双肩包；步速较慢",
+    "en": "Approx. 1.86 m, slim build; plain green top, brown trousers; backpack; slow gait"
+   }
+  },
+  {
+   "id": "person-22",
+   "class": "person",
+   "attrs": {
+    "top_color": "yellow",
+    "bottom_color": "khaki",
+    "top_pattern": "solid",
+    "accessory": "cap",
+    "height_class": "medium",
+    "build": "average",
+    "gait": "slow"
+   },
+   "vector": [
+    2,
+    3,
+    0,
+    2,
+    1,
+    1,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      232,
+      200,
+      52
+     ],
+     "bottom_rgb": [
+      190,
+      170,
+      120
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "solid"
+     },
+     "accessory": {
+      "kind": "cap",
+      "rgb": [
+       200,
+       200,
+       196
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.5,
+    0.3,
+    1.74
+   ],
+   "gait": {
+    "speed_mps": [
+     0.8,
+     1.4
+    ],
+    "median_mps": 1.1
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.529612,
+     -0.020582,
+     0.472394,
+     0.458324,
+     -0.000409,
+     0.185684,
+     0.326377,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.326377,
+     0.0,
+     0.0,
+     0.0,
+     -0.195826
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.74 m，体型中等；上身黄色纯色上衣，下身卡其色长裤；戴浅色鸭舌帽；步速较慢",
+    "en": "Approx. 1.74 m, medium build; plain yellow top, khaki trousers; light cap; slow gait"
+   }
+  },
+  {
+   "id": "person-23",
+   "class": "person",
+   "attrs": {
+    "top_color": "white",
+    "bottom_color": "black",
+    "top_pattern": "striped",
+    "accessory": "shoulder_bag",
+    "height_class": "short",
+    "build": "average",
+    "gait": "brisk"
+   },
+   "vector": [
+    6,
+    0,
+    1,
+    3,
+    0,
+    1,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      236,
+      236,
+      232
+     ],
+     "bottom_rgb": [
+      30,
+      30,
+      32
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "striped",
+      "accent_rgb": [
+       30,
+       30,
+       32
+      ],
+      "period_m": 0.08
+     },
+     "accessory": {
+      "kind": "shoulder_bag",
+      "rgb": [
+       96,
+       62,
+       36
+      ]
+     }
+    }
+   },
+   "size_m": [
+    0.5,
+    0.3,
+    1.62
+   ],
+   "gait": {
+    "speed_mps": [
+     1.1,
+     2.0
+    ],
+    "median_mps": 1.6
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.746041,
+     -0.005634,
+     0.015468,
+     0.090656,
+     0.004107,
+     -0.010907,
+     0.0,
+     0.399815,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.399815,
+     -0.239889,
+     0.0,
+     0.239889
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.62 m，体型中等；上身白色条纹上衣，下身黑色长裤；挎单肩包；步速较快",
+    "en": "Approx. 1.62 m, medium build; striped white top, black trousers; shoulder bag; brisk gait"
+   }
+  },
+  {
+   "id": "person-24",
+   "class": "person",
+   "attrs": {
+    "top_color": "red",
+    "bottom_color": "black",
+    "top_pattern": "striped",
+    "accessory": "none",
+    "height_class": "short",
+    "build": "average",
+    "gait": "slow"
+   },
+   "vector": [
+    0,
+    0,
+    1,
+    0,
+    0,
+    1,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "person-proxy@1",
+    "rig": "awr-proxy-rig-person@1",
+    "render": {
+     "top_rgb": [
+      190,
+      40,
+      40
+     ],
+     "bottom_rgb": [
+      30,
+      30,
+      32
+     ],
+     "skin_rgb": [
+      205,
+      168,
+      140
+     ],
+     "pattern": {
+      "kind": "striped",
+      "accent_rgb": [
+       236,
+       236,
+       232
+      ],
+      "period_m": 0.08
+     },
+     "accessory": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    0.5,
+    0.3,
+    1.62
+   ],
+   "gait": {
+    "speed_mps": [
+     0.8,
+     1.4
+    ],
+    "median_mps": 1.1
+   },
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "stand",
+     "loop": true,
+     "period_s": 4.0
+    },
+    {
+     "id": 1,
+     "name": "walk",
+     "loop": true,
+     "period_s": 1.1
+    },
+    {
+     "id": 2,
+     "name": "handover",
+     "loop": false,
+     "period_s": 2.0
+    },
+    {
+     "id": 3,
+     "name": "board",
+     "loop": false,
+     "period_s": 2.5
+    },
+    {
+     "id": 4,
+     "name": "alight",
+     "loop": false,
+     "period_s": 2.5
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "clothing",
+     "emissivity": 0.97,
+     "temp_model": "person_clothed",
+     "parts": [
+      "torso",
+      "legs",
+      "accessory"
+     ]
+    },
+    {
+     "zone": "skin",
+     "emissivity": 0.98,
+     "temp_model": "skin_33c",
+     "parts": [
+      "head",
+      "neck"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.362738,
+     0.498215,
+     0.328355,
+     0.09748,
+     0.004416,
+     -0.011728,
+     0.0,
+     0.429914,
+     0.0,
+     0.429914,
+     0.0,
+     0.0,
+     0.0,
+     -0.257948,
+     0.0,
+     -0.257948
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "身高约 1.62 m，体型中等；上身红色条纹上衣，下身黑色长裤；无明显配饰；步速较慢",
+    "en": "Approx. 1.62 m, medium build; striped red top, black trousers; no visible accessories; slow gait"
+   }
+  },
+  {
+   "id": "vehicle-01",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "hatchback",
+    "body_color": "silver",
+    "roof": "rack",
+    "marking": "side_stripe"
+   },
+   "vector": [
+    1,
+    2,
+    2,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "hatchback",
+     "body_rgb": [
+      168,
+      171,
+      176
+     ],
+     "roof_rgb": [
+      168,
+      171,
+      176
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "side_stripe",
+      "rgb": [
+       236,
+       236,
+       232
+      ]
+     },
+     "roof_rack": {
+      "rgb": [
+       50,
+       52,
+       56
+      ]
+     }
+    }
+   },
+   "size_m": [
+    4.0,
+    1.75,
+    1.5
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.531169,
+     -0.000694,
+     -0.022296,
+     0.531169,
+     -0.000694,
+     -0.022296,
+     0.0,
+     0.380035,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.228021,
+     0.0,
+     0.380035,
+     0.0,
+     -0.266024,
+     -0.152014
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "银色两厢车，带车顶行李架，车身侧面白色饰条",
+    "en": "Silver hatchback, roof rack, white side stripe"
+   }
+  },
+  {
+   "id": "vehicle-02",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "suv",
+    "body_color": "carmine",
+    "roof": "black",
+    "marking": "door_panel"
+   },
+   "vector": [
+    2,
+    3,
+    1,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "suv",
+     "body_rgb": [
+      160,
+      22,
+      32
+     ],
+     "roof_rgb": [
+      24,
+      24,
+      26
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "door_panel",
+      "rgb": [
+       232,
+       200,
+       52
+      ]
+     }
+    }
+   },
+   "size_m": [
+    4.7,
+    1.9,
+    1.75
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.325267,
+     0.508856,
+     0.30996,
+     0.078935,
+     0.005032,
+     -0.013313,
+     0.0,
+     0.0,
+     0.474123,
+     0.0,
+     0.0,
+     0.0,
+     0.284474,
+     0.0,
+     0.0,
+     0.0,
+     0.474123,
+     0.0,
+     0.047412
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "暗红色SUV，黑色车顶，前门黄色标识板",
+    "en": "Dark red SUV, black roof, yellow door panel"
+   }
+  },
+  {
+   "id": "vehicle-03",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "hatchback",
+    "body_color": "olive",
+    "roof": "body",
+    "marking": "door_panel"
+   },
+   "vector": [
+    1,
+    5,
+    0,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "hatchback",
+     "body_rgb": [
+      86,
+      100,
+      50
+     ],
+     "roof_rgb": [
+      86,
+      100,
+      50
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "door_panel",
+      "rgb": [
+       232,
+       200,
+       52
+      ]
+     }
+    }
+   },
+   "size_m": [
+    4.0,
+    1.75,
+    1.5
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.358133,
+     -0.12716,
+     0.236119,
+     0.358133,
+     -0.12716,
+     0.236119,
+     0.0,
+     0.446335,
+     0.0,
+     0.0,
+     0.0,
+     0.267801,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.446335,
+     -0.312435,
+     -0.178534
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "橄榄绿两厢车，车顶与车身同色，前门黄色标识板",
+    "en": "Olive green hatchback, body-colour roof, yellow door panel"
+   }
+  },
+  {
+   "id": "vehicle-04",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "pickup",
+    "body_color": "cobalt",
+    "roof": "black",
+    "marking": "none"
+   },
+   "vector": [
+    4,
+    4,
+    1,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "pickup",
+     "body_rgb": [
+      28,
+      70,
+      150
+     ],
+     "roof_rgb": [
+      24,
+      24,
+      26
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    5.3,
+    1.9,
+    1.8
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.306122,
+     0.15902,
+     -0.46789,
+     0.081122,
+     0.005171,
+     -0.013682,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.48726,
+     0.0,
+     0.292356,
+     0.0,
+     0.48726,
+     0.0,
+     0.0,
+     0.292356,
+     0.097452
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "深蓝色皮卡，黑色车顶，车身无标识",
+    "en": "Dark blue pickup truck, black roof, no markings"
+   }
+  },
+  {
+   "id": "vehicle-05",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "van",
+    "body_color": "olive",
+    "roof": "rack",
+    "marking": "door_panel"
+   },
+   "vector": [
+    3,
+    5,
+    2,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "van",
+     "body_rgb": [
+      86,
+      100,
+      50
+     ],
+     "roof_rgb": [
+      86,
+      100,
+      50
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "door_panel",
+      "rgb": [
+       232,
+       200,
+       52
+      ]
+     },
+     "roof_rack": {
+      "rgb": [
+       50,
+       52,
+       56
+      ]
+     }
+    }
+   },
+   "size_m": [
+    5.0,
+    1.95,
+    2.0
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.365488,
+     -0.129771,
+     0.240968,
+     0.365488,
+     -0.129771,
+     0.240968,
+     0.0,
+     0.0,
+     0.0,
+     0.455502,
+     0.0,
+     0.0,
+     0.0,
+     0.273301,
+     0.0,
+     0.0,
+     0.455502,
+     0.13665,
+     0.273301
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "橄榄绿厢式车，带车顶行李架，前门黄色标识板",
+    "en": "Olive green van, roof rack, yellow door panel"
+   }
+  },
+  {
+   "id": "vehicle-06",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "pickup",
+    "body_color": "carmine",
+    "roof": "rack",
+    "marking": "none"
+   },
+   "vector": [
+    4,
+    3,
+    2,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "pickup",
+     "body_rgb": [
+      160,
+      22,
+      32
+     ],
+     "roof_rgb": [
+      160,
+      22,
+      32
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "none"
+     },
+     "roof_rack": {
+      "rgb": [
+       50,
+       52,
+       56
+      ]
+     }
+    }
+   },
+   "size_m": [
+    5.3,
+    1.9,
+    1.8
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.261934,
+     0.409776,
+     0.249607,
+     0.261934,
+     0.409776,
+     0.249607,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.381806,
+     0.0,
+     0.0,
+     0.229084,
+     0.381806,
+     0.0,
+     0.0,
+     0.229084,
+     0.076361
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "暗红色皮卡，带车顶行李架，车身无标识",
+    "en": "Dark red pickup truck, roof rack, no markings"
+   }
+  },
+  {
+   "id": "vehicle-07",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "suv",
+    "body_color": "cobalt",
+    "roof": "rack",
+    "marking": "door_panel"
+   },
+   "vector": [
+    2,
+    4,
+    2,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "suv",
+     "body_rgb": [
+      28,
+      70,
+      150
+     ],
+     "roof_rgb": [
+      28,
+      70,
+      150
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "door_panel",
+      "rgb": [
+       232,
+       200,
+       52
+      ]
+     },
+     "roof_rack": {
+      "rgb": [
+       50,
+       52,
+       56
+      ]
+     }
+    }
+   },
+   "size_m": [
+    4.7,
+    1.9,
+    1.75
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.275069,
+     0.142889,
+     -0.420427,
+     0.275069,
+     0.142889,
+     -0.420427,
+     0.0,
+     0.0,
+     0.437832,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.262699,
+     0.0,
+     0.0,
+     0.437832,
+     0.0,
+     0.043783
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "深蓝色SUV，带车顶行李架，前门黄色标识板",
+    "en": "Dark blue SUV, roof rack, yellow door panel"
+   }
+  },
+  {
+   "id": "vehicle-08",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "sedan",
+    "body_color": "black",
+    "roof": "body",
+    "marking": "door_panel"
+   },
+   "vector": [
+    0,
+    1,
+    0,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "sedan",
+     "body_rgb": [
+      30,
+      30,
+      32
+     ],
+     "roof_rgb": [
+      30,
+      30,
+      32
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "door_panel",
+      "rgb": [
+       232,
+       200,
+       52
+      ]
+     }
+    }
+   },
+   "size_m": [
+    4.6,
+    1.8,
+    1.45
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.13737,
+     0.006223,
+     -0.016527,
+     0.13737,
+     0.006223,
+     -0.016527,
+     0.605835,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.363501,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.605835,
+     -0.060584,
+     -0.302918
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "黑色轿车，车顶与车身同色，前门黄色标识板",
+    "en": "Black sedan, body-colour roof, yellow door panel"
+   }
+  },
+  {
+   "id": "vehicle-09",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "pickup",
+    "body_color": "white",
+    "roof": "rack",
+    "marking": "door_panel"
+   },
+   "vector": [
+    4,
+    0,
+    2,
+    2
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "pickup",
+     "body_rgb": [
+      236,
+      236,
+      232
+     ],
+     "roof_rgb": [
+      236,
+      236,
+      232
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "door_panel",
+      "rgb": [
+       232,
+       200,
+       52
+      ]
+     },
+     "roof_rack": {
+      "rgb": [
+       50,
+       52,
+       56
+      ]
+     }
+    }
+   },
+   "size_m": [
+    5.3,
+    1.9,
+    1.8
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.598292,
+     -0.004518,
+     0.012405,
+     0.598292,
+     -0.004518,
+     0.012405,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.320634,
+     0.0,
+     0.0,
+     0.19238,
+     0.0,
+     0.0,
+     0.320634,
+     0.19238,
+     0.064127
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "白色皮卡，带车顶行李架，前门黄色标识板",
+    "en": "White pickup truck, roof rack, yellow door panel"
+   }
+  },
+  {
+   "id": "vehicle-10",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "pickup",
+    "body_color": "black",
+    "roof": "body",
+    "marking": "none"
+   },
+   "vector": [
+    4,
+    1,
+    0,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "pickup",
+     "body_rgb": [
+      30,
+      30,
+      32
+     ],
+     "roof_rgb": [
+      30,
+      30,
+      32
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    5.3,
+    1.9,
+    1.8
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.133971,
+     0.006069,
+     -0.016118,
+     0.133971,
+     0.006069,
+     -0.016118,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.590845,
+     0.354507,
+     0.0,
+     0.0,
+     0.590845,
+     0.0,
+     0.0,
+     0.354507,
+     0.118169
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "黑色皮卡，车顶与车身同色，车身无标识",
+    "en": "Black pickup truck, body-colour roof, no markings"
+   }
+  },
+  {
+   "id": "vehicle-11",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "van",
+    "body_color": "olive",
+    "roof": "body",
+    "marking": "none"
+   },
+   "vector": [
+    3,
+    5,
+    0,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "van",
+     "body_rgb": [
+      86,
+      100,
+      50
+     ],
+     "roof_rgb": [
+      86,
+      100,
+      50
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    5.0,
+    1.95,
+    2.0
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.365488,
+     -0.129771,
+     0.240968,
+     0.365488,
+     -0.129771,
+     0.240968,
+     0.0,
+     0.0,
+     0.0,
+     0.455502,
+     0.0,
+     0.273301,
+     0.0,
+     0.0,
+     0.455502,
+     0.0,
+     0.0,
+     0.13665,
+     0.273301
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "橄榄绿厢式车，车顶与车身同色，车身无标识",
+    "en": "Olive green van, body-colour roof, no markings"
+   }
+  },
+  {
+   "id": "vehicle-12",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "sedan",
+    "body_color": "cobalt",
+    "roof": "rack",
+    "marking": "side_stripe"
+   },
+   "vector": [
+    0,
+    4,
+    2,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "sedan",
+     "body_rgb": [
+      28,
+      70,
+      150
+     ],
+     "roof_rgb": [
+      28,
+      70,
+      150
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "side_stripe",
+      "rgb": [
+       236,
+       236,
+       232
+      ]
+     },
+     "roof_rack": {
+      "rgb": [
+       50,
+       52,
+       56
+      ]
+     }
+    }
+   },
+   "size_m": [
+    4.6,
+    1.8,
+    1.45
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.268706,
+     0.139584,
+     -0.410701,
+     0.268706,
+     0.139584,
+     -0.410701,
+     0.427703,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.256622,
+     0.0,
+     0.427703,
+     0.0,
+     -0.04277,
+     -0.213852
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "深蓝色轿车，带车顶行李架，车身侧面白色饰条",
+    "en": "Dark blue sedan, roof rack, white side stripe"
+   }
+  },
+  {
+   "id": "vehicle-13",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "hatchback",
+    "body_color": "carmine",
+    "roof": "body",
+    "marking": "none"
+   },
+   "vector": [
+    1,
+    3,
+    0,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "hatchback",
+     "body_rgb": [
+      160,
+      22,
+      32
+     ],
+     "roof_rgb": [
+      160,
+      22,
+      32
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    4.0,
+    1.75,
+    1.5
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.257287,
+     0.402507,
+     0.245179,
+     0.257287,
+     0.402507,
+     0.245179,
+     0.0,
+     0.375033,
+     0.0,
+     0.0,
+     0.0,
+     0.22502,
+     0.0,
+     0.0,
+     0.375033,
+     0.0,
+     0.0,
+     -0.262523,
+     -0.150013
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "暗红色两厢车，车顶与车身同色，车身无标识",
+    "en": "Dark red hatchback, body-colour roof, no markings"
+   }
+  },
+  {
+   "id": "vehicle-14",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "sedan",
+    "body_color": "white",
+    "roof": "black",
+    "marking": "none"
+   },
+   "vector": [
+    0,
+    0,
+    1,
+    0
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "sedan",
+     "body_rgb": [
+      236,
+      236,
+      232
+     ],
+     "roof_rgb": [
+      24,
+      24,
+      26
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "none"
+     }
+    }
+   },
+   "size_m": [
+    4.6,
+    1.8,
+    1.45
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.753525,
+     -0.00569,
+     0.015623,
+     0.067231,
+     0.004286,
+     -0.011339,
+     0.403826,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.242295,
+     0.0,
+     0.403826,
+     0.0,
+     0.0,
+     -0.040383,
+     -0.201913
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "白色轿车，黑色车顶，车身无标识",
+    "en": "White sedan, black roof, no markings"
+   }
+  },
+  {
+   "id": "vehicle-15",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "van",
+    "body_color": "black",
+    "roof": "body",
+    "marking": "side_stripe"
+   },
+   "vector": [
+    3,
+    1,
+    0,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "van",
+     "body_rgb": [
+      30,
+      30,
+      32
+     ],
+     "roof_rgb": [
+      30,
+      30,
+      32
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "side_stripe",
+      "rgb": [
+       236,
+       236,
+       232
+      ]
+     }
+    }
+   },
+   "size_m": [
+    5.0,
+    1.95,
+    2.0
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.132817,
+     0.006017,
+     -0.01598,
+     0.132817,
+     0.006017,
+     -0.01598,
+     0.0,
+     0.0,
+     0.0,
+     0.585755,
+     0.0,
+     0.351453,
+     0.0,
+     0.0,
+     0.0,
+     0.585755,
+     0.0,
+     0.175727,
+     0.351453
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "黑色厢式车，车顶与车身同色，车身侧面白色饰条",
+    "en": "Black van, body-colour roof, white side stripe"
+   }
+  },
+  {
+   "id": "vehicle-16",
+   "class": "vehicle",
+   "attrs": {
+    "body_type": "sedan",
+    "body_color": "silver",
+    "roof": "black",
+    "marking": "side_stripe"
+   },
+   "vector": [
+    0,
+    2,
+    1,
+    1
+   ],
+   "asset": {
+    "kind": "procedural",
+    "generator": "vehicle-proxy@1",
+    "rig": "awr-proxy-rig-vehicle@1",
+    "render": {
+     "body_type": "sedan",
+     "body_rgb": [
+      168,
+      171,
+      176
+     ],
+     "roof_rgb": [
+      24,
+      24,
+      26
+     ],
+     "glass_rgb": [
+      40,
+      52,
+      60
+     ],
+     "marking": {
+      "kind": "side_stripe",
+      "rgb": [
+       236,
+       236,
+       232
+      ]
+     }
+    }
+   },
+   "size_m": [
+    4.6,
+    1.8,
+    1.45
+   ],
+   "anim_clips": [
+    {
+     "id": 0,
+     "name": "idle",
+     "loop": true,
+     "period_s": 1.0
+    },
+    {
+     "id": 1,
+     "name": "drive",
+     "loop": true,
+     "period_s": 1.0
+    }
+   ],
+   "thermal_zones": [
+    {
+     "zone": "body",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_body",
+     "parts": [
+      "body",
+      "roof"
+     ]
+    },
+    {
+     "zone": "engine",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_engine",
+     "parts": [
+      "hood"
+     ]
+    },
+    {
+     "zone": "exhaust",
+     "emissivity": 0.9,
+     "temp_model": "vehicle_exhaust",
+     "parts": [
+      "exhaust"
+     ]
+    }
+   ],
+   "embedding": {
+    "model": "awr-attr-descriptor@1",
+    "values": [
+     0.651278,
+     -0.000851,
+     -0.027338,
+     0.077578,
+     0.004945,
+     -0.013084,
+     0.46597,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.279582,
+     0.0,
+     0.0,
+     0.46597,
+     0.0,
+     -0.046597,
+     -0.232985
+    ]
+   },
+   "license": {
+    "kind": "original",
+    "spdx": "LicenseRef-ANet-OSL",
+    "holder": "Agent Network Research"
+   },
+   "description": {
+    "zh": "银色轿车，黑色车顶，车身侧面白色饰条",
+    "en": "Silver sedan, black roof, white side stripe"
+   }
+  }
+ ]
+}

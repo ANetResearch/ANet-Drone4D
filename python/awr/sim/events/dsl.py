@@ -134,16 +134,25 @@ def normalize(doc: dict) -> dict:
         if "length_m" in ap:
             size[0] = float(ap["length_m"])
         gait = a.get("gait") or {}
-        sp = gait.get("speed_mps", c["speed"])
+        sp, median = gait.get("speed_mps", c["speed"]), c["median"]
+        look = {"asset": ap.get("asset") or ap.get("preset") or c["asset"],
+                **{k: list(ap[k]) for k in ("top_rgb", "bottom_rgb", "body_rgb") if k in ap},
+                **({"height_mm": ms(size[2])} if a["class"] in ("person", "dog") else {}),
+                **({"accessories": list(ap["accessories"])} if ap.get("accessories") else {})}
+        if a.get("appearance_ref"):                               # appearance_lib@1：外观、尺寸与步态档取自外观库（门 1 已解析）
+            from awr.sim.events.appearance import plan_fields
+
+            pf = plan_fields(a["appearance_ref"])
+            look, size = pf["appearance"], pf["size_m"]
+            if pf["gait"] and "speed_mps" not in gait:
+                sp, median = pf["gait"]["speed_mps"], pf["gait"]["median_mps"]
         actors.append({
             "id": a["id"], "class": a["class"], "profile": c["profile"],
             "size_mm": [ms(s) for s in size],
-            "appearance": {"asset": ap.get("asset") or ap.get("preset") or c["asset"],
-                           **{k: list(ap[k]) for k in ("top_rgb", "bottom_rgb", "body_rgb") if k in ap},
-                           **({"height_mm": ms(size[2])} if a["class"] in ("person", "dog") else {}),
-                           **({"accessories": list(ap["accessories"])} if ap.get("accessories") else {})},
+            "appearance": look,
+            **({"roles": list(a["roles"])} if a.get("roles") else {}),
             "gait": None if sp is None else {"speed_mps": [float(sp[0]), float(sp[1])], "accel_mps2": float(gait.get("accel_mps2", c["accel"])),
-                                             "median_mps": float(c["median"] if c["median"] else (sp[0] + sp[1]) / 2)},
+                                             "median_mps": float(median if median else (sp[0] + sp[1]) / 2)},
             "route": [{"t_ms": ms(w["t"]), "at": w["at"], "do": w.get("do", "pass"), "dwell_ms": ms(w.get("dwell_s", 0)),
                        "via": list(w.get("via", [])), "target": w.get("target"), "tol_ms": ms(w.get("tol_s", 3))} for w in a["route"]],
         })
@@ -215,8 +224,8 @@ def _e(code: str, reason: int | None, path: str, zh: str, en: str, **detail) -> 
 
 
 def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list[Issue], list[Issue]]:
-    """门 1：schema、id、引用、时间、类别与动作、上车目标、限额、模式。`anchors` 为解析后的锚点表（id → 锚点；None 表示
-    世界无锚点层且无覆盖层，锚点引用一律报未知）。返回 (plan 或 None, errors, warnings)。"""
+    """门 1：schema、id、引用、时间、类别与动作、上车目标、限额、模式、外观引用与可区分性（`appearance.gate1_issues`）。
+    `anchors` 为解析后的锚点表（id → 锚点；None 表示世界无锚点层且无覆盖层，锚点引用一律报未知）。返回 (plan 或 None, errors, warnings)。"""
     sch = _schema_issues(doc)
     if any(e.code != "E-LIMIT" for e in sch):                     # 结构性错误：后续检查依赖结构，提前返回
         return None, sch, []
@@ -336,6 +345,9 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
             ref = (an.get("params") or {}).get(pk)
             if isinstance(ref, str) and ref not in anchors:
                 errs.append(_e("E-ANCHOR-UNKNOWN", 611, f"/annotations/{j}/params/{pk}", f"未知锚点：{ref}", f"Unknown anchor: {ref}", anchor=ref))
+    from awr.sim.events.appearance import gate1_issues as appearance_issues
+
+    errs.extend(appearance_issues(doc))                           # 外观引用与可区分性（M23-FR-072，appearance_lib@1）
     errs.extend(_e("E-RELATION-REF", 611, f"/relations/{j}/{side}", f"关系引用未知注释：{r[side]}", f"Relation references unknown annotation: {r[side]}")
                 for j, r in enumerate(doc.get("relations", [])) for side in ("src", "dst") if r[side] not in ann_ids)
     if errs:

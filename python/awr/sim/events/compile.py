@@ -251,8 +251,10 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     (tmp / "anchors.json").write_text(json.dumps({"schema": "awr.anchors.v1", "world_id": wdoc["id"], "anchors": list(anchors.values())},
                                                  ensure_ascii=False, indent=1), encoding="utf-8")
     res.status, res.out = "compiled", out
+    from awr.sim.events.appearance import report_for
+
     (tmp / "compile_report.json").write_text(json.dumps({**res.as_dict(), "out": None, "provenance": prov, "gate3": {"stats": g3.stats,
-                                                         "extra": g3.extra, "perf": g3.perf}},
+                                                         "extra": g3.extra, "perf": g3.perf}, "appearance": report_for(plan)},
                                                         ensure_ascii=False, indent=1),
                                             encoding="utf-8")
     if out.exists():

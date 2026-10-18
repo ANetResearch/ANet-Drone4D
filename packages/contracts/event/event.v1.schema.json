@@ -168,6 +168,27 @@
               }
             }
           },
+          "appearance_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_@./-]+$",
+            "description": "Appearance id in appearance_lib@1 (event/appearance_lib.v1), bare or prefixed with appearance_lib@1/; mutually exclusive with the colour, size and accessory fields of appearance. Unresolvable references fail gate 1 with 611 (detail.why = appearance_unresolved); required for targets and distractors of reid_occlusion and vehicle_track events (M23 §15.2, FR-072; P0b, additive)"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "target",
+                "distractor",
+                "participant",
+                "background_vehicle"
+              ]
+            },
+            "uniqueItems": true,
+            "maxItems": 4,
+            "description": "Actor roles for the type validators (M23 §15.2; P0b, additive); gate 1 checks target and distractor distinguishability with the appearance_lib rules"
+          },
           "gait": {
             "type": "object",
             "additionalProperties": false,

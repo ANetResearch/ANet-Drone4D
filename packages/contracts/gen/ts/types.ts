@@ -132,6 +132,23 @@ export type ActV1GimbalCmd =
  */
 export type Anchors = Anchors1
 /**
+ * SHA-256 of the RFC 8785 (JCS) form of the parsed spec
+ */
+export type AppearanceLibV1Sha256 = string
+/**
+ * @minItems 3
+ * @maxItems 3
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AppearanceLibV1Rgb".
+ */
+export type AppearanceLibV1Rgb = [number, number, number, ...number[]]
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AppearanceLibV1Sha256".
+ */
+export type AppearanceLibV1Sha2561 = string
+/**
  * Recording block messages (awr.StateExtBlock.v1, awr.SafetyBlock.v1). AWR-16 §13.4 (msgpack snake_case).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -1900,6 +1917,383 @@ export interface Anchors1 {
      */
     public?: boolean
   }[]
+}
+/**
+ * Appearance library (drone4d.appearance_lib.v1). AWR-05 §5.2.8, §8.1 and ADR-181; M23 §15.2 and M23-FR-072; M25 §15.7 (contracts 1.3.0, d1 V0.3, P0b). appearance_lib@1 is a project-original procedural library generated deterministically from configs/appearance.d3/spec.yaml: each entry carries an id, a class, categorical attributes and their integer vector, procedural asset parameters, animation clips, thermal material zones, a descriptor embedding and a licence record. Event actors reference entries through actors[].appearance_ref; compile gate 1 checks target and distractor distinguishability with the attribute vector only (rules), the embedding is a diagnostic and is never delivered to agents.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AppearanceLibV1".
+ */
+export interface AppearanceLibV1 {
+  schema: 'drone4d.appearance_lib.v1'
+  lib_id: string
+  generator: {
+    name: string
+    version: string
+    spec_sha256: AppearanceLibV1Sha256
+    seed: number
+    embedding_model?: string
+    /**
+     * Redraw round per class (0 = first draw); a round > 0 appends |r<round> to the counter key
+     */
+    rounds?: {
+      [k: string]: number
+    }
+  }
+  license: AppearanceLibV1License
+  palette: {
+    [k: string]: {
+      rgb: AppearanceLibV1Rgb
+      zh: string
+      en: string
+    }
+  }
+  min_delta_e00?: number
+  classes: {
+    person?: AppearanceLibV1Cls
+    vehicle?: AppearanceLibV1Cls
+  }
+  rules: {
+    [k: string]: AppearanceLibV1Rule
+  }
+  min_hard_negatives?: number
+  /**
+   * @minItems 1
+   * @maxItems 2000
+   */
+  entries: [
+    {
+      id: string
+      class: 'person' | 'vehicle'
+      attrs: {
+        [k: string]: string
+      }
+      /**
+       * Index of each attribute value in classes.<class>.attributes order
+       *
+       * @minItems 1
+       * @maxItems 8
+       */
+      vector: [number, ...number[]]
+      asset: {
+        kind: 'procedural' | 'gltf'
+        /**
+         * Procedural proxy generator id (M25 FR-034) or glTF asset id
+         */
+        generator: string
+        rig?: string
+        uri?: string
+        sha256?: AppearanceLibV1Sha2561
+        /**
+         * Visible-light parameters of the procedural proxy
+         */
+        render: {
+          top_rgb?: AppearanceLibV1Rgb
+          bottom_rgb?: AppearanceLibV1Rgb
+          skin_rgb?: AppearanceLibV1Rgb
+          body_rgb?: AppearanceLibV1Rgb
+          roof_rgb?: AppearanceLibV1Rgb
+          glass_rgb?: AppearanceLibV1Rgb
+          pattern?: {
+            kind: 'solid' | 'striped' | 'checked'
+            accent_rgb?: AppearanceLibV1Rgb
+            period_m?: number
+          }
+          accessory?: {
+            kind: 'none' | 'backpack' | 'cap' | 'shoulder_bag'
+            rgb?: AppearanceLibV1Rgb
+          }
+          roof_rack?: {
+            rgb: AppearanceLibV1Rgb
+          }
+          marking?: {
+            kind: 'none' | 'side_stripe' | 'door_panel'
+            rgb?: AppearanceLibV1Rgb
+          }
+          body_type?: 'sedan' | 'hatchback' | 'suv' | 'van' | 'pickup'
+        }
+      }
+      /**
+       * l, w, h in metres
+       *
+       * @minItems 3
+       * @maxItems 3
+       */
+      size_m: [number, number, number, ...number[]]
+      gait?: {
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        speed_mps: [number, number, ...number[]]
+        median_mps: number
+      }
+      /**
+       * @maxItems 255
+       */
+      anim_clips: {
+        /**
+         * Clip id carried by the tape.anim sidecar (u8)
+         */
+        id: number
+        name: string
+        loop: boolean
+        period_s: number
+      }[]
+      /**
+       * @minItems 1
+       * @maxItems 16
+       */
+      thermal_zones: [
+        {
+          zone: 'skin' | 'clothing' | 'body' | 'engine' | 'exhaust' | 'glass'
+          emissivity: number
+          /**
+           * Temperature model id of the M25 thermal_table_v1
+           */
+          temp_model: string
+          parts?: string[]
+        },
+        ...{
+          zone: 'skin' | 'clothing' | 'body' | 'engine' | 'exhaust' | 'glass'
+          emissivity: number
+          /**
+           * Temperature model id of the M25 thermal_table_v1
+           */
+          temp_model: string
+          parts?: string[]
+        }[]
+      ]
+      /**
+       * Offline appearance embedding for gate-1 diagnostics and evaluation; never delivered to agents
+       */
+      embedding: {
+        model: string
+        /**
+         * @minItems 1
+         * @maxItems 512
+         */
+        values: [number, ...number[]]
+      }
+      /**
+       * Canonical description generated from the attribute vector (M23-FR-083); no identity, route or time
+       */
+      description: {
+        zh: string
+        en: string
+      }
+      /**
+       * Reference appearance image rendered offline by M25 (brief content, not truth)
+       */
+      ref_image?: {
+        uri: string
+        sha256: AppearanceLibV1Sha2561
+        views?: ('front' | 'side' | 'top45')[]
+      }
+      license: AppearanceLibV1License
+    },
+    ...{
+      id: string
+      class: 'person' | 'vehicle'
+      attrs: {
+        [k: string]: string
+      }
+      /**
+       * Index of each attribute value in classes.<class>.attributes order
+       *
+       * @minItems 1
+       * @maxItems 8
+       */
+      vector: [number, ...number[]]
+      asset: {
+        kind: 'procedural' | 'gltf'
+        /**
+         * Procedural proxy generator id (M25 FR-034) or glTF asset id
+         */
+        generator: string
+        rig?: string
+        uri?: string
+        sha256?: AppearanceLibV1Sha2561
+        /**
+         * Visible-light parameters of the procedural proxy
+         */
+        render: {
+          top_rgb?: AppearanceLibV1Rgb
+          bottom_rgb?: AppearanceLibV1Rgb
+          skin_rgb?: AppearanceLibV1Rgb
+          body_rgb?: AppearanceLibV1Rgb
+          roof_rgb?: AppearanceLibV1Rgb
+          glass_rgb?: AppearanceLibV1Rgb
+          pattern?: {
+            kind: 'solid' | 'striped' | 'checked'
+            accent_rgb?: AppearanceLibV1Rgb
+            period_m?: number
+          }
+          accessory?: {
+            kind: 'none' | 'backpack' | 'cap' | 'shoulder_bag'
+            rgb?: AppearanceLibV1Rgb
+          }
+          roof_rack?: {
+            rgb: AppearanceLibV1Rgb
+          }
+          marking?: {
+            kind: 'none' | 'side_stripe' | 'door_panel'
+            rgb?: AppearanceLibV1Rgb
+          }
+          body_type?: 'sedan' | 'hatchback' | 'suv' | 'van' | 'pickup'
+        }
+      }
+      /**
+       * l, w, h in metres
+       *
+       * @minItems 3
+       * @maxItems 3
+       */
+      size_m: [number, number, number, ...number[]]
+      gait?: {
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        speed_mps: [number, number, ...number[]]
+        median_mps: number
+      }
+      /**
+       * @maxItems 255
+       */
+      anim_clips: {
+        /**
+         * Clip id carried by the tape.anim sidecar (u8)
+         */
+        id: number
+        name: string
+        loop: boolean
+        period_s: number
+      }[]
+      /**
+       * @minItems 1
+       * @maxItems 16
+       */
+      thermal_zones: [
+        {
+          zone: 'skin' | 'clothing' | 'body' | 'engine' | 'exhaust' | 'glass'
+          emissivity: number
+          /**
+           * Temperature model id of the M25 thermal_table_v1
+           */
+          temp_model: string
+          parts?: string[]
+        },
+        ...{
+          zone: 'skin' | 'clothing' | 'body' | 'engine' | 'exhaust' | 'glass'
+          emissivity: number
+          /**
+           * Temperature model id of the M25 thermal_table_v1
+           */
+          temp_model: string
+          parts?: string[]
+        }[]
+      ]
+      /**
+       * Offline appearance embedding for gate-1 diagnostics and evaluation; never delivered to agents
+       */
+      embedding: {
+        model: string
+        /**
+         * @minItems 1
+         * @maxItems 512
+         */
+        values: [number, ...number[]]
+      }
+      /**
+       * Canonical description generated from the attribute vector (M23-FR-083); no identity, route or time
+       */
+      description: {
+        zh: string
+        en: string
+      }
+      /**
+       * Reference appearance image rendered offline by M25 (brief content, not truth)
+       */
+      ref_image?: {
+        uri: string
+        sha256: AppearanceLibV1Sha2561
+        views?: ('front' | 'side' | 'top45')[]
+      }
+      license: AppearanceLibV1License
+    }[]
+  ]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AppearanceLibV1License".
+ */
+export interface AppearanceLibV1License {
+  /**
+   * original: made by the project, no external licence obligations
+   */
+  kind: 'original' | 'third_party'
+  spdx: string
+  holder: string
+  attribution?: string
+  /**
+   * @maxItems 64
+   */
+  third_party?: {
+    name: string
+    spdx: string
+    source?: string
+  }[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AppearanceLibV1Cls".
+ */
+export interface AppearanceLibV1Cls {
+  count: number
+  min_pair_distance: number
+  asset: string
+  rig?: string
+  /**
+   * @minItems 1
+   * @maxItems 8
+   */
+  attributes: [AppearanceLibV1Attribute, ...AppearanceLibV1Attribute[]]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AppearanceLibV1Attribute".
+ */
+export interface AppearanceLibV1Attribute {
+  name: string
+  /**
+   * color values are palette keys
+   */
+  kind: 'color' | 'enum'
+  /**
+   * @minItems 2
+   * @maxItems 32
+   */
+  values: [string, string, ...string[]]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AppearanceLibV1Rule".
+ */
+export interface AppearanceLibV1Rule {
+  class: 'person' | 'vehicle'
+  /**
+   * Minimum attribute (Hamming) distance between the target and every distractor
+   */
+  min_distance: number
+  /**
+   * Minimum number of equal attributes (hard negatives)
+   */
+  min_shared: number
+  /**
+   * At least one of these attributes must be equal
+   */
+  shared_any_of?: string[]
 }
 /**
  * awr.bench.result.v1. AWR-18 §7.6 (fleet_ladder, bench_state, bench_cmd). records[].ipc is an optional addition (AWR-03 §5.11 rule 1) for the IPC benchmarks of M11 (tools/bench/ipc): a flat map of snake_case metric names with unit suffixes (AWR-03 §5.4, for example publish_p99_us, read_cpu_core, cmd_rtt_p99_ms, event_gaps, recover_max_ms) to numbers or null, so the M16 harness can aggregate them.
@@ -4348,6 +4742,16 @@ export interface EventV1 {
          */
         accessories?: string[]
       }
+      /**
+       * Appearance id in appearance_lib@1 (event/appearance_lib.v1), bare or prefixed with appearance_lib@1/; mutually exclusive with the colour, size and accessory fields of appearance. Unresolvable references fail gate 1 with 611 (detail.why = appearance_unresolved); required for targets and distractors of reid_occlusion and vehicle_track events (M23 §15.2, FR-072; P0b, additive)
+       */
+      appearance_ref?: string
+      /**
+       * Actor roles for the type validators (M23 §15.2; P0b, additive); gate 1 checks target and distractor distinguishability with the appearance_lib rules
+       *
+       * @maxItems 4
+       */
+      roles?: ('target' | 'distractor' | 'participant' | 'background_vehicle')[]
       gait?: {
         /**
          * [lo, hi], 0 < lo <= hi <= 40
@@ -4454,6 +4858,16 @@ export interface EventV1 {
          */
         accessories?: string[]
       }
+      /**
+       * Appearance id in appearance_lib@1 (event/appearance_lib.v1), bare or prefixed with appearance_lib@1/; mutually exclusive with the colour, size and accessory fields of appearance. Unresolvable references fail gate 1 with 611 (detail.why = appearance_unresolved); required for targets and distractors of reid_occlusion and vehicle_track events (M23 §15.2, FR-072; P0b, additive)
+       */
+      appearance_ref?: string
+      /**
+       * Actor roles for the type validators (M23 §15.2; P0b, additive); gate 1 checks target and distractor distinguishability with the appearance_lib rules
+       *
+       * @maxItems 4
+       */
+      roles?: ('target' | 'distractor' | 'participant' | 'background_vehicle')[]
       gait?: {
         /**
          * [lo, hi], 0 < lo <= hi <= 40
@@ -9501,6 +9915,14 @@ export interface QaReport {
       | 'pointcloud'
       | 'raycast'
       | 'appearance'
+      | 'grids'
+      | 'quality'
+      | 'semantic'
+      | 'collision'
+      | 'occupancy'
+      | 'navmesh'
+      | 'anchors'
+      | 'package'
     seconds: number
     peak_rss_mb?: number
   }[]
