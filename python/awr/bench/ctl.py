@@ -85,8 +85,9 @@ def _board_publish(s: BenchSettings, a) -> int:
         return 2
     dst = s.data_root / "boards" / v
     dst.mkdir(parents=True, exist_ok=True)
-    for name in ("config.json", "rows.jsonl"):
-        shutil.copyfile(src / name, dst / name)
+    if src.resolve() != dst.resolve():                                  # 指向已发布版本目录时原地重算
+        for name in ("config.json", "rows.jsonl"):
+            shutil.copyfile(src / name, dst / name)
     try:
         board = publish(dst, SubmissionStore(s.data_root / "submissions").board_view(), n_boot=a.n_boot)
     except BoardVersionError as e:
