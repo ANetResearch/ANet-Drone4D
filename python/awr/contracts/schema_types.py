@@ -235,6 +235,7 @@ __all__ = [
     "EvaluationV1Inputs",
     "EvaluationV1Interactive",
     "EvaluationV1Safety",
+    "EvaluationV1SafetyCrashes",
     "EvaluationV1SafetyMinSepM",
     "EvaluationV1SafetyViolations",
     "EventV1",
@@ -3287,6 +3288,14 @@ class EvaluationV1Safety(TypedDict):
     min_sep_m: EvaluationV1SafetyMinSepM
     violations: EvaluationV1SafetyViolations
     penetrations: int
+    crashes: NotRequired[EvaluationV1SafetyCrashes]
+
+
+# bench/evaluation.v1.schema.json#/properties/safety/properties/crashes
+class EvaluationV1SafetyCrashes(TypedDict):
+    uav: int
+    world: int
+    impact: int
 
 
 # bench/evaluation.v1.schema.json#/properties/safety/properties/min_sep_m

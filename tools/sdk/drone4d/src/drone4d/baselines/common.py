@@ -20,6 +20,7 @@ from drone4d.agent import DroneAgent, act, gimbal_look_at, nav_goto, nav_takeoff
 __all__ = ["BaselineAgent", "Track", "Tracks"]
 
 GATE_M = 4.0
+LAYER_M = 8.0                     # 机间高度分层间隔（按 uav id 排序居中分配）
 LOST_S = 2.0
 TARGET_RGB_TOL = 45.0
 FIT_NS = 3_000_000_000            # 轨迹位置与速度取近 3 s 原始位置的直线拟合
@@ -132,7 +133,9 @@ class BaselineAgent(DroneAgent):
         b = config["brief"]
         self.area = [tuple(p) for p in b["area"]["polygon_enu_m"]]
         lo, hi = b["area"]["alt_agl_range_m"]
-        self.alt = self.ALT_AGL_M or 0.5 * (lo + hi)
+        fleet = sorted([self.uav, *self.peers])
+        layer = LAYER_M * (fleet.index(self.uav) - 0.5 * (len(fleet) - 1))   # 高度分层：同高度交叉航线会机间碰撞
+        self.alt = min(max((self.ALT_AGL_M or 0.5 * (lo + hi)) + layer, lo + 2.0), hi - 2.0)
         self.anchors = b["anchors"]
         self.targets = [t["appearance"].get("top_rgb") for t in b["targets"]]
         self.vocab = set(b["report_vocab"])

@@ -4227,6 +4227,14 @@ export interface EvaluationV1 {
       vehicle: number
     }
     penetrations: number
+    /**
+     * Terminating contacts decided by the physics tier (contracts 1.3.x additive): UAV-UAV collisions counted once per pair, static-world collisions, hard landings.
+     */
+    crashes?: {
+      uav: number
+      world: number
+      impact: number
+    }
   }
   actors: {
     [k: string]: {

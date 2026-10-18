@@ -1,6 +1,7 @@
 """安全与合规（M27 §6.7.6）：机体球（r 0.5 m）与演员包围体（人员圆柱近似胶囊 r 0.4 m、h 1.8 m；车辆按尺寸 OBB）的最小距离，
 P0a 以 10 Hz 真值轨迹计算，只计机体在空中（AIRBORNE、LANDING）的 tick；距离低于任务间距的连续区段计一次违规，≤ 0 记穿透
-（`ranked_valid = false`，`actor_penetration`）。首次升至 5 m 以上之后、降落段之外离地高度 < 2 m 的空中区段计地面告警。"""
+（`ranked_valid = false`，`actor_penetration`）。首次升至 5 m 以上之后、降落段之外离地高度 < 2 m 的空中区段计地面告警。
+`crashes` 统计物理后端判定的终止类接触：机间碰撞（一对计一次）、撞击静态世界、硬着陆。"""
 
 from __future__ import annotations
 
@@ -62,4 +63,10 @@ def safety(run, world, th=TH) -> dict:
     fin = lambda a: float(np.min(a)) if np.isfinite(a).any() else None   # noqa: E731
     return {"ground_alerts": int(sum(_segments(ground[:, u]) for u in range(nu))), "nofly_incursions": 0, "detected_count": 0,
             "min_sep_m": {"person": fin(dp), "vehicle": fin(dv)}, "violations": {"person": int(viol_p), "vehicle": int(viol_v)},
-            "penetrations": int(pen)}
+            "penetrations": int(pen), "crashes": _crashes(run.contacts)}
+
+
+def _crashes(contacts: list[dict]) -> dict:
+    """机体终止类接触（物理后端判定）：机间碰撞（每对计一次）、撞击静态世界、硬着陆。"""
+    uav = {(c["t_ns"], round(c["pos_enu_m"][0], 2), round(c["pos_enu_m"][1], 2)) for c in contacts if c["kind"] == "COLLISION_UAV"}
+    return {"uav": len(uav), "world": sum(c["kind"] == "COLLISION_WORLD" for c in contacts), "impact": sum(c["kind"] == "IMPACT" for c in contacts)}
