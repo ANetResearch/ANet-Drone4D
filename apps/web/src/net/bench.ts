@@ -79,6 +79,17 @@ export interface Board {
 /** BN-83 */
 export interface BoardVersion { board_version: string; current: boolean; score_version: string; weights: null; tracks: BoardTrack[]; lanes: BoardLane[]; n_entries: number }
 export interface BoardIndex { current: string | null; versions: BoardVersion[] }
+/** bench/submission.v1 (BN-85, BN-95, BN-96) */
+export type SubmissionState = 'RECEIVED' | 'SCANNING' | 'VALIDATING' | 'EVALUATING' | 'SCORING' | 'DONE' | 'REJECTED' | 'FAILED' | 'WITHDRAWN'
+export interface SubmissionLane {
+  lane: string; metrics: Partial<Record<BoardMetricKey, BoardMetric>>; dominance_tier?: number
+  runs: { total: number; valid: number; invalid: number; platform_rerun?: number }; status?: string; composite?: number | null
+}
+export interface Submission {
+  schema: string; submission_id: string; track: string; lanes?: string[]; image_digest: string; entry: { cmd: string[]; env?: Record<string, string> }
+  notes?: string; state: SubmissionState; visibility: 'private' | 'board'; position: number
+  reason?: { code: number; name: string; detail?: Record<string, unknown> }; result?: { lanes: SubmissionLane[] }
+}
 /** BN-84 */
 export interface BoardEntryEvent { event: string; n_runs: number; invalid_runs: number; invalid_reasons: string[]; seeds: number[]; metrics: Components; repeat_delta: null }
 export interface BoardEntryDetail {

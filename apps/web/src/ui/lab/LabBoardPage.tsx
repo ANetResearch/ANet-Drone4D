@@ -83,6 +83,10 @@ export function LabBoardPage() {
               {q.data.lanes.map((x) => <NativeSelectOption key={x.lane} value={x.lane}>{x.lane}</NativeSelectOption>)}
             </NativeSelect>
           ) : null}
+          <Button size="sm" variant="ghost" onClick={() => navigate('/lab/submissions')}>
+            <Icon icon="data.package" data-icon="inline-start" />
+            {t('lab.sub.title')}
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => navigate('/lab/runs')}>
             <Icon icon="data.folder" data-icon="inline-start" />
             {t('lab.runs.title')}
