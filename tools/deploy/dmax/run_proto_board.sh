@@ -12,6 +12,7 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 D=/data/anet-drone4d-d3/d3dev
 NAME=${1:?output name}; shift
 CPUS=${CPUS:-12}
+MEM=${MEM:-48g}
 SPEC=${SPEC:-configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json}
 GPU=${GPU:-}
 case "$GPU" in ""|2|3) ;; *) echo "GPU must be 2 or 3 on dmax" >&2; exit 2;; esac
@@ -29,7 +30,7 @@ else
   HOST="-e PYTHONPATH=/repo/pylib-gz:/repo/python d3-gz:dev"
   LAUNCH="--gz-launcher local"
 fi
-ssh dmax "mkdir -p $D/out/$NAME && docker run -d --rm --name d3-board-$NAME --network none --cpus $CPUS --user \$(id -u):\$(id -g) -e HOME=/tmp \
+ssh dmax "mkdir -p $D/out/$NAME && docker run -d --rm --name d3-board-$NAME --network none --cpus $CPUS --memory $MEM --user \$(id -u):\$(id -g) -e HOME=/tmp \
   -e AWR_CONTRACTS_DIR=/repo/contracts -e AWR_HOST_PATH_MAP=/repo=$D \
   -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker:ro -v $D:/repo -w /repo $HOST \
   sh -c 'python3 tools/bench/d3/proto_board.py --spec $SPEC \

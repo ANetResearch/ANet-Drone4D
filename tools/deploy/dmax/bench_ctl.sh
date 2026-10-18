@@ -10,5 +10,5 @@ BR=${BENCH_ROOT:-benchroot}
 rsync -a --delete --exclude __pycache__ "$ROOT/python/" "dmax:$D/python/"
 rsync -a --mkpath --delete "$ROOT/packages/contracts/" "dmax:$D/contracts/"
 args=$(printf '%q ' "$@")
-ssh dmax "mkdir -p $D/$BR && docker run --rm --network none --user \$(id -u):\$(id -g) -e HOME=/tmp -e PYTHONPATH=/repo/pylib-gz:/repo/python \
+ssh dmax "mkdir -p $D/$BR && docker run --rm --name d3-bench-ctl-$$ --network none --cpus 2 --memory 4g --user \$(id -u):\$(id -g) -e HOME=/tmp -e PYTHONPATH=/repo/pylib-gz:/repo/python \
   -e AWR_CONTRACTS_DIR=/repo/contracts -e AWR_BENCH_DATA_ROOT=/repo/$BR -v $D:/repo -w /repo d3-gz:dev python3 -m awr.bench.ctl $args"

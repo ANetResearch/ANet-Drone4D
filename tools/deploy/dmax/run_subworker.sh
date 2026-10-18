@@ -7,10 +7,11 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 D=/data/anet-drone4d-d3/d3dev
 BR=${BENCH_ROOT:-benchroot}
 CPUS=${CPUS:-8}
+MEM=${MEM:-32g}
 rsync -a --delete --exclude __pycache__ "$ROOT/python/" "dmax:$D/python/"
 rsync -a --mkpath --delete "$ROOT/packages/contracts/" "dmax:$D/contracts/"
 rsync -a --mkpath "$ROOT/native/gz/proto/" "dmax:$D/native/gz/proto/"
-ssh dmax "mkdir -p $D/$BR $D/run/as && docker rm -f d3-subworker >/dev/null 2>&1; docker run -d --rm --name d3-subworker --network none --cpus $CPUS \
+ssh dmax "mkdir -p $D/$BR $D/run/as && docker rm -f d3-subworker >/dev/null 2>&1; docker run -d --rm --name d3-subworker --network none --cpus $CPUS --memory $MEM \
   --user \$(id -u):\$(id -g) -e HOME=/tmp -e PYTHONPATH=/repo/pylib-gz:/repo/python -e AWR_CONTRACTS_DIR=/repo/contracts \
   -e AWR_HOST_PATH_MAP=/repo=$D -e AWR_AGENT_SOCK_ROOT=/repo/run/as \
   -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker:ro -v $D:/repo -w /repo d3-gz:dev \
