@@ -1,6 +1,7 @@
 """内部提交流水线（AWR-17 §18.23；M27 §6.7.9；D3-AC-56）：`python -m awr.bench.subworker --data-root <dir> [--once]`。
 
-按创建先后逐个处理 RECEIVED 的提交，每个阶段开始前重读状态（撤回即停止）：
+按创建先后逐个处理 RECEIVED 的提交（所属榜单版本被平台复现审计冻结的跳过，`awr.bench.platform_audit`），每个阶段开始前重读状态
+（撤回即停止）：
 
 1. SCANNING：`docker image inspect <digest>`：镜像须已在 dmax（私有仓库推送或本机构建）、linux/amd64、≤ 8 GiB；否则 REJECTED 692 `scan`；
 2. VALIDATING：冒烟运行（Fast 档、`smoke_s` 秒、公开冒烟种子 0）：每架机须完成握手并返回动作、无协议错误、容器以 0 退出；
@@ -24,6 +25,7 @@ import traceback
 from pathlib import Path
 
 from awr.bench.boardstore import append_rows, load_config, publish, slim_evaluation
+from awr.bench.platform_audit import is_frozen
 from awr.bench.submissions import SubmissionStore
 
 __all__ = ["process_one", "scan_image"]
@@ -64,8 +66,8 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
 
     data_root = Path(data_root)
     st = SubmissionStore(data_root / "submissions")
-    d = st.next_received()
-    if d is None:
+    d = next((x for x in st.all() if x["state"] == "RECEIVED" and not is_frozen(data_root / "boards" / x["_meta"]["board_version"])), None)
+    if d is None:                                            # 平台复现审计冻结的榜单版本：其提交留在 RECEIVED，解冻后继续
         return None
     sid, team = d["submission_id"], d["_meta"]["team"]
     bdir = data_root / "boards" / d["_meta"]["board_version"]
