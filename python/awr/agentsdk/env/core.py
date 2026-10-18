@@ -95,7 +95,7 @@ class BenchEnv:
         self.nav = NavModel(spec.seed, spec.noise)
         self.l1 = L1Model(spec.seed, self.world, self.tape, self.cam)
         self.link = LinkModel(spec.seed, tuple(self.uavs), self.world, self.tape, spec.comm)
-        self.rec = EnvRecorder(spec.out_dir)
+        self.rec = EnvRecorder(spec.out_dir, spec=spec, tape=self.tape)
         self._tier = tier
         self._l2_factory = l2
         self.l2 = None
