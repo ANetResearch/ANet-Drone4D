@@ -1,5 +1,9 @@
 """事件编译编排（M23 §6.4、§7.1）：门 1 → 舞台装载 → 门 2 → 生成 → 打包与流式复算 → 产物目录（原子改名）。
 
+世界检查并入门 1（M23 §6.3 `E-WORLD`）：世界包须满足 M22 `metric_ok()`（`scaleStatus ≠ relative` 且标定证据完整），
+否则返回 600 `WORLD_UNCALIBRATED`、不装载舞台（D3-AC-02、M22-AC-008）；`CompileOptions.ranked` 为真时另要求
+`ranked_ok`（`scaleStatus ∉ {relative, assumed}`，AWR-05 §5.1.2），同样返回 600，`detail.ranked = true`。
+
 门 3（语义验证、oracle、事件图）由后续工作包接入；本编排对门 3 记 `skipped`。产物：`event.json`（原始 DSL 的 JSON 形式）、
 `plan.json`、`anchors.json`（解析后锚点）、`tape.bin`、`tape.json`、`compile_report.json`。
 """
@@ -18,6 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from awr.contracts.reasons import REASONS
 from awr.sim.events.anchors import (
     anchor_xy,
     anchors_sha256,
@@ -28,12 +33,20 @@ from awr.sim.events.anchors import (
 )
 from awr.sim.events.dsl import Issue, event_sha256, gate1, load_doc
 from awr.sim.events.errors import EventError
+from awr.world.geometry.status import MetricStatus, metric_ok
 
-__all__ = ["GENERATOR", "GENERATOR_VERSION", "CompileOptions", "CompileResult", "compile_event", "raycast_sha256", "stage_bbox"]
+__all__ = ["GENERATOR", "GENERATOR_VERSION", "CompileOptions", "CompileResult", "compile_event", "raycast_sha256", "stage_bbox",
+           "world_issue"]
 
 GENERATOR = "awr.sim.events.gen"
 GENERATOR_VERSION = "0.1.0-grid"
 STAGE_MARGIN_M = 60.0
+
+
+def _reason_name(code: int) -> str:
+    """原因码名称：以 contracts rt/reasons.json 为准（含 M22 所有、由编译返回的 600），未登记者回退到 M23 本地表。"""
+    ri = REASONS.get(code)
+    return ri.name if ri is not None else EventError(code).reason
 
 
 @dataclass(frozen=True)
@@ -44,6 +57,7 @@ class CompileOptions:
     out: Path | None = None
     cache_dir: Path | None = None
     preflight_only: bool = False
+    ranked: bool = False                            # 排名运行的编译：另拒 scaleStatus ∈ {relative, assumed}
 
 
 @dataclass
@@ -59,12 +73,13 @@ class CompileResult:
     boards: list[dict] = field(default_factory=list)
     tape: dict | None = None
     out: Path | None = None
+    world_metric: dict | None = None                # M22 metric_ok() 的结果（MetricStatus.to_json）
 
     def as_dict(self) -> dict[str, Any]:
         return {"event_id": self.event_id, "version": self.version, "status": self.status,
-                "reason": None if self.reason is None else {"code": self.reason, "name": EventError(self.reason).reason},
+                "reason": None if self.reason is None else {"code": self.reason, "name": _reason_name(self.reason)},
                 "gates": self.gates, "segments": self.segments, "retime": self.retime, "snaps": self.snaps, "boards": self.boards,
-                "tape": self.tape, "out": None if self.out is None else str(self.out)}
+                "tape": self.tape, "out": None if self.out is None else str(self.out), "world_metric": self.world_metric}
 
 
 def _gate(n: int, errs: list[Issue], warns: list[Issue], t0: float, status: str | None = None) -> dict:
@@ -109,6 +124,18 @@ def stage_bbox(plan: dict, anchors: dict) -> tuple[float, float, float, float]:
     return min(xs) - m, min(ys) - m, max(xs) + m, max(ys) + m
 
 
+def world_issue(ms: MetricStatus, *, ranked: bool = False) -> Issue | None:
+    """世界米制检查的门 1 问题：`ok` 为假，或排名编译而 `ranked_ok` 为假时为 600 `E-WORLD`，否则 None。"""
+    if ms.ok and (ms.ranked_ok or not ranked):
+        return None
+    detail = {**ms.to_json(), "ranked": ranked}
+    if not ms.ok:
+        return Issue("E-WORLD", 600, "/world", f"世界未完成米制标定，不能加载事件：{'、'.join(ms.missing)}",
+                     f"The world has not been metrically calibrated: {', '.join(ms.missing)}", detail)
+    return Issue("E-WORLD", 600, "/world", f"排名运行要求尺度等级高于 assumed，当前为 {ms.scale_status}",
+                 f"Ranked runs require a scale status stronger than assumed; the world is {ms.scale_status}", detail)
+
+
 def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: CompileOptions | None = None) -> CompileResult:
     opts = opts or CompileOptions()
     t_wall = time.perf_counter()
@@ -120,6 +147,10 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
         iss = Issue("E-SCHEMA", 611, "", f"无法解析事件文档：{e}", f"Cannot parse the event document: {e}")
         return CompileResult(None, None, "failed", 611, [_gate(1, [iss], [], t0)])
     eid, ver = doc.get("event_id"), doc.get("version", 1)
+    ms = metric_ok(world_dir)
+    if ms.missing[:1] in (("world_json_missing",), ("world_json_invalid",)):
+        iss = Issue("E-WORLD", 600, "/world", "世界包缺少可读的 world.json，不能加载事件", "The world package has no readable world.json", ms.to_json())
+        return CompileResult(eid, ver, "failed", 600, [_gate(1, [iss], [], t0)], world_metric=ms.to_json())
     wdoc = json.loads((world_dir / "world.json").read_text(encoding="utf-8"))
     overlay = load_overlay(opts.anchors_overlay)
     if overlay is None and str(doc.get("anchors_ref", "world")).startswith("event:") and isinstance(event_doc, (str, Path)) \
@@ -132,13 +163,16 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     w = doc.get("world") or {}
     if w.get("id") and w["id"] != wdoc.get("id"):
         pre.append(Issue("E-WORLD", 615, "/world/id", "事件引用的世界与装载的世界包不一致", "The event refers to another world package"))
+    wi = world_issue(ms, ranked=opts.ranked)
+    if wi is not None:
+        pre.append(wi)
     anchors = resolve_anchors(world_anchors(world_dir), overlay)
     plan, errs, warns = gate1(doc, anchors)
     errs = pre + errs
     gates = [_gate(1, errs, warns, t0)]
     if errs:
         reason = next((e.reason for e in errs if e.reason not in (None, 611)), 611)
-        return CompileResult(eid, ver, "failed", reason, gates)
+        return CompileResult(eid, ver, "failed", reason, gates, world_metric=ms.to_json())
     # ------------------------------------------------------------ 舞台
     t0 = time.perf_counter()
     from awr.sim.events.gen import Stage, preflight
@@ -155,7 +189,7 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     pf = preflight(plan, stage, mode=opts.retime_mode)
     segs = [lg.report() for a in sorted(pf["legs"]) for lg in pf["legs"][a]]
     gates.append(_gate(2, pf["errors"], pf["warnings"], t0))
-    res = CompileResult(eid, ver, "preflight", None, gates, segs, pf["retime"], pf["snaps"], pf["boards"])
+    res = CompileResult(eid, ver, "preflight", None, gates, segs, pf["retime"], pf["snaps"], pf["boards"], world_metric=ms.to_json())
     if pf["errors"]:
         res.status = "infeasible" if any(e.reason == 612 for e in pf["errors"]) else "failed"
         res.reason = 612 if res.status == "infeasible" else 611
