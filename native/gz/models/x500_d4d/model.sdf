@@ -79,12 +79,15 @@
           </friction>
         </surface>
       </collision>
-      <collision name="gear_skid_r">
-        <pose>0 -0.132 -.2195 0 0 0</pose>
+      <!-- Drone4D: skid contact as four 2 cm foot spheres (bottom at -0.227 m, same rest height as the original 1.5 cm skid boxes).
+           Thin boxes on world triangle meshes (bullet) snag: a vehicle resting on the mesh could not lift off and reported
+           lateral normals on triangle edges. Names keep the "gear_" prefix (ground-contact classification). -->
+      <collision name="gear_foot_rf">
+        <pose>0.11 -0.132 -0.207 0 0 0</pose>
         <geometry>
-          <box>
-            <size>0.25 0.015 0.015</size>
-          </box>
+          <sphere>
+            <radius>0.02</radius>
+          </sphere>
         </geometry>
         <surface>
           <contact>
@@ -98,12 +101,50 @@
           </friction>
         </surface>
       </collision>
-      <collision name="gear_skid_l">
-        <pose>0 0.132 -.2195 0 0 0</pose>
+      <collision name="gear_foot_rb">
+        <pose>-0.11 -0.132 -0.207 0 0 0</pose>
         <geometry>
-          <box>
-            <size>0.25 0.015 0.015</size>
-          </box>
+          <sphere>
+            <radius>0.02</radius>
+          </sphere>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+      <collision name="gear_foot_lf">
+        <pose>0.11 0.132 -0.207 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.02</radius>
+          </sphere>
+        </geometry>
+        <surface>
+          <contact>
+            <ode>
+              <min_depth>0.001</min_depth>
+              <max_vel>0</max_vel>
+            </ode>
+          </contact>
+          <friction>
+            <ode />
+          </friction>
+        </surface>
+      </collision>
+      <collision name="gear_foot_lb">
+        <pose>-0.11 0.132 -0.207 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.02</radius>
+          </sphere>
         </geometry>
         <surface>
           <contact>

@@ -24,6 +24,7 @@ from awr.phys.adapter import (
     LAND_STILL_S,
     STILL_S,
     STILL_V_MPS,
+    TAKEOFF_GRACE_S,
     ContactEvent,
     DispatchResult,
     StatusSignals,
@@ -52,6 +53,7 @@ class _Veh:
     landed: bool
     in_contact: bool
     still_ns: int = 0
+    grace_ns: int = 0                    # 起飞宽限剩余（飞行指令生效时置为 TAKEOFF_GRACE_S，首次离地即清零）
     crash: str = "none"
     sent: Setpoint | None = None
 
@@ -148,6 +150,8 @@ class GzSimBackend:
                 continue
             self.tracker.set(c, self.history.last_sample(c.uav).pos_enu_m)
             if c.kind in _FLY:
+                if v.landed:
+                    v.grace_ns = int(TAKEOFF_GRACE_S * 1e9)
                 v.landed = False
             v.still_ns = 0
         self._pending = keep
@@ -220,6 +224,7 @@ class GzSimBackend:
                 elif kind == "TOUCHDOWN":
                     v.in_contact = True
                 elif kind == "LIFTOFF":
+                    v.grace_ns = 0
                     ps = state[j, v.idx, 0:3]                # 离地时已无接触点，取机体位置
                     ev = ContactEvent(v.uav, int(t_rel[j]), kind, "gz", (float(ps[0]), float(ps[1]), float(ps[2])), (0.0, 0.0, 1.0), float(c.speed))
                     v.in_contact = False
@@ -228,6 +233,9 @@ class GzSimBackend:
                         out.append(ev)
             for v in self._v.values():
                 if v.crash != "none" or v.landed:
+                    continue
+                if v.grace_ns > 0:
+                    v.grace_ns -= self.step_ns
                     continue
                 speed = float(np.linalg.norm(state[j, v.idx, 7:10]))
                 v.still_ns = v.still_ns + self.step_ns if v.in_contact and speed < STILL_V_MPS else 0

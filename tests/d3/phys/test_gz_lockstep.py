@@ -152,3 +152,42 @@ def test_land_on_world_mesh(tmp_path: Path) -> None:
     assert "TOUCHDOWN" in kinds and "IMPACT" not in kinds and "COLLISION_WORLD" not in kinds
     assert st == VehicleStatus.GROUNDED
     assert abs(zs[-1] - (zg + GEAR_Z)) <= 0.3 and min(zs) > zg                    # 不穿透
+
+
+
+@pytest.mark.skipif(not (WORLD / "geometry/mesh/raycast/index.json").exists(), reason="needs worlds/oryahovo-crop1")
+def test_takeoff_from_rest_on_world_mesh(tmp_path: Path) -> None:
+    """静止起飞（原型榜起飞点）：按网格面放在静止高度、第 1 个 tick 起飞；网格面上推力爬升可超过 1 s，不能被判为落地（起飞宽限 3 s）。"""
+    pytest.importorskip("zmq")
+    pytest.importorskip("open3d")
+    from awr.agentsdk.env.core import SPAWN_FOOT, _open_world
+    from awr.agentsdk.env.geom import surface_z
+    from awr.phys.gz.backend import GzSimBackend
+    from awr.phys.gz.compose import UavSpawn, compose_run
+    from awr.phys.gz.instance import GzInstance
+    from awr.phys.kinematic import GEAR_Z_M
+    from awr.world.export.gz import export_world
+
+    world = _open_world(WORLD)
+    pads = [(76.0, -78.0), (76.0, -82.0), (76.0, -86.0)]
+    spawns = [UavSpawn(f"uav-0{i + 1}", (x, y, float(surface_z(world, SPAWN_FOOT + np.array([x, y])).max()) + GEAR_Z_M + 0.01)) for i, (x, y) in enumerate(pads)]
+    exp = export_world(WORLD, out_root=tmp_path / "exp", check_sdf=True)
+    inst = GzInstance(tmp_path / "run", "local", launcher="local", world_export=exp.root)
+    inst.start(compose_run(spawns, world_static_uri=exp.uri, endpoint=inst.gz_endpoint, spherical=exp.spherical))
+    ev = []
+    uavs = [s.uav for s in spawns]
+    try:
+        inst.wait_socket(120)
+        be = GzSimBackend(uavs, inst.endpoint, grounded=uavs)
+        be.open()
+        for k in range(60):
+            be.submit([TierCommand(u, "takeoff", 1, alt_m=10.0) for u in uavs] if k == 1 else [])
+            ev += be.advance(k).contacts
+        st = be.status()
+        be.close()
+    finally:
+        inst.stop()
+    for u in uavs:
+        kinds = [e.kind for e in ev if e.uav == u]
+        assert "LIFTOFF" in kinds and "TOUCHDOWN" not in kinds and "COLLISION_WORLD" not in kinds, (u, kinds)
+        assert st[u] == VehicleStatus.AIRBORNE

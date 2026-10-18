@@ -13,7 +13,7 @@ import numpy as np
 
 from awr.phys import PhysError
 
-__all__ = ["CLOCK_PROFILES", "IMPACT_VZ_MPS", "LAND_STILL_S", "STILL_S", "STILL_V_MPS", "ClockProfile", "ContactEvent", "DispatchResult",
+__all__ = ["CLOCK_PROFILES", "IMPACT_VZ_MPS", "LAND_STILL_S", "STILL_S", "STILL_V_MPS", "TAKEOFF_GRACE_S", "ClockProfile", "ContactEvent", "DispatchResult",
            "OrbitSpec", "PhysicsTier", "StatusSignals", "TickResult", "TickTiming", "TierCommand", "VehicleStatus", "derive_status",
            "steps_per_tick", "validate_clock"]
 
@@ -22,6 +22,8 @@ STILL_V_MPS = 0.25
 LAND_STILL_S = 0.5
 STILL_S = 1.0
 IMPACT_VZ_MPS = 3.0
+# 起飞宽限：飞行指令生效后、首次离地前的 3 s 内不做落地判定（静止起飞的电机加速与推力爬升可超过 1 s，不能判为"已落地"）
+TAKEOFF_GRACE_S = 3.0
 
 CmdKind = Literal["velocity", "goto", "follow_path", "orbit", "hover", "takeoff", "land", "kill"]
 ContactKind = Literal["TOUCHDOWN", "LIFTOFF", "COLLISION_WORLD", "IMPACT", "COLLISION_UAV"]
