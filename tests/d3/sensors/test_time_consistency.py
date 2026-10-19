@@ -501,6 +501,7 @@ def _env_run(site, env_event, tape_dir: Path, out: Path, *, physics: str, clock:
             obs, *_ = env.step(acts)
         rec["stages"] = [(s.name, s.order) for s in env.tier.f.pipeline.stages] if physics == "fast" else []
         rec["n_ticks"] = env.k
+        rec["pre_ticks"] = env.preroll.n_ticks              # 预滚 [−2 s, 0)（env.preroll）：物理步照常执行
         env.close()
     return rec
 
@@ -520,7 +521,8 @@ def test_stage_order_and_clock_profile_do_not_change_sensor_actor_states(site, e
     # 运行确有差异：stage 次序已换、探针 stage 按物理频率执行，物理档与时钟档改变机体位姿
     order = lambda r: [n for n, _o in r["stages"] if n in ("mesh_contact", "pose_history", "tape_probe")]  # noqa: E731
     assert order(base) == ["mesh_contact", "pose_history"] and order(runs["fast-perm"]) == ["pose_history", "mesh_contact", "tape_probe"]
-    assert runs["fast-perm"]["probe"] == 20 * 25 and runs["fast-sb100"]["probe"] == 20 * 10
+    assert runs["fast-perm"]["probe"] == (20 + runs["fast-perm"]["pre_ticks"]) * 25
+    assert runs["fast-sb100"]["probe"] == (20 + runs["fast-sb100"]["pre_ticks"]) * 10
     moved = {n: max(float(np.linalg.norm(runs[n]["cam_pos"][k] - base["cam_pos"][k])) for k in base["cam_pos"]) for n in runs}
     travel = max(float(np.linalg.norm(base["cam_pos"][(u, 20)] - base["cam_pos"][(u, 0)])) for u in ("uav-01", "uav-02"))
     print(f"[S07] env camera-position deviation from fast/d1_250 (m): {moved}; travel {travel:.2f} m; probe calls "

@@ -18,6 +18,8 @@ M25 会话（`sensorsvc`，L2 与 L2-depth）：到期帧以 `(uav, sensor, seq)
 物理档（`spec.physics`）：`realistic`（gz 锁步，正式成绩）、`fast`（FleetSim，`awr.phys.fast`）、`kinematic`（开发夹具）；同一 Agent
 代码与观测接口在各档不变，`clock_profile` 先按 M24 时钟档规则与输出集合校验（637）。
 goto 目标解释在本机导航系，每个控制步按当前导航误差换算为真值系目标（变化 ≥ 5 cm 时更新跟踪器）。
+预滚（`env.preroll`，M26-FR-004）：reset 时先推进事件零点之前的 `[−t_pre, 0)`（缺省 2 s；地面起飞为静止、空中出生为悬停保持），
+不调用 Agent、不交付观测；此后物理档以事件时间视图出现，k = 0 观测时刻为 0，窗口判定写入 `tier_info.preroll`。
 未返回动作的 Agent 计超时（回执 `timeout`），沿用上一导航指令。回合在事件时长到达或全部机体终止时结束。
 """
 
@@ -35,6 +37,7 @@ from awr.agentsdk.env.l1 import L1Model
 from awr.agentsdk.env.l2 import CAM_SENSOR, GNSS_SENSOR, IMU_SENSOR, LIDAR_SENSOR, L2Config
 from awr.agentsdk.env.link import LinkModel
 from awr.agentsdk.env.nav import NavModel
+from awr.agentsdk.env.preroll import PREROLL_DEFAULT_S, plan_preroll, run_preroll
 from awr.agentsdk.env.recorder import EnvRecorder
 from awr.agentsdk.env.spec import EnvSpec
 from awr.agentsdk.task import brief_for_agent, task_from_event
@@ -76,11 +79,11 @@ class _Agent:
 
 class BenchEnv:
     def __init__(self, spec: EnvSpec, *, world=None, tape=None, tier=None, cam: CameraModel | None = None, limits: Limits | None = None,
-                 l2=None, sensorsvc=None, inflight_cap: int | None = None, wall_preview=False) -> None:
+                 l2=None, sensorsvc=None, inflight_cap: int | None = None, wall_preview=False, preroll_s: float = PREROLL_DEFAULT_S) -> None:
         """`l2`：L2 传感器工厂 `(env) -> L2Sensors`（测试注入 CPU 渲染替身）；缺省按 `spec.l2` 构造 EGL 光栅相机。
         `sensorsvc`：M25 调度器（`awr.sensorsvc.scheduler.Scheduler`；进程内 GL 渲染须 `threaded=False`），L2 帧经其 Benchmark 会话交付；
         `inflight_cap` 为会话在途上限（缺省 2 个 tick 的到期帧数）。`wall_preview`：True 写入运行目录，或回调
-        `(uav, seq, t_ns, jpeg_bytes)`。"""
+        `(uav, seq, t_ns, jpeg_bytes)`。`preroll_s`：事件零点之前的预滚窗口（`env.preroll`；缺省 2 s，0 关闭）。"""
         from awr.sim.events.tape import open_tape
 
         if spec.obs_level not in ("L1", "L2", "L2-depth"):
@@ -105,6 +108,7 @@ class BenchEnv:
         self._svc_wait = {"ticks": 0, "rejected_641": 0, "resubmits": 0, "wait_s": 0.0, "backpressure_s": 0.0, "blocked_ticks": 0}
         self._svc_cache: tuple[int, dict] | None = None
         self._wall = _WallPreview(spec.out_dir, wall_preview) if wall_preview else None
+        self.preroll = plan_preroll(((f.uav, f.airborne) for f in spec.fleet), preroll_s, TICK_MS)
         self.possible_agents = list(self.uavs)
         self.agents: list[str] = []
         self.k = 0
@@ -189,6 +193,7 @@ class BenchEnv:
             raise ValueError("the run seed is fixed by the run specification")
         self.tier = self._make_tier()
         self.tier.open()
+        self.tier = run_preroll(self.tier, self.preroll)    # [−t_pre, 0)：不调用 Agent、不交付观测；窗口内接触只记入 tier_info.preroll
         if self.spec.obs_level != "L1":
             self.l2 = self._l2_factory(self) if self._l2_factory is not None else self._make_l2()
             if self._svc is not None:
@@ -210,6 +215,9 @@ class BenchEnv:
         for u, c in self.configs.items():
             self.rec.write_json(f"agents/{u}/config.json", c)
         self._t0 = time.perf_counter()
+        if self.l2 is not None:                             # 预滚样本只进入 L2 的 IMU 预热，不产生帧
+            for u in self.uavs:
+                self.l2.ingest(u, *self.tier.preroll_samples(u))
         self._feed_l2(0)
         self._sense(0)
         self._log_fleet()

@@ -94,9 +94,9 @@ class _Track:
         self.gel: list[float] = []
 
     def add(self, t_ns: np.ndarray, state: np.ndarray) -> None:
-        last = self.t[-1] if self.t else -1
+        last = self.t[-1] if self.t else None                 # 预滚窗口的样本时刻为负（awr.agentsdk.env.preroll）
         for t, row in zip(t_ns.tolist(), state, strict=True):
-            if t > last:
+            if last is None or t > last:
                 self.t.append(int(t))
                 self.s.append(np.asarray(row, np.float64).copy())
                 last = t
