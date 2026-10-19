@@ -3,7 +3,10 @@
 
 无效原因分两类：`actor_penetration`（穿越演员包围体）使本次结果作废，`ranked_valid = false` 且四项分量全部记 0
 （M27-FR-161、ADR-191：计入样本、不剔除）；`physics_not_ranked`（运动学开发档）只表示该 Run 不进入正式榜，分量照常
-输出供开发榜与诊断使用（正式榜由 `aggregate.ranked_row` 排除）。"""
+输出供开发榜与诊断使用（正式榜由 `aggregate.ranked_row` 排除）。
+
+只在可观测区计分（M27-FR-089、D3-AC-04）：发生在 quality 层不完整区域的注释（事件真值 `in_incomplete_region`）与窗口内参与者
+全部在建筑内的注释由 `ec.exclusions` 剔除，不进入 EC、AO、CE 的分母，在 `excluded[]` 中单列；EU 的事件集不变。"""
 
 from __future__ import annotations
 
@@ -17,7 +20,7 @@ import numpy as np
 from awr.agentsdk.task import scored_events
 from awr.bench.eval.ao import active_observation
 from awr.bench.eval.ce import collaborative
-from awr.bench.eval.ec import event_capture
+from awr.bench.eval.ec import event_capture, event_truth_rows, exclusions, inside_masks
 from awr.bench.eval.eu import event_understanding
 from awr.bench.eval.ident import build_ident
 from awr.bench.eval.run import load_run
@@ -57,10 +60,13 @@ def evaluate_run(run_dir: Path, event_dir: Path, world, *, fx: float | None = No
     scripted = [a["id"] for a in run.tape.actors_info(scripted_only=True)]
     pres = run.present(scripted)
     present = {a: pres[:, i] for i, a in enumerate(scripted)}
-    ec, cov, per_event = event_capture(E, U, ident, present, run.n_ticks)
+    inside = inside_masks(run, scripted)
+    E, excluded = exclusions(E, event_truth_rows(Path(event_dir)), present, run.n_ticks, inside=inside)
+    Es = [e for e in E if not e.get("excluded")]                  # 只在可观测区计分：EC、AO、CE 的分母（M27-FR-089）
+    ec, cov, per_event = event_capture(Es, U, ident, present, run.n_ticks, inside=inside)
     eu = event_understanding(run.reports, E, run)
-    ao = active_observation(E, U, run, world, fx=fx or CameraModel().fx, envelope_agl_m=tuple(run.task["altitude_envelope_agl_m"]))
-    ce_raw, ce, ce_norm = collaborative(E, U, ident, present, run.n_ticks, run)
+    ao = active_observation(Es, U, run, world, fx=fx or CameraModel().fx, envelope_agl_m=tuple(run.task["altitude_envelope_agl_m"]))
+    ce_raw, ce, ce_norm = collaborative(Es, U, ident, present, run.n_ticks, run)
     sf = safety(run, world)
     invalid = []
     if sf["penetrations"]:
@@ -74,12 +80,12 @@ def evaluate_run(run_dir: Path, event_dir: Path, world, *, fx: float | None = No
     doc = {"schema": "drone4d.bench.evaluation.v1", "run_id": run.manifest["run_id"], "evaluator_version": EVALUATOR_VERSION,
            "thresholds_version": THRESHOLDS_VERSION, "oracle_version": ORACLE_VERSION, "inputs": run.hashes(),
            "obs_level": run.manifest["obs_level"], "ranked": ranked, "ranked_valid": not invalid, "invalid_reasons": invalid,
-           "ec": {"value": ec, "coverage": cov, "events": list(per_event.values())}, "excluded": [], "eu": eu, "ao": ao,
+           "ec": {"value": ec, "coverage": cov, "events": list(per_event.values())}, "excluded": excluded, "eu": eu, "ao": ao,
            "ce": ce_raw, "safety": sf, "actors": _actor_stats(run, ident, present),
            "components": comp}
     if diag is not None:
         diag.update(_clean({"ce": ce_norm, "thresholds": {"h_px": TH.h_px, "vis": TH.vis}, "n_reports": len(run.reports), "n_events": len(E),
-                            "n_l1": len(run.l1)}))
+                            "n_l1": len(run.l1), "n_excluded": len(excluded)}))
     return _clean(doc)
 
 
