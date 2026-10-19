@@ -85,6 +85,7 @@
               "collision",
               "occupancy",
               "navmesh",
+              "navgraph",
               "anchors",
               "package"
             ]
@@ -385,6 +386,10 @@
         "navmesh": {
           "type": "object",
           "description": "per profile: islands, walkable area before and after trimming, random path reachability and corridor, vegetation share"
+        },
+        "navgraph": {
+          "type": "object",
+          "description": "OSM road and lane graph (M22-FR-034, FR-074): content and file sha256, edge, lane, connector, junction and stop line counts, road corridor share, routable share, NavMesh snap share, warnings"
         },
         "anchors": {
           "type": "object",

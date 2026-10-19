@@ -5,7 +5,8 @@
 与 `dsm_2m_n` 由确定性竖向栅格化核在求交网格上生成，每格 4 × 4 采样，§6.6.6，V-GLB-04；`dtm_10m` 仍由采样点云按 D2 规则派生）
 → D1 切片与派生（与六城同一代码）→ quality（质量位栅格、`semantic/quality.geojson` 覆盖多边形、求交网格 `q.u8`，`zones.border`
 改为覆盖多边形内缩，§6.6.7）→ appearance（`gltf-glb@2`，`tri.q.u8`）→ occupancy（`awr-occ@1`，覆盖外 unknown，§6.6.10）→ navmesh（行人与车辆 `detour-navmesh@1`，
-Node recast-navigation WASM 烘焙，§6.6.11，ADR-196）→ package（world.json 1.1.0：`profile = d3-glb`、`sensorHints`、
+Node recast-navigation WASM 烘焙，§6.6.11，ADR-196）→ navgraph（配方有 OSM 时：道路图与车道图 `geojson/awr-navgraph@1`，覆盖取
+quality 的 `cover`，高度取 `dsm_2m` 并经 navsvc 吸附到车辆 NavMesh，§7.3.4，FR-034、FR-074）→ package（world.json 1.1.0：`profile = d3-glb`、`sensorHints`、
 `dataset`（含 `derivedFrom[]` 与署名，M22-FR-065））→ D2 全部校验规则与 V-GLB 规则组（M22 §7.8）→ qa 报告 `glb` 段（配准、调平、
 V-GLB 逐条结果）。V-GLB-08（许可与署名）失败以 602 WORLD_LICENSE_MISSING 报告。语义、碰撞与锚点阶段随后加入。
 """
@@ -25,7 +26,9 @@ import numpy as np
 from awr.world.georef.frames import mat_to_quat
 from awr.world.glb.derive.appearance import HREF as APPEARANCE_HREF
 from awr.world.glb.derive.appearance import write_appearance
-from awr.world.glb.derive.navmesh import write_navmesh
+from awr.world.glb.derive.lanes import LanesResult, cover_fn, read_osm, write_lanes
+from awr.world.glb.derive.navmesh import HREF_DIR as NAV_HREF_DIR
+from awr.world.glb.derive.navmesh import NavSvc, write_navmesh
 from awr.world.glb.derive.occupancy import occ_href, write_occupancy
 from awr.world.glb.derive.pointcloud import sample_surface
 from awr.world.glb.derive.quality import GEOJSON_HREF as QUALITY_GEOJSON_HREF
@@ -402,6 +405,12 @@ class GlbPipeline(BuildPipeline):
         self.navmesh_qa = nav.qa
         self.layers.extend(nav.layers)
         self._stage("navmesh", time.perf_counter() - t3)
+        t4 = time.perf_counter()                                        # navgraph（§7.3.4，FR-034、FR-074）：道路图与车道图
+        ln = self.run_lanes(q, "vehicle" in nav.docs)
+        if ln is not None:
+            self.lanes_qa = ln.qa
+            self.layers.append(ln.layer)
+        self._stage("navgraph", time.perf_counter() - t4)
         qx: dict[str, Any] = {"stats": {"features": self.quality_info["features"], "coverAreaM2": qs["cover_area_m2"],
                                         "footprintVertices": qs["footprint_vertices"]}}
         if q.water:
@@ -429,6 +438,33 @@ class GlbPipeline(BuildPipeline):
         self._inset_border(res, 1.0 if tol is None else float(tol))
         self.quality = res
         return res
+
+    def run_lanes(self, q: QualityResult, vehicle_nav: bool) -> LanesResult | None:
+        """navgraph 阶段（`awr.world.glb.derive.lanes`）：配方 `osm` 的道路 → `geometry/nav/graph.geojson`。覆盖取 quality 的
+        `cover`（越出覆盖的道路裁去），高度取 `dsm_2m`（最高命中面，FR-034），有车辆 NavMesh 时车道与连接段经 navsvc 吸附
+        （吸附搜索的高度初值取 `dtm_10m`）。配方无 OSM 输入或 OSM 不含道路时不生成该图层。"""
+        from awr.world.georef.types import Anchor
+        from awr.world.terrain.grids import Grid, read_grid
+
+        d = self.adapter.recipe.doc
+        ents = d.get("osm") or []
+        ents = [ents] if isinstance(ents, dict) else list(ents)
+        if not ents:
+            return None
+        roads = read_osm([verify_raw(e["path"], e.get("sha256")) for e in ents], Anchor.from_coordinate(self.coordinate))
+        if not roads.ways:                                              # OSM 输入不含道路：不发布空的道路图层
+            return None
+        sc, a = read_grid(self.stage / DSM_HREF)
+        dsm = Grid(a, (float(sc["originXY"][0]), float(sc["originXY"][1])), float(sc["cellM"]))
+        t = self.nc.terrain
+        dtm = Grid(t.dtm, t.dtm_origin_xy, t.dtm_cell_m)
+        kw: dict[str, Any] = {"sources": [{"name": str(e["path"]), "sha256": str(e["sha256"])} for e in ents],
+                              "inside": cover_fn(q.cover, q.dsm_origin_xy, q.dsm_cell_m),
+                              "z_fn": lambda xy: dsm.bilinear(xy[:, 0], xy[:, 1]), "z_guess_fn": lambda xy: dtm.bilinear(xy[:, 0], xy[:, 1])}
+        if not vehicle_nav:
+            return write_lanes(self.stage, self.nc.world_id, self.coordinate_sha, roads, **kw)
+        with NavSvc(profiles={"vehicle": self.stage / NAV_HREF_DIR / "vehicle.json"}) as nav:
+            return write_lanes(self.stage, self.nc.world_id, self.coordinate_sha, roads, nav=nav, **kw)
 
     def _water_rings(self) -> list[np.ndarray]:
         """配方 `osm` 与 `qa.osm_extra` 中的水面多边形（世界帧 (E, N)；ODbL 派生）。无 OSM 输入时为空。"""
@@ -514,6 +550,8 @@ class GlbPipeline(BuildPipeline):
                "vglb": vglb_results(self.validation) if self.validation is not None else []}
         if getattr(self, "navmesh_qa", None) is not None:
             seg["navmesh"] = self.navmesh_qa
+        if getattr(self, "lanes_qa", None) is not None:
+            seg["navgraph"] = self.lanes_qa
         return seg
 
     def run_report(self) -> dict:
@@ -529,13 +567,16 @@ class GlbPipeline(BuildPipeline):
         known = {(e["rule"], e["message"]) for e in v["errors"] + v["warnings"]}
         v["errors"] += [e for e in post.errors if (e["rule"], e["message"]) not in known]
         v["warnings"] += [e for e in post.warnings if (e["rule"], e["message"]) not in known]
-        if post.warnings and report["status"] == "pass":
+        lane_warn = int((getattr(self, "lanes_qa", None) or {}).get("corridor_warnings", 0))    # 车道段越出道路走廊（FR-074）
+        if (post.warnings or lane_warn) and report["status"] == "pass":
             report["status"] = "warn"
         write_json(self.stage / QA_HREF, report)
         w = read_json(self.stage / "world.json")
         w["qa"]["status"] = report["status"]
+        extra = [f"navgraph: {lane_warn} lane segments outside the road corridor (qa/report.json glb.navgraph)"] if lane_warn else []
         w["qa"]["messages"] = (w["qa"]["messages"] + [f"{e['rule']} {e['message']}" for e in post.warnings
-                                                      if f"{e['rule']} {e['message']}" not in w["qa"]["messages"]])[:20]
+                                                      if f"{e['rule']} {e['message']}" not in w["qa"]["messages"]]
+                               + [m for m in extra if m not in w["qa"]["messages"]])[:20]
         write_json(self.stage / "world.json", w)
         self.world = w
         if post.errors:
