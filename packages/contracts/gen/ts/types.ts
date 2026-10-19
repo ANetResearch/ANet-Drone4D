@@ -1572,6 +1572,10 @@ export interface ActV1Report {
    */
   position_enu_m?: [number, number, ...number[]]
   confidence?: number
+  /**
+   * v1.3 (P0b, additive): vehicle_event only, the vehicle key event type it reports (depart, turn, stop, park, enter_zone, exit_zone; M23 §15.3); EU matches it against vehicle key events of the same type. Other report types omit it
+   */
+  event?: string
 }
 /**
  * Agent configuration (drone4d.bench.agent_config.v1). AWR-05 §8.1, M26 §7.4 (contracts 1.3.0, d1 V0.3). CONFIG frame body. Never contains run_id, run_seed, event id or version, tape hashes, split, the ranked flag or backend and renderer versions.

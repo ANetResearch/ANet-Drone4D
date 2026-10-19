@@ -1655,6 +1655,7 @@ class ActV1Report(TypedDict):
     window: ActV1ReportWindow
     position_enu_m: NotRequired[list[float]]
     confidence: NotRequired[float]
+    event: NotRequired[str]
 
 
 # bench/act.v1.schema.json#/$defs/Report/properties/participants/items

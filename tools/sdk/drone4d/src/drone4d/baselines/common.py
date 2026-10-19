@@ -1,8 +1,8 @@
 """基线策略的公共部分（M26 §14.3）：起飞与到位、估计系 goto、云台 look-at、检测级多目标关联与 report 规则。
 
-检测级观测的 `det_id` 每帧匿名，基线以地面位置做最近邻关联（门限 4 m，类别相同），形成本机轨迹，位置与速度取近 3 s 原始位置的
-直线拟合；外观可识别时以上衣颜色
-与简报目标比对（RGB 欧氏距离 < 45）。report 规则只读本机轨迹与已收到的消息：
+检测级观测的 `det_id` 每帧匿名，基线以地面位置做最近邻关联（门限 4 m、车辆 6 m，类别相同），形成本机轨迹，
+位置与速度取近 3 s 原始位置的直线拟合；外观可识别时以上衣颜色与简报目标比对（RGB 欧氏距离 < 45）。
+report 规则只读本机轨迹与已收到的消息：
 - `meet`：两条已持续 ≥ 5 s 的人员轨迹地面距离 ≤ 3 m 并保持 ≥ 5 s（> 5 m 才清零；检测地面位置带噪，对应简报 2 m 判据），
   其间至少 20 帧两人同帧被检测（排除同一人的分裂轨迹）；
 - `board`：人员轨迹在静止车辆（轨迹拟合 ≥ 2 s、速度 < 1 m/s）4 m 内消失（≥ 2 s 未再关联），该车随后 60 s 内启动（> 1.5 m/s）时确认；
@@ -11,6 +11,14 @@
 内只报一次。
 
 L2、L2-depth：检测由参考检测器 `ref_det_v1` 与感知适配层（`drone4d.perception.ref_det.L2Perception`）从相机图像得到，形同 L1 检测。
+
+P0b（M26-FR-122）：四类事件的其余 report 类型（`handover`、`disperse`、`alight`、`exit_building`、`reacquire`、`identity_link`、
+`vehicle_event`、`found`）由 `drone4d.baselines.events` 按简报 `report_vocab` 启用，规则见该模块；目标搜索先验见
+`drone4d.baselines.prior`。热成像通道（`ref_thermal_blob_v1`，`drone4d.baselines.thermal`）：构造参数 `thermal=None`（缺省）时，
+L2 与 L2-depth 下 agent_config 含 `kind = thermal` 的传感器即启用，`True` 强制启用，`False` 关闭；热成像检测与相机检测进入同一
+轨迹关联（按 (时刻, 传感器, 帧序号) 分帧），report 证据优先取相机帧，轨迹在窗口内只有热像仪帧时才引用热像仪帧。
+外观比对：上衣颜色距离 < 45，且双方都有下装颜色时下装颜色距离也 < 45；类别须与简报目标一致（车辆目标的 `top_rgb` 即车身颜色）。
+每条 report 的证据取窗口终点及以前的最近 3 个检测（同一轨迹保留首 3 个与最近 64 个检测供回溯）。
 """
 
 from __future__ import annotations
@@ -19,10 +27,15 @@ import math
 from dataclasses import dataclass, field
 
 from drone4d.agent import DroneAgent, act, gimbal_look_at, nav_goto, nav_takeoff, report
+from drone4d.baselines import events
+from drone4d.baselines.prior import search_prior
 
-__all__ = ["BaselineAgent", "Track", "Tracks"]
+__all__ = ["BaselineAgent", "Track", "Tracks", "rgb_match", "suppress_ns"]
 
 GATE_M = 4.0
+GATE_V_M = 6.0                    # 车辆关联门限（P0b）：行驶车辆急转弯时直线外推误差可达 5 m
+GAP_REC_NS = 3_000_000_000        # 同一轨迹相邻两次关联间隔 ≥ 3 s 记为一次观测间断（Re-ID 重新捕获判定用）
+EV_KEEP = 64
 LAYER_M = 8.0                     # 机间高度分层间隔（按 uav id 排序居中分配）
 LOST_S = 2.0
 TARGET_RGB_TOL = 45.0
@@ -34,6 +47,12 @@ BOARD_M = 4.0
 DOOR_M = 4.0
 ENTER_LOST_S = 5.0
 SUPPRESS_NS = 30_000_000_000      # 同类型 report 30 s 内只报一次（含他机经消息告知的）
+# P0b 类型的抑制时长（秒）：键为 report 类型（`vehicle_event` 按 `vehicle_event:<event>` 分键）；未列出的类型取 30 s
+SUPPRESS_S = {"alight": 10.0, "exit_building": 10.0, "reacquire": 10.0, "identity_link": 10.0, "vehicle_event": 8.0, "found": 3600.0}
+
+
+def suppress_ns(key: str) -> int:
+    return int(SUPPRESS_S.get(key.split(":", 1)[0], SUPPRESS_NS / 1e9) * 1e9)
 
 
 @dataclass
@@ -48,14 +67,38 @@ class Track:
     vel: tuple[float, float] = (0.0, 0.0)
     closed: bool = False
     hist: list[tuple[int, float, float]] = field(default_factory=list)
+    bottom: tuple[int, int, int] | None = None
+    xy0: tuple[float, float] = (0.0, 0.0)                    # 首个检测的地面位置
+    n: int = 0                                               # 关联的检测数
+    last_frame: tuple[str, int] = ("", -1)                   # 最近一次关联的 (传感器, 帧序号)
+    gaps: list[tuple[int, int]] = field(default_factory=list)   # 观测间断 (间断前末次时刻, 恢复时刻)
+    ev_first: list[tuple[int, bool, dict]] = field(default_factory=list)   # 首 3 个证据 (时刻, 是否热像仪, 证据)
+    evh: list[tuple[int, bool, dict]] = field(default_factory=list)        # 最近 EV_KEEP 个证据
 
     def span_s(self) -> float:
         return (self.hist[-1][0] - self.hist[0][0]) / 1e9 if self.hist else 0.0
 
+    def evidence(self, t_end: int) -> list[dict]:
+        """窗口终点 t_end 及以前的最近 3 个证据，相机帧优先；没有时取最早的证据（至多 3 个）。"""
+        seen: set[tuple[str, int]] = set()
+        rows = []
+        for t, th, e in [*self.ev_first, *self.evh]:
+            k = (e["sensor"], e["frame_seq"])
+            if k not in seen:
+                seen.add(k)
+                rows.append((t, th, e))
+        rows.sort(key=lambda r: (r[0], r[2]["sensor"], r[2]["frame_seq"]))
+        upto = [r for r in rows if r[0] <= t_end] or rows[:1]
+        cam = [r for r in upto if not r[1]]
+        return [e for _t, _th, e in (cam or upto)[-3:]]
+
     def fit(self) -> None:
-        """近 FIT_S 秒原始地面位置的最小二乘直线：位置取末端拟合值，速度取斜率（检测地面位置逐帧独立带噪，差分速度不可用）。"""
+        """近 FIT_S 秒原始地面位置的最小二乘直线：位置取末端拟合值，速度取斜率（检测地面位置逐帧独立带噪，差分速度不可用）。
+        人员需 ≥ 5 个点且跨 ≥ 1 s；车辆（P0b）≥ 3 个点且跨 ≥ 0.2 s 即拟合，否则行驶车辆在新轨迹的前 1 s 内以均值位置预测，
+        8 m/s 时滞后超过关联门限而分裂。"""
         h = self.hist
-        if len(h) < 5 or h[-1][0] - h[0][0] < 1_000_000_000:
+        n_min, span_min = (3, 200_000_000) if self.cls == "vehicle" else (5, 1_000_000_000)
+        if len(h) < n_min or h[-1][0] - h[0][0] < span_min:
             n = len(h)
             self.xy = (sum(p[1] for p in h) / n, sum(p[2] for p in h) / n)
             return
@@ -79,15 +122,15 @@ class Tracks:
         self.near_co: dict[tuple[str, str], int] = {}      # 近距保持期间两轨迹同帧更新的次数（排除同一人的分裂轨迹）
 
     def update(self, dets: list[dict], t_ns: int) -> list[Track]:
-        by_frame: dict[int, list[dict]] = {}
-        for d in dets:
-            by_frame.setdefault(d["seq"], []).append(d)
+        by_frame: dict[tuple[int, str, int], list[dict]] = {}
+        for d in dets:                                           # 分帧键 (时刻, 传感器, 帧序号)：相机与热像仪的帧序号各自计数
+            by_frame.setdefault((d["t_mid_ns"], d["sensor_id"], d["seq"]), []).append(d)
         touched: list[Track] = []
-        for seq in sorted(by_frame):
+        for fk in sorted(by_frame):
             used: set[str] = set()
-            for d in sorted(by_frame[seq], key=lambda d: d["det_id"]):
+            for d in sorted(by_frame[fk], key=lambda d: d["det_id"]):
                 x, y = d["ground_xy_noisy"]
-                best, bd = None, GATE_M
+                best, bd = None, (GATE_V_M if d["class"] == "vehicle" else GATE_M)
                 for tr in self.items:
                     if tr.closed or tr.cls != d["class"] or tr.tid in used:
                         continue
@@ -99,15 +142,28 @@ class Tracks:
                 t = d["t_mid_ns"]
                 if best is None:
                     self.n += 1
-                    best = Track(f"{self.uav}-t{self.n}", d["class"], (x, y), t, t)
+                    best = Track(f"{self.uav}-t{self.n}", d["class"], (x, y), t, t, xy0=(x, y))
                     self.items.append(best)
+                elif t - best.t_last >= GAP_REC_NS:
+                    best.gaps.append((best.t_last, t))
                 best.hist = [p for p in best.hist if t - p[0] <= FIT_NS] + [(t, x, y)]
                 best.t_last = t
+                best.n += 1
+                best.last_frame = (d["sensor_id"], d["seq"])
                 best.fit()
                 if "appearance" in d:
                     best.rgb = tuple(d["appearance"]["top_rgb"])
+                    if "bottom_rgb" in d["appearance"]:
+                        best.bottom = tuple(d["appearance"]["bottom_rgb"])
                 ev = {"bbox_xywh": d["bbox_xywh"]} if d.get("l2") else {"det_id": d["det_id"]}
-                best.ev = ([*best.ev, {"uav": self.uav, "sensor": d["sensor_id"], "frame_seq": d["seq"], **ev}])[-3:]
+                e = {"uav": self.uav, "sensor": d["sensor_id"], "frame_seq": d["seq"], **ev}
+                th = bool(d.get("thermal"))
+                if not th:
+                    best.ev = [*best.ev, e][-3:]
+                row = (t, th, e)
+                if len(best.ev_first) < 3:
+                    best.ev_first.append(row)
+                best.evh = [*best.evh, row][-EV_KEEP:]
                 used.add(best.tid)
                 touched.append(best)
         for tr in self.items:
@@ -119,8 +175,10 @@ class Tracks:
         return [tr for tr in self.items if not tr.closed and (t_ns - tr.t_last) / 1e9 <= max_age_s]
 
 
-def rgb_match(rgb, target) -> bool:
-    return rgb is not None and target is not None and math.dist(rgb, target) < TARGET_RGB_TOL
+def rgb_match(rgb, target, bottom=None, target_bottom=None) -> bool:
+    if rgb is None or target is None or math.dist(rgb, target) >= TARGET_RGB_TOL:
+        return False
+    return bottom is None or target_bottom is None or math.dist(bottom, target_bottom) < TARGET_RGB_TOL
 
 
 class BaselineAgent(DroneAgent):
@@ -129,6 +187,9 @@ class BaselineAgent(DroneAgent):
     name = "baseline"
     ALT_AGL_M: float | None = None
     CRUISE_MPS = 8.0
+
+    def __init__(self, *, thermal: bool | None = None) -> None:
+        self.use_thermal = thermal
 
     def reset(self, config: dict) -> None:
         super().reset(config)
@@ -142,14 +203,26 @@ class BaselineAgent(DroneAgent):
         self.alt = min(max((self.ALT_AGL_M or 0.5 * (lo + hi)) + layer, lo + 2.0), hi - 2.0)
         self.anchors = b["anchors"]
         self.targets = [t["appearance"].get("top_rgb") for t in b["targets"]]
+        self.target_bottoms = [t["appearance"].get("bottom_rgb") for t in b["targets"]]
+        self.target_classes = [t.get("class", "person") for t in b["targets"]]
         self.vocab = set(b["report_vocab"])
+        self.prior = search_prior(b)
         self.cam = next(s["sensor_id"] for s in config["sensors"] if s["kind"] == "camera")
         self.tracks = Tracks(self.uav)
         self.perception = None
-        if config.get("obs_level") in ("L2", "L2-depth"):
+        self.thermal = None
+        l2 = config.get("obs_level") in ("L2", "L2-depth")
+        if l2:
             from drone4d.perception.ref_det import L2Perception
 
             self.perception = L2Perception(config)
+        has_th = any(s["kind"] == "thermal" for s in config["sensors"])
+        if has_th and (self.use_thermal or (self.use_thermal is None and l2)):
+            from drone4d.baselines.thermal import ThermalPerception
+
+            self.thermal = ThermalPerception(config)
+        self.looks: list[tuple[int, tuple[float, float]]] = []       # 近 10 s 的云台 look-at 地面点（出建筑判定的"已观察"条件）
+        events.init_state(self)
         self.reported: set[tuple] = set()
         self.board_cand: dict[str, tuple[str, int]] = {}
         self.suppress: dict[str, int] = {}
@@ -166,6 +239,8 @@ class BaselineAgent(DroneAgent):
         if self.ground_ref is None:
             self.ground_ref = obs["ground_hint"]["dtm_m"]
         dets = self.perception.detect(obs) if self.perception is not None else obs["sensors"].get("detections", [])
+        if self.thermal is not None:
+            dets = [*dets, *self.thermal.detect(obs)]
         self.tracks.update(dets, obs["t_ns"])
         msgs, reports = self.on_inbox(inbox), self.reports(obs["t_ns"])
         st = obs["status"]["mode"]
@@ -178,6 +253,8 @@ class BaselineAgent(DroneAgent):
             else:
                 return act(obs["k"], msgs=msgs, report=reports)
         goal, look = self.mission(obs, inbox)
+        if look is not None:
+            self.looks = [p for p in self.looks if self.t_ns - p[0] <= 10_000_000_000] + [(self.t_ns, (float(look[0]), float(look[1])))]
         extra = self.messages(obs)
         z = self.ground_ref + self.alt
         g = gimbal_look_at(self.cam, (look[0], look[1], self.ground_ref)) if look is not None else None
@@ -198,10 +275,16 @@ class BaselineAgent(DroneAgent):
     def suppressed(self, type_: str, t_ns: int) -> bool:
         return self.suppress.get(type_, -1) >= t_ns
 
-    def _emit(self, out: list[dict], type_: str, parts: list[Track], t0: int, t1: int, xy, conf: float) -> None:
-        out.append(report(type_, [{"track_id": tr.tid, "evidence": tr.ev} for tr in parts], t0, t1, (xy[0], xy[1], self.ground_ref or 0.0), conf))
-        self.suppress[type_] = t1 + SUPPRESS_NS
-        self.just_reported.append((type_, t1))
+    def _emit(self, out: list[dict], type_: str, parts: list[Track], t0: int, t1: int, xy, conf: float, event: str | None = None) -> None:
+        r = report(type_, [{"track_id": tr.tid, "evidence": tr.evidence(t1)} for tr in parts], t0, t1, (xy[0], xy[1], self.ground_ref or 0.0),
+                   conf)
+        key = type_
+        if event is not None:
+            r["event"] = event
+            key = f"{type_}:{event}"
+        out.append(r)
+        self.suppress[key] = max(t1, self.t_ns) + suppress_ns(key) if type_ in SUPPRESS_S else t1 + SUPPRESS_NS
+        self.just_reported.append((key, t1))
 
     def reports(self, t_ns: int) -> list[dict]:
         out: list[dict] = []
@@ -211,12 +294,14 @@ class BaselineAgent(DroneAgent):
                 for b in persons[i + 1:]:
                     key = tuple(sorted((a.tid, b.tid)))
                     d = math.dist(a.xy, b.xy)
-                    if a.t_last == b.t_last and key in self.tracks.near_since:
+                    if a.last_frame == b.last_frame and a.t_last == b.t_last and key in self.tracks.near_since:
                         self.tracks.near_co[key] = self.tracks.near_co.get(key, 0) + 1
                     if d <= MEET_M:
                         t0 = self.tracks.near_since.setdefault(key, t_ns)
-                        if (t_ns - t0 >= MEET_HOLD_NS and self.tracks.near_co.get(key, 0) >= MEET_CO_MIN and ("meet", *key) not in self.reported
-                                and not self.suppressed("meet", t_ns)):
+                        held = t_ns - t0 >= MEET_HOLD_NS and self.tracks.near_co.get(key, 0) >= MEET_CO_MIN
+                        if held:
+                            events.note_meet(self, key, t0, t_ns)
+                        if held and ("meet", *key) not in self.reported and not self.suppressed("meet", t_ns):
                             self.reported.add(("meet", *key))
                             self._emit(out, "meet", [a, b], t0, t_ns, ((a.xy[0] + b.xy[0]) / 2, (a.xy[1] + b.xy[1]) / 2), 0.6)
                     elif d > MEET_RESET_M:
@@ -249,6 +334,7 @@ class BaselineAgent(DroneAgent):
                     self._emit(out, "board", [p, v], t_lost - 2_000_000_000, t_ns, p.xy, 0.5)
                 p.closed = True
                 del self.board_cand[pid]
+        events.reports(self, t_ns, out)
         return out[:4]
 
     # --------------------------------------------------------------- 几何工具
@@ -256,5 +342,12 @@ class BaselineAgent(DroneAgent):
         xs, ys = zip(*self.area, strict=True)
         return (sum(xs) / len(xs), sum(ys) / len(ys))
 
+    def target_no(self, tr: Track) -> int | None:
+        """轨迹匹配的简报目标序号（类别一致且外观匹配；先列者优先），无匹配为 None。"""
+        for i, (rgb, bot, cls) in enumerate(zip(self.targets, self.target_bottoms, self.target_classes, strict=True)):
+            if cls == tr.cls and rgb_match(tr.rgb, rgb, tr.bottom, bot):
+                return i
+        return None
+
     def target_tracks(self, t_ns: int, max_age_s: float = 3.0) -> list[Track]:
-        return [tr for tr in self.tracks.live(t_ns, max_age_s) if any(rgb_match(tr.rgb, t) for t in self.targets)]
+        return [tr for tr in self.tracks.live(t_ns, max_age_s) if self.target_no(tr) is not None]

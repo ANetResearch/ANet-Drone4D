@@ -3,6 +3,9 @@
 行名同时是 `BASELINES` 的键，指向该行的策略类。
 
 同一种子两次运行的动作流逐字节一致：策略内无随机数、无墙钟依赖，集合按确定次序遍历。
+
+P0b：四类事件（Re-ID、交汇与交接、车辆追踪、目标搜索）的 report 规则在 `drone4d.baselines.events`，目标搜索先验在
+`drone4d.baselines.prior`，热成像通道 `ref_thermal_blob_v1` 在 `drone4d.baselines.thermal`（构造参数 `thermal`，见 `common`）。
 """
 
 from drone4d.baselines.coverage_scan import CoverageScan
