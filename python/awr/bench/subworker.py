@@ -17,6 +17,9 @@
    否则 REJECTED 692 `smoke`；
 3. EVALUATING：按榜单版本的评测配置（`boards/<ver>/config.json`，秘密种子）逐种子正式运行（Realistic 档、隔离容器）；
    平台原因失败（Env 或物理后端异常）自动重跑一次并计入 `runs.platform_rerun`，仍失败则 FAILED；
+   每个 Run（含冒烟）在墙钟上限 `10 × duration_s + 600 s` 内执行（`awr.bench.submissions.guarded_run`，D3-AC-59）：超限即终止（693），
+   冒烟超限 REJECTED 693，正式 Run 超限记为无效行（`ranked_valid = false`，`invalid_reasons = [wall_limit]`）且不重跑；
+   Run 的 GPU 时间计入提交方团队的每周 GPU 时间配额（平台原因失败的尝试不计）；
 4. SCORING：评测行追加到 `rows.jsonl`，按 `score_version` 聚合本提交的四项指标与置信区间；`visibility = board` 时重算榜单并
    回填名次与层级 → DONE。
 
@@ -42,7 +45,7 @@ from awr.agentsdk.env.containers import check_launch, host_path, parse_docker_ru
 from awr.bench.boardstore import append_rows, load_config, publish, slim_evaluation
 from awr.bench.platform_audit import is_frozen
 from awr.bench.spec_rules import check_submission_eval, reason
-from awr.bench.submissions import SubmissionStore
+from awr.bench.submissions import SubmissionStore, WallLimitExceeded, guarded_run, run_duration_s, wall_limit_s
 
 __all__ = ["IMAGE_MAX_B", "SCAN_SEVERITIES", "ScanError", "ScannerUnavailable", "TrivyScanner", "process_one", "scan_image",
            "vulnerability_findings"]
@@ -308,10 +311,15 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
         return sid
     st.transition(sid, "VALIDATING", expect="SCANNING")
     try:
-        r = run_job(rs, policy=policy, seed=0, run_id=f"{sid}-smoke", run_dir=work / "smoke", physics="kinematic", duration_s=smoke_s, **common)
+        r = guarded_run(run_job, st, sid, rs, limit_s=wall_limit_s(smoke_s), policy=policy, seed=0, run_id=f"{sid}-smoke", run_dir=work / "smoke",
+                        physics="kinematic", duration_s=smoke_s, **common)
         ag = r["agents"]
         fail = {u: s for u, s in ag.items() if s.get("acts", 0) == 0 or s.get("protocol_errors") or s.get("exited") not in (None, "bye")
                 or s.get("exit_code") not in (0, None)}
+    except WallLimitExceeded as e:                           # 冒烟超墙钟上限：终止并拒绝（693）
+        st.transition(sid, "REJECTED", reason=e.reason(stage="smoke"))
+        log(f"{sid}: REJECTED smoke wall limit {e.limit_s:g} s")
+        return sid
     except Exception as e:                                   # 握手超时、容器启动失败等均归为冒烟失败
         fail = {"error": getattr(e, "code", None) or type(e).__name__}
     if fail:
@@ -325,10 +333,15 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
     event = rs["event"]["id"]
     for k, seed in enumerate(cfg["seeds"]):
         run_dir = data_root / "dataset" / event / "runs" / f"{sid}-r{k}"
+        wall = None
         for attempt in (0, 1):
             try:
-                res = run_job(rs, policy=policy, seed=int(seed), run_id=f"{sid}-r{k}", run_dir=run_dir, physics=cfg.get("physics"),
-                              gz=cfg.get("gz") or None, **common)
+                res = guarded_run(run_job, st, sid, rs, limit_s=wall_limit_s(run_duration_s(rs, common["events_root"])), policy=policy, seed=int(seed),
+                                  run_id=f"{sid}-r{k}", run_dir=run_dir, physics=cfg.get("physics"), gz=cfg.get("gz") or None, **common)
+                break
+            except WallLimitExceeded as e:                   # 超墙钟上限：终止（693），记为无效行，不重跑
+                wall = e
+                log(f"{sid}: run r{k} exceeded the wall limit {e.limit_s:g} s")
                 break
             except Exception:                               # 平台原因：重跑一次
                 log(f"{sid}: run r{k} attempt {attempt} failed\n{traceback.format_exc()[-1500:]}")
@@ -336,6 +349,12 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
                     st.transition(sid, "FAILED", reason={"code": 320, "name": "INTERNAL", "detail": {"why": "platform", "run": k}})
                     return sid
                 reruns += 1
+        if wall is not None:
+            rows.append({"entry_id": f"{team}/{sid}", "team": team, "display_name": sid, "baseline": False, "track": cfg["track_id"],
+                         "lane": cfg["lane"], "event_type": cfg.get("event_type", cfg["lane"]), "event": event, "seed": k, "submission_id": sid,
+                         "evaluation": {"components": dict.fromkeys(("ec", "eu", "ao", "ce")), "ranked": True, "ranked_valid": False,
+                                        "invalid_reasons": ["wall_limit"]}, "termination": wall.reason()})
+            continue
         ev = json.loads((Path(res["run_dir"]) / "evaluation.json").read_text(encoding="utf-8"))
         rows.append({"entry_id": f"{team}/{sid}", "team": team, "display_name": sid, "baseline": False, "track": cfg["track_id"],
                      "lane": cfg["lane"], "event_type": cfg.get("event_type", cfg["lane"]), "event": event, "seed": k, "submission_id": sid,

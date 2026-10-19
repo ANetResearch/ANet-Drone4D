@@ -489,6 +489,37 @@
         "x-d3-stage": "P0a"
       }
     },
+    "/api/bench/v1/registry/token": {
+      "post": {
+        "description": "BN-82：`d3-registry` 推送令牌（团队命名空间，10 min）。`docker login <registry> -u <principal> --password-stdin` 以令牌为密码。",
+        "operationId": "registry_token_api_bench_v1_registry_token_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Registry Token Api Bench V1 Registry Token Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Registry Token",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          303,
+          681
+        ],
+        "x-d3-bn": "BN-82",
+        "x-d3-role": "invited",
+        "x-d3-stage": "P0a"
+      }
+    },
     "/api/bench/v1/runs": {
       "get": {
         "description": "BN-42：过滤 `event`、`experiment`、`policy`、`state`（逗号分隔）、`ranked`、`ids`（逗号分隔）；按（事件，run_id）排序，游标分页。",

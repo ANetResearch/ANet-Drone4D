@@ -62,6 +62,7 @@ EXPECTED: dict[tuple[str, str], str] = {
     ("GET", "/submissions/{sid}"): "invited",
     ("DELETE", "/submissions/{sid}"): "invited",
     ("POST", "/submissions/{sid}/visibility"): "invited",
+    ("POST", "/registry/token"): "invited",
 }
 
 
