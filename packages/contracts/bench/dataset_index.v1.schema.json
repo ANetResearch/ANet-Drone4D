@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/dataset_index.v1.schema.json",
+  "title": "Dataset event index dataset/<event_id>/index.json (drone4d.bench.dataset_index.v1)",
+  "description": "M27-FR-064; M27 §7.6; D3-AC-63 (contracts 1.3.0, d1 V0.3). Event-level index of the three-tier dataset directory (event, truth, runs): experiments and runs, split and metric summary per run, exported formats and the export manifest hash. Maintained by awr.bench.export; contains no timestamps, so repeated exports of the same runs leave it byte-identical.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "event_id", "world_id", "split", "event", "truth", "experiments", "runs"],
+  "properties": {
+    "schema": {"const": "drone4d.bench.dataset_index.v1"},
+    "event_id": {"type": "string", "minLength": 1},
+    "world_id": {"type": "string", "minLength": 1},
+    "split": {"enum": ["dev", "test"]},
+    "event": {"type": "array", "description": "Files under event/", "items": {"$ref": "#/$defs/file"}},
+    "truth": {"type": "array", "description": "Files under truth/ (dev only; test truth lives in hidden/)", "items": {"$ref": "#/$defs/file"}},
+    "experiments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["experiment_id", "runs"],
+        "properties": {"experiment_id": {"type": "string"}, "runs": {"type": "array", "items": {"type": "string"}}}
+      }
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["run_id", "experiment_id", "split", "obs_level", "ranked", "determinism_level", "seed_commit", "metrics", "exports",
+                     "export_manifest_sha256"],
+        "properties": {
+          "run_id": {"type": "string", "minLength": 1},
+          "experiment_id": {"type": "string"},
+          "split": {"enum": ["dev", "test"]},
+          "obs_level": {"type": "string"},
+          "ranked": {"type": "boolean"},
+          "determinism_level": {"enum": ["1b", "2", "3", "none"]},
+          "seed_commit": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ec", "ec_coverage", "eu_f1", "ao_real", "ranked_valid"],
+            "properties": {
+              "ec": {"type": ["number", "null"]},
+              "ec_coverage": {"type": ["number", "null"]},
+              "eu_f1": {"type": ["number", "null"]},
+              "ao_real": {"type": ["number", "null"]},
+              "ranked_valid": {"type": ["boolean", "null"]}
+            }
+          },
+          "exports": {"type": "array", "items": {"enum": ["files", "bag"]}, "uniqueItems": true},
+          "export_manifest_sha256": {"anyOf": [{"type": "string", "pattern": "^[0-9a-f]{64}$"}, {"type": "null"}]}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}
