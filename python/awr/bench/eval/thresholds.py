@@ -16,6 +16,7 @@ SCORE_VERSION = "d3-score-0"
 class Thresholds:
     h_px: float = 16.0               # 识别：投影高度（无遮挡）≥ 16 px
     vis: float = 0.5                 # 且身体 5 点 LOS 可见比例 ≥ 0.5
+    dT_app_k: float = 1.0            # 热成像帧另要求 |dT_app_k| ≥ 1.0 K（§5.4.10，D3-AC-61）
     pad_s: float = 2.0               # EC 窗口前后各 2 s
     eu_dt_s: float = 15.0            # EU：report 区间与事件区间的间隔 ≤ 15 s（重叠为 0）
     eu_iou: float = 0.3
