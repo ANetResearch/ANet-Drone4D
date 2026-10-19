@@ -536,12 +536,13 @@ SPAWN_LEVEL_M = 0.15
 
 
 class _GzTier:
-    """Realistic 档：每 Run 一个 gz 实例（GzInstance + compose_run + GzSimBackend），关闭时停止实例。"""
+    """Realistic 档：每 Run 一个 gz 实例（GzInstance + compose_run + SupervisedGzBackend：看门狗 632 / 638 时重启实例并从回合起点
+    重放，M24-FR-078、FR-079），关闭时停止实例。"""
 
     @staticmethod
     def create(spec: EnvSpec, spawn: dict, grounded: list[str], world):
         from awr.agentsdk.env.geom import surface_z
-        from awr.phys.gz.backend import GzSimBackend
+        from awr.phys.gz.backend import SupervisedGzBackend
         from awr.phys.gz.compose import UavSpawn, compose_run
         from awr.phys.gz.instance import GzInstance
         from awr.phys.kinematic import GEAR_Z_M
@@ -565,7 +566,8 @@ class _GzTier:
         inst.start(compose_run(spawns, world_static_uri=exp.uri, endpoint=inst.gz_endpoint, spherical=exp.spherical))
         try:
             inst.wait_socket(float(o.get("ready_timeout_s", 120)))
-            be = GzSimBackend(list(spawn), inst.endpoint, grounded=grounded, run_id=spec.run_id, timeout_s=float(o.get("step_timeout_s", 30)))
+            be = SupervisedGzBackend(inst, list(spawn), grounded=grounded, run_id=spec.run_id, step_timeout_s=float(o.get("step_timeout_s", 5)),
+                                     reuse_policy=o.get("reuse_policy", "per_run"))
         except Exception:
             inst.stop()
             raise
