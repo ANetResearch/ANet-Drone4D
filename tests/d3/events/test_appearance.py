@@ -96,8 +96,10 @@ def test_palette_rejects_close_colours() -> None:
 
 # ------------------------------------------------------------------------------------------------- 门 1
 def _reid(lib: al.Library, target: str, distractors: list[str]) -> dict:
-    acts = [{"id": "tgt", "class": "person", "roles": ["target"], "appearance_ref": target,
-             "route": [{"t": 0, "at": "a0", "do": "spawn"}, {"t": 60, "at": "a1"}]}]
+    acts = [{"id": "tgt", "class": "person", "roles": ["target"], "appearance_ref": target,          # 经过 2 处建筑出入口对（E07 类型必备配置）
+             "route": [{"t": 0, "at": "a0", "do": "spawn"}, {"t": 15, "at": "door_a", "do": "enter_building"},
+                       {"t": 25, "at": "door_a", "do": "exit_building"}, {"t": 40, "at": "door_b", "do": "enter_building"},
+                       {"t": 50, "at": "door_b", "do": "exit_building"}, {"t": 60, "at": "a1"}]}]
     acts += [{"id": f"d{k}", "class": "person", "roles": ["distractor"], "appearance_ref": r,
               "route": [{"t": 0, "at": "a0", "do": "spawn"}, {"t": 60, "at": "a1"}]} for k, r in enumerate(distractors)]
     return {"schema": "drone4d.event.v1", "event_id": "reid-ap-001", "event_type": "reid_occlusion", "world": {"id": "oryahovo-crop1"},
@@ -105,7 +107,9 @@ def _reid(lib: al.Library, target: str, distractors: list[str]) -> dict:
 
 
 ANCHORS = {"a0": {"id": "a0", "kind": "point", "profile": "person", "xy": [0.0, 0.0]},
-           "a1": {"id": "a1", "kind": "point", "profile": "person", "xy": [50.0, 0.0]}}
+           "a1": {"id": "a1", "kind": "point", "profile": "person", "xy": [50.0, 0.0]},
+           "door_a": {"id": "door_a", "kind": "door", "profile": "person", "xy": [15.0, 5.0], "building": "b_a"},
+           "door_b": {"id": "door_b", "kind": "door", "profile": "person", "xy": [35.0, 5.0], "building": "b_b"}}
 
 
 def _good(lib: al.Library) -> tuple[str, list[str]]:
