@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.anet-drone.dev/bench/1/lab_static_index.v1.schema.json",
+  "title": "Public-site static artifact index /lab-static/index.json (drone4d.lab_static_index.v1)",
+  "description": "M27 §7.8 + AWR-17 §18.8.5; M27-FR-134, FR-138; D3-AC-21 (contracts 1.3.0, d1 V0.3). The only file of the public static artifact set that lives outside the version directory; served no-cache with ETag and replaced atomically (write temporary file, then rename). Every artifact path is relative to /lab-static/v/<version>/ and must not escape it. Artifacts are immutable. features.leaderboard and features.submit are always false on the public site (R-D3-46). Files larger than 64 MiB are not hosted on emax: they carry an external ModelScope link instead (ADR-201). Written by tools/deploy/emax/d3-public/labctl.py index; parsed by apps/web/src/app/lab-public/staticIndex.ts, which tolerates unknown fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "built_unix_ns", "license", "worlds", "events", "files_sha256", "files_bytes_total", "features"],
+  "properties": {
+    "schema": {"const": "drone4d.lab_static_index.v1"},
+    "version": {"type": "string", "pattern": "^\\d{4}\\.\\d{2}\\.\\d{2}-\\d+$", "description": "Version directory name YYYY.MM.DD-n"},
+    "built_unix_ns": {"type": "string", "pattern": "^[0-9]{1,20}$"},
+    "lab_build": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$", "description": "Directory name of the /lab/ static build this index was published with"},
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files", "attribution"],
+      "properties": {
+        "files": {"type": "array", "items": {"$ref": "#/$defs/relpath"}},
+        "attribution": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "worlds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+          "pointcloud": {"$ref": "#/$defs/relpath"},
+          "summary": {"$ref": "#/$defs/relpath"},
+          "bytes": {"$ref": "#/$defs/bytes"}
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version", "tape", "runs"],
+        "properties": {
+          "id": {"$ref": "#/$defs/event_id"},
+          "version": {"type": "integer", "minimum": 1},
+          "world_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+          "tape": {"$ref": "#/$defs/relpath"},
+          "tape_json": {"$ref": "#/$defs/relpath"},
+          "brief": {"$ref": "#/$defs/relpath"},
+          "bytes": {"$ref": "#/$defs/bytes"},
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "runs": {"type": "array", "items": {"$ref": "#/$defs/run"}}
+        }
+      }
+    },
+    "files_sha256": {"$ref": "#/$defs/relpath", "description": "SHA256SUMS inside the version directory (sha256sum text format)"},
+    "files_bytes_total": {"type": "integer", "minimum": 0, "description": "Sum of the sizes of all files listed in SHA256SUMS"},
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inspect", "compare", "leaderboard", "submit"],
+      "properties": {
+        "inspect": {"type": "boolean"},
+        "compare": {"type": "boolean"},
+        "leaderboard": {"const": false},
+        "submit": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "relpath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?![a-zA-Z][a-zA-Z0-9+.-]*:)(?!/)(?!.*\\\\)(?!(.*/)?\\.\\.?(/|$))(?!.*//).+$",
+      "description": "Path relative to the version directory: no scheme, no leading slash, no backslash, no . or .. segment, no empty segment (a trailing slash marks a directory)"
+    },
+    "bytes": {"type": "integer", "minimum": 0},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "event_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+    "external": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "url"],
+      "description": "Distribution-channel copy of an artifact larger than 64 MiB (ADR-201: ModelScope)",
+      "properties": {
+        "channel": {"const": "modelscope"},
+        "url": {"type": "string", "pattern": "^https://(www\\.)?modelscope\\.cn/"}
+      }
+    },
+    "video": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uav", "cam", "path"],
+      "properties": {
+        "uav": {"type": "string", "minLength": 1},
+        "cam": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["rgb", "thermal"]},
+        "path": {"$ref": "#/$defs/relpath"},
+        "bytes": {"$ref": "#/$defs/bytes"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "external": {"$ref": "#/$defs/external"}
+      }
+    },
+    "slice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "t_from_s", "t_to_s", "rrd"],
+      "properties": {
+        "event_id": {"type": "string", "minLength": 1},
+        "t_from_s": {"type": "number"},
+        "t_to_s": {"type": "number"},
+        "rrd": {"$ref": "#/$defs/relpath"},
+        "bytes": {"$ref": "#/$defs/bytes"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "external": {"$ref": "#/$defs/external"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "policy", "n_uav", "obs_level"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^run-[a-z2-7]{10}$"},
+        "policy": {"type": "string", "minLength": 1},
+        "n_uav": {"type": "integer", "minimum": 1},
+        "obs_level": {"type": "string", "minLength": 1},
+        "metrics": {"$ref": "#/$defs/relpath"},
+        "tracks_obs": {"$ref": "#/$defs/relpath"},
+        "videos": {"type": "array", "items": {"$ref": "#/$defs/video"}},
+        "slices": {"type": "array", "items": {"$ref": "#/$defs/slice"}},
+        "basemap": {"$ref": "#/$defs/relpath"},
+        "basemap_bytes": {"$ref": "#/$defs/bytes"},
+        "basemap_sha256": {"$ref": "#/$defs/sha256"},
+        "lidar_compare": {"$ref": "#/$defs/relpath"}
+      }
+    }
+  }
+}

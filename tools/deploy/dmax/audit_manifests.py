@@ -70,6 +70,7 @@ PY_LAUNCHERS = {
     "python/awr/agentsdk/env/containers.py": "_render_agents",
     "tools/bench/d3/slam_eval/livo.py": "_render_slam_livo",
     "tools/bench/d3/slam_eval/cli.py": "_render_slam_cli",
+    "tools/deploy/emax/d3-public/drill.py": "_render_d3_public_drill",
 }
 _PY_LAUNCH = re.compile(r"""["']run["']\s*,\s*["']-d["']|["']docker["']\s*,\s*["']run["']|\bdocker\s+run\b""")
 _SH_LAUNCH = re.compile(r"\bdocker\s+(?:container\s+)?run\b")
@@ -215,6 +216,19 @@ def _render_slam_cli(tmp: Path) -> tuple[list[Launch], list[Finding]]:
                           image=g.image, mem_gb=float(res["mem_gb"]), cpus=float(res["cpus"]))
         out.append(parse_docker_run(livo.docker_argv(lr), site, component="livo", run=run))
     return out, []
+
+
+def _render_d3_public_drill(tmp: Path) -> tuple[list[Launch], list[Finding]]:
+    """公开样例发布线演练（开发机，D3-AC-21）：nginx 容器与收尾的 chown 容器（组件 test，CPU 池）；进程号固定，只渲染一次。"""
+    d = str(ROOT / "tools" / "deploy" / "emax" / "d3-public")
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    import drill
+
+    box = drill.NginxBox(tmp / "d3-public-drill", "d3-f08-nginx:local", 18640, 18641)
+    site = "python:d3-public-drill"
+    return [parse_docker_run(box.run_argv("nginx -g 'daemon off;'"), site, component="test"),
+            parse_docker_run(box.chown_argv(), site, component="test")], []
 
 
 def _code_only(txt: str) -> str:

@@ -112,6 +112,10 @@ __all__ = [
     "BoardV1Tracks",
     "BriefV1",
     "BriefV1PublicAnchors",
+    "BriefV1Search",
+    "BriefV1SearchPrior",
+    "BriefV1SearchPriorComponents",
+    "BriefV1SearchPriorGrid",
     "BriefV1Targets",
     "BusCommand",
     "BusCommandAdmission",
@@ -284,6 +288,10 @@ __all__ = [
     "EventV1Interactive",
     "EventV1Labels",
     "EventV1Relations",
+    "EventV1Search",
+    "EventV1SearchPrior",
+    "EventV1SearchPriorComponents",
+    "EventV1SearchPriorGrid",
     "EventV1World",
     "Export",
     "ExportManifestV1",
@@ -334,6 +342,7 @@ __all__ = [
     "FrameV1AgentViewGimbalReading",
     "FrameV1AgentViewMountNominal",
     "FrameV1AgentViewRgb",
+    "FrameV1AgentViewTempCk",
     "FrameV1GroundTruth",
     "FrameV1GroundTruthGimbalTrue",
     "FrameV1GroundTruthGtDepth",
@@ -345,6 +354,11 @@ __all__ = [
     "FrameV1GroundTruthTWorldSensor",
     "FrameV1GroundTruthTiming",
     "FrameV1Internal",
+    "FrameV1InternalThermal",
+    "FrameV1InternalThermalNoise",
+    "FrameV1InternalThermalPlanckTable",
+    "FrameV1InternalThermalThermalStatic",
+    "FrameV1InternalThermalThermalTable",
     "FramesV1",
     "Gcs",
     "Geo",
@@ -395,6 +409,19 @@ __all__ = [
     "Keys",
     "KeysKeys",
     "KeysKeysQosOneOf1",
+    "LabStaticIndexV1",
+    "LabStaticIndexV1Bytes",
+    "LabStaticIndexV1EventId",
+    "LabStaticIndexV1Events",
+    "LabStaticIndexV1External",
+    "LabStaticIndexV1Features",
+    "LabStaticIndexV1License",
+    "LabStaticIndexV1Relpath",
+    "LabStaticIndexV1Run",
+    "LabStaticIndexV1Sha256",
+    "LabStaticIndexV1Slice",
+    "LabStaticIndexV1Video",
+    "LabStaticIndexV1Worlds",
     "Layouts",
     "LayoutsSchemas",
     "LayoutsSchemasFields",
@@ -1257,6 +1284,22 @@ type Geo = GeoReq | GeoRep
 
 # rec/inputlog.schema.json# Input log runs/<run>/inputs.msgpack (awr.inputlog.v1)
 type Inputlog = InputlogHeader | InputlogEntry
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/bytes
+type LabStaticIndexV1Bytes = int
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/event_id
+type LabStaticIndexV1EventId = str
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/relpath
+type LabStaticIndexV1Relpath = str
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/sha256
+type LabStaticIndexV1Sha256 = str
 
 
 # rt/ops.schema.json# awr.rt.v1 control-plane JSON messages
@@ -2146,11 +2189,17 @@ class BlocksStateExtBlock(TypedDict):
 class BoardV1(TypedDict):
     schema: Literal["drone4d.bench.board.v1"]
     board_version: str
+    score_version: NotRequired[str]
     tracks: list[BoardV1Tracks]
     lanes: list[BoardV1Lanes]
     seed_set_commit: NotRequired[str]
     evaluator_major: int
     platform_digest: str
+    test_split_version: NotRequired[str]
+    gpu_model: NotRequired[str]
+    cpu_isa_level: NotRequired[str]
+    seeds_per_event: NotRequired[int]
+    repeats: NotRequired[int]
     entries: list[BoardV1Entries]
 
 
@@ -2163,9 +2212,10 @@ class BoardV1Entries(TypedDict):
     lane: str
     metrics: BoardV1EntriesMetrics
     dominance_tier: int | None
-    status: NotRequired[Literal["valid", "invalid"]]
+    status: NotRequired[Literal["valid", "invalid", "incomplete"]]
     first_listed_unix_ns: int
     baseline: bool
+    display_order: NotRequired[int]
 
 
 # bench/board.v1.schema.json#/properties/entries/items/properties/metrics
@@ -2242,6 +2292,7 @@ class BriefV1(TypedDict):
     public_anchors: list[BriefV1PublicAnchors]
     targets: list[BriefV1Targets]
     task_area: list[list[float]]
+    search: NotRequired[BriefV1Search]
 
 
 # event/brief.v1.schema.json#/properties/public_anchors/items
@@ -2249,6 +2300,40 @@ class BriefV1PublicAnchors(TypedDict):
     id: str
     kind: NotRequired[str]
     pos_enu_m: list[float]
+
+
+# event/brief.v1.schema.json#/properties/search
+class BriefV1Search(TypedDict):
+    target_class: Literal["person", "vehicle", "object"]
+    prior: BriefV1SearchPrior
+    area_polygon: list[list[float]]
+    motion: Literal["static", "wander"]
+    wander_radius_m: NotRequired[float]
+    window_s: float
+
+
+# event/brief.v1.schema.json#/properties/search/properties/prior
+class BriefV1SearchPrior(TypedDict):
+    type: Literal["gmm", "grid"]
+    components: NotRequired[list[BriefV1SearchPriorComponents]]
+    grid: NotRequired[BriefV1SearchPriorGrid]
+
+
+# event/brief.v1.schema.json#/properties/search/properties/prior/properties/components/items
+class BriefV1SearchPriorComponents(TypedDict):
+    anchor: NotRequired[str]
+    xy: NotRequired[list[float]]
+    sigma_m: float
+    weight: NotRequired[float]
+
+
+# event/brief.v1.schema.json#/properties/search/properties/prior/properties/grid
+class BriefV1SearchPriorGrid(TypedDict):
+    origin_xy: list[float]
+    cell_m: float
+    nx: int
+    ny: int
+    weights: list[float]
 
 
 # event/brief.v1.schema.json#/properties/targets/items
@@ -3593,6 +3678,7 @@ class EventV1(TypedDict):
     comms: NotRequired[EventV1Comms]
     annotations: NotRequired[list[EventV1Annotations]]
     relations: NotRequired[list[EventV1Relations]]
+    search: NotRequired[EventV1Search]
     brief: NotRequired[EventV1Brief]
     interactive: NotRequired[EventV1Interactive]
     labels: NotRequired[EventV1Labels]
@@ -3711,6 +3797,41 @@ class EventV1Relations(TypedDict):
     src: str
     rel: Literal["before", "after", "during", "overlaps", "causes", "enables"]
     dst: str
+
+
+# event/event.v1.schema.json#/properties/search
+class EventV1Search(TypedDict):
+    target: str
+    prior: EventV1SearchPrior
+    area_polygon: list[list[float]]
+    motion: NotRequired[Literal["static", "wander"]]
+    wander_radius_m: NotRequired[float]
+    window_s: NotRequired[float]
+
+
+# event/event.v1.schema.json#/properties/search/properties/prior
+class EventV1SearchPrior(TypedDict):
+    type: Literal["gmm", "grid"]
+    components: NotRequired[list[EventV1SearchPriorComponents]]
+    grid: NotRequired[EventV1SearchPriorGrid]
+    grid_ref: NotRequired[str]
+
+
+# event/event.v1.schema.json#/properties/search/properties/prior/properties/components/items
+class EventV1SearchPriorComponents(TypedDict):
+    anchor: NotRequired[str]
+    xy: NotRequired[list[float]]
+    sigma_m: float
+    weight: NotRequired[float]
+
+
+# event/event.v1.schema.json#/properties/search/properties/prior/properties/grid
+class EventV1SearchPriorGrid(TypedDict):
+    origin_xy: list[float]
+    cell_m: float
+    nx: int
+    ny: int
+    weights: list[float]
 
 
 # event/event.v1.schema.json#/properties/world
@@ -4091,7 +4212,7 @@ class FrameIndexV1(TypedDict):
     sensor_id: str
     channel: str
     encoding: Literal["foxglove.CompressedImage", "foxglove.RawImage", "awr.sensor.lidar_frame.v2"]
-    codec: Literal["jpeg", "raw", "32FC1", "lidar_v2"]
+    codec: Literal["jpeg", "raw", "32FC1", "lidar_v2", "16UC1"]
     agent_delivered: bool
     period_ns: int
     items: list[FrameIndexV1_]
@@ -4110,7 +4231,7 @@ class FrameIndexV1_(TypedDict):
 class FrameV1(TypedDict):
     schema: Literal["drone4d.frame.v1"]
     frame_id: str
-    kind: Literal["camera"]
+    kind: Literal["camera", "thermal"]
     agent_view: FrameV1AgentView
     ground_truth: FrameV1GroundTruth
     internal: FrameV1Internal
@@ -4130,8 +4251,9 @@ class FrameV1AgentView(TypedDict):
     pixel_convention: Literal["colmap_center_0.5"]
     mount_nominal: FrameV1AgentViewMountNominal
     gimbal_reading: FrameV1AgentViewGimbalReading
-    rgb: FrameV1AgentViewRgb
+    rgb: NotRequired[FrameV1AgentViewRgb]
     depth: NotRequired[FrameV1AgentViewDepth]
+    temp_ck: NotRequired[FrameV1AgentViewTempCk]
 
 
 # sensor/v2/frame.v1.schema.json#/properties/agent_view/properties/depth
@@ -4165,6 +4287,16 @@ class FrameV1AgentViewRgb(TypedDict):
     sha256: str
 
 
+# sensor/v2/frame.v1.schema.json#/properties/agent_view/properties/temp_ck
+class FrameV1AgentViewTempCk(TypedDict):
+    dtype: Literal["u16"]
+    unit: Literal["0.01 K"]
+    codec: Literal["radiometric_u16"]
+    compression: Literal["zstd"]
+    ref: str
+    sha256: str
+
+
 # sensor/v2/frame.v1.schema.json#/properties/ground_truth
 class FrameV1GroundTruth(TypedDict):
     T_world_sensor: FrameV1GroundTruthTWorldSensor
@@ -4172,7 +4304,7 @@ class FrameV1GroundTruth(TypedDict):
     instance: FrameV1GroundTruthInstance
     instance_unocc: FrameV1GroundTruthInstanceUnocc
     semantic: FrameV1GroundTruthSemantic
-    invalid_mask: FrameV1GroundTruthInvalidMask
+    invalid_mask: NotRequired[FrameV1GroundTruthInvalidMask]
     gt_depth: NotRequired[FrameV1GroundTruthGtDepth]
     objects: list[FrameV1GroundTruthObjects]
     timing: FrameV1GroundTruthTiming
@@ -4233,11 +4365,13 @@ class FrameV1GroundTruthTWorldSensor(TypedDict):
 # sensor/v2/frame.v1.schema.json#/properties/ground_truth/properties/timing
 class FrameV1GroundTruthTiming(TypedDict):
     t_truth_ns: list[int]
-    blur_subframes: int
-    rs_bands: int
-    rs_method: Literal["vertex", "bands"]
+    blur_subframes: NotRequired[int]
+    rs_bands: NotRequired[int]
+    rs_method: NotRequired[Literal["vertex", "bands"]]
     rs_nodes: NotRequired[int]
     readout_window_ns: NotRequired[list[int]]
+    lag_subframes: NotRequired[int]
+    subframe_weights: NotRequired[list[float]]
 
 
 # sensor/v2/frame.v1.schema.json#/properties/internal
@@ -4259,6 +4393,48 @@ class FrameV1Internal(TypedDict):
     driver: str
     run_seed: NotRequired[int]
     derived: bool
+    thermal: NotRequired[FrameV1InternalThermal]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal
+class FrameV1InternalThermal(TypedDict):
+    renderer: str
+    thermal_table: FrameV1InternalThermalThermalTable
+    planck_table: FrameV1InternalThermalPlanckTable
+    noise: FrameV1InternalThermalNoise
+    thermal_static: NotRequired[FrameV1InternalThermalThermalStatic]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal/properties/noise
+class FrameV1InternalThermalNoise(TypedDict):
+    version: str
+    profile: str
+    netd_mk_300k: float
+    fpn_offset_k: float
+    fpn_gain_frac: float
+    optics_sigma_px: float
+    tau_bolometer_s: float
+    lag_subframes: int
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal/properties/planck_table
+class FrameV1InternalThermalPlanckTable(TypedDict):
+    version: str
+    sha256: str
+    band_um: list[float]
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal/properties/thermal_static
+class FrameV1InternalThermalThermalStatic(TypedDict):
+    sha256: str
+    sun_az_el_deg: list[float]
+    backend: str
+
+
+# sensor/v2/frame.v1.schema.json#/properties/internal/properties/thermal/properties/thermal_table
+class FrameV1InternalThermalThermalTable(TypedDict):
+    version: str
+    sha256: str
 
 
 # bench/frames.v1.schema.json# Frame range container header (d3frames.v1)
@@ -4702,6 +4878,99 @@ class KeysKeysQosOneOf1(TypedDict):
     priority: Literal["REAL_TIME", "INTERACTIVE_HIGH", "INTERACTIVE_LOW", "DATA_HIGH", "DATA", "DATA_LOW", "BACKGROUND"]
     congestion: Literal["DROP", "BLOCK"]
     express: bool
+
+
+# bench/lab_static_index.v1.schema.json# Public-site static artifact index /lab-static/index.json (drone4d.lab_static_index.v1)
+class LabStaticIndexV1(TypedDict):
+    schema: Literal["drone4d.lab_static_index.v1"]
+    version: str
+    built_unix_ns: str
+    lab_build: NotRequired[str]
+    license: LabStaticIndexV1License
+    worlds: list[LabStaticIndexV1Worlds]
+    events: list[LabStaticIndexV1Events]
+    files_sha256: LabStaticIndexV1Relpath
+    files_bytes_total: int
+    features: LabStaticIndexV1Features
+
+
+# bench/lab_static_index.v1.schema.json#/properties/events/items
+class LabStaticIndexV1Events(TypedDict):
+    id: LabStaticIndexV1EventId
+    version: int
+    world_id: NotRequired[str]
+    tape: LabStaticIndexV1Relpath
+    tape_json: NotRequired[LabStaticIndexV1Relpath]
+    brief: NotRequired[LabStaticIndexV1Relpath]
+    bytes: NotRequired[LabStaticIndexV1Bytes]
+    sha256: NotRequired[LabStaticIndexV1Sha256]
+    runs: list[LabStaticIndexV1Run]
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/external
+class LabStaticIndexV1External(TypedDict):
+    channel: Literal["modelscope"]
+    url: str
+
+
+# bench/lab_static_index.v1.schema.json#/properties/features
+class LabStaticIndexV1Features(TypedDict):
+    inspect: bool
+    compare: bool
+    leaderboard: Literal[False]
+    submit: Literal[False]
+
+
+# bench/lab_static_index.v1.schema.json#/properties/license
+class LabStaticIndexV1License(TypedDict):
+    files: list[LabStaticIndexV1Relpath]
+    attribution: list[str]
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/run
+class LabStaticIndexV1Run(TypedDict):
+    run_id: str
+    policy: str
+    n_uav: int
+    obs_level: str
+    metrics: NotRequired[LabStaticIndexV1Relpath]
+    tracks_obs: NotRequired[LabStaticIndexV1Relpath]
+    videos: NotRequired[list[LabStaticIndexV1Video]]
+    slices: NotRequired[list[LabStaticIndexV1Slice]]
+    basemap: NotRequired[LabStaticIndexV1Relpath]
+    basemap_bytes: NotRequired[LabStaticIndexV1Bytes]
+    basemap_sha256: NotRequired[LabStaticIndexV1Sha256]
+    lidar_compare: NotRequired[LabStaticIndexV1Relpath]
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/slice
+class LabStaticIndexV1Slice(TypedDict):
+    event_id: str
+    t_from_s: float
+    t_to_s: float
+    rrd: LabStaticIndexV1Relpath
+    bytes: NotRequired[LabStaticIndexV1Bytes]
+    sha256: NotRequired[LabStaticIndexV1Sha256]
+    external: NotRequired[LabStaticIndexV1External]
+
+
+# bench/lab_static_index.v1.schema.json#/$defs/video
+class LabStaticIndexV1Video(TypedDict):
+    uav: str
+    cam: str
+    kind: NotRequired[Literal["rgb", "thermal"]]
+    path: LabStaticIndexV1Relpath
+    bytes: NotRequired[LabStaticIndexV1Bytes]
+    sha256: NotRequired[LabStaticIndexV1Sha256]
+    external: NotRequired[LabStaticIndexV1External]
+
+
+# bench/lab_static_index.v1.schema.json#/properties/worlds/items
+class LabStaticIndexV1Worlds(TypedDict):
+    id: str
+    pointcloud: NotRequired[LabStaticIndexV1Relpath]
+    summary: NotRequired[LabStaticIndexV1Relpath]
+    bytes: NotRequired[LabStaticIndexV1Bytes]
 
 
 # rt/layouts.schema.json# layouts.json meta-schema
@@ -11984,7 +12253,8 @@ FrameV1GroundTruthObjects = TypedDict("FrameV1GroundTruthObjects", {
     "bbox_xywh": list[int],
     "bbox_unocc_xywh": list[int],
     "occluder_sem_px": dict[str, int],
-    "flags": list[Literal["truncated"]],
+    "flags": list[Literal["truncated", "no_ring"]],
+    "dT_app_k": NotRequired[float],
 })
 
 

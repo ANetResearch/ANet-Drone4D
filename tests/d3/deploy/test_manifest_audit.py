@@ -73,7 +73,7 @@ def test_repo_manifests_have_no_errors(audit, report) -> None:
         assert r["docker_runs"] == (0 if any(k in site for k in ("multi-card", "all-cards", "foreign-card")) else n), site
         assert (r["exit"] != 0) == (r["docker_runs"] == 0), site
     s = report["summary"]
-    assert s["python"] == 22 and s["scripts"] >= 6 and s["errors"] == 0
+    assert s["python"] == 24 and s["scripts"] >= 6 and s["errors"] == 0      # 含 d3-public 演练的 nginx 与 chown 容器各 1 条
     # 告警只有 CM-08（d3.slice 尚未配置配额）与 CM-00（新增脚本尚未登记变体，但已按缺省变体渲染且无错误）
     assert {f["rule"] for f in report["findings"]} <= {"CM-08", "CM-00"}
 

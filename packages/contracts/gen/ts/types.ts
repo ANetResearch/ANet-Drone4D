@@ -692,6 +692,13 @@ export type Faults =
  */
 export type FleetRosterPropertiesEntriesItems = FleetRosterPropertiesEntriesItems1
 /**
+ * Camera frame record (drone4d.frame.v1). AWR-05 §8.1, M25 §7.2.1 (contracts 1.3.0, d1 V0.3). Three partitions: agent_view (the source set that M26 projects into bench/obs.v1 CameraObs), ground_truth (evaluation store and truth files only, ADR-161) and internal (provenance). Units: times in ns, K in px with pixel centres at 0.5, distances in m, angles in deg. Thermal frames (kind = thermal, P0b, M25 §15.6; additive in contracts 1.3.x) carry agent_view.temp_ck instead of rgb and depth, ground_truth.objects[].dT_app_k, the thermal timing fields and internal.thermal; the camera-only requirements (rgb, invalid_mask, blur_subframes, rs_bands, rs_method) are enforced per kind in allOf. internal.appearance uses the run_spec values (mesh, 3dgs); appearance_source and appearance_version are added in contracts 1.3.x (additive, M25-FR-194, FR-201).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "FrameV1".
+ */
+export type FrameV1 = FrameV11
+/**
  * Geometry probe service (svc/geo/{height,ray_hit}; V0.2 raycast, los, lidar). AWR-17 §9.3; M04 §7.3 (drafted by M04). op names follow M04 §7.3: svc/geo/height serves height_dsm, ground_dtm, agl, clearance, probe, segment_los, path_coarse_check, heightmap_top, terrain_profile; svc/geo/ray_hit serves ray_hit; raycast, los and lidar are the V0.2 geo-worker ops. Failure replies may carry detail (the reason name).
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -768,6 +775,32 @@ export type Inputlog = InputlogHeader | InputlogEntry
  * via the `definition` "WorldCommonRunId".
  */
 export type WorldCommonRunId = string
+/**
+ * Path relative to the version directory: no scheme, no leading slash, no backslash, no . or .. segment, no empty segment (a trailing slash marks a directory)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1Relpath".
+ */
+export type LabStaticIndexV1Relpath = string
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1Bytes".
+ */
+export type LabStaticIndexV1Bytes = number
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1EventId".
+ */
+export type LabStaticIndexV1EventId = string
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1Sha256".
+ */
+export type LabStaticIndexV1Sha256 = string
+/**
+ * Path relative to the version directory: no scheme, no leading slash, no backslash, no . or .. segment, no empty segment (a trailing slash marks a directory)
+ */
+export type LabStaticIndexV1Relpath1 = string
 /**
  * awr.sensor.lwir.v1 (uncooled thermal imager). Model file vehicles/sensor_models/<id>.yaml or mount file vehicles/<dir>/sensors/<file>.yaml (AWR-20 §7.5): a model file carries model_id and model_version; a mount file carries sensor_id, spec_ref and mount plus whitelisted overrides; the effective spec is deep_merge(model, mount). Digital zoom changes the display only; N always uses native pixels.
  *
@@ -2686,7 +2719,7 @@ export interface UavSafety {
   }[]
 }
 /**
- * Internal leaderboard (drone4d.bench.board.v1). AWR-17 §18.23 and §18.24 (contracts 1.3.0, d1 V0.3). Internal only (minimum role invited), no static copy. Lanes: reid, handoff, vehicle, search (event types) plus research task lanes registered by the board version. tracks[].appearance is mesh (aerial 3dgs from P3 when registered); mesh_distilled and generative never appear.
+ * Internal leaderboard (drone4d.bench.board.v1). AWR-17 §18.23 and §18.24 (contracts 1.3.0, d1 V0.3). Internal only (minimum role invited), no static copy. Lanes: reid, handoff, vehicle, search (event types) plus research task lanes registered by the board version. tracks[].appearance is mesh (aerial 3dgs from P3 when registered); mesh_distilled and generative never appear. Board v1 (score_version d3-score-1) adds score_version, test_split_version, gpu_model, cpu_isa_level, seeds_per_event and repeats (frozen with the board version), per-entry display_order (default list order of AWR-05 §5.6.9) and status incomplete (not all K x R runs of the lane's test events completed). seed_set_commit is an HMAC from the EvalStore; plaintext seeds never appear.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "BoardV1".
@@ -2694,6 +2727,10 @@ export interface UavSafety {
 export interface BoardV1 {
   schema: 'drone4d.bench.board.v1'
   board_version: string
+  /**
+   * d3-score-0 (prototype) when absent; d3-score-1 for board v1.
+   */
+  score_version?: string
   tracks: {
     track: string
     fleet_ref: string
@@ -2713,6 +2750,11 @@ export interface BoardV1 {
   seed_set_commit?: string
   evaluator_major: number
   platform_digest: string
+  test_split_version?: string
+  gpu_model?: string
+  cpu_isa_level?: string
+  seeds_per_event?: number
+  repeats?: number
   entries: {
     entry_id: string
     team: string
@@ -2770,11 +2812,15 @@ export interface BoardV1 {
      */
     dominance_tier: number | null
     /**
-     * invalid when more than 20% of the entry's runs are not ranked-valid: shown with metrics from valid runs, excluded from ranks and tiers.
+     * invalid when more than 20% of the entry's runs are not ranked-valid: shown with metrics from valid runs, excluded from ranks and tiers. incomplete (board v1) when not all K x R runs of every test event of the lane are completed: shown, excluded from ranks and tiers.
      */
-    status?: 'valid' | 'invalid'
+    status?: 'valid' | 'invalid' | 'incomplete'
     first_listed_unix_ns: number
     baseline: boolean
+    /**
+     * Board v1: 1-based position within the track x lane (tier ascending, then first listed; unranked entries next, reference baselines last).
+     */
+    display_order?: number
   }[]
 }
 /**
@@ -2815,6 +2861,82 @@ export interface BriefV1 {
     [number, number, ...number[]],
     ...[number, number, ...number[]][]
   ]
+  /**
+   * target_search only (M23 §15.3 rule 2, FR-083): the prior, search area, motion and window; never the actual position
+   */
+  search?: {
+    target_class: 'person' | 'vehicle' | 'object'
+    prior: {
+      type: 'gmm' | 'grid'
+      /**
+       * @minItems 1
+       * @maxItems 16
+       *
+       * Items: Isotropic Gaussian component; exactly one of anchor and xy (compile gate 1)
+       */
+      components?: [
+        {
+          /**
+           * Anchor id (awr-anchors@1)
+           */
+          anchor?: string
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          xy?: [number, number, ...number[]]
+          sigma_m: number
+          weight?: number
+        },
+        ...{
+          /**
+           * Anchor id (awr-anchors@1)
+           */
+          anchor?: string
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          xy?: [number, number, ...number[]]
+          sigma_m: number
+          weight?: number
+        }[]
+      ]
+      /**
+       * Row-major (y outer, x inner) prior mass per cell
+       */
+      grid?: {
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        origin_xy: [number, number, ...number[]]
+        cell_m: number
+        nx: number
+        ny: number
+        /**
+         * @minItems 1
+         * @maxItems 65536
+         */
+        weights: [number, ...number[]]
+      }
+    }
+    /**
+     * World-frame polygon (m), simple, 3-64 vertices
+     *
+     * @minItems 3
+     * @maxItems 64
+     */
+    area_polygon: [
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      ...[number, number, ...number[]][]
+    ]
+    motion: 'static' | 'wander'
+    wander_radius_m?: number
+    window_s: number
+  }
 }
 /**
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -5139,6 +5261,92 @@ export interface EventV1 {
     dst: string
   }[]
   /**
+   * target_search only (v1.3, M23 §15.2, P0b): target, location prior and search area. The actual position is sampled from the prior with the event seed at compile time (stream 19, channels 9-15) and appears only in the tape and the truth; brief.json carries the prior only
+   */
+  search?: {
+    /**
+     * Scripted actor id; its route references only the reserved anchor search_target (spawn, optional despawn)
+     */
+    target: string
+    prior: {
+      type: 'gmm' | 'grid'
+      /**
+       * @minItems 1
+       * @maxItems 16
+       *
+       * Items: Isotropic Gaussian component; exactly one of anchor and xy (compile gate 1)
+       */
+      components?: [
+        {
+          /**
+           * Anchor id (awr-anchors@1)
+           */
+          anchor?: string
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          xy?: [number, number, ...number[]]
+          sigma_m: number
+          weight?: number
+        },
+        ...{
+          /**
+           * Anchor id (awr-anchors@1)
+           */
+          anchor?: string
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          xy?: [number, number, ...number[]]
+          sigma_m: number
+          weight?: number
+        }[]
+      ]
+      /**
+       * Row-major (y outer, x inner) prior mass per cell
+       */
+      grid?: {
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        origin_xy: [number, number, ...number[]]
+        cell_m: number
+        nx: number
+        ny: number
+        /**
+         * @minItems 1
+         * @maxItems 65536
+         */
+        weights: [number, ...number[]]
+      }
+      /**
+       * JSON file with the grid object, relative to the event directory; inlined at compile time
+       */
+      grid_ref?: string
+    }
+    /**
+     * World-frame polygon (m), simple, 3-64 vertices
+     *
+     * @minItems 3
+     * @maxItems 64
+     */
+    area_polygon: [
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      [number, number, ...number[]],
+      ...[number, number, ...number[]][]
+    ]
+    motion?: 'static' | 'wander'
+    wander_radius_m?: number
+    /**
+     * Length of the target_window key events
+     */
+    window_s?: number
+  }
+  /**
    * Task brief (not truth): appearance descriptions only, no times or routes
    */
   brief?: {
@@ -5667,7 +5875,10 @@ export interface FrameIndexV1 {
   sensor_id: string
   channel: string
   encoding: 'foxglove.CompressedImage' | 'foxglove.RawImage' | 'awr.sensor.lidar_frame.v2'
-  codec: 'jpeg' | 'raw' | '32FC1' | 'lidar_v2'
+  /**
+   * 16UC1 = thermal channel /uav/{id}/thermal/{name} (foxglove.RawImage u16, 0.01 K per LSB); its bytes and sha256 are the delivered ThermalObs.temp_ck bytes (zstd)
+   */
+  codec: 'jpeg' | 'raw' | '32FC1' | 'lidar_v2' | '16UC1'
   agent_delivered: boolean
   period_ns: number
   /**
@@ -5681,22 +5892,16 @@ export interface FrameIndexV1 {
   }[]
   next_seq: number | null
 }
-/**
- * Camera frame record (drone4d.frame.v1). AWR-05 §8.1, M25 §7.2.1 (contracts 1.3.0, d1 V0.3). Three partitions: agent_view (the source set that M26 projects into bench/obs.v1 CameraObs), ground_truth (evaluation store and truth files only, ADR-161) and internal (provenance). Units: times in ns, K in px with pixel centres at 0.5, distances in m, angles in deg. Thermal fields (temp_ck, dT_app_k) are added in P0b. internal.appearance uses the run_spec values (mesh, 3dgs); appearance_source and appearance_version are added in contracts 1.3.x (additive, M25-FR-194, FR-201).
- *
- * This interface was referenced by `AwrContracts`'s JSON-Schema
- * via the `definition` "FrameV1".
- */
-export interface FrameV1 {
+export interface FrameV11 {
   schema: 'drone4d.frame.v1'
   /**
    * <run_id>/<uav>/<sensor>/<seq>; internal identifier, never part of obs.v1
    */
   frame_id: string
   /**
-   * This version defines camera frames only; LiDAR uses lidar_frame.v2
+   * camera or thermal (P0b; the thermal record is the source set of bench/obs.v1 ThermalObs); LiDAR uses lidar_frame.v2
    */
-  kind: 'camera'
+  kind: 'camera' | 'thermal'
   agent_view: {
     sensor_id: string
     seq: number
@@ -5752,7 +5957,7 @@ export interface FrameV1 {
     /**
      * sha256 over the delivered bytes; the archive stores the same bytes
      */
-    rgb: {
+    rgb?: {
       codec: 'jpeg' | 'raw'
       quality?: number
       /**
@@ -5773,6 +5978,20 @@ export interface FrameV1 {
        * @maxItems 2
        */
       range_m: [number, number, ...number[]]
+      /**
+       * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
+       */
+      ref: string
+      sha256: string
+    }
+    /**
+     * Thermal only: apparent temperature, u16 little-endian, 0.01 K per LSB (temp_ck = floor(T_app * 100 + 0.5), saturated to [0, 65535]), zstd level 3 single frame. sha256 over the delivered bytes; ThermalObs.temp_ck and the raw.mcap archive carry the same bytes
+     */
+    temp_ck?: {
+      dtype: 'u16'
+      unit: '0.01 K'
+      codec: 'radiometric_u16'
+      compression: 'zstd'
       /**
        * Payload block: an attached binary section of the same MCAP message, or a relative path in a file export
        */
@@ -5830,7 +6049,7 @@ export interface FrameV1 {
        */
       ref: string
     }
-    invalid_mask: {
+    invalid_mask?: {
       dtype: 'u8'
       codec: 'zstd'
       /**
@@ -5885,7 +6104,11 @@ export interface FrameV1 {
       occluder_sem_px: {
         [k: string]: number
       }
-      flags: 'truncated'[]
+      flags: ('truncated' | 'no_ring')[]
+      /**
+       * Thermal only: median noise-free apparent temperature of the visible pixels minus the median of the ring within Chebyshev distance 3 px that contains no actor pixel (K); absent with flag no_ring when the ring is empty
+       */
+      dT_app_k?: number
     }[]
     /**
      * Truth-layer sample times
@@ -5896,12 +6119,12 @@ export interface FrameV1 {
        * @maxItems 1
        */
       t_truth_ns: [number, ...number[]]
-      blur_subframes: number
-      rs_bands: number
+      blur_subframes?: number
+      rs_bands?: number
       /**
        * Rolling shutter method (ADR-179): vertex (default) or bands (reference)
        */
-      rs_method: 'vertex' | 'bands'
+      rs_method?: 'vertex' | 'bands'
       /**
        * Rolling shutter (vertex): camera pose nodes across the readout window (M25 §15.4)
        */
@@ -5913,6 +6136,16 @@ export interface FrameV1 {
        * @maxItems 2
        */
       readout_window_ns?: [number, number, ...number[]]
+      /**
+       * Thermal only: detector subframes S of the bolometer lag model (M25 §15.6 step 5)
+       */
+      lag_subframes?: number
+      /**
+       * Thermal only: subframe weights in time order (sum 1)
+       *
+       * @minItems 1
+       */
+      subframe_weights?: [number, ...number[]]
     }
   }
   internal: {
@@ -5948,6 +6181,44 @@ export interface FrameV1 {
      * true for offline re-rendering
      */
     derived: boolean
+    /**
+     * Thermal only (M25-FR-186, FR-187): versions and digests of the parameter table, the band-integrated Planck table, the noise profile and thermal_static.npz
+     */
+    thermal?: {
+      renderer: string
+      thermal_table: {
+        version: string
+        sha256: string
+      }
+      planck_table: {
+        version: string
+        sha256: string
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        band_um: [number, number, ...number[]]
+      }
+      noise: {
+        version: string
+        profile: string
+        netd_mk_300k: number
+        fpn_offset_k: number
+        fpn_gain_frac: number
+        optics_sigma_px: number
+        tau_bolometer_s: number
+        lag_subframes: number
+      }
+      thermal_static?: {
+        sha256: string
+        /**
+         * @minItems 2
+         * @maxItems 2
+         */
+        sun_az_el_deg: [number, number, ...number[]]
+        backend: string
+      }
+    }
   }
 }
 /**
@@ -6559,6 +6830,110 @@ export interface Keys {
    * sandbox-pool control namespace (AWR-17 §17.10.1)
    */
   pool_namespace?: string
+}
+/**
+ * Public-site static artifact index /lab-static/index.json (drone4d.lab_static_index.v1). M27 §7.8 + AWR-17 §18.8.5; M27-FR-134, FR-138; D3-AC-21 (contracts 1.3.0, d1 V0.3). The only file of the public static artifact set that lives outside the version directory; served no-cache with ETag and replaced atomically (write temporary file, then rename). Every artifact path is relative to /lab-static/v/<version>/ and must not escape it. Artifacts are immutable. features.leaderboard and features.submit are always false on the public site (R-D3-46). Files larger than 64 MiB are not hosted on emax: they carry an external ModelScope link instead (ADR-201). Written by tools/deploy/emax/d3-public/labctl.py index; parsed by apps/web/src/app/lab-public/staticIndex.ts, which tolerates unknown fields.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1".
+ */
+export interface LabStaticIndexV1 {
+  schema: 'drone4d.lab_static_index.v1'
+  /**
+   * Version directory name YYYY.MM.DD-n
+   */
+  version: string
+  built_unix_ns: string
+  /**
+   * Directory name of the /lab/ static build this index was published with
+   */
+  lab_build?: string
+  license: {
+    files: LabStaticIndexV1Relpath[]
+    attribution: string[]
+  }
+  worlds: {
+    id: string
+    pointcloud?: LabStaticIndexV1Relpath
+    summary?: LabStaticIndexV1Relpath
+    bytes?: LabStaticIndexV1Bytes
+  }[]
+  events: {
+    id: LabStaticIndexV1EventId
+    version: number
+    world_id?: string
+    tape: LabStaticIndexV1Relpath
+    tape_json?: LabStaticIndexV1Relpath
+    brief?: LabStaticIndexV1Relpath
+    bytes?: LabStaticIndexV1Bytes
+    sha256?: LabStaticIndexV1Sha256
+    runs: LabStaticIndexV1Run[]
+  }[]
+  files_sha256: LabStaticIndexV1Relpath1
+  /**
+   * Sum of the sizes of all files listed in SHA256SUMS
+   */
+  files_bytes_total: number
+  features: {
+    inspect: boolean
+    compare: boolean
+    leaderboard: false
+    submit: false
+  }
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1Run".
+ */
+export interface LabStaticIndexV1Run {
+  run_id: string
+  policy: string
+  n_uav: number
+  obs_level: string
+  metrics?: LabStaticIndexV1Relpath
+  tracks_obs?: LabStaticIndexV1Relpath
+  videos?: LabStaticIndexV1Video[]
+  slices?: LabStaticIndexV1Slice[]
+  basemap?: LabStaticIndexV1Relpath
+  basemap_bytes?: LabStaticIndexV1Bytes
+  basemap_sha256?: LabStaticIndexV1Sha256
+  lidar_compare?: LabStaticIndexV1Relpath
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1Video".
+ */
+export interface LabStaticIndexV1Video {
+  uav: string
+  cam: string
+  kind?: 'rgb' | 'thermal'
+  path: LabStaticIndexV1Relpath
+  bytes?: LabStaticIndexV1Bytes
+  sha256?: LabStaticIndexV1Sha256
+  external?: LabStaticIndexV1External
+}
+/**
+ * Distribution-channel copy of an artifact larger than 64 MiB (ADR-201: ModelScope)
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1External".
+ */
+export interface LabStaticIndexV1External {
+  channel: 'modelscope'
+  url: string
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "LabStaticIndexV1Slice".
+ */
+export interface LabStaticIndexV1Slice {
+  event_id: string
+  t_from_s: number
+  t_to_s: number
+  rrd: LabStaticIndexV1Relpath
+  bytes?: LabStaticIndexV1Bytes
+  sha256?: LabStaticIndexV1Sha256
+  external?: LabStaticIndexV1External
 }
 /**
  * layouts.json meta-schema. Structure of rt/layouts.json (AWR-17 §10.3). Semantic rules (no overlap, natural alignment, bits within the integer, enums exist, scale only on integers) are checked by tools/contracts/gen.py.
@@ -7735,7 +8110,7 @@ export interface ObsV1DepthImage {
   }
 }
 /**
- * v1.3 (P0b)
+ * v1.3 (P0b; M26-FR-124, API-FR-132). Projection of the M25 thermal frame record (drone4d.frame.v1, kind = thermal) agent_view; gimbal_reading carries encoder noise. Binary attachment rules as CameraObs (msgpack bin). Ranked runs only allow codec = radiometric_u16 (682 otherwise); nominal noise parameters only via agent_config.brief.nominal_noise. Golden vectors: bench/golden/thermal
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "ObsV1ThermalObs".
@@ -7759,7 +8134,7 @@ export interface ObsV1ThermalObs {
   mount_nominal: ObsV1Mount
   gimbal_reading: ObsV1Gimbal
   /**
-   * Apparent temperature, 0.01 K per LSB (msgpack bin, little-endian; length given by the counts in the same object)
+   * Apparent temperature, 0.01 K per LSB (msgpack bin, little-endian; length given by the counts in the same object). radiometric_u16: one zstd frame (level 3) that decompresses to exactly 2*W*H bytes, byte-identical to the M25 delivered bytes and the raw.mcap archive (agent_view.temp_ck.sha256); agc_jpeg: 8-bit AGC JPEG preview
    */
   temp_ck: {
     [k: string]: unknown
