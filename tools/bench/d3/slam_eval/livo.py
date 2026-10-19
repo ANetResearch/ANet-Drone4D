@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import threading
 import time
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -33,6 +34,7 @@ __all__ = [
     "docker_argv",
     "extrinsic_T_I_L",
     "image_file",
+    "image_file_argv",
     "image_id",
     "parse_log",
     "patch_yaml",
@@ -141,9 +143,16 @@ def image_id(image: str) -> str | None:
     return r.stdout.strip() or None
 
 
+def image_file_argv(image: str, path: str) -> list[str]:
+    """读取镜像内文本文件的 docker 参数表（不含 docker 本身）：容器 `d3-livo-cat-<随机>`，`--rm --network none`，1 核、256 MB
+    （CM-01、CM-02、CM-06；容器清单审计按此渲染）。"""
+    return ["run", "--rm", "--name", f"d3-livo-cat-{uuid.uuid4().hex[:12]}", "--network", "none", "--memory", "256m", "--cpus", "1",
+            "--entrypoint", "cat", image, path]
+
+
 def image_file(image: str, path: str) -> str:
-    """读取镜像内的文本文件（如 `/ws/src/FAST-LIVO2/config/MARS_LVIG.yaml`），容器 `--rm --network none`。"""
-    r = _docker(["run", "--rm", "--network", "none", "--entrypoint", "cat", image, path])
+    """读取镜像内的文本文件（如 `/ws/src/FAST-LIVO2/config/MARS_LVIG.yaml`），参数表见 `image_file_argv`。"""
+    r = _docker(image_file_argv(image, path))
     if r.returncode != 0:
         raise FileNotFoundError(f"{image}:{path}: {r.stderr.strip()}")
     return r.stdout
@@ -160,7 +169,7 @@ def read_source(spec: str | Path, image: str) -> str:
 class LivoRun:
     """一次 FAST-LIVO2 回放（模式 × 重复）。路径均为宿主机绝对路径。"""
 
-    name: str                       # 容器名（d3-<作业>-<模式>-r<k>）
+    name: str                       # 容器名（d3-livo-<作业>-<算例>-<模式>-r<k>，M27 §8 d3-livo-<job>；CM-06）
     mode: str
     repeat: int
     run_dir: Path

@@ -6,7 +6,8 @@
      Agent 隔离容器（`AgentContainers.argv()`，两个 Run × 两架机）；另扫描 python/awr 与 tools 下的 `.py`（不计注释与文档字符串），
      出现未登记的 `docker run` 启动点即报错（CM-00）。
   2. dmax 启动脚本：`tools/deploy/dmax/**/*.sh` 中含 `docker run` 的脚本按 `SHELL_SITES` 登记的变体（参数与环境变量）执行，
-     `ssh`、`rsync`、`scp` 与 `docker` 由记录桩替换：远端命令串在本机受限 PATH 的 bash 中展开，`docker` 桩只记录参数表，
+     `ssh`、`rsync`、`scp` 与 `docker` 由记录桩替换：远端命令串在本机受限 PATH 的 bash 中展开（另有 `mkdir`、`cp` 空操作桩与
+    `id`、`head`、`tail` 本机只读命令），`docker` 桩只记录参数表，
      不连接 dmax、不启动任何容器；变体声明 `reject = True` 时断言脚本拒绝该参数（如 `GPU=2,3`）且没有发出 `docker run`。
      未登记的脚本按无参数缺省变体渲染并告警，无法渲染时报错（CM-00）。
   3. 运行中容器（可选）：`--inspect FILE`（`docker inspect` JSON）或 `--live`（`ssh dmax` 只读执行 `docker inspect`，
@@ -67,6 +68,8 @@ RENDER_TIMEOUT_S = 60.0
 PY_LAUNCHERS = {
     "python/awr/phys/gz/instance.py": "_render_gz",
     "python/awr/agentsdk/env/containers.py": "_render_agents",
+    "tools/bench/d3/slam_eval/livo.py": "_render_slam_livo",
+    "tools/bench/d3/slam_eval/cli.py": "_render_slam_cli",
 }
 _PY_LAUNCH = re.compile(r"""["']run["']\s*,\s*["']-d["']|["']docker["']\s*,\s*["']run["']|\bdocker\s+run\b""")
 _SH_LAUNCH = re.compile(r"\bdocker\s+(?:container\s+)?run\b")
@@ -96,6 +99,13 @@ SHELL_SITES: dict[str, tuple[Variant, ...]] = {
         Variant("foreign-card", "test", (), {"GPU": "0"}, reject=True),
     ),
     f"{SCRIPT_ROOT}/run_gz_tests.sh": (Variant("default", "test"),),
+    f"{SCRIPT_ROOT}/run_mbl_e2e.sh": (                          # 最小基准闭环宿主（D3-AC-56）：L2 渲染绑定 GPU 参数指定的一张卡
+        Variant("gpu2", "board", ("audit",), gpu=2),
+        Variant("gpu3", "board", ("audit",), {"GPU": "3"}, gpu=3),
+        Variant("multi-card", "board", ("audit",), {"GPU": "2,3"}, reject=True),
+        Variant("all-cards", "board", ("audit",), {"GPU": "all"}, reject=True),
+        Variant("foreign-card", "board", ("audit",), {"GPU": "0"}, reject=True),
+    ),
     f"{SCRIPT_ROOT}/run_proto_board.sh": (
         Variant("l1", "board", ("audit",)),
         Variant("l2-gpu2", "board", ("audit",), {"GPU": "2"}, gpu=2),
@@ -105,6 +115,7 @@ SHELL_SITES: dict[str, tuple[Variant, ...]] = {
         Variant("foreign-card", "board", ("audit",), {"GPU": "0"}, reject=True),
     ),
     f"{SCRIPT_ROOT}/run_subworker.sh": (Variant("default", "subworker", ("--once",)),),
+    f"{SCRIPT_ROOT}/images/trivy/build.sh": (Variant("default", "subworker"),),   # 构建后以 --version 自检一次（CPU 池）
 }
 
 
@@ -141,6 +152,67 @@ def _render_agents(tmp: Path) -> tuple[list[Launch], list[Finding]]:
         ac = AgentContainers(tmp / "agents" / run, run, list(AUDIT_UAVS), "d3-agent-py:dev", cmd=["python", "-m", "drone4d.serve"], cpus=2.0, mem_gb=8.0)
         out += [parse_docker_run(ac.argv(u, tmp / "agents" / run / "sock" / u), "python:agent-containers", component="agent", run=run)
                 for u in AUDIT_UAVS]
+    return out, []
+
+
+def _slam_eval():
+    """slam_eval 作业包（tools/bench/d3/slam_eval，只依赖 numpy）→ (cli, livo) 模块。"""
+    d = str(ROOT / "tools" / "bench" / "d3")
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    import slam_eval.cli as cli
+    import slam_eval.livo as livo
+
+    return cli, livo
+
+
+def _render_slam_livo(tmp: Path) -> tuple[list[Launch], list[Finding]]:
+    """FAST-LIVO2 容器（`docker_argv`）与读取镜像内参数文件的一次性容器（`image_file_argv`），两个作业各一份。"""
+    _, livo = _slam_eval()
+    bag = tmp / "slam" / "case" / "sim.bag"
+    out = []
+    for run in AUDIT_RUNS:
+        r = livo.LivoRun(f"d3-livo-{run}-direct-livo-r1", "livo", 1, tmp / "slam" / run / "livo-r1", bag, "d3-livo:dev", mem_gb=8.0, cpus=2.0)
+        out.append(parse_docker_run(livo.docker_argv(r), "python:slam-livo[run]", component="livo", run=run))
+        argv = ["docker", *livo.image_file_argv("d3-livo:dev", "/ws/src/FAST-LIVO2/config/MARS_LVIG.yaml")]
+        out.append(parse_docker_run(argv, "python:slam-livo[image-file]", component="livo", run=run))
+    return out, []
+
+
+_SLAM_YAML = "common:\n  img_en: 1\nevo:\n  seq_name: x\n  pose_output_en: false\npcd_save:\n  pcd_save_en: true\n"
+
+
+def _render_slam_cli(tmp: Path) -> tuple[list[Launch], list[Finding]]:
+    """slam_eval 作业的容器（命令行缺省参数，`--name-prefix` 取两个 Run 名）：`run` 的 livo / lio 回放（`_prepare` 与资源模型）、
+    评测容器、GT 参考点容器，`regress` 的 RTK 抽取容器与回放容器。"""
+    cli, livo = _slam_eval()
+    cd = tmp / "slam-cli" / "case"
+    cd.mkdir(parents=True, exist_ok=True)
+    (cd / "livo.yaml").write_text(_SLAM_YAML, encoding="utf-8")
+    (cd / "camera.yaml").write_text("cam_model: Pinhole\n", encoding="utf-8")
+    case = cli.Case(dir=cd, name="case", bag=cd / "sim.bag", livo_yaml=cd / "livo.yaml", camera_yaml=cd / "camera.yaml", gt_imu=None,
+                    gt_lidar_ref=None)
+    ps = cli.build_parser()
+    out: list[Launch] = []
+    for run in AUDIT_RUNS:
+        jo = tmp / "slam-cli" / run
+        a = ps.parse_args(["run", "--case", str(cd), "--out", str(jo), "--name-prefix", run])
+        res = cli.job_resources(case.lidar_model, 360.0)
+        site = "python:slam-cli[run]"
+        for mode in livo.MODES:
+            lr = cli._prepare(case, jo, mode, 1, a, res, float(res["mem_gb"]), float(res["cpus"]))
+            out.append(parse_docker_run(livo.docker_argv(lr), site, component="livo", run=run))
+        out.append(parse_docker_run(cli._eval_docker_argv(a, case, jo / "runs" / "livo-r1", jo / "eval.json", None, None, None), site,
+                                    component="eval", run=run))
+        out.append(parse_docker_run(cli._ref_docker_argv(a, case, jo, jo / "gt_lidar_ref.ply"), site, component="eval", run=run))
+        g = ps.parse_args(["regress", "--bag", str(case.bag), "--out", str(jo / "regress"), "--name-prefix", run])
+        site = "python:slam-cli[regress]"
+        out.append(parse_docker_run(cli._rtk_docker_argv(g, case.bag, jo / "regress", jo / "regress" / "rtk_enu.tum"), site,
+                                    component="livo", run=run))
+        res = cli.job_resources(g.lidar_model, g.flight_s, min_gb=g.min_mem_gb, min_cpus=g.min_cpus)
+        lr = livo.LivoRun(name=cli._cname(g, "livo", "regress"), mode="livo", repeat=1, run_dir=jo / "regress" / "run", bag=case.bag,
+                          image=g.image, mem_gb=float(res["mem_gb"]), cpus=float(res["cpus"]))
+        out.append(parse_docker_run(livo.docker_argv(lr), site, component="livo", run=run))
     return out, []
 
 
@@ -225,7 +297,8 @@ def render_shell(script: Path, args: tuple[str, ...] = (), env: dict[str, str] |
                  ) -> tuple[int, list[list[str]], str]:
     """在记录桩下执行启动脚本 → (退出码, 发出的 docker 参数表列表（不含 docker 本身）, stderr 尾部)。
 
-    本机侧 PATH 前置桩目录（ssh、rsync、scp、docker）；ssh 桩把远端命令串交给只含 docker 桩、mkdir 桩与 id 的 PATH 下的 bash，
+    本机侧 PATH 前置桩目录（ssh、rsync、scp、docker）；ssh 桩把远端命令串交给只含 docker 桩、mkdir 与 cp 空操作桩、
+    id、head 与 tail（只读）的 PATH 下的 bash，
     远端命令串里的其他命令找不到即失败，不会在本机产生副作用。"""
     with tempfile.TemporaryDirectory(prefix="d3-manifest-") as td:
         t = Path(td)
@@ -238,10 +311,12 @@ def render_shell(script: Path, args: tuple[str, ...] = (), env: dict[str, str] |
             _stub(loc / n, "#!/bin/sh\nexit 0\n")
         for d in (loc, rem):
             _stub(d / "docker", _DOCKER_STUB.format(py=py))
-        _stub(rem / "mkdir", "#!/bin/sh\nexit 0\n")
-        idp = shutil.which("id")
-        if idp:
-            (rem / "id").symlink_to(idp)
+        for n in ("mkdir", "cp"):
+            _stub(rem / n, "#!/bin/sh\nexit 0\n")
+        for n in ("id", "head", "tail"):
+            exe = shutil.which(n)
+            if exe:
+                (rem / n).symlink_to(exe)
         e = {"PATH": f"{loc}{os.pathsep}{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(t), "LANG": "C.UTF-8",
              "AUDIT_REC": str(rec), "AUDIT_REMOTE_PATH": str(rem), **(env or {})}
         try:

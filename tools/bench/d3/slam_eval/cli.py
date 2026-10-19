@@ -1,7 +1,7 @@
 """`slam_eval` 命令行（M27 §6.6.2 时序；子命令见包说明）。
 
     PYTHONPATH=python python tools/bench/d3/slam_eval run --case <算例目录> --out <输出目录> [--mesh <世界包或网格>]
-        [--modes livo,lio] [--repeats 3] [--rate 4] [--image d3-livo:dev] [--parallel 4] [--name-prefix d3-slam]
+        [--modes livo,lio] [--repeats 3] [--rate 4] [--image d3-livo:dev] [--parallel 4] [--name-prefix slam]
         [--mem-gb G | --mem-scale S] [--cpus C] [--eval-runner local|docker] [--eval-image d3-sensorsvc:dev] [--repo <仓库根>]
         [--no-pcd] [--l0] [--require-regress <regress.json>] [--watchdog-s 600]
     ... eval --case <算例> --run <运行目录> --out <eval.json> [--mesh ...] [--ref <参考点 ply>] [--l0-out <l0 文件>]
@@ -80,6 +80,13 @@ def _safe(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "-", s)
 
 
+def _cname(a, component: str, *parts: str) -> str:
+    """容器名 `d3-<组件>-<作业>-...`（组件 livo 或 eval，M27 §8 `d3-livo-<job>`；容器清单审计 CM-06）。
+    `--name-prefix` 为作业标签，开头的 `d3-` 去掉以兼容旧写法（`d3-slam` 与 `slam` 等价）。"""
+    job = re.sub(r"^d3-", "", str(a.name_prefix)) or "slam"
+    return _safe("-".join(["d3", component, job, *parts]))
+
+
 def _trajectory_file(run_dir: Path) -> Path:
     res = Path(run_dir) / "Log" / "result"
     fs = sorted(res.glob("*.txt")) if res.is_dir() else []
@@ -154,7 +161,7 @@ def _eval_docker_argv(args, case: Case, run_dir: Path, out_json: Path, ref: Path
         mounts.add(str(Path(mesh).resolve() if Path(mesh).is_dir() else Path(mesh).resolve().parent))
     if ref is not None:
         mounts.add(str(Path(ref).resolve().parent))
-    argv = ["docker", "run", "--rm", "--name", _safe(f"{args.name_prefix}-eval-{case.name}-{Path(run_dir).name}"), "--network", "none",
+    argv = ["docker", "run", "--rm", "--name", _cname(args, "eval", case.name, Path(run_dir).name), "--network", "none",
             "--memory", f"{args.eval_mem_gb}g", "--cpus", str(args.eval_cpus), "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp",
             "-e", f"PYTHONPATH={repo}/python:{repo}/tools/bench/d3",
             "-e", f"AWR_CONTRACTS_DIR={repo}/packages/contracts", "-w", str(repo)]
@@ -168,6 +175,13 @@ def _eval_docker_argv(args, case: Case, run_dir: Path, out_json: Path, ref: Path
     if l0 is not None:
         cmd += ["--l0-out", str(l0)]
     return [*argv, args.eval_image, *cmd]
+
+
+def _ref_docker_argv(args, case: Case, out: Path, ref: Path) -> list[str]:
+    """GT 参考点云（`ref` 子命令）的容器：与评测容器同镜像、同挂载与资源，容器名以作业输出目录区分。"""
+    argv = _eval_docker_argv(args, case, out, out / "unused.json", None, None, None)
+    i = argv.index("eval")
+    return [*argv[:i], "ref", "--case", str(case.dir), "--out", str(ref)]
 
 
 def _run_eval(args, case: Case, run_dir: Path, ref: Path | None, l0: Path | None) -> dict:
@@ -214,7 +228,7 @@ def _prepare(case: Case, out: Path, mode: str, k: int, a, res: dict, mem_gb: flo
     kv = {**MODES[mode], "evo/seq_name": "est", "evo/pose_output_en": True, "pcd_save/pcd_save_en": not a.no_pcd}
     (rd / "livo.yaml").write_text(patch_yaml(case.livo_yaml.read_text(), kv))
     (rd / "camera.yaml").write_text(case.camera_yaml.read_text())
-    return LivoRun(name=_safe(f"{a.name_prefix}-{case.name}-{mode}-r{k}"), mode=mode, repeat=k, run_dir=rd, bag=case.bag, image=a.image,
+    return LivoRun(name=_cname(a, "livo", case.name, f"{mode}-r{k}"), mode=mode, repeat=k, run_dir=rd, bag=case.bag, image=a.image,
                    mem_gb=mem_gb, cpus=cpus, rate=a.rate, quiet_s=a.quiet_s)
 
 
@@ -277,10 +291,7 @@ def cmd_run(a) -> int:
             if a.eval_runner == "local":
                 cmd_ref(argparse.Namespace(case=str(case.dir), out=str(ref)))
             else:
-                argv = _eval_docker_argv(a, case, out, out / "unused.json", None, None, None)
-                i = argv.index("eval")
-                argv = [*argv[:i], "ref", "--case", str(case.dir), "--out", str(ref)]
-                r = subprocess.run(argv, capture_output=True, text=True)
+                r = subprocess.run(_ref_docker_argv(a, case, out, ref), capture_output=True, text=True)
                 (out / "ref.log").write_text(r.stdout + r.stderr)
                 if r.returncode != 0:
                     ref = None
@@ -308,6 +319,13 @@ def cmd_run(a) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------------- regress
+def _rtk_docker_argv(a, bag: Path, out: Path, rtk: Path) -> list[str]:
+    """从 bag 抽取 RTK 参考轨迹的容器（d3-livo 镜像，1 核、4 GB，`--network none`）。"""
+    return ["docker", "run", "--rm", "--name", _cname(a, "livo", "rtk"), "--network", "none", "--memory", "4g", "--cpus", "1",
+            "-v", f"{bag.parent}:/bag:ro", "-v", f"{out}:/out", "--entrypoint", "bash", a.image, "-c",
+            f"source /opt/ros/noetic/setup.bash && python3 /opt/d3-livo/extract_rtk.py /bag/{bag.name} /out/{rtk.name} {a.rtk_topic}"]
+
+
 def cmd_regress(a) -> int:
     out = Path(a.out).resolve()
     (out / "run" / "Log").mkdir(parents=True, exist_ok=True)
@@ -316,10 +334,7 @@ def cmd_regress(a) -> int:
                  "image": {"tag": a.image, "id": image_id(a.image)}, "threshold": {"ate_rmse_m_max": AC14["hkisland03_ate_m_max"]}}
     rtk = Path(a.rtk) if a.rtk else out / "rtk_enu.tum"
     if not rtk.exists():
-        r = subprocess.run(["docker", "run", "--rm", "--name", _safe(f"{a.name_prefix}-rtk"), "--network", "none", "--memory", "4g",
-                            "--cpus", "1", "-v", f"{bag.parent}:/bag:ro", "-v", f"{out}:/out", "--entrypoint", "bash", a.image, "-c",
-                            f"source /opt/ros/noetic/setup.bash && python3 /opt/d3-livo/extract_rtk.py /bag/{bag.name} /out/{rtk.name} "
-                            f"{a.rtk_topic}"], capture_output=True, text=True)
+        r = subprocess.run(_rtk_docker_argv(a, bag, out, rtk), capture_output=True, text=True)
         (out / "rtk.log").write_text(r.stdout + r.stderr)
         if r.returncode != 0:
             doc.update({"ok": False, "why": "rtk extraction failed"})
@@ -330,7 +345,7 @@ def cmd_regress(a) -> int:
     (rd / "livo.yaml").write_text(cfg)
     (rd / "camera.yaml").write_text(read_source(a.cam, a.image))
     res = job_resources(a.lidar_model, a.flight_s, min_gb=a.min_mem_gb, min_cpus=a.min_cpus)
-    lr = LivoRun(name=_safe(f"{a.name_prefix}-regress"), mode="livo", repeat=1, run_dir=rd, bag=bag, image=a.image,
+    lr = LivoRun(name=_cname(a, "livo", "regress"), mode="livo", repeat=1, run_dir=rd, bag=bag, image=a.image,
                  mem_gb=float(a.mem_gb or res["mem_gb"]), cpus=float(a.cpus or res["cpus"]), rate=a.rate, start_s=a.start,
                  quiet_s=a.quiet_s)
     doc["resources"] = {**res, "mem_gb_applied": lr.mem_gb, "cpus_applied": lr.cpus, "rate": lr.rate, "start_s": lr.start_s}
@@ -400,7 +415,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def common_docker(p):
         p.add_argument("--image", default="d3-livo:dev")
-        p.add_argument("--name-prefix", default="d3-slam")
+        p.add_argument("--name-prefix", default="slam")                   # 作业标签：容器名 d3-livo-<作业>-...、d3-eval-<作业>-...
         p.add_argument("--watchdog-s", type=float, default=600.0)
         p.add_argument("--retries", type=int, default=1)
         p.add_argument("--quiet-s", type=int, default=10)

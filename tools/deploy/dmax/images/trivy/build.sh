@@ -8,5 +8,5 @@ D=/data/anet-drone4d-d3/d3dev
 CTX=/data/anet-drone4d-d3/build/trivy
 ssh dmax "mkdir -p $CTX && cp $D/tools/trivy/trivy $CTX/trivy"
 rsync -a "$HERE/Dockerfile" "dmax:$CTX/"
-ssh dmax "cd $CTX && docker build -q -t d3-trivy:$TAG . >/dev/null && docker image inspect d3-trivy:$TAG --format '{{.Id}} {{.Size}}' \
+ssh dmax "docker build -q -t d3-trivy:$TAG $CTX >/dev/null && docker image inspect d3-trivy:$TAG --format '{{.Id}} {{.Size}}' \
   && docker run --rm --network none --read-only --tmpfs /tmp --cpus 1 --memory 512m --name d3-subworker-trivy-version d3-trivy:$TAG --version | head -1"

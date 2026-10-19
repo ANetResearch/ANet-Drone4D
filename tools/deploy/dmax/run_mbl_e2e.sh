@@ -7,7 +7,7 @@
 #   SUBMIT_IMAGE_BUILD=1 时先构建示例内部提交镜像 d3-example-close-track:<SUBMIT_TAG>（tools/bench/d3/examples/close_track/build.sh）。
 #   WAIT=1 时前台等待容器结束并以其退出码退出；缺省后台运行，日志在 $D/out/<输出名>/e2e.log（阶段与 Run）与 console.log（全部输出）。
 # 执行方式：宿主进程在 d3-sensorsvc 容器内绑定一张卡（L2 的 EGL 渲染），gz 实例与 Agent 隔离容器经挂载的 docker 套接字作为兄弟容器启动
-# （--gz-launcher docker 的挂载约定与 run_proto_board.sh 相同，路径按 AWR_HOST_PATH_MAP 换算）。dmax 只用 GPU 2、3；容器名 d3-mbl-<输出名>。
+# （--gz-launcher docker 的挂载约定与 run_proto_board.sh 相同，路径按 AWR_HOST_PATH_MAP 换算）。dmax 只用 GPU 2、3；容器名 d3-board-mbl-<输出名>（组件 board：L1 在 CPU 池、L2 绑定一张卡，D3-AC-22 CM-06）。
 # 前提：镜像 d3-sensorsvc:dev、d3-gz:dev、d3-agent-py:dev（images/*/build.sh；d3-agent-py 须含 numpy 与 pillow）；$D/worlds/<world> 已就位。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -20,7 +20,7 @@ CPUS=${CPUS:-16}
 MEM=${MEM:-64g}
 BR=${BENCH_ROOT:-benchroot}
 CONFIG=${CONFIG:-configs/bench.d3/mbl-formal.yaml}
-CNAME=d3-mbl-$NAME
+CNAME=d3-board-mbl-$NAME
 CFG_ARG=""
 if [ -f "$ROOT/$CONFIG" ]; then CFG_ARG="--config $CONFIG"; else echo "note: $CONFIG not found, using the built-in formal defaults" >&2; fi
 if ssh dmax "docker ps -q --filter name=^/$CNAME\$" | grep -q .; then echo "$CNAME is already running" >&2; exit 3; fi

@@ -63,17 +63,17 @@ def test_repo_manifests_have_no_errors(audit, report) -> None:
     errs = [f for f in report["findings"] if f["level"] == "error"]
     assert report["pass"] and not errs, errs
     assert report["schema"] == "awr.d3.manifest_audit.v1" and set(report["rules"]) == {"CM-00", *RULES}
-    # 每个登记变体都实际渲染：5 个脚本、8 个非拒绝变体（run_d3_tests.sh 各发出主阶段、gz 阶段与合并阶段 3 条 docker run，
-    # 其余各 1 条），6 个拒绝变体 0 条
+    # 每个登记变体都实际渲染：7 个脚本、11 个非拒绝变体（run_d3_tests.sh 各发出主阶段、gz 阶段与合并阶段 3 条 docker run，
+    # 其余各 1 条），9 个拒绝变体 0 条
     reg = tuple(f"sh:{k}[" for k in sorted(audit.SHELL_SITES))
     rs = {r["site"]: r for r in report["renders"] if r["site"].startswith(reg)}
-    assert len(rs) == 14
+    assert len(rs) == 20
     for site, r in rs.items():
         n = 3 if "run_d3_tests.sh" in site else 1
         assert r["docker_runs"] == (0 if any(k in site for k in ("multi-card", "all-cards", "foreign-card")) else n), site
         assert (r["exit"] != 0) == (r["docker_runs"] == 0), site
     s = report["summary"]
-    assert s["python"] == 6 and s["scripts"] >= 6 and s["errors"] == 0
+    assert s["python"] == 22 and s["scripts"] >= 6 and s["errors"] == 0
     # 告警只有 CM-08（d3.slice 尚未配置配额）与 CM-00（新增脚本尚未登记变体，但已按缺省变体渲染且无错误）
     assert {f["rule"] for f in report["findings"]} <= {"CM-08", "CM-00"}
 
@@ -108,7 +108,10 @@ def test_scripts_bind_at_most_one_card(report) -> None:
     assert by["sh:tools/deploy/dmax/run_proto_board.sh[l1]"]["gpus"] == []
     assert by["sh:tools/deploy/dmax/run_proto_board.sh[l2-gpu2]"]["gpus"] == ["device=2"]
     assert by["sh:tools/deploy/dmax/run_proto_board.sh[l2-gpu3]"]["gpus"] == ["device=3"]
-    for site in ("bench_ctl.sh[default]", "run_gz_tests.sh[default]", "run_subworker.sh[default]"):
+    assert by["sh:tools/deploy/dmax/run_mbl_e2e.sh[gpu2]"]["gpus"] == ["device=2"]
+    assert by["sh:tools/deploy/dmax/run_mbl_e2e.sh[gpu3]"]["gpus"] == ["device=3"]
+    assert by["sh:tools/deploy/dmax/run_mbl_e2e.sh[gpu2]"]["name"] == "d3-board-mbl-audit"
+    for site in ("bench_ctl.sh[default]", "run_gz_tests.sh[default]", "run_subworker.sh[default]", "images/trivy/build.sh[default]"):
         assert by[f"sh:tools/deploy/dmax/{site}"]["gpus"] == [], site
     # 统一测试入口：只有主阶段绑定 GPU 参数指定的一张卡，gz 阶段与合并阶段不挂载 GPU
     d3t = {(lc["site"], lc["name"]): lc["gpus"] for lc in _by_site(report, "sh:tools/deploy/dmax/run_d3_tests.sh")}
@@ -121,6 +124,21 @@ def test_scripts_bind_at_most_one_card(report) -> None:
     # 运行 gz 的宿主容器（local launcher）不在容器层设 GZ_PARTITION；d3-gz-* 命名空间不被测试或宿主容器占用
     for lc in by.values():
         assert "GZ_PARTITION" not in lc["env"] and not lc["name"].startswith("d3-gz-"), lc["site"]
+
+
+def test_slam_eval_containers_cpu_pool(report) -> None:
+    """slam_eval 作业（tools/bench/d3/slam_eval）：FAST-LIVO2 回放、RTK 抽取与读取镜像参数文件的容器为 d3-livo-*，评测与参考点容器为
+    d3-eval-*，均在 CPU 池、设 --memory 与 --cpus；两个作业的容器名两两不同。"""
+    sl = _by_site(report, "python:slam-")
+    assert len(sl) == 16 and len({lc["name"] for lc in sl}) == 16             # 读取镜像文件的一次性容器名带随机后缀，其余按作业区分
+    for lc in sl:
+        assert lc["gpus"] == [] and lc["devices"] == [] and lc["runtime"] is None, lc["name"]
+        assert lc["name"].startswith(("d3-livo-", "d3-eval-")) and "GZ_PARTITION" not in lc["env"], lc["name"]
+    names = {lc["name"] for lc in _by_site(report, "python:slam-cli")}
+    assert {"d3-livo-audit-run-a-case-livo-r1", "d3-livo-audit-run-a-case-lio-r1", "d3-eval-audit-run-a-case-livo-r1",
+            "d3-livo-audit-run-b-rtk", "d3-livo-audit-run-b-regress"} <= names
+    rp = [lc for lc in sl if lc["command"] == ["/opt/d3-livo/run_livo.sh"]]                     # 回放：作业 2 种模式 + regress + 直接渲染
+    assert len(rp) == 8 and all(lc["name"].startswith("d3-livo-") for lc in rp)
 
 
 def test_gz_local_subprocess_partition(tmp_path: Path) -> None:
