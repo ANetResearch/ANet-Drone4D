@@ -29,6 +29,9 @@ pytest.importorskip("httpx")
 import httpx
 from fastapi.testclient import TestClient
 
+# D2 环境（.venv）无 D3 依赖：bench API 与回放读取经 awr.bench.recorder.foxglove 导入 foxglove_schemas_protobuf
+pytest.importorskip("foxglove_schemas_protobuf")
+
 from awr.api.bench_main import create_app
 from awr.bench.api.rerun_proxy import (
     GRPC_SERVICE,

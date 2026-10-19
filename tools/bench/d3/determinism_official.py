@@ -15,10 +15,10 @@
 
 对拍项（`compare`）：
 
-- `repeat`（a ↔ b）：gz 位姿摘要 `pose_sha256` 相同；每架机 Agent 收到的观测流（`agents/<uav>/obs.sha256`，L2 帧字节以 base64 进入
+- `repeat`（a 对 b）：gz 位姿摘要 `pose_sha256` 相同；每架机 Agent 收到的观测流（`agents/<uav>/obs.sha256`，L2 帧字节以 base64 进入
   规范 JSON）与动作流（`acts.jsonl`，动作与回执）逐字节一致；逐帧摘要（`awr.bench.platform_audit.frames_digest`：obs、act、逐 tick 位姿、
   report、net、truth/*）逐项相同；`run_hash` 相同；
-- `m25_vs_free`（m25 ↔ a）、`bp_repeat`（bp1 ↔ bp2）、`bp_vs_free`（bp1 ↔ a）：`(uav, sensor, seq)` 集合与逐帧字节（交付帧的规范
+- `m25_vs_free`（m25 对 a）、`bp_repeat`（bp1 对 bp2）、`bp_vs_free`（bp1 对 a）：`(uav, sensor, seq)` 集合与逐帧字节（交付帧的规范
   JSON sha256 与 raw.mcap 存档消息 sha256 两种口径）逐一相同，且上述各流逐帧一致；
 - 每个运行内部：raw.mcap 存档帧集合与交付帧集合相同、写入器 `dropped = 0`、gz 无重启（`restarts = 0`）；
 - 背压确实发生：bp 变体 `max_inflight = 1`、每个 tick 都收到 641 并阻塞（`blocked_ticks = ticks`）、等待墙钟 ≥ 每帧 50 ms × 完成帧数

@@ -23,8 +23,9 @@
       两棵产物树逐字节对拍（只在一侧的文件、内容不同的文件）。
   d2-parity [--ref v0.2.1] [--work DIR]
       扩展点 15 的构建对拍（"开关缺省关闭时 D2 演示构建产物逐字节不变"，UX-AC-082）：`git archive <ref>` 与当前工作树的
-      `apps/web`、`docs/media` 分别放到 `<work>/ref` 与 `<work>/cur`（两棵树路径结构相同：rolldown 的模块顺序与绝对路径的
-      相对次序有关，两侧须同构），共用本检出的 node_modules，以相同的构建信息（ref 的提交与提交时刻、channel = demo）各做一次
+      `apps/web`、`docs/media`、`packages/contracts` 分别放到 `<work>/ref` 与 `<work>/cur`（两棵树路径结构相同：rolldown
+      的模块顺序与绝对路径的相对次序有关，两侧须同构），第三方包逐项链接本检出的 node_modules（两侧共用），工作区包
+      `@awr/*` 指向各自副本（契约改动因此计入对拍），以相同的构建信息（ref 的提交与提交时刻、channel = demo）各做一次
       `VITE_AWR_DEMO=public` 构建，再逐字节对拍；`cur` 的产物另按 `build --profile demo` 扫描。
 
 用法：
@@ -288,20 +289,37 @@ def resolve_ref(ref: str) -> tuple[str, str]:
     return sha, when
 
 
-def export_ref(ref: str, dst: Path, paths: tuple[str, ...] = ("apps/web", "docs/media")) -> None:
+# 两侧导出的子树：@awr/contracts 是 npm 工作区包（node_modules/@awr/contracts -> ../../packages/contracts），两侧都须导出自己的
+# packages/contracts，否则两侧都解析到本检出的契约，契约改动对演示构建的影响测不出来（G05 发现 5）
+PARITY_PATHS = ("apps/web", "docs/media", "packages/contracts")
+
+
+def export_ref(ref: str, dst: Path, paths: tuple[str, ...] = PARITY_PATHS) -> None:
     data = git(["archive", "--format=tar", f"{ref}^{{commit}}", *paths])
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
         tf.extractall(dst, filter="data")
 
 
-def export_worktree(dst: Path, paths: tuple[str, ...] = ("apps/web", "docs/media")) -> None:
+def export_worktree(dst: Path, paths: tuple[str, ...] = PARITY_PATHS) -> None:
     for p in paths:
         shutil.copytree(ROOT / p, dst / p, ignore=shutil.ignore_patterns(*COPY_IGNORE), symlinks=True)
 
 
-def link_node_modules(tree: Path) -> None:
-    (tree / "node_modules").symlink_to(ROOT / "node_modules", target_is_directory=True)
-    web_nm = ROOT / "apps" / "web" / "node_modules"
+def link_node_modules(tree: Path, root: Path = ROOT) -> None:
+    """副本的 node_modules：第三方包逐项链接本检出（两侧共用同一份依赖），工作区包 ``@awr/*`` 保留相对链接（如
+    ``../../packages/contracts``），从而指向副本自己导出的子树（同 mk/d3.mk 的 GATE_REF 导出）。"""
+    nm = tree / "node_modules"
+    nm.mkdir()
+    for e in sorted((root / "node_modules").iterdir()):
+        if e.name in (".vite-temp", "@awr"):
+            continue
+        (nm / e.name).symlink_to(e, target_is_directory=e.is_dir())
+    ws = root / "node_modules" / "@awr"
+    if ws.is_dir():
+        (nm / "@awr").mkdir()
+        for e in sorted(ws.iterdir()):
+            (nm / "@awr" / e.name).symlink_to(os.readlink(e) if e.is_symlink() else e, target_is_directory=True)
+    web_nm = root / "apps" / "web" / "node_modules"
     if web_nm.is_dir():
         (tree / "apps" / "web" / "node_modules").symlink_to(web_nm, target_is_directory=True)
 

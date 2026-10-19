@@ -10,6 +10,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+# D2 环境（.venv）无 D3 依赖：awr.phys.gz.protocol 导入 google.protobuf（gz 协议消息）
+pytest.importorskip("google.protobuf")
+
 from awr.phys import PhysError
 from awr.phys.adapter import TierCommand, VehicleStatus
 from awr.phys.gz import protocol as P

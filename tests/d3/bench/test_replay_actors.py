@@ -26,6 +26,8 @@ import pytest
 
 pytest.importorskip("mcap")
 pytest.importorskip("zstandard")
+# D2 环境（.venv）无 D3 依赖：bench API 与回放读取经 awr.bench.recorder.foxglove 导入 foxglove_schemas_protobuf
+pytest.importorskip("foxglove_schemas_protobuf")
 
 from awr.bench.recorder.read import REPLAY_TOL_M, TapeActorSource, run_attachments, tape_target_rows
 from awr.contracts.layouts import TARGET_LITE32

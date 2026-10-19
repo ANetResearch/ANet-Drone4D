@@ -7,59 +7,21 @@
 // 2. 未匹配的路径回到首页并显示一次"页面不存在，已打开事件沙盘首页"（AWR-14 §21.2.2 末行）；
 // 3. 页面标题为 `<页面> · 事件沙盘 · ANet Drone4D 公开站`（AWR-14 §21.2.2 规则 4）。
 import * as React from 'react'
-import { DEMO_DOCS_URL } from '@/lib/demo'
-import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
 import { Icon } from '@/ui/icons/Icon'
-import { getLabLocale, setLabLocale, useLabT } from './i18n'
+import { useLabT } from './i18n'
+import { LabHeader } from './LabHeader'
 import { BUILTIN_ROUTES, LabEmpty } from './pages'
-import { composeRoutes, currentPath, dismissNotFound, LAB_PREFIX, matchLabRoute, notFoundNotice, onLabLinkClick, redirectNotFound, subscribeLocation, type LabPublicRoute } from './router'
+import { composeRoutes, currentPath, dismissNotFound, matchLabRoute, notFoundNotice, redirectNotFound, subscribeLocation, type LabPublicRoute } from './router'
 import { loadStaticIndex, type LabFetch, type LabStaticIndex } from './staticIndex'
 
 const EXT = import.meta.glob<{ route: LabPublicRoute }>('./samples/*.route.tsx', { eager: true })
 export const LAB_ROUTES: readonly LabPublicRoute[] = composeRoutes(Object.values(EXT).map((m) => m.route), BUILTIN_ROUTES)
 
-const BRAND_AVATAR = `${import.meta.env.BASE_URL}brand/avatar-96.png`
-
 type IndexState = { kind: 'loading' } | { kind: 'ready'; index: LabStaticIndex } | { kind: 'error'; code: string }
 
 function useLocationPath(): string {
   return React.useSyncExternalStore(subscribeLocation, currentPath, currentPath)
-}
-
-function Header() {
-  const t = useLabT()
-  const other = getLabLocale() === 'zh-CN' ? 'en' : 'zh-CN'
-  return (
-    <header className="sticky top-0 z-(--z-header) border-b border-border bg-background">
-      <div className="mx-auto flex h-11 max-w-6xl items-center gap-3 px-4 sm:px-6">
-        <a href={`${LAB_PREFIX}/`} onClick={(e) => onLabLinkClick(e, `${LAB_PREFIX}/`)} className="flex min-h-11 items-center gap-2.5 rounded-md">
-          <img src={BRAND_AVATAR} width={20} height={20} alt="" aria-hidden="true" className="size-5 shrink-0" />
-          <span className="text-sm font-semibold tracking-tight whitespace-nowrap">{t('lab.public.brand')}</span>
-        </a>
-        <Badge variant="outline" className="max-sm:hidden" data-lab-public-badge="">{t('lab.public.site')}</Badge>
-        <nav className="ml-2 hidden items-center gap-0.5 md:flex" aria-label={t('lab.public.brand')}>
-          <Button variant="ghost" size="sm" className="h-8 px-3 text-sm" nativeButton={false}
-            render={<a href={`${LAB_PREFIX}/`} onClick={(e) => onLabLinkClick(e, `${LAB_PREFIX}/`)} />}>
-            {t('lab.public.nav.samples')}
-          </Button>
-        </nav>
-        <div className="ml-auto flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-8 px-3 text-sm" lang={other} onClick={() => setLabLocale(other, true)} data-lab-lang="">
-            {t('lab.public.lang')}
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 px-3 text-sm max-sm:hidden" nativeButton={false} render={<a href="/" />}>
-            {t('lab.public.nav.sandbox')}
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 px-3 text-sm max-sm:hidden" nativeButton={false}
-            render={<a href={DEMO_DOCS_URL} target="_blank" rel="noreferrer noopener" />}>
-            {t('lab.public.nav.docs')}
-            <Icon icon="external" data-icon="inline-end" />
-          </Button>
-        </div>
-      </div>
-    </header>
-  )
 }
 
 function Footer({ index }: { index: LabStaticIndex | null }) {
@@ -147,7 +109,7 @@ export function LabPublicApp({ fetchFn, routes = LAB_ROUTES }: { fetchFn?: LabFe
 
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground" data-lab-build="public">
-      <Header />
+      <LabHeader />
       {notFound ? <Banner text={t('lab.public.notFound')} onClose={dismissNotFound} /> : null}
       {updated ? <Banner text={t('lab.public.updated')} action={t('lab.public.refresh')} onAction={reload} onClose={() => setUpdated(false)} /> : null}
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">

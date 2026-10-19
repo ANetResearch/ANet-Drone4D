@@ -112,6 +112,12 @@ expect('binary kinds', [binaryKind(ELF), binaryKind(Buffer.from('!<arch>\nxxxx',
   expect('schnell is not dev', lic('tools/navsvc/package.json', '{"model": "FLUX.1-schnell"}'), [])
   expect('product image clones FAST-LIVO2', lic('tools/deploy/dmax/images/gz/Dockerfile', `RUN git clone https://github.com/hku-mars/${LIVO}\n`), ['REL-07'])
   expect('livo image may build it', lic('tools/deploy/dmax/images/livo/Dockerfile', `RUN git clone https://github.com/hku-mars/${LIVO}\n`), [])
+  // the label on images/<dir>/Dockerfile exempts the other recipe files of that image directory (entry scripts, requirements)
+  const LABELLED = (dir) => (dir === 'tools/deploy/dmax/images/y' ? 'FROM a\nLABEL awr.image.scope="internal" x="1"\n' : 'FROM a\n')
+  expect('labelled image directory', [imageRecipe('tools/deploy/dmax/images/y/run.sh', '', LABELLED),
+    imageRecipe('tools/deploy/dmax/images/y/requirements.in', '', LABELLED), imageRecipe('tools/deploy/dmax/images/z/run.sh', '', LABELLED),
+    imageRecipe('tools/deploy/dmax/images/z/run.sh', '', () => null)], [false, false, true, true])
+  expect('labelled slam image scripts may run it', lic('tools/deploy/dmax/images/slam/run_livo.sh', `#!/bin/sh\nroslaunch ${LIVO} run_bag.launch\n`), [])
   expect('product package imports nvdiffrast', lic('python/awr/sensorsvc/camera/x.py', `import numpy as np\nimport ${NVDR}.torch as dr\n`), ['REL-07'])
   expect('research script import is not product code', lic('tests/d3/research/x.py', `import ${NVDR}.torch as dr\n`), [])
   expect('vendored research source', lic(`third_party/${NVDR}/ops.py`, 'x = 1\n'), ['REL-07'])

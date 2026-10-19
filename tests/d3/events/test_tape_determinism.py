@@ -410,7 +410,7 @@ def test_transitions_step_without_slide_or_jump(runs) -> None:
     n_step = n_smooth = 0
     vis = _vis(st)
     jump = (vis[:-1] != vis[1:]) | (ct[:-1] != ct[1:])                             # (k, i)：k → k + 1 可见性类别或容器变化
-    mw = vis[:-1] & vis[1:] & (st[:-1] != st[1:]) & ~jump                          # 移动 ↔ 等待
+    mw = vis[:-1] & vis[1:] & (st[:-1] != st[1:]) & ~jump                          # 移动与等待互转
     for k, i in zip(*np.nonzero(jump), strict=True):
         a, b = fr[k, i], fr[k + 1, i]
         # 阶跃：区间内一律取第 k 帧（位置、状态、容器），t_{k+1} 起取第 k + 1 帧
@@ -424,7 +424,7 @@ def test_transitions_step_without_slide_or_jump(runs) -> None:
         n_step += 1
     for k, i in zip(*np.nonzero(mw), strict=True):
         a, b = fr[k, i], fr[k + 1, i]
-        # 移动 ↔ 等待：Hermite 插值连续，5 ms 采样的相邻位移不超过该类最大速度 × 5 ms 的 1.5 倍，两端与帧记录重合
+        # 移动与等待互转：Hermite 插值连续，5 ms 采样的相邻位移不超过该类最大速度 × 5 ms 的 1.5 倍，两端与帧记录重合
         P = np.stack([t.actor_states(int(x), [int(i)]).pos_enu_m[0] for x in int(k) * TICK_NS + np.arange(0, TICK_NS + 1, 5_000_000)])
         vmax = 11.0 if t.actors[i]["class"] == "vehicle" else 1.8
         assert np.linalg.norm(np.diff(P[:, :2], axis=0), axis=1).max() <= 1.5 * vmax * 5e-3 + 1e-6

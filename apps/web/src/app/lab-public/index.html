@@ -15,13 +15,15 @@
       #boot-mask { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 1rem; background: oklch(0.149 0.005 264.5); color: oklch(0.740 0.012 264.5);
         font: 500 12px/18px "Inter Variable", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
-      #boot-mask .boot-badge { width: 320px; max-width: calc(100vw - 2rem); height: auto; }
+      /* 完整徽章：宽 480 px，视口宽 < 1280 时 320 px（AWR-15 §4.2 加载遮罩；同应用 index.html 与 styles/boot.css） */
+      #boot-mask .boot-badge { width: 480px; max-width: calc(100vw - 2rem); height: auto; }
+      @media (max-width: 1279px) { #boot-mask .boot-badge { width: 320px; } }
       #boot-mask .boot-version { min-height: 16px; font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
     </style>
   </head>
   <body>
     <div id="boot-mask" role="status" aria-live="polite">
-      <img class="boot-badge" src="%BASE_URL%brand/anet-logo.svg" width="320" height="55" alt="ANet" />
+      <img class="boot-badge" src="%BASE_URL%brand/anet-logo.svg" width="480" height="83" alt="ANet" />
       <div class="boot-version"></div>
       <div class="boot-phase">ANet Drone4D · Event Lab</div>
     </div>

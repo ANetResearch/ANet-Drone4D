@@ -187,7 +187,7 @@ def parent_key(path: str) -> str:
 
 def pair_hits(vals: np.ndarray, Q: np.ndarray, tol: float) -> np.ndarray:
     """容器取值 `vals` (m,) 与真值样本 `Q` (N, d)（NaN 为不参与的分量）→ (N,) 命中：存在两个不同取值分别在 `tol` 内等于该行两个
-    不同分量（二部图最大匹配 ≥ 2 ⇔ 匹配到的取值数 ≥ 2 且分量数 ≥ 2）。"""
+    不同分量（二部图最大匹配 ≥ 2 当且仅当匹配到的取值数 ≥ 2 且分量数 ≥ 2）。"""
     N = Q.shape[0]
     if len(vals) < 2 or N == 0:
         return np.zeros(N, bool)

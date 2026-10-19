@@ -15,6 +15,9 @@ from typing import ClassVar
 import pytest
 from fastapi.testclient import TestClient
 
+# D2 环境（.venv）无 D3 依赖：bench API 与回放读取经 awr.bench.recorder.foxglove 导入 foxglove_schemas_protobuf
+pytest.importorskip("foxglove_schemas_protobuf")
+
 from awr.api.bench_main import create_app
 from awr.bench.runs_store import RunStore
 from awr.bench.settings import BenchSettings

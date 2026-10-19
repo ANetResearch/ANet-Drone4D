@@ -11,7 +11,8 @@ COPY run_livo.sh extract_rtk.py /opt/d3-livo/
 RUN chmod +x /opt/d3-livo/run_livo.sh /opt/d3-livo/extract_rtk.py \
  && test -x /ws/devel/lib/fast_livo/fastlivo_mapping \
  && echo "${D3_LIVO_BUILD}" > /opt/d3-livo/BUILD
-LABEL org.drone4d.component="d3-livo" org.drone4d.upstream="hku-mars/FAST-LIVO2@0d2c034" org.drone4d.license.upstream="GPL-2.0" \
+# awr.image.scope=internal：只在内部服务器运行的 FAST-LIVO2 作业镜像，不发布（check-release REL-07 据此豁免本镜像目录）
+LABEL awr.image.scope="internal" org.drone4d.component="d3-livo" org.drone4d.upstream="hku-mars/FAST-LIVO2@0d2c034" org.drone4d.license.upstream="GPL-2.0" \
       org.drone4d.build="${D3_LIVO_BUILD}"
 WORKDIR /ws
 ENTRYPOINT ["bash", "/opt/d3-livo/run_livo.sh"]

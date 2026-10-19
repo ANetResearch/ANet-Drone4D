@@ -378,25 +378,25 @@
 ```
 rows.jsonl（evaluation.v1 分量 + ledger_summary + 行键 + attempt + seed_tag）
    │  R-M32-04、R-M32-92 入库校验与 attempt 归并
-   ▼
-Suite 清单 ──(§6.2.3 映射)──▶ MetricSet.view / Scoring.view（分析组视图，V-1–V-12）
+   ↓
+Suite 清单 ──(§6.2.3 映射)──→ MetricSet.view / Scoring.view（分析组视图，V-1–V-12）
    │
-   ▼
-LedgerCheck ──(重算比对、enforce、budget.policy 映射)──▶ apply_scoring（失败/无效方向化计分，exclude 阈值）
+   ↓
+LedgerCheck ──(重算比对、enforce、budget.policy 映射)──→ apply_scoring（失败/无效方向化计分，exclude 阈值）
    │
-   ▼
-build_cube ──▶ Cube[entry, metric, scenario, seed, repeat, intervention]
+   ↓
+build_cube ──→ Cube[entry, metric, scenario, seed, repeat, intervention]
    │  F-01–F-03 点估计；F-24 完整性；F-45 无效判定
-   ▼
+   ↓
 resample（F-07 种子、F-08 下标、R-M32-93 索引、F-09 计数）── 全组共享
    │
-   ├─▶ replicate_means（F-10/F-11）──▶ ci_mean（F-12/F-13）
-   ├─▶ paired_ci + pvalue（F-12–F-14、F-41、F-42）──▶ holm（F-16）──▶ verdict（F-17）
-   │        └─▶ tie_groups（§6.4.2 定点）、rank_intervals（F-19）
-   ├─▶ dominance_graph（F-20）+ ref_dominance（F-22）──▶ scc ──▶ dominance_tiers（F-21）
-   └─▶ delta / fieller（F-25–F-30）、robust（F-31、F-43、F_rob）
-   ▼
-board.v2 内容 + stats 自述块 + comparisons[]  ──(JCS)──▶ L6 写入与发布
+   ├─→ replicate_means（F-10/F-11）──→ ci_mean（F-12/F-13）
+   ├─→ paired_ci + pvalue（F-12–F-14、F-41、F-42）──→ holm（F-16）──→ verdict（F-17）
+   │        └─→ tie_groups（§6.4.2 定点）、rank_intervals（F-19）
+   ├─→ dominance_graph（F-20）+ ref_dominance（F-22）──→ scc ──→ dominance_tiers（F-21）
+   └─→ delta / fieller（F-25–F-30）、robust（F-31、F-43、F_rob）
+   ↓
+board.v2 内容 + stats 自述块 + comparisons[]  ──(JCS)──→ L6 写入与发布
 ```
 
 ### 6.2 数据结构
@@ -659,8 +659,8 @@ F-15  重采样次数    n_boot = min( n_boot_cap, max(10,000, ⌈20 · m_rank /
 F-16  Holm          族内 m 个检验的 p 值升序 p_(1) ≤ … ≤ p_(m)（同值按检验标识码点序）
                     调整 p：p̃_(i) = max_{l ≤ i} min(1, (m − l + 1) · p_(l))
                     拒绝 H_(i) 当且仅当 p̃_(i) ≤ α
-F-17  判定词        A ≻_k B  ⇔  p̃_{AB,k} ≤ α  ∧  d̂_{AB,k} > ε_k                       "显著且实际更优"
-                    A ≈_k B  ⇔  CI90_{AB,k} ⊂ [−ε_eq, ε_eq]                              "等价"
+F-17  判定词        A ≻_k B  当且仅当  p̃_{AB,k} ≤ α  ∧  d̂_{AB,k} > ε_k                       "显著且实际更优"
+                    A ≈_k B  当且仅当  CI90_{AB,k} ⊂ [−ε_eq, ε_eq]                              "等价"
 F-18  并列扫描      e_(1), …, e_(K) 按 (−σ μ̂, entry_id) 排序；h ← e_(1)；g ← 0
                     对 l = 2..K：若 h ≻ e_(l) 则 g ← g + 1，h ← e_(l)；tie_group(e_(l)) = g
                     rank(e) = 组首在序列中的位置（自 1 起）
@@ -675,15 +675,15 @@ F-41  双侧 p 值     选向比较：p₂ = min(1, 2 · p₁)，p₁ 取点估�
 **支配分层**
 
 ```
-F-20  支配          A ▷ B ⇔ ∀k ∈ T : d̂_{AB,k} ≥ −ε_k  ∧  ∃k ∈ T : p̃^{dom}_{AB,k} ≤ α ∧ d̂_{AB,k} > ε_k
-F-21  分层          以 ▷ 为有向边（A → B）构图；Tarjan 求强连通分量 Q_1..Q_r；缩点图为有向无环图
+F-20  支配          A ⊳ B 当且仅当 ∀k ∈ T : d̂_{AB,k} ≥ −ε_k  ∧  ∃k ∈ T : p̃^{dom}_{AB,k} ≤ α ∧ d̂_{AB,k} > ε_k
+F-21  分层          以 ⊳ 为有向边（A → B）构图；Tarjan 求强连通分量 Q_1..Q_r；缩点图为有向无环图
                     tier(Q) = 1 + 最长入路径长度（等价于逐层剥离：每轮移除当前无入边的分量）
-F-22  参考行层级    A ▷_ref ρ ⇔ ∀k ∈ T : d̂_{Aρ,k} ≥ −ε_k  ∧  ∃k ∈ T : p̃^{domref}_{Aρ,k} ≤ α ∧ d̂_{Aρ,k} > ε_k
+F-22  参考行层级    A ⊳_ref ρ 当且仅当 ∀k ∈ T : d̂_{Aρ,k} ≥ −ε_k  ∧  ∃k ∈ T : p̃^{domref}_{Aρ,k} ≤ α ∧ d̂_{Aρ,k} > ε_k
                     p̃^{domref} 为 F_domref（定向单侧，独立 Holm）的调整 p 值
-                    tier(ρ) = 1 + max{ tier(A) : A ∈ C, A ▷_ref ρ }（无则为 1）
+                    tier(ρ) = 1 + max{ tier(A) : A ∈ C, A ⊳_ref ρ }（无则为 1）
 ```
 
-二元环不可能：若 `A ▷ B`，存在 k 使 `d̂_{AB,k} > ε_k`，即 `d̂_{BA,k} < −ε_k`，B 在 k 上不满足"不劣于"A，故 `B ▷ A` 不成立。三元及以上的环因容差可能出现，由 F-21 合并。
+二元环不可能：若 `A ⊳ B`，存在 k 使 `d̂_{AB,k} > ε_k`，即 `d̂_{BA,k} < −ε_k`，B 在 k 上不满足"不劣于"A，故 `B ⊳ A` 不成立。三元及以上的环因容差可能出现，由 F-21 合并。
 
 **失败与无效计分**
 
@@ -693,13 +693,13 @@ F-23  不利端        worst_k = range_lo（σ_k = +1）或 range_hi（σ_k = �
                       不利端有界：y ← worst_k
                       不利端无界：y ← penalty_k（已声明）；否则 y ← null（nullable = true）；二者皆无为 V-9 错误
                     消耗类指标：y 保留实测；安全类指标：保留实测；fail_rate 由 failure.policy 计 1
-F-24  完整性        valid_cell(e,s,i) ⇔ 单元格 (s,i) 存在 e 的主评测有效行（R-M32-92 归并后未记缺失）
+F-24  完整性        valid_cell(e,s,i) 当且仅当 单元格 (s,i) 存在 e 的主评测有效行（R-M32-92 归并后未记缺失）
                                          ∧（invalid_policy = exclude 时另须 ranked_valid = true）
-                    incomplete(e) ⇔ ∃s ∈ 声明场景集 : #{i : valid_cell(e,s,i)} < min_valid_seeds（缺省 3）
+                    incomplete(e) 当且仅当 ∃s ∈ 声明场景集 : #{i : valid_cell(e,s,i)} < min_valid_seeds（缺省 3）
                     zero 口径下 ranked_valid = false 的 Episode 计为有效种子（已按 F-23 计分）
 F-45  无效阈值      仅 invalid_policy = exclude：n_tot(e) = e 的主评测有效行数（intervention = none，排名运行，R-M32-92 归并后）
                     n_val(e) = 其中 ranked_valid = true 的行数
-                    status(e) = invalid ⇔ n_val(e) < (1 − θ) · n_tot(e)，以有理数精确比较（θ = 0.2 时为 5 · n_val < 4 · n_tot）
+                    status(e) = invalid 当且仅当 n_val(e) < (1 − θ) · n_tot(e)，以有理数精确比较（θ = 0.2 时为 5 · n_val < 4 · n_tot）
                     与 D3 `len(valid) < 0.8 * len(rs)` 逐例等价（D3-INV-12）
 ```
 
@@ -751,8 +751,8 @@ F-34  比值          tx_a = det[a].tx_bytes；cpu_a = measured[a].cpu_ms；tok_
                     b_tx_ratio = Σ_a tx_a / limit(tx_bytes, team)
                     cpu_ratio  = Σ_a cpu_a / Σ_a limit(cpu_ms, a)；cpu_ratio_max = max_a cpu_a / limit(cpu_ms, a)
                     token_ratio = Σ_a tok_a / limit(tokens, team)（limit = 0 时按 R-M32-59）
-                    enforce = violation：violation(dim) ⇔ usage_scope(dim) > limit_scope(dim)，scope ∈ {agent, team}
-                    enforce = refuse：   不产生违规；usage_scope(dim) > limit_scope(dim) ⇒ ledger_mismatch
+                    enforce = violation：violation(dim) 当且仅当 usage_scope(dim) > limit_scope(dim)，scope ∈ {agent, team}
+                    enforce = refuse：   不产生违规；usage_scope(dim) > limit_scope(dim) 则 ledger_mismatch
                     额度比较以整数进行（字节、μWh、token 计数为整数；cpu_ms 比较前不舍入）
 ```
 
@@ -781,7 +781,7 @@ F-38  交叉自助      μ*_j = Σ_s Σ_t C^S_{j,s} C^T_{j,t} ȳ(s,t) / (Σ_s C^
                     C^T 为训练产物下标计数，以独立域 "drone4d.board.resample.train.v1" 派生
 F-39  复跑判据      Δ_r = μ̂_rerun − μ̂；ŝ_o 为原估计标准误（family：F-06 的 ŝ 型单条目标准误；fixed_set：F-42 型闭式标准误）
                     ŝ_r = σ̂_ep / sqrt(n_r)，σ̂_ep 为原条目全部主评测 Episode 值的样本标准差（分母 N − 1）
-                    R-1/R-2b 通过 ⇔ |Δ_r| ≤ Z_995 · sqrt(ŝ_o² + ŝ_r²) + ε        （α_r = 0.01，ε = 0.02）
+                    R-1/R-2b 通过 当且仅当 |Δ_r| ≤ Z_995 · sqrt(ŝ_o² + ŝ_r²) + ε        （α_r = 0.01，ε = 0.02）
 F-40  承诺验证      seed_set_commit = hex(SHA-256(salt ‖ JCS([dec(ω) for ω in sorted_numeric(seeds)])))；
                     seed_tag = hex(HMAC-SHA256(salt, LP("drone4d.board.seed_tag.v1") ‖ LP(episode_id) ‖ LP(scenario_id) ‖ u32be(seed_index) ‖ u64be(ω)))
                     （编码与测试向量以 CT §3.4.3 为唯一定义，XR-07）
@@ -791,7 +791,7 @@ F-42  闭式方差      fixed_set 下配对差均值的分层自助方差（B �
                     v_s = (1/m'_s) Σ_{i∈I_s} (D(s,i) − D̄(s))²（插件方差）
                     ŝ_N² = (1/|S_AB|²) Σ_{s∈S_AB} v_s / m'_s
                     缺失种子使 m'_s < m_s 时为近似值（stats 注明）；ŝ_N = 0 时按 §6.4.4 退化规则
-F-44  重放容差      consistent_k(a, b) ⇔ (a = b = null) ∨ (a, b 非空 ∧ |a − b| ≤ τ_abs,k + τ_rel · max(|a|, |b|))
+F-44  重放容差      consistent_k(a, b) 当且仅当 (a = b = null) ∨ (a, b 非空 ∧ |a − b| ≤ τ_abs,k + τ_rel · max(|a|, |b|))
                     τ_abs,k = replay_tol_k（若声明）否则 10^(−precision_k)；τ_rel = 1e-9
 ```
 

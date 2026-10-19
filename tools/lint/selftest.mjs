@@ -141,6 +141,19 @@ expect('palette tokens from AWR-15', Object.keys(doc).length, 18)
   expect('brand rules', got, ['BRAND-03', 'BRAND-02', 'BRAND-02', 'BRAND-02'])
 }
 
+// check-brand: the /lab/ public build has its own header and boot-mask placements; other lab-public files are not placements
+{
+  const files = new Map([
+    [`${SRC}/app/lab-public/LabHeader.tsx`, "const A = `${import.meta.env.BASE_URL}brand/avatar-96.png`"],
+    ['apps/web/src/app/lab-public/index.html', '<img class="boot-badge" src="%BASE_URL%brand/anet-logo.svg" />'],
+    [`${SRC}/app/lab-public/App.tsx`, "const A = `${import.meta.env.BASE_URL}brand/avatar-96.png`"],
+    [`${SRC}/app/lab-public/pages.tsx`, "<img src='brand/anet-logo.svg'/>"],
+    [`${SRC}/app/lab-public/sub/LabHeader.tsx`, "<img src='brand/avatar-96.png'/>"],
+  ])
+  const got = rules((R) => brand([...files.keys()], R, (f) => files.get(f)))
+  expect('brand /lab/ placements', got, ['BRAND-02', 'BRAND-02', 'BRAND-02'])
+}
+
 // check-deps boundaries
 {
   const declared = new Map([['react', {}], ['three', {}], ['@msgpack/msgpack', {}]])

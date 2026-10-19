@@ -680,7 +680,7 @@ execution: {host: batch, workers: auto}
 ```
 experiment.yaml
   │  YL-01..12（受限 YAML）                         → yaml_restricted / yaml_ambiguous_scalar / ...
-  ▼
+  ↓
 文档（JSON 数据模型） ── spec_sha256 = sha256(JCS(文档))
   │  requires.drone4d 检查                          → sdk_version_unsatisfied
   │  schema 校验（自含校验器，§7.4.4）               → field_unknown / type_mismatch / ...
@@ -690,13 +690,13 @@ experiment.yaml
   │                                                 → split_platform_only / seed_out_of_public_range / component_unavailable_in_wheel
   │  policy_ref 解析（M30 登记表）                    → policy_ref_unknown / extra_missing
   │  属性解析（M28 AttrRegistry，层：登记缺省 < Suite < Helper < 实验 < cli）
-  ▼
+  ↓
 ResolvedExperiment ── experiment_id、experiment_config_sha256、analysis_config_sha256、labels、required_extras
   │  Episode 展开：policies × scenarios × seed_index × repeats，经 InterventionPlan 增删
   │  参考策略 Episode 去重共享；按 EpisodeKey 码点序排序；逐 Episode config_sha256 与 episode_id
   │  执行计划过滤（--policies 子集、续跑已完成项）       → plan.json
   │  策略预检（py: 策略，R-M34-105）                  → policy_preflight_failed
-  ▼
+  ↓
 EpisodeSpec[]（M28）→ BatchHost 迭代式结果流（CR-M34-01）→ 各 runs/<episode_id>/ → rows.jsonl → analyze_experiment → 报告
 ```
 

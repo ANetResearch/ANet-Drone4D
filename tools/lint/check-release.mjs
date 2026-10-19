@@ -21,8 +21,9 @@
 //   REL-07 research-only components (nvdiffrast, the Inria 3DGS rasterizer and simple-knn, Skyfall-GS, FLUX.1 [dev]) and
 //          FAST-LIVO2 stay out of product image recipes (Dockerfiles, requirements and build scripts under tools/deploy/,
 //          pyproject.toml, requirements*.in/lock, package.json) and out of the product package python/; research and
-//          internal-only images (an images/<dir> named sky, livo, research-* or r<N>-*, or a Dockerfile labelled
-//          awr.image.scope=research|internal) are exempt; vendored copies of their source are reported anywhere
+//          internal-only images (an images/<dir> named sky, livo, research-* or r<N>-*, or an images/<dir> whose Dockerfile is
+//          labelled awr.image.scope=research|internal, all recipe files of that directory included) are exempt; vendored
+//          copies of their source are reported anywhere
 //   REL-08 NOTICE and THIRD_PARTY_NOTICES.md carry the attributions: every CC-BY entry of configs/worlds.d3/raw-manifest.json
 //          (title, author, source, license), the OSM ODbL statement, the elevation credits, the D3 components of REQUIRED
 //          (hill-01, gz-sim fork, x500, FAST-LIVO2 with its version, nvdiffrast, Skyfall-GS, FLUX.1 [dev], recast-navigation
@@ -200,8 +201,13 @@ const RESEARCH_HEADERS = [[['GRAPHDECO', 'research group'].join(' '), 'Inria 3DG
   [['NVIDIA Source Code', 'License'].join(' '), 'code under the NVIDIA Source Code License (nvdiffrast)']]
 const RESEARCH_IMPORT = /^\s*(?:import|from)\s+(nvdiffrast|diff_gaussian_rasterization|simple_knn)\b/m
 
-/** a product image recipe: a container or dependency recipe of an image that is not research or internal-only */
-export function imageRecipe(f, text = '') {
+/** Dockerfile text of an image directory (images/<dir>/Dockerfile in the working tree; null when it does not exist) */
+const imageDockerfile = (dir) => (existsSync(join(ROOT, dir, 'Dockerfile')) ? readText(`${dir}/Dockerfile`) : null)
+
+/** a product image recipe: a container or dependency recipe of an image that is not research or internal-only. The label
+ *  awr.image.scope=research|internal on images/<dir>/Dockerfile exempts the whole image directory (its entry scripts and
+ *  requirements files as well); readDockerfile(dir) returns that Dockerfile's text or null (tests pass a stub) */
+export function imageRecipe(f, text = '', readDockerfile = imageDockerfile) {
   const b = base(f)
   const deploy = f.startsWith('tools/deploy/')
   const recipe = (deploy && (/^(Dockerfile|Containerfile)(\..+)?$|\.(dockerfile|containerfile)$/i.test(b) || /^requirements[^/]*\.(in|lock|txt)$/.test(b)
@@ -211,6 +217,11 @@ export function imageRecipe(f, text = '') {
   const m = /(?:^|\/)images\/([^/]+)\//.exec(f)
   if (m && RESEARCH_IMAGE.test(m[1])) return false
   if (/^(Dockerfile|Containerfile)/i.test(b) && RESEARCH_LABEL.test(text)) return false
+  const d = /^(.*?(?:^|\/)images\/[^/]+)\//.exec(f)
+  if (d && b !== 'Dockerfile') {
+    const df = readDockerfile(d[1])
+    if (df && RESEARCH_LABEL.test(df)) return false
+  }
   return true
 }
 const stripHash = (text) => text.replace(/(^|\s)#[^\n]*/g, '$1')

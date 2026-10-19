@@ -292,7 +292,7 @@ SCORE_V1 = "d3-score-1"
 BOARD_CONFIG = "drone4d.bench.board_config.v1"
 BOARD_LOCK = "drone4d.bench.board_lock.v1"
 BOARD_EVALSTORE = "drone4d.bench.board_evalstore.v1"
-# 事件类型赛道 ↔ event_type（AWR-05 §5.6.9；M27 §15.3）
+# 事件类型赛道与 event_type 的对应（AWR-05 §5.6.9；M27 §15.3）
 EVENT_LANES = {"reid": "reid_occlusion", "handoff": "rendezvous_handoff", "vehicle": "vehicle_track", "search": "target_search"}
 # 评分版本：只定义分量与归一化，`weights = null`（ADR-191；Q-D3-19）；`rng` 为置信区间重采样随机数的派生方式，`lanes` 为赛道来源
 SCORE_VERSIONS = {

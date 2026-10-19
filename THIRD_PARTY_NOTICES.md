@@ -150,6 +150,7 @@ container images on the GPU server)
 | pyzmq | BSD-3-Clause; the wheels bundle libzmq (MPL-2.0) |
 | pillow | MIT-CMU |
 | av (PyAV) | BSD-3-Clause; the wheels bundle FFmpeg (built as LGPL-3.0-or-later) and codec libraries under their own licenses, among them x264 and x265 (GPL-2.0-or-later) |
+| datafusion (Apache DataFusion Python bindings, 54.0.0; the `catalog` extra of rerun-sdk) | Apache-2.0; the wheels bundle the Rust crates of Apache DataFusion and Apache Arrow under their own licenses |
 
 **D3 container images** (recipes in `tools/deploy/dmax/images/`; the images are used on the internal GPU server and are
 not published)
@@ -160,6 +161,7 @@ not published)
 | d3-sensorsvc | nvidia-nvimgcodec-cu12 (nvImageCodec, `requirements-nvjpeg.in`) | Apache-2.0 |
 | d3-sensorsvc | nvidia-nvjpeg-cu12, nvidia-cuda-runtime-cu12 (`requirements-nvjpeg.in`) | NVIDIA proprietary license (CUDA Toolkit EULA) |
 | d3-sensorsvc | cuda-bindings (`requirements-nvjpeg.in`) | NVIDIA Software License |
+| d3-sensorsvc | warp-lang (NVIDIA Warp 1.17.0, `requirements-warp.in`) | Apache-2.0, Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES; the wheel bundles NVRTC and libmathdx under NVIDIA licenses and other components under their own licenses (listed in its `licenses/` directory) |
 | d3-gz | gz-sim 8 (Harmonic) and the gz-* libraries, from the ROS 2 Jazzy vendor packages | Apache-2.0 |
 | d3-gz | Ogre-Next, Assimp (gz rendering dependencies) | MIT, BSD-3-Clause |
 | d3-gz | ZeroMQ (libzmq), Protocol Buffers, Eigen (linked by `libDrone4DGz.so`) | MPL-2.0, BSD-3-Clause, MPL-2.0 |
@@ -299,6 +301,12 @@ Attribution required by the data sources (https://github.com/tilezen/joerd/blob/
 - SRTM terrain data courtesy of the U.S. Geological Survey;
 - Europe terrain data produced using Copernicus data and information funded by the European Union - EU-DEM layers.
 
+The levelling QA of `oryahovo-crop1` cross-checks the result against the Copernicus DEM GLO-30 tile
+`Copernicus_DSM_COG_10_N43_00_E023_00_DEM.tif` (AWS open data, https://registry.opendata.aws/copernicus-dem/; sha256 in
+`configs/worlds.d3/raw-manifest.json`). It is used only to compute QA statistics and is not redistributed:
+"Produced using Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018 provided
+under COPERNICUS by the European Union and ESA; all rights reserved."
+
 `hill-01` (D3.x) takes `hMslM` from EU-DEM 25 m (Copernicus) and credits it in the same way.
 
 ### MARS-LVIG (internal research only)
@@ -311,7 +319,7 @@ The other public reference sets of `configs/refsets.d3/` are used the same way (
 中文：D3 世界包由 Sketchfab 上以 CC BY 4.0 发布的摄影测量模型构建（oryahovo-crop1、smalltown-01 为 Mitko @bg3d，hill-01 为
 Dok11 @dok11），源模型与世界包不入库，对外发布的派生制品保留作者、链接与许可，并注明"经修改（米制标定、调平、派生）"；
 OpenStreetMap 派生数据（配准证据、anchors、navgraph）单独标注 ODbL-1.0 与"OpenStreetMap contributors"；高程瓦片取自
-AWS Terrain Tiles（SRTM 与 EU-DEM）；MARS-LVIG 只作内部回归，不再分发。
+AWS Terrain Tiles（SRTM 与 EU-DEM），crop 调平交叉核对另用 Copernicus DEM GLO-30（只算 QA 统计量，不再分发）；MARS-LVIG 只作内部回归，不再分发。
 
 ## 5. Brand assets
 

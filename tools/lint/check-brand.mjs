@@ -4,7 +4,8 @@
 //   BRAND-01 every file in apps/web/public/brand/ matches brand.lock.json (sha256), and anet-logo.svg is byte-identical to
 //            refs/design/ANet/docs/media/anet-logo.svg (not recoloured)
 //   BRAND-02 brand assets are referenced only from the AWR-15 §4.2 placements (AppHeader, loading overlay, about dialog,
-//            empty states, report cover, favicon in index.html); the badge must not be rendered inside [data-viewport]
+//            empty states, report cover, favicon in index.html; the header and boot mask of the /lab/ public build); the badge
+//            must not be rendered inside [data-viewport]
 //   BRAND-03 no avatars.githubusercontent.com anywhere under apps/web
 // Until M15 delivers public/brand/brand.lock.json the lock comparison is reported as a note, not a failure
 // (use --strict to fail).
@@ -18,9 +19,11 @@ const BRAND_DIR = 'apps/web/public/brand'
 const LOCK = `${BRAND_DIR}/brand.lock.json`
 const REF_LOGO = 'refs/design/ANet/docs/media/anet-logo.svg'
 const ASSET_RE = /(?:\/brand\/[\w.-]*|anet-logo\.svg|avatar-(?:96|460)\.png|anet-avatar[\w.-]*)/g
-// AWR-15 §4.2 placements (file name patterns under apps/web/src) plus index.html for the favicon
-const PLACEMENTS = [/\/ui\/layout\/AppHeader[^/]*$/, /LoadingOverlay[^/]*$/, /LoadingMask[^/]*$/, /AboutDialog[^/]*$/, /EmptyState[^/]*$/,
-  /ReportCover[^/]*$/, /\/ui\/brand\/[^/]+$/, /^apps\/web\/index\.html$/]
+// AWR-15 §4.2 placements (file name patterns under apps/web/src) plus index.html for the favicon and the boot mask. The /lab/
+// public read-only build (ADR-129; vite VITE_AWR_LAB_ONLY, base /lab/) has the same two placements in its own files: the header
+// lock-up in lab-public/LabHeader.tsx and the boot mask and favicon in lab-public/index.html (nothing else under lab-public/)
+export const PLACEMENTS = [/\/ui\/layout\/AppHeader[^/]*$/, /LoadingOverlay[^/]*$/, /LoadingMask[^/]*$/, /AboutDialog[^/]*$/, /EmptyState[^/]*$/,
+  /ReportCover[^/]*$/, /\/ui\/brand\/[^/]+$/, /^apps\/web\/index\.html$/, /^apps\/web\/src\/app\/lab-public\/(?:LabHeader\.tsx|index\.html)$/]
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex')
 // Module specifiers of import / export / import() are code paths (for example `@/ui/brand/PanelEmpty`), not asset
 // references; they count only when the specifier itself names an image file (request M15-to-M00 item 3).

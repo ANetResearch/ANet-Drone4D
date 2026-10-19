@@ -1091,7 +1091,7 @@ stateDiagram-v2
 | 对象 | 状态 | 迁移 |
 |---|---|---|
 | 批量 Episode 任务 | QUEUED → RUNNING → DONE；RUNNING → RETRYING（720，首次）→ RUNNING；RETRYING 后再失败 → FAILED_INFRA；策略失败 → DONE（`failure.policy`） | 由 `BatchHost` 推进；结果按 `episode_id` 归位 |
-| Agent 端点 | CREATED → RESET（`reset` 返回）→ READY → CALLING ⇄ READY → CLOSED；CALLING → FAILED（异常、协议错误、watchdog） | FAILED 使 Episode 进入 FAILED_POLICY 或 FAILED_INFRA |
+| Agent 端点 | CREATED → RESET（`reset` 返回）→ READY → CALLING → READY（往复）→ CLOSED；CALLING → FAILED（异常、协议错误、watchdog） | FAILED 使 Episode 进入 FAILED_POLICY 或 FAILED_INFRA |
 
 #### 6.4.4 阶段写权限矩阵（R-M28-13）
 

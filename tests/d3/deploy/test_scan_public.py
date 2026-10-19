@@ -218,6 +218,28 @@ def test_lab_only_build_is_clean(tmp_path: Path) -> None:
     assert k9.returncode == 0, k9.stdout + k9.stderr
 
 
+def test_parity_trees_resolve_workspace_packages_to_their_own_copy(tmp_path: Path) -> None:
+    """d2-parity 两侧都导出 packages/contracts，``@awr/*`` 指向各自副本，第三方包逐项链接本检出（G05 发现 5）"""
+    assert "packages/contracts" in sp.PARITY_PATHS
+    root = tmp_path / "root"
+    (root / "packages" / "contracts").mkdir(parents=True)
+    (root / "node_modules" / "three").mkdir(parents=True)
+    (root / "node_modules" / ".bin").mkdir()
+    (root / "node_modules" / ".vite-temp").mkdir()
+    (root / "node_modules" / "@awr").mkdir()
+    (root / "node_modules" / "@awr" / "contracts").symlink_to("../../packages/contracts", target_is_directory=True)
+    for side in ("ref", "cur"):
+        tree = tmp_path / side
+        _w(tree, "packages/contracts/package.json", f'{{"name": "@awr/contracts", "side": "{side}"}}')
+        sp.link_node_modules(tree, root)
+        nm = tree / "node_modules"
+        assert (nm / "three").resolve() == (root / "node_modules" / "three").resolve()
+        assert (nm / ".bin").is_symlink() and not (nm / ".vite-temp").exists()
+        assert not (nm / "@awr").is_symlink()
+        assert (nm / "@awr" / "contracts").resolve() == (tree / "packages" / "contracts").resolve()
+        assert json.loads((nm / "@awr" / "contracts" / "package.json").read_text())["side"] == side
+
+
 def test_d2_demo_build_parity(tmp_path: Path) -> None:
     """扩展点 15：开关缺省关闭时 d3-dev 的演示构建与 D2 标签 v0.2.1 的演示构建逐字节一致（D3-AC-01，UX-AC-082）"""
     _need_node()

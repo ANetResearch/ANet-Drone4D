@@ -48,7 +48,7 @@ def notice_text(world: dict, lang: str = "en") -> str:
                      f"以 {_lic(str(d.get('license', '')), True)} 授权使用；来源：{d.get('url', '未登记')}。")
         lines.append("本世界包相对原始资产经过修改：米制标定、调平、世界坐标系重表达及派生资产（点云、栅格、求交网格、外观网格等）。")
         if any(e.get("license") == ODBL for e in df):
-            lines.append("由 OpenStreetMap 派生的图层（锚点、道路图与相关质量多边形）以 ODbL-1.0 提供，© OpenStreetMap contributors。")
+            lines.append("由 OpenStreetMap 派生的图层（锚点、道路图与相关质量多边形）以 ODbL-1.0 提供，\u00a9 OpenStreetMap contributors。")
         lines.extend(f"派生来源：{e.get('name')}（{e.get('version')}），许可 {_lic(str(e.get('license')), True)}，"
                      f"署名 {e.get('attribution')}，用途 {e.get('use')}" + (f"，{e['url']}" if e.get("url") else "") + "。" for e in df)
     else:
@@ -58,7 +58,7 @@ def notice_text(world: dict, lang: str = "en") -> str:
                      "frame and derived assets (point cloud, rasters, ray-cast mesh, appearance mesh and others).")
         if any(e.get("license") == ODBL for e in df):
             lines.append("Layers derived from OpenStreetMap (anchors, road graph and related quality polygons) are provided under ODbL-1.0, "
-                         "© OpenStreetMap contributors.")
+                         "\u00a9 OpenStreetMap contributors.")
         lines.extend(f"Derived from {e.get('name')} ({e.get('version')}), licence {_lic(str(e.get('license')), False)}, "
                      f"attribution: {e.get('attribution')}, used for {e.get('use')}" + (f", {e['url']}" if e.get("url") else "") + "."
                      for e in df)
