@@ -4305,10 +4305,10 @@ flowchart TB
 |---|---|---|---|---|---|
 | `/lab/login` | 工作区登录 | P0a | 无 | 不提供 | `next`（登录后跳转，只接受 `/lab` 前缀的相对路径） |
 | `/lab` | 工作区首页 | P0a | 研究者 | 只读（无队列与资源卡片） | — |
-| `/lab/worlds`、`/lab/worlds/:wid` | 世界列表与详情 | P0a | 研究者 | 只读 | `tab ∈ {overview, calibration, quality, layers, license}` |
-| `/lab/events`、`/lab/events/:eid` | 事件列表、事件时间线与编辑器 | P0a 只读；P1 编辑与新建 | 研究者（编辑：研究者，本人及所属项目） | 只读回放（只显示脚本演员） | `v`（版本）、`draft`（草稿 id，P1）、`t`（仿真秒）、`actor` |
+| `/lab/worlds`、`/lab/worlds/:wid` | 世界列表与详情 | P0a | 研究者 | 只读 | `tab ∈ {overview, calibration, quality, layers, license, sensors}`（v1.6，F02：`sensors` 为传感器提示，与 §21.3.2 表第 5 行一致） |
+| `/lab/events`、`/lab/events/:eid` | 事件列表、事件时间线与编辑器 | P0a 只读；P1 编辑与新建 | 研究者（编辑：研究者，本人及所属项目） | 只读回放（只显示脚本演员） | `v`（版本）、`draft`（草稿 id，P1）、`t`（仿真秒）、`actor`；v1.6（F02）：列表页另有 `eid`、`v`，打开编译详情侧栏 |
 | `/lab/experiments/new` | 机队与策略配置 | P1 | 研究者 | 不提供 | `event`、`v`、`from`（复制已有 Run 规格） |
-| `/lab/runs` | 运行列表与状态 | P0a | 研究者 | 不提供 | `event`、`xp`、`policy`、`state`、`ranked`、`cursor` |
+| `/lab/runs` | 运行列表与状态 | P0a | 研究者 | 不提供 | `event`、`xp`、`policy`、`state`、`ranked`、`cursor`；v1.6（F02）：`run`，打开运行状态侧栏 |
 | `/lab/runs/:rid` | 多机观测墙 | P0a | 研究者 | 只读（观测层，无真值叠加） | `t`、`uav`、`grid ∈ {1, 4, 9, 16}`、`page`、`view ∈ {obs, eval}`、`cam` |
 | `/lab/runs/:rid/lidar` | LiDAR 与重建对比 | P0b | 研究者 | 只读（预计算；Tier S 点云降级） | `uav`、`src`（`gt,l0,livo` 的子集）、`rep`、`mode ∈ {livo, lio}` |
 | `/lab/runs/:rid/inspect` | 运行回放 · 数据检视 | P0b（v1.3 由 P1 前移） | 研究者（评测 catalog：评测员） | 公开样例使用 `/lab/samples/:sid` 内的同一面板（Tier B/A，`public` 档切片） | `t`、`slice`、`catalog ∈ {dist, eval}` |
@@ -4319,7 +4319,7 @@ flowchart TB
 | `/lab/samples`、`/lab/samples/:sid` | 样例目录与样例运行（公开站，v1.3） | P0b | —（内部构建重定向到 `/lab/runs/:rid`） | 只读：事件回放、多机私有视角、样例数据检视 | `t`、`uav`、`grid` |
 | 其他 `/lab/*` | — | — | — | — | 重定向 `/lab` 并 Toast"页面不存在，已打开事件沙盘首页" |
 
-1. 路由 id 一律以 `lab` 前缀登记在 `app/router/table.ts`（扩展点 15 只负责演示构建的路由集合与导航入口，路由本身在 `app/routes/lab*.tsx`，属 M15 新增路径）；`/lab/runs/:rid` 中 `:rid` 满足 `^run-[a-z2-7]{10}$`，`/lab/events/:eid` 中 `:eid` 满足 `^[a-z][a-z0-9-]{2,63}$`，不满足时回到对应列表页。
+1. 路由 id 一律以 `lab` 前缀登记在 `app/router/table.ts`（扩展点 15 只负责演示构建的路由集合与导航入口，路由本身在 `app/routes/lab*.tsx`，属 M15 新增路径；v1.6，F02：路由不再只在 `app/routes/lab*.tsx`。lab 路由分片：每个 lab 功能新增 `app/routes/lab/<feature>.route.ts`（导出 `route`，经 `routes/lab/lab.ts` 的 `labRoute()` 定义，id 以 `lab-` 为前缀），由 `app/router/table.ts` 的第二个 glob 收集；`VITE_AWR_EXT_ROUTES` 写组名 `lab` 时交付全部分片，旧式 `lab*.tsx` 仍按 id 交付；演示构建以 `labStripPlugin` 清空该 glob 并常量折叠，产物与 D2 逐字节一致）；`/lab/runs/:rid` 中 `:rid` 满足 `^run-[a-z2-7]{10}$`，`/lab/events/:eid` 中 `:eid` 满足 `^[a-z][a-z0-9-]{2,63}$`，不满足时回到对应列表页。
 2. `t` 以仿真秒表示（`t = 37.25`），打开后 seek 到该时刻；`view = eval` 在角色不足时静默改为 `obs` 并 Toast"当前角色无权查看评测视图（115 ROLE_FORBIDDEN）"。
 3. URL 写入沿用 §2.2：播放头与选择以 `history.replaceState` 节流 1 Hz 写入；路由切换用 `pushState`。
 4. 页面标题：`<页面> · 事件沙盘 · ANet Drone4D`；运行页为 `<运行 id> · 观测墙 · 事件沙盘 · ANet Drone4D`；公开只读构建在产品名后加"公开站"（例如"数据集 · 事件沙盘 · ANet Drone4D 公开站"）。
@@ -4434,7 +4434,7 @@ async function resolveLabSurface(build: LabBuild, route: Route): Promise<LabSurf
 
 #### 21.4.1 事件列表（`/lab/events`，P0a）
 
-`LfTable`（table.log 皮肤）列：事件 id、名称、世界、最新版本、状态、strict、时长、脚本演员、背景演员、磁带 `content_sha256` 前 12 位（等宽）、被引用运行数、更新于。筛选：世界、状态、所有者（本人、项目、全部）、关键字。行点击进入时间线；"新建事件"（P1，研究者）创建草稿并进入编辑器。状态显示名见 §21.15.4。
+`LfTable`（table.log 皮肤）列：事件 id、名称、世界、最新版本、状态、strict、时长、脚本演员、背景演员、磁带 `content_sha256` 前 12 位（等宽）、被引用运行数、更新于。筛选：世界、状态、所有者（本人、项目、全部）、关键字。行点击进入时间线；"新建事件"（P1，研究者）创建草稿并进入编辑器。状态显示名见 §21.15.4。v1.6 实现口径（F02）："所有者"筛选与"被引用运行数"列待 BN-20 增加 `owner` 与 `runs_count` 字段后提供（AWR-17 §18.5 同步）；P0a 中事件行点击打开编译详情侧栏，时间线页 `/lab/events/:eid` 另行交付。
 
 #### 21.4.2 事件时间线与编辑器线框（`/lab/events/:eid`，1920 × 1080，P1 编辑态）
 
@@ -4646,6 +4646,8 @@ const RULES: ((s: RunSpecDraft, ctx: Ctx) => Issue | null)[] = [
 | 资源 | GPU 份额、M25 等待（s）、写入阻塞占比 | 只在运行中与收尾中显示 |
 | 原因 | 原因码与短文案（§21.15.6），悬停显示 `remedy` | FAILED、CANCELLED |
 | 操作 | `DropdownMenu`：打开、复制规格、取消（非终态）、重试（FAILED、CANCELLED）、导出（COMPLETED） | 取消与重试需 `AlertDialog` 确认；按钮文案"取消运行""重试运行" |
+
+v1.6 实现口径（F02，P0a）：进度列为"排队第 {n} 位 · 等待：{blocked_by}"，取消请求后为"取消中 · {s} s 内终止"（超时提示等待调度器）；20 格刻度条、`T+mm:ss`、预计开始时刻、资源列、"复制规格"与"导出"待 BN-42 提供仿真进度与资源字段及导出接口后补齐（D3.x）；列表整页轮询，有未结束运行且页面可见时 5 s，否则 30 s；行点击时有帧数据进入观测墙，否则打开状态侧栏。
 
 批量操作：多选后"取消所选运行（{n}）"；确认对话框标题"取消 {n} 个运行？"，正文"已开始的运行将在 10 s 内终止，已写入的录制保留 14 天。"。列表页不订阅逐运行 topic（避免订阅数随行数增长），只有可视区内运行中的行每 5 s 以 `GET /runs?ids=` 刷新。
 
@@ -5239,7 +5241,7 @@ GitHub About：一句话描述（≤ 120 字符，无营销用语）；topics �
 
 ### 21.19 文案（新增键，中文与英文）
 
-D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不再推迟到 V1.0，§21.27 第 10 条）；键名前缀 `lab.`；原因码 600–699 的短文案由 `reasons.json` 生成（`reasons.zh-CN.gen.json` 与英文对应文件）。
+D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不再推迟到 V1.0，§21.27 第 10 条）；键名前缀 `lab.`；原因码 600–699 的短文案由 `reasons.json` 生成（`reasons.zh-CN.gen.json` 与英文对应文件）。v1.6（F02）：D3 lab 文案按功能分片：`app/i18n/lab/<feature>.zh-CN.json` 与 `.en.json` 成对、同键，键前缀 `lab.`，跨分片唯一且不与 `zh-CN.json`、`en.json` 重复；运行时由 `app/i18n/index.ts` 按文件名序合并；演示构建不含分片（`tests/lab/worlds.test.ts` 校验）。英文界面目前不显示原因码处理建议，建议 `rt/reasons.json` 增加 `remedy_en`（AWR-17 §18.12，AWR-05 §25.5）。
 
 | 键 | 中文 | English |
 |---|---|---|
@@ -5467,7 +5469,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | UX-AC-098 | 数据集浏览（D3-AC-24、50） | 树、摘要与表格数据与接口一致；种子 < 10 的指标带提示；下载区显示许可与署名；test 划分条目 0 个 | Playwright `lab/datasets` | 本机 B | P0 |
 | UX-AC-099 | 内部排行榜与提交（v1.3；D3-AC-43、57、59） | 排行榜按分轨与榜单版本显示 S、置信区间、四分量与并列组，基线行不占名次；提交 Sheet 显示推送命令、分轨与配额，配额不足时禁用并显示 681；撤回只在评测前可用；公开构建中不存在排行榜与提交路由与字符串 | Playwright（`fake_bench`）`lab/leaderboard`、`lab/submissions`、构建扫描 | 本机 B | P0 |
 | UX-AC-100 | lab 播放头 | 三种来源切换正确；Tier S 写 store ≤ 4 Hz；缓冲门限 500 ms；实时运行不可 seek | `tests/lab/playhead.test.ts` | 本机 S | P0 |
-| UX-AC-101 | 公开站回放（D3-AC-19、21） | 前端磁带解码的脚本演员位置与内部回放差 ≤ 5 cm；状态切换处无滑移；机队位置取 `tracks_obs.bin` | Playwright `lab/public-replay` | 本机 S | P0 |
+| UX-AC-101 | 公开站回放（D3-AC-19、21） | 前端磁带解码的脚本演员位置与内部回放差 ≤ 5 cm；状态切换处无滑移；机队位置取 `tracks_obs.bin`；单元级证据为 `apps/web/tests/m06/tape_replay.test.ts`（v1.6，B08，golden `packages/contracts/golden/event/tape-replay.{bin,json}`，实测最大差约 5 µm） | Playwright `lab/public-replay` | 本机 S | P0 |
 | UX-AC-102 | 公开站约束（D3-AC-21） | 全部公开页的请求只含 `/lab/` 与 `/lab-static/` 的 GET；WS 数 0；公开只读构建分块中不含 `/api/bench/v1/runs`、`/events`、`/session` 字符串 | Playwright `lab/public`、分块扫描 | 本机 S | P0 |
 | UX-AC-103 | 移动布局 | tablet 与 phone 模拟下布局符合 §21.14.3；命中区审计 0 违例；无横向滚动 | Playwright（设备模拟） | 本机 S | P1 |
 | UX-AC-104 | 文案（D3-AC-23、46） | copy-lint 中英文规则集 0 error；基线例外在 P0b 出口前为 0；README 结构符合 §21.15.8；评审清单记录存在 | `make lint`、评审记录 | 本机 | P0 |
@@ -5754,5 +5756,5 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 |---|---|---|
 | §1、§3 等 D1 章节 | "数字沙盘"（Web 应用主工作面的设计用语） | 用户可见称谓为"三维场景视图"；"数字沙盘"只作 D1 设计史用语，不进入界面字符串 |
 | §20.2.2 路由表"视图"列 | `/world/:id` 为"沙盘"；`/sandbox/:sid` 为"沙盘（沙盒）" | `/world/:id` 为"三维场景视图"；`/sandbox/:sid` 为"交互沙盒" |
-| UX-AC-039 | 按钮"在沙盘中打开" | "在三维场景视图中打开"；界面字符串与 e2e 断言随 D2 发布面文案复核同一变更修改（D3-AC-46） |
-| §0 至 §20 的界面字符串中以"沙盘"指 D1 视图的其他键 | 例如窗口过窄提示"数字沙盘要求窗口宽度……" | 改为"三维场景视图"或"本应用"，随 D2 发布面文案复核修改（CL-ZH-04） |
+| UX-AC-039 | 按钮"在沙盘中打开" | "在三维场景视图中打开"；界面字符串与 e2e 断言随 D2 发布面文案复核同一变更修改（D3-AC-46）（v1.6，L02：已修改，`jobs.openInSandbox` 为"在三维场景视图中打开"，回归测试 `tests/e2e/test_release_copy.py`） |
+| §0 至 §20 的界面字符串中以"沙盘"指 D1 视图的其他键 | 例如窗口过窄提示"数字沙盘要求窗口宽度……" | 改为"三维场景视图"或"本应用"，随 D2 发布面文案复核修改（CL-ZH-04）（v1.6，L02：已修改，涉及键 `jobs.subtitle`、`shell.tooSmallHint`、`ff.narrowHint` 与 `landing.story.digital-twin.alt`；窄窗提示统一为"本应用要求窗口宽度不小于 360 CSS px"） |

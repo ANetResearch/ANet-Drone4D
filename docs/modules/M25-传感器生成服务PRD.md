@@ -698,6 +698,7 @@ def render_camera_frame(ctx, sess, req) -> tuple[CameraObsInt, CameraTruth]:
 | 位姿 | 位置取 `ActorStates.pos_enu_m`（z 已由磁带按网格贴地），偏航取 `yaw`；俯仰与横滚为 0 |
 | 可见性 | `state ∈ {1 移动, 2 等待}` 时绘制；`0 缺席`、`3 在车内`、`4 在建筑内`、`5 离场` 时不绘制 |
 | 实例号 | 演员磁带序号 idx + 1（u16，1..65533）；0 为静态场景；65534、65535 保留 |
+| 时间基准（v1.4，S07） | 采集作业中相机与 LiDAR 的演员状态只来自 `capture.ActorClock`，以整数采集时刻为键；只有完全相同的纳秒时刻才复用结果 |
 | 语义 | `d3-semantic@1` 的演员类别码（§6.4.6） |
 | 着色 | `c = albedo · (k_amb + k_dif · max(0, n · L_sun))`，`L_sun` 由 `bakedSunAzElDeg` 给出，`k_amb = 0.55`、`k_dif = 0.45`（使朝阳面与背景贴图的晴天亮度相当，P0a 以样张评审标定） |
 | 深度偏置 | 演员片元参与深度测试的值朝相机偏置 1 cm，消除脚底与地面的深度并列；平面深度附件写无偏置值 |
@@ -744,6 +745,8 @@ def render_camera_frame(ctx, sess, req) -> tuple[CameraObsInt, CameraTruth]:
 | 合计 | 约 3.9 ms（约 255 帧/s 上限） | 约 10.8 ms（约 92 帧/s 上限） | 阈值 ≥ 120 与 ≥ 80 帧/s 留有余量（AWR-05 §5.4.3） |
 
 ### 6.5 相机：效果链与 ISP
+
+> v1.4 实现状态（S09）：`raster-gl@0.4.1` 只实现增益与自动曝光、渐晕、噪声、ISP；畸变、雾、接触阴影、雨与 2048² 投影阴影图尚未实现（`build_remap` 已有 CPU 实现但未接入 GPU 路径，§6.5.7），§6.7 要求的 PBO 异步读回也未实现。封板任务未覆盖上述项，补齐前 D3-AC-11 不能通过；`tools/bench/d3/camera_throughput.py` 对缺失项以 GPU 代价代理遍计时，结果标注 `fx_proxy`，只作开发参考（AWR-05 §25.5 F-15）。
 
 #### 6.5.1 顺序
 
@@ -835,7 +838,7 @@ def build_remap(cm: CameraModel, max_ratio=1.35):
     return RemapTable(W_r, H_r, fx_r, fy_r, cx_r, cy_r, map=(u_r, v_r))
 ```
 
-`dist` 全零时不建表，渲染相机等于交付相机，重映射为恒等（直接读回）。映射表按 `CameraModel` 哈希缓存。验收：已知三维点经 `cv2.projectPoints(K, dist)`（主点换算到 OpenCV 约定后）投影位置与实例质心之差 ≤ 0.5 px，RGB 与深度、实例、语义的边缘对齐误差 ≤ 0.5 px（M25-AC-006）。
+`dist` 全零时不建表，渲染相机等于交付相机，重映射为恒等（直接读回）。映射表按 `CameraModel` 哈希缓存。v1.4 实现状态（S03）：`build_remap` 已在 `awr.sensorsvc.camera.proj` 实现（CPU，带缓存），尚未接入 GPU 渲染路径。验收：已知三维点经 `cv2.projectPoints(K, dist)`（主点换算到 OpenCV 约定后）投影位置与实例质心之差 ≤ 0.5 px，RGB 与深度、实例、语义的边缘对齐误差 ≤ 0.5 px（M25-AC-006）。
 
 ### 6.6 相机真值
 
@@ -919,7 +922,7 @@ def build_remap(cm: CameraModel, max_ratio=1.35):
 | 静态网格 | M22 `raycast` 网格（`awr-trimesh@1`）按瓦片建 Warp `Mesh`（BVH `cubql`，town 约 0.26 s）；顶点为瓦片局部 float32 |
 | 侧表 | 每面：材质号 u16、三个角点 UV（float32）、语义码 u8、质量位 u8（M22 提供，§14 第 8 条） |
 | 反射率纹理 | 每材质由 RGB 预计算线性亮度 L（u8）与烘焙阴影掩膜，缓存键 `(contentVersion, reflectance_model)`（§6.8.4） |
-| 动态实体 | 每类一个局部系 Warp `Mesh`（与相机共用资产）；≤ 64 个近邻实例化；> 64 个或带骨骼动画时使用合并网格并每 10 ms 切片 refit（256 个实体 0.27 ms，r4 §4.3） |
+| 动态实体 | 每类一个局部系 Warp `Mesh`（与相机共用资产）；≤ 64 个近邻实例化；> 64 个或带骨骼动画时使用合并网格并每 10 ms 切片 refit（256 个实体 0.27 ms，r4 §4.3）。v1.4 实现状态（S12）：当前全部候选实体一律实例化，> 64 个的 refit 路径移至 D3.x |
 | 显存 | town 静态网格约 0.6 GB（`cubql`），每世界加反射率纹理约 0.3 GB |
 
 #### 6.8.3 单帧求交内核
@@ -956,9 +959,22 @@ def k_mesh_lidar(...):
 
 随后以 GPU 前缀和压缩有效点（Warp `array_scan`，确定性），只把有效点与真值槽位数组拷回（r4 §4.4）。
 
+v1.4 实现说明（S12，产品路径 `python/awr/sensorsvc/lidar/warp_mesh.py`，`WarpMeshLidar`、`open_mesh_lidar`，`AWR_LIDAR_BACKEND` = auto \| warp \| cpu）：
+
+1. 内核分三段：射线生成（float64）、静态求交、演员与回波。
+2. 候选瓦片以 float32 slab 检测对外扩 1 m 的 AABB 判定；float64 slab 会使 A40 上的内核时间加倍。
+3. 命中距离在命中三角形所在平面上以 float64 重算，公式与 `query._plane_t` 相同。
+4. 演员位姿取自主机侧按 CPU 参考 `_ActorTrack` 构建的分段表：拉格朗日三次分段，磁带帧边界附近直接取样，按每条射线自身的时刻求值；GPU 各段执行期间在主机上重建航迹。
+5. 扫掠球检测为 float32，半径外扩 5 cm，得到的候选集合是 CPU 候选集合的超集。
+6. 有效点在设备上压缩，经固定页主机环形缓冲区拷回；`scan_batch(copy=False)` 返回该环形缓冲区的视图。
+
+对拍（`tests/d3/sensorsvc/test_mesh_lidar_gpu.py`）：命中不一致 0，距离差 p99 ≤ 1.9e-6 m、最大 ≤ 7.6e-6 m。
+
 位姿节点：K = 11 时节点时刻为 `t_s + 10 ms · m`（m = 0..10），每个节点的位姿按 §6.2.5 由 PoseHistory 以 slerp 求得；`pose_nodes = native` 时节点为帧内全部物理步样本加两端插值点（250 Hz 时 27 个）。
 
 #### 6.8.4 回波模型与反射率（`sem_table_v1`）
+
+> v1.4 实现状态（S12）：纹理亮度调制与烘焙阴影补偿在 CPU 与 GPU 两条路径中均未实现，P0a、P0b 登记为未实现；补齐时两条路径必须同时修改。
 
 ```text
 命中静态面：cls = face_class[hit_face]；L = 双线性(反射率亮度纹理, uv)；sh = 阴影掩膜(uv)
@@ -977,6 +993,8 @@ def k_mesh_lidar(...):
 - `ρ_sem` 见 §6.4.6；置信度 C，待真机标定；模型名 `reflectance_model = sem_table_v1` 写入 Run 规格 `versions` 与 D3-AC-14 报告。
 
 #### 6.8.5 天气（905 nm）
+
+> v1.4 实现状态（S12）：harsh 档近场鬼影回波与雨致测距噪声因子 (1 + k_β·β·r) 在 CPU 与 GPU 两条路径中均未实现，P0a、P0b 登记为未实现；补齐时两条路径必须同时修改。
 
 ```text
 雾（Kim）：β_fog = 3.912 / V · (905 / 550)^(−q)，q = 1.6（V > 50 km）、1.3（6–50 km）、0.16·V_km + 0.34（1–6 km）、V_km − 0.5（0.5–1 km）、0（< 0.5 km）
@@ -1383,7 +1401,7 @@ M25 复用 `awr.sim.sensors.cbrng` 的 SplitMix64 逐级派生（`key(seed, stre
 | `depth_noise` | 0x1400–0x14FF | L2-depth 深度噪声 |
 | `therm_temporal`（v1.4） | 0x1500–0x15FF | 热成像时间噪声帧键（+ sensor_no），frame_index = 帧序号 |
 | `therm_fpn`（v1.4） | 0x1600–0x16FF | 固定图案噪声键（+ sensor_no），frame_index = 0；逐像素计数 `pix · 2 + c`（c = 0 偏置，1 增益） |
-| `lidar` | 0x2000–0x20FF | LiDAR 帧键；逐射线子通道 CH_ANG 0–1、CH_DET 2、CH_RANGE 3、CH_GHOST 4–5、CH_FA 6–7 |
+| `lidar` | 0x2000–0x20FF | LiDAR 帧键；逐射线子通道（v1.4 按实现修订，S12）：0 检测（CH_DET）、1 测距（CH_RANGE）、2 角度（CH_ANG）、3 虚警判定、4 虚警距离（CH_FA），5–7 空闲（建议 5–6 留给 CH_GHOST）；CPU 参考 `mesh.py` 与 GPU 路径一致。原表（CH_ANG 0–1、CH_DET 2、CH_RANGE 3、CH_GHOST 4–5、CH_FA 6–7）与代码不符，按代码修订以免改变现有全部 LiDAR golden |
 | `imu` | 0x3000–0x37FF | sensor_no · 32 + c（c 见 §6.9.2） |
 | `gnss` | 0x3800–0x3FFF | sensor_no · 16 + c（c 见 §6.9.3） |
 | `nav` | 0x4000–0x40FF | 导航解误差：sensor_no · 16 + c（0–2 位置白噪声、3–5 速度白噪声、6–8 姿态 GM） |
@@ -2039,8 +2057,8 @@ tests/d3/{sensors,lidar,slam,camera_pkg,rotorpy,gs}/                    # 测试
 | M25-AC-002 | P0 | P0a | Rig 与位姿查询 | 请求时刻早于首样本或晚于末样本返回 646（不外推，断言覆盖全部后端）；曝光与读出之和超过帧周期、`slam_cam` 带云台或非全局快门、未知型号返回 649；`pose_at` 与解析轨迹（匀速直线、匀角速度）比较位置误差 ≤ 1e-9 m、姿态误差 ≤ 1e-9 rad | `tests/d3/sensors/test_pose.py` | 本机 | 09 |
 | M25-AC-003 | P0 | P0a | 触发网格与时间戳 | 帧率 10、12.5、15、20、30 Hz 对 10 Hz tick：1 h 仿真内 `t_end,k` 与有理数公式逐纳秒一致（第 `f·3600` 帧恰为 `t0 + 3600 s`），交付 tick 正确；`t_mid` 为整数纳秒且等于公式值；卷帘行时刻与子帧时刻与 §6.2.3 一致（≤ 1 ns 取整误差）；帧时间戳与触发网格误差为 0 | `tests/d3/sensors/test_trigger.py` | 本机 | 09 |
 | M25-AC-004 | P0 | P0a | 投影几何 | 无遮挡、无截断的构造视角下，演员网格三维质心投影与只渲染该演员一遍的掩膜质心之差 ≤ 1 px（720p）；已知标记顶点在实例图中的像素位置误差 ≤ 1 px；标记掩膜亚像素质心与 D2 `CameraGeom.project` 之差 ≤ 0.1 px；变焦帧的交付 `K` 与渲染一致 | `tests/d3/sensors/test_multiview.py` | dmax（单卡绑定） | 09 |
-| M25-AC-005 | P0 | P0a | 遮挡与深度精度 | 60 个视角 × 5 个演员（r3 §5.2 配置）：联合 z-buffer 与两遍合成参照的实例 IoU 均值 ≥ 0.999；斜距 ≥ 300 m 时人与地面、人与贴墙立面的实例 IoU ≥ 0.99；1 km 处相距 2 cm 的两平面遮挡次序 100% 正确；平面深度与解析平面的差 p90 ≤ 1 mm（≤ 300 m） | `tests/d3/sensors/test_occlusion.py` | dmax（单卡绑定） | 09 |
-| M25-AC-006 | P0 | P0a | 畸变对齐 | `dist = (−0.12, 0.03, 0, 0, 0)` 时 RGB 与深度、实例、语义的边缘对齐误差 ≤ 0.5 px；已知三维点经 `cv2.projectPoints(K, dist)`（主点换算到 OpenCV 约定）的投影与实例质心之差 ≤ 0.5 px；`dist = 0` 时不建表且输出与无畸变路径逐字节一致 | `tests/d3/sensors/test_distortion.py` | dmax（单卡绑定） | 09 |
+| M25-AC-005 | P0 | P0a | 遮挡与深度精度 | 60 个视角 × 5 个演员（r3 §5.2 配置）：联合 z-buffer 与两遍合成参照的实例 IoU 均值 ≥ 0.999；斜距 ≥ 300 m 时人与地面、人与贴墙立面的实例 IoU ≥ 0.99；1 km 处相距 2 cm 的两平面遮挡次序 100% 正确；平面深度与解析平面的差 p90 ≤ 1 mm（≤ 300 m） | `tests/d3/sensors/test_multiview.py`（v1.4，S03：`test_joint_zbuffer_matches_two_pass`、`test_far_range_person_iou`；原登记 `test_occlusion.py`） | dmax（单卡绑定） | 09 |
+| M25-AC-006 | P0 | P0a | 畸变对齐 | `dist = (−0.12, 0.03, 0, 0, 0)` 时 RGB 与深度、实例、语义的边缘对齐误差 ≤ 0.5 px；已知三维点经 `cv2.projectPoints(K, dist)`（主点换算到 OpenCV 约定）的投影与实例质心之差 ≤ 0.5 px；`dist = 0` 时不建表且输出与无畸变路径逐字节一致 | `tests/d3/sensors/test_multiview.py`（v1.4，S03：`test_distortion_edge_alignment`、`test_build_remap_cover_ratio_and_identity`；原登记 `test_distortion.py`） | dmax（单卡绑定） | 09 |
 | M25-AC-007 | P0 | P0a | 多机多视角 | 同一磁带上 1 / 3 / 5 架三种机队配置（悬停、扫描、跟踪）产出的 RGB、深度、实例、语义帧摘要集合两两交集为空（起飞前地面帧除外）；渲染所用位姿全部取自已推进的 PoseHistory（不外推断言计数为 0） | `tests/d3/sensors/test_multiview.py` | dmax（单卡绑定） | 09 |
 | M25-AC-008 | P0 | P0a | 跨传感器时间一致与合批 | 构造穿越路口的演员：相机曝光中点与 LiDAR 逐点时刻所用的演员位置与 `TapeReader.actor_states(t)` 之差 ≤ 1 mm；合批计数器显示只有 `t_ns` 完全相同的帧共享实体状态；动态源不同的两个会话在同一世界、同一 `t_ns` 上从不合批；改变 sim-core stage 次序或时钟档不改变传感器读到的演员状态 | `tests/d3/sensors/test_time_consistency.py` | dmax | 10 |
 | M25-AC-009 | P0 | P0a | 可见度真值 | 与逐演员单独渲染的暴力参照比较：`px_visible`、`px_unoccluded`、`h_px_unocc`、`h_px_visible`、`bbox` 完全相等；`Σ occluder_sem_px = px_unoccluded − px_visible`；植被遮挡单列；被 `invalid_mask` 标记的像素不计入 | `tests/d3/sensors/test_visibility.py` | dmax（单卡绑定） | 18、30（支撑） |
@@ -2053,7 +2071,7 @@ tests/d3/{sensors,lidar,slam,camera_pkg,rotorpy,gs}/                    # 测试
 | M25-AC-016 | P0 | P0a | Worker 与会话生命周期 | 杀死 worker 后客户端 ≤ 5 s 收到 648，supervisor 重启后新会话可用；世界加载失败返回 645 且不影响同 worker 其他会话；显存超过上限时新会话排队、120 s 后 647；容器只见一张 GPU、设 `--memory`、命名符合 `d3-sensorsvc-gpu<N>` | `tests/d3/deploy/test_sensorsvc_worker.py` | dmax | 22 |
 | M25-AC-017 | P0 | P0a | 保密 | 以 canary 种子运行：worker 与客户端日志、指标、错误消息、预览帧、全部 `ObsFrame` 载荷中检索 run_seed（十进制、十六进制、小端 8 字节）命中 0；`ObsFrame` 载荷类型不含 §7.1.2 中标"评测库"或"真值文件"的字段（类型内省）；M26 以 ObsFrame 投影的 obs.v1 消息未知字段 0 | `tests/d3/leak_redteam/test_sensorsvc.py`（与 M26 共有） | dmax | 16 |
 | M25-AC-018 | P1 | P0a | `V1Adapter` | 装到 D2 v1 调用点时传感器位姿与 `FakeBackend.pose` 差 ≤ 1e-12；`poll` 返回 `SensorFrame` 且 `payload.frame` 通过 `frame.v1` 校验；`caps.raycast ∈ {mesh, render}` | `tests/d3/sensors/test_v1_adapter.py` | 本机（llvmpipe） | — |
-| M25-AC-019 | P0 | P0a | 资产与许可 | `assets/actors/manifest.json` 与 `LICENSES.md` 逐项对应；删除某资产的许可登记后加载返回 651；产品镜像清单中无 nvdiffrast | `tests/d3/sensors/test_assets.py`、镜像清单扫描 | 本机、dmax | 24 |
+| M25-AC-019 | P0 | P0a | 资产与许可 | `assets/actors/manifest.json` 与 `LICENSES.md` 逐项对应；删除某资产的许可登记后加载返回 651；产品镜像清单中无 nvdiffrast | `tests/d3/sensors/test_assets.py`、镜像清单扫描（`tools/deploy/dmax/scan_images.sh`，含 `d3-livo` 与 `d3-r3-camera-render` 自检对照，L04） | 本机、dmax | 24 |
 | M25-AC-020 | P0 | P0a | GNSS 与导航解 | 10⁵ 个样本：GM σ 与 τ（自相关拟合）相对误差 ≤ 5%，白噪声 σ ≤ 3%；harsh 多路径触发率与 1/60 s⁻¹ 相对误差 ≤ 20%；导航解误差统计与 §6.9.4 一致（≤ 5%）；`clean` 档误差恒为 0；每架机每仿真秒 CPU ≤ 0.5 ms | `tests/d3/sensors/test_gnss_nav.py` | 本机 | — |
 | M25-AC-021 | P0 | P0b | LiDAR 几何一致 | Warp 与 Open3D CPU 参考（均为瓦片局部原点 float32 求交，同一批射线）逐射线距离差 p99 ≤ 1 mm、最大 ≤ 1 cm，命中判定不一致 ≤ 1e-4；GPU 花样与 `pattern.py` 角度差 ≤ 0.03°；同键下 GPU 与 CPU 的噪声抽样逐值一致 | `tests/d3/lidar/test_consistency.py` | dmax（单卡绑定） | 12 |
 | M25-AC-022 | P0 | P0b | LiDAR 并发 | MID-360 每帧 20,000 射线、10 Hz、K = 11、语义反射率、32 个动态实体、天气开：每 0.1 s tick（扫描 + GPU 压缩 + 回传有效点）100 架 p95 ≤ 30 ms；应交付 400 架 p95 ≤ 80 ms | `tools/bench/d3/lidar_concurrency.py` | 独占 A40 | 12 |
@@ -2254,7 +2272,7 @@ tests/d3/{sensors,lidar,slam,camera_pkg,rotorpy,gs}/                    # 测试
 
 ```python
 @dataclass(frozen=True)
-class ThermalModel:                      # python/awr/sensorsvc/thermal/model.py（可打包核心）
+class ThermalModel:                      # v1.4 实现位于 python/awr/sensorsvc/thermal/render.py（原设计 thermal/model.py，S13）
     width: int = 640; height: int = 512
     fx: float; fy: float; cx: float; cy: float
     band_um: tuple[float, float] = (8.0, 14.0)
@@ -2270,12 +2288,16 @@ class ThermalModel:                      # python/awr/sensorsvc/thermal/model.py
 
 **管线**（单独一遍 640 × 512 MRT，几何与实例缓冲与可见光共用）
 
-1. 光栅化输出：表面温度与发射率（RG16F）、平面深度（R32F）、实例（R16UI）、语义（R8UI）、法向竖直分量（R8 SNORM，由片元导数求平面法向）。
+1. 光栅化输出：表面温度与发射率（RG16F）、平面深度（R32F）、实例（R16UI）、语义（R8UI）、法向竖直分量（R8 SNORM，由片元导数求平面法向）。v1.4 实现（S13）：表面温度、发射率与法向竖直分量合用 RGBA32F（f16 在 300 K 处步长 0.25 K，超出 0.2 K 误差预算）；静态法向由片元导数求得，演员法向取顶点法向，均取朝向相机的一面。
 2. 静态表面温度：`T_s = T_air + ΔT_base(c) + s · ΔT_sun(c) · max(0, sin h) + (1 − cloud) · ΔT_night(c) · [h < 0] − wet · ΔT_wet(c)`；c 为三角形语义类别（`gl_PrimitiveID` 查表），s 为 `thermal_static.npz` 中该三角形的日照可见度。
 3. 动态实体：每个实例一组 uniform（温度、发射率；外观库带材质分区时按分区取值），车辆发动机与排气分区的温度由磁带状态推导的 `engine_on` 与熄火时长按 τ = 600 s 指数回落计算。
 4. 辐射换算（后处理计算着色器）：`L_obj = ε·B(T_s) + (1 − ε)·[w_sky·B(T_sky) + (1 − w_sky)·B(T_air)]`，`w_sky = clamp(n_z, 0, 1)`；无几何像素取 `B(T_sky)`；`L_sensor = τ(d)·L_obj + (1 − τ(d))·B(T_air)`；B 为 8–14 µm 波段积分 Planck 辐亮度查找表（200–400 K，0.01 K 步长，float32，构建期生成并记录 sha256）。v1.4（S11）：无几何像素直接取 B(T_sky)，不另乘 τ；d 为沿视线的斜距；只在给定雾能见度时计入 β_fog；表版本 `planck-band-lut@1`，sha256 覆盖辐亮度表与 dB/dT 表两部分字节。
 5. 探测器：帧窗口内 S = 4 个子帧按 `w_j ∝ exp(−(t_end − t_j)/τ_b)` 加权（子帧各自取机体、云台与演员位姿）；高斯光学模糊 σ = 0.6 px；表观温度 `T_app = B⁻¹(L_sensor)`；时间噪声 `σ_T(T) = NETD_300 · (dB/dT|300 K)/(dB/dT|T)`；固定图案噪声偏置与增益按 `(run_seed, uav, sensor)` 抽样、运行内固定；量化到 0.01 K 写入 u16（`temp_ck = round(T_app[K] × 100)`，饱和于 [0, 65535]）。v1.4 实现取舍（S11）：固定图案增益残差作用于与非均匀性校正点 T_NUC = 300 K 的差，`T' = T + g·(T − 300 K) + o`；量化采用 `floor(T·100 + 0.5)`；模糊核半径 `ceil(3σ)`，边缘复制；u1、u2 正态推导与相机像素噪声相同（24 位 float32 Box–Muller）。
 6. 真值：`objects[]` 增加 `dT_app_k`（实体可见像素表观温度中位数减去其外接 3 px 环带的中位数）；实例与语义同可见光规则；表面温度与发射率真值图只在 `render_offline` 中输出。
+
+**v1.4 实现设定（S13，参见 AWR-05 §5.4.10）**：子帧窗口为 [t_end − (S−1)·τ_b, t_end] 等间隔取样（4 子帧时权重约 0.03、0.09、0.24、0.64），真值层取末子帧，全部子帧位姿与演员相同时只绘制一遍；车辆分区按车身盒体：x ≥ 0.2·l 为发动机区，x ≤ −0.45·l 且 z ≤ 0.35·h 为排气区，熄火后两区以 τ = 600 s 回落到车身温度，熄火时长 = 停车时长 − 120 s，从未行驶的车辆按冷车计，车身日照项按无遮挡计；人员代理的颈与头为皮肤分区；DSL `profile` 改用参数表另一类别行，`surface_temp_c` 覆盖 base 分区，`emissivity` 覆盖全部分区；machine、uav、object 为 body 模型（machine +2 + 8·sin h、ε 0.90；uav +3 + 4·sin h、ε 0.90；object 0 + 4·sin h、ε 0.93，本实现设定）；`dT_app_k` 的环带为切比雪夫距离 ≤ 3 px 且不含任何演员像素，环带为空时不给出该字段并加标记 `no_ring`；`thermal_static.npz` 为质心单射线（可见 255、遮挡 0），起点沿太阳方向外移 2 cm，太阳在地平线下时全为 0，成员 `sun_vis`、`sun_az_el_deg`、`backend`，zip 成员时间固定为 1980-01-01、不压缩以保证字节确定，建筑立面另乘入射余弦 \|n·sun\|；静态类别取外观目录的 `tri.cls` 流，没有时以求交网格 `cls` 按 `src` 回填，都没有时为 0（default 行）。
+
+**参数表文件与帧记录（v1.4，S13）**：参数表文件为 `configs/thermal_table_v1.yaml`（schema `awr.thermal_table.v1`，sha256 按规范 JSON 计算）。热成像帧记录 `kind = thermal`；`agent_view.temp_ck` 为 {`dtype` u16、`unit` 0.01 K、`codec` radiometric_u16、`compression` zstd、`ref`、`sha256`}；`internal.thermal` 含 `thermal_table`、`planck_table`、`noise`、`thermal_static` 的版本与 sha256；编码器标识为 `zstd-3/u16le`。
 
 **参数表 `thermal_table_v1`**（置信度 D，P0b 核对后冻结；数值单位 K，相对 `T_air`）
 
@@ -2296,6 +2318,8 @@ class ThermalModel:                      # python/awr/sensorsvc/thermal/model.py
 **随机流**：流 22 `sensor_gen` 增加通道 `therm_temporal`（键 `(run_seed, 22, uav_no, frame_index, ch)`，区间 0x1500–0x15FF，帧键加 sensor_no）与 `therm_fpn`（键 `(run_seed, 22, uav_no, 0, ch)`，区间 0x1600–0x16FF，逐像素计数 `pix · 2 + c`，c = 0 偏置、1 增益；v1.4 登记区间，见 §6.17.2）。
 
 ### 15.7 外观库与骨骼动画（M25-FR-191、192）
+
+v1.4 实现口径（E05）：`appearance_lib@1` 的资产为程序化代理（`person-proxy@1`、`vehicle-proxy@1`，骨架 id 为 `awr-proxy-rig-*@1`），不以 glTF 入库；plan 与磁带中 `appearance.asset` 为 `appearance_lib@1/<id>`，M25 按此查库取 render 参数（图案、配饰、车顶、行李架、标识）。动画片段 id：人物 0 stand、1 walk、2 handover、3 board、4 alight；车辆 0 idle、1 drive。热成像分区发射率：衣物 0.97、皮肤 0.98，车身、发动机与排气 0.90。下列条目为 v1.1 设计，资产形态以本段为准。
 
 - 外观库 `appearance_lib@1` 的人物与车辆资产以 glTF 2.0 入库，附骨骼与动画片段（行走、站立、交接动作、上下车；车辆的车轮旋转与转向），材质按可见光与热成像分区（皮肤、衣物、发动机、排气、车身）。
 - 渲染：磁带动画侧车给出每个演员的片段与相位，顶点着色器做线性混合蒙皮（LBS，每顶点 ≤ 4 骨骼，骨骼矩阵经 SSBO 传入）；卷帘逐顶点投影对蒙皮后的世界坐标执行；LiDAR 对带动画实体以合并网格 refit（FR-073）。
@@ -2470,7 +2494,7 @@ M25 在方案 C1 下的工作量为 WP-D3-22（P1 部分）中的 2.0 人周（�
 
 ## 18. D3-SEAL 修订（v1.4，依据 AWR-05 v1.6）
 
-依据 AWR-05 v1.6 的 ADR-198（D3-AC-10 修订）与封板收尾批次（S01、S02、S04、S10、S11）。阈值不变；开发参考数字登记在 AWR-05 §24.3。
+依据 AWR-05 v1.6 的 ADR-198（D3-AC-10 修订）与封板收尾批次（第一批 S01、S02、S04、S10、S11；第二批 S03、S06、S07、S08、S09、S12、S13、E05、L04）。阈值不变；开发参考数字登记在 AWR-05 §24.3 与 §25.3。
 
 | 条款 | 修订 | 来源 |
 |---|---|---|
@@ -2479,5 +2503,14 @@ M25 在方案 C1 下的工作量为 WP-D3-22（P1 部分）中的 2.0 人周（�
 | §6.14.4、M25-AC-015 | `awr.sensorsvc.scheduler` 实现、GL 后端 `threaded=False`、恢复规则；AC-015 背压部分的测试为 `tests/d3/deploy/test_backpressure.py`，GPU 时间份额与 `estimate()` 未覆盖 | S04 |
 | §6.11 | `SlamBagWriter`、`verify_slam_bag` 与核对方式 | S10 |
 | §6.17.2、§15.6 | `therm_temporal`、`therm_fpn` 通道区间；无几何像素、斜距、雾项与 Planck 表版本；固定图案增益、量化、模糊核与正态推导 | S11 |
+| §6.5.7、M25-AC-005、006 | `build_remap` 位于 `awr.sensorsvc.camera.proj`（CPU，带缓存），未接入 GPU 渲染路径；AC-005、006 的测试为 `tests/d3/sensors/test_multiview.py` | S03 |
+| §5.4.3（AWR-05）卷帘快门 | 验收参照 `camera.rowref`（Warp BVH 逐行射线求交）；`raster.rs_static` 静止判定走全局快门程序；warp-lang 1.17.0 离线装入 `d3-sensorsvc`（`requirements-warp.lock`）；测试 `tests/d3/sensors/test_rolling_shutter.py`（12 个用例） | S06 |
+| §6.4.4、§6.8 | 采集作业的演员时间基准为 `capture.ActorClock`（整数纳秒键，只在完全相同时刻复用） | S07 |
+| §6.7、§15.5 | L2 Env 相机经 `camera.encode.shared_encoder` 编码，交付字节即 `raw.mcap` 存档字节；1080p JPEG 体积见 `docs/impl/D3-相机实测记录.md` | S08 |
+| §6.5、§6.7、§6.21 | 效果链缺项与 PBO 异步读回未实现（§6.5 注）；吞吐工具 `tools/bench/d3/camera_throughput.py`：持续模式 10 min、在途 ≤ 4、4 线程编码池、录制每 60 s 轮转并删除旧段；在线模式 10 Hz 锁步、1 或 3 个并发 Worker、时延从 tick 请求算起；缺失的晴天档与最坏档效果以 GPU 代价代理遍计时（标注 `fx_proxy` 的结果只作开发参考）；独占采样按 ADR-195 以 1 s pmon 加 5 s 计算进程查询，容器须加 `--pid=host`；分阶段实测见 S09 报告与 AWR-05 §25.3 第 14 行；会话显存口径与 §6.21 的冲突见 AWR-05 §23.5 C-14 | S09 |
+| §6.8.2、§6.8.3、§6.8.4、§6.8.5、§6.17.2 | Warp GPU 产品路径 `warp_mesh.py` 的实现说明与对拍结果；全部候选实体实例化，refit 路径移至 D3.x；纹理亮度调制、烘焙阴影补偿、harsh 档鬼影与雨致测距噪声在两条路径均未实现；LiDAR 逐射线子通道表按代码修订 | S12 |
+| §5.4.10（AWR-05）、§15.6 | RGBA32F 几何遍、子帧窗口、车辆分区与熄火、machine/uav/object 参数、`dT_app_k` 环带、`thermal_static.npz` 字节确定、静态类别来源；`ThermalModel` 位于 `thermal/render.py`；参数表 `configs/thermal_table_v1.yaml`；帧记录 `kind = thermal` 与 `internal.thermal`；静态几何按瓦片合并上传（每顶点 12 B、每三角形 12 B，crop 世界约 90 MB），读回走 PBO，每个子帧提交后调用 `glFlush` | S13 |
+| §15.7 | `appearance_lib@1` 资产为程序化代理（`person-proxy@1`、`vehicle-proxy@1`），动画片段 id 与热成像分区发射率 | E05 |
+| M25-AC-019 | 镜像清单扫描入口 `tools/deploy/dmax/scan_images.sh`（含 `d3-livo` 与 `d3-r3-camera-render` 自检对照） | L04 |
 
 S01 性能实测（本机共享机，开发参考）：对齐磁带帧时每帧时刻函数查询由 10 次降到 6 次，扫描 66 ms → 53 ms；跨磁带帧边界的帧约 22 次查询，65 ms → 82 ms；`crop-handoff-001` 磁带 `actor_states` 约 0.87 ms/次。D3-AC 映射：D3-AC-10 按 ADR-198 修订（`tests/d3/sensors/test_time_consistency.py`）；D3-AC-22 的背压三项为 `tests/d3/deploy/test_backpressure.py`。

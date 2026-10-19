@@ -51,6 +51,7 @@ guide/targets
 guide/tasking
 guide/mobile
 guide/identity
+guide/sdk-quickstart
 ```
 
 {doc}`guide/showcase`
@@ -73,6 +74,9 @@ guide/identity
 
 {doc}`guide/identity`
 : The identity entry for internal staff: where it is and what it is for.
+
+{doc}`guide/sdk-quickstart`
+: The `drone4d` Python SDK of the Event Lab (V0.3, in development): install it, write an example agent and run a 3-drone episode on the high-fidelity and fast simulation tiers.
 
 ## Open interface
 
