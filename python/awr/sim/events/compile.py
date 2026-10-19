@@ -11,7 +11,8 @@
 
 产物：`event.json`（原始 DSL 的 JSON 形式）、`plan.json`、`anchors.json`（解析后锚点）、`tape.bin`、`tape.json`、
 `truth/r<truth_rev>/event_truth.json`（`drone4d.event_truth.v1`）、`truth/r<truth_rev>/event_graph.json`（`drone4d.event_graph.v1`）、
-`compile_report.json`（含 `truth_summary`）。
+`compile_report.json`（含 `truth_summary`）；目标搜索事件另有
+`brief.json`（`drone4d.event_brief.v1`，只含先验，`awr.sim.events.search.brief`），其实际位置只在 `anchors.json`、磁带与真值中。
 """
 
 from __future__ import annotations
@@ -178,6 +179,11 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     if wi is not None:
         pre.append(wi)
     anchors = resolve_anchors(world_anchors(world_dir), overlay)
+    from awr.sim.events import search  # 目标搜索：内联栅格先验、保留锚点占位（M23-FR-076，E08）
+
+    ev_dir = Path(event_doc).parent if isinstance(event_doc, Path) or (isinstance(event_doc, str) and "\n" not in event_doc
+                                                                         and Path(event_doc).exists()) else None
+    doc, anchors = search.prepare(doc, anchors, ev_dir)
     plan, errs, warns = gate1(doc, anchors)
     errs = pre + errs
     gates = [_gate(1, errs, warns, t0)]
@@ -197,6 +203,7 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     nav_p = build_nav(q, bbox, "person", seeds)
     nav_v = build_nav(q, bbox, "vehicle", seeds, z=nav_p.z)
     stage = Stage({"person": nav_p, "vehicle": nav_v}, build_ground_index(q, bbox), anchors)
+    plan = search.materialize(plan, doc, stage)                   # 按事件种子抽样目标实际位置（只进锚点表、磁带与真值）
     pf = preflight(plan, stage, mode=opts.retime_mode)
     segs = [lg.report() for a in sorted(pf["legs"]) for lg in pf["legs"][a]]
     gates.append(_gate(2, pf["errors"], pf["warnings"], t0))
@@ -252,6 +259,8 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     (tmp / "tape.json").write_text(json.dumps(man, ensure_ascii=False, indent=1), encoding="utf-8")
     (tmp / "event.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
     (tmp / "plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf-8")
+    if (bf := search.brief(plan, anchors, opts.truth_rev)) is not None:      # 目标搜索简报：只含先验（§15.3 规则 2）
+        (tmp / "brief.json").write_text(json.dumps(bf, ensure_ascii=False, indent=1), encoding="utf-8")
     (tmp / "anchors.json").write_text(json.dumps({"schema": "awr.anchors.v1", "world_id": wdoc["id"], "anchors": list(anchors.values())},
                                                  ensure_ascii=False, indent=1), encoding="utf-8")
     res.status, res.out = "compiled", out

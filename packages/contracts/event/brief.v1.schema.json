@@ -90,6 +90,155 @@
       "minItems": 3,
       "maxItems": 64,
       "description": "World-frame polygon (m)"
+    },
+    "search": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "target_search only (M23 §15.3 rule 2, FR-083): the prior, search area, motion and window; never the actual position",
+      "properties": {
+        "target_class": {
+          "enum": [
+            "person",
+            "vehicle",
+            "object"
+          ]
+        },
+        "prior": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "gmm",
+                "grid"
+              ]
+            },
+            "components": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Isotropic Gaussian component; exactly one of anchor and xy (compile gate 1)",
+                "properties": {
+                  "anchor": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "Anchor id (awr-anchors@1)"
+                  },
+                  "xy": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "sigma_m": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 500
+                  },
+                  "weight": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "default": 1
+                  }
+                },
+                "required": [
+                  "sigma_m"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 16
+            },
+            "grid": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Row-major (y outer, x inner) prior mass per cell",
+              "properties": {
+                "origin_xy": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "cell_m": {
+                  "type": "number",
+                  "minimum": 0.5,
+                  "maximum": 100
+                },
+                "nx": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 256
+                },
+                "ny": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 256
+                },
+                "weights": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "minItems": 1,
+                  "maxItems": 65536
+                }
+              },
+              "required": [
+                "origin_xy",
+                "cell_m",
+                "nx",
+                "ny",
+                "weights"
+              ]
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        "area_polygon": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 3,
+          "maxItems": 64,
+          "description": "World-frame polygon (m), simple, 3-64 vertices"
+        },
+        "motion": {
+          "enum": [
+            "static",
+            "wander"
+          ]
+        },
+        "wander_radius_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "window_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "target_class",
+        "prior",
+        "area_polygon",
+        "motion",
+        "window_s"
+      ]
     }
   },
   "required": [
