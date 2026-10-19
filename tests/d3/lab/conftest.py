@@ -54,6 +54,7 @@ EXPECTED: dict[tuple[str, str], str] = {
     ("GET", "/runs/{rid}/frames/{uav}/{sensor}:range"): "researcher",
     ("GET", "/runs/{rid}/truth/frames/{uav}/{sensor}/{seq}"): "evaluator",
     ("GET", "/runs/{rid}/truth/event/tape"): "evaluator",
+    ("GET", "/runs/{rid}/viewer_url"): "researcher",
     ("GET", "/board"): "invited",
     ("GET", "/board/{track}/entries/{entry_id}"): "invited",
     ("GET", "/leaderboard"): "invited",

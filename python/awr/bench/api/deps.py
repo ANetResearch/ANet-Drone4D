@@ -99,7 +99,7 @@ ENDPOINTS: tuple[Endpoint, ...] = (
     Endpoint("BN-54", "GET", "/runs/{}/artifacts/{}", "researcher", "P0a", (305, 691, 697)),
     Endpoint("BN-55", "POST", "/runs/{}/exports", "researcher", "P0a", (691, 685, 689)),
     Endpoint("BN-56", "POST", "/runs/{}/slam_eval", "researcher", "P0b", (642, 649, 684)),
-    Endpoint("BN-57", "GET", "/runs/{}/viewer_url", "researcher", "P0b", (694, 305)),
+    Endpoint("BN-57", "GET", "/runs/{}/viewer_url", "researcher", "P0b", (694, 305, 300, 213)),
     Endpoint("BN-60", "GET", "/jobs/{}", "researcher", "P0a", (305,)),
     Endpoint("BN-61", "DELETE", "/jobs/{}", "researcher", "P0a", (680,)),
     Endpoint("BN-70", "GET", "/experiments", "researcher", "P0a"),
