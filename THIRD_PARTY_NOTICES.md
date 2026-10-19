@@ -171,6 +171,13 @@ not published)
 | @recast-navigation/core, @recast-navigation/generators, @recast-navigation/wasm | 0.43.1 | MIT, Copyright (c) 2025 Isaac Mason |
 | recastnavigation (Recast and Detour, compiled into the WebAssembly module of @recast-navigation/wasm) | as bundled by 0.43.1 | Zlib, Copyright (c) 2009 Mikko Mononen |
 
+**D3 event lab, Web** (`apps/web/package.json`; loaded on demand by the data inspection panel of the internal workspace
+and of the `/lab/` public samples; not loaded by the D2 sandbox)
+
+| Package | Version | License |
+|---|---|---|
+| @rerun-io/web-viewer (Rerun Web Viewer; the JavaScript loader and the WebAssembly viewer `re_viewer_bg.wasm`, self-hosted; update checks disabled) | 0.38.1 | MIT or Apache-2.0, Copyright (c) 2022 Rerun Technologies AB; the Rust crates compiled into the WebAssembly module under their own licenses |
+
 **Separate containers (not in this repository, not linked)**
 
 | Component | Version | License | Use |
