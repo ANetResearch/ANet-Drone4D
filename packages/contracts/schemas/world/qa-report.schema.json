@@ -78,7 +78,15 @@
               "normalize",
               "pointcloud",
               "raycast",
-              "appearance"
+              "appearance",
+              "grids",
+              "quality",
+              "semantic",
+              "collision",
+              "occupancy",
+              "navmesh",
+              "anchors",
+              "package"
             ]
           },
           "seconds": {
