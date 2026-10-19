@@ -11,6 +11,9 @@
   扫掠包围球筛选，只影响计算量。
 - 回波（`sem_table_v1` 的 P0a 子集）：rho = rho_sem[cls]（不做纹理亮度调制与阴影补偿，待反射率纹理就绪），rho_eff = rho·max(|n·d|, 0.05)·
   exp(−2β·r)，r_max = min(r_hard, 40·(rho_eff/0.1)^0.269)，逻辑斯蒂检测，测距噪声 sigma(r)；虚警 1e-4（realistic、harsh）。
+- `void`（bit6，M25 §6.8.6；D3-AC-04）：给出 `quality`（`awr.sensorsvc.quality.SensorQuality`）时，最近交点为拉伸面、洞缘或覆盖外的
+  静态三角形，或射线在任意距离上都与静态网格无交点、仰角 < 0 且起点在覆盖多边形内（穿洞、越过覆盖边缘）；观测帧不受影响（按回波
+  模型输出）。未给出时（D2 世界、quality 阶段之前的构建）沿用"量程内未命中且仰角 < 0"。
 - 随机数：帧键 K_f = key(run_seed, 22, uav_no, frame_seq, 0x2000 + sensor_no)，槽位键 sm(K_f ^ (i·8 + c))（c：0 检测、1 测距、
   2 角度、3 虚警判定、4 虚警距离）。clean 档无测距、角度噪声与虚警，检测概率仍按量程模型。
 """
@@ -21,6 +24,7 @@ import json
 import math
 from dataclasses import dataclass
 from functools import cache
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -30,7 +34,10 @@ from awr.sim.events.tape import STATE_VISIBLE
 from awr.sim.sensors import cbrng
 from awr.sim.sensors.lidar.pattern import directions_flu, mid360_pattern
 
-__all__ = ["INST_NONE", "INST_SPURIOUS", "LIDAR_RECORD", "TIER_SCALE", "LidarScan", "MeshLidar", "rho_sem"]
+if TYPE_CHECKING:
+    from awr.sensorsvc.quality import SensorQuality
+
+__all__ = ["INST_NONE", "INST_SPURIOUS", "LIDAR_RECORD", "TIER_SCALE", "LidarScan", "MeshLidar", "lidar_void", "rho_sem"]
 
 INST_SPURIOUS, INST_NONE = 65534, 65535
 CH_DET, CH_RANGE, CH_ANG, CH_FA, CH_FA_R = 0, 1, 2, 3, 4
@@ -91,12 +98,13 @@ def _normal2(h: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 class MeshLidar:
-    """`q` 为 MeshWorldQuery；`actors` 为磁带演员表（按 idx），与相机代理同一几何。"""
+    """`q` 为 MeshWorldQuery；`actors` 为磁带演员表（按 idx），与相机代理同一几何；`quality` 为世界的传感器侧质量信息（`void` 判定）。"""
 
-    def __init__(self, q, model: LidarModel, actors: list[dict] | None = None) -> None:
+    def __init__(self, q, model: LidarModel, actors: list[dict] | None = None, quality: SensorQuality | None = None) -> None:
         self.q = q
         self.m = model
         self.actors = actors or []
+        self.quality = quality
         self._mesh: dict[int, tuple[object, float]] = {}
         self._az = np.empty(model.slots_per_frame)
         self._el = np.empty(model.slots_per_frame)
@@ -180,7 +188,7 @@ class MeshLidar:
             refl = np.where(spur, np.uint8(8), refl)
         out = ret | spur
         el_w = d[:, 2]
-        void = ~hit & (el_w < 0)
+        void = lidar_void(self.quality, prim, hit & (inst == 0), ~hit & (el_w < 0), o, d, q=self.q)
         gt_inst = np.where(spur, INST_SPURIOUS, np.where(ret, inst, INST_NONE)).astype(np.uint16)
         gt_flags = ((np.where(hit, sem, 0) & 0x3F) | (void.astype(np.int64) << 6) | (spur.astype(np.int64) << 7)).astype(np.uint8)
         pts = np.zeros(int(out.sum()), LIDAR_RECORD)
@@ -241,6 +249,16 @@ class MeshLidar:
                 inst[k] = int(a) + 1
                 sem[k] = SEM_CODE.get(self.actors[int(a)]["class"], 13)
         return int((inst > 0).sum())
+
+
+def lidar_void(quality: SensorQuality | None, prim: np.ndarray, static_hit: np.ndarray, miss_down: np.ndarray, o: np.ndarray,
+               d: np.ndarray, *, q=None) -> np.ndarray:
+    """槽位 `void`（M25 §6.8.6）：`prim` 为静态最近交点三角形，`static_hit` 为量程内最近交点为静态网格的槽位，`miss_down` 为量程内
+    无交点（静态与演员）且仰角 < 0 的槽位，`o`、`d` 为世界系射线起点与单位方向，`q` 为求交用的 MeshWorldQuery（缺省取 `quality`
+    自带的）。无质量信息时即 `miss_down`（与 Warp 后端一致）。"""
+    if quality is None:
+        return np.asarray(miss_down, bool)
+    return quality.lidar_void(prim, static_hit, miss_down, o, d, q=q)
 
 
 _VIS = np.array(sorted(STATE_VISIBLE), np.uint8)

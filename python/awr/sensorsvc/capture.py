@@ -200,6 +200,7 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
     from awr.bench.recorder.writer import RunWriter
     from awr.sensorsvc.camera.raster import RS_NODES, RasterCamera
     from awr.sensorsvc.camera.scene import load_appearance
+    from awr.sensorsvc.quality import SensorQuality
 
     doc, fleet = load_spec(spec)
     prof = profile(str(doc.get("noise_profile", "realistic")))
@@ -249,7 +250,8 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
             while (te := t_end_ns(0, rate, k)) <= duration * NS:
                 jobs.append((t_mid_ns(te, round(c.model.exposure_s * NS), round(c.model.readout_s * NS)), u.uav, c, k))
                 k += 1
-    lidar, imus = None, {}
+    lidar, imus, sq = None, {}, None
+    wq_cache = Path(data_root) / "cache" / "worldquery"
     uav_no_of = {u.uav: i for i, u in enumerate(fleet)}
     if any(u.lidars for u in fleet):                             # 网格 LiDAR（M25 §6.8）：帧末时刻排入同一时序
         from awr.sensorsvc.lidar.mesh import MeshLidar
@@ -258,7 +260,9 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
 
         lmodel = load_lidar_model()
         t1 = time.perf_counter()
-        lidar = MeshLidar(open_mesh_world_query(wdir, Path(data_root) / "cache" / "worldquery"), lmodel, tape.actors if tape else None)
+        lq = open_mesh_world_query(wdir, wq_cache)
+        sq = SensorQuality.load(wdir, q=lq, cache_root=wq_cache)
+        lidar = MeshLidar(lq, lmodel, tape.actors if tape else None, quality=sq)
         log(f"[capture] mesh lidar ready in {time.perf_counter() - t1:.1f} s")
         imus = {(u.uav, L.name): _imu_track(hist[u.uav], L, duration, seed, uav_no_of[u.uav], prof.name) for u in fleet for L in u.lidars}
         for u in fleet:
@@ -267,6 +271,8 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
                 while (k + 1) * lmodel.frame_ns <= duration * NS:
                     jobs.append(((k + 1) * lmodel.frame_ns, u.uav, L, k))
                     k += 1
+    if sq is None:                                               # 质量位联动（D3-AC-04）：LiDAR void 与相机 invalid_mask 第 1–4 位
+        sq = SensorQuality.load(wdir, cache_root=wq_cache)
     jobs.sort(key=lambda j: (j[0], j[1], j[2].sensor_no))
     if max_frames:
         jobs = jobs[:max_frames]
@@ -302,7 +308,8 @@ def run_capture(spec: dict, data_root: Path, *, worlds_dir: Path | None = None, 
             rec, blocks = camera_frame(ctx, uav=uav, sensor_id=c.name, seq=seq, t_mid_ns=tm, exposure_ns=round(c.model.exposure_s * NS),
                                        readout_ns=ro, cm=c.model, mount=c.mount, gimbal_reading=g_read, gimbal_true=g, pos_enu_m=pos, R_ws=R,
                                        out=out, outputs=c.outputs | {"gt_depth"}, depth_obs=d_obs,
-                                       depth_range_m=(prof.depth.d_min_m, prof.depth.d_max_m), actors=tape.actors if tape else None)
+                                       depth_range_m=(prof.depth.d_min_m, prof.depth.d_max_m), actors=tape.actors if tape else None,
+                                       quality=sq)
             jpeg = blocks[rec["agent_view"]["rgb"]["ref"]]
             raw.write_camera(uav, c.name, seq, tm, jpeg, depth_m=d_obs, period_ns=int(NS / parse_rate(c.fps)))
             agent = {rec["agent_view"]["rgb"]["ref"], rec["agent_view"].get("depth", {}).get("ref")}      # 观测载荷只进 raw.mcap

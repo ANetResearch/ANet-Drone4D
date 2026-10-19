@@ -3,6 +3,9 @@
 - agent_view：交付图像（JPEG，sha256 取交付字节）、L2-depth（f32 平面深度，`depth` 在输出集合中时）、内参与标称挂载、云台读数；
 - ground_truth：真值外参（ENU←RDF）、真实云台角、实例与无遮挡实例（u16）、语义（u8，`d3-semantic@1`）、`invalid_mask`（u8），
   均为 zstd 压缩；`gt_depth`（f32，bshuf4-zstd 无损）；可见度归约 `objects`（无演员时为空表）；真值时刻；
+- `invalid_mask` 位（M25 §6.6.2，`INVALID_BITS`）：第 0 位为无几何下视；给出 `quality`（`awr.sensorsvc.quality.SensorQuality`，世界包
+  quality 阶段的逐三角形质量位与覆盖多边形）时第 1–4 位为前景静态三角形的拉伸面、覆盖外、洞缘与水面（D3-AC-04）；演员像素不置位；
+  可见度归约排除被标记像素；
 - internal：版本与来源（`encoder` 为实际编码器身份，如 `nvimgcodec-0.9.0/jpeg/q90/420`）。载荷块以 `ref` 命名（同一 MCAP
   消息的附加段或文件导出中的相对路径）。
 
@@ -17,6 +20,7 @@ import hashlib
 import math
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -27,6 +31,9 @@ from awr.sensorsvc.camera.model import CAMERA_PROFILES, CameraModel
 from awr.sensorsvc.camera.proj import ray_elevation
 from awr.sensorsvc.camera.raster import RENDERER_VERSION, RS_NODES, RenderOut
 from awr.sensorsvc.poses import Mount, q_world_opt
+
+if TYPE_CHECKING:
+    from awr.sensorsvc.quality import SensorQuality
 
 __all__ = ["INVALID_BITS", "FrameContext", "PendingFrame", "camera_frame", "camera_frame_deferred", "camera_profile_of", "encode_jpeg"]
 
@@ -121,10 +128,12 @@ def camera_frame_deferred(ctx: FrameContext, *, uav: str, sensor_id: str, seq: i
                           gimbal_true: tuple[float, float, float], pos_enu_m: np.ndarray, R_ws: np.ndarray, out: RenderOut,
                           outputs: frozenset[str] | set[str], ref_prefix: str = "", depth_obs: np.ndarray | None = None,
                           depth_range_m: tuple[float, float] | None = None, actors: list[dict] | None = None,
-                          encoder: JpegEncoder | None = None, rgb: EncodeTicket | bytes | None = None) -> PendingFrame:
+                          encoder: JpegEncoder | None = None, rgb: EncodeTicket | bytes | None = None,
+                          quality: SensorQuality | None = None) -> PendingFrame:
     """组装一帧并返回 `PendingFrame`。`outputs` 取 render_req.v1 的取值；真值分区总是写出（只进入评测库与真值文件，ADR-161）。
     `depth_obs` 为经 L2-depth 传感器模型的观测深度（缺省即渲染深度），`gt_depth` 总是渲染深度。`actors` 为磁带演员表（按 idx），
-    给出且渲染带有 `instance_unocc` 时做可见度归约（M25 §6.6.1）。
+    给出且渲染带有 `instance_unocc` 时做可见度归约（M25 §6.6.1）。`quality` 给出时 `invalid_mask` 置第 1–4 位（M25 §6.6.2），
+    缺省（D2 世界、无 quality 层的构建）只置第 0 位。
 
     RGB：`rgb` 为已提交的编码票据或已编码的 JPEG 字节（身份取票据、`encoder` 或 `ctx.encoder`）；缺省由 `encoder`（缺省为
     按档位选择的进程常驻编码器，`camera.encode.shared_encoder`）在函数入口提交，随后的真值压缩与可见度归约在 CPU 上与 GPU
@@ -158,7 +167,9 @@ def camera_frame_deferred(ctx: FrameContext, *, uav: str, sensor_id: str, seq: i
         rng = list(depth_range_m) if depth_range_m else [cm.near_m, cm.far_m]
         av["depth"] = {"dtype": "f32", "unit": "m", "type": "planar_z", "range_m": rng, "ref": put("depth.f32", b), "sha256": _sha(b)}
     void = (depth <= 0) & (ray_elevation(cm, R_ws, cm.width, cm.height) < 0)
-    mask = void.astype(np.uint8)                                   # 第 0 位；其余位随质量位附件与效果链落地
+    mask = void.astype(np.uint8)                                   # 第 0 位：无几何下视
+    if quality is not None:                                        # 第 1–4 位：前景静态三角形的质量位（演员像素不置位）
+        mask |= quality.camera_bits(cm=cm, R_ws=R_ws, pos_enu_m=pos_enu_m, depth_m=depth, instance=out.instance, semantic=out.semantic)
     unocc = out.instance_unocc if out.instance_unocc is not None else np.zeros_like(out.instance)
     objects = visibility_objects(out.instance, unocc, out.semantic, mask, actors) if actors and out.instance_unocc is not None else []
     gt = {"T_world_sensor": {"pos_enu_m": [float(v) for v in pos_enu_m], "q_ws_xyzw": [float(v) for v in q_world_opt(R_ws)], "frame": "ENU<-RDF"},
