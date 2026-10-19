@@ -1,0 +1,82 @@
+# d3-registry 鉴权前端（AWR-05 §5.6.7、ADR-183；AWR-17 §18.23.2、§18.23.3；D3-AC-59）。
+# 只监听 ZeroTier 地址 ${REG_BIND}:${REG_PORT}（TLS，证书与内部工作区共用，SAN 含该地址）；公网网卡与其余地址不监听。
+#   - /v2/**：每个请求先经 auth_request 子请求 /_authz → d3-registry-authz 127.0.0.1:${REG_AUTHZ_PORT}（BenchAuth.authorize_registry：
+#     推送令牌、来源 bench token 未撤销、团队命名空间、方法）；放行后转发 d3-registry 127.0.0.1:${REG_BACKEND_PORT}。
+#   - 不缓存鉴权结果（无 proxy_cache，子请求逐次执行）：撤销在下一个请求即生效（≤ 2 s，鉴权缓存须 ≤ 1 s）。
+#   - 401 带 WWW-Authenticate: Basic realm="d3-registry"（由鉴权服务给出，auth_request 原样带回；docker login 以推送令牌为密码）；403 为 DENIED（115，authz 已写审计）；
+#     鉴权服务不可达或出错为 500/502（失败关闭）。错误体为 distribution 的 JSON 错误格式，Docker 客户端可显示原因。
+#   - Authorization 头不转发给后端（后端不鉴权，也不应看到令牌）；请求体流式转发（不缓冲到磁盘），单个请求体 ≤ 4 GB
+#     （镜像未压缩大小上限 4 GB 由扫描阶段判定，692）。
+#   - 其余路径 404。
+map $upstream_http_docker_distribution_api_version $registry_api_version {
+  '' 'registry/2.0';
+}
+
+server {
+  listen ${REG_BIND}:${REG_PORT} ssl;
+  http2 off;
+  server_name ${LAB_SERVER_NAME};
+  ssl_certificate /etc/nginx/tls/cert.pem;
+  ssl_certificate_key /etc/nginx/tls/key.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_session_cache shared:regtls:4m;
+
+  client_max_body_size 4g;
+  chunked_transfer_encoding on;
+
+  set $d3_principal "-";
+
+  location = /_authz {
+    internal;
+    proxy_pass http://127.0.0.1:${REG_AUTHZ_PORT}/authz;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header X-Original-Method $request_method;
+    proxy_set_header X-Original-URI $request_uri;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_connect_timeout 2s;
+    proxy_read_timeout 5s;
+  }
+
+  location /v2/ {
+    auth_request /_authz;
+    auth_request_set $d3_principal $upstream_http_x_d3_principal;
+    error_page 401 = @unauthorized;
+    error_page 403 = @denied;
+    error_page 500 502 503 504 = @unavailable;
+
+    proxy_pass http://127.0.0.1:${REG_BACKEND_PORT};
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header Authorization "";
+    proxy_request_buffering off;
+    proxy_buffering off;
+    proxy_read_timeout 900s;
+    proxy_send_timeout 900s;
+    add_header Docker-Distribution-Api-Version $registry_api_version always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+  }
+
+  # 401 只来自鉴权服务：auth_request 把子请求的 WWW-Authenticate（Basic realm="d3-registry"）带到响应上，此处不再重复添加
+  location @unauthorized {
+    default_type application/json;
+    add_header Docker-Distribution-Api-Version registry/2.0 always;
+    return 401 '{"errors":[{"code":"UNAUTHORIZED","message":"authentication required (d3-registry push token)","detail":null}]}\n';
+  }
+  location @denied {
+    default_type application/json;
+    add_header Docker-Distribution-Api-Version registry/2.0 always;
+    return 403 '{"errors":[{"code":"DENIED","message":"requested access to the resource is denied (115)","detail":null}]}\n';
+  }
+  location @unavailable {
+    default_type application/json;
+    add_header Docker-Distribution-Api-Version registry/2.0 always;
+    return 503 '{"errors":[{"code":"UNAVAILABLE","message":"registry authorization unavailable","detail":null}]}\n';
+  }
+
+  location / { return 404; }
+}

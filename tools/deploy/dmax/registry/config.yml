@@ -1,0 +1,34 @@
+# d3-registry 后端（CNCF distribution v3，AWR-05 §5.6.7、ADR-183；D3-AC-59）。只绑回环 127.0.0.1:18671，不配置鉴权：
+# 鉴权在前端 d3-registry-front（nginx auth_request → d3-registry-authz，逐请求、不缓存）；宿主 materialize 经回环拉取提交镜像。
+# 不开 debug 端口与 metrics（缺省配置的 :5001 不保留）；删除只开放给前端的管理员（authz：DELETE 仅 admin），垃圾回收由管理员离线执行。
+version: 0.1
+log:
+  level: info
+  formatter: json
+  accesslog:
+    disabled: false
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+  delete:
+    enabled: true
+  cache:
+    blobdescriptor: inmemory
+  maintenance:
+    uploadpurging:
+      enabled: true
+      age: 168h
+      interval: 24h
+      dryrun: false
+  tag:
+    concurrencylimit: 5
+http:
+  addr: 127.0.0.1:18671
+  relativeurls: true
+  headers:
+    X-Content-Type-Options: [nosniff]
+health:
+  storagedriver:
+    enabled: true
+    interval: 10s
+    threshold: 3
