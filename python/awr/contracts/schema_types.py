@@ -194,6 +194,11 @@ __all__ = [
     "CoordinateTrueNorth",
     "D3Semantic",
     "D3SemanticClasses",
+    "DatasetIndexV1",
+    "DatasetIndexV1Experiments",
+    "DatasetIndexV1File",
+    "DatasetIndexV1Runs",
+    "DatasetIndexV1RunsMetrics",
     "Detection",
     "DetectionPage",
     "Effect",
@@ -281,6 +286,18 @@ __all__ = [
     "EventV1Relations",
     "EventV1World",
     "Export",
+    "ExportManifestV1",
+    "ExportManifestV1Exporter",
+    "ExportManifestV1Files",
+    "ExportManifestV1Generation",
+    "ExportManifestV1GenerationStatement",
+    "ExportManifestV1GenerationTools",
+    "ExportManifestV1License",
+    "ExportManifestV1LicenseAttribution",
+    "ExportManifestV1Quantization",
+    "ExportManifestV1Sha256",
+    "ExportManifestV1Skipped",
+    "ExportManifestV1Source",
     "Faults",
     "FaultsOneOf0",
     "FaultsOneOf1",
@@ -993,6 +1010,8 @@ __all__ = [
     "TruthV1AnnotationChecks",
     "TruthV1Events",
     "TruthV1EventsEvidence",
+    "TruthV1KeyEvents",
+    "TruthV1KeyRelations",
     "TruthV1RelationChecks",
     "UavSafety",
     "UavSafetyActive",
@@ -1222,6 +1241,10 @@ type Engine = ReconIrEngine
 
 # env/env_world_defaults.schema.json# env_world_defaults.json
 type EnvWorldDefaults = dict[str, EnvWorldDefaultsItem]
+
+
+# bench/export_manifest.v1.schema.json#/$defs/sha256
+type ExportManifestV1Sha256 = str
 
 
 # rt/faults.schema.json# Fault injection request
@@ -2936,6 +2959,54 @@ class D3SemanticClasses(TypedDict):
     reflect_905: NotRequired[float]
 
 
+# bench/dataset_index.v1.schema.json# Dataset event index dataset/<event_id>/index.json (drone4d.bench.dataset_index.v1)
+class DatasetIndexV1(TypedDict):
+    schema: Literal["drone4d.bench.dataset_index.v1"]
+    event_id: str
+    world_id: str
+    split: Literal["dev", "test"]
+    event: list[DatasetIndexV1File]
+    truth: list[DatasetIndexV1File]
+    experiments: list[DatasetIndexV1Experiments]
+    runs: list[DatasetIndexV1Runs]
+
+
+# bench/dataset_index.v1.schema.json#/properties/experiments/items
+class DatasetIndexV1Experiments(TypedDict):
+    experiment_id: str
+    runs: list[str]
+
+
+# bench/dataset_index.v1.schema.json#/$defs/file
+class DatasetIndexV1File(TypedDict):
+    path: str
+    bytes: int
+    sha256: str
+
+
+# bench/dataset_index.v1.schema.json#/properties/runs/items
+class DatasetIndexV1Runs(TypedDict):
+    run_id: str
+    experiment_id: str
+    split: Literal["dev", "test"]
+    obs_level: str
+    ranked: bool
+    determinism_level: Literal["1b", "2", "3", "none"]
+    seed_commit: str
+    metrics: DatasetIndexV1RunsMetrics
+    exports: list[Literal["files", "bag"]]
+    export_manifest_sha256: str | None
+
+
+# bench/dataset_index.v1.schema.json#/properties/runs/items/properties/metrics
+class DatasetIndexV1RunsMetrics(TypedDict):
+    ec: float | None
+    ec_coverage: float | None
+    eu_f1: float | None
+    ao_real: float | None
+    ranked_valid: bool | None
+
+
 # sensor/detection.schema.json# awr.sensor.detection.v1
 class Detection(TypedDict):
     seq: int
@@ -3660,6 +3731,117 @@ class Export(TypedDict):
     files: list[WorldCommonFileRef]
     created_at: NotRequired[str]
     params: NotRequired[dict[str, Any]]
+
+
+# bench/export_manifest.v1.schema.json# Dataset export manifest derived/export_manifest.json (drone4d.bench.export_manifest.v1)
+class ExportManifestV1(TypedDict):
+    schema: Literal["drone4d.bench.export_manifest.v1"]
+    exporter: ExportManifestV1Exporter
+    generated_unix_ns: int
+    run_id: str
+    experiment_id: str
+    event_id: str
+    world_id: str
+    split: Literal["dev"]
+    formats: list[Literal["files", "bag"]]
+    layers: list[Literal["obs", "run", "truth"]]
+    source: ExportManifestV1Source
+    quantization: dict[str, ExportManifestV1Quantization]
+    license: ExportManifestV1License
+    generation: ExportManifestV1Generation
+    retention: dict[str, Literal["transient", "standard", "pinned"]]
+    counts: dict[str, int]
+    skipped: list[ExportManifestV1Skipped]
+    files: list[ExportManifestV1Files]
+
+
+# bench/export_manifest.v1.schema.json#/properties/exporter
+class ExportManifestV1Exporter(TypedDict):
+    name: Literal["awr.bench.export"]
+    version: str
+    contracts_version: str
+
+
+# bench/export_manifest.v1.schema.json#/properties/files/items
+class ExportManifestV1Files(TypedDict):
+    path: str
+    format: Literal["files", "bag"]
+    layer: Literal["obs", "run", "truth"]
+    kind: Literal["rgb", "depth_log16", "seg_instance", "seg_semantic", "lidar", "state", "messages", "actions", "reports", "bag"]
+    uav: NotRequired[str]
+    sensor: NotRequired[str]
+    seq: NotRequired[int]
+    t_ns: NotRequired[int]
+    n: NotRequired[int]
+    bytes: int
+    sha256: ExportManifestV1Sha256
+    source_sha256: NotRequired[ExportManifestV1Sha256]
+    stats: NotRequired[dict[str, Any]]
+
+
+# bench/export_manifest.v1.schema.json#/properties/generation
+class ExportManifestV1Generation(TypedDict):
+    synthetic: Literal[True]
+    statement: ExportManifestV1GenerationStatement
+    appearance: str
+    tools: list[ExportManifestV1GenerationTools]
+    versions: dict[str, Any]
+
+
+# bench/export_manifest.v1.schema.json#/properties/generation/properties/statement
+class ExportManifestV1GenerationStatement(TypedDict):
+    zh: str
+    en: str
+
+
+# bench/export_manifest.v1.schema.json#/properties/generation/properties/tools/items
+class ExportManifestV1GenerationTools(TypedDict):
+    name: str
+    version: str
+    role: str
+
+
+# bench/export_manifest.v1.schema.json#/properties/license
+class ExportManifestV1License(TypedDict):
+    complete: bool
+    dataset: str | None
+    citation: str | None
+    url: str | None
+    notice: str | None
+    redistribution: bool | None
+    derivedFrom: list[dict[str, Any]]
+    attribution: ExportManifestV1LicenseAttribution
+    modification: str
+    missing: list[str]
+
+
+# bench/export_manifest.v1.schema.json#/properties/license/properties/attribution
+class ExportManifestV1LicenseAttribution(TypedDict):
+    en: NotRequired[str | None]
+    zh: NotRequired[str | None]
+
+
+# bench/export_manifest.v1.schema.json#/properties/quantization/additionalProperties
+class ExportManifestV1Quantization(TypedDict):
+    encoding: str
+    lossless: bool
+
+
+# bench/export_manifest.v1.schema.json#/properties/skipped/items
+class ExportManifestV1Skipped(TypedDict):
+    what: str
+    why: str
+    n: NotRequired[int]
+
+
+# bench/export_manifest.v1.schema.json#/properties/source
+class ExportManifestV1Source(TypedDict):
+    raw_mcap_sha256: ExportManifestV1Sha256
+    raw_mcap_bytes: int
+    frames_idx_sha256: ExportManifestV1Sha256
+    truth_mcap_sha256: ExportManifestV1Sha256 | None
+    run_manifest_sha256: ExportManifestV1Sha256
+    evaluation_sha256: ExportManifestV1Sha256 | None
 
 
 # rt/faults.schema.json#/oneOf/0
@@ -6986,6 +7168,7 @@ class QaReportGlb(TypedDict):
     semantic: NotRequired[dict[str, Any]]
     collision: NotRequired[dict[str, Any]]
     navmesh: NotRequired[dict[str, Any]]
+    navgraph: NotRequired[dict[str, Any]]
     anchors: NotRequired[dict[str, Any]]
     sensor_hints: NotRequired[dict[str, Any]]
     vglb: NotRequired[list[dict[str, Any]]]
@@ -7012,7 +7195,7 @@ class QaReportSizes(TypedDict):
 
 # schemas/world/qa-report.schema.json#/properties/stages/items
 class QaReportStages(TypedDict):
-    name: Literal["read", "ingest", "dtm", "normals", "classify", "tile", "dsm", "zones", "hash", "validate", "normalize", "pointcloud", "raycast", "appearance", "grids", "quality", "semantic", "collision", "occupancy", "navmesh", "anchors", "package"]
+    name: Literal["read", "ingest", "dtm", "normals", "classify", "tile", "dsm", "zones", "hash", "validate", "normalize", "pointcloud", "raycast", "appearance", "grids", "quality", "semantic", "collision", "occupancy", "navmesh", "navgraph", "anchors", "package"]
     seconds: float
     peak_rss_mb: NotRequired[float]
 
@@ -10103,6 +10286,10 @@ class TruthV1(TypedDict):
     relation_checks: list[TruthV1RelationChecks]
     skyvis_1hz: dict[str, list[float | None]]
     consistency: dict[str, Any]
+    key_events: NotRequired[list[TruthV1KeyEvents]]
+    key_relations: NotRequired[list[TruthV1KeyRelations]]
+    validator_params: NotRequired[dict[str, Any]]
+    report_map: NotRequired[dict[str, list[str]]]
     perf: NotRequired[dict[str, Any]]
 
 
@@ -10136,6 +10323,28 @@ class TruthV1EventsEvidence(TypedDict):
     door_dist_m: NotRequired[float]
     sky_vis_min: NotRequired[float]
     zone: NotRequired[str]
+    object: NotRequired[str]
+    dist_m: NotRequired[float]
+    gap_ms: NotRequired[int]
+
+
+# event/truth.v1.schema.json#/properties/key_events/items
+class TruthV1KeyEvents(TypedDict):
+    id: str
+    type: str
+    participants: list[str]
+    interval_ms: list[int]
+    window_s: NotRequired[float]
+    declared: NotRequired[bool]
+    ref: NotRequired[str]
+    params: dict[str, Any]
+
+
+# event/truth.v1.schema.json#/properties/key_relations/items
+class TruthV1KeyRelations(TypedDict):
+    src: str
+    rel: Literal["before", "after", "during", "overlaps", "causes", "enables"]
+    dst: str
 
 
 # event/truth.v1.schema.json#/properties/relation_checks/items

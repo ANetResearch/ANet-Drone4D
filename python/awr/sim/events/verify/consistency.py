@@ -7,9 +7,9 @@
 - `S-ARRIVAL`：脚本演员每个路点的实际到达时刻与计划时刻之差为 0（运动学排时，1 mm 对应的时间小于 1 ms）、到达位置定点化误差
   ≤ `tol_mm`（1 mm），且到达时刻落在 tick 上并可见时磁带位置与计划点之差 ≤ `tol_mm`；
 - `S-OVERLAP`：脚本演员两两可见帧的水平间距 ≥ `min_m`（0.5 m），同乘与同一 zone 站位（两者均以该 zone 为路点且同在其内）
-  除外；背景与脚本演员的间距只统计并告警 `W-BG-OVERLAP`（人群避让属 D3-AC-29，P1，以 ADR 移出 D3 封板范围），
+  除外，`object` 类物体（被拾取、放下与交接的道具，P0b）不参与；背景与脚本演员的间距只统计并告警 `W-BG-OVERLAP`（人群避让属 D3-AC-29，P1，以 ADR 移出 D3 封板范围），
   `bg_overlap_error = true` 时按 `S-OVERLAP` 报错；
-- `S-CONTAINER`：状态 3 的演员 `container` 指向状态 1 或 2 的车辆（P1 的物体可由行人携带），且该帧 x、y、z 相同；非状态 3 的
+- `S-CONTAINER`：状态 3 的演员 `container` 指向状态 1 或 2 的车辆（物体可由行人携带，P0b），且该帧 x、y、z 相同；非状态 3 的
   演员 `container` 为 255。
 """
 
@@ -135,8 +135,9 @@ def _route_zones(ctx: Context, i: int) -> set[str]:
 def overlap(ctx: Context, p: dict) -> CheckResult:
     lim = float(p["min_m"])
     rows, ss = [], math.inf
-    zs = {i: _route_zones(ctx, i) for i in ctx.scripted()}
-    for i, j in itertools.combinations(ctx.scripted(), 2):
+    bodies = [i for i in ctx.scripted() if ctx.cls[i] != "object"]
+    zs = {i: _route_zones(ctx, i) for i in bodies}
+    for i, j in itertools.combinations(bodies, 2):
         m = ctx.vis[:, i] & ctx.vis[:, j]
         if not m.any():
             continue
@@ -156,10 +157,11 @@ def overlap(ctx: Context, p: dict) -> CheckResult:
     bs, n_bg_fail, bg_rows = math.inf, 0, []
     if n_b and n_s:
         step = max(1, (1 << 22) // (n_b * n_s))
+        body = np.array([c != "object" for c in ctx.cls[:n_s]], bool)
         for k0 in range(0, len(f), step):
             B = f[k0:k0 + step, n_s:]
             vb = np.isin(B["state"], VISIBLE)
-            vs = ctx.vis[k0:k0 + step]
+            vs = ctx.vis[k0:k0 + step] & body
             if not (vb.any() and vs.any()):
                 continue
             bxy = np.stack([B["x_mm"], B["y_mm"]], -1).astype(np.float64) / 1000.0

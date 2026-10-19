@@ -193,7 +193,7 @@ def test_header_env_track_and_contracts(compiled) -> None:
     reg = Registry().with_resources([(th["$id"], Resource.from_contents(th))])
     jsonschema.Draft202012Validator(tm, registry=reg).validate(json.loads((r.out / "tape.json").read_text()))
     assert {p.name for p in r.out.iterdir()} == {"event.json", "plan.json", "anchors.json", "tape.bin", "tape.json", "compile_report.json", "truth"}
-    assert [p.name for p in (r.out / "truth").rglob("*") if p.is_file()] == ["event_truth.json"]                # 门 3 真值（E01）
+    assert sorted(p.name for p in (r.out / "truth").rglob("*") if p.is_file()) == ["event_graph.json", "event_truth.json"]  # 门 3 真值与事件图
     assert r.tape["bytes_per_actor_s"] <= 25.0
     assert t.comm_zones_at(29_999_999_999) == [] and t.comm_zones_at(70_000_000_000) == []
     (z,) = t.comm_zones_at(30_000_000_000)

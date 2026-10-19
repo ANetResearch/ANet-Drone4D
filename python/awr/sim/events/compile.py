@@ -6,10 +6,12 @@
 
 门 3（§6.9，`awr.sim.events.verify`）：在流式复算之后对规范帧数据执行检测器、声明与关系核对、一致性检查与天空可见度；strict 下
 任一声明未验证、关系不成立或一致性失败返回 613 `EVENT_SEMANTIC_MISMATCH` 且不发布产物，lenient 下同一代码记为告警；未声明的显著
-事件以 `declared: false` 写入真值并告警 `W-UNDECLARED`。观测性 oracle、事件图与 `truth.mcap` 由后续工作包接入。
+事件以 `declared: false` 写入真值并告警 `W-UNDECLARED`。事件图 `event_graph.json`（§6.10.2，`gen.build_graph`）与真值同目录写出；
+观测性 oracle 与 `truth.mcap` 由后续工作包接入。
 
 产物：`event.json`（原始 DSL 的 JSON 形式）、`plan.json`、`anchors.json`（解析后锚点）、`tape.bin`、`tape.json`、
-`truth/r<truth_rev>/event_truth.json`（`drone4d.event_truth.v1`）、`compile_report.json`（含 `truth_summary`）。
+`truth/r<truth_rev>/event_truth.json`（`drone4d.event_truth.v1`）、`truth/r<truth_rev>/event_graph.json`（`drone4d.event_graph.v1`）、
+`compile_report.json`（含 `truth_summary`）。
 """
 
 from __future__ import annotations
@@ -207,7 +209,7 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     if opts.preflight_only:
         return res
     # ------------------------------------------------------------ 生成与打包
-    from awr.sim.events.gen import arrivals, build_header, build_truth, generate_frames, truth_sha256
+    from awr.sim.events.gen import arrivals, build_graph, build_header, build_truth, generate_frames, truth_sha256
     from awr.sim.events.tape import TapeReader, manifest, write_tape
     from awr.sim.events.verify import load_quality, verify_event
 
@@ -239,6 +241,8 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     t_sha = truth_sha256(truth)
     (tmp / "truth" / f"r{opts.truth_rev}").mkdir(parents=True)
     (tmp / "truth" / f"r{opts.truth_rev}" / "event_truth.json").write_text(json.dumps(truth, ensure_ascii=False, indent=1), encoding="utf-8")
+    (tmp / "truth" / f"r{opts.truth_rev}" / "event_graph.json").write_text(json.dumps(build_graph(truth, table), ensure_ascii=False, indent=1),
+                                                                           encoding="utf-8")   # §6.10.2（M23-FR-074）
     res.truth = g3.summary(opts.truth_rev, t_sha)
     prov = {"generator": GENERATOR, "generator_version": GENERATOR_VERSION, "recast_navigation": "none (awr-navgrid@1)", "wasm_sha256": "0" * 64,
             "node": "none", "host": platform.node(), "wall_ms": int((time.perf_counter() - t_wall) * 1000),

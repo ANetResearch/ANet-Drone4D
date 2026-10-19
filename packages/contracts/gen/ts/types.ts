@@ -587,6 +587,15 @@ export type EoZoom1 = {
   [k: string]: unknown
 }
 /**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ExportManifestV1Sha256".
+ */
+export type ExportManifestV1Sha256 = string
+/**
+ * sha256 of the archived payload this file was derived from (equal to sha256 for byte-identical kinds)
+ */
+export type ExportManifestV1Sha2561 = string
+/**
  * Fault injection request. Mock-only fault injection (M09 §6.12; REST R16 POST /api/fleet/vehicles/{id}/faults; scenario action fault.inject). Out-of-range values return 422 110.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -4023,6 +4032,57 @@ export interface D3Semantic {
   ]
 }
 /**
+ * Dataset event index dataset/<event_id>/index.json (drone4d.bench.dataset_index.v1). M27-FR-064; M27 §7.6; D3-AC-63 (contracts 1.3.0, d1 V0.3). Event-level index of the three-tier dataset directory (event, truth, runs): experiments and runs, split and metric summary per run, exported formats and the export manifest hash. Maintained by awr.bench.export; contains no timestamps, so repeated exports of the same runs leave it byte-identical.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "DatasetIndexV1".
+ */
+export interface DatasetIndexV1 {
+  schema: 'drone4d.bench.dataset_index.v1'
+  event_id: string
+  world_id: string
+  split: 'dev' | 'test'
+  /**
+   * Files under event/
+   */
+  event: DatasetIndexV1File[]
+  /**
+   * Files under truth/ (dev only; test truth lives in hidden/)
+   */
+  truth: DatasetIndexV1File[]
+  experiments: {
+    experiment_id: string
+    runs: string[]
+  }[]
+  runs: {
+    run_id: string
+    experiment_id: string
+    split: 'dev' | 'test'
+    obs_level: string
+    ranked: boolean
+    determinism_level: '1b' | '2' | '3' | 'none'
+    seed_commit: string
+    metrics: {
+      ec: number | null
+      ec_coverage: number | null
+      eu_f1: number | null
+      ao_real: number | null
+      ranked_valid: boolean | null
+    }
+    exports: ('files' | 'bag')[]
+    export_manifest_sha256: string | null
+  }[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "DatasetIndexV1File".
+ */
+export interface DatasetIndexV1File {
+  path: string
+  bytes: number
+  sha256: string
+}
+/**
  * awr.sensor.detection.v1. Detection record of the session detection ring (8192, AWR-17 §17.6.4; SB-39). Imaging sensors give the target id; radar and acoustic give track_id or bearing_id and target null.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -5172,6 +5232,127 @@ export interface WorldCommonFileRef {
   path: WorldCommonRelHref
   bytes?: number
   sha256?: WorldCommonSha256
+}
+/**
+ * Dataset export manifest derived/export_manifest.json (drone4d.bench.export_manifest.v1). M27-FR-066, FR-067, FR-068, FR-072, FR-073, FR-074; M27 §7.6; D3-AC-63 (contracts 1.3.0, d1 V0.3). One manifest per run under runs/<run_id>/derived/. Lists every exported file with its sha256, the source raw.mcap and truth file hashes, the quantisation of each derived format, licence and attribution inherited from the world package, and the generation-tool statement. Only dev-split, non-evaluation runs are exportable (691 otherwise). Apart from generated_unix_ns the document is byte-identical for the same raw.mcap, truth file and exporter version (FR-074).
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "ExportManifestV1".
+ */
+export interface ExportManifestV1 {
+  schema: 'drone4d.bench.export_manifest.v1'
+  exporter: {
+    name: 'awr.bench.export'
+    version: string
+    contracts_version: string
+  }
+  /**
+   * The only field excluded from export determinism (FR-074)
+   */
+  generated_unix_ns: number
+  run_id: string
+  experiment_id: string
+  event_id: string
+  world_id: string
+  split: 'dev'
+  /**
+   * @minItems 1
+   */
+  formats: ['files' | 'bag', ...('files' | 'bag')[]]
+  /**
+   * @minItems 1
+   */
+  layers: ['obs' | 'run' | 'truth', ...('obs' | 'run' | 'truth')[]]
+  source: {
+    raw_mcap_sha256: ExportManifestV1Sha256
+    raw_mcap_bytes: number
+    frames_idx_sha256: ExportManifestV1Sha256
+    truth_mcap_sha256: ExportManifestV1Sha256 | null
+    run_manifest_sha256: ExportManifestV1Sha256
+    evaluation_sha256: ExportManifestV1Sha256 | null
+  }
+  /**
+   * Per derived kind: how the file encodes the archived value (lossless kinds state lossless = true)
+   */
+  quantization: {
+    [k: string]: {
+      encoding: string
+      lossless: boolean
+    }
+  }
+  license: {
+    complete: boolean
+    /**
+     * Licence of the world package source data (e.g. CC-BY-4.0); renderings are derived works
+     */
+    dataset: string | null
+    citation: string | null
+    url: string | null
+    notice: string | null
+    /**
+     * world.json dataset.redistribution fact record (ADR-034)
+     */
+    redistribution: boolean | null
+    derivedFrom: {}[]
+    attribution: {
+      en?: string | null
+      zh?: string | null
+    }
+    modification: string
+    missing: string[]
+  }
+  generation: {
+    synthetic: true
+    statement: {
+      zh: string
+      en: string
+    }
+    appearance: string
+    tools: {
+      name: string
+      version: string
+      role: string
+    }[]
+    /**
+     * run_manifest.versions (M27-FR-008)
+     */
+    versions: {}
+  }
+  /**
+   * Derived-artifact retention class per format (M27-FR-058: bag transient 7 d, files standard 30 d)
+   */
+  retention: {
+    [k: string]: 'transient' | 'standard' | 'pinned'
+  }
+  counts: {
+    [k: string]: number
+  }
+  skipped: {
+    what: string
+    why: string
+    n?: number
+  }[]
+  /**
+   * Sorted by path; paths are relative to derived/
+   */
+  files: {
+    path: string
+    format: 'files' | 'bag'
+    layer: 'obs' | 'run' | 'truth'
+    kind: 'rgb' | 'depth_log16' | 'seg_instance' | 'seg_semantic' | 'lidar' | 'state' | 'messages' | 'actions' | 'reports' | 'bag'
+    uav?: string
+    sensor?: string
+    seq?: number
+    t_ns?: number
+    /**
+     * Lines (jsonl) or messages (bag)
+     */
+    n?: number
+    bytes: number
+    sha256: ExportManifestV1Sha256
+    source_sha256?: ExportManifestV1Sha2561
+    stats?: {}
+  }[]
 }
 /**
  * awr.field.profile.v1. Topics field/acoustic, field/visual, field/thermal, field/radar (1 Hz wall, on subscription) and SB-74 (AWR-17 §17.20.6; semantics AWR-04 §15.11.4, M18-M19 PRD §15.2.2; drafted by M19 WP-19b). Free-space field of each vehicle: v(r, e) = v_r(r) (+ or x) f_el(e) on the shared log-spaced grid r_m; e is the elevation of the vehicle seen from the observer (sample point), looked up in the nearest el_deg cell; beyond cut_el_m of that cell nothing is drawn. v_r encoding v_enc: lin = round((v - v_off) * 10), log = round((lg v + 8) * 4000); 65535 = not drawn; trailing 65535 omitted. f_el i16 x100 (dB for combine add, factor for mul); f_el and cut_el_m with one item apply to every elevation. Topic frames carry arrays only for vehicles whose rev changed (or every vehicle in a keyframe); `same` references an earlier item of the same frame with identical arrays. Non-keyframes omit r_m, el_deg, bands, iso, ref and shell_ref (unchanged since the last keyframe; a grid change is always a keyframe).
@@ -9921,6 +10102,7 @@ export interface QaReport {
       | 'collision'
       | 'occupancy'
       | 'navmesh'
+      | 'navgraph'
       | 'anchors'
       | 'package'
     seconds: number
@@ -10021,6 +10203,10 @@ export interface QaReport {
      * per profile: islands, walkable area before and after trimming, random path reachability and corridor, vegetation share
      */
     navmesh?: {}
+    /**
+     * OSM road and lane graph (M22-FR-034, FR-074): content and file sha256, edge, lane, connector, junction and stop line counts, road corridor share, routable share, NavMesh snap share, warnings
+     */
+    navgraph?: {}
     /**
      * counts per class, snap distance quantiles, warnings, relocations, difference to the previous version
      */
@@ -13377,7 +13563,7 @@ export interface TracksV1 {
   ]
 }
 /**
- * Semantic event truth event_truth.json (drone4d.event_truth.v1). M23 §6.10.1 (contracts 1.3.0, d1 V0.3). Truth layer: evaluators and admins only. truth_sha256 = JCS hash without perf.
+ * Semantic event truth event_truth.json (drone4d.event_truth.v1). M23 §6.10.1 (contracts 1.3.0, d1 V0.3). Truth layer: evaluators and admins only. truth_sha256 = JCS hash without perf. v1.3 (M23 §15.3, FR-077; P0b, additive): key_events, key_relations, validator_params and report_map are written only for event types with a registered type validator.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
  * via the `definition` "TruthV1".
@@ -13416,6 +13602,18 @@ export interface TruthV1 {
       door_dist_m?: number
       sky_vis_min?: number
       zone?: string
+      /**
+       * Carried object actor id (object_handover)
+       */
+      object?: string
+      /**
+       * Giver-receiver distance at the transfer, maximum of release and pickup frames (object_handover)
+       */
+      dist_m?: number
+      /**
+       * Release-to-pickup gap; 0 for a direct handover (object_handover)
+       */
+      gap_ms?: number
     }
   }[]
   annotation_checks: {
@@ -13446,6 +13644,56 @@ export interface TruthV1 {
    * M23 §6.9.4 statistics and worst values
    */
   consistency: {}
+  /**
+   * Key events computed by the type validator from the tape (M23 §15.3 column 3, FR-077); authored declarations are only cross-checked
+   */
+  key_events?: {
+    id: string
+    type: string
+    /**
+     * @minItems 1
+     */
+    participants: [string, ...string[]]
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    interval_ms: [number, number, ...number[]]
+    window_s?: number
+    /**
+     * True when the key event derives from a declared truth event
+     */
+    declared?: boolean
+    /**
+     * Id of the events[] row the key event derives from, if any
+     */
+    ref?: string
+    /**
+     * Type-specific evidence, e.g. giver, receiver and object of a handover
+     */
+    params: {}
+  }[]
+  /**
+   * Relation edges between key events produced by the type validator; each holds by construction under the gate-3 relation predicates
+   */
+  key_relations?: {
+    src: string
+    rel: 'before' | 'after' | 'during' | 'overlaps' | 'causes' | 'enables'
+    dst: string
+  }[]
+  /**
+   * Type validator thresholds in effect, defaults included; part of truth_sha256 (M23 §15.3 rule 1)
+   */
+  validator_params?: {}
+  /**
+   * Agent report type to the key event types it matches (key_relations for relation reports), used by EU matching (M23 §15.3 rule 4, AWR-05 §5.2.8 rule 5)
+   */
+  report_map?: {
+    /**
+     * @minItems 1
+     */
+    [k: string]: [string, ...string[]]
+  }
   /**
    * Ray counts and timings; excluded from truth_sha256
    */

@@ -20,7 +20,8 @@ from typing import Any
 
 from awr.sim.events.jcs import jcs
 
-__all__ = ["CLASS_DEFAULTS", "LIMITS", "YAML_LIMITS", "Issue", "event_sha256", "gate1", "load_doc", "ms", "normalize", "stop_windows"]
+__all__ = ["CARRY_DROP", "CARRY_PICKUP", "CLASS_DEFAULTS", "LIMITS", "YAML_LIMITS", "CarryStep", "Issue", "carry_schedule", "event_sha256", "gate1",
+           "load_doc", "ms", "normalize", "stop_windows"]
 
 LIMITS = {"actors": 30, "background": 1000, "route": 64, "annotations": 256, "relations": 512, "zones": 32, "keyframes": 256,
           "duration_s": 3600.0, "dsl_bytes": 1 << 20}
@@ -38,7 +39,7 @@ CLASS_DEFAULTS: dict[str, dict[str, Any]] = {
 }
 P0A_CLASSES = frozenset(CLASS_DEFAULTS)
 STATIC_CLASSES = frozenset({"machine", "object"})
-ACTIONS_BY_CLASS = {"person": {"spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn"},
+ACTIONS_BY_CLASS = {"person": {"spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn", "pickup", "drop"},
                     "vehicle": {"spawn", "pass", "wait", "despawn"}, "dog": {"spawn", "pass", "wait", "despawn"},
                     "machine": {"spawn", "despawn"}, "object": {"spawn", "despawn"}}
 ENV_DEFAULTS = {"wind_mps": 3.0, "wind_dir_deg": 270.0, "gust_sigma_mps": 0.5, "rain_mm_h": 0.0, "visibility_m": 30000.0, "fog": 0.0,
@@ -213,6 +214,71 @@ def stop_windows(route: list[dict], dur_s: float) -> list[tuple[float, float, bo
     return out
 
 
+CARRY_DROP, CARRY_PICKUP = 0, 1
+CARRY_TICK_MS = 100
+
+
+@dataclass(frozen=True)
+class CarryStep:
+    """物体携带日程的一步（M23-FR-058，P0b）：`t_ms` 为行人路点时刻向上取整到 100 ms 帧，`kind` 为 `CARRY_DROP` 或 `CARRY_PICKUP`。"""
+    t_ms: int
+    kind: int
+    actor: str
+    waypoint: int
+    actor_index: int
+
+
+def carry_schedule(actors: list[dict]) -> dict[str, list[CarryStep]]:
+    """物体携带日程：object id → 按 (帧, 先放下后拾取, 行人 id) 排序的 `CarryStep` 列表。行人路点 `do: pickup | drop` 的 `target`
+    为物体；同一帧内 A 放下、B 拾取即为直接交接（容器在相邻两帧由 A 变为 B）。`actors` 可为 DSL 文档（`t`，秒）或规范化 plan
+    （`t_ms`）的演员表；门 1、门 2、生成与门 3（`verify.rendezvous`）共用本函数，保证四处的帧时刻一致。"""
+    out: dict[str, list[CarryStep]] = {}
+    for ai, a in enumerate(actors):
+        for j, w in enumerate(a.get("route", [])):
+            do = w.get("do", "pass")
+            if do not in ("pickup", "drop") or not w.get("target"):
+                continue
+            t = int(w["t_ms"]) if "t_ms" in w else ms(w["t"])
+            t = (t + CARRY_TICK_MS - 1) // CARRY_TICK_MS * CARRY_TICK_MS
+            out.setdefault(w["target"], []).append(CarryStep(t, CARRY_PICKUP if do == "pickup" else CARRY_DROP, a["id"], j, ai))
+    return {k: sorted(v, key=lambda s: (s.t_ms, s.kind, s.actor, s.waypoint)) for k, v in sorted(out.items())}
+
+
+def _carry_issues(acts: list[dict], cls_of: dict[str, str]) -> list[Issue]:
+    """门 1 携带次序（M23-FR-058）：拾取时物体未被携带、已出现且未消失；放下者为当前携带者；物体在被携带期间不得 despawn。"""
+    errs = []
+    by_id = {a["id"]: a for a in acts}
+    for oid, steps in carry_schedule(acts).items():
+        if cls_of.get(oid) != "object":
+            continue                                              # 目标类别错误已由 E-CARRY-TARGET 报出
+        r = by_id[oid]["route"]
+        t_spawn = ms(r[0]["t"]) if r else 0
+        t_gone = next((ms(w["t"]) for w in r[1:] if w.get("do") == "despawn"), None)
+        holder, t_hold = None, 0
+        for s in steps:
+            p = f"/actors/{s.actor_index}/route/{s.waypoint}"
+            t_s = s.t_ms / 1000.0
+            if s.kind == CARRY_PICKUP:
+                why = ("carried" if holder is not None else "before_spawn" if s.t_ms < t_spawn else
+                       "after_despawn" if t_gone is not None and s.t_ms >= t_gone else None)
+                if why:
+                    errs.append(_e("E-CARRY-ORDER", 611, p, f"{s.actor} 在 {t_s:g} s 无法拾取物体 {oid}（{why}）",
+                                   f"{s.actor} cannot pick up object {oid} at {t_s:g} s ({why})", object=oid, why=why,
+                                   holder=holder))
+                    continue
+                holder, t_hold = s.actor, s.t_ms
+            elif holder != s.actor:
+                errs.append(_e("E-CARRY-ORDER", 611, p, f"{s.actor} 在 {t_s:g} s 未携带物体 {oid}，不能放下",
+                               f"{s.actor} does not carry object {oid} at {t_s:g} s and cannot drop it", object=oid, why="not_holder",
+                               holder=holder))
+            else:
+                holder = None
+        if holder is not None and t_gone is not None and t_gone > t_hold:
+            errs.append(_e("E-CARRY-ORDER", 611, f"/actors/{acts.index(by_id[oid])}/route", f"物体 {oid} 在被 {holder} 携带期间 despawn",
+                           f"Object {oid} despawns while carried by {holder}", object=oid, why="despawn_carried", holder=holder))
+    return errs
+
+
 def _covers(win: tuple[float, float, bool], t: float, board: bool) -> bool:
     """上车：乘客可先到并等候，只要求车辆尚未离开（t 不晚于窗口终点）；下车：t 须落在窗口内。"""
     lo, hi, closed = win
@@ -224,7 +290,8 @@ def _e(code: str, reason: int | None, path: str, zh: str, en: str, **detail) -> 
 
 
 def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list[Issue], list[Issue]]:
-    """门 1：schema、id、引用、时间、类别与动作、上车目标、限额、模式、外观引用与可区分性（`appearance.gate1_issues`）。
+    """门 1：schema、id、引用、时间、类别与动作、上车目标、限额、模式、外观引用与可区分性（`appearance.gate1_issues`）、
+    类型必备配置（`verify.registry.type_issues`）。
     `anchors` 为解析后的锚点表（id → 锚点；None 表示世界无锚点层且无覆盖层，锚点引用一律报未知）。返回 (plan 或 None, errors, warnings)。"""
     sch = _schema_issues(doc)
     if any(e.code != "E-LIMIT" for e in sch):                     # 结构性错误：后续检查依赖结构，提前返回
@@ -303,6 +370,9 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
                         errs.append(_e("E-BOARD-TARGET", 611, f"{p}/t", f"{zh}车时刻 {t_p:g} s 不在车辆 {tgt} 的等待窗口内",
                                        f"The {do} time {t_p:g} s is outside the waiting windows of vehicle {tgt}", vehicle=tgt, why="window",
                                        t_s=t_p, windows_s=[[lo, hi] for lo, hi, _c in wins]))
+            if do in ("pickup", "drop") and cls_of.get(w.get("target")) != "object":
+                errs.append(_e("E-CARRY-TARGET", 611, f"{p}/target", "拾取与放下的目标须为物体演员", "Pickup/drop target must be an object actor",
+                               target=w.get("target")))
         if route:
             first = route[0].get("do", "pass")
             if first not in ("spawn", "exit_building"):
@@ -312,6 +382,7 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
                 if w.get("do") in ("despawn",) or (w.get("do") == "enter_building" and route[j + 1].get("do") != "exit_building"):
                     errs.append(_e("E-FIRST-WAYPOINT", 611, f"{base}/route/{j + 1}", "despawn 或 enter_building 之后仍有路点",
                                    "Waypoints follow despawn or enter_building"))
+    errs.extend(_carry_issues(acts, cls_of))                      # 物体携带次序（M23-FR-058，P0b）
     for gi, g in enumerate(doc.get("background", [])):
         if g["class"] == "dog":
             errs.append(_e("E-CLASS-UNSUPPORTED", 619, f"/background/{gi}/class", "背景狗在 P1 提供", "Background dogs are available from P1"))
@@ -348,6 +419,9 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
     from awr.sim.events.appearance import gate1_issues as appearance_issues
 
     errs.extend(appearance_issues(doc))                           # 外观引用与可区分性（M23-FR-072，appearance_lib@1）
+    from awr.sim.events.verify.registry import type_issues
+
+    errs.extend(type_issues(doc, anchors))                        # 类型必备配置（M23-FR-071，§15.3 第 2 列，E-TYPE）
     errs.extend(_e("E-RELATION-REF", 611, f"/relations/{j}/{side}", f"关系引用未知注释：{r[side]}", f"Relation references unknown annotation: {r[side]}")
                 for j, r in enumerate(doc.get("relations", [])) for side in ("src", "dst") if r[side] not in ann_ids)
     if errs:

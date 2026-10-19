@@ -8,7 +8,9 @@ E08 `search.py`、E09 `vehicle_track.py`）：
   `fn(ctx, params) -> list[Detection]`；`params` 为缺省参数与注释 `params` 的合并结果；
 - 一致性检查 `@check(code)`：§6.9.4 的逐项检查，签名 `fn(ctx, params) -> CheckResult`；
 - 类型验证器 `@validator(event_type)`：§15.3 第 3 列，签名 `fn(ctx, gate3) -> None`，可向 `gate3` 追加事件、错误、告警与
-  `extra`（写入编译报告）。
+  `extra`（写入编译报告）；
+- 门 1 类型必备配置检查 `@requirement(event_type)`：§15.3 第 2 列（M23-FR-071），签名 `fn(doc, anchors) -> list[Issue]`，由
+  `dsl.gate1` 经 `type_issues()` 调用，问题以 `type_issue()` 构造（`E-TYPE`，611，`detail.why = type_requirement`）。
 
 同一键重复登记抛 `RuntimeError`（避免并行新增的文件静默覆盖）；登记次序不影响结果（门 3 按类型名与代码排序执行）。
 """
@@ -20,7 +22,8 @@ import pkgutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-__all__ = ["CHECKS", "DETECTORS", "VALIDATORS", "Check", "Detector", "check", "collect", "detector", "validator"]
+__all__ = ["CHECKS", "DETECTORS", "REQUIREMENTS", "VALIDATORS", "Check", "Detector", "check", "collect", "detector", "requirement",
+           "type_issue", "type_issues", "validator"]
 
 _CORE = frozenset({"base", "registry", "engine"})
 
@@ -46,6 +49,7 @@ class Check:
 DETECTORS: dict[str, Detector] = {}
 CHECKS: dict[str, Check] = {}
 VALIDATORS: dict[str, Callable] = {}
+REQUIREMENTS: dict[str, Callable] = {}
 _collected = False
 
 
@@ -75,6 +79,27 @@ def validator(event_type: str):
         _put(VALIDATORS, event_type, fn, "validator")
         return fn
     return deco
+
+
+def requirement(event_type: str):
+    def deco(fn: Callable) -> Callable:
+        _put(REQUIREMENTS, event_type, fn, "type requirement")
+        return fn
+    return deco
+
+
+def type_issue(path: str, zh: str, en: str, *, event_type: str, rule: str, **detail):
+    """门 1 类型必备配置问题（M23-FR-071）：`E-TYPE`，611，`detail = {why: type_requirement, event_type, rule, ...}`。"""
+    from awr.sim.events.dsl import Issue
+
+    return Issue("E-TYPE", 611, path, zh, en, {"why": "type_requirement", "event_type": event_type, "rule": rule, **detail})
+
+
+def type_issues(doc: dict, anchors: dict[str, dict] | None) -> list:
+    """按 `event_type` 执行已登记的门 1 必备配置检查（未登记的类型返回空表）；假定 `doc` 已通过 schema。"""
+    collect()
+    fn = REQUIREMENTS.get(doc.get("event_type", "rendezvous_handoff"))
+    return list(fn(doc, anchors or {})) if fn is not None else []
 
 
 def collect() -> None:

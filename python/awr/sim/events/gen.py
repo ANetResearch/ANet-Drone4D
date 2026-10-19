@@ -20,21 +20,23 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from awr.sim.events.anchors import anchor_xy, point_in_polygon
-from awr.sim.events.dsl import Issue
+from awr.sim.events.dsl import CARRY_PICKUP, Issue, carry_schedule
 from awr.sim.events.jcs import jcs
 from awr.sim.events.nav import NavGrid, Snap, rounded_length
 from awr.sim.events.tape import NO_CONTAINER, RECORD, fold_yaw, record_spec
 from awr.sim.sensors import cbrng
 
-__all__ = ["STREAM", "TRUTH_SCHEMA", "Stage", "arrivals", "build_header", "build_truth", "compile_env_track", "dsl_sha256", "generate_frames",
-           "preflight", "t_min", "truth_sha256", "v_peak"]
+__all__ = ["CARRY_DIST_M", "GRAPH_SCHEMA", "STREAM", "TRUTH_SCHEMA", "Stage", "arrivals", "build_graph", "build_header", "build_truth",
+           "compile_env_track", "dsl_sha256", "generate_frames", "preflight", "t_min", "truth_sha256", "v_peak"]
 
 STREAM = 19
 TICK_MS = 100
 BOARD_DIST_M = 8.0
+CARRY_DIST_M = 2.0                              # 拾取点到物体位置（交接时到交出者放下点）的距离上限（M23 §6.9.1 object_handover）
 ZONE_SLOT_R = 0.8
 INF_MS = 1 << 62
 TRUTH_SCHEMA = "drone4d.event_truth.v1"
+GRAPH_SCHEMA = "drone4d.event_graph.v1"
 for _n, _r in (("bg_goal", (0, 1)), ("bg_speed", (2, 2)), ("bg_pause", (3, 3)), ("bg_look", (4, 7)), ("bg_phase", (8, 8)),
                ("interactive", (16, 19)), ("local_dev", (20, 23))):
     cbrng.CHANNELS.setdefault((STREAM, _n), _r)
@@ -261,6 +263,7 @@ def preflight(plan: dict, stage: Stage, *, mode: str = "minimal") -> dict:
                 errs.append(_issue("I-BOARD", 612, f"/actors/{ai}/route/{j}", f"{a['id']} 在 {w['at']} 的{'上' if w['do'] == 'board' else '下'}车不在 {tgt} 的等待窗口内或距离 ≥ 8 m",
                                    f"{a['id']} {w['do']} at {w['at']} is outside the waiting window of {tgt} or ≥ 8 m away",
                                    actor=a["id"], vehicle=tgt, dwell_ext_s=ext_s))
+    errs.extend(_carry_preflight(plan, pts_of, idx_of))
     return {"errors": errs, "warnings": warns, "legs": legs, "retime": {"mode": mode, "actors": retime, "vehicle_dwell_ext_s": ext},
             "boards": boards, "windows": windows, "points": pts_of,
             "snaps": [{"anchor": s.anchor, "profile": k[1], "dist_m": round(s.dist_m, 3) if math.isfinite(s.dist_m) else None,
@@ -274,6 +277,28 @@ def _snap_issue(s: Snap, path: str, errs: list, warns: list) -> None:
     elif s.status == "warn" and not any(w.detail.get("anchor") == s.anchor for w in warns if w.code == "W-SNAP"):
         warns.append(_issue("W-SNAP", None, path, f"锚点 {s.anchor} 吸附距离 {s.dist_m:.1f} m", f"Anchor {s.anchor} snapped {s.dist_m:.1f} m away",
                             anchor=s.anchor, dist_m=s.dist_m))
+
+
+def _carry_preflight(plan: dict, pts_of: dict[str, list[Snap]], idx_of: dict[str, int]) -> list[Issue]:
+    """门 2 携带可行性（M23-FR-058，P0b）：拾取路点的吸附点到物体当前位置（出生点，或上一次放下者的放下路点吸附点）的水平距离
+    < `CARRY_DIST_M`，否则 `I-CARRY`（612）。门 1 已保证携带次序；实际磁带上的距离由门 3（`verify.rendezvous`）复核。"""
+    errs = []
+    for oid, steps in carry_schedule(plan["actors"]).items():
+        if not pts_of.get(oid):
+            continue
+        at = pts_of[oid][0].p
+        for s in steps:
+            p = pts_of[s.actor][s.waypoint].p
+            if s.kind != CARRY_PICKUP:
+                at = p
+                continue
+            d = math.dist(p[:2], at[:2])
+            if not d < CARRY_DIST_M:
+                errs.append(_issue("I-CARRY", 612, f"/actors/{idx_of[s.actor]}/route/{s.waypoint}",
+                                   f"{s.actor} 的拾取点距物体 {oid} {d:.2f} m（须 < {CARRY_DIST_M:g} m）",
+                                   f"Pickup point of {s.actor} is {d:.2f} m from object {oid} (must be < {CARRY_DIST_M:g} m)",
+                                   actor=s.actor, object=oid, dist_m=round(d, 3)))
+    return errs
 
 
 # ---------------------------------------------------------------------- 时间线
@@ -526,6 +551,52 @@ def _yaw_cdeg(vxy: np.ndarray, state: np.ndarray, first_dir: float) -> np.ndarra
     return fold_yaw(_fix(out, 100.0, np.int64))
 
 
+def _resolve_carry(plan: dict, order: list[dict], ev: list[dict], navs: list) -> None:
+    """物体携带（M23-FR-058、§15.1 第 3 条，P0b）：按 `dsl.carry_schedule` 改写物体的逐帧求值（乘客已复制容器记录之后）。
+
+    - 携带帧 [拾取帧, 放下帧)：携带者状态 1 或 2 时物体状态 3、`container` 为携带者；携带者在车内（状态 3）时物体随之在车内，
+      `container` 为该车辆（容器字段只指向可见的顶层容器）；携带者状态 0、4、5 时物体取相同状态、无容器；位置、速度与 z 提示
+      复制携带者记录（贴地后 x、y、z 与容器逐位相同，§6.9.4 `S-CONTAINER`）；
+    - 放下后：物体静止于放下帧的携带者位置（状态 2），直至下一次拾取或物体自身的 despawn；
+    - 同一帧先放下后拾取（直接交接）：容器在相邻两帧由交出者变为接收者。
+    没有拾取与放下的事件不经过本函数的任何改写，磁带与 `content_sha256` 不变。"""
+    pos = {a["id"]: i for i, a in enumerate(order)}
+    n_t = len(ev[0]["state"]) if ev else 0
+    for oid, steps in carry_schedule(plan["actors"]).items():
+        o = pos.get(oid)
+        if o is None or order[o]["class"] != "object":
+            continue
+        e = ev[o]
+        own_gone = e["state"] == 5
+        holder = -1
+        cuts = [(s.t_ms // TICK_MS, s) for s in steps] + [(n_t, None)]
+        k_prev = 0
+        for k, s in cuts:
+            k = min(max(k, 0), n_t)
+            if holder >= 0 and k > k_prev:                          # [k_prev, k) 由 holder 携带
+                c = ev[holder]
+                sl = slice(k_prev, k)
+                e["xy"][sl], e["vxy"][sl], e["z_hint"][sl] = c["xy"][sl], c["vxy"][sl], c["z_hint"][sl]
+                cs = c["state"][sl]
+                e["state"][sl] = np.where(np.isin(cs, (1, 2, 3)), 3, cs)
+                e["container"][sl] = np.where(np.isin(cs, (1, 2)), holder, np.where(cs == 3, c["container"][sl], -1))
+            if s is None:
+                break
+            if s.kind == CARRY_PICKUP:
+                holder = pos[s.actor]
+            elif holder >= 0 and k < n_t:                           # 放下：静止于放下帧的携带者位置，至下一次拾取或 despawn
+                rest = ev[holder]["xy"][k].copy()
+                m = np.arange(n_t) >= k
+                e["xy"][m], e["vxy"][m] = rest, 0.0
+                e["z_hint"][m] = navs[o].z_at_batch(np.tile(rest, (int(m.sum()), 1)))
+                e["state"][m] = np.where(own_gone[m], 5, 2)
+                e["container"][m] = -1
+                holder = -1
+            else:
+                holder = -1
+            k_prev = k
+
+
 def generate_frames(plan: dict, stage: Stage, pf: dict) -> tuple[np.ndarray, list[dict], dict]:
     """返回 (frames (n_ticks, n) RECORD, 演员表, 报告)。"""
     n_t = plan["duration_ms"] // TICK_MS
@@ -573,6 +644,7 @@ def generate_frames(plan: dict, stage: Stage, pf: dict) -> tuple[np.ndarray, lis
             e["xy"][src], e["vxy"][src], e["z_hint"][src] = c["xy"][src], c["vxy"][src], c["z_hint"][src]
             e["state"][src] = np.where(gone, 5, 3)
             e["container"][src[gone]] = -1
+    _resolve_carry(plan, order, ev, [nav for _ph, nav in tracks[:n_s]])
     xy = np.stack([e["xy"] for e in ev], 1)
     zh = np.stack([e["z_hint"] for e in ev], 1)
     zh_f = np.where(np.isfinite(zh), zh, 0.0)
@@ -593,11 +665,10 @@ def generate_frames(plan: dict, stage: Stage, pf: dict) -> tuple[np.ndarray, lis
         fr["vy_cmps"][:, i] = _fix(e["vxy"][:, 1], 100.0, np.int16)
         fr["state"][:, i] = e["state"]
         fr["container"][:, i] = np.where(e["container"] >= 0, e["container"], NO_CONTAINER).astype(np.uint8)
-    for i, e in enumerate(ev):                                  # 乘客的航向与容器一致
-        m = e["state"] == 3
-        if m.any():
-            c = int(fr["container"][m, i][0])
-            fr["yaw_cdeg"][m, i] = fr["yaw_cdeg"][m, c]
+    for i, e in enumerate(ev):                                  # 乘客与被携带物体的航向逐帧与容器一致
+        ks = np.flatnonzero(e["state"] == 3)
+        if len(ks):
+            fr["yaw_cdeg"][ks, i] = fr["yaw_cdeg"][ks, fr["container"][ks, i].astype(np.int64)]
     _finalize_vz(fr)
     vis = np.isin(fr["state"], (1, 2))
     report = _report(order, pf, fr, vis, n_s, found, _arrivals(order, pf, scripted))
@@ -696,13 +767,46 @@ def truth_sha256(truth: dict) -> str:
 
 def build_truth(plan: dict, tape_content_sha256: str, *, strict: bool = True, truth_rev: int = 1, detector_params: dict | None = None,
                 events: list[dict] | None = None, annotation_checks: list[dict] | None = None, relation_checks: list[dict] | None = None,
-                skyvis_1hz: dict | None = None, consistency: dict | None = None, perf: dict | None = None) -> dict:
+                skyvis_1hz: dict | None = None, consistency: dict | None = None, perf: dict | None = None,
+                key_events: list[dict] | None = None, key_relations: list[dict] | None = None, validator_params: dict | None = None,
+                report_map: dict | None = None) -> dict:
     """组装 `event_truth.json`（`drone4d.event_truth.v1`）。真值随 `dsl_sha256` 绑定完整 DSL：只改注释、关系、显示名或简报时
-    磁带与 `content_sha256` 不变，`dsl_sha256` 与 `truth_sha256` 改变（§6.7.5）。门 3 的结果经关键字参数传入。"""
+    磁带与 `content_sha256` 不变，`dsl_sha256` 与 `truth_sha256` 改变（§6.7.5）。门 3 的结果经关键字参数传入。
+
+    类型验证器的输出（M23 §15.3 规则 1、4，M23-FR-077）：`key_events`、`key_relations`、`validator_params`、`report_map` 只在
+    事件类型登记了验证器且其给出结果时写入（None 时不写该字段，未登记验证器的事件真值与此前逐字节相同）。"""
     doc = {"schema": TRUTH_SCHEMA, "event_id": plan["event_id"], "event_version": plan["version"], "truth_rev": int(truth_rev),
            "tape_content_sha256": tape_content_sha256, "dsl_sha256": dsl_sha256(plan), "strict": bool(strict),
            "detector_params": dict(detector_params or {}), "events": list(events or []), "annotation_checks": list(annotation_checks or []),
            "relation_checks": list(relation_checks or []), "skyvis_1hz": dict(skyvis_1hz or {}), "consistency": dict(consistency or {})}
+    for k, v in (("key_events", key_events), ("key_relations", key_relations), ("validator_params", validator_params),
+                 ("report_map", report_map)):
+        if v is not None:
+            doc[k] = list(v) if isinstance(v, list) else dict(v)
     if perf is not None:
         doc["perf"] = dict(perf)
     return doc
+
+
+def build_graph(truth: dict, actors: list[dict]) -> dict:
+    """事件图 `event_graph.json`（`drone4d.event_graph.v1`，M23 §6.10.2、M23-FR-074）：由真值与磁带头演员表组装。
+
+    节点：脚本演员实体 `{id, kind: entity, class, scripted}`（含 `object` 类物体）；真值事件与类型验证器关键事件
+    `{id, kind: event, type, interval_ms, declared}`（关键事件的 `declared` 取其引用的真值事件或匹配的声明）。边：参与者
+    `participates_in` 事件；通过验证的作者关系（`relation_checks`，按注释 id 连接其首个命中的真值事件）；关键事件之间的验证器关系
+    （`key_relations`）。实体按 id、事件按 (起始时刻, id)、边按 (rel, src, dst) 排序，同一真值两次组装逐字节相同。"""
+    ents = [{"id": a["id"], "kind": "entity", "class": a["class"], "scripted": True} for a in actors if a.get("scripted")]
+    names = {a["id"] for a in actors if a.get("scripted")}
+    evs = [{"id": e["id"], "kind": "event", "type": e["type"], "interval_ms": list(e["interval_ms"]), "declared": bool(e["declared"])}
+           for e in truth.get("events", [])]
+    keys = [{"id": k["id"], "kind": "event", "type": k["type"], "interval_ms": list(k["interval_ms"]), "declared": bool(k.get("declared", False))}
+            for k in truth.get("key_events", [])]
+    edges = {(p, "participates_in", e["id"]) for e in [*truth.get("events", []), *truth.get("key_events", [])] for p in e["participants"]
+             if p in names}
+    ann = {e["annotation"]: e["id"] for e in truth.get("events", []) if e.get("annotation") and e["id"] == e["annotation"]}
+    edges |= {(ann[r["src"]], r["rel"], ann[r["dst"]]) for r in truth.get("relation_checks", []) if r["verified"] and r["src"] in ann
+              and r["dst"] in ann}
+    edges |= {(r["src"], r["rel"], r["dst"]) for r in truth.get("key_relations", [])}
+    return {"schema": GRAPH_SCHEMA, "event_id": truth["event_id"], "event_version": truth["event_version"], "truth_rev": truth["truth_rev"],
+            "nodes": sorted(ents, key=lambda n: n["id"]) + sorted(evs + keys, key=lambda n: (n["interval_ms"][0], n["id"])),
+            "edges": [{"src": a, "rel": r, "dst": b} for a, r, b in sorted(edges, key=lambda x: (x[1], x[0], x[2]))]}

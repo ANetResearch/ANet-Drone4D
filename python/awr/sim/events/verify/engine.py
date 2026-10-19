@@ -53,11 +53,21 @@ class Gate3:
     stats: dict = field(default_factory=dict)
     extra: dict = field(default_factory=dict)          # 类型验证器输出（写入编译报告）
     perf: dict = field(default_factory=dict)
+    # 类型验证器写入真值的字段（§15.3 规则 1、4，M23-FR-077）；None 时取 `extra` 的同名键，两处都没有则真值中不写该字段
+    key_events: list[dict] | None = None
+    key_relations: list[dict] | None = None
+    validator_params: dict | None = None
+    report_map: dict | None = None
 
     def truth_kwargs(self) -> dict:
         """`gen.build_truth` 的门 3 关键字参数。"""
-        return {"detector_params": self.detector_params, "events": self.events, "annotation_checks": self.annotation_checks,
-                "relation_checks": self.relation_checks, "skyvis_1hz": self.skyvis_1hz, "consistency": self.consistency}
+        out = {"detector_params": self.detector_params, "events": self.events, "annotation_checks": self.annotation_checks,
+               "relation_checks": self.relation_checks, "skyvis_1hz": self.skyvis_1hz, "consistency": self.consistency}
+        for k in ("key_events", "key_relations", "validator_params", "report_map"):       # 字段未设置时取 extra 中的同名键
+            v = getattr(self, k) if getattr(self, k) is not None else self.extra.get(k)
+            if v is not None:
+                out[k] = v
+        return out
 
     def summary(self, truth_rev: int | None, truth_sha256: str | None) -> dict:
         """编译状态载荷 `truth_summary`（§7.3.1）。"""
@@ -140,7 +150,7 @@ def verify_event(plan: dict, frames: np.ndarray, table: list[dict], *, anchors: 
         ann_p.append(p)
         ann_who.append(who)
     ctx = Context(plan, frames, table, n_s, anchors, stage=stage, mesh=mesh, arrivals=arrivals, quality=list(quality or []),
-                  zone_refs=tuple(sorted(zone_refs)))
+                  zone_refs=tuple(sorted(zone_refs)), params=params)
     g = Gate3(strict=bool(strict))
     res = {"mesh": mesh, "stage": stage}
 

@@ -58,6 +58,7 @@ class Context:
     arrivals: list[dict] | None = None             # gen.arrivals 的逐路点到达
     quality: list[np.ndarray] = field(default_factory=list)      # 不完整区域多边形（M22 semantic.quality）
     zone_refs: tuple[tuple[str, float], ...] = ()  # 注释引用的 (zone 锚点, buffer_m)（zone_* 检测器的缺省对象）
+    params: dict = field(default_factory=dict)     # verify_event 的参数覆盖（键为检测器类型、检查代码或事件类型，类型验证器读取后者）
     cache: dict = field(default_factory=dict)
     perf: dict = field(default_factory=dict)
 
