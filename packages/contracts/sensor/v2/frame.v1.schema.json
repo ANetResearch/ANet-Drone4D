@@ -853,6 +853,7 @@
       "then": {
         "properties": {
           "agent_view": {
+            "type": "object",
             "required": [
               "rgb"
             ],
@@ -863,11 +864,13 @@
             }
           },
           "ground_truth": {
+            "type": "object",
             "required": [
               "invalid_mask"
             ],
             "properties": {
               "timing": {
+                "type": "object",
                 "required": [
                   "blur_subframes",
                   "rs_bands",
@@ -877,6 +880,7 @@
             }
           },
           "internal": {
+            "type": "object",
             "not": {
               "required": [
                 "thermal"
@@ -900,6 +904,7 @@
       "then": {
         "properties": {
           "agent_view": {
+            "type": "object",
             "required": [
               "temp_ck"
             ],
@@ -919,8 +924,10 @@
             }
           },
           "ground_truth": {
+            "type": "object",
             "properties": {
               "timing": {
+                "type": "object",
                 "required": [
                   "lag_subframes",
                   "subframe_weights"
@@ -929,6 +936,7 @@
             }
           },
           "internal": {
+            "type": "object",
             "required": [
               "thermal"
             ]
