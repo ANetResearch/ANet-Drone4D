@@ -23,7 +23,7 @@ def test_gate_covers_items_1_to_6() -> None:
     m = _gate()
     g = m.load_gate()
     assert {s["item"] for s in g["steps"]} == {1, 2, 3, 4, 5, 6}
-    assert [s["id"] for s in m.select_steps(g, None)].count("perf") == 0           # 缺省不跑性能（需独占主机）
+    assert [s["id"] for s in m.select_steps(g, None)].count("perf") == 1           # 第 3 条缺省运行（G04：与 D2 基线差分）
     assert [s["id"] for s in m.select_steps(g, ["perf"])] == ["perf"]
     with pytest.raises(ValueError):
         m.select_steps(g, ["nope"])

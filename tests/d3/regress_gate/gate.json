@@ -8,21 +8,24 @@
   {"id": "zero-impact", "item": 2, "kind": "builtin", "timeout_s": 7200},
   {"id": "resim", "item": 2, "kind": "builtin", "timeout_s": 1800,
    "doc": "resim frame digest sequence under both flag sets vs the D2 baseline (d2@928c57b): record the fixed script below into an input log, resim it, compare"},
-  {"id": "perf", "item": 3, "kind": "builtin", "timeout_s": 3600, "default": false,
-   "doc": "D2 perf subset; needs an exclusive host (ADR-033 run protocol), off by default on shared hosts"},
+  {"id": "perf", "item": 3, "kind": "builtin", "timeout_s": 3600,
+   "doc": "D2 perf subset vs the D2 baseline (<= 5 %, thread CPU time, median of 7 after 1 warm-up); on by default (G04): runs on the baseline host (dmax CPU pool, gate-d3-dmax), judged only after the per-CPU load precondition"},
   {"id": "lint", "item": 4, "kind": "cmd", "argv": ["make", "lint"], "cwd": ".", "timeout_s": 1800,
    "doc": "ruff, oxlint, lint-m06 and the import direction rule (lint-py-imports; item 5)"},
   {"id": "imports", "item": 5, "kind": "cmd", "argv": ["{py}", "tools/lint/check_py_imports.py"], "cwd": ".", "timeout_s": 600},
   {"id": "public-build", "item": 6, "kind": "cmd", "argv": ["make", "demo-build"], "cwd": ".", "timeout_s": 3600,
-   "doc": "public demo build with the K9 production bundle scan (ADR-111); the public site e2e and Tier S first screen run in the perf harness"},
+   "doc": "public demo build with the K9 production bundle scan (ADR-111); the public site e2e and Tier S first screen run in step public-e2e"},
   {"id": "k9-d3", "item": 6, "kind": "builtin", "timeout_s": 600,
    "doc": "K9 D3 extension: the D2 public demo build carries no D3 entry strings (/lab/, /api/bench/v1 and its runs|events|session paths); run after public-build"},
   {"id": "demo-parity", "item": 6, "kind": "cmd", "argv": ["make", "demo-parity"], "cwd": ".", "timeout_s": 2400,
    "doc": "extension point 15 build parity: the demo build of the D2 tag (D2_REF, default v0.2.1) and of this tree are byte identical (scan_public.py d2-parity; needs the git dir)"},
   {"id": "lab-build", "item": 6, "kind": "cmd", "argv": ["make", "lab-build"], "cwd": ".", "timeout_s": 1800,
-   "doc": "the /lab/ static build (VITE_AWR_LAB_ONLY=1) with the K9 production bundle scan and the lab profile of scan_public.py"}
+   "doc": "the /lab/ static build (VITE_AWR_LAB_ONLY=1) with the K9 production bundle scan and the lab profile of scan_public.py"},
+  {"id": "public-e2e", "item": 6, "kind": "builtin", "timeout_s": 3000,
+   "doc": "D2 public site e2e and the Tier S first screen under the emax cgroup emulation (tests/e2e/d2-public-gate.spec.ts), Tier S judged against the D2 baseline; run after public-build"}
  ],
  "zero_impact": {
+  "doc": "relay_batch run checks (summary.exit_code, config_problems) and r1 = r2 determinism are strict; scenario quality checks (gaps, handover, dispatch delays ...) pass when they pass or fail identically to baseline.json relay_checks (D2, d2@928c57b; G04 differential rule); record the D2 baseline with --stack-root <d2 checkout>: relay_batch puts its own tree's python/ first on the worker PYTHONPATH",
   "relay_batch": {"case": "b", "hours": 1, "seed": 11},
   "files": ["relay_stats.json", "events.jsonl"],
   "flags": [{"AWR_D3_ENABLED": "0"}, {"AWR_D3_ENABLED": "1"}],
@@ -45,5 +48,27 @@
   "doc_forbidden": "the bench client composes paths from the base literal (net/bench.ts BENCH + `/runs/...`), so the base /api/bench/v1 is forbidden too",
   "text_ext": [".html", ".js", ".mjs", ".css", ".json", ".webmanifest", ".txt", ".map", ".svg", ".xml"]
  },
- "perf": {"pytest": ["tests/targets/test_budget.py", "tests/perception"], "max_regression": 0.05}
+ "public_e2e": {
+  "doc": "AWR-04 §13 cgroup emulation of emax: unit CPUQuota 250 %, MemoryHigh 1.8G, MemoryMax 2G, cpuset 0-3, cgroup-exec.sh subgroups; supervisor with the shared show S7 and the sandbox control plane (quota profile local: one loopback visitor; prefix quota and proof of work are covered by the D2 sandbox tests); browser on client_cpus; the site routes like the emax nginx, the /lab/ build mounted at /lab/ when present",
+  "spec": "tests/e2e/d2-public-gate.spec.ts", "dist": ".cache/deploy/emax/web-dist", "lab_dist": ".cache/deploy/emax/lab-dist", "stack_root": ".",
+  "cgroup": {"enabled": true, "cpu_quota_pct": 250, "mem_high": "1.8G", "mem_max": "2G", "cpus": "0-3"}, "require_cgroup": true, "client_cpus": "4-7",
+  "stack": {"world": "synthcity", "max_sessions": "auto", "show_scenario": "s7-synthcity-relay", "quota_profile": "local", "ws_max_show": 24,
+            "set": ["run.scenario_profile=public"], "ready_timeout_s": 240},
+  "required": ["landing", "world-hub", "shared-show-viewer", "visitor-sandbox", "tier-s", "d3-requests"],
+  "tier_s": {"worlds": ["synthcity", "shenzhen"], "repeats": 3, "ttfp_ms_max": 1000, "regress_max": 0.05, "regress_floor_ms": 50,
+             "doc": "ttfp_ms_max = thresholds.json ttfp_ms (D1-AC-02, frozen); regress_max = the 5 % of D3-AC-01; regress_floor_ms = timing resolution of the shared local host for a TTFP of about 10 ms"},
+  "timeout_s": 2400
+ },
+ "perf": {
+  "doc": "D3-AC-01 item 3 (AWR-05 §4.8): targets/perception budget cases of D2 (M18-AC-022, M19-AC-010, M19-AC-026). Each repeat is a fresh worker process; metrics are the thread CPU time of the call phase (call_cpu_ms; preemption and run-queue waits of a loaded host are excluded) and the record_property values of the case; median of `repeats` after `warmup` (7 rather than the 3 of ADR-033: single repeats spread 10-40 % on the shared CPU pool), each <= D2 baseline x (1 + max_regression); the baseline is the median of `baseline_repeats` (a single 5-repeat session drifts about 3 % between sessions). Outcomes must equal the D2 baseline (cases that passed on d2 must pass; D2 budget misses stay accepted only while identical). Baseline: baseline.json `perf`, recorded with the d2@928c57b awr package on the dmax CPU pool in a no-load window; host fingerprint (CPU model, Python, numpy, numba) must match. flight60 and fleet-ladder are not part of this step yet",
+  "pytest": ["tests/targets/test_budget.py", "tests/perception/test_budget.py", "tests/perception/test_field_budget.py"],
+  "metrics": {
+   "tests/targets/test_budget.py::test_stage_budget_30x12": ["stage_cpu_ms_per_sim_s", "call_cpu_ms"],
+   "tests/perception/test_budget.py::test_stage_cost_12x30": ["call_cpu_ms"],
+   "tests/perception/test_field_budget.py::test_field_cost_12x30_per_sim_second": ["call_cpu_ms"]
+  },
+  "warmup": 1, "repeats": 7, "baseline_repeats": 21, "max_regression": 0.05, "timeout_s": 1800,
+  "load_max_per_cpu": 0.5, "load_wait_s": 600,
+  "env": {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "NUMBA_NUM_THREADS": "1"}
+ }
 }
