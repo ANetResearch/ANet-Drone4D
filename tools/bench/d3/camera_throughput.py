@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""tools/bench/d3/camera_throughput.py：相机档位吞吐（D3-AC-11 的 `rgb720-gs`、`rgb1080-rs` 两档；D3-AC-47 的 720p 与 `rgb1080-rs`
-端到端吞吐、1080p JPEG 单帧体积、会话显存与 GPU 时间；M25-AC-014、M25-AC-047、M25-NFR-01、NFR-13）。`therm512` 档与标准轨
-热成像、MID-360 并发负载由 S20 在本文件补齐。
+"""tools/bench/d3/camera_throughput.py：相机档位吞吐（D3-AC-11 的 `rgb720-gs`、`rgb1080-rs`、`therm512` 三档与标准轨单 Run、3 并发
+Run 的传感器实时因子和会话显存；D3-AC-47 的 720p 与 `rgb1080-rs` 端到端吞吐、1080p JPEG 单帧体积、会话显存与 GPU 时间；M25-AC-014、
+M25-AC-047、M25-NFR-01、NFR-13）。
 
 被测对象为单 M25 Worker 的完整相机链路（docs/05 §5.4.3、M25 §6.4–§6.7）：crop 世界常驻 EGL 光栅相机（`raster-gl`），按事件磁带
 绘制演员并输出 RGB8、L2-depth 平面深度、实例、无遮挡实例、语义、质量位与可见度归约（`objects[]`）；效果链取 `realistic` 噪声档
@@ -9,27 +9,39 @@
 计数须为 0）；真值 zstd 与可见度归约在编码线程池（缺省 4 线程，M25 §6.7）执行；观测写 `raw.mcap`、真值写真值 MCAP（M27
 `RunWriter` 异步队列，队列满时阻塞生产者，阻塞计入时延与吞吐）。
 
+`therm512` 档（S20，M25 §15.6、docs/05 §5.4.10）：`thermal.render.ThermalCamera`（640 × 512，S = 4 子帧运动机体、演员分区温度、
+Planck 辐射换算、大气透过、光学模糊、FPN 与 NETD，`realistic` 档）全输出：表观温度 u16（0.01 K）、无噪表观温度、实例、无遮挡实例、
+语义与 `objects[].dT_app_k`；`temp_ck` 经 u16 + zstd 编码（交付字节即存档字节），帧组装（`thermal_frame`）在编码线程池执行；
+观测经 `ThermalObs` 写 `raw.mcap` 热成像通道（`/uav/{id}/thermal/therm0`），真值（帧记录与实例、语义块）写真值 MCAP。静态日照
+可见度由 `thermal_bake` 在装载时烘焙（不计时），静态类别取世界包 `tri.cls`（无时为 default 行）。热成像与天气无关（D3-AC-11 单档），
+测量取最坏档天气（雾 2 km、雨 8 mm/h 的消光，不改变计算量）。
+
 两种测量（每种在独立 Worker 进程中运行，世界装载与预热不计时）：
 
 - `sustained`（持续吞吐）：N 台相机（缺省 3 机各 1 台，环绕事件演员群飞行 8 m/s、云台注视）轮流出帧，帧间不等待，在途帧 ≤
   `--inflight`；窗口 `--duration-s`（缺省 600 s，即 10 min 持续）内交付帧数 / 窗口墙钟为帧/s，另报 60 s 分箱的最小值。
-  单帧时延 = 开始渲染至交付（JPEG 与 frame.v1 记录就绪并入录制队列）。
+  单帧时延 = 开始渲染至交付（JPEG 或 `temp_ck` 与 frame.v1 记录就绪并入录制队列）。
 - `online`（在线闭环）：锁步 10 Hz，每 tick 对 N 机同时请求，全部交付后才进入下一 tick（Benchmark 等待全部到期帧，M25-FR-140）；
   单帧时延 = tick 请求时刻至该帧交付，传感器实时因子 RTF = 仿真时长 / 墙钟。`--runs 3` 时 3 个 Worker 同卡并发（标准轨 3 个
-  并发正式 Run），各自报告 RTF。
+  并发正式 Run），各自报告 RTF。`rgb1080-rs` 的 online 测量缺省为完整标准轨负载（`--online-extras therm512,mid360`）：同一 Worker
+  每 tick 另出 N 帧 `therm512`（与可见光共用 EGL 上下文）与 N 帧 MID-360（`lidar.warp_mesh.WarpMeshLidar.scan_batch` 一次 launch，
+  20,000 槽位、K = 11 逐点位姿、演员按逐射线时刻、最坏档 905 nm 消光、`realistic` 噪声档，观测写 `raw.mcap`，槽位真值写真值 MCAP），
+  全部交付后才进入下一 tick；可见光、热成像与 LiDAR 的单帧时延分别统计。`--online-extras none` 只测相机部分（验收标注
+  `partial_workload:camera_only`，不计入）。
 
 天气档（D3-AC-11）：晴天档 = 畸变、雾、噪声、ISP、接触阴影；最坏档 = 晴天档 + 雨 + 2048² 投影阴影图。`raster-gl@0.4.1` 的效果链
 只实现了曝光增益、渐晕、噪声与 ISP（`camera.effects`，P0a-1 基础档）；其余各项（畸变、雾、接触阴影、雨、投影阴影图）以本文件的
 GPU 代价代理遍计时：在同一 EGL 上下文、同一分辨率上按目标算法执行（雾为 Koschmieder 透过率；接触阴影为逐演员贴地椭圆衰减；
 雨为 16 采样雨线与深度比较、消光与湿润；投影阴影为 2048² 演员深度图加 16 采样 PCF；畸变为 LUT 重映射全部四个输出），但结果
 不写入交付像素。报告逐遍记录 GL 计时查询的 GPU 毫秒数，并在验收中标注 `fx_proxy`：代理口径的数字只作开发参考，渲染器落地
-真实效果链之后去掉代理（`--fx-proxy off`）复测才可计入。
+真实效果链之后去掉代理（`--fx-proxy off`）复测才可计入。`therm512` 的管线已完整实现，不含代理遍。
 
 性能运行协议（ADR-033；ADR-195）：排他锁（flock `$AWR_PERF_LOCK`）、负载前置条件（1 分钟 loadavg ≤ `--load-max`）、`--repeats`
 次重复取中位；测量期间以 `nvidia-smi pmon -s um -d 1`（1 s）与 `--query-compute-apps`（5 s）采样被测卡，按本进程启动的 Worker
 PID 区分外部进程，判定独占级别：A 级（外部计算进程数 0）、B 级（外部进程只驻留显存，全部采样 SM 与显存带宽占用为 0，空闲显存
 ≥ 被测需求 + 4 GB；计为正式数字须经用户确认）、shared（开发参考，不计入封板）。容器内运行须加 `--pid=host`，否则 pmon 看不到
-进程、PID 无法对应，级别记为 unknown。会话显存取 pmon `fb` 列中 Worker PID 的峰值（缺省回退为 Worker 自测的整卡显存增量）。
+进程、PID 无法对应，级别记为 unknown。会话显存取 pmon `fb` 列中 Worker PID 的峰值（缺省回退为 Worker 自测的整卡显存增量）；
+标准轨测量中该进程同时持有可见光、热成像（EGL）、nvJPEG 与 Warp（LiDAR）的全部设备内存，即完整标准轨会话显存。
 
 子命令：
 - `run`：按 `--modes`、`--profiles`、`--tiers`、`--runs` 展开测量矩阵，逐项写 `<out>/runs/<名>-r<k>.json`（已存在则跳过，断点续跑），
@@ -39,8 +51,9 @@ PID 区分外部进程，判定独占级别：A 级（外部计算进程数 0）
 
 用法（dmax，d3-sensorsvc 镜像，单卡绑定，`--pid=host`）：
     python tools/bench/d3/camera_throughput.py run --world worlds/oryahovo-crop1 --event d3data/events/crop-handoff-001/v1 \\
-        --out out/camera-throughput --scratch /scratch --gpu 3 [--profiles rgb720-gs,rgb1080-rs] [--tiers clear,worst] \\
-        [--modes sustained,online] [--runs 1,3] [--duration-s 600] [--online-sim-s 360] [--repeats 3] [--no-lock]
+        --out out/camera-throughput --scratch /scratch --gpu 3 [--profiles rgb720-gs,rgb1080-rs,therm512] [--tiers clear,worst] \\
+        [--modes sustained,online] [--runs 1,3] [--duration-s 600] [--online-sim-s 360] [--online-extras therm512,mid360] \\
+        [--wq-cache /cache/worldquery] [--repeats 3] [--no-lock]
     python tools/bench/d3/camera_throughput.py summarize --out out/camera-throughput
 退出码：0 计入的条款全部通过（共享卡或代理口径的条款记为不计入，不影响退出码；`seal_ready` 另要求全部条款计入且通过）、
 1 有条款不通过或未测、14 前置条件不满足（未取得锁或负载过高）。
@@ -80,19 +93,24 @@ TICK_NS = 100_000_000
 EXIT_OK, EXIT_FAIL, EXIT_ENV = 0, 1, 14
 GB = 1e9
 
-# D3-AC-11 原文阈值（暂定，P-1 实测后冻结；冻结前不得放宽）与应交付目标；在线闭环单帧时延 p99；M25-AC-014 的 3 机 720p 最坏档 RTF
+# D3-AC-11 原文阈值（暂定，P-1 实测后冻结；冻结前不得放宽）与应交付目标；在线闭环单帧时延 p99；M25-AC-014 的 3 机 720p 最坏档 RTF；
+# 标准轨（3 × rgb1080-rs + 3 × therm512 + 3 × MID-360，最坏档）单 Run RTF ≥ 1.0、3 并发各 ≥ 0.35。`fps` 的键为该档位测量的天气档。
 PROFILES: dict[str, dict] = {
     "rgb720-gs": {"fps": {"clear": 120.0, "worst": 80.0}, "target_fps": {"clear": 200.0, "worst": 120.0}, "latency_p99_ms": 50.0,
                   "rtf_min": {1: 1.0}},
     "rgb1080-rs": {"fps": {"clear": 60.0, "worst": 40.0}, "target_fps": {"clear": 90.0, "worst": 60.0}, "latency_p99_ms": 80.0,
                    "rtf_min": {1: 1.0, 3: 0.35}},
+    "therm512": {"fps": {"single": 300.0}, "target_fps": {"single": 500.0}},          # 与天气无关的单档
 }
-DEFERRED_PROFILES = {"therm512": "S20"}
+THERMAL_PROFILE = "therm512"
+STD_PROFILE = "rgb1080-rs"                 # 标准轨的可见光档位
+STD_EXTRAS = ("therm512", "mid360")        # 标准轨在同一 Worker 内的其余负载（每机 1 台 therm512、1 台 MID-360）
 VRAM_MAX_B = 1.2 * GB                     # 标准轨会话显存 ≤ 1.2 GB（D3-AC-11、M25-AC-047）
-# 天气档的效果项（D3-AC-11）与 raster-gl@0.4.1 已实现的项（camera.effects：增益与自动曝光、渐晕、噪声、ISP）
+# 天气档的效果项（D3-AC-11）与 raster-gl@0.4.1 已实现的项（camera.effects：增益与自动曝光、渐晕、噪声、ISP）；`single` 为热成像单档
 TIERS: dict[str, tuple[str, ...]] = {
     "clear": ("distortion", "fog", "noise", "isp", "contact_shadow"),
     "worst": ("distortion", "fog", "noise", "isp", "contact_shadow", "rain", "shadow_map"),
+    "single": (),
 }
 IMPLEMENTED_FX = frozenset({"noise", "isp"})
 PROXY_ORDER = ("rain", "fog", "shadow_map", "contact_shadow", "distortion")
@@ -126,6 +144,9 @@ class JobCfg:
     event_offset_s: float = 30.0
     index: int = 0                         # 并发 Worker 序号（错开航迹相位与随机流）
     queue_msgs: int = 256
+    extras: tuple[str, ...] = ()           # online：同一 Worker 内的标准轨其余负载（therm512、mid360）
+    wq_cache: str = ""                     # MID-360：世界查询缓存目录（`open_mesh_world_query`；空为 <scratch>/worldquery）
+    t_air_k: float = 288.15                # 热成像气温（15 °C）
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -134,11 +155,17 @@ class JobCfg:
     def from_dict(d: Mapping) -> JobCfg:
         kw = dict(d)
         kw["outputs"] = tuple(kw.get("outputs", ("rgb", "depth")))
+        kw["extras"] = tuple(kw.get("extras", ()))
         return JobCfg(**kw)
 
     @property
     def name(self) -> str:
-        return f"{self.mode}-{self.profile}-{self.tier}"
+        return f"{self.mode}-{workload_tag(self.profile, self.extras)}-{self.tier}"
+
+
+def workload_tag(profile: str, extras: Sequence[str] = ()) -> str:
+    """测量负载标签：档位加同一 Worker 内的其余负载，例如 `rgb1080-rs+therm512+mid360`（标准轨）。"""
+    return "+".join([profile, *extras])
 
 
 def proxy_passes(tier: str, fx_proxy: bool = True) -> tuple[str, ...]:
@@ -151,18 +178,27 @@ def proxy_passes(tier: str, fx_proxy: bool = True) -> tuple[str, ...]:
     return tuple(p for p in PROXY_ORDER if p in want)
 
 
-def plan_matrix(modes: Sequence[str], profiles: Sequence[str], tiers: Sequence[str], runs: Sequence[int]) -> list[dict]:
-    """测量矩阵：sustained 为档位 × 天气档（单 Worker）；online 为档位 × 并发数（最坏档，标准轨与 M25-AC-014 的口径）。"""
+def plan_matrix(modes: Sequence[str], profiles: Sequence[str], tiers: Sequence[str], runs: Sequence[int],
+                extras: Sequence[str] = STD_EXTRAS) -> list[dict]:
+    """测量矩阵：sustained 为档位 × 天气档（单 Worker；`therm512` 只有单档 `single`）；online 为可见光档位 × 并发数（最坏档，
+    M25-AC-014 与标准轨的口径），其中 `rgb1080-rs` 带上 `extras`（缺省为完整标准轨：therm512 与 MID-360），`therm512` 不单独测 online。"""
     for p in profiles:
-        if p in DEFERRED_PROFILES:
-            raise ValueError(f"profile {p} is implemented by {DEFERRED_PROFILES[p]}")
         if p not in PROFILES:
             raise ValueError(f"unknown camera profile {p!r}")
+    bad = set(extras) - set(STD_EXTRAS)
+    if bad:
+        raise ValueError(f"unknown online extras {sorted(bad)} (therm512, mid360)")
     out = []
     if "sustained" in modes:
-        out += [{"mode": "sustained", "profile": p, "tier": t, "runs": 1} for p in profiles for t in tiers]
+        for p in profiles:
+            ts = list(PROFILES[p]["fps"]) if p == THERMAL_PROFILE else [t for t in tiers if t in PROFILES[p]["fps"]]
+            out += [{"mode": "sustained", "profile": p, "tier": t, "runs": 1} for t in ts]
     if "online" in modes:
-        out += [{"mode": "online", "profile": p, "tier": "worst", "runs": int(n)} for p in profiles for n in runs]
+        for p in profiles:
+            if p == THERMAL_PROFILE:
+                continue
+            ex = [e for e in STD_EXTRAS if e in extras] if p == STD_PROFILE else []
+            out += [{"mode": "online", "profile": p, "tier": "worst", "runs": int(n), **({"extras": ex} if ex else {})} for n in runs]
     unknown = set(modes) - {"sustained", "online"}
     if unknown:
         raise ValueError(f"unknown modes {sorted(unknown)}")
@@ -170,7 +206,7 @@ def plan_matrix(modes: Sequence[str], profiles: Sequence[str], tiers: Sequence[s
 
 
 def measurement_name(m: Mapping) -> str:
-    return f"{m['mode']}-{m['profile']}-{m['tier']}-x{m['runs']}"
+    return f"{m['mode']}-{workload_tag(m['profile'], m.get('extras') or ())}-{m['tier']}-x{m['runs']}"
 
 
 # ---------------------------------------------------------------------------------------------------------------- 统计
@@ -399,9 +435,14 @@ class Fleet:
     def pose(self, i: int, t_ns: int) -> tuple[np.ndarray, np.ndarray]:
         from awr.sensorsvc.camera import look_at_R
 
+        p, _yaw = self.body(i, t_ns)
+        return p, look_at_R(p, self.target)
+
+    def body(self, i: int, t_ns: int) -> tuple[np.ndarray, float]:
+        """机体位置与航向（rad，沿环绕切线，逆时针飞行）；机体水平。"""
         a = self.ph[i] + self.w[i] * (t_ns / NS)
         p = np.array([self.c[0] + self.r[i] * math.cos(a), self.c[1] + self.r[i] * math.sin(a), self.ground + self.h[i]])
-        return p, look_at_R(p, self.target)
+        return p, a + math.pi / 2
 
 
 def frame_t_mid(seq: int, exposure_ns: int, readout_ns: int) -> int:
@@ -566,6 +607,10 @@ FOG_VIS_M = 2000.0                                   # 代理雾：能见度 2 k
 RAIN_MM_H = 8.0                                      # 代理雨：8 mm/h（消光系数约 1.076·R^0.67 km⁻¹，r3）
 SHADOW_SIZE = 2048
 SHADOW_SPAN_M = 300.0
+# 热成像与 MID-360 的天气（能见度 km、降雨 mm/h）：与代理遍同一组最坏档参数；热成像单档取最坏档天气（只改变消光，不改变计算量）
+WEATHER: dict[str, tuple[float | None, float]] = {"clear": (None, 0.0), "worst": (FOG_VIS_M / 1000.0, RAIN_MM_H),
+                                                  "single": (FOG_VIS_M / 1000.0, RAIN_MM_H)}
+THERMAL_SENSOR, LIDAR_SENSOR = "therm0", "lidar0"
 
 
 def distortion_lut(cm, dist_coef: Sequence[float] = DIST_PROXY) -> np.ndarray:
@@ -794,6 +839,17 @@ class Sink:
         agent = {av["rgb"]["ref"], av.get("depth", {}).get("ref")}
         self.tru.write_camera_truth(uav, av["sensor_id"], seq, t_ns, rec, {k: v for k, v in blocks.items() if k not in agent})
 
+    def write_thermal(self, uav: str, seq: int, t_ns: int, rec: dict, blocks: dict[str, bytes], obs: dict) -> None:
+        """热成像：`ThermalObs`（`temp_ck` 交付字节原样）写观测通道；帧记录与实例、语义块写真值 MCAP（frame.v1 真值容器，`kind = thermal`）。"""
+        self.raw.write_thermal(uav, rec["agent_view"]["sensor_id"], obs, period_ns=TICK_NS)
+        agent = rec["agent_view"]["temp_ck"]["ref"]
+        self.tru.write_camera_truth(uav, rec["agent_view"]["sensor_id"], seq, t_ns, rec, {k: v for k, v in blocks.items() if k != agent})
+
+    def write_lidar(self, uav: str, seq: int, t_ns: int, hdr: dict, gt: dict, sc) -> None:
+        """MID-360：`awr.sensor.lidar_frame.v2` 观测与逐槽位真值（inst、flags）。"""
+        self.raw.write_lidar(uav, hdr["sensor_id"], seq, t_ns, hdr, sc.points, period_ns=TICK_NS)
+        self.tru.write_lidar_truth(uav, hdr["sensor_id"], seq, t_ns, gt, sc.gt_inst, sc.gt_flags)
+
     def close(self) -> dict:
         self._close(self.raw, self.tru)
         for t in self._closers:
@@ -822,9 +878,11 @@ class _Done:
     blocks: dict
     depth_obs: np.ndarray | None
     asm_ms: float
-    jpeg_bytes: int
+    payload_bytes: int                     # 交付载荷字节数（JPEG 或 `temp_ck` 的 u16 + zstd）
     n_objects: int
     enc_timing: dict
+    kind: str = "camera"                   # camera | thermal
+    obs: dict | None = None                # 热成像：ThermalObs（`temp_ck` 为交付字节原样）
 
 
 @dataclass
@@ -838,18 +896,208 @@ class _Stats:
     asm_ms: list[float] = field(default_factory=list)
     write_enqueue_ms: list[float] = field(default_factory=list)
     latency_ms: list[float] = field(default_factory=list)
-    jpeg_bytes: list[int] = field(default_factory=list)
+    payload_bytes: list[int] = field(default_factory=list)
     objects: list[int] = field(default_factory=list)
     actors_drawn: list[int] = field(default_factory=list)
     batches: list[int] = field(default_factory=list)
     t_deliv: list[float] = field(default_factory=list)
     tick_ms: list[float] = field(default_factory=list)
+    points: list[int] = field(default_factory=list)
+
+    def summary(self) -> dict:
+        """单类传感器的帧数、时延、分阶段耗时与载荷（Worker 报告的 `sensors.<kind>`）。"""
+        return {"frames": len(self.t_deliv), "latency_ms": dist(self.latency_ms),
+                "stages_ms": {"draw": dist(self.draw_ms), "readback": dist(self.readback_ms), "issue": dist(self.issue_ms),
+                              "assemble": dist(self.asm_ms), "write_enqueue": dist(self.write_enqueue_ms)},
+                "payload_kB": dist([b / 1e3 for b in self.payload_bytes]), "objects_per_frame": dist(self.objects),
+                "actors_drawn": dist(self.actors_drawn), **({"points_per_frame": dist(self.points)} if self.points else {})}
+
+
+def rot_z(yaw: float) -> np.ndarray:
+    c, s = math.cos(yaw), math.sin(yaw)
+    return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+
+
+class _ThermalRig:
+    """Worker 内的 `therm512`（每机 1 台 `therm0`，与可见光同一云台注视）：`ThermalCamera` 与可见光共用 EGL 上下文（`raster` 为 None 时
+    自建只含上下文的光栅相机）；装载时烘焙 `thermal_static`（Warp，GPU）。帧窗口结束于 tick 边界，S = 4 子帧的机体位姿与演员状态
+    逐子帧取（`ActorClock` 整数时刻键）；演员分区温度按帧时刻计算（同一 tick 的各机共用），车辆发动机状态由磁带速度推导：行驶中
+    或停车后 120 s 内为运转，此后按 `engine_off_s` 计熄火时长，从未行驶为冷车。"""
+
+    def __init__(self, w: Worker, scene, wdir: Path, raster, sun) -> None:
+        from awr.sensorsvc.thermal import render as tr
+
+        job = w.job
+        self.w, self.tr = w, tr
+        t0 = time.perf_counter()
+        self.model = tr.ThermalModel(noise=job.noise)
+        self.table = tr.load_thermal_table()
+        self.static = tr.thermal_bake(scene, sun, backend="auto") if sun is not None else None
+        self.bake_s = time.perf_counter() - t0
+        self.cam = tr.ThermalCamera(scene, table=self.table, tri_cls=tr.static_classes(wdir, scene.triangles), static=self.static,
+                                    sun_az_el_deg=sun, raster=raster)
+        self.cam.set_actors(w.tape.actors)
+        fog_km, rain = WEATHER[job.tier]
+        self.env = tr.thermal_env(self.table, job.t_air_k, cloud=0.3, rh=0.6, fog_visibility_km=fog_km, rain_mmh=rain)
+        self.manifest = tr.thermal_manifest(self.table, self.cam.planck, self.model, self.static)
+        self.sun = sun
+        t_ref = 10.0                                                     # 子帧相对帧窗口终点的整数纳秒偏移（与绝对时刻无关）
+        self.offs = [round((t - t_ref) * NS) for t in tr.subframe_times_s(t_ref, self.model)]
+        self._th_key: int | None = None
+        self._th: list = []
+        self._moving: dict[int, float] = {}
+        self.load_s = time.perf_counter() - t0
+
+    def actor_th(self, t_ev: int) -> list:
+        """帧时刻 `t_ev`（磁带时刻）的逐演员分区温度；同一时刻缓存（同一 tick 的各机与 `_draw_actors` 的 uniform 缓存共用）。"""
+        if self._th_key == t_ev:
+            return self._th
+        tr, tbl = self.tr, self.table
+        st = self.w.clock(int(t_ev))
+        speed = {int(i): math.hypot(float(v[0]), float(v[1])) for i, v in zip(st.ids, st.vel_enu_mps, strict=True)}
+        t_s = t_ev / NS
+        out = []
+        for k, a in enumerate(self.w.tape.actors):
+            row = (a.get("thermal") or {}).get("profile") or a["class"]
+            if row not in tbl.actors:                                     # 参数表无此类别：按 object 行（body 模型、无发动机）
+                a, row = {**a, "class": "object", "thermal": {kk: v for kk, v in (a.get("thermal") or {}).items() if kk != "profile"}}, "object"
+            off = math.inf
+            if "dT_engine" in tbl.actors[row]:
+                lm = self._moving.get(k)
+                if lm is not None and lm > t_s:                           # 磁带回绕：重新计
+                    lm = None
+                    self._moving.pop(k)
+                if speed.get(k, 0.0) > 0.2:
+                    lm = self._moving[k] = t_s
+                off = tr.engine_off_s(t_s, lm, tbl, row)
+            out.append(tr.actor_thermal(a, tbl, self.env, self.sun, engine_off=off))
+        self._th_key, self._th = t_ev, out
+        return out
+
+    def issue(self, i: int, seq: int, t_req: float, record: bool = True):
+        tr, w = self.tr, self.w
+        t_end_rel = (int(seq) + 1) * TICK_NS                             # 采集窗口结束于第 seq + 1 个 tick 边界
+        t_sub = [t_end_rel + o for o in self.offs]
+        poses = [(R, p) for p, R in (w.fleet.pose(i, t) for t in t_sub)]
+        frames = [w.clock.frame(event_time(t, w.ev0, w.span)) for t in t_sub]
+        t_ev = event_time(t_end_rel, w.ev0, w.span)
+        th = self.actor_th(t_ev)
+        keys = tr.NoiseKeys(w.job.seed, i + 8 * w.job.index, 0, int(seq))
+        t0 = time.perf_counter()
+        out = self.cam.render(self.model, poses, np.asarray(t_sub, np.float64) / NS, t_end_rel / NS, self.env, actor_frames=frames, actor_th=th,
+                              noise=keys)
+        t1 = time.perf_counter()
+        w.rendered += 1
+        if record:
+            st = w.stats["thermal"]
+            st.draw_ms.append(out.draw_ms)
+            st.readback_ms.append(out.readback_ms)
+            st.issue_ms.append((t1 - t0) * 1e3)
+            st.actors_drawn.append(out.actors_drawn)
+            st.batches.append(out.batches_drawn)
+        R, p = poses[-1]
+        return w.pool.submit(self._assemble, i, int(seq), t_ev, t_req, p, R, gimbal_of(R), out)
+
+    def _assemble(self, i, seq, t_mid, t_req, pos, R, g, out) -> _Done:
+        from awr.agentsdk.schemas import thermal_obs
+
+        w = self.w
+        a = time.perf_counter()
+        rec, blocks = self.tr.thermal_frame(w.ctx, uav=w.uav_ids[i], sensor_id=THERMAL_SENSOR, seq=seq, t_mid_ns=int(t_mid), model=self.model,
+                                            mount=w.mount, gimbal_reading=g, gimbal_true=g, pos_enu_m=pos, R_ws=R, out=out, manifest=self.manifest,
+                                            actors=w.tape.actors)
+        obs = thermal_obs(rec, blocks, ranked=True, verify=False)        # 交付字节即 thermal_frame 的 u16 + zstd 块（sha256 已在帧记录）
+        b = time.perf_counter()
+        return _Done(i, seq, int(t_mid), t_req, b, rec, blocks, None, (b - a) * 1e3, len(obs["temp_ck"]), len(rec["ground_truth"]["objects"]), {},
+                     kind="thermal", obs=obs)
+
+    def release(self) -> None:
+        self.cam.release()
+
+
+class _LidarRig:
+    """Worker 内的 MID-360（每机 1 台 `lidar0`，倒装 `p600_mid360_inv`）：产品路径 `WarpMeshLidar`，每 tick 把 N 机的帧合成一次
+    `scan_batch(copy=False)`；第 seq 帧覆盖 [seq·T, (seq + 1)·T]（与同一 tick 的相机帧窗口相同），K = 11 个位姿节点取机体解析航迹，
+    演员按逐射线时刻经同一 `ActorClock` 取磁带状态；天气按天气档给出 905 nm 消光。观测与槽位真值在调用方线程打包后入录制队列。"""
+
+    def __init__(self, w: Worker, wdir: Path, query=None) -> None:
+        from awr.sensorsvc.lidar.model import MOUNT_INVERTED_MAPPING, load_lidar_model
+        from awr.sensorsvc.lidar.warp_mesh import WarpMeshLidar, beta_905_per_m
+        from awr.sim.sensors.frames import mount_R
+
+        job = w.job
+        self.w = w
+        t0 = time.perf_counter()
+        if query is None:
+            from awr.world.mesh.query import open_mesh_world_query
+
+            query = open_mesh_world_query(wdir, Path(job.wq_cache) if job.wq_cache else Path(job.scratch) / "worldquery")
+        self.q = query
+        self.m = load_lidar_model()
+        self.lid = WarpMeshLidar(self.q, self.m, w.tape.actors)
+        vis_km, rain = WEATHER[job.tier]
+        self.beta = beta_905_per_m(None if vis_km is None else vis_km * 1000.0, rain)
+        self.mount_xyz = np.asarray(MOUNT_INVERTED_MAPPING[0], np.float64)
+        self.mount_rpy = tuple(MOUNT_INVERTED_MAPPING[1])
+        self.R_mount = mount_R(self.mount_rpy)
+        self.seg = self.m.frame_ns // (self.m.pose_nodes - 1)
+        self.load_s = time.perf_counter() - t0
+
+    def scan(self, seq: int, record: bool = True) -> tuple[list, int, float]:
+        from awr.sensorsvc.lidar.warp_mesh import LidarFrameReq
+
+        w, job = self.w, self.w.job
+        t_rel = int(seq) * TICK_NS
+        t_ev = event_time(t_rel, w.ev0, w.span)
+        reqs = []
+        for i in range(job.uavs):
+            nodes = []
+            for k in range(self.m.pose_nodes):
+                p, yaw = w.fleet.body(i, t_rel + k * self.seg)
+                Rb = rot_z(yaw)
+                nodes.append((Rb @ self.R_mount, p + Rb @ self.mount_xyz))
+            reqs.append(LidarFrameReq(int(seq), t_ev, nodes, seed=job.seed, uav_no=i + 8 * job.index, tier=job.noise, beta_905=self.beta))
+        a = time.perf_counter()
+        scans = self.lid.scan_batch(reqs, actor_states=w.clock, copy=False)
+        b = time.perf_counter()
+        if record:
+            st = w.stats["lidar"]
+            st.draw_ms.append((b - a) * 1e3)                              # 一次 launch 的扫描、GPU 压缩与回传（全部 N 机）
+            st.issue_ms.append((b - a) * 1e3)
+        return scans, t_ev, b
+
+    def deliver(self, scans: list, seq: int, t_ev: int, t_ref: float, record: bool = True) -> None:
+        w = self.w
+        st = w.stats["lidar"]
+        for i, sc in enumerate(scans):
+            uav = w.uav_ids[i]
+            fid = f"{w.ctx.run_id}/{uav}/{LIDAR_SENSOR}/{int(seq)}"
+            hdr = {"schema": "awr.sensor.lidar_frame.v2", "sensor_id": LIDAR_SENSOR, "frame_id": fid, "frame_seq": int(seq), "timebase_ns": int(t_ev),
+                   "point_dt_ns": self.m.point_dt_ns, "slots_per_frame": self.m.slots_per_frame, "point_count": len(sc.points),
+                   "model": self.m.model_id, "pattern_id": "mid360-nonrep@1", "return_mode": "first", "sync_type": "sim",
+                   "mount_nominal": {"xyz_m": [float(v) for v in self.mount_xyz], "rpy_deg": list(self.mount_rpy)}, "noise_tier": w.job.noise}
+            gt = {"schema": "awr.sensor.lidar_gt.v1", "frame_id": fid, "frame_seq": int(seq), "timebase_ns": int(t_ev),
+                  "slots": self.m.slots_per_frame, "codec": "zstd", "reflectance_model": "sem_table_v1", "beta_905_per_m": self.beta,
+                  "dynamic_source_id": w.ctx.dynamic_source_id, "actor_hits": sc.actor_hits, "actor_rays": sc.actor_rays,
+                  "seed": {"run_seed": int(w.job.seed), "uav_no": i + 8 * w.job.index, "sensor_no": 0}}
+            a = time.perf_counter()
+            w.sink.write_lidar(uav, int(seq), int(t_ev), hdr, gt, sc)
+            b = time.perf_counter()
+            if record:
+                st.write_enqueue_ms.append((b - a) * 1e3)
+                st.latency_ms.append((b - t_ref) * 1e3)
+                st.points.append(len(sc.points))
+                st.payload_bytes.append(int(sc.points.nbytes))
+                st.objects.append(int(sc.actor_hits))
+                st.t_deliv.append(b)
+        w.sink.maybe_rotate()
 
 
 class Worker:
-    """单 M25 Worker：常驻世界、光栅相机、GPU 编码器、编码线程池与录制队列。"""
+    """单 M25 Worker：常驻世界、光栅相机（或 `therm512` 热成像）、GPU 编码器、编码线程池与录制队列；`job.extras` 给出同一 Worker
+    内的标准轨其余负载（therm512 与可见光共用 EGL 上下文；mid360 为 Warp CUDA）。`lidar_query` 可注入 LiDAR 的世界查询（测试用）。"""
 
-    def __init__(self, job: JobCfg, log=None) -> None:
+    def __init__(self, job: JobCfg, log=None, *, lidar_query=None) -> None:
         from concurrent.futures import ThreadPoolExecutor
 
         from awr.sensorsvc.camera.effects import AeState, profile, with_profile
@@ -865,47 +1113,62 @@ class Worker:
 
         self.job = job
         self.log = log or (lambda s: sys.stderr.write(s + "\n"))
+        self.kind = "thermal" if job.profile == THERMAL_PROFILE else "camera"
+        bad = set(job.extras) - set(STD_EXTRAS)
+        if bad or (job.extras and self.kind == "thermal"):
+            raise ValueError(f"extras {sorted(job.extras)} not valid for profile {job.profile}")
         self.vram0_mib = device_used_mib(0)
         t0 = time.perf_counter()
         wdir = Path(job.world)
         world = json.loads((wdir / "world.json").read_text(encoding="utf-8"))
         self.tape = open_tape(Path(job.event))
         self.tape.check_world(world["contentVersion"])
-        self.cam = RasterCamera(load_appearance(wdir))
-        self.cam.set_actors(self.tape.actors)
+        scene = load_appearance(wdir)
         sun = tuple((world.get("sensorHints") or {}).get("bakedSunAzElDeg") or ()) or None
-        self.cam.set_sun(sun)
-        self.load_s = time.perf_counter() - t0
+        self.stats = {"camera": _Stats(), "thermal": _Stats(), "lidar": _Stats()}
+        self.st = self.stats[self.kind]
         self.prof = profile(job.noise)
-        p = CAMERA_PROFILES[job.profile]
-        w, h = p["size"]
-        cm = CameraModel.from_hfov(int(w), int(h), job.hfov_deg, fps="10", exposure_s=float(p["exposure_s"]), readout_s=float(p["readout_s"]),
-                                   isp=IspConfig(jpeg_quality=90))
-        self.cm = with_profile(cm, self.prof)
-        self.exp_ns, self.ro_ns = round(self.cm.exposure_s * NS), round(self.cm.readout_s * NS)
-        self.enc = make_encoder(job.profile, self.cm.width, self.cm.height, online=True)
-        self.proxy = FxProxy(self.cam, self.cm, proxy_passes(job.tier, job.fx_proxy), sun_az_el_deg=sun)
+        self.cam = self.cm = self.enc = self.proxy = None
+        if self.kind == "camera":
+            self.cam = RasterCamera(scene)
+            self.cam.set_actors(self.tape.actors)
+            self.cam.set_sun(sun)
+            p = CAMERA_PROFILES[job.profile]
+            w, h = p["size"]
+            cm = CameraModel.from_hfov(int(w), int(h), job.hfov_deg, fps="10", exposure_s=float(p["exposure_s"]), readout_s=float(p["readout_s"]),
+                                       isp=IspConfig(jpeg_quality=90))
+            self.cm = with_profile(cm, self.prof)
+            self.exp_ns, self.ro_ns = round(self.cm.exposure_s * NS), round(self.cm.readout_s * NS)
+            self.enc = make_encoder(job.profile, self.cm.width, self.cm.height, online=True)
+            self.proxy = FxProxy(self.cam, self.cm, proxy_passes(job.tier, job.fx_proxy), sun_az_el_deg=sun)
+        self.load_s = time.perf_counter() - t0
         self.pool = ThreadPoolExecutor(max_workers=job.pool, thread_name_prefix="m25-enc")
-        self.ctx = FrameContext(f"tput-{job.name}-{job.index}", f"tput-{job.index}", world["contentVersion"], str(self.cam.info.get("GL_RENDERER")),
-                                str(self.cam.info.get("GL_VERSION")).split()[-1], noise_tier=self.prof.name)
         self.mount = Mount((0.12, 0.0, -0.08), (0.0, 0.0, 0.0))
         end = (self.tape.n_ticks - 1) * TICK_NS
         self.ev0 = min(round(job.event_offset_s * NS), (self.tape.n_ticks // 2) * TICK_NS)
         self.span = max(TICK_NS, end - TICK_NS - self.ev0)
         self.clock = ActorClock(self.tape, 0)
         self.fleet = Fleet(actor_center(self.tape, min(self.ev0 + 60 * NS, end)), ground_z(wdir), job.uavs, phase0=0.7 * job.index)
+        self.th = _ThermalRig(self, scene, wdir, self.cam, sun) if self.kind == "thermal" or "therm512" in job.extras else None
+        self.lid = _LidarRig(self, wdir, lidar_query) if "mid360" in job.extras else None
+        self.gl_info = dict((self.cam if self.cam is not None else self.th.cam.raster).info)
+        self.ctx = FrameContext(f"tput-{job.name}-{job.index}", f"tput-{job.index}", world["contentVersion"], str(self.gl_info.get("GL_RENDERER")),
+                                str(self.gl_info.get("GL_VERSION")).split()[-1], noise_tier=self.prof.name)
         self.ae = [AeState() for _ in range(job.uavs)]
         self.depth = "depth" in job.outputs
         self.outputs = frozenset(job.outputs)
         self.sink = Sink(Path(job.scratch) / f"{job.name}-{job.index}-{os.getpid()}", segment_s=job.segment_s, keep=job.keep_output,
                          queue_msgs=job.queue_msgs)
-        self.st = _Stats()
         self.rendered = 0
         self.vram_warm_mib: float | None = None
         self.uav_ids = [f"uav-{i + 1:02d}" for i in range(job.uavs)]
+        self.load_total_s = time.perf_counter() - t0
 
     # ------------------------------------------------------------------ 单帧
     def issue(self, i: int, seq: int, t_req: float, record: bool = True):
+        """主档位的一帧（可见光或 `therm512`）：GPU 渲染与读回在调用线程，帧组装与编码提交到编码线程池，返回 Future[_Done]。"""
+        if self.kind == "thermal":
+            return self.th.issue(i, seq, t_req, record)
         from awr.sensorsvc.camera.effects import finish_frame, frame_params
 
         cm = self.cm
@@ -929,7 +1192,7 @@ class Worker:
         t1 = time.perf_counter()
         self.rendered += 1
         if record:
-            st = self.st
+            st = self.stats["camera"]
             st.draw_ms.append(out.draw_ms)
             st.readback_ms.append(out.readback_ms)
             st.proxy_ms.append(sum(pg.values()))
@@ -955,14 +1218,17 @@ class Worker:
 
     def deliver(self, d: _Done, record: bool, t_ref: float | None = None) -> None:
         a = time.perf_counter()
-        self.sink.write(self.uav_ids[d.uav], d.seq, d.t_mid, d.rec, d.blocks, d.depth_obs)
+        if d.kind == "thermal":
+            self.sink.write_thermal(self.uav_ids[d.uav], d.seq, d.t_mid, d.rec, d.blocks, d.obs)
+        else:
+            self.sink.write(self.uav_ids[d.uav], d.seq, d.t_mid, d.rec, d.blocks, d.depth_obs)
         self.sink.maybe_rotate()
         if record:
-            st = self.st
+            st = self.stats[d.kind]
             st.write_enqueue_ms.append((time.perf_counter() - a) * 1e3)
             st.latency_ms.append((d.t_deliv - (d.t_req if t_ref is None else t_ref)) * 1e3)
             st.asm_ms.append(d.asm_ms)
-            st.jpeg_bytes.append(d.jpeg_bytes)
+            st.payload_bytes.append(d.payload_bytes)
             st.objects.append(d.n_objects)
             st.t_deliv.append(d.t_deliv)
             if d.enc_timing:
@@ -971,10 +1237,18 @@ class Worker:
 
     # ------------------------------------------------------------------ 测量
     def warmup(self) -> None:
-        n = max(self.job.warmup, self.job.uavs)
-        futs = [self.issue(j % self.job.uavs, j // self.job.uavs, time.perf_counter(), record=False) for j in range(n)]
+        """预热（不计时）：主档位 `warmup` 帧；标准轨另出热成像帧与 2 次 LiDAR 批（含 Warp 内核编译）。"""
+        N = self.job.uavs
+        n = max(self.job.warmup, N)
+        futs = [self.issue(j % N, j // N, time.perf_counter(), record=False) for j in range(n)]
+        if self.th is not None and self.kind != "thermal":
+            futs += [self.th.issue(j % N, j // N, time.perf_counter(), record=False) for j in range(n)]
         for f in futs:
             self.deliver(f.result(), record=False)
+        if self.lid is not None:
+            for k in range(2):
+                scans, t_ev, _ = self.lid.scan(k, record=False)
+                self.lid.deliver(scans, k, t_ev, time.perf_counter(), record=False)
         self.vram_warm_mib = device_used_mib(0)
 
     def sustained(self) -> dict:
@@ -999,28 +1273,95 @@ class Worker:
                 "fps": round(inside / self.job.duration_s, 3), "fps_bins_60s": fps_bins(self.st.t_deliv, t0, t_end)}
 
     def online(self) -> dict:
+        """锁步 10 Hz：每 tick 依次出 N 帧主档位、N 帧热成像（标准轨）与 N 帧 MID-360（一次批），全部交付后进入下一 tick。"""
         N = self.job.uavs
         n_ticks = round(self.job.sim_s * NS / TICK_NS)
         k0 = max(self.job.warmup, N) // N + 1
+        extra_th = self.th is not None and self.kind != "thermal"
         t0 = time.perf_counter()
         for k in range(n_ticks):
             t_tick = time.perf_counter()
-            futs = [self.issue(i, k0 + k, t_tick) for i in range(N)]
+            seq = k0 + k
+            futs = [self.issue(i, seq, t_tick) for i in range(N)]
+            tfuts = [self.th.issue(i, seq, t_tick) for i in range(N)] if extra_th else []
+            lid = self.lid.scan(seq) if self.lid is not None else None
             for f in futs:
                 self.deliver(f.result(), record=True, t_ref=t_tick)
+            for f in tfuts:
+                self.deliver(f.result(), record=True, t_ref=t_tick)
+            if lid is not None:
+                self.lid.deliver(lid[0], seq, lid[1], t_tick)
             self.st.tick_ms.append((time.perf_counter() - t_tick) * 1e3)
         wall = time.perf_counter() - t0
         sim = n_ticks * TICK_NS / NS
-        return {"frames": len(self.st.t_deliv), "ticks": n_ticks, "sim_s": sim, "wall_s": round(wall, 3), "rtf": round(sim / wall, 4),
-                "fps": round(len(self.st.t_deliv) / wall, 3), "tick_ms": dist(self.st.tick_ms)}
+        frames = {k: len(s.t_deliv) for k, s in self.stats.items() if s.t_deliv}
+        return {"frames": len(self.st.t_deliv), "frames_by_sensor": frames, "ticks": n_ticks, "sim_s": sim, "wall_s": round(wall, 3),
+                "rtf": round(sim / wall, 4), "fps": round(len(self.st.t_deliv) / wall, 3), "tick_ms": dist(self.st.tick_ms)}
 
     def close(self) -> dict:
         sink = self.sink.close()
         self.pool.shutdown(wait=True)
-        self.enc.close()
-        self.proxy.release()
-        self.cam.release()
+        if self.enc is not None:
+            self.enc.close()
+        if self.proxy is not None:
+            self.proxy.release()
+        if self.th is not None:
+            self.th.release()
+        if self.cam is not None:
+            self.cam.release()
         return sink
+
+
+def worker_report(w: Worker, res: Mapping, *, cpu_calls: int, ru: tuple, wall: float) -> dict:
+    """Worker 报告（测量结果、分阶段耗时、负载构成与资源）；`ru` 为 (装载前, 计时开始, 计时结束) 的 rusage。"""
+    job, st = w.job, w.st
+    ru0, ru1, ru2 = ru
+    if w.kind == "camera":
+        camera = {"width": w.cm.width, "height": w.cm.height, "hfov_deg": job.hfov_deg, "readout_ms": w.ro_ns / 1e6, "exposure_ms": w.exp_ns / 1e6}
+        encoder, encoder_kind, fx_ver, renderer = w.enc.identity, w.enc.kind, w.ctx.fx_version, w.ctx.renderer_version
+        passes, pgms, casters = list(w.proxy.passes), {p: dist(v) for p, v in w.proxy.gpu_ms.items()}, w.proxy.caster_counts
+    else:
+        m = w.th.model
+        camera = {"width": m.width, "height": m.height, "hfov_deg": round(math.degrees(2 * math.atan(m.width / 2 / m.fx)), 3), "readout_ms": 0.0,
+                  "subframes": m.lag_subframes}
+        encoder, encoder_kind, fx_ver, renderer = "zstd-3/u16le", "cpu-zstd", None, w.th.tr.THERMAL_RENDERER_VERSION
+        passes, pgms, casters = [], {}, []
+    sensors = {k: s.summary() for k, s in w.stats.items() if s.t_deliv}
+    loads = {"world_and_primary_s": round(w.load_s, 2), "total_s": round(w.load_total_s, 2)}
+    if w.th is not None:
+        loads["thermal_s"] = round(w.th.load_s, 2)
+        loads["thermal_bake_s"] = round(w.th.bake_s, 2)
+    if w.lid is not None:
+        loads["lidar_s"] = round(w.lid.load_s, 2)
+        loads["lidar_build_ms"] = round(w.lid.lid.build_ms, 1)
+    doc = {"job": job.as_dict(), "pid": os.getpid(), "kind": w.kind, "extras": list(job.extras), "workload": sorted(sensors),
+           "gl": w.gl_info, "encoder": encoder, "encoder_kind": encoder_kind, "renderer": renderer, "fx_version": fx_ver, "load_s": loads["total_s"],
+           "load": loads, "camera": camera,
+           "fx": {"tier": job.tier, "items": list(TIERS[job.tier]), "implemented": sorted(IMPLEMENTED_FX & set(TIERS[job.tier])), "proxy": passes,
+                  "proxy_gpu_ms": pgms, "shadow_casters": dist(casters) if casters else None},
+           **res,
+           "latency_ms": dist(st.latency_ms), "stages_ms": {"draw": dist(st.draw_ms), "readback": dist(st.readback_ms),
+                                                             "proxy_gpu": dist(st.proxy_ms), "issue": dist(st.issue_ms),
+                                                             "upload": dist(st.upload_ms), "encode": dist(st.encode_ms),
+                                                             "assemble": dist(st.asm_ms), "write_enqueue": dist(st.write_enqueue_ms)},
+           "jpeg_kB": dist([b / 1e3 for b in st.payload_bytes] if w.kind == "camera" else []),
+           "payload_kB": dist([b / 1e3 for b in st.payload_bytes]), "objects_per_frame": dist(st.objects),
+           "actors_drawn": dist(st.actors_drawn), "batches_drawn": dist(st.batches), "sensors": sensors,
+           "cpu_encode_calls": cpu_calls,
+           "cpu": {"user_s": round(ru2.ru_utime - ru1.ru_utime, 2), "sys_s": round(ru2.ru_stime - ru1.ru_stime, 2),
+                   "cores": round((ru2.ru_utime - ru1.ru_utime + ru2.ru_stime - ru1.ru_stime) / wall, 3) if wall else None,
+                   "load_user_s": round(ru1.ru_utime - ru0.ru_utime, 2), "maxrss_mib": round(ru2.ru_maxrss / 1024, 1)},
+           "vram_self": {"device_used_before_mib": w.vram0_mib, "device_used_warm_mib": w.vram_warm_mib,
+                         "delta_mib": (w.vram_warm_mib - w.vram0_mib) if w.vram0_mib is not None and w.vram_warm_mib is not None else None},
+           "actor_clock": {"calls": w.clock.calls, "hits": w.clock.hits}}
+    if w.th is not None:
+        doc["thermal"] = {"renderer": w.th.tr.THERMAL_RENDERER_VERSION, "manifest": w.th.manifest, "subframe_offsets_ns": w.th.offs,
+                          "env": {"t_air_k": w.th.env.t_air_k, "t_sky_k": w.th.env.sky_k, "fog_visibility_km": w.th.env.fog_visibility_km,
+                                  "rain_mmh": w.th.env.rain_mmh}}
+    if w.lid is not None:
+        doc["lidar"] = {**w.lid.lid.versions(), "model": w.lid.m.model_id, "beta_905_per_m": w.lid.beta, "pose_nodes": w.lid.m.pose_nodes,
+                        "mount_rpy_deg": list(w.lid.mount_rpy)}
+    return doc
 
 
 def worker_main(job_path: Path) -> int:
@@ -1042,28 +1383,7 @@ def worker_main(job_path: Path) -> int:
         wall = time.perf_counter() - t_wall0
         ru2 = resource.getrusage(resource.RUSAGE_SELF)
         cpu_calls = cpu_encode_calls() - cpu0
-        st = w.st
-        doc = {"job": job.as_dict(), "pid": os.getpid(), "gl": w.cam.info, "encoder": w.enc.identity, "encoder_kind": w.enc.kind,
-               "renderer": w.ctx.renderer_version, "fx_version": w.ctx.fx_version, "load_s": round(w.load_s, 2),
-               "camera": {"width": w.cm.width, "height": w.cm.height, "hfov_deg": job.hfov_deg, "readout_ms": w.ro_ns / 1e6,
-                          "exposure_ms": w.exp_ns / 1e6},
-               "fx": {"tier": job.tier, "items": list(TIERS[job.tier]), "implemented": sorted(IMPLEMENTED_FX & set(TIERS[job.tier])),
-                      "proxy": list(w.proxy.passes), "proxy_gpu_ms": {p: dist(v) for p, v in w.proxy.gpu_ms.items()},
-                      "shadow_casters": dist(w.proxy.caster_counts) if w.proxy.caster_counts else None},
-               **res,
-               "latency_ms": dist(st.latency_ms), "stages_ms": {"draw": dist(st.draw_ms), "readback": dist(st.readback_ms),
-                                                                 "proxy_gpu": dist(st.proxy_ms), "issue": dist(st.issue_ms),
-                                                                 "upload": dist(st.upload_ms), "encode": dist(st.encode_ms),
-                                                                 "assemble": dist(st.asm_ms), "write_enqueue": dist(st.write_enqueue_ms)},
-               "jpeg_kB": dist([b / 1e3 for b in st.jpeg_bytes]), "objects_per_frame": dist(st.objects),
-               "actors_drawn": dist(st.actors_drawn), "batches_drawn": dist(st.batches),
-               "cpu_encode_calls": cpu_calls,
-               "cpu": {"user_s": round(ru2.ru_utime - ru1.ru_utime, 2), "sys_s": round(ru2.ru_stime - ru1.ru_stime, 2),
-                       "cores": round((ru2.ru_utime - ru1.ru_utime + ru2.ru_stime - ru1.ru_stime) / wall, 3) if wall else None,
-                       "load_user_s": round(ru1.ru_utime - ru0.ru_utime, 2), "maxrss_mib": round(ru2.ru_maxrss / 1024, 1)},
-               "vram_self": {"device_used_before_mib": w.vram0_mib, "device_used_warm_mib": w.vram_warm_mib,
-                             "delta_mib": (w.vram_warm_mib - w.vram0_mib) if w.vram0_mib is not None and w.vram_warm_mib is not None else None},
-               "actor_clock": {"calls": w.clock.calls, "hits": w.clock.hits}}
+        doc = worker_report(w, res, cpu_calls=cpu_calls, ru=(ru0, ru1, ru2), wall=wall)
     doc["sink"] = w.close()
     doc["write_MBps"] = round(doc["sink"]["bytes"] / 1e6 / wall, 2) if wall else None
     Path(job.out).write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
@@ -1121,7 +1441,7 @@ def run_measurement(m: Mapping, base: JobCfg, out: Path, rep: int, gpu: tuple[in
     jobs = []
     for i in range(int(m["runs"])):
         j = JobCfg.from_dict({**base.as_dict(), "mode": m["mode"], "profile": m["profile"], "tier": m["tier"], "index": i,
-                              "out": str(wdir / f"worker-{i}.json")})
+                              "extras": list(m.get("extras") or ()), "out": str(wdir / f"worker-{i}.json")})
         (wdir / f"job-{i}.json").write_text(json.dumps(j.as_dict(), indent=1) + "\n", encoding="utf-8")
         jobs.append(j)
     sampler = GpuSampler(gpu[0], gpu[1]).start()
@@ -1204,8 +1524,12 @@ def summarize_runs(runs: Sequence[Mapping]) -> dict:
                             "fps": [x["fps"] for x in w], "fps_min_bin": [min(x.get("fps_bins_60s") or [x["fps"]]) for x in w],
                             "rtf": [x.get("rtf") for x in w], "latency_p99_ms": [x["latency_ms"].get("p99") for x in w],
                             "vram_mib": [v["mib"] for v in r["vram"]], "vram_method": sorted({v["method"] for v in r["vram"]})})
+        lat_by = {k: _median(max((w["sensors"][k]["latency_ms"].get("p99") for w in r["workers"] if k in (w.get("sensors") or {})),
+                                 default=None) for r in rs) for k in sorted({k for w in ws for k in (w.get("sensors") or {})})}
         items[key] = {
             **m, "repeats": len(rs), "levels": sorted({p["level"] for p in per_rep}),
+            "workload": sorted({k for w in ws for k in (w.get("sensors") or {})}), "latency_p99_ms_by_sensor": lat_by,
+            "payload_kB_mean": _median((w.get("payload_kB") or {}).get("mean") for w in ws),
             "fx_proxy": sorted({p for w in ws for p in w["fx"]["proxy"]}),
             "fps": _median(min(p["fps"]) for p in per_rep),
             "fps_min_bin": _median(min(p["fps_min_bin"]) for p in per_rep),
@@ -1213,7 +1537,7 @@ def summarize_runs(runs: Sequence[Mapping]) -> dict:
             "latency_p99_ms": _median(max(x for x in p["latency_p99_ms"] if x is not None) for p in per_rep),
             "vram_mib_max": _median(max((x for x in p["vram_mib"] if x is not None), default=None) for p in per_rep),
             "vram_method": sorted({mm for p in per_rep for mm in p["vram_method"]}),
-            "jpeg_kB_mean": _median(w["jpeg_kB"].get("mean") for w in ws), "jpeg_kB_max": max((w["jpeg_kB"].get("max") or 0) for w in ws),
+            "jpeg_kB_mean": _median(w["jpeg_kB"].get("mean") for w in ws), "jpeg_kB_max": max((w["jpeg_kB"].get("max") or 0) for w in ws) or None,
             "write_MBps": _median(sum(w.get("write_MBps") or 0 for w in r["workers"]) for r in rs),
             "writer_block_frac_max": max(max(w["sink"]["raw"]["block_frac"], w["sink"]["truth"]["block_frac"]) for w in ws),
             "cpu_encode_calls": sum(w["cpu_encode_calls"] for w in ws),
@@ -1225,13 +1549,18 @@ def summarize_runs(runs: Sequence[Mapping]) -> dict:
 
 
 def gpu_time(w: Mapping) -> float | None:
-    """在线测量的 GPU 时间（GPU·s / 仿真 s，M25 §6.21 口径）：Σ(几何与效果遍 + 代理遍) / 仿真时长；读回与编码另计，不含。"""
+    """在线测量的 GPU 时间（GPU·s / 仿真 s，M25 §6.21 口径）：Σ(几何与效果遍 + 代理遍) / 仿真时长；标准轨另加热成像的几何、辐射与
+    探测器遍（`draw`，含 `ctx.finish`）。读回、编码与 LiDAR（Warp，另报 `sensors.lidar.stages_ms.draw`）不含。"""
     sim = w.get("sim_s")
     st = w.get("stages_ms") or {}
     d, p = st.get("draw") or {}, st.get("proxy_gpu") or {}
     if not sim or not d.get("n"):
         return None
-    return round((d["mean"] + (p.get("mean") or 0.0)) * d["n"] / 1000.0 / sim, 4)
+    ms = (d["mean"] + (p.get("mean") or 0.0)) * d["n"]
+    th = ((w.get("sensors") or {}).get("thermal") or {}).get("stages_ms", {}).get("draw") or {}
+    if w.get("kind", "camera") == "camera" and th.get("n"):
+        ms += th["mean"] * th["n"]
+    return round(ms / 1000.0 / sim, 4)
 
 
 def _counted(it: Mapping, *, partial: str | None = None) -> tuple[bool, list[str]]:
@@ -1263,39 +1592,52 @@ def acceptance(items: Mapping[str, Mapping]) -> list[dict]:
         acc.append(d)
 
     for prof, spec in PROFILES.items():
-        for tier in ("clear", "worst"):
+        for tier, thr in spec["fps"].items():
             it = items.get(measurement_name({"mode": "sustained", "profile": prof, "tier": tier, "runs": 1}))
-            thr = spec["fps"][tier]
             add(f"AC11.fps.{prof}.{tier}", f"{prof} {tier} 10 min sustained >= {thr:g} fps", it, it and it.get("fps"), thr,
                 lambda v, t=thr: v >= t, target=spec["target_fps"][tier])
             if it is not None:
                 add(f"AC11.fps_min_bin.{prof}.{tier}", f"{prof} {tier} every 60 s bin >= {thr:g} fps (sustain)", it, it.get("fps_min_bin"), thr,
                     lambda v, t=thr: v >= t)
-        on1 = items.get(measurement_name({"mode": "online", "profile": prof, "tier": "worst", "runs": 1}))
-        lat = spec["latency_p99_ms"]
-        add(f"AC11.latency_p99.{prof}", f"{prof} online closed-loop frame latency p99 <= {lat:g} ms", on1, on1 and on1.get("latency_p99_ms"),
-            lat, lambda v, t=lat: v <= t)
-        for n, rmin in spec["rtf_min"].items():
-            it = items.get(measurement_name({"mode": "online", "profile": prof, "tier": "worst", "runs": n}))
-            if prof == "rgb1080-rs":
-                text = (f"standard track run x{n} (3 x rgb1080-rs camera part, worst) sensor RTF >= {rmin:g}"
-                        + (" each" if n > 1 else ""))
-                partial = "partial_workload:therm512+mid360_by_S20"
-            else:
-                text, partial = f"3 x {prof} worst L2 run RTF >= {rmin:g} (M25-AC-014)", None
-            add(f"AC11.rtf.{prof}.x{n}", text, it, it and it.get("rtf_min"), rmin, lambda v, t=rmin: v >= t, partial=partial)
-        if on1 is not None and prof == "rgb1080-rs":
-            vm = on1.get("vram_mib_max")
-            add("AC11.vram.rgb1080-rs", "standard track session VRAM <= 1.2 GB (3 x rgb1080-rs camera part)", on1,
-                None if vm is None else round(vm * 2 ** 20 / GB, 3), VRAM_MAX_B / GB, lambda v: v <= VRAM_MAX_B / GB,
-                partial="partial_workload:therm512+mid360_by_S20")
         for key, it in items.items():
             if it["profile"] == prof and it.get("cpu_encode_calls"):
                 acc.append({"id": f"AC60.cpu_encode.{key}", "clause": "online path makes no CPU JPEG encode call", "value": it["cpu_encode_calls"],
                             "threshold": 0, "passed": False, "counted": True, "why": []})
-    acc.append({"id": "AC11.fps.therm512", "clause": "therm512 >= 300 fps", "value": None, "threshold": 300.0, "passed": None,
-                "counted": False, "why": ["deferred:S20"]})
+        if "latency_p99_ms" not in spec:                                  # therm512 只有持续吞吐条款（在线负载并入标准轨）
+            continue
+        on1, part1 = online_item(items, prof, 1)
+        lat = spec["latency_p99_ms"]
+        val = None
+        if on1 is not None:
+            val = (on1.get("latency_p99_ms_by_sensor") or {}).get("camera", on1.get("latency_p99_ms"))
+        add(f"AC11.latency_p99.{prof}", f"{prof} online closed-loop frame latency p99 <= {lat:g} ms"
+            + (" (standard track workload)" if on1 is not None and on1.get("extras") else ""), on1, val, lat, lambda v, t=lat: v <= t)
+        for n, rmin in spec["rtf_min"].items():
+            it, partial = online_item(items, prof, n)
+            if prof == STD_PROFILE:
+                text = (f"standard track run x{n} (3 x rgb1080-rs + 3 x therm512 + 3 x MID-360, worst) sensor RTF >= {rmin:g}"
+                        + (" each" if n > 1 else ""))
+            else:
+                text = f"3 x {prof} worst L2 run RTF >= {rmin:g} (M25-AC-014)"
+            add(f"AC11.rtf.{prof}.x{n}", text, it, it and it.get("rtf_min"), rmin, lambda v, t=rmin: v >= t, partial=partial)
+        if on1 is not None and prof == STD_PROFILE:
+            vm = on1.get("vram_mib_max")
+            add("AC11.vram.rgb1080-rs", "standard track session VRAM <= 1.2 GB (3 x rgb1080-rs + 3 x therm512 + 3 x MID-360, one worker process)",
+                on1, None if vm is None else round(vm * 2 ** 20 / GB, 3), VRAM_MAX_B / GB, lambda v: v <= VRAM_MAX_B / GB, partial=part1)
     return acc
+
+
+def online_item(items: Mapping[str, Mapping], prof: str, n: int) -> tuple[Mapping | None, str | None]:
+    """在线测量项与负载缺口标注：标准轨档位优先取完整负载（`rgb1080-rs+therm512+mid360`），缺失时退回只含部分负载的测量并标注
+    `partial_workload:<缺少的负载>`（不计入）；其余档位取相机测量。"""
+    if prof != STD_PROFILE:
+        return items.get(measurement_name({"mode": "online", "profile": prof, "tier": "worst", "runs": n})), None
+    cands = [it for it in items.values() if it["mode"] == "online" and it["profile"] == prof and it["tier"] == "worst" and it["runs"] == n]
+    if not cands:
+        return None, None
+    it = max(cands, key=lambda c: len(c.get("extras") or ()))
+    missing = [e for e in STD_EXTRAS if e not in (it.get("extras") or ())]
+    return it, (f"partial_workload:missing_{'+'.join(missing)}" if missing else None)
 
 
 def write_summary(out: Path, runs: Sequence[Mapping], meta: Mapping) -> dict:
@@ -1327,10 +1669,14 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
     r.add_argument("--event", type=Path, required=True, help="compiled event version directory (tape.bin, tape.json)")
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--scratch", type=Path, help="recording directory (default <out>/rec); segments are deleted unless --keep-output")
-    r.add_argument("--profiles", default="rgb720-gs,rgb1080-rs")
+    r.add_argument("--profiles", default="rgb720-gs,rgb1080-rs,therm512")
     r.add_argument("--tiers", default="clear,worst")
     r.add_argument("--modes", default="sustained,online")
     r.add_argument("--runs", default="1,3", help="online concurrency levels (workers on the same GPU)")
+    r.add_argument("--online-extras", default=",".join(STD_EXTRAS),
+                   help="standard-track load added to the rgb1080-rs online runs (therm512, mid360; 'none' = camera only)")
+    r.add_argument("--wq-cache", type=Path, help="world query cache for MID-360 (default <scratch>/worldquery)")
+    r.add_argument("--t-air-k", type=float, default=288.15, help="thermal air temperature")
     r.add_argument("--duration-s", type=float, default=600.0, help="sustained window wall time (D3-AC-11: 10 min)")
     r.add_argument("--online-sim-s", type=float, default=360.0, help="online simulated duration per run")
     r.add_argument("--uavs", type=int, default=3)
@@ -1369,7 +1715,8 @@ def main(argv: list[str] | None = None) -> int:
         doc = write_summary(a.out, load_runs(a.out), prev)
         print(json.dumps(doc["summary"]["acceptance"], ensure_ascii=False, indent=1))
         return EXIT_OK if doc["summary"]["passed"] else EXIT_FAIL
-    matrix = plan_matrix(_csv(a.modes), _csv(a.profiles), _csv(a.tiers), [int(x) for x in _csv(a.runs)])
+    extras = [] if a.online_extras.strip() in ("", "none") else _csv(a.online_extras)
+    matrix = plan_matrix(_csv(a.modes), _csv(a.profiles), _csv(a.tiers), [int(x) for x in _csv(a.runs)], extras)
     lock = None if a.no_lock else acquire_lock(a.lock, a.lock_wait_s)
     if lock is None and not a.no_lock:
         sys.stderr.write(f"performance lock {a.lock} not acquired within {a.lock_wait_s:g} s\n")
@@ -1382,7 +1729,8 @@ def main(argv: list[str] | None = None) -> int:
     base = JobCfg(mode="sustained", profile="rgb720-gs", tier="clear", world=str(a.world.resolve()), event=str(a.event.resolve()), out="",
                   scratch=str((a.scratch or a.out / "rec").resolve()), duration_s=a.duration_s, sim_s=a.online_sim_s, uavs=a.uavs,
                   hfov_deg=a.hfov_deg, noise=a.noise, outputs=tuple(_csv(a.outputs)), pool=a.pool, inflight=a.inflight, warmup=a.warmup,
-                  segment_s=a.segment_s, keep_output=a.keep_output, fx_proxy=a.fx_proxy == "on")
+                  segment_s=a.segment_s, keep_output=a.keep_output, fx_proxy=a.fx_proxy == "on",
+                  wq_cache=str(a.wq_cache.resolve()) if a.wq_cache else "", t_air_k=a.t_air_k)
     meta = {"protocol": {"adr": ["ADR-033", "ADR-195"], "lock": None if a.no_lock else str(a.lock), "load": load, "repeats": a.repeats,
                          "statistic": "median", "gpu_host_index": a.gpu, "gpu_visible": {"index": gpu[0], "uuid": gpu[1], "name": gpu[2]}},
             "host": host_info(), "config": {**base.as_dict(), "matrix": matrix}}

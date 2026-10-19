@@ -1,8 +1,11 @@
 """相机档位吞吐基准 `tools/bench/d3/camera_throughput.py`（D3-AC-11、D3-AC-47；M25-AC-014、047）。
 
-前半部分不需要 GPU：测量矩阵、天气档代理遍、帧时刻、统计分箱、`nvidia-smi` 采样解析、ADR-195 独占级别判定、汇总与逐条判定。
-后半部分需要 EGL 与 nvJPEG（dmax d3-sensorsvc 容器内运行，本机跳过）：代价代理遍不改变光栅相机的状态与交付像素；在合成世界与
-单演员磁带上以真实 Worker 子进程跑一次缩短的 sustained 与 online 测量，核对报告结构、在线守卫零 CPU 编码与落盘。
+前半部分不需要 GPU：测量矩阵（含 `therm512` 单档与标准轨 online 负载）、天气档代理遍、帧时刻、航迹、统计分箱、`nvidia-smi` 采样
+解析、ADR-195 独占级别判定、汇总与逐条判定（含标准轨负载缺口标注与 therm512 条款）。
+后半部分需要 EGL、nvJPEG 与 Warp CUDA（dmax d3-sensorsvc 容器内运行，本机跳过）：代价代理遍不改变光栅相机的状态与交付像素；在合成
+世界与双演员磁带上以真实 Worker 子进程跑一次缩短的 sustained（720p 最坏档、therm512）与 online 测量，核对报告结构、在线守卫零 CPU
+编码与落盘；进程内跑一次缩短的标准轨 online（1080p 卷帘 + therm512 + MID-360，同一 Worker），核对三类传感器逐 tick 交付、录制通道
+与真值、热成像帧记录与 LiDAR 帧头。
 """
 
 from __future__ import annotations
@@ -31,16 +34,25 @@ PMON = """# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    
 
 
 # ---------------------------------------------------------------------------------------------------------------- 配置与矩阵
-def test_plan_matrix_and_deferred_profile() -> None:
-    m = ct.plan_matrix(["sustained", "online"], ["rgb720-gs", "rgb1080-rs"], ["clear", "worst"], [1, 3])
+def test_plan_matrix_therm512_and_standard_track() -> None:
+    m = ct.plan_matrix(["sustained", "online"], ["rgb720-gs", "rgb1080-rs", "therm512"], ["clear", "worst"], [1, 3])
     names = [ct.measurement_name(x) for x in m]
-    assert names[:4] == ["sustained-rgb720-gs-clear-x1", "sustained-rgb720-gs-worst-x1", "sustained-rgb1080-rs-clear-x1",
-                         "sustained-rgb1080-rs-worst-x1"]
-    assert names[4:] == ["online-rgb720-gs-worst-x1", "online-rgb720-gs-worst-x3", "online-rgb1080-rs-worst-x1", "online-rgb1080-rs-worst-x3"]
-    with pytest.raises(ValueError, match="S20"):
-        ct.plan_matrix(["sustained"], ["therm512"], ["clear"], [1])
+    assert names[:5] == ["sustained-rgb720-gs-clear-x1", "sustained-rgb720-gs-worst-x1", "sustained-rgb1080-rs-clear-x1",
+                         "sustained-rgb1080-rs-worst-x1", "sustained-therm512-single-x1"]                  # 热成像与天气无关的单档
+    assert names[5:] == ["online-rgb720-gs-worst-x1", "online-rgb720-gs-worst-x3", "online-rgb1080-rs+therm512+mid360-worst-x1",
+                         "online-rgb1080-rs+therm512+mid360-worst-x3"]                                     # 标准轨：同一 Worker 内的完整负载
+    assert m[-1]["extras"] == ["therm512", "mid360"] and "extras" not in m[5]
+    only_cam = ct.plan_matrix(["online"], ["rgb1080-rs"], ["worst"], [1], extras=())
+    assert [ct.measurement_name(x) for x in only_cam] == ["online-rgb1080-rs-worst-x1"]
+    assert ct.plan_matrix(["sustained"], ["therm512"], ["clear"], [1]) == [{"mode": "sustained", "profile": "therm512", "tier": "single", "runs": 1}]
+    assert ct.plan_matrix(["sustained"], ["rgb720-gs"], ["worst", "single"], [1]) == [{"mode": "sustained", "profile": "rgb720-gs",
+                                                                                         "tier": "worst", "runs": 1}]
     with pytest.raises(ValueError, match="modes"):
         ct.plan_matrix(["burst"], ["rgb720-gs"], ["clear"], [1])
+    with pytest.raises(ValueError, match="extras"):
+        ct.plan_matrix(["online"], ["rgb1080-rs"], ["worst"], [1], extras=("radar",))
+    with pytest.raises(ValueError, match="profile"):
+        ct.plan_matrix(["sustained"], ["therm640"], ["clear"], [1])
 
 
 def test_thresholds_match_ac11_text() -> None:
@@ -50,6 +62,8 @@ def test_thresholds_match_ac11_text() -> None:
     assert p["rgb1080-rs"]["fps"] == {"clear": 60.0, "worst": 40.0} and p["rgb1080-rs"]["target_fps"] == {"clear": 90.0, "worst": 60.0}
     assert p["rgb720-gs"]["latency_p99_ms"] == 50.0 and p["rgb1080-rs"]["latency_p99_ms"] == 80.0
     assert p["rgb1080-rs"]["rtf_min"] == {1: 1.0, 3: 0.35} and p["rgb720-gs"]["rtf_min"] == {1: 1.0}
+    assert p["therm512"]["fps"] == {"single": 300.0} and p["therm512"]["target_fps"] == {"single": 500.0}      # therm512 ≥ 300，应交付 500
+    assert ct.STD_PROFILE == "rgb1080-rs" and ct.STD_EXTRAS == ("therm512", "mid360")                          # 3 × 1080 + 3 × 热 + 3 × MID-360
     assert ct.VRAM_MAX_B == 1.2e9
 
 
@@ -57,15 +71,20 @@ def test_proxy_passes_per_tier() -> None:
     assert ct.proxy_passes("clear") == ("fog", "contact_shadow", "distortion")
     assert ct.proxy_passes("worst") == ("rain", "fog", "shadow_map", "contact_shadow", "distortion")
     assert ct.proxy_passes("worst", fx_proxy=False) == ()
+    assert ct.proxy_passes("single") == ()                                                    # 热成像管线完整实现，无代理遍
+    assert ct.WEATHER["single"] == ct.WEATHER["worst"] and ct.WEATHER["clear"] == (None, 0.0)
     assert set(ct.TIERS["worst"]) - set(ct.TIERS["clear"]) == {"rain", "shadow_map"}
     with pytest.raises(ValueError):
         ct.proxy_passes("storm")
 
 
 def test_job_roundtrip() -> None:
-    j = ct.JobCfg(mode="online", profile="rgb1080-rs", tier="worst", world="/w", event="/e", out="/o.json", scratch="/s", outputs=("rgb",))
+    j = ct.JobCfg(mode="online", profile="rgb1080-rs", tier="worst", world="/w", event="/e", out="/o.json", scratch="/s", outputs=("rgb",),
+                  extras=("therm512", "mid360"))
     k = ct.JobCfg.from_dict(json.loads(json.dumps(j.as_dict())))
-    assert k == j and k.name == "online-rgb1080-rs-worst"
+    assert k == j and k.name == "online-rgb1080-rs+therm512+mid360-worst"
+    old = {kk: v for kk, v in j.as_dict().items() if kk not in ("extras", "wq_cache", "t_air_k")}       # S09 的作业文件
+    assert ct.JobCfg.from_dict(old).extras == ()
 
 
 # ---------------------------------------------------------------------------------------------------------------- 时刻与航迹
@@ -90,6 +109,11 @@ def test_fleet_orbits_and_look_at() -> None:
         assert math.hypot(p0[0] - 10.0, p0[1] + 5.0) == pytest.approx(40.0 + 15.0 * i)
         d = f.target - p0
         assert R[:, 0] @ (d / np.linalg.norm(d)) == pytest.approx(1.0, abs=1e-9)             # 光轴注视环绕中心
+    p, yaw = f.body(1, 250_000_000)
+    p1, _ = f.body(1, 260_000_000)
+    v = (p1 - p) / 0.01
+    assert np.allclose(v[:2] / np.linalg.norm(v[:2]), [math.cos(yaw), math.sin(yaw)], atol=1e-3)            # 航向沿切线
+    assert np.allclose(ct.rot_z(yaw) @ [1.0, 0.0, 0.0], [math.cos(yaw), math.sin(yaw), 0.0])
     az, el, zoom = ct.gimbal_of(f.pose(0, 0)[1])
     assert -math.pi <= az <= math.pi
     assert el < 0 and zoom == 0.0
@@ -146,16 +170,18 @@ def test_exclusivity_levels() -> None:
 
 
 # ---------------------------------------------------------------------------------------------------------------- 汇总与判定
-def _worker(fps: float, *, rtf: float | None = None, p99: float = 30.0, proxy: tuple[str, ...] = (), pid: int = 1) -> dict:
+def _worker(fps: float, *, rtf: float | None = None, p99: float = 30.0, proxy: tuple[str, ...] = (), pid: int = 1,
+            sensors: dict[str, float] | None = None) -> dict:
     d = ct.dist([10.0, 20.0])
     return {"pid": pid, "fps": fps, "fps_bins_60s": [fps, fps * 0.98], "rtf": rtf, "latency_ms": {"p99": p99},
             "fx": {"proxy": list(proxy), "proxy_gpu_ms": {p: d for p in proxy}}, "jpeg_kB": {"mean": 300.0, "max": 360.0}, "write_MBps": 40.0,
             "sink": {"raw": {"block_frac": 0.0}, "truth": {"block_frac": 0.001}}, "cpu_encode_calls": 0,
-            "stages_ms": {"draw": d, "readback": d}}
+            "stages_ms": {"draw": d, "readback": d}, "sensors": {k: {"latency_ms": {"p99": v}} for k, v in (sensors or {"camera": p99}).items()}}
 
 
-def _run(mode: str, profile: str, tier: str, n: int, workers: list[dict], level: str = "A", rep: int = 0, vram: float = 900.0) -> dict:
-    m = {"mode": mode, "profile": profile, "tier": tier, "runs": n}
+def _run(mode: str, profile: str, tier: str, n: int, workers: list[dict], level: str = "A", rep: int = 0, vram: float = 900.0,
+         extras: tuple[str, ...] = ()) -> dict:
+    m = {"mode": mode, "profile": profile, "tier": tier, "runs": n, **({"extras": list(extras)} if extras else {})}
     return {"name": f"{ct.measurement_name(m)}-r{rep}", "measurement": m, "repeat": rep, "ok": True, "workers": workers,
             "vram": [{"pid": w["pid"], "mib": vram, "method": "pmon_fb"} for w in workers], "gpu_load": {"level": level}}
 
@@ -178,13 +204,42 @@ def test_summary_acceptance_counted_and_median() -> None:
     a = acc["AC11.latency_p99.rgb1080-rs"]
     assert a["value"] == 70.0 and a["passed"] and a["counted"]
     a = acc["AC11.rtf.rgb1080-rs.x1"]
-    assert a["passed"] and not a["counted"] and "partial_workload:therm512+mid360_by_S20" in a["why"]
+    assert a["passed"] and not a["counted"] and a["why"] == ["partial_workload:missing_therm512+mid360"]   # 只测了相机部分
     a = acc["AC11.rtf.rgb1080-rs.x3"]
     assert a["value"] == 0.33 and not a["passed"] and "exclusive_B_pending_user_confirmation" in a["why"]   # 取 3 个并发 Run 中最小者
     a = acc["AC11.latency_p99.rgb720-gs"]
     assert not a["passed"] and a["why"] == ["shared_gpu"]
     assert acc["AC11.vram.rgb1080-rs"]["value"] == round(1100 * 2 ** 20 / 1e9, 3) and acc["AC11.vram.rgb1080-rs"]["passed"]
-    assert acc["AC11.fps.rgb720-gs.worst"]["why"] == ["not_measured"] and acc["AC11.fps.therm512"]["why"] == ["deferred:S20"]
+    assert acc["AC11.vram.rgb1080-rs"]["why"] == ["partial_workload:missing_therm512+mid360"]
+    assert acc["AC11.fps.rgb720-gs.worst"]["why"] == ["not_measured"] and acc["AC11.fps.therm512.single"]["why"] == ["not_measured"]
+    assert not any("deferred" in w for a in s["acceptance"] for w in a["why"])
+
+
+def test_summary_standard_track_and_therm512() -> None:
+    """标准轨完整负载的测量优先于只含相机部分的测量；时延条款取标准轨中可见光帧的 p99；therm512 持续吞吐对照 300（应交付 500）。"""
+    std = ("therm512", "mid360")
+    runs = [_run("online", "rgb1080-rs", "worst", 1, [_worker(30.0, rtf=0.5, p99=60.0)], vram=1000.0),
+            _run("online", "rgb1080-rs", "worst", 1, [_worker(30.0, rtf=1.1, p99=200.0, sensors={"camera": 75.0, "thermal": 90.0, "lidar": 20.0})],
+                 vram=1100.0, extras=std),
+            _run("online", "rgb1080-rs", "worst", 3, [_worker(10.0, rtf=r, pid=k, sensors={"camera": 1.0, "thermal": 2.0, "lidar": 3.0})
+                                                      for k, r in enumerate((0.4, 0.36, 0.5))], extras=std),
+            _run("sustained", "therm512", "single", 1, [_worker(380.0)])]
+    s = ct.summarize_runs(runs)
+    it = s["items"]["online-rgb1080-rs+therm512+mid360-worst-x1"]
+    assert it["workload"] == ["camera", "lidar", "thermal"] and it["latency_p99_ms_by_sensor"] == {"camera": 75.0, "lidar": 20.0, "thermal": 90.0}
+    acc = {a["id"]: a for a in s["acceptance"]}
+    a = acc["AC11.rtf.rgb1080-rs.x1"]
+    assert a["value"] == 1.1 and a["passed"] and a["counted"] and a["why"] == []                # 完整标准轨负载，不再标注 partial
+    assert acc["AC11.rtf.rgb1080-rs.x3"]["value"] == 0.36 and acc["AC11.rtf.rgb1080-rs.x3"]["passed"]
+    assert acc["AC11.latency_p99.rgb1080-rs"]["value"] == 75.0 and "standard track" in acc["AC11.latency_p99.rgb1080-rs"]["clause"]
+    v = acc["AC11.vram.rgb1080-rs"]
+    assert v["value"] == round(1100 * 2 ** 20 / 1e9, 3) and v["counted"] and "therm512" in v["clause"]
+    t = acc["AC11.fps.therm512.single"]
+    assert t["value"] == 380.0 and t["threshold"] == 300.0 and t["passed"] and t["counted"] and t["target"] == 500.0 and not t["target_met"]
+    assert acc["AC11.fps_min_bin.therm512.single"]["value"] == round(380.0 * 0.98, 4)
+    assert "AC11.latency_p99.therm512" not in acc and not any(k.startswith("AC11.rtf.therm512") for k in acc)
+    it, why = ct.online_item(s["items"], "rgb720-gs", 1)
+    assert it is None and why is None
 
 
 def test_gpu_time_per_sim_second() -> None:
@@ -295,11 +350,11 @@ def test_end_to_end_short_run(fixture_world, tmp_path: Path) -> None:
     root, ev = fixture_world
     out = tmp_path / "out"
     rc = ct.main(["run", "--world", str(root), "--event", str(ev), "--out", str(out), "--no-lock", "--modes", "sustained,online",
-                  "--profiles", "rgb720-gs,rgb1080-rs", "--tiers", "worst", "--runs", "1", "--duration-s", "4", "--online-sim-s", "1",
-                  "--warmup", "6", "--segment-s", "2"])
+                  "--profiles", "rgb720-gs,rgb1080-rs,therm512", "--tiers", "worst", "--runs", "1", "--duration-s", "4", "--online-sim-s", "1",
+                  "--warmup", "6", "--segment-s", "2", "--online-extras", "none"])
     assert rc in (ct.EXIT_OK, ct.EXIT_FAIL)
     doc = json.loads((out / "camera_throughput.json").read_text())
-    assert doc["schema"] == ct.SCHEMA and len(doc["runs"]) == 4
+    assert doc["schema"] == ct.SCHEMA and len(doc["runs"]) == 5
     runs = {r["name"]: r for r in ct.load_runs(out)}
     s = runs["sustained-rgb720-gs-worst-x1-r0"]
     assert s["ok"] and s["exit_codes"] == [0]
@@ -317,5 +372,94 @@ def test_end_to_end_short_run(fixture_world, tmp_path: Path) -> None:
     assert w["latency_ms"]["n"] == 30 and w["latency_ms"]["p99"] >= w["latency_ms"]["p50"] > 0
     assert o["vram"][0]["mib"] and o["vram"][0]["method"] in ("pmon_fb", "compute_apps", "device_delta")
     assert o["gpu_load"]["level"] in ("A", "B", "shared", "unknown")
-    ids = {a["id"] for a in doc["summary"]["acceptance"]}
-    assert {"AC11.fps.rgb720-gs.worst", "AC11.latency_p99.rgb1080-rs", "AC11.rtf.rgb1080-rs.x1", "AC11.vram.rgb1080-rs"} <= ids
+    t = runs["sustained-therm512-single-x1-r0"]
+    (w,) = t["workers"]
+    assert t["ok"] and w["kind"] == "thermal" and w["camera"]["width"] == 640 and w["camera"]["height"] == 512 and w["fx"]["proxy"] == []
+    assert w["frames"] > 10 and w["fps"] > 0 and w["cpu_encode_calls"] == 0 and w["encoder"] == "zstd-3/u16le" and w["jpeg_kB"] == {"n": 0}
+    assert w["payload_kB"]["mean"] > 0 and w["objects_per_frame"]["max"] >= 1 and w["workload"] == ["thermal"]
+    assert w["thermal"]["manifest"]["thermal_table"]["version"] == "thermal_table_v1" and w["thermal"]["env"]["rain_mmh"] == ct.RAIN_MM_H
+    assert w["sink"]["raw"]["messages"] >= w["frames"] and w["sink"]["truth"]["messages"] >= w["frames"] and w["sink"]["raw"]["dropped"] == 0
+    acc = {a["id"]: a for a in doc["summary"]["acceptance"]}
+    assert {"AC11.fps.rgb720-gs.worst", "AC11.latency_p99.rgb1080-rs", "AC11.rtf.rgb1080-rs.x1", "AC11.vram.rgb1080-rs",
+            "AC11.fps.therm512.single"} <= set(acc)
+    assert acc["AC11.fps.therm512.single"]["value"] == w["fps"] and acc["AC11.fps.therm512.single"]["threshold"] == 300.0
+    assert "partial_workload:missing_therm512+mid360" in acc["AC11.rtf.rgb1080-rs.x1"]["why"]
+
+
+def _fixture_query():
+    """LiDAR 世界查询的最小替身（`WarpMeshLidar` 只用 `tiles` 与 `semantic`）：外观夹具的地面与盒子作为单个瓦片。"""
+    from types import SimpleNamespace
+
+    sys.path.insert(0, str(REPO / "tests/d3/sensorsvc"))
+    from appfix import scene_enu
+
+    V, F, _UV = scene_enu()
+    org = np.zeros(3)
+    tile = SimpleNamespace(id=0, origin=org, lo=V.min(0), hi=V.max(0), t0=0, nt=len(F), scene=None, V=(V - org).astype(np.float32),
+                           F=F.astype(np.uint32))
+    return SimpleNamespace(tiles=[tile], semantic=None)
+
+
+def test_standard_track_online_in_process(fixture_world, tmp_path: Path) -> None:
+    """标准轨在线闭环（同一 Worker：3 × rgb1080-rs + 3 × therm512 + 3 × MID-360，最坏档）：每 tick 三类传感器各交付 3 帧；热成像与
+    可见光共用 EGL 上下文；LiDAR 经 Warp CUDA；观测与真值写入录制；在线守卫内零 CPU JPEG 编码；报告含分传感器时延与负载构成。"""
+    _gl_ctx().release()
+    pytest.importorskip("mcap")
+    wm = pytest.importorskip("awr.sensorsvc.lidar.warp_mesh")
+    from awr.sensorsvc.camera.encode import cpu_encode_calls, gpu_encoder_available, online_path
+
+    if not gpu_encoder_available():
+        pytest.skip("[gpu] nvJPEG (nvImageCodec / CUDA) unavailable")
+    pytest.importorskip("warp")
+    if not wm.warp_cuda_available():
+        pytest.skip("[gpu] no CUDA device for warp")
+    root, ev = fixture_world
+    job = ct.JobCfg(mode="online", profile="rgb1080-rs", tier="worst", world=str(root), event=str(ev), out=str(tmp_path / "w.json"),
+                    scratch=str(tmp_path / "rec"), sim_s=0.5, warmup=3, segment_s=0.3, keep_output=True, extras=ct.STD_EXTRAS)
+    import resource
+
+    with online_path():
+        c0 = cpu_encode_calls()
+        w = ct.Worker(job, lidar_query=_fixture_query())
+        try:
+            assert w.th.cam.ctx is w.cam.ctx                                                      # 热成像与可见光共用上下文
+            w.warmup()
+            ru = resource.getrusage(resource.RUSAGE_SELF)
+            res = w.online()
+            doc = ct.worker_report(w, res, cpu_calls=cpu_encode_calls() - c0, ru=(ru, ru, ru), wall=res["wall_s"])
+        finally:
+            sink = w.close()
+    assert res["ticks"] == 5 and res["frames_by_sensor"] == {"camera": 15, "thermal": 15, "lidar": 15} and res["rtf"] > 0
+    assert doc["cpu_encode_calls"] == 0 and doc["workload"] == ["camera", "lidar", "thermal"] and doc["extras"] == ["therm512", "mid360"]
+    sen = doc["sensors"]
+    assert sen["thermal"]["latency_ms"]["n"] == 15 and sen["lidar"]["points_per_frame"]["mean"] > 100 and sen["camera"]["latency_ms"]["n"] == 15
+    assert sen["thermal"]["objects_per_frame"]["max"] >= 1                                         # 热成像可见度归约有演员
+    assert doc["lidar"]["backend"] and doc["lidar"]["beta_905_per_m"] > 0 and doc["thermal"]["env"]["fog_visibility_km"] == ct.FOG_VIS_M / 1000
+    assert ct.gpu_time({**doc, "sim_s": res["sim_s"]}) > ct.gpu_time({**doc, "sim_s": res["sim_s"], "sensors": {}})   # 计入热成像 GPU 时间
+    assert sink["raw"]["dropped"] == 0 and sink["truth"]["dropped"] == 0
+    from mcap.reader import make_reader
+
+    from awr.bench.recorder.channels import decode_thermal_message
+    from awr.bench.recorder.lidar import unpack_lidar_frame
+    from awr.bench.recorder.truth import unpack_camera_gt
+
+    topics: dict[str, int] = {}
+    therm, lid, tgt = [], [], []
+    for f in sorted(Path(sink["root"]).rglob("*.mcap")):
+        with f.open("rb") as fh:
+            for _sch, ch, msg in make_reader(fh).iter_messages():
+                topics[ch.topic] = topics.get(ch.topic, 0) + 1
+                if "/thermal/" in ch.topic and len(therm) < 2:
+                    therm.append(decode_thermal_message(msg.data, decode=True))
+                elif ch.topic.startswith("/uav/") and "/lidar/" in ch.topic and len(lid) < 2:
+                    lid.append(unpack_lidar_frame(msg.data))
+                elif ch.topic.startswith("/eval/hidden/camera/") and ch.topic.endswith("/therm0") and len(tgt) < 2:
+                    tgt.append(unpack_camera_gt(msg.data))
+    n = 3 + 2 + 5 * 3                                                                              # 预热 3 帧 + 2 次 LiDAR 预热批 + 5 tick
+    assert topics["/uav/uav-01/thermal/therm0"] >= 5 and topics["/uav/uav-03/lidar/lidar0"] >= 5 and topics["/eval/hidden/lidar/uav-02/lidar0"] >= 5
+    assert topics["/uav/uav-01/camera/eo/image"] >= 5 and sum(v for k, v in topics.items() if "/thermal/" in k) <= n
+    assert therm[0]["temp_ck"].shape == (512, 640) and therm[0]["temp_ck"].dtype == np.uint16
+    hdr, pts = lid[0]
+    assert hdr["slots_per_frame"] == 20000 and hdr["point_count"] == len(pts) > 0 and hdr["mount_nominal"]["rpy_deg"] == [180.0, 0.0, 0.0]
+    rec, blocks = tgt[0]
+    assert rec["kind"] == "thermal" and "temp_ck.u16.zst" not in blocks and {"instance.u16.zst", "semantic.u8.zst"} <= set(blocks)
