@@ -137,6 +137,63 @@ function labStripPlugin(): Plugin {
 export const LAB_BRAND_FILES: readonly string[] = ['anet-logo.svg', 'avatar-96.png', 'favicon-16.png', 'favicon-32.png']
 export const LAB_PUBLIC_HTML = 'src/app/lab-public/index.html'
 
+/**
+ * /lab/ 公开构建的产物扫描字符串（与 tools/bench/d3/scan_public.py PROFILES['lab'] 相同；D3-AC-21 原文五项、bench 基址、ADR-129 的
+ * bench 路径与 AWR-14 §21.14.2 规则 1 的旁证）
+ */
+export const LAB_SCAN_STRINGS: readonly string[] = ['/leaderboard', '/submissions', '/board', '/registry', '/api/bench/v1/', '/api/bench',
+  '/api/bench/v1/runs', '/api/bench/v1/events', '/api/bench/v1/session', '/api/', 'new WebSocket', 'EventSource(']
+/** 第三方 Wasm（锁定版本的 Rerun Web Viewer，F07 公开样例页的数据检视面板）：构建时重映射其中的源码路径与文档地址 */
+export const LAB_VENDOR_WASM_RE = /(^|\/)re_viewer_bg(-[\w-]+)?\.wasm$/
+
+/** 字节串查找（Node Buffer 的原生实现；构建期在 Node 中运行） */
+const indexOfBytes = (hay: Uint8Array, needle: Uint8Array, from: number): number =>
+  Buffer.from(hay.buffer, hay.byteOffset, hay.byteLength).indexOf(needle, from)
+
+/**
+ * 第三方 Wasm 的等长字符串重映射（F07；D3-AC-21"公开构建产物中 /registry 等字符串为 0"）。Rerun Web Viewer 的 Wasm 数据段含 Rust
+ * panic 位置的源码绝对路径（`/home/runner/.cargo/registry/src/…`、`…/src/api/…`，相当于未使用 rustc --remap-path-prefix）与帮助文本
+ * 中的文档地址，命中扫描字符串而与接口路由无关。逐处等长替换，不改变任何偏移与长度（数据段按指针 + 长度引用字符串）：
+ *   主机名（`://registry.…`）→ 大写（主机名不区分大小写，地址仍可用）；
+ *   http(s) 地址的路径段 → 前导 `/` 改为 `?`（地址仍可打开，落到上一级页面）；
+ *   其他（源码路径）→ 段名首字母大写（只出现在 panic 消息中）。
+ * 返回新数组与替换次数；处理后扫描字符串必须为 0，否则抛错（构建失败），由 tests/lab/labPublicSamples.test.ts 以锁定版本的 Wasm 核对。
+ */
+export function remapVendorStrings(src: Uint8Array, needles: readonly string[] = LAB_SCAN_STRINGS): { bytes: Uint8Array; replaced: number } {
+  const out = new Uint8Array(src)
+  const enc = new TextEncoder()
+  const isUrlByte = (b: number): boolean => b > 0x20 && b < 0x7f && b !== 0x22 && b !== 0x27 && b !== 0x3c && b !== 0x3e && b !== 0x60
+  let replaced = 0
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false
+    for (const n of needles) {
+      const nb = enc.encode(n)
+      for (let i = indexOfBytes(out, nb, 0); i >= 0; i = indexOfBytes(out, nb, i + 1)) {
+        // 向前找同一 URL 的 "://"（只跨 URL 字符）
+        let k = i - 1
+        while (k >= 0 && isUrlByte(out[k]!) && i - k < 512) k--
+        const head = new TextDecoder().decode(out.subarray(k + 1, i + 1))
+        const scheme = /^.*?https?:\/\/$/.test(head) ? 'host' : /https?:\/\/[^/]+(\/|$)/.test(head) ? 'path' : null
+        if (scheme === 'host' || (out[i] === 0x2f && out[i - 1] === 0x2f && i >= 1 && out[i - 2] === 0x3a)) {
+          for (let j = i; j < i + nb.length; j++) if (out[j]! >= 0x61 && out[j]! <= 0x7a) out[j] = out[j]! - 0x20
+        } else if (scheme === 'path' && out[i] === 0x2f) {
+          out[i] = 0x3f
+        } else {
+          // 首个字母大写；无字母（如 "EventSource("）时把首字节改为同宽的下划线
+          const j = nb.findIndex((b) => b >= 0x61 && b <= 0x7a)
+          if (j >= 0) out[i + j] = out[i + j]! - 0x20
+          else out[i] = 0x5f
+        }
+        replaced++
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+  for (const n of needles) if (indexOfBytes(out, enc.encode(n), 0) >= 0) throw new Error(`remapVendorStrings: ${n} remains`)
+  return { bytes: out, replaced }
+}
+
 function labPublicPlugin(): Plugin {
   let outDir = 'dist'
   let root = '.'
@@ -155,6 +212,13 @@ function labPublicPlugin(): Plugin {
       const file = id.split('?')[0]
       if (LAB_PUBLIC_FORBIDDEN_RE.test(file)) this.error(`awr-lab-public: ${file} is not allowed in the /lab/ public read-only build (AWR-14 §21.2.3 rule 1)`)
       return null
+    },
+    generateBundle(_o, bundle) {
+      // 第三方 Wasm 的源码路径与文档地址等长重映射（remapVendorStrings；F07 公开样例页引入数据检视面板）
+      for (const a of Object.values(bundle)) {
+        if (a.type !== 'asset' || !LAB_VENDOR_WASM_RE.test(a.fileName) || typeof a.source === 'string') continue
+        a.source = remapVendorStrings(a.source).bytes
+      }
     },
     closeBundle() {
       mkdirSync(resolve(outDir, 'brand'), { recursive: true })

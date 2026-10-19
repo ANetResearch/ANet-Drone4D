@@ -175,7 +175,8 @@ describe('copy and sources of the public build (D3-AC-21)', () => {
     for (const p of srcs) {
       const text = readFileSync(p, 'utf8')
       for (const s of forbidden) expect(text.includes(s), `${p}: ${s}`).toBe(false)
-      expect(/from '@\/(net|app\/router|app\/routes|app\/demo|ui\/lab)\b/.test(text), p).toBe(false)
+      // ui/lab 中只有为公开构建设计的数据检视面板（R06）与事件平面图纯函数可被引用（F07 样例运行页；其余由 LAB_PUBLIC_FORBIDDEN_RE 守卫）
+      expect(/from '@\/(net|app\/router|app\/routes|app\/demo|ui\/lab(?!\/(inspect\/|wall\/eventPlan')))\b/.test(text), p).toBe(false)
     }
     const words = Object.values(LAB_DICTS['zh-CN']).join('\n') + Object.values(LAB_DICTS.en).join('\n')
     expect(/得分[^。]*显示|主得分|排行榜|提交入口/.test(words.replace('页面不显示得分', ''))).toBe(false)

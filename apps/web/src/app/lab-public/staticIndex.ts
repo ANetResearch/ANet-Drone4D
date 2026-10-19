@@ -18,10 +18,14 @@ export interface LabStaticFile {
   path: string
   bytes: number | null
   sha256: string | null
+  /** 单文件 > 64 MB 时的分发渠道副本（ADR-201：ModelScope）；其他地址一律忽略 */
+  external: string | null
 }
 export interface LabStaticVideo extends LabStaticFile {
   uav: string
   cam: string
+  /** 视频种类（rgb、thermal）；索引未给出时为 null，由传感器名推断（app/lab-public/samples/videoSync.ts） */
+  kind: 'rgb' | 'thermal' | null
 }
 export interface LabStaticSlice extends LabStaticFile {
   eventId: string
@@ -39,6 +43,10 @@ export interface LabStaticRun {
   videos: LabStaticVideo[]
   slices: LabStaticSlice[]
   basemap: string | null
+  basemapBytes: number | null
+  basemapSha256: string | null
+  /** 观测层机队轨迹 tracks_obs.bin（AWR-17 §18.8.3） */
+  tracksObs: string | null
   lidarCompare: string | null
 }
 export interface LabStaticEvent {
@@ -119,10 +127,23 @@ function relPath(v: unknown, where: string, optional = false): string | null {
   return s
 }
 
+/** 分发渠道地址（lab_static_index.v1 `external`：channel = modelscope，https://modelscope.cn/ 或 www.modelscope.cn/） */
+export const LAB_EXTERNAL_URL_RE = /^https:\/\/(www\.)?modelscope\.cn\/[^\s"'<>\\]*$/
+const sha256Of = (v: unknown): string | null => {
+  const sha = str(v)
+  return sha && /^[0-9a-f]{64}$/.test(sha) ? sha : null
+}
+const bytesOf = (v: unknown): number | null => {
+  const b = num(v)
+  return b !== null && b >= 0 ? b : null
+}
+
 function file(v: Obj, key: string, where: string): LabStaticFile {
-  const bytes = num(v.bytes)
-  const sha = str(v.sha256)
-  return { path: relPath(v[key], `${where}.${key}`), bytes: bytes !== null && bytes >= 0 ? bytes : null, sha256: sha && /^[0-9a-f]{64}$/.test(sha) ? sha : null }
+  const ext = isObj(v.external) ? str(v.external.url) : null
+  return {
+    path: relPath(v[key], `${where}.${key}`), bytes: bytesOf(v.bytes), sha256: sha256Of(v.sha256),
+    external: ext !== null && LAB_EXTERNAL_URL_RE.test(ext) ? ext : null,
+  }
 }
 
 function parseRun(v: unknown, ev: { id: string; version: number; worldId: string | null }, where: string): LabStaticRun {
@@ -137,11 +158,16 @@ function parseRun(v: unknown, ev: { id: string; version: number; worldId: string
     policy: str(v.policy) ?? '',
     nUav: Math.max(0, Math.trunc(num(v.n_uav) ?? 0)),
     obsLevel: str(v.obs_level) ?? '',
-    videos: arr(v.videos).filter(isObj).map((x, i) => ({ ...file(x, 'path', `${where}.videos[${i}]`), uav: str(x.uav) ?? '', cam: str(x.cam) ?? '' })),
+    videos: arr(v.videos).filter(isObj).map((x, i) => ({
+      ...file(x, 'path', `${where}.videos[${i}]`), uav: str(x.uav) ?? '', cam: str(x.cam) ?? '', kind: x.kind === 'rgb' || x.kind === 'thermal' ? x.kind : null,
+    })),
     slices: arr(v.slices).filter(isObj).map((x, i) => ({
       ...file(x, 'rrd', `${where}.slices[${i}]`), eventId: str(x.event_id) ?? '', tFromS: num(x.t_from_s) ?? 0, tToS: num(x.t_to_s) ?? 0,
     })),
     basemap: relPath(v.basemap, `${where}.basemap`, true),
+    basemapBytes: bytesOf(v.basemap_bytes),
+    basemapSha256: sha256Of(v.basemap_sha256),
+    tracksObs: relPath(v.tracks_obs, `${where}.tracks_obs`, true),
     lidarCompare: relPath(v.lidar_compare, `${where}.lidar_compare`, true),
   }
 }
@@ -209,7 +235,7 @@ export function sampleFiles(run: LabStaticRun): (LabStaticFile & { kind: 'video'
   return [
     ...run.videos.map((v) => ({ ...v, kind: 'video' as const, label: `${v.uav} · ${v.cam}`, hosted: hosted(v.bytes) })),
     ...run.slices.map((s) => ({ ...s, kind: 'slice' as const, label: `${s.eventId} · ${s.tFromS.toFixed(1)}–${s.tToS.toFixed(1)} s`, hosted: hosted(s.bytes) })),
-    ...(run.basemap ? [{ path: run.basemap, bytes: null, sha256: null, kind: 'basemap' as const, label: 'basemap.rrd', hosted: true }] : []),
+    ...(run.basemap ? [{ path: run.basemap, bytes: run.basemapBytes, sha256: run.basemapSha256, external: null, kind: 'basemap' as const, label: 'basemap.rrd', hosted: true }] : []),
   ]
 }
 
