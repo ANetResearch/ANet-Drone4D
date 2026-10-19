@@ -121,7 +121,8 @@ def board(request: Request, p: BoardMember) -> dict:
         b = json.loads((root / v / "board.json").read_text(encoding="utf-8"))
         if subs is None and not all(e.get("baseline") for e in b["entries"]):
             subs = _subs(request)
-        out.append({"board_version": v, "current": v == cur, "score_version": SCORE_VERSION, "weights": None, "tracks": b["tracks"],
+        out.append({"board_version": v, "current": v == cur, "score_version": b.get("score_version", SCORE_VERSION), "weights": None,
+                    "tracks": b["tracks"],
                     "lanes": b["lanes"], "seed_set_commit": b["seed_set_commit"], "platform_digest": b["platform_digest"],
                     "evaluator_major": b["evaluator_major"], "n_entries": len(_visible(request, v, b["entries"], subs))})
     return {"current": cur, "versions": out}

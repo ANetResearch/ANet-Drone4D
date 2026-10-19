@@ -19,8 +19,11 @@ gz 锁步档限定（D3-AC-43"只收 gz 锁步档的正式运行"）：正式榜
 （`state = DONE` 且 `visibility = board`）或提交记录缺失的条目立即不返回；`delist_withdrawn` 对账：当前版本重算榜单（他者名次与
 层级随之更新），旧版本只读、只由读取侧隐藏；`rows.jsonl` 与提交的评分记录一律保留。
 
-版本冻结（D3-AC-57）：`config.json.score_version`（缺省为当前 `SCORE_VERSION`）与本平台评分版本不同，或重算后的赛道集合与已发布的
-`board.json` 不同，`publish` 拒绝（`BoardVersionError`）：评分版本或赛道集合变更须发布为新榜单版本，旧版本只读。
+版本冻结（D3-AC-57）：`config.json.score_version`（缺省为当前 `SCORE_VERSION`）不是已登记的评分版本（`aggregate.SCORE_VERSIONS`），或与已发布
+`board.json` 的评分版本（旧制品缺省 `d3-score-0`）不同，或重算后的赛道集合与已发布的 `board.json` 不同，`publish` 拒绝（`BoardVersionError`）：
+评分版本或赛道集合变更须发布为新榜单版本，旧版本只读。排行榜 v1（`drone4d.bench.board_config.v1`，`d3-score-1`）另比较全部冻结项
+（`aggregate.frozen_diff`：分轨、赛道与 test 事件清单、种子集承诺、test 划分版本、评测器主版本、平台摘要、GPU 型号与 CPU ISA 等级），
+配置或 EvalStore 不合规（`aggregate.BoardConfigError`）同样以 `BoardVersionError` 拒绝。
 """
 
 from __future__ import annotations
@@ -30,7 +33,16 @@ import re
 import time
 from pathlib import Path
 
-from awr.bench.eval.aggregate import build_board, compose, entry_details, ranked_row
+from awr.bench.eval.aggregate import (
+    SCORE_VERSIONS,
+    BoardConfigError,
+    build_board,
+    compose,
+    entry_details,
+    frozen_diff,
+    is_v1,
+    ranked_row,
+)
 from awr.bench.eval.thresholds import SCORE_VERSION
 
 __all__ = ["GZ_PHYSICS", "LISTING", "WITHDRAW_SLA_S", "BoardPhysicsError", "BoardVersionError", "append_rows", "board_physics", "compose_board",
@@ -176,19 +188,31 @@ def publish(board_dir: Path, subs: dict[str, dict] | None = None, *, n_boot: int
     board_dir = Path(board_dir)
     cfg = load_config(board_dir)
     sv = cfg.get("score_version", SCORE_VERSION)
-    if sv != SCORE_VERSION:
-        raise BoardVersionError(f"board {board_dir.name} is scored with {sv}, platform is {SCORE_VERSION}: publish a new board version")
+    if sv not in SCORE_VERSIONS:
+        raise BoardVersionError(f"board {board_dir.name} is scored with {sv}, platform knows {sorted(SCORE_VERSIONS)}: publish a new board version")
     _check_physics(board_dir, cfg)
-    rows = _board_rows(board_dir, cfg, subs)
-    board = build_board(rows, board_version=board_dir.name, n_boot=n_boot, track=cfg.get("track"))
     prev = board_dir / "board.json"
-    if prev.is_file():
-        old = {x["lane"] for x in json.loads(prev.read_text(encoding="utf-8"))["lanes"]}
-        new = {x["lane"] for x in board["lanes"]}
-        if old != new:
-            raise BoardVersionError(f"board {board_dir.name} lanes {sorted(old)} -> {sorted(new)}: publish a new board version")
+    old = json.loads(prev.read_text(encoding="utf-8")) if prev.is_file() else None
+    if old is not None and old.get("score_version", SCORE_VERSION) != sv:
+        raise BoardVersionError(f"board {board_dir.name} is scored with {old.get('score_version', SCORE_VERSION)}, config says {sv}: "
+                                "publish a new board version")
+    rows = _board_rows(board_dir, cfg, subs)
+    try:
+        board = build_board(rows, board_version=board_dir.name, n_boot=n_boot, track=cfg.get("track"), board=cfg)
+        details = entry_details(rows, board=cfg)
+    except BoardConfigError as e:
+        raise BoardVersionError(f"board {board_dir.name}: {e}") from e
+    if old is not None:
+        if is_v1(cfg):
+            diff = frozen_diff(old, board)
+            if diff:
+                raise BoardVersionError(f"board {board_dir.name} frozen items {diff} changed: publish a new board version")
+        else:
+            was, now = {x["lane"] for x in old["lanes"]}, {x["lane"] for x in board["lanes"]}
+            if was != now:
+                raise BoardVersionError(f"board {board_dir.name} lanes {sorted(was)} -> {sorted(now)}: publish a new board version")
     (board_dir / "board.json").write_text(json.dumps(board, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    (board_dir / "details.json").write_text(json.dumps(entry_details(rows), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    (board_dir / "details.json").write_text(json.dumps(details, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     listing = {r["entry_id"]: r["submission_id"] for r in rows if not r.get("baseline") and r.get("submission_id")}
     (board_dir / LISTING).write_text(json.dumps({"entries": listing}, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return board
@@ -236,4 +260,7 @@ def compose_board(board_dir: Path, weights: dict[str, float], subs: dict[str, di
     board_dir = Path(board_dir)
     cfg = load_config(board_dir)
     _check_physics(board_dir, cfg)
-    return compose(_board_rows(board_dir, cfg, subs), weights, board_version=board_dir.name, n_boot=n_boot, track=cfg.get("track"))
+    try:
+        return compose(_board_rows(board_dir, cfg, subs), weights, board_version=board_dir.name, n_boot=n_boot, track=cfg.get("track"), board=cfg)
+    except BoardConfigError as e:
+        raise BoardVersionError(f"board {board_dir.name}: {e}") from e
