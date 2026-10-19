@@ -2798,7 +2798,7 @@ def reap_idle(conns, cfg, now_ns):                         # show-api，每 10 s
 
 | 项 | 内容 |
 |---|---|
-| 登记 | `rt/topics.json` 增加 17 §18.11 的五个 topic：`bench/run/{rid}/status`、`uav/{id}/sensor/{name}/preview`、`uav/{id}/lidar/{name}/v2`、`event/status`、`actor/state`；各条 `d1 = V0.3`、`apis = ["lab"]`，并以 `scope ∈ {lab_researcher, lab_evaluator}` 标注最低订阅角色（`topics.schema.json` 增加 `scope`，`apis` 枚举增加 `lab`） |
+| 登记 | `rt/topics.json` 增加 17 §18.11 的五个 topic：`bench/run/{rid}/status`、`uav/{id}/sensor/{name}/preview`、`uav/{id}/lidar/{name}/v2`、`event/status`、`actor/state`；各条 `d1 = V0.3`、`apis = ["lab"]`，并以 `scope ∈ {lab_researcher, lab_evaluator}` 标注最低订阅角色（`topics.schema.json` 增加 `scope`，`apis` 枚举增加 `lab`）；AWR-05 v1.6（F05）：lab-gateway 实现见 17 §18.11 的"实现"段（生产者接口 `write_live()`、不接受通配、限频、受邀成员 4403、TIME 为 STOPPED） |
 | 生成物 | `tools/contracts/gen.py`、`gen.mjs` 把 `apis = ["lab"]` 的条目生成到独立的 `LAB_TOPICS`（Python 另有 `LAB_SCOPES`、`match_lab_topic`）；`TOPICS` 与 `match_topic` 不含它们 |
 | 缺省不变 | show-api 与 sandbox-api 的 advertise、订阅校验（未登记 topic 返回 314）、API 文档页与前端 `matchTopic` 均基于 `TOPICS`，行为不变；D2 网关文件不改（17 §18.11） |
 | 验收 | `tests/contracts/test_d3_topics_channels.py`、`tests/contracts/test_catalogs.py::test_topics_reference_known_layouts_and_schemas` |
@@ -2807,7 +2807,7 @@ def reap_idle(conns, cfg, now_ns):                         # show-api，每 10 s
 
 | 项 | 内容 |
 |---|---|
-| 进程 | `runtime.yaml` 以新层 `d3` 声明 `bench-api`（`python -m awr.api.bench_main`，入口文件归 M27）、`bench-scheduler`（`awr.bench.sched`）、`geosvc`（`awr.world.mesh.geosvc`，按需，每活跃世界一个，M22-FR-048）、`lab-gateway`（`awr.bench.rt_main`）、`rerun-proxy`（`awr.bench.api.rerun_proxy`；AWR-05 v1.6，R05：单模块 `python/awr/bench/api/rerun_proxy.py`，取代 `awr.bench.rerun_proxy`）；入口模块随各工作包交付 |
+| 进程 | `runtime.yaml` 以新层 `d3` 声明 `bench-api`（`python -m awr.api.bench_main`，入口文件归 M27）、`bench-scheduler`（`awr.bench.sched`）、`geosvc`（`awr.world.mesh.geosvc`，按需，每活跃世界一个，M22-FR-048）、`lab-gateway`（`awr.bench.api.gateway`；AWR-05 v1.6，F05：单模块 `python/awr/bench/api/gateway.py`，取代原登记的 `awr.bench.rt_main`，`configs/runtime.yaml` 已更新）、`rerun-proxy`（`awr.bench.api.rerun_proxy`；AWR-05 v1.6，R05：单模块 `python/awr/bench/api/rerun_proxy.py`，取代 `awr.bench.rerun_proxy`）；入口模块随各工作包交付 |
 | profile | `d3: {procs_enable: [core, ext, dev, d3], defaults: {env: {AWR_D3_ENABLED: "1"}}}`；`config.py` 的 `LAYERS` 与层字面量增加 `d3` |
 | 部署 | dmax 上以 `d3-*` 容器运行（19 号文档 D3 增补，WP-D3-12）；本机 `d3` profile 用于开发 |
 | 缺省不变 | dev、demo、ci、perf、public、sandbox 六个 profile 的进程集合与环境不变，`AWR_D3_ENABLED` 不出现 |

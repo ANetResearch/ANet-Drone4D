@@ -1169,6 +1169,7 @@ JPEG 允许段：SOI（FFD8）、APP0 JFIF（FFE0）、DQT（FFDB）、SOF0（FF
 | `window` | object | `t_start_ns`、`t_end_ns` |
 | `position_enu_m` | f64[2] 或 f64[3] | 估计系位置 |
 | `confidence` | f32 | [0, 1] |
+| `event`（可选，v1.2，A09，只增） | string | 模式 `^[a-z][a-z0-9_]{0,47}$`；只用于 `vehicle_event`（`depart`、`turn`、`stop`、`park`、`enter_zone`、`exit_zone`），EU 以其与同类型车辆关键事件匹配 |
 
 ### 7.6 观测空间与动作空间（Gymnasium 映射）
 
@@ -1299,10 +1300,11 @@ D2 沙盒加载器忽略这两个段（只增可选属性）；SDK `drone4d.flee
 | 元数据 | `--hostname agent`；环境变量只有 `DRONE4D_SOCK=/run/drone4d/agent.sock`、`DRONE4D_PROTOCOL=drone4d.bench.wire.v1`；不继承宿主环境；容器名 `d3-agent-<run_id>-<aid>` 与标签只在宿主可见 | 元数据中性 |
 | 资源（`std`） | `--cpus 2`、`--memory 8g`、`--memory-swap 8g`、`--pids-limit 256`、`--ulimit nofile=1024:1024`、无 GPU | 排名公平、主机安全 |
 | 资源（`large`，开发运行） | `--cpus 8`、`--memory 32g`、可选 `--gpus '"device=N"'`（按 AWR-05 §4.7 单卡绑定并计入 M27 份额） | 研究开发 |
-| 系统调用 | 开发运行使用 Docker 缺省 seccomp；正式评测（内部与受邀成员，v1.1 起 P0b）使用 gVisor（`--runtime runsc`）或 seccomp 缺省档 | ADR-164、ADR-183 |
+| 系统调用 | 开发运行使用 Docker 缺省 seccomp；正式评测（内部与受邀成员，v1.1 起 P0b）使用 gVisor（`--runtime runsc`）或 seccomp 缺省档；v1.2（B24）：seccomp 配置 `d3-agent-v1` 以 `--security-opt seccomp=<文件>` 显式指定（`awr.agentsdk.env.containers.seccomp_profile`；缺省动作 EPERM，`clone` 只放行不带命名空间标志的调用，`clone3` 返回 ENOSYS，逃逸类系统调用 KILL_PROCESS，退出码 159）；`PIDS_LIMIT = 256`、`TMPFS_MB = 256` | ADR-164、ADR-183 |
 | 日志 | stdout 与 stderr 写入 `/out/agent.log`（上限 64 MiB，超出截断），不进入 Env 日志 | 不形成回流通道 |
 | 停止 | `--stop-timeout 10`；回合结束发送 CLOSE，10 s 后 SIGTERM，再 10 s 后 SIGKILL | 有界回收 |
 | 现状（v1.2，A08） | 启动器尚未满足本表"挂载"与"元数据"两行（主机名、随机令牌目录、`DRONE4D_SOCK` 与 `DRONE4D_PROTOCOL`），以 strict xfail 跟踪；生产配置的元数据标识命中为 0（A08 实测） | 记录差距 |
+| 审计模式（v1.2，B24） | `AWR_AGENT_HARDEN_AUDIT=1` 时：Agent 的 `--network` 为 `container:<agent>-mon`，监视容器 `<agent>-mon` 先于 Agent 启动，为 `--network none`、uid 65534、`--cap-drop ALL`、只读根、`--pids-limit 8`、`--cpus 0.1`、`--memory 32m`，读取 snmp `OutNoRoutes` 计数，Agent 仍只看到 lo；另以只读方式挂载诱饵目录到 `/data/d3/hidden`（内含 `index.json` `{}`，真实隐藏存储从不挂载），宿主侧以 inotify 记录访问；进程数与 shmem 峰值经 Engine API 读取；每个触发的向量写一条 691 拒绝记录（`why = hardening`，`vector`）到 `agents/<uav>/hardening.jsonl`；监视容器不可用时以 664 拒绝启动。局限：被 seccomp 终止的子进程只记录在宿主内核日志（type=1326，读取需要 CAP_SYSLOG），对不存在路径的 open 不可观测（AWR-05 §23.5 C-30）；测试 `tests/d3/submit/test_redteam.py`（26 个用例） | 红队审计（D3-AC-59） |
 | 自检 | 启动器在 `docker create` 后、`start` 前以 `docker inspect` 核对 `NetworkMode`、`CapDrop`、`ReadonlyRootfs`、`User`、`Mounts`（恰为 3 处）、`Env`（恰为白名单）、`Hostname`、`NanoCpus`、`Memory`、`PidsLimit`、`DeviceRequests`，任一不符即 664 `why = container_flags` | 配置漂移防护 |
 
 ### 8.2 泄漏通道登记表
@@ -1642,6 +1644,14 @@ v1.2 补记（A08，R2）：毫米定点成对模式须排除整米值与公开�
 参考检测器 `ref_det_v1`（v1.2 按 A05 实现改写；原登记的 YOLOX-S、COCO 权重、ONNX Runtime、640 × 640 输入、置信阈值 0.35 与 NMS 0.5 未采用）：自研 CenterNet 式网络（步长 4，深度可分离卷积块，膨胀率 2 与 4），输入 960 × 540，由 JPEG DCT 域半尺度解码得到；以 `crop-handoff-001` 的 21,600 帧 `rgb1080-rs` 渲染图（25–125 m AGL）训练，BN 折入权重，numpy CPU 推理；热图阈值 0.3，3 × 3 极大值抑制；类别为人员与车辆。实测（`std` 档，来源 `model_card.json` 的 `std_step_wall`，`tools/bench/d3/refdet/step_wall.py`）：单帧推理 p95 0.095 s，每步墙钟 p95 0.116 s，最差一步 0.181 s，预算 0.5 s；原暂定值"单帧推理 p95 ≤ 250 ms"以此实测替换。
 
 说明（v1.2，A02）：`coverage_scan` 在短事件或稀疏事件上可能不发送 report，这是策略本身的性质；其 report 规则由构造观测用例覆盖（`tests/d3/baselines/test_act_reports.py`）。`ref_thermal_blob_v1`：以 `temp_ck` 计算相对局部背景（31 × 31 中值）的表观温差，阈值 2 K 的连通域，面积与长宽比按人员与车辆的像素尺寸先验筛选。
+
+说明（v1.2，A09，`tests/d3/baselines/test_event_types.py` 20 个用例）：
+
+1. 四类事件的 report 规则（`drone4d.baselines.events`，按 `brief.report_vocab` 启用，三个基线共用）：`handover` 报交汇区间；`disperse` 为交汇后 120 s 内两条轨迹相距 ≥ 10 m；`alight` 为人员在静止车辆 4 m 内出现；`exit_building` 为人员在云台曾注视过的门 4 m 内出现；`reacquire` 与 `identity_link` 在目标观测间断 ≥ 5 s（人员）或 ≥ 3 s（车辆）后报出，窗口为 [t, t]；`vehicle_event` 带 `event` ∈ {`depart`, `turn`, `stop`, `park`}，速度滞回 0.5/2 m/s，`stop` 为静止 3–30 s，`park` 为静止 ≥ 30 s，`turn` 为 6 s 内航向变化 ≥ 45°；`found` 全程只报一次；`relation`、`enter_zone`、`exit_zone` 不报。
+2. `ref_thermal_blob_v1` 实现（`drone4d.baselines.thermal`）：背景为以每个 8 px 格心为中心的 31 × 31 窗口中值；阈值 ΔT ≥ 2 K，只取正差；8 邻接连通域；米制尺寸先验：人员长边 0.25–2.5 m、短边 ≤ 1.2 m、面积 0.05–3 m²，车辆长边 2.5–8 m、短边 1–3.5 m、面积 2.5–24 m²、长宽比 ≤ 4.5；每步只处理最新一帧，640 × 512 单帧约 0.1 s。
+3. 配置热像仪时 L2 的 `thermal` 参数缺省开启。
+4. 搜索先验：`static_guard` 的观察位取先验中心；`coverage_scan` 的航带按先验质量降序分配。
+5. 跟踪器：车辆关联门限 6 m，车辆轨迹在 3 个点且跨度 ≥ 0.2 s 后拟合；分帧键为（时刻、传感器、帧序号）；证据取窗口终点及之前的帧，相机帧优先。
 
 ### 14.4 新增功能需求
 

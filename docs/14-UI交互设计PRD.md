@@ -5582,7 +5582,14 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 规则：
 1. 数据全部来自 `/lab-static/v/<version>/samples/<sid>/`（磁带、`tracks_obs.bin`、每机 RGB 与热成像伪彩 H.264 视频、`public` 档切片与 `basemap.rrd`）；不显示主得分、分量与任何跨策略比较；页面底部显示样例说明（世界、事件类型、机队、策略名与"样例运行，不构成排名"）与许可署名。
 2. "样例数据检视"在 Tier B/A 以右侧分栏加载 Rerun Web Viewer（与 §21.9 相同的外壳与 lab 播放头同步）；Tier S 与移动设备显示切片下载入口。
-3. 视频同步：以 lab 播放头为准，偏差 > 1 帧时重新 seek；同时播放路数按设备档限制（§21.14.3）。
+3. 视频同步：以 lab 播放头为准，偏差 > 1 帧时重新 seek；同时播放路数按设备档限制（§21.14.3）。v1.6 实现（F07，`apps/web/src/app/lab-public/samples/videoSync.ts`）：
+   - 播放中视频时钟的目标为播放头减半帧，因为合成器按重叠最多选帧，比按帧号取整早半帧；暂停与拖动时 seek 到帧中点。
+   - 漂移 > 1 帧时重新 seek：目标按实测 seek 时延前置（至多 250 ms），同一路两次 seek 至少间隔 500 ms。
+   - 漂移在 0.25–1 帧之间时微调播放速率（至多 ±20%）。
+   - 起播时播放头保持到视频开始推进（至多 1 s）；视频未就绪超过 500 ms 进入缓冲状态，播放头冻结。
+   - 同时播放路数上限：手机 1，平板与 Tier S 4，桌面 Tier B/A 6；两个通道都在上限内时才提供"并排"视图。
+   - 偏差以 `requestVideoFrameCallback` 测量，写入 `data-sync-*` 属性（`presented`、`max-dev`、`hist`、`reseeks`、`videos`），供 Playwright `lab/public-samples` 读取。
+4. 请求守卫（v1.6，F07）：页面挂载期间 `samples/staticGuard.ts` 只放行同源 `/lab/`、`/lab-static/` 的 GET 与 HEAD，其余请求（含 Rerun Viewer 启动时的 GitHub 版本检查）被拦截。
 
 #### 21.29.4 文案（新增键，中文与英文）
 

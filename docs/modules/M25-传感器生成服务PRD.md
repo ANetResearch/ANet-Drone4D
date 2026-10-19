@@ -1075,6 +1075,8 @@ def synth_imu(H: PoseHistory, imu: ImuModel, mount: Mount, t_from_ns, t_to_ns, t
 随机数：n 键 = key(run_seed, STREAM_M25, uav_no, j, CH_IMU_BASE + sensor_no · 32 + c)，c 为通道（0–5 白噪声、6–11 偏置步进、12–17 上电偏置（只用 j = 0）、18–20 振动相位（只用 j = 0））
 ```
 
+v1.4 实现（S19，`python/awr/sensorsvc/imu.py`）：噪声参数取自 `vehicles/d3/sensor_models/imu_icm40609_livox.yaml`（`awr.sensor.imu_mems.v1`），经 `awr.sim.catalog.loader.imu_noise_tier` 解析（与 `rig.json` 同一解析器），缺省值等于 `imu_icm40609_livox@1.0.0`；原实现读取飞控 IMU 参数，与 §6.10 的 MID-360 内置 IMU 行不一致，已改正。harsh 档 = realistic 加三轴加速度振动（原实现把白噪声与随机游走乘 1.5，已删除）。预滚窗口的负序号随机游走以 j = 0 为原点（b(0) = 0）向正负两侧分别累加，结果只取决于 j，分批调用逐位一致，j ≥ 0 的结果与旧实现逐位相同。realistic 档实际 IMU 噪声因此变小（陀螺约为原来的 1/7，加速度约 1/6），依赖旧噪声的 L2 观测、`slam_eval` 算例与 RPE 矩阵以新参数为准并注明 `noise_table_version = d3-noise-1`。
+
 #### 6.9.3 GNSS
 
 ```text
@@ -1136,6 +1138,8 @@ pos_sigma_m、att_sigma_deg 输出标称值（不随实现变化，避免泄漏�
 | | 云台编码器噪声 σ | 0 | 0.05° | 0.2° | 每帧白噪声，进入 `gimbal_reading` | 本文设定 |
 | 深度（L2-depth） | σ(d)、量程 | 0、0.3–200 m | 0.005·d + 0.0005·d²、0.3–60 m | σ × 2、0.3–40 m | 越界为 0 | AWR-05（暂定，P1 标定） |
 | 湍流（物理档） | 带限湍流 | 无 | 0.3 m | 1.0 m | 由 M24 实现 | AWR-05；r1 §2 |
+
+v1.4（S19）：MID-360 内置 IMU 行的实现来源为 `imu_icm40609_livox`（经 `imu_noise_tier`），`ImuModel.table(tier)` 与 `imu_noise_tier`、`rig.json` 噪声段逐项一致（C11）；harsh 档只在 realistic 基础上叠加振动，不再放大白噪声与随机游走。
 
 ### 6.11 SLAM 导出合同（FAST-LIVO2 输入）
 
@@ -1234,6 +1238,8 @@ v1.4（S14）：生成器位于 `python/awr/sensorsvc/slam/rig.py`（CLI `python
 | C11 | 噪声参数与 `noise_table_version` 对应的参数表逐项一致 |
 | N1（负向） | 删除无回波点的 bag 被拒绝（642，原因"livox_zero_points_missing"） |
 | N2（负向） | IMU 加速度改为 m/s² 的 bag 被拒绝（642） |
+
+v1.4 实现（S19）：测试文件 `tests/d3/slam/test_contract.py`（14 个用例，13 passed、1 xfailed），float64 参考实现 `tests/d3/slam/imu_reference.py`（逐物理步显式循环，另含 C7 用的纯惯导积分器）；C8 与 M25-FR-092 由 `awr.sensorsvc.imu.check_dynamics` 与 `assert_dynamics` 实现（违例样本按 50 ms 合并为时间段，返回 642 并在 `extra.segments` 标注）；测试中 bag 的时基为事件时刻加 `t_pre`（ROS1 时间不能为负）。已知问题：realistic 档采集作业给 `slam_cam` 的云台读数加了编码器噪声（§15.6.5 只允许 `cam0`），C10 的 realistic 档一项为 xfail；C4 的"1 ± 0.01 g"在 realistic 档读数上与上电偏置 σ 0.196 m/s² 冲突（200 个种子 62.5% 不通过），测试在 clean 档判定，口径待确认（AWR-05 §23.5 C-31）；N1 的原因名尚未写入 642 的 detail。
 
 ### 6.12 3DGS 外观层（P3；v1.2 按 ADR-187 修订；v1.3 定稿为结论 C0）
 
@@ -2329,6 +2335,8 @@ class ThermalModel:                      # v1.4 实现位于 python/awr/sensorsv
 **`thermal_bake` 作业**：按（世界 `contentVersion`、事件 `content_sha256`）以 Warp 对静态网格逐三角形质心向事件起点太阳方向（M07 太阳位置）求交，输出 `thermal_static.npz`（u8 日照可见度，0–255）；事件时长 ≤ 1 h 时只计算一次；产物 sha256 写入运行清单；同镜像同型号 GPU 逐字节一致。
 
 **随机流**：流 22 `sensor_gen` 增加通道 `therm_temporal`（键 `(run_seed, 22, uav_no, frame_index, ch)`，区间 0x1500–0x15FF，帧键加 sensor_no）与 `therm_fpn`（键 `(run_seed, 22, uav_no, 0, ch)`，区间 0x1600–0x16FF，逐像素计数 `pix · 2 + c`，c = 0 偏置、1 增益；v1.4 登记区间，见 §6.17.2）。
+
+**实现设定（v1.4，S20）**：吞吐基准由磁带速度推导车辆的 `engine_on` 状态；热成像真值写入 `/eval/hidden/camera/{uav}/therm0`（`camera_gt` 容器，`kind = thermal`），正式的热成像真值通道名待 M27 通道契约确定，L2 Env 接入热成像时与此一致；`therm512` 帧组装中 `encode_temp_ck`（zstd-3）单线程 5.57 ms，为最大项（AWR-05 §27.5 F-54）；crop 世界无烘焙太阳位置时静态日照项与 `thermal_bake` 不生效。
 
 ### 15.7 外观库与骨骼动画（M25-FR-191、192）
 

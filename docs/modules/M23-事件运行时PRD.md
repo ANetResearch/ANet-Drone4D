@@ -1917,6 +1917,17 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 - 泊车：`park` 动作在锚点处减速停车并置发动机关闭标志。
 - 确定性：只用整数毫秒步进与 float64 显式运算次序，不用随机数（背景车流的出发时刻与目的地取流 19 的 `vehicle` 通道）；生成结果进入 `content_sha256`。
 
+v1.3 实现口径（W13，`python/awr/sim/events/vehicle.py`，`tests/d3/events/test_vehicle.py` 14 个用例）：
+
+1. 接口：`simulate`、`background`（背景交通，流 19 的 `vehicle` 通道 24–27，起点避开已有车辆）、`audit`、`key_events`、`VehicleSim.track(i)`（与生成器兼容的轨迹与 `flags`）；车辆位置以沿路线弧长表示，车身 4.5 m × 1.8 m，100 ms 整数毫秒步长；`digest()` 为毫米量化数组加 JCS 日志的 sha256；高度可经 `z_fn` 注入（建议 `walkable_height(profile = vehicle)`），缺省取车道 z 插值。接入 `gen.py` 与 DSL 的 `drive`、`stop`、`park` 归 E09。
+2. 路口互斥单元：单元为连接段加 `ext_in`（源车道尾部）与 `ext_out`（目标车道头部）；延伸量覆盖与其他路径相距 < 2.5 m 的部分，上限 30 m，可跨节点；发卡弯的远段与其他路径重叠时单元为独占，且同源兄弟连接段互相冲突；冲突集为车道图冲突、单元几何邻近与兄弟远段三者的并集。
+3. 次路间隙接受：次路车在以下任一条件成立时拒绝准入：主路车到冲突单元的 ETA ≤ 4 s；主路车到其自身请求点的时间 ≤ 次路车（含其车队前车）的清空时间 + 1 s。
+4. 其他准入条件与等待块：目标车道须有空间（车长 + 2 m + 1 m 余量）；停车让行标志处须先完全停车；准入次序为先进先出的等待块；同级先到先行，同时到达按 idx 小者先。
+5. 两层安全兜底：几何探测把前方路径上有车身的车辆作为额外前车计入 IDM（覆盖车道图几何重叠与急弯）；顺序 OBB 安全层在必要时就地停车并记录 `safety_stops`，保证车身不相交。
+6. 审计判据与缺省容差（`vehicle.py` 的 `AUDIT_DEFAULTS`）：违例种类 `off_lane`、`corridor`、`gap`、`overlap`、`conflict`、`uncommitted`、`order`、`major_blocked`、`speed`；统计与计数写入 `consistency`。验证器只读磁带与路线，日志可选。
+7. 关键事件（由磁带产出）：`depart`；`turn{intersection, dir}`；`stop{cause: junction | queue | dwell}`；`park`。
+8. 已知局限：主路饱和时锐角路口的次路车可能等待较长（20 车 180 s 最长 84.7 s），无死锁；立交与车道图几何重叠只靠探测与安全层兜底（AWR-05 §27.5 F-47）。
+
 ### 15.5 磁带侧车（只增）
 
 | 侧车 | 内容 | 规则 |
@@ -2016,7 +2027,7 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 | §6.4 错误目录 | 增加 `W-BG-OVERLAP`（告警）：背景与脚本演员间距 < 0.5 m 只计数并告警（人群避让属 D3-AC-29，P1，已按 ADR 移出）；`S-OVERLAP.bg_overlap_error = true` 时恢复为 `S-OVERLAP` 错误 | E01 |
 | §6.9.1 | 未声明事件全量扫描时，`zone_*` 检测器只覆盖注释引用的（zone, buffer_m）组合；注释参与者为锚点 id 时写入检测器的 anchor 或 zone 参数；`aerial_occlusion` 方向为确定性等立体角螺旋（z = sin(仰角) 等分层，方位按黄金角步进）；持续时间 = 末样本时刻 − 首样本时刻 | E01 |
 | §6.9.2 | 声明事件取注释 id，同一注释的第 2 次及以后命中为 `<id>-2`、`<id>-3`……；注释参数产生同一事件而区间不同时，吸收缺省参数的检测结果，不重复计数；lenient 下 `S-MISMATCH`、`S-RELATION` 与 `S-*` 一致性码记为告警 | E01 |
-| §6.9.3 | 不完整区域取 `semantic/quality.geojson` 中 `kind` ∈ {nodata, hole} 的要素；"空射线 > 50%"判据尚未实现 | E01 |
+| §6.9.3 | 不完整区域取 `semantic/quality.geojson` 中 `kind` ∈ {nodata, hole} 的要素；"空射线 > 50%"判据尚未实现；v1.3（W14）："空射线 > 50%"判据仍未实现（不变）；M27 侧的剔除已交付（`python/awr/bench/eval/ec.py`，M27-FR-089、§6.7.6） | E01、W14 |
 | §6.10.1 | 真值路径为 `truth/r<truth_rev>/event_truth.json`；`perf` 含 `detector_ms`、`check_ms`、`skyvis_rays`、`skyvis_ms`、`wall_ms` | E01 |
 | §7.3.1 | `truth_summary` 增加 `strict`、`consistency_failed`；613 时 `truth_sha256` 为 null | E01 |
 | §6.4 产物 | `compile_report.json` 增加 `gate3{stats, extra, perf}` | E01 |

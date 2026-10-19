@@ -178,7 +178,7 @@ and of the `/lab/` public samples; not loaded by the D2 sandbox)
 
 | Package | Version | License |
 |---|---|---|
-| @rerun-io/web-viewer (Rerun Web Viewer; the JavaScript loader and the WebAssembly viewer `re_viewer_bg.wasm`, self-hosted; update checks disabled) | 0.38.1 | MIT or Apache-2.0, Copyright (c) 2022 Rerun Technologies AB; the Rust crates compiled into the WebAssembly module under their own licenses |
+| @rerun-io/web-viewer (Rerun Web Viewer; the JavaScript loader and the WebAssembly viewer `re_viewer_bg.wasm`, self-hosted; update checks disabled) | 0.38.1 | MIT or Apache-2.0, Copyright (c) 2022 Rerun Technologies AB; the Rust crates compiled into the WebAssembly module under their own licenses. The `/lab/` public build rewrites the Rust source-path and documentation-URL strings inside `re_viewer_bg.wasm` without changing its length (`apps/web/vite.config.ts`, `remapVendorStrings`) and distributes the result under the MIT license |
 
 **Separate containers (not in this repository, not linked)**
 

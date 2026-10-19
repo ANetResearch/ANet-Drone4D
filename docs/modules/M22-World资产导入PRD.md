@@ -667,6 +667,20 @@ def level(mesh_osm, dem, world_diag_m) -> Leveling:   # python/awr/world/glb/lev
 
 调平验收量（FR-013，L3、L4）在世界帧中计算：对 `horizontal_planes.geojson` 每个多边形内 `cls ∈ {water, road_surface, ground}` 的三角形按面积加权拟合平面，坡度 = `acos(n_z)`。v1.4 实现口径（W02）：多边形边界内缩 15 m；覆盖内延伸超过 800 m 的多边形沿主轴等分，至少 2 段；通过条件为至少 3 个被评估平面且全部 ≤ 阈值（世界摘要 `planesMaxSlopeDeg` 取最大值）；配方 `qa.planes_exclude` 可人工排除个别平面，须记录原因；语义图层落地前，地面与水面以 `n_z > 0.9` 代替 `cls`。
 
+v1.4 补记（W07、W08，AWR-05 ADR-210，用户 2026-10-19 决定）：公里级世界增加 L5 公开 DEM 交叉核对。配方 `qa.dem` 给出交叉核对 DEM（按 `model` 分组，GeoTIFF 或 SRTM `.hgt`），每组与主 DEM 用同一地面抽样（同一种子）独立回归，与墙面竖直度共三法，在世界帧比较调平后的剩余梯度：
+
+```python
+def dem_cross_check(primary, cross_dems, wall, S) -> CrossCheck:   # python/awr/world/glb/qa.py
+    fits = [fit_dem(primary, S)] + [fit_dem(dem, S) for dem in cross_dems] + [wall]   # 同一抽样 S
+    if any(f is None for f in fits): return CrossCheck(pass_=False, missing=...)    # 任一方法缺失即不成立
+    pairs = [tilt(a.residual_g - b.residual_g) for a, b in combinations(fits, 2)]
+    consensus_g = mean(f.residual_g for f in fits)
+    L5 = (max(pairs) <= 0.5 and all(tilt(f.residual_g) <= 0.5 for f in fits)
+          and tilt(consensus_g) <= 0.2 and all(0.85 <= f.k <= 1.15 for f in fits if f.is_dem))
+```
+
+阈值沿用 L1、G-05、L3 与 R4，不按实测调整；`needs_control_points = not (L1 and (L3 or L4 or L5))`。DEM 读取器为 `read_geotiff_dem`（小端经典 TIFF，分块或分条，无压缩或 Deflate，预测器 1/2/3，PixelIsPoint 与 PixelIsArea，GDAL_NODATA）与 `GridDem`（经纬度格网双线性采样，接口同 `HgtDem`），不引入新依赖。
+
 #### 6.6.5 世界帧、原点与锚点
 
 ```python
@@ -930,8 +944,9 @@ v1.2：上式只适用于 `appearanceSource = aerial`（外部重建资产）。
 | L2 | 墙面法两子集一致性与 CI95 半宽 | 均 ≤ 0.3° | 小场景 | 本文设定 |
 | L3 | 已知水平面坡度 | ≥ 3 处 ≤ 0.2°（小场景 ≤ 0.5°） | 全部 | 05 D3-AC-02；小场景为本文设定 |
 | L4 | 控制点 AGL 残差 RMS | ≥ 20 点 ≤ 2 m | 有控制点时 | 05 D3-AC-02 |
+| L5（v1.4，W07，ADR-210） | 公开 DEM 交叉核对：主 DEM、交叉核对 DEM 与墙面三法两两之差；各法剩余倾角；三法剩余梯度均值的倾角；各 DEM 竖向尺度比 k | ≤ 0.5°；≤ 0.5°；≤ 0.2°；[0.85, 1.15] | 公里级，配方给出 `qa.dem` 时 | 用户 2026-10-19 决定；AWR-05 ADR-210 |
 
-门禁编号映射（v1.4，W02）：`qa/report.json` 的门禁 G-11 = L1，G-12 = L2，G-13 = L3 或 L4，G-14 = R4，G-15 = 尺度独立复测（OSM 建筑轮廓对墙面的截断 3 m 倒角精配，与 r2 差 ≤ 0.5%）加 R5（20 次重启的尺度相对标准差 ≤ 0.5%）。GLB 世界的 G-04 改为调平后地面残差 MAD（有 DEM 时为 DEM 回归残差），G-05 改为主方法的剩余倾角，两者取不到值均判失败。门禁取值随 `coordinate.json` 发布并取整，全精度结果在 `qa/report.json` 的 `glb.leveling` 与 `glb.scale`。
+门禁编号映射（v1.4，W02）：`qa/report.json` 的门禁 G-11 = L1，G-12 = L2，G-13 = L3 或 L4，G-14 = R4，G-15 = 尺度独立复测（OSM 建筑轮廓对墙面的截断 3 m 倒角精配，与 r2 差 ≤ 0.5%）加 R5（20 次重启的尺度相对标准差 ≤ 0.5%）。GLB 世界的 G-04 改为调平后地面残差 MAD（有 DEM 时为 DEM 回归残差），G-05 改为主方法的剩余倾角，两者取不到值均判失败。门禁取值随 `coordinate.json` 发布并取整，全精度结果在 `qa/report.json` 的 `glb.leveling` 与 `glb.scale`。v1.4（W07，ADR-210）：有交叉核对 DEM 时 G-13 = L3 或 L4 或 L5；L5 成立时追加告警门 G-16（L3 水平面判据，告警级），世界 `qa.status = warn`；V-GLB-15 把 L5 成立视同 L3 或 L4 成立。
 
 ### 6.8 默认参数
 
@@ -1229,7 +1244,7 @@ v1.6（W11）车道扩展（`schema_version` 1.1.0，只增）：每个要素带
 |---|---|---|---|
 | 0 | `nodata` | 覆盖外，或覆盖内无竖向命中 | occupancy unknown；NavMesh 不可走；LiDAR `void`；相机 `invalid_mask`；评测剔除 |
 | 1 | `hole` | 开放边界环内部 | 同 bit0 |
-| 2 | `stretched` | 拉伸三角形（插值面） | NavMesh 不可走；LiDAR `void`；相机 `invalid_mask`；UI 标注"此处为插值面" |
+| 2 | `stretched` | 拉伸三角形（插值面） | NavMesh：只在非近水平（n_z < 0.9）时不可走，近水平拉伸面按语义取区域（v1.4，W07，ADR-211）；LiDAR `void`；相机 `invalid_mask`（传感器消费待定，AWR-05 §23.5 C-28）；UI 标注"此处为插值面" |
 | 3 | `low_texture` | 纹素低于中位数 1/8 | UI 标注；数据集分辨率说明 |
 | 4 | `multilayer` | 多层表面柱（屋檐、拱、树冠） | 2.5D 查询保守处理；评测单列 |
 | 5 | `water` | 水面 | NavMesh 不可走 |
@@ -1254,7 +1269,7 @@ v1.6（S15）：逐三角形质量位（`q.u8` 与 `tri.q.u8`）的 bit1 含义�
 | 字段 | 内容 |
 |---|---|
 | `registration` | 方法、粗搜与细搜峰值、R1–R6 各量、尺度不确定度、交叉校验（frame-of 时） |
-| `leveling` | 主方法、两法梯度与倾角、差值、CI95、水平面逐个坡度、控制点残差、`needs_control_points` |
+| `leveling` | 主方法、两法梯度与倾角、差值、CI95、水平面逐个坡度、控制点残差、`needs_control_points`；v1.4（W07）：增加 `cross_check{methods, missing, fits, pairs, max_pair_delta_deg, residual_tilt_deg, k, consensus_g, consensus_tilt_deg, suggested_applied_g, limits, pass}` 与 `L5` |
 | `topology` | 焊接前后顶点数、重复面、退化面、边界边与总长、非流形边、连通分量、碎块 |
 | `stages[]` | `{name, seconds, peak_rss_mb, input_sha256, output_sha256}`；v1.4（W10）：`name` 枚举增加 M22 阶段名 `grids`、`quality`、`semantic`、`collision`、`occupancy`、`navmesh`、`anchors`、`package`（`qa-report.schema.json` 加法式修订）；v1.6（W11）再增加 `navgraph` |
 | `quality` | 覆盖率、各位面积占比、覆盖多边形顶点数 |
@@ -1404,15 +1419,17 @@ build:
   nav:
     person: {cs: 0.30, ch: 0.20, input: collision}
     vehicle: {cs: 0.50, ch: 0.20, input: collision}
+    # v1.4（W07）：person 另设 keep: largest-seeded（只保留含种子的最大岛）；缺省保留全部含种子岛
 anchors: {overrides: anchors.overrides.json, seeds: nav_seeds.json, offmesh: offmesh.json,
           poi_whitelist: [amenity, tourism, shop, public_transport, leisure, historic]}
 levelling: {horizontal_planes: horizontal_planes.geojson, control_points: null}
-qa: {osm_extra: [], reference_m_per_unit: 20.935, planes_exclude: []}   # v1.4：独立复测与人工排除（W02）；顶层 dem、osm 与 W03 共用
+qa: {osm_extra: [], reference_m_per_unit: 20.935, planes_exclude: [],   # v1.4：独立复测与人工排除（W02）；顶层 dem、osm 与 W03 共用
+     dem: [{path: dem/Copernicus_DSM_COG_10_N43_00_E023_00_DEM.tif, sha256: 73772d1f…, model: glo30, use: levelling}]}   # v1.4（W07）：交叉核对 DEM（L5）
 stages: [{id: centre, polygon_m: [[…]]}]  # P1 舞台导出
 publish: {public_browser_layer: true}
 ```
 
-v1.4（W02、W03）：配方的 `osm`、`dem` 可为列表；`qa` 段含 `osm_extra`、`reference_m_per_unit`、`planes_exclude`（排除须记录原因）；`qa.osm_extra` 与 `qa.dem` 同样登记到 `derivedFrom[]`，`use` 取值限于契约枚举。
+v1.4（W02、W03）：配方的 `osm`、`dem` 可为列表；`qa` 段含 `osm_extra`、`reference_m_per_unit`、`planes_exclude`（排除须记录原因）；`qa.osm_extra` 与 `qa.dem` 同样登记到 `derivedFrom[]`，`use` 取值限于契约枚举。v1.4（W07）：`qa.dem` 的含义为交叉核对 DEM，按 `model` 分组（GeoTIFF 或 SRTM `.hgt`，`model` 如 `glo30`、`srtm30m`），每组以与主 DEM 同一地面抽样独立回归，用于 L5；`build.nav.<profile>.keep` 为 NavMesh 岛裁剪方式（`largest-seeded` 只保留含种子的最大岛，缺省保留全部含种子岛）。
 
 #### 7.6.2 `registration.json`
 
@@ -1506,12 +1523,12 @@ v1.4（W03）：V-GLB 规则组以独立规则表登记，只对 `profile = d3-g
 | 源文件 | `oryahovo_-_crop_1_-_metashape_texture_problems.glb`，289,706,900 B，sha256 `2798ed0444712af1df66219dcc79471e57bd55489828800ecba48ae4cb983a63` | `an_entire_small_town_scanned_by_a_drone.glb`，230,581,656 B，sha256 `d1e3effce66add4e4a7b0239d1764bf030fb908b066831f9db75dae79a9085ec` | `anciolina_3d_hilltop_village_scan_snowy.glb`，143,818,396 B，sha256 `c374a461a23d2aa052e6b17c2956714cc9eafd3dbbe3303aa9af72fa5d93946e` |
 | 署名（`asset.extras`） | Mitko（https://sketchfab.com/bg3d），CC-BY-4.0，模型 uid `979b09bd0b7744989d5786c2635f24ba` | Mitko（https://sketchfab.com/bg3d），CC-BY-4.0，uid `ebdd505832c745e081f03d8e29d17f84` | dok11（https://sketchfab.com/dok11），CC-BY-4.0，uid `64ede430838142f5929edfc7eb371efc` |
 | 规模 | 2,879,110 面；16 × 4096² JPEG；`KHR_materials_unlit` | 1,996,759 面；16 × 4096² JPEG；unlit | 2,999,995 面；1 × 8192² JPEG；`KHR_materials_specular`（按 unlit 处理） |
-| 配准方法 | `inherit-frame`（参照 `smalltown-01`），另以 `roads` 交叉校验 | `osm-road-correlation` | `osm-footprint-correlation`（46 栋建筑） |
+| 配准方法 | `inherit-frame`（参照 `smalltown-01`），另以 `roads` 交叉校验 | `osm-road-correlation`（v1.4，W08：`registration.json` 已实际写为该值，此前导入时为 `manual`） | `osm-footprint-correlation`（46 栋建筑） |
 | OSM | Geofabrik `bulgaria` 抽取，按包围盒外扩 2 km 裁剪 | 同左 | Geofabrik `italy/centro` 抽取，同样裁剪 |
-| DEM | SRTM 1″（调平与 `hMslM`） | SRTM 1″ | EU-DEM v1.1 25 m（只用于 `hMslM`；小场景不做 DEM 调平） |
+| DEM | SRTM 1″（调平与 `hMslM`；实际来源为 AWS Terrain Tiles）；v1.4（W07）：Copernicus DEM GLO-30 作 L5 交叉核对（只用于 QA） | SRTM 1″；GLO-30 交叉核对（同一瓦片，W08） | EU-DEM v1.1 25 m（只用于 `hMslM`；小场景不做 DEM 调平） |
 | 预期尺度 | 20.935 m/单位（±0.5%） | 8.374 m/单位（±0.5%） | 2.49–2.53 m/单位（±2%） |
 | 预期真北偏航 | 168.04° | 168.04° | 316° |
-| 预期倾斜 | DEM 约 1.25°；墙面约 0.88°（v1.4 实测：墙面法改进后 crop 1.27°、DEM 1.61°，W02） | 同左（v1.4 实测：墙面 1.51°、DEM 1.21°） | 墙面约 1.12° |
+| 预期倾斜 | DEM 约 1.25°；墙面约 0.88°（v1.4 实测：墙面法改进后 crop 1.27°、DEM 1.61°，W02）。v1.4 重建实测（W07，contentVersion `7d3429a04895`）：两法之差 0.349°、剩余倾角 0.397°；L5 成立（GLO-30 0.084°、墙面 0.113°，三法均值 0.168°）；L3 为告警（G-16）；尺度 +0.23%，R5 0.06%；V-GLB 15 项 pass、V-GLB-06 不适用；行人 NavMesh 主岛 0.727 km²，车辆主岛 0.152 km²，车道吸附率 0.530 | 同左（v1.4 实测：墙面 1.51°、DEM 1.21°）。v1.4 实测（W08，contentVersion `b5103d23ed70`）：两法之差 0.319°、剩余倾角 0.060°；L3 不成立（多瑙河网格水面 0.26°–3.27°），L5 成立（两两之差 ≤ 0.370°，三法均值 0.042°）；尺度 8.3856（+0.14%），R5 8e-8；V-GLB 15 项 pass、V-GLB-06 不适用；`dsm_2m` 最大差 8e-6 m | 墙面约 1.12° |
 | 预期世界包围盒（m） | [−1256, −850, −103] – [1256, 850, 138] | [−2287, −1393, −166] – [2287, 1393, 85] | [−61, −73, −19] – [61, 73, 27] |
 | 预期锚点经纬度、`hMslM` | 43.7352474° N、23.9612838° E，约 115 m | 43.731199° N、23.962713° E，约 165 m | 43.594844° N、11.683000° E，约 896 m |
 | 已知水平面（L3） | 多瑙河水面（OSM 河岸多边形，覆盖内分 ≥ 2 段）、镇中心广场 | 同左 | 人工指定的广场与台阶平台（`horizontal_planes.geojson`），坡度门限 0.5° |
