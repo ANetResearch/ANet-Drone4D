@@ -16,7 +16,11 @@
   {"id": "public-build", "item": 6, "kind": "cmd", "argv": ["make", "demo-build"], "cwd": ".", "timeout_s": 3600,
    "doc": "public demo build with the K9 production bundle scan (ADR-111); the public site e2e and Tier S first screen run in the perf harness"},
   {"id": "k9-d3", "item": 6, "kind": "builtin", "timeout_s": 600,
-   "doc": "K9 D3 extension: the D2 public demo build carries no D3 entry strings (/lab/, /api/bench/v1 and its runs|events|session paths); run after public-build"}
+   "doc": "K9 D3 extension: the D2 public demo build carries no D3 entry strings (/lab/, /api/bench/v1 and its runs|events|session paths); run after public-build"},
+  {"id": "demo-parity", "item": 6, "kind": "cmd", "argv": ["make", "demo-parity"], "cwd": ".", "timeout_s": 2400,
+   "doc": "extension point 15 build parity: the demo build of the D2 tag (D2_REF, default v0.2.1) and of this tree are byte identical (scan_public.py d2-parity; needs the git dir)"},
+  {"id": "lab-build", "item": 6, "kind": "cmd", "argv": ["make", "lab-build"], "cwd": ".", "timeout_s": 1800,
+   "doc": "the /lab/ static build (VITE_AWR_LAB_ONLY=1) with the K9 production bundle scan and the lab profile of scan_public.py"}
  ],
  "zero_impact": {
   "relay_batch": {"case": "b", "hours": 1, "seed": 11},

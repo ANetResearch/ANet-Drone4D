@@ -98,6 +98,7 @@ SHELL_SITES: dict[str, tuple[Variant, ...]] = {
         Variant("all-cards", "test", (), {"GPU": "all"}, reject=True),
         Variant("foreign-card", "test", (), {"GPU": "0"}, reject=True),
     ),
+    f"{SCRIPT_ROOT}/run_d3_gate.sh": (Variant("start", "test", (), {"SYNC": "0", "WAIT": "0"}),),   # 回归门重载部分（CPU 池）：复用快照、只启动
     f"{SCRIPT_ROOT}/run_gz_tests.sh": (Variant("default", "test"),),
     f"{SCRIPT_ROOT}/run_mbl_e2e.sh": (                          # 最小基准闭环宿主（D3-AC-56）：L2 渲染绑定 GPU 参数指定的一张卡
         Variant("gpu2", "board", ("audit",), gpu=2),
