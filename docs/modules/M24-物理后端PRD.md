@@ -727,6 +727,13 @@ def setpoints(self, k, last, pending) -> list[VelSp]:
 
 与 FleetSim 的关系：航点时间参数化（`topp_lite_nb`）、PX4 位置环增益（`params_px4`）、降落速度剖面（`setpoint.land_speed`）与限幅档共用；FleetSim 的 refgen 融合在 L1 核内、以物理频率闭环，而跟踪器以 tick 频率做位置反馈，二者的差异计入动力学对照报告（§13 第 12 条）。
 
+v1.6（P09）：`RefTracker`（`python/awr/phys/tracker.py` 新增类，Realistic 档参考跟踪器；P0a `Tracker` 保留给 KinematicTier 与未切换的运行）：
+- 与 Fast 档共用同一指令映射与同一参考生成器：影子 `FastTier`（无世界、不推进物理）只使用其 FleetState、ProfileTable 与 PathBuffer；指令经 `FastTier._apply`（M08 `actions.begin_*`），参考由 M08 `setpoint.refgen` 逐物理步（4 ms，与 Fast 档 L1 同频）推进：PositionSmoothing-lite、HOLD 刹停锁定、TAKEOFF 1 s 怠速加 3 s 斜坡、LAND 剖面（1.5 / 0.7 / 0.3 m/s）与触地爬行、ORBIT 角速度斜坡、PATH TOPP-lite、VELOCITY 零速轴锁定。
+- 位置环与 FleetSim `pos_ctrl` 同式（`v_sp = P·(tr_x − p) + tr_v`，同一限幅）；PX4 速度积分、加速度前馈与实测加速度阻尼以速度当量叠加：`v_cmd = v_sp + I + (tr_a − K_d·a) / K_p`（`K_p`、`K_i`、`K_d` 取 `MPC_*_VEL_*_ACC`），I 按 tick 起点误差积分，触地、怠速、失能时清零；水平设定按参考限幅截断，截断时积分反算；偏航与 FleetSim 姿态环同式（`MC_YAW_P · Δψ`）。
+- tick 内只有 tick 起点状态：参考推进与位置环使用线性外推的位置与偏航；逐步设定交给宿主按 `apply_step` 下发。
+- 接口：`bind`（回合起点，按 HelloAck 初始样本出生）、`observe`（tick 起点状态、接触、落地、坠毁同步到影子状态）、`set`、`kind`、`plan(k, t_k_ns, n_steps) → {uav: [Setpoint] × n_steps}`；`ground_h(xy)` 给出 AGL 与起飞基准（缺省 0，生产缺省取世界 DTM，AWR-05 ADR-208）。
+- compose 增加 `VelocityLimits.profile = "px4"`：Lee `velocityGain` = PX4 速度 P 增益 × 机体总质量（1.8、1.8、4.0 × 2.0643 kg），速度误差项的加速度限幅为 g·tan 45°、g·tan 45°、g，Lee 速度限幅在限幅档上加 3 m/s 余量（参考限幅由 RefTracker 执行）；缺省 `"r9"`（原型增益）不变。
+
 #### 6.5.8 风
 
 | 模式 | 实现 | 输入一致性 | 状态 |
@@ -1005,12 +1012,29 @@ def calibrate_k(vehicle_ref: str, speeds=(2, 4, 6, 8, 10), u_ref=8.0) -> WindCal
 
 报告 `phys_compare.json` 写入运行目录并随数据集发布，字段含机型、时钟档、风模式、碰撞源、k 值、每项指标与是否在容差内。
 
+v1.6（P09）首轮实测（dmax `d3-gz:p09`，field 风模式、`sigma_turb = 0`；报告实现为 `tier_compare.json`，`drone4d.phys.tier_compare.v1`，见 AWR-05 §5.3.6）：
+
+| 用例 | 档间差 / 容差 | 判定 |
+|---|---|---|
+| takeoff_land（爬升与下降） | 位置 RMS 0.0095 / 1.5 m；到达高度时刻差 0.104 / 1 s；触地时刻差 0 / 1 s；触地竖直速度差 6e-5 / 0.3 m/s | 通过 |
+| hover | 位置 RMS 0.0095 / 0.5 m；最大漂移 0.044 / 0.5 m | 通过 |
+| velocity_step（速度阶跃） | 位置 RMS 0.373 / 1.5 m；上升时间差 0.08 / 0.3 s；超调差 0.59 / 10% | 通过 |
+| velocity_limit | 稳态速度差 0.855 / 1.0 m/s（Fast 11.86、gz 11.00，均 ≤ 12.3） | 通过 |
+| yaw_step（偏航阶跃） | t90 差 0.096 / 0.2 s | 通过 |
+| waypoints（方形航线） | 位置 RMS 0.436 / 1.5 m；到达时刻差 0.117 / 1.0 s 每 100 m | 通过 |
+| orbit | 位置 RMS 1.110 / 1.5 m；半径 RMS 差 0.020 / 0.5 m；绕圈时刻差 0.372 / 1.0 s 每 100 m | 通过 |
+| contact_crash | 坠毁时刻差 0.02 / 0.5 s；坠毁水平位置差 0.243 / 0.5 m；事件种类 COLLISION_WORLD、IMPACT 两档相同 | 通过 |
+| wind_hover（恒风悬停） | 位置 RMS 0.023 / 0.5 m；倾角差 0.0004 / 0.5°（两档 7.850°） | 通过 |
+
+容差来源：速度阶跃、偏航阶跃、恒风悬停、方形航线、爬升与下降取上表初始容差；悬停、限幅、环绕、接触与坠毁为 P09 设定；报告的 `tolerance_status` 标为初始值，冻结按 AWR-05 ADR-208（推荐，待确认）。首轮以 P0a Tracker 与 r9 增益驱动时只有 2/9 通过，改用 RefTracker 与 `px4` 档后 9/9 通过。
+
 #### 6.10.7 两档采样一致性（P2，FR-063）
 
 1. 参考轨迹：一次 Fast 档运行的 PoseHistory（250 Hz，含机动与触地）。
 2. Realistic 侧使用测试构建的注入模式：注入机体关闭重力、碰撞与速度控制，PreUpdate 以 `WorldPoseCmd` 写入参考位姿，PostUpdate 照常采集位姿；速度、角速度与比力取注入组件中的参考值。该用例只验证采集、传输、网格校验与编码链路，不验证动力学。Fast 侧直接使用参考 PoseHistory。
 3. 两侧 PoseHistory 逐样本比较：时刻逐位相同，位置差 ≤ 1e-6 m、姿态差 ≤ 1e-9 rad（gz 位姿往返的双精度舍入），速度、角速度与比力逐位相同。
 4. 两侧送入同一 M25：LiDAR 逐点位姿差 ≤ 1 mm、IMU 合成输出差在重采样容差内（D3-AC-35）；给定完全相同的 PoseHistory 字节时 M25 输出逐字节相同（M25 负责）。
+5. v1.6（P09）：注入模式已实现：`Drone4DClock` 的 `<inject>path</inject>`（测试世界）读取 f64[n][n_uav][16] 参考轨迹，每个授予步写模型 `WorldPoseCmd` 使 link 落在本步末参考位姿并清零模型速度，PostUpdate 照常采集位姿，速度、角速度与比力取参考行；HelloAck 的 `plugin_build` 带 `+inject`；文件缺失或尺寸不符时 Hello 回 635。实测 7501 个样本时刻逐位相同、位置最大差 2.84e-7 m、姿态 2.67e-15 rad，速度、角速度、比力逐位相同；LiDAR 300 帧 4,203,660 点与 IMU 6000 样本逐字节相同。
 
 #### 6.10.8 RotorPy 对拍（P1，FR-064）
 
@@ -1562,7 +1586,7 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 | M24-AC-013 | P0 | 控制协议健壮性 | 重发同一 `seq` 不重复推进（gz 迭代计数不变）；乱序、越界索引、长度不符返回 635；`kill -9` gz 进程在 ≤ 1 s 内识别为 638；步进挂起时 632 按 `step_timeout_s` 触发；故障后按控制日志重放到故障前 tick 的 PoseHistory 与原运行逐位相同；10 万条随机消息模糊测试无崩溃 | `tests/d3/phys/determinism/test_fault.py`（v1.2；原写 `tests/d3/gz/test_protocol.py`）、`native/gz/test` | dmax CPU 池 | 40（部分） |
 | M24-AC-014 | P0 | gz 评估（v1.1：Jetty 部分 P1；链路实测 P-1 与 P0a；reset 验证 P0b） | Jetty 评估矩阵六项结论成文并提交 ADR；Env → ZeroMQ → `Drone4DClock` → `PoseTap` → M25 链路 3 机 RTF 与分解入库并替换 AWR-05 §5.3.5 依据；同种子 reset 与新实例 300 tick PoseHistory sha256 比较结论成文；physics 档就绪 p95 ≤ 5 s、RSS ≤ 1.5 GB | `tools/bench/d3/gz_lockstep.py`、`python -m awr.phys reset-check`、评估报告 | dmax | 40 |
 | M24-AC-015 | P0 | Realistic 锁步（v1.1：P0a 纯物理与协议，P0b 含 M25 标准轨） | 3 架 x500（720p RGB + MID-360 类 LiDAR，10 Hz，M25 生成）RTF ≥ 0.9；`pose_history_hz` 声明 250 且实测相邻样本间隔恒为 4 ms；同镜像同 ISA 两次运行 PoseHistory sha256 相同；physics 与 xval 档（相同预热步数）物理轨迹逐位相同；方形航线机动中世界系定高误差 ≤ 2 m；StepDone 时刻与 tick 网格之差为 0；控制往返开销 p95 ≤ 2 ms（8 架） | `tests/d3/gz/test_realistic.py`、`tools/bench/d3/gz_lockstep.py` | 独占 A40 | 34 |
-| M24-AC-016 | P0 | 两档对照（v1.1：P0b） | 同一磁带与 Run 规格在 Fast 与 Realistic 都能运行；注入模式下两侧 PoseHistory 时刻逐位相同、位置差 ≤ 1e-6 m、姿态差 ≤ 1e-9 rad、比力逐位相同，经 M25 后 LiDAR 逐点位姿差 ≤ 1 mm、IMU 输出差在重采样容差内；`phys_compare.json` 生成并含 §6.10.6 全部机动与容差判定 | `tests/d3/gz/test_tier_compare.py`、Playwright `lab/compare` | 独占 A40、本机 Tier B | 35 |
+| M24-AC-016 | P0 | 两档对照（v1.1：P0b） | 同一磁带与 Run 规格在 Fast 与 Realistic 都能运行；注入模式下两侧 PoseHistory 时刻逐位相同、位置差 ≤ 1e-6 m、姿态差 ≤ 1e-9 rad、比力逐位相同，经 M25 后 LiDAR 逐点位姿差 ≤ 1 mm、IMU 输出差在重采样容差内；`phys_compare.json` 生成并含 §6.10.6 全部机动与容差判定；v1.6（P09）：报告实现为 `tier_compare.json`；注入模式采样一致性与 M25 逐字节（CPU 相机替身、LiDAR、IMU）已实测通过，GPU 相机逐字节待补测 | `tests/d3/gz/test_tier_compare.py`、Playwright `lab/compare` | 独占 A40、本机 Tier B | 35 |
 | M24-AC-017 | P0 | 风与接触（v1.1：接触与 uniform 风 P0a，field 风 P0b，标定 P2） | 标定后各风速倾角差 ≤ 0.5°（或按参考风速标定并报告残差）；P600 8 m/s Fast 档倾角 7.43° ± 0.2°；uniform 模式平均风与磁带关键帧插值逐位一致；field 模式下发风矢量与 M07 查询逐位一致；gz 侧撞墙、硬着陆、落地三类判定与阈值表一致；`vehicle_collision = true` 的 ranked 运行被拒 | `tests/d3/gz/test_realistic.py`、`python -m awr.phys calibrate-wind`、`tests/d3/phys/test_gz_wind.py`（v1.2，P08：field 消息与 M07 查询逐位一致；x500 在 8 m/s 风中倾角 7.8503°，FleetSim 7.8505°） | dmax | 35（部分） |
 | M24-AC-018 | P1 | Interactive 下发（P2） | Interactive 运行中 gz 侧回放的演员位置与 M23 实现磁带的 `TapeReader` 插值差 ≤ 1e-6 m；控制日志重放后实现磁带逐字节相同 | `tests/d3/gz/test_realistic.py` | dmax | 37（支撑） |
 | M24-AC-019 | P1 | SITL（P2） | 1 / 3 / 5 / 10 架 15 s 内全部到 READY；≤ 5 架 RTF ≥ 0.95；offboard 速度阶跃跟踪 5 s 内速度误差 ≤ 0.5 m/s；`ranked = false`，提交排名返回 633；心跳中断 3 s 后状态为 LOST 并记 639；PoseHistory 网格无缺口 | `tests/d3/gz/test_sitl.py` | dmax | 36 |
@@ -1702,7 +1726,7 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 | M24-FR-078 | 故障恢复重放：gz 进程异常退出或步进超时后，重启实例并按控制日志从回合起点重放到故障 tick，逐步比对重放样本与已存样本，逐位一致后继续；不一致时返回 638 并由 M27 判为平台失败整体重跑（不计入提交方）。v1.2：宿主侧实现为 `awr.phys.gz.backend.SupervisedGzBackend`，逐 tick 比对控制消息与样本块的 sha256，不一致时返回 638 并附 `detail.platform_failure` | P0 | P0b | V0.3 | M24-AC-027 | ADR-177 |
 | M24-FR-079 | 看门狗：单 tick 等待 `step_done` 超过 `gz_step_timeout_s`（缺省 5 s 墙钟）触发 FR-078；同一 Run 连续触发 3 次即失败（632）；v1.2："连续 3 次"指同一故障码连续出现且中间没有成功 tick，632 与 638 同样适用 | P0 | P0b | V0.3 | M24-AC-027 | 本文设定 |
 | M24-FR-080 | 平台复现审计：`awr.phys.audit.replay(run_manifest)` 以存档的控制日志与同一 `platform_digest` 重放，比对 PoseHistory 存档 sha256；供 M27 每日审计作业调用 | P0 | P0b | V0.3 | M24-AC-029 | ADR-177 |
-| M24-FR-081 | DroneAdapter 一致性用例集 `tests/d3/phys/conformance/`：同一组用例（起降、悬停、速度阶跃、航点、环绕、接触与坠毁、恒风扰动）在 Realistic 与 Fast 两档运行，断言接口层行为一致（`VehicleStatus` 序列、指令生效步、限幅回执、PoseHistory 网格），动力学差异只以容差报告 `tier_compare.json` 给出 | P0 | P0b | V0.3 | M24-AC-028 | ADR-176 |
+| M24-FR-081 | DroneAdapter 一致性用例集 `tests/d3/phys/conformance/`：同一组用例（起降、悬停、速度阶跃、航点、环绕、接触与坠毁、恒风扰动）在 Realistic 与 Fast 两档运行，断言接口层行为一致（`VehicleStatus` 序列、指令生效步、限幅回执、PoseHistory 网格），动力学差异只以容差报告 `tier_compare.json` 给出；v1.6（P09）："指令生效步"指响应起点晚于生效时刻且在 3 tick（0.3 s）以内；实现于 `python/awr/phys/tier_compare.py`，Realistic 侧使用 RefTracker（§6.5.7） | P0 | P0b | V0.3 | M24-AC-028 | ADR-176 |
 | M24-FR-082 | 每实例资源：`physics` 实例 `--cpus 2`、`--memory 2g`、不挂载 GPU；`awr.phys.estimate` 按 §14.4 返回 CPU、内存、显存（只有 `xval`）与启动开销；`/phys/tick_stats` 增加实例 CPU 与 RSS 的 1 Hz 采样 | P0 | P0a | V0.3 | M24-AC-026 | ADR-178 |
 | M24-FR-083 | 标准基准机型：`p600_bench`（AWR-20 §15.16）映射为 `d4d_quad` 模板参数（质量、惯量、轴距、电机常数与限幅取 M21 同一来源），Realistic 与 Fast 两档使用同一参数源。v1.2（P03）：当前映射（质量 3.935 kg，惯量 J_x500 · (m / 2.064) · (0.300 / 0.246)² = 0.061516 / 0.061516 / 0.113394 kg·m²，ω_max 1500）只在 `tools/bench/d3/gz_lockstep.py` 中实现，应移入 `configs/phys/quad_templates.yaml` 与 `compose/_GzTier`；该映射下最高速度约 9.8 m/s（指令 12 m/s） | P0 | P0a | V0.3 | M24-AC-026 | AWR-20 §15.16 |
 
@@ -1728,7 +1752,7 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 | M24-AC-025 | P0 | 缺省档与排名约束（P0a） | 未指定 `physics` 的 Run 规格解析为 `realistic` + `physics` 导出档；`ranked = true` 且 `physics = fast` 或 `sitl` 或 `xval` 的 Run 校验失败；`platform_digest` 与榜单版本不一致时拒绝启动 | `tests/d3/phys/test_tiers.py` | 本机 | 34 |
 | M24-AC-026 | P0 | 每 Run 重启与资源（P0a） | `physics` 实例启动 p95 ≤ 5 s；3 机 360 s 锁步中实例 CPU p95 ≤ 2 核、RSS ≤ 2 GB、无 GPU 设备；3 个正式 Run 并发时各自 PoseHistory 与单独运行逐位一致；`p600_bench` 参数在两档相同 | `tools/bench/d3/gz_lockstep.py`、`tests/d3/phys/test_gz_lockstep_long.py`（v1.2；原写的 `tests/d3/gz/test_realistic.py` 不存在） | dmax | 34 |
 | M24-AC-027 | P0 | 故障恢复重放（P0b） | 在第 1,000 tick 注入 `kill -9` 与步进超时各 10 次：每次在重放后继续，最终 PoseHistory 存档与无故障运行 sha256 相同；连续 3 次超时的运行失败（632） | `tests/d3/phys/determinism/test_fault.py`（v1.2；原写 `tests/d3/gz/test_recovery.py`） | dmax | 17、35 |
-| M24-AC-028 | P0 | 两档一致性用例集（P0b） | 一致性用例在两档全部通过；`tier_compare.json` 字段齐全且位置 RMS、到达时刻差在报告容差内 | `tests/d3/phys/conformance/` | dmax | 35 |
+| M24-AC-028 | P0 | 两档一致性用例集（P0b） | 一致性用例在两档全部通过；`tier_compare.json` 字段齐全且位置 RMS、到达时刻差在报告容差内；v1.6（P09）：已满足（9/9 用例通过，`tier_compare.json` 字段齐全，AWR-05 §26.3 第 36 行） | `tests/d3/phys/conformance/` | dmax | 35 |
 | M24-AC-029 | P0 | 平台复现审计（P0b） | 审计重放 30 个抽样 Run 全部一致；人为替换插件构建后审计检出 `platform_digest` 不一致并发出冻结信号 | `tests/d3/phys/test_audit.py` | dmax | 17 |
 
 ### 14.7 D3-AC 映射变更

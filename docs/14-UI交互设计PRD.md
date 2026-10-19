@@ -4219,7 +4219,7 @@ viewer 界面（共享展示、静态浏览）不出现以上任何写入口；D
 2. **页面**：工作区首页与世界（P0a）、事件列表与只读时间线（P0a）、事件编辑器（P1）、机队与策略配置（P1，P0 经 SDK 与 REST）、运行列表与状态（P0a）、多机观测墙（P0a）、LiDAR 与重建对比（P0b）、运行回放 · 数据检视（P1，Rerun 面板）、数据集与评测浏览（P0b）、Fast 与 Realistic 对照（P2）、内部排行榜与提交（v1.3：P0a 原型、P0b v1，不对外）。每页给出线框、数据来源、交互规则与状态。
 3. **时间权威**：工作区内由 lab 播放头 `stores/lab/playhead.ts` 统一驱动三维场景视图、观测墙、时间线与 Rerun 面板。内部工作区的回放经 lab-gateway 的回放会话取得 TIME，播放头委托 M12 Timeline store（AWR-05 ADR-149 的"唯一时间权威"在 RT 会话内成立）；公开站无 RT 连接，播放头以本地时钟驱动，复用 `engine/time` 库；`stores/timeline.ts` 不修改（§21.13，§21.27 第 2 条）。
 4. **每机私有视角**：观测墙每格只显示该机实际收到的观测（`agent_view`）；真值叠加（实例、分割、可见比例、遮挡物类别）只对评测员与管理员开放，并以"评测视图"标签区分；公开站不提供真值叠加。实时运行使用 2 Hz 低分辨率预览流，回放使用 `raw.mcap` 中的存档帧（内部）或预渲染视角视频（公开站）。
-5. **LiDAR 与重建对比**（P0b，R-D3-29）：GLB 真值、L0 已知位姿地图与 FAST-LIVO2 地图三方叠加，使用 `ui/lab/lidar/` 专用画布（不经 M06 图层注册表）；Tier B/A 显示裁剪碰撞网格，Tier S 以网格采样点云降级；误差以灰阶顺序色阶着色并预计算；RPE100、ATE、漂移与"种子 × 重复运行"分布以箱线图呈现。
+5. **LiDAR 与重建对比**（P0b，R-D3-29）：GLB 真值、L0 已知位姿地图与 FAST-LIVO2 地图三方叠加，使用 `ui/lab/lidar-compare/`（v1.6，F06：原写 `ui/lab/lidar/`） 专用画布（不经 M06 图层注册表）；Tier B/A 显示裁剪碰撞网格，Tier S 以网格采样点云降级；误差以灰阶顺序色阶着色并预计算；RPE100、ATE、漂移与"种子 × 重复运行"分布以箱线图呈现。
 6. **数据检视**（v1.3：P0b，R-D3-22、R-D3-36、R-D3-46）：Rerun Web Viewer 按需加载，右侧分栏嵌入；播放头与 Viewer 双向同步，带防重入标记与节流；选择联动按实体路径映射；面板外壳、空状态与错误文案由宿主提供，Rerun 内部界面不承载业务操作；只在 Tier B/A 启用。
 7. **公开站只读样例**（v1.3：R-D3-46 取代 R-D3-27）：自 P0b 起只读展示样例：事件回放、多机私有视角（RGB 与热成像伪彩视频同步）、样例数据检视（Rerun 面板，Tier B/A）、世界浏览与 LiDAR 对比样例；不展示排行榜与任何得分比较，不提供提交；全部页面只发起静态 GET（§21.14、§21.29）。
 8. **企业级文案**（R-D3-21）：§21.15 把 AWR-05 §7.10 落到界面：中英文原则、术语与称谓、状态名、按钮动词、消息模板、原因码 600–699 文案、copy-lint 规则编号与白名单、README 与仓库元数据结构、D2 发布面复核清单（P-1，D3-AC-46）。
@@ -4279,6 +4279,7 @@ flowchart TB
   RW["/lab/runs/:rid 多机观测墙"]
   RLD["/lab/runs/:rid/lidar LiDAR 与重建对比（P0b）"]
   RI["/lab/runs/:rid/inspect 运行回放 · 数据检视（P1）"]
+  RP["/lab/replay 双 Run 同步回放与样例包（P0a，仅内部）"]
   CMP["/lab/compare Fast 与 Realistic 对照（P2）"]
   DS["/lab/datasets 数据集与评测浏览（P0b）"]
   LB["/lab/leaderboard 内部排行榜与提交（v1.3：P0a 起，只在内部构建）"]
@@ -4288,6 +4289,7 @@ flowchart TB
   ED -->|"新建实验"| XN
   XN -->|"提交运行"| RL
   RL --> RW
+  RL --> RP
   RW --> RLD
   RW --> RI
   HOME --> DS
@@ -4297,7 +4299,7 @@ flowchart TB
   WD -->|"在此世界上的事件"| EL
 ```
 
-公开只读构建只包含 `HOME`、`WL`、`WD`、`EL`、`ED`（只读回放）、`RW`（观测浏览）、`RLD`（预计算）、`RI`（v1.3：P0b 起，Tier B/A）、`CMP`（P2）、`DS`（v1.3：公开构建不含 `LB`，改为样例页 `/lab/samples`，§21.29）；不包含登录页、运行列表与机队配置页。
+公开只读构建只包含 `HOME`、`WL`、`WD`、`EL`、`ED`（只读回放）、`RW`（观测浏览）、`RLD`（预计算）、`RI`（v1.3：P0b 起，Tier B/A）、`CMP`（P2）、`DS`（v1.3：公开构建不含 `LB`，改为样例页 `/lab/samples`，§21.29）；不包含登录页、运行列表、双 Run 同步回放（`RP`，v1.6，F04）与机队配置页。
 
 #### 21.2.2 路由表（D3）
 
@@ -4310,8 +4312,9 @@ flowchart TB
 | `/lab/experiments/new` | 机队与策略配置 | P1 | 研究者 | 不提供 | `event`、`v`、`from`（复制已有 Run 规格） |
 | `/lab/runs` | 运行列表与状态 | P0a | 研究者 | 不提供 | `event`、`xp`、`policy`、`state`、`ranked`、`cursor`；v1.6（F02）：`run`，打开运行状态侧栏 |
 | `/lab/runs/:rid` | 多机观测墙 | P0a | 研究者 | 只读（观测层，无真值叠加） | `t`、`uav`、`grid ∈ {1, 4, 9, 16}`、`page`、`view ∈ {obs, eval}`、`cam` |
-| `/lab/runs/:rid/lidar` | LiDAR 与重建对比 | P0b | 研究者 | 只读（预计算；Tier S 点云降级） | `uav`、`src`（`gt,l0,livo` 的子集）、`rep`、`mode ∈ {livo, lio}` |
-| `/lab/runs/:rid/inspect` | 运行回放 · 数据检视 | P0b（v1.3 由 P1 前移） | 研究者（评测 catalog：评测员） | 公开样例使用 `/lab/samples/:sid` 内的同一面板（Tier B/A，`public` 档切片） | `t`、`slice`、`catalog ∈ {dist, eval}` |
+| `/lab/replay` | 两个 Run 同步回放（含样例包浏览，v1.6，F04） | P0a | 研究者 | 不提供 | `a`、`b`（运行 id）、`t`（统一时间轴上的仿真秒，即 Run A 的仿真时间）、`cam`、`align ∈ {sim, event}`、`rate ∈ {0.25, 0.5, 1, 2, 4, 8}` |
+| `/lab/runs/:rid/lidar` | LiDAR 与重建对比 | P0b | 研究者 | 只读（预计算；Tier S 点云降级） | `uav`、`src`（`gt,l0,livo` 的子集）、`rep`、`mode ∈ {livo, lio}`；v1.6（F06）：另有 `tier ∈ {S, B}`（覆盖设备检测；软件光栅化为 Tier S）、`color ∈ {err, rgb}`、`size ∈ {1, 2, 3, 4, 6}`（px）、`crop=0`（隐藏裁剪框）；`src=none` 关闭全部图层 |
+| `/lab/runs/:rid/inspect` | 运行回放 · 数据检视 | P0b（v1.3 由 P1 前移） | 研究者（评测 catalog：评测员） | 公开样例使用 `/lab/samples/:sid` 内的同一面板（Tier B/A，`public` 档切片） | `t`、`slice`、`catalog ∈ {dist, eval}`；v1.6（R06）：`slice` 为 `<from>,<to>`（仿真秒），作为 BN-57 的 `t_from`、`t_to` 传入；测试构建（`TEST_SWITCHES`）接受 `?inspect=force` 以跳过设备检查，供软件渲染下的 Playwright 使用 |
 | `/lab/compare` | Fast 与 Realistic 对照 | P2 | 研究者 | 只读 | `a`、`b`（两个运行 id）、`t` |
 | `/lab/datasets` | 数据集与评测浏览 | P0b | 研究者 | 只读（dev 集） | `event`、`xp`、`group`、`metric` |
 | `/lab/leaderboard` | 内部排行榜（v1.3） | P0a（原型）、P0b（v1） | 受邀成员 | 不提供（构建期剔除） | `track`、`bv`（榜单版本）、`entry` |
@@ -4742,7 +4745,7 @@ function onPlayhead(t: number, rate: number, tiles: Tile[]) {
 ```text
 ┌ 顶栏 · 面包屑：… › 运行 run-k2m4q7xz3a › LiDAR 与重建对比                        机型 p600_mid360_inv · LIVO │
 ├────────┬──────────────────────────────────────────────────────────┬─────────────────────────────────────────┤
-│ 导航栏 │ 专用画布（ui/lab/lidar/CompareCanvas）                     │ 数据源                                   │
+│ 导航栏 │ 专用画布（ui/lab/lidar-compare/CompareCanvas）             │ 数据源                                   │
 │        │  [GLB 真值 开] [L0 已知位姿地图 开] [FAST-LIVO2 地图 开]     │ 机 [uav-01 v]  模式 [LIVO|LIO]  重复 [r1 v] │
 │        │  误差着色 [到网格距离 v]  点大小 [2 px]  裁剪框 [舞台 v]      │ ──────────────────────────────────────  │
 │        │                                                          │ RPE100 中位数 0.21%   对齐 ATE 0.14 m     │
@@ -4762,12 +4765,14 @@ function onPlayhead(t: number, rate: number, tiles: Tile[]) {
 
 | 项 | Tier B/A | Tier S |
 |---|---|---|
-| 画布 | `ui/lab/lidar/` 专用画布（three.js，不经 M06 图层注册表，P0 不依赖扩展点 14）；预算检查沿用 `m06.gpu-limits` 阈值 | 同一画布，降级档 |
+| 画布 | `ui/lab/lidar-compare/` 专用画布（v1.6，F06：实现为 `apps/web/src/ui/lab/lidar-compare/`（`CompareCanvas.tsx` 等），原写 `ui/lab/lidar/`；three.js，不经 M06 图层注册表，P0 不依赖扩展点 14）；预算检查沿用 `m06.gpu-limits` 阈值 | 同一画布，降级档 |
 | GLB 真值 | 裁剪后的局部碰撞网格（10% 减面，≤ 300,000 面）半透明（不透明度 0.25，g400） | 世界包阶段 11 的网格采样彩色点云（裁剪到同一区域） |
 | L0 地图与 FAST-LIVO2 地图 | 点云，各 ≤ 2,000,000 点；两路以点形区分（实心圆、空心方） | 预先抽稀到 D2 点预算阶梯以内（Tier S 档上限），误差着色在 dmax 预计算并随点下发 |
 | 误差着色 | 每点到网格距离量化为 u8（0–0.5 m，步长 2 mm），着色为灰阶顺序色阶：0 m 为 g400，0.5 m 及以上为 g50（高亮显示偏差）；不使用色相与红色（§21.27 第 4 条） | 同左 |
 | 轨迹 | 真值轨迹（g300 实线）与估计轨迹（g50 虚线）；按逐点位姿积分的地图 | 同左 |
 | 交互 | 环绕、平移、缩放；点击点显示坐标与误差；框选区域统计误差分布 | 同左（帧率目标见 UX-NFR-041） |
+
+v1.6（F06）绘制规则：空心方点在绘制缓冲区中至少 3 像素（Tier S 像素比 0.5 时即 6 CSS 像素）；无误差值的点以 g600 绘制；Tier S 中真值采样点保持原色（实心方点）；Tier S 预算为 gt、l0、livo 合计 ≤ 150,000 点（D2 点预算阶梯的 Tier S 上限）；制品契约为 `drone4d.bench.lidar_compare.v1`（M27-FR-109）。
 
 数据来自 M27 派生物 `derived/compare/{tier_b, tier_s, metrics.json}`（内部经 `GET /runs/{rid}/artifacts/compare/...`；公开站为静态制品）；页面不在浏览器中计算误差（预计算口径与 `eval_sim` 一致，D3-AC-15）。
 
@@ -4798,16 +4803,18 @@ function onPlayhead(t: number, rate: number, tiles: Tile[]) {
 
 | 状态 | 进入条件 | 呈现 | 退出 |
 |---|---|---|---|
-| UNSUPPORTED | 设备档为 Tier S，或 WebGL2 与 WebGPU 均不可用 | `Empty`："当前设备不支持数据检视面板。可下载时间窗切片，在 Rerun 原生 Viewer 中打开。"按钮"下载切片"（公开站）或"在原生 Viewer 中打开"（内部） | — |
+| UNSUPPORTED | 设备档为 Tier S，或 WebGL2 与 WebGPU 均不可用；v1.6（R06）实现的四类原因：软件渲染（Tier S）、WebGL2 与 WebGPU 均不可用、不支持 Wasm SIMD、手机或平板布局（宽度 < 1024 px 或粗指针） | `Empty`："当前设备不支持数据检视面板。可下载时间窗切片，在 Rerun 原生 Viewer 中打开。"按钮"下载切片"（公开站）或"在原生 Viewer 中打开"（内部） | — |
 | IDLE | 页面进入、设备档允许 | 外壳与"加载数据检视"按钮（首次进入自动开始，用户关闭后不再自动） | 开始加载 |
-| LOADING | `React.lazy` 加载 `@rerun-io/web-viewer-react` 分块与 Wasm（自托管，49 MB，传输约 16 MB） | `Progress`（按已收字节）与"正在加载数据检视组件 · {mb} / {total} MB" | 成功 → OPENING；失败 → ERROR |
-| OPENING | 内部：`GET /runs/{rid}/viewer_url`（设置 `d3_rr` Cookie，17 §18.10.2）后 `viewer.open(url)`；公开站：`open(slice.rrd)` 与 `open(basemap.rrd)`（同一 `recording_id`） | `Skeleton` 覆盖 Viewer 区；"正在打开录制" | `recording_open` 事件 → READY；10 s 无事件 → ERROR |
+| LOADING | `React.lazy` 加载 `@rerun-io/web-viewer-react` 分块与 Wasm（自托管，49 MB，传输约 16 MB） | `Progress`（按已收字节）与"正在加载数据检视组件 · {mb} / {total} MB"；v1.6（R06）：加载入口为 `ui/lab/inspect/viewerLoader.ts`（核心包 `@rerun-io/web-viewer` 0.38.1，原写 `@rerun-io/web-viewer-react`）；进度为 `re_viewer_bg*.wasm` 已收到的解压后字节（start 期间包装 fetch），分母为锁定大小 51,225,405 B；宿主覆盖层遮住 Viewer 自带的英文加载画面 | 成功 → OPENING；失败 → ERROR |
+| OPENING | 内部：`GET /runs/{rid}/viewer_url`（设置 `d3_rr` Cookie，17 §18.10.2）后 `viewer.open(url)`；公开站：`open(slice.rrd)` 与 `open(basemap.rrd)`（同一 `recording_id`）；v1.6（R05）：内部构建在取得 `viewer_url` 后以同源 `viewer.open(url)` 打开；在 `cookie_exp_unix_ns` 前约 60 s、或收到 401 或 `grpc-status 16` 时重新调用 BN-57 | `Skeleton` 覆盖 Viewer 区；"正在打开录制" | `recording_open` 事件 → READY；10 s 无事件 → ERROR |
 | READY | 录制已打开 | Viewer 可交互；时间与选择同步生效 | 卸载、切换运行 |
 | ERROR | 加载、打开或运行期错误（含 694 版本不一致） | `Alert`："数据检视未能打开录制（694 RERUN_VERSION_MISMATCH）。该录制需要迁移后查看。"按钮"重试" | 重试 → LOADING |
 
 Viewer 未加载时三维场景视图的帧率与内存不受影响（D1-AC-03b 不回退，D3-AC-25）；`memory_limit` 设为 1.5 GB；路由离开时调用 `viewer.stop()` 并释放 Wasm 内存。
 
 #### 21.9.3 时间与选择同步
+
+v1.6（R06）实现口径（`ui/lab/inspect/rerunSync.ts`）：回声按精确值识别（每次推送登记一个待回声值，保留 10 s），同时保留下文的 50 ms 窗口规则；挂接时先暂停 Viewer 并把活动时间轴设为 `sim_time`，挂接推送的回声到达之前丢弃 Viewer 的时间与时间轴事件（实测原因：0.38 打开 `.rrd` 即开始播放且不发 play 事件，缺省时间轴为 `tick`）；与已同步时刻相差一帧以内的 Viewer 更新合并，100 ms 后写入精确值，拖动结束后静止误差为 0；真实 Viewer 实测（本机 SwiftShader，开发参考）100 次往返最大误差 0 ns，推送数 = 回声数 = 384，lab 拖动期间无回写。
 
 ```ts
 // 伪代码：ui/lab/inspect/rerunSync.ts（M15）。lab 播放头为时间权威（§21.13），Viewer 为跟随方
@@ -4833,13 +4840,13 @@ viewer.on('selection_change', (ev) => {
 
 1. 同步误差：任一方向拖动后另一方的时间差 ≤ 1 帧（≤ 100 ms 仿真时间）；100 次往复拖动后双方事件计数一致、无回环震荡（D3-AC-25）。
 2. Viewer 播放时（`play` 事件）lab 播放头切换为跟随 Viewer 的时间（`source = rerun`），用户在三维场景视图或时间线上操作即收回权威；切换在时间线上以"由数据检视驱动"标签提示。
-3. 三维场景视图中的选择经 Viewer 的 URL 片段定位到实体（`#/fleet/uav-02`）；评测员会话中真值实体 `/truth/actors/<id>` 可选中并在场景视图中高亮。
+3. 三维场景视图中的选择经 Viewer 的 URL 片段定位到实体（`#/fleet/uav-02`）；评测员会话中真值实体 `/truth/actors/<id>` 可选中并在场景视图中高亮。v1.6（R06）：场景到 Viewer 的选择只对 catalog 来源执行（URL 片段 `#selection=<entity>`，保留已有的 `when` 与 `time_selection`）；静态切片只执行 Viewer 到场景的方向，因为重新打开静态文件会再次下载；左侧窗格当前为正北朝上的平面总览（机队航迹，评测员另有真值演员），代替三维场景视图。
 
 #### 21.9.4 数据来源与权限
 
 | 构建与角色 | 数据 | 说明 |
 |---|---|---|
-| 内部 · 研究者 | 分发 catalog（`obs.*`、`agent.*`） | 经 rerun-proxy，Cookie `d3_rr`（10 min，Path=/rerun/）；查询真值返回 0 行 |
+| 内部 · 研究者 | 分发 catalog（`obs.*`、`agent.*`） | 经 rerun-proxy，Cookie `d3_rr`（10 min，Path=/rerun/ 与 Path=/rerun.cloud.v1alpha1.RerunCloudService，v1.6，R05）；查询真值返回 0 行 |
 | 内部 · 评测员、管理员 | 评测 catalog（全部层） | 外壳按钮"打开评测 catalog"，外壳标签"评测视图" |
 | 公开站（P1 起，Tier B/A） | 静态制品中的 `public` 档时间窗切片与 `basemap.rrd` | 切片列表来自静态制品索引；每片 ≤ 64 MB；不允许整段运行直链下载 |
 
@@ -5209,6 +5216,8 @@ GitHub About：一句话描述（≤ 120 字符，无营销用语）；topics �
 | 环境轨迷你曲线 | sparkline | `LfSparkline` | Canvas / 数据变化 | 无 |
 | 事件泳道 | 时间轨 | `LfTimelineTrack`（增加状态色带与刻度字形） | Canvas / ≤ 10 Hz | 无 |
 
+v1.6（F06）：`LfBox` 与 `LfMatrix` 目前在页面内实现（`ui/lab/lidar-compare/charts.tsx`），仍须迁入 `ui/lf`（AWR-05 §26.5 F-41）。
+
 #### 21.17.4 transitions.dev 配方（§8.2 表的续行，编号接 #46）
 
 | # | 交互 | 配方 | 宿主 | 打开 / 进入 | 关闭 / 退出 | 曲线 | lite 差异 | reduced |
@@ -5349,8 +5358,9 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | `apps/web/src/ui/lab/fleet/`（新）：`ExperimentNew.tsx`、`FleetTable.tsx`、`specRules.ts`、`EstimateCard.tsx` | §21.5 | M15（WP-D3-17） | `stores/catalog.ts` 的机型目录读取方式、`ui/panels/fleet/*` 的表单件 |
 | `apps/web/src/ui/lab/runs/`（新） | 运行列表与状态 | M15（WP-D3-10） | `ui/views/RunsPage.tsx`、`ui/lf/{LfTable,LfTickGauge}.tsx` |
 | `apps/web/src/ui/lab/wall/`（新）：`ObservationWall.tsx`、`layout.ts`、`frameScheduler.ts`、`tileRenderer.ts`、`evalOverlay.tsx` | §21.7 | M15（WP-D3-10） | `ui/fpv/{PerceptionHud,hudModel}.tsx` 的角标排版；M06 `engine/droneview/**`（帧解码 Worker、`d3frames.v1` 解析） |
-| `apps/web/src/ui/lab/lidar/`（新）：`CompareCanvas.tsx`、`errorRamp.ts`、`MetricsPanel.tsx` | §21.8 | M15、M06（WP-D3-26） | `engine/pointcloud` 的 ANET_Q16 解码（Tier S）；r4 原型 `.cache/research/d3/r4-mesh-lidar/scripts/{recon,viz}.py`（误差口径）；r1 `eval_sim.py`（指标口径） |
-| `apps/web/src/ui/lab/inspect/`（新）：`InspectPage.tsx`、`RerunPanel.tsx`、`rerunSync.ts` | §21.9 | M15（WP-D3-17） | r8 原型 `.cache/research/d3/r8-rerun/web/{index.html,app.js}`（`fromRerun` 防重入、`set_current_time`、`time_update`）；`ui/components/ui/resizable.tsx` |
+| `apps/web/src/ui/lab/lidar-compare/`（新；v1.6，F06：原写 `ui/lab/lidar/`）：`CompareCanvas.tsx`、`charts.tsx` 等 | §21.8 | M15、M06（WP-D3-26） | `engine/pointcloud` 的 ANET_Q16 解码（Tier S）；r4 原型 `.cache/research/d3/r4-mesh-lidar/scripts/{recon,viz}.py`（误差口径）；r1 `eval_sim.py`（指标口径） |
+| `apps/web/src/ui/lab/inspect/`（新）：`InspectPage.tsx`、`RerunPanel.tsx`、`rerunSync.ts`（v1.6，R06：另有 `viewerLoader.ts`，是 `@rerun-io/web-viewer` 唯一的动态 `import()`） | §21.9 | M15（WP-D3-17） | r8 原型 `.cache/research/d3/r8-rerun/web/{index.html,app.js}`（`fromRerun` 防重入、`set_current_time`、`time_update`）；`ui/components/ui/resizable.tsx` |
+| `apps/web/src/ui/lab/replay/`（新，v1.6）：`ReplayPage.tsx`、`ReplayTile.tsx`、`SamplePackPanel.tsx`、`sync.ts`、`samplePack.ts` | §21.2.2 `/lab/replay`（双 Run 同步回放与样例包浏览） | M15（F04） | `ui/lab/wall/{frames,layout}.ts`、`stores/lab/playhead.ts` |
 | `apps/web/src/ui/lab/{compare,datasets,leaderboard}/`（新） | §21.10 至 §21.12 | M15（WP-D3-26、WP-D3-23、WP-D3-21） | `ui/lf/{LfBarRank,LfLine,LfStat}.tsx` |
 | `apps/web/src/ui/lf/{LfBox,LfMatrix}.tsx`（新）；`LfBarRank.tsx`（增加 `whisker`）、`LfTimelineTrack.tsx`（增加色带与刻度字形） | §21.17.3 | M15 | lieflat 规范（d01） |
 | `apps/web/src/engine/actors/tape/`（新，M06） | 前端磁带解码器：zstd WASM、按演员分列差分解码、Hermite 插值与阶跃规则 | M06（WP-D3-10） | `engine/time/{hermite,trackModel}.ts`；`engine/targets` 已导出组件（`TargetsOverlay`、`bodyMesh`）；r6 原型 `scripts/tape.py`（格式参照）；r7 `scripts/e3_tape_interp.py`（插值对拍） |

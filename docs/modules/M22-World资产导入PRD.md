@@ -807,7 +807,7 @@ tiles = bake_tiles_parallel(nav_mesh_yup, area, params, offmesh)  # Node worker_
 nav0 = assemble_in_tile_order(tiles)                              # (ty, tx) 升序
 seeds = snap(osm_junctions_in_cover, nav0, ext=(2, 4, 2)) + recipe.seeds
 nav = flood_fill_prune(nav0, seeds, traverse_offmesh=True)        # 不可达多边形 flags = 0；保留含种子的岛
-graph = osm_highways_in_cover -> split_at_nodes -> drape_z(raster_top) -> navgraph.geojson
+graph = osm_highways -> split_at_nodes -> clip(cover) -> drape_z(dsm_2m) -> lanes(FR-074) -> corridor_check -> nav_snap(vehicle) -> navgraph.geojson   # v1.6（W11）
 cands = junctions + buildings + doors + pois (clip to cover)
 for a in cands:
     d, p = nearest_poly(nav, a.xyz, ext=(15, 10, 15))
@@ -816,6 +816,8 @@ for a in cands:
     a.status = "auto" if d <= 3.0 and dist_to_cover_edge(a) > 20.0 else "review"
 anchors = apply_overrides(cands, recipe.anchors_overrides) ; diff_against(previous_package)
 ```
+
+v1.6（W11）：道路走廊定义为车辆道路中心线按 max(width_m/2, 5 m) 缓冲，与上文 `ROAD_CORRIDOR` 的 5 m 相同；`corridor_check` 逐段与逐采样点判定车道是否落在走廊内，结果写入车道的 `in_corridor` 与 `corridor_excess_m`；车道图字段见 §7.3.4 的车道扩展；`lanes` 阶段在覆盖内以迭代 Tarjan 求强连通分量，最大分量内的车道记 `routable = true`（crop 上占车道长度的 97.3%），M23 生成车辆路线时只用可路由车道（`LaneGraph.routable()`）。
 
 #### 6.6.12 `sensorHints`
 
@@ -1184,6 +1186,18 @@ FeatureCollection，坐标为世界帧 (E, N)。顶层 `awr`：`{schema: "awr.na
 | `osm_id` | string | — | `way/<id>` |
 | `z_m` | number[] | m | 逐顶点贴地高度（最高命中面） |
 
+v1.6（W11）车道扩展（`schema_version` 1.1.0，只增）：每个要素带 `feature ∈ {edge, lane, connector, junction, conflict_zone, stop_line}`，原有的边要素为 `feature = edge`，字段不变。
+
+| 要素 | id | 字段 |
+|---|---|---|
+| lane | `l-<way>-<seq>[-k]-<f\|b><i>`（`i = 0` 为最左车道） | `dir`、`index`、`lanes`、`from_node`、`to_node`、`width_m`、`speed_mps`、`length_m`、`z_m`、`turns`、`shared`、`successors`、`stop_line`、`junction_rule ∈ {major, minor, equal, null}`、`in_corridor`、`corridor_excess_m`、`routable`、`nav{vertices, snapped, z_source, max_dist_m}` |
+| connector | `t-<node>-<k>` | `from_lane`、`to_lane`、`turn`、`radius_min_m`、`priority`、`conflicts`、`control_scale` |
+| junction | `j-<node>` | `rule ∈ {priority, equal}`、`major_edges`、`approaches`、`connectors`、`conflict_zone` |
+| conflict_zone | `z-<node>` | 该路口全部连接段采样点的凸包 |
+| stop_line | `s-<lane>` | `rule ∈ {yield_major, first_come, stop_sign, give_way}`、`s_m` |
+
+覆盖裁剪产生的节点 id 为 `c-<way>-<seq>-<k>a` 与 `c-<way>-<seq>-<k>b`。顶层 `awr` 增加 `sources[]`、`lanes{...}`、`stats` 与 `content_sha256`；`content_sha256` 为去掉该字段后的顶层与全部要素的规范 JSON 的 sha256。
+
 #### 7.3.5 `awr-anchors@1`（`semantic/anchors.json`；与 `event/anchors.schema.json` 同一 schema）
 
 顶层：`{schema: "awr.anchors.v1", schema_version, world_id, frame: "world", units: "m", coordinate_sha256, license, attribution, sources[{name, sha256}], anchors[]}`。
@@ -1222,6 +1236,8 @@ FeatureCollection，坐标为世界帧 (E, N)。顶层 `awr`：`{schema: "awr.na
 | 6 | `fragment` | 已移除的漂浮碎块位置 | 记录 |
 | 7 | `synthetic_nav` | 人工 off-mesh 连接或人工导航面 | 记录；事件真值报告注明 |
 
+v1.6（S15）：逐三角形质量位（`q.u8` 与 `tri.q.u8`）的 bit1 含义为"与洞的边界环相邻"（洞边），不同于栅格 bit1 的"开放边界环内部"；该位应在构建的 quality 阶段烘焙（后续事项，AWR-05 §26.5 F-39），在此之前由 M25 读取端在加载时从质量栅格的洞单元与焊接后的边界边推导（M25 §6.8.6）。
+
 质量栅格 sidecar 为 `grid.schema.json`，`kind = quality`、`dtype = uint8`、`valueFrame = unitless`、`scale = 1`、`offset = 0`，`method` 写位定义。GeoJSON 顶层 `awr = {schema: "awr.quality.v1", world_id, frame, units, coordinate_sha256, cell_m, raster_href, bits, license?, attribution?}`（v1.4，W10：`bits` 为位定义表；ODbL 头 `license`、`attribution` 只在用到 OSM 水面时写入）；要素 properties `{kind ∈ scan-footprint|nodata|hole|stretched|low-texture|multilayer|water|fragment|synthetic-nav, reasons_bits, area_m2}`。
 
 #### 7.3.7 外观网格目录（`visual/mesh/appearance/`）
@@ -1240,11 +1256,12 @@ FeatureCollection，坐标为世界帧 (E, N)。顶层 `awr`：`{schema: "awr.na
 | `registration` | 方法、粗搜与细搜峰值、R1–R6 各量、尺度不确定度、交叉校验（frame-of 时） |
 | `leveling` | 主方法、两法梯度与倾角、差值、CI95、水平面逐个坡度、控制点残差、`needs_control_points` |
 | `topology` | 焊接前后顶点数、重复面、退化面、边界边与总长、非流形边、连通分量、碎块 |
-| `stages[]` | `{name, seconds, peak_rss_mb, input_sha256, output_sha256}`；v1.4（W10）：`name` 枚举增加 M22 阶段名 `grids`、`quality`、`semantic`、`collision`、`occupancy`、`navmesh`、`anchors`、`package`（`qa-report.schema.json` 加法式修订） |
+| `stages[]` | `{name, seconds, peak_rss_mb, input_sha256, output_sha256}`；v1.4（W10）：`name` 枚举增加 M22 阶段名 `grids`、`quality`、`semantic`、`collision`、`occupancy`、`navmesh`、`anchors`、`package`（`qa-report.schema.json` 加法式修订）；v1.6（W11）再增加 `navgraph` |
 | `quality` | 覆盖率、各位面积占比、覆盖多边形顶点数 |
 | `semantic` | 各类面积占比 |
 | `collision` | 双向误差 p50、p95、p99（m） |
 | `navmesh` | 每个 profile 的岛统计、裁剪前后可走面积、随机路径可达率与走廊、植被占比 |
+| `navgraph`（v1.6，W11；位于 `glb.navgraph`） | 车道图统计：道路边与车辆边、车道与连接段、路口与冲突区、停止线需要与缺失、走廊内段占比与采样占比、最大超出、最大强连通分量长度占比、`lane_route` 抽样可达率、NavMesh 吸附占比、`content_sha256` |
 | `anchors` | 各类数量、吸附距离分位数、告警数、重定位数、与上一版本的差异 |
 | `sensor_hints` | 纹素与边长分布、太阳估计得分曲面摘要 |
 | `vglb` | V-GLB 每条规则的结果 |
@@ -1822,7 +1839,7 @@ tests/d3/world/、tests/d3/quality/        # 本模块测试
 | 编号 | 需求描述 | 优先级 | 阶段 | 目标版本 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M22-FR-074 | OSM 车道图 `geojson/awr-navgraph@1` 的车道扩展（只增）：每条道路按 `lanes`、`oneway`、`turn:lanes` 生成车道中心线（缺省车道宽 3.2 m，缺失标签时按道路等级取 1 或 2 车道）、路口转向连通（冲突区多边形）、限速（`maxspeed` 或按道路等级缺省）与停止线（次路进入主路处）；车道几何吸附到车辆 NavMesh，越出道路走廊的段标记并告警 | P0 | P0b | V0.3 | M22-AC-033 | ADR-181、ADR-132 v1.3 |
-| M22-FR-075 | 车道图查询库：`lane_route(a, b) -> LaneRoute`（最短路，代价为长度除以限速）、`conflict_zones(intersection)`、`stop_line(lane)`；Python 实现为确定性 CPU 路径，M23 生成器的 JS 实现以 golden 逐位对拍 | P0 | P0b | V0.3 | M22-AC-033 | ADR-181 |
+| M22-FR-075 | 车道图查询库：`lane_route(a, b) -> LaneRoute`（最短路，代价为长度除以限速）、`conflict_zones(intersection)`、`stop_line(lane)`；Python 实现为确定性 CPU 路径，M23 生成器的 JS 实现以 golden 逐位对拍；v1.6："M23 生成器的 JS 实现以 golden 逐位对拍"一句由 ADR-196、ADR-197 取代（生成器为 Python 单一实现，不再有 JS 车道图实现） | P0 | P0b | V0.3 | M22-AC-033 | ADR-181 |
 | M22-FR-076 | `gaussian` 阶段的外观来源：图层元数据增加 `appearanceSource ∈ {aerial, mesh_distilled, generative}`（v1.2 增加 `mesh_distilled`）、生成或训练流程版本与参数 sha256；任何来源的图层只登记为外观层，不参与任何几何派生（raycast、grids、occupancy、NavMesh、碰撞）；`world.json` 的 `dataset.derivedFrom[]` 登记源网格、训练器与（生成式时）扩散模型及 Skyfall-GS 组件的版本与许可。v1.2：`generative` 图层只用于研究世界，发布到 dmax 世界目录与分发渠道的世界包遇到该来源时拒绝（601，`detail.why = appearance_generative_forbidden`）（ADR-187） | P0 | P0b（契约）；`mesh_distilled` 自 P1（方案 C1）或 P3；`generative` 只用于研究 | V0.3 | M22-AC-034、037 | ADR-186、ADR-187 |
 | M22-FR-077 | 外观层与网格的对齐验收（v1.2 按来源分档，AWR-05 §6.4.4 G-3DGS v2 的 G1）：`aerial` 残差中位数 ≤ 5 cm（与 FR-073 一致）、边缘 F 值 ≥ 0.80；`mesh_distilled` 与 `generative` 期望深度相对残差中位数中空（AGL 40–150 m）≤ 0.5%、低空（AGL 8–40 m）≤ 1.5%，中空边缘 F 值 ≥ 0.80、低空 ≥ 同瓦片产物 A 的 90%，`generative` 的残差另须 ≤ 同瓦片 `mesh_distilled` 的 1.1 倍；天空方向不透明度 > 0.5 的像素占比 ≤ 0.1%；不通过时不入包（601，`detail.why = appearance_alignment`）。v1.1 的"残差中位数 ≤ 5 cm 适用于全部来源"作废：首轮评估中网格派生外观的残差中位数为 0.18–0.25 m（相对 0.2–1.1%），该门限只对厘米级 GSD 的实拍重建有意义（r11 §7.5） | P0 | P1（方案 C1）或 P3 | V0.3 | M22-AC-034、036、037 | ADR-186、ADR-187 |
 | M22-FR-078 | town 配准独立交付：`register smalltown-01` 的 `registration.json` 在 P0a 发布并作为 `oryahovo-crop1` 的 `--frame-of` 参照；完整 town 世界包在 P0b 构建，构建时复用同一 `registration.json` | P0 | P0a | V0.3 | M22-AC-035 | ADR-175、R-D3-49 |
@@ -1831,7 +1848,7 @@ tests/d3/world/、tests/d3/quality/        # 本模块测试
 
 | 编号 | 优先级 | 阶段 | 度量与阈值 | 方法 | 环境 | D3-AC |
 |---|---|---|---|---|---|---|
-| M22-AC-033 | P0 | P0b | crop 车道图：OSM 道路走廊内车道段占比 ≥ 99%；转向连通与冲突区覆盖全部路口；`lane_route` 随机 500 对可达且 Python 与 JS 结果逐位一致；限速与停止线字段齐全 | `tests/d3/world/test_lanes.py` | 本机 | 33、62 |
+| M22-AC-033 | P0 | P0b | crop 车道图：OSM 道路走廊内车道段占比 ≥ 99%；转向连通与冲突区覆盖全部路口；`lane_route` 随机 500 对可达且 Python 与 JS 结果逐位一致；限速与停止线字段齐全；v1.6："Python 与 JS 结果逐位一致"由 ADR-196、ADR-197 取代（单一 Python 实现）；`lane_route` 随机 500 对从最大强连通分量中抽取（crop 上占车道长度的 97.3%）；W11 实测见 AWR-05 §26.3 第 27 行 | `tests/d3/world/test_lanes.py` | 本机 | 33、62 |
 | M22-AC-034 | P0 | P0b（契约）、P3 | 外观图层登记 `appearanceSource`（`aerial`、`mesh_distilled` 或 `generative`）且不改变 `raycast`、grids、occupancy、NavMesh 与碰撞文件的 sha256；对齐验收按 FR-077（v1.2 按来源分档）；许可登记齐全 | `tests/d3/world/test_gaussian_layer.py` | dmax | 41、64 |
 | M22-AC-035 | P0 | P0a | town `registration.json` 先于 crop 构建发布；crop 以共帧继承得到 20.935 m/单位（M22-AC-003）；P0b 构建 town 世界包时复用同一配准记录，`T_world_source` 逐位一致 | `tests/d3/world/test_frame_of.py` | dmax CPU 池 | 02 |
 

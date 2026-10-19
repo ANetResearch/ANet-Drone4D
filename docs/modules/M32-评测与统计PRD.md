@@ -1160,6 +1160,17 @@ CT 建立前，本表是 `board.v2` 统计字段的单一来源；LB §13 的治
 | D3-INV-19 | `subworker.process_one` 的提交结果：`lane_metrics` 以该提交的全部行（不经 `ranked_row` 过滤、含无效行）计算；`status = "valid" if valid >= 0.8 * len(rows) else "invalid"`，分母为全部行数；与 D3-INV-12 的比较方向互为补集、边界相同，但分母与计算行集不同；`runs.platform_rerun` 为平台原因重跑次数，失败的尝试不写入 `rows.jsonl` |
 | D3-INV-20 | `boardstore._listed`（输入前置条件，不属 `aggregate.py`）：保留全部基线行，以及每个（团队、分轨、赛道）中状态为 `DONE`、`visibility = board` 且 `(done_unix_ns, submission_id)` 最大的提交的行；`publish` 与 `compose_board` 在调用 `build_board`/`compose` 前施加；影子重算须复现该过滤（R-M32-72） |
 
+**`d3-score-1` 的差异（AWR-05 v1.6，B18）**：D3-INV-01 至 D3-INV-20 描述 `d3-score-0`，保持不变。榜单 v1（`configs/bench.d3/board-v1/board.json`，`score_version = d3-score-1`）与之相比的差异如下，影子重算与兼容移植按此分支实现：
+
+| 编号 | 差异 |
+|---|---|
+| D3-S1-01 | `_rng`：随机数为 `HMAC-SHA256(K_board, entry_id‖board_version‖lane)` 的前 8 字节，取代 D3-INV-03 的 `sha256` 前 8 字节；`K_board` 存于 EvalStore（`drone4d.bench.board_evalstore.v1`） |
+| D3-S1-02 | 分轨与赛道取自榜单配置，按配置中的次序排列，取代 D3-INV-15 由行的 `track` 排序生成 |
+| D3-S1-03 | 组内行按 `(event, seed, rep, run_id)` 排序后计算；行只携带种子序号 k ∈ [0, K)，携带种子值的行被拒绝 |
+| D3-S1-04 | 状态增加 `incomplete`：缺少任一 K × R 运行的条目不给名次与层级 |
+| D3-S1-05 | 条目增加 `display_order`，实现缺省显示次序 |
+| D3-S1-06 | `seed_set_commit` 取自锁文件（`drone4d.bench.board_lock.v1`，HMAC 承诺），取代 `sha256(seeds)` |
+
 ### 8.3 `drone4d-event@1` 在 `board.v2` 中的口径
 
 - D3 榜单继续以 `board.v1` 发布与冻结；`board.v2` 中的 `drone4d-event@1` 视图只用于影子重算与跨 Suite 浏览，不替换 `board.v1`。

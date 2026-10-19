@@ -2807,7 +2807,7 @@ def reap_idle(conns, cfg, now_ns):                         # show-api，每 10 s
 
 | 项 | 内容 |
 |---|---|
-| 进程 | `runtime.yaml` 以新层 `d3` 声明 `bench-api`（`python -m awr.api.bench_main`，入口文件归 M27）、`bench-scheduler`（`awr.bench.sched`）、`geosvc`（`awr.world.mesh.geosvc`，按需，每活跃世界一个，M22-FR-048）、`lab-gateway`（`awr.bench.rt_main`）、`rerun-proxy`（`awr.bench.rerun_proxy`）；入口模块随各工作包交付 |
+| 进程 | `runtime.yaml` 以新层 `d3` 声明 `bench-api`（`python -m awr.api.bench_main`，入口文件归 M27）、`bench-scheduler`（`awr.bench.sched`）、`geosvc`（`awr.world.mesh.geosvc`，按需，每活跃世界一个，M22-FR-048）、`lab-gateway`（`awr.bench.rt_main`）、`rerun-proxy`（`awr.bench.api.rerun_proxy`；AWR-05 v1.6，R05：单模块 `python/awr/bench/api/rerun_proxy.py`，取代 `awr.bench.rerun_proxy`）；入口模块随各工作包交付 |
 | profile | `d3: {procs_enable: [core, ext, dev, d3], defaults: {env: {AWR_D3_ENABLED: "1"}}}`；`config.py` 的 `LAYERS` 与层字面量增加 `d3` |
 | 部署 | dmax 上以 `d3-*` 容器运行（19 号文档 D3 增补，WP-D3-12）；本机 `d3` profile 用于开发 |
 | 缺省不变 | dev、demo、ci、perf、public、sandbox 六个 profile 的进程集合与环境不变，`AWR_D3_ENABLED` 不出现 |

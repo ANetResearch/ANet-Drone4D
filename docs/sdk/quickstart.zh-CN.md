@@ -9,6 +9,7 @@
 | 第 2 步至第 4 步（安装、编写、运行） | dmax，全新 `python:3.11-slim` 容器（amd64，`--network none`、`--cpus 2`、`--memory 8g`），离线 wheel 目录 | 容器启动到 3 机 60 s 高保真仿真回合结束，墙钟 49.4 s，其中 Env 回合墙钟 38.6 s |
 | 第 4.3 节（进程内运行） | dmax，d3-gz 镜像（Python 3.12，`--cpus 8`） | 同一回合墙钟 36.7 s，动作流 sha256 与第 4.2 节逐机相同 |
 | 第 5 节（快速仿真档） | 同第 4.2 节的研究者侧容器，平台侧以 FleetSim 运行 | 容器启动到 3 机 60 s 快速仿真回合结束，墙钟 47.6 s，其中 Env 回合墙钟 39.2 s |
+| 干净主机演练（ADR-202） | dmax，全新 `python:3.12-slim` 容器（amd64，2026-10-19） | 从容器启动起算 45.0–51.2 s（上限 900 s），记录见 `docs/impl/D3-SDK-上手演练记录.md` |
 
 实测日期 2026-10-18（UTC）。平台侧（第 4.1 节）先于研究者侧启动并等待接入。干净主机的正式演练按 ADR-202 在 dmax 全新 `python:3.12-slim` 容器中执行，记录在 `docs/impl/D3-SDK-上手演练记录.md`。
 
@@ -286,8 +287,12 @@ CMD ["python", "-m", "drone4d.serve", "plaza_watch:PlazaWatch"]
 
 在仓库根目录执行（输出写入 `var/sdk/dist/`，不在源码树中留下构建目录；需要 setuptools ≥ 77）：
 
+wheel 的字节依赖构建时的 `umask` 与源文件权限位，因此先设置 `umask 022` 并统一源目录权限；下列 sha256 在此条件下复现（2026-10-19 复核）。
+
 ```bash
+umask 022
 rm -rf var/sdk && mkdir -p var/sdk && cp -r tools/sdk/drone4d var/sdk/src
+chmod -R u=rwX,go=rX var/sdk/src
 SOURCE_DATE_EPOCH=1760745600 python -m pip wheel --no-deps --no-build-isolation -w var/sdk/dist var/sdk/src
 (cd var/sdk/src && SOURCE_DATE_EPOCH=1760745600 python -c "import setuptools.build_meta as b; b.build_sdist('../dist')")
 ls var/sdk/dist
@@ -297,7 +302,7 @@ sha256sum var/sdk/dist/*.whl
 ```text
 drone4d-0.2.0.dev0-py3-none-any.whl
 drone4d-0.2.0.dev0.tar.gz
-b8b54b301c2bf903d758dbed96a8017765d5c4b66feb4ffeca9a76cf7f2f778d  var/sdk/dist/drone4d-0.2.0.dev0-py3-none-any.whl
+b8e9ddd3c7a54da4e387505605f8a9f3e5345d47c2ebfd88c323503fbc000b9d  var/sdk/dist/drone4d-0.2.0.dev0-py3-none-any.whl
 ```
 
 wheel 为纯 Python（`py3-none-any`），包含全部模块、参考检测器权重与模型卡；固定 `SOURCE_DATE_EPOCH` 时两次构建的 wheel 逐字节相同；sdist 的 tar 成员保留文件时间戳，sha256 随复制时刻变化，不作逐字节比对。离线安装所用的 wheel 目录需包含 `drone4d` 与下列依赖（Python 3.11 的 numpy 取 2.4.6，numpy 2.5 起不再支持 Python 3.11）：

@@ -184,7 +184,7 @@
 | M23-FR-006 | 环境关键帧 `{t, wind_mps, wind_dir_deg, gust_sigma_mps, rain_mm_h, visibility_m, fog?, cloud?}` 与插值方式 `smooth`（缺省）、`step`、`linear`；按 §6.11 映射到 M07 EnvScalars 并编译为环境轨 | P0 | V0.3 | P0a | M23-AC-023 | AWR-05 §5.2.1；M07 §6.2.1 |
 | M23-FR-007 | 通信干扰区 `{id, polygon, t[from,to], extra_loss, extra_latency_ms, bandwidth_scale}` 原样进入规范头，由 M26 解释；多边形必须简单（不自交）、顶点 ≤ 64 | P0 | V0.3 | P0a | M23-AC-001 | AWR-05 §5.2.1、§5.5.5 |
 | M23-FR-008 | 注释 `{id, type, participants, window, params, salience, label_zh, label_en}` 与关系 `{src, rel ∈ before/after/during/overlaps/causes/enables, dst}`；注释类型按 §6.9.1 | P0 | V0.3 | P0a | M23-AC-015、016 | AWR-05 §5.2.1；r6 §6 |
-| M23-FR-009 | 任务简报段 `brief{public_anchors[], targets[{actor, description_zh, description_en}], task_area}` 编译为 `brief.json`（非真值）；简报只能引用作者标记为公开的锚点与外观描述，不得含时刻与路线 | P0 | V0.3 | P0a | M23-AC-035 | AWR-05 §5.5.4；§14 第 8 条 |
+| M23-FR-009 | 任务简报段 `brief{public_anchors[], targets[{actor, description_zh, description_en}], task_area}` 编译为 `brief.json`（非真值）；简报只能引用作者标记为公开的锚点与外观描述，不得含时刻与路线；v1.3（E08）：在 D3 封板范围内 `brief.json` 只为 `target_search` 生成（FR-083） | P0 | V0.3 | P0a | M23-AC-035 | AWR-05 §5.5.4；§14 第 8 条 |
 | M23-FR-010 | `interactive{reactions, replan_on_block, max_deviation_m, background}`：`mode = exogenous` 时只读取 `background`（混合模式开关），其余字段忽略；P2 之前 `mode = interactive` 或 `background = local_deviation` 返回 619 | P0 | V0.3 | P0a、P2 | M23-AC-032 | ADR-135 |
 | M23-FR-011 | 限额按 §6.16：脚本演员 ≤ 30、单路线路点 ≤ 64、时长 ≤ 3,600 s、磁带频率 10 Hz、DSL 文本 ≤ 1 MiB；超限返回 618 | P0 | V0.3 | P0a | M23-AC-002 | AWR-05 §5.2.5；M18 `MAX_PATH` |
 | **锚点** | | | | | | |
@@ -375,7 +375,7 @@ flowchart LR
 | `route` | array | — | 必填 | 1–64 个路点 | |
 | `route[].t` | number | s | 必填 | [0, duration_s] | **到达时刻** |
 | `route[].at` | string | — | 必填 | 锚点 id | |
-| `route[].do` | string | — | `pass` | `spawn`、`pass`、`wait`、`enter_building`、`exit_building`、`board`、`alight`、`despawn`、`pickup`（P1）、`drop`（P1） | |
+| `route[].do` | string | — | `pass` | `spawn`、`pass`、`wait`、`enter_building`、`exit_building`、`board`、`alight`、`despawn`、`pickup`（v1.3，E06：P0b）、`drop`（v1.3，E06：P0b） | v1.3（E06）：`pickup`、`drop` 的目标必须为 `object`，否则 611 `E-CARRY-TARGET`；先 `pickup` 后 `drop` 的次序不满足时 611 `E-CARRY-ORDER`；时刻或距离不可行时 612 `I-CARRY` |
 | `route[].dwell_s` | number | s | 0 | [0, duration_s] | 到达后停留 |
 | `route[].via` | string[] | — | `[]` | ≤ 8 个锚点 | 只约束路径 |
 | `route[].target` | string | — | 无 | 演员 id | `board`、`alight` 为车辆；`pickup`、`drop` 为 `object` |
@@ -387,11 +387,11 @@ flowchart LR
 
 | 类别 | 推进方式 | NavMesh profile | 允许动作 | 阶段 | 尺寸缺省（l × w × h，m） |
 |---|---|---|---|---|---|
-| `person` | 运动学 | person | 全部（`pickup`、`drop` 为 P1） | P0a | 0.5 × 0.3 × 1.75 |
+| `person` | 运动学 | person | 全部（`pickup`、`drop` 为 P0b，v1.3，E06） | P0a | 0.5 × 0.3 × 1.75 |
 | `vehicle` | 运动学；P1 起车道图 + IDM | vehicle（P0）；navgraph（P1） | `spawn`、`pass`、`wait`、`despawn` | P0a | 4.5 × 1.8 × 1.5 |
 | `dog` | 运动学 | person（半径按 0.3 m 腐蚀） | `spawn`、`pass`、`wait`、`despawn` | P0a | 0.9 × 0.3 × 0.6 |
 | `machine` | 静止 | 无 | `spawn`、`despawn` | P0a | 1.0 × 0.7 × 0.8 |
-| `object` | 静止；P1 起可被携带 | 无 | `spawn`、`despawn`；被 `pickup`、`drop` | P0a、P1 | 0.6 × 0.4 × 0.4 |
+| `object` | 静止；P0b 起可被携带（v1.3，E06） | 无 | `spawn`、`despawn`；被 `pickup`、`drop` | P0a、P1 | 0.6 × 0.4 × 0.4 |
 | `uav` | 三维直线段运动学 | 无 | `spawn`、`pass`、`wait`、`despawn` | P1 | 0.35 × 0.35 × 0.1 |
 
 尺寸缺省取自 `packages/contracts/target/class_defaults.json`；`dog` 只能使用 person profile 中经额外腐蚀仍连通的区域，否则门 2 返回不连通。
@@ -607,10 +607,17 @@ sequenceDiagram
 | 2 | `W-BG-DENSITY` | 告警 | 背景密度 > 0.5 人/m²（按 zone 可走面积） | — |
 | 3 | `S-MISMATCH` | 错误（strict）或告警 | 声明未被验证 | 613 |
 | 3 | `S-RELATION` | 错误（strict）或告警 | 时序关系不成立 | 613 |
-| 3 | `S-OFFMESH`、`S-ZGROUND`、`S-ARRIVAL`、`S-OVERLAP`、`S-CONTAINER` | 错误 | 一致性检查失败（§6.9.4） | 613 |
+| 3 | `S-OFFMESH`、`S-ZGROUND`、`S-ARRIVAL`、`S-OVERLAP`、`S-CONTAINER` | 错误 | 一致性检查失败（§6.9.4）；v1.3（E06）：`S-OVERLAP` 不计 `object` 类道具 | 613 |
 | 3 | `W-UNDECLARED` | 告警 | 发现未声明的显著事件（已写入真值） | — |
 | 3 | `W-BG-OVERLAP`（v1.3，E01） | 告警 | 背景演员与脚本演员间距 < 0.5 m：只计数并告警（背景避让属 D3-AC-29，P1，已按 ADR 移出封板）；`S-OVERLAP.bg_overlap_error = true` 时恢复为 `S-OVERLAP` 错误 | — |
 | 1 | `E-APPEARANCE`（v1.3，E05） | 错误 | 外观库引用或外观约束不满足；`detail.why` ∈ {`appearance_unresolved`、`appearance_class`、`appearance_override`、`appearance_gait`、`appearance_required`、`appearance_distance`、`appearance_hard_negative`、`appearance_similarity`} | 611 |
+| 1 | `E-TYPE`（v1.3，E07） | 错误 | 类型必备配置不满足；`detail.why = type_requirement`，`detail.rule` 区分条目（Re-ID：`target_count`、`target_class`、`distractor_count`、`distractor_class`、`occlusion_facilities`） | 611 |
+| 1 | `E-CARRY-TARGET`、`E-CARRY-ORDER`（v1.3，E06） | 错误 | `pickup`、`drop` 的目标不是 `object`；或携带次序不成立（未拾取即放下、重复拾取） | 611 |
+| 2 | `I-CARRY`（v1.3，E06） | 不可行 | 拾取或放下时持有者与物体的距离或时刻不可行 | 612 |
+| 3 | `S-TYPE`（v1.3，E07） | 错误（strict）或告警（lenient） | 类型验证器不通过（Re-ID：`why = occlusion_count \| target_missing`） | 613 |
+| 3 | `W-TYPE-ORACLE`（v1.3，E07） | 告警 | 无网格：Re-ID 遮挡只按磁带状态判定 | — |
+| 3 | `S-CARRY`、`S-HANDOVER`、`S-KEY-MEET`（v1.3，E06） | 错误（strict）或告警 | 携带语义、交接判据或关键 meet 不成立 | 613 |
+| 3 | `W-HANDOVER-OUTSIDE`、`W-NO-MEET`（v1.3，E06） | 告警 | 交接不在任何 meet 内；声明角色的事件中无 meet | — |
 
 ### 6.5 门 2：几何预检与自动排时
 
@@ -938,7 +945,7 @@ actor_states(t_ns, ids = 全部):
 | `zone_enter`、`zone_exit` | 任一脚本演员 | 进入或离开 zone（半径或多边形 + `buffer_m`，缺省 25 m） | 瞬时 | P0a | r6 §6.1 |
 | `zone_pass` | 任一脚本演员 | 在 zone 缓冲区内的可见区间，持续 ≥ 1 s | 持续区间 | P0a | r6 §6.1 |
 | `aerial_occlusion` | 脚本行人 | 躯干点（离地 1.0 m）向仰角 ≥ 25° 的 64 个等立体角方向发射射线，未被网格遮挡的比例（天空可见度）< `sky_vis_max`（0.35），持续 ≥ 3 s，1 Hz 采样 | 持续区间 | P0a | r6 §6.1 |
-| `object_handover` | 两名行人、物体 | 物体容器由一人变为另一人，转移时两人距离 < 2 m | 瞬时 | P1 | r6 schema |
+| `object_handover` | 两名行人、物体 | 物体容器由一人变为另一人，转移时两人距离 < 2 m；v1.3（E06）：可直接转移，也可经地面转移（放下到拾取 ≤ 10 s），释放帧与拾取帧两人距离均 < 2 m | 区间 [release, pickup]（直接转移时为瞬时） | P0b（v1.3，E06，原为 P1） | r6 schema |
 | `follow` | 两名脚本演员 | 跟随者与被跟随者距离 ∈ [2, 30] m、航向差 < 45°、持续 ≥ 20 s | 持续区间 | P1 | 本文设定 |
 | `loiter` | 脚本行人 | 60 s 内位移包络半径 < 15 m 且移动占比 > 50% | 持续区间 | P1 | 本文设定 |
 | `run` | 脚本行人 | 速度 > 2.5 m/s 持续 ≥ 3 s | 持续区间 | P1 | 本文设定 |
@@ -1004,7 +1011,7 @@ strict 且（任一 check 未验证 或 任一关系不成立 或 一致性失�
 
 #### 6.10.2 `event_graph.json`（`drone4d.event_graph.v1`）
 
-节点：实体 `{id, kind: "entity", class, scripted}`、事件 `{id, kind: "event", type, interval_ms, declared}`；边：`{src, rel: "participates_in", dst}` 与通过验证的关系边。OpenLABEL 映射（P3）：演员 → `objects`；区间事件 → `actions`（`frame_intervals` 按 10 Hz 帧号）；瞬时事件 → `events`；关系 → `relations`（`rdf_subjects`、`rdf_objects`）；`declared` 与 `salience` 写入 `attributes`。
+节点：实体 `{id, kind: "entity", class, scripted}`、事件 `{id, kind: "event", type, interval_ms, declared}`；边：`{src, rel: "participates_in", dst}` 与通过验证的关系边。OpenLABEL 映射（P3；v1.3，E06：事件级映射在 P0b 交付，实现 `python/awr/bench/export/openlabel.py`，以官方 OpenLABEL 1.0 JSON Schema 校验，schema 不入库；运行级数据集集成仍为 P3，M27-FR-071）：演员 → `objects`；区间事件 → `actions`（`frame_intervals` 按 10 Hz 帧号）；瞬时事件 → `events`；关系 → `relations`（`rdf_subjects`、`rdf_objects`）；`declared` 与 `salience` 写入 `attributes`。
 
 #### 6.10.3 `observability.npz`（参考相机 oracle）
 
@@ -1244,7 +1251,8 @@ COMPILING 的子阶段（`gate1`、`gate2`、`generating`、`packing`、`gate3`�
 | 3 | 背景停留 | 同上 |
 | 4–7 | 背景外观：4 预设、5 着色扰动（同一 64 位键分三段取 R、G、B）、6 身高、7 是否干扰者 | 0 |
 | 8 | 背景出生时刻相位（[0, 2] s 错开） | 0 |
-| 9–15 | 保留 | — |
+| 9–11 | `search`（v1.3，E08）：9 栅格单元选择、10 x 抖动、11 y 抖动 | 0 |
+| 12–15 | `search_wander`（v1.3，E08）：12 游走目标 x、13 游走目标 y、14 停留、15 保留 | 16·g + try（g 为第几个游走目标，try 为重试次数） |
 | 16–19 | Interactive：反应候选次序扰动、hide 候选平局裁决 | 第几次反应 |
 | 20–23 | 混合模式局部偏离：方向扰动、停留抖动 | 第几次偏离 |
 
@@ -1882,7 +1890,7 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 | `actors[].roles` | list | `target`、`distractor`、`participant`、`background_vehicle`；类型验证器据此确定参与者（v1.3，E05：已进入 `event.v1` schema） | P0b |
 | `actors[].thermal` | object | `{surface_temp_c?, emissivity?, profile?}`；缺省取 M25 `thermal_table_v1` 的类别值 | P0b |
 | `actors[].drive` | object | `{profile ∈ {urban, cautious, aggressive}, idm{v0_mps?, T_s?, s0_m?, a_mps2?, b_mps2?}, lane_route[]?}`；只对 `vehicle` | P0b |
-| `search` | object | `{target, prior{type: gmm \| grid, components[{anchor \| xy, sigma_m, weight}] \| grid_ref}, area_polygon, motion ∈ {static, wander(radius_m)}, window_s（缺省 60）}`；只对 `target_search` | P0b |
+| `search` | object | v1.3（E08）确切形状：`{target, prior{type: gmm \| grid, components[{anchor \| xy, sigma_m, weight = 1}] \| grid{origin_xy, cell_m, nx, ny, weights[ny·nx]（行主序）} \| grid_ref（相对事件目录的 JSON，编译时内联）}, area_polygon, motion ∈ {static, wander}, wander_radius_m（缺省 10，只对 person）, window_s（缺省 60，10–600）}`；目标的路线只引用保留锚点 `search_target`（`spawn`，可选 `despawn`）；只对 `target_search` | P0b |
 | `environment.keyframes[].air_temp_c`、`rh_pct` | number | 缺省 15 °C、60%；供热成像 | P0b |
 | `template`（事件模板文件） | object | `drone4d.event_template.v1`：基础 DSL 加参数域（锚点集合、时刻偏移、外观分配、先验样本），由 FR-080 展开为变体 | P0b |
 
@@ -1890,14 +1898,14 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 
 | 类型 | 门 1 必备配置检查 | 门 3 验证器与关键事件（`event_truth.json.key_events[]`） | 允许的 report 类型（写入 `bench/task.v1.report_types`） |
 |---|---|---|---|
-| `reid_occlusion` | 1 名 `target`、≥ 3 名 `distractor`，均有 `appearance_ref`；目标与每名干扰者的外观属性距离 ≥ 2 且至少共享 1 个属性（v1.3，E05：外观库规则 `reid_occlusion` 为 `min_distance` 2、`min_shared` 1）；目标路线经过 ≥ 2 处遮挡设施（建筑出入口对、树冠或廊下、上下车） | 以参考相机可观测性 oracle 判定遮挡区间（目标在全部参考视点中不可见且持续 ≥ 5 s）；每次遮挡结束产出 `target_reacquire`；另产出 `enter_building`、`exit_building`、`board`、`alight` | `reacquire`、`identity_link`、`enter_building`、`exit_building`、`board`、`alight` |
-| `rendezvous_handoff` | ≥ 2 名 `participant`；P0b 起至少 1 件 `object` 与 `pickup`/`drop` 动作 | `meet`（≥ 2 人间距 ≤ 2 m 持续 ≥ 5 s）、`handover`（物品容器在交汇窗口内由 A 变为 B）、`disperse`、`board`、`alight`、`enter_building`、关系边（`before`、`during`、`causes`） | `meet`、`handover`、`disperse`、`board`、`alight`、`enter_building`、`relation` |
+| `reid_occlusion` | 1 名 `target`、≥ 3 名 `distractor`，均有 `appearance_ref`；目标与每名干扰者的外观属性距离 ≥ 2 且至少共享 1 个属性（v1.3，E05：外观库规则 `reid_occlusion` 为 `min_distance` 2、`min_shared` 1）；目标路线经过 ≥ 2 处遮挡设施（建筑出入口对、树冠或廊下、上下车）；v1.3（E07）：遮挡设施按作者路线静态计数：建筑出入对（`enter_building` 紧接 `exit_building`）、同一车辆的 `board` 后接 `alight`、或引用 category ∈ {`poi:canopy`、`poi:tree_canopy`、`poi:arcade`、`poi:colonnade`、`poi:covered_walkway`、`poi:underpass`} 锚点的 `at`/`via` 路点（不计首个路点，连续引用同一锚点计一次） | 以参考相机可观测性 oracle 判定遮挡区间（目标在全部参考视点中不可见且持续 ≥ 5 s）；每次遮挡结束产出 `target_reacquire`；另产出 `enter_building`、`exit_building`、`board`、`alight`；v1.3（E07）：门 3 oracle 采用 §6.10.3 的 LOS 部分：视点为世界对齐的 10 m 网格 × {40, 70, 100} m（相对目标地面 z），水平 300 m 以内；身体 5 点；遮挡物为静态网格与 15 m 以内的可见车辆（定向包围盒）；按 20、60、150、300 m 环由近到远搜索。occluded = 状态 3 或 4，或状态 1 或 2 且全部视线被遮挡；一次遮挡两侧必须都有可见 tick；短于 `merge_gap_s` = 1 s 的可见间隙合并；`target_reacquire` 放在首个可见 tick。`key_events` 的 id 为 `<type>-<n>`；建筑与车辆的状态转移映射为 `enter_building`、`exit_building`、`board`、`alight`，带 `ref` 与 `declared`；`report_map`：`reacquire` 与 `identity_link` → `target_reacquire`，其余类型映射到同名事件 | `reacquire`、`identity_link`、`enter_building`、`exit_building`、`board`、`alight` |
+| `rendezvous_handoff` | ≥ 2 名 `participant`；P0b 起至少 1 件 `object` 与 `pickup`/`drop` 动作；v1.3（E06）：上述要求（`participant_count`、`participant_class`、`object_carry`）只适用于声明角色的 P0b 形态事件；P0a 的 `crop-handoff-001` 保持 M23-AC-037 的 P0a 规则 | `meet`（≥ 2 人间距 ≤ 2 m 持续 ≥ 5 s）、`handover`（物品容器在交汇窗口内由 A 变为 B）、`disperse`、`board`、`alight`、`enter_building`、关系边（`before`、`during`、`causes`）；v1.3（E06）：meet 为两两 ≤ 2 m 持续 ≥ 5 s，按共享成员且时间重叠传递合并；handover 见 §6.9.1，且须包含在给出者与接收者的一次 meet 内；disperse 为 meet 后 120 s 内首个全部参与者两两不共存（状态 1–3）或相距 ≥ 10 m 的帧，散开前再次相遇时 disperse 移到较晚的 meet；关键关系：handover 在 meet 期间（during）、meet 先于 disperse、meet 先于成员其后的 board、alight 与 enter_building、handover 导致接收者的下一次 board 或 enter_building（causes）；携带语义：持有者在车内时物体容器指向车辆，持有者在建筑内时物体为状态 4，放下后物体停在持有者放下帧的位置；`truth.v1` 增加可选 `key_events`、`key_relations`、`validator_params`、`report_map` 与证据的 `object`、`dist_m`、`gap_ms`，`event_graph.json` 写在真值旁 | `meet`、`handover`、`disperse`、`board`、`alight`、`enter_building`、`relation` |
 | `vehicle_track` | 1 辆 `target` 车辆、≥ 2 辆 `distractor` 车辆（外观相似：同类型或同色；v1.3，E05：写为外观库规则 `rules.vehicle_track`，即 `min_distance` 2、`min_shared` 1、`shared_any_of` [`body_type`, `body_color`]），全部车辆有 `drive` 且路线可在车道图上解析 | `depart`、`turn{intersection}`、`stop`、`park`、`enter_zone`、`exit_zone`、`target_reacquire`（车辆被建筑或其他车辆遮挡 ≥ 3 s 后重新可见） | `vehicle_event`、`identity_link` |
-| `target_search` | `search` 段完整；目标类别为 `person`、`vehicle` 或 `object`；先验支撑集与 `area_polygon` 相交面积 ≥ 90% | 目标实际位置由先验按事件种子抽样（流 19 的 `search` 通道，确定性）并写入磁带；把目标在场区间按 `window_s` 切分为关键事件 `target_window_k`（参与者为目标） | `found` |
+| `target_search` | `search` 段完整；目标类别为 `person`、`vehicle` 或 `object`；先验支撑集与 `area_polygon` 相交面积 ≥ 90% | 目标实际位置由先验按事件种子抽样（流 19 的 `search` 通道，确定性）并写入磁带；把目标在场区间按 `window_s` 切分为关键事件 `target_window_k`（参与者为目标）；v1.3（E08）：关键事件类型为 `target_window`，id 为 `target_window_<k>`，每个在场区间（状态 1 与 2）K = max(1, ⌈L/W⌉) 个窗口，最后一个窗口可短于 W；`target_present` 写入真值 `events[]`，`report_map` 为 `found` → `target_present`；抽样算法：1 m 世界对齐格点 ∩ 区域 ∩ 可行走面，31 位量化权重，以键 `(seed, 19, actor_no, 0, 9)` 做整数 CDF 反演，表的 sha256 写入 `plan.search.sample`；实际位置只出现在 `anchors.json`（`search_target`）、磁带与真值中；门 3 的 `S-TYPE` 检查项：`sample_position`、`sample_replay`、`static_motion`、`wander_radius`、`outside_area` | `found` |
 
 规则：
 1. 关键事件、参与者与区间全部由门 3 从磁带与网格计算，作者声明只作核对；验证器参数写入 `event_truth.json.validator_params` 并进入 `truth_sha256`。
-2. 目标搜索类的先验写入 `brief.json`；实际位置只在磁带与真值中（test 事件的磁带即真值）；简报泄漏扫描对实际位置坐标 0 命中。
+2. 目标搜索类的先验写入 `brief.json`；实际位置只在磁带与真值中（test 事件的磁带即真值）；简报泄漏扫描对实际位置坐标 0 命中。v1.3（E08）：关键事件、抽样算法与实际位置的存放见上表 `target_search` 行；`brief.json` 的先验位于 `search` 段（`brief.v1` 新增），任务契约 `prior.ref = "brief.json#/search/prior"`。
 3. 外观可区分性只用属性向量判定（门 1）；外观嵌入距离写入编译报告作为诊断。v1.3（E05）：`compile_report.json` 增加 `appearance` 段，含 `lib_id`、`lib_sha256`、`library` 统计（两两属性距离分布与嵌入距离）、`actors` 映射与 `pairs` 逐对结果；未使用外观库的事件该段为 null。
 4. `target_search` 另产出单个 `target_present` 事件（目标在场区间）作为 EU 的真值，`found` 报告与之匹配；其余类型的 report 到关键事件的映射见 AWR-05 §5.2.8 规则 5，映射表写入 `event_truth.json.report_map`。
 
@@ -1921,27 +1929,27 @@ WP-D3-05 合计 7.0 人周（E1 2.5、E2 1.5、E3 1.5、E5 1.5），与 AWR-05 �
 | 编号 | 需求描述 | 优先级 | 目标版本 | 阶段 | 验收要点 | 依据 |
 |---|---|---|---|---|---|---|
 | M23-FR-070 | `event_type` 字段与类型注册表：每个类型登记必备配置检查、验证器、关键事件定义、允许的 report 类型与简报生成器；未登记类型返回 611 | P0 | V0.3 | P0a（字段与 `rendezvous_handoff`）、P0b（其余三类） | M23-AC-037 | ADR-181 |
-| M23-FR-071 | 门 1 类型检查：按 §15.3 第 2 列校验，失败一次报出全部错误（611，`detail.why = type_requirement`） | P0 | V0.3 | P0b | M23-AC-037 | ADR-181 |
+| M23-FR-071 | 门 1 类型检查：按 §15.3 第 2 列校验，失败一次报出全部错误（611，`detail.why = type_requirement`）；v1.3（E07）：各类型以 `@requirement(event_type)` 在 `verify/registry.py` 登记门 1 检查，`dsl.gate1` 经 `type_issues` 调用（FR-070 的类型注册同此） | P0 | V0.3 | P0b | M23-AC-037 | ADR-181 |
 | M23-FR-072 | 外观引用与可区分性：`appearance_ref` 解析到 `appearance_lib@1`（无法解析时 611，`detail.why = appearance_unresolved`）；Re-ID 类事件的属性距离与难负样本约束不满足时返回 611 | P0 | V0.3 | P0b | M23-AC-038 | ADR-181 |
 | M23-FR-073 | Re-ID 验证器：以参考相机可观测性 oracle 计算遮挡区间并产出 `target_reacquire`；遮挡少于 2 处或均短于 5 s 时 strict 编译失败（613） | P0 | V0.3 | P0b | M23-AC-039 | ADR-181 |
 | M23-FR-074 | 交汇与交接验证器：`meet`、`handover`、`disperse` 与关系边；事件图增加 `handover` 节点与 `object` 实体 | P0 | V0.3 | P0b | M23-AC-039 | ADR-181 |
 | M23-FR-075 | 车辆追踪：车道图路线解析、IDM 跟驰、弯道限速、路口让行、`stop` 与 `park`；验证器产出 `turn`、`stop`、`park`、`enter_zone`、`exit_zone`、`target_reacquire` | P0 | V0.3 | P0b | M23-AC-040 | ADR-181、ADR-132 v1.3 |
-| M23-FR-076 | 目标搜索：先验解析（GMM 或栅格）、按事件种子确定性抽样实际位置、`motion = wander` 时以 DetourCrowd 在半径内游走；关键事件 `target_window_k`；`brief.json` 只含先验 | P0 | V0.3 | P0b | M23-AC-041 | ADR-181 |
+| M23-FR-076 | 目标搜索：先验解析（GMM 或栅格）、按事件种子确定性抽样实际位置、`motion = wander` 时在半径内游走（v1.3，E08：使用 NavGrid/Detour 路径而非 DetourCrowd，与 ADR-196 决策 (7) 一致）；关键事件 `target_window_k`；`brief.json` 只含先验 | P0 | V0.3 | P0b | M23-AC-041 | ADR-181 |
 | M23-FR-077 | 关键事件清单：`event_truth.json.key_events[]{id, type, participants, interval, window_s?, params}` 与 `validator_params`，供 M27 计分 | P0 | V0.3 | P0a（交汇与交接类）、P0b | M23-AC-039 | ADR-182 |
 | M23-FR-078 | report 类型白名单：按类型写入 `bench/task.v1.report_types`，M26 动作守卫据此校验 `report.type` | P0 | V0.3 | P0a、P0b | M23-AC-037 | ADR-181 |
 | M23-FR-079 | 热成像参数与 `tape.flags` 侧车：`actors[].thermal`、环境 `air_temp_c` 与 `rh_pct`、`engine_on` 与 `carrying_object` 标志 | P0 | V0.3 | P0b | M23-AC-042 | ADR-180 |
 | M23-FR-080 | 事件模板与 test 变体：`drone4d.event_template.v1` 按参数域确定性展开 N 个变体（变体 id 为参数 sha256 前 12 位），每个变体独立编译并由管理员登记为 dev 或 test（M27 `splits.json`）；同一模板的 dev 与 test 变体参数不重复 | P0 | V0.3 | P0b | M23-AC-043 | ADR-147 v1.3、ADR-181 |
 | M23-FR-081 | 首个固定事件 `crop-handoff-001`：`events/d3/handoff/crop-handoff-001.yaml`（r6 原型最终版加简报），strict 编译通过；磁带与真值进入 golden 与样例包 | P0 | V0.3 | P0a | M23-AC-037 | ADR-175 |
 | M23-FR-082 | 第一批事件集：四类各 ≥ 1 个 dev 与 ≥ 2 个 test 事件（crop）；dev 事件入 git（`events/d3/{reid,handoff,vehicle,search}/`），test 事件只存 `/data/d3/hidden/` | P0 | V0.3 | P0b | M23-AC-043 | ADR-181 |
-| M23-FR-083 | 简报内容：参考外观图（M25 渲染）与由属性向量生成的规范描述文本（中文与英文），目标搜索类附先验图层（PNG 与参数）；不得含演员 id、路线、时刻与实际位置 | P0 | V0.3 | P0b | M23-AC-041 | ADR-181、ADR-161 |
+| M23-FR-083 | 简报内容：参考外观图（M25 渲染）与由属性向量生成的规范描述文本（中文与英文），目标搜索类附先验图层（PNG 与参数）；不得含演员 id、路线、时刻与实际位置；v1.3（E08）：在 D3 封板范围内 `brief.json` 只为 `target_search` 生成，`brief.v1` 新增 `search` 段 | P0 | V0.3 | P0b | M23-AC-041 | ADR-181、ADR-161 |
 
 ### 15.7 新增验收
 
 | 编号 | 优先级 | 阶段 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
 |---|---|---|---|---|---|---|---|
-| M23-AC-037 | P0 | P0a、P0b | 类型注册与门 1 | P0a：`crop-handoff-001` 以 `event_type = rendezvous_handoff` strict 编译通过；P0b：四类各 1 个缺少必备配置的事件一次报出全部类型错误（611）；`report_types` 写入任务契约 | `tests/d3/events/test_types.py` | 本机 | 06、56、62 |
+| M23-AC-037 | P0 | P0a、P0b | 类型注册与门 1 | P0a：`crop-handoff-001` 以 `event_type = rendezvous_handoff` strict 编译通过；P0b：四类各 1 个缺少必备配置的事件一次报出全部类型错误（611）；`report_types` 写入任务契约 | `tests/d3/events/test_types.py`；v1.3（E06、E07、E08）：按类型分文件 `tests/d3/events/test_types_{reid,rendezvous,search,vehicle}.py`（Re-ID 部分在 `test_types_reid.py`） | 本机 | 06、56、62 |
 | M23-AC-038 | P0 | P0b | 外观可区分性 | 构造属性距离 1 的干扰者被拒绝；无法解析的外观引用返回 611（`appearance_unresolved`）；24 个外观两两属性距离统计写入编译报告 | `tests/d3/events/test_appearance.py` | 本机 | 62 |
-| M23-AC-039 | P0 | P0b | Re-ID 与交汇交接验证器 | 构造 2 处 6 s 遮挡的路线产出 2 个 `target_reacquire`；构造交接用例产出 `handover` 且物品容器转移与磁带一致；关系边与事件图一致 | `tests/d3/events/test_validators_types.py` | 本机 | 62 |
+| M23-AC-039 | P0 | P0b | Re-ID 与交汇交接验证器 | 构造 2 处 6 s 遮挡的路线产出 2 个 `target_reacquire`；构造交接用例产出 `handover` 且物品容器转移与磁带一致；关系边与事件图一致 | `tests/d3/events/test_types_reid.py`（Re-ID，v1.3，E07）、`tests/d3/events/test_types_rendezvous.py`（交汇与交接，v1.3，E06）；原写 `tests/d3/events/test_validators_types.py` | 本机 | 62 |
 | M23-AC-040 | P0 | P0b | 车辆追踪 | D3-AC-33 全部条款；`turn`、`stop`、`park` 关键事件与磁带一致；两台机器生成的 `content_sha256` 相同 | `tests/d3/events/test_vehicle.py` | 本机与 dmax | 33、62 |
 | M23-AC-041 | P0 | P0b | 目标搜索 | 同一事件种子两次抽样得到相同位置；不同 test 变体位置服从先验（1,000 次抽样的卡方检验 p ≥ 0.01）；`brief.json` 与任务契约中实际位置坐标检索 0 命中；60 s 窗口关键事件计数正确 | `tests/d3/events/test_search.py` | 本机 | 62、16 |
 | M23-AC-042 | P0 | P0b | 热成像参数与标志侧车 | `tape.flags` 中 `engine_on` 在行驶、停车 120 s 内与 `park` 后取值正确；侧车 sha256 写入规范头；缺省热参数与 M25 参数表版本一致 | `tests/d3/events/test_flags.py` | 本机 | 61 |

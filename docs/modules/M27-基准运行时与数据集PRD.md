@@ -128,7 +128,7 @@ v1.1 按 AWR-05 v1.3（ADR-174、ADR-175、ADR-182 至 ADR-184）重排；v1.0 �
 
 ### 2.3 路径所有权（M27）
 
-依据 AWR-05 §5.6.8 与 §12.2：`python/awr/bench/**`（含 `rt_main.py` 即 lab-gateway、`rerun_proxy/`）、`python/awr/api/bench_main.py`（所有权冲突见 §13 第 11 条）、`packages/contracts/bench/**`（起草，M00 合入）、`tools/deploy/dmax/images/{bench,livo}/**`、`configs/bench/**`（本文增补）、`tests/d3/{bench,slam,rerun,deploy,submit,publish}/**`（本文增补；`tests/d3/lab/**` 与 M15 按文件分属）。
+依据 AWR-05 §5.6.8 与 §12.2：`python/awr/bench/**`（含 `rt_main.py` 即 lab-gateway、`api/rerun_proxy.py`（v1.3，R05））、`python/awr/api/bench_main.py`（所有权冲突见 §13 第 11 条）、`packages/contracts/bench/**`（起草，M00 合入）、`tools/deploy/dmax/images/{bench,livo}/**`、`configs/bench/**`（本文增补）、`tests/d3/{bench,slam,rerun,deploy,submit,publish}/**`（本文增补；`tests/d3/lab/**` 与 M15 按文件分属）。
 
 ---
 
@@ -254,12 +254,12 @@ v1.1 按 AWR-05 v1.3（ADR-174、ADR-175、ADR-182 至 ADR-184）重排；v1.0 �
 | M27-FR-064 | 目录按"事件 → 真值 → 运行"三层（§7.6）；每个事件目录含 `index.json`（实验与 Run 列表、划分、指标摘要） | P0 | P0b | M27-AC-012 | §5.6.4；r6 §11.1 |
 | M27-FR-065 | `world_manifest.json` 由世界包派生：世界 id、`contentVersion`、尺度与坐标系、网格与 NavMesh sha256、`sensorHints`、`license`、`citation`、`derivedFrom[]`（含 OSM ODbL 与 SRTM） | P0 | P0b | M27-AC-012 | ADR-154 |
 | M27-FR-066 | 逐文件导出（`files`）：`derived/<uav>/rgb/<seq>.jpg`（存档字节原样）、`depth_log16/<seq>.png`（L2-depth）、`seg/{instance,semantic}/<seq>.png`（真值层，只在评测库或 dev 真值发布中）、`lidar/<seq>.bin`、`state.jsonl`（带噪导航解）、`messages.jsonl`、`actions.jsonl`、`reports.jsonl` | P0 | P0b | M27-AC-012 | §5.6.4 |
-| M27-FR-067 | `depth_log16`：`v = round(65534 · log10(d / 0.3) / 4)`，`d ∈ [0.3, 3000] m`；无回波、越界或无覆盖写哨兵 65535；可选 `depth_f32`；元数据写量化方式与相对步长 1.4e-4 | P0 | P0b | M27-AC-013 | §5.6.4 派生格式 |
+| M27-FR-067 | `depth_log16`：`v = round(65534 · log10(d / 0.3) / 4)`，`d ∈ [0.3, 3000] m`；无回波、越界或无覆盖写哨兵 65535；可选 `depth_f32`；元数据写量化方式与相对步长 1.4e-4；v1.3（B16）实现说明：NaN、inf 与 ≤ 0 计为无回波，(0, 0.3) 与 > 3000 m 计为越界，两者都写 65535；数值以 float64 的 `np.rint` 计算 | P0 | P0b | M27-AC-013 | §5.6.4 派生格式 |
 | M27-FR-068 | ROS bag 导出（`bag`）：ROS1 bag，Livox `CustomMsg` 全点流（每帧 20,000 点、无回波零占位）、`/livox/imu`（g 单位）、`/left_camera/image/compressed`；与 `slam_eval` 共用生成器（§6.7.7） | P0 | P0b | M27-AC-023 | §5.4.6 |
 | M27-FR-069 | 点云导出：每帧 PCD（二进制，字段 `x y z intensity tag offset_time`）或 PLY；世界系去畸变点云只来自真值层 | P1 | P0b | M27-AC-012 | §5.6.4 |
-| M27-FR-070 | LeRobot 导出：每个 `(run, uav)` 为一个 episode；`observation.images.<cam>`（由存档 JPEG 转码的 mp4）、`observation.state`（带噪导航解）、`action`（速度设定或航点）、`task`（简报文本）；格式版本在实施时锁定，以 `lerobot` 包 `LeRobotDataset` 回读测试为准 | P1 | P3 | M27-AC-031 | §5.6.4；r6 §11.3 |
-| M27-FR-071 | OpenLABEL 导出：由 `event_graph.json`、`event_truth.json` 与真值实例生成 ASAM OpenLABEL 1.0 JSON（objects、actions、events、relations、逐帧二维框），以官方 JSON Schema 校验 | P1 | P3 | M27-AC-031 | §5.2.6 |
-| M27-FR-072 | 导出清单 `export_manifest.json`：导出器版本、来源 `raw.mcap` sha256、每个文件 sha256、量化说明、许可与署名、生成工具声明 | P0 | P0b | M27-AC-012 | ADR-154 |
+| M27-FR-070 | LeRobot 导出：每个 `(run, uav)` 为一个 episode；`observation.images.<cam>`（由存档 JPEG 转码的 mp4）、`observation.state`（带噪导航解）、`action`（速度设定或航点）、`task`（简报文本）；格式版本在实施时锁定，以 `lerobot` 包 `LeRobotDataset` 回读测试为准；v1.3（B16）：请求 LeRobot 格式返回 689（`why = format_unavailable`，P3，ADR-194） | P1 | P3 | M27-AC-031 | §5.6.4；r6 §11.3 |
+| M27-FR-071 | OpenLABEL 导出：由 `event_graph.json`、`event_truth.json` 与真值实例生成 ASAM OpenLABEL 1.0 JSON（objects、actions、events、relations、逐帧二维框），以官方 JSON Schema 校验；v1.3（B16）：运行级请求返回 689（`why = format_unavailable`，P3，ADR-194）；v1.3（E06）：事件级导出器已在 P0b 交付（`python/awr/bench/export/openlabel.py`，以官方 schema 校验），运行级数据集集成仍为 P3（B32） | P1 | P3 | M27-AC-031 | §5.2.6 |
+| M27-FR-072 | 导出清单 `export_manifest.json`：导出器版本、来源 `raw.mcap` sha256、每个文件 sha256、量化说明、许可与署名、生成工具声明；v1.3（B16）清单字段：`exporter`、`generated_unix_ns`（唯一的非确定字段）、`source{raw_mcap_sha256, raw_mcap_bytes, frames_idx_sha256, truth_mcap_sha256, run_manifest_sha256, evaluation_sha256}`、`quantization`、`license`（取自世界清单，`modification` = "经修改（米制标定、调平、派生）"；缺少许可时返回 689 `license_incomplete`）、`generation`（仿真数据声明与工具清单）、`retention`、`counts`、`skipped` 与 `files[]`；契约 `drone4d.bench.export_manifest.v1` | P0 | P0b | M27-AC-012 | ADR-154 |
 | M27-FR-073 | 划分约束：test 划分的 Run 不得导出任何真值层文件到 `/data/d3/dataset/`；`export` 作业对 test Run 请求真值层返回 691 并审计。v1.3（B11）：评测运行指保留级别为 `ranked_eval` 或 `kind = submission` 的运行，导出返回 691，`detail.why = eval_run` | P0 | P0b | M27-AC-012 | ADR-147、D3-AC-18 |
 | M27-FR-074 | 导出确定性：同一 `raw.mcap`、真值文件与导出器版本，导出文件逐字节一致（`export_manifest.json` 的生成时刻字段除外） | P1 | P0b | M27-AC-038 | ADR-136 |
 
@@ -284,7 +284,7 @@ v1.1 按 AWR-05 v1.3（ADR-174、ADR-175、ADR-182 至 ADR-184）重排；v1.0 �
 | 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
 |---|---|---|---|---|---|
 | M27-FR-086 | Evaluator 输入：`raw.mcap`（观测、动作、消息、声明）、真值文件（实例、可见度、逐点实例、真值位姿、`det_id` 映射）、磁带与 `event_truth.json`、`observability.npz`、Run 规格与任务；输出 `evaluation.json`（`bench/evaluation.v1`，§7.4）与 `eval.rrd` | P0 | P0a | M27-AC-014 | ADR-150 |
-| M27-FR-087 | 识别谓词 `ident(u, p, k)`：L1 为投影高度 `h_px ≥ 16` 且身体 5 点 LOS 可见比例 ≥ 0.5；L2 为 TruthFrame `objects[]` 的 `h_px_unocc ≥ 16` 且 `visible_ratio ≥ 0.5`；阈值取自版本化阈值表 `eval_thresholds.v1`（P0 按 r6 口径冻结，P2 由 D3-AC-38 标定后经 ADR 修订） | P0 | P0a | M27-AC-014 | §5.6.5 |
+| M27-FR-087 | 识别谓词 `ident(u, p, k)`：L1 为投影高度 `h_px ≥ 16` 且身体 5 点 LOS 可见比例 ≥ 0.5；L2 为 TruthFrame `objects[]` 的 `h_px_unocc ≥ 16` 且 `visible_ratio ≥ 0.5`；阈值取自版本化阈值表 `eval_thresholds.v1`（P0 按 r6 口径冻结，P2 由 D3-AC-38 标定后经 ADR 修订）；v1.3（S18）：热成像行（`kind = thermal`）另要求 \|dT_app_k\| ≥ 1.0 K，`no_ring` 时不识别；三个阈值均含等号；同一机同一帧的多个传感器按机与帧合并，任一通过即计；实现 `python/awr/bench/eval/ident.py` | P0 | P0a | M27-AC-014 | §5.6.5 |
 | M27-FR-088 | EC 与 EC 覆盖按 §6.7.6；多人区间事件要求同一帧同时识别全部参与者；瞬时事件的覆盖窗口取事件前 2 s | P0 | P0a | M27-AC-014 | §5.6.5；r6 §12.4 |
 | M27-FR-089 | 只在可观测区计分：事件发生在 quality 层不完整区域，或参与者处于 `INSIDE` 状态的时段，不计入分母，在 `evaluation.json` 的 `excluded[]` 中单列原因 | P0 | P0a | M27-AC-020 | ADR-131、D3-AC-04 |
 | M27-FR-090 | AO：P0a 实现 AO_real v0（oracle 取 M23 `observability.npz` 参考相机，r6 口径）与 AO_pos；P1 实现 AO_real v1（oracle 按本 Run 机队相机与任务高度包络计算，§6.7.6），自 v1 起为排名口径；`evaluation.json` 记录 oracle 版本、相机模型、网格与高度档参数；不同相机配置不混排 | P0 | P0a（v0）、P1（v1） | M27-AC-014、018 | ADR-150；本文 §13 第 5 条 |
@@ -311,7 +311,7 @@ v1.1 按 AWR-05 v1.3（ADR-174、ADR-175、ADR-182 至 ADR-184）重排；v1.0 �
 | M27-FR-106 | `eval_sim`：轨迹指标（锚定漂移终点与最大、Umeyama 对齐 ATE、RPE100、终点姿态误差）与地图指标（到 GLB 网格的精度、对可观测参考点的完整度、F@0.1/0.2/0.5，锚定与对齐两种坐标，颜色 MAE 与 PSNR），算法见 §6.7.7 | P0 | P0b | M27-AC-024 | §5.6.5 SLAM 行；r1 §4.4 |
 | M27-FR-107 | L0 离线地图：以真值逐点位姿积分 LiDAR 点，稀疏 8³ 块哈希 log-odds，体素 0.25 m，深度上限 60 m，作业 `--memory 16g`，不做 TSDF；产出每机覆盖率、两两 Jaccard（0.5 m 表面体素）与合并覆盖率。v1.3 实现口径（B15，`python/awr/bench/eval/lidar_map.py`）：(a) log-odds 为 0.01 单位的 int16 定点（原写 float16），参数不变（hit +0.85、miss −0.40、截断 [−2.0, 3.5]、occupied ≥ 0.85），整数运算逐位确定；(b) 按帧更新（OctoMap `computeUpdate`）：每个体素每帧至多更新一次，hit 优先于 miss（原伪代码按射线累加），free 体素为从起点体素到终点体素（不含终点）的 Amanatides-Woo 序列；(c) `S_ref` 缺省为全机队建图所用命中点所在的 0.5 m 格，可传入网格采样的参照集；(d) 过滤：tag 低 2 位非零、零占位点与传感器系距离 > 60 m 的点丢弃；(e) 内存：地图预算缺省 8 GiB（池倍增峰值 ≤ 1.5 倍），超出时返回 684 `SLAM_JOB_FAILED` 并使地图失效 | P0 | P0b | M27-AC-025 | §5.5.6、D3-AC-15 |
 | M27-FR-108 | 分布报告：每机每模式按"种子 × 重复"报告 RPE100 的中位数、p10、p90 与最大值，ATE 与 F@0.2 同样给分布；单次运行的 RPE100 标量取段均值（r1 口径），另报段中位数 | P0 | P0b | M27-AC-024 | §5.4.6 RPE100 定义；本文 §13 第 10 条 |
-| M27-FR-109 | 对比视图制品：为 `/lab/runs/:rid/lidar` 生成 L0 地图与 FAST-LIVO2 地图的抽稀点云（ANET_Q16，按 D2 点预算阶梯）、到网格距离着色（0–0.5 m 截断）、裁剪网格引用与指标 JSON；Tier S 与 Tier B/A 两套 | P0 | P0b | M27-AC-025 | §7.5 |
+| M27-FR-109 | 对比视图制品：为 `/lab/runs/:rid/lidar` 生成 L0 地图与 FAST-LIVO2 地图的抽稀点云（ANET_Q16，按 D2 点预算阶梯）、到网格距离着色（0–0.5 m 截断）、裁剪网格引用与指标 JSON；Tier S 与 Tier B/A 两套；v1.3（F06）：制品契约 `drone4d.bench.lidar_compare.v1`（`derived/compare/metrics.json`），字段为 `origin`、`crop`、`eval_sim{err_cap_m 0.5, err_step_m 0.002}`、`runs[]{metrics, segments[]{s_m, rpe_pct, drift_m, at}, traj{gt, est}}`、`l0`（`fleet_report` 不变）、`layers[]{src, tier, kind, uav, mode, rep, path, n\|faces, bpp, cube_min, cube_size, err}`、`err_samples[]{layer, i, d_m}`、`ac14`；点图层为单节点 ANET_Q16 v1 载荷，`ext[0]` 为误差 u8（255 为无值）；GLB 为相对 `origin` 的局部 ENU，不做 Y-up 轴交换；Tier S 预算为 gt、l0、livo 合计 ≤ 150,000 点（D2 点预算阶梯的 Tier S 上限） | P0 | P0b | M27-AC-025 | §7.5 |
 | M27-FR-110 | 真机回归 `slam_regress`：每周与镜像变更时运行 MARS-LVIG HKisland03，ATE ≤ 1.2 m；失败时禁止新的 `slam_eval` 使用该镜像 | P1 | P0b | M27-AC-027 | ADR-143、D3-AC-14 |
 | M27-FR-111 | 产物：`derived/slam/<uav>/<mode>/r<rep>/` 下存 TUM 轨迹、抽稀地图、`metrics.json`、日志；bag 为 transient；元数据注明"轨迹与地图由 FAST-LIVO2（版本）生成" | P0 | P0b | M27-AC-034 | ADR-154 |
 | M27-FR-112 | SLAM 在环（可选）：在线运行时 FAST-LIVO2 容器经 ROS 桥消费本机传感器流，M27 只负责容器生命周期与资源；评测口径同离线 | P2 | P2 | — | §5.5.6 L1 轨道 |
@@ -494,7 +494,7 @@ flowchart TB
 | export、export_rrd | `python -m awr.bench.export`、`python -m awr.bench.recorder.rerun_export --from-mcap`（v1.3；原写 `python -m awr.bench.rerun.export_rrd`） | 作业容器，每分片 2 核、4 GB | §4.6、§6.7.8 |
 | slam_eval | `python -m awr.bench.slam.job` + `d3-livo` 容器 | CPU 池，按 §6.7.7 内存模型 | §4.9 |
 | catalog 服务 | Rerun OSS catalog（0.38.x） | 容器 `d3-catalog-eval`、`d3-catalog-dist`，内网 | 评测与分发两个 catalog |
-| rerun-proxy | `python -m awr.bench.rerun_proxy` | 容器 `d3-rerun-proxy` | 令牌与角色校验、转发 |
+| rerun-proxy | `python -m awr.bench.api.rerun_proxy`（v1.3，R05：单模块 `python/awr/bench/api/rerun_proxy.py`） | 容器 `d3-rerun-proxy` | 令牌与角色校验、转发 |
 | rerun-relay | `python -m awr.bench.rerun.relay` | 可选 | 实时旁路（有损） |
 | lab-gateway | `python -m awr.bench.rt_main` | 容器 `d3-lab-gateway` | D3 实时 topic 与作用域 |
 | publish_static、release、retention_gc、slam_regress | `python -m awr.bench.publish …`、`python -m awr.bench.store.retention` | 作业容器 | §4.12、§4.13、§4.5 |
@@ -1356,7 +1356,7 @@ def leaderboard(obs_level: str, evaluator_major: int) -> list[Row]:
 | 保留（Run） | `retention.run_days{transient, standard, failed}` | 14、180、14 | 天 | ADR-163 |
 | 保留（派生） | `retention.derived_days{transient, standard}` | 7、30 | 天 | ADR-163 |
 | 清理周期 | `retention.gc_period_s` | 3600 | s【墙钟】 | 本文设定 |
-| 识别阈值 | `eval_thresholds.v1{h_px, vis}` | 16、0.5 | px、— | §5.6.5 |
+| 识别阈值 | `eval_thresholds.v1{h_px, vis, dT_app_k}`（`dT_app_k` 为 v1.3，S18） | 16、0.5、1.0 | px、—、K | §5.6.5；热成像行另判 `dT_app_k`（FR-087） |
 | EC 窗口扩展 | `eval.ec_pad_s` | 2 | s | §5.6.5 |
 | EU 时间容差、IoU、膨胀 | `eval.eu{dt_s, iou, dilate_px}` | 15、0.3、3 | s、—、px | §5.6.5 |
 | AO 参数 | `eval.ao{q_px, window_s, grid_m, alt_step_m}` | 30、1、10、10 | px、s、m、m | §5.6.5 |
@@ -1445,7 +1445,8 @@ def leaderboard(obs_level: str, evaluator_major: int) -> list[Row]:
 | `known_targets` | 是否下发已知目标位置与禁入体（M20 语义） | 是（为 true 时随简报下发） |
 | `min_obs_level` | 允许的最低观测档 | 是 |
 | `altitude_envelope_agl_m[2]` | 任务高度包络，AO oracle 使用 | 是 |
-| `scored_event_types[]` | 计分的事件类型（如 `proximity_encounter`、`board_vehicle`、`enter_building`、`vehicle_pass`） | 否 |
+| `scored_event_types[]` | 计分的事件类型（如 `proximity_encounter`、`board_vehicle`、`enter_building`、`vehicle_pass`；v1.3，E08：target_search 含 `target_window`） | 否 |
+| `prior`（v1.3，E08，只对 target_search） | `prior.kind` 为 `region_weights`（gmm）或 `heatmap`（grid），`ref = "brief.json#/search/prior"`；`report_types = [found]` | 是 |
 | `safety{min_sep_person_m, min_sep_vehicle_m, no_fly[]}` | 安全规则 | 是（规则本身公开） |
 
 ### 7.3 运行清单 `run_manifest.json`
@@ -1497,6 +1498,7 @@ def leaderboard(obs_level: str, evaluator_major: int) -> list[Row]:
 | `/uav/{id}/camera/{name}/calib` | raw | `foxglove.CameraCalibration`（标称内参与 `dist`） | 静态 + 变焦变化时 | 观测 | `/fleet/<uav>/cam<k>/image`（Pinhole） |
 | `/uav/{id}/gimbal/{name}` | raw | `foxglove.FrameTransform`（带噪云台读数） | 50 Hz | 观测 | `/fleet/<uav>/cam<k>`（Transform3D） |
 | `/uav/{id}/lidar/{name}` | raw | `awr.sensor.lidar_frame.v2`（有效点 + `offset_time`） | 10 Hz | 观测（L2） | `/fleet/<uav>/lidar<k>` |
+| `/uav/{id}/thermal/{name}`（v1.3，S17） | raw | `foxglove.RawImage`（`encoding = 16UC1`，`data` 为 `ThermalObs.temp_ck` 原样：u16le 加一个 zstd level 3 帧；通道元数据 `codec = 16UC1`、`compression = zstd`、`unit = 0.01 K`、`therm_codec`）；`agc_jpeg` 预览为 `CompressedImage` | 传感器频率 | 观测（L2） | — |
 | `/uav/{id}/imu/{name}`、`/uav/{id}/gnss/{name}` | raw | msgpack（`ImuObs`、`GnssObs`，单位写入通道元数据） | 200 Hz / 10 Hz | 观测（L2） | `/fleet/<uav>/telemetry/*` |
 | `/uav/{id}/action`、`/uav/{id}/report` | raw | json（`bench/act.v1`） | 10 Hz / 事件 | 运行 | `/agents/<uav>/plan`（只在评测版面） |
 | `/net/records` | raw | json | 每次投递 | 运行 | `/eval/metrics/comm_*` |
@@ -1515,6 +1517,8 @@ def leaderboard(obs_level: str, evaluator_major: int) -> list[Row]:
 真值文件的通道只出现在 `truth/run_<id>.mcap`（test 划分在 `hidden/`），不得写入 `raw.mcap`。
 
 Env 运行的实际写入（v1.3，B03）：`raw.mcap` 已写相机 image 与 depth、lidar、imu、gnss、`obs/nav`、`obs/detections`（L1）、action、report 与 `net/records`；calib、gimbal、`/env`、`/run/status`、`/phys/tick_stats` 暂未写；真值文件新增 `/eval/hidden/vis/{uav}/{sensor}`（L2 可见度行，json）与 `/eval/hidden/contacts/{uav}`（json）；`/uav/{id}/state` 当前为 10 Hz、每 tick 末的 msgpack `awr.bench.TruthState.v1`，尚未达到 50 Hz `awr.DroneState64.v1`。真值层 `truth/l2.jsonl` 的行增加 `mask` 字段：可见实例掩膜裁剪到可见包围盒，行主序，packbits 后 zlib 再 base64（B01）。导出器把 imu 与 gnss 写到 `/fleet/<uav>/telemetry/<sensor_id>`（R01），`rec/mcap_channels.json` 的对应 `rrd_entity` 待 M00 修订。全部通道登记到 `packages/contracts/rec/mcap_channels.json`（扩展点 10，M27 起草、M00 合入）。
+
+v1.3（S17）：`RAW_TOPIC_PATTERNS` 包含 `/uav/*/thermal/*`；EnvRecorder 自动把 ThermalObs 写入该通道，`log_time = t_mid_ns`、`sequence = seq`。
 
 #### 7.5.2 元数据记录与附件
 
@@ -1564,6 +1568,18 @@ Env 运行的实际写入（v1.3，B03）：`raw.mcap` 已写相机 image 与 de
 /data/d3/evalstore/rrd/<event_id>/<run_id>/{truth.rrd, eval.rrd}    # 只在评测 catalog
 /data/d3/hidden/<event_id>/{event/, truth/}                          # test 真值，0700
 ```
+
+v1.3（B16）实现：入口为 `python/awr/bench/export/dataset.py`（`export_run`、`verify_export`、`artifact_items`；CLI `python -m awr.bench.export --run <id> | --run-dir DIR [--formats files,bag] [--layers obs,run,truth] [--event-dir DIR] [--no-strict-license] [--verify]`）。
+- 逐文件名补零到 6 位；同一架无人机有多个同类传感器时，传感器名成为子目录（`<uav>/rgb/<cam>/<seq>.jpg`），否则为 `<uav>/rgb/<seq>.jpg`。
+- bag 位于 `derived/bag/<uav>.bag`，以本节为准；AWR-05 §5.6.4 原写 `uav-01/bag/`，已与本节对齐。
+- `lidar/<seq>.bin` 为存档的 `awr.sensor.lidar_frame.v2` 消息字节。
+- `state.jsonl` 每行为 `{k, ...NavSolution}`；`messages.jsonl` 为存档的 `/net/records` JSON；`actions.jsonl` 与 `reports.jsonl` 每行另加 `uav` 与 `t_ns`。
+- dev 真值写入 `<event>/truth/run_<id>.mcap`；`event/` 下的磁带原样取自 `raw.mcap` 附件；同一事件 id 下磁带或世界清单不同时返回 689 `event_conflict`。
+- 测试 `tests/d3/bench/test_export.py`（13 个用例）；热成像 u16 由 B26 补充。
+
+#### 7.6.1 样例包 `drone4d.bench.sample_pack.v1`（v1.3，F04；B20 交付）
+
+样例包供内部工作区 `/lab/replay` 的样例包面板与公开样例目录选取运行，经 BN-75 `GET /samples` 列出（17 §18.8.7）。文档形状：`{schema, pack_id, generated_utc, event_id, event_version, world_id, board_version, samples[]{group, policy, run_id, sim_s, metrics{ec, eu, ao, ce}, files[]{kind ∈ {video, mcap, metrics, tape, manifest, slice}, path, bytes, sha256, uav?, cam?}}}`；`path` 为相对派生物目录的路径，文件经 BN-54 下载；不含种子。生成器由 B20 实现，前端解析在 `apps/web/src/ui/lab/replay/samplePack.ts`。
 
 v1.3 现状（B03）：Env 运行的真值文件当前位于 `<run_dir>/truth/run_<id>.mcap`，与本布局的 `<event>/truth/run_<id>.mcap` 不同，迁移或统一方式待定（AWR-05 §24.5 F-04）；`.attempts` 的 14 天清理不适用于 pinned 运行（"pinned 永不删除"优先）。
 
@@ -1623,6 +1639,8 @@ v1.3 现状（B03）：Env 运行的真值文件当前位于 `<run_dir>/truth/ru
   "files_sha256": "SHA256SUMS"
 }
 ```
+
+v1.3（F08）：契约已入库（`packages/contracts/bench/lab_static_index.v1.schema.json`），写入方为 `tools/deploy/emax/d3-public/labctl.py index`，解析方为 `apps/web/src/app/lab-public/staticIndex.ts`；`features.leaderboard` 与 `features.submit` 恒为 false；超过 64 MB 的制品以 `external`（`channel = modelscope`）给出。
 
 v1.3（R04）：底图须与切片共用 `recording_id = run_id` 才能在 Viewer 中合并，因此示例改为按 Run 的 `runs/<rid>/slices/basemap.rrd`；事件级底图只对单 Run 事件有效。v1.3（G02）：前端解析器另接受事件条目上的 `world_id`，以及视频与切片条目上的 `bytes`、`sha256`；公开站上 `features.leaderboard` 或 `features.submit` 为 true 的索引一律拒绝。
 
@@ -1685,7 +1703,7 @@ python -m awr.bench.publish release --set <name> --version X.Y.Z | check-release
 | 686 | `WRITE_BUDGET_EXCEEDED` | — | 写带宽已达预算，新作业暂缓准入 | Write bandwidth budget reached; admission is paused | 基线 |
 | 687 | `RECORDING_INTEGRITY_FAILED` | — | 录制完整性校验未通过 | Recording integrity verification failed | 建议 |
 | 688 | `EVALUATION_FAILED` | — | 评测作业失败，录制已保留 | Evaluation failed; the recording has been retained | 建议 |
-| 689 | `BENCH_EXPORT_FAILED` | — | 数据导出作业失败 | The export job failed | 建议 |
+| 689 | `BENCH_EXPORT_FAILED` | — | 数据导出作业失败 | The export job failed | 建议；v1.3（B16）使用的 `detail.why`：`format_unavailable`、`unknown_format`、`unknown_layer`、`run_manifest_missing`、`run_manifest_invalid`、`recording_missing`、`frames_idx_mismatch`、`license_incomplete`、`event_conflict`、`bag_inputs_missing`、`dataset_root_required`、`export_manifest_invalid`、`index_invalid` |
 | 690 | `PUBLIC_READ_ONLY` | 403 | 公开站为只读视图 | The public site is read-only | 基线 |
 | 691 | `TEST_SPLIT_ACCESS_DENIED` | 403 | 无权访问测试集数据 | Access to test split data is not permitted | 基线 |
 | 692 | `SUBMISSION_REJECTED` | 422 | 提交未通过边界或镜像检查 | The submission did not pass boundary or image checks | 基线 |
@@ -1754,7 +1772,7 @@ d3:
     bench-scheduler: {cmd: "python -m awr.bench.sched", container: d3-bench-sched, cpus: 1, memory: 2g,
                       mounts: ["/var/run/docker.sock", "/data/d3"]}
     lab-gateway:     {cmd: "python -m awr.bench.rt_main", container: d3-lab-gateway, cpus: 1, memory: 2g}
-    rerun-proxy:     {cmd: "python -m awr.bench.rerun_proxy", container: d3-rerun-proxy, cpus: 1, memory: 1g}
+    rerun-proxy:     {cmd: "python -m awr.bench.api.rerun_proxy", container: d3-rerun-proxy, cpus: 1, memory: 1g}
     rerun-relay:     {cmd: "python -m awr.bench.rerun.relay", container: d3-rerun-relay, cpus: 1, memory: 2g, optional: true}
     catalog-eval:    {image: d3-catalog, container: d3-catalog-eval, memory: 8g,
                       cmd: "python -m awr.bench.catalog serve --catalog eval --host <内网地址> --port <端口>"}   # v1.3（R03）；/data/d3 以相同绝对路径挂载
@@ -1811,9 +1829,10 @@ location /api/bench/ { return 404; }              # v1.1：一律 404，不再�
 | `python/awr/bench/submit/{model,intake,scan,hardening,suites,leaderboard,oidc,quota}.py` | §4.10、§4.11、§6.5、§6.7.11 |
 | `python/awr/bench/publish/{__main__,static_bundle,budget,sync,release,channel_modelscope,channel_hf,check_release}.py` | §4.12、§4.13、§6.7.9 |
 | `python/awr/bench/api/{app,deps,session,roles,routes_worlds,routes_events,routes_runs,routes_jobs,routes_datasets,routes_submissions,routes_public,ws_agents,openapi}.py` | §7.7；只由 bench-api 挂载 |
-| `python/awr/bench/rt_main.py`、`python/awr/bench/rerun_proxy/{__main__,app}.py` | lab-gateway、rerun-proxy |
+| `python/awr/bench/rt_main.py`、`python/awr/bench/api/rerun_proxy.py`（v1.3，R05：单模块，取代 `rerun_proxy/{__main__,app}.py`） | lab-gateway、rerun-proxy |
 | `python/awr/bench/{ctl,client}.py`、`python/awr/api/bench_main.py` | 运维 CLI、内部客户端、bench-api 入口 |
 | `packages/contracts/bench/{run_spec,run_manifest,evaluation,task,session,submission,lab_static_index}.v1.schema.json` | 起草，M00 合入 |
+| `packages/contracts/bench/{export_manifest,dataset_index}.v1.schema.json`（v1.3，B16） | `drone4d.bench.export_manifest.v1`（FR-072）与 `drone4d.bench.dataset_index.v1`（`index.json`，不含时间戳字段）；已入库 |
 | `configs/bench/{bench.yaml,gpu_calendar.yaml,public_catalog.yaml,eval_thresholds.v1.json}` | §6.8 |
 | `tools/deploy/dmax/images/{bench,livo}/**` | 镜像（`livo` 只含 Dockerfile、补丁与入口脚本） |
 | `tools/bench/d3/{batch_matrix,eval_perf,writer_throughput,fio_d3}.*` | 本模块 harness（所有权见 §13 第 11 条） |
@@ -1924,7 +1943,7 @@ M27 不修改任何 D2 文件。以下内容由 M27 起草，经所有者合入�
 | M27-AC-006 | 注入写入器背压（磁盘限速 20 MB/s）与 M25 背压（在途上限 1、延迟 50 ms）：丢帧 0，各通道消息数等于 Env 计数，`(uav, sensor, seq)` 集合与无背压运行相同；1 h 生产负载下 `writer_block_frac ≤ 1%`；单写入器持续 ≥ 150 MB/s | `tests/d3/bench/test_recorder.py`、`tools/bench/d3/writer_throughput.py` | dmax | 19、22 |
 | M27-AC-007 | `frames.idx` 大小 = 头 + 32 B × 记录数 + 32 B，不含帧数据，≤ `raw.mcap` 的 0.1%；任取 1,000 帧经 `frames.idx` 读出的字节 sha256 等于 M26 交付摘要；注入一帧摘要不符时 FINALIZING 失败（687） | `tests/d3/bench/test_frames_idx.py` | dmax | 19 |
 | M27-AC-008 | `raw.mcap` 中不存在真值通道（通道白名单检查）；真值文件独立存在；附件含磁带（sha256 与 `content_sha256` 对应的原始字节一致）、世界清单、`run_spec.json`（排名运行无种子）；Foxglove 通道可被 Rerun 0.38 MCAP 导入器与 Foxglove 读取 | `tests/d3/bench/test_recorder.py` | 本机 | 19 |
-| M27-AC-009 | 内部回放由磁带补出的演员与磁带位置差 ≤ 5 cm（每演员每秒抽样）；两个 Run 同步对比时同一 `t_sim_ns` 下观测帧时间戳差 ≤ 1 个帧周期；帧接口 p95 ≤ 100 ms（720p JPEG、热缓存） | `tests/d3/bench/test_replay_actors.py`（v1.3，B08；原登记 `test_tape_source.py`）、Playwright `lab/replay` | dmax、本机 Tier S | 19 |
+| M27-AC-009 | 内部回放由磁带补出的演员与磁带位置差 ≤ 5 cm（每演员每秒抽样）；两个 Run 同步对比时同一 `t_sim_ns` 下观测帧时间戳差 ≤ 1 个帧周期；帧接口 p95 ≤ 100 ms（720p JPEG、热缓存） | `tests/d3/bench/test_replay_actors.py`（v1.3，B08；原登记 `test_tape_source.py`）、Playwright `lab/replay`；`apps/web/tests/lab/replay.test.ts`（F04，16 个用例，Vitest 时间轴同步） | dmax、本机 Tier S | 19 |
 | M27-AC-010 | 以缩短时钟（测试配置 1 天 = 1 min）构造 transient、standard、pinned 与失败运行及各类派生物：到期即清理；pinned 不清理；被发布包引用者自动 pinned；来源清理时其非 pinned 派生物同时清理；`.rrd` 先注销后删除；审计完整；`--dry-run` 不删除 | `tests/d3/deploy/test_retention.py`（v1.3 按封板计划落位；原写 `tests/d3/bench/test_retention.py`） | 本机 | 22 |
 | M27-AC-011 | 模拟占用 ≥ 95% 时新 Run 保持 QUEUED、`blocked_by = storage` 并记录 685；80% 告警；1 h 生产负载下实测写速率 p95 ≤ `B_write`，超出 10% 时暂停准入并记录 686；存储账与 `du` 偏差 ≤ 1% | `tests/d3/deploy/test_quota.py`、运行清单审计 | dmax | 22 |
 | M27-AC-012 | 三层目录、`index.json`、`world_manifest.json`、`run_manifest.json`、`evaluation.json`、`export_manifest.json` 通过 schema 校验；`rgb/*.jpg` 与存档字节 sha256 相同；test 划分 Run 请求真值层导出返回 691，test 发布包不含 `truth/`；许可字段齐全 | `tests/d3/bench/test_export.py` | dmax | 18 |
@@ -1937,7 +1956,7 @@ M27 不修改任何 D2 文件。以下内容由 M27 起草，经所有者合入�
 | M27-AC-019 | CE 输出全部字段；每配置 ≥ 10 种子报告均值、标准差、n 与 95% 置信区间；样本数 < 10 的配置被标注且不上榜；实验报告含 EC 随 N 的边际收益曲线；与参考实现一致 | `tests/d3/bench/test_{ce,aggregate}.py` | dmax | 30 |
 | M27-AC-020 | 构造发生在网格洞内的事件，EC 分母剔除并在 `excluded[]` 单列；参与者 `INSIDE` 时段不计 | `tests/d3/quality/test_eval_exclusion.py` | dmax | 04 |
 | M27-AC-021 | 离线导出与在线写入（启用时）`rerun rrd compare` 逐实体一致；`application_id` 无点号、路径校验通过；`/fleet/<uav>` 为带噪导航解，真值位姿只在 `/truth/**`；分发 catalog 只含 `obs.*`、`agent.*`，在其上查询 `/truth/**` 返回 0 行；跨 3 个 Run 的位姿查询 ≤ 1 s；`rerun_version` 不一致时返回 694 与迁移提示；`public` 切片（3 机 10 s）≤ 64 MB、`basemap.rrd` ≤ 24 MB，合并后原生 Viewer 可打开并回放；`dataset` 档导出 ≥ 4 倍实时；派生物按保留期清理且先注销；Agent 层越界实体被丢弃 | `tests/d3/rerun/`、`tests/d3/rerun/test_online_vs_offline.py`（R02）、`tests/d3/rerun/test_public_slice.py`（R04） | dmax | 20 |
-| M27-AC-022 | 无令牌、过期令牌与研究者访问评测 catalog 均被拒绝（302、115）；`viewer_url` 令牌 10 min 过期；catalog 端口在 dmax 之外不可达；访问写审计 | `tests/d3/lab/test_rerun_proxy.py` | dmax | 16、51 |
+| M27-AC-022 | 无令牌、过期令牌与研究者访问评测 catalog 均被拒绝（302、115）；`viewer_url` 令牌 10 min 过期；catalog 端口在 dmax 之外不可达；访问写审计 | `tests/d3/rerun/test_proxy.py`（v1.3，R05；原写 `tests/d3/lab/test_rerun_proxy.py`） | dmax | 16、51 |
 | M27-AC-023 | 由 `raw.mcap` 生成的 bag：每帧 20,000 点、无回波零占位、`offset_time = i·5000 ns` 单调、`timebase` 为帧首、CustomMsg md5 正确、IMU 单位 g、相机来自 `slam_cam`；删除无回波点或 `offset_time` 重复的帧被拒绝（642）；`slam_cam` 通道标注 `agent_delivered = false` | `tests/d3/slam/test_{bagify,contract_gate}.py` | dmax CPU 池 | 13 |
 | M27-AC-024 | D3-AC-14 的区间（P-1 冻结值）在本作业 `metrics.json` 上判定；同一 bag 与轨迹上 RPE100 段均值与 r1 `eval_sim.py` 相对差 ≤ 1%；分布统计正确；3 机 × 360 s × 2 模式 × 3 重复在 16 核预算内 ≤ 25 min。v1.3（SL1）：`traj_metrics` 原型缺省 `stride_m = 1.0` 应改为 0（每个估计样本一个段起点，同 r1）：在 r1 `s2c_livo_a` 上 1 m 步进与 r1 相差 +2.4%，超出本条的 1%，逐样本起点只差 −0.32% | `slam_eval`、`tests/d3/slam/test_eval_sim.py` | dmax CPU 池 | 14 |
 | M27-AC-025 | 3 架机各 ≥ 60 s：每机 L0 地图在 `--memory 16g` 内完成；两两 Jaccard ≤ 0.3；覆盖率与合并覆盖率输出；Tier S 对比点云不超过 D2 点预算阶梯；到网格距离着色与 `eval_sim` 抽样 1 万点差 ≤ 1 mm | `tests/d3/slam/test_multi_uav.py` | dmax | 15 |
@@ -2096,7 +2115,7 @@ M27 不修改任何 D2 文件。以下内容由 M27 起草，经所有者合入�
 | M27-FR-163 | （v1.2 由 M27-FR-178、FR-181 取代：逐项聚合到赛道，`weights = null`，合成接口保留，见 §15）合成与聚合：`S(r) = 100 · Σ w_k m_k`，权重取 `score_version`（`d3-score-0` 与 `d3-score-1` 缺省 0.35、0.25、0.20、0.20）；事件级、类型级、分轨级三级等权平均；95% 置信区间以两阶段分层自助法（事件内对种子、种子内对重复有放回重采样，10,000 次）计算，重采样随机数以 `HMAC(K_board, entry_id ‖ board_version)` 派生，结果逐字节可复现 | P0 | P0a | M27-AC-044、045 | ADR-182 |
 | M27-FR-164 | 分轨与榜单版本：`bench/board.v1` 定义分轨（机队、观测档、物理档、事件模式、智能体类别、外观层）与榜单版本（分轨集合、`score_version`、test 划分版本、`seed_set_commit`、评测器主版本、平台镜像摘要、GPU 型号与 CPU ISA 等级）；任一项变更即新版本，旧版本只读归档 | P0 | P0a（原型）、P0b（v1） | M27-AC-046 | ADR-182 |
 | M27-FR-165 | （v1.2 由 M27-FR-179、FR-180、FR-182 取代：逐项名次、非支配层级与代表条目，见 §15）排序与平局：按 S 点估计降序；相邻条目按配对自助法计算 ΔS 的 95% 区间，含 0 者归入同一并列组并显示同一名次；组内显示次序依次比较 EC、EU、AO、`f_res` 均值与首次上榜时刻；无效 Run 占比 > 20% 的条目标注"无效"且不排名；同一团队同一分轨只显示最高分条目；基线为参考行不占名次 | P0 | P0a | M27-AC-045 | ADR-182 |
-| M27-FR-166 | 秘密种子集：每个榜单版本为每个 test 事件以 CSPRNG 生成 K 个种子（v1：K = 5；原型榜：单事件 K = 10），只存 EvalStore，清单与榜单只含 `seed_set_commit`；同一版本内全部条目使用同一种子集 | P0 | P0a | M27-AC-046 | ADR-161、ADR-182 |
+| M27-FR-166 | 秘密种子集：每个榜单版本为每个 test 事件以 CSPRNG 生成 K 个种子（v1：K = 5；原型榜：单事件 K = 10），只存 EvalStore，清单与榜单只含 `seed_set_commit`；同一版本内全部条目使用同一种子集；v1.3（B18）：v1 的种子存储按榜单版本存放于 EvalStore（`drone4d.bench.board_evalstore.v1`），以 (赛道, test 事件) 为键 | P0 | P0a | M27-AC-046 | ADR-161、ADR-182 |
 | M27-FR-176 | 类型化关键事件：Evaluator 从 M23 `event_truth.json` 读取按事件类型产出的关键事件与 report 类型（Re-ID 的 `target_reacquire`、交汇与交接的关系边、车辆追踪的 `turn`/`stop`/`park`、目标搜索的 60 s 窗口），热成像帧的识别另要求 `\|dT_app_k\| ≥ 1 K`；EU 按 `event_truth.json.report_map` 把 report 映射到真值事件后匹配（目标搜索类以单个 `target_present` 事件为 EU 真值） | P0 | P0b | M27-AC-050 | ADR-180、ADR-181 |
 
 ### 14.5 内部提交与受邀成员（AWR-05 §5.6.7、ADR-183）
@@ -2104,7 +2123,7 @@ M27 不修改任何 D2 文件。以下内容由 M27 起草，经所有者合入�
 | 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
 |---|---|---|---|---|---|
 | M27-FR-167 | 提交流水线：`RECEIVED → SCANNING → VALIDATING → EVALUATING → SCORING → DONE`，失败分支 `REJECTED`（扫描或冒烟不通过，退还配额）、`FAILED`（平台故障且重跑失败，退还配额）、`WITHDRAWN`（RECEIVED 至 EVALUATING 前撤回）；DONE 后提交者可设 `visibility ∈ {private, board}`。v1.3（B14）：SCANNING 为 inspect（≤ 4 GB、linux/amd64）加 Trivy；领取前做扫描器自检，不可用时提交保持 RECEIVED；非开发榜在扫描前做轮次配置准入，返回 633 或 682；扫描记录写入 `submissions/<id>/scan.json`；扫描在 `d3-trivy:dev` 隔离容器中以 `docker save` 加 `trivy image --input` 执行，扫描器故障重试 1 次后判 FAILED 320（失败关闭）。v1.3（B12）：撤回在读取时立即生效；每个榜单版本有 `listing.json`（`entry_id → submission_id`），对账函数 `boardstore.delist_withdrawn` 重新发布当前版本，旧版本保持只读并在读取时隐藏；24 h 上限为 `WITHDRAW_SLA_S = 86400`；排名榜的配置物理档必须为 realistic（缺省即 realistic），声明其他物理档或 `lockstep = false` 的行由 `append_rows` 拒绝并在发布时剔除，`BoardPhysicsError` 是 `BoardVersionError` 的子类 | P0 | P0a | M27-AC-047 | ADR-183 |
-| M27-FR-168 | 受邀成员：`invited` 角色，token 绑定团队、有效期 ≤ 90 天；可调用的接口限于会话、dev 事件与世界只读、提交、本团队提交与排行榜读取（BN-82、83、84、85、95、96、97、98、99）；其余返回 403 `115` 并审计；撤销后会话与推送令牌 ≤ 2 s 失效 | P0 | P0b | M27-AC-048 | ADR-183 |
+| M27-FR-168 | 受邀成员：`invited` 角色，token 绑定团队、有效期 ≤ 90 天；可调用的接口限于会话、dev 事件与世界只读、提交、本团队提交与排行榜读取（BN-82、83、84、85、95、96、97、98、99）；其余返回 403 `115` 并审计；撤销后会话与推送令牌 ≤ 2 s 失效；v1.3（B13）：受邀令牌有效期缺省且上限为 90 天（`INVITED_TOKEN_MAX_S`） | P0 | P0b | M27-AC-048 | ADR-183 |
 | M27-FR-169 | 配额：以"正式提交"计量；受邀成员每团队每周 ≤ 2 次、内部成员每人每周 ≤ 5 次；冒烟验证每人每日 ≤ 10 次；每团队每周 GPU 时间 ≤ 40 GPU·h；同时排队 ≤ 2 个；超额 681 | P0 | P0a（内部）、P0b（受邀） | M27-AC-048 | Q-D3-09 |
 | M27-FR-170 | 正式评测的容器约束：沿用 FR-130 的加固；每步墙钟预算 L2 分轨 0.5 s、L1 分轨 0.25 s；单 Run 墙钟上限 `10 × duration_s + 600 s`（超限 693）；Agent 容器 `std` 资源档 | P0 | P0a（基础隔离）、P0b（gVisor 或 seccomp 加固） | M27-AC-048 | ADR-164、ADR-183 |
 | M27-FR-175 | 排行榜接口（v1.2 按 §15.4 修订：按赛道返回四项指标与区间、逐项名次与层级，不含合成值）：BN-83（榜单版本与分轨）、BN-97（条目列表，含 S、置信区间、分量、并列组、基线参考行）、BN-84（条目详情：按事件类型与事件的分解、`repeat_delta`、无效 Run 计数），最低角色 `invited`；不提供匿名访问；排行榜快照导出只对管理员（Q-D3-16） | P0 | P0a | M27-AC-046 | ADR-183、ADR-184 |
@@ -2180,7 +2199,7 @@ class LaneResult:
     metrics: dict[str, MetricStat]      # 键："ec"、"eu"、"ao"、"ce"（|U| = 1 的分轨无 "ce"）
     dominance_tier: int | None          # 非支配层级（1 起）；无效或基线为 None
     runs: RunCounts                     # total、valid、invalid、platform_rerun
-    status: Literal["listed", "invalid", "incomplete"]
+    status: Literal["listed", "invalid", "incomplete"]   # v1.3（B18）：与 board.v1 一致；缺少任一 K × R 运行为 incomplete
     composite: CompositeStat | None     # 评分版本 weights = null 时恒为 None
 
 @dataclass(frozen=True)
@@ -2228,7 +2247,8 @@ class BoardVersion:                     # bench/board.v1
 
 | 接口或页面 | v1.2 规定 |
 |---|---|
-| BN-83 `GET /board` | 返回榜单版本、分轨与赛道定义、`score_version`（`weights` 为 null 时显示"合成主得分待定"）、种子集承诺与平台摘要 |
+| BN-83 `GET /board` | 返回榜单版本、分轨与赛道定义、`score_version`（`weights` 为 null 时显示"合成主得分待定"）、种子集承诺与平台摘要；v1.3（B18）：`score_version` 取自 `board.json`（旧版本缺省 `d3-score-0`） |
+| 排队提交与榜单版本（v1.3，B18，先行生效，待封板前用户确认，AWR-05 §23.5 C-21） | 领取时提交所登记的榜单版本已不是当前版本：若 `aggregate.admits(当前版本, track, lanes)` 返回 None，则迁移到当前版本、以当前种子集评测并审计迁移；否则 REJECTED 680 `board_frozen` 并退还配额；已冻结版本不再接收新行 |
 | BN-97 `GET /leaderboard?track=&lane=&board_version=` | 按"分轨 × 赛道"返回条目：四项 `MetricStat`、`dominance_tier`、运行计数、状态、基线参考行；缺省 `lane` 时返回该分轨全部赛道；不含逐种子结果、种子与合成值 |
 | BN-84 `GET /board/{track}/entries/{entry_id}` | 条目详情：各赛道四项指标与区间、按 test 事件分解的指标、`repeat_delta`、无效 Run 原因分布、镜像摘要与评测器版本 |
 | BN-95、BN-96 | 提交请求增加可选 `lanes[]`（缺省全部赛道）；结果按赛道返回四项指标与区间，不含合成值 |

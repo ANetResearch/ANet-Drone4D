@@ -9,6 +9,7 @@ In about 15 minutes you install the `drone4d` SDK, write an example agent, run a
 | Steps 2 to 4 (install, write, run) | dmax, a fresh `python:3.11-slim` container (amd64, `--network none`, `--cpus 2`, `--memory 8g`), offline wheel directory | From container start to the end of the 3-drone 60 s high-fidelity episode: 49.4 s wall clock, of which the Env episode took 38.6 s |
 | Section 4.3 (in-process run) | dmax, d3-gz image (Python 3.12, `--cpus 8`) | The same episode took 36.7 s wall clock; the per-drone action stream sha256 equals section 4.2 |
 | Section 5 (fast simulation tier) | The researcher-side container from section 4.2; the platform side runs FleetSim | From container start to the end of the 3-drone 60 s fast simulation episode: 47.6 s wall clock, of which the Env episode took 39.2 s |
+| Clean-host drill (ADR-202) | dmax, a fresh `python:3.12-slim` container (amd64, 2026-10-19) | 45.0 to 51.2 s from container start (limit 900 s); recorded in `docs/impl/D3-SDK-上手演练记录.md` |
 
 Measured on 2026-10-18 (UTC). The platform side (section 4.1) was started first and waited for the agents. The formal clean-host drill runs in a fresh `python:3.12-slim` container on dmax under ADR-202 and is recorded in `docs/impl/D3-SDK-上手演练记录.md`.
 
@@ -286,8 +287,12 @@ See `tools/bench/d3/examples/close_track/` for a complete example. The `drone4d`
 
 Run from the repository root (the output goes to `var/sdk/dist/` and no build directory is left in the source tree; setuptools 77 or later is required):
 
+The wheel bytes depend on the build-time `umask` and on the permission bits of the source files, so set `umask 022` and normalise the source permissions first; the sha256 below reproduces under these conditions (verified on 2026-10-19).
+
 ```bash
+umask 022
 rm -rf var/sdk && mkdir -p var/sdk && cp -r tools/sdk/drone4d var/sdk/src
+chmod -R u=rwX,go=rX var/sdk/src
 SOURCE_DATE_EPOCH=1760745600 python -m pip wheel --no-deps --no-build-isolation -w var/sdk/dist var/sdk/src
 (cd var/sdk/src && SOURCE_DATE_EPOCH=1760745600 python -c "import setuptools.build_meta as b; b.build_sdist('../dist')")
 ls var/sdk/dist
@@ -297,7 +302,7 @@ sha256sum var/sdk/dist/*.whl
 ```text
 drone4d-0.2.0.dev0-py3-none-any.whl
 drone4d-0.2.0.dev0.tar.gz
-b8b54b301c2bf903d758dbed96a8017765d5c4b66feb4ffeca9a76cf7f2f778d  var/sdk/dist/drone4d-0.2.0.dev0-py3-none-any.whl
+b8e9ddd3c7a54da4e387505605f8a9f3e5345d47c2ebfd88c323503fbc000b9d  var/sdk/dist/drone4d-0.2.0.dev0-py3-none-any.whl
 ```
 
 The wheel is pure Python (`py3-none-any`) and contains all modules, the reference detector weights and the model card; with a fixed `SOURCE_DATE_EPOCH`, two builds produce byte-identical wheels. The sdist keeps file timestamps in its tar members, so its sha256 changes with the copy time and is not compared byte by byte. A wheel directory for offline installation needs `drone4d` and the following dependencies (numpy 2.4.6 for Python 3.11, since numpy 2.5 no longer supports Python 3.11):
