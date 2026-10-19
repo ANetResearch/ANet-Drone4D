@@ -20,7 +20,7 @@
 `raw.mcap`（M27 §7.5.1、§7.5.2）：写入发生在观测交付时（`on_obs`），存档的正是 Agent 收到的字节：
 
 - `/uav/{id}/camera/{name}/image`（`foxglove.CompressedImage`，JPEG 原样）、`/depth`（L2-depth，`foxglove.RawImage` 32FC1，bshuf4-zstd
-  无损）、`/uav/{id}/lidar/{name}`（`awr.sensor.lidar_frame.v2`，由 LidarObs 的 xyz、offset_time、reflectivity、tag 无损重排）、
+  无损）、`/uav/{id}/thermal/{name}`（`foxglove.RawImage` 16UC1，ThermalObs `temp_ck` 的 u16 + zstd 字节原样）、`/uav/{id}/lidar/{name}`（`awr.sensor.lidar_frame.v2`，由 LidarObs 的 xyz、offset_time、reflectivity、tag 无损重排）、
   `/uav/{id}/imu/{name}`、`/uav/{id}/gnss/{name}`（msgpack，交付对象原样）；
 - `/uav/{id}/obs/nav`（msgpack）、`/uav/{id}/obs/detections`（L1，json）、`/uav/{id}/action`、`/uav/{id}/report`、`/net/records`（json）；
 - Metadata `run`（run_id、config_sha256、spec_sha256、run_hash、排名运行的 seed_commit）、`run.wall`、`channels.units`；
@@ -53,7 +53,8 @@ __all__ = ["RAW_TOPIC_PATTERNS", "TRUTH_TOPIC_PATTERNS", "EnvRecorder", "Recorde
 TICK_NS = 100_000_000
 FRAME_PERIOD_NS = 100_000_000                                 # L2 相机与 LiDAR 均为 10 Hz（env.l2）
 # 通道白名单（M27-AC-008）：raw.mcap 只含观测与运行层，真值通道只在 truth/run_<id>.mcap
-RAW_TOPIC_PATTERNS = (r"^/uav/[^/]+/camera/[A-Za-z0-9_]+/(image|depth)$", r"^/uav/[^/]+/lidar/[A-Za-z0-9_]+$", r"^/uav/[^/]+/imu/[A-Za-z0-9_]+$",
+RAW_TOPIC_PATTERNS = (r"^/uav/[^/]+/camera/[A-Za-z0-9_]+/(image|depth)$", r"^/uav/[^/]+/thermal/[A-Za-z0-9_]+$", r"^/uav/[^/]+/lidar/[A-Za-z0-9_]+$",
+                      r"^/uav/[^/]+/imu/[A-Za-z0-9_]+$",
                       r"^/uav/[^/]+/gnss/[A-Za-z0-9_]+$", r"^/uav/[^/]+/obs/[A-Za-z0-9_]+$", r"^/uav/[^/]+/(action|report)$", r"^/net/records$")
 TRUTH_TOPIC_PATTERNS = (r"^/uav/[^/]+/state$", r"^/eval/hidden/.+$")
 _SEED_KEYS = frozenset({"seed", "seeds", "seed_count"})
@@ -204,6 +205,10 @@ class EnvRecorder:
             for kind in ("image",) + (("depth",) if depth is not None else ()):
                 t = camera_topic(uav, sid, kind)
                 c[t] = c.get(t, 0) + 1
+        elif "temp_ck" in f:                                    # ThermalObs：temp_ck 交付字节原样存档（S17，D3-AC-61）
+            from awr.bench.recorder.channels import thermal_topic
+
+            self._emit("raw", thermal_topic(uav, sid), RunWriter.write_thermal, uav, sid, f, period_ns=FRAME_PERIOD_NS)
         elif "xyz_m" in f:
             from awr.bench.recorder.lidar import LIDAR_RECORD
 

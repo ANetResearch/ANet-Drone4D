@@ -222,6 +222,23 @@ class RunWriter:
 
             self._submit(job_depth, int(np.asarray(depth).nbytes), t_ns)
 
+    def write_thermal(self, uav: str, name: str, obs: dict, *, period_ns: int | None = None, agent_delivered: bool = True) -> None:
+        """ThermalObs → `/uav/{id}/thermal/{name}`（`foxglove.RawImage` 16UC1，data 为 `temp_ck` 交付字节原样；见 `channels`），
+        log_time = `t_mid_ns`，sequence = seq。调用方线程打包：校验载荷长度并取得字节快照。"""
+        from awr.bench.recorder.channels import thermal_message, thermal_topic
+
+        schema, meta, data = thermal_message(uav, obs)
+        meta = {"agent_delivered": "true" if agent_delivered else "false", **meta}
+        if period_ns:
+            meta["period_ns"] = str(int(period_ns))
+        topic, seq, t_ns = thermal_topic(uav, name), int(obs["seq"]), int(obs["t_mid_ns"])
+
+        def job() -> int:
+            cid = self._channel(topic, schema, meta)
+            return self._add(cid, topic, t_ns, seq, data)
+
+        self._submit(job, len(data), t_ns)
+
     def write_lidar(self, uav: str, name: str, seq: int, t_ns: int, header: dict, points: np.ndarray, *, period_ns: int | None = None,
                     agent_delivered: bool = True) -> None:
         """`awr.sensor.lidar_frame.v2`（log_time = 帧首 timebase_ns）。"""

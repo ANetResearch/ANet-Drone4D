@@ -42,8 +42,9 @@ __all__ = ["CONTENT_TYPES", "MAX_FRAMES_PER_STRIDE", "MAX_RANGE_BYTES", "REPLAY_
 MAX_FRAMES_PER_STRIDE = 300
 MAX_RANGE_BYTES = 64 << 20
 MAX_INDEX_ITEMS = 1000
-CONTENT_TYPES = {"jpeg": "image/jpeg", "32FC1": "application/octet-stream"}
-_SCHEMA_OF_CODEC = {"jpeg": "foxglove.CompressedImage", "32FC1": "foxglove.RawImage"}
+CONTENT_TYPES = {"jpeg": "image/jpeg", "32FC1": "application/octet-stream", "16UC1": "application/zstd"}
+# 16UC1：热成像通道，载荷为 ThermalObs.temp_ck 交付字节（u16 + zstd 原样，存档压缩即交付形式，不解开；channels.thermal_message）
+_SCHEMA_OF_CODEC = {"jpeg": "foxglove.CompressedImage", "32FC1": "foxglove.RawImage", "16UC1": "foxglove.RawImage"}
 
 
 class FrameLimitError(ValueError):

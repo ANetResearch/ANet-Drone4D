@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.anet-drone.dev/sensor-v2/1/frame.v1.schema.json",
   "title": "Camera frame record (drone4d.frame.v1)",
-  "description": "AWR-05 §8.1, M25 §7.2.1 (contracts 1.3.0, d1 V0.3). Three partitions: agent_view (the source set that M26 projects into bench/obs.v1 CameraObs), ground_truth (evaluation store and truth files only, ADR-161) and internal (provenance). Units: times in ns, K in px with pixel centres at 0.5, distances in m, angles in deg. Thermal fields (temp_ck, dT_app_k) are added in P0b. internal.appearance uses the run_spec values (mesh, 3dgs); appearance_source and appearance_version are added in contracts 1.3.x (additive, M25-FR-194, FR-201).",
+  "description": "AWR-05 §8.1, M25 §7.2.1 (contracts 1.3.0, d1 V0.3). Three partitions: agent_view (the source set that M26 projects into bench/obs.v1 CameraObs), ground_truth (evaluation store and truth files only, ADR-161) and internal (provenance). Units: times in ns, K in px with pixel centres at 0.5, distances in m, angles in deg. Thermal frames (kind = thermal, P0b, M25 §15.6; additive in contracts 1.3.x) carry agent_view.temp_ck instead of rgb and depth, ground_truth.objects[].dT_app_k, the thermal timing fields and internal.thermal; the camera-only requirements (rgb, invalid_mask, blur_subframes, rs_bands, rs_method) are enforced per kind in allOf. internal.appearance uses the run_spec values (mesh, 3dgs); appearance_source and appearance_version are added in contracts 1.3.x (additive, M25-FR-194, FR-201).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -15,8 +15,11 @@
       "description": "<run_id>/<uav>/<sensor>/<seq>; internal identifier, never part of obs.v1"
     },
     "kind": {
-      "const": "camera",
-      "description": "This version defines camera frames only; LiDAR uses lidar_frame.v2"
+      "enum": [
+        "camera",
+        "thermal"
+      ],
+      "description": "camera or thermal (P0b; the thermal record is the source set of bench/obs.v1 ThermalObs); LiDAR uses lidar_frame.v2"
     },
     "agent_view": {
       "type": "object",
@@ -191,6 +194,42 @@
             "ref",
             "sha256"
           ]
+        },
+        "temp_ck": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Thermal only: apparent temperature, u16 little-endian, 0.01 K per LSB (temp_ck = floor(T_app * 100 + 0.5), saturated to [0, 65535]), zstd level 3 single frame. sha256 over the delivered bytes; ThermalObs.temp_ck and the raw.mcap archive carry the same bytes",
+          "properties": {
+            "dtype": {
+              "const": "u16"
+            },
+            "unit": {
+              "const": "0.01 K"
+            },
+            "codec": {
+              "const": "radiometric_u16"
+            },
+            "compression": {
+              "const": "zstd"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Payload block: an attached binary section of the same MCAP message, or a relative path in a file export"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "dtype",
+            "unit",
+            "codec",
+            "compression",
+            "ref",
+            "sha256"
+          ]
         }
       },
       "required": [
@@ -205,8 +244,7 @@
         "dist",
         "pixel_convention",
         "mount_nominal",
-        "gimbal_reading",
-        "rgb"
+        "gimbal_reading"
       ]
     },
     "ground_truth": {
@@ -472,9 +510,14 @@
                 "type": "array",
                 "items": {
                   "enum": [
-                    "truncated"
+                    "truncated",
+                    "no_ring"
                   ]
                 }
+              },
+              "dT_app_k": {
+                "type": "number",
+                "description": "Thermal only: median noise-free apparent temperature of the visible pixels minus the median of the ring within Chebyshev distance 3 px that contains no actor pixel (K); absent with flag no_ring when the ring is empty"
               }
             },
             "required": [
@@ -534,13 +577,24 @@
               "minItems": 2,
               "maxItems": 2,
               "description": "Rolling shutter readout window [t_mid - T_ro/2, t_mid + T_ro/2] in ns"
+            },
+            "lag_subframes": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Thermal only: detector subframes S of the bolometer lag model (M25 §15.6 step 5)"
+            },
+            "subframe_weights": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0
+              },
+              "minItems": 1,
+              "description": "Thermal only: subframe weights in time order (sum 1)"
             }
           },
           "required": [
-            "t_truth_ns",
-            "blur_subframes",
-            "rs_bands",
-            "rs_method"
+            "t_truth_ns"
           ]
         }
       },
@@ -550,7 +604,6 @@
         "instance",
         "instance_unocc",
         "semantic",
-        "invalid_mask",
         "objects",
         "timing"
       ]
@@ -626,6 +679,137 @@
         "derived": {
           "type": "boolean",
           "description": "true for offline re-rendering"
+        },
+        "thermal": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Thermal only (M25-FR-186, FR-187): versions and digests of the parameter table, the band-integrated Planck table, the noise profile and thermal_static.npz",
+          "properties": {
+            "renderer": {
+              "type": "string"
+            },
+            "thermal_table": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "version",
+                "sha256"
+              ]
+            },
+            "planck_table": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "band_um": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              },
+              "required": [
+                "version",
+                "sha256",
+                "band_um"
+              ]
+            },
+            "noise": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": "string"
+                },
+                "netd_mk_300k": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "fpn_offset_k": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "fpn_gain_frac": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "optics_sigma_px": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "tau_bolometer_s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "lag_subframes": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "version",
+                "profile",
+                "netd_mk_300k",
+                "fpn_offset_k",
+                "fpn_gain_frac",
+                "optics_sigma_px",
+                "tau_bolometer_s",
+                "lag_subframes"
+              ]
+            },
+            "thermal_static": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "sun_az_el_deg": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "backend": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sha256",
+                "sun_az_el_deg",
+                "backend"
+              ]
+            }
+          },
+          "required": [
+            "renderer",
+            "thermal_table",
+            "planck_table",
+            "noise"
+          ]
         }
       },
       "required": [
@@ -653,5 +837,104 @@
     "agent_view",
     "ground_truth",
     "internal"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "camera"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "agent_view": {
+            "required": [
+              "rgb"
+            ],
+            "not": {
+              "required": [
+                "temp_ck"
+              ]
+            }
+          },
+          "ground_truth": {
+            "required": [
+              "invalid_mask"
+            ],
+            "properties": {
+              "timing": {
+                "required": [
+                  "blur_subframes",
+                  "rs_bands",
+                  "rs_method"
+                ]
+              }
+            }
+          },
+          "internal": {
+            "not": {
+              "required": [
+                "thermal"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "thermal"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "agent_view": {
+            "required": [
+              "temp_ck"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "rgb"
+                  ]
+                },
+                {
+                  "required": [
+                    "depth"
+                  ]
+                }
+              ]
+            }
+          },
+          "ground_truth": {
+            "properties": {
+              "timing": {
+                "required": [
+                  "lag_subframes",
+                  "subframe_weights"
+                ]
+              }
+            }
+          },
+          "internal": {
+            "required": [
+              "thermal"
+            ]
+          }
+        }
+      }
+    }
   ]
 }

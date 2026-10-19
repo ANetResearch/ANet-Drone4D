@@ -34,8 +34,10 @@
         "jpeg",
         "raw",
         "32FC1",
-        "lidar_v2"
-      ]
+        "lidar_v2",
+        "16UC1"
+      ],
+      "description": "16UC1 = thermal channel /uav/{id}/thermal/{name} (foxglove.RawImage u16, 0.01 K per LSB); its bytes and sha256 are the delivered ThermalObs.temp_ck bytes (zstd)"
     },
     "agent_delivered": {
       "type": "boolean"
