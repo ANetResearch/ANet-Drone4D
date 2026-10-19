@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import importlib.util
 import io
 import json
 import os
@@ -71,6 +72,7 @@ PY_LAUNCHERS = {
     "tools/bench/d3/slam_eval/livo.py": "_render_slam_livo",
     "tools/bench/d3/slam_eval/cli.py": "_render_slam_cli",
     "tools/deploy/emax/d3-public/drill.py": "_render_d3_public_drill",
+    "tools/bench/d3/lidar_collect.py": "_render_lidar_collect",
 }
 _PY_LAUNCH = re.compile(r"""["']run["']\s*,\s*["']-d["']|["']docker["']\s*,\s*["']run["']|\bdocker\s+run\b""")
 _SH_LAUNCH = re.compile(r"\bdocker\s+(?:container\s+)?run\b")
@@ -215,6 +217,29 @@ def _render_slam_cli(tmp: Path) -> tuple[list[Launch], list[Finding]]:
         lr = livo.LivoRun(name=cli._cname(g, "livo", "regress"), mode="livo", repeat=1, run_dir=jo / "regress" / "run", bag=case.bag,
                           image=g.image, mem_gb=float(res["mem_gb"]), cpus=float(res["cpus"]))
         out.append(parse_docker_run(livo.docker_argv(lr), site, component="livo", run=run))
+    return out, []
+
+
+def _render_lidar_collect(tmp: Path) -> tuple[list[Launch], list[Finding]]:
+    """多机 LiDAR 采集作业（`lidar_collect.py all`，D3-AC-15）的两个容器阶段（`stage_argv`，命令行缺省参数，`--task` 取两个 Run 名）：
+    采集容器为 GPU Worker（d3-sensorsvc-*，缺省 GPU 2），收尾容器为 CPU 池评测容器（d3-eval-*）；宿主 `slam` 阶段经 slam_eval 命令行
+    启动的容器由 `_render_slam_cli` 覆盖。"""
+    d = str(ROOT / "tools" / "bench" / "d3")
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    lc = sys.modules.get("d3_lidar_collect_audit")
+    if lc is None:                                               # 脚本文件（非包）：按路径加载；dataclass 需模块已在 sys.modules
+        spec = importlib.util.spec_from_file_location("d3_lidar_collect_audit", ROOT / "tools" / "bench" / "d3" / "lidar_collect.py")
+        lc = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = lc
+        spec.loader.exec_module(lc)
+    ps = lc.build_parser()
+    out: list[Launch] = []
+    for run in AUDIT_RUNS:
+        a = ps.parse_args(["all", "--src", str(ROOT), "--out", str(tmp / "lidar-collect" / run), "--world-dir", str(tmp / "worlds" / "w"),
+                           "--task", run])
+        out.append(parse_docker_run(lc.stage_argv(a, "collect"), "python:lidar-collect[collect]", component="sensorsvc", run=run))
+        out.append(parse_docker_run(lc.stage_argv(a, "post"), "python:lidar-collect[post]", component="eval", run=run))
     return out, []
 
 

@@ -73,7 +73,7 @@ def test_repo_manifests_have_no_errors(audit, report) -> None:
         assert r["docker_runs"] == (0 if any(k in site for k in ("multi-card", "all-cards", "foreign-card")) else n), site
         assert (r["exit"] != 0) == (r["docker_runs"] == 0), site
     s = report["summary"]
-    assert s["python"] == 24 and s["scripts"] >= 6 and s["errors"] == 0      # 含 d3-public 演练的 nginx 与 chown 容器各 1 条
+    assert s["python"] == 28 and s["scripts"] >= 6 and s["errors"] == 0      # 含 d3-public 演练的 nginx 与 chown 容器各 1 条、B19 采集与收尾容器各 2 条
     # 告警只有 CM-08（d3.slice 尚未配置配额）与 CM-00（新增脚本尚未登记变体，但已按缺省变体渲染且无错误）
     assert {f["rule"] for f in report["findings"]} <= {"CM-08", "CM-00"}
 
@@ -139,6 +139,23 @@ def test_slam_eval_containers_cpu_pool(report) -> None:
             "d3-livo-audit-run-b-rtk", "d3-livo-audit-run-b-regress"} <= names
     rp = [lc for lc in sl if lc["command"] == ["/opt/d3-livo/run_livo.sh"]]                     # 回放：作业 2 种模式 + regress + 直接渲染
     assert len(rp) == 8 and all(lc["name"].startswith("d3-livo-") for lc in rp)
+
+
+def test_lidar_collect_containers(report) -> None:
+    """多机 LiDAR 采集作业（tools/bench/d3/lidar_collect.py all）：采集容器为 GPU Worker（d3-sensorsvc-*，只绑定缺省 GPU 2 一张卡），
+    收尾容器为 CPU 池评测容器（d3-eval-*，--memory 16g，不挂载 GPU）；两个作业的容器名两两不同。"""
+    col = _by_site(report, "python:lidar-collect[collect]")
+    post = _by_site(report, "python:lidar-collect[post]")
+    assert len(col) == len(post) == 2 and len({lc["name"] for lc in col + post}) == 4
+    for lc in col:
+        assert lc["name"].startswith("d3-sensorsvc-audit-run-") and lc["name"].endswith("-collect"), lc["name"]
+        assert lc["gpus"] == ["device=2"] and lc["memory"] and lc["cpus"], lc["name"]
+    for lc in post:
+        assert lc["name"].startswith("d3-eval-audit-run-") and lc["name"].endswith("-post"), lc["name"]
+        assert lc["gpus"] == [] and lc["devices"] == [] and lc["memory"] == "16g" and lc["cpus"], lc["name"]
+    for lc in col + post:
+        assert "GZ_PARTITION" not in lc["env"] and lc["command"][1].endswith("tools/bench/d3/lidar_collect.py"), lc["name"]
+        assert lc["command"][2] == lc["name"].rsplit("-", 1)[1], lc["name"]                 # 容器名末段即所执行的阶段
 
 
 def test_gz_local_subprocess_partition(tmp_path: Path) -> None:

@@ -1024,6 +1024,7 @@ def build_report(out: Path) -> dict:
 
 # ---------------------------------------------------------------------------------------------------------------- dmax 编排
 def _docker(name: str, src: Path, mounts: list[str], cmd: list[str], *, image: str, cpus: float, mem: str, gpu: int | None = None) -> list[str]:
+    """容器内执行本脚本的一个阶段；容器名 `d3-<组件>-<作业>-<阶段>`（CM-06），GPU 只经 `--gpus device=<N>` 绑定一张卡（CM-03）。"""
     argv = ["docker", "run", "--rm", "--name", name, "--network", "none", "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp",
             "--cpus", str(cpus), "--memory", mem, "-e", "PYTHONDONTWRITEBYTECODE=1", "-e", "AWR_D3_ENABLED=1",
             "-e", f"PYTHONPATH={src}/python:{src}/tools/bench/d3", "-e", f"AWR_CONTRACTS_DIR={src}/packages/contracts", "-w", str(src)]
@@ -1059,15 +1060,27 @@ def run_slam(out: Path, *, src: Path, repeats: int = 3, modes: str = "livo,lio",
     return rc
 
 
-def cmd_all(a) -> int:
+def stage_argv(a, stage: str) -> list[str]:
+    """`all` 的容器阶段 → docker run 参数表（tools/deploy/dmax/audit_manifests.py 按同一函数渲染审计）：
+    `collect` 为 GPU Worker（d3-sensorsvc-*，绑定 `--gpu` 一张卡），`post` 为 CPU 池评测容器（d3-eval-*，`--memory 16g`，不挂载 GPU）。"""
     src, out, wd = Path(a.src).resolve(), Path(a.out).resolve(), Path(a.world_dir).resolve()
-    out.mkdir(parents=True, exist_ok=True)
     mounts = [f"{src}:{src}:ro", f"{out}:{out}", f"{wd.parent}:{wd.parent}:ro"]
     common = ["--world-dir", str(wd), "--out", str(out)]
+    job = a.task.lower()
+    if stage == "collect":
+        return _docker(f"d3-sensorsvc-{job}-collect", src, mounts,
+                       ["collect", *common, "--run-id", a.run_id, "--duration", str(a.duration), "--noise", a.noise, "--seed", str(a.seed),
+                        "--vehicles-dir", str(src / "vehicles")], image=a.image, cpus=a.cpus, mem=a.mem, gpu=a.gpu)
+    if stage == "post":
+        return _docker(f"d3-eval-{job}-post", src, mounts, ["post", *common], image=a.image, cpus=a.cpus, mem=f"{L0_MEMORY_GB}g")
+    raise ValueError(f"no container stage {stage!r}")
+
+
+def cmd_all(a) -> int:
+    src, out = Path(a.src).resolve(), Path(a.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
     if "collect" in a.stages:
-        argv = _docker(f"d3-{a.task}-collect", src, mounts, ["collect", *common, "--run-id", a.run_id, "--duration", str(a.duration),
-                                                               "--noise", a.noise, "--seed", str(a.seed), "--vehicles-dir", str(src / "vehicles")],
-                       image=a.image, cpus=a.cpus, mem=a.mem, gpu=a.gpu)
+        argv = stage_argv(a, "collect")
         print(shlex.join(argv), flush=True)
         if subprocess.run(argv).returncode:
             return 1
@@ -1076,7 +1089,7 @@ def cmd_all(a) -> int:
         if any(v not in (0, 1) for v in rc.values()):
             return 1
     if "post" in a.stages:
-        argv = _docker(f"d3-{a.task}-post", src, mounts, ["post", *common], image=a.image, cpus=a.cpus, mem=f"{L0_MEMORY_GB}g")
+        argv = stage_argv(a, "post")
         print(shlex.join(argv), flush=True)
         if subprocess.run(argv).returncode:
             return 1
