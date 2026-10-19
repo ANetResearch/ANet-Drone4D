@@ -71,7 +71,9 @@ def test_noise_statistics_determinism_and_batching() -> None:
     da = np.diff(a.acc_mps2[:, 2])
     assert np.std(da) / math.sqrt(2) == pytest.approx(m.acc_nd * math.sqrt(200), rel=0.05)
     h = synth_imu(t, w, f, t_from_ns=0, t_to_ns=60 * NS, tier="harsh", **kw)
-    assert np.std(np.diff(h.gyro_rps[:, 0])) / np.std(dg) == pytest.approx(1.5, rel=1e-6)
+    assert np.array_equal(h.gyro_rps, a.gyro_rps)                 # harsh = realistic + 加速度振动（AWR-20 §15.6.5，白噪声不放大）
+    vib = h.acc_mps2 - a.acc_mps2
+    assert 0.5 * m.vib_amp_mps2 < np.abs(vib).max() <= m.vib_amp_mps2 + 1e-9     # 150 Hz 以 200 Hz 采样只取到 4 个相位
     c = synth_imu(t, w, f, t_from_ns=0, t_to_ns=60 * NS, tier="realistic", **{**kw, "seed": 4})
     assert not np.allclose(a.gyro_rps, c.gyro_rps)
     assert (a.flags == 0).all()

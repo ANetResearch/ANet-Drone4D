@@ -5,43 +5,103 @@
   首样本取第 1 段），比力 f_b = R_wbᵀ (a + g·e_z)。
 - 杆臂：f_imu = R_biᵀ (f_b + ω̇ × r + ω × (ω × r))，ω̇ 为后向差分；w_imu = R_biᵀ ω。
 - 抗混叠：y[n] = y[n−1] + a·(x[n] − y[n−1])，a = 1 − exp(−2π f_c Δt)，初值取首样本（scipy lfilter，与逐步递推逐位一致）。
-- 噪声（per-sample，Δt = 5 ms）：白噪声 sigma = ND·sqrt(200)；偏置随机游走 b(j+1) = b(j) + rw·sqrt(Δt)·n（MID-360 内置 IMU 规则）；
-  上电偏置 turn_on_sigma·n（j = 0 通道）。随机数 key(run_seed, 22, uav_no, j, 0x3000 + sensor_no·32 + c)：c 0–5 白噪声、
-  6–11 偏置步进、12–17 上电偏置。clean 档无噪声；harsh 档白噪声与随机游走 × 1.5。量程饱和 32 g、2000 °/s，flags bit0。
+- 噪声参数：MID-360 内置 IMU 型号 `imu_icm40609_livox`（`vehicles/d3/sensor_models/`，AWR-20 §15.6.5 单一真源，
+  `awr.sim.catalog.loader.imu_noise_tier` 解析）。clean 档无噪声；realistic 档为型号文件取值；harsh 档为 realistic 加振动
+  （白噪声与随机游走不放大）。每样本（Δt = 5 ms）：白噪声为每样本 sigma；偏置纯随机游走 b(j+1) = b(j) + rw·sqrt(Δt)·n，
+  b(0) = 0，j < 0（预滚窗口）向负方向延伸 b(j) = b(j+1) − rw·sqrt(Δt)·n_j；上电偏置 turn_on_sigma·n（j = 0 通道）；
+  振动 v = A·sin(2π f_v t_j + φ_axis) 只加在加速度三轴，f_v 为机型 `acoustic.bpf_hz`。随机数
+  key(run_seed, 22, uav_no, j, 0x3000 + sensor_no·32 + c)：c 0–5 白噪声、6–11 偏置步进、12–17 上电偏置、18–20 振动相位
+  （U[0, 1) × 2π，j = 0）。量程饱和 32 g、2000 °/s，flags bit0。
+- 动力学断言（M25-FR-092，D3-AC-13 C8）：`check_dynamics` / `assert_dynamics` 对 PoseHistory 检查 |ω| < 5 rad/s 与
+  比力模长 |a| < 30 m/s²，违例时 SLAM 导出返回 642 并标注时间段。
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
+from awr.sensorsvc.errors import SensorSvcError
 from awr.sim.sensors import cbrng
 
-__all__ = ["MID360_IMU_IN_LIDAR", "G", "ImuModel", "ImuSamples", "kinematics_from_poses", "load_imu_model", "synth_imu"]
+__all__ = ["DEFAULT_BPF_HZ", "DYN_ACC_MAX_MPS2", "DYN_OMEGA_MAX_RPS", "MID360_IMU_IN_LIDAR", "TIERS", "DynamicsReport", "G", "ImuModel",
+           "ImuSamples", "assert_dynamics", "check_dynamics", "kinematics_from_poses", "load_imu_model", "synth_imu"]
 
 G = 9.80665
 STREAM_M25 = 22
 CH_IMU = 0x3000
-TIER = {"clean": 0.0, "realistic": 1.0, "harsh": 1.5}
+TIERS = ("clean", "realistic", "harsh")
 ACC_SAT = 32 * G
 GYRO_SAT = math.radians(2000.0)
 MID360_IMU_IN_LIDAR = (0.011, 0.02329, -0.04412)     # mid360.yaml imu.lidar_in_imu.t 取反（旋转为单位阵）
-DEFAULT_MODEL = Path(__file__).resolve().parents[3] / "vehicles" / "awr_q9" / "sensors" / "imu.yaml"
+DEFAULT_MODEL = Path(__file__).resolve().parents[3] / "vehicles" / "d3" / "sensor_models" / "imu_icm40609_livox.yaml"
+DEFAULT_BPF_HZ = 150.0                               # 缺省 SLAM 机型 p600_mid360_inv 的 acoustic.bpf_hz（vehicles/p600/params.yaml）
+DYN_OMEGA_MAX_RPS = 5.0                              # C8：|ω| < 5 rad/s
+DYN_ACC_MAX_MPS2 = 30.0                              # C8：|a| < 30 m/s²（比力模长，与 slam.rig 的初始化窗口判据同口径）
+SEC_DYN_JOIN_NS = 50_000_000                         # 违例样本间隔 ≤ 50 ms 时并入同一时间段
 
 
 @dataclass(frozen=True)
 class ImuModel:
+    """内置 IMU 型号的 realistic 档参数（SI 单位，每样本离散；AWR-20 §15.6.5）。clean 档全部取 0，harsh 档另加振动。
+    缺省值与 `imu_icm40609_livox@1.0.0` 相同（运行镜像只挂载 python/ 时使用）。"""
+
     rate_hz: int = 200
-    gyro_nd: float = 3.39e-4          # rad/s/√Hz
-    gyro_rw: float = 3.88e-5          # rad/s²/√Hz
-    gyro_turn_on: float = 8.73e-3     # rad/s
-    acc_nd: float = 4.0e-3            # m/s²/√Hz
-    acc_rw: float = 6.0e-3            # m/s³/√Hz
-    acc_turn_on: float = 0.196        # m/s²
+    gyro_sigma: float = 7.0e-4                       # rad/s，每样本白噪声 sigma（200 Hz）
+    gyro_rw: float = 1.0e-5                          # rad/s/√s，偏置随机游走
+    gyro_turn_on: float = math.radians(0.5)          # rad/s，上电偏置 sigma（每运行抽一次）
+    acc_sigma: float = 1.0e-3 * G                    # m/s²，每样本白噪声 sigma
+    acc_rw: float = 1.0e-5 * G                       # m/s²/√s
+    acc_turn_on: float = 0.196                       # m/s²
     aa_cutoff_hz: float = 80.0
+    vib_hz: float = DEFAULT_BPF_HZ                   # harsh 振动频率（机型 acoustic.bpf_hz）
+    vib_amp_mps2: float = 1.5                        # harsh 振动幅值（三轴）
+    model_id: str = "imu_icm40609_livox"
+    noise_table_version: str = "d3-noise-1"
+
+    @property
+    def gyro_nd(self) -> float:
+        """等效噪声密度 rad/s/√Hz（sigma / sqrt(rate)）。"""
+        return self.gyro_sigma / math.sqrt(self.rate_hz)
+
+    @property
+    def acc_nd(self) -> float:
+        """等效噪声密度 m/s²/√Hz。"""
+        return self.acc_sigma / math.sqrt(self.rate_hz)
+
+    @classmethod
+    def from_noise(cls, noise: Mapping[str, Any], *, vib_hz: float | None = None, **kw: Any) -> ImuModel:
+        """`imu_noise_tier(doc, "realistic" | "harsh")` 的字典（即 rig.json `noise.imu`）→ 型号参数；harsh 字典的 `vib_hz` 优先。
+        clean 档字典全部为 0，不能还原 realistic 参数，拒绝。"""
+        if noise.get("tier") == "clean":
+            raise ValueError("clean-tier noise parameters are all zero; build the model from the realistic or harsh tier")
+        hz = noise.get("vib_hz") or vib_hz or DEFAULT_BPF_HZ
+        if "vib_amp_mps2" not in kw and noise.get("tier") == "harsh":
+            kw["vib_amp_mps2"] = float(noise.get("vib_amp_mps2", 0.0))
+        return cls(rate_hz=int(noise.get("rate_hz", 200)), gyro_sigma=float(noise["gyro_sigma_sample_rps"]),
+                   gyro_rw=float(noise["gyro_bias_rw_rps_rts"]), gyro_turn_on=math.radians(float(noise["turn_on_gyro_dps"])),
+                   acc_sigma=float(noise["acc_sigma_sample_g"]) * G, acc_rw=float(noise["acc_bias_rw_g_rts"]) * G,
+                   acc_turn_on=float(noise["turn_on_acc_mps2"]), aa_cutoff_hz=float(noise.get("aa_cutoff_hz", 80.0)), vib_hz=float(hz),
+                   **kw)
+
+    def table(self, tier: str) -> dict[str, Any]:
+        """噪声档 `tier` 下的参数，键与单位同 `imu_noise_tier`（g、rad/s、g/√s、rad/s/√s、m/s²、°/s），用于与参数表逐项对照。"""
+        if tier not in TIERS:
+            raise ValueError(f"noise tier {tier!r} not in {TIERS}")
+        z = tier == "clean"
+        out: dict[str, Any] = {
+            "acc_sigma_sample_g": 0.0 if z else self.acc_sigma / G, "gyro_sigma_sample_rps": 0.0 if z else self.gyro_sigma,
+            "acc_bias_rw_g_rts": 0.0 if z else self.acc_rw / G, "gyro_bias_rw_rps_rts": 0.0 if z else self.gyro_rw,
+            "turn_on_acc_mps2": 0.0 if z else self.acc_turn_on, "turn_on_gyro_dps": 0.0 if z else math.degrees(self.gyro_turn_on),
+            "vib_hz": self.vib_hz if tier == "harsh" else None, "vib_amp_mps2": self.vib_amp_mps2 if tier == "harsh" else 0.0,
+        }
+        out.update({"rate_hz": self.rate_hz, "acc_unit_export": "g", "aa_cutoff_hz": self.aa_cutoff_hz, "tier": tier})
+        return out
 
 
 @dataclass
@@ -54,16 +114,24 @@ class ImuSamples:
     gyro_true: np.ndarray
 
 
-def load_imu_model(path: Path | str | None = None) -> ImuModel:
+def load_imu_model(path: Path | str | None = None, *, bpf_hz: float | None = None) -> ImuModel:
+    """读取内置 IMU 型号文件（`awr.sensor.imu_mems.v1`，缺省 `imu_icm40609_livox`）；`bpf_hz` 为机型 `acoustic.bpf_hz`
+    （harsh 振动频率，缺省取 p600 的 150 Hz）。缺省路径不存在时（运行镜像只挂载 python/）返回内置缺省。"""
     import yaml
 
+    from awr.sim.catalog.loader import imu_noise_tier
+
     p = Path(path or DEFAULT_MODEL)
-    if path is None and not p.exists():                  # 运行镜像只挂载 python/：取与 imu.yaml 相同的内置缺省
-        return ImuModel()
+    hz = float(bpf_hz) if bpf_hz is not None else DEFAULT_BPF_HZ
+    if path is None and not p.exists():
+        return ImuModel(vib_hz=hz)
     d = yaml.safe_load(p.read_text(encoding="utf-8"))
-    g, a = d["gyro"], d["accel"]
-    return ImuModel(int(d.get("rate_hz", 200)), float(g["noise_density"]), float(g["random_walk"]), float(g["turn_on_sigma"]),
-                    float(a["noise_density"]), float(a["random_walk"]), float(a["turn_on_sigma"]))
+    if d.get("schema") != "awr.sensor.imu_mems.v1":
+        raise ValueError(f"{p}: built-in IMU model must be awr.sensor.imu_mems.v1, got {d.get('schema')!r}")
+    kw: dict[str, Any] = {} if d.get("vibration_harsh") else {"vib_amp_mps2": 0.0}
+    n = imu_noise_tier(d, "harsh" if d.get("vibration_harsh") else "realistic", bpf_hz=hz)
+    return ImuModel.from_noise(n, vib_hz=hz, model_id=str(d.get("model_id", p.stem)), noise_table_version=str(d.get("noise_table_version", "")),
+                               **kw)
 
 
 def _quat_R(q: np.ndarray) -> np.ndarray:
@@ -102,11 +170,34 @@ def _key_normal(seed: int, uav_no: int, j: np.ndarray, sensor_no: int, c: int) -
     return cbrng.normal_elem(seed, STREAM_M25, uav_no, j, CH_IMU + sensor_no * 32 + c)
 
 
+def _bias_walk(seed: int, uav_no: int, sensor_no: int, j: np.ndarray, rw: np.ndarray) -> np.ndarray:
+    """偏置随机游走 b(j)（6 通道），b(0) = 0：j > 0 为 Σ_{0≤m<j} s_m，j < 0 为 −Σ_{j≤m<0} s_m，s_m = rw·sqrt(Δt)·n_m。
+    两个方向各自从 0 顺序累加，结果只取决于 j，与分批调用的区间无关（逐位一致）。"""
+    out = np.zeros((len(j), 6))
+    hi, lo = int(j.max(initial=0)), int(j.min(initial=0))
+    if hi > 0:
+        m = np.arange(0, hi, dtype=np.int64)[:, None]
+        steps = np.hstack([_key_normal(seed, uav_no, m, sensor_no, 6 + c) for c in range(6)]) * rw
+        cum = np.vstack([np.zeros((1, 6)), np.cumsum(steps, axis=0)])
+        pos = j > 0
+        out[pos] = cum[j[pos]]
+    if lo < 0:
+        m = np.arange(-1, lo - 1, -1, dtype=np.int64)[:, None]                       # −1, −2, …, lo
+        steps = np.hstack([_key_normal(seed, uav_no, m, sensor_no, 6 + c) for c in range(6)]) * rw
+        cum = np.vstack([np.zeros((1, 6)), -np.cumsum(steps, axis=0)])                # cum[k] = b(−k)
+        neg = j < 0
+        out[neg] = cum[-j[neg]]
+    return out
+
+
 def synth_imu(t_ns: np.ndarray, omega_b: np.ndarray, f_b: np.ndarray, *, R_bi: np.ndarray, r_imu_b: np.ndarray, model: ImuModel,
               t_from_ns: int, t_to_ns: int, tier: str = "realistic", seed: int = 0, uav_no: int = 0, sensor_no: int = 0) -> ImuSamples:
-    """`t_ns` 为物理步时刻；输出 [t_from, t_to) 内的 200 Hz 绝对网格样本（网格原点 0）。噪声状态从 j = 0 递推，与分批调用无关。"""
+    """`t_ns` 为物理步时刻；输出 [t_from, t_to) 内的 200 Hz 绝对网格样本（网格原点 0，预滚窗口为负时刻）。噪声状态以 j = 0 为
+    原点递推，与分批调用无关。"""
     from scipy.signal import lfilter
 
+    if tier not in TIERS:
+        raise ValueError(f"noise tier {tier!r} not in {TIERS}")
     t = np.asarray(t_ns, np.int64)
     w = np.asarray(omega_b, np.float64)
     fb = np.asarray(f_b, np.float64)
@@ -131,23 +222,66 @@ def synth_imu(t_ns: np.ndarray, omega_b: np.ndarray, f_b: np.ndarray, *, R_bi: n
     j, tj = j[ok], tj[ok]
     yi = np.stack([np.interp(tj.astype(np.float64), t.astype(np.float64), y[:, k]) for k in range(6)], 1)
     gyro_t, acc_t = yi[:, :3], yi[:, 3:]
-    sc = TIER[tier]
     gyro, acc = gyro_t.copy(), acc_t.copy()
-    if sc > 0 and len(j):
+    if tier != "clean" and len(j):
         dts = 1.0 / model.rate_hz
-        sg, sa = model.gyro_nd * math.sqrt(model.rate_hz) * sc, model.acc_nd * math.sqrt(model.rate_hz) * sc
         jj = j[:, None]
         white = np.hstack([_key_normal(seed, uav_no, jj, sensor_no, c) for c in range(6)])
         on = np.array([float(_key_normal(seed, uav_no, 0, sensor_no, 12 + c)) for c in range(6)])
         on *= np.array([model.gyro_turn_on] * 3 + [model.acc_turn_on] * 3)
-        rw = np.array([model.gyro_rw] * 3 + [model.acc_rw] * 3) * math.sqrt(dts) * sc
-        jall = np.arange(0, int(j[-1]), dtype=np.int64)[:, None]      # 偏置从 j = 0 递推：b(j) = Σ_{m<j} rw·n_m
-        steps = np.hstack([_key_normal(seed, uav_no, jall, sensor_no, 6 + c) for c in range(6)]) * rw if len(jall) else np.zeros((0, 6))
-        cum = np.vstack([np.zeros((1, 6)), np.cumsum(steps, axis=0)])
-        bias = cum[j] + on
-        gyro = gyro_t + bias[:, :3] + sg * white[:, :3]
-        acc = acc_t + bias[:, 3:] + sa * white[:, 3:]
+        rw = np.array([model.gyro_rw] * 3 + [model.acc_rw] * 3) * math.sqrt(dts)
+        bias = _bias_walk(seed, uav_no, sensor_no, j, rw) + on
+        gyro = gyro_t + bias[:, :3] + model.gyro_sigma * white[:, :3]
+        acc = acc_t + bias[:, 3:] + model.acc_sigma * white[:, 3:]
+        if tier == "harsh" and model.vib_amp_mps2 > 0:            # 抗混叠与重采样之后按输出采样时刻叠加（含采样混叠）
+            ph = 2.0 * math.pi * np.array([float(cbrng.uniform_elem(seed, STREAM_M25, uav_no, 0, CH_IMU + sensor_no * 32 + 18 + c))
+                                           for c in range(3)])
+            acc = acc + model.vib_amp_mps2 * np.sin(2.0 * math.pi * model.vib_hz * (tj.astype(np.float64) / 1e9)[:, None] + ph)
     sat = (np.abs(acc) > ACC_SAT).any(1) | (np.abs(gyro) > GYRO_SAT).any(1)
     acc = np.clip(acc, -ACC_SAT, ACC_SAT)
     gyro = np.clip(gyro, -GYRO_SAT, GYRO_SAT)
     return ImuSamples(tj, acc, gyro, sat.astype(np.uint8), acc_t, gyro_t)
+
+
+# ---------------------------------------------------------------------------------------------------------------- 动力学断言
+@dataclass
+class DynamicsReport:
+    """PoseHistory 动力学断言（M25-FR-092，C8）：全程最大 |ω| 与比力模长，违例时间段 `[{t0_ns, t1_ns, max_omega_rps, max_acc_mps2}]`。"""
+
+    n: int
+    max_omega_rps: float
+    max_acc_mps2: float
+    segments: list[dict] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return not self.segments
+
+    def to_dict(self) -> dict:
+        return {"n": self.n, "max_omega_rps": round(self.max_omega_rps, 6), "max_acc_mps2": round(self.max_acc_mps2, 6),
+                "segments": self.segments, "ok": self.ok}
+
+
+def check_dynamics(t_ns, omega_b, f_b, *, omega_max: float = DYN_OMEGA_MAX_RPS, acc_max: float = DYN_ACC_MAX_MPS2) -> DynamicsReport:
+    """逐样本 |ω| < `omega_max`、|f_b| < `acc_max`；相距 ≤ 50 ms 的违例样本并为一个时间段。"""
+    t = np.asarray(t_ns, np.int64)
+    wn = np.linalg.norm(np.asarray(omega_b, np.float64).reshape(-1, 3), axis=1)
+    fn = np.linalg.norm(np.asarray(f_b, np.float64).reshape(-1, 3), axis=1)
+    if not len(t) == len(wn) == len(fn):
+        raise ValueError("t_ns, omega_b and f_b must have the same length")
+    bad = np.flatnonzero(~((wn < omega_max) & (fn < acc_max)))
+    groups = np.split(bad, np.flatnonzero(np.diff(t[bad]) > SEC_DYN_JOIN_NS) + 1) if len(bad) else []
+    segs = [{"t0_ns": int(t[g[0]]), "t1_ns": int(t[g[-1]]), "max_omega_rps": round(float(wn[g].max()), 6),
+             "max_acc_mps2": round(float(fn[g].max()), 6)} for g in groups]
+    return DynamicsReport(len(t), float(wn.max(initial=0.0)), float(fn.max(initial=0.0)), segs)
+
+
+def assert_dynamics(t_ns, omega_b, f_b, **kw: float) -> DynamicsReport:
+    """SLAM 导出前的动力学断言：违例时抛 642（`extra.segments` 标注时间段），否则返回报告。"""
+    rep = check_dynamics(t_ns, omega_b, f_b, **kw)
+    if not rep.ok:
+        s = rep.segments
+        raise SensorSvcError(642, f"pose history violates |omega| < {kw.get('omega_max', DYN_OMEGA_MAX_RPS)} rad/s or "
+                                  f"|a| < {kw.get('acc_max', DYN_ACC_MAX_MPS2)} m/s^2 in {len(s)} segment(s), first "
+                                  f"[{s[0]['t0_ns']}, {s[0]['t1_ns']}] ns", segments=s, dynamics=rep.to_dict())
+    return rep
