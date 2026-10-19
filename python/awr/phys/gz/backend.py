@@ -1,7 +1,7 @@
 """GzSimBackend（M24 §6.5.5、§6.5.9；Realistic 档宿主侧）：经 `drone4d.gz.v1` 锁步推进 gz-sim，样本写入 PoseHistoryBuffer。
 
 - `open()`：Hello → HelloAck（就绪屏障）；`t0_gz` 取 HelloAck.t_ns，HelloAck.initial_state 作为回合 t = 0 的样本写入。
-- `submit()`：TierCommand 按 `apply_tick` 排队；`advance(k)` 在 tick 起点把到期指令交给跟踪器，以 tick 起点状态求一次设定，
+- `submit()`：TierCommand 按 `apply_tick` 排队（orbit 与 follow_path 的参数校验与 Fast 档相同，P09）；`advance(k)` 在 tick 起点把到期指令交给跟踪器，以 tick 起点状态求一次设定，
   与上次下发相同的设定省略（接收端零阶保持），Control 授予 `steps_per_tick` 步。
 - StepDone 逐项校验 seq、tick、n_uav 与网格 `t_ns[j] − t0_gz = t_k + (j + 1) · step_ns`（635），整块写入 PoseHistory。
 - 接触（§6.5.9）：gz 侧分类触地开始、离地、撞击；宿主判定落地（触地且 ‖v‖ < 0.25 m/s 持续 0.5 s（land）或 1.0 s（其他），
@@ -62,6 +62,7 @@ _FLY = frozenset({"takeoff", "goto", "velocity", "orbit", "follow_path"})
 
 RECOVERABLE = frozenset({632, 638})                  # 步进超时、实例退出：重启实例 + 从回合起点重放
 REUSE_POLICY = "per_run"                             # M24-FR-060 验证结论（verify_reset_reuse）；same_seed 未通过验证
+MAX_PATH_POINTS = 256                                # follow_path 航点上限（与 Fast 档相同）
 STEP_TIMEOUT_S = 5.0                                 # M24-FR-079 gz_step_timeout_s；run_spec physics_opts.step_timeout_s 缺省
 
 
@@ -101,6 +102,7 @@ class GzSimBackend:
         if (self.tick_ms * 1_000_000) % self.step_ns:
             raise PhysError(637, f"tick {self.tick_ms} ms is not a multiple of the {self.step_ns} ns step")
         self.n_steps = self.tick_ms * 1_000_000 // self.step_ns
+        self.tracker.tick_s = self.tick_ms / 1000.0                    # orbit 参考点按 tick 推进
         g = set(self.uavs if self.grounded is None else self.grounded)
         self._v = {u: _Veh(u, i, landed=u in g, in_contact=u in g) for i, u in enumerate(self.uavs)}
         self._pending: list[TierCommand] = []
@@ -139,6 +141,8 @@ class GzSimBackend:
         self.digest.update(blk)
         self.open_sha256 = hashlib.sha256(blk).digest()
         self.hello_ack = {"gz_sim_version": ack.gz_sim_version, "plugin_build": ack.plugin_build, "t0_gz_ns": self.t0_gz_ns}
+        if hasattr(self.tracker, "bind"):                                # RefTracker（P09）：影子参考状态按初始样本出生
+            self.tracker.bind(self.uavs, {u: init[i] for i, u in enumerate(self.uavs)}, [u for u, v in self._v.items() if v.landed])
         return self.hello_ack
 
     def _rpc(self, body: str, m, timeout_s: float, raw_out: list | None = None):
@@ -171,8 +175,10 @@ class GzSimBackend:
         for c in cmds:
             if c.uav not in self._v:
                 out.append(DispatchResult(c.uav, False, 630, detail="unknown vehicle"))
-            elif c.kind in ("orbit", "follow_path"):
-                out.append(DispatchResult(c.uav, False, 630, detail=f"{c.kind} is not available in P0a"))
+            elif c.kind == "follow_path" and (c.path_enu_m is None or not 1 <= len(c.path_enu_m) <= MAX_PATH_POINTS):
+                out.append(DispatchResult(c.uav, False, 630, detail=f"follow_path needs 1..{MAX_PATH_POINTS} points"))
+            elif c.kind == "orbit" and (c.orbit is None or not 1.0 <= c.orbit.radius_m <= 1000.0):
+                out.append(DispatchResult(c.uav, False, 630, detail="orbit radius must be in [1, 1000] m"))
             else:
                 self._pending.append(c)
                 out.append(DispatchResult(c.uav, True))
@@ -195,11 +201,19 @@ class GzSimBackend:
             v.still_ns = 0
         self._pending = keep
 
+    def _observation(self) -> dict[str, tuple]:
+        out = {}
+        for u, v in self._v.items():
+            s = self.history.last_sample(u)
+            row = np.concatenate([s.pos_enu_m, s.q_ws_xyzw, s.vel_enu_mps, s.omega_b_rps, s.f_b_mps2])
+            out[u] = (row, v.in_contact, v.landed, v.crash != "none")
+        return out
+
     def _setpoint(self, v: _Veh) -> Setpoint:
         if v.crash != "none" or v.landed:
             return Setpoint((0.0, 0.0, 0.0), 0.0, enabled=False)
         s = self.history.last_sample(v.uav)
-        return self.tracker.setpoint(v.uav, s.pos_enu_m, s.vel_enu_mps)
+        return self.tracker.setpoint(v.uav, s.pos_enu_m, s.vel_enu_mps, s.q_ws_xyzw)
 
     # ------------------------------------------------------------ 推进
     def advance(self, k: int) -> TickResult:
@@ -207,14 +221,21 @@ class GzSimBackend:
             raise PhysError(631, "backend is not open")
         tm = TickTiming()
         w0 = time.perf_counter_ns()
-        self._due(k)
+        planned = None
+        if hasattr(self.tracker, "plan"):                                # RefTracker：tick 起点状态 → 逐物理步设定（apply_step 0..n−1）
+            self.tracker.observe(self.t_k_ns, self._observation())
+            self._due(k)
+            self.tracker.observe(self.t_k_ns, self._observation())
+            planned = self.tracker.plan(k, self.t_k_ns, self.n_steps)
+        else:
+            self._due(k)
         sps = []
         for v in self._v.values():
-            sp = self._setpoint(v)
-            if sp != v.sent:
-                sps.append(P.msg("VelSp", uav_index=v.idx, apply_step=0, vx=sp.v_enu[0], vy=sp.v_enu[1], vz=sp.v_enu[2],
-                                 yaw_rate=sp.yaw_rate, enabled=sp.enabled))
-                v.sent = sp
+            for j, sp in enumerate(planned[v.uav] if planned is not None else (self._setpoint(v),)):
+                if sp != v.sent:
+                    sps.append(P.msg("VelSp", uav_index=v.idx, apply_step=j, vx=sp.v_enu[0], vy=sp.v_enu[1], vz=sp.v_enu[2],
+                                     yaw_rate=sp.yaw_rate, enabled=sp.enabled))
+                    v.sent = sp
         wind = self.wind.for_tick(k, self.t_k_ns, self.n_steps, self.history) if self.wind is not None else []
         ctl = P.msg("Control", seq=self.seq + 1, tick=k, grant_steps=self.n_steps, setpoints=sps, wind=wind)
         w1 = time.perf_counter_ns()

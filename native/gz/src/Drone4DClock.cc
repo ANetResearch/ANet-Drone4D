@@ -11,7 +11,15 @@
  *   4. replies StepDone with all samples of the batch before blocking for the next Control.
  *
  * SDF parameters: <endpoint> (default ipc:///run/d4d/ctl.sock), <step_ns> (4000000), <lockstep> (true),
- * <recv_poll_ms> (200), repeated <uav model="..." link="base_link"/> in uav_index order.
+ * <recv_poll_ms> (200), repeated <uav model="..." link="base_link"/> in uav_index order, and <inject> (test builds only, below).
+ *
+ * Kinematic injection (M24 §6.10.7, M24-FR-063; D3-AC-35 two-tier sampling check; test worlds only, HelloAck reports the plugin
+ * build with "+inject"): <inject>path</inject> names a reference trajectory f64[n_rows][n_uav][16] (little-endian, the sample
+ * layout above), row n at t0 + n * step_ns where t0 is the HelloAck time. In every granted step the clock writes the vehicle
+ * model's WorldPoseCmd so that the link lands on the reference pose of the step end and zeroes the model velocities; the world is
+ * composed without gravity and without static collision geometry. PostUpdate samples the link pose as usual (the path under test:
+ * collection, transport, grid check and encoding) and takes velocity, body rate and specific force from the reference row.
+ * Rows past the end of the file hold the last row.
  *
  * Contacts (thresholds as D2 ContactCfg): normal within 45 degrees of +Z is ground-like; ground contact at a descent
  * speed above 3 m/s is IMPACT, otherwise TOUCHDOWN; steep normals are COLLISION_WORLD; any contact with another vehicle
@@ -23,6 +31,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <set>
@@ -41,9 +50,11 @@
 #include <gz/sim/Model.hh>
 #include <gz/sim/System.hh>
 #include <gz/sim/Util.hh>
+#include <gz/sim/components/AngularVelocityCmd.hh>
 #include <gz/sim/components/Collision.hh>
 #include <gz/sim/components/ContactSensorData.hh>
 #include <gz/sim/components/LinearVelocitySeed.hh>
+#include <gz/sim/components/LinearVelocityCmd.hh>
 #include <gz/sim/components/Link.hh>
 #include <gz/sim/components/Model.hh>
 #include <gz/sim/components/Name.hh>
@@ -84,6 +95,7 @@ struct Uav
   bool first{true};
   bool ground{false};   // ground-like contact in the previous step
   bool other{false};    // non-ground contact in the previous step
+  math::Pose3d linkInModel;  // X_ML (kinematic injection)
 };
 
 class Drone4DClock : public System, public ISystemConfigure, public ISystemPreUpdate, public ISystemPostUpdate
@@ -108,6 +120,8 @@ public:
       u.linkName = e->Get<std::string>("link", "base_link").first;
       this->uavs.push_back(u);
     }
+    const std::string inject = _sdf->Get<std::string>("inject", "").first;
+    if (!inject.empty()) this->LoadInject(inject);
     this->sock = std::make_unique<zmq::socket_t>(this->ctx, zmq::socket_type::rep);
     this->sock->set(zmq::sockopt::rcvtimeo, this->pollMs);
     this->sock->set(zmq::sockopt::linger, 0);
@@ -133,6 +147,7 @@ public:
     this->ApplyDue(_ecm);
     this->ApplyDueWind(_ecm);
     this->ApplyWind(_ecm);
+    if (this->injectOn) this->ApplyInject(_info, _ecm);
     ++this->stepInBatch;
   }
 
@@ -153,9 +168,11 @@ public:
       const math::Vector3d a = u.first ? math::Vector3d::Zero : (v - u.vPrev) / dt;
       const math::Vector3d wB = P.Rot().RotateVectorReverse(wW);
       const math::Vector3d fB = P.Rot().RotateVectorReverse(a - math::Vector3d(0, 0, -kG));
-      const double row[kStateN] = {P.Pos().X(), P.Pos().Y(), P.Pos().Z(), P.Rot().X(), P.Rot().Y(), P.Rot().Z(),
-                                   P.Rot().W(), v.X(),       v.Y(),       v.Z(),       wB.X(),      wB.Y(),
-                                   wB.Z(),      fB.X(),      fB.Y(),      fB.Z()};
+      double row[kStateN] = {P.Pos().X(), P.Pos().Y(), P.Pos().Z(), P.Rot().X(), P.Rot().Y(), P.Rot().Z(),
+                             P.Rot().W(), v.X(),       v.Y(),       v.Z(),       wB.X(),      wB.Y(),
+                             wB.Z(),      fB.X(),      fB.Y(),      fB.Z()};
+      if (this->injectOn)  // velocity, body rate and specific force from the reference row
+        std::memcpy(row + 7, this->InjectRow(t, i) + 7, 9 * sizeof(double));
       this->samples.insert(this->samples.end(), row, row + kStateN);
       const math::Vector3d vPre = u.first ? v : u.vPrev;  // contact resolution has already stopped v: judge impacts by the step before
       u.vPrev = v;
@@ -176,6 +193,7 @@ private:
       u.link = m.LinkByName(_ecm, u.linkName);
       if (u.link == kNullEntity) return false;
       Link(u.link).EnableVelocityChecks(_ecm, true);
+      u.linkInModel = worldPose(u.model, _ecm).Inverse() * worldPose(u.link, _ecm);
       for (const Entity &l : _ecm.EntitiesByComponents(components::ParentEntity(u.model), components::Link()))
       {
         for (const Entity &c : _ecm.ChildrenByComponents(l, components::Collision()))
@@ -311,6 +329,52 @@ private:
     }
   }
 
+  void LoadInject(const std::string &_path)
+  {
+    std::ifstream f(_path, std::ios::binary | std::ios::ate);
+    const size_t row = this->uavs.size() * kStateN * sizeof(double);
+    const std::streamoff n = f ? static_cast<std::streamoff>(f.tellg()) : -1;
+    if (n <= 0 || row == 0 || static_cast<size_t>(n) % row != 0)
+    {
+      gzerr << "[Drone4DClock] inject file " << _path << " is missing or not f64[n][" << this->uavs.size() << "][16]" << std::endl;
+      this->injectBad = true;
+      return;
+    }
+    this->inject.resize(static_cast<size_t>(n) / sizeof(double));
+    f.seekg(0);
+    f.read(reinterpret_cast<char *>(this->inject.data()), n);
+    this->injectRows = static_cast<size_t>(n) / row;
+    this->injectOn = true;
+    gzmsg << "[Drone4DClock] kinematic injection: " << this->injectRows << " reference rows from " << _path << std::endl;
+  }
+
+  /// Reference row of vehicle _i at simulation time _t (rows past the end hold the last row).
+  const double *InjectRow(int64_t _t, size_t _i) const
+  {
+    const int64_t n = std::max<int64_t>(0, (_t - this->t0Ns) / this->stepNs);
+    const size_t r = std::min<size_t>(static_cast<size_t>(n), this->injectRows - 1);
+    return this->inject.data() + (r * this->uavs.size() + _i) * kStateN;
+  }
+
+  /// Kinematic injection: the link lands on the reference pose of this step's end; model velocities are zeroed.
+  void ApplyInject(const UpdateInfo &_info, EntityComponentManager &_ecm)
+  {
+    const int64_t t = std::chrono::duration_cast<std::chrono::nanoseconds>(_info.simTime).count();
+    for (size_t i = 0; i < this->uavs.size(); ++i)
+    {
+      const Uav &u = this->uavs[i];
+      const double *r = this->InjectRow(t, i);
+      const math::Pose3d wl(math::Vector3d(r[0], r[1], r[2]), math::Quaterniond(r[6], r[3], r[4], r[5]));
+      Model(u.model).SetWorldPoseCmd(_ecm, wl * u.linkInModel.Inverse());
+      auto *lv = _ecm.Component<components::LinearVelocityCmd>(u.model);
+      if (lv == nullptr) _ecm.CreateComponent(u.model, components::LinearVelocityCmd(math::Vector3d::Zero));
+      else lv->Data() = math::Vector3d::Zero;
+      auto *av = _ecm.Component<components::AngularVelocityCmd>(u.model);
+      if (av == nullptr) _ecm.CreateComponent(u.model, components::AngularVelocityCmd(math::Vector3d::Zero));
+      else av->Data() = math::Vector3d::Zero;
+    }
+  }
+
   void ApplyWind(EntityComponentManager &_ecm)
   {
     if (this->stepInBatch != 0) return;
@@ -402,21 +466,29 @@ private:
         this->SendError(635, "uav_models[" + std::to_string(i) + "] = " + _h.uav_models(i));
         return;
       }
+    if (this->injectBad)
+    {
+      this->SendError(635, "kinematic injection file is missing or malformed");
+      return;
+    }
     auto *ack = out.mutable_hello_ack();
     ack->set_gz_sim_version(GZ_SIM_VERSION_FULL);
-    ack->set_plugin_build(D4D_PLUGIN_BUILD);
+    ack->set_plugin_build(this->injectOn ? D4D_PLUGIN_BUILD "+inject" : D4D_PLUGIN_BUILD);
     ack->set_n_uav(static_cast<uint32_t>(this->uavs.size()));
     // Served in PreUpdate: simTime is already the end of this iteration's step, the reported state is one step earlier.
-    ack->set_t_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(_info.simTime - _info.dt).count());
+    this->t0Ns = std::chrono::duration_cast<std::chrono::nanoseconds>(_info.simTime - _info.dt).count();
+    ack->set_t_ns(this->t0Ns);
     std::vector<double> st;
-    for (const auto &u : this->uavs)
+    for (size_t i = 0; i < this->uavs.size(); ++i)
     {
+      const Uav &u = this->uavs[i];
       const math::Pose3d P = Link(u.link).WorldPose(_ecm).value_or(math::Pose3d::Zero);
       const double row[kStateN] = {P.Pos().X(), P.Pos().Y(), P.Pos().Z(), P.Rot().X(), P.Rot().Y(), P.Rot().Z(), P.Rot().W(),
                                    0, 0, 0, 0, 0, 0, 0, 0, 0};
       math::Vector3d fB = P.Rot().RotateVectorReverse(math::Vector3d(0, 0, kG));
       std::vector<double> r(row, row + kStateN);
       r[13] = fB.X(); r[14] = fB.Y(); r[15] = fB.Z();
+      if (this->injectOn) std::memcpy(r.data() + 7, this->InjectRow(this->t0Ns, i) + 7, 9 * sizeof(double));
       st.insert(st.end(), r.begin(), r.end());
     }
     ack->set_initial_state(st.data(), st.size() * sizeof(double));
@@ -464,6 +536,10 @@ private:
   std::vector<int64_t> tNs;
   std::vector<pb::Contact> contacts;
   std::string cached;
+  int64_t t0Ns{0};                 // HelloAck time (row 0 of the injection reference)
+  std::vector<double> inject;      // kinematic injection reference f64[n][n_uav][16]
+  size_t injectRows{0};
+  bool injectOn{false}, injectBad{false};
   std::chrono::steady_clock::time_point wall0;
   std::chrono::steady_clock::duration sim0{};
 };
