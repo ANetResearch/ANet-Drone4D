@@ -68,6 +68,7 @@ READ_RPCS = frozenset({
 })
 _FWD_REQ = ("content-type", "accept", "x-grpc-web", "grpc-timeout", "grpc-encoding", "grpc-accept-encoding", "user-agent", "x-user-agent", "te")
 _FWD_RESP = ("content-type", "grpc-status", "grpc-message", "grpc-encoding", "grpc-accept-encoding", "x-rerun-server-version")
+_FWD_PREFIX = "x-rerun-"   # Rerun 的 gRPC 元数据（按条目寻址的 RPC 必需 x-rerun-entry-id、x-rerun-entry-name-bin；F05 部署实测）：双向转发
 _GRPC_STATUS = {401: "16", 403: "7", 404: "5", 405: "12", 413: "8", 503: "14"}       # UNAUTHENTICATED、PERMISSION_DENIED……
 
 
@@ -372,12 +373,14 @@ def create_proxy_app(settings: BenchSettings | None = None, *, upstreams: dict[s
         if len(body) > MAX_REQUEST_BYTES:
             return deny(request, _Deny(307, 413, "request_too_large", p, catalog=c))
         hdrs = {k: v for k in _FWD_REQ if (v := request.headers.get(k)) is not None}     # 不转发 Cookie、Authorization、Origin、Host
+        hdrs.update((k, v) for k, v in request.headers.items() if k.startswith(_FWD_PREFIX))
         cli = http()
         try:
             up = await cli.send(cli.build_request("POST", f"{base}/{service}/{rpc}", content=body, headers=hdrs), stream=True)
         except httpx.HTTPError:
             return deny(request, _Deny(213, 503, "upstream", p, catalog=c))
         out_h = {k: v for k in _FWD_RESP if (v := up.headers.get(k)) is not None}
+        out_h.update((k, v) for k, v in up.headers.items() if k.startswith(_FWD_PREFIX))
         out_h["Cache-Control"] = "no-store"
         common = {"via": via, "session": claims.get("jti"), "catalog": c, "dataset": p.scope.get("dataset"), "segment": p.scope.get("run_id"),
                   "rpc": rpc}

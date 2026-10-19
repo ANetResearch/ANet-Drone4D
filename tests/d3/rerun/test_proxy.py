@@ -218,13 +218,15 @@ def test_proxy_forwarding_hygiene_audit_and_sessions(tmp_path: Path) -> None:
     with TestClient(env.proxy) as pc:
         r1 = _post(pc, _rpc("FindEntries"), cookie=tok, bearer=None)
         r2 = pc.post(_rpc("QueryDataset"), content=b"\x00\x00\x00\x00\x03abc", headers={**GRPC_WEB, "cookie": f"{RR_COOKIE}={tok}; d3_session=sess-x",
-                                                                                       "origin": ORIGIN, "grpc-timeout": "10S"})
+                                                                                       "origin": ORIGIN, "grpc-timeout": "10S",
+                                                                                       "x-rerun-entry-id": "18DFEF4A82B81D84", "x-rerun-entry-name-bin": "YWJj"})
         assert r1.status_code == r2.status_code == 200
         for r in (r1, r2):
             assert r.headers["cache-control"] == "no-store" and r.headers["grpc-status"] == "0"
             assert r.headers["content-type"] == "application/grpc-web+proto" and "access-control-allow-origin" not in r.headers
         up = env.seen[-1]
         assert up.url.path == _rpc("QueryDataset") and up.content == b"\x00\x00\x00\x00\x03abc" and up.headers["grpc-timeout"] == "10S"
+        assert up.headers["x-rerun-entry-id"] == "18DFEF4A82B81D84" and up.headers["x-rerun-entry-name-bin"] == "YWJj"   # 按条目寻址的元数据（F05）
         for h in ("cookie", "authorization", "origin"):
             assert all(h not in s.headers for s in env.seen), h
         recs = [a for a in env.audit() if a["action"] == "rerun_proxy"]

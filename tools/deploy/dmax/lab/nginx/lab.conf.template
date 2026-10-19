@@ -1,0 +1,78 @@
+# 内部工作区鉴权反向代理（AWR-05 §7.11、ADR-166；AWR-17 §18.3、§18.10.3、§18.11、§19；D3-AC-51、D3-AC-25）。
+# 只监听 ZeroTier 地址 ${LAB_BIND}:${LAB_PORT}（TLS，证书由 labctl.sh tls 在 dmax 上生成）；公网网卡与其余地址不监听。
+#   - 页面：除登录页与静态资源外，整页加载须带有效会话 Cookie（auth_request → bench-api GET /api/bench/v1/session），否则 302 到
+#     /lab/login?next=<路径>；页面内的数据请求由各服务自行鉴权（bench-api 会话 Cookie 与 CSRF、lab-gateway 短期令牌、rerun-proxy d3_rr）。
+#   - /api/bench/ → bench-api 127.0.0.1:18650；/api/lab/rt（WS）→ lab-gateway 127.0.0.1:18651；
+#     /rerun/ 与 /rerun.cloud.v1alpha1.RerunCloudService/（gRPC-web，流式不缓冲）→ rerun-proxy 127.0.0.1:18652（R05：两类路径都须转发）。
+#   - 其余 /api/** 与探针路径返回 404（D1、D2 接口不在内部工作区暴露）。
+server {
+  listen ${LAB_BIND}:${LAB_PORT} ssl;
+  http2 on;
+  server_name ${LAB_SERVER_NAME};
+  ssl_certificate /etc/nginx/tls/cert.pem;
+  ssl_certificate_key /etc/nginx/tls/key.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_session_cache shared:labtls:4m;
+  root /usr/share/nginx/lab;
+  client_max_body_size 64m;
+
+  include /etc/nginx/lab-headers.conf;
+
+  proxy_http_version 1.1;
+  proxy_set_header Host $http_host;
+  proxy_set_header X-Forwarded-For $remote_addr;
+  proxy_set_header X-Forwarded-Proto https;
+  proxy_set_header X-Real-IP $remote_addr;
+
+  location = /_auth {
+    internal;
+    proxy_pass http://127.0.0.1:18650/api/bench/v1/session;
+    proxy_method GET;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header Authorization "";
+  }
+  location @login { return 302 /lab/login?next=$uri; }
+
+  location /api/bench/ {
+    proxy_pass http://127.0.0.1:18650;
+    proxy_buffering off;
+    proxy_read_timeout 300s;
+  }
+  location = /api/lab/rt {
+    proxy_pass http://127.0.0.1:18651;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+  location = /rerun/healthz { return 404; }
+  location /rerun/ {
+    proxy_pass http://127.0.0.1:18652;
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 600s;
+  }
+  location /rerun.cloud.v1alpha1.RerunCloudService/ {
+    proxy_pass http://127.0.0.1:18652;
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 600s;
+  }
+  location /api/ { return 404; }
+
+  # 静态资源（构建产物，不含数据）：无需会话；哈希文件名长期缓存
+  location /assets/ { try_files $uri =404; include /etc/nginx/lab-headers.conf; add_header Cache-Control "public, max-age=31536000, immutable" always; }
+  location ~* \.(?:js|mjs|css|woff2?|ttf|svg|png|jpg|jpeg|webp|ico|wasm|webmanifest)$ { try_files $uri =404; }
+  location = /lab/login { try_files /index.html =404; include /etc/nginx/lab-headers.conf; add_header Cache-Control "no-store" always; }
+  location = / { return 302 /lab/runs; }
+
+  # 页面：须有效会话
+  location / {
+    auth_request /_auth;
+    error_page 401 403 = @login;
+    include /etc/nginx/lab-headers.conf;
+    add_header Cache-Control "no-store" always;
+    try_files $uri /index.html;
+  }
+}
