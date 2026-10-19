@@ -147,7 +147,8 @@ export class InspectController {
     this.viewerUnsubs.push(
       v.on('recording_open', (e) => {
         if (g !== this.gen || e.recording_id !== recId || this.snap.state !== 'OPENING') return
-        if (e.version !== undefined && !sameMinor(e.version)) return this.fail(g, { kind: 'version', detail: e.version })
+        // catalog 来源（redap）的 recording_open 不带写出版本（0.38.1 实测为 null），版本已由 BN-57 的 rerun_version 校验
+        if (e.version != null && !sameMinor(e.version)) return this.fail(g, { kind: 'version', detail: e.version })
         this.ready(g, recId)
       }),
       v.on('selection_change', (e) => {

@@ -37,7 +37,7 @@ export interface ViewerTimeEvent { recording_id?: string; time: number }
 export interface ViewerTimelineEvent { recording_id?: string; timeline: string; time: number }
 export interface ViewerPlayEvent { recording_id?: string }
 
-export interface ViewerOpenEvent { recording_id: string; source?: string; version?: string }
+export interface ViewerOpenEvent { recording_id: string; source?: string; version?: string | null }
 export interface ViewerSelectionEvent { recording_id?: string; items: readonly { type: string; entity_path?: string }[] }
 /** Viewer 事件（@rerun-io/web-viewer 0.38 ViewerEvent 的子集） */
 export interface ViewerEventMap {

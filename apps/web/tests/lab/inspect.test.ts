@@ -566,6 +566,14 @@ describe('inspect panel state machine (AWR-14 §21.9.2)', () => {
     expect(ctl.snapshot.error?.kind).toBe('version')
   })
 
+  it('catalog recording_open without a writer version (redap, version null) reaches READY', async () => {
+    // Rerun 0.38.1 实测（R07 Playwright lab/inspect）：catalog URI 打开时 recording_open 的 version 为 null；版本已由 BN-57 校验
+    const { ctl, parent, viewer } = ctlSetup()
+    await ctl.start(parent)
+    viewer.emit('recording_open', { recording_id: REC, source: 'redap', version: null })
+    expect(ctl.snapshot.state).toBe('READY')
+  })
+
   it('times out after 10 s without recording_open; retry closes and reopens without reloading', async () => {
     const { ctl, parent, viewer, clock, starts, fetchLink } = ctlSetup()
     await ctl.start(parent)
