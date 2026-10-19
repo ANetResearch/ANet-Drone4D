@@ -211,6 +211,54 @@
               }
             }
           },
+          "drive": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Lane-graph driving for vehicle actors (M23 §15.2, §15.4; P0b, additive): the vehicle follows the world nav.graph lanes under IDM car following, curve speed limits and junction yielding instead of the kinematic schedule; vehicle class only (gate 1 E-DRIVE 611). Route constraints are expressed with waypoint via anchors",
+            "properties": {
+              "profile": {
+                "enum": [
+                  "urban",
+                  "cautious",
+                  "aggressive"
+                ],
+                "default": "urban"
+              },
+              "idm": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "IDM overrides of the profile defaults (T 1.5 s, s0 2 m, a 1.5 m/s2, b 2.0 m/s2; v0 from the lane speed limit times the profile factor, v0_mps caps it)",
+                "properties": {
+                  "v0_mps": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 40
+                  },
+                  "T_s": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10
+                  },
+                  "s0_m": {
+                    "type": "number",
+                    "minimum": 2,
+                    "maximum": 20,
+                    "description": "Not below the 2 m minimum gap (D3-AC-33)"
+                  },
+                  "a_mps2": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10
+                  },
+                  "b_mps2": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10
+                  }
+                }
+              }
+            }
+          },
           "route": {
             "type": "array",
             "items": {
@@ -239,10 +287,12 @@
                     "alight",
                     "despawn",
                     "pickup",
-                    "drop"
+                    "drop",
+                    "stop",
+                    "park"
                   ],
                   "default": "pass",
-                  "description": "pickup and drop are P1"
+                  "description": "pickup and drop: person actors carrying an object (P0b). stop and park: vehicle actors with drive only (P0b, additive); stop halts at the waypoint for dwell_s, park ends the route with the engine off and must be the last waypoint"
                 },
                 "dwell_s": {
                   "type": "number",

@@ -156,6 +156,39 @@
             "scripted_scripted",
             "bg_scripted"
           ]
+        },
+        "lanes": {
+          "type": "object",
+          "description": "Lane-graph vehicles (M23 §15.4, P0b, additive; present only when the event drives vehicles on nav.graph): navgraph content_sha256, the vehicle generation digest (millimetre positions, heights, states, flags and decision log), per-vehicle routes, the generator self-audit (D3-AC-33 criteria) and decision-log counters",
+          "properties": {
+            "navgraph_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "vehicles": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "audit": {
+              "type": "object"
+            },
+            "log": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "navgraph_sha256",
+            "digest",
+            "vehicles",
+            "audit",
+            "log"
+          ]
         }
       },
       "required": [

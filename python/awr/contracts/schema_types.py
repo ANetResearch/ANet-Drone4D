@@ -274,6 +274,8 @@ __all__ = [
     "EventV1",
     "EventV1Actors",
     "EventV1ActorsAppearance",
+    "EventV1ActorsDrive",
+    "EventV1ActorsDriveIdm",
     "EventV1ActorsGait",
     "EventV1ActorsRoute",
     "EventV1Annotations",
@@ -917,6 +919,7 @@ __all__ = [
     "TapeManifestV1Provenance",
     "TapeManifestV1Report",
     "TapeManifestV1ReportArrivals",
+    "TapeManifestV1ReportLanes",
     "TapeManifestV1ReportMinDistM",
     "TapeV1",
     "TapeV1Actors",
@@ -3697,6 +3700,21 @@ class EventV1ActorsAppearance(TypedDict):
     accessories: NotRequired[list[str]]
 
 
+# event/event.v1.schema.json#/properties/actors/items/properties/drive
+class EventV1ActorsDrive(TypedDict):
+    profile: NotRequired[Literal["urban", "cautious", "aggressive"]]
+    idm: NotRequired[EventV1ActorsDriveIdm]
+
+
+# event/event.v1.schema.json#/properties/actors/items/properties/drive/properties/idm
+class EventV1ActorsDriveIdm(TypedDict):
+    v0_mps: NotRequired[float]
+    T_s: NotRequired[float]
+    s0_m: NotRequired[float]
+    a_mps2: NotRequired[float]
+    b_mps2: NotRequired[float]
+
+
 # event/event.v1.schema.json#/properties/actors/items/properties/gait
 class EventV1ActorsGait(TypedDict):
     speed_mps: NotRequired[list[float]]
@@ -3707,7 +3725,7 @@ class EventV1ActorsGait(TypedDict):
 class EventV1ActorsRoute(TypedDict):
     t: float
     at: str
-    do: NotRequired[Literal["spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn", "pickup", "drop"]]
+    do: NotRequired[Literal["spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn", "pickup", "drop", "stop", "park"]]
     dwell_s: NotRequired[float]
     via: NotRequired[list[str]]
     target: NotRequired[str]
@@ -9425,6 +9443,7 @@ class TapeManifestV1Report(TypedDict):
     boards: list[dict[str, Any]]
     warnings: list[str]
     min_dist_m: TapeManifestV1ReportMinDistM
+    lanes: NotRequired[TapeManifestV1ReportLanes]
 
 
 # event/tape_manifest.v1.schema.json#/properties/report/properties/arrivals/items
@@ -9434,6 +9453,15 @@ class TapeManifestV1ReportArrivals(TypedDict):
     t_plan_s: float
     t_arrive_s: float
     late_s: float
+
+
+# event/tape_manifest.v1.schema.json#/properties/report/properties/lanes
+class TapeManifestV1ReportLanes(TypedDict):
+    navgraph_sha256: str
+    digest: str
+    vehicles: list[dict[str, Any]]
+    audit: dict[str, Any]
+    log: dict[str, Any]
 
 
 # event/tape_manifest.v1.schema.json#/properties/report/properties/min_dist_m
@@ -12224,6 +12252,7 @@ EventV1Actors = TypedDict("EventV1Actors", {
     "appearance_ref": NotRequired[str],
     "roles": NotRequired[list[Literal["target", "distractor", "participant", "background_vehicle"]]],
     "gait": NotRequired[EventV1ActorsGait],
+    "drive": NotRequired[EventV1ActorsDrive],
     "route": list[EventV1ActorsRoute],
     "reaction": NotRequired[Reaction],
 })

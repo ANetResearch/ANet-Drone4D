@@ -2,10 +2,12 @@
 `MAX_FAILS` 条违例；违例在 strict 下为 613 错误，lenient 下为告警（§6.9.2）。
 
 - `S-OFFMESH`：脚本演员可见帧到所属 profile 可走面的水平距离 ≤ `tol_m`（0.1 m）。可走面对象提供 `offmesh_dist_batch(xy)` 时
-  直接调用（Recast/Detour 实现，W09/W12），否则按 `nav.NavGrid` 计算到最近可走格的距离（可走格内为 0，搜索半径 2 格）；
+  直接调用（Recast/Detour 实现，W09/W12），否则按 `nav.NavGrid` 计算到最近可走格的距离（可走格内为 0，搜索半径 2 格）；舞台提供
+  `actor_nav` 时按演员取可走面，车道图车辆为到其车道路线中心线的距离减车道半宽（M23 §6.9.4 车辆口径，E09）；
 - `S-ZGROUND`：全部演员可见帧 |z_tape − ground_z(x, y)| ≤ `tol_m`（2 cm），ground_z 以磁带 z 为层提示；未找到表面的帧只计数；
 - `S-ARRIVAL`：脚本演员每个路点的实际到达时刻与计划时刻之差为 0（运动学排时，1 mm 对应的时间小于 1 ms）、到达位置定点化误差
-  ≤ `tol_mm`（1 mm），且到达时刻落在 tick 上并可见时磁带位置与计划点之差 ≤ `tol_mm`；
+  ≤ `tol_mm`（1 mm），且到达时刻落在 tick 上并可见时磁带位置与计划点之差 ≤ `tol_mm`；车道图车辆（到达行带 `lane`，E09）只检查
+  迟到 ≤ 行内 `tol_ms`（路点 `tol_s`），位置容差取行内 `tol_mm`（0.5 m 加到达帧一步行程，见 `gen.lane_traffic`）；
 - `S-OVERLAP`：脚本演员两两可见帧的水平间距 ≥ `min_m`（0.5 m），同乘与同一 zone 站位（两者均以该 zone 为路点且同在其内）
   除外，`object` 类物体（被拾取、放下与交接的道具，P0b）不参与；背景与脚本演员的间距只统计并告警 `W-BG-OVERLAP`（人群避让属 D3-AC-29，P1，以 ADR 移出 D3 封板范围），
   `bg_overlap_error = true` 时按 `S-OVERLAP` 报错；
@@ -58,9 +60,10 @@ def offmesh(ctx: Context, p: dict) -> CheckResult:
         return CheckResult({"available": False})
     tol = float(p["tol_m"])
     rows, n, worst = [], 0, 0.0
+    actor_nav = getattr(ctx.stage, "actor_nav", None)          # gen.Stage：车道图车辆取车道路线（E09）
     for i in ctx.scripted():
         prof = ctx.table[i].get("profile")
-        nav = ctx.stage.nav.get(prof) if prof else None
+        nav = actor_nav(ctx.plan, ctx.ids[i], prof) if actor_nav is not None else (ctx.stage.nav.get(prof) if prof else None)
         if nav is None:
             continue
         ks = np.flatnonzero(ctx.vis[:, i])
@@ -109,7 +112,10 @@ def arrival(ctx: Context, p: dict) -> CheckResult:
         if i is None:
             continue
         n += 1
-        late = abs(int(r["late_ms"]))
+        lane = bool(r.get("lane"))                              # 车道图车辆：只计迟到，容差取行内 tol_ms、tol_mm（E09）
+        late = max(0, int(r["late_ms"])) if lane else abs(int(r["late_ms"]))
+        tol_r = float(r.get("tol_mm", tol)) if lane else tol
+        late_ok = late <= int(r.get("tol_ms", 0)) if lane else late == 0
         err = float(r["err_mm"])
         t = int(r["t_arrive_ms"])
         if t % ctx.tick_ms == 0 and 0 <= t // ctx.tick_ms < ctx.n_ticks and ctx.vis[t // ctx.tick_ms, i]:
@@ -117,7 +123,7 @@ def arrival(ctx: Context, p: dict) -> CheckResult:
             err = max(err, math.hypot(float(ctx.frames["x_mm"][k, i]) - r["xy_plan_m"][0] * 1000.0,
                                       float(ctx.frames["y_mm"][k, i]) - r["xy_plan_m"][1] * 1000.0))
         worst_t, worst_mm = max(worst_t, late), max(worst_mm, err)
-        if late > 0 or err > tol:
+        if not late_ok or err > tol_r:
             rows.append({"actor": r["actor"], "waypoint": r["waypoint"], "t_ms": r["t_plan_ms"], "late_ms": late, "err_mm": rnd(err),
                          "sev": late + err})
     out = _worst(rows, "sev")

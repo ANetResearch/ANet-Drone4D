@@ -4949,6 +4949,25 @@ export interface EventV1 {
         accel_mps2?: number
       }
       /**
+       * Lane-graph driving for vehicle actors (M23 §15.2, §15.4; P0b, additive): the vehicle follows the world nav.graph lanes under IDM car following, curve speed limits and junction yielding instead of the kinematic schedule; vehicle class only (gate 1 E-DRIVE 611). Route constraints are expressed with waypoint via anchors
+       */
+      drive?: {
+        profile?: 'urban' | 'cautious' | 'aggressive'
+        /**
+         * IDM overrides of the profile defaults (T 1.5 s, s0 2 m, a 1.5 m/s2, b 2.0 m/s2; v0 from the lane speed limit times the profile factor, v0_mps caps it)
+         */
+        idm?: {
+          v0_mps?: number
+          T_s?: number
+          /**
+           * Not below the 2 m minimum gap (D3-AC-33)
+           */
+          s0_m?: number
+          a_mps2?: number
+          b_mps2?: number
+        }
+      }
+      /**
        * @minItems 1
        * @maxItems 64
        */
@@ -4963,9 +4982,21 @@ export interface EventV1 {
            */
           at: string
           /**
-           * pickup and drop are P1
+           * pickup and drop: person actors carrying an object (P0b). stop and park: vehicle actors with drive only (P0b, additive); stop halts at the waypoint for dwell_s, park ends the route with the engine off and must be the last waypoint
            */
-          do?: 'spawn' | 'pass' | 'wait' | 'enter_building' | 'exit_building' | 'board' | 'alight' | 'despawn' | 'pickup' | 'drop'
+          do?:
+            | 'spawn'
+            | 'pass'
+            | 'wait'
+            | 'enter_building'
+            | 'exit_building'
+            | 'board'
+            | 'alight'
+            | 'despawn'
+            | 'pickup'
+            | 'drop'
+            | 'stop'
+            | 'park'
           dwell_s?: number
           /**
            * @maxItems 8
@@ -4990,9 +5021,21 @@ export interface EventV1 {
            */
           at: string
           /**
-           * pickup and drop are P1
+           * pickup and drop: person actors carrying an object (P0b). stop and park: vehicle actors with drive only (P0b, additive); stop halts at the waypoint for dwell_s, park ends the route with the engine off and must be the last waypoint
            */
-          do?: 'spawn' | 'pass' | 'wait' | 'enter_building' | 'exit_building' | 'board' | 'alight' | 'despawn' | 'pickup' | 'drop'
+          do?:
+            | 'spawn'
+            | 'pass'
+            | 'wait'
+            | 'enter_building'
+            | 'exit_building'
+            | 'board'
+            | 'alight'
+            | 'despawn'
+            | 'pickup'
+            | 'drop'
+            | 'stop'
+            | 'park'
           dwell_s?: number
           /**
            * @maxItems 8
@@ -5065,6 +5108,25 @@ export interface EventV1 {
         accel_mps2?: number
       }
       /**
+       * Lane-graph driving for vehicle actors (M23 §15.2, §15.4; P0b, additive): the vehicle follows the world nav.graph lanes under IDM car following, curve speed limits and junction yielding instead of the kinematic schedule; vehicle class only (gate 1 E-DRIVE 611). Route constraints are expressed with waypoint via anchors
+       */
+      drive?: {
+        profile?: 'urban' | 'cautious' | 'aggressive'
+        /**
+         * IDM overrides of the profile defaults (T 1.5 s, s0 2 m, a 1.5 m/s2, b 2.0 m/s2; v0 from the lane speed limit times the profile factor, v0_mps caps it)
+         */
+        idm?: {
+          v0_mps?: number
+          T_s?: number
+          /**
+           * Not below the 2 m minimum gap (D3-AC-33)
+           */
+          s0_m?: number
+          a_mps2?: number
+          b_mps2?: number
+        }
+      }
+      /**
        * @minItems 1
        * @maxItems 64
        */
@@ -5079,9 +5141,21 @@ export interface EventV1 {
            */
           at: string
           /**
-           * pickup and drop are P1
+           * pickup and drop: person actors carrying an object (P0b). stop and park: vehicle actors with drive only (P0b, additive); stop halts at the waypoint for dwell_s, park ends the route with the engine off and must be the last waypoint
            */
-          do?: 'spawn' | 'pass' | 'wait' | 'enter_building' | 'exit_building' | 'board' | 'alight' | 'despawn' | 'pickup' | 'drop'
+          do?:
+            | 'spawn'
+            | 'pass'
+            | 'wait'
+            | 'enter_building'
+            | 'exit_building'
+            | 'board'
+            | 'alight'
+            | 'despawn'
+            | 'pickup'
+            | 'drop'
+            | 'stop'
+            | 'park'
           dwell_s?: number
           /**
            * @maxItems 8
@@ -5106,9 +5180,21 @@ export interface EventV1 {
            */
           at: string
           /**
-           * pickup and drop are P1
+           * pickup and drop: person actors carrying an object (P0b). stop and park: vehicle actors with drive only (P0b, additive); stop halts at the waypoint for dwell_s, park ends the route with the engine off and must be the last waypoint
            */
-          do?: 'spawn' | 'pass' | 'wait' | 'enter_building' | 'exit_building' | 'board' | 'alight' | 'despawn' | 'pickup' | 'drop'
+          do?:
+            | 'spawn'
+            | 'pass'
+            | 'wait'
+            | 'enter_building'
+            | 'exit_building'
+            | 'board'
+            | 'alight'
+            | 'despawn'
+            | 'pickup'
+            | 'drop'
+            | 'stop'
+            | 'park'
           dwell_s?: number
           /**
            * @maxItems 8
@@ -12801,6 +12887,16 @@ export interface TapeManifestV1 {
     min_dist_m: {
       scripted_scripted: number | null
       bg_scripted: number | null
+    }
+    /**
+     * Lane-graph vehicles (M23 §15.4, P0b, additive; present only when the event drives vehicles on nav.graph): navgraph content_sha256, the vehicle generation digest (millimetre positions, heights, states, flags and decision log), per-vehicle routes, the generator self-audit (D3-AC-33 criteria) and decision-log counters
+     */
+    lanes?: {
+      navgraph_sha256: string
+      digest: string
+      vehicles: {}[]
+      audit: {}
+      log: {}
     }
   }
 }

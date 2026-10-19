@@ -202,7 +202,7 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     seeds = [anchor_xy(a) for a in anchors.values() if a.get("seed")]
     nav_p = build_nav(q, bbox, "person", seeds)
     nav_v = build_nav(q, bbox, "vehicle", seeds, z=nav_p.z)
-    stage = Stage({"person": nav_p, "vehicle": nav_v}, build_ground_index(q, bbox), anchors)
+    stage = Stage({"person": nav_p, "vehicle": nav_v}, build_ground_index(q, bbox), anchors, world_dir=world_dir)   # 车道图按需装载（E09）
     plan = search.materialize(plan, doc, stage)                   # 按事件种子抽样目标实际位置（只进锚点表、磁带与真值）
     pf = preflight(plan, stage, mode=opts.retime_mode)
     segs = [lg.report() for a in sorted(pf["legs"]) for lg in pf["legs"][a]]
@@ -216,7 +216,15 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     if opts.preflight_only:
         return res
     # ------------------------------------------------------------ 生成与打包
-    from awr.sim.events.gen import arrivals, build_graph, build_header, build_truth, generate_frames, truth_sha256
+    from awr.sim.events.gen import (
+        arrivals,
+        build_graph,
+        build_header,
+        build_truth,
+        generate_frames,
+        navgraph_ref,
+        truth_sha256,
+    )
     from awr.sim.events.tape import TapeReader, manifest, write_tape
     from awr.sim.events.verify import load_quality, verify_event
 
@@ -224,7 +232,7 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     report["warnings"] = sorted(set(report["warnings"]) | {w.code for w in warns})
     a_sha = anchors_sha256(anchors)
     world = {"id": wdoc["id"], "content_version": wdoc["contentVersion"], "raycast_sha256": raycast_sha256(world_dir),
-             "navmesh_sha256": {"person": nav_p.sha256, "vehicle": nav_v.sha256}, "anchors_sha256": a_sha}
+             "navmesh_sha256": {"person": nav_p.sha256, "vehicle": nav_v.sha256}, "anchors_sha256": a_sha, **navgraph_ref(plan, stage)}
     header = build_header(plan, table, world, event_sha256(plan, a_sha))
     out = Path(opts.out) if opts.out else Path(os.environ.get("AWR_D3_EVENTS_DIR", "var/d3/events")) / eid / f"v{plan['version']}"
     tmp = out.with_name(out.name + f".tmp-{os.getpid()}")

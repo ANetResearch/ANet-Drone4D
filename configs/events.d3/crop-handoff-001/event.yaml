@@ -1,5 +1,9 @@
 # crop-handoff-001：首个固定事件（M23 §2.1，rendezvous_handoff）。沿用 r6 原型的情节：两人在中心路口广场会合，
 # B 在东侧路缘登上车辆 C 离开，A 进入 Z 楼；40 名背景行人在镇中心游走。
+# v1.6（E09，D3-AC-33）：车辆 C 改用 M22 车道图驾驶（drive：IDM 跟驰、弯道限速、路口让行），西路入口、停车点与东路出口锚点移到
+# 车道中心线上；C 在 195 s 出现，在停车点停留到计划时刻 235 s 后再停 30 s，驶到东路出口消失（实际时刻取生成结果，迟到 ≤ tol_s）。
+# 同批（W12，ADR-196）按 Detour NavMesh 寻路：B 到东北斜街的时刻由 120 s 放宽到 124 s（路径略长，峰值速度 ≤ 1.8 m/s 上限）；
+# A 在广场停留由 7 s 改为 20 s，在 B 离开广场 10 s 后再走向 Z 楼（两人去往路缘与 Z 楼的路径重合，避免 B 超越 A 时两人间距 < 0.5 m）。
 schema: drone4d.event.v1
 event_id: crop-handoff-001
 version: 1
@@ -18,22 +22,22 @@ actors:
     route:
       - {t: 0, at: ev_market_exit, do: spawn}
       - {t: 85, at: ev_north_street}
-      - {t: 225, at: ev_plaza, dwell_s: 7, do: wait}
+      - {t: 225, at: ev_plaza, dwell_s: 20, do: wait}
       - {t: 290, at: ev_building_z_door, do: enter_building}
   - id: person_B
     class: person
     appearance: {preset: civilian, top_rgb: [176, 52, 44], bottom_rgb: [70, 70, 80], height_m: 1.68}
     route:
       - {t: 60, at: ev_north_gate, do: spawn}
-      - {t: 120, at: ev_east_street}
+      - {t: 124, at: ev_east_street}
       - {t: 215, at: ev_plaza, dwell_s: 20, do: wait}
       - {t: 255, at: ev_plaza_curb, do: board, target: vehicle_C}
   - id: vehicle_C
     class: vehicle
     appearance: {preset: sedan, body_rgb: [210, 210, 214], length_m: 4.6}
-    gait: {speed_mps: [2.0, 11.0], accel_mps2: 2.5}
+    drive: {profile: urban}
     route:
-      - {t: 150, at: ev_road_west, do: spawn}
+      - {t: 195, at: ev_road_west, do: spawn}
       - {t: 235, at: ev_plaza_curb_road, dwell_s: 30, do: wait}
       - {t: 330, at: ev_road_east, do: despawn}
 background:

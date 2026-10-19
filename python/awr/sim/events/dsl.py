@@ -40,7 +40,7 @@ CLASS_DEFAULTS: dict[str, dict[str, Any]] = {
 P0A_CLASSES = frozenset(CLASS_DEFAULTS)
 STATIC_CLASSES = frozenset({"machine", "object"})
 ACTIONS_BY_CLASS = {"person": {"spawn", "pass", "wait", "enter_building", "exit_building", "board", "alight", "despawn", "pickup", "drop"},
-                    "vehicle": {"spawn", "pass", "wait", "despawn"}, "dog": {"spawn", "pass", "wait", "despawn"},
+                    "vehicle": {"spawn", "pass", "wait", "despawn", "stop", "park"}, "dog": {"spawn", "pass", "wait", "despawn"},
                     "machine": {"spawn", "despawn"}, "object": {"spawn", "despawn"}}
 ENV_DEFAULTS = {"wind_mps": 3.0, "wind_dir_deg": 270.0, "gust_sigma_mps": 0.5, "rain_mm_h": 0.0, "visibility_m": 30000.0, "fog": 0.0,
                 "cloud": 0.05}
@@ -152,6 +152,7 @@ def normalize(doc: dict) -> dict:
             "size_mm": [ms(s) for s in size],
             "appearance": look,
             **({"roles": list(a["roles"])} if a.get("roles") else {}),
+            **({"drive": json.loads(json.dumps(a["drive"]))} if a.get("drive") is not None else {}),     # 车道图驾驶（M23 §15.4，E09）
             "gait": None if sp is None else {"speed_mps": [float(sp[0]), float(sp[1])], "accel_mps2": float(gait.get("accel_mps2", c["accel"])),
                                              "median_mps": float(median if median else (sp[0] + sp[1]) / 2)},
             "route": [{"t_ms": ms(w["t"]), "at": w["at"], "do": w.get("do", "pass"), "dwell_ms": ms(w.get("dwell_s", 0)),
@@ -198,16 +199,18 @@ def event_sha256(plan: dict, anchors_sha256: str) -> str:
 def stop_windows(route: list[dict], dur_s: float) -> list[tuple[float, float, bool]]:
     """车辆路线的声明停靠窗口（门 1 静态检查，只用作者给出的时刻）：`wait` 或 `dwell_s > 0` 的路点 k 给出 `(t_k, hi, closed)`。
     中间路点的 hi 为下一路点的声明时刻（车辆须在该时刻已到达下一锚点，开区间）；末路点与门 2 一致：`pass`、`wait` 停留到事件结束，
-    其余（如带停留的 `despawn`）停留到 `t_k + dwell_s`（闭区间）。门 2 以实际到达时刻与 8 m 距离再判 `I-BOARD`。"""
+    其余（如带停留的 `despawn`）停留到 `t_k + dwell_s`（闭区间）。门 2 以实际到达时刻与 8 m 距离再判 `I-BOARD`。
+    车道图车辆（E09）：`park` 与末路点的 `stop` 同 `wait`（停在终点直至事件结束）。"""
     out = []
     for k, v in enumerate(route):
         do, dwell = v.get("do", "pass"), float(v.get("dwell_s", 0))
-        if do != "wait" and dwell <= 0:
+        last = k + 1 == len(route)
+        if do != "wait" and dwell <= 0 and not (last and do in ("stop", "park")):
             continue
         lo = float(v["t"])
-        if k + 1 < len(route):
+        if not last:
             out.append((lo, float(route[k + 1]["t"]), False))
-        elif do in ("pass", "wait"):
+        elif do in ("pass", "wait", "stop", "park"):
             out.append((lo, max(float(dur_s), lo), True))
         else:
             out.append((lo, lo + dwell, True))
@@ -276,6 +279,36 @@ def _carry_issues(acts: list[dict], cls_of: dict[str, str]) -> list[Issue]:
         if holder is not None and t_gone is not None and t_gone > t_hold:
             errs.append(_e("E-CARRY-ORDER", 611, f"/actors/{acts.index(by_id[oid])}/route", f"物体 {oid} 在被 {holder} 携带期间 despawn",
                            f"Object {oid} despawns while carried by {holder}", object=oid, why="despawn_carried", holder=holder))
+    return errs
+
+
+def _drive_issues(acts: list[dict]) -> list[Issue]:
+    """门 1 车道图驾驶（M23 §15.2、§15.4，E09）：`drive` 只对 `vehicle`，IDM 参数可解析（`vehicle.drive_params`）；`stop`、`park`
+    只对给出 `drive` 的车辆；`park` 须为末路点。问题码 `E-DRIVE`（611），`detail.why` 为 `class`、`params`、`needs_drive`、
+    `park_not_last`。"""
+    errs = []
+    for i, a in enumerate(acts):
+        drive, route = a.get("drive"), a.get("route", [])
+        if drive is not None and a["class"] != "vehicle":
+            errs.append(_e("E-DRIVE", 611, f"/actors/{i}/drive", f"drive 只适用于车辆，{a['id']} 为 {a['class']}",
+                           f"drive applies to vehicles only; {a['id']} is a {a['class']}", actor=a["id"], why="class"))
+            continue
+        if drive is not None:
+            from awr.sim.events.vehicle import drive_params
+
+            try:
+                drive_params(drive)
+            except ValueError as ex:
+                errs.append(_e("E-DRIVE", 611, f"/actors/{i}/drive", f"{a['id']} 的驾驶参数无效：{ex}", f"Invalid drive parameters of {a['id']}: {ex}",
+                               actor=a["id"], why="params"))
+        for j, w in enumerate(route):
+            do = w.get("do", "pass")
+            if do in ("stop", "park") and a["class"] == "vehicle" and drive is None:
+                errs.append(_e("E-DRIVE", 611, f"/actors/{i}/route/{j}/do", f"{a['id']} 的 {do} 动作需要 drive（车道图驾驶）",
+                               f"The {do} action of {a['id']} requires drive (lane-graph driving)", actor=a["id"], why="needs_drive"))
+            if do == "park" and j != len(route) - 1:
+                errs.append(_e("E-DRIVE", 611, f"/actors/{i}/route/{j}/do", f"{a['id']} 的 park 须为末路点", f"park must be the last waypoint of {a['id']}",
+                               actor=a["id"], why="park_not_last"))
     return errs
 
 
@@ -383,6 +416,7 @@ def gate1(doc: dict, anchors: dict[str, dict] | None) -> tuple[dict | None, list
                     errs.append(_e("E-FIRST-WAYPOINT", 611, f"{base}/route/{j + 1}", "despawn 或 enter_building 之后仍有路点",
                                    "Waypoints follow despawn or enter_building"))
     errs.extend(_carry_issues(acts, cls_of))                      # 物体携带次序（M23-FR-058，P0b）
+    errs.extend(_drive_issues(acts))                              # 车道图驾驶（M23 §15.2、§15.4，P0b）
     for gi, g in enumerate(doc.get("background", [])):
         if g["class"] == "dog":
             errs.append(_e("E-CLASS-UNSUPPORTED", 619, f"/background/{gi}/class", "背景狗在 P1 提供", "Background dogs are available from P1"))
