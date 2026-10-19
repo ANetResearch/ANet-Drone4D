@@ -402,13 +402,15 @@ class _GL:
         self.CheckFramebufferStatus = fn("glCheckFramebufferStatus", u)
         self.ClearBufferfv = fn("glClearBufferfv", u, i, p)
         self.ClearBufferuiv = fn("glClearBufferuiv", u, i, p)
+        self.Flush = fn("glFlush")
 
 
 class _Mrt:
-    """MRT 帧缓冲：颜色 f16×4、平面深度 f32、实例 u16、语义 u8，加 DEPTH32F 深度附件（reversed-Z）。"""
+    """MRT 帧缓冲：颜色 f16×4（`col_dtype = "f4"` 时 f32×4，热成像的表面温度与发射率）、平面深度 f32、实例 u16、语义 u8，
+    加 DEPTH32F 深度附件（reversed-Z）。"""
 
-    def __init__(self, ctx, gl: _GL, w: int, h: int) -> None:
-        self.col = ctx.texture((w, h), 4, dtype="f2")
+    def __init__(self, ctx, gl: _GL, w: int, h: int, *, col_dtype: str = "f2") -> None:
+        self.col = ctx.texture((w, h), 4, dtype=col_dtype)
         self.z = ctx.texture((w, h), 1, dtype="f4")
         self.inst = ctx.texture((w, h), 1, dtype="u2")
         self.sem = ctx.texture((w, h), 1, dtype="u1")
@@ -464,9 +466,12 @@ class _Target:
 
 
 class RasterCamera:
-    """持有 EGL 上下文与常驻世界外观；`render` 线程不安全（每 GPU 一个 worker 进程，M25 §6.14.1）。"""
+    """持有 EGL 上下文与常驻世界外观；`render` 线程不安全（每 GPU 一个 worker 进程，M25 §6.14.1）。
 
-    def __init__(self, scene: AppearanceScene, *, ctx=None) -> None:
+    `textures = False` 时不解码与上传纹理（热成像等只用几何的通道共用本对象的上下文时，省去纹理显存与加载时间；此时可见光绘制
+    按无纹理材质输出）。"""
+
+    def __init__(self, scene: AppearanceScene, *, ctx=None, textures: bool = True) -> None:
         import moderngl
         from PIL import Image
 
@@ -499,7 +504,7 @@ class RasterCamera:
         t0 = time.perf_counter()
         Image.MAX_IMAGE_PIXELS = None
         self.textures = []
-        for _mime, data in scene.textures:
+        for _mime, data in scene.textures if textures else ():
             import io
 
             with Image.open(io.BytesIO(data)) as im:
@@ -672,11 +677,12 @@ class RasterCamera:
                     prog["u_mv"].write(mv.T.astype("<f4").tobytes())
                     prog["u_mvp"].write((P @ mv).T.astype("<f4").tobytes())
                 tile = b.tile
-            if b.texture != bound:
-                prog["u_has_tex"].value = b.texture is not None
-                if b.texture is not None:
-                    self.textures[b.texture].use(0)
-                bound = b.texture
+            tex = b.texture if b.texture is not None and b.texture < len(self.textures) else None
+            if tex != bound:
+                prog["u_has_tex"].value = tex is not None
+                if tex is not None:
+                    self.textures[tex].use(0)
+                bound = tex
             (vao_rs if rs else vao).render()
             n += 1
         na = 0

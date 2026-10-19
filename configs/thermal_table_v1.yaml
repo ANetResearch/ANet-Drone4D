@@ -1,0 +1,48 @@
+# configs/thermal_table_v1.yaml（所有者 M25；M25 §15.6 参数表、AWR-05 §5.4.10；ADR-180；M25-FR-186）
+# 热成像参数表 thermal_table_v1：静态表面温度（按 d3-semantic@1 静态类别）、动态实体温度与发射率、天空有效温度、大气消光与降雨湿润。
+# 置信度 D（文献量级的暂定值），P0b 以公开热红外航拍样例的表观温差统计核对后冻结；修改任何数值即为新版本（version 改名），
+# 版本号与 sha256（本文件解析后规范 JSON 的摘要，与注释与排版无关）写入 FrameMeta、运行清单与榜单版本。
+# 加载与校验：awr.sensorsvc.thermal.render.load_thermal_table（未知键、缺键、类别码重复或越界一律报错）。
+# 温度单位 K，均为相对 T_air 的增量；发射率无量纲；消光系数单位 km⁻¹。
+schema: awr.thermal_table.v1
+version: thermal_table_v1
+confidence: D
+
+# 静态表面温度：T_s = T_air + dT_base + s·dT_sun·max(0, sin h)·[cos_i] + (1 − cloud)·dT_night·[h < 0] − wet·dT_wet
+#   s 为 thermal_static.npz 的逐三角形日照可见度（0–255 归一化），h 为事件起点太阳高度角，wet 在雨强 ≥ wet.rain_mmh 时为 1；
+#   sun_incidence: true 的类别（建筑立面）另乘入射余弦 cos_i = |n·sun|（三角形法向与太阳方向，双面网格取绝对值）。
+#   codes 为 d3-semantic@1 码；未列出的静态码（0 unclassified、7 low_object、11–15 等）取 default 行。
+static:
+  road:       {codes: [9, 10],   dT_base:  1.0, dT_sun: 12.0, dT_night: -1.0, dT_wet: 1.0, eps: 0.95}
+  ground:     {codes: [1],       dT_base:  0.5, dT_sun:  8.0, dT_night: -2.0, dT_wet: 0.8, eps: 0.93}
+  facade:     {codes: [6],       dT_base:  0.5, dT_sun:  6.0, dT_night: -1.0, dT_wet: 0.5, eps: 0.92, sun_incidence: true}
+  roof:       {codes: [5],       dT_base:  1.0, dT_sun: 15.0, dT_night: -4.0, dT_wet: 1.5, eps: 0.90}
+  vegetation: {codes: [2, 3, 4], dT_base: -1.5, dT_sun:  3.0, dT_night: -2.0, dT_wet: 0.5, eps: 0.98}
+  water:      {codes: [8],       dT_base: -2.0, dT_sun:  0.0, dT_night:  1.0, dT_wet: 0.0, eps: 0.96}
+  default:    {codes: [],        dT_base:  0.0, dT_sun:  4.0, dT_night: -1.5, dT_wet: 0.5, eps: 0.93}
+
+# 动态实体（演员代理几何与外观库共用的分区：base 着装、车身或皮毛，skin 裸露皮肤，engine 发动机区，exhaust 排气区）
+#   blend 模型：T = T_air + k·(t_ref_c + 273.15 − T_air)（着装有效表面温度）；skin_c 给出时皮肤分区取该绝对温度（°C）
+#   body 模型：T_base = T_air + dT_body + dT_body_sun·max(0, sin h)（演员按无遮挡日照计）；engine 与 exhaust 在 engine_on
+#     （行驶中或停车后 engine_on_after_stop_s 内）为 T_air + dT_engine、T_air + dT_exhaust，熄火后以 cool_tau_s 指数回落到 T_base：
+#     T = T_base + (T_on − T_base)·exp(−t_off/cool_tau_s)，t_off 为熄火时长（停车时长减 engine_on_after_stop_s）
+#   分区几何（代理网格局部帧，原点脚底中心，x 朝前，z 向上；l、h 为 size_mm 的长与高）：车身盒体上 x ≥ engine_x_frac·l 的部分为
+#     发动机区（前机盖与前脸），x ≤ exhaust_x_frac·l 且 z ≤ exhaust_z_frac·h 的部分为排气区（尾部下沿）。
+#   DSL actors[].thermal：surface_temp_c 覆盖 base 分区温度（°C），emissivity 覆盖全部分区发射率，profile 改用本表另一类别行。
+actors:
+  person:  {model: blend, t_ref_c: 34.0, k: 0.55, eps: 0.97, skin_c: 33.0, skin_eps: 0.98}
+  dog:     {model: blend, t_ref_c: 38.0, k: 0.60, eps: 0.97}
+  vehicle: {model: body, dT_body: 2.0, dT_body_sun: 8.0, eps: 0.90, dT_engine: 45.0, dT_exhaust: 80.0, engine_on_after_stop_s: 120.0,
+            cool_tau_s: 600.0, engine_x_frac: 0.2, exhaust_x_frac: -0.45, exhaust_z_frac: 0.35}
+  machine: {model: body, dT_body: 2.0, dT_body_sun: 8.0, eps: 0.90}
+  uav:     {model: body, dT_body: 3.0, dT_body_sun: 4.0, eps: 0.90}
+  object:  {model: body, dT_body: 0.0, dT_body_sun: 4.0, eps: 0.93}
+
+# 天空有效温度 T_sky = T_air + dT_clear·(1 − cloud_factor·cloud)（晴空 T_air − 25 K，全云 T_air − 5 K）
+sky: {dT_clear: -25.0, cloud_factor: 0.8}
+
+# 长波红外消光 β = clear_a + clear_rh·rh + fog_k·fog_c/V_km（给出雾能见度时）+ rain_a·R^rain_exp（R 为雨强 mm/h），τ(d) = exp(−β·d)
+extinction_per_km: {clear_a: 0.02, clear_rh: 0.06, fog_k: 0.5, fog_c: 3.912, rain_a: 0.25, rain_exp: 0.63}
+
+# 降雨湿润：雨强 ≥ rain_mmh 时 wet = 1，静态与动态发射率 + eps_add（上限 eps_max）
+wet: {rain_mmh: 0.5, eps_add: 0.02, eps_max: 0.99}
