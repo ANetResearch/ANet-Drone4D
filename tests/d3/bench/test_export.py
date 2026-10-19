@@ -9,7 +9,12 @@
 - test 划分与评测运行（`ranked_eval`、`kind = submission`）导出返回 691 并写审计，数据集目录中不出现任何产物；
 - 两次导出逐字节一致（导出清单的生成时刻除外）；
 - 派生物按保留期清理：bag 7 天、逐文件 30 天，清理后 697；来源 Run 清理后导出 697；
-- 真实 Env L2-depth 运行（CPU 替身渲染）可按同一流程导出并核对一致。
+- 真实 Env L2-depth 运行（CPU 替身渲染）可按同一流程导出并核对一致；
+- v1.6（B26）热成像 u16：`/uav/{id}/thermal/{name}` 的交付字节解码与导出 PNG16 逐值相同（含 0 与 65535 饱和值），来源 sha256 为交付
+  字节 sha256，独立解码器（Pillow）读回一致；agc_jpeg 预览按存档字节原样导出且不混入 RGB 与 bag；篡改后 `verify_export` 报告不一致；
+- v1.6（B26）派生物保留接入：请求类别（transient、standard）登记与清单一致；导出清单镜像到 `bag/` 与 bag 同寿（bag 被引用为 pinned
+  或晚于 files 重新派生时，files 到期后仍可核对与列出 bag）；清理作业 `export.retention.gc` 之后事件索引的 `exports`、清单哈希与
+  真值文件列表随之更新且仍通过 schema；dry-run 不改任何文件。
 """
 
 from __future__ import annotations
@@ -56,6 +61,7 @@ H = "a" * 64
 N_FRAMES = 10
 SLOTS = 20_000
 CAM = (4, 6)                                                   # (h, w)
+THERM = (6, 8)                                                 # 热成像 (h, w)
 WORLD_MANIFEST = {"schema": "awr.world_manifest.v1", "world_id": WID, "contentVersion": "1.0.0", "public": True,
                   "license": {"dataset": "CC-BY-4.0", "citation": "Mitko @bg3d, CC-BY-4.0", "url": "https://sketchfab.com/bg3d",
                               "notice": "Contains modified CC-BY-4.0 material", "redistribution": False,
@@ -107,7 +113,14 @@ def _semantic(seq: int) -> np.ndarray:
     return (np.arange(CAM[0] * CAM[1], dtype=np.uint8).reshape(CAM) + seq) % 40
 
 
-def build_run(d: Path, *, split: str = "dev", world: dict | None = None) -> Path:
+def _thermal(seq: int) -> np.ndarray:
+    """表观温度 u16（0.01 K/LSB）：250–350 K 随机，另含 0 与 65535 饱和值与 300.00 K 点。"""
+    a = np.random.default_rng(300 + seq).integers(25_000, 35_000, THERM).astype(np.uint16)
+    a[0, 0], a[0, 1], a[1, 0] = 0, 65535, 30_000
+    return a
+
+
+def build_run(d: Path, *, split: str = "dev", world: dict | None = None, thermal: bool = False) -> Path:
     import zstandard
 
     zc = zstandard.ZstdCompressor(level=3)
@@ -130,6 +143,13 @@ def build_run(d: Path, *, split: str = "dev", world: dict | None = None) -> Path
             w.write_camera("uav-01", "cam0", seq, t0 + 50_000_000, _jpeg(seq), depth_m=_depth(seq), period_ns=100_000_000)
             w.write_camera("uav-01", "slam_cam", seq, t0 + 30_000_000, _jpeg(1000 + seq), period_ns=100_000_000, agent_delivered=False)
             w.write_camera("uav-02", "cam0", seq, t0 + 50_000_000, _jpeg(2000 + seq), period_ns=100_000_000)
+            if thermal:                                            # uav-01 辐射测量 u16；uav-02 agc_jpeg 预览（开发运行）
+                w.write_thermal("uav-01", "therm0", {"sensor_id": "therm0", "seq": seq, "t_mid_ns": t0 + 40_000_000, "width": THERM[1],
+                                                     "height": THERM[0], "codec": "radiometric_u16",
+                                                     "temp_ck": zc.compress(_thermal(seq).astype("<u2").tobytes())}, period_ns=100_000_000)
+                w.write_thermal("uav-02", "therm0", {"sensor_id": "therm0", "seq": seq, "t_mid_ns": t0 + 40_000_000, "width": THERM[1],
+                                                     "height": THERM[0], "codec": "agc_jpeg", "temp_ck": _jpeg(3000 + seq)},
+                                period_ns=100_000_000)
             pts = _lidar_points(seq)
             w.write_lidar("uav-01", "lidar0", seq, t0, {"schema": "awr.sensor.lidar_frame.v2", "sensor_id": "lidar0", "frame_seq": seq,
                                                         "timebase_ns": t0, "point_count": len(pts), "point_dt_ns": 5000,
@@ -427,7 +447,9 @@ def test_export_is_deterministic(src: Path, tmp_path: Path) -> None:
     ma.pop("generated_unix_ns"), mb.pop("generated_unix_ns")
     assert ma == mb
     diff = [k for k in ta if ta[k] != tb[k]]
-    assert set(diff) == {f"runs/{RID}/derived/export_manifest.json", "index.json"}   # 两者只差清单生成时刻（索引登记清单哈希）
+    man_paths = {f"runs/{RID}/derived/export_manifest.json", f"runs/{RID}/derived/bag/export_manifest.json"}   # 主清单与 bag/ 镜像
+    assert ta[f"runs/{RID}/derived/bag/export_manifest.json"] == ta[f"runs/{RID}/derived/export_manifest.json"]
+    assert set(diff) == man_paths | {"index.json"}                                  # 两者只差清单生成时刻（索引登记清单哈希）
     ia, ib = json.loads(ta["index.json"]), json.loads(tb["index.json"])
     for i in (ia, ib):
         i["runs"][0].pop("export_manifest_sha256")
@@ -435,7 +457,7 @@ def test_export_is_deterministic(src: Path, tmp_path: Path) -> None:
     # 原位重导出：文件不变，索引与清单（除生成时刻）不变
     c = export_run(a.run_dir, formats=("files", "bag"), layers=("obs", "run", "truth"), clock=lambda: next(t))
     tc = tree(a.event_dir)
-    assert {k for k in ta if ta[k] != tc[k]} == {f"runs/{RID}/derived/export_manifest.json", "index.json"}
+    assert {k for k in ta if ta[k] != tc[k]} == man_paths | {"index.json"}
     assert c.manifest["files"] == a.manifest["files"]
     # 增量导出：只重导 bag 时保留上次的逐文件条目
     d = export_run(a.run_dir, formats=("bag",), clock=lambda: next(t))
@@ -533,12 +555,170 @@ def test_rejections_689(src: Path, tmp_path: Path) -> None:
     assert ei.value.code == 685 and ei.value.detail["why"] == "quota_stop"
 
 
+# ---------------------------------------------------------------------- 热成像 u16（v1.6，B26）
+def test_thermal_u16_matches_raw_mcap(tmp_path: Path) -> None:
+    import io
+
+    from awr.bench.recorder.channels import decode_thermal_message
+
+    src = build_run(tmp_path / "env-runs" / RID, thermal=True)
+    res = _export(src, tmp_path / "d3")
+    der, man = res.run_dir / "derived", res.manifest
+    by = {e["path"]: e for e in man["files"]}
+    assert check_export_manifest(man) == [] and man["counts"]["thermal_u16"] == N_FRAMES and man["counts"]["thermal_agc"] == N_FRAMES
+    assert man["counts"]["rgb"] == 3 * N_FRAMES and man["skipped"] == [{"what": "bag/uav-02", "why": "no lidar channel"}]
+    q = man["quantization"]["thermal_u16"]
+    assert q["lossless"] is True and q["unit"] == "0.01 K" and "kelvin = v / 100" in q["encoding"]
+    # 以 mcap 读取器独立解码来源：交付字节 → u16，与导出 PNG16 逐值相同；来源 sha256 为交付字节 sha256
+    PIL = pytest.importorskip("PIL.Image")
+    n = 0
+    for _topic, seq, t, data in _msgs(src / "raw.mcap", ["/uav/uav-01/thermal/therm0"]):
+        msg = decode_thermal_message(data, decode=True)
+        e = by[f"uav-01/thermal_u16/{seq:06d}.png"]
+        png = (der / e["path"]).read_bytes()
+        v = read_png_gray(png)
+        assert v.dtype == np.uint16 and v.shape == THERM and np.array_equal(v, msg["temp_ck"]) and np.array_equal(v, _thermal(seq))
+        assert np.array_equal(np.asarray(PIL.open(io.BytesIO(png))).astype(np.uint16), v)          # 通用解码器读回一致
+        assert e["source_sha256"] == hashlib.sha256(msg["payload"]).hexdigest() != e["sha256"] and e["t_ns"] == t
+        assert v[0, 0] == 0 and v[0, 1] == 65535 and v[1, 0] / 100 == 300.0                          # 饱和值原样、开尔文 = v / 100
+        n += 1
+    assert n == N_FRAMES
+    # 与 Agent 侧解码（ThermalObs.temp_ck）同一结果；BN-49 帧索引页的 sha256 与清单来源哈希一致
+    from awr.agentsdk.schemas import decode_thermal_obs
+
+    fs = FrameStore(res.run_dir)
+    f = fs.frame("uav-01", "therm0", 3)
+    obs = {"codec": "radiometric_u16", "width": THERM[1], "height": THERM[0], "temp_ck": f.payload}
+    assert np.array_equal(decode_thermal_obs(obs), read_png_gray((der / "uav-01/thermal_u16/000003.png").read_bytes()))
+    page = fs.index_page("uav-01", "therm0")
+    assert all(i["sha256"] == by[f"uav-01/thermal_u16/{i['seq']:06d}.png"]["source_sha256"] for i in page["items"])
+    fs.close()
+    # agc_jpeg 预览：存档字节原样，不归入 RGB，也不被 bag 选作相机
+    for _topic, seq, _t, data in _msgs(src / "raw.mcap", ["/uav/uav-02/thermal/therm0"]):
+        from foxglove_schemas_protobuf.CompressedImage_pb2 import CompressedImage
+
+        m = CompressedImage()
+        m.ParseFromString(data)
+        assert (der / f"uav-02/thermal_agc/{seq:06d}.jpg").read_bytes() == m.data == _jpeg(3000 + seq)
+    assert not any("therm0" in p for p in by if "/rgb/" in p)
+    assert next(e for e in man["files"] if e["kind"] == "bag")["stats"]["camera"] == "slam_cam"
+    rep = verify_export(res.run_dir)
+    assert rep["ok"], rep
+    assert rep["checked"]["thermal_u16"] == N_FRAMES and rep["checked"]["thermal_agc"] == N_FRAMES and rep["manifest"] == "export_manifest.json"
+    # 篡改一个像素（清单同步改写哈希）后，逐值比对报告不一致
+    p = der / "uav-01/thermal_u16/000002.png"
+    v = read_png_gray(p.read_bytes())
+    v[2, 3] += 1
+    p.write_bytes(png_gray(v))
+    doc = json.loads(res.manifest_path.read_text())
+    for e in doc["files"]:
+        if e["path"] == "uav-01/thermal_u16/000002.png":
+            e["sha256"], e["bytes"] = hashlib.sha256(p.read_bytes()).hexdigest(), p.stat().st_size
+    res.manifest_path.write_text(json.dumps(doc), encoding="utf-8")
+    bad = verify_export(res.run_dir)
+    assert not bad["ok"] and bad["mismatches"] == [{"path": "uav-01/thermal_u16/000002.png", "why": "thermal_u16 differs from raw.mcap temp_ck"}]
+
+
+# ---------------------------------------------------------------------- 派生物保留接入（v1.6，B26）
+def test_retention_classes_mirror_and_index_reconcile(src: Path, tmp_path: Path, capsys) -> None:
+    from awr.bench.export import retention as xr
+    from awr.bench.export.dataset import _uav_dir
+
+    root = tmp_path / "d3"
+    pol = retention.RetentionPolicy(day_ns=60 * 10 ** 9)
+    day, t0 = pol.day_ns, 10 ** 18
+    # 请求类别：standard 作用于本次生成的两种格式；pinned 等其他取值 689
+    with pytest.raises(ExportError) as ei:
+        _export(src, root, retention_class="pinned")
+    assert (ei.value.code, ei.value.detail["why"]) == (689, "unknown_retention")
+    res = _export(src, tmp_path / "s", retention_class="standard", clock=lambda: t0)
+    rec = retention.load_record(res.run_dir)
+    assert res.manifest["retention"] == {"files": "standard", "bag": "standard"} and rec["derived"]["bag"]["retention"] == "standard"
+    assert xr.format_status(res.run_dir, "bag", policy=pol)["retain_until_unix_ns"] == t0 + 30 * day
+    # 只重导逐文件：bag 保留上次的类别
+    again = export_run(res.run_dir, formats=("files",), layers=("obs",), clock=lambda: t0 + 1)
+    assert again.manifest["retention"] == {"files": "standard", "bag": "standard"}
+    # 缺省类别导出，bag 被发布包引用为 pinned
+    res = _export(src, root, clock=lambda: t0)
+    retention.register_run(res.run_dir, retention="standard", t0_unix_ns=t0)
+    mirror = res.run_dir / "derived" / "bag" / "export_manifest.json"
+    assert mirror.read_bytes() == res.manifest_path.read_bytes()
+    retention.sync_references(root, "release:r1", [(RID, "bag")])
+    ev = res.event_dir
+    idx0 = (ev / "index.json").read_bytes()
+    plan = xr.gc(root, policy=pol, now=t0 + 31 * day, dry_run=True)                # dry-run：只返回计划
+    assert plan["deleted"] and plan["indexes"] == [] and (ev / "index.json").read_bytes() == idx0 and res.manifest_path.is_file()
+    out = xr.gc(root, policy=pol, now=t0 + 31 * day)                               # files 到期（含主清单），pinned bag 保留
+    assert not res.manifest_path.exists() and not (res.run_dir / "derived" / "uav-01").exists() and mirror.is_file()
+    assert (res.run_dir / "derived" / "bag" / "uav-01.bag").is_file()
+    path, doc = xr.load_manifest(res.run_dir)
+    assert path == mirror and xr.live_formats(res.run_dir, doc) == ["bag"]
+    rep = verify_export(res.run_dir)
+    assert rep["ok"] and rep["manifest"] == "bag/export_manifest.json" and rep["checked"] == {"bag": 1}
+    assert len(rep["expired"]) == len(doc["files"]) - 1 and "bag/uav-01.bag" not in rep["expired"]
+    items = artifact_items(res.run_dir, policy=pol)
+    assert [(i["path"], i["kind"], i["retention"]) for i in items] == [("bag/export_manifest.json", "export_manifest", "pinned"),
+                                                                        ("bag/uav-01.bag", "bag", "pinned")]
+    assert items[1]["retain_until_unix_ns"] is None
+    idx = json.loads((ev / "index.json").read_text())
+    assert check_index(idx) == [] and idx["runs"][0]["exports"] == ["bag"]
+    assert idx["runs"][0]["export_manifest_sha256"] == hashlib.sha256(mirror.read_bytes()).hexdigest()
+    assert out["indexes"][0]["runs"][RID] == {"exports_before": ["bag", "files"], "exports": ["bag"]}
+    assert xr.gc(root, policy=pol, now=t0 + 32 * day)["indexes"] == []             # 状态不变时索引不重写
+    # 引用撤销后 bag 按 transient 到期，镜像随之清理；来源 Run 到期后真值文件从索引中移除
+    retention.sync_references(root, "release:r1", [])
+    xr.gc(root, policy=pol, now=t0 + 33 * day)
+    assert not (res.run_dir / "derived" / "bag").exists() and xr.load_manifest(res.run_dir) == (None, None)
+    assert artifact_items(res.run_dir) == [] and verify_export(res.run_dir)["expired"] == ["export_manifest.json"]
+    idx = json.loads((ev / "index.json").read_text())
+    assert idx["runs"][0]["exports"] == [] and idx["runs"][0]["export_manifest_sha256"] is None
+    assert {r["path"] for r in idx["truth"]} == {f"truth/run_{RID}.mcap"}
+    out = xr.gc(root, policy=pol, now=t0 + 181 * day)
+    idx = json.loads((ev / "index.json").read_text())
+    assert idx["truth"] == [] and out["indexes"][0]["truth_removed"] == [f"truth/run_{RID}.mcap"] and check_index(idx) == []
+    assert not (ev / "truth" / f"run_{RID}.mcap").exists()
+    # 命令行（数据根级）：gc --dry-run 与 reconcile
+    assert xr.main(["--data-root", str(root), "gc", "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["dry_run"] is True
+    assert xr.main(["--data-root", str(root), "reconcile"]) == 0 and json.loads(capsys.readouterr().out) == []
+    # 机号与派生物种类子目录同名时拒绝（否则清理会把逐文件导出当作该种类）
+    with pytest.raises(ExportError) as ei:
+        _uav_dir("bag")
+    assert ei.value.detail["why"] == "uav_id_reserved"
+
+
+def test_bag_rederived_after_files_keeps_manifest(src: Path, tmp_path: Path) -> None:
+    """bag 晚于 files 重新派生：files 到期后清单镜像仍在，bag 可核对、可列出；bag 到期后一并清理。"""
+    from awr.bench.export import retention as xr
+
+    root = tmp_path / "d3"
+    pol = retention.RetentionPolicy(day_ns=60 * 10 ** 9)
+    day, t0 = pol.day_ns, 10 ** 18
+    res = _export(src, root, clock=lambda: t0)
+    retention.register_run(res.run_dir, retention="standard", t0_unix_ns=t0)
+    xr.gc(root, policy=pol, now=t0 + 8 * day)                                        # 首次 bag 到期
+    assert not (res.run_dir / "derived" / "bag").exists() and verify_export(res.run_dir)["expired"] == ["bag/uav-01.bag"]
+    assert json.loads((res.event_dir / "index.json").read_text())["runs"][0]["exports"] == ["files"]
+    export_run(res.run_dir, formats=("bag",), clock=lambda: t0 + 28 * day)            # 第 28 天重新派生 bag
+    assert json.loads((res.event_dir / "index.json").read_text())["runs"][0]["exports"] == ["bag", "files"]
+    xr.gc(root, policy=pol, now=t0 + 31 * day)                                       # files 到期，bag 未到期
+    rep = verify_export(res.run_dir)
+    assert rep["ok"] and rep["manifest"] == "bag/export_manifest.json" and rep["checked"] == {"bag": 1}
+    assert [i["kind"] for i in artifact_items(res.run_dir, policy=pol)] == ["export_manifest", "bag"]
+    assert all(i["retention"] == "transient" and i["retain_until_unix_ns"] == t0 + 35 * day for i in artifact_items(res.run_dir, policy=pol))
+    assert json.loads((res.event_dir / "index.json").read_text())["runs"][0]["exports"] == ["bag"]
+    xr.gc(root, policy=pol, now=t0 + 36 * day)
+    assert xr.load_manifest(res.run_dir) == (None, None)
+    assert json.loads((res.event_dir / "index.json").read_text())["runs"][0]["exports"] == []
+
+
 # ---------------------------------------------------------------------- 命令行
 def test_cli_export_and_verify(src: Path, tmp_path: Path, capsys) -> None:
     root = tmp_path / "d3"
-    assert main(["--data-root", str(root), "--run-dir", str(src), "--formats", "files,bag", "--layers", "obs,run,truth"]) == 0
+    assert main(["--data-root", str(root), "--run-dir", str(src), "--formats", "files,bag", "--layers", "obs,run,truth", "--retention", "standard"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["counts"]["rgb"] == 3 * N_FRAMES and Path(out["manifest"]).is_file()
+    assert retention.load_record(Path(out["run_dir"]))["derived"]["bag"]["retention"] == "standard"
     assert main(["--data-root", str(root), "--run", RID, "--verify"]) == 0
     assert json.loads(capsys.readouterr().out)["ok"] is True
     assert main(["--data-root", str(root), "--run", RID, "--formats", "lerobot"]) == 1

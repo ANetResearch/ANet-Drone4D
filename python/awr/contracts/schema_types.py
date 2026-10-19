@@ -3888,7 +3888,7 @@ class ExportManifestV1Files(TypedDict):
     path: str
     format: Literal["files", "bag"]
     layer: Literal["obs", "run", "truth"]
-    kind: Literal["rgb", "depth_log16", "seg_instance", "seg_semantic", "lidar", "state", "messages", "actions", "reports", "bag"]
+    kind: Literal["rgb", "depth_log16", "thermal_u16", "thermal_agc", "seg_instance", "seg_semantic", "lidar", "state", "messages", "actions", "reports", "bag"]
     uav: NotRequired[str]
     sensor: NotRequired[str]
     seq: NotRequired[int]

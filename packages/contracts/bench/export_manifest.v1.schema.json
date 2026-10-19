@@ -88,7 +88,7 @@
     },
     "retention": {
       "type": "object",
-      "description": "Derived-artifact retention class per format (M27-FR-058: bag transient 7 d, files standard 30 d)",
+      "description": "Derived-artifact retention class per format (M27-FR-058: bag transient 7 d, files standard 30 d by default; v1.6 (B26): an export request may set transient or standard for the formats it generates)",
       "additionalProperties": {"enum": ["transient", "standard", "pinned"]}
     },
     "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
@@ -111,7 +111,8 @@
           "path": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"},
           "format": {"enum": ["files", "bag"]},
           "layer": {"enum": ["obs", "run", "truth"]},
-          "kind": {"enum": ["rgb", "depth_log16", "seg_instance", "seg_semantic", "lidar", "state", "messages", "actions", "reports", "bag"]},
+          "kind": {"enum": ["rgb", "depth_log16", "thermal_u16", "thermal_agc", "seg_instance", "seg_semantic", "lidar", "state", "messages", "actions", "reports", "bag"],
+                   "description": "v1.6 (B26, additive): thermal_u16 = radiometric_u16 thermal frame as PNG16 in 0.01 K per LSB, decoded from the delivered temp_ck bytes (source_sha256); thermal_agc = agc_jpeg thermal preview bytes as archived (dev runs only)"},
           "uav": {"type": "string"},
           "sensor": {"type": "string"},
           "seq": {"type": "integer", "minimum": 0},

@@ -5527,7 +5527,7 @@ export interface ExportManifestV1 {
     versions: {}
   }
   /**
-   * Derived-artifact retention class per format (M27-FR-058: bag transient 7 d, files standard 30 d)
+   * Derived-artifact retention class per format (M27-FR-058: bag transient 7 d, files standard 30 d by default; v1.6 (B26): an export request may set transient or standard for the formats it generates)
    */
   retention: {
     [k: string]: 'transient' | 'standard' | 'pinned'
@@ -5547,7 +5547,22 @@ export interface ExportManifestV1 {
     path: string
     format: 'files' | 'bag'
     layer: 'obs' | 'run' | 'truth'
-    kind: 'rgb' | 'depth_log16' | 'seg_instance' | 'seg_semantic' | 'lidar' | 'state' | 'messages' | 'actions' | 'reports' | 'bag'
+    /**
+     * v1.6 (B26, additive): thermal_u16 = radiometric_u16 thermal frame as PNG16 in 0.01 K per LSB, decoded from the delivered temp_ck bytes (source_sha256); thermal_agc = agc_jpeg thermal preview bytes as archived (dev runs only)
+     */
+    kind:
+      | 'rgb'
+      | 'depth_log16'
+      | 'thermal_u16'
+      | 'thermal_agc'
+      | 'seg_instance'
+      | 'seg_semantic'
+      | 'lidar'
+      | 'state'
+      | 'messages'
+      | 'actions'
+      | 'reports'
+      | 'bag'
     uav?: string
     sensor?: string
     seq?: number

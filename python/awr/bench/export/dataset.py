@@ -1,4 +1,4 @@
-"""数据集导出器与导出清单（M27-FR-064、065、066、067、068、072、073、074；M27 §7.6；AWR-05 §5.6.4；D3-AC-63、M27-AC-012、013）。
+"""数据集导出器与导出清单（M27-FR-058、064、065、066、067、068、072、073、074；M27 §7.6；AWR-05 §5.6.4；D3-AC-63、M27-AC-012、013）。
 
 `export_run` 把一个 dev 划分的 Run 放入数据集三层目录，并按需派生逐文件导出与 ROS bag：
 
@@ -13,11 +13,15 @@
             ├── export_manifest.json       drone4d.bench.export_manifest.v1
             ├── <uav>/rgb/<seq>.jpg        存档 JPEG 字节原样（sha256 与 frames.idx 索引页、BN-50 单帧相同）
             ├── <uav>/depth_log16/<seq>.png        L2-depth：PNG16，v = round(65534 · log10(d / 0.3) / 4)，哨兵 65535
+            ├── <uav>/thermal_u16/<seq>.png        热成像 radiometric_u16：PNG16，值为 ThermalObs.temp_ck 解码后的 u16（0.01 K/LSB，
+            │                                      开尔文 = v / 100），无损；来源载荷 sha256 为 Agent 收到的交付字节（zstd 帧）
+            ├── <uav>/thermal_agc/<seq>.jpg        热成像 agc_jpeg 预览（只在开发运行出现）：存档 JPEG 字节原样，非辐射测量值
             ├── <uav>/seg/{instance,semantic}/<seq>.png   真值层（只在 layers 含 truth 时）：实例 u16、语义 u8，无损
             ├── <uav>/lidar/<seq>.bin      `awr.sensor.lidar_frame.v2` 消息字节原样
             ├── <uav>/state.jsonl          带噪导航解（`/uav/{id}/obs/nav`），每行 {k, ...NavSolution}
             ├── messages.jsonl  actions.jsonl  reports.jsonl     运行层（`/net/records`、`/uav/{id}/action`、`/uav/{id}/report`）
             └── bag/<uav>.bag              ROS1 bag（§5.4.6 合同：Livox CustomMsg 全槽位、`/livox/imu` g 单位、`/left_camera/image/compressed`）
+                bag/export_manifest.json   导出清单的镜像（与 bag 同寿，见 `awr.bench.export.retention`）
 
 同一机有多个同类传感器时，传感器名作为一级子目录插入（如 `<uav>/rgb/<cam>/<seq>.jpg`），序号补零到 6 位；导出清单逐文件登记
 机号、传感器、序号与时刻。
@@ -27,22 +31,26 @@
 - 划分（M27-FR-073；B11；ADR-147）：Run 的有效划分取运行清单声明与事件登记中最严格者（`split.run_split`）；test 划分与评测运行
   （保留级别 `ranked_eval` 或 `kind = submission`）一律拒绝，抛 `split.SplitAccessDenied`（691，`detail.why ∈ {test_split, eval_run}`），
   拒绝写访问审计 `deny`（`op = export`）。只导出 dev 真值，test 真值留在 hidden/（`HiddenStore`）。
-- 一致性：`verify_export` 逐文件核对导出清单的 sha256 与长度，并与来源逐项比对：RGB 与 LiDAR 与存档字节相同、深度按同一量化
-  重算逐像素相同、实例与语义图与真值块解码结果相同、jsonl 逐行与通道消息一致、bag 通过 §5.4.6 合同读回校验且帧数与存档相同。
+- 一致性：`verify_export` 逐文件核对导出清单的 sha256 与长度，并与来源逐项比对：RGB、LiDAR 与热成像 AGC 预览与存档字节相同、
+  深度按同一量化重算逐像素相同、热成像 u16 与存档交付字节（`/uav/{id}/thermal/{name}` 的 zstd 载荷）解码结果逐值相同且来源
+  sha256 等于交付字节 sha256、实例与语义图与真值块解码结果相同、jsonl 逐行与通道消息一致、bag 通过 §5.4.6 合同读回校验且帧数与
+  存档相同。
 - 确定性（M27-FR-074）：同一 `raw.mcap`、真值文件与导出器版本，导出文件与 `index.json` 逐字节一致，导出清单只有
   `generated_unix_ns` 不同（PNG 自行编码：Up 滤波 + zlib 6 级；JSON 键排序、紧凑分隔符）。
 - 许可（ADR-154；§14）：导出清单的 `license` 取世界清单的许可、署名与 `derivedFrom`，并声明"经修改（米制标定、调平、派生）"；
   `generation` 为生成工具声明（仿真生成、非真实采集；外观层为生成式时另行声明）。缺少许可、署名或说明时 689 拒绝
   （`strict_license = False` 时照常导出并在 `license.missing` 中列出，供合成测试世界使用）。
-- 保留（M27-FR-058；B05）：导出完成后以 `retention.register_derived` 登记 `files`（standard 30 天）与 `bag`（transient 7 天），
-  由 `retention_gc` 按期清理；来源 Run 已清理时 697。
+- 保留（M27-FR-058；B05；B26）：导出完成后经 `awr.bench.export.retention.register_export` 登记 `files`（缺省 standard 30 天）与
+  `bag`（缺省 transient 7 天），请求可以 `retention ∈ {transient, standard}` 指定本次生成格式的类别；由清理作业
+  `awr.bench.export.retention.gc`（`retention_gc` + 事件索引重写）按期清理；清单镜像到 `bag/` 使 bag 晚于 files 到期时仍有清单；
+  `artifact_items` 不列已清理的格式；来源 Run 已清理时 697。
 - 原因码：689 `BENCH_EXPORT_FAILED`（规格、清单、完整性或许可问题，`detail.why` 说明）；691；697 `ARTIFACT_EXPIRED`；
   685 `STORAGE_QUOTA_EXCEEDED`（给出 `gate` 时按派生作业准入）；bag 不满足 §5.4.6 合同时由 `awr.sensorsvc.slam.bag` 抛 642。
 
-LeRobot 与 OpenLABEL（M27-FR-070、071）属 P3，随 ADR-194 移出 D3 封板，请求时 689（`why = format_unavailable`）；热成像 u16 的
-逐文件导出由 B26 接入（当前在 `skipped` 中登记）。
+LeRobot 与 OpenLABEL（M27-FR-070、071）属 P3，随 ADR-194 移出 D3 封板，请求时 689（`why = format_unavailable`）；编码未知的观测通道
+登记在清单的 `skipped` 中。
 
-命令行：`python -m awr.bench.export --run <run_id> [--formats files,bag] [--layers obs,run,truth] [--event-dir DIR] [--verify]`，
+命令行：`python -m awr.bench.export --run <run_id> [--formats files,bag] [--layers obs,run,truth] [--event-dir DIR] [--retention C] [--verify]`，
 数据根取 `--data-root` 或 `AWR_BENCH_DATA_ROOT`（缺省 /data/d3）。
 """
 
@@ -69,7 +77,8 @@ from pathlib import Path
 import numpy as np
 
 from awr.bench import retention
-from awr.bench.recorder.channels import TRUTH_CAMERA_TOPIC
+from awr.bench.export import retention as export_retention
+from awr.bench.recorder.channels import THERMAL_CODEC, THERMAL_TOPIC, TRUTH_CAMERA_TOPIC
 from awr.bench.recorder.frames_idx import FramesIdx
 from awr.bench.recorder.lidar import LIDAR_CODEC, unpack_lidar_frame
 from awr.bench.recorder.read import FrameStore, run_attachments
@@ -77,13 +86,13 @@ from awr.bench.split import SplitAccessDenied, SplitRegistry, declared_run_split
 
 __all__ = ["DEFAULT_LAYERS", "EXPORTER", "EXPORTER_VERSION", "FORMATS", "INDEX_SCHEMA", "LAYERS", "LOG16_D_MAX_M", "LOG16_D_MIN_M",
            "LOG16_SENTINEL", "SCHEMA", "ExportError", "ExportResult", "artifact_items", "check_export_manifest", "check_index",
-           "depth_log16_decode", "depth_log16_encode", "export_run", "main", "png_gray", "read_png_gray", "verify_export"]
+           "depth_log16_decode", "depth_log16_encode", "export_run", "main", "png_gray", "read_png_gray", "thermal_u16", "verify_export"]
 
 EXPORTER = "awr.bench.export"
-EXPORTER_VERSION = "1.0.0"
+EXPORTER_VERSION = "1.1.0"                                          # 1.1.0（B26）：热成像 u16 与 AGC 预览逐文件导出
 SCHEMA = "drone4d.bench.export_manifest.v1"
 INDEX_SCHEMA = "drone4d.bench.dataset_index.v1"
-MANIFEST = "export_manifest.json"
+MANIFEST = export_retention.MANIFEST
 FORMATS = ("files", "bag")
 DEFERRED_FORMATS = {"lerobot": "P3", "openlabel": "P3"}           # M27-FR-070、071；ADR-194 移出 D3 封板
 LAYERS = ("obs", "run", "truth")
@@ -91,7 +100,7 @@ DEFAULT_LAYERS = ("obs", "run")
 RUN_FILES = ("run_manifest.json", "raw.mcap", "frames.idx", "evaluation.json", retention.RETENTION_FILE)
 EVENT_DIR_FILES = ("event.yaml", "plan.json")
 EVENT_TRUTH_FILES = ("event_truth.json", "event_graph.json", "observability.npz")
-DERIVED_RETENTION = {"files": "standard", "bag": "transient"}       # M27-FR-058
+DERIVED_RETENTION = export_retention.DERIVED_RETENTION              # M27-FR-058
 SEQ_DIGITS = 6
 
 # depth_log16（M27-FR-067；AWR-05 §5.6.4）：d = 0.3 · 10^(4 · v / 65534) 米，v = 65535 为无回波、越界或无覆盖
@@ -384,11 +393,15 @@ class _Source:
             yield int(m.log_time), int(m.sequence), bytes(m.data)
 
     def sensors(self) -> dict[str, dict[str, list[str]]]:
-        """{uav: {rgb|depth|lidar|other: [sensor_id]}}（按 frames.idx 的通道元数据 codec 归类）。"""
+        """{uav: {rgb|depth|lidar|thermal|thermal_agc|other: [sensor_id]}}（按 frames.idx 的通道与元数据 codec 归类）：热成像通道
+        `/uav/{id}/thermal/{name}` 的 16UC1 为辐射测量 u16（`thermal`），jpeg 为 agc_jpeg 预览（`thermal_agc`），不计入 RGB。"""
         out: dict[str, dict[str, list[str]]] = {}
         for (uav, sensor), info in sorted(self.open().meta.items()):
             codec = info.get("codec", "jpeg")
-            kind = {"jpeg": "rgb", "32FC1": "depth", LIDAR_CODEC: "lidar"}.get(codec, "other")
+            if THERMAL_TOPIC.match(str(info.get("channel", ""))):
+                kind = {THERMAL_CODEC: "thermal", "jpeg": "thermal_agc"}.get(codec, "other")
+            else:
+                kind = {"jpeg": "rgb", "32FC1": "depth", LIDAR_CODEC: "lidar"}.get(codec, "other")
             out.setdefault(uav, {}).setdefault(kind, []).append(sensor)
         return out
 
@@ -447,15 +460,38 @@ class _Out:
         return e
 
 
+def _uav_dir(uav: str) -> str:
+    """机号作为 `derived/` 下的一级目录：与派生物种类子目录（`bag/`、`rrd/`、`video/` 等）同名时保留清理会把它当作该种类，689 拒绝。"""
+    if uav in retention.DERIVED_KINDS:
+        raise ExportError(689, "uav_id_reserved", uav=uav, reserved=list(retention.DERIVED_KINDS))
+    return uav
+
+
 def _sub(uav: str, kind_dir: str, sensor: str, multi: bool) -> str:
-    return f"{uav}/{kind_dir}/{sensor}" if multi else f"{uav}/{kind_dir}"
+    return f"{_uav_dir(uav)}/{kind_dir}/{sensor}" if multi else f"{_uav_dir(uav)}/{kind_dir}"
+
+
+def thermal_u16(payload: bytes, width: int, height: int) -> np.ndarray:
+    """热成像存档载荷（`ThermalObs.temp_ck` 交付字节：u16le + 单个 zstd 帧）→ (H, W) uint16（0.01 K/LSB）；解压长度须为 2·W·H。"""
+    from awr.agentsdk.schemas import decode_thermal_obs
+
+    return decode_thermal_obs({"codec": "radiometric_u16", "width": int(width), "height": int(height), "temp_ck": payload})
+
+
+def _thermal_frame(fs: FrameStore, uav: str, sensor: str, seq: int):
+    f = fs.frame(uav, sensor, seq)
+    try:
+        return f, thermal_u16(f.payload, f.width or 0, f.height or 0)
+    except ValueError as e:                                       # zstd 帧损坏或长度与 2·W·H 不符
+        raise ExportError(689, "thermal_payload_invalid", uav=uav, sensor=sensor, seq=seq, error=str(e)) from None
 
 
 def _export_obs(src: _Source, out: _Out) -> None:
-    """观测层：RGB 原样、depth_log16、LiDAR 消息原样、带噪导航解。"""
+    """观测层：RGB 原样、depth_log16、热成像 u16（PNG16）与 AGC 预览原样、LiDAR 消息原样、带噪导航解。"""
     fs = src.open()
     for uav, kinds in src.sensors().items():
         rgb, depth, lidar = kinds.get("rgb", []), kinds.get("depth", []), kinds.get("lidar", [])
+        therm, agc = kinds.get("thermal", []), kinds.get("thermal_agc", [])
         for s in kinds.get("other", []):
             src.skipped.append({"what": f"{uav}/{s}", "why": f"codec {fs.meta[(uav, s)].get('codec')} has no per-file exporter yet"})
         for sensor in rgb:
@@ -472,6 +508,18 @@ def _export_obs(src: _Source, out: _Out) -> None:
                 v, st = depth_log16_encode(np.frombuffer(f.payload, "<f4").reshape(int(f.height), int(f.width)))
                 out.put(f"{base}/{_seq_name(f.seq, 'png')}", png_gray(v), fmt="files", layer="obs", kind="depth_log16", source=f.payload,
                         uav=uav, sensor=sensor, seq=f.seq, t_ns=f.t_ns, stats=st)
+        for sensor in therm:
+            base = _sub(uav, "thermal_u16", sensor, len(therm) > 1)
+            for r in fs.idx.span(uav, sensor, 0, 2 ** 32 - 1):
+                f, v = _thermal_frame(fs, uav, sensor, int(r["seq"]))
+                out.put(f"{base}/{_seq_name(f.seq, 'png')}", png_gray(v), fmt="files", layer="obs", kind="thermal_u16", source=f.payload,
+                        uav=uav, sensor=sensor, seq=f.seq, t_ns=f.t_ns)
+        for sensor in agc:
+            base = _sub(uav, "thermal_agc", sensor, len(agc) > 1)
+            for r in fs.idx.span(uav, sensor, 0, 2 ** 32 - 1):
+                f = fs.frame(uav, sensor, int(r["seq"]))
+                out.put(f"{base}/{_seq_name(f.seq, 'jpg')}", f.payload, fmt="files", layer="obs", kind="thermal_agc", source=f.payload,
+                        uav=uav, sensor=sensor, seq=f.seq, t_ns=f.t_ns)
         for sensor in lidar:
             base = _sub(uav, "lidar", sensor, len(lidar) > 1)
             for r in fs.idx.span(uav, sensor, 0, 2 ** 32 - 1):
@@ -485,7 +533,7 @@ def _export_obs(src: _Source, out: _Out) -> None:
         if not m:
             continue
         lines = [_canon({"k": seq, **msgpack.unpackb(data, raw=False)}) for _t, seq, data in src.messages(topic)]
-        out.put(f"{m.group(1)}/state.jsonl", b"".join(x + b"\n" for x in lines), fmt="files", layer="obs", kind="state", uav=m.group(1),
+        out.put(f"{_uav_dir(m.group(1))}/state.jsonl", b"".join(x + b"\n" for x in lines), fmt="files", layer="obs", kind="state", uav=m.group(1),
                 n=len(lines))
 
 
@@ -659,6 +707,11 @@ QUANTIZATION = {
                     "d_min_m": LOG16_D_MIN_M, "d_max_m": LOG16_D_MAX_M, "sentinel": LOG16_SENTINEL,
                     "sentinel_meaning": "no return, no coverage or out of [0.3, 3000] m", "rel_step": round(LOG16_REL_STEP, 9),
                     "source": "L2-depth planar z f32 (raw.mcap /uav/{id}/camera/{name}/depth)"},
+    "thermal_u16": {"encoding": "png16 gray, apparent temperature v in 0.01 K per LSB (kelvin = v / 100), decoded from the radiometric_u16 "
+                                "ThermalObs.temp_ck payload as delivered to the agent", "lossless": True, "unit": "0.01 K",
+                    "source": "raw.mcap /uav/{id}/thermal/{name} (foxglove.RawImage 16UC1, data = u16le + one zstd frame); "
+                              "source_sha256 = sha256 of the delivered bytes"},
+    "thermal_agc": {"encoding": "jpeg, agc_jpeg thermal preview bytes as archived (dev runs only; not radiometric)", "lossless": True},
     "seg_instance": {"encoding": "png16 gray, instance id (camera_gt.v1 ground_truth.instance)", "lossless": True},
     "seg_semantic": {"encoding": "png8 gray, semantic code (d3-semantic@1)", "lossless": True},
     "lidar": {"encoding": "awr.sensor.lidar_frame.v2 message bytes as archived", "lossless": True},
@@ -838,12 +891,16 @@ def _audit(audit, action: str, principal, **fields) -> None:
 def export_run(run_dir: Path, *, dataset_root: Path | None = None, formats: Iterable[str] = ("files",), layers: Iterable[str] = DEFAULT_LAYERS,
                registry: SplitRegistry | None = None, audit=None, principal=None, kind: str | None = None, event_dir: Path | None = None,
                strict_license: bool = True, verify_bag: bool = True, gate=None, tenant: str | None = None,
-               clock: Callable[[], int] = time.time_ns) -> ExportResult:
+               retention_class: str | None = None, clock: Callable[[], int] = time.time_ns) -> ExportResult:
     """导出一个 Run（规则见模块说明）。`dataset_root` 缺省时 Run 须已在 `<dataset_root>/<event>/runs/<id>`（原位派生）；
     `registry` 给出时事件登记的划分参与判定；`audit`（`awr.bench.auth.AuditLog`）记录拒绝与导出；`gate`（`retention.StorageGate`）
-    给出时按派生作业准入（685）。返回 ExportResult；失败抛 ExportError、SplitAccessDenied（691）或 SensorSvcError（642）。"""
+    给出时按派生作业准入（685）；`retention_class`（transient 或 standard，AWR-17 `POST /runs/{rid}/exports` 的 `retention`）
+    给出时作为本次生成格式的保留类别，缺省 files standard、bag transient。返回 ExportResult；失败抛 ExportError、
+    SplitAccessDenied（691）或 SensorSvcError（642）。"""
     formats = list(dict.fromkeys(formats))
     layers = list(dict.fromkeys(layers))
+    if retention_class is not None and retention_class not in export_retention.REQUEST_CLASSES:
+        raise ExportError(689, "unknown_retention", retention=retention_class, allowed=list(export_retention.REQUEST_CLASSES))
     for f in formats:
         if f in DEFERRED_FORMATS:
             raise ExportError(689, "format_unavailable", format=f, phase=DEFERRED_FORMATS[f])
@@ -910,6 +967,9 @@ def export_run(run_dir: Path, *, dataset_root: Path | None = None, formats: Iter
     for e in entries:
         counts[e["kind"]] = counts.get(e["kind"], 0) + 1
     all_formats = sorted(set(formats) | set(keep_fmts), key=FORMATS.index)
+    classes = export_retention.classes_for(formats, retention_class)
+    prev_cls = (prev or {}).get("retention") or {}
+    ret = {f: classes[f] if f in classes else prev_cls.get(f, DERIVED_RETENTION[f]) for f in all_formats}
     all_layers = sorted(set(layers if "files" in formats else []) | set(keep_layers) | ({"obs"} if "bag" in formats else set()), key=LAYERS.index)
     from awr.contracts import CONTRACTS_VERSION
 
@@ -917,18 +977,14 @@ def export_run(run_dir: Path, *, dataset_root: Path | None = None, formats: Iter
            "generated_unix_ns": int(clock()), "run_id": src.run_id, "experiment_id": src.experiment_id, "event_id": src.event_id,
            "world_id": src.world_id, "split": "dev", "formats": all_formats, "layers": all_layers, "source": source,
            "quantization": {k: QUANTIZATION[k] for k in sorted(counts)}, "license": lic, "generation": _generation(src.manifest),
-           "retention": {f: DERIVED_RETENTION[f] for f in all_formats}, "counts": dict(sorted(counts.items())),
+           "retention": ret, "counts": dict(sorted(counts.items())),
            "skipped": sorted(src.skipped, key=lambda s: (s["what"], s["why"])), "files": entries}
     errs = check_export_manifest(doc)
     if errs:
         raise ExportError(689, "export_manifest_invalid", errors=errs[:10])
     data = _write_json(derived / MANIFEST, doc)
-    now = int(clock())
-    for f in all_formats:
-        if f in formats:
-            retention.register_derived(dst, f, retention=DERIVED_RETENTION[f], now=now)
-    if "files" not in formats and "files" not in retention.load_record(dst).get("derived", {}):
-        retention.register_derived(dst, "files", retention=DERIVED_RETENTION["files"], now=now)   # 清单本身归入 files 类
+    export_retention.mirror_manifest(derived, data, all_formats)        # bag/ 中的清单镜像，与 bag 同寿
+    export_retention.register_export(dst, classes, now=int(clock()))  # 只导出 bag 时清单本身归入 files 类
     idx = _update_index(ev_root, src, split, placed, all_formats, hashlib.sha256(data).hexdigest())
     nbytes = sum(e["bytes"] for e in entries)
     _audit(audit, "export", principal, op="export", run_id=src.run_id, event_id=src.event_id, formats=all_formats, layers=all_layers,
@@ -949,12 +1005,13 @@ def verify_export(run_dir: Path) -> dict:
 
     run_dir = Path(run_dir)
     derived = run_dir / "derived"
-    doc = _read_json(derived / MANIFEST)
+    mpath, doc = export_retention.load_manifest(run_dir)
     rep: dict = {"ok": False, "run_dir": str(run_dir), "checked": {}, "mismatches": [], "missing": [], "expired": []}
     if doc is None:
         exp = retention.expired_reason(run_dir, "files")
         rep["expired" if exp else "missing"].append(MANIFEST)
         return rep
+    rep["manifest"] = mpath.relative_to(derived).as_posix()
     if not (run_dir / "raw.mcap").is_file():
         rep["missing"].append("raw.mcap")
         return rep
@@ -992,9 +1049,11 @@ def verify_export(run_dir: Path) -> dict:
             why = None
             if len(b) != e["bytes"] or hashlib.sha256(b).hexdigest() != e["sha256"]:
                 why = "file differs from export_manifest"
-            elif e["kind"] in ("rgb", "lidar"):
+            elif e["kind"] in ("rgb", "lidar", "thermal_agc"):
                 f = fs.frame(e["uav"], e["sensor"], e["seq"])
                 why = None if f is not None and f.payload == b and f.t_ns == e["t_ns"] else "bytes differ from raw.mcap"
+            elif e["kind"] == "thermal_u16":
+                why = _verify_thermal(fs, e, b)
             elif e["kind"] == "depth_log16":
                 f = fs.frame(e["uav"], e["sensor"], e["seq"])
                 v, _st = depth_log16_encode(np.frombuffer(f.payload, "<f4").reshape(int(f.height), int(f.width)))
@@ -1017,6 +1076,21 @@ def verify_export(run_dir: Path) -> dict:
         src.close()
     rep["ok"] = not (rep["mismatches"] or rep["missing"] or rep["schema_errors"])
     return rep
+
+
+def _verify_thermal(fs: FrameStore, e: dict, b: bytes) -> str | None:
+    """热成像 u16：存档交付字节的 sha256 等于清单 `source_sha256`，时刻相同，PNG 读回与交付字节解码逐值相同（形状、dtype 一致）。"""
+    f = fs.frame(e["uav"], e["sensor"], e["seq"])
+    if f is None:
+        return "thermal frame missing from raw.mcap"
+    if f.sha256 != e.get("source_sha256") or f.t_ns != e["t_ns"]:
+        return "thermal source bytes differ from raw.mcap"
+    try:
+        want = thermal_u16(f.payload, f.width or 0, f.height or 0)
+        got = read_png_gray(b)
+    except ValueError as x:
+        return f"thermal decode: {x}"
+    return None if got.dtype == np.uint16 and np.array_equal(got, want) else "thermal_u16 differs from raw.mcap temp_ck"
 
 
 def _verify_bag(src: _Source, p: Path, e: dict) -> str | None:
@@ -1057,29 +1131,24 @@ def _verify_bag(src: _Source, p: Path, e: dict) -> str | None:
 
 def artifact_items(run_dir: Path, *, policy: retention.RetentionPolicy = retention.POLICY, job_id: str | None = None) -> list[dict]:
     """BN `GET /runs/{rid}/artifacts`（AWR-17）的导出部分：`{path, kind ∈ {files, bag, export_manifest}, layer, bytes, sha256, job_id,
-    retention, retain_until_unix_ns}`；路径相对 `derived/`。"""
+    retention, retain_until_unix_ns}`；路径相对 `derived/`。已按保留期清理的格式不列出（下载返回 697）；主清单已清理时列出仍存在的
+    清单镜像（如 `bag/export_manifest.json`），其保留期与所在格式相同。"""
     run_dir = Path(run_dir)
-    p = run_dir / "derived" / MANIFEST
-    doc = _read_json(p)
+    p, doc = export_retention.load_manifest(run_dir)
     if doc is None:
         return []
     rec = retention.load_record(run_dir)
-
-    def until(fmt: str) -> tuple[str, int | None]:
-        d = rec.get("derived", {}).get(fmt, {})
-        cls = "pinned" if d.get("pinned_by") else d.get("retention") or DERIVED_RETENTION.get(fmt, "standard")
-        t0 = d.get("created_unix_ns")
-        days = policy.derived_days.get(cls)
-        return cls, (int(t0) + days * policy.day_ns if t0 is not None and days is not None else None)
-
-    out = []
-    cls, t = until("files")
-    out.append({"path": MANIFEST, "kind": "export_manifest", "layer": "run", "bytes": p.stat().st_size, "sha256": _sha_file(p), "job_id": job_id,
-                "retention": cls, "retain_until_unix_ns": t})
+    rel = p.relative_to(run_dir / "derived").as_posix()
+    owner = next((f for f, sub in export_retention.FORMAT_DIRS.items() if rel == f"{sub}/{MANIFEST}"), "files")
+    live = set(export_retention.live_formats(run_dir, doc))
+    st = {f: export_retention.format_status(run_dir, f, policy=policy, rec=rec) for f in {owner, *live}}
+    out = [{"path": rel, "kind": "export_manifest", "layer": "run", "bytes": p.stat().st_size, "sha256": _sha_file(p), "job_id": job_id,
+            "retention": st[owner]["retention"], "retain_until_unix_ns": st[owner]["retain_until_unix_ns"]}]
     for e in doc["files"]:
-        cls, t = until(e["format"])
+        if e["format"] not in live:
+            continue
         out.append({"path": e["path"], "kind": e["format"], "layer": e["layer"], "bytes": e["bytes"], "sha256": e["sha256"], "job_id": job_id,
-                    "retention": cls, "retain_until_unix_ns": t})
+                    "retention": st[e["format"]]["retention"], "retain_until_unix_ns": st[e["format"]]["retain_until_unix_ns"]})
     return out
 
 
@@ -1099,6 +1168,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layers", default=",".join(DEFAULT_LAYERS))
     ap.add_argument("--event-dir", type=Path, default=None, help="compiled event version directory (event.yaml, plan.json, event truth)")
     ap.add_argument("--no-strict-license", action="store_true")
+    ap.add_argument("--retention", choices=export_retention.REQUEST_CLASSES, default=None,
+                    help="retention class of the formats generated now (default: files standard, bag transient)")
     ap.add_argument("--verify", action="store_true", help="only verify an existing export")
     a = ap.parse_args(argv)
     root = a.data_root or BenchSettings.from_env().data_root
@@ -1114,7 +1185,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         res = export_run(run_dir, dataset_root=root / "dataset", formats=[x for x in a.formats.split(",") if x],
                          layers=[x for x in a.layers.split(",") if x], registry=SplitRegistry.for_root(root, audit=audit), audit=audit,
-                         event_dir=a.event_dir, strict_license=not a.no_strict_license)
+                         event_dir=a.event_dir, strict_license=not a.no_strict_license, retention_class=a.retention)
     except (ExportError, SplitAccessDenied) as e:
         print(json.dumps({"code": e.code, "detail": e.detail}, ensure_ascii=False))
         return 1
