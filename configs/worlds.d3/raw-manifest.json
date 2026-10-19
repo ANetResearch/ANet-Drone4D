@@ -40,10 +40,10 @@
    "bytes": 25934402,
    "sha256": "b0a0d087c0bc28d25223c46b9bf077448b8f0c7fc309c06b0a4eba947b96031a",
    "kind": "dem",
-   "source_url": "https://doi.org/10.5067/MEaSUREs/SRTM/SRTMGL1.003",
+   "source_url": "https://s3.amazonaws.com/elevation-tiles-prod/skadi/N43/N43E023.hgt.gz (Terrain Tiles on AWS, https://registry.opendata.aws/terrain-tiles/; gzip sha256 fa315c411814e3728162b7b85d36df7c436018c4cfe3f6929c13b2047bb83e8e, decompressed)",
    "license": "public-domain",
-   "author": "NASA/USGS SRTM",
-   "title": "SRTM 1 arc-second tile N43E023 (SRTMGL1 v003)",
+   "author": "SRTM terrain data courtesy of the U.S. Geological Survey; Europe terrain data produced using Copernicus data and information funded by the European Union - EU-DEM layers (compiled by Mapzen, tilezen/joerd)",
+   "title": "SRTM 1 arc-second tile N43E023 (SRTMGL1 v003, Terrain Tiles on AWS skadi format)",
    "retrieved": "2026-10-18"
   },
   {
@@ -56,6 +56,17 @@
    "author": "OpenStreetMap contributors",
    "title": "OpenStreetMap water and open-area polygons around Oryahovo (Danube riverbank multipolygon)",
    "retrieved": "2026-10-18"
+  },
+  {
+   "name": "dem/Copernicus_DSM_COG_10_N43_00_E023_00_DEM.tif",
+   "bytes": 43142002,
+   "sha256": "73772d1f62be64ceff79bd92d9289f5cd8a939553647f6ee2eb90f536dbad930",
+   "kind": "dem",
+   "source_url": "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N43_00_E023_00_DEM/Copernicus_DSM_COG_10_N43_00_E023_00_DEM.tif (AWS open data, https://registry.opendata.aws/copernicus-dem/; ETag md5 8a1389d806d28b84022bbd9e66bd1fdb)",
+   "license": "Copernicus-DEM-GLO-30",
+   "author": "Produced using Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved",
+   "title": "Copernicus DEM GLO-30 tile N43E023 (float32 COG, EGM2008 heights, levelling cross-check only)",
+   "retrieved": "2026-10-19"
   }
  ]
 }

@@ -1,7 +1,9 @@
 """行人与车辆 NavMesh（M22 §6.2 第 8 阶段、§6.6.11、§6.8、§7.3.3；M22-FR-032、FR-033；ADR-132、ADR-196）与 navsvc 客户端。
 
 烘焙：求交网格（写出后的 `awr-trimesh@1`，与校验器同一份几何）→ 逐三角形 Detour 区域号（缺省 GROUND；`cls.u8` 语义：路面 PAVED、
-植被 VEGETATION、立面 STEEP、屋顶与水面 NULL；`q.u8` 质量位 nodata、hole、stretched、water 置 NULL；距 OSM 道路折线 ≤ 5 m 的
+植被 VEGETATION、立面 STEEP、屋顶与水面 NULL；`q.u8` 质量位 nodata、hole、water 置 NULL，stretched 只对非近水平面（n_z < 0.9）置 NULL
+（W07：crop 上按边长判定的拉伸面 95% 为近水平的大三角形——道路、广场等平坦区的抽稀面，全部置 NULL 使行人主岛由 0.73 km² 碎成
+0.10 km²、车辆主岛由 0.15 km² 碎成 0.006 km²）；距 OSM 道路折线 ≤ 5 m 的
 非 NULL 三角形改为 ROAD_CORRIDOR）→ Node 烘焙工具 `tools/navsvc/src/bake.mjs`（recast-navigation 0.43.1 WASM，低层 API 分瓦片、
 逐三角形 area id，worker_threads 并行，瓦片按 (ty, tx) 装配）→ 种子吸附（OSM 路口 `j-<node>` 与配方 `nav_seeds.json`，初次搜索
 半宽 (2, 4, 2) m）与洪泛裁剪（含种子的岛保留，其余多边形 flags = 0；配方 `build.nav.<profile>.keep = largest-seeded` 时只保留
@@ -79,6 +81,8 @@ CORRIDOR_HALF_M = 5.0             # OSM 道路走廊半宽（§6.8）
 CORRIDOR_STEP_M = 0.2             # 折线加密步长：最近加密点距离与真距离之差 ≤ 0.1 m
 SEED_EXT_MM = (2000, 4000, 2000)  # 初次吸附搜索半宽（Recast x、y 竖直、z）
 NULL_QBITS = 1 | 2 | 4 | 32       # nodata、hole、stretched、water（§7.3.6）
+Q_STRETCHED = 4
+STRETCHED_FLAT_NZ = 0.9           # 近水平（坡度 ≤ 25.8°）的拉伸面仍可行走：平坦区抽稀产生的大三角形不是插值竖帘（W07 crop 实测）
 # OSM highway 取值：行人走廊（walkable lines）与车辆道路
 PERSON_WAYS = frozenset({"footway", "path", "pedestrian", "steps", "living_street", "residential", "service", "unclassified", "road",
                          "tertiary", "tertiary_link", "secondary", "secondary_link", "primary", "primary_link", "trunk", "trunk_link",
@@ -200,7 +204,15 @@ def triangle_areas(V: np.ndarray, F: np.ndarray, *, corridor_lines: Sequence[np.
             lut[i] = CLASS_AREA.get(k, GROUND)
         area = lut[np.asarray(tri_cls, np.uint8)]
     if tri_q is not None:
-        area[(np.asarray(tri_q, np.uint8) & NULL_QBITS) != 0] = NULL
+        qq = np.asarray(tri_q, np.uint8)
+        null = (qq & (NULL_QBITS & ~Q_STRETCHED)) != 0
+        st = np.flatnonzero(((qq & Q_STRETCHED) != 0) & ~null)
+        if st.size:
+            P = np.asarray(V, np.float64)[np.asarray(F, np.int64)[st]]
+            n = np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0])
+            nz = np.abs(n[:, 2]) / np.maximum(np.linalg.norm(n, axis=1), 1e-300)
+            null[st[nz < STRETCHED_FLAT_NZ]] = True
+        area[null] = NULL
     if corridor_lines:
         cen = (V[F[:, 0], :2] + V[F[:, 1], :2] + V[F[:, 2], :2]) / 3.0
         area[(area != NULL) & corridor_mask(cen, corridor_lines)] = ROAD_CORRIDOR

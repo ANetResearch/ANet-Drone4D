@@ -370,7 +370,8 @@ def test_committed_recipes_declare_osm_and_dem() -> None:
             from awr.world.glb.pipeline import derived_from
 
             df = derived_from(doc)
-            assert {e["license"] for e in df} == {"ODbL-1.0", "public-domain"}
+            lic = {e["license"] for e in df}                    # crop 另有调平交叉核对 DEM（qa.dem，GLO-30，W07）
+            assert {"ODbL-1.0", "public-domain"} <= lic <= {"ODbL-1.0", "public-domain", "Copernicus-DEM-GLO-30"}
 
 
 # ---------------------------------------------------------------- 世界清单（world_manifest.json）

@@ -66,8 +66,17 @@ NOTICE_ODBL = "OpenStreetMap-derived layers are provided under ODbL-1.0."
 OSM_ENTRY = {"name": "OpenStreetMap", "license": "ODbL-1.0", "attribution": "OpenStreetMap contributors",
              "url": "https://www.openstreetmap.org/copyright", "use": "registration,anchors,navgraph"}
 DERIVED_USES = ("registration", "anchors", "navgraph", "levelling", "hMsl")     # world.schema dataset.derivedFrom[].use
-DEM_MODELS = {"srtm30m": {"name": "SRTM 1 arc-second", "version": "SRTMGL1 v003", "license": "public-domain",
-                          "attribution": "NASA/USGS SRTM", "url": "https://doi.org/10.5067/MEaSUREs/SRTM/SRTMGL1.003"},
+# srtm30m 的实际来源为 Terrain Tiles on AWS（skadi `N43E023.hgt.gz`），署名按 tilezen/joerd 数据源条款（05 §14 v1.6、THIRD_PARTY_NOTICES）；
+# glo30 为调平交叉核对 DEM（配方 `qa.dem`，L5，awr.world.glb.qa）。
+DEM_MODELS = {"srtm30m": {"name": "SRTM 1 arc-second", "version": "SRTMGL1 v003 (Terrain Tiles on AWS, skadi)", "license": "public-domain",
+                          "attribution": "NASA/USGS SRTM: SRTM terrain data courtesy of the U.S. Geological Survey; Europe terrain data produced "
+                                         "using Copernicus data and information funded by the European Union - EU-DEM layers (Terrain Tiles on AWS)",
+                          "url": "https://registry.opendata.aws/terrain-tiles/"},
+              "glo30": {"name": "Copernicus DEM GLO-30", "version": "COP-DEM GLO-30 (AWS open data COG, object Last-Modified 2022-05-09)",
+                        "license": "Copernicus-DEM-GLO-30",
+                        "attribution": "Produced using Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH "
+                                       "2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved",
+                        "url": "https://registry.opendata.aws/copernicus-dem/"},
               "eudem25m": {"name": "EU-DEM v1.1", "version": "v1.1", "license": "Copernicus-data",
                            "attribution": "Produced using Copernicus data and information funded by the European Union - EU-DEM layers",
                            "url": "https://land.copernicus.eu/imagery-in-situ/eu-dem/eu-dem-v1.1"}}

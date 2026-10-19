@@ -2097,7 +2097,7 @@ def glb14(w: WorldView, rep: Report):
 
 @glb_rule("V-GLB-15", "semantic", "W")
 def glb15(w: WorldView, rep: Report):
-    """调平证据：qa/report.json `glb.leveling`（L1–L4 判定位优先，缺省时按量复核）或 G-11/G-12/G-13 门禁；staging 中报告尚未写出，
+    """调平证据：qa/report.json `glb.leveling`（L1–L5 判定位优先，缺省时按量复核）或 G-11/G-12/G-13 门禁；staging 中报告尚未写出，
     由构建在报告后补验。"""
     _glb(w)
     if w.staging:
@@ -2130,15 +2130,16 @@ def glb15(w: WorldView, rep: Report):
     lim = float(lv.get("planes_limit_deg", 0.2 if km else 0.5))
     planes = [p for p in lv.get("planes", []) if isinstance(p, dict) and p.get("slope_deg") is not None and p.get("evaluated", True)]
     cp = lv.get("control_points") if isinstance(lv.get("control_points"), dict) else {}
-    if "L3" in lv or "L4" in lv:
-        ok34 = bool(lv.get("L3")) or bool(lv.get("L4"))
+    if "L3" in lv or "L4" in lv:          # L5：公开 DEM 交叉核对（两 DEM 与墙面三法，W07；L5 成立时 L3 只作 G-16 告警）
+        ok34 = bool(lv.get("L3")) or bool(lv.get("L4")) or bool(lv.get("L5"))
     elif planes or cp:
         ok34 = (len(planes) >= 3 and max(float(p["slope_deg"]) for p in planes) <= lim) or \
             (int(cp.get("n", 0)) >= 20 and cp.get("rms_m") is not None and float(cp["rms_m"]) <= 2.0)
     else:
         ok34 = gate("G-13", "G-L34")
     if not ok34:
-        msgs.append(f"no acceptance: >= 3 horizontal planes with slope <= {lim:g} deg or >= 20 control points with AGL RMS <= 2 m (L3, L4)")
+        msgs.append(f"no acceptance: >= 3 horizontal planes with slope <= {lim:g} deg, >= 20 control points with AGL RMS <= 2 m "
+                    "or the public-DEM cross-check (L3, L4, L5)")
     if lv.get("needs_control_points"):
         msgs.append("needs_control_points = true")
     for m in msgs:

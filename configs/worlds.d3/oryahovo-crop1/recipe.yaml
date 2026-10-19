@@ -12,7 +12,10 @@ dem: {path: dem/N43E023.hgt, sha256: b0a0d087c0bc28d25223c46b9bf077448b8f0c7fc30
 qa:   # 标定 QA（awr.world.glb.qa；M22 §6.6.4、§6.7）：水面多边形补充抽取与 G-15 的 r2 对照尺度
   osm_extra:
     - {path: osm/oryahovo_water.osm, sha256: ba9fc9121d8da1d7e3ae0fca3e9374a6bd65cb8ad6ef5ff5db3497fae5c89048,
-       extract: "Overpass API 2026-10-18: water, square, pitch, parking areas in bbox 23.93,43.72,23.99,43.75", use: "levelling planes"}
+       extract: "Overpass API 2026-10-18: water, square, pitch, parking areas in bbox 23.93,43.72,23.99,43.75", use: "levelling"}
+  dem:  # 调平交叉核对 DEM（L5：SRTM、GLO-30 与墙面竖直度三法一致，用户 2026-10-19 决定以此替代控制点判据）
+    - {path: dem/Copernicus_DSM_COG_10_N43_00_E023_00_DEM.tif, sha256: 73772d1f62be64ceff79bd92d9289f5cd8a939553647f6ee2eb90f536dbad930,
+       model: glo30, use: "levelling"}
   reference_m_per_unit: 20.935
 registration: registration.json
 build:
@@ -20,3 +23,5 @@ build:
   tiling_m: 512
   quality_cell_m: 2.0
   voxel_m: 1.0
+  nav:  # D3-AC-03"种子洪泛裁剪后随机 1,000 对 100% 可达"：行人只保留含种子的最大岛（830k m²，占保留面积 92.6%，W09 实测）；车辆保留全部含种子岛（车道吸附）
+    person: {keep: largest-seeded}

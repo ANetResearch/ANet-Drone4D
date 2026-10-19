@@ -9,7 +9,10 @@
 - G-L1（公里级）：DEM 回归与墙面竖直度两法剩余梯度之差折合角度 ≤ 0.5°；超出或缺少任一方法时告警并要求控制点。
 - G-L2（小场景）：墙面法按立面方位奇偶分成两个子集，两子集差与自助法 CI95 半宽均 ≤ 0.3°。
 - G-L34：≥ 3 处已知水平面（OSM 水体、广场与人工增补多边形，面积 ≥ 2,000 m²）全部坡度 ≤ 0.2°（小场景 ≤ 0.5°），或 ≥ 20 个
-  分散控制点的 AGL 残差 RMS ≤ 2 m，任一满足即通过。
+  分散控制点的 AGL 残差 RMS ≤ 2 m，或（公里级）L5 公开 DEM 交叉核对成立，任一满足即通过（G-13）。
+- L5（用户 2026-10-19 决定以公开 DEM 交叉核对替代控制点判据，W07 起草 ADR）：主 DEM（SRTM 1″）、交叉核对 DEM（配方 `qa.dem`，
+  Copernicus GLO-30）与墙面竖直度三法：两两之差 ≤ 0.5°，各法剩余倾角 ≤ 0.5°，三法剩余梯度均值（共识）的倾角 ≤ 0.2°，各 DEM 的
+  竖向尺度比 k ∈ [0.85, 1.15]。此时 L3 水平面判据只作告警（G-16）。
 - G-R4（公里级）：DEM 竖向尺度比 k ∈ [0.85, 1.15]。
 - G-SCALE：以 OSM 建筑轮廓对网格墙面的截断倒角精配独立测得尺度（配准记录的尺度只作初值），与 r2 实测值之差 ≤ 0.5%，
   且 20 次扰动重启的尺度标准差 / 均值 ≤ 0.5%（R5）。
@@ -48,6 +51,7 @@ __all__ = [
     "R2_SCALE_M_PER_UNIT",
     "DemFit",
     "GlbQa",
+    "GridDem",
     "HgtDem",
     "OsmData",
     "QaInputs",
@@ -55,6 +59,7 @@ __all__ = [
     "WallFit",
     "calibrate",
     "control_point_rms",
+    "dem_cross_check",
     "dem_fit",
     "face_geometry",
     "glb_gates",
@@ -64,10 +69,12 @@ __all__ = [
     "huber_irls",
     "levelling_report",
     "load_control_points",
+    "load_dem",
     "load_horizontal_planes",
     "measure_scale",
     "parse_osm",
     "plane_slopes",
+    "read_geotiff_dem",
     "replace_gates",
     "rings_to_world",
     "run_glb_qa",
@@ -86,6 +93,9 @@ L3_MAX_SLOPE_SMALL_DEG = 0.5
 L3_MIN_AREA_M2 = 2000.0
 L4_MIN_POINTS = 20
 L4_MAX_RMS_M = 2.0
+L5_PAIR_MAX_DEG = 0.5               # 三法两两之差（同 L1）
+L5_RESIDUAL_MAX_DEG = 0.5           # 各法剩余倾角（同 G-05）
+L5_CONSENSUS_MAX_DEG = 0.2          # 三法共识剩余倾角（与 L3 水平面坡度同一门限）
 G04_MAX_MAD_M = 5.0
 G05_MAX_DEG = 0.5
 R4_RANGE = (0.85, 1.15)
@@ -274,6 +284,124 @@ class HgtDem:
             out[m] = (a[r0, c0] * (1 - fr) * (1 - fc) + a[r0, c0 + 1] * (1 - fr) * fc + a[r0 + 1, c0] * fr * (1 - fc)
                       + a[r0 + 1, c0 + 1] * fr * fc)
         return out
+
+
+_TIFF_TYPES = {1: "B", 2: "s", 3: "H", 4: "I", 5: "II", 11: "f", 12: "d", 16: "Q"}
+_TIFF_SIZES = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 11: 4, 12: 8, 16: 8}
+
+
+def _tiff_tags(b: bytes) -> dict[int, tuple]:
+    """小端经典 TIFF 首个 IFD 的标签表（{tag: 值元组}）；只用于下面的 GeoTIFF 读取。"""
+    import struct
+
+    if b[:4] != b"II*\x00":
+        raise ValueError("not a little-endian classic TIFF")
+    off = struct.unpack_from("<I", b, 4)[0]
+    n = struct.unpack_from("<H", b, off)[0]
+    out: dict[int, tuple] = {}
+    for i in range(n):
+        tag, typ, cnt, val = struct.unpack_from("<HHII", b, off + 2 + 12 * i)
+        if typ not in _TIFF_TYPES:
+            continue
+        p = off + 2 + 12 * i + 8 if _TIFF_SIZES[typ] * cnt <= 4 else val
+        out[tag] = (b[p:p + cnt],) if typ == 2 else struct.unpack_from("<" + _TIFF_TYPES[typ] * cnt, b, p)
+    return out
+
+
+def read_geotiff_dem(path: str | Path) -> tuple[np.ndarray, tuple[float, float, float, float], dict[str, Any]]:
+    """单波段 float32 地理坐标 GeoTIFF（Copernicus DEM GLO-30 COG 的形式）读取：分块或分条、无压缩或 Deflate，预测器 1/2/3。
+
+    返回 (高程数组, (北缘纬度, 西缘经度, 纬向步长, 经向步长), 来源记录)，数组行 0 为北缘，元素为像元中心高程（PixelIsPoint
+    时 tiepoint 即像元中心；PixelIsArea 时向内平移半像元），空值（GDAL_NODATA 或 −32767 以下）为 NaN。只读主分辨率 IFD。
+    """
+    import zlib
+
+    p = Path(path)
+    raw = p.read_bytes()
+    t = _tiff_tags(raw)
+    W, H = int(t[256][0]), int(t[257][0])
+    if t.get(258, (32,))[0] != 32 or t.get(339, (3,))[0] != 3 or t.get(277, (1,))[0] != 1:
+        raise ValueError(f"{p.name}: only single-band float32 GeoTIFF is supported")
+    comp, pred = int(t.get(259, (1,))[0]), int(t.get(317, (1,))[0])
+    if comp not in (1, 8, 32946) or pred not in (1, 2, 3):
+        raise ValueError(f"{p.name}: compression {comp} / predictor {pred} not supported")
+    if 322 in t:
+        tw, th, offs, cnts = int(t[322][0]), int(t[323][0]), t[324], t[325]
+    else:
+        tw, th, offs, cnts = W, int(t.get(278, (H,))[0]), t[273], t[279]
+    nx = -(-W // tw)
+    a = np.full((-(-H // th) * th, nx * tw), np.nan, np.float32)
+    for k, (o, c) in enumerate(zip(offs, cnts, strict=True)):
+        buf = raw[o:o + c]
+        if comp != 1:
+            buf = zlib.decompress(buf)
+        rows = len(buf) // (tw * 4)
+        u = np.frombuffer(buf, np.uint8)[:rows * tw * 4].reshape(rows, tw * 4)
+        if pred == 3:                                       # 浮点预测器：逐行字节差分累加，再由字节平面（高位在前）重组
+            u = np.cumsum(u, axis=1, dtype=np.uint8)
+            v = u.reshape(rows, 4, tw).transpose(0, 2, 1).copy().view(">f4")[..., 0]
+        else:
+            v = u.copy().view("<f4")
+            if pred == 2:
+                v = np.cumsum(v, axis=1, dtype=np.float32)
+        ty, tx = divmod(k, nx) if 322 in t else (k, 0)
+        a[ty * th:ty * th + rows, tx * tw:tx * tw + tw] = v
+    a = a[:H, :W].astype(np.float64)
+    nod = t.get(42113)
+    if nod:
+        with_nod = float(nod[0].rstrip(b"\x00").decode() or "nan")
+        a[a == with_nod] = np.nan
+    a[a < -32767.0] = np.nan
+    sx, sy = float(t[33550][0]), float(t[33550][1])
+    ti = t[33922]
+    lon0, lat0 = float(ti[3]) - float(ti[0]) * sx, float(ti[4]) + float(ti[1]) * sy
+    keys = t.get(34735, ())
+    rtype = next((keys[i + 3] for i in range(4, len(keys), 4) if keys[i] == 1025), 1)
+    if rtype == 1:                                          # PixelIsArea：tiepoint 为像元角点
+        lon0, lat0 = lon0 + sx / 2, lat0 - sy / 2
+    src = {"name": p.name, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "posts": [H, W]}
+    return a, (lat0, lon0, sy, sx), src
+
+
+class GridDem:
+    """经纬度规则格网 DEM（像元中心，行 0 为北缘）的双线性采样，接口同 `HgtDem`（Copernicus GLO-30 等 GeoTIFF）。"""
+
+    def __init__(self, grids: list[tuple[np.ndarray, tuple[float, float, float, float]]], sources: list[dict[str, Any]]) -> None:
+        self.grids = grids
+        self.sources = sources
+
+    @classmethod
+    def load(cls, paths: Sequence[str | Path]) -> GridDem:
+        grids, src = [], []
+        for p in paths:
+            a, geo, s = read_geotiff_dem(p)
+            grids.append((a, geo))
+            src.append(s)
+        return cls(grids, src)
+
+    def sample(self, lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+        lat, lon = np.asarray(lat, np.float64), np.asarray(lon, np.float64)
+        out = np.full(lat.shape, np.nan)
+        for a, (lat0, lon0, dy, dx) in self.grids:
+            r, c = (lat0 - lat) / dy, (lon - lon0) / dx
+            m = (r >= 0) & (c >= 0) & (r <= a.shape[0] - 1) & (c <= a.shape[1] - 1) & np.isnan(out)
+            if not m.any():
+                continue
+            r0 = np.clip(np.floor(r[m]).astype(np.int64), 0, a.shape[0] - 2)
+            c0 = np.clip(np.floor(c[m]).astype(np.int64), 0, a.shape[1] - 2)
+            fr, fc = r[m] - r0, c[m] - c0
+            out[m] = (a[r0, c0] * (1 - fr) * (1 - fc) + a[r0, c0 + 1] * (1 - fr) * fc + a[r0 + 1, c0] * fr * (1 - fc)
+                      + a[r0 + 1, c0 + 1] * fr * fc)
+        return out
+
+
+def load_dem(paths: Sequence[str | Path]) -> HgtDem | GridDem:
+    """按扩展名选读取器：`.tif`/`.tiff` 为 GeoTIFF（`GridDem`），其余为 SRTM `.hgt`（`HgtDem`）；同一组文件须为同一种格式。"""
+    ps = [Path(p) for p in paths]
+    tif = [p.suffix.lower() in (".tif", ".tiff") for p in ps]
+    if any(tif) and not all(tif):
+        raise ValueError("one DEM set must not mix GeoTIFF and SRTM .hgt files")
+    return GridDem.load(ps) if all(tif) and ps else HgtDem.load(ps)
 
 
 @dataclass(frozen=True)
@@ -685,7 +813,8 @@ def measure_scale(C: np.ndarray, N: np.ndarray, area: np.ndarray, buildings_xy: 
 class QaInputs:
     """标定 QA 的外部输入（配方 `qa` 段，路径相对 `data/raw/d3-glb/` 并经入库清单校验；人工增补文件在配方目录）。"""
 
-    dem: HgtDem | None = None
+    dem: HgtDem | GridDem | None = None
+    dem_cross: list[tuple[str, HgtDem | GridDem]] = field(default_factory=list)     # 交叉核对 DEM（配方 `qa.dem`，按 model 分组）
     osm: OsmData | None = None
     planes_extra: list[dict[str, Any]] = field(default_factory=list)       # 世界帧多边形（horizontal_planes.geojson）
     control_points: list[dict[str, Any]] = field(default_factory=list)
@@ -696,7 +825,8 @@ class QaInputs:
     @classmethod
     def from_recipe(cls, recipe: Any, anchor: Anchor, *, verify: Callable[..., Path] | None = None) -> QaInputs:
         """配方顶层 `dem`、`osm`（与 W03 的 `derivedFrom` 共用，单个对象或列表）加 `qa` 段：`osm_extra`（水面等补充抽取）、
-        `reference_m_per_unit`（缺省取 `R2_SCALE_M_PER_UNIT`）、`planes_exclude`（{id: 原因}）。"""
+        `dem`（交叉核对 DEM，按 `model` 分组，每组一次独立回归，L5）、`reference_m_per_unit`（缺省取 `R2_SCALE_M_PER_UNIT`）、
+        `planes_exclude`（{id: 原因}）。"""
         from awr.world.glb.recipe import verify_raw
 
         verify = verify or verify_raw
@@ -711,11 +841,18 @@ class QaInputs:
                 out_ += [] if not v else ([v] if isinstance(v, dict) else list(v))
             return out_
 
-        dem = entries(d.get("dem"), q.get("dem"))
+        dem = entries(d.get("dem"))
         osm = entries(d.get("osm"), q.get("osm_extra"))
         if dem:
-            out.dem = HgtDem.load([verify(e["path"], e.get("sha256")) for e in dem])
+            out.dem = load_dem([verify(e["path"], e.get("sha256")) for e in dem])
             out.files += [{**s, "use": "levelling"} for s in out.dem.sources]
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for e in entries(q.get("dem")):
+            groups.setdefault(str(e.get("model", "dem")), []).append(e)
+        for model, es in groups.items():
+            dm = load_dem([verify(e["path"], e.get("sha256")) for e in es])
+            out.dem_cross.append((model, dm))
+            out.files += [{**s, "use": f"levelling cross-check ({model})"} for s in dm.sources]
         if osm:
             out.osm = parse_osm([verify(e["path"], e.get("sha256")) for e in osm])
             out.files += [{**s, "use": "levelling planes, scale check"} for s in out.osm.sources]
@@ -735,9 +872,39 @@ class GlbQa:
     needs_control_points: bool
 
 
+def dem_cross_check(dem: DemFit | None, cross: Sequence[tuple[str, DemFit | None]], wall: WallFit | None,
+                    applied_g: Sequence[float]) -> dict[str, Any] | None:
+    """L5 公开 DEM 交叉核对（公里级）：主 DEM、交叉核对 DEM 与墙面竖直度各自测得的世界帧剩余梯度，判定两两之差、各法剩余倾角、
+    三法共识（剩余梯度均值）倾角与各 DEM 的竖向尺度比。没有交叉核对 DEM 时返回 None；任一方法缺失时 `pass = false`。"""
+    if not cross:
+        return None
+    ag = (float(applied_g[0]), float(applied_g[1]))
+    fits: list[tuple[str, DemFit | WallFit | None]] = [("dem", dem), *((f"dem:{m}", f) for m, f in cross), ("wall", wall)]
+    have = [(k, f) for k, f in fits if f is not None]
+    missing = [k for k, f in fits if f is None]
+    pairs = [{"a": a, "b": b, "delta_deg": round(gradient_delta_deg(fa.g, fb.g), 4)} for (a, fa), (b, fb) in itertools.combinations(have, 2)]
+    res = {k: round(f.tilt_deg, 4) for k, f in have}
+    ks = {k: round(f.k, 4) for k, f in have if isinstance(f, DemFit)}
+    cons = None if not have else (float(np.mean([f.g[0] for _, f in have])), float(np.mean([f.g[1] for _, f in have])))
+    ok = (not missing and all(p["delta_deg"] <= L5_PAIR_MAX_DEG for p in pairs) and all(v <= L5_RESIDUAL_MAX_DEG for v in res.values())
+          and cons is not None and tilt_deg(cons) <= L5_CONSENSUS_MAX_DEG and all(R4_RANGE[0] <= v <= R4_RANGE[1] for v in ks.values()))
+    return {"methods": [k for k, _ in fits], "missing": missing,
+            "fits": {k: f.to_json() for k, f in have if isinstance(f, DemFit) and k != "dem"},
+            "pairs": pairs, "max_pair_delta_deg": max((p["delta_deg"] for p in pairs), default=None),
+            "residual_tilt_deg": res, "k": ks,
+            "consensus_g": None if cons is None else [round(v, 6) for v in cons],
+            "consensus_tilt_deg": None if cons is None else round(tilt_deg(cons), 4),
+            "suggested_applied_g": None if cons is None else [round(v, 9) for v in source_gradient(ag, cons)],
+            "limits": {"pair_deg": L5_PAIR_MAX_DEG, "residual_deg": L5_RESIDUAL_MAX_DEG, "consensus_deg": L5_CONSENSUS_MAX_DEG,
+                       "k": list(R4_RANGE)},
+            "pass": bool(ok)}
+
+
 def levelling_report(*, applied_g: Sequence[float], km_scale: bool, dem: DemFit | None, wall: WallFit | None,
-                     planes: list[dict[str, Any]], cps: dict[str, Any], ground_mad_m: float | None) -> dict[str, Any]:
-    """M22 §7.3.8 `glb.leveling`：主方法、两法剩余梯度与源帧倾角、差值、CI95、水平面逐个坡度、控制点残差、`needs_control_points`。"""
+                     planes: list[dict[str, Any]], cps: dict[str, Any], ground_mad_m: float | None,
+                     dem_cross: Sequence[tuple[str, DemFit | None]] = ()) -> dict[str, Any]:
+    """M22 §7.3.8 `glb.leveling`：主方法、两法剩余梯度与源帧倾角、差值、CI95、水平面逐个坡度、控制点残差、L5 公开 DEM 交叉
+    核对（`cross_check`）、`needs_control_points`。"""
     ag = (float(applied_g[0]), float(applied_g[1]))
     primary = "dem" if km_scale and dem is not None else ("wall" if wall is not None else None)
     res = None if primary is None else (dem.g if primary == "dem" else wall.g)          # type: ignore[union-attr]
@@ -750,7 +917,9 @@ def levelling_report(*, applied_g: Sequence[float], km_scale: bool, dem: DemFit 
           and wall.ci95_half_deg <= L2_MAX_DEG)
     l3 = len(ev) >= L3_MIN_PLANES and max_slope is not None and max_slope <= lim
     l4 = cps["points"] >= L4_MIN_POINTS and cps["rms_m"] is not None and cps["rms_m"] <= L4_MAX_RMS_M
-    needs = not ((l1 if km_scale else l2) and (l3 or l4))
+    xc = dem_cross_check(dem, dem_cross, wall, ag) if km_scale else None
+    l5 = bool(xc and xc["pass"])
+    needs = not ((l1 if km_scale else l2) and (l3 or l4 or l5))
     src = {k: (None if f is None else source_gradient(ag, f.g)) for k, f in (("dem", dem), ("wall", wall))}
     return {"primary": primary, "km_scale": km_scale, "applied_g": [round(v, 9) for v in ag], "applied_tilt_deg": round(tilt_deg(ag), 4),
             "residual_g": None if res is None else [round(v, 6) for v in res], "residual_tilt_deg": None if res is None else round(tilt_deg(res), 4),
@@ -762,7 +931,8 @@ def levelling_report(*, applied_g: Sequence[float], km_scale: bool, dem: DemFit 
             "planes": planes, "planes_evaluated": len(ev), "planes_max_slope_deg": _r(max_slope, 4), "planes_limit_deg": lim,
             "subset_delta_deg": None if wall is None else _r(wall.halves_delta_deg, 4),
             "ci95_deg": None if wall is None else _r(wall.ci95_half_deg, 4),
-            "control_points": {**cps, "n": cps["points"]}, "L1": l1, "L2": l2, "L3": l3, "L4": l4, "needs_control_points": needs,
+            "control_points": {**cps, "n": cps["points"]}, "cross_check": xc, "L1": l1, "L2": l2, "L3": l3, "L4": l4, "L5": l5,
+            "needs_control_points": needs,
             "suggested_applied_g": None if res is None else [round(v, 9) for v in source_gradient(ag, res)]}
 
 
@@ -790,11 +960,30 @@ def glb_gates(lev: dict[str, Any], scale: dict[str, Any] | None) -> list[GateRes
                                 {"halves_delta_deg": _c(wall.get("halves_delta_deg"), 3), "ci95_half_deg": _c(wall.get("ci95_half_deg"), 3)},
                                 L2_MAX_DEG, bool(lev["L2"]), "warn"))
     cp = lev["control_points"]
-    gates.append(GateResult("G-13", f"L3 >= 3 horizontal planes slope <= {lev['planes_limit_deg']} deg, or L4 >= 20 control points AGL RMS <= 2 m",
-                            {"planes_evaluated": lev["planes_evaluated"], "planes_max_slope_deg": _c(lev["planes_max_slope_deg"], 3),
-                             "control_points": cp["points"], "control_rms_m": _c(cp["rms_m"], 2)},
-                            {"planes": L3_MIN_PLANES, "slope_deg": lev["planes_limit_deg"], "points": L4_MIN_POINTS, "rms_m": L4_MAX_RMS_M},
-                            bool(lev["L3"] or lev["L4"]), "warn"))
+    xc = lev.get("cross_check")
+    l5 = bool(lev.get("L5"))
+    if xc is None:
+        gates.append(GateResult("G-13", f"L3 >= 3 horizontal planes slope <= {lev['planes_limit_deg']} deg, or L4 >= 20 control points AGL RMS <= 2 m",
+                                {"planes_evaluated": lev["planes_evaluated"], "planes_max_slope_deg": _c(lev["planes_max_slope_deg"], 3),
+                                 "control_points": cp["points"], "control_rms_m": _c(cp["rms_m"], 2)},
+                                {"planes": L3_MIN_PLANES, "slope_deg": lev["planes_limit_deg"], "points": L4_MIN_POINTS, "rms_m": L4_MAX_RMS_M},
+                                bool(lev["L3"] or lev["L4"]), "warn"))
+    else:
+        gates.append(GateResult("G-13", f"L3 >= 3 horizontal planes slope <= {lev['planes_limit_deg']} deg, or L4 >= 20 control points AGL RMS <= 2 m, "
+                                "or L5 public-DEM cross-check (DEM, DEM, wall: pairwise <= 0.5 deg, residual <= 0.5 deg, consensus <= 0.2 deg)",
+                                {"planes_evaluated": lev["planes_evaluated"], "planes_max_slope_deg": _c(lev["planes_max_slope_deg"], 3),
+                                 "control_points": cp["points"], "control_rms_m": _c(cp["rms_m"], 2),
+                                 "cross_max_pair_deg": _c(xc["max_pair_delta_deg"], 3), "cross_max_residual_deg":
+                                     _c(max(xc["residual_tilt_deg"].values(), default=None), 3),
+                                 "cross_consensus_deg": _c(xc["consensus_tilt_deg"], 3)},
+                                {"planes": L3_MIN_PLANES, "slope_deg": lev["planes_limit_deg"], "points": L4_MIN_POINTS, "rms_m": L4_MAX_RMS_M,
+                                 "cross_pair_deg": L5_PAIR_MAX_DEG, "cross_residual_deg": L5_RESIDUAL_MAX_DEG,
+                                 "cross_consensus_deg": L5_CONSENSUS_MAX_DEG},
+                                bool(lev["L3"] or lev["L4"] or l5), "warn"))
+        if l5:                                              # L5 成立时水平面判据降为告警（用户 2026-10-19 决定）
+            gates.append(GateResult("G-16", f"L3 advisory: >= 3 horizontal planes slope <= {lev['planes_limit_deg']} deg (L5 accepted)",
+                                    {"planes_evaluated": lev["planes_evaluated"], "planes_max_slope_deg": _c(lev["planes_max_slope_deg"], 3)},
+                                    {"planes": L3_MIN_PLANES, "slope_deg": lev["planes_limit_deg"]}, bool(lev["L3"]), "warn"))
     if lev["km_scale"]:
         k = dem.get("k")
         gates.append(GateResult("G-14", "R4 DEM vertical scale ratio k in [0.85, 1.15]", _c(k, 3), list(R4_RANGE),
@@ -844,6 +1033,7 @@ def run_glb_qa(Vw: np.ndarray, F: np.ndarray, *, applied_g: Sequence[float], m_p
             wet[bb[_inside(Pg[bb], xy)]] = True
             dry = dry[~wet]
     dem = dem_fit(C, dry, inputs.dem, anchor) if inputs.dem is not None and km else None
+    cross = [(m, dem_fit(C, dry, d, anchor)) for m, d in inputs.dem_cross] if km else []      # 同一地面抽样（同种子），L5
     wall = wall_fit(N, area)
     if dem is not None:
         mad: float | None = dem.mad_m
@@ -852,7 +1042,7 @@ def run_glb_qa(Vw: np.ndarray, F: np.ndarray, *, applied_g: Sequence[float], m_p
     planes = plane_slopes(C, N, area, planes_in, exclude=inputs.planes_exclude)
     cps = control_point_rms(ground_height_fn(Vw, F, gidx), inputs.control_points) if inputs.control_points and gidx.size else \
         control_point_rms(lambda EN: np.full(len(EN), np.nan), [])
-    lev = levelling_report(applied_g=applied_g, km_scale=km, dem=dem, wall=wall, planes=planes, cps=cps, ground_mad_m=mad)
+    lev = levelling_report(applied_g=applied_g, km_scale=km, dem=dem, wall=wall, planes=planes, cps=cps, ground_mad_m=mad, dem_cross=cross)
     lev["horizontal_diag_m"] = round(diag, 1)
     scale: dict[str, Any] | None = None
     if inputs.osm is not None:

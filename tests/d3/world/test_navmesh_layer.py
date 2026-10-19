@@ -131,16 +131,17 @@ def test_highways_junction_and_corridor(tmp_path: Path) -> None:
 
 
 def test_triangle_areas_semantics_quality_and_corridor() -> None:
-    V = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [100, 0, 0], [101, 0, 0], [100, 1, 0]], np.float64)
-    F = np.array([[0, 1, 2], [3, 4, 5], [0, 1, 2], [3, 4, 5], [3, 4, 5]], np.int64)
+    V = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [100, 0, 0], [101, 0, 0], [100, 1, 0], [100, 0, 1]], np.float64)
+    F = np.array([[0, 1, 2], [3, 4, 5], [0, 1, 2], [3, 4, 5], [3, 4, 5], [3, 4, 6], [3, 4, 5]], np.int64)
     keys = ["unclassified", "ground", "low_vegetation", "medium_vegetation", "high_vegetation", "building_roof", "building_facade",
             "low_object", "water", "road_surface"]
-    cls = np.array([1, 9, 5, 4, 6], np.uint8)
-    q = np.array([0, 0, 0, 0, 4], np.uint8)                        # 第 5 个三角形为拉伸面
+    cls = np.array([1, 9, 5, 4, 6, 1, 1], np.uint8)
+    q = np.array([0, 0, 0, 0, 4, 4, 32], np.uint8)                 # 第 5 个为水平拉伸面、第 6 个为竖直拉伸面、第 7 个为水面
     lines = [np.array([[-10.0, 0.0], [10.0, 0.0]])]
     a, hist = nm.triangle_areas(V, F, corridor_lines=lines, tri_cls=cls, class_keys=keys, tri_q=q)
-    assert a.tolist() == [nm.ROAD_CORRIDOR, nm.PAVED, nm.NULL, nm.VEGETATION, nm.NULL]
-    assert hist == {"NULL": 2, "ROAD_CORRIDOR": 1, "PAVED": 1, "VEGETATION": 1}
+    # 近水平的拉伸面仍按语义取区域号（W07：平坦区抽稀大三角形），竖直拉伸面与水面置 NULL
+    assert a.tolist() == [nm.ROAD_CORRIDOR, nm.PAVED, nm.NULL, nm.VEGETATION, nm.STEEP, nm.NULL, nm.NULL]
+    assert hist == {"NULL": 3, "ROAD_CORRIDOR": 1, "PAVED": 1, "VEGETATION": 1, "STEEP": 1}
     a, _ = nm.triangle_areas(V, F)
     assert set(a.tolist()) == {nm.GROUND}
     z = nm.lowest_hit(np.array([[0, 0, 5], [4, 0, 5], [0, 4, 5], [0, 0, 1], [4, 0, 1], [0, 4, 1.0]]),

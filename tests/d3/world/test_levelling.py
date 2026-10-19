@@ -447,3 +447,178 @@ def glb_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "  sketchfab: {uid: '', author: test, license: CC0-1.0}\nregistration: registration.json\n"
         "build:\n  tiling_m: 128\n  pointcloud: {target_points: 60000, seed: 7}\n")
     return load_recipe("synth-glb", tmp_path / "recipes"), V, F
+
+
+# ---------------------------------------------------------------- L5 公开 DEM 交叉核对（W07；用户 2026-10-19 决定）
+
+
+def _write_geotiff(p: Path, a: np.ndarray, lat0: float, lon0: float, step: float, *, tiled: bool = True, predictor: int = 3,
+                   pixel_is_point: bool = True, nodata: str | None = "-32767") -> None:
+    """最小 float32 GeoTIFF 写出（小端经典 TIFF；分块 Deflate 加浮点预测器，或无压缩分条），供读取器对拍。"""
+    import struct
+    import zlib
+
+    H, W = a.shape
+    tw = th = 16
+
+    def enc(block: np.ndarray) -> bytes:
+        rows, cols = block.shape
+        if predictor == 3:
+            b = block.astype(">f4").view(np.uint8).reshape(rows, cols, 4).transpose(0, 2, 1).reshape(rows, 4 * cols)
+            d = np.diff(b.astype(np.int16), axis=1, prepend=0).astype(np.uint8)
+            return zlib.compress(d.tobytes())
+        return block.astype("<f4").tobytes()
+
+    chunks = []
+    if tiled:
+        for ty in range(0, H, th):
+            for tx in range(0, W, tw):
+                blk = np.zeros((th, tw), np.float32)
+                sub = a[ty:ty + th, tx:tx + tw]
+                blk[:sub.shape[0], :sub.shape[1]] = sub
+                chunks.append(enc(blk))
+    else:
+        chunks = [enc(a[r:r + 1]) for r in range(H)]
+    geokeys = [1, 1, 0, 2, 1024, 0, 1, 2, 1025, 0, 1, 2 if pixel_is_point else 1]
+    tags: list[tuple[int, int, list]] = [(256, 3, [W]), (257, 3, [H]), (258, 3, [32]), (259, 3, [8 if predictor == 3 else 1]),
+                                         (262, 3, [1]), (277, 3, [1]), (317, 3, [predictor]), (339, 3, [3])]
+    tags += [(33550, 12, [step, step, 0.0]), (33922, 12, [0.0, 0.0, 0.0, lon0, lat0, 0.0]), (34735, 3, geokeys)]
+    if nodata is not None:
+        tags.append((42113, 2, [nodata.encode() + b"\x00"]))
+    data_off = 8
+    blob = b"".join(chunks)
+    offs, o = [], data_off
+    for c in chunks:
+        offs.append(o)
+        o += len(c)
+    if tiled:
+        tags += [(322, 3, [tw]), (323, 3, [th]), (324, 4, offs), (325, 4, [len(c) for c in chunks])]
+    else:
+        tags += [(273, 4, offs), (278, 3, [1]), (279, 4, [len(c) for c in chunks])]
+    tags.sort()
+    fmt = {3: "H", 4: "I", 12: "d"}
+    ifd_off = data_off + len(blob)
+    extra = bytearray()
+    ents = []
+    extra_base = ifd_off + 2 + 12 * len(tags) + 4
+    for tag, typ, vals in tags:
+        if typ == 2:
+            payload, cnt = vals[0], len(vals[0])
+        else:
+            payload, cnt = struct.pack("<" + fmt[typ] * len(vals), *vals), len(vals)
+        if len(payload) <= 4:
+            ents.append(struct.pack("<HHI", tag, typ, cnt) + payload.ljust(4, b"\x00"))
+        else:
+            ents.append(struct.pack("<HHII", tag, typ, cnt, extra_base + len(extra)))
+            extra += payload + (b"\x00" if len(payload) % 2 else b"")
+    p.write_bytes(b"II*\x00" + struct.pack("<I", ifd_off) + blob + struct.pack("<H", len(tags)) + b"".join(ents)
+                  + struct.pack("<I", 0) + bytes(extra))
+
+
+@pytest.mark.parametrize(("tiled", "predictor", "point"), [(True, 3, True), (False, 1, False)])
+def test_geotiff_dem_reader_layouts_and_georeference(tmp_path: Path, tiled: bool, predictor: int, point: bool) -> None:
+    """GLO-30 形式的 GeoTIFF（分块 Deflate 加浮点预测器、PixelIsPoint）与无压缩分条（PixelIsArea）：逐像元还原、空值为 NaN、
+    双线性采样与像元中心约定一致。"""
+    rng = np.random.default_rng(5)
+    a = rng.uniform(-50.0, 2000.0, (37, 21)).astype(np.float32)
+    a[3, 4] = -32767.0
+    step = 1.0 / 3600
+    p = tmp_path / "Copernicus_DSM_COG_10_N43_00_E023_00_DEM.tif"
+    _write_geotiff(p, a, 44.0, 23.0, step, tiled=tiled, predictor=predictor, pixel_is_point=point)
+    got, (lat0, lon0, dy, dx), src = qa.read_geotiff_dem(p)
+    ref = a.astype(np.float64)
+    ref[3, 4] = np.nan
+    assert got.shape == a.shape and np.array_equal(np.isnan(got), np.isnan(ref)) and np.allclose(got, ref, equal_nan=True, rtol=0, atol=0)
+    c_lat, c_lon = (44.0, 23.0) if point else (44.0 - step / 2, 23.0 + step / 2)
+    assert (lat0, lon0) == pytest.approx((c_lat, c_lon), abs=1e-12) and dy == dx == pytest.approx(step)
+    assert src["posts"] == [37, 21] and len(src["sha256"]) == 64
+    dem = qa.load_dem([p])
+    assert isinstance(dem, qa.GridDem)
+    r, c = 10.25, 7.5
+    lat, lon = np.array([c_lat - r * step]), np.array([c_lon + c * step])
+    want = np.interp(0.5, [0, 1], [np.interp(0.25, [0, 1], [ref[10, 7], ref[11, 7]]), np.interp(0.25, [0, 1], [ref[10, 8], ref[11, 8]])])
+    assert dem.sample(lat, lon)[0] == pytest.approx(want, abs=1e-6)
+    assert np.isnan(dem.sample(np.array([c_lat + step]), np.array([c_lon]))[0])            # 格网外为 NaN
+    with pytest.raises(ValueError):
+        qa.load_dem([p, tmp_path / "N43E023.hgt"])
+
+
+def _fit(g: tuple[float, float], k: float = 1.0) -> qa.DemFit:
+    return qa.DemFit(g, k, 2.0, 1.0, 1000)
+
+
+def _wall(g: tuple[float, float]) -> qa.WallFit:
+    return qa.WallFit(g, 5000, 0.0, 0.05, (g, g), 0.0)
+
+
+def _lev(dem: qa.DemFit | None, cross: list, wall: qa.WallFit | None) -> dict:
+    cps = qa.control_point_rms(lambda EN: np.full(len(EN), np.nan), [])
+    return qa.levelling_report(applied_g=(0.0, -0.02), km_scale=True, dem=dem, wall=wall, planes=[], cps=cps, ground_mad_m=1.0,
+                               dem_cross=cross)
+
+
+def test_l5_cross_check_accepts_three_consistent_methods_and_downgrades_l3() -> None:
+    """crop 实测形态：SRTM 剩余 0.4°，GLO-30 0.08°，墙面 0.11°，两两差 ≤ 0.5°，共识 0.17° ≤ 0.2°：L5 成立，G-13 通过，L3（无水平面）
+    只作 G-16 告警，needs_control_points = false。"""
+    dem, x, wall = _fit((-0.003272, -0.006108), 0.917), _fit((-0.001384, 0.000468), 0.967), _wall((-0.001956, -0.000157))
+    lev = _lev(dem, [("glo30", x)], wall)
+    xc = lev["cross_check"]
+    assert xc["pass"] and lev["L5"] and lev["L1"] and not lev["L3"] and not lev["needs_control_points"]
+    assert xc["methods"] == ["dem", "dem:glo30", "wall"] and len(xc["pairs"]) == 3 and xc["max_pair_delta_deg"] <= 0.5
+    assert xc["consensus_tilt_deg"] == pytest.approx(math.degrees(math.atan(math.hypot(*np.mean([dem.g, x.g, wall.g], 0)))), abs=1e-4)
+    assert xc["residual_tilt_deg"]["dem"] == pytest.approx(0.397, abs=1e-3) and xc["k"] == {"dem": 0.917, "dem:glo30": 0.967}
+    assert xc["suggested_applied_g"] == pytest.approx(list(source_gradient((0.0, -0.02), tuple(xc["consensus_g"]))), abs=1e-6)
+    gates = {g.id: g for g in qa.glb_gates(lev, None)}
+    assert gates["G-13"].passed and gates["G-13"].value["cross_consensus_deg"] == pytest.approx(0.168, abs=1e-3)
+    assert not gates["G-16"].passed and gates["G-16"].severity == "warn"
+
+
+@pytest.mark.parametrize(("case", "why"), [
+    ("pair", "two methods differ by 0.69 deg"), ("residual", "one method keeps 0.55 deg"), ("consensus", "all agree on 0.3 deg"),
+    ("missing", "wall fit missing"), ("k", "GLO-30 k = 0.8"), ("none", "no cross-check DEM")])
+def test_l5_cross_check_rejects(case: str, why: str) -> None:
+    g0 = (0.002, 0.0)
+    dem, x, wall = _fit(g0), _fit(g0), _wall(g0)
+    if case == "pair":
+        x = _fit((0.002 + 0.012, 0.0))
+    elif case == "residual":
+        dem, x, wall = _fit((0.0096, 0.0)), _fit((0.0045, 0.0)), _wall((0.0045, 0.0))
+    elif case == "consensus":
+        dem, x, wall = _fit((0.0052, 0.0)), _fit((0.0052, 0.0)), _wall((0.0052, 0.0))
+    elif case == "missing":
+        wall = None
+    elif case == "k":
+        x = _fit(g0, 0.8)
+    lev = _lev(dem, [] if case == "none" else [("glo30", x)], wall)
+    assert not lev["L5"], why
+    gates = {g.id: g for g in qa.glb_gates(lev, None)}
+    assert not gates["G-13"].passed and "G-16" not in gates and lev["needs_control_points"]
+    if case == "none":
+        assert lev["cross_check"] is None and "L5" not in gates["G-13"].name
+    else:
+        assert not lev["cross_check"]["pass"]
+
+
+def test_full_qa_with_a_second_dem_passes_l5_without_planes() -> None:
+    """解析 DEM 作主 DEM 与交叉核对 DEM、无 OSM 水平面：L3 不成立而 L5 成立，G-13 通过、G-16 告警。"""
+    t = _town((0.0, 0.0))
+    inp = qa.QaInputs(dem=_dem(), dem_cross=[("glo30", _dem())])
+    out = qa.run_glb_qa(t["V"], t["F"], applied_g=(0.0, 0.0), m_per_unit=10.0, anchor=ANCHOR, inputs=inp)
+    lev = out.report["leveling"]
+    assert lev["planes_evaluated"] == 0 and not lev["L3"] and lev["L5"] and not out.needs_control_points
+    assert lev["cross_check"]["fits"]["dem:glo30"]["samples"] == lev["dem"]["samples"]          # 同一地面抽样
+    gates = {g.id: g for g in out.gates}
+    assert gates["G-13"].passed and not gates["G-16"].passed
+
+
+def test_inputs_from_recipe_groups_cross_check_dems_by_model(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    _write_geotiff(raw / "a.tif", np.zeros((20, 20), np.float32), 44.0, 23.0, 1 / 3600)
+    _write_geotiff(raw / "b.tif", np.ones((20, 20), np.float32), 44.0, 24.0, 1 / 3600)
+    rec = SimpleNamespace(world_id="w", dir=tmp_path, doc={"qa": {"dem": [{"path": "a.tif", "model": "glo30"}, {"path": "b.tif", "model": "glo30"}]}})
+    inp = qa.QaInputs.from_recipe(rec, ANCHOR, verify=lambda p, s=None: raw / p)
+    assert inp.dem is None and [m for m, _ in inp.dem_cross] == ["glo30"] and len(inp.dem_cross[0][1].grids) == 2
+    assert [f["use"] for f in inp.files] == ["levelling cross-check (glo30)"] * 2
