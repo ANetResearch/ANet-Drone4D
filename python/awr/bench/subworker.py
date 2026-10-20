@@ -4,7 +4,13 @@
 按创建先后逐个处理 RECEIVED 的提交（所属榜单版本被平台复现审计冻结的跳过，`awr.bench.platform_audit`），每个阶段开始前重读状态
 （撤回即停止）：
 
-0. 领取与准入：配置了漏洞扫描器时先自检（离线库缺失、损坏或库龄 > 30 天、扫描镜像缺失时抛 `ScannerUnavailable`，提交留在
+0. 镜像接入门（D3-AC-59；B25 遗留，`registry_gate`）：宿主 `regctl.py materialize`（d3-registry → 宿主 docker）为每个 RECEIVED
+   提交写 `submissions/<id>/registry.json`；受邀成员（`_meta.role = invited`）的提交只有该记录 `status ∈ {pulled, present}` 才领取，
+   `foreign_image`（镜像不在本团队命名空间）与 `digest_is_manifest`（以清单摘要提交）即 REJECTED 692 `scan`（`detail.check` 取该
+   状态），尚无记录或 `not_found`、`pull_failed`、`error` 时留在 RECEIVED 等待接入，超过 `registry_wait_s`（自提交起，缺省 1800 s）
+   仍未就绪即 REJECTED 692 `scan` `image_missing`（附 `registry_status`）；`--registry-gate all`（与 materialize 伴随容器同时部署）
+   对全部角色要求接入记录，`off` 关闭（开发自检）。等待中的提交不阻塞队列中其后的提交；
+   领取与准入：配置了漏洞扫描器时先自检（离线库缺失、损坏或库龄 > 30 天、扫描镜像缺失时抛 `ScannerUnavailable`，提交留在
    RECEIVED，库刷新后继续；库龄 > 7 天告警）；非开发榜（`track.dev` 不为真）再以 `spec_rules.check_submission_eval` 对榜单轮次
    配置求值，不满足时 REJECTED（633 或 682）；
 1. SCANNING（D3-AC-59；ADR-204）：`docker image inspect <digest>`：镜像须已在 dmax（私有仓库推送或本机构建）、linux/amd64、
@@ -47,13 +53,17 @@ from awr.bench.platform_audit import is_frozen
 from awr.bench.spec_rules import check_submission_eval, reason
 from awr.bench.submissions import SubmissionStore, WallLimitExceeded, guarded_run, run_duration_s, wall_limit_s
 
-__all__ = ["IMAGE_MAX_B", "SCAN_SEVERITIES", "ScanError", "ScannerUnavailable", "TrivyScanner", "process_one", "scan_image",
-           "vulnerability_findings"]
+__all__ = ["IMAGE_MAX_B", "REGISTRY_GATES", "REGISTRY_READY", "REGISTRY_WAIT_S", "SCAN_SEVERITIES", "ScanError", "ScannerUnavailable",
+           "TrivyScanner", "process_one", "registry_gate", "scan_image", "vulnerability_findings"]
 
 IMAGE_MAX_B = 4 * 1000 ** 3              # D3-AC-59"体积 > 4 GB 拒绝"：十进制 GB，按 `docker image inspect` 的 Size（未压缩）计（ADR-204 (4)）
 SCAN_SEVERITIES = ("HIGH", "CRITICAL")   # "HIGH 及以上"
 DB_WARN_DAYS, DB_MAX_DAYS = 7.0, 30.0    # 库龄告警与拒绝扫描（ADR-204 (3)）；库龄取 trivy-db 与 trivy-java-db 中较旧者的 UpdatedAt
 LIST_MAX = 50                            # reason 与扫描记录中列出的漏洞条数上限（计数不受限）
+REGISTRY_READY = ("pulled", "present")   # materialize 结论：镜像已在宿主且来源合规
+REGISTRY_REJECT = ("foreign_image", "digest_is_manifest")   # 提交方原因、重试不会改变的结论
+REGISTRY_WAIT_S = 1800.0                 # 自提交起等待镜像接入的上限
+REGISTRY_GATES = ("off", "invited", "all")
 _RFC3339 = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)$")
 
 
@@ -243,6 +253,38 @@ def scan_image(digest: str, docker: str = "docker", *, trivy: TrivyScanner | Non
     return None
 
 
+def registry_gate(data_root: Path, doc: dict, *, now_ns: int, mode: str = "invited", wait_s: float = REGISTRY_WAIT_S) -> tuple[str, dict | None]:
+    """镜像接入门（模块文档第 0 步）：→ (`ready` | `wait` | `reject`, reject 时的 reason)。
+
+    接入记录 `submissions/<id>/registry.json` 由宿主 `regctl.py materialize` 写入（`awr.d3.registry_materialize.v1`）；记录的
+    `image_digest` 与提交不同（不应出现）时按无记录处理。`mode = invited` 只约束受邀成员，内部成员无记录时照常领取（宿主本机构建的
+    镜像），有记录时同样按记录判定；`all` 约束全部角色；`off` 一律放行。"""
+    if mode not in REGISTRY_GATES:
+        raise ValueError(f"registry gate {mode!r} (expected one of {REGISTRY_GATES})")
+    if mode == "off":
+        return "ready", None
+    sid = doc["submission_id"]
+    try:
+        rec = json.loads((Path(data_root) / "submissions" / sid / "registry.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        rec = None
+    if not isinstance(rec, dict) or rec.get("image_digest") != doc.get("image_digest"):
+        rec = None
+    status = rec.get("status") if rec else None
+    if status in REGISTRY_READY:
+        return "ready", None
+    if status in REGISTRY_REJECT:
+        extra = {"config_digest": rec["local_image_id"]} if status == "digest_is_manifest" and rec.get("local_image_id") else {}
+        return "reject", _reason("scan", check=status, **extra)
+    invited = (doc.get("_meta") or {}).get("role") == "invited"
+    if rec is None and mode == "invited" and not invited:
+        return "ready", None
+    age_s = (int(now_ns) - int(doc["_meta"]["created_unix_ns"])) / 1e9
+    if age_s > wait_s:
+        return "reject", _reason("scan", check="image_missing", registry_status=status or "none", waited_s=round(age_s, 1))
+    return "wait", None
+
+
 def _alive(st: SubmissionStore, sid: str) -> bool:
     return st.get(sid)["state"] not in ("WITHDRAWN", "REJECTED", "FAILED", "DONE")
 
@@ -255,19 +297,30 @@ def _write_json(path: Path, doc: dict) -> None:
 
 
 def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.0, n_boot: int = 10_000, run_job=None,
-                trivy: TrivyScanner | None = None, log=print) -> str | None:
-    """处理一个 RECEIVED 提交；→ submission_id 或 None（队列为空）。
+                trivy: TrivyScanner | None = None, log=print, registry: str = "invited", registry_wait_s: float = REGISTRY_WAIT_S) -> str | None:
+    """处理一个 RECEIVED 提交；→ submission_id 或 None（队列为空或全部在等待镜像接入）。
 
     `trivy` 为 None 时不做漏洞扫描（测试替身与开发自检；命令行入口缺省要求扫描器，见 `main`）；扫描器不可用时抛
-    ScannerUnavailable，提交保持 RECEIVED。"""
+    ScannerUnavailable，提交保持 RECEIVED。`registry`、`registry_wait_s`：镜像接入门（`registry_gate`）。"""
     from awr.bench.eval.aggregate import lane_metrics
     if run_job is None:
         from awr.bench.runner import run_job
 
     data_root = Path(data_root)
     st = SubmissionStore(data_root / "submissions")
-    d = next((x for x in st.all() if x["state"] == "RECEIVED" and not is_frozen(data_root / "boards" / x["_meta"]["board_version"])), None)
-    if d is None:                                            # 平台复现审计冻结的榜单版本：其提交留在 RECEIVED，解冻后继续
+    d = None
+    for x in st.all():                                       # 平台复现审计冻结的榜单版本：其提交留在 RECEIVED，解冻后继续
+        if x["state"] != "RECEIVED" or is_frozen(data_root / "boards" / x["_meta"]["board_version"]):
+            continue
+        gate, why = registry_gate(data_root, x, now_ns=st.clock(), mode=registry, wait_s=registry_wait_s)
+        if gate == "reject":                                 # 接入结论为提交方原因或等待超时：不领取，直接拒绝
+            st.transition(x["submission_id"], "REJECTED", reason=why, expect="RECEIVED")
+            log(f"{x['submission_id']}: REJECTED registry {why['detail']}")
+            return x["submission_id"]
+        if gate == "ready":
+            d = x
+            break
+    if d is None:
         return None
     sid, team = d["submission_id"], d["_meta"]["team"]
     db = trivy.ready() if trivy is not None else None       # 库缺失或过期：抛 ScannerUnavailable，不领取
@@ -392,6 +445,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--trivy-image", default=os.environ.get("AWR_TRIVY_IMAGE") or "d3-trivy:dev")
     ap.add_argument("--scan-dir", type=Path, default=None, help="where image archives are staged (default <data-root>/scan)")
     ap.add_argument("--no-trivy", action="store_true", help="skip the vulnerability scan (development only)")
+    ap.add_argument("--registry-gate", choices=REGISTRY_GATES, default=os.environ.get("AWR_REGISTRY_GATE") or "invited",
+                    help="require the host materialize record submissions/<id>/registry.json (status pulled or present) before claiming: "
+                         "invited members only (default), all roles, or off (env AWR_REGISTRY_GATE)")
+    ap.add_argument("--registry-wait-s", type=float, default=REGISTRY_WAIT_S,
+                    help="reject with 692 image_missing when the image is still not materialized this long after submission")
     a = ap.parse_args(argv)
     if a.no_trivy:
         trivy = None
@@ -405,7 +463,8 @@ def main(argv: list[str] | None = None) -> int:
 
     while True:
         try:
-            sid = process_one(a.data_root, smoke_s=a.smoke_s, n_boot=a.n_boot, trivy=trivy, log=log)
+            sid = process_one(a.data_root, smoke_s=a.smoke_s, n_boot=a.n_boot, trivy=trivy, log=log, registry=a.registry_gate,
+                              registry_wait_s=a.registry_wait_s)
         except ScannerUnavailable as e:                       # 不领取提交；库刷新或扫描镜像就绪后继续
             log(f"scanner unavailable: {e}")
             if a.once:

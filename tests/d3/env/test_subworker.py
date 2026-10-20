@@ -123,3 +123,88 @@ def test_platform_failure_is_rerun_once_and_not_charged(root: Path, tmp_path: Pa
     assert d["state"] == "DONE" and d["result"]["lanes"][0]["runs"]["platform_rerun"] == 1
     assert d["result"]["lanes"][0]["runs"]["total"] == 2                                          # 重跑不计入提交方的 Run
     assert calls == [f"{sid}-smoke", f"{sid}-r0", f"{sid}-r0", f"{sid}-r1"]
+
+
+# ---------------------------------------------------------------------- 镜像接入门（D3-AC-59；B25 遗留）
+def _registry(root: Path, sid: str, status: str, digest: str = GOOD, **extra) -> None:
+    """宿主 `regctl.py materialize` 写出的接入记录（`awr.d3.registry_materialize.v1`）。"""
+    p = root / "submissions" / sid / "registry.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"schema": "awr.d3.registry_materialize.v1", "submission_id": sid, "image_digest": digest, "status": status,
+                             **extra}))
+
+
+def _doc(sid: str, role: str, created_s: float = 0.0, digest: str = GOOD) -> dict:
+    return {"submission_id": sid, "image_digest": digest, "_meta": {"role": role, "created_unix_ns": int(created_s * 1e9)}}
+
+
+@pytest.mark.parametrize(("role", "mode", "status", "age_s", "want"), [
+    ("invited", "invited", "pulled", 5, ("ready", None)),
+    ("invited", "invited", "present", 5, ("ready", None)),
+    ("invited", "invited", None, 5, ("wait", None)),                         # 尚未接入：留在 RECEIVED
+    ("invited", "invited", "not_found", 5, ("wait", None)),
+    ("invited", "invited", "pull_failed", 5, ("wait", None)),
+    ("invited", "invited", "foreign_image", 5, ("reject", "foreign_image")),
+    ("invited", "invited", "digest_is_manifest", 5, ("reject", "digest_is_manifest")),
+    ("invited", "invited", None, 4000, ("reject", "image_missing")),         # 等待超过 1800 s
+    ("invited", "invited", "not_found", 4000, ("reject", "image_missing")),
+    ("researcher", "invited", None, 5, ("ready", None)),                     # 内部成员可用宿主本机构建的镜像
+    ("researcher", "invited", "not_found", 5, ("wait", None)),               # 有记录时同样按记录判定
+    ("researcher", "all", None, 5, ("wait", None)),                          # all：全部角色须先接入
+    ("researcher", "all", "present", 5, ("ready", None)),
+    ("invited", "off", None, 4000, ("ready", None)),
+])
+def test_registry_gate_decisions(tmp_path: Path, role: str, mode: str, status: str | None, age_s: float, want: tuple) -> None:
+    from awr.bench.subworker import registry_gate
+
+    if status is not None:
+        _registry(tmp_path, "sub-x", status, local_image_id="sha256:" + "c" * 64)
+    gate, why = registry_gate(tmp_path, _doc("sub-x", role), now_ns=int(age_s * 1e9), mode=mode)
+    assert (gate, why and why["detail"]["check"]) == want
+    if gate == "reject":
+        assert why["code"] == 692 and why["detail"]["why"] == "scan"
+    if want == ("reject", "image_missing"):
+        assert why["detail"]["registry_status"] == (status or "none") and why["detail"]["waited_s"] == 4000.0
+    if want == ("reject", "digest_is_manifest"):
+        assert why["detail"]["config_digest"] == "sha256:" + "c" * 64
+
+
+def test_registry_gate_ignores_record_for_another_digest(tmp_path: Path) -> None:
+    from awr.bench.subworker import registry_gate
+
+    _registry(tmp_path, "sub-x", "pulled", digest="sha256:" + "b" * 64)
+    assert registry_gate(tmp_path, _doc("sub-x", "invited"), now_ns=5 * 10 ** 9)[0] == "wait"
+    with pytest.raises(ValueError):
+        registry_gate(tmp_path, _doc("sub-x", "invited"), now_ns=0, mode="sometimes")
+
+
+def test_invited_submissions_wait_for_materialize(root: Path, tmp_path: Path) -> None:
+    """受邀成员：未接入的提交不被领取（不进入 SCANNING，避免 692 image_missing 抢跑），其后的提交照常处理；他队镜像 692
+    foreign_image；接入为 pulled 后才领取；等待超时 692 image_missing。"""
+    st = SubmissionStore(root / "submissions")
+    missing = "sha256:" + "0" * 64                                         # fake docker 中不存在：领取后在扫描阶段 image_missing
+    s_wait = st.create({"track": "std2-l1", "image_digest": missing, "entry": ENTRY}, owner="bob", team="team-b", board_version="proto-t",
+                       tracks={"std2-l1"}, lanes={"rendezvous_handoff"}, role="invited")["submission_id"]
+    s_foreign = st.create({"track": "std2-l1", "image_digest": GOOD, "entry": ENTRY}, owner="bob", team="team-b", board_version="proto-t",
+                          tracks={"std2-l1"}, lanes={"rendezvous_handoff"}, role="invited")["submission_id"]
+    _registry(root, s_foreign, "foreign_image")
+    logs: list[str] = []
+    assert process_one(root, docker=_docker(tmp_path), log=logs.append) == s_foreign
+    f = st.get(s_foreign)
+    assert f["state"] == "REJECTED" and f["reason"]["detail"] == {"why": "scan", "check": "foreign_image"}
+    assert [h["state"] for h in f["_meta"]["history"]] == ["RECEIVED", "REJECTED"]          # 未领取、未扫描
+    assert process_one(root, docker=_docker(tmp_path), log=logs.append) is None              # 只剩等待接入的提交
+    assert st.get(s_wait)["state"] == "RECEIVED" and not (root / "submissions" / s_wait / "scan.json").exists()
+
+    _registry(root, s_wait, "pulled", digest=missing)                                        # 接入完成 → 领取并进入扫描
+    assert process_one(root, docker=_docker(tmp_path), log=logs.append) == s_wait
+    w = st.get(s_wait)
+    assert [h["state"] for h in w["_meta"]["history"]] == ["RECEIVED", "SCANNING", "REJECTED"]
+    assert w["reason"]["detail"] == {"why": "scan", "check": "image_missing"}                 # 替身 docker 中确无此镜像
+
+    s_late = st.create({"track": "std2-l1", "image_digest": GOOD, "entry": ENTRY}, owner="bob", team="team-b", board_version="proto-t",
+                       tracks={"std2-l1"}, lanes={"rendezvous_handoff"}, role="invited")["submission_id"]
+    assert process_one(root, docker=_docker(tmp_path), log=logs.append, registry_wait_s=0.0) == s_late
+    late = st.get(s_late)
+    assert late["state"] == "REJECTED" and late["reason"]["detail"]["check"] == "image_missing"
+    assert late["reason"]["detail"]["registry_status"] == "none"

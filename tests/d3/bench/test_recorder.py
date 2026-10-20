@@ -16,6 +16,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import struct
 import sys
 import time
 from pathlib import Path
@@ -342,3 +343,55 @@ def test_ranked_run_spec_attachment_has_no_seed(synth_event, tmp_path: Path) -> 
     blob = (run / "raw.mcap").read_bytes()
     for needle in (str(seed).encode(), f"{seed:x}".encode(), seed.to_bytes(8, "little")):
         assert needle not in blob
+
+
+def test_env_l2_lidar_frame_index_digest_and_ranked_compaction(synth_event, tmp_path: Path) -> None:
+    """含 LiDAR 的真实 L2 Env 运行（D3-AC-22 保留条款；B23 遗留 1）：`lidar-v2` 通道的帧索引页符合 `bench/frame_index.v1`
+    （encoding `awr.sensor.lidar_frame.v2`、codec `lidar_v2`），区间容器可读；逐帧摘要含 lidar0 的交付字节 sha256；
+    `ranked_eval` 精简成功（只保留逐帧摘要与 truth_min，`raw.mcap` 删除），摘要与精简前重算的一致。"""
+    from awr.agentsdk.schemas import bench_validator
+    from awr.bench import retention as R
+
+    root = tmp_path / "root"
+    run = root / "dataset" / "ev-lidar" / "runs" / "t-rec"
+    seen, _man, _env = _episode(synth_event, run, ranked=True)
+    got = _delivered(seen)
+    lid = {k: v for k, v in got.items() if "xyz_m" in v}
+    assert lid and {k[1] for k in lid} == {"lidar0"}
+
+    fs = FrameStore(run)
+    try:
+        page = fs.index_page("uav-01", "lidar0")
+        assert not list(bench_validator("frame_index").iter_errors(page)), page
+        assert page["encoding"] == "awr.sensor.lidar_frame.v2" and page["codec"] == "lidar_v2"
+        assert [i["seq"] for i in page["items"]] == sorted(s for u, _sid, s in lid if u == "uav-01")
+        for it in page["items"]:
+            assert it["sha256"] == fs.frame("uav-01", "lidar0", it["seq"]).sha256
+        s0, s1 = page["items"][0]["seq"], page["items"][-1]["seq"]
+        box = fs.range_container("uav-01", "lidar0", s0, s1)
+        n = struct.unpack_from("<I", box, 8)[0]
+        head = json.loads(box[12:12 + n])
+        assert head["codec"] == "lidar_v2" and head["n"] == len(page["items"]) and hashlib.sha256(box[:-32]).digest() == box[-32:]
+        cam = fs.index_page("uav-01", "eo")
+        assert cam["codec"] == "jpeg" and cam["encoding"] == "foxglove.CompressedImage"
+    finally:
+        fs.close()
+
+    body = R.frames_digest(run)
+    rows = [ln.split("\t") for ln in body.decode().splitlines()[1:]]
+    lrows = {(u, int(q)): (h, int(b)) for u, s, q, h, b in rows if s == "lidar0"}
+    assert len(lrows) == len(lid)
+    fs = FrameStore(run)
+    try:
+        for (u, _sid, q) in lid:
+            f = fs.frame(u, "lidar0", q)
+            assert lrows[(u, q)] == (f.sha256, len(f.payload))
+    finally:
+        fs.close()
+    assert {s for _u, s, *_ in rows} >= {"eo", "lidar0"}
+
+    out = R.compact_ranked(run, root=root)
+    assert out["compacted"] and out["frames_digest_sha256"] == hashlib.sha256(body).hexdigest()
+    assert (run / "frames.digest").read_bytes() == body and (run / "truth_min.json").is_file()
+    assert not (run / "raw.mcap").exists() and not (run / "frames.idx").exists()
+    assert R.load_record(run)["ranked_eval"]["phase"] == "compacted"

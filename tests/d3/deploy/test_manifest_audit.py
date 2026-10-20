@@ -63,13 +63,16 @@ def test_repo_manifests_have_no_errors(audit, report) -> None:
     errs = [f for f in report["findings"] if f["level"] == "error"]
     assert report["pass"] and not errs, errs
     assert report["schema"] == "awr.d3.manifest_audit.v1" and set(report["rules"]) == {"CM-00", *RULES}
-    # 每个登记变体都实际渲染：8 个脚本、12 个非拒绝变体（run_d3_tests.sh 各发出主阶段、gz 阶段与合并阶段 3 条 docker run，
-    # 其余各 1 条），9 个拒绝变体 0 条
+    # 每个登记变体都实际渲染：11 个脚本、17 个非拒绝变体，9 个拒绝变体 0 条。docker run 条数：run_d3_tests.sh 主阶段、gz 阶段与
+    # 合并阶段 3 条；run_subworker.sh 缺省与 benchroot 为 materialize 伴随容器 + subworker 2 条，MATERIALIZE=0 为 1 条；
+    # registry/regctl.sh up 3 条（registry、authz、front）；lab/profile.sh up 6 条；scan_images.sh 6 个镜像各 2 条 + 汇总 1 条；其余各 1 条
     reg = tuple(f"sh:{k}[" for k in sorted(audit.SHELL_SITES))
     rs = {r["site"]: r for r in report["renders"] if r["site"].startswith(reg)}
-    assert len(rs) == 21
+    assert len(rs) == 26
+    runs = {"run_d3_tests.sh": 3, "run_subworker.sh[default]": 2, "run_subworker.sh[benchroot]": 2, "regctl.sh[up]": 3, "profile.sh[up]": 6,
+            "scan_images.sh[default]": 13}
     for site, r in rs.items():
-        n = 3 if "run_d3_tests.sh" in site else 1
+        n = next((v for k, v in runs.items() if k in site), 1)
         assert r["docker_runs"] == (0 if any(k in site for k in ("multi-card", "all-cards", "foreign-card")) else n), site
         assert (r["exit"] != 0) == (r["docker_runs"] == 0), site
     s = report["summary"]

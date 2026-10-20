@@ -44,7 +44,19 @@ MAX_RANGE_BYTES = 64 << 20
 MAX_INDEX_ITEMS = 1000
 CONTENT_TYPES = {"jpeg": "image/jpeg", "32FC1": "application/octet-stream", "16UC1": "application/zstd"}
 # 16UC1：热成像通道，载荷为 ThermalObs.temp_ck 交付字节（u16 + zstd 原样，存档压缩即交付形式，不解开；channels.thermal_message）
-_SCHEMA_OF_CODEC = {"jpeg": "foxglove.CompressedImage", "32FC1": "foxglove.RawImage", "16UC1": "foxglove.RawImage"}
+_SCHEMA_OF_CODEC = {"jpeg": "foxglove.CompressedImage", "32FC1": "foxglove.RawImage", "16UC1": "foxglove.RawImage",
+                    LIDAR_CODEC: "awr.sensor.lidar_frame.v2"}
+# lidar-v2：LiDAR 通道（`/uav/{id}/lidar/{name}`，`awr.sensor.lidar_frame.v2`），消息字节即交付字节，不经图像解封装；
+# 帧索引契约（`bench/frame_index.v1`）的 codec 枚举写作 `lidar_v2`，通道元数据沿用写入器的 `lidar-v2`，在接口输出处换名
+_CONTRACT_CODEC = {LIDAR_CODEC: "lidar_v2"}
+
+
+def _codec_fields(info: dict) -> dict:
+    """通道元数据 → 帧索引与区间容器头的 `encoding`、`codec`（契约名）；未登记的编解码抛 ValueError（指明通道，不以 KeyError 中断）。"""
+    codec = info.get("codec", "jpeg")
+    if codec not in _SCHEMA_OF_CODEC:
+        raise ValueError(f"channel {info.get('channel')!r}: frame codec {codec!r} is not supported by the reader")
+    return {"encoding": _SCHEMA_OF_CODEC[codec], "codec": _CONTRACT_CODEC.get(codec, codec)}
 
 
 class FrameLimitError(ValueError):
@@ -132,9 +144,8 @@ class FrameStore:
         page, more = rs[:MAX_INDEX_ITEMS], rs[MAX_INDEX_ITEMS:MAX_INDEX_ITEMS + 1]
         items = [{"seq": int(r["seq"]), "t_ns": int(r["t_ns"]), "bytes": n, "sha256": h}
                  for r in page for n, h in [self._digest_of(uav, sensor, r)]]
-        codec = info.get("codec", "jpeg")
         return {"schema": "drone4d.bench.frame_index.v1", "run_id": self.run_id, "uav_id": uav, "sensor_id": sensor, "channel": info["channel"],
-                "encoding": _SCHEMA_OF_CODEC[codec], "codec": codec, "agent_delivered": info.get("agent_delivered", "true") == "true",
+                **_codec_fields(info), "agent_delivered": info.get("agent_delivered", "true") == "true",
                 "period_ns": int(info.get("period_ns", 100_000_000)), "items": items,
                 "next_seq": int(more["seq"][0]) if len(more) else None}
 
@@ -147,8 +158,7 @@ class FrameStore:
         if seq_to < seq_from or seq_to - seq_from + 1 > MAX_FRAMES_PER_STRIDE * stride:
             raise FrameLimitError({"max_frames": MAX_FRAMES_PER_STRIDE, "max_bytes": MAX_RANGE_BYTES})
         rs = [r for r in self.idx.span(uav, sensor, seq_from, seq_to) if (int(r["seq"]) - seq_from) % stride == 0]
-        codec = info.get("codec", "jpeg")
-        head = {"run_id": self.run_id, "uav_id": uav, "sensor_id": sensor, "encoding": _SCHEMA_OF_CODEC[codec], "codec": codec, "n": len(rs),
+        head = {"run_id": self.run_id, "uav_id": uav, "sensor_id": sensor, **_codec_fields(info), "n": len(rs),
                 "seq_from": int(seq_from), "seq_to": int(seq_to), "stride": stride}
         hj = json.dumps(head, separators=(",", ":")).encode()
         parts = [b"D3FR", struct.pack("<HHI", 1, 0, len(hj)), hj]

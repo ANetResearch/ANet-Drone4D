@@ -21,6 +21,9 @@ goto 目标解释在本机导航系，每个控制步按当前导航误差换算
 预滚（`env.preroll`，M26-FR-004）：reset 时先推进事件零点之前的 `[−t_pre, 0)`（缺省 2 s；地面起飞为静止、空中出生为悬停保持），
 不调用 Agent、不交付观测；此后物理档以事件时间视图出现，k = 0 观测时刻为 0，窗口判定写入 `tier_info.preroll`。
 未返回动作的 Agent 计超时（回执 `timeout`），沿用上一导航指令。回合在事件时长到达或全部机体终止时结束。
+磁带校验（`env.tapecheck`）：构造时先核对磁带与所加载世界包的版本（不符 615 `TAPE_WORLD_MISMATCH`，不创建运行目录）；正式运行（排名
+且 `realistic` 档）另拒绝栅格后端编译（`generator_version` 以 `-grid` 结尾）或 NavMesh 哈希与世界图层不符的磁带（ADR-196 决策 (5)），
+结果写入运行清单 `tape_check`。
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ from awr.agentsdk.env.nav import NavModel
 from awr.agentsdk.env.preroll import PREROLL_DEFAULT_S, plan_preroll, run_preroll
 from awr.agentsdk.env.recorder import EnvRecorder
 from awr.agentsdk.env.spec import EnvSpec
+from awr.agentsdk.env.tapecheck import check_tape_world, is_formal
 from awr.agentsdk.task import brief_for_agent, task_from_event
 from awr.phys.adapter import TierCommand, VehicleStatus
 
@@ -91,6 +95,7 @@ class BenchEnv:
         self.spec = spec
         self.uavs = [f.uav for f in spec.fleet]
         self.tape = tape or open_tape(Path(spec.event_dir))
+        self.tape_check = check_tape_world(self.tape, Path(spec.world_dir), formal=is_formal(spec))   # 615：磁带须为所加载世界版本编译
         self.world = world or _open_world(Path(spec.world_dir))
         self.cam = cam or CameraModel()
         self.lim = limits or Limits()
@@ -480,7 +485,7 @@ class BenchEnv:
                     "ranked": self.spec.ranked, "policy": self.spec.policy, "decision": self.spec.decision.config(),
                     "comm": {"enabled": self.spec.comm.enabled, "bucket_Bps": self.spec.comm.bucket_Bps},
                     "duration_s": self.duration_s, "n_ticks": self.k, "pose_sha256": info.get("pose_sha256"), "tier_info": info,
-                    "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats}
+                    "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats, "tape_check": self.tape_check}
         if not self.spec.ranked or self.spec.seed_commit:     # 运行身份（M27-FR-007）；排名运行须有 M27 的种子承诺值
             manifest.update(self.spec.identity())
         if svc is not None:

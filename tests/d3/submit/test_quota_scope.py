@@ -79,6 +79,14 @@ def _create(st: SubmissionStore, owner: str, team: str, role: str = "invited", k
     return st.create(REQ, owner=owner, team=team, role=role, kind=kind, **MK)["submission_id"]
 
 
+def _materialized(root: Path, sid: str) -> None:
+    """宿主 `regctl.py materialize` 的接入记录（受邀成员的提交须 pulled 或 present 才被 subworker 领取，`subworker.registry_gate`）。"""
+    p = root / "submissions" / sid / "registry.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"schema": "awr.d3.registry_materialize.v1", "submission_id": sid, "image_digest": REQ["image_digest"],
+                             "status": "pulled"}))
+
+
 def _quota_err(st: SubmissionStore, owner: str, team: str, role: str = "invited", kind: str = "formal") -> dict:
     with pytest.raises(SubmissionError) as ei:
         _create(st, owner, team, role, kind)
@@ -313,6 +321,7 @@ LIMITS: dict[Path, list[float]] = {}
 def test_subworker_terminates_formal_run_at_wall_limit(board_root: Path, tmp_path: Path) -> None:
     st = SubmissionStore(board_root / "submissions")
     sid = _create(st, "ann", "team-a")
+    _materialized(board_root, sid)
     jobs = _Jobs({f"{sid}-r1"})
     assert sw.process_one(board_root, docker=_fake_docker(tmp_path), run_job=jobs, n_boot=100, log=lambda m: None) == sid
     d = st.get(sid)
@@ -331,6 +340,7 @@ def test_subworker_terminates_formal_run_at_wall_limit(board_root: Path, tmp_pat
 def test_subworker_rejects_smoke_over_wall_limit(board_root: Path, tmp_path: Path) -> None:
     st = SubmissionStore(board_root / "submissions")
     sid = _create(st, "ann", "team-a")
+    _materialized(board_root, sid)
     jobs = _Jobs({f"{sid}-smoke"})
     sw.process_one(board_root, docker=_fake_docker(tmp_path), run_job=jobs, n_boot=100, log=lambda m: None)
     d = st.get(sid)

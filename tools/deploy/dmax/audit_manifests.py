@@ -6,8 +6,8 @@
      Agent 隔离容器（`AgentContainers.argv()`，两个 Run × 两架机）；另扫描 python/awr 与 tools 下的 `.py`（不计注释与文档字符串），
      出现未登记的 `docker run` 启动点即报错（CM-00）。
   2. dmax 启动脚本：`tools/deploy/dmax/**/*.sh` 中含 `docker run` 的脚本按 `SHELL_SITES` 登记的变体（参数与环境变量）执行，
-     `ssh`、`rsync`、`scp` 与 `docker` 由记录桩替换：远端命令串在本机受限 PATH 的 bash 中展开（另有 `mkdir`、`cp` 空操作桩与
-    `id`、`head`、`tail` 本机只读命令），`docker` 桩只记录参数表，
+     `ssh`、`rsync`、`scp` 与 `docker` 由记录桩替换：远端命令串在本机受限 PATH 的 bash 中展开（另有 `mkdir`、`cp`、`chown` 空操作桩、
+    输出 0 的 `stat` 桩与 `id`、`head`、`tail` 本机只读命令），`docker` 桩只记录参数表，
      不连接 dmax、不启动任何容器；变体声明 `reject = True` 时断言脚本拒绝该参数（如 `GPU=2,3`）且没有发出 `docker run`。
      未登记的脚本按无参数缺省变体渲染并告警，无法渲染时报错（CM-00）。
   3. 运行中容器（可选）：`--inspect FILE`（`docker inspect` JSON）或 `--live`（`ssh dmax` 只读执行 `docker inspect`，
@@ -118,8 +118,15 @@ SHELL_SITES: dict[str, tuple[Variant, ...]] = {
         Variant("all-cards", "board", ("audit",), {"GPU": "all"}, reject=True),
         Variant("foreign-card", "board", ("audit",), {"GPU": "0"}, reject=True),
     ),
-    f"{SCRIPT_ROOT}/run_subworker.sh": (Variant("default", "subworker", ("--once",)),),
+    f"{SCRIPT_ROOT}/run_subworker.sh": (                         # 缺省：materialize 伴随容器 + subworker（数据根 $LAB_DATA）
+        Variant("default", "subworker", ("--once",)),
+        Variant("no-materialize", "subworker", ("--once",), {"MATERIALIZE": "0"}),
+        Variant("benchroot", "subworker", ("--once",), {"BENCH_ROOT": "benchroot"}),
+    ),
     f"{SCRIPT_ROOT}/images/trivy/build.sh": (Variant("default", "subworker"),),   # 构建后以 --version 自检一次（CPU 池）
+    f"{SCRIPT_ROOT}/registry/regctl.sh": (Variant("up", "registry", ("up",)),),  # d3-registry 三个容器（CPU 池）
+    f"{SCRIPT_ROOT}/lab/profile.sh": (Variant("up", None, ("up",)),),            # d3 profile 六个容器，组件取 d3.component 标签
+    f"{SCRIPT_ROOT}/scan_images.sh": (Variant("default", "test"),),             # 镜像依赖扫描（每镜像 pip 与扫描两个容器 + 汇总）
 }
 
 
@@ -337,8 +344,8 @@ def render_shell(script: Path, args: tuple[str, ...] = (), env: dict[str, str] |
                  ) -> tuple[int, list[list[str]], str]:
     """在记录桩下执行启动脚本 → (退出码, 发出的 docker 参数表列表（不含 docker 本身）, stderr 尾部)。
 
-    本机侧 PATH 前置桩目录（ssh、rsync、scp、docker）；ssh 桩把远端命令串交给只含 docker 桩、mkdir 与 cp 空操作桩、
-    id、head 与 tail（只读）的 PATH 下的 bash，
+    本机侧 PATH 前置桩目录（ssh、rsync、scp、docker）；ssh 桩把远端命令串交给只含 docker 桩、mkdir、cp 与 chown 空操作桩、
+    stat 桩（输出 0）、id、head 与 tail（只读）的 PATH 下的 bash，
     远端命令串里的其他命令找不到即失败，不会在本机产生副作用。"""
     with tempfile.TemporaryDirectory(prefix="d3-manifest-") as td:
         t = Path(td)
@@ -351,8 +358,9 @@ def render_shell(script: Path, args: tuple[str, ...] = (), env: dict[str, str] |
             _stub(loc / n, "#!/bin/sh\nexit 0\n")
         for d in (loc, rem):
             _stub(d / "docker", _DOCKER_STUB.format(py=py))
-        for n in ("mkdir", "cp"):
+        for n in ("mkdir", "cp", "chown"):
             _stub(rem / n, "#!/bin/sh\nexit 0\n")
+        _stub(rem / "stat", "#!/bin/sh\necho 0\n")              # `stat -c %g /var/run/docker.sock`（--group-add）：渲染时取 0
         for n in ("id", "head", "tail"):
             exe = shutil.which(n)
             if exe:
