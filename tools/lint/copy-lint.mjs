@@ -135,7 +135,7 @@ const PRODUCT = /(?<![\w./@-])(?:ANet[ -])?Drone4D(?![\w/-]|\.\w)/g
 const PROPER_PHRASES = ['ANet Synthetic City', 'ANet Tower', 'Agent Network Research', 'Gazebo Sim', 'Gazebo Classic', 'Event Lab',
   'Interactive Sandbox', 'Scene View', 'World Package', 'World Runtime', 'Read the Docs', 'Mock ANet', 'ANet Open Source License',
   'Apache License', 'Python SDK', 'Livox MID-360', 'Web Viewer', 'Open API', 'ANet Graphite', 'Creative Commons', 'Open Data Commons',
-  'OpenStreetMap', 'Johnson', 'Potree', 'Skyfall-GS', 'SuperSplat', 'ModelScope', 'Hugging Face', 'Docker Hub']
+  'OpenStreetMap', 'Johnson', 'Potree', 'Skyfall-GS', 'SuperSplat', 'ModelScope', 'Hugging Face', 'Docker Hub', 'Sandbox API']
 const PROPER_WORDS = new Set(['ANet', 'Drone4D', 'Gazebo', 'Rerun', 'RotorPy', 'Livox', 'Python', 'Linux', 'Windows', 'Chrome', 'Firefox',
   'Safari', 'Edge', 'Apple', 'Intel', 'Mac', 'Docker', 'Kubernetes', 'Ubuntu', 'English', 'Chinese', 'Shenzhen', 'Hong', 'Kong', 'Mock',
   'Johnson', 'Potree', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'January', 'February', 'March',
@@ -299,16 +299,18 @@ function jsonSegments(file, raw, lang, { fields = null } = {}) {
   const visit = (v, path) => {
     if (typeof v === 'string') {
       const key = path[path.length - 1]
-      // OpenAPI: summaries and descriptions; generated schema titles ("Task Id") are not copy, the document title is
-      if (fields && !(fields.includes(key) || (key === 'title' && path.length === 2 && path[0] === 'info'))) return
+      // the cursor follows every string value (also the skipped ones), so that a reported key is located at its own occurrence
       const quoted = JSON.stringify(String(key)) + ':'
       let at = raw.indexOf(quoted, cursor)
       if (at < 0) at = raw.indexOf(quoted)
       if (at >= 0) cursor = at + quoted.length
+      // OpenAPI: summaries and descriptions; generated schema titles ("Task Id") are not copy, the document title is
+      if (fields && !(fields.includes(key) || (key === 'title' && path.length === 2 && path[0] === 'info'))) return
       const vAt = at >= 0 ? raw.indexOf('"', at + quoted.length) + 1 : 0
       const [line, col] = lineCol(raw, Math.max(vAt, 0))
-      // ICU placeholders and arguments are not copy
-      const text = v.replace(/\{[^{}]*\}/g, (m) => ' '.repeat(m.length))
+      // ICU placeholders and arguments are not copy; OpenAPI descriptions are CommonMark, their code spans are not copy either
+      let text = v.replace(/\{[^{}]*\}/g, (m) => ' '.repeat(m.length))
+      if (fields) text = text.replace(/`[^`\n]+`/g, (m) => ' '.repeat(m.length))
       const sLang = lang === 'auto' ? detectLang(v) : lang
       const anchor = fields ? path.join('/') : path.join('.')
       segs.push({ text, lang: sLang, file, heading: false, label: fields ? key === 'summary' || key === 'title' : isLabelText(text, sLang), anchor,

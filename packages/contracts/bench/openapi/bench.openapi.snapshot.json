@@ -96,7 +96,7 @@
     }
   },
   "info": {
-    "title": "drone4d bench-api",
+    "title": "ANet Drone4D Event Lab API",
     "version": "1"
   },
   "openapi": "3.1.0",
@@ -507,7 +507,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Registry Token",
+        "summary": "Registry token",
         "x-awr-reasons": [
           115,
           301,
@@ -913,7 +913,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Frame Index",
+        "summary": "Frame index",
         "x-awr-reasons": [
           115,
           301,
@@ -1084,7 +1084,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Frame Range",
+        "summary": "Frame range",
         "x-awr-reasons": [
           115,
           301,
@@ -1204,7 +1204,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Event Tape",
+        "summary": "Event tape",
         "x-awr-reasons": [
           115,
           301,
@@ -1293,7 +1293,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Truth Frame",
+        "summary": "Truth frame",
         "x-awr-reasons": [
           115,
           301,
@@ -1389,7 +1389,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Viewer Url",
+        "summary": "Viewer URL",
         "x-awr-reasons": [
           115,
           213,
@@ -1412,7 +1412,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Delete Session",
+        "summary": "Delete session",
         "x-awr-reasons": [
           301,
           302,
@@ -1439,7 +1439,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Get Session",
+        "summary": "Get session",
         "x-awr-reasons": [
           301,
           302
@@ -1475,7 +1475,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Create Session",
+        "summary": "Create session",
         "x-awr-reasons": [
           111,
           302
@@ -1522,7 +1522,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Short Token",
+        "summary": "Short token",
         "x-awr-reasons": [
           115,
           301,

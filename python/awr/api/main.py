@@ -45,6 +45,7 @@ from awr.world.package.catalog import Catalog
 from .audit import AuditWriter
 from .identity import ApiIdentity
 from .middleware import AwrMiddleware
+from .openapi_copy import apply_sentence_case_summaries
 from .problem import ApiProblem, problem
 from .ratelimit import RateLimiter
 from .rt.gateway import Gateway
@@ -332,6 +333,7 @@ def create_app(settings: ApiSettings | None = None, *, bus: Any = None, ring_cls
     app.include_router(static_router)
     app.add_api_route("/{path:path}", spa_route(dist), methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
                       include_in_schema=False)
+    apply_sentence_case_summaries(app)                          # OpenAPI 摘要 sentence case（AWR-05 §7.10，D3-AC-23）
     app.add_middleware(AwrMiddleware, ctx=ctx)
     return app
 

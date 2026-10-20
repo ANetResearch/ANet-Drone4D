@@ -13,7 +13,8 @@
 # 相等且为 X.Y.Z。
 # COPY-01..10（copy-lint.mjs，docs/05 §7.10，ADR-153；D3-AC-46、D3-AC-23、D3-AC-53）：企业级文案中英文规则集，缺省扫描 D2 发布面
 # （README.md、README.zh-CN.md、zh-CN.json、en.json、CITATION.cff），tools/lint/copy-lint.scope.json 追加范围；P-1 基线例外登记在
-# tools/lint/copy-lint.baseline.json，P0b 出口前清零（lint-copy-strict 在仍有基线例外时失败）。
+# tools/lint/copy-lint.baseline.json，P0b 出口前清零；v1.6（L05）起 lint-copy-lint 与 lint-check-release（REL-09）均为严格模式，
+# 仍有基线例外时失败。
 
 LINT_SCRIPTS := no-emoji no-hex lint-lf motion-lint check-icons no-raw-controls check-brand check-deps check-units check-release check-version copy-lint
 
@@ -29,11 +30,15 @@ lint-selftest:
 lint-lint-lf:
 	@cd $(ROOT) && node tools/lint/lint-lf.mjs --palette
 
-lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units lint-check-release lint-check-version lint-copy-lint:
+lint-no-emoji lint-no-hex lint-motion-lint lint-check-icons lint-no-raw-controls lint-check-brand lint-check-deps lint-check-units lint-check-version:
 	@cd $(ROOT) && node tools/lint/$(patsubst lint-%,%,$@).mjs
 
-# P0b 出口（D3-AC-23）：基线例外须已清零
-lint-copy-strict:
+# P0b 出口（D3-AC-23，L05）起 make lint 与 REL 均以严格模式运行 copy-lint：扫描缺省发布面与 copy-lint.scope.json 追加的 D3 页面、
+# /lab/ 公开构建、原因码文案与 OpenAPI 快照，基线例外须为 0（新增放行只能登记为经评审的 allow 条目）
+lint-check-release:
+	@cd $(ROOT) && node tools/lint/check-release.mjs --copy-strict
+
+lint-copy-lint lint-copy-strict:
 	@cd $(ROOT) && node tools/lint/copy-lint.mjs --strict
 
 lint-py-imports:

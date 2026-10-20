@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from awr.api.openapi_copy import apply_sentence_case_summaries
 from awr.api.problem import ApiProblem, problem, uuid7
 from awr.bench.api import board, frames, rerun_proxy, runs, session, submissions, worlds
 from awr.bench.api.deps import annotate
@@ -23,13 +24,14 @@ PREFIX = "/api/bench/v1"
 
 
 def create_bench_app(settings: BenchSettings) -> FastAPI:
-    app = FastAPI(title="drone4d bench-api", version="1", openapi_url=f"{PREFIX}/openapi.json", docs_url=None, redoc_url=None)
+    app = FastAPI(title="ANet Drone4D Event Lab API", version="1", openapi_url=f"{PREFIX}/openapi.json", docs_url=None, redoc_url=None)
     app.state.settings = settings
     app.state.auth = BenchAuth(settings.keys_dir, settings.db_path, session_ttl_s=settings.session_ttl_s, short_ttl_s=settings.short_ttl_s)
     app.state.frame_stores = StoreCache()
     for r in (session.router, worlds.router, runs.router, frames.router, rerun_proxy.router, board.router, submissions.router):
         app.include_router(r, prefix=PREFIX)
     annotate(app, PREFIX)                                        # OpenAPI x-d3-role、x-d3-stage、x-awr-reasons（D3-AC-51）
+    apply_sentence_case_summaries(app)                           # OpenAPI 摘要 sentence case（AWR-05 §7.10，D3-AC-23）
 
     @app.middleware("http")
     async def _headers(request: Request, call_next):

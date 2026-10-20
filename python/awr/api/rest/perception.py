@@ -90,7 +90,7 @@ def _id_ok(v: str, field: str, rx: re.Pattern = VID_RE) -> None:
 
 @sandbox_router.get("/vehicles/{vid}/perception")
 async def sbx_vehicle_perception(vid: str, request: Request, _p: SbxViewer) -> dict[str, Any]:
-    """当前感知结果（`awr.uav.perception.v1` 加 radar、acoustic、lidar 点数判据）。成像目标的 `target` 为识别物 id（数据关联视为
+    """当前感知结果（`awr.uav.perception.v1` 加 `radar`、`acoustic`、`lidar` 点数判据）。成像目标的 `target` 为识别物 id（数据关联视为
     理想）；雷达航迹与声阵列方位不含识别物 id。"""
     _id_ok(vid, "vid")
     rep = await _query(request, "perception/vehicle", {"id": vid})

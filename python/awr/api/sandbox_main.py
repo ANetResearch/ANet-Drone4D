@@ -57,6 +57,7 @@ from .audit import AuditWriter
 from .deps import require_sandbox_session
 from .main import _install_handlers, discover_routers
 from .middleware import AwrMiddleware
+from .openapi_copy import apply_sentence_case_summaries
 from .ratelimit import CATEGORIES, RateLimiter, sandbox_categories, sandbox_rate_checks
 from .rt.hub import GatewayHub, PoolClient
 from .rt.ws import sandbox_rt_endpoint
@@ -212,7 +213,7 @@ def build_openapi(app: FastAPI) -> dict[str, Any]:
     """沙盒 OpenAPI 3.1（SB-20）：只含 `/api/sandbox/v1` 下的已挂载路由，加 WS 端点（SB-64）与本文档（SB-20）两条手写项。"""
     # FastAPI ≥ 0.141 以惰性对象挂载 include_router 的路由：交给 get_openapi 展开，再按前缀过滤路径
     spec = get_openapi(title=TITLE, version=API_VERSION, openapi_version="3.1.0", routes=app.routes,
-                       description="沙盒 REST v1（AWR-17 §17.5）。会话路由使用 Authorization: Bearer <沙盒 token>。")
+                       description="交互沙盒 REST v1。会话路由使用 Authorization: Bearer <沙盒 token>。")
     spec["paths"] = {p: ops for p, ops in (spec.get("paths") or {}).items() if p.startswith(PREFIX)}
     comps = spec.setdefault("components", {})
     comps.setdefault("securitySchemes", {})["bearerAuth"] = {"type": "http", "scheme": "bearer", "bearerFormat": "awr-v1"}
@@ -281,6 +282,7 @@ def create_sandbox_app(settings: ApiSettings | None = None, *, sb: SandboxCfg | 
     for _name, r in discover_routers("sandbox_router", deny=DENY_MODULES):
         app.include_router(r, prefix=PREFIX + "/sessions/{sid}", dependencies=[Depends(require_sandbox_session)])
     app.add_api_websocket_route(PREFIX + "/sessions/{sid}/rt", sandbox_rt_endpoint)
+    apply_sentence_case_summaries(app)                           # OpenAPI 摘要 sentence case（AWR-05 §7.10，D3-AC-23）
     cache: dict[str, Any] = {}
 
     async def openapi_route(request: Request) -> JSONResponse:
