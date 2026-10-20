@@ -1,0 +1,64 @@
+# crop-vehicle-001：车辆追踪类 dev 事件（M23 §15.3 第 3 行，D3-AC-33、D3-AC-62；E10）。目标车（vehicle-01）自西北路入城，经中心路口
+# 转入东路，先在广场东侧停车点等候 15 s，再在东路东行车道临停 6 s，随后在路口左转进入东北支路并在尽端泊车熄火；三辆干扰车取自外观库中与目标同车型或同色的条目，
+# 分别自东路、南路与东北路驶入并穿过中心路口。全部车辆按 M22 车道图驾驶（IDM 跟驰、路口让行）；验证器产出 depart、turn、stop、park
+# 与 enter_zone、exit_zone 关键事件，并以视线 oracle 判定目标的 target_reacquire。
+schema: drone4d.event.v1
+event_id: crop-vehicle-001
+version: 1
+event_type: vehicle_track
+world: {id: oryahovo-crop1}
+anchors_ref: event:anchors.json
+seed: 20261023
+duration_s: 180
+mode: exogenous
+time_origin_utc: "2026-06-16T14:00:00Z"
+actors:
+  - id: car_t
+    class: vehicle
+    roles: [target]
+    appearance_ref: vehicle-01
+    drive: {profile: urban}
+    route:
+      - {t: 20, at: ev_nw_road_in, do: spawn}
+      - {t: 55, at: ev_plaza_curb_road, dwell_s: 15, do: wait}
+      - {t: 100, at: ev_east_road_stop, dwell_s: 6, do: stop}
+      - {t: 150, at: ev_spur_park, do: park}
+  - id: car_d1
+    class: vehicle
+    roles: [distractor]
+    appearance_ref: vehicle-03
+    drive: {profile: urban}
+    route:
+      - {t: 30, at: ev_east_road_in, do: spawn}
+      - {t: 110, at: ev_ne_road_out, do: despawn}
+  - id: car_d2
+    class: vehicle
+    roles: [distractor]
+    appearance_ref: vehicle-13
+    drive: {profile: cautious}
+    route:
+      - {t: 40, at: ev_south_road_in, do: spawn}
+      - {t: 120, at: ev_nw_road_out, do: despawn}
+  - id: car_d3
+    class: vehicle
+    roles: [distractor]
+    appearance_ref: vehicle-16
+    drive: {profile: urban}
+    route:
+      - {t: 70, at: ev_ne_road_in, do: spawn}
+      - {t: 115, at: ev_plaza_curb_road, dwell_s: 8, do: wait}
+      - {t: 170, at: ev_road_east, do: despawn}
+background:
+  - {class: vehicle, count: 3, zone: ev_traffic_area, stream: 2}
+  - {class: person, count: 16, zone: ev_town_center, speed_mps: [0.8, 1.6], pause_s: [0, 20], stream: 1}
+environment:
+  interpolation: smooth
+  keyframes:
+    - {t: 0, wind_mps: 3.5, wind_dir_deg: 270, gust_sigma_mps: 0.8, rain_mm_h: 0, visibility_m: 25000}
+    - {t: 180, wind_mps: 4.0, wind_dir_deg: 275, gust_sigma_mps: 0.9, rain_mm_h: 0, visibility_m: 25000}
+annotations:
+  - {id: pass_spur_junction, type: zone_pass, participants: [car_t], window: [90, 160], params: {zone: ev_spur_junction, buffer_m: 0}}
+brief:
+  public_anchors: [ev_plaza]
+  targets:
+    - {actor: car_t, description_zh: "银色两厢车，带车顶行李架，车身侧面白色饰条", description_en: "Silver hatchback, roof rack, white side stripe"}

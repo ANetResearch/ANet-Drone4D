@@ -1,0 +1,105 @@
+# 第一批四类事件的 dev/test 划分登记（D3-AC-62、D3-AC-43；M23-FR-082、M27-FR-113、FR-114；E10）。
+#
+# - 世界：oryahovo-crop1（contentVersion 7d8c8b895e55）；赛道与 configs/bench.d3/board-v1/board.json 的 lanes 一一对应。
+# - 每条赛道 ≥ 1 个 dev 事件与恰好 board.events_per_lane（2）个 test 事件；全部事件以 strict、ranked（Detour，generator_version
+#   0.2.0-detour）编译通过。
+# - dev 事件的源文件入库（configs/events.d3/<lane>/<event_id>/、crop-handoff-001 在 configs/events.d3/ 顶层），磁带与真值对内部成员与
+#   受邀成员开放。
+# - test 事件不入库（source: hidden）：源文件、锚点覆盖层、磁带与真值只存于 dmax 数据根 `<data_root>/hidden/<event_id>/event/v1/`
+#   （目录 0700、文件 0600，经 awr.bench.split.HiddenStore 读取并审计）；`<data_root>/events/<event_id>/v1/` 只放对研究者开放的
+#   brief.json（目标搜索类）。
+# - 哈希为承诺值：source_sha256、overlay_sha256 为 event.yaml、anchors.json 文件字节的 SHA-256；dsl_sha256、content_sha256、
+#   truth_sha256 分别取编译产物 event_truth.json、tape.json 与 compile_report.json（truth_summary）。重新编译须逐字节复现；生成器或世界
+#   变更导致哈希变化时，事件升版本（v2）并更新本表与 test_split_version，不得原地覆盖。
+# - 服务端登记：`python -m awr.bench.split --data-root <data_root> set <event_id> <split> --by e10 --version <test_split_version>`
+#   写入 `<data_root>/bench/splits.json`；`tests/d3/events/test_event_set.py` 核对本表、仓库内容与（设 AWR_E10_DATA_ROOT 时）数据根。
+schema: drone4d.bench.split_set.v1
+test_split_version: v1
+world: {id: oryahovo-crop1, content_version: 7d8c8b895e55}
+generator_version: 0.2.0-detour
+board: configs/bench.d3/board-v1/board.json
+lanes:
+  - {lane: reid, event_type: reid_occlusion}
+  - {lane: handoff, event_type: rendezvous_handoff}
+  - {lane: vehicle, event_type: vehicle_track}
+  - {lane: search, event_type: target_search}
+events:
+  - {event_id: crop-reid-001, split: dev, lane: reid, event_type: reid_occlusion, version: 1, source: configs/events.d3/reid/crop-reid-001,
+     source_sha256: a537ba4e3abcd5440b3d7fbbb8b13ac3986ec78619a435ad76d00d2f547b5d10,
+     overlay_sha256: 7dc9944ad5e7059aa3ec54ab2eb8b474c0bbf705cb3311640b1b89aa38acaf68,
+     dsl_sha256: 3cd93c90a3487fd6e05c2720b2fb885a80fe3d2fc534b5cf7b730b7e078ac33f,
+     content_sha256: adc9675bae520b3561672472ced32eca0572e16f0618406c2cbfd6f9f3d0fb19,
+     truth_sha256: ab8c8815358c9b5f989d066c25cad208c3b6e0e24b6ca849d9fb21e574f34e57}
+  - {event_id: crop-reid-101, split: test, lane: reid, event_type: reid_occlusion, version: 1, source: hidden,
+     source_sha256: 4c9b9871a7ed63277bb665ef36460ff71aa72215f161d3d5dd314664832ce675,
+     overlay_sha256: cfaf410084ed7fa0c0c229be5f6bb5aa0d687f005cf8f1f80d07c63e6dbef957,
+     dsl_sha256: bf71e1d4b122c0c2d817982c5b34d3ff7b3dd3a8a4484d7b422b4e3af695ba46,
+     content_sha256: e038741fbb95637ef04c277733d0ebf66915b4bbc0f7ca9c94e0d5ef9c932a07,
+     truth_sha256: e943d8fbd4633077eb542f409252972c405cb6cbde6910b4784288a15e3131ef}
+  - {event_id: crop-reid-102, split: test, lane: reid, event_type: reid_occlusion, version: 1, source: hidden,
+     source_sha256: 51b5f2c363f3caa34b87e8af5201b40ab06508bbc36e0cc297052b2a3f387f5d,
+     overlay_sha256: 3cfab5b601443f1a418a095a68e5fc24032122ff70deddaf086c29af16338b27,
+     dsl_sha256: a623be67e1255bfdaa0271720e1833397f7f5af75dd2834b43c6e8c9a2e1e0fa,
+     content_sha256: f3fff9104f5d56456927c15567145094d834a82c7d129b9480d0727350e09576,
+     truth_sha256: de4f571816ab8b54ce55c3c5a5364f2255b974e8d4e30e6c747a1cb72ce277e8}
+  - {event_id: crop-handoff-001, split: dev, lane: handoff, event_type: rendezvous_handoff, version: 1, source: configs/events.d3/crop-handoff-001,
+     source_sha256: de2f09c2346aadf7092dda9a32f3f2a493d09cb8b77ebb18aed756d45d777a95,
+     overlay_sha256: 2872e4b5c774c17cf6a0a73522eabcc6e9c7c3523b0a9f557fd6e4220d72034c,
+     dsl_sha256: 50a5d3ec540787090f2691b8a06f9a02160398598d610efa650f3fae33928688,
+     content_sha256: b1285649605e08efe8445da1e73f23a1a22f8eafaac310210e220706f6a08e54,
+     truth_sha256: 02af793bc058677246062fe54ed13f3d2b42cf5c416b9a16f959330f4bbb7bc4}
+  - {event_id: crop-handoff-002, split: dev, lane: handoff, event_type: rendezvous_handoff, version: 1, source: configs/events.d3/handoff/crop-handoff-002,
+     source_sha256: f4f3a768005488862ec8057c9d5305e9b788bc8770d08c639ca70b0c74bca965,
+     overlay_sha256: 37847c0d115fa380417d53712038409d537307a28e812ea7198db46488790a8a,
+     dsl_sha256: 297e9abb34255bef5576a63fac3b063149ae38073f66868e6415ae231285d9ad,
+     content_sha256: 70ee1d438e09baf10dc642b6b7537e64c7d756f381d411f5f53ee08bd4e4cc9b,
+     truth_sha256: cb13643923b37c77271da6a62954972404c1f79c3469ee11ced3741557447073}
+  - {event_id: crop-handoff-101, split: test, lane: handoff, event_type: rendezvous_handoff, version: 1, source: hidden,
+     source_sha256: ae4cfc071f9b5dd20d99e11c884b9a13f98681886615ccb62a7facf502ce5f6b,
+     overlay_sha256: dd5dd76ae121c1f1cd8920439f74bf8d1c10e17a73b4aeb49c8c4fa99ff6b220,
+     dsl_sha256: 3eed5fcc57506d587dae914d1144d75d895efde90248f461f4494025793744b3,
+     content_sha256: 811cec14d4439aafd568099aaf51e919d0b0dc3c4a0607596f7a7baa712748ea,
+     truth_sha256: 2c08c5eb2a55d978dacfbd283d64ada41bee26ec9d380fa861257fd6e8365ab1}
+  - {event_id: crop-handoff-102, split: test, lane: handoff, event_type: rendezvous_handoff, version: 1, source: hidden,
+     source_sha256: 28777f14bd5604940d86e92dedb84c9c0cec80673cee6d4737e7d53a0e659bff,
+     overlay_sha256: 21186d154680c21481158aa00e6350f4dd11c9781aec8b79b4d332a4663ce6b7,
+     dsl_sha256: 3bb231487b173b367ea28a2bf70185fee25754aa7886529fc4e74d584181ae7e,
+     content_sha256: 7a8f7e2c39dc390bb9f7528123cd9a6c585ac6ef80fece9c3d7af8fe39b8d3ed,
+     truth_sha256: 20c64609b3edbed1032f3035ec078edca9d092cd5e022d7e7ce3670569e2da45}
+  - {event_id: crop-vehicle-001, split: dev, lane: vehicle, event_type: vehicle_track, version: 1, source: configs/events.d3/vehicle/crop-vehicle-001,
+     source_sha256: df6c030f30e3fb155e5ba1b43a12cc5ace274cd6ff3989f5af672f96f8c56fab,
+     overlay_sha256: b8b6c2170e6abce30851df46d80f7f4d2dcf323d9a3eafae807f0c13011e6cb3,
+     dsl_sha256: 03a263efd3339bb3536edebbe6bf4e24cf003aa1fe50d5b4914de759e3b8a667,
+     content_sha256: e6c29422e3b232727b635665c53588bc8091959ee6f6648ba56a64c920a24cf5,
+     truth_sha256: ccec51210b08b57a213ede956ce314cdd4ba0410bd9b5351055038e4ef7662d0}
+  - {event_id: crop-vehicle-101, split: test, lane: vehicle, event_type: vehicle_track, version: 1, source: hidden,
+     source_sha256: 4f9366ffba07e5285c273d70b783ccb65b7cae6d2a1304b8b2fc27133c61faca,
+     overlay_sha256: 3511d61479ee6857e00330d990ff7109da5127761e497bdb51863b418e34d273,
+     dsl_sha256: 2fe6766c7bad1dbe44c03db664ba9d62450b8297ce8a7d85a6e51b58b4435b6b,
+     content_sha256: adc3e81be4c82c134bf3c42aecbeabc9150f0702f117bedd9fd3676591779338,
+     truth_sha256: 4906328efbe614fc3633e934eb099b284b10e5e6151e9fd4364c564edfe835a5}
+  - {event_id: crop-vehicle-102, split: test, lane: vehicle, event_type: vehicle_track, version: 1, source: hidden,
+     source_sha256: 13b33b0d47a418f8ec6ab03334c705a286df7c4ee52fcfff9c311a9e158e98b2,
+     overlay_sha256: c294fe5d85d92c461fdb085dee15a1ffdac0fa530816cdf4a4da1842733aff6e,
+     dsl_sha256: 7ec338135df75757bb901bd63c1a07483e89538ab9d6cf95041b4e18e43bfa74,
+     content_sha256: 07e8a4dc641f877182a831b467f3400295ec7a21d386db1fbb2478c416a33e66,
+     truth_sha256: 3e9e4271e43df712cf4e6198f9a45337c419acff0169f237ae3f0c0b962dd836}
+  - {event_id: crop-search-001, split: dev, lane: search, event_type: target_search, version: 1, source: configs/events.d3/search/crop-search-001,
+     source_sha256: 4a52f9a76c3dbaeaa8ebcfc69f1ee47fe81aad64fc602cf845a88a6658722001,
+     overlay_sha256: 6559033561cd44c0e6baaf9b422d2eb5ded474fcfd6f13beab5c6be25d2db6c2,
+     dsl_sha256: 8c2329100e31172e99ba840373d0304a2ce5039461b9a397bf6c64a7a84407c5,
+     content_sha256: cf44fbfa6b0704ac1cb1fc19c99fe38c5c91a21a2b5782c8a34ab40780e979c3,
+     truth_sha256: acd963478aff388b7100fcc1eaf5c6d4907b456a061638613ee27b1e45ec5f62}
+  - {event_id: crop-search-101, split: test, lane: search, event_type: target_search, version: 1, source: hidden,
+     source_sha256: 4b8c19e7d91b0889a05e75bff80c8005fb02943a3312c396f270fce0a8563b03,
+     overlay_sha256: 6f7f41518446da68b98e486844e0b734626ce2a040714bdc9b40f402efc7c6fc,
+     dsl_sha256: 534bb7d6bb0d87d5ff137de48749aac8e5da81b9a2f50ba459702fcd36e8f71f,
+     content_sha256: 1763e4b5796fbf519edd81be1eda33c9cb10e388c03816e02d118710a070d8bd,
+     truth_sha256: a2b4ba1a3ffcb346138c010bbe171ba8ea8c202f8384cb7582f8240144dd834f}
+  - {event_id: crop-search-102, split: test, lane: search, event_type: target_search, version: 1, source: hidden,
+     source_sha256: 2d7902af3a40855d7a41b64ec1bc670785eb4722e546fd49cce51524c3173376,
+     overlay_sha256: 8a55df4a001cd24255f3a826c2dfe7c51b54bbdf00c417f97be5c21d961c2f6f,
+     dsl_sha256: f5fc9137acc69a14ea98600cddbd1d4d6c77aad59a3eda16683f52654298e9a6,
+     content_sha256: a9ed3a6195d7adc18f1d21d5ca435e25d39ae08992902f9d3e73adc08d1871a9,
+     truth_sha256: 2f52b9a90e4ff2dbfa65a4f5fded96a3e9aa5a858d1e4921139a2437f8f7e830}
+
