@@ -19,8 +19,27 @@ import numpy as np
 
 from awr.sensorsvc.camera.model import CameraModel
 
-__all__ = ["R_FLU_OPT", "RemapTable", "build_remap", "distort_normalized", "gimbal_R", "hfov_to_f", "look_at_R", "mv_tile", "proj_reversed_z",
-           "project_points", "project_points_dist", "ray_elevation", "remap_bilinear", "remap_nearest", "undistort_normalized", "world_to_opt"]
+__all__ = [
+    "R_FLU_OPT",
+    "RemapTable",
+    "build_remap",
+    "distort_normalized",
+    "gimbal_R",
+    "gl_mat4",
+    "hfov_to_f",
+    "look_at_R",
+    "mv_tile",
+    "mv_tiles",
+    "proj_reversed_z",
+    "project_points",
+    "project_points_dist",
+    "ray_elevation",
+    "ray_elevation_at",
+    "remap_bilinear",
+    "remap_nearest",
+    "undistort_normalized",
+    "world_to_opt",
+]
 
 R_FLU_OPT = np.array([[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]])     # FLU←OPT：x_s = z_o，y_s = −x_o，z_s = −y_o
 
@@ -40,6 +59,21 @@ def mv_tile(R_ws: np.ndarray, p_w: np.ndarray, tile_origin: np.ndarray) -> np.nd
     Rwo_T = M[:3, :3]
     M[:3, 3] = Rwo_T @ (np.asarray(tile_origin, np.float64) - np.asarray(p_w, np.float64))
     return M
+
+
+def mv_tiles(R_ws: np.ndarray, p_w: np.ndarray, tile_origins: np.ndarray) -> np.ndarray:
+    """(n, 4, 4) float64：逐瓦片 `mv_tile` 的向量化形式（一帧全部瓦片一次计算，平移项同为 R_woᵀ(o − p)）。"""
+    M = world_to_opt(R_ws, p_w)
+    o = np.asarray(tile_origins, np.float64).reshape(-1, 3)
+    out = np.empty((len(o), 4, 4))
+    out[:] = M
+    out[:, :3, 3] = (o - np.asarray(p_w, np.float64)) @ M[:3, :3].T
+    return out
+
+
+def gl_mat4(M: np.ndarray) -> np.ndarray:
+    """(…, 4, 4) float64 → 列主序 float32 连续数组（uniform、SSBO 的 mat4 字节布局）。"""
+    return np.ascontiguousarray(np.swapaxes(M, -1, -2), "<f4")
 
 
 def proj_reversed_z(cm: CameraModel, *, width: int | None = None, height: int | None = None) -> np.ndarray:
@@ -96,6 +130,16 @@ def ray_elevation(cm: CameraModel, R_ws: np.ndarray, width: int, height: int) ->
     Rwo = np.asarray(R_ws, np.float64) @ R_FLU_OPT
     dz = Rwo[2, 0] * u[None, :] + Rwo[2, 1] * v[:, None] + Rwo[2, 2]
     norm = np.sqrt(u[None, :] ** 2 + v[:, None] ** 2 + 1.0)
+    return dz / norm
+
+
+def ray_elevation_at(cm: CameraModel, R_ws: np.ndarray, width: int, height: int, rows: np.ndarray, cols: np.ndarray) -> np.ndarray:
+    """`ray_elevation` 在给定像素 (rows, cols) 处的值（逐元素同式，结果与整幅计算后取下标逐位相同）。"""
+    u = (np.asarray(cols, np.float64) + 0.5 - cm.cx * width / cm.width) / (cm.fx * width / cm.width)
+    v = (np.asarray(rows, np.float64) + 0.5 - cm.cy * height / cm.height) / (cm.fy * height / cm.height)
+    Rwo = np.asarray(R_ws, np.float64) @ R_FLU_OPT
+    dz = Rwo[2, 0] * u + Rwo[2, 1] * v + Rwo[2, 2]
+    norm = np.sqrt(u ** 2 + v ** 2 + 1.0)
     return dz / norm
 
 

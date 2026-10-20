@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from fractions import Fraction
@@ -134,3 +135,66 @@ def test_camera_frame_objects_from_unoccluded_pass() -> None:
     assert (o["actor"], o["px_unoccluded"], o["px_visible"], o["h_px_unocc"], o["occluder_sem_px"]) == ("person_A", 40, 20, 10, {"0": 20})
     ref = rec["ground_truth"]["instance_unocc"]["ref"]
     assert np.array_equal(np.frombuffer(zstandard.ZstdDecompressor().decompress(blocks[ref]), "<u2").reshape(48, 64), unocc)
+
+
+def test_camera_frame_aux_pool_is_byte_identical() -> None:
+    """辅助线程池组装（L2-depth 复制与 sha256、真值 zstd、`gt_depth` 在池中并行）与同步组装的记录与载荷块逐字节相同，块顺序相同；
+    `wait_inputs()` 之后改写输入数组不影响结果（读回槽位可在此后归还）。"""
+    pytest.importorskip("PIL")
+    pytest.importorskip("zstandard")
+    from concurrent.futures import ThreadPoolExecutor
+
+    from awr.sensorsvc.camera.raster import RenderOut
+    from awr.sensorsvc.frame import FrameContext, camera_frame_deferred
+
+    cm = CameraModel.from_hfov(64, 48, 84.0)
+    rng = np.random.default_rng(4)
+    inst = np.zeros((48, 64), np.uint16)
+    inst[20:25, 30:34] = 1
+    unocc = inst.copy()
+    unocc[25:30, 30:34] = 1
+    sem = np.where(inst > 0, 32, 0).astype(np.uint8)
+    depth = (5.0 + 40.0 * rng.random((48, 64))).astype(np.float32)
+    qual = np.zeros((48, 64), np.uint8)
+    qual[:3] = 1
+    rgb = rng.integers(0, 255, (48, 64, 3), dtype=np.uint8)
+    acts = [{"idx": 0, "id": "person_A", "class": "person"}]
+    ctx = FrameContext("run-1", "sess-1", "v", "gpu", "drv", dynamic_source_id="ab" * 32, encoder="pillow/jpeg/q90/420")
+
+    def build(aux):
+        out = RenderOut(rgb.copy(), depth.copy(), inst.copy(), sem.copy(), 1.0, 1.0, 3, depth_obs=depth * 1.01, instance_unocc=unocc.copy(),
+                        actors_drawn=1, qual=qual.copy())
+        pf = camera_frame_deferred(ctx, uav="u1", sensor_id="cam0", seq=3, t_mid_ns=5, exposure_ns=1_000_000, readout_ns=0, cm=cm,
+                                   mount=Mount(), gimbal_reading=(0.0, 0.0, 0.0), gimbal_true=(0.0, 0.0, 0.0), pos_enu_m=np.zeros(3),
+                                   R_ws=np.eye(3), out=out, outputs={"rgb", "depth", "gt_depth"}, depth_obs=out.depth_obs, actors=acts,
+                                   rgb=b"\xff\xd8jpeg", aux=aux)
+        pf.wait_inputs()
+        for a in (out.depth_m, out.depth_obs, out.instance, out.instance_unocc, out.semantic):
+            a[...] = 0                                                         # 模拟读回槽位复用
+        return pf.result()
+
+    rec0, blk0 = build(None)
+    with ThreadPoolExecutor(4) as aux:
+        rec1, blk1 = build(aux)
+    assert json.dumps(rec0, sort_keys=False) == json.dumps(rec1, sort_keys=False)
+    assert list(blk0) == list(blk1) and all(blk0[k] == blk1[k] for k in blk0)
+    assert rec1["agent_view"]["depth"]["sha256"] == hashlib.sha256((depth * 1.01).astype("<f4").tobytes()).hexdigest()
+
+
+def test_void_below_horizon_rechecks_only_near_horizon_pixels() -> None:
+    """天空分类 2（接近地平线）以 float64 仰角复核，其余按分类取值；无分类 2 时不做复核。"""
+    from awr.sensorsvc.camera.proj import gimbal_R, ray_elevation
+    from awr.sensorsvc.camera.raster import RenderOut
+    from awr.sensorsvc.frame import void_below_horizon
+
+    cm = CameraModel.from_hfov(64, 48, 60.0)
+    R = gimbal_R(0.0, 0.0)
+    el = ray_elevation(cm, R, 64, 48)
+    qual = np.where(el < 0, 1, 0).astype(np.uint8)
+    z = np.zeros((48, 64), np.float32)
+    out = RenderOut(np.zeros((48, 64, 3), np.uint8), z, np.zeros((48, 64), np.uint16), np.zeros((48, 64), np.uint8), 0.0, 0.0, 0, qual=qual)
+    assert np.array_equal(void_below_horizon(out, cm, R), el < 0)
+    q2 = qual.copy()
+    q2[22:26] = 2                                                              # 地平线附近的行改为待复核
+    out2 = RenderOut(out.rgb8, z, out.instance, out.semantic, 0.0, 0.0, 0, qual=q2)
+    assert np.array_equal(void_below_horizon(out2, cm, R), el < 0)

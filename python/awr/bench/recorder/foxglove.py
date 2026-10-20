@@ -38,8 +38,7 @@ def compressed_image(t_ns: int, frame_id: str, data: bytes, fmt: str = "jpeg") -
 def raw_image_f32(t_ns: int, frame_id: str, depth: np.ndarray, *, compression: str | None = DEPTH_COMPRESSION) -> bytes:
     a = np.ascontiguousarray(depth, "<f4")
     h, w = a.shape
-    raw = a.tobytes()
-    data = bshuf4_zstd(raw) if compression == DEPTH_COMPRESSION else raw
+    data = bshuf4_zstd(a) if compression == DEPTH_COMPRESSION else a.tobytes()   # 压缩时不先复制为 bytes
     m = RawImage(frame_id=frame_id, width=w, height=h, encoding="32FC1", step=4 * w, data=data)
     _stamp(m, t_ns)
     return m.SerializeToString()

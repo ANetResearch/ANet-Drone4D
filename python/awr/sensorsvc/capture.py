@@ -123,6 +123,7 @@ class ActorClock:
         self.tape = tape
         self.offset_ns = int(offset_ns)
         self._cache: OrderedDict[int, object] = OrderedDict()
+        self._frames: dict[int, tuple] = {}
         self.calls = 0
         self.hits = 0
 
@@ -153,8 +154,13 @@ class ActorClock:
         from awr.sensorsvc.camera.raster import ActorFrame
 
         st = self(t_ns)
-        v = np.isin(st.state, (1, 2))
-        return ActorFrame(st.ids[v], st.pos_enu_m[v], st.yaw_rad[v])
+        af = self._frames.get(t_ns)
+        if af is None or af[0] is not st:                          # 同一时刻的多台相机共用（与状态缓存同进同出）
+            v = (st.state == 1) | (st.state == 2)
+            af = self._frames[t_ns] = (st, ActorFrame(st.ids[v], st.pos_enu_m[v], st.yaw_rad[v]))
+            if len(self._frames) > self.CACHE_TIMES:
+                self._frames.pop(next(iter(self._frames)))
+        return af[1]
 
 
 def _yaw_q(yaw: float) -> np.ndarray:

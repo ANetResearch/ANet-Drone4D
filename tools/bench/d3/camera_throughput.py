@@ -6,12 +6,13 @@ M25-AC-047、M25-NFR-01、NFR-13）。
 被测对象为单 M25 Worker 的完整相机链路（docs/05 §5.4.3、M25 §6.4–§6.7）：crop 世界常驻 EGL 光栅相机（`raster-gl`），按事件磁带
 绘制演员并输出 RGB8、L2-depth 平面深度、实例、无遮挡实例、语义、质量位与可见度归约（`objects[]`）；效果链取 `realistic` 噪声档
 （自动曝光、渐晕、Poisson–Gaussian 噪声、ISP）；RGB 经 GPU nvJPEG（q90 4:2:0，`camera.encode`，在线守卫内运行，CPU 编码调用
-计数须为 0）；真值 zstd 与可见度归约在编码线程池（缺省 4 线程，M25 §6.7）执行；观测写 `raw.mcap`、真值写真值 MCAP（M27
+计数须为 0）；可见度归约在编码线程池（缺省 4 线程，M25 §6.7）执行，L2-depth 的复制与 sha256、真值 zstd 在辅助线程池（8 线程）中帧内并行；观测写 `raw.mcap`、真值写真值 MCAP（M27
 `RunWriter` 异步队列，队列满时阻塞生产者，阻塞计入时延与吞吐）。
 
 `therm512` 档（S20，M25 §15.6、docs/05 §5.4.10）：`thermal.render.ThermalCamera`（640 × 512，S = 4 子帧运动机体、演员分区温度、
 Planck 辐射换算、大气透过、光学模糊、FPN 与 NETD，`realistic` 档）全输出：表观温度 u16（0.01 K）、无噪表观温度、实例、无遮挡实例、
-语义与 `objects[].dT_app_k`；`temp_ck` 经 u16 + zstd 编码（交付字节即存档字节），帧组装（`thermal_frame`）在编码线程池执行；
+语义与 `objects[].dT_app_k`；`temp_ck` 经 u16 + zstd-1 编码（交付字节即存档字节），帧组装（`thermal_frame`）在编码线程池执行，编码、sha256 与真值 zstd 另在辅助
+线程池中帧内并行；
 观测经 `ThermalObs` 写 `raw.mcap` 热成像通道（`/uav/{id}/thermal/therm0`），真值（帧记录与实例、语义块）写真值 MCAP。静态日照
 可见度由 `thermal_bake` 在装载时烘焙（不计时），静态类别取世界包 `tri.cls`（无时为 default 行）。热成像与天气无关（D3-AC-11 单档），
 测量取最坏档天气（雾 2 km、雨 8 mm/h 的消光，不改变计算量）。
@@ -29,12 +30,12 @@ Planck 辐射换算、大气透过、光学模糊、FPN 与 NETD，`realistic` �
   全部交付后才进入下一 tick；可见光、热成像与 LiDAR 的单帧时延分别统计。`--online-extras none` 只测相机部分（验收标注
   `partial_workload:camera_only`，不计入）。
 
-天气档（D3-AC-11）：晴天档 = 畸变、雾、噪声、ISP、接触阴影；最坏档 = 晴天档 + 雨 + 2048² 投影阴影图。`raster-gl@0.4.1` 的效果链
-只实现了曝光增益、渐晕、噪声与 ISP（`camera.effects`，P0a-1 基础档）；其余各项（畸变、雾、接触阴影、雨、投影阴影图）以本文件的
-GPU 代价代理遍计时：在同一 EGL 上下文、同一分辨率上按目标算法执行（雾为 Koschmieder 透过率；接触阴影为逐演员贴地椭圆衰减；
-雨为 16 采样雨线与深度比较、消光与湿润；投影阴影为 2048² 演员深度图加 16 采样 PCF；畸变为 LUT 重映射全部四个输出），但结果
-不写入交付像素。报告逐遍记录 GL 计时查询的 GPU 毫秒数，并在验收中标注 `fx_proxy`：代理口径的数字只作开发参考，渲染器落地
-真实效果链之后去掉代理（`--fx-proxy off`）复测才可计入。`therm512` 的管线已完整实现，不含代理遍。
+天气档（D3-AC-11）：晴天档 = 畸变、雾、噪声、ISP、接触阴影；最坏档 = 晴天档 + 雨 + 2048² 投影阴影图。`raster-gl@0.5.0` 起效果链
+全部在渲染器内实现并写入交付像素（`camera.effects` `fx-full@2`，docs/05 §5.4.3）：渲染域着色遍（接触阴影、投影阴影图 16 采样 PCF、
+湿润、Koschmieder 雾与雨消光、16 采样雨线）→ 畸变重映射遍（交付像素 → 渲染域 LUT，RGB 双线性、其余平面最近邻）→ 交付域效果遍
+（增益、渐晕、噪声、ISP）→ L2-depth 与测光遍。晴天档取能见度 20 km 的大气消光与 `DIST_TIER` 径向畸变，最坏档取雾 2 km、雨
+8 mm/h 与 `shadow=map`。读回为持久映射 PBO 环（`camera.readback`）：本帧提交后才等待上一帧的栅栏，帧组装与 zstd 在编码线程池执行
+（M25 §6.7）。`--fx-proxy` 保留为兼容参数，代理遍集合恒为空；报告的 `gpu` 阶段为整帧 GL 计时查询毫秒数。
 
 性能运行协议（ADR-033；ADR-195）：排他锁（flock `$AWR_PERF_LOCK`）、负载前置条件（1 分钟 loadavg ≤ `--load-max`）、`--repeats`
 次重复取中位；测量期间以 `nvidia-smi pmon -s um -d 1`（1 s）与 `--query-compute-apps`（5 s）采样被测卡，按本进程启动的 Worker
@@ -106,13 +107,14 @@ THERMAL_PROFILE = "therm512"
 STD_PROFILE = "rgb1080-rs"                 # 标准轨的可见光档位
 STD_EXTRAS = ("therm512", "mid360")        # 标准轨在同一 Worker 内的其余负载（每机 1 台 therm512、1 台 MID-360）
 VRAM_MAX_B = 1.2 * GB                     # 标准轨会话显存 ≤ 1.2 GB（D3-AC-11、M25-AC-047）
-# 天气档的效果项（D3-AC-11）与 raster-gl@0.4.1 已实现的项（camera.effects：增益与自动曝光、渐晕、噪声、ISP）；`single` 为热成像单档
+# 天气档的效果项（D3-AC-11）与渲染器已实现的项：raster-gl@0.5.0 实现全部效果项（畸变、雾、接触阴影、雨、2048² 投影阴影图与噪声、
+# ISP，K03），不再有代价代理遍；`single` 为热成像单档
 TIERS: dict[str, tuple[str, ...]] = {
     "clear": ("distortion", "fog", "noise", "isp", "contact_shadow"),
     "worst": ("distortion", "fog", "noise", "isp", "contact_shadow", "rain", "shadow_map"),
     "single": (),
 }
-IMPLEMENTED_FX = frozenset({"noise", "isp"})
+IMPLEMENTED_FX = frozenset({"distortion", "fog", "noise", "isp", "contact_shadow", "rain", "shadow_map"})
 PROXY_ORDER = ("rain", "fog", "shadow_map", "contact_shadow", "distortion")
 B_LEVEL_HEADROOM_MIB = 4096               # ADR-195 B 级：空闲显存 ≥ 被测需求 + 4 GB
 
@@ -169,7 +171,7 @@ def workload_tag(profile: str, extras: Sequence[str] = ()) -> str:
 
 
 def proxy_passes(tier: str, fx_proxy: bool = True) -> tuple[str, ...]:
-    """天气档中渲染器尚未实现、以代价代理遍计时的效果项（按执行顺序）。"""
+    """天气档中渲染器尚未实现、需以代价代理遍计时的效果项（按执行顺序）；raster-gl@0.5.0 起为空（`--fx-proxy` 保留为兼容参数）。"""
     if tier not in TIERS:
         raise ValueError(f"unknown tier {tier!r} (clear, worst)")
     if not fx_proxy:
@@ -433,10 +435,16 @@ class Fleet:
         self.target = np.array([self.c[0], self.c[1], self.ground + 1.5])
 
     def pose(self, i: int, t_ns: int) -> tuple[np.ndarray, np.ndarray]:
-        from awr.sensorsvc.camera import look_at_R
-
-        p, _yaw = self.body(i, t_ns)
-        return p, look_at_R(p, self.target)
+        """机体位置与云台注视姿态 WORLD←FLU（与 `camera.look_at_R` 同一约定：光轴 x 指向目标，y 水平；标量运算，每帧 9 + 4 次调用）。"""
+        a = self.ph[i] + self.w[i] * (t_ns / NS)
+        px, py, pz = self.c[0] + self.r[i] * math.cos(a), self.c[1] + self.r[i] * math.sin(a), self.ground + self.h[i]
+        dx, dy, dz = self.target[0] - px, self.target[1] - py, self.target[2] - pz
+        n = math.sqrt(dx * dx + dy * dy + dz * dz)
+        x0, x1, x2 = dx / n, dy / n, dz / n
+        yl = math.hypot(x0, x1)                                          # y = up × x（不会正下视：环绕半径 ≥ 40 m）
+        y0, y1 = -x1 / yl, x0 / yl
+        z0, z1, z2 = -x2 * y1, x2 * y0, x0 * y1 - x1 * y0
+        return np.array([px, py, pz]), np.array([[x0, y0, z0], [x1, y1, z1], [x2, 0.0, z2]])
 
     def body(self, i: int, t_ns: int) -> tuple[np.ndarray, float]:
         """机体位置与航向（rad，沿环绕切线，逆时针飞行）；机体水平。"""
@@ -471,322 +479,32 @@ def gimbal_of(R: np.ndarray) -> tuple[float, float, float]:
     return math.atan2(float(x[1]), float(x[0])), math.asin(max(-1.0, min(1.0, float(x[2])))), 0.0
 
 
-# ---------------------------------------------------------------------------------------------------------------- 效果代价代理遍
-_FS_HEAD = """
-#version 450
-uniform vec4 u_K;
-uniform mat3 u_Rwo;
-uniform vec3 u_p;
-vec3 world_of(ivec2 q, float z) {
-    vec3 xo = vec3((float(q.x) + 0.5 - u_K.z) / u_K.x * z, (float(q.y) + 0.5 - u_K.w) / u_K.y * z, z);
-    return u_Rwo * xo + u_p;
-}
-uint pcg(uint v) {
-    uint s = v * 747796405u + 2891336453u;
-    uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
-    return (w >> 22u) ^ w;
-}
-float h01(uvec3 v) { return float(pcg(v.x ^ pcg(v.y ^ pcg(v.z)))) * (1.0 / 4294967296.0); }
-"""
-FOG_FS = _FS_HEAD + """
-uniform sampler2D u_col;
-uniform sampler2D u_z;
-uniform float u_sigma;
-uniform vec3 u_fog;
-layout(location = 0) out vec4 o_col;
-void main() {
-    ivec2 q = ivec2(gl_FragCoord.xy);
-    vec3 c = texelFetch(u_col, q, 0).rgb;
-    float z = texelFetch(u_z, q, 0).r;
-    float T = z > 0.0 ? exp(-u_sigma * z) : 1.0;
-    o_col = vec4(mix(u_fog, c, T), 1.0);
-}
-"""
-RAIN_FS = _FS_HEAD + """
-uniform sampler2D u_col;
-uniform sampler2D u_z;
-uniform vec2 u_dir;
-uniform float u_sigma;
-uniform float u_density;
-uniform uint u_seed;
-layout(location = 0) out vec4 o_col;
-void main() {
-    ivec2 q = ivec2(gl_FragCoord.xy);
-    vec3 c = texelFetch(u_col, q, 0).rgb;
-    float z = texelFetch(u_z, q, 0).r;
-    float zz = z > 0.0 ? z : 1e4;
-    float acc = 0.0;
-    for (int i = 0; i < 16; ++i) {                       // 雨线 16 采样（r3：曝光内位移投影成线段，逐点与场景深度比较）
-        vec2 s = vec2(q) - u_dir * (float(i) / 15.0);
-        uvec2 cell = uvec2(max(s, vec2(0.0)) / 3.0);
-        float r = h01(uvec3(cell, u_seed));
-        float d = 0.5 + 29.5 * h01(uvec3(cell, u_seed + 1u));
-        if (r < u_density && d < zz) acc += 1.0 / (1.0 + 0.15 * d);
-    }
-    float T = exp(-u_sigma * min(zz, 3000.0));
-    vec3 wet = c * 0.82;
-    vec3 g = vec3(dot(wet, vec3(0.2126, 0.7152, 0.0722)));
-    o_col = vec4(mix(mix(wet, g, 0.15) * T + vec3(0.6) * (1.0 - T), vec3(0.9), clamp(acc * 0.03, 0.0, 0.5)), 1.0);
-}
-"""
-SHADOW_FS = _FS_HEAD + """
-uniform sampler2D u_col;
-uniform sampler2D u_z;
-uniform sampler2D u_sm;
-uniform mat4 u_L;
-layout(location = 0) out vec4 o_col;
-const vec2 PD[16] = vec2[](vec2(-0.94, -0.40), vec2(0.95, -0.77), vec2(-0.09, -0.93), vec2(0.34, 0.29), vec2(-0.92, 0.46),
-    vec2(-0.82, -0.15), vec2(-0.38, 0.28), vec2(-0.19, 0.84), vec2(0.82, 0.31), vec2(0.37, -0.74), vec2(0.18, -0.14),
-    vec2(0.62, 0.71), vec2(-0.59, -0.80), vec2(0.06, 0.40), vec2(-0.45, -0.32), vec2(0.89, -0.09));
-void main() {
-    ivec2 q = ivec2(gl_FragCoord.xy);
-    vec3 c = texelFetch(u_col, q, 0).rgb;
-    float z = texelFetch(u_z, q, 0).r;
-    float sh = 0.0;
-    if (z > 0.0) {
-        vec4 L = u_L * vec4(world_of(q, z), 1.0);
-        vec2 uv = L.xy * 0.5 + 0.5;
-        for (int i = 0; i < 16; ++i) {                   // 16 采样 PCF；reversed-Z：深度值大者更靠近光源
-            float d = texture(u_sm, uv + PD[i] * (1.5 / 2048.0)).r;
-            sh += d > L.z + 2e-4 ? 1.0 : 0.0;
-        }
-    }
-    o_col = vec4(c * (1.0 - 0.45 * sh / 16.0), 1.0);
-}
-"""
-CONTACT_FS = _FS_HEAD + """
-uniform sampler2D u_col;
-uniform sampler2D u_z;
-uniform vec4 u_act[64];
-uniform int u_n;
-uniform vec2 u_sun_xy;
-layout(location = 0) out vec4 o_col;
-void main() {
-    ivec2 q = ivec2(gl_FragCoord.xy);
-    vec3 c = texelFetch(u_col, q, 0).rgb;
-    float z = texelFetch(u_z, q, 0).r;
-    float a = 0.0;
-    if (z > 0.0) {
-        vec3 X = world_of(q, z);
-        for (int i = 0; i < u_n; ++i) {                  // 接触阴影：沿太阳方向投影的贴地椭圆衰减贴花
-            vec4 A = u_act[i];
-            vec2 d = (X.xy - (A.xy + u_sun_xy * A.w)) / vec2(1.6 * A.w, A.w);
-            float e = dot(d, d);
-            float hz = abs(X.z - A.z);
-            a = max(a, (1.0 - smoothstep(0.5, 1.0, e)) * (1.0 - smoothstep(0.0, 0.6, hz)));
-        }
-    }
-    o_col = vec4(c * (1.0 - 0.5 * a), 1.0);
-}
-"""
-DISTORT_FS = """
-#version 450
-uniform sampler2D u_col;
-uniform sampler2D u_z;
-uniform usampler2D u_inst;
-uniform usampler2D u_sem;
-uniform sampler2D u_map;
-uniform vec2 u_size;
-layout(location = 0) out vec4 o_rgb;
-layout(location = 1) out float o_z;
-layout(location = 2) out uint o_inst;
-layout(location = 3) out uint o_sem;
-void main() {
-    ivec2 q = ivec2(gl_FragCoord.xy);
-    vec2 s = texelFetch(u_map, q, 0).rg;                 // 交付像素 → 无畸变渲染域的源坐标（LUT）
-    vec3 x = clamp(texture(u_col, s / u_size).rgb, 0.0, 1.0);
-    o_rgb = vec4(mix(1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055, x * 12.92, vec3(lessThanEqual(x, vec3(0.0031308)))), 1.0);
-    ivec2 n = clamp(ivec2(floor(s)), ivec2(0), ivec2(u_size) - 1);
-    o_z = texelFetch(u_z, n, 0).r;
-    o_inst = texelFetch(u_inst, n, 0).r;
-    o_sem = texelFetch(u_sem, n, 0).r;
-}
-"""
-DIST_PROXY = (-0.08, 0.02, 0.0, 0.0, 0.0)           # 代理 LUT 的 Brown–Conrady 系数（k1, k2, p1, p2, k3）
-FOG_VIS_M = 2000.0                                   # 代理雾：能见度 2 km（Koschmieder 消光系数 3.912 / V）
-RAIN_MM_H = 8.0                                      # 代理雨：8 mm/h（消光系数约 1.076·R^0.67 km⁻¹，r3）
-SHADOW_SIZE = 2048
-SHADOW_SPAN_M = 300.0
-# 热成像与 MID-360 的天气（能见度 km、降雨 mm/h）：与代理遍同一组最坏档参数；热成像单档取最坏档天气（只改变消光，不改变计算量）
+# ---------------------------------------------------------------------------------------------------------------- 天气档
+DIST_TIER = (-0.08, 0.02, 0.0, 0.0, 0.0)           # 晴天档与最坏档的交付相机畸变（Brown–Conrady k1, k2, p1, p2, k3，桶形）
+CLEAR_VIS_M = 20000.0                                # 晴天档：能见度 20 km 的轻霾（消光计算量与浓雾相同）
+FOG_VIS_M = 2000.0                                   # 最坏档：能见度 2 km（Koschmieder 消光系数 3.912 / V）
+RAIN_MM_H = 8.0                                      # 最坏档：8 mm/h（可见光消光 1.076·R^0.67 km⁻¹，r3；雨线与湿润）
+# 热成像与 MID-360 的天气（能见度 km、降雨 mm/h）：热成像单档取最坏档天气（只改变消光，不改变计算量）
 WEATHER: dict[str, tuple[float | None, float]] = {"clear": (None, 0.0), "worst": (FOG_VIS_M / 1000.0, RAIN_MM_H),
                                                   "single": (FOG_VIS_M / 1000.0, RAIN_MM_H)}
+# 可见光相机的天气档：(能见度 m, 降雨 mm/h, 接地阴影 `CameraModel.shadow`)；最坏档的 map 为 2048² 投影阴影图加接触阴影
+CAMERA_TIERS: dict[str, tuple[float, float, str]] = {"clear": (CLEAR_VIS_M, 0.0, "contact"), "worst": (FOG_VIS_M, RAIN_MM_H, "map")}
 THERMAL_SENSOR, LIDAR_SENSOR = "therm0", "lidar0"
 
 
-def distortion_lut(cm, dist_coef: Sequence[float] = DIST_PROXY) -> np.ndarray:
-    """交付像素中心 → 无畸变域源坐标（像素，float32，(H, W, 2)）：对归一化坐标作 Brown–Conrady 逆映射的一阶近似。"""
-    k1, k2, p1, p2, k3 = (float(v) for v in dist_coef)
-    u, v = np.meshgrid(np.arange(cm.width, dtype=np.float64) + 0.5, np.arange(cm.height, dtype=np.float64) + 0.5)
-    x, y = (u - cm.cx) / cm.fx, (v - cm.cy) / cm.fy
-    r2 = x * x + y * y
-    g = 1.0 / (1.0 + k1 * r2 + k2 * r2 * r2 + k3 * r2 ** 3)
-    xs = x * g - (2 * p1 * x * y + p2 * (r2 + 2 * x * x))
-    ys = y * g - (p1 * (r2 + 2 * y * y) + 2 * p2 * x * y)
-    return np.stack([xs * cm.fx + cm.cx, ys * cm.fy + cm.cy], -1).astype("<f4")
+def camera_weather(tier: str):
+    """天气档 → (`effects.Weather`, `CameraModel.shadow`)。"""
+    from awr.sensorsvc.camera.effects import Weather
+
+    vis, rain, shadow = CAMERA_TIERS[tier]
+    return Weather(visibility_m=vis, rain_mmh=rain), shadow
 
 
 def ortho_reversed_z(span_m: float, near_m: float, far_m: float) -> np.ndarray:
-    """光源正交投影（光学帧 → 裁剪空间，ZERO_TO_ONE 深度：z = near 时 1，z = far 时 0）。"""
-    P = np.zeros((4, 4))
-    P[0, 0] = P[1, 1] = 2.0 / span_m
-    P[2, 2] = -1.0 / (far_m - near_m)
-    P[2, 3] = far_m / (far_m - near_m)
-    P[3, 3] = 1.0
-    return P
+    """投影阴影图的光源正交投影（`camera.raster.ortho_reversed_z`）。"""
+    from awr.sensorsvc.camera.raster import ortho_reversed_z as f
 
-
-class FxProxy:
-    """尚未落地的效果项的 GPU 代价代理遍（见模块说明）：读本帧渲染目标（线性颜色、平面深度、实例、语义），写入自有暂存纹理，
-    不改变交付像素；每遍以 GL 计时查询计 GPU 时间。需在 `RasterCamera.render` 之后、同一上下文与同一分辨率上调用。"""
-
-    def __init__(self, cam, cm, passes: Sequence[str], *, sun_az_el_deg: tuple[float, float] | None = None) -> None:
-        from awr.sensorsvc.camera.actors import sun_dir
-        from awr.sensorsvc.camera.raster import FULLSCREEN_VS
-
-        self.cam, self.cm, self.passes = cam, cm, tuple(passes)
-        ctx = self.ctx = cam.ctx
-        mgl = cam._mgl
-        self.mgl = mgl
-        W, H = cm.width, cm.height
-        self.tg = cam._target(W, H)
-        self.ping = [ctx.texture((W, H), 4, dtype="f2") for _ in range(2)]
-        for t in self.ping:
-            t.filter = (mgl.LINEAR, mgl.LINEAR)
-        self.ping_fb = [ctx.framebuffer(color_attachments=[t]) for t in self.ping]
-        self.progs: dict[str, Any] = {}
-        self.vaos: dict[str, Any] = {}
-        src = {"fog": FOG_FS, "rain": RAIN_FS, "shadow_map": SHADOW_FS, "contact_shadow": CONTACT_FS, "distortion": DISTORT_FS}
-        for p in self.passes:
-            self.progs[p] = ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=src[p])
-            self.vaos[p] = ctx.vertex_array(self.progs[p], [])
-        self.queries = {p: ctx.query(time=True) for p in self.passes}
-        self.sun = sun_dir(sun_az_el_deg)
-        if "distortion" in self.passes:
-            self.map = ctx.texture((W, H), 2, distortion_lut(cm).tobytes(), dtype="f4")
-            self.map.filter = (mgl.NEAREST, mgl.NEAREST)
-            self.d_rgb = ctx.texture((W, H), 4, dtype="f1")
-            self.d_z = ctx.texture((W, H), 1, dtype="f4")
-            self.d_inst = ctx.texture((W, H), 1, dtype="u2")
-            self.d_sem = ctx.texture((W, H), 1, dtype="u1")
-            self.d_fb = ctx.framebuffer(color_attachments=[self.d_rgb, self.d_z, self.d_inst, self.d_sem])
-        if "shadow_map" in self.passes:
-            self.sm = ctx.depth_texture((SHADOW_SIZE, SHADOW_SIZE))
-            self.sm.compare_func = ""
-            self.sm.filter = (mgl.NEAREST, mgl.NEAREST)
-            self.sm_fb = ctx.framebuffer(depth_attachment=self.sm)
-        self.gpu_ms: dict[str, list[float]] = {p: [] for p in self.passes}
-        self.caster_counts: list[int] = []
-
-    @staticmethod
-    def _put(prog, k: str, v) -> None:
-        with contextlib.suppress(KeyError):                           # 驱动裁掉的未使用 uniform
-            prog[k].value = v
-
-    def _common(self, prog, R_ws: np.ndarray, p_w: np.ndarray) -> None:
-        from awr.sensorsvc.camera.proj import R_FLU_OPT
-
-        cm = self.cm
-        self._put(prog, "u_K", (cm.fx, cm.fy, cm.cx, cm.cy))
-        Rwo = np.asarray(R_ws, np.float64) @ R_FLU_OPT
-        with contextlib.suppress(KeyError):
-            prog["u_Rwo"].write(Rwo.T.astype("<f4").tobytes())       # 列主序
-        self._put(prog, "u_p", tuple(float(v) for v in p_w))
-
-    def run(self, R_ws: np.ndarray, p_w: np.ndarray, actors, seq: int, target: np.ndarray) -> dict[str, float]:
-        """执行代理遍；返回本帧各遍 GPU 毫秒数。`actors` 为本帧 `ActorFrame`（可为 None），`target` 为注视点（阴影图中心）。"""
-        if not self.passes:
-            return {}
-        mgl, ctx, tg, cm = self.mgl, self.ctx, self.tg, self.cm
-        ctx.disable(mgl.DEPTH_TEST)
-        src_col = tg.col
-        k = 0
-        for p in self.passes:
-            prog, q = self.progs[p], self.queries[p]
-            with q:
-                if p == "shadow_map":
-                    self._shadow_casters(actors, target)
-                if p == "distortion":
-                    self.d_fb.use()
-                else:
-                    self.ping_fb[k].use()
-                ctx.viewport = (0, 0, cm.width, cm.height)
-                ctx.disable(mgl.DEPTH_TEST)
-                self._common(prog, R_ws, p_w)
-                src_col.use(1)
-                tg.z.use(2)
-                self._put(prog, "u_col", 1)
-                self._put(prog, "u_z", 2)
-                if p == "fog":
-                    self._put(prog, "u_sigma", 3.912 / FOG_VIS_M)
-                    self._put(prog, "u_fog", (0.75, 0.77, 0.80))
-                elif p == "rain":
-                    self._put(prog, "u_dir", (0.08 * cm.fx * 0.02, 0.35 * cm.fy * 0.02))
-                    self._put(prog, "u_sigma", 1.076 * RAIN_MM_H ** 0.67 / 1000.0)
-                    self._put(prog, "u_density", 0.02)
-                    self._put(prog, "u_seed", int(seq) & 0xFFFFFFFF)
-                elif p == "shadow_map":
-                    self.sm.use(3)
-                    self._put(prog, "u_sm", 3)
-                    with contextlib.suppress(KeyError):
-                        prog["u_L"].write(self._L.T.astype("<f4").tobytes())
-                elif p == "contact_shadow":
-                    arr = np.zeros((64, 4), "<f4")
-                    n = 0
-                    if actors is not None and len(actors.idx):
-                        n = min(64, len(actors.idx))
-                        arr[:n, :3] = actors.pos[:n]
-                        arr[:n, 3] = [0.5 if self.cam.actor_sem[int(i)] == 32 else 2.2 for i in actors.idx[:n]]
-                    with contextlib.suppress(KeyError):
-                        prog["u_act"].write(arr.tobytes())
-                    self._put(prog, "u_n", n)
-                    s = self.sun
-                    self._put(prog, "u_sun_xy", (float(-s[0] / max(s[2], 0.2)), float(-s[1] / max(s[2], 0.2))))
-                elif p == "distortion":
-                    tg.inst.use(3)
-                    tg.sem.use(4)
-                    self.map.use(5)
-                    for name, unit in (("u_inst", 3), ("u_sem", 4), ("u_map", 5)):
-                        self._put(prog, name, unit)
-                    self._put(prog, "u_size", (float(cm.width), float(cm.height)))
-                self.vaos[p].render(mgl.TRIANGLES, vertices=3)
-            if p != "distortion":
-                src_col = self.ping[k]
-                k ^= 1
-        out = {}
-        for p in self.passes:
-            ms = self.queries[p].elapsed / 1e6
-            self.gpu_ms[p].append(ms)
-            out[p] = ms
-        return out
-
-    def _shadow_casters(self, actors, target: np.ndarray) -> None:
-        """2048² 投影阴影图：从太阳方向以正交投影绘制本帧演员（静态几何的阴影已烘焙在贴图中）。"""
-        from awr.sensorsvc.camera import look_at_R
-        from awr.sensorsvc.camera.proj import world_to_opt
-
-        mgl, ctx = self.mgl, self.ctx
-        tgt = np.asarray(target, np.float64)
-        p_l = tgt + self.sun * 500.0
-        R_l = look_at_R(p_l, tgt)
-        P = ortho_reversed_z(SHADOW_SPAN_M, 1.0, 1000.0)
-        self._L = P @ world_to_opt(R_l, p_l)
-        self.sm_fb.use()
-        self.sm_fb.clear(depth=0.0)
-        ctx.viewport = (0, 0, SHADOW_SIZE, SHADOW_SIZE)
-        ctx.enable(mgl.DEPTH_TEST)
-        ctx.depth_func = ">"
-        n = 0
-        if actors is not None and len(actors.idx):
-            n = self.cam._draw_actors(actors, self.cm, P, R_l, p_l, None)
-        ctx.disable(mgl.DEPTH_TEST)
-        self.caster_counts.append(n)
-
-    def release(self) -> None:
-        objs = [*self.ping, *self.ping_fb, *self.progs.values(), *self.vaos.values(), *self.queries.values()]
-        objs += [getattr(self, n) for n in ("map", "d_rgb", "d_z", "d_inst", "d_sem", "d_fb", "sm", "sm_fb") if hasattr(self, n)]
-        for o in objs:
-            with contextlib.suppress(Exception):
-                o.release()
+    return f(span_m, near_m, far_m)
 
 
 # ---------------------------------------------------------------------------------------------------------------- 录制落盘
@@ -889,7 +607,7 @@ class _Done:
 class _Stats:
     draw_ms: list[float] = field(default_factory=list)
     readback_ms: list[float] = field(default_factory=list)
-    proxy_ms: list[float] = field(default_factory=list)
+    gpu_ms: list[float] = field(default_factory=list)
     issue_ms: list[float] = field(default_factory=list)
     upload_ms: list[float] = field(default_factory=list)
     encode_ms: list[float] = field(default_factory=list)
@@ -907,10 +625,31 @@ class _Stats:
     def summary(self) -> dict:
         """单类传感器的帧数、时延、分阶段耗时与载荷（Worker 报告的 `sensors.<kind>`）。"""
         return {"frames": len(self.t_deliv), "latency_ms": dist(self.latency_ms),
-                "stages_ms": {"draw": dist(self.draw_ms), "readback": dist(self.readback_ms), "issue": dist(self.issue_ms),
-                              "assemble": dist(self.asm_ms), "write_enqueue": dist(self.write_enqueue_ms)},
+                "stages_ms": {"draw": dist(self.draw_ms), "readback": dist(self.readback_ms), "gpu": dist(self.gpu_ms),
+                              "issue": dist(self.issue_ms), "assemble": dist(self.asm_ms), "write_enqueue": dist(self.write_enqueue_ms)},
                 "payload_kB": dist([b / 1e3 for b in self.payload_bytes]), "objects_per_frame": dist(self.objects),
                 "actors_drawn": dist(self.actors_drawn), **({"points_per_frame": dist(self.points)} if self.points else {})}
+
+
+class _Pend:
+    """已提交 GPU、尚未交给组装线程的一帧（异步读回，M25 §6.7）：`finalize()` 在渲染线程等读回栅栏并把组装提交到编码线程池，
+    `result()` 先 `finalize()` 再等组装结果（`_Done`）。Worker 在提交下一帧之后才 `finalize` 上一帧，使栅栏等待与 GPU 执行重叠。"""
+
+    __slots__ = ("finish", "fut", "kind", "uav", "w")
+
+    def __init__(self, w: Worker, kind: str, uav: int, finish) -> None:
+        self.w, self.kind, self.uav, self.finish = w, kind, uav, finish
+        self.fut = None
+
+    def finalize(self) -> None:
+        if self.fut is None:
+            self.fut = self.finish()
+            with contextlib.suppress(ValueError):
+                self.w._pending.remove(self)
+
+    def result(self) -> _Done:
+        self.finalize()
+        return self.fut.result()
 
 
 def rot_z(yaw: float) -> np.ndarray:
@@ -924,7 +663,7 @@ class _ThermalRig:
     逐子帧取（`ActorClock` 整数时刻键）；演员分区温度按帧时刻计算（同一 tick 的各机共用），车辆发动机状态由磁带速度推导：行驶中
     或停车后 120 s 内为运转，此后按 `engine_off_s` 计熄火时长，从未行驶为冷车。"""
 
-    def __init__(self, w: Worker, scene, wdir: Path, raster, sun) -> None:
+    def __init__(self, w: Worker, scene, wdir: Path, raster, sun, slots: int = 8) -> None:
         from awr.sensorsvc.thermal import render as tr
 
         job = w.job
@@ -935,7 +674,7 @@ class _ThermalRig:
         self.static = tr.thermal_bake(scene, sun, backend="auto") if sun is not None else None
         self.bake_s = time.perf_counter() - t0
         self.cam = tr.ThermalCamera(scene, table=self.table, tri_cls=tr.static_classes(wdir, scene.triangles), static=self.static,
-                                    sun_az_el_deg=sun, raster=raster)
+                                    sun_az_el_deg=sun, raster=raster, readback_slots=slots)
         self.cam.set_actors(w.tape.actors)
         fog_km, rain = WEATHER[job.tier]
         self.env = tr.thermal_env(self.table, job.t_air_k, cloud=0.3, rh=0.6, fog_visibility_km=fog_km, rain_mmh=rain)
@@ -974,8 +713,11 @@ class _ThermalRig:
         self._th_key, self._th = t_ev, out
         return out
 
-    def issue(self, i: int, seq: int, t_req: float, record: bool = True):
+    def issue(self, i: int, seq: int, t_req: float, record: bool = True) -> _Pend:
+        """提交第 i 机第 seq 帧（GPU 绘制与读回 DMA 异步执行），返回 `_Pend`；同一渲染器的上一帧随即 `finalize`。"""
         tr, w = self.tr, self.w
+        if w.kind == "thermal":
+            w.flush()                                                    # 主档位为热成像时同可见光：提交前 finalize 上一帧
         t_end_rel = (int(seq) + 1) * TICK_NS                             # 采集窗口结束于第 seq + 1 个 tick 边界
         t_sub = [t_end_rel + o for o in self.offs]
         poses = [(R, p) for p, R in (w.fleet.pose(i, t) for t in t_sub)]
@@ -984,28 +726,38 @@ class _ThermalRig:
         th = self.actor_th(t_ev)
         keys = tr.NoiseKeys(w.job.seed, i + 8 * w.job.index, 0, int(seq))
         t0 = time.perf_counter()
-        out = self.cam.render(self.model, poses, np.asarray(t_sub, np.float64) / NS, t_end_rel / NS, self.env, actor_frames=frames, actor_th=th,
-                              noise=keys)
+        job = self.cam.submit(self.model, poses, np.asarray(t_sub, np.float64) / NS, t_end_rel / NS, self.env, actor_frames=frames, actor_th=th,
+                              noise=keys, timer=True)
         t1 = time.perf_counter()
         w.rendered += 1
-        if record:
-            st = w.stats["thermal"]
-            st.draw_ms.append(out.draw_ms)
-            st.readback_ms.append(out.readback_ms)
-            st.issue_ms.append((t1 - t0) * 1e3)
-            st.actors_drawn.append(out.actors_drawn)
-            st.batches.append(out.batches_drawn)
         R, p = poses[-1]
-        return w.pool.submit(self._assemble, i, int(seq), t_ev, t_req, p, R, gimbal_of(R), out)
 
-    def _assemble(self, i, seq, t_mid, t_req, pos, R, g, out) -> _Done:
+        def finish():
+            out = job.result()
+            if record:
+                st = w.stats["thermal"]
+                st.draw_ms.append(out.draw_ms)
+                st.readback_ms.append(out.readback_ms)
+                st.issue_ms.append((t1 - t0) * 1e3)
+                st.actors_drawn.append(out.actors_drawn)
+                st.batches.append(out.batches_drawn)
+                if out.gpu_ms is not None:
+                    st.gpu_ms.append(out.gpu_ms)
+            return w.pool.submit(self._assemble, i, int(seq), t_ev, t_req, p, R, gimbal_of(R), out, job)
+
+        return w._push(_Pend(w, "thermal", i, finish))
+
+    def _assemble(self, i, seq, t_mid, t_req, pos, R, g, out, job) -> _Done:
         from awr.agentsdk.schemas import thermal_obs
 
         w = self.w
         a = time.perf_counter()
-        rec, blocks = self.tr.thermal_frame(w.ctx, uav=w.uav_ids[i], sensor_id=THERMAL_SENSOR, seq=seq, t_mid_ns=int(t_mid), model=self.model,
-                                            mount=w.mount, gimbal_reading=g, gimbal_true=g, pos_enu_m=pos, R_ws=R, out=out, manifest=self.manifest,
-                                            actors=w.tape.actors)
+        try:
+            rec, blocks = self.tr.thermal_frame(w.ctx, uav=w.uav_ids[i], sensor_id=THERMAL_SENSOR, seq=seq, t_mid_ns=int(t_mid), model=self.model,
+                                                mount=w.mount, gimbal_reading=g, gimbal_true=g, pos_enu_m=pos, R_ws=R, out=out,
+                                                manifest=self.manifest, actors=w.tape.actors, aux=w.aux)
+        finally:
+            job.release()                                                # 帧记录与载荷块均已复制出读回槽位
         obs = thermal_obs(rec, blocks, ranked=True, verify=False)        # 交付字节即 thermal_frame 的 u16 + zstd 块（sha256 已在帧记录）
         b = time.perf_counter()
         return _Done(i, seq, int(t_mid), t_req, b, rec, blocks, None, (b - a) * 1e3, len(obs["temp_ck"]), len(rec["ground_truth"]["objects"]), {},
@@ -1128,28 +880,32 @@ class Worker:
         self.stats = {"camera": _Stats(), "thermal": _Stats(), "lidar": _Stats()}
         self.st = self.stats[self.kind]
         self.prof = profile(job.noise)
-        self.cam = self.cm = self.enc = self.proxy = None
+        self.cam = self.cm = self.enc = self.weather = None
+        self._pending: list[_Pend] = []
+        slots = max(job.inflight, job.uavs) + 4                          # 读回槽位：在途帧 + 待 finalize 的一帧 + 余量
         if self.kind == "camera":
-            self.cam = RasterCamera(scene)
+            self.cam = RasterCamera(scene, readback_slots=slots)
             self.cam.set_actors(self.tape.actors)
             self.cam.set_sun(sun)
             p = CAMERA_PROFILES[job.profile]
             w, h = p["size"]
+            self.weather, shadow = camera_weather(job.tier)
             cm = CameraModel.from_hfov(int(w), int(h), job.hfov_deg, fps="10", exposure_s=float(p["exposure_s"]), readout_s=float(p["readout_s"]),
-                                       isp=IspConfig(jpeg_quality=90))
+                                       isp=IspConfig(jpeg_quality=90), dist=DIST_TIER, shadow=shadow)
             self.cm = with_profile(cm, self.prof)
             self.exp_ns, self.ro_ns = round(self.cm.exposure_s * NS), round(self.cm.readout_s * NS)
             self.enc = make_encoder(job.profile, self.cm.width, self.cm.height, online=True)
-            self.proxy = FxProxy(self.cam, self.cm, proxy_passes(job.tier, job.fx_proxy), sun_az_el_deg=sun)
+            self.read_planes = ("rgb", "inst", "sem", "qual", "unocc", "vis", "zobs", "sub") + (("z",) if "gt_depth" in job.outputs else ())
         self.load_s = time.perf_counter() - t0
         self.pool = ThreadPoolExecutor(max_workers=job.pool, thread_name_prefix="m25-enc")
+        self.aux = ThreadPoolExecutor(max_workers=2 * job.pool, thread_name_prefix="m25-aux")    # 帧内并行的载荷任务（sha256、zstd）
         self.mount = Mount((0.12, 0.0, -0.08), (0.0, 0.0, 0.0))
         end = (self.tape.n_ticks - 1) * TICK_NS
         self.ev0 = min(round(job.event_offset_s * NS), (self.tape.n_ticks // 2) * TICK_NS)
         self.span = max(TICK_NS, end - TICK_NS - self.ev0)
         self.clock = ActorClock(self.tape, 0)
         self.fleet = Fleet(actor_center(self.tape, min(self.ev0 + 60 * NS, end)), ground_z(wdir), job.uavs, phase0=0.7 * job.index)
-        self.th = _ThermalRig(self, scene, wdir, self.cam, sun) if self.kind == "thermal" or "therm512" in job.extras else None
+        self.th = _ThermalRig(self, scene, wdir, self.cam, sun, slots) if self.kind == "thermal" or "therm512" in job.extras else None
         self.lid = _LidarRig(self, wdir, lidar_query) if "mid360" in job.extras else None
         self.gl_info = dict((self.cam if self.cam is not None else self.th.cam.raster).info)
         self.ctx = FrameContext(f"tput-{job.name}-{job.index}", f"tput-{job.index}", world["contentVersion"], str(self.gl_info.get("GL_RENDERER")),
@@ -1165,12 +921,27 @@ class Worker:
         self.load_total_s = time.perf_counter() - t0
 
     # ------------------------------------------------------------------ 单帧
-    def issue(self, i: int, seq: int, t_req: float, record: bool = True):
-        """主档位的一帧（可见光或 `therm512`）：GPU 渲染与读回在调用线程，帧组装与编码提交到编码线程池，返回 Future[_Done]。"""
+    def _push(self, pend: _Pend) -> _Pend:
+        """登记新提交的一帧（提交前已 `flush`，此处 finalize 的只是同一 tick 中另一类传感器在本帧之前提交的帧）。"""
+        for q in list(self._pending):
+            q.finalize()
+        self._pending.append(pend)
+        return pend
+
+    def flush(self) -> None:
+        """finalize 全部已提交的帧：等读回栅栏（上一帧的 GPU 工作在本线程处理交付等事务期间已基本完成）并把组装提交到编码线程池。
+        每帧提交前调用，使组装比"下一帧提交之后才 finalize"提前一个提交周期开始（持续吞吐受在途上限与组装时延共同约束）。"""
+        for q in list(self._pending):
+            q.finalize()
+
+    def issue(self, i: int, seq: int, t_req: float, record: bool = True) -> _Pend:
+        """主档位的一帧（可见光或 `therm512`）：在调用线程（渲染线程）提交 GPU 绘制与异步读回，返回 `_Pend`；上一帧在本帧提交后
+        等读回栅栏并把帧组装与 nvJPEG 提交到编码线程池（M25 §6.7：读回与下一帧渲染重叠）。"""
         if self.kind == "thermal":
             return self.th.issue(i, seq, t_req, record)
         from awr.sensorsvc.camera.effects import finish_frame, frame_params
 
+        self.flush()                                                     # 上一帧先 finalize：组装尽早开始；同机测光先写回（M25 §6.5.3）
         cm = self.cm
         t_rel = frame_t_mid(seq, self.exp_ns, self.ro_ns)
         t_mid = event_time(t_rel, self.ev0, self.span)
@@ -1183,38 +954,52 @@ class Worker:
                 rs.append((Rk, pk))
         af = self.clock.frame(int(t_mid))
         fxp = frame_params(cm, self.ae[i], seed=self.job.seed, uav_no=i + 8 * self.job.index, sensor_no=0, frame_index=seq,
-                           t_mid_s=t_mid / NS, depth=self.prof.depth if self.depth else None)
+                           t_mid_s=t_mid / NS, depth=self.prof.depth if self.depth else None, weather=self.weather)
         t0 = time.perf_counter()
-        out = self.cam.render(cm, R, pos, fx=fxp, rs_nodes=rs, actors=af)
-        finish_frame(self.ae[i], fxp, out.meter_sub)
-        pg = self.proxy.run(R, pos, af, seq, self.fleet.target)
-        tk = self.enc.submit(out.rgb8)
+        job = self.cam.submit(cm, R, pos, fx=fxp, rs_nodes=rs, actors=af, read=self.read_planes, timer=True)
         t1 = time.perf_counter()
         self.rendered += 1
-        if record:
-            st = self.stats["camera"]
-            st.draw_ms.append(out.draw_ms)
-            st.readback_ms.append(out.readback_ms)
-            st.proxy_ms.append(sum(pg.values()))
-            st.issue_ms.append((t1 - t0) * 1e3)
-            st.actors_drawn.append(out.actors_drawn)
-            st.batches.append(out.batches_drawn)
         g = gimbal_of(R)
-        return self.pool.submit(self._assemble, i, seq, t_mid, t_req, pos, R, g, out, tk)
 
-    def _assemble(self, i, seq, t_mid, t_req, pos, R, g, out, tk) -> _Done:
+        def finish():
+            out = job.result()
+            finish_frame(self.ae[i], fxp, out.meter_sub)
+            if record:
+                st = self.stats["camera"]
+                st.draw_ms.append(out.draw_ms)
+                st.readback_ms.append(out.readback_ms)
+                st.issue_ms.append((t1 - t0) * 1e3)
+                st.actors_drawn.append(out.actors_drawn)
+                st.batches.append(out.batches_drawn)
+                if out.gpu_ms is not None:
+                    st.gpu_ms.append(out.gpu_ms)
+            return self.pool.submit(self._assemble, i, seq, t_mid, t_req, pos, R, g, out, job)
+
+        return self._push(_Pend(self, "camera", i, finish))
+
+    def _assemble(self, i, seq, t_mid, t_req, pos, R, g, out, job) -> _Done:
+        """编码线程：RGB 提交 nvJPEG（拷入固定页内存后异步上传与编码）、真值分区压缩与可见度归约；组装完成即归还读回槽位。"""
         from awr.sensorsvc.frame import camera_frame_deferred
 
         a = time.perf_counter()
-        pf = camera_frame_deferred(self.ctx, uav=self.uav_ids[i], sensor_id="eo", seq=seq, t_mid_ns=int(t_mid), exposure_ns=self.exp_ns,
-                                   readout_ns=self.ro_ns, cm=self.cm, mount=self.mount, gimbal_reading=g, gimbal_true=g, pos_enu_m=pos, R_ws=R,
-                                   out=out, outputs=self.outputs, depth_obs=out.depth_obs if self.depth else None,
-                                   depth_range_m=(self.prof.depth.d_min_m, self.prof.depth.d_max_m), actors=self.tape.actors, rgb=tk)
+        try:
+            tk = self.enc.submit(out.rgb8)
+            pf = camera_frame_deferred(self.ctx, uav=self.uav_ids[i], sensor_id="eo", seq=seq, t_mid_ns=int(t_mid), exposure_ns=self.exp_ns,
+                                       readout_ns=self.ro_ns, cm=self.cm, mount=self.mount, gimbal_reading=g, gimbal_true=g, pos_enu_m=pos,
+                                       R_ws=R, out=out, outputs=self.outputs, depth_obs=out.depth_obs if self.depth else None,
+                                       depth_range_m=(self.prof.depth.d_min_m, self.prof.depth.d_max_m), actors=self.tape.actors, rgb=tk,
+                                       aux=self.aux)
+            pf.wait_inputs()                                             # 辅助池中的复制、sha256 与 zstd 读取读回槽位
+        finally:
+            job.release()                                                # 载荷块与真值已复制出读回槽位
         rec, blocks = pf.result()
         b = time.perf_counter()
-        jpg = blocks[rec["agent_view"]["rgb"]["ref"]]
-        return _Done(i, seq, int(t_mid), t_req, b, rec, blocks, out.depth_obs if self.depth else None, (b - a) * 1e3, len(jpg),
-                     len(rec["ground_truth"]["objects"]), dict(tk.timing))
+        av = rec["agent_view"]
+        jpg = blocks[av["rgb"]["ref"]]
+        dob = None
+        if self.depth:                                                   # 写入 raw.mcap 的 L2-depth 取交付字节（不再引用读回槽位）
+            dob = np.frombuffer(blocks[av["depth"]["ref"]], "<f4").reshape(self.cm.height, self.cm.width)
+        return _Done(i, seq, int(t_mid), t_req, b, rec, blocks, dob, (b - a) * 1e3, len(jpg), len(rec["ground_truth"]["objects"]), dict(tk.timing))
 
     def deliver(self, d: _Done, record: bool, t_ref: float | None = None) -> None:
         a = time.perf_counter()
@@ -1301,10 +1086,9 @@ class Worker:
     def close(self) -> dict:
         sink = self.sink.close()
         self.pool.shutdown(wait=True)
+        self.aux.shutdown(wait=True)
         if self.enc is not None:
             self.enc.close()
-        if self.proxy is not None:
-            self.proxy.release()
         if self.th is not None:
             self.th.release()
         if self.cam is not None:
@@ -1316,16 +1100,25 @@ def worker_report(w: Worker, res: Mapping, *, cpu_calls: int, ru: tuple, wall: f
     """Worker 报告（测量结果、分阶段耗时、负载构成与资源）；`ru` 为 (装载前, 计时开始, 计时结束) 的 rusage。"""
     job, st = w.job, w.st
     ru0, ru1, ru2 = ru
+    from awr.sensorsvc.camera.effects import FX_VERSION, visible_sigma_per_m
+    from awr.sensorsvc.camera.proj import build_remap
+    from awr.sensorsvc.camera.raster import RENDERER_VERSION
+
+    fxd: dict[str, Any] = {"tier": job.tier, "items": list(TIERS[job.tier]), "implemented": sorted(IMPLEMENTED_FX & set(TIERS[job.tier])),
+                           "proxy": list(proxy_passes(job.tier, job.fx_proxy)), "proxy_gpu_ms": {}}
     if w.kind == "camera":
-        camera = {"width": w.cm.width, "height": w.cm.height, "hfov_deg": job.hfov_deg, "readout_ms": w.ro_ns / 1e6, "exposure_ms": w.exp_ns / 1e6}
-        encoder, encoder_kind, fx_ver, renderer = w.enc.identity, w.enc.kind, w.ctx.fx_version, w.ctx.renderer_version
-        passes, pgms, casters = list(w.proxy.passes), {p: dist(v) for p, v in w.proxy.gpu_ms.items()}, w.proxy.caster_counts
+        camera = {"width": w.cm.width, "height": w.cm.height, "hfov_deg": job.hfov_deg, "readout_ms": w.ro_ns / 1e6, "exposure_ms": w.exp_ns / 1e6,
+                  "dist": list(w.cm.dist)}
+        encoder, encoder_kind, fx_ver, renderer = w.enc.identity, w.enc.kind, FX_VERSION, RENDERER_VERSION
+        rt = build_remap(w.cm) if w.cm.has_distortion() else None
+        fxd.update(weather={"visibility_m": w.weather.visibility_m, "rain_mmh": w.weather.rain_mmh,
+                            "sigma_per_m": round(visible_sigma_per_m(w.weather), 8)}, shadow=w.cm.shadow,
+                   render_size=[rt.render.width, rt.render.height] if rt else [w.cm.width, w.cm.height])
     else:
         m = w.th.model
         camera = {"width": m.width, "height": m.height, "hfov_deg": round(math.degrees(2 * math.atan(m.width / 2 / m.fx)), 3), "readout_ms": 0.0,
                   "subframes": m.lag_subframes}
-        encoder, encoder_kind, fx_ver, renderer = "zstd-3/u16le", "cpu-zstd", None, w.th.tr.THERMAL_RENDERER_VERSION
-        passes, pgms, casters = [], {}, []
+        encoder, encoder_kind, fx_ver, renderer = w.th.tr.TEMP_CK_ENCODER, "cpu-zstd", None, w.th.tr.THERMAL_RENDERER_VERSION
     sensors = {k: s.summary() for k, s in w.stats.items() if s.t_deliv}
     loads = {"world_and_primary_s": round(w.load_s, 2), "total_s": round(w.load_total_s, 2)}
     if w.th is not None:
@@ -1337,11 +1130,10 @@ def worker_report(w: Worker, res: Mapping, *, cpu_calls: int, ru: tuple, wall: f
     doc = {"job": job.as_dict(), "pid": os.getpid(), "kind": w.kind, "extras": list(job.extras), "workload": sorted(sensors),
            "gl": w.gl_info, "encoder": encoder, "encoder_kind": encoder_kind, "renderer": renderer, "fx_version": fx_ver, "load_s": loads["total_s"],
            "load": loads, "camera": camera,
-           "fx": {"tier": job.tier, "items": list(TIERS[job.tier]), "implemented": sorted(IMPLEMENTED_FX & set(TIERS[job.tier])), "proxy": passes,
-                  "proxy_gpu_ms": pgms, "shadow_casters": dist(casters) if casters else None},
+           "fx": fxd,
            **res,
            "latency_ms": dist(st.latency_ms), "stages_ms": {"draw": dist(st.draw_ms), "readback": dist(st.readback_ms),
-                                                             "proxy_gpu": dist(st.proxy_ms), "issue": dist(st.issue_ms),
+                                                             "gpu": dist(st.gpu_ms), "issue": dist(st.issue_ms),
                                                              "upload": dist(st.upload_ms), "encode": dist(st.encode_ms),
                                                              "assemble": dist(st.asm_ms), "write_enqueue": dist(st.write_enqueue_ms)},
            "jpeg_kB": dist([b / 1e3 for b in st.payload_bytes] if w.kind == "camera" else []),
@@ -1543,21 +1335,25 @@ def summarize_runs(runs: Sequence[Mapping]) -> dict:
             "cpu_encode_calls": sum(w["cpu_encode_calls"] for w in ws),
             "gpu_s_per_sim_s": _median(gpu_time(w) for w in ws),
             "stages_p50_ms": {k: _median(w["stages_ms"][k].get("p50") for w in ws) for k in ws[0]["stages_ms"]},
-            "proxy_gpu_p50_ms": {p: _median(w["fx"]["proxy_gpu_ms"][p].get("p50") for w in ws) for p in ws[0]["fx"]["proxy_gpu_ms"]},
+            "proxy_gpu_p50_ms": {p: _median((w["fx"].get("proxy_gpu_ms") or {}).get(p, {}).get("p50") for w in ws)
+                                 for p in (ws[0]["fx"].get("proxy_gpu_ms") or {})},
             "per_repeat": per_rep}
     return {"items": items, "acceptance": acceptance(items)}
 
 
 def gpu_time(w: Mapping) -> float | None:
-    """在线测量的 GPU 时间（GPU·s / 仿真 s，M25 §6.21 口径）：Σ(几何与效果遍 + 代理遍) / 仿真时长；标准轨另加热成像的几何、辐射与
-    探测器遍（`draw`，含 `ctx.finish`）。读回、编码与 LiDAR（Warp，另报 `sensors.lidar.stages_ms.draw`）不含。"""
+    """在线测量的 GPU 时间（GPU·s / 仿真 s，M25 §6.21 口径）：Σ 每帧 GL 计时查询的 GPU 时间（`gpu`，自第一遍绘制至最后一个效果遍，
+    含 GPU 等待 CPU 提交的空隙，偏保守）/ 仿真时长；标准轨另加热成像的同口径时间。无 `gpu` 阶段的旧报告按 `draw`（含 `ctx.finish`）
+    加代理遍计。读回 DMA、编码与 LiDAR（Warp，另报 `sensors.lidar.stages_ms.draw`）不含。"""
     sim = w.get("sim_s")
     st = w.get("stages_ms") or {}
-    d, p = st.get("draw") or {}, st.get("proxy_gpu") or {}
+    g = st.get("gpu") or {}
+    d, p = (g, {}) if g.get("n") else (st.get("draw") or {}, st.get("proxy_gpu") or {})
     if not sim or not d.get("n"):
         return None
     ms = (d["mean"] + (p.get("mean") or 0.0)) * d["n"]
-    th = ((w.get("sensors") or {}).get("thermal") or {}).get("stages_ms", {}).get("draw") or {}
+    th_st = ((w.get("sensors") or {}).get("thermal") or {}).get("stages_ms", {})
+    th = th_st.get("gpu") if (th_st.get("gpu") or {}).get("n") else th_st.get("draw") or {}
     if w.get("kind", "camera") == "camera" and th.get("n"):
         ms += th["mean"] * th["n"]
     return round(ms / 1000.0 / sim, 4)

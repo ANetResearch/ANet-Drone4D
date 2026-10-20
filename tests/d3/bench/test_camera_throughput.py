@@ -68,14 +68,22 @@ def test_thresholds_match_ac11_text() -> None:
 
 
 def test_proxy_passes_per_tier() -> None:
-    assert ct.proxy_passes("clear") == ("fog", "contact_shadow", "distortion")
-    assert ct.proxy_passes("worst") == ("rain", "fog", "shadow_map", "contact_shadow", "distortion")
+    assert ct.proxy_passes("clear") == () and ct.proxy_passes("worst") == ()                   # raster-gl@0.5.0：效果链全部实现
     assert ct.proxy_passes("worst", fx_proxy=False) == ()
-    assert ct.proxy_passes("single") == ()                                                    # 热成像管线完整实现，无代理遍
-    assert ct.WEATHER["single"] == ct.WEATHER["worst"] and ct.WEATHER["clear"] == (None, 0.0)
-    assert set(ct.TIERS["worst"]) - set(ct.TIERS["clear"]) == {"rain", "shadow_map"}
+    assert ct.proxy_passes("single") == ()
+    assert set(ct.TIERS["worst"]) | set(ct.TIERS["clear"]) <= ct.IMPLEMENTED_FX
     with pytest.raises(ValueError):
         ct.proxy_passes("storm")
+
+
+def test_camera_weather_tiers() -> None:
+    from awr.sensorsvc.camera.effects import visible_sigma_per_m
+
+    wc, sc = ct.camera_weather("clear")
+    ww, sw = ct.camera_weather("worst")
+    assert wc.visibility_m == ct.CLEAR_VIS_M and wc.rain_mmh == 0.0 and sc == "contact"
+    assert ww.visibility_m == ct.FOG_VIS_M and ww.rain_mmh == ct.RAIN_MM_H and sw == "map"
+    assert visible_sigma_per_m(ww) > visible_sigma_per_m(wc) > 0.0
 
 
 def test_job_roundtrip() -> None:
@@ -119,16 +127,18 @@ def test_fleet_orbits_and_look_at() -> None:
     assert el < 0 and zoom == 0.0
 
 
-def test_distortion_lut_and_light_projection() -> None:
+def test_distortion_tier_and_light_projection() -> None:
     from awr.sensorsvc.camera import CameraModel
+    from awr.sensorsvc.camera.proj import build_remap
 
-    cm = CameraModel.from_hfov(64, 48, 60.0)
-    lut = ct.distortion_lut(cm)
-    assert lut.shape == (48, 64, 2) and lut.dtype == np.float32
-    c = lut[24, 32]
-    assert c == pytest.approx([32.5, 24.5], abs=0.05)                                         # 主点附近近似恒等
-    r_out = np.hypot(*(lut[0, 0] - [cm.cx, cm.cy]))
+    cm = CameraModel.from_hfov(64, 48, 60.0, dist=ct.DIST_TIER)
+    rt = build_remap(cm)
+    rc = rt.render
+    c = np.array([rt.map_u[24, 32] - rc.cx, rt.map_v[24, 32] - rc.cy])
+    assert c == pytest.approx([32.5 - cm.cx, 24.5 - cm.cy], abs=0.05)                         # 主点附近近似恒等
+    r_out = np.hypot(rt.map_u[0, 0] - rc.cx, rt.map_v[0, 0] - rc.cy)
     assert r_out > np.hypot(0.5 - cm.cx, 0.5 - cm.cy)                                         # k1 < 0（桶形）：角点取更外的源像素
+    assert rc.width > cm.width and rt.pixel_ratio <= 1.35
     P = ct.ortho_reversed_z(300.0, 1.0, 1000.0)
     near, far = P @ [0, 0, 1.0, 1], P @ [0, 0, 1000.0, 1]
     assert near[2] == pytest.approx(1.0) and far[2] == pytest.approx(0.0) and (P @ [150.0, 0, 5, 1])[0] == pytest.approx(1.0)
@@ -306,35 +316,43 @@ def fixture_world(tmp_path_factory) -> tuple[Path, Path]:
     return root, ev
 
 
-def test_proxy_passes_leave_renderer_state_intact(fixture_world) -> None:
-    """代理遍在同一上下文执行后，下一次渲染的全部输出与未执行代理遍时逐字节相同；各遍均有 GPU 计时。"""
+def test_async_submit_matches_sync_render(fixture_world) -> None:
+    """吞吐 Worker 的读回路径：最坏档（畸变、雾、雨、投影阴影图）下连续提交多帧、按序等待的结果与同步 `render` 逐字节相同，
+    且每帧有整帧 GPU 计时；读回槽位在 `release` 后归还。"""
     ctx = _gl_ctx()
     from awr.sensorsvc.camera import CameraModel, look_at_R
+    from awr.sensorsvc.camera.effects import AeState, frame_params
     from awr.sensorsvc.camera.raster import ActorFrame, RasterCamera
     from awr.sensorsvc.camera.scene import load_appearance
     from awr.sim.events.tape import open_tape
 
     root, ev = fixture_world
     tape = open_tape(ev)
-    cam = RasterCamera(load_appearance(root, tile_m=64.0), ctx=ctx)
+    cam = RasterCamera(load_appearance(root, tile_m=64.0), ctx=ctx, readback_slots=3)
     try:
         cam.set_actors(tape.actors)
-        cm = CameraModel.from_hfov(320, 180, 60.0)
+        weather, shadow = ct.camera_weather("worst")
+        cm = CameraModel.from_hfov(320, 180, 60.0, dist=ct.DIST_TIER, shadow=shadow)
         p = np.array([-30.0, -20.0, 40.0])
         R = look_at_R(p, np.zeros(3))
         st = tape.actor_states(10 * ct.NS)
         af = ActorFrame(st.ids, st.pos_enu_m, st.yaw_rad)
+        fx = frame_params(cm, AeState(), seed=7, uav_no=0, sensor_no=0, frame_index=3, t_mid_s=10.0, weather=weather)
         with cam.ctx:
-            ref = cam.render(cm, R, p, actors=af)
-            px = ct.FxProxy(cam, cm, ct.proxy_passes("worst"))
-            ms = px.run(R, p, af, 3, np.zeros(3))
-            again = cam.render(cm, R, p, actors=af)
-            px.release()
-        assert set(ms) == set(ct.proxy_passes("worst")) and all(v >= 0.0 for v in ms.values()) and sum(ms.values()) > 0.0
-        assert px.caster_counts == [2]
-        for k in ("rgb8", "depth_m", "instance", "semantic", "instance_unocc"):
-            assert np.array_equal(getattr(ref, k), getattr(again, k)), k
-        assert (ref.instance_unocc > 0).any()
+            ref = cam.render(cm, R, p, fx=fx, actors=af)
+            outs = []
+            for _ in range(2):
+                jobs = [cam.submit(cm, R, p, fx=fx, actors=af, timer=True) for _ in range(3)]
+                for j in jobs:
+                    o = j.result()
+                    outs.append((o, {k: np.array(getattr(o, k)) for k in ("rgb8", "depth_m", "instance", "semantic", "instance_unocc")}))
+                    j.release()
+        assert fx.shadow_map and fx.rain_mmh == ct.RAIN_MM_H and fx.fog_sigma_m > 0
+        assert ref.rgb8.shape == (180, 320, 3) and (ref.instance_unocc > 0).any()
+        for o, arrs in outs:
+            assert o.gpu_ms is not None and o.gpu_ms > 0.0
+            for k, v in arrs.items():
+                assert np.array_equal(getattr(ref, k), v), k
     finally:
         cam.release()
 
@@ -361,7 +379,7 @@ def test_end_to_end_short_run(fixture_world, tmp_path: Path) -> None:
     (w,) = s["workers"]
     assert w["frames"] > 10 and w["fps"] > 0 and w["cpu_encode_calls"] == 0 and w["encoder_kind"] == "gpu"
     assert w["encoder"].startswith("nvimgcodec-") and w["camera"]["width"] == 1280
-    assert w["fx"]["proxy"] == list(ct.proxy_passes("worst")) and w["fx"]["proxy_gpu_ms"]["shadow_map"]["n"] >= w["frames"]
+    assert w["fx"]["proxy"] == [] and w["fx"]["implemented"] == sorted(ct.TIERS["worst"]) and w["stages_ms"]["gpu"]["n"] >= w["frames"]
     assert w["objects_per_frame"]["max"] >= 1                                                 # 可见度归约有演员
     assert w["sink"]["raw"]["messages"] >= 2 * w["frames"] and w["sink"]["truth"]["messages"] >= w["frames"]   # 图像 + 深度、真值
     assert w["sink"]["raw"]["dropped"] == 0 and w["sink"]["raw"]["segments"] >= 2 and w["sink"]["bytes"] > 0
@@ -375,7 +393,7 @@ def test_end_to_end_short_run(fixture_world, tmp_path: Path) -> None:
     t = runs["sustained-therm512-single-x1-r0"]
     (w,) = t["workers"]
     assert t["ok"] and w["kind"] == "thermal" and w["camera"]["width"] == 640 and w["camera"]["height"] == 512 and w["fx"]["proxy"] == []
-    assert w["frames"] > 10 and w["fps"] > 0 and w["cpu_encode_calls"] == 0 and w["encoder"] == "zstd-3/u16le" and w["jpeg_kB"] == {"n": 0}
+    assert w["frames"] > 10 and w["fps"] > 0 and w["cpu_encode_calls"] == 0 and w["encoder"] == "zstd-1/u16le" and w["jpeg_kB"] == {"n": 0}
     assert w["payload_kB"]["mean"] > 0 and w["objects_per_frame"]["max"] >= 1 and w["workload"] == ["thermal"]
     assert w["thermal"]["manifest"]["thermal_table"]["version"] == "thermal_table_v1" and w["thermal"]["env"]["rain_mmh"] == ct.RAIN_MM_H
     assert w["sink"]["raw"]["messages"] >= w["frames"] and w["sink"]["truth"]["messages"] >= w["frames"] and w["sink"]["raw"]["dropped"] == 0

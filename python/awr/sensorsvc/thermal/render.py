@@ -9,11 +9,13 @@
   以 SSBO 按 `gl_PrimitiveID` 查表（批次内三角形序 → 外观三角形号 `tri_ids` → 逐三角形值），语义取世界包的 `tri.cls`（无时为 0）；
   演员为代理网格，分区（着装、皮肤、车身盒体）为逐顶点属性，发动机区与排气区在片元着色器按局部坐标划分。每个子帧一遍几何与一遍
   辐射换算（`L_sensor`，与 `radiometry.sensor_radiance` 同式），随后子帧加权、可分离高斯光学模糊、`B⁻¹`（波段 Planck 表的折线精确
-  反函数）、固定图案噪声与 NETD 时间噪声（与 `noise.apply_noise` 同键同式，GLSL SplitMix64），量化为 u16 厘开尔文。经 PBO 读回
-  `temp_ck`、无噪表观温度（真值 `dT_app_k` 用）、实例、语义与只渲染演员的实例（数组只读）；每个子帧提交后 `glFlush`，使 GPU 与
-  下一子帧的 CPU 提交重叠。
-- 交付与存档：`temp_ck` 为 u16 小端 + zstd（交付字节即存档字节）；`thermal_frame` 组装帧记录（agent_view、ground_truth 含
-  `objects[].dT_app_k`、internal 含参数表与 Planck 表版本）。
+  反函数）、固定图案噪声与 NETD 时间噪声（与 `noise.apply_noise` 同键同式，GLSL SplitMix64），量化为 u16 厘开尔文。演员与可见光
+  相同以合批绘制（`camera.actorbuf`，每个子帧一次绘制，分区温度与发射率取自 SSBO）。`submit` 绘制并把 `temp_ck`、无噪表观温度
+  （真值 `dT_app_k` 用）、实例、语义与只渲染演员的实例写入持久映射的读回槽位（`camera.readback`）后立即返回，`result()` 只等栅栏，
+  数组为槽位上的只读视图；`render` 为同步包装（返回只读副本）。
+- 交付与存档：`temp_ck` 为 u16 小端 + zstd 级别 1（交付字节即存档字节；D3-AC-11 吞吐，S20、F-54：级别 3 单帧 5.6–7.8 ms，级别 1
+  约 3.7 ms，体积增加约 9%）；`thermal_frame` 组装帧记录（agent_view、ground_truth 含 `objects[].dT_app_k`、internal 含参数表与
+  Planck 表版本）。
 
 本实现设定（M25 未规定处，并入文档见 S13 实现记录）：
 1. 表面温度与发射率附件取 RGBA32F（第三通道为法向竖直分量），不取 RG16F：f16 在 300 K 处的分辨率为 0.25 K，超出动态实体 0.2 K 的
@@ -35,6 +37,7 @@ import io
 import json
 import math
 import os
+import threading
 import time
 import zipfile
 from collections.abc import Sequence
@@ -58,18 +61,20 @@ from awr.sensorsvc.thermal.radiometry import (
     planck_table,
 )
 
-__all__ = ["MAX_SUBFRAMES", "THERM512", "THERMAL_RENDERER_VERSION", "ActorThermal", "NoiseKeys", "StaticRow", "ThermalCamera",
-           "ThermalModel", "ThermalOut", "ThermalStatic", "ThermalTable", "actor_thermal", "actor_zones", "decode_temp_ck",
+__all__ = ["MAX_SUBFRAMES", "TEMP_CK_ENCODER", "THERM512", "THERMAL_RENDERER_VERSION", "ActorThermal", "NoiseKeys", "StaticRow", "ThermalCamera",
+           "ThermalJob", "ThermalModel", "ThermalOut", "ThermalStatic", "ThermalTable", "actor_thermal", "actor_zones", "decode_temp_ck",
            "encode_temp_ck", "engine_off_s", "last_moving_time", "load_thermal_table", "scene_triangles", "static_classes",
            "static_surface", "subframe_times_s", "thermal_bake", "thermal_env", "thermal_frame", "thermal_manifest",
            "thermal_objects", "thermal_table_from_doc", "triangle_sun_cos"]
 
-THERMAL_RENDERER_VERSION = "thermal-gl@1"
+THERMAL_RENDERER_VERSION = "thermal-gl@2"
 THERMAL_TABLE_SCHEMA = "awr.thermal_table.v1"
 DEFAULT_TABLE = Path(__file__).resolve().parents[4] / "configs" / "thermal_table_v1.yaml"
 MAX_SUBFRAMES = 4                              # 着色器的子帧纹理数（M25 §15.6 S = 4）
 MAX_BLUR_R = 7                                 # 模糊核半径上限（sigma ≤ 2.33 px）
-ZSTD_LEVEL = 3                                 # 与 `sensorsvc.frame` 的真值层相同
+ZSTD_LEVEL = 3                                 # 真值层（实例、语义），与 `sensorsvc.frame` 相同
+TEMP_CK_ZSTD_LEVEL = 1                         # 交付的 `temp_ck`（D3-AC-11 吞吐；单线程、字节确定）
+TEMP_CK_ENCODER = f"zstd-{TEMP_CK_ZSTD_LEVEL}/u16le"
 SEM_NONE = 255
 ZONE_BASE, ZONE_SKIN, ZONE_BODY = 0, 1, 2      # 顶点分区；片元着色器把车身盒体再分为 0 车身、2 发动机、3 排气
 KELVIN = 273.15
@@ -587,12 +592,25 @@ def thermal_bake(scene_or_tris, sun_az_el_deg: tuple[float, float], *, backend: 
 
 # ---------------------------------------------------------------- 编码、真值与帧记录
 
-def encode_temp_ck(temp_ck: np.ndarray) -> bytes:
-    """u16 厘开尔文 → 小端字节 + zstd（单线程、级别 3，字节确定）；交付字节即存档字节。"""
-    import zstandard
+_tls = threading.local()
 
+
+def _compressor(level: int):
+    d = getattr(_tls, "zc", None)
+    if d is None:
+        d = _tls.zc = {}
+    c = d.get(level)
+    if c is None:
+        import zstandard
+
+        c = d[level] = zstandard.ZstdCompressor(level=level)
+    return c
+
+
+def encode_temp_ck(temp_ck: np.ndarray) -> bytes:
+    """u16 厘开尔文 → 小端字节 + zstd（单线程、级别 1，字节确定；压缩器按线程复用）；交付字节即存档字节。"""
     a = np.ascontiguousarray(np.asarray(temp_ck, np.uint16).astype("<u2", copy=False))
-    return zstandard.ZstdCompressor(level=ZSTD_LEVEL).compress(a.tobytes())
+    return _compressor(TEMP_CK_ZSTD_LEVEL).compress(memoryview(a).cast("B"))
 
 
 def decode_temp_ck(data: bytes, width: int, height: int) -> np.ndarray:
@@ -618,9 +636,10 @@ def _ring(mask: np.ndarray, r: int) -> np.ndarray:
 
 
 def thermal_objects(t_app_k: np.ndarray, instance: np.ndarray, instance_unocc: np.ndarray, semantic: np.ndarray, actors: list[dict],
-                    invalid: np.ndarray | None = None, *, ring_px: int = 3) -> list[dict]:
-    """可见度归约（`camera.actors.visibility_objects`）加 `dT_app_k`：可见像素无噪表观温度中位数减 `ring_px` 环带中位数（K，6 位小数）。"""
-    objs = visibility_objects(instance, instance_unocc, semantic, invalid, actors)
+                    invalid: np.ndarray | None = None, *, ring_px: int = 3, stats: np.ndarray | None = None) -> list[dict]:
+    """可见度归约（`camera.actors.visibility_objects`）加 `dT_app_k`：可见像素无噪表观温度中位数减 `ring_px` 环带中位数（K，6 位小数）。
+    `stats` 为 GPU 可见度统计（`ThermalOut.vis`，无 `invalid` 时使用）。"""
+    objs = visibility_objects(instance, instance_unocc, semantic, invalid, actors, stats=stats if invalid is None else None)
     H, W = instance.shape
     t = np.asarray(t_app_k, np.float64)
     bg = instance == 0 if invalid is None else (instance == 0) & (invalid == 0)
@@ -671,19 +690,31 @@ def _gimbal(g: tuple[float, float, float]) -> dict:
     return d
 
 
+class _Now:
+    """已完成的结果（`thermal_frame` 无辅助池时与 Future 同一接口）。"""
+
+    __slots__ = ("v",)
+
+    def __init__(self, v) -> None:
+        self.v = v
+
+    def result(self):
+        return self.v
+
+
 def thermal_frame(ctx, *, uav: str, sensor_id: str, seq: int, t_mid_ns: int, model: ThermalModel, mount, gimbal_reading, gimbal_true,
                   pos_enu_m, R_ws, out: ThermalOut, manifest: dict, actors: list[dict] | None = None,
-                  ref_prefix: str = "") -> tuple[dict, dict[str, bytes]]:
+                  ref_prefix: str = "", aux=None) -> tuple[dict, dict[str, bytes]]:
     """组装一帧热成像记录（`drone4d.frame.v1` 的热成像分区，`kind = thermal`）与载荷块 {ref: 字节}。
 
     `ctx` 为 `sensorsvc.frame.FrameContext`；`manifest` 为 `thermal_manifest(...)`。agent_view 的 `temp_ck` 为 u16 + zstd，sha256 取
-    交付字节，载荷块存同一 `bytes` 对象（交付字节即存档字节）；ground_truth 为实例、无遮挡实例、语义（zstd）与 `objects[]`。"""
+    交付字节，载荷块存同一 `bytes` 对象（交付字节即存档字节）；ground_truth 为实例、无遮挡实例、语义（zstd）与 `objects[]`。
+    `aux` 给出时（辅助线程池，`concurrent.futures.Executor`），`temp_ck` 编码与 sha256、真值分区的 zstd 在该池中与可见度归约并行，
+    返回前全部回填（字节与同步组装逐字节相同）。"""
     from awr.sensorsvc.poses import q_world_opt
 
     if model.codec != "radiometric_u16":
         raise ValueError("thermal_frame only assembles radiometric_u16 frames (agc_jpeg is a preview codec)")
-    import zstandard
-
     blocks: dict[str, bytes] = {}
 
     def put(name: str, b: bytes) -> str:
@@ -692,26 +723,37 @@ def thermal_frame(ctx, *, uav: str, sensor_id: str, seq: int, t_mid_ns: int, mod
         return ref
 
     def z(a: np.ndarray) -> bytes:
-        return zstandard.ZstdCompressor(level=ZSTD_LEVEL).compress(np.ascontiguousarray(a).tobytes())
+        return _compressor(ZSTD_LEVEL).compress(memoryview(np.ascontiguousarray(a)).cast("B"))
 
-    tb = encode_temp_ck(out.temp_ck)
+    def ck_sha(a: np.ndarray) -> tuple[bytes, str]:
+        b = encode_temp_ck(a)
+        return b, hashlib.sha256(b).hexdigest()
+
+    def run(fn, *args):
+        return aux.submit(fn, *args) if aux is not None else _Now(fn(*args))
+
+    unocc = out.instance_unocc if out.instance_unocc is not None else np.zeros_like(out.instance)
+    f_ck = run(ck_sha, out.temp_ck)
+    f_gt = [run(z, np.asarray(out.instance, "<u2")), run(z, np.asarray(unocc, "<u2")), run(z, out.semantic)]
+    objects = (thermal_objects(out.t_app_k, out.instance, unocc, out.semantic, actors, stats=out.vis)
+               if actors and out.instance_unocc is not None else [])
+    tb, tsha = f_ck.result()
+    zi, zu, zs = (f.result() for f in f_gt)
     av = {"sensor_id": sensor_id, "seq": int(seq), "t_mid_ns": int(t_mid_ns), "exposure_ns": 0, "readout_ns": 0,
           "width": model.width, "height": model.height, "K": model.K(), "dist": [0.0] * 5, "pixel_convention": "colmap_center_0.5",
           "mount_nominal": {"xyz_m": list(mount.xyz_m), "rpy_deg": list(mount.rpy_deg)}, "gimbal_reading": _gimbal(gimbal_reading),
           "temp_ck": {"dtype": "u16", "unit": "0.01 K", "codec": "radiometric_u16", "compression": "zstd", "ref": put("temp_ck.u16.zst", tb),
-                      "sha256": hashlib.sha256(tb).hexdigest()}}
-    unocc = out.instance_unocc if out.instance_unocc is not None else np.zeros_like(out.instance)
-    objects = thermal_objects(out.t_app_k, out.instance, unocc, out.semantic, actors) if actors and out.instance_unocc is not None else []
+                      "sha256": tsha}}
     gt = {"T_world_sensor": {"pos_enu_m": [float(v) for v in pos_enu_m], "q_ws_xyzw": [float(v) for v in q_world_opt(R_ws)], "frame": "ENU<-RDF"},
           "gimbal_true": _gimbal(gimbal_true),
-          "instance": {"dtype": "u16", "codec": "zstd", "ref": put("instance.u16.zst", z(out.instance.astype("<u2")))},
-          "instance_unocc": {"dtype": "u16", "codec": "zstd", "ref": put("instance_unocc.u16.zst", z(unocc.astype("<u2")))},
-          "semantic": {"dtype": "u8", "codec": "zstd", "code_table": "d3-semantic@1", "ref": put("semantic.u8.zst", z(out.semantic))},
+          "instance": {"dtype": "u16", "codec": "zstd", "ref": put("instance.u16.zst", zi)},
+          "instance_unocc": {"dtype": "u16", "codec": "zstd", "ref": put("instance_unocc.u16.zst", zu)},
+          "semantic": {"dtype": "u8", "codec": "zstd", "code_table": "d3-semantic@1", "ref": put("semantic.u8.zst", zs)},
           "objects": objects,
           "timing": {"t_truth_ns": [round(out.t_sub_s[-1] * 1e9)] if out.t_sub_s is not None else [int(t_mid_ns)],
                      "lag_subframes": len(out.weights), "subframe_weights": [round(float(w), 9) for w in out.weights]}}
     rec = {"schema": "drone4d.frame.v1", "frame_id": f"{ctx.run_id}/{uav}/{sensor_id}/{int(seq)}", "kind": "thermal", "agent_view": av,
-           "ground_truth": gt, "internal": {**ctx.internal(), "encoder": "zstd-3/u16le", "renderer_version": THERMAL_RENDERER_VERSION,
+           "ground_truth": gt, "internal": {**ctx.internal(), "encoder": TEMP_CK_ENCODER, "renderer_version": THERMAL_RENDERER_VERSION,
                                              "thermal": manifest}}
     return rec, blocks
 
@@ -780,52 +822,64 @@ void main() {
     o_sem = (tri_sem[t >> 2] >> ((t & 3u) * 8u)) & 0xFFu;
 }
 """
-TH_ACTOR_VS = """
+def _th_actor_vs() -> str:
+    from awr.sensorsvc.camera.actorbuf import GLSL_ACTOR_SSBO
+
+    return """
 #version 450
+""" + GLSL_ACTOR_SSBO + """
 uniform mat4 u_P;
-uniform mat4 u_mv;
-uniform mat3 u_Rw;
 in vec3 in_pos;
 in vec3 in_nrm;
 in float in_zone;
+in float in_aid;
 out vec3 v_q;
 out vec3 v_nw;
 out vec3 v_loc;
 flat out int v_zone;
+flat out int v_a;
 void main() {
-    v_nw = u_Rw * in_nrm;
+    int a = int(in_aid + 0.5);
+    v_a = a;
+    v_nw = mat3(act_rw[u_base + a]) * in_nrm;
     v_loc = in_pos;
     v_zone = int(in_zone + 0.5);
-    vec4 q = u_mv * vec4(in_pos, 1.0);
+    vec4 q = act_mv[u_mvbase + a] * vec4(in_pos, 1.0);
     v_q = q.xyz;
-    gl_Position = u_P * vec4(q.z > 0.02 ? q.xyz * ((q.z - 0.01) / q.z) : q.xyz, 1.0);   // 与可见光演员相同的 1 cm 深度偏置
+    gl_Position = act_info[u_base + a].z == 0u ? vec4(2.0, 2.0, 2.0, 1.0)   // 本帧未出现：退化到裁剪体外
+        : u_P * vec4(q.z > 0.02 ? q.xyz * ((q.z - 0.01) / q.z) : q.xyz, 1.0);   // 与可见光演员相同的 1 cm 深度偏置
 }
 """
+
+
 TH_ACTOR_FS = """
 #version 450
-uniform uint u_inst;
-uniform uint u_sem;
-uniform float u_zT[4];
-uniform float u_zE[4];
-uniform vec3 u_geo;
+layout(std430, binding = 4) readonly buffer ActInfo { uvec4 act_info[]; };
+layout(std430, binding = 5) readonly buffer ActTh { vec4 act_th[]; };   // 每演员 3 项：分区温度、分区发射率、(发动机 x, 排气 x, 排气 z)
+uniform int u_base;
 uniform mat3 u_Rwo;
 in vec3 v_q;
 in vec3 v_nw;
 in vec3 v_loc;
 flat in int v_zone;
+flat in int v_a;
 layout(location = 0) out vec4 o_te;
 layout(location = 1) out float o_z;
 layout(location = 2) out uint o_inst;
 layout(location = 3) out uint o_sem;
 void main() {
+    vec4 zT = act_th[3 * v_a];
+    vec4 zE = act_th[3 * v_a + 1];
+    vec3 geo = act_th[3 * v_a + 2].xyz;
     int z = v_zone;
-    if (z == 2) z = v_loc.x >= u_geo.x ? 2 : ((v_loc.x <= u_geo.y && v_loc.z <= u_geo.z) ? 3 : 0);
+    if (z == 2) z = v_loc.x >= geo.x ? 2 : ((v_loc.x <= geo.y && v_loc.z <= geo.z) ? 3 : 0);
     vec3 n = normalize(v_nw);
     if (dot(n, u_Rwo * (-v_q)) < 0.0) n = -n;
-    o_te = vec4(u_zT[z], u_zE[z], n.z, 1.0);
+    uvec4 inf = act_info[u_base + v_a];
+    o_te = vec4(zT[z], zE[z], n.z, 1.0);
     o_z = v_q.z;
-    o_inst = u_inst;
-    o_sem = u_sem;
+    o_inst = inf.x;
+    o_sem = inf.y;
 }
 """
 FULLSCREEN_VS = """
@@ -950,6 +1004,8 @@ class ThermalOut:
     batches_drawn: int
     actors_drawn: int
     debug: dict | None = None               # `debug=True`：te (S, H, W, 4) f32、z (S, H, W)、L (S, H, W) 子帧入瞳辐亮度
+    gpu_ms: float | None = None             # GL 计时查询的 GPU 时间（`submit(..., timer=True)`）
+    vis: np.ndarray | None = None           # (K, VIS_STRIDE) uint32 GPU 可见度统计（`camera.actors.visibility_stats` 同一布局；有演员时）
 
 
 class _ThTarget:
@@ -972,30 +1028,41 @@ class _ThTarget:
         self.tc = ctx.texture((w, h), 1, dtype="f4")
         self.tc.filter = (0x2600, 0x2600)
         self.out = ctx.framebuffer(color_attachments=[self.ck, self.tc])
-        self._pbo: dict[int, object] = {}
-        self._ctx = ctx
-
-    def read_many(self, items: list[tuple[object, str]]) -> list[np.ndarray]:
-        """读回若干单通道纹理：先对全部纹理发出 `read_into(PBO)`（异步 DMA），再逐个映射（A40 上 640 × 512 的 u16 + f32 两张约
-        0.2 ms，逐张 `texture.read()` 约 0.5 ms）。"""
-        nb = {"u1": 1, "u2": 2, "f4": 4}
-        pbos = []
-        for tex, dt in items:
-            b = self._pbo.get(id(tex))
-            if b is None:
-                b = self._pbo[id(tex)] = self._ctx.buffer(reserve=self.w * self.h * nb[dt])
-            tex.read_into(b)
-            pbos.append(b)
-        np_dt = {"u1": np.uint8, "u2": np.uint16, "f4": np.float32}
-        return [np.frombuffer(b.read(), np_dt[dt]).reshape(self.h, self.w) for b, (_t, dt) in zip(pbos, items, strict=True)]
 
     def release(self, gl) -> None:
-        for b in self._pbo.values():
-            b.release()
-        self._pbo.clear()
         self.mrt.release(gl)
         if self.unocc is not None:
             self.unocc.release(gl)
+
+
+@dataclass
+class ThermalJob:
+    """已提交的一帧热成像（`ThermalCamera.submit`）：`result()` 在渲染线程等待读回并返回 `ThermalOut`（数组为读回槽位上的只读
+    视图），`release()` 归还槽位（任一线程，幂等；归还后视图失效）。"""
+
+    read: object
+    meta: dict
+    query: object | None = None
+    _out: ThermalOut | None = None
+
+    def result(self) -> ThermalOut:
+        if self._out is None:
+            t0 = time.perf_counter()
+            v = self.read.wait()
+            m = self.meta
+            o = ThermalOut(v["ck"], v["tc"], v.get("z"), v["inst"], v["sem"], v.get("unocc"), m["weights"], m["t_sub"], m["draw_ms"],
+                           (time.perf_counter() - t0) * 1e3, m["batches"], m["actors"], m["debug"])
+            o.gpu_ms = self.query.elapsed / 1e6 if self.query is not None else None
+            if v.get("vis") is not None:
+                from awr.sensorsvc.camera.actors import VIS_STRIDE
+
+                o.vis = v["vis"].reshape(-1, VIS_STRIDE)
+            self._out = o
+        return self._out
+
+    def release(self) -> None:
+        self.read.release()
+        self._out = None
 
 
 def _same_poses(poses) -> bool:
@@ -1040,7 +1107,8 @@ class ThermalCamera:
     为事件起点太阳位置（与 bake 相同）。"""
 
     def __init__(self, scene, *, table: ThermalTable | None = None, tri_cls: np.ndarray | None = None, static: ThermalStatic | None = None,
-                 sun_az_el_deg: tuple[float, float] | None = None, raster=None, ctx=None, band_um: tuple[float, float] = BAND_UM) -> None:
+                 sun_az_el_deg: tuple[float, float] | None = None, raster=None, ctx=None, band_um: tuple[float, float] = BAND_UM,
+                 readback_slots: int = 6) -> None:
         from awr.sensorsvc.camera.raster import RasterCamera
 
         self._own = raster is None
@@ -1066,7 +1134,7 @@ class ThermalCamera:
         self.sun_cos = triangle_sun_cos(scene_triangles(scene), self.sun_az_el) if any(r.sun_incidence for r in self.table.rows) else None
         ctx_ = self.ctx
         self.prog = ctx_.program(vertex_shader=TH_VS, fragment_shader=TH_FS)
-        self.actp = ctx_.program(vertex_shader=TH_ACTOR_VS, fragment_shader=TH_ACTOR_FS)
+        self.actp = ctx_.program(vertex_shader=_th_actor_vs(), fragment_shader=TH_ACTOR_FS)
         self.radp = ctx_.program(vertex_shader=FULLSCREEN_VS, fragment_shader=RAD_FS)
         self.blendp = ctx_.program(vertex_shader=FULLSCREEN_VS, fragment_shader=BLEND_FS)
         self.hblurp = ctx_.program(vertex_shader=FULLSCREEN_VS, fragment_shader=HBLUR_FS)
@@ -1091,6 +1159,7 @@ class ThermalCamera:
             lo, hi = bs[0].origin + pos.min(0), bs[0].origin + pos.max(0)
             corners.append([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
         self.corners = np.asarray(corners, np.float64).reshape(-1, 8, 3)
+        self.tile_org = np.asarray([d[1] for d in self.draws], np.float64).reshape(-1, 3)
         self._order = np.concatenate(order) if order else np.zeros(0, np.int64)
         sem = np.zeros(-(-max(off, 1) // 4) * 4, np.uint8)
         sem[:off] = self.tri_cls[self._order]
@@ -1101,11 +1170,23 @@ class ThermalCamera:
         self.dlut = ctx_.texture((N_TABLE, 1), 1, self.planck.dbdt_lut.astype("<f4").tobytes(), dtype="f4")
         for t in (self.lut, self.dlut):
             t.filter = (0x2600, 0x2600)
-        self.actor_vaos: list[tuple] = []
+        self.actors = None                                                # camera.actorbuf.ActorBuffers（set_actors）
+        self.vis_buf = None                                               # GPU 可见度统计（set_actors 时创建）
+        self.vis_K = 1
+        self._vis0 = b""
         self.actor_sem: list[int] = []
+        self.th_buf = ctx_.buffer(reserve=48)
+        self._env_key: tuple | None = None
+        self._env_rad = (0.0, 0.0, 0.0)
+        self._netd_key: tuple | None = None
+        self._netd = 0.0
         self._targets: dict[tuple[int, int], _ThTarget] = {}
-        self._th_cache: tuple = (None, [])
+        self._th_key: object = None
         self.static_s = 0.0
+        from awr.sensorsvc.camera.readback import ReadbackRing
+
+        self.ring = ReadbackRing(slots=readback_slots)
+        self._queries: list = []
 
     # ------------------------------------------------------------ 静态与演员
     def _ensure_static(self, env: ThermalEnv) -> None:
@@ -1121,19 +1202,26 @@ class ThermalCamera:
         self.static_s = time.perf_counter() - t0
 
     def set_actors(self, actors: list[dict]) -> None:
-        """磁带演员表（按 idx）→ 每名演员一个代理网格 VAO（顶点、法向、分区），与可见光代理几何相同。"""
+        """磁带演员表（按 idx）→ 合批的代理网格（顶点、法向、分区），与可见光代理几何相同。"""
+        from awr.sensorsvc.camera.actorbuf import ActorBuffers
         from awr.sensorsvc.camera.actors import SEM_CODE
 
-        for vbo, vao in self.actor_vaos:
-            vao.release()
-            vbo.release()
-        self.actor_vaos, self.actor_sem = [], []
-        for a in actors:
+        if self.actors is not None:
+            self.actors.release()
+        from awr.sensorsvc.camera.actors import vis_init
+
+        self.vis_K = len(actors) + 1
+        self._vis0 = vis_init(self.vis_K).tobytes()
+        if self.vis_buf is None:
+            self.vis_buf = self.ctx.buffer(reserve=len(self._vis0))
+        meshes, info = [], []
+        for k, a in enumerate(actors):
             P, N, _C = proxy_mesh(a)
-            Z = actor_zones(a)
-            vbo = self.ctx.buffer(np.hstack([P, N, Z[:, None]]).astype("<f4").tobytes())
-            self.actor_vaos.append((vbo, self.ctx.vertex_array(self.actp, [(vbo, "3f 3f 1f", "in_pos", "in_nrm", "in_zone")])))
-            self.actor_sem.append(SEM_CODE.get(a["class"], 13))
+            meshes.append(np.hstack([P, N, actor_zones(a)[:, None]]))
+            info.append((k + 1, SEM_CODE.get(a["class"], 13)))
+        self.actor_sem = [s_ for _i, s_ in info]
+        self.actors = ActorBuffers(self.ctx, meshes, "3f 3f 1f", ("in_pos", "in_nrm", "in_zone"), info)
+        self._th_key = None
 
     def _target(self, w: int, h: int) -> _ThTarget:
         t = self._targets.get((w, h))
@@ -1146,36 +1234,32 @@ class ThermalCamera:
         with contextlib.suppress(KeyError):                               # 驱动裁掉的未使用 uniform
             prog[k].value = v
 
-    def _draw_actors(self, act, actor_th: Sequence[ActorThermal], P: np.ndarray, R_ws, p_w) -> int:
-        """绘制一帧演员；分区温度与发射率的 uniform 字节按 `actor_th` 对象缓存（同一帧的各子帧与无遮挡通道共用）。"""
+    def _upload_th(self, actor_th: Sequence[ActorThermal]) -> None:
+        """逐演员分区温度、发射率与车辆分区几何写入 SSBO（binding 5）；同一 `actor_th` 对象只写一次。"""
+        if self._th_key is actor_th:
+            return
+        n = max(len(actor_th), 1)
+        a = np.zeros((n, 3, 4), np.float32)
+        for k, t in enumerate(actor_th):
+            a[k, 0, :len(t.zone_t_k)] = t.zone_t_k
+            a[k, 1, :len(t.zone_eps)] = t.zone_eps
+            a[k, 2, :3] = (t.engine_x_m, t.exhaust_x_m, t.exhaust_z_m)
+        b = a.astype("<f4").tobytes()
+        self.th_buf.orphan(max(len(b), self.th_buf.size))               # 换新存储：不与仍在执行的上一帧绘制同步
+        self.th_buf.write(b)
+        self._th_key = actor_th
+
+    def _draw_actors(self, P: np.ndarray, R_ws, p_w, base: int, mvbase: int) -> None:
         from awr.sensorsvc.camera.proj import world_to_opt
 
         prog = self.actp
         prog["u_P"].write(P.T.astype("<f4").tobytes())
-        view = world_to_opt(R_ws, p_w)
-        prog["u_Rwo"].write(view[:3, :3].astype("<f4").tobytes())
-        if self._th_cache[0] is not actor_th:
-            self._th_cache = (actor_th, [(np.asarray(t.zone_t_k, "<f4").tobytes(), np.asarray(t.zone_eps, "<f4").tobytes(),
-                                          (float(t.engine_x_m), float(t.exhaust_x_m), float(t.exhaust_z_m))) for t in actor_th])
-        cache = self._th_cache[1]
-        c, s_ = np.cos(np.asarray(act.yaw, np.float64)), np.sin(np.asarray(act.yaw, np.float64))
-        n = 0
-        for k, i in enumerate(act.idx):
-            Mm = np.array([[c[k], -s_[k], 0.0, act.pos[k][0]], [s_[k], c[k], 0.0, act.pos[k][1]], [0.0, 0.0, 1.0, act.pos[k][2]], [0.0, 0.0, 0.0, 1.0]])
-            zt, ze, geo = cache[int(i)]
-            prog["u_Rw"].write(Mm[:3, :3].T.astype("<f4").tobytes())
-            prog["u_mv"].write((view @ Mm).T.astype("<f4").tobytes())
-            prog["u_inst"].value = int(i) + 1
-            prog["u_sem"].value = self.actor_sem[int(i)]
-            prog["u_zT"].write(zt)
-            prog["u_zE"].write(ze)
-            self._put(prog, "u_geo", geo)
-            self.actor_vaos[int(i)][1].render()
-            n += 1
-        return n
+        prog["u_Rwo"].write(world_to_opt(R_ws, p_w)[:3, :3].astype("<f4").tobytes())
+        self.th_buf.bind_to_storage_buffer(5)
+        self.actors.draw(prog, base, mvbase)
 
-    def _geometry(self, tg: _ThTarget, cm: CameraModel, R_ws, p_w, env: ThermalEnv, act, actor_th) -> tuple[int, int]:
-        from awr.sensorsvc.camera.proj import mv_tile, proj_reversed_z, world_to_opt
+    def _geometry(self, tg: _ThTarget, cm: CameraModel, R_ws, p_w, env: ThermalEnv, aset) -> tuple[int, int]:
+        from awr.sensorsvc.camera.proj import gl_mat4, mv_tiles, proj_reversed_z, world_to_opt
 
         mgl = self._mgl
         tg.mrt.fbo.use()
@@ -1192,22 +1276,26 @@ class ThermalCamera:
         self.te_buf.bind_to_storage_buffer(0)
         self.sem_buf.bind_to_storage_buffer(1)
         n = 0
-        for (_tile, origin, vao, off, _bufs), ok in zip(self.draws, _frustum_visible(self.corners, cm, Mw), strict=True):
-            if not ok:
-                continue
-            mv = mv_tile(R_ws, p_w, origin)
-            prog["u_mv"].write(mv.T.astype("<f4").tobytes())
-            prog["u_mvp"].write((P @ mv).T.astype("<f4").tobytes())
-            prog["u_tri0"].value = int(off)
+        idx = np.flatnonzero(_frustum_visible(self.corners, cm, Mw))
+        if len(idx):                                                     # 可见瓦片的模型视图一次计算（float64），转列主序 float32
+            MV = mv_tiles(R_ws, p_w, self.tile_org[idx])
+            mvb, mvpb = gl_mat4(MV), gl_mat4(P @ MV)
+        u_mv, u_mvp, u_tri0 = prog["u_mv"], prog["u_mvp"], prog["u_tri0"]
+        for k, i in enumerate(idx):
+            _tile, _origin, vao, off, _bufs = self.draws[i]
+            u_mv.write(mvb[k].tobytes())
+            u_mvp.write(mvpb[k].tobytes())
+            u_tri0.value = int(off)
             vao.render()
             n += 1
         na = 0
-        if act is not None and len(act.idx):
-            na = self._draw_actors(act, actor_th, P, R_ws, p_w)
+        if aset is not None and aset[2]:
+            self._draw_actors(P, R_ws, p_w, aset[0], aset[1])
+            na = aset[2]
         self.ctx.disable(mgl.DEPTH_TEST)
         return n, na
 
-    def _unocc(self, tg: _ThTarget, cm: CameraModel, R_ws, p_w, act, actor_th) -> None:
+    def _unocc(self, tg: _ThTarget, cm: CameraModel, R_ws, p_w, aset) -> None:
         from awr.sensorsvc.camera.proj import proj_reversed_z
         from awr.sensorsvc.camera.raster import _Mrt
 
@@ -1217,18 +1305,48 @@ class ThermalCamera:
         tg.unocc.fbo.use()
         self.ctx.viewport = (0, 0, tg.w, tg.h)
         tg.unocc.clear(self.gl)
-        if act is not None and len(act.idx):
+        if aset is not None and aset[2]:
             self.ctx.enable(mgl.DEPTH_TEST)
             self.ctx.depth_func = ">"
-            self._draw_actors(act, actor_th, proj_reversed_z(cm), R_ws, p_w)
+            self._draw_actors(proj_reversed_z(cm), R_ws, p_w, aset[0], aset[1])
             self.ctx.disable(mgl.DEPTH_TEST)
 
     def render(self, model: ThermalModel, poses: Sequence[tuple[np.ndarray, np.ndarray]], t_sub_s, t_end_s: float, env: ThermalEnv, *,
                actor_frames: Sequence | None = None, actor_th: Sequence[ActorThermal] | None = None, noise: NoiseKeys | None = None,
                depth: bool = False, debug: bool = False) -> ThermalOut:
-        """一帧热成像：`poses[j]` 为子帧 j 的 (R_ws, p_w)（与 `t_sub_s` 对应，升序，末项 ≤ t_end），`actor_frames[j]` 为该子帧的
-        `raster.ActorFrame`，`actor_th[idx]` 为演员 idx 的分区温度（`actor_thermal`）。`env` 为本帧环境（`thermal_env`）。
-        `depth = True` 时另读回末子帧平面深度（帧记录不含深度，在线路径不读）。"""
+        """同步接口：`submit` 后立即等待读回，返回只读副本。参数同 `submit`。"""
+        job = self.submit(model, poses, t_sub_s, t_end_s, env, actor_frames=actor_frames, actor_th=actor_th, noise=noise, depth=depth,
+                          debug=debug)
+        try:
+            o = job.result()
+
+            def cp(a):
+                if a is None:
+                    return None
+                c = np.array(a)
+                c.setflags(write=False)
+                return c
+            out = ThermalOut(cp(o.temp_ck), cp(o.t_app_k), cp(o.depth_m), cp(o.instance), cp(o.semantic), cp(o.instance_unocc), o.weights,
+                             o.t_sub_s, o.draw_ms, o.readback_ms, o.batches_drawn, o.actors_drawn, o.debug, o.gpu_ms, cp(o.vis))
+        finally:
+            job.release()
+        return out
+
+    def _query(self, k: int):
+        while len(self._queries) <= k:
+            self._queries.append(self.ctx.query(time=True))
+        return self._queries[k]
+
+    def submit(self, model: ThermalModel, poses: Sequence[tuple[np.ndarray, np.ndarray]], t_sub_s, t_end_s: float, env: ThermalEnv, *,
+               actor_frames: Sequence | None = None, actor_th: Sequence[ActorThermal] | None = None, noise: NoiseKeys | None = None,
+               depth: bool = False, debug: bool = False, timer: bool = False) -> ThermalJob:
+        """绘制一帧热成像并提交读回，立即返回 `ThermalJob`。`poses[j]` 为子帧 j 的 (R_ws, p_w)（与 `t_sub_s` 对应，升序，末项 ≤ t_end），
+        `actor_frames[j]` 为该子帧的 `raster.ActorFrame`，`actor_th[idx]` 为演员 idx 的分区温度（`actor_thermal`）。`env` 为本帧环境
+        （`thermal_env`）。`depth = True` 时另读回末子帧平面深度（帧记录不含深度，在线路径不读）；`timer = True` 以 GL 计时查询记录
+        GPU 时间。"""
+        from awr.sensorsvc.camera.proj import world_to_opt
+        from awr.sensorsvc.camera.readback import ReadJob, plane_layout
+
         mgl = self._mgl
         S = len(poses)
         t_sub = np.asarray(t_sub_s, np.float64)
@@ -1247,30 +1365,53 @@ class ThermalCamera:
         cm = model.camera()
         W, H = cm.width, cm.height
         tg = self._target(W, H)
-        tbl = self.planck
-        b_air, b_sky = float(tbl.radiance(env.t_air_k)), float(tbl.radiance(env.sky_k))
-        beta_m = self.table.beta_per_km(env.rh, env.fog_visibility_km, env.rain_mmh) * 1e-3
+        has_unocc = actor_frames is not None
+        items = [("ck", W, H, "u16"), ("tc", W, H, "f32"), ("inst", W, H, "u16"), ("sem", W, H, "u8")]
+        if has_unocc:
+            items.append(("unocc", W, H, "u16"))
+        want_vis = has_unocc and self.actors is not None
+        if want_vis:
+            from awr.sensorsvc.camera.actors import VIS_STRIDE
+
+            items.append(("vis", VIS_STRIDE * self.vis_K, 1, "u32"))
+        if depth:
+            items.append(("z", W, H, "f32"))
+        layout, nbytes = plane_layout(items)
         t0 = time.perf_counter()
+        slot = self.ring.acquire(nbytes)
+        q = None
+        if timer:
+            q = self._query(slot)
+            q.mglo.begin()
+        tbl = self.planck
+        ek = (env.t_air_k, env.sky_k, env.rh, env.fog_visibility_km, env.rain_mmh)
+        if self._env_key != ek:                                          # 同一环境逐帧相同：辐亮度与消光只算一次
+            self._env_rad = (float(tbl.radiance(env.t_air_k)), float(tbl.radiance(env.sky_k)),
+                             self.table.beta_per_km(env.rh, env.fog_visibility_km, env.rain_mmh) * 1e-3)
+            self._env_key = ek
+        b_air, b_sky, beta_m = self._env_rad
+        asets = [None] * len(sub)
+        if actor_frames is not None and self.actors is not None:
+            self._upload_th(actor_th)
+            asets = self.actors.upload([(actor_frames[j], [world_to_opt(*poses[j])]) for j in sub])
         dbg = {"te": [], "z": [], "L": []} if debug else None
         n = na = 0
         self.lut.use(3)
         self.dlut.use(4)
-        for slot, j in enumerate(sub):
+        for slot_j, j in enumerate(sub):
             R, p = poses[j]
-            act = actor_frames[j] if actor_frames is not None else None
-            n, na = self._geometry(tg, cm, R, p, env, act, actor_th)
+            n, na = self._geometry(tg, cm, R, p, env, asets[slot_j])
             tg.mrt.col.use(5)
             tg.mrt.z.use(6)
-            tg.L[slot][1].use()
+            tg.L[slot_j][1].use()
             self.ctx.viewport = (0, 0, W, H)
             for k, v in (("u_te", 5), ("u_z", 6), ("u_lut", 3), ("u_K", (cm.fx, cm.fy, cm.cx, cm.cy)), ("u_env", (b_air, b_sky, beta_m))):
                 self._put(self.radp, k, v)
             self._vaos["rad"].render(mgl.TRIANGLES, vertices=3)
-            self.gl.Flush()                                               # 提交本子帧命令，使 GPU 与下一子帧的 CPU 提交重叠
             if dbg is not None:
                 dbg["te"].append(np.frombuffer(tg.mrt.col.read(), np.float32).reshape(H, W, 4).copy())
                 dbg["z"].append(np.frombuffer(tg.mrt.z.read(), np.float32).reshape(H, W).copy())
-                dbg["L"].append(np.frombuffer(tg.L[slot][0].read(), np.float32).reshape(H, W).copy())
+                dbg["L"].append(np.frombuffer(tg.L[slot_j][0].read(), np.float32).reshape(H, W).copy())
         for k in range(len(sub)):
             tg.L[k][0].use(7 + k)
         wv = np.zeros(4, np.float32)
@@ -1287,9 +1428,8 @@ class ThermalCamera:
         self._put(self.hblurp, "u_r", r)
         self._vaos["h"].render(mgl.TRIANGLES, vertices=3)
         last = sub[-1]
-        has_unocc = actor_frames is not None
         if has_unocc:
-            self._unocc(tg, cm, *poses[last], actor_frames[last], actor_th)
+            self._unocc(tg, cm, *poses[last], asets[-1])
         tg.hblur[0].use(12)
         tg.out.use()
 
@@ -1303,36 +1443,53 @@ class ThermalCamera:
             tn._check_ids(noise.uav_no, noise.sensor_no)
             kt = int(key(noise.seed, tn.STREAM_M25, noise.uav_no, noise.frame_index, tn.THERM_CHANNELS["therm_temporal"][0] + noise.sensor_no))
             kf = int(key(noise.seed, tn.STREAM_M25, noise.uav_no, 0, tn.THERM_CHANNELS["therm_fpn"][0] + noise.sensor_no))
-        netd_num = float(np.float32(prof.netd_mk_300k * 1e-3 * float(tbl.dbdt(tn.T_REF_NETD_K))))
+        nk = ("netd", prof.netd_mk_300k)
+        if self._netd_key != nk:
+            self._netd = float(np.float32(prof.netd_mk_300k * 1e-3 * float(tbl.dbdt(tn.T_REF_NETD_K))))
+            self._netd_key = nk
+        netd_num = self._netd
         self.detp["u_k"].write(kern.astype("<f4").tobytes())
         for k, v in (("u_src", 12), ("u_lut", 3), ("u_dlut", 4), ("u_r", r), ("u_noise", (netd_num, prof.fpn_offset_k, prof.fpn_gain_frac, tn.T_NUC_K)),
                      ("u_kt", key2(kt)), ("u_kf", key2(kf)), ("u_W", W)):
             self._put(self.detp, k, v)
         self._vaos["det"].render(mgl.TRIANGLES, vertices=3)
-        self.ctx.finish()
-        t1 = time.perf_counter()
-        items = [(tg.ck, "u2"), (tg.tc, "f4"), (tg.mrt.inst, "u2"), (tg.mrt.sem, "u1")]
+        if want_vis:                                                     # 末子帧实例、无遮挡实例与语义 → 逐实例统计（与光栅相机同一归约）
+            visp = self.raster.visp                                      # 与光栅相机共用归约程序（同一上下文），统计缓冲各自持有
+            self.vis_buf.orphan(len(self._vis0))
+            self.vis_buf.write(self._vis0)
+            self.vis_buf.bind_to_storage_buffer(7)
+            tg.mrt.inst.use(8)
+            tg.unocc.inst.use(9)
+            tg.mrt.sem.use(10)
+            visp["u_size"].value = (W, H)
+            visp["u_K"].value = self.vis_K
+            visp.run(-(-W // 16), -(-H // 16), 1)
+            self.ctx.memory_barrier()
+        if q is not None:
+            q.mglo.end()
+        tex = {"ck": tg.ck.glo, "tc": tg.tc.glo, "inst": tg.mrt.inst.glo, "sem": tg.mrt.sem.glo, "z": tg.mrt.z.glo}
         if has_unocc:
-            items.append((tg.unocc.inst, "u2"))
-        if depth:
-            items.append((tg.mrt.z, "f4"))
-        got = tg.read_many(items)
-        ck, tc, inst, sem = got[:4]
-        unocc = got[4] if has_unocc else None
-        z = got[-1] if depth else None
-        t2 = time.perf_counter()
+            tex["unocc"] = tg.unocc.inst.glo
+        self.ring.issue(slot, layout, {name: tex[name] for name, *_ in items if name != "vis"},
+                        {"vis": self.vis_buf.glo} if want_vis else None)
+        t1 = time.perf_counter()
         if dbg is not None:
             dbg = {k: np.stack(v) for k, v in dbg.items()}
-        return ThermalOut(ck, tc, z, inst, sem, unocc, weights, t_sub[sub], (t1 - t0) * 1e3, (t2 - t1) * 1e3, n, na, dbg)
+        meta = {"weights": weights, "t_sub": t_sub[sub], "draw_ms": (t1 - t0) * 1e3, "batches": n, "actors": na, "debug": dbg}
+        return ThermalJob(ReadJob(self.ring, slot, layout, tuple(name for name, *_ in items)), meta, q)
 
     def release(self) -> None:
         for t in self._targets.values():
             t.release(self.gl)
         self._targets.clear()
-        for vbo, vao in self.actor_vaos:
-            vao.release()
-            vbo.release()
-        self.actor_vaos = []
+        self.ring.close()
+        if self.actors is not None:
+            self.actors.release()
+            self.actors = None
+        self.th_buf.release()
+        if self.vis_buf is not None:
+            self.vis_buf.release()
+            self.vis_buf = None
         for _tile, _o, vao, _off, bufs in self.draws:
             vao.release()
             for b in bufs:

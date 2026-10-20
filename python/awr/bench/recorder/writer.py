@@ -10,6 +10,9 @@
   每次阻塞计入 `stats`（`blocked`、`block_s`、`block_max_s`，前 `BLOCK_LOG_MAX` 次阻塞的 `[t_ns, wait_ms]`）。在途包括正在写的那条，
   单条超过 `queue_bytes` 的消息在队列为空时放行。
 
+异步模式下 L2-depth 的存档打包（bshuf4-zstd，1080p 单帧约 15 ms）在 `pack_threads` 个打包线程中并行执行（D3-AC-11 吞吐），写线程
+按入队顺序等待对应结果后写入，消息顺序与字节不变。
+
 背压注入（测试与 dmax 复测用）：`inject_delay_s` 为写线程每条消息额外等待，`rate_Bps` 为写入速率上限（按消息字节累计限速，
 模拟磁盘 20 MB/s 等慢下游，M27-AC-006）。两者只延长墙钟，消息集合与字节不变。
 
@@ -23,6 +26,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -54,7 +58,8 @@ def _frozen(a: np.ndarray, dtype=None) -> np.ndarray:
 
 class RunWriter:
     def __init__(self, path: Path, *, profile: str = "drone4d-d3", depth_compression: str | None = DEPTH_COMPRESSION,
-                 queue_msgs: int = 0, queue_bytes: int = 256 << 20, inject_delay_s: float = 0.0, rate_Bps: float | None = None) -> None:
+                 queue_msgs: int = 0, queue_bytes: int = 256 << 20, inject_delay_s: float = 0.0, rate_Bps: float | None = None,
+                 pack_threads: int = 2) -> None:
         self.path = Path(path)
         self.depth_compression = depth_compression           # None 只用于兼容测试（D3 首版写出的未压缩深度）
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -80,6 +85,8 @@ class RunWriter:
         self._b_pending = 0
         self._cv = threading.Condition()
         self._thread: threading.Thread | None = None
+        self._pack = ThreadPoolExecutor(max_workers=int(pack_threads), thread_name_prefix=f"runwriter-pack:{self.path.name}") \
+            if self.queue_msgs > 0 and pack_threads > 0 else None
         if self.queue_msgs > 0:
             self._thread = threading.Thread(target=self._loop, name=f"runwriter:{self.path.name}", daemon=True)
             self._thread.start()
@@ -214,11 +221,14 @@ class RunWriter:
             depth = _frozen(depth_m, "<f4") if self._thread is not None else depth_m
             dm = {**meta, "codec": "32FC1"} | ({"compression": self.depth_compression} if self.depth_compression else {})
 
-            def job_depth() -> int:
-                from awr.bench.recorder.foxglove import raw_image_f32
+            from awr.bench.recorder.foxglove import raw_image_f32
 
+            packed = None if self._pack is None else self._pack.submit(raw_image_f32, t_ns, fid, depth, compression=self.depth_compression)
+
+            def job_depth() -> int:
                 cid = self._channel(dt, "foxglove.RawImage", dm)
-                return self._add(cid, dt, t_ns, seq, raw_image_f32(t_ns, fid, depth, compression=self.depth_compression))
+                data = packed.result() if packed is not None else raw_image_f32(t_ns, fid, depth, compression=self.depth_compression)
+                return self._add(cid, dt, t_ns, seq, data)
 
             self._submit(job_depth, int(np.asarray(depth).nbytes), t_ns)
 
@@ -341,6 +351,8 @@ class RunWriter:
                 self._raise()
             self._w.finish()
         finally:
+            if self._pack is not None:
+                self._pack.shutdown(wait=True)
             self._f.close()
 
     def __enter__(self) -> RunWriter:

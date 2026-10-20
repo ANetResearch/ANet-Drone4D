@@ -18,8 +18,9 @@ import math
 
 import numpy as np
 
-__all__ = ["ACTOR_DEPTH_BIAS_M", "K_AMB", "K_DIF", "SEM_CODE", "SUN_AZ_EL_DEG", "actor_to_world", "mask_iou", "proxy_centroid", "proxy_markers",
-           "proxy_mesh", "sun_dir", "two_pass_composite", "visibility_objects"]
+__all__ = ["ACTOR_DEPTH_BIAS_M", "GLSL_VIS_CS", "K_AMB", "K_DIF", "SEM_CODE", "SUN_AZ_EL_DEG", "VIS_EMPTY", "VIS_STRIDE", "actor_to_world",
+           "mask_iou", "objects_from_stats", "proxy_centroid", "proxy_markers", "proxy_mesh", "sun_dir", "two_pass_composite", "vis_init",
+           "visibility_objects", "visibility_stats"]
 
 SEM_CODE = {"person": 32, "vehicle": 33, "dog": 34, "uav": 35, "machine": 36, "object": 37}
 K_AMB, K_DIF = 0.55, 0.45
@@ -109,39 +110,116 @@ def proxy_mesh(actor: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return P, N, C
 
 
-def visibility_objects(inst: np.ndarray, inst_unocc: np.ndarray, sem: np.ndarray, invalid: np.ndarray | None,
-                       actors: list[dict]) -> list[dict]:
-    """M25 §6.6.1 可见度归约：返回 px_unoccluded > 0 的演员（按 inst 升序）。只遍历任一实例通道非 0 的像素（演员通常只占画面一小部分）。"""
+VIS_STRIDE = 266               # 可见度统计每实例的 u32 个数：nU、nV、无遮挡外接框 (x0, y0, x1, y1)、可见外接框、遮挡物语义直方图 256
+VIS_EMPTY = 0xFFFFFFFF         # 外接框最小值的初值（该实例无像素）
+
+GLSL_VIS_CS = """
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(std430, binding = 7) buffer Vis { uint vis[]; };
+uniform usampler2D u_inst;
+uniform usampler2D u_unocc;
+uniform usampler2D u_sem;
+uniform ivec2 u_size;
+uniform uint u_K;
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x >= u_size.x || p.y >= u_size.y) return;
+    uint iu = texelFetch(u_unocc, p, 0).r;
+    uint iv = texelFetch(u_inst, p, 0).r;
+    uint x = uint(p.x), y = uint(p.y);
+    if (iu > 0u && iu < u_K) {
+        uint b = iu * 266u;
+        atomicAdd(vis[b], 1u);
+        atomicMin(vis[b + 2u], x); atomicMin(vis[b + 3u], y); atomicMax(vis[b + 4u], x); atomicMax(vis[b + 5u], y);
+        if (iv != iu) atomicAdd(vis[b + 10u + texelFetch(u_sem, p, 0).r], 1u);
+    }
+    if (iv > 0u && iv < u_K) {
+        uint b = iv * 266u;
+        atomicAdd(vis[b + 1u], 1u);
+        atomicMin(vis[b + 6u], x); atomicMin(vis[b + 7u], y); atomicMax(vis[b + 8u], x); atomicMax(vis[b + 9u], y);
+    }
+}
+"""
+
+
+def vis_init(K: int) -> np.ndarray:
+    """可见度统计缓冲的初值 (K, VIS_STRIDE) uint32：计数与直方图 0，外接框最小值 VIS_EMPTY、最大值 0。"""
+    a = np.zeros((K, VIS_STRIDE), np.uint32)
+    a[:, [2, 3, 6, 7]] = VIS_EMPTY
+    return a
+
+
+def visibility_stats(inst: np.ndarray, inst_unocc: np.ndarray, sem: np.ndarray, invalid: np.ndarray | None, K: int | None = None) -> np.ndarray:
+    """逐实例可见度统计 (K, VIS_STRIDE) uint32（与 GPU 归约 `GLSL_VIS_CS` 同一布局与语义）：只计任一实例通道非 0 且未标记无效的像素；
+    nU、nV 为无遮挡、可见像素数，外接框为像素列、行的最小与最大值，直方图为无遮挡像素中可见实例不是本实例者的语义码计数。"""
     H, W = inst.shape
-    fg = (inst_unocc > 0) | (inst > 0)
-    if invalid is not None:
-        fg &= invalid == 0
-    pix = np.flatnonzero(fg)
+    pix = np.flatnonzero(np.bitwise_or(inst_unocc, inst) != 0)            # 任一实例通道非 0（整幅两遍；布尔数组的 nonzero 最快）
+    if invalid is not None and len(pix):
+        pix = pix[invalid.ravel()[pix] == 0]
     iu = inst_unocc.ravel()[pix].astype(np.int64)
     iv = inst.ravel()[pix].astype(np.int64)
+    if K is None:
+        K = int(max(iu.max(initial=0), iv.max(initial=0))) + 1
+    st = vis_init(K)
+    if not len(pix):
+        return st
     sm = sem.ravel()[pix].astype(np.int64)
     yy, xx = np.divmod(pix, W)
+    st[:, 0] = np.bincount(iu, minlength=K)[:K]
+    st[:, 1] = np.bincount(iv, minlength=K)[:K]
+
+    def spans(ids: np.ndarray, pos: np.ndarray, n: int, col: int) -> None:
+        occ = np.bincount(ids * n + pos, minlength=K * n)[:K * n].reshape(K, n) > 0
+        any_ = occ.any(1)
+        st[any_, col] = occ[any_].argmax(1)
+        st[any_, col + 2] = n - 1 - occ[any_][:, ::-1].argmax(1)
+
+    spans(iu, xx, W, 2)
+    spans(iu, yy, H, 3)
+    spans(iv, xx, W, 6)
+    spans(iv, yy, H, 7)
+    occm = (iu > 0) & (iv != iu)
+    st[:, 10:] = np.bincount(iu[occm] * 256 + sm[occm], minlength=K * 256)[:K * 256].reshape(K, 256)
+    st[0] = vis_init(1)[0]                                                  # 实例 0（背景）不统计，与 GPU 归约一致
+    return st
+
+
+def objects_from_stats(st: np.ndarray, actors: list[dict], width: int, height: int) -> list[dict]:
+    """可见度统计 → `objects[]`（px_unoccluded > 0 的演员，按 inst 升序；字段见 M25 §6.6.1）。"""
+    W, H = int(width), int(height)
+    st = np.asarray(st)
+    n_u = st[:, 0].astype(np.int64)
     out = []
-    for i in np.unique(iu[iu > 0]):
-        mu = iu == i
-        mv = iv == i
-        bu = (int(xx[mu].min()), int(yy[mu].min()), int(xx[mu].max()), int(yy[mu].max()))
-        if mv.any():
-            bv = (int(xx[mv].min()), int(yy[mv].min()), int(xx[mv].max()), int(yy[mv].max()))
+    for i in np.flatnonzero(n_u[1:]) + 1:
+        i = int(i)
+        r = st[i]
+        nu, nv = int(r[0]), int(r[1])
+        bu = (int(r[2]), int(r[3]), int(r[4]), int(r[5]))
+        if nv:
+            bv = (int(r[6]), int(r[7]), int(r[8]), int(r[9]))
             bbox_v = [bv[0], bv[1], bv[2] - bv[0] + 1, bv[3] - bv[1] + 1]
             hv = bv[3] - bv[1] + 1
         else:
             bbox_v, hv = [0, 0, 0, 0], 0
-        occ = mu & (iv != i)
-        hist = np.bincount(sm[occ], minlength=256)
-        a = actors[int(i) - 1]
-        o = {"inst": int(i), "actor": a["id"], "class": SEM_CODE.get(a["class"], 13), "px_visible": int(mv.sum()), "px_unoccluded": int(mu.sum()),
-             "h_px_unocc": bu[3] - bu[1] + 1, "h_px_visible": hv, "visible_ratio": round(float(mv.sum()) / float(mu.sum()), 6),
-             "bbox_xywh": bbox_v, "bbox_unocc_xywh": [bu[0], bu[1], bu[2] - bu[0] + 1, bu[3] - bu[1] + 1],
-             "occluder_sem_px": {str(k): int(v) for k, v in enumerate(hist) if v},
-             "flags": ["truncated"] if bu[0] == 0 or bu[1] == 0 or bu[2] == W - 1 or bu[3] == H - 1 else []}
-        out.append(o)
+        a = actors[i - 1]
+        h = r[10:]
+        out.append({"inst": i, "actor": a["id"], "class": SEM_CODE.get(a["class"], 13), "px_visible": nv, "px_unoccluded": nu,
+                    "h_px_unocc": bu[3] - bu[1] + 1, "h_px_visible": hv, "visible_ratio": round(float(nv) / float(nu), 6),
+                    "bbox_xywh": bbox_v, "bbox_unocc_xywh": [bu[0], bu[1], bu[2] - bu[0] + 1, bu[3] - bu[1] + 1],
+                    "occluder_sem_px": {str(int(k)): int(h[k]) for k in np.flatnonzero(h)},
+                    "flags": ["truncated"] if bu[0] == 0 or bu[1] == 0 or bu[2] == W - 1 or bu[3] == H - 1 else []})
     return out
+
+
+def visibility_objects(inst: np.ndarray, inst_unocc: np.ndarray, sem: np.ndarray, invalid: np.ndarray | None,
+                       actors: list[dict], stats: np.ndarray | None = None) -> list[dict]:
+    """M25 §6.6.1 可见度归约：返回 px_unoccluded > 0 的演员（按 inst 升序）。逐实例的像素数、外接框与遮挡物语义直方图由
+    `visibility_stats` 以 `bincount` 一次求出（实例 × 行、实例 × 列的出现表取首末位置），不逐实例扫描像素。`stats` 给出时
+    （光栅相机的 GPU 归约，`RenderOut.vis`）直接使用，调用方须保证 `invalid` 不含任何实例像素（只有无几何下视位时成立）。"""
+    if stats is None:
+        stats = visibility_stats(inst, inst_unocc, sem, invalid)
+    return objects_from_stats(stats, actors, inst.shape[1], inst.shape[0])
 
 
 def proxy_centroid(actor: dict) -> np.ndarray:

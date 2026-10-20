@@ -1,21 +1,32 @@
-"""EGL 网格光栅化（M25 §6.4.2、§6.4.3 通道 A 的静态部分；M25-FR-030 至 033、039）。
+"""EGL 网格光栅化（M25 §6.4.2、§6.4.3 通道 A 的静态部分；M25-FR-030 至 033、039；docs/05 §5.4.3 效果链；D3-AC-11）。
 
 一遍 MRT：`RGBA16F` 线性颜色、`R32F` 平面深度（片元光学帧 z，米）、`R16UI` 实例（静态场景 0）、`R8UI` 语义（几何外 255）、
-`DEPTH32F` reversed-Z（`glClipControl(LOWER_LEFT, ZERO_TO_ONE)`，清除 0，比较 GREATER）。材质 unlit，纹理以 `SRGB8` 上传由硬件
-解码到线性，三线性 mip 与 16× 各向异性。读回第 0 行即图像顶部。
+`R8UI` 天空分类（`qual`：0 有几何或仰角 ≥ 0 的天空，1 无几何下视，2 仰角接近 0 由 CPU 以 float64 复核）、`DEPTH32F` reversed-Z
+（`glClipControl(LOWER_LEFT, ZERO_TO_ONE)`，清除 0，比较 GREATER）。材质 unlit，纹理以 `SRGB8` 上传由硬件解码到线性，三线性 mip
+与 16× 各向异性。读回第 0 行即图像顶部。
 
-几何之后两遍全屏三角形：天空遍以 `GEQUAL` 只覆盖深度仍为清除值 0 的像素（仰角 ≥ 0 为天空渐变，否则为远景雾色，语义 255；§6.4.3
-天空）；编码遍把线性颜色按 sRGB 量化为 8 位。读回 8 位 RGB、R32F 深度、实例与语义。
+几何之后：天空遍以 `GEQUAL` 只覆盖深度仍为清除值 0 的像素（仰角 ≥ 0 为天空渐变，否则为远景雾色，语义 255；§6.4.3 天空），
+同时写天空分类（`invalid_mask` 第 0 位"无几何下视"由此得到，帧组装不再逐像素求视线仰角）。
 
-卷帘（M25 §15.4，`rs_method = vertex`）：`render(..., rs_nodes=[(R, p)] × 9)` 时几何遍换用逐顶点行时刻投影的顶点着色器：
-读出窗口 [t_mid − T_ro/2, t_mid + T_ro/2] 内 9 个等间隔相机位姿节点以瓦片相对的模型视图矩阵传入，顶点按 2 次不动点迭代求自身
-所在行的时刻，节点间对矩阵线性插值（节点间隔 T_ro/8，旋转量很小，插值误差远小于 0.01 px）；深度、实例、语义与颜色同一遍
-写出。天空遍取 t_mid 位姿。9 个节点相同（静止机体，`rs_static`）时改走全局快门程序，与全局快门输出逐字节一致。验收参照
-（Warp 逐行射线求交与行带方法）见 `camera.rowref`。
+演员（M25 §6.4.4）：全部代理网格合并为一个顶点缓冲，逐帧以 SSBO 给出每名演员的模型视图矩阵、实例号与语义（`actorbuf`），
+一次绘制调用画出全部演员；只渲染演员的无遮挡通道同样一次绘制。
 
-`render(..., fx=FxParams)` 时编码遍换成效果链遍（M25 §6.5：增益、渐晕、Poisson–Gaussian 噪声、sRGB 与量化；逐像素正态以
-`GL_ARB_gpu_shader_int64` 的 SplitMix64 与 `camera.effects` 参考实现同式），另加 L2-depth 遍（观测深度写入单独的 R32F）与
-自动曝光测光用的 1/8 降采样遍（读回小图，直方图在 CPU 上按参考实现计算）。
+卷帘（M25 §15.4，`rs_method = vertex`）：`rs_nodes=[(R, p)] × 9` 时几何遍换用逐顶点行时刻投影的顶点着色器：读出窗口内 9 个
+等间隔相机位姿节点以瓦片相对的模型视图矩阵传入，顶点按 2 次不动点迭代求自身所在交付行的时刻（有畸变时先对归一化坐标施加
+交付相机的畸变模型，行时刻按交付图像的行计），节点间对矩阵线性插值；深度、实例、语义与颜色同一遍写出。天空遍取 t_mid 位姿。
+9 个节点相同（静止机体，`rs_static`）时改走全局快门程序，与全局快门输出逐字节一致。验收参照见 `camera.rowref`。
+
+效果链（`fx=FxParams`；docs/05 §5.4.3 顺序，参考实现见 `camera.effects`）：
+1. 渲染域（无畸变；交付相机有畸变时按 `proj.build_remap` 取含裕量的渲染相机）着色遍：接触阴影贴花（静态像素，逐演员椭圆衰减）、
+   2048² 投影阴影图（从太阳方向正交投影绘制本帧演员，16 采样 PCF）、雨天湿润、雾与雨的消光（沿视线斜距）与雨线（16 采样，
+   雨滴网格按帧键哈希）；
+2. 畸变重映射遍（只在 `dist` 非零时）：RGB 线性域双线性，深度、实例、语义、天空分类与无遮挡实例最近邻，输出交付尺寸；
+3. 交付域：增益、渐晕、Poisson–Gaussian 噪声、sRGB 与量化（逐像素正态以 `GL_ARB_gpu_shader_int64` 的 SplitMix64 与参考实现同式），
+   另加 L2-depth 遍（观测深度写入单独的 R32F）与自动曝光测光用的 1/8 降采样遍。
+
+读回（M25 §6.7）：`submit` 绘制并把所需平面以 `glGetTextureImage` 写入持久映射的读回槽位（`camera.readback`）后立即返回
+`RenderJob`；`RenderJob.result()` 只等栅栏，数组是槽位内存上的只读视图，`release()` 归还槽位。调用方因此可以在 GPU 执行与 DMA
+期间提交下一帧，帧组装线程直接读视图。`render` 为同步包装（提交、等待、复制、归还），返回可写数组，与此前接口一致。
 
 moderngl 负责程序、顶点数组与纹理；它不提供的 clip control、深度浮点附件与整型附件清除经 EGL 取函数地址以 ctypes 调用。
 """
@@ -25,21 +36,38 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import ctypes.util
-import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
+from awr.sensorsvc.camera import effects as _fx
+from awr.sensorsvc.camera.actorbuf import GLSL_ACTOR_SSBO, ActorBuffers
+from awr.sensorsvc.camera.actors import GLSL_VIS_CS, VIS_STRIDE, vis_init
 from awr.sensorsvc.camera.effects import FxParams
 from awr.sensorsvc.camera.model import CameraModel
-from awr.sensorsvc.camera.proj import mv_tile, proj_reversed_z, world_to_opt
+from awr.sensorsvc.camera.proj import (
+    RemapTable,
+    build_remap,
+    gl_mat4,
+    look_at_R,
+    mv_tiles,
+    proj_reversed_z,
+    world_to_opt,
+)
+from awr.sensorsvc.camera.readback import ReadbackRing, ReadJob, plane_layout
 from awr.sensorsvc.camera.scene import AppearanceScene
 
-__all__ = ["RENDERER_VERSION", "RS_NODES", "RasterCamera", "RenderOut", "linear_to_srgb8", "srgb8_to_linear"]
+__all__ = ["RENDERER_VERSION", "RS_NODES", "SHADOW_MAP_SIZE", "ActorFrame", "RasterCamera", "RenderJob", "RenderOut", "linear_to_srgb8",
+           "ortho_reversed_z", "srgb8_to_linear"]
 
-RENDERER_VERSION = "raster-gl@0.4.1"
+RENDERER_VERSION = "raster-gl@0.5.0"
 SEM_NONE = 255
+QUAL_EPS = 1e-5                                # 天空分类：|仰角正弦| ≤ 1e-5 记为 2，由 CPU 以 float64 复核
+SHADOW_MAP_SIZE = 2048
+SHADOW_SPAN_MIN_M, SHADOW_SPAN_MAX_M = 8.0, 400.0
+SHADOW_NEAR_M, SHADOW_FAR_M, SHADOW_DIST_M = 1.0, 1000.0, 500.0
+SHADOW_BIAS = 2e-4                             # 光源深度（归一化）偏置，约 0.2 m
 _GL_TEXTURE_2D, _GL_DEPTH32F, _GL_FRAMEBUFFER = 0x0DE1, 0x8CAC, 0x8D40
 _GL_COLOR_ATTACHMENT0, _GL_DEPTH_ATTACHMENT, _GL_FB_COMPLETE = 0x8CE0, 0x8D00, 0x8CD5
 _GL_COLOR, _GL_DEPTH = 0x1800, 0x1801
@@ -62,13 +90,34 @@ void main() {
 }
 """
 RS_NODES = 9
-VS_RS = """
-#version 450
+# 卷帘行时刻（交付行）：u_fycy、u_H 为交付相机；有畸变时对归一化坐标先施加交付相机的畸变模型（OpenCV k1、k2、p1、p2、k3）
+_GLSL_RS = """
 const int NC = 9;
-uniform mat4 u_P;
-uniform mat4 u_mvn[NC];
 uniform vec2 u_fycy;
 uniform float u_H;
+uniform int u_hasdist;
+uniform vec4 u_dist0;
+uniform float u_k3;
+float row_of(vec4 q) {
+    if (!(q.z > 1e-3)) return 0.5 * u_H;
+    if (u_hasdist == 0) return u_fycy.x * q.y / q.z + u_fycy.y;
+    float xn = q.x / q.z;
+    float yn = q.y / q.z;
+    float r2 = xn * xn + yn * yn;
+    float rad = 1.0 + r2 * (u_dist0.x + r2 * (u_dist0.y + r2 * u_k3));
+    float yd = yn * rad + u_dist0.z * (r2 + 2.0 * yn * yn) + 2.0 * u_dist0.w * xn * yn;
+    return u_fycy.x * yd + u_fycy.y;
+}
+float s_of(mat4 mv, vec4 p) {
+    float i = clamp(row_of(mv * p) - 0.5, 0.0, u_H - 1.0);
+    return ((i - 0.5 * (u_H - 1.0)) / u_H + 0.5) * float(NC - 1);
+}
+"""
+VS_RS = """
+#version 450
+""" + _GLSL_RS + """
+uniform mat4 u_P;
+uniform mat4 u_mvn[NC];
 in vec3 in_pos;
 in vec2 in_uv;
 out vec2 v_uv;
@@ -78,12 +127,6 @@ mat4 mv_at(float s) {
     int k = min(int(floor(c)), NC - 2);
     float f = c - float(k);
     return u_mvn[k] * (1.0 - f) + u_mvn[k + 1] * f;
-}
-float s_of(mat4 mv, vec4 p) {
-    vec4 q = mv * p;
-    float y = q.z > 1e-3 ? u_fycy.x * q.y / q.z + u_fycy.y : 0.5 * u_H;
-    float i = clamp(y - 0.5, 0.0, u_H - 1.0);
-    return ((i - 0.5 * (u_H - 1.0)) / u_H + 0.5) * float(NC - 1);
 }
 void main() {
     vec4 p = vec4(in_pos, 1.0);
@@ -107,87 +150,98 @@ layout(location = 0) out vec4 o_col;
 layout(location = 1) out float o_z;
 layout(location = 2) out uint o_inst;
 layout(location = 3) out uint o_sem;
+layout(location = 4) out uint o_qual;
 void main() {
     vec3 c = u_has_tex ? texture(u_tex, v_uv).rgb : vec3(0.2158);
     o_col = vec4(c, 1.0);
     o_z = v_z;
     o_inst = u_inst;
     o_sem = u_sem;
+    o_qual = 0u;
 }
 """
 
-# 演员（M25 §6.4.4）：模型视图逐演员给出；深度测试值朝相机偏置 1 cm，平面深度附件写无偏置值
+# 演员（M25 §6.4.4）：合批绘制，逐演员数据取自 SSBO（actorbuf）；深度测试值朝相机偏置 1 cm，平面深度附件写无偏置值
 ACTOR_VS = """
 #version 450
+""" + GLSL_ACTOR_SSBO + """
 uniform mat4 u_P;
-uniform mat4 u_mv;
-uniform mat3 u_Rw;
 uniform vec3 u_sun;
 in vec3 in_pos;
 in vec3 in_nrm;
 in vec3 in_col;
+in float in_aid;
 out vec3 v_col;
 out float v_z;
+flat out uint v_inst;
+flat out uint v_sem;
 void main() {
-    vec3 n = normalize(u_Rw * in_nrm);
+    int a = int(in_aid + 0.5);
+    uvec4 inf = act_info[u_base + a];
+    v_inst = inf.x;
+    v_sem = inf.y;
+    vec3 n = normalize(mat3(act_rw[u_base + a]) * in_nrm);
     v_col = in_col * (0.55 + 0.45 * max(0.0, dot(n, u_sun)));
-    vec4 q = u_mv * vec4(in_pos, 1.0);
+    vec4 q = act_mv[u_mvbase + a] * vec4(in_pos, 1.0);
     v_z = q.z;
-    gl_Position = u_P * vec4(q.z > 0.02 ? q.xyz * ((q.z - 0.01) / q.z) : q.xyz, 1.0);   // 相机后方的顶点不缩放（交给裁剪）
+    gl_Position = inf.z == 0u ? vec4(2.0, 2.0, 2.0, 1.0)                 // 本帧未出现：退化到裁剪体外
+                              : u_P * vec4(q.z > 0.02 ? q.xyz * ((q.z - 0.01) / q.z) : q.xyz, 1.0);   // 相机后方的顶点不缩放
 }
 """
 ACTOR_VS_RS = """
 #version 450
-const int NC = 9;
+""" + GLSL_ACTOR_SSBO + _GLSL_RS + """
 uniform mat4 u_P;
-uniform mat4 u_mvn[NC];
-uniform vec2 u_fycy;
-uniform float u_H;
-uniform mat3 u_Rw;
 uniform vec3 u_sun;
 in vec3 in_pos;
 in vec3 in_nrm;
 in vec3 in_col;
+in float in_aid;
 out vec3 v_col;
 out float v_z;
+flat out uint v_inst;
+flat out uint v_sem;
+int g_m0;
 mat4 mv_at(float s) {
     float c = clamp(s, 0.0, float(NC - 1));
     int k = min(int(floor(c)), NC - 2);
     float f = c - float(k);
-    return u_mvn[k] * (1.0 - f) + u_mvn[k + 1] * f;
-}
-float s_of(mat4 mv, vec4 p) {
-    vec4 q = mv * p;
-    float y = q.z > 1e-3 ? u_fycy.x * q.y / q.z + u_fycy.y : 0.5 * u_H;
-    float i = clamp(y - 0.5, 0.0, u_H - 1.0);
-    return ((i - 0.5 * (u_H - 1.0)) / u_H + 0.5) * float(NC - 1);
+    return act_mv[g_m0 + k] * (1.0 - f) + act_mv[g_m0 + k + 1] * f;
 }
 void main() {
-    vec3 n = normalize(u_Rw * in_nrm);
+    int a = int(in_aid + 0.5);
+    uvec4 inf = act_info[u_base + a];
+    v_inst = inf.x;
+    v_sem = inf.y;
+    g_m0 = u_mvbase + a * NC;
+    vec3 n = normalize(mat3(act_rw[u_base + a]) * in_nrm);
     v_col = in_col * (0.55 + 0.45 * max(0.0, dot(n, u_sun)));
     vec4 p = vec4(in_pos, 1.0);
     float s = 0.5 * float(NC - 1);
     for (int it = 0; it < 2; ++it) s = s_of(mv_at(s), p);
     vec4 q = mv_at(s) * p;
     v_z = q.z;
-    gl_Position = u_P * vec4(q.z > 0.02 ? q.xyz * ((q.z - 0.01) / q.z) : q.xyz, 1.0);   // 相机后方的顶点不缩放（交给裁剪）
+    gl_Position = inf.z == 0u ? vec4(2.0, 2.0, 2.0, 1.0)
+                              : u_P * vec4(q.z > 0.02 ? q.xyz * ((q.z - 0.01) / q.z) : q.xyz, 1.0);
 }
 """
 ACTOR_FS = """
 #version 450
-uniform uint u_inst;
-uniform uint u_sem;
 in vec3 v_col;
 in float v_z;
+flat in uint v_inst;
+flat in uint v_sem;
 layout(location = 0) out vec4 o_col;
 layout(location = 1) out float o_z;
 layout(location = 2) out uint o_inst;
 layout(location = 3) out uint o_sem;
+layout(location = 4) out uint o_qual;
 void main() {
     o_col = vec4(v_col, 1.0);
     o_z = v_z;
-    o_inst = u_inst;
-    o_sem = u_sem;
+    o_inst = v_inst;
+    o_sem = v_sem;
+    o_qual = 0u;
 }
 """
 
@@ -206,10 +260,12 @@ uniform vec4 u_K;
 uniform vec3 u_horizon;
 uniform vec3 u_zenith;
 uniform vec3 u_fog;
+uniform float u_eps;
 layout(location = 0) out vec4 o_col;
 layout(location = 1) out float o_z;
 layout(location = 2) out uint o_inst;
 layout(location = 3) out uint o_sem;
+layout(location = 4) out uint o_qual;
 void main() {
     vec3 r = vec3((gl_FragCoord.x - u_K.z) / u_K.x, (gl_FragCoord.y - u_K.w) / u_K.y, 1.0);
     float el = (u_Rwo * r).z / length(r);
@@ -218,6 +274,7 @@ void main() {
     o_z = 0.0;
     o_inst = 0u;
     o_sem = 255u;
+    o_qual = el < -u_eps ? 1u : (el > u_eps ? 0u : 2u);
 }
 """
 ENCODE_FS = """
@@ -310,6 +367,138 @@ void main() {
 """
 
 
+
+# 渲染域着色遍（docs/05 §5.4.3；参考实现 `effects.shade_reference`，投影阴影图除外）
+SHADE_FS = """
+#version 450
+layout(std430, binding = 6) readonly buffer Cast { vec4 casters[]; };   // 每演员 2 项：(cx, cy, z0, 0)、(ux, uy, 1/a, 1/b)
+uniform sampler2D u_col;
+uniform sampler2D u_z;
+uniform usampler2D u_inst;
+uniform sampler2D u_sm;
+uniform vec4 u_K;
+uniform mat3 u_Rwo;
+uniform vec3 u_p;
+uniform int u_flags;                                     // 1 接触阴影、2 投影阴影图、4 消光、8 雨（湿润与雨线）
+uniform int u_ncast;
+uniform mat4 u_L;
+uniform float u_sigma;
+uniform vec3 u_fogc;
+uniform vec2 u_rdir;
+uniform float u_rdens;
+uniform uvec2 u_rkey;
+layout(location = 0) out vec4 o_col;
+const vec2 PD[16] = vec2[](vec2(-0.94, -0.40), vec2(0.95, -0.77), vec2(-0.09, -0.93), vec2(0.34, 0.29), vec2(-0.92, 0.46),
+    vec2(-0.82, -0.15), vec2(-0.38, 0.28), vec2(-0.19, 0.84), vec2(0.82, 0.31), vec2(0.37, -0.74), vec2(0.18, -0.14),
+    vec2(0.62, 0.71), vec2(-0.59, -0.80), vec2(0.06, 0.40), vec2(-0.45, -0.32), vec2(0.89, -0.09));
+uint pcg(uint v) {
+    uint s = v * 747796405u + 2891336453u;
+    uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    return (w >> 22u) ^ w;
+}
+float h01(uvec2 c, uint k) { return float(pcg(c.x ^ pcg(c.y ^ pcg(k)))) * (1.0 / 4294967296.0); }
+void main() {
+    ivec2 q = ivec2(gl_FragCoord.xy);
+    vec3 c = texelFetch(u_col, q, 0).rgb;
+    float z = texelFetch(u_z, q, 0).r;
+    vec3 r = vec3((float(q.x) + 0.5 - u_K.z) / u_K.x, (float(q.y) + 0.5 - u_K.w) / u_K.y, 1.0);
+    float rng = z * length(r);
+    if (z > 0.0) {
+        vec3 X = u_Rwo * (r * z) + u_p;
+        float sh = 1.0;
+        if ((u_flags & 1) != 0 && texelFetch(u_inst, q, 0).r == 0u) {
+            float a = 0.0;
+            for (int i = 0; i < u_ncast; ++i) {
+                vec4 c0 = casters[2 * i];
+                vec4 c1 = casters[2 * i + 1];
+                vec2 d = X.xy - c0.xy;
+                float al = (d.x * c1.x + d.y * c1.y) * c1.z;
+                float ac = (-d.x * c1.y + d.y * c1.x) * c1.w;
+                float e = al * al + ac * ac;
+                if (e < 1.0) a = max(a, (1.0 - smoothstep(0.5, 1.0, e)) * (1.0 - smoothstep(0.0, @CDZ@, abs(X.z - c0.z))));
+            }
+            sh = 1.0 - @CK@ * a;
+        }
+        if ((u_flags & 2) != 0) {
+            vec4 L = u_L * vec4(X, 1.0);
+            vec2 uv = L.xy * 0.5 + 0.5;
+            if (all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0)))) {
+                float o = 0.0;
+                for (int i = 0; i < 16; ++i) {               // 16 采样 PCF；reversed-Z：深度值大者更靠近光源
+                    float d = texture(u_sm, uv + PD[i] * (1.5 / @SMS@.0)).r;
+                    o += d > L.z + @SMB@ ? 1.0 : 0.0;
+                }
+                sh = min(sh, 1.0 - @SMK@ * o / 16.0);
+            }
+        }
+        c *= sh;
+        if ((u_flags & 8) != 0) {
+            vec3 wet = c * @WK@;
+            float g = dot(wet, vec3(0.2126, 0.7152, 0.0722));
+            c = mix(wet, vec3(g), @WD@);
+        }
+        if ((u_flags & 4) != 0) c = mix(u_fogc, c, exp(-u_sigma * rng));
+    }
+    if ((u_flags & 8) != 0) {
+        float zz = z > 0.0 ? rng : 1e4;
+        float acc = 0.0;
+        for (int i = 0; i < @RS@; ++i) {                     // 雨线：沿屏幕位移方向逐点取雨滴网格，雨滴比场景近时可见
+            precise vec2 s = vec2(q) - u_rdir * (float(i) / @RS1@.0);
+            uvec2 cell = uvec2(max(s, vec2(0.0)) / @RC@);
+            float rr = h01(cell, u_rkey.x);
+            precise float d = 0.5 + 29.5 * h01(cell, u_rkey.y);
+            if (rr < u_rdens && d < zz) acc += 1.0 / (1.0 + 0.15 * d);
+        }
+        c = mix(c, vec3(@RL@), clamp(acc * @RA@, 0.0, @RM@));
+    }
+    o_col = vec4(c, 1.0);
+}
+"""
+for _k, _v in {"@CDZ@": repr(_fx.CONTACT_DZ_M), "@CK@": repr(_fx.CONTACT_K), "@SMS@": str(SHADOW_MAP_SIZE), "@SMB@": repr(SHADOW_BIAS),
+               "@SMK@": repr(_fx.SHADOW_MAP_K), "@WK@": repr(_fx.WET_K), "@WD@": repr(_fx.WET_DESAT), "@RS@": str(_fx.RAIN_SAMPLES),
+               "@RS1@": str(_fx.RAIN_SAMPLES - 1), "@RC@": repr(_fx.RAIN_CELL_PX), "@RL@": repr(_fx.RAIN_STREAK_LIN),
+               "@RA@": repr(_fx.RAIN_ALPHA_K), "@RM@": repr(_fx.RAIN_ALPHA_MAX)}.items():
+    SHADE_FS = SHADE_FS.replace(_k, _v)
+
+# 畸变重映射遍（docs/05 §5.4.3；参考实现 `proj.remap_bilinear`、`proj.remap_nearest`）：交付像素 → 渲染域连续坐标（LUT，RG32F）
+RESOLVE_FS = """
+#version 450
+uniform sampler2D u_col;
+uniform sampler2D u_z;
+uniform usampler2D u_inst;
+uniform usampler2D u_sem;
+uniform usampler2D u_qual;
+uniform usampler2D u_unocc;
+uniform sampler2D u_map;
+uniform bool u_has_unocc;
+layout(location = 0) out vec4 o_col;
+layout(location = 1) out float o_z;
+layout(location = 2) out uint o_inst;
+layout(location = 3) out uint o_sem;
+layout(location = 4) out uint o_qual;
+layout(location = 5) out uint o_unocc;
+vec3 C(ivec2 p) { return texelFetch(u_col, p, 0).rgb; }
+void main() {
+    ivec2 q = ivec2(gl_FragCoord.xy);
+    ivec2 sz = textureSize(u_z, 0);
+    vec2 m = texelFetch(u_map, q, 0).rg;
+    ivec2 n = clamp(ivec2(floor(m)), ivec2(0), sz - 1);
+    vec2 uv = m - 0.5;
+    ivec2 i0 = ivec2(floor(uv));
+    vec2 f = uv - vec2(i0);
+    ivec2 i1 = clamp(i0 + 1, ivec2(0), sz - 1);
+    i0 = clamp(i0, ivec2(0), sz - 1);
+    vec3 c = (1.0 - f.y) * ((1.0 - f.x) * C(i0) + f.x * C(ivec2(i1.x, i0.y))) + f.y * ((1.0 - f.x) * C(ivec2(i0.x, i1.y)) + f.x * C(i1));
+    o_col = vec4(c, 1.0);
+    o_z = texelFetch(u_z, n, 0).r;
+    o_inst = texelFetch(u_inst, n, 0).r;
+    o_sem = texelFetch(u_sem, n, 0).r;
+    o_qual = texelFetch(u_qual, n, 0).r;
+    o_unocc = u_has_unocc ? texelFetch(u_unocc, n, 0).r : 0u;
+}
+"""
+
+
 RS_STATIC_ROT, RS_STATIC_POS_M = 1e-9, 1e-6
 
 
@@ -349,20 +538,36 @@ SKY_ZENITH = srgb8_to_linear((110, 150, 200))
 FOG = srgb8_to_linear((190, 196, 202))
 
 
+
+def ortho_reversed_z(span_m: float, near_m: float, far_m: float) -> np.ndarray:
+    """光源正交投影（光学帧 → 裁剪空间，ZERO_TO_ONE 深度：z = near 时 1，z = far 时 0）。"""
+    P = np.zeros((4, 4))
+    P[0, 0] = P[1, 1] = 2.0 / span_m
+    P[2, 2] = -1.0 / (far_m - near_m)
+    P[2, 3] = far_m / (far_m - near_m)
+    P[3, 3] = 1.0
+    return P
+
+
 @dataclass
 class RenderOut:
     rgb8: np.ndarray          # (H, W, 3) uint8 sRGB
-    depth_m: np.ndarray       # (H, W) float32 平面深度，几何外 0
+    depth_m: np.ndarray | None   # (H, W) float32 平面深度，几何外 0（异步读回未请求 `z` 时为 None）
     instance: np.ndarray      # (H, W) uint16
     semantic: np.ndarray      # (H, W) uint8，几何外 255
     draw_ms: float
     readback_ms: float
     batches_drawn: int
-    rgb_lin: np.ndarray | None = None     # (H, W, 3) float32 线性，`render(..., linear=True)` 时读回
+    rgb_lin: np.ndarray | None = None     # (H, W, 3) float32 线性，效果链增益之前的交付域图像（`linear=True`）
     depth_obs: np.ndarray | None = None   # (H, W) float32 L2-depth 观测深度，`fx.depth` 给出时
     meter_sub: np.ndarray | None = None   # (⌈H/8⌉, ⌈W/8⌉, 3) float32 线性 1/8 降采样，`fx.meter` 时
     instance_unocc: np.ndarray | None = None   # (H, W) uint16 只渲染演员的实例（`actors` 给出时）
     actors_drawn: int = 0
+    qual: np.ndarray | None = None        # (H, W) uint8 天空分类：0 有几何或天空、1 无几何下视、2 接近地平线（CPU 复核）
+    remap: RemapTable | None = None       # 有畸变时的渲染相机与映射表（天空分类复核用）
+    gpu_ms: float | None = None           # GL 计时查询：本帧绘制与效果遍的 GPU 时间（`timer=True`）
+    debug: dict | None = None             # `debug=True`：渲染域的着色前线性图像、着色后图像、平面深度、实例与天空分类
+    vis: np.ndarray | None = None         # (K, VIS_STRIDE) uint32 GPU 可见度统计（`actors.visibility_stats` 同一布局；读回 `vis` 且有演员时）
 
 
 @dataclass(frozen=True)
@@ -387,7 +592,9 @@ class _GL:
             addr = gpa(name.encode())
             if not addr:
                 raise RuntimeError(f"GL entry point {name} not available")
-            return ctypes.CFUNCTYPE(u if name == "glCheckFramebufferStatus" else None, *args)(addr)
+            # PYFUNCTYPE：调用期间不释放 GIL（这些调用只是把命令放进驱动队列，微秒级；CFUNCTYPE 每次释放后重新竞争 GIL，帧组装
+            # 线程繁忙时渲染线程每次调用都可能等到切换间隔）
+            return ctypes.PYFUNCTYPE(u if name == "glCheckFramebufferStatus" else None, *args)(addr)
 
         self.ClipControl = fn("glClipControl", u, u)
         self.GenTextures = fn("glGenTextures", i, p)
@@ -407,14 +614,16 @@ class _GL:
 
 class _Mrt:
     """MRT 帧缓冲：颜色 f16×4（`col_dtype = "f4"` 时 f32×4，热成像的表面温度与发射率）、平面深度 f32、实例 u16、语义 u8，
-    加 DEPTH32F 深度附件（reversed-Z）。"""
+    `qual = True` 时另加天空分类 u8；加 DEPTH32F 深度附件（reversed-Z）。"""
 
-    def __init__(self, ctx, gl: _GL, w: int, h: int, *, col_dtype: str = "f2") -> None:
+    def __init__(self, ctx, gl: _GL, w: int, h: int, *, col_dtype: str = "f2", qual: bool = False) -> None:
         self.col = ctx.texture((w, h), 4, dtype=col_dtype)
         self.z = ctx.texture((w, h), 1, dtype="f4")
         self.inst = ctx.texture((w, h), 1, dtype="u2")
         self.sem = ctx.texture((w, h), 1, dtype="u1")
-        for t in (self.col, self.z, self.inst, self.sem):
+        self.qual = ctx.texture((w, h), 1, dtype="u1") if qual else None
+        atts = [t for t in (self.col, self.z, self.inst, self.sem, self.qual) if t is not None]
+        for t in atts:
             t.filter = (0x2600, 0x2600)                                     # NEAREST
         d = ctypes.c_uint(0)
         gl.GenTextures(1, ctypes.byref(d))
@@ -424,54 +633,147 @@ class _Mrt:
         f = ctypes.c_uint(0)
         gl.GenFramebuffers(1, ctypes.byref(f))
         gl.BindFramebuffer(_GL_FRAMEBUFFER, f.value)
-        for k, t in enumerate((self.col, self.z, self.inst, self.sem)):
+        for k, t in enumerate(atts):
             gl.FramebufferTexture2D(_GL_FRAMEBUFFER, _GL_COLOR_ATTACHMENT0 + k, _GL_TEXTURE_2D, t.glo, 0)
         gl.FramebufferTexture2D(_GL_FRAMEBUFFER, _GL_DEPTH_ATTACHMENT, _GL_TEXTURE_2D, self.depth_glo, 0)
-        bufs = (ctypes.c_uint * 4)(*[_GL_COLOR_ATTACHMENT0 + k for k in range(4)])
-        gl.DrawBuffers(4, bufs)
+        self.n_att = len(atts)
+        bufs = (ctypes.c_uint * self.n_att)(*[_GL_COLOR_ATTACHMENT0 + k for k in range(self.n_att)])
+        gl.DrawBuffers(self.n_att, bufs)
         st = gl.CheckFramebufferStatus(_GL_FRAMEBUFFER)
         if st != _GL_FB_COMPLETE:
             raise RuntimeError(f"framebuffer incomplete: 0x{st:04X}")
         self.fbo_glo = f.value
         self.fbo = ctx.detect_framebuffer(f.value)
 
+    _ZERO_F = (ctypes.c_float * 4)(0.0, 0.0, 0.0, 0.0)
+    _ZERO_U = (ctypes.c_uint * 4)(0, 0, 0, 0)
+    _SEM_U = (ctypes.c_uint * 4)(SEM_NONE, 0, 0, 0)
+
     def clear(self, gl: _GL) -> None:
         gl.BindFramebuffer(_GL_FRAMEBUFFER, self.fbo_glo)
-        zero_f = (ctypes.c_float * 4)(0.0, 0.0, 0.0, 0.0)
-        gl.ClearBufferfv(_GL_COLOR, 0, zero_f)
-        gl.ClearBufferfv(_GL_COLOR, 1, zero_f)
-        gl.ClearBufferuiv(_GL_COLOR, 2, (ctypes.c_uint * 4)(0, 0, 0, 0))
-        gl.ClearBufferuiv(_GL_COLOR, 3, (ctypes.c_uint * 4)(SEM_NONE, 0, 0, 0))
-        gl.ClearBufferfv(_GL_DEPTH, 0, zero_f)
+        zf, zu = self._ZERO_F, self._ZERO_U
+        gl.ClearBufferfv(_GL_COLOR, 0, zf)
+        gl.ClearBufferfv(_GL_COLOR, 1, zf)
+        gl.ClearBufferuiv(_GL_COLOR, 2, zu)
+        gl.ClearBufferuiv(_GL_COLOR, 3, self._SEM_U)
+        if self.qual is not None:
+            gl.ClearBufferuiv(_GL_COLOR, 4, zu)
+        gl.ClearBufferfv(_GL_DEPTH, 0, zf)
 
     def release(self, gl: _GL) -> None:
         gl.DeleteFramebuffers(1, ctypes.byref(ctypes.c_uint(self.fbo_glo)))
         gl.DeleteTextures(1, ctypes.byref(ctypes.c_uint(self.depth_glo)))
+        for t in (self.col, self.z, self.inst, self.sem, self.qual):
+            if t is not None:
+                t.release()
 
 
 class _Target:
-    def __init__(self, ctx, gl: _GL, w: int, h: int) -> None:
-        self.w, self.h = w, h
-        m = self.mrt = _Mrt(ctx, gl, w, h)
-        self.col, self.z, self.inst, self.sem = m.col, m.z, m.inst, m.sem
-        self.depth_glo, self.fbo_glo, self.fbo = m.depth_glo, m.fbo_glo, m.fbo
+    """一个（交付尺寸，渲染尺寸）组合的全部渲染目标：渲染域 MRT（含天空分类）与只渲染演员的通道、着色遍输出（RGBA32F）、畸变重映射
+    输出（交付尺寸）、交付 RGB8、L2-depth 与测光小图。渲染域与交付域在无畸变时尺寸相同。"""
+
+    def __init__(self, ctx, gl: _GL, w: int, h: int, wr: int, hr: int) -> None:
+        self.ctx, self.gl = ctx, gl
+        self.w, self.h, self.wr, self.hr = w, h, wr, hr
+        self.mrt = _Mrt(ctx, gl, wr, hr, qual=True)
         self.unocc: _Mrt | None = None                                     # 只渲染演员的通道，首次使用时创建
+        self.col2 = self.col2_fb = None                                    # 着色遍输出
+        self.res: list | None = None                                       # 畸变重映射输出 [col, z, inst, sem, qual, unocc]
+        self.res_fb = None
         self.rgb = ctx.texture((w, h), 4, dtype="f1")
         self.enc = ctx.framebuffer(color_attachments=[self.rgb])
         self.zobs = ctx.texture((w, h), 1, dtype="f4")
         self.zfb = ctx.framebuffer(color_attachments=[self.zobs])
         self.sw, self.sh = -(-w // 8), -(-h // 8)
-        self.sub = ctx.texture((self.sw, self.sh), 4, dtype="f2")
+        self.sub = ctx.texture((self.sw, self.sh), 4, dtype="f4")              # f32：读回不经驱动的 f16 → f32 CPU 转换
         self.subfb = ctx.framebuffer(color_attachments=[self.sub])
+        self.maps: dict[int, tuple[RemapTable, object]] = {}
+
+    def shade_target(self):
+        if self.col2 is None:
+            self.col2 = self.ctx.texture((self.wr, self.hr), 4, dtype="f4")
+            self.col2.filter = (0x2600, 0x2600)
+            self.col2_fb = self.ctx.framebuffer(color_attachments=[self.col2])
+        return self.col2_fb
+
+    def resolve_target(self):
+        if self.res is None:
+            c = self.ctx
+            self.res = [c.texture((self.w, self.h), 4, dtype="f4"), c.texture((self.w, self.h), 1, dtype="f4"),
+                        c.texture((self.w, self.h), 1, dtype="u2"), c.texture((self.w, self.h), 1, dtype="u1"),
+                        c.texture((self.w, self.h), 1, dtype="u1"), c.texture((self.w, self.h), 1, dtype="u2")]
+            for t in self.res:
+                t.filter = (0x2600, 0x2600)
+            self.res_fb = c.framebuffer(color_attachments=self.res)
+        return self.res_fb
+
+    def remap_tex(self, rt: RemapTable):
+        got = self.maps.get(id(rt))
+        if got is None:
+            m = np.stack([rt.map_u, rt.map_v], -1).astype("<f4")
+            t = self.ctx.texture((self.w, self.h), 2, m.tobytes(), dtype="f4")
+            t.filter = (0x2600, 0x2600)
+            got = self.maps[id(rt)] = (rt, t)
+        return got[1]
+
+    def release(self) -> None:
+        self.mrt.release(self.gl)
+        if self.unocc is not None:
+            self.unocc.release(self.gl)
+        objs = [self.rgb, self.enc, self.zobs, self.zfb, self.sub, self.subfb, self.col2, self.col2_fb, self.res_fb, *(self.res or [])]
+        objs += [t for _rt, t in self.maps.values()]
+        for o in objs:
+            if o is not None:
+                with contextlib.suppress(Exception):
+                    o.release()
+
+
+@dataclass
+class RenderJob:
+    """已提交的一帧（`RasterCamera.submit`）：`result()` 在渲染线程等待读回并返回 `RenderOut`（数组为读回槽位上的只读视图），
+    `release()` 归还槽位（任一线程，幂等；归还后视图失效）。"""
+
+    read: ReadJob
+    meta: dict
+    query: object | None = None
+    _out: RenderOut | None = None
+    _t_submit: float = field(default_factory=time.perf_counter)
+
+    def result(self) -> RenderOut:
+        if self._out is None:
+            t0 = time.perf_counter()
+            v = self.read.wait()
+            m = self.meta
+            gpu = self.query.elapsed / 1e6 if self.query is not None else None
+            dbg = {k[4:]: v[k] for k in v if k.startswith("dbg_")} or None
+            vis = v.get("vis")
+            self._out = RenderOut(v["rgb"], v.get("z"), v["inst"], v["sem"], m["draw_ms"], (time.perf_counter() - t0) * 1e3, m["batches"],
+                                  v.get("lin"), v.get("zobs"), v.get("sub"), v.get("unocc"), m["actors"], v.get("qual"), m["remap"], gpu, dbg,
+                                  None if vis is None else vis.reshape(-1, VIS_STRIDE))
+        return self._out
+
+    def release(self) -> None:
+        self.read.release()
+        self._out = None
+
+
+def _copy_out(o: RenderOut) -> RenderOut:
+    """同步接口：把槽位视图复制为可写数组（槽位随后归还）。"""
+    def cp(a):
+        return None if a is None else np.array(a)
+
+    return RenderOut(cp(o.rgb8), cp(o.depth_m), cp(o.instance), cp(o.semantic), o.draw_ms, o.readback_ms, o.batches_drawn, cp(o.rgb_lin),
+                     cp(o.depth_obs), cp(o.meter_sub), cp(o.instance_unocc), o.actors_drawn, cp(o.qual), o.remap, o.gpu_ms,
+                     None if o.debug is None else {k: np.array(v) for k, v in o.debug.items()}, cp(o.vis))
 
 
 class RasterCamera:
-    """持有 EGL 上下文与常驻世界外观；`render` 线程不安全（每 GPU 一个 worker 进程，M25 §6.14.1）。
+    """持有 EGL 上下文与常驻世界外观；`render`、`submit` 线程不安全（每 GPU 一个 worker 进程，M25 §6.14.1）。
 
     `textures = False` 时不解码与上传纹理（热成像等只用几何的通道共用本对象的上下文时，省去纹理显存与加载时间；此时可见光绘制
-    按无纹理材质输出）。"""
+    按无纹理材质输出）。`readback_slots` 为异步读回槽位数（同时未归还的帧数上限）。"""
 
-    def __init__(self, scene: AppearanceScene, *, ctx=None, textures: bool = True) -> None:
+    def __init__(self, scene: AppearanceScene, *, ctx=None, textures: bool = True, readback_slots: int = 6) -> None:
         import moderngl
         from PIL import Image
 
@@ -486,21 +788,31 @@ class RasterCamera:
         self.fxp = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=FX_FS)
         self.dep = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=DEPTH_FS)
         self.subp = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=SUB_FS)
+        self.shadep = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=SHADE_FS)
+        self.resp = self.ctx.program(vertex_shader=FULLSCREEN_VS, fragment_shader=RESOLVE_FS)
         self.actp = self.ctx.program(vertex_shader=ACTOR_VS, fragment_shader=ACTOR_FS)
         self.actp_rs = self.ctx.program(vertex_shader=ACTOR_VS_RS, fragment_shader=ACTOR_FS)
-        self.actor_vaos: list[tuple[object, object, int]] = []
+        self.actors: ActorBuffers | None = None
         self.actor_sem: list[int] = []
+        self.actor_dims = np.zeros((0, 3))
         self.fxp["u_col"].value = 1
         self.subp["u_col"].value = 1
         self.dep["u_z"].value = 2
         for k, v in (("u_horizon", SKY_HORIZON), ("u_zenith", SKY_ZENITH), ("u_fog", FOG)):
             self.sky[k].value = tuple(float(x) for x in v)
+        self.sky["u_eps"].value = QUAL_EPS
         self.enc["u_col"].value = 1
+        for k, unit in (("u_col", 1), ("u_z", 2), ("u_inst", 3), ("u_sm", 4)):
+            self._put(self.shadep, k, unit)
+        for k, unit in (("u_col", 1), ("u_z", 2), ("u_inst", 3), ("u_sem", 4), ("u_qual", 5), ("u_unocc", 6), ("u_map", 7)):
+            self._put(self.resp, k, unit)
         self.sky_vao = self.ctx.vertex_array(self.sky, [])
         self.enc_vao = self.ctx.vertex_array(self.enc, [])
         self.fx_vao = self.ctx.vertex_array(self.fxp, [])
         self.dep_vao = self.ctx.vertex_array(self.dep, [])
         self.sub_vao = self.ctx.vertex_array(self.subp, [])
+        self.shade_vao = self.ctx.vertex_array(self.shadep, [])
+        self.res_vao = self.ctx.vertex_array(self.resp, [])
         t0 = time.perf_counter()
         Image.MAX_IMAGE_PIXELS = None
         self.textures = []
@@ -528,68 +840,64 @@ class RasterCamera:
             corners.append([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
             self.draws.append((b, vao, vao_rs))
         self.corners = np.asarray(corners, np.float64).reshape(-1, 8, 3)
+        tiles = sorted({b.tile for b, *_ in self.draws})                  # 瓦片序号 → 原点；每批次所属瓦片（逐帧向量化计算模型视图）
+        first = {}
+        for b, *_ in self.draws:
+            first.setdefault(b.tile, b.origin)
+        self.tile_org = np.asarray([first[t] for t in tiles], np.float64).reshape(-1, 3)
+        self.draw_tile = np.asarray([tiles.index(b.tile) for b, *_ in self.draws], np.int64)
         self.ctx.finish()
         self.upload_s = time.perf_counter() - t1
         self.gl.ClipControl(_GL_LOWER_LEFT, _GL_ZERO_TO_ONE)
-        self._targets: dict[tuple[int, int], _Target] = {}
+        self._targets: dict[tuple[int, int, int, int], _Target] = {}
+        self.ring = ReadbackRing(slots=readback_slots)
+        self._queries: list = []
+        self._sm = self._sm_fb = None
+        self.cast_buf = self.ctx.buffer(reserve=32)
+        self.visp = self.ctx.compute_shader(GLSL_VIS_CS)                  # 可见度统计（GPU 归约，M25 §6.6.1）
+        for k, unit in (("u_inst", 8), ("u_unocc", 9), ("u_sem", 10)):
+            self._put(self.visp, k, unit)
+        self.vis_buf = self.ctx.buffer(reserve=VIS_STRIDE * 4)
+        self.vis_K = 1
+        self._vis0 = vis_init(1).tobytes()
         self.scene = scene
         self.set_sun(None)
+
+    @staticmethod
+    def _put(prog, k: str, v) -> None:
+        with contextlib.suppress(KeyError):                               # 驱动裁掉的未使用 uniform
+            prog[k].value = v
 
     def set_sun(self, az_el_deg: tuple[float, float] | None) -> None:
         from awr.sensorsvc.camera.actors import sun_dir
 
-        L = tuple(float(v) for v in sun_dir(az_el_deg))
+        self.sun = sun_dir(az_el_deg)
+        L = tuple(float(v) for v in self.sun)
         for prog in (self.actp, self.actp_rs):
             prog["u_sun"].value = L
 
     def set_actors(self, actors: list[dict]) -> None:
-        """磁带演员表（按 idx）→ 每名演员一个代理网格 VAO（全局快门与卷帘各一）。"""
+        """磁带演员表（按 idx）→ 合批的代理网格（实例号 idx + 1、语义码）与演员尺寸（接触阴影、阴影图取景）。"""
         from awr.sensorsvc.camera.actors import SEM_CODE, proxy_mesh
 
-        for vbo, vao, vao_rs in self.actor_vaos:
-            for o in (vao, vao_rs, vbo):
-                o.release()
-        self.actor_vaos, self.actor_sem = [], []
-        for a in actors:
+        if self.actors is not None:
+            self.actors.release()
+        meshes, info = [], []
+        for k, a in enumerate(actors):
             P, N, C = proxy_mesh(a)
-            vbo = self.ctx.buffer(np.hstack([P, N, C]).astype("<f4").tobytes())
-            fmt = [(vbo, "3f 3f 3f", "in_pos", "in_nrm", "in_col")]
-            self.actor_vaos.append((vbo, self.ctx.vertex_array(self.actp, fmt), self.ctx.vertex_array(self.actp_rs, fmt)))
-            self.actor_sem.append(SEM_CODE.get(a["class"], 13))
+            meshes.append(np.hstack([P, N, C]))
+            info.append((k + 1, SEM_CODE.get(a["class"], 13)))
+        self.actor_sem = [s for _i, s in info]
+        self.actor_dims = np.array([[s / 1000.0 for s in a["size_mm"]] for a in actors], np.float64).reshape(-1, 3)
+        self.actors = ActorBuffers(self.ctx, meshes, "3f 3f 3f", ("in_pos", "in_nrm", "in_col"), info)
+        self.vis_K = len(actors) + 1
+        self._vis0 = vis_init(self.vis_K).tobytes()
 
-    def _draw_actors(self, act: ActorFrame, cm: CameraModel, P: np.ndarray, R_ws, p_w, rs_nodes) -> int:
-        rs = rs_nodes is not None
-        prog = self.actp_rs if rs else self.actp
-        prog["u_P"].write(P.T.astype("<f4").tobytes())
-        if rs:
-            prog["u_fycy"].value = (cm.fy, cm.cy)
-            prog["u_H"].value = float(cm.height)
-            views = [world_to_opt(Rk, pk) for Rk, pk in rs_nodes]
-        else:
-            view = world_to_opt(R_ws, p_w)
-        n = 0
-        for i, pos, yaw in zip(act.idx, act.pos, act.yaw, strict=True):
-            c, s_ = math.cos(float(yaw)), math.sin(float(yaw))
-            Rz = np.array([[c, -s_, 0.0], [s_, c, 0.0], [0.0, 0.0, 1.0]])
-            Mm = np.eye(4)
-            Mm[:3, :3] = Rz
-            Mm[:3, 3] = pos
-            prog["u_Rw"].write(Rz.T.astype("<f4").tobytes())
-            prog["u_inst"].value = int(i) + 1
-            prog["u_sem"].value = self.actor_sem[int(i)]
-            if rs:
-                prog["u_mvn"].write(np.stack([(V @ Mm).T for V in views]).astype("<f4").tobytes())
-            else:
-                prog["u_mv"].write((view @ Mm).T.astype("<f4").tobytes())
-            _vbo, vao, vao_rs = self.actor_vaos[int(i)]
-            (vao_rs if rs else vao).render()
-            n += 1
-        return n
-
-    def _target(self, w: int, h: int) -> _Target:
-        t = self._targets.get((w, h))
+    def _target(self, w: int, h: int, wr: int | None = None, hr: int | None = None) -> _Target:
+        key = (w, h, wr or w, hr or h)
+        t = self._targets.get(key)
         if t is None:
-            t = self._targets[(w, h)] = _Target(self.ctx, self.gl, w, h)
+            t = self._targets[key] = _Target(self.ctx, self.gl, *key)
         return t
 
     def _visible(self, cm: CameraModel, M: np.ndarray) -> np.ndarray:
@@ -600,15 +908,82 @@ class RasterCamera:
                | (x * cm.fx > (cm.width - cm.cx) * z).all(1) | (y * cm.fy < -cm.cy * z).all(1) | (y * cm.fy > (cm.height - cm.cy) * z).all(1))
         return ~out
 
-    def _fx_passes(self, tg: _Target, cm: CameraModel, fx: FxParams) -> None:
+    def _shadow_light(self, act: ActorFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """投影阴影图的光源取景：正交投影中心取本帧演员脚底位置的均值，沿太阳方向后退 500 m；视野覆盖全部演员的外接球（另加 1 m），
+        在 [8, 400] m 内。返回 (光源视图 4×4, 投影 4×4, 世界 → 裁剪 4×4)。"""
+        pos = np.asarray(act.pos, np.float64).reshape(-1, 3)
+        dims = self.actor_dims[np.asarray(act.idx, np.int64)] if len(self.actor_dims) else np.ones((len(pos), 3))
+        c0 = pos.mean(0)
+        p_l = c0 + self.sun * SHADOW_DIST_M
+        R_l = look_at_R(p_l, c0)
+        V = world_to_opt(R_l, p_l)
+        Xo = pos @ V[:3, :3].T + V[:3, 3]
+        rad = 0.5 * np.linalg.norm(dims, axis=1)
+        span = 2.0 * float(np.max(np.maximum(np.abs(Xo[:, 0]), np.abs(Xo[:, 1])) + rad)) + 2.0
+        span = min(max(span, SHADOW_SPAN_MIN_M), SHADOW_SPAN_MAX_M)
+        P = ortho_reversed_z(span, SHADOW_NEAR_M, SHADOW_FAR_M)
+        return V, P, P @ V
+
+    def _shadow_map(self, base: int, mvbase: int, P: np.ndarray) -> None:
+        mgl = self._mgl
+        if self._sm is None:
+            self._sm = self.ctx.depth_texture((SHADOW_MAP_SIZE, SHADOW_MAP_SIZE))
+            self._sm.compare_func = ""
+            self._sm.filter = (mgl.NEAREST, mgl.NEAREST)
+            self._sm_fb = self.ctx.framebuffer(depth_attachment=self._sm)
+        self._sm_fb.use()
+        self._sm_fb.clear(depth=0.0)
+        self.ctx.viewport = (0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE)
+        self.ctx.enable(mgl.DEPTH_TEST)
+        self.ctx.depth_func = ">"
+        self.actp["u_P"].write(P.T.astype("<f4").tobytes())
+        self.actors.draw(self.actp, base, mvbase)
+        self.ctx.disable(mgl.DEPTH_TEST)
+
+    def _shade(self, tg: _Target, rcm: CameraModel, R_ws, p_w, fx: FxParams, act: ActorFrame | None, light: np.ndarray | None) -> None:
+        from awr.sensorsvc.camera.proj import R_FLU_OPT
+
+        prog = self.shadep
+        flags = 0
+        ncast = 0
+        if fx.contact_shadow and act is not None and len(act.idx):
+            cast = _fx.contact_casters(act.pos, self.actor_dims[np.asarray(act.idx, np.int64)], self.sun)
+            b = cast.astype("<f4").tobytes()
+            self.cast_buf.orphan(max(len(b), self.cast_buf.size))      # 每帧换新存储：不与上一帧仍在执行的着色遍同步
+            self.cast_buf.write(b)
+            ncast = len(cast)
+            flags |= 1
+        if light is not None:
+            flags |= 2
+            self._sm.use(4)
+            prog["u_L"].write(light.T.astype("<f4").tobytes())
+        if fx.fog_sigma_m > 0:
+            flags |= 4
+        if fx.rain_mmh > 0:
+            flags |= 8
+            self._put(prog, "u_rdir", _fx.rain_streak(rcm, R_ws))
+            self._put(prog, "u_rdens", _fx.rain_density(fx.rain_mmh))
+            self._put(prog, "u_rkey", (fx.key_rain & 0xFFFFFFFF, (fx.key_rain >> 32) & 0xFFFFFFFF))
+        tg.shade_target().use()
+        self.ctx.viewport = (0, 0, tg.wr, tg.hr)
+        tg.mrt.col.use(1)
+        tg.mrt.z.use(2)
+        tg.mrt.inst.use(3)
+        self.cast_buf.bind_to_storage_buffer(6)
+        Rwo = np.asarray(R_ws, np.float64) @ R_FLU_OPT
+        with contextlib.suppress(KeyError):
+            prog["u_Rwo"].write(Rwo.T.astype("<f4").tobytes())       # 列主序
+        for k, v in (("u_K", (rcm.fx, rcm.fy, rcm.cx, rcm.cy)), ("u_p", tuple(float(x) for x in p_w)), ("u_flags", flags), ("u_ncast", ncast),
+                     ("u_sigma", float(fx.fog_sigma_m)), ("u_fogc", tuple(float(x) for x in _fx.FOG_LIN))):
+            self._put(prog, k, v)
+        self.shade_vao.render(self._mgl.TRIANGLES, vertices=3)
+
+    def _fx_passes(self, tg: _Target, cm: CameraModel, fx: FxParams, lin, zsrc) -> None:
         def key2(k: int) -> tuple[int, int]:
             return (k & 0xFFFFFFFF, (k >> 32) & 0xFFFFFFFF)
 
-        def put(prog, k: str, v) -> None:
-            with contextlib.suppress(KeyError):                           # 驱动裁掉的未使用 uniform
-                prog[k].value = v
-
-        tg.col.use(1)
+        put = self._put
+        lin.use(1)
         if fx.meter:
             tg.subfb.use()
             self.ctx.viewport = (0, 0, tg.sw, tg.sh)
@@ -621,39 +996,90 @@ class RasterCamera:
         self.fx_vao.render(self._mgl.TRIANGLES, vertices=3)
         if fx.depth is not None:
             tg.zfb.use()
-            tg.z.use(2)
+            zsrc.use(2)
             for k, v in (("u_d", (fx.depth.a, fx.depth.d_min_m, fx.depth.d_max_m)), ("u_key", key2(fx.key_depth)), ("u_W", tg.w)):
                 put(self.dep, k, v)
             self.dep_vao.render(self._mgl.TRIANGLES, vertices=3)
 
-    def render(self, cm: CameraModel, R_ws: np.ndarray, p_w: np.ndarray, *, linear: bool = False, fx: FxParams | None = None,
-               rs_nodes: list[tuple[np.ndarray, np.ndarray]] | None = None, actors: ActorFrame | None = None) -> RenderOut:
-        """`R_ws`、`p_w` 为 t_mid 位姿；`rs_nodes` 给出时按卷帘逐顶点投影（9 个节点，时间升序，覆盖读出窗口）；`actors` 给出时
-        在静态场景之后绘制演员，并另以只渲染演员的通道得到 `instance_unocc`。"""
+    def _query(self, k: int):
+        while len(self._queries) <= k:
+            self._queries.append(self.ctx.query(time=True))
+        return self._queries[k]
+
+    def submit(self, cm: CameraModel, R_ws: np.ndarray, p_w: np.ndarray, *, fx: FxParams | None = None,
+               rs_nodes: list[tuple[np.ndarray, np.ndarray]] | None = None, actors: ActorFrame | None = None,
+               read: tuple[str, ...] | None = None, linear: bool = False, debug: bool = False, timer: bool = False) -> RenderJob:
+        """绘制一帧并提交读回，立即返回 `RenderJob`。`R_ws`、`p_w` 为 t_mid 位姿；`rs_nodes` 给出时按卷帘逐顶点投影（9 个节点，
+        时间升序，覆盖读出窗口）；`actors` 给出时在静态场景之后绘制演员，并另以只渲染演员的通道得到 `instance_unocc`。
+
+        `read` 为读回平面（缺省全部）：rgb、z（平面深度）、inst、sem、qual、unocc、zobs（L2-depth）、sub（测光小图）、vis（GPU 可见度
+        统计，`RenderOut.vis`）；rgb、inst、sem 总是读回，unocc、vis、zobs、sub 只在对应输入给出时读回。`linear=True` 另读回效果链增益之前的交付域线性图像，`debug=True`
+        另读回渲染域中间结果，`timer=True` 以 GL 计时查询记录 GPU 时间。"""
         mgl = self._mgl
         W, H = cm.width, cm.height
-        tg = self._target(W, H)
-        t0 = time.perf_counter()
-        tg.fbo.use()
-        self.ctx.viewport = (0, 0, W, H)
-        tg.mrt.clear(self.gl)
-        self.ctx.enable(mgl.DEPTH_TEST)
-        self.ctx.disable(mgl.CULL_FACE)
-        self.ctx.depth_func = ">"
-        P = proj_reversed_z(cm)
-        Mw = world_to_opt(R_ws, p_w)
+        rt = build_remap(cm) if cm.has_distortion() else None
+        rcm = rt.render if rt is not None else cm
+        Wr, Hr = rcm.width, rcm.height
+        tg = self._target(W, H, Wr, Hr)
         rs = rs_nodes is not None
         if rs and len(rs_nodes) != RS_NODES:
             raise ValueError(f"rolling shutter needs {RS_NODES} pose nodes")
         if rs and rs_static(rs_nodes):                                   # 静止机体：退化为全局快门，输出逐字节一致（D3-AC-60）
             rs_nodes, rs = None, False
+        has_act = actors is not None and self.actors is not None
+        want = set(read) if read is not None else {"rgb", "z", "inst", "sem", "qual", "unocc", "zobs", "sub", "vis"}
+        shaded = fx is not None and fx.shade
+        items = [("rgb", W, H, "rgb8"), ("inst", W, H, "u16"), ("sem", W, H, "u8")]
+        items += [(nm, W, H, f) for nm, f in (("z", "f32"), ("qual", "u8")) if nm in want]
+        if "unocc" in want and has_act:
+            items.append(("unocc", W, H, "u16"))
+        want_vis = "vis" in want and has_act
+        if want_vis:
+            items.append(("vis", VIS_STRIDE * self.vis_K, 1, "u32"))
+        if "zobs" in want and fx is not None and fx.depth is not None:
+            items.append(("zobs", W, H, "f32"))
+        if "sub" in want and fx is not None and fx.meter:
+            items.append(("sub", tg.sw, tg.sh, "rgb32f"))
+        if linear:
+            items.append(("lin", W, H, "rgb32f"))
+        if debug:
+            items += [("dbg_lin_render", Wr, Hr, "rgb32f"), ("dbg_z_render", Wr, Hr, "f32"), ("dbg_inst_render", Wr, Hr, "u16"),
+                      ("dbg_qual_render", Wr, Hr, "u8")] + ([("dbg_shaded", Wr, Hr, "rgb32f")] if shaded else [])
+        layout, nbytes = plane_layout(items)
+        t0 = time.perf_counter()
+        slot = self.ring.acquire(nbytes)
+        slot_q = None
+        if timer:
+            slot_q = self._query(slot)
+            slot_q.mglo.begin()
+        P = proj_reversed_z(rcm)
+        Mw = world_to_opt(R_ws, p_w)
+        # 演员数据：相机视图（全局快门 1 个、卷帘 9 个节点）与阴影图的光源视图
+        sets_meta = None
+        light = None
+        if has_act:
+            views = [world_to_opt(Rk, pk) for Rk, pk in rs_nodes] if rs else [Mw]
+            sets = [(actors, views)]
+            if fx is not None and fx.shadow_map and len(actors.idx):
+                Vl, Pl, light = self._shadow_light(actors)
+                sets.append((actors, [Vl]))
+            sets_meta = self.actors.upload(sets)
+        tg.mrt.fbo.use()
+        self.ctx.viewport = (0, 0, Wr, Hr)
+        tg.mrt.clear(self.gl)
+        self.ctx.enable(mgl.DEPTH_TEST)
+        self.ctx.disable(mgl.CULL_FACE)
+        self.ctx.depth_func = ">"
         prog = self.prog_rs if rs else self.prog
         prog["u_inst"].value = 0
         prog["u_sem"].value = 0
+        rs_unis = None
         if rs:
+            d = tuple(float(v) for v in cm.dist)
+            rs_unis = (("u_fycy", (cm.fy, cm.cy)), ("u_H", float(H)), ("u_hasdist", int(cm.has_distortion())), ("u_dist0", d[:4]), ("u_k3", d[4]))
             prog["u_P"].write(P.T.astype("<f4").tobytes())
-            prog["u_fycy"].value = (cm.fy, cm.cy)
-            prog["u_H"].value = float(H)
+            for k, v in rs_unis:
+                self._put(prog, k, v)
         n = 0
         bound = None
         tile = None
@@ -662,20 +1088,24 @@ class RasterCamera:
         elif rs:                                                         # 读出窗口首、中、末三个位姿的视锥并集
             vis = np.zeros(len(self.draws), bool)
             for Rk, pk in (rs_nodes[0], rs_nodes[RS_NODES // 2], rs_nodes[-1]):
-                vis |= self._visible(cm, world_to_opt(Rk, pk))
+                vis |= self._visible(rcm, world_to_opt(Rk, pk))
         else:
-            vis = self._visible(cm, Mw)
-        for (b, vao, vao_rs), ok in zip(self.draws, vis, strict=True):
+            vis = self._visible(rcm, Mw)
+        if vis.any():                                                    # 全部瓦片的模型视图一次计算（float64），转列主序 float32
+            if rs:
+                mvn = gl_mat4(np.stack([mv_tiles(Rk, pk, self.tile_org) for Rk, pk in rs_nodes], 1))     # (瓦片, 节点, 4, 4)
+            else:
+                MV = mv_tiles(R_ws, p_w, self.tile_org)
+                mvb, mvpb = gl_mat4(MV), gl_mat4(P @ MV)
+        for (b, vao, vao_rs), ok, ti in zip(self.draws, vis, self.draw_tile, strict=True):
             if not ok:
                 continue
             if b.tile != tile:
                 if rs:
-                    mvs = np.stack([mv_tile(Rk, pk, b.origin).T for Rk, pk in rs_nodes]).astype("<f4")
-                    prog["u_mvn"].write(mvs.tobytes())
+                    prog["u_mvn"].write(mvn[ti].tobytes())
                 else:
-                    mv = mv_tile(R_ws, p_w, b.origin)
-                    prog["u_mv"].write(mv.T.astype("<f4").tobytes())
-                    prog["u_mvp"].write((P @ mv).T.astype("<f4").tobytes())
+                    prog["u_mv"].write(mvb[ti].tobytes())
+                    prog["u_mvp"].write(mvpb[ti].tobytes())
                 tile = b.tile
             tex = b.texture if b.texture is not None and b.texture < len(self.textures) else None
             if tex != bound:
@@ -686,50 +1116,97 @@ class RasterCamera:
             (vao_rs if rs else vao).render()
             n += 1
         na = 0
-        if actors is not None and len(actors.idx):
-            na = self._draw_actors(actors, cm, P, R_ws, p_w, rs_nodes)
+        aprog = self.actp_rs if rs else self.actp
+        if has_act and len(actors.idx):
+            aprog["u_P"].write(P.T.astype("<f4").tobytes())
+            if rs:
+                for k, v in rs_unis:
+                    self._put(aprog, k, v)
+            base, mvbase, na = sets_meta[0]
+            self.actors.draw(aprog, base, mvbase)
         self.ctx.depth_func = ">="                                       # 天空遍：只覆盖深度仍为 0 的像素
         self.sky["u_Rwo"].write(Mw[:3, :3].astype("<f4").tobytes())     # 列主序写入 R_woᵀ 的转置，即 R_wo
-        self.sky["u_K"].value = (cm.fx, cm.fy, cm.cx, cm.cy)
+        self.sky["u_K"].value = (rcm.fx, rcm.fy, rcm.cx, rcm.cy)
         self.sky_vao.render(mgl.TRIANGLES, vertices=3)
         self.ctx.disable(mgl.DEPTH_TEST)
-        if fx is None:
-            tg.enc.use()
-            tg.col.use(1)
-            self.enc_vao.render(mgl.TRIANGLES, vertices=3)
-        else:
-            self._fx_passes(tg, cm, fx)
-        unocc = None
-        if actors is not None:
+        if has_act:                                                      # 只渲染演员的通道（渲染域）
             if tg.unocc is None:
-                tg.unocc = _Mrt(self.ctx, self.gl, W, H)
+                tg.unocc = _Mrt(self.ctx, self.gl, Wr, Hr)
             tg.unocc.fbo.use()
-            self.ctx.viewport = (0, 0, W, H)
+            self.ctx.viewport = (0, 0, Wr, Hr)
             tg.unocc.clear(self.gl)
             if len(actors.idx):
                 self.ctx.enable(mgl.DEPTH_TEST)
                 self.ctx.depth_func = ">"
-                self._draw_actors(actors, cm, P, R_ws, p_w, rs_nodes)
+                self.actors.draw(aprog, *sets_meta[0][:2])
                 self.ctx.disable(mgl.DEPTH_TEST)
-        self.ctx.finish()
+        lin_r = tg.mrt.col                                               # 渲染域线性颜色（着色遍之后为 col2）
+        if shaded:
+            if light is not None:
+                self._shadow_map(*sets_meta[1][:2], Pl)
+            self._shade(tg, rcm, R_ws, p_w, fx, actors if has_act else None, light)
+            lin_r = tg.col2
+        src = {"col": lin_r, "z": tg.mrt.z, "inst": tg.mrt.inst, "sem": tg.mrt.sem, "qual": tg.mrt.qual,
+               "unocc": tg.unocc.inst if has_act else None}
+        if rt is not None:                                               # 畸变重映射到交付尺寸
+            fb = tg.resolve_target()
+            fb.use()
+            self.ctx.viewport = (0, 0, W, H)
+            for unit, t in ((1, lin_r), (2, tg.mrt.z), (3, tg.mrt.inst), (4, tg.mrt.sem), (5, tg.mrt.qual)):
+                t.use(unit)
+            if has_act:
+                tg.unocc.inst.use(6)
+            tg.remap_tex(rt).use(7)
+            self._put(self.resp, "u_has_unocc", bool(has_act))
+            self.res_vao.render(mgl.TRIANGLES, vertices=3)
+            src = dict(zip(("col", "z", "inst", "sem", "qual", "unocc"), tg.res, strict=True))
+            if not has_act:
+                src["unocc"] = None
+        if fx is None:
+            tg.enc.use()
+            self.ctx.viewport = (0, 0, W, H)
+            src["col"].use(1)
+            self.enc_vao.render(mgl.TRIANGLES, vertices=3)
+        else:
+            self._fx_passes(tg, cm, fx, src["col"], src["z"])
+        if want_vis:                                                     # 交付域实例、无遮挡实例与语义 → 逐实例统计（原子归约）
+            self.vis_buf.orphan(len(self._vis0))
+            self.vis_buf.write(self._vis0)
+            self.vis_buf.bind_to_storage_buffer(7)
+            src["inst"].use(8)
+            src["unocc"].use(9)
+            src["sem"].use(10)
+            self.visp["u_size"].value = (W, H)
+            self.visp["u_K"].value = self.vis_K
+            self.visp.run(-(-W // 16), -(-H // 16), 1)
+            self.ctx.memory_barrier()
+        if slot_q is not None:
+            slot_q.mglo.end()
+        tex = {"rgb": tg.rgb.glo, "inst": src["inst"].glo, "sem": src["sem"].glo, "z": src["z"].glo, "qual": src["qual"].glo,
+               "zobs": tg.zobs.glo, "sub": tg.sub.glo, "lin": src["col"].glo, "dbg_lin_render": tg.mrt.col.glo, "dbg_z_render": tg.mrt.z.glo,
+               "dbg_inst_render": tg.mrt.inst.glo, "dbg_qual_render": tg.mrt.qual.glo, "dbg_shaded": lin_r.glo}
+        if src["unocc"] is not None:
+            tex["unocc"] = src["unocc"].glo
+        self.ring.issue(slot, layout, {name: tex[name] for name, *_ in items if name != "vis"}, {"vis": self.vis_buf.glo} if want_vis else None)
         t1 = time.perf_counter()
-        if actors is not None:
-            unocc = np.frombuffer(tg.unocc.inst.read(), np.uint16).reshape(H, W).copy()
-        rgb = np.frombuffer(tg.rgb.read(), np.uint8).reshape(H, W, 4)[..., :3].copy()
-        z = np.frombuffer(tg.z.read(), np.float32).reshape(H, W).copy()
-        inst = np.frombuffer(tg.inst.read(), np.uint16).reshape(H, W).copy()
-        sem = np.frombuffer(tg.sem.read(), np.uint8).reshape(H, W).copy()
-        lin = np.frombuffer(tg.col.read(), np.float16).reshape(H, W, 4)[..., :3].astype(np.float32) if linear else None
-        zo = np.frombuffer(tg.zobs.read(), np.float32).reshape(H, W).copy() if fx is not None and fx.depth is not None else None
-        sub = (np.frombuffer(tg.sub.read(), np.float16).reshape(tg.sh, tg.sw, 4)[..., :3].astype(np.float32)
-               if fx is not None and fx.meter else None)
-        t2 = time.perf_counter()
-        return RenderOut(rgb, z, inst, sem, (t1 - t0) * 1e3, (t2 - t1) * 1e3, n, lin, zo, sub, unocc, na)
+        meta = {"draw_ms": (t1 - t0) * 1e3, "batches": n, "actors": na, "remap": rt}
+        return RenderJob(ReadJob(self.ring, slot, layout, tuple(name for name, *_ in items)), meta, slot_q)
+
+    def render(self, cm: CameraModel, R_ws: np.ndarray, p_w: np.ndarray, *, linear: bool = False, fx: FxParams | None = None,
+               rs_nodes: list[tuple[np.ndarray, np.ndarray]] | None = None, actors: ActorFrame | None = None, debug: bool = False) -> RenderOut:
+        """同步接口：`submit` 后立即等待读回，返回可写数组（全部平面）。参数同 `submit`。"""
+        job = self.submit(cm, R_ws, p_w, fx=fx, rs_nodes=rs_nodes, actors=actors, linear=linear, debug=debug)
+        try:
+            out = _copy_out(job.result())
+        finally:
+            job.release()
+        return out
 
     def release(self) -> None:
         for t in self._targets.values():
-            t.mrt.release(self.gl)
-            if t.unocc is not None:
-                t.unocc.release(self.gl)
+            t.release()
         self._targets.clear()
+        self.ring.close()
+        if self.actors is not None:
+            self.actors.release()
         self.ctx.release()

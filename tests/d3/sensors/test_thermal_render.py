@@ -441,6 +441,10 @@ def test_gpu_dynamic_entities_match_table(gl_world, case: str) -> None:
         assert abs(float(np.median(_win(o.t_app_k, i, j))) - want) <= 0.01
         objs = tr.thermal_objects(o.t_app_k, o.instance, o.instance_unocc, o.semantic, [actor])
         assert len(objs) == 1 and objs[0]["dT_app_k"] > 1.0
+        from awr.sensorsvc.camera.actors import visibility_stats
+
+        assert o.vis is not None and np.array_equal(o.vis, visibility_stats(o.instance, o.instance_unocc, o.semantic, None, 2))   # GPU 归约
+        assert tr.thermal_objects(o.t_app_k, o.instance, o.instance_unocc, o.semantic, [actor], stats=o.vis) == objs
     print(case, rep)
     cam.release()
 
@@ -563,3 +567,30 @@ def test_gpu_throughput_reference(gl_world) -> None:
     dt = time.perf_counter() - t0
     print(f"therm512 fixture: {n / (dt - enc):.0f} frame/s render+readback, zstd {enc / n * 1e3:.2f} ms/frame")
     cam.release()
+
+
+def test_thermal_frame_aux_pool_is_byte_identical() -> None:
+    """辅助线程池组装（`temp_ck` 编码与 sha256、真值 zstd 并行）与同步组装的记录与载荷块逐字节相同、块顺序相同。"""
+    pytest.importorskip("zstandard")
+    from concurrent.futures import ThreadPoolExecutor
+
+    from awr.sensorsvc.frame import FrameContext
+    from awr.sensorsvc.poses import Mount
+
+    m = tr.THERM512
+    H, W = m.height, m.width
+    rng = np.random.default_rng(9)
+    ck = (28800 + rng.integers(-300, 3000, (H, W))).astype(np.uint16)
+    inst = np.zeros((H, W), np.uint16)
+    inst[100:140, 200:220] = 1
+    out = tr.ThermalOut(ck, ck.astype(np.float32) / 100, None, inst, np.ones((H, W), np.uint8), inst.copy(),
+                        np.array([0.1, 0.2, 0.3, 0.4]), np.array([0.97, 0.98, 0.99, 1.0]), 1.0, 1.0, 1, 1)
+    ctx = FrameContext("run1", "s1", "cv1", "A40", "580")
+    man = tr.thermal_manifest(_table(), rad.planck_table(), m)
+    kw = dict(uav="u1", sensor_id="therm0", seq=7, t_mid_ns=1_000_000_000, model=m, mount=Mount(), gimbal_reading=(0, 0, 0),
+              gimbal_true=(0, 0, 0), pos_enu_m=np.zeros(3), R_ws=np.eye(3), out=out, manifest=man, actors=[PERSON])
+    rec0, blk0 = tr.thermal_frame(ctx, **kw)
+    with ThreadPoolExecutor(4) as aux:
+        rec1, blk1 = tr.thermal_frame(ctx, aux=aux, **kw)
+    assert json.dumps(rec0) == json.dumps(rec1) and list(blk0) == list(blk1) and all(blk0[k] == blk1[k] for k in blk0)
+    assert rec1["internal"]["encoder"] == tr.TEMP_CK_ENCODER == "zstd-1/u16le"
