@@ -219,7 +219,7 @@ def _stage(world, plan: dict):
     """与 compile.py 同一舞台装载（门 2 输入），供生成侧到达量复算。"""
     from awr.sim.events.anchors import anchor_xy, load_overlay, resolve_anchors, world_anchors
     from awr.sim.events.ground import build_ground_index
-    from awr.sim.events.nav import build_nav
+    from awr.sim.events.nav import build_stage_nav
     from awr.world.mesh.query import open_mesh_world_query
 
     w, tmp = world
@@ -227,9 +227,8 @@ def _stage(world, plan: dict):
     q = open_mesh_world_query(w, tmp / "cache")
     bbox = stage_bbox(plan, anchors)
     seeds = [anchor_xy(a) for a in anchors.values() if a.get("seed")]
-    nav_p = build_nav(q, bbox, "person", seeds)
-    nav_v = build_nav(q, bbox, "vehicle", seeds, z=nav_p.z)
-    return gen.Stage({"person": nav_p, "vehicle": nav_v}, build_ground_index(q, bbox), anchors), q
+    navs = build_stage_nav(q, bbox, seeds, world_dir=w)                     # 与编译同一后端（有 NavMesh 图层时为 Detour，ADR-196）
+    return gen.Stage({"person": navs["person"], "vehicle": navs["vehicle"]}, build_ground_index(q, bbox), anchors), q
 
 
 # ---------------------------------------------------------------------- 1. 同机连续 3 次

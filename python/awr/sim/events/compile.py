@@ -46,7 +46,7 @@ __all__ = ["GENERATOR", "GENERATOR_VERSION", "CompileOptions", "CompileResult", 
            "world_issue"]
 
 GENERATOR = "awr.sim.events.gen"
-GENERATOR_VERSION = "0.1.0-grid"
+GENERATOR_VERSION = "0.2.0"                      # 实际版本串带寻路后端后缀：0.2.0-detour 或 0.2.0-grid（ADR-196）
 STAGE_MARGIN_M = 60.0
 
 
@@ -194,14 +194,14 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     t0 = time.perf_counter()
     from awr.sim.events.gen import Stage, preflight
     from awr.sim.events.ground import build_ground_index
-    from awr.sim.events.nav import build_nav
+    from awr.sim.events.nav import build_stage_nav
     from awr.world.mesh.query import open_mesh_world_query
 
     q = open_mesh_world_query(world_dir, opts.cache_dir)
     bbox = stage_bbox(plan, anchors)
     seeds = [anchor_xy(a) for a in anchors.values() if a.get("seed")]
-    nav_p = build_nav(q, bbox, "person", seeds)
-    nav_v = build_nav(q, bbox, "vehicle", seeds, z=nav_p.z)
+    navs = build_stage_nav(q, bbox, seeds, world_dir=world_dir, backend="detour" if opts.ranked else None)   # ADR-196 (4)、(5)
+    nav_p, nav_v = navs["person"], navs["vehicle"]
     stage = Stage({"person": nav_p, "vehicle": nav_v}, build_ground_index(q, bbox), anchors, world_dir=world_dir)   # 车道图按需装载（E09）
     plan = search.materialize(plan, doc, stage)                   # 按事件种子抽样目标实际位置（只进锚点表、磁带与真值）
     pf = preflight(plan, stage, mode=opts.retime_mode)
@@ -259,8 +259,8 @@ def compile_event(event_doc: Path | str | dict, world_dir: Path, *, opts: Compil
     (tmp / "truth" / f"r{opts.truth_rev}" / "event_graph.json").write_text(json.dumps(build_graph(truth, table), ensure_ascii=False, indent=1),
                                                                            encoding="utf-8")   # §6.10.2（M23-FR-074）
     res.truth = g3.summary(opts.truth_rev, t_sha)
-    prov = {"generator": GENERATOR, "generator_version": GENERATOR_VERSION, "recast_navigation": "none (awr-navgrid@1)", "wasm_sha256": "0" * 64,
-            "node": "none", "host": platform.node(), "wall_ms": int((time.perf_counter() - t_wall) * 1000),
+    prov = {"generator": GENERATOR, "generator_version": f"{GENERATOR_VERSION}-{nav_p.kind}", **nav_p.provenance(),
+            "host": platform.node(), "wall_ms": int((time.perf_counter() - t_wall) * 1000),
             "rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1),
             "created_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}
     man = manifest(h, header, provenance=prov, report=report)

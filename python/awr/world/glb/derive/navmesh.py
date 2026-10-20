@@ -508,6 +508,7 @@ class NavSvc:
             try:
                 self.proc.stdin.write(b'{"op":"quit"}\n')
                 self.proc.stdin.flush()
+                self.proc.stdin.close()               # 标准输入保持打开时 Node 事件循环不退出（quit 之后仍需 EOF）
                 self.proc.wait(timeout=10)
             except (OSError, subprocess.TimeoutExpired):
                 self.proc.kill()
