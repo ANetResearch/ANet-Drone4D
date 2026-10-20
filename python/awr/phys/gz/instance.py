@@ -21,6 +21,7 @@ import contextlib
 import os
 import shutil
 import subprocess
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -58,6 +59,7 @@ class GzInstance:
     _proc: subprocess.Popen | None = field(default=None, init=False, repr=False)
     _log: object | None = field(default=None, init=False, repr=False)
     restarts: int = field(default=0, init=False)                   # restart() 次数（同一 Run 内）
+    launch: dict = field(default_factory=dict, init=False)          # 最近一次 start() 的计时（启动时长分解，D3-AC-34）
 
     def __post_init__(self) -> None:
         # gz 按 GZ_SIM_RESOURCE_PATH 解析 model:// 时，相对路径会与模型目录二次拼接（网格找不到、静默无碰撞）；docker 挂载同样要求绝对路径
@@ -110,31 +112,58 @@ class GzInstance:
         cmd = self.command()
         if self.dry_run:
             return cmd
+        self.launch = {"wall0": time.time(), "t0": time.monotonic()}
         if self.launcher == "local":
             env = self.local_env()
             self._log = (Path(self.run_dir) / "gz.log").open("wb")
             self._proc = subprocess.Popen(cmd, stdout=self._log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+            self.launch["cmd_s"] = time.monotonic() - self.launch["t0"]
             return cmd
         if shutil.which(self.docker) is None:
             raise PhysError(630, "docker is not available on this host")
         r = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        self.launch["cmd_s"] = time.monotonic() - self.launch["t0"]
         if r.returncode != 0:
             raise PhysError(631, f"gz container failed to start: {r.stderr.strip()[:400]}")
         return cmd
 
-    def wait_socket(self, timeout_s: float = 60.0) -> None:
+    def wait_socket(self, timeout_s: float = 60.0, *, poll_s: float = 0.01, alive_every_s: float = 0.5) -> None:
+        """LAUNCHING → LOADING：等待 Drone4DClock 绑定控制端点（631 超时；进程先退出为 638）。
+
+        端点文件每 `poll_s` 检查一次。docker 实例的存活检查（`docker inspect`，经守护进程）放在后台线程中每 `alive_every_s` 执行
+        一次：守护进程繁忙时单次调用可达数秒（S21 实测一次启动的"docker run 到控制端点"为 4.84 s），逐轮同步调用会把这段等待计入实例
+        启动时长（D3-AC-34），并使端点的发现最多推迟一个调用时长。local 实例的存活检查不经守护进程，逐轮执行。
+        端点出现后读一次日志，世界网格缺失（gz 照常运行但没有碰撞体）报 638。"""
         sock = self.sock_dir / "ctl.sock"
         t0 = time.monotonic()
-        while time.monotonic() - t0 < timeout_s:
-            if sock.exists():
-                miss = [ln for ln in self.logs().splitlines() if "Unable to find file" in ln]
-                if miss:                                            # 世界网格缺失时 gz 照常运行但没有碰撞体
-                    raise PhysError(638, f"gz could not load {len(miss)} mesh file(s): {miss[0][-300:]}")
-                return
-            if not self.alive():
-                raise PhysError(638, f"gz container exited before binding the control socket: {self.logs()[-600:]}")
-            time.sleep(0.1)
-        raise PhysError(631, f"control socket not ready after {timeout_s:g} s")
+        dead, stop = threading.Event(), threading.Event()
+        watcher = None
+        if self.launcher != "local":
+            def watch() -> None:
+                while not stop.wait(alive_every_s):
+                    if not self.alive():
+                        dead.set()
+                        return
+
+            watcher = threading.Thread(target=watch, name=f"gz-alive-{self.name}", daemon=True)
+            watcher.start()
+        try:
+            while time.monotonic() - t0 < timeout_s:
+                if sock.exists():
+                    if "t0" in self.launch:
+                        self.launch["socket_s"] = time.monotonic() - self.launch["t0"]
+                    miss = [ln for ln in self.logs().splitlines() if "Unable to find file" in ln]
+                    if miss:                                        # 世界网格缺失时 gz 照常运行但没有碰撞体
+                        raise PhysError(638, f"gz could not load {len(miss)} mesh file(s): {miss[0][-300:]}")
+                    if "t0" in self.launch:
+                        self.launch["log_check_s"] = time.monotonic() - self.launch["t0"] - self.launch["socket_s"]
+                    return
+                if dead.is_set() or (watcher is None and not self.alive()):
+                    raise PhysError(638, f"gz container exited before binding the control socket: {self.logs()[-600:]}")
+                time.sleep(poll_s)
+            raise PhysError(631, f"control socket not ready after {timeout_s:g} s")
+        finally:
+            stop.set()
 
     def alive(self) -> bool:
         if self.launcher == "local":

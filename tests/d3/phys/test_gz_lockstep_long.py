@@ -16,6 +16,7 @@ import json
 import os
 import shutil
 import sys
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -276,6 +277,110 @@ def test_probe_flags_short_ticks() -> None:
     assert rep["tick_diff_max_ns"] == gl.STEP_NS
 
 
+class _PreBackend(FakeBackend):
+    """FakeBackend + run_preroll 所需的 status()（地面静止，全部 GROUNDED）。"""
+
+    def status(self):
+        from awr.phys.adapter import VehicleStatus
+
+        return dict.fromkeys(self.uavs, VehicleStatus.GROUNDED)
+
+
+def test_probe_counts_preroll_ticks() -> None:
+    """探针在 Env 预滚视图之下：推进 tick 数 = n_ticks + 预滚 tick，样本率与 RTF 按实际推进时长折算，定高窗口按预滚平移（S21 遗留 3）。"""
+    from awr.agentsdk.env.preroll import plan_preroll, run_preroll
+    from awr.phys.adapter import TierCommand
+
+    plan = plan_preroll([("uav-01", False)], 2.0, 100)
+    tier = _probe(_PreBackend(["uav-01"]), alt_from_ns=10 * gl.TICK_NS)
+    tier.pre_ticks = plan.n_ticks
+    tier.open()
+    ev = run_preroll(tier, plan)
+    ev.submit([TierCommand("uav-01", "goto", 0, target_enu_m=(0.0, 0.0, 31.0))])
+    n = 40
+    for k in range(n):
+        ev.advance(k)
+    rep = tier.report(n * gl.TICK_NS / 1e9)
+    assert rep["ticks"] == n + 20 and rep["preroll_ticks"] == 20 and rep["sim_advanced_s"] == pytest.approx(6.0)
+    assert rep["pose_history_hz"]["measured"] == {"uav-01": 250.0}                    # 旧口径：1500 / 4.0 s = 375
+    assert rep["rtf_phys"] == pytest.approx(6.0 / (60 * 2_008_000 / 1e9), rel=1e-6)
+    assert rep["alt_err"]["uav-01"]["n"] == (n - 10) * 25                              # 事件时间 1.0 s 起（档内 3.0 s）
+    doc = _run_doc(ticks=n + 20, n_ticks=n, preroll_ticks=20)
+    assert gl.summarize([doc])["checks"]["step_done_25"]["result"]
+    assert not gl.summarize([_run_doc(ticks=n + 20, n_ticks=n)])["checks"]["step_done_25"]["result"]   # 旧记录无预滚计数
+
+
+def test_probe_hello_once_and_startup_breakdown() -> None:
+    be = FakeBackend(["uav-01"])
+    calls = []
+    be.open = lambda: calls.append(1) or {"t0_gz_ns": 0}
+    inst = _Inst()
+    inst.launch = {"cmd_s": 0.2, "socket_s": 0.9, "log_check_s": 0.03}
+    tier = gl.ProbeTier(be, inst, t_launch=time.monotonic() - 1.0, t_socket=time.monotonic() - 0.1, alt_from_ns=0, sampler=None, sdf="")
+    tier.hello()
+    tier.open()
+    assert calls == [1]                                                              # make_tier 已发送 Hello，reset 时不重发
+    st = tier.startup
+    assert st["launch_cmd_s"] == 0.2 and st["socket_seen_s"] == 0.9 and st["log_check_s"] == 0.03
+    assert 0.9 <= st["launch_to_socket_s"] <= 0.95 and st["host_gap_s"] >= 0.09 and st["startup_s"] >= st["launch_to_socket_s"]
+
+
+def test_startup_statistics_and_trace_parsing() -> None:
+    samples = [{"index": i, "startup_s": 2.6, "hello_s": 1.6, "launch_to_socket_s": 1.0} for i in range(19)]
+    s = gl.summarize_startup([*samples, {"index": 19, "startup_s": 5.2, "hello_s": 1.6, "launch_to_socket_s": 3.6}])
+    assert s["n"] == 20 and s["over_threshold"] == [19] and s["worst_pass"] is False and s["p95_pass"] is True
+    assert s["stats"]["startup_s"]["max"] == 5.2 and s["stats"]["startup_s"]["median"] == 2.6
+    assert s["stats"]["startup_s"]["p95"] == pytest.approx(2.6 + 0.05 * 2.6, abs=1e-3)
+    ok = gl.summarize_startup(samples)
+    assert ok["worst_pass"] and ok["p95_pass"] and not ok["over_threshold"]
+    assert gl.summarize_startup([])["worst_pass"] is None
+
+    t = gl.parse_rfc3339("2026-10-20T05:02:52.123456789Z")
+    assert t == pytest.approx(1792472572.123456, abs=1e-6)
+    assert gl.parse_rfc3339("2026-10-20T13:02:52+08:00") == pytest.approx(1792472572.0)
+    assert gl.parse_rfc3339("0001-01-01T00:00:00Z") is None and gl.parse_rfc3339("bad") is None
+    lines = ["2026-10-20T05:02:52.500000000Z [Msg] Gazebo Sim Server v8.15.0",
+             "2026-10-20T05:02:52.900000000Z [Msg] [Drone4DClock] 3 vehicles, step 4000000 ns",
+             "no timestamp", "2026-10-20T05:02:54.100000000Z [Msg] Found no publishers on /stats"]
+    lo = gl.log_offsets(lines, 1792472572.0)
+    assert lo == {"lines": 3, "first_s": 0.5, "last_s": 2.1, "clock_bound_s": 0.9}
+    assert gl.startup_trace(_Inst()) == {}                                           # local 实例：无容器时刻
+
+
+def test_summarize_startup_samples_and_cpu_pool() -> None:
+    """实例启动条款按最差实例判定（C-34 确认前），并入 startup 子命令样本并报告 p95；只有 physics 且未分配 GPU → cpu_pool，计为正式。"""
+    runs = [_run_doc(idx=i, startup=s, gpu_assigned=None, gpu_snapshots=[{"available": False}]) for i, s in enumerate((2.6, 2.7, 2.8))]
+    s = gl.summarize(runs)
+    assert s["gpu_label"] == "cpu_pool" and _res(s)["startup_s"] == "pass" and _res(s)["rtf_phys"] == "pass"
+    probe = [{"index": i, "startup_s": 2.6} for i in range(36)] + [{"index": 36, "startup_s": 6.2}]
+    s2 = gl.summarize(runs, startup=probe)
+    a = next(x for x in s2["acceptance"] if x["clause"] == "startup_s")
+    assert a["result"] == "fail" and a["measured"] == 6.2 and a["n"] == {"runs": 3, "probe": 37} and a["p95"] < 5.0
+    assert a["statistic"].startswith("worst")
+    assert s2["perf"]["startup_s_max"] == 6.2 and s2["perf"]["startup_s"] == 2.6
+    old = gl.summarize([_run_doc(idx=i, snaps_other=None) for i in range(3)])                    # 旧记录（无 gpu_assigned）
+    assert old["gpu_label"] == "shared" and _res(old)["startup_s"] == "pass_shared_not_counted"
+    mixed = gl.summarize([*runs, _run_doc("m25", gpu_assigned=2)])
+    assert mixed["gpu_label"] != "cpu_pool"
+
+
+def test_cpu_pool_state(tmp_path: Path) -> None:
+    root = tmp_path / "cg"
+    (root / "d3.slice" / "d3-eval.slice").mkdir(parents=True)
+    (root / "d3.slice" / "cgroup.procs").write_text("")
+    (root / "d3.slice" / "d3-eval.slice" / "cgroup.procs").write_text("11\n12\n")
+    st = gl.cpu_pool_state(str(root), "d3-K04", docker=str(tmp_path / "no-docker"))
+    assert st == {"d3_slice_procs": 2}
+    assert gl.cpu_pool_state(None, "x", docker=str(tmp_path / "no-docker")) == {}
+
+
+def test_cli_startup_args() -> None:
+    a = gl._args(["startup", "--events-root", "ev", "--out", "o"])
+    assert a.cmd == "startup" and a.n == 20 and a.gz_verbose == 1 and a.gz_cpus == 2.0 and a.host_cgroup_root is None
+    r = gl._args(["run", "--events-root", "ev", "--out", "o", "--host-cgroup-root", "/h"])
+    assert r.repeats == 3 and r.host_cgroup_root == "/h" and r.kinds == "physics,m25"
+
+
 # ---------------------------------------------------------------------------------------------------------------- 资源与 GPU
 def test_resource_sampling() -> None:
     s = gl.parse_cgroup("usage_usec 2500000\nuser_usec 1\n", "1073741824\n", "anon 536870912\nfile 1048576\nshmem 0\n")
@@ -402,7 +507,8 @@ def test_three_uav_lockstep_env(tmp_path: Path) -> None:
     for clause in ("step_done_25_steps_per_tick", "pose_history_hz_250", "same_seed_bitwise", "alt_err_m", "step_done_tick_diff_ns",
                    "cpu_cores", "mem_gb", "no_gpu", "gravity_9_80665", "no_crash"):
         assert r[clause] in ("pass", "pass_shared_not_counted"), (clause, r[clause], s)
-    assert runs[0]["n_ticks"] == round(dur * 10) and runs[0]["iterations"] == 25 * runs[0]["n_ticks"]
+    assert runs[0]["n_ticks"] == round(dur * 10) and runs[0]["iterations"] == 25 * (runs[0]["n_ticks"] + runs[0]["preroll_ticks"])
+    assert runs[0]["ticks"] == runs[0]["n_ticks"] + runs[0]["preroll_ticks"] and runs[0]["preroll_ticks"] == 20     # Env 预滚 2 s
     assert runs[0]["vehicle"]["mass_kg"] == 3.935
     if dur >= 300:
         assert s["vh_max_mps"] >= 8.0                                                          # 航段确实以 ≥ 8 m/s（p600_std 巡航）机动
