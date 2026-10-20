@@ -1,0 +1,14 @@
+{
+  "description": "oryahovo-crop1 人工 off-mesh 连接（M22 §6.6.11、§7.6；D3-AC-03，AWR-05 §28.5 选项 (A)）。坐标为世界帧 [E, N, U] 米。",
+  "links": [
+    {
+      "id": "osm-w200320976-break",
+      "profile": "person",
+      "a": [-840.534, 200.642, -26.595],
+      "b": [-839.611, 203.504, -26.195],
+      "radius_m": 0.5,
+      "bidir": true,
+      "evidence": "OSM way 200320976（highway=residential）在主岛与西侧岛（约 55,923 m²）之间的 3 m 网格断口；两端点为断口两侧的行人 NavMesh 吸附点，高差 0.40 m（W12 断口扫描 gaps2.json）"
+    }
+  ]
+}

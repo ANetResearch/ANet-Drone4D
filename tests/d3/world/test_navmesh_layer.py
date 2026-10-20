@@ -22,9 +22,10 @@ from awr.world.georef.frames import world_to_lla
 from awr.world.georef.types import Anchor
 from awr.world.glb.derive import navmesh as nm
 from awr.world.glb.derive.raycast import write_raycast
+from awr.world.ingest.types import ConfigError
 from awr.world.package.validate import validate_world, vglb_results
 
-pytestmark = pytest.mark.skipif(shutil.which("node") is None or not (nm.NAVSVC_DIR / "node_modules").is_dir(),
+pytestmark = pytest.mark.skipif(shutil.which("node") is None or not nm.navsvc_modules().is_dir(),
                                 reason="dep: node 22 and tools/navsvc/node_modules (npm ci --prefix tools/navsvc)")
 
 WID = "synth-nav"
@@ -98,8 +99,42 @@ def test_version_pins_match_package_lock_and_wasm() -> None:
     for name in ("core", "generators", "wasm"):
         assert pkg["dependencies"][f"@recast-navigation/{name}"] == v
         assert lock["packages"][f"node_modules/@recast-navigation/{name}"]["version"] == v
-    wasm = nm.NAVSVC_DIR / "node_modules/@recast-navigation/wasm/dist/recast-navigation.wasm.wasm"
+    wasm = nm.navsvc_modules() / "@recast-navigation/wasm/dist/recast-navigation.wasm.wasm"
     assert hashlib.sha256(wasm.read_bytes()).hexdigest() == nm.wasm_sha256()
+
+
+def test_navsvc_modules_resolve_from_an_ancestor_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """dmax 编译镜像（K06）的布局：代码检出不含 `tools/navsvc/node_modules`，依赖装在祖先目录的 `node_modules`。Python 侧
+    `navsvc_modules()` 与 navsvc `recast.mjs`（`import.meta.resolve`）取到同一目录，版本与 WASM 核对照常进行；本地依赖存在时优先。"""
+    import subprocess
+
+    real = nm.navsvc_modules()
+    repo = tmp_path / "repo"
+    nav = repo / "tools" / "navsvc"
+    shutil.copytree(nm.NAVSVC_DIR / "src", nav / "src")
+    for f in ("package.json", "WASM_SHA256"):
+        shutil.copy(nm.NAVSVC_DIR / f, nav / f)
+    (repo / "tools" / "worldglb").mkdir(parents=True)
+    shutil.copy(nm.RECAST_VERSION_FILE, repo / "tools" / "worldglb" / "RECAST_VERSION")
+    monkeypatch.setattr(nm, "NAVSVC_DIR", nav)
+    outer = [d / "node_modules" for d in tmp_path.parents if (d / "node_modules" / "@recast-navigation" / "core").is_dir()]
+    if outer:                                                                # 本身运行在编译镜像内（/node_modules 已装）
+        assert nm.navsvc_modules() == outer[0]
+    else:
+        assert nm.navsvc_modules() == nav / "node_modules" and not nm.navsvc_modules().is_dir()     # 未安装：调用方据 is_dir() 判定
+        with pytest.raises(ConfigError, match="recast-navigation not installed"):
+            nm.node_bin()
+    shutil.copytree(real, tmp_path / "node_modules")                         # 镜像布局：/node_modules（此处为 tmp_path/node_modules）
+    assert nm.navsvc_modules() == tmp_path / "node_modules"
+    assert nm.node_bin()
+    js = ("const m = await import(process.argv[1]); const info = await m.initRecast();"
+          "console.log(JSON.stringify({pkg: m.PKG_DIR, wasm: info.wasm_sha256}))")
+    out = subprocess.run([nm.node_bin(), "--input-type=module", "-e", js, (nav / "src" / "recast.mjs").as_uri()],
+                         capture_output=True, text=True, timeout=60, check=True)
+    got = json.loads(out.stdout)
+    assert got == {"pkg": str(tmp_path / "node_modules" / "@recast-navigation"), "wasm": nm.wasm_sha256()}
+    shutil.copytree(real, nav / "node_modules")                              # 本地依赖优先（与 Node 解析次序一致）
+    assert nm.navsvc_modules() == nav / "node_modules"
 
 
 def test_recast_params_cells_and_profiles() -> None:

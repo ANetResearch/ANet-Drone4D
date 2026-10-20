@@ -44,7 +44,7 @@ from awr.world.package.jsonio import write_json
 
 __all__ = ["AGENTS", "AREAS", "BAKE_JS", "CELLS", "FLAGS", "HREF_DIR", "NAVSVC_DIR", "NAVSVC_JS", "RECAST_VERSION_FILE", "Highways",
            "NavSvc", "NavSvcError", "NavmeshResult", "agent_for", "bake_profile", "corridor_mask", "junction_seeds", "lowest_hit",
-           "nav_profiles", "node_bin", "parse_highways", "recast_params", "recast_version", "to_mm", "triangle_areas", "wasm_sha256",
+           "nav_profiles", "navsvc_modules", "node_bin", "parse_highways", "recast_params", "recast_version", "to_mm", "triangle_areas", "wasm_sha256",
            "write_navmesh"]
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -109,12 +109,24 @@ def wasm_sha256() -> str:
     return WASM_SHA256_FILE.read_text(encoding="utf-8").strip()
 
 
+def navsvc_modules() -> Path:
+    """navsvc 实际装载的 `node_modules` 目录：按 Node ESM 裸模块解析的次序，自 `tools/navsvc/src` 起逐级向上查找含
+    `@recast-navigation/core` 的 `node_modules`（K06：dmax 编译镜像把依赖装在 `/node_modules`，代码以卷挂载在任意目录时同样可解析；
+    `tools/navsvc/src/recast.mjs` 以 `import.meta.resolve` 取同一目录做版本与 WASM 核对）。均不存在时返回
+    `tools/navsvc/node_modules`（调用方据 `is_dir()` 判定未安装）。"""
+    for d in (NAVSVC_DIR / "src", *(NAVSVC_DIR / "src").parents):
+        m = d / "node_modules"
+        if (m / "@recast-navigation" / "core").is_dir():
+            return m
+    return NAVSVC_DIR / "node_modules"
+
+
 def node_bin(node: str | None = None) -> str:
     """Node 可执行文件：参数、`AWR_NODE` 或 PATH 中的 `node`；navsvc 依赖未安装时报配置错误（`npm ci --prefix tools/navsvc`）。"""
     exe = node or os.environ.get("AWR_NODE") or shutil.which("node")
     if not exe:
         raise ConfigError("node not found (set AWR_NODE or install Node 22); required by the navmesh stage and navsvc")
-    if not (NAVSVC_DIR / "node_modules" / "@recast-navigation" / "core").is_dir():
+    if not (navsvc_modules() / "@recast-navigation" / "core").is_dir():
         raise ConfigError(f"recast-navigation not installed in {NAVSVC_DIR} (run: npm ci --prefix tools/navsvc)")
     return exe
 

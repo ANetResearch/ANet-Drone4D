@@ -13,6 +13,8 @@
    - 车辆 profile NavMesh 存在且示例事件 crop-handoff-001 的车辆段全部可达（门 2 预检，Detour 后端）；
    - 点状锚点（OSM 路口、OSM POI 与出入口节点、示例事件的点状与门锚点；建筑多边形不计；限扫描覆盖范围内）`navSnap` 中位距离 ≤ 1 m，
      > 3 m 的比例 ≤ 5%；吸附按 M22 §6.6.11（水平搜索半宽 15 m，`point` 类 > 3 m 时沿 OSM 道路 ±15 m、步长 0.5 m 重定位，接受 ≤ 1 m）；
+     "> 3 m 比例"的分母按 AWR-05 §28.5 选项 (A)（K06）只计可寻路（保留）分量上的锚点，位于被洪泛裁剪掉的岛上的锚点 status = review
+     单列（判定由 `navmesh_pruned.mjs` 查询被裁剪多边形）；crop 的行人 NavMesh 以配方 `offmesh.json` 的西侧连接并入西侧岛；
    - 两台机器烘焙的 NavMesh sha256 相同：本机部分为图层清单、bin 文件与 navsvc `hello` 三处 sha256 一致及两个 navsvc 进程应答逐字节
      相同；跨机器对拍由 X01 执行，给出 `AWR_NAVMESH_PEER_SHA256="person=<sha>,vehicle=<sha>"` 时在此比对。
 
@@ -44,7 +46,7 @@ from awr.sim.events import nav as nv
 from awr.world.glb.derive import navmesh as nm
 from awr.world.ingest.types import ConfigError
 
-pytestmark = pytest.mark.skipif(shutil.which("node") is None or not (nm.NAVSVC_DIR / "node_modules").is_dir(),
+pytestmark = pytest.mark.skipif(shutil.which("node") is None or not nm.navsvc_modules().is_dir(),
                                 reason="dep: node 22 and tools/navsvc/node_modules (npm ci --prefix tools/navsvc)")
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -58,6 +60,9 @@ VEG_LANDUSE = frozenset({"forest", "meadow", "grass", "orchard", "vineyard", "fa
 VEG_CLASSES = frozenset({"low_vegetation", "medium_vegetation", "high_vegetation"})
 POI_KEYS = ("amenity", "shop", "tourism", "office", "craft", "historic", "entrance")
 SNAP_EXT_M, RELOC_SPAN_M, RELOC_STEP_M, RELOC_ACCEPT_M = 15.0, 15.0, 0.5, 1.0      # M22 §6.6.11
+# 西侧约 55,923 m² 岛上的点状锚点（W12 实测：crop 7d3429a04895 上 15 m 内无保留多边形；K06 以 off-mesh 连接并入主岛后应 ≤ 3 m）
+WEST_ISLAND_ANCHORS = frozenset({"j-4474499578", "j-4474499583", "j-4474499602", "j-4474499617", "j-4474611983", "j-4474611985",
+                                 "j-4474685508", "j-4474685517", "n-13116721564"})
 
 
 # ====================================================================== 合成夹具
@@ -110,7 +115,9 @@ def synth(tmp_path_factory: pytest.TempPathFactory) -> SimpleNamespace:
 
 
 def test_backend_selection_and_fallback(synth, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
-    """ADR-196 (5)：有图层取 Detour（sha256 = 图层 bin.sha256，provenance 取 navsvc），无图层或 `grid` 取栅格；`detour` 不可用即报错。"""
+    """ADR-196 (5)：有图层取 Detour（sha256 = 图层 bin.sha256，provenance 取 navsvc），无图层或 `grid` 取栅格；`detour` 不可用即报错。
+    缺省后端取 `AWR_EVENT_NAV`（dmax 编译镜像设为 detour，K06），本用例先清除以检查 `auto` 口径，再检查环境变量为 detour 时报错。"""
+    monkeypatch.delenv("AWR_EVENT_NAV", raising=False)
     p, v = synth.p, synth.v
     assert isinstance(p, nv.DetourNav) and isinstance(v, nv.DetourNav) and p.svc is v.svc
     assert p.sha256 == synth.docs["person"]["bin"]["sha256"] and v.sha256 == synth.docs["vehicle"]["bin"]["sha256"] and p.sha256 != v.sha256
@@ -123,6 +130,10 @@ def test_backend_selection_and_fallback(synth, monkeypatch: pytest.MonkeyPatch, 
     assert all(isinstance(n, nv.NavGrid) for n in nv.build_stage_nav(_Q(), BBOX).values())               # 无世界目录（夹具）
     with pytest.raises(ConfigError, match="detour-navmesh@1"):
         nv.build_stage_nav(_Q(), BBOX, world_dir=synth.empty, backend="detour")
+    monkeypatch.setenv("AWR_EVENT_NAV", "detour")                               # 正式编译环境：缺图层不退回栅格
+    with pytest.raises(ConfigError, match="detour-navmesh@1"):
+        nv.build_stage_nav(_Q(), BBOX, world_dir=synth.empty)
+    monkeypatch.delenv("AWR_EVENT_NAV")
     with pytest.raises(ConfigError, match="must be one of"):
         nv.build_stage_nav(_Q(), BBOX, world_dir=synth.world, backend="recast")
     monkeypatch.setenv("AWR_EVENT_NAV", "grid")
@@ -298,7 +309,7 @@ def crop(tmp_path_factory: pytest.TempPathFactory) -> SimpleNamespace:
     lo, hi = cover.min(0), cover.max(0)
     navs = nv.build_stage_nav(q, (lo[0], lo[1], hi[0], hi[1]), world_dir=CROP, backend="detour")
     return SimpleNamespace(q=q, navs=navs, hw=hw, files=files, anchor=anchor, cover=cover, pip=point_in_polygon,
-                           layers=nv.navmesh_profiles(CROP))
+                           layers=nv.navmesh_profiles(CROP), tmp=tmp_path_factory.mktemp("ac03"))
 
 
 @need_crop
@@ -355,6 +366,29 @@ def test_crop_random_pairs_reachable_corridor_and_vegetation(crop) -> None:
     assert stats["vegetation_frac"] <= 0.05, stats
 
 
+def _pruned_island_dist(rows: list[dict], crop) -> list[int | None]:
+    """逐个锚点到最近被裁剪多边形的水平距离（整数毫米；15 m 内没有时为 None），由 `navmesh_pruned.mjs` 在独立 Node 进程中查询。
+    竖直初值取求交网格自上而下首个命中再抬高 0.5 m（与 DetourNav 的吸附口径相同）。"""
+    import subprocess
+
+    out: list[int | None] = [None] * len(rows)
+    for prof in sorted({r["profile"] for r in rows}):
+        idx = [i for i, r in enumerate(rows) if r["profile"] == prof]
+        xy = np.array([rows[i]["xy"] for i in idx], np.float64)
+        z, _prim = crop.q.walkable_surface(xy, np.inf)
+        z = np.where(np.isfinite(z), z, 0.0) + 0.5
+        pts = [nm.to_mm((float(x), float(y), float(h))) for (x, y), h in zip(xy, z, strict=True)]
+        f = Path(crop.tmp) / f"pruned-{prof}.json"
+        f.write_text(json.dumps(pts))
+        res = subprocess.run([nm.node_bin(), str(Path(__file__).with_name("navmesh_pruned.mjs")),
+                              str(CROP / "geometry" / "nav" / f"{prof}.json"), str(f)],
+                             capture_output=True, text=True, timeout=600, check=True)
+        got = json.loads(res.stdout)
+        for k, i in enumerate(idx):
+            out[i] = got["pruned_mm"][k]
+    return out
+
+
 @pytest.fixture(scope="module")
 def anchor_snaps(crop) -> SimpleNamespace:
     """点状锚点候选（覆盖范围内）与 M22 §6.6.11 吸附结果。"""
@@ -394,7 +428,8 @@ def anchor_snaps(crop) -> SimpleNamespace:
                 if s2.dist_m <= RELOC_ACCEPT_M:
                     d, moved = s2.dist_m, float(np.hypot(*(D[j] - p)))
                     break
-        rows.append({"source": src, "id": aid, "profile": prof, "raw_m": s.dist_m, "dist_m": d, "relocated_m": moved})
+        rows.append({"source": src, "id": aid, "profile": prof, "xy": [float(p[0]), float(p[1])], "raw_m": s.dist_m, "dist_m": d,
+                     "relocated_m": moved})
     dist = np.array([r["dist_m"] for r in rows])
     by = {k: {"n": sum(1 for r in rows if r["source"] == k),
               "median_m": float(np.median([r["dist_m"] for r in rows if r["source"] == k])),
@@ -405,6 +440,21 @@ def anchor_snaps(crop) -> SimpleNamespace:
           "far": [r for r in rows if r["dist_m"] > 3.0]}
     kept = dist[np.isfinite(dist)]
     st["kept_island_only"] = {"n": len(kept), "median_m": float(np.median(kept)), "far_frac": float(np.mean(kept > 3.0))}
+    # AWR-05 §28.5 选项 (A)（K06）：位于被洪泛裁剪掉的岛上的锚点——吸附半宽 15 m 内（含沿 OSM 道路重定位）没有保留多边形、
+    # 3 m 内有被裁剪多边形（flags = 0）——status = review，不提供给事件路线，不计入"> 3 m 比例"的分母；其余锚点照常计入，
+    # 包括保留岛上吸附 > 3 m 的锚点（建筑内的 POI 等，即使其附近另有被裁剪的碎片多边形）与 15 m 内没有任何可走面的锚点
+    far_rows = [r for r in rows if r["dist_m"] > 3.0]
+    pruned_mm = _pruned_island_dist(far_rows, crop) if far_rows else []
+    for r, pm in zip(far_rows, pruned_mm, strict=True):
+        r["pruned_m"] = None if pm is None else pm / 1000.0
+        r["pruned_island"] = math.isinf(r["dist_m"]) and pm is not None and pm / 1000.0 <= 3.0
+    routable = [r for r in rows if not r.get("pruned_island")]
+    rd = np.array([r["dist_m"] for r in routable])
+    st["pruned_island"] = [r["id"] for r in rows if r.get("pruned_island")]
+    st["routable"] = {"n": len(routable), "median_m": float(np.median(rd)), "far": int((rd > 3.0).sum()),
+                      "far_frac": float(np.mean(rd > 3.0))}
+    for r in rows:
+        r["status"] = "auto" if r["dist_m"] <= 3.0 else "review"         # M22 §6.6.11（覆盖边缘 20 m 条件不影响本统计）
     _record("anchor_snap", st)
     print(json.dumps({k: v for k, v in st.items() if k != "far"}, ensure_ascii=False))
     return SimpleNamespace(rows=rows, stats=st)
@@ -412,26 +462,48 @@ def anchor_snaps(crop) -> SimpleNamespace:
 
 @need_crop
 def test_crop_anchor_snap_median(anchor_snaps) -> None:
-    """点状锚点 navSnap 中位距离 ≤ 1 m（§11 D3-AC-03）；示例事件锚点全部 ≤ 3 m。"""
+    """点状锚点 navSnap 中位距离 ≤ 1 m（§11 D3-AC-03，全部候选与可寻路分量两种口径）；示例事件锚点全部 ≤ 3 m 且不在被裁剪岛上。"""
     st = anchor_snaps.stats
     assert st["n"] >= 200 and st["median_m"] <= 1.0, st
-    assert all(r["dist_m"] <= 3.0 for r in anchor_snaps.rows if r["source"] == "event")
-    assert st["kept_island_only"]["far_frac"] <= 0.05, st["kept_island_only"]
+    assert st["routable"]["median_m"] <= 1.0, st["routable"]
+    assert all(r["dist_m"] <= 3.0 and not r.get("pruned_island") for r in anchor_snaps.rows if r["source"] == "event")
 
 
 @need_crop
-@pytest.mark.xfail(strict=True, reason="D3-AC-03 未过项（待用户决定）：crop 7d3429a04895 行人 NavMesh 按 keep = largest-seeded 只保留主岛（W07），"
-                                     "> 3 m 比例 22/231 ≈ 9.5%（只计保留岛 6/215 ≈ 2.8%）；保留全部含种子岛时为 6/231 ≈ 2.6% 但随机 1,000 对只有 829 对可达，"
-                                     "两条款在本世界互相冲突；唯一有依据的 off-mesh 连接（OSM way 200320976 上 3 m 断口，并入西侧 55,923 m² 岛）"
-                                     "实验烘焙后为 13/231 ≈ 5.6%，仍未达标；决定并重建 crop 后删除本标记")
 def test_crop_anchor_snap_far_fraction(anchor_snaps) -> None:
-    """点状锚点 navSnap > 3 m 的比例 ≤ 5%（允许沿 OSM 道路自动重定位）（§11 D3-AC-03，全量口径）。
+    """点状锚点 navSnap > 3 m 的比例 ≤ 5%（允许沿 OSM 道路自动重定位）（§11 D3-AC-03）。
 
-    未过项的构成（W12 复核，2026-10-19 实测）：保留岛上 6 个（5 个 POI 位于建筑或遮蔽结构内，吸附 3.5–4.4 m，15 m 内无 OSM 道路可供重定位；
-    1 个路口距扫描覆盖边缘 2.1 m）；被裁剪岛上 16 个：西侧 55,923 m² 岛 9 个（与主岛之间只有上述 3 m 断口），其余 7 个位于扫描边缘的山坡孤岛，
-    沿 OSM 道路与主岛之间为 35 m 以上的无网格或不可走地形，不以 off-mesh 连接虚构连通。
+    分母按 AWR-05 §28.5 选项 (A)（K06）：只计可寻路（保留）分量上的点状锚点；位于被洪泛裁剪掉的岛上的锚点（15 m 内无保留多边形、
+    3 m 内有被裁剪多边形）status = review，不提供给事件路线，单列登记。crop 的行人 NavMesh 以 `offmesh.json` 的西侧连接
+    （OSM way 200320976 上 3 m 断口）把约 55,923 m² 的西侧岛并入主岛，该岛上的路口不再是被裁剪锚点；其余被裁剪岛位于扫描边缘的
+    山坡，沿 OSM 道路与主岛之间为 35 m 以上的无网格或不可走地形，不以 off-mesh 连接虚构连通。
     """
-    assert anchor_snaps.stats["far_frac"] <= 0.05, {k: v for k, v in anchor_snaps.stats.items() if k != "far"}
+    st = anchor_snaps.stats
+    rt = st["routable"]
+    assert rt["far_frac"] <= 0.05, {k: v for k, v in st.items() if k != "far"}
+    assert len(st["pruned_island"]) + rt["n"] == st["n"]
+    assert len(st["pruned_island"]) <= 0.05 * st["n"], st["pruned_island"]                  # 被裁剪岛锚点只是少数（复核用）
+    west = {r["id"]: r for r in anchor_snaps.rows if r["id"] in WEST_ISLAND_ANCHORS}
+    assert set(west) == WEST_ISLAND_ANCHORS and all(r["dist_m"] <= 3.0 for r in west.values()), west
+
+
+@need_crop
+def test_crop_person_navmesh_offmesh_link_joins_the_west_island(crop) -> None:
+    """crop 行人 NavMesh 带配方 `offmesh.json` 的西侧连接，洪泛裁剪经连接遍历后仍只保留一个分量（keep = largest-seeded）；
+    连接两端可吸附且端点间 Detour 走廊完整。"""
+    doc = crop.layers["person"]
+    om = {o["id"]: o for o in doc["offmesh"]}
+    cfg = json.loads((ROOT / "configs" / "worlds.d3" / "oryahovo-crop1" / "offmesh.json").read_text(encoding="utf-8"))["links"]
+    assert set(om) == {L["id"] for L in cfg if L.get("profile", "person") == "person"} and "osm-w200320976-break" in om
+    assert doc["keep"] == "largest-seeded" and doc["islands"]["kept"] == 1
+    link = om["osm-w200320976-break"]
+    svc = crop.navs["person"].svc
+    a, b = (nm.to_mm(link[k]) for k in ("a", "b"))
+    for p in (a, b):
+        r = svc.call("snap", profile="person", p=p)
+        assert r["found"] and r["dist_mm"] <= 1000, r
+    r = svc.call("path", profile="person", a=a, b=b)                              # 断口两侧原为两个岛，只经连接互通
+    assert r.get("found") and r.get("complete"), r
 
 
 @need_crop

@@ -24,4 +24,5 @@ build:
   quality_cell_m: 2.0
   voxel_m: 1.0
   nav:  # D3-AC-03"种子洪泛裁剪后随机 1,000 对 100% 可达"：行人只保留含种子的最大岛（830k m²，占保留面积 92.6%，W09 实测）；车辆保留全部含种子岛（车道吸附）
+        # offmesh.json 的西侧连接（OSM way 200320976 上 3 m 断口）把约 55,923 m² 的西侧岛并入主岛（K06，AWR-05 §28.5 选项 (A)）；洪泛裁剪经 off-mesh 连接遍历
     person: {keep: largest-seeded}

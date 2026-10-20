@@ -309,7 +309,7 @@ def test_bytes_deterministic_and_independent_of_input_order(built, tmp_path: Pat
     assert "ODbL" in lay["note"] and r.layer.files == [L.HREF]
 
 
-HAVE_NODE = shutil.which("node") is not None and (nm.NAVSVC_DIR / "node_modules").is_dir()
+HAVE_NODE = shutil.which("node") is not None and nm.navsvc_modules().is_dir()
 need_node = pytest.mark.skipif(not HAVE_NODE, reason="dep: node 22 and tools/navsvc/node_modules (npm ci --prefix tools/navsvc)")
 
 

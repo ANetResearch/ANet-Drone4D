@@ -15,7 +15,14 @@ export const NAVSVC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.ur
 export const ROOT = path.resolve(NAVSVC_DIR, '..', '..')
 export const RECAST_VERSION_FILE = path.join(ROOT, 'tools', 'worldglb', 'RECAST_VERSION')
 export const WASM_SHA256_FILE = path.join(NAVSVC_DIR, 'WASM_SHA256')
-export const PKG_DIR = path.join(NAVSVC_DIR, 'node_modules', '@recast-navigation')
+// 依赖目录取 Node 对裸模块的实际解析结果：tools/navsvc/node_modules，或其祖先目录的 node_modules（dmax 编译镜像装在 /node_modules，
+// 代码以卷挂载在任意目录时同样可解析，K06）；版本与 WASM 核对的对象即实际装载的包
+function pkgDir() {
+  let d = path.dirname(fileURLToPath(import.meta.resolve('@recast-navigation/core')))
+  while (path.basename(d) !== '@recast-navigation' && path.dirname(d) !== d) d = path.dirname(d)
+  return d
+}
+export const PKG_DIR = pkgDir()
 export const WASM_PATH = path.join(PKG_DIR, 'wasm', 'dist', 'recast-navigation.wasm.wasm')
 export const NAVSVC_VERSION = JSON.parse(fs.readFileSync(path.join(NAVSVC_DIR, 'package.json'), 'utf8')).version
 
