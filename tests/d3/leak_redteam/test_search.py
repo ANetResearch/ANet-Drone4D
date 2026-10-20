@@ -56,7 +56,13 @@ _p = HERE.parents[0] / "env" / "conftest.py"
 _spec = importlib.util.spec_from_file_location("d3_env_conftest_redteam", _p)
 _m = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_m)
-synth_event = _m.synth_event
+
+
+@pytest.fixture(scope="session")
+def synth_event(tmp_path_factory):
+    """合成交接事件，舞台寻路固定为栅格后端：本模块的统计判据按该磁带标定（Detour 与栅格的背景演员轨迹不同，见 env conftest
+    `synth_event_at`），结果不随本机是否装有 navsvc 依赖或 `AWR_EVENT_NAV` 取值而变。"""
+    yield from _m.synth_event_at(tmp_path_factory, nav="grid")
 
 # 已知缺陷：判据名 → 原因（修复后对应的严格 xfail 用例转为 XPASS 而失败，届时从此处移除）
 KNOWN_FINDINGS = {

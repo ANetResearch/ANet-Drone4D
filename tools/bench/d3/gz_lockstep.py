@@ -1111,7 +1111,7 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
     r.add_argument("--m25-runs", type=int, default=1)
     r.add_argument("--noise", choices=("clean", "realistic", "harsh"))
     r.add_argument("--sample-s", type=float, default=1.0)
-    st = sub.add_parser("startup", help="repeated physics instance cold starts (docker run to HelloAck), no simulation")
+    st = sub.add_parser("startup", help="repeated physics instance cold starts (instance launch to HelloAck), no simulation")
     _add_gz_args(st)
     st.add_argument("--n", type=int, default=20, help="number of instance starts")
     st.add_argument("--gap-s", type=float, default=1.0, help="pause between starts")
@@ -1196,7 +1196,7 @@ def main_startup(a: argparse.Namespace, gz: dict, load: dict) -> int:
         r = startup_once(cfg, i, export=export, world=world)
         p.write_text(json.dumps(r, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         samples.append(r)
-        sys.stderr.write(f"startup-{i}: {r.get('startup_s')} s (docker run {r.get('launch_cmd_s')} s, socket {r.get('launch_to_socket_s')} s, "
+        sys.stderr.write(f"startup-{i}: {r.get('startup_s')} s (launch cmd {r.get('launch_cmd_s')} s, socket {r.get('launch_to_socket_s')} s, "
                          f"hello {r.get('hello_s')} s)\n")
         time.sleep(max(0.0, a.gap_s))
     summ = summarize_startup(samples)

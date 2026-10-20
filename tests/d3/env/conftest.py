@@ -50,6 +50,13 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
 
 @pytest.fixture(scope="session")
 def synth_event(tmp_path_factory):
+    yield from synth_event_at(tmp_path_factory)
+
+
+def synth_event_at(tmp_path_factory, nav: str | None = None):
+    """`synth_event` 的生成器（世界目录, 事件版本目录）。`nav` 固定事件编译的舞台寻路后端（`AWR_EVENT_NAV`：grid | detour）；
+    缺省 None 沿用环境（本机装有 navsvc 依赖时为 Detour，否则退回栅格，ADR-196）。演员轨迹随后端不同，按固定磁带标定的统计用例
+    （泄漏红队 R1、R4 等）以 `nav="grid"` 调用，使结果不随 Node 与 navsvc 是否安装、`AWR_EVENT_NAV` 取值而变。"""
     pytest.importorskip("open3d")
     pytest.importorskip("zstandard")
     from synthworld import build_synth_world
@@ -72,7 +79,10 @@ def synth_event(tmp_path_factory):
     (d / "anchors.json").write_text(json.dumps(OVERLAY))
     (d / "event.json").write_text(json.dumps(ev))
     # meet_ab 为示意声明（合成路线中 a、b 不相遇）；夹具不核对语义，门 3 以 lenient 编译（strict 下为 613，E01）
-    r = compile_event(d / "event.json", w, opts=CompileOptions(out=d / "v1", cache_dir=tmp / "cache", strict=False))
+    with pytest.MonkeyPatch.context() as m:                 # 只在编译期间固定后端，不影响同一会话的其他用例
+        if nav is not None:
+            m.setenv("AWR_EVENT_NAV", nav)
+        r = compile_event(d / "event.json", w, opts=CompileOptions(out=d / "v1", cache_dir=tmp / "cache", strict=False))
     assert r.status == "compiled", r.as_dict()
     yield w, d / "v1"
     mp.undo()

@@ -67,7 +67,9 @@ def synth_event(tmp_path_factory):
     (d / "anchors.json").write_text(json.dumps(OVERLAY))
     (d / "event.json").write_text(json.dumps(ev))
     # meet_ab 为示意声明（合成路线中 a、b 不相遇）；夹具不核对语义，门 3 以 lenient 编译（strict 下为 613，E01）
-    r = compile_event(d / "event.json", w, opts=CompileOptions(out=d / "v1", cache_dir=tmp / "cache", strict=False))
+    with pytest.MonkeyPatch.context() as m:   # 舞台寻路固定为栅格后端：MIN_REPORTS 按该磁带实测，不随本机是否装有 navsvc 依赖而变
+        m.setenv("AWR_EVENT_NAV", "grid")
+        r = compile_event(d / "event.json", w, opts=CompileOptions(out=d / "v1", cache_dir=tmp / "cache", strict=False))
     assert r.status == "compiled", r.as_dict()
     yield w, d / "v1"
     mp.undo()
