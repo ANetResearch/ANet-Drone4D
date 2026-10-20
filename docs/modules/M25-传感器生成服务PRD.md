@@ -746,7 +746,7 @@ def render_camera_frame(ctx, sess, req) -> tuple[CameraObsInt, CameraTruth]:
 
 ### 6.5 相机：效果链与 ISP
 
-> v1.4 实现状态（S09）：`raster-gl@0.4.1` 只实现增益与自动曝光、渐晕、噪声、ISP；畸变、雾、接触阴影、雨与 2048² 投影阴影图尚未实现（`build_remap` 已有 CPU 实现但未接入 GPU 路径，§6.5.7），§6.7 要求的 PBO 异步读回也未实现。封板任务未覆盖上述项，补齐前 D3-AC-11 不能通过；`tools/bench/d3/camera_throughput.py` 对缺失项以 GPU 代价代理遍计时，结果标注 `fx_proxy`，只作开发参考（AWR-05 §25.5 F-15）。
+> v1.6 实现状态（K03，取代下述 v1.4 状态）：`raster-gl@0.5.0`、`fx-full@2` 实现完整效果链：畸变重映射遍（`build_remap` 接入渲染路径，`RESOLVE_FS` 把含裕量的无畸变渲染域重映射到交付像素，§6.5.7）；渲染域着色遍依次为接触阴影、2048² 投影阴影图（reversed-Z 正交光源、演员合批绘制、16 采样 PCF）、湿润、Koschmieder 雾与雨消光（σ = 3.912/V + 1.076·R^0.67 km⁻¹，雾色混合）与 16 采样雨线（键取 `cam_rain` 通道）；CPU 参考为 `effects.shade_reference`（投影阴影图除外，另做几何核验）。天气档：晴天为能见度 20 km、接触阴影、`DIST_TIER = (-0.08, 0.02, 0, 0, 0)`；最坏为雾 2 km、雨 8 mm/h、`shadow = map`。§6.7 的读回与帧组装见该节 v1.6 实现状态。吞吐工具 `tools/bench/d3/camera_throughput.py` 已删除代理遍（`proxy_passes` 恒为空，`--fx-proxy` 只保留为兼容参数），可见光各条款计入（AWR-05 §5.4.3、§25.5 F-15）。v1.4 状态（S09，已取代）：`raster-gl@0.4.1` 只实现增益与自动曝光、渐晕、噪声、ISP，缺项以 GPU 代价代理遍计时，结果标注 `fx_proxy`。
 
 #### 6.5.1 顺序
 
@@ -838,7 +838,7 @@ def build_remap(cm: CameraModel, max_ratio=1.35):
     return RemapTable(W_r, H_r, fx_r, fy_r, cx_r, cy_r, map=(u_r, v_r))
 ```
 
-`dist` 全零时不建表，渲染相机等于交付相机，重映射为恒等（直接读回）。映射表按 `CameraModel` 哈希缓存。v1.4 实现状态（S03）：`build_remap` 已在 `awr.sensorsvc.camera.proj` 实现（CPU，带缓存），尚未接入 GPU 渲染路径。验收：已知三维点经 `cv2.projectPoints(K, dist)`（主点换算到 OpenCV 约定后）投影位置与实例质心之差 ≤ 0.5 px，RGB 与深度、实例、语义的边缘对齐误差 ≤ 0.5 px（M25-AC-006）。
+`dist` 全零时不建表，渲染相机等于交付相机，重映射为恒等（直接读回）。映射表按 `CameraModel` 哈希缓存。v1.4 实现状态（S03）：`build_remap` 已在 `awr.sensorsvc.camera.proj` 实现（CPU，带缓存），尚未接入 GPU 渲染路径。v1.6（K03）：已接入渲染路径，由 `RESOLVE_FS` 在 GPU 上重映射（RGB 双线性，其余平面最近邻，卷帘行时刻按交付行计），与 `remap_bilinear` 之差 ≤ 1e-4、与 `remap_nearest` 精确一致。验收：已知三维点经 `cv2.projectPoints(K, dist)`（主点换算到 OpenCV 约定后）投影位置与实例质心之差 ≤ 0.5 px，RGB 与深度、实例、语义的边缘对齐误差 ≤ 0.5 px（M25-AC-006）。
 
 ### 6.6 相机真值
 
@@ -890,6 +890,7 @@ v1.4（S15）实现现状：相机目前不在 GL 侧按三角形查表。CPU �
 | `objects[]`、`T_world_sensor` | 不交付 | 真值文件，JSON（RFC 8785 规范化） | — | 同上 |
 
 - 读回：PBO 异步拷贝到固定页内存，与下一帧渲染重叠；JPEG 编码在第二路流上执行。
+- v1.6 实现状态（K03）：读回为持久映射 PBO 环（`python/awr/sensorsvc/camera/readback.py`：`glBufferStorage` 加 `GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT`，`glGetTextureImage` 写入槽位后插入栅栏，取结果时只等栅栏，数组为槽位上的只读视图，槽位在 release 前不复用；只入队的 GL 调用不释放 GIL，栅栏等待释放 GIL）；`RasterCamera.submit`、`ThermalCamera.submit` 返回 `RenderJob`、`ThermalJob`，`render` 为同步包装，结果逐字节相同；测光小图为 RGBA32F。帧组装中 L2-depth 复制与 sha256、真值 zstd、`gt_depth`、`temp_ck` 编码与 sha256 在辅助线程池中帧内并行，字节与块顺序与同步组装逐字节相同；L2-depth 的 bshuf4-zstd 由写入器打包线程池并行执行（`RunWriter(pack_threads=2)`，消息顺序与字节不变）。可见度统计（§6.6.1）由计算着色器原子归约随帧读回（`RenderOut.vis`、`ThermalOut.vis`），与 CPU 统计逐值相同，只在没有质量位时使用；`ray_elevation` 质量位由天空遍写出的天空分类平面给出，CPU 只以 float64 复核分类 2，与原掩码逐位相同。
 - CPU 侧：zstd 与重排在 worker 的编码线程池（≤ 4 线程）执行；720p 每帧 CPU 约 3–5 ms（实例 1.8 MB、语义与质量位各 0.9 MB，静态像素为 0，压缩率高）。
 - 编码器身份（`nvimgcodec-<ver>/jpeg/q90/420`）写入 `FrameMeta.encoder`；同一像素数组在同镜像同型号 GPU 上产生同一字节。
 - v1.4（S02）：nvImageCodec 把 nvJPEG 登记为 `HYBRID_CPU_GPU` 后端（以 `GPU_ONLY` 无法构造编码器）；编码器选择由 `AWR_JPEG_ENCODER = auto | gpu | cpu` 控制，`rgb1080-rs` 或在线路径不可回退到 CPU（在线守卫 `online_path()`，越界抛 `CpuEncodeForbidden`）。
@@ -2316,7 +2317,7 @@ class ThermalModel:                      # v1.4 实现位于 python/awr/sensorsv
 
 **v1.4 实现设定（S13，参见 AWR-05 §5.4.10）**：子帧窗口为 [t_end − (S−1)·τ_b, t_end] 等间隔取样（4 子帧时权重约 0.03、0.09、0.24、0.64），真值层取末子帧，全部子帧位姿与演员相同时只绘制一遍；车辆分区按车身盒体：x ≥ 0.2·l 为发动机区，x ≤ −0.45·l 且 z ≤ 0.35·h 为排气区，熄火后两区以 τ = 600 s 回落到车身温度，熄火时长 = 停车时长 − 120 s，从未行驶的车辆按冷车计，车身日照项按无遮挡计；人员代理的颈与头为皮肤分区；DSL `profile` 改用参数表另一类别行，`surface_temp_c` 覆盖 base 分区，`emissivity` 覆盖全部分区；machine、uav、object 为 body 模型（machine +2 + 8·sin h、ε 0.90；uav +3 + 4·sin h、ε 0.90；object 0 + 4·sin h、ε 0.93，本实现设定）；`dT_app_k` 的环带为切比雪夫距离 ≤ 3 px 且不含任何演员像素，环带为空时不给出该字段并加标记 `no_ring`；`thermal_static.npz` 为质心单射线（可见 255、遮挡 0），起点沿太阳方向外移 2 cm，太阳在地平线下时全为 0，成员 `sun_vis`、`sun_az_el_deg`、`backend`，zip 成员时间固定为 1980-01-01、不压缩以保证字节确定，建筑立面另乘入射余弦 \|n·sun\|；静态类别取外观目录的 `tri.cls` 流，没有时以求交网格 `cls` 按 `src` 回填，都没有时为 0（default 行）。
 
-**参数表文件与帧记录（v1.4，S13）**：参数表文件为 `configs/thermal_table_v1.yaml`（schema `awr.thermal_table.v1`，sha256 按规范 JSON 计算）。热成像帧记录 `kind = thermal`；`agent_view.temp_ck` 为 {`dtype` u16、`unit` 0.01 K、`codec` radiometric_u16、`compression` zstd、`ref`、`sha256`}；`internal.thermal` 含 `thermal_table`、`planck_table`、`noise`、`thermal_static` 的版本与 sha256；编码器标识为 `zstd-3/u16le`。
+**参数表文件与帧记录（v1.4，S13）**：参数表文件为 `configs/thermal_table_v1.yaml`（schema `awr.thermal_table.v1`，sha256 按规范 JSON 计算）。热成像帧记录 `kind = thermal`；`agent_view.temp_ck` 为 {`dtype` u16、`unit` 0.01 K、`codec` radiometric_u16、`compression` zstd、`ref`、`sha256`}；`internal.thermal` 含 `thermal_table`、`planck_table`、`noise`、`thermal_static` 的版本与 sha256；编码器标识为 `zstd-1/u16le`（v1.6，K03；原为 `zstd-3/u16le`），热成像渲染器版本 `thermal-gl@2`；8 × 6 黄金向量在 level 1 与 level 3 下逐字节相同，S17 的逐字节约定不变。
 
 **参数表 `thermal_table_v1`**（置信度 D，P0b 核对后冻结；数值单位 K，相对 `T_air`）
 
@@ -2336,7 +2337,7 @@ class ThermalModel:                      # v1.4 实现位于 python/awr/sensorsv
 
 **随机流**：流 22 `sensor_gen` 增加通道 `therm_temporal`（键 `(run_seed, 22, uav_no, frame_index, ch)`，区间 0x1500–0x15FF，帧键加 sensor_no）与 `therm_fpn`（键 `(run_seed, 22, uav_no, 0, ch)`，区间 0x1600–0x16FF，逐像素计数 `pix · 2 + c`，c = 0 偏置、1 增益；v1.4 登记区间，见 §6.17.2）。
 
-**实现设定（v1.4，S20）**：吞吐基准由磁带速度推导车辆的 `engine_on` 状态；热成像真值写入 `/eval/hidden/camera/{uav}/therm0`（`camera_gt` 容器，`kind = thermal`），正式的热成像真值通道名待 M27 通道契约确定，L2 Env 接入热成像时与此一致；`therm512` 帧组装中 `encode_temp_ck`（zstd-3）单线程 5.57 ms，为最大项（AWR-05 §27.5 F-54）；crop 世界无烘焙太阳位置时静态日照项与 `thermal_bake` 不生效。
+**实现设定（v1.4，S20）**：吞吐基准由磁带速度推导车辆的 `engine_on` 状态；热成像真值写入 `/eval/hidden/camera/{uav}/therm0`（`camera_gt` 容器，`kind = thermal`），正式的热成像真值通道名待 M27 通道契约确定，L2 Env 接入热成像时与此一致；`therm512` 帧组装中 `encode_temp_ck`（zstd-3）单线程 5.57 ms，为最大项（AWR-05 §27.5 F-54）；v1.6（K03）：改为 zstd-1（真实帧 3.7 ms、压缩比 1.84，zstd-3 为 7.8 ms、2.01），压缩器按线程复用，并移入辅助线程池；crop 世界无烘焙太阳位置时静态日照项与 `thermal_bake` 不生效。
 
 ### 15.7 外观库与骨骼动画（M25-FR-191、192）
 
@@ -2528,7 +2529,7 @@ M25 在方案 C1 下的工作量为 WP-D3-22（P1 部分）中的 2.0 人周（�
 | §5.4.3（AWR-05）卷帘快门 | 验收参照 `camera.rowref`（Warp BVH 逐行射线求交）；`raster.rs_static` 静止判定走全局快门程序；warp-lang 1.17.0 离线装入 `d3-sensorsvc`（`requirements-warp.lock`）；测试 `tests/d3/sensors/test_rolling_shutter.py`（12 个用例） | S06 |
 | §6.4.4、§6.8 | 采集作业的演员时间基准为 `capture.ActorClock`（整数纳秒键，只在完全相同时刻复用） | S07 |
 | §6.7、§15.5 | L2 Env 相机经 `camera.encode.shared_encoder` 编码，交付字节即 `raw.mcap` 存档字节；1080p JPEG 体积见 `docs/impl/D3-相机实测记录.md` | S08 |
-| §6.5、§6.7、§6.21 | 效果链缺项与 PBO 异步读回未实现（§6.5 注）；吞吐工具 `tools/bench/d3/camera_throughput.py`：持续模式 10 min、在途 ≤ 4、4 线程编码池、录制每 60 s 轮转并删除旧段；在线模式 10 Hz 锁步、1 或 3 个并发 Worker、时延从 tick 请求算起；缺失的晴天档与最坏档效果以 GPU 代价代理遍计时（标注 `fx_proxy` 的结果只作开发参考）；独占采样按 ADR-195 以 1 s pmon 加 5 s 计算进程查询，容器须加 `--pid=host`；分阶段实测见 S09 报告与 AWR-05 §25.3 第 14 行；会话显存口径与 §6.21 的冲突见 AWR-05 §23.5 C-14 | S09 |
+| §6.5、§6.7、§6.21 | 效果链缺项与 PBO 异步读回未实现（§6.5 注）；吞吐工具 `tools/bench/d3/camera_throughput.py`：持续模式 10 min、在途 ≤ 4、4 线程编码池、录制每 60 s 轮转并删除旧段；在线模式 10 Hz 锁步、1 或 3 个并发 Worker、时延从 tick 请求算起；缺失的晴天档与最坏档效果以 GPU 代价代理遍计时（标注 `fx_proxy` 的结果只作开发参考）；独占采样按 ADR-195 以 1 s pmon 加 5 s 计算进程查询，容器须加 `--pid=host`；分阶段实测见 S09 报告与 AWR-05 §25.3 第 14 行；会话显存口径与 §6.21 的冲突见 AWR-05 §23.5 C-14；v1.6（K03）：效果链缺项与 PBO 异步读回已实现，代理遍已删除（`proxy_passes` 恒为空）；帧组装的 L2-depth 复制与 sha256、真值 zstd、`gt_depth` 与 `temp_ck` 编码在辅助线程池中帧内并行；可见度统计由 GPU 归约随帧读回；持续模式在途上限 4 帧使吞吐约为在途帧数 / 单帧时延，修改属协议变更（AWR-05 §23.5 C-38） | S09、K03 |
 | §6.8.2、§6.8.3、§6.8.4、§6.8.5、§6.17.2 | Warp GPU 产品路径 `warp_mesh.py` 的实现说明与对拍结果；全部候选实体实例化，refit 路径移至 D3.x；纹理亮度调制、烘焙阴影补偿、harsh 档鬼影与雨致测距噪声在两条路径均未实现；LiDAR 逐射线子通道表按代码修订 | S12 |
 | §5.4.10（AWR-05）、§15.6 | RGBA32F 几何遍、子帧窗口、车辆分区与熄火、machine/uav/object 参数、`dT_app_k` 环带、`thermal_static.npz` 字节确定、静态类别来源；`ThermalModel` 位于 `thermal/render.py`；参数表 `configs/thermal_table_v1.yaml`；帧记录 `kind = thermal` 与 `internal.thermal`；静态几何按瓦片合并上传（每顶点 12 B、每三角形 12 B，crop 世界约 90 MB），读回走 PBO，每个子帧提交后调用 `glFlush` | S13 |
 | §15.7 | `appearance_lib@1` 资产为程序化代理（`person-proxy@1`、`vehicle-proxy@1`），动画片段 id 与热成像分区发射率 | E05 |

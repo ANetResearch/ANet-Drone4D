@@ -828,10 +828,13 @@ for a in cands:
     if a.kind in {point} and d > 3.0: d, p, s = relocate_along_osm_ways(a, nav, span=15.0, step=0.5, accept=1.0)
     a.navSnap, a.snapDistM, a.relocatedM = p, d, s
     a.status = "auto" if d <= 3.0 and dist_to_cover_edge(a) > 20.0 else "review"
+    if on_pruned_island(a, nav): a.status = "review"   # v1.6（ADR-212）：15 m 内（含重定位）无保留多边形且 3 m 内有 flags = 0 的多边形
 anchors = apply_overrides(cands, recipe.anchors_overrides) ; diff_against(previous_package)
 ```
 
 v1.6（W11）：道路走廊定义为车辆道路中心线按 max(width_m/2, 5 m) 缓冲，与上文 `ROAD_CORRIDOR` 的 5 m 相同；`corridor_check` 逐段与逐采样点判定车道是否落在走廊内，结果写入车道的 `in_corridor` 与 `corridor_excess_m`；车道图字段见 §7.3.4 的车道扩展；`lanes` 阶段在覆盖内以迭代 Tarjan 求强连通分量，最大分量内的车道记 `routable = true`（crop 上占车道长度的 97.3%），M23 生成车辆路线时只用可路由车道（`LaneGraph.routable()`）。
+
+v1.6（K06，AWR-05 ADR-212）：被裁剪岛上的锚点定义为吸附半宽 15 m 内（含沿 OSM 道路的重定位）没有保留多边形、且 3 m 内有被裁剪（flags = 0）多边形的锚点；这类锚点 `status = review`，不提供给事件路线，在报告中单列，不进入 D3-AC-03"点状锚点 `navSnap` > 3 m 的比例"的分母（该比例只在保留（可寻路）分量上的点状锚点上统计）。crop 配方另带 `offmesh.json` 西侧连接 `osm-w200320976-break`（§7.6.3），把约 55,923 m² 的西侧岛并入主岛；crop contentVersion `7d8c8b895e55` 上 > 3 m 的比例为 6/224 = 2.68%，被裁剪岛上的锚点 7 个，全体口径 13/231 = 5.63%。
 
 #### 6.6.12 `sensorHints`
 
@@ -1449,7 +1452,7 @@ v1.4（W02、W03）：配方的 `osm`、`dem` 可为列表；`qa` 段含 `osm_ex
 |---|---|
 | `anchors.overrides.json` | `{schema: "awr.anchors.overrides.v1", ops: [{op: add\|move\|confirm\|deprecate\|relabel\|pair, id, fields?, by, reason}]}`，按数组顺序施加 |
 | `nav_seeds.json` | `{seeds: [{id, xy, profile}]}`，补充 OSM 路口之外的裁剪种子 |
-| `offmesh.json` | `{links: [{id, a: [E,N,U], b: [E,N,U], radius_m, bidir, profile}]}`，台阶、窄巷等人工连接 |
+| `offmesh.json` | `{links: [{id, a: [E,N,U], b: [E,N,U], radius_m, bidir, profile}]}`，台阶、窄巷等人工连接；v1.6（K06）：crop 配方带 `configs/worlds.d3/oryahovo-crop1/offmesh.json`（一条连接 `osm-w200320976-break`，OSM way 200320976 的 3 m 断开处，AWR-05 ADR-212） |
 | `horizontal_planes.geojson` | 人工增补的已知水平面多边形（世界帧 E、N） |
 | `control_points.json` | `{points: [{gltf_xyz, lat_deg, lon_deg, h_msl_m?}]}` 或 `{pairs: [{gltf_a, gltf_b, distance_m}]}` |
 

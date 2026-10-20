@@ -682,6 +682,7 @@ def _settle(self, s, act, t_k):
 2. 迟到的 ACT（`k` 小于当前在途 `k_obs`）丢弃，回执 `late`；`k` 大于当前在途值或重复的 ACT 计协议错误（666）。
 3. 动作生效时刻按主时钟 tick 量化；物理步粒度由 `clock_profile` 决定（缺省 `{d1_250, 250, 250, 250}` 每 tick 一步；`l1_hz = 125` 的吞吐档每 2 tick 一步），setpoint 在其后第一个物理步生效，规则与 D2 批处理相同（F16）。
 4. 确定性边界：`fixed` 模式下只要 Agent 不超时，τ 与生效时刻与墙钟无关；`per_step` 模式只有在墙钟耗时超过 `step_budget_s` 时才引入墙钟依赖，此时运行被标记，M27 据此决定排名有效性。
+5. v1.6（K05）磁带核对：BenchEnv 构造时在 `open_tape` 之后、创建录制器之前调用 `awr.agentsdk.env.tapecheck.check_tape_world`。磁带头 `world.content_version` 须等于世界 `world.json` 的 `contentVersion`，否则报 615 `TAPE_WORLD_MISMATCH`，不创建运行目录、不启动 gz；无 `world.json` 的夹具世界只允许用于非正式运行。正式运行（ranked 且 `physics = realistic`，ADR-196 决策 (5)）另以 615 拒绝：栅格生成器磁带（`why = grid_generator`）、来源缺失（`provenance_missing`）、NavMesh 摘要与世界 `detour-navmesh@1` 图层的 `bin.sha256` 不符（`navmesh_mismatch`）、世界缺该图层（`navmesh_layer_missing`）、磁带未记录 NavMesh 摘要（`navmesh_unrecorded`）与缺 `world.json`（`world_manifest_missing`）。核对结果写入运行清单的 `tape_check` 字段。
 
 #### 6.6.2 观测投影与白名单编码
 

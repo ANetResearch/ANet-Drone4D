@@ -4315,7 +4315,7 @@ flowchart TB
 | `/lab/replay` | 两个 Run 同步回放（含样例包浏览，v1.6，F04） | P0a | 研究者 | 不提供 | `a`、`b`（运行 id）、`t`（统一时间轴上的仿真秒，即 Run A 的仿真时间）、`cam`、`align ∈ {sim, event}`、`rate ∈ {0.25, 0.5, 1, 2, 4, 8}` |
 | `/lab/runs/:rid/lidar` | LiDAR 与重建对比 | P0b | 研究者 | 只读（预计算；Tier S 点云降级） | `uav`、`src`（`gt,l0,livo` 的子集）、`rep`、`mode ∈ {livo, lio}`；v1.6（F06）：另有 `tier ∈ {S, B}`（覆盖设备检测；软件光栅化为 Tier S）、`color ∈ {err, rgb}`、`size ∈ {1, 2, 3, 4, 6}`（px）、`crop=0`（隐藏裁剪框）；`src=none` 关闭全部图层 |
 | `/lab/runs/:rid/inspect` | 运行回放 · 数据检视 | P0b（v1.3 由 P1 前移） | 研究者（评测 catalog：评测员） | 公开样例使用 `/lab/samples/:sid` 内的同一面板（Tier B/A，`public` 档切片） | `t`、`slice`、`catalog ∈ {dist, eval}`；v1.6（R06）：`slice` 为 `<from>,<to>`（仿真秒），作为 BN-57 的 `t_from`、`t_to` 传入；测试构建（`TEST_SWITCHES`）接受 `?inspect=force` 以跳过设备检查，供软件渲染下的 Playwright 使用 |
-| `/lab/compare` | Fast 与 Realistic 对照 | P2 | 研究者 | 只读 | `a`、`b`（两个运行 id）、`t` |
+| `/lab/compare` | Fast 与 Realistic 对照 | P2 | 研究者 | v1.6（F13）：只在内部构建提供；公开站部分随 P2 移出 | v1.6（F13）：`run`（持有 `tier_compare/` 产物的运行；缺省取 `b`）、`case`、`uav`、`t`；原定义 `a`、`b`（两个运行 id）、`t` 的两运行模式随 P2 移出 |
 | `/lab/datasets` | 数据集与评测浏览 | P0b | 研究者 | 只读（dev 集） | `event`、`xp`、`group`、`metric` |
 | `/lab/leaderboard` | 内部排行榜（v1.3） | P0a（原型）、P0b（v1） | 受邀成员 | 不提供（构建期剔除） | `track`、`bv`（榜单版本）、`entry` |
 | `/lab/submissions`、`/lab/submissions/:sid` | 内部提交（v1.3） | P0a（内部成员）、P0b（受邀成员） | 受邀成员（本团队） | 不提供（构建期剔除） | `track`、`state` |
@@ -4855,6 +4855,8 @@ viewer.on('selection_change', (ev) => {
 ### 21.10 Fast 与 Realistic 对照（`/lab/compare`，P2；R-D3-20）
 
 两个运行（同一磁带与 Run 规格，物理档分别为 Fast 与 Realistic）并排：上部两个观测墙（各 1–4 格）共用 lab 播放头；中部三维场景视图同时显示两档轨迹（Fast 实线 g50、Realistic 虚线 g300）；下部差异图表：位置差 RMS 随时间（`LfLine`）、到达时刻差、观测差（同一 `(uav, sensor, seq)` 的帧摘要相同比例）与指标差（`LfTable`）。进入页面时校验两运行的 `tape_content_sha256` 与 `config_sha256`（除物理档字段外）一致，不一致时 `Alert`"两个运行的事件或规格不同，对照结果不可比。"
+
+v1.6（F13）：实现为单运行模式。页面经 BN-54 读取运行 `/runs/{run}/artifacts/tier_compare/` 下的 `tier_compare.json` 与各用例的 `<case>.<tier>.npz`（`np.savez` 文件，含 numpy 写出的 zip64 头与压缩归档，由 `npz.ts` 解码）。左栏为用例表（接口判定、容差判定与余量）与报告摘要；主区为两档平面轨迹（Fast 实线 `--lf-data`、Realistic 虚线 `--lf-data2`）、高度曲线、逐样本位置差（以报告的位置 RMS 为参考线）、指标差带（相对各自容差），以及指标、接口检查、采样一致性与 M25 逐字节输出的表格（`LfTable`）。全部图表与位置读数共用一个 lab 播放头。规格检查：两档的机体集合或样本数不同、或样本时刻不逐位相同时，`Alert`"两档的采样网格或机体集合不同，对照结果不可比。"并给出原因。一致性检查：由轨迹重算的位置 RMS 须与报告的 `pos_rms_m` 相差 ≤ 1e-9 m，`within` 须与 diff ≤ tol 一致，不一致时标注；采样一致性各项按各自上限由页面自行判定，不取报告的通过标志。两运行模式（两个观测墙）与 `tape_content_sha256`、`config_sha256` 核对随 P2 移出 D3。BN-54 实现前页面在生产环境中无法加载数据（AWR-05 §29.5 F-70）。
 
 ### 21.11 数据集与评测浏览（`/lab/datasets`，P0b；R-D3-06、R-D3-10）
 
@@ -5475,7 +5477,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | UX-AC-094 | 评测视图 | 研究者与访客的请求中 `/truth/` 出现 0 次；评测员切换后出现"评测视图"标签与包围框；评测视图像素中无红色 | Playwright | 本机 B | P0 |
 | UX-AC-095 | LiDAR 对比（D3-AC-15） | Tier B 三方叠加正确、误差着色与 `metrics.json` 一致（抽样 1,000 点，量化误差 ≤ 2 mm）；Tier S 以点云降级；帧率符合 UX-NFR-041；箱线图分位数与数据一致 | Playwright `lab/lidar-compare`、`perf/lab/lidar.spec.ts` | 本机 S、B | P0 |
 | UX-AC-096 | 数据检视（D3-AC-25） | 五种加载状态按 §21.9.2 呈现；双向同步误差 ≤ 1 帧；100 次往复无震荡；选择联动正确；Tier S 显示 UNSUPPORTED；Viewer 未加载时场景帧率不回退 | Playwright `lab/inspect` | 本机 B、S | P0 |
-| UX-AC-097 | 对照页（D3-AC-35） | 两运行共用播放头；规格不一致时提示；差异图表与 `evaluation.json` 一致 | Playwright `lab/compare` | 本机 B | P0 |
+| UX-AC-097 | 对照页（D3-AC-35） | 两运行共用播放头；规格不一致时提示；差异图表与 `evaluation.json` 一致 | Playwright `lab/compare`；v1.6（F13）：共用播放头、规格不一致提示与报告一致性核对已实现（单元测试 `apps/web/tests/lab/tierCompare.test.ts`，单运行模式读取 `tier_compare.json`），Playwright 待补 | 本机 B | P0 |
 | UX-AC-098 | 数据集浏览（D3-AC-24、50） | 树、摘要与表格数据与接口一致；种子 < 10 的指标带提示；下载区显示许可与署名；test 划分条目 0 个 | Playwright `lab/datasets` | 本机 B | P0 |
 | UX-AC-099 | 内部排行榜与提交（v1.3；D3-AC-43、57、59） | 排行榜按分轨与榜单版本显示 S、置信区间、四分量与并列组，基线行不占名次；提交 Sheet 显示推送命令、分轨与配额，配额不足时禁用并显示 681；撤回只在评测前可用；公开构建中不存在排行榜与提交路由与字符串 | Playwright（`fake_bench`）`lab/leaderboard`、`lab/submissions`、构建扫描 | 本机 B | P0 |
 | UX-AC-100 | lab 播放头 | 三种来源切换正确；Tier S 写 store ≤ 4 Hz；缓冲门限 500 ms；实时运行不可 seek | `tests/lab/playhead.test.ts` | 本机 S | P0 |

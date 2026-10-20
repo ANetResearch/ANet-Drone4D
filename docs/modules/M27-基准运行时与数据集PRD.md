@@ -729,7 +729,7 @@ stateDiagram-v2
 | 当前 | 事件 | 守卫 | 动作 | 目标 |
 |---|---|---|---|---|
 | — | 接收请求 | 身份有效、配额未超、边界检查通过 | 记录、计配额、生成 ticket | RECEIVED |
-| RECEIVED | 镜像上传或推送完成 | — | 启动 Trivy 与体积扫描 | SCANNING |
+| RECEIVED | 镜像上传或推送完成 | — | 启动 Trivy 与体积扫描；v1.6（K05）：领取前经镜像接入门 `registry_gate`（模式 `invited` 缺省、`all`、`off`；命令行 `--registry-gate` 或环境变量 `AWR_REGISTRY_GATE`，等待上限 `--registry-wait-s` 缺省 1800 s）：`submissions/<sid>/registry.json` 为 `pulled` 或 `present` 才领取；无记录、`not_found`、`pull_failed`、`error` 或记录的 `image_digest` 与提交不符时保持 RECEIVED，不阻塞后续提交；`foreign_image`、`digest_is_manifest` 报 REJECTED 692（`detail.check` 为该结论）；提交后超过等待上限仍未就绪报 REJECTED 692 `image_missing`（带 `registry_status`、`waited_s`）；`invited` 只对受邀成员生效，`all` 对全部角色生效；`run_subworker.sh` 带 materialize 侧车（缺省）时为 `all` | SCANNING |
 | SCANNING | 扫描通过 | — | 按测试套件展开排名 Run（`public` 或 `research` 类）；v1.3（B14）：扫描为 inspect（≤ 4 GB、linux/amd64）加 Trivy，记录写 `submissions/<id>/scan.json`，见 M27-FR-167 | QUEUED |
 | SCANNING | 扫描失败 | — | 记录原因；退还配额 | REJECTED（692） |
 | RECEIVED、SCANNING、QUEUED | 撤回（DELETE） | 提交者本人 | 取消全部排队 Run；退还配额 | WITHDRAWN |
@@ -1502,7 +1502,7 @@ def leaderboard(obs_level: str, evaluator_major: int) -> list[Row]:
 | `/uav/{id}/camera/{name}/calib` | raw | `foxglove.CameraCalibration`（标称内参与 `dist`） | 静态 + 变焦变化时 | 观测 | `/fleet/<uav>/cam<k>/image`（Pinhole） |
 | `/uav/{id}/gimbal/{name}` | raw | `foxglove.FrameTransform`（带噪云台读数） | 50 Hz | 观测 | `/fleet/<uav>/cam<k>`（Transform3D） |
 | `/uav/{id}/lidar/{name}` | raw | `awr.sensor.lidar_frame.v2`（有效点 + `offset_time`） | 10 Hz | 观测（L2） | `/fleet/<uav>/lidar<k>` |
-| `/uav/{id}/thermal/{name}`（v1.3，S17） | raw | `foxglove.RawImage`（`encoding = 16UC1`，`data` 为 `ThermalObs.temp_ck` 原样：u16le 加一个 zstd level 3 帧；通道元数据 `codec = 16UC1`、`compression = zstd`、`unit = 0.01 K`、`therm_codec`）；`agc_jpeg` 预览为 `CompressedImage` | 传感器频率 | 观测（L2） | — |
+| `/uav/{id}/thermal/{name}`（v1.3，S17） | raw | `foxglove.RawImage`（`encoding = 16UC1`，`data` 为 `ThermalObs.temp_ck` 原样：u16le 加一个 zstd 帧，v1.6（K03）起为 level 1，数据仍为 `ThermalObs.temp_ck` 原样；通道元数据 `codec = 16UC1`、`compression = zstd`、`unit = 0.01 K`、`therm_codec`）；`agc_jpeg` 预览为 `CompressedImage` | 传感器频率 | 观测（L2） | — |
 | `/uav/{id}/imu/{name}`、`/uav/{id}/gnss/{name}` | raw | msgpack（`ImuObs`、`GnssObs`，单位写入通道元数据） | 200 Hz / 10 Hz | 观测（L2） | `/fleet/<uav>/telemetry/*` |
 | `/uav/{id}/action`、`/uav/{id}/report` | raw | json（`bench/act.v1`） | 10 Hz / 事件 | 运行 | `/agents/<uav>/plan`（只在评测版面） |
 | `/net/records` | raw | json | 每次投递 | 运行 | `/eval/metrics/comm_*` |
