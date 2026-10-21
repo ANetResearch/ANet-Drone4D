@@ -1750,7 +1750,7 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 | 编号 | 优先级 | 场景 | 度量与阈值 | 方法 | 环境 | D3-AC |
 |---|---|---|---|---|---|---|
 | M24-AC-025 | P0 | 缺省档与排名约束（P0a） | 未指定 `physics` 的 Run 规格解析为 `realistic` + `physics` 导出档；`ranked = true` 且 `physics = fast` 或 `sitl` 或 `xval` 的 Run 校验失败；`platform_digest` 与榜单版本不一致时拒绝启动 | `tests/d3/phys/test_tiers.py` | 本机 | 34 |
-| M24-AC-026 | P0 | 每 Run 重启与资源（P0a） | `physics` 实例启动 p95 ≤ 5 s；3 机 360 s 锁步中实例 CPU p95 ≤ 2 核、RSS ≤ 2 GB、无 GPU 设备；3 个正式 Run 并发时各自 PoseHistory 与单独运行逐位一致；`p600_bench` 参数在两档相同 | `tools/bench/d3/gz_lockstep.py`、`tests/d3/phys/test_gz_lockstep_long.py`（v1.2；原写的 `tests/d3/gz/test_realistic.py` 不存在） | dmax | 34 |
+| M24-AC-026 | P0 | 每 Run 重启与资源（P0a） | `physics` 实例启动 p95 ≤ 5 s（v1.6，AWR-05 ADR-216：统计样本为 ADR-033 协议下 ≥ 40 次冷启动加各 Run 实例，判定取 p95，同时报告最差实例；K04 实测 p95 3.15 s、最差 3.73 s）；3 机 360 s 锁步中实例 CPU p95 ≤ 2 核、RSS ≤ 2 GB、无 GPU 设备；3 个正式 Run 并发时各自 PoseHistory 与单独运行逐位一致；`p600_bench` 参数在两档相同 | `tools/bench/d3/gz_lockstep.py`、`tests/d3/phys/test_gz_lockstep_long.py`（v1.2；原写的 `tests/d3/gz/test_realistic.py` 不存在） | dmax | 34 |
 | M24-AC-027 | P0 | 故障恢复重放（P0b） | 在第 1,000 tick 注入 `kill -9` 与步进超时各 10 次：每次在重放后继续，最终 PoseHistory 存档与无故障运行 sha256 相同；连续 3 次超时的运行失败（632） | `tests/d3/phys/determinism/test_fault.py`（v1.2；原写 `tests/d3/gz/test_recovery.py`） | dmax | 17、35 |
 | M24-AC-028 | P0 | 两档一致性用例集（P0b） | 一致性用例在两档全部通过；`tier_compare.json` 字段齐全且位置 RMS、到达时刻差在报告容差内；v1.6（P09）：已满足（9/9 用例通过，`tier_compare.json` 字段齐全，AWR-05 §26.3 第 36 行） | `tests/d3/phys/conformance/` | dmax | 35 |
 | M24-AC-029 | P0 | 平台复现审计（P0b） | 审计重放 30 个抽样 Run 全部一致；人为替换插件构建后审计检出 `platform_digest` 不一致并发出冻结信号 | `tests/d3/phys/test_audit.py` | dmax | 17 |
@@ -1792,3 +1792,5 @@ tests/d3/phys/**、tests/d3/gz/**、tests/d3/rotorpy/test_dyn_parity.py
 v1.2 第二批（P07、P08）依据 AWR-05 §25；P07 另记：`python/awr/agentsdk/env/spec.py` 中 `EnvSpec` 的物理档注释仍为 `realistic|kinematic`，应补 `fast`（该文件归 S05）。
 
 D3-AC 映射：D3-AC-35 与 D3-AC-58 增加 `tests/d3/phys/test_fast.py`（P07）；D3-AC-34 的测试增加 `tests/d3/phys/test_gz_export_checks.py` 与 `test_gz_lockstep_long.py`（原登记 `tests/d3/gz/test_export_physics.py` 的实际路径为前者）；D3-AC-35 增加 `tests/d3/phys/determinism/test_fault.py`。控制日志落盘（FR-068 `control.bin`）与基于控制日志的复现审计尚未完成（AWR-05 §12.1 WP-D3-20）。
+
+v1.6 第八批（D01，AWR-05 §31）：M24-AC-026 的启动统计量按 ADR-216 明确为"≥ 40 次冷启动加各 Run 实例的 p95，同时报告最差实例"，不采用 3 次中位；`tools/bench/d3/gz_lockstep.py` 的启动条款待改为按 p95 判定（AWR-05 §31.5 F-82）。

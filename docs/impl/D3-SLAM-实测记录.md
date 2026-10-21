@@ -220,6 +220,8 @@ r1 的 clean 基线（LIVO 0.094 m）来自 1 kHz 微分平坦样条与另一种
 
 ## 6 供 D01 冻结时参考（拟议，未生效）
 
+> D01 处置（2026-10-21，ADR-215，先行生效，待封板前用户确认，AWR-05 §23.5 C-39）：采用第 1 条的事件零点锚定；realistic 区间冻结为 [0.07%, 0.18%]，即原区间相对 r1 参考中位的 0.6–1.6 倍作用于本矩阵参考中位 0.112%，不采用第 2 条 (a) 建议的 [0.08%, 0.30%]，湍流对照（第 2 条 (b)）移入 D3.x；第 4 条按原建议冻结：MID-360 LIVO 作业 4 核、r_map 4.5 万点/s；HKisland03 回归作业 ≥ 32 GB、8 核；Avia 维持暂定。按冻结口径主组 clean 0.054%、0.051 m、地图 0.085 m，realistic 15 次中位 0.112%、最大 0.237%，各条款通过（[D3-P-1-实测报告.md](D3-P-1-实测报告.md) §4.4）。
+
 1. **锚定点**：D3-AC-14 的"地图到网格距离均值"与锚定漂移改以事件零点（预滚窗口结束时刻）处的估计锚定；对齐 ATE 与 RPE100 不受影响。按此口径 clean 档 LIVO 为 0.085 m，满足 0.15 m（`matrix.json` 的 `ac14_event0_anchor`，`counted = false`）。实现位置为 `slam_eval.cli.evaluate_run`（SL1 的 `traj_metrics` 加锚定时刻参数），`slam_matrix.py reanchor` 已给出等价计算。
 2. **realistic 区间**：两种做法择一：(a) 依据本矩阵冻结为 gz 锁步无湍流口径，例如中位数区间取 [0.08%, 0.30%]、单次最大 ≤ 0.50% 不变；(b) 保留 [0.15%, 0.40%]，在 realistic 档轨迹中加入与 r1 相当的湍流后重飞（`slam_traj.py fly` 目前不接风，需要先扩展）。区间数值由 D01 决定。
 3. **8 m/s 比值**：条款满足；引用时注明 gz 锁步轨迹上单一位姿发散，量级引用 Fast 档的 51–88 倍与 S16 的 15–64 倍。
@@ -244,7 +246,7 @@ python3 src/tools/bench/d3/slam_matrix.py report --out out          # → out/ma
 
 ## 8 遗留
 
-1. D3-AC-14 按暂定阈值不通过两条（clean 地图距离的锚定口径、realistic 区间下界），由 D01 以 ADR 冻结后用 `slam_matrix.py report` 重新判定；判定代码读取 `slam_eval.report.AC14`，冻结时只改该表与锚定口径。
-2. `slam_eval` 内存模型的 MID-360 缺省 `cpus = 2` 与 r_map = 5 万点/s 需要按 4.1、3.7 修订（SL1 的文件，归 D01 冻结后修改）。
+1. D3-AC-14 按暂定阈值不通过两条（clean 地图距离的锚定口径、realistic 区间下界），由 D01 以 ADR 冻结后用 `slam_matrix.py report` 重新判定；判定代码读取 `slam_eval.report.AC14`，冻结时只改该表与锚定口径。D01 已以 ADR-215 冻结（事件零点锚定，区间 [0.07%, 0.18%]），工具冻结表与锚定参数尚未落地，落地后重新判定（AWR-05 §31.5 F-82）。
+2. `slam_eval` 内存模型的 MID-360 缺省 `cpus = 2` 与 r_map = 5 万点/s 需要按 4.1、3.7 修订（SL1 的文件，归 D01 冻结后修改）；ADR-215 冻结为 4 核、4.5 万点/s，`memmodel.py` 待修改（AWR-05 §31.5 F-82）。
 3. 360 s 航迹（`slam_traj.py fly --laps 2.6`）上的 M27-AC-026 30% 限额复现与 3 机 × 360 s 墙钟（M27-AC-024）归 B19，本矩阵未覆盖。
 4. dmax 产物约 33 GB（`sl3/out`，其中运行目录的地图 PCD 约 22 GB），D01 引用完成后可删除 PCD，封板后整体删除。

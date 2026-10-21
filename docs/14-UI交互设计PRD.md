@@ -5140,6 +5140,8 @@ GitHub About：一句话描述（≤ 120 字符，无营销用语）；topics �
 5. 许可与署名在世界页、数据集页、公开站页脚与下载区可见（D3-AC-24）。
 6. copy-lint 无 error，warning 已逐条确认。
 
+v1.6（H11）：本次发布的评审记录为 [impl/D3-文案评审记录.md](impl/D3-文案评审记录.md)（AWR-05 §7.10、D3-AC-23、D3-AC-46）；`tests/d3/copy/test_copy_review_record.py` 要求每个新增的 D3 路由与词典文件都在记录中登记，记录引用的发现编号须已登记，中英文词典键集合与 ICU 参数名一致，D3 组件注释以外不出现中文字面量。评审裁决 R-01 至 R-07 见记录第 7 节（AWR-05 §23.5 C-45 至 C-51）。
+
 ### 21.16 图层与设备档（AWR-05 §7.8）
 
 | 档 | 世界外观 | 演员 | 视角 | 数据检视 |
@@ -5261,7 +5263,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | `lab.nav.{home,worlds,events,experiments,runs,datasets,compare,leaderboard}` | 概览、世界、事件、实验、运行、数据集、对照、排行榜 | Overview, Worlds, Events, Experiments, Runs, Datasets, Compare, Leaderboard |
 | `lab.login.title` / `lab.login.hint` | 工作区登录 / 使用管理员签发的工作区令牌登录。令牌只在本次提交中使用，不会保存在浏览器中。 | Workspace sign-in / Sign in with a workspace token issued by an administrator. The token is used only for this request and is not stored in the browser. |
 | `lab.session.expiring` | 会话将于 {m} 分钟后到期 | The session expires in {m} minutes |
-| `lab.role.{visitor,invited,researcher,evaluator,admin}` | 访客、受邀成员、研究者、评测员、管理员（v1.3：`public_submitter` 废止） | Visitor, Invited member, Researcher, Evaluator, Administrator |
+| `lab.role.{visitor,invited,researcher,evaluator,admin}` | 访客、受邀成员、研究者、评测员、管理员（v1.3：`public_submitter` 废止；v1.6（H11）：词典中 `lab.role.researcher` 仍为"研究员"、`lab.role.invited` 英文仍为 "Invited"，与本表不一致，按 W-03 改正，见 [impl/D3-文案评审记录.md](impl/D3-文案评审记录.md)） | Visitor, Invited member, Researcher, Evaluator, Administrator |
 | `lab.forbidden` | 当前角色无权查看此页面（115 ROLE_FORBIDDEN）。如需访问，请联系工作区管理员。 | Your role does not permit access to this page (115 ROLE_FORBIDDEN). Contact the workspace administrator for access. |
 | `lab.world.scale` | 尺度 {s} m/单位（{method}，残差 {r} m） | Scale {s} m per unit ({method}, residual {r} m) |
 | `lab.world.scaleAssumed` | 尺度为人工设定，未经地标配准 | The scale was set manually and has not been registered against landmarks |
@@ -5362,7 +5364,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | `apps/web/src/ui/lab/wall/`（新）：`ObservationWall.tsx`、`layout.ts`、`frameScheduler.ts`、`tileRenderer.ts`、`evalOverlay.tsx` | §21.7 | M15（WP-D3-10） | `ui/fpv/{PerceptionHud,hudModel}.tsx` 的角标排版；M06 `engine/droneview/**`（帧解码 Worker、`d3frames.v1` 解析） |
 | `apps/web/src/ui/lab/lidar-compare/`（新；v1.6，F06：原写 `ui/lab/lidar/`）：`CompareCanvas.tsx`、`charts.tsx` 等 | §21.8 | M15、M06（WP-D3-26） | `engine/pointcloud` 的 ANET_Q16 解码（Tier S）；r4 原型 `.cache/research/d3/r4-mesh-lidar/scripts/{recon,viz}.py`（误差口径）；r1 `eval_sim.py`（指标口径） |
 | `apps/web/src/ui/lab/inspect/`（新）：`InspectPage.tsx`、`RerunPanel.tsx`、`rerunSync.ts`（v1.6，R06：另有 `viewerLoader.ts`，是 `@rerun-io/web-viewer` 唯一的动态 `import()`） | §21.9 | M15（WP-D3-17） | r8 原型 `.cache/research/d3/r8-rerun/web/{index.html,app.js}`（`fromRerun` 防重入、`set_current_time`、`time_update`）；`ui/components/ui/resizable.tsx` |
-| `apps/web/src/ui/lab/replay/`（新，v1.6）：`ReplayPage.tsx`、`ReplayTile.tsx`、`SamplePackPanel.tsx`、`sync.ts`、`samplePack.ts` | §21.2.2 `/lab/replay`（双 Run 同步回放与样例包浏览） | M15（F04） | `ui/lab/wall/{frames,layout}.ts`、`stores/lab/playhead.ts` |
+| `apps/web/src/ui/lab/replay/`（新，v1.6）：`ReplayPage.tsx`、`ReplayTile.tsx`、`SamplePackPanel.tsx`、`sync.ts`、`samplePack.ts` | §21.2.2 `/lab/replay`（双 Run 同步回放与样例包浏览）；v1.6（B20）：样例包文件种类为 `video`、`mcap`、`metrics`、`tape`、`manifest`、`slice` 与 `tracks`（事件回放机队轨迹 `tracks_obs.bin`，`bench/tracks.v1` 观测层，契约 `bench/sample_pack.v1`）；`samplePack.ts` 的 `SAMPLE_FILE_KINDS`、`FILE_ICON` 与文案 `lab.replay.pack.file.tracks` 须补 `tracks`，事件回放的场景视图可复用 `lab-public/samples/tracks.ts` 的解码器（AWR-05 §31.5 F-91） | M15（F04） | `ui/lab/wall/{frames,layout}.ts`、`stores/lab/playhead.ts` |
 | `apps/web/src/ui/lab/{compare,datasets,leaderboard}/`（新） | §21.10 至 §21.12 | M15（WP-D3-26、WP-D3-23、WP-D3-21） | `ui/lf/{LfBarRank,LfLine,LfStat}.tsx` |
 | `apps/web/src/ui/lf/{LfBox,LfMatrix}.tsx`（新）；`LfBarRank.tsx`（增加 `whisker`）、`LfTimelineTrack.tsx`（增加色带与刻度字形） | §21.17.3 | M15 | lieflat 规范（d01） |
 | `apps/web/src/engine/actors/tape/`（新，M06） | 前端磁带解码器：zstd WASM、按演员分列差分解码、Hermite 插值与阶跃规则 | M06（WP-D3-10） | `engine/time/{hermite,trackModel}.ts`；`engine/targets` 已导出组件（`TargetsOverlay`、`bodyMesh`）；r6 原型 `scripts/tape.py`（格式参照）；r7 `scripts/e3_tape_interp.py`（插值对拍） |

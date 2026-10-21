@@ -685,6 +685,7 @@ def _settle(self, s, act, t_k):
 5. v1.6（K05）磁带核对：BenchEnv 构造时在 `open_tape` 之后、创建录制器之前调用 `awr.agentsdk.env.tapecheck.check_tape_world`。磁带头 `world.content_version` 须等于世界 `world.json` 的 `contentVersion`，否则报 615 `TAPE_WORLD_MISMATCH`，不创建运行目录、不启动 gz；无 `world.json` 的夹具世界只允许用于非正式运行。正式运行（ranked 且 `physics = realistic`，ADR-196 决策 (5)）另以 615 拒绝：栅格生成器磁带（`why = grid_generator`）、来源缺失（`provenance_missing`）、NavMesh 摘要与世界 `detour-navmesh@1` 图层的 `bin.sha256` 不符（`navmesh_mismatch`）、世界缺该图层（`navmesh_layer_missing`）、磁带未记录 NavMesh 摘要（`navmesh_unrecorded`）与缺 `world.json`（`world_manifest_missing`）。核对结果写入运行清单的 `tape_check` 字段。
 6. v1.6（B10）L2 主循环的实现：在上述语义不变的前提下，网格 LiDAR 由工作进程池计算（`awr/agentsdk/env/l2.py` 的 `_LidarPool`，CPU 参考每架机一个工作进程，至多 4 个）；相机先为全部机提交、再统一取回；可见度真值归约与观测记录移到后台线程，观测记录在线程中写出（remote 运行时为 `async_obs_record`）；规范观测摘要 `canonical_sha256` 按增量计算；IMU 偏置随机游走以增量缓存 `BiasWalk` 计算（`awr/sensorsvc/imu.py`）；IMU、GNSS 合成与点云等待重叠。以上改动的输出逐字节不变（与改动前正式 Run 的 `obs.sha256`、`acts.jsonl`、真值文件、`pose_sha256` 与 `evaluation.json` 对拍相同）。剖析结论：共享卡上主循环以 Agent 计算（std 资源档单核，基线每步约 110–125 ms）为下限；B10 第 2 轮 L2 墙钟比由 3.66–4.73 降到 2.12–2.49（[AWR-05 §30.3 第 86 行](../05-D3-设计增补与决策记录.md)，记录见 [impl/D3-P0a-正式口径记录.md](../impl/D3-P0a-正式口径记录.md) §2.1）。
 7. v1.6（B10）L2 网格 LiDAR 后端：由 `L2Config.lidar_backend`（`cpu` | `warp`）给出，未给出时取 `AWR_ENV_LIDAR_BACKEND`，缺省 `cpu`；Env 不读 sensorsvc 的 `AWR_LIDAR_BACKEND`（其缺省 `auto` 会随机器是否有 GPU 改变点云）。正式口径（`mbl_e2e` 配置键 `lidar_backend`，进入配置指纹）取 `warp`，即 M25 GPU 产品路径，与 S20、S21 的标准轨在线测量为同一路径；运行清单记录 `l2.lidar_backend`；与 CPU 参考实现的差异按 D3-AC-12 判定（实测 120 帧点集相同，坐标最大差 5.7e-6 m）。
+8. v1.6（K07）世界查询：Env 经 `awr.agentsdk.env.core.open_world_query(world_dir, formal=)` 打开世界查询，返回（查询, `world_query`）。正式运行（`is_formal`：排名且 `physics = realistic`）打不开网格查询时抛 `WorldQueryFallbackRefused`，不退回 DSM 查询，注入 DSM 查询的正式运行同样拒绝；非正式运行记录 warning 后退回 DSM。运行清单 `manifest.json`（`drone4d.bench.env_run.v1`，非契约）记录 `world_query{kind ∈ {mesh, dsm, other}, class, fallback?{reason ∈ {no_mesh_layer, mesh_open_failed}, error}}`。`runner.run_job`、`proto_board._one` 与 `r6_ec reeval` 按 `is_formal(spec)` 打开世界。正式运行前须预生成世界派生缓存（dmax `geo_cache.sh warm`，19 号说明书 dmax 节），不在线派生；测试 `tests/d3/env/test_world_query.py`（6 个用例）。
 
 #### 6.6.2 观测投影与白名单编码
 
@@ -1720,5 +1721,12 @@ v1.6 第七批（B10，AWR-05 §30）：
 | §6.6.1 说明第 6、7 项 | L2 主循环提速的实现（LiDAR 工作进程池、相机先提交后取回、后台真值归约与观测记录、增量观测摘要、`BiasWalk`、IMU 与 GNSS 与点云等待重叠，输出逐字节不变）与剖析结论；L2 网格 LiDAR 后端 `L2Config.lidar_backend`，正式口径取 `warp` | B10 |
 | §6.6.5 | `ActionGuard.saw_frames` 登记 L2 帧证据；§14.3 所列"L2 证据登记缺陷"已修复，D3-AC-58 在 L2 上的 report 条款由 B10 第 2 轮正式运行判定通过 | B10 |
 | §6.2 机型 | `p600_bench` 的 gz 机型映射由 `awr.phys.gz.vehicles` 提供，Env 的 `_GzTier` 写入并挂载派生模型、改写 `run.sdf`，运行清单 `tier_info.vehicle` 记录映射参数（AWR-05 §24.5 F-09 已解决） | B10 |
+
+v1.6 第八批（K07，AWR-05 §31）：
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| §6.6.1 说明第 8 项 | 世界查询 `open_world_query`：正式运行拒绝 DSM 回退（`WorldQueryFallbackRefused`），非正式运行告警后回退，运行清单记录 `world_query{kind, class, fallback?}` | K07 |
+| 基线运行环境 | dmax 上的基线与 SDK 在 `d3-gz` 宿主上以按锁文件重建的共享 pylib-gz 运行（含 `mcap`），不再需要私有 pylib；起飞点注释按实测更正（三维最小距离 16.74–20.72 m，起飞点不移动） | K07 |
 
 D3-AC 映射（第七批）：D3-AC-18 的 r6 EC 对照口径已按 A10 确定（`crop-handoff-001` 含 `cross_C`，计分事件正好是 r6 的 4 类，AWR-05 §24.5 F-02 已关闭），对照结果与条款处置见 AWR-05 §23.5 C-42；D3-AC-17、56、58 的正式运行证据见 [impl/D3-P0a-正式口径记录.md](../impl/D3-P0a-正式口径记录.md)。
