@@ -88,7 +88,7 @@ ERR_CAP_M, ERR_STEP_M, ERR_NONE = 0.5, 0.002, 255
 ERR_SAMPLES = 10_000
 MESH_MARGIN_M = 120.0                                           # 网格裁剪：航线包围盒外扩（≥ 深度上限 60 m + 余量）
 SEG_M, SEG_STRIDE_M, POLY_STEP_M = 100.0, 10.0, 1.0
-AC14_REALISTIC_BAND = (0.15, 0.40)
+AC14_REALISTIC_BAND = (0.07, 0.18)                              # D3-AC-14 realistic 区间，ADR-215 冻结（= slam_eval.report.AC14）
 
 
 @dataclass(frozen=True)

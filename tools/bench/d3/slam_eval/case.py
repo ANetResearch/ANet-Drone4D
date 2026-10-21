@@ -66,6 +66,9 @@ def load_case(path: Path | str, *, mesh: str | None = None) -> Case:
         mesh_spec = mesh or (str((d / m).resolve()) if m and not Path(m).is_absolute() else m)
         meta = {k: c.get(k) for k in ("uav", "noise_profile", "seed", "trajectory_source", "reflectance_model", "noise_table_version",
                                        "pose_nodes", "slam_cam_phase", "world", "speed_mps", "agl_m")}
+        ev0 = c.get("t_event0_bag_ns") or c.get("t0_bag_ns")                 # 事件零点（bag 时刻；ADR-215 锚定点）
+        if ev0:
+            meta["t_event0_bag_ns"] = int(ev0)
         return Case(d, c.get("name") or d.name, d / c.get("bag", "sim.bag"), d / c.get("livo_yaml", "livo.yaml"),
                     d / c.get("camera_yaml", "camera.yaml"), _opt(d / c.get("gt_imu", "gt_imu.tum")),
                     _opt(d / c.get("gt_lidar_ref", "gt_lidar_world.ply")), c.get("lidar_model", "mid360"), c.get("flight_s"),

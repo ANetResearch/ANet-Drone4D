@@ -4,9 +4,11 @@
    算例名与 `slam_traj.case_name` 一致；已有算例按轨迹核对（PoseHistory sha256、节点、相位、航速），不一致记 stale 不复用。
 2. 算例生成按（轨迹、节点、相位）分组调用 `build_cases`；运行：`slam_eval run` 命令行（`--cpus`、`--require-regress`、容器前缀）、
    已完成跳过、未完成旧输出改名保留。
-3. 判定：主组 LIVO 的 clean / realistic 条款、8 m/s ATE 比 ≥ 5、HKisland03 ≤ 1.2 m、版本字段、运行有效性（处理帧比例）；
-   任一条不通过或缺样本时总结论不通过或未定；native / r1_mid 对比；Markdown 表格。
-4. 锚定点敏感性：首个估计带初始化姿态瞬态时，以事件零点重新锚定消除整体旋转；锚定坐标下的地图到网格距离随之回到真值。
+3. 判定（ADR-215 冻结表）：主组 LIVO 的 clean / realistic 条款（区间 [0.07%, 0.18%]）、8 m/s ATE 比 ≥ 5（单一位姿发散计为满足）、
+   HKisland03 ≤ 1.2 m（资源 ≥ 32 GB、8 核另报）、版本字段、运行有效性（处理帧比例）；任一条不通过或缺样本时总结论不通过或未定；
+   native / r1_mid 对比；Markdown 表格。
+4. 锚定点：首个估计带初始化姿态瞬态时，以事件零点重新锚定消除整体旋转；锚定坐标下的地图到网格距离随之回到真值；旧运行
+   （首个估计锚定）的地图条款按 `reanchor.json` 的事件零点数值判定，r1 口径另报不计入。
 """
 
 from __future__ import annotations
@@ -62,31 +64,34 @@ def write_case(root: Path, name: str, *, source: str, noise: str, seed: int, pn:
     return d
 
 
-def run_rec(mode: str, k: int, rpe: float, ate: float, acc: float, processed: int = FRAMES, ok: bool = True) -> dict:
+def run_rec(mode: str, k: int, rpe: float, ate: float, acc: float, processed: int = FRAMES, ok: bool = True,
+            anchor: str | None = "event0") -> dict:
+    """单次运行记录；`anchor = None` 模拟 ADR-215 之前以首个估计锚定评测的运行（`traj` 无 `anchor`）。"""
     return {"run": f"{mode}-r{k}", "mode": mode, "repeat": k, "ok": ok, "code": 0 if ok else 684, "why": None if ok else "oom_kill",
             "traj": {"rpe100_pct": rpe, "rpe100_median_pct": rpe * 0.7, "rpe100_max_pct": rpe * 2, "ate_aligned_rmse_m": ate,
-                     "drift_max_m": 0.4, "drift_final_m": 0.1},
+                     "drift_max_m": 0.4, "drift_final_m": 0.1, **({"anchor": {"mode": anchor}} if anchor else {})},
             "map": {"acc_mean_m": acc, "fscore@0.2": 0.6}, "map_aligned": {"acc_mean_m": 0.03, "fscore@0.2": 0.9},
             "per_frame": {"lio": {"n": processed}}, "resources": {"rss_peak_gb": 2.8, "cpu_cores_equiv": 3.0},
             "r_map": {"r_map_slope": 26_000.0, "r_map_peak": 11_000.0}}
 
 
 def mdoc(source: str, noise: str, seed: int, *, pn: str = "11", phase: str = "tick_end", speed: float = 6.0, livo=(), lio=(),
-         image: str = "sha256:img", processed: int = FRAMES) -> dict:
+         image: str = "sha256:img", processed: int = FRAMES, anchor: str | None = "event0") -> dict:
     """一个算例的 metrics.json：livo / lio 为 [(rpe100_pct, ate_m, map_m)]（每项一次重复）。"""
     name = f"{source}-{noise}-s{seed}-{pn}-{phase}-v{speed:g}"
-    runs = [run_rec(m, k, *v, processed=processed) for m, vals in (("livo", livo), ("lio", lio)) for k, v in enumerate(vals, 1)]
+    runs = [run_rec(m, k, *v, processed=processed, anchor=anchor) for m, vals in (("livo", livo), ("lio", lio))
+            for k, v in enumerate(vals, 1)]
     return {"case": {"name": name, "dir": f"/cases/{name}", "noise_profile": noise, "seed": seed, "trajectory_source": source,
                      "pose_nodes": pn, "slam_cam_phase": phase, "speed_mps": speed, "reflectance_model": "sem_table_v1",
                      "noise_table_version": "d3-noise-1", "world": "smalltown-01"},
             "image": {"tag": "d3-livo:dev", "id": image}, "contract": {"lidar_frames": FRAMES}, "status": "completed", "runs": runs}
 
 
-def passing_docs(group: str = "gz_lockstep", *, clean_map: float = 0.10, processed: int = FRAMES) -> list[dict]:
+def passing_docs(group: str = "gz_lockstep", *, clean_map: float = 0.10, processed: int = FRAMES, anchor: str | None = "event0") -> list[dict]:
     c3 = [(0.08, 0.10, clean_map)] * 3
-    docs = [mdoc(group, "clean", 1, livo=c3, lio=c3, processed=processed)]
+    docs = [mdoc(group, "clean", 1, livo=c3, lio=c3, processed=processed, anchor=anchor)]
     for s in range(1, 6):
-        r3 = [(0.20 + 0.01 * s, 0.3, 0.2)] * 3
+        r3 = [(0.09 + 0.01 * s, 0.3, 0.2)] * 3                             # 中位 0.12%，在 ADR-215 区间 [0.07%, 0.18%] 内
         docs.append(mdoc(group, "realistic", s, livo=r3, lio=r3, processed=processed))
     docs.append(mdoc(group, "clean", 1, pn="single", speed=8.0, livo=[(0.5, 0.60, 0.4)] * 3, lio=[(0.5, 0.40, 0.4)] * 3))
     docs.append(mdoc(group, "clean", 1, speed=8.0, livo=[(0.09, 0.10, 0.1)] * 3, lio=[(0.09, 0.10, 0.1)] * 3))
@@ -229,7 +234,8 @@ def test_report_passes_when_every_clause_holds():
     assert rep["regress"]["ok"] and rep["regress"]["same_image"] is True
     res = rep["resources"]["gz_lockstep"]["livo"]
     assert res["runs"] == 18 and res["r_map_slope"]["median"] == 26_000.0 and res["cores_equiv"]["median"] == 3.0
-    assert rep["ac14"]["pass"] is True and rep["ac14"]["status"] == "provisional"
+    assert rep["ac14"]["pass"] is True and rep["ac14"]["status"] == "frozen" and rep["ac14"]["adr"] == "ADR-215"
+    assert r8["basis"] == "ratio" and rep["regress"]["resources_ok"] is None                # 回归记录无资源字段：不判定资源
     ph = rep["phase"]["gz_lockstep"]["clean-s1"]["livo"]["rpe100_pct"]
     assert ph["base"]["median"] == pytest.approx(0.08) and ph["variant"]["median"] == pytest.approx(0.12)
     assert ph["rel_change"] == pytest.approx(0.5)
@@ -246,7 +252,16 @@ def test_report_fails_or_is_undecided():
     # clean 地图到网格 0.32 m > 0.15 m：主组判定不通过
     rep = sm.build_report(passing_docs(clean_map=0.32), REGRESS_OK)
     chk = {c["clause"]: c for c in rep["groups"]["gz_lockstep"]["judge"]["modes"]["livo"]["checks"]}
-    assert chk["clean map-to-mesh mean (median over runs) <= 0.15 m"]["pass"] is False and rep["ac14"]["pass"] is False
+    assert chk[sm.MAP_CLAUSE]["pass"] is False and rep["ac14"]["pass"] is False
+    # r1 区间内（0.21%–0.25%）、ADR-215 冻结区间外：realistic 区间条款不通过
+    docs = passing_docs()
+    for d in docs:
+        if d["case"]["noise_profile"] == "realistic" and d["case"]["pose_nodes"] == "11" and d["case"]["slam_cam_phase"] == "tick_end":
+            for r in d["runs"]:
+                r["traj"]["rpe100_pct"] = 0.20 + 0.01 * d["case"]["seed"]
+    rep = sm.build_report(docs, REGRESS_OK)
+    chk = {c["clause"]: c for c in rep["groups"]["gz_lockstep"]["judge"]["modes"]["livo"]["checks"]}
+    assert chk["realistic RPE100 median in [0.07%, 0.18%]"]["pass"] is False and rep["ac14"]["pass"] is False
     # 处理帧不足（CPU 份额不足时 LIVO 丢帧）：运行有效性不通过
     rep = sm.build_report(passing_docs(processed=1200), REGRESS_OK)
     assert rep["validity"]["pass"] is False and len(rep["validity"]["incomplete"]) == 6 * 6 and rep["ac14"]["pass"] is False
@@ -357,7 +372,7 @@ def test_reanchor_run_map_to_mesh(tmp_path):
     # metrics.json 汇总入口：reanchor_all 逐运行写出，load_docs 读回并进入算例摘要
     out = tmp_path
     mp = out / "runs" / "loop" / "metrics.json"
-    doc_m = mdoc("gz_lockstep", "clean", 1, livo=[(0.08, 0.1, 0.3)])
+    doc_m = mdoc("gz_lockstep", "clean", 1, livo=[(0.08, 0.1, 0.3)], anchor=None)              # ADR-215 之前的运行（首个估计锚定）
     doc_m["case"]["dir"] = str(case)
     mp.parent.mkdir(parents=True, exist_ok=True)
     (mp.parent / "runs").mkdir(exist_ok=True)
@@ -370,16 +385,26 @@ def test_reanchor_run_map_to_mesh(tmp_path):
     assert row["map_to_mesh_mean_event0_m"]["median"] < 1e-3 and row["att_err_at_event0_deg"]["median"] == pytest.approx(0.2, abs=1e-6)
 
 
-def test_event0_anchor_variant_is_reported_but_not_counted():
-    docs = passing_docs(clean_map=0.32)
-    for r in docs[0]["runs"]:
-        r["reanchor"] = {"att_err_at_anchor_deg": 0.2, "map": {"acc_mean_m": 0.08}, "event0": {"drift_max_m": 0.2}}
+def test_legacy_runs_are_rejudged_from_reanchor_without_rerun():
+    """ADR-215 (6)：旧运行（首个估计锚定，clean 地图 0.32 m）以 `reanchor.json` 的事件零点数值（0.08 m）重判；r1 口径另报不计入。"""
+    docs = passing_docs(clean_map=0.32, anchor=None)
     rep = sm.build_report(docs, REGRESS_OK)
-    ev = rep["ac14_event0_anchor"]
-    assert rep["ac14"]["pass"] is False and ev["counted"] is False
-    assert ev["map_to_mesh_mean_event0_m"] == pytest.approx(0.08) and ev["map_pass"] is True and ev["pass"] is True
-    assert "拟议口径（不计入）" in sm.render_md(rep) and "锚定点敏感性" in sm.render_md(rep)
-    assert sm.build_report(passing_docs(clean_map=0.32), REGRESS_OK)["ac14_event0_anchor"]["pass"] is None
+    assert rep["ac14"]["pass"] is None                                         # 缺事件零点数据：地图条款未定，不回落到 r1 口径
+    for d in docs:
+        for r in d["runs"]:
+            r["reanchor"] = {"att_err_at_anchor_deg": 0.2, "map": {"acc_mean_m": 0.08}, "event0": {"drift_max_m": 0.2}}
+    rep = sm.build_report(docs, REGRESS_OK)
+    chk = {c["clause"]: c for c in rep["groups"]["gz_lockstep"]["judge"]["modes"]["livo"]["checks"]}
+    assert chk[sm.MAP_CLAUSE]["value"] == pytest.approx(0.08) and chk[sm.MAP_CLAUSE]["pass"] is True and rep["ac14"]["pass"] is True
+    ref = rep["ac14_first_estimate_anchor"]
+    assert ref["counted"] is False and ref["map_to_mesh_mean_first_m"] == pytest.approx(0.32) and ref["map_pass"] is False
+    assert ref["pass"] is False
+    row = rep["groups"]["gz_lockstep"]["cases"][0]["modes"]["livo"]
+    assert row["anchors"] == ["first_estimate"] and row["drift_max_event0_m"]["median"] == pytest.approx(0.2)
+    md = sm.render_md(rep)
+    assert "参考口径（r1，首个估计锚定，不计入）" in md and "锚定点敏感性" in md and "ADR-215" in md
+    # 新运行（以事件零点评测）：参考口径无数据
+    assert sm.build_report(passing_docs(), REGRESS_OK)["ac14_first_estimate_anchor"]["pass"] is None
 
 
 def test_single_pose_divergence_is_counted():
@@ -387,6 +412,24 @@ def test_single_pose_divergence_is_counted():
     docs.append(mdoc("gz_lockstep", "clean", 1, pn="single", speed=8.0, livo=[(300.0, 805.0, 50.0), (12.0, 65.0, 9.0), (0.5, 0.6, 0.4)]))
     r8 = sm.build_report(docs, REGRESS_OK)["ratio8"]["gz_lockstep"]["livo"]
     assert r8["single_diverged"] == 2 and r8["single_runs"] == 3 and r8["ratio"] == pytest.approx(65.0 / 0.10) and r8["pass"] is True
+    assert r8["basis"] == "single_pose_diverged" and r8["reference_ratio"]["fast_tier"] == [51.0, 88.0]
+    # ADR-215 (3)：单一位姿发散（中位 12 m > 10 m）时即使比值 < 5 也计为满足，并在报告中注明
+    docs = [d for d in passing_docs() if d["case"]["speed_mps"] != 8.0]
+    docs.append(mdoc("gz_lockstep", "clean", 1, pn="single", speed=8.0, livo=[(5.0, 12.0, 3.0)] * 3))
+    docs.append(mdoc("gz_lockstep", "clean", 1, speed=8.0, livo=[(1.0, 4.0, 1.0)] * 3))
+    rep = sm.build_report(docs, REGRESS_OK)
+    r8 = rep["ratio8"]["gz_lockstep"]["livo"]
+    assert r8["ratio"] == pytest.approx(3.0) and r8["pass"] is True and r8["basis"] == "single_pose_diverged"
+    assert "单一位姿发散，计为满足" in sm.render_md(rep)
+
+
+def test_regress_resources_are_reported_against_adr215():
+    rg = {**REGRESS_OK, "resources": {"mem_gb_applied": 32.0, "cpus_applied": 8.0}}
+    rep = sm.build_report(passing_docs(), rg)
+    assert rep["regress"]["resources_ok"] is True and rep["regress"]["resources_required"] == {"mem_gb_min": 32.0, "cpus_min": 8.0}
+    assert "ADR-215 要求 ≥ 32 GB、8 核：通过" in sm.render_md(rep)
+    rep = sm.build_report(passing_docs(), {**REGRESS_OK, "resources": {"mem_gb_applied": 20.0, "cpus_applied": 4.0}})
+    assert rep["regress"]["resources_ok"] is False and rep["ac14"]["pass"] is True              # 资源只报告，ATE 条款照常判定
 
 
 def test_validity_scope_only_counts_judged_runs():

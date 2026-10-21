@@ -29,6 +29,7 @@ __all__ = [
     "R_to_quat",
     "TrajInterp",
     "Tum",
+    "anchor_index",
     "load_tum",
     "positions_ate",
     "quat_to_R",
@@ -211,8 +212,22 @@ def segment_starts(s: np.ndarray, stride_m: float) -> np.ndarray:
     return np.unique(idx[idx < len(s)])
 
 
-def traj_metrics(est: Tum, gt: Tum | TrajInterp, *, seg_m: float = 100.0, stride_m: float = 0.0) -> dict:
-    """单次运行轨迹指标（§6.7.7）。返回值另含 `_T_W_F`（锚定变换）与 `_align`（Umeyama R、t），供地图评测使用。"""
+def anchor_index(t: np.ndarray, anchor_t_s: float | None) -> int:
+    """锚定样本下标：`anchor_t_s` 为 None 时取首个估计；否则取首个不早于 `anchor_t_s` 的估计（早于首个估计时取首个）。"""
+    if anchor_t_s is None:
+        return 0
+    i = int(np.searchsorted(np.asarray(t, np.float64), float(anchor_t_s) - 1e-9, side="left"))
+    if i >= len(t):
+        raise ValueError(f"anchor time {anchor_t_s:.3f} s is after the last estimate {float(t[-1]):.3f} s")
+    return i
+
+
+def traj_metrics(est: Tum, gt: Tum | TrajInterp, *, seg_m: float = 100.0, stride_m: float = 0.0, anchor_t_s: float | None = None) -> dict:
+    """单次运行轨迹指标（§6.7.7）。返回值另含 `_T_W_F`（锚定变换）与 `_align`（Umeyama R、t），供地图评测使用。
+
+    锚定：`anchor_t_s` 为 None 时以首个估计位姿锚定（r1 口径）；否则以首个不早于 `anchor_t_s` 的估计位姿锚定（ADR-215 (1)：事件零点，
+    即预滚窗口结束时刻），锚定漂移、未对齐 ATE 与终点姿态误差只在锚定样本及其后统计。对齐 ATE 与 RPE100 与锚定点无关（左乘刚体变换
+    被 Umeyama 对齐吸收，相对位姿不变），仍在全部重叠样本上统计。"""
     g = gt if isinstance(gt, TrajInterp) else TrajInterp(gt)
     lo, hi = g.span
     keep = (est.t >= lo) & (est.t <= hi)
@@ -220,12 +235,13 @@ def traj_metrics(est: Tum, gt: Tum | TrajInterp, *, seg_m: float = 100.0, stride
         raise ValueError("estimate does not overlap the truth trajectory")
     te, Te = est.t[keep], est.T()[keep]
     Rg, pg = g.at(te)
-    T_W_I0 = np.eye(4)
-    T_W_I0[:3, :3], T_W_I0[:3, 3] = Rg[0], pg[0]
-    T_W_F = T_W_I0 @ np.linalg.inv(Te[0])
+    ia = anchor_index(te, anchor_t_s)
+    T_W_Ia = np.eye(4)
+    T_W_Ia[:3, :3], T_W_Ia[:3, 3] = Rg[ia], pg[ia]
+    T_W_F = T_W_Ia @ np.linalg.inv(Te[ia])
     Tw = T_W_F @ Te
     Rw, pw = Tw[:, :3, :3], Tw[:, :3, 3]
-    e_anchor = np.linalg.norm(pw - pg, axis=1)
+    e_anchor = np.linalg.norm(pw[ia:] - pg[ia:], axis=1)
     R_al, t_al, _ = umeyama(pw, pg)
     e_al = np.linalg.norm(pw @ R_al.T + t_al - pg, axis=1)
     s = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(pg, axis=0), axis=1))])
@@ -246,10 +262,13 @@ def traj_metrics(est: Tum, gt: Tum | TrajInterp, *, seg_m: float = 100.0, stride
     ang = np.degrees(np.arccos(np.clip((np.trace(dR, axis1=1, axis2=2) - 1.0) / 2.0, -1.0, 1.0)))
     yaw_g = np.unwrap(np.arctan2(Rg[:, 1, 0], Rg[:, 0, 0]))
     yaw_w = np.unwrap(np.arctan2(Rw[:, 1, 0], Rw[:, 0, 0]))
+    la = float(s[-1] - s[ia])                                              # 锚定样本之后的路程（漂移百分比的分母）
     out = {
         "n": len(te), "duration_s": float(te[-1] - te[0]), "length_m": float(s[-1]),
+        "anchor": {"t_s": float(te[ia]), "requested_t_s": None if anchor_t_s is None else float(anchor_t_s), "index": ia,
+                   "skipped_s": float(te[ia] - te[0])},
         "drift_final_m": float(e_anchor[-1]), "drift_max_m": float(e_anchor.max()),
-        "drift_final_pct": float(e_anchor[-1] / s[-1] * 100.0) if s[-1] > 0 else None,
+        "drift_final_pct": float(e_anchor[-1] / la * 100.0) if la > 0 else None,
         "ate_aligned_rmse_m": _rms(e_al), "ate_aligned_max_m": float(e_al.max()), "ate_unaligned_rmse_m": _rms(e_anchor),
         "rot_err_final_deg": float(ang[-1]), "yaw_drift_final_deg": float(np.degrees(abs(yaw_w[-1] - yaw_g[-1]))),
         "rpe100_pct": float(np.mean(rpe)) if rpe else None,

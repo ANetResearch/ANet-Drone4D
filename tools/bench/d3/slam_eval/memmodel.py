@@ -3,9 +3,11 @@
     mem_limit = safety × (base + bytes_per_point × r_map × T)          （GB = 1e9 B）
 
 - r_map：按型号标定的地图点累积率（点/s）。FAST-LIVO2 每个体素地图点保存 `pointWithVar`（约 430 B），内存随扫过的表面积线性增长
-  （r1 §2.4）。暂定值 MID-360 倒装 30 m AGL 5 万点/s、Avia 8 万点/s（r1：MID-360 160 s 峰值 2.2–5.3 GB；Avia HKisland03 320 s
-  峰值 12.7 GB），P-1 以 `calibrate_r_map` 的实测值经 ADR 冻结（M27-AC-037）。
-- 份额：MID-360 缺省 2 核；长量程型号（Avia 等）与 HKisland03 回归 ≥ 20 GB、4 核（M27-FR-104，D3-AC-14）。
+  （r1 §2.4）。MID-360 倒装 30 m AGL 按 ADR-215 决策 (5) 冻结为 4.5 万点/s（SL3 斜率口径上限 4.3 万点/s 加余量；360 s 作业限额
+  约 1.5 × (2 GB + 430 B × 45,000 × 360) ≈ 13.4 GB）；Avia 维持暂定 8 万点/s（r1 HKisland03 320 s 峰值 12.7 GB），冻结移入 D3.x
+  （独占核复测或在模型中加入积压项）。
+- 份额：MID-360 LIVO 作业 `--cpus 4`（ADR-215 (5)：2 核时丢弃约 25% 的 LiDAR 帧，4 核时处理帧比例 ≥ 99%）；长量程型号（Avia 等）
+  维持暂定下限 ≥ 20 GB、4 核；HKisland03 真机回归作业 ≥ 32 GB、8 核（ADR-215 (4)，`slam_eval regress` 缺省值）。
 - 标定：容器内每 2 s 采样 FastLIVO2 进程 RSS（`res.txt`）。回放墙钟乘以倍速即航时；对回放窗口内的 RSS(航时) 做最小二乘直线，
   斜率 ÷ 430 B 为 `r_map_slope`；峰值口径 `r_map_peak = (RSS_peak − base) / (430 B × T)`（base 取模型的 2 GB，偏保守时取 0）。
   两者都报告，冻结取较大者。
@@ -24,16 +26,17 @@ GB = 1e9
 
 @dataclass(frozen=True)
 class MemModel:
-    """`slam.mem{base_gb, bytes_per_point, safety, r_map}`（M27 §11 参数表，暂定）。"""
+    """`slam.mem{base_gb, bytes_per_point, safety, r_map}`（M27 §11 参数表；MID-360 项按 ADR-215 冻结，Avia 项暂定）。"""
 
     base_gb: float = 2.0
     bytes_per_point: float = 430.0
     safety: float = 1.5
-    r_map: dict = field(default_factory=lambda: {"mid360": 50_000.0, "avia": 80_000.0})
+    r_map: dict = field(default_factory=lambda: {"mid360": 45_000.0, "avia": 80_000.0})
     long_range: tuple = ("avia",)
     long_range_min_gb: float = 20.0
-    cpus: dict = field(default_factory=lambda: {"mid360": 2.0, "avia": 4.0})
-    status: str = "provisional"                                            # P-1 冻结后改为 frozen 并写 ADR 编号
+    cpus: dict = field(default_factory=lambda: {"mid360": 4.0, "avia": 4.0})
+    status: dict = field(default_factory=lambda: {"mid360": "frozen", "avia": "provisional"})   # 逐型号；冻结项见 adr
+    adr: str = "ADR-215"
 
     def as_dict(self) -> dict:
         return asdict(self)

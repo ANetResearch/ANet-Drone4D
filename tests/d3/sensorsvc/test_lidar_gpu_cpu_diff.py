@@ -69,16 +69,22 @@ def _thr(levels: list[str], p95: float) -> dict:
     return {"fleets": {"100": {"levels": levels, "tick_p95_ms_median": p95}, "400": {"levels": levels, "tick_p95_ms_median": 3 * p95}}}
 
 
-def _diff(p99: float, mx: float, rate: float) -> dict:
-    return {"d_m": {"p50": p99 / 10, "p99": p99, "max": mx}, "hit_mismatch_rate": rate}
+def _diff(p99: float, mx: float, rate: float, edge: int = 0, rays: int = 10_000_000) -> dict:
+    """对拍汇总样例：无轮廓边歧义时两种口径的数值相同（同一表面 = 全部双方命中射线）。"""
+    return {"d_m": {"p50": p99 / 10, "p99": p99, "max": mx}, "hit_mismatch_rate": rate, "rays": rays,
+            "d_same_surface_m": {"p50": p99 / 10, "p99": p99, "max": mx}, "hit_or_edge_mismatch_rate": rate + edge / rays,
+            "edge": {"rays": edge, "rate": edge / rays}}
 
 
 def test_judge_counting_rules() -> None:
-    """吞吐条款：全部重复为 A 级才计入；B 级待用户确认、shared 与 unknown 不计入；几何一致性条款不受独占级别约束；缺测为 None。"""
+    """吞吐条款：全部重复为 A 级才计入；B 级待用户确认、shared 与 unknown 不计入；几何一致性条款不受独占级别约束；缺测为 None。
+    逐射线条款按 ADR-207 判定（同一表面距离差、命中不一致含轮廓边歧义），原文口径照报不计入；`rule="original"` 为回退口径。"""
     ok = lc.judge({"throughput": _thr(["A", "A", "A"], 20.0), "diff": _diff(1e-6, 1e-5, 0.0)})
-    assert ok["counted_pass"] and ok["seal_ready"]
-    assert [i["counted"] for i in ok["items"] if i["class"] != "拟议"] == [True] * 5
-    assert all(not i["counted"] for i in ok["items"] if i["class"] == "拟议")
+    assert ok["counted_pass"] and ok["seal_ready"] and ok["rule"] == "adr207" and ok["adr"] == "ADR-207"
+    assert [i["counted"] for i in ok["items"] if i["class"] != "参考"] == [True] * 5
+    assert [i["id"] for i in ok["items"] if i["counted"]][2:] == ["AC12.ray_d_p99_m.same_surface", "AC12.ray_d_max_m.same_surface",
+                                                                  "AC12.hit_or_edge_mismatch_rate"]
+    assert all(not i["counted"] and i["basis"] == "original" for i in ok["items"] if i["class"] == "参考")
     sh = lc.judge({"throughput": _thr(["A", "shared", "A"], 20.0), "diff": _diff(1e-6, 1e-5, 0.0)})
     t100 = sh["items"][0]
     assert t100["level"] == "shared" and not t100["counted"] and t100["pass"]
@@ -89,14 +95,29 @@ def test_judge_counting_rules() -> None:
     assert not slow["items"][0]["pass"] and not slow["counted_pass"]
     for d in (_diff(1.1e-3, 1e-3, 0.0), _diff(1e-4, 1.1e-2, 0.0), _diff(1e-4, 1e-3, 1.1e-4)):
         assert not lc.judge({"throughput": _thr(["A"] * 3, 20.0), "diff": d})["counted_pass"]
-    # 原文口径的最大距离差超限但全部来自轮廓边判定歧义：原文条款不通过（不得自行放宽），拟议口径条款通过并注明
-    edge = {**_diff(1e-6, 5.2e-2, 0.0), "d_same_surface_m": {"p99": 1e-6, "max": 1.5e-5}, "hit_or_edge_mismatch_rate": 5e-7,
-            "edge": {"rays": 1}}
+        assert not lc.judge({"throughput": _thr(["A"] * 3, 20.0), "diff": d}, rule="original")["counted_pass"]
+    # S16 实测形态：原文口径最大距离差 2.52 m 全部来自 3 条轮廓边歧义射线（19.2M 条射线）；ADR-207 口径（同一表面最大 2.8e-5 m，
+    # 不一致加歧义 1.6e-7）通过并计入，原文口径照报不通过、不计入
+    edge = {**_diff(1.6e-13, 2.52, 0.0, edge=3, rays=19_200_000), "d_same_surface_m": {"p99": 1.6e-13, "max": 2.8e-5}}
     je = lc.judge({"throughput": _thr(["A"] * 3, 20.0), "diff": edge})
     by = {i["id"]: i for i in je["items"]}
-    assert not by["AC12.ray_d_max_m"]["pass"] and "轮廓边" in by["AC12.ray_d_max_m"]["note"] and not je["counted_pass"]
-    assert by["AC12.ray_d_max_m.same_surface"]["pass"] and by["AC12.hit_or_edge_mismatch_rate"]["pass"]
-    assert not by["AC12.ray_d_max_m.same_surface"]["counted"]
+    assert by["AC12.ray_d_max_m.same_surface"]["pass"] and by["AC12.ray_d_max_m.same_surface"]["counted"]
+    assert by["AC12.hit_or_edge_mismatch_rate"]["value"] == pytest.approx(3 / 19_200_000) and by["AC12.hit_or_edge_mismatch_rate"]["pass"]
+    assert not by["AC12.ray_d_max_m"]["pass"] and not by["AC12.ray_d_max_m"]["counted"] and "轮廓边" in by["AC12.ray_d_max_m"]["note"]
+    assert je["counted_pass"] and je["seal_ready"] and je["info"]["AC12.edge_ambiguous"]["rays"] == 3
+    # 回退口径（用户否决 ADR-207）：原文条款计入，最大差 2.52 m 不通过
+    jo = lc.judge({"throughput": _thr(["A"] * 3, 20.0), "diff": edge}, rule="original")
+    byo = {i["id"]: i for i in jo["items"]}
+    assert jo["rule"] == "original" and byo["AC12.ray_d_max_m"]["counted"] and not jo["counted_pass"] and not jo["seal_ready"]
+    assert not byo["AC12.ray_d_max_m.same_surface"]["counted"]
+    # 歧义射线过多：ADR-207 的"命中不一致 + 歧义"超过 1e-4 时不通过
+    many = lc.judge({"throughput": _thr(["A"] * 3, 20.0), "diff": _diff(1e-6, 1e-5, 0.0, edge=2_000, rays=10_000_000)})
+    assert not many["counted_pass"]
+    # S16 之前的对拍记录（无同一表面字段）：ADR-207 条款未定，不回落到原文口径
+    legacy = lc.judge({"throughput": _thr(["A"] * 3, 20.0), "diff": {"d_m": {"p99": 1e-6, "max": 1e-5}, "hit_mismatch_rate": 0.0}})
+    assert not legacy["counted_pass"] and {i["id"]: i for i in legacy["items"]}["AC12.ray_d_max_m.same_surface"]["pass"] is None
+    with pytest.raises(ValueError):
+        lc.judge({}, rule="x")
     err = _thr(["A"] * 3, 20.0)
     err["fleets"]["400"] = {"repeats": [], "error": "RuntimeError: out of memory", "tick_p95_ms_median": None, "levels": []}
     i400 = lc.judge({"throughput": err, "diff": _diff(1e-6, 1e-5, 0.0)})["items"][1]

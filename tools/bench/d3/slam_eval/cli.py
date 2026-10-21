@@ -3,8 +3,9 @@
     PYTHONPATH=python python tools/bench/d3/slam_eval run --case <算例目录> --out <输出目录> [--mesh <世界包或网格>]
         [--modes livo,lio] [--repeats 3] [--rate 4] [--image d3-livo:dev] [--parallel 4] [--name-prefix slam]
         [--mem-gb G | --mem-scale S] [--cpus C] [--eval-runner local|docker] [--eval-image d3-sensorsvc:dev] [--repo <仓库根>]
-        [--no-pcd] [--l0] [--require-regress <regress.json>] [--watchdog-s 600]
+        [--no-pcd] [--l0] [--require-regress <regress.json>] [--watchdog-s 600] [--anchor event0|first|<bag 时刻 s>]
     ... eval --case <算例> --run <运行目录> --out <eval.json> [--mesh ...] [--ref <参考点 ply>] [--l0-out <l0 文件>]
+        [--anchor event0|first|<bag 时刻 s>]
     ... ref --case <算例> --out <参考点 ply>
     ... regress --bag <HKisland_GNSS03.bag> --out <目录> [--rtk <tum>] [--start 72] [--rate 1] [--image d3-livo:dev]
     ... judge --clean <metrics.json>... --realistic <metrics.json>... --out <judge.json>
@@ -44,7 +45,7 @@ from .livo import (
     run_with_retry,
 )
 from .memmodel import MEM, calibrate_r_map, job_resources
-from .report import AC14, judge_ac14, summarize_runs
+from .report import AC14, ANCHOR_EVENT0, ANCHOR_FIRST, judge_ac14, summarize_runs
 from .traj import R_to_quat, TrajInterp, Tum, load_tum, positions_ate, save_tum, traj_metrics
 
 HK_CFG = "image:/ws/src/FAST-LIVO2/config/MARS_LVIG.yaml"
@@ -96,9 +97,37 @@ def _trajectory_file(run_dir: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------------------------------------------- eval
+ANCHOR_CHOICES = (ANCHOR_EVENT0, "first")
+
+
+def resolve_anchor(case: Case, anchor: str | float | None = ANCHOR_EVENT0) -> dict:
+    """锚定时刻（ADR-215 决策 (1)）：`event0`（缺省）= 算例 `case.json` 的事件零点（预滚窗口结束，bag 时刻）；`first` 或 None =
+    首个估计（r1 口径）；数值 = 指定 bag 时刻（s）。算例没有事件零点（r1 `rig.json`、外部 bag）时回落到首个估计并注明。"""
+    if anchor is None or anchor == "first" or anchor == ANCHOR_FIRST:
+        return {"mode": ANCHOR_FIRST, "t_s": None}
+    if anchor == ANCHOR_EVENT0:
+        ev0 = case.meta.get("t_event0_bag_ns")
+        if not ev0:
+            return {"mode": ANCHOR_FIRST, "t_s": None, "fallback": "case has no event zero (t_event0_bag_ns)"}
+        return {"mode": ANCHOR_EVENT0, "t_s": int(ev0) / 1e9}
+    return {"mode": "time", "t_s": float(anchor)}
+
+
+def _anchor_arg(v: str) -> str | float:
+    if v in ANCHOR_CHOICES or v == ANCHOR_FIRST:
+        return v
+    try:
+        return float(v)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"--anchor must be one of {ANCHOR_CHOICES} or a bag time in seconds") from e
+
+
 def evaluate_run(case: Case, run_dir: Path, *, mesh_spec: str | None = None, ref_path: Path | None = None,
-                 l0_out: Path | None = None) -> dict:
-    """一次运行的 `eval_sim`：轨迹指标、锚定与对齐坐标下的地图指标、可选 L0 地图；写 `est_world.tum` 与 `traj_err.txt`。"""
+                 l0_out: Path | None = None, anchor: str | float | None = ANCHOR_EVENT0) -> dict:
+    """一次运行的 `eval_sim`：轨迹指标、锚定与对齐坐标下的地图指标、可选 L0 地图；写 `est_world.tum` 与 `traj_err.txt`。
+
+    `anchor`：锚定时刻（`resolve_anchor`），缺省为事件零点（ADR-215 (1)）；锚定漂移与锚定坐标下的地图到网格距离随之变化，RPE100 与
+    对齐 ATE 不变。所用口径写入 `traj.anchor.mode`（`event0` / `first_estimate` / `time`），`slam_eval.report` 据此判定。"""
     import time
 
     t0 = time.perf_counter()
@@ -107,7 +136,9 @@ def evaluate_run(case: Case, run_dir: Path, *, mesh_spec: str | None = None, ref
     if case.gt_imu is None:
         raise FileNotFoundError(f"{case.dir}: gt_imu.tum missing")
     gt = TrajInterp(load_tum(case.gt_imu))
-    tm = traj_metrics(est, gt)
+    an = resolve_anchor(case, anchor)
+    tm = traj_metrics(est, gt, anchor_t_s=an["t_s"])
+    tm["anchor"] = {**tm["anchor"], **an, "t_s": tm["anchor"]["t_s"], "requested_t_s": an["t_s"]}
     T_W_F, (R_al, t_al) = tm["_T_W_F"], tm["_align"]
     Tw = T_W_F @ est.T()
     save_tum(run_dir / "est_world.tum", Tum(est.t, Tw[:, :3, 3], R_to_quat(Tw[:, :3, :3])))
@@ -167,7 +198,8 @@ def _eval_docker_argv(args, case: Case, run_dir: Path, out_json: Path, ref: Path
             "-e", f"AWR_CONTRACTS_DIR={repo}/packages/contracts", "-w", str(repo)]
     for m in sorted(mounts):
         argv += ["-v", f"{m}:{m}"]
-    cmd = ["python", "-m", "slam_eval", "eval", "--case", str(case.dir), "--run", str(Path(run_dir).resolve()), "--out", str(out_json)]
+    cmd = ["python", "-m", "slam_eval", "eval", "--case", str(case.dir), "--run", str(Path(run_dir).resolve()), "--out", str(out_json),
+           "--anchor", str(getattr(args, "anchor", ANCHOR_EVENT0))]
     if mesh:
         cmd += ["--mesh", str(Path(mesh).resolve())]
     if ref is not None:
@@ -187,7 +219,7 @@ def _ref_docker_argv(args, case: Case, out: Path, ref: Path) -> list[str]:
 def _run_eval(args, case: Case, run_dir: Path, ref: Path | None, l0: Path | None) -> dict:
     out_json = Path(run_dir) / "eval.json"
     if args.eval_runner == "local":
-        doc = evaluate_run(case, run_dir, mesh_spec=args.mesh, ref_path=ref, l0_out=l0)
+        doc = evaluate_run(case, run_dir, mesh_spec=args.mesh, ref_path=ref, l0_out=l0, anchor=getattr(args, "anchor", ANCHOR_EVENT0))
         _write(out_json, doc)
         return json.loads(out_json.read_text())
     r = subprocess.run(_eval_docker_argv(args, case, run_dir, out_json, ref, l0, args.mesh or case.mesh), capture_output=True, text=True)
@@ -200,11 +232,11 @@ def _run_eval(args, case: Case, run_dir: Path, ref: Path | None, l0: Path | None
 def cmd_eval(a) -> int:
     case = load_case(a.case, mesh=a.mesh)
     doc = evaluate_run(case, Path(a.run), mesh_spec=a.mesh, ref_path=Path(a.ref) if a.ref else None,
-                       l0_out=Path(a.l0_out) if a.l0_out else None)
+                       l0_out=Path(a.l0_out) if a.l0_out else None, anchor=a.anchor)
     _write(Path(a.out), doc)
     t = doc["traj"]
     print(json.dumps({"rpe100_pct": t["rpe100_pct"], "ate_aligned_rmse_m": t["ate_aligned_rmse_m"],
-                      "map_to_mesh_mean_m": (doc.get("map") or {}).get("acc_mean_m")}))
+                      "map_to_mesh_mean_m": (doc.get("map") or {}).get("acc_mean_m"), "anchor": t["anchor"]["mode"]}))
     return 0
 
 
@@ -441,6 +473,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--l0", action="store_true")
     p.add_argument("--require-regress")
     p.add_argument("--no-imu-period-check", action="store_true")
+    p.add_argument("--anchor", type=_anchor_arg, default=ANCHOR_EVENT0, help="锚定时刻：event0（缺省，ADR-215）、first 或 bag 时刻（s）")
     common_docker(p)
     p.set_defaults(fn=cmd_run)
 
@@ -451,6 +484,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mesh")
     p.add_argument("--ref")
     p.add_argument("--l0-out")
+    p.add_argument("--anchor", type=_anchor_arg, default=ANCHOR_EVENT0, help="锚定时刻：event0（缺省，ADR-215）、first 或 bag 时刻（s）")
     p.set_defaults(fn=cmd_eval)
 
     p = sp.add_parser("ref")
@@ -471,9 +505,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--flight-s", type=float, default=318.0)
     p.add_argument("--lidar-model", default="avia")
     # HKisland03 1× 回放：4 核配额下 republish 解码 2448×2048 JPEG 与节点争用，处理滞后、消息积压使 RSS 在 240 s 内超过 20 GB
-    # 被 OOM 结束（SL1 实测）；缺省取 r1 的 8 核与 32 GB（D3-AC-14 写"≥ 20 GB、4 核"）
-    p.add_argument("--min-cpus", type=float, default=8.0)
-    p.add_argument("--min-mem-gb", type=float, default=32.0)
+    # 被 OOM 结束（SL1 实测）；ADR-215 决策 (4) 冻结为 ≥ 32 GB、8 核（取代 D3-AC-14 原文"≥ 20 GB、4 核"）
+    p.add_argument("--min-cpus", type=float, default=AC14["hkisland03_resources"]["cpus_min"])
+    p.add_argument("--min-mem-gb", type=float, default=AC14["hkisland03_resources"]["mem_gb_min"])
     common_docker(p)
     p.set_defaults(fn=cmd_regress)
 

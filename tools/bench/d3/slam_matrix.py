@@ -16,15 +16,18 @@
   - `run`：在宿主上对每个算例调用 `slam_eval run`（子进程；FAST-LIVO2 与评测容器由 `slam_eval` 启动），`--jobs` 个算例并行，
     已完成（`metrics.json` 的 status = completed）的算例跳过；未完成的旧输出移到 `<算例>.prev-<UTC>` 后重跑；
   - `regress`：HKisland03 真机回归（调用 `slam_eval regress`），结果供 `run --require-regress` 作镜像闸门（M27-FR-110）；
-  - `reanchor`：锚定点敏感性诊断（d3-sensorsvc 容器内）：以事件零点（预滚窗口结束）处的估计重新锚定，重算锚定漂移与地图到网格
-    距离，写各运行目录的 `reanchor.json`；只作诊断，不进入判定；
+  - `reanchor`：锚定点重算（d3-sensorsvc 容器内）：以事件零点（预滚窗口结束）处的估计重新锚定，重算锚定漂移与地图到网格
+    距离，写各运行目录的 `reanchor.json`。ADR-215 之前以首个估计锚定评测的运行，其 clean 地图到网格条款按 ADR-215 决策 (1) 以该文件
+    的事件零点数值判定（无须重跑）；`evaluate_run` 已以事件零点评测的运行（`traj.anchor.mode = event0`）不需要该文件；
   - `report`：汇总 `<out>/runs/*/metrics.json` 与回归记录，写 `<out>/matrix.json`（`drone4d.bench.slam_matrix.v1`）与
     `<out>/matrix.md`（实测记录用的表格）。
-- 判定（`build_report`）：主组按 `slam_eval.report.judge_ac14`（clean 三项、realistic 四项与样本完整性，LIVO 为主判定，LIO 单列）；
-  8 m/s 逐点（`11`）相对单一位姿（`single`）的对齐 ATE 比（跨重复中位数之比）≥ 5；HKisland03 ATE ≤ 1.2 m；报告注明反射率模型与
-  噪声档参数表版本。另做运行有效性核对：FAST-LIVO2 实际处理的 LiDAR 帧数（逐帧耗时记录数）不少于 bag 帧数的 `MIN_FRAME_FRAC`，
+- 判定（`build_report`）：主组按 `slam_eval.report.judge_ac14`（ADR-215 冻结表：clean 三项（地图到网格以事件零点锚定）、realistic
+  四项（区间 [0.07%, 0.18%]）与样本完整性，LIVO 为主判定，LIO 单列）；8 m/s 逐点（`11`）相对单一位姿（`single`）的对齐 ATE 比
+  （跨重复中位数之比）≥ 5，单一位姿发散（对齐 ATE 中位 > 10 m）时计为满足并注明；HKisland03 ATE ≤ 1.2 m（作业资源 ≥ 32 GB、8 核
+  另报）；报告注明反射率模型与噪声档参数表版本。另做运行有效性核对：FAST-LIVO2 实际处理的 LiDAR 帧数（逐帧耗时记录数）不少于 bag 帧数的 `MIN_FRAME_FRAC`，
   否则该运行记为"处理不完整"（CPU 份额不足时 LIVO 模式的图像经 republish 丢帧、LiDAR 帧被合并处理，结果不代表算法本身），
-  D3-AC-14 的总结论要求全部运行完整。阈值为 §11 暂定值（`AC14["status"] = provisional`），由 D01 以 ADR 冻结，本工具不放宽。
+  D3-AC-14 的总结论要求全部运行完整。阈值按 ADR-215 冻结（`AC14["status"] = frozen`），本工具不放宽；首个估计锚定的地图条款
+  （r1 口径，ADR-215 的回退口径）另报为参考，不计入判定。
 
 用法（dmax，工作目录 `/data/anet-drone4d-d3/d3dev/sl3`，`src` 为仓库同步副本）：
     # 算例（d3-sensorsvc 容器内，CPU 池，挂载 src、sl2/out、out 与世界包）
@@ -59,7 +62,15 @@ for _p in (ROOT / "python", HERE):
         sys.path.insert(0, str(_p))
 
 from slam_eval import EVAL_VERSION  # noqa: E402
-from slam_eval.report import AC14, distribution, judge_ac14, run_scalars  # noqa: E402
+from slam_eval.report import (  # noqa: E402
+    AC14,
+    ANCHOR_EVENT0,
+    MAP_CLAUSE,
+    anchor_mode,
+    distribution,
+    judge_ac14,
+    run_scalars,
+)
 from slam_eval.traj import TrajInterp, Tum, load_tum, traj_metrics  # noqa: E402
 
 SCHEMA_PLAN = "drone4d.bench.slam_matrix_plan.v1"
@@ -73,7 +84,7 @@ BLOCKS = ("main", "v8", "nodes", "phase")
 REALISTIC_SEEDS = (1, 2, 3, 4, 5)                               # D3-AC-14：realistic 5 种子 × 3 重复
 BASE_NODES, BASE_PHASE = "11", "tick_end"                      # 缺省位姿节点与 slam_cam 相位（§5.4.6、§4.3 规则 4）
 BASE_SPEED_MPS, V8_SPEED_MPS = 6.0, 8.0
-DIVERGED_M = 10.0                                               # 对齐 ATE 超过该值记为发散（只用于报告计数，不改变比值判定）
+DIVERGED_M = AC14["single_pose_diverged_ate_m"]                 # 单一位姿对齐 ATE 超过该值记为发散（ADR-215 (3)：比值条款计为满足）
 MIN_FRAME_FRAC = 0.98                                           # 运行有效性：处理帧数 / bag 帧数（FAST-LIVO2 初始化消耗前几帧）
 MODES = ("livo", "lio")
 REANCHOR = "reanchor.json"                                      # 锚定点敏感性诊断（每次运行一份，`reanchor` 子命令写出）
@@ -408,6 +419,13 @@ def run_frames(doc: Mapping, run: Mapping) -> dict:
     return {"bag_frames": int(bag_frames), "processed": int(n), "frac": frac, "complete": bool(frac >= MIN_FRAME_FRAC)}
 
 
+def drift_max_event0(run: Mapping) -> float | None:
+    """事件零点锚定的最大漂移：以事件零点评测的运行取 `traj`，否则取 `reanchor.json`。"""
+    if anchor_mode(run) == ANCHOR_EVENT0:
+        return (run.get("traj") or {}).get("drift_max_m")
+    return (((run.get("reanchor") or {}).get("event0")) or {}).get("drift_max_m")
+
+
 def _ok_runs(docs: Sequence[Mapping], mode: str) -> list[Mapping]:
     return [r for d in docs for r in d.get("runs", []) if r.get("mode") == mode and r.get("ok")]
 
@@ -431,10 +449,10 @@ def case_row(doc: Mapping) -> dict:
             **{k: _dist([doc], mode, k) for k in ("rpe100_pct", "rpe100_median_pct", "ate_aligned_rmse_m", "drift_max_m",
                                                   "map_to_mesh_mean_m", "fscore@0.2", "rss_peak_gb")},
             "map_to_mesh_mean_aligned_m": distribution(((r.get("map_aligned") or {}).get("acc_mean_m")) for r in rs if r.get("ok")),
-            "map_to_mesh_mean_event0_m": distribution((((r.get("reanchor") or {}).get("map") or {}).get("acc_mean_m"))
-                                                      for r in rs if r.get("ok")),
-            "drift_max_event0_m": distribution((((r.get("reanchor") or {}).get("event0") or {}).get("drift_max_m"))
-                                               for r in rs if r.get("ok")),
+            "map_to_mesh_mean_event0_m": distribution(run_scalars(r)["map_to_mesh_mean_event0_m"] for r in rs if r.get("ok")),
+            "map_to_mesh_mean_first_m": distribution(run_scalars(r)["map_to_mesh_mean_first_m"] for r in rs if r.get("ok")),
+            "drift_max_event0_m": distribution(drift_max_event0(r) for r in rs if r.get("ok")),
+            "anchors": sorted({anchor_mode(r) for r in rs if r.get("ok")}),
             "att_err_at_event0_deg": distribution(((r.get("reanchor") or {}).get("att_err_at_anchor_deg")) for r in rs if r.get("ok")),
             "rpe100_runs": [run_scalars(r)["rpe100_pct"] for r in rs if r.get("ok")],
             "frames": {"min_frac": min((f["frac"] for f in fr if f["frac"] is not None), default=None),
@@ -447,22 +465,27 @@ def case_row(doc: Mapping) -> dict:
 
 
 def ate_ratio(single: Sequence[Mapping], per_point: Sequence[Mapping], mode: str) -> dict:
-    """8 m/s：单一位姿与逐点位姿的对齐 ATE（各自跨重复取中位数）之比（D3-AC-14"逐点位姿相对单一位姿的 ATE 改善 ≥ 5 倍"）。"""
+    """8 m/s：单一位姿与逐点位姿的对齐 ATE（各自跨重复取中位数）之比（D3-AC-14"逐点位姿相对单一位姿的 ATE 改善 ≥ 5 倍"）。
+    ADR-215 决策 (3)：单一位姿运行发散（对齐 ATE 中位 > `DIVERGED_M`）时计为满足（`basis = single_pose_diverged`），比值照报。"""
     a, b = _dist(single, mode, "ate_aligned_rmse_m"), _dist(per_point, mode, "ate_aligned_rmse_m")
     ratio = None
     if a.get("n") and b.get("n") and b["median"] > 0:
         ratio = a["median"] / b["median"]
     lim = AC14["per_point_vs_single_pose_ate_ratio_min"]
     div = [run_scalars(r)["ate_aligned_rmse_m"] for r in _ok_runs(single, mode)]
-    return {"single": a, "per_point": b, "ratio": ratio, "limit": lim, "pass": None if ratio is None else bool(ratio >= lim),
+    diverged = bool(a.get("n") and b.get("n") and a["median"] > DIVERGED_M)
+    ok = None if ratio is None and not diverged else bool(diverged or ratio >= lim)
+    basis = None if ok is None else ("single_pose_diverged" if diverged else "ratio")
+    return {"single": a, "per_point": b, "ratio": ratio, "limit": lim, "pass": ok, "basis": basis,
+            "reference_ratio": AC14["per_point_ratio_reference"],
             "single_diverged": sum(1 for x in div if x is not None and x > DIVERGED_M), "single_runs": len(div),
             "rpe100_single": _dist(single, mode, "rpe100_pct"), "rpe100_per_point": _dist(per_point, mode, "rpe100_pct")}
 
 
 def compare(base: Sequence[Mapping], variant: Sequence[Mapping], mode: str) -> dict:
-    """同一（组、噪声档、种子）上基线与变体的 RPE100、ATE 与地图到网格对比（中位数与相对差）。"""
+    """同一（组、噪声档、种子）上基线与变体的 RPE100、ATE 与地图到网格（事件零点锚定，ADR-215 (1)）对比（中位数与相对差）。"""
     out = {}
-    for k in ("rpe100_pct", "ate_aligned_rmse_m", "map_to_mesh_mean_m"):
+    for k in ("rpe100_pct", "ate_aligned_rmse_m", "map_to_mesh_mean_event0_m"):
         a, b = _dist(base, mode, k), _dist(variant, mode, k)
         rel = None
         if a.get("n") and b.get("n") and a["median"]:
@@ -545,7 +568,12 @@ def build_report(docs: Sequence[Mapping], regress: Mapping | None = None) -> dic
     # HKisland03 回归
     if regress:
         ate = (regress.get("ate") or {}).get("ate_rmse_m")
+        rq = AC14["hkisland03_resources"]
+        rr = regress.get("resources") or {}
+        mem, cpu = rr.get("mem_gb_applied"), rr.get("cpus_applied")
         rep["regress"] = {"ate_rmse_m": ate, "limit_m": AC14["hkisland03_ate_m_max"], "ok": regress.get("ok"),
+                          "resources_required": rq,
+                          "resources_ok": None if mem is None or cpu is None else bool(mem >= rq["mem_gb_min"] and cpu >= rq["cpus_min"]),
                           "image": regress.get("image"), "created_utc": regress.get("created_utc"),
                           "resources": regress.get("resources"), "ate": regress.get("ate"),
                           "same_image": (regress.get("image") or {}).get("id") in images if images else None}
@@ -558,8 +586,8 @@ def build_report(docs: Sequence[Mapping], regress: Mapping | None = None) -> dic
     ver_ok = bool(rep["versions"]["reflectance_model"]) and bool(rep["versions"]["noise_table_version"])
     clauses = [
         {"clause": "main group (gz lockstep) LIVO: clean and realistic RPE100/ATE/map clauses", "pass": j.get("pass")},
-        {"clause": "8 m/s per-point vs single-pose aligned ATE ratio >= 5 (main group, LIVO)", "value": r8.get("ratio"),
-         "pass": r8.get("pass")},
+        {"clause": "8 m/s per-point vs single-pose aligned ATE ratio >= 5, single-pose divergence counts as met (main group, LIVO)",
+         "value": r8.get("ratio"), "basis": r8.get("basis"), "pass": r8.get("pass")},
         {"clause": "HKisland03 ATE <= 1.2 m", "value": rg.get("ate_rmse_m"),
          "pass": None if not rg else bool(rg.get("ok")) and rg.get("same_image") is not False},
         {"clause": "report states reflectance model and noise table version", "value": {k: rep["versions"][k] for k in
@@ -570,30 +598,25 @@ def build_report(docs: Sequence[Mapping], regress: Mapping | None = None) -> dic
          "pass": rep["validity"]["ac14_scope"]["pass"]},
     ]
     v = [c["pass"] for c in clauses]
-    rep["ac14"] = {"clauses": clauses, "pass": None if any(x is None for x in v) else all(v), "status": AC14["status"],
-                   "note": "thresholds are the provisional r1-spline values; D01 freezes them by ADR from this matrix"}
-    rep["ac14_event0_anchor"] = event0_variant(rep, clauses)
+    rep["ac14"] = {"clauses": clauses, "pass": None if any(x is None for x in v) else all(v), "status": AC14["status"], "adr": AC14["adr"],
+                   "note": "thresholds frozen by ADR-215 (event-zero anchoring, realistic band [0.07%, 0.18%]); not relaxed by this tool"}
+    rep["ac14_first_estimate_anchor"] = first_estimate_variant(rep, clauses)
     return rep
 
 
-MAP_CLAUSE = "clean map-to-mesh mean (median over runs) <= 0.15 m"
-
-
-def event0_variant(rep: Mapping, clauses: Sequence[Mapping]) -> dict:
-    """拟议口径（不计入判定，供 D01 以 ADR 决定）：clean 地图到网格距离改以事件零点锚定（`reanchor`），其余条款不变。
-    缺少锚定点诊断数据时结论为 None。"""
+def first_estimate_variant(rep: Mapping, clauses: Sequence[Mapping]) -> dict:
+    """参考口径（不计入判定）：clean 地图到网格距离以首个估计锚定（r1 口径，ADR-215 否决决策 (1) 时的回退口径），其余条款不变。
+    以事件零点评测、没有首个估计锚定数值的运行使该口径的结论为 None。"""
     j = (rep["groups"].get(MAIN_GROUP) or {}).get("judge") or {}
     jm = (j.get("modes") or {}).get(AC14["main_mode"]) or {}
-    clean = [r for r in (rep["groups"].get(MAIN_GROUP) or {}).get("cases", []) if r["noise"] == "clean"]
-    d = clean[0]["modes"].get(AC14["main_mode"], {}).get("map_to_mesh_mean_event0_m", {}) if clean else {}
-    lim = AC14["clean"]["map_to_mesh_mean_m_max"]
-    map_ok = None if not d.get("n") else bool(d["median"] <= lim)
+    ref = jm.get("first_estimate_reference") or {}
+    map_ok = ref.get("pass")
     others = [c["pass"] for c in jm.get("checks", []) if c["clause"] != MAP_CLAUSE]
     main_ok = None if map_ok is None or any(x is None for x in others) else (map_ok and all(others))
     v = [main_ok] + [c["pass"] for c in clauses[1:]]
-    return {"map_to_mesh_mean_event0_m": d.get("median"), "limit_m": lim, "map_pass": map_ok, "main_group_pass": main_ok,
-            "pass": None if any(x is None for x in v) else all(v), "counted": False,
-            "note": "proposed anchoring at the event zero (end of the pre-roll window); not counted until D01 decides by ADR"}
+    return {"map_to_mesh_mean_first_m": ref.get("map_to_mesh_mean_m"), "limit_m": AC14["clean"]["map_to_mesh_mean_m_max"],
+            "map_pass": map_ok, "main_group_pass": main_ok, "pass": None if any(x is None for x in v) else all(v), "counted": False,
+            "note": "r1 anchoring at the first estimate (inside the FAST-LIVO2 initialisation); ADR-215 fallback, reported only"}
 
 
 def load_docs(out: Path) -> tuple[list[dict], list[str]]:
@@ -629,18 +652,18 @@ def render_md(rep: Mapping) -> str:
     """实测记录用的表格（中文；数值保留 3 位小数，RPE100 以 % 表示）。"""
     L: list[str] = []
     L.append("### 主矩阵（6 m/s，`pose_nodes = 11`，`slam_cam` 相位 `tick_end`）\n")
-    L.append("| 组 | 算例 | 模式 | 成功 / 运行 | RPE100 段均值（中位，各次） | 对齐 ATE 中位（m） | 锚定最大漂移中位（m） | 地图到网格均值中位（锚定 / 对齐，m） "
-             "| 处理帧比例最小值 |")
+    L.append("| 组 | 算例 | 模式 | 成功 / 运行 | RPE100 段均值（中位，各次） | 对齐 ATE 中位（m） | 事件零点锚定最大漂移中位（m） "
+             "| 地图到网格均值中位（事件零点锚定 / 对齐，m） | 处理帧比例最小值 |")
     L.append("|---|---|---|---|---|---|---|---|---|")
     for g, gd in rep["groups"].items():
         for row in gd["cases"]:
             for m, md in row["modes"].items():
                 runs = " / ".join(_f(x, 3) for x in md["rpe100_runs"])
                 L.append(f"| {g} | {row['case']} | {m.upper()} | {md['ok']} / {md['runs']} | {_f(md['rpe100_pct'].get('median'), 3, True)}"
-                         f"（{runs}） | {_f(md['ate_aligned_rmse_m'].get('median'))} | {_f(md['drift_max_m'].get('median'))} | "
-                         f"{_f(md['map_to_mesh_mean_m'].get('median'))} / {_f(md['map_to_mesh_mean_aligned_m'].get('median'))} | "
+                         f"（{runs}） | {_f(md['ate_aligned_rmse_m'].get('median'))} | {_f(md['drift_max_event0_m'].get('median'))} | "
+                         f"{_f(md['map_to_mesh_mean_event0_m'].get('median'))} / {_f(md['map_to_mesh_mean_aligned_m'].get('median'))} | "
                          f"{_f(md['frames']['min_frac'], 3)} |")
-    L.append("\n### D3-AC-14 判定（各组；LIVO 为主口径，LIO 单列）\n")
+    L.append("\n### D3-AC-14 判定（各组；ADR-215 冻结表；LIVO 为主口径，LIO 单列）\n")
     L.append("| 组 | 模式 | 条款 | 实测 | 阈值 | 结论 |")
     L.append("|---|---|---|---|---|---|")
     for g, gd in rep["groups"].items():
@@ -657,7 +680,7 @@ def render_md(rep: Mapping) -> str:
                 L.append(f"| {g} | {m.upper()} | {c['clause']} | {val} | {c['limit']} | {_verdict(c['pass'])} |")
     L.append("\n### 8 m/s 逐点位姿与单一位姿（clean 种子 1，对齐 ATE 跨重复中位数）\n")
     L.append(f"| 组 | 模式 | 单一位姿 ATE（m） | 单一位姿发散次数（ATE > {DIVERGED_M:g} m） | 逐点（11 节点）ATE（m） | 比值 "
-             "| 单一位姿 / 逐点 RPE100 | 结论（≥ 5） |")
+             "| 单一位姿 / 逐点 RPE100 | 结论（≥ 5，单一位姿发散计为满足） |")
     L.append("|---|---|---|---|---|---|---|---|")
     for g, gd in rep["ratio8"].items():
         for m in MODES:
@@ -665,10 +688,14 @@ def render_md(rep: Mapping) -> str:
             L.append(f"| {g} | {m.upper()} | {_f((r.get('single') or {}).get('median'))} | {r.get('single_diverged', 0)} / "
                      f"{r.get('single_runs', 0)} | {_f((r.get('per_point') or {}).get('median'))} | "
                      f"{_f(r.get('ratio'), 2)} | {_f((r.get('rpe100_single') or {}).get('median'), 3, True)} / "
-                     f"{_f((r.get('rpe100_per_point') or {}).get('median'), 3, True)} | {_verdict(r.get('pass'))} |")
+                     f"{_f((r.get('rpe100_per_point') or {}).get('median'), 3, True)} | {_verdict(r.get('pass'))}"
+                     f"{'（单一位姿发散，计为满足）' if r.get('basis') == 'single_pose_diverged' else ''} |")
+    ref = AC14["per_point_ratio_reference"]
+    L.append(f"\n比值量级参考（ADR-215 决策 (3)）：Fast 档 {ref['fast_tier'][0]:g}–{ref['fast_tier'][1]:g} 倍，S16 crop "
+             f"{ref['s16_crop'][0]:g}–{ref['s16_crop'][1]:g} 倍。")
     for blk, title in (("nodes", "`pose_nodes = native` 与 `11`"), ("phase", "`slam_cam` 相位 `r1_mid` 与 `tick_end`")):
         L.append(f"\n### {title}（同组、同噪声档、同种子；中位数，相对差 = 变体 / 基线 − 1）\n")
-        L.append("| 组 | 档与种子 | 模式 | RPE100 基线 → 变体 | 对齐 ATE（m） | 地图到网格均值（m） |")
+        L.append("| 组 | 档与种子 | 模式 | RPE100 基线 → 变体 | 对齐 ATE（m） | 地图到网格均值（事件零点锚定，m） |")
         L.append("|---|---|---|---|---|---|")
         for g, gd in rep[blk].items():
             for key, cd in gd.items():
@@ -681,21 +708,21 @@ def render_md(rep: Mapping) -> str:
                         return (f"{_f((x.get('base') or {}).get('median'), 3, pct)} → {_f((x.get('variant') or {}).get('median'), 3, pct)}"
                                 f"（{'—' if rel is None else f'{rel * 100:+.0f}%'}）")
                     L.append(f"| {g} | {key} | {m.upper()} | {cell('rpe100_pct', True)} | {cell('ate_aligned_rmse_m')} | "
-                             f"{cell('map_to_mesh_mean_m')} |")
-    if any(md["map_to_mesh_mean_event0_m"].get("n") for gd in rep["groups"].values() for row in gd["cases"]
-           for md in row["modes"].values()):
-        L.append("\n### 锚定点敏感性（诊断，不进入判定；中位数）\n")
+                             f"{cell('map_to_mesh_mean_event0_m')} |")
+    if any(md["map_to_mesh_mean_first_m"].get("n") and md["map_to_mesh_mean_event0_m"].get("n") for gd in rep["groups"].values()
+           for row in gd["cases"] for md in row["modes"].values()):
+        L.append("\n### 锚定点敏感性（首个估计锚定为 r1 参考口径，不进入判定；中位数）\n")
         L.append("| 组 | 算例 | 模式 | 首个估计锚定时事件零点处姿态误差（°） | 锚定最大漂移：首个估计 → 事件零点（m） "
                  "| 地图到网格均值：首个估计 → 事件零点 → 对齐（m） |")
         L.append("|---|---|---|---|---|---|")
         for g, gd in rep["groups"].items():
             for row in gd["cases"]:
                 for m, md in row["modes"].items():
-                    if not md["map_to_mesh_mean_event0_m"].get("n"):
+                    if not (md["map_to_mesh_mean_first_m"].get("n") and md["map_to_mesh_mean_event0_m"].get("n")):
                         continue
                     L.append(f"| {g} | {row['case']} | {m.upper()} | {_f(md['att_err_at_event0_deg'].get('median'))} | "
                              f"{_f(md['drift_max_m'].get('median'))} → {_f(md['drift_max_event0_m'].get('median'))} | "
-                             f"{_f(md['map_to_mesh_mean_m'].get('median'))} → {_f(md['map_to_mesh_mean_event0_m'].get('median'))} → "
+                             f"{_f(md['map_to_mesh_mean_first_m'].get('median'))} → {_f(md['map_to_mesh_mean_event0_m'].get('median'))} → "
                              f"{_f(md['map_to_mesh_mean_aligned_m'].get('median'))} |")
     if rep.get("resources"):
         L.append("\n### 资源与 r_map（主矩阵；共享 CPU 池，开发参考；中位数（最小–最大））\n")
@@ -715,9 +742,13 @@ def render_md(rep: Mapping) -> str:
     rg = rep.get("regress")
     if rg:
         L.append("\n### HKisland03 真机回归\n")
+        rq = rg.get("resources_required") or {}
+        ra = rg.get("resources") or {}
         L.append(f"ATE RMSE {_f(rg['ate_rmse_m'])} m（阈值 ≤ {rg['limit_m']} m），结论 {_verdict(rg['ok'])}；镜像 "
-                 f"`{(rg.get('image') or {}).get('id', '')[:19]}`，与矩阵运行镜像一致：{_verdict(rg.get('same_image'))}。")
-    L.append("\n### D3-AC-14 总判定（主组 gz 锁步，LIVO）\n")
+                 f"`{(rg.get('image') or {}).get('id', '')[:19]}`，与矩阵运行镜像一致：{_verdict(rg.get('same_image'))}；作业资源 "
+                 f"{_f(ra.get('mem_gb_applied'), 0)} GB、{_f(ra.get('cpus_applied'), 0)} 核（ADR-215 要求 ≥ {rq.get('mem_gb_min', 0):g} GB、"
+                 f"{rq.get('cpus_min', 0):g} 核：{_verdict(rg.get('resources_ok'))}）。")
+    L.append("\n### D3-AC-14 总判定（主组 gz 锁步，LIVO；ADR-215 冻结口径）\n")
     L.append("| 条款 | 实测 | 结论 |")
     L.append("|---|---|---|")
     for c in rep["ac14"]["clauses"]:
@@ -729,10 +760,10 @@ def render_md(rep: Mapping) -> str:
         L.append("\n运行有效性（全部运行）：" + "；".join(
             [f"{x['case']}/{x['run']} 处理帧比例 {x['frac']:.3f}" for x in va["incomplete"]]
             + [f"{x['case']}/{x['run']} 失败（{x['code']}）" for x in va["failed"]]) + "。")
-    L.append(f"\n总结论：{_verdict(rep['ac14']['pass'])}（阈值状态 {rep['ac14']['status']}）。版本：反射率模型 "
+    L.append(f"\n总结论：{_verdict(rep['ac14']['pass'])}（阈值状态 {rep['ac14']['status']}，{rep['ac14'].get('adr', '')}）。版本：反射率模型 "
              f"{', '.join(rep['versions']['reflectance_model']) or '—'}，噪声档参数表 {', '.join(rep['versions']['noise_table_version']) or '—'}。")
-    ev = rep.get("ac14_event0_anchor") or {}
-    L.append(f"\n拟议口径（不计入）：clean 地图到网格均值以事件零点锚定为 {_f(ev.get('map_to_mesh_mean_event0_m'))} m"
+    ev = rep.get("ac14_first_estimate_anchor") or {}
+    L.append(f"\n参考口径（r1，首个估计锚定，不计入）：clean 地图到网格均值 {_f(ev.get('map_to_mesh_mean_first_m'))} m"
              f"（阈值 ≤ {ev.get('limit_m')} m，{_verdict(ev.get('map_pass'))}），按此口径主组 {_verdict(ev.get('main_group_pass'))}，"
              f"总结论 {_verdict(ev.get('pass'))}。")
     return "\n".join(L) + "\n"

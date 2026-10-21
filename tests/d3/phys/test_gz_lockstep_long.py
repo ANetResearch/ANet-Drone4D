@@ -331,9 +331,19 @@ def test_startup_statistics_and_trace_parsing() -> None:
     assert s["n"] == 20 and s["over_threshold"] == [19] and s["worst_pass"] is False and s["p95_pass"] is True
     assert s["stats"]["startup_s"]["max"] == 5.2 and s["stats"]["startup_s"]["median"] == 2.6
     assert s["stats"]["startup_s"]["p95"] == pytest.approx(2.6 + 0.05 * 2.6, abs=1e-3)
+    assert s["statistic"] == "p95" and s["samples_sufficient"] is False and s["pass"] is False          # 20 < 40 次：样本不足
+    assert s["worst"] == {"source": "startup-19", "startup_s": 5.2, "segments": {"launch_to_socket_s": 3.6, "hello_s": 1.6},
+                          "utc": None, "loadavg": None}
     ok = gl.summarize_startup(samples)
     assert ok["worst_pass"] and ok["p95_pass"] and not ok["over_threshold"]
-    assert gl.summarize_startup([])["worst_pass"] is None
+    assert gl.summarize_startup([])["worst_pass"] is None and gl.summarize_startup([])["pass"] is None
+    # ADR-216 (2)：≥ 40 次冷启动按 p95 判定；单个 6.2 s 长尾（最差实例，必报）不使条款不通过
+    k04 = [{"index": i, "startup_s": 2.6} for i in range(41)] + [{"index": 41, "startup_s": 6.2, "launch_cmd_s": 4.1}]
+    s40 = gl.summarize_startup(k04)
+    assert s40["samples_sufficient"] and s40["p95_pass"] and s40["pass"] is True and s40["worst_pass"] is False
+    assert s40["worst"]["source"] == "startup-41" and s40["worst"]["segments"] == {"launch_cmd_s": 4.1}
+    slow = gl.summarize_startup([{"index": i, "startup_s": 5.5 if i % 10 == 0 else 2.6} for i in range(40)])
+    assert slow["p95_pass"] is False and slow["pass"] is False
 
     t = gl.parse_rfc3339("2026-10-20T05:02:52.123456789Z")
     assert t == pytest.approx(1792472572.123456, abs=1e-6)
@@ -348,16 +358,30 @@ def test_startup_statistics_and_trace_parsing() -> None:
 
 
 def test_summarize_startup_samples_and_cpu_pool() -> None:
-    """实例启动条款按最差实例判定（C-34 确认前），并入 startup 子命令样本并报告 p95；只有 physics 且未分配 GPU → cpu_pool，计为正式。"""
+    """实例启动条款按 p95 判定（ADR-216 (2)），并入 startup 子命令样本并报告最差实例；冷启动 < 40 次时样本不足、不计入；
+    只有 physics 且未分配 GPU → cpu_pool，计为正式。"""
     runs = [_run_doc(idx=i, startup=s, gpu_assigned=None, gpu_snapshots=[{"available": False}]) for i, s in enumerate((2.6, 2.7, 2.8))]
     s = gl.summarize(runs)
-    assert s["gpu_label"] == "cpu_pool" and _res(s)["startup_s"] == "pass" and _res(s)["rtf_phys"] == "pass"
-    probe = [{"index": i, "startup_s": 2.6} for i in range(36)] + [{"index": 36, "startup_s": 6.2}]
+    assert s["gpu_label"] == "cpu_pool" and _res(s)["rtf_phys"] == "pass"
+    assert _res(s)["startup_s"] == "pass_insufficient_samples_not_counted" and not s["seal_ready"]
+    probe = [{"index": i, "startup_s": 2.6, "hello_s": 1.5} for i in range(39)] + [{"index": 39, "startup_s": 6.2, "launch_cmd_s": 4.0}]
     s2 = gl.summarize(runs, startup=probe)
     a = next(x for x in s2["acceptance"] if x["clause"] == "startup_s")
-    assert a["result"] == "fail" and a["measured"] == 6.2 and a["n"] == {"runs": 3, "probe": 37} and a["p95"] < 5.0
-    assert a["statistic"].startswith("worst")
+    assert a["result"] == "pass" and a["measured"] == a["p95"] and a["p95"] < 5.0 and a["n"] == {"runs": 3, "probe": 40}
+    assert a["statistic"].startswith("p95") and a["worst_pass"] is False and a["samples_sufficient"]
+    assert a["worst"]["source"] == "startup-39" and a["worst"]["startup_s"] == 6.2 and a["worst"]["segments"] == {"launch_cmd_s": 4.0}
     assert s2["perf"]["startup_s_max"] == 6.2 and s2["perf"]["startup_s"] == 2.6
+    assert s2["perf"]["startup_segments"]["hello_s"]["median"] == 1.5
+    slow = gl.summarize(runs, startup=[{"index": i, "startup_s": 5.6 if i < 4 else 2.6} for i in range(40)])
+    assert _res(slow)["startup_s"] == "fail" and not slow["passed"] and not slow["seal_ready"]
+    excl = [*[_run_doc(idx=i) for i in range(3)], _run_doc("m25")]
+    full = gl.summarize(excl, startup=probe)
+    assert full["gpu_label"] == "exclusive" and full["passed"] and full["seal_ready"]
+    few = gl.summarize(excl)                                                                      # 无冷启动样本：通过但不计入封板
+    assert few["passed"] and not few["seal_ready"] and _res(few)["startup_s"] == "pass_insufficient_samples_not_counted"
+    runs[1]["startup"]["startup_s"] = 7.0                                                         # Run 实例为最差实例
+    w = next(x for x in gl.summarize(runs, startup=probe)["acceptance"] if x["clause"] == "startup_s")["worst"]
+    assert w["source"] == "physics-1" and w["startup_s"] == 7.0
     old = gl.summarize([_run_doc(idx=i, snaps_other=None) for i in range(3)])                    # 旧记录（无 gpu_assigned）
     assert old["gpu_label"] == "shared" and _res(old)["startup_s"] == "pass_shared_not_counted"
     mixed = gl.summarize([*runs, _run_doc("m25", gpu_assigned=2)])
@@ -376,7 +400,7 @@ def test_cpu_pool_state(tmp_path: Path) -> None:
 
 def test_cli_startup_args() -> None:
     a = gl._args(["startup", "--events-root", "ev", "--out", "o"])
-    assert a.cmd == "startup" and a.n == 20 and a.gz_verbose == 1 and a.gz_cpus == 2.0 and a.host_cgroup_root is None
+    assert a.cmd == "startup" and a.n == 40 and a.gz_verbose == 1 and a.gz_cpus == 2.0 and a.host_cgroup_root is None
     r = gl._args(["run", "--events-root", "ev", "--out", "o", "--host-cgroup-root", "/h"])
     assert r.repeats == 3 and r.host_cgroup_root == "/h" and r.kinds == "physics,m25"
 
@@ -429,13 +453,20 @@ def _res(summary) -> dict[str, str]:
     return {a["clause"]: a["result"] for a in summary["acceptance"]}
 
 
+PROBES = [{"index": i, "startup_s": 2.5} for i in range(40)]
+
+
 def test_summarize_exclusive_pass_and_medians() -> None:
     runs = [_run_doc(idx=i, rtf=r, startup=s) for i, (r, s) in enumerate(((3.5, 2.0), (4.5, 4.0), (4.0, 3.0)))] + [_run_doc("m25", rtf=1.0)]
-    s = gl.summarize(runs)
-    assert s["gpu_label"] == "exclusive" and s["passed"]
+    s = gl.summarize(runs, startup=PROBES)
+    assert s["gpu_label"] == "exclusive" and s["passed"] and s["adr"] == "ADR-216"
     assert s["perf"]["rtf_phys"] == 4.0 and s["perf"]["repeats"] == 3 and s["perf"]["startup_s_max"] == 4.0   # rtf 只取 physics 的中位数
     assert set(_res(s).values()) == {"pass"} and s["same_seed"]["bitwise"] and s["m25_equal"]["bitwise"] and s["seal_ready"]
-    assert next(a for a in s["acceptance"] if a["clause"] == "rtf_phys")["provisional"]
+    rtf = next(a for a in s["acceptance"] if a["clause"] == "rtf_phys")
+    assert "provisional" not in rtf and rtf["min_single"] == 3.5 and rtf["runs"] == [3.5, 4.5, 4.0]          # ADR-216 (1)：冻结，单次最低另报
+    # 中位 ≥ 3.0 而单次低于 3.0（S21 第 1 组 2.92）：按中位判定通过
+    low1 = gl.summarize([_run_doc(idx=i, rtf=r) for i, r in enumerate((2.92, 3.12, 3.65))] + [_run_doc("m25")], startup=PROBES)
+    assert _res(low1)["rtf_phys"] == "pass" and low1["perf"]["rtf_phys_min"] == 2.92
 
 
 def test_summarize_failures_and_shared_card() -> None:

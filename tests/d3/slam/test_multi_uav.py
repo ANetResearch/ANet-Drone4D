@@ -165,6 +165,13 @@ def pipeline(synth_world: Path, tmp_path_factory: pytest.TempPathFactory) -> Pat
 
 
 # ---------------------------------------------------------------------------------------------------------------- 1 航迹规划
+def test_ac14_band_matches_frozen_table() -> None:
+    """lidar-compare 报告写出的 realistic 区间与 `slam_eval.report.AC14` 一致（ADR-215 冻结为 [0.07%, 0.18%]）。"""
+    from slam_eval.report import AC14
+
+    assert list(lc.AC14_REALISTIC_BAND) == AC14["realistic"]["rpe100_median_range_pct"] == [0.07, 0.18]
+
+
 def test_plan_waypoints_reproduce_planned_poses(synth_world: Path) -> None:
     """250 Hz 航点经采集作业 `build_history` 插值后逐样本等于规划位姿（u = 0）；悬停窗口静止，三维速度不超过设定值。"""
     from awr.sensorsvc.camera.snap import ground_z

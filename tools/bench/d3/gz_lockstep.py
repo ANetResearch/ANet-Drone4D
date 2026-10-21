@@ -25,8 +25,10 @@ Env 主循环、守卫、导航误差与观测投影与正式运行相同，Agen
 实例的 RTF 与资源在 CPU 池测量，计为正式数字），同时记录 `d3.slice` 进程数与其他 `d3-` 容器。报告记录卡号、同卡进程快照、容器
 `--cpus` 与 `--memory`。
 
-实例启动的统计量（§23.5 C-34，待 D01 以 ADR 明确）：判定按逐次（最差实例），同时报告 p95（M24-NFR-006、M24-AC-026 的口径）。样本为
-各 Run 的实例与 `startup` 子命令的冷启动。
+D3-AC-34 性能条款按 ADR-216 冻结：只计物理与锁步协议的 3 机 RTF ≥ 3.0，按 ADR-033 以 3 次运行取中位判定（RTF 按实际推进的仿真时长
+（含预滚）折算），单次最低值另报；`physics` 实例启动 ≤ 5 s 按 ≥ 40 次冷启动（`startup` 子命令）加本次测量各 Run 实例的 p95 判定
+（M24-NFR-006、M24-AC-026），同时报告样本数、最差实例与分段计时（`docker run`、控制端点出现、Hello 往返）。冷启动样本不足 40 次时
+启动条款记为样本不足、不计入（`seal_ready` 为假）。
 
 子命令：
 - `run`：执行 physics（L1，无 M25 负载）× `--repeats` 与 m25（L2 + M25 会话）× `--m25-runs`，每个 Run 写 `<out>/runs/<kind>-<i>.json`，
@@ -43,7 +45,7 @@ Env 主循环、守卫、导航误差与观测投影与正式运行相同，Agen
     python tools/bench/d3/gz_lockstep.py startup --worlds-root worlds --events-root d3data/events --out out/gz-lockstep --n 40
     python tools/bench/d3/gz_lockstep.py summarize --out out/gz-lockstep
 退出码：0 计入的条款全部通过（共享卡上的性能条款记为不计入，不影响退出码；`seal_ready` 另要求独占卡或 CPU 池）、1 有条款不通过或
-未测（`startup`：有实例超过 5 s）、14 前置条件不满足（未取得锁或负载过高）。
+未测（`startup`：p95 超过 5 s 或样本不足 40 次）、14 前置条件不满足（未取得锁或负载过高）。
 """
 
 from __future__ import annotations
@@ -84,9 +86,12 @@ POSE_HISTORY_HZ = 1_000_000_000 // STEP_NS             # 250
 G = 9.80665
 EXIT_OK, EXIT_FAIL, EXIT_ENV = 0, 1, 14
 
-# D3-AC-34 阈值（§11.2 原文）；rtf_phys 为"暂定，P-1 实测后冻结"
+# D3-AC-34 阈值（§11.2 原文）；rtf_phys 原为"暂定，P-1 实测后冻结"，ADR-216 决策 (1) 冻结为 3.0（不变）
 THRESHOLDS = {"alt_err_m": 2.0, "startup_s": 5.0, "rtf_phys": 3.0, "cpu_cores": 2.0, "mem_gb": 2.0, "tick_diff_ns": 0, "frame_diff_ns": 0}
-PROVISIONAL = frozenset({"rtf_phys"})
+PROVISIONAL: frozenset[str] = frozenset()
+STARTUP_STATISTIC = "p95"                                       # ADR-216 决策 (2)：启动时长按 p95 判定，最差实例必报
+STARTUP_MIN_PROBES = 40                                         # ADR-216 决策 (2)：≥ 40 次冷启动（`startup` 子命令）
+STARTUP_SEGMENTS = ("launch_cmd_s", "socket_seen_s", "launch_to_socket_s", "log_check_s", "host_gap_s", "hello_s")
 COUNTED_LABELS = frozenset({"exclusive", "cpu_pool"})   # 性能条款计为正式数字的测量级别（ADR-195 决策 (2)(6)）
 
 
@@ -723,9 +728,20 @@ def _pct(xs: Sequence[float], q: float) -> float | None:
     return round(float(np.percentile(v, q)), 3) if v else None
 
 
-def summarize_startup(samples: Sequence[Mapping], threshold_s: float = THRESHOLDS["startup_s"]) -> dict:
-    """实例启动样本 → 各分段的中位、p95、最大与两种判据（C-34 待 D01 以 ADR 明确统计量之前两者都报告）：
-    `worst`：逐次判定，每个实例都 ≤ 阈值（§11.2 原文、C-34 确认前的口径）；`p95`：p95 ≤ 阈值（M24-NFR-006、M24-AC-026）。"""
+def worst_instance(samples: Sequence[Mapping]) -> dict | None:
+    """启动时长最长的实例（ADR-216 (2) 必报项）：来源（`source`，Run 为 `<kind>-<index>`、冷启动为 `startup-<index>`）、时长与分段计时。"""
+    xs = [r for r in samples if r.get("startup_s") is not None]
+    if not xs:
+        return None
+    w = max(xs, key=lambda r: float(r["startup_s"]))
+    return {"source": w.get("source") or f"startup-{w.get('index')}", "startup_s": round(float(w["startup_s"]), 3),
+            "segments": {k: w[k] for k in STARTUP_SEGMENTS if w.get(k) is not None}, "utc": w.get("utc"), "loadavg": w.get("loadavg")}
+
+
+def summarize_startup(samples: Sequence[Mapping], threshold_s: float = THRESHOLDS["startup_s"], *,
+                      min_probes: int = STARTUP_MIN_PROBES) -> dict:
+    """实例启动样本 → 各分段的中位、p95、最大与判定（ADR-216 决策 (2)）：`pass` = p95 ≤ 阈值且冷启动样本 ≥ `min_probes`；
+    逐次口径（`worst_pass`，ADR-216 回退口径）与最差实例另报。"""
     keys = ("startup_s", "launch_cmd_s", "socket_seen_s", "log_check_s", "launch_to_socket_s", "hello_s", "host_gap_s")
     stats = {}
     for k in keys:
@@ -734,8 +750,12 @@ def summarize_startup(samples: Sequence[Mapping], threshold_s: float = THRESHOLD
             stats[k] = {"n": len(v), "median": _pct(v, 50), "p95": _pct(v, 95), "max": round(max(v), 3), "min": round(min(v), 3)}
     st = stats.get("startup_s") or {}
     over = [r.get("index") for r in samples if r.get("startup_s") is not None and r["startup_s"] > threshold_s]
-    return {"n": len(samples), "threshold_s": threshold_s, "stats": stats, "over_threshold": over,
-            "worst_pass": None if not st else st["max"] <= threshold_s, "p95_pass": None if not st else st["p95"] <= threshold_s}
+    p95_ok = None if not st else st["p95"] <= threshold_s
+    enough = st.get("n", 0) >= min_probes
+    return {"n": len(samples), "threshold_s": threshold_s, "statistic": STARTUP_STATISTIC, "min_samples": min_probes,
+            "samples_sufficient": enough, "stats": stats, "over_threshold": over, "worst": worst_instance(samples),
+            "worst_pass": None if not st else st["max"] <= threshold_s, "p95_pass": p95_ok,
+            "pass": None if p95_ok is None else bool(p95_ok and enough)}
 
 
 def startup_once(cfg: RunCfg, idx: int, *, export, world) -> dict:
@@ -875,10 +895,13 @@ def _median(xs: Sequence[float | None]) -> float | None:
 def summarize(runs: Sequence[Mapping], *, label: str | None = None, startup: Sequence[Mapping] = ()) -> dict:
     """各 Run → 中位数（ADR-033 PR-3）、跨 Run 逐位一致性与 D3-AC-34 逐条判定。
 
-    实例启动条款的样本 = 各 Run 的实例（每 Run 重启）+ `startup` 子命令的冷启动样本（`<out>/startup/startup-*.json`）。判定按逐次
-    （最差实例，§23.5 C-34 确认前的口径），同时报告 p95（M24-NFR-006、M24-AC-026 的口径）与样本数，供 D01 以 ADR 明确统计量。"""
+    实例启动条款的样本 = 各 Run 的实例（每 Run 重启）+ `startup` 子命令的冷启动样本（`<out>/startup/startup-*.json`）。按 ADR-216
+    决策 (2) 以 p95 判定，报告样本数、最差实例（来源与分段计时）与逐次口径；冷启动样本少于 `STARTUP_MIN_PROBES` 时条款记为
+    `<结论>_insufficient_samples_not_counted`（不阻塞 `passed`，`seal_ready` 为假）。RTF 按 ADR-216 决策 (1) 取中位，单次最低值另报。"""
     phys = sorted((r for r in runs if r["kind"] == "physics"), key=lambda r: r["index"])
     m25 = sorted((r for r in runs if r["kind"] == "m25"), key=lambda r: r["index"])
+    st_samples = ([{**(r.get("startup") or {}), "source": f"{r.get('kind')}-{r.get('index')}"} for r in runs]
+                  + [{**r, "source": f"startup-{r.get('index')}"} for r in startup])
     st_runs = [float(x) for x in ((r.get("startup") or {}).get("startup_s") for r in runs) if x is not None]
     st_probe = [float(x) for x in (r.get("startup_s") for r in startup) if x is not None]
     st_all = st_runs + st_probe
@@ -889,9 +912,13 @@ def summarize(runs: Sequence[Mapping], *, label: str | None = None, startup: Seq
         v = [x for x in v if x is not None]
         return max(v) if v else None
 
-    perf = {"rtf_phys": _median([r.get("rtf_phys") for r in phys]), "rtf_gz": _median([r.get("gz_rtf_mean") for r in phys]),
+    rtf_runs = [float(r["rtf_phys"]) for r in phys if r.get("rtf_phys") is not None]
+    perf = {"rtf_phys": _median([r.get("rtf_phys") for r in phys]), "rtf_phys_min": min(rtf_runs, default=None), "rtf_phys_runs": rtf_runs,
+            "rtf_gz": _median([r.get("gz_rtf_mean") for r in phys]),
             "rtf_env": _median([r.get("rtf_env") for r in phys]), "startup_s": _median(st_all), "startup_s_max": max(st_all, default=None),
             "startup_s_p95": _pct(st_all, 95), "startup_n": {"runs": len(st_runs), "probe": len(st_probe)},
+            "startup_worst": worst_instance(st_samples),
+            "startup_segments": {k: v for k, v in summarize_startup(st_samples)["stats"].items() if k != "startup_s"},
             "cpu_cores_p95": _median([((r.get("resources") or {}).get("cpu_cores") or {}).get("p95") for r in phys]),
             "cpu_cores_max": mx(runs, lambda r: ((r.get("resources") or {}).get("cpu_cores") or {}).get("max")),
             "mem_anon_gb_max": mx(runs, lambda r: ((r.get("resources") or {}).get("mem_anon_gb") or {}).get("max")),
@@ -950,7 +977,7 @@ def summarize(runs: Sequence[Mapping], *, label: str | None = None, startup: Seq
         item("alt_err_m", None if alt_max is None else alt_max <= th["alt_err_m"], alt_max, th["alt_err_m"]),
         item("step_done_tick_diff_ns", None if tick_diff is None else tick_diff == th["tick_diff_ns"], tick_diff, 0),
         item("frame_tick_diff_ns", None if frame_diff is None else frame_diff == th["frame_diff_ns"], frame_diff, 0),
-        item("startup_s", None if perf["startup_s_max"] is None else perf["startup_s_max"] <= th["startup_s"], perf["startup_s_max"],
+        item("startup_s", None if perf["startup_s_p95"] is None else perf["startup_s_p95"] <= th["startup_s"], perf["startup_s_p95"],
              th["startup_s"], performance=True),
         item("rtf_phys", None if perf["rtf_phys"] is None else perf["rtf_phys"] >= th["rtf_phys"], perf["rtf_phys"], th["rtf_phys"],
              performance=True),
@@ -963,10 +990,19 @@ def summarize(runs: Sequence[Mapping], *, label: str | None = None, startup: Seq
     ]
     for a in accept:
         if a["clause"] == "startup_s":
-            a.update(statistic="worst instance (C-34 interim)", p95=perf["startup_s_p95"], n=perf["startup_n"])
+            enough = perf["startup_n"]["probe"] >= STARTUP_MIN_PROBES
+            a.update(statistic="p95 (ADR-216 (2))", p95=perf["startup_s_p95"], n=perf["startup_n"], min_probes=STARTUP_MIN_PROBES,
+                     samples_sufficient=enough, worst=perf["startup_worst"],
+                     worst_pass=None if perf["startup_s_max"] is None else perf["startup_s_max"] <= th["startup_s"])
+            if not enough and a["result"] in ("pass", "fail"):
+                a["result"] += "_insufficient_samples_not_counted"
+        if a["clause"] == "rtf_phys":
+            a.update(statistic="median of runs (ADR-033, ADR-216 (1))", min_single=perf["rtf_phys_min"], runs=perf["rtf_phys_runs"])
     passed = all(a["result"] == "pass" or a["result"].endswith("_not_counted") for a in accept)
+    counted = all(not (a["performance"] and a["result"].endswith("_not_counted")) for a in accept)
     return {"gpu_label": label, "perf": perf, "same_seed": same_seed, "m25_equal": m25_eq, "frames": frames, "checks": checks,
-            "vh_max_mps": vh, "acceptance": accept, "passed": passed, "seal_ready": passed and label in COUNTED_LABELS}
+            "vh_max_mps": vh, "acceptance": accept, "passed": passed, "adr": "ADR-216",
+            "seal_ready": passed and counted and label in COUNTED_LABELS}
 
 
 def write_summary(out: Path, runs: Sequence[Mapping], meta: Mapping) -> dict:
@@ -1024,7 +1060,7 @@ def _args(argv: list[str] | None) -> argparse.Namespace:
     r.add_argument("--sample-s", type=float, default=1.0)
     st = sub.add_parser("startup", help="repeated physics instance cold starts (instance launch to HelloAck), no simulation")
     _add_gz_args(st)
-    st.add_argument("--n", type=int, default=20, help="number of instance starts")
+    st.add_argument("--n", type=int, default=STARTUP_MIN_PROBES, help="number of instance starts (ADR-216: >= 40)")
     st.add_argument("--gap-s", type=float, default=1.0, help="pause between starts")
     s = sub.add_parser("summarize")
     s.add_argument("--out", type=Path, required=True)
@@ -1086,7 +1122,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def main_startup(a: argparse.Namespace, gz: dict, load: dict) -> int:
     """`startup`：`--n` 次实例冷启动（每次新容器、同一 run.sdf 组装），写 `<out>/startup/startup-<i>.json` 与 `<out>/gz_startup.json`。
-    退出码按逐次判定（C-34 确认前的口径）：全部 ≤ 5 s 为 0，否则 1。"""
+    退出码按 ADR-216 决策 (2)：p95 ≤ 5 s 且样本 ≥ 40 次为 0，否则 1；最差实例与逐次口径写入汇总。"""
     from awr.agentsdk.env.core import _open_world
     from awr.agentsdk.env.spec import EnvSpec
     from awr.world.export.gz import export_world
@@ -1118,7 +1154,7 @@ def main_startup(a: argparse.Namespace, gz: dict, load: dict) -> int:
            "config": {"spec": str(a.spec), "vehicle": a.vehicle, "gz": gz, "n": a.n}, "summary": summ}
     (a.out / "gz_startup.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(json.dumps(summ, ensure_ascii=False, indent=1))
-    return EXIT_OK if summ["worst_pass"] else EXIT_FAIL
+    return EXIT_OK if summ["pass"] else EXIT_FAIL
 
 
 if __name__ == "__main__":

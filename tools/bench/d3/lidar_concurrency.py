@@ -16,8 +16,10 @@
   局部原点 float32 求交，随机键相同）。汇总全部射线的距离差分布（p50、p90、p99、p99.9、最大，静态与演员分列）、命中判定不一致率、
   演员实例不一致数与观测帧有效槽位差。阈值：距离差 p99 ≤ 1 mm、最大 ≤ 1 cm、命中不一致 ≤ 1e-4。另把"两侧命中不同静态三角形、较近
   三角形边界与射线的平面内距离在 float32 判定带宽内"的射线单列为轮廓边判定歧义（`edge_ambiguous`：深度台阶处 Embree 与 Warp 的边界
-  容差不同），给出去掉歧义后的同一表面距离差分布与"命中不一致 + 歧义"比例；判定按 §11.2 原文口径，拟议口径（歧义计入命中不一致）
-  单列且不计入，待 D01 以 ADR 冻结。
+  容差不同），给出去掉歧义后的同一表面距离差分布与"命中不一致 + 歧义"比例。判定按 ADR-207（先行生效，§23.5 C-19）：距离差
+  p99 ≤ 1 mm、最大 ≤ 1 cm 在同一表面射线上统计，命中判定不一致（含轮廓边 float32 判定歧义）≤ 1e-4；原文口径（全部双方命中射线的
+  距离差、不含歧义的命中不一致率）照报、不计入（ADR-207 决策 (3)）。用户否决 ADR-207 时以 `judge --rule original` 按原文口径判定
+  （ADR-207 回退）。
 - `ate`（D3-AC-47 的"逐点位姿与单一位姿的 ATE 比值"）：同一解析航迹（缺省悬停 3 s 后加速到 8 m/s 绕环线一圈，叠加周期 4 s、
   角速度幅值 32°/s 的偏航摆动，即 r1/r4 的 v8 航段；60 s，航高 = 环线最高表面 + 8 m；环心取网格覆盖内结构丰富、对地航高最低处，
   见 `loop_center`）分别以逐点位姿（K = 11 个真值节点）与单一位姿
@@ -79,6 +81,7 @@ AC12_N400_P95_MS = 80.0                 # 400 架 p95（应交付目标）
 AC12_D_P99_M = 1e-3                     # 逐射线距离差 p99
 AC12_D_MAX_M = 1e-2                     # 逐射线距离差最大
 AC12_HIT_MISMATCH = 1e-4                # 命中判定不一致率
+AC12_RULES = ("adr207", "original")     # 逐射线条款的计数口径：ADR-207（缺省，先行生效）与 §11.2 原文（ADR-207 回退）
 
 N_ACTORS = 32
 N_HOTSPOTS = 8
@@ -531,7 +534,7 @@ class RayDiff:
 
     def summary(self) -> dict:
         """`d_m` 为全部双方命中射线（§11.2 原文口径）；`d_same_surface_m` 去掉轮廓边判定歧义射线；`edge` 为歧义射线的计数、比例与
-        距离差；`hit_or_edge_mismatch_rate` = (命中不一致 + 轮廓边歧义) / 射线数（拟议口径，待 D01 以 ADR 冻结）。"""
+        距离差；`hit_or_edge_mismatch_rate` = (命中不一致 + 轮廓边歧义) / 射线数（ADR-207 判定口径）。"""
         cat = lambda xs: np.concatenate(xs) if xs else np.zeros(0)  # noqa: E731
         ds, da, de = cat(self.d_static), cat(self.d_actor), cat(self.d_edge)
         same = np.concatenate([ds, da])
@@ -864,8 +867,14 @@ def _counted(level: str | None) -> tuple[bool, str]:
     return False, f"{level or 'unknown'}：共享卡或无法判定，开发参考，不计入封板"
 
 
-def judge(doc: Mapping) -> dict:
-    """逐条对照 D3-AC-12 阈值；吞吐条款按独占级别标注是否计入（全部重复为 A 级才计入），几何一致性条款不受独占级别约束。"""
+def judge(doc: Mapping, rule: str = "adr207") -> dict:
+    """逐条对照 D3-AC-12 阈值；吞吐条款按独占级别标注是否计入（全部重复为 A 级才计入），几何一致性条款不受独占级别约束。
+
+    逐射线条款的计数口径 `rule`：`adr207`（缺省，ADR-207 先行生效，§23.5 C-19）以同一表面射线的距离差 p99 / 最大与"命中不一致
+    + 轮廓边判定歧义"比例判定，原文口径照报、不计入（决策 (3)）；`original`（ADR-207 回退）以全部双方命中射线的距离差与不含歧义的
+    命中不一致率判定，ADR-207 口径照报、不计入。阈值两种口径相同，不放宽（ADR-194）。"""
+    if rule not in AC12_RULES:
+        raise ValueError(f"rule must be one of {AC12_RULES}")
     items = []
     thr = doc.get("throughput") or {}
     for n, lim, cls in (("100", AC12_N100_P95_MS, "阻塞"), ("400", AC12_N400_P95_MS, "应交付")):
@@ -884,32 +893,41 @@ def judge(doc: Mapping) -> dict:
         items.append({"id": f"AC12.n{n}_p95_ms", "class": cls, "threshold": lim, "value": v, "pass": v is not None and v <= lim,
                       "counted": c, "level": lvl, "note": note})
     df = doc.get("diff")
-    for key, lim, get in (("ray_d_p99_m", AC12_D_P99_M, lambda d: d["d_m"].get("p99")), ("ray_d_max_m", AC12_D_MAX_M, lambda d: d["d_m"].get("max")),
-                          ("hit_mismatch_rate", AC12_HIT_MISMATCH, lambda d: d["hit_mismatch_rate"])):
-        v = get(df) if df else None
-        note = "" if df else "未测"
-        e = (df or {}).get("edge") or {}
-        if key == "ray_d_max_m" and v is not None and v > lim and e.get("rays"):
-            note = (f"{e['rays']} 条射线为轮廓边 float32 判定歧义（两侧命中不同静态三角形，较近三角形边界与射线距离 ≤ 带宽），"
-                    "去掉后见 AC12.ray_d_max_m.same_surface")
-        items.append({"id": f"AC12.{key}", "class": "阻塞", "threshold": lim, "value": v, "pass": None if v is None else v <= lim,
-                      "counted": df is not None, "note": note})
-    # 拟议口径（待 D01 以 ADR 冻结；不计入）：轮廓边判定歧义按命中判定不一致计，距离差分布只取同一表面
-    for key, lim, get in (("ray_d_max_m.same_surface", AC12_D_MAX_M, lambda d: (d.get("d_same_surface_m") or {}).get("max")),
-                          ("ray_d_p99_m.same_surface", AC12_D_P99_M, lambda d: (d.get("d_same_surface_m") or {}).get("p99")),
-                          ("hit_or_edge_mismatch_rate", AC12_HIT_MISMATCH, lambda d: d.get("hit_or_edge_mismatch_rate"))):
-        v = get(df) if df else None
-        items.append({"id": f"AC12.{key}", "class": "拟议", "threshold": lim, "value": v, "pass": None if v is None else v <= lim,
-                      "counted": False, "note": "拟议口径：轮廓边 float32 判定歧义计入命中判定不一致；待 D01 以 ADR 冻结后替换原文口径"})
+    e = (df or {}).get("edge") or {}
+    original = (("ray_d_p99_m", AC12_D_P99_M, lambda d: d["d_m"].get("p99")), ("ray_d_max_m", AC12_D_MAX_M, lambda d: d["d_m"].get("max")),
+                ("hit_mismatch_rate", AC12_HIT_MISMATCH, lambda d: d["hit_mismatch_rate"]))
+    adr207 = (("ray_d_p99_m.same_surface", AC12_D_P99_M, lambda d: (d.get("d_same_surface_m") or {}).get("p99")),
+              ("ray_d_max_m.same_surface", AC12_D_MAX_M, lambda d: (d.get("d_same_surface_m") or {}).get("max")),
+              ("hit_or_edge_mismatch_rate", AC12_HIT_MISMATCH, lambda d: d.get("hit_or_edge_mismatch_rate")))
+    for name, rows in (("adr207", adr207), ("original", original)):
+        judged = name == rule
+        for key, lim, get in rows:
+            v = get(df) if df else None
+            if not df:
+                note = "未测"
+            elif v is None:
+                note = "对拍结果无该口径的字段（S16 之前的记录，须以现行工具重测）"
+            elif judged:
+                note = "判定口径：ADR-207" if name == "adr207" else "判定口径：§11.2 原文（ADR-207 回退）"
+            else:
+                note = ("原文口径（ADR-207 决策 (3) 照报，不计入）" if name == "original" else
+                        "ADR-207 口径（照报，不计入；用户已否决 ADR-207 时使用 --rule original）")
+            if name == "original" and key == "ray_d_max_m" and v is not None and v > lim and e.get("rays"):
+                note += (f"；{e['rays']} 条射线为轮廓边 float32 判定歧义（两侧命中不同静态三角形，较近三角形边界与射线距离 ≤ 带宽），"
+                         "ADR-207 口径计入命中判定不一致")
+            items.append({"id": f"AC12.{key}", "class": "阻塞" if judged else "参考", "basis": name, "threshold": lim, "value": v,
+                          "pass": None if v is None else v <= lim, "counted": bool(judged and df is not None), "note": note})
     counted = [i for i in items if i["counted"]]
     ok = all(i["pass"] for i in counted) and bool(counted)
-    seal = all(i["counted"] and i["pass"] for i in items if i["class"] == "阻塞") and all(i["pass"] for i in items if i["class"] != "拟议")
+    seal = all(i["counted"] and i["pass"] for i in items if i["class"] == "阻塞") and all(i["pass"] for i in items if i["class"] != "参考")
     slam = (doc.get("ate") or {}).get("slam") or {}
     info = {"AC47.ray_diff_distribution": None if not df else {k: df["d_m"].get(k) for k in ("p50", "p99", "max")},
             "AC47.ray_diff_distribution_same_surface": None if not df or "d_same_surface_m" not in df else
             {k: df["d_same_surface_m"].get(k) for k in ("p50", "p99", "max")},
+            "AC12.edge_ambiguous": None if not df else {"rays": e.get("rays"), "rate": e.get("rate"), "rays_total": df.get("rays")},
             "AC47.ate_ratio": {f"{t}/{m}": g.get("ate_ratio_single_over_per_point") for t, ms in slam.items() for m, g in ms.items()} or None}
-    return {"items": items, "counted_pass": ok, "seal_ready": bool(seal), "info": info}
+    return {"rule": rule, "adr": "ADR-207" if rule == "adr207" else None, "items": items, "counted_pass": ok, "seal_ready": bool(seal),
+            "info": info}
 
 
 # ---------------------------------------------------------------------------------------------------------------- 编排
@@ -931,7 +949,7 @@ def _save(path: Path, doc: Mapping) -> None:
     path.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
 
-def assemble(out: Path, meta: Mapping | None = None, slam_out: Path | None = None) -> dict:
+def assemble(out: Path, meta: Mapping | None = None, slam_out: Path | None = None, rule: str = "adr207") -> dict:
     """合并各部分结果；给出 `slam_out` 时把 FAST-LIVO2 评测结果并入 `ate.slam`（并写回 ate.json）。"""
     doc: dict[str, Any] = {"schema": SCHEMA, "utc": _utc(), **(meta or {})}
     for part in PARTS:
@@ -943,7 +961,7 @@ def assemble(out: Path, meta: Mapping | None = None, slam_out: Path | None = Non
         part = json.loads(_part_path(out, "ate").read_text(encoding="utf-8"))
         part["result"] = doc["ate"]
         _save(_part_path(out, "ate"), part)
-    doc["judge"] = judge(doc)
+    doc["judge"] = judge(doc, rule)
     _save(out / "lidar_concurrency.json", doc)
     return doc
 
@@ -1007,7 +1025,7 @@ def cmd_judge(a: argparse.Namespace) -> int:
     meta: dict = {}
     with contextlib.suppress(OSError, ValueError):
         meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
-    doc = assemble(out, meta, Path(a.slam_out) if a.slam_out else None)
+    doc = assemble(out, meta, Path(a.slam_out) if a.slam_out else None, rule=a.rule)
     sys.stdout.write(json.dumps(doc["judge"], ensure_ascii=False, indent=1) + "\n")
     return EXIT_OK if doc["judge"]["counted_pass"] else EXIT_FAIL
 
@@ -1049,6 +1067,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     j = sub.add_parser("judge", help="按已有的部分结果重新汇总与判定")
     j.add_argument("--out", required=True)
     j.add_argument("--slam-out", help="slam_eval 输出根目录（<slam-out>/<算例名>/metrics.json），汇总 ATE 比值")
+    j.add_argument("--rule", choices=AC12_RULES, default="adr207", help="逐射线条款计数口径：adr207（缺省，ADR-207）或 original（回退）")
     j.set_defaults(fn=cmd_judge)
     a = ap.parse_args(argv)
     return int(a.fn(a))

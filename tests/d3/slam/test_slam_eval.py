@@ -3,10 +3,14 @@
 - 轨迹指标：刚体变换下零误差、等比尺度误差下 RPE100 等于尺度偏差、与 r1 `eval_sim.py` RPE 循环（逐样本起点、除以 100 m）的
   相对差 ≤ 1%（M27-AC-024）、Umeyama 还原、真机回归的位置 ATE；
 - 地图指标：到网格距离（PLY 网格，局部原点 float32）、完整度与 F-score、真值位姿 LiDAR 参考集（B1）落在网格上、L0 离线地图；
-- 内存模型：`1.5 × (2 GB + 430 B × r_map × T)`、长量程 ≥ 20 GB 与 4 核、由 RSS 采样还原 r_map；
+- 内存模型：`1.5 × (2 GB + 430 B × r_map × T)`、MID-360 4 核与 4.5 万点/s（ADR-215 冻结）、长量程 ≥ 20 GB 与 4 核、由 RSS 采样
+  还原 r_map；
+- 锚定（ADR-215 (1)）：事件零点锚定消除初始化瞬态的整体旋转，RPE100 与对齐 ATE 不随锚定点变化；`evaluate_run` 缺省事件零点、
+  算例无事件零点时回落到首个估计并注明；
 - 容器执行：参数 yaml 补丁、容器参数（`--network none`、`--memory` = `--memory-swap`、`--cpus`）、OOM / 非零退出 / 日志停滞记 684、
   保留日志并重试 1 次、单个运行失败不影响其他运行（假 docker）；
-- 判定：D3-AC-14 clean 与 realistic 条款、样本不全时不给通过；
+- 判定：D3-AC-14 按 ADR-215 冻结表（realistic 区间 [0.07%, 0.18%]、clean 地图以事件零点锚定）、样本不全时不给通过；旧运行的事件
+  零点数值取自 `reanchor.json`，两者都缺时地图条款未定；
 - 作业：合同违反（删除无回波点的 bag）返回 642 且不启动容器；合成算例经假 docker 与本地评测完成全流程并给出分布。
 """
 
@@ -27,6 +31,7 @@ sys.path.insert(0, str(ROOT / "tools" / "bench" / "d3"))
 
 from slam_eval import SCHEMA  # noqa: E402
 from slam_eval.case import load_case, rebag  # noqa: E402
+from slam_eval.cli import evaluate_run, resolve_anchor  # noqa: E402
 from slam_eval.cli import main as cli_main  # noqa: E402
 from slam_eval.livo import (  # noqa: E402
     LivoRun,
@@ -41,8 +46,8 @@ from slam_eval.livo import (  # noqa: E402
     yaml_get,
     yaml_vector,
 )
-from slam_eval.memmodel import calibrate_r_map, job_resources, mem_limit_gb  # noqa: E402
-from slam_eval.report import AC14, distribution, judge_ac14, summarize_runs  # noqa: E402
+from slam_eval.memmodel import MEM, calibrate_r_map, job_resources, mem_limit_gb  # noqa: E402
+from slam_eval.report import AC14, MAP_CLAUSE, distribution, judge_ac14, summarize_runs  # noqa: E402
 from slam_eval.traj import (  # noqa: E402
     R_to_quat,
     TrajInterp,
@@ -180,6 +185,63 @@ def test_rpe100_matches_r1_loop_within_1pct():
     assert ref > 0.01
 
 
+def rotx(a: float) -> np.ndarray:
+    c, s = np.cos(a), np.sin(a)
+    return np.array([[1.0, 0, 0], [0, c, -s], [0, s, c]])
+
+
+def transient_est(gt: Tum, T_F_W: np.ndarray, rad: float, t_until: float) -> Tum:
+    """估计 = 真值表达到 F 系；`t_until` 之前的样本带机体系 x 轴姿态误差 `rad`（FAST-LIVO2 预滚窗口内的初始化瞬态）。"""
+    T = T_F_W @ gt.T()
+    m = gt.t < t_until
+    T[m, :3, :3] = T[m, :3, :3] @ rotx(rad)
+    return Tum(gt.t, T[:, :3, 3], R_to_quat(T[:, :3, :3]))
+
+
+def test_traj_metrics_anchor_time_removes_init_transient():
+    """ADR-215 (1)：以事件零点（首个不早于锚定时刻的估计）锚定，初始化瞬态不再经环线放大；RPE100 与对齐 ATE 不受锚定点影响。"""
+    gt = loop_traj()
+    est = transient_est(gt, T_of(rotz(0.4), [3.0, -2.0, 1.0]), np.radians(0.2), T0 + 2.0)
+    first = traj_metrics(est, gt)
+    ev0 = traj_metrics(est, gt, anchor_t_s=T0 + 2.0 - 1e-4)
+    assert first["anchor"]["index"] == 0 and first["anchor"]["requested_t_s"] is None and first["drift_max_m"] > 0.5
+    assert ev0["anchor"]["t_s"] == pytest.approx(T0 + 2.0) and ev0["anchor"]["skipped_s"] == pytest.approx(2.0)
+    assert ev0["drift_max_m"] < 1e-6 and ev0["drift_final_m"] < 1e-6 and ev0["rot_err_final_deg"] < 1e-5
+    assert ev0["rpe100_pct"] == pytest.approx(first["rpe100_pct"], rel=1e-9)                # 全部样本，与锚定无关
+    assert ev0["ate_aligned_rmse_m"] == pytest.approx(first["ate_aligned_rmse_m"], rel=1e-6)
+    assert traj_metrics(est, gt, anchor_t_s=T0 - 50.0)["anchor"]["index"] == 0              # 早于首个估计：取首个
+    with pytest.raises(ValueError):
+        traj_metrics(est, gt, anchor_t_s=T0 + 1e4)
+
+
+def test_evaluate_run_anchors_at_event_zero_by_default(tmp_path):
+    gt = loop_traj(n_s=60.0)
+    d = tmp_path / "case"
+    d.mkdir()
+    save_tum(d / "gt_imu.tum", gt)
+    (d / "case.json").write_text(json.dumps({"schema": "drone4d.bench.slam_case.v1", "name": "loop", "gt_imu": "gt_imu.tum",
+                                             "t_event0_bag_ns": round((T0 + 2.0) * NS)}))
+    rd = tmp_path / "run"
+    (rd / "Log" / "result").mkdir(parents=True)
+    save_tum(rd / "Log" / "result" / "est.txt", transient_est(gt, T_of(rotz(-0.3), [1.0, 2.0, 0.5]), np.radians(0.2), T0 + 2.0))
+    case = load_case(d)
+    assert case.meta["t_event0_bag_ns"] == round((T0 + 2.0) * NS)
+    doc = evaluate_run(case, rd)
+    a = doc["traj"]["anchor"]
+    assert a["mode"] == "event0" and a["requested_t_s"] == pytest.approx(T0 + 2.0) and a["t_s"] >= T0 + 2.0 - 1e-6
+    assert doc["traj"]["drift_max_m"] < 1e-4 and doc["map"] is None
+    first = evaluate_run(case, rd, anchor="first")
+    assert first["traj"]["anchor"]["mode"] == "first_estimate" and first["traj"]["drift_max_m"] > 0.1
+    assert evaluate_run(case, rd, anchor=T0 + 30.0)["traj"]["anchor"]["mode"] == "time"
+    # 无事件零点的算例（r1 rig.json、外部 bag）：回落到首个估计并注明
+    (d / "case.json").write_text(json.dumps({"schema": "drone4d.bench.slam_case.v1", "name": "loop", "gt_imu": "gt_imu.tum"}))
+    r = resolve_anchor(load_case(d))
+    assert r["mode"] == "first_estimate" and "event zero" in r["fallback"]
+    out = tmp_path / "eval.json"
+    assert cli_main(["eval", "--case", str(d), "--run", str(rd), "--out", str(out), "--anchor", str(T0 + 2.0)]) == 0
+    assert json.loads(out.read_text())["traj"]["anchor"]["mode"] == "time"
+
+
 def test_positions_ate_against_rtk():
     rng = np.random.default_rng(3)
     t = T0 + np.arange(0, 300, 0.2)
@@ -192,11 +254,14 @@ def test_positions_ate_against_rtk():
 
 # ---------------------------------------------------------------------------------------------------------------- memmodel
 def test_memory_model_and_long_range_floor():
-    assert mem_limit_gb("mid360", 360.0) == pytest.approx(1.5 * (2.0 + 430 * 50_000 * 360 / 1e9))   # ≈ 14.6 GB（"约 16 GB"）
-    assert mem_limit_gb("avia", 60.0) == 20.0                                                       # 长量程下限
+    # ADR-215 (5)：MID-360 4.5 万点/s、4 核；360 s 作业约 1.5 × (2 GB + 430 B × 45,000 × 360) ≈ 13.4 GB
+    assert mem_limit_gb("mid360", 360.0) == pytest.approx(1.5 * (2.0 + 430 * 45_000 * 360 / 1e9))
+    assert mem_limit_gb("mid360", 360.0) == pytest.approx(13.449, abs=1e-3) and job_resources("mid360", 360.0)["mem_gb"] == 14
+    assert mem_limit_gb("avia", 60.0) == 20.0                                                       # 长量程下限（暂定）
     r = job_resources("avia", 318.0)
     assert r["mem_gb"] >= 20 and r["cpus"] == 4.0
-    assert job_resources("mid360", 160.0)["cpus"] == 2.0
+    assert job_resources("mid360", 160.0)["cpus"] == 4.0
+    assert MEM.status == {"mid360": "frozen", "avia": "provisional"} and MEM.adr == "ADR-215"
     with pytest.raises(KeyError):
         mem_limit_gb("unknown", 10.0)
 
@@ -379,9 +444,11 @@ def test_stalled_log_is_684(tmp_path, fake_docker):
 
 
 # ---------------------------------------------------------------------------------------------------------------- 判定
-def _doc(name, seed, noise, rpes, ates=None, accs=None, mode="livo"):
+def _doc(name, seed, noise, rpes, ates=None, accs=None, mode="livo", anchor="event0"):
+    """metrics.json 样例；`anchor = None` 模拟 ADR-215 之前的运行（以首个估计锚定，`traj` 无 `anchor`）。"""
     runs = [{"run": f"{mode}-r{k + 1}", "mode": mode, "ok": True, "traj": {"rpe100_pct": v, "rpe100_median_pct": v,
-                                                                            "ate_aligned_rmse_m": (ates or [0.1] * len(rpes))[k]},
+                                                                            "ate_aligned_rmse_m": (ates or [0.1] * len(rpes))[k],
+                                                                            **({"anchor": {"mode": anchor}} if anchor else {})},
              "map": {"acc_mean_m": (accs or [0.09] * len(rpes))[k], "fscore@0.2": 0.6}} for k, v in enumerate(rpes)]
     return {"case": {"name": name, "seed": seed, "noise_profile": noise}, "runs": runs}
 
@@ -395,18 +462,45 @@ def test_distribution_and_summary():
 
 def test_judge_ac14_pass_fail_and_incomplete():
     clean = [_doc("c", 1, "clean", [0.08, 0.09, 0.085])]
-    real = [_doc(f"s{s}", s, "realistic", [0.24, 0.26, 0.25]) for s in range(1, 6)]
+    real = [_doc(f"s{s}", s, "realistic", [0.10, 0.12, 0.11]) for s in range(1, 6)]
     j = judge_ac14(clean, real, modes=("livo",))
-    assert j["pass"] is True and j["modes"]["livo"]["realistic"]["rpe100_pct"]["n"] == 15
-    bad = [_doc(f"s{s}", s, "realistic", [0.24, 0.26, 0.55]) for s in range(1, 6)]                 # 单次 > 0.50%
+    assert j["pass"] is True and j["modes"]["livo"]["realistic"]["rpe100_pct"]["n"] == 15 and j["adr"] == "ADR-215"
+    assert any(c["clause"] == "realistic RPE100 median in [0.07%, 0.18%]" for c in j["modes"]["livo"]["checks"])
+    bad = [_doc(f"s{s}", s, "realistic", [0.10, 0.12, 0.55]) for s in range(1, 6)]                 # 单次 > 0.50%
     assert judge_ac14(clean, bad, modes=("livo",))["pass"] is False
+    old_band = [_doc(f"s{s}", s, "realistic", [0.24, 0.26, 0.25]) for s in range(1, 6)]           # r1 区间内、冻结区间外
+    assert judge_ac14(clean, old_band, modes=("livo",))["pass"] is False
+    low = [_doc(f"s{s}", s, "realistic", [0.069, 0.069, 0.069]) for s in range(1, 6)]
+    assert judge_ac14([_doc("c", 1, "clean", [0.05] * 3)], low, modes=("livo",))["pass"] is False
     hi_clean = [_doc("c", 1, "clean", [0.12, 0.11, 0.13])]
     assert judge_ac14(hi_clean, real, modes=("livo",))["pass"] is False
     few = real[:2]
     jf = judge_ac14(clean, few, modes=("livo",))
     assert jf["pass"] is False and any("seeds" in c["clause"] and c["pass"] is False for c in jf["modes"]["livo"]["checks"])
     assert judge_ac14(clean, [], modes=("livo",))["pass"] is None                                # 无 realistic 样本：不判定
-    assert AC14["status"] == "provisional" and AC14["main_mode"] == "livo"
+    assert AC14["status"] == "frozen" and AC14["main_mode"] == "livo" and AC14["realistic"]["rpe100_median_range_pct"] == [0.07, 0.18]
+    assert AC14["hkisland03_resources"] == {"mem_gb_min": 32.0, "cpus_min": 8.0}
+
+
+def test_judge_ac14_map_clause_uses_event_zero_anchor():
+    """ADR-215 (1)：clean 地图到网格按事件零点锚定判定；旧运行（首个估计锚定）取 `reanchor.json`，缺失时未定，r1 口径另报不计入。"""
+    real = [_doc(f"s{s}", s, "realistic", [0.10, 0.12, 0.11]) for s in range(1, 6)]
+    legacy = [_doc("c", 1, "clean", [0.08] * 3, accs=[0.32] * 3, anchor=None)]
+    j = judge_ac14(legacy, real, modes=("livo",))["modes"]["livo"]
+    chk = {c["clause"]: c for c in j["checks"]}
+    assert chk[MAP_CLAUSE]["pass"] is None and j["pass"] is None                                   # 无事件零点数据：不判定
+    assert j["first_estimate_reference"]["map_to_mesh_mean_m"] == pytest.approx(0.32) and j["first_estimate_reference"]["pass"] is False
+    for r in legacy[0]["runs"]:
+        r["reanchor"] = {"map": {"acc_mean_m": 0.085}, "event0": {"drift_max_m": 0.2}}
+    j = judge_ac14(legacy, real, modes=("livo",))["modes"]["livo"]
+    chk = {c["clause"]: c for c in j["checks"]}
+    assert chk[MAP_CLAUSE]["value"] == pytest.approx(0.085) and chk[MAP_CLAUSE]["pass"] is True and j["pass"] is True
+    assert j["clean"]["anchors"] == ["first_estimate"]
+    legacy[0]["runs"][2].pop("reanchor")                                                           # 部分运行缺数据：仍不判定
+    assert {c["clause"]: c for c in judge_ac14(legacy, real, modes=("livo",))["modes"]["livo"]["checks"]}[MAP_CLAUSE]["pass"] is None
+    # 以事件零点评测的运行：直接取 map；不重算首个估计口径
+    ev = judge_ac14([_doc("c", 1, "clean", [0.08] * 3, accs=[0.16] * 3)], real, modes=("livo",))["modes"]["livo"]
+    assert {c["clause"]: c for c in ev["checks"]}[MAP_CLAUSE]["pass"] is False and ev["first_estimate_reference"]["pass"] is None
 
 
 # ---------------------------------------------------------------------------------------------------------------- 算例、bag 与地图
@@ -550,12 +644,13 @@ def test_run_end_to_end_with_fake_container(tmp_path, fake_docker, monkeypatch):
                    "--l0"])
     doc = json.loads((out / "metrics.json").read_text())
     assert rc == 0 and doc["schema"] == SCHEMA and doc["status"] == "completed" and doc["contract"]["ok"]
-    assert doc["resources"]["mem_gb_applied"] == job_resources("mid360", 20.0)["mem_gb"] and doc["resources"]["cpus_applied"] == 2.0
+    assert doc["resources"]["mem_gb_applied"] == job_resources("mid360", 20.0)["mem_gb"] and doc["resources"]["cpus_applied"] == 4.0
     assert sorted(r["run"] for r in doc["runs"]) == ["lio-r1", "lio-r2", "livo-r1", "livo-r2"]
     for r in doc["runs"]:
         assert r["traj"]["rpe100_pct"] == pytest.approx(100 * eps, rel=1e-3)
         assert r["map"]["acc_mean_m"] == pytest.approx(0.06, abs=1e-3) and r["map"]["ref_points"] > 1000
         assert r["r_map"]["r_map_slope"] > 0 and r["per_frame"]["lio"]["n"] == 1
+        assert r["traj"]["anchor"]["mode"] == "first_estimate" and "event zero" in r["traj"]["anchor"]["fallback"]   # 算例无事件零点
     lio_yaml = (out / "runs" / "lio-r1" / "livo.yaml").read_text()
     assert yaml_get(lio_yaml, "common/img_en") == "0" and yaml_get(lio_yaml, "evo/pose_output_en") == "true"
     assert yaml_get((out / "runs" / "livo-r2" / "livo.yaml").read_text(), "common/img_en") == "1"
