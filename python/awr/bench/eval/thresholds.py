@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 __all__ = ["EVALUATOR_VERSION", "ORACLE_VERSION", "SCORE_VERSION", "TH", "THRESHOLDS_VERSION", "Thresholds"]
 
-EVALUATOR_VERSION = "0.1.0"
+EVALUATOR_VERSION = "0.2.0"      # 0.2.0（K07）：AO 关键时刻改为 r6 口径（开始、中点、结束，参与者须在场）
 THRESHOLDS_VERSION = "eval_thresholds.v1"
 ORACLE_VERSION = "ao-oracle-v0-grid@1"
 SCORE_VERSION = "d3-score-0"

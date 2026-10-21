@@ -1,0 +1,20 @@
+# pylib-gz.in（K07；A10 遗留 F-78 (a)）：d3-gz 宿主侧 Python 依赖（dmax $D/pylib-gz，cp312，以 PYTHONPATH 前置挂入 d3-gz 容器）。
+# 版本以 requirements.lock 与 requirements-d3.lock 为约束（两者共有的包版本一致），锁文件由本目录 pylib.sh lock 生成：
+#   uv pip compile pylib-gz.in -c ../../../../../requirements.lock -c ../../../../../requirements-d3.lock --generate-hashes \
+#     --python-version 3.12 --python-platform x86_64-manylinux_2_28 -o pylib-gz.lock
+# 用途：Env 宿主（锁步 gz 协议 pyzmq + protobuf、MeshWorldQuery 的 Open3D 网格求交、契约校验 jsonschema、线协议 msgpack）、
+# Env 录制 raw.mcap（mcap、zstandard、lz4；Foxglove 通道 mcap-protobuf-support、foxglove-schemas-protobuf）与 d3-gz 内的 pytest。
+numpy
+scipy
+open3d-cpu
+pyzmq
+protobuf
+jsonschema
+msgpack
+pyyaml
+mcap
+zstandard
+lz4
+mcap-protobuf-support
+foxglove-schemas-protobuf
+pytest

@@ -228,21 +228,120 @@ def test_seal_event_moves_truth_into_hidden(tmp_path: Path) -> None:
     reg.register("t", "test", by="root")
     hs = sp.HiddenStore.for_root(root, audit)
     before = hs.misplaced(reg, events_root=ev, dataset_root=ds)
-    assert sorted(Path(x).name for x in before) == ["event_truth.json", "fleet.npz", "run_r1.mcap", "tape.bin", "tape.json"]
+    hidden_names = ["compile_report.json", "event.json", "event_truth.json", "plan.json", "tape.bin", "tape.json"]
+    assert sorted(Path(x).name for x in before) == sorted([*hidden_names, "fleet.npz", "run_r1.mcap"])
     acts = hs.seal_event("t", events_root=ev, dataset_root=ds)
-    assert sorted(a["dst"] for a in acts if a["action"] == "move") == ["t/event/v1/event_truth.json", "t/event/v1/tape.bin", "t/event/v1/tape.json",
-                                                                       "t/truth/run_r1.mcap"]
-    assert not (vdir / "tape.bin").exists() and (vdir / "brief.json").exists() and (vdir / "plan.json").exists()   # 非真值制品留在编译目录
+    assert sorted(a["dst"] for a in acts if a["action"] == "move") == [*(f"t/event/v1/{n}" for n in hidden_names), "t/truth/run_r1.mcap"]
+    assert sorted(f.name for f in vdir.iterdir()) == ["brief.json"]                       # 编译目录只留简报（K07：路线、锚点、编译报告也封存）
     assert hs.event_dir("t", 1).joinpath("tape.bin").read_bytes() == TAPE
     assert stat.S_IMODE(hs.event_dir("t", 1).joinpath("tape.bin").stat().st_mode) == 0o600
     assert [Path(x).name for x in hs.misplaced(reg, events_root=ev, dataset_root=ds)] == ["fleet.npz"]   # Env 运行目录内的真值：只报告
-    assert (ev / "d" / "v1" / "tape.bin").exists()                                                         # dev 事件不动
+    assert (ev / "d" / "v1" / "tape.bin").exists() and (ev / "d" / "v1" / "plan.json").exists()          # dev 事件不动
     # 重复迁移：目标已存在且内容相同则去重，不同则报告冲突
     (vdir / "tape.bin").write_bytes(TAPE)
     (vdir / "tape.json").write_text("{}")
     acts = hs.seal_event("t", events_root=ev, dataset_root=ds)
     assert sorted((a["action"], Path(a["src"]).name) for a in acts) == [("conflict", "tape.json"), ("dedup", "tape.bin")]
     assert [a for a in audit.read() if a["action"] == "hidden_seal"][-1]["conflicts"] == 1
+
+
+def _compiled(vdir: Path, *, rev: int = 1) -> None:
+    """按编译器的实际布局补齐版本目录：真值在 `truth/r<k>/`，另有锚点、事件源与发布标记。"""
+    t = vdir / "truth" / f"r{rev}"
+    t.mkdir(parents=True)
+    (t / "event_truth.json").write_text(json.dumps({"events": [{"id": "a", "interval_ms": [1000, 2000]}]}))
+    (t / "event_graph.json").write_text(json.dumps({"nodes": []}))
+    (vdir / "event_truth.json").unlink()
+    (vdir / "anchors.json").write_text(json.dumps({"anchors": [{"id": "search_target", "xy": [12.5, -3.0]}]}))
+    (vdir / "anchors.overlay.json").write_text("{}")
+    (vdir / "event.yaml").write_text("event_id: t\n")
+    (vdir / "published.json").write_text(json.dumps({"by": "root", "content_sha256": TAPE_SHA}))
+
+
+def test_seal_is_recursive_for_published_then_registered_test_event(tmp_path: Path) -> None:
+    """K07（E10 遗留 F-72）：事件先以 dev 发布到 `events/`（真值在 `truth/r<k>/`），之后才登记为 test；`misplaced` 递归列出
+    全部隐藏制品（含 `truth/r1/event_truth.json`、`event_graph.json` 与 `plan.json`、`anchors.json`、`compile_report.json`），
+    `seal_event` 按相对路径移入 hidden，编译目录只留简报与发布标记，hidden 内可按名称取到最新修订的真值。"""
+    root = tmp_path / "d3"
+    ev, ds = root / "events", root / "dataset"
+    vdir = _event(ev, "pub", split=None)
+    _compiled(vdir)
+    audit = AuditLog(root / "audit")
+    reg = sp.SplitRegistry.for_root(root, audit=audit)
+    hs = sp.HiddenStore.for_root(root, audit)
+    reg.register("pub", "dev", by="root")
+    assert hs.misplaced(reg, events_root=ev, dataset_root=ds) == []                          # dev：全部制品可留在编译目录
+    reg.register("pub", "test", by="root")
+    rel = sorted(Path(x).relative_to(vdir).as_posix() for x in hs.misplaced(reg, events_root=ev, dataset_root=ds))
+    assert rel == ["anchors.json", "anchors.overlay.json", "compile_report.json", "event.json", "event.yaml", "plan.json", "tape.bin",
+                   "tape.json", "truth/r1/event_graph.json", "truth/r1/event_truth.json"]
+    acts = hs.seal_event("pub", events_root=ev, dataset_root=ds)
+    assert sorted(a["dst"] for a in acts) == [f"pub/event/v1/{r}" for r in rel] and {a["action"] for a in acts} == {"move"}
+    assert sorted(p.relative_to(vdir).as_posix() for p in vdir.rglob("*")) == ["brief.json", "published.json"]   # truth/ 子目录随之删除
+    assert hs.misplaced(reg, events_root=ev, dataset_root=ds) == []
+    f = hs.event_file("pub", 1, "event_truth.json")
+    assert f == hs.event_dir("pub", 1) / "truth" / "r1" / "event_truth.json" and json.loads(f.read_text())["events"][0]["id"] == "a"
+    assert hs.event_file("pub", 1, "plan.json") == hs.event_dir("pub", 1) / "plan.json"
+    for d in (hs.event_dir("pub", 1) / "truth", hs.event_dir("pub", 1) / "truth" / "r1"):
+        assert stat.S_IMODE(d.stat().st_mode) == 0o700
+    assert stat.S_IMODE((hs.event_dir("pub", 1) / "truth" / "r1" / "event_graph.json").stat().st_mode) == 0o600
+    # 新修订 r2 只写进 hidden：按名称取最新修订
+    r2 = hs.event_dir("pub", 1) / "truth" / "r2"
+    r2.mkdir()
+    (r2 / "event_truth.json").write_text("{}")
+    assert hs.event_file("pub", 1, "event_truth.json") == r2 / "event_truth.json"
+    # 发布后又被写回的子目录真值（如重编译）同样被列出
+    (vdir / "truth" / "r3").mkdir(parents=True)
+    (vdir / "truth" / "r3" / "event_truth.json").write_text("{}")
+    assert [Path(x).relative_to(vdir).as_posix() for x in hs.misplaced(reg, events_root=ev, dataset_root=ds)] == ["truth/r3/event_truth.json"]
+
+
+def test_seal_reports_symlinks_and_declared_test(tmp_path: Path) -> None:
+    """编译目录中的符号链接不搬进 hidden，只报告冲突并保留在违规清单；只在事件声明（未登记）为 test 的事件同样计入。"""
+    root = tmp_path / "d3"
+    ev, ds = root / "events", root / "dataset"
+    vdir = _event(ev, "s", split="test", tape=False)
+    (vdir / "observability.npz").symlink_to(vdir / "plan.json")
+    audit = AuditLog(root / "audit")
+    reg = sp.SplitRegistry.for_root(root, audit=audit)
+    hs = sp.HiddenStore.for_root(root, audit)
+    assert {Path(x).name for x in hs.misplaced(reg, events_root=ev, dataset_root=ds, declared={"s": "test"})} == {
+        "compile_report.json", "event.json", "observability.npz", "plan.json"}
+    acts = hs.seal_event("s", events_root=ev, dataset_root=ds)
+    assert [(a["action"], a.get("why")) for a in acts if Path(a["src"]).name == "observability.npz"] == [("conflict", "symlink")]
+    assert [Path(x).name for x in hs.misplaced(reg, events_root=ev, dataset_root=ds, declared={"s": "test"})] == ["observability.npz"]
+
+
+def test_hidden_permissions_check_and_fix(tmp_path: Path, capsys) -> None:
+    """hidden 属主与权限（M27-FR-114，K07）：目录 0700、文件 0600、不允许符号链接；`perms --fix` 整理模式（属主需 root，此处用当前
+    用户核对 uid 判据），并写审计 `hidden_perms`。"""
+    import os
+
+    root = tmp_path / "d3"
+    audit = AuditLog(root / "audit")
+    hs = sp.HiddenStore.for_root(root, audit)
+    d = hs.event_dir("x", 1) / "truth" / "r1"
+    d.mkdir(parents=True)
+    (d / "event_truth.json").write_text("{}")
+    (hs.event_dir("x", 1) / "tape.bin").write_bytes(TAPE)
+    os.chmod(hs.root, 0o755)
+    os.chmod(d / "event_truth.json", 0o644)
+    bad = {x["path"]: x["problems"] for x in hs.permission_problems()}
+    assert bad["."] == ["mode 0755 != 0700"] and bad["x/event/v1/truth/r1/event_truth.json"] == ["mode 0644 != 0600"]
+    assert "x/event/v1/tape.bin" in bad                                                  # write_bytes 按 umask 建为 0644
+    uid, gid = os.getuid(), os.getgid()
+    assert any("uid" in p for x in hs.permission_problems(uid=uid + 1) for p in x["problems"])
+    args = ["--data-root", str(root), "perms", "--uid", str(uid), "--gid", str(gid)]
+    assert sp.main(args) == 1
+    capsys.readouterr()
+    assert sp.main([*args, "--fix"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["problems"] == [] and out["fixed"] >= 3
+    assert stat.S_IMODE(hs.root.stat().st_mode) == 0o700 and stat.S_IMODE((d / "event_truth.json").stat().st_mode) == 0o600
+    assert [a for a in audit.read() if a["action"] == "hidden_perms"][-1]["uid"] == uid
+    (hs.event_dir("x", 1) / "link.json").symlink_to(d / "event_truth.json")
+    assert [x["problems"] for x in hs.permission_problems() if x["path"].endswith("link.json")] == [["symlink not allowed"]]
+    assert sp.main(["--data-root", str(root), "perms", "--fix"]) == 1                     # 链接不自动处理：仍报告
 
 
 # ── bench-api：691 与 hidden 读取 ────────────────────────────────────────────────────────────────────────────────────
@@ -253,7 +352,12 @@ def test_event_detail_of_test_event_is_691_for_researcher(env: Env) -> None:
         body = _deny691(env, env.c.get(f"{P}/events/{eid}", headers=env.h("researcher")), before, "alice")
         assert body["detail"] == {"why": "test_split", "event_id": eid, "split": "test"}
         r = env.c.get(f"{P}/events/{eid}", headers=env.h("evaluator"))
-        assert r.status_code == 200 and r.json()["split"] == "test" and r.json()["segments"]
+        assert r.status_code == 200 and r.json()["split"] == "test"
+        if eid == TEST_EV:                                                 # K07：编译报告已封存，详情由 hidden 组装并审计
+            assert r.json()["segments"] and r.json()["status"] == "compiled" and "plan.json" in {a["name"] for a in r.json()["artifacts"]}
+            assert not (env.s.data_root / "events" / eid / "v1" / "compile_report.json").exists()
+            last = [a for a in env.audit() if a["action"] == "truth_read"][-1]
+            assert (last["op"], last["principal"], last["result"], last["path"]) == ("detail", "eve", "ok", f"{eid}/event/v1")
     r = env.c.get(f"{P}/events/{TEST_EV}", headers=env.h("invited"))
     assert r.status_code == 403 and r.json()["code"] == 115 and r.json()["detail"]["why"] == "invited_scope"
     assert env.c.get(f"{P}/events/{DEV_EV}", headers=env.h("researcher")).status_code == 200
@@ -354,7 +458,7 @@ def test_cli_set_show_seal_misplaced(tmp_path: Path, capsys) -> None:
     assert sp.main([*args, "seal", "t"]) == 2                                   # 未登记为 test：拒绝迁移
     assert sp.main([*args, "set", "t", "test", "--by", "root", "--version", "t1"]) == 0
     capsys.readouterr()
-    assert sp.main([*args, "misplaced"]) == 1 and len(json.loads(capsys.readouterr().out)["misplaced"]) == 3
+    assert sp.main([*args, "misplaced"]) == 1 and len(json.loads(capsys.readouterr().out)["misplaced"]) == 6   # 磁带、真值、路线、编译报告与事件源
     assert sp.main([*args, "seal", "t"]) == 0
     capsys.readouterr()
     assert sp.main([*args, "misplaced"]) == 0

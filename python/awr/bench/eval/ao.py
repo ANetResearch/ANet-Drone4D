@@ -1,6 +1,11 @@
 """主动观测效率 AO（M27-FR-090；P0a 为 v0）。
 
-每个计分事件取区间中点为关键时刻 τ，参与者取 τ 时在场的人员。证据质量 `q = min(1, h / 30 px) · vis`（与识别同口径）：
+关键时刻（r6 口径，`key_moments`；K07 修正 A10 遗留 F-77）：每个含人员参与者的计分事件取事件区间的开始、中点与结束 3 个时刻；
+区间优先取事件真值（`truth/r<k>/event_truth.json` 中该注释的首个命中 `interval_ms`，即 r6 的"已验证区间"），无真值时取声明窗口。
+参与者须在场：某时刻有参与者已不在场（上车、进入建筑等瞬时事件在区间中点或结束时参与者已消失）时，改取该时刻之前、不早于窗口起点
+前 `pad_s`（2 s，与 EC 窗口同口径）、全部人员参与者都在场的最近 tick（"事件前时刻"）；窗口内找不到全员在场的 tick 时取该时刻在场的参与者子集，无人在场则跳过。
+同一事件换算后重合的时刻只计一次。AO 为全部（事件、关键时刻）比值的平均。
+证据质量 `q = min(1, h / 30 px) · vis`（与识别同口径）：
 - `AO_real`：τ ± 1 s 内同一架机对全部参与者实际获得的证据质量（取各参与者最大值后取最小，再对机取最大）÷ oracle 最优质量；
 - `AO_pos_los`：τ 时各机所在位置（不看相机指向）的视点质量 ÷ oracle 最优质量（含静态网格遮挡）；
 - `AO_pos`：同上但不计遮挡（只看距离），÷ 无遮挡 oracle 最优质量。
@@ -20,7 +25,7 @@ import numpy as np
 from awr.agentsdk.env.geom import los
 from awr.bench.eval.thresholds import ORACLE_VERSION, TH
 
-__all__ = ["active_observation"]
+__all__ = ["active_observation", "key_moments", "truth_intervals"]
 
 TICK_NS = 100_000_000
 
@@ -83,38 +88,89 @@ class _RealIndex:
         return float(per[ok].min(axis=1).max()) if ok.any() else 0.0
 
 
-def active_observation(E: list[dict], U: list[str], run, world, *, fx: float, envelope_agl_m: tuple[float, float], th=TH) -> dict:
+def truth_intervals(truth_rows: list[dict] | None) -> dict[str, tuple[float, float]]:
+    """{注释 id: 首个真值命中的区间（秒）}：`event_truth.json` 中带 `annotation` 的事件行按 `interval_ms` 起点取最早一处。"""
+    out: dict[str, tuple[float, float]] = {}
+    for r in truth_rows or ():
+        a, iv = r.get("annotation"), r.get("interval_ms")
+        if a is None or not iv or len(iv) != 2:
+            continue
+        t = (float(iv[0]) / 1000.0, float(iv[1]) / 1000.0)
+        if str(a) not in out or t < out[str(a)]:
+            out[str(a)] = t
+    return out
+
+
+def key_moments(e: dict, present: np.ndarray, n_ticks: int, interval_s: tuple[float, float] | None = None, *,
+                pad_s: float = TH.pad_s) -> list[tuple[int, np.ndarray]]:
+    """计分事件 `e` 的关键时刻（r6 口径，规则见模块说明）→ [(tick, 在场掩码)]，按 tick 升序、去重。
+
+    `present`：(n_ticks + 1, n) bool，列为 `e` 的人员参与者（tick 末时刻在场，`RunData.present` 同口径）；`interval_s` 为真值区间，
+    缺省取声明窗口 `[a_s, b_s]`。掩码给出该时刻计入的参与者（全员在场时全为 True）。"""
+    a, b = interval_s if interval_s is not None else (float(e["a_s"]), float(e["b_s"]))
+
+    def tick(t: float) -> int:
+        return min(max(round(t * 10), 0), n_ticks)
+
+    lo = tick(min(float(e["a_s"]), a) - pad_s)
+    allp = present.all(axis=1)
+    out: list[tuple[int, np.ndarray]] = []
+    seen: set[tuple[int, bytes]] = set()
+    for k in sorted({tick(a), tick((a + b) / 2), tick(b)}):
+        nz = np.flatnonzero(allp[lo:k + 1]) if k >= lo else np.empty(0, np.int64)
+        if nz.size:
+            kk, m = lo + int(nz[-1]), np.ones(present.shape[1], bool)
+        else:
+            kk, m = k, present[k].copy()
+            if not m.any():
+                continue
+        key = (kk, m.tobytes())
+        if key not in seen:
+            seen.add(key)
+            out.append((kk, m))
+    return sorted(out, key=lambda x: x[0])
+
+
+def active_observation(E: list[dict], U: list[str], run, world, *, fx: float, envelope_agl_m: tuple[float, float], th=TH,
+                       truth_rows: list[dict] | None = None, present: dict[str, np.ndarray] | None = None) -> dict:
+    """→ `evaluation.json` 的 `ao`。`truth_rows` 为事件真值行（缺省按声明窗口取关键时刻）；`present` 为 {演员: (n_ticks + 1,) 在场}
+    （评测器已算出时传入，缺省按磁带逐 tick 计算）。"""
     info = {a["id"]: a for a in run.tape.actors_info()}
     pos = np.asarray(run.fleet["pos"], np.float64)
     idx = _RealIndex(run.l1, U, th)
+    ivs = truth_intervals(truth_rows)
+    present = dict(present or {})
     real, pos_los, pos_only = [], [], []
     for e in E:
-        k0 = round((e["a_s"] + e["b_s"]) / 2 * 10)
-        k0 = min(k0, run.n_ticks)
         ids = [p for p in e["participants"] if info[p]["cls"] == "person"]
         if not ids:
             continue
-        st = run.tape.actor_states(k0 * TICK_NS, [info[p]["idx"] for p in ids])
-        here = [(p, st.pos_enu_m[i], info[p]["size_m"][2], float(st.yaw_rad[i])) for i, p in enumerate(ids) if st.state[i] in (1, 2)]
-        if not here:
-            continue
-        persons = [(c, H, _body_points(c, H, info[p]["size_m"][0], yaw)) for p, c, H, yaw in here]
-        cen = np.mean([c for _p, c, _H, _y in here], axis=0)
-        r_max = fx * 1.6 / th.h_px
-        g = np.arange(-r_max, r_max + 1e-9, th.oracle_grid_m)
-        gx, gy = np.meshgrid(g, g)
-        m = gx ** 2 + gy ** 2 <= r_max ** 2
-        xy = np.stack([cen[0] + gx[m], cen[1] + gy[m]], 1)
-        zg = np.asarray(world.ground_dtm(xy), np.float64)
-        lo, hi = envelope_agl_m
-        V = np.concatenate([np.column_stack([xy, zg + a]) for a in np.arange(lo, hi + 1e-9, th.oracle_alt_step_m)])
-        q_star = float(_quality(V, persons, fx, world, True, th).max())
-        q_star_nl = float(_quality(V, persons, fx, world, False, th).max())
-        best = idx.best(k0, sorted({p for p, *_ in here}), th.ao_window_s * 10)
-        Vu = pos[k0]
-        real.append(min(1.0, best / max(q_star, 1e-9)))
-        pos_los.append(min(1.0, float(_quality(Vu, persons, fx, world, True, th).max()) / max(q_star, 1e-9)))
-        pos_only.append(min(1.0, float(_quality(Vu, persons, fx, world, False, th).max()) / max(q_star_nl, 1e-9)))
+        miss = [p for p in ids if p not in present]
+        if miss:
+            pm = run.present(miss)
+            present.update({p: pm[:, i] for i, p in enumerate(miss)})
+        P = np.column_stack([np.asarray(present[p][:run.n_ticks + 1], bool) for p in ids])
+        for k0, m in key_moments(e, P, run.n_ticks, ivs.get(str(e["id"])), pad_s=th.pad_s):
+            sel = [p for p, ok in zip(ids, m, strict=True) if ok]
+            st = run.tape.actor_states(k0 * TICK_NS, [info[p]["idx"] for p in sel])
+            here = [(p, st.pos_enu_m[i], info[p]["size_m"][2], float(st.yaw_rad[i])) for i, p in enumerate(sel)]
+            persons = [(c, H, _body_points(c, H, info[p]["size_m"][0], yaw)) for p, c, H, yaw in here]
+            cen = np.mean([c for _p, c, _H, _y in here], axis=0)
+            r_max = fx * 1.6 / th.h_px
+            g = np.arange(-r_max, r_max + 1e-9, th.oracle_grid_m)
+            gx, gy = np.meshgrid(g, g)
+            mm = gx ** 2 + gy ** 2 <= r_max ** 2
+            xy = np.stack([cen[0] + gx[mm], cen[1] + gy[mm]], 1)
+            zg = np.asarray(world.ground_dtm(xy), np.float64)
+            lo, hi = envelope_agl_m
+            V = np.concatenate([np.column_stack([xy, zg + a]) for a in np.arange(lo, hi + 1e-9, th.oracle_alt_step_m)])
+            q_star = float(_quality(V, persons, fx, world, True, th).max())
+            q_star_nl = float(_quality(V, persons, fx, world, False, th).max())
+            best = idx.best(k0, sorted(sel), th.ao_window_s * 10)
+            Vu = pos[k0]
+            real.append(min(1.0, best / max(q_star, 1e-9)))
+            pos_los.append(min(1.0, float(_quality(Vu, persons, fx, world, True, th).max()) / max(q_star, 1e-9)))
+            pos_only.append(min(1.0, float(_quality(Vu, persons, fx, world, False, th).max()) / max(q_star_nl, 1e-9)))
     return {"ao_real": float(np.mean(real)) if real else 0.0, "ao_pos_los": float(np.mean(pos_los)) if pos_los else 0.0,
             "ao_pos": float(np.mean(pos_only)) if pos_only else 0.0,
             "oracle": {"version": ORACLE_VERSION, "camera_models": ["d4d_eo1080@1"], "grid_m": th.oracle_grid_m, "alt_step_m": th.oracle_alt_step_m,

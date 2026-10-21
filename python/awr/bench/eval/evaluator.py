@@ -61,11 +61,13 @@ def evaluate_run(run_dir: Path, event_dir: Path, world, *, fx: float | None = No
     pres = run.present(scripted)
     present = {a: pres[:, i] for i, a in enumerate(scripted)}
     inside = inside_masks(run, scripted)
-    E, excluded = exclusions(E, event_truth_rows(Path(event_dir)), present, run.n_ticks, inside=inside)
+    truth_rows = event_truth_rows(Path(event_dir))
+    E, excluded = exclusions(E, truth_rows, present, run.n_ticks, inside=inside)
     Es = [e for e in E if not e.get("excluded")]                  # 只在可观测区计分：EC、AO、CE 的分母（M27-FR-089）
     ec, cov, per_event = event_capture(Es, U, ident, present, run.n_ticks, inside=inside)
     eu = event_understanding(run.reports, E, run)
-    ao = active_observation(Es, U, run, world, fx=fx or CameraModel().fx, envelope_agl_m=tuple(run.task["altitude_envelope_agl_m"]))
+    ao = active_observation(Es, U, run, world, fx=fx or CameraModel().fx, envelope_agl_m=tuple(run.task["altitude_envelope_agl_m"]),
+                            truth_rows=truth_rows, present=present)
     ce_raw, ce, ce_norm = collaborative(Es, U, ident, present, run.n_ticks, run)
     sf = safety(run, world)
     invalid = []

@@ -10,7 +10,8 @@ FR-124；D3-AC-43）。
   解析到 `<data_root>/hidden/` 并写 `truth_read` 审计（外部主体计数见 `awr.bench.split.truth_access_summary`）。
 
 BN-27 `GET /events/{eid}/versions/{v}/artifacts/{name}`：最低角色 researcher；`name` 限 M23 §7.3.3 白名单（其余 305）；dev 事件
-读事件编译目录 `<data_root>/events/<eid>/v<N>/`；test 事件的 HIDDEN_ONLY 制品读 `hidden/<eid>/event/v<N>/`（未迁移时回落到编译目录，
+读事件编译目录 `<data_root>/events/<eid>/v<N>/`；test 事件的 HIDDEN_ONLY 制品（K07 起含 `plan.json`、`anchors.json`、
+`compile_report.json` 与事件源）读 `hidden/<eid>/event/v<N>/`（真值文件顶层没有时取最新 `truth/r<k>/`；未迁移时回落到编译目录，
 审计路径带 `outside:`），其余受限制品读编译目录，均经 HiddenStore 授权与审计。响应带 `ETag = sha256`，支持 `If-None-Match`。
 """
 
@@ -118,7 +119,7 @@ def event_artifact(eid: str, v: int, name: str, request: Request, p: Researcher)
             raise ApiProblem(305, detail={"event_id": eid, "version": v, "name": name})
         body = f.read_bytes()
     else:
-        f = hs.event_dir(eid, v) / name if name in sp.HIDDEN_ONLY else vdir / name
+        f = hs.event_file(eid, v, name) if name in sp.HIDDEN_ONLY else vdir / name   # 真值文件可在 truth/r<k>/ 下（K07）
         if name in sp.HIDDEN_ONLY and not f.is_file() and (vdir / name).is_file():
             f = vdir / name                                   # 未迁移到 hidden 的旧编译目录（misplaced 会列出）
         if not f.is_file():

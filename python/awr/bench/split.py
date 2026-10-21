@@ -7,10 +7,15 @@ AWR-17 §18.3.5；ADR-147；D3-AC-43、D3-AC-63）。
   判定规则 `split_of`：登记表优先；事件自身声明 test（`event.json`、`plan.json` 的 `split`）时一律为 test（取更严格者，
   登记表写 dev 而事件声明 test 视为冲突，按 test 处理并由 `conflicts()` 列出）；未登记时取事件声明，缺省 dev；未知取值按 test。
 - 隐藏存放（M27-FR-114）：test 事件的磁带（`tape.bin`、`tape.json`）、`truth.mcap`、`event_truth.json`、`event_graph.json`、
-  `observability.npz` 与 Run 真值文件只存于 `<data_root>/hidden/<event_id>/{event/v<N>/, truth/}`（目录 0700、文件 0600）；
+  `observability.npz`、路线与锚点（`plan.json`、`anchors.json`，目标搜索类含实际抽样位置）、编译报告（`compile_report.json`）、
+  事件源（`event.yaml`、`event.json`、`anchors.overlay.json`）与 Run 真值文件只存于 `<data_root>/hidden/<event_id>/{event/v<N>/, truth/}`
+  （目录 0700、文件 0600，属主为 Evaluator 服务用户，`perms` 子命令核对与整理）；事件编译目录 `events/<eid>/v<N>/` 只允许留存
+  `EVENT_DIR_PUBLIC`（`brief.json` 与发布、停用标记），其余文件（含子目录，如编译器写出的 `truth/r<k>/event_truth.json`、
+  `event_graph.json`）一律视为隐藏制品（K07）；
   `HiddenStore` 是读取 test 真值的唯一入口：每次读取写审计 `truth_read`（主体、角色、凭据类别、令牌 id、进程、相对路径、
   事件、Run、作业、request_id、结果），评测员与管理员以外的主体拒绝并返回 691（同样写审计，`result = denied`）。
-  `seal_event` 把 test 事件的上述制品从事件编译目录与数据集目录移入 hidden；`misplaced` 列出仍在 hidden 之外的 test 真值。
+  `seal_event` 把 test 事件的上述制品从事件编译目录（递归，保持相对路径）与数据集目录移入 hidden；`misplaced` 递归列出仍在
+  hidden 之外的 test 制品（含已发布后才登记为 test 的事件）。
 - 制品授权（M23 §7.3.3）：dev 事件的全部制品对研究者开放；test 事件只有 `brief.json` 对研究者开放，其余（`event.yaml`、
   `plan.json`、`anchors.json`、`compile_report.json`、磁带与真值）只对评测员及以上，越权 691。
 - 运行与导出：Run 的划分取 RunStore 记录、运行清单（`run_manifest.json`、`manifest.json`、`evaluation.json`）与所属事件划分中
@@ -30,6 +35,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import sys
 import threading
 import time
@@ -39,7 +45,8 @@ from pathlib import Path
 
 from awr.bench.auth import ROLES, AuditLog, Principal
 
-__all__ = ["EVENT_ARTIFACTS", "HIDDEN_ONLY", "INTERNAL_ROLES", "PUBLIC_ARTIFACTS", "SCHEMA", "SERVICE_EVALUATOR", "SPLITS", "TRUTH_READ",
+__all__ = ["EVENT_ARTIFACTS", "EVENT_DIR_PUBLIC", "HIDDEN_ONLY", "INTERNAL_ROLES", "PUBLIC_ARTIFACTS", "SCHEMA", "SERVICE_EVALUATOR", "SPLITS",
+           "TRUTH_FILES", "TRUTH_READ",
            "HiddenStore", "SplitAccessDenied", "SplitRegistry", "SplitRegistryError", "artifact_allowed", "declared_run_splits",
            "export_check", "external_truth_reads", "main", "read_audit", "run_split", "strictest", "submit_check", "truth_access_summary"]
 
@@ -52,8 +59,13 @@ SPLIT_CHANGE = "split_change"
 EVENT_ARTIFACTS = frozenset({"brief.json", "event.yaml", "plan.json", "anchors.json", "compile_report.json", "tape.bin", "tape.json",
                              "truth.mcap", "event_truth.json", "event_graph.json", "observability.npz"})
 PUBLIC_ARTIFACTS = frozenset({"brief.json"})
-# M27-FR-114：test 事件只存于 hidden/ 的制品（磁带与真值）；其余受限制品（路线、锚点、编译报告）可留在事件编译目录，只做访问控制
-HIDDEN_ONLY = frozenset({"tape.bin", "tape.json", "truth.mcap", "event_truth.json", "event_graph.json", "observability.npz"})
+# M27-FR-114（K07 修订）：test 事件只存于 hidden/ 的制品：磁带与真值，另含路线、锚点、编译报告与事件源（plan.json 含演员路线，
+# anchors.json 在目标搜索类中含实际抽样位置）；BN-27 对这些名称一律从 hidden 读取
+HIDDEN_ONLY = frozenset({"tape.bin", "tape.json", "truth.mcap", "event_truth.json", "event_graph.json", "observability.npz", "plan.json",
+                         "anchors.json", "compile_report.json", "event.yaml", "event.json", "anchors.overlay.json"})
+# test 事件编译目录 `events/<eid>/v<N>/` 中允许留存的文件（顶层）：对研究者开放的简报与发布、停用标记；其余文件（含子目录）均为隐藏制品
+EVENT_DIR_PUBLIC = frozenset({"brief.json", "published.json", "deprecated.json"})
+TRUTH_FILES = ("event_truth.json", "event_graph.json", "observability.npz")    # 编译器写在 `truth/r<k>/` 下的真值文件
 # Evaluator 服务进程的主体（离线评测与平台审计经 HiddenStore 读取 test 真值时使用）
 SERVICE_EVALUATOR = Principal("svc:evaluator", "evaluator", (), "service")
 
@@ -300,30 +312,68 @@ class HiddenStore:
         return Path(path).read_bytes()
 
     # 迁移与检查
+    def event_file(self, event_id: str, version: int, name: str) -> Path:
+        """hidden 中事件版本的制品路径：顶层 `<name>`；真值文件（`TRUTH_FILES`）顶层不存在时取最新修订 `truth/r<k>/<name>`。"""
+        d = self.event_dir(event_id, version)
+        f = d / name
+        if f.is_file() or name not in TRUTH_FILES:
+            return f
+        revs = sorted((int(r.name[1:]) for r in (d / "truth").glob("r*") if r.is_dir() and r.name[1:].isdigit()), reverse=True)
+        return next((d / "truth" / f"r{k}" / name for k in revs if (d / "truth" / f"r{k}" / name).is_file()), f)
+
+    @staticmethod
+    def hidden_event_files(vdir: Path) -> list[Path]:
+        """事件版本目录 `vdir` 中属于隐藏制品的文件（递归；顶层的 `EVENT_DIR_PUBLIC` 除外），按相对路径排序。符号链接也计入
+        （hidden 之外不应有指向真值的链接）。"""
+        vdir = Path(vdir)
+        if not vdir.is_dir():
+            return []
+        out = []
+        for f in sorted(vdir.rglob("*")):
+            if f.is_dir() and not f.is_symlink():
+                continue
+            if f.parent == vdir and f.name in EVENT_DIR_PUBLIC:
+                continue
+            out.append(f)
+        return out
+
+    @staticmethod
+    def _version_dirs(edir: Path) -> list[Path]:
+        if not Path(edir).is_dir():
+            return []
+        return sorted(d for d in Path(edir).iterdir() if d.is_dir() and d.name.startswith("v") and d.name[1:].isdigit())
+
     def seal_event(self, event_id: str, *, events_root: Path, dataset_root: Path) -> list[dict]:
-        """把 test 事件的磁带与真值移入 hidden（M27-FR-114）：`events/<eid>/v<N>/` 中的 HIDDEN_ONLY 制品 → `hidden/<eid>/event/v<N>/`；
-        `dataset/<eid>/truth/*` → `hidden/<eid>/truth/`。目标已存在且内容相同则删除源，不同则保留两者并报告冲突。→ 动作列表。"""
+        """把 test 事件的隐藏制品移入 hidden（M27-FR-114）：`events/<eid>/v<N>/` 中除 `EVENT_DIR_PUBLIC` 以外的全部文件（递归，含
+        `truth/r<k>/`）→ `hidden/<eid>/event/v<N>/<相对路径>`；`dataset/<eid>/truth/*` → `hidden/<eid>/truth/`。目标已存在且内容相同则
+        删除源，不同则保留两者并报告冲突；移空的子目录随之删除。已发布后才登记为 test 的事件同样适用。→ 动作列表。"""
         out: list[dict] = []
         moves: list[tuple[Path, Path]] = []
-        edir = Path(events_root) / event_id
-        if edir.is_dir():
-            for vdir in sorted(d for d in edir.iterdir() if d.is_dir() and d.name.startswith("v") and d.name[1:].isdigit()):
-                moves += [(f, self.event_dir(event_id, int(vdir.name[1:])) / f.name) for f in sorted(vdir.iterdir()) if f.is_file() and f.name in HIDDEN_ONLY]
+        for vdir in self._version_dirs(Path(events_root) / event_id):
+            dst_root = self.event_dir(event_id, int(vdir.name[1:]))
+            moves += [(f, dst_root / f.relative_to(vdir)) for f in self.hidden_event_files(vdir)]
         tdir = Path(dataset_root) / event_id / "truth"
         if tdir.is_dir():
             moves += [(f, self.truth_dir(event_id) / f.relative_to(tdir)) for f in sorted(tdir.rglob("*")) if f.is_file()]
         for src, dst in moves:
             self._mkdir(dst.parent)
             if dst.exists():
-                if dst.read_bytes() == src.read_bytes():
+                if not src.is_symlink() and dst.read_bytes() == src.read_bytes():
                     src.unlink()
                     out.append({"action": "dedup", "src": str(src), "dst": self._rel(dst)})
                 else:
                     out.append({"action": "conflict", "src": str(src), "dst": self._rel(dst)})
                 continue
+            if src.is_symlink():                                  # 不把链接搬进 hidden：只报告，由管理员处置
+                out.append({"action": "conflict", "src": str(src), "dst": self._rel(dst), "why": "symlink"})
+                continue
             shutil.move(str(src), str(dst))
             os.chmod(dst, 0o600)
             out.append({"action": "move", "src": str(src), "dst": self._rel(dst)})
+        for vdir in self._version_dirs(Path(events_root) / event_id):   # 删除移空的子目录（版本目录本身保留，供简报与发布标记）
+            for d in sorted((x for x in vdir.rglob("*") if x.is_dir() and not x.is_symlink()), key=lambda x: len(x.parts), reverse=True):
+                if not any(d.iterdir()):
+                    d.rmdir()
         if out:
             self.audit.write("hidden_seal", event_id=event_id, n=len(out), conflicts=sum(1 for a in out if a["action"] == "conflict"),
                              process=_process())
@@ -331,8 +381,8 @@ class HiddenStore:
 
     def misplaced(self, registry: SplitRegistry, *, events_root: Path, dataset_root: Path,
                   declared: dict[str, str | None] | None = None) -> list[str]:
-        """仍在 hidden 之外的 test 真值（M27-FR-114 的违规清单）：test 事件编译目录中的 HIDDEN_ONLY 制品、`dataset/<eid>/truth/` 下的文件、
-        test 事件下各 Run 目录 `truth/` 中的文件。`declared` 为事件自身声明的划分（缺省只按登记表）。"""
+        """仍在 hidden 之外的 test 制品（M27-FR-114 的违规清单）：test 事件编译目录中除 `EVENT_DIR_PUBLIC` 以外的全部文件（递归）、
+        `dataset/<eid>/truth/` 下的文件、test 事件下各 Run 目录 `truth/` 中的文件。`declared` 为事件自身声明的划分（缺省只按登记表）。"""
         declared = declared or {}
         eids = set(registry.load()["events"]) | set(declared)
         for root in (Path(events_root), Path(dataset_root)):
@@ -342,13 +392,65 @@ class HiddenStore:
         for eid in sorted(eids):
             if registry.split_of(eid, declared.get(eid)) != "test":
                 continue
-            edir = Path(events_root) / eid
-            if edir.is_dir():
-                out += [str(f) for f in sorted(edir.glob("v*/*")) if f.is_file() and f.name in HIDDEN_ONLY]
+            for vdir in self._version_dirs(Path(events_root) / eid):
+                out += [str(f) for f in self.hidden_event_files(vdir)]
             ddir = Path(dataset_root) / eid
             out += [str(f) for f in sorted((ddir / "truth").rglob("*")) if f.is_file()]
             out += [str(f) for f in sorted(ddir.glob("runs/*/truth/**/*")) if f.is_file()]
         return out
+
+    # 属主与权限
+    def permission_problems(self, *, uid: int | None = None, gid: int | None = None) -> list[dict]:
+        """hidden 根及其下全部条目的属主与权限核对（M27-FR-114）：目录 0700、普通文件 0600、不允许符号链接与其他类型；给出
+        `uid`、`gid` 时属主须为 Evaluator 服务用户。→ [{path（相对 hidden 根）, kind, mode, uid, gid, problems[]}]。"""
+        out: list[dict] = []
+        if not self.root.exists():
+            return out
+        for p in [self.root, *sorted(self.root.rglob("*"))]:
+            st = p.lstat()
+            if p.is_symlink():
+                kind, want = "symlink", None
+            elif p.is_dir():
+                kind, want = "dir", 0o700
+            elif p.is_file():
+                kind, want = "file", 0o600
+            else:
+                kind, want = "other", None
+            probs = []
+            if want is None:
+                probs.append(f"{kind} not allowed")
+            elif stat.S_IMODE(st.st_mode) != want:
+                probs.append(f"mode {stat.S_IMODE(st.st_mode):04o} != {want:04o}")
+            if uid is not None and st.st_uid != uid:
+                probs.append(f"uid {st.st_uid} != {uid}")
+            if gid is not None and st.st_gid != gid:
+                probs.append(f"gid {st.st_gid} != {gid}")
+            if probs:
+                out.append({"path": "." if p == self.root else p.relative_to(self.root).as_posix(), "kind": kind,
+                            "mode": f"{stat.S_IMODE(st.st_mode):04o}", "uid": st.st_uid, "gid": st.st_gid, "problems": probs})
+        return out
+
+    def fix_permissions(self, *, uid: int | None = None, gid: int | None = None) -> int:
+        """把 hidden 根及其下目录设为 0700、文件 0600，给出 `uid`、`gid` 时改属主（需 root）；符号链接与其他类型不处理（仍由
+        `permission_problems` 报告）。写审计 `hidden_perms`。→ 修改的条目数。"""
+        n = 0
+        if not self.root.exists():
+            return n
+        for p in [self.root, *sorted(self.root.rglob("*"))]:
+            if p.is_symlink() or not (p.is_dir() or p.is_file()):
+                continue
+            st = p.lstat()
+            want = 0o700 if p.is_dir() else 0o600
+            changed = False
+            if stat.S_IMODE(st.st_mode) != want:
+                os.chmod(p, want)
+                changed = True
+            if (uid is not None and st.st_uid != uid) or (gid is not None and st.st_gid != gid):
+                os.chown(p, st.st_uid if uid is None else uid, st.st_gid if gid is None else gid)
+                changed = True
+            n += changed
+        self.audit.write("hidden_perms", n=n, uid=uid, gid=gid, process=_process())
+        return n
 
 
 # ── 审计统计 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -381,7 +483,8 @@ def truth_access_summary(records: Iterable[dict]) -> dict:
 # ── 命令行 ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def main(argv: list[str] | None = None) -> int:
-    """`python -m awr.bench.split show | set <event> <dev|test> --by NAME [--version V] | seal <event> | misplaced | audit`。"""
+    """`python -m awr.bench.split show | set <event> <dev|test> --by NAME [--version V] | seal <event> | misplaced | audit
+    | perms [--uid N] [--gid N] [--fix]`。"""
     from awr.bench.settings import BenchSettings
 
     ap = argparse.ArgumentParser(prog="python -m awr.bench.split")
@@ -397,6 +500,10 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("event_id")
     sub.add_parser("misplaced")
     sub.add_parser("audit")
+    m = sub.add_parser("perms", help="check (or --fix) hidden/ ownership and modes: dirs 0700, files 0600, owner = Evaluator service user")
+    m.add_argument("--uid", type=int)
+    m.add_argument("--gid", type=int)
+    m.add_argument("--fix", action="store_true")
     a = ap.parse_args(argv)
     root = a.data_root or BenchSettings.from_env().data_root
     audit = AuditLog(root / "audit")
@@ -417,6 +524,11 @@ def main(argv: list[str] | None = None) -> int:
         acts = hs.seal_event(a.event_id, events_root=root / "events", dataset_root=root / "dataset")
         print(json.dumps({"event_id": a.event_id, "actions": acts}, ensure_ascii=False, indent=1))
         return 1 if any(x["action"] == "conflict" for x in acts) else 0
+    if a.cmd == "perms":
+        fixed = hs.fix_permissions(uid=a.uid, gid=a.gid) if a.fix else 0
+        bad = hs.permission_problems(uid=a.uid, gid=a.gid)
+        print(json.dumps({"root": str(hs.root), "fixed": fixed, "problems": bad}, ensure_ascii=False, indent=1))
+        return 1 if bad else 0
     if a.cmd == "misplaced":
         bad = hs.misplaced(reg, events_root=root / "events", dataset_root=root / "dataset")
         print(json.dumps({"misplaced": bad}, ensure_ascii=False, indent=1))

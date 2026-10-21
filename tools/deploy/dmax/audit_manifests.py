@@ -91,6 +91,9 @@ class Variant:
     reject: bool = False                                         # 期望脚本拒绝该变体、不发出 docker run
 
 
+# run_proto_board.sh 的启动前核对容器（宿主依赖与世界派生缓存，K07）：L2 变体中也在 CPU 池，不挂载 GPU
+_BOARD_PREFLIGHT: dict[str, int | None] = {"d3-board-audit-pre": None, "d3-board-audit-geo": None}
+
 # dmax 启动脚本的登记变体（仓库相对路径 → 变体）
 SHELL_SITES: dict[str, tuple[Variant, ...]] = {
     f"{SCRIPT_ROOT}/bench_ctl.sh": (Variant("default", "bench", ("board", "list")),),
@@ -113,12 +116,14 @@ SHELL_SITES: dict[str, tuple[Variant, ...]] = {
     ),
     f"{SCRIPT_ROOT}/run_proto_board.sh": (
         Variant("l1", "board", ("audit",)),
-        Variant("l2-gpu2", "board", ("audit",), {"GPU": "2"}, gpu=2),
-        Variant("l2-gpu3", "board", ("audit",), {"GPU": "3"}, gpu=3),
+        Variant("l2-gpu2", "board", ("audit",), {"GPU": "2"}, gpu=2, gpu_by_name=_BOARD_PREFLIGHT),   # 启动前核对（K07）在 CPU 池
+        Variant("l2-gpu3", "board", ("audit",), {"GPU": "3"}, gpu=3, gpu_by_name=_BOARD_PREFLIGHT),
         Variant("multi-card", "board", ("audit",), {"GPU": "2,3"}, reject=True),
         Variant("all-cards", "board", ("audit",), {"GPU": "all"}, reject=True),
         Variant("foreign-card", "board", ("audit",), {"GPU": "0"}, reject=True),
     ),
+    f"{SCRIPT_ROOT}/geo_cache.sh": (Variant("check", "worldbuild", ("check",)), Variant("warm", "worldbuild", ("warm",))),  # 世界派生缓存（K07）
+    f"{SCRIPT_ROOT}/images/gz/pylib.sh": (Variant("verify", "test", ("verify",)), Variant("install", "test", ("install",))),  # pylib-gz 重建（K07；build = 下载 + install + 替换）
     f"{SCRIPT_ROOT}/run_subworker.sh": (                         # 缺省：materialize 伴随容器 + subworker（数据根 $LAB_DATA）
         Variant("default", "subworker", ("--once",)),
         Variant("no-materialize", "subworker", ("--once",), {"MATERIALIZE": "0"}),

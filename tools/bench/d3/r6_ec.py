@@ -16,11 +16,14 @@
   pads    核对新增起飞点（需世界包与已编译事件）→ `<out>/pads.json`
   run     运行全部（或 `--rows`、`--seeds` 所选）行 × 种子；已有 evaluation.json 的跳过（断点续跑），失败写 `<out>/failures.json`
   report  汇总 `<out>/runs/` → `<out>/r6_ec.json`（`drone4d.bench.r6_ec.v1`）并打印对照表；退出码 0 通过、1 不通过或缺运行
+  reeval  以当前评测器重评 `--from` 的完整运行目录（不重跑仿真），新的 evaluation.json 与运行清单写入 `<out>/runs/`，原目录不动；
+          `<out>/reeval.json` 逐运行列出新旧评测器版本与 EC、AO 分量（K07：AO 关键时刻修正后重评 A10 的 ref6）
 
 用法（dmax，L1 在 d3-gz 容器内运行，gz 与宿主同容器）：
   python3 tools/bench/d3/r6_ec.py run --config configs/bench.d3/ref6-l1.yaml --events-root d3data/events --worlds-root worlds \\
       --out out/a10 [--jobs 6] [--physics kinematic] [--rows lawn3_cover] [--seeds 1,2]
   python3 tools/bench/d3/r6_ec.py report --config configs/bench.d3/ref6-l1.yaml --out out/a10 --events-root d3data/events --worlds-root worlds
+  python3 tools/bench/d3/r6_ec.py reeval --from a10/out/ref6 --out out/ref6-k07 --events-root d3data/events --worlds-root worlds [--jobs 8]
 """
 
 from __future__ import annotations
@@ -47,7 +50,7 @@ SCHEMA = "drone4d.bench.r6_ec.v1"
 CONFIG_SCHEMA = "drone4d.bench.r6_ec_config.v1"
 R6_TYPES = ("proximity_encounter", "board_vehicle", "enter_building", "vehicle_pass")
 
-__all__ = ["CONFIG_SCHEMA", "SCHEMA", "check_pads", "load_config", "main", "mean_sd_ci", "report", "row_specs", "summarize_row"]
+__all__ = ["CONFIG_SCHEMA", "SCHEMA", "check_pads", "load_config", "main", "mean_sd_ci", "reeval", "report", "row_specs", "summarize_row"]
 
 
 # ------------------------------------------------------------------ 配置与规格
@@ -179,6 +182,70 @@ def run_all(cfg: dict, out: Path, *, events_root: Path, worlds_root: Path, rows:
     else:
         fp.unlink(missing_ok=True)
     return 1 if failures else 0
+
+
+# ------------------------------------------------------------------ 重评（不重跑仿真）
+_WORLDS: dict[tuple[str, bool], object] = {}
+
+
+def _reeval_one(job: dict) -> dict:
+    """单个运行目录的重评：世界查询按运行清单判定正式运行（排名且 realistic 时不退回 DSM），每个进程按（世界、正式）缓存一份。"""
+    for p in (ROOT / "python", ROOT / "tools/sdk/drone4d/src"):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    from awr.agentsdk.env.core import _open_world
+    from awr.bench.eval.evaluator import evaluate_run
+
+    src, dst = Path(job["src"]), Path(job["dst"])
+    man = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
+    formal = bool(man.get("ranked")) and man.get("physics") == "realistic"
+    key = (job["world_dir"], formal)
+    if key not in _WORLDS:
+        _WORLDS[key] = _open_world(Path(job["world_dir"]), formal=formal)
+    t0 = time.time()
+    doc = evaluate_run(src, Path(job["event_dir"]), _WORLDS[key])
+    dst.mkdir(parents=True, exist_ok=True)
+    (dst / "evaluation.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    (dst / "manifest.json").write_text((src / "manifest.json").read_text(encoding="utf-8"), encoding="utf-8")
+    old = json.loads((src / "evaluation.json").read_text(encoding="utf-8")) if (src / "evaluation.json").exists() else {}
+    pick = ("ec", "ao_real", "ao_pos", "ao_pos_los")
+
+    def comps(d: dict) -> dict:
+        if not d:
+            return {}
+        return {"ec": d["ec"]["value"], **{k: d["ao"][k] for k in pick[1:]}}
+
+    return {"run": src.name, "formal": formal, "eval_wall_s": round(time.time() - t0, 2),
+            "old": {"evaluator_version": old.get("evaluator_version"), **comps(old)},
+            "new": {"evaluator_version": doc["evaluator_version"], **comps(doc)}}
+
+
+def reeval(cfg: dict, src_out: Path, out: Path, *, events_root: Path, worlds_root: Path, jobs: int = 4) -> dict:
+    """以当前评测器重评 `src_out/runs/<行>-s<种子>/`（完整运行目录）→ `out/runs/` 与 `out/reeval.json`；运行目录不修改。"""
+    base = json.loads((ROOT / cfg["base_run_spec"]).read_text(encoding="utf-8"))
+    ev_dir = Path(events_root) / cfg["event"]["id"] / f"v{cfg['event'].get('version', 1)}"
+    world_dir = Path(worlds_root) / base["world"]["id"]
+    todo = [{"src": str(Path(src_out) / "runs" / f"{r}-s{s}"), "dst": str(Path(out) / "runs" / f"{r}-s{s}"), "event_dir": str(ev_dir),
+             "world_dir": str(world_dir)} for r in cfg["rows"] for s in cfg["seeds"]]
+    todo = [j for j in todo if (Path(j["src"]) / "manifest.json").exists()]
+    rows, failures = [], []
+    with ProcessPoolExecutor(max_workers=max(1, jobs)) as ex:
+        futs = {ex.submit(_reeval_one, j): j for j in todo}
+        for f in as_completed(futs):
+            try:
+                r = f.result()
+            except Exception as e:
+                failures.append({"run": Path(futs[f]["src"]).name, "error": repr(e), "trace": traceback.format_exc()[-4000:]})
+                print(f"FAIL {Path(futs[f]['src']).name}: {e!r}", flush=True)
+                continue
+            rows.append(r)
+            print(f"{r['run']}: AO_real {r['old'].get('ao_real')} -> {r['new']['ao_real']:.4f}  EC {r['new']['ec']:.4f}  "
+                  f"({r['eval_wall_s']} s)", flush=True)
+    doc = {"schema": "drone4d.bench.r6_ec_reeval.v1", "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "from": str(src_out),
+           "event_dir": str(ev_dir), "world_dir": str(world_dir), "runs": sorted(rows, key=lambda r: r["run"]), "failures": failures}
+    Path(out).mkdir(parents=True, exist_ok=True)
+    (Path(out) / "reeval.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return doc
 
 
 # ------------------------------------------------------------------ 汇总与判定
@@ -316,7 +383,7 @@ def _open(events_root: Path, worlds_root: Path, cfg: dict):
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="r6_ec.py")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("specs", "pads", "run", "report"):
+    for c in ("specs", "pads", "run", "report", "reeval"):
         p = sub.add_parser(c)
         p.add_argument("--config", type=Path, default=ROOT / "configs/bench.d3/ref6-l1.yaml")
         p.add_argument("--out", type=Path, required=True)
@@ -330,8 +397,11 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--gz-launcher", choices=("docker", "local"))
             p.add_argument("--gz-image")
             p.add_argument("--duration-s", type=float, help="override run duration (smoke only; not a formal comparison)")
-        if c == "report":
+        if c in ("report", "reeval"):
             p.add_argument("--no-pads", action="store_true", help="skip the pad check (no world or tape at hand)")
+        if c == "reeval":
+            p.add_argument("--from", dest="src", type=Path, required=True, help="output directory holding the full run directories")
+            p.add_argument("--jobs", type=int, default=4)
     a = ap.parse_args(argv)
     cfg = load_config(a.config)
     a.out.mkdir(parents=True, exist_ok=True)
@@ -342,6 +412,11 @@ def main(argv: list[str] | None = None) -> int:
             (a.out / "specs" / f"{name}.run_spec.json").write_text(json.dumps(rs, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
             print(f"{name}: {len(rs['fleet'])} UAV, comm {rs['comm']['enabled']}, pads {[f['start']['pos_enu_m'][:2] for f in rs['fleet']]}")
         return 0
+    if a.cmd == "reeval":
+        doc = reeval(cfg, a.src, a.out, events_root=a.events_root, worlds_root=a.worlds_root, jobs=a.jobs)
+        if doc["failures"]:
+            return 1
+        a.cmd = "report"                                        # 重评后直接汇总判定（与 report 子命令相同）
     if a.cmd in ("pads", "report") and not getattr(a, "no_pads", False):
         world, tape = _open(a.events_root, a.worlds_root, cfg)
         pc = cfg.get("pad_check") or {}

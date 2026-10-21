@@ -35,6 +35,7 @@ def _one(job: dict) -> dict:
 
     from awr.agentsdk.env.core import BenchEnv, _open_world
     from awr.agentsdk.env.spec import EnvSpec
+    from awr.agentsdk.env.tapecheck import is_formal
     from awr.bench.eval.evaluator import evaluate_run
 
     rs, pol, seed, out = job["spec"], job["policy"], job["seed"], Path(job["out"])
@@ -60,7 +61,7 @@ def _one(job: dict) -> dict:
     t0 = time.time()
     m = run_episode(BenchEnv(spec), lambda _u: BASELINES[pol]())
     t1 = time.time()
-    doc = evaluate_run(run_dir, spec.event_dir, _open_world(spec.world_dir))
+    doc = evaluate_run(run_dir, spec.event_dir, _open_world(spec.world_dir, formal=is_formal(spec)))   # 正式运行不退回 DSM（K07）
     ev_path.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return {"policy": pol, "seed": seed, "run_dir": str(run_dir), "skipped": False, "run_wall_s": round(t1 - t0, 1),
             "eval_wall_s": round(time.time() - t1, 1), "pose_sha256": m.get("pose_sha256"), "components": doc["components"]}

@@ -14,7 +14,9 @@ D3-AC-51 `/lab/worlds`、`/lab/worlds/:wid`、`/lab/events`）。
 角色（AWR-17 §18.3.5、§18.23.3；14 §21.2.5；D3-AC-51）：四个接口的最低角色为 `invited`。事件载荷带划分 `split`（`event.json` 或
 `plan.json` 的 `split`，缺省 `dev`）；受邀成员只见 dev 事件（列表与世界详情的 `events[]` 过滤 test 事件，详情 403 `115`，
 `why = invited_scope`）。划分取 `splits.json` 登记与事件声明中最严格者（`awr.bench.api.truth.event_split`）；研究者读取 test 事件
-的编译详情（含路线诊断与制品清单）403 `691`（M23 §7.3.3），列表项不受影响。
+的编译详情（含路线诊断与制品清单）403 `691`（M23 §7.3.3），列表项不受影响。评测员及以上读取 test 事件详情时，编译报告、路线与
+事件源已封存在 `hidden/<eid>/event/v<N>/`（K07），详情由隐藏区制品组装（经 HiddenStore 授权并写 `truth_read`，`op = detail`），
+发布与停用标记仍取编译目录。
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from fastapi import APIRouter, Query, Request
 
 from awr.api.problem import ApiProblem
 from awr.bench.api.deps import Invited, scope_error
-from awr.bench.api.truth import event_split, guard_event
+from awr.bench.api.truth import event_split, guard_event, hidden
 from awr.bench.auth import Principal
 from awr.bench.runs_store import reason_view
 
@@ -309,6 +311,25 @@ def events(request: Request, p: Invited, world: str | None = None, status: str |
     return {"items": items[:limit], "next_cursor": None, "total": len(items)}
 
 
+def _hidden_version_doc(request: Request, p: Principal, eid: str, v: int, vdir: Path, hdir: Path) -> dict:
+    """test 事件版本的详情（评测员及以上，调用前已 `guard_event`）：编译报告、路线与事件源取隐藏区，发布与停用标记取编译目录；
+    制品清单合并两处。读取经 HiddenStore 授权并写 `truth_read` 审计（`op = detail`）。"""
+    hidden(request).authorize(p, hdir, event_id=eid, op="detail", request_id=getattr(request.state, "request_id", None))
+    doc = dict(_version(eid, v, hdir))
+    pub = _read_opt(vdir / "published.json")
+    if (vdir / "deprecated.json").exists():
+        doc["status"] = "deprecated"
+    elif pub is not None:
+        doc["status"] = "published"
+        doc["published"] = {k: pub.get(k) for k in ("by", "published_unix_ns", "content_sha256")}
+    names = {a["name"]: a for a in doc["artifacts"]}
+    for f in sorted(vdir.iterdir()) if vdir.is_dir() else ():
+        if f.is_file() and f.name not in names:
+            names[f.name] = {"name": f.name, "bytes": f.stat().st_size}
+    doc["artifacts"] = [names[k] for k in sorted(names)]
+    return doc
+
+
 @router.get("/events/{eid}")
 def event(eid: str, request: Request, p: Invited, version: int | None = Query(None, ge=1)) -> dict:
     """BN-22：编译状态与结果（M23 §7.3.1）；`versions[]` 为全部版本的 `{version, status}`。"""
@@ -324,4 +345,6 @@ def event(eid: str, request: Request, p: Invited, version: int | None = Query(No
     if _dev_only(p) and doc["split"] != "dev":
         raise scope_error("invited_scope", event_id=eid, split=doc["split"])
     guard_event(request, p, eid, doc["split"])                 # test 事件：评测员以下 691
+    if doc["split"] != "dev" and (hdir := hidden(request).event_dir(eid, v)).is_dir():
+        doc = {**_hidden_version_doc(request, p, eid, v, edir / f"v{v}", hdir), "split": doc["split"]}
     return {**doc, "latest_version": vs[-1], "versions": [{"version": x, "status": _version(eid, x, edir / f"v{x}")["status"]} for x in vs]}

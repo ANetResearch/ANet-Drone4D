@@ -24,10 +24,14 @@ goto 目标解释在本机导航系，每个控制步按当前导航误差换算
 磁带校验（`env.tapecheck`）：构造时先核对磁带与所加载世界包的版本（不符 615 `TAPE_WORLD_MISMATCH`，不创建运行目录）；正式运行（排名
 且 `realistic` 档）另拒绝栅格后端编译（`generator_version` 以 `-grid` 结尾）或 NavMesh 哈希与世界图层不符的磁带（ADR-196 决策 (5)），
 结果写入运行清单 `tape_check`。
+世界查询（`open_world_query`；K07）：缺省打开网格查询 `MeshWorldQuery`（M22），失败时正式运行（`is_formal`）拒绝并抛
+`WorldQueryFallbackRefused`，不退回 DSM；非正式运行记录 warning 后退回 DSM 查询。实际使用的查询类型与退回原因写入运行清单
+`world_query`（`{kind: mesh | dsm | other, class, fallback?}`）。
 """
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 import time
@@ -48,7 +52,9 @@ from awr.agentsdk.env.tapecheck import check_tape_world, is_formal
 from awr.agentsdk.task import brief_for_agent, task_from_event
 from awr.phys.adapter import TierCommand, VehicleStatus
 
-__all__ = ["TICK_MS", "TICK_NS", "BenchEnv"]
+__all__ = ["TICK_MS", "TICK_NS", "BenchEnv", "WorldQueryFallbackRefused", "open_world_query", "world_query_info"]
+
+log = logging.getLogger(__name__)
 
 TICK_MS = 100
 TICK_NS = TICK_MS * 1_000_000
@@ -97,7 +103,12 @@ class BenchEnv:
         self.uavs = [f.uav for f in spec.fleet]
         self.tape = tape or open_tape(Path(spec.event_dir))
         self.tape_check = check_tape_world(self.tape, Path(spec.world_dir), formal=is_formal(spec))   # 615：磁带须为所加载世界版本编译
-        self.world = world or _open_world(Path(spec.world_dir))
+        if world is None:
+            self.world, self.world_query = open_world_query(Path(spec.world_dir), formal=is_formal(spec))
+        else:
+            self.world, self.world_query = world, world_query_info(world)
+            if is_formal(spec) and self.world_query["kind"] == "dsm":
+                raise WorldQueryFallbackRefused(Path(spec.world_dir), "a DSM world query was injected into a formal run")
         self.cam = cam or CameraModel()
         self.lim = limits or Limits()
         self.task = task_from_event(Path(spec.event_dir))
@@ -526,7 +537,8 @@ class BenchEnv:
                     "ranked": self.spec.ranked, "policy": self.spec.policy, "decision": self.spec.decision.config(),
                     "comm": {"enabled": self.spec.comm.enabled, "bucket_Bps": self.spec.comm.bucket_Bps},
                     "duration_s": self.duration_s, "n_ticks": self.k, "pose_sha256": info.get("pose_sha256"), "tier_info": info,
-                    "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats, "tape_check": self.tape_check}
+                    "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats, "tape_check": self.tape_check,
+                    "world_query": self.world_query}
         if not self.spec.ranked or self.spec.seed_commit:     # 运行身份（M27-FR-007）；排名运行须有 M27 的种子承诺值
             manifest.update(self.spec.identity())
         if self.l2 is not None:                             # 网格 LiDAR 后端（cpu：Open3D 参考；warp：M25 GPU 产品路径）
@@ -576,15 +588,60 @@ class _WallPreview:
         return {"hz": self.HZ, "size": list(self.SIZE), "jpeg_quality": self.QUALITY, "frames": dict(self.n), "source": "delivered"}
 
 
-def _open_world(world_dir: Path):
+class WorldQueryFallbackRefused(RuntimeError):
+    """正式运行的网格查询打不开时拒绝退回 DSM（K07；A10 遗留 F-78 (c)）：`detail` 含世界目录与网格查询的错误。"""
+
+    def __init__(self, world_dir: Path, why: str, error: BaseException | None = None) -> None:
+        msg = f"formal runs need the mesh world query for {Path(world_dir).name}: {why}"
+        super().__init__(msg + (f" ({type(error).__name__}: {error})" if error is not None else ""))
+        self.detail = {"why": "mesh_query_unavailable", "world": Path(world_dir).name, "reason": why,
+                       **({"error": f"{type(error).__name__}: {str(error)[:300]}"} if error is not None else {})}
+
+
+def world_query_info(world) -> dict:
+    """运行清单的 `world_query`：按查询对象的类型判定 `mesh`（`MeshWorldQuery`）、`dsm`（`DsmWorldQuery`）或 `other`（测试替身）。"""
+    names = [c.__name__ for c in type(world).__mro__]
+    kind = "mesh" if "MeshWorldQuery" in names else "dsm" if "DsmWorldQuery" in names else "other"
+    return {"kind": kind, "class": type(world).__name__}
+
+
+def open_world_query(world_dir: Path, *, formal: bool = False):
+    """→ (世界查询, `world_query` 记录)。网格查询打不开时：`formal` 为真抛 `WorldQueryFallbackRefused`；否则记录 warning，
+    退回 DSM 查询，并在记录的 `fallback` 中给出原因（`no_mesh_layer`：世界包没有 `mesh.raycast` 图层，如 DSM 合成夹具；
+    `mesh_open_failed`：图层存在但打开失败，如派生缓存不可写）。"""
+    world_dir = Path(world_dir)
     try:
         from awr.world.mesh.query import open_mesh_world_query
 
-        return open_mesh_world_query(world_dir)
-    except Exception:
+        w = open_mesh_world_query(world_dir)
+        return w, world_query_info(w)
+    except Exception as e:
+        why = "mesh_open_failed" if _has_mesh_layer(world_dir) else "no_mesh_layer"
+        if formal:
+            raise WorldQueryFallbackRefused(world_dir, why, e) from e
+        log.warning("world %s: mesh query unavailable (%s: %s: %s); falling back to the DSM query (non-formal run)",
+                    world_dir.name, why, type(e).__name__, str(e)[:300])
         from awr.world.geometry.query import open_dsm_world_query
 
-        return open_dsm_world_query(world_dir)
+        w = open_dsm_world_query(world_dir)
+        return w, {**world_query_info(w), "fallback": {"reason": why, "error": f"{type(e).__name__}: {str(e)[:300]}"}}
+
+
+def _has_mesh_layer(world_dir: Path) -> bool:
+    try:
+        import json as _json
+
+        doc = _json.loads((Path(world_dir) / "world.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    layers = doc.get("layers") or []
+    ids = [x.get("id") for x in layers] if isinstance(layers, list) else list(layers)
+    return "mesh.raycast" in ids
+
+
+def _open_world(world_dir: Path, *, formal: bool = False):
+    """世界查询（只要对象时的简写；规则见 `open_world_query`）。"""
+    return open_world_query(Path(world_dir), formal=formal)[0]
 
 
 SPAWN_FOOT = np.array([[dx, dy] for dx in (-0.7, -0.35, 0.0, 0.35, 0.7) for dy in (-0.7, -0.35, 0.0, 0.35, 0.7)])

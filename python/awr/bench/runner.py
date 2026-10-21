@@ -54,6 +54,7 @@ def run_job(rs: dict, *, policy: dict, seed: int, run_id: str, run_dir: Path, wo
     from awr.agentsdk.env.containers import run_container_episode
     from awr.agentsdk.env.core import BenchEnv, _open_world
     from awr.agentsdk.env.spec import EnvSpec
+    from awr.agentsdk.env.tapecheck import is_formal
     from awr.bench.eval.evaluator import evaluate_run
 
     rs = {**rs, "policy": {k: v for k, v in policy.items() if k in ("kind", "name", "image_digest", "params")}}
@@ -76,7 +77,7 @@ def run_job(rs: dict, *, policy: dict, seed: int, run_id: str, run_dir: Path, wo
     (run_dir / "agents" / "wire_stats.json").write_text(json.dumps(stats, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     if not audit.passed:                                     # 审计未失败即关闭时（fail_closed=False）在此判平台失败
         raise ObsSchemaViolation("schema", "run", None, [p for x in audit.samples for p in x["paths"]])
-    doc = evaluate_run(run_dir, spec.event_dir, _open_world(spec.world_dir))
+    doc = evaluate_run(run_dir, spec.event_dir, _open_world(spec.world_dir, formal=is_formal(spec)))   # 正式运行不退回 DSM（K07）
     (run_dir / "evaluation.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return {"run_id": run_id, "run_dir": str(run_dir), "run_wall_s": round(t1 - t0, 1), "eval_wall_s": round(time.time() - t1, 1),
             "pose_sha256": manifest.get("pose_sha256"), "components": doc["components"], "ranked_valid": doc["ranked_valid"], "agents": stats,
