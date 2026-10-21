@@ -263,7 +263,7 @@ L2 基线实际发出了 report，但全部被 Env 守卫拒绝：第 1 轮 L2 �
 | 2 | **docs/05 回填。** D3-AC-56 行（第 2 轮通过）、§24.5 F-09（机型映射已移入 `awr.phys.gz.vehicles` 与 Env）、Env 的 L2 LiDAR 后端设定与正式口径取 Warp、守卫的 L2 帧证据、§30 共享文件登记；见任务报告 doc_notes | 文档归属方 |
 | 3 | **`coverage_scan` 在 `p600_bench` 上 EC 下降。** EC 由 0.725、0.750（x500）降到 0.400、0.325，AO 为 0；条款（`track_share` EC 更高、不全部并列）仍满足，但该基线的扫描航线未按新机型的动力学调参，建议基线归属方核对 | SDK 基线 |
 | 4 | **L2 EU 区间含 0。** 第 2 轮 L2 上 report 被接受，EU 点估计 0.018、0.036，但三个基线的 EU 两两并列；EU 依赖 report 的 meet 判定与 `ref_det_v1` 的 L2 检测质量（A09、S26） | SDK 基线、S26 |
-| 5 | **AO 观察。** D3-AC-18 的"覆盖扫描 AO_real v0 ≤ 0.05"按 M23 参考相机 oracle 口径另行判定，本轮 `coverage_scan` AO 为 0，不作该条判定 | 评测（M27） |
+| 5 | **AO 观察。** D3-AC-18 的"覆盖扫描 AO_real v0 ≤ 0.05"由 A10 的 r6 对照另行判定（oracle 为评测时计算的 `ao-oracle-v0-grid@1`，AWR-05 §5.6.5；M23 在 P0a 不产出 `observability.npz`），本轮 `coverage_scan` AO 为 0，不作该条判定 | 评测（M27） |
 | 6 | **复核脚本入库。** `verify_formal.py` 目前只在 dmax `b10r2/verify/` 与 `b10/verify/`；可并入 `mbl_e2e.py` 的报告阶段（`evaluation.json` 重算、重复一致、榜单重算、基线区分度、机型与后端统计） | B09 归属 |
 | 7 | **样例包。** B20 取 `mbl_e2e.json` 的 `representative_runs`（L1 `coverage_scan-k00`、`static_guard-k04`、`track_share-k04`；L2 `coverage_scan-k05`、`static_guard-k04`、`track_share-k04`，均为第 1 次重复） | B20 |
 | 8 | **页面标注。** `/lab/board` 按 `config.track.prototype`、`gpu_class` 显示"原型""共享卡"标签；`board.json` 可增加 `track.prototype` 字段 | F09 |

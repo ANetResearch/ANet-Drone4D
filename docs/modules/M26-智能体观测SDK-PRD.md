@@ -683,6 +683,8 @@ def _settle(self, s, act, t_k):
 3. 动作生效时刻按主时钟 tick 量化；物理步粒度由 `clock_profile` 决定（缺省 `{d1_250, 250, 250, 250}` 每 tick 一步；`l1_hz = 125` 的吞吐档每 2 tick 一步），setpoint 在其后第一个物理步生效，规则与 D2 批处理相同（F16）。
 4. 确定性边界：`fixed` 模式下只要 Agent 不超时，τ 与生效时刻与墙钟无关；`per_step` 模式只有在墙钟耗时超过 `step_budget_s` 时才引入墙钟依赖，此时运行被标记，M27 据此决定排名有效性。
 5. v1.6（K05）磁带核对：BenchEnv 构造时在 `open_tape` 之后、创建录制器之前调用 `awr.agentsdk.env.tapecheck.check_tape_world`。磁带头 `world.content_version` 须等于世界 `world.json` 的 `contentVersion`，否则报 615 `TAPE_WORLD_MISMATCH`，不创建运行目录、不启动 gz；无 `world.json` 的夹具世界只允许用于非正式运行。正式运行（ranked 且 `physics = realistic`，ADR-196 决策 (5)）另以 615 拒绝：栅格生成器磁带（`why = grid_generator`）、来源缺失（`provenance_missing`）、NavMesh 摘要与世界 `detour-navmesh@1` 图层的 `bin.sha256` 不符（`navmesh_mismatch`）、世界缺该图层（`navmesh_layer_missing`）、磁带未记录 NavMesh 摘要（`navmesh_unrecorded`）与缺 `world.json`（`world_manifest_missing`）。核对结果写入运行清单的 `tape_check` 字段。
+6. v1.6（B10）L2 主循环的实现：在上述语义不变的前提下，网格 LiDAR 由工作进程池计算（`awr/agentsdk/env/l2.py` 的 `_LidarPool`，CPU 参考每架机一个工作进程，至多 4 个）；相机先为全部机提交、再统一取回；可见度真值归约与观测记录移到后台线程，观测记录在线程中写出（remote 运行时为 `async_obs_record`）；规范观测摘要 `canonical_sha256` 按增量计算；IMU 偏置随机游走以增量缓存 `BiasWalk` 计算（`awr/sensorsvc/imu.py`）；IMU、GNSS 合成与点云等待重叠。以上改动的输出逐字节不变（与改动前正式 Run 的 `obs.sha256`、`acts.jsonl`、真值文件、`pose_sha256` 与 `evaluation.json` 对拍相同）。剖析结论：共享卡上主循环以 Agent 计算（std 资源档单核，基线每步约 110–125 ms）为下限；B10 第 2 轮 L2 墙钟比由 3.66–4.73 降到 2.12–2.49（[AWR-05 §30.3 第 86 行](../05-D3-设计增补与决策记录.md)，记录见 [impl/D3-P0a-正式口径记录.md](../impl/D3-P0a-正式口径记录.md) §2.1）。
+7. v1.6（B10）L2 网格 LiDAR 后端：由 `L2Config.lidar_backend`（`cpu` | `warp`）给出，未给出时取 `AWR_ENV_LIDAR_BACKEND`，缺省 `cpu`；Env 不读 sensorsvc 的 `AWR_LIDAR_BACKEND`（其缺省 `auto` 会随机器是否有 GPU 改变点云）。正式口径（`mbl_e2e` 配置键 `lidar_backend`，进入配置指纹）取 `warp`，即 M25 GPU 产品路径，与 S20、S21 的标准轨在线测量为同一路径；运行清单记录 `l2.lidar_backend`；与 CPU 参考实现的差异按 D3-AC-12 判定（实测 120 帧点集相同，坐标最大差 5.7e-6 m）。
 
 #### 6.6.2 观测投影与白名单编码
 
@@ -817,6 +819,8 @@ def truth_target(self, s, nav_int, t_k):                                        
 ```
 
 注入规则：`velocity` 在 `apply_tick` 以 `Setpoint32` 注入，此后每个控制步重发同一设定（保持规则 FR-055）；`goto/orbit/path/rtl` 在 `apply_tick` 以真值系目标启动 M24 路径跟踪器，此后每个控制步以 `truth_target` 更新目标（变化 ≥ 5 cm 时）；`takeoff`、`land`、`gimbal`、`zoom`、`sensor_mode` 以 `CommandEngine.handle` 注入，principal `bench:<run_id>/<uav_id>`，命令参数按 `commands.json` 的 `args_schema` 校验。
+
+v1.6（B10）帧证据登记：`ActionGuard.saw_frames(frames)` 登记 L2 与 L2-depth 交付给该机的全部（传感器, 帧序号），`BenchEnv._observe` 在 L2 时调用（实现 `python/awr/agentsdk/env/guard.py`、`core.py`）；此前只从 L1 检测（`saw(dets)`）登记，L2 的框证据（`sensor`、`frame_seq`、`bbox_xywh`，无 `det_id`）引用的帧从未登记，B10 第 1 轮 L2 的 738 条 report 全部以 663 `evidence_unknown` 被拒。修正后 663 `evidence_unknown` 只针对未交付的帧；测试 `tests/d3/env/test_l2.py::test_l2_frame_evidence_reports_are_accepted`；B10 第 2 轮 L2 的 722 条 report 全部附证据并被接受。
 
 #### 6.6.6 链路模型
 
@@ -1708,3 +1712,13 @@ v1.2 补记（A08，R2）：毫米定点成对模式须排除整米值与公开�
 | §6.2、§6.6.1、记录器 | Env 在构建档位前对 fast 与 realistic 一律按输出集合（camera、lidar、imu，L1 为 detections）校验时钟档，变体机型使用基础机型的 L1 模板；超时写入 `agents/<uav>/acts.jsonl`，为 `act = null`、`acks = [661 timeout]` 的行；`manifest.json` 对不排名运行与带 `seed_commit` 的排名运行写入 `config_sha256`、`spec_sha256`、`run_hash`、`versions` 与 `clock_profile`；`env/spec.py` 中 `EnvSpec` 的物理档注释应补 `fast`（该文件归 S05） | P07 |
 
 D3-AC 映射：D3-AC-18 的 r6 EC 对照需决定口径（r6 为 4 类事件均值，`crop-handoff-001` 只有 3 类），推荐按事件类型逐类对照，见 AWR-05 §24.5 F-02；D3-AC-58 的证据位置为 `tests/d3/baselines/test_act_reports.py`，参考检测器每步墙钟实测（dmax 2026-10-18 17:09–17:28Z，3 个 `std` 容器并发，3 次取中位，最差一步 0.181 s ≤ 0.5 s，p99 0.131 s，超时 0，ACT 不一致 0；局限：录制使用 kinematic 物理）记入 RP0a。
+
+v1.6 第七批（B10，AWR-05 §30）：
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| §6.6.1 说明第 6、7 项 | L2 主循环提速的实现（LiDAR 工作进程池、相机先提交后取回、后台真值归约与观测记录、增量观测摘要、`BiasWalk`、IMU 与 GNSS 与点云等待重叠，输出逐字节不变）与剖析结论；L2 网格 LiDAR 后端 `L2Config.lidar_backend`，正式口径取 `warp` | B10 |
+| §6.6.5 | `ActionGuard.saw_frames` 登记 L2 帧证据；§14.3 所列"L2 证据登记缺陷"已修复，D3-AC-58 在 L2 上的 report 条款由 B10 第 2 轮正式运行判定通过 | B10 |
+| §6.2 机型 | `p600_bench` 的 gz 机型映射由 `awr.phys.gz.vehicles` 提供，Env 的 `_GzTier` 写入并挂载派生模型、改写 `run.sdf`，运行清单 `tier_info.vehicle` 记录映射参数（AWR-05 §24.5 F-09 已解决） | B10 |
+
+D3-AC 映射（第七批）：D3-AC-18 的 r6 EC 对照口径已按 A10 确定（`crop-handoff-001` 含 `cross_C`，计分事件正好是 r6 的 4 类，AWR-05 §24.5 F-02 已关闭），对照结果与条款处置见 AWR-05 §23.5 C-42；D3-AC-17、56、58 的正式运行证据见 [impl/D3-P0a-正式口径记录.md](../impl/D3-P0a-正式口径记录.md)。

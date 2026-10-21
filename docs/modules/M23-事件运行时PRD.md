@@ -1972,8 +1972,8 @@ v1.3 接入口径（E09，`gen.py` 的 `lane_traffic`，门 2、生成与门 3 �
 | M23-FR-078 | report 类型白名单：按类型写入 `bench/task.v1.report_types`，M26 动作守卫据此校验 `report.type` | P0 | V0.3 | P0a、P0b | M23-AC-037 | ADR-181 |
 | M23-FR-079 | 热成像参数与 `tape.flags` 侧车：`actors[].thermal`、环境 `air_temp_c` 与 `rh_pct`、`engine_on` 与 `carrying_object` 标志 | P0 | V0.3 | P0b | M23-AC-042 | ADR-180 |
 | M23-FR-080 | 事件模板与 test 变体：`drone4d.event_template.v1` 按参数域确定性展开 N 个变体（变体 id 为参数 sha256 前 12 位），每个变体独立编译并由管理员登记为 dev 或 test（M27 `splits.json`）；同一模板的 dev 与 test 变体参数不重复 | P0 | V0.3 | P0b | M23-AC-043 | ADR-147 v1.3、ADR-181 |
-| M23-FR-081 | 首个固定事件 `crop-handoff-001`：`events/d3/handoff/crop-handoff-001.yaml`（r6 原型最终版加简报），strict 编译通过；磁带与真值进入 golden 与样例包 | P0 | V0.3 | P0a | M23-AC-037 | ADR-175 |
-| M23-FR-082 | 第一批事件集：四类各 ≥ 1 个 dev 与 ≥ 2 个 test 事件（crop）；dev 事件入 git（`events/d3/{reid,handoff,vehicle,search}/`），test 事件只存 `/data/d3/hidden/` | P0 | V0.3 | P0b | M23-AC-043 | ADR-181 |
+| M23-FR-081 | 首个固定事件 `crop-handoff-001`：`events/d3/handoff/crop-handoff-001.yaml`（r6 原型最终版加简报），strict 编译通过；磁带与真值进入 golden 与样例包。v1.6（E10）：实际源文件为 `configs/events.d3/crop-handoff-001/{event.yaml, anchors.json}`，登记为 handoff 赛道的 dev 事件 | P0 | V0.3 | P0a | M23-AC-037 | ADR-175 |
+| M23-FR-082 | 第一批事件集：四类各 ≥ 1 个 dev 与 ≥ 2 个 test 事件（crop）；dev 事件入 git（`events/d3/{reid,handoff,vehicle,search}/`），test 事件只存 `/data/d3/hidden/`。v1.6（E10）：dev 事件源文件在 `configs/events.d3/{reid,handoff,vehicle,search}/<event_id>/`（`event.yaml`、`anchors.json`），crop-handoff-001 保留在 `configs/events.d3/` 顶层；test 事件只存 `<data_root>/hidden/<eid>/event/v<N>/`（编译目录与源文件 `event.yaml`、`anchors.overlay.json`），不入 git。第一批（oryahovo-crop1，全部 strict + ranked，`0.2.0-detour`）：dev 为 crop-reid-001、crop-handoff-001、crop-handoff-002、crop-vehicle-001、crop-search-001；test 为 crop-{reid,handoff,vehicle,search}-{101,102}。划分由 `configs/bench.d3/split.yaml`（`drone4d.bench.split_set.v1`，每事件的 split、lane、版本与承诺哈希 `source_sha256`、`overlay_sha256`、`dsl_sha256`、`content_sha256`、`truth_sha256`）登记，经 `python -m awr.bench.split set` 写入 `<data_root>/bench/splits.json`（`test_split_version` v1）；编写约束见 §15.9；测试 `tests/d3/events/test_event_set.py` | P0 | V0.3 | P0b | M23-AC-043 | ADR-181 |
 | M23-FR-083 | 简报内容：参考外观图（M25 渲染）与由属性向量生成的规范描述文本（中文与英文），目标搜索类附先验图层（PNG 与参数）；不得含演员 id、路线、时刻与实际位置；v1.3（E08）：在 D3 封板范围内 `brief.json` 只为 `target_search` 生成，`brief.v1` 新增 `search` 段 | P0 | V0.3 | P0b | M23-AC-041 | ADR-181、ADR-161 |
 
 ### 15.7 新增验收
@@ -1995,6 +1995,16 @@ v1.3 接入口径（E09，`gen.py` 的 `lane_traffic`，门 2、生成与门 3 �
 | D3-AC-33 | P1（应交付） | P0b（阻塞） | 车辆追踪类事件所需 |
 | D3-AC-56 | — | P0a | 首个固定事件 `crop-handoff-001` |
 | D3-AC-62 | — | P0b | 第一批四类事件 |
+
+### 15.9 事件编写约束（v1.6，E10）
+
+依据 E10 编写第一批四类事件（13 个，AWR-05 §30.2）时的实测。以下约束适用于 dev 与 test 事件，违反时多数在门 3 strict 下报 613 或使编译耗时显著增加：
+
+1. **锚点放在开阔可走面上。** 建筑边缘、挑檐与树冠下，navsvc 给出的 Detour 路径可能被 S-OFFMESH 探测判为离网，实测最大 1.24 m（探测在多层面上取到上层，AWR-05 §30.5 F-74）。锚点应选在开阔可走面上，并按路线逐段核查。
+2. **人员路段速度不得低于步态下限。** 慢于步态下限的路段会推迟出发（W-SLOW），演员在上一锚点停留，同一锚点的后续经过者因此触发 S-OVERLAP。不要让两人在同一点状锚点上先后停留；交接与等候使用 zone 站位。
+3. **车辆泊车点放在开阔天空下。** 泊车点位于浓密树冠下时，门 3 的视线 oracle 每个被挡 tick 约需 4.2 万条射线（一个车辆追踪事件初稿共 4360 万条、92 s）；改到开阔路段后为 435 万条、9.8 s。
+4. **车辆锚点取车道中心线。** 泊车点放在无后续车流的车道末端。
+5. **背景人数。** 背景行人偶发 S-ZGROUND（单帧贴地偏差超过 2 cm 容差），strict 下整个事件报 613；定位前以调整背景人数规避（AWR-05 §30.5 F-73）。
 
 ## 16. v1.2 同步（依据 AWR-05 v1.4）
 
@@ -2029,7 +2039,7 @@ v1.3 接入口径（E09，`gen.py` 的 `lane_traffic`，门 2、生成与门 3 �
 
 ### 17.1 修订依据与摘要
 
-依据 AWR-05 v1.6 的 ADR-196（NavMesh 采用 Recast/Detour，查询服务 navsvc）、ADR-197（D3-AC-07 修订：Python 生成器与 TS 解码器逐字节对拍）与封板收尾批次（第一批 H02、W01、E02、E03、E04、F01；第二批 E01、E05、W09、B08，AWR-05 §25；第五批 W12、E09，AWR-05 §28）的实现结果。阈值不变。
+依据 AWR-05 v1.6 的 ADR-196（NavMesh 采用 Recast/Detour，查询服务 navsvc）、ADR-197（D3-AC-07 修订：Python 生成器与 TS 解码器逐字节对拍）与封板收尾批次（第一批 H02、W01、E02、E03、E04、F01；第二批 E01、E05、W09、B08，AWR-05 §25；第五批 W12、E09，AWR-05 §28；第七批 E10，AWR-05 §30）的实现结果。阈值不变。
 
 ### 17.2 条款修订
 
@@ -2061,6 +2071,8 @@ v1.3 接入口径（E09，`gen.py` 的 `lane_traffic`，门 2、生成与门 3 �
 | §6.5 规则 5、§6.6.1、§6.6.4 | Detour 后端 `DetourNav` 取代栅格过渡实现，`AWR_EVENT_NAV` 选择后端，排名编译强制 Detour，栅格只用于测试夹具；背景行人沿 Detour 路径推进，不使用 DetourCrowd | W12（ADR-196） |
 | §15.2、§15.3、§15.4、§6.4、§6.7.6、§6.9.4 | `drive` 的实现形状与 `stop`、`park`；`vehicle_track` 验证器与 report 映射；停留语义与迟到容差；`E-DRIVE`、`I-LANES`、`I-LATE` 等问题码；`report.lanes` 与 `world.navgraph_sha256`；`S-OFFMESH`、`S-ARRIVAL` 车道口径 | E09 |
 | 示例事件 `crop-handoff-001` | 车辆锚点移到车道中心线（ev_road_west (−108, 58) → (−103.98, 66.68)，ev_plaza_curb_road (44, −55) → (46.76, −46.24)，ev_road_east (186, −96) → (188.0, −89.14)）；vehicle_C 改为 `drive: {profile: urban}`，出现时刻由 150 s 改为 195 s；按 Detour 寻路调整 person_B 到 ev_east_street 的时刻（120 s → 124 s）与 person_A 的广场停留（7 s → 20 s）；version 仍为 1，磁带须重新编译发布（AWR-05 §27.5 F-44） | E09、W12 |
+| FR-081、FR-082 | 事件源文件的实际路径为 `configs/events.d3/…`；第一批 dev 与 test 清单；划分登记 `configs/bench.d3/split.yaml` 与 `splits.json`；test 事件只存 `<data_root>/hidden/<eid>/event/v<N>/` | E10 |
+| §15.9（新增） | 事件编写约束：开阔可走面上的锚点、步态下限与 zone 站位、开阔天空下的泊车点、车道中心线锚点、背景人数 | E10 |
 
 ### 17.3 D3-AC 映射变更
 

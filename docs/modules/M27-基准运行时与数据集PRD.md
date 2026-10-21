@@ -287,7 +287,7 @@ v1.1 按 AWR-05 v1.3（ADR-174、ADR-175、ADR-182 至 ADR-184）重排；v1.0 �
 | M27-FR-087 | 识别谓词 `ident(u, p, k)`：L1 为投影高度 `h_px ≥ 16` 且身体 5 点 LOS 可见比例 ≥ 0.5；L2 为 TruthFrame `objects[]` 的 `h_px_unocc ≥ 16` 且 `visible_ratio ≥ 0.5`；阈值取自版本化阈值表 `eval_thresholds.v1`（P0 按 r6 口径冻结，P2 由 D3-AC-38 标定后经 ADR 修订）；v1.3（S18）：热成像行（`kind = thermal`）另要求 \|dT_app_k\| ≥ 1.0 K，`no_ring` 时不识别；三个阈值均含等号；同一机同一帧的多个传感器按机与帧合并，任一通过即计；实现 `python/awr/bench/eval/ident.py` | P0 | P0a | M27-AC-014 | §5.6.5 |
 | M27-FR-088 | EC 与 EC 覆盖按 §6.7.6；多人区间事件要求同一帧同时识别全部参与者；瞬时事件的覆盖窗口取事件前 2 s | P0 | P0a | M27-AC-014 | §5.6.5；r6 §12.4 |
 | M27-FR-089 | 只在可观测区计分：事件发生在 quality 层不完整区域，或参与者处于 `INSIDE` 状态的时段，不计入分母，在 `evaluation.json` 的 `excluded[]` 中单列原因；v1.3（W14，`python/awr/bench/eval/ec.py`）实现规则：注解的全部真值命中都在不完整区域时以 `incomplete_region` 剔除，任一命中可观测则照常计分；`inside_building` 为窗口 [a − 2 s, b + 2 s] 内全部参与者均不在场且至少一名处于 INSIDE；两者同时成立时原因为 `incomplete_region`；仍计分的事件中，全部参与者不在场且至少一名 INSIDE 的 tick 不计入覆盖分母；被剔除的事件离开 EC、覆盖、AO 与 CE 的分母，EU 保留全集；事件真值缺失时不按 `incomplete_region` 剔除 | P0 | P0a | M27-AC-020 | ADR-131、D3-AC-04 |
-| M27-FR-090 | AO：P0a 实现 AO_real v0（oracle 取 M23 `observability.npz` 参考相机，r6 口径）与 AO_pos；P1 实现 AO_real v1（oracle 按本 Run 机队相机与任务高度包络计算，§6.7.6），自 v1 起为排名口径；`evaluation.json` 记录 oracle 版本、相机模型、网格与高度档参数；不同相机配置不混排 | P0 | P0a（v0）、P1（v1） | M27-AC-014、018 | ADR-150；本文 §13 第 5 条 |
+| M27-FR-090 | AO：P0a 实现 AO_real v0（oracle 取 M23 `observability.npz` 参考相机，r6 口径）与 AO_pos；P1 实现 AO_real v1（oracle 按本 Run 机队相机与任务高度包络计算，§6.7.6），自 v1 起为排名口径；`evaluation.json` 记录 oracle 版本、相机模型、网格与高度档参数；不同相机配置不混排。v1.6（A10 更正）：M23 在 P0a 不产出 `observability.npz`；实现的 v0 为 `ao-oracle-v0-grid@1`，评测时按本 Run 的标称相机 `d4d_eo1080@1`（HFOV 60°）计算，候选视点为 30–120 m 包络内 10 m 网格 × 10 m 高度档，遮挡只计静态网格视线，构造与 r6 参考相机 oracle 相同（r6 相机为 HFOV 40°）；关键时刻 τ 目前取窗口中点，瞬时事件（上车、进入建筑）在中点时参与者已不在场而被跳过，改为 r6 口径（开始、中点、结束，瞬时事件取事件前时刻）为后续事项（AWR-05 §30.5 F-77） | P0 | P0a（v0）、P1（v1） | M27-AC-014、018 | ADR-150；本文 §13 第 5 条 |
 | M27-FR-091 | EU：Agent `report` 与真值按（类型相同、时间差 ≤ 15 s、参与者集合一致）一对一最大匹配；参与者对应由证据建立：L2 以证据帧 TruthFrame 实例图关联（IoU ≥ 0.3 或点落在膨胀 3 px 的掩膜内），L1 以 `det_id` 经评测库映射；输出 precision、recall、F1 与参与者级明细 | P0 | P0a（v0）、P1（诊断扩展） | M27-AC-017 | §5.6.5、D3-AC-30 |
 | M27-FR-092 | CE：`G = EC(fleet) − max_u EC(u)`（`EC(u)` 只用该机自身识别）、`G / (\|U\| − 1)`、冗余度、航程 km、通信 KB、丢包率、`ΔEC/km = G / km`、`ΔEC/KB = G / KB`；实验级报告给出 EC 随 N 的边际收益曲线 | P0 | P0a（v0 与归一化 CE）、P1（边际收益曲线） | M27-AC-019 | §5.6.5 |
 | M27-FR-093 | 安全与合规：近地告警、禁入体侵入、被发现次数（M18 度量）、无人机与演员最小间距（人员胶囊 r 0.4 m、h 1.8 m；车辆按类别包围盒；无人机按 M21 机型包络半径）；间距低于任务规则（缺省人员 5 m、车辆 3 m）按连续区段计次；包围体相交的运行 `ranked_valid = false` | P0 | P0a | M27-AC-015 | §5.6.5、ADR-150 |
@@ -320,8 +320,8 @@ v1.1 按 AWR-05 v1.3（ADR-174、ADR-175、ADR-182 至 ADR-184）重排；v1.0 �
 
 | 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
 |---|---|---|---|---|---|
-| M27-FR-113 | 划分登记：每个事件或事件族变体登记为 `dev` 或 `test`（`/data/d3/bench/splits.json`，管理员维护，变更审计）；一个事件不得同时属于两个划分。v1.3（B11）：`splits.json` schema 为 `drone4d.bench.splits.v1`（`{schema, test_split_version, events{eid: dev|test}, updated_unix_ns, updated_by}`）；判定取登记值与事件自身声明中较严格者，未知值按 test 处理；实现为 `python/awr/bench/split.py`（`SplitRegistry`；CLI `python -m awr.bench.split show|set|seal|misplaced|audit`） | P0 | P0a（dev）、P0b（test） | M27-AC-032 | ADR-147 |
-| M27-FR-114 | test 真值存放：test 事件的磁带、`event_truth.json`、`event_graph.json`、`observability.npz` 与 Run 真值文件只存于 `/data/d3/hidden/`（0700，属主为 Evaluator 服务用户）；读取一律经 `HiddenStore` 并审计；Evaluator 以外的访问返回 691。v1.3（B11）：隐藏布局为 `hidden/<eid>/event/v<N>/`（带版本，与事件编译目录结构相同）与 `hidden/<eid>/truth/run_<id>.{mcap,frames.idx}`；只放隐藏区的集合为 `tape.bin`、`tape.json`、`truth.mcap`、`event_truth.json`、`event_graph.json`、`observability.npz`；`plan.json`、`event.yaml`、`anchors.json` 与 `compile_report.json` 可留在编译目录，只做访问控制；实现为 `python/awr/bench/split.py` 的 `HiddenStore` 与 `python/awr/bench/api/truth.py` | P0 | P0b | M27-AC-032 | ADR-147、D3-AC-43 |
+| M27-FR-113 | 划分登记：每个事件或事件族变体登记为 `dev` 或 `test`（`/data/d3/bench/splits.json`，管理员维护，变更审计）；一个事件不得同时属于两个划分。v1.3（B11）：`splits.json` schema 为 `drone4d.bench.splits.v1`（`{schema, test_split_version, events{eid: dev\|test}, updated_unix_ns, updated_by}`）；判定取登记值与事件自身声明中较严格者，未知值按 test 处理；实现为 `python/awr/bench/split.py`（`SplitRegistry`；CLI `python -m awr.bench.split show\|set\|seal\|misplaced\|audit`）。v1.6（E10）：登记来源为仓库内的 `configs/bench.d3/split.yaml`（`drone4d.bench.split_set.v1`：每事件的 split、lane、event_type、version、source 与承诺哈希 `source_sha256`、`overlay_sha256`、`dsl_sha256`、`content_sha256`、`truth_sha256`），经 `python -m awr.bench.split set … --version v1` 写入 `splits.json`；第一批 13 个事件（dev 5 个、test 8 个），`test_split_version` v1，`SplitRegistry.digest()` `2ca09b23…` | P0 | P0a（dev）、P0b（test） | M27-AC-032 | ADR-147 |
+| M27-FR-114 | test 真值存放：test 事件的磁带、`event_truth.json`、`event_graph.json`、`observability.npz` 与 Run 真值文件只存于 `/data/d3/hidden/`（0700，属主为 Evaluator 服务用户）；读取一律经 `HiddenStore` 并审计；Evaluator 以外的访问返回 691。v1.3（B11）：隐藏布局为 `hidden/<eid>/event/v<N>/`（带版本，与事件编译目录结构相同）与 `hidden/<eid>/truth/run_<id>.{mcap,frames.idx}`；只放隐藏区的集合为 `tape.bin`、`tape.json`、`truth.mcap`、`event_truth.json`、`event_graph.json`、`observability.npz`；`plan.json`、`event.yaml`、`anchors.json` 与 `compile_report.json` 可留在编译目录，只做访问控制；实现为 `python/awr/bench/split.py` 的 `HiddenStore` 与 `python/awr/bench/api/truth.py`。v1.6（E10）：编译器把真值写在 `v<N>/truth/r<k>/{event_truth,event_graph}.json`，而 `HiddenStore.seal_event` 与 `misplaced` 目前只遍历 `v<N>/` 顶层文件；改为递归处理，并把 test 事件的 `plan.json`、`anchors.json`（目标搜索类含实际抽样位置）与 `compile_report.json` 也列为隐藏制品，登记为后续事项（AWR-05 §30.5 F-72）；E10 的 test 事件直接编译进隐藏区（含源文件 `event.yaml`、`anchors.overlay.json`，目录 0700、文件 0600），`events/<eid>/` 下只有目标搜索类的 `brief.json`。数据根：dmax 开发数据根为 `/data/anet-drone4d-d3/d3dev/d3data`（容器内挂载为 `/data/d3`），与 bench-api 使用的 lab 数据根 `/data/anet-drone4d-d3/lab/data` 分开，后者的同步见 AWR-05 §30.5 F-75 | P0 | P0b | M27-AC-032 | ADR-147、D3-AC-43 |
 | M27-FR-115 | test 公开内容：世界包引用、任务简报（公开锚点、目标外观描述、任务区、允许的观测档、时长）；不含磁带与任何真值 | P0 | P0b | M27-AC-032 | §5.6.6 |
 | M27-FR-116 | 事件族：M23 按分布生成变体；M27 以变体参数的 sha256 确定性留出 30% 到 test（同族留出变体只在 test 出现），记录划分版本；dev 与 test 变体参数不重复 | P1 | P3 | M27-AC-032 | ADR-147 |
 | M27-FR-117 | （v1.1 修订：`source ∈ {internal, invited}`，不再有 `public`）提交对象 `Submission{submission_id, source ∈ {internal, public}, principal, image_digest, obs_level, suite_id, state, visibility, created_unix_ns}`；状态机见 §6.5 | P0 | P0a | M27-AC-032 | ADR-147 |
@@ -1148,7 +1148,7 @@ def event_understanding(reports, E, run, level):
 ```
 
 ```python
-# python/awr/bench/eval/ao.py（v1，P1；v0 用 observability.npz 的参考相机 oracle）
+# python/awr/bench/eval/ao.py（v1，P1；v0 为评测时计算的 ao-oracle-v0-grid@1，见 FR-090 v1.6 注）
 def ao_real(E, U, run, cams, envelope, world, tape):
     vals = []
     for e in E:
@@ -2318,7 +2318,7 @@ class BoardVersion:                     # bench/board.v1
 
 ### 16.1 修订依据与摘要
 
-依据 AWR-05 v1.6 的封板收尾批次（第一批 S05、P01、B01 至 B05、B07、R01、G02、F01；第二批 B08、B09、B11、B12、B14、B15、R02、R03、R04、SL1）。阈值不变；参考数字登记在 AWR-05 §24.3 与 §25.3。
+依据 AWR-05 v1.6 的封板收尾批次（第一批 S05、P01、B01 至 B05、B07、R01、G02、F01；第二批 B08、B09、B11、B12、B14、B15、R02、R03、R04、SL1；第七批 E10、A10，AWR-05 §30）。阈值不变；参考数字登记在 AWR-05 §24.3、§25.3 与 §30.3。
 
 ### 16.2 条款修订
 
@@ -2345,6 +2345,8 @@ class BoardVersion:                     # bench/board.v1
 | FR-077、FR-083、§6.7.8 第 3 步、§8.4、§9.1 | catalog 实现入口 `awr.bench.catalog`、注册时优化与比较时点、`catalog-*` 进程命令；BN-57 的实现要求见 §16.6 | R03 |
 | FR-082、§6.7.8 第 4 步、§7.8、§9.1 | 公开切片实现、关键事件来源次序、按 Run 底图与 `slices.json` | R04 |
 | FR-104、M27-AC-024、§6.7.7、§6.8 | `slam_eval` 实现位置与 HKisland03 资源实测；`traj_metrics` 步进缺省改为 0；`slam.mem` 保持暂定 | SL1 |
+| FR-090、§6.7.6 代码注释 | AO_real v0 的 oracle 为评测时计算的 `ao-oracle-v0-grid@1`（M23 在 P0a 不产出 `observability.npz`）；关键时刻取法的后续事项 | A10 |
+| FR-113、FR-114 | 划分登记来源 `configs/bench.d3/split.yaml`；真值子目录 `truth/r<k>/` 与 `HiddenStore` 只处理顶层文件的后续事项；dmax 开发数据根与 lab 数据根 | E10 |
 
 ### 16.3 调度口径（B04）
 

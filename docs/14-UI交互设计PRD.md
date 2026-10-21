@@ -5091,13 +5091,13 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 | CL-ZH-03 | 中文 | 无条件性能数字：出现"帧/s""点/s""倍""ms""fps"而同句无硬件或条件词（A40、单卡、Tier、分辨率、档、在…上） | warning（对外页面为 error） | 术语表与参数表中的单位列 |
 | CL-ZH-04 | 中文 | 称谓：D1 视图以"沙盘"称呼、"沙盘"与"沙盒"混用 | error | `ui/lab/**` 的"事件沙盘" |
 | CL-EN-01 | 英文 | 禁用词：awesome、amazing、blazing、lightning-fast、super、magic、revolutionary、game-changing、cutting-edge、world-class、best-in-class、first-ever、seamless、effortless、insanely、!（句末） | error | 引用的外部专有名词 |
-| CL-EN-02 | 英文 | 标题与按钮 sentence case（首词首字母大写，其余小写，专有名词除外） | warning | 专有名词词表 `tools/lint/copy-proper-nouns.txt` |
+| CL-EN-02 | 英文 | 标题与按钮 sentence case（首词首字母大写，其余小写，专有名词除外） | warning | 专有名词词表 `tools/lint/copy-proper-nouns.txt`（v1.6，L05 更正：该文件不存在，专有名词表为 `tools/lint/copy-lint.mjs` 中的 `PROPER_PHRASES` 与 `PROPER_WORDS`，已加入 'Sandbox API'） |
 | CL-EN-03 | 英文 | 无条件性能数字（与 CL-ZH-03 同口径） | warning（对外页面为 error） | 同上 |
 | CL-ALL-01 | 全部 | emoji 与禁用字形（沿用 `no-emoji.mjs` 的字符集） | error | 无 |
 | CL-ALL-02 | 全部 | 产品名写法：正文中出现 `ANet-Drone4D`（URL 与包名除外） | error | URL、代码、包名 |
 | CL-ALL-03 | 全部 | 交付称谓（v1.6，AWR-05 §7.10、ADR-194）：以主版本号 2 指代下一大版本（`Drone4D 2.0`、`Drone4D v2`、`Drone4D 2` 后接非数字、"2.0 版"、"二代"、"新一代 Drone4D"），以及 `D3.5`、`D3 Plus` | error | 第三方许可与软件版本号（Apache License 2.0、Apache-2.0、glTF 2.0、OAuth 2.0）；契约与协议版本号（`board.v2`、`wire.v2`、`1.3.0`）；本项目已发布的版本号（"0.2.0 版本"）；引用外部文献原题 |
 
-扫描范围：`apps/web/src/app/i18n/{zh-CN,en}.json`、`README.md`、`README.zh-CN.md`、公开站落地页与关于页、GitHub 仓库 About 与 topics（`tools/release/repo-meta.json`）、release notes、`CITATION.cff`、数据集发布页（`README` 与 `GENERATORS.md`）、`drone4d-camera` 文档、OpenAPI 描述（`bench.openapi.snapshot.json` 的 `summary` 与 `description`）。基线例外在 `tools/lint/copy-lint.baseline.json` 逐条登记（文件、键、规则、理由、登记人），P0b 出口前清零（D3-AC-46、D3-AC-23）。
+扫描范围：`apps/web/src/app/i18n/{zh-CN,en}.json`、`README.md`、`README.zh-CN.md`、公开站落地页与关于页、GitHub 仓库 About 与 topics（`tools/release/repo-meta.json`）、release notes、`CITATION.cff`、数据集发布页（`README` 与 `GENERATORS.md`）、`drone4d-camera` 文档、OpenAPI 描述（`bench.openapi.snapshot.json` 的 `summary` 与 `description`）。v1.6（L05）：扫描范围由 `tools/lint/copy-lint.scope.json` 在缺省范围外追加：D3 lab 分片词典 `apps/web/src/app/i18n/lab/*.json`；`/lab/` 公开构建 `apps/web/src/app/lab-public/` 下的全部 `i18n/*.json` 与模板 `lab-public/index.html`；原因码文案 `reasons.zh-CN.gen.json`；OpenAPI 快照 `packages/contracts/rest/openapi.snapshot.json`、`packages/contracts/rest/sandbox.openapi.snapshot.json` 与 `packages/contracts/bench/openapi/bench.openapi.snapshot.json`（bench 快照路径以此为准）；数据集发布包的 README 与 GENERATORS 模板（`tools/release/`，属 P3，目录不存在时跳过）。扫描文件 27 个，语言按文件名判定。基线例外在 `tools/lint/copy-lint.baseline.json` 逐条登记（文件、键、规则、理由、登记人），P0b 出口前清零（D3-AC-46、D3-AC-23）。
 
 规则编号对照（v1.6，L01）：本表的 CL-* 编号为设计编号；`tools/lint/copy-lint.mjs` 的实现编号为 COPY-01 至 COPY-10（含义见 AWR-05 §7.10），基线登记、`<!-- copy-lint-allow COPY-xx 理由 -->` 放行注释与 lint 输出一律使用实现编号。对照如下：
 
@@ -5369,7 +5369,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | `apps/web/src/viewport/layers/{actors,worldMesh}.tsx`（新，M06） | P1 背景演员实例化图层与舞台网格图层；`LayerId` 增补经扩展点 14 | M06（WP-D3-17、21） | `viewport/layers/targets.tsx`、`pointcloud.tsx`；r2 原型 `.cache/research/d3/r2-glb-world/web/index.html`（GLTFLoader + meshopt + KTX2 加载） |
 | `apps/web/src/lib/demo.ts`、`app/router/table.ts`、落地页与导航入口 | 扩展点 15：`VITE_AWR_LAB_PUBLIC` 与 `VITE_AWR_LAB_ONLY` | M15（WP-D3-27） | D2 `DEMO_ROUTES`、`installRoutes` |
 | `apps/web/src/app/i18n/{zh-CN,en}.json` | §21.19 新键；扩展点 17 的 D2 发布面复核 | M15（WP-D3-13） | 文案键生成脚本 |
-| `tools/lint/copy-lint.mjs`、`copy-lint.baseline.json`、`copy-proper-nouns.txt`（新，M00） | §21.15.7 | M00、M15（WP-D3-13） | `tools/lint/no-emoji.mjs` 的扫描框架 |
+| `tools/lint/copy-lint.mjs`、`copy-lint.baseline.json`、`copy-proper-nouns.txt`（新，M00；v1.6，L05：`copy-proper-nouns.txt` 未建，专有名词表在 `copy-lint.mjs` 中；扫描范围配置为 `copy-lint.scope.json`） | §21.15.7 | M00、M15（WP-D3-13） | `tools/lint/no-emoji.mjs` 的扫描框架 |
 | `tools/shadcn/icons/inventory.mjs` | §21.17.2 新 key | M15 | D1 生成器 |
 | `apps/web/tests/lab/**`、`apps/web/perf/lab/**`（新） | §21.25 的用例（Playwright `lab/*`） | M15、M16 | `tests/m15/*` 的 FakeSource 夹具；新增 `fake_bench.py`（bench REST 与 lab-gateway 夹具） |
 
