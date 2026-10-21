@@ -996,6 +996,16 @@ export type ReconIr = ReconIrSession | ReconIrEngine | ReconIrRig | ReconIrCamer
  */
 export type Replay = ReplayReplayReq | ReplayReplayRep | ReplayWorkerCmd
 /**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SamplePackV1Sha256".
+ */
+export type SamplePackV1Sha256 = string
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SamplePackV1Metric".
+ */
+export type SamplePackV1Metric = number | null
+/**
  * awr.scenario.v1 scenario file. Scenario JSON (AWR-16 §12, snake_case). Files live in scenarios/<scenario_id>.json (M16); the loader is M10 (V-SC rules, failure 121). Generator parameter sub-schemas gen_<name> follow M10 §6.5.10.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -11584,6 +11594,100 @@ export interface SafetyCodes {
     merge_key: string | null
     d1: 'core' | 'ext' | 'stub'
   }[]
+}
+/**
+ * Internal sample pack (drone4d.bench.sample_pack.v1). D3-AC-56 (sample pack browsable in the internal workspace); AWR-05 §10.2 P0a deliverable; AWR-14 §21.22; AWR-17 §18.8.3, §18.8.4 (contracts 1.3.0, d1 V0.3). One representative run per observation-level group and reference baseline of the formal mbl_e2e round (median-EC seed of repeat 1): event replay (tracks_obs.bin plus the event tape), private-view video of every UAV, raw MCAP, evaluation and run manifest. Written by tools/bench/d3/sample_pack.py to <data_root>/samples/<pack_id>/pack.json; returned by bench-api GET /samples (researcher, {items: [pack...]}); parsed by apps/web/src/ui/lab/replay/samplePack.ts, which tolerates unknown fields. File paths are relative to the run's derived/ directory and are downloaded through BN-54 GET /runs/{rid}/artifacts/{path}. The document never carries seeds or seed indices.
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SamplePackV1".
+ */
+export interface SamplePackV1 {
+  schema: 'drone4d.bench.sample_pack.v1'
+  pack_id: string
+  generated_utc: string
+  /**
+   * Acceptance item served by the pack (D3-AC-56)
+   */
+  acceptance?: string
+  /**
+   * mbl_e2e round id of the source runs
+   */
+  round?: string | null
+  event_id: string
+  event_version: number | null
+  world_id: string | null
+  /**
+   * Current board version of the round
+   */
+  board_version: string | null
+  /**
+   * Board version per observation-level group (l1, l2)
+   */
+  board_versions?: {
+    [k: string]: string | null
+  }
+  source?: {
+    report_sha256?: SamplePackV1Sha256
+    fingerprint?: string | null
+    formal?: boolean | null
+    formal_passed?: boolean | null
+  }
+  samples: SamplePackV1Sample[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SamplePackV1Sample".
+ */
+export interface SamplePackV1Sample {
+  /**
+   * Observation-level group, lower case (l1, l2)
+   */
+  group: string
+  obs_level?: string
+  policy: string
+  run_id: string
+  board_version?: string | null
+  sim_s?: number | null
+  uavs?: string[]
+  metrics: {
+    ec: SamplePackV1Metric
+    eu: SamplePackV1Metric
+    ao: SamplePackV1Metric
+    ce: SamplePackV1Metric
+  }
+  files: SamplePackV1File[]
+}
+/**
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "SamplePackV1File".
+ */
+export interface SamplePackV1File {
+  /**
+   * video: private-view MP4 of one UAV camera; tracks: tracks.v1 observation layer (event replay fleet positions); tape: event tape (tape.bin, tape.json); mcap: raw.mcap; metrics: evaluation.json; manifest: run_manifest.json; slice: Rerun time-window slice
+   */
+  kind: 'video' | 'mcap' | 'metrics' | 'tape' | 'manifest' | 'slice' | 'tracks'
+  /**
+   * Relative to the run's derived/ directory
+   */
+  path: string
+  bytes: number
+  sha256: SamplePackV1Sha256
+  layer?: 'obs' | 'run' | 'agent' | 'truth'
+  media_type?: string
+  uav?: string
+  cam?: string
+  /**
+   * video: encoded frames
+   */
+  frames?: number
+  fps?: number
+  /**
+   * video: simulation time of frame 0; frame i is at t0_ns + i / fps
+   */
+  t0_ns?: number
+  width?: number
+  height?: number
+  duration_s?: number
 }
 /**
  * awr.sandbox.session_state.v1. Topic sandbox/session 1 Hz, sandbox-api only (AWR-17 §17.7.4; source state/sandbox-pool/sessions).

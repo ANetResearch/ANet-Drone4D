@@ -778,6 +778,116 @@
         "x-d3-stage": "P0a"
       }
     },
+    "/api/bench/v1/runs/{rid}/artifacts": {
+      "get": {
+        "description": "BN-53：派生物列表（路径相对 `derived/`）。",
+        "operationId": "artifacts_api_bench_v1_runs__rid__artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Artifacts Api Bench V1 Runs  Rid  Artifacts Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Artifacts",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305
+        ],
+        "x-d3-bn": "BN-53",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
+      }
+    },
+    "/api/bench/v1/runs/{rid}/artifacts/{path}": {
+      "get": {
+        "description": "BN-54：派生物下载（Range、ETag = sha256；已清理 410 `697`；真值层评测员以下 691）。",
+        "operationId": "artifact_api_bench_v1_runs__rid__artifacts__path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Artifact",
+        "x-awr-reasons": [
+          115,
+          301,
+          302,
+          305,
+          309,
+          691,
+          697
+        ],
+        "x-d3-bn": "BN-54",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
+      }
+    },
     "/api/bench/v1/runs/{rid}/evaluation": {
       "get": {
         "operationId": "evaluation_api_bench_v1_runs__rid__evaluation_get",
@@ -1402,6 +1512,35 @@
         "x-d3-bn": "BN-57",
         "x-d3-role": "researcher",
         "x-d3-stage": "P0b"
+      }
+    },
+    "/api/bench/v1/samples": {
+      "get": {
+        "description": "样例包目录（BN-53.samples）：每份 `pack.json` 原样返回，样例按可见性收窄。",
+        "operationId": "samples_api_bench_v1_samples_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Samples Api Bench V1 Samples Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Samples",
+        "x-awr-reasons": [
+          115,
+          301,
+          302
+        ],
+        "x-d3-bn": "BN-53.samples",
+        "x-d3-role": "researcher",
+        "x-d3-stage": "P0a"
       }
     },
     "/api/bench/v1/session": {

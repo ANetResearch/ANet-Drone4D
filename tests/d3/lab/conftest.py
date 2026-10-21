@@ -57,6 +57,9 @@ EXPECTED: dict[tuple[str, str], str] = {
     ("GET", "/runs/{rid}/frames/{uav}/{sensor}:range"): "researcher",
     ("GET", "/runs/{rid}/truth/frames/{uav}/{sensor}/{seq}"): "evaluator",
     ("GET", "/runs/{rid}/truth/event/tape"): "evaluator",
+    ("GET", "/runs/{rid}/artifacts"): "researcher",
+    ("GET", "/runs/{rid}/artifacts/{path}"): "researcher",
+    ("GET", "/samples"): "researcher",
     ("GET", "/runs/{rid}/viewer_url"): "researcher",
     ("GET", "/board"): "invited",
     ("GET", "/board/{track}/entries/{entry_id}"): "invited",
@@ -71,7 +74,7 @@ EXPECTED: dict[tuple[str, str], str] = {
 
 
 def pytest_generate_tests(metafunc) -> None:
-    """`op` × `role`：权限矩阵逐项用例（27 个操作 × 4 类角色）。"""
+    """`op` × `role`：权限矩阵逐项用例（全部已交付操作 × 4 类角色）。"""
     if "op" in metafunc.fixturenames and "role" in metafunc.fixturenames:
         cases = [(op, r) for op in EXPECTED for r in ROLES]
         metafunc.parametrize(("op", "role"), cases, ids=[f"{m} {path} [{r}]" for (m, path), r in cases])

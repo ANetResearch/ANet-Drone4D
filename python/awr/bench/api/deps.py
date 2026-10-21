@@ -96,7 +96,8 @@ ENDPOINTS: tuple[Endpoint, ...] = (
     Endpoint("BN-52", "GET", "/runs/{}/truth/frames/{}/{}/{}", "evaluator", "P0a", (305, 691)),
     Endpoint("BN-52.tape", "GET", "/runs/{}/truth/event/tape", "evaluator", "P0a", (305, 614)),
     Endpoint("BN-53", "GET", "/runs/{}/artifacts", "researcher", "P0a", (305,)),
-    Endpoint("BN-54", "GET", "/runs/{}/artifacts/{}", "researcher", "P0a", (305, 691, 697)),
+    Endpoint("BN-54", "GET", "/runs/{}/artifacts/{}", "researcher", "P0a", (305, 309, 691, 697)),
+    Endpoint("BN-53.samples", "GET", "/samples", "researcher", "P0a"),       # 样例包目录（D3-AC-56；实现增补）
     Endpoint("BN-55", "POST", "/runs/{}/exports", "researcher", "P0a", (691, 685, 689)),
     Endpoint("BN-56", "POST", "/runs/{}/slam_eval", "researcher", "P0b", (642, 649, 684)),
     Endpoint("BN-57", "GET", "/runs/{}/viewer_url", "researcher", "P0b", (694, 305, 300, 213)),
@@ -143,6 +144,8 @@ def _audit(request: Request, p: Principal | None, action: str, **fields) -> None
     rp = getattr(request.scope.get("route"), "path", None)        # 惰性挂载时为路由器内的原始路由（不含前缀）
     if rp is not None and not rp.startswith(PREFIX):
         rp = PREFIX + rp
+    if rp is not None:
+        rp = _CONV.sub(r"{\1}", rp)                                # 路由模板去掉转换器（`{path:path}` → `{path}`），与 role_matrix 同一写法
     auth: BenchAuth = request.app.state.auth
     auth.audit.write(action, principal=p.name if p else None, role=p.role if p else None, via=p.via if p else None,
                      token_id=p.token_id if p else None, method=request.method, route=rp,

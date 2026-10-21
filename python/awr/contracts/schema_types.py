@@ -786,6 +786,13 @@ __all__ = [
     "RunSpecV1World",
     "SafetyCodes",
     "SafetyCodesCodes",
+    "SamplePackV1",
+    "SamplePackV1File",
+    "SamplePackV1Metric",
+    "SamplePackV1Sample",
+    "SamplePackV1SampleMetrics",
+    "SamplePackV1Sha256",
+    "SamplePackV1Source",
     "SandboxSessionState",
     "SandboxSessionStateClock",
     "SandboxSessionStateExpiringOneOf0",
@@ -1347,6 +1354,14 @@ type ReconIr = ReconIrSession | ReconIrEngine | ReconIrRig | ReconIrCameras | Re
 
 # bus/replay.schema.json# Event replay request and reply (evt/<producer>/_replay) and replay-worker control
 type Replay = ReplayReplayReq | ReplayReplayRep | ReplayWorkerCmd
+
+
+# bench/sample_pack.v1.schema.json#/$defs/metric
+type SamplePackV1Metric = float | None
+
+
+# bench/sample_pack.v1.schema.json#/$defs/sha256
+type SamplePackV1Sha256 = str
 
 
 # scenario/scenario.schema.json#/$defs/actions
@@ -8259,6 +8274,69 @@ class SafetyCodesCodes(TypedDict):
     icon: str
     merge_key: str | None
     d1: Literal["core", "ext", "stub"]
+
+
+# bench/sample_pack.v1.schema.json# Internal sample pack (drone4d.bench.sample_pack.v1)
+class SamplePackV1(TypedDict):
+    schema: Literal["drone4d.bench.sample_pack.v1"]
+    pack_id: str
+    generated_utc: str
+    acceptance: NotRequired[str]
+    round: NotRequired[str | None]
+    event_id: str
+    event_version: int | None
+    world_id: str | None
+    board_version: str | None
+    board_versions: NotRequired[dict[str, str | None]]
+    source: NotRequired[SamplePackV1Source]
+    samples: list[SamplePackV1Sample]
+
+
+# bench/sample_pack.v1.schema.json#/$defs/file
+class SamplePackV1File(TypedDict):
+    kind: Literal["video", "mcap", "metrics", "tape", "manifest", "slice", "tracks"]
+    path: str
+    bytes: int
+    sha256: SamplePackV1Sha256
+    layer: NotRequired[Literal["obs", "run", "agent", "truth"]]
+    media_type: NotRequired[str]
+    uav: NotRequired[str]
+    cam: NotRequired[str]
+    frames: NotRequired[int]
+    fps: NotRequired[float]
+    t0_ns: NotRequired[int]
+    width: NotRequired[int]
+    height: NotRequired[int]
+    duration_s: NotRequired[float]
+
+
+# bench/sample_pack.v1.schema.json#/$defs/sample
+class SamplePackV1Sample(TypedDict):
+    group: str
+    obs_level: NotRequired[str]
+    policy: str
+    run_id: str
+    board_version: NotRequired[str | None]
+    sim_s: NotRequired[float | None]
+    uavs: NotRequired[list[str]]
+    metrics: SamplePackV1SampleMetrics
+    files: list[SamplePackV1File]
+
+
+# bench/sample_pack.v1.schema.json#/$defs/sample/properties/metrics
+class SamplePackV1SampleMetrics(TypedDict):
+    ec: SamplePackV1Metric
+    eu: SamplePackV1Metric
+    ao: SamplePackV1Metric
+    ce: SamplePackV1Metric
+
+
+# bench/sample_pack.v1.schema.json#/properties/source
+class SamplePackV1Source(TypedDict):
+    report_sha256: NotRequired[SamplePackV1Sha256]
+    fingerprint: NotRequired[str | None]
+    formal: NotRequired[bool | None]
+    formal_passed: NotRequired[bool | None]
 
 
 # rt/payloads/sandbox_session_state.schema.json# awr.sandbox.session_state.v1

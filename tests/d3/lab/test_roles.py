@@ -15,7 +15,8 @@ import re
 import pytest
 
 PARAMS = {"rid": "run-a000000001", "wid": "oryahovo-crop1", "eid": "abc-crossing", "sid": "sub-aaaaaaaaaa", "track": "std3-l1",
-          "entry_id": "ent-aaaaaaaaaa", "uav": "uav-01", "sensor": "cam0", "seq": "0"}
+          "entry_id": "ent-aaaaaaaaaa", "uav": "uav-01", "sensor": "cam0", "seq": "0",
+          "path": "video/uav-01_cam0.mp4"}
 BODIES = {("POST", "/session/short-token"): {"aud": "frames"}, ("POST", "/submissions"): {},
           ("POST", "/submissions/{sid}/visibility"): {"visibility": "board"}}
 RANK = {"none": -1, "invited": 0, "researcher": 1, "evaluator": 2, "admin": 3}
