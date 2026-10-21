@@ -1,10 +1,11 @@
 """6 种参考策略（r6 §12.3，M26-FR-081，D3-AC-18）：登记表与 r6 实测值、run_spec 派生与契约、补齐的 3 个参考行
 （`hover1_plaza` → `hover_plaza`、`track3_nocomm` → `track_solo`、`track5_share` → 5 机 `track_share`）的确定性与行为
-（合成世界、运动学开发档）。"""
+（合成世界、运动学开发档）；r6 观测设置（ADR-217 决策 (1)）：HFOV 40° 相机覆盖、巡航与跟踪高度、hover 行固定注视。"""
 
 from __future__ import annotations
 
 import copy
+import functools
 import json
 import sys
 from pathlib import Path
@@ -31,10 +32,49 @@ def test_registry_matches_r6_table() -> None:
         ("hover_plaza", 1, True), ("static_guard", 3, True), ("coverage_scan", 3, True), ("track_solo", 3, False), ("track_share", 3, True),
         ("track_share", 5, True)]
     for r in REFERENCE6.values():
-        assert BASELINES[r.name] is POLICIES[r.policy]
+        f = BASELINES[r.name]
+        assert isinstance(f, functools.partial) and f.func is POLICIES[r.policy] and f.keywords == r.params and not f.args
+        assert r.hfov_deg == 40.0                                                # r6 §12.3：HFOV 40°
         pe = r.r6["per_event"]
         assert abs(sum(pe.values()) / len(pe) - r.r6["ec"]) <= 0.01, r.name   # r6 逐事件捕获率均值 = EC（转录核对）
     assert REFERENCE6["lawn3_cover"].r6["ao_real"] == 0.0 and REFERENCE6["lawn3_cover"].r6["ao_pos"] == 0.92
+    # r6 原型 bench.py 的 fleets：Hover alt 60 注视锚点、Lawnmower alt 70、Tracker 岗位 alt 60 跟踪 alt 45
+    assert {n: r.params for n, r in REFERENCE6.items()} == {
+        "hover1_plaza": {"alt_agl_m": 60.0, "gaze": "fixed"}, "hover3_anchors": {"alt_agl_m": 60.0, "gaze": "fixed"},
+        "lawn3_cover": {"alt_agl_m": 70.0}, **{n: {"alt_agl_m": 60.0, "track_alt_agl_m": 45.0} for n in R6_ORDER[3:]}}
+
+
+def test_baseline_observation_params() -> None:
+    """构造参数：巡航高度（机队中心，按机分层并限制在包络内）、注视方式、跟踪高度；缺省与改动前一致。"""
+    from drone4d.baselines.static_guard import StaticGuard
+    from drone4d.baselines.track_share import TrackShare
+
+    def ready(a, uav="uav-02", peers=("uav-01", "uav-03")):
+        a.uav, a.peers, a.alt_range = uav, list(peers), (30.0, 120.0)
+        a.layer = 8.0 * (sorted([uav, *peers]).index(uav) - 0.5 * len(peers))
+        a.alt = a.layered_alt(a.alt_agl_m or a.ALT_AGL_M or 75.0)
+        return a
+
+    assert ready(StaticGuard()).alt == 75.0 and StaticGuard().gaze == "sweep"           # 缺省：包络中值、扫视
+    assert ready(StaticGuard(alt_agl_m=60.0)).alt == 60.0
+    assert ready(StaticGuard(alt_agl_m=60.0), uav="uav-01").alt == 52.0                # 按 uav id 分层 8 m
+    assert ready(StaticGuard(alt_agl_m=30.0), uav="uav-01").layered_alt(30.0) == 32.0  # 限制在包络内（下界 + 2 m）
+    with pytest.raises(ValueError, match="gaze"):
+        StaticGuard(gaze="orbit")
+    sg = ready(StaticGuard(gaze="fixed"))
+    sg.post, sg.stand = (10.0, 20.0), (-20.0, -10.0)
+    assert {sg.mission({"k": k}, [])[1] for k in range(0, 400, 7)} == {(10.0, 20.0)}  # 固定注视候选点
+    sw = ready(StaticGuard())
+    sw.post, sw.stand = (10.0, 20.0), (-20.0, -10.0)
+    assert len({sw.mission({"k": k}, [])[1] for k in range(0, 400, 7)}) == 9            # 3 × 3 扫视
+    tr = ready(TrackShare(alt_agl_m=60.0, track_alt_agl_m=45.0, thermal=False), uav="uav-03", peers=("uav-01", "uav-02"))
+    tr.track = None
+    assert tr.goal_alt() == 68.0
+    tr.track = 0
+    assert tr.goal_alt() == 53.0                                                       # 跟踪期间：45 m + 本机分层
+    plain = ready(TrackShare())
+    plain.track = 0
+    assert plain.goal_alt() == plain.alt == 75.0                                       # 缺省不改变跟踪高度
 
 
 def test_run_spec_policy_enum_covers_registry() -> None:
@@ -49,8 +89,9 @@ def test_reference_run_spec_derivation() -> None:
         rs = reference_run_spec(base, name)
         ref = REFERENCE6[name]
         assert check_reference_spec(rs) == []
-        assert rs["policy"] == {"kind": "reference", "name": name}
+        assert rs["policy"] == {"kind": "reference", "name": name, "params": {"baseline": ref.params}}
         assert len(rs["fleet"]) == ref.n_uav and rs["comm"]["enabled"] is ref.comm
+        assert all(f["sensors"] == [{"sensor_id": "eo", "overrides": {"hfov_deg": 40.0}}] for f in rs["fleet"])   # r6 相机覆盖
         ids = [f["uav_id"] for f in rs["fleet"]]
         assert len(set(ids)) == len(ids) and ids[: min(3, ref.n_uav)] == [f["uav_id"] for f in base["fleet"]][: ref.n_uav]
         assert {k: v for k, v in rs.items() if k not in ("fleet", "policy", "comm")} == {k: v for k, v in base.items() if k not in ("fleet", "policy", "comm")}
@@ -68,6 +109,18 @@ def test_reference_run_spec_derivation() -> None:
     assert len(check_reference_spec(bad)) == 2
     assert check_reference_spec({**five, "policy": {"kind": "image", "name": "track5_share"}}) != []
     assert check_reference_spec(base) == []                                      # 基础策略名不受行约束
+    nop = {**five, "policy": {"kind": "reference", "name": "track5_share"}}       # 缺观测设置
+    assert any("r6 observation" in p for p in check_reference_spec(nop))
+    wide = copy.deepcopy(five)
+    wide["fleet"][4]["sensors"][0]["overrides"]["hfov_deg"] = 60.0
+    assert check_reference_spec(wide) == ["track5_share: uav-05 requires camera override hfov_deg = 40"]
+    keep = {**base, "fleet": [{**base["fleet"][0], "sensors": [{"sensor_id": "lidar0", "enabled": False},
+                                                              {"sensor_id": "eo", "overrides": {"role": "agent"}}]}],
+            "policy": {"kind": "reference", "name": "track_share", "params": {"decision": {"mode": "fixed"}}}}
+    h1 = reference_run_spec(keep, "hover1_plaza")                                 # 保留基础规格的传感器项与 params
+    assert h1["fleet"][0]["sensors"] == [{"sensor_id": "lidar0", "enabled": False},
+                                         {"sensor_id": "eo", "overrides": {"role": "agent", "hfov_deg": 40.0}}]
+    assert h1["policy"]["params"] == {"decision": {"mode": "fixed"}, "baseline": {"alt_agl_m": 60.0, "gaze": "fixed"}}
 
 
 def test_reference_run_spec_contract_valid() -> None:
@@ -121,7 +174,7 @@ def _fleet(n: int):
     return tuple(FleetEntry(f"uav-{i + 1:02d}", (-20.0 + 10.0 * i, 50.0, 0.0)) for i in range(n))
 
 
-def _run(synth_event, out: Path, name: str, seed: int = 5, dur: float = 30.0) -> tuple[dict, dict]:
+def _run(synth_event, out: Path, name: str, seed: int = 5, dur: float = 30.0, factory=None) -> tuple[dict, dict]:
     """按参考行 `name` 的机数与链路开关运行一回合 → (manifest, {uav: agent})。"""
     from awr.agentsdk.env.core import BenchEnv
     from awr.agentsdk.env.link import CommCfg
@@ -133,7 +186,7 @@ def _run(synth_event, out: Path, name: str, seed: int = 5, dur: float = 30.0) ->
                    comm=CommCfg(enabled=ref.comm), policy={"kind": "reference", "name": name})
     env = BenchEnv(spec)
     obs, infos = env.reset()
-    ags = {u: BASELINES[name]() for u in env.possible_agents}
+    ags = {u: (factory or BASELINES[name])() for u in env.possible_agents}
     for u, a in ags.items():
         a.reset(infos[u]["config"])
     while env.agents:
@@ -165,14 +218,21 @@ def test_added_references_deterministic(synth_event, tmp_path: Path, name: str) 
         (tmp_path / "a/agents/uav-01/obs.sha256").read_bytes()                             # 种子变化则观测或位姿变化
 
 
-def test_hover_plaza_holds_zone_anchor(synth_event, tmp_path: Path) -> None:
-    _, ags = _run(synth_event, tmp_path / "h", "hover1_plaza", dur=60.0)
+@pytest.mark.parametrize("gaze", ["fixed", "sweep"])
+def test_hover_plaza_holds_zone_anchor(synth_event, tmp_path: Path, gaze: str) -> None:
+    from drone4d.baselines import HoverPlaza
+
+    factory = BASELINES["hover1_plaza"] if gaze == "fixed" else HoverPlaza            # 参考行为 r6 设置（固定注视）
+    _, ags = _run(synth_event, tmp_path / "h", "hover1_plaza", dur=60.0, factory=factory)
     a = ags["uav-01"]
     zone = next(x for x in a.anchors if x["kind"] == "zone")                               # 合成事件的 ev_plaza（中心 (0, 60)）
-    assert a.post == tuple(zone["pos_enu_m"][:2])
+    assert a.post == tuple(zone["pos_enu_m"][:2]) and a.gaze == gaze
     assert a.phase == "mission" and abs(a.pos[0] - a.stand[0]) < 3.0 and abs(a.pos[1] - a.stand[1]) < 3.0
     looks = {tuple(r["act"]["gimbal"]["target_enu_m"][:2]) for r in _acts(tmp_path / "h", "uav-01") if r["act"].get("gimbal")}
-    assert (a.post[0], a.post[1]) in looks and len(looks) >= 3                             # 以广场为中心扫视
+    if gaze == "fixed":
+        assert looks == {(a.post[0], a.post[1])}                                           # r6 hover 行：固定注视广场
+    else:
+        assert (a.post[0], a.post[1]) in looks and len(looks) >= 3                         # 以广场为中心扫视
 
 
 def test_track_solo_never_communicates(synth_event, tmp_path: Path) -> None:

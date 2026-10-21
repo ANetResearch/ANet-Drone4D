@@ -5,11 +5,14 @@
 - 参考行由 `drone4d.baselines.REFERENCE6` 登记（r6 行名 → 策略类、机数、链路开关、r6 实测值）；每行的 run_spec 由基础规格经
   `reference_run_spec` 派生，配置可逐行指定起飞点（`pads`）；新增起飞点须机体投影 ±0.7 m 内网格高差 ≤ `pad_check.level_m`、离
   360 s 磁带中全部演员（含背景人群）的轨迹 ≥ `pad_check.clear_m`；
-- 每行 × 每个种子一个运行（`proto_board._one`：Env 与评测同一路径，产出 `<out>/runs/<行>-s<种子>/evaluation.json`）；
+- 每行 × 每个种子一个运行（`_job`，与 `proto_board._one` 同一 Env 与评测路径，保留参考行的 `policy.params`，产出 `<out>/runs/<行>-s<种子>/evaluation.json`）；
 - 判定：每行 EC 均值与 r6 EC 之差 ≤ `criteria.ec_mean_abs_diff_max`；覆盖扫描行（`criteria.coverage_row`）AO_real 均值 ≤
   `ao_real_max` 且 AO_pos 均值 ≥ `ao_pos_min`。`crop-handoff-001` 含 r6 的 4 类关键事件（`zone_pass` 即 r6 的"车辆经过"，
   `event_type_map`），总体 EC 直接对照；逐事件捕获率按类型列出供诊断，不参与判定；
-- 报告核对运行的磁带 `content_sha256` 与世界 `contentVersion`（`expect`），物理档非 realistic 时标注 `dev`（不作正式结论）。
+- 报告核对运行的磁带 `content_sha256` 与世界 `contentVersion`（`expect`），物理档非 realistic 时标注 `dev`（不作正式结论）；
+- 观测设置（ADR-217 决策 (1)，配置 `observation`）：参考行按 r6 §12.3 的观测设置运行——L1 相机 HFOV 40°（run_spec 相机覆盖，
+  运行清单 `camera`）、巡航高度与注视方式（策略构造参数，`policy.params.baseline`）。配置值须与 `REFERENCE6` 登记一致（`load_config`），
+  报告逐运行核对运行清单的相机与策略参数、评测的 oracle 相机型号，不符时判不通过（`verdict.observation_ok`）。
 
 子命令：
   specs   写出 6 行 run_spec（`<out>/specs/<行>.run_spec.json`）并核对与登记一致
@@ -30,7 +33,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import math
 import sys
@@ -50,7 +52,8 @@ SCHEMA = "drone4d.bench.r6_ec.v1"
 CONFIG_SCHEMA = "drone4d.bench.r6_ec_config.v1"
 R6_TYPES = ("proximity_encounter", "board_vehicle", "enter_building", "vehicle_pass")
 
-__all__ = ["CONFIG_SCHEMA", "SCHEMA", "check_pads", "load_config", "main", "mean_sd_ci", "reeval", "report", "row_specs", "summarize_row"]
+__all__ = ["CONFIG_SCHEMA", "SCHEMA", "check_pads", "load_config", "main", "mean_sd_ci", "observation_check", "observation_problems", "reeval",
+           "report", "row_specs", "summarize_row"]
 
 
 # ------------------------------------------------------------------ 配置与规格
@@ -63,12 +66,38 @@ def load_config(path: Path) -> dict:
     unknown = [r for r in cfg["rows"] if r not in REFERENCE6]
     if unknown:
         raise ValueError(f"{path}: rows not in REFERENCE6: {unknown}")
+    probs = observation_problems(cfg)
+    if probs:
+        raise ValueError(f"{path}: observation setting differs from REFERENCE6: {probs}")
     for r, pads in (cfg.get("pads") or {}).items():
         if r not in cfg["rows"]:
             raise ValueError(f"{path}: pads given for unknown row {r}")
         if len(pads) != REFERENCE6[r].n_uav:
             raise ValueError(f"{path}: {r} needs {REFERENCE6[r].n_uav} pads, got {len(pads)}")
     return cfg
+
+
+def observation_problems(cfg: dict) -> list[str]:
+    """配置的观测设置（`observation.camera_hfov_deg`、`observation.params`）与 `REFERENCE6` 登记逐行比对 → 问题列表。"""
+    obs = cfg.get("observation") or {}
+    if not obs:
+        return ["observation is missing (ADR-217)"]
+    out = []
+    for r in cfg["rows"]:
+        ref = REFERENCE6[r]
+        if float(obs.get("camera_hfov_deg", -1)) != ref.hfov_deg:
+            out.append(f"{r}: camera_hfov_deg {obs.get('camera_hfov_deg')} != {ref.hfov_deg:g}")
+        got = (obs.get("params") or {}).get(r)
+        if got != ref.params:
+            out.append(f"{r}: params {got} != {ref.params}")
+    return out
+
+
+def camera_model_ref(hfov_deg: float) -> str:
+    """覆盖后的 L1 相机型号（Env `CameraModel.with_overrides` 同口径）。"""
+    from awr.agentsdk.env.camera import CameraModel
+
+    return CameraModel().with_overrides({"hfov_deg": float(hfov_deg)}).model_ref
 
 
 def config_sha256(path: Path) -> str:
@@ -134,15 +163,50 @@ def check_pads(pads: list[dict], world, tape, *, level_m: float, clear_m: float,
 
 
 # ------------------------------------------------------------------ 运行
-def _proto_board():
-    spec = importlib.util.spec_from_file_location("_d3_proto_board", Path(__file__).with_name("proto_board.py"))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def _job(job: dict) -> dict:
-    return _proto_board()._one(job)
+    """单个（参考行, 种子）运行：与 `proto_board._one` 相同的 Env 与评测路径，但保留参考行规格的 `policy`（含 `params.baseline`，
+    进入运行清单与运行哈希；`proto_board` 只保留策略名）。隔离容器方式由平台镜像以 `--baseline <r6 行>` 启动，观测设置由
+    `BASELINES[<r6 行>]` 绑定。"""
+    for p in (ROOT / "python", ROOT / "tools/sdk/drone4d/src"):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    from drone4d.baselines import BASELINES
+    from drone4d.runner import run_episode
+
+    from awr.agentsdk.env.core import BenchEnv, _open_world
+    from awr.agentsdk.env.spec import EnvSpec
+    from awr.agentsdk.env.tapecheck import is_formal
+    from awr.bench.eval.evaluator import evaluate_run
+
+    rs, pol, seed, out = job["spec"], job["policy"], job["seed"], Path(job["out"])
+    if (rs.get("policy") or {}).get("name") != pol:
+        raise ValueError(f"spec policy {rs.get('policy')} is not row {pol}")
+    if job.get("duration_s"):
+        rs = {**rs, "duration_s": float(job["duration_s"])}
+    run_dir = out / "runs" / f"{pol}-s{seed}"
+    ev_path = run_dir / "evaluation.json"
+    if ev_path.exists():
+        return {"policy": pol, "seed": seed, "run_dir": str(run_dir), "skipped": True}
+    gz = {k: v for k, v in job["gz"].items() if v is not None}
+    if gz:
+        gz.setdefault("name", f"d3-gz-{job['tag']}-{pol}-s{seed}")
+    run_id = f"{job['tag']}-{pol}-s{seed}"
+    if job["agents"] == "container":
+        from awr.bench.runner import run_job
+
+        r = run_job(rs, policy=rs["policy"], seed=seed, run_id=run_id, run_dir=run_dir, worlds_root=Path(job["worlds_root"]),
+                    events_root=Path(job["events_root"]), physics=job["physics"], gz=gz, agent_image=job["agent_image"])
+        return {"policy": pol, "seed": seed, "run_dir": str(run_dir), "skipped": False, "run_wall_s": r["run_wall_s"], "eval_wall_s": r["eval_wall_s"],
+                "pose_sha256": r["pose_sha256"], "components": r["components"]}
+    spec = EnvSpec.from_run_spec(rs, run_id=run_id, seed=seed, worlds_root=Path(job["worlds_root"]), events_root=Path(job["events_root"]),
+                                 out_dir=run_dir, physics=job["physics"], gz=gz)
+    t0 = time.time()
+    m = run_episode(BenchEnv(spec), lambda _u: BASELINES[pol]())
+    t1 = time.time()
+    doc = evaluate_run(run_dir, spec.event_dir, _open_world(spec.world_dir, formal=is_formal(spec)))
+    ev_path.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return {"policy": pol, "seed": seed, "run_dir": str(run_dir), "skipped": False, "run_wall_s": round(t1 - t0, 1),
+            "eval_wall_s": round(time.time() - t1, 1), "pose_sha256": m.get("pose_sha256"), "components": doc["components"]}
 
 
 def run_all(cfg: dict, out: Path, *, events_root: Path, worlds_root: Path, rows: list[str] | None = None, seeds: list[int] | None = None,
@@ -294,7 +358,25 @@ def summarize_row(name: str, evals: list[dict], type_map: dict[str, str]) -> dic
 
 def _run_inputs(run_dir: Path) -> dict:
     m = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8")) if (run_dir / "manifest.json").exists() else {}
-    return {"tier": m.get("tier"), "physics": m.get("physics") or (m.get("spec") or {}).get("physics")}
+    return {"tier": m.get("tier"), "physics": m.get("physics") or (m.get("spec") or {}).get("physics"), "camera": m.get("camera"),
+            "params": ((m.get("policy") or {}).get("params") or {}).get("baseline")}
+
+
+def observation_check(name: str, run: str, inputs: dict, ev: dict, cfg: dict) -> list[str]:
+    """一个运行的观测设置是否为配置值：运行清单的相机（视场、型号）、策略参数与评测 oracle 的相机型号 → 问题列表。"""
+    obs = cfg["observation"]
+    hfov = float(obs["camera_hfov_deg"])
+    ref = camera_model_ref(hfov)
+    cam = inputs.get("camera") or {}
+    out = []
+    if cam.get("hfov_deg") != hfov or cam.get("model_ref") != ref:
+        out.append(f"{run}: camera {cam.get('model_ref')} hfov {cam.get('hfov_deg')} != {ref} hfov {hfov:g}")
+    if inputs.get("params") != obs["params"][name]:
+        out.append(f"{run}: policy.params.baseline {inputs.get('params')} != {obs['params'][name]}")
+    om = (ev.get("ao") or {}).get("oracle", {}).get("camera_models")
+    if om != [ref]:
+        out.append(f"{run}: AO oracle camera {om} != [{ref}]")
+    return out
 
 
 def report(cfg: dict, out: Path, *, config_path: Path | None = None, events_root: Path | None = None, worlds_root: Path | None = None,
@@ -302,7 +384,7 @@ def report(cfg: dict, out: Path, *, config_path: Path | None = None, events_root
     """汇总 `<out>/runs/` 并判定（不运行仿真）。"""
     crit = cfg["criteria"]
     type_map = dict(cfg.get("event_type_map") or {})
-    rows, missing, tiers, oracle = [], [], set(), set()
+    rows, missing, tiers, oracle, obs_probs = [], [], set(), set(), []
     for name in cfg["rows"]:
         evals = []
         for s in cfg["seeds"]:
@@ -314,7 +396,9 @@ def report(cfg: dict, out: Path, *, config_path: Path | None = None, events_root
             ev = json.loads(p.read_text(encoding="utf-8"))
             evals.append(ev)
             oracle.add(json.dumps(ev["ao"].get("oracle"), sort_keys=True))
-            tiers.add(_run_inputs(rd)["tier"] or "")
+            ri = _run_inputs(rd)
+            tiers.add(ri["tier"] or "")
+            obs_probs += observation_check(name, rd.name, ri, ev, cfg)
         rows.append(summarize_row(name, evals, type_map))
     for r in rows:
         r["ec_pass"] = r["ec"]["mean"] is not None and abs(r["d_ec"]) <= crit["ec_mean_abs_diff_max"] + 1e-9
@@ -340,16 +424,19 @@ def report(cfg: dict, out: Path, *, config_path: Path | None = None, events_root
     dev = physics != ["realistic"]
     pads_ok = None if pads is None else all(p["ok"] for p in pads)
     ec_ok = all(r["ec_pass"] for r in rows)
+    obs_ok = not obs_probs
     doc = {"schema": SCHEMA, "ac": cfg.get("ac", "D3-AC-18"), "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "config": {"path": str(config_path) if config_path else None, "sha256": config_sha256(config_path) if config_path else None},
            "event": cfg["event"], "obs_level": cfg.get("obs_level"), "seeds": list(cfg["seeds"]), "physics_tiers": physics, "dev": dev,
            "inputs": inputs, "expect": exp, "inputs_ok": inputs_ok, "oracle": [json.loads(o) for o in sorted(oracle)],
-           "event_type_map": type_map, "criteria": crit, "pads": pads, "rows": rows, "missing_runs": missing,
+           "event_type_map": type_map, "criteria": crit, "observation": cfg["observation"], "observation_problems": obs_probs[:50],
+           "pads": pads, "rows": rows, "missing_runs": missing,
            "coverage": {"row": crit["coverage_row"], "ao_real": cov["ao_real"]["mean"] if cov else None,
                         "ao_pos": cov["ao_pos"]["mean"] if cov else None, "ao_pos_los": cov["ao_pos_los"]["mean"] if cov else None,
                         "pass": ao_ok},
-           "verdict": {"ec_pass": ec_ok, "ao_pass": ao_ok, "complete": not missing, "inputs_ok": inputs_ok, "pads_ok": pads_ok, "formal": not dev,
-                       "pass": ec_ok and ao_ok and not missing and inputs_ok is not False and pads_ok is not False}}
+           "verdict": {"ec_pass": ec_ok, "ao_pass": ao_ok, "complete": not missing, "inputs_ok": inputs_ok, "pads_ok": pads_ok,
+                       "observation_ok": obs_ok, "formal": not dev,
+                       "pass": ec_ok and ao_ok and not missing and inputs_ok is not False and pads_ok is not False and obs_ok}}
     return doc
 
 
@@ -365,7 +452,7 @@ def format_table(doc: dict) -> str:
                      f"   {r['eu_f1']['mean']:.3f}  {r['ce_gain']['mean']:+.3f} | {pe}")
     v = doc["verdict"]
     lines.append(f"verdict: EC {v['ec_pass']}  AO {v['ao_pass']}  complete {v['complete']}  inputs {v['inputs_ok']}  pads {v['pads_ok']}  "
-                 f"formal {v['formal']}  -> {'PASS' if v['pass'] else 'FAIL'}")
+                 f"observation {v['observation_ok']}  formal {v['formal']}  -> {'PASS' if v['pass'] else 'FAIL'}")
     return "\n".join(lines)
 
 

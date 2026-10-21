@@ -10,7 +10,8 @@
 - `AO_pos_los`：τ 时各机所在位置（不看相机指向）的视点质量 ÷ oracle 最优质量（含静态网格遮挡）；
 - `AO_pos`：同上但不计遮挡（只看距离），÷ 无遮挡 oracle 最优质量。
 oracle：以参与者质心为中心、半径 `fx · 1.6 / 16`、10 m 网格与任务高度包络（10 m 一档）的候选视点上取最大质量；视点可见性以
-身体 5 点视线计。P0a 的 oracle 按本 Run 的标称相机计算（版本 `ao-oracle-v0-grid@1`），P1 的 v1 按机队相机与云台范围计算。
+身体 5 点视线计。P0a 的 oracle 按本 Run 的标称相机计算（版本 `ao-oracle-v0-grid@1`；相机覆盖的运行按覆盖后的相机，ADR-217，
+`evaluator.run_camera`），P1 的 v1 按机队相机与云台范围计算。
 
 实际质量的检索按列数组进行（D3-AC-18 评测耗时）：识别真值行一次性转为按 `seq` 排序的（机、演员、质量）列，每个关键时刻以二分
 定位 τ ± 1 s 的行区间，再按（机、演员）分组取最大值；与逐行扫描的定义逐值一致。
@@ -132,8 +133,9 @@ def key_moments(e: dict, present: np.ndarray, n_ticks: int, interval_s: tuple[fl
 
 
 def active_observation(E: list[dict], U: list[str], run, world, *, fx: float, envelope_agl_m: tuple[float, float], th=TH,
-                       truth_rows: list[dict] | None = None, present: dict[str, np.ndarray] | None = None) -> dict:
-    """→ `evaluation.json` 的 `ao`。`truth_rows` 为事件真值行（缺省按声明窗口取关键时刻）；`present` 为 {演员: (n_ticks + 1,) 在场}
+                       truth_rows: list[dict] | None = None, present: dict[str, np.ndarray] | None = None,
+                       camera_model: str = "d4d_eo1080@1") -> dict:
+    """→ `evaluation.json` 的 `ao`。`camera_model` 为 oracle 相机的型号（与 `fx` 对应，记入 `oracle.camera_models`）。`truth_rows` 为事件真值行（缺省按声明窗口取关键时刻）；`present` 为 {演员: (n_ticks + 1,) 在场}
     （评测器已算出时传入，缺省按磁带逐 tick 计算）。"""
     info = {a["id"]: a for a in run.tape.actors_info()}
     pos = np.asarray(run.fleet["pos"], np.float64)
@@ -173,5 +175,5 @@ def active_observation(E: list[dict], U: list[str], run, world, *, fx: float, en
             pos_only.append(min(1.0, float(_quality(Vu, persons, fx, world, False, th).max()) / max(q_star_nl, 1e-9)))
     return {"ao_real": float(np.mean(real)) if real else 0.0, "ao_pos_los": float(np.mean(pos_los)) if pos_los else 0.0,
             "ao_pos": float(np.mean(pos_only)) if pos_only else 0.0,
-            "oracle": {"version": ORACLE_VERSION, "camera_models": ["d4d_eo1080@1"], "grid_m": th.oracle_grid_m, "alt_step_m": th.oracle_alt_step_m,
+            "oracle": {"version": ORACLE_VERSION, "camera_models": [camera_model], "grid_m": th.oracle_grid_m, "alt_step_m": th.oracle_alt_step_m,
                        "envelope_agl_m": [float(envelope_agl_m[0]), float(envelope_agl_m[1])]}}

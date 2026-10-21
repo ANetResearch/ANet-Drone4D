@@ -12,6 +12,11 @@
 规格先经 `resolve_run_spec` 规范化：`clock_profile` 由档名回填为四元组 `{name, main_hz, physics_hz, l1_hz}`（四元组而非名称进入
 哈希，同名不同频率的档位不会混为同一配置），`physics` 取实际生效值。`versions` 为字符串映射：平台镜像摘要（`image.gz`、
 `image.sensorsvc`、`image.env`、`image.agent`）与运行环境版本（`env`、`python`、`numpy`）；任一镜像摘要变化即改变运行哈希。
+
+相机覆盖（ADR-217 决策 (1)，D3-AC-18 r6 对照）：`fleet[].sensors[]` 中 `sensor_id = eo` 的 `overrides.hfov_deg` 为 L1 标称相机的
+水平视场覆盖（`EnvSpec.camera`，`camera_model()` 派生相机）；全部机体须一致；只允许用于不排名运行与 r6 参考行
+（`policy = {kind: reference, name: <r6 行名>}`，`REFERENCE_ROWS`），排名的其他运行（提交镜像、基础基线）一律拒绝，不进入排名赛道。
+覆盖随 run_spec 进入 `config_sha256` 与运行哈希。
 """
 
 from __future__ import annotations
@@ -23,10 +28,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from awr.agentsdk.env.camera import CameraModel
 from awr.agentsdk.env.link import CommCfg
 
-__all__ = ["CONFIG_EXCLUDE", "ENV_VERSION", "SPEC_EXCLUDE", "DecisionCfg", "EnvSpec", "FleetEntry", "config_sha256", "platform_versions",
-           "resolve_clock_profile", "resolve_run_spec", "run_hash", "spec_sha256"]
+__all__ = ["CAMERA_SENSOR_ID", "CONFIG_EXCLUDE", "ENV_VERSION", "REFERENCE_ROWS", "SPEC_EXCLUDE", "DecisionCfg", "EnvSpec", "FleetEntry",
+           "camera_override", "config_sha256", "platform_versions", "resolve_clock_profile", "resolve_run_spec", "run_hash", "spec_sha256"]
 
 ENV_VERSION = "d3-env@0.3.0"
 # M27-FR-007：不影响结果的键（spec 另保留 seed_commit）；seeds、seed_count 在展开为单个 Run 后不再属于该 Run 的规格
@@ -35,6 +41,26 @@ CONFIG_EXCLUDE = frozenset({"run_id", "experiment_id", "experiment", "seed", "se
 SPEC_EXCLUDE = frozenset({"run_id", "experiment_id", "experiment", "seed", "seeds", "seed_count", "submitted_by", "created_unix_ns",
                           "retention", "priority"})
 IMAGE_KEYS = ("gz", "sensorsvc", "env", "agent")
+CAMERA_SENSOR_ID = "eo"                      # L1 标称相机的 sensor_id（`CameraModel.sensor_id`）
+# r6 §12.3 参考行（M26-FR-081，SDK `drone4d.baselines.REFERENCE6` 的行名）：相机覆盖允许用于这些参考行（ADR-217）
+REFERENCE_ROWS = frozenset({"hover1_plaza", "hover3_anchors", "lawn3_cover", "track3_nocomm", "track3_share", "track5_share"})
+
+
+def camera_override(rs: Mapping) -> dict:
+    """run_spec → L1 标称相机覆盖 `{"hfov_deg": 度}`（无覆盖为空）；各机覆盖不一致、或排名运行而策略不是 r6 参考行时 ValueError。"""
+    per = []
+    for f in rs.get("fleet") or []:
+        ov = next((dict(x.get("overrides") or {}) for x in f.get("sensors", []) if x.get("sensor_id") == CAMERA_SENSOR_ID), {})
+        per.append({k: float(ov[k]) for k in ("hfov_deg",) if k in ov})
+    if not any(per):
+        return {}
+    if any(p != per[0] for p in per):
+        raise ValueError("camera override must be the same for every UAV")
+    pol = rs.get("policy") or {}
+    if bool(rs.get("ranked", False)) and not (pol.get("kind") == "reference" and pol.get("name") in REFERENCE_ROWS):
+        raise ValueError("a camera override is only allowed for unranked runs and r6 reference rows (ADR-217)")
+    CameraModel().with_overrides(per[0])                    # 键与取值范围
+    return per[0]
 
 
 def resolve_clock_profile(cp: str | Mapping | None) -> dict:
@@ -150,6 +176,11 @@ class EnvSpec:
     run_spec: dict | None = None                 # 规范规格（resolve_run_spec）；None 时由本对象字段合成
     seed_commit: str | None = None               # 排名运行的种子承诺值（M27 生成）；不排名运行缺省以 seed 代替
     versions: dict = field(default_factory=platform_versions)
+    camera: dict = field(default_factory=dict)  # L1 标称相机覆盖（`{"hfov_deg": 度}`，ADR-217）；空为标称相机
+
+    def camera_model(self) -> CameraModel:
+        """本运行的 L1 相机：标称相机按 `camera` 覆盖派生。"""
+        return CameraModel().with_overrides(self.camera)
 
     # ------------------------------------------------------------------ 运行身份（M27-FR-007）
     def resolved(self) -> dict:
@@ -159,7 +190,8 @@ class EnvSpec:
         return resolve_run_spec({
             "world": {"id": Path(self.world_dir).name}, "event": {"id": Path(self.event_dir).parent.name, "dir": Path(self.event_dir).name},
             "fleet": [{"uav_id": f.uav, "vehicle_ref": f.vehicle_ref, "start": {"kind": "pose", "pos_enu_m": list(f.pos_enu_m),
-                                                                                  "yaw_rad": f.yaw_rad, "airborne": f.airborne}}
+                                                                                  "yaw_rad": f.yaw_rad, "airborne": f.airborne},
+                       **({"sensors": [{"sensor_id": CAMERA_SENSOR_ID, "overrides": dict(self.camera)}]} if self.camera else {})}
                       for f in self.fleet],
             "obs_level": self.obs_level, "noise": self.noise, "duration_s": self.duration_s, "ranked": self.ranked,
             "policy": {**self.policy, "params": {**(self.policy.get("params") or {}), "decision": self.decision.config()}},
@@ -206,4 +238,4 @@ class EnvSpec:
                    duration_s=rs.get("duration_s"), decision=DecisionCfg(**dec), comm=comm, ranked=bool(rs.get("ranked", False)),
                    policy=dict(rs.get("policy", {"kind": "sdk"})), out_dir=out_dir, gz=dict(gz or {}), l2=l2,
                    clock_profile=resolve_clock_profile(rs.get("clock_profile")), run_spec=resolve_run_spec(rs), seed_commit=seed_commit,
-                   versions=platform_versions(img))
+                   versions=platform_versions(img), camera=camera_override(rs))

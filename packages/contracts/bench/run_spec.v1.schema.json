@@ -117,6 +117,12 @@
                     "mount_preset": {
                       "type": "string"
                     },
+                    "hfov_deg": {
+                      "type": "number",
+                      "minimum": 10,
+                      "maximum": 120,
+                      "description": "Horizontal field of view override for the L1 nominal camera (sensor_id eo). Allowed only for unranked runs and r6 reference rows; ranked runs of other policies are refused (ADR-217)"
+                    },
                     "role": {
                       "enum": [
                         "agent",

@@ -3,7 +3,9 @@
 - 对照口径：6 个参考行与登记表一致、12 个种子、判据逐条对照 §11 原文（EC 均值差 ≤ 0.1；覆盖扫描 AO_real v0 ≤ 0.05 且 AO_pos ≥ 0.85）；
   `crop-handoff-001` 含 r6 的 4 类关键事件（`zone_pass` 即"车辆经过"），总体 EC 可直接对照（§24.5 F-02）；
 - 6 行 run_spec 派生：契约有效、机数与链路与登记一致、track5_share 采用配置的起飞点；
-- 汇总与判定：构造评测文件覆盖通过、EC 超差、AO 超限、缺运行、非 realistic 档、磁带不符各分支；
+- 观测设置（ADR-217 决策 (1)）：配置与 `REFERENCE6` 一致、派生规格带相机覆盖与 `policy.params.baseline`，运行清单与评测的相机逐运行核对；
+- 汇总与判定：构造评测文件覆盖通过、EC 超差、AO 超限、缺运行、非 realistic 档、磁带不符、观测设置不符各分支；
+- 单个运行（`_job`，合成世界、运动学开发档）：运行清单记录相机覆盖与策略参数，评测 oracle 按覆盖相机计算；
 - 起飞点核对（世界包与已编译事件，`AWR_EVENTS_ROOT`）；
 - 正式结果（`AWR_R6_EC_DIR=<r6_ec.py run 的输出目录>`，dmax 实测）：报告判定通过。
 """
@@ -47,6 +49,11 @@ def test_config_matches_ac18_text(cfg) -> None:
     assert c == {"ec_mean_abs_diff_max": 0.1, "coverage_row": "lawn3_cover", "ao_real_max": 0.05, "ao_pos_min": 0.85}
     assert REFERENCE6[c["coverage_row"]].policy == "coverage_scan"
     assert cfg["expect"]["tape_content_sha256"] == TAPE_SHA
+    obs = cfg["observation"]                                                   # ADR-217 决策 (1)：r6 §12.3 观测设置
+    assert obs["camera_hfov_deg"] == 40.0 and r6.observation_problems(cfg) == []
+    assert obs["params"]["lawn3_cover"] == {"alt_agl_m": 70.0}
+    assert all(obs["params"][r] == {"alt_agl_m": 60.0, "gaze": "fixed"} for r in ("hover1_plaza", "hover3_anchors"))
+    assert all(obs["params"][r] == {"alt_agl_m": 60.0, "track_alt_agl_m": 45.0} for r in ("track3_nocomm", "track3_share", "track5_share"))
 
 
 def test_event_has_all_r6_event_types(cfg) -> None:
@@ -71,7 +78,9 @@ def test_row_specs_derivation_and_contract(cfg) -> None:
         ref = REFERENCE6[name]
         assert not [e.message for e in v.iter_errors(rs)], name
         assert check_reference_spec(rs) == []
-        assert rs["policy"] == {"kind": "reference", "name": name} and len(rs["fleet"]) == ref.n_uav and rs["comm"]["enabled"] is ref.comm
+        assert rs["policy"] == {"kind": "reference", "name": name, "params": {"baseline": cfg["observation"]["params"][name]}}
+        assert len(rs["fleet"]) == ref.n_uav and rs["comm"]["enabled"] is ref.comm
+        assert all(f["sensors"] == [{"sensor_id": "eo", "overrides": {"hfov_deg": 40.0}}] for f in rs["fleet"])
         assert rs["seeds"] == cfg["seeds"] and rs["obs_level"] == "L1" and rs["physics"] == "realistic"
         if name not in cfg["pads"]:
             assert rs == {**reference_run_spec(base, name), "seeds": cfg["seeds"]}
@@ -91,6 +100,12 @@ def test_config_rejects_bad_rows(tmp_path: Path) -> None:
     p.write_text(txt.replace(", [80.0, -96.0, 0.0]]", "]"), encoding="utf-8")
     with pytest.raises(ValueError, match="pads"):
         r6.load_config(p)
+    p.write_text(txt.replace("camera_hfov_deg: 40.0", "camera_hfov_deg: 60.0"), encoding="utf-8")
+    with pytest.raises(ValueError, match="observation"):
+        r6.load_config(p)
+    p.write_text(txt.replace("lawn3_cover: {alt_agl_m: 70.0}", "lawn3_cover: {alt_agl_m: 75.0}"), encoding="utf-8")
+    with pytest.raises(ValueError, match="observation"):
+        r6.load_config(p)
 
 
 # ------------------------------------------------------------------ 汇总与判定（构造评测文件）
@@ -98,7 +113,8 @@ def _ev(ec_events: dict[str, bool], *, ao_real: float, ao_pos: float, f1: float 
     evs = [{"id": f"e_{t}", "type": t, "captured": c, "coverage": 0.5 if c else 0.0, "by": ["uav-01"] if c else []} for t, c in ec_events.items()]
     ec = sum(ec_events.values()) / len(ec_events)
     return {"ec": {"value": ec, "coverage": ec / 2, "events": evs}, "excluded": [], "ranked_valid": True,
-            "ao": {"ao_real": ao_real, "ao_pos": ao_pos, "ao_pos_los": ao_pos, "oracle": {"version": "ao-oracle-v0-grid@1"}},
+            "ao": {"ao_real": ao_real, "ao_pos": ao_pos, "ao_pos_los": ao_pos,
+                   "oracle": {"version": "ao-oracle-v0-grid@1", "camera_models": ["d4d_eo1080@1+hfov40"]}},
             "eu": {"f1": f1}, "ce": {"gain": 0.0, "redundancy": 1.2, "flight_km": 1.0, "comm_kb": 0.0}}
 
 
@@ -117,7 +133,11 @@ def _fake_runs(out: Path, cfg: dict, *, tier: str = "realistic", tweak: dict | N
             d = out / "runs" / f"{name}-s{s}"
             d.mkdir(parents=True, exist_ok=True)
             (d / "evaluation.json").write_text(json.dumps(doc))
-            (d / "manifest.json").write_text(json.dumps({"tier": tier, "physics": tier}))
+            man = {"tier": tier, "physics": tier, "camera": {"model_ref": "d4d_eo1080@1+hfov40", "hfov_deg": 40.0},
+                   "policy": {"kind": "reference", "name": name, "params": {"baseline": dict(ref.params)}}}
+            if tweak and f"{name}:manifest" in tweak:
+                man = tweak[f"{name}:manifest"](man, i)
+            (d / "manifest.json").write_text(json.dumps(man))
 
 
 def _roots(tmp: Path, cfg: dict, sha: str = TAPE_SHA) -> tuple[Path, Path]:
@@ -176,6 +196,74 @@ def test_report_fail_branches(tmp_path: Path, cfg) -> None:
     assert doc2["missing_runs"] == ["track5_share-s12"] and not v["complete"]
     assert doc2["dev"] and not v["formal"] and doc2["physics_tiers"] == ["kinematic"]
     assert v["inputs_ok"] is False and not v["pass"]
+
+
+def test_report_observation_mismatch(tmp_path: Path, cfg) -> None:
+    """观测设置不符（标称相机运行、旧 A10 的无参数运行、评测 oracle 相机不符）→ observation_ok = False，判不通过。"""
+    def nominal(man, i):                        # hover1_plaza 种子 1：标称相机（无 camera）
+        if i == 0:
+            man.pop("camera")
+        return man
+
+    def no_params(man, i):                      # lawn3_cover：旧 A10 运行（策略只有名称）
+        man["policy"] = {"kind": "reference", "name": "lawn3_cover"}
+        return man
+
+    def oracle60(doc, i):
+        if i == 1:
+            doc["ao"]["oracle"]["camera_models"] = ["d4d_eo1080@1"]
+        return doc
+
+    out = tmp_path / "out"
+    _fake_runs(out, cfg, tweak={"hover1_plaza:manifest": nominal, "lawn3_cover:manifest": no_params, "track5_share": oracle60})
+    er, wr = _roots(tmp_path, cfg)
+    doc = r6.report(cfg, out, events_root=er, worlds_root=wr)
+    probs = doc["observation_problems"]
+    assert any(p.startswith("hover1_plaza-s1: camera None") for p in probs)
+    assert sum(p.startswith("lawn3_cover-s") and "policy.params.baseline None" in p for p in probs) == 12
+    assert any(p.startswith("track5_share-s2: AO oracle camera ['d4d_eo1080@1']") for p in probs)
+    v = doc["verdict"]
+    assert v["ec_pass"] and v["ao_pass"] and v["observation_ok"] is False and not v["pass"]
+    assert "observation False" in r6.format_table(doc)
+
+
+# ------------------------------------------------------------------ 单个运行（合成世界、运动学开发档）
+@pytest.fixture(scope="module")
+def synth_event(tmp_path_factory):
+    import importlib.util as ilu
+
+    sp = ilu.spec_from_file_location("_env_conftest_r6", ROOT / "tests/d3/env/conftest.py")
+    mod = ilu.module_from_spec(sp)
+    sp.loader.exec_module(mod)
+    yield from mod.synth_event_at(tmp_path_factory)
+
+
+def test_job_records_observation_setting(synth_event, tmp_path: Path, cfg) -> None:
+    """`_job` 以参考行规格运行：运行清单记录 HFOV 40° 相机与 `policy.params.baseline`，agent 配置的相机内参为覆盖值，
+    评测 oracle 按覆盖相机；报告的逐运行核对通过，hover 行固定注视（云台目标只有一个）。"""
+    w, ev = synth_event
+    base = json.loads((ROOT / cfg["base_run_spec"]).read_text(encoding="utf-8"))
+    base = {**base, "world": {"id": w.name}, "event": {"id": ev.parent.name, "version": 1},
+            "fleet": [{**base["fleet"][0], "start": {"kind": "pose", "pos_enu_m": [-10.0, 50.0, 0.0], "yaw_deg": 90.0}}]}
+    rs = reference_run_spec(base, "hover1_plaza")
+    job = {"spec": rs, "policy": "hover1_plaza", "seed": 3, "out": str(tmp_path), "tag": "t", "physics": "kinematic", "gz": {},
+           "worlds_root": str(w.parent), "events_root": str(ev.parent.parent), "agents": "inproc", "duration_s": 60.0}
+    r = r6._job(job)
+    rd = tmp_path / "runs" / "hover1_plaza-s3"
+    assert not r["skipped"] and r["run_dir"] == str(rd)
+    man = json.loads((rd / "manifest.json").read_text())
+    assert man["camera"]["model_ref"] == "d4d_eo1080@1+hfov40" and man["camera"]["hfov_deg"] == 40.0
+    assert man["policy"] == {"kind": "reference", "name": "hover1_plaza", "params": {"baseline": {"alt_agl_m": 60.0, "gaze": "fixed"}}}
+    acfg = json.loads((rd / "agents/uav-01/config.json").read_text())
+    assert next(s for s in acfg["sensors"] if s["kind"] == "camera")["K"][0] == pytest.approx(2637.6, abs=0.1)
+    ev_doc = json.loads((rd / "evaluation.json").read_text())
+    assert r6.observation_check("hover1_plaza", rd.name, r6._run_inputs(rd), ev_doc, cfg) == []
+    looks = {tuple(json.loads(x)["act"]["gimbal"]["target_enu_m"][:2]) for x in (rd / "agents/uav-01/acts.jsonl").read_text().splitlines()
+             if json.loads(x)["act"].get("gimbal")}
+    assert len(looks) == 1                                                       # 固定注视
+    assert r6._job(job)["skipped"]                                               # 已有 evaluation.json：断点续跑
+    with pytest.raises(ValueError, match="is not row"):
+        r6._job({**job, "policy": "hover3_anchors"})
 
 
 def test_mean_sd_ci() -> None:

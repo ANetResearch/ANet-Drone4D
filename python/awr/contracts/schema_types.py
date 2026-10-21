@@ -8191,6 +8191,7 @@ class RunSpecV1FleetSensorsOverrides(TypedDict):
     height_px: NotRequired[int]
     fps: NotRequired[str]
     mount_preset: NotRequired[str]
+    hfov_deg: NotRequired[float]
     role: NotRequired[Literal["agent", "slam"]]
 
 

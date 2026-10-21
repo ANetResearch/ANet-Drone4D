@@ -109,7 +109,7 @@ class BenchEnv:
             self.world, self.world_query = world, world_query_info(world)
             if is_formal(spec) and self.world_query["kind"] == "dsm":
                 raise WorldQueryFallbackRefused(Path(spec.world_dir), "a DSM world query was injected into a formal run")
-        self.cam = cam or CameraModel()
+        self.cam = cam or spec.camera_model()          # L1 相机：标称相机或 run_spec 相机覆盖（ADR-217）
         self.lim = limits or Limits()
         self.task = task_from_event(Path(spec.event_dir))
         self.duration_s = float(spec.duration_s or self.task["brief"]["duration_s"])
@@ -541,6 +541,8 @@ class BenchEnv:
                     "world_query": self.world_query}
         if not self.spec.ranked or self.spec.seed_commit:     # 运行身份（M27-FR-007）；排名运行须有 M27 的种子承诺值
             manifest.update(self.spec.identity())
+        if self.cam != CameraModel():                       # L1 相机不是标称相机（相机覆盖，ADR-217）：评测器的 AO oracle 按此相机计算
+            manifest["camera"] = self.cam.manifest()
         if self.l2 is not None:                             # 网格 LiDAR 后端（cpu：Open3D 参考；warp：M25 GPU 产品路径）
             manifest["l2"] = {"lidar_backend": getattr(self.l2, "lidar_backend", None)}
         if svc is not None:

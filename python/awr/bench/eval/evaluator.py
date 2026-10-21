@@ -6,7 +6,10 @@
 输出供开发榜与诊断使用（正式榜由 `aggregate.ranked_row` 排除）。
 
 只在可观测区计分（M27-FR-089、D3-AC-04）：发生在 quality 层不完整区域的注释（事件真值 `in_incomplete_region`）与窗口内参与者
-全部在建筑内的注释由 `ec.exclusions` 剔除，不进入 EC、AO、CE 的分母，在 `excluded[]` 中单列；EU 的事件集不变。"""
+全部在建筑内的注释由 `ec.exclusions` 剔除，不进入 EC、AO、CE 的分母，在 `excluded[]` 中单列；EU 的事件集不变。
+
+AO oracle 的相机（§5.6.5"按本 Run 的标称相机"）：取运行清单的 `camera`（Env 相机覆盖时写入，ADR-217），没有时为标称相机
+`d4d_eo1080@1`（HFOV 60°）；无覆盖的运行评测结果不变。"""
 
 from __future__ import annotations
 
@@ -27,7 +30,7 @@ from awr.bench.eval.run import load_run
 from awr.bench.eval.safety import safety
 from awr.bench.eval.thresholds import EVALUATOR_VERSION, ORACLE_VERSION, TH, THRESHOLDS_VERSION
 
-__all__ = ["ZERO_REASONS", "check_run_manifest", "dev_seed_commit", "evaluate_run", "run_manifest", "write_run_manifest"]
+__all__ = ["ZERO_REASONS", "check_run_manifest", "dev_seed_commit", "evaluate_run", "run_camera", "run_manifest", "write_run_manifest"]
 
 ZERO_REASONS = ("actor_penetration",)          # 使结果作废、分量全部记 0 的无效原因（M27-FR-161）
 TICK_S = 0.1
@@ -49,10 +52,20 @@ def _actor_stats(run, ident, present_all: dict[str, np.ndarray]) -> dict:
     return out
 
 
-def evaluate_run(run_dir: Path, event_dir: Path, world, *, fx: float | None = None, diag: dict | None = None) -> dict:
-    """→ evaluation.v1；`diag` 若给出则填入诊断量（归一化中间量、阈值、计数），不进入评测文档。"""
+def run_camera(env_manifest: dict) -> tuple[float, str]:
+    """运行的 L1 相机 → (fx 像素, 型号)：运行清单 `camera`（相机覆盖）或标称相机。"""
     from awr.agentsdk.env.camera import CameraModel
 
+    cam = env_manifest.get("camera")
+    if cam:
+        return float(cam["fx"]), str(cam["model_ref"])
+    c = CameraModel()
+    return c.fx, c.model_ref
+
+
+def evaluate_run(run_dir: Path, event_dir: Path, world, *, fx: float | None = None, diag: dict | None = None) -> dict:
+    """→ evaluation.v1；`diag` 若给出则填入诊断量（归一化中间量、阈值、计数），不进入评测文档。`fx` 给出时覆盖运行相机的焦距
+    （诊断与敏感性分析用）。"""
     run = load_run(Path(run_dir), Path(event_dir))
     E = [e for e in scored_events(Path(event_dir)) if e["type"] in run.task["scored_event_types"]]
     U = run.uavs
@@ -66,8 +79,9 @@ def evaluate_run(run_dir: Path, event_dir: Path, world, *, fx: float | None = No
     Es = [e for e in E if not e.get("excluded")]                  # 只在可观测区计分：EC、AO、CE 的分母（M27-FR-089）
     ec, cov, per_event = event_capture(Es, U, ident, present, run.n_ticks, inside=inside)
     eu = event_understanding(run.reports, E, run)
-    ao = active_observation(Es, U, run, world, fx=fx or CameraModel().fx, envelope_agl_m=tuple(run.task["altitude_envelope_agl_m"]),
-                            truth_rows=truth_rows, present=present)
+    cam_fx, cam_ref = run_camera(run.manifest)
+    ao = active_observation(Es, U, run, world, fx=fx or cam_fx, envelope_agl_m=tuple(run.task["altitude_envelope_agl_m"]),
+                            truth_rows=truth_rows, present=present, camera_model=cam_ref)
     ce_raw, ce, ce_norm = collaborative(Es, U, ident, present, run.n_ticks, run)
     sf = safety(run, world)
     invalid = []

@@ -11420,6 +11420,10 @@ export interface RunSpecV1 {
            */
           fps?: string
           mount_preset?: string
+          /**
+           * Horizontal field of view override for the L1 nominal camera (sensor_id eo). Allowed only for unranked runs and r6 reference rows; ranked runs of other policies are refused (ADR-217)
+           */
+          hfov_deg?: number
           role?: 'agent' | 'slam'
         }
       }[]
@@ -11456,6 +11460,10 @@ export interface RunSpecV1 {
            */
           fps?: string
           mount_preset?: string
+          /**
+           * Horizontal field of view override for the L1 nominal camera (sensor_id eo). Allowed only for unranked runs and r6 reference rows; ranked runs of other policies are refused (ADR-217)
+           */
+          hfov_deg?: number
           role?: 'agent' | 'slam'
         }
       }[]

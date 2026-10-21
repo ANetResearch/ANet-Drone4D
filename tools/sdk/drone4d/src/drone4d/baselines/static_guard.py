@@ -2,7 +2,10 @@
 到位后云台以候选点为中心按 3 × 3 网格（±20 m）每 2 s 切换一次视点扫视。广播与通信不使用。
 
 P0b 目标搜索：简报给出搜索先验（`brief.search`）时，候选观察位改为先验中心（gmm 分量按权重降序、grid 为质量最高且相距 ≥ 40 m
-的格心，`drone4d.baselines.prior`），第 i 架机（按 uav id 排序）取第 i mod n 个。"""
+的格心，`drone4d.baselines.prior`），第 i 架机（按 uav id 排序）取第 i mod n 个。
+
+注视方式（构造参数 `gaze`，ADR-217 决策 (1)）：`sweep`（缺省）为上述 3 × 3 扫视；`fixed` 为到位后云台固定注视候选点（r6 §12.3
+hover 行的设置，不扫视）。"""
 
 from __future__ import annotations
 
@@ -13,10 +16,17 @@ from drone4d.baselines.common import BaselineAgent
 __all__ = ["StaticGuard"]
 
 SWEEP = [(0, 0), (20, 0), (20, 20), (0, 20), (-20, 20), (-20, 0), (-20, -20), (0, -20), (20, -20)]
+GAZES = ("sweep", "fixed")
 
 
 class StaticGuard(BaselineAgent):
     name = "static_guard"
+
+    def __init__(self, *, gaze: str = "sweep", **kw) -> None:
+        if gaze not in GAZES:
+            raise ValueError(f"gaze must be one of {GAZES}, got {gaze!r}")
+        super().__init__(**kw)
+        self.gaze = gaze
 
     def reset(self, config: dict) -> None:
         super().reset(config)
@@ -32,6 +42,8 @@ class StaticGuard(BaselineAgent):
         self.stand = (self.post[0] - 30.0, self.post[1] - 30.0)          # 斜视站位：俯角约 60°
 
     def mission(self, obs, inbox):
+        if self.gaze == "fixed":
+            return self.stand, self.post
         j = (obs["k"] // 20) % len(SWEEP)
         dx, dy = SWEEP[j]
         return self.stand, (self.post[0] + dx, self.post[1] + dy)

@@ -19,6 +19,18 @@ rows: [hover1_plaza, hover3_anchors, lawn3_cover, track3_nocomm, track3_share, t
 pads:
   track5_share: [[76.0, -78.0, 0.0], [76.0, -82.0, 0.0], [76.0, -86.0, 0.0], [80.0, -92.0, 0.0], [80.0, -96.0, 0.0]]
 pad_check: {level_m: 0.03, clear_m: 15.0}   # 只核对相对基础机队新增的起飞点
+# 观测设置（ADR-217 决策 (1)；r6 §12.3 与原型 bench.py 的 fleets）：L1 相机 HFOV 40°（run_spec fleet[].sensors[eo].overrides.hfov_deg，
+# 只用于参考行与不排名运行，不进入排名赛道），巡航高度 hover 与跟踪行 60 m、跟踪时 45 m、覆盖扫描行 70 m（机队中心高度，按机 8 m 分层），
+# hover 行固定注视；须与 drone4d.baselines.REFERENCE6 登记一致（load_config 核对），report 逐运行核对运行清单与评测的相机
+observation:
+  camera_hfov_deg: 40.0
+  params:
+    hover1_plaza: {alt_agl_m: 60.0, gaze: fixed}
+    hover3_anchors: {alt_agl_m: 60.0, gaze: fixed}
+    lawn3_cover: {alt_agl_m: 70.0}
+    track3_nocomm: {alt_agl_m: 60.0, track_alt_agl_m: 45.0}
+    track3_share: {alt_agl_m: 60.0, track_alt_agl_m: 45.0}
+    track5_share: {alt_agl_m: 60.0, track_alt_agl_m: 45.0}
 # r6 逐事件表的类型名：crop-handoff-001 的 cross_C（zone_pass，车辆 C 经过广场 25 m 缓冲区）即 r6 的"车辆经过"
 event_type_map: {zone_pass: vehicle_pass}
 criteria:

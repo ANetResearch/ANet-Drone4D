@@ -1,5 +1,9 @@
 """L1 标称相机与云台（M26 §6.6.3；P0a）：针孔 1920 × 1080、HFOV 60°、无畸变，挂载于机头下方三轴云台。
 
+相机覆盖（ADR-217 决策 (1)，D3-AC-18）：run_spec `fleet[].sensors[]` 中 `sensor_id = eo` 的 `overrides.hfov_deg` 改变水平视场（分辨率、
+云台与挂载不变），只用于参考行（r6 行名）与不排名运行（`EnvSpec.from_run_spec` 校验）；覆盖后的型号记为 `<标称型号>+hfov<度>`，
+运行清单 `camera` 字段记录实际相机，评测器的 AO oracle 按该相机计算（M27 `evaluator.run_camera`）。
+
 云台角相对机体航向：`yaw_deg` 逆时针为正（与 ENU 偏航同口径），`pitch_deg` 向上为正（−90 为正下视）；指令角按
 `rate_max_dps` 每控制步限速趋近。光学帧取 forward / right / down 三个 ENU 单位向量。
 """
@@ -7,11 +11,14 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
-__all__ = ["CameraModel", "Gimbal", "cam_axes", "project"]
+__all__ = ["CAMERA_OVERRIDE_KEYS", "HFOV_RANGE_DEG", "CameraModel", "Gimbal", "cam_axes", "project"]
+
+CAMERA_OVERRIDE_KEYS = frozenset({"hfov_deg"})      # L1 标称相机可覆盖的键（ADR-217）
+HFOV_RANGE_DEG = (10.0, 120.0)                      # 覆盖视场的取值范围（与 run_spec 契约一致）
 
 
 @dataclass(frozen=True)
@@ -35,6 +42,24 @@ class CameraModel:
     def K(self) -> list[float]:
         f = self.fx
         return [f, 0.0, self.width / 2, 0.0, f, self.height / 2, 0.0, 0.0, 1.0]
+
+    def with_overrides(self, ov: dict | None) -> CameraModel:
+        """按相机覆盖（`{"hfov_deg": 度}`）派生：视场改为覆盖值，型号记为 `<标称型号>+hfov<度>`；空覆盖返回自身。"""
+        if not ov:
+            return self
+        bad = set(ov) - CAMERA_OVERRIDE_KEYS
+        if bad:
+            raise ValueError(f"camera overrides {sorted(bad)} are not supported (only {sorted(CAMERA_OVERRIDE_KEYS)})")
+        h = float(ov["hfov_deg"])
+        if not HFOV_RANGE_DEG[0] <= h <= HFOV_RANGE_DEG[1]:
+            raise ValueError(f"camera override hfov_deg {h} is outside {list(HFOV_RANGE_DEG)}")
+        if h == self.hfov_deg:
+            return self
+        return replace(self, hfov_deg=h, model_ref=f"{self.model_ref.split('+', 1)[0]}+hfov{h:g}")
+
+    def manifest(self) -> dict:
+        """运行清单 `camera`：实际 L1 相机的型号、分辨率、视场与焦距（像素）。"""
+        return {"model_ref": self.model_ref, "width": self.width, "height": self.height, "hfov_deg": self.hfov_deg, "fx": self.fx}
 
     def config(self) -> dict:
         """agent_config.v1 `sensors[]` 条目。"""

@@ -19,6 +19,9 @@ L2 与 L2-depth 下 agent_config 含 `kind = thermal` 的传感器即启用，`T
 轨迹关联（按 (时刻, 传感器, 帧序号) 分帧），report 证据优先取相机帧，轨迹在窗口内只有热像仪帧时才引用热像仪帧。
 外观比对：上衣颜色距离 < 45，且双方都有下装颜色时下装颜色距离也 < 45；类别须与简报目标一致（车辆目标的 `top_rgb` 即车身颜色）。
 每条 report 的证据取窗口终点及以前的最近 3 个检测（同一轨迹保留首 3 个与最近 64 个检测供回溯）。
+
+巡航高度（构造参数 `alt_agl_m`，ADR-217 决策 (1)）：机队中心高度，缺省取任务包络中值；各机按 uav id 排序以 `LAYER_M` 分层，
+限制在包络内（距上下界各 2 m）。r6 参考行（`drone4d.baselines.reference.REFERENCE6`）以该参数取 r6 §12.3 的高度。
 """
 
 from __future__ import annotations
@@ -188,8 +191,9 @@ class BaselineAgent(DroneAgent):
     ALT_AGL_M: float | None = None
     CRUISE_MPS = 8.0
 
-    def __init__(self, *, thermal: bool | None = None) -> None:
+    def __init__(self, *, thermal: bool | None = None, alt_agl_m: float | None = None) -> None:
         self.use_thermal = thermal
+        self.alt_agl_m = alt_agl_m
 
     def reset(self, config: dict) -> None:
         super().reset(config)
@@ -197,10 +201,10 @@ class BaselineAgent(DroneAgent):
         self.peers = config["peers"]
         b = config["brief"]
         self.area = [tuple(p) for p in b["area"]["polygon_enu_m"]]
-        lo, hi = b["area"]["alt_agl_range_m"]
+        self.alt_range = tuple(float(x) for x in b["area"]["alt_agl_range_m"])
         fleet = sorted([self.uav, *self.peers])
-        layer = LAYER_M * (fleet.index(self.uav) - 0.5 * (len(fleet) - 1))   # 高度分层：同高度交叉航线会机间碰撞
-        self.alt = min(max((self.ALT_AGL_M or 0.5 * (lo + hi)) + layer, lo + 2.0), hi - 2.0)
+        self.layer = LAYER_M * (fleet.index(self.uav) - 0.5 * (len(fleet) - 1))   # 高度分层：同高度交叉航线会机间碰撞
+        self.alt = self.layered_alt(self.alt_agl_m or self.ALT_AGL_M or 0.5 * sum(self.alt_range))
         self.anchors = b["anchors"]
         self.targets = [t["appearance"].get("top_rgb") for t in b["targets"]]
         self.target_bottoms = [t["appearance"].get("bottom_rgb") for t in b["targets"]]
@@ -256,13 +260,22 @@ class BaselineAgent(DroneAgent):
         if look is not None:
             self.looks = [p for p in self.looks if self.t_ns - p[0] <= 10_000_000_000] + [(self.t_ns, (float(look[0]), float(look[1])))]
         extra = self.messages(obs)
-        z = self.ground_ref + self.alt
+        z = self.ground_ref + self.goal_alt()
         g = gimbal_look_at(self.cam, (look[0], look[1], self.ground_ref)) if look is not None else None
         nav_cmd = nav_goto((goal[0], goal[1], z), self.CRUISE_MPS) if goal is not None else None
         return act(obs["k"], nav=nav_cmd, gimbal=g, msgs=(msgs + extra)[:8], report=reports)
 
     def mission(self, obs: dict, inbox: list[dict]):
         raise NotImplementedError
+
+    def layered_alt(self, center: float) -> float:
+        """机队中心高度 → 本机高度：加本机分层偏移，限制在任务包络内（距上下界各 2 m）。"""
+        lo, hi = self.alt_range
+        return min(max(center + self.layer, lo + 2.0), hi - 2.0)
+
+    def goal_alt(self) -> float:
+        """任务阶段 goto 的目标高度（相对起飞点地面）；缺省为巡航高度，派生类可按状态改变（`track_share` 跟踪高度）。"""
+        return self.alt
 
     def on_inbox(self, inbox: list[dict]) -> list[dict]:
         return []
