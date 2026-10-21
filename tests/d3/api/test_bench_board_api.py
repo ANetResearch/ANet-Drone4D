@@ -66,6 +66,31 @@ def test_env_run_listing_and_evaluation(env) -> None:
     assert c.get(f"{P}/runs/{it['run_id']}/evaluation", headers=h_inv).json()["code"] == 115      # 评测结果只对研究员及以上
 
 
+def test_env_run_with_run_manifest_falls_back_to_env_item(env, tmp_path: Path) -> None:
+    """正式 Env 运行同时写 run_manifest.v1（不含 state）与 manifest.json：列表与 BN-43 回退到 env_run_item（K12，B20 后续事项 3）。"""
+    c, h, _ = env
+    base = tmp_path / "d3" / "dataset" / "crop-handoff-001" / "runs"
+    for rid, evaluated in (("crop-handoff-001-track_share-s2", True), ("crop-handoff-001-track_share-s3", False)):
+        run = base / rid
+        run.mkdir(parents=True)
+        (run / "run_manifest.json").write_text(json.dumps({"schema": "drone4d.bench.run_manifest.v1", "run_id": rid, "attempt": 1,
+                                                           "split": "dev", "ranked": True}))
+        (run / "manifest.json").write_text(json.dumps({"schema": "drone4d.bench.env_run.v1", "run_id": rid, "world": "oryahovo-crop1",
+                                                       "policy": {"kind": "reference", "name": "track_share"}, "tier": "gz-sim",
+                                                       "obs_level": "L1", "ranked": True, "fleet": [{"uav": "uav-01"}], "duration_s": 360.0}))
+        if evaluated:
+            (run / "evaluation.json").write_text(json.dumps({"schema": "drone4d.bench.evaluation.v1", **_ev(0.7)}))
+    items = {i["run_id"]: i for i in c.get(f"{P}/runs", headers=h).json()["items"]}
+    s2, s3 = items["crop-handoff-001-track_share-s2"], items["crop-handoff-001-track_share-s3"]
+    assert s2["state"] == "EVALUATED" and s2["kind"] == "bench" and s2["world_id"] == "oryahovo-crop1" and s2["evaluation"]["components"]["ec"] == 0.7
+    assert s3["state"] == "SUCCEEDED" and s3["evaluation"] is None
+    assert c.get(f"{P}/runs/crop-handoff-001-track_share-s2", headers=h).json()["state"] == "EVALUATED"
+    assert c.get(f"{P}/runs/crop-handoff-001-track_share-s3", headers=h).json()["state"] == "SUCCEEDED"
+    assert "UNKNOWN" not in {i["state"] for i in items.values()}
+    assert [i["run_id"] for i in c.get(f"{P}/runs?state=EVALUATED", headers=h).json()["items"]] == [
+        "crop-handoff-001-track_share-s1", "crop-handoff-001-track_share-s2"]
+
+
 def test_board_versions_and_leaderboard(env) -> None:
     c, _h, h_inv = env
     b = c.get(f"{P}/board", headers=h_inv).json()

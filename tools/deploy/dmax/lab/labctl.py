@@ -29,6 +29,7 @@ import socket
 import ssl
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -156,8 +157,15 @@ def unauth_checks(c: Checks, client: Any, base: str, cafile: str | None) -> None
     r = client.get(f"{base}/")
     c.add("root redirects to /lab/runs", r.status_code == 302 and r.headers.get("location", "").endswith("/lab/runs"), status=r.status_code)
     r = client.get(f"{base}/lab/runs")
-    c.add("page without session redirects to login", r.status_code == 302 and "/lab/login?next=/lab/runs" in r.headers.get("location", ""),
+    loc = r.headers.get("location", "")
+    nxt = urllib.parse.parse_qs(urllib.parse.urlsplit(loc).query).get("next")
+    c.add("page without session redirects to login", r.status_code == 302 and "/lab/login?" in loc and nxt == ["/lab/runs"],
           status=r.status_code, location=r.headers.get("location"))
+    deep = "/lab/replay?a=run-a&b=run-b&t=1.5"                      # 查询串随 next 保留（encodeURIComponent，与前端同一口径）
+    r = client.get(f"{base}{deep}")
+    nxt = urllib.parse.parse_qs(urllib.parse.urlsplit(r.headers.get("location", "")).query).get("next")
+    c.add("login redirect keeps path and query in next", r.status_code == 302 and nxt == [deep], status=r.status_code,
+          location=r.headers.get("location"))
     r = client.get(f"{base}/lab/login")
     c.add("login page 200 (html)", r.status_code == 200 and "text/html" in r.headers.get("content-type", ""), status=r.status_code)
     c.add("security headers", all(h in r.headers for h in SECURITY_HEADERS), present=[h for h in SECURITY_HEADERS if h in r.headers])

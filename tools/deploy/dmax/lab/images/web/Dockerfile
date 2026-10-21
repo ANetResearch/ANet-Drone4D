@@ -3,7 +3,7 @@
 # /rerun.cloud.v1alpha1.RerunCloudService/ 转发到回环上的 bench-api、lab-gateway 与 rerun-proxy。配置模板在启动时由官方镜像的
 # envsubst 入口展开（只替换 LAB_ 前缀变量）。
 FROM docker.m.daocloud.io/library/nginx:1.27-alpine
-COPY nginx.conf lab-headers.conf /etc/nginx/
+COPY nginx.conf lab-headers.conf lab-next.js /etc/nginx/
 COPY lab.conf.template /etc/nginx/templates/lab.conf.template
 COPY site/ /usr/share/nginx/lab/
 RUN rm -f /etc/nginx/conf.d/default.conf \

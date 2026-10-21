@@ -16,6 +16,11 @@
 //     无写操作（403 115 role）、他人运行 403 115 invited_scope；
 //   8 越权审计：上述每次 403 在 audit/access-*.jsonl 恰有一条 deny 记录（主体、方法、路径、115），审计文件不含令牌明文。
 // 结果写 `AWR_F09_OUT`（缺省 runs/f09/out；不放在 Playwright 的 outputDir runs/playwright 下，后者每次运行开始时清空）/lab-roles.json。内部构建可由 `AWR_LAB_INTERNAL_DIST` 给出（缺省现场构建）。
+// 已部署模式（K12）：给出 `AWR_LAB_BASE`（如 dmax https://10.253.20.5:18660）、`AWR_LAB_RUN`（工作区内已注册的运行，代替团队运行
+// 作 :rid 路由实例）与四个角色的 bench token（只经环境变量：`AWR_LAB_TOKEN_INVITED`、`AWR_LAB_TOKEN`（研究者）、`AWR_LAB_TOKEN_EVAL`、
+// `AWR_LAB_TOKEN_ADMIN`；主体名与项目按 PRINCIPALS 签发，标题行断言依赖主体名）时改测已部署的工作区，只运行用例 1 至 3（另断言
+// d3_session 带 Secure）；用例 4 至 8 依赖本机栈构造的受管运行、世界、事件与审计目录而跳过。部署上没有受邀成员团队的受管运行，
+// 受邀成员 × :rid 路由的两格记为跳过（目录运行对受邀成员不可见，由用例 7 在本机栈覆盖）。
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -59,6 +64,12 @@ const RUNS: SeedRun[] = [
 ]
 const STATES = ['QUEUED', 'PREPARING', 'RUNNING', 'FINALIZING', 'EVALUATING', 'COMPLETED', 'FAILED', 'CANCELLED'] as const
 const TEAM_RUN = 'run-b000000001'
+/** 已部署的内部工作区（K12）；为 null 时启动本机栈 */
+const REMOTE = process.env.AWR_LAB_BASE?.replace(/\/$/, '') ?? null
+/** :rid 路由的实例：本机栈为受邀成员团队的运行，已部署模式为 AWR_LAB_RUN */
+const RID = REMOTE ? (process.env.AWR_LAB_RUN ?? '') : TEAM_RUN
+/** 已部署模式只运行用例 1 至 3 */
+const needsLocal = () => test.skip(!!REMOTE, 'needs the seeded local stack (managed runs, worlds, events, audit directory)')
 
 // ── 测试栈 ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -174,7 +185,18 @@ function internalDist(tmp: string): string {
   return out
 }
 
+/** 已部署模式：四个角色的 token 只取自环境变量（不写文件与日志） */
+function remoteStack(base: string): Stack {
+  const env = { invited: 'AWR_LAB_TOKEN_INVITED', researcher: 'AWR_LAB_TOKEN', evaluator: 'AWR_LAB_TOKEN_EVAL', admin: 'AWR_LAB_TOKEN_ADMIN' } as const
+  const tokens = Object.fromEntries(Object.entries(env).map(([k, v]) => [k, process.env[v] ?? ''])) as Stack['tokens']
+  tokens.other = process.env.AWR_LAB_TOKEN_OTHER ?? ''
+  const missing = Object.entries(env).filter(([k]) => tokens[k as Role].length < 8).map(([, v]) => v)
+  if (missing.length > 0 || !RID) throw new Error(`AWR_LAB_BASE needs AWR_LAB_RUN and ${missing.join(', ') || 'the role tokens'}`)
+  return { url: base, tokens, dataRoot: '', close: async () => {} }
+}
+
 async function startStack(): Promise<Stack> {
+  if (REMOTE) return remoteStack(REMOTE)
   const tmp = mkdtempSync(join(process.env.AWR_LAB_TMP ?? tmpdir(), 'awr-f09-roles-'))
   const dist = internalDist(tmp)
   const port = await freePort()
@@ -251,9 +273,9 @@ const ROUTES: RouteCase[] = [
   { pattern: '/lab/worlds/:wid', path: '/lab/worlds/oryahovo-crop1', view: 'lab-world', min: 'invited', figure: 'lab-world' },
   { pattern: '/lab/events', path: '/lab/events', view: 'lab-events', min: 'invited', figure: 'lab-events' },
   { pattern: '/lab/runs', path: '/lab/runs', view: 'lab-runs', min: 'invited', figure: 'lab-runs' },
-  { pattern: '/lab/runs/:rid', path: `/lab/runs/${TEAM_RUN}?view=eval`, view: 'lab-wall', min: 'invited', figure: 'lab-wall', eval: 'wall' },
-  { pattern: '/lab/runs/:rid/inspect', path: `/lab/runs/${TEAM_RUN}/inspect?catalog=eval`, view: 'lab-inspect', min: 'invited', eval: 'inspect' },
-  { pattern: '/lab/runs/:rid/lidar', path: `/lab/runs/${TEAM_RUN}/lidar`, view: 'lab-lidar-compare', min: 'researcher', denied: 'lab.lidarCompare.roleDenied' },
+  { pattern: '/lab/runs/:rid', path: `/lab/runs/${RID}?view=eval`, view: 'lab-wall', min: 'invited', figure: 'lab-wall', eval: 'wall' },
+  { pattern: '/lab/runs/:rid/inspect', path: `/lab/runs/${RID}/inspect?catalog=eval`, view: 'lab-inspect', min: 'invited', eval: 'inspect' },
+  { pattern: '/lab/runs/:rid/lidar', path: `/lab/runs/${RID}/lidar`, view: 'lab-lidar-compare', min: 'researcher', denied: 'lab.lidarCompare.roleDenied' },
   { pattern: '/lab/replay', path: '/lab/replay', view: 'lab-replay', min: 'researcher', denied: 'lab.replay.roleDenied', figure: 'lab-replay' },
   { pattern: '/lab/compare', path: '/lab/compare', view: 'lab-compare', min: 'researcher', denied: 'lab.compare.roleDenied' },
   { pattern: '/lab/board', path: '/lab/board', view: 'lab-board', min: 'invited', figure: 'lab-board' },
@@ -276,13 +298,15 @@ test.beforeAll(async ({ browser }) => {
 test.afterAll(async () => {
   for (const c of contexts.values()) await c.close()
   mkdirSync(OUT, { recursive: true })
-  writeFileSync(join(OUT, 'lab-roles.json'), JSON.stringify({ at_utc: new Date().toISOString(), ...result }, null, 1))
+  // 用例失败后 Playwright 换新 worker 继续（已部署模式下其后只有跳过的用例），新 worker 的 result 为空，不覆盖已写出的记录
+  if (Object.keys(result).length > 0) writeFileSync(join(OUT, REMOTE ? 'lab-roles.remote.json' : 'lab-roles.json'),
+    JSON.stringify({ at_utc: new Date().toISOString(), mode: REMOTE ? 'remote' : 'local', base: REMOTE, ...result }, null, 1))
   await st?.close()
 })
 
 /** 新上下文：页面内记录出现过的 Toast 文本（Toast 4 s 后消失，断言不依赖其仍在屏幕上） */
 async function newContext(): Promise<BrowserContext> {
-  const c = await browser0.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1, locale: 'zh-CN' })
+  const c = await browser0.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1, locale: 'zh-CN', ignoreHTTPSErrors: !!REMOTE })
   await c.addInitScript(() => {
     const w = window as unknown as { __f09Toasts: string[] }
     w.__f09Toasts = []
@@ -312,6 +336,9 @@ async function login(page: Page, who: Role | 'other', next = '/lab/runs'): Promi
 /** 每个角色一个已登录的浏览器上下文（会话 Cookie 在上下文内复用） */
 /** 已登录角色的页面收到的 403 响应计数（`主体 方法 路径` → 次数），越权审计用例逐项对照 deny 记录 */
 const observed403 = new Map<string, number>()
+/** 角色的主体名：本机栈为 PRINCIPALS；已部署模式取登录后 GET /session 的 principal（临时 token 可用任意主体名签发） */
+const principalOf = new Map<Role, string>()
+const nameOf = (role: Role): string => principalOf.get(role) ?? PRINCIPALS[role][0]
 
 /** 每个角色一个已登录的浏览器上下文（会话 Cookie 在上下文内复用）；上下文内全部 bench 403 响应计入 observed403 */
 async function as(role: Role): Promise<Page> {
@@ -319,16 +346,20 @@ async function as(role: Role): Promise<Page> {
   if (!c) {
     c = await newContext()
     contexts.set(role, c)
-    const who = PRINCIPALS[role][0]
     c.on('response', (r) => {
       const u = new URL(r.url())
       if (r.status() === 403 && u.pathname.startsWith('/api/bench/')) {
-        const k = `${who} ${r.request().method()} ${u.pathname}`
+        const k = `${nameOf(role)} ${r.request().method()} ${u.pathname}`
         observed403.set(k, (observed403.get(k) ?? 0) + 1)
       }
     })
     const p = await c.newPage()
     await login(p, role)
+    if (REMOTE) {
+      const s = await call(p, 'GET', '/session')
+      expect([s.status, (s.body as { role?: string } | null)?.role]).toEqual([200, role])
+      principalOf.set(role, String((s.body as { principal: string }).principal))
+    }
     await p.close()
   }
   return c.newPage()
@@ -395,7 +426,7 @@ test('路由清单完整；未登录访问全部 /lab 路由跳转登录页并�
     expect(next?.replace(/[?&]t=[\d.]+$/, ''), r.path).toBe(r.path)
     await expect(page.locator('[data-view="lab-login"]')).toBeVisible()
   }
-  for (const p of ['/session', '/runs', '/worlds', '/events', '/submissions', `/runs/${TEAM_RUN}`]) {
+  for (const p of ['/session', '/runs', '/worlds', '/events', '/submissions', `/runs/${RID}`]) {
     const res = await page.request.get(`${st.url}${API}${p}`)
     expect(res.status(), p).toBe(401)
   }
@@ -427,13 +458,15 @@ test('会话：bench token 换取 HttpOnly、SameSite=Strict、12 h 的 d3_sessi
   expect(sess!.httpOnly).toBe(true)
   expect(sess!.sameSite).toBe('Strict')
   expect(sess!.path).toBe('/')
+  if (REMOTE) expect(sess!.secure, 'd3_session must be Secure on the TLS deployment').toBe(true)
   const life = sess!.expires - t0
   expect(life).toBeGreaterThan(43_200 - 120)
   expect(life).toBeLessThanOrEqual(43_200 + 5)
   const session = await call(page, 'GET', '/session')
   expect(session.status).toBe(200)
   const sb = session.body as { principal: string; role: string; iat_unix_ns?: string; exp_unix_ns?: string }
-  expect([sb.principal, sb.role]).toEqual(['alice', 'researcher'])
+  expect(sb.role).toBe('researcher')
+  if (!REMOTE) expect(sb.principal).toBe('alice')
   if (sb.iat_unix_ns && sb.exp_unix_ns) expect((BigInt(sb.exp_unix_ns) - BigInt(sb.iat_unix_ns)) / 1_000_000_000n).toBe(43_200n)
   const store = await page.evaluate(() => JSON.stringify({ ls: { ...localStorage }, ss: { ...sessionStorage }, c: document.cookie, href: location.href }))
   expect(leaks(store), 'token in URL, Web Storage or document.cookie').toBe(false)
@@ -449,13 +482,18 @@ test('会话：bench token 换取 HttpOnly、SameSite=Strict、12 h 的 d3_sessi
 })
 
 test('四类角色 × 全部 /lab 路由：可达或 115 提示，评测视图只对评测员及以上，不发起越权请求，外壳文案过 copy-lint', async () => {
-  test.setTimeout(600_000)
+  // 已部署模式的 :rid 路由是真实采集运行（Viewer 按需取数、观测墙解码真实帧），Tier S 下每格可达 1 至 2 min
+  test.setTimeout(REMOTE ? 2_400_000 : 600_000)
   const matrix: Record<string, Record<string, unknown>> = {}
   const copy: { route: string; role: Role; rule: string; match: string; text: string }[] = []
   for (const role of ROLES) {
     const page = await as(role)
     const log = benchLog(page)
     for (const r of ROUTES) {
+      if (REMOTE && role === 'invited' && r.pattern.startsWith('/lab/runs/:rid') && r.min === 'invited') {
+        ;(matrix[r.path] ??= {})[role] = { skipped: 'no run of the invited team on the deployment' }
+        continue
+      }
       log.length = 0
       await page.goto(st.url + r.path)
       const sec = page.locator(`section[data-view="${r.view}"]`)
@@ -495,7 +533,7 @@ test('四类角色 × 全部 /lab 路由：可达或 115 提示，评测视图�
       expect(bad, `${role} ${r.path} bench 401/403`).toEqual([])
       if (!allowed) expect(log.filter((x) => x.p !== `${API}/session`), `${role} ${r.path} requests behind a 115 notice`).toEqual([])
       if (r.view === 'lab-runs') {
-        const [name] = PRINCIPALS[role]
+        const name = nameOf(role)
         await expect(page.locator('[data-lab-header="runs"]')).toContainText(tz('lab.session', { name, role: tz(`lab.role.${role}`) }))
       }
       const cc = await shellCopyFindings(page, `section[data-view="${r.view}"]`)
@@ -511,6 +549,7 @@ test('四类角色 × 全部 /lab 路由：可达或 115 提示，评测视图�
 })
 
 test('/lab/worlds 与 /lab/worlds/:wid：世界列表、六个标签；/lab/events：受邀成员只见 dev 事件，三道门与原因码', async () => {
+  needsLocal()
   const page = await as('researcher')
   await page.goto(`${st.url}/lab/worlds`)
   const row = page.locator('[data-figure="lab-worlds"] [data-row-key="oryahovo-crop1"]')
@@ -552,6 +591,7 @@ test('/lab/worlds 与 /lab/worlds/:wid：世界列表、六个标签；/lab/even
 })
 
 test('/lab/runs 状态机：八态徽标、排队位置、重启副文、原因码、唯一 hot 行与状态侧栏', async () => {
+  needsLocal()
   const page = await as('researcher')
   await page.goto(`${st.url}/lab/runs`)
   await expect(rowOf(page, 'run-a000000001')).toBeVisible()
@@ -581,6 +621,7 @@ test('/lab/runs 状态机：八态徽标、排队位置、重启副文、原因�
 })
 
 test('取消：排队运行立即取消，运行中经取消中倒计时到已取消，批量取消；重试：同一 run_id 新 attempt', async () => {
+  needsLocal()
   test.setTimeout(180_000)
   const page = await as('researcher')
   await page.goto(`${st.url}/lab/runs`)
@@ -640,6 +681,7 @@ test('取消：排队运行立即取消，运行中经取消中倒计时到已�
 const denials: { who: string; method: string; path: string; why: string | null }[] = []
 
 test('数据范围：研究者对他人项目只读（403 115 project_scope），评测员不限项目；受邀成员只见本团队 dev 运行且无写操作', async () => {
+  needsLocal()
   // 研究者 alice：他人项目运行无操作，直接调用 403
   const res = await as('researcher')
   await res.goto(`${st.url}/lab/runs`)
@@ -695,6 +737,7 @@ test('数据范围：研究者对他人项目只读（403 115 project_scope）�
 })
 
 test('越权审计：每次 403 恰有一条 deny 记录（主体、方法、路径、115），审计文件不含令牌明文', async () => {
+  needsLocal()
   expect(denials.length, 'runs after the data scope case').toBeGreaterThan(0)
   const dir = join(st.dataRoot, 'audit')
   const files = readdirSync(dir).filter((f) => /^access-\d{8}\.jsonl$/.test(f))

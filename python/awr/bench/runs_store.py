@@ -32,6 +32,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+from awr.bench.dbconn import SerialConnection
 from awr.contracts.reasons import REASONS
 
 __all__ = ["ACTIVE", "CANCEL_REQUESTABLE", "CANCEL_TIMEOUT_S", "RETRYABLE", "RUN_ID", "STATES", "TERMINAL", "TRANSITIONS", "RunStateError",
@@ -80,7 +81,7 @@ def list_runs(dataset_dir: Path) -> list[dict]:
                 "has_frames": (d / "frames.idx").exists(), "created_unix_ns": doc.get("created_unix_ns"),
                 "kind": doc.get("kind"), "world_id": doc.get("world_id")}
         env = d / "manifest.json"
-        if not doc and env.exists():
+        if "state" not in doc and env.exists():     # Env 运行：run_manifest.v1 不含 state，以 manifest.json 与评测结果判定
             item.update(env_run_item(d, json.loads(env.read_text(encoding="utf-8"))))
         out.append(item)
     return out
@@ -193,7 +194,8 @@ class RunStore:
         self.queue_per_tenant = int(queue_per_tenant)
         self.cancel_timeout_ns = int(cancel_timeout_s * 1e9)
         self._lock = threading.RLock()
-        self._db = sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None, timeout=5.0)
+        # 连接被 bench-api 线程池共用：全部语句经同一把 RLock 串行化，写事务期间的读也在锁外等待（dbconn，K12）
+        self._db = SerialConnection(sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None, timeout=5.0), self._lock)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(_SCHEMA)

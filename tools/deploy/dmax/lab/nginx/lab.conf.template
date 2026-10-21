@@ -1,7 +1,7 @@
 # 内部工作区鉴权反向代理（AWR-05 §7.11、ADR-166；AWR-17 §18.3、§18.10.3、§18.11、§19；D3-AC-51、D3-AC-25）。
 # 只监听 ZeroTier 地址 ${LAB_BIND}:${LAB_PORT}（TLS，证书由 labctl.sh tls 在 dmax 上生成）；公网网卡与其余地址不监听。
 #   - 页面：除登录页与静态资源外，整页加载须带有效会话 Cookie（auth_request → bench-api GET /api/bench/v1/session），否则 302 到
-#     /lab/login?next=<路径>；页面内的数据请求由各服务自行鉴权（bench-api 会话 Cookie 与 CSRF、lab-gateway 短期令牌、rerun-proxy d3_rr）。
+#     /lab/login?next=<路径与查询串，encodeURIComponent 编码>（$lab_next，nginx.conf 经 njs 计算，与前端同一口径）；页面内的数据请求由各服务自行鉴权（bench-api 会话 Cookie 与 CSRF、lab-gateway 短期令牌、rerun-proxy d3_rr）。
 #   - /api/bench/ → bench-api 127.0.0.1:18650；/api/lab/rt（WS）→ lab-gateway 127.0.0.1:18651；
 #     /rerun/ 与 /rerun.cloud.v1alpha1.RerunCloudService/（gRPC-web，流式不缓冲）→ rerun-proxy 127.0.0.1:18652（R05：两类路径都须转发）。
 #   - 其余 /api/** 与探针路径返回 404（D1、D2 接口不在内部工作区暴露）。
@@ -32,7 +32,7 @@ server {
     proxy_set_header Content-Length "";
     proxy_set_header Authorization "";
   }
-  location @login { return 302 /lab/login?next=$uri; }
+  location @login { return 302 /lab/login?next=$lab_next; }
 
   location /api/bench/ {
     proxy_pass http://127.0.0.1:18650;

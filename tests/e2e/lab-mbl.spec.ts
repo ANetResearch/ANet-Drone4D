@@ -409,7 +409,7 @@ function localPacks(dir: string): Pack[] {
 }
 
 /** 页面识别的样例文件种类（ui/lab/replay/samplePack.ts SAMPLE_FILE_KINDS）；其余种类被页面丢弃，结果中单列 */
-const UI_KINDS = ['video', 'mcap', 'metrics', 'tape', 'manifest', 'slice']
+const UI_KINDS = ['video', 'mcap', 'metrics', 'tape', 'manifest', 'slice', 'tracks']
 
 test('样例包：每个基线 1 个代表运行（L1、L2），3 机私有视角视频、MCAP 与指标在 /lab/replay 可浏览并可同步回放，文档不含种子', async () => {
   test.setTimeout(420_000)

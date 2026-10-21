@@ -32,6 +32,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from awr.bench.dbconn import SerialConnection
+
 __all__ = ["AUDS", "INVITED_AUDS", "INVITED_TOKEN_MAX_S", "REGISTRY_AUD", "ROLES", "SESSION_TTL_S", "AuditLog", "AuthError", "BenchAuth", "Principal",
            "registry_namespace"]
 
@@ -175,7 +177,8 @@ class BenchAuth:
             _write_private(kp, secrets.token_bytes(32))
         self._k_st = _hkdf(kp.read_bytes(), b"awr-bench", b"awr/bench-st/v1")
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None)
+        # 会话表连接被 bench-api 线程池共用：语句串行化（并发 execute 曾致会话解析偶发 InterfaceError，表现为 500 与 401；K12）
+        self._db = SerialConnection(sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None))
         self._db.execute("CREATE TABLE IF NOT EXISTS sessions (h TEXT PRIMARY KEY, principal TEXT, role TEXT, projects TEXT, token_id TEXT, "
                          "iat INTEGER, exp INTEGER)")
 

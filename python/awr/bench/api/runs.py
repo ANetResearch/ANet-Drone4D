@@ -138,7 +138,7 @@ def run(rid: str, request: Request, p: Invited) -> dict:
     if rec is None:
         out.update({"state": doc.get("state", "UNKNOWN"), "kind": doc.get("kind"), "world_id": doc.get("world_id"), "fleet": doc.get("fleet", [])})
         env = d / "manifest.json"
-        if not doc and env.exists():
+        if "state" not in doc and env.exists():     # 与 list_runs 同一判定（run_manifest.v1 不含 state）
             out.update(env_run_item(d, json.loads(env.read_text(encoding="utf-8"))))
     else:
         out["fleet"] = doc.get("fleet", [])

@@ -7,13 +7,24 @@ D3-AC-25）的静态核查：
    `/rerun.cloud.v1alpha1.RerunCloudService/` 的上游端口；页面经 `auth_request` 鉴权；其余 `/api/` 与探针 404。
 3. 镜像依赖锁定与 requirements.lock、requirements-d3.lock 一致；runtime.yaml 的 d3 进程入口模块存在。
 4. labctl.py 的端口表解析、Set-Cookie 属性解析与 TCP 扫描（回环上的监听与未监听端口）。
+5. 登录跳转参数（K12）：`@login` 以 njs 计算的 `$lab_next`（encodeURIComponent($request_uri)）拼接，查询串随 next 保留，与前端
+   useBenchSession 同一口径；nginx.conf 加载 njs 模块，镜像复制 lab-next.js；函数本身以 node 执行核对。
+6. `labctl.sh snapshot`（build 的快照一步，K12）：源码取自已提交的快照（`git archive`），不读工作树与未入库文件；补丁只改其列出的
+   文件、标签加补丁摘要；快照外路径的补丁、非空目标目录与取不到提交时拒绝；node_modules 的 @awr/* 指回快照。需要 git（外置 git
+   目录时由环境变量 GIT_DIR、GIT_WORK_TREE 给出），否则跳过。
 """
 
 from __future__ import annotations
 
+import difflib
+import hashlib
 import importlib.util
+import json
+import os
 import re
+import shutil
 import socket
+import subprocess
 import sys
 from pathlib import Path
 
@@ -119,6 +130,25 @@ def test_nginx_template_routes_and_auth() -> None:
     assert body.count("add_header Cache-Control") == body.count("include /etc/nginx/lab-headers.conf;") - 1   # add_header 不跨层继承
 
 
+def test_login_redirect_next_keeps_query() -> None:
+    t = (LAB / "nginx/lab.conf.template").read_text(encoding="utf-8")
+    assert re.findall(r"location @login \{([^}]*)\}", t) == [" return 302 /lab/login?next=$lab_next; "]
+    conf = "\n".join(ln.split("#", 1)[0] for ln in (LAB / "nginx/nginx.conf").read_text(encoding="utf-8").splitlines())
+    assert re.search(r"^load_module modules/ngx_http_js_module\.so;", conf, re.M)
+    assert "js_import lab from /etc/nginx/lab-next.js;" in conf and "js_set $lab_next lab.next;" in conf
+    assert "lab-next.js" in (LAB / "images/web/Dockerfile").read_text(encoding="utf-8")
+    assert '"$L/nginx/lab-next.js"' in (LAB / "labctl.sh").read_text(encoding="utf-8")
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("[dep] node not installed")
+    js = (f"const m = await import({json.dumps((LAB / 'nginx/lab-next.js').as_uri())});"
+          "const out = ['/lab/runs/run-x?view=eval', '/lab/replay?a=r1&b=r2&t=1.5', '/lab/worlds/%E4%B8%96', ''].map("
+          "(u) => m.default.next({ variables: { request_uri: u } })); console.log(JSON.stringify(out))")
+    r = subprocess.run([node, "--input-type=module", "-e", js], capture_output=True, text=True, check=True)
+    assert json.loads(r.stdout) == ["%2Flab%2Fruns%2Frun-x%3Fview%3Deval", "%2Flab%2Freplay%3Fa%3Dr1%26b%3Dr2%26t%3D1.5",
+                                    "%2Flab%2Fworlds%2F%25E4%25B8%2596", "%2Flab%2Fruns"]
+
+
 def _pins(path: Path) -> dict[str, str]:
     out = {}
     for ln in path.read_text(encoding="utf-8").splitlines():
@@ -159,3 +189,64 @@ def test_labctl_ports_cookies_and_scan(labctl) -> None:
             closed_port = tmp.getsockname()[1]
         assert labctl.probe_port("127.0.0.1", open_port, 1.0) == "open"
         assert labctl.probe_port("127.0.0.1", closed_port, 1.0) == "closed"
+
+
+def _git(*args: str) -> str | None:
+    r = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=False)
+    return r.stdout if r.returncode == 0 else None
+
+
+def _snapshot(dst: Path, patch: Path | None = None) -> subprocess.CompletedProcess:
+    env = {**os.environ, "LAB_REF": "HEAD", "LAB_PATCH": str(patch) if patch else ""}
+    return subprocess.run(["bash", str(LAB / "labctl.sh"), "snapshot", str(dst)], capture_output=True, text=True, env=env, check=False)
+
+
+def _patch_for(rel: str, head_text: str, extra: str) -> str:
+    return "".join(difflib.unified_diff(head_text.splitlines(keepends=True), (head_text + extra).splitlines(keepends=True),
+                                        fromfile=f"a/{rel}", tofile=f"b/{rel}"))
+
+
+def test_labctl_snapshot_uses_committed_tree_and_patch(tmp_path: Path) -> None:
+    commit = (_git("rev-parse", "--verify", "-q", "HEAD^{commit}") or "").strip()
+    if not commit:
+        pytest.skip("[dep] git commit not reachable (export GIT_DIR and GIT_WORK_TREE for the external git dir)")
+    if not (ROOT / "node_modules").is_dir():
+        pytest.skip("[dep] node_modules not installed")
+    # 无补丁：标签为提交号前 10 位，源码与 HEAD 一致，未入库的忽略文件不进入快照
+    r = _snapshot(tmp_path / "a")
+    assert r.returncode == 0, r.stderr
+    build = json.loads((tmp_path / "a" / "BUILD.json").read_text(encoding="utf-8"))
+    assert (build["schema"], build["commit"], build["tag"], build["patch_sha256"], build["patch_files"], build["web_dirty"]) == \
+        ("drone4d.lab.build.v1", commit, commit[:10], None, [], False)
+    for rel in ("python/awr/bench/runs_store.py", "apps/web/package.json", "tools/deploy/dmax/lab/labctl.py", "tests/e2e/lab-roles.spec.ts"):
+        assert (tmp_path / "a" / rel).read_text(encoding="utf-8") == _git("show", f"HEAD:{rel}"), rel
+    assert not (tmp_path / "a" / "apps/web/public/bench").exists()            # .gitignore 下的夹具（禁止再分发）
+    assert not (tmp_path / "a" / "docs").exists()
+    assert (tmp_path / "a" / "node_modules/@awr/contracts").resolve() == (tmp_path / "a" / "packages/contracts").resolve()
+    assert (tmp_path / "a" / "node_modules/.bin").is_dir()
+    # 目标目录非空时拒绝
+    assert _snapshot(tmp_path / "a").returncode == 2
+    # 补丁：只改列出的文件，标签加 sha256 前 8 位；apps/web 内的改动置 web_dirty
+    rel = "apps/web/src/main.tsx"
+    head = _git("show", f"HEAD:{rel}")
+    assert head is not None
+    patch = tmp_path / "k.patch"
+    patch.write_text(_patch_for(rel, head, "// k12 snapshot test\n"), encoding="utf-8")
+    r = _snapshot(tmp_path / "b", patch)
+    assert r.returncode == 0, r.stderr
+    build = json.loads((tmp_path / "b" / "BUILD.json").read_text(encoding="utf-8"))
+    digest = hashlib.sha256(patch.read_bytes()).hexdigest()
+    assert (build["tag"], build["patch_sha256"], build["patch_files"], build["web_dirty"]) == (f"{commit[:10]}-p{digest[:8]}", digest, [rel], True)
+    assert (tmp_path / "b" / rel).read_text(encoding="utf-8") == head + "// k12 snapshot test\n"
+    # 快照外路径的补丁失败
+    bad = tmp_path / "bad.patch"
+    bad.write_text(_patch_for("docs/README.md", _git("show", "HEAD:docs/README.md") or "x\n", "y\n"), encoding="utf-8")
+    assert _snapshot(tmp_path / "c", bad).returncode != 0
+
+
+def test_labctl_snapshot_refuses_without_commit(tmp_path: Path) -> None:
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE")}
+    env.update(LAB_REF="refs/heads/k12-no-such-branch", GIT_CEILING_DIRECTORIES=str(ROOT.parent))
+    r = subprocess.run(["bash", str(LAB / "labctl.sh"), "snapshot", str(tmp_path / "x")], capture_output=True, text=True, env=env, check=False)
+    assert r.returncode == 2 and "not a commit" in r.stderr
+    assert not (tmp_path / "x").exists()
