@@ -30,6 +30,21 @@
    回填名次与层级 → DONE。
 
 运行目录 `dataset/<event>/runs/<submission_id>-r<k>`（k 为种子序号，不暴露种子值）。
+
+排行榜 v1（`aggregate.is_v1`：`drone4d.bench.board_config.v1`，`d3-score-1`；D3-AC-43、57；M27-FR-160、FR-166、FR-183）：
+
+- 领取时的版本衔接（B18 决定）：登记的榜单版本已不是当前版本时，当前版本为 v1 且接收该分轨与所选赛道（`aggregate.admits`）
+  即改登记到当前版本（`_meta.board_version`，`_meta.moved[]` 留痕），否则 REJECTED 680 `board_frozen`（不计入配额）；
+- 准入：配置的服务端运行参数（`v1_problems`：`worlds_root`、`events_root`、`events{<test 事件>: {world_id, version, starts[],
+  events_root?}}`、冒烟规格 `smoke.run_spec`，冒烟事件不得为 test 事件）不全时 FAILED 320 `board_config`（平台原因）；
+  再以 `spec_rules.check_ranked_eval` 对该分轨的排名 Run 规格求值（633、682）；
+- 冒烟：`smoke.run_spec`（dev 事件、Fast 档、公开冒烟种子 0），不在 test 事件上运行；
+- 正式评测：按 `aggregate.expand_runs` 展开"所选赛道 × test 事件 × 种子序号 k × 重复 rep"，每个 Run 以 `aggregate.run_spec_for`
+  生成排名规格（`ranked = true`、`physics = realistic`），种子明文按（赛道、事件、k）取自 EvalStore（先以 `verify_lock` 复核封板记录，
+  失败关闭），`seed_commit = HMAC-SHA256(K_eval, run_id ‖ ":" ‖ seed)` 写入运行清单；Run 标识 `<submission_id>-<event>-k<k>r<rep>`，
+  评测行只含种子序号与重复序号，日志中的种子明文以 `<seed>` 代替；
+- 只收 gz 锁步档：评测行的 `evaluation.physics` 取运行清单的实际物理档，任一行不是 gz 锁步档时不写入（FAILED 320 `physics`）；
+- 评分：每个所选赛道以 `lane_metrics(secret = K_board)` 计算本提交的四项指标与置信区间（与榜单同一口径），上榜后回填名次与层级。
 """
 
 from __future__ import annotations
@@ -37,6 +52,8 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -48,13 +65,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from awr.agentsdk.env.containers import check_launch, host_path, parse_docker_run
-from awr.bench.boardstore import append_rows, load_config, publish, slim_evaluation
+from awr.bench.boardstore import append_rows, current_version, gz_row, load_config, publish, slim_evaluation, versions
+from awr.bench.eval.aggregate import BoardConfigError, admits, board_key, expand_runs, is_v1, run_spec_for, verify_lock
 from awr.bench.platform_audit import is_frozen
-from awr.bench.spec_rules import check_submission_eval, reason
+from awr.bench.spec_rules import check_ranked_eval, check_submission_eval, reason
 from awr.bench.submissions import SubmissionStore, WallLimitExceeded, guarded_run, run_duration_s, wall_limit_s
 
-__all__ = ["IMAGE_MAX_B", "REGISTRY_GATES", "REGISTRY_READY", "REGISTRY_WAIT_S", "SCAN_SEVERITIES", "ScanError", "ScannerUnavailable",
-           "TrivyScanner", "process_one", "registry_gate", "scan_image", "vulnerability_findings"]
+__all__ = ["IMAGE_MAX_B", "REGISTRY_GATES", "REGISTRY_READY", "REGISTRY_WAIT_S", "SCAN_SEVERITIES", "V1_EVENT_KEYS", "ScanError",
+           "ScannerUnavailable", "TrivyScanner", "process_one", "registry_gate", "scan_image", "seed_commit", "v1_problems",
+           "vulnerability_findings"]
 
 IMAGE_MAX_B = 4 * 1000 ** 3              # D3-AC-59"体积 > 4 GB 拒绝"：十进制 GB，按 `docker image inspect` 的 Size（未压缩）计（ADR-204 (4)）
 SCAN_SEVERITIES = ("HIGH", "CRITICAL")   # "HIGH 及以上"
@@ -64,6 +83,7 @@ REGISTRY_READY = ("pulled", "present")   # materialize 结论：镜像已在宿�
 REGISTRY_REJECT = ("foreign_image", "digest_is_manifest")   # 提交方原因、重试不会改变的结论
 REGISTRY_WAIT_S = 1800.0                 # 自提交起等待镜像接入的上限
 REGISTRY_GATES = ("off", "invited", "all")
+V1_EVENT_KEYS = ("world_id", "version", "starts")   # 排行榜 v1 配置 `events.<test 事件>` 的必备键（服务端运行参数，不含秘密）
 _RFC3339 = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)$")
 
 
@@ -296,6 +316,189 @@ def _write_json(path: Path, doc: dict) -> None:
     tmp.replace(path)
 
 
+# ------------------------------------------------------------------------------------------------------------ 排行榜 v1
+def seed_commit(k_eval: bytes, run_id: str, seed: int) -> str:
+    """排名运行的种子承诺值 `HMAC-SHA256(K_eval, run_id ‖ ":" ‖ seed)`（M27-FR-005）。"""
+    return hmac.new(k_eval, f"{run_id}:{int(seed)}".encode(), hashlib.sha256).hexdigest()
+
+
+def v1_problems(cfg: dict, track: str, lanes: list[str] | None = None) -> list[str]:
+    """排行榜 v1 轮次配置中提交评测所需的服务端运行参数（不含秘密、不属于冻结项）的检查：`worlds_root`、`events_root`、所选赛道
+    每个 test 事件的 `events.<id>`（`V1_EVENT_KEYS`，起飞位姿个数等于分轨机数）与冒烟规格 `smoke.run_spec`（dev 事件，不得为
+    test 事件）。→ 问题列表，空为可评测。"""
+    p = [f"{k} is required" for k in ("worlds_root", "events_root") if not cfg.get(k)]
+    t = next((x for x in cfg.get("tracks", []) if x.get("track") == track), None)
+    if t is None:
+        return [*p, f"track {track} is not registered"]
+    evs = cfg.get("events") or {}
+    test = set()
+    for ln in cfg["lock"]["lanes"]:
+        test |= set(ln["test_events"])
+        if lanes and ln["lane"] not in lanes:
+            continue
+        for e in ln["test_events"]:
+            x = evs.get(e)
+            if not isinstance(x, dict) or any(x.get(k) in (None, "", []) for k in V1_EVENT_KEYS):
+                p.append(f"events.{e} needs {list(V1_EVENT_KEYS)}")
+            elif len(x["starts"]) != int(t["n_uav"]):
+                p.append(f"events.{e} gives {len(x['starts'])} start poses, track {track} flies {t['n_uav']}")
+    sm = (cfg.get("smoke") or {}).get("run_spec")
+    if not isinstance(sm, dict) or not (sm.get("event") or {}).get("id"):
+        p.append("smoke.run_spec (a run spec on a dev event) is required")
+    elif sm["event"]["id"] in test:
+        p.append(f"smoke.run_spec runs on test event {sm['event']['id']}: smoke runs only on dev events")
+    return p
+
+
+def _evalstore(cfg: dict) -> dict:
+    """排行榜 v1 的 EvalStore（种子明文与 K_eval，只在服务端读取）：先以明文复核封板记录，缺失或不符时抛 BoardConfigError（失败关闭）。"""
+    try:
+        store = json.loads(Path(str(cfg.get("evalstore") or "")).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise BoardConfigError(f"board {cfg.get('board_version')}: evalstore is not readable") from None
+    p = verify_lock(cfg["lock"], store, seeds_per_event=int(cfg["seeds_per_event"]))
+    if p:
+        raise BoardConfigError(f"board {cfg.get('board_version')}: " + "; ".join(p))
+    return store
+
+
+def _scrub(text: str, seed: int) -> str:
+    """日志文本中的种子明文（十进制与十六进制）以 `<seed>` 代替。"""
+    for s in sorted({str(int(seed)), f"{int(seed):x}", f"{int(seed):#x}"}, key=len, reverse=True):
+        text = text.replace(s, "<seed>")
+    return text
+
+
+def _run_physics(run_dir: Path) -> str | None:
+    """运行清单（Env `manifest.json`）记录的实际物理档；不可读时为 None（由评测行的其他声明与评测器口径把关）。"""
+    try:
+        return json.loads((Path(run_dir) / "manifest.json").read_text(encoding="utf-8")).get("physics")
+    except (OSError, ValueError):
+        return None
+
+
+def _requeue_v1(data_root: Path, st: SubmissionStore, d: dict, log) -> tuple[Path, dict] | None:
+    """领取时的版本衔接（模块文档"排行榜 v1"第 1 条）：→ (榜单目录, 配置)；改登记到当前版本时一并返回当前版本；不能衔接时
+    REJECTED 680 `board_frozen` 并返回 None。"""
+    root = data_root / "boards"
+    bv = d["_meta"]["board_version"]
+    cfg = load_config(root / bv)
+    cur = current_version(root, versions(root))
+    if cur is None or cur == bv:
+        return root / bv, cfg
+    ccfg = load_config(root / cur) if (root / cur / "config.json").is_file() else {}
+    if is_v1(ccfg) and admits(ccfg, d["track"], d.get("lanes")) is None and not is_frozen(root / cur):
+        doc = st.get(d["submission_id"])
+        doc["_meta"]["board_version"] = cur
+        doc["_meta"].setdefault("moved", []).append({"from": bv, "to": cur, "t_unix_ns": st.clock()})
+        st._put(doc)
+        log(f"{d['submission_id']}: board version {bv} is no longer current, re-registered to {cur}")
+        return root / cur, ccfg
+    st.transition(d["submission_id"], "REJECTED", expect="RECEIVED",
+                  reason={"code": 680, "name": "RUN_STATE_CONFLICT", "detail": {"why": "board_frozen", "board_version": bv}})
+    log(f"{d['submission_id']}: REJECTED 680 board_frozen ({bv}, current {cur})")
+    return None
+
+
+def _v1_runs(cfg: dict, d: dict, policy: dict) -> list[dict]:
+    """提交的正式评测展开（不含种子明文）：→ [{lane, event_type, event, seed_index, rep, run_id, rs, events_root}]。"""
+    sid = d["submission_id"]
+    etype = {ln["lane"]: ln.get("event_type") or ln["lane"] for ln in cfg["lock"]["lanes"]}
+    rs_policy = {"kind": "image", "image_digest": policy["image_digest"]}
+    out = []
+    for it in expand_runs(cfg, d["track"], d.get("lanes") or None):
+        x = cfg["events"][it["event"]]
+        rs = run_spec_for(cfg, d["track"], world_id=str(x["world_id"]), event_id=it["event"], event_version=int(x["version"]),
+                          starts=list(x["starts"]), policy=rs_policy)
+        if x.get("duration_s"):
+            rs["duration_s"] = float(x["duration_s"])
+        out.append({"lane": it["lane"], "event_type": etype[it["lane"]], "event": it["event"], "seed_index": it["seed_index"], "rep": it["rep"],
+                    "run_id": f"{sid}-{it['event']}-k{it['seed_index']}r{it['rep']}", "rs": rs,
+                    "events_root": Path(x.get("events_root") or cfg["events_root"])})
+    return out
+
+
+def _evaluate_v1(data_root: Path, st: SubmissionStore, d: dict, cfg: dict, runs: list[dict], *, policy: dict, common: dict, run_job,
+                 log) -> tuple[list[dict], int] | None:
+    """EVALUATING（排行榜 v1）：逐 Run 正式运行并生成评测行；→ (评测行, 平台原因重跑次数)，平台原因两次失败时 FAILED 并返回 None。"""
+    sid, team = d["submission_id"], d["_meta"]["team"]
+    store = _evalstore(cfg)
+    k_eval = bytes.fromhex(store["k_eval"])
+    rows, reruns = [], 0
+    for it in runs:
+        seed = int(store["seeds"][it["lane"]][it["event"]][it["seed_index"]])
+        run_id, run_dir = it["run_id"], data_root / "dataset" / it["event"] / "runs" / it["run_id"]
+        base = {"entry_id": f"{team}/{sid}", "team": team, "display_name": sid, "baseline": False, "track": d["track"], "lane": it["lane"],
+                "event_type": it["event_type"], "event": it["event"], "seed": it["seed_index"], "rep": it["rep"], "run_id": run_id,
+                "submission_id": sid}
+        wall = None
+        for attempt in (0, 1):
+            try:
+                guarded_run(run_job, st, sid, it["rs"], limit_s=wall_limit_s(run_duration_s(it["rs"], it["events_root"])), policy=policy, seed=seed,
+                            run_id=run_id, run_dir=run_dir, physics=cfg["physics"], gz=cfg.get("gz") or None,
+                            seed_commit=seed_commit(k_eval, run_id, seed), **{**common, "events_root": it["events_root"]})
+                break
+            except WallLimitExceeded as e:                   # 超墙钟上限：终止（693），记为无效行，不重跑
+                wall = e
+                log(f"{sid}: run {run_id} exceeded the wall limit {e.limit_s:g} s")
+                break
+            except Exception:                               # 平台原因：重跑一次（日志不含种子明文）
+                log(_scrub(f"{sid}: run {run_id} attempt {attempt} failed\n{traceback.format_exc()[-1500:]}", seed))
+                if attempt == 1:
+                    st.transition(sid, "FAILED", reason={"code": 320, "name": "INTERNAL", "detail": {"why": "platform", "run": run_id}})
+                    return None
+                reruns += 1
+        if wall is not None:
+            rows.append({**base, "evaluation": {"components": dict.fromkeys(("ec", "eu", "ao", "ce")), "ranked": True, "ranked_valid": False,
+                                                "invalid_reasons": ["wall_limit"], "physics": cfg["physics"]}, "termination": wall.reason()})
+            continue
+        ev = json.loads((run_dir / "evaluation.json").read_text(encoding="utf-8"))
+        rows.append({**base, "evaluation": slim_evaluation(ev, physics=_run_physics(run_dir))})
+    return rows, reruns
+
+
+def _score_v1(st: SubmissionStore, d: dict, cfg: dict, bdir: Path, rows: list[dict], reruns: int, *, n_boot: int, log) -> None:
+    """SCORING（排行榜 v1）：只收 gz 锁步档的评测行；逐赛道计算本提交的四项指标（K_board 置信区间，与榜单同一口径）→ DONE，
+    上榜时重算榜单并回填名次与层级。"""
+    from awr.bench.eval.aggregate import lane_metrics
+
+    sid, team = d["submission_id"], d["_meta"]["team"]
+    bad = sorted(r["run_id"] for r in rows if not gz_row(r))
+    if bad:                                                  # 平台以非 gz 锁步档运行：不写入榜单（D3-AC-43）
+        st.transition(sid, "FAILED", reason={"code": 320, "name": "INTERNAL", "detail": {"why": "physics", "runs": len(bad)}})
+        log(f"{sid}: FAILED {len(bad)} runs are not gz lockstep ({bad[:3]})")
+        return
+    st.transition(sid, "SCORING", expect="EVALUATING")
+    now = st.clock()
+    rows = [{**r, "first_listed_unix_ns": now} for r in rows]
+    append_rows(bdir, rows)
+    secret = board_key(cfg)
+    eid = f"{team}/{sid}"
+    lanes = []
+    for lane in dict.fromkeys(r["lane"] for r in rows):
+        rs = sorted((r for r in rows if r["lane"] == lane), key=lambda r: (r["event"], r["seed"], r["rep"], r["run_id"]))
+        valid = [r for r in rs if r["evaluation"]["ranked_valid"]]
+        met = (lane_metrics(valid, key=(eid, bdir.name, lane), n_boot=n_boot, secret=secret)[0] if valid
+               else {m: {"value": None, "ci95": [0.0, 0.0]} for m in ("ec", "eu", "ao", "ce")})
+        lanes.append({"lane": lane, "metrics": met, "runs": {"total": len(rs), "valid": len(valid), "invalid": len(rs) - len(valid),
+                                                             "platform_rerun": reruns},
+                      "status": "valid" if len(valid) >= 0.8 * len(rs) else "invalid", "composite": None})
+    st.transition(sid, "DONE", result={"lanes": lanes})
+    if st.get(sid)["visibility"] == "board":
+        board = publish(bdir, st.board_view(), n_boot=n_boot)
+        ent = {e["lane"]: e for e in board["entries"] if e["entry_id"] == eid and e["track"] == d["track"]}
+        for lane in lanes:
+            e = ent.get(lane["lane"])
+            if e is not None:
+                lane["metrics"], lane["status"] = e["metrics"], e["status"]
+                if e["dominance_tier"] is not None:
+                    lane["dominance_tier"] = e["dominance_tier"]
+        doc = st.get(sid)
+        doc["result"] = {"lanes": lanes}
+        st._put(doc)
+    log(f"{sid}: DONE " + json.dumps({ln["lane"]: {m: v["value"] for m, v in ln["metrics"].items()} for ln in lanes}))
+
+
 def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.0, n_boot: int = 10_000, run_job=None,
                 trivy: TrivyScanner | None = None, log=print, registry: str = "invited", registry_wait_s: float = REGISTRY_WAIT_S) -> str | None:
     """处理一个 RECEIVED 提交；→ submission_id 或 None（队列为空或全部在等待镜像接入）。
@@ -328,14 +531,37 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
         log(f"warning: trivy db is {db['age_days']:.1f} days old (> {trivy.warn_days:g}); refresh with tools/deploy/dmax/images/trivy/fetch.sh --db-only")
     bdir = data_root / "boards" / d["_meta"]["board_version"]
     cfg = load_config(bdir)
-    if not (cfg.get("track") or {}).get("dev"):              # 正式榜：提交恒为排名运行，按榜单轮次配置求组合规则（633、682）
-        bad = reason(check_submission_eval(cfg))
-        if bad:
-            st.transition(sid, "REJECTED", reason=bad, expect="RECEIVED")
-            log(f"{sid}: REJECTED config {bad['code']} {bad['detail']['why']}")
-            return sid
-    rs = cfg["run_spec"]
+    v1 = is_v1(cfg)
     policy = {"kind": "image", "image_digest": d["image_digest"], "entry": d["entry"]}
+    if v1:                                                   # 排行榜 v1：版本衔接、运行参数与排名规格准入（模块文档"排行榜 v1"）
+        got = _requeue_v1(data_root, st, d, log)
+        if got is None:
+            return sid
+        bdir, cfg = got
+        d = st.get(sid)
+        bad_cfg = v1_problems(cfg, d["track"], d.get("lanes"))
+        try:
+            _evalstore(cfg)                                  # EvalStore 缺失或与封板记录不符：失败关闭，不领取评测
+        except BoardConfigError as e:
+            bad_cfg.append(str(e))
+        if bad_cfg:
+            st.transition(sid, "FAILED", expect="RECEIVED", reason={"code": 320, "name": "INTERNAL",
+                                                                    "detail": {"why": "board_config", "problems": bad_cfg[:5]}})
+            log(f"{sid}: FAILED board {bdir.name} config: {bad_cfg[:5]}")
+            return sid
+        v1_runs = _v1_runs(cfg, d, policy)
+        bad = reason(check_ranked_eval(v1_runs[0]["rs"], physics=cfg.get("physics"), policy={"kind": "image"}))
+        rs = cfg["smoke"]["run_spec"]
+        smoke_roots = {"worlds_root": Path(cfg["smoke"].get("worlds_root") or cfg["worlds_root"]),
+                       "events_root": Path(cfg["smoke"].get("events_root") or cfg["events_root"])}
+    else:
+        bad = None if (cfg.get("track") or {}).get("dev") else reason(check_submission_eval(cfg))
+        rs = cfg["run_spec"]
+        smoke_roots = {}
+    if bad:                                                  # 正式榜：提交恒为排名运行，按榜单轮次配置求组合规则（633、682）
+        st.transition(sid, "REJECTED", reason=bad, expect="RECEIVED")
+        log(f"{sid}: REJECTED config {bad['code']} {bad['detail']['why']}")
+        return sid
     common = {"worlds_root": Path(cfg["worlds_root"]), "events_root": Path(cfg["events_root"]), "agent_image": cfg.get("agent_image", "d3-agent-py:dev"),
               "docker": docker}
     work = data_root / "submissions" / sid
@@ -365,7 +591,7 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
     st.transition(sid, "VALIDATING", expect="SCANNING")
     try:
         r = guarded_run(run_job, st, sid, rs, limit_s=wall_limit_s(smoke_s), policy=policy, seed=0, run_id=f"{sid}-smoke", run_dir=work / "smoke",
-                        physics="kinematic", duration_s=smoke_s, **common)
+                        physics="kinematic", duration_s=smoke_s, **{**common, **smoke_roots})
         ag = r["agents"]
         fail = {u: s for u, s in ag.items() if s.get("acts", 0) == 0 or s.get("protocol_errors") or s.get("exited") not in (None, "bye")
                 or s.get("exit_code") not in (0, None)}
@@ -382,6 +608,11 @@ def process_one(data_root: Path, *, docker: str = "docker", smoke_s: float = 20.
     if not _alive(st, sid):
         return sid
     st.transition(sid, "EVALUATING", expect="VALIDATING")
+    if v1:
+        got = _evaluate_v1(data_root, st, d, cfg, v1_runs, policy=policy, common=common, run_job=run_job, log=log)
+        if got is not None:
+            _score_v1(st, d, cfg, bdir, *got, n_boot=n_boot, log=log)
+        return sid
     rows, reruns = [], 0
     event = rs["event"]["id"]
     for k, seed in enumerate(cfg["seeds"]):

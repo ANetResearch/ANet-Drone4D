@@ -48,7 +48,9 @@ def write_obs_audit(run_dir: Path, audit: ObsAudit) -> dict:
 def run_job(rs: dict, *, policy: dict, seed: int, run_id: str, run_dir: Path, worlds_root: Path, events_root: Path,
             physics: str | None = None, gz: dict | None = None, agent_image: str = AGENT_IMAGE, cpus: float = 1.0, mem_gb: float = 2.0,
             step_budget_s: float | None = None, duration_s: float | None = None, docker: str = "docker",
-            hello_timeout_s: float = 60.0) -> dict:
+            hello_timeout_s: float = 60.0, seed_commit: str | None = None) -> dict:
+    """`seed_commit`：排名运行（`rs.ranked = true`，排行榜 v1 的正式评测）由评测员签发的种子承诺值
+    `HMAC-SHA256(K_eval, run_id ‖ ":" ‖ seed)`（M27-FR-005），写入运行清单代替种子明文；非排名运行缺省 None。"""
     from awr.agentsdk.env.containers import run_container_episode
     from awr.agentsdk.env.core import BenchEnv, _open_world
     from awr.agentsdk.env.spec import EnvSpec
@@ -59,7 +61,7 @@ def run_job(rs: dict, *, policy: dict, seed: int, run_id: str, run_dir: Path, wo
         rs["duration_s"] = float(duration_s)
     run_dir = Path(run_dir)
     spec = EnvSpec.from_run_spec(rs, run_id=run_id, seed=seed, worlds_root=Path(worlds_root), events_root=Path(events_root), out_dir=run_dir,
-                                 physics=physics, gz=gz)
+                                 physics=physics, gz=gz, seed_commit=seed_commit)
     image, cmd, env = _agent(policy, agent_image)
     t0 = time.time()
     with audit_scope() as audit:
