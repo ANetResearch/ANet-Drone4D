@@ -6,7 +6,7 @@
  "lab.compare.notOk": "Fail",
  "lab.compare.casePass": "Case passed",
  "lab.compare.caseFail": "Case failed",
- "lab.compare.uav": "Vehicle",
+ "lab.compare.uav": "UAV",
  "lab.compare.roleDenied": "Your role cannot view the tier comparison",
  "lab.compare.roleDeniedHint": "The tier comparison is available to researchers and above. Contact the workspace administrator for access.",
  "lab.compare.toBoard": "Open internal leaderboard",

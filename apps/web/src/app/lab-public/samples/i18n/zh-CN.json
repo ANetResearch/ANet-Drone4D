@@ -22,7 +22,7 @@
  "lab.public.run.views.empty": "该样例没有视角视频。",
  "lab.public.run.views.tileAria": "{uav} {kind} 视角视频",
  "lab.public.run.views.loading": "正在加载视频",
- "lab.public.run.views.error": "视频加载失败",
+ "lab.public.run.views.error": "视频加载失败。可在样例数据下载中获取该视频。",
  "lab.public.run.views.outside": "无该时段画面",
  "lab.public.run.views.offsite": "该视频超过 64 MB，经分发渠道提供",
  "lab.public.run.views.openExternal": "在 ModelScope 打开",

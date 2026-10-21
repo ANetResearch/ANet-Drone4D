@@ -13,7 +13,9 @@
 //   COPY-05 a performance or scale number without its conditions (hardware, resolution, sensor set, clock or physics tier,
 //           measurement method) in the same sentence: throughput (fps, 帧/s, steps/s, GB/s), speed-ups ("3x faster", "提升 40%"),
 //           fleet scale ("up to 1,000 drones", "1,000 vehicles", "1 000 架") and latency or duration claims ("首帧 ≤ 5 s",
-//           "loads in 2 s"); timeouts, retry intervals and countdowns ("超时 30 秒", "5 秒后重试") are parameters, not claims
+//           "loads in 2 s"); timeouts, retry intervals and countdowns ("超时 30 秒", "5 秒后重试") are parameters, not claims, and so
+//           are termination and failure deadlines in English ("Started runs terminate within 10 s", "could not open the recording
+//           within 10 s"; R-06 of the D3 copy review, W-06)
 //   COPY-06 product and proper-noun spelling: "ANet Drone4D" at first mention in a document, then "Drone4D"; the repository
 //           identifier ANet-Drone4D only in URLs and package names; official spellings (Gazebo Sim, Rerun, FAST-LIVO2, RotorPy,
 //           Livox MID-360, PX4, LiDAR, UrbanScene3D, FleetSim, GitHub)
@@ -24,7 +26,9 @@
 //   COPY-09 slogan-style taglines: "X in, Y out", and short headings closed by a period ("从真实世界，到无人机集群。")
 //   COPY-10 delivery and term names (§7.10 term table): D1 "三维场景视图", D2 "交互沙盒", D3 "事件沙盘"; "沙盘" only in D3 copy
 //           (keys under lab.*); the next major version is D4, never "Drone4D 2.0"; physics tiers, observation and run states
-//           use the table terms ("快速仿真", "每机私有观测", not "极速模式", "上帝视角", "跑起来了")
+//           use the table terms ("快速仿真", "每机私有观测", not "极速模式", "上帝视角", "跑起来了"); interface strings (dictionaries and
+//           HTML pages) never carry the delivery names D1 to D4 or D3.x (§7.10 usage rule 1, R-04 of the D3 copy review, W-01): the
+//           interface names the product and the version; README tables and documents are Markdown and are not checked for this
 //   COPY-BL-01 a baseline exception or allowance that no longer matches any finding (remove it from the register)
 //   COPY-BL-02 a malformed register entry (missing file, rule, match or reason; an allowance also needs reviewed)
 //   COPY-BL-03 with --strict (the P0b exit, D3-AC-23): baseline exceptions remain
@@ -110,6 +114,8 @@ const TERMS = [
   [/\bgod(?:'s)?[- ]?(?:eye )?(?:view|mode)\b/gi, 'use per-drone private observation'],
 ]
 
+const DELIVERY_NAME = /(?<![\w.-])D[1-4](?:\.x)?(?![\w-])/g
+
 // ---- COPY-06 spellings ---------------------------------------------------------------------------------------------------------
 // [pattern, canonical forms]; a match that is not one of the canonical forms is reported. Lower-case forms adjacent to a path or
 // identifier character (. / _ -) are package or module names and are skipped (drone4d.serve, drone4d-camera).
@@ -155,6 +161,10 @@ const SCALE_LIMIT = /per (?:sandbox|session|visitor|user|account)|each (?:sandbo
 const DURATION = new RegExp(String.raw`(?:[≤<]=?\s*)?\d[\d.]*(?:\s*(?:to|-|–|~|至)\s*\d[\d.]*)?\s*(?:ms|毫秒|μs|s|sec(?:onds?)?|秒|min(?:utes?)?|分钟)(?![\w/])`, 'g')
 const DURATION_CLAIM = /latency|first frame|takes?\b|loads? in|builds? in|starts? in|ready in|within|under \d|in about|延迟|时延|首帧|耗时|用时|仅需|只需|内完成|即可完成|加载完成|启动时间|响应时间|吞吐|throughput|帧率|frame rate/i
 const DURATION_PARAM = /timeout|time-out|超时|重试|retry|retries|interval|间隔|每隔|倒计时|countdown|后自动|after \d|every \d|过期|expires?|有效期|renewable|续期|session|会话时长|保留/i
+// English termination and failure deadlines are parameters as well, symmetric with "超时 30 秒" (W-06): a run that terminates or is
+// cancelled within N s, and a negated verb phrase before "within" ("could not open the recording within 10 s", up to four words, no
+// conjunction in between) that states a limit, not a speed
+const DURATION_DEADLINE = /\b(?:terminat(?:e|es|ed|ing)|cancell?(?:s|ed|ing)?|stop(?:s|ped|ping)?|shuts? down|time[sd]? out|timed out)\s+(?:(?!(?:and|but|or)\b)[a-z-]+\s+){0,2}within\b|\b(?:(?:could|did|does|do|can|will|would)\s*(?:not|n't)|cannot)\s+(?:(?!(?:and|but|or)\b)[a-z-]+\s+){1,4}within\b/i
 const CONDITION = [
   /\b(?:A40|A100|H100|H200|L40S?|L4|T4|V100|RTX\s?\d{3,4}\w*|GTX\s?\d{3,4}|GPUs?|CPUs?|vCPUs?|cores?|threads?|Xeon|EPYC|Ryzen|Core i\d|Apple M\d|M\d (?:Pro|Max|Ultra)|laptop|desktop|Tier [SBA])\b/i,
   /核|显卡|单卡|单张|笔记本|台式机|服务器|主机|档位|时钟档|物理档|快速档|锁步|lockstep|晴天档/,
@@ -360,10 +370,11 @@ export function segmentsOf(file, raw, { lang, kind }) {
   const k = kind ?? kindOf(file)
   // documents take one language ("auto" detects it from the CJK share); dictionaries and OpenAPI decide per string
   if (lang === 'auto' && k !== 'i18n' && k !== 'openapi') lang = detectLang(raw)
-  if (k === 'i18n') return jsonSegments(file, raw, lang ?? 'auto')
+  // interface strings (dictionaries, HTML pages) carry `ui`: the delivery names D1 to D4 are reported there (COPY-10)
+  if (k === 'i18n') return jsonSegments(file, raw, lang ?? 'auto').map((sg) => ({ ...sg, ui: true }))
   if (k === 'openapi') return jsonSegments(file, raw, lang ?? 'auto', { fields: ['summary', 'description'] })
   if (k === 'cff') return cffSegments(file, raw, lang ?? 'en')
-  if (k === 'html') return htmlSegments(file, raw, lang ?? detectLang(raw))
+  if (k === 'html') return htmlSegments(file, raw, lang ?? detectLang(raw)).map((sg) => ({ ...sg, ui: true }))
   return mdSegments(file, raw, lang ?? detectLang(raw))
 }
 export const kindOf = (f) => (f.endsWith('.json') ? (/openapi/i.test(f) ? 'openapi' : 'i18n') : f.endsWith('.cff') ? 'cff' : /\.html?$/.test(f) ? 'html' : 'md')
@@ -443,7 +454,7 @@ function numberHits(seg, add) {
       seen.push([at, at + m[0].length])
       add('COPY-05', at, m[0].trim(), `number "${m[0].trim()}" without conditions (hardware, resolution, sensor set, clock or physics tier, method; §7.10 principle 3)`)
     }
-    if (DURATION_CLAIM.test(s) && !DURATION_PARAM.test(s)) {
+    if (DURATION_CLAIM.test(s) && !DURATION_PARAM.test(s) && !DURATION_DEADLINE.test(s)) {
       for (const m of s.matchAll(DURATION)) {
         const at = a + m.index
         if (seen.some(([x, y]) => at < y && at + m[0].length > x)) continue
@@ -478,6 +489,10 @@ function termHits(seg, add) {
   // "沙盘" belongs to D3 copy only: in the dictionaries outside lab.* it names the D1 view or the D2 sandbox
   if (seg.key && !seg.key.startsWith('lab.')) {
     for (const m of t.matchAll(/(?<!数字|事件)沙盘/g)) add('COPY-10', m.index, m[0], '"沙盘" is used only for the D3 Event Lab (事件沙盘); D1 is 三维场景视图, D2 is 交互沙盒')
+  }
+  // the interface names the product and the version, not the delivery (§7.10 usage rule 1); "D3-AC-14" is an acceptance number (W-08)
+  if (seg.ui) {
+    for (const m of t.matchAll(DELIVERY_NAME)) add('COPY-10', m.index, m[0], `"${m[0]}" is a delivery name; interface strings name the product and version (交互沙盒, 事件沙盘, V0.3; §7.10 usage rule 1)`)
   }
 }
 

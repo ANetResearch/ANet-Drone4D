@@ -57,6 +57,7 @@
  "lab.replay.pack.file.tape": "事件磁带",
  "lab.replay.pack.file.manifest": "运行清单",
  "lab.replay.pack.file.slice": "数据检视切片",
+ "lab.replay.pack.file.tracks": "机队轨迹（观测层）",
  "lab.replay.pack.setA": "设为运行 A",
  "lab.replay.pack.setB": "设为运行 B",
  "lab.replay.pack.openWall": "打开运行 {id} 的观测墙",

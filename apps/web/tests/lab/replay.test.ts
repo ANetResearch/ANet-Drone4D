@@ -12,7 +12,7 @@ import { setLocale, t } from '@/app/i18n'
 import { route } from '@/app/routes/lab/replay.route'
 import { usePlayhead } from '@/stores/lab/playhead'
 import { frameIndexKey, ReplayPage, replayRunKey, replayRunsKey, samplesKey } from '@/ui/lab/replay/ReplayPage'
-import { artifactHref, bytesText, parseSamplePack, parseSamplePacks, safeArtifactPath, SAMPLE_PACK_SCHEMA } from '@/ui/lab/replay/samplePack'
+import { artifactHref, bytesText, parseSamplePack, parseSamplePacks, safeArtifactPath, SAMPLE_FILE_KINDS, SAMPLE_PACK_SCHEMA } from '@/ui/lab/replay/samplePack'
 import {
   alignShifts, assignRun, clockText, commonCams, parseReplaySearch, pickFrame, replayChannels, signedS, syncAt, sweepSync, tracksOf, unifiedSpan,
   type ReplayTrack, type SideTracks,
@@ -272,6 +272,7 @@ const sample = (group: string, policy: string, run: string, ec: number) => ({
     ...UAVS.map((u) => ({ kind: 'video', path: `video/${u}_cam0.mp4`, bytes: 18_874_368, sha256: 'a'.repeat(64), uav: u, cam: 'cam0' })),
     { kind: 'mcap', path: 'raw.mcap', bytes: 4_200_000_000, sha256: 'b'.repeat(64) },
     { kind: 'metrics', path: 'evaluation.json', bytes: 2048, sha256: null },
+    { kind: 'tracks', path: 'tracks_obs.bin', bytes: 614_400, sha256: 'c'.repeat(64) },
   ],
 })
 const PACK = {
@@ -290,7 +291,7 @@ describe('sample pack (samplePack.ts)', () => {
     expect(p.packId).toBe('mbl-p0a-2026.10.19-1')
     expect(p.samples.map((s) => `${s.group}/${s.policy}`)).toEqual(['l1/coverage_scan', 'l1/track_share', 'l2/track_share'])
     expect(p.dropped).toBe(2)
-    expect(p.samples[0]!.files.map((f) => f.kind)).toEqual(['video', 'video', 'video', 'mcap', 'metrics'])
+    expect(p.samples[0]!.files.map((f) => f.kind)).toEqual(['video', 'video', 'video', 'mcap', 'metrics', 'tracks'])
     expect(p.samples[0]!.metrics).toEqual({ ec: 0.6, eu: 0.41, ao: null, ce: 0.12 })
     expect(JSON.stringify(p)).not.toMatch(/seed/)
     expect(parseSamplePack({ ...PACK, schema: 'drone4d.bench.sample_pack.v0' })).toBeNull()
@@ -298,6 +299,27 @@ describe('sample pack (samplePack.ts)', () => {
     const packs = parseSamplePacks({ items: [{ ...PACK, pack_id: 'older', generated_utc: '2026-10-01T00:00:00Z' }, PACK, null, 3] })
     expect(packs.map((x) => x.packId)).toEqual(['mbl-p0a-2026.10.19-1', 'older'])
     expect(parseSamplePacks(null)).toEqual([])
+  })
+
+  it('lists every file kind of the sample_pack.v1 contract with a label in both dictionaries (tracks_obs.bin included)', () => {
+    const schema = JSON.parse(readFileSync(join(WEB, '..', '..', 'packages/contracts/bench/sample_pack.v1.schema.json'), 'utf8')) as unknown
+    const enums: string[][] = []
+    const walk = (v: unknown): void => {
+      if (Array.isArray(v)) v.forEach(walk)
+      else if (v && typeof v === 'object') {
+        const o = v as Record<string, unknown>
+        const kind = (o.properties as Record<string, { enum?: string[] }> | undefined)?.kind
+        if (kind?.enum && (o.required as unknown[] | undefined)?.includes('path')) enums.push(kind.enum)
+        Object.values(o).forEach(walk)
+      }
+    }
+    walk(schema)
+    expect(enums).toHaveLength(1)
+    expect([...SAMPLE_FILE_KINDS].sort()).toEqual([...enums[0]!].sort())
+    for (const lang of ['zh-CN', 'en']) {
+      const dict = JSON.parse(readFileSync(join(WEB, `src/app/i18n/lab/replay.${lang}.json`), 'utf8')) as Record<string, string>
+      for (const k of SAMPLE_FILE_KINDS) expect(dict[`lab.replay.pack.file.${k}`], `${lang} ${k}`).toBeTruthy()
+    }
   })
 
   it('accepts only relative artifact paths and builds BN-54 download links', () => {

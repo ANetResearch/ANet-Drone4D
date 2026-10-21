@@ -10,7 +10,8 @@ import { BENCH, type BoardMetricKey, type Components } from '@/net/bench'
 import { REPLAY_RUN_RE } from './sync'
 
 export const SAMPLE_PACK_SCHEMA = 'drone4d.bench.sample_pack.v1'
-export const SAMPLE_FILE_KINDS = ['video', 'mcap', 'metrics', 'tape', 'manifest', 'slice'] as const
+/** 与 `sample_pack.v1.schema.json` 的 `files[].kind` 枚举一致；tracks 为事件回放的机队轨迹 `tracks_obs.bin`（`bench/tracks.v1` 观测层） */
+export const SAMPLE_FILE_KINDS = ['video', 'mcap', 'metrics', 'tape', 'manifest', 'slice', 'tracks'] as const
 export type SampleFileKind = (typeof SAMPLE_FILE_KINDS)[number]
 const METRIC_KEYS: readonly BoardMetricKey[] = ['ec', 'eu', 'ao', 'ce']
 

@@ -1,6 +1,6 @@
 {
  "lab.public.run.notice": "Sample run, not a ranking",
- "lab.public.run.meta": "Event {event} v{version} · World {world} · Policy {policy} · {n} UAVs · Observation level {obs}",
+ "lab.public.run.meta": "Event {event} v{version} · World {world} · Policy {policy} · {n, plural, one {# UAV} other {# UAVs}} · Observation level {obs}",
  "lab.public.run.scene.title": "Event replay",
  "lab.public.run.scene.aria": "Event replay plan view: scripted actors and fleet positions, north up",
  "lab.public.run.scene.hint": "Scripted actors are decoded from the event tape in the browser and interpolated at the playhead. Fleet positions use the noisy navigation solution of the observation layer. Background pedestrians appear only in the view videos.",
@@ -22,7 +22,7 @@
  "lab.public.run.views.empty": "This sample has no view videos.",
  "lab.public.run.views.tileAria": "{uav} {kind} view video",
  "lab.public.run.views.loading": "Loading video",
- "lab.public.run.views.error": "The video could not be loaded",
+ "lab.public.run.views.error": "The video could not be loaded. It is available in the sample data downloads.",
  "lab.public.run.views.outside": "No footage at this time",
  "lab.public.run.views.offsite": "This video exceeds 64 MB and is provided through the distribution channel",
  "lab.public.run.views.openExternal": "Open on ModelScope",

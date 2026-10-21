@@ -31,7 +31,7 @@
  "lab.lidarCompare.noGlHint": "指标面板与沿程曲线不受影响；三维对比请在支持 WebGL2 的浏览器中查看。",
  "lab.lidarCompare.probing": "正在识别显示档",
  "lab.lidarCompare.canvasAria": "LiDAR 与重建对比三维画布",
- "lab.lidarCompare.budget.s": "显示 {n} 点，Tier S 上限 {max} 点（D2 点预算阶梯）",
+ "lab.lidarCompare.budget.s": "显示 {n} 点，Tier S 上限 {max} 点（交互沙盒点预算阶梯）",
  "lab.lidarCompare.budget.b": "显示 {n} 点，每路上限 {max} 点；网格 {faces} 面，上限 {fmax} 面",
  "lab.lidarCompare.thinned": "制品点数超出显示档预算，已按固定步长抽稀显示；误差值保持 eval_sim 原值。",
  "lab.lidarCompare.meshOver": "裁剪网格超过 {max} 面，未显示，请重新生成裁剪网格。",

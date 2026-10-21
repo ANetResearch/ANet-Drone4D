@@ -7,7 +7,7 @@ import en from '@/app/i18n/en.json'
 import zhCN from '@/app/i18n/zh-CN.json'
 import type { Board, BoardEntry, BoardIndex, BoardMetric, Submission } from '@/net/bench'
 import { boardRows, fmtCi, fmtRank, fmtTier, fmtValue } from '@/ui/lab/board'
-import { LabBoardPage } from '@/ui/lab/LabBoardPage'
+import { EntryDetail, LabBoardPage } from '@/ui/lab/LabBoardPage'
 import { LabSubmissionsPage } from '@/ui/lab/LabSubmissionsPage'
 
 const m = (value: number | null, rank?: number, tie_group?: number): BoardMetric => ({ value, ci95: [0.1, 0.2], ...(rank ? { rank, tie_group } : {}) })
@@ -116,4 +116,33 @@ describe('weights = null: no composite score on the lab pages (D3-AC-57)', () =>
     }
     expect(zhCN['lab.board.note' as keyof typeof zhCN]).toContain('不计算合成分')
   })
+})
+
+// D3 文案评审 W-02、W-05、W-07：中文不夹用 Run，指标首次出现写全称，条目详情不可用时给出处理建议（AWR-14 §21.15.1 第 6 条）
+describe('board copy (D3 copy review W-02, W-05, W-07)', () => {
+  afterEach(() => setLocale('zh-CN'))
+
+  it('names the four metrics in full before the abbreviations and says runs in Chinese', () => {
+    const zh = zhCN as Record<string, string>
+    const enD = en as Record<string, string>
+    expect(zh['lab.board.note']).toMatch(/^指标：事件捕获率（EC）、事件理解 F1（EU）、主动观测质量（AO）、协同收益（CE）。/)
+    expect(enD['lab.board.note']).toMatch(/^Metrics: event capture \(EC\), event understanding F1 \(EU\), active observation quality \(AO\), collaborative efficiency \(CE\)\. /)
+    for (const k of Object.keys(zh).filter((x) => x.startsWith('lab.board.'))) expect(zh[k], k).not.toMatch(/\bRuns?\b/)
+    expect([zh['lab.board.detail.runs'], zh['lab.board.detail.invalid']]).toEqual(['运行数', '无效运行'])
+  })
+
+  for (const loc of ['zh-CN', 'en'] as const) {
+    it(`entry detail (${loc}) explains what to do when it is unavailable`, () => {
+      setLocale(loc)
+      // 预置失败的条目详情查询；静态渲染不发请求，挂载时不重试以保留失败状态
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false, staleTime: Infinity } } })
+      const entry = { ...e('team-a/v1', 1, 1, 0, false, 'std3-l1'), lane: LANE.lane }
+      qc.getQueryCache().build(qc, { queryKey: ['lab', 'board-entry', 'proto-0', entry.track, entry.entry_id] })
+        .setState({ status: 'error', error: new Error('503'), fetchStatus: 'idle', errorUpdateCount: 1 })
+      const html = renderToStaticMarkup(h(QueryClientProvider, { client: qc }, h(EntryDetail, { version: 'proto-0', entry, lane: LANE.lane })))
+      const d = (loc === 'en' ? en : zhCN) as Record<string, string>
+      expect(html).toContain(d['lab.board.detail.unavailable'])
+      expect(html).toContain(d['lab.unreachableHint'])
+    })
+  }
 })

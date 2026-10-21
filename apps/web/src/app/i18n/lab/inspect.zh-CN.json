@@ -35,7 +35,7 @@
  "lab.inspect.error.version": "数据检视未能打开录制（694 RERUN_VERSION_MISMATCH）。该录制需要迁移后查看。",
  "lab.inspect.error.role": "当前角色无权打开该 catalog（115 ROLE_FORBIDDEN）。",
  "lab.inspect.error.notFound": "该运行未注册到所选 catalog（305 NOT_FOUND）。test 划分的运行不在分发 catalog 中。",
- "lab.inspect.error.session": "工作区会话已失效，请重新登录。",
+ "lab.inspect.error.session": "工作区会话已失效（302 TOKEN_INVALID），请重新登录。",
  "lab.inspect.error.timeout": "数据检视未能在 10 s 内打开录制。请确认 rerun-proxy 与 catalog 服务可用后重试。",
  "lab.inspect.error.load": "数据检视组件加载失败。浏览器需支持 WebAssembly SIMD，以及 WebGL2 或 WebGPU。",
  "lab.inspect.error.credential": "录制链接含有凭据，已拒绝打开。",

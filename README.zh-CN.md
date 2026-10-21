@@ -287,6 +287,9 @@ Drone4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet
 - **代码。** 本项目以 **ANet Open Source License** 发布。该许可证基于 Apache License 2.0 修改，允许商业使用，但须满足两项条件：面向无关第三方运营多租户托管仿真或数字孪生服务须获得书面授权；必须保留所有 ANet 标识与版权声明。完整条款见 [LICENSE](LICENSE)，标识说明见 [NOTICE](NOTICE)。
 - **UrbanScene3D。** 六座城市世界衍生自 UrbanScene3D，在公开演示站经数据集权利方授权使用。本仓库不分发原始数据集及由其构建的世界包，详见 [NOTICE](NOTICE)。
 - **ANet 合成城市。** 由本项目以固定随机种子生成，不含第三方数据，世界包与截图可自由再分发。
+- **事件沙盘世界（V0.3）。** 网格世界 `oryahovo-crop1` 与 `smalltown-01` 由 Mitko（[sketchfab.com/bg3d](https://sketchfab.com/bg3d)）在 Sketchfab 上以[知识共享署名 4.0 国际](https://creativecommons.org/licenses/by/4.0/)许可（CC-BY-4.0）发布的摄影测量模型构建，经修改（米制标定、调平与派生图层）；原作者不为 ANet Drone4D 背书。模型标题与来源链接见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；本仓库不分发源模型及由其构建的世界包。
+- **OpenStreetMap。** 事件沙盘世界的配准证据、锚点与道路、步行路网由 OpenStreetMap 数据派生，(c) OpenStreetMap contributors，以 [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/)（ODbL-1.0）提供；对外发布的派生图层沿用同一许可与署名。
+- **高程数据。** 事件沙盘世界的调平与海拔高度取自 [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/)：SRTM terrain data courtesy of the U.S. Geological Survey；Europe terrain data produced using Copernicus data and information funded by the European Union - EU-DEM layers。调平核对使用 [Copernicus DEM GLO-30](https://registry.opendata.aws/copernicus-dem/)，只用于计算统计量，不再分发：Produced using Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.
 - **第三方组件。** 许可清单见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 引用

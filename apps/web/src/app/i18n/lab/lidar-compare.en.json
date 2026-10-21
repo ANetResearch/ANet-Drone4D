@@ -31,7 +31,7 @@
  "lab.lidarCompare.noGlHint": "The metrics panel and the along-track curves are unaffected. Open the 3D comparison in a browser with WebGL2.",
  "lab.lidarCompare.probing": "Detecting the display tier",
  "lab.lidarCompare.canvasAria": "3D canvas of the LiDAR and reconstruction comparison",
- "lab.lidarCompare.budget.s": "{n} points shown, Tier S limit {max} points (D2 point budget ladder)",
+ "lab.lidarCompare.budget.s": "{n} points shown, Tier S limit {max} points (Interactive Sandbox point budget ladder)",
  "lab.lidarCompare.budget.b": "{n} points shown, limit {max} points per map; mesh {faces} faces, limit {fmax} faces",
  "lab.lidarCompare.thinned": "The artifacts exceed the point budget of this tier and are thinned with a fixed stride; error values remain the eval_sim values.",
  "lab.lidarCompare.meshOver": "The cropped mesh exceeds {max} faces and is not shown. Regenerate the cropped mesh.",

@@ -1,5 +1,5 @@
 // 样例包浏览（D3-AC-56"样例包在内部工作区可浏览"；数据形状见 samplePack.ts）。lieflat 表格：观测档组、基线策略、代表运行、
-// 四项指标（EC、EU、AO、CE，三位小数）、样例文件（私有视角视频、MCAP、指标，经 BN-54 下载）与操作（设为运行 A、设为运行 B、打开观测墙）。
+// 四项指标（EC、EU、AO、CE，三位小数）、样例文件（私有视角视频、机队轨迹、MCAP、指标等，经 BN-54 下载）与操作（设为运行 A、设为运行 B、打开观测墙）。
 // 多个样例包时按生成时刻由新到旧，可切换；无样例包（接口未提供或尚未生成）时显示空状态，页面其余部分照常可用。
 import * as React from 'react'
 import { useT } from '@/app/i18n'
@@ -22,6 +22,7 @@ import type { RunSide } from './sync'
 
 const FILE_ICON: Readonly<Record<SampleFile['kind'], IconKey>> = {
   video: 'sensor.video', mcap: 'data.package', metrics: 'perf.chart', tape: 'tl.replay', manifest: 'data.json', slice: 'data.file',
+  tracks: 'layer.trajectory',
 }
 
 function fileLabel(t: ReturnType<typeof useT>, f: SampleFile): string {

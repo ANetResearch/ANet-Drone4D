@@ -241,6 +241,14 @@ expect('units bad', [checkName('speed_ms', undefined) !== null, checkName('delay
   ].join('\n')), [])
   expect('copy en labels', dict({ 'a.export': 'Export dataset', 'b.open': 'Open ANet Synthetic City', 'c.quote': 'No targets: add one under "Targets" first',
     'd.version': 'ANet Drone4D · World Runtime {version}', 'e.menu': 'Export…' }, 'en'), [])
+  // W-06 (D3 copy review R-06): termination and failure deadlines are parameters, as "超时 30 秒" is in Chinese
+  expect('copy en deadlines', en([
+    'A queued run is cancelled immediately. A started run terminates within 10 s, and recordings written so far are retained for 14 days.',
+    '', 'Started runs terminate within 10 s. Recordings written so far are retained for 14 days.',
+    '', 'Data inspection could not open the recording within 10 s. Check that rerun-proxy and the catalog service are available, then retry.',
+    '', 'Sessions are cancelled within 30 s of sign-out. The agent did not respond within 5 s.',
+  ].join('\n')), [])
+  expect('copy delivery names outside the interface', [...zh('| D3 | 事件沙盘 | 开发中 |\n\nD3.x 规划见路线图。'), ...en('Delivered in D2.')], [])
   expect('copy allow directive', en('ANet Drone4D docs.\n\n<!-- copy-lint-allow COPY-08 quoted from the review checklist -->\nDo not write "the first benchmark".'), [])
   // misses: each of these must be reported
   expect('copy zh phrases', zh('超快渲染，秒出结果，黑科技，一键搞定。'), ['COPY-01', 'COPY-01', 'COPY-01', 'COPY-01'])
@@ -263,6 +271,14 @@ expect('units bad', [checkName('speed_ms', undefined) !== null, checkName('delay
   expect('copy en banned words', en('ANet Drone4D is an awesome, blazing-fast, seamless, cutting-edge runtime.'), ['COPY-01', 'COPY-01', 'COPY-01', 'COPY-01'])
   expect('copy slogans', [...en('<h3>Reality in, swarms out.</h3>\n\nANet Drone4D.'), ...zh('<h3>从真实世界，到无人机集群。</h3>')], ['COPY-09', 'COPY-09'])
   expect('copy terms', zh('在数字沙盘中打开。D3 事件实验室，极速模式，上帝视角，ANet Drone4D 2.0 发布。'), ['COPY-10', 'COPY-10', 'COPY-10', 'COPY-10', 'COPY-10'])
+  expect('copy en deadline misses', en('ANet Drone4D is ready within 2 s. Runs complete within 5 s. The view does not stall and loads within 3 s. It stops and renders within 1 s.'),
+    ['COPY-05', 'COPY-05', 'COPY-05', 'COPY-05'])
+  // W-01 (R-04): delivery names D1 to D4 and D3.x are reported in interface strings; an acceptance number (D3-AC-14) is not one
+  expect('copy delivery names in the interface', dict({ 'lab.login.title': 'D3 内部工作区登录', 'lab.budget': '（D2 点预算阶梯）', 'lab.plan': 'D3.x 规划',
+    'lab.next': 'Planned for D4.', 'lab.band': 'D3-AC-14 区间', 'lab.ok': '事件沙盘内部工作区登录（V0.3）' }, 'zh'),
+    ['COPY-10@lab.login.title', 'COPY-10@lab.budget', 'COPY-10@lab.plan', 'COPY-10@lab.next'])
+  expect('copy delivery names in html', copy('p.html', '<html><head><title>D3 事件沙盘</title></head><body><p>交互沙盒</p></body></html>', { lang: 'zh', kind: 'html' })
+    .map((x) => x.rule), ['COPY-10'])
   expect('copy sandbox naming by key', dict({ 'jobs.open': '在沙盘中打开', 'lab.title': '事件沙盘' }, 'zh'), ['COPY-10@jobs.open'])
   expect('copy rule filter', copy('r.md', '超快，业界首创。', { lang: 'zh', rules: ['COPY-08'] }).map((x) => x.rule), ['COPY-08'])
   // CITATION.cff: software title and abstract are copy, URLs and third-party references are not
