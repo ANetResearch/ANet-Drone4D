@@ -13,7 +13,13 @@
 
 执行：网格 LiDAR 在独立进程（`_lidar_main`）中运行：每个 tick 先把各机 11 个位姿节点发给它，主进程同时渲染各机相机、
 编码 JPEG（GL 上下文只在主进程），再收取点云；与进程内串行执行逐字节相同（同一 MeshLidar 实现与参数）。线程并行在 dmax 上实测
-更慢（GIL 与 open3d 内部线程争用），不采用。
+更慢（GIL 与 open3d 内部线程争用），不采用。工作进程缺省每架机一个（`L2Config.lidar_workers`，`_LidarPool`）：MeshLidar 的扫描
+只取决于帧序号、位姿节点与种子，不跨帧、跨机保留状态，各机分到哪个进程不影响点云字节；单进程时 3 机扫描约占 tick 墙钟的
+40%，是相机渲染之后主循环的主要等待。后端（`L2Config.lidar_backend`，`lidar_backend`）缺省为 Open3D CPU 参考；`warp` 为 M25 GPU
+产品路径（`awr.sensorsvc.lidar.warp_mesh`，与 CPU 参考同一算法与随机键），一个工作进程每 tick 一次 launch 扫描全部机体（3 机约
+10 ms，CPU 参考逐机约 40 ms），点云与 CPU 参考的差异按 D3-AC-12 判定。相机先提交全部机体的绘制与读回（`RasterCamera.submit`），
+再按机序取回并编码（`_cameras`）；IMU 与 GNSS 在等待点云期间合成。IMU 偏置随机游走用增量缓存（`awr.sensorsvc.imu.BiasWalk`，
+与整段重算逐位一致）。
 
 真值侧记录（只写入运行真值层）：每帧可见演员的 `{uav, seq, t_ns, actor, h_unocc_px, vis, bbox_xywh}`（M25 §6.6.1 可见度归约），
 供 EC 识别判定与 EU 的框证据关联（IoU）。渲染器可注入（`renderer`，测试用 CPU 替身）；缺省为 EGL 光栅相机（需 GPU）。
@@ -21,6 +27,7 @@
 
 from __future__ import annotations
 
+import bisect
 import contextlib
 import math
 import os
@@ -34,13 +41,15 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["CAM_SENSOR", "GNSS_SENSOR", "IMU_SENSOR", "LIDAR_SENSOR", "L2Config", "L2Sensors", "mask_code"]
+__all__ = ["CAM_SENSOR", "GNSS_SENSOR", "IMU_SENSOR", "LIDAR_BACKENDS", "LIDAR_SENSOR", "L2Config", "L2Sensors", "lidar_backend", "mask_code"]
 
 NS = 1_000_000_000
 TICK_NS = 100_000_000
 CAM_SENSOR, LIDAR_SENSOR, IMU_SENSOR, GNSS_SENSOR = "eo", "lidar0", "lidar0_imu", "gnss0"
 CAM_NO, LIDAR_NO = 0, 100
 IMU_WARMUP_NS = NS
+LIDAR_WORKERS_MAX = 4
+LIDAR_BACKENDS = ("cpu", "warp")
 
 
 @dataclass(frozen=True)
@@ -51,7 +60,20 @@ class L2Config:
     imu: bool = True
     gnss: bool = True
     lidar_proc: bool = True                   # 网格 LiDAR 在独立进程中与相机渲染并行
+    lidar_workers: int = 0                    # LiDAR 工作进程数（各机按序轮流分配）；0 为每架机一个（至多 LIDAR_WORKERS_MAX），Warp 后端为 1 个
+    lidar_backend: str | None = None          # cpu（Open3D CPU 参考）或 warp（M25 GPU 产品路径）；None 取 AWR_ENV_LIDAR_BACKEND，再缺省 cpu
     cache_dir: Path | None = None             # MeshWorldQuery 缓存；缺省 <worlds>/../cache/worldquery
+
+
+def lidar_backend(cfg: L2Config) -> str:
+    """网格 LiDAR 后端：`cfg.lidar_backend`，未给出时取环境变量 `AWR_ENV_LIDAR_BACKEND`，再缺省 `cpu`（Open3D CPU 参考）。`warp` 为 M25
+    GPU 产品路径（`awr.sensorsvc.lidar.warp_mesh`，与 CPU 参考同一算法与随机键，差异见 D3-AC-12；每帧结果只取决于该帧输入与帧键，
+    与批大小无关），无 CUDA 设备时在 Warp 的 CPU 设备上运行同一内核。Env 不读 sensorsvc 的 `AWR_LIDAR_BACKEND`（其缺省 auto 随机器
+    是否有 GPU 改变点云），后端只由本配置或 Env 专用变量确定，并写入运行清单 `l2.lidar_backend`。"""
+    b = (cfg.lidar_backend or os.environ.get("AWR_ENV_LIDAR_BACKEND", "") or "cpu").strip().lower()
+    if b not in LIDAR_BACKENDS:
+        raise ValueError(f"lidar backend must be one of {LIDAR_BACKENDS} (got {b!r})")
+    return b
 
 
 def mask_code(inst: np.ndarray, i: int, bbox_xywh) -> str | None:
@@ -111,7 +133,7 @@ class _Track:
 
     def state_at(self, t_ns: int) -> np.ndarray:
         t = min(max(int(t_ns), self.t[0]), self.t[-1])
-        i = int(np.searchsorted(self.t, t, side="right")) - 1
+        i = bisect.bisect_right(self.t, t) - 1                 # 与 np.searchsorted(side="right") 相同，不把列表转换为数组
         if self.t[i] == t or i == len(self.t) - 1:
             return self.s[i]
         u = (t - self.t[i]) / (self.t[i + 1] - self.t[i])
@@ -136,10 +158,10 @@ class _Track:
         return t[a:b], np.asarray(self.s[a:b])
 
     def trim_before(self, t_ns: int) -> None:
-        i = int(np.searchsorted(self.t, t_ns, side="left")) - 1
+        i = bisect.bisect_left(self.t, t_ns) - 1
         if i > 0:
             del self.t[:i], self.s[:i]
-        j = int(np.searchsorted(self.gt, t_ns, side="left")) - 1
+        j = bisect.bisect_left(self.gt, t_ns) - 1
         if j > 0:
             del self.gt[:j], self.gaz[:j], self.gel[:j]
 
@@ -167,6 +189,7 @@ class L2Sensors:
         self.actors = list(tape.actors)
         self._lp = None
         self.lidar = None
+        self.lidar_backend: str | None = None         # 实际使用的网格 LiDAR 后端（写入运行清单 `l2.lidar_backend`）
         if self.cfg.lidar:
             from awr.sensorsvc.lidar.model import MOUNT_INVERTED_MAPPING, load_lidar_model
             from awr.sensorsvc.poses import Mount
@@ -175,15 +198,18 @@ class L2Sensors:
             self.lmodel = load_lidar_model()
             if lidar is not None:
                 self.lidar = lidar
+                self.lidar_backend = "injected"
             else:
+                self.lidar_backend = lidar_backend(self.cfg)
                 cache = self.cfg.cache_dir or Path(world_dir).resolve().parent.parent / "cache" / "worldquery"
                 if self.cfg.lidar_proc:                       # 独立解释器（不继承 EGL 状态），先于渲染器启动以重叠装载
-                    self._lp = _LidarProc(Path(world_dir), cache, Path(tape.path).parent)
+                    n = self.cfg.lidar_workers or (1 if self.lidar_backend == "warp" else min(len(self.uavs), LIDAR_WORKERS_MAX))
+                    self._lp = _LidarPool(max(1, n), Path(world_dir), cache, Path(tape.path).parent, self.lidar_backend)
                 else:
-                    from awr.sensorsvc.lidar.mesh import MeshLidar
+                    from awr.sensorsvc.lidar.warp_mesh import open_mesh_lidar
                     from awr.world.mesh.query import open_mesh_world_query
 
-                    self.lidar = MeshLidar(open_mesh_world_query(Path(world_dir), cache), self.lmodel, self.actors)
+                    self.lidar = open_mesh_lidar(open_mesh_world_query(Path(world_dir), cache), self.lmodel, self.actors, backend=self.lidar_backend)
         if renderer is None:
             from awr.sensorsvc.camera.raster import RasterCamera
             from awr.sensorsvc.camera.scene import load_appearance
@@ -194,10 +220,15 @@ class L2Sensors:
             renderer.set_sun(tuple(hints.get("bakedSunAzElDeg") or ()) or None)
         self.cam = renderer
         self.encoder: str | None = None           # 最近一帧的 JPEG 编码器身份（`<库>-<版本>/jpeg/q90/420`）
+        # 真值侧可见度归约推迟到后台线程（只在异步接口路径；BenchEnv 不经 M25 会话时开启）：真值行以 Future 返回，调用方在下一次
+        # 推进前按序取回写出，读回槽位在归约完成后归还；观测字节与真值行内容、顺序均不变
+        self.defer_truth = False
+        self._truth_pool = None
         if self.cfg.imu:
-            from awr.sensorsvc.imu import MID360_IMU_IN_LIDAR, load_imu_model
+            from awr.sensorsvc.imu import MID360_IMU_IN_LIDAR, BiasWalk, load_imu_model
 
             self.imu_model = load_imu_model()
+            self._bias = {u: BiasWalk() for u in self.uavs}           # 偏置随机游走的增量缓存（与整段重算逐位一致）
             R_bl = self.lmount.R if self.cfg.lidar else np.eye(3)
             t_bl = np.asarray(self.lmount.xyz_m if self.cfg.lidar else (0.0, 0.0, 0.0), np.float64)
             self.R_bi, self.r_imu = R_bl, t_bl + R_bl @ np.asarray(MID360_IMU_IN_LIDAR)
@@ -253,22 +284,22 @@ class L2Sensors:
         jobs = [(u, no, t_k - TICK_NS, self._lidar_nodes(u, t_k - TICK_NS)) for u, no in items] if k > 0 and self.cfg.lidar else []
         if jobs and self._lp is not None:
             self._lp.submit(k, jobs, self.seed, self.prof.name)
-        cams = {u: self._finish_camera(u, k, *self._render(u, no, k)) for u, no in items}
+        cams = self._cameras(k, items)
+        # IMU 与 GNSS 由计数器式随机数按键生成、不依赖点云，在等待 LiDAR 工作进程期间合成（帧字节与先取点云时相同）
+        imus = {u: self._imu(u, no, k, t_k - TICK_NS, t_k) for u, no in items} if k > 0 and self.cfg.imu else {}
+        gnss = {u: self._gnss(u, no, k, t_k) for u, no in items} if self.cfg.gnss else {}
         lid = {}
         if jobs:
-            lid = self._lp.result() if self._lp is not None else {u: _scan(self.lidar, u, no, k, t_s, nodes, self.tape.actor_states, self.seed,
-                                                                              self.prof.name) for u, no, t_s, nodes in jobs}
+            lid = self._lp.result() if self._lp is not None else _scan_jobs(self.lidar, k, jobs, self.tape.actor_states, self.seed, self.prof.name)
         res = {}
-        for u, no in items:
+        for u, _no in items:
             sensors = {CAM_SENSOR: [cams[u][0]]}
             if u in lid:
                 sensors[LIDAR_SENSOR] = [{**lid[u], "mount_nominal": {"t_bs_m": list(self.lmount.xyz_m), "q_bs_xyzw": _q_of(self.lmount.R)}}]
-            if k > 0 and self.cfg.imu:
-                imu = self._imu(u, no, k, t_k - TICK_NS, t_k)
-                if imu is not None:
-                    sensors[IMU_SENSOR] = [imu]
-            if self.cfg.gnss:
-                sensors[GNSS_SENSOR] = [self._gnss(u, no, k, t_k)]
+            if imus.get(u) is not None:
+                sensors[IMU_SENSOR] = [imus[u]]
+            if u in gnss:
+                sensors[GNSS_SENSOR] = [gnss[u]]
             res[u] = (sensors, cams[u][1])
             self.track[u].trim_before(t_k - 2 * IMU_WARMUP_NS)
         return res
@@ -286,8 +317,47 @@ class L2Sensors:
             nodes.append((R_wb @ self.lmount.R, s[0:3] + R_wb @ np.asarray(self.lmount.xyz_m)))
         return nodes
 
+    def _cameras(self, k: int, items: list[tuple[str, int]]) -> dict[str, tuple[dict, list[dict]]]:
+        """各机相机帧 → {uav: (CameraObs, 真值行)}。渲染器有异步接口（`submit`，EGL 光栅相机）时先提交全部机体的绘制与读回，
+        再按机序取回、结束自动曝光并编码：GL 命令按提交顺序执行，各机自动曝光状态互相独立，输出与逐机同步渲染逐字节相同，省去
+        同步接口的整帧复制并让 GPU 绘制与读回重叠；槽位在该机帧编码完成后归还。测试替身只有同步接口 `render`。"""
+        from awr.sensorsvc.camera.effects import finish_frame
+
+        if not hasattr(self.cam, "submit"):
+            return {u: self._finish_camera(u, k, *self._render(u, no, k)) for u, no in items}
+        jobs = []
+        handed: set[int] = set()
+        try:
+            for u, no in items:
+                (R, pos, fxp, rs, actors), meta = self._setup(u, no, k)
+                jobs.append((u, self.cam.submit(self.cm, R, pos, fx=fxp, rs_nodes=rs, actors=actors), fxp, meta))
+            cams = {}
+            for i, (u, job, fxp, meta) in enumerate(jobs):
+                out = job.result()
+                finish_frame(self.ae[u], fxp, out.meter_sub)
+                if self.defer_truth:                      # 槽位交给真值线程，由其归还
+                    handed.add(i)
+                    cams[u] = self._finish_camera(u, k, out, meta, job=job)
+                else:
+                    cams[u] = self._finish_camera(u, k, out, meta)
+                    job.release()
+            return cams
+        finally:
+            for i, (_u, job, _f, _m) in enumerate(jobs):
+                if i not in handed:
+                    job.release()
+
     def _render(self, uav: str, uav_no: int, k: int):
-        from awr.sensorsvc.camera.effects import finish_frame, frame_params, gimbal_reading
+        from awr.sensorsvc.camera.effects import finish_frame
+
+        (R, pos, fxp, rs, actors), meta = self._setup(uav, uav_no, k)
+        out = self.cam.render(self.cm, R, pos, fx=fxp, rs_nodes=rs, actors=actors)
+        finish_frame(self.ae[uav], fxp, out.meter_sub)
+        return out, meta
+
+    def _setup(self, uav: str, uav_no: int, k: int):
+        """一帧的绘制参数 `(R, pos, fx, rs_nodes, actors)` 与 `(t_mid, 云台读数)`。"""
+        from awr.sensorsvc.camera.effects import frame_params, gimbal_reading
         from awr.sensorsvc.camera.raster import RS_NODES, ActorFrame
         from awr.sensorsvc.timing import t_mid_ns
 
@@ -305,12 +375,25 @@ class L2Sensors:
                 rs.append((Rj, pj))
         stt = self.tape.actor_states(tm)
         v = np.isin(stt.state, (1, 2))
-        out = self.cam.render(self.cm, R, pos, fx=fxp, rs_nodes=rs, actors=ActorFrame(stt.ids[v], stt.pos_enu_m[v], stt.yaw_rad[v]))
-        finish_frame(st, fxp, out.meter_sub)
-        return out, (tm, gimbal_reading(g, self.prof.gimbal_sigma_deg, **kw))
+        return (R, pos, fxp, rs, ActorFrame(stt.ids[v], stt.pos_enu_m[v], stt.yaw_rad[v])), (tm, gimbal_reading(g, self.prof.gimbal_sigma_deg, **kw))
 
-    def _finish_camera(self, uav: str, k: int, out, meta) -> tuple[dict, list[dict]]:
+    def _vis_rows(self, uav: str, k: int, tm: int, out) -> list[dict]:
+        """真值侧可见度归约与掩膜（truth/l2.jsonl 的行），只读实例与语义平面，不进入观测。"""
         from awr.sensorsvc.camera.actors import visibility_objects
+
+        objs = visibility_objects(out.instance, out.instance_unocc, out.semantic, None, self.actors) \
+            if out.instance_unocc is not None and self.actors else []
+        return [{"uav": uav, "sensor": CAM_SENSOR, "seq": int(k), "t_ns": int(tm), "actor": o["actor"], "h_unocc_px": o["h_px_unocc"],
+                 "vis": o["visible_ratio"], "bbox_xywh": o["bbox_xywh"], "mask": mask_code(out.instance, o["inst"], o["bbox_xywh"])} for o in objs]
+
+    def _deferred_rows(self, uav: str, k: int, tm: int, out, job) -> list[dict]:
+        try:
+            return self._vis_rows(uav, k, tm, out)
+        finally:
+            job.release()
+
+    def _finish_camera(self, uav: str, k: int, out, meta, job=None):
+        """→ (CameraObs, 真值行)。`job` 给出时（`defer_truth`）真值行改由后台线程计算并返回 Future，该线程算完即归还读回槽位。"""
         from awr.sensorsvc.camera.encode import shared_encoder
 
         tm, gr = meta
@@ -319,10 +402,7 @@ class L2Sensors:
         # 先提交编码，可见度归约与掩膜编码在 CPU 上与 GPU 编码并行；交付字节即 raw.mcap 存档字节（D3-AC-60）
         tk = shared_encoder(self.cfg.camera_profile, cm.width, cm.height, quality=cm.isp.jpeg_quality).submit(out.rgb8)
         self.encoder = tk.identity
-        objs = visibility_objects(out.instance, out.instance_unocc, out.semantic, None, self.actors) \
-            if out.instance_unocc is not None and self.actors else []
-        rows = [{"uav": uav, "sensor": CAM_SENSOR, "seq": int(k), "t_ns": int(tm), "actor": o["actor"], "h_unocc_px": o["h_px_unocc"],
-                 "vis": o["visible_ratio"], "bbox_xywh": o["bbox_xywh"], "mask": mask_code(out.instance, o["inst"], o["bbox_xywh"])} for o in objs]
+        rows = self._vis_rows(uav, k, tm, out) if job is None else None
         obs = {"sensor_id": CAM_SENSOR, "seq": int(k), "t_mid_ns": int(tm), "exposure_ns": self.exp_ns, "readout_ns": self.ro_ns,
                "width": cm.width, "height": cm.height, "K": [cm.fx, 0.0, cm.cx, 0.0, cm.fy, cm.cy, 0.0, 0.0, 1.0],
                "dist": [float(x) for x in cm.dist], "mount_nominal": self.mount_cam(),
@@ -331,6 +411,12 @@ class L2Sensors:
         if self.depth:
             d = out.depth_obs if out.depth_obs is not None else out.depth_m
             obs["depth"] = {"encoding": "f32le", "data": np.ascontiguousarray(d, "<f4").tobytes()}
+        if job is not None:
+            if self._truth_pool is None:
+                from concurrent.futures import ThreadPoolExecutor
+
+                self._truth_pool = ThreadPoolExecutor(1, thread_name_prefix="l2-truth")
+            rows = self._truth_pool.submit(self._deferred_rows, uav, k, tm, out, job)
         return obs, rows
 
     def _imu(self, uav: str, uav_no: int, k: int, t_from: int, t_to: int) -> dict | None:
@@ -340,7 +426,7 @@ class L2Sensors:
         if len(t) < 2:
             return None
         smp = synth_imu(t, s[:, 10:13], s[:, 13:16], R_bi=self.R_bi, r_imu_b=self.r_imu, model=self.imu_model, t_from_ns=t_from, t_to_ns=t_to,
-                        tier=self.prof.name, seed=self.seed, uav_no=uav_no, sensor_no=0)
+                        tier=self.prof.name, seed=self.seed, uav_no=uav_no, sensor_no=0, bias=self._bias[uav])
         if len(smp.t_ns) == 0:
             return None
         return {"sensor_id": IMU_SENSOR, "seq": int(k - 1), "t0_ns": int(smp.t_ns[0]), "dt_ns": int(NS // self.imu_model.rate_hz),
@@ -355,6 +441,9 @@ class L2Sensors:
                 "vel_enu_mps": [float(v) for v in s[7:10]], "fix": self.nav.fix, "pos_std_m": list(self.nav.pos_std_m)}
 
     def close(self) -> None:
+        if self._truth_pool is not None:
+            self._truth_pool.shutdown(wait=True)
+            self._truth_pool = None
         if self._lp is not None:
             self._lp.close()
             self._lp = None
@@ -366,7 +455,22 @@ class L2Sensors:
 def _scan(lidar, uav: str, uav_no: int, k: int, t_s: int, nodes, actor_states, seed: int, tier: str) -> dict:
     """一帧网格 LiDAR（窗口 [t_s, t_s + 100 ms]，帧序号 k − 1）→ LidarObs（不含 mount_nominal）。"""
     sc = lidar.scan(k - 1, t_s, nodes, actor_states=actor_states, seed=seed, uav_no=uav_no, sensor_no=0, tier=tier)
-    p = sc.points
+    return _lidar_obs(sc.points, k, t_s)
+
+
+def _scan_jobs(lidar, k: int, jobs, actor_states, seed: int, tier: str) -> dict:
+    """同一 tick 各机的扫描 {uav: LidarObs}：Warp 后端一次 launch 扫描全部机体（每帧结果与批大小、批内次序无关，M25-AC-012），
+    CPU 参考逐机扫描。"""
+    if hasattr(lidar, "scan_batch"):
+        from awr.sensorsvc.lidar.warp_mesh import LidarFrameReq
+
+        reqs = [LidarFrameReq(k - 1, t_s, nodes, seed, no, 0, tier) for _u, no, t_s, nodes in jobs]
+        scans = lidar.scan_batch(reqs, actor_states=actor_states)
+        return {u: _lidar_obs(sc.points, k, t_s) for (u, _no, t_s, _n), sc in zip(jobs, scans, strict=True)}
+    return {u: _scan(lidar, u, no, k, t_s, nodes, actor_states, seed, tier) for u, no, t_s, nodes in jobs}
+
+
+def _lidar_obs(p, k: int, t_s: int) -> dict:
     xyz = np.stack([p["x"], p["y"], p["z"]], 1).astype("<f4")
     return {"sensor_id": LIDAR_SENSOR, "seq": int(k - 1), "t_start_ns": int(t_s), "n": len(p), "xyz_m": xyz.tobytes(),
             "reflectivity": np.ascontiguousarray(p["reflectivity"], "u1").tobytes(), "tag": np.ascontiguousarray(p["tag"], "u1").tobytes(),
@@ -388,20 +492,21 @@ def _recv(f):
 
 
 def _lidar_main() -> None:
-    """工作进程入口（`python -c "from awr.agentsdk.env.l2 import _lidar_main; _lidar_main()" <world> <cache> <event>`）：
-    stdin/stdout 为长度前缀的 pickle 帧；stdout 的其它输出改写到 stderr。"""
+    """工作进程入口（`python -c "from awr.agentsdk.env.l2 import _lidar_main; _lidar_main()" <world> <cache> <event> [<后端>]`）：
+    stdin/stdout 为长度前缀的 pickle 帧；stdout 的其它输出改写到 stderr。后端缺省 cpu。"""
     out = os.fdopen(os.dup(1), "wb")
     os.dup2(2, 1)
     inp = sys.stdin.buffer
     world_dir, cache, event_dir = sys.argv[1:4]
+    backend = sys.argv[4] if len(sys.argv) > 4 else "cpu"
     try:
-        from awr.sensorsvc.lidar.mesh import MeshLidar
         from awr.sensorsvc.lidar.model import load_lidar_model
+        from awr.sensorsvc.lidar.warp_mesh import open_mesh_lidar
         from awr.sim.events.tape import open_tape
         from awr.world.mesh.query import open_mesh_world_query
 
         tape = open_tape(Path(event_dir))
-        lidar = MeshLidar(open_mesh_world_query(Path(world_dir), Path(cache)), load_lidar_model(), list(tape.actors))
+        lidar = open_mesh_lidar(open_mesh_world_query(Path(world_dir), Path(cache)), load_lidar_model(), list(tape.actors), backend=backend)
         _send(out, ("ready", None))
     except Exception:
         _send(out, ("err", traceback.format_exc()))
@@ -415,17 +520,47 @@ def _lidar_main() -> None:
             return
         k, jobs, seed, tier = msg
         try:
-            _send(out, ("ok", {u: _scan(lidar, u, no, k, t_s, nodes, tape.actor_states, seed, tier) for u, no, t_s, nodes in jobs}))
+            _send(out, ("ok", _scan_jobs(lidar, k, jobs, tape.actor_states, seed, tier)))
         except Exception:
             _send(out, ("err", traceback.format_exc()))
+
+
+class _LidarPool:
+    """N 个网格 LiDAR 工作进程：`submit` 把同一 tick 的机体作业按序号轮流分给各进程（作业 i → 进程 i mod N），`result` 合并各进程的
+    点云（按 uav 取用，与单进程逐字节相同）。各进程同时装载世界（几何缓存按临时目录原子改名写入，并发装载安全）。"""
+
+    def __init__(self, n: int, world_dir: Path, cache: Path, event_dir: Path, backend: str = "cpu") -> None:
+        self.procs = [_LidarProc(world_dir, cache, event_dir, backend) for _ in range(int(n))]
+        self._busy: list[_LidarProc] = []
+
+    def submit(self, k: int, jobs, seed: int, tier: str) -> None:
+        n = len(self.procs)
+        self._busy = []
+        for i, p in enumerate(self.procs):
+            part = jobs[i::n]
+            if part:
+                p.submit(k, part, seed, tier)
+                self._busy.append(p)
+
+    def result(self) -> dict:
+        out: dict = {}
+        for p in self._busy:
+            out.update(p.result())
+        self._busy = []
+        return out
+
+    def close(self) -> None:
+        for p in self.procs:
+            p.close()
 
 
 class _LidarProc:
     """网格 LiDAR 工作进程（独立解释器，不经 multiprocessing，不重新导入调用方主模块）：submit 后由主进程渲染相机，result 取回同一
     tick 的点云。"""
 
-    def __init__(self, world_dir: Path, cache: Path, event_dir: Path) -> None:
-        cmd = [sys.executable, "-c", "from awr.agentsdk.env.l2 import _lidar_main; _lidar_main()", str(world_dir), str(cache), str(event_dir)]
+    def __init__(self, world_dir: Path, cache: Path, event_dir: Path, backend: str = "cpu") -> None:
+        cmd = [sys.executable, "-c", "from awr.agentsdk.env.l2 import _lidar_main; _lidar_main()", str(world_dir), str(cache), str(event_dir),
+               backend]
         self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         self._ready = False
 

@@ -5,7 +5,8 @@
   真值系目标，速度限幅）；hover、takeoff（`alt_agl_m` 限于任务高度包络）、land；orbit、path、rtl 在 P1（663 `unsupported`）。
 - gimbal：angles 按云台范围限幅；look_at 以本机导航解计算角度；zoom 只接受 1×（663 `zoom_range`）；sensor_mode 在 P0b。
 - msgs：通信关闭（667 `comm_off`）、目的方不存在（667 `dst`）、载荷超长（667 `too_large`）。
-- report：类型不在任务契约 `report_types` 中（663 `report_type`，FR-125）；证据引用本机未收到的检测或帧（663 `evidence_unknown`）。
+- report：类型不在任务契约 `report_types` 中（663 `report_type`，FR-125）；证据引用本机未收到的检测或帧（663 `evidence_unknown`；L1 按
+  det_id 与帧序号，L2 的框证据按本机已交付的 (传感器, 帧序号)，`saw_frames`）。
 守卫不调用 D2 TrustedGuard（§13 第 1 条），只以仿真时间实现同等语义。
 
 超时（D3-AC-17；AWR-17 §18.9.6）：Agent 在 `decision.step_budget_s` 内未返回动作时由 `timeout(k)` 处置：回执
@@ -93,6 +94,13 @@ class ActionGuard:
         for d in dets:
             self.seen[d["det_id"]] = d["seq"]
             self.frames.add((d["sensor_id"], d["seq"]))
+
+    def saw_frames(self, frames: dict[str, list[dict]]) -> None:
+        """L2、L2-depth 交付的传感器帧（`sensors` 映射）：report 的帧证据（`sensor`、`frame_seq`、`bbox_xywh`，无 det_id）按本机已收到的
+        (传感器, 帧序号) 核对。"""
+        for sid, fs in frames.items():
+            for f in fs:
+                self.frames.add((str(sid), int(f["seq"])))
 
     def check(self, act: dict, k_obs: int, nav_pos: np.ndarray, nav_yaw: float, e_nav: np.ndarray, ground_z: float) -> GuardResult:
         r = GuardResult()

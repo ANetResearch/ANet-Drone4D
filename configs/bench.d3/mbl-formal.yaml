@@ -1,0 +1,52 @@
+# configs/bench.d3/mbl-formal.yaml：最小基准闭环的 P0a 正式口径（D3-AC-56；同时为 D3-AC-17、18、57、58 提供正式运行；WP-D3-30；B10）。
+# 由 tools/deploy/dmax/run_mbl_e2e.sh 读入，tools/bench/d3/mbl_e2e.py 执行（schema drone4d.bench.mbl_e2e_config.v1；未写出的键取脚本缺省值，
+# 缺省值即正式口径）。规模：L1 + L2 两组 × 3 个参考基线 × 10 个秘密种子 × 2 次重复 = 120 个正式 Run，Realistic 档 gz 锁步，
+# 另有 1 个锁步预检 Run 与 1 个内部提交（扫描、冒烟、正式评测、评分）。记录见 docs/impl/D3-P0a-正式口径记录.md。
+#
+# 取值说明：
+# - round：Run 标识前缀，gz 与 Agent 兄弟容器名由此派生（d3-gz-b10-formal-r2-*、d3-agent-b10-formal-r2-*，CM-06）。第 2 轮（r2）：
+#   第 1 轮 b10-formal 的 L2 墙钟比 3.66–4.73 超过 3.0、机队为 x500，Env 主循环提速与 p600_bench 映射之后以新轮次名与新榜单版本重跑；
+# - groups[].jobs：并行 Run 数（不进入配置指纹，可在续跑时调整）。两组均 3 路并行：r2 起 L2 的 Env 主循环中相机三机先提交后取回、
+#   IMU 偏置增量计算与 IMU、GNSS 在等待点云期间合成、真值可见度归约与观测记录移到后台线程、观测摘要不生成整段 JSON（输出逐字节
+#   不变，记录第 4 节），主循环其余时间主要等待 Agent 动作；
+# - fleet_vehicle：p600_bench（排行榜标准轨机型，vehicles/d3/variants/p600_bench.yaml）。Realistic 档在 x500_d4d 几何上换用其质量
+#   3.935 kg、惯量与最大转速 1500 rad/s（awr.phys.gz.vehicles，M24-FR-083，F-09）；L2 传感器组（rgb1080-rs、倒装 MID-360、内置 IMU、
+#   GNSS、导航解）由 Env 的 L2 观测提供，与变体的 rig 一致（P0a 不交付热成像）；
+# - lidar_backend：warp，L2 网格 LiDAR 使用 M25 GPU 产品路径（awr.sensorsvc.lidar.warp_mesh，与 Open3D CPU 参考同一算法与随机键，
+#   逐射线差异按 D3-AC-12 判定；内核无浮点原子，同一输入逐字节重复），一个工作进程一次 launch 扫描全部机体；经 Env 专用变量
+#   AWR_ENV_LIDAR_BACKEND 传给基线与内部提交的全部 Run，运行清单记录 l2.lidar_backend；
+# - agent_image、gz.image 与提交镜像使用本任务专用标签（:b10），由快照构建，避免共享 :dev 标签在本轮执行期间被其他任务重建；
+# - board.version：每组一个榜单版本 p0a-formal-r2-l1、p0a-formal-r2-l2，L2 为当前版本；原型榜标注 track.prototype = true、
+#   gpu_class = shared。第 1 轮的 p0a-formal-l1、p0a-formal-l2 保留为历史版本。
+schema: drone4d.bench.mbl_e2e_config.v1
+round: b10-formal-r2
+world: {id: oryahovo-crop1, deep: false}
+event: {source: configs/events.d3/crop-handoff-001/event.yaml}
+groups:
+  - {obs_level: L1, run_spec: configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json, jobs: 3}
+  - {obs_level: L2, run_spec: configs/bench.d3/crop-handoff-001.l2-3uav.run_spec.json, jobs: 3}
+fleet_vehicle: p600_bench
+baselines: [static_guard, coverage_scan, track_share]
+seeds: 10
+repeats: 2
+duration_s: null
+physics: realistic
+split: dev
+agent_image: d3-agent-py:b10
+gz: {launcher: docker, image: d3-gz:b10, export_root: null}
+lockstep: {preflight_s: 20, policy: track_share, group: L1}
+wall_ratio_max: 3.0
+lidar_backend: warp
+platform_retries: 1
+board: {version: p0a-formal-r2, current: L2, n_boot: 10000}
+submission:
+  image: d3-example-close-track:b10
+  cmd: [python, -m, drone4d.serve, close_track.agent:Agent]
+  env: {}
+  group: L2
+  team: d3-internal
+  owner: mbl-e2e
+  notes: "P0a formal round b10-formal-r2: internal example submission (close_track)"
+  smoke_s: 20
+  worker: inline
+  timeout_s: 21600

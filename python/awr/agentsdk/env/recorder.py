@@ -42,13 +42,14 @@ import hashlib
 import json
 import os
 import platform
+import re
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
 
-__all__ = ["RAW_TOPIC_PATTERNS", "TRUTH_TOPIC_PATTERNS", "EnvRecorder", "RecorderOptions", "canonical_json"]
+__all__ = ["RAW_TOPIC_PATTERNS", "TRUTH_TOPIC_PATTERNS", "EnvRecorder", "RecorderOptions", "canonical_json", "canonical_sha256"]
 
 TICK_NS = 100_000_000
 FRAME_PERIOD_NS = 100_000_000                                 # L2 相机与 LiDAR 均为 10 Hz（env.l2）
@@ -74,6 +75,46 @@ def _enc(x):
 
 def canonical_json(x) -> bytes:
     return json.dumps(_enc(x), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+
+_PH = re.compile(r'"@b64@([0-9a-f]{16})@(\d+)@"')
+
+
+def _enc_ph(x, blobs: list[bytes], nonce: str):
+    """`_enc` 的占位版：bytes 换成 `{"$b64": "@b64@<nonce>@<i>@"}`，原字节按序号存入 `blobs`。"""
+    if isinstance(x, bytes | bytearray):
+        blobs.append(bytes(x))
+        return {"$b64": f"@b64@{nonce}@{len(blobs) - 1}@"}
+    if isinstance(x, dict):
+        return {k: _enc_ph(v, blobs, nonce) for k, v in x.items()}
+    if isinstance(x, list | tuple):
+        return [_enc_ph(v, blobs, nonce) for v in x]
+    if isinstance(x, np.generic):
+        return x.item()
+    return x
+
+
+def canonical_sha256(x) -> str:
+    """`sha256(canonical_json(x))` 的十六进制摘要，逐位相同但不生成整段 JSON：结构部分（不含二进制载荷）先按规范 JSON 编码，
+    其中每段 bytes 以随机占位串代替；摘要按顺序喂入结构文本与各段载荷的 base64（base64 字符在 JSON 中无需转义，与整段编码的
+    字节序列相同）。L2 观测每条约 1 MB（JPEG、点云），整段 `json.dumps` 要逐字符扫描数 MB 的 base64 文本，是 Env 主循环的主要
+    开销之一。占位串与数据中的字符串冲突（出现次数不符）时退回整段编码。"""
+    blobs: list[bytes] = []
+    nonce = os.urandom(8).hex()
+    text = json.dumps(_enc_ph(x, blobs, nonce), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if not blobs:
+        return hashlib.sha256(text.encode()).hexdigest()
+    parts = _PH.split(text)                                     # [文本, nonce, 序号, 文本, …]
+    if len(parts) != 3 * len(blobs) + 1 or any(parts[i] != nonce for i in range(1, len(parts), 3)) \
+            or sorted(int(parts[i]) for i in range(2, len(parts), 3)) != list(range(len(blobs))):
+        return hashlib.sha256(canonical_json(x)).hexdigest()
+    h = hashlib.sha256(parts[0].encode())
+    for i in range(1, len(parts), 3):
+        h.update(b'"')
+        h.update(base64.b64encode(blobs[int(parts[i + 1])]))
+        h.update(b'"')
+        h.update(parts[i + 2].encode())
+    return h.hexdigest()
 
 
 def _plain(x):
@@ -305,7 +346,7 @@ class EnvRecorder:
 
     # ------------------------------------------------------------------ Env 回调
     def on_obs(self, uav: str, k: int, msg: dict) -> str:
-        h = hashlib.sha256(canonical_json(msg)).hexdigest()
+        h = canonical_sha256(msg)
         if self.dir:
             f = self._fh.get(f"agents/{uav}/obs.sha256")
             if f is None:

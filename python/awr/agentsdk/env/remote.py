@@ -163,7 +163,10 @@ class SocketAgentHost:
 
 
 def run_remote_episode(env, hosts: Mapping[str, SocketAgentHost], *, step_budget_s: float | None = None) -> tuple[dict, dict]:
-    """hosts 须已 `accept()`；→ (env.close() 的运行清单, 每机线协议统计)。"""
+    """hosts 须已 `accept()`；→ (env.close() 的运行清单, 每机线协议统计)。观测交付后只经线协议编码、不再修改，Env 的观测记录
+    改在后台线程写出（`BenchEnv.async_obs_record`，与 Agent 计算重叠）。"""
+    if hasattr(env, "async_obs_record"):
+        env.async_obs_record = True
     obs, infos = env.reset()
     reason = "run_ended"
     try:

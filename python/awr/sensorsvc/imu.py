@@ -29,7 +29,7 @@ import numpy as np
 from awr.sensorsvc.errors import SensorSvcError
 from awr.sim.sensors import cbrng
 
-__all__ = ["DEFAULT_BPF_HZ", "DYN_ACC_MAX_MPS2", "DYN_OMEGA_MAX_RPS", "MID360_IMU_IN_LIDAR", "TIERS", "DynamicsReport", "G", "ImuModel",
+__all__ = ["DEFAULT_BPF_HZ", "DYN_ACC_MAX_MPS2", "DYN_OMEGA_MAX_RPS", "MID360_IMU_IN_LIDAR", "TIERS", "BiasWalk", "DynamicsReport", "G", "ImuModel",
            "ImuSamples", "assert_dynamics", "check_dynamics", "kinematics_from_poses", "load_imu_model", "synth_imu"]
 
 G = 9.80665
@@ -170,6 +170,10 @@ def _key_normal(seed: int, uav_no: int, j: np.ndarray, sensor_no: int, c: int) -
     return cbrng.normal_elem(seed, STREAM_M25, uav_no, j, CH_IMU + sensor_no * 32 + c)
 
 
+def _turn_on(seed: int, uav_no: int, sensor_no: int) -> np.ndarray:
+    return np.array([float(_key_normal(seed, uav_no, 0, sensor_no, 12 + c)) for c in range(6)])
+
+
 def _bias_walk(seed: int, uav_no: int, sensor_no: int, j: np.ndarray, rw: np.ndarray) -> np.ndarray:
     """偏置随机游走 b(j)（6 通道），b(0) = 0：j > 0 为 Σ_{0≤m<j} s_m，j < 0 为 −Σ_{j≤m<0} s_m，s_m = rw·sqrt(Δt)·n_m。
     两个方向各自从 0 顺序累加，结果只取决于 j，与分批调用的区间无关（逐位一致）。"""
@@ -190,10 +194,59 @@ def _bias_walk(seed: int, uav_no: int, sensor_no: int, j: np.ndarray, rw: np.nda
     return out
 
 
+class BiasWalk:
+    """`_bias_walk` 的增量缓存（逐 tick 调用的在线路径用）：正方向累加和按需向后延伸并保留，延伸段以已缓存的末值为首元素重新
+    `cumsum`，逐次加法与整段从 0 顺序累加相同，结果逐位一致；每次调用的开销只与新增网格点数成正比（整段重算随仿真时长线性
+    增长，360 s 运行的末段每次约 7 万点 × 6 通道）。负方向（预滚窗口）与键变化时退回整段计算。一个对象只服务一个
+    (seed, uav_no, sensor_no, rw) 键；键变化时清空重建。"""
+
+    def __init__(self) -> None:
+        self._key: tuple | None = None
+        self._cum = np.zeros((0, 6))
+        self._n = 0                                               # 有效行数：行 r 为 b(r)，r < _n
+        self._on: dict[tuple[int, int, int], np.ndarray] = {}     # 上电偏置的标准正态抽样（j = 0 通道 12–17，只取决于键）
+
+    def turn_on(self, seed: int, uav_no: int, sensor_no: int) -> np.ndarray:
+        """上电偏置通道的 6 个标准正态值（与 `synth_imu` 逐次计算相同，按键缓存）。"""
+        key = (int(seed), int(uav_no), int(sensor_no))
+        if key not in self._on:
+            self._on[key] = _turn_on(seed, uav_no, sensor_no)
+        return self._on[key].copy()
+
+    def __call__(self, seed: int, uav_no: int, sensor_no: int, j: np.ndarray, rw: np.ndarray) -> np.ndarray:
+        j = np.asarray(j, np.int64)
+        if len(j) and int(j.min()) < 0:
+            return _bias_walk(seed, uav_no, sensor_no, j, rw)
+        key = (int(seed), int(uav_no), int(sensor_no), np.asarray(rw, np.float64).tobytes())
+        if key != self._key:
+            self._key, self._cum, self._n = key, np.zeros((0, 6)), 0
+        hi = int(j.max(initial=0))
+        if hi >= self._n:
+            self._extend(seed, uav_no, sensor_no, hi, rw)
+        return self._cum[j] if len(j) else np.zeros((0, 6))
+
+    def _extend(self, seed: int, uav_no: int, sensor_no: int, hi: int, rw: np.ndarray) -> None:
+        """有效行延伸到 b(hi)（含）。首次与整段计算相同（0 行之后接 `cumsum(steps)`）。"""
+        if self._n == 0:
+            new = _bias_walk(seed, uav_no, sensor_no, np.arange(0, hi + 1, dtype=np.int64), rw)
+        else:
+            m = np.arange(self._n - 1, hi, dtype=np.int64)[:, None]          # s_{n−1} … s_{hi−1}
+            steps = np.hstack([_key_normal(seed, uav_no, m, sensor_no, 6 + c) for c in range(6)]) * rw
+            new = np.cumsum(np.vstack([self._cum[self._n - 1:self._n], steps]), axis=0)[1:]
+        n1 = self._n + len(new)
+        if n1 > len(self._cum):                                       # 容量倍增，避免每 tick 复制整段
+            buf = np.zeros((max(n1, 2 * len(self._cum), 1024), 6))
+            buf[:self._n] = self._cum[:self._n]
+            self._cum = buf
+        self._cum[self._n:n1] = new
+        self._n = n1
+
+
 def synth_imu(t_ns: np.ndarray, omega_b: np.ndarray, f_b: np.ndarray, *, R_bi: np.ndarray, r_imu_b: np.ndarray, model: ImuModel,
-              t_from_ns: int, t_to_ns: int, tier: str = "realistic", seed: int = 0, uav_no: int = 0, sensor_no: int = 0) -> ImuSamples:
+              t_from_ns: int, t_to_ns: int, tier: str = "realistic", seed: int = 0, uav_no: int = 0, sensor_no: int = 0,
+              bias: BiasWalk | None = None) -> ImuSamples:
     """`t_ns` 为物理步时刻；输出 [t_from, t_to) 内的 200 Hz 绝对网格样本（网格原点 0，预滚窗口为负时刻）。噪声状态以 j = 0 为
-    原点递推，与分批调用无关。"""
+    原点递推，与分批调用无关。`bias`：偏置随机游走的增量缓存（`BiasWalk`，每个 (uav, sensor) 一个；结果与不传时逐位一致）。"""
     from scipy.signal import lfilter
 
     if tier not in TIERS:
@@ -227,10 +280,10 @@ def synth_imu(t_ns: np.ndarray, omega_b: np.ndarray, f_b: np.ndarray, *, R_bi: n
         dts = 1.0 / model.rate_hz
         jj = j[:, None]
         white = np.hstack([_key_normal(seed, uav_no, jj, sensor_no, c) for c in range(6)])
-        on = np.array([float(_key_normal(seed, uav_no, 0, sensor_no, 12 + c)) for c in range(6)])
+        on = bias.turn_on(seed, uav_no, sensor_no) if bias is not None else _turn_on(seed, uav_no, sensor_no)
         on *= np.array([model.gyro_turn_on] * 3 + [model.acc_turn_on] * 3)
         rw = np.array([model.gyro_rw] * 3 + [model.acc_rw] * 3) * math.sqrt(dts)
-        bias = _bias_walk(seed, uav_no, sensor_no, j, rw) + on
+        bias = (bias(seed, uav_no, sensor_no, j, rw) if bias is not None else _bias_walk(seed, uav_no, sensor_no, j, rw)) + on
         gyro = gyro_t + bias[:, :3] + model.gyro_sigma * white[:, :3]
         acc = acc_t + bias[:, 3:] + model.acc_sigma * white[:, 3:]
         if tier == "harsh" and model.vib_amp_mps2 > 0:            # 抗混叠与重采样之后按输出采样时刻叠加（含采样混叠）

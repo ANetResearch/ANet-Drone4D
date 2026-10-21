@@ -105,6 +105,12 @@ def _ok_world(world_dir, *, deep=False) -> dict:
             "info": {"rules_checked": 100}, "seconds": 0.1}
 
 
+@pytest.fixture(autouse=True)
+def _lidar_backend_env(monkeypatch) -> None:
+    """`Round` 把配置的 LiDAR 后端写入进程环境（AWR_ENV_LIDAR_BACKEND）；每个测试结束后恢复，不影响其他测试的 Env。"""
+    monkeypatch.setenv("AWR_ENV_LIDAR_BACKEND", "cpu")
+
+
 @pytest.fixture()
 def env(tmp_path: Path, monkeypatch) -> dict:
     monkeypatch.setenv("FAKE_DOCKER_STATE", str(tmp_path / "docker-state"))
@@ -269,6 +275,50 @@ def test_fingerprint_config_errors_and_plan(env: dict, capsys) -> None:
     assert mbl.is_formal(cfg) and cfg["wall_ratio_max"] == 3.0 and cfg["seeds"] == 10 and cfg["repeats"] == 2
     assert not mbl.is_formal(mbl.load_config(None, {"duration_s": 30.0}))
     assert not mbl.is_formal(mbl.load_config(None, {"groups": ["L1"]}))
+
+
+def test_lockstep_check_counts_preroll_ticks() -> None:
+    """锁步不变量按档内 tick 计：回合 200 tick + 预滚 20 tick（t_pre = 2 s）时 gz 自报迭代数应为 25 × 220（dmax 实测形态，B10）。"""
+    man = {"physics": "realistic", "tier": "realistic", "n_ticks": 200,
+           "tier_info": {"ticks": 220, "iterations": 5500, "restarts": 0, "preroll": {"n_ticks": 20, "t_pre_s": 2.0}}}
+    r = mbl.lockstep_check(man, 10, 250)
+    assert r["ok"] and r["preroll_ticks"] == 20 and r["backend_ticks"] == 220
+    assert not mbl.lockstep_check({**man, "tier_info": {**man["tier_info"], "iterations": 5000}}, 10, 250)["ok"]
+    assert not mbl.lockstep_check({**man, "tier_info": {**man["tier_info"], "ticks": 200}}, 10, 250)["ok"]
+    assert mbl.lockstep_check({**man, "tier_info": {"ticks": 200, "iterations": 5000}}, 10, 250)["ok"]       # 无预滚
+    assert not mbl.lockstep_check({**man, "physics": "kinematic"}, 10, 250)["applicable"]
+    # 公开冒烟种子 0 不参与脱敏（预检与冒烟的错误文本保持原样），秘密种子照常替换
+    assert mbl.redact("[Errno 30] Read-only file system", [0]) == "[Errno 30] Read-only file system"
+    assert mbl.redact("seed 123456789 / 75bcd15", [0, 123456789]) == "seed <seed> / <seed>"
+
+
+def test_formal_config_file(tmp_path: Path, monkeypatch) -> None:
+    """B10 正式口径配置 `configs/bench.d3/mbl-formal.yaml`：正式口径 120 个 Run、Realistic 档 gz 锁步、轮次与榜单版本命名、
+    本轮专用镜像标签；组内并行度不进入配置指纹（续跑时可调整）。"""
+    monkeypatch.chdir(REPO)
+    path = REPO / "configs/bench.d3/mbl-formal.yaml"
+    cfg = mbl.load_config(path)
+    assert mbl.is_formal(cfg) and cfg["physics"] == "realistic" and cfg["gz"]["launcher"] == "docker" and cfg["wall_ratio_max"] == 3.0
+    rnd = mbl.Round(cfg, tmp_path / "out", worlds_root=REPO / "worlds", data_root=tmp_path / "br")
+    plan = rnd.plan()
+    assert len(plan) == 120 and len({p["run_id"] for p in plan}) == 120
+    assert all(p["run_id"].startswith("b10-formal-r2-") for p in plan) and cfg["fleet_vehicle"] == "p600_bench"
+    assert {(p["group"], p["policy"]) for p in plan} == {(g, b) for g in ("L1", "L2") for b in mbl.BASELINES}
+    assert [rnd.board_version(g) for g in ("L1", "L2")] == ["p0a-formal-r2-l1", "p0a-formal-r2-l2"]
+    assert all(f["vehicle_ref"] == "p600_bench" for g in ("L1", "L2") for f in rnd.specs[g]["fleet"])
+    assert cfg["board"]["current"] == "L2" and cfg["submission"]["group"] == "L2" and cfg["submission"]["worker"] == "inline"
+    assert cfg["agent_image"].endswith(":b10") and cfg["gz"]["image"].endswith(":b10") and cfg["submission"]["image"].endswith(":b10")
+    assert all(rnd.specs[g]["ranked"] and rnd.specs[g]["duration_s"] == 360 for g in ("L1", "L2"))
+    faster = mbl.load_config(path)
+    for g in faster["groups"]:
+        g["jobs"] = 2
+    assert mbl.fingerprint(faster) == mbl.fingerprint(cfg)
+    assert cfg["lidar_backend"] == "warp" and os.environ["AWR_ENV_LIDAR_BACKEND"] == "warp"      # L2 网格 LiDAR 用 M25 GPU 产品路径
+    other = mbl.load_config(path)
+    other["lidar_backend"] = "cpu"
+    assert mbl.fingerprint(other) != mbl.fingerprint(cfg)                                           # 后端进入指纹（续跑不能换后端）
+    with pytest.raises(mbl.ConfigError, match="lidar_backend"):
+        mbl.load_config(path, {"lidar_backend": "auto"})
 
 
 def test_world_and_compile_gates_stop_the_round(env: dict) -> None:

@@ -9,7 +9,16 @@ import pytest
 
 pytest.importorskip("scipy")
 
-from awr.sensorsvc.imu import ACC_SAT, G, ImuModel, kinematics_from_poses, load_imu_model, synth_imu
+from awr.sensorsvc.imu import (
+    ACC_SAT,
+    BiasWalk,
+    G,
+    ImuModel,
+    _bias_walk,
+    kinematics_from_poses,
+    load_imu_model,
+    synth_imu,
+)
 
 NS = 1_000_000_000
 I3 = np.eye(3)
@@ -77,6 +86,27 @@ def test_noise_statistics_determinism_and_batching() -> None:
     c = synth_imu(t, w, f, t_from_ns=0, t_to_ns=60 * NS, tier="realistic", **{**kw, "seed": 4})
     assert not np.allclose(a.gyro_rps, c.gyro_rps)
     assert (a.flags == 0).all()
+
+
+def test_bias_walk_cache_is_bitwise_equal_to_full_sum() -> None:
+    """逐 tick 调用的增量缓存（`BiasWalk`）与整段从 0 累加逐位一致，含首次调用、跳跃、回看与键变化；`synth_imu(bias=...)` 同样一致。"""
+    rw = np.array([1e-4] * 3 + [3e-3] * 3) * math.sqrt(0.005)
+    b = BiasWalk()
+    for j0 in [0, 20, 40, *range(60, 4000, 20), 9000, 120, 9020]:          # 顺序、跳跃（9000）、回看（120）
+        j = np.arange(j0, j0 + 20, dtype=np.int64)
+        assert np.array_equal(b(7, 1, 0, j, rw).view(np.uint64), _bias_walk(7, 1, 0, j, rw).view(np.uint64)), j0
+    j = np.arange(100, 120, dtype=np.int64)
+    assert np.array_equal(b(8, 1, 0, j, rw), _bias_walk(8, 1, 0, j, rw))     # 键变化：清空重建
+    neg = np.arange(-40, -20, dtype=np.int64)
+    assert np.array_equal(b(8, 1, 0, neg, rw), _bias_walk(8, 1, 0, neg, rw))  # 负方向（预滚）退回整段计算
+    t, p, q = track(seconds=12.0)
+    w, f = kinematics_from_poses(t, p, q)
+    kw = {"R_bi": I3, "r_imu_b": np.zeros(3), "model": ImuModel(), "seed": 3, "uav_no": 2, "sensor_no": 0, "tier": "realistic"}
+    cache = BiasWalk()
+    for k in range(1, 110):
+        a = synth_imu(t, w, f, t_from_ns=(k - 1) * NS // 10, t_to_ns=k * NS // 10, **kw)
+        c = synth_imu(t, w, f, t_from_ns=(k - 1) * NS // 10, t_to_ns=k * NS // 10, bias=cache, **kw)
+        assert np.array_equal(a.acc_mps2, c.acc_mps2) and np.array_equal(a.gyro_rps, c.gyro_rps), k
 
 
 def test_saturation_flag() -> None:

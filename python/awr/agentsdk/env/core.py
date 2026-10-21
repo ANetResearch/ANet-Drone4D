@@ -29,6 +29,7 @@ goto 目标解释在本机导航系，每个控制步按当前导航误差换算
 from __future__ import annotations
 
 import math
+import os
 import time
 from pathlib import Path
 
@@ -112,6 +113,12 @@ class BenchEnv:
         self._svc, self._svc_cap, self._sess = sensorsvc, inflight_cap, None
         self._svc_wait = {"ticks": 0, "rejected_641": 0, "resubmits": 0, "wait_s": 0.0, "backpressure_s": 0.0, "blocked_ticks": 0}
         self._svc_cache: tuple[int, dict] | None = None
+        self._truth_q: list = []                          # 推迟计算的 L2 真值行（Future，按 tick、机序）
+        # 观测记录（摘要与 raw.mcap 观测通道）在后台线程按交付顺序写出，下一步结算动作之前取齐：只在观测交付后不再被修改时开启
+        # （`run_remote_episode`：观测经线协议编码发送）；写入顺序与同步写入相同
+        self.async_obs_record = False
+        self._rec_pool = None
+        self._rec_futs: list = []
         self._wall = _WallPreview(spec.out_dir, wall_preview) if wall_preview else None
         self.preroll = plan_preroll(((f.uav, f.airborne) for f in spec.fleet), preroll_s, TICK_MS)
         self.possible_agents = list(self.uavs)
@@ -201,6 +208,8 @@ class BenchEnv:
         self.tier = run_preroll(self.tier, self.preroll)    # [−t_pre, 0)：不调用 Agent、不交付观测；窗口内接触只记入 tier_info.preroll
         if self.spec.obs_level != "L1":
             self.l2 = self._l2_factory(self) if self._l2_factory is not None else self._make_l2()
+            if self._svc is None and hasattr(self.l2, "defer_truth"):
+                self.l2.defer_truth = True                 # 真值可见度归约在等待 Agent 动作期间由后台线程完成（`_flush_truth`）
             if self._svc is not None:
                 cap = self._svc_cap or 2 * len(self.uavs) * len(self._l2_sensors(1))
                 self._sess = self._svc.open(f"{self.spec.run_id}/0", "benchmark", produce=self._produce, inflight_cap=cap)
@@ -228,7 +237,21 @@ class BenchEnv:
         self._log_fleet()
         return self._observe(), {u: {"config": self.configs[u]} for u in self.uavs}
 
+    def _flush_truth(self) -> None:
+        """按序写出推迟计算的 L2 真值行（上一次感知的各机）：在每次推进之前（本 tick 的接触事件之前）与关闭时写出，真值层的写入顺序
+        与不推迟时相同。"""
+        q, self._truth_q = self._truth_q, []
+        for fut in q:
+            for tr in fut.result():
+                self.rec.on_vis(tr)
+
+    def _flush_obs(self) -> None:
+        futs, self._rec_futs = self._rec_futs, []
+        for f in futs:
+            f.result()
+
     def step(self, actions: dict[str, dict]):
+        self._flush_obs()
         for u in list(actions):
             if u not in self.st or self.st[u].k_obs is None:
                 raise KeyError(f"{u} has no observation in flight")
@@ -310,6 +333,7 @@ class BenchEnv:
         a.wall_s += time.perf_counter() - t_wall
 
     def _advance(self) -> None:
+        self._flush_truth()
         k = self.k
         for a in self.st.values():                          # 估计系目标随导航误差更新（≥ 5 cm）
             if a.cmd_kind == "goto" and a.goto_nav is not None and not a.done:
@@ -406,8 +430,11 @@ class BenchEnv:
                 a = self.st[u]
                 for sid, fs in frames.items():
                     a.frames.setdefault(sid, []).extend(fs)
-                for tr in truth:
-                    self.rec.on_vis(tr)
+                if isinstance(truth, list):
+                    for tr in truth:
+                        self.rec.on_vis(tr)
+                else:
+                    self._truth_q.append(truth)
                 if self._wall is not None:
                     self._wall.on_frames(u, k, frames.get(CAM_SENSOR) or [])
             return
@@ -446,7 +473,16 @@ class BenchEnv:
                    "term": a.term if (a.term["terminated"] or a.term["truncated"]) else {"terminated": False, "truncated": False, "reason": "none"}}
             msg = {"obs": obs, "inbox": a.inbox}
             self.guard[u].saw(a.dets)
-            self.rec.on_obs(u, self.k, msg)
+            if self.l2 is not None:                         # L2 的 report 证据引用交付的相机帧（框证据，无 det_id）
+                self.guard[u].saw_frames(a.frames)
+            if self.async_obs_record:
+                if self._rec_pool is None:
+                    from concurrent.futures import ThreadPoolExecutor
+
+                    self._rec_pool = ThreadPoolExecutor(1, thread_name_prefix="env-obs-rec")
+                self._rec_futs.append(self._rec_pool.submit(self.rec.on_obs, u, self.k, msg))
+            else:
+                self.rec.on_obs(u, self.k, msg)
             out[u] = msg
             a.dets, a.acks, a.inbox, a.frames = [], [], [], {}
             a.k_obs = self.k
@@ -462,6 +498,11 @@ class BenchEnv:
         self._fleet["status"].append([str(self.status[u]) for u in self.uavs])
 
     def close(self) -> dict:
+        self._flush_obs()
+        if self._rec_pool is not None:
+            self._rec_pool.shutdown(wait=True)
+            self._rec_pool = None
+        self._flush_truth()
         info = self.tier.close() if hasattr(self, "tier") else {}
         svc = None
         if self._sess is not None:
@@ -488,6 +529,8 @@ class BenchEnv:
                     "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats, "tape_check": self.tape_check}
         if not self.spec.ranked or self.spec.seed_commit:     # 运行身份（M27-FR-007）；排名运行须有 M27 的种子承诺值
             manifest.update(self.spec.identity())
+        if self.l2 is not None:                             # 网格 LiDAR 后端（cpu：Open3D 参考；warp：M25 GPU 产品路径）
+            manifest["l2"] = {"lidar_backend": getattr(self.l2, "lidar_backend", None)}
         if svc is not None:
             manifest["sensorsvc"] = svc
         if self._wall is not None:
@@ -550,7 +593,9 @@ SPAWN_LEVEL_M = 0.15
 
 class _GzTier:
     """Realistic 档：每 Run 一个 gz 实例（GzInstance + compose_run + SupervisedGzBackend：看门狗 632 / 638 时重启实例并从回合起点
-    重放，M24-FR-078、FR-079），关闭时停止实例。"""
+    重放，M24-FR-078、FR-079），关闭时停止实例。机型按 `fleet[].vehicle_ref` 映射（`awr.phys.gz.vehicles`，M24-FR-083）：`p600_bench`
+    在 x500_d4d 几何上换用其质量、惯量与最大转速，派生模型写入 `<run_dir>/models/` 并只读挂载进 gz 实例；其余机型用 x500 原型。
+    映射参数写入运行清单 `tier_info.vehicle`。"""
 
     @staticmethod
     def create(spec: EnvSpec, spawn: dict, grounded: list[str], world):
@@ -558,14 +603,26 @@ class _GzTier:
         from awr.phys.gz.backend import SupervisedGzBackend
         from awr.phys.gz.compose import UavSpawn, compose_run
         from awr.phys.gz.instance import GzInstance
+        from awr.phys.gz.vehicles import apply_vehicle, base_model_sdf, quad_for_fleet, write_model
         from awr.phys.kinematic import GEAR_Z_M
         from awr.world.export.gz import export_world
 
         o = spec.gz
         exp = export_world(Path(spec.world_dir), out_root=o.get("export_root"), check_sdf=o.get("check_sdf"))
         run_dir = Path(o.get("run_dir") or (Path(spec.out_dir) / "phys" if spec.out_dir else Path("/tmp") / f"d4d-{spec.run_id}"))
-        inst = GzInstance(run_dir, o.get("name", f"d3-gz-{spec.run_id}"), image=o.get("image", "d3-gz:dev"), launcher=o.get("launcher", "docker"),
-                          world_export=exp.root)
+        launcher = o.get("launcher", "docker")
+        q = quad_for_fleet(f.vehicle_ref for f in spec.fleet)
+        mounts = {}
+        md = write_model(run_dir / "models", q, base_model_sdf()) if q.mapped else None
+        if md is not None:
+            if launcher == "docker":
+                mounts[str(md)] = f"/opt/d4d/models/{q.model}"
+            else:
+                rp = os.environ.get("GZ_SIM_RESOURCE_PATH", "")
+                if str(md.parent) not in rp.split(":"):
+                    os.environ["GZ_SIM_RESOURCE_PATH"] = ":".join(p for p in (str(md.parent), rp) if p)
+        inst = GzInstance(run_dir, o.get("name", f"d3-gz-{spec.run_id}"), image=o.get("image", "d3-gz:dev"), launcher=launcher,
+                          world_export=exp.root, extra_mounts=mounts)
         spawns = []
         for u, (p, yaw) in spawn.items():
             z = float(p[2])
@@ -576,7 +633,7 @@ class _GzTier:
                     raise ValueError(f"{u}: spawn surface not level ({np.ptp(zs):.2f} m over the airframe footprint)")
                 z = float(zs.max()) + GEAR_Z_M + 0.01
             spawns.append(UavSpawn(u, (float(p[0]), float(p[1]), z), yaw))
-        inst.start(compose_run(spawns, world_static_uri=exp.uri, endpoint=inst.gz_endpoint, spherical=exp.spherical))
+        inst.start(apply_vehicle(compose_run(spawns, world_static_uri=exp.uri, endpoint=inst.gz_endpoint, spherical=exp.spherical), q, len(spawns)))
         try:
             inst.wait_socket(float(o.get("ready_timeout_s", 120)))
             be = SupervisedGzBackend(inst, list(spawn), grounded=grounded, run_id=spec.run_id, step_timeout_s=float(o.get("step_timeout_s", 5)),
@@ -584,12 +641,12 @@ class _GzTier:
         except Exception:
             inst.stop()
             raise
-        return _GzHandle(be, inst)
+        return _GzHandle(be, inst, q.as_dict())
 
 
 class _GzHandle:
-    def __init__(self, be, inst) -> None:
-        self.be, self.inst = be, inst
+    def __init__(self, be, inst, vehicle: dict | None = None) -> None:
+        self.be, self.inst, self.vehicle = be, inst, vehicle
         self.name = be.name
 
     def __getattr__(self, k):
@@ -597,6 +654,7 @@ class _GzHandle:
 
     def close(self) -> dict:
         try:
-            return self.be.close()
+            info = self.be.close()
+            return {**info, "vehicle": self.vehicle} if self.vehicle is not None and isinstance(info, dict) else info
         finally:
             self.inst.stop()

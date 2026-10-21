@@ -114,7 +114,7 @@ def test_d3_process_reads_overlay(monkeypatch):
     monkeypatch.setenv("AWR_D3_ENABLED", "1")
     c = Catalog.load(VEH)
     assert c.overlay is not None and VID in c.overlay.variants
-    assert c.overlay.visible_ids() == [VID]
+    assert c.overlay.visible_ids() == [VID, "p600_bench"]
     monkeypatch.delenv("AWR_D3_ENABLED")
     assert Catalog.load(VEH, d3=True).overlay is not None
     monkeypatch.setenv("AWR_D3_ENABLED", "1")
@@ -229,6 +229,32 @@ def test_rig_matches_section_15_3(ov):
                                "role": "slam", "default": True, "rate_hz": 10.0, "controllable": False}
     with pytest.raises(KeyError):
         v.sensor("therm0")
+
+
+# ---------------------------------------------------------------- p600_bench（CAT-FR-043、FR-047；CAT-AC-033；§15.16.1）
+def test_p600_bench_derived_values_and_rig(ov):
+    v = ov.variant("p600_bench")
+    d = v.derived
+    assert v.base_ref == "p600_mid360@2.0.0" and v.problems == []
+    assert v.delta == {"dm_kg": pytest.approx(0.11), "dp_w": pytest.approx(1.5)}            # lwir640 13 mm 0.09 kg + 支架 0.02 kg、+1.5 W
+    for key, want in (("mass_kg", 3.935), ("p_hover_w", 419.9), ("hover_endurance_s", 1661.4), ("hover_thrust", 0.502), ("twr", 1.99),
+                      ("mtow_margin_kg", 0.165)):
+        assert _rel(want, d[key]) <= 0.01, (key, d[key])
+    assert abs(d["mass_kg"] - 3.935) < 1e-9 and abs(d["p_hover_w"] - 419.9) < 0.1 and abs(d["hover_endurance_s"] - 1661.4) < 0.5
+    doc = v.doc
+    assert PF.validate_doc(doc, pid="p600_bench", vdir=v.base_dir)[2] == []                # VH、MT、MNT-1（移除可选补光灯后）通过
+    assert "nir_ill" not in doc["sensors"] and v.tags == ["bench_standard", "thermal"]
+    rows = [(s.sensor_no, s.sensor_id, s.slot, s.kind, s.model_ref, s.default) for s in v.rig]
+    assert rows == [(0, "cam0", "eo", "camera", "eo_gx40@1.0.0", True), (1, "therm0", "lwir", "thermal", "lwir640@1.0.0", True),
+                    (2, "lidar0", "mid360", "lidar", "mid360@2.0.0", True), (3, "lidar0_imu", None, "imu", "imu_icm40609_livox@1.0.0", True),
+                    (4, "imu0", "imu", "imu", None, True), (5, "gnss0", "gnss", "gnss", None, True), (6, "nav", None, "nav", None, True)]
+    cam, th, lid = v.sensor("cam0"), v.sensor("therm0"), v.sensor("lidar0")
+    assert tuple(th.xyz_m[i] - cam.xyz_m[i] for i in range(3)) == pytest.approx((0.0, 0.045, 0.0))   # 与 cam0 光心偏置（同云台共视轴）
+    inv = ov.variant(VID).sensor("lidar0")
+    assert (lid.mount_preset, lid.xyz_m, lid.rpy_deg) == (inv.mount_preset, inv.xyz_m, inv.rpy_deg) == ("inverted_mapping", (0.0, 0.0, -0.08),
+                                                                                                       (180.0, 0.0, 0.0))
+    with pytest.raises(KeyError):
+        v.sensor("slam_cam")
 
 
 def test_slam_cam_model(ov):

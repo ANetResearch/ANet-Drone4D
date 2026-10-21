@@ -113,7 +113,7 @@ DEFAULTS: dict[str, Any] = {
     "fleet_vehicle": None, "baselines": list(BASELINES), "seeds": 10, "repeats": 2, "duration_s": None, "physics": "realistic", "split": "dev",
     "agent_image": "d3-agent-py:dev", "gz": {"launcher": "docker", "image": "d3-gz:dev", "export_root": None},
     "lockstep": {"preflight_s": 20.0, "policy": "track_share", "group": "L1"},
-    "wall_ratio_max": 3.0, "platform_retries": 1,
+    "wall_ratio_max": 3.0, "platform_retries": 1, "lidar_backend": "cpu",
     "board": {"version": "mbl-p0a", "current": "L2", "n_boot": 10_000},
     "submission": {"image": "d3-example-close-track:dev", "cmd": ["python", "-m", "drone4d.serve", "close_track.agent:Agent"], "env": {},
                    "group": "L2", "team": "d3-internal", "owner": "mbl-e2e", "notes": "", "smoke_s": 20.0, "worker": "inline",
@@ -177,8 +177,10 @@ def _merge(base: dict, over: dict) -> dict:
 
 
 def redact(text: str, seeds: list[int]) -> str:
-    """异常与日志文本中的种子明文（十进制、十六进制）替换为 `<seed>`。"""
+    """异常与日志文本中的种子明文（十进制、十六进制）替换为 `<seed>`；公开冒烟种子 0 不是秘密，不替换（否则文本中的每个 0 都被改写）。"""
     for s in seeds:
+        if not s:
+            continue
         for pat in (str(s), f"{s:x}", f"{s:016x}", f"{s:X}"):
             text = text.replace(pat, "<seed>")
     return text
@@ -242,6 +244,8 @@ def _validate(cfg: dict) -> None:
         raise ConfigError("physics must be realistic or kinematic")
     if cfg["split"] not in ("dev", "test"):
         raise ConfigError("split must be dev or test")
+    if cfg["lidar_backend"] not in ("cpu", "warp"):
+        raise ConfigError("lidar_backend must be cpu or warp")
     v = str(cfg["round"])
     if not v or not all(c.isalnum() or c in "-." for c in v) or len(v) > 40:
         raise ConfigError("round must be 1-40 characters of [A-Za-z0-9.-]")
@@ -342,16 +346,20 @@ def _audit(man: dict, r: dict | None) -> dict:
 
 
 def lockstep_check(man: dict, main_hz: int, physics_hz: int) -> dict:
-    """gz 锁步核对：物理档 realistic，gz 自报迭代数 = 每 tick 物理步数 × tick 数（M24-AC-026 的步进不变量；`main_hz` 为 Env tick 频率）。"""
+    """gz 锁步核对：物理档 realistic，gz 自报迭代数 = 每 tick 物理步数 × 档内 tick 数（M24-AC-026 的步进不变量；`main_hz` 为 Env tick 频率）。
+    档内 tick 数 = 回合 tick 数 + Env 预滚 tick 数（事件零点之前的 `[−t_pre, 0)`，`tier_info.preroll.n_ticks`，M26-FR-004；B10）。"""
     if man.get("physics") != "realistic":
         return {"applicable": False, "physics": man.get("physics")}
     ti = man.get("tier_info") or {}
     n = int(man.get("n_ticks", 0))
+    pre = int((ti.get("preroll") or {}).get("n_ticks") or 0)
     steps = physics_hz // main_hz
     it = ti.get("iterations")
-    ok = man.get("tier") == "realistic" and it is not None and int(it) == steps * n and n > 0
-    return {"applicable": True, "ok": bool(ok), "tier": man.get("tier"), "n_ticks": n, "steps_per_tick": steps, "iterations": it,
-            "backend_ticks": ti.get("ticks"), "restarts": int(ti.get("restarts", 0) or 0), "gz_rtf_mean": ti.get("gz_rtf_mean")}
+    bt = ti.get("ticks")
+    ok = (man.get("tier") == "realistic" and it is not None and int(it) == steps * (n + pre) and n > 0
+          and (bt is None or int(bt) == n + pre))
+    return {"applicable": True, "ok": bool(ok), "tier": man.get("tier"), "n_ticks": n, "preroll_ticks": pre, "steps_per_tick": steps,
+            "iterations": it, "backend_ticks": bt, "restarts": int(ti.get("restarts", 0) or 0), "gz_rtf_mean": ti.get("gz_rtf_mean")}
 
 
 def execute_run(job: dict, run_job: Callable | None = None, log: Callable[[str], None] | None = None) -> dict:
@@ -401,7 +409,7 @@ def execute_run(job: dict, run_job: Callable | None = None, log: Callable[[str],
                lockstep=lockstep_check(man, main_hz, physics_hz), obs_audit=_audit(man, r), pose_sha256=man.get("pose_sha256"),
                tape_content_sha256=(man.get("event") or {}).get("content_sha256"), components=ev.get("components"),
                ranked=bool(ev.get("ranked", False)), ranked_valid=bool(ev.get("ranked_valid")), invalid_reasons=list(ev.get("invalid_reasons", [])),
-               evaluation_sha256=sha256_file(ev_path))
+               evaluation_sha256=sha256_file(ev_path), lidar_backend=(man.get("l2") or {}).get("lidar_backend"))
     try:                                                                 # 运行清单（M27 §7.3）：排名运行只含 seed_commit
         from awr.agentsdk.env.spec import EnvSpec
         from awr.bench.eval.evaluator import run_manifest, write_run_manifest
@@ -459,6 +467,8 @@ class Round:
         self.log_path = self.out / "e2e.log"
         self.store = EvalStore(self.out / "evalstore")
         self.fp = fingerprint(cfg)
+        # L2 网格 LiDAR 后端（`awr.agentsdk.env.l2.lidar_backend`）：经 Env 专用变量传给本进程与进程池中的 Run（基线与内部提交同一后端）
+        os.environ["AWR_ENV_LIDAR_BACKEND"] = str(cfg["lidar_backend"])
         self.specs = {g["obs_level"]: self._spec(g) for g in cfg["groups"]}
         ev = {(rs["event"]["id"], int(rs["event"].get("version", 1))) for rs in self.specs.values()}
         if len(ev) != 1:

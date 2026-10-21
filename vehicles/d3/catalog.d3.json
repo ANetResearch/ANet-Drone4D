@@ -45,6 +45,23 @@
         "slam_rig"
       ],
       "summary_zh": "四旋翼，3.885 kg，悬停 28.2 min，倒装 MID-360 激光雷达与下俯 45° 全局快门 SLAM 相机；D3 建图缺省机型"
+    },
+    {
+      "id": "p600_bench",
+      "file": "variants/p600_bench.yaml",
+      "base": "p600_mid360@2.0.0",
+      "profile_version": "1.0.0",
+      "display_name": "P600 (benchmark standard track)",
+      "display_name_zh": "P600（排行榜标准轨）",
+      "category": "multirotor",
+      "reference": false,
+      "visible": true,
+      "order": 1,
+      "d3_tags": [
+        "bench_standard",
+        "thermal"
+      ],
+      "summary_zh": "四旋翼，3.935 kg，悬停 27.7 min，GX40 可见光（rgb1080-rs）与同云台共视轴 lwir640 13 mm 热像、倒装 MID-360 激光雷达；排行榜标准轨机型"
     }
   ]
 }
