@@ -197,7 +197,7 @@ def surface_grid(q, x0: float, y0: float, nx: int, ny: int) -> np.ndarray:
     return z.reshape(ny, nx)
 
 
-def _walk_mask(z: np.ndarray, climb: float, erode: int) -> np.ndarray:
+def _walk_mask(z: np.ndarray, climb: float, erode: int, allowed_mask: np.ndarray | None = None) -> np.ndarray:
     ok = np.isfinite(z)
     zf = np.where(ok, z, 0.0)
     w = ok.copy()
@@ -209,6 +209,9 @@ def _walk_mask(z: np.ndarray, climb: float, erode: int) -> np.ndarray:
         else:
             edge[:, 0 if sh == 1 else -1] = True
         w &= ~edge
+    if allowed_mask is not None:
+        # 先删去禁入格，再施加车辆边界余量。不能填补原几何缺失。
+        w &= allowed_mask
     for _ in range(erode):
         e = w.copy()
         for ax, sh in ((0, 1), (0, -1), (1, 1), (1, -1)):
@@ -219,8 +222,12 @@ def _walk_mask(z: np.ndarray, climb: float, erode: int) -> np.ndarray:
 
 
 def build_nav(q, bbox: tuple[float, float, float, float], profile: str, seeds: list[tuple[float, float]] = (), *,
-              z: np.ndarray | None = None) -> NavGrid:
-    """bbox = (xmin, ymin, xmax, ymax) world 帧 m（向外取整到格）；seeds 为种子锚点平面坐标。`z` 可复用另一 profile 的高度场。"""
+              z: np.ndarray | None = None, allowed_mask: np.ndarray | None = None) -> NavGrid:
+    """bbox = (xmin, ymin, xmax, ymax) world 帧 m（向外取整到格）；seeds 为种子锚点平面坐标。
+
+    `z` 可复用另一 profile 的高度场。可选 `allowed_mask` 必须匹配该格网；调用者负责地面层、语义许可及实体尺寸验证。
+    它只收紧可走格，不修复最高表面高度、不改变旧的种子岛选择策略。未传时保持旧行为。
+    """
     from scipy import ndimage
 
     x0, y0 = math.floor(bbox[0] / CELL_M) * CELL_M, math.floor(bbox[1] / CELL_M) * CELL_M
@@ -228,7 +235,11 @@ def build_nav(q, bbox: tuple[float, float, float, float], profile: str, seeds: l
     if z is None:
         z = surface_grid(q, x0, y0, nx, ny)
     pr = PROFILES[profile]
-    w = _walk_mask(z, pr["climb_m"], pr["erode"])
+    if z.shape != (ny, nx):
+        raise ValueError("height field shape does not match bbox")
+    if allowed_mask is not None and (allowed_mask.shape != (ny, nx) or allowed_mask.dtype != np.bool_):
+        raise ValueError("allowed_mask must be a boolean array matching the height field")
+    w = _walk_mask(z, pr["climb_m"], pr["erode"], allowed_mask)
     lab, n = ndimage.label(w, structure=[[0, 1, 0], [1, 1, 1], [0, 1, 0]])
     keep: set[int] = set()
     for sx, sy in seeds:
