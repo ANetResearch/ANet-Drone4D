@@ -287,3 +287,21 @@ reimplemented in Python.
 | openlidarviewer | GNU Affero General Public License v3.0 only | https://www.gnu.org/licenses/agpl-3.0.html |
 | WindNinja | Public domain statement of the Rocky Mountain Research Station | https://github.com/firelab/windninja/blob/master/LICENSE |
 | UrbanScene3D | Dataset terms quoted in section 4; ANet-Drone4D deployments use it under authorization of the rights holders | https://github.com/Linxius/UrbanScene3D |
+
+## 5. Optional scene-target assets (not bundled)
+
+The optional target catalog in `packages/contracts/target/assets.catalog.json` records per-asset source URLs,
+CC0-1.0 license metadata, dimensions and content hashes. Model/texture binaries are not committed here.
+The native-view screenshots in `docs/audit/target-life/` depict these optional assets in the synthetic test scene.
+
+| Asset set | Source | License recorded by the source lock | Integration |
+|---|---|---|---|
+| 12 human appearances | [MakeHuman system assets](https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html) | CC0-1.0 | Existing ALE compiled meshes/textures, exported with source hash checks; sampled pose interpolation |
+| Seven vehicle types and six street objects | [Innerscene 3D parts](https://www.innerscene.com/tools/library/3d-parts/) (individual URLs in the catalog) | CC0-1.0 | Existing ALE compiled assets; physical plates and selected wheel-group animation authored for this integration |
+| Dog, forklift and quadcopter | Individual Innerscene URLs and SHA-256 values in `tools/deploy/targetlab/extra-assets.lock.json` | CC0-1.0 | Separate GLB export; the dog's 16-pose deformation is authored for this integration |
+
+`tools/deploy/targetlab/export_assets.py` currently requires an existing ALE asset directory, including its original
+lock files and attribution README; it does not download or bundle that directory. The exporter preserves those
+notices alongside the generated pack. `export_extra_assets.py` handles the separately locked GLB inputs. No ALE
+application source code is included. The living-population planner and conflict handling are implemented in this
+repository; they do not embed SUMO or another external traffic engine.

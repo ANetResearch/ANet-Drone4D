@@ -61,8 +61,8 @@ def test_frame_checks() -> None:
 
 
 def test_socket_agents_match_in_process(synth_event, tmp_path: Path) -> None:
+    from d3_env_support import _run, _spec
     from drone4d.baselines import BASELINES
-    from test_env import _run, _spec
 
     from awr.agentsdk.env.core import BenchEnv
     from awr.agentsdk.env.remote import SocketAgentHost, run_remote_episode
@@ -120,8 +120,8 @@ def _fake_docker(tmp_path: Path, monkeypatch) -> str:
 
 
 def test_container_episode_matches_in_process(synth_event, tmp_path: Path, monkeypatch) -> None:
+    from d3_env_support import _run, _spec
     from drone4d.baselines import BASELINES
-    from test_env import _run, _spec
 
     from awr.agentsdk.env.containers import run_container_episode
     from awr.agentsdk.env.core import BenchEnv
@@ -143,7 +143,7 @@ def test_container_episode_matches_in_process(synth_event, tmp_path: Path, monke
 
 
 def test_container_start_failure_and_env_keys(synth_event, tmp_path: Path, monkeypatch) -> None:
-    from test_env import _spec
+    from d3_env_support import _spec
 
     from awr.agentsdk.env.containers import AgentContainers, host_path, run_container_episode
     from awr.agentsdk.env.core import BenchEnv

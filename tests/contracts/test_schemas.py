@@ -25,6 +25,7 @@ DATA = {
     "rt/caps/prometheus.json": "rt/caps.schema.json", "bus/keys.json": "bus/keys.schema.json", "env/presets.json": "env/presets.schema.json",
     "env/env_world_defaults.json": "env/env_world_defaults.schema.json", "rec/mcap_channels.json": "rec/mcap_channels.schema.json",
     "agent/capability_catalog.json": "agent/capability_catalog.schema.json", "classes/anet-classes-v1.json": "schemas/world/class-table.schema.json",
+    "target/assets.catalog.json": "target/assets.catalog.schema.json",
     # D2（AWR-04 §11.6，WP-01）
     "target/class_defaults.json": "target/class_defaults.schema.json", "sensor/perception_levels.json": "sensor/perception_levels.schema.json",
     # D3（AWR-05 §8.1，WP-D3-01）
@@ -138,3 +139,38 @@ def test_scenario_s1_example_validates():
 def test_class_table_16_classes():
     t = load("classes/anet-classes-v1.json")
     assert len(t["classes"]) == 16
+
+
+@pytest.mark.parametrize("mutation", ["hash", "negative_size", "unknown_class", "missing_layout", "unaligned_offset", "unknown_field"])
+def test_asset_catalog_rejects_invalid_resources(mutation):
+    doc = load("target/assets.catalog.json")
+    asset = doc["assets"][0]
+    if mutation == "hash":
+        asset["geometry_sha256"] = "unverified"
+    elif mutation == "negative_size":
+        asset["dimensions_m"][0] = -1
+    elif mutation == "unknown_class":
+        asset["class"] = "unknown"
+    elif mutation == "missing_layout":
+        del asset["layout"]["indices"]
+    elif mutation == "unaligned_offset":
+        asset["layout"]["p"]["offset"] = 3
+    else:
+        asset["shell_command"] = "untrusted"
+    assert errors("target/assets.catalog.schema.json", doc)
+
+
+def test_asset_catalog_ids_and_buffer_layout_are_consistent():
+    assets = load("target/assets.catalog.json")["assets"]
+    assert len({a["id"] for a in assets}) == len(assets)
+    for asset in assets:
+        layout = asset["layout"]
+        assert layout["p"]["count"] == layout["n"]["count"] == layout["c"]["count"] == asset["vertices"] * 3
+        assert layout["uv"]["count"] == asset["vertices"] * 2
+        assert layout["poses"]["count"] == asset["vertices"] * 3 * asset["poses"]
+        assert layout["indices"]["count"] == asset["triangles"] * 3
+        end = 0
+        for span in sorted(layout.values(), key=lambda span: span["offset"]):
+            assert span["offset"] >= end
+            end = span["offset"] + span["count"] * 4
+        assert end == asset["bytes"]

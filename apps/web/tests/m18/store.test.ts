@@ -7,7 +7,7 @@ import { TARGET_LITE32 as L } from '@awr/contracts/layouts'
 import { PAL, TARGETS_CAPS, TargetsOverlay, TargetsModel, targetsModel, type TargetDetail } from '@/engine/targets'
 import type { CallResult, DataMsg, RtClient, RtEvent } from '@/net/rt'
 import {
-  attachTargetsFeed, manualKeepoutWarning, summarize, targetRedCandidate, targetsActions, targetsFeedTick, targetsStore,
+  resetTargetsWorld, attachTargetsFeed, manualKeepoutWarning, summarize, targetRedCandidate, targetsActions, targetsFeedTick, targetsStore,
 } from '@/stores/targets'
 
 
@@ -88,6 +88,18 @@ describe('targets store (M18-AC-017)', () => {
     expect(targetsStore.getState().max).toBe(30)
   })
 
+  it('template reset clears old appearance and capture even when ids and revisions recur', () => {
+    targetsModel.setConfig({ id: 'person-01', class: 'person', cfg_rev: 1, label: 'old' })
+    targetsActions.select('person-01')
+    const epoch = targetsStore.getState().epoch
+    resetTargetsWorld()
+    expect(targetsStore.getState().epoch).toBe(epoch + 1)
+    expect(targetsModel.cfgs.size).toBe(0)
+    expect(targetsStore.getState().selected).toBeNull()
+    targetsModel.setConfig({ id: 'person-01', class: 'person', cfg_rev: 1, label: 'new' })
+    expect(targetsModel.cfgs.get('person-01')?.label).toBe('new')
+  })
+
   it('actions send the contract shapes', async () => {
     const o = await targetsActions.add('dog', [10, 20, null], { label: '巡逻犬' })
     expect(o.ok && o.id === 'person-09').toBe(true)
@@ -117,6 +129,17 @@ describe('targets store (M18-AC-017)', () => {
 })
 
 describe('targets overlay (M18-AC-020, Node)', () => {
+  it('retains REST configs before the first stream rows but prunes genuinely removed actors', () => {
+    const m = new TargetsModel()
+    m.resolver = { targetIdOf: (n) => `t-${n}` }
+    m.setConfig({ id: 't-0', class: 'person', pos: [0, 0, 0] })
+    m.ingestRows(rows(0), 0)
+    expect(m.cfgs.has('t-0')).toBe(true)
+    m.ingestRows(rows(1), 100)
+    expect(m.cfgs.has('t-0')).toBe(true)
+    m.ingestRows(rows(0), 200)
+    expect(m.cfgs.has('t-0')).toBe(false)
+  })
   it('caps, draws, degrade and red', () => {
     const m = new TargetsModel()
     m.resolver = { targetIdOf: (n) => `t-${n}` }

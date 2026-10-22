@@ -49,6 +49,8 @@ export const RESIZE_FRAC = 0.1
 export const MODIFIER_WINDOW_MS = 2000
 
 export interface PowerContext {
+  /** Explicit continuous-world builds never park due to author/viewer inactivity. */
+  continuous?: boolean
   role: PowerRole
   /** the sandbox queue or the viewer queue is not empty (the busy thresholds apply) */
   busy: boolean
@@ -83,7 +85,7 @@ export class PowerMachine {
 
   /** the machine may save (a realtime link exists and keep-running is off) */
   canSave(): boolean {
-    return this.ctx.role !== 'none' && !(this.ctx.internal && this.ctx.keepRunning)
+    return this.ctx.role !== 'none' && !this.ctx.continuous && !(this.ctx.internal && this.ctx.keepRunning)
   }
 
   /** the idle clock's reference: the latest local input or external API activity */

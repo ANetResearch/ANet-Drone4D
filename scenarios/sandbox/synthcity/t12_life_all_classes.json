@@ -1,0 +1,839 @@
+{
+  "schema": "awr.sandbox.template.v1",
+  "template_id": "t12_life_all_classes",
+  "world_id": "synthcity",
+  "name_zh": "T12 六类目标生活（实验）",
+  "summary_zh": "T12 六类目标生活（实验）",
+  "first_feedback_zh": "选择目标查看当前活动、目的地与等待原因",
+  "recommended": false,
+  "calendar_default": {
+    "start_local": "10:00",
+    "tz": "Asia/Shanghai"
+  },
+  "acoustic_bg": "urban",
+  "env": {
+    "preset": "clear",
+    "overrides": {}
+  },
+  "seed": 81,
+  "camera": {
+    "center_enu_m": [
+      300,
+      -120,
+      0
+    ],
+    "range_m": 650,
+    "pitch_deg": -40,
+    "yaw_deg": 0
+  },
+  "anchors_ref": "scenarios/sandbox/anchors/synthcity.json",
+  "vehicles": [],
+  "nests": [],
+  "tasks": [],
+  "targets": [
+    {
+      "id": "resident-01",
+      "label": "居民 01",
+      "class": "person",
+      "pos": [
+        465.79999999999995,
+        -166.75,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.34131795167922974,
+        "w": 0.6017975807189941,
+        "h": 1.7666809558868408
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-1",
+        "geometry_sha256": "d4491b0e461d3ced14faa19808af5a3af47e6bcbaa3dacba5572dcfed9a5efc2"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-01"
+      }
+    },
+    {
+      "id": "resident-02",
+      "label": "居民 02",
+      "class": "person",
+      "pos": [
+        134.2,
+        -193.25,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.35303887724876404,
+        "w": 0.6192468404769897,
+        "h": 1.834559679031372
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-2",
+        "geometry_sha256": "3fb381e8cdf7637f8bb3be081aebc2ea2676e803c45ab4098c854b4fbc06efd3"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-02"
+      }
+    },
+    {
+      "id": "resident-03",
+      "label": "居民 03",
+      "class": "person",
+      "pos": [
+        108.05000000000001,
+        -71.0,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.27933183312416077,
+        "w": 0.4678380489349365,
+        "h": 1.499302625656128
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-3",
+        "geometry_sha256": "1637558e0c555a5c54da8f87b93f3d3d360f2a67d2ab93e412e8fa0ccefee051"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-03"
+      }
+    },
+    {
+      "id": "resident-04",
+      "label": "居民 04",
+      "class": "person",
+      "pos": [
+        465.79999999999995,
+        77.25,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.30363062024116516,
+        "w": 0.5019052028656006,
+        "h": 1.6126034259796143
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-4",
+        "geometry_sha256": "7ee830cfa304e0afc375bca34e95648f9412341c1a5f6229ae769018f9b3565c"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-04"
+      }
+    },
+    {
+      "id": "resident-05",
+      "label": "居民 05",
+      "class": "person",
+      "pos": [
+        469.0,
+        -313.25,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.33972030878067017,
+        "w": 0.6011413931846619,
+        "h": 1.756656527519226
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-5",
+        "geometry_sha256": "53cf9866bcd9b1a0b0c131afb2378957ca302905312c3d946dbd722672a7ee7a"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-05"
+      }
+    },
+    {
+      "id": "resident-06",
+      "label": "居民 06",
+      "class": "person",
+      "pos": [
+        491.0,
+        44.05,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.3540637493133545,
+        "w": 0.6198362112045288,
+        "h": 1.834559679031372
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-6",
+        "geometry_sha256": "0c8ff16565f5fdcf291ba8f278ba7acac859f39abc098dda4e3f87f922812a20"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-06"
+      }
+    },
+    {
+      "id": "resident-07",
+      "label": "居民 07",
+      "class": "person",
+      "pos": [
+        225.0,
+        -288.04999999999995,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.28317925333976746,
+        "w": 0.4678380489349365,
+        "h": 1.5068318843841553
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-7",
+        "geometry_sha256": "f977eb932fc28a3e196f65588cb90ebffd1cd461cd60dce511ca582ed0f85924"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-07"
+      }
+    },
+    {
+      "id": "resident-08",
+      "label": "居民 08",
+      "class": "person",
+      "pos": [
+        345.79999999999995,
+        -46.75,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.3027184307575226,
+        "w": 0.5019052028656006,
+        "h": 1.6126034259796143
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-8",
+        "geometry_sha256": "7ae01a1ac7a1ebd5f23f001c475d26992ff42aec35ced385908c603bf46a347b"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-08"
+      }
+    },
+    {
+      "id": "resident-09",
+      "label": "居民 09",
+      "class": "person",
+      "pos": [
+        108.05000000000001,
+        -45.8,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.3540637493133545,
+        "w": 0.6198362112045288,
+        "h": 1.8250895738601685
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-9",
+        "geometry_sha256": "bfd29fbfd0e0603eb11ad2c1407432a3c1f687179fe9d4af8029df681d653a7c"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-09"
+      }
+    },
+    {
+      "id": "resident-10",
+      "label": "居民 10",
+      "class": "person",
+      "pos": [
+        257.25,
+        45.0,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.33972030878067017,
+        "w": 0.6011413931846619,
+        "h": 1.7666809558868408
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-10",
+        "geometry_sha256": "92c97101d0fb1dadee6d0231fa266aa51e66c41fd57402a54ec1d181b7b5f8be"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-10"
+      }
+    },
+    {
+      "id": "resident-11",
+      "label": "居民 11",
+      "class": "person",
+      "pos": [
+        374.20000000000005,
+        -48.05,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.29904142022132874,
+        "w": 0.5019052028656006,
+        "h": 1.6193996667861938
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-11",
+        "geometry_sha256": "5fbd8b78cec0f662ed8de7d92b789ad78b9552dc2ee62fcd47256a5f40a2e289"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-11"
+      }
+    },
+    {
+      "id": "resident-12",
+      "label": "居民 12",
+      "class": "person",
+      "pos": [
+        131.0,
+        77.25,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.28317925333976746,
+        "w": 0.4678380489349365,
+        "h": 1.5004502534866333
+      },
+      "metadata": {
+        "role": "居民"
+      },
+      "appearance": {
+        "asset_id": "human-12",
+        "geometry_sha256": "adfebf910b3391dc47bd5a28fce034706958df44cba4cc65de10c979988415dc"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "resident-12"
+      }
+    },
+    {
+      "id": "driver-01",
+      "label": "镇区办事司机 01",
+      "class": "vehicle",
+      "pos": [
+        235.5,
+        -207.0,
+        0.0
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 4.840295469388366,
+        "w": 2.1809000074863434,
+        "h": 1.5451387965586036
+      },
+      "metadata": {
+        "role": "镇区办事司机",
+        "vehicle_type": "sedan",
+        "plate_text": "皖A 76286",
+        "plate_region": "中国安徽"
+      },
+      "appearance": {
+        "asset_id": "sedan",
+        "geometry_sha256": "4e69845d455e40a12fc565d3822f84b1fd48eb4532269b0aea3af76a719efb65"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "driver-01"
+      }
+    },
+    {
+      "id": "driver-02",
+      "label": "镇区办事司机 02",
+      "class": "vehicle",
+      "pos": [
+        213.0,
+        -295.5,
+        0.0
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 4.760385429486632,
+        "w": 2.2357398569583893,
+        "h": 1.8251303711440414
+      },
+      "metadata": {
+        "role": "镇区办事司机",
+        "vehicle_type": "suv",
+        "plate_text": "皖A 67233",
+        "plate_region": "中国安徽"
+      },
+      "appearance": {
+        "asset_id": "suv",
+        "geometry_sha256": "34869825288a07a28d7d2563e5cac1bd749148dc7cf7c0df8b33397c10e214d5"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "driver-02"
+      }
+    },
+    {
+      "id": "driver-03",
+      "label": "镇区办事司机 03",
+      "class": "vehicle",
+      "pos": [
+        333.0,
+        64.5,
+        0.0
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 4.264859830960631,
+        "w": 2.1169200241565704,
+        "h": 1.5851422569248825
+      },
+      "metadata": {
+        "role": "镇区办事司机",
+        "vehicle_type": "hatchback",
+        "plate_text": "皖A 95080",
+        "plate_region": "中国安徽"
+      },
+      "appearance": {
+        "asset_id": "hatchback",
+        "geometry_sha256": "55b884178e8e9c8be319648c69beb6ae3d369f04536a545d765def4a3eb53484"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "driver-03"
+      }
+    },
+    {
+      "id": "driver-04",
+      "label": "镇区办事司机 04",
+      "class": "vehicle",
+      "pos": [
+        383.0,
+        -184.5,
+        0.0
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 4.840295469388366,
+        "w": 2.1809000074863434,
+        "h": 1.5451387965586036
+      },
+      "metadata": {
+        "role": "镇区办事司机",
+        "vehicle_type": "sedan",
+        "plate_text": "皖A 99165",
+        "plate_region": "中国安徽"
+      },
+      "appearance": {
+        "asset_id": "sedan",
+        "geometry_sha256": "4e69845d455e40a12fc565d3822f84b1fd48eb4532269b0aea3af76a719efb65"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "driver-04"
+      }
+    },
+    {
+      "id": "dog-01",
+      "label": "社区犬 01",
+      "class": "dog",
+      "pos": [
+        375.45,
+        -25.75,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.51172572549361,
+        "w": 0.11991918736271412,
+        "h": 0.3400000020520615
+      },
+      "metadata": {
+        "role": "社区犬"
+      },
+      "appearance": {
+        "asset_id": "dog-small",
+        "geometry_sha256": "64867115b364531c63c686d40031613a6d2a3ab01468cd60b797e9800c30d887"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "dog-01"
+      }
+    },
+    {
+      "id": "dog-02",
+      "label": "社区犬 02",
+      "class": "dog",
+      "pos": [
+        135.45,
+        -215.25,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.51172572549361,
+        "w": 0.11991918736271412,
+        "h": 0.3400000020520615
+      },
+      "metadata": {
+        "role": "社区犬"
+      },
+      "appearance": {
+        "asset_id": "dog-small",
+        "geometry_sha256": "64867115b364531c63c686d40031613a6d2a3ab01468cd60b797e9800c30d887"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "dog-02"
+      }
+    },
+    {
+      "id": "machine-01",
+      "label": "后勤叉车 01",
+      "class": "machine",
+      "pos": [
+        184.0,
+        -250.0,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 3.350000001490116,
+        "w": 1.2194001078605652,
+        "h": 2.305000066757202
+      },
+      "metadata": {
+        "role": "后勤叉车"
+      },
+      "appearance": {
+        "asset_id": "forklift",
+        "geometry_sha256": "8c2a172510ff94dd78203556da275d5893db3f328e3e3fe77d741169779e6592"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "machine-01"
+      }
+    },
+    {
+      "id": "uav-01",
+      "label": "巡检无人机 01",
+      "class": "uav",
+      "pos": [
+        383.0,
+        -184.5,
+        25.0
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.5696718990802765,
+        "w": 0.6844411492347717,
+        "h": 0.31599999871104956
+      },
+      "metadata": {
+        "role": "巡检无人机"
+      },
+      "appearance": {
+        "asset_id": "quadcopter",
+        "geometry_sha256": "6132ae6270999369e04a0361ecb3f1b08c6d908d40ecb827fa59d19635c85a04"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "uav-01"
+      }
+    },
+    {
+      "id": "uav-02",
+      "label": "巡检无人机 02",
+      "class": "uav",
+      "pos": [
+        213.0,
+        -55.5,
+        25.0
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.5696718990802765,
+        "w": 0.6844411492347717,
+        "h": 0.31599999871104956
+      },
+      "metadata": {
+        "role": "巡检无人机"
+      },
+      "appearance": {
+        "asset_id": "quadcopter",
+        "geometry_sha256": "6132ae6270999369e04a0361ecb3f1b08c6d908d40ecb827fa59d19635c85a04"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "uav-02"
+      }
+    },
+    {
+      "id": "object-01",
+      "label": "公共设施 01",
+      "class": "object",
+      "pos": [
+        220.0,
+        -200.0,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 1.5700000524520874,
+        "w": 0.6861013211051152,
+        "h": 0.9298210556301194
+      },
+      "metadata": {
+        "role": "公共设施"
+      },
+      "appearance": {
+        "asset_id": "bench",
+        "geometry_sha256": "eaba95030f6f40ae53db4f7ff5c4f901daa7ac99e4400c5e649a83a718520d17"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "object-01"
+      }
+    },
+    {
+      "id": "object-02",
+      "label": "公共设施 02",
+      "class": "object",
+      "pos": [
+        200.0,
+        -240.0,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.5799999833106995,
+        "w": 0.5799999833106995,
+        "h": 0.8199999835342169
+      },
+      "metadata": {
+        "role": "公共设施"
+      },
+      "appearance": {
+        "asset_id": "litter-bin",
+        "geometry_sha256": "bace60486dd8df91f6074eba9bed8addc71448819f16297921f31b3d8a3ffacd"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "object-02"
+      }
+    },
+    {
+      "id": "object-03",
+      "label": "公共设施 03",
+      "class": "object",
+      "pos": [
+        220.0,
+        -130.0,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.2746235430240631,
+        "w": 0.31774356961250305,
+        "h": 0.7994560238003032
+      },
+      "metadata": {
+        "role": "公共设施"
+      },
+      "appearance": {
+        "asset_id": "hydrant",
+        "geometry_sha256": "784b095061d244113b613b5554cebf48d8e3f3bb10ee8731b5cf663e9dfe3c1e"
+      },
+      "life": {
+        "recipe_id": "life",
+        "sha256": "1f00d22ebcc63860c007c2a0aecc6bb814f36684381bdf79f59722b902ad0202",
+        "actor_id": "object-03"
+      }
+    }
+  ]
+}

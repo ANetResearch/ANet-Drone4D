@@ -155,6 +155,11 @@ function Actions({ compact }: { compact: boolean }) {
   const t = useT()
   const template = useSandbox((s) => s.template)
   const live = useSandbox((s) => s.phase === 'active' || s.phase === 'ready')
+  const parked = useSandbox((s) => s.phase === 'parked')
+  const resume = async () => {
+    const result = await sandbox.resumeParked()
+    if (result === 'failed') notify('sandbox:resume', 'info', t('sandbox.resume.failed'))
+  }
   const reset = () => confirmThen({
     id: 'sandbox.reset', title: t('sandbox.reset.title'), body: t('sandbox.reset.body'), action: t('sandbox.bar.reset'),
     run: () => void (template ? sandbox.loadTemplate(template) : Promise.resolve(null)),
@@ -171,6 +176,7 @@ function Actions({ compact }: { compact: boolean }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuGroup>
+            {parked ? <DropdownMenuItem onClick={() => void resume()}>{t('sandbox.resume.action')}</DropdownMenuItem> : null}
             <DropdownMenuItem disabled={!live} onClick={() => sandboxDialogs.open('template')}>{t('sandbox.bar.template')}</DropdownMenuItem>
             <DropdownMenuItem disabled={!live} onClick={() => sandboxDialogs.open('world')}>{t('sandbox.bar.world')}</DropdownMenuItem>
             <DropdownMenuItem disabled={!live} onClick={reset}>{t('sandbox.bar.reset')}</DropdownMenuItem>
@@ -182,6 +188,7 @@ function Actions({ compact }: { compact: boolean }) {
   }
   return (
     <span className="flex items-center gap-1">
+      {parked ? <Button size="xs" variant="outline" onClick={() => void resume()} data-session-resume="">{t('sandbox.resume.action')}</Button> : null}
       <Button size="xs" variant="ghost" disabled={!live} onClick={() => sandboxDialogs.open('template')} data-session-template="">{t('sandbox.bar.template')}</Button>
       <Button size="xs" variant="ghost" disabled={!live} onClick={() => sandboxDialogs.open('world')} data-session-world="">{t('sandbox.bar.world')}</Button>
       <Button size="xs" variant="ghost" disabled={!live} onClick={reset} data-session-reset="">{t('sandbox.bar.reset')}</Button>

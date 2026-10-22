@@ -430,6 +430,7 @@ const benchTarget = process.env.AWR_BENCH_TARGET ?? 'http://127.0.0.1:18650'
 // /assets/ 是 Vite 构建产物前缀，不作代理（AWR-03 §3.3、AWR-16 F-09、R2-42）；/worlds 本身是前端路由（World Hub，
 // M15-FR-003），因此 /worlds 只以正则匹配带子路径的数据请求。preview 显式使用同一张表（默认会继承 server.proxy）。
 const PROXY = {
+  '/api/sandbox': { target: `http://127.0.0.1:${8002 + 10 * offset}`, ws: true },
   '/api/bench': { target: benchTarget }, // 须在 /api 之前（前缀按声明序匹配）
   '/api': { target: apiTarget, ws: true },
   '^/worlds/.+': { target: apiTarget },
