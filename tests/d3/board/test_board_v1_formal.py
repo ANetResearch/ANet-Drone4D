@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import json
 import os
+import shutil
 import stat
 import sys
 from pathlib import Path
@@ -331,3 +332,114 @@ def test_audited_run_job_records_env_and_evaluate_reads(formal, monkeypatch) -> 
     F.audited_run_job({"event": {"id": "crop-handoff-002", "version": 1}}, data_root=str(root), test_events=list(TEST_EVENTS), run_id="dev")
     assert len(sp.read_audit(root / "audit")) == n0 + 2                              # dev 事件不写 test 真值审计
     assert functools.partial(F.audited_run_job, data_root=str(root), test_events=[]).func is F.audited_run_job
+
+
+# ---------------------------------------------------------------------------------------------------------- K16：重评版本、平台重跑、实验室发布
+def _fake_rescore(run_dir: Path, event_dir: Path, truth_dir: Path | None, access) -> dict:
+    """评测器替身（重评）：经 HiddenStore 读取事件真值与运行真值（审计），search 赛道的分量改变，其余赛道原样（只换评测器版本）。"""
+    access.read_bytes(Path(event_dir) / "truth" / "r1" / "event_truth.json")
+    assert truth_dir is not None and (Path(truth_dir) / "run_seed.json").is_file()            # seal-truth 之后运行真值只在隐藏区
+    access.authorize_dir(Path(event_dir))
+    old = json.loads((Path(run_dir) / "evaluation.json").read_text())
+    doc = {**old, "evaluator_version": "0.3.0"}
+    if "crop-search-" in Path(run_dir).name:
+        doc["components"] = {k: round(min(1.0, v + 0.2), 6) for k, v in old["components"].items()}
+    return doc
+
+
+@pytest.fixture(scope="module")
+def rescored(formal, tmp_path_factory):
+    """formal 数据根的副本上执行 rescore v1 → v1.1（不改动 formal 的数据根）。"""
+    tmp = tmp_path_factory.mktemp("k16")
+    root, out = tmp / "d3", tmp / "out"
+    shutil.copytree(formal["root"], root, symlinks=True)
+    logs: list[str] = []
+    rep = F.rescore_board(root, out, src="v1", dst="v1.1", n_boot=N_BOOT, eval_uid=None, evaluate=_fake_rescore, log=logs.append)
+    return {"root": root, "out": out, "rep": rep, "logs": logs, "tmp": tmp}
+
+
+def test_rescore_publishes_v1_1_with_unchanged_lanes_byte_identical(formal, rescored) -> None:
+    from awr.bench.eval.aggregate import SCORE_V2
+
+    root, rep = rescored["root"], rescored["rep"]
+    assert rep["passed"] and rep["runs"] == 3 * 160 + 4 * 80 and rep["reused"] == 0
+    assert rep["changed_runs"] == 5 * 2 * 20                                        # search 赛道：5 个条目 × 2 分轨 × 20 次
+    for k, v in rep["lanes"].items():
+        if k.endswith("/search"):
+            assert not v["evaluations_unchanged"] and not v["board_identical"]
+        else:
+            assert v["evaluations_unchanged"] and v["board_identical"] and v["identical"] == v["runs"], k
+    cfg1 = json.loads((root / "boards" / "v1" / "config.json").read_text())
+    cfg2 = json.loads((root / "boards" / "v1.1" / "config.json").read_text())
+    store2 = json.loads(F._store_path(root, "v1.1").read_text())
+    store1 = json.loads(F._store_path(formal["root"], "v1").read_text())
+    assert cfg2["score_version"] == SCORE_V2 and cfg2["lock"]["rescore_of"] == "v1" and cfg2["rescore"]["of"] == "v1"
+    assert not verify_lock(cfg2["lock"], store2, seeds_per_event=5)
+    assert store2["seeds"] == store1["seeds"] and store2["k_board"] == store1["k_board"] and store2["board_version"] == "v1.1"
+    assert [ln["seed_set_commit"] for ln in cfg2["lock"]["lanes"]] == [ln["seed_set_commit"] for ln in cfg1["lock"]["lanes"]]
+    assert (root / "boards" / "current").read_text().strip() == "v1.1"
+    b1 = json.loads((root / "boards" / "v1" / "board.json").read_text())
+    assert (root / "boards" / "v1" / "board.json").read_bytes() == (formal["root"] / "boards" / "v1" / "board.json").read_bytes()   # 原版本只读
+    b2 = json.loads((root / "boards" / "v1.1" / "board.json").read_text())
+    assert b2["score_version"] == SCORE_V2 and b1["score_version"] == "d3-score-1"
+    assert all(rep["publish"]["twice_identical"].values())
+    ev = next((root / "dataset" / "crop-search-101" / "runs").glob("*k0r0"))
+    assert json.loads((ev / "evaluation.json").read_text())["evaluator_version"] == "0.3.0" and (ev / "evaluation.unknown.json").is_file()
+    ops = [r for r in sp.read_audit(root / "audit") if r.get("job") == F.RESCORE_JOB]
+    assert len({r["run_id"] for r in ops}) == rep["runs"] and {r["role"] for r in ops} == {"evaluator"}       # 每个 Run 的真值读取均有审计
+    again = F.rescore_board(root, rescored["out"], src="v1", dst="v1.1", n_boot=N_BOOT, eval_uid=None, log=lambda m: None)
+    assert again["passed"] and again["reused"] == again["runs"] and again["publish"]["sha256"] == rep["publish"]["sha256"]   # 续跑幂等
+
+
+def test_rescore_moves_submissions_and_refreshes_results(rescored) -> None:
+    root = rescored["root"]
+    b2 = json.loads((root / "boards" / "v1.1" / "board.json").read_text())
+    ent = {(e["entry_id"], e["track"], e["lane"]): e for e in b2["entries"] if not e["baseline"]}
+    docs = [json.loads(p.read_text()) for p in (root / "submissions").glob("sub-*.json")]
+    assert len(docs) == 4
+    for d in docs:
+        assert d["_meta"]["board_version"] == "v1.1" and d["_meta"]["board_history"][0]["board_version"] == "v1"
+        assert d["_meta"]["result_board"]["board_version"] == "v1.1"
+        for ln in d["result"]["lanes"]:
+            e = ent[(f"{d['_meta']['team']}/{d['submission_id']}", d["track"], ln["lane"])]
+            assert ln["metrics"] == e["metrics"] and ln["status"] == e["status"] and ln.get("dominance_tier") == e["dominance_tier"]
+    rep = F.build_report(root, rescored["out"], board_version="v1.1", n_boot=N_BOOT, eval_uid=os.getuid(), log=lambda m: None)
+    assert rep["passed"], [c for c in rep["checks"] if not c["passed"]]
+
+
+def test_rerun_platform_replaces_the_run_and_keeps_the_superseded_one(rescored) -> None:
+    from awr.bench.boardstore import load_rows
+
+    root, out = rescored["root"], rescored["tmp"] / "out-rerun"
+    rid = "v1-l2-static_guard-crop-handoff-102-k4r0"
+    n0 = len(load_rows(root / "boards" / "v1.1"))
+    res = F.rerun_platform(root, out, board_version="v1.1", run_ids=[rid], reason="all agents timed out on the first tick (661) under host load",
+                           n_boot=N_BOOT, eval_uid=None, log=lambda m: None)
+    rows = load_rows(root / "boards" / "v1.1")
+    assert len(rows) == n0 and sum(r["run_id"] == rid for r in rows) == 1
+    sup = [json.loads(x) for x in (root / "boards" / "v1.1" / "rows.superseded.jsonl").read_text().splitlines()]
+    assert [r["run_id"] for r in sup] == [rid] and "first tick" in sup[0]["superseded"]["reason"]
+    runs = root / "dataset" / "crop-handoff-102" / "runs"
+    assert (runs / rid / "evaluation.json").is_file() and (runs / f"{rid}.superseded-1" / "evaluation.json").is_file()
+    assert (root / "hidden" / "crop-handoff-102" / "truth" / "runs" / f"{rid}.superseded-1").is_dir()
+    assert (root / "hidden" / "crop-handoff-102" / "truth" / "runs" / rid / "run_seed.json").is_file()      # 新 Run 的真值已入隐藏区
+    assert not (runs / rid / "truth").exists() and all(res["publish"]["twice_identical"].values())
+    assert res["runs"][0]["run_id"] == rid and res["runs"][0]["superseded"] == f"{rid}.superseded-1"
+
+
+def test_publish_lab_copies_board_artifacts_and_submissions_only(rescored, tmp_path: Path) -> None:
+    root = rescored["root"]
+    lab = tmp_path / "lab"
+    (lab / "boards").mkdir(parents=True)
+    (lab / "submissions").mkdir()
+    (lab / "boards" / "current").write_text("p0a-formal-r2-l2\n")
+    res = F.publish_lab(root, rescored["out"], board_versions=["v1", "v1.1"], lab_root=lab, current="v1.1", log=lambda m: None)
+    assert res["current"] == {"before": "p0a-formal-r2-l2", "after": "v1.1"} and not res["config_json_in_lab"]
+    for v in ("v1", "v1.1"):
+        assert sorted(p.name for p in (lab / "boards" / v).iterdir()) == sorted(F.LAB_FILES)
+        assert (lab / "boards" / v / "board.json").read_bytes() == (root / "boards" / v / "board.json").read_bytes()
+    assert len(list((lab / "submissions").glob("sub-*.json"))) == 4
+    assert not (lab / "hidden").exists() and not (lab / "bench").exists() and not list(lab.rglob("config.json"))
+    b2 = json.loads((lab / "boards" / "v1.1" / "board.json").read_text())
+    api = F.api_visibility(lab, "v1.1", b2)                                         # 以实验室副本启动 bench API：匿名 404，invited 可读
+    assert api["passed"], api

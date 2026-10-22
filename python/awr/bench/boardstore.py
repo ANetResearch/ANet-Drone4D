@@ -14,6 +14,9 @@ gz 锁步档限定（D3-AC-43"只收 gz 锁步档的正式运行"）：正式榜
 （行或 `evaluation` 的 `physics`）不是 `realistic`、或声明 `lockstep = false` 的，`append_rows` 拒绝写入，`publish` 亦不计入；未声明物理档的行
 按 `aggregate.ranked_row` 的评测器口径（`physics_not_ranked`、`ranked = false`）剔除。
 
+提交结果同步：每次发布后以 `board.json` 刷新本榜单版本 DONE 提交的 `result`（名次、并列组、层级以榜单为准，不在榜的去掉名次与层级），
+见 `awr.bench.board.results`。
+
 撤回下线（D3-AC-43"提交者撤回后 24 h 内条目下线"；M27 §6.7.9"结果可见性"）：`publish` 同时写 `listing.json`（上榜提交条目
 `entry_id → submission_id`，同一输入逐字节一致）；读取侧（`awr.bench.api.board`）以之对照提交的当前状态，不再满足上榜规则
 （`state = DONE` 且 `visibility = board`）或提交记录缺失的条目立即不返回；`delist_withdrawn` 对账：当前版本重算榜单（他者名次与
@@ -33,6 +36,7 @@ import re
 import time
 from pathlib import Path
 
+from awr.bench.board.results import refresh_results
 from awr.bench.eval.aggregate import (
     SCORE_VERSIONS,
     BoardConfigError,
@@ -215,6 +219,7 @@ def publish(board_dir: Path, subs: dict[str, dict] | None = None, *, n_boot: int
     (board_dir / "details.json").write_text(json.dumps(details, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     listing = {r["entry_id"]: r["submission_id"] for r in rows if not r.get("baseline") and r.get("submission_id")}
     (board_dir / LISTING).write_text(json.dumps({"entries": listing}, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    refresh_results(board_dir, board)                       # 提交结果中的名次与层级以本次发布为准（B21 遗留 10；awr.bench.board.results）
     return board
 
 

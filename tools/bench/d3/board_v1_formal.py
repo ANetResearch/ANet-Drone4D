@@ -30,6 +30,22 @@ FR-166、FR-177 至 FR-183；ADR-182、ADR-191、ADR-195；B21）。
    重新运行其余 Run（计入平台重跑），再评分并上榜（`resume_submission`）。
 7. `rebuild-timing`：以本榜单版本的真实配置（K_board 与 test 事件）构造单分轨 100 个条目 × 4 个赛道的评测行，`build_board`
    （n_boot = 10 000）计时 `--repeat` 次取中位（D3-AC-57 (h) 的 ≤ 60 s，dmax CPU 池）。
+8. `seal-rescore`（管理员，读取划分登记）与 `rescore`（K16，Evaluator 服务用户；`--board-version` 为原版本，`--to` 为重评版本）：
+   评测器修正后的离线重评与新榜单版本（`rescore` 遇到尚未封板的重评版本时自行封板，须有划分登记的读权限）。以
+   `d3-score-2` 封板重评版本（`seal_board(rescore_of=<原版本>, store=<原 EvalStore>)`：种子集、K_eval、K_board 沿用，test 划分版本须与
+   原版本相同）；原版本全部评测行对应的 Run 由保留的运行记录（`reports.jsonl`、`agents/`、`net/`）、隐藏区运行真值
+   （`hidden/<eid>/truth/runs/<run_id>/`）与隐藏区事件版本目录重新评测（`evaluate_run(access = TruthAccess.hidden)`，每个真值文件一条
+   `truth_read` 审计，job `k16-rescore`），不重新仿真；新 `evaluation.json` 写回运行目录，原文件另存为 `evaluation.<原评测器版本>.json`；
+   评测行按新分量写入重评版本，提交文档的 `_meta.board_version` 迁到重评版本（`_meta.board_history` 记原版本），发布两次核对逐字节一致，
+   `boards/current` 指向重评版本，原版本只读保留。结果 `<out>/rescore-<重评版本>.json`：逐 Run 的评测是否改变（去掉 `evaluator_version`
+   与 `inputs.truth_sha256` 后的规范 JSON 比较）、逐"分轨 × 赛道"的榜单条目与原版本是否逐字节一致；分量不变的赛道须逐字节一致，
+   否则失败。可续跑：已是新评测器版本且原文件已另存的 Run 不重算。
+9. `rerun-platform`（K16，Evaluator 服务用户，需 GPU）：平台原因的运行按 D3-AC-57 (d) 重跑并替换：`--runs` 列出的基线 Run 的原运行目录与
+   隐藏区运行真值改名为 `<run_id>.superseded-<n>`，以同一种子（EvalStore）重新运行并评测、真值移入隐藏区，`rows.jsonl` 中该 Run 的评测行
+   移到 `rows.superseded.jsonl`（带原因）后追加新行，再发布两次核对；记录 `<out>/rerun-platform.json`。
+10. `publish-lab`（管理员）：把榜单版本的发布制品（`board.json`、`details.json`、`listing.json`、`rows.jsonl`）与其上榜提交的文档复制到实验室
+   数据根（`--lab-root`，属主 `--lab-uid`），设置实验室的 `boards/current`；不复制 `config.json`（服务端评测配置）、EvalStore 与 `hidden/`，
+   实验室只读展示，撤回由读取侧即时隐藏（`boardstore.entry_listed`）。记录 `<out>/publish-lab.json`。
 
 Run 标识：基线 `<版本>-<l1|l2>-<基线>-<事件>-k<k>r<rep>`，提交 `<submission_id>-<事件>-k<k>r<rep>`（subworker）；运行目录
 `<data_root>/dataset/<事件>/runs/<run_id>/`。每个 test 事件 Run 在开始与评测时各写一条 `truth_read` 审计（主体 `svc:evaluator`，角色
@@ -42,6 +58,10 @@ evaluator，`job = <--job>`，op 为 `env` 与 `evaluate`）。
     python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/b21 submit --track std3-l2 --name relay-l2 \\
         --image d3-example-relay-scan:b21 --cmd "python -m drone4d.serve relay_scan.agent:Agent" --team d3-research --owner b21
     python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/b21 board | seal-truth | report | rebuild-timing
+    python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/k16 --board-version v1 seal-rescore --to v1.1     # root
+    python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/k16 --board-version v1 rescore --to v1.1 --jobs 12
+    python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/k16 --board-version v1.1 report
+    python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/k16 --board-version v1.1 publish-lab --lab-root /lab --lab-uid 10001
 退出码：0 成功（report 为全部判定通过）；1 失败或判定不通过；2 参数或配置错误。
 """
 
@@ -81,6 +101,8 @@ SMOKE_EVENT = ("crop-handoff-002", 1)   # 冒烟规格所在的 dev 事件（交
 SMOKE_OBS = "L1"
 BASELINE_TEAM = "D3 reference"
 JOB = "b21-formal"
+RESCORE_JOB = "k16-rescore"
+LAB_FILES = ("board.json", "details.json", "listing.json", "rows.jsonl")   # 实验室只读展示所需的发布制品（不含 config.json）
 TEXT_SUFFIXES = (".json", ".jsonl", ".log", ".txt", ".yaml", ".yml", ".csv", ".md")
 COMPOSITE_KEYS = ("composite", "score", "weights_applied")
 
@@ -679,7 +701,7 @@ def build_report(data_root: Path, out: Path, *, board_version: str, gpu_log: Pat
     """逐项判定（模块文档第 6 条）→ 报告；全部通过时 `passed = true`。"""
     from awr.bench.auth import AuditLog, Principal
     from awr.bench.boardstore import load_listing, load_rows
-    from awr.bench.eval.aggregate import board_key, lane_metrics
+    from awr.bench.eval.aggregate import BOARD_SCORES, board_key, lane_metrics, rng_scope
     from awr.bench.split import HiddenStore, SplitAccessDenied, SplitRegistry, read_audit, truth_access_summary
     from awr.bench.submissions import SubmissionStore
 
@@ -757,7 +779,7 @@ def build_report(data_root: Path, out: Path, *, board_version: str, gpu_log: Pat
         rs = sorted((x for x in listed if (x["track"], x["lane"], x["entry_id"]) == (e["track"], e["lane"], e["entry_id"])),
                     key=lambda x: (x["event"], int(x["seed"]), int(x["rep"]), str(x.get("run_id", ""))))
         valid = [x for x in rs if x["evaluation"]["ranked_valid"]]
-        met = lane_metrics(valid, key=(e["entry_id"], board_version, e["lane"]), n_boot=n_boot, secret=secret)[0]
+        met = lane_metrics(valid, key=(e["entry_id"], rng_scope(cfg), e["lane"]), n_boot=n_boot, secret=secret)[0]
         shown = {m: {k: x for k, x in v.items() if k not in ("rank", "tie_group")} for m, v in e["metrics"].items()}   # 名次与并列组为派生字段
         if json.dumps(met, sort_keys=True) != json.dumps(shown, sort_keys=True):
             mismatch.append(f"{e['track']}/{e['lane']}/{e['entry_id']}")
@@ -771,8 +793,8 @@ def build_report(data_root: Path, out: Path, *, board_version: str, gpu_log: Pat
           pub.get("sha256", {}).get("board.json") == E.sha256_file(bdir / "board.json"),
           "board.json, details.json and listing.json are byte-identical when computed twice", publish=pub.get("sha256"))
     comp_keys = _contains_composite(board) + _contains_composite(details)
-    check("no_composite", board.get("score_version") == "d3-score-1" and not comp_keys and all("composite" not in e for e in ents),
-          "score_version d3-score-1 (weights null): no composite score in board.json or details.json", found=comp_keys[:5])
+    check("no_composite", board.get("score_version") in BOARD_SCORES and not comp_keys and all("composite" not in e for e in ents),
+          f"score_version {board.get('score_version')} (weights null): no composite score in board.json or details.json", found=comp_keys[:5])
     ranks_ok = all(e["baseline"] or e["status"] != "valid" or (e.get("dominance_tier") is not None and all(
         "rank" in v and "tie_group" in v for v in e["metrics"].values())) for e in ents)
     check("ranks_ties_tiers", ranks_ok, "valid submission entries carry per-metric rank and tie group and a dominance tier; baselines are not ranked")
@@ -942,6 +964,358 @@ def rebuild_timing(data_root: Path, *, board_version: str, n_entries: int = 100,
     return res
 
 
+# ------------------------------------------------------------------------------------------------------------------ 8 离线重评（K16）
+def _strip_eval(doc: dict) -> str:
+    """评测结果的比较形式：去掉评测器版本与 `inputs.truth_sha256`（评测器 0.3.0 收窄了运行真值摘要口径）后的规范 JSON。"""
+    d = {k: v for k, v in doc.items() if k != "evaluator_version"}
+    d["inputs"] = {k: v for k, v in (doc.get("inputs") or {}).items() if k != "truth_sha256"}
+    return json.dumps(d, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+_WORLDS: dict[str, Any] = {}
+
+
+def _world(world_dir: Path):
+    """进程内缓存的世界查询（正式口径：网格查询打不开即失败，不退回 DSM）。"""
+    from awr.agentsdk.env.core import _open_world
+
+    k = str(world_dir)
+    if k not in _WORLDS:
+        _WORLDS[k] = _open_world(Path(world_dir), formal=True)
+    return _WORLDS[k]
+
+
+def rescore_run(job: dict) -> dict:
+    """重评一个 Run（进程池单元）：经 HiddenStore 读取隐藏区的事件版本目录与运行真值，`evaluate_run` → 写回 `evaluation.json`（原文件
+    另存为 `evaluation.<原评测器版本>.json`，只另存一次）。`job["evaluate"]` 给出时替换评测函数（测试）。→ 比较摘要。"""
+    from awr.bench.auth import AuditLog
+    from awr.bench.eval.evaluator import evaluate_run
+    from awr.bench.eval.thresholds import EVALUATOR_VERSION
+    from awr.bench.eval.truth import TruthAccess
+    from awr.bench.split import HiddenStore
+
+    root, rid, ev = Path(job["data_root"]), job["run_id"], job["event"]
+    run_dir = root / "dataset" / ev / "runs" / rid
+    cur_p = run_dir / "evaluation.json"
+    cur = E.read_json(cur_p)
+    if cur.get("evaluator_version") == EVALUATOR_VERSION:
+        olds = sorted(run_dir.glob("evaluation.*.json"))
+        if not olds:
+            raise FormalError(f"{rid}: evaluation.json is already {EVALUATOR_VERSION} but no earlier evaluation is kept")
+        old, new, reused = E.read_json(olds[-1]), cur, True
+    else:
+        hs = HiddenStore.for_root(root, AuditLog(root / "audit"))
+        acc = TruthAccess.hidden(hs, event_id=ev, run_id=rid, job=RESCORE_JOB)
+        td = hs.truth_dir(ev) / "runs" / rid
+        evaluate = job.get("evaluate") or (lambda rd, ed, td_, acc_: evaluate_run(rd, ed, _world(Path(job["world_dir"])), truth_dir=td_, access=acc_))
+        new = evaluate(run_dir, hs.event_dir(ev, int(job["event_version"])), td if td.is_dir() else None, acc)
+        old, reused = cur, False
+        keep = run_dir / f"evaluation.{old.get('evaluator_version', 'unknown')}.json"
+        if not keep.exists():
+            shutil.copy2(cur_p, keep)
+        tmp = run_dir / ".evaluation.json.tmp"
+        tmp.write_text(json.dumps(new, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        os.replace(tmp, cur_p)
+    same = _strip_eval(old) == _strip_eval(new)
+    diff = sorted(k for k in set(old) | set(new) if k not in ("evaluator_version",) and old.get(k) != new.get(k))
+    return {"run_id": rid, "event": ev, "identical": same, "components_identical": old.get("components") == new.get("components"),
+            "differs": diff, "old_version": old.get("evaluator_version"), "new_version": new.get("evaluator_version"), "reused": reused,
+            "old_components": old.get("components"), "new_components": new.get("components"),
+            "inputs_same": {k: old.get("inputs", {}).get(k) == new.get("inputs", {}).get(k) for k in ("raw_mcap_sha256", "tape_sha256",
+                                                                                                      "event_truth_sha256", "truth_sha256")},
+            "evaluation": new}
+
+
+def _seal_rescore(data_root: Path, *, src: str, dst: str, eval_uid: int | None, log=print) -> dict:
+    """以 `d3-score-2` 封板重评版本 `dst`（沿用 `src` 的种子集与密钥）；已封板时核对其为 `src` 的重评版本。→ 服务端配置。"""
+    from awr.bench.auth import AuditLog
+    from awr.bench.boardstore import load_config
+    from awr.bench.eval.aggregate import SCORE_V2, board_config, seal_board
+    from awr.bench.eval.thresholds import EVALUATOR_VERSION
+    from awr.bench.split import SplitRegistry
+
+    data_root = Path(data_root)
+    bdir, sp = _bv_dir(data_root, dst), _store_path(data_root, dst)
+    if (bdir / "config.json").exists():
+        cfg = load_config(bdir)
+        if cfg.get("lock", {}).get("rescore_of") != src:
+            raise FormalError(f"board version {dst} exists and is not a rescore of {src}")
+        _load(data_root, dst)
+        return cfg
+    if sp.exists():
+        raise FormalError(f"{sp} exists without {bdir / 'config.json'}: resolve by hand")
+    cfg_src, store_src = _load(data_root, src)
+    reg = SplitRegistry.for_root(data_root, audit=AuditLog(data_root / "audit"))
+    if reg.digest() != cfg_src["lock"]["test_split_version"]:
+        raise FormalError(f"test split changed since {src} was sealed: a rescore keeps the split; seal a new board version instead")
+    lk = cfg_src["lock"]
+    types = {e: ln["event_type"] for ln in lk["lanes"] for e in ln["test_events"]}
+    tpl = {k: v for k, v in cfg_src.items() if k not in ("lock", "evalstore")}
+    tpl.update(board_version=dst, score_version=SCORE_V2)
+    lock, store = seal_board(tpl, types, test_split_version=lk["test_split_version"], platform=lk["platform"], gpu_model=lk["gpu_model"],
+                             cpu_isa_level=lk["cpu_isa_level"], sealed_utc=E.utc_now(), store=store_src, rescore_of=src)
+    sp.parent.mkdir(parents=True, exist_ok=True)
+    E.write_json(sp, store, mode=0o600)
+    cfg = board_config(tpl, lock, sp)
+    cfg["rescore"] = {"of": src, "evaluator_version": EVALUATOR_VERSION, "job": RESCORE_JOB, "sealed_utc": lock["sealed_utc"]}
+    bdir.mkdir(parents=True, exist_ok=True)
+    E.write_json(bdir / "config.json", cfg, mode=0o600)
+    if eval_uid is not None and os.geteuid() == 0:
+        for q in (sp, bdir, bdir / "config.json"):
+            os.lchown(q, eval_uid, eval_uid)
+    log(f"[rescore] sealed {dst} ({SCORE_V2}) as a rescore of {src}: seed_set {lock['seed_set_commit'][:16]}, lanes "
+        f"{[ln['seed_set_commit'][:12] for ln in lock['lanes']]} (same lane commitments as {src})")
+    return cfg
+
+
+def _canon(x: Any) -> str:
+    return json.dumps(x, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def _lane_blocks(board: dict) -> dict[str, str]:
+    """榜单的逐"分轨 × 赛道"条目块（规范 JSON；比较两个榜单版本时用）。"""
+    out: dict[str, list] = {}
+    for e in board["entries"]:
+        out.setdefault(f"{e['track']}/{e['lane']}", []).append(e)
+    return {k: _canon(v) for k, v in out.items()}
+
+
+def migrate_submissions(data_root: Path, *, src: str, dst: str, sids: list[str], log=print) -> list[str]:
+    """重评版本发布前把上榜提交迁到重评版本：`_meta.board_version = dst`，`_meta.board_history` 追加原版本（幂等）。→ 迁移过的 id。"""
+    from awr.bench.submissions import SubmissionStore
+
+    st = SubmissionStore(Path(data_root) / "submissions")
+    moved = []
+    for sid in sids:
+        with st.lock:
+            d = st.get(sid)
+            if d["_meta"]["board_version"] == dst:
+                continue
+            if d["_meta"]["board_version"] != src or d["state"] != "DONE":
+                raise FormalError(f"{sid} is {d['state']} on {d['_meta']['board_version']}, expected DONE on {src}")
+            d["_meta"].setdefault("board_history", []).append({"board_version": src, "rescored_to": dst, "utc": E.utc_now(), "job": RESCORE_JOB})
+            d["_meta"]["board_version"] = dst
+            st._put(d)
+        moved.append(sid)
+    log(f"[rescore] submissions moved from {src} to {dst}: {moved or '-'}")
+    return moved
+
+
+def rescore_board(data_root: Path, out: Path, *, src: str, dst: str, jobs: int = 1, n_boot: int = 10_000, eval_uid: int | None = EVAL_UID,
+                  evaluate=None, log=print) -> dict:
+    """离线重评并发布重评版本（模块文档第 8 条）。`evaluate(run_dir, event_dir, truth_dir, access)` 替换评测函数（测试）。→ 摘要。"""
+    from awr.bench.boardstore import append_rows, load_listing, load_rows, publish, slim_evaluation
+    from awr.bench.submissions import SubmissionStore
+
+    data_root, out = Path(data_root), Path(out)
+    cfg_src, _ = _load(data_root, src)
+    cfg = _seal_rescore(data_root, src=src, dst=dst, eval_uid=eval_uid, log=log)
+    sdir, bdir = _bv_dir(data_root, src), _bv_dir(data_root, dst)
+    rows_src = load_rows(sdir)
+    if not rows_src:
+        raise FormalError(f"board {src} has no evaluation rows")
+    events = cfg_src["events"]
+    todo = [{"data_root": str(data_root), "run_id": r["run_id"], "event": r["event"], "event_version": int(events[r["event"]]["version"]),
+             "world_dir": str(Path(cfg_src["worlds_root"]) / events[r["event"]]["world_id"]), "evaluate": evaluate} for r in rows_src]
+    log(f"[rescore] {src} -> {dst}: {len(todo)} runs, {jobs} jobs")
+    t0 = time.time()
+    res: dict[str, dict] = {}
+    if jobs <= 1 or evaluate is not None:
+        for j in todo:
+            res[j["run_id"]] = rescore_run(j)
+    else:
+        with ProcessPoolExecutor(max_workers=jobs) as ex:
+            futs = {ex.submit(rescore_run, j): j["run_id"] for j in todo}
+            for i, f in enumerate(as_completed(futs)):
+                res[futs[f]] = f.result()
+                if (i + 1) % 50 == 0:
+                    log(f"[rescore] {i + 1} / {len(todo)} runs ({time.time() - t0:.0f} s)")
+    wall = round(time.time() - t0, 1)
+    new_rows = []
+    for r in rows_src:
+        ev = res[r["run_id"]]["evaluation"]
+        new_rows.append({**r, "evaluation": slim_evaluation(ev, physics=r["evaluation"].get("physics"))})
+    with board_lock(bdir):
+        have = load_rows(bdir)
+        if not have:
+            append_rows(bdir, new_rows)
+        elif _canon_rows(have) != _canon_rows(new_rows):
+            raise FormalError(f"{bdir}/rows.jsonl differs from the rescored rows; resolve by hand")
+    listing = load_listing(sdir) or {}
+    migrate_submissions(data_root, src=src, dst=dst, sids=sorted(set(listing.values())), log=log)
+    subs = SubmissionStore(data_root / "submissions")
+    files = ("board.json", "details.json", "listing.json")
+    with board_lock(bdir):
+        publish(bdir, subs.board_view(), n_boot=n_boot)
+        first = {f: (bdir / f).read_bytes() for f in files}
+        publish(bdir, subs.board_view(), n_boot=n_boot)
+        second = {f: (bdir / f).read_bytes() for f in files}
+    (data_root / "boards" / "current").write_text(dst + "\n", encoding="utf-8")
+    if eval_uid is not None and os.geteuid() == 0:
+        for q in (bdir, *bdir.iterdir(), data_root / "boards" / "current"):
+            os.lchown(q, eval_uid, eval_uid)
+    same = {f: first[f] == second[f] for f in files}
+    pub = {"board_version": dst, "rows": len(new_rows), "entries": len(json.loads(first["board.json"])["entries"]), "twice_identical": same,
+           "sha256": {f: E.sha256_bytes(first[f]) for f in files}}
+    E.write_json(out / "board_publish.json", pub)
+    # 比较：逐 Run、逐"分轨 × 赛道"
+    lane_of = {(r["run_id"]): (r["track"], r["lane"]) for r in rows_src}
+    per_lane: dict[str, dict] = {}
+    for rid, x in res.items():
+        tr, ln = lane_of[rid]
+        c = per_lane.setdefault(f"{tr}/{ln}", {"runs": 0, "identical": 0, "components_identical": 0})
+        c["runs"] += 1
+        c["identical"] += x["identical"]
+        c["components_identical"] += x["components_identical"]
+    old_b, new_b = E.read_json(sdir / "board.json"), json.loads(first["board.json"])
+    ob, nb = _lane_blocks(old_b), _lane_blocks(new_b)
+    lanes = {}
+    for k, c in sorted(per_lane.items()):
+        unchanged = c["identical"] == c["runs"]
+        lanes[k] = {**c, "evaluations_unchanged": unchanged, "board_identical": ob.get(k) == nb.get(k)}
+    bad = [k for k, v in lanes.items() if v["evaluations_unchanged"] and not v["board_identical"]]
+    changed = {rid: {"differs": x["differs"], "old": x["old_components"], "new": x["new_components"]} for rid, x in sorted(res.items())
+               if not x["identical"]}
+    inputs = {k: sum(x["inputs_same"][k] for x in res.values()) for k in ("raw_mcap_sha256", "tape_sha256", "event_truth_sha256", "truth_sha256")}
+    rep = {"schema": "drone4d.bench.board_rescore.v1", "from": src, "to": dst, "score_version": cfg["score_version"],
+           "evaluator_version": next(iter(res.values()))["new_version"], "runs": len(res), "reused": sum(x["reused"] for x in res.values()),
+           "identical_runs": sum(x["identical"] for x in res.values()), "changed_runs": len(changed), "inputs_same": inputs, "wall_s": wall,
+           "lanes": lanes, "lanes_unchanged_but_board_differs": bad, "publish": pub, "changed": changed, "generated_utc": E.utc_now(),
+           "passed": not bad and all(same.values())}
+    E.write_json(out / f"rescore-{dst}.json", rep)
+    for k, v in lanes.items():
+        log(f"  {k}: {v['identical']}/{v['runs']} evaluations unchanged, board block identical to {src}: {v['board_identical']}")
+    log(f"[rescore] {dst}: {rep['identical_runs']}/{rep['runs']} runs unchanged, {rep['changed_runs']} changed, published twice identical "
+        f"{same}, passed={rep['passed']} ({wall} s)")
+    if not rep["passed"]:
+        raise FormalError(f"rescore {dst}: lanes with unchanged evaluations differ on the board {bad} or publish not identical {same}")
+    return rep
+
+
+# ------------------------------------------------------------------------------------------------------------------ 9 平台原因重跑（K16）
+def rerun_platform(data_root: Path, out: Path, *, board_version: str, run_ids: list[str], reason: str, docker: str = "docker", n_boot: int = 10_000,
+                   runner=None, eval_uid: int | None = EVAL_UID, log=print) -> dict:
+    """平台原因的基线 Run 重跑并替换（模块文档第 9 条）。`runner(job)` 替换单个 Run 的执行（测试）。→ 摘要。"""
+    from awr.bench.auth import AuditLog
+    from awr.bench.boardstore import load_rows, publish, slim_evaluation
+    from awr.bench.split import HiddenStore
+    from awr.bench.submissions import SubmissionStore
+
+    data_root, out = Path(data_root), Path(out)
+    cfg, store = _load(data_root, board_version)
+    bdir = _bv_dir(data_root, board_version)
+    rows = load_rows(bdir)
+    by_id = {r.get("run_id"): r for r in rows}
+    miss = [x for x in run_ids if x not in by_id or not by_id[x].get("baseline")]
+    if miss:
+        raise FormalError(f"{miss} are not baseline runs of {board_version}")
+    hs = HiddenStore.for_root(data_root, AuditLog(data_root / "audit"))
+    plan = {it["run_id"]: it for t in cfg["tracks"] for it in plan_baselines(cfg, track=t["track"])}
+    if cfg.get("rescore"):                                    # 重评版本的基线 Run 沿用原版本的 run_id
+        src = cfg["rescore"]["of"]
+        plan = {it["run_id"].replace(f"{board_version}-", f"{src}-", 1): {**it, "run_id": it["run_id"].replace(f"{board_version}-", f"{src}-", 1),
+                                                                            "key": it["key"].replace(f"{board_version}-", f"{src}-", 1)}
+                for it in plan.values()}
+    done = []
+    for rid in run_ids:
+        it, old = plan[rid], by_id[rid]
+        run_dir = data_root / "dataset" / it["event"] / "runs" / rid
+        n = 1 + len(list(run_dir.parent.glob(f"{rid}.superseded-*")))
+        if run_dir.exists():
+            run_dir.rename(run_dir.with_name(f"{rid}.superseded-{n}"))
+        td = hs.truth_dir(it["event"]) / "runs" / rid
+        if td.exists():
+            td.rename(td.with_name(f"{rid}.superseded-{n}"))
+        rec_p = out / "records" / f"{rid}.json"
+        if rec_p.exists():
+            rec_p.rename(rec_p.with_name(f"{rid}.superseded-{n}.json"))
+        job = _baseline_job(cfg, store, it, data_root=data_root, out=out, docker=docker)
+        (runner or _pool_baseline)(job)
+        rec = E.read_json(rec_p) if rec_p.exists() else {}
+        if rec.get("status") != "COMPLETED":
+            raise FormalError(f"rerun of {rid} did not complete ({rec.get('status', 'no record')}); the superseded run is kept")
+        ev = E.read_json(run_dir / "evaluation.json")
+        man = E.read_json(run_dir / "manifest.json")
+        new = {**old, "evaluation": slim_evaluation(ev, physics=man.get("physics"))}
+        done.append({"run_id": rid, "superseded": f"{rid}.superseded-{n}", "old": old["evaluation"]["components"], "new": new["evaluation"]["components"],
+                     "agents": {u: a.get("timeouts", 0) for u, a in (man.get("agents") or {}).items()}, "rerun_utc": E.utc_now()})
+        with board_lock(bdir):
+            cur = load_rows(bdir)
+            keep = [r for r in cur if r.get("run_id") != rid]
+            sup = [{**r, "superseded": {"reason": reason, "utc": E.utc_now(), "by": f"{rid} (rerun {n})"}} for r in cur if r.get("run_id") == rid]
+            with open(bdir / "rows.superseded.jsonl", "a", encoding="utf-8") as f:
+                for r in sup:
+                    f.write(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n")
+            tmp = bdir / ".rows.jsonl.tmp"
+            tmp.write_text("".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in [*keep, new]), encoding="utf-8")
+            os.replace(tmp, bdir / "rows.jsonl")
+        log(f"[rerun-platform] {rid}: {done[-1]['old']} -> {done[-1]['new']}")
+    seal_run_truth(data_root, board_version=board_version, eval_uid=eval_uid, log=log)
+    subs = SubmissionStore(data_root / "submissions")
+    files = ("board.json", "details.json", "listing.json")
+    with board_lock(bdir):
+        publish(bdir, subs.board_view(), n_boot=n_boot)
+        first = {f: (bdir / f).read_bytes() for f in files}
+        publish(bdir, subs.board_view(), n_boot=n_boot)
+        same = {f: first[f] == (bdir / f).read_bytes() for f in files}
+    pub = {"board_version": board_version, "twice_identical": same, "sha256": {f: E.sha256_bytes(first[f]) for f in files}}
+    E.write_json(out / "board_publish.json", {**pub, "rows": len(load_rows(bdir)), "entries": len(json.loads(first["board.json"])["entries"])})
+    res = {"board_version": board_version, "reason": reason, "runs": done, "publish": pub}
+    E.write_json(out / "rerun-platform.json", res)
+    return res
+
+
+# ------------------------------------------------------------------------------------------------------------------ 10 实验室发布（K16）
+def publish_lab(data_root: Path, out: Path, *, board_versions: list[str], lab_root: Path, current: str | None = None, lab_uid: int | None = None,
+                log=print) -> dict:
+    """把榜单版本的发布制品与其上榜提交的文档复制到实验室数据根（模块文档第 10 条）；不复制 config.json、EvalStore 与 hidden/。"""
+    from awr.bench.boardstore import load_listing
+
+    data_root, lab_root = Path(data_root), Path(lab_root)
+    if not (lab_root / "boards").is_dir() or not (lab_root / "submissions").is_dir():
+        raise FormalError(f"{lab_root} is not a lab data root (boards/ and submissions/ are required)")
+    copied, sids = {}, set()
+    for v in board_versions:
+        src = _bv_dir(data_root, v)
+        if not (src / "board.json").is_file():
+            raise FormalError(f"board {v} is not published under {data_root}")
+        dst = lab_root / "boards" / v
+        dst.mkdir(exist_ok=True)
+        for f in LAB_FILES:
+            if (src / f).is_file():
+                tmp = dst / f".{f}.tmp"
+                shutil.copyfile(src / f, tmp)
+                os.chmod(tmp, 0o644)
+                os.replace(tmp, dst / f)
+        copied[v] = {f: E.sha256_file(dst / f) for f in LAB_FILES if (dst / f).is_file()}
+        sids |= set((load_listing(src) or {}).values())
+    subs = {}
+    for sid in sorted(sids):
+        s = data_root / "submissions" / f"{sid}.json"
+        tmp = lab_root / "submissions" / f".{sid}.json.tmp"
+        shutil.copyfile(s, tmp)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, lab_root / "submissions" / f"{sid}.json")
+        subs[sid] = E.sha256_file(lab_root / "submissions" / f"{sid}.json")
+    prev = (lab_root / "boards" / "current").read_text(encoding="utf-8").strip() if (lab_root / "boards" / "current").is_file() else None
+    if current:
+        (lab_root / "boards" / "current").write_text(current + "\n", encoding="utf-8")
+    if lab_uid is not None and os.geteuid() == 0:
+        for v in board_versions:
+            for q in (lab_root / "boards" / v, *(lab_root / "boards" / v).iterdir()):
+                os.lchown(q, lab_uid, lab_uid)
+        for sid in subs:
+            os.lchown(lab_root / "submissions" / f"{sid}.json", lab_uid, lab_uid)
+        if current:
+            os.lchown(lab_root / "boards" / "current", lab_uid, lab_uid)
+    leaked = [str(p) for p in (lab_root / "boards").rglob("*") if p.name == "config.json" and p.parent.name in board_versions]
+    res = {"lab_root": str(lab_root), "versions": copied, "submissions": subs, "current": {"before": prev, "after": current or prev},
+           "excluded": ["config.json", "bench/evalstore", "hidden/"], "config_json_in_lab": leaked, "utc": E.utc_now()}
+    E.write_json(Path(out) / "publish-lab.json", res)
+    log(f"[publish-lab] {board_versions} -> {lab_root} ({len(subs)} submissions), current {prev} -> {current or prev}")
+    return res
+
+
 # ------------------------------------------------------------------------------------------------------------------ 命令行
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="board_v1_formal.py", description=__doc__.split("\n\n")[0])
@@ -985,6 +1359,19 @@ def main(argv: list[str] | None = None) -> int:
     t = sub.add_parser("rebuild-timing")
     t.add_argument("--entries", type=int, default=100)
     t.add_argument("--repeat", type=int, default=3)
+    z = sub.add_parser("seal-rescore", help="admin: seal a d3-score-2 rescore board version of --board-version (reads the split registry)")
+    z.add_argument("--to", required=True)
+    q = sub.add_parser("rescore", help="offline re-evaluation of --board-version into a new d3-score-2 board version")
+    q.add_argument("--to", required=True, help="the new (rescore) board version")
+    q.add_argument("--jobs", type=int, default=8)
+    w = sub.add_parser("rerun-platform", help="rerun baseline runs that failed for a platform cause and replace their rows")
+    w.add_argument("--runs", required=True, help="comma-separated run ids")
+    w.add_argument("--reason", required=True)
+    lab = sub.add_parser("publish-lab", help="copy published board artifacts and submission documents to the lab data root")
+    lab.add_argument("--lab-root", type=Path, required=True)
+    lab.add_argument("--versions", default=None, help="comma-separated board versions (default --board-version)")
+    lab.add_argument("--current", default=None, help="set the lab boards/current to this version")
+    lab.add_argument("--lab-uid", type=int, default=None)
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     log = _log_to(a.out / f"{a.cmd}.log")
@@ -1020,6 +1407,15 @@ def main(argv: list[str] | None = None) -> int:
             res = rebuild_timing(a.data_root, board_version=a.board_version, n_entries=a.entries, repeat=a.repeat, log=log)
             E.write_json(a.out / "rebuild_timing.json", res)
             return 0 if res["passed"] else 1
+        elif a.cmd == "seal-rescore":
+            _seal_rescore(a.data_root, src=a.board_version, dst=a.to, eval_uid=EVAL_UID, log=log)
+        elif a.cmd == "rescore":
+            rescore_board(a.data_root, a.out, src=a.board_version, dst=a.to, jobs=a.jobs, log=log)
+        elif a.cmd == "rerun-platform":
+            rerun_platform(a.data_root, a.out, board_version=a.board_version, run_ids=a.runs.split(","), reason=a.reason, docker=a.docker, log=log)
+        elif a.cmd == "publish-lab":
+            publish_lab(a.data_root, a.out, board_versions=(a.versions or a.board_version).split(","), lab_root=a.lab_root, current=a.current,
+                        lab_uid=a.lab_uid, log=log)
     except FormalError as e:
         log(f"[{a.cmd}] FAILED: {e}")
         return 1

@@ -131,7 +131,7 @@ def test_seal_assigns_test_events_by_event_type(tmp_path: Path) -> None:
     (lambda c: c["tracks"][1].update(appearance="3dgs-aerial"), "appearance mesh"),
     (lambda c: c["tracks"][1].update(track="std3-l2"), "unique ids"),
     (lambda c: c["lanes"][0].update(event_type="vehicle_track"), "one to one"),
-    (lambda c: c.update(score_version="d3-score-0"), "score_version must be d3-score-1"),
+    (lambda c: c.update(score_version="d3-score-0"), "score_version must be one of"),
     (lambda c: c.update(repeats=0), "repeats must be a positive integer"),
 ])
 def test_board_config_rules(mutate, msg) -> None:

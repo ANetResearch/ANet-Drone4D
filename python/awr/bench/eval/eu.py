@@ -1,7 +1,11 @@
 """事件理解 EU v0（M27 §6.7.6 `event_understanding`）：参与者以证据多数表决关联到演员（平票为未解析；L1 按 det_id，L2 按框 IoU
 或点落在膨胀 3 px 的可见掩膜内），
 report 与计分事件一对一匹配（类型对应、时间差 ≤ 15 s、参与者集合相等），先最大化匹配数再最小化 Σ dt。时间差取 report 区间
-与事件区间的间隔（重叠为 0；长时段事件不因区间中点偏移而误判），同间隔以区间中点差的千分之一定序。"""
+与事件区间的间隔（重叠为 0；长时段事件不因区间中点偏移而误判），同间隔以区间中点差的千分之一定序。
+
+类型映射缺省为 `agentsdk.task.EVENT_OF`；给出 `report_map`（事件真值 `report_map`：report 类型 → 真值事件类型列表，M23 §15.3 规则 4）时
+按之匹配。`locate(report, event)` 给出时另作定位核对（目标搜索 `found`：定位误差 ≤ `eu_found_m`，见 `awr.bench.eval.truth`），
+返回假的配对不成立。"""
 
 from __future__ import annotations
 
@@ -91,7 +95,13 @@ def _gap(r: dict, e: dict) -> float:
     return max(0.0, e["a_s"] - r["window"]["t_end_ns"] / 1e9, r["window"]["t_start_ns"] / 1e9 - e["b_s"])
 
 
-def event_understanding(reports: list[dict], E: list[dict], run, th=TH) -> dict:
+def event_understanding(reports: list[dict], E: list[dict], run, th=TH, *, report_map: dict[str, list[str]] | None = None,
+                        locate=None) -> dict:
+    def same_type(rt: str, et: str) -> bool:
+        if report_map is not None and rt in report_map:
+            return et in report_map[rt]
+        return EVENT_OF.get(rt, rt) == et
+
     resolved = unresolved = 0
     edges = []
     for i, row in enumerate(reports):
@@ -107,7 +117,7 @@ def event_understanding(reports: list[dict], E: list[dict], run, th=TH) -> dict:
         r0, r1 = r["window"]["t_start_ns"] / 1e9, r["window"]["t_end_ns"] / 1e9
         for j, e in enumerate(E):
             dt = _gap(r, e)
-            if EVENT_OF.get(r["type"], r["type"]) == e["type"] and dt <= th.eu_dt_s and set(e["participants"]) == R:
+            if same_type(r["type"], e["type"]) and dt <= th.eu_dt_s and set(e["participants"]) == R and (locate is None or locate(r, e)):
                 edges.append((i, j, dt + 1e-3 * abs((r0 + r1) / 2 - (e["a_s"] + e["b_s"]) / 2)))
     matches = []
     if edges:

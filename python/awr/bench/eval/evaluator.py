@@ -9,7 +9,12 @@
 全部在建筑内的注释由 `ec.exclusions` 剔除，不进入 EC、AO、CE 的分母，在 `excluded[]` 中单列；EU 的事件集不变。
 
 AO oracle 的相机（§5.6.5"按本 Run 的标称相机"）：取运行清单的 `camera`（Env 相机覆盖时写入，ADR-217），没有时为标称相机
-`d4d_eo1080@1`（HFOV 60°）；无覆盖的运行评测结果不变。"""
+`d4d_eo1080@1`（HFOV 60°）；无覆盖的运行评测结果不变。
+
+计分事件集与真值读取（评测器 0.3.0，K16；M27-FR-176、FR-114、FR-124）：计分事件为 plan.json 的注释加事件真值中属于计分类型的
+类型化关键事件（目标搜索的 `target_window_k`），目标搜索的 EU 按 `report_map`（`found` → `target_present`，定位 ≤ 5 m）匹配；
+事件真值与运行真值经 `truth.TruthAccess` 读取（test 事件经 HiddenStore 授权并审计），运行真值可在运行目录之外（`truth_dir`，
+已移入隐藏区的 test 运行）。规则与 `inputs` 的摘要口径见 `awr.bench.eval.truth`。"""
 
 from __future__ import annotations
 
@@ -23,17 +28,19 @@ import numpy as np
 from awr.agentsdk.task import scored_events
 from awr.bench.eval.ao import active_observation
 from awr.bench.eval.ce import collaborative
-from awr.bench.eval.ec import event_capture, event_truth_rows, exclusions, inside_masks
+from awr.bench.eval.ec import event_capture, exclusions, inside_masks
 from awr.bench.eval.eu import event_understanding
 from awr.bench.eval.ident import build_ident
 from awr.bench.eval.run import load_run
 from awr.bench.eval.safety import safety
 from awr.bench.eval.thresholds import EVALUATOR_VERSION, ORACLE_VERSION, TH, THRESHOLDS_VERSION
+from awr.bench.eval.truth import TruthAccess, eu_target_set, event_truth, event_truth_sha256, scored_event_set
 
 __all__ = ["ZERO_REASONS", "check_run_manifest", "dev_seed_commit", "evaluate_run", "run_camera", "run_manifest", "write_run_manifest"]
 
 ZERO_REASONS = ("actor_penetration",)          # 使结果作废、分量全部记 0 的无效原因（M27-FR-161）
 TICK_S = 0.1
+TICK_NS = 100_000_000
 
 
 def _actor_stats(run, ident, present_all: dict[str, np.ndarray]) -> dict:
@@ -63,22 +70,50 @@ def run_camera(env_manifest: dict) -> tuple[float, str]:
     return c.fx, c.model_ref
 
 
-def evaluate_run(run_dir: Path, event_dir: Path, world, *, fx: float | None = None, diag: dict | None = None) -> dict:
+def _found_locate(run, th=TH):
+    """目标搜索 `found` 的定位核对：report `position_enu_m` 与目标在 report 窗口末时刻（截断到该真值事件区间）的磁带位置的水平距离
+    ≤ `eu_found_m`；report 无位置时不成立。"""
+    idx = {a["id"]: a["idx"] for a in run.tape.actors_info()}
+
+    def ok(r: dict, e: dict) -> bool:
+        pos = r.get("position_enu_m")
+        if not pos or len(e["participants"]) != 1:
+            return False
+        t = min(max(r["window"]["t_end_ns"] / 1e9, e["a_s"]), e["b_s"])
+        k = min(max(round(t * 10), 0), run.n_ticks)
+        st = run.tape.actor_states(k * TICK_NS, [idx[e["participants"][0]]])
+        p = st.pos_enu_m[0]
+        return math.hypot(float(pos[0]) - float(p[0]), float(pos[1]) - float(p[1])) <= th.eu_found_m
+
+    return ok
+
+
+def evaluate_run(run_dir: Path, event_dir: Path, world, *, fx: float | None = None, diag: dict | None = None, truth_dir: Path | None = None,
+                 access: TruthAccess | None = None) -> dict:
     """→ evaluation.v1；`diag` 若给出则填入诊断量（归一化中间量、阈值、计数），不进入评测文档。`fx` 给出时覆盖运行相机的焦距
-    （诊断与敏感性分析用）。"""
-    run = load_run(Path(run_dir), Path(event_dir))
-    E = [e for e in scored_events(Path(event_dir)) if e["type"] in run.task["scored_event_types"]]
+    （诊断与敏感性分析用）。`truth_dir` 为运行真值目录（缺省 `<run_dir>/truth`）；`access` 为真值读取入口（缺省直接读文件，test 事件
+    以 `TruthAccess.hidden` 经 HiddenStore）。"""
+    access = access or TruthAccess()
+    run = load_run(Path(run_dir), Path(event_dir), truth_dir=truth_dir, access=access)
+    plan = json.loads((Path(event_dir) / "plan.json").read_text(encoding="utf-8"))
+    ann = [e for e in scored_events(Path(event_dir)) if e["type"] in run.task["scored_event_types"]]
+    truth = event_truth(Path(event_dir), access)
+    E, key_rows = scored_event_set(ann, truth, run.task["scored_event_types"])
     U = run.uavs
     ident = build_ident(run)
     scripted = [a["id"] for a in run.tape.actors_info(scripted_only=True)]
     pres = run.present(scripted)
     present = {a: pres[:, i] for i, a in enumerate(scripted)}
     inside = inside_masks(run, scripted)
-    truth_rows = event_truth_rows(Path(event_dir))
+    truth_rows = None if truth is None else [*truth.get("events", []), *key_rows]
     E, excluded = exclusions(E, truth_rows, present, run.n_ticks, inside=inside)
     Es = [e for e in E if not e.get("excluded")]                  # 只在可观测区计分：EC、AO、CE 的分母（M27-FR-089）
     ec, cov, per_event = event_capture(Es, U, ident, present, run.n_ticks, inside=inside)
-    eu = event_understanding(run.reports, E, run)
+    tgt = eu_target_set(run.task, truth)
+    if tgt is None:
+        eu = event_understanding(run.reports, E, run)
+    else:                                                         # 目标搜索：EU 真值为 target_present，found 须定位 ≤ 5 m
+        eu = event_understanding(run.reports, tgt[0], run, report_map=tgt[1], locate=_found_locate(run))
     cam_fx, cam_ref = run_camera(run.manifest)
     ao = active_observation(Es, U, run, world, fx=fx or cam_fx, envelope_agl_m=tuple(run.task["altitude_envelope_agl_m"]),
                             truth_rows=truth_rows, present=present, camera_model=cam_ref)
@@ -94,7 +129,8 @@ def evaluate_run(run_dir: Path, event_dir: Path, world, *, fx: float | None = No
     if any(r in ZERO_REASONS for r in invalid):
         comp = {k: (None if v is None else 0.0) for k, v in comp.items()}     # CE 对单机无定义，仍为 null
     doc = {"schema": "drone4d.bench.evaluation.v1", "run_id": run.manifest["run_id"], "evaluator_version": EVALUATOR_VERSION,
-           "thresholds_version": THRESHOLDS_VERSION, "oracle_version": ORACLE_VERSION, "inputs": run.hashes(),
+           "thresholds_version": THRESHOLDS_VERSION, "oracle_version": ORACLE_VERSION,
+           "inputs": run.hashes(event_truth_sha256=event_truth_sha256(plan.get("annotations", []), [e for e in E if e.get("key")])),
            "obs_level": run.manifest["obs_level"], "ranked": ranked, "ranked_valid": not invalid, "invalid_reasons": invalid,
            "ec": {"value": ec, "coverage": cov, "events": list(per_event.values())}, "excluded": excluded, "eu": eu, "ao": ao,
            "ce": ce_raw, "safety": sf, "actors": _actor_stats(run, ident, present),

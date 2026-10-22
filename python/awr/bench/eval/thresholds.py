@@ -6,7 +6,9 @@ from dataclasses import dataclass
 
 __all__ = ["EVALUATOR_VERSION", "ORACLE_VERSION", "SCORE_VERSION", "TH", "THRESHOLDS_VERSION", "Thresholds"]
 
-EVALUATOR_VERSION = "0.2.0"      # 0.2.0（K07）：AO 关键时刻改为 r6 口径（开始、中点、结束，参与者须在场）
+EVALUATOR_VERSION = "0.3.0"      # 0.2.0（K07）：AO 关键时刻改为 r6 口径（开始、中点、结束，参与者须在场）
+# 0.3.0（K16）：目标搜索的计分事件取事件真值的 target_window 关键事件、EU 按 report_map（found → target_present，定位 ≤ 5 m）；
+# inputs.truth_sha256 只覆盖评测读取的运行真值（truth.RUN_TRUTH_FILES）；隐藏真值经 HiddenStore 读取。其余事件类型结果逐字节不变
 THRESHOLDS_VERSION = "eval_thresholds.v1"
 ORACLE_VERSION = "ao-oracle-v0-grid@1"
 SCORE_VERSION = "d3-score-0"
@@ -21,6 +23,7 @@ class Thresholds:
     eu_dt_s: float = 15.0            # EU：report 区间与事件区间的间隔 ≤ 15 s（重叠为 0）
     eu_iou: float = 0.3
     eu_dilate_px: int = 3            # EU：点证据落在膨胀 3 px 的可见掩膜内（M27 §6.8 `eval.eu.dilate_px`）
+    eu_found_m: float = 5.0          # EU：目标搜索 found 的定位误差 ≤ 5 m（水平距离；AWR-05 §5.2.8 target_search 行与规则 5）
     ao_q_px: float = 30.0            # AO 质量 min(1, h / 30 px) · 可见比例
     ao_window_s: float = 1.0
     oracle_grid_m: float = 10.0

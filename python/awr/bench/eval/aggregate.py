@@ -19,6 +19,12 @@ test 事件的行；上榜条件为该赛道全部 test 事件的 K × R 个 Run
 `display_order`（§5.6.9 缺省显示次序：非支配层级升序、同层按首次上榜时刻；其后为不排名条目，最后为基线参考行）。`frozen_diff` 给出
 与已发布版本不同的冻结项（分轨、赛道与 test 事件清单、评分版本、test 划分版本、种子集承诺、评测器主版本、平台摘要、GPU 型号与
 CPU ISA 等级），任一项不同须发布为新榜单版本。`d3-score-0` 的计算与输出逐字节不变（M32 §8.2 D3-INV-01 至 D3-INV-18）。
+
+`d3-score-2`（K16，评测器 0.3.0）：聚合、置信区间与名次规则与 `d3-score-1` 相同；评测行取自评测器 ≥ 0.3.0 的 `evaluation.json`
+（目标搜索赛道以事件真值的 `target_window` 关键事件计分，见 `awr.bench.eval.truth`）。为修正评测器而发布的重评榜单版本
+（`seal_board(..., rescore_of=<原版本>, store=<原 EvalStore>)`）沿用原版本的秘密种子集、K_eval 与 K_board，封板记录带
+`rescore_of`；`d3-score-2` 的重采样种子取 `HMAC-SHA256(K_board, entry_id ‖ rng_scope ‖ lane)`，`rng_scope = lock.rescore_of`
+（缺省为本榜单版本），因此分量不变的赛道在重评版本上的点值、置信区间、名次、并列组与层级与原版本逐字节一致（`rng_scope`）。
 """
 
 from __future__ import annotations
@@ -34,9 +40,10 @@ import numpy as np
 
 from awr.bench.eval.thresholds import EVALUATOR_VERSION, ORACLE_VERSION, SCORE_VERSION
 
-__all__ = ["BOARD_CONFIG", "BOARD_EVALSTORE", "BOARD_LOCK", "EVENT_LANES", "METRICS", "SCORE_V1", "SCORE_VERSIONS", "BoardConfigError", "admits",
-           "board_config", "board_key", "build_board", "check_board_config", "compose", "entry_details", "expand_runs", "frozen_diff", "is_v1",
-           "lane_metrics", "load_board_template", "ranked_row", "run_spec_for", "score_definition", "seal_board", "verify_lock"]
+__all__ = ["BOARD_CONFIG", "BOARD_EVALSTORE", "BOARD_LOCK", "BOARD_SCORES", "EVENT_LANES", "METRICS", "SCORE_V1", "SCORE_V2", "SCORE_VERSIONS",
+           "BoardConfigError", "admits", "board_config", "board_key", "build_board", "check_board_config", "compose", "entry_details", "expand_runs",
+           "frozen_diff", "is_v1", "lane_metrics", "load_board_template", "ranked_row", "rng_scope", "run_spec_for", "score_definition", "seal_board",
+           "verify_lock"]
 
 METRICS = ("ec", "eu", "ao", "ce")
 N_BOOT = 10_000
@@ -97,7 +104,8 @@ def _rng(*parts: str, secret: bytes | None = None) -> np.random.Generator:
 
 
 def lane_metrics(rows: list[dict], *, key: tuple[str, str, str], n_boot: int = N_BOOT, secret: bytes | None = None) -> tuple[dict, np.ndarray]:
-    """`key = (entry_id, board_version, lane)`；`secret` 为榜单版本的 K_board（`d3-score-1`），缺省按 `d3-score-0` 派生。"""
+    """`key = (entry_id, board_version, lane)`（`d3-score-2` 的第二项为 `rng_scope(cfg)`）；`secret` 为榜单版本的 K_board
+    （`d3-score-1`、`d3-score-2`），缺省按 `d3-score-0` 派生。"""
     units = _units(rows)
     boots = _boot(units, _rng(*key, secret=secret), n_boot)
     out = {}
@@ -233,10 +241,10 @@ def compose(rows: list[dict], weights: dict[str, float], *, board_version: str, 
     if np.any(w < 0) or w.sum() <= 0:
         raise ValueError("weights must be non-negative with a positive sum")
     w = w / w.sum()
-    secret = None
+    secret, scope = None, board_version
     if _v1_selected(board):
         v1 = _V1(board, board_version)
-        items, secret = list(v1.groups(rows).items()), v1.secret
+        items, secret, scope = list(v1.groups(rows).items()), v1.secret, v1.scope
         dev = False
     else:
         dev = bool((track or {}).get("dev"))
@@ -250,7 +258,7 @@ def compose(rows: list[dict], weights: dict[str, float], *, board_version: str, 
         use = rs if dev else [r for r in rs if r["evaluation"]["ranked_valid"]]
         if not use:
             continue
-        met, boots = lane_metrics(use, key=(eid, board_version, lane), n_boot=n_boot, secret=secret)
+        met, boots = lane_metrics(use, key=(eid, scope, lane), n_boot=n_boot, secret=secret)
         vals = [met[m]["value"] for m in METRICS]
         if any(v is None for v in vals):
             out.append({"entry_id": eid, "track": tr, "lane": lane, "value": None, "ci95": [0.0, 0.0]})
@@ -287,8 +295,10 @@ def entry_details(rows: list[dict], *, board: dict | None = None) -> dict[str, d
     return out
 
 
-# ------------------------------------------------------------------------------------------------------------ 排行榜 v1（d3-score-1）
+# ------------------------------------------------------------------------------------------------------------ 排行榜 v1（d3-score-1、d3-score-2）
 SCORE_V1 = "d3-score-1"
+SCORE_V2 = "d3-score-2"                 # K16：评测器 0.3.0（目标搜索计分事件修正）；重评版本沿用原版本的重采样流（rng_scope）
+BOARD_SCORES = (SCORE_V1, SCORE_V2)     # 排行榜 v1 配置（board_config.v1）可用的评分版本
 BOARD_CONFIG = "drone4d.bench.board_config.v1"
 BOARD_LOCK = "drone4d.bench.board_lock.v1"
 BOARD_EVALSTORE = "drone4d.bench.board_evalstore.v1"
@@ -298,6 +308,8 @@ EVENT_LANES = {"reid": "reid_occlusion", "handoff": "rendezvous_handoff", "vehic
 SCORE_VERSIONS = {
     SCORE_VERSION: {"stage": "prototype", "rng": "sha256(entry_id‖board_version‖lane)", "lanes": "rows", "weights": None},
     SCORE_V1: {"stage": "board-v1", "rng": "hmac-sha256(K_board, entry_id‖board_version‖lane)", "lanes": "config", "weights": None},
+    SCORE_V2: {"stage": "board-v1", "rng": "hmac-sha256(K_board, entry_id‖rng_scope‖lane), rng_scope = lock.rescore_of or board_version",
+               "lanes": "config", "weights": None, "evaluator_min": "0.3.0"},
 }
 # 榜单版本冻结项（M27-FR-164、FR-177）：任一项与已发布版本不同即须新榜单版本
 FROZEN = ("score_version", "tracks", "lanes", "seed_set_commit", "test_split_version", "evaluator_major", "platform_digest", "gpu_model",
@@ -348,7 +360,10 @@ def score_definition(version: str) -> dict:
                                      "f_res": "clip(1 - 0.5 * max(0, rho - 1), 0, 1)", "budget": "bench/task.v1.budget"},
                               "ranked_valid_false": "all components 0",
                               "aggregate": "event value = mean over seeds x repeats; lane value = equal-weight mean over test events",
-                              "ci95": {"method": "two-stage stratified bootstrap", "n_boot": N_BOOT, "rng": SCORE_VERSIONS[version]["rng"]}},
+                              "ci95": {"method": "two-stage stratified bootstrap", "n_boot": N_BOOT, "rng": SCORE_VERSIONS[version]["rng"]},
+                              **({"events": "plan annotations + typed key events of the scored types in event truth (target_search: "
+                                            "target_window_k); target_search EU: found -> target_present within 5 m",
+                                  "evaluator_min": SCORE_VERSIONS[version]["evaluator_min"]} if "evaluator_min" in SCORE_VERSIONS[version] else {})},
             "weights": SCORE_VERSIONS[version]["weights"]}
 
 
@@ -366,15 +381,15 @@ def _secret_paths(x, path: str = "") -> list[str]:
 
 
 def check_board_config(cfg: dict, *, sealed: bool = False) -> list[str]:
-    """排行榜 v1 榜单版本配置的检查（→ 问题列表，空为合规）：评分版本 `d3-score-1`、物理档 realistic、事件模式 exogenous、
+    """排行榜 v1 榜单版本配置的检查（→ 问题列表，空为合规）：评分版本 `d3-score-1` 或 `d3-score-2`、物理档 realistic、事件模式 exogenous、
     分轨唯一且外观层为 mesh、事件类型赛道与 event_type 一一对应、K、R 与每赛道事件数为正整数、配置与封板记录中无种子明文或密钥；
     `sealed = True` 时还要求封板记录（`lock`）与 EvalStore 路径，且封板记录与模板一致（赛道集合、每赛道 test 事件数、承诺值格式、
     test 事件不跨事件类型赛道）。"""
     p: list[str] = []
     if cfg.get("schema") != BOARD_CONFIG:
         return [f"schema must be {BOARD_CONFIG}"]
-    if cfg.get("score_version") != SCORE_V1:
-        p.append(f"score_version must be {SCORE_V1}")
+    if cfg.get("score_version") not in BOARD_SCORES:
+        p.append(f"score_version must be one of {list(BOARD_SCORES)}")
     bv = str(cfg.get("board_version", ""))
     if not bv or not bv[0].isalnum() or len(bv) > 64 or not all(c.isalnum() or c in "._-" for c in bv):
         p.append(f"board_version {bv!r} is not a valid board version name")
@@ -421,6 +436,9 @@ def check_board_config(cfg: dict, *, sealed: bool = False) -> list[str]:
         p.append("evalstore (server-side path of the EvalStore) is required")
     if lock.get("board_version") != bv or lock.get("score_version") != cfg.get("score_version"):
         p.append("lock board_version or score_version differs from the config")
+    rso = lock.get("rescore_of")
+    if rso is not None and (not isinstance(rso, str) or rso == bv or cfg.get("score_version") != SCORE_V2):
+        p.append("lock rescore_of names the original board version of a d3-score-2 rescore and differs from board_version")
     if [ln.get("lane") for ln in lock.get("lanes", [])] != names:
         p.append("lock lanes differ from the config lanes")
     seen: dict[str, str] = {}
@@ -478,15 +496,23 @@ def _draw_seeds(n: int, taken: set[int]) -> list[int]:
 
 
 def seal_board(cfg: dict, test_events: dict[str, str], *, test_split_version: str, platform: dict[str, str], gpu_model: str, cpu_isa_level: str,
-               sealed_utc: str, store: dict | None = None) -> tuple[dict, dict]:
+               sealed_utc: str, store: dict | None = None, rescore_of: str | None = None) -> tuple[dict, dict]:
     """封板（M27-FR-166、FR-177）：`test_events` 为 test 划分中的事件 → event_type（`awr.bench.split` 登记的 test 事件及其 `plan.json`）。
     事件类型赛道按 event_type 自动归属（模板中显式列出 `test_events` 的赛道以列出者为准）；每赛道须恰有 `events_per_lane` 个 test 事件。
     `store` 缺省时以 CSPRNG 生成 K_eval、K_board 与每个（赛道、test 事件）K 个秘密种子；给出时（重新封板、复核）沿用其种子与密钥。
+    `rescore_of`（`d3-score-2` 的重评版本）：`store` 须为该原版本的 EvalStore，种子与密钥原样沿用、`board_version` 改为新版本，
+    封板记录带 `rescore_of`（赛道与事件级承诺与原版本相同，榜单级承诺随版本名变化）。
     → (封板记录 `drone4d.bench.board_lock.v1`，只含承诺值；EvalStore 文档 `drone4d.bench.board_evalstore.v1`，含明文，只在服务端保存)。"""
     p = check_board_config(cfg)
     if p:
         raise BoardConfigError("; ".join(p))
     k, bv = int(cfg["seeds_per_event"]), str(cfg["board_version"])
+    if rescore_of is not None:
+        if cfg["score_version"] != SCORE_V2 or rescore_of == bv:
+            raise BoardConfigError(f"a rescore of {rescore_of} is a new {SCORE_V2} board version with another name")
+        if store is None or store.get("board_version") != rescore_of:
+            raise BoardConfigError(f"a rescore reuses the evalstore of {rescore_of}")
+        store = {**store, "board_version": bv}
     picked: list[tuple[dict, list[str]]] = []
     for ln in cfg["lanes"]:
         if ln.get("test_events"):
@@ -518,7 +544,7 @@ def seal_board(cfg: dict, test_events: dict[str, str], *, test_split_version: st
     lock = {"schema": BOARD_LOCK, "board_version": bv, "score_version": cfg["score_version"], "test_split_version": str(test_split_version),
             "lanes": lanes, "seed_set_commit": _board_commit(k_eval, bv, lane_commits), "evaluator_major": _major(),
             "platform": {x: str(platform[x]) for x in PLATFORM_IMAGES if x in platform}, "gpu_model": str(gpu_model),
-            "cpu_isa_level": str(cpu_isa_level), "sealed_utc": str(sealed_utc)}
+            "cpu_isa_level": str(cpu_isa_level), "sealed_utc": str(sealed_utc), **({"rescore_of": str(rescore_of)} if rescore_of else {})}
     p = check_board_config({**cfg, "lock": lock, "evalstore": "-"}, sealed=True) + verify_lock(lock, store, seeds_per_event=k)
     if p:
         raise BoardConfigError("; ".join(p))
@@ -622,6 +648,14 @@ def run_spec_for(cfg: dict, track: str, *, world_id: str, event_id: str, event_v
     return {**rs, **{k: v for k, v in (t.get("run_spec") or {}).items() if k not in rs}, "ranked": True}
 
 
+def rng_scope(cfg: dict) -> str:
+    """置信区间重采样种子中的榜单版本项：`d3-score-2` 的重评版本为原版本名（`lock.rescore_of`），其余为本榜单版本名。"""
+    lock = cfg.get("lock") or {}
+    if cfg.get("score_version") == SCORE_V2 and lock.get("rescore_of"):
+        return str(lock["rescore_of"])
+    return str(cfg["board_version"])
+
+
 def frozen_diff(old: dict, new: dict) -> list[str]:
     """两个 `board.json` 之间不同的冻结项（M27-FR-164）；非空即须发布为新榜单版本。"""
     return [k for k in FROZEN if old.get(k) != new.get(k)]
@@ -650,6 +684,7 @@ class _V1:
         self.tracks = [t["track"] for t in cfg["tracks"]]
         self.lanes = [ln["lane"] for ln in self.lock["lanes"]]
         self.events = {ln["lane"]: list(ln["test_events"]) for ln in self.lock["lanes"]}
+        self.scope = rng_scope(cfg)
         self.secret = board_key(cfg) if keyed else None
 
     def groups(self, rows: list[dict]) -> dict[tuple[str, str, str], list[dict]]:
@@ -701,7 +736,7 @@ def _build_v1(rows: list[dict], cfg: dict, *, board_version: str, n_boot: int) -
     for (tr, lane, eid), rs in v1.groups(rows).items():
         valid = [r for r in rs if r["evaluation"]["ranked_valid"]]
         status = "incomplete" if not v1.complete(lane, rs) else "invalid" if len(valid) < 0.8 * len(rs) else "valid"
-        met, boots = (lane_metrics(valid, key=(eid, board_version, lane), n_boot=n_boot, secret=v1.secret) if valid
+        met, boots = (lane_metrics(valid, key=(eid, v1.scope, lane), n_boot=n_boot, secret=v1.secret) if valid
                       else ({m: {"value": None, "ci95": [0.0, 0.0]} for m in METRICS}, None))
         r0 = rs[0]
         entries.append({"entry_id": eid, "team": r0.get("team", "internal"), "display_name": r0.get("display_name", eid), "track": tr, "lane": lane,
