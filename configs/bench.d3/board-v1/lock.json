@@ -1,0 +1,75 @@
+{
+ "board_version": "v1",
+ "cpu_isa_level": "x86-64-v4",
+ "evaluator_major": 0,
+ "gpu_model": "NVIDIA A40",
+ "lanes": [
+  {
+   "event_commits": {
+    "crop-reid-101": "6ec85c8fd7d32407f4ed51e039a6380a3cc1b9714eb3c52397ccda1f6d90c400",
+    "crop-reid-102": "bf605394bd8c7005e04014526bc5d746f20425d21e5f1988fcf0619c70bd441b"
+   },
+   "event_type": "reid_occlusion",
+   "kind": "event_type",
+   "lane": "reid",
+   "seed_set_commit": "c02d07ad4f398fa3eec5f317a498aa24873971f62e3e7da2473d2704348ec629",
+   "test_events": [
+    "crop-reid-101",
+    "crop-reid-102"
+   ]
+  },
+  {
+   "event_commits": {
+    "crop-handoff-101": "7bf44553441680600b6ad5b23afae0f45764d0f37f34852b7f43e1cd3edb1129",
+    "crop-handoff-102": "e58dce3ea50cb0a2d4a3e18eacc678c35f8f39427a06bbba8b391f125b58f248"
+   },
+   "event_type": "rendezvous_handoff",
+   "kind": "event_type",
+   "lane": "handoff",
+   "seed_set_commit": "2faaf0bcdce0ed26718a10941419c91c11e76cd2d483414fe2a495fc61f3b776",
+   "test_events": [
+    "crop-handoff-101",
+    "crop-handoff-102"
+   ]
+  },
+  {
+   "event_commits": {
+    "crop-vehicle-101": "7252b5fd9d3a392df3a5f6de67191ea0c29cff4957ff536e7fb19b62dbee7d97",
+    "crop-vehicle-102": "5360766bb6a559dff9d99edd0fde2e68369a49626d02c757ddf413d4a1007208"
+   },
+   "event_type": "vehicle_track",
+   "kind": "event_type",
+   "lane": "vehicle",
+   "seed_set_commit": "c21618f0b5c5c8a6f04484d020907b455be8c30ccb36d1d3d04398bd47259464",
+   "test_events": [
+    "crop-vehicle-101",
+    "crop-vehicle-102"
+   ]
+  },
+  {
+   "event_commits": {
+    "crop-search-101": "c3915a7e7789e9faa7c822a6eeb4b69741d7b0356d13588ca5cbdf6afb2edb41",
+    "crop-search-102": "7d3d972fbf274d55677e833961b45121ce8e832b062efab96a6586395af272ab"
+   },
+   "event_type": "target_search",
+   "kind": "event_type",
+   "lane": "search",
+   "seed_set_commit": "e1e71ee9d4316d5fadecf5150a37a50c56267f55ab2c35344213c1c112a886cc",
+   "test_events": [
+    "crop-search-101",
+    "crop-search-102"
+   ]
+  }
+ ],
+ "platform": {
+  "baseline": "sha256:977aa7e1a7ece8fe9cfdbfe0ec9c3b90e60a647f57150a3fe7d3d4b6d5cc5c20",
+  "env": "sha256:2002e8265482b1e45f1e7f0378d8c8fff46585242b24f105835e3c5472f1157b",
+  "gz": "sha256:e8549393d4605343a5014602dcc9b255bca4c780a8f7c3bdcf4e3429f713c0c2",
+  "m25_worker": "sha256:2002e8265482b1e45f1e7f0378d8c8fff46585242b24f105835e3c5472f1157b"
+ },
+ "schema": "drone4d.bench.board_lock.v1",
+ "score_version": "d3-score-1",
+ "sealed_utc": "2026-10-21T20:13:29Z",
+ "seed_set_commit": "ffe2fd61f11c4ad965ec31e0deef1e6db1e7e4527f4598e046079fc8e9066d4c",
+ "test_split_version": "2ca09b23b4e6e244bdbda836dc53aaa48ea44f5eda0d9b0e5d970f2701af283b"
+}
