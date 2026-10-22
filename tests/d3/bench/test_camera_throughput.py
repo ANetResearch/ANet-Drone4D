@@ -190,16 +190,17 @@ def _worker(fps: float, *, rtf: float | None = None, p99: float = 30.0, proxy: t
 
 
 def _run(mode: str, profile: str, tier: str, n: int, workers: list[dict], level: str = "A", rep: int = 0, vram: float = 900.0,
-         extras: tuple[str, ...] = ()) -> dict:
+         extras: tuple[str, ...] = (), session: float | None = 300.0) -> dict:
+    """`vram` 为 Worker 进程合计峰值，`session` 为 ADR-213 决策 (2) 的会话增量（None：旧报告，无会话前基线）。"""
     m = {"mode": mode, "profile": profile, "tier": tier, "runs": n, **({"extras": list(extras)} if extras else {})}
     return {"name": f"{ct.measurement_name(m)}-r{rep}", "measurement": m, "repeat": rep, "ok": True, "workers": workers,
-            "vram": [{"pid": w["pid"], "mib": vram, "method": "pmon_fb"} for w in workers], "gpu_load": {"level": level}}
+            "vram": [{"pid": w["pid"], "mib": vram, "method": "pmon_fb", "session_mib": session} for w in workers], "gpu_load": {"level": level}}
 
 
 def test_summary_acceptance_counted_and_median() -> None:
     runs = [_run("sustained", "rgb720-gs", "clear", 1, [_worker(f)], rep=k) for k, f in enumerate((130.0, 118.0, 125.0))]
     runs += [_run("sustained", "rgb1080-rs", "worst", 1, [_worker(45.0, proxy=("rain", "shadow_map"))]),
-             _run("online", "rgb1080-rs", "worst", 1, [_worker(30.0, rtf=1.2, p99=70.0)], vram=1100.0),
+             _run("online", "rgb1080-rs", "worst", 1, [_worker(30.0, rtf=1.2, p99=70.0)], vram=1100.0, session=None),
              _run("online", "rgb1080-rs", "worst", 3, [_worker(10.0, rtf=r, p99=200.0, pid=k) for k, r in enumerate((0.4, 0.33, 0.5))],
                   level="B"),
              _run("online", "rgb720-gs", "worst", 1, [_worker(30.0, rtf=0.9, p99=60.0)], level="shared")]
@@ -219,8 +220,8 @@ def test_summary_acceptance_counted_and_median() -> None:
     assert a["value"] == 0.33 and not a["passed"] and "exclusive_B_pending_user_confirmation" in a["why"]   # 取 3 个并发 Run 中最小者
     a = acc["AC11.latency_p99.rgb720-gs"]
     assert not a["passed"] and a["why"] == ["shared_gpu"]
-    assert acc["AC11.vram.rgb1080-rs"]["value"] == round(1100 * 2 ** 20 / 1e9, 3) and acc["AC11.vram.rgb1080-rs"]["passed"]
-    assert acc["AC11.vram.rgb1080-rs"]["why"] == ["partial_workload:missing_therm512+mid360"]
+    assert acc["AC11.vram.rgb1080-rs"]["value"] == round(1100 * 2 ** 20 / 1e9, 3) and acc["AC11.vram.rgb1080-rs"]["passed"]  # 无基线：进程峰值
+    assert acc["AC11.vram.rgb1080-rs"]["why"] == ["partial_workload:missing_therm512+mid360;vram_no_session_baseline"]
     assert acc["AC11.fps.rgb720-gs.worst"]["why"] == ["not_measured"] and acc["AC11.fps.therm512.single"]["why"] == ["not_measured"]
     assert not any("deferred" in w for a in s["acceptance"] for w in a["why"])
 
@@ -230,7 +231,7 @@ def test_summary_standard_track_and_therm512() -> None:
     std = ("therm512", "mid360")
     runs = [_run("online", "rgb1080-rs", "worst", 1, [_worker(30.0, rtf=0.5, p99=60.0)], vram=1000.0),
             _run("online", "rgb1080-rs", "worst", 1, [_worker(30.0, rtf=1.1, p99=200.0, sensors={"camera": 75.0, "thermal": 90.0, "lidar": 20.0})],
-                 vram=1100.0, extras=std),
+                 vram=2800.0, extras=std, session=410.0),
             _run("online", "rgb1080-rs", "worst", 3, [_worker(10.0, rtf=r, pid=k, sensors={"camera": 1.0, "thermal": 2.0, "lidar": 3.0})
                                                       for k, r in enumerate((0.4, 0.36, 0.5))], extras=std),
             _run("sustained", "therm512", "single", 1, [_worker(380.0)])]
@@ -243,7 +244,8 @@ def test_summary_standard_track_and_therm512() -> None:
     assert acc["AC11.rtf.rgb1080-rs.x3"]["value"] == 0.36 and acc["AC11.rtf.rgb1080-rs.x3"]["passed"]
     assert acc["AC11.latency_p99.rgb1080-rs"]["value"] == 75.0 and "standard track" in acc["AC11.latency_p99.rgb1080-rs"]["clause"]
     v = acc["AC11.vram.rgb1080-rs"]
-    assert v["value"] == round(1100 * 2 ** 20 / 1e9, 3) and v["counted"] and "therm512" in v["clause"]
+    assert v["value"] == round(410 * 2 ** 20 / 1e9, 3) and v["counted"] and v["passed"] and "therm512" in v["clause"]   # ADR-213：会话增量
+    assert s["items"]["online-rgb1080-rs+therm512+mid360-worst-x1"]["vram_mib_max"] == 2800.0                    # Worker 进程合计另报
     t = acc["AC11.fps.therm512.single"]
     assert t["value"] == 380.0 and t["threshold"] == 300.0 and t["passed"] and t["counted"] and t["target"] == 500.0 and not t["target_met"]
     assert acc["AC11.fps_min_bin.therm512.single"]["value"] == round(380.0 * 0.98, 4)
@@ -481,3 +483,189 @@ def test_standard_track_online_in_process(fixture_world, tmp_path: Path) -> None
     assert hdr["slots_per_frame"] == 20000 and hdr["point_count"] == len(pts) > 0 and hdr["mount_nominal"]["rpy_deg"] == [180.0, 0.0, 0.0]
     rec, blocks = tgt[0]
     assert rec["kind"] == "thermal" and "temp_ck.u16.zst" not in blocks and {"instance.u16.zst", "semantic.u8.zst"} <= set(blocks)
+
+
+# ---------------------------------------------------------------------------------------------------------------- Worker 渲染进程组（ADR-214 决策 (4)）
+def test_job_units_and_render_fields() -> None:
+    j = ct.JobCfg(mode="online", profile="rgb1080-rs", tier="worst", world="/w", event="/e", out="/o", scratch="/s", render_procs=3, uav_subset=(2, 0))
+    k = ct.JobCfg.from_dict(json.loads(json.dumps(j.as_dict())))
+    assert k == j and k.units == (0, 2) and k.render_procs == 3
+    assert ct.JobCfg(mode="online", profile="rgb720-gs", tier="worst", world="", event="", out="", scratch="").units == (0, 1, 2)
+
+
+class _FakeSampler:
+    def __init__(self, fb: dict[int, list[int]]) -> None:
+        self.pmon = [{"pid": p, "fb": v} for p, vs in fb.items() for v in vs]
+        self.apps: list[dict] = []
+
+
+def test_session_vram_increment_over_render_procs() -> None:
+    """ADR-213 决策 (2)：会话增量 = Σ(各渲染进程峰值 − 同进程会话前基线)，一个进程承担多个会话时均分；进程合计另报。"""
+    w = {"pid": 11, "render": {"procs": 3, "parts": [{"proc": k, "pid": 11 + k, "sessions_on_proc": 1, "vram_base_mib": 2000.0} for k in range(3)]}}
+    v = ct.own_vram_mib(w, _FakeSampler({11: [1500, 2150], 12: [2300], 13: [2100, 2050]}))
+    assert v["mib"] == 2150 + 2300 + 2100 and v["session_mib"] == 150 + 300 + 100 and v["base_mib"] == 6000.0 and v["method"] == "pmon_fb"
+    shared = {"pid": 11, "render": {"parts": [{"proc": 0, "pid": 11, "sessions_on_proc": 2, "vram_base_mib": 2000.0}]}}
+    assert ct.own_vram_mib(shared, _FakeSampler({11: [2600]}))["session_mib"] == 300.0
+    legacy = {"pid": 5, "vram_self": {"process_base_mib": 2400.0, "delta_mib": 2700.0}}                     # 单进程 Worker
+    assert ct.own_vram_mib(legacy, _FakeSampler({5: [2763]}))["session_mib"] == 363.0
+    old = {"pid": 5, "vram_self": {"delta_mib": 2700.0}}                                                       # K03 报告：无基线
+    v = ct.own_vram_mib(old, _FakeSampler({5: [2763]}))
+    assert v["mib"] == 2763.0 and v["session_mib"] is None
+    v = ct.own_vram_mib(old, _FakeSampler({}))
+    assert v["method"] == "device_delta" and v["mib"] == 2700.0 and v["session_mib"] is None
+
+
+def test_gpu_time_parts_adr213() -> None:
+    """GPU 时间 = 渲染与效果链 + 热成像 + nvJPEG + Warp LiDAR；读回单列、不计入。"""
+    d = lambda n, m: {"n": n, "mean": m}                                                                      # noqa: E731
+    w = {"sim_s": 10.0, "kind": "camera", "stages_ms": {"gpu": d(300, 1.0), "encode": d(300, 4.0), "readback": d(300, 2.0)},
+         "sensors": {"thermal": {"stages_ms": {"gpu": d(300, 3.0), "readback": d(300, 1.0)}}, "lidar": {"stages_ms": {"draw": d(100, 5.0)}}}}
+    g = ct.gpu_time_parts(w)
+    assert g == {"render": 0.03, "thermal": 0.09, "nvjpeg": 0.12, "lidar": 0.05, "total": 0.29, "readback": 0.09}
+    assert ct.gpu_time(w) == 0.29
+    th = {"sim_s": 10.0, "kind": "thermal", "stages_ms": {"gpu": d(300, 3.0)}}
+    assert ct.gpu_time_parts(th)["total"] == 0.09
+
+
+def test_merge_parts_into_session_report() -> None:
+    """渲染进程组：各部分的逐帧统计拼接后重算分布，CPU 与 CPU 编码调用按进程求和，录制摘要求和。"""
+    def raw(lat: list[float], t: list[float]) -> dict:
+        from dataclasses import asdict
+
+        return {"camera": asdict(ct._Stats(latency_ms=lat, t_deliv=t, payload_bytes=[1000] * len(lat), gpu_ms=[1.0] * len(lat))),
+                "thermal": asdict(ct._Stats())}
+
+    merged = ct.merge_stats([raw([10.0, 20.0], [1.0, 2.0]), raw([30.0], [1.5])])
+    assert merged["camera"].latency_ms == [10.0, 20.0, 30.0] and merged["thermal"].t_deliv == [] and merged["lidar"].t_deliv == []
+
+    def part(pid: int, proc: int) -> dict:
+        return {"kind": "camera", "pid": pid, "fps": 10.0, "t0": 1.0, "cpu": {"user_s": 10.0, "sys_s": 1.0, "cores": 2.0, "load_user_s": 3.0,
+                "maxrss_mib": 100.0}, "cpu_encode_calls": 0, "load": {"total_s": 5.0 + proc}, "vram_self": {"process_base_mib": 2000.0},
+                "actor_clock": {"calls": 5, "hits": 4}, "render": {"inflight_per_proc": 4, "parts": [{"proc": proc, "pid": pid, "uavs": [proc]}]},
+                "fx": {"proxy": []}, "camera": {"width": 1280}}
+
+    doc = ct.group_doc([part(21, 0), part(22, 1)], merged, {"frames": 3, "fps": 30.0}, procs=3)
+    assert doc["fps"] == 30.0 and "t0" not in doc and doc["latency_ms"]["n"] == 3 and doc["latency_ms"]["max"] == 30.0
+    assert doc["cpu"]["cores"] == 4.0 and doc["cpu"]["user_s"] == 20.0 and doc["pids"] == [21, 22] and doc["load_s"] == 6.0
+    assert doc["render"]["procs"] == 3 and [p["uavs"] for p in doc["render"]["parts"]] == [[0], [1]] and doc["workload"] == ["camera"]
+    assert doc["sensors"]["camera"]["frames"] == 3 and doc["actor_clock"] == {"calls": 10, "hits": 8}
+    sk = {"bytes": 10, "kept": False, "root": "/r", "raw": {"segments": 1, "messages": 4, "file_bytes": 5, "blocked": 0, "dropped": 0, "block_s": 0.5,
+                                                          "block_max_s": 0.1, "block_frac": 0.01, "max_depth": 3}}
+    sk["truth"] = dict(sk["raw"])
+    m = ct.merge_sinks([sk, {**sk, "root": "/q", "raw": {**sk["raw"], "block_frac": 0.02, "max_depth": 9}}])
+    assert m["bytes"] == 20 and m["raw"]["messages"] == 8 and m["raw"]["block_frac"] == 0.02 and m["raw"]["max_depth"] == 9 and m["roots"] == ["/r", "/q"]
+
+
+def _mcap_messages(root: Path) -> dict[tuple[str, int], list[bytes]]:
+    """录制目录下全部 MCAP 消息：(主题, log_time) → 消息字节（按文件与消息顺序）。"""
+    from mcap.reader import make_reader
+
+    out: dict[tuple[str, int], list[bytes]] = {}
+    for f in sorted(Path(root).rglob("*.mcap")):
+        with f.open("rb") as fh:
+            for _sch, ch, msg in make_reader(fh).iter_messages():
+                out.setdefault((ch.topic, int(msg.log_time)), []).append(bytes(msg.data))
+    return out
+
+
+def test_render_group_bytewise_matches_single_process(fixture_world, tmp_path: Path) -> None:
+    """渲染进程组的逐字节确定性（ADR-214 决策 (4)）：同一会话以 3 个渲染进程与单进程 Worker 各跑一次缩短的在线测量（3 × 1080p 卷帘 +
+    3 × therm512，5 tick，`sensor` 调度）与持续测量（720p 最坏档 `sensor` 调度；therm512 `tick` 调度），录制中每个主题、每个帧时刻的
+    观测与真值消息逐字节相同（持续测量比较两次都产出的帧）；渲染进程组的报告记录进程数、调度方式、在途上限、各部分 PID 与会话前
+    显存基线。"""
+    _gl_ctx().release()
+    pytest.importorskip("mcap")
+    from awr.sensorsvc.camera.encode import gpu_encoder_available
+
+    if not gpu_encoder_available():
+        pytest.skip("[gpu] nvJPEG (nvImageCodec / CUDA) unavailable")
+    root, ev = fixture_world
+    msgs = {}
+    for R in (1, 3):
+        out = tmp_path / f"r{R}"
+        rc = ct.main(["run", "--world", str(root), "--event", str(ev), "--out", str(out), "--no-lock", "--modes", "sustained,online",
+                      "--profiles", "rgb720-gs,rgb1080-rs,therm512", "--tiers", "worst", "--runs", "1", "--duration-s", "3", "--online-sim-s", "0.5",
+                      "--warmup", "6", "--segment-s", "600", "--online-extras", "therm512", "--keep-output", "--render-procs", str(R)])
+        assert rc in (ct.EXIT_OK, ct.EXIT_FAIL)
+        runs = {r["name"]: r for r in ct.load_runs(out)}
+        on = runs["online-rgb1080-rs+therm512-worst-x1-r0"]
+        assert on["ok"], on.get("exit_codes")
+        (w,) = on["workers"]
+        assert w["render"]["procs"] == R and w["render"]["inflight_per_proc"] == 4 and w["ticks"] == 5
+        assert w["frames_by_sensor"] == {"camera": 15, "thermal": 15} and w["cpu_encode_calls"] == 0
+        assert sorted(u for p in w["render"]["parts"] for u in p["uavs"]) == [0, 1, 2] and len(w["render"]["parts"]) == R
+        assert len({p["pid"] for p in w["render"]["parts"]}) == R
+        su = runs["sustained-rgb720-gs-worst-x1-r0"]
+        (ws,) = su["workers"]
+        assert su["ok"] and ws["fps"] > 0 and ws["render"]["procs"] == R
+        th = runs["sustained-therm512-single-x1-r0"]
+        (wt,) = th["workers"]
+        assert th["ok"] and wt["fps"] > 0
+        if R == 3:
+            assert len(ws["fps_by_proc"]) == 3 and ws["fps"] == pytest.approx(sum(ws["fps_by_proc"]), rel=0.05)
+            assert ws["render"]["dispatch"] == "sensor" and w["render"]["dispatch"] == "sensor"           # 可见光有曝光反馈：按机粘滞
+            assert wt["render"]["dispatch"] == "tick" and len(wt["render"]["parts"]) == 3                    # 热成像无逐帧状态：按帧序号
+            assert all(p["uavs"] == [0, 1, 2] for p in wt["render"]["parts"])
+        msgs[R] = {kind: {} for kind in ("online", "sustained")}
+        for d in (out / "rec").iterdir():
+            kind = "online" if d.name.startswith("online") else "sustained"
+            for k, v in _mcap_messages(d).items():
+                msgs[R][kind].setdefault(k, []).extend(v)
+    on1, on3 = msgs[1]["online"], msgs[3]["online"]
+    assert on1.keys() == on3.keys() and len(on1) > 30
+    topics = {t for t, _ in on1}
+    assert any("/thermal/" in t for t in topics) and any(t.endswith("/eo/image") for t in topics)
+    for k in on1:
+        assert sorted(on1[k]) == sorted(on3[k]), k                                                  # 观测与真值逐字节相同
+    s1, s3 = msgs[1]["sustained"], msgs[3]["sustained"]
+    common = s1.keys() & s3.keys()
+    assert len(common) >= 9 and any("/thermal/" in t for t, _ in common) and any(t.endswith("/eo/image") for t, _ in common)
+    for k in common:                                    # 夹具磁带 60 s，持续测量的事件时刻回绕后同一帧时刻可有多个帧序号：比较两次都产出的帧
+        a, b = set(s1[k]), set(s3[k])
+        assert a <= b or b <= a, k
+
+
+def test_lidar_subset_scan_matches_full_batch(fixture_world, tmp_path: Path) -> None:
+    """MID-360 在渲染进程组中只扫描本进程承担的无人机：与全部 3 机一次批扫描中同一机的帧逐字节相同（点、槽位真值与命中计数）。"""
+    _gl_ctx().release()
+    wm = pytest.importorskip("awr.sensorsvc.lidar.warp_mesh")
+    pytest.importorskip("warp")
+    if not wm.warp_cuda_available():
+        pytest.skip("[gpu] no CUDA device for warp")
+    from awr.sensorsvc.camera.encode import gpu_encoder_available
+
+    if not gpu_encoder_available():
+        pytest.skip("[gpu] nvJPEG (nvImageCodec / CUDA) unavailable")
+    root, ev = fixture_world
+    scans = {}
+    for sub in ((), (1,)):
+        job = ct.JobCfg(mode="online", profile="rgb720-gs", tier="worst", world=str(root), event=str(ev), out=str(tmp_path / "w.json"),
+                        scratch=str(tmp_path / f"rec{len(sub)}"), extras=("mid360",), uav_subset=sub)
+        w = ct.Worker(job, lidar_query=_fixture_query())
+        try:
+            sc, _t, _b = w.lid.scan(12, record=False)
+            scans[sub] = {i: (np.array(s.points), np.array(s.gt_inst), np.array(s.gt_flags), s.actor_hits) for i, s in zip(job.units, sc, strict=True)}
+        finally:
+            w.close()
+    a, b = scans[()][1], scans[(1,)][1]
+    assert len(scans[()]) == 3 and list(scans[(1,)]) == [1]
+    assert a[0].tobytes() == b[0].tobytes() and np.array_equal(a[1], b[1]) and np.array_equal(a[2], b[2]) and a[3] == b[3] and len(a[0]) > 0
+
+
+def test_job_owns_tick_slot() -> None:
+    """`tick` 调度：进程 p 只出帧序号 ≡ p (mod R) 的帧（全部机）；`sensor` 调度：只出本进程承担的机。"""
+    base = {"mode": "sustained", "profile": "therm512", "tier": "single", "world": "", "event": "", "out": "", "scratch": ""}
+    j = ct.JobCfg(**base, tick_slot=(3, 1))
+    assert [jj for jj in range(18) if j.owns(jj)] == [3, 4, 5, 12, 13, 14]
+    k = ct.JobCfg(**base, uav_subset=(2,))
+    assert [jj for jj in range(9) if k.owns(jj)] == [2, 5, 8]
+    assert ct.JobCfg.from_dict(json.loads(json.dumps(j.as_dict()))).tick_slot == (3, 1)
+
+
+def test_thermal_engine_state_is_history_free() -> None:
+    """热成像演员发动机状态只取决于帧时刻：此刻行驶为此刻，否则为此前最后一个行驶 tick，从未行驶为 None。"""
+    rig = ct._ThermalRig.__new__(ct._ThermalRig)
+    rig._mv_ticks = {4: np.array([10, 11, 12, 40])}
+    T = ct.TICK_NS
+    assert rig.last_moving_s(4, 20 * T + 5, 0.0) == 1.2 and rig.last_moving_s(4, 41 * T, 0.0) == 4.0
+    assert rig.last_moving_s(4, 5 * T, 0.0) is None and rig.last_moving_s(4, 5 * T, 3.0) == 0.5 and rig.last_moving_s(7, 50 * T, 0.0) is None
