@@ -326,3 +326,25 @@ async def sbx_life_scene(sha256: str, request: Request, _p: SbxViewer):
         return await target_authoring("scene", world, {"sha256": sha256})
     except (ValueError, OSError, KeyError, TypeError):
         raise ApiProblem(110, status=422, detail={"why": "LIFE_SCENE_NOT_AVAILABLE"}) from None
+
+
+@sandbox_router.post("/target-life/{sha256}/rehearsal")
+async def sbx_life_rehearsal(sha256: str, request: Request, _p: SbxOperator, body: Annotated[dict[str, Any], Body()]):
+    """Operator-only authoring evidence; never expose future trajectories as agent observations."""
+    from awr.runtime.target_authoring import target_authoring
+
+    world = await _life_world_id(request)
+    actor_id = body.get("actor_id")
+    if set(body) != {"actor_id"} or not isinstance(actor_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", actor_id):
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_REHEARSAL_ACTOR"})
+    if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_REHEARSAL_HASH"})
+    lock = getattr(request.app.state, "life_generation_lock", None)
+    if lock is None:
+        lock = asyncio.Lock()
+        request.app.state.life_generation_lock = lock
+    try:
+        async with lock:
+            return await target_authoring("rehearsal", world, {"sha256": sha256, "actor_id": actor_id})
+    except (ValueError, OSError, KeyError, TypeError):
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_REHEARSAL_UNAVAILABLE"}) from None

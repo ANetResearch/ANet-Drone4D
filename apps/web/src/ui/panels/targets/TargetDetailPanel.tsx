@@ -403,6 +403,7 @@ export function TargetDetailPanel() {
         </p>
       ) : null}
       <LiveState id={id} />
+      {target.life && operator ? <div className="rounded-md border p-2 text-hud-sub"><p>{t('targets.population.memberHint')}</p><Button size="sm" variant="outline" className="mt-2" onClick={() => entities.back()}>{t('targets.population.back')}</Button></div> : null}
       {(target.activity || target.life) ? <ActivityCard activity={detail?.activity} /> : null}
       <Tabs value={tab} onValueChange={(v) => setTab(v === 'identity' ? 'identity' : v === 'quant' ? 'quant' : 'config')} className="min-w-0">
         <TabsList variant="line" data-target-tabs={tab}>
@@ -424,7 +425,7 @@ export function TargetDetailPanel() {
           <TextField id="label" label={t('target.f.label')} value={target.label ?? detail?.label ?? id} readOnly={!operator} validate={labelOk} onCommit={(v) => patch({ label: v })} />
         </div>
         <Field orientation="horizontal" className="col-span-2">
-          <Switch checked={target.enabled !== false} disabled={!operator} id="tg-enabled" onCheckedChange={(on: boolean) => void patch({ enabled: on })} />
+          <Switch checked={target.enabled !== false} disabled={!operator || !!target.life} id="tg-enabled" onCheckedChange={(on: boolean) => void patch({ enabled: on })} />
           <FieldLabel htmlFor="tg-enabled" className="font-normal">{t('target.f.enabled')}</FieldLabel>
         </Field>
         {(['l', 'w', 'h'] as const).map((k) => (

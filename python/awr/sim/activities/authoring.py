@@ -35,6 +35,15 @@ def execute(request: dict) -> dict:
     if not isinstance(world, str) or not re.fullmatch(r"[a-z0-9-]{1,63}", world):
         raise ValueError("Invalid scene identity")
     body = request["body"]
+    if request["operation"] == "rehearsal":
+        from .rehearsal import rehearsal
+
+        recipe = load_recipe("life", body["sha256"])
+        network = life_network(world)
+        if any(recipe.get(k) != network.get(k) for k in ("world_id", "world_content_version", "coordinate_sha256")):
+            raise ValueError("Rehearsal scene mismatch")
+        root = Path(os.environ.get("AWR_TARGET_LIFE_DIR", "var/target-life")) / "rehearsals"
+        return rehearsal(recipe, body["sha256"], body["actor_id"], root)
     if request["operation"] == "scene":
         sha = body["sha256"]
         recipe = load_recipe("life", sha)

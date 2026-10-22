@@ -129,6 +129,17 @@ describe('targets store (M18-AC-017)', () => {
 })
 
 describe('targets overlay (M18-AC-020, Node)', () => {
+  it('retains REST configs before the first stream rows but prunes genuinely removed actors', () => {
+    const m = new TargetsModel()
+    m.resolver = { targetIdOf: (n) => `t-${n}` }
+    m.setConfig({ id: 't-0', class: 'person', pos: [0, 0, 0] })
+    m.ingestRows(rows(0), 0)
+    expect(m.cfgs.has('t-0')).toBe(true)
+    m.ingestRows(rows(1), 100)
+    expect(m.cfgs.has('t-0')).toBe(true)
+    m.ingestRows(rows(0), 200)
+    expect(m.cfgs.has('t-0')).toBe(false)
+  })
   it('caps, draws, degrade and red', () => {
     const m = new TargetsModel()
     m.resolver = { targetIdOf: (n) => `t-${n}` }

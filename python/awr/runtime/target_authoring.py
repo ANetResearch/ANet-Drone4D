@@ -11,7 +11,7 @@ MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 
 
 async def target_authoring(operation: str, world: str, body: dict, *, timeout_s: float = 180) -> dict:
-    if operation not in ("preview", "scene"):
+    if operation not in ("preview", "scene", "rehearsal"):
         raise ValueError("Unknown target authoring operation")
     data = json.dumps({"operation": operation, "world": world, "body": body}, allow_nan=False).encode()
     if len(data) > MAX_REQUEST_BYTES:

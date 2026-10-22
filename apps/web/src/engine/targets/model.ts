@@ -111,15 +111,18 @@ export class TargetsModel {
   }
 
   ingestRows(bytes: Uint8Array, tSimMs: number): void {
+    const previous = new Set<string>()
+    for (let i = 0; i < this.rows.n; i++) previous.add(this.idOfRow(i))
     decodeTargetLite32(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), Math.floor(bytes.byteLength / 32), this.rows)
     this.tSimMs = tSimMs
     this.version++
-    // targets gone from the rows lose their cached detail and configuration
-    if (this.details.size > this.rows.n || this.cfgs.size > this.rows.n) {
+    // Prune only actors previously observed on the stream. REST authoring configs can arrive
+    // before the first rows/roster; an initial empty snapshot must not erase their life binding.
+    if (previous.size || this.details.size > this.rows.n) {
       const live = new Set<string>()
       for (let i = 0; i < this.rows.n; i++) live.add(this.idOfRow(i))
-      for (const id of [...this.details.keys()]) if (!live.has(id)) this.details.delete(id)
-      for (const id of [...this.cfgs.keys()]) if (!live.has(id)) this.cfgs.delete(id)
+      for (const id of this.details.keys()) if (!live.has(id)) this.details.delete(id)
+      for (const id of previous) if (!live.has(id)) this.cfgs.delete(id)
     }
   }
 

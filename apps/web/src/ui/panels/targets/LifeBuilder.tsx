@@ -15,13 +15,14 @@ function errorMessage(e: unknown): string {
 }
 
 /** Preview/admission does not alter the live world. Applying is an explicit reset. */
-export function LifeBuilder({ operator }: { operator: boolean }) {
+export interface LifeBuilderInitial { seed: number; people: number; vehicles: number; extras: Record<string, number>; vehicleTypes: string[] }
+export function LifeBuilder({ operator, initial }: { operator: boolean; initial?: LifeBuilderInitial }) {
   const t = useT()
-  const [seed, setSeed] = React.useState(20261022)
-  const [people, setPeople] = React.useState(12)
-  const [vehicles, setVehicles] = React.useState(4)
-  const [extras, setExtras] = React.useState<Record<string, number>>({ dog: 0, uav: 0, machine: 0, object: 0 })
-  const [vehicleTypes, setVehicleTypes] = React.useState(['sedan', 'suv', 'hatchback'])
+  const [seed, setSeed] = React.useState(initial?.seed ?? 20261022)
+  const [people, setPeople] = React.useState(initial?.people ?? 12)
+  const [vehicles, setVehicles] = React.useState(initial?.vehicles ?? 4)
+  const [extras, setExtras] = React.useState<Record<string, number>>(initial?.extras ?? { dog: 0, uav: 0, machine: 0, object: 0 })
+  const [vehicleTypes, setVehicleTypes] = React.useState(initial?.vehicleTypes ?? ['sedan', 'suv', 'hatchback'])
   const [prompt, setPrompt] = React.useState('')
   const [preview, setPreview] = React.useState<LifePreview | null>(null)
   const [busy, setBusy] = React.useState(false)
@@ -51,10 +52,11 @@ export function LifeBuilder({ operator }: { operator: boolean }) {
   const countsOK = counts.every((n) => Number.isInteger(n) && n >= 0) && total >= 1 && total <= 30 && (vehicles === 0 || vehicleTypes.length > 0)
   const actors = Object.values(preview?.audit.actors ?? {})
   const mobileActors = actors.filter((a) => !a.stationary)
-  return <details className="rounded-md border p-2 text-xs" data-life-builder="">
+  return <details open={initial ? true : undefined} className="rounded-md border p-2 text-xs" data-life-builder="">
     <summary className="cursor-pointer font-medium">{t('targets.lifeBuilder.scene_life_generator')}</summary>
     <div className="mt-2 flex flex-col gap-2">
       <p className="text-muted-foreground">{t('targets.lifeBuilder.scene_engine_configuration_and_seed_define_a')}</p>
+      {initial ? <p>{t('targets.population.replaceWarning')}</p> : null}
       <label>{t('targets.lifeBuilder.seed')}<Input disabled={busy} type="number" value={seed} min={0} max={4294967295} onChange={(e) => { setSeed(Number(e.target.value)); setPreview(null) }} /></label>
       <div className="grid grid-cols-2 gap-2">
         <label>{t('targets.lifeBuilder.people')}<Input disabled={busy} type="number" min={0} max={30} value={people} onChange={(e) => { setPeople(Number(e.target.value)); setPreview(null) }} /></label>

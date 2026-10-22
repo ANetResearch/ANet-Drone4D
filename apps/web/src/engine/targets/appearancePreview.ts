@@ -4,6 +4,7 @@ import { SCENE } from '@/lib/tokens/scene.gen'
 import { loadTargetAsset, type LoadedTargetAsset, type TargetAsset } from './assetData'
 import { VehiclePlates } from './plates'
 import { previewDistance } from './previewFraming'
+import { rollWheels } from './wheels'
 
 export type PreviewView = 'reset' | 'front' | 'back' | 'left' | 'right' | 'in' | 'out' | 'plate'
 export class AppearancePreview {
@@ -51,8 +52,8 @@ export class AppearancePreview {
       if (this.disposed) { data.tex.dispose(); data.image.close(); return }
       this.data = data
       const geometry = new BufferGeometry()
-      geometry.setAttribute('position', new BufferAttribute(data.p, 3))
-      geometry.setAttribute('normal', new BufferAttribute(data.n, 3))
+      geometry.setAttribute('position', new BufferAttribute(data.p.slice(), 3))
+      geometry.setAttribute('normal', new BufferAttribute(data.n.slice(), 3))
       geometry.setAttribute('uv', new BufferAttribute(data.uv, 2))
       geometry.setAttribute('color', new BufferAttribute(data.c, 3))
       geometry.setIndex(new BufferAttribute(data.indices, 1))
@@ -69,6 +70,24 @@ export class AppearancePreview {
   setPlate(text: string) {
     this.plate = text.trim().toUpperCase()
     if (this.data) this.plates.update(this.asset.class === 'vehicle' ? this.plate : '', this.asset.dimensions_m)
+    this.render()
+  }
+  setMotion(distance: number, speed: number, hidden: boolean) {
+    const mesh = this.mesh, data = this.data
+    if (!mesh || !data) return
+    mesh.visible = !hidden
+    const position = mesh.geometry.getAttribute('position') as BufferAttribute
+    const normal = mesh.geometry.getAttribute('normal') as BufferAttribute
+    const p = position.array as Float32Array
+    if (this.asset.poses > 0 && speed > .05) {
+      const phase = ((distance / this.asset.stride_m) % 1) * this.asset.poses
+      const a = Math.floor(phase), b = (a + 1) % this.asset.poses, weight = phase - a
+      for (let j = 0; j < p.length; j++) p[j] = data.poses[a * p.length + j] * (1 - weight) + data.poses[b * p.length + j] * weight
+    } else if (data.wheels) {
+      rollWheels(data.p, data.n, p, normal.array as Float32Array, data.wheels, distance)
+      normal.needsUpdate = true
+    } else p.set(data.p)
+    position.needsUpdate = true
     this.render()
   }
   view(action: PreviewView) {
