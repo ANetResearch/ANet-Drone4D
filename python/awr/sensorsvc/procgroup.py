@@ -18,6 +18,12 @@
 
 持续模式的在途上限按每个渲染进程计（`INFLIGHT_PER_PROC`，S09 缺省 4 帧）。
 
+内存预算（docs/05 §4.7"M25 Worker 内存 16 GB"；K13）：每个渲染进程复制一份 EGL/CUDA 上下文、编码器、Warp 上下文与常驻世界，
+进程内存与承担的会话数基本无关。`render_procs_for` 在调用方请求的进程数之上按并发会话数取上限：并发会话数不少于
+`SESSIONS_CAP_FROM`（3）时渲染进程数不超过 `SESSIONS_CAP_PROCS`（3），即每个会话一个进程（K03 三并发同构），3 个并发标准轨
+会话的渲染进程组合计内存落在 16 GB 之内（K08：R = 6 时 6 个进程 RSS 合计约 21 GB）。`tick` 调度（单会话、无逐帧状态，
+如热成像持续测量）不受此上限约束。
+
 进程模型（`RenderGroup`）：`multiprocessing` 的 spawn 方式启动（EGL 与 CUDA 上下文不能跨 fork 继承），每个进程按 `target`
 （`模块:函数` 或 `文件路径:函数`）构造处理器 `handler = factory(arg, index)`，就绪后在一条或多条消息通道上串行处理请求
 `handler.handle(msg) -> reply`；每条通道只由 Worker 的一个控制线程使用（多会话时一个会话一条通道），进程内按到达顺序处理。
@@ -46,13 +52,17 @@ from typing import Any
 
 from awr.sensorsvc.errors import SensorSvcError
 
-__all__ = ["DISPATCH_MODES", "INFLIGHT_PER_PROC", "RENDER_PROCS_MAX", "STATEFUL_KINDS", "RenderGroup", "Unit", "assign_units", "dispatch_mode",
-           "load_target", "proc_units", "shared_clock", "tick_owner"]
+__all__ = ["DISPATCH_MODES", "INFLIGHT_PER_PROC", "RENDER_PROCS_MAX", "SESSIONS_CAP_FROM", "SESSIONS_CAP_PROCS", "STATEFUL_KINDS",
+           "WORKER_MEM_BUDGET_MIB", "RenderGroup", "Unit", "assign_units", "dispatch_mode", "load_target", "proc_units", "render_procs_for",
+           "shared_clock", "tick_owner"]
 
 INFLIGHT_PER_PROC = 4                    # 持续模式每个渲染进程的在途帧上限（S09 缺省，ADR-214 决策 (4)）
 RENDER_PROCS_MAX = 16                    # 每个 Worker 的渲染进程数上限（Worker ≤ 16 核，docs/05 §4.7）
 READY_TIMEOUT_S = 900.0
 DISPATCH_MODES = ("sensor", "tick")
+WORKER_MEM_BUDGET_MIB = 16 * 1024        # M25 Worker 内存预算（docs/05 §4.7，ADR-139）
+SESSIONS_CAP_FROM = 3                    # 并发会话数达到该值时按会话限制渲染进程数（K13，§4.7 内存预算）
+SESSIONS_CAP_PROCS = 3                   # 此时的渲染进程数上限：每会话一个进程（K03 三并发同构）
 STATEFUL_KINDS = frozenset({"camera"})   # 有逐帧状态的传感器类别：可见光（自动曝光以同机上一帧测光为输入，M25 §6.5.3）
 WORKER_LOST = 648
 
@@ -83,6 +93,19 @@ def assign_units(sessions: Sequence[int], procs: int) -> dict[Unit, int]:
         for i in range(int(n)):
             out[Unit(s, i)] = own[i % len(own)]
     return out
+
+
+def render_procs_for(requested: int, sessions: int, dispatch: str = "sensor") -> int:
+    """请求的渲染进程数 → §4.7 内存预算下实际启动的进程数上限（模块文档"内存预算"）。`sensor` 调度且并发会话数 ≥ `SESSIONS_CAP_FROM`
+    时取 min(请求, `SESSIONS_CAP_PROCS`)；`tick` 调度（单会话）与会话数更少时不变。请求超出 1..`RENDER_PROCS_MAX` 时 640。"""
+    R = int(requested)
+    if R < 1 or R > RENDER_PROCS_MAX:
+        raise SensorSvcError(640, f"render procs must be in 1..{RENDER_PROCS_MAX}, got {requested}")
+    if dispatch not in DISPATCH_MODES:
+        raise SensorSvcError(640, f"unknown dispatch mode {dispatch!r}")
+    if dispatch == "sensor" and int(sessions) >= SESSIONS_CAP_FROM:
+        R = min(R, SESSIONS_CAP_PROCS)
+    return R
 
 
 def proc_units(assign: dict[Unit, int], procs: int) -> list[dict[int, list[int]]]:

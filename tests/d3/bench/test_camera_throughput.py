@@ -520,11 +520,30 @@ def test_gpu_time_parts_adr213() -> None:
     d = lambda n, m: {"n": n, "mean": m}                                                                      # noqa: E731
     w = {"sim_s": 10.0, "kind": "camera", "stages_ms": {"gpu": d(300, 1.0), "encode": d(300, 4.0), "readback": d(300, 2.0)},
          "sensors": {"thermal": {"stages_ms": {"gpu": d(300, 3.0), "readback": d(300, 1.0)}}, "lidar": {"stages_ms": {"draw": d(100, 5.0)}}}}
-    g = ct.gpu_time_parts(w)
-    assert g == {"render": 0.03, "thermal": 0.09, "nvjpeg": 0.12, "lidar": 0.05, "total": 0.29, "readback": 0.09}
+    g = ct.gpu_time_parts(w)                                       # K13 之前的报告：nvJPEG 与 LiDAR 回退为墙钟上界
+    assert g == {"render": 0.03, "thermal": 0.09, "nvjpeg": 0.12, "lidar": 0.05, "total": 0.29, "readback": 0.09,
+                 "nvjpeg_wall": 0.12, "lidar_wall": 0.05}
     assert ct.gpu_time(w) == 0.29
     th = {"sim_s": 10.0, "kind": "thermal", "stages_ms": {"gpu": d(300, 3.0)}}
     assert ct.gpu_time_parts(th)["total"] == 0.09
+    # K13 起：两项取 CUDA 事件计时（`encode_gpu`、`sensors.lidar.stages_ms.gpu`），墙钟值另列供对照
+    w["stages_ms"]["encode_gpu"] = d(300, 1.5)
+    w["sensors"]["lidar"]["stages_ms"]["gpu"] = d(100, 2.0)
+    g = ct.gpu_time_parts(w)
+    assert g["nvjpeg"] == 0.045 and g["lidar"] == 0.02 and g["total"] == 0.185
+    assert g["nvjpeg_wall"] == 0.12 and g["lidar_wall"] == 0.05 and g["readback"] == 0.09
+    assert ct.gpu_time_parts({**w, "stages_ms": {**w["stages_ms"], "encode_gpu": d(0, None)}})["nvjpeg"] == 0.12
+
+
+def test_stats_carry_cuda_event_encode_time() -> None:
+    """逐帧统计：nvJPEG 票据的 `gpu_ms`（CUDA 事件）进入 `encode_gpu` 阶段分布；渲染进程组合并时随其他字段拼接。"""
+    from dataclasses import asdict
+
+    st = ct._Stats(encode_ms=[4.0, 5.0], encode_gpu_ms=[1.0, 2.0], t_deliv=[0.1, 0.2])
+    f = ct.stats_fields("camera", {"camera": st, "thermal": ct._Stats(), "lidar": ct._Stats(gpu_ms=[3.0])})
+    assert f["stages_ms"]["encode_gpu"]["n"] == 2 and f["stages_ms"]["encode_gpu"]["mean"] == 1.5
+    m = ct.merge_stats([{"camera": asdict(st)}, {"camera": asdict(ct._Stats(encode_gpu_ms=[3.0]))}, {"camera": {"t_deliv": [0.3]}}])
+    assert m["camera"].encode_gpu_ms == [1.0, 2.0, 3.0] and m["camera"].t_deliv == [0.1, 0.2, 0.3]
 
 
 def test_merge_parts_into_session_report() -> None:

@@ -863,6 +863,12 @@ class RasterCamera:
         self.scene = scene
         self.set_sun(None)
 
+    @property
+    def readback_slots(self) -> int:
+        """异步读回槽位数，即 `submit` 同时未归还的帧数上限：调用方一次提交、尚未归还的帧数超过它时 `submit` 等待归还（同一线程内
+        先提交后取回会等满超时），因此 L2Sensors 按它分批提交（D3-AC-60）。"""
+        return self.ring.n
+
     @staticmethod
     def _put(prog, k: str, v) -> None:
         with contextlib.suppress(KeyError):                               # 驱动裁掉的未使用 uniform

@@ -165,3 +165,21 @@ def test_dispatch_mode_and_tick_owner() -> None:
     assert [tick_owner(s, 6) for s in range(8)] == [0, 1, 2, 3, 4, 5, 0, 1]
     with pytest.raises(SensorSvcError):
         tick_owner(3, 0)
+
+
+def test_render_procs_capped_by_concurrent_sessions() -> None:
+    """§4.7 内存预算（K13）：`sensor` 调度下并发会话 ≥ 3 时渲染进程数 ≤ 3，即每会话一个进程（K03 三并发同构）；会话更少或 `tick`
+    调度（单会话热成像持续测量）时按请求；请求越界为 640。"""
+    from awr.sensorsvc.procgroup import SESSIONS_CAP_PROCS, WORKER_MEM_BUDGET_MIB, render_procs_for
+
+    assert WORKER_MEM_BUDGET_MIB == 16384 and SESSIONS_CAP_PROCS == 3
+    assert [render_procs_for(6, s) for s in (1, 2, 3, 4, 6)] == [6, 6, 3, 3, 3]
+    assert render_procs_for(2, 3) == 2 and render_procs_for(1, 5) == 1
+    assert render_procs_for(6, 1, "tick") == 6 and render_procs_for(6, 3, "tick") == 6
+    per = proc_units(assign_units([3, 3, 3], render_procs_for(6, 3)), 3)          # 三个标准轨会话：各占一个进程
+    assert per == [{0: [0, 1, 2]}, {1: [0, 1, 2]}, {2: [0, 1, 2]}]
+    for bad in ((0, 1), (RENDER_PROCS_MAX + 1, 1)):
+        with pytest.raises(SensorSvcError):
+            render_procs_for(*bad)
+    with pytest.raises(SensorSvcError):
+        render_procs_for(3, 1, "frame")

@@ -450,8 +450,8 @@ def test_injected_gimbal_truth_and_actor_numbers_are_detected(synth_event, tmp_p
 
     orig_fc = l2mod.L2Sensors._finish_camera
 
-    def leaky_cam(self, uav, k, out, meta):
-        fr, tr = orig_fc(self, uav, k, out, meta)
+    def leaky_cam(self, uav, k, out, meta, job=None):                # 与产品签名一致（异步路径以 `job` 交出读回槽位）
+        fr, tr = orig_fc(self, uav, k, out, meta, job=job)
         az, el = self.track[uav].gimbal_at(fr["t_mid_ns"])
         fr["gimbal_reading"] = {"roll_deg": 0.0, "pitch_deg": float(np.degrees(el)), "yaw_deg": float(np.degrees(az))}
         return fr, tr

@@ -379,10 +379,11 @@ def _probe_l2(probe: _RunProbe):
             probe.sense_s.append((int(k), len(items), time.perf_counter() - t0))
             return r
 
-        def _finish_camera(self, uav, k, out, meta):
+        def _finish_camera(self, uav, k, out, meta, job=None):
+            # BenchEnv 不经 M25 会话时开启 `defer_truth`，产品路径以 `job` 把读回槽位交给真值线程：先复制编码输入，再交产品路径
             if k % REENCODE_EVERY == 0:
                 probe.rgb[(uav, int(k))] = np.array(out.rgb8, copy=True)
-            obs, rows = super()._finish_camera(uav, k, out, meta)
+            obs, rows = super()._finish_camera(uav, k, out, meta, job=job)
             probe.encoders.add(self.encoder)
             return obs, rows
 
@@ -614,3 +615,62 @@ def test_1080p_frame_size_viewpoints(crop_event) -> None:
                                 "nvjpeg_upload": pct_ms(t["upload_ms"] for t in enc_ms if "upload_ms" in t)},
               "rows": rows}
     write_record("size_1080p", record)
+
+
+def test_l2_async_batches_match_sync_on_gpu(crop_event) -> None:
+    """读回环分批（D3-AC-60；F-116）：EGL 光栅相机只有 2 个读回槽位时，L2 一个 tick 为 5 个视点出帧（异步接口按槽位数分 3 批提交）
+    不超时；连续 3 个 tick 的交付 JPEG 与真值行与同一渲染器经同步接口（`render`）逐机渲染的结果逐字节相同。"""
+    _require_gpu_stack()
+    from awr.agentsdk.env.l2 import L2Config, L2Sensors
+    from awr.sensorsvc.camera.proj import look_at_R
+    from awr.sensorsvc.camera.raster import RasterCamera
+    from awr.sensorsvc.camera.scene import load_appearance
+    from awr.sim.events.tape import open_tape
+
+    w, ev, _tmp = crop_event
+    tape = open_tape(Path(ev))
+    st = tape.actor_states(5 * 10**9)
+    v = np.isin(st.state, (1, 2))
+    center = np.median(st.pos_enu_m[v], 0)
+    vps = [vp for vp in _viewpoints(center, float(center[2])) if vp["agl_m"] in (40.0, 80.0)][:5]
+    uavs = [f"vp-{i}" for i in range(len(vps))]
+    meta = json.loads((Path(w) / "world.json").read_text(encoding="utf-8"))
+
+    class FixedView(L2Sensors):
+        def _cam_pose(self, uav, t_ns):
+            vp = vps[uavs.index(uav)]
+            return vp["pos"], look_at_R(vp["pos"], vp["target"]), (math.radians(vp["heading_deg"]), math.radians(vp["pitch_deg"]), 0.0)
+
+    class SyncOnly:                                                  # 同一渲染器的同步接口（无 `submit`）：逐机渲染并复制
+        def __init__(self, cam) -> None:
+            self.cam = cam
+
+        def render(self, *a, **kw):
+            return self.cam.render(*a, **kw)
+
+    cam = RasterCamera(load_appearance(Path(w)), readback_slots=2)
+    cam.set_actors(tape.actors)
+    cam.set_sun(tuple((meta.get("sensorHints") or {}).get("bakedSunAzElDeg") or ()) or None)
+    assert cam.readback_slots == 2
+
+    def run(renderer) -> list:
+        s = FixedView(world_dir=Path(w), tape=tape, uavs=uavs, seed=SEED, noise="realistic", obs_level="L2", nav=None,
+                      mount_t_bs_m=(0.12, 0.0, -0.08), hfov_deg=60.0, renderer=renderer, world_meta=meta,
+                      cfg=L2Config(camera_profile=PROFILE, lidar=False, imu=False, gnss=False))
+        for u in uavs:
+            s.ingest(u, np.array([0, 20 * TICK_NS], np.int64), np.stack([_static_state(np.zeros(3))] * 2))
+        out = []
+        for k in (1, 2, 3):
+            res = s.sense_all(k, [(u, i) for i, u in enumerate(uavs)])
+            out += [(u, k, hashlib.sha256(res[u][0][CAM][0]["rgb"]["data"]).hexdigest(), repr(res[u][1])) for u in uavs]
+        return out
+
+    try:
+        with E.online_path():
+            a = run(cam)
+            waits = cam.ring.waits
+            b = run(SyncOnly(cam))
+    finally:
+        cam.release()
+    assert len(a) == 5 * 3 and a == b
+    assert cam.ring.n == 2 and waits == 0                           # 分批后同一线程内从不等待槽位

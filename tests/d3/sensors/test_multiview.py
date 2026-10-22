@@ -733,29 +733,33 @@ def _probe_l2(probe: _Probe):
             self._poses.append(np.concatenate([np.asarray(pos, np.float64), np.asarray(R, np.float64).ravel(), np.asarray(g, np.float64)]))
             return pos, R, g
 
-        def _render(self, uav, uav_no, k):
+        def _setup(self, uav, uav_no, k):
+            # 同步（`_render`）与异步（`_cameras` 先逐机 `_setup` 与提交、后按序取回）两条路径都经 `_setup` 取一帧的绘制参数：
+            # 在此按机记录本帧的 10 次位姿查询结果，帧内容在 `_finish_camera` 记录（两条路径都经过它）
             self._k = k
             self._poses = []
             st = self.env.status.get(uav)
             if st is not None and st != VehicleStatus.GROUNDED:
                 probe.airborne.add(uav)
-            out, meta = super()._render(uav, uav_no, k)
+            r = super()._setup(uav, uav_no, k)
+            self._frame_poses[(uav, k)] = (int(uav_no), np.stack(self._poses), uav not in probe.airborne)
+            return r
+
+        def _finish_camera(self, uav, k, out, meta, job=None):
+            # 先于产品路径读取平面：`job` 给出（`defer_truth`）时槽位由真值线程归还，此后视图失效
+            uav_no, poses, ground = self._frame_poses.pop((uav, k))
             f = probe.frames.setdefault((uav, k), _Frame(uav, k))
             for ch, a in zip(CHANNELS, (out.rgb8, out.depth_m, out.instance, out.semantic), strict=True):
                 b = np.ascontiguousarray(a)
                 f.digests[ch] = hashlib.sha256(b.tobytes()).hexdigest()
                 f.constant[ch] = bool((b == b.flat[0]).all())
-            f.ground = uav not in probe.airborne
+            f.ground = ground
             stt = self.tape.actor_states(meta[0])                         # 与渲染同一时刻（t_mid）、在画面中可见的演员状态
             seen = np.unique(out.instance)
             v = np.isin(stt.state, (1, 2)) & np.isin(stt.ids + 1, seen[seen > 0])
-            f.uav_no, f.poses = int(uav_no), np.stack(self._poses)
+            f.uav_no, f.poses = uav_no, poses
             f.actors = (np.asarray(stt.ids[v]).copy(), np.asarray(stt.pos_enu_m[v], np.float64).copy(), np.asarray(stt.yaw_rad[v], np.float64).copy())
-            return out, meta
-
-        def _finish_camera(self, uav, k, out, meta):
-            obs, rows = super()._finish_camera(uav, k, out, meta)
-            f = probe.frames[(uav, k)]
+            obs, rows = super()._finish_camera(uav, k, out, meta, job=job)
             f.t_mid_ns, f.exposure_ns, f.readout_ns = int(obs["t_mid_ns"]), int(obs["exposure_ns"]), int(obs["readout_ns"])
             return obs, rows
 
@@ -765,7 +769,7 @@ def _probe_l2(probe: _Probe):
         cfg = L2Config(**{k: v for k, v in (env.spec.l2 or {}).items() if k in ("camera_profile", "jpeg_quality", "lidar", "imu", "gnss")})
         s = ProbeL2(world_dir=wd, tape=env.tape, uavs=env.uavs, seed=env.spec.seed, noise=env.spec.noise, obs_level=env.spec.obs_level,
                     nav=env.nav, mount_t_bs_m=env.cam.mount_t_bs_m, hfov_deg=env.cam.hfov_deg, cfg=cfg, world_meta=meta)
-        s.env, s._k = env, -1
+        s.env, s._k, s._poses, s._frame_poses = env, -1, [], {}
         return s
 
     return factory

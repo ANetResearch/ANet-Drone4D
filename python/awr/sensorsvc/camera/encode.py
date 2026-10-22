@@ -110,7 +110,7 @@ class EncodeTicket:
     _bytes: bytes | None = None
     identity: str = ""                               # 编码器身份（写入 FrameMeta.encoder）
     t_submit: float = 0.0
-    timing: dict = field(default_factory=dict)       # GPU：upload_ms、encode_ms、t0/t1（perf_counter 秒，编码区间）
+    timing: dict = field(default_factory=dict)       # GPU：upload_ms、encode_ms、t0/t1（perf_counter 秒，编码区间）、gpu_ms（CUDA 事件）
 
     def result(self, timeout: float | None = None) -> bytes:
         if self._bytes is None:
@@ -189,6 +189,10 @@ class GpuJpegEncoder(JpegEncoder):
     `submit(rgb8)`（调用线程）：等待空闲槽位 → 拷入固定页 → 上传流 `cuMemcpyHtoDAsync` → 记录上传事件 → 交编码线程。
     编码线程：编码流 `cuStreamWaitEvent(上传事件)` → `Encoder.encode(..., cuda_stream=编码流)` → 同步编码流 → 归还槽位。
     帧 N 在编码流上编码时，帧 N+1 可在 GL 上渲染、在上传流上拷贝。线程安全：`submit` 可由单个渲染线程调用。
+
+    GPU 时间（§4.7 份额核算，ADR-213 决策 (3)）：编码流上在等待上传事件之后、编码调用之后各记录一个计时事件，两者之差记为票据的
+    `timing["gpu_ms"]`（CUDA 事件计时）。区间自上传完成、编码流开始执行时起算，不含编码线程排队、上传等待与码流转为 `bytes`；
+    nvImageCodec 在编码调用内取回码流（主机等待 GPU），区间含取回的拷贝，仍是 GPU 占用的上界，但比墙钟 `encode_ms` 紧。
     """
     kind = "gpu"
 
@@ -220,6 +224,9 @@ class GpuJpegEncoder(JpegEncoder):
                 self._host_np.append(np.ctypeslib.as_array((ctypes.c_uint8 * n).from_address(hp)).reshape(self.height, self.width, 3))
                 self._devp.append(int(_cu_check(cu.cuMemAlloc(n))))
                 self._ev.append(_cu_check(cu.cuEventCreate(cu.CUevent_flags.CU_EVENT_DISABLE_TIMING)))
+            # 编码流计时事件（单个编码线程串行使用，每帧复用）
+            self._tev = (_cu_check(cu.cuEventCreate(cu.CUevent_flags.CU_EVENT_DEFAULT)),
+                         _cu_check(cu.cuEventCreate(cu.CUevent_flags.CU_EVENT_DEFAULT)))
             # nvImageCodec 把 nvJPEG 编码器登记为 HYBRID_CPU_GPU 后端（编码在 GPU 上执行，主机只取回码流）；镜像只保留
             # libnvjpeg_ext（删除 libjpeg-turbo、OpenCV 等 CPU 编解码扩展），因此该后端只能落到 nvJPEG
             self._enc = nv.Encoder(device_id=int(device), max_num_cpu_threads=1, backends=[nv.Backend(nv.BackendKind.HYBRID_CPU_GPU)])
@@ -269,11 +276,14 @@ class GpuJpegEncoder(JpegEncoder):
         t0 = time.perf_counter()
         try:
             _cu_check(cu.cuStreamWaitEvent(self.s_encode, self._ev[k], 0))
+            _cu_check(cu.cuEventRecord(self._tev[0], self.s_encode))
             img = nv.as_image(_DeviceView(self._devp[k], self.height, self.width), int(self.s_encode))
             cs = self._enc.encode(img, "jpeg", params=self._params, cuda_stream=int(self.s_encode))
+            _cu_check(cu.cuEventRecord(self._tev[1], self.s_encode))
             _cu_check(cu.cuStreamSynchronize(self.s_encode))
             if cs is None:
                 raise RuntimeError("nvJPEG encode failed")
+            tk.timing["gpu_ms"] = float(_cu_check(cu.cuEventElapsedTime(self._tev[0], self._tev[1])))
             out = bytes(memoryview(cs))
         finally:
             with self._cv:
@@ -291,6 +301,8 @@ class GpuJpegEncoder(JpegEncoder):
         self._pool.shutdown(wait=True)
         cu = self._cu
         self._bind()
+        for e in self._tev:
+            cu.cuEventDestroy(e)
         for k in range(self.slots):
             cu.cuEventDestroy(self._ev[k])
             cu.cuMemFree(self._devp[k])

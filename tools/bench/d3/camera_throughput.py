@@ -653,6 +653,7 @@ class _Stats:
     issue_ms: list[float] = field(default_factory=list)
     upload_ms: list[float] = field(default_factory=list)
     encode_ms: list[float] = field(default_factory=list)
+    encode_gpu_ms: list[float] = field(default_factory=list)   # nvJPEG 编码流 CUDA 事件区间（`EncodeTicket.timing["gpu_ms"]`）
     asm_ms: list[float] = field(default_factory=list)
     write_enqueue_ms: list[float] = field(default_factory=list)
     latency_ms: list[float] = field(default_factory=list)
@@ -880,6 +881,9 @@ class _LidarRig:
             st = w.stats["lidar"]
             st.draw_ms.append((b - a) * 1e3)                              # 一次 launch 的扫描、GPU 压缩与回传（全部 N 机）
             st.issue_ms.append((b - a) * 1e3)
+            lt = self.lid.last_timing
+            if "gpu_ms" in lt:                                            # CUDA 事件：内核区间与 D2H 回传之和（不含主机重建演员轨迹的空隙）
+                st.gpu_ms.append(lt["gpu_ms"] + lt.get("d2h_gpu_ms", 0.0))
         return scans, t_ev, b
 
     def deliver(self, scans: list, seq: int, t_ev: int, t_ref: float, record: bool = True) -> None:
@@ -1087,6 +1091,8 @@ class Worker:
             if d.enc_timing:
                 st.upload_ms.append(d.enc_timing.get("upload_ms", 0.0))
                 st.encode_ms.append(d.enc_timing.get("encode_ms", 0.0))
+                if "gpu_ms" in d.enc_timing:
+                    st.encode_gpu_ms.append(d.enc_timing["gpu_ms"])
 
     # ------------------------------------------------------------------ 测量
     def warmup(self) -> None:
@@ -1189,7 +1195,7 @@ def stats_fields(kind: str, stats: Mapping[str, _Stats]) -> dict:
     st = stats[kind]
     return {"latency_ms": dist(st.latency_ms), "stages_ms": {"draw": dist(st.draw_ms), "readback": dist(st.readback_ms), "gpu": dist(st.gpu_ms),
                                                          "issue": dist(st.issue_ms), "upload": dist(st.upload_ms), "encode": dist(st.encode_ms),
-                                                         "assemble": dist(st.asm_ms), "write_enqueue": dist(st.write_enqueue_ms)},
+                                                         "encode_gpu": dist(st.encode_gpu_ms), "assemble": dist(st.asm_ms), "write_enqueue": dist(st.write_enqueue_ms)},
             "jpeg_kB": dist([b / 1e3 for b in st.payload_bytes] if kind == "camera" else []),
             "payload_kB": dist([b / 1e3 for b in st.payload_bytes]), "objects_per_frame": dist(st.objects),
             "actors_drawn": dist(st.actors_drawn), "batches_drawn": dist(st.batches),
@@ -1390,11 +1396,18 @@ def group_main(job_path: Path) -> int:
     预热后输出 `READY <渲染进程 PID>`，收到 GO 后执行测量：sustained 由各进程在共同的计时窗口内独立出帧（在途上限按进程计），帧率为
     全部进程窗口内交付帧之和 / 窗口；online 每个会话一个控制线程，每 tick 向承担该会话的进程同时发出请求，全部交付后进入下一 tick
     （tick 耗时、RTF 由本进程计）。各会话的报告按部分合并后写入各自的 `out`。"""
-    from awr.sensorsvc.procgroup import RenderGroup, assign_units, dispatch_mode, proc_units, shared_clock, tick_owner
+    from awr.sensorsvc.procgroup import (
+        RenderGroup,
+        assign_units,
+        dispatch_mode,
+        proc_units,
+        render_procs_for,
+        shared_clock,
+        tick_owner,
+    )
 
     g = json.loads(Path(job_path).read_text(encoding="utf-8"))
     jobs = [JobCfg.from_dict(j) for j in g["sessions"]]
-    R = int(g["render_procs"])
     if not shared_clock():
         raise SystemExit("perf_counter is not a system-wide monotonic clock; render group latency would be invalid")
     mode = jobs[0].mode
@@ -1403,6 +1416,7 @@ def group_main(job_path: Path) -> int:
     kinds = {("thermal" if j.profile == THERMAL_PROFILE else "camera") for j in jobs}
     kinds |= {{"therm512": "thermal", "mid360": "lidar"}[e] for j in jobs for e in j.extras}
     dispatch = dispatch_mode(sorted(kinds))
+    R = render_procs_for(int(g["render_procs"]), len(jobs), dispatch)    # §4.7 内存预算：并发会话 ≥ 3 时每会话一个进程（K13）
     if dispatch == "tick":                                              # 无逐帧状态：第 seq 帧（全部无人机）由进程 seq mod R 产生
         if len(jobs) != 1:
             raise SystemExit("tick dispatch runs one session per worker")
@@ -1673,7 +1687,7 @@ def summarize_runs(runs: Sequence[Mapping]) -> dict:
             "cpu_encode_calls": sum(w["cpu_encode_calls"] for w in ws),
             "gpu_s_per_sim_s": _median(gpu_time(w) for w in ws),
             "gpu_s_per_sim_s_parts": {k: _median((gpu_time_parts(w) or {}).get(k) for w in ws)
-                                      for k in ("render", "thermal", "nvjpeg", "lidar", "readback")},
+                                      for k in ("render", "thermal", "nvjpeg", "lidar", "readback", "nvjpeg_wall", "lidar_wall")},
             "stages_p50_ms": {k: _median(w["stages_ms"][k].get("p50") for w in ws) for k in ws[0]["stages_ms"]},
             "proxy_gpu_p50_ms": {p: _median((w["fx"].get("proxy_gpu_ms") or {}).get(p, {}).get("p50") for w in ws)
                                  for p in (ws[0]["fx"].get("proxy_gpu_ms") or {})},
@@ -1684,8 +1698,10 @@ def summarize_runs(runs: Sequence[Mapping]) -> dict:
 def gpu_time_parts(w: Mapping) -> dict | None:
     """在线测量的 GPU 时间分解（GPU·s / 仿真 s；ADR-213 决策 (3)）：`render` 为每帧 GL 计时查询的渲染与效果链时间（`gpu`，自第一遍
     绘制至最后一个效果遍，含 GPU 等待 CPU 提交的空隙，偏保守；无 `gpu` 阶段的旧报告按 `draw` 加代理遍计），`thermal` 为标准轨热成像的
-    同口径时间，`nvjpeg` 为 nvJPEG 编码区间（上传完成至编码流同步的墙钟，上界），`lidar` 为 Warp LiDAR 批（一次 launch 的扫描、GPU
-    压缩与回传墙钟，上界）；`readback` 为读回 DMA（主档位与热成像的栅栏等待）单列，不计入 `total`。"""
+    同口径时间，`nvjpeg` 为 nvJPEG 编码流的 CUDA 事件区间（`encode_gpu`：上传完成后至编码调用返回，含 nvImageCodec 取回码流），
+    `lidar` 为 Warp LiDAR 批的 CUDA 事件区间（`sensors.lidar.stages_ms.gpu`：内核区间与 D2H 回传之和，不含两段内核之间主机重建演员
+    轨迹的空隙）；K13 之前的报告没有事件计时，两项回退为墙钟上界（编码线程内的编码区间、一次 launch 的扫描、压缩与回传墙钟），墙钟值
+    另以 `nvjpeg_wall`、`lidar_wall` 给出供对照；`readback` 为读回 DMA（主档位与热成像的栅栏等待）单列，不计入 `total`。"""
     sim = w.get("sim_s")
     st = w.get("stages_ms") or {}
     g = st.get("gpu") or {}
@@ -1701,14 +1717,18 @@ def gpu_time_parts(w: Mapping) -> dict | None:
     th_st = (sens.get("thermal") or {}).get("stages_ms", {})
     th = th_st.get("gpu") if (th_st.get("gpu") or {}).get("n") else th_st.get("draw") or {}
     camera = w.get("kind", "camera") == "camera"
+    lid_st = (sens.get("lidar") or {}).get("stages_ms") or {}
+    nvj_wall = tot(st.get("encode")) if camera else 0.0
+    lid_wall = tot(lid_st.get("draw"))
     parts = {"render": (d["mean"] + (p.get("mean") or 0.0)) * d["n"] / 1000.0,
              "thermal": tot(th) if camera else 0.0,
-             "nvjpeg": tot(st.get("encode")) if camera else 0.0,
-             "lidar": tot(((sens.get("lidar") or {}).get("stages_ms") or {}).get("draw"))}
+             "nvjpeg": (tot(st["encode_gpu"]) if (st.get("encode_gpu") or {}).get("n") else nvj_wall) if camera else 0.0,
+             "lidar": tot(lid_st["gpu"]) if (lid_st.get("gpu") or {}).get("n") else lid_wall}
     readback = tot(st.get("readback")) + (tot(th_st.get("readback")) if camera else 0.0)
     out = {k: round(v / sim, 4) for k, v in parts.items()}
     out["total"] = round(sum(parts.values()) / sim, 4)
     out["readback"] = round(readback / sim, 4)
+    out["nvjpeg_wall"], out["lidar_wall"] = round(nvj_wall / sim, 4), round(lid_wall / sim, 4)
     return out
 
 

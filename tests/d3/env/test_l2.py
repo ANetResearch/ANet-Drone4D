@@ -79,6 +79,67 @@ class FakeRasterAsync(FakeRaster):
         return Job()
 
 
+class FakeRasterRing(FakeRaster):
+    """有界读回环替身（与 `ReadbackRing.acquire` 同义）：`readback_slots` 个槽位，全部占用时 `submit` 等待其他线程归还，`timeout_s`
+    内等不到则抛 TimeoutError；结果为槽位上的只读视图，归还后槽位被覆写。`advertise` 为对调用方声明的槽位数（缺省等于实际值；
+    取大于实际值时复现分批之前"一次提交全部机体"的超时）。"""
+
+    def __init__(self, slots: int = 3, *, timeout_s: float = 2.0, advertise: int | None = None) -> None:
+        import threading
+
+        self.n, self.timeout_s, self.advertise = int(slots), float(timeout_s), advertise
+        self.free = list(range(self.n))
+        self.mem: dict[int, dict] = {}
+        self.cv = threading.Condition()
+        self.max_busy = 0
+        self.submits = 0
+
+    @property
+    def readback_slots(self) -> int:
+        return self.n if self.advertise is None else int(self.advertise)
+
+    def submit(self, cm, R_ws, p_w, *, fx=None, rs_nodes=None, actors=None):
+        import time
+
+        out = self.render(cm, R_ws, p_w, fx=fx, rs_nodes=rs_nodes, actors=actors)
+        deadline = time.monotonic() + self.timeout_s
+        with self.cv:
+            while not self.free:
+                left = deadline - time.monotonic()
+                if left <= 0 or not self.cv.wait(left):
+                    raise TimeoutError("readback ring: no free slot (frames are not being released)")
+            k = self.free.pop(0)
+            self.max_busy = max(self.max_busy, self.n - len(self.free))
+            self.submits += 1
+        planes = {n: getattr(out, n) for n in ("rgb8", "depth_m", "instance", "semantic", "instance_unocc")}
+        for a in planes.values():
+            a.setflags(write=False)
+        self.mem[k] = planes
+        ring = self
+
+        class Job:
+            released = False
+
+            def result(self):
+                from awr.sensorsvc.camera.raster import RenderOut
+
+                m = ring.mem[k]
+                return RenderOut(m["rgb8"], m["depth_m"], m["instance"], m["semantic"], 0.0, 0.0, 0, instance_unocc=m["instance_unocc"])
+
+            def release(self):
+                if self.released:
+                    return
+                self.released = True
+                for a in ring.mem[k].values():
+                    a.setflags(write=True)
+                    a[...] = 0
+                with ring.cv:
+                    ring.free.append(k)
+                    ring.cv.notify_all()
+
+        return Job()
+
+
 def _segments(jpg: bytes) -> set[int]:
     seen, i = set(), 2
     assert jpg[:2] == b"\xff\xd8"
@@ -105,10 +166,10 @@ def _l2(env: BenchEnv, lidar_proc: bool = True, renderer=None) -> L2Sensors:
 
 
 def _episode(synth_event, out: Path, obs_level: str = "L2", lidar_proc: bool = True, renderer=None,
-             async_rec: bool = False) -> tuple[list[tuple[str, dict]], dict]:
+             async_rec: bool = False, fleet=FLEET, l2=None) -> tuple[list[tuple[str, dict]], dict]:
     w, ev = synth_event
-    spec = EnvSpec("t-l2", 3, w, ev, FLEET, obs_level=obs_level, physics="kinematic", duration_s=3.0, out_dir=out)
-    env = BenchEnv(spec, l2=lambda e: _l2(e, lidar_proc, renderer))
+    spec = EnvSpec("t-l2", 3, w, ev, fleet, obs_level=obs_level, physics="kinematic", duration_s=3.0, out_dir=out)
+    env = BenchEnv(spec, l2=l2 or (lambda e: _l2(e, lidar_proc, renderer)))
     env.async_obs_record = async_rec
     obs, infos = env.reset()
     seen = [(u, o) for u, o in obs.items()]
@@ -318,3 +379,84 @@ def test_unranked_levels_are_refused(synth_event, level: str) -> None:
     w, ev = synth_event
     with pytest.raises(ValueError):
         BenchEnv(EnvSpec("t", 1, w, ev, FLEET, obs_level=level, physics="kinematic", duration_s=1.0))
+
+
+# ---------------------------------------------------------------- 读回环槽位分批（D3-AC-60；F-116）
+def _stub_tape():
+    st = SimpleNamespace(ids=np.zeros(0, np.int64), state=np.zeros(0, np.uint8), pos_enu_m=np.zeros((0, 3)), yaw_rad=np.zeros(0))
+    return SimpleNamespace(actors=[], path=Path("."), actor_states=lambda t_ns, ids=None: st)
+
+
+def _unit(renderer, n: int) -> L2Sensors:
+    """无世界的 L2 相机单元：n 架机静止于不同位置（各机画面不同），云台俯仰 −45°。"""
+    uavs = [f"u{i:02d}" for i in range(n)]
+    s = L2Sensors(world_dir=Path("."), tape=_stub_tape(), uavs=uavs, seed=3, noise="realistic", obs_level="L2", nav=None,
+                  mount_t_bs_m=(0.12, 0.0, -0.08), hfov_deg=60.0, renderer=renderer,
+                  cfg=L2Config(camera_profile="rgb720-gs", lidar=False, imu=False, gnss=False))
+    for i, u in enumerate(uavs):
+        st = np.zeros(16)
+        st[0:3], st[6] = (7.0 * i, -3.0 * i, 40.0 + i), 1.0
+        s.ingest(u, np.array([0, 10 * 100_000_000], np.int64), np.stack([st, st]))
+        s.gimbal(u, 0, 5.0 * i, -45.0)
+    return s
+
+
+def _frames(s: L2Sensors, ticks=(1, 2, 3)) -> list:
+    out = []
+    for k in ticks:
+        res = s.sense_all(k, [(u, i) for i, u in enumerate(s.uavs)])
+        for u in s.uavs:
+            sens, rows = res[u]
+            out.append((u, k, sens, rows.result() if hasattr(rows, "result") else rows))
+    return out
+
+
+@pytest.mark.parametrize("defer", [False, True])
+def test_async_path_batches_submissions_by_readback_slots(defer: bool) -> None:
+    """一个 tick 的机数大于读回槽位数（8 机、3 槽位）：异步路径按槽位数分批提交，同时未归还的帧数不超过槽位数，每机每 tick 恰好
+    提交一次，交付帧与真值行与同步路径逐字节相同（含 `defer_truth`：上一批槽位由真值线程归还）。"""
+    pytest.importorskip("PIL")
+    ref = _frames(_unit(FakeRaster(), 8))
+    ring = FakeRasterRing(3)
+    s = _unit(ring, 8)
+    s.defer_truth = defer
+    try:
+        got = _frames(s)
+    finally:
+        s.close()
+    assert ring.max_busy <= 3 and ring.submits == 8 * 3 and len(ring.free) == 3
+    assert [(u, k) for u, k, *_ in got] == [(u, k) for u, k, *_ in ref]
+    assert [x[2] for x in got] == [x[2] for x in ref] and [x[3] for x in got] == [x[3] for x in ref]
+
+
+def test_async_path_without_batching_times_out_on_full_ring() -> None:
+    """替身复现分批之前的故障：渲染器声明的槽位数大于实际槽位数时，一次提交全部机体的第（槽位数 + 1）次提交等不到归还而超时；
+    声明正确时同一负载正常完成（L2 只按声明的 `readback_slots` 分批）。"""
+    pytest.importorskip("PIL")
+    s = _unit(FakeRasterRing(2, timeout_s=0.2, advertise=64), 5)
+    with pytest.raises(TimeoutError):
+        s.sense_all(1, [(u, i) for i, u in enumerate(s.uavs)])
+    ok = _unit(FakeRasterRing(2, timeout_s=0.2), 5)
+    assert len(ok.sense_all(1, [(u, i) for i, u in enumerate(ok.uavs)])) == 5
+
+
+def test_async_episode_with_more_uavs_than_readback_slots(synth_event, tmp_path: Path) -> None:
+    """8 机 L2 运行（BenchEnv：`defer_truth` 与后台观测记录开启），读回环 3 个槽位：每 tick 分 3 批提交，不超时；观测摘要、交付帧与
+    truth/l2.jsonl 与同步路径逐字节相同。"""
+    fleet = tuple(FleetEntry(f"uav-{i + 1:02d}", (-21.0 + 6.0 * i, 50.0 + (i % 2) * 4.0, 30.0), 0.0, airborne=True) for i in range(8))
+
+    def l2(renderer):
+        return lambda e: L2Sensors(world_dir=Path(e.spec.world_dir), tape=e.tape, uavs=e.uavs, seed=e.spec.seed, noise=e.spec.noise,
+                                   obs_level=e.spec.obs_level, nav=e.nav, mount_t_bs_m=e.cam.mount_t_bs_m, hfov_deg=e.cam.hfov_deg,
+                                   cfg=L2Config(camera_profile="rgb720-gs", lidar=False, imu=False, gnss=False), renderer=renderer)
+
+    ring = FakeRasterRing(3, timeout_s=10.0)
+    a, _ = _episode(synth_event, tmp_path / "s", fleet=fleet, l2=l2(FakeRaster()))
+    b, _ = _episode(synth_event, tmp_path / "a", fleet=fleet, l2=l2(ring), async_rec=True)
+    assert ring.max_busy <= 3 and ring.submits == 8 * 31
+    assert [m["obs"]["sensors"] for _u, m in a] == [m["obs"]["sensors"] for _u, m in b]
+    for f in fleet:
+        sa = (tmp_path / "s" / "agents" / f.uav / "obs.sha256").read_text()
+        assert sa.count("\n") == 31 and sa == (tmp_path / "a" / "agents" / f.uav / "obs.sha256").read_text()
+    tv = (tmp_path / "s" / "truth" / "l2.jsonl").read_bytes()
+    assert tv == (tmp_path / "a" / "truth" / "l2.jsonl").read_bytes()
