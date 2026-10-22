@@ -177,8 +177,13 @@ def test_seal_writes_config_evalstore_view_and_lock_without_secrets(formal) -> N
     assert cfg["smoke"]["run_spec"]["event"]["id"] == "crop-handoff-002" and cfg["smoke"]["run_spec"]["event"]["id"] not in TEST_EVENTS
     for e in TEST_EVENTS:                                                            # 评测视图：eval-events/<eid> → hidden/<eid>/event
         assert (root / "eval-events" / e).resolve() == formal["hidden"].root.resolve() / e / "event"
-    lock = json.loads((tmp / "lock.json").read_text())
-    assert lock == cfg["lock"]
+    lock = json.loads((tmp / "lock.json").read_text())                             # 入库形式：只含承诺值，不含 test 事件 id（M23-FR-082）
+    assert lock == F.public_lock(cfg["lock"]) and lock["lock_sha256"] == F.lock_sha256(cfg["lock"])
+    assert lock["schema"] == F.PUBLIC_LOCK_SCHEMA and lock["seed_set_commit"] == cfg["lock"]["seed_set_commit"]
+    assert not [e for e in TEST_EVENTS if e in (tmp / "lock.json").read_text()]
+    for pub, full in zip(lock["lanes"], cfg["lock"]["lanes"], strict=True):
+        assert pub["seed_set_commit"] == full["seed_set_commit"] and pub["n_test_events"] == len(full["test_events"]) == 2
+        assert pub["event_commits"] == sorted(full["event_commits"].values())
     txt = (tmp / "lock.json").read_text() + (root / "boards" / "v1" / "config.json").read_text()
     assert store["k_eval"] not in txt and store["k_board"] not in txt
     assert not [s for s in F._all_seeds(store) if str(s) in txt]

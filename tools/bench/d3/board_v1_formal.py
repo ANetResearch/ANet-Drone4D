@@ -12,7 +12,7 @@ FR-166、FR-177 至 FR-183；ADR-182、ADR-191、ADR-195；B21）。
    Evaluator 服务用户），服务端配置 `<data_root>/boards/<版本>/config.json` = 模板 + 封板记录 + EvalStore 路径 + 运行参数（`worlds_root`、
    `events_root`、`events.<test 事件>{world_id, version, starts}`、dev 事件上的冒烟规格 `smoke.run_spec`、`gz`、`agent_image`；不含秘密）；
    test 事件经评测视图 `<data_root>/eval-events/<eid> → ../hidden/<eid>/event`（目录 0700）到达 Env；发布空榜并设为当前版本；
-   封板记录（只含承诺值）另写 `--lock-out`。
+   封板记录的入库形式另写 `--lock-out`（`public_lock`：只含承诺值，不含 test 事件 id，M23-FR-082）。
 2. `baselines`（Evaluator 服务用户）：基线参考行的正式 Run（`aggregate.expand_runs` × 基线），种子明文按（赛道、事件、k）取自 EvalStore，
    `seed_commit = HMAC-SHA256(K_eval, run_id ‖ ":" ‖ seed)`；经 `mbl_e2e.execute_run` 运行（隔离容器、`bench/obs.v1` 逐帧审计、锁步核对、
    运行清单 `bench/run_manifest.v1` 只含 seed_commit），记录写 `<out>/records/<run_id>.json`（不含种子明文）；进程池并行 `--jobs`。
@@ -72,6 +72,7 @@ for _p in (ROOT / "tools/sdk/drone4d/src", ROOT / "python", Path(__file__).resol
 import mbl_e2e as E  # noqa: E402
 
 REPORT_SCHEMA = "drone4d.bench.board_v1_formal.v1"
+PUBLIC_LOCK_SCHEMA = "drone4d.bench.board_lock_public.v1"
 EVAL_UID = 10002                     # Evaluator 服务用户（docs/impl/D3-隐藏区与离机备份.md）
 WORLD_ID = "oryahovo-crop1"
 # 起飞位：crop-handoff-001 的平屋顶起飞位（E10：8 个 test 事件的脚本演员距起飞位 ≥ 18.3 m）
@@ -165,6 +166,26 @@ def _bv_dir(data_root: Path, bv: str) -> Path:
 
 def _store_path(data_root: Path, bv: str) -> Path:
     return Path(data_root) / "bench" / "evalstore" / f"{bv}.json"
+
+
+def lock_sha256(lock: dict) -> str:
+    """封板锁的规范摘要（键排序、紧凑、UTF-8 的 JSON 的 SHA-256）：入库的公开锁以此绑定服务端完整锁。"""
+    return E.sha256_bytes(json.dumps(lock, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+
+
+def public_lock(lock: dict) -> dict:
+    """封板锁的入库形式（M23-FR-082：test 事件 id 只出现在划分登记表与隐藏区）：去掉各赛道的 `test_events`，事件级承诺
+    `event_commits` 由"事件 id → HMAC"改为按值排序的 HMAC 列表并记 `n_test_events`；其余字段（赛道级与榜单级承诺、
+    `test_split_version`、平台镜像摘要、GPU 型号、ISA 等级等）原样保留；`lock_sha256` 为服务端完整锁的规范摘要，可与
+    `<data_root>/boards/<版本>/config.json` 的 `lock` 核对。"""
+    out = {k: v for k, v in lock.items() if k not in ("lanes", "schema")}
+    out["schema"] = PUBLIC_LOCK_SCHEMA
+    out["lock_schema"] = lock.get("schema")
+    out["lock_sha256"] = lock_sha256(lock)
+    out["lanes"] = [{**{k: v for k, v in ln.items() if k not in ("test_events", "event_commits")},
+                     "n_test_events": len(ln.get("test_events") or []),
+                     "event_commits": sorted((ln.get("event_commits") or {}).values())} for ln in lock["lanes"]]
+    return out
 
 
 def _load(data_root: Path, bv: str) -> tuple[dict, dict]:
@@ -274,7 +295,7 @@ def seal_board_version(data_root: Path, *, board_version: str, worlds_root: Path
     bdir.mkdir(parents=True, exist_ok=True)
     E.write_json(bdir / "config.json", cfg, mode=0o600)
     if lock_out is not None:
-        E.write_json(Path(lock_out), lock)
+        E.write_json(Path(lock_out), public_lock(lock))
     with board_lock(bdir):
         publish(bdir, SubmissionStore(data_root / "submissions").board_view(), n_boot=n_boot)
     (data_root / "boards" / "current").write_text(board_version + "\n", encoding="utf-8")
