@@ -6,6 +6,7 @@ import { Input } from '@/ui/components/ui/input'
 import { Textarea } from '@/ui/components/ui/textarea'
 import { Field, FieldLabel } from '@/ui/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/components/ui/select'
+import { AppearancePreviewCard } from './AppearancePreviewCard'
 import { customizationAssets, customizationErrors, customizationOf, customizationPatch, type Customization } from './customization'
 
 /** Explicit save: switching models and entering a plate are submitted together, never on blur. */
@@ -50,6 +51,7 @@ export function CustomizationForm({ target, cls, operator, creating = false, sav
       {entries.length === 1 ? <p className="text-hud-sub text-muted-foreground">{t('targets.customizationForm.one_mesh_is_available_separate_breed_coat')}</p> : null}
       {asset ? <p className="text-hud-sub text-muted-foreground">{asset.dimensions_m.map((n) => n.toFixed(2)).join(' × ')} m · {asset.license}</p> : null}
     </Field>
+    <AppearancePreviewCard key={value.assetId} assetId={value.assetId} plate={value.plate} />
     {cls === 'vehicle' ? <>
       {field('plate', t('targets.customizationForm.plate_number'), 16)}
       {field('region', t('targets.customizationForm.plate_region'), 32)}

@@ -2817,5 +2817,20 @@
  "targets.lifeVehicle.sedan": "Sedan",
  "targets.lifeVehicle.suv": "SUV",
  "targets.lifeVehicle.truck": "Truck",
- "targets.lifeVehicle.van": "Cargo van"
+ "targets.lifeVehicle.van": "Cargo van",
+ "targets.preview.title": "Selected appearance preview",
+ "targets.preview.canvas": "Appearance model preview; drag to rotate",
+ "targets.preview.loading": "Loading selected model…",
+ "targets.preview.error": "Preview failed to load. Please retry.",
+ "targets.preview.retry": "Retry preview",
+ "targets.preview.left": "Turn left",
+ "targets.preview.right": "Turn right",
+ "targets.preview.in": "Zoom in",
+ "targets.preview.out": "Zoom out",
+ "targets.preview.front": "Front",
+ "targets.preview.back": "Back",
+ "targets.preview.reset": "Reset view",
+ "targets.preview.plate": "Plate close-up",
+ "targets.preview.hint": "Drag to rotate. Preview uses the real mesh and texture; save to apply it to the scene.",
+ "targets.preview.wireframe": "Original wireframe selected; no detailed appearance mesh."
 }

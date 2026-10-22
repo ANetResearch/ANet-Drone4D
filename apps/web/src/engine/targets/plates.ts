@@ -1,5 +1,5 @@
 // Plate geometry uses physical metres and actual metadata; no screen-space identity billboard.
-import { CanvasTexture, Group, Mesh, PlaneGeometry, SRGBColorSpace } from 'three'
+import { CanvasTexture, Group, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { texture, vec4 } from 'three/tsl'
 
@@ -7,8 +7,10 @@ export class VehiclePlates {
   readonly root = new Group()
   private key = ''
   private tex: CanvasTexture | null = null
-  private material: MeshBasicNodeMaterial | null = null
+  private material: MeshBasicNodeMaterial | MeshBasicMaterial | null = null
   private geometry: PlaneGeometry | null = null
+
+  constructor(private readonly classic = false) {}
 
   update(text: string, dimensions: readonly number[]): void {
     const key = JSON.stringify([text, dimensions])
@@ -24,8 +26,12 @@ export class VehiclePlates {
     ctx.fillStyle = 'rgb(20, 20, 20)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
     ctx.font = 'bold 150px sans-serif'; ctx.fillText(text, 512, 138, 950)
     this.tex = new CanvasTexture(canvas); this.tex.colorSpace = SRGBColorSpace
-    this.material = new MeshBasicNodeMaterial()
-    this.material.colorNode = vec4(texture(this.tex).rgb, 1)
+    if (this.classic) this.material = new MeshBasicMaterial({ map: this.tex })
+    else {
+      const material = new MeshBasicNodeMaterial()
+      material.colorNode = vec4(texture(this.tex).rgb, 1)
+      this.material = material
+    }
     this.geometry = new PlaneGeometry(.52, .13)
     for (const side of [-1, 1]) {
       const plate = new Mesh(this.geometry, this.material)

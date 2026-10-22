@@ -1,16 +1,16 @@
 // Optional mesh pack. Target state, identity and heading remain authoritative server data.
-import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, SRGBColorSpace, Texture } from 'three'
+import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { attribute, normalWorld, normalize, positionWorld, texture, vec4 } from 'three/tsl'
-import catalog from '../../../../../packages/contracts/target/assets.catalog.json'
+import { TARGET_ASSETS, loadTargetAsset, type TargetAsset, type LoadedTargetAsset as Loaded } from './assetData'
+export { TARGET_ASSETS } from './assetData'
+export type { TargetAsset } from './assetData'
 import { onSceneShading, sceneShading } from '../shading'
 import type { TargetsModel } from './model'
 import { VehiclePlates } from './plates'
-import { rollWheels, type WheelGroups } from './wheels'
+import { rollWheels } from './wheels'
 
 export const APPEARANCE_ENABLED = import.meta.env.VITE_AWR_TARGET_ASSETS === '1'
-export const TARGET_ASSETS = catalog.assets
-export type TargetAsset = typeof TARGET_ASSETS[number] & { wheels?: { sha256: string; bytes: number; count: number; vertices: number } }
 export type AssetStatus = 'idle' | 'loading' | 'ready' | 'error'
 const statuses = new Map<string, AssetStatus>()
 const listeners = new Set<() => void>()
@@ -25,19 +25,7 @@ export function retryAsset(id: string): void {
   for (const fn of retryListeners) fn(id)
 }
 
-interface Loaded { asset: TargetAsset; p: Float32Array; n: Float32Array; uv: Float32Array; c: Float32Array; poses: Float32Array; indices: Uint32Array; tex: Texture; image: ImageBitmap; wheels?: WheelGroups }
 interface Actor { plates: VehiclePlates; key: string; mesh: Mesh<BufferGeometry, MeshBasicNodeMaterial>; data: Loaded; version: number; detailVersion: number; distance: number; lastTime: number; x: number; y: number }
-
-async function verified(url: string, hash: string, bytes: number, signal: AbortSignal): Promise<ArrayBuffer> {
-  const res = await fetch(url, { signal })
-  if (!res.ok) throw new Error(`Asset HTTP ${res.status}`)
-  const buffer = await res.arrayBuffer()
-  if (buffer.byteLength !== bytes) throw new Error('Asset length mismatch')
-  const sum = await crypto.subtle.digest('SHA-256', buffer)
-  const hex = Array.from(new Uint8Array(sum), (n) => n.toString(16).padStart(2, '0')).join('')
-  if (hex !== hash) throw new Error('Asset hash mismatch')
-  return buffer
-}
 
 function material(data: Loaded): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial()
@@ -68,26 +56,8 @@ export class TargetAppearances {
     this.pending.add(asset.id)
     status(asset.id, 'loading')
     try {
-      const base = '/assets/target-assets/'
-      const [buffer, png, wheelBuffer] = await Promise.all([
-        verified(`${base}${asset.geometry_sha256}.bin`, asset.geometry_sha256, asset.bytes, this.abort.signal),
-        verified(`${base}${asset.texture_sha256}.png`, asset.texture_sha256, asset.texture_bytes, this.abort.signal),
-        asset.wheels ? verified(`${base}${asset.wheels.sha256}.wheels.bin`, asset.wheels.sha256, asset.wheels.bytes, this.abort.signal) : Promise.resolve(null),
-      ])
-      const image = await createImageBitmap(new Blob([png]), { imageOrientation: 'flipY' })
-      if (this.abort.signal.aborted) { image.close(); return }
-      const tex = new Texture(image)
-      tex.colorSpace = SRGBColorSpace
-      tex.flipY = false
-      tex.needsUpdate = true
-      const floats = (key: 'p' | 'n' | 'uv' | 'c' | 'poses') => new Float32Array(buffer, asset.layout[key].offset, asset.layout[key].count)
-      const wheels = asset.wheels && wheelBuffer ? {
-        ids: new Int32Array(wheelBuffer, 0, asset.wheels.vertices),
-        centers: new Float32Array(wheelBuffer, asset.wheels.vertices * 4, asset.wheels.count * 3),
-        radii: new Float32Array(wheelBuffer, (asset.wheels.vertices + asset.wheels.count * 3) * 4, asset.wheels.count),
-      } : undefined
-      const data = { asset, wheels, p: floats('p'), n: floats('n'), uv: floats('uv'), c: floats('c'), poses: floats('poses'),
-        indices: new Uint32Array(buffer, asset.layout.indices.offset, asset.layout.indices.count), tex, image }
+      const data = await loadTargetAsset(asset, this.abort.signal)
+      if (this.abort.signal.aborted) { data.tex.dispose(); data.image.close(); return }
       this.cache.set(asset.id, data)
       status(asset.id, 'ready')
     } catch (e) {

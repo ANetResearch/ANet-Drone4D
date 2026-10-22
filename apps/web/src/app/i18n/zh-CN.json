@@ -2817,5 +2817,20 @@
  "targets.lifeVehicle.sedan": "轿车",
  "targets.lifeVehicle.suv": "SUV",
  "targets.lifeVehicle.truck": "卡车",
- "targets.lifeVehicle.van": "厢式货车"
+ "targets.lifeVehicle.van": "厢式货车",
+ "targets.preview.title": "所选外观预览",
+ "targets.preview.canvas": "外观模型预览，可拖动旋转",
+ "targets.preview.loading": "正在加载所选模型…",
+ "targets.preview.error": "预览加载失败，请重试。",
+ "targets.preview.retry": "重试预览",
+ "targets.preview.left": "左转",
+ "targets.preview.right": "右转",
+ "targets.preview.in": "放大",
+ "targets.preview.out": "缩小",
+ "targets.preview.front": "正面",
+ "targets.preview.back": "背面",
+ "targets.preview.reset": "重置视角",
+ "targets.preview.plate": "车牌近景",
+ "targets.preview.hint": "拖动可旋转；预览使用真实模型与纹理，保存后才应用到场景。",
+ "targets.preview.wireframe": "当前选择原始线框，没有精细外观模型。"
 }

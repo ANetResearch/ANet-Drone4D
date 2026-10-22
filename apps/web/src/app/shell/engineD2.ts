@@ -12,3 +12,6 @@ export { CLASS_DEFAULTS, soundPeriodSamples, TARGET_CLASSES, targetsModel } from
 export type { BodyView, TargetCfg, TargetClassName, TargetDetail } from '@/engine/targets'
 
 export { APPEARANCE_ENABLED, TARGET_ASSETS, assetFor, assetStatus, subscribeAssets, retryAsset } from '@/engine/targets/appearance'
+
+export { AppearancePreview } from '@/engine/targets/appearancePreview'
+export type { PreviewView } from '@/engine/targets/appearancePreview'
