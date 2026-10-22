@@ -5117,6 +5117,8 @@ async function loadStaticIndex(): Promise<LabStaticIndex> {
 
 基线文件 `copy-lint.baseline.json` 的 `exceptions` 为 P-1 基线，由 `make lint-copy-strict` 判定清零；`allow` 为经评审的永久放行项，须填写 `reason` 与 `reviewed`。
 
+v1.6（K09，AWR-05 §23.5 C-48、C-50）：COPY-05 的英文白名单增加时限与超时参数语境：terminate、cancel、stop、shut down、time out 之后至多 2 个词接 within，以及否定谓语（could、did、does、do、can、will、would 加 not，或 cannot）之后至多 4 个词接 within，其间不含连词，视为参数，不报；性能与时间宣称仍报（R-06）。COPY-10 增加界面交付称谓规则：i18n 与 html 两类文件中出现 `D1` 至 `D4` 或 `D3.x` 报 error，`D3-AC-14` 一类验收编号与 Markdown 文件不报（R-04）。自测见 `tools/lint/selftest.mjs`。
+
 #### 21.15.8 README 与仓库元数据结构（D2 发布面复核与 D3 发布）
 
 | 章节（`README.md` / `README.zh-CN.md`） | 内容要求 |
@@ -5364,7 +5366,7 @@ D3 新增键一律同时写入 `app/i18n/zh-CN.json` 与 `en.json`（英文不�
 | `apps/web/src/ui/lab/wall/`（新）：`ObservationWall.tsx`、`layout.ts`、`frameScheduler.ts`、`tileRenderer.ts`、`evalOverlay.tsx` | §21.7 | M15（WP-D3-10） | `ui/fpv/{PerceptionHud,hudModel}.tsx` 的角标排版；M06 `engine/droneview/**`（帧解码 Worker、`d3frames.v1` 解析） |
 | `apps/web/src/ui/lab/lidar-compare/`（新；v1.6，F06：原写 `ui/lab/lidar/`）：`CompareCanvas.tsx`、`charts.tsx` 等 | §21.8 | M15、M06（WP-D3-26） | `engine/pointcloud` 的 ANET_Q16 解码（Tier S）；r4 原型 `.cache/research/d3/r4-mesh-lidar/scripts/{recon,viz}.py`（误差口径）；r1 `eval_sim.py`（指标口径） |
 | `apps/web/src/ui/lab/inspect/`（新）：`InspectPage.tsx`、`RerunPanel.tsx`、`rerunSync.ts`（v1.6，R06：另有 `viewerLoader.ts`，是 `@rerun-io/web-viewer` 唯一的动态 `import()`） | §21.9 | M15（WP-D3-17） | r8 原型 `.cache/research/d3/r8-rerun/web/{index.html,app.js}`（`fromRerun` 防重入、`set_current_time`、`time_update`）；`ui/components/ui/resizable.tsx` |
-| `apps/web/src/ui/lab/replay/`（新，v1.6）：`ReplayPage.tsx`、`ReplayTile.tsx`、`SamplePackPanel.tsx`、`sync.ts`、`samplePack.ts` | §21.2.2 `/lab/replay`（双 Run 同步回放与样例包浏览）；v1.6（B20）：样例包文件种类为 `video`、`mcap`、`metrics`、`tape`、`manifest`、`slice` 与 `tracks`（事件回放机队轨迹 `tracks_obs.bin`，`bench/tracks.v1` 观测层，契约 `bench/sample_pack.v1`）；`samplePack.ts` 的 `SAMPLE_FILE_KINDS`、`FILE_ICON` 与文案 `lab.replay.pack.file.tracks` 须补 `tracks`，事件回放的场景视图可复用 `lab-public/samples/tracks.ts` 的解码器（AWR-05 §31.5 F-91） | M15（F04） | `ui/lab/wall/{frames,layout}.ts`、`stores/lab/playhead.ts` |
+| `apps/web/src/ui/lab/replay/`（新，v1.6）：`ReplayPage.tsx`、`ReplayTile.tsx`、`SamplePackPanel.tsx`、`sync.ts`、`samplePack.ts` | §21.2.2 `/lab/replay`（双 Run 同步回放与样例包浏览）；v1.6（B20）：样例包文件种类为 `video`、`mcap`、`metrics`、`tape`、`manifest`、`slice` 与 `tracks`（事件回放机队轨迹 `tracks_obs.bin`，`bench/tracks.v1` 观测层，契约 `bench/sample_pack.v1`）；`samplePack.ts` 的 `SAMPLE_FILE_KINDS`、`SamplePackPanel.tsx` 的图标（`layer.trajectory`）与文案 `lab.replay.pack.file.tracks`（"机队轨迹（观测层）" / "Fleet tracks (observation layer)"）已补 `tracks`（v1.6，K09）；事件回放的场景视图接入 `tracks_obs.bin` 仍待，可复用 `lab-public/samples/tracks.ts` 的解码器（AWR-05 §31.5 F-91） | M15（F04） | `ui/lab/wall/{frames,layout}.ts`、`stores/lab/playhead.ts` |
 | `apps/web/src/ui/lab/{compare,datasets,leaderboard}/`（新） | §21.10 至 §21.12 | M15（WP-D3-26、WP-D3-23、WP-D3-21） | `ui/lf/{LfBarRank,LfLine,LfStat}.tsx` |
 | `apps/web/src/ui/lf/{LfBox,LfMatrix}.tsx`（新）；`LfBarRank.tsx`（增加 `whisker`）、`LfTimelineTrack.tsx`（增加色带与刻度字形） | §21.17.3 | M15 | lieflat 规范（d01） |
 | `apps/web/src/engine/actors/tape/`（新，M06） | 前端磁带解码器：zstd WASM、按演员分列差分解码、Hermite 插值与阶跃规则 | M06（WP-D3-10） | `engine/time/{hermite,trackModel}.ts`；`engine/targets` 已导出组件（`TargetsOverlay`、`bodyMesh`）；r6 原型 `scripts/tape.py`（格式参照）；r7 `scripts/e3_tape_interp.py`（插值对拍） |

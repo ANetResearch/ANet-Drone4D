@@ -1794,3 +1794,5 @@ v1.2 第二批（P07、P08）依据 AWR-05 §25；P07 另记：`python/awr/agent
 D3-AC 映射：D3-AC-35 与 D3-AC-58 增加 `tests/d3/phys/test_fast.py`（P07）；D3-AC-34 的测试增加 `tests/d3/phys/test_gz_export_checks.py` 与 `test_gz_lockstep_long.py`（原登记 `tests/d3/gz/test_export_physics.py` 的实际路径为前者）；D3-AC-35 增加 `tests/d3/phys/determinism/test_fault.py`。控制日志落盘（FR-068 `control.bin`）与基于控制日志的复现审计尚未完成（AWR-05 §12.1 WP-D3-20）。
 
 v1.6 第八批（D01，AWR-05 §31）：M24-AC-026 的启动统计量按 ADR-216 明确为"≥ 40 次冷启动加各 Run 实例的 p95，同时报告最差实例"，不采用 3 次中位；`tools/bench/d3/gz_lockstep.py` 的启动条款待改为按 p95 判定（AWR-05 §31.5 F-82）。
+
+v1.6 第九批（K11，AWR-05 §32）：`gz_lockstep.py` 已按 M24-AC-026 的统计量实现（≥ 40 次冷启动加各 Run 实例的 p95 判定，冷启动不足 40 次时不计入；报告样本数、最差实例与分段计时；RTF 取 3 次中位并另报单次最低）；K04 重汇总：启动 p95 3.15 s、最差 3.731 s，RTF 中位 3.604（最低 3.133）；测试 `tests/d3/phys/test_gz_lockstep_long.py`。

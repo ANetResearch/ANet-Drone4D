@@ -290,7 +290,7 @@ v1.1 按 AWR-05 v1.3（ADR-175、ADR-176、ADR-183、ADR-185）重排；v1.0 的
 | 编号 | 需求描述 | 优先级 | 阶段 | 验收要点 | 依据 |
 |---|---|---|---|---|---|
 | M26-FR-080 | Python SDK `drone4d`（`tools/sdk/drone4d/`，独立 wheel，不依赖 `awr`）：`DroneAgent` 基类、`drone4d.bench.make`、容器内运行器 `drone4d-agent run module:Class`（v1.2 实现差异，A03：入口没有 `run` 子命令，写作 `drone4d-agent module:Class`，等价于 `python -m drone4d.serve`；修订本条或补子命令待定，AWR-05 §25.5）、生成类型、JPEG 解码与点云视图工具、PettingZoo 与 Gymnasium 包装、示例、中英文文档；Python 3.11–3.13 | P0 | P0a | M26-AC-030 | §5.5.8 路径 |
-| M26-FR-081 | （v1.1 增补：另交付 3 个基线策略作为排行榜参考行，见 M26-FR-120 至 FR-123）参考策略：r6 的 6 种机队策略（`hover1_plaza`、`hover3_anchors`、`lawn3_cover`、`track3_nocomm`、`track3_share`、`track5_share`）以 L1 运行与 r6 指标同一量级；另提供基于 M10 `lawnmower` 生成器的覆盖扫描与 M20 特权基线（只在 L0 特权运行）。v1.2（A04）：6 个 r6 行名登记为参考策略名（`drone4d.baselines.REFERENCE6`、`BASELINES` 键、`run_spec` 的 `policy.name` 枚举），每行的策略类、机数与 `comm.enabled` 见 §14.3；`REFERENCE6` 另按事件类型保存 `per_event` | P0 | P0a | M26-AC-018 | D3-AC-18；r6 §12.3 |
+| M26-FR-081 | （v1.1 增补：另交付 3 个基线策略作为排行榜参考行，见 M26-FR-120 至 FR-123）参考策略：r6 的 6 种机队策略（`hover1_plaza`、`hover3_anchors`、`lawn3_cover`、`track3_nocomm`、`track3_share`、`track5_share`）以 L1 运行与 r6 指标同一量级；另提供基于 M10 `lawnmower` 生成器的覆盖扫描与 M20 特权基线（只在 L0 特权运行）。v1.2（A04）：6 个 r6 行名登记为参考策略名（`drone4d.baselines.REFERENCE6`、`BASELINES` 键、`run_spec` 的 `policy.name` 枚举），每行的策略类、机数与 `comm.enabled` 见 §14.3；`REFERENCE6` 另按事件类型保存 `per_event`。v1.6（K10，AWR-05 ADR-217 决策 (1)）：`REFERENCE6[*].params` 绑定 r6 观测设置（hover 60 m 注视锚点、lawnmower 70 m、tracker 岗位 60 m、跟踪时 45 m）与 `hfov_deg = 40`，`BASELINES[<r6 行>]` 以 `functools.partial` 绑定该行 `params`；D3-AC-18 的 r6 对照条款按 AWR-05 ADR-218 判定 | P0 | P0a | M26-AC-018 | D3-AC-18；r6 §12.3 |
 | M26-FR-082 | 私有地图助手（SDK 库，在 Agent 进程内运行）：稀疏 8³ 块哈希 log-odds 占据（体素 0.25 m）、可选 TSDF；`integrate(points, per_point_poses)`、`frontiers(min_cluster)`（聚类与可达性过滤）、`export_delta(since)`、`merge(delta)`（log-odds 相加并截断）；一律按逐点位姿积分；CPU 实现为缺省，GPU（Warp）为可选 | P1 | P1 | M26-AC-017 | §5.5.6；F13 |
 | M26-FR-083 | 定位轨道：`localization = estimated`（缺省）时地图助手使用导航解与逐点时刻插值的位姿；`oracle` 时导航解等于真值，只用于开发运行或单列分组；D3-AC-27 的 ≤ 0.2 m 指标在 `oracle` 下验收，`estimated` 下单独报告 | P1 | P1 | M26-AC-017 | §13 第 4 条 |
 | M26-FR-084 | Frontier 协同探索参考策略：基于地图助手与消息交换增量，供 town 协同探索演示（≥ 5 机） | P1 | P2 | M26-AC-018 | D3-AC-52 |
@@ -1730,3 +1730,13 @@ v1.6 第八批（K07，AWR-05 §31）：
 | 基线运行环境 | dmax 上的基线与 SDK 在 `d3-gz` 宿主上以按锁文件重建的共享 pylib-gz 运行（含 `mcap`），不再需要私有 pylib；起飞点注释按实测更正（三维最小距离 16.74–20.72 m，起飞点不移动） | K07 |
 
 D3-AC 映射（第七批）：D3-AC-18 的 r6 EC 对照口径已按 A10 确定（`crop-handoff-001` 含 `cross_C`，计分事件正好是 r6 的 4 类，AWR-05 §24.5 F-02 已关闭），对照结果与条款处置见 AWR-05 §23.5 C-42；D3-AC-17、56、58 的正式运行证据见 [impl/D3-P0a-正式口径记录.md](../impl/D3-P0a-正式口径记录.md)。
+
+v1.6 第九批（K10，AWR-05 §32）：
+
+| 条款 | 修订 | 来源 |
+|---|---|---|
+| run_spec 与 `EnvSpec`（FR-081、§6.2） | L1 标称相机水平视场覆盖：run_spec `fleet[].sensors[sensor_id = eo].overrides.hfov_deg`（[10, 120]，各机须一致）；只用于非排名运行与 r6 参考行，排名运行中的提交镜像与基础基线由 `EnvSpec.from_run_spec` 拒绝；覆盖后型号命名为 `<型号>+hfov<度>`（例如 `d4d_eo1080@1+hfov40`），只改水平视场，分辨率、云台与挂载不变；覆盖随 run_spec 进入 `config_sha256` 与运行哈希；L1 检测、云台、动作守卫、agent_config 内参与 L2 视场随之改变；相机非标称时运行清单写入 `camera` | K10 |
+| SDK 基线（FR-081、FR-120 至 FR-123） | 构造参数：`BaselineAgent(alt_agl_m=)`（机队中心巡航高度，缺省为包络中值，按机分层 8 m 并限制在包络内，新增 `layered_alt()`、`goal_alt()` 钩子）、`StaticGuard(gaze = sweep 或 fixed)`（`fixed` 到位后固定注视候选点，`HoverPlaza` 继承）、`TrackShare(track_alt_agl_m=)`（有跟踪对象时改用跟踪高度，`TrackSolo` 继承）；缺省行为不变 | K10 |
+| `REFERENCE6` | 绑定 r6 观测设置（`params` 与 `hfov_deg = 40`）；`reference_run_spec` 为各机写入相机覆盖（保留其他传感器项）并把 `params` 记入 `policy.params.baseline`，`check_reference_spec` 核对两者；以容器方式运行参考行前须重建 `d3-agent-py`（AWR-05 §32.5 F-109） | K10 |
+
+D3-AC 映射（第九批）：D3-AC-18 的证据增加 `tests/d3/env/test_camera_override.py`、`tests/d3/baselines/test_reference6.py` 与 `tests/d3/bench/test_r6_ec.py`；r6 对照条款按 AWR-05 ADR-218 判定通过（AWR-05 §32.3 第 100 行）。
