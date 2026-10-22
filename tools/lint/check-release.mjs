@@ -7,7 +7,8 @@
 //          files (.ply .las .laz .e57 .pcd) and Potree containers (octree.bin, hierarchy.bin); UrbanScene3D terms forbid
 //          redistribution and World Packages are rebuilt locally (ADR-034)
 //   REL-03 a credential: private-key blocks and common token shapes, and every value of ~/.config/awr/*.env (12 characters or
-//          more) found verbatim in a text file; values are compared in memory and never printed, only the file and the key name
+//          more) found verbatim in a text file; values are compared in memory and never printed, only the file and the key name;
+//          keys matching PUBLIC_KEYS (model ids) name public identifiers and are not compared
 //   REL-04 the deployment admin secret (internal identity passphrase, ADR-123; AWR-04 §15.9.5 item 2): when this machine has a
 //          deployment secret file (~/.config/awr/admin.secret, or the file AWR_ADMIN_SECRET_FILE points to), its first line
 //          (6 characters or more) must not appear verbatim in any text file of the release set; compared in memory, never
@@ -36,7 +37,10 @@ const TOKENS = [
   [/\bglpat-[A-Za-z0-9_-]{20,}\b/, 'GitLab token'],
 ]
 
-/** values of ~/.config/awr/*.env (KEY=VALUE lines, quotes stripped), at least 12 characters; never printed */
+// keys whose values are public identifiers, not credentials: model ids (for example an image model id) are named in
+// provenance records and illustration manifests; a value that also serves another key is still compared under that key
+export const PUBLIC_KEYS = /(^|_)(MODEL|MODELS|MODEL_ID)$/
+/** values of ~/.config/awr/*.env (KEY=VALUE lines, quotes stripped), at least 12 characters, except PUBLIC_KEYS; never printed */
 export function localSecrets(dir = join(homedir(), '.config', 'awr')) {
   const out = []
   if (!existsSync(dir)) return out
@@ -52,7 +56,7 @@ export function localSecrets(dir = join(homedir(), '.config', 'awr')) {
       const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line)
       if (!m) continue
       const v = m[2].replace(/^(['"])(.*)\1$/, '$2')
-      if (v.length >= 12) out.push({ file: n, key: m[1], value: v })
+      if (v.length >= 12 && !PUBLIC_KEYS.test(m[1])) out.push({ file: n, key: m[1], value: v })
     }
   }
   return out

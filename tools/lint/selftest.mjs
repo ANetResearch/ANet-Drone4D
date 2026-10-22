@@ -12,8 +12,11 @@ import { checkSources as brand } from './check-brand.mjs'
 import { checkImports } from './check-deps.mjs'
 import { checkName } from './check-units.mjs'
 import { checkSource as perfFlags } from '../ci/check-perf-flags.mjs'
-import { checkEntry as release, MAX_BYTES, deploySecret } from './check-release.mjs'
+import { checkEntry as release, MAX_BYTES, PUBLIC_KEYS, deploySecret, localSecrets } from './check-release.mjs'
 import { checkVersions } from './check-version.mjs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { readText } from './_common.mjs'
 
 class Collect {
@@ -174,6 +177,19 @@ expect('units bad', [checkName('speed_ms', undefined) !== null, checkName('delay
     release('c.ts', 10, 'const k = "local-value"', local, R)
   })
   expect('release rules', got, ['REL-01', 'REL-02', 'REL-02', 'REL-03', 'REL-03', 'REL-03', 'REL-03'])
+}
+
+// REL-03 public identifiers: model ids in ~/.config/awr/*.env are not credentials (backport of d3-dev e155a21)
+{
+  const dir = mkdtempSync(join(tmpdir(), 'awr-rel03-'))
+  try {
+    const v = 'v' + Math.random().toString(36).slice(2, 12) + 'Q7'
+    writeFileSync(join(dir, 'svc.env'), `SVC_IMAGE_MODEL=public-model-id-001\nSVC_MODEL_ID="public-model-id-002"\nSVC_API_KEY=${v}xxxx\n`)
+    expect('model ids are not secrets', localSecrets(dir).map((s) => s.key), ['SVC_API_KEY'])
+    expect('public key pattern', ['A_MODEL', 'MODEL', 'A_MODELS', 'A_MODEL_ID', 'A_MODEL_KEY', 'MODELKEY'].map((k) => PUBLIC_KEYS.test(k)), [true, true, true, true, false, false])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 // REL-04 (ADR-123): the deployment secret is generated at runtime; a short value is ignored; a missing file gives null
