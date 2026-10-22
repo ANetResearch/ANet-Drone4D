@@ -1,6 +1,6 @@
 import * as React from 'react'
 import type { Target } from '@awr/contracts/types'
-import { getLocale } from '@/app/i18n'
+import { getLocale, useT } from '@/app/i18n'
 import { APPEARANCE_ENABLED, assetFor, assetStatus, subscribeAssets, retryAsset } from '@/app/shell/engineD2'
 import { targetsModel } from '@/app/shell/engineD2'
 import { camera } from '@/viewport/facade'
@@ -11,14 +11,15 @@ import { Field, FieldLabel } from '@/ui/components/ui/field'
 export function AppearanceEditor({ id, target }: { id: string; target: Target }) {
   const selected = target.appearance?.asset_id ?? ''
   const load = React.useSyncExternalStore(subscribeAssets, () => assetStatus(selected))
+  const t = useT()
   if (!APPEARANCE_ENABLED) return null
   const zh = getLocale() === 'zh-CN'
   const current = assetFor(selected)
-  const message = !selected ? (zh ? '尚未选择精细模型' : 'No mesh selected') : {
-    idle: zh ? '等待加载；打开视口后继续' : 'Queued; open the viewport to load',
-    loading: zh ? '正在加载网格与贴图…' : 'Loading mesh and texture…',
-    ready: zh ? '模型已加载 · 跟随仿真位置与朝向' : 'Mesh ready · bound to simulation pose',
-    error: zh ? '模型加载失败，暂显示线框；可重试加载' : 'Asset failed; showing wireframe. You can retry loading.',
+  const message = !selected ? (t('targets.appearanceEditor.no_mesh_selected')) : {
+    idle: t('targets.appearanceEditor.queued_open_the_viewport_to_load'),
+    loading: t('targets.appearanceEditor.loading_mesh_and_texture'),
+    ready: t('targets.appearanceEditor.mesh_ready_bound_to_simulation_pose'),
+    error: t('targets.appearanceEditor.asset_failed_showing_wireframe_you_can_retry'),
   }[load]
   const inspect = (plate = false) => {
     const row = targetsModel.rowOf(id)
@@ -37,14 +38,14 @@ export function AppearanceEditor({ id, target }: { id: string; target: Target })
     }, plate)
   }
   return <Field className="col-span-2" data-target-appearance={selected || 'wireframe'}>
-    <FieldLabel>{zh ? '已应用的模型与观察' : 'Applied model and inspection'}</FieldLabel>
-    <p className="text-hud-sub">{current ? (zh ? current.name_zh : current.name_en) : (zh ? '原生线框' : 'Original wireframe')}</p>
+    <FieldLabel>{t('targets.appearanceEditor.applied_model_and_inspection')}</FieldLabel>
+    <p className="text-hud-sub">{current ? (zh ? current.name_zh : current.name_en) : (t('targets.appearanceEditor.original_wireframe'))}</p>
     <p className="text-hud-sub text-muted-foreground" role="status">{message}</p>
-    {load === 'error' ? <Button size="sm" variant="outline" onClick={() => retryAsset(selected)}>{zh ? '重试加载模型' : 'Retry model download'}</Button> : null}
-    {current ? <p className="text-hud-sub text-muted-foreground">{current.license} · {current.triangles.toLocaleString()} {zh ? '三角面' : 'triangles'}</p> : null}
-    <p className="text-hud-sub text-muted-foreground">{zh ? `持续身份：${id}` : `Persistent identity: ${id}`}</p>
-    <Button size="sm" variant="outline" onClick={() => inspect()}>{zh ? '近看并跟随目标' : 'Inspect and follow target'}</Button>
-    {target.class === 'vehicle' && target.metadata?.plate_text ? <Button size="sm" variant="outline" onClick={() => inspect(true)}>{zh ? '近看前车牌' : 'Inspect front plate'}</Button> : null}
-    <p className="text-hud-sub text-muted-foreground">{zh ? '仅移动观察视角；拖动视口或切换视角退出跟随。目标进入设施后停止跟随。' : 'Overview only. Drag or change camera view to stop; following also stops at facility entry.'}</p>
+    {load === 'error' ? <Button size="sm" variant="outline" onClick={() => retryAsset(selected)}>{t('targets.appearanceEditor.retry_model_download')}</Button> : null}
+    {current ? <p className="text-hud-sub text-muted-foreground">{current.license} · {current.triangles.toLocaleString()} {t('targets.appearanceEditor.triangles')}</p> : null}
+    <p className="text-hud-sub text-muted-foreground">{t('targets.appearanceEditor.persistent_identity', { value1: id })}</p>
+    <Button size="sm" variant="outline" onClick={() => inspect()}>{t('targets.appearanceEditor.inspect_and_follow_target')}</Button>
+    {target.class === 'vehicle' && target.metadata?.plate_text ? <Button size="sm" variant="outline" onClick={() => inspect(true)}>{t('targets.appearanceEditor.inspect_front_plate')}</Button> : null}
+    <p className="text-hud-sub text-muted-foreground">{t('targets.appearanceEditor.overview_only_drag_or_change_camera_view')}</p>
   </Field>
 }

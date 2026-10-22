@@ -59,3 +59,8 @@
 - 原托管 pytest shard 2 缺 D3 协议依赖，改用仓库既有 `requirements.lock` + `requirements-d3.lock` 的独立环境执行，保留测试集合。
 - 上游 12.8 MB `m1geo_full.parquet` 无损改为 4 个按序 Parquet 分片，每片小于 5 MB。35 万行通过 Arrow（含 metadata）和 pandas 完整相等校验，图表加载器兼容单文件及分片。不删除数据、不放宽发布大小规则。
 - 本节的本地检查不替代托管 CI、数据/GPU/性能门禁或维护者契约审查；PR 检查页记录最终托管结果。
+
+- 补齐资产目录的 JSON Schema、生成类型和契约覆盖登记；负例覆盖哈希、尺寸、类别、缓冲区布局、未知字段，另校验唯一 ID、缓冲区跨度和字节数。完整 checkout 上 contracts/georef：531 passed、3 skipped。
+- 所有目标 UI 文案接入统一 i18n，移除被新表单替代的旧 IdentityEditor；i18n/目标前端 39 项通过，完整 lint、类型检查和生产构建通过。
+- 浏览器确认创建车辆、刷新后配置持久化、修改车牌、切换人物模型、犬只能力提示；独立测试会话已回收。API 重启只涉及 sandbox-api；原生活会话继续运行。新 worker 的固定 seed 预览和设施读取均通过，浏览器预览准入成功且原世界时钟继续前进；未调用付费模型。
+- 使用仓库 `.nvmrc` 指定的 Node 22.12.0 在 Linux 完整执行前端 unit：1448 passed、39 skipped。系统默认 Node 25 的先前结果不作为门禁结果；未为此修改产品代码或断言阈值。

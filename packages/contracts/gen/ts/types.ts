@@ -1902,6 +1902,130 @@ export interface Anchors1 {
   }[]
 }
 /**
+ * Optional target asset catalog v1
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AssetsCatalog".
+ */
+export interface AssetsCatalog {
+  format: 'awr.target-assets.v1'
+  /**
+   * @minItems 1
+   */
+  assets: [
+    {
+      id: string
+      class: 'person' | 'vehicle' | 'dog' | 'uav' | 'machine' | 'object'
+      name_zh: string
+      name_en: string
+      license: string
+      source: string
+      source_geometry_sha256: string
+      source_texture_sha256: string
+      geometry_sha256: string
+      texture_sha256: string
+      vertices: number
+      triangles: number
+      poses: number
+      layout: {
+        p: {
+          offset: number
+          count: number
+        }
+        n: {
+          offset: number
+          count: number
+        }
+        uv: {
+          offset: number
+          count: number
+        }
+        c: {
+          offset: number
+          count: number
+        }
+        poses: {
+          offset: number
+          count: number
+        }
+        indices: {
+          offset: number
+          count: number
+        }
+      }
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      dimensions_m: [number, number, number, ...number[]]
+      stride_m: number
+      bytes: number
+      texture_bytes: number
+      wheels?: {
+        sha256: string
+        bytes: number
+        count: number
+        vertices: number
+      }
+    },
+    ...{
+      id: string
+      class: 'person' | 'vehicle' | 'dog' | 'uav' | 'machine' | 'object'
+      name_zh: string
+      name_en: string
+      license: string
+      source: string
+      source_geometry_sha256: string
+      source_texture_sha256: string
+      geometry_sha256: string
+      texture_sha256: string
+      vertices: number
+      triangles: number
+      poses: number
+      layout: {
+        p: {
+          offset: number
+          count: number
+        }
+        n: {
+          offset: number
+          count: number
+        }
+        uv: {
+          offset: number
+          count: number
+        }
+        c: {
+          offset: number
+          count: number
+        }
+        poses: {
+          offset: number
+          count: number
+        }
+        indices: {
+          offset: number
+          count: number
+        }
+      }
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      dimensions_m: [number, number, number, ...number[]]
+      stride_m: number
+      bytes: number
+      texture_bytes: number
+      wheels?: {
+        sha256: string
+        bytes: number
+        count: number
+        vertices: number
+      }
+    }[]
+  ]
+}
+/**
  * awr.bench.result.v1. AWR-18 §7.6 (fleet_ladder, bench_state, bench_cmd). records[].ipc is an optional addition (AWR-03 §5.11 rule 1) for the IPC benchmarks of M11 (tools/bench/ipc): a flat map of snake_case metric names with unit suffixes (AWR-03 §5.4, for example publish_p99_us, read_cpu_core, cmd_rtt_p99_ms, event_gaps, recover_max_ms) to numbers or null, so the M16 harness can aggregate them.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema

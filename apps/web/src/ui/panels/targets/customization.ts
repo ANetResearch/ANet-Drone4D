@@ -20,7 +20,7 @@ export function customizationErrors(cls: Target['class'], value: Customization):
   if (!cleanText(value.role, 48)) errors.push('role')
   if (!cleanText(value.description, 256)) errors.push('description')
   if (cls === 'vehicle') {
-    if (!/^[A-Z0-9一-鿿 -]{0,16}$/.test(value.plate.trim().toUpperCase())) errors.push('plate')
+    if (!/^[A-Z0-9\u4e00-\u9fff -]{0,16}$/.test(value.plate.trim().toUpperCase())) errors.push('plate')
     if (!cleanText(value.region, 32)) errors.push('region')
   }
   return errors

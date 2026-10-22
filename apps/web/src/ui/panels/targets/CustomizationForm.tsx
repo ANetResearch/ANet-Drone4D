@@ -1,6 +1,6 @@
 import * as React from 'react'
 import type { Target } from '@awr/contracts/types'
-import { getLocale } from '@/app/i18n'
+import { getLocale, useT } from '@/app/i18n'
 import { Button } from '@/ui/components/ui/button'
 import { Input } from '@/ui/components/ui/input'
 import { Textarea } from '@/ui/components/ui/textarea'
@@ -13,6 +13,7 @@ export function CustomizationForm({ target, cls, operator, creating = false, sav
   target: Partial<Target>; cls: Target['class']; operator: boolean; creating?: boolean
   save: (patch: Partial<Target>) => Promise<boolean>
 }) {
+  const t = useT()
   const zh = getLocale() === 'zh-CN'
   const prefix = React.useId()
   const [value, setValue] = React.useState(() => customizationOf(target, cls, creating))
@@ -23,8 +24,8 @@ export function CustomizationForm({ target, cls, operator, creating = false, sav
   const errors = customizationErrors(cls, value)
   const entries = customizationAssets(cls)
   const asset = entries.find((a) => a.id === value.assetId)
-  const title = cls === 'person' ? (zh ? '人物外观' : 'Person appearance') : cls === 'vehicle' ? (zh ? '车型与外观' : 'Vehicle model') : cls === 'dog' ? (zh ? '犬只外观' : 'Dog appearance') : (zh ? '目标外观' : 'Appearance')
-  const items = [{ value: '', label: zh ? '原生线框' : 'Original wireframe' }, ...entries.map((a) => ({ value: a.id, label: zh ? a.name_zh : a.name_en }))]
+  const title = cls === 'person' ? (t('targets.customizationForm.person_appearance')) : cls === 'vehicle' ? (t('targets.customizationForm.vehicle_model')) : cls === 'dog' ? (t('targets.customizationForm.dog_appearance')) : (t('targets.customizationForm.appearance'))
+  const items = [{ value: '', label: t('targets.customizationForm.original_wireframe') }, ...entries.map((a) => ({ value: a.id, label: zh ? a.name_zh : a.name_en }))]
   const edit = (key: keyof Customization, text: string) => { setValue((v) => ({ ...v, [key]: text })); setSaved(false) }
   const field = (key: keyof Customization, label: string, limit: number) => <Field>
     <FieldLabel htmlFor={`${prefix}-${key}`}>{label}</FieldLabel>
@@ -38,34 +39,34 @@ export function CustomizationForm({ target, cls, operator, creating = false, sav
     finally { setBusy(false) }
   }
   return <div className="flex min-w-0 flex-col gap-3" data-target-customization={cls}>
-    {field('label', zh ? '目标名称' : 'Target name', 32)}
+    {field('label', t('targets.customizationForm.target_name'), 32)}
     <Field>
       <FieldLabel>{title}</FieldLabel>
       <Select items={items} value={value.assetId} disabled={!operator || busy} onValueChange={(v) => typeof v === 'string' && edit('assetId', v)}>
         <SelectTrigger className="w-full" aria-label={title}><SelectValue /></SelectTrigger>
         <SelectContent>{items.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}</SelectContent>
       </Select>
-      <p className="text-hud-sub text-muted-foreground">{zh ? `可选 ${entries.length} 套精细模型；选择后使用该模型的真实外观。` : `${entries.length} mesh presets; selection uses the model's actual appearance.`}</p>
-      {entries.length === 1 ? <p className="text-hud-sub text-muted-foreground">{zh ? '当前仅有这一套精细资产，尚不支持独立修改品种、毛色或部件。' : 'One mesh is available; separate breed, coat and part editing is not supported.'}</p> : null}
+      <p className="text-hud-sub text-muted-foreground">{t('targets.customizationForm.mesh_presets_selection_uses_the_model_s', { value1: entries.length })}</p>
+      {entries.length === 1 ? <p className="text-hud-sub text-muted-foreground">{t('targets.customizationForm.one_mesh_is_available_separate_breed_coat')}</p> : null}
       {asset ? <p className="text-hud-sub text-muted-foreground">{asset.dimensions_m.map((n) => n.toFixed(2)).join(' × ')} m · {asset.license}</p> : null}
     </Field>
     {cls === 'vehicle' ? <>
-      {field('plate', zh ? '车牌号码' : 'Plate number', 16)}
-      {field('region', zh ? '车牌所属地区' : 'Plate region', 32)}
-      <p className="text-hud-sub text-muted-foreground">{zh ? '车牌会显示在精细车辆的前后牌照上。留空可移除文字；字母自动转为大写。' : 'The plate appears on the mesh front and rear. Empty removes the text; letters are uppercased.'}</p>
+      {field('plate', t('targets.customizationForm.plate_number'), 16)}
+      {field('region', t('targets.customizationForm.plate_region'), 32)}
+      <p className="text-hud-sub text-muted-foreground">{t('targets.customizationForm.the_plate_appears_on_the_mesh_front')}</p>
     </> : null}
-    {field('role', zh ? '角色说明' : 'Role', 48)}
+    {field('role', t('targets.customizationForm.role'), 48)}
     <Field>
-      <FieldLabel htmlFor={`${prefix}-description`}>{zh ? '身份备注' : 'Identity notes'}</FieldLabel>
+      <FieldLabel htmlFor={`${prefix}-description`}>{t('targets.customizationForm.identity_notes')}</FieldLabel>
       <Textarea id={`${prefix}-description`} rows={2} value={value.description} maxLength={256} disabled={!operator || busy} onChange={(e) => edit('description', e.target.value)} />
-      <p className="text-hud-sub text-muted-foreground">{zh ? '备注只保存文字，不会自动改变衣着、车身颜色或行为。' : 'Notes are text only; they do not alter clothing, paint or behavior.'}</p>
+      <p className="text-hud-sub text-muted-foreground">{t('targets.customizationForm.notes_are_text_only_they_do_not')}</p>
     </Field>
-    {target.life || target.activity ? <p className="text-hud-sub text-muted-foreground">{zh ? '当前目标由场景活动驱动。外观替换需通过路线尺寸检查；保存不改变身份或活动进度。' : 'Scene-controlled actor. Replacement must fit the admitted route; saving preserves identity and activity progress.'}</p> : null}
-    {errors.length && (dirty || creating) ? <p role="alert" className="text-hud-sub">{zh ? '请填写目标名称，并检查车牌格式和文本长度。车牌可含大写字母、数字、汉字、空格及连字符。' : 'Enter a target name and check text lengths and plate characters (letters, digits, Chinese characters, spaces and hyphens).'}</p> : null}
+    {target.life || target.activity ? <p className="text-hud-sub text-muted-foreground">{t('targets.customizationForm.scene_controlled_actor_replacement_must_fit_the')}</p> : null}
+    {errors.length && (dirty || creating) ? <p role="alert" className="text-hud-sub">{t('targets.customizationForm.enter_a_target_name_and_check_text')}</p> : null}
     {operator ? <div className="flex flex-wrap gap-2">
-      <Button size="sm" disabled={busy || errors.length > 0 || (!creating && !dirty)} onClick={() => void submit()}>{busy ? (zh ? '保存中…' : 'Saving…') : creating ? (zh ? '下一步：在场景中放置' : 'Next: place in scene') : (zh ? '保存外观与身份' : 'Save appearance and identity')}</Button>
-      {!creating ? <Button size="sm" variant="outline" disabled={busy || !dirty} onClick={() => { setValue(baseline); setSaved(false) }}>{zh ? '撤销未保存修改' : 'Discard changes'}</Button> : null}
+      <Button size="sm" disabled={busy || errors.length > 0 || (!creating && !dirty)} onClick={() => void submit()}>{busy ? (t('targets.customizationForm.saving')) : creating ? (t('targets.customizationForm.next_place_in_scene')) : (t('targets.customizationForm.save_appearance_and_identity'))}</Button>
+      {!creating ? <Button size="sm" variant="outline" disabled={busy || !dirty} onClick={() => { setValue(baseline); setSaved(false) }}>{t('targets.customizationForm.discard_changes')}</Button> : null}
     </div> : null}
-    {saved ? <p role="status">{zh ? '配置已保存' : 'Configuration saved'}</p> : null}
+    {saved ? <p role="status">{t('targets.customizationForm.configuration_saved')}</p> : null}
   </div>
 }

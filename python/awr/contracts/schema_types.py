@@ -67,6 +67,16 @@ __all__ = [
     "AnchorsAnchorsQuality",
     "AnchorsAnchorsSnapDistM",
     "AnchorsSources",
+    "AssetsCatalog",
+    "AssetsCatalogAssets",
+    "AssetsCatalogAssetsLayout",
+    "AssetsCatalogAssetsLayoutC",
+    "AssetsCatalogAssetsLayoutIndices",
+    "AssetsCatalogAssetsLayoutN",
+    "AssetsCatalogAssetsLayoutP",
+    "AssetsCatalogAssetsLayoutPoses",
+    "AssetsCatalogAssetsLayoutUv",
+    "AssetsCatalogAssetsWheels",
     "BenchResult",
     "BenchResultHost",
     "BenchResultRecords",
@@ -1850,6 +1860,66 @@ class AnchorsAnchorsSnapDistM(TypedDict):
 class AnchorsSources(TypedDict):
     name: str
     sha256: str
+
+
+# target/assets.catalog.schema.json# Optional target asset catalog v1
+class AssetsCatalog(TypedDict):
+    format: Literal["awr.target-assets.v1"]
+    assets: list[AssetsCatalogAssets]
+
+
+# target/assets.catalog.schema.json#/properties/assets/items/properties/layout
+class AssetsCatalogAssetsLayout(TypedDict):
+    p: AssetsCatalogAssetsLayoutP
+    n: AssetsCatalogAssetsLayoutN
+    uv: AssetsCatalogAssetsLayoutUv
+    c: AssetsCatalogAssetsLayoutC
+    poses: AssetsCatalogAssetsLayoutPoses
+    indices: AssetsCatalogAssetsLayoutIndices
+
+
+# target/assets.catalog.schema.json#/properties/assets/items/properties/layout/properties/c
+class AssetsCatalogAssetsLayoutC(TypedDict):
+    offset: int
+    count: int
+
+
+# target/assets.catalog.schema.json#/properties/assets/items/properties/layout/properties/indices
+class AssetsCatalogAssetsLayoutIndices(TypedDict):
+    offset: int
+    count: int
+
+
+# target/assets.catalog.schema.json#/properties/assets/items/properties/layout/properties/n
+class AssetsCatalogAssetsLayoutN(TypedDict):
+    offset: int
+    count: int
+
+
+# target/assets.catalog.schema.json#/properties/assets/items/properties/layout/properties/p
+class AssetsCatalogAssetsLayoutP(TypedDict):
+    offset: int
+    count: int
+
+
+# target/assets.catalog.schema.json#/properties/assets/items/properties/layout/properties/poses
+class AssetsCatalogAssetsLayoutPoses(TypedDict):
+    offset: int
+    count: int
+
+
+# target/assets.catalog.schema.json#/properties/assets/items/properties/layout/properties/uv
+class AssetsCatalogAssetsLayoutUv(TypedDict):
+    offset: int
+    count: int
+
+
+# target/assets.catalog.schema.json#/properties/assets/items/properties/wheels
+class AssetsCatalogAssetsWheels(TypedDict):
+    sha256: str
+    bytes: int
+    count: int
+    vertices: int
 
 
 # perf/bench-result.schema.json# awr.bench.result.v1
@@ -11479,6 +11549,30 @@ AgentConfigV1BriefTargets = TypedDict("AgentConfigV1BriefTargets", {
     "label": str,
     "class": str,
     "appearance": AgentConfigV1BriefTargetsAppearance,
+})
+
+
+# target/assets.catalog.schema.json#/properties/assets/items
+AssetsCatalogAssets = TypedDict("AssetsCatalogAssets", {
+    "id": str,
+    "class": Literal["person", "vehicle", "dog", "uav", "machine", "object"],
+    "name_zh": str,
+    "name_en": str,
+    "license": str,
+    "source": str,
+    "source_geometry_sha256": str,
+    "source_texture_sha256": str,
+    "geometry_sha256": str,
+    "texture_sha256": str,
+    "vertices": int,
+    "triangles": int,
+    "poses": int,
+    "layout": AssetsCatalogAssetsLayout,
+    "dimensions_m": list[float],
+    "stride_m": float,
+    "bytes": int,
+    "texture_bytes": int,
+    "wheels": NotRequired[AssetsCatalogAssetsWheels],
 })
 
 
