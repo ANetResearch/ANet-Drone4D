@@ -9,4 +9,6 @@ export {
 } from '@/engine/perception'
 export type { Light, PerceptionSensorFrame, PerceptionTarget, ReqLevel, SensorP } from '@/engine/perception'
 export { CLASS_DEFAULTS, soundPeriodSamples, TARGET_CLASSES, targetsModel } from '@/engine/targets'
-export type { BodyView, TargetCfg, TargetClassName } from '@/engine/targets'
+export type { BodyView, TargetCfg, TargetClassName, TargetDetail } from '@/engine/targets'
+
+export { APPEARANCE_ENABLED, TARGET_ASSETS, assetFor, assetStatus, subscribeAssets, retryAsset } from '@/engine/targets/appearance'

@@ -20,7 +20,7 @@ export interface TargetRow {
   id: string
   label: string
   cls: TargetClass
-  motion: 'static' | 'path' | 'random_walk'
+  motion: 'static' | 'path' | 'random_walk' | 'timeline'
   awareness: Awareness
   best: BestLevel
   captured: boolean
@@ -42,7 +42,7 @@ export function buildRows(items: readonly Pick<TargetItem, 'id' | 'label' | 'cls
   return items.map((x) => {
     const cls = ((TARGET_CLASSES as readonly string[]).includes(x.cls ?? '') ? x.cls : 'object') as TargetClass
     const mm = motionOf(x.id)
-    const motion = mm === 'path' || mm === 'random_walk' ? mm : mm === 'static' ? 'static' : x.moving ? 'path' : 'static'
+    const motion = mm === 'path' || mm === 'random_walk' || mm === 'timeline' ? mm : mm === 'static' ? 'static' : x.moving ? 'path' : 'static'
     return { id: x.id, label: x.label || x.id, cls, motion, awareness: x.aware, best: x.level, captured: x.captured, discovered: x.discovered }
   })
 }

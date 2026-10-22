@@ -1,0 +1,61 @@
+{
+  "design": {
+    "summary": "调整居民01与居民02的日常活动链，使两人前往不同的办公楼、不同的商店后回家，每段停留30-120秒。",
+    "assignments": [
+      {
+        "actor_id": "resident-01",
+        "visits": [
+          {
+            "facility_id": "facility-14",
+            "purpose": "办理行政手续",
+            "dwell_s": 90
+          },
+          {
+            "facility_id": "facility-15",
+            "purpose": "购买日用品",
+            "dwell_s": 45
+          },
+          {
+            "facility_id": "facility-13",
+            "purpose": "回家休息",
+            "dwell_s": 30
+          }
+        ]
+      },
+      {
+        "actor_id": "resident-02",
+        "visits": [
+          {
+            "facility_id": "facility-08",
+            "purpose": "办理对公业务",
+            "dwell_s": 75
+          },
+          {
+            "facility_id": "facility-09",
+            "purpose": "购买食材",
+            "dwell_s": 50
+          },
+          {
+            "facility_id": "facility-01",
+            "purpose": "回家休息",
+            "dwell_s": 15
+          }
+        ]
+      }
+    ]
+  },
+  "provider_usage": {
+    "requested_model": "deepseek-v4-pro",
+    "returned_model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 2871,
+      "completion_tokens": 262,
+      "total_tokens": 3133,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    },
+    "wall_s": 6.514,
+    "output_sha256": "28d236c2626a7d0452a6ea660458d71d14077083a0cac704b9a0814d5883df67"
+  }
+}

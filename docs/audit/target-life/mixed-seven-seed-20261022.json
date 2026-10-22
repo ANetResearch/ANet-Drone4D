@@ -1,0 +1,666 @@
+{
+  "seed": 20261022,
+  "engine_sha256": "ed394c08d18b451f1b16826290b5aa7197d94d3398cd3e06e6c74b17afc8c09e",
+  "network_file_sha256": "a6aff644dec160bc59b20ce53ce1302046654e3785a45ae4e72a43c5c4566427",
+  "vehicle_types": [
+    "sedan",
+    "suv",
+    "hatchback",
+    "van",
+    "pickup",
+    "bus",
+    "truck"
+  ],
+  "audit": {
+    "version": "scene-life-1",
+    "seed": 20261022,
+    "ticks": 15000,
+    "event_sha256": "89e8c231dfa41ee20870d80fa657773471d988eb437f614c7bc9a0773251b95f",
+    "safety_interventions": 0,
+    "population_history": [
+      {
+        "t_s": 60.0,
+        "total": 27,
+        "moving": 17,
+        "visiting": 1,
+        "waiting": 6,
+        "stationary": 3
+      },
+      {
+        "t_s": 120.0,
+        "total": 27,
+        "moving": 16,
+        "visiting": 3,
+        "waiting": 5,
+        "stationary": 3
+      },
+      {
+        "t_s": 180.0,
+        "total": 27,
+        "moving": 16,
+        "visiting": 5,
+        "waiting": 3,
+        "stationary": 3
+      },
+      {
+        "t_s": 240.0,
+        "total": 27,
+        "moving": 14,
+        "visiting": 3,
+        "waiting": 7,
+        "stationary": 3
+      },
+      {
+        "t_s": 300.0,
+        "total": 27,
+        "moving": 16,
+        "visiting": 6,
+        "waiting": 2,
+        "stationary": 3
+      },
+      {
+        "t_s": 360.0,
+        "total": 27,
+        "moving": 16,
+        "visiting": 6,
+        "waiting": 2,
+        "stationary": 3
+      },
+      {
+        "t_s": 420.0,
+        "total": 27,
+        "moving": 15,
+        "visiting": 5,
+        "waiting": 4,
+        "stationary": 3
+      },
+      {
+        "t_s": 480.0,
+        "total": 27,
+        "moving": 15,
+        "visiting": 6,
+        "waiting": 3,
+        "stationary": 3
+      },
+      {
+        "t_s": 540.0,
+        "total": 27,
+        "moving": 22,
+        "visiting": 2,
+        "waiting": 0,
+        "stationary": 3
+      },
+      {
+        "t_s": 600.0,
+        "total": 27,
+        "moving": 13,
+        "visiting": 5,
+        "waiting": 6,
+        "stationary": 3
+      },
+      {
+        "t_s": 660.0,
+        "total": 27,
+        "moving": 11,
+        "visiting": 10,
+        "waiting": 3,
+        "stationary": 3
+      },
+      {
+        "t_s": 720.0,
+        "total": 27,
+        "moving": 15,
+        "visiting": 7,
+        "waiting": 2,
+        "stationary": 3
+      },
+      {
+        "t_s": 780.0,
+        "total": 27,
+        "moving": 11,
+        "visiting": 9,
+        "waiting": 4,
+        "stationary": 3
+      },
+      {
+        "t_s": 840.0,
+        "total": 27,
+        "moving": 11,
+        "visiting": 10,
+        "waiting": 3,
+        "stationary": 3
+      },
+      {
+        "t_s": 900.0,
+        "total": 27,
+        "moving": 13,
+        "visiting": 8,
+        "waiting": 3,
+        "stationary": 3
+      },
+      {
+        "t_s": 960.0,
+        "total": 27,
+        "moving": 13,
+        "visiting": 6,
+        "waiting": 5,
+        "stationary": 3
+      },
+      {
+        "t_s": 1020.0,
+        "total": 27,
+        "moving": 16,
+        "visiting": 6,
+        "waiting": 2,
+        "stationary": 3
+      },
+      {
+        "t_s": 1080.0,
+        "total": 27,
+        "moving": 10,
+        "visiting": 8,
+        "waiting": 6,
+        "stationary": 3
+      },
+      {
+        "t_s": 1140.0,
+        "total": 27,
+        "moving": 15,
+        "visiting": 7,
+        "waiting": 2,
+        "stationary": 3
+      },
+      {
+        "t_s": 1200.0,
+        "total": 27,
+        "moving": 14,
+        "visiting": 7,
+        "waiting": 3,
+        "stationary": 3
+      },
+      {
+        "t_s": 1260.0,
+        "total": 27,
+        "moving": 15,
+        "visiting": 7,
+        "waiting": 2,
+        "stationary": 3
+      },
+      {
+        "t_s": 1320.0,
+        "total": 27,
+        "moving": 14,
+        "visiting": 9,
+        "waiting": 1,
+        "stationary": 3
+      },
+      {
+        "t_s": 1380.0,
+        "total": 27,
+        "moving": 13,
+        "visiting": 8,
+        "waiting": 3,
+        "stationary": 3
+      },
+      {
+        "t_s": 1440.0,
+        "total": 27,
+        "moving": 10,
+        "visiting": 9,
+        "waiting": 5,
+        "stationary": 3
+      },
+      {
+        "t_s": 1500.0,
+        "total": 27,
+        "moving": 15,
+        "visiting": 9,
+        "waiting": 0,
+        "stationary": 3
+      }
+    ],
+    "min_clearance_m": 0.29776190284664616,
+    "min_swept_clearance_m": 0.29716741249776046,
+    "actors": {
+      "dog-01": {
+        "class": "dog",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1146.734,
+        "visits": 2,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 35.2,
+        "reason_seconds": {
+          "align with corridor": 17.3,
+          "moving": 1097.6,
+          "red signal": 131.1,
+          "居家休息": 254.0
+        }
+      },
+      "dog-02": {
+        "class": "dog",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1141.478,
+        "visits": 3,
+        "max_unplanned_wait_s": 10.6,
+        "max_no_progress_s": 48.0,
+        "reason_seconds": {
+          "align with corridor": 19.0,
+          "downstream occupied": 10.6,
+          "moving": 1093.3,
+          "red signal": 77.1,
+          "嗅闻与休息": 27.0,
+          "居家休息": 273.0
+        }
+      },
+      "driver-01": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 2700.557,
+        "visits": 8,
+        "max_unplanned_wait_s": 9.8,
+        "max_no_progress_s": 39.8,
+        "reason_seconds": {
+          "downstream occupied": 3.5,
+          "junction right of way": 6.3,
+          "moving": 698.1,
+          "red signal": 206.9,
+          "yield before conflict": 20.3,
+          "停车办事": 564.9
+        }
+      },
+      "driver-02": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 3125.677,
+        "visits": 6,
+        "max_unplanned_wait_s": 46.3,
+        "max_no_progress_s": 46.3,
+        "reason_seconds": {
+          "junction right of way": 4.9,
+          "moving": 748.8,
+          "red signal": 239.3,
+          "yield before conflict": 51.0,
+          "停车办事": 456.0
+        }
+      },
+      "driver-03": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 2821.115,
+        "visits": 7,
+        "max_unplanned_wait_s": 36.6,
+        "max_no_progress_s": 39.7,
+        "reason_seconds": {
+          "downstream occupied": 6.8,
+          "junction right of way": 17.8,
+          "moving": 722.9,
+          "red signal": 239.3,
+          "yield before conflict": 83.7,
+          "停车办事": 429.5
+        }
+      },
+      "driver-04": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 3281.096,
+        "visits": 6,
+        "max_unplanned_wait_s": 58.1,
+        "max_no_progress_s": 58.1,
+        "reason_seconds": {
+          "downstream occupied": 4.1,
+          "junction right of way": 11.8,
+          "moving": 761.0,
+          "red signal": 324.7,
+          "yield before conflict": 62.4,
+          "停靠装卸/交付": 336.0
+        }
+      },
+      "driver-05": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 3190.086,
+        "visits": 7,
+        "max_unplanned_wait_s": 10.9,
+        "max_no_progress_s": 40.9,
+        "reason_seconds": {
+          "junction right of way": 27.1,
+          "moving": 750.6,
+          "red signal": 251.4,
+          "yield before conflict": 0.9,
+          "停车办事": 470.0
+        }
+      },
+      "driver-06": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 3484.838,
+        "visits": 8,
+        "max_unplanned_wait_s": 18.5,
+        "max_no_progress_s": 31.8,
+        "reason_seconds": {
+          "downstream occupied": 5.7,
+          "junction right of way": 26.8,
+          "moving": 839.0,
+          "red signal": 337.5,
+          "yield before conflict": 35.0,
+          "站点上下客": 256.0
+        }
+      },
+      "driver-07": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 2860.24,
+        "visits": 7,
+        "max_unplanned_wait_s": 14.7,
+        "max_no_progress_s": 41.8,
+        "reason_seconds": {
+          "downstream occupied": 1.9,
+          "junction right of way": 36.1,
+          "moving": 699.3,
+          "red signal": 330.4,
+          "yield before conflict": 24.3,
+          "停靠装卸/交付": 408.0
+        }
+      },
+      "machine-01": {
+        "class": "machine",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 584.235,
+        "visits": 23,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 1.2,
+        "reason_seconds": {
+          "align with corridor": 1.2,
+          "moving": 545.6,
+          "装卸与设备检查": 953.2
+        }
+      },
+      "object-01": {
+        "class": "object",
+        "stationary": true,
+        "updates": 15000,
+        "distance_m": 0.0,
+        "visits": 0,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 0.0,
+        "reason_seconds": {
+          "固定安装的公共设施": 1500.0
+        }
+      },
+      "object-02": {
+        "class": "object",
+        "stationary": true,
+        "updates": 15000,
+        "distance_m": 0.0,
+        "visits": 0,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 0.0,
+        "reason_seconds": {
+          "固定安装的公共设施": 1500.0
+        }
+      },
+      "object-03": {
+        "class": "object",
+        "stationary": true,
+        "updates": 15000,
+        "distance_m": 0.0,
+        "visits": 0,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 0.0,
+        "reason_seconds": {
+          "固定安装的公共设施": 1500.0
+        }
+      },
+      "resident-01": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1162.252,
+        "visits": 3,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 40.4,
+        "reason_seconds": {
+          "align with corridor": 19.7,
+          "moving": 989.3,
+          "red signal": 102.0,
+          "居家休息": 142.0,
+          "工作/办事": 185.0,
+          "购物": 62.0
+        }
+      },
+      "resident-02": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1079.047,
+        "visits": 3,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 42.5,
+        "reason_seconds": {
+          "align with corridor": 20.0,
+          "moving": 876.9,
+          "red signal": 157.1,
+          "居家休息": 162.0,
+          "工作/办事": 197.0,
+          "购物": 87.0
+        }
+      },
+      "resident-03": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1192.398,
+        "visits": 2,
+        "max_unplanned_wait_s": 5.8,
+        "max_no_progress_s": 43.5,
+        "reason_seconds": {
+          "align with corridor": 18.8,
+          "downstream occupied": 2.6,
+          "junction right of way": 5.8,
+          "moving": 929.2,
+          "red signal": 231.7,
+          "yield before conflict": 0.9,
+          "工作/办事": 206.0,
+          "购物": 105.0
+        }
+      },
+      "resident-04": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1344.924,
+        "visits": 2,
+        "max_unplanned_wait_s": 38.9,
+        "max_no_progress_s": 44.2,
+        "reason_seconds": {
+          "align with corridor": 21.1,
+          "downstream occupied": 38.9,
+          "moving": 992.5,
+          "red signal": 331.4,
+          "工作/办事": 4.1,
+          "购物": 112.0
+        }
+      },
+      "resident-05": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1021.669,
+        "visits": 4,
+        "max_unplanned_wait_s": 19.1,
+        "max_no_progress_s": 45.0,
+        "reason_seconds": {
+          "align with corridor": 22.4,
+          "downstream occupied": 4.3,
+          "entrance occupied": 19.1,
+          "junction right of way": 2.5,
+          "moving": 729.0,
+          "red signal": 141.3,
+          "yield before conflict": 0.1,
+          "居家休息": 171.0,
+          "工作/办事": 299.3,
+          "购物": 111.0
+        }
+      },
+      "resident-06": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1166.147,
+        "visits": 3,
+        "max_unplanned_wait_s": 14.9,
+        "max_no_progress_s": 41.5,
+        "reason_seconds": {
+          "align with corridor": 22.7,
+          "junction right of way": 14.9,
+          "moving": 996.6,
+          "red signal": 95.7,
+          "居家休息": 121.0,
+          "工作/办事": 181.1,
+          "购物": 68.0
+        }
+      },
+      "resident-07": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1057.84,
+        "visits": 4,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 40.1,
+        "reason_seconds": {
+          "align with corridor": 21.8,
+          "moving": 852.9,
+          "red signal": 128.6,
+          "居家休息": 138.0,
+          "工作/办事": 293.7,
+          "购物": 65.0
+        }
+      },
+      "resident-08": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1143.159,
+        "visits": 2,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 42.3,
+        "reason_seconds": {
+          "align with corridor": 20.9,
+          "moving": 884.5,
+          "red signal": 269.6,
+          "工作/办事": 227.0,
+          "购物": 98.0
+        }
+      },
+      "resident-09": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1207.56,
+        "visits": 3,
+        "max_unplanned_wait_s": 4.1,
+        "max_no_progress_s": 43.0,
+        "reason_seconds": {
+          "align with corridor": 19.7,
+          "junction right of way": 4.1,
+          "moving": 899.0,
+          "red signal": 188.3,
+          "居家休息": 70.9,
+          "工作/办事": 234.0,
+          "购物": 84.0
+        }
+      },
+      "resident-10": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1121.727,
+        "visits": 3,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 47.3,
+        "reason_seconds": {
+          "align with corridor": 21.1,
+          "moving": 791.3,
+          "red signal": 173.6,
+          "居家休息": 171.0,
+          "工作/办事": 237.0,
+          "购物": 106.0
+        }
+      },
+      "resident-11": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 958.983,
+        "visits": 4,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 40.4,
+        "reason_seconds": {
+          "align with corridor": 20.1,
+          "moving": 825.7,
+          "red signal": 114.5,
+          "居家休息": 133.0,
+          "工作/办事": 317.6,
+          "购物": 89.1
+        }
+      },
+      "resident-12": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1138.539,
+        "visits": 3,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 41.4,
+        "reason_seconds": {
+          "align with corridor": 17.7,
+          "moving": 920.8,
+          "red signal": 169.1,
+          "居家休息": 114.4,
+          "工作/办事": 215.0,
+          "购物": 63.0
+        }
+      },
+      "uav-01": {
+        "class": "uav",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 3393.987,
+        "visits": 9,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 1.2,
+        "reason_seconds": {
+          "align with corridor": 1.2,
+          "moving": 1324.8,
+          "悬停巡检": 174.0
+        }
+      },
+      "uav-02": {
+        "class": "uav",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 3612.293,
+        "visits": 8,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 0.0,
+        "reason_seconds": {
+          "moving": 1394.0,
+          "悬停巡检": 106.0
+        }
+      }
+    },
+    "admitted": true,
+    "failures": []
+  }
+}

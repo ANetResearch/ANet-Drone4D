@@ -3082,6 +3082,32 @@ export interface Target {
     f_mhz?: number
     bw_mhz?: number
   } | null
+  /**
+   * Optional immutable visual asset binding; null restores the original wireframe. Asset must match target class and the deployment catalog.
+   */
+  appearance?: {
+    asset_id: string
+    geometry_sha256: string
+  } | null
+  /**
+   * Experimental optional binding to a content-addressed scene-verified pedestrian activity plan. Requires timeline/exogenous.
+   */
+  activity?: {
+    plan_id: string
+    sha256: string
+  } | null
+  metadata?: {
+    role?: string
+    description?: string
+    plate_text?: string
+    plate_region?: string
+    vehicle_type?: 'sedan' | 'hatchback' | 'suv' | 'van' | 'pickup' | 'bus' | 'truck'
+  } | null
+  life?: {
+    recipe_id: string
+    actor_id: string
+    sha256: string
+  } | null
 }
 /**
  * awr.target.sound.v1 (periodic sound source). Periodic source per 1/3-octave band (AWR-04 §7.5; M18-M19 PRD §6.5.2): on phase full level, off phase -40 dB. Out of range: 541.
@@ -12035,7 +12061,7 @@ export interface TargetDetail {
     lw_dba_now?: number
   } | null
   motion?: {
-    mode?: 'static' | 'path' | 'random_walk'
+    mode?: 'static' | 'path' | 'random_walk' | 'timeline'
     speed_mps?: number
     vz_mps?: number
     path_idx?: number | null
@@ -12057,6 +12083,23 @@ export interface TargetDetail {
   } | null
   cfg_rev: number
   cfg?: Target
+  activity?: {
+    phase: 'walk' | 'orient' | 'rest' | 'wait' | 'complete' | 'departing' | 'travel' | 'arrived' | 'visit' | 'stationary'
+    destination: string
+    remaining_s: number
+    seed: number
+    walked_m: number
+    duration_s: number
+    visits: number
+    /**
+     * @maxItems 128
+     */
+    route_enu_m: [number, number, number, ...number[]][]
+    reason?: string
+    hidden?: boolean
+    updates?: number
+    max_unplanned_wait_s?: number
+  }
 }
 /**
  * SB-40

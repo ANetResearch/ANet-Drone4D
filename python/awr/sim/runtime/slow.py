@@ -220,6 +220,13 @@ class SlowTasks:
             self.ptr = head
         return ran
 
+    def reset_sim_clock(self) -> None:
+        """A new simulation epoch must not wait for the previous epoch's timestamp."""
+        for task in self.tasks:
+            if task.period_sim_ns:
+                task.last_sim = -(1 << 62)
+                task.due_since = -1
+
     @staticmethod
     def _due(t: SlowTask, now_wall: int, now_sim: int) -> bool:
         if t.period_wall_ns and now_wall - t.last_wall < t.period_wall_ns:

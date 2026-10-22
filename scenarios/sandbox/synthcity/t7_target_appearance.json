@@ -1,0 +1,207 @@
+{
+  "schema": "awr.sandbox.template.v1",
+  "template_id": "t7_target_appearance",
+  "world_id": "synthcity",
+  "name_zh": "T7 目标外观验收（实验）",
+  "summary_zh": "2 种行人、4 种车型；点击目标后选择「近看目标」。此模板仅验证外观，行人仍使用原游走逻辑。",
+  "first_feedback_zh": "打开识别物清单，检查模型和姿态",
+  "recommended": false,
+  "calendar_default": {
+    "start_local": "10:00",
+    "tz": "Asia/Shanghai"
+  },
+  "acoustic_bg": "urban",
+  "env": {
+    "preset": "clear",
+    "overrides": {}
+  },
+  "seed": 15,
+  "camera": {
+    "center_enu_m": [
+      225,
+      -329.7,
+      0
+    ],
+    "range_m": 900,
+    "pitch_deg": -40,
+    "yaw_deg": 0
+  },
+  "anchors_ref": "scenarios/sandbox/anchors/synthcity.json",
+  "vehicles": [],
+  "nests": [],
+  "tasks": [],
+  "targets": [
+    {
+      "id": "person-01",
+      "label": "休闲男装 · 短发",
+      "class": "person",
+      "pos": [
+        225,
+        -329.7,
+        null
+      ],
+      "yaw_rad": 0.028,
+      "motion": {
+        "mode": "static"
+      },
+      "sensitivity": [],
+      "appearance": {
+        "asset_id": "human-1",
+        "geometry_sha256": "d4491b0e461d3ced14faa19808af5a3af47e6bcbaa3dacba5572dcfed9a5efc2"
+      },
+      "size_m": {
+        "l": 0.34131795167922974,
+        "w": 0.6017975807189941,
+        "h": 1.7666809558868408
+      },
+      "reaction_policy": "exogenous"
+    },
+    {
+      "id": "person-02",
+      "label": "休闲女装 · 短发",
+      "class": "person",
+      "pos": [
+        259,
+        -475.7,
+        null
+      ],
+      "motion": {
+        "mode": "random_walk",
+        "region": [
+          [
+            229,
+            -505.7
+          ],
+          [
+            289,
+            -505.7
+          ],
+          [
+            289,
+            -445.7
+          ],
+          [
+            229,
+            -445.7
+          ]
+        ],
+        "speed_mps": 1.0
+      },
+      "sensitivity": [],
+      "appearance": {
+        "asset_id": "human-3",
+        "geometry_sha256": "1637558e0c555a5c54da8f87b93f3d3d360f2a67d2ab93e412e8fa0ccefee051"
+      },
+      "size_m": {
+        "l": 0.27933183312416077,
+        "w": 0.4678380489349365,
+        "h": 1.499302625656128
+      },
+      "reaction_policy": "exogenous"
+    },
+    {
+      "id": "vehicle-01",
+      "class": "vehicle",
+      "label": "四门轿车",
+      "pos": [
+        233,
+        -329.7,
+        null
+      ],
+      "yaw_rad": 0,
+      "motion": {
+        "mode": "static"
+      },
+      "size_m": {
+        "l": 4.840295469388366,
+        "w": 2.1809000074863434,
+        "h": 1.5451387965586036
+      },
+      "appearance": {
+        "asset_id": "sedan",
+        "geometry_sha256": "4e69845d455e40a12fc565d3822f84b1fd48eb4532269b0aea3af76a719efb65"
+      },
+      "sensitivity": [],
+      "sound": null,
+      "reaction_policy": "exogenous"
+    },
+    {
+      "id": "vehicle-02",
+      "class": "vehicle",
+      "label": "SUV",
+      "pos": [
+        243,
+        -329.7,
+        null
+      ],
+      "yaw_rad": 0,
+      "motion": {
+        "mode": "static"
+      },
+      "size_m": {
+        "l": 4.760385429486632,
+        "w": 2.2357398569583893,
+        "h": 1.8251303711440414
+      },
+      "appearance": {
+        "asset_id": "suv",
+        "geometry_sha256": "34869825288a07a28d7d2563e5cac1bd749148dc7cf7c0df8b33397c10e214d5"
+      },
+      "sensitivity": [],
+      "sound": null,
+      "reaction_policy": "exogenous"
+    },
+    {
+      "id": "vehicle-03",
+      "class": "vehicle",
+      "label": "高顶厢式货车",
+      "pos": [
+        253,
+        -329.7,
+        null
+      ],
+      "yaw_rad": 0,
+      "motion": {
+        "mode": "static"
+      },
+      "size_m": {
+        "l": 5.703000031411648,
+        "w": 2.624000072479248,
+        "h": 2.650429493516472
+      },
+      "appearance": {
+        "asset_id": "van",
+        "geometry_sha256": "e006e91b819d87e56ccfbcb33e932c84b7771f9489c4d061e19a12eee1cb35bb"
+      },
+      "sensitivity": [],
+      "sound": null,
+      "reaction_policy": "exogenous"
+    },
+    {
+      "id": "vehicle-04",
+      "class": "vehicle",
+      "label": "双排皮卡",
+      "pos": [
+        263,
+        -329.7,
+        null
+      ],
+      "yaw_rad": 0,
+      "motion": {
+        "mode": "static"
+      },
+      "size_m": {
+        "l": 5.690920549444854,
+        "w": 2.320120006799698,
+        "h": 1.9601240353658795
+      },
+      "appearance": {
+        "asset_id": "pickup",
+        "geometry_sha256": "cfbf0525be674ef0640f1e61c4716319b660b10d7c87a1ab5e874b6c5b51f1b2"
+      },
+      "sensitivity": [],
+      "sound": null,
+      "reaction_policy": "exogenous"
+    }
+  ]
+}

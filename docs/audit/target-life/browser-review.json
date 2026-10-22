@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-22",
+  "access": "enabled; confirmed using native IAB",
+  "session": "sb-wc7eyw64ti",
+  "template": "t13_all_vehicle_types",
+  "seed": 81,
+  "screenshots": [
+    "view-bus-follow.png",
+    "view-person-follow.png",
+    "view-dog-follow.png",
+    "view-forklift.png",
+    "view-uav-follow.png",
+    "view-bench-visible.png"
+  ],
+  "native_observations": {
+    "bus": {
+      "id": "driver-06",
+      "plate": "皖A 75542",
+      "from": {
+        "phase": "visit",
+        "reason": "站点上下客",
+        "distance_m": 5930,
+        "visits": 12,
+        "updates": 23704
+      },
+      "to": {
+        "phase": "travel",
+        "distance_m": 5965,
+        "visits": 12,
+        "updates": 24050
+      },
+      "mesh_visible_while_following": true
+    },
+    "resident": {
+      "id": "resident-01",
+      "from": {
+        "phase": "visit",
+        "destination": "办公楼 14",
+        "hidden": true,
+        "distance_m": 1568,
+        "visits": 7,
+        "updates": 24445
+      },
+      "to": {
+        "phase": "travel",
+        "destination": "商店 15",
+        "hidden": false,
+        "distance_m": 1569,
+        "visits": 7,
+        "updates": 26193
+      },
+      "same_identity_after_exit": true
+    },
+    "forklift": {
+      "id": "machine-01",
+      "visit_reason": "装卸与设备检查",
+      "then": "travel",
+      "distance_increased_from_m": 1046,
+      "distance_increased_to_m": 1063
+    },
+    "uav": {
+      "id": "uav-01",
+      "from": "travel",
+      "to": "visit",
+      "reason": "悬停巡检"
+    },
+    "dog": {
+      "id": "dog-01",
+      "distance_increased_from_m": 1750,
+      "distance_increased_to_m": 1814
+    }
+  },
+  "phone_hidden_tab_reload": "passed without manually selecting viewport",
+  "camera_inspection": "native body follow observed; plate inspection follows position, does not rotate with turning vehicle; manual input/another view releases follow, hidden facility target releases follow",
+  "plate_pixels": {
+    "status": "passed_native_render",
+    "target_id": "driver-04",
+    "initial": "皖A 99165",
+    "edited": "皖A 99166",
+    "restored": "皖A 99165",
+    "identity_preserved": true,
+    "evidence": [
+      "view-plate-readable.png",
+      "view-plate-edited.png",
+      "view-plate-restored.png"
+    ],
+    "camera": "overview inspector, physically rendered front plate; simulation kept running"
+  },
+  "limitations": [
+    "Screenshots demonstrate representative visual states, not full trajectory collision certification.",
+    "Human and dog gait is source-mesh deformation, not motion capture or foot IK.",
+    "The world background is original synthcity point-cloud rendering."
+  ]
+}

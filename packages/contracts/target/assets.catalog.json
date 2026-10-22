@@ -1,0 +1,1407 @@
+{
+  "format": "awr.target-assets.v1",
+  "assets": [
+    {
+      "id": "human-1",
+      "class": "person",
+      "name_zh": "休闲男装 · 短发",
+      "name_en": "Casual man · short hair",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "dbc92649b01737136ac844bd31a58de25c73da71ce18f52534cf9951daa90f62",
+      "source_texture_sha256": "3fc4d14dcf7409dec12ae5cb8ab1e817139ad58e4f651e1b035d08c63910f09b",
+      "geometry_sha256": "d4491b0e461d3ced14faa19808af5a3af47e6bcbaa3dacba5572dcfed9a5efc2",
+      "texture_sha256": "3fc4d14dcf7409dec12ae5cb8ab1e817139ad58e4f651e1b035d08c63910f09b",
+      "vertices": 118056,
+      "triangles": 39352,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 354168
+        },
+        "n": {
+          "offset": 1416672,
+          "count": 354168
+        },
+        "uv": {
+          "offset": 2833344,
+          "count": 236112
+        },
+        "c": {
+          "offset": 3777792,
+          "count": 354168
+        },
+        "poses": {
+          "offset": 5194464,
+          "count": 2833344
+        },
+        "indices": {
+          "offset": 16527840,
+          "count": 118056
+        }
+      },
+      "dimensions_m": [
+        0.34131795167922974,
+        0.6017975807189941,
+        1.7666809558868408
+      ],
+      "stride_m": 1.35,
+      "bytes": 17000064,
+      "texture_bytes": 6254070
+    },
+    {
+      "id": "human-3",
+      "class": "person",
+      "name_zh": "休闲女装 · 短发",
+      "name_en": "Casual woman · short hair",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "86596c30b2c4d7121afbcadea20c8d09f304d419c07eb4cd2b7cd76682db30e3",
+      "source_texture_sha256": "0d70ce976a30e8ad869d82081a942b1d1c7c0f5b1627ec0dec68bd2fd8e0d345",
+      "geometry_sha256": "1637558e0c555a5c54da8f87b93f3d3d360f2a67d2ab93e412e8fa0ccefee051",
+      "texture_sha256": "0d70ce976a30e8ad869d82081a942b1d1c7c0f5b1627ec0dec68bd2fd8e0d345",
+      "vertices": 80070,
+      "triangles": 26690,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 240210
+        },
+        "n": {
+          "offset": 960840,
+          "count": 240210
+        },
+        "uv": {
+          "offset": 1921680,
+          "count": 160140
+        },
+        "c": {
+          "offset": 2562240,
+          "count": 240210
+        },
+        "poses": {
+          "offset": 3523080,
+          "count": 1921680
+        },
+        "indices": {
+          "offset": 11209800,
+          "count": 80070
+        }
+      },
+      "dimensions_m": [
+        0.27933183312416077,
+        0.4678380489349365,
+        1.499302625656128
+      ],
+      "stride_m": 1.35,
+      "bytes": 11530080,
+      "texture_bytes": 6035326
+    },
+    {
+      "id": "sedan",
+      "class": "vehicle",
+      "name_zh": "四门轿车",
+      "name_en": "Four-door sedan",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/graphite-four-door-sedan-eed96d12",
+      "source_geometry_sha256": "1978c9f07d5857009affad896930aa72d983990ca315f5a744130dd0bca04822",
+      "source_texture_sha256": "b04bc6bc1ff63519dbcb0c24439ea6d205a9a06fbe059c640e12082ab6222c63",
+      "geometry_sha256": "4e69845d455e40a12fc565d3822f84b1fd48eb4532269b0aea3af76a719efb65",
+      "texture_sha256": "b04bc6bc1ff63519dbcb0c24439ea6d205a9a06fbe059c640e12082ab6222c63",
+      "vertices": 133970,
+      "triangles": 132082,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 401910
+        },
+        "n": {
+          "offset": 1607640,
+          "count": 401910
+        },
+        "uv": {
+          "offset": 3215280,
+          "count": 267940
+        },
+        "c": {
+          "offset": 4287040,
+          "count": 401910
+        },
+        "poses": {
+          "offset": 5894680,
+          "count": 0
+        },
+        "indices": {
+          "offset": 5894680,
+          "count": 396246
+        }
+      },
+      "dimensions_m": [
+        4.840295469388366,
+        2.1809000074863434,
+        1.5451387965586036
+      ],
+      "stride_m": 0,
+      "bytes": 7479664,
+      "texture_bytes": 100038,
+      "wheels": {
+        "sha256": "c11e4f743b82afb2f9fd5bef7a73c5ec6c3afec2ae32fbfda04347240f472fb2",
+        "bytes": 535944,
+        "count": 4,
+        "vertices": 133970
+      }
+    },
+    {
+      "id": "suv",
+      "class": "vehicle",
+      "name_zh": "SUV",
+      "name_en": "SUV",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/sage-five-door-crossover-suv-1db314ad",
+      "source_geometry_sha256": "8efee7b9de6679f414a0ea27d264f8ce75e3fbecd7a16f443b0c1632ed12ca10",
+      "source_texture_sha256": "8eb29c3613462947c5ecddc6790e4b906df2487e1d318948f36616017c494e84",
+      "geometry_sha256": "34869825288a07a28d7d2563e5cac1bd749148dc7cf7c0df8b33397c10e214d5",
+      "texture_sha256": "8eb29c3613462947c5ecddc6790e4b906df2487e1d318948f36616017c494e84",
+      "vertices": 133377,
+      "triangles": 132132,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 400131
+        },
+        "n": {
+          "offset": 1600524,
+          "count": 400131
+        },
+        "uv": {
+          "offset": 3201048,
+          "count": 266754
+        },
+        "c": {
+          "offset": 4268064,
+          "count": 400131
+        },
+        "poses": {
+          "offset": 5868588,
+          "count": 0
+        },
+        "indices": {
+          "offset": 5868588,
+          "count": 396396
+        }
+      },
+      "dimensions_m": [
+        4.760385429486632,
+        2.2357398569583893,
+        1.8251303711440414
+      ],
+      "stride_m": 0,
+      "bytes": 7454172,
+      "texture_bytes": 100076,
+      "wheels": {
+        "sha256": "1f50feb1822641fdee3e07bf0a7a9e68ff16f0d4895f9598bbd859b11fa92057",
+        "bytes": 533572,
+        "count": 4,
+        "vertices": 133377
+      }
+    },
+    {
+      "id": "van",
+      "class": "vehicle",
+      "name_zh": "高顶厢式货车",
+      "name_en": "Cargo van",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/high-roof-cargo-panel-van-c4d5145f",
+      "source_geometry_sha256": "b98420d47b8f57ea752765d9ca2d6dc98de1d74bf21555b44e56c4ca25b98260",
+      "source_texture_sha256": "f497eb3ff13dbb2ea16cebc1ec837edfd92587d8603cc86bad56b7a30f976739",
+      "geometry_sha256": "e006e91b819d87e56ccfbcb33e932c84b7771f9489c4d061e19a12eee1cb35bb",
+      "texture_sha256": "f497eb3ff13dbb2ea16cebc1ec837edfd92587d8603cc86bad56b7a30f976739",
+      "vertices": 146288,
+      "triangles": 135896,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 438864
+        },
+        "n": {
+          "offset": 1755456,
+          "count": 438864
+        },
+        "uv": {
+          "offset": 3510912,
+          "count": 292576
+        },
+        "c": {
+          "offset": 4681216,
+          "count": 438864
+        },
+        "poses": {
+          "offset": 6436672,
+          "count": 0
+        },
+        "indices": {
+          "offset": 6436672,
+          "count": 407688
+        }
+      },
+      "dimensions_m": [
+        5.703000031411648,
+        2.624000072479248,
+        2.650429493516472
+      ],
+      "stride_m": 0,
+      "bytes": 8067424,
+      "texture_bytes": 100039,
+      "wheels": {
+        "sha256": "70cfca10ea9495b07a4c9901b6e85cec97de4ebb69c0e13821b46263689b9048",
+        "bytes": 585216,
+        "count": 4,
+        "vertices": 146288
+      }
+    },
+    {
+      "id": "pickup",
+      "class": "vehicle",
+      "name_zh": "双排皮卡",
+      "name_en": "Crew-cab pickup",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/crew-cab-pickup-with-open-bed-4f02e0cc",
+      "source_geometry_sha256": "334f024131814901835c3e6e8fd5310fa40676b06178a9bcdaf03afacd1871aa",
+      "source_texture_sha256": "c30db1ab7764ff384f75942354659b98f6b4f689f53652e3eff4a06569c00a6b",
+      "geometry_sha256": "cfbf0525be674ef0640f1e61c4716319b660b10d7c87a1ab5e874b6c5b51f1b2",
+      "texture_sha256": "c30db1ab7764ff384f75942354659b98f6b4f689f53652e3eff4a06569c00a6b",
+      "vertices": 147920,
+      "triangles": 145816,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 443760
+        },
+        "n": {
+          "offset": 1775040,
+          "count": 443760
+        },
+        "uv": {
+          "offset": 3550080,
+          "count": 295840
+        },
+        "c": {
+          "offset": 4733440,
+          "count": 443760
+        },
+        "poses": {
+          "offset": 6508480,
+          "count": 0
+        },
+        "indices": {
+          "offset": 6508480,
+          "count": 437448
+        }
+      },
+      "dimensions_m": [
+        5.690920549444854,
+        2.320120006799698,
+        1.9601240353658795
+      ],
+      "stride_m": 0,
+      "bytes": 8258272,
+      "texture_bytes": 100039,
+      "wheels": {
+        "sha256": "00a625d7fea9997b6824ba5a2a0b6178981b7b1861943b16b8196aa4ea62d85f",
+        "bytes": 591744,
+        "count": 4,
+        "vertices": 147920
+      }
+    },
+    {
+      "id": "human-2",
+      "class": "person",
+      "name_zh": "居民外观 02",
+      "name_en": "Resident appearance 02",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "3e7121e64c7d54e3582f009e2c35fbdd5303646de1ea392b2f5c663f44e734f1",
+      "source_texture_sha256": "e1ee9964757d3373c7e07e0d22a495966868d3a90d96a1265e4129a9cf81a626",
+      "geometry_sha256": "3fb381e8cdf7637f8bb3be081aebc2ea2676e803c45ab4098c854b4fbc06efd3",
+      "texture_sha256": "e1ee9964757d3373c7e07e0d22a495966868d3a90d96a1265e4129a9cf81a626",
+      "vertices": 79920,
+      "triangles": 26640,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 239760
+        },
+        "n": {
+          "offset": 959040,
+          "count": 239760
+        },
+        "uv": {
+          "offset": 1918080,
+          "count": 159840
+        },
+        "c": {
+          "offset": 2557440,
+          "count": 239760
+        },
+        "poses": {
+          "offset": 3516480,
+          "count": 1918080
+        },
+        "indices": {
+          "offset": 11188800,
+          "count": 79920
+        }
+      },
+      "dimensions_m": [
+        0.35303887724876404,
+        0.6192468404769897,
+        1.834559679031372
+      ],
+      "stride_m": 1.35,
+      "bytes": 11508480,
+      "texture_bytes": 5984217
+    },
+    {
+      "id": "human-4",
+      "class": "person",
+      "name_zh": "居民外观 04",
+      "name_en": "Resident appearance 04",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "d87a74ffb00621fb3e9498054aae6e7193166dc82051d5308768768b946473c4",
+      "source_texture_sha256": "8af81eeb11b2d836e98cb49666d4053b06d404ac3a4eed79cb124669d00a893c",
+      "geometry_sha256": "7ee830cfa304e0afc375bca34e95648f9412341c1a5f6229ae769018f9b3565c",
+      "texture_sha256": "8af81eeb11b2d836e98cb49666d4053b06d404ac3a4eed79cb124669d00a893c",
+      "vertices": 95424,
+      "triangles": 31812,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 286272
+        },
+        "n": {
+          "offset": 1145088,
+          "count": 286272
+        },
+        "uv": {
+          "offset": 2290176,
+          "count": 190848
+        },
+        "c": {
+          "offset": 3053568,
+          "count": 286272
+        },
+        "poses": {
+          "offset": 4198656,
+          "count": 2290176
+        },
+        "indices": {
+          "offset": 13359360,
+          "count": 95436
+        }
+      },
+      "dimensions_m": [
+        0.30363062024116516,
+        0.5019052028656006,
+        1.6126034259796143
+      ],
+      "stride_m": 1.35,
+      "bytes": 13741104,
+      "texture_bytes": 6567986
+    },
+    {
+      "id": "human-5",
+      "class": "person",
+      "name_zh": "居民外观 05",
+      "name_en": "Resident appearance 05",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "84a312c4e4bcc4f9ec6c7dca4850a49aeb9e155e7e07230da55ce537cf067c68",
+      "source_texture_sha256": "b1ace2032f219912e3263f389258607b8a7a8cede437a2dab3d5d8c857392273",
+      "geometry_sha256": "53cf9866bcd9b1a0b0c131afb2378957ca302905312c3d946dbd722672a7ee7a",
+      "texture_sha256": "b1ace2032f219912e3263f389258607b8a7a8cede437a2dab3d5d8c857392273",
+      "vertices": 75654,
+      "triangles": 25218,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 226962
+        },
+        "n": {
+          "offset": 907848,
+          "count": 226962
+        },
+        "uv": {
+          "offset": 1815696,
+          "count": 151308
+        },
+        "c": {
+          "offset": 2420928,
+          "count": 226962
+        },
+        "poses": {
+          "offset": 3328776,
+          "count": 1815696
+        },
+        "indices": {
+          "offset": 10591560,
+          "count": 75654
+        }
+      },
+      "dimensions_m": [
+        0.33972030878067017,
+        0.6011413931846619,
+        1.756656527519226
+      ],
+      "stride_m": 1.35,
+      "bytes": 10894176,
+      "texture_bytes": 5990722
+    },
+    {
+      "id": "human-6",
+      "class": "person",
+      "name_zh": "居民外观 06",
+      "name_en": "Resident appearance 06",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "c61bab1b19a59ebc3e66582c74989ef16a7754b55040239f84094351d052b11c",
+      "source_texture_sha256": "0863b1a1e0ed555efc1a4c10472779d079ecbfcd647e1de2301f4de5fbbbaf9a",
+      "geometry_sha256": "0c8ff16565f5fdcf291ba8f278ba7acac859f39abc098dda4e3f87f922812a20",
+      "texture_sha256": "0863b1a1e0ed555efc1a4c10472779d079ecbfcd647e1de2301f4de5fbbbaf9a",
+      "vertices": 117054,
+      "triangles": 39018,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 351162
+        },
+        "n": {
+          "offset": 1404648,
+          "count": 351162
+        },
+        "uv": {
+          "offset": 2809296,
+          "count": 234108
+        },
+        "c": {
+          "offset": 3745728,
+          "count": 351162
+        },
+        "poses": {
+          "offset": 5150376,
+          "count": 2809296
+        },
+        "indices": {
+          "offset": 16387560,
+          "count": 117054
+        }
+      },
+      "dimensions_m": [
+        0.3540637493133545,
+        0.6198362112045288,
+        1.834559679031372
+      ],
+      "stride_m": 1.35,
+      "bytes": 16855776,
+      "texture_bytes": 5926002
+    },
+    {
+      "id": "human-7",
+      "class": "person",
+      "name_zh": "居民外观 07",
+      "name_en": "Resident appearance 07",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "7e443922738ee45d1e35dcb55d4b9b05fa1295a366c42b1e9c62c15e8ecdd193",
+      "source_texture_sha256": "e87d8ef1717f7c893537e3307cbbc29bc75c9ac368049b3485fc3375de10368a",
+      "geometry_sha256": "f977eb932fc28a3e196f65588cb90ebffd1cd461cd60dce511ca582ed0f85924",
+      "texture_sha256": "e87d8ef1717f7c893537e3307cbbc29bc75c9ac368049b3485fc3375de10368a",
+      "vertices": 94146,
+      "triangles": 31382,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 282438
+        },
+        "n": {
+          "offset": 1129752,
+          "count": 282438
+        },
+        "uv": {
+          "offset": 2259504,
+          "count": 188292
+        },
+        "c": {
+          "offset": 3012672,
+          "count": 282438
+        },
+        "poses": {
+          "offset": 4142424,
+          "count": 2259504
+        },
+        "indices": {
+          "offset": 13180440,
+          "count": 94146
+        }
+      },
+      "dimensions_m": [
+        0.28317925333976746,
+        0.4678380489349365,
+        1.5068318843841553
+      ],
+      "stride_m": 1.35,
+      "bytes": 13557024,
+      "texture_bytes": 6621370
+    },
+    {
+      "id": "human-8",
+      "class": "person",
+      "name_zh": "居民外观 08",
+      "name_en": "Resident appearance 08",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "f1bd9efe4df87b3f603ae6021bfa167fe2f4989ca347036be1437b8a4974abff",
+      "source_texture_sha256": "7cbfd4762a65cb22aaae4c9c31bf8d9ff52b8e6e85eef9efdffef24f85fc1692",
+      "geometry_sha256": "7ae01a1ac7a1ebd5f23f001c475d26992ff42aec35ced385908c603bf46a347b",
+      "texture_sha256": "7cbfd4762a65cb22aaae4c9c31bf8d9ff52b8e6e85eef9efdffef24f85fc1692",
+      "vertices": 86616,
+      "triangles": 28876,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 259848
+        },
+        "n": {
+          "offset": 1039392,
+          "count": 259848
+        },
+        "uv": {
+          "offset": 2078784,
+          "count": 173232
+        },
+        "c": {
+          "offset": 2771712,
+          "count": 259848
+        },
+        "poses": {
+          "offset": 3811104,
+          "count": 2078784
+        },
+        "indices": {
+          "offset": 12126240,
+          "count": 86628
+        }
+      },
+      "dimensions_m": [
+        0.3027184307575226,
+        0.5019052028656006,
+        1.6126034259796143
+      ],
+      "stride_m": 1.35,
+      "bytes": 12472752,
+      "texture_bytes": 6285580
+    },
+    {
+      "id": "human-9",
+      "class": "person",
+      "name_zh": "居民外观 09",
+      "name_en": "Resident appearance 09",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "bbf25e551dac53e84618494297a14d14538b5ee7de43a1e4f0bc7ea39f91a781",
+      "source_texture_sha256": "e6b8321f5ddf327aa1dd2cf05d30d1c9debcf29b4d20e9e4fa918da6b55ff3bb",
+      "geometry_sha256": "bfd29fbfd0e0603eb11ad2c1407432a3c1f687179fe9d4af8029df681d653a7c",
+      "texture_sha256": "e6b8321f5ddf327aa1dd2cf05d30d1c9debcf29b4d20e9e4fa918da6b55ff3bb",
+      "vertices": 112788,
+      "triangles": 37596,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 338364
+        },
+        "n": {
+          "offset": 1353456,
+          "count": 338364
+        },
+        "uv": {
+          "offset": 2706912,
+          "count": 225576
+        },
+        "c": {
+          "offset": 3609216,
+          "count": 338364
+        },
+        "poses": {
+          "offset": 4962672,
+          "count": 2706912
+        },
+        "indices": {
+          "offset": 15790320,
+          "count": 112788
+        }
+      },
+      "dimensions_m": [
+        0.3540637493133545,
+        0.6198362112045288,
+        1.8250895738601685
+      ],
+      "stride_m": 1.35,
+      "bytes": 16241472,
+      "texture_bytes": 5769553
+    },
+    {
+      "id": "human-10",
+      "class": "person",
+      "name_zh": "居民外观 10",
+      "name_en": "Resident appearance 10",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "4bd78da45c155bb748625ff082e07dea5aa81945cf8ac59f91e93c859282d074",
+      "source_texture_sha256": "630f5126f948d2e5d7c421641d8f6ea318c7328a987ced00d62d4501c1954ecc",
+      "geometry_sha256": "92c97101d0fb1dadee6d0231fa266aa51e66c41fd57402a54ec1d181b7b5f8be",
+      "texture_sha256": "630f5126f948d2e5d7c421641d8f6ea318c7328a987ced00d62d4501c1954ecc",
+      "vertices": 80922,
+      "triangles": 26974,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 242766
+        },
+        "n": {
+          "offset": 971064,
+          "count": 242766
+        },
+        "uv": {
+          "offset": 1942128,
+          "count": 161844
+        },
+        "c": {
+          "offset": 2589504,
+          "count": 242766
+        },
+        "poses": {
+          "offset": 3560568,
+          "count": 1942128
+        },
+        "indices": {
+          "offset": 11329080,
+          "count": 80922
+        }
+      },
+      "dimensions_m": [
+        0.33972030878067017,
+        0.6011413931846619,
+        1.7666809558868408
+      ],
+      "stride_m": 1.35,
+      "bytes": 11652768,
+      "texture_bytes": 6309091
+    },
+    {
+      "id": "human-11",
+      "class": "person",
+      "name_zh": "居民外观 11",
+      "name_en": "Resident appearance 11",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "12917f9f9ad23e23464103871f58b475ba0fbf39208ede3ac73cfe482f91c668",
+      "source_texture_sha256": "d1df4ae6e5622b43e8ab0168a98cd32694288883afc3f022640ea4b54fa24d1f",
+      "geometry_sha256": "5fbd8b78cec0f662ed8de7d92b789ad78b9552dc2ee62fcd47256a5f40a2e289",
+      "texture_sha256": "d1df4ae6e5622b43e8ab0168a98cd32694288883afc3f022640ea4b54fa24d1f",
+      "vertices": 84324,
+      "triangles": 28112,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 252972
+        },
+        "n": {
+          "offset": 1011888,
+          "count": 252972
+        },
+        "uv": {
+          "offset": 2023776,
+          "count": 168648
+        },
+        "c": {
+          "offset": 2698368,
+          "count": 252972
+        },
+        "poses": {
+          "offset": 3710256,
+          "count": 2023776
+        },
+        "indices": {
+          "offset": 11805360,
+          "count": 84336
+        }
+      },
+      "dimensions_m": [
+        0.29904142022132874,
+        0.5019052028656006,
+        1.6193996667861938
+      ],
+      "stride_m": 1.35,
+      "bytes": 12142704,
+      "texture_bytes": 6376505
+    },
+    {
+      "id": "human-12",
+      "class": "person",
+      "name_zh": "居民外观 12",
+      "name_en": "Resident appearance 12",
+      "license": "CC0-1.0",
+      "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+      "source_geometry_sha256": "1e231bb616bce772fc33b4e159e75c2e3b3f7f736f4bcd6e1c8ccdd5c0773f3d",
+      "source_texture_sha256": "19b2a20a39afce79ad6c0a39f0b04a8ac442bd05a62d53870fada500447bffbc",
+      "geometry_sha256": "adfebf910b3391dc47bd5a28fce034706958df44cba4cc65de10c979988415dc",
+      "texture_sha256": "19b2a20a39afce79ad6c0a39f0b04a8ac442bd05a62d53870fada500447bffbc",
+      "vertices": 95436,
+      "triangles": 31812,
+      "poses": 8,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 286308
+        },
+        "n": {
+          "offset": 1145232,
+          "count": 286308
+        },
+        "uv": {
+          "offset": 2290464,
+          "count": 190872
+        },
+        "c": {
+          "offset": 3053952,
+          "count": 286308
+        },
+        "poses": {
+          "offset": 4199184,
+          "count": 2290464
+        },
+        "indices": {
+          "offset": 13361040,
+          "count": 95436
+        }
+      },
+      "dimensions_m": [
+        0.28317925333976746,
+        0.4678380489349365,
+        1.5004502534866333
+      ],
+      "stride_m": 1.35,
+      "bytes": 13742784,
+      "texture_bytes": 6382121
+    },
+    {
+      "id": "hatchback",
+      "class": "vehicle",
+      "name_zh": "五门掀背车",
+      "name_en": "Five-door hatchback",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/blue-five-door-compact-hatchback-5b95b2a0",
+      "source_geometry_sha256": "4f1eeb99c8cba919cefcbf5f832ccac4bae85d04ce51565454323704ed988695",
+      "source_texture_sha256": "4096d74f4ab2b730463c95528513496dd74167af143d2a2a25dbb2f2dc8ca55a",
+      "geometry_sha256": "55b884178e8e9c8be319648c69beb6ae3d369f04536a545d765def4a3eb53484",
+      "texture_sha256": "4096d74f4ab2b730463c95528513496dd74167af143d2a2a25dbb2f2dc8ca55a",
+      "vertices": 133347,
+      "triangles": 130902,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 400041
+        },
+        "n": {
+          "offset": 1600164,
+          "count": 400041
+        },
+        "uv": {
+          "offset": 3200328,
+          "count": 266694
+        },
+        "c": {
+          "offset": 4267104,
+          "count": 400041
+        },
+        "poses": {
+          "offset": 5867268,
+          "count": 0
+        },
+        "indices": {
+          "offset": 5867268,
+          "count": 392706
+        }
+      },
+      "dimensions_m": [
+        4.264859830960631,
+        2.1169200241565704,
+        1.5851422569248825
+      ],
+      "stride_m": 0,
+      "bytes": 7438092,
+      "texture_bytes": 100085,
+      "wheels": {
+        "sha256": "8b46c521111dcbab1b8ed89a468e9516817e264e3fc0da1236674c0e64b5bf58",
+        "bytes": 533452,
+        "count": 4,
+        "vertices": 133347
+      }
+    },
+    {
+      "id": "bus",
+      "class": "vehicle",
+      "name_zh": "城市公交车",
+      "name_en": "City bus",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/12-m-low-floor-city-bus-8e3c7229",
+      "source_geometry_sha256": "3d79e1d92217eb8c3e170fc17d7b50558f192e89ed5797fa6367b6c14b48d6d1",
+      "source_texture_sha256": "eabecfd3511747818a01628685bbd1fabdd8d6b5321e830789ba2a28a5fce5e0",
+      "geometry_sha256": "c7d15f1dd14414404745c19d6224cfb10ba728684e52cab0441173e6760dc088",
+      "texture_sha256": "eabecfd3511747818a01628685bbd1fabdd8d6b5321e830789ba2a28a5fce5e0",
+      "vertices": 165901,
+      "triangles": 179088,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 497703
+        },
+        "n": {
+          "offset": 1990812,
+          "count": 497703
+        },
+        "uv": {
+          "offset": 3981624,
+          "count": 331802
+        },
+        "c": {
+          "offset": 5308832,
+          "count": 497703
+        },
+        "poses": {
+          "offset": 7299644,
+          "count": 0
+        },
+        "indices": {
+          "offset": 7299644,
+          "count": 537264
+        }
+      },
+      "dimensions_m": [
+        12.197999954223633,
+        3.0840001106262207,
+        3.427000107243657
+      ],
+      "stride_m": 0,
+      "bytes": 9448700,
+      "texture_bytes": 100044
+    },
+    {
+      "id": "truck",
+      "class": "vehicle",
+      "name_zh": "厢式卡车",
+      "name_en": "Box truck",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/7-5-t-class-box-truck-with-roll-up-door-12baea66",
+      "source_geometry_sha256": "cb4bfb5b7e478ad8f93cb8b14ba88ccb21ce2f42fa308e9a18b70560612a4cd6",
+      "source_texture_sha256": "4804695d1719405374dd32db3b5c593533dc39b58250acd2fade9d0e5a6d1395",
+      "geometry_sha256": "b5169073c7a8d8c343dd26b531b97631b6f9790ddf731813b249a53a54d9dcaa",
+      "texture_sha256": "4804695d1719405374dd32db3b5c593533dc39b58250acd2fade9d0e5a6d1395",
+      "vertices": 157945,
+      "triangles": 157848,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 473835
+        },
+        "n": {
+          "offset": 1895340,
+          "count": 473835
+        },
+        "uv": {
+          "offset": 3790680,
+          "count": 315890
+        },
+        "c": {
+          "offset": 5054240,
+          "count": 473835
+        },
+        "poses": {
+          "offset": 6949580,
+          "count": 0
+        },
+        "indices": {
+          "offset": 6949580,
+          "count": 473544
+        }
+      },
+      "dimensions_m": [
+        7.389999866485596,
+        2.7339999675750732,
+        3.306999952532351
+      ],
+      "stride_m": 0,
+      "bytes": 8843756,
+      "texture_bytes": 100038
+    },
+    {
+      "id": "bench",
+      "class": "object",
+      "name_zh": "公园长椅",
+      "name_en": "Park bench",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/avenue-slatted-park-bench-bde5a75b",
+      "source_geometry_sha256": "ec688292823f0d4e4ce0717b2a78914e9bdc0efeb9252b1ad67a9aa50634ebaa",
+      "source_texture_sha256": "a6c2d4bd2b4352b65eebc17361f218f8c9c1a6fa76e36048841bff98da7af02b",
+      "geometry_sha256": "eaba95030f6f40ae53db4f7ff5c4f901daa7ac99e4400c5e649a83a718520d17",
+      "texture_sha256": "a6c2d4bd2b4352b65eebc17361f218f8c9c1a6fa76e36048841bff98da7af02b",
+      "vertices": 2662,
+      "triangles": 3292,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 7986
+        },
+        "n": {
+          "offset": 31944,
+          "count": 7986
+        },
+        "uv": {
+          "offset": 63888,
+          "count": 5324
+        },
+        "c": {
+          "offset": 85184,
+          "count": 7986
+        },
+        "poses": {
+          "offset": 117128,
+          "count": 0
+        },
+        "indices": {
+          "offset": 117128,
+          "count": 9876
+        }
+      },
+      "dimensions_m": [
+        1.5700000524520874,
+        0.6861013211051152,
+        0.9298210556301194
+      ],
+      "stride_m": 0,
+      "bytes": 156632,
+      "texture_bytes": 545421
+    },
+    {
+      "id": "litter-bin",
+      "class": "object",
+      "name_zh": "垃圾桶",
+      "name_en": "Litter bin",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/slatted-park-litter-bin-6334976f",
+      "source_geometry_sha256": "006aafaac18789f9306d596c6d9cd21a97e38b7b88a233431ee9922c5ae91372",
+      "source_texture_sha256": "67a67175ddb1bb316703658e4ead35be90cd5e32a97049d55d40ff6167417ed3",
+      "geometry_sha256": "bace60486dd8df91f6074eba9bed8addc71448819f16297921f31b3d8a3ffacd",
+      "texture_sha256": "67a67175ddb1bb316703658e4ead35be90cd5e32a97049d55d40ff6167417ed3",
+      "vertices": 12506,
+      "triangles": 11880,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 37518
+        },
+        "n": {
+          "offset": 150072,
+          "count": 37518
+        },
+        "uv": {
+          "offset": 300144,
+          "count": 25012
+        },
+        "c": {
+          "offset": 400192,
+          "count": 37518
+        },
+        "poses": {
+          "offset": 550264,
+          "count": 0
+        },
+        "indices": {
+          "offset": 550264,
+          "count": 35640
+        }
+      },
+      "dimensions_m": [
+        0.5799999833106995,
+        0.5799999833106995,
+        0.8199999835342169
+      ],
+      "stride_m": 0,
+      "bytes": 692824,
+      "texture_bytes": 826255
+    },
+    {
+      "id": "hydrant",
+      "class": "object",
+      "name_zh": "消防栓",
+      "name_en": "Fire hydrant",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/fire-hydrant-6f53bb5d",
+      "source_geometry_sha256": "153afbd9e96d075f2de1b5a3e059aae0b4db4faf2156abdb8aa967b4dc8c160e",
+      "source_texture_sha256": "b169089d49009fe5cd3fc39677c45e0305d397127174df28addd871bb4f5d33f",
+      "geometry_sha256": "784b095061d244113b613b5554cebf48d8e3f3bb10ee8731b5cf663e9dfe3c1e",
+      "texture_sha256": "b169089d49009fe5cd3fc39677c45e0305d397127174df28addd871bb4f5d33f",
+      "vertices": 26091,
+      "triangles": 43158,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 78273
+        },
+        "n": {
+          "offset": 313092,
+          "count": 78273
+        },
+        "uv": {
+          "offset": 626184,
+          "count": 52182
+        },
+        "c": {
+          "offset": 834912,
+          "count": 78273
+        },
+        "poses": {
+          "offset": 1148004,
+          "count": 0
+        },
+        "indices": {
+          "offset": 1148004,
+          "count": 129474
+        }
+      },
+      "dimensions_m": [
+        0.2746235430240631,
+        0.31774356961250305,
+        0.7994560238003032
+      ],
+      "stride_m": 0,
+      "bytes": 1665900,
+      "texture_bytes": 1473014
+    },
+    {
+      "id": "bollard",
+      "class": "object",
+      "name_zh": "隔离柱",
+      "name_en": "Bollard",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/steel-security-bollard-5e948999",
+      "source_geometry_sha256": "135a492f148a2ee6a49e752ee27c1931c1820a2861dcb1dff362d2efabe1d577",
+      "source_texture_sha256": "e8a0244505844302df4c97da9230f56e5134dae315a710c21b20ea618f7007dc",
+      "geometry_sha256": "bde586a41fd265dd61bb1cb57b22c21862d8bbb31daf43bd26c9318d95e6f6b8",
+      "texture_sha256": "e8a0244505844302df4c97da9230f56e5134dae315a710c21b20ea618f7007dc",
+      "vertices": 2179,
+      "triangles": 3380,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 6537
+        },
+        "n": {
+          "offset": 26148,
+          "count": 6537
+        },
+        "uv": {
+          "offset": 52296,
+          "count": 4358
+        },
+        "c": {
+          "offset": 69728,
+          "count": 6537
+        },
+        "poses": {
+          "offset": 95876,
+          "count": 0
+        },
+        "indices": {
+          "offset": 95876,
+          "count": 10140
+        }
+      },
+      "dimensions_m": [
+        0.2899999916553485,
+        0.2899999916553485,
+        0.9000000096857548
+      ],
+      "stride_m": 0,
+      "bytes": 136436,
+      "texture_bytes": 36384
+    },
+    {
+      "id": "bicycle-rack",
+      "class": "object",
+      "name_zh": "自行车架",
+      "name_en": "Bicycle rack",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/three-loop-bicycle-rack-3a1b8cc5",
+      "source_geometry_sha256": "99ffd119daad85d9d2a5bb0200a65f521623b367a711d1080330ff48c20f2c4a",
+      "source_texture_sha256": "e9a8f8bdb0849c7c9c67059c26fa7b00762a8d7af9ac7df14965183bbbe903a4",
+      "geometry_sha256": "8e6a392b64a2f932c9a5e4133aa4e5c12d528a914b5084d2b690fcbdb91f3ac4",
+      "texture_sha256": "e9a8f8bdb0849c7c9c67059c26fa7b00762a8d7af9ac7df14965183bbbe903a4",
+      "vertices": 3972,
+      "triangles": 3516,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 11916
+        },
+        "n": {
+          "offset": 47664,
+          "count": 11916
+        },
+        "uv": {
+          "offset": 95328,
+          "count": 7944
+        },
+        "c": {
+          "offset": 127104,
+          "count": 11916
+        },
+        "poses": {
+          "offset": 174768,
+          "count": 0
+        },
+        "indices": {
+          "offset": 174768,
+          "count": 10548
+        }
+      },
+      "dimensions_m": [
+        1.7999999523162842,
+        0.7599999830126762,
+        0.8659992106258869
+      ],
+      "stride_m": 0,
+      "bytes": 216960,
+      "texture_bytes": 11814
+    },
+    {
+      "id": "parked-bicycle",
+      "class": "object",
+      "name_zh": "停放自行车",
+      "name_en": "Parked bicycle",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/city-bicycle-58a2a324",
+      "source_geometry_sha256": "b7bf45a15c828885b2cd8184c2619f5591e61df8241abe9c879ec4f1df67421c",
+      "source_texture_sha256": "19cdae8a4f86d7f4a03dbda50bc21faab93879af8e576411252b096e6bac8ed9",
+      "geometry_sha256": "659522618b8d3962fe9e49494beb600da39d096c7cba1ac74c333b2376a1af73",
+      "texture_sha256": "19cdae8a4f86d7f4a03dbda50bc21faab93879af8e576411252b096e6bac8ed9",
+      "vertices": 10405,
+      "triangles": 11784,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 31215
+        },
+        "n": {
+          "offset": 124860,
+          "count": 31215
+        },
+        "uv": {
+          "offset": 249720,
+          "count": 20810
+        },
+        "c": {
+          "offset": 332960,
+          "count": 31215
+        },
+        "poses": {
+          "offset": 457820,
+          "count": 0
+        },
+        "indices": {
+          "offset": 457820,
+          "count": 35352
+        }
+      },
+      "dimensions_m": [
+        0.5800998399572268,
+        1.78000009059906,
+        1.0759726079492486
+      ],
+      "stride_m": 0,
+      "bytes": 599228,
+      "texture_bytes": 29544
+    },
+    {
+      "id": "dog-small",
+      "class": "dog",
+      "name_zh": "小型犬",
+      "name_en": "Small dog",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/small-dog-standing-ce18ca9c",
+      "source_geometry_sha256": "16532034a9947d21f525b084a89195339e383cc1ca793e0a4390484120289aee",
+      "source_texture_sha256": "16532034a9947d21f525b084a89195339e383cc1ca793e0a4390484120289aee",
+      "geometry_sha256": "64867115b364531c63c686d40031613a6d2a3ab01468cd60b797e9800c30d887",
+      "texture_sha256": "0e5a6c9b6610486c43c1a721f2e9bec38a4055bfea467c1c97432fa95e07ff4c",
+      "vertices": 21453,
+      "triangles": 35272,
+      "poses": 16,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 64359
+        },
+        "n": {
+          "offset": 257436,
+          "count": 64359
+        },
+        "uv": {
+          "offset": 514872,
+          "count": 42906
+        },
+        "c": {
+          "offset": 686496,
+          "count": 64359
+        },
+        "poses": {
+          "offset": 943932,
+          "count": 1029744
+        },
+        "indices": {
+          "offset": 5062908,
+          "count": 105816
+        }
+      },
+      "dimensions_m": [
+        0.51172572549361,
+        0.11991918736271412,
+        0.3400000020520615
+      ],
+      "stride_m": 0.24,
+      "bytes": 5486172,
+      "texture_bytes": 36653
+    },
+    {
+      "id": "forklift",
+      "class": "machine",
+      "name_zh": "电动叉车",
+      "name_en": "Electric forklift",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/electric-counterbalance-forklift-7acc0547",
+      "source_geometry_sha256": "e6faa144b0479cd422e8ea6dfc9795468384ae17bd45db58b67c2b2ba657ebaf",
+      "source_texture_sha256": "e6faa144b0479cd422e8ea6dfc9795468384ae17bd45db58b67c2b2ba657ebaf",
+      "geometry_sha256": "8c2a172510ff94dd78203556da275d5893db3f328e3e3fe77d741169779e6592",
+      "texture_sha256": "563148b6a10eee7269b371f0e950a17001ffb5ed32da4a90c71e0e463b1538e5",
+      "vertices": 19788,
+      "triangles": 18460,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 59364
+        },
+        "n": {
+          "offset": 237456,
+          "count": 59364
+        },
+        "uv": {
+          "offset": 474912,
+          "count": 39576
+        },
+        "c": {
+          "offset": 633216,
+          "count": 59364
+        },
+        "poses": {
+          "offset": 870672,
+          "count": 0
+        },
+        "indices": {
+          "offset": 870672,
+          "count": 55380
+        }
+      },
+      "dimensions_m": [
+        3.350000001490116,
+        1.2194001078605652,
+        2.305000066757202
+      ],
+      "stride_m": 0.0,
+      "bytes": 1092192,
+      "texture_bytes": 26550
+    },
+    {
+      "id": "quadcopter",
+      "class": "uav",
+      "name_zh": "四旋翼无人机",
+      "name_en": "Quadcopter",
+      "license": "CC0-1.0",
+      "source": "https://www.innerscene.com/tools/library/3d-parts/quadcopter-with-flight-electronics-a25968c1",
+      "source_geometry_sha256": "0d38b6f44eef969fe17f0c8a54d6747b7a0efb8a3b2e9ab875221d182a6dfb12",
+      "source_texture_sha256": "0d38b6f44eef969fe17f0c8a54d6747b7a0efb8a3b2e9ab875221d182a6dfb12",
+      "geometry_sha256": "6132ae6270999369e04a0361ecb3f1b08c6d908d40ecb827fa59d19635c85a04",
+      "texture_sha256": "a45f5981d625c3c8235ce69ccf1abe7317388a0968b299e6e28afcc255070850",
+      "vertices": 7236,
+      "triangles": 5036,
+      "poses": 0,
+      "layout": {
+        "p": {
+          "offset": 0,
+          "count": 21708
+        },
+        "n": {
+          "offset": 86832,
+          "count": 21708
+        },
+        "uv": {
+          "offset": 173664,
+          "count": 14472
+        },
+        "c": {
+          "offset": 231552,
+          "count": 21708
+        },
+        "poses": {
+          "offset": 318384,
+          "count": 0
+        },
+        "indices": {
+          "offset": 318384,
+          "count": 15108
+        }
+      },
+      "dimensions_m": [
+        0.5696718990802765,
+        0.6844411492347717,
+        0.31599999871104956
+      ],
+      "stride_m": 0.0,
+      "bytes": 378816,
+      "texture_bytes": 18889
+    }
+  ]
+}

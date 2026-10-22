@@ -495,6 +495,113 @@
         }
       ],
       "description": "P2: schema only"
+    },
+    "appearance": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "description": "Optional immutable visual asset binding; null restores the original wireframe. Asset must match target class and the deployment catalog.",
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+        },
+        "geometry_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "asset_id",
+        "geometry_sha256"
+      ]
+    },
+    "activity": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Experimental optional binding to a content-addressed scene-verified pedestrian activity plan. Requires timeline/exogenous.",
+      "additionalProperties": false,
+      "required": [
+        "plan_id",
+        "sha256"
+      ],
+      "properties": {
+        "plan_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "metadata": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "maxLength": 48
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "plate_text": {
+          "type": "string",
+          "maxLength": 16,
+          "pattern": "^[A-Z0-9一-鿿 -]*$"
+        },
+        "plate_region": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "vehicle_type": {
+          "enum": [
+            "sedan",
+            "hatchback",
+            "suv",
+            "van",
+            "pickup",
+            "bus",
+            "truck"
+          ]
+        }
+      }
+    },
+    "life": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "recipe_id",
+        "sha256",
+        "actor_id"
+      ],
+      "properties": {
+        "recipe_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
     }
   },
   "required": [

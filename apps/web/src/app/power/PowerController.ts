@@ -117,7 +117,7 @@ function applyThresholds(): void {
 function syncContext(): void {
   const role = roleNow()
   const internal = surfaceStore.getState().internal
-  machine.ctx = { role, busy: busyNow(role), internal, keepRunning: powerStore.getState().keepRunning }
+  machine.ctx = { role, busy: busyNow(role), internal, keepRunning: powerStore.getState().keepRunning, continuous: role === 'sandbox' && import.meta.env.VITE_AWR_LIFE_CONTINUOUS === '1' }
   if (powerStore.getState().role !== role) set({ role })
 }
 

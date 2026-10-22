@@ -861,9 +861,12 @@ __all__ = [
     "TapeV1World",
     "TapeV1WorldNavmeshSha256",
     "Target",
+    "TargetActivity",
+    "TargetAppearance",
     "TargetCreateRequest",
     "TargetCreated",
     "TargetDetail",
+    "TargetDetailActivity",
     "TargetDetailBehaviorOneOf0",
     "TargetDetailCaptureOneOf0",
     "TargetDetailDwellOneOf0",
@@ -872,7 +875,9 @@ __all__ = [
     "TargetDetailMotion",
     "TargetDetailSensitivity",
     "TargetDetailSoundOneOf0",
+    "TargetLife",
     "TargetList",
+    "TargetMetadata",
     "TargetMotion",
     "TargetQuant",
     "TargetQuantPairs",
@@ -8878,10 +8883,38 @@ class TapeV1WorldNavmeshSha256(TypedDict):
     vehicle: NotRequired[str]
 
 
+# target/target.schema.json#/properties/activity
+class TargetActivity(TypedDict):
+    plan_id: str
+    sha256: str
+
+
+# target/target.schema.json#/properties/appearance
+class TargetAppearance(TypedDict):
+    asset_id: str
+    geometry_sha256: str
+
+
 # target/target.schema.json#/$defs/created
 class TargetCreated(TypedDict):
     id: WorldCommonSlug
     cfg: NotRequired[Target]
+
+
+# rt/payloads/target_detail.schema.json#/properties/activity
+class TargetDetailActivity(TypedDict):
+    phase: Literal["walk", "orient", "rest", "wait", "complete", "departing", "travel", "arrived", "visit", "stationary"]
+    destination: str
+    remaining_s: float
+    seed: int
+    walked_m: float
+    duration_s: float
+    visits: int
+    route_enu_m: list[list[float]]
+    reason: NotRequired[str]
+    hidden: NotRequired[bool]
+    updates: NotRequired[int]
+    max_unplanned_wait_s: NotRequired[float]
 
 
 # rt/payloads/target_detail.schema.json#/properties/behavior/oneOf/0
@@ -8929,7 +8962,7 @@ class TargetDetailLastDiscoveredOneOf0(TypedDict):
 
 # rt/payloads/target_detail.schema.json#/properties/motion
 class TargetDetailMotion(TypedDict):
-    mode: NotRequired[Literal["static", "path", "random_walk"]]
+    mode: NotRequired[Literal["static", "path", "random_walk", "timeline"]]
     speed_mps: NotRequired[float]
     vz_mps: NotRequired[float]
     path_idx: NotRequired[int | None]
@@ -8957,10 +8990,26 @@ class TargetDetailSoundOneOf0(TypedDict):
     lw_dba_now: NotRequired[float]
 
 
+# target/target.schema.json#/properties/life
+class TargetLife(TypedDict):
+    recipe_id: str
+    actor_id: str
+    sha256: str
+
+
 # target/target.schema.json#/$defs/list
 class TargetList(TypedDict):
     items: list[Target]
     rev: NotRequired[int]
+
+
+# target/target.schema.json#/properties/metadata
+class TargetMetadata(TypedDict):
+    role: NotRequired[str]
+    description: NotRequired[str]
+    plate_text: NotRequired[str]
+    plate_region: NotRequired[str]
+    vehicle_type: NotRequired[Literal["sedan", "hatchback", "suv", "van", "pickup", "bus", "truck"]]
 
 
 # target/target.schema.json#/properties/motion
@@ -11726,6 +11775,10 @@ Target = TypedDict("Target", {
     "hearing_band_adj_db": NotRequired[list[float] | None],
     "radar_rx": NotRequired[TargetRadarRxOneOf0 | None],
     "rf_rx": NotRequired[TargetRfRxOneOf0 | None],
+    "appearance": NotRequired[TargetAppearance | None],
+    "activity": NotRequired[TargetActivity | None],
+    "metadata": NotRequired[TargetMetadata | None],
+    "life": NotRequired[TargetLife | None],
 })
 
 
@@ -11752,6 +11805,7 @@ TargetDetail = TypedDict("TargetDetail", {
     "capture": NotRequired[TargetDetailCaptureOneOf0 | None],
     "cfg_rev": int,
     "cfg": NotRequired[Target],
+    "activity": NotRequired[TargetDetailActivity],
 })
 
 

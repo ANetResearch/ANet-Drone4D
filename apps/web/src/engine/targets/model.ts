@@ -41,6 +41,7 @@ export interface TargetDetail {
   sound?: { on: boolean; phase_s?: number; lw_dba_now?: number } | null
   motion?: { mode?: string; speed_mps?: number; vz_mps?: number; path_idx?: number | null }
   capture?: { best_level: string; captured?: boolean; sensor?: string | null; uav?: string | null; n_eff?: number | null; n_req?: number | null } | null
+  activity?: { phase: 'walk' | 'orient' | 'rest' | 'wait' | 'complete' | 'departing' | 'travel' | 'arrived' | 'visit' | 'stationary'; reason?: string; hidden?: boolean; updates?: number; max_unplanned_wait_s?: number; destination: string; remaining_s: number; seed: number; walked_m: number; duration_s: number; visits: number; route_enu_m: number[][] }
   cfg_rev: number
   cfg?: TargetCfg
 }
@@ -50,6 +51,9 @@ export interface TargetCfg {
   id: string
   label?: string
   class: string
+  appearance?: { asset_id: string; geometry_sha256: string } | null
+  life?: { recipe_id: string; sha256: string; actor_id: string } | null
+  metadata?: { role?: string; description?: string; plate_text?: string; plate_region?: string; vehicle_type?: string } | null
   pos?: (number | null)[]
   size_m?: { l: number; w: number; h: number }
   motion?: { mode?: string; path?: (number | null)[][]; region?: number[][]; speed_mps?: number; [k: string]: unknown }
@@ -67,6 +71,7 @@ export interface IdResolver {
 }
 
 export class TargetsModel {
+  facilities: Record<string, { label: string; indoor?: boolean; frontage_center?: number[]; normal_xy?: number[]; portal_width_m?: number; portal_height_m?: number }> = {}
   readonly rows: TargetRows = newTargetRows()
   /** + 1 on every decoded rows message */
   version = 0
@@ -199,6 +204,7 @@ export class TargetsModel {
     this.rows.n = 0
     this.details.clear()
     this.cfgs.clear()
+    this.facilities = {}
     this.version++
     this.detailVersion++
   }

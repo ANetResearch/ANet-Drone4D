@@ -58,7 +58,7 @@ TOP_FIELDS = frozenset((
     "id", "label", "class", "enabled", "pos", "yaw_rad", "alt_agl_m", "size_m", "critical_dim_m", "motion", "color_srgb", "albedo_vis",
     "contrast0", "camouflage", "occlusion", "reflect_850", "reflect_905", "thermal", "rcs_m2", "rcs_fluct", "rcs_band", "sound", "rf",
     "criterion_mode", "alertness", "hearing_th_dba", "acoustic_adv_db", "visual_theta0_arcmin", "level_req", "n_req_px", "reaction",
-    "calm_s", "alert_radius_m", "sensitivity", "cfg_rev",
+    "calm_s", "alert_radius_m", "sensitivity", "cfg_rev", "appearance", "activity", "metadata", "life",
     "visual_acuity_arcmin", "hearing_band_adj_db", "radar_rx", "rf_rx",   # D2.1
     "reaction_policy",                                                       # D3 扩展点 2（AWR-05 §12.3）
 ))
@@ -320,10 +320,59 @@ def validate_reaction(r: Any) -> None:
         raise TargetError(110, "reaction.alert_others", "NOT_A_BOOL")
 
 
+@cache
+def appearance_catalog() -> dict[str, dict]:
+    """Optional appearance pack metadata; binaries remain deployment artifacts."""
+    path = contracts_root() / "target" / "assets.catalog.json"
+    return {a["id"]: a for a in json.loads(path.read_text())["assets"]}
+
+
 def validate_config(c: dict) -> list[str]:
     """完整配置（合并后）的逐字段校验；通过时返回警告列表（radar、rf 敏感体只入 schema）。放置相关（540）在 placement.py。"""
     _keys(110, "", c, TOP_FIELDS)
     _enum(110, "class", c.get("class"), tuple(class_defaults()["classes"]))
+    if c.get("metadata") is not None:
+        metadata = _keys(110, "metadata", c["metadata"], frozenset(("role", "description", "plate_text", "plate_region", "vehicle_type")))
+        for key, limit in (("role", 48), ("description", 256), ("plate_text", 16), ("plate_region", 32)):
+            if key in metadata and (not isinstance(metadata[key], str) or len(metadata[key]) > limit or any(ord(x) < 32 or ord(x) == 127 for x in metadata[key])):
+                raise TargetError(110, f"metadata.{key}", "BAD_TEXT")
+        if "plate_text" in metadata and not re.fullmatch(r"[A-Z0-9一-鿿 -]*", metadata["plate_text"]):
+            raise TargetError(110, "metadata.plate_text", "BAD_PLATE")
+        if any(key in metadata for key in ("plate_text", "plate_region", "vehicle_type")) and c["class"] != "vehicle":
+            raise TargetError(110, "metadata", "VEHICLE_METADATA_ON_NON_VEHICLE")
+        if "vehicle_type" in metadata:
+            _enum(110, "metadata.vehicle_type", metadata["vehicle_type"], ("sedan", "hatchback", "suv", "van", "pickup", "bus", "truck"))
+            asset_id = (c.get("appearance") or {}).get("asset_id")
+            if asset_id and asset_id != metadata["vehicle_type"]:
+                raise TargetError(110, "metadata.vehicle_type", "ASSET_TYPE_MISMATCH")
+    if c.get("life") is not None:
+        life = _keys(110, "life", c["life"], frozenset(("recipe_id", "sha256", "actor_id")))
+        if any(not isinstance(life.get(k), str) or not ID_RE.fullmatch(life[k]) for k in ("recipe_id", "actor_id")):
+            raise TargetError(110, "life", "BAD_ID")
+        if not isinstance(life.get("sha256"), str) or not re.fullmatch(r"[a-f0-9]{64}", life["sha256"]):
+            raise TargetError(110, "life.sha256", "BAD_HASH")
+        if c.get("activity") or c.get("motion", {}).get("mode") != "timeline" or c.get("reaction_policy") != "exogenous":
+            raise TargetError(110, "life", "REQUIRES_EXCLUSIVE_TIMELINE_EXOGENOUS")
+        if c.get("id", life["actor_id"]) != life["actor_id"]:
+            raise TargetError(110, "life.actor_id", "IDENTITY_MISMATCH")
+    if c.get("activity") is not None:
+        activity = _keys(110, "activity", c["activity"], frozenset(("plan_id", "sha256")))
+        if not isinstance(activity.get("plan_id"), str) or not ID_RE.fullmatch(activity["plan_id"]):
+            raise TargetError(110, "activity.plan_id", "BAD_ID")
+        if not isinstance(activity.get("sha256"), str) or not re.fullmatch(r"[a-f0-9]{64}", activity["sha256"]):
+            raise TargetError(110, "activity.sha256", "BAD_HASH")
+        if c["class"] != "person" or c.get("motion", {}).get("mode") != "timeline" or c.get("reaction_policy") != "exogenous":
+            raise TargetError(110, "activity", "REQUIRES_PERSON_TIMELINE_EXOGENOUS")
+    if c.get("appearance") is not None:
+        appearance = _keys(110, "appearance", c["appearance"], frozenset(("asset_id", "geometry_sha256")))
+        asset_id = appearance.get("asset_id")
+        if not isinstance(asset_id, str) or asset_id not in appearance_catalog():
+            raise TargetError(110, "appearance.asset_id", "UNKNOWN_ASSET")
+        asset = appearance_catalog()[asset_id]
+        if asset["class"] != c["class"]:
+            raise TargetError(110, "appearance.asset_id", "ASSET_CLASS_MISMATCH")
+        if appearance.get("geometry_sha256") != asset["geometry_sha256"]:
+            raise TargetError(110, "appearance.geometry_sha256", "ASSET_VERSION_MISMATCH")
     if c.get("id") is not None and (not isinstance(c["id"], str) or not ID_RE.match(c["id"])):
         raise TargetError(110, "id", "BAD_ID", value=str(c["id"])[:40])
     if not isinstance(c.get("enabled", True), bool):

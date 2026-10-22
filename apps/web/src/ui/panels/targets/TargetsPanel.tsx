@@ -1,3 +1,4 @@
+import { LifeBuilder } from './LifeBuilder'
 // Targets list, the right rail's second entity (R-D2-07, R-D2-18; M15-FR-212; UX-FR-119, UX-FR-120, UX-FR-123;
 // AWR-14 §20.7.1, §20.7.2, §20.7.5): "targets n / 30" with "add" (class menu; places the target with a viewport click on
 // the ground, TARGET_PLACE) for the sandbox operator and a filter menu (class, awareness, best level, discovered only).
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { targetsActions, useTargets, type TargetCallOutcome } from '@/stores/targets'
 import { useFleet } from '@/stores/fleet'
 import { useRt } from '@/ui/shell/RtContext'
+import { useConnView, isOnline } from '@/ui/shell/connView'
 import { targetsModel } from '@/app/shell/engineD2'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
@@ -42,19 +44,25 @@ export const CLASS_ICON: Readonly<Record<TargetClass, IconKey>> = {
 /** the sandbox's REST target list seeds the configurations of the target model once per session (operator) */
 export function useSeedTargetConfigs(enabled: boolean): void {
   const sid = useSandbox((s) => s.sid)
+  const epoch = useTargets((s) => s.epoch)
+  const online = useConnView((s) => isOnline(s.conn))
   React.useEffect(() => {
-    if (!enabled || !sid) return
+    if (!enabled || !sid || !online) return
     let live = true
     void sbSession.targets().then((r) => {
       if (!live) return
       for (const c of r.items ?? []) if (c.id && !targetsModel.cfgs.has(c.id)) targetsModel.setConfig(c as Parameters<typeof targetsModel.setConfig>[0])
+      const life = r.items?.find((c) => c.life)?.life
+      if (life) void sbSession.lifeScene(life.sha256).then((scene) => {
+        if (live) { targetsModel.facilities = scene.facilities; targetsModel.detailVersion++ }
+      }, () => { /* scene details can be retried after reconnection */ })
     }, () => {
       // the detail messages bring the configurations anyway (cfg_rev, every 10 s)
     })
     return () => {
       live = false
     }
-  }, [enabled, sid])
+  }, [enabled, sid, epoch, online])
 }
 
 /** the targets of the page: the store's TargetLite32 rows, else the roster entries and seeded configurations with the
@@ -157,6 +165,7 @@ export function TargetsPanel() {
     [items, filter, version])
   if (surface === 'static' || surface === 'sandbox-gone') return <PanelEmpty brand={false} title={t('targets.static')} description={t('hint.staticBrowse')} />
   const full = items.length >= limit
+  const lifeActive = items.some((item) => !!targetsModel.cfgs.get(item.id)?.life)
   return (
     <div className="flex min-h-0 flex-col gap-2" data-targets-panel="">
       <div className="flex items-center gap-1.5">
@@ -194,7 +203,7 @@ export function TargetsPanel() {
         </DropdownMenu>
         {operator ? (
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button size="xs" variant="outline" disabled={full} data-targets-add="" />}>
+            <DropdownMenuTrigger render={<Button size="xs" variant="outline" disabled={full || lifeActive} data-targets-add="" />}>
               <Icon icon="plus" data-icon="inline-start" />
               {t('targets.add')}
             </DropdownMenuTrigger>
@@ -212,6 +221,7 @@ export function TargetsPanel() {
           </DropdownMenu>
         ) : null}
       </div>
+      {surface === 'sandbox' ? <LifeBuilder operator={operator} /> : null}
       {full && operator ? <p className="text-hud-sub text-muted-foreground" data-targets-full="">{reasonText(505).short}</p> : null}
       {placing ? (
         <p className="flex items-center gap-1.5 text-hud-sub" data-targets-placing={placing}>
