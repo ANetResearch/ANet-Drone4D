@@ -6,9 +6,12 @@
   `reference_run_spec` 派生，配置可逐行指定起飞点（`pads`）；新增起飞点须机体投影 ±0.7 m 内网格高差 ≤ `pad_check.level_m`、离
   360 s 磁带中全部演员（含背景人群）的轨迹 ≥ `pad_check.clear_m`；
 - 每行 × 每个种子一个运行（`_job`，与 `proto_board._one` 同一 Env 与评测路径，保留参考行的 `policy.params`，产出 `<out>/runs/<行>-s<种子>/evaluation.json`）；
-- 判定：每行 EC 均值与 r6 EC 之差 ≤ `criteria.ec_mean_abs_diff_max`；覆盖扫描行（`criteria.coverage_row`）AO_real 均值 ≤
-  `ao_real_max` 且 AO_pos 均值 ≥ `ao_pos_min`。`crop-handoff-001` 含 r6 的 4 类关键事件（`zone_pass` 即 r6 的"车辆经过"，
-  `event_type_map`），总体 EC 直接对照；逐事件捕获率按类型列出供诊断，不参与判定；
+- 判定（r6 对照条款，ADR-218，用户 2026-10-22 批准的放宽；缺省 `--rule adr218`）：EC 均值与 r6 §12.3 同量级、排序一致——覆盖扫描行
+  （`criteria.coverage_row`）的 EC 均值与 AO_real 均值在 6 行中最低（可并列），`criteria.rank_highest_row`（缺省 `track5_share`）的
+  EC 均值在 6 行中最高（可并列）；"同量级"以该排序条件判定，不另设数值阈值。原文判据"每行 EC 均值与 r6 EC 之差 ≤
+  `criteria.ec_mean_abs_diff_max`"保留为参考列（逐行 `ec_diff_ok` 与 `verdict.ec_diff_ok_rows`），`--rule original` 时按原文判定（回退）。
+  覆盖扫描行 AO_real 均值 ≤ `ao_real_max` 且 AO_pos 均值 ≥ `ao_pos_min`（两种口径相同）。`crop-handoff-001` 含 r6 的 4 类关键事件
+  （`zone_pass` 即 r6 的"车辆经过"，`event_type_map`），总体 EC 直接对照；逐事件捕获率按类型列出供诊断，不参与判定；
 - 报告核对运行的磁带 `content_sha256` 与世界 `contentVersion`（`expect`），物理档非 realistic 时标注 `dev`（不作正式结论）；
 - 观测设置（ADR-217 决策 (1)，配置 `observation`）：参考行按 r6 §12.3 的观测设置运行——L1 相机 HFOV 40°（run_spec 相机覆盖，
   运行清单 `camera`）、巡航高度与注视方式（策略构造参数，`policy.params.baseline`）。配置值须与 `REFERENCE6` 登记一致（`load_config`），
@@ -18,14 +21,16 @@
   specs   写出 6 行 run_spec（`<out>/specs/<行>.run_spec.json`）并核对与登记一致
   pads    核对新增起飞点（需世界包与已编译事件）→ `<out>/pads.json`
   run     运行全部（或 `--rows`、`--seeds` 所选）行 × 种子；已有 evaluation.json 的跳过（断点续跑），失败写 `<out>/failures.json`
-  report  汇总 `<out>/runs/` → `<out>/r6_ec.json`（`drone4d.bench.r6_ec.v1`）并打印对照表；退出码 0 通过、1 不通过或缺运行
+  report  汇总 `<out>/runs/` → `<out>/r6_ec.json`（`drone4d.bench.r6_ec.v1`）并打印对照表（逐行 EC、r6 值、差值、排序与
+          observation_ok）；`--rule adr218`（缺省）或 `original`；退出码 0 通过、1 不通过或缺运行
   reeval  以当前评测器重评 `--from` 的完整运行目录（不重跑仿真），新的 evaluation.json 与运行清单写入 `<out>/runs/`，原目录不动；
           `<out>/reeval.json` 逐运行列出新旧评测器版本与 EC、AO 分量（K07：AO 关键时刻修正后重评 A10 的 ref6）
 
 用法（dmax，L1 在 d3-gz 容器内运行，gz 与宿主同容器）：
   python3 tools/bench/d3/r6_ec.py run --config configs/bench.d3/ref6-l1.yaml --events-root d3data/events --worlds-root worlds \\
       --out out/a10 [--jobs 6] [--physics kinematic] [--rows lawn3_cover] [--seeds 1,2]
-  python3 tools/bench/d3/r6_ec.py report --config configs/bench.d3/ref6-l1.yaml --out out/a10 --events-root d3data/events --worlds-root worlds
+  python3 tools/bench/d3/r6_ec.py report --config configs/bench.d3/ref6-l1.yaml --out out/a10 --events-root d3data/events --worlds-root worlds \
+      [--rule original]
   python3 tools/bench/d3/r6_ec.py reeval --from a10/out/ref6 --out out/ref6-k07 --events-root d3data/events --worlds-root worlds [--jobs 8]
 """
 
@@ -51,9 +56,12 @@ from drone4d.baselines import REFERENCE6, check_reference_spec, reference_run_sp
 SCHEMA = "drone4d.bench.r6_ec.v1"
 CONFIG_SCHEMA = "drone4d.bench.r6_ec_config.v1"
 R6_TYPES = ("proximity_encounter", "board_vehicle", "enter_building", "vehicle_pass")
+RULES = ("adr218", "original")               # r6 对照条款：ADR-218 排序判据（缺省）；原文逐行差值判据（回退，ADR-218 前的口径）
+RANK_HIGHEST_ROW = "track5_share"            # ADR-218 决策 (1)：EC 均值在 6 行中最高（可并列）的行
+TIE_EPS = 1e-9                               # 并列容差：均值已取 4 位小数，相等即并列
 
-__all__ = ["CONFIG_SCHEMA", "SCHEMA", "check_pads", "load_config", "main", "mean_sd_ci", "observation_check", "observation_problems", "reeval",
-           "report", "row_specs", "summarize_row"]
+__all__ = ["CONFIG_SCHEMA", "RULES", "SCHEMA", "check_pads", "load_config", "main", "mean_sd_ci", "observation_check", "observation_problems",
+           "rank_check", "reeval", "report", "row_specs", "summarize_row"]
 
 
 # ------------------------------------------------------------------ 配置与规格
@@ -379,14 +387,51 @@ def observation_check(name: str, run: str, inputs: dict, ev: dict, cfg: dict) ->
     return out
 
 
+def _dense_rank(vals: dict[str, float | None], *, descending: bool) -> dict[str, int | None]:
+    """密集排名（并列同名次，1 起）；缺值记 None。"""
+    uniq = sorted({v for v in vals.values() if v is not None}, reverse=descending)
+    return {k: None if v is None else 1 + next(i for i, u in enumerate(uniq) if abs(u - v) <= TIE_EPS) for k, v in vals.items()}
+
+
+def rank_check(rows: list[dict], *, lowest_row: str, highest_row: str = RANK_HIGHEST_ROW) -> dict:
+    """ADR-218 决策 (1) 的排序判据：`lowest_row`（覆盖扫描行）的 EC 均值与 AO_real 均值在各行中最低（可并列），`highest_row` 的
+    EC 均值在各行中最高（可并列）→ 各子条件、比较值、并列行与 `pass`；有行缺运行（均值为 None）或指定行不在表中时不通过。"""
+    ec = {r["name"]: r["ec"]["mean"] for r in rows}
+    ao = {r["name"]: r["ao_real"]["mean"] for r in rows}
+    probs = [f"{n}: no runs" for n, v in ec.items() if v is None]
+    probs += [f"{n}: not a reported row" for n in (lowest_row, highest_row) if n not in ec]
+    complete = not probs
+
+    def side(vals: dict, row: str, *, low: bool) -> dict:
+        others = {n: v for n, v in vals.items() if n != row and v is not None}
+        v = vals.get(row)
+        if v is None or not others:
+            return {"row": row, "value": v, "others_bound": None, "tied_with": [], "ok": False}
+        bound = min(others.values()) if low else max(others.values())
+        ok = v <= bound + TIE_EPS if low else v >= bound - TIE_EPS
+        return {"row": row, "value": v, "others_bound": bound, "tied_with": sorted(n for n, x in others.items() if abs(x - v) <= TIE_EPS), "ok": ok}
+
+    ec_low, ao_low, ec_high = side(ec, lowest_row, low=True), side(ao, lowest_row, low=True), side(ec, highest_row, low=False)
+    for c, what in ((ec_low, "EC lowest"), (ao_low, "AO_real lowest"), (ec_high, "EC highest")):
+        if complete and not c["ok"]:
+            probs.append(f"{c['row']}: {what} fails ({c['value']} vs {c['others_bound']})")
+    return {"rule": "adr218", "lowest_row": lowest_row, "highest_row": highest_row,
+            "ec_lowest": ec_low, "ao_real_lowest": ao_low, "ec_highest": ec_high,
+            "ec_rank": _dense_rank(ec, descending=True), "ao_real_rank": _dense_rank(ao, descending=False),
+            "problems": probs, "pass": complete and ec_low["ok"] and ao_low["ok"] and ec_high["ok"]}
+
+
 def report(cfg: dict, out: Path, *, config_path: Path | None = None, events_root: Path | None = None, worlds_root: Path | None = None,
-           pads: list[dict] | None = None) -> dict:
-    """汇总 `<out>/runs/` 并判定（不运行仿真）。"""
+           pads: list[dict] | None = None, rule: str = "adr218") -> dict:
+    """汇总 `<out>/runs/` 并判定（不运行仿真）。`rule`：r6 对照条款的口径，`adr218`（缺省，排序判据；逐行差值为参考）或
+    `original`（原文逐行差 ≤ `ec_mean_abs_diff_max`）。"""
+    if rule not in RULES:
+        raise ValueError(f"rule must be one of {RULES}")
     crit = cfg["criteria"]
     type_map = dict(cfg.get("event_type_map") or {})
     rows, missing, tiers, oracle, obs_probs = [], [], set(), set(), []
     for name in cfg["rows"]:
-        evals = []
+        evals, row_probs = [], []
         for s in cfg["seeds"]:
             rd = out / "runs" / f"{name}-s{s}"
             p = rd / "evaluation.json"
@@ -398,10 +443,17 @@ def report(cfg: dict, out: Path, *, config_path: Path | None = None, events_root
             oracle.add(json.dumps(ev["ao"].get("oracle"), sort_keys=True))
             ri = _run_inputs(rd)
             tiers.add(ri["tier"] or "")
-            obs_probs += observation_check(name, rd.name, ri, ev, cfg)
-        rows.append(summarize_row(name, evals, type_map))
+            row_probs += observation_check(name, rd.name, ri, ev, cfg)
+        row = summarize_row(name, evals, type_map)
+        row["observation_ok"] = bool(evals) and not row_probs             # 逐行：该行全部运行的观测设置与配置一致
+        row["observation_problems_n"] = len(row_probs)
+        obs_probs += row_probs
+        rows.append(row)
+    for r in rows:                                                      # 原文逐行差值判据（ADR-218 下为参考列）
+        r["ec_diff_ok"] = r["ec"]["mean"] is not None and abs(r["d_ec"]) <= crit["ec_mean_abs_diff_max"] + 1e-9
+    ranking = rank_check(rows, lowest_row=crit["coverage_row"], highest_row=crit.get("rank_highest_row", RANK_HIGHEST_ROW))
     for r in rows:
-        r["ec_pass"] = r["ec"]["mean"] is not None and abs(r["d_ec"]) <= crit["ec_mean_abs_diff_max"] + 1e-9
+        r["ec_rank"], r["ao_real_rank"] = ranking["ec_rank"][r["name"]], ranking["ao_real_rank"][r["name"]]
     cov = next((r for r in rows if r["name"] == crit["coverage_row"]), None)
     ao_ok = bool(cov and cov["ao_real"]["mean"] is not None and cov["ao_real"]["mean"] <= crit["ao_real_max"] + 1e-9
                  and cov["ao_pos"]["mean"] >= crit["ao_pos_min"] - 1e-9)
@@ -423,35 +475,50 @@ def report(cfg: dict, out: Path, *, config_path: Path | None = None, events_root
     physics = sorted(t for t in tiers if t)
     dev = physics != ["realistic"]
     pads_ok = None if pads is None else all(p["ok"] for p in pads)
-    ec_ok = all(r["ec_pass"] for r in rows)
+    diff_ok = all(r["ec_diff_ok"] for r in rows)
+    ec_ok = ranking["pass"] if rule == "adr218" else diff_ok
     obs_ok = not obs_probs
     doc = {"schema": SCHEMA, "ac": cfg.get("ac", "D3-AC-18"), "generated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "config": {"path": str(config_path) if config_path else None, "sha256": config_sha256(config_path) if config_path else None},
            "event": cfg["event"], "obs_level": cfg.get("obs_level"), "seeds": list(cfg["seeds"]), "physics_tiers": physics, "dev": dev,
            "inputs": inputs, "expect": exp, "inputs_ok": inputs_ok, "oracle": [json.loads(o) for o in sorted(oracle)],
-           "event_type_map": type_map, "criteria": crit, "observation": cfg["observation"], "observation_problems": obs_probs[:50],
-           "pads": pads, "rows": rows, "missing_runs": missing,
+           "event_type_map": type_map, "criteria": crit, "rule": rule, "observation": cfg["observation"], "observation_problems": obs_probs[:50],
+           "pads": pads, "rows": rows, "missing_runs": missing, "ranking": ranking,
            "coverage": {"row": crit["coverage_row"], "ao_real": cov["ao_real"]["mean"] if cov else None,
                         "ao_pos": cov["ao_pos"]["mean"] if cov else None, "ao_pos_los": cov["ao_pos_los"]["mean"] if cov else None,
                         "pass": ao_ok},
-           "verdict": {"ec_pass": ec_ok, "ao_pass": ao_ok, "complete": not missing, "inputs_ok": inputs_ok, "pads_ok": pads_ok,
+           "verdict": {"rule": rule, "ec_pass": ec_ok, "ec_rank_pass": ranking["pass"], "ec_diff_pass": diff_ok,
+                       "ec_diff_ok_rows": sum(1 for r in rows if r["ec_diff_ok"]), "n_rows": len(rows),
+                       "ao_pass": ao_ok, "complete": not missing, "inputs_ok": inputs_ok, "pads_ok": pads_ok,
                        "observation_ok": obs_ok, "formal": not dev,
                        "pass": ec_ok and ao_ok and not missing and inputs_ok is not False and pads_ok is not False and obs_ok}}
     return doc
 
 
 def format_table(doc: dict) -> str:
-    lines = ["row              n  EC (mean ± sd)   r6    ΔEC     cov    AO_real AO_pos  EU-F1  gain   | " + " ".join(f"{t[:6]:>6}" for t in R6_TYPES)]
+    """对照表：逐行 EC 均值、r6 值、差值（`!` 为原文 ≤ 0.1 不成立，ADR-218 下只作参考）、EC 与 AO_real 名次、观测设置核对与诊断列；
+    其后为排序判据、参考计数与总判定。"""
+    lines = ["row              n  EC (mean ± sd)   r6    ΔEC     rk  cov    AO_real rk  AO_pos  obs   EU-F1  gain   | "
+             + " ".join(f"{t[:6]:>6}" for t in R6_TYPES)]
     for r in doc["rows"]:
         if r["ec"]["mean"] is None:
             lines.append(f"{r['name']:<16} 0  (no runs)")
             continue
         pe = " ".join(f"{(r['per_event'].get(t) if r['per_event'].get(t) is not None else float('nan')):6.2f}" for t in R6_TYPES)
         lines.append(f"{r['name']:<16} {r['n_runs']:<2} {r['ec']['mean']:.3f} ± {r['ec']['sd']:.3f}  {r['r6']['ec']:.2f}  {r['d_ec']:+.3f}"
-                     f"{'' if r['ec_pass'] else '!'}  {r['ec_coverage']['mean']:.3f}  {r['ao_real']['mean']:.3f}   {r['ao_pos']['mean']:.3f}"
-                     f"   {r['eu_f1']['mean']:.3f}  {r['ce_gain']['mean']:+.3f} | {pe}")
-    v = doc["verdict"]
-    lines.append(f"verdict: EC {v['ec_pass']}  AO {v['ao_pass']}  complete {v['complete']}  inputs {v['inputs_ok']}  pads {v['pads_ok']}  "
+                     f"{' ' if r['ec_diff_ok'] else '!'}  {r['ec_rank']:<2}  {r['ec_coverage']['mean']:.3f}  {r['ao_real']['mean']:.3f}   "
+                     f"{r['ao_real_rank']:<2}  {r['ao_pos']['mean']:.3f}   {'ok' if r['observation_ok'] else 'FAIL':<4}  "
+                     f"{r['eu_f1']['mean']:.3f}  {r['ce_gain']['mean']:+.3f} | {pe}")
+    v, rk = doc["verdict"], doc["ranking"]
+
+    def side(c: dict, what: str) -> str:
+        tie = f", tied with {', '.join(c['tied_with'])}" if c["tied_with"] else ""
+        return f"{c['row']} {what} {c['ok']} ({c['value']} vs others {c['others_bound']}{tie})"
+
+    lines.append("ranking (ADR-218): " + "; ".join((side(rk["ec_lowest"], "EC lowest"), side(rk["ao_real_lowest"], "AO_real lowest"),
+                                                    side(rk["ec_highest"], "EC highest"))) + f" -> {rk['pass']}")
+    lines.append(f"reference (original text): |ΔEC| <= {doc['criteria']['ec_mean_abs_diff_max']} in {v['ec_diff_ok_rows']}/{v['n_rows']} rows")
+    lines.append(f"verdict [{v['rule']}]: EC {v['ec_pass']}  AO {v['ao_pass']}  complete {v['complete']}  inputs {v['inputs_ok']}  pads {v['pads_ok']}  "
                  f"observation {v['observation_ok']}  formal {v['formal']}  -> {'PASS' if v['pass'] else 'FAIL'}")
     return "\n".join(lines)
 
@@ -486,6 +553,8 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--duration-s", type=float, help="override run duration (smoke only; not a formal comparison)")
         if c in ("report", "reeval"):
             p.add_argument("--no-pads", action="store_true", help="skip the pad check (no world or tape at hand)")
+            p.add_argument("--rule", choices=RULES, default="adr218",
+                           help="r6 clause: adr218 = same magnitude and order (default); original = per-row |dEC| <= max (fallback)")
         if c == "reeval":
             p.add_argument("--from", dest="src", type=Path, required=True, help="output directory holding the full run directories")
             p.add_argument("--jobs", type=int, default=4)
@@ -519,7 +588,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_all(cfg, a.out, events_root=a.events_root, worlds_root=a.worlds_root,
                        rows=a.rows.split(",") if a.rows else None, seeds=[int(s) for s in a.seeds.split(",")] if a.seeds else None,
                        jobs=a.jobs, physics=a.physics, gz_launcher=a.gz_launcher, gz_image=a.gz_image, duration_s=a.duration_s)
-    doc = report(cfg, a.out, config_path=a.config, events_root=a.events_root, worlds_root=a.worlds_root, pads=pads)
+    doc = report(cfg, a.out, config_path=a.config, events_root=a.events_root, worlds_root=a.worlds_root, pads=pads, rule=a.rule)
     (a.out / "r6_ec.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(format_table(doc))
     return 0 if doc["verdict"]["pass"] else 1

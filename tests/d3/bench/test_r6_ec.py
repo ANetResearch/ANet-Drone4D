@@ -1,10 +1,13 @@
 """D3-AC-18 r6 EC 对照（A10；`configs/bench.d3/ref6-l1.yaml`，`tools/bench/d3/r6_ec.py`）。
 
-- 对照口径：6 个参考行与登记表一致、12 个种子、判据逐条对照 §11 原文（EC 均值差 ≤ 0.1；覆盖扫描 AO_real v0 ≤ 0.05 且 AO_pos ≥ 0.85）；
+- 对照口径：6 个参考行与登记表一致、12 个种子、判据逐条对照 §11 原文（覆盖扫描 AO_real v0 ≤ 0.05 且 AO_pos ≥ 0.85）；r6 对照条款按
+  ADR-218（用户 2026-10-22 批准的放宽）为"同量级、排序一致"：覆盖扫描行 EC 均值与 AO_real 在 6 行中最低、track5_share EC 最高（均可并列），
+  原文"EC 均值差 ≤ 0.1"保留为参考列与 `--rule original` 回退；
   `crop-handoff-001` 含 r6 的 4 类关键事件（`zone_pass` 即"车辆经过"），总体 EC 可直接对照（§24.5 F-02）；
 - 6 行 run_spec 派生：契约有效、机数与链路与登记一致、track5_share 采用配置的起飞点；
 - 观测设置（ADR-217 决策 (1)）：配置与 `REFERENCE6` 一致、派生规格带相机覆盖与 `policy.params.baseline`，运行清单与评测的相机逐运行核对；
-- 汇总与判定：构造评测文件覆盖通过、EC 超差、AO 超限、缺运行、非 realistic 档、磁带不符、观测设置不符各分支；
+- 汇总与判定：构造评测文件覆盖通过、EC 超差（ADR-218 下只计参考）、AO 超限、缺运行、非 realistic 档、磁带不符、观测设置不符各分支；
+  排序判据（`rank_check`）的通过、并列与三个子条件各自不成立的分支；K10 实测数值（ADR-218 通过、原文 3/6）；命令行 `--rule`；
 - 单个运行（`_job`，合成世界、运动学开发档）：运行清单记录相机覆盖与策略参数，评测 oracle 按覆盖相机计算；
 - 起飞点核对（世界包与已编译事件，`AWR_EVENTS_ROOT`）；
 - 正式结果（`AWR_R6_EC_DIR=<r6_ec.py run 的输出目录>`，dmax 实测）：报告判定通过。
@@ -157,13 +160,22 @@ def test_report_pass_on_r6_like_runs(tmp_path: Path, cfg) -> None:
     assert doc["schema"] == r6.SCHEMA and doc["verdict"]["pass"] and doc["verdict"]["formal"]
     by = {r["name"]: r for r in doc["rows"]}
     for name, r in by.items():
-        assert r["n_runs"] == 12 and r["ec_pass"] and abs(r["d_ec"]) <= 0.05, name   # 12 种子下逐事件取整后的残差
+        assert r["n_runs"] == 12 and r["ec_diff_ok"] and abs(r["d_ec"]) <= 0.05, name   # 12 种子下逐事件取整后的残差
+        assert r["observation_ok"] and r["observation_problems_n"] == 0, name
         assert set(r["per_event"]) == set(r6.R6_TYPES)
     assert by["track3_nocomm"]["per_event"]["board_vehicle"] == round(7 / 12, 4)
     assert doc["coverage"] == {"row": "lawn3_cover", "ao_real": 0.0, "ao_pos": 0.92, "ao_pos_los": 0.92, "pass": True}
     assert doc["inputs"] == {"tape_content_sha256": TAPE_SHA, "world_content_version": "7d8c8b895e55"} and doc["inputs_ok"]
     assert doc["config"]["sha256"] == r6.config_sha256(CONFIG)
-    assert "PASS" in r6.format_table(doc)
+    v = doc["verdict"]
+    assert doc["rule"] == v["rule"] == "adr218" and v["ec_pass"] and v["ec_rank_pass"] and v["ec_diff_pass"]
+    assert (v["ec_diff_ok_rows"], v["n_rows"]) == (6, 6)
+    rk = doc["ranking"]                         # r6 表本身满足排序：lawn3 0.25 最低，track5 1.00 最高
+    assert rk["pass"] and rk["lowest_row"] == "lawn3_cover" and rk["highest_row"] == "track5_share" and rk["problems"] == []
+    assert by["lawn3_cover"]["ec_rank"] == max(r["ec_rank"] for r in by.values()) and by["track5_share"]["ec_rank"] == 1
+    assert by["lawn3_cover"]["ao_real_rank"] == 1
+    t = r6.format_table(doc)
+    assert "PASS" in t and "ranking (ADR-218)" in t and "in 6/6 rows" in t and "verdict [adr218]" in t
 
 
 def test_report_fail_branches(tmp_path: Path, cfg) -> None:
@@ -182,10 +194,16 @@ def test_report_fail_branches(tmp_path: Path, cfg) -> None:
     er, wr = _roots(tmp_path, cfg)
     doc = r6.report(cfg, out, events_root=er, worlds_root=wr)
     by = {r["name"]: r for r in doc["rows"]}
-    assert not by["hover3_anchors"]["ec_pass"] and by["hover3_anchors"]["d_ec"] == -0.25
-    assert all(r["ec_pass"] for n, r in by.items() if n != "hover3_anchors")
-    assert not doc["verdict"]["ec_pass"] and not doc["verdict"]["ao_pass"] and not doc["verdict"]["pass"]
+    assert not by["hover3_anchors"]["ec_diff_ok"] and by["hover3_anchors"]["d_ec"] == -0.25
+    assert all(r["ec_diff_ok"] for n, r in by.items() if n != "hover3_anchors")
+    v = doc["verdict"]                          # ADR-218：超差只计参考，排序仍成立（hover3 0.50 > lawn3 0.25）；AO 超限 → 不通过
+    assert v["ec_pass"] and v["ec_rank_pass"] and not v["ec_diff_pass"] and v["ec_diff_ok_rows"] == 5
+    assert not v["ao_pass"] and not v["pass"]
     assert "!" in r6.format_table(doc) and "FAIL" in r6.format_table(doc)
+    orig = r6.report(cfg, out, events_root=er, worlds_root=wr, rule="original")   # 回退口径：逐行差值判定
+    assert orig["verdict"]["rule"] == "original" and not orig["verdict"]["ec_pass"] and orig["verdict"]["ec_rank_pass"]
+    with pytest.raises(ValueError, match="rule"):
+        r6.report(cfg, out, events_root=er, worlds_root=wr, rule="r6")
 
     out2 = tmp_path / "out2"                    # 缺运行、运动学开发档、磁带不符
     _fake_runs(out2, cfg, tier="kinematic")
@@ -225,6 +243,102 @@ def test_report_observation_mismatch(tmp_path: Path, cfg) -> None:
     v = doc["verdict"]
     assert v["ec_pass"] and v["ao_pass"] and v["observation_ok"] is False and not v["pass"]
     assert "observation False" in r6.format_table(doc)
+    by = {r["name"]: r for r in doc["rows"]}    # 逐行 observation_ok
+    assert [n for n, r in by.items() if not r["observation_ok"]] == ["hover1_plaza", "lawn3_cover", "track5_share"]
+    assert (by["hover1_plaza"]["observation_problems_n"], by["lawn3_cover"]["observation_problems_n"]) == (1, 12)
+
+
+# ------------------------------------------------------------------ ADR-218 排序判据
+# K10 实测（dmax，2026-10-21 19:49–20:32 UTC，72 个运行）：各行 EC 均值与覆盖扫描行 AO_real（docs/05 ADR-218 实测段）
+K10_EC = {"hover1_plaza": 0.75, "hover3_anchors": 1.0, "lawn3_cover": 0.25, "track3_nocomm": 0.979, "track3_share": 1.0, "track5_share": 1.0}
+K10_AO = {"hover1_plaza": 0.8, "hover3_anchors": 1.0, "lawn3_cover": 0.0, "track3_nocomm": 0.933, "track3_share": 0.983, "track5_share": 1.0}
+
+
+def _rows(ec: dict, ao: dict) -> list[dict]:
+    return [{"name": n, "ec": {"mean": ec[n]}, "ao_real": {"mean": ao.get(n)}} for n in ec]
+
+
+def test_rank_check_k10_numbers() -> None:
+    """K10 数值：lawn3_cover 的 EC（0.25）与 AO_real（0.000）最低，track5_share 的 EC（1.000）最高并与两行并列 → 通过。"""
+    rk = r6.rank_check(_rows(K10_EC, K10_AO), lowest_row="lawn3_cover")
+    assert rk["pass"] and rk["problems"] == [] and rk["highest_row"] == r6.RANK_HIGHEST_ROW == "track5_share"
+    assert rk["ec_lowest"] == {"row": "lawn3_cover", "value": 0.25, "others_bound": 0.75, "tied_with": [], "ok": True}
+    assert rk["ao_real_lowest"]["ok"] and rk["ao_real_lowest"]["others_bound"] == 0.8
+    assert rk["ec_highest"]["tied_with"] == ["hover3_anchors", "track3_share"] and rk["ec_highest"]["ok"]
+    assert rk["ec_rank"] == {"hover1_plaza": 3, "hover3_anchors": 1, "lawn3_cover": 4, "track3_nocomm": 2, "track3_share": 1, "track5_share": 1}
+    assert rk["ao_real_rank"]["lawn3_cover"] == 1 and rk["ao_real_rank"]["track5_share"] == rk["ao_real_rank"]["hover3_anchors"]
+
+
+def test_rank_check_fail_and_tie_branches() -> None:
+    lo = "lawn3_cover"
+    ec_tie = {**K10_EC, "hover1_plaza": 0.25}                                 # 最低并列：通过
+    assert r6.rank_check(_rows(ec_tie, K10_AO), lowest_row=lo)["ec_lowest"]["tied_with"] == ["hover1_plaza"]
+    assert r6.rank_check(_rows(ec_tie, K10_AO), lowest_row=lo)["pass"]
+    bad = r6.rank_check(_rows({**K10_EC, "hover1_plaza": 0.2}, K10_AO), lowest_row=lo)          # 覆盖扫描行 EC 不是最低
+    assert not bad["pass"] and not bad["ec_lowest"]["ok"] and bad["ao_real_lowest"]["ok"] and bad["ec_highest"]["ok"]
+    assert bad["problems"] == ["lawn3_cover: EC lowest fails (0.25 vs 0.2)"]
+    bad = r6.rank_check(_rows(K10_EC, {**K10_AO, "lawn3_cover": 0.9}), lowest_row=lo)           # AO_real 不是最低
+    assert not bad["pass"] and not bad["ao_real_lowest"]["ok"] and bad["ec_lowest"]["ok"]
+    bad = r6.rank_check(_rows({**K10_EC, "track5_share": 0.98}, K10_AO), lowest_row=lo)         # track5_share 不是最高
+    assert not bad["pass"] and not bad["ec_highest"]["ok"] and bad["ec_highest"]["others_bound"] == 1.0
+    bad = r6.rank_check(_rows({**K10_EC, "track3_share": None}, K10_AO), lowest_row=lo)         # 缺运行的行：不通过
+    assert not bad["pass"] and bad["problems"] == ["track3_share: no runs"] and bad["ec_rank"]["track3_share"] is None
+    bad = r6.rank_check(_rows({k: v for k, v in K10_EC.items() if k != "track5_share"}, K10_AO), lowest_row=lo)
+    assert not bad["pass"] and "track5_share: not a reported row" in bad["problems"]
+    custom = r6.rank_check(_rows(K10_EC, K10_AO), lowest_row=lo, highest_row="hover1_plaza")   # 配置可改最高行
+    assert not custom["pass"] and not custom["ec_highest"]["ok"]
+
+
+def _k10_tweak(name: str):
+    """把 r6 样式的构造评测改成 K10 的各行 EC：前 round(EC × 12 × 4) 个事件捕获（track3_nocomm 11 个种子全捕获、1 个种子 3/4）。"""
+    def f(doc, i):
+        target = 12 * 4 * K10_EC[name]
+        k = round(target)
+        n_cap = min(4, max(0, k - 4 * i))
+        for j, e in enumerate(doc["ec"]["events"]):
+            e["captured"] = j < n_cap
+        doc["ec"]["value"] = n_cap / 4
+        doc["ao"]["ao_real"] = K10_AO[name]
+        if name == "lawn3_cover":
+            doc["ao"]["ao_pos"] = 0.976
+        return doc
+    return f
+
+
+def test_report_k10_like_runs_adr218_pass_original_fail(tmp_path: Path, cfg) -> None:
+    """K10 实测各行 EC：ADR-218 排序判据通过；原文逐行差 ≤ 0.1 为 3/6（参考），`--rule original` 判不通过；表中逐行给出
+    EC、r6、差值、名次与观测设置核对。"""
+    out = tmp_path / "out"
+    _fake_runs(out, cfg, tweak={n: _k10_tweak(n) for n in cfg["rows"]})
+    er, wr = _roots(tmp_path, cfg)
+    doc = r6.report(cfg, out, events_root=er, worlds_root=wr)
+    by = {r["name"]: r for r in doc["rows"]}
+    assert {n: r["ec"]["mean"] for n, r in by.items()} == {**K10_EC, "track3_nocomm": round(47 / 48, 4)}
+    assert [n for n, r in by.items() if r["ec_diff_ok"]] == ["lawn3_cover", "track3_nocomm", "track5_share"]
+    assert {n: r["d_ec"] for n, r in by.items()} == {"hover1_plaza": 0.25, "hover3_anchors": 0.25, "lawn3_cover": 0.0,
+                                                     "track3_nocomm": 0.0792, "track3_share": 0.12, "track5_share": 0.0}
+    v = doc["verdict"]
+    assert v["pass"] and v["ec_pass"] and v["ec_rank_pass"] and not v["ec_diff_pass"] and (v["ec_diff_ok_rows"], v["n_rows"]) == (3, 6)
+    assert doc["coverage"]["ao_real"] == 0.0 and doc["coverage"]["ao_pos"] == 0.976 and v["ao_pass"]
+    t = r6.format_table(doc)
+    assert "in 3/6 rows" in t and "tied with hover3_anchors, track3_share" in t and t.rstrip().endswith("PASS")
+    assert t.count("+0.250!") == 2 and "+0.120!" in t
+    orig = r6.report(cfg, out, events_root=er, worlds_root=wr, rule="original")
+    assert not orig["verdict"]["pass"] and not orig["verdict"]["ec_pass"] and orig["verdict"]["ao_pass"]
+
+
+def test_cli_report_rule(tmp_path: Path, cfg, capsys) -> None:
+    """命令行 `report --no-pads [--rule original]`：写出 r6_ec.json、打印对照表，退出码随口径。"""
+    out = tmp_path / "out"
+    _fake_runs(out, cfg, tweak={n: _k10_tweak(n) for n in cfg["rows"]})
+    er, wr = _roots(tmp_path, cfg)
+    base = ["report", "--config", str(CONFIG), "--out", str(out), "--events-root", str(er), "--worlds-root", str(wr), "--no-pads"]
+    assert r6.main(base) == 0
+    doc = json.loads((out / "r6_ec.json").read_text(encoding="utf-8"))
+    assert doc["rule"] == "adr218" and doc["verdict"]["pass"] and doc["pads"] is None
+    assert "verdict [adr218]" in capsys.readouterr().out
+    assert r6.main([*base, "--rule", "original"]) == 1
+    assert json.loads((out / "r6_ec.json").read_text(encoding="utf-8"))["verdict"]["rule"] == "original"
 
 
 # ------------------------------------------------------------------ 单个运行（合成世界、运动学开发档）
@@ -303,6 +417,6 @@ def test_formal_r6_ec_report(cfg) -> None:
     doc = r6.report(cfg, out, config_path=CONFIG, events_root=er, worlds_root=ROOT / "worlds")
     print(r6.format_table(doc))
     assert doc["verdict"]["complete"] and doc["verdict"]["formal"], doc["missing_runs"]
-    assert doc["verdict"]["inputs_ok"] is not False
-    assert doc["verdict"]["ec_pass"], [(r["name"], r["d_ec"]) for r in doc["rows"]]
+    assert doc["verdict"]["inputs_ok"] is not False and doc["verdict"]["observation_ok"], doc["observation_problems"]
+    assert doc["verdict"]["ec_pass"], doc["ranking"]["problems"]                # ADR-218 排序判据
     assert doc["verdict"]["ao_pass"], doc["coverage"]
