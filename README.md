@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="docs/media/drone4d-banner.jpg" alt="ANet-Drone4D: the 4D world runtime for multi-agent drones" width="100%" />
+<img src="docs/media/drone4d-banner.jpg" alt="ANet Drone4D banner: the 4D world runtime for multi-agent drones" width="100%" />
 
-<h3>Reality in, swarms out.</h3>
+<h3>ANet Drone4D</h3>
 
-Real-world 4D simulation for multi-agent drones: city-scale point-cloud digital twins, fleet simulation, swarm control, and target perception on a unified simulation clock, rendered live in any browser without a server GPU.
+ANet Drone4D is a real-world grounded 4D simulation platform for multi-agent drones. The Interactive Sandbox (V0.2) runs city-scale point-cloud digital twins, fleet simulation, swarm control and target perception on one simulation clock; its server needs no GPU, and the scene renders in the visitor's browser. The Event Lab (V0.3, in development) adds mesh worlds, event tapes and an event-level observation benchmark; its sensor generation requires an NVIDIA GPU on the server.
 
-[![Release](https://img.shields.io/badge/release-v0.2.0-1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0)
+[![Release](https://img.shields.io/github/v/release/ANetResearch/ANet-Drone4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/latest)
 [![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-Read%20the%20Docs%20layout-1f1f1f)](https://docs.agentnetwork.org.cn/drone4d/en/latest/)
 [![Live demo](https://img.shields.io/badge/live%20demo-drone4d.agentnetwork.org.cn-e0322d)](https://drone4d.agentnetwork.org.cn)
@@ -25,38 +25,39 @@ Real-world 4D simulation for multi-agent drones: city-scale point-cloud digital 
 
 <img src="docs/media/demo-flight.webp" alt="Scenario S0 in ANet Synthetic City: drones spiral around the ANet Tower, cover city blocks and fly a V formation along the river" width="100%" />
 
-<sub>Scenario S0 in ANet Synthetic City, captured on a GPU-free machine and played back at twice real time.</sub>
-
-## Highlights
-
-- **Point-cloud digital twin.** Seven worlds—ANet Synthetic City and six UrbanScene3D cities—stream into the browser as octree point clouds, adapting density to viewpoint and frame budget.
-- **Drone swarm simulation and swarm control.** FleetSim steps 1 to 1,000 vehicles on a shared 250 Hz clock. It runs a PX4-style flight model, mission generators, geofences, and fleet separation in a single loop.
-- **Targets, perception and missions.** Six target classes use Johnson/TTPF detection across EO, NIR, LWIR, radar, and acoustic sensors. Nests and greedy task allocation drive 7x24 relay watch from stations outside each target's sensitivity range.
-- **An interactive sandbox per visitor.** Each session runs an isolated simulation core, accessible via desktop browser, mobile devices, REST v1, or the Python SDK. Every city on the public demo also plays a recorded drone monitoring show.
-- **Built for the next step.** The D3 Event Lab introduces Gazebo Sim lockstep physics, mesh cameras and LiDAR, FAST-LIVO2 reconstruction comparisons, and event-level benchmarks for multi-agent observation policies.
+<sub>Scenario S0 in ANet Synthetic City, captured on a machine without a GPU and played back at twice real time.</sub>
 
 ## Capabilities
 
-| | Capability | Status |
-|---|---|---|
-| Digital Twin | City-scale point clouds, progressive loading, automatic density | Available |
-| Drone Swarm | FleetSim, up to 1,000 vehicles on one clock | Available |
-| PX4 | PX4-style position and attitude cascade (PX4-lite), validated against PX4 SIH flights | Available |
-| Swarm Control | Formations, area coverage, geofences, separation, 14-state flight state machine | Available |
-| Perception | Six target classes across EO, NIR, LWIR, radar, and acoustic sensors | Available |
-| Agent Swarm | Capability discovery and task delegation over Mock ANet (disabled on public site) | Available |
-| Gazebo | Gazebo Sim lockstep as the high-fidelity physics tier | In development |
-| LiDAR and cameras | Mesh LiDAR (Livox MID-360 pattern) and photorealistic mesh cameras | In development |
-| 4D Reconstruction | FAST-LIVO2 on simulated data, evaluated against mesh ground truth | In development |
-| Rerun | Recordings exported for inspection in Rerun | In development |
-| 3DGS | Gaussian-splatting appearance layer over mesh geometry | Research |
-| PX4 SITL | Software-in-the-loop flight-controller validation with Gazebo | Research |
+| Capability | Delivery | Runtime prerequisites | Status |
+|---|---|---|---|
+| Point-cloud digital twin: seven worlds (ANet Synthetic City and six UrbanScene3D cities), octree streaming, density adapted to viewpoint and frame budget | D1 (V0.1) | Server: CPU only. Browser: WebGL2 | Available |
+| Fleet simulation: FleetSim steps 1 to 1,000 vehicles on one 250 Hz clock; at 1,000 vehicles it keeps a real-time factor of 1.00 on 0.53 CPU core of an 8-vCPU Xeon E5-2603 v4 virtual machine (median of 3 runs) | D1 (V0.1) | Server: CPU only | Available |
+| PX4-style position and attitude cascade (PX4-lite), validated against PX4 SIH flight recordings | D1 (V0.1) | Server: CPU only | Available |
+| Swarm control: formations, area coverage, geofences, fleet separation, 14-state flight state machine, eight mission generators | D1 (V0.1) | Server: CPU only | Available |
+| Environment field: wind with turbulence, visibility and precipitation across 12 weather presets | D1 (V0.1) | Server: CPU only | Available |
+| Capability discovery and task delegation over an in-process Mock ANet (disabled on the public demo) | D1 (V0.1) | Server: CPU only | Available |
+| Interactive Sandbox: an isolated simulation core per visitor with up to 12 drones, 30 targets and 4 nests per session; desktop, tablet and phone layouts; REST v1 and Python SDK | D2 (V0.2) | Server: 4 CPU cores, no GPU | Available |
+| Target perception: six target classes across EO, night, LWIR, LiDAR, radar and acoustic sensors (Johnson criteria and TTPF) | D2 (V0.2) | Server: CPU only | Available |
+| Nests, greedy task allocation and 7x24 relay watch from stations outside each target's sensitivity range | D2 (V0.2) | Server: CPU only | Available |
+| Event Lab: GLB mesh worlds, event tapes and Gazebo Sim lockstep as the high-fidelity physics tier | D3 (V0.3) | Server: NVIDIA GPU | In development |
+| Mesh cameras and mesh LiDAR (Livox MID-360 pattern) | D3 (V0.3) | Server: NVIDIA GPU | In development |
+| FAST-LIVO2 reconstruction on simulated data, evaluated against mesh ground truth; data inspection in Rerun | D3 (V0.3) | Server: NVIDIA GPU | In development |
 
-Statuses reflect the [v0.2.0 release](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0) and the [D3 design baseline](docs/05-D3-设计增补与决策记录.md).
+Statuses reflect the published V0.2 releases and the [D3 design baseline](docs/05-D3-设计增补与决策记录.md).
 
-## Get started
+## Requirements
 
-Explore the **[live demo](https://drone4d.agentnetwork.org.cn)** with no registration required. It provides a read-only shared show and an isolated sandbox per visitor. To run the platform locally on Linux:
+| Component | Requirement |
+|---|---|
+| Browser | Desktop Chrome or Edge (latest two major versions) with WebGL2; WebGPU is optional. Tablet and phone browsers are supported with dedicated layouts. Frame rate and image quality depend on the device GPU. |
+| Server, Interactive Sandbox (V0.2) | Linux x86_64 with 4 CPU cores; no GPU. The public demo runs on such a host. |
+| Server, Event Lab (V0.3, in development) | Linux x86_64 with an NVIDIA GPU (EGL, driver ≥ 535, at least 8 GB of GPU memory) for sensor generation. |
+| Toolchain | Python 3.12 and Node 22, installed by `make setup`. |
+
+## Quick start
+
+The **[live demo](https://drone4d.agentnetwork.org.cn)** requires no registration. It provides a read-only shared show and an isolated sandbox per visitor. To run the platform locally on Linux:
 
 ```sh
 git clone https://github.com/ANetResearch/ANet-Drone4D.git && cd ANet-Drone4D
@@ -67,6 +68,12 @@ make run          # then open http://127.0.0.1:8000/world/synthcity
 
 The [Quick start](https://docs.agentnetwork.org.cn/drone4d/en/latest/intro/quickstart.html) guide covers every step with real output, including how to drive a sandbox session from the Python SDK.
 
+## Documentation
+
+- [Documentation site](https://docs.agentnetwork.org.cn/drone4d/en/latest/): introduction, topics, REST API and Python SDK reference.
+- [Design documents](docs/): architecture, technology selection, product and UI requirements, data and protocol specifications, and acceptance reports.
+- [Live demo](https://drone4d.agentnetwork.org.cn) and its [interactive API reference](https://drone4d.agentnetwork.org.cn/sandbox/api).
+
 ## Feature tour
 
 > [!NOTE]
@@ -76,7 +83,7 @@ The [Quick start](https://docs.agentnetwork.org.cn/drone4d/en/latest/intro/quick
 
 <img src="docs/media/feature-reality.jpg" alt="A city block digitized from an aerial survey into a point-cloud twin" width="100%" />
 
-`worldpkg` normalizes raw point clouds—aligning units, up axis, leveling, north, origin, normals, ground model, height above ground, and classifications—into World Package v1. This format pairs a Potree 2.0 compatible octree using 12-byte ANET_Q16 point encoding with DSM and DTM rasters, semantics, and zones. Each of the six UrbanScene3D cities (roughly 5 million points per city) builds on a CPU in 27 to 35 s and passes `validate --deep` with zero errors. ANet Synthetic City generates from a fixed seed (1.2 km by 1.2 km, about 3.9 million points, zero third-party data) in about 25 s.
+`worldpkg` normalizes raw point clouds—aligning units, up axis, leveling, north, origin, normals, ground model, height above ground, and classifications—into World Package v1. This format pairs a Potree 2.0 compatible octree using 12-byte ANET_Q16 point encoding with DSM and DTM rasters, semantics, and zones. On an 8-vCPU Xeon E5-2603 v4 virtual machine without a GPU, each of the six UrbanScene3D cities (roughly 5 million points per city) builds in 27 to 35 s and passes `validate --deep` with zero errors. ANet Synthetic City generates from a fixed seed (1.2 km by 1.2 km, about 3.9 million points, zero third-party data) in about 25 s on the same 8-vCPU machine.
 
 ### Streaming city-scale point clouds
 
@@ -98,11 +105,11 @@ The environment service computes wind (combining a height profile with a turbule
 
 <sub>**Screenshot.** A single viewpoint as light rain transitions into fog: visibility drops from 6.0 km to 690 m halfway through the 40 s transition, settling at 150 m.</sub>
 
-### Many drones, one clock
+### Fleet simulation on one clock
 
 <img src="docs/media/feature-swarm.jpg" alt="Drone formations and coverage lanes over a point-cloud city" width="100%" />
 
-FleetSim advances all drones as a single structure of arrays on a shared 250 Hz clock. Its PX4-style position and attitude cascade is compiled with numba, verified against a numpy reference, and validated against PX4 SIH flight recordings. At 1,000 drones, FleetSim maintains real-time performance on roughly half a CPU core. Safety logic executes within the same loop: a 14-state flight state machine, geofences, energy-aware return to home, fleet separation, and link-loss policies. Eight mission generators provide trajectories ranging from helical facade scans to formations and area coverage.
+FleetSim advances all drones as a single structure of arrays on a shared 250 Hz clock. Its PX4-style position and attitude cascade is compiled with numba, verified against a numpy reference, and validated against PX4 SIH flight recordings. With 1,000 drones on an 8-vCPU Xeon E5-2603 v4 virtual machine, FleetSim holds a real-time factor of 1.00 on 0.53 CPU core with a single-step p99 of 2.69 ms (median of 3 runs in the D1 acceptance). Safety logic executes within the same loop: a 14-state flight state machine, geofences, energy-aware return to home, fleet separation, and link-loss policies. Eight mission generators provide trajectories ranging from helical facade scans to formations and area coverage.
 
 <table>
 <tr>
@@ -117,7 +124,7 @@ FleetSim advances all drones as a single structure of arrays on a shared 250 Hz 
 
 <img src="docs/media/feature-agents.jpg" alt="Three different drones searching terrain together, one thermal camera finding a target" width="100%" />
 
-Each drone registers its capabilities on an agent network. In the S3 search-and-rescue scenario, an optical camera drone detects a candidate target, queries the network for thermal drones via capability discovery, gathers quotes priced by the simulator's internal estimator, and delegates confirmation to the optimal responder. The outcome is verified against a receipt and an acceptance predicate. V0.1 executes this workflow over an in-process Mock ANet; full ANet integration is scheduled for V1.0.
+Each drone registers its capabilities on an agent network. In the S3 search-and-rescue scenario, an optical camera drone detects a candidate target, queries the network for thermal drones via capability discovery, gathers quotes priced by the simulator's internal estimator, and delegates confirmation to the selected responder. The outcome is verified against a receipt and an acceptance predicate. The current releases execute this workflow over an in-process Mock ANet, which the public demo does not enable; connection to the ANet network itself is not part of V0.2 or V0.3.
 
 ### Interactive sandbox, targets and relay watch
 
@@ -226,12 +233,12 @@ The vehicle catalogue includes the P600 digital twin in its MID-360 configuratio
 
 | Version | Scope | Status |
 |---|---|---|
-| V0.1 | Point-cloud digital twin, progressive loading, FleetSim with PX4-lite, realtime protocol, Mock ANet | Released |
-| V0.2.0 | Interactive sandbox, targets and quantified perception, nests and relay watch, open API, phones and tablets, city monitoring shows | Released |
-| V0.3 | D3 Event Lab: GLB worlds, event tapes, Gazebo Sim lockstep, mesh cameras and LiDAR, FAST-LIVO2, benchmark | In development |
-| P3 and V1.0 | 3DGS appearance layer, PX4 SITL, real ANet with a self-hosted ANetHub | Planned |
+| V0.1 | Scene View: point-cloud digital twin, progressive loading, FleetSim with PX4-lite, realtime protocol, Mock ANet | Released |
+| V0.2 | Interactive Sandbox: targets and quantified perception, nests and relay watch, open API, phones and tablets, city monitoring shows; patch releases from `v0.2.1` | Released |
+| V0.3 | Event Lab: GLB mesh worlds, event tapes, Gazebo Sim lockstep, mesh cameras and LiDAR, FAST-LIVO2 evaluation, event-level observation benchmark | In development |
+| V0.3.x | Increments on the V0.3 baseline, including the SITL physics tier and the 3DGS appearance layer | Planned |
 
-Progress is tracked in [GitHub milestones](https://github.com/ANetResearch/ANet-Drone4D/milestones) and the pinned [roadmap issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1). See [Roadmap](https://docs.agentnetwork.org.cn/drone4d/en/latest/project/roadmap.html) and the
+Later versions are in research and concept design and are not scheduled here. Progress is tracked in [GitHub milestones](https://github.com/ANetResearch/ANet-Drone4D/milestones) and the pinned [roadmap issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1). See [Roadmap](https://docs.agentnetwork.org.cn/drone4d/en/latest/project/roadmap.html) and the
 [D3 design](docs/05-D3-设计增补与决策记录.md).
 
 </details>
@@ -248,7 +255,7 @@ V0.2.0 is evaluated against 55 acceptance criteria (D2-AC-01 to D2-AC-55). Round
 | P0 (50) | 41 | 9 | 0 |
 | P1 (5) | 3 | 0 | 2 |
 
-A 24 h soak test completed with zero restarts and a memory growth rate of 0.48 MB/h. Remaining items are documented as known issues in the [release notes](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0); see the full report in [docs/impl/D2-验收报告-第2轮.md](docs/impl/D2-验收报告-第2轮.md).
+A 24 h soak test under a cgroup simulation of the 4-core public host completed with zero restarts and a memory growth rate of 0.48 MB/h. Remaining items are documented as known issues in the [release notes](https://github.com/ANetResearch/ANet-Drone4D/releases/tag/v0.2.0); see the full report in [docs/impl/D2-验收报告-第2轮.md](docs/impl/D2-验收报告-第2轮.md).
 
 </details>
 
@@ -272,16 +279,20 @@ See [docs/15](docs/15-视觉设计规范与色卡.md) for the visual specificati
 
 <br/>
 
-ANet-Drone4D is part of the ANet ecosystem from Agent Network Research, alongside [ANet](https://github.com/ANetResearch/ANet), [ANetHub](https://github.com/ANetResearch/ANetHub), and [ANetCore](https://github.com/ANetResearch/ANetCore). Drones serve as the first class of physical agents: they publish capabilities, discover peers, delegate tasks, and verify outcomes against receipts. ANet operates as the collaboration plane rather than the flight control plane—delegated tasks translate into standard commands subject to the same admission and safety checks as manual operator inputs.
+Drone4D is part of the ANet ecosystem from Agent Network Research, alongside [ANet](https://github.com/ANetResearch/ANet), [ANetHub](https://github.com/ANetResearch/ANetHub), and [ANetCore](https://github.com/ANetResearch/ANetCore). Drones serve as the first class of physical agents: they publish capabilities, discover peers, delegate tasks, and verify outcomes against receipts. ANet operates as the collaboration plane rather than the flight control plane—delegated tasks translate into standard commands subject to the same admission and safety checks as manual operator inputs.
 
 </details>
 
-<details>
-<summary><b>Data and citation</b></summary>
+## License and attribution
 
-<br/>
+- **Code.** Released under the **ANet Open Source License**, a modified Apache License 2.0 that permits commercial use subject to two conditions: operating a multi-tenant hosted simulation or digital twin service for unrelated parties requires written authorization, and all ANet logos and copyright notices must be retained. See [LICENSE](LICENSE) for full terms and [NOTICE](NOTICE) for the marks.
+- **UrbanScene3D.** The six city worlds are derived from UrbanScene3D and hosted on the public demo with authorization from the dataset rights holders (经数据集权利方授权使用). This repository does not distribute the raw dataset or World Packages built from it; see [NOTICE](NOTICE) for details.
+- **ANet Synthetic City.** Generated by this project from a fixed seed; it contains no third-party data, and its World Package and screenshots may be redistributed.
+- **Third-party components.** Listed with their licenses in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-The six city worlds are derived from UrbanScene3D and hosted on the public demo with authorization from the dataset rights holders (经数据集权利方授权使用). This repository does not distribute the raw dataset; see [NOTICE](NOTICE) for details. Please cite UrbanScene3D (ECCV 2022) when using these worlds:
+## Citation
+
+Please cite UrbanScene3D (ECCV 2022) when using the six city worlds:
 
 ```bibtex
 @inproceedings{UrbanScene3D,
@@ -292,33 +303,27 @@ The six city worlds are derived from UrbanScene3D and hosted on the public demo 
 }
 ```
 
-To cite ANet-Drone4D, use GitHub's "Cite this repository" feature ([CITATION.cff](CITATION.cff)) or the following BibTeX entry:
+To cite Drone4D, use GitHub's "Cite this repository" feature ([CITATION.cff](CITATION.cff)) or the following BibTeX entry:
 
 ```bibtex
 @software{anet_drone4d_2026,
-  title   = {ANet-Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
+  title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.2.0},
+  version = {0.2.2},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```
 
-</details>
-
 ## Acknowledgements
 
-ANet-Drone4D builds on [three.js](https://threejs.org), [React Three Fiber](https://github.com/pmndrs/react-three-fiber),
+Drone4D builds on [three.js](https://threejs.org), [React Three Fiber](https://github.com/pmndrs/react-three-fiber),
 [Potree](https://github.com/potree/potree), [zenoh](https://zenoh.io), [numba](https://numba.pydata.org),
 [PX4](https://github.com/PX4/PX4-Autopilot), [Prometheus](https://github.com/amov-lab/Prometheus), and UrbanScene3D.
 
 ## Contributing
 
 Issues and pull requests are welcome in English or Chinese; see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Changes to system contracts—including file formats, `awr.rt.v1`, the REST API, or reason codes—must begin with an issue, and `make ci` serves as the merge gate. Report security vulnerabilities to hi@anet0.com ([SECURITY.md](SECURITY.md)).
-
-## License
-
-Released under the **ANet Open Source License (ANet-Drone4D)**, a modified Apache License 2.0 that permits commercial use subject to two conditions: operating a multi-tenant hosted simulation or digital twin service for unrelated parties requires written authorization, and all ANet logos and copyright notices must be retained. See [LICENSE](LICENSE) for full terms.
 
 <div align="center">
 <br/>
