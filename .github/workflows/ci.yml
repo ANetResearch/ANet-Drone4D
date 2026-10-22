@@ -98,5 +98,15 @@ jobs:
 
       - name: make setup
         run: make setup
+      # The second shard includes D3 protocol and recorder tests. Install the existing
+      # D3 lock in its separate environment instead of collecting them in the D2 venv.
+      - name: Install locked D3 test environment
+        if: matrix.shard == 2
+        run: make setup-d3
       - name: pytest -m "not perf and not slow and not needs_data"
-        run: make test-py-nodata PYTEST_SHARD=${{ matrix.shard }}
+        run: |
+          if [ "${{ matrix.shard }}" = 2 ]; then
+            make test-py-nodata PYTEST_SHARD=2 PY="$PWD/.venv-d3/bin/python"
+          else
+            make test-py-nodata PYTEST_SHARD=1
+          fi

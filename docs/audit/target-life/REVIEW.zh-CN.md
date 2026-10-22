@@ -40,7 +40,7 @@
 
 模型检查入口：识别物详情 → **近看并跟随目标**；车辆另有 **近看前车牌**。这只是观察相机，不给 agent 增加识别能力或控制无人机。拖动画面、切换视角或目标进入设施后退出跟随；车牌近景保留观察方向，车辆转弯后可能需重新对准。
 
-## PR 前复测（2026-10-22）
+## PR 首次提交前复测（2026-10-22，后续修复见下）
 
 - 在已部署 Python 3.12 锁定环境执行 `PYTHONPATH=python .venv/bin/python -m pytest tests/activities tests/targets tests/d3/events/test_scene.py -q -k "not test_stage_budget_30x12"`：267 passed、1 deselected；本次纳入第一批场景审计回归。
 - 前端复测增加 contracts/geo 后，共 385 项通过（其中目标/启动/D2/相机为原 75 项）。
@@ -49,3 +49,13 @@
 - 同一 lint 的发布大小检查被 main 已有的 `research/ccf-tpci/data/m1geo_full.parquet`（12,858,479 bytes，限制 5 MB）阻塞；该文件不在本 PR 的改动中。
 - 完整 contracts/georef 后端套件未取得结果：远端是按部署所需文件同步的工作区，收集 `test_d3_event_contracts.py` 时缺少上游 `docs/modules/M23-*.md`，在收集阶段终止；不将该次尝试计作通过。目标契约相关测试已包含在上述 267 项回归中。
 - 完整 `make ci` 尚未通过。契约设计审查记录为 [#62](https://github.com/ANetResearch/ANet-Drone4D/issues/62)；本次提交用于汇总审查，不表示已满足自动合并条件。
+
+## 手动配置及 CI 修复复测
+
+- 新增按类别的创建表单和已有目标的“外观与身份”编辑页；手动配置车辆在原生浏览器中成功放置，模型为高顶厢式车，前车牌像素显示 `皖A TEST88`。
+- 部署锁定 Python 3.12 环境的活动、目标和场景回归：274 passed、1 个既有性能用例按原范围 deselected。
+- 新增 6 项前端配置测试；目标前端 30 项通过，类型检查和带资产/生活开关的生产构建通过。
+- API/仿真依赖通过独立 authoring worker 解耦；11 项 transport/场景选择测试通过，覆盖真实子进程拒绝非法场景、超时、取消回收、响应超限和协议校验。完整 `make -k _lint` 通过。
+- 原托管 pytest shard 2 缺 D3 协议依赖，改用仓库既有 `requirements.lock` + `requirements-d3.lock` 的独立环境执行，保留测试集合。
+- 上游 12.8 MB `m1geo_full.parquet` 无损改为 4 个按序 Parquet 分片，每片小于 5 MB。35 万行通过 Arrow（含 metadata）和 pandas 完整相等校验，图表加载器兼容单文件及分片。不删除数据、不放宽发布大小规则。
+- 本节的本地检查不替代托管 CI、数据/GPU/性能门禁或维护者契约审查；PR 检查页记录最终托管结果。

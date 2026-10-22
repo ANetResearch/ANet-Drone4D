@@ -49,7 +49,8 @@ import { labelOk, MAX_VOLUMES, newVolume, RANGES, sensitivityErrors } from './ta
 import { QuantCard } from './QuantCard'
 import { AppearanceEditor } from './AppearanceEditor'
 import { ActivityCard } from './ActivityCard'
-import { IdentityEditor } from './IdentityEditor'
+import { CustomizationForm } from './CustomizationForm'
+import { APPEARANCE_ENABLED } from '@/app/shell/engineD2'
 
 function usePatch(id: string | null) {
   return React.useCallback(async (p: Partial<Target>): Promise<boolean> => {
@@ -355,7 +356,7 @@ export function TargetDetailPanel() {
   const nPts = useD2Tool((s) => s.points.length)
   const [advanced, setAdvanced] = React.useState(false)
   // D2.1 (UX-FR-160): the "perception readout" tab next to the configuration
-  const [tab, setTab] = React.useState<'config' | 'quant'>('config')
+  const [tab, setTab] = React.useState<'identity' | 'config' | 'quant'>(APPEARANCE_ENABLED ? 'identity' : 'config')
   const back = (
     <Button size="xs" variant="ghost" onClick={() => entities.back()} data-target-back="">
       <Icon icon="chev.left" data-icon="inline-start" />{t('targets.back')}
@@ -403,19 +404,22 @@ export function TargetDetailPanel() {
       ) : null}
       <LiveState id={id} />
       {(target.activity || target.life) ? <ActivityCard activity={detail?.activity} /> : null}
-      <Tabs value={tab} onValueChange={(v) => setTab(v === 'quant' ? 'quant' : 'config')} className="min-w-0">
+      <Tabs value={tab} onValueChange={(v) => setTab(v === 'identity' ? 'identity' : v === 'quant' ? 'quant' : 'config')} className="min-w-0">
         <TabsList variant="line" data-target-tabs={tab}>
+          {APPEARANCE_ENABLED ? <TabsTrigger value="identity" data-target-tab="identity">{t('targets.tab.identity')}</TabsTrigger> : null}
           <TabsTrigger value="config" data-target-tab="config">{t('targets.tab.config')}</TabsTrigger>
           <TabsTrigger value="quant" data-target-tab="quant">{t('quant.title')}</TabsTrigger>
         </TabsList>
         <TabsPanels className="min-w-0">
+          {APPEARANCE_ENABLED ? <TabsContent value="identity" className="flex min-w-0 flex-col gap-3">
+            <CustomizationForm key={`${id}:${target.cfg_rev ?? 0}`} cls={target.class} target={target} operator={operator} save={patch} />
+            <AppearanceEditor id={id} target={target} />
+          </TabsContent> : null}
           <TabsContent value="quant" className="min-w-0">
             <QuantCard targetId={id} targetLabel={sanitizeText(target.label ?? id, 32)} />
           </TabsContent>
           <TabsContent value="config" className="flex min-w-0 flex-col gap-3">
       <div className="grid grid-cols-2 gap-2" data-target-form="">
-        <AppearanceEditor id={id} target={target} operator={operator} patch={patch} />
-              <IdentityEditor target={target} operator={operator} patch={patch} />
         <div className="col-span-2">
           <TextField id="label" label={t('target.f.label')} value={target.label ?? detail?.label ?? id} readOnly={!operator} validate={labelOk} onCommit={(v) => patch({ label: v })} />
         </div>

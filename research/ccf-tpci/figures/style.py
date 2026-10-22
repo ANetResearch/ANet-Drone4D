@@ -79,7 +79,14 @@ def save(fig: plt.Figure, name: str) -> Path:
 
 
 def load(name: str) -> pd.DataFrame:
-    return pd.read_parquet(DATA / f"{name}.parquet")
+    single = DATA / f"{name}.parquet"
+    if single.exists():
+        return pd.read_parquet(single)
+    # Ordered, lossless partitions keep individual tracked artifacts below 5 MB.
+    parts = sorted((DATA / name).glob("part-*.parquet"))
+    if not parts:
+        raise FileNotFoundError(single)
+    return pd.concat([pd.read_parquet(part) for part in parts], ignore_index=True)
 
 
 def boot_ci(x: np.ndarray, stat=np.mean, n: int = 2000, alpha: float = 0.05, seed: int = 0) -> tuple[float, float, float]:

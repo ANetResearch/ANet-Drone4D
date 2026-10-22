@@ -1,40 +1,25 @@
 import * as React from 'react'
 import type { Target } from '@awr/contracts/types'
 import { getLocale } from '@/app/i18n'
-import { APPEARANCE_ENABLED, TARGET_ASSETS, assetFor, assetStatus, subscribeAssets, retryAsset } from '@/app/shell/engineD2'
+import { APPEARANCE_ENABLED, assetFor, assetStatus, subscribeAssets, retryAsset } from '@/app/shell/engineD2'
 import { targetsModel } from '@/app/shell/engineD2'
 import { camera } from '@/viewport/facade'
 import { prefs } from '@/stores/prefs'
 import { Button } from '@/ui/components/ui/button'
 import { Field, FieldLabel } from '@/ui/components/ui/field'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/components/ui/select'
 
-export function AppearanceEditor({ id, target, operator, patch }: {
-  id: string; target: Target; operator: boolean; patch: (p: Partial<Target>) => Promise<boolean>
-}) {
+export function AppearanceEditor({ id, target }: { id: string; target: Target }) {
   const selected = target.appearance?.asset_id ?? ''
   const load = React.useSyncExternalStore(subscribeAssets, () => assetStatus(selected))
-  const [busy, setBusy] = React.useState(false)
   if (!APPEARANCE_ENABLED) return null
   const zh = getLocale() === 'zh-CN'
-  const entries = TARGET_ASSETS.filter((a) => a.class === target.class)
   const current = assetFor(selected)
-  const items = [{ value: '', label: zh ? '原生线框' : 'Original wireframe' }, ...entries.map((a) => ({ value: a.id, label: zh ? a.name_zh : a.name_en }))]
   const message = !selected ? (zh ? '尚未选择精细模型' : 'No mesh selected') : {
     idle: zh ? '等待加载；打开视口后继续' : 'Queued; open the viewport to load',
     loading: zh ? '正在加载网格与贴图…' : 'Loading mesh and texture…',
     ready: zh ? '模型已加载 · 跟随仿真位置与朝向' : 'Mesh ready · bound to simulation pose',
     error: zh ? '模型加载失败，暂显示线框；可重试加载' : 'Asset failed; showing wireframe. You can retry loading.',
   }[load]
-  const change = async (value: string) => {
-    const asset = assetFor(value)
-    setBusy(true)
-    try {
-      await patch(asset ? { appearance: { asset_id: asset.id, geometry_sha256: asset.geometry_sha256 },
-        size_m: { l: asset.dimensions_m[0], w: asset.dimensions_m[1], h: asset.dimensions_m[2] },
-        ...(target.class === 'vehicle' ? { metadata: { ...target.metadata, vehicle_type: asset.id as NonNullable<Target['metadata']>['vehicle_type'] } } : {}) } : { appearance: null })
-    } finally { setBusy(false) }
-  }
   const inspect = (plate = false) => {
     const row = targetsModel.rowOf(id)
     if (row < 0) return
@@ -52,11 +37,8 @@ export function AppearanceEditor({ id, target, operator, patch }: {
     }, plate)
   }
   return <Field className="col-span-2" data-target-appearance={selected || 'wireframe'}>
-    <FieldLabel>{zh ? '精细外观' : 'Appearance'}</FieldLabel>
-    <Select items={items} value={selected} disabled={!operator || busy} onValueChange={(v) => typeof v === 'string' && void change(v)}>
-      <SelectTrigger className="w-full" aria-label={zh ? '精细外观' : 'Appearance'}><SelectValue /></SelectTrigger>
-      <SelectContent>{items.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}</SelectContent>
-    </Select>
+    <FieldLabel>{zh ? '已应用的模型与观察' : 'Applied model and inspection'}</FieldLabel>
+    <p className="text-hud-sub">{current ? (zh ? current.name_zh : current.name_en) : (zh ? '原生线框' : 'Original wireframe')}</p>
     <p className="text-hud-sub text-muted-foreground" role="status">{message}</p>
     {load === 'error' ? <Button size="sm" variant="outline" onClick={() => retryAsset(selected)}>{zh ? '重试加载模型' : 'Retry model download'}</Button> : null}
     {current ? <p className="text-hud-sub text-muted-foreground">{current.license} · {current.triangles.toLocaleString()} {zh ? '三角面' : 'triangles'}</p> : null}

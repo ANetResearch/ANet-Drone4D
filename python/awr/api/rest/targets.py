@@ -23,11 +23,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import os
 import re
 import time
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, Header, Request
@@ -288,28 +286,10 @@ async def _life_world_id(request: Request) -> str:
     return world
 
 
-def _life_network(world_id: str):
-    root = Path(os.environ.get("AWR_TARGET_LIFE_DIR", "var/target-life"))
-    path = root / f"{world_id}.network.json"
-    if not path.exists():
-        path = root / "network.json"
-    doc = json.loads(path.read_text())
-    world_root = Path(os.environ.get("AWR_WORLDS_DIR", "worlds"))
-    manifest = json.loads((world_root / world_id / "world.json").read_text())
-    if (
-        doc["world_id"] != world_id
-        or doc["world_content_version"] != manifest["contentVersion"]
-        or doc["coordinate_sha256"] != manifest["coordinate"]["sha256"]
-    ):
-        raise ValueError("Network does not match the current scene version and coordinates")
-    return doc
-
-
 @sandbox_router.post("/target-life/preview")
 async def sbx_life_preview(request: Request, _p: SbxOperator, body: Annotated[dict[str, Any], Body()]):
     """Compile and audit a proposed population, without modifying/pausing the session."""
-    from awr.sim.activities.compiler import audit_recipe, persist_recipe, populate, target_configs
-    from awr.sim.activities.designer import design
+    from awr.runtime.target_authoring import target_authoring
 
     world = await _life_world_id(request)
     if set(body) - {"seed", "people", "vehicles", "prompt", "mode", "extras", "vehicle_types"}:
@@ -325,36 +305,13 @@ async def sbx_life_preview(request: Request, _p: SbxOperator, body: Annotated[di
     if mode not in ("seed", "deepseek"):
         raise ApiProblem(110, status=422, detail={"why": "LIFE_MODE"})
 
-    def compile_preview():
-        doc = populate(
-            _life_network(world),
-            body.get("seed", 20261022),
-            people,
-            vehicles,
-            extras=extras,
-            vehicle_types=body.get("vehicle_types"),
-        )
-        usage = None
-        if mode == "deepseek":
-            doc, usage = design(doc, body.get("prompt", ""))
-        audit = audit_recipe(doc)
-        sha = persist_recipe(doc) if audit["admitted"] else None
-        return {
-            "seed": doc["seed"],
-            "sha256": sha,
-            "targets": target_configs(doc, sha) if sha else [],
-            "audit": audit,
-            "design": doc.get("design"),
-            "provider_usage": usage,
-        }
-
     lock = getattr(request.app.state, "life_generation_lock", None)
     if lock is None:
         lock = asyncio.Lock()
         request.app.state.life_generation_lock = lock
     try:
         async with lock:
-            return await asyncio.to_thread(compile_preview)
+            return await target_authoring("preview", world, body)
     except (ValueError, OSError, KeyError, TypeError) as exc:
         # Never return provider headers, credentials or upstream response bodies.
         raise ApiProblem(110, status=422, detail={"why": "LIFE_PREVIEW_REJECTED", "reason": str(exc)[:240]}) from None
@@ -362,13 +319,10 @@ async def sbx_life_preview(request: Request, _p: SbxOperator, body: Annotated[di
 
 @sandbox_router.get("/target-life/{sha256}/scene")
 async def sbx_life_scene(sha256: str, request: Request, _p: SbxViewer):
-    from awr.sim.activities.bindings import load_recipe
+    from awr.runtime.target_authoring import target_authoring
 
     world = await _life_world_id(request)
     try:
-        recipe = await asyncio.to_thread(load_recipe, "life", sha256)
-        if recipe["world_id"] != world:
-            raise ValueError("Scene mismatch")
-        return {"recipe_sha256": sha256, "facilities": recipe["facilities"]}
+        return await target_authoring("scene", world, {"sha256": sha256})
     except (ValueError, OSError, KeyError, TypeError):
         raise ApiProblem(110, status=422, detail={"why": "LIFE_SCENE_NOT_AVAILABLE"}) from None

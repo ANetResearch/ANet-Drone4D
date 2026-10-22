@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from awr.api.rest.targets import _life_network
+from awr.sim.activities.authoring import life_network
 
 
 @pytest.fixture
@@ -34,15 +34,15 @@ def test_scene_specific_network_overrides_only_its_own_legacy_default(networks):
     root, docs = networks
     (root / "network.json").write_text(json.dumps(docs["alpha"]))
     (root / "beta.network.json").write_text(json.dumps(docs["beta"]))
-    assert _life_network("alpha") == docs["alpha"]
-    assert _life_network("beta") == docs["beta"]
+    assert life_network("alpha") == docs["alpha"]
+    assert life_network("beta") == docs["beta"]
 
 
 def test_missing_scene_graph_cannot_reuse_another_world(networks):
     root, docs = networks
     (root / "network.json").write_text(json.dumps(docs["alpha"]))
     with pytest.raises(ValueError, match="Network does not match"):
-        _life_network("beta")
+        life_network("beta")
 
 
 @pytest.mark.parametrize("field", ["world_content_version", "coordinate_sha256"])
@@ -51,4 +51,4 @@ def test_stale_scene_specific_graph_fails_instead_of_silently_falling_back(netwo
     (root / "network.json").write_text(json.dumps(docs["beta"]))
     (root / "beta.network.json").write_text(json.dumps({**docs["beta"], field: "stale"}))
     with pytest.raises(ValueError, match="Network does not match"):
-        _life_network("beta")
+        life_network("beta")

@@ -2745,5 +2745,7 @@
  "sandbox.template.t10_custom_life.short": "T10",
  "sandbox.template.t11_custom_life.short": "T11",
  "sandbox.template.t12_life_all_classes.short": "T12",
- "sandbox.template.t13_all_vehicle_types.short": "T13"
+ "sandbox.template.t13_all_vehicle_types.short": "T13",
+ "targets.tab.identity": "Appearance & identity",
+ "targets.lifeEditingHint": "This is a scene-controlled population. Select any actor to edit appearance and identity. Change population counts through the life generator to revalidate routes and avoidance."
 }

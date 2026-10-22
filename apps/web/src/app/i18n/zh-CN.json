@@ -2745,5 +2745,7 @@
  "sandbox.template.t10_custom_life.short": "T10",
  "sandbox.template.t11_custom_life.short": "T11",
  "sandbox.template.t12_life_all_classes.short": "T12",
- "sandbox.template.t13_all_vehicle_types.short": "T13"
+ "sandbox.template.t13_all_vehicle_types.short": "T13",
+ "targets.tab.identity": "外观与身份",
+ "targets.lifeEditingHint": "当前为完整生活群体：点击任一目标可手动编辑外观与身份。增减数量请通过生活生成器重新生成，以便重新检查路线和避让。"
 }

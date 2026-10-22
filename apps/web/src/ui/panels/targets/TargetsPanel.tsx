@@ -1,4 +1,6 @@
 import { LifeBuilder } from './LifeBuilder'
+import { CreateTargetDialog } from './CreateTargetDialog'
+import type { Target } from '@awr/contracts/types'
 // Targets list, the right rail's second entity (R-D2-07, R-D2-18; M15-FR-212; UX-FR-119, UX-FR-120, UX-FR-123;
 // AWR-14 §20.7.1, §20.7.2, §20.7.5): "targets n / 30" with "add" (class menu; places the target with a viewport click on
 // the ground, TARGET_PLACE) for the sandbox operator and a filter menu (class, awareness, best level, discovered only).
@@ -18,7 +20,8 @@ import { targetsActions, useTargets, type TargetCallOutcome } from '@/stores/tar
 import { useFleet } from '@/stores/fleet'
 import { useRt } from '@/ui/shell/RtContext'
 import { useConnView, isOnline } from '@/ui/shell/connView'
-import { targetsModel } from '@/app/shell/engineD2'
+import { APPEARANCE_ENABLED, targetsModel, type TargetCfg } from '@/app/shell/engineD2'
+import { prefs } from '@/stores/prefs'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
 import {
@@ -99,21 +102,23 @@ const rosterGate = {
 /** reason text of a refused target call, with the `why` of 540 to 544 when given */
 export function targetCallText(o: TargetCallOutcome): string {
   const why = typeof o.detail?.why === 'string' ? o.detail.why : null
-  return `${o.code ? reasonText(o.code).short : ''}${why ? ` (${sanitizeText(why, 32)})` : ''}`
+  const reason = typeof o.detail?.reason === 'string' ? sanitizeText(o.detail.reason, 160) : ''
+  return `${o.code ? reasonText(o.code).short : ''}${why ? ` (${sanitizeText(why, 32)})` : ''}${reason ? ` · ${reason}` : ''}`
 }
 
 /** place a target of a class with a viewport click (TARGET_PLACE); 540 keeps the tool with the reason */
-export function startPlaceTarget(cls: TargetClass, onCreated: (id: string) => void): void {
+export function startPlaceTarget(cls: TargetClass, onCreated: (id: string) => void, extra: Partial<TargetCfg> = {}): void {
+  prefs.setUi('mobileTab', 'viewport')
   targetsActions.setPlacing(cls)
   d2Tools.start('TARGET_PLACE', cls, ([p]) => {
     targetsActions.setPlacing(null)
-    void targetsActions.add(cls, [p[0], p[1], cls === 'uav' ? p[2] + 30 : null]).then((o) => {
+    void targetsActions.add(cls, [p[0], p[1], cls === 'uav' ? p[2] + 30 : null], extra).then((o) => {
       if (o.ok) {
         if (o.id) onCreated(o.id)
         return
       }
       notify('targets:place', 'warning', targetCallText(o))
-      if (o.code === 540) startPlaceTarget(cls, onCreated)
+      if (o.code === 540) startPlaceTarget(cls, onCreated, extra)
     })
   })
 }
@@ -158,6 +163,7 @@ export function TargetsPanel() {
   const selected = useEntities((s) => s.target)
   const placing = useD2Tool((s) => (s.mode === 'TARGET_PLACE' ? s.subject : null))
   const red = useRedOwner('viewport')
+  const [creating, setCreating] = React.useState<Target['class'] | null>(null)
   const [filter, setFilter] = React.useState<TargetFilter>(NO_FILTER)
   // the configurations of the model are read with the store version (motion modes of the rows)
   const rows = React.useMemo(() => filterRows(buildRows(items, (id) => targetsModel.cfgs.get(id)?.motion?.mode), filter),
@@ -211,7 +217,7 @@ export function TargetsPanel() {
               <DropdownMenuGroup>
                 <DropdownMenuLabel>{t('targets.add.class')}</DropdownMenuLabel>
                 {TARGET_CLASSES.map((c) => (
-                  <DropdownMenuItem key={c} onClick={() => startPlaceTarget(c, (id) => entities.openTarget(id))} data-targets-add-class={c}>
+                  <DropdownMenuItem key={c} onClick={() => APPEARANCE_ENABLED ? setCreating(c) : startPlaceTarget(c, (id) => entities.openTarget(id))} data-targets-add-class={c}>
                     <Icon icon={CLASS_ICON[c]} />
                     {t(`target.class.${c}`)}
                   </DropdownMenuItem>
@@ -221,6 +227,8 @@ export function TargetsPanel() {
           </DropdownMenu>
         ) : null}
       </div>
+      <CreateTargetDialog cls={creating} close={() => setCreating(null)} place={(cls, patch) => startPlaceTarget(cls, (id) => entities.openTarget(id), patch as Partial<TargetCfg>)} />
+      {lifeActive && operator ? <p className="text-hud-sub text-muted-foreground">{t('targets.lifeEditingHint')}</p> : null}
       {surface === 'sandbox' ? <LifeBuilder operator={operator} /> : null}
       {full && operator ? <p className="text-hud-sub text-muted-foreground" data-targets-full="">{reasonText(505).short}</p> : null}
       {placing ? (
