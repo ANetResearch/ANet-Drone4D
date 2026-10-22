@@ -553,8 +553,9 @@ class RunSource:
         st = s.statistics
         t_range = (int(st.message_start_time), int(st.message_end_time)) if st and st.message_count else (0, 0)
         seed = None
-        if (run_dir / "truth" / "run_seed.json").is_file():
-            sd = json.loads((run_dir / "truth" / "run_seed.json").read_text(encoding="utf-8"))
+        sf = _seed_path(run_dir, rid)
+        if sf is not None:
+            sd = json.loads(sf.read_text(encoding="utf-8"))
             seed = sd.get("run_seed", sd.get("seed")) if isinstance(sd, dict) else sd
         elif isinstance(spec.get("seed"), int):
             seed = spec["seed"]
@@ -599,6 +600,19 @@ class RunSource:
         if self.seed is not None and layer in ("truth", "eval"):        # 种子只进入评测 catalog（truth 与 eval 层）
             p["seed"] = int(self.seed)
         return {k: v for k, v in p.items() if v is not None}
+
+
+def _seed_path(run_dir: Path, rid: str) -> Path | None:
+    """种子文件：不排名运行在运行目录真值层 `truth/run_seed.json`；排名运行在数据集布局 `<data>/dataset/<eid>/runs/<id>` 同一数据根
+    的隐藏区 `hidden/<eid>/truth/runs/<id>/run_seed.json`（K18，`awr.agentsdk.env.core.write_run_seed`）；无权限读取隐藏区时视为没有。"""
+    for p in (run_dir / "truth" / "run_seed.json",
+              run_dir.parent.parent.parent.parent / "hidden" / run_dir.parent.parent.name / "truth" / "runs" / rid / "run_seed.json"):
+        try:
+            if p.is_file():
+                return p
+        except OSError:
+            continue
+    return None
 
 
 def _truth_path(run_dir: Path, rid: str) -> Path | None:

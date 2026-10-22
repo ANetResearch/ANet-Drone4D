@@ -41,7 +41,8 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["CAM_SENSOR", "GNSS_SENSOR", "IMU_SENSOR", "LIDAR_BACKENDS", "LIDAR_SENSOR", "L2Config", "L2Sensors", "lidar_backend", "mask_code"]
+__all__ = ["CAM_SENSOR", "GNSS_SENSOR", "IMU_SENSOR", "LIDAR_BACKENDS", "LIDAR_SENSOR", "WQ_CACHE_ENV", "L2Config", "L2Sensors", "lidar_backend",
+           "mask_code", "worldquery_cache_dir"]
 
 NS = 1_000_000_000
 TICK_NS = 100_000_000
@@ -50,6 +51,7 @@ CAM_NO, LIDAR_NO = 0, 100
 IMU_WARMUP_NS = NS
 LIDAR_WORKERS_MAX = 4
 LIDAR_BACKENDS = ("cpu", "warp")
+WQ_CACHE_ENV = "AWR_WORLDQUERY_CACHE_DIR"
 
 
 @dataclass(frozen=True)
@@ -62,7 +64,20 @@ class L2Config:
     lidar_proc: bool = True                   # 网格 LiDAR 在独立进程中与相机渲染并行
     lidar_workers: int = 0                    # LiDAR 工作进程数（各机按序轮流分配）；0 为每架机一个（至多 LIDAR_WORKERS_MAX），Warp 后端为 1 个
     lidar_backend: str | None = None          # cpu（Open3D CPU 参考）或 warp（M25 GPU 产品路径）；None 取 AWR_ENV_LIDAR_BACKEND，再缺省 cpu
-    cache_dir: Path | None = None             # MeshWorldQuery 缓存；缺省 <worlds>/../cache/worldquery
+    cache_dir: Path | None = None             # MeshWorldQuery 缓存；None 按 `worldquery_cache_dir` 取（AWR_WORLDQUERY_CACHE_DIR，再缺省推导）
+
+
+def worldquery_cache_dir(world_dir: Path | str, explicit: Path | str | None = None) -> Path:
+    """L2 网格世界查询（LiDAR 工作进程与进程内扫描）的派生缓存根（K18，B21 遗留 9）：依次取 `explicit`（`L2Config.cache_dir`、
+    `BenchEnv(l2_cache_dir=...)`），环境变量 `AWR_WORLDQUERY_CACHE_DIR`（非空时），最后才按世界目录推导 `<worlds 的上级>/cache/worldquery`
+    （dmax 部署布局 `$D/worlds/<id>` 与 `$D/cache/worldquery`，K18 之前的唯一来源，保留为缺省以免已有缓存失效）。缓存只影响装载
+    耗时，不进入运行哈希与观测字节。"""
+    if explicit:
+        return Path(explicit)
+    env = os.environ.get(WQ_CACHE_ENV, "").strip()
+    if env:
+        return Path(env)
+    return Path(world_dir).resolve().parent.parent / "cache" / "worldquery"
 
 
 def lidar_backend(cfg: L2Config) -> str:
@@ -190,6 +205,14 @@ class L2Sensors:
         self._lp = None
         self.lidar = None
         self.lidar_backend: str | None = None         # 实际使用的网格 LiDAR 后端（写入运行清单 `l2.lidar_backend`）
+        self.gpu_probe: dict | None = None            # 建立 GPU 上下文之前的体检记录（K18）；渲染器与 LiDAR 都注入时不体检
+        warp_here = self.cfg.lidar and lidar is None and lidar_backend(self.cfg) == "warp"
+        if renderer is None or warp_here:
+            from awr.sensorsvc.gpuhealth import require_gpu
+
+            # 宿主 systemd reload 后容器失去设备访问：Warp 报 CUDA error 100 并退到 CPU 设备、EGL 建上下文段错误。先体检，不通过
+            # 抛 647（平台失败、可重跑），不再让驱动崩溃带走评测进程（B21 遗留 3）；LiDAR 工作进程内的 Warp 由 `open_mesh_lidar` 体检
+            self.gpu_probe = require_gpu(egl=renderer is None, warp=warp_here and not self.cfg.lidar_proc, stage="l2")
         if self.cfg.lidar:
             from awr.sensorsvc.lidar.model import MOUNT_INVERTED_MAPPING, load_lidar_model
             from awr.sensorsvc.poses import Mount
@@ -201,7 +224,7 @@ class L2Sensors:
                 self.lidar_backend = "injected"
             else:
                 self.lidar_backend = lidar_backend(self.cfg)
-                cache = self.cfg.cache_dir or Path(world_dir).resolve().parent.parent / "cache" / "worldquery"
+                cache = worldquery_cache_dir(world_dir, self.cfg.cache_dir)
                 if self.cfg.lidar_proc:                       # 独立解释器（不继承 EGL 状态），先于渲染器启动以重叠装载
                     n = self.cfg.lidar_workers or (1 if self.lidar_backend == "warp" else min(len(self.uavs), LIDAR_WORKERS_MAX))
                     self._lp = _LidarPool(max(1, n), Path(world_dir), cache, Path(tape.path).parent, self.lidar_backend)
@@ -318,13 +341,25 @@ class L2Sensors:
         return nodes
 
     def _cameras(self, k: int, items: list[tuple[str, int]]) -> dict[str, tuple[dict, list[dict]]]:
-        """各机相机帧 → {uav: (CameraObs, 真值行)}。渲染器有异步接口（`submit`，EGL 光栅相机）时先提交全部机体的绘制与读回，
+        """各机相机帧 → {uav: (CameraObs, 真值行)}。渲染器有异步接口（`submit`，EGL 光栅相机）时先提交一批机体的绘制与读回，
         再按机序取回、结束自动曝光并编码：GL 命令按提交顺序执行，各机自动曝光状态互相独立，输出与逐机同步渲染逐字节相同，省去
-        同步接口的整帧复制并让 GPU 绘制与读回重叠；槽位在该机帧编码完成后归还。测试替身只有同步接口 `render`。"""
-        from awr.sensorsvc.camera.effects import finish_frame
+        同步接口的整帧复制并让 GPU 绘制与读回重叠；槽位在该机帧编码完成后归还。测试替身只有同步接口 `render`。
 
+        一批的机数不超过渲染器的读回槽位数（`readback_slots`，缺省 6）：同一线程先提交后取回，一次提交的帧数超过槽位数时第
+        （槽位数 + 1）次提交等不到归还而超时（D3-AC-60；固定视点网格、机队大于 6 的 tick）。分批不改变 GL 命令次序与各机自动曝光
+        的输入，输出与一次提交逐字节相同；`defer_truth` 时上一批的槽位由真值线程归还，下一批的提交等待归还即可推进。"""
         if not hasattr(self.cam, "submit"):
             return {u: self._finish_camera(u, k, *self._render(u, no, k)) for u, no in items}
+        n = max(1, int(getattr(self.cam, "readback_slots", 0) or len(items) or 1))
+        cams: dict[str, tuple[dict, list[dict]]] = {}
+        for b in range(0, len(items), n):
+            cams.update(self._camera_batch(k, items[b:b + n]))
+        return cams
+
+    def _camera_batch(self, k: int, items: list[tuple[str, int]]) -> dict[str, tuple[dict, list[dict]]]:
+        """一批（机数 ≤ 读回槽位数）异步提交与按序取回；异常时未交给真值线程的槽位全部归还。"""
+        from awr.sensorsvc.camera.effects import finish_frame
+
         jobs = []
         handed: set[int] = set()
         try:
@@ -565,12 +600,15 @@ class _LidarProc:
         self._ready = False
 
     def _get(self):
-        try:
-            tag, val = _recv(self.proc.stdout)
-        except EOFError:
-            raise RuntimeError(f"lidar worker exited (code {self.proc.poll()})") from None
-        if tag == "err":
-            raise RuntimeError(f"lidar worker failed:\n{val}")
+        from awr.sensorsvc.gpuhealth import gpu_errors
+
+        with gpu_errors("lidar worker"):                  # 工作进程内的 647、CUDA 100 等回溯，或进程退出时设备节点已丢失 → 647（K18）
+            try:
+                tag, val = _recv(self.proc.stdout)
+            except EOFError:
+                raise RuntimeError(f"lidar worker exited (code {self.proc.poll()})") from None
+            if tag == "err":
+                raise RuntimeError(f"lidar worker failed:\n{val}")
         return val
 
     def submit(self, k: int, jobs, seed: int, tier: str) -> None:

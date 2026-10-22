@@ -571,14 +571,14 @@ class _FlatRaster:
 def _l2(uavs: Sequence[str], *, world=None, world_dir: Path | None = None, renderer=None, seed: int = 7, noise: str = "realistic",
         camera_profile: str = "rgb720-gs"):
     """M25 L2 传感器（Env 同一实现）：LiDAR 为 `world`（BoxWorld 或 MeshWorldQuery）上的 MeshLidar，IMU 为 MID-360 内置 IMU。"""
-    from awr.agentsdk.env.l2 import L2Config, L2Sensors
+    from awr.agentsdk.env.l2 import L2Config, L2Sensors, worldquery_cache_dir
     from awr.sensorsvc.lidar.mesh import MeshLidar
     from awr.sensorsvc.lidar.model import load_lidar_model
 
     if world is None:
         from awr.world.mesh.query import open_mesh_world_query
 
-        world = open_mesh_world_query(Path(world_dir), Path(world_dir).resolve().parent.parent / "cache" / "worldquery")
+        world = open_mesh_world_query(Path(world_dir), worldquery_cache_dir(world_dir))      # AWR_WORLDQUERY_CACHE_DIR 或按世界目录推导
     lidar = MeshLidar(world, load_lidar_model(), [])
     return L2Sensors(world_dir=Path(world_dir or "."), tape=_NoTape(), uavs=list(uavs), seed=seed, noise=noise, obs_level="L2", nav=None,
                      mount_t_bs_m=(0.1, 0.0, -0.05), hfov_deg=80.0,

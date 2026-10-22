@@ -27,6 +27,8 @@ goto 目标解释在本机导航系，每个控制步按当前导航误差换算
 世界查询（`open_world_query`；K07）：缺省打开网格查询 `MeshWorldQuery`（M22），失败时正式运行（`is_formal`）拒绝并抛
 `WorldQueryFallbackRefused`，不退回 DSM；非正式运行记录 warning 后退回 DSM 查询。实际使用的查询类型与退回原因写入运行清单
 `world_query`（`{kind: mesh | dsm | other, class, fallback?}`）。
+运行种子（`write_run_seed`；K18）：不排名运行写入 `truth/run_seed.json`；排名运行不在运行目录留种子明文（写入隐藏区
+`hidden/<eid>/truth/runs/<run_id>/` 或 `spec.seed_sink`，没有隐藏区时不写），落点记入运行清单 `seed_store`。
 """
 
 from __future__ import annotations
@@ -51,8 +53,10 @@ from awr.agentsdk.env.spec import EnvSpec
 from awr.agentsdk.env.tapecheck import check_tape_world, is_formal
 from awr.agentsdk.task import brief_for_agent, task_from_event
 from awr.phys.adapter import TierCommand, VehicleStatus
+from awr.sensorsvc.gpuhealth import gpu_errors
 
-__all__ = ["TICK_MS", "TICK_NS", "BenchEnv", "WorldQueryFallbackRefused", "open_world_query", "world_query_info"]
+__all__ = ["SEED_FILE", "TICK_MS", "TICK_NS", "BenchEnv", "WorldQueryFallbackRefused", "open_world_query", "seed_sink_for",
+           "world_query_info", "write_run_seed"]
 
 log = logging.getLogger(__name__)
 
@@ -90,11 +94,13 @@ class _Agent:
 
 class BenchEnv:
     def __init__(self, spec: EnvSpec, *, world=None, tape=None, tier=None, cam: CameraModel | None = None, limits: Limits | None = None,
-                 l2=None, sensorsvc=None, inflight_cap: int | None = None, wall_preview=False, preroll_s: float = PREROLL_DEFAULT_S) -> None:
+                 l2=None, sensorsvc=None, inflight_cap: int | None = None, wall_preview=False, preroll_s: float = PREROLL_DEFAULT_S,
+                 l2_cache_dir: Path | None = None) -> None:
         """`l2`：L2 传感器工厂 `(env) -> L2Sensors`（测试注入 CPU 渲染替身）；缺省按 `spec.l2` 构造 EGL 光栅相机。
         `sensorsvc`：M25 调度器（`awr.sensorsvc.scheduler.Scheduler`；进程内 GL 渲染须 `threaded=False`），L2 帧经其 Benchmark 会话交付；
         `inflight_cap` 为会话在途上限（缺省 2 个 tick 的到期帧数）。`wall_preview`：True 写入运行目录，或回调
-        `(uav, seq, t_ns, jpeg_bytes)`。`preroll_s`：事件零点之前的预滚窗口（`env.preroll`；缺省 2 s，0 关闭）。"""
+        `(uav, seq, t_ns, jpeg_bytes)`。`preroll_s`：事件零点之前的预滚窗口（`env.preroll`；缺省 2 s，0 关闭）。`l2_cache_dir`：L2 网格
+        世界查询的派生缓存根（缺省按 `env.l2.worldquery_cache_dir` 取 `AWR_WORLDQUERY_CACHE_DIR`，再按世界目录推导；不进入运行哈希）。"""
         from awr.sim.events.tape import open_tape
 
         if spec.obs_level not in ("L1", "L2", "L2-depth"):
@@ -120,6 +126,7 @@ class BenchEnv:
         self.rec = EnvRecorder(spec.out_dir, spec=spec, tape=self.tape)
         self._tier = tier
         self._l2_factory = l2
+        self._l2_cache = Path(l2_cache_dir) if l2_cache_dir else None
         self.l2 = None
         self._svc, self._svc_cap, self._sess = sensorsvc, inflight_cap, None
         self._svc_wait = {"ticks": 0, "rejected_641": 0, "resubmits": 0, "wait_s": 0.0, "backpressure_s": 0.0, "blocked_ticks": 0}
@@ -144,7 +151,8 @@ class BenchEnv:
 
         wd = Path(self.spec.world_dir)
         meta = _json.loads((wd / "world.json").read_text(encoding="utf-8")) if (wd / "world.json").is_file() else {}
-        cfg = L2Config(**{k: v for k, v in (self.spec.l2 or {}).items() if k in ("camera_profile", "jpeg_quality", "lidar", "imu", "gnss")})
+        cfg = L2Config(**{k: v for k, v in (self.spec.l2 or {}).items() if k in ("camera_profile", "jpeg_quality", "lidar", "imu", "gnss")},
+                       cache_dir=self._l2_cache)
         return L2Sensors(world_dir=wd, tape=self.tape, uavs=self.uavs, seed=self.spec.seed, noise=self.spec.noise, obs_level=self.spec.obs_level,
                          nav=self.nav, mount_t_bs_m=self.cam.mount_t_bs_m, hfov_deg=self.cam.hfov_deg, cfg=cfg, world_meta=meta)
 
@@ -218,7 +226,8 @@ class BenchEnv:
         self.tier.open()
         self.tier = run_preroll(self.tier, self.preroll)    # [−t_pre, 0)：不调用 Agent、不交付观测；窗口内接触只记入 tier_info.preroll
         if self.spec.obs_level != "L1":
-            self.l2 = self._l2_factory(self) if self._l2_factory is not None else self._make_l2()
+            with gpu_errors("l2 open"):                     # GPU 丢失（设备节点、EGL、Warp）→ 647 平台失败，不再崩溃（K18）
+                self.l2 = self._l2_factory(self) if self._l2_factory is not None else self._make_l2()
             if self._svc is None and hasattr(self.l2, "defer_truth"):
                 self.l2.defer_truth = True                 # 真值可见度归约在等待 Agent 动作期间由后台线程完成（`_flush_truth`）
             if self._svc is not None:
@@ -235,7 +244,7 @@ class BenchEnv:
         self.agents = list(self.uavs)
         self.status = dict(self.tier.status())
         self.rec.write_json("task.json", self.task)
-        self.rec.write_json("truth/run_seed.json", {"run_seed": self.spec.seed})
+        self.seed_store = write_run_seed(self.spec, self.rec)
         self.configs = {u: self.agent_config(u) for u in self.uavs}
         for u, c in self.configs.items():
             self.rec.write_json(f"agents/{u}/config.json", c)
@@ -252,9 +261,10 @@ class BenchEnv:
         """按序写出推迟计算的 L2 真值行（上一次感知的各机）：在每次推进之前（本 tick 的接触事件之前）与关闭时写出，真值层的写入顺序
         与不推迟时相同。"""
         q, self._truth_q = self._truth_q, []
-        for fut in q:
-            for tr in fut.result():
-                self.rec.on_vis(tr)
+        with gpu_errors("l2 truth"):
+            for fut in q:
+                for tr in fut.result():
+                    self.rec.on_vis(tr)
 
     def _flush_obs(self) -> None:
         futs, self._rec_futs = self._rec_futs, []
@@ -436,7 +446,8 @@ class BenchEnv:
         t = k * TICK_NS
         if self.l2 is not None:
             live = [(u, a.no) for u, a in self.st.items() if not a.done and self.status[u] != VehicleStatus.CRASHED]
-            res = self._sense_m25(k, live) if self._sess is not None else self.l2.sense_all(k, live)
+            with gpu_errors("l2 sense"):                    # 运行中 CUDA / EGL 设备丢失类异常 → 647（K18）
+                res = self._sense_m25(k, live) if self._sess is not None else self.l2.sense_all(k, live)
             for u, (frames, truth) in res.items():
                 a = self.st[u]
                 for sid, fs in frames.items():
@@ -538,13 +549,16 @@ class BenchEnv:
                     "comm": {"enabled": self.spec.comm.enabled, "bucket_Bps": self.spec.comm.bucket_Bps},
                     "duration_s": self.duration_s, "n_ticks": self.k, "pose_sha256": info.get("pose_sha256"), "tier_info": info,
                     "wall_s": round(wall, 2), "l1_rays": self.l1.n_rays, "agents": stats, "tape_check": self.tape_check,
-                    "world_query": self.world_query}
+                    "world_query": self.world_query, "seed_store": getattr(self, "seed_store", None)}
         if not self.spec.ranked or self.spec.seed_commit:     # 运行身份（M27-FR-007）；排名运行须有 M27 的种子承诺值
             manifest.update(self.spec.identity())
         if self.cam != CameraModel():                       # L1 相机不是标称相机（相机覆盖，ADR-217）：评测器的 AO oracle 按此相机计算
             manifest["camera"] = self.cam.manifest()
         if self.l2 is not None:                             # 网格 LiDAR 后端（cpu：Open3D 参考；warp：M25 GPU 产品路径）
             manifest["l2"] = {"lidar_backend": getattr(self.l2, "lidar_backend", None)}
+            probe = getattr(self.l2, "gpu_probe", None)
+            if isinstance(probe, dict):                     # 建立 GPU 上下文之前的体检（`awr.sensorsvc.gpuhealth.require_gpu`）
+                manifest["l2"]["gpu_probe"] = {k: probe[k] for k in ("mode", "expected", "warp_cuda_devices") if k in probe}
         if svc is not None:
             manifest["sensorsvc"] = svc
         if self._wall is not None:
@@ -588,6 +602,67 @@ class _WallPreview:
 
     def summary(self) -> dict:
         return {"hz": self.HZ, "size": list(self.SIZE), "jpeg_quality": self.QUALITY, "frames": dict(self.n), "source": "delivered"}
+
+
+SEED_FILE = "run_seed.json"
+
+
+def seed_sink_for(spec: EnvSpec) -> tuple[Path | None, bool]:
+    """排名运行种子明文的隐藏区目录 → (目录, 是否显式给出)：`spec.seed_sink`；未给出而运行目录为 M27 数据集布局
+    `<data>/dataset/<eid>/runs/<run_id>`（subworker、board_v1_formal 同）时取同一数据根的 `<data>/hidden/<eid>/truth/runs/<run_id>`
+    （`HiddenStore.truth_dir` 与 `seal-truth` 的布局）；其余为 None。"""
+    if getattr(spec, "seed_sink", None) is not None:
+        return Path(spec.seed_sink), True
+    if spec.out_dir is None:
+        return None, False
+    p = Path(spec.out_dir)
+    if p.parent.name == "runs" and p.parent.parent.parent.name == "dataset":
+        return p.parent.parent.parent.parent / "hidden" / p.parent.parent.name / "truth" / "runs" / p.name, False
+    return None, False
+
+
+def _mkdir_hidden(d: Path) -> None:
+    """建目录链，新建的各级设为 0700（隐藏区 `HiddenStore._mkdir` 的同一口径；已有目录不改属主与权限）。"""
+    missing = [x for x in (d, *d.parents) if not x.exists()]
+    d.mkdir(parents=True, exist_ok=True)
+    for x in missing:
+        os.chmod(x, 0o700)
+
+
+def write_run_seed(spec: EnvSpec, rec: EnvRecorder | None = None) -> str | None:
+    """运行种子明文的落点（ADR-161 决策 (3)、M27-FR-005；K18，B21 遗留 8）→ 运行清单 `seed_store`：
+
+    - 不排名运行：写入运行目录真值层 `truth/run_seed.json`（不排名运行的种子本就公开，Rerun 导出与复现取用），记 `run_dir`；
+    - 排名运行：运行目录不留种子明文，只写入隐藏区目录（`seed_sink_for`：显式 `spec.seed_sink`，或数据集布局下同一数据根的
+      `hidden/<eid>/truth/runs/<run_id>/`）的 `run_seed.json`（新建目录 0700、文件 0600，先写临时文件再改名），记 `hidden`；评测
+      catalog 的导出（`rerun_export`）从该处取种子。没有隐藏区目录时不写，种子以 M27 评测库（`EvalStore.seeds`，与 `seed_commit`
+      的 HMAC 承诺对应）为准，记 `evalstore`。由布局推导的隐藏区不可写（例如属主为 Evaluator 服务用户）时同样不写并记 warning
+      （不含种子）；显式给出的目录不可写时抛出。
+    运行目录未给出（`out_dir = None`）且不排名时不写盘，记 None。"""
+    if not spec.ranked:
+        if rec is None or not getattr(rec, "dir", None):
+            return None
+        rec.write_json(f"truth/{SEED_FILE}", {"run_seed": spec.seed})
+        return "run_dir"
+    sink, explicit = seed_sink_for(spec)
+    if sink is None:
+        return "evalstore"
+    import json as _json
+
+    tmp = sink / f".{SEED_FILE}.{os.getpid()}.tmp"
+    try:
+        _mkdir_hidden(sink)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(_json.dumps({"run_seed": int(spec.seed), "run_id": spec.run_id}, sort_keys=True) + "\n")
+        os.replace(tmp, sink / SEED_FILE)
+    except OSError as e:
+        if explicit:
+            raise
+        log.warning("run %s: hidden seed store %s is not writable (%s); the seed stays only in the EvalStore", spec.run_id, sink,
+                    type(e).__name__)
+        return "evalstore"
+    return "hidden"
 
 
 class WorldQueryFallbackRefused(RuntimeError):

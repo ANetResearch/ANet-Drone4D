@@ -2,6 +2,7 @@
 # 运行时由 Env 以 --network none、只读根文件系统、非 root 用户启动，经挂载的 /run/drone4d/agent.sock 与 Env 通信。
 # 内部提交可以此为基础镜像：COPY 自己的包，CMD ["python", "-m", "drone4d.serve", "my_pkg.agent:Agent"]。
 # L2 参考检测器（drone4d.perception.ref_det，numpy 推理）需 numpy 与 pillow；BLAS 单线程（容器 1 CPU，且逐字节确定）。
+# pillow ≥ 12.3.0（build.sh 钉定版本并校验 sha256）：基础镜像须通过提交扫描门（ADR-204、D3-AC-59；K18）。
 FROM python:3.12-slim
 COPY wheels/ /tmp/wheels/
 RUN pip install --no-index --no-cache-dir /tmp/wheels/msgpack-*.whl /tmp/wheels/numpy-*.whl /tmp/wheels/pillow-*.whl && rm -rf /tmp/wheels

@@ -15,7 +15,7 @@
       truth/l1.jsonl                L1 检测的真值映射（uav、seq、t_ns、det_id、actor、h_px、h_unocc_px、vis、ident、delivered）
       truth/l2.jsonl                L2 相机帧的可见度归约（uav、sensor、seq、t_ns、actor、h_unocc_px、vis、bbox_xywh）
       truth/contacts.jsonl          接触事件
-      truth/run_seed.json           运行种子（真值层；评测与审计用，不对 Agent 可见）
+      truth/run_seed.json           运行种子（只限不排名运行；排名运行不在运行目录留种子明文，见 `core.write_run_seed`）
 
 `raw.mcap`（M27 §7.5.1、§7.5.2）：写入发生在观测交付时（`on_obs`），存档的正是 Agent 收到的字节：
 

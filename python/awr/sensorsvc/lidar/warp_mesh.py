@@ -91,6 +91,13 @@ def open_mesh_lidar(q, model: LidarModel, actors: list[dict] | None = None, back
         raise ValueError(f"AWR_LIDAR_BACKEND must be auto, warp or cpu (got {b!r})")
     if b == "cpu" or (b == "auto" and not warp_cuda_available()):
         return MeshLidar(q, model, actors)
+    if b == "warp" and not str(device or "cuda").startswith("cpu"):
+        from awr.sensorsvc.gpuhealth import gpu_expected, require_gpu
+
+        # 本应有 GPU 的进程（容器带 NVIDIA 设备节点或 NVIDIA_VISIBLE_DEVICES）Warp 却看不到 CUDA 设备（初始化报 CUDA error 100）：
+        # 设备已丢失，抛 647 平台错误，不静默退到 Warp CPU 设备（K18，B21 遗留 3）
+        if gpu_expected() and not warp_cuda_available():
+            require_gpu(egl=False, warp=True, stage="lidar", mode="nodes")
     return WarpMeshLidar(q, model, actors, device=device)
 
 
@@ -676,6 +683,9 @@ class WarpMeshLidar:
         self.last_tracks: dict[int, _ActorTrack] = {}
         self.last_timing: dict[str, float] = {}
         self.last_rays: dict[str, np.ndarray] | None = None
+        # CUDA 计时事件（§4.7 GPU 时间份额核算，ADR-213 决策 (3)）：第 1、2 段内核、第 3 段内核与压缩、D2H 回传三个区间各一对；
+        # 两段之间主机重建演员轨迹时 GPU 可能空闲，该空隙不计入
+        self._tev = None if is_cpu else [wp.Event(dev, enable_timing=True) for _ in range(6)]
         t0 = time.perf_counter()
         self._tiles = []                                         # 保持 points、indices 数组的引用（Mesh 只记录其设备指针）
         ids, org, lo, hi, t0s = [], [], [], [], []
@@ -823,6 +833,10 @@ class WarpMeshLidar:
         prm.n_tiles, prm.n_sem, prm.rays = self._n_tiles, self._n_sem, int(bool(rays))
         # ---- 第 1、2 段内核（射线、静态求交）先行异步执行，主机同时重建演员轨迹
         T1 = time.perf_counter()
+        ev = self._tev
+        stream = wp.get_stream(dev) if ev is not None else None
+        if ev is not None:
+            stream.record_event(ev[0])
         fr_sc, fr_key = A(sc, np.float64, wp.float64), A(kf, np.uint64, wp.uint64)
         k_rays, k_static, k_main = self._k_stages
         wp.launch(k_rays, dim=n_rays, device=dev, block_dim=BLOCK_DIM,
@@ -832,9 +846,13 @@ class WarpMeshLidar:
         wp.launch(k_static, dim=n_rays, device=dev, block_dim=BLOCK_DIM,
                   inputs=[prm, self._ro, self._rd, self._tile_mesh, self._tile_org, self._tile_lo, self._tile_hi, self._tile_t0,
                           self._st, self._sprim, self._snrm])
+        if ev is not None:
+            stream.record_event(ev[1])
         T2 = time.perf_counter()
         at = self._actor_tables(actor_states, t0s, B, N)
         T3 = time.perf_counter()
+        if ev is not None:
+            stream.record_event(ev[2])
         ahit = wp.zeros(B, dtype=wp.int32, device=dev)
         aray = wp.zeros(B, dtype=wp.int32, device=dev)
         segs = at["segs"]
@@ -860,16 +878,27 @@ class WarpMeshLidar:
         fstart = wp.empty(B + 1, dtype=wp.int32, device=dev)
         wp.launch(self._k_fstart, dim=B + 1, inputs=[N, n_rays, self._valid, self._offs, fstart], device=dev)
         wp.launch(self._k_compact, dim=n_rays, inputs=[self._rec, self._valid, self._offs, self._out], device=dev)
+        if ev is not None:
+            stream.record_event(ev[3])
         fst = fstart.numpy()                                     # 同步点
         T4 = time.perf_counter()
         total = int(fst[-1])
         h_out, h_inst, h_flags, _cap = self._host_slot(n_rays)
+        if ev is not None:
+            stream.record_event(ev[4])
         wp.copy(h_out, self._out, count=total)
         wp.copy(h_inst, self._inst, count=n_rays)
         wp.copy(h_flags, self._flags, count=n_rays)
+        if ev is not None:
+            stream.record_event(ev[5])
         hits, rays_n = ahit.numpy(), aray.numpy()
         wp.synchronize_device(dev)
         T5 = time.perf_counter()
+        gpu = {}
+        if ev is not None:
+            el = wp.get_event_elapsed_time
+            gpu = {"gpu_ms": el(ev[0], ev[1], synchronize=False) + el(ev[2], ev[3], synchronize=False),
+                   "d2h_gpu_ms": el(ev[4], ev[5], synchronize=False)}
         pts = h_out.numpy()[:total].view(LIDAR_RECORD)
         gi = h_inst.numpy()[:n_rays]
         gf = h_flags.numpy()[:n_rays]
@@ -883,7 +912,8 @@ class WarpMeshLidar:
         T6 = time.perf_counter()
         self.last_timing = {"frames": float(B), "points": float(total), "actors": float(len(at["idx"])), "segments": float(at["n_seg"]),
                             "prep_ms": (T1 - T0) * 1e3, "launch_ms": (T2 - T1) * 1e3, "track_ms": (T3 - T2) * 1e3,
-                            "gpu_wait_ms": (T4 - T3) * 1e3, "d2h_ms": (T5 - T4) * 1e3, "unpack_ms": (T6 - T5) * 1e3, "total_ms": (T6 - T0) * 1e3}
+                            "gpu_wait_ms": (T4 - T3) * 1e3, "d2h_ms": (T5 - T4) * 1e3, "unpack_ms": (T6 - T5) * 1e3, "total_ms": (T6 - T0) * 1e3,
+                            **gpu}
         return out
 
     def _actor_tables(self, actor_states, t0s: np.ndarray, B: int, N: int) -> dict:

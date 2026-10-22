@@ -11,6 +11,11 @@
   记 632；等待期间每 `poll_s` 经 `alive()`（通常为 `GzInstance.alive`）检查实例，进程已退出记 638（≤ 1 s 识别）。Hello 与 Shutdown
   沿用 `timeout_s`。632 / 638 之后套接字作废（REQ 状态机已失步），由 `SupervisedGzBackend` 重启实例并重放。
 - 每 tick 记录控制消息与样本块的 sha256（`last_control_sha256`、`last_block_sha256`），供重放逐 tick 比对。
+- 发散守卫（K18，B21 遗留 5）：机间碰撞后 gz 中已坠毁机体的状态可能发散（位置约 1e124、速度溢出，录制溢出告警）。样本块写入
+  PoseHistory 之前逐机逐步检查：状态非有限、速度 > `GUARD_V_MPS`、角速度 > `GUARD_OMEGA_RPS`、位置分量绝对值 > `GUARD_POS_M`，
+  或已坠毁机体离坠毁点 > `GUARD_DRIFT_M` 即判发散。发散机体自该步起冻结为最后一个合理样本（速度与角速度置零），此后各 tick
+  的样本均为冻结值；未坠毁机体发散按坠毁处理（`crash = impact`，给出 IMPACT 接触，Env 终止该机），不再把发散值交给 Env 与录制。
+  守卫只取决于样本值，重放逐位一致；触发记录在 `close()` 的 `crash_guard`。
 - field 风模式（M24-FR-046，§6.5.8）：`wind` 为 `awr.phys.gz.wind.FieldWind` 时，每 tick 以 tick 起点状态求本 tick 的逐机风矢量
   放入 `Control.wind`（`Drone4DClock` 写入 D4dWind，`Drone4DWindDrag` 施力）；重放时 FieldWind 返回缓存，控制消息逐字节相同。
 
@@ -64,6 +69,10 @@ RECOVERABLE = frozenset({632, 638})                  # 步进超时、实例退�
 REUSE_POLICY = "per_run"                             # M24-FR-060 验证结论（verify_reset_reuse）；same_seed 未通过验证
 MAX_PATH_POINTS = 256                                # follow_path 航点上限（与 Fast 档相同）
 STEP_TIMEOUT_S = 5.0                                 # M24-FR-079 gz_step_timeout_s；run_spec physics_opts.step_timeout_s 缺省
+GUARD_V_MPS = 100.0                                  # 发散守卫：速度上限（x500 平飞上限约 20 m/s，150 m 自由落体约 54 m/s）
+GUARD_OMEGA_RPS = 1000.0                             # 角速度上限（约 160 转/s，坠毁翻滚远低于此值）
+GUARD_POS_M = 1.0e5                                  # 位置分量绝对值上限（世界包范围为数公里）
+GUARD_DRIFT_M = 500.0                                # 已坠毁机体离坠毁点的位移上限
 
 
 @dataclass
@@ -76,6 +85,8 @@ class _Veh:
     grace_ns: int = 0                    # 起飞宽限剩余（飞行指令生效时置为 TAKEOFF_GRACE_S，首次离地即清零）
     crash: str = "none"
     sent: Setpoint | None = None
+    crash_pos: np.ndarray | None = None  # 坠毁步的机体位置，发散守卫的位移基准
+    frozen: np.ndarray | None = None     # 发散守卫冻结的状态行（16）；None 未冻结
 
 
 @dataclass
@@ -119,6 +130,7 @@ class GzSimBackend:
         self.open_sha256 = b""                           # HelloAck 初始样本块的 sha256
         self.last_control_sha256 = b""                   # 最近一个 tick 的 Control 信封字节 sha256
         self.last_block_sha256 = b""                     # 最近一个 tick 的样本块（t_rel ‖ state）sha256
+        self.guard_events: list[dict] = []               # 发散守卫触发记录（uav、t_ns、reason、crashed_before）
 
     # ------------------------------------------------------------ 连接
     def open(self) -> dict:
@@ -252,7 +264,7 @@ class GzSimBackend:
             raise PhysError(635, f"StepDone seq {sd.seq} tick {sd.tick} n_uav {sd.n_uav} n_steps {sd.n_steps} does not match")
         if not np.array_equal(t_rel, expect):
             raise PhysError(635, f"StepDone times {t_rel[:2].tolist()}... are off the grid {expect[:2].tolist()}...")
-        state = P.samples_array(sd, len(self.uavs))
+        state, guard_contacts = self._guard(P.samples_array(sd, len(self.uavs)), t_rel)
         w3 = time.perf_counter_ns()
         tm.decode = w3 - w2
         self.history.append_block(t_rel, state)
@@ -260,7 +272,7 @@ class GzSimBackend:
         self.digest.update(blk)
         self.last_block_sha256 = hashlib.sha256(blk).digest()
         self.last_control_sha256 = hashlib.sha256(raw_ctl[0]).digest()
-        contacts = self._contacts(sd, t_rel, state)
+        contacts = guard_contacts + self._contacts(sd, t_rel, state)
         t_start = self.t_k_ns
         self.t_k_ns = int(expect[-1])
         self.seq = int(ctl.seq)
@@ -270,6 +282,51 @@ class GzSimBackend:
         self._rtf.append(float(sd.gz_rtf))
         self._ticks += 1
         return TickResult(k, t_start, self.t_k_ns, self.n_steps, tuple(contacts), self.status(), tm)
+
+    def _guard(self, state: np.ndarray, t_rel: np.ndarray) -> tuple[np.ndarray, list[ContactEvent]]:
+        """发散守卫（见模块说明）：→ (守卫后的样本块, 未坠毁机体判发散时的 IMPACT 接触)。无触发且无冻结机体时原样返回。"""
+        out: np.ndarray | None = None
+        contacts: list[ContactEvent] = []
+        for v in self._v.values():
+            if v.frozen is None:
+                col = state[:, v.idx, :]
+                with np.errstate(invalid="ignore", over="ignore"):
+                    bad = ~np.isfinite(col).all(axis=1)
+                    fin = np.where(np.isfinite(col), col, 0.0)
+                    speed = np.linalg.norm(fin[:, 7:10], axis=1)
+                    omega = np.linalg.norm(fin[:, 10:13], axis=1)
+                    far = np.abs(fin[:, 0:3]).max(axis=1) > GUARD_POS_M
+                    drift = (np.linalg.norm(fin[:, 0:3] - v.crash_pos, axis=1) > GUARD_DRIFT_M if v.crash_pos is not None
+                             else np.zeros(len(col), bool))
+                why = np.where(bad, 1, np.where(speed > GUARD_V_MPS, 2, np.where(omega > GUARD_OMEGA_RPS, 3, np.where(far, 4,
+                                                                                                              np.where(drift, 5, 0)))))
+                if not why.any():
+                    if v.crash != "none" and v.crash_pos is None:
+                        v.crash_pos = np.array(col[0, 0:3], np.float64)
+                    continue
+                j = int(np.argmax(why > 0))
+                last = np.array(col[j - 1] if j > 0 else self._last_row(v.uav), np.float64)
+                last[7:13] = 0.0                              # 冻结：速度与角速度置零，位置、姿态、比力取最后一个合理样本
+                v.frozen = last
+                reason = ("nonfinite", "speed", "omega", "position", "drift")[int(why[j]) - 1]
+                self.guard_events.append({"uav": v.uav, "t_ns": int(t_rel[j]), "reason": reason, "crashed_before": v.crash != "none"})
+                if v.crash == "none":                         # 未坠毁机体发散：按坠毁处理，Env 以 CRASHED 终止该机
+                    v.crash = "impact"
+                    p = last[0:3]
+                    contacts.append(ContactEvent(v.uav, int(t_rel[j]), "IMPACT", "gz", (float(p[0]), float(p[1]), float(p[2])), None,
+                                                 float(np.linalg.norm(fin[j - 1, 7:10])) if j > 0 else 0.0))
+                if out is None:
+                    out = np.array(state, np.float64)
+                out[j:, v.idx, :] = v.frozen
+            else:
+                if out is None:
+                    out = np.array(state, np.float64)
+                out[:, v.idx, :] = v.frozen
+        return (state if out is None else out), contacts
+
+    def _last_row(self, uav: str) -> np.ndarray:
+        s = self.history.last_sample(uav)
+        return np.concatenate([s.pos_enu_m, s.q_ws_xyzw, s.vel_enu_mps, s.omega_b_rps, s.f_b_mps2])
 
     def _contacts(self, sd, t_rel: np.ndarray, state: np.ndarray) -> list[ContactEvent]:
         by_step: dict[int, list] = {}
@@ -285,6 +342,9 @@ class GzSimBackend:
                 ev = ContactEvent(v.uav, int(t_rel[j]), kind, "gz", (c.px, c.py, c.pz), (c.nx, c.ny, c.nz), float(c.speed))
                 if kind in _CRASH:
                     v.crash = _CRASH[kind]
+                    if v.crash_pos is None and v.frozen is None:  # 发散守卫的位移基准：坠毁步的机体位置（有限时）
+                        ps = state[j, v.idx, 0:3]
+                        v.crash_pos = np.array(ps, np.float64) if np.isfinite(ps).all() else None
                     out.append(ev)
                 elif kind == "TOUCHDOWN":
                     v.in_contact = True
@@ -326,6 +386,8 @@ class GzSimBackend:
                 "gz_rtf_mean": float(np.mean(self._rtf)) if self._rtf else 0.0, "pose_sha256": self.digest.hexdigest()}
         if self.wind is not None:
             info["wind"] = self.wind.describe()
+        if self.guard_events:
+            info["crash_guard"] = list(self.guard_events)
         if self._sock is not None:
             try:
                 body, bye = self._rpc("shutdown", P.msg("Shutdown"), self.timeout_s)

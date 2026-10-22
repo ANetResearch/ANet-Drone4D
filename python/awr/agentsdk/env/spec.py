@@ -1,6 +1,7 @@
 """Env 运行上下文（M26 §6.2 RunContext 的 P0a 子集）与 `bench/run_spec.v1` 的映射。
 
-`run_seed` 只存在于 Env 进程内存与运行真值层（排名运行由 M27 以 CSPRNG 生成），不进入观测、简报与 Agent 可见的日志。
+`run_seed` 只存在于 Env 进程内存与真值层（排名运行由 M27 以 CSPRNG 生成），不进入观测、简报与 Agent 可见的日志；排名运行的种子
+明文不写入运行目录，只写入 `seed_sink` 给出的隐藏区目录或不写（`core.write_run_seed`，K18）。
 决策时延（`policy.params.decision`，M26 §9.4 的 run_spec 变更请求落地前）缺省 `fixed`、τ = 0（下一 tick 生效）。
 
 运行身份（M27-FR-007、M24-FR-069；D3-AC-17）：
@@ -177,6 +178,7 @@ class EnvSpec:
     seed_commit: str | None = None               # 排名运行的种子承诺值（M27 生成）；不排名运行缺省以 seed 代替
     versions: dict = field(default_factory=platform_versions)
     camera: dict = field(default_factory=dict)  # L1 标称相机覆盖（`{"hfov_deg": 度}`，ADR-217）；空为标称相机
+    seed_sink: Path | None = None                # 排名运行种子明文的隐藏区目录（`core.write_run_seed`）；None 不写；不进入哈希
 
     def camera_model(self) -> CameraModel:
         """本运行的 L1 相机：标称相机按 `camera` 覆盖派生。"""
@@ -214,9 +216,9 @@ class EnvSpec:
     @classmethod
     def from_run_spec(cls, rs: dict, *, run_id: str, seed: int, worlds_root: Path, events_root: Path, out_dir: Path | None = None,
                       physics: str | None = None, gz: dict | None = None, images: Mapping[str, str] | None = None,
-                      seed_commit: str | None = None) -> EnvSpec:
+                      seed_commit: str | None = None, seed_sink: Path | None = None) -> EnvSpec:
         """`images`：平台镜像摘要（`gz`、`sensorsvc`、`env`、`agent`，进入 `versions`）；缺省 `gz` 取 `gz["image"]`，`agent` 取
-        `policy.image_digest`。"""
+        `policy.image_digest`。`seed_sink`：排名运行种子明文的隐藏区目录（缺省不写，种子以 M27 评测库为准）。"""
         fleet = []
         for f in rs["fleet"]:
             st = f["start"]
@@ -238,4 +240,4 @@ class EnvSpec:
                    duration_s=rs.get("duration_s"), decision=DecisionCfg(**dec), comm=comm, ranked=bool(rs.get("ranked", False)),
                    policy=dict(rs.get("policy", {"kind": "sdk"})), out_dir=out_dir, gz=dict(gz or {}), l2=l2,
                    clock_profile=resolve_clock_profile(rs.get("clock_profile")), run_spec=resolve_run_spec(rs), seed_commit=seed_commit,
-                   versions=platform_versions(img), camera=camera_override(rs))
+                   versions=platform_versions(img), camera=camera_override(rs), seed_sink=Path(seed_sink) if seed_sink else None)
