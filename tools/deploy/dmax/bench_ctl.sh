@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 在 dmax 的 d3-gz 容器内执行 `python -m awr.bench.ctl …`（数据根 $D/<BENCH_ROOT>，缺省 benchroot）。
 # 例：tools/deploy/dmax/bench_ctl.sh board publish /repo/out/proto-2 --current
-#     tools/deploy/dmax/bench_ctl.sh submission create --team d3 --owner alice --track std3-l1 --digest sha256:… --cmd "python -m drone4d.serve pkg:Agent"
+#     tools/deploy/dmax/bench_ctl.sh submission create --team d3 --owner alice --track std3-l1 --digest sha256:… --cmd "python -m anet4d.serve pkg:Agent"
 # 不要用于 token issue（明文令牌会经 ssh 输出到本机终端）。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)

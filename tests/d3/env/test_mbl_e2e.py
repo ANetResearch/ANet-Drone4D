@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[3]
-SDK = REPO / "tools/sdk/drone4d/src"
+SDK = REPO / "tools/sdk/anet4d/src"
 _spec = importlib.util.spec_from_file_location("mbl_e2e", REPO / "tools/bench/d3/mbl_e2e.py")
 mbl = importlib.util.module_from_spec(_spec)
 sys.modules["mbl_e2e"] = mbl
@@ -123,7 +123,7 @@ def env(tmp_path: Path, monkeypatch) -> dict:
     cfg = {"schema": mbl.CONFIG_SCHEMA, "round": "t-mbl", "event": {"source": str(EVENT_SRC)},
            "groups": [{"obs_level": "L1", "run_spec": str(L1), "jobs": 3}, {"obs_level": "L2", "run_spec": str(L2), "jobs": 2}],
            "seeds": 3, "repeats": 2, "fleet_vehicle": "p600_bench", "board": {"version": "t-mbl", "current": "L2", "n_boot": 200},
-           "submission": {"image": DIGEST, "cmd": ["python", "-m", "drone4d.serve", "close_track.agent:Agent"], "group": "L2", "team": "d3-internal",
+           "submission": {"image": DIGEST, "cmd": ["python", "-m", "anet4d.serve", "close_track.agent:Agent"], "group": "L2", "team": "d3-internal",
                           "owner": "alice", "smoke_s": 5.0}}
     p = tmp_path / "mbl.json"
     p.write_text(json.dumps(cfg))
@@ -388,7 +388,7 @@ def test_end_to_end_real_run_job(synth_event, tmp_path: Path, monkeypatch, reque
     cfg = {"schema": mbl.CONFIG_SCHEMA, "round": "e2e", "world": {"id": w.name}, "event": {"source": str(src / "event.json")},
            "groups": [{"obs_level": "L1", "run_spec": str(tmp_path / "rs.json"), "jobs": 3}], "seeds": 2, "repeats": 2, "physics": "kinematic",
            "lockstep": {"preflight_s": 4.0, "policy": "track_share", "group": "L1"}, "board": {"version": "e2e", "current": "L1", "n_boot": 200},
-           "submission": {"image": DIGEST, "cmd": ["python", "-m", "drone4d.serve", "--baseline", "track_share"], "group": "L1", "team": "t1",
+           "submission": {"image": DIGEST, "cmd": ["python", "-m", "anet4d.serve", "--baseline", "track_share"], "group": "L1", "team": "t1",
                           "owner": "bob", "smoke_s": 3.0}}
     (tmp_path / "cfg.json").write_text(json.dumps(cfg))
     hooks = mbl.Hooks(validate_world=_ok_world, compile_event=compile_copy, docker=str(docker))

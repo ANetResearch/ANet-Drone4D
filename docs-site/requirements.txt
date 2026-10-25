@@ -1,4 +1,4 @@
-# ANet Drone4D 文档站构建依赖（Sphinx + sphinx-rtd-theme + MyST）。
+# ANet4D 文档站构建依赖（Sphinx + sphinx-rtd-theme + MyST）。
 # 只用于 docs-site/，安装在独立虚拟环境 .venv-docs 中，不影响项目主依赖（requirements.lock）。
 # Read the Docs 构建读取本文件（.readthedocs.yaml 的 python.install）。
 sphinx==9.1.0

@@ -1,5 +1,5 @@
 {
-  "$comment": "端点说明的译文与补充（drone4d_api 扩展读取）。沙盒快照自带中文 summary，这里给出英文；运行时快照只有 FastAPI 自动生成的英文名，这里给出中英文说明。快照新增 operationId 而本文件缺少对应条目时，构建以告警失败（sphinx-build -W）。",
+  "$comment": "端点说明的译文与补充（anet4d_api 扩展读取）。沙盒快照自带中文 summary，这里给出英文；运行时快照只有 FastAPI 自动生成的英文名，这里给出中英文说明。快照新增 operationId 而本文件缺少对应条目时，构建以告警失败（sphinx-build -W）。",
   "groups": {
     "sandbox": {
       "rest/sandbox.py": {"zh": "会话、排队与生命周期", "en": "Sessions, queue and lifecycle"},

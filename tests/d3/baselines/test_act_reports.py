@@ -26,7 +26,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[0] / "world"))
 sys.path.insert(0, str(HERE.parents[0] / "events"))
-sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "anet4d" / "src"))
 
 pytest.importorskip("open3d")
 pytest.importorskip("zstandard")
@@ -92,7 +92,7 @@ def _check_evidence_shape(rep: dict, uav: str, cam: str, kind: str) -> None:
 
 # ------------------------------------------------------------------ 1. L1 回合
 def _episode(synth_event, out: Path, policy: str, seed: int = 5) -> BenchEnv:
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     w, ev = synth_event
     env = BenchEnv(EnvSpec(f"bl-{policy}-{seed}", seed, w, ev, FLEET3, physics="kinematic", duration_s=EPISODE_S, out_dir=out))
@@ -208,7 +208,7 @@ def l1_setup(synth_event):
 
 
 def _scripted_run(policy: str, config: dict, guard, level: str):
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     ag = BASELINES[policy]()
     ag.reset(copy.deepcopy(config))
@@ -298,7 +298,7 @@ class _FramePerception:
 
 
 def test_l2_episode_reports_use_frame_bbox_evidence(synth_event, tmp_path: Path) -> None:
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     from awr.agentsdk.env.l2 import L2Config, L2Sensors
 

@@ -144,7 +144,7 @@ def formal(tmp_path_factory):
             mp.setattr("awr.bench.runner.run_job", _crashing(fake, after=30))
         try:
             subs[name] = F.run_submission(root, out, board_version="v1", track=track, name=name, image=f"d3-example-{img}:t",
-                                          cmd=["python", "-m", "drone4d.serve", f"{img}.agent:Agent"], team=team, owner="b21", n_boot=N_BOOT,
+                                          cmd=["python", "-m", "anet4d.serve", f"{img}.agent:Agent"], team=team, owner="b21", n_boot=N_BOOT,
                                           docker=str(docker), digest=IMG[img], poll_s=0.01, log=logs.append)
         except WorkerCrash:
             mp.setattr("awr.bench.runner.run_job", fake)

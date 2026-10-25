@@ -9,7 +9,7 @@ test_rolling_shutter.py，本文件只复核交付值。用例对应：
   （reset、各步与 close）都在 `online_path()` 作用域内：每 tick 每机恰好一帧（10 Hz：seq 连续、t_mid 间隔 100 ms，1920 × 1080，
   readout_ns = 20,000,000）；L2 记录的编码器身份为 nvImageCodec（nvJPEG）q90 4:2:0，抽样帧用新建的 GPU 编码器重编码后逐字节相同，
   与 CPU 回退的字节不同；`cpu_encode_calls()` 增量为 0；每次观测都经宿主线协议编码（`awr.agentsdk.wire.encode_frame`，
-  并按线上字节做下发审计），在 Unix 套接字对的另一端由 SDK 的接收函数（`drone4d.wire._recv`）解码，得到 Agent 收到的 JPEG。
+  并按线上字节做下发审计），在 Unix 套接字对的另一端由 SDK 的接收函数（`anet4d.wire._recv`）解码，得到 Agent 收到的 JPEG。
   其 sha256 与 `raw.mcap` 中的存档字节（经 `frames.idx` 由 FrameStore 读出）、帧索引条目逐帧一致：
   `test_1080p_three_uav_online_end_to_end`；
 - 1080p 单帧体积：沿用同一产品路径（L2Sensors 渲染、效果链、自动曝光与 nvJPEG），在固定视点网格（离地 40/80/150/250 m ×
@@ -50,7 +50,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent / "world"))
 sys.path.insert(0, str(HERE.parent / "events"))
-sys.path.insert(0, str(ROOT / "tools" / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(ROOT / "tools" / "sdk" / "anet4d" / "src"))
 
 PROFILE = "rgb1080-rs"
 W, H = 1920, 1080
@@ -106,7 +106,7 @@ def write_record(name: str, obj: dict) -> Path | None:
 
 class WireTap:
     """Agent 侧实际收到的观测：宿主按线协议编码 OBS 帧并按线上字节审计（与 `SocketAgentHost._send` 相同），经 Unix 套接字对
-    发送，另一端由 SDK 的接收函数 `drone4d.wire._recv` 解码。"""
+    发送，另一端由 SDK 的接收函数 `anet4d.wire._recv` 解码。"""
 
     def __init__(self) -> None:
         from awr.agentsdk.env.obs_audit import ObsAudit
@@ -117,8 +117,8 @@ class WireTap:
         self.wire_bytes = 0
 
     def deliver(self, uav: str, msg: dict) -> dict:
-        from drone4d.wire import T as SdkT
-        from drone4d.wire import _recv
+        from anet4d.wire import T as SdkT
+        from anet4d.wire import _recv
 
         from awr.agentsdk.wire import T, encode_frame
 
@@ -400,7 +400,7 @@ def _probe_l2(probe: _RunProbe):
 @pytest.fixture(scope="module")
 def crop_run(crop_event) -> _RunProbe:
     """3 机 × rgb1080-rs × 10 Hz 的 BenchEnv 运行（整个运行在 `online_path()` 内），Agent 侧经线协议接收观测。"""
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     from awr.agentsdk.env.core import BenchEnv
     from awr.agentsdk.env.spec import EnvSpec, FleetEntry

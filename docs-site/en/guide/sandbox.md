@@ -105,11 +105,10 @@ range counts as a discovery under the criterion. After releasing the takeover, t
   the previous world are not carried over to the new world (coordinates and geometry differ between worlds); export a snapshot first if you
   need to keep them.
 
-Known issue: in the 0.2.0 release currently serving the public instance, this isolation does not fully hold on every switching path. Several
-client-side caches (targets, perception and field readings, tasking, the fleet roster, the timeline) were not reset per world, so entities and
-view settings from the previous world could remain visible after switching, including when switching worlds inside a sandbox session. The
-defect has been fixed in the development line (every such cache is now gated and reset by a world-scoped data layer) and ships with the next
-release; until the public instance is redeployed, you may still observe it there.
+Fixed in 0.2.1: in 0.2.0 this isolation did not fully hold on every switching path. Several client-side caches (targets, perception and
+field readings, tasking, the fleet roster, the timeline) were not reset per world, so entities and view settings from the previous world could
+remain visible after switching, including when switching worlds inside a sandbox session. Since 0.2.1 every such cache is gated and reset by a
+world-scoped data layer.
 
 ## Lifetime, renewal and power saving
 

@@ -531,10 +531,10 @@ describe('copy shard lab.public.run.* (AWR-14 §21.15; D3-AC-23)', () => {
 })
 
 describe('request guard of the sample page (AWR-14 §21.14.2 rule 1; D3-AC-21 static GET only)', () => {
-  const BASE = 'https://drone4d.agentnetwork.org.cn/lab/samples/run-abcdefghij'
+  const BASE = 'https://anet4d.agentnetwork.org.cn/lab/samples/run-abcdefghij'
 
   it('allows same-origin GET and HEAD under /lab/ and /lab-static/ only', () => {
-    for (const u of ['/lab-static/v/2026.10.19-1/runs/x/video/a.mp4', 'https://drone4d.agentnetwork.org.cn/lab/assets/re_viewer_bg-x.wasm', '/lab/assets/a.js']) {
+    for (const u of ['/lab-static/v/2026.10.19-1/runs/x/video/a.mp4', 'https://anet4d.agentnetwork.org.cn/lab/assets/re_viewer_bg-x.wasm', '/lab/assets/a.js']) {
       expect(allowedRequest(u, 'GET', BASE), u).toBe(true)
     }
     expect(allowedRequest('/lab-static/index.json', 'HEAD', BASE)).toBe(true)
@@ -563,7 +563,7 @@ describe('request guard of the sample page (AWR-14 §21.14.2 rule 1; D3-AC-21 st
       const off2 = installStaticGuard() // 嵌套挂载
       await g.fetch('/lab-static/v/2026.10.19-1/runs/x/tracks_obs.bin')
       await expect(g.fetch('https://tel.rerun.io/api/pogevent', { method: 'POST', body: '{}' })).rejects.toThrow(/blocked/)
-      await expect(g.fetch(new Request('https://drone4d.agentnetwork.org.cn/api/bench/v1/session'))).rejects.toThrow(/blocked/)
+      await expect(g.fetch(new Request('https://anet4d.agentnetwork.org.cn/api/bench/v1/session'))).rejects.toThrow(/blocked/)
       expect(g.navigator.sendBeacon('https://tel.rerun.io/api/pogevent', '{}')).toBe(false)
       expect(seen).toEqual(['/lab-static/v/2026.10.19-1/runs/x/tracks_obs.bin'])
       expect(blockedRequests() - n0).toBe(3)

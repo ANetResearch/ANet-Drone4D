@@ -36,7 +36,7 @@ from awr.phys.pose_history import G_W
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[0] / "world"))
 sys.path.insert(0, str(HERE.parents[0] / "events"))
-sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "anet4d" / "src"))
 
 G = 9.80665
 
@@ -278,7 +278,7 @@ def _episode(spec, make_agent, l2=None) -> dict:
 
 
 def test_env_fast_l1_same_agent_code_and_bytewise_streams(synth_event, tmp_path: Path) -> None:
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     from awr.agentsdk.env.spec import EnvSpec, FleetEntry
 

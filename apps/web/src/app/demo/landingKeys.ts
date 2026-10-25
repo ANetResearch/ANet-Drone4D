@@ -11,7 +11,7 @@
 // instead of silently falling back to the key name in English and to zh-CN's text in Chinese.
 /** STORY chapters of LandingContent.ts with their number of points (landing.story.<id>.p1 .. pN) */
 const STORY_POINTS: readonly (readonly [string, number])[] = [['digital-twin', 3], ['environment', 3], ['fleet-control', 3],
-  ['perception', 3], ['relay-agents', 3], ['sandbox', 3], ['roadmap', 4]]
+  ['perception', 3], ['relay-agents', 3], ['sandbox', 3], ['roadmap', 5]]
 const MEDIA_KEYS = ['flight', 'hero', 'swarm', 'follow', 'perf', 'streaming', 'weather']
 const STATUSES = ['available', 'dev', 'research']
 

@@ -1,5 +1,5 @@
 // docs-site/_shared/tools/gen-icons.mjs：由 lucide 的 IconNode 几何（与 Web 端 morphicons 注册表同一来源、同一版本）生成文档站图标样式
-// _static/css/drone4d-icons.css，替换 sphinx-rtd-theme 自带的 FontAwesome 字形；同时输出复制按钮的 SVG（conf_common 读取）。
+// _static/css/anet4d-icons.css，替换 sphinx-rtd-theme 自带的 FontAwesome 字形；同时输出复制按钮的 SVG（conf_common 读取）。
 // 用法（仓库根目录）：node docs-site/_shared/tools/gen-icons.mjs
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -38,7 +38,7 @@ ${vars.join('\n')}
 }
 .wy-breadcrumbs a.icon-home::before, .wy-breadcrumbs-aside a.fa-github::before, .wy-nav-top i.fa-bars::before,
 .rst-footer-buttons .fa-arrow-circle-left::before, .rst-footer-buttons .fa-arrow-circle-right::before,
-.rst-content .admonition-title::before, .wy-menu-vertical li button.toctree-expand::before, .drone4d-caret::before,
+.rst-content .admonition-title::before, .wy-menu-vertical li button.toctree-expand::before, .anet4d-caret::before,
 .rst-content h1 .headerlink::before, .rst-content h2 .headerlink::before, .rst-content h3 .headerlink::before, .rst-content h4 .headerlink::before {
   content: ""; display: inline-block; width: 1em; height: 1em; vertical-align: -0.14em; background-color: currentColor;
   -webkit-mask: var(--d4-icon) center / contain no-repeat; mask: var(--d4-icon) center / contain no-repeat; font-family: inherit;
@@ -54,9 +54,9 @@ ${vars.join('\n')}
 .rst-content .attention .admonition-title::before, .rst-content .error .admonition-title::before { --d4-icon: var(--d4-icon-warning); }
 .wy-menu-vertical li button.toctree-expand::before { --d4-icon: var(--d4-icon-collapsed); }
 .wy-menu-vertical li.current > a button.toctree-expand::before, .wy-menu-vertical li.on a button.toctree-expand::before { --d4-icon: var(--d4-icon-expanded); }
-.drone4d-caret::before { --d4-icon: var(--d4-icon-caret); }
+.anet4d-caret::before { --d4-icon: var(--d4-icon-caret); }
 .rst-content h1 .headerlink::before, .rst-content h2 .headerlink::before, .rst-content h3 .headerlink::before, .rst-content h4 .headerlink::before { --d4-icon: var(--d4-icon-link); width: 0.8em; height: 0.8em; }
 `
-writeFileSync(join(here, '..', '_static', 'css', 'drone4d-icons.css'), css)
+writeFileSync(join(here, '..', '_static', 'css', 'anet4d-icons.css'), css)
 writeFileSync(join(here, '..', '_static', 'img', 'copy.svg'), svg(nodes.copy, 'currentColor') + '\n')
-console.log(`drone4d-icons.css: ${Object.keys(ICONS).length} icons from lucide@${version}`)
+console.log(`anet4d-icons.css: ${Object.keys(ICONS).length} icons from lucide@${version}`)

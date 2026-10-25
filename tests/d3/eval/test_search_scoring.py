@@ -99,7 +99,7 @@ def test_eu_found_matches_target_present_within_5_m() -> None:
 @pytest.fixture(scope="module")
 def track_run(synth_event, tmp_path_factory):
     """track_share 100 s（2 机，运动学开发档）的运行目录与世界查询。"""
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
     from test_env import _run, _spec
 
     from awr.agentsdk.env.core import _open_world

@@ -19,7 +19,7 @@ SPEC=${SPEC:-configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json}
 GPU=${GPU:-}
 case "$GPU" in ""|2|3) ;; *) echo "GPU must be 2 or 3 on dmax" >&2; exit 2;; esac
 rsync -a --delete --exclude __pycache__ "$ROOT/python/" "dmax:$D/python/"
-rsync -a --mkpath --delete --exclude __pycache__ "$ROOT/tools/sdk/drone4d/src/" "dmax:$D/tools/sdk/drone4d/src/"
+rsync -a --mkpath --delete --exclude __pycache__ "$ROOT/tools/sdk/anet4d/src/" "dmax:$D/tools/sdk/anet4d/src/"
 rsync -a --mkpath --delete --exclude __pycache__ "$ROOT/tools/bench/d3/" "dmax:$D/tools/bench/d3/"
 rsync -a --mkpath --delete "$ROOT/configs/bench.d3/" "dmax:$D/configs/bench.d3/"
 rsync -a --mkpath --delete "$ROOT/packages/contracts/" "dmax:$D/contracts/"

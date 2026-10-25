@@ -1,6 +1,6 @@
 # D3-AC-18 r6 EC 对照（A10）：crop-handoff-001 上 6 种参考策略 × 12 种子（L1）与 r6 §12.3 实测表对照。
 # 运行与报告：tools/bench/d3/r6_ec.py（specs / pads / run / report）；断言：tests/d3/bench/test_r6_ec.py。
-# 参考行登记（策略类、机数、链路、r6 值）在 drone4d.baselines.REFERENCE6，本文件只给出对照口径与运行参数。
+# 参考行登记（策略类、机数、链路、r6 值）在 anet4d.baselines.REFERENCE6，本文件只给出对照口径与运行参数。
 schema: drone4d.bench.r6_ec_config.v1
 ac: D3-AC-18
 base_run_spec: configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json   # 世界、事件、L1、realistic、链路参数与 3 个起飞点
@@ -21,7 +21,7 @@ pads:
 pad_check: {level_m: 0.03, clear_m: 15.0}   # 只核对相对基础机队新增的起飞点
 # 观测设置（ADR-217 决策 (1)；r6 §12.3 与原型 bench.py 的 fleets）：L1 相机 HFOV 40°（run_spec fleet[].sensors[eo].overrides.hfov_deg，
 # 只用于参考行与不排名运行，不进入排名赛道），巡航高度 hover 与跟踪行 60 m、跟踪时 45 m、覆盖扫描行 70 m（机队中心高度，按机 8 m 分层），
-# hover 行固定注视；须与 drone4d.baselines.REFERENCE6 登记一致（load_config 核对），report 逐运行核对运行清单与评测的相机
+# hover 行固定注视；须与 anet4d.baselines.REFERENCE6 登记一致（load_config 核对），report 逐运行核对运行清单与评测的相机
 observation:
   camera_hfov_deg: 40.0
   params:

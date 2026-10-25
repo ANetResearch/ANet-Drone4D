@@ -9,7 +9,7 @@
 
 ```sh
 pip install "httpx>=0.24" "websockets>=12" "msgpack>=1.0"
-curl -O https://drone4d.agentnetwork.org.cn/sdk/awr_sandbox.py
+curl -O https://anet4d.agentnetwork.org.cn/sdk/awr_sandbox.py
 ```
 
 在仓库内运行时，文件位于 `tools/sdk/awr_sandbox.py`，`make setup` 创建的 `.venv` 已包含上述依赖（见 {doc}`../intro/quickstart`）。
@@ -19,7 +19,7 @@ curl -O https://drone4d.agentnetwork.org.cn/sdk/awr_sandbox.py
 ```python
 from awr_sandbox import Sandbox
 
-sb = Sandbox("https://drone4d.agentnetwork.org.cn", timeout_s=30)
+sb = Sandbox("https://anet4d.agentnetwork.org.cn", timeout_s=30)
 with sb.create("synthcity", "t5_area_guard") as s:   # 满员时自动排队；需要时自动求解工作量证明
     print(s.state()["state"])
     s.clock("speed", rate=5)                          # 受限时返回授予值
@@ -129,5 +129,5 @@ with sb.create("synthcity", "t6_manual") as s:
 | `scenario2_e2e.py` | 区域值守与接力的端到端验收脚本 |
 
 ```sh
-python tools/sdk/examples/01_quickstart.py https://drone4d.agentnetwork.org.cn
+python tools/sdk/examples/01_quickstart.py https://anet4d.agentnetwork.org.cn
 ```

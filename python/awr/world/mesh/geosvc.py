@@ -1104,7 +1104,7 @@ def spawn_geosvc(world_dir: Path, *, socket_path: Path | None = None, cache_root
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m awr.world.mesh.geosvc", description="ANet Drone4D shared geometry service (geosvc)")
+    ap = argparse.ArgumentParser(prog="python -m awr.world.mesh.geosvc", description="ANet4D shared geometry service (geosvc)")
     ap.add_argument("--world", help="world id under --worlds-dir")
     ap.add_argument("--worlds-dir", default=os.environ.get("AWR_WORLDS_DIR", "worlds"))
     ap.add_argument("--world-dir", help="world package directory (overrides --world)")

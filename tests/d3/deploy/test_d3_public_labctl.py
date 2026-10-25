@@ -322,7 +322,7 @@ def test_push_refuses_unclean_inputs(tmp_path):
 
 def test_enable_site_and_withdraw_restore_d2_bytes(tmp_path):
     lay = labctl.Layout(tmp_path / "srv")
-    site = tmp_path / "sites-available" / "drone4d.agentnetwork.org.cn.conf"
+    site = tmp_path / "sites-available" / "anet4d.agentnetwork.org.cn.conf"
     site.parent.mkdir()
     d2 = labsite.D2_SITE.read_text(encoding="utf-8")
     site.write_text(d2, encoding="utf-8")
@@ -345,6 +345,29 @@ def test_enable_site_and_withdraw_restore_d2_bytes(tmp_path):
     site.write_text(labsite.render(d2), encoding="utf-8")
     labctl.withdraw(lay2, site, nginx_test="true", nginx_reload="true")
     assert site.read_text(encoding="utf-8") == d2
+
+
+def test_enable_site_refuses_mismatched_domain(tmp_path):
+    """更名迁移：.state/d2-site.conf 中仍是旧域名的站点文件时，enable-site 不把它装进新域名的站点文件；跳转站点不能作为 base。"""
+    lay = labctl.Layout(tmp_path / "srv")
+    lay.init()
+    d2 = labsite.D2_SITE.read_text(encoding="utf-8")
+    old = d2.replace("anet4d.agentnetwork.org.cn", "drone4d.agentnetwork.org.cn")
+    lay.d2_site.write_text(old, encoding="utf-8")
+    site = tmp_path / "sites-available" / "anet4d.agentnetwork.org.cn.conf"
+    site.parent.mkdir()
+    with pytest.raises(labctl.LabError, match="server_name"):
+        labctl.enable_site(lay, site, nginx_test="true", nginx_reload="true")
+    assert not site.exists()
+    # 以 --base 指定新站点文件即可，保存的 D2 文件随之更新
+    labctl.enable_site(lay, site, base=labsite.D2_SITE, nginx_test="true", nginx_reload="true")
+    assert site.read_text(encoding="utf-8") == labsite.render(d2) and lay.d2_site.read_text(encoding="utf-8") == d2
+    legacy = labsite.EMAX / "drone4d.agentnetwork.org.cn.conf"
+    with pytest.raises(labsite.SiteError, match="跳转站点"):
+        labsite.render(legacy.read_text(encoding="utf-8"))
+    with pytest.raises(labctl.LabError, match="server_name"):
+        labctl.withdraw(lay, tmp_path / "sites-available" / "drone4d.agentnetwork.org.cn.conf", d2_site=labsite.D2_SITE,
+                        nginx_test="true", nginx_reload="true")
 
 
 def test_withdraw_with_d2_release_runs_install_rollback(tmp_path):

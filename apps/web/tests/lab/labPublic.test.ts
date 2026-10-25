@@ -102,7 +102,7 @@ describe('read-only requests (AWR-14 §21.14.2 rule 1, UX-NFR-045)', () => {
   it('allows only same-origin GET under /lab/ and /lab-static/', async () => {
     expect(LAB_ALLOWED_PREFIXES).toEqual(['/lab/', '/lab-static/'])
     for (const u of ['/lab-static/index.json', '/lab-static/v/2026.11.03-1/a.mp4', '/lab/brand/avatar-96.png']) expect(isAllowedLabUrl(u), u).toBe(true)
-    for (const u of ['/api/bench/v1/runs', '/api/sandbox/v1/capacity', '//evil.example/lab/', 'https://drone4d.agentnetwork.org.cn/lab-static/index.json',
+    for (const u of ['/api/bench/v1/runs', '/api/sandbox/v1/capacity', '//evil.example/lab/', 'https://anet4d.agentnetwork.org.cn/lab-static/index.json',
       '/lab-static/../api/x', '/lab', '/worlds/synthcity/world.json']) expect(isAllowedLabUrl(u), u).toBe(false)
     const seen: [string, RequestInit | undefined][] = []
     const fake = (url: string, init?: RequestInit): Promise<Response> => {

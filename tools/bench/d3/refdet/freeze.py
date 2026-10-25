@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """tools/bench/d3/refdet/freeze.py：把 `ref_det_v1` 的定稿记录写入模型卡（M26-FR-121；D3-AC-58）。
 
-写入 `tools/sdk/drone4d/src/drone4d/perception/model_card.json` 的三个块（其余字段为 train.py 的训练记录，不改动）：
+写入 `tools/sdk/anet4d/src/anet4d/perception/model_card.json` 的三个块（其余字段为 train.py 的训练记录，不改动）：
 - `release`：模型版本、权重文件名、字节数与 sha256、定稿时间（UTC）与格式说明；
 - `parity`：parity.py `check` 的结果（torch 参考与 numpy 推理逐元素最大绝对误差，阈值 1e-3；推理侧镜像的 numpy 版本）；
 - `std_step_wall`：step_wall.py `summarize` 的结果（L2 基线在 `std` 档容器内的每步墙钟分位数、预算与判定、容器参数与单帧推理）。
 
-SDK 常量 `drone4d.perception.ref_det.WEIGHTS_SHA256` 与 `STD_STEP_WALL_S` 须与模型卡一致（tests/d3/sdk/test_refdet_freeze.py 校验），
+SDK 常量 `anet4d.perception.ref_det.WEIGHTS_SHA256` 与 `STD_STEP_WALL_S` 须与模型卡一致（tests/d3/sdk/test_refdet_freeze.py 校验），
 本工具打印两者的取值供核对。
 
 用法：python freeze.py --parity out/a05/parity.json --step-wall out/a05/step_wall.json [--card PATH] [--version 1.0.0]
@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CARD = HERE.parents[2] / "sdk" / "drone4d" / "src" / "drone4d" / "perception" / "model_card.json"
+CARD = HERE.parents[2] / "sdk" / "anet4d" / "src" / "anet4d" / "perception" / "model_card.json"
 STEP_KEYS = ("p50_s", "p90_s", "p95_s", "p99_s", "max_s", "mean_s")
 
 

@@ -1,21 +1,34 @@
-# ANet Drone4D 文档
+# ANet4D 文档
 
-ANet Drone4D 是面向自主多智能体无人机的真实世界 4D World Runtime。它把采集或重建得到的城市点云整理为带版本的 World，
-让环境场、无人机机群与智能体在同一个服务器时钟下运行，并把结果流式传输到任意支持 WebGL2 的浏览器。服务器不需要 GPU。
+**ANet4D：新一代具身智能体协同模拟基础设施。** ANet4D 的目标是成为具身智能体协同研究的标准实验基础设施，如同 NS-3 之于网络研究：
+在同一个世界、同一个时钟与同一套评测协议下研究由具身智能体与软件智能体组成的协同团队。规划覆盖的实体包括多无人机、无人车（UGV）、
+无人船（USV）、地面机器人、固定传感器以及无实体的软件智能体。
 
-本文档对应 **0.2.0**（V0.2-demo，即 D2 与 D2.1），发布于 2026-10-13。公开实例位于
-[drone4d.agentnetwork.org.cn](https://drone4d.agentnetwork.org.cn)，源代码位于
-[GitHub](https://github.com/ANetResearch/ANet-Drone4D)。
+当前基础是 V0.1 至 V0.3 已交付的能力：
+
+- **真实世界 4D 数字孪生。** 采集或重建得到的城市点云与摄影测量网格整理为带版本的 World，同时服务于物理、查询与显示；
+  4D 环境场（风、能见度、降水）与仿真共用同一个时钟。
+- **交互沙盒（V0.2）。** 每位访客一个隔离的仿真核心，包含机群仿真、识别物与感知量化、机巢与任务编排、REST 接口与 Python SDK；
+  服务器无需 GPU，场景由浏览器渲染。
+- **事件沙盘（V0.3）。** 由声明式事件规格编译的事件磁带、以 Gazebo Sim 锁步作为高保真物理档、网格渲染的相机、热成像与 LiDAR 传感器，
+  以及附 Agent SDK 与基线策略的评测运行时；传感器生成需要服务器配备 NVIDIA GPU。
+
+目前已交付的实体类型为无人机（多旋翼、固定翼与垂起机型）。后续方向是跨实体的协同实验平台：声明式实验规格、可替换的协同算法与可比较的
+实验证据，见 {doc}`project/roadmap`。
+
+本文档对应 **0.3.2**（V0.3.2 · ANet4D）。公开实例位于
+[anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn)，源代码位于 {gh}`GitHub </>`。ANet4D 曾以 ANet Drone4D
+之名发布；原站点与原文档地址均跳转到新地址，少量遗留标识符仍保留原名（见 {doc}`project/faq`）。
 
 ## 获取帮助
 
 遇到问题时，可以按以下顺序查找：
 
 - 先查阅 {doc}`project/faq` 与 {doc}`intro/quickstart` 的排错一节。
-- 在 [GitHub Issues](https://github.com/ANetResearch/ANet-Drone4D/issues) 检索或提交问题，中文与英文均可。
+- 在 {gh}`GitHub Issues </issues>` 检索或提交问题，中文与英文均可。
 - 涉及契约（文件格式、`awr.rt.v1`、REST 接口、原因码）的变更建议，请先开 issue 讨论，见
-  [CONTRIBUTING.md](https://github.com/ANetResearch/ANet-Drone4D/blob/main/CONTRIBUTING.md)。
-- 安全问题请发送至 hi@anet0.com，见 [SECURITY.md](https://github.com/ANetResearch/ANet-Drone4D/blob/main/SECURITY.md)。
+  {gh}`CONTRIBUTING.md </blob/main/CONTRIBUTING.md>`。
+- 安全问题请发送至 hi@anet0.com，见 {gh}`SECURITY.md </blob/main/SECURITY.md>`。
 
 ## 第一步
 
@@ -71,7 +84,7 @@ guide/sdk-quickstart
 : 面向内部人员的身份入口：位置与用途。
 
 {doc}`guide/sdk-quickstart`
-: 事件沙盘（V0.3，开发中）的 Python SDK `drone4d`：安装、编写示例 Agent，在高保真仿真档与快速仿真档上运行 3 机回合。
+: 事件沙盘（V0.3）的 Python SDK `anet4d`：安装、编写示例 Agent，在高保真仿真档与快速仿真档上运行 3 机回合。
 
 ## 开放接口
 
@@ -122,7 +135,7 @@ project/citation
 ```
 
 {doc}`project/roadmap`
-: D1 与 D2 的发布内容，D3 的设计要点与阶段计划，以及后续版本主题。
+: V0.1 至 V0.3 的交付内容、V0.3.2 的范围，以及 ANet4D 的后续方向（D4）。
 
 {doc}`project/acceptance`
 : D2 第 2 轮验收的结果、未通过项的根因与完整报告的链接。
@@ -131,4 +144,4 @@ project/citation
 : 常见问题。
 
 {doc}`project/citation`
-: 引用 ANet Drone4D 与 UrbanScene3D，许可证与第三方声明。
+: 引用 ANet4D 与 UrbanScene3D，许可证与第三方声明。

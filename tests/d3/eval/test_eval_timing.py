@@ -313,7 +313,7 @@ def _ao_real_reference(E, U, run, th) -> list[float]:
 @pytest.fixture(scope="module")
 def synth_run(synth_event, tmp_path_factory):
     """合成事件上的 2 机 track_share 运行（120 s，运动学开发档）。"""
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
     from test_env import _run, _spec
 
     d = tmp_path_factory.mktemp("timing") / "r"

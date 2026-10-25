@@ -29,7 +29,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT / "tools" / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(ROOT / "tools" / "sdk" / "anet4d" / "src"))
 
 zstandard = pytest.importorskip("zstandard")
 
@@ -86,7 +86,7 @@ def _guard(vocab: list[str]) -> ActionGuard:
 
 def _run(policy: str, cfg: dict, script, seconds: float, *, nav_xy=(0.0, 0.0), thermal_scene=None, thermal=None):
     """逐步构造观测并经动作守卫核对 → (动作与回执列表, 证据所有者映射, 智能体)。"""
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     ag = BASELINES[policy](thermal=thermal)
     ag.reset(copy.deepcopy(cfg))
@@ -298,8 +298,8 @@ def test_search_found_once(policy: str) -> None:
 
 
 def test_search_prior_orders_lanes_and_posts() -> None:
-    from drone4d.baselines import BASELINES
-    from drone4d.baselines.prior import search_prior
+    from anet4d.baselines import BASELINES
+    from anet4d.baselines.prior import search_prior
 
     cfg = _search_cfg()
     pri = search_prior(cfg["brief"])
@@ -336,7 +336,7 @@ def _golden(name: str) -> bytes:
 
 def test_decode_temp_ck_matches_golden_and_env_decoder() -> None:
     import msgpack
-    from drone4d.baselines.thermal import decode_temp_ck
+    from anet4d.baselines.thermal import decode_temp_ck
 
     from awr.agentsdk.schemas import decode_thermal_obs
 
@@ -354,7 +354,7 @@ def test_decode_temp_ck_matches_golden_and_env_decoder() -> None:
 
 
 def test_background_and_components_match_brute_force() -> None:
-    from drone4d.baselines.thermal import BG_STEP, BG_WIN, blobs, local_background
+    from anet4d.baselines.thermal import BG_STEP, BG_WIN, blobs, local_background
 
     rng = np.random.default_rng(7)
     t = (29000 + rng.integers(0, 60, (37, 45))).astype(np.uint16)
@@ -414,7 +414,7 @@ def _thermal_frame(k: int, people, z: float) -> dict:
 
 
 def test_thermal_blob_detection_and_projection() -> None:
-    from drone4d.baselines.thermal import ThermalPerception, blobs, classify, decode_temp_ck
+    from anet4d.baselines.thermal import ThermalPerception, blobs, classify, decode_temp_ck
     from jsonschema import Draft202012Validator
 
     from awr.agentsdk.schemas import BENCH_ID
@@ -460,7 +460,7 @@ def test_thermal_channel_reports_meet_at_night(policy: str) -> None:
     def script(_t):
         return []
 
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     ag = BASELINES[policy]()
     ag.reset(copy.deepcopy(cfg))
@@ -468,7 +468,7 @@ def test_thermal_channel_reports_meet_at_night(policy: str) -> None:
     off = BASELINES[policy](thermal=False)
     off.reset(copy.deepcopy(cfg))
     assert off.thermal is None
-    import drone4d.perception.ref_det as rd
+    import anet4d.perception.ref_det as rd
 
     orig = rd.L2Perception
     rd.L2Perception = lambda config, det=None: _Dark()

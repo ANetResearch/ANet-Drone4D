@@ -93,7 +93,7 @@ class Env:
     user: str = "awr"
     show_base: str = "http://127.0.0.1:18640"
     sb_base: str = "http://127.0.0.1:18641"
-    host: str | None = "drone4d.agentnetwork.org.cn"
+    host: str | None = "anet4d.agentnetwork.org.cn"   # 公开站点（旧域名只做 301）
     cgroup_fs: Path = Path(os.environ.get("AWR_CGROUP_FS", "/sys/fs/cgroup"))
     status_cmd: list[str] | None = None      # 缺省按 prefix 组装（见 status_call）
     pool_cmd: list[str] | None = None
@@ -384,7 +384,7 @@ def probe_pool(env: Env) -> dict[str, Any] | None:
 
 def _http(env: Env, base: str, path: str, *, method: str = "GET", body: dict | None = None, token: str | None = None,
           timeout: float = 10.0) -> tuple[int, Any]:
-    headers = {"User-Agent": "anet-drone4d-observe", "Accept": "application/json"}
+    headers = {"User-Agent": "anet4d-observe", "Accept": "application/json"}
     if env.host:
         headers["Host"] = env.host
     if token:
@@ -961,7 +961,7 @@ def main(argv: list[str] | None = None) -> int:
         q.add_argument("--user", default="awr")
         q.add_argument("--show-base", default="http://127.0.0.1:18640")
         q.add_argument("--sb-base", default="http://127.0.0.1:18641")
-        q.add_argument("--host", default="drone4d.agentnetwork.org.cn", help="Host 头（公开模式只认站点域名；空串不发送）")
+        q.add_argument("--host", default="anet4d.agentnetwork.org.cn", help="Host 头（公开模式只认站点域名；空串不发送）")
         q.add_argument("--cgroup-fs", default=os.environ.get("AWR_CGROUP_FS", "/sys/fs/cgroup"))
         q.add_argument("--status-cmd", default=None, help="替代 awr status --json 的命令（调试用）")
         q.add_argument("--pool-cmd", default=None, help="替代 sbctl.sh --json status 的命令（调试用）")

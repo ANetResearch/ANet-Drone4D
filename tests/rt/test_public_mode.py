@@ -27,8 +27,8 @@ from awr.api.public import client_ip, parse_networks, public_policy, world_of_pa
 from awr.api.settings import ApiSettings
 
 PROTO = "awr.rt.v1"
-SITE = "https://drone4d.agentnetwork.org.cn"
-HOST = "drone4d.agentnetwork.org.cn"
+SITE = "https://anet4d.agentnetwork.org.cn"
+HOST = "anet4d.agentnetwork.org.cn"
 
 
 def _public(**over) -> fakesim.GwStack:
@@ -78,7 +78,7 @@ def test_admin_secret_when_configured() -> None:
 def test_origin_and_host(pub) -> None:
     ok = httpx.get(f"{pub.base}/api/sys/info", headers={"Origin": SITE}, timeout=5)
     assert ok.status_code == 200 and ok.json()["access_mode"] == "public"
-    for origin in (pub.origin, "http://localhost:5173", "http://drone4d.agentnetwork.org.cn", "https://evil.example"):
+    for origin in (pub.origin, "http://localhost:5173", "http://anet4d.agentnetwork.org.cn", "https://evil.example"):
         r = httpx.get(f"{pub.base}/api/sys/info", headers={"Origin": origin}, timeout=5)
         assert r.status_code == 403 and r.json()["code"] == 303, origin
     for host, want in ((HOST, 200), ("127.0.0.1", 200), ("attacker.example", 400)):

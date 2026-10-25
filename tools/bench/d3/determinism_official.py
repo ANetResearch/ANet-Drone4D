@@ -56,7 +56,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "python", ROOT / "tools/sdk/drone4d/src"):
+for _p in (ROOT / "python", ROOT / "tools/sdk/anet4d/src"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -185,12 +185,12 @@ def _file_sha(p: Path) -> str | None:
 
 
 def run_one(spec, policy: str, v: Variant, *, l2=None, agent_factory=None) -> dict:
-    """按变体运行一次 Env（参考策略在进程内，与 `drone4d.runner.run_episode` 同一循环），写运行目录内的对拍产物；→ 运行要点。"""
+    """按变体运行一次 Env（参考策略在进程内，与 `anet4d.runner.run_episode` 同一循环），写运行目录内的对拍产物；→ 运行要点。"""
     from awr.agentsdk.env.core import BenchEnv
     from awr.bench.platform_audit import frames_digest, write_digest
 
     if agent_factory is None:
-        from drone4d.baselines import BASELINES
+        from anet4d.baselines import BASELINES
 
         def agent_factory(_u, _p=policy):
             return BASELINES[_p]()

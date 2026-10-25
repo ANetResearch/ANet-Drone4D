@@ -1,9 +1,10 @@
-# mk/docs-site.mk（D2.2-D1）：Drone4D 文档站（Sphinx + sphinx-rtd-theme + MyST Markdown，Read the Docs 目录布局）。
+# mk/docs-site.mk（D2.2-D1）：ANet4D 文档站（Sphinx + sphinx-rtd-theme + MyST Markdown，Read the Docs 目录布局）。
 #   make docs-site            构建 en 与 zh_CN 到 docs-site/_build/html/{en,zh-cn}/latest，并写入根跳转页 index.html（-W：告警即失败）
 #   make docs-site-linkcheck  两种语言的 sphinx linkcheck，结果在 docs-site/_build/linkcheck/<lang>/output.{txt,json}
 #                             （对外链接超时只记录、不判失败：conf_common.linkcheck_report_timeouts_as_broken = False）
 #   make docs-site-serve      以只读静态服务器在 127.0.0.1:$(DOCS_PORT) 预览 _build/html（Ctrl+C 结束）
 #   make docs-site-clean      删除 docs-site/_build
+#   make docs-publish         tools/deploy/docs/publish.sh：准备 /anet4d/ 待发布目录与旧路径 /drone4d/ 的跳转页（不上传，只打印命令）
 # 依赖固定在 docs-site/requirements.txt，安装在独立虚拟环境 .venv-docs（不影响项目主依赖 requirements.lock）；
 # 发布见 tools/deploy/docs/publish.sh（只准备待发布目录并打印 rsync 命令，不上传）。
 
@@ -18,7 +19,7 @@ DOCS_OPTS     ?= -q
 DOCS_LANGS    := en:en zh_CN:zh-cn
 DOCS_REQ_STAMP := $(DOCS_VENV)/.requirements.sha256
 
-.PHONY: docs-site docs-site-venv docs-site-linkcheck docs-site-serve docs-site-clean
+.PHONY: docs-site docs-site-venv docs-site-linkcheck docs-site-serve docs-site-clean docs-publish
 
 docs-site-venv: ## 创建或更新文档构建环境 .venv-docs（按 docs-site/requirements.txt）
 	@[ -x "$(DOCS_PY)" ] || { echo "创建 .venv-docs（$(PYTHON_BOOT)）"; $(PYTHON_BOOT) -m venv "$(DOCS_VENV)"; } || \
@@ -54,3 +55,7 @@ docs-site-serve: ## 在 127.0.0.1:$(DOCS_PORT) 预览已构建的文档站
 
 docs-site-clean: ## 删除文档站构建产物 docs-site/_build
 	rm -rf "$(DOCS_OUT)"
+
+docs-publish: ## 准备文档站待发布目录（/anet4d/）与旧路径 /drone4d/ 跳转页，并打印上传命令（不上传）
+	@[ -f "$(DOCS_OUT)/html/index.html" ] || $(call fail,$(EXIT_GENERIC),文档站尚未构建,make docs-site)
+	@bash "$(ROOT)/tools/deploy/docs/publish.sh" --build "$(DOCS_OUT)/html"

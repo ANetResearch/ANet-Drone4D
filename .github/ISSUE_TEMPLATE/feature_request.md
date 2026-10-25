@@ -11,7 +11,7 @@ What you are trying to do, and what stops you today.
 
 **Proposal**
 
-What you would like ANet-Drone4D to do.
+What you would like ANet4D to do.
 
 **Layer**
 

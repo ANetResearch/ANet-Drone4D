@@ -1,4 +1,4 @@
-"""ANet Drone4D 文档站（en）的 Sphinx 配置；公共部分见 docs-site/_shared/conf_common.py。"""
+"""ANet4D 文档站（en）的 Sphinx 配置；公共部分见 docs-site/_shared/conf_common.py。"""
 
 import sys
 from pathlib import Path

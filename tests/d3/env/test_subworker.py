@@ -18,9 +18,9 @@ from awr.bench.runner import run_job
 from awr.bench.submissions import SubmissionStore
 from awr.bench.subworker import process_one
 
-SDK = Path(__file__).resolve().parents[3] / "tools/sdk/drone4d/src"
+SDK = Path(__file__).resolve().parents[3] / "tools/sdk/anet4d/src"
 GOOD = "sha256:" + "a" * 64
-ENTRY = {"cmd": ["python", "-m", "drone4d.serve", "--baseline", "track_share"], "env": {"MODE": "eval"}}
+ENTRY = {"cmd": ["python", "-m", "anet4d.serve", "--baseline", "track_share"], "env": {"MODE": "eval"}}
 
 
 def _ev(ec: float) -> dict:

@@ -21,12 +21,12 @@ import numpy as np
 from awr.contracts.rng_streams import Stream
 from awr.contracts.rng_streams import rng as stream_rng
 
-# 2: draws come from the registered stream 23 target_activity (ADR-049) instead of an ad hoc random.Random(sha256(...))
+# 2: draws come from the registered stream 24 target_activity (ADR-049) instead of an ad hoc random.Random(sha256(...))
 VERSION = "pedestrian-activity-2"
 
 
 def actor_key(actor_id: str) -> int:
-    """Integer key of an actor in stream 23: first 8 bytes (big-endian) of sha256(actor_id)."""
+    """Integer key of an actor in stream 24: first 8 bytes (big-endian) of sha256(actor_id)."""
     return int.from_bytes(hashlib.sha256(actor_id.encode()).digest()[:8], "big")
 
 

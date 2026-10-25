@@ -14,9 +14,9 @@ import pytest
 pytest.importorskip("PIL")
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "tools/sdk/drone4d/src"))
+sys.path.insert(0, str(ROOT / "tools/sdk/anet4d/src"))
 
-from drone4d.perception import ref_det as R  # noqa: E402
+from anet4d.perception import ref_det as R  # noqa: E402
 
 
 def _weights(path: Path, seed: int = 0) -> Path:
@@ -115,7 +115,7 @@ def test_perception_ground_intersection_and_appearance() -> None:
 
 
 def test_evidence_uses_bbox_at_l2() -> None:
-    from drone4d.baselines.common import Tracks
+    from anet4d.baselines.common import Tracks
 
     tr = Tracks("uav-01")
     det = {"det_id": "0" * 16, "sensor_id": "eo", "seq": 3, "t_mid_ns": 300_000_000, "class": "person", "bbox_xywh": [1, 2, 3, 4],

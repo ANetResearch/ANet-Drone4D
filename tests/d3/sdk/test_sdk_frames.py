@@ -1,4 +1,4 @@
-"""drone4d SDK 取帧（docs/05 §10.2 P0a-1；M26-FR-080；AWR-17 §18.8）：以 bench-api 进程内应用为传输的端到端读取。"""
+"""anet4d SDK 取帧（docs/05 §10.2 P0a-1；M26-FR-080；AWR-17 §18.8）：以 bench-api 进程内应用为传输的端到端读取。"""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ pytest.importorskip("mcap_protobuf")
 pytest.importorskip("PIL")
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "tools/sdk/drone4d/src"))
+sys.path.insert(0, str(ROOT / "tools/sdk/anet4d/src"))
 
-from drone4d.bench import BenchClient, BenchError  # noqa: E402
+from anet4d.bench import BenchClient, BenchError  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from awr.api.bench_main import create_app  # noqa: E402

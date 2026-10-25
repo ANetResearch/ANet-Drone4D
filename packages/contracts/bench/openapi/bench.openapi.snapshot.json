@@ -96,7 +96,7 @@
     }
   },
   "info": {
-    "title": "ANet Drone4D Event Lab API",
+    "title": "ANet4D Event Lab API",
     "version": "1"
   },
   "openapi": "3.1.0",

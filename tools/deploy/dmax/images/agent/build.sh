@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在 dmax 上构建 d3-agent-py 镜像（容器 Agent 基础镜像与参考基线）：同步 drone4d SDK（含参考检测器权重）与离线 wheel
+# 在 dmax 上构建 d3-agent-py 镜像（容器 Agent 基础镜像与参考基线）：同步 anet4d SDK（含参考检测器权重与兼容别名包 drone4d）与离线 wheel
 # （msgpack 在 $D/wheels-gz，numpy、pillow 在 $D/wheels-agent，cp312 manylinux_2_28）后 docker build。msgpack 钉在 MSGPACK_VERSION
 # （缺省 1.2.2，同 requirements.lock；wheels-gz 中并存多个版本时 pip 无法求解），numpy 版本同 requirements-d3.lock；pillow 单独
 # 钉在 PILLOW_VERSION（缺省 12.3.0）：基础镜像须通过提交扫描门（Trivy HIGH 及以上、上游已有修复的漏洞即拒绝，ADR-204、D3-AC-59），
@@ -20,6 +20,6 @@ ssh dmax "set -e; mkdir -p $CTX/wheels && rm -f $CTX/wheels/*.whl
   pw=\$(ls $W/pillow-$PILLOW_VERSION-cp312-*manylinux*x86_64*.whl)
   echo \"$PILLOW_SHA256  \$pw\" | sha256sum -c --quiet -
   cp /data/anet-drone4d-d3/d3dev/wheels-gz/msgpack-$MSGPACK_VERSION-cp312*.whl $W/numpy-*cp312*.whl \"\$pw\" $CTX/wheels/"
-rsync -a --delete --exclude __pycache__ --exclude bench "$ROOT/tools/sdk/drone4d/src/drone4d/" "dmax:$CTX/drone4d/"
+rsync -a --mkpath --delete --exclude __pycache__ --exclude /anet4d/bench "$ROOT/tools/sdk/anet4d/src/" "dmax:$CTX/sdk/"
 rsync -a "$HERE/Dockerfile" "dmax:$CTX/"
 ssh dmax "cd $CTX && docker build -q -t d3-agent-py:$TAG . >/dev/null && docker image inspect d3-agent-py:$TAG --format '{{.Id}} {{.Size}}'"

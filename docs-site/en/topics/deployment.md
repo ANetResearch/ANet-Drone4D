@@ -1,12 +1,12 @@
 # Deployment
 
-This page outlines the deployment kit of the public demo [drone4d.agentnetwork.org.cn](https://drone4d.agentnetwork.org.cn) and how this
+This page outlines the deployment kit of the public demo [anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn) and how this
 documentation site is published. For individual commands, parameters and troubleshooting, the repository's
-[tools/deploy/emax/README.md](https://github.com/ANetResearch/ANet-Drone4D/blob/main/tools/deploy/emax/README.md) is authoritative.
+{gh}`tools/deploy/emax/README.md </blob/main/tools/deploy/emax/README.md>` is authoritative.
 
 ## Topology
 
-One Ubuntu 24.04 server with 4 cores and no GPU, shared with other production services. One systemd unit `anet-drone4d` (system user `awr`)
+One Ubuntu 24.04 server with 4 cores and no GPU, shared with other production services. One systemd unit `anet-drone4d` (a legacy identifier kept for existing installations; system user `awr`)
 hosts two process groups:
 
 | Group | Processes | Notes |
@@ -50,7 +50,9 @@ Updates follow the same procedure (only changed world packages are uploaded); `i
 ## Constraints
 
 - **Add this site only.** Other sites on the server, `nginx.conf` and certificates are never touched; the rate limit zones, cache zones,
-  upstreams and map variables of this site all carry the `drone4d` prefix.
+  upstreams and map variables of this site all carry a site-specific prefix.
+- **Former domain.** `drone4d.agentnetwork.org.cn` answers with a permanent redirect (HTTP 301) to the same path on
+  `anet4d.agentnetwork.org.cn`, so existing links and bookmarks keep working.
 - **World packages are not committed.** The seven worlds are offered under authorization (see {doc}`worlds`); world packages travel only in
   deployment bundles, never into the git repository, and raw data is never downloaded on the server.
 - **Secrets stay out of the repository, bundles and logs.** The internal identity passphrase is written as a file on the server only by
@@ -71,13 +73,14 @@ Updates follow the same procedure (only changed world packages are uploaded); `i
 
 ## Publishing this documentation site
 
-This site uses Sphinx, sphinx-rtd-theme and the Read the Docs directory layout, published under `https://docs.agentnetwork.org.cn/drone4d/`:
+This site uses Sphinx, sphinx-rtd-theme and the Read the Docs directory layout, published under `https://docs.agentnetwork.org.cn/anet4d/`:
 
 | Path | Content |
 |---|---|
-| `/drone4d/` | Root page: redirects by browser language, Chinese to `zh-cn` and everything else to `en` |
-| `/drone4d/en/latest/` | English documentation |
-| `/drone4d/zh-cn/latest/` | Chinese documentation |
+| `/anet4d/` | Root page: redirects by browser language, Chinese to `zh-cn` and everything else to `en` |
+| `/anet4d/en/latest/` | English documentation |
+| `/anet4d/zh-cn/latest/` | Chinese documentation |
+| `/drone4d/` | Former path: one static redirect page per documentation page, pointing to the same page under `/anet4d/` and keeping the anchor |
 
 `.readthedocs.yaml` at the repository root lets Read the Docs build the same sources. Self-hosted publishing takes two steps:
 
@@ -86,6 +89,11 @@ make docs-site                        # builds into docs-site/_build/html/
 tools/deploy/docs/publish.sh          # prepares the publish directory and checksum list, and prints the rsync command
 ```
 
-`publish.sh` only prepares `.cache/deploy/docs/drone4d/` locally and prints the upload command; it does not upload. The target is
-`/var/www/docs.agentnetwork/public/drone4d/` on the documentation server (owner `www-data`); synchronization applies to the `drone4d/`
-subdirectory only, never deletes or modifies anything else in that root, and needs no nginx change.
+`publish.sh` only prepares `.cache/deploy/docs/anet4d/` locally and prints the upload command; it does not upload. The target is
+`/var/www/docs.agentnetwork/public/anet4d/` on the documentation server (owner `www-data`); synchronization applies to that subdirectory
+only, never deletes or modifies anything else in that root, and needs no nginx change.
+
+In the same run, `publish.sh` generates the redirect pages for the former path into the sibling directory `.cache/deploy/docs/drone4d/`,
+one page per HTML page of the build, and prints the command that synchronizes them to `/var/www/docs.agentnetwork/public/drone4d/`. The
+redirect pages carry `noindex` and a canonical link to the new address; the former path no longer serves styles, scripts, images or the
+search index.

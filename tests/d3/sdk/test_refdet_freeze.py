@@ -18,12 +18,12 @@ pytest.importorskip("PIL")
 pytest.importorskip("msgpack")
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT / "tools/sdk/drone4d/src"), str(ROOT / "tools/bench/d3/refdet")]
+sys.path[:0] = [str(ROOT / "tools/sdk/anet4d/src"), str(ROOT / "tools/bench/d3/refdet")]
 
 import freeze as FZ  # noqa: E402
 import parity as PA  # noqa: E402
 import step_wall as SW  # noqa: E402
-from drone4d.perception import ref_det as R  # noqa: E402
+from anet4d.perception import ref_det as R  # noqa: E402
 
 CARD = json.loads(R.WEIGHTS.with_name("model_card.json").read_text(encoding="utf-8"))
 
@@ -75,7 +75,7 @@ class _Echo:
         self.uav = config["uav_id"]
 
     def step(self, obs: dict, inbox: list[dict]) -> dict:
-        from drone4d.agent import act, nav_goto
+        from anet4d.agent import act, nav_goto
 
         h = hashlib.sha256(bytes(obs["sensors"]["eo"][0]["rgb"]["data"])).digest()
         time.sleep(0.002)
@@ -83,7 +83,7 @@ class _Echo:
 
 
 def _trace(root: Path, uavs: list[str], steps: int) -> Path:
-    from drone4d.wire import T, encode_frame
+    from anet4d.wire import T, encode_frame
 
     for n, u in enumerate(uavs):
         d = root / u
@@ -102,7 +102,7 @@ def _trace(root: Path, uavs: list[str], steps: int) -> Path:
 
 
 def _replay(trace: Path, sock: Path, out: Path, uavs: list[str]) -> dict:
-    from drone4d.wire import serve
+    from anet4d.wire import serve
 
     rc: list[int] = []
     th = threading.Thread(target=lambda: rc.append(SW.main(["replay", "--trace", str(trace), "--sock-root", str(sock), "--out", str(out),

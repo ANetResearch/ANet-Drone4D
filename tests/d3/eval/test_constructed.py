@@ -214,7 +214,7 @@ def test_eu_point_evidence_matches_report() -> None:
 @pytest.fixture(scope="module")
 def track_run(synth_event, tmp_path_factory):
     """track_share 100 s（2 机，运动学开发档）的运行目录（EC > 0，作安全用例的对照）。"""
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
     from test_env import _run, _spec
 
     d = tmp_path_factory.mktemp("constructed") / "track"
@@ -273,7 +273,7 @@ def test_actor_penetration_invalidates_and_zeroes_components(synth_event, track_
 
 def test_coverage_scan_ao_real_low_ao_pos_high(synth_event, tmp_path: Path) -> None:
     """覆盖扫描（近正下视、不跟踪）：机位常在 oracle 最优区内（AO_pos 高），实际证据质量近 0（AO_real 低）。"""
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
     from test_env import _run, _spec
 
     from awr.agentsdk.env.core import _open_world

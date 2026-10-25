@@ -1,6 +1,6 @@
 # Installation and requirements
 
-This page lists the environment, ports, directories and configuration needed to run ANet Drone4D locally. The step-by-step procedure is
+This page lists the environment, ports, directories and configuration needed to run ANet4D locally. The step-by-step procedure is
 in {doc}`quickstart`.
 
 ## Server

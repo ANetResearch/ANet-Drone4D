@@ -74,7 +74,7 @@ CAPACITY_PATH = PREFIX + "/capacity"
 API_VERSION = "1.0.0"
 DENY_MODULES = ("runs", "jobs", "recon", "agents", "sys", "scenarios", "auth", "sessions")
 HB_PERIOD_S = 0.1
-TITLE = "ANet Drone4D Sandbox API"
+TITLE = "ANet4D Sandbox API"
 
 
 @dataclass

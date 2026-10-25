@@ -61,7 +61,7 @@ BASELINES = {"static_guard": (0.30, 0.10, 0.20, 0.10), "coverage_scan": (0.50, 0
 IMG = {k: "sha256:" + c * 64 for k, c in (("a", "a"), ("b", "b"), ("r", "e"), ("c", "c"))}
 SKILL = {IMG["a"]: (0.85, 0.55, 0.65, 0.45), IMG["b"]: (0.55, 0.35, 0.40, 0.30), IMG["r"]: (0.70, 0.40, 0.50, 0.35),
          IMG["c"]: (0.40, 0.20, 0.30, 0.20)}
-ENTRY = {"cmd": ["python", "-m", "drone4d.serve", "agent:Agent"], "env": {"MODE": "eval"}}
+ENTRY = {"cmd": ["python", "-m", "anet4d.serve", "agent:Agent"], "env": {"MODE": "eval"}}
 WHO = {"ann": ("invited", ("team-a",)), "bob": ("invited", ("team-b",)), "cid": ("invited", ("team-c",)), "rae": ("researcher", ("d3",)),
        "eve": ("evaluator", ())}
 H = 3_600 * 10**9
@@ -370,7 +370,8 @@ def test_anonymous_and_public_site_access_is_404(done) -> None:
     revoked = e.app.state.auth.issue_token("old", "invited", ("team-o",))
     assert e.app.state.auth.revoke_token(revoked[0])
     anon = [{}, {"Authorization": f"Bearer {revoked[1]}"}, {"Cookie": "d3_session=forged"}]
-    public = [e.h(w, Host="drone4d.agentnetwork.org.cn") for w in ("ann", "rae", "eve")] + [e.h("ann", **{"X-Forwarded-Host": "drone4d.agentnetwork.org.cn"})]
+    public = ([e.h(w, Host=host) for host in ("anet4d.agentnetwork.org.cn", "drone4d.agentnetwork.org.cn") for w in ("ann", "rae", "eve")]
+              + [e.h("ann", **{"X-Forwarded-Host": "anet4d.agentnetwork.org.cn"})])
     for hdr in anon + public:
         for path in paths:
             r = e.c.get(P + path, headers=hdr)

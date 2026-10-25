@@ -1,6 +1,6 @@
 {
   "name": "@awr/web",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "AWR 前端（Vite 8 + React 19.3 + TS 7）；依赖增删向 M00 提交请求，版本以 AWR-11 §3.2、§3.6 为准",

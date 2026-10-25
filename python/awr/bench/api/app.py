@@ -24,7 +24,7 @@ PREFIX = "/api/bench/v1"
 
 
 def create_bench_app(settings: BenchSettings) -> FastAPI:
-    app = FastAPI(title="ANet Drone4D Event Lab API", version="1", openapi_url=f"{PREFIX}/openapi.json", docs_url=None, redoc_url=None)
+    app = FastAPI(title="ANet4D Event Lab API", version="1", openapi_url=f"{PREFIX}/openapi.json", docs_url=None, redoc_url=None)
     app.state.settings = settings
     app.state.auth = BenchAuth(settings.keys_dir, settings.db_path, session_ttl_s=settings.session_ttl_s, short_ttl_s=settings.short_ttl_s)
     app.state.frame_stores = StoreCache()

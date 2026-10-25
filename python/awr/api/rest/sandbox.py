@@ -79,7 +79,7 @@ SID = Annotated[str, Path(pattern=r"^sb-[a-z2-7]{10}$", description="沙盒 sid"
 POLL_S = 1.0
 WAIT_STATE_POLL_S = 0.25
 SANDBOX_HEADERS = {"AWR-Sandbox-API": "1", "Cache-Control": "no-store"}
-SDK = "from awr_sandbox import Sandbox\nsb = Sandbox(\"https://drone4d.agentnetwork.org.cn\")\n"
+SDK = "from awr_sandbox import Sandbox\nsb = Sandbox(\"https://anet4d.agentnetwork.org.cn\")\n"
 
 
 def _samples(curl: str, py: str) -> dict[str, Any]:

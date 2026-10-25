@@ -102,8 +102,8 @@ def test_ctl_board_publish_and_submission_create(tmp_path: Path, monkeypatch, ca
     assert ctl.main(["board", "publish", str(tmp_path / "d3/boards/round-1"), "--n-boot", "100"]) == 0           # 原地重算
     capsys.readouterr()
     assert ctl.main(["submission", "create", "--team", "t", "--owner", "o", "--track", "std3-l1", "--digest", "sha256:" + "c" * 64,
-                     "--cmd", "python -m drone4d.serve pkg:Agent", "--env", "MODE=eval", "--visibility", "board"]) == 0
+                     "--cmd", "python -m anet4d.serve pkg:Agent", "--env", "MODE=eval", "--visibility", "board"]) == 0
     sid = capsys.readouterr().out.strip()
     d = SubmissionStore(tmp_path / "d3/submissions").get(sid)
-    assert d["entry"] == {"cmd": ["python", "-m", "drone4d.serve", "pkg:Agent"], "env": {"MODE": "eval"}} and d["visibility"] == "board"
+    assert d["entry"] == {"cmd": ["python", "-m", "anet4d.serve", "pkg:Agent"], "env": {"MODE": "eval"}} and d["visibility"] == "board"
     assert ctl.main(["submission", "create", "--team", "t", "--owner", "o", "--track", "nope", "--digest", "sha256:" + "c" * 64, "--cmd", "x"]) == 1

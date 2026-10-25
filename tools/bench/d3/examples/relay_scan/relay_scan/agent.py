@@ -9,16 +9,16 @@
   其余机继续扫描。跟踪站位、丢失后的外推与 Re-ID 词表下的守候时长同 `track_share`。
 - 巡航高度取任务包络中值并按机号分层（基线公共规则）；策略内无随机数、无墙钟依赖，同一输入的动作流逐字节一致。
 
-容器入口：`python -m drone4d.serve relay_scan.agent:Agent`。
+容器入口：`python -m anet4d.serve relay_scan.agent:Agent`。
 """
 
 from __future__ import annotations
 
 import math
 
-from drone4d.agent import decode_msg, out_msg
-from drone4d.baselines import TrackShare
-from drone4d.baselines.track_share import STANDOFF_M
+from anet4d.agent import decode_msg, out_msg
+from anet4d.baselines import TrackShare
+from anet4d.baselines.track_share import STANDOFF_M
 
 __all__ = ["Agent", "scan_waypoints"]
 

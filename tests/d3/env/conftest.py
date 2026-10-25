@@ -20,7 +20,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[0] / "world"))
 sys.path.insert(0, str(HERE.parents[0] / "events"))
-sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "anet4d" / "src"))
 
 # 模块（或 `模块::用例` 通配）→ 直接用到的 D3 依赖（顶层模块名）
 MODULE_DEPS: dict[str, tuple[str, ...]] = {

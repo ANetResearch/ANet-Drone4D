@@ -1,11 +1,11 @@
-"""tests/d3/agentsdk_pkg 的夹具与工具（conftest.py 导出夹具；D3-AC-58、M26-AC-030）：构建 `drone4d` 的 wheel 与 sdist，在临时 venv 中安装（不含 `awr`），
+"""tests/d3/agentsdk_pkg 的夹具与工具（conftest.py 导出夹具；D3-AC-58、M26-AC-030）：构建 `anet4d` 的 wheel 与 sdist，在临时 venv 中安装（不含 `awr`），
 供快速上手示例与基线策略经线协议运行。
 
-- `dist`：缺省把 tools/sdk/drone4d 复制到临时目录后构建（不在源码树留下 build/ 与 egg-info；需要 setuptools ≥ 77，按
-  pyproject 的 build-system）；设置 `DRONE4D_DIST=<目录>` 时直接使用该目录中已构建的 wheel 与 sdist（dmax 容器内复用本机构建物）。
+- `dist`：缺省把 tools/sdk/anet4d 复制到临时目录后构建（不在源码树留下 build/ 与 egg-info；需要 setuptools ≥ 77，按
+  pyproject 的 build-system）；设置 `ANET4D_DIST=<目录>`（旧名 `DRONE4D_DIST` 仍接受）时直接使用该目录中已构建的 wheel 与 sdist（dmax 容器内复用本机构建物）。
 - `clean_venv`：`python -m venv --without-pip` 新建环境，以宿主 pip 的 `--python` 安装 wheel（extras `l2`）。依赖来源：设置
-  `DRONE4D_WHEELHOUSE=<目录>` 时为该离线 wheel 目录（`--no-index --find-links`，即 ADR-202 的干净主机口径）；否则把当前解释器中
-  已安装的依赖闭包（只含 drone4d 声明的依赖及其传递依赖）以符号链接放入一个目录并经 .pth 挂到 venv，pip 仍按元数据核对依赖。
+  `ANET4D_WHEELHOUSE=<目录>`（旧名 `DRONE4D_WHEELHOUSE` 仍接受）时为该离线 wheel 目录（`--no-index --find-links`，即 ADR-202 的干净主机口径）；否则把当前解释器中
+  已安装的依赖闭包（只含 anet4d 声明的依赖及其传递依赖）以符号链接放入一个目录并经 .pth 挂到 venv，pip 仍按元数据核对依赖。
   两种方式下 venv 中都没有 `awr`，`PYTHONPATH` 不传入子进程。
 """
 
@@ -28,7 +28,12 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-PKG = ROOT / "tools" / "sdk" / "drone4d"
+PKG = ROOT / "tools" / "sdk" / "anet4d"
+
+
+def _env(name: str) -> str | None:
+    """ANET4D_* 选项；旧名 DRONE4D_*（ANet4D V0.3.2 更名前）仍接受。"""
+    return os.environ.get(name) or os.environ.get(name.replace("ANET4D_", "DRONE4D_", 1))
 SDK = PKG / "src"
 DOCS = ROOT / "docs" / "sdk"
 EXAMPLES = DOCS / "examples"
@@ -93,14 +98,14 @@ def _setuptools_ok() -> bool:
 
 @pytest.fixture(scope="session")
 def dist(tmp_path_factory) -> Dist:
-    pre = os.environ.get("DRONE4D_DIST")
+    pre = _env("ANET4D_DIST")
     if pre:
         d = Path(pre)
-        wheels, sdists = sorted(d.glob("drone4d-*-py3-none-any.whl")), sorted(d.glob("drone4d-*.tar.gz"))
-        assert len(wheels) == 1 and len(sdists) == 1, f"DRONE4D_DIST={d} must hold exactly one wheel and one sdist"
+        wheels, sdists = sorted(d.glob("anet4d-*-py3-none-any.whl")), sorted(d.glob("anet4d-*.tar.gz"))
+        assert len(wheels) == 1 and len(sdists) == 1, f"ANET4D_DIST={d} must hold exactly one wheel and one sdist"
         return Dist(wheels[0], sdists[0], False, 0.0)
     if not _setuptools_ok():
-        pytest.skip("[dep] building the drone4d wheel needs setuptools>=77 (or set DRONE4D_DIST to a built wheel and sdist)")
+        pytest.skip("[dep] building the anet4d wheel needs setuptools>=77 (or set ANET4D_DIST to a built wheel and sdist)")
     tmp = tmp_path_factory.mktemp("dist")
     t = time.monotonic()
     wheel = build_wheel(tmp)
@@ -113,7 +118,7 @@ def dist(tmp_path_factory) -> Dist:
 
 
 def build_wheel(tmp: Path) -> Path:
-    """tools/sdk/drone4d 复制到 tmp/src 后构建 wheel 到 tmp/out（与快速上手第 8 节的命令相同）。"""
+    """tools/sdk/anet4d 复制到 tmp/src 后构建 wheel 到 tmp/out（与快速上手第 8 节的命令相同）。"""
     src, out = tmp / "src", tmp / "out"
     shutil.copytree(PKG, src, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "build", "*.egg-info"))
     r = subprocess.run([sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--no-index", "-q", "-w", str(out), str(src)],
@@ -141,7 +146,7 @@ def _requirement_closure(dist: Dist, extras: set[str]) -> list[str]:
         try:
             d = md.distribution(req.name)
         except md.PackageNotFoundError:
-            pytest.skip(f"[dep] could not import '{req.name}' (dependency of drone4d; or set DRONE4D_WHEELHOUSE)")
+            pytest.skip(f"[dep] could not import '{req.name}' (dependency of anet4d; or set ANET4D_WHEELHOUSE)")
         seen[key] = d
         todo += [(Requirement(r), set(req.extras)) for r in d.requires or []]
     return sorted(seen)
@@ -170,7 +175,7 @@ def clean_venv(dist: Dist, tmp_path_factory) -> Venv:
     py = root / "bin" / "python"
     site = Path(subprocess.run([str(py), "-c", "import sysconfig; print(sysconfig.get_paths()['purelib'])"], env=clean_env(),
                                capture_output=True, text=True, check=True).stdout.strip())
-    house = os.environ.get("DRONE4D_WHEELHOUSE")
+    house = _env("ANET4D_WHEELHOUSE")
     pip = [sys.executable, "-m", "pip", "--python", str(py), "install", "--no-index", "--disable-pip-version-check", "-q"]
     if house:
         pip += ["--find-links", house]
@@ -178,20 +183,26 @@ def clean_venv(dist: Dist, tmp_path_factory) -> Venv:
     else:
         linked = root.parent / "deps"
         _link_deps(_requirement_closure(dist, {"l2"}), linked)
-        (site / "_drone4d_test_deps.pth").write_text(f"{linked}\n", encoding="utf-8")
+        (site / "_anet4d_test_deps.pth").write_text(f"{linked}\n", encoding="utf-8")
         deps = "linked"
-    r = subprocess.run([*pip, f"drone4d[l2] @ {dist.wheel.as_uri()}"], env=clean_env(), capture_output=True, text=True, timeout=600)
+    r = subprocess.run([*pip, f"anet4d[l2] @ {dist.wheel.as_uri()}"], env=clean_env(), capture_output=True, text=True, timeout=600)
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-4000:]
     return Venv(root, py, t0, time.monotonic() - t0, deps, site)
 
 
 def venv_probe(v: Venv) -> dict:
-    """venv 内的自检：drone4d 版本与安装位置、awr 不可导入、参考检测器权重随包并通过 sha256 校验。"""
-    code = ("import importlib.util, json, drone4d, drone4d.baselines, drone4d.serve\n"
-            "from drone4d.perception import ref_det\n"
+    """venv 内的自检：anet4d 版本与安装位置、awr 不可导入、参考检测器权重随包并通过 sha256 校验；已弃用的别名包 drone4d 导入时发出
+    DeprecationWarning，子模块与 anet4d 为同一对象。"""
+    code = ("import importlib.util, json, warnings, anet4d, anet4d.baselines, anet4d.serve\n"
+            "from anet4d.perception import ref_det\n"
             "m = ref_det.RefDet()\n"
-            "print(json.dumps({'version': drone4d.__version__, 'file': drone4d.__file__, 'awr': importlib.util.find_spec('awr') is not None,"
-            " 'weights': str(ref_det.WEIGHTS), 'baselines': sorted(drone4d.baselines.BASELINES)}))\n")
+            "with warnings.catch_warnings(record=True) as w:\n"
+            "    warnings.simplefilter('always')\n"
+            "    import drone4d, drone4d.baselines, drone4d.perception.ref_det\n"
+            "alias = {'same': drone4d.baselines is anet4d.baselines and drone4d.perception.ref_det is ref_det,"
+            " 'version': drone4d.__version__, 'deprecated': any(issubclass(x.category, DeprecationWarning) for x in w)}\n"
+            "print(json.dumps({'version': anet4d.__version__, 'file': anet4d.__file__, 'awr': importlib.util.find_spec('awr') is not None,"
+            " 'weights': str(ref_det.WEIGHTS), 'baselines': sorted(anet4d.baselines.BASELINES), 'alias': alias}))\n")
     r = v.run("-c", code)
     assert r.returncode == 0, r.stderr[-4000:]
     return json.loads(r.stdout.strip().splitlines()[-1])

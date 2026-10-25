@@ -57,7 +57,7 @@
     wall_ratio_max: 3.0               # 单个正式 Run 墙钟 ≤ 仿真时长 × 3（共享卡，原型）
     platform_retries: 1
     board: {version: mbl-p0a, current: L2, n_boot: 10000}
-    submission: {image: d3-example-close-track:dev, cmd: [python, -m, drone4d.serve, close_track.agent:Agent], env: {},
+    submission: {image: d3-example-close-track:dev, cmd: [python, -m, anet4d.serve, close_track.agent:Agent], env: {},
                  group: L2, team: d3-internal, owner: mbl-e2e, notes: "", smoke_s: 20, worker: inline, timeout_s: 21600}
 
 用法：
@@ -91,7 +91,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "tools/sdk/drone4d/src", ROOT / "python"):
+for _p in (ROOT / "tools/sdk/anet4d/src", ROOT / "python"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -119,7 +119,7 @@ DEFAULTS: dict[str, Any] = {
     "lockstep": {"preflight_s": 20.0, "policy": "track_share", "group": "L1"},
     "wall_ratio_max": 3.0, "platform_retries": 1, "lidar_backend": "cpu",
     "board": {"version": "mbl-p0a", "current": "L2", "n_boot": 10_000},
-    "submission": {"image": "d3-example-close-track:dev", "cmd": ["python", "-m", "drone4d.serve", "close_track.agent:Agent"], "env": {},
+    "submission": {"image": "d3-example-close-track:dev", "cmd": ["python", "-m", "anet4d.serve", "close_track.agent:Agent"], "env": {},
                    "group": "L2", "team": "d3-internal", "owner": "mbl-e2e", "notes": "", "smoke_s": 20.0, "worker": "inline",
                    "timeout_s": 21_600.0, "poll_s": 15.0},
 }

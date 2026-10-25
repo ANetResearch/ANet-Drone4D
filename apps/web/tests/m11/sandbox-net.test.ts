@@ -16,7 +16,7 @@ import { readBytes } from '../contracts/util'
 import { ctrlOps, frames, microtasks, rig } from '../net/harness'
 
 const SID = 'sb-k3m7q2x7ab'
-const loc = { protocol: 'https:', host: 'drone4d.example' }
+const loc = { protocol: 'https:', host: 'anet4d.example' }
 
 afterEach(() => {
   setEndpoint({ kind: 'shared' })
@@ -28,7 +28,7 @@ describe('endpoint', () => {
   it('shared and sandbox prefixes, realtime URLs and the API origin', () => {
     expect(getEndpoint().kind).toBe('shared')
     expect(apiBase()).toBe('/api')
-    expect(rtUrl(loc)).toBe('wss://drone4d.example/api/rt')
+    expect(rtUrl(loc)).toBe('wss://anet4d.example/api/rt')
     const seen: string[] = []
     const off = onEndpointChange((e) => seen.push(e.kind))
     setEndpoint({ kind: 'sandbox', sid: SID, token: () => 'tok-1' })

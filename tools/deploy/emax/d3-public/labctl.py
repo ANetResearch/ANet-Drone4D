@@ -58,7 +58,7 @@ SCHEMA_INDEX = "drone4d.lab_static_index.v1"
 SCHEMA_STATE = "awr.deploy.d3_public.state.v1"
 SCHEMA_REPORT = "awr.deploy.d3_public.labctl.v1"
 DEFAULT_ROOT = Path("/srv/drone4d")
-SITE_FILE = Path("/etc/nginx/sites-available/drone4d.agentnetwork.org.cn.conf")
+SITE_FILE = Path("/etc/nginx/sites-available/anet4d.agentnetwork.org.cn.conf")   # 公开站点（旧域名 drone4d 的站点文件只做 301）
 MIB = 1 << 20
 MAX_FILE_BYTES = 64 * MIB                 # 单文件 ≤ 64 MB（Q-D3-02；与 scan_public.py 同一口径 1 MB = 2^20 B）
 BUDGET_BYTES = 3 * (1 << 30)               # D3 在 emax 的总占用（含保留版本，硬链接去重）≤ 3 GB
@@ -734,6 +734,18 @@ def install_site(site_file: Path, text: str, *, nginx_test: str, nginx_reload: s
     return {"site_file": str(site_file), "sha256": labsite.sha256_text(text)}
 
 
+def _check_host(site_file: Path, d2: str) -> None:
+    """站点文件以域名命名（`<域名>.conf`）时，写入的内容必须服务同一域名：防止把更名前保存的旧站点文件（server_name 为旧域名）
+    装进新域名的站点文件，或把公开站点装进旧域名的跳转站点文件。"""
+    name = site_file.name
+    host = name[: -len(".conf")] if name.endswith(".conf") else ""
+    if "." not in host or not re.search(r"^\s*server_name\s", d2, re.M):
+        return
+    if not re.search(rf"^\s*server_name\s+{re.escape(host)};", d2, re.M):
+        raise LabError(f"站点文件 {name} 与内容的 server_name 不一致：请以 --base 或 --d2-site 指定服务 {host} 的站点文件"
+                       f"（更名后为 {labsite.D2_SITE.name}）")
+
+
 def enable_site(lay: Layout, site_file: Path, *, base: Path | None = None, nginx_test: str, nginx_reload: str) -> dict:
     """安装"D2 + /lab/"站点文件：以当前站点文件（不含 /lab/ 时）或 --base 为 D2 站点文件，保存到 .state/d2-site.conf。"""
     t0 = time.monotonic()
@@ -745,9 +757,10 @@ def enable_site(lay: Layout, site_file: Path, *, base: Path | None = None, nginx
     elif lay.d2_site.exists():
         d2 = lay.d2_site.read_text(encoding="utf-8")
     else:
-        raise LabError("找不到 D2 站点文件：以 --base 指定 D2 标签构建自带的 drone4d.agentnetwork.org.cn.conf")
+        raise LabError(f"找不到 D2 站点文件：以 --base 指定当前发布自带的 {labsite.D2_SITE.name}")
     if labsite.has_lab(d2):
         raise LabError("D2 站点文件不应包含 /lab/ 增补段")
+    _check_host(site_file, d2)
     text = labsite.render(d2)
     lay.d2_site.write_text(d2, encoding="utf-8")
     os.chmod(lay.d2_site, 0o600)
@@ -775,6 +788,7 @@ def withdraw(lay: Layout, site_file: Path, *, d2_site: Path | None = None, nginx
         raise LabError("找不到 D2 站点文件（.state/d2-site.conf 或 --d2-site）")
     if labsite.has_lab(d2):
         raise LabError("D2 站点文件不应包含 /lab/ 增补段")
+    _check_host(site_file, d2)
     res = install_site(site_file, d2, nginx_test=nginx_test, nginx_reload=nginx_reload)
     rel_out = None
     if d2_release:

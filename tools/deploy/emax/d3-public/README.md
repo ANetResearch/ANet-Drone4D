@@ -1,11 +1,13 @@
 # emax 公开样例发布线：`/lab/` 与 `/lab-static/`（D3-AC-21）
 
-本目录是 D3 公开只读样例在 emax（`https://drone4d.agentnetwork.org.cn`）上的发布、校验、回滚与演练材料，对应
+本目录是 D3 公开只读样例在 ANet4D 公开站点 emax（`https://anet4d.agentnetwork.org.cn`；旧域名 `drone4d.agentnetwork.org.cn` 只做
+301）上的发布、校验、回滚与演练材料，对应
 [AWR-05](../../../../docs/05-D3-设计增补与决策记录.md) §7.9 实现约束 1–5、Q-D3-02、ADR-129、ADR-184、ADR-194、ADR-201，
 [AWR-17](../../../../docs/17-接口与通信协议说明书.md) §18.8.5 与 M27-FR-134、FR-136、FR-138。它是脚本目录，不是 Python 包；
 脚本只用标准库（emax 系统 Python 3.12 即可运行），演练脚本 `drill.py` 例外（需要仓库 `.venv` 与 docker）。
 
-公开站主构建保持 D2 标签构建（ADR-194 (5) ⑤）：本目录不修改 D2 的站点文件与 `install.sh`，只在 D2 站点文件上插入两段增补，
+公开站主构建保持 D2 标签构建（ADR-194 (5) ⑤）：本目录不修改公开站点文件 `anet4d.agentnetwork.org.cn.conf`（下文称 D2 站点文件）
+与 `install.sh`，只在 D2 站点文件上插入两段增补，
 得到"D2 + /lab/"站点文件；回滚到 D2 就是重新安装 D2 站点文件。公开站不运行任何 D3 进程（公开组合根 `AWR_D3_ENABLED = 0`），
 `/api/bench/*` 一律 404，只读页只发起 `/lab/` 与 `/lab-static/` 的静态 GET。
 
@@ -16,12 +18,14 @@
 | `labsite.py` | `render`（D2 站点文件 + 两段增补）、`check`（emax 上复核待安装的站点文件）、`strip`（还原 D2 站点文件）；`localize` 供演练与测试 |
 | `labctl.py` | 发布线：`index`、`check`、`push`、`activate`、`rollback`、`enable-site`、`withdraw`、`status`、`budget`、`pin` |
 | `verify.py` | 上线后的验收检查：站点检查（bench404、lab、static、rate、conn_ip、conn_all、nmax、回滚后的 d2）与本机检查（root、disk、content） |
-| `nginx-check.sh` | 开发机：一次性 Ubuntu 24.04 容器（nginx 1.24）中 `nginx -t` 两种站点文件，并在真实 nginx 上跑端到端用例与 verify.py |
+| `nginx-check.sh` | 开发机：一次性 Ubuntu 24.04 容器（nginx 1.24）中 `nginx -t` 两种站点文件（各自与旧域名跳转站点同时启用），并在真实 nginx 上跑端到端用例与 verify.py |
 | `drill.py` | 开发机：cgroup 模拟演练（D2 栈 + 容器 nginx + 16 路并发下载 + WS 推送时延 + D2-AC-04 负载 + 回滚演练） |
 
 **硬性约束（沿用 [D2 部署手册](../README.md) 的约束 1、4）：** 只新增与替换本站点的文件，不改 `nginx.conf` 与其他站点；
-增补段的区名、map 变量一律带 `drone4d_lab` 前缀；`enable-site` 与 `withdraw` 只写本站点的 `sites-available` 文件，先 `nginx -t`，
-失败即恢复原文件且不 reload。任何密钥不进入版本目录、索引、日志与本目录。
+增补段的区名、map 变量一律带 `anet4d_lab` 前缀；`enable-site` 与 `withdraw` 只写本站点的 `sites-available` 文件（缺省
+`/etc/nginx/sites-available/anet4d.agentnetwork.org.cn.conf`），先 `nginx -t`，失败即恢复原文件且不 reload；写入内容的
+`server_name` 与站点文件名的域名不一致时拒绝（防止把更名前保存的旧站点文件装进新域名的站点文件）。旧域名的跳转站点不插入增补段。
+`/srv/drone4d/` 与 `drone4d.lab_static_index.v1` 是沿用的遗留标识（服务器目录与契约 id，不随产品更名）。任何密钥不进入版本目录、索引、日志与本目录。
 
 ## 1 emax 上的目录
 
@@ -53,7 +57,7 @@ PYTHONPATH=python python3 tools/deploy/emax/d3-public/labctl.py pin --bench-root
 
 # emax（root）：校验 staging、移入、原子切换、保留 2 个版本
 sudo python3 /srv/drone4d/bin/labctl.py activate --version $V --chown root:root
-sudo python3 /srv/drone4d/bin/labctl.py enable-site --base /opt/anet-drone4d/current/tools/deploy/emax/drone4d.agentnetwork.org.cn.conf   # 首次上线
+sudo python3 /srv/drone4d/bin/labctl.py enable-site --base /opt/anet-drone4d/current/tools/deploy/emax/anet4d.agentnetwork.org.cn.conf   # 首次上线与域名迁移
 sudo python3 /srv/drone4d/bin/verify.py --connect 127.0.0.1 --source-ips 127.0.0.2-127.0.0.12 --expect-nmax 4 --local --out /srv/drone4d/.state/verify-$V.json
 ```
 

@@ -1,8 +1,8 @@
 """快速上手示例 Agent `PlazaWatch`（docs/sdk/quickstart.zh-CN.md、quickstart.en.md）。
 
 每架机起飞到各自的高度层，飞往分配给本机的公开锚点斜上方站位，云台持续对准锚点，并每 10 s 向标准错误输出累计检测数。
-L1 直接读取观测中的检测列表；L2 由参考检测器 `ref_det_v1`（`drone4d.perception.ref_det.L2Perception`，需要 extras `l2`）
-从相机图像得到同形的检测。示例不发送机间消息、不提交 report；report 与协同的写法见基线策略 `drone4d.baselines`。
+L1 直接读取观测中的检测列表；L2 由参考检测器 `ref_det_v1`（`anet4d.perception.ref_det.L2Perception`，需要 extras `l2`）
+从相机图像得到同形的检测。示例不发送机间消息、不提交 report；report 与协同的写法见基线策略 `anet4d.baselines`。
 
 同一份代码不改动地运行于各物理档（`physics = realistic`、`fast`）与观测档（L1、L2）；策略内无随机数、无墙钟依赖，
 同一种子两次运行的动作流逐字节一致。
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 
-from drone4d.agent import DroneAgent, act, gimbal_look_at, nav_goto, nav_takeoff
+from anet4d.agent import DroneAgent, act, gimbal_look_at, nav_goto, nav_takeoff
 
 STANDOFF_M = 30.0                 # 站位相对锚点向西、向南各偏移 30 m（斜视）
 LAYER_M = 8.0                     # 机间高度分层间隔：同高度交叉航线会机间碰撞
@@ -35,7 +35,7 @@ class PlazaWatch(DroneAgent):
         self.cam = next(s["sensor_id"] for s in config["sensors"] if s["kind"] == "camera")
         self.perception = None
         if config["obs_level"] != "L1":
-            from drone4d.perception.ref_det import L2Perception
+            from anet4d.perception.ref_det import L2Perception
 
             self.perception = L2Perception(config)
         self.ground: float | None = None

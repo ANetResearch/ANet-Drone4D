@@ -402,8 +402,8 @@ describe('/lab/compare page', () => {
       expect(v).not.toMatch(/[!！~～]|2\.0|Drone4D v2|封板/)
       expect(v.trim()).toBe(v)
     }
-    expect(zh['lab.compare.docTitle']).toBe('两档对照 · 事件沙盘 · ANet Drone4D')
-    expect(e['lab.compare.docTitle']).toBe('Tier comparison · Event Lab · ANet Drone4D')
+    expect(zh['lab.compare.docTitle']).toBe('两档对照 · 事件沙盘 · ANet4D')
+    expect(e['lab.compare.docTitle']).toBe('Tier comparison · Event Lab · ANet4D')
     // 每个 P09 用例与容差项都有文案
     for (const c of P09.cases) {
       expect(zh[`lab.compare.case.${String(c.id)}`], String(c.id)).toBeTruthy()

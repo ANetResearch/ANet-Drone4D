@@ -41,7 +41,7 @@ platform_retries: 1
 board: {version: p0a-formal-r2, current: L2, n_boot: 10000}
 submission:
   image: d3-example-close-track:b10
-  cmd: [python, -m, drone4d.serve, close_track.agent:Agent]
+  cmd: [python, -m, anet4d.serve, close_track.agent:Agent]
   env: {}
   group: L2
   team: d3-internal

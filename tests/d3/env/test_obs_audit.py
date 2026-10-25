@@ -24,7 +24,7 @@ from awr.agentsdk.wire import PROTOCOL, T, WireSocket, encode_frame
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-SDK = ROOT / "tools/sdk/drone4d/src"
+SDK = ROOT / "tools/sdk/anet4d/src"
 sys.path.insert(0, str(SDK))
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "tests" / "contracts"))
@@ -160,7 +160,7 @@ def test_audit_scope_binds_hosts(tmp_path: Path) -> None:
 
 def _serve(hosts: dict) -> list[subprocess.Popen]:
     env_ = {**os.environ, "PYTHONPATH": f"{SDK}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"}
-    return [subprocess.Popen([sys.executable, "-m", "drone4d.serve", "--baseline", "track_share", "--sock", str(h.path)], env=env_)
+    return [subprocess.Popen([sys.executable, "-m", "anet4d.serve", "--baseline", "track_share", "--sock", str(h.path)], env=env_)
             for h in hosts.values()]
 
 

@@ -31,7 +31,7 @@ class Stream(IntEnum):
     COMM_LINK = 20
     OBS_FAST = 21
     SENSOR_GEN = 22
-    TARGET_ACTIVITY = 23
+    TARGET_ACTIVITY = 24
 
 
 def rng(world_seed: int, stream: int, *keys: int) -> np.random.Generator:

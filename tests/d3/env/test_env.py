@@ -19,7 +19,7 @@ def _valid(kind: str, _u: str, doc: dict) -> None:
 
 @pytest.mark.parametrize("policy", ["static_guard", "coverage_scan", "track_share"])
 def test_baselines_contracts_and_determinism(synth_event, tmp_path: Path, policy: str) -> None:
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     m1 = _run(_spec(synth_event, tmp_path / "a"), lambda u: BASELINES[policy](), _valid)
     m2 = _run(_spec(synth_event, tmp_path / "b"), lambda u: BASELINES[policy]())
@@ -105,7 +105,7 @@ def test_guard_acks(synth_event, tmp_path: Path) -> None:
 
 
 def test_l1_anonymous_and_link(synth_event, tmp_path: Path) -> None:
-    from drone4d.agent import act, gimbal_angles, nav_takeoff, out_msg
+    from anet4d.agent import act, gimbal_angles, nav_takeoff, out_msg
 
     def script(o):
         if o["k"] == 0:

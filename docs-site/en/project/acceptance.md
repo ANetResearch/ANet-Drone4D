@@ -54,9 +54,9 @@ pinning environment, and they pass when run alone or match round 1.
 
 ## Full reports
 
-- [D2 acceptance report (round 2)](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/impl/D2-验收报告-第2轮.md)
-- [D2 acceptance report (round 1)](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/impl/D2-验收报告-第1轮.md)
-- [D1 acceptance report (round 6)](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/impl/D1-验收报告-第6轮.md)
-- [D2 design supplement and acceptance criteria (docs/04)](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/04-D2-设计增补与决策记录.md)
+- {gh}`D2 acceptance report (round 2) </blob/main/docs/impl/D2-验收报告-第2轮.md>`
+- {gh}`D2 acceptance report (round 1) </blob/main/docs/impl/D2-验收报告-第1轮.md>`
+- {gh}`D1 acceptance report (round 6) </blob/main/docs/impl/D1-验收报告-第6轮.md>`
+- {gh}`D2 design supplement and acceptance criteria (docs/04) </blob/main/docs/04-D2-设计增补与决策记录.md>`
 
 The reports are written in Chinese.

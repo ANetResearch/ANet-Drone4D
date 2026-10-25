@@ -1,4 +1,5 @@
-# /etc/systemd/system/anet-drone4d.service：ANet Drone4D 公开演示站 V0.2-demo（T4，AWR-19 §3.7、§4.4；ADR-085、ADR-091）。
+# /etc/systemd/system/anet-drone4d.service：ANet4D 公开站点（拓扑沿用 V0.2-demo：T4，AWR-19 §3.7、§4.4；ADR-085、ADR-091）。
+# 单元名 anet-drone4d 与 /opt/anet-drone4d、/etc/anet-drone4d 是沿用的遗留标识（不随产品更名，见 README.md「遗留标识」）。
 # 由 tools/deploy/emax/install.sh 安装（不要手改已安装的副本：下次安装会覆盖；调整配额请用 install.sh --cpu-quota、
 # --memory-high，它们写入 drop-in anet-drone4d.service.d/limits.conf，安装时不覆盖）。
 # 外层 systemd 只保活 supervisor；sim-core、show-api、sandbox-pool、sandbox-api 的启动顺序、心跳、退避与熔断由 supervisor
@@ -12,7 +13,7 @@
 # （journalctl -u anet-drone4d）；子进程日志另写 /opt/anet-drone4d/var/runs/<run>/logs/*.log 与 var/sandbox/runs/<sid>/。
 
 [Unit]
-Description=ANet Drone4D public demo V0.2-demo (World Runtime: shared show S7 and multi-tenant sandboxes)
+Description=ANet4D public site (World Runtime: shared show S7 and multi-tenant sandboxes)
 Documentation=https://github.com/ANetResearch/ANet-Drone4D/blob/main/tools/deploy/emax/README.md
 After=network-online.target
 Wants=network-online.target

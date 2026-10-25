@@ -1,6 +1,6 @@
 """nginx 站点文件的最小解析器（tests/ops 用；M00，D2 WP-16）。
 
-把 `tools/deploy/emax/drone4d.agentnetwork.org.cn.conf` 解析成指令树：`Directive(name, args, block)`，`block` 为子指令列表或
+把 `tools/deploy/emax/anet4d.agentnetwork.org.cn.conf` 解析成指令树：`Directive(name, args, block)`，`block` 为子指令列表或
 None。支持 `#` 注释、单双引号（引号内的 `{`、`}`、`;`、`#` 不是语法字符，反斜杠转义按 nginx 规则保留）。只用于结构断言，
 不是 nginx 语义的完整实现；有 nginx 可执行文件时 `test_nginx_static_parity.py` 另做真实对拍。
 """
@@ -12,8 +12,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SITE = ROOT / "tools" / "deploy" / "emax" / "drone4d.agentnetwork.org.cn.conf"
-BOOTSTRAP = ROOT / "tools" / "deploy" / "emax" / "drone4d.agentnetwork.org.cn.bootstrap.conf"
+SITE = ROOT / "tools" / "deploy" / "emax" / "anet4d.agentnetwork.org.cn.conf"
+BOOTSTRAP = ROOT / "tools" / "deploy" / "emax" / "anet4d.agentnetwork.org.cn.bootstrap.conf"
+#: 旧域名的永久跳转站点（只有 301 与 ACME，不定义共享区）
+LEGACY_SITE = ROOT / "tools" / "deploy" / "emax" / "drone4d.agentnetwork.org.cn.conf"
+DOMAIN = "anet4d.agentnetwork.org.cn"
+LEGACY_DOMAIN = "drone4d.agentnetwork.org.cn"
 
 
 @dataclass

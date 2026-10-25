@@ -86,8 +86,8 @@ def test_board_ranks_ties_and_ci() -> None:
 
 
 def test_env_run_evaluates(synth_event, tmp_path: Path) -> None:
+    from anet4d.baselines import BASELINES
     from d3_env_support import _run, _spec
-    from drone4d.baselines import BASELINES
 
     from awr.agentsdk.env.core import _open_world
     from awr.bench.eval.evaluator import evaluate_run

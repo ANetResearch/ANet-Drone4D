@@ -1,12 +1,12 @@
-# awr_sandbox：ANet Drone4D 沙盒 Python SDK
+# awr_sandbox：ANet4D 沙盒 Python SDK
 
 单文件 SDK（`awr_sandbox.py`，版本 1.1.0，接口 `/api/sandbox/v1`），依赖 `httpx>=0.24`、`websockets>=12`、`msgpack>=1.0`，
 支持 Python 3.9 至 3.13，不依赖本仓库的 `awr` 包（M17-FR-056；AWR-17 §17.13.1）。
 
 ```bash
 pip install "httpx>=0.24" "websockets>=12" "msgpack>=1.0"
-curl -O https://drone4d.agentnetwork.org.cn/sdk/awr_sandbox.py
-python examples/01_quickstart.py https://drone4d.agentnetwork.org.cn
+curl -O https://anet4d.agentnetwork.org.cn/sdk/awr_sandbox.py
+python examples/01_quickstart.py https://anet4d.agentnetwork.org.cn
 ```
 
 | 能力 | 调用 | 端点 |

@@ -35,7 +35,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "sensorsvc"))
-sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "anet4d" / "src"))
 
 from awr.sensorsvc.camera.actors import (  # noqa: E402
     actor_to_world,
@@ -808,7 +808,7 @@ def _gz_options(physics: str, out: Path, name: str) -> dict:
 
 
 def _run_config(world: Path, event: Path, out: Path, physics: str, name: str, policy: str, n: int) -> _Probe:
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     from awr.agentsdk.env.core import BenchEnv
     from awr.agentsdk.env.spec import EnvSpec, FleetEntry

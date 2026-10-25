@@ -306,7 +306,7 @@ def create_proxy_app(settings: BenchSettings | None = None, *, upstreams: dict[s
                 await c.aclose()
             clients.clear()
 
-    app = FastAPI(title="drone4d rerun-proxy", version="1", openapi_url=None, docs_url=None, redoc_url=None, lifespan=lifespan)
+    app = FastAPI(title="ANet4D rerun-proxy", version="1", openapi_url=None, docs_url=None, redoc_url=None, lifespan=lifespan)
     app.state.settings = s
     app.state.auth = a
     app.state.sessions = ProxySessions(a)

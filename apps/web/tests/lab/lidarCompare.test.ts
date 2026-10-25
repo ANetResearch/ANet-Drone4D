@@ -446,8 +446,8 @@ describe('/lab/runs/:rid/lidar page', () => {
       expect(v).not.toMatch(/[!！~～]|2\.0|Drone4D v2|封板/)
       expect(v.trim()).toBe(v)
     }
-    expect(zh['lab.lidarCompare.docTitle']).toBe('LiDAR 与重建对比 · 事件沙盘 · ANet Drone4D')
-    expect(e['lab.lidarCompare.docTitle']).toBe('LiDAR and reconstruction comparison · Event Lab · ANet Drone4D')
+    expect(zh['lab.lidarCompare.docTitle']).toBe('LiDAR 与重建对比 · 事件沙盘 · ANet4D')
+    expect(e['lab.lidarCompare.docTitle']).toBe('LiDAR and reconstruction comparison · Event Lab · ANet4D')
     // 页面与组件源码不含中文字面量（I18N-01：文案只在词典中）
     for (const f of ['ComparePage.tsx', 'CompareCanvas.tsx', 'charts.tsx', 'compare.ts', 'scene.ts']) {
       const src = readFileSync(join(WEB, 'src/ui/lab/lidar-compare', f), 'utf8').split('\n').filter((l) => !/^\s*(\/\/|\/\*\*|\*)/.test(l)).join('\n')

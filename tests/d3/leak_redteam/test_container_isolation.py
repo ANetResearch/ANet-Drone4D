@@ -3,7 +3,7 @@
 
 以真实 `d3-agent-py` 镜像（`AWR_A08_AGENT_IMAGE`，缺省 `d3-agent-py:dev`）经生产启动器 `AgentContainers`（`run_container_episode`，
 与 bench runner、subworker 相同的 `docker run` 参数表）在排名配置下运行一个回合。容器入口为探测 Agent：先在容器内执行 A11
-探测，再以 `drone4d.serve --baseline static_guard` 完成整个回合（HELLO、CONFIG、逐步 OBS/ACT、CLOSE），探测结果经容器日志
+探测，再以 `anet4d.serve --baseline static_guard` 完成整个回合（HELLO、CONFIG、逐步 OBS/ACT、CLOSE），探测结果经容器日志
 （启动器回收为 `agents/<uav>/container.log`）带回宿主。
 
 - 网络（L-18）：宿主侧在 dmax 本机全部 IPv4 地址（回环、ZeroTier、docker 网桥、局域网与公网地址）上设诱饵监听，并在部署
@@ -159,9 +159,9 @@ doc = probe()
 emit(doc)
 if "--serve" in sys.argv:
     import runpy
-    sys.argv = ["drone4d.serve", "--baseline", "static_guard"]
+    sys.argv = ["anet4d.serve", "--baseline", "static_guard"]
     try:
-        runpy.run_module("drone4d.serve", run_name="__main__", alter_sys=True)
+        runpy.run_module("anet4d.serve", run_name="__main__", alter_sys=True)
     except SystemExit:
         pass
     finally:
@@ -1001,7 +1001,7 @@ def test_formal_container_leak_matrix(synth_event, level: str, noise: str, rep: 
     t0 = time.monotonic()
     try:
         run = record_container_episode(env, run_dir, IMAGE, capture_dir=cap_dir, keep=False, cpus=2.0, mem_gb=8.0, hello_timeout_s=120.0,
-                                       cmd=["python", "-m", "drone4d.serve", "--baseline", FORMAL_BASELINE])
+                                       cmd=["python", "-m", "anet4d.serve", "--baseline", FORMAL_BASELINE])
     finally:
         if old is None:
             os.environ.pop("AWR_AGENT_SOCK_ROOT", None)

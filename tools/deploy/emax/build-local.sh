@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# tools/deploy/emax/build-local.sh：在本机构建 ANet Drone4D 公开演示站 V0.2-demo 的部署包（T4，AWR-19 §3.7；ADR-083、ADR-085、
-# ADR-109、ADR-118）。
+# tools/deploy/emax/build-local.sh：在本机构建 ANet4D 公开站点的部署包（拓扑沿用 V0.2-demo：T4，AWR-19 §3.7；ADR-083、ADR-085、
+# ADR-109、ADR-118）。部署包名 anet-drone4d-<release> 与服务器上的 anet-drone4d-worlds/ 目录是沿用的遗留标识（install.sh 与
+# 服务器布局依赖它们，不随产品更名）。
 #
 #   tools/deploy/emax/build-local.sh [--worlds all|none|<id,id,…>] [--with-world] [--out DIR] [--skip-web]
 #
@@ -99,7 +100,7 @@ step "生产包扫描（M06-AC-010：无测试开关）与构建信息"
 node "$ROOT/apps/web/tests/m06/lint/prod-bundle-scan.mjs" "$WEB_OUT"
 grep -q 'data-landing' "$WEB_OUT/index.html" || die "dist/index.html 不是演示构建（缺少落地页标记）"
 [ ! -e "$WEB_OUT/bench" ] || die "演示构建不得包含 dist/bench（UrbanScene3D 城市的 flight60 夹具，ADR-109 第 5 条待评估）"
-[ -f "$WEB_OUT/demo/drone4d-banner.jpg" ] && [ -f "$WEB_OUT/demo/demo-flight.webp" ] || die "落地页媒体缺失（dist/demo）"
+[ -f "$WEB_OUT/demo/anet4d-banner.jpg" ] && [ -f "$WEB_OUT/demo/demo-flight.webp" ] || die "落地页媒体缺失（dist/demo）"
 for f in lab-oblique lab-junction lab-residential lab-blocks lab-thermal; do
   [ -f "$WEB_OUT/demo/lab/$f.webp" ] || die "落地页"事件沙盘 · 无人机视角"媒体缺失（dist/demo/lab/$f.webp）"
 done
@@ -145,6 +146,9 @@ if [ -d "$HOME/.config/awr" ]; then
     while IFS='=' read -r k v; do
       v=${v%\"}; v=${v#\"}
       [ ${#v} -ge 12 ] || continue
+      # 服务地址不是凭据：键以 _URL 或 _ENDPOINT 结尾、值为不带用户信息（无 @）的 http(s) 地址时不比对（例如公开的 API 基地址
+      # 也写在源码中）；带用户名或口令的地址照常比对
+      if [[ "$k" =~ (_URL|_ENDPOINT)$ ]] && [[ "$v" =~ ^https?://[^/@[:space:]]+(/[^@[:space:]]*)?$ ]]; then continue; fi
       if grep -rqF -- "$v" "$STAGE" 2>/dev/null; then die "包内出现本机凭据（$(basename "$envf") 的 $k）"; fi
     done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$envf" || true)
   done

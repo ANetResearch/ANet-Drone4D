@@ -46,7 +46,7 @@ D2 的退出标准（P0 全部通过，P1 通过率不低于 80%）尚未满足�
 
 ## 完整报告
 
-- [D2 验收报告（第 2 轮）](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/impl/D2-验收报告-第2轮.md)
-- [D2 验收报告（第 1 轮）](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/impl/D2-验收报告-第1轮.md)
-- [D1 验收报告（第 6 轮）](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/impl/D1-验收报告-第6轮.md)
-- [D2 设计增补与验收标准（docs/04）](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/04-D2-设计增补与决策记录.md)
+- {gh}`D2 验收报告（第 2 轮） </blob/main/docs/impl/D2-验收报告-第2轮.md>`
+- {gh}`D2 验收报告（第 1 轮） </blob/main/docs/impl/D2-验收报告-第1轮.md>`
+- {gh}`D1 验收报告（第 6 轮） </blob/main/docs/impl/D1-验收报告-第6轮.md>`
+- {gh}`D2 设计增补与验收标准（docs/04） </blob/main/docs/04-D2-设计增补与决策记录.md>`

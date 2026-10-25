@@ -71,7 +71,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "python", ROOT / "tools" / "sdk" / "drone4d" / "src"):
+for _p in (ROOT / "python", ROOT / "tools" / "sdk" / "anet4d" / "src"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -184,7 +184,7 @@ class ManeuverPolicy:
         return (float(self.c[0] + sx * h), float(self.c[1] + sy * h), z), float(self.p.speeds[j % len(self.p.speeds)])
 
     def step(self, uav: str, obs: Mapping) -> dict:
-        from drone4d.agent import act, nav_goto, nav_takeoff
+        from anet4d.agent import act, nav_goto, nav_takeoff
 
         k = int(obs["k"])
         if k == 0:

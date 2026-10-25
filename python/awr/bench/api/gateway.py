@@ -826,7 +826,7 @@ def create_gateway_app(settings: BenchSettings, *, auth: BenchAuth | None = None
         finally:
             await hub.stop()
 
-    app = FastAPI(title="drone4d lab-gateway", version="1", openapi_url=None, docs_url=None, redoc_url=None, lifespan=lifespan)
+    app = FastAPI(title="ANet4D lab-gateway", version="1", openapi_url=None, docs_url=None, redoc_url=None, lifespan=lifespan)
     app.state.settings = settings
     app.state.hub = hub
     app.add_api_websocket_route(WS_PATH, lab_rt_endpoint)

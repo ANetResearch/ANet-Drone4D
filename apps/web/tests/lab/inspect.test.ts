@@ -478,7 +478,7 @@ function ctlSetup(o: { source?: CatalogSource | StaticSource; support?: { ok: tr
   const ranges: [number, number][] = []
   const ctl = new InspectController({
     source, playhead: ph, support: o.support ?? { ok: true }, clock,
-    resolveUrl: (u) => new URL(u, 'https://drone4d.example/lab/samples/run-k2m4q7xz3a').href,
+    resolveUrl: (u) => new URL(u, 'https://anet4d.example/lab/samples/run-k2m4q7xz3a').href,
     start: async (_p, so) => {
       starts.push(1)
       if (o.fail) throw o.fail
@@ -647,8 +647,8 @@ describe('public sample panel reads static slices only (AWR-14 §21.9.4; D3-AC-2
     const { ctl, parent, viewer } = ctlSetup({ source: STATIC })
     await ctl.start(parent)
     expect(viewer.opened).toEqual([[
-      'https://drone4d.example/lab-static/v/2026.10.19-1/runs/run-k2m4q7xz3a/slices/t085-095.rrd',
-      'https://drone4d.example/lab-static/v/2026.10.19-1/runs/run-k2m4q7xz3a/slices/basemap.rrd',
+      'https://anet4d.example/lab-static/v/2026.10.19-1/runs/run-k2m4q7xz3a/slices/t085-095.rrd',
+      'https://anet4d.example/lab-static/v/2026.10.19-1/runs/run-k2m4q7xz3a/slices/basemap.rrd',
     ]])
     viewer.emit('recording_open', { recording_id: REC })
     expect(ctl.snapshot.state).toBe('READY')
@@ -928,7 +928,7 @@ describe('inspect route and copy (AWR-14 §21.2.2, §21.9.2)', () => {
     expect(zh['lab.inspect.error.version']).toBe('数据检视未能打开录制（694 RERUN_VERSION_MISMATCH）。该录制需要迁移后查看。')
     expect(zh['lab.inspect.drivenBy']).toBe('由数据检视驱动')
     expect(zh['lab.inspect.native']).toBe('在原生 Viewer 中打开')
-    expect(t('lab.inspect.docTitle', { rid: 'run-k2m4q7xz3a' })).toBe('run-k2m4q7xz3a · 数据检视 · 事件沙盘 · ANet Drone4D')
+    expect(t('lab.inspect.docTitle', { rid: 'run-k2m4q7xz3a' })).toBe('run-k2m4q7xz3a · 数据检视 · 事件沙盘 · ANet4D')
     setLocale('en')
     expect(t('lab.inspect.loading', { mb: '24.4', total: '48.9' })).toBe('Loading data inspection component · 24.4 / 48.9 MB')
     for (const [k, v] of Object.entries(en)) expect(/[一-鿿]/.test(v), k).toBe(false)

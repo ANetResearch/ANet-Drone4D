@@ -1,11 +1,11 @@
 """`close_track` Agent：track_share 的观察、跟踪、共享与 report 规则不变，巡航高度取 45 m AGL（任务包络 30–120 m 内）。
 
-容器入口：`python -m drone4d.serve close_track.agent:Agent`。
+容器入口：`python -m anet4d.serve close_track.agent:Agent`。
 """
 
 from __future__ import annotations
 
-from drone4d.baselines import TrackShare
+from anet4d.baselines import TrackShare
 
 __all__ = ["Agent"]
 

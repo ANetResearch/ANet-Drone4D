@@ -150,16 +150,16 @@
       "d1": "V0.3"
     },
     {
-      "stream_id": 23,
+      "stream_id": 24,
       "name": "target_activity",
       "owner": "M18",
-      "purpose": "experimental scene target pedestrian errands (m23 scene-target foundations): destination choice and dwell draws, keys (seed, 23, actor_key, variant), actor_key = first 8 bytes (big-endian) of sha256(actor_id)",
+      "purpose": "experimental scene target pedestrian errands (m23 scene-target foundations): destination choice and dwell draws, keys (seed, 24, actor_key, variant), actor_key = first 8 bytes (big-endian) of sha256(actor_id)",
       "d1": "V0.3"
     }
   ],
   "reserved": {
-    "from": 24,
+    "from": 25,
     "to": 63,
-    "note": "7 is unassigned; 11-16 M01 reconstruction (ext); 17 targets_motion (M18), 18 perception (M19); 19-22 D3 (M23, M26, M25; AWR-05 §8.5); 23 target_activity (M18, experimental); 24-63 reserved"
+    "note": "7 is unassigned; 11-16 M01 reconstruction (ext); 17 targets_motion (M18), 18 perception (M19); 19-22 D3 (M23, M26, M25; AWR-05 §8.5); 23 reserved for the D4 keyed namespace (AWR-06 §5.5); 24 target_activity (M18, experimental); 25-63 reserved"
   }
 }

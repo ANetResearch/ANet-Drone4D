@@ -14,7 +14,7 @@ export interface LabRouteProps {
 export interface LabPublicRoute {
   id: string
   pattern: string
-  /** 页面标题（document.title 为 `<标题> · 事件沙盘 · ANet Drone4D 公开站`） */
+  /** 页面标题（document.title 为 `<标题> · 事件沙盘 · ANet4D 公开站`） */
   title: (p: LabRouteProps, t: (key: string, params?: Record<string, string | number>) => string) => string
   render: (p: LabRouteProps) => React.ReactNode
 }

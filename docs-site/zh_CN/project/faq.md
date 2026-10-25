@@ -1,9 +1,27 @@
 # 常见问题
 
+## 命名
+
+**ANet4D 与 ANet Drone4D 是什么关系？**
+二者是同一个项目。自 0.3.2 起产品名为 ANet4D，即新一代具身智能体协同模拟基础设施；原名 ANet Drone4D 不再使用。公开站由
+`drone4d.agentnetwork.org.cn` 迁至 [anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn)，本文档站由
+`docs.agentnetwork.org.cn/drone4d/` 迁至 `docs.agentnetwork.org.cn/anet4d/`，原地址永久跳转。GitHub 仓库地址目前仍为
+{gh}`github.com/ANetResearch/ANet-Drone4D </>`；仓库改名后，GitHub 会把原地址跳转到新地址。
+
+**为什么有些标识符仍含 `drone4d`？**
+属于协议、数据契约或已录制数据的标识符保留原有拼写，使已有录制、事件磁带、提交与安装继续有效，回放保持逐字节一致。这些遗留标识符包括
+事件规格 `drone4d.event.v1`、Agent 线协议 `drone4d.bench.wire.v1`、契约包内的 schema 标识、已录制 MCAP 文件中的通道名、Gazebo 原生插件名，
+以及服务器上的安装路径与单元名（例如 systemd 单元 `anet-drone4d`）。它们是标识符，不是产品名。
+
+**我在使用 Python 包 `drone4d`，需要做什么？**
+SDK 包已改为 `anet4d`（wheel `anet4d-<版本>-py3-none-any.whl`、`import anet4d`、`python -m anet4d.serve`）。`drone4d` 作为已弃用的兼容别名保留一个版本，
+它重新导出 `anet4d` 并发出 `DeprecationWarning`；请在导入与命令中把 `drone4d` 替换为 `anet4d`。见 {doc}`../guide/sdk-quickstart`。
+
 ## 运行环境
 
 **服务器需要 GPU 吗？**
-不需要。物理、安全、任务、感知与环境都在 CPU 上计算；点云、天气与界面在访客浏览器中渲染。公开实例运行在 4 核、无 GPU 的服务器上。
+交互沙盒不需要：物理、安全、任务、感知与环境都在 CPU 上计算，点云、天气与界面在访客浏览器中渲染。公开实例运行在 4 核、无 GPU 的服务器上。
+事件沙盘的传感器生成（网格相机、热成像与 LiDAR）需要服务器配备 NVIDIA GPU；公开实例只展示预先渲染的事件沙盘样例。
 
 **支持哪些操作系统？**
 服务器只支持 x86-64 Linux（Ubuntu 22.04 或 24.04 经过验证）：共享内存状态环依赖 x86 的内存序。其他系统可以通过虚拟机或远程 Linux 服务器运行，
@@ -26,7 +44,8 @@
 可以自由分享。见 {doc}`../topics/worlds`。
 
 **能否导入自己的点云？**
-0.2.0 的 ingest 面向内置数据集与合成城市；任意 PLY 或 LAS 点云的导入列在 V0.2 主题中，三角网格资产导入在 D3 中实施。见 {doc}`roadmap`。
+点云 ingest 面向内置数据集与合成城市；任意 PLY 或 LAS 点云的导入列在原设计基线的 V0.2 主题中。自 V0.3 起，摄影测量 GLB 网格可经米制尺度、真北与调平标定后
+作为网格世界导入。见 {doc}`roadmap`。
 
 ## 共享展示与沙盒
 
@@ -35,8 +54,7 @@
 
 **切换底图后，原来布置的识别物和任务去哪了？**
 切换底图会在新世界重启仿真并载入该世界的同名场景模板；上一世界的识别物、机巢、任务与视野配置不会带入新世界，因为各世界的坐标与几何互不相同。
-需要保留配置时，先导出配置快照，之后可在原世界恢复。已知问题：在当前公开实例运行的 0.2.0 版本中，这一隔离并不是在所有切换路径上都成立，
-切换后上一世界的实体或视野配置可能仍然可见；该缺陷已在开发分支修复，将随下一版本发布，见 {doc}`../guide/sandbox`。
+需要保留配置时，先导出配置快照，之后可在原世界恢复。0.2.0 中这一隔离并不是在所有切换路径上都成立；该缺陷自 0.2.1 起已修复，见 {doc}`../guide/sandbox`。
 
 **画面稀疏或帧率较低怎么办？**
 画质控制器会根据实测帧时间降低点预算以维持帧率。没有硬件 GPU 或使用集成显卡时，画面会更稀疏；关闭其他占用 GPU 的页面、改用桌面浏览器或缩小窗口
@@ -68,11 +86,11 @@ SDK 1.1.0 及更早版本中，排队的长轮询（单次最长 25 s）沿用 `
 所有命令都经过与界面相同的准入与安全检查。真实 ANet 网络的接入列在 V1.0。
 
 **能接入 PX4 或真实无人机吗？**
-0.2.0 使用内置的 FleetSim（PX4 风格控制级联，与 PX4 SIH 飞行记录对照）。PX4 SIH、SITL 与经 Prometheus 接入真实 P600 依次列在 V0.2、V0.4 与 V0.5，
-D3 的 gz-sim 锁步档与 SITL 档在实施中。见 {doc}`roadmap`。
+交互沙盒使用内置的 FleetSim（PX4 风格控制级联，与 PX4 SIH 飞行记录对照）。事件沙盘增加了 Gazebo Sim 锁步档作为高保真物理档（V0.3）。
+PX4 SITL 档与经 Prometheus 接入真实 P600 不在已发布版本中，见 {doc}`roadmap`。
 
 ## 反馈
 
 **如何报告问题？**
-请在 [GitHub Issues](https://github.com/ANetResearch/ANet-Drone4D/issues) 提交，并附上启动屏或 `GET /api/health` 中的版本行、浏览器与设备、
+请在 {gh}`GitHub Issues </issues>` 提交，并附上启动屏或 `GET /api/health` 中的版本行、浏览器与设备、
 复现步骤，以及错误响应中的 `request_id`。安全问题请发送至 hi@anet0.com。

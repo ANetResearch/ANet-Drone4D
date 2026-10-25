@@ -6,7 +6,7 @@
 - `/lab-static/index.json` no-cache；`/lab-static/v/<ver>/` immutable、`limit_rate_after`（整段下载 8m、分段 0）、`limit_rate 2m`、
   每前缀 `limit_conn 4`、全站 `limit_conn 32`（AWR-05 §7.9 实现约束 4、17 §18.8.5 规则 4）；只允许 GET 与 HEAD；
 - 直出正则与 labctl 的路径规则一致（以点开头的段、`.staging`、非法版本名不匹配）；
-- 新增的区名不与 D2 站点文件冲突（drone4d_lab 前缀）。
+- 新增的区名不与 D2 站点文件冲突（anet4d_lab 前缀）。
 """
 
 from __future__ import annotations
@@ -54,11 +54,11 @@ def test_zones_and_maps_are_prefixed_and_unique():
     zones = [d.args for d in main.find("limit_conn_zone")]
     names = [next(a for a in z if a.startswith("zone=")).split("=")[1].split(":")[0] for z in zones]
     assert len(names) == len(set(names))
-    assert ["$drone4d_prefix", "zone=drone4d_lab_ip:10m"] in zones and ["$server_name", "zone=drone4d_lab_all:1m"] in zones
-    m = next(d for d in main.find("map") if d.args == ["$http_range", "$drone4d_lab_rate_after"])
+    assert ["$anet4d_prefix", "zone=anet4d_lab_ip:10m"] in zones and ["$server_name", "zone=anet4d_lab_all:1m"] in zones
+    m = next(d for d in main.find("map") if d.args == ["$http_range", "$anet4d_lab_rate_after"])
     table = {d.name: d.args[0] for d in m.block or []}
     assert table == {"": "8m", "bytes=0-": "8m", "default": "0"}
-    m = next(d for d in main.find("map") if d.args == ["$request_method", "$drone4d_lab_bad_method"])
+    m = next(d for d in main.find("map") if d.args == ["$request_method", "$anet4d_lab_bad_method"])
     assert {d.name: d.args[0] for d in m.block or []} == {"GET": "0", "HEAD": "0", "default": "1"}
 
 
@@ -77,8 +77,8 @@ def test_bench_404_lab_and_lab_static_locations():
     idx = locs["= /lab-static/index.json"]
     assert idx.values("alias") == [["/srv/drone4d/lab-static/index.json"]] and ["Cache-Control", "no-cache", "always"] in idx.values("add_header")
     v = next(d for k, d in locs.items() if k.startswith("~ ^/lab-static/v/"))
-    assert v.values("limit_rate") == [["2m"]] and v.values("limit_rate_after") == [["$drone4d_lab_rate_after"]]
-    assert sorted(v.values("limit_conn")) == [["drone4d_lab_all", "32"], ["drone4d_lab_ip", "4"]]
+    assert v.values("limit_rate") == [["2m"]] and v.values("limit_rate_after") == [["$anet4d_lab_rate_after"]]
+    assert sorted(v.values("limit_conn")) == [["anet4d_lab_all", "32"], ["anet4d_lab_ip", "4"]]
     assert ["Cache-Control", "public, max-age=31536000, immutable", "always"] in v.values("add_header")
     assert v.values("max_ranges") == [["1"]]
     assert v.values("sendfile_max_chunk") == [["256k"]]       # 每次写事件 ≤ 256 KiB 后让出 worker（WS 推送时延）
@@ -86,8 +86,8 @@ def test_bench_404_lab_and_lab_static_locations():
     # 只允许 GET 与 HEAD：每个 /lab 与 /lab-static 的直出 location 都有 405 分支
     for k in ("^~ /lab/", "^~ /lab/assets/", "= /lab-static/index.json"):
         ifs = locs[k].find("if")
-        assert ifs and ifs[0].args == ["($drone4d_lab_bad_method)"] and ifs[0].values("return") == [["405"]], k
-    assert v.find("if")[0].args == ["($drone4d_lab_bad_method)"] and v.find("if")[0].values("return") == [["405"]]
+        assert ifs and ifs[0].args == ["($anet4d_lab_bad_method)"] and ifs[0].values("return") == [["405"]], k
+    assert v.find("if")[0].args == ["($anet4d_lab_bad_method)"] and v.find("if")[0].values("return") == [["405"]]
     # 增补段在 location / 之前，location / 仍为最后一个（SPA 回退给 show-api）
     order = [" ".join(d.args) for d in srv.find("location")]
     assert order[-1] == "/" and order.index("^~ /lab/") < order.index("/")

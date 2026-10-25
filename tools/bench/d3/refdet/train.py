@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """tools/bench/d3/refdet/train.py：训练参考检测器 `ref_det_v1`（M26-FR-121）。在 dmax 的 pytorch 镜像（GPU 2 或 3）中运行。
 
-网络（CenterNet 式，输出步长 4）：输入为 Agent 侧同一预处理的 960×540 RGB（`drone4d.perception.ref_det.decode_small`：JPEG DCT 域
+网络（CenterNet 式，输出步长 4）：输入为 Agent 侧同一预处理的 960×540 RGB（`anet4d.perception.ref_det.decode_small`：JPEG DCT 域
 1/2 缩放解码，底部补 4 行 0 到 544），`x/255 − 0.5`；stem 4×4/4 分块卷积（32，步长 4，跳连）→ 深度可分离块 b2 32→48/2（步长 8）→ b3 48→48 →
 b4（膨胀 2）→ b5（膨胀 4）→ b6（残差）→ 最近邻 ×2 上采样与 stem 拼接（80）→ 1×1 80→32 → 1×1 32→6：
 两类中心热图（person、vehicle）、框尺寸 log(h、w，输入像素）、中心亚像素偏移。
 
 数据：gen_data.py 的分片；首次运行把全部帧解码缩放为 uint8 memmap（`<data>/cache-960x540.u8`）。段号 % 10 == 0 的段为验证集。
-导出：BN 折叠进卷积，权重存 `ref_det_v1.npz`（float32），与 numpy 推理（drone4d.perception.ref_det）在验证帧上逐元素比对（≤ 1e-3）。
+导出：BN 折叠进卷积，权重存 `ref_det_v1.npz`（float32），与 numpy 推理（anet4d.perception.ref_det）在验证帧上逐元素比对（≤ 1e-3）。
 
 用法：python train.py --data out/refdet/data --out out/refdet/model [--epochs 40] [--batch 32]
 """
@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "sdk" / "anet4d" / "src"))
 
 W_IN, H_IN, H_PAD, STRIDE = 960, 540, 544, 4
 HM_W, HM_H = W_IN // STRIDE, H_PAD // STRIDE
@@ -33,7 +33,7 @@ ARCH = [("stem", 3, 32, 4, 1), ("b2", 32, 48, 2, 1), ("b3", 48, 48, 1, 1), ("b4"
 
 
 def _load_frame(args) -> np.ndarray:
-    from drone4d.perception.ref_det import decode_small
+    from anet4d.perception.ref_det import decode_small
 
     path, off, ln = args
     with open(path, "rb") as f:
@@ -327,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
     export(net, a.out / "ref_det_v1.npz")
     torch.save(net.state_dict(), a.out / "ref_det_v1.pt")
     # numpy 推理与 torch 比对（验证帧前 8 帧）
-    from drone4d.perception.ref_det import RefDet
+    from anet4d.perception.ref_det import RefDet
 
     rd = RefDet(a.out / "ref_det_v1.npz")
     x = _batch_x(mm, val[:8], [False] * 8)

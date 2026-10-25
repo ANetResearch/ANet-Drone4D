@@ -44,8 +44,8 @@ export const DEMO_ROUTES: ReadonlySet<string> = new Set(['root', 'world', 'world
 /** palette and hotkey actions that would open a hidden page */
 export const DEMO_HIDDEN_ACTIONS: ReadonlySet<string> = new Set(['replay.runs', 'jobs.open'])
 
-export const DEMO_REPO_URL = 'https://github.com/ANetResearch/ANet-Drone4D'
-export const DEMO_DOCS_URL = 'https://docs.agentnetwork.org.cn/drone4d/'
+/** repository and documentation links of the landing page and the /lab/ header (lib/site.ts is the single source) */
+export { REPO_URL as DEMO_REPO_URL, DOCS_URL as DEMO_DOCS_URL, SITE_ORIGIN as DEMO_SITE_ORIGIN } from './site'
 
 /** world ids of a list allowed in this build (the seven worlds in the demo build, all of them outside it) */
 export function demoWorlds<T extends { id: string }>(list: readonly T[]): T[] {

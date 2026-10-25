@@ -28,7 +28,7 @@ import identity as idfx
 
 pytestmark = [pytest.mark.needs_data, pytest.mark.slow]
 
-SITE = "https://drone4d.example.test"
+SITE = "https://anet4d.example.test"
 GAP_S = 2.1                                          # 每前缀 0.5 次/s（突发 3）
 P1 = "203.0.113.7"                                   # 文档用途地址（RFC 5737），各自一个 /64 与 /24 前缀
 P2 = "198.51.100.9"

@@ -57,7 +57,7 @@
       },
       "activity": {
         "plan_id": "walker-01",
-        "sha256": "6eb0fd66bed2ace88cfe44f4e2ccf041984c2b39cdc3b95392f0354e0cf65af3"
+        "sha256": "99b152f1397b371ede25e97083051aa6609e3ecc86edc08ea5613173365bee7c"
       }
     },
     {
@@ -86,7 +86,7 @@
       },
       "activity": {
         "plan_id": "walker-02",
-        "sha256": "34fea774e556bae9d0294f1aec81f35a3cafff4f3b0dd3e341fb396af899d6a9"
+        "sha256": "ecf637972d56298c94a513c737a00862d816e757e114399a51147962e68fb90b"
       }
     },
     {
@@ -115,7 +115,7 @@
       },
       "activity": {
         "plan_id": "walker-03",
-        "sha256": "4ca60d7ff1c27aa4f2d7ab7fe3dbbd9e53ed4f180e9fd2d8f85af9b90b8f9a73"
+        "sha256": "4235d010e24f25111c791778f0daacbd82cb8bca870c287167692d163600dd93"
       }
     },
     {
@@ -123,8 +123,8 @@
       "label": "步行居民 04",
       "class": "person",
       "pos": [
-        347.4,
-        43.4,
+        372.6,
+        -47.4,
         0.15
       ],
       "motion": {
@@ -144,7 +144,7 @@
       },
       "activity": {
         "plan_id": "walker-04",
-        "sha256": "2236808602ec8bc2e4b2e3df64566d7d1412a97d4c7c3394376d84388b0d4a1b"
+        "sha256": "8411e943901ed9eb1ec33b27107ea4e6f6c1f09432f8b4b5961f233b67b10b23"
       }
     },
     {
@@ -152,8 +152,8 @@
       "label": "步行居民 05",
       "class": "person",
       "pos": [
-        467.4,
-        -47.4,
+        256.6,
+        43.4,
         0.15
       ],
       "motion": {
@@ -173,7 +173,7 @@
       },
       "activity": {
         "plan_id": "walker-05",
-        "sha256": "ef8f7b60215351b43da442b5ed0a4039153f0479db2f1a00ec275fdeaa8e7c29"
+        "sha256": "6eb7a04855fef26cd4fbd531b5aada61d1c40f7113ae9fd05393dc291219691b"
       }
     },
     {
@@ -181,7 +181,7 @@
       "label": "步行居民 06",
       "class": "person",
       "pos": [
-        467.4,
+        372.6,
         -192.6,
         0.15
       ],
@@ -202,7 +202,7 @@
       },
       "activity": {
         "plan_id": "walker-06",
-        "sha256": "bfb164784bf667de877d703343fa194a8f80c805ffc947976aeb85727eab86df"
+        "sha256": "1426bd201f0aed85e127406c5ee4b747e5682e50d2c52005daf55912cddbbbec"
       }
     }
   ]

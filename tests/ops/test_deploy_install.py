@@ -422,7 +422,7 @@ class _Stub:
 def test_smoke_outcomes(status, body, rc):
     s = _Stub(status, body)
     out: list[str] = []
-    assert smoke.run(s.base, "drone4d.agentnetwork.org.cn", "synthcity", 5, out=out.append) == rc, out
+    assert smoke.run(s.base, "anet4d.agentnetwork.org.cn", "synthcity", 5, out=out.append) == rc, out
     if rc == 0:
         assert ("DELETE", "/api/sandbox/v1/sessions/sb-abcdefghij") in s.calls
         assert any(p.startswith("/api/sandbox/v1/sessions/sb-abcdefghij?wait_state=READY") for _, p in s.calls)
@@ -499,13 +499,13 @@ def test_build_local_bundle(built):
     out, stage = built
     rel = dict(line.split("=", 1) for line in (stage / "RELEASE").read_text().splitlines())
     assert re.fullmatch(r"\d{8}-\d{6}-(?:[0-9a-f]{10}|nogit)(?:-dirty)?", rel["release"])
-    assert rel["channel"] == "demo" and rel["version"] == "0.3.1" and rel["dirty"] in ("true", "false")
+    assert rel["channel"] == "demo" and rel["version"] == "0.3.2" and rel["dirty"] in ("true", "false")
     bi = json.loads((stage / "apps" / "web" / "dist" / "build-info.json").read_text())
     assert bi == {"version": rel["version"], "channel": "demo", "commit": rel["commit"], "dirty": rel["dirty"] == "true",
                   "built_at": rel["built_at"], "release": rel["release"]}
     html = (stage / "apps" / "web" / "dist" / "index.html").read_text()
-    assert '<meta name="awr-build" content="0.3.1-demo+' in html
-    assert '<div class="boot-version">V0.3.1-demo · ' in html and "window.__AWR_BOOT_MANIFEST=" in html
+    assert '<meta name="awr-build" content="0.3.2-demo+' in html
+    assert '<div class="boot-version">V0.3.2-demo · ' in html and "window.__AWR_BOOT_MANIFEST=" in html
     assert (stage / "tools" / "sdk" / "awr_sandbox.py").is_file()
     for s in (stage / "tools" / "deploy" / "emax").glob("*.sh"):
         assert s.stat().st_mode & stat.S_IXUSR, s

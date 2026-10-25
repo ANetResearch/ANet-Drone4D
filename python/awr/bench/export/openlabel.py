@@ -118,8 +118,8 @@ def to_openlabel(graph: dict, truth: dict, header: dict, *, frames: np.ndarray |
         relations[str(len(relations))] = {"name": f"{e['src']} {e['rel']} {e['dst']}", "type": e["rel"],
                                           "rdf_subjects": [{"type": s[0], "uid": s[1]}], "rdf_objects": [{"type": o[0], "uid": o[1]}]}
     meta = {"schema_version": SCHEMA_VERSION, "name": truth["event_id"], "file_version": f"v{truth['event_version']}-r{truth['truth_rev']}",
-            "annotator": "ANet-Drone4D gate 3 semantic verifier (awr.sim.events)", "tagged_file": "tape.bin",
-            "comment": "Ground truth of a Drone4D event (truth layer); frame k is t = k x 100 ms from the tape start",
+            "annotator": "ANet4D gate 3 semantic verifier (awr.sim.events)", "tagged_file": "tape.bin",
+            "comment": "Ground truth of an ANet4D event (truth layer); frame k is t = k x 100 ms from the tape start",
             "exporter": EXPORTER, "frame_rate_hz": 10, "event_type": truth.get("event_type") or header.get("event_type"),
             "tape_content_sha256": truth["tape_content_sha256"], **({"truth_sha256": truth_sha256} if truth_sha256 else {})}
     meta = {k: v for k, v in meta.items() if v is not None}

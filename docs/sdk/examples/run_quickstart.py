@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""快速上手的运行脚本（平台侧，需要 ANet Drone4D 仓库环境：`awr` 包、世界包与已编译事件；Realistic 档另需 gz-sim 与
-Drone4D 插件，即 d3-gz 镜像）。docs/sdk/quickstart.zh-CN.md 第 4 节、quickstart.en.md section 4。
+"""快速上手的运行脚本（平台侧，需要 ANet4D 仓库环境：`awr` 包、世界包与已编译事件；Realistic 档另需 gz-sim 与
+本仓库的 Gazebo 原生插件，即 d3-gz 镜像）。docs/sdk/quickstart.zh-CN.md 第 4 节、quickstart.en.md section 4。
 
-以 `drone4d.bench.make(..., physics=...)` 构造本地开发 Env（不排名），两种 Agent 接入方式：
-- 进程内：`--agent plaza_watch:PlazaWatch`，每架机一个实例，经 `drone4d.runner.run_episode` 驱动；
-- 套接字：`--sock-root DIR`，为每架机监听 `DIR/<uav>/agent.sock`，等待外部进程（研究者主机上 `pip install drone4d` 后的
-  `python -m drone4d.serve plaza_watch:PlazaWatch --sock DIR/<uav>/agent.sock`，或 Agent 容器）接入，经线协议
+以 `anet4d.bench.make(..., physics=...)` 构造本地开发 Env（不排名），两种 Agent 接入方式：
+- 进程内：`--agent plaza_watch:PlazaWatch`，每架机一个实例，经 `anet4d.runner.run_episode` 驱动；
+- 套接字：`--sock-root DIR`，为每架机监听 `DIR/<uav>/agent.sock`，等待外部进程（研究者主机上 `pip install anet4d` 后的
+  `python -m anet4d.serve plaza_watch:PlazaWatch --sock DIR/<uav>/agent.sock`，或 Agent 容器）接入，经线协议
   `drone4d.bench.wire.v1` 交换帧。两种方式下同一种子的动作流逐字节一致。
 
 结束后在标准输出打印一行 JSON 摘要（`drone4d.quickstart.summary.v1`）：步数、墙钟、逐机超时与动作流 sha256、report 数。
@@ -99,8 +99,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--hello-timeout-s", default=300.0, type=float)
     a = ap.parse_args(argv)
 
-    from drone4d.local import make  # 即 drone4d.bench.make；平台镜像未装 bench-api 客户端依赖 httpx 时也可导入
-    from drone4d.runner import run_episode
+    from anet4d.local import make  # 即 anet4d.bench.make；平台镜像未装 bench-api 客户端依赖 httpx 时也可导入
+    from anet4d.runner import run_episode
 
     rs = json.loads(a.spec.read_text(encoding="utf-8"))
     rs["ranked"] = False                                   # 本地开发运行不排名

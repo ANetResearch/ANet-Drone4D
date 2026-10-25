@@ -8,7 +8,8 @@
 //          redistribution and World Packages are rebuilt locally (ADR-034)
 //   REL-03 a credential: private-key blocks and common token shapes, and every value of ~/.config/awr/*.env (12 characters or
 //          more) found verbatim in a text file; values are compared in memory and never printed, only the file and the key name;
-//          keys matching PUBLIC_KEYS (model ids) name public identifiers and are not compared
+//          keys matching PUBLIC_KEYS (model ids) name public identifiers and are not compared, nor are endpoint keys
+//          (PUBLIC_URL_KEYS) whose value is a plain http(s) address without credentials
 //   REL-04 the deployment admin secret (internal identity passphrase, ADR-123; AWR-04 §15.9.5 item 2): when this machine has a
 //          deployment secret file (~/.config/awr/admin.secret, or the file AWR_ADMIN_SECRET_FILE points to), its first line
 //          (6 characters or more) must not appear verbatim in any text file of the release set; compared in memory, never
@@ -16,7 +17,8 @@
 // License and attribution rules (docs/05 §14, ADR-154, ADR-205; D3-AC-24, D3-AC-45, D3-AC-46):
 //   REL-05 FAST-LIVO2 (GPL-2.0) runs only as a separate container: no FAST-LIVO2 or rpg_vikit source tree, no C/C++ or build
 //          file that includes or defines its code, no binary linked with it, no submodule pointing at it
-//   REL-06 gz-sim fork files (FORKS) keep the original copyright header, state the Drone4D modifications under it and are
+//   REL-06 gz-sim fork files (FORKS) keep the original copyright header, state the modifications under it in a "Drone4D
+//          modifications" paragraph (legacy heading of the native fork files; "ANet4D modifications" is accepted) and are
 //          listed in THIRD_PARTY_NOTICES.md; a file with an Open Source Robotics Foundation header or the fork namespace
 //          that is not registered is reported (register it, or restore its header)
 //   REL-07 research-only components (nvdiffrast, the Inria 3DGS rasterizer and simple-knn, Skyfall-GS, FLUX.1 [dev]) and
@@ -63,6 +65,10 @@ const TOKENS = [
 // keys whose values are public identifiers, not credentials: model ids (for example an image model id) are named in
 // provenance records and illustration manifests; a value that also serves another key is still compared under that key
 export const PUBLIC_KEYS = /(^|_)(MODEL|MODELS|MODEL_ID)$/
+// endpoint keys (..._URL, ..._ENDPOINT) whose value is a plain http(s) address without user info are public service addresses
+// (the same rule as tools/deploy/emax/build-local.sh); an address that carries credentials is still compared
+export const PUBLIC_URL_KEYS = /(^|_)(URL|ENDPOINT)$/
+export const PLAIN_URL = /^https?:\/\/[A-Za-z0-9.-]+(:\d+)?(\/[^\s@]*)?$/
 /** values of ~/.config/awr/*.env (KEY=VALUE lines, quotes stripped), at least 12 characters, except PUBLIC_KEYS; never printed */
 export function localSecrets(dir = join(homedir(), '.config', 'awr')) {
   const out = []
@@ -79,6 +85,7 @@ export function localSecrets(dir = join(homedir(), '.config', 'awr')) {
       const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line)
       if (!m) continue
       const v = m[2].replace(/^(['"])(.*)\1$/, '$2')
+      if (PUBLIC_URL_KEYS.test(m[1]) && PLAIN_URL.test(v)) continue
       if (v.length >= 12 && !PUBLIC_KEYS.test(m[1])) out.push({ file: n, key: m[1], value: v })
     }
   }
@@ -260,7 +267,7 @@ export function checkLicenseEntry(f, text, R, head = null) {
     const where = fork.path.endsWith('LICENSE') ? text : head40
     const miss = fork.header.filter((h) => !where.includes(h))
     if (miss.length) R.add(f, 1, 1, 'REL-06', `fork of ${fork.upstream}: the original copyright header is incomplete (missing "${miss[0].trim()}"); restore it unchanged`)
-    if (fork.modified && !/Drone4D modifications/.test(head40)) R.add(f, 1, 1, 'REL-06', `fork of ${fork.upstream}: state the changes in a "Drone4D modifications" paragraph under the header (Apache-2.0 Section 4(b))`)
+    if (fork.modified && !/(?:Drone4D|ANet4D) modifications/.test(head40)) R.add(f, 1, 1, 'REL-06', `fork of ${fork.upstream}: state the changes in a "Drone4D modifications" paragraph under the header (Apache-2.0 Section 4(b))`)
   } else if (text !== null && FORK_SCAN.test(f)) {
     const m = OSRF.exec(text)
     if (m) R.add(f, ...lineCol(text, m.index), 'REL-06', 'carries an Open Source Robotics Foundation copyright header but is not a registered fork; add it to FORKS in tools/lint/check-release.mjs and to THIRD_PARTY_NOTICES.md section 1')

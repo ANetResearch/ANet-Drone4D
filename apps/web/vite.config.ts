@@ -6,6 +6,7 @@ import { build, defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { LANDING_I18N_KEYS, LANDING_LAB_I18N_KEYS } from './src/app/demo/landingKeys.ts'
+import { PRODUCT_NAME, SITE_ORIGIN } from './src/lib/site.ts'
 
 // 公开演示构建（ADR-083；M15-FR-120；AWR-19 §3.7）：VITE_AWR_DEMO=public。默认构建不受影响；与测试开关互斥（生产包中不得
 // 残留演示以外的测试开关）。入口换成 src/app/demo/entry.tsx（"/" 为不加载 three 的落地页，其余路由按需加载应用），
@@ -19,7 +20,7 @@ if (DEMO && process.env.VITE_AWR_TEST_SWITCHES === '1') throw new Error('VITE_AW
 // keys) is no longer part of this group — Landing*.tsx reads its own virtual:awr-landing-i18n instead (landingI18nPlugin
 // below), so the full bilingual dictionary stays out of the landing chunk; the lazily loaded start Sheet still reads
 // app/i18n directly and gets it in its own chunk, the way it always has.
-const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\w*\.tsx?|app[\\/]lab-public[\\/]flags\.ts|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|sheet|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types|lucide-compat)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|testSwitches)\.ts)|vite[\\/]preload-helper|virtual:awr-landing-i18n/
+const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\w*\.tsx?|app[\\/]lab-public[\\/]flags\.ts|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|sheet|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types|lucide-compat)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|site|testSwitches)\.ts)|vite[\\/]preload-helper|virtual:awr-landing-i18n/
 const DEMO_MEDIA = ['demo-flight.webp', 'screenshot-hero.jpg', 'screenshot-streaming.jpg', 'screenshot-weather.jpg', 'screenshot-swarm.jpg',
   'screenshot-follow.jpg', 'screenshot-perf.jpg']
 
@@ -286,6 +287,20 @@ function labPublicPlugin(): Plugin {
   }
 }
 
+// 公开演示站的社交分享元数据（v0.3.2 更名 ANet4D；站点 anet4d.agentnetwork.org.cn，lib/site.ts）：og:image 为落地页主图
+// public/demo/anet4d-banner.jpg（2400×900，绝对 URL），仅演示构建写入；默认构建与 /lab/ 静态构建不带站点域名。
+const DEMO_SOCIAL_META = [
+  ['property', 'og:type', 'website'],
+  ['property', 'og:site_name', PRODUCT_NAME],
+  ['property', 'og:title', `${PRODUCT_NAME} · Simulation infrastructure for collaborative embodied agents`],
+  ['property', 'og:description', `${PRODUCT_NAME}：新一代具身智能体协同模拟基础设施。${PRODUCT_NAME}: simulation infrastructure for collaborative embodied agents.`],
+  ['property', 'og:url', `${SITE_ORIGIN}/`],
+  ['property', 'og:image', `${SITE_ORIGIN}/demo/anet4d-banner.jpg`],
+  ['property', 'og:image:width', '2400'],
+  ['property', 'og:image:height', '900'],
+  ['name', 'twitter:card', 'summary_large_image'],
+].map(([attr, key, value]) => `    <meta ${attr}="${key}" content="${value}" />`).join('\n')
+
 function demoPlugin(): Plugin {
   let outDir = 'dist'
   let root = '.'
@@ -301,7 +316,7 @@ function demoPlugin(): Plugin {
       handler(html) {
         return html
           .replace('/src/main.tsx', '/src/app/demo/entry.tsx')
-          .replace('<title>ANet Drone4D</title>', '<title>ANet Drone4D · Public Demo</title>')
+          .replace('<title>ANet4D</title>', `<title>${PRODUCT_NAME} · Public Demo</title>\n${DEMO_SOCIAL_META}`)
           // "/" is the landing page: the boot mask of the app stays hidden there (painted before any script runs)
           .replace('</style>', '      html[data-landing] #boot-mask { display: none; }\n    </style>\n    <script>if (location.pathname === "/") document.documentElement.setAttribute("data-landing", "")</script>')
       },

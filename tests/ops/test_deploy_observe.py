@@ -58,7 +58,7 @@ class Stub(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         n = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(n) or b"{}")
-        assert self.headers.get("Host") == "drone4d.agentnetwork.org.cn"
+        assert self.headers.get("Host") == "anet4d.agentnetwork.org.cn"
         if self.path == "/api/auth/token" and body.get("role") == "viewer":
             self.ev.tokens += 1
             return self._send(200, {"token": f"tok{self.ev.tokens}"})

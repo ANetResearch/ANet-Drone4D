@@ -24,13 +24,13 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "tools" / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(ROOT / "tools" / "sdk" / "anet4d" / "src"))
 _spec = importlib.util.spec_from_file_location("r6_ec", ROOT / "tools" / "bench" / "d3" / "r6_ec.py")
 r6 = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("r6_ec", r6)
 _spec.loader.exec_module(r6)
 
-from drone4d.baselines import REFERENCE6, check_reference_spec, reference_run_spec  # noqa: E402
+from anet4d.baselines import REFERENCE6, check_reference_spec, reference_run_spec  # noqa: E402
 
 CONFIG = ROOT / "configs/bench.d3/ref6-l1.yaml"
 TAPE_SHA = "b1285649605e08efe8445da1e73f23a1a22f8eafaac310210e220706f6a08e54"

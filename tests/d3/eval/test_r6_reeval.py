@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def _r6():
-    sys.path.insert(0, str(ROOT / "tools" / "sdk" / "drone4d" / "src"))
+    sys.path.insert(0, str(ROOT / "tools" / "sdk" / "anet4d" / "src"))
     spec = importlib.util.spec_from_file_location("r6_ec_reeval", ROOT / "tools" / "bench" / "d3" / "r6_ec.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules["r6_ec_reeval"] = mod                     # 进程池按模块名序列化工作函数
@@ -24,8 +24,8 @@ def _r6():
 
 
 def test_reeval_rewrites_evaluations_without_touching_runs(synth_event, tmp_path: Path) -> None:
-    from drone4d.baselines import BASELINES
-    from drone4d.runner import run_episode
+    from anet4d.baselines import BASELINES
+    from anet4d.runner import run_episode
 
     from awr.agentsdk.env.core import BenchEnv, _open_world
     from awr.agentsdk.env.spec import EnvSpec, FleetEntry

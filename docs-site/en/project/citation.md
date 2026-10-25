@@ -1,16 +1,16 @@
 # Citation and license
 
-## Citing ANet Drone4D
+## Citing ANet4D
 
-GitHub's "Cite this repository" reads [CITATION.cff](https://github.com/ANetResearch/ANet-Drone4D/blob/main/CITATION.cff) at the repository
+GitHub's "Cite this repository" reads {gh}`CITATION.cff </blob/main/CITATION.cff>` at the repository
 root. BibTeX:
 
 ```bibtex
-@software{anet_drone4d_2026,
-  title   = {ANet-Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
+@software{anet4d_2026,
+  title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.2.0},
+  version = {0.3.2},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```
@@ -54,7 +54,8 @@ The agent part builds on ANet's research on the value of connection in agent net
 
 ## License
 
-ANet Drone4D is released under the **ANet Open Source License (ANet-Drone4D)**, a modified Apache License 2.0:
+ANet4D is released under the **ANet Open Source License**, a modified Apache License 2.0 (the license text refers to the project
+by its former repository name, ANet-Drone4D):
 
 - **Commercial use is allowed.** The World Runtime, the World Package tools and the web sandbox can be embedded in your products or run on
   your own infrastructure.
@@ -65,10 +66,10 @@ ANet Drone4D is released under the **ANet Open Source License (ANet-Drone4D)**, 
 - **Data and third-party parts follow their own terms.** UrbanScene3D is for non-commercial use only and may not be redistributed (this
   project's own deployments use it under authorization of the dataset rights holders, see {doc}`../topics/worlds`); the included and adapted
   third-party components and their licenses are listed in
-  [THIRD_PARTY_NOTICES.md](https://github.com/ANetResearch/ANet-Drone4D/blob/main/THIRD_PARTY_NOTICES.md).
+  {gh}`THIRD_PARTY_NOTICES.md </blob/main/THIRD_PARTY_NOTICES.md>`.
 
-The full terms are in [LICENSE](https://github.com/ANetResearch/ANet-Drone4D/blob/main/LICENSE) and
-[NOTICE](https://github.com/ANetResearch/ANet-Drone4D/blob/main/NOTICE). For commercial licensing and related questions, contact
+The full terms are in {gh}`LICENSE </blob/main/LICENSE>` and
+{gh}`NOTICE </blob/main/NOTICE>`. For commercial licensing and related questions, contact
 hi@anet0.com.
 
 ## Marks
@@ -78,7 +79,7 @@ Research; they stay in the user interfaces as license condition 1b requires, and
 
 ## Acknowledgments
 
-ANet Drone4D builds on open work: the viewport uses [three.js](https://threejs.org) and React Three Fiber, the octree container layout comes
+ANet4D builds on open work: the viewport uses [three.js](https://threejs.org) and React Three Fiber, the octree container layout comes
 from Potree, the bus is [zenoh](https://zenoh.io), the fleet kernel uses [numba](https://numba.pydata.org), the control cascade and SIH
 reference flights come from PX4, the P600 airframe comes from Prometheus, and the cities come from UrbanScene3D. This documentation site is
 built with [Sphinx](https://www.sphinx-doc.org/en/master/) and the [Read the Docs theme](https://sphinx-rtd-theme.readthedocs.io/en/stable/).

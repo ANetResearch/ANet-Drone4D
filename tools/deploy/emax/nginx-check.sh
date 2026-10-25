@@ -6,9 +6,11 @@
 #   需要 docker 与本地 ubuntu:24.04 镜像（NGINX_CHECK_IMAGE 可换成已装 nginx 的镜像，此时不再 apt 安装）；容器内 apt 安装 nginx、
 #   openssl、python3。仓库以只读方式挂载，只有证据目录可写；容器退出即删除，不改动本机（本机不需要安装 nginx）。
 #
-# 步骤：自签证书放到 /etc/letsencrypt/live/<域名>/，依次以引导站点与正式站点 `nginx -t`；再以仓库 .venv 在容器内执行
+# 步骤：自签证书放到 /etc/letsencrypt/live/<域名>/（新旧两个域名），依次以引导站点、正式站点、旧域名跳转站点与
+# "正式站点 + 跳转站点"组合 `nginx -t`；再以仓库 .venv 在容器内执行
 # tests/ops/test_nginx_static_parity.py（/worlds/ 直出与 show-api 静态路由对拍）与 tests/ops/test_nginx_site_e2e.py（路径分流、
-# 创建限流；容量接口微缓存 D2-AC-42：100 个并发客户端每秒到达 sandbox-api ≤ 1 次，上游 503、500、慢、卡住与不可达五种故障）。
+# 创建限流；容量接口微缓存 D2-AC-42：100 个并发客户端每秒到达 sandbox-api ≤ 1 次，上游 503、500、慢、卡住与不可达五种故障；
+# 旧域名 80 与 443 的 301 与 ACME）。
 # 证据写到 --out（缺省 .cache/deploy/emax/nginx-check/<UTC 时刻>/）：nginx-version.txt、nginx-t.log、pytest.log、junit.xml、
 # capacity-<用例>.json（awr.deploy.nginx-capacity.v1）与汇总 nginx-check.json（awr.deploy.nginx-check.v1）。
 # 验收入口：M16 harness 用例 d21.nginx-capacity（apps/web/perf/d21/cases.mjs）以 --out {runDir}/nginx 调用本脚本。
@@ -25,7 +27,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --out) [ $# -ge 2 ] || { echo "nginx-check: --out 需要目录" >&2; exit 2; }; OUT=$2; shift 2 ;;
     --) shift; PYTEST_ARGS=("$@"); break ;;
-    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,19p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "nginx-check: 未知参数 $1" >&2; exit 2 ;;
   esac
 done
@@ -48,15 +50,23 @@ if ! command -v nginx >/dev/null; then
     || { echo "nginx-check: 容器内 apt 安装 nginx 失败（见 $OUT/apt.log；需要能访问 Ubuntu 软件源）" >&2; exit 8; }
 fi
 nginx -v 2>&1 | tee "$OUT/nginx-version.txt"
-D=drone4d.agentnetwork.org.cn
-mkdir -p "/etc/letsencrypt/live/$D" /var/www/certbot
-openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -nodes -days 2 -subj "/CN=$D" \
-  -keyout "/etc/letsencrypt/live/$D/privkey.pem" -out "/etc/letsencrypt/live/$D/fullchain.pem" >/dev/null 2>&1 || exit 8
+D=anet4d.agentnetwork.org.cn
+L=drone4d.agentnetwork.org.cn   # 旧域名：跳转站点（只有 301 与 ACME），沿用自己的证书路径
+mkdir -p /var/www/certbot
+for h in "$D" "$L"; do
+  mkdir -p "/etc/letsencrypt/live/$h"
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -nodes -days 2 -subj "/CN=$h" \
+    -keyout "/etc/letsencrypt/live/$h/privkey.pem" -out "/etc/letsencrypt/live/$h/fullchain.pem" >/dev/null 2>&1 || exit 8
+done
 : >"$OUT/nginx-t.log"
-for site in bootstrap site; do
-  f="$ROOT/tools/deploy/emax/$D.conf"; [ "$site" = bootstrap ] && f="$ROOT/tools/deploy/emax/$D.bootstrap.conf"
-  echo "==> nginx -t：$site" | tee -a "$OUT/nginx-t.log"
-  cp "$f" "/etc/nginx/sites-enabled/$D.conf"
+E="$ROOT/tools/deploy/emax"
+# 依次检查：新域名引导站点；新域名正式站点；旧域名跳转站点单独启用；迁移后的组合（正式站点 + 跳转站点同时启用，共享区不重名）
+for step in "bootstrap:$E/$D.bootstrap.conf:" "site:$E/$D.conf:" "legacy::$E/$L.conf" "site+legacy:$E/$D.conf:$E/$L.conf"; do
+  IFS=: read -r name fd fl <<<"$step"
+  echo "==> nginx -t：$name" | tee -a "$OUT/nginx-t.log"
+  rm -f "/etc/nginx/sites-enabled/$D.conf" "/etc/nginx/sites-enabled/$L.conf"
+  [ -z "$fd" ] || cp "$fd" "/etc/nginx/sites-enabled/$D.conf"
+  [ -z "$fl" ] || cp "$fl" "/etc/nginx/sites-enabled/$L.conf"
   nginx -t 2>&1 | tee -a "$OUT/nginx-t.log"
   [ "${PIPESTATUS[0]}" -eq 0 ] || exit 2
 done

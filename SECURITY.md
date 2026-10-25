@@ -1,12 +1,12 @@
 # Security Policy
 
-ANet-Drone4D runs a control plane: it accepts commands that move simulated aircraft today, and it is designed to carry
+ANet4D runs a control plane: it accepts commands that move simulated aircraft today, and it is designed to carry
 commands for real ones in later versions. A browser tab on the wrong page, or a stranger on the same network, must not
 be able to fly anything. We take every report seriously.
 
 ## Reporting a vulnerability
 
-Email **hi@anet0.com** with the subject `[SECURITY] ANet-Drone4D`. Please include:
+Email **hi@anet0.com** with the subject `[SECURITY] ANet4D`. Please include:
 
 - the commit you tested (`git rev-parse HEAD`), your platform, and the access mode (loopback or LAN)
 - the output of `awr doctor --json` (check it for secrets before sending)
@@ -17,7 +17,8 @@ Please do **not** open a public issue, and never paste the contents of `runs/<ru
 a token into any report. We aim to acknowledge within 72 hours. Please give us reasonable time to ship a fix before
 public disclosure.
 
-ANet-Drone4D is pre-1.0: fixes land on `main`, and there are no maintained release branches yet.
+ANet4D is pre-1.0: fixes land on `main`, and there are no maintained release branches yet. Versions up to V0.3.1 were
+published under the former name ANet Drone4D; reports about them use the same address.
 
 ## Security model
 
@@ -46,7 +47,7 @@ leaves only land, hover and return-to-launch.
   loopback bus (`127.0.0.1:7447`). Access control on the bus is planned for V0.5.
 - **The network in LAN mode.** LAN mode is plain HTTP: tokens and the admin secret cross the network unencrypted.
   Prefer loopback plus SSH forwarding, and keep LAN mode on a trusted demo network.
-- **The public internet.** ANet-Drone4D is not designed to be exposed to the internet before V1.0; that needs TLS
+- **The public internet.** ANet4D is not designed to be exposed to the internet before V1.0; that needs TLS
   termination and stronger authentication in front of it.
 - **World files are public to whoever can reach the port.** The static `/worlds` files are served read-only without
   a token (the `Host` check still applies).
@@ -60,6 +61,6 @@ and `awr` CLI, the Web sandbox, the World Package tools, the Makefiles and scrip
 sections of `docs/`.
 
 Out of scope: vulnerabilities in third-party dependencies (please report them upstream too, and tell us if
-ANet-Drone4D is exposed), the UrbanScene3D dataset, and attacks that start from an already compromised account on the
+ANet4D is exposed), the UrbanScene3D dataset, and attacks that start from an already compromised account on the
 host. Reports about the ANet network itself go to the same address; see
 [ANetResearch/ANet](https://github.com/ANetResearch/ANet/blob/main/SECURITY.md).

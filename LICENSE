@@ -1,17 +1,19 @@
-ANet Open Source License (ANet-Drone4D)
+ANet Open Source License (ANet4D)
 
 Copyright (c) 2026 Agent Network Research (anet0.com)
 
-ANet-Drone4D is licensed under a modified version of the Apache License
-2.0, with the following additional conditions. In these conditions,
-"ANet-Drone4D" means the software and documentation published under this
-License in the ANet-Drone4D repository
-(github.com/ANetResearch/ANet-Drone4D, called "ANet Drone / World
+ANet4D is licensed under a modified version of the Apache License 2.0,
+with the following additional conditions. In these conditions, "ANet4D"
+means the software and documentation published under this License in the
+ANet4D repository (github.com/ANetResearch/ANet-Drone4D, or the
+repository to which it is renamed or moved; called "ANet Drone / World
 Runtime" or "AWR" in its code and documentation), in Source or Object
 form, including any Derivative Works of them; "the producer" means Agent
-Network Research.
+Network Research. Versions up to 0.3.1 were published under the former
+name "ANet-Drone4D"; references to "ANet-Drone4D" in those versions and
+in this License's earlier versions mean the same software.
 
-1. ANet-Drone4D may be utilized commercially, including as a backend
+1. ANet4D may be utilized commercially, including as a backend
    service for other applications (for example, by embedding the world
    runtime, the World Package tools or the Web sandbox in your own
    product) and by running it on your own infrastructure. Should the
@@ -19,11 +21,11 @@ Network Research.
    producer:
 
    a. Multi-tenant hosted service: Unless explicitly authorized by the
-      producer in writing, you may not use the ANet-Drone4D source code to
+      producer in writing, you may not use the ANet4D source code to
       operate a multi-tenant hosted simulation or digital twin service.
       - Hosted simulation or digital twin service definition: a service,
-        reached over a network, that runs ANet-Drone4D, or any other
-        program built from or derived from ANet-Drone4D source code, to
+        reached over a network, that runs ANet4D, or any other
+        program built from or derived from ANet4D source code, to
         build, host, stream or simulate worlds, environments, vehicles,
         sensors or agents; for example a hosted Web sandbox, a hosted
         realtime gateway (`awr.rt.v1`) or REST API, or a service that
@@ -55,14 +57,14 @@ Network Research.
               exhibition.
 
    b. LOGO and copyright information: In the process of using
-      ANet-Drone4D's user interfaces, you may not remove or modify the
+      ANet4D's user interfaces, you may not remove or modify the
       ANet LOGO or copyright information in them. You may add your own
       name or marks alongside them. This restriction is inapplicable to
-      uses of ANet-Drone4D that do not involve these user interfaces, such
+      uses of ANet4D that do not involve these user interfaces, such
       as using its Python packages or World Package tools as a library, or
       running the runtime headless behind your own application.
       - User interface definition: (1) the Web sandbox: the `apps/web/`
-        directory of ANet-Drone4D and the pages built from it, including
+        directory of ANet4D and the pages built from it, including
         the application header, the loading and empty screens, the about
         dialog, the generated reports and the favicon; (2) the command-line
         interface: the output of `awr`, such as its version, help, banner
@@ -84,52 +86,52 @@ Network Research.
    c. You have the right to submit your contribution on these terms.
 
 3. Third-party data, code and assets. This License covers the work of
-   the producer and of the contributors to ANet-Drone4D. It grants no
+   the producer and of the contributors to ANet4D. It grants no
    rights in the following, and its additional conditions do not apply
    to them; each remains under its own license or terms:
 
-   a. Datasets: UrbanScene3D, and any other dataset that ANet-Drone4D can
+   a. Datasets: UrbanScene3D, and any other dataset that ANet4D can
       download, read or convert, together with anything built from their
       content, such as World Packages, terrain and semantic rasters,
       flight paths and recordings. UrbanScene3D is made available by its
       authors for non-commercial use only, and neither the dataset nor an
-      altered version of it may be redistributed. The ANet-Drone4D
+      altered version of it may be redistributed. The ANet4D
       repository contains neither UrbanScene3D data nor World Packages
       built from it. Tools such as `make fetch-data` and `worldpkg` only
       fetch or convert data that you obtain yourself, under the dataset's
       own terms, which you must accept before you download or use it.
-      Condition 1 permits commercial use of ANet-Drone4D; it does not
+      Condition 1 permits commercial use of ANet4D; it does not
       permit commercial use of UrbanScene3D or of anything derived from
       it.
-   b. Third-party software, code and assets that ANet-Drone4D includes or
+   b. Third-party software, code and assets that ANet4D includes or
       adapts, as listed in THIRD_PARTY_NOTICES.md (for example the
       shadcn/ui component sources, the Transitions.dev motion tokens and
       the P600 airframe model derived from Prometheus). Where the terms of
       such a component are more restrictive than this License, including
       a non-commercial license, those terms apply to that component.
-   c. Reference repositories that the ANet-Drone4D documentation cites or
-      studies, which are not part of the ANet-Drone4D repository, and the
-      third-party dependencies that ANet-Drone4D installs from package
+   c. Reference repositories that the ANet4D documentation cites or
+      studies, which are not part of the ANet4D repository, and the
+      third-party dependencies that ANet4D installs from package
       registries such as npm and PyPI.
-   d. Names, logos and trademarks of third parties, which ANet-Drone4D
+   d. Names, logos and trademarks of third parties, which ANet4D
       uses only to identify their projects, products and datasets.
 
    Code that the producer adapted from its own ANet and ANetCore
-   repositories is part of ANet-Drone4D and is licensed under this
-   License. When you redistribute ANet-Drone4D or a Derivative Work, keep
+   repositories is part of ANet4D and is licensed under this
+   License. When you redistribute ANet4D or a Derivative Work, keep
    THIRD_PARTY_NOTICES.md with it, together with the license texts and
    notices it refers to.
 
 Apart from the specific conditions mentioned above, all other rights and
 restrictions follow the Apache License 2.0. The licenses granted in
 Sections 2 and 3 of the Apache License 2.0 are subject to the additional
-conditions above, and when you redistribute ANet-Drone4D or a Derivative
+conditions above, and when you redistribute ANet4D or a Derivative
 Work, the copy of "this License" that you give recipients under its
 Section 4(a) is this entire document, additional conditions included.
 Additional or different license terms that you provide under the last
 paragraph of Section 4 of the Apache License 2.0, for your modifications
 or for a Derivative Work as a whole, do not remove or relax these
-additional conditions for the parts of ANet-Drone4D that the Derivative
+additional conditions for the parts of ANet4D that the Derivative
 Work contains. In this document, "condition 1" to "condition 3" refer to
 the numbered additional conditions above, and "Section" refers to a
 section of the Apache License 2.0. The full text of the Apache License 2.0
