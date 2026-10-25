@@ -16,7 +16,7 @@
 #                                .cache/deploy/emax/lab-dist，做 K9 生产包扫描与公开产物扫描（tools/bench/d3/scan_public.py，D3-AC-21）
 #   make lab-scan                公开产物扫描：lab-dist（lab 档）与 web-dist（demo 档）；LAB_STATIC=<目录> 另扫公开静态目录（test 集与
 #                                真值文件 0、单文件 ≤ 64 MB、总量 ≤ 3 GB；TEST_IDS=<文件> 列出 test 划分的事件与运行 id）
-#   make demo-parity             扩展点 15 构建对拍（D3-AC-01，UX-AC-082）：D2 标签（D2_REF，缺省 v0.3.1：V0.3.1 起公开站主构建为该标签的演示构建）与当前工作树的演示构建
+#   make demo-parity             扩展点 15 构建对拍（D3-AC-01，UX-AC-082）：D2 标签（D2_REF，缺省 v0.3.2：V0.3.2 起公开站主构建为该标签的演示构建）与当前工作树的演示构建
 #                                （开关缺省关闭）逐字节一致；git 目录在工作树外时先导出 GIT_DIR
 # 报告写到 .cache/deploy/emax/scan/*.json（awr.d3.scan_public.report.v1）。
 # 构建信息（ADR-118）：AWR_BUILD_CHANNEL、AWR_BUILD_SHA、AWR_BUILD_DIRTY、AWR_BUILD_TIME、AWR_RELEASE 由 build-local.sh 计算并导出给
@@ -28,7 +28,7 @@ DEMO_DIST := $(ROOT)/.cache/deploy/emax/web-dist
 LAB_DIST := $(ROOT)/.cache/deploy/emax/lab-dist
 DEPLOY_OUT := $(ROOT)/.cache/deploy/emax
 SCAN_OUT := $(DEPLOY_OUT)/scan
-D2_REF ?= v0.3.1
+D2_REF ?= v0.3.2
 SCAN_PUBLIC := $(PY) tools/bench/d3/scan_public.py
 WORLDS ?= $(if $(filter 1,$(WORLD)),synthcity,all)
 
@@ -49,7 +49,7 @@ lab-scan: ## 公开产物扫描（D3-AC-21）：lab-dist（lab 档）与 web-dis
 	@cd $(ROOT) && $(SCAN_PUBLIC) build $(DEMO_DIST) --profile demo --json $(SCAN_OUT)/web-dist.json
 	@if [ -n "$(LAB_STATIC)" ]; then cd $(ROOT) && $(SCAN_PUBLIC) static $(LAB_STATIC) $(if $(TEST_IDS),--test-ids $(TEST_IDS)) --json $(SCAN_OUT)/lab-static.json; fi
 
-demo-parity: _need-installed ## 扩展点 15 构建对拍：D2 标签（D2_REF，缺省 v0.3.1：V0.3.1 起公开站主构建为该标签的演示构建）与当前工作树的演示构建逐字节一致（D3-AC-01）
+demo-parity: _need-installed ## 扩展点 15 构建对拍：D2 标签（D2_REF，缺省 v0.3.2：V0.3.2 起公开站主构建为该标签的演示构建）与当前工作树的演示构建逐字节一致（D3-AC-01）
 	@cd $(ROOT) && $(SCAN_PUBLIC) d2-parity --ref $(D2_REF) --json $(SCAN_OUT)/d2-parity.json
 
 deploy-pack: _need-installed ## ANet4D 公开站点部署包与世界包（tools/deploy/emax/build-local.sh；WORLDS=all|none|<id,…>，WORLD=1 只打 synthcity）
