@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useT } from '@/app/i18n'
 import { APPEARANCE_ENABLED } from '@/app/shell/engineD2'
-import { sbSession, type LifePreview } from '@/ui/sandbox/domain'
+import { lifeApi, type LifePreview } from '@/ui/sandbox/lifeApi'
 import { sandbox } from '@/ui/sandbox/session'
 import { Button } from '@/ui/components/ui/button'
 import { Input } from '@/ui/components/ui/input'
@@ -30,7 +30,7 @@ export function LifeBuilder({ operator, initial }: { operator: boolean; initial?
   if (!operator || !APPEARANCE_ENABLED) return null
   const generate = async (mode: 'seed' | 'deepseek') => {
     setBusy(true); setMessage(''); setPreview(null)
-    try { setPreview(await sbSession.lifePreview({ seed, people, vehicles, extras, vehicle_types: vehicleTypes, mode, prompt })) }
+    try { setPreview(await lifeApi.preview({ seed, people, vehicles, extras, vehicle_types: vehicleTypes, mode, prompt })) }
     catch (e) { setMessage(errorMessage(e)) }
     finally { setBusy(false) }
   }

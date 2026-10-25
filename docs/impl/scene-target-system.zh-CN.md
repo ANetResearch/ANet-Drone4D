@@ -27,6 +27,14 @@
 
 连续生活模式须同时启用部署配置和前端开关。预览或模型思考不会暂停已运行世界；应用新群体是显式的沙盒重置操作。功能默认可选，旧配置继续可用。
 
+### 合入 d3-dev 时的约束（2026-10-25）
+
+- 契约：识别物可选字段 `appearance`、`activity`、`metadata`、`life` 与 `target_detail` 的 `timeline`、`activity` 按 AWR-17 §10.2 记为契约次版本 1.3.0（只增，layouts 不变）。
+- 随机数：行人活动计划的目的地与停留抽样改用登记随机流 23 `target_activity`（键 `(seed, 23, actor_key, variant)`，`actor_key` 为 `sha256(actor_id)` 前 8 字节），计划编译器版本升为 `pedestrian-activity-2`；此前生成的计划须以 `tools/deploy/targetlab/build_activities.py` 重新生成，该脚本同时更新 T8 模板中的计划哈希。生活群体配方（T9–T13）不使用随机抽样，不受影响。
+- 公开构建：`VITE_AWR_DEMO=public` 且未设 `VITE_AWR_TARGET_LIFE=1` 时，生活群体生成器、行为预演与定制编排模块在构建期替换为空实现，相关文案与实验模板名从词典剔除；产物不含 `/target-life/` 路由与模型服务名称。
+- 模板目录：识别物带实验绑定的模板（T7–T13）只在 `AWR_TARGET_LIFE_ENABLE=1` 的部署中列出与创建，缺省部署（含公开演示）不可见。
+- D2 缺省行为：`SimCore.reset` 的慢任务仿真时钟重置只在 `AWR_TARGET_LIFE_ENABLE=1` 时启用；缺省部署的重置与调度行为与合入前一致。
+
 ## 如何复核当前版本
 
 部署与重建命令见 [targetlab README](../../tools/deploy/targetlab/README.md)。从原生 synthcity 世界页创建 **T13 七种车型与六类目标（实验）**：12 人、7 车、2 犬、2 架巡检无人机、1 叉车、3 个固定设施，共 27 个实体。

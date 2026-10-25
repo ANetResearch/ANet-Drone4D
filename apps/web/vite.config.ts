@@ -44,6 +44,30 @@ if (LAB_ONLY && process.env.VITE_AWR_TEST_SWITCHES === '1') throw new Error('VIT
 export const LAB_BASE_PATH = '/lab/'
 if (LAB_PUBLIC && !DEMO) throw new Error('VITE_AWR_LAB_PUBLIC=1 only applies to the public demo build (VITE_AWR_DEMO=public)')
 
+// 场景目标引擎的实验编排界面（m23/scene-target-foundations；tools/deploy/targetlab）：VITE_AWR_TARGET_LIFE=1 只用于私有验收部署。
+// 公开演示构建缺省（0）在构建期把生活群体生成器、行为预演与定制编排（含计费模型服务入口）的模块替换为空实现（TARGET_LIFE_STUBS），
+// 从词典剔除其文案键与实验模板名（stripTargetLifeKeys），产物中不含 /target-life/ 路由与模型服务名称（K9 与 k9-d3 扫描）。
+// 内部构建（未设 VITE_AWR_DEMO）不受影响；服务端路由另由 AWR_TARGET_LIFE_ENABLE 控制（缺省 404）。
+const TARGET_LIFE = envSwitch('VITE_AWR_TARGET_LIFE', process.env.VITE_AWR_TARGET_LIFE)
+if (TARGET_LIFE && !DEMO) throw new Error('VITE_AWR_TARGET_LIFE=1 only applies to the public demo build (internal builds always carry the target-life UI)')
+/** 公开演示构建中替换为空实现的实验编排模块（相对 src/ 的路径 → 替换源码；导出名与原模块相同） */
+export const TARGET_LIFE_STUBS: Readonly<Record<string, string>> = {
+  'ui/panels/targets/LifeBuilder.tsx': 'export function LifeBuilder(_props) { return null }\n',
+  'ui/panels/targets/BehaviorPreview.tsx': 'export function BehaviorPreview(_props) { return null }\n',
+  'ui/sandbox/lifeApi.ts': 'const off = () => Promise.reject(new Error("target life disabled"))\nexport const lifeApi = { rehearsal: off, scene: off, preview: off }\n',
+}
+export function targetLifeStub(file: string): string | null {
+  const f = file.split('\\').join('/')
+  for (const [rel, code] of Object.entries(TARGET_LIFE_STUBS)) if (f.endsWith(`/src/${rel}`)) return code
+  return null
+}
+/** 实验编排界面的文案键前缀与实验模板（T7–T13）的模板名键 */
+export const TARGET_LIFE_KEY_RE = /^(targets\.(lifeBuilder|lifeClass|lifeVehicle)\.|targets\.rehearsal\.(?!noRecipe$)|sandbox\.template\.t(7|8|9|1[0-3])_)/
+export function stripTargetLifeKeys(json: string): string {
+  const d = JSON.parse(json) as Record<string, unknown>
+  return JSON.stringify(Object.fromEntries(Object.entries(d).filter(([k]) => !TARGET_LIFE_KEY_RE.test(k))), null, 1)
+}
+
 /** D3 内部工作区的源码（只在内部构建）：任何公开构建（演示构建与 /lab/ 静态构建）都不得加载 */
 export const LAB_INTERNAL_RE = /[\\/]src[\\/](app[\\/]routes[\\/]lab[^\\/]*\.tsx$|app[\\/]routes[\\/]lab[\\/]|app[\\/]i18n[\\/]lab[\\/]|ui[\\/]lab[\\/]|stores[\\/]lab[\\/]|net[\\/]bench\.ts$)/
 /** /lab/ 公开只读构建的源码：演示构建不得加载（两个公开构建互不包含；开关与路径常量 flags.ts 除外，演示构建的入口链接读它） */
@@ -132,7 +156,10 @@ function labStripPlugin(): Plugin {
     },
     transform(code, id) {
       const file = id.split('?')[0]
-      if (/[\\/]src[\\/]app[\\/]i18n[\\/](zh-CN|en)\.json$/.test(file)) return { code: stripLabKeys(code), map: null }
+      if (/[\\/]src[\\/]app[\\/]i18n[\\/](zh-CN|en)\.json$/.test(file)) {
+        const out = stripLabKeys(code)
+        return { code: TARGET_LIFE ? out : stripTargetLifeKeys(out), map: null }
+      }
       if (/[\\/]src[\\/]styles[\\/]index\.css$/.test(file)) {
         const rel = (p: string): string => posix.relative(posix.dirname(file.split('\\').join('/')), posix.join(root.split('\\').join('/'), p))
         return { code: `${code}\n${LAB_TAILWIND_EXCLUDE.map((p) => `@source not "${rel(p)}";`).join('\n')}\n`, map: null }
@@ -156,6 +183,10 @@ function labStripPlugin(): Plugin {
       if (LAB_INTERNAL_RE.test(file)) this.error(`awr-lab-strip: D3 internal workspace module ${file} in a public demo build (extension point 15)`)
       if (ENGINE_ACTORS_RE.test(file)) this.error(`awr-lab-strip: D3 engine module ${file} in the demo build (extension point 15)`)
       if (LAB_PUBLIC_SRC_RE.test(file)) this.error(`awr-lab-strip: /lab/ public build module ${file} in the demo build (ADR-129)`)
+      if (!TARGET_LIFE) {
+        const stub = targetLifeStub(file)
+        if (stub !== null) return stub
+      }
       return null
     },
   }

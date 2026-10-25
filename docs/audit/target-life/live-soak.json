@@ -6481,6 +6481,6 @@
       ]
     }
   ],
-  "scope": "Live 1500-second wall-time SDK run on mya40, no browser or keepalive, all 27 actors sampled each minute and matched against local same-version fixed-seed replay; not a rendered visual assessment.",
+  "scope": "Live 1500-second wall-time SDK run on the private targetlab deployment, no browser or keepalive, all 27 actors sampled each minute and matched against local same-version fixed-seed replay; not a rendered visual assessment.",
   "date": "2026-10-22"
 }

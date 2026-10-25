@@ -1,183 +1,100 @@
-# 目标引擎人工验收沙盒
+# 场景目标引擎私有验收部署指南（实验）
 
-当前功能与 v0.2.0 的对照、启用条件和限制见 [升级说明](../../../docs/impl/scene-target-system.zh-CN.md)，验收结论见 [验收报告](../../../docs/audit/target-life/REVIEW.zh-CN.md)。下方按增量保留开发历史；各批次的“未实现”仅描述当时状态。用户现已批准提交汇总 PR，原 #61 保留关闭。
+本目录提供场景目标引擎（场景活动审计、精细外观、确定性生活群体与受约束的定制编排）的**私有验收部署**脚本。
+功能边界、启用条件与限制见 [升级说明](../../../docs/impl/scene-target-system.zh-CN.md)，验收记录见
+[验收报告](../../../docs/audit/target-life/REVIEW.zh-CN.md)。
 
-当前验收部署在 `mya40:/data/1010zzm/ANet-Drone4D-target-lab`。只监听服务器回环地址，不修改已有 ALE 或公网服务。
-本机固定入口 `http://127.0.0.1:28660`，SSH 转发到服务器 `5443`；主 API `8270`，沙盒 API `8272`，总线 `7717`。
+本部署仅用于内部验收，不属于公开演示站点：公开构建（`VITE_AWR_DEMO=public` 且未设置 `VITE_AWR_TARGET_LIFE=1`）
+在构建期剔除生活群体编排界面与定制编排入口，公开模板目录不列出依赖未入库配方的实验模板（T7–T13）。
 
-开发流程：本地功能分支修改并验证，部署到这个独立目录，通过同一入口展示实际变化；用户确认后才创建 PR。
-草稿 PR #61 已按用户要求关闭，分支保留。不要每个增量都创建 PR，也不要在用户确认前重开该 PR。
+## 1. 部署约束
 
-依赖按仓库 lock 安装。开发者启动后端：
+- 使用独立检出目录与独立运行时 profile（`targetlab`），不与公开演示或其他服务共用端口、共享内存目录或数据目录。
+- 服务只监听回环地址（`net.access_mode=loopback`），经运维方批准的 SSH 端口转发或内网反向代理访问；不得暴露到公网。
+- 世界包、资产导出产物、配方与计划（`worlds/`、`var/`、`.cache/`）均不入库。跨主机复制模板时须同时复制其引用的配方、计划与资产包；
+  哈希、世界版本或尺寸不匹配时，服务端拒绝准入。
+- 定制编排的模型服务凭据只放在仓库外或部署私有目录（缺省 `var/private/gravitex.json`，权限 0600），由
+  `AWR_LIFE_PROVIDER_CONFIG` 指向；仓库、日志与审计证据中不得出现凭据。
+
+端口由 `AWR_PORT_OFFSET` 统一偏移（`run.sh` 缺省为 27，即主 API 8270、沙盒 API 8272、总线 7717）；本地代理
+`proxy.mjs` 监听回环地址 5443。以下示例以 `<LAB_URL>` 表示访问入口（例如经端口转发后的 `http://127.0.0.1:<本地端口>`）。
+
+## 2. 启动
+
+依赖按仓库锁文件安装。启动后端：
 
 ```sh
 bash tools/deploy/targetlab/run.sh
 ```
 
-本地按 lock 安装依赖，使用 `VITE_AWR_DEMO=public VITE_AWR_TARGET_ASSETS=1 VITE_AWR_LIFE_CONTINUOUS=1 npm run build -w apps/web` 构建，将 `apps/web/dist/` 同步到服务器。
-这个构建开关启用原生“开启我的沙盒”入口，不代表把服务暴露公网。构建后在另一个终端启动只依赖 Node 标准库的 REST/WS 代理：
+构建验收用前端（实验开关仅用于本部署）：
+
+```sh
+VITE_AWR_DEMO=public VITE_AWR_TARGET_LIFE=1 VITE_AWR_TARGET_ASSETS=1 VITE_AWR_LIFE_CONTINUOUS=1 npm run build -w apps/web
+```
+
+| 开关 | 作用 |
+|---|---|
+| `VITE_AWR_TARGET_LIFE=1` | 保留生活群体生成器、行为预演与定制编排界面（缺省在公开构建中剔除） |
+| `VITE_AWR_TARGET_ASSETS=1` | 启用精细外观资产加载；未设置时目标以线框显示 |
+| `VITE_AWR_LIFE_CONTINUOUS=1` | 验收期间禁止因页面隐藏或空闲自动驻留沙盒；显式暂停与会话寿命限制仍有效 |
+| `AWR_TARGET_LIFE_ENABLE=1`（服务端） | 启用 `/target-life/preview`、`/{sha256}/scene`、`/{sha256}/rehearsal`；未设置时返回 404 |
+
+构建后启动只依赖 Node 标准库的 REST/WS 分流代理：
 
 ```sh
 node tools/deploy/targetlab/proxy.mjs
 ```
 
-本机转发：
+运行中的 sim-core 不热加载 Python 代码；部署更新后使用新会话，或经正常驻留与恢复启动新进程。
+
+## 3. 资产包
+
+`packages/contracts/target/assets.catalog.json` 只记录资产元数据、来源、许可、尺寸、布局与内容哈希；资产二进制不入库。
+导出工具从已锁定来源的资产目录生成内容寻址的浏览器资产包：
 
 ```sh
-ssh -NT -L 127.0.0.1:28660:127.0.0.1:5443 -o ExitOnForwardFailure=yes mya40
+.venv/bin/python tools/deploy/targetlab/export_assets.py <ASSET_SOURCE_DIR> apps/web/dist/assets/target-assets
+.venv/bin/python tools/deploy/targetlab/export_extra_assets.py <EXTRA_SOURCE_DIR> apps/web/dist/assets/target-assets
 ```
 
-当前用户电脑已用 `~/Library/LaunchAgents/org.houqiii.drone4d-targetlab-tunnel.plist` 保持上述隧道，断线自动重连，
-不要同时再启动相同端口的手动隧道。查看状态：`launchctl print gui/$(id -u)/org.houqiii.drone4d-targetlab-tunnel`。
-需要停用时执行 `launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/org.houqiii.drone4d-targetlab-tunnel.plist`。
+`<ASSET_SOURCE_DIR>` 须包含原始来源锁文件；`export_extra_assets.py` 按 `extra-assets.lock.json` 校验固定源文件。
+浏览器逐项核验网格与纹理的长度和 SHA-256，缺失或不匹配时显示失败并保留线框。资产许可须按
+`THIRD_PARTY_NOTICES.md` 逐项复核后方可再分发。
 
-首次以原生 synthcity 与原识别物建立对照基线。精细资产、场景约束、持续身份、自主行为每批需说明“已实现”和“未实现”，
-并展示实际目标/轨迹；不能用状态说明页代替场景效果，也不能把原生基线描述成升级已完成。
-场景包和精细资产不入 Git；默认启动脚本先限制为 synthcity，真实场景通过相应检查和适配后再开放。
-
-## 2026-10-21 基线验收
-
-- 已通过原生浏览器入口创建 T5 沙盒，实时钟正常推进，原模板的两个行人出现在识别物清单。
-- 已从“识别物 → 新增 → 车”在底图放置车辆，清单变为 3 / 30，详情可读尺寸、运动和感知配置。
-- 这是原引擎线框目标基线；尚未接入精细外观、语义路网约束、持续身份增强或自主行为生成。
-- 部署修复：沙盒 REST/WS 分流、public 界面构建、独立 runtime profile、启动预热，以及 macOS 大小写文件名歧义。
-- 验证：前端 typecheck、生产构建、eventPlan 单元测试 10 项；脚本语法与 diff 空白检查通过。
-- 后端是独立目录的 CPU 仿真，未占用 GPU、未调用模型 API。当前 shell 无 cgroup delegation，不能把配置的容量预算声称为硬资源隔离。
-- 本机画面证据：`.cache/targetlab/native-sandbox.png`（不入 Git）。会话 URL 有寿命，长期使用上述固定世界入口重新开启沙盒。
-
-## 精细外观增量（实验）
-
-原生“识别物 → 配置”增加精细外观选择与“近看目标”。T7 是外观验收模板：两个人物、轿车、SUV、厢式货车和皮卡。
-同一个目标 ID 绑定目录中的资产，切换外观不会重新生成身份或重置运动状态；选择资产会采用其真实包围尺寸。
-旧目标无 appearance 字段时继续使用原生线框。资产开关默认关闭。
-
-从已有 ALE 资产目录导出，经源文件哈希校验后部署：
-
-```sh
-.venv/bin/python tools/deploy/targetlab/export_assets.py /data/1010zzm/drone4d-ale/assets apps/web/dist/assets/target-assets
-```
-
-导出产物不入 Git；`packages/contracts/target/assets.catalog.json` 只存元数据、来源、许可、尺寸、布局和内容哈希。
-浏览器核验网格与纹理的长度和 SHA-256；缺失/不匹配明确显示失败，保留线框，不伪装成精细模型。
-MakeHuman 人物与 Innerscene 车辆来自 ALE 已锁定资产，保留原始贴图及锁文件中的来源与 CC0 许可信息。
-资产几何保持 ENU、+X 朝前；行人步态按实际位移插值，暂停或静止不空转，车辆位置与朝向来自同一实时目标状态。
-
-本批限制：T7 仍使用原有 static/random_walk，不能作为真实活动验证；未实现设施语义、车道约束、任务活动链、避让、车牌生成。
-当前仅原生世界视口接入网格，不能声称已同步到全部传感器/相机或改变检测评分。网格未做 LOD；步态仅 8 帧插值，法线仍用静态法线，
-步相从本次客户端观察的位移累积，刷新后的步相未锁定。完整身份档案、动画复现摘要和传感器一致性属于后续批次。
-新增 appearance 是分支实验契约，正式 PR 前仍需按 CONTRIBUTING 走设计 issue 与契约评审。
-
-验收记录：后端 appearance/schema/snapshot 共 29 项通过；前端 store/overlayMove 共 9 项通过；typecheck、针对改动的 oxlint、契约双端生成检查与生产构建通过（保留现有大 bundle 提示）。
-浏览器实际验证了 T7 六目标、人物/车辆近景、同一 vehicle-01 从 sedan 切 SUV 后刷新仍保留、随后恢复 sedan；控制台未见错误。
-近景证据在本机 `.cache/targetlab/appearance-person.png`、`appearance-car.png`、`appearance-walking.png`（不入 Git）。
-实测 HUD 呈现间隔约 17–18 ms，仅为本次六目标观察，不构成 30 个高模目标性能保证。
-
-## T8 场景约束步行增量（实验）
-
-原生“载入场景”选择 T8；6 名精细人物在 synthcity 的人行道和过街通道跨街区活动。
-识别物详情显示当前目的地、阶段、已走距离、完成到访数和 seed；“查看本次路线”定位路线，
-“近看目标”检查模型。绑定活动的目标不允许手工移动或修改运动速度/尺寸，需重新生成计划。
-
-生成器需要已安装 T7 的资产目录，并与世界的合成生成器版本、源文件摘要、尺寸及坐标文件完全匹配：
+## 4. 活动计划与生活配方
 
 ```sh
 PYTHONPATH=python .venv/bin/python tools/deploy/targetlab/build_activities.py worlds/synthcity --seed 20261022
-```
-
-输出 `var/target-activities/` 内的网络、内容寻址计划及 audit.json，并更新 T8 模板。
-计划在服务器根目录运行时读取；非根目录启动需设置 `AWR_TARGET_ACTIVITY_DIR` 绝对路径。
-跨服务器复制模板必须同时复制其引用的计划与外观资产。哈希、世界版本或尺寸不匹配时拒绝准入。
-运行中的 sim-core 不热加载 Python；部署后使用新会话或正常驻留/恢复启动新进程。
-
-当前网络包含 64 节点、112 条双向行人连接，沿精确合成地面采样高度，检查建筑、树干和低树冠。
-默认 seed 下，六人前 1500 秒分别行走 1101.0 / 1171.6 / 1209.6 / 1314.3 / 1358.1 / 1401.8 米，
-完成 3 / 4 / 3 / 4 / 3 / 5 次到访。计划完成当前行程才结束（约 25.6–30.7 分钟），然后原地停留。
-以 0.2 秒间隔检查至 3600 秒，最小两人间距约 4.09 米；这是离线采样验收，不是实时避让或连续碰撞证明。
-同一世界、网络、编译器、目标 ID、seed 与候选 variant 生成同一计划；运行姿态由绝对仿真时钟求值，
-观察次数不推进目标私有时钟。计划哈希进入配置快照；完整运行检查点仍应按原引擎机制保留时钟。
-
-边界：目前只接通 synthcity 适配器和街角目的地/短暂停留模板；尚不是通勤、购物或配送。
-车辆交通、路权、在线避让、真实场景适配、用户在 UI 选择数量/seed、DeepSeek 设计助手均未实现。
-新行程通过内部实验计划驱动原生 timeline，尚未统一编译到 D3 事件磁带。
-原生演示的节能驻留仍会暂停仿真；本批补充“恢复沙盒”按钮以处理刷新/其他页签驻留后的恢复，
-不把这一演示会话当作已验收的实时 agent benchmark。bench 推理期间持续推进须单独验证会话策略。
-
-本批验收：服务器活动/目标/配置/快照/仿真时钟共 50 项测试通过；前端目标 store/overlayMove 9 项通过；
-typecheck、改动文件 oxlint、契约生成检查和生产构建通过。本机缺 zenoh，完整 sim-core 测试使用服务器锁定环境运行。
-浏览器实测 T8 六人、精细人物近景、活动进度、跨街区路线与同 seed 重置；重置后 0 秒即恢复活动详情。
-同时修复原生 SlowTasks 在时钟归零后沿用旧 last_sim，导致详情要等到上一场时刻才恢复发布的问题。
-截图：`.cache/targetlab/activity-person.png` 与 `activity-route.png`（本机，不入 Git）。
-
-## T9–T12 持续生活增量（2026-10-22）
-
-本节替代上文 T8 的功能边界；T7/T8 仍保留作对照。
-
-- T9：24 位居民和 6 辆汽车；T10/T11：已经生成并验收的两份 DeepSeek Pro 定制案例；T12：12 位居民、4 辆汽车、2 只社区犬、2 架巡检无人机、1 台叉车、3 个固定设施。
-- “识别物 → 场景生活生成器”选择数量、车型和 seed，先生成并检查 1500 秒，再显式应用、重置仿真。生成和模型调用期间，正在运行的世界继续走时。
-- 所有实体每 0.1 秒参加同一个确定性行为步，包括等待、进入设施和固定设施。**不根据观察者、相机、实体数量轮流激活子集**。准入逐实体检查更新次数、完成到访数、最长无进展时间及间距；超过 120 秒的行程停滞拒绝应用。
-- 每个居民有办公室/办事、商店、住宅的跨街区目的地；设施有显式入口、容量及出入协调。设施内部用门户占用表示，身份保留，不生成替身；不是室内房间和工作动作的物理仿真。
-- 行人分向通行、过街信号、交叉口排队/预约、下游空间检查、提前让行和最终全体碰撞约束共用一套运行时。车辆是有速度和朝向约束的运动模型，尚不是轮胎、传动与车辆动力学模型。
-- 犬有单独的户外停留点与住宅许可；叉车只能走已检查的铺装作业环线；空中巡检使用单独检查的 25 m 空中网络；物件必须离开全部已登记活动通道。合成设施用途和作业区是显式场景创作，不是从图像推断的真实用途。
-- 可编辑车型、牌照、用途与描述；变更保留实体 ID。大于当前活动走廊准入尺寸的模型不能直接替换。公交车、卡车等模型可选，但本场景现有保守圆形车身模型并不支持它们的全部自主路线；不能将“有外观”描述为“任意车型交通已通过”。
-
-构建：
-
-```sh
-VITE_AWR_DEMO=public VITE_AWR_TARGET_ASSETS=1 VITE_AWR_LIFE_CONTINUOUS=1 npm run build -w apps/web
 PYTHONPATH=python .venv/bin/python tools/deploy/targetlab/build_life.py worlds/synthcity --people 24 --vehicles 6
-```
-
-`VITE_AWR_LIFE_CONTINUOUS` 仅用于该验收构建，禁止因页面隐藏/空闲自动暂停沙盒；后端验收部署同时把闲置驻留阈值设为 8 小时。显式暂停和会话寿命限制仍有效。禁止通过模型思考时暂停来提高成绩。
-
-`var/target-life/network.json` 是场景能力输入；`life-<sha256>.json` 是内容寻址配方。绑定世界 ID、内容版本、坐标摘要和运行时代码摘要。不匹配时拒绝载入。完整群体必须原子导入，禁止只加载其中一部分而留下隐藏的碰撞实体。配置快照与同一时间的重放不依赖采样次数。其他场景必须提交适配后的地面/道路/入口/空域图，缺条件不得套用 synthcity 的坐标。
-
-新增类别模型由 `export_extra_assets.py` 从 `extra-assets.lock.json` 的固定源文件导入；不以几何体替换源三角面。犬步态为本项目编写的程序变形，非动作捕捉；轿车/SUV/掀背车/货车/皮卡的源轮组已按行驶距离滚动；尚未完成足部 IK、叉车搬运载荷、车轮转向或旋翼动力学。已有 Web FPV 传感器视图共享 targets 世界层；服务端离线图像/其他渲染器不能据此认定已经接通。
-
-DeepSeek 凭据仅放在仓库外或部署私有目录 `var/private/gravitex.json`（0600）。UI 只传行为意图，后端只接受现有 actor/facility ID 和受限停留时间，不执行模型生成代码。请求固定 `deepseek-v4-pro`，关闭 thinking，输出最多 1800 tokens，不自动重试；失败请求也占预算。部署级账本最多 3 次调用，已用 2 次。两个示例共 6281 tokens，模型服务没有返回价格，未估算实际账单。
-
-当前验证：后端定时推进、整组导入、车牌身份保留、恢复重放、25 分钟离线拥堵和全量更新检查均有结果；T9/T10/T11/T12 的最终原生画面尚待检查，因为本机 Work 禁用了浏览器使用。不能用构建和 API 检查替代外观、姿态及视觉遮挡验收。
-
-### 最终部署后复核（2026-10-22）
-
-后端相关测试 65 项通过；前端相关测试 39 项通过，类型检查与生产构建通过。28 个资产、61 个唯一资源文件经部署文件 SHA-256 与 HTTP 长度逐项核验。
-原生接口重新创建 T12 后，六类共 24 个目标正常加载；预览生成的配方哈希与已发布 T12 相同。生成检查期间旧世界继续推进 42.88 秒；车牌修改保留身份和活动绑定；应用后时钟归零，再播放时所有类型继续推进。详情见 `docs/audit/target-life/deployment.json`。
-T9 的 30 个实体在当前 1500 秒验收中各更新 15000 次；每分钟抽样同时移动 12–22 个，其余是设施到访或交通等待。不能把“每步更新”误读成“全员永不停下”；最终原生画面仍待浏览器权限恢复后验收。
-
-### 七车型交通与完整车身检查（2026-10-22）
-
-本节替代上文大型车辆仅可选外观的限制。T13 为 27 个实体：12 人、七种车型各一辆、2 犬、2 架巡检无人机、1 台叉车、3 个固定设施。T9–T13 与另一个七车型混合 seed 已通过 1500 秒离线准入。
-
-车辆采用随朝向变化、覆盖完整矩形车身的多圆包络。每一步检查平移与转动之间的扫掠间距；转动遇阻也不能先提交朝向再处理碰撞。每条道路按实际车型检查全部触及的道路格、建筑和植被净空，并限制转弯半径。路口采用相切圆弧，停车线位于横道之前并留出最长车头空间；普通连续车道的分段点不会强制车辆停车。
-
-这些是保守的运动与交通约束，仍不是轮胎/悬挂动力学。公交停靠、货物交付用目的与服务时长表示，没有乘客上下车或搬运载荷的身体动画。
-
-车型勾选顺序不改变固定 seed 的结果。DeepSeek 接收每个目标实际可往返到达的设施列表；固定物件不能分配移动日程。原始两份定制意图已去除部署信息，保存为 `scenarios/target-life/custom-intents/case-1.json` 与 `case-2.json`。重新编译不调用模型：
-
-```sh
 PYTHONPATH=python .venv/bin/python tools/deploy/targetlab/release_life.py var/target-life/network.json scenarios/target-life/custom-intents
 ```
 
-多场景部署可在 `AWR_TARGET_LIFE_DIR/<world_id>.network.json` 提供各自经过验证的场景图；兼容的 `network.json` 也必须匹配当前世界版本和坐标摘要。缺少该场景数据会拒绝生成，不能使用另一个场景的坐标。真实地形的道路、步行区和设施语义仍需独立准备和验收，不由此 synthcity 适配器自动推断。
+- `build_activities.py` 输出 `var/target-activities/` 下的网络、内容寻址计划与 `audit.json`，并更新 T8 模板；
+  非仓库根目录启动时设置 `AWR_TARGET_ACTIVITY_DIR`（绝对路径）。
+- `build_life.py` 输出 `var/target-life/network.json`（场景能力输入）与 `life-<sha256>.json`（内容寻址配方）。
+  配方绑定世界 ID、内容版本、坐标摘要与运行时代码摘要，不匹配时拒绝载入；完整群体原子导入，不允许部分加载。
+- `release_life.py` 由已保存的定制意图重新编译配方，不调用模型服务。
+- 多场景部署在 `AWR_TARGET_LIFE_DIR/<world_id>.network.json` 提供各自经验证的场景图；缺少场景数据时拒绝生成，
+  不得套用其他场景的坐标。当前只提供 synthcity 适配器。
 
-本轮扩大回归：241 项功能测试通过。T13 实际接口载入全部七车型，公交车车牌修改保留身份，重置后继续推进；倒序提交车型选择仍生成相同配方哈希。生成预览用时 85.79 秒，原世界推进 85.90 秒。
+## 5. 实时长测
 
-原有 `test_stage_budget_30x12` 耗时门槛在此共享主机未通过：默认内核的本次单次测量为 8.97 ms/仿真秒，同机未改动基线 `f155414` 为 8.73，门槛为 3.0。该测试使用旧 random_walk/static 目标，不是新生活引擎的性能证明；这里没有把它标为通过，也没有将这两次非正式测量当作完成了项目性能运行协议。记录见 `docs/audit/target-life/performance-budget.json`。
-
-### 实时长测的重复执行
-
-`check_live_life.py` 创建自己的 SDK 会话，按真实时间等待并采样全体目标，与本地同版本配方重放对照；不发送保活、暂停或模型请求。完成或失败后关闭自己的会话。输出路径必须不存在，以免覆盖旧证据。默认 1500 秒，每 60 秒检查一次；短时冒烟验证不能代替完整长测。
+`check_live_life.py` 创建独立 SDK 会话，按墙钟时间等待并采样全体目标，与本地同版本配方的重放逐项对照；
+不发送保活、暂停或模型请求，结束后关闭会话。输出路径必须不存在，以免覆盖既有证据。
 
 ```sh
-.venv/bin/python tools/deploy/targetlab/check_live_life.py \
-  var/target-life/life-935b67f4d87784ae538942c2e170d6396c1e49934211535a8814cff853cbe965.json \
-  --url http://127.0.0.1:28660 --template t13_all_vehicle_types \
-  --output .cache/targetlab/live-soak-new.json
+.venv/bin/python tools/deploy/targetlab/check_live_life.py var/target-life/life-<sha256>.json \
+  --url <LAB_URL> --template t13_all_vehicle_types --output .cache/targetlab/live-soak.json
 ```
 
-本机需拥有与服务端完全一致的运行时代码和配方；在服务器上执行时改用其沙盒入口 URL。检查包括每目标更新次数、仿真时钟与墙钟偏差、活动/身份/距离重放，以及长测结束的移动主体到访次数。最近版本前端相关单元测试已扩大为 51 项通过；当前验收摘要见 `docs/audit/target-life/REVIEW.zh-CN.md`。
+缺省时长 1500 s、每 60 s 采样一次；短时冒烟不能替代完整长测。执行端须与服务端使用一致的运行时代码与配方。
 
-本次 T13 的 25 分钟实时长测已通过：27 个实体各至少更新 15000 次，26 轮全体采样均匹配固定 seed 重放，最大观测时钟偏差 0.619 秒。无保活、暂停或浏览器参与；测试专用会话正常关闭。报告 `docs/audit/target-life/live-soak.json` 保存每轮逐实体证据，不能替代尚未完成的原生视觉验收。
+## 6. 已知限制
 
-## 2026-10-22 浏览器恢复与原生回归
-
-浏览器权限已确认正常，上述权限阻塞为历史状态。当前 T13 原生会话已可操作，已观察人物、厢式车和长椅网格。手机布局的隐藏视口启动死锁、旧活动说明、模型失败重试以及近看交互已修复；加载并发限制只作用于模型资源，不改变全体实体每步推进。详情见 `docs/audit/target-life/REVIEW.zh-CN.md`。六类目标、设施出入、停靠再出发、车牌像素编辑的代表性原生验收已完成，证据在 `docs/audit/target-life/browser-review.json`；仍不代表任意场景的视觉或性能认证。
+- 车辆为带速度与朝向约束的运动学模型，采用覆盖完整车身的多圆包络与扫掠间距检查；不包含轮胎、悬挂与传动动力学。
+- 设施内部以门户占用表示，不仿真室内空间与作业动作；公交停靠、货物交付以目的地与服务时长表示。
+- 犬步态为程序变形；尚未实现足部 IK、叉车搬运载荷、车轮转向与旋翼动力学。
+- 生活群体在 `TargetRuntime` 内按 0.1 s 固定步长推进，尚未编译为 Canonical Event Tape；随机数尚未登记到仓库的随机流机制。
+- 精细外观仅接入 Web 世界视口与共享 targets 图层的 Web 传感器视图；服务端离线渲染路径未接入。
+- 验收结论仅适用于所记录的世界、配方、seed 与软硬件条件，不构成任意场景的视觉或性能认证。

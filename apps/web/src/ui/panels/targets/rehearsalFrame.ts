@@ -1,4 +1,4 @@
-import type { LifeSample } from '@/ui/sandbox/domain'
+import type { LifeSample } from '@/ui/sandbox/lifeApi'
 
 /** Interpolate presentation between recorded seconds; discrete events remain on their sampled boundary. */
 export function rehearsalFrame(samples: LifeSample[], time: number): LifeSample {

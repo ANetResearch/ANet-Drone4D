@@ -1,6 +1,6 @@
 {
  "schema": "awr.sandbox.snapshot.v1",
- "contracts": "1.2.0",
+ "contracts": "1.3.0",
  "world_id": "synthcity",
  "template_id": "t5_area_guard",
  "calendar": {

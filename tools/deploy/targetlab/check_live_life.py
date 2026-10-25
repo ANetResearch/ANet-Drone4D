@@ -24,7 +24,7 @@ from awr.sim.activities.life import LifeWorld  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("recipe", type=Path, help="Deployed life-<sha256>.json")
-    parser.add_argument("--url", default="http://127.0.0.1:28660")
+    parser.add_argument("--url", required=True, help="Sandbox entry URL of the private deployment")
     parser.add_argument("--world", default="synthcity")
     parser.add_argument("--template", default="t13_all_vehicle_types")
     parser.add_argument("--duration", type=int, default=1500)

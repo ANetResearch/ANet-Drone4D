@@ -178,14 +178,24 @@ def test_s7_composition_adr094() -> None:
 
 
 def test_m17_template_catalog_reads_the_files() -> None:
-    """M17 池的模板目录（`TemplateCatalog`）直接读取本目录：每个世界 6 个基础模板、synthcity 另有 7 个目标系统模板，T5 推荐，组装出的 session.json 含全部配置段。"""
-    from awr.sandbox.templates import TemplateCatalog, build_session_config
+    """M17 池的模板目录（`TemplateCatalog`）直接读取本目录：缺省部署每个世界 6 个基础模板（实验目标模板不列出、按 id 不可取），
+    私有验收部署（experimental）synthcity 另有 7 个目标系统模板；T5 推荐，组装出的 session.json 含全部配置段。"""
+    from awr.sandbox.templates import TemplateCatalog, build_session_config, is_experimental_template
 
-    cat = TemplateCatalog(C.SANDBOX)
+    base = {(w, t) for w in C.WORLDS for t in C.TEMPLATE_IDS}
+    cat = TemplateCatalog(C.SANDBOX, experimental=False)
     items = cat.items(None, list(C.WORLDS))
-    assert len(items) == len(EXPECTED_TEMPLATES) and sum(1 for it in items if it["recommended"]) == 7
+    assert len(items) == len(base) == 42 and sum(1 for it in items if it["recommended"]) == 7
     for w in C.WORLDS:
-        assert cat.ids(w) == sorted(t for world, t in EXPECTED_TEMPLATES if world == w)
+        assert cat.ids(w) == sorted(C.TEMPLATE_IDS)
+    for tid in SCENE_TARGET_TEMPLATE_IDS:
+        assert cat.get("synthcity", tid) is None
+    lab = TemplateCatalog(C.SANDBOX, experimental=True)
+    assert len(lab.items(None, list(C.WORLDS))) == len(EXPECTED_TEMPLATES)
+    for w in C.WORLDS:
+        assert lab.ids(w) == sorted(t for world, t in EXPECTED_TEMPLATES if world == w)
+    assert {t for t in SCENE_TARGET_TEMPLATE_IDS if is_experimental_template(lab.get("synthcity", t) or {})} == set(SCENE_TARGET_TEMPLATE_IDS)
+    assert not any(is_experimental_template(cat.get(w, t) or {}) for w, t in base)
     t = cat.get("sanfrancisco", C.T5)
     cfg = build_session_config("sanfrancisco", template_id=C.T5, template=t, snapshot=None, calendar=None, acoustic_bg=None,
                                seed=3, limits={"vehicles_max": 12, "targets_max": 30, "nests_max": 4, "tasks_active_max": 6},

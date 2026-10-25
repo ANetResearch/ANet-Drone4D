@@ -1027,7 +1027,10 @@ class SimCore:
         self.lease.reset()
         self.clock.apply("reset")
         self.ctx.tick, self.ctx.t_ns = 0, 0
-        self.slow.reset_sim_clock()
+        # 慢任务的仿真周期随时钟归零重新起算（m23 修复：否则重置后要等到上一纪元的时刻才再次到期）。D2 零影响（ADR-129）：
+        # 缺省不启用，只在场景目标私有验收部署（AWR_TARGET_LIFE_ENABLE=1）启用；转为缺省行为须经重放摘要复核（D4 待定）
+        if os.environ.get("AWR_TARGET_LIFE_ENABLE") == "1":
+            self.slow.reset_sim_clock()
         self._rtf_t0 = (0, 0)  # RTF 窗口随仿真时间归零重新开始（_write_step_stats）
         self.epoch += 1
         self.segment += 1

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { rehearsalFrame } from '@/ui/panels/targets/rehearsalFrame'
-import type { LifeSample } from '@/ui/sandbox/domain'
+import type { LifeSample } from '@/ui/sandbox/lifeApi'
 
 const first: LifeSample = { t: 0, pos: [0, 0, 0], yaw: Math.PI - .1, speed: 2, distance: 0, hidden: false, phase: 'travel', destination: 'Shop', reason: '' }
 const second: LifeSample = { ...first, t: 1, pos: [2, 0, 0], yaw: -Math.PI + .1, distance: 2 }

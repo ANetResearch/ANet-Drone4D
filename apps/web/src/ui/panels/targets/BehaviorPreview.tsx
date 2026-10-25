@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useT } from '@/app/i18n'
-import { sbSession, type LifeRehearsal, type LifeSample } from '@/ui/sandbox/domain'
+import { lifeApi, type LifeRehearsal, type LifeSample } from '@/ui/sandbox/lifeApi'
 import { Button } from '@/ui/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/ui/components/ui/native-select'
 import { Slider } from '@/ui/components/ui/slider'
@@ -19,7 +19,7 @@ export function BehaviorPreview({ sha, actorId, onFrame }: { sha: string; actorI
   const load = async () => {
     setStatus('loading')
     try {
-      const result = await sbSession.lifeRehearsal(sha, actorId)
+      const result = await lifeApi.rehearsal(sha, actorId)
       if (active.current) { setData(result); setStatus('ready'); setTime(0) }
     } catch { if (active.current) setStatus('error') }
   }

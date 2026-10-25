@@ -3,7 +3,7 @@ import { useT } from '@/app/i18n'
 import { APPEARANCE_ENABLED, AppearancePreview, assetFor, type PreviewView } from '@/app/shell/engineD2'
 import { Button } from '@/ui/components/ui/button'
 import type { Target } from '@awr/contracts/types'
-import type { LifeSample } from '@/ui/sandbox/domain'
+import type { LifeSample } from '@/ui/sandbox/lifeApi'
 import { BehaviorPreview } from './BehaviorPreview'
 
 /** Draft-only component: plate keystrokes update the viewer, never save target configuration. */

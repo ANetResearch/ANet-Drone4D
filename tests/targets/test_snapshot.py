@@ -91,11 +91,13 @@ def test_import_problems_reported() -> None:
             h.close()
 
 
-def test_target_detail_resumes_immediately_after_template_clock_reset() -> None:
+def test_target_detail_resumes_immediately_after_template_clock_reset(monkeypatch) -> None:
+    """慢任务仿真时钟重置（m23 修复）只在 AWR_TARGET_LIFE_ENABLE=1 时启用（D2 缺省行为不变，见 SimCore.reset）。"""
     import msgpack
 
     from awr.sim.targets import plugin
 
+    monkeypatch.setenv("AWR_TARGET_LIFE_ENABLE", "1")
     with R.isolated_registry() as reg:
         h = _core(reg)
         try:

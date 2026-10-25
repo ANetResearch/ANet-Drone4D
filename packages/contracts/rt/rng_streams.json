@@ -148,11 +148,18 @@
       "owner": "M25",
       "purpose": "D3 camera, thermal, LiDAR, IMU and GNSS noise, navigation solution and gimbal encoder readings: keys (run_seed, 22, uav_no, index, ch), index = frame or sample index; channel table M25 §6.17.2",
       "d1": "V0.3"
+    },
+    {
+      "stream_id": 23,
+      "name": "target_activity",
+      "owner": "M18",
+      "purpose": "experimental scene target pedestrian errands (m23 scene-target foundations): destination choice and dwell draws, keys (seed, 23, actor_key, variant), actor_key = first 8 bytes (big-endian) of sha256(actor_id)",
+      "d1": "V0.3"
     }
   ],
   "reserved": {
-    "from": 23,
+    "from": 24,
     "to": 63,
-    "note": "7 is unassigned; 11-16 M01 reconstruction (ext); 17 targets_motion (M18), 18 perception (M19); 19-22 D3 (M23, M26, M25; AWR-05 §8.5); 23-63 reserved"
+    "note": "7 is unassigned; 11-16 M01 reconstruction (ext); 17 targets_motion (M18), 18 perception (M19); 19-22 D3 (M23, M26, M25; AWR-05 §8.5); 23 target_activity (M18, experimental); 24-63 reserved"
   }
 }

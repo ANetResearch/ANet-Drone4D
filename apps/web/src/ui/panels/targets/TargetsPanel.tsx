@@ -34,6 +34,7 @@ import { PanelEmpty } from '@/ui/brand'
 import { useSurface } from '@/app/shell/surface'
 import { useRedOwner } from '@/ui/notify/redFigures'
 import { sbSession } from '@/ui/sandbox/domain'
+import { lifeApi } from '@/ui/sandbox/lifeApi'
 import { entities, useEntities } from '@/ui/sandbox/entities'
 import { useSandbox } from '@/ui/sandbox/session'
 import { d2Tools, useD2Tool } from '@/ui/tools/d2Tools'
@@ -67,7 +68,7 @@ export function useSeedTargetConfigs(enabled: boolean): number {
         // Mobile panels can hide the viewport/frame loop. REST configuration must still refresh the UI.
         bumpRevision()
         const life = r.items?.find((c) => c.life)?.life
-        if (life) void sbSession.lifeScene(life.sha256).then((scene) => {
+        if (life) void lifeApi.scene(life.sha256).then((scene) => {
           if (live) { targetsModel.facilities = scene.facilities; targetsModel.detailVersion++ }
         }, () => { /* scene details can be retried after reconnection */ })
         if (!rosterIds || rosterIds.split('|').every((id) => targetsModel.cfgs.has(id))) return

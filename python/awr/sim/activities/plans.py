@@ -13,13 +13,21 @@ import itertools
 import json
 import math
 import os
-import random
 from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 
-VERSION = "pedestrian-activity-1"
+from awr.contracts.rng_streams import Stream
+from awr.contracts.rng_streams import rng as stream_rng
+
+# 2: draws come from the registered stream 23 target_activity (ADR-049) instead of an ad hoc random.Random(sha256(...))
+VERSION = "pedestrian-activity-2"
+
+
+def actor_key(actor_id: str) -> int:
+    """Integer key of an actor in stream 23: first 8 bytes (big-endian) of sha256(actor_id)."""
+    return int.from_bytes(hashlib.sha256(actor_id.encode()).digest()[:8], "big")
 
 
 def digest(doc: dict) -> str:
@@ -63,7 +71,7 @@ def compile_plan(
     if not 0.3 <= speed_mps <= 2.0 or not 60 <= duration_s <= 7200:
         raise ValueError("Invalid pedestrian speed or duration")
     # Independent actor stream: adding/removing another actor never changes this itinerary.
-    rng = random.Random(int(hashlib.sha256(f"{VERSION}:{seed}:{actor_id}:{variant}".encode()).hexdigest(), 16))
+    rng = stream_rng(int(seed), int(Stream.TARGET_ACTIVITY), actor_key(actor_id), int(variant))
     nodes = network["nodes"]
     if start not in nodes:
         raise ValueError("Unknown start node")
@@ -118,7 +126,7 @@ def compile_plan(
                 candidates.append((dst, path))
         if not candidates:
             raise ValueError("Need at least three reachable destinations, with routes >= 100 m")
-        destination, route = rng.choice(candidates)
+        destination, route = candidates[int(rng.integers(len(candidates)))]
         name = nodes[destination]["label"]
         for a, b in itertools.pairwise(route):
             p, q = nodes[a]["pos"], nodes[b]["pos"]
@@ -134,7 +142,7 @@ def compile_plan(
         visits.append({"node": destination, "arrival_s": t, "purpose": nodes[destination]["purpose"]})
         append(
             "rest",
-            t + rng.uniform(25, 75),
+            t + float(rng.uniform(25, 75)),
             nodes[destination]["pos"],
             nodes[destination]["pos"],
             yaw,

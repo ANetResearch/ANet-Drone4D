@@ -20,7 +20,7 @@
   "recipe_sha256": "935b67f4d87784ae538942c2e170d6396c1e49934211535a8814cff853cbe965",
   "paid_model_calls": 0,
   "date": "2026-10-22",
-  "deployment": "mya40 private targetlab; localhost:28660",
+  "deployment": "private targetlab deployment (loopback only)",
   "functional_tests_passed": 241,
   "performance_gate": {
     "test": "tests/targets/test_budget.py::test_stage_budget_30x12",
