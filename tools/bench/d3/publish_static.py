@@ -351,8 +351,18 @@ def _retag_tracks(src: Path, run_id: str) -> bytes:
     return sp.build_tracks(run_id, int(head["hz"]), int(head["n_samples"]), uavs)
 
 
+def _internal_run_id(run: Path) -> str:
+    """运行清单的 `run_id`（目录可能以其他名字挂载）；没有清单时取目录名。"""
+    p = run / "run_manifest.json"
+    if p.is_file():
+        rid = json.loads(p.read_text(encoding="utf-8")).get("run_id")
+        if rid:
+            return str(rid)
+    return run.name
+
+
 def cmd_assemble(a) -> int:
-    run_id = a.run_id or public_run_id(a.run.name)
+    run_id = a.run_id or public_run_id(_internal_run_id(a.run))
     v = a.vdir
     if v.exists() and any(v.iterdir()) and not a.force:
         raise PublishError(f"{v} is not empty (use --force)")

@@ -127,6 +127,8 @@ def test_assemble_layout_and_draft(tmp_path):
     (run / "derived" / "event" / "tape.bin").write_bytes(b"TAPE")
     (run / "derived" / "event" / "tape.json").write_text("{}", encoding="utf-8")
     (run / "derived" / "tracks_obs.bin").write_bytes(_tracks(run.name))
+    (run / "run_manifest.json").write_text(json.dumps({"run_id": "b10-formal-r2-l2-track_share-k04-p1"}), encoding="utf-8")
+    run = run.rename(tmp_path / "srun")                                    # 容器挂载点名不同：公开 id 取运行清单的 run_id
     media = tmp_path / "media" / "video"
     media.mkdir(parents=True)
     for u in UAVS:
@@ -139,7 +141,7 @@ def test_assemble_layout_and_draft(tmp_path):
                   "--world", "oryahovo-crop1", "--policy", "track_share", "--obs-level", "L2", "--license", str(lic), "--notice", str(lic),
                   "--attribution", "ANetResearch"])
     assert rc == 0
-    rid = ps.public_run_id(run.name)
+    rid = ps.public_run_id("b10-formal-r2-l2-track_share-k04-p1")
     draft = json.loads((tmp_path / "pub" / "2026.10.25-1.draft.json").read_text(encoding="utf-8"))
     ev = draft["events"][0]
     assert ev["tape"] == "events/crop-handoff-001/tape.bin" and (vdir / ev["tape"]).read_bytes() == b"TAPE"
