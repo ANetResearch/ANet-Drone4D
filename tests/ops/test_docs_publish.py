@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -36,7 +37,8 @@ def _build(tmp: Path) -> Path:
 
 
 def _run(tmp: Path, out: Path) -> subprocess.CompletedProcess:
-    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp / "home")}
+    # the interpreter's own directory first: the gate container has python3 only in its venv, not in /usr/bin
+    env = {"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin", "HOME": str(tmp / "home")}
     return subprocess.run(["bash", str(PUBLISH), "--build", str(_build(tmp)), "--out", str(out)], capture_output=True, text=True,
                           env=env, timeout=120)
 
