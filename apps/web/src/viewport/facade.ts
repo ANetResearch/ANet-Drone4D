@@ -197,6 +197,36 @@ export const camera = {
   northUp(): void {
     vp.rig?.northUp()
   },
+  /** Close inspection of a target, in ENU. This changes only the operator's overview camera. */
+  inspectRoute(points: readonly (readonly number[])[]): void {
+    const rig = vp.rig
+    if (!rig || !points.length) return
+    const xs = points.map((p) => p[0]), ys = points.map((p) => p[1])
+    const x = (Math.min(...xs) + Math.max(...xs)) / 2, y = (Math.min(...ys) + Math.max(...ys)) / 2
+    const d = Math.max(100, Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys))
+    rig.setMode('orbit')
+    rig.flyTo([x + d * 0.15, y - d * 0.4, points[0][2] + d * 1.2], [x, y, points[0][2]], 'focus')
+  },
+  inspectTarget(pos: readonly number[], size: readonly number[], heading = 0, readPoint?: (out: Float64Array) => boolean, plate = false): void {
+    const rig = vp.rig
+    if (!rig) return
+    rig.setMode('orbit')
+    const d = Math.max(3, ...size) * 1.8
+    const a = heading + Math.PI / 4
+    // Plate inspection observes the physical plate, without an identity billboard or a simulation pause.
+    if (plate) {
+      const x = pos[0] + Math.cos(heading) * (size[0] / 2 + 0.015)
+      const y = pos[1] + Math.sin(heading) * (size[0] / 2 + 0.015)
+      rig.flyTo([x + Math.cos(heading) * 1.6, y + Math.sin(heading) * 1.6, pos[2] + 2.05],
+        [x, y, pos[2] + Math.min(0.65, size[2] * 0.3)], 'focus')
+    } else {
+      // A high oblique overview avoids placing the inspection camera inside roadside buildings.
+      rig.flyTo([pos[0] + Math.cos(a) * d * 0.5, pos[1] + Math.sin(a) * d * 0.5, pos[2] + Math.max(size[2] * 1.2, d * 0.85)],
+        [pos[0], pos[1], pos[2] + size[2] * 0.5], 'focus')
+    }
+    rig.setFollowLock(false)
+    rig.trackPoint(readPoint ?? null)
+  },
   home(): void {
     vp.rig?.goHome()
   },

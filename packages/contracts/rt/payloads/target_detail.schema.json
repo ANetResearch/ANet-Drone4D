@@ -314,7 +314,8 @@
           "enum": [
             "static",
             "path",
-            "random_walk"
+            "random_walk",
+            "timeline"
           ]
         },
         "speed_mps": {
@@ -414,6 +415,84 @@
     },
     "cfg": {
       "$ref": "../../target/1/target.schema.json"
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "destination",
+        "remaining_s",
+        "seed",
+        "walked_m",
+        "duration_s",
+        "visits",
+        "route_enu_m"
+      ],
+      "properties": {
+        "phase": {
+          "enum": [
+            "walk",
+            "orient",
+            "rest",
+            "wait",
+            "complete",
+            "departing",
+            "travel",
+            "arrived",
+            "visit",
+            "stationary"
+          ]
+        },
+        "destination": {
+          "type": "string"
+        },
+        "remaining_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "walked_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "visits": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "route_enu_m": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "reason": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "updates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_unplanned_wait_s": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
     }
   },
   "required": [

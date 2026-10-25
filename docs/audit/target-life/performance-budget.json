@@ -1,0 +1,9 @@
+{
+  "test": "tests/targets/test_budget.py::test_stage_budget_30x12",
+  "status": "not_passed_on_this_shared_host",
+  "limit_ms_per_sim_second": 3.0,
+  "base_commit": "f155414ff8f4b7621ea847027da93624ebe9391a",
+  "base_ms_per_sim_second": 8.73,
+  "feature_ms_per_sim_second": 8.97,
+  "scope": "Legacy random_walk/static actors, 30 targets and 12 drones. Separate same-host samples; not a qualified performance protocol run or a scene-life timing certificate."
+}

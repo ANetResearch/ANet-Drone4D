@@ -1,0 +1,58 @@
+{
+  "targets": 27,
+  "classes": 6,
+  "vehicle_types": [
+    "bus",
+    "hatchback",
+    "pickup",
+    "sedan",
+    "suv",
+    "truck",
+    "van"
+  ],
+  "preview_admitted": true,
+  "seed_selection_order_invariant": true,
+  "sim_seconds_during_preview": 85.9,
+  "wall_seconds_during_preview": 85.79,
+  "bus_plate_identity_preserved": true,
+  "reset_at_zero": true,
+  "resumed_updates": true,
+  "recipe_sha256": "935b67f4d87784ae538942c2e170d6396c1e49934211535a8814cff853cbe965",
+  "paid_model_calls": 0,
+  "date": "2026-10-22",
+  "deployment": "mya40 private targetlab; localhost:28660",
+  "functional_tests_passed": 241,
+  "performance_gate": {
+    "test": "tests/targets/test_budget.py::test_stage_budget_30x12",
+    "status": "not_passed_on_this_shared_host",
+    "limit_ms_per_sim_second": 3.0,
+    "base_commit": "f155414ff8f4b7621ea847027da93624ebe9391a",
+    "base_ms_per_sim_second": 8.73,
+    "feature_ms_per_sim_second": 8.97,
+    "scope": "Legacy random_walk/static actors, 30 targets and 12 drones. Separate same-host samples; not a qualified performance protocol run or a scene-life timing certificate."
+  },
+  "visual_verification": "passed representative native T13 review: all six target classes visible; bus/forklift stop-to-travel, resident facility exit with stable identity, UAV travel-to-hover, physical plate edit and restore",
+  "live_25_minute_soak": {
+    "status": "passed",
+    "duration_s": 1500,
+    "targets": 27,
+    "checkpoints": 26,
+    "min_updates": 15000,
+    "max_clock_skew_s": 0.619,
+    "all_checkpoints_match_seed_replay": true,
+    "report": "live-soak.json"
+  },
+  "pull_request_created": false,
+  "frontend_unit_tests_passed": 75,
+  "live_check_cli_smoke": "passed: dedicated session, 5-second requested horizon; not the 25-minute soak",
+  "frontend_unit_test_scope": "68 target/boot/D2 tests plus 7 camera-mode tests (includes 2 inspection regressions)",
+  "browser_transport_probe": {
+    "wall_s": 90.35,
+    "sim_s": 90.38,
+    "max_relative_clock_skew_s": 0.87,
+    "disconnects": 0,
+    "status": "passed_after_bounding_asset_loads",
+    "limitation": "Two earlier probes stalled; this 90-second probe is not a cold-cache endurance certificate."
+  },
+  "visual_report": "browser-review.json"
+}

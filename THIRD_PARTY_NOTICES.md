@@ -322,6 +322,24 @@ Dok11 @dok11），源模型与世界包不入库，对外发布的派生制品�
 OpenStreetMap 派生数据（配准证据、anchors、navgraph）单独标注 ODbL-1.0 与"OpenStreetMap contributors"；高程瓦片取自
 AWS Terrain Tiles（SRTM 与 EU-DEM），crop 调平交叉核对另用 Copernicus DEM GLO-30（只算 QA 统计量，不再分发）；MARS-LVIG 只作内部回归，不再分发。
 
+### Optional scene-target assets (not bundled)
+
+The optional target catalog in `packages/contracts/target/assets.catalog.json` records per-asset source URLs,
+CC0-1.0 license metadata, dimensions and content hashes. Model/texture binaries are not committed here.
+The native-view screenshots in `docs/audit/target-life/` depict these optional assets in the synthetic test scene.
+
+| Asset set | Source | License recorded by the source lock | Integration |
+|---|---|---|---|
+| 12 human appearances | [MakeHuman system assets](https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html) | CC0-1.0 | Existing ALE compiled meshes/textures, exported with source hash checks; sampled pose interpolation |
+| Seven vehicle types and six street objects | [Innerscene 3D parts](https://www.innerscene.com/tools/library/3d-parts/) (individual URLs in the catalog) | CC0-1.0 | Existing ALE compiled assets; physical plates and selected wheel-group animation authored for this integration |
+| Dog, forklift and quadcopter | Individual Innerscene URLs and SHA-256 values in `tools/deploy/targetlab/extra-assets.lock.json` | CC0-1.0 | Separate GLB export; the dog's 16-pose deformation is authored for this integration |
+
+`tools/deploy/targetlab/export_assets.py` currently requires an existing ALE asset directory, including its original
+lock files and attribution README; it does not download or bundle that directory. The exporter preserves those
+notices alongside the generated pack. `export_extra_assets.py` handles the separately locked GLB inputs. No ALE
+application source code is included. The living-population planner and conflict handling are implemented in this
+repository; they do not embed SUMO or another external traffic engine.
+
 ## 5. Brand assets
 
 The ANet logo (`apps/web/public/brand/anet-logo.svg`, a byte-identical copy of `docs/media/anet-logo.svg` in

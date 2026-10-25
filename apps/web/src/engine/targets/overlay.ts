@@ -1,3 +1,4 @@
+import { FacilityPortals } from './facilities'
 // Target and sensitivity-volume overlay (M18-FR-024, NFR-005; M18-M19 PRD §8.2; AWR-04 §10.5). Owner: M18.
 // Real-size targets: a box wireframe per target (l x w x h along the heading) with a heading tick, <= 32 targets; the
 // sensitivity volumes: translucent faces + outline, <= 64 bodies (sector 48 segments, sphere and hemisphere 24 x 12).
@@ -26,6 +27,7 @@ import { bodyFaces, bodyMesh, boxEdges, newMeshBuffers, type IndexedFaces, type 
 import { TARGET_CAP } from './decode'
 import type { BodyView, TargetsModel } from './model'
 import type { Volume } from './geometry'
+import { APPEARANCE_ENABLED, TargetAppearances } from './appearance'
 
 type N = any // TSL nodes
 
@@ -51,7 +53,9 @@ export interface OverlayOptions {
 }
 
 export class TargetsOverlay {
+  private readonly facilities = new FacilityPortals()
   readonly root = new Group()
+  readonly appearances = APPEARANCE_ENABLED ? new TargetAppearances() : null
   readonly boxes: ThinLineBatch
   readonly outlines: ThinLineBatch
   readonly faces: Mesh
@@ -115,15 +119,19 @@ export class TargetsOverlay {
     this.faces.visible = false
     this.root.add(this.faces, this.outlines.obj, this.boxes.obj)
     this.root.name = 'TargetsLayer'
+    this.root.add(this.facilities.root)
+    if (this.appearances) this.root.add(this.appearances.root)
   }
 
   drawCount(): number {
     if (!this.root.visible) return 0
-    return this.boxes.drawCount() + this.outlines.drawCount() + (this.faces.visible ? 1 : 0)
+    return this.boxes.drawCount() + this.outlines.drawCount() + (this.faces.visible ? 1 : 0) + (this.appearances?.drawCount() ?? 0)
   }
 
   /** rebuild when the model or the options changed; returns true when it rebuilt */
   update(model: TargetsModel, o: OverlayOptions): boolean {
+    this.appearances?.update(model)
+    this.facilities.update(model)
     const key = `${o.view}|${o.modelId}|${o.selectedId}|${o.redId}|${o.showBodies}|${this.level}`
     if (model.version === this.seenVersion && model.detailVersion === this.seenDetail && key === this.seenKey) return false
     this.seenVersion = model.version
@@ -141,6 +149,7 @@ export class TargetsOverlay {
     const X = this.index.array as Uint32Array
     const nT = Math.min(R.n, TARGETS_CAPS.targets)
     for (let i = 0; i < nT; i++) {
+      if (R.hidden[i]) continue
       const id = model.idOfRow(i)
       const cls = model.classOfRow(i)
       const x = R.pos[3 * i], y = R.pos[3 * i + 1], z = R.pos[3 * i + 2]
@@ -149,6 +158,13 @@ export class TargetsOverlay {
       const pal = id === o.redId ? PAL.R500 : id === o.selectedId ? PAL.G50 : R.enabled[i] ? PAL.G400 : PAL.G200
       const box = this.boxOf(l, w, h, gen)
       this.boxes.segsXform(box.seg, box.nSeg, x, y, z, hc, hs, pal, R.enabled[i] ? 1 : 0.5)
+      if (id === o.selectedId) {
+        const route = model.details.get(id)?.activity?.route_enu_m ?? []
+        for (let j = 1; j < Math.min(route.length, 128); j++) {
+          const a = route[j - 1], b = route[j]
+          this.outlines.seg(a[0], a[1], a[2] + 0.2, b[0], b[1], b[2] + 0.2, PAL.G50, false, 0.9)
+        }
+      }
       if (!o.showBodies || this.level >= 3 || !R.enabled[i] || (this.level >= 2 && id !== o.selectedId)) continue
       const vols = model.volumesOfRow(i, o.view, o.modelId)
       const occupied = R.occupied[i] === 1
@@ -274,6 +290,8 @@ export class TargetsOverlay {
   }
 
   dispose(): void {
+    this.appearances?.dispose()
+    this.facilities.dispose()
     this.boxes.dispose()
     this.outlines.dispose()
     this.faces.geometry.dispose()

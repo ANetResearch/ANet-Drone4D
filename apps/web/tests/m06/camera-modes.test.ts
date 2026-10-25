@@ -79,3 +79,43 @@ describe('camera modes (M06-AC-037)', () => {
     expect(CAMERA.groundClearM).toBe(2)
   })
 })
+
+describe('target overview inspection', () => {
+  it('tracks a moving target without steering drones; releases at facility entry and manual input', () => {
+    const r = rig()
+    r.lookAtEnu([10, -10, 20], [0, 0, 1])
+    let x = 0, visible = true
+    const read = (out: Float64Array) => { out.set([x, 0, 1]); return visible }
+    r.trackPoint(read)
+    frame(0, r)
+    x = 40
+    frame(100, r)
+    expect(r.getPose().target_enu_m[0]).toBeCloseTo(40)
+    expect(r.getPose().eye_enu_m[0]).toBeCloseTo(50)
+    expect(r.focusAgent).toBe(-1)
+    visible = false
+    frame(200, r)
+    visible = true; x = 80
+    frame(300, r)
+    expect(r.getPose().target_enu_m[0]).toBeCloseTo(40)
+    r.trackPoint(read)
+    frame(400, r)
+    r.touchRotate(5, 0, 720)
+    x = 120
+    frame(500, r)
+    expect(r.getPose().target_enu_m[0]).toBeCloseTo(80)
+    r.dispose()
+  })
+  it('view changes take ownership back from target inspection', () => {
+    const r = rig()
+    r.lookAtEnu([10, -10, 20], [0, 0, 1])
+    let x = 40
+    r.trackPoint(out => { out.set([x, 0, 1]); return true })
+    frame(0, r)
+    r.viewFrom([0, 0, 1])
+    x = 90
+    frame(100, r)
+    expect(r.getPose().target_enu_m[0]).toBeCloseTo(40)
+    r.dispose()
+  })
+})

@@ -28,6 +28,7 @@ import { bindSandboxRt, onSandboxToken, sandbox, sandboxStore } from '@/ui/sandb
 import { installCaptureNotices } from '@/ui/notify/d2Notices'
 import { perfStore } from '@/stores/perf'
 import { onWorldReset, worldScope } from '@/stores/worldScope'
+import { resetTargetsWorld } from '@/stores/targets'
 import { bindSafety } from '@/stores/safety'
 import { bindAgents } from '@/stores/agents'
 import { bindJobs } from '@/stores/jobs'
@@ -141,6 +142,9 @@ export function RtProvider({ children }: { children: React.ReactNode }) {
       onEpochChange: (from, to) => {
         const tl = timelineStore.getState()
         if (tl.mode === 'replay' || tl.playback !== null || connViewStore.getState().mode === 'replay' || performance.now() - modeChangedAt < 3000) return
+        // A template reset can reuse both sid and target ids with cfg_rev=1.
+        // Never retain the previous target's appearance, capture or configuration.
+        resetTargetsWorld()
         notify('sim:epoch', 'info', t('conn.epochChanged', { from, to }))
       },
     })

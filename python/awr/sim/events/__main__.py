@@ -1,4 +1,4 @@
-"""`python -m awr.sim.events compile|preflight|verify|inspect`（M23 §7.2）。
+"""`python -m awr.sim.events compile|preflight|verify|inspect|scene-audit`（M23 §7.2）。
 
 compile、preflight 的退出码：0 通过，2 门 1 失败（含输入安全拒绝与限额 618、阶段不支持 619），3 门 2 不可行（612），
 4 其他编译错误（门 2 的非不可行错误、编译中抛出的 EventError）；verify、inspect 失败为 2。编译报告写到标准输出，
@@ -35,6 +35,8 @@ def exit_code(status: str, gates: list[dict]) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m awr.sim.events")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("scene-audit", help="experimental, read-only scene activity prerequisites").add_argument(
+        "--world", type=Path, required=True)
     for c in ("verify", "inspect"):
         sub.add_parser(c).add_argument("path", type=Path)
     for c in ("compile", "preflight"):
@@ -47,6 +49,12 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--out", type=Path)
         p.add_argument("--cache", type=Path)
     a = ap.parse_args(argv)
+    if a.cmd == "scene-audit":
+        from awr.sim.events.scene import audit_scene
+
+        report = audit_scene(a.world)
+        print(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False))
+        return {"blocked": 2, "needs_verification": 3, "ready": 0}[report["status"]]
     if a.cmd in ("compile", "preflight"):
         from awr.sim.events.compile import CompileOptions, compile_event
 

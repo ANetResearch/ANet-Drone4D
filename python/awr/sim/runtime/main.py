@@ -1027,6 +1027,7 @@ class SimCore:
         self.lease.reset()
         self.clock.apply("reset")
         self.ctx.tick, self.ctx.t_ns = 0, 0
+        self.slow.reset_sim_clock()
         self._rtf_t0 = (0, 0)  # RTF 窗口随仿真时间归零重新开始（_write_step_stats）
         self.epoch += 1
         self.segment += 1
