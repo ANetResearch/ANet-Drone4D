@@ -18,7 +18,8 @@ export interface LabStaticFile {
   path: string
   bytes: number | null
   sha256: string | null
-  /** 单文件 > 64 MB 时的分发渠道副本（ADR-201：ModelScope）；其他地址一律忽略 */
+  /** 分发渠道副本（ADR-201：单文件 > 64 MB；ADR-221：任意大小，emax 出口带宽）：只接受 ModelScope，其他地址一律忽略；
+   * 给出时制品不在版本目录中，页面从该地址播放与下载 */
   external: string | null
 }
 export interface LabStaticVideo extends LabStaticFile {
@@ -45,6 +46,8 @@ export interface LabStaticRun {
   basemap: string | null
   basemapBytes: number | null
   basemapSha256: string | null
+  /** 底图的分发渠道副本（ADR-221） */
+  basemapExternal: string | null
   /** 观测层机队轨迹 tracks_obs.bin（AWR-17 §18.8.3） */
   tracksObs: string | null
   lidarCompare: string | null
@@ -72,6 +75,8 @@ export interface LabStaticIndex {
   filesSha256: string | null
   filesBytesTotal: number | null
   features: { inspect: boolean; compare: boolean }
+  /** Rerun Viewer Wasm 的 ModelScope 副本（ADR-221）；null 时 Viewer 从 /lab/assets/ 自托管加载 */
+  viewerWasm: { url: string; bytes: number | null; sha256: string | null } | null
   /** 版本目录内相对路径 → 可请求的地址（/lab-static/v/<version>/<path>） */
   url: (path: string) => string
 }
@@ -138,12 +143,23 @@ const bytesOf = (v: unknown): number | null => {
   return b !== null && b >= 0 ? b : null
 }
 
+const externalOf = (v: unknown): string | null => {
+  const ext = isObj(v) && v.channel === 'modelscope' ? str(v.url) : null
+  return ext !== null && LAB_EXTERNAL_URL_RE.test(ext) ? ext : null
+}
+
 function file(v: Obj, key: string, where: string): LabStaticFile {
-  const ext = isObj(v.external) ? str(v.external.url) : null
-  return {
-    path: relPath(v[key], `${where}.${key}`), bytes: bytesOf(v.bytes), sha256: sha256Of(v.sha256),
-    external: ext !== null && LAB_EXTERNAL_URL_RE.test(ext) ? ext : null,
-  }
+  return { path: relPath(v[key], `${where}.${key}`), bytes: bytesOf(v.bytes), sha256: sha256Of(v.sha256), external: externalOf(v.external) }
+}
+
+/** 制品是否由本站托管：没有分发渠道副本且单文件 ≤ 64 MB（AWR-14 §21.14.2 规则 2；ADR-221） */
+export function isHosted(f: { bytes: number | null; external: string | null }): boolean {
+  return f.external === null && (f.bytes === null || f.bytes <= LAB_STATIC_MAX_FILE_BYTES)
+}
+
+/** 播放与下载地址：分发渠道副本优先，其次本站版本目录；两者都没有时为 null */
+export function artifactSrc(index: Pick<LabStaticIndex, 'url'>, f: { path: string; bytes: number | null; external: string | null }): string | null {
+  return f.external ?? (isHosted(f) ? index.url(f.path) : null)
 }
 
 function parseRun(v: unknown, ev: { id: string; version: number; worldId: string | null }, where: string): LabStaticRun {
@@ -167,9 +183,15 @@ function parseRun(v: unknown, ev: { id: string; version: number; worldId: string
     basemap: relPath(v.basemap, `${where}.basemap`, true),
     basemapBytes: bytesOf(v.basemap_bytes),
     basemapSha256: sha256Of(v.basemap_sha256),
+    basemapExternal: externalOf(v.basemap_external),
     tracksObs: relPath(v.tracks_obs, `${where}.tracks_obs`, true),
     lidarCompare: relPath(v.lidar_compare, `${where}.lidar_compare`, true),
   }
+}
+
+function viewerWasmOf(v: unknown): LabStaticIndex['viewerWasm'] {
+  const url = externalOf(v)
+  return url !== null && isObj(v) ? { url, bytes: bytesOf(v.bytes), sha256: sha256Of(v.sha256) } : null
 }
 
 /** 解析并校验索引；url() 把版本目录内相对路径映射到 /lab-static/v/<version>/ 下 */
@@ -213,6 +235,7 @@ export function parseStaticIndex(raw: unknown): LabStaticIndex {
     filesSha256: relPath(raw.files_sha256, 'files_sha256', true),
     filesBytesTotal: total !== null && total >= 0 ? total : null,
     features: { inspect: feats.inspect === true, compare: feats.compare === true },
+    viewerWasm: viewerWasmOf(raw.viewer_wasm),
     url: (p: string) => {
       if (!isSafeRelPath(p)) throw new LabStaticError('static.path', p)
       return base + p
@@ -229,13 +252,13 @@ export function findSample(idx: LabStaticIndex, runId: string): LabStaticRun | n
   return idx.events.flatMap((e) => e.runs).find((r) => r.runId === runId) ?? null
 }
 
-/** 可下载的制品（视频、切片与底图），单文件 > 64 MB 的标记为不在本站提供（AWR-14 §21.14.2 规则 2） */
+/** 可下载的制品（视频、切片与底图）；hosted 为本站托管，否则经分发渠道（AWR-14 §21.14.2 规则 2；ADR-221） */
 export function sampleFiles(run: LabStaticRun): (LabStaticFile & { kind: 'video' | 'slice' | 'basemap'; label: string; hosted: boolean })[] {
-  const hosted = (b: number | null): boolean => b === null || b <= LAB_STATIC_MAX_FILE_BYTES
+  const bm = run.basemap ? { path: run.basemap, bytes: run.basemapBytes, sha256: run.basemapSha256, external: run.basemapExternal } : null
   return [
-    ...run.videos.map((v) => ({ ...v, kind: 'video' as const, label: `${v.uav} · ${v.cam}`, hosted: hosted(v.bytes) })),
-    ...run.slices.map((s) => ({ ...s, kind: 'slice' as const, label: `${s.eventId} · ${s.tFromS.toFixed(1)}–${s.tToS.toFixed(1)} s`, hosted: hosted(s.bytes) })),
-    ...(run.basemap ? [{ path: run.basemap, bytes: run.basemapBytes, sha256: run.basemapSha256, external: null, kind: 'basemap' as const, label: 'basemap.rrd', hosted: true }] : []),
+    ...run.videos.map((v) => ({ ...v, kind: 'video' as const, label: `${v.uav} · ${v.cam}`, hosted: isHosted(v) })),
+    ...run.slices.map((s) => ({ ...s, kind: 'slice' as const, label: `${s.eventId} · ${s.tFromS.toFixed(1)}–${s.tToS.toFixed(1)} s`, hosted: isHosted(s) })),
+    ...(bm ? [{ ...bm, kind: 'basemap' as const, label: 'basemap.rrd', hosted: isHosted(bm) }] : []),
   ]
 }
 

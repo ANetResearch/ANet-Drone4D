@@ -398,10 +398,19 @@ describe('sample run page (AWR-14 §21.29.3)', () => {
       kind: 'static', recordingId: RUN,
       slices: [{ url: `/lab-static/v/2026.10.19-1/runs/${RUN}/slices/encounter_ab.rrd`, bytes: 524288 }],
       basemap: { url: `/lab-static/v/2026.10.19-1/runs/${RUN}/slices/basemap.rrd`, bytes: 307200 },
+      wasmUrl: null,
     })
     expect(checkStaticSource(src)).toBeNull()
     expect(inspectSource(idx, { ...run, slices: [] })).toBeNull()
     expect(inspectSource(idx, { ...run, slices: run.slices.map((s) => ({ ...s, bytes: 65 * MB })) })).toBeNull()
+    // ADR-221：切片、底图与 Viewer Wasm 的 ModelScope 副本优先
+    const ms = (f: string) => `https://www.modelscope.cn/datasets/x/y/resolve/master/${f}`
+    const ext = inspectSource({ ...idx, viewerWasm: { url: ms('re_viewer_bg.wasm'), bytes: 1, sha256: null } },
+      { ...run, slices: run.slices.map((s) => ({ ...s, external: ms('a.rrd') })), basemapExternal: ms('basemap.rrd') })!
+    expect(ext.slices).toEqual([{ url: ms('a.rrd'), bytes: 524288 }])
+    expect(ext.basemap?.url).toBe(ms('basemap.rrd'))
+    expect(ext.wasmUrl).toBe(ms('re_viewer_bg.wasm'))
+    expect(checkStaticSource(ext)).toBeNull()
   })
 
   it('derives the playhead duration from the tape, fleet tracks, slice windows and videos', () => {
@@ -443,17 +452,23 @@ describe('sample run page (AWR-14 §21.29.3)', () => {
     }
   })
 
-  it('lays out 3 UAVs × [RGB | thermal] on a desktop Tier B/A device, with the > 64 MB video linked to ModelScope', () => {
+  it('lays out 3 UAVs × [RGB | thermal] on a desktop Tier B/A device, playing the ModelScope copy in CORS mode (ADR-221)', () => {
     const idx = fullIndex()
     const run = idx.events[0]!.runs[0]!
     const html = renderToStaticMarkup(createElement(PrivateViews, { index: idx, run, group: new VideoSyncGroup(), limit: 6, t: sampleT }))
     expect(html).toContain('data-view-mode="both"')
     expect([...html.matchAll(/data-view-tile="([^"]+)"/g)].map((m) => m[1])).toEqual(
       ['rgb/uav-01/cam0', 'rgb/uav-02/cam0', 'rgb/uav-03/cam0', 'thermal/uav-01/therm0', 'thermal/uav-02/therm0', 'thermal/uav-03/therm0'])
-    expect(html.match(/<video /g)).toHaveLength(5)
-    expect(html).toContain('data-view-state="offsite"')
-    expect(html).toContain('href="https://modelscope.cn/datasets/anet/drone4d-samples/file/view/master/uav-03_therm0.mp4"')
+    expect(html.match(/<video /g)).toHaveLength(6)
+    expect(html).not.toContain('data-view-state="offsite"')
+    expect(html).toMatch(/<video[^>]*src="https:\/\/modelscope\.cn\/datasets\/anet\/drone4d-samples\/file\/view\/master\/uav-03_therm0\.mp4"[^>]*crossorigin="anonymous"/)
     expect(html).toContain(`src="/lab-static/v/2026.10.19-1/runs/${RUN}/video/uav-01_therm0.mp4"`)
+    expect(html.match(/crossorigin="anonymous"/g)).toHaveLength(1)
+    // > 64 MB 且没有分发渠道副本：不发起请求，格内显示说明（ADR-201）
+    const bare = { ...run, videos: run.videos.map((v) => (v.external ? { ...v, external: null } : v)) }
+    const off = renderToStaticMarkup(createElement(PrivateViews, { index: idx, run: bare, group: new VideoSyncGroup(), limit: 6, t: sampleT }))
+    expect(off.match(/<video /g)).toHaveLength(5)
+    expect(off).toContain('data-view-state="offsite"')
     expect(html).toContain('data-thermal-scale="white-hot"')
     expect(html).toContain('muted=""')
     const phone = renderToStaticMarkup(createElement(PrivateViews, { index: idx, run, group: new VideoSyncGroup(), limit: 1, t: sampleT }))

@@ -675,6 +675,18 @@ describe('public sample panel reads static slices only (AWR-14 §21.9.4; D3-AC-2
     expect(ctl.snapshot.error?.kind).toBe('static')
     expect(viewer.opened).toEqual([])
   })
+
+  it('accepts ModelScope copies of slices and of the viewer Wasm, and nothing else off-site (ADR-221)', () => {
+    const ms = 'https://www.modelscope.cn/datasets/inksong/ANet-Drone4D-samples/resolve/master/samples/v/runs/r/slices/a.rrd'
+    expect(isStaticRrd(ms)).toBe(true)
+    expect(isStaticRrd('https://modelscope.cn/datasets/x/y/resolve/master/a.rrd')).toBe(true)
+    for (const bad of ['https://modelscope.cn.evil.example/a.rrd', 'http://www.modelscope.cn/a.rrd', 'https://www.modelscope.cn/a/../b.rrd',
+      'https://www.modelscope.cn/datasets/x/y/resolve/master/a.mp4']) expect(isStaticRrd(bad), bad).toBe(false)
+    const wasm = 'https://www.modelscope.cn/datasets/x/y/resolve/master/viewer/re_viewer_bg.wasm'
+    expect(checkStaticSource({ ...STATIC, slices: [{ url: ms }], wasmUrl: wasm })).toBeNull()
+    expect(checkStaticSource({ ...STATIC, wasmUrl: 'https://cdn.example/re_viewer_bg.wasm' })?.kind).toBe('static')
+    expect(checkStaticSource({ ...STATIC, wasmUrl: 'https://www.modelscope.cn/datasets/x/y/resolve/master/a.js' })?.kind).toBe('static')
+  })
 })
 
 // ── 纯函数 ────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -784,6 +796,22 @@ describe('viewer loading and configuration (AWR-05 §6.1.5, §6.1.6)', () => {
       return [(await a.arrayBuffer()).byteLength, (await b.arrayBuffer()).byteLength]
     })
     expect(got).toEqual([300_000, 10])
+    expect(seen.at(-1)).toBe(300_000)
+    expect(globalThis.fetch).toBe(orig)
+  })
+
+  it('fetches the viewer Wasm from the ModelScope copy in CORS mode when one is given (ADR-221)', async () => {
+    const body = (n: number) => new Response(new Uint8Array(n), { headers: { 'content-type': 'application/wasm' } })
+    const orig = vi.fn(async (u: string, _init?: RequestInit) => body(u.endsWith('.wasm') ? 300_000 : 10))
+    vi.stubGlobal('fetch', orig)
+    const ms = 'https://www.modelscope.cn/datasets/x/y/resolve/master/viewer/re_viewer_bg.wasm'
+    const seen: number[] = []
+    await withWasmProgress((n) => seen.push(n), async () => {
+      await (await fetch('/lab/assets/re_viewer_bg-Ab12cD.wasm')).arrayBuffer()
+      await (await fetch('/lab-static/index.json')).arrayBuffer()
+    }, ms)
+    expect(orig.mock.calls.map((c) => c[0])).toEqual([ms, '/lab-static/index.json'])
+    expect(orig.mock.calls[0]![1]).toMatchObject({ mode: 'cors', credentials: 'omit' })
     expect(seen.at(-1)).toBe(300_000)
     expect(globalThis.fetch).toBe(orig)
   })

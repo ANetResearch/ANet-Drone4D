@@ -134,7 +134,8 @@ def test_index_rejects_leaderboard_missing_files_and_bad_version(tmp_path):
 
 
 def test_external_modelscope_entry_for_oversize_artifact(tmp_path):
-    """> 64 MB 的制品不放版本目录，只给 ModelScope 链接（ADR-201）；≤ 64 MB 的不得只外链。"""
+    """> 64 MB 的制品不放版本目录，只给 ModelScope 链接（ADR-201）；v1.6（ADR-221）任意大小的制品都可只经 ModelScope 分发，
+    此时索引须给出 bytes 与 sha256；外链只接受 ModelScope。"""
     v = version_dir(tmp_path, "2026.10.19-1")
     d = draft()
     ext = {"uav": "uav-09", "cam": "cam0", "path": f"runs/{RUN}/video/uav-09_cam0.mp4", "bytes": 200 * MIB, "sha256": "a" * 64,
@@ -143,12 +144,34 @@ def test_external_modelscope_entry_for_oversize_artifact(tmp_path):
     idx = labctl.build_index(v, d)
     _validator().validate(idx)
     assert labctl.check_version_dir(v)["ok"]
-    idx["events"][0]["runs"][0]["videos"][-1]["bytes"] = 10 * MIB
+    idx["events"][0]["runs"][0]["videos"][-1]["bytes"] = 10 * MIB                  # ADR-221：小文件也可只外链
     labctl.write_json_atomic(v / labctl.INDEX_IN_VERSION, idx)
-    assert any("≤ 64 MB" in p for p in labctl.check_version_dir(v)["problems"])
+    assert labctl.check_version_dir(v)["ok"]
+    del idx["events"][0]["runs"][0]["videos"][-1]["sha256"]
+    labctl.write_json_atomic(v / labctl.INDEX_IN_VERSION, idx)
+    assert any("bytes 与 sha256" in p for p in labctl.check_version_dir(v)["problems"])
+    idx["events"][0]["runs"][0]["videos"][-1].update(sha256="a" * 64)
     idx["events"][0]["runs"][0]["videos"][-1]["external"]["url"] = "https://huggingface.co/x"
     labctl.write_json_atomic(v / labctl.INDEX_IN_VERSION, idx)
     assert any("ModelScope" in p for p in labctl.check_version_dir(v)["problems"])
+
+
+def test_external_basemap_and_viewer_wasm(tmp_path):
+    """ADR-221：底图可只经 ModelScope 分发（basemap_external）；viewer_wasm 透传到索引并按 ModelScope 规则校验。"""
+    v = version_dir(tmp_path, "2026.10.19-1")
+    d = draft()
+    r = d["events"][0]["runs"][0]
+    r.update(basemap=f"runs/{RUN}/slices/far_basemap.rrd", basemap_bytes=5 * MIB, basemap_sha256="b" * 64,
+             basemap_external={"channel": "modelscope", "url": "https://www.modelscope.cn/datasets/anet/s/resolve/master/basemap.rrd"})
+    d["viewer_wasm"] = {"channel": "modelscope", "url": "https://www.modelscope.cn/datasets/anet/s/resolve/master/re_viewer_bg.wasm",
+                        "bytes": 51_225_405, "sha256": "c" * 64}
+    idx = labctl.build_index(v, d)
+    _validator().validate(idx)
+    assert idx["viewer_wasm"]["bytes"] == 51_225_405
+    assert labctl.check_version_dir(v)["ok"]
+    idx["viewer_wasm"]["url"] = "https://example.org/re_viewer_bg.wasm"
+    labctl.write_json_atomic(v / labctl.INDEX_IN_VERSION, idx)
+    assert any("viewer_wasm" in p for p in labctl.check_version_dir(v)["problems"])
 
 
 # ---------------------------------------------------------------------------------------------------------------------

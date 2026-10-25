@@ -5,15 +5,15 @@
 //   maxConcurrentVideos），超过上限时不提供并排；手机只显示一机，以"上一架、下一架"切换；
 // - 时间：<video> 只由 lab 播放头驱动（VideoSyncGroup，页面每个动画帧 tick 一次），格内不保留自己的时钟；每次合成新帧时把
 //   mediaTime 交给同步器记录偏差；
-// - 单文件 > 64 MB 的视频不在本站提供：格内显示分发渠道链接（ADR-201），不发起请求；
+// - 视频地址：分发渠道副本优先（ADR-221：emax 出口约 3 Mbps，视频经 ModelScope 播放），以 CORS 模式请求（/lab/ 为 COEP
+//   require-corp）；没有副本时取本站版本目录；单文件 > 64 MB 且没有副本的不发起请求，格内显示说明（ADR-201）；
 // - 热成像为白热调色板的伪彩视频，附色标（不以红色表达高温，AWR-14 §21.7.3 热成像行）。
 import * as React from 'react'
 import { Button } from '@/ui/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { Icon } from '@/ui/icons/Icon'
 import { usePlayhead } from '@/stores/lab/playhead'
-import { LAB_STATIC_MAX_FILE_BYTES } from '../flags'
-import type { LabStaticIndex, LabStaticRun, LabStaticVideo } from '../staticIndex'
+import { artifactSrc, type LabStaticIndex, type LabStaticRun, type LabStaticVideo } from '../staticIndex'
 import type { SampleT } from './text'
 import {
   availableModes, defaultMode, frameCount, groupByUav, targetFrame, VIDEO_FPS, visibleTiles, type Tile, type VideoSyncGroup,
@@ -95,7 +95,8 @@ type TileState = 'loading' | 'ready' | 'error'
 
 function VideoTile({ tile, index, group, t }: { tile: Tile<LabStaticVideo>; index: LabStaticIndex; group: VideoSyncGroup; t: SampleT }) {
   const { video, kind, uav } = tile
-  const hosted = video.bytes === null || video.bytes <= LAB_STATIC_MAX_FILE_BYTES
+  const src = artifactSrc(index, video)
+  const playable = src !== null
   const id = tileId(video)
   const ref = React.useRef<HTMLVideoElement>(null)
   const [state, setState] = React.useState<TileState>('loading')
@@ -106,7 +107,7 @@ function VideoTile({ tile, index, group, t }: { tile: Tile<LabStaticVideo>; inde
 
   React.useEffect(() => {
     const el = ref.current
-    if (!el || !hosted) return
+    if (!el || !playable) return
     const off = group.add(id, el, tm)
     let h = 0
     const onFrame: VideoFrameRequestCallback = (_now, meta) => {
@@ -118,16 +119,16 @@ function VideoTile({ tile, index, group, t }: { tile: Tile<LabStaticVideo>; inde
       off()
       if (h && typeof el.cancelVideoFrameCallback === 'function') el.cancelVideoFrameCallback(h)
     }
-  }, [group, id, tm, hosted])
+  }, [group, id, tm, playable])
 
   const n = frameCount(durationS, tm.fps)
   const outside = n !== null && (k < 0 || k >= n)
   const label = t(`lab.public.run.kind.${kind}`)
   return (
-    <figure data-view-tile={`${kind}/${id}`} data-view-kind={kind} data-view-state={hosted ? state : 'offsite'} data-view-outside={outside || undefined}
+    <figure data-view-tile={`${kind}/${id}`} data-view-kind={kind} data-view-state={playable ? state : 'offsite'} data-view-outside={outside || undefined}
       className="relative m-0 aspect-video min-w-0 overflow-hidden rounded-md border bg-muted">
-      {hosted ? (
-        <video ref={ref} src={index.url(video.path)} muted playsInline preload="auto" disablePictureInPicture disableRemotePlayback
+      {playable ? (
+        <video ref={ref} src={src} crossOrigin={video.external ? 'anonymous' : undefined} muted playsInline preload="auto" disablePictureInPicture disableRemotePlayback
           aria-label={t('lab.public.run.views.tileAria', { uav, kind: label })} className={outside ? 'size-full object-contain opacity-60' : 'size-full object-contain'}
           onLoadedMetadata={(e) => {
             const d = e.currentTarget.duration
@@ -147,12 +148,12 @@ function VideoTile({ tile, index, group, t }: { tile: Tile<LabStaticVideo>; inde
           ) : null}
         </div>
       )}
-      {hosted && state !== 'ready' ? (
+      {playable && state !== 'ready' ? (
         <span className="absolute inset-0 flex items-center justify-center text-hud-sub text-muted-foreground">
           {t(state === 'error' ? 'lab.public.run.views.error' : 'lab.public.run.views.loading')}
         </span>
       ) : null}
-      {hosted && state === 'ready' && outside ? (
+      {playable && state === 'ready' && outside ? (
         <span className="absolute right-1 top-1 inline-flex items-center gap-1 rounded-sm bg-background/80 px-1.5 text-hud-sub">
           <Icon icon="state.stale" />
           {t('lab.public.run.views.outside')}

@@ -188,7 +188,7 @@ def _index_files(idx: dict) -> list[tuple[str, int | None, str | None]]:
         for r in e.get("runs") or []:
             out += [(v["path"], v.get("bytes"), v.get("sha256")) for v in r.get("videos") or [] if not v.get("external")]
             out += [(s["rrd"], s.get("bytes"), s.get("sha256")) for s in r.get("slices") or [] if not s.get("external")]
-            if r.get("basemap"):
+            if r.get("basemap") and not r.get("basemap_external"):
                 out.append((r["basemap"], r.get("basemap_bytes"), r.get("basemap_sha256")))
     return out
 
@@ -346,7 +346,9 @@ def check_rate(site: Site, *, path: str | None = None) -> dict:
             return _check("rate", [err or "index.json 不可用"])
         big = _largest(site, idx, need)
         if big is None:
-            return _check("rate", [f"没有 ≥ {need / MIB:.0f} MiB 的制品可测（--rate-path 指定）"])
+            # ADR-221：大文件只经 ModelScope 分发时，本站托管的制品都在前 8 MiB 的不限速额度内，限速不会生效，也无从实测；
+            # 站点文件中的 limit_rate 由 tests/d3/deploy/test_d3_public_site.py 与 nginx 端到端用例核对
+            return _check("rate", [], {"skipped": f"没有 ≥ {need / MIB:.0f} MiB 的本站托管制品（大文件经分发渠道，ADR-221）；--rate-path 可指定"})
         path = big[0]
     full = timed_download(site, path, hold=(RATE_AFTER, hold_s))
     if full["status"] != 200:

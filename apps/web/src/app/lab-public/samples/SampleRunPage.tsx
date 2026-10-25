@@ -27,10 +27,9 @@ import type { InspectController } from '@/ui/lab/inspect/inspectController'
 import { InspectPanel } from '@/ui/lab/inspect/InspectPanel'
 import { labPlayheadPort } from '@/ui/lab/inspect/playheadPort'
 import { RERUN_VIEWER_VERSION } from '@/ui/lab/inspect/viewerLoader'
-import { LAB_STATIC_MAX_FILE_BYTES } from '../flags'
 import { fmtMb, LabEmpty, tableMaxHeight } from '../pages'
 import { LAB_PREFIX, onLabLinkClick, type LabRouteProps } from '../router'
-import { findSample, type LabStaticIndex, type LabStaticRun } from '../staticIndex'
+import { artifactSrc, findSample, isHosted, type LabStaticIndex, type LabStaticRun } from '../staticIndex'
 import { PrivateViews } from './PrivateViews'
 import { SAMPLE_EVENT_OFFSET_S, sampleDurationS, useSampleData } from './sampleData'
 import { ScenePlan, type ScenePlanProps } from './ScenePlan'
@@ -57,11 +56,15 @@ export function parseSampleT(search: string): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
-/** 数据检视的静态来源：切片与底图（只取本站托管的文件；recording_id = run_id，AWR-17 §18.8.5 v1.6 注） */
+/** 数据检视的静态来源：切片与底图（分发渠道副本优先，其次本站托管的文件，ADR-221；recording_id = run_id，AWR-17 §18.8.5 v1.6 注） */
 export function inspectSource(index: LabStaticIndex, run: LabStaticRun): StaticSource | null {
-  const slices = run.slices.filter((s) => s.bytes === null || s.bytes <= LAB_STATIC_MAX_FILE_BYTES).map((s) => ({ url: index.url(s.path), bytes: s.bytes }))
+  const slices = run.slices.flatMap((s) => {
+    const url = artifactSrc(index, s)
+    return url ? [{ url, bytes: s.bytes }] : []
+  })
   if (!slices.length) return null
-  return { kind: 'static', recordingId: run.runId, slices, basemap: run.basemap ? { url: index.url(run.basemap), bytes: run.basemapBytes } : null }
+  const bm = run.basemap ? artifactSrc(index, { path: run.basemap, bytes: run.basemapBytes, external: run.basemapExternal }) : null
+  return { kind: 'static', recordingId: run.runId, slices, basemap: bm ? { url: bm, bytes: run.basemapBytes } : null, wasmUrl: index.viewerWasm?.url ?? null }
 }
 
 interface Viewport { cls: DeviceClass; soft: boolean; probe: DeviceProbe }
@@ -230,9 +233,9 @@ function SliceLinks({ index, run, t, it }: { index: LabStaticIndex; run: LabStat
   return (
     <div className="flex flex-col items-center gap-2" data-sample-slices="">
       {run.slices.map((s) => {
-        const hosted = s.bytes === null || s.bytes <= LAB_STATIC_MAX_FILE_BYTES
+        const hosted = isHosted(s)
         const label = t('lab.public.run.slices.item', { event: s.eventId, from: s.tFromS.toFixed(1), to: s.tToS.toFixed(1) })
-        const href = hosted ? index.url(s.path) : s.external
+        const href = artifactSrc(index, s)
         return href ? (
           <Button key={s.path} size="sm" variant="outline" nativeButton={false}
             render={<a href={href} {...(hosted ? { download: '' } : { target: '_blank', rel: 'noreferrer noopener' })} data-sample-slice={s.path} />}>
@@ -242,7 +245,9 @@ function SliceLinks({ index, run, t, it }: { index: LabStaticIndex; run: LabStat
         ) : null
       })}
       {run.basemap ? (
-        <Button size="sm" variant="ghost" nativeButton={false} render={<a href={index.url(run.basemap)} download="" data-sample-basemap={run.basemap} />}>
+        <Button size="sm" variant="ghost" nativeButton={false} render={run.basemapExternal
+          ? <a href={run.basemapExternal} target="_blank" rel="noreferrer noopener" data-sample-basemap={run.basemap} />
+          : <a href={index.url(run.basemap)} download="" data-sample-basemap={run.basemap} />}>
           <Icon icon="data.export" data-icon="inline-start" />
           basemap.rrd
         </Button>
@@ -298,15 +303,16 @@ function Timeline({ ctl, buffering, t }: { ctl: InspectController | null; buffer
   )
 }
 
-/** 样例数据下载：视频、切片与底图；> 64 MB 的指向分发渠道（AWR-14 §21.14.2 规则 2） */
+/** 样例数据下载：视频、切片与底图；有分发渠道副本或 > 64 MB 的指向分发渠道（AWR-14 §21.14.2 规则 2；ADR-221） */
 function SampleFiles({ index, run, t }: { index: LabStaticIndex; run: LabStaticRun; t: SampleT }) {
   type Row = { kind: 'video' | 'slice' | 'basemap'; path: string; label: string; bytes: number | null; hosted: boolean; external: string | null }
   const rows: Row[] = [
     ...run.videos.map((v) => ({ kind: 'video' as const, path: v.path, label: `${v.uav} · ${v.cam}`, bytes: v.bytes, external: v.external,
-      hosted: v.bytes === null || v.bytes <= LAB_STATIC_MAX_FILE_BYTES })),
-    ...run.slices.map((s) => ({ kind: 'slice' as const, path: s.path, bytes: s.bytes, external: s.external, hosted: s.bytes === null || s.bytes <= LAB_STATIC_MAX_FILE_BYTES,
+      hosted: isHosted(v) })),
+    ...run.slices.map((s) => ({ kind: 'slice' as const, path: s.path, bytes: s.bytes, external: s.external, hosted: isHosted(s),
       label: t('lab.public.run.slices.item', { event: s.eventId, from: s.tFromS.toFixed(1), to: s.tToS.toFixed(1) }) })),
-    ...(run.basemap ? [{ kind: 'basemap' as const, path: run.basemap, label: 'basemap.rrd', bytes: run.basemapBytes, external: null, hosted: true }] : []),
+    ...(run.basemap ? [{ kind: 'basemap' as const, path: run.basemap, label: 'basemap.rrd', bytes: run.basemapBytes, external: run.basemapExternal,
+      hosted: isHosted({ bytes: run.basemapBytes, external: run.basemapExternal }) }] : []),
   ]
   if (!rows.length) return null
   const cols: LfColumn<Row>[] = [
