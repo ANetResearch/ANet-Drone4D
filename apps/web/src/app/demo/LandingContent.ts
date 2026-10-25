@@ -27,7 +27,7 @@ export const STORY: readonly StoryChapter[] = [
   { id: 'perception', icon: 'mission.target', points: ['available', 'available', 'available'], image: 'perception', keywords: ['LiDAR', 'Simulation'] },
   { id: 'relay-agents', icon: 'agent.network', points: ['available', 'available', 'available'], image: 'relay-agents', keywords: ['Agent Swarm', 'Swarm Control'] },
   { id: 'sandbox', icon: 'sandbox.mine', points: ['available', 'available', 'available'], image: null, keywords: ['Simulation', 'Drone Swarm'] },
-  { id: 'roadmap', icon: 'sensor.lidar', points: ['dev', 'dev', 'research', 'research'], image: 'roadmap', keywords: ['Gazebo', 'LiDAR', '4D Reconstruction', '3DGS', 'PX4'] },
+  { id: 'roadmap', icon: 'sensor.lidar', points: ['available', 'available', 'research', 'research'], image: 'roadmap', keywords: ['Gazebo', 'LiDAR', '4D Reconstruction', '3DGS', 'PX4'] },
 ]
 
 export interface Media { file: string; key: string; w: number; h: number }
@@ -51,7 +51,7 @@ export const DRONE4D_BIBTEX = `@software{anet_drone4d_2026,
   title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.2.2},
+  version = {0.3.0},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }`
 
