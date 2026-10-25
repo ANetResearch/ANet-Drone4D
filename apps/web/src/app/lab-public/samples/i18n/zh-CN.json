@@ -13,7 +13,7 @@
  "lab.public.run.scene.legendInside": "车内或建筑内",
  "lab.public.run.scene.legendUav": "机队（导航解）",
  "lab.public.run.views.title": "多机私有视角",
- "lab.public.run.views.hint": "每机实际收到的观测，预渲染为视频，不含真值叠加；画面按 lab 播放头同步，偏差超过 1 帧时重新定位。",
+ "lab.public.run.views.hint": "每机视角，预渲染为视频，不含真值叠加。可见光为该机实际收到的相机观测；热成像按同一飞行的机体位姿与云台状态以 therm512 传感器模型离线渲染，V0.3 的 L2 观测档不向 Agent 交付热成像。画面按 lab 播放头同步，偏差超过 1 帧时重新定位。",
  "lab.public.run.views.modeAria": "视角通道",
  "lab.public.run.views.mode.rgb": "RGB",
  "lab.public.run.views.mode.thermal": "热成像",

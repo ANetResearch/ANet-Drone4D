@@ -13,7 +13,7 @@
  "lab.public.run.scene.legendInside": "In a vehicle or building",
  "lab.public.run.scene.legendUav": "Fleet (navigation solution)",
  "lab.public.run.views.title": "Per-UAV private views",
- "lab.public.run.views.hint": "The observations each UAV received, pre-rendered as video without truth overlays. Playback follows the lab playhead and seeks again when the offset exceeds 1 frame.",
+ "lab.public.run.views.hint": "Per-UAV views, pre-rendered as video without truth overlays. RGB shows the camera observations each UAV received. Thermal is rendered offline with the therm512 sensor model along the same flight's body poses and gimbal state; the V0.3 L2 observation tier does not deliver thermal frames to agents. Playback follows the lab playhead and seeks again when the offset exceeds 1 frame.",
  "lab.public.run.views.modeAria": "View channel",
  "lab.public.run.views.mode.rgb": "RGB",
  "lab.public.run.views.mode.thermal": "Thermal",

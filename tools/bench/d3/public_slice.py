@@ -499,13 +499,14 @@ def build_public(run_dir: Path, *, out: Path | None = None, event_dir: Path | No
                  uavs: Sequence[str] | None = None, max_slices: int | None = None, jobs: int = 1, voxel_m: float = VOXEL_M,
                  margin_m: float = 0.0, bbox: tuple[float, float, float, float] | None = None, basemap: bool = True,
                  verify: bool = True, register: bool = True, world: str | None = None, event: str | None = None,
-                 far_m: float = rx.DEFAULT_FAR_M) -> dict:
-    """一个公开样例运行的全部切片与底图；写 `slices.json`。有切片或底图失败时清单的 `ok = false`（调用方据此返回 696）。"""
+                 far_m: float = rx.DEFAULT_FAR_M, run_id: str | None = None) -> dict:
+    """一个公开样例运行的全部切片与底图；写 `slices.json`。有切片或底图失败时清单的 `ok = false`（调用方据此返回 696）。
+    `run_id` 给出时以之为 `recording_id`（公开运行 id，AWR-17 §18.8.5 规则 6；`publish_static.py` 传入）。"""
     t_wall = time.perf_counter()
     sdk = rx.require_sdk()
     run_dir = Path(run_dir)
-    ident = {"world": world, "event": event, "run_id": None}
-    src = rx.RunSource.open(run_dir, world=world, event=event)
+    ident = {"world": world, "event": event, "run_id": run_id}
+    src = rx.RunSource.open(run_dir, world=world, event=event, run_id=run_id)
     ident["run_id"] = src.run_id
     default_out = run_dir / "derived" / "slices"
     out = Path(out) if out else default_out
@@ -625,13 +626,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-basemap", action="store_true")
     ap.add_argument("--no-verify", action="store_true")
     ap.add_argument("--no-register", action="store_true")
+    ap.add_argument("--run-id", default=None, help="recording_id override (public run id run-[a-z2-7]{10}, AWR-17 §18.8.5 rule 6)")
     a = ap.parse_args(argv)
     try:
         man = build_public(a.run_dir, out=a.out, event_dir=a.event_dir, events_root=a.events_root, world_dir=a.world_dir, window_s=a.window_s,
                            slice_cap_mb=a.slice_cap_mb, basemap_cap_mb=a.basemap_cap_mb, keys=a.key, at_s=a.at, uavs=a.uav,
                            max_slices=a.max_slices, jobs=a.jobs, voxel_m=a.voxel_m, margin_m=a.margin_m,
                            bbox=tuple(a.bbox) if a.bbox else None, basemap=not a.no_basemap, verify=not a.no_verify,
-                           register=not a.no_register, world=a.world, event=a.event, far_m=a.far_m)
+                           register=not a.no_register, world=a.world, event=a.event, far_m=a.far_m, run_id=a.run_id)
     except (ValueError, rx.RerunExportError) as e:
         print(json.dumps({"ok": False, "code": getattr(e, "code", 2), "error": str(e)}, ensure_ascii=False), file=sys.stderr)
         return 2

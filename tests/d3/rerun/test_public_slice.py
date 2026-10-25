@@ -387,3 +387,14 @@ def test_cli_parallel_at_window(env: dict, tmp_path: Path) -> None:
     bad = subprocess.run([sys.executable, str(SCRIPT), "--run", str(env["run"]), "--out", str(tmp_path / "bad")], capture_output=True, text=True,
                          timeout=120, env={"PYTHONPATH": str(ROOT / "python"), "CI": "1"})
     assert bad.returncode == 2 and "event-dir" in bad.stderr                   # 无事件目录且未给 --at
+
+
+def test_public_run_id_overrides_recording_id(env: dict, tmp_path: Path) -> None:
+    """发布时写入公开运行 id（AWR-17 §18.8.5 规则 6，`publish_static.py`）：清单与切片的 recording_id 均为公开运行 id，复核通过。"""
+    man = ps.build_public(env["run"], out=tmp_path / "pub", events_root=env["events_root"], at_s=[6.0], window_s=4.0, basemap=False,
+                          register=False, run_id="run-abcdefghij")
+    assert man["ok"] and man["run_id"] == man["recording_id"] == "run-abcdefghij"
+    assert man["slices"] and all(s["verify"]["ok"] for s in man["slices"])
+    from awr.bench.recorder.rerun_export import scan_rrd
+
+    assert scan_rrd(Path(man["slices"][0]["path"])).recording_id == "run-abcdefghij"
