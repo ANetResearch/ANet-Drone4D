@@ -239,6 +239,34 @@ def test_gpu_errors_classification(fake_dev) -> None:
     assert e.value.code == 648
 
 
+def test_render_group_gpu_loss_is_647(fake_dev) -> None:
+    """M25 渲染进程组（K13）的 GPU 丢失：回溯带 CUDA error 100 → 647；渲染进程在 EGL 中段错误而设备节点已被拒绝 → 647（exitcode -11）；
+    设备节点正常时进程退出与 GPU 无关的异常仍为 648（K18，B21 遗留 3）。"""
+    from awr.sensorsvc.procgroup import WORKER_LOST, RenderGroup
+
+    _, denied = fake_dev
+    target = f"{Path(__file__).with_name('_gpu_lost_proc.py')}:GpuLostProc"
+    with RenderGroup(target, [{}, {}, {}]) as g:
+        assert g.request(0, ("ping",)) == ("ping",)
+        with pytest.raises(SensorSvcError) as e:
+            g.request(0, ("cuda100",))
+        assert e.value.code == 647 and e.value.extra["cause"] == "gpu_lost" and e.value.extra["platform_failure"] is True
+        assert e.value.extra["retryable"] is True and e.value.extra["proc"] == 0
+        with pytest.raises(SensorSvcError) as e:                                      # 与 GPU 无关的处理器异常：648
+            g.request(0, ("boom",))
+        assert e.value.code == WORKER_LOST
+        with pytest.raises(SensorSvcError) as e:                                      # 设备节点正常时段错误：648
+            g.request(1, ("segv",), timeout_s=60)
+        assert e.value.code == WORKER_LOST and "exitcode -11" in str(e.value)
+        denied.add("nvidia2")                                                         # 宿主 systemd reload：设备 cgroup 拒绝
+        with pytest.raises(SensorSvcError) as e:
+            g.request(2, ("segv",), timeout_s=60)
+        assert e.value.code == 647 and e.value.extra["exitcode"] == -11 and "device nodes lost" in str(e.value)
+        with pytest.raises(SensorSvcError) as e:                                      # 已退出进程再发送：同样按设备节点归类
+            g.request(2, ("ping",), timeout_s=5)
+        assert e.value.code == 647
+
+
 def test_env_l2_gpu_loss_is_platform_error(synth_event, tmp_path: Path) -> None:
     """Env 建立 L2 传感器时 GPU 已丢失：reset 抛 647（平台失败、可重跑），而不是让驱动崩溃带走进程。"""
     def lost(_env):

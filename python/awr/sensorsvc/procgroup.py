@@ -28,7 +28,10 @@
 （`模块:函数` 或 `文件路径:函数`）构造处理器 `handler = factory(arg, index)`，就绪后在一条或多条消息通道上串行处理请求
 `handler.handle(msg) -> reply`；每条通道只由 Worker 的一个控制线程使用（多会话时一个会话一条通道），进程内按到达顺序处理。
 `("close",)` 调用 `handler.close()` 并退出。处理器异常以 `("error", 回溯)` 返回，调用方抛出 648 `SENSOR_WORKER_LOST`；进程退出或
-超时同样为 648。消息只含小对象（命令、计数与时刻）；帧数据在渲染进程内写入录制，不经进程间通道。
+超时同样为 648。GPU 丢失例外（K18，B21 遗留 3）：回溯带设备丢失特征（CUDA error 100 / 999、NVML、EGL 初始化失败、647），或进程
+退出、失联、超时时本应有 GPU 而 NVIDIA 设备节点已打不开（宿主 systemd reload 后渲染进程在 EGL 中段错误即属此类），改抛 647
+`SENSOR_GPU_UNAVAILABLE`（`cause = gpu_lost`，平台失败、可重跑，`awr.sensorsvc.gpuhealth`），与单进程 L2 路径的归类相同。
+消息只含小对象（命令、计数与时刻）；帧数据在渲染进程内写入录制，不经进程间通道。
 
 时刻：各进程的 `time.perf_counter()` 在 Linux 上为 CLOCK_MONOTONIC（系统范围），Worker 的 tick 请求时刻与渲染进程的交付时刻可
 直接相减（`shared_clock()` 校验）。
@@ -51,6 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from awr.sensorsvc.errors import SensorSvcError
+from awr.sensorsvc.gpuhealth import check_device_nodes, gpu_expected, gpu_lost, is_gpu_lost_message
 
 __all__ = ["DISPATCH_MODES", "INFLIGHT_PER_PROC", "RENDER_PROCS_MAX", "SESSIONS_CAP_FROM", "SESSIONS_CAP_PROCS", "STATEFUL_KINDS",
            "WORKER_MEM_BUDGET_MIB", "RenderGroup", "Unit", "assign_units", "dispatch_mode", "load_target", "proc_units", "render_procs_for",
@@ -235,25 +239,36 @@ class RenderGroup:
     def pids(self) -> list[int]:
         return [int(p.pid) for p in self.procs]
 
+    def _lost(self, k: int, detail: str, traceback_text: str = "") -> SensorSvcError:
+        """渲染进程 k 失败时的错误：GPU 丢失（回溯带设备丢失特征，或本应有 GPU 而设备节点已打不开）为 647，其余为 648。
+        647 的 `exitcode` 为负时即被信号终止（EGL 段错误为 -11）。"""
+        code = self.procs[k].exitcode
+        if is_gpu_lost_message(traceback_text):
+            return gpu_lost(f"render proc {k} {detail}", proc=k, exitcode=code)
+        if gpu_expected():
+            nodes = check_device_nodes()
+            if not nodes["ok"] or not nodes["nodes"]:
+                return gpu_lost(f"render proc {k} {detail} (exitcode {code}); NVIDIA device nodes lost: {nodes['lost'] or 'none present'}",
+                                proc=k, exitcode=code)
+        return SensorSvcError(WORKER_LOST, f"render proc {k} {detail}" + ("" if traceback_text else f" (exitcode {code})"), proc=k)
+
     def _recv(self, k: int, ch: int, timeout_s: float | None) -> tuple[str, Any]:
         c = self.conns[k][ch]
         if timeout_s is not None and not c.poll(timeout_s):
-            alive = self.procs[k].is_alive()
-            raise SensorSvcError(WORKER_LOST, f"render proc {k} {'timed out' if alive else 'exited'} "
-                                              f"(exitcode {self.procs[k].exitcode})", proc=k)
+            raise self._lost(k, "timed out" if self.procs[k].is_alive() else "exited")
         try:
             st, val = c.recv()
         except (EOFError, OSError) as e:
-            raise SensorSvcError(WORKER_LOST, f"render proc {k} lost: {e!r} (exitcode {self.procs[k].exitcode})", proc=k) from e
+            raise self._lost(k, f"lost: {e!r}") from e
         if st == "error":
-            raise SensorSvcError(WORKER_LOST, f"render proc {k} failed:\n{val}", proc=k)
+            raise self._lost(k, f"failed:\n{val}", str(val))
         return st, val
 
     def send(self, k: int, msg: tuple, ch: int = 0) -> None:
         try:
             self.conns[k][ch].send(msg)
         except (OSError, BrokenPipeError) as e:
-            raise SensorSvcError(WORKER_LOST, f"render proc {k} lost: {e!r}", proc=k) from e
+            raise self._lost(k, f"lost: {e!r}") from e
 
     def recv(self, k: int, ch: int = 0, timeout_s: float | None = None) -> Any:
         return self._recv(k, ch, timeout_s)[1]
