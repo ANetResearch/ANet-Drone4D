@@ -82,13 +82,18 @@ describe('index.html boot markup (filled by M00, written by M15)', () => {
     expect(mask.indexOf('class="boot-version"')).toBeLessThan(mask.indexOf('class="boot-progress"'))
   })
 
-  it('five segments in phase order, first child of the track keeps the D2 bar writers working, capacity line present', () => {
-    expect([...mask.matchAll(/data-seg="([a-z]+)"/g)].map((m) => m[1])).toEqual(['bundle', 'world', 'points', 'warming', 'reveal'])
-    expect(mask).toMatch(/<div class="boot-progress"><i class="boot-track"><i data-seg="bundle">/)
+  it('one loading bar with one fill (v0.3.0), indeterminate before the first script, readout lines, capacity line present', () => {
+    expect(mask).not.toMatch(/data-seg=/)
+    expect([...mask.matchAll(/role="progressbar"/g)]).toHaveLength(1)
+    expect(mask).toMatch(/<div class="boot-progress" role="progressbar" aria-label="[^"]+" aria-valuemin="0" aria-valuemax="100" data-state="indeterminate"><i class="boot-fill"><\/i><\/div>/)
+    expect(mask.indexOf('class="boot-phase"')).toBeLessThan(mask.indexOf('class="boot-progress"'))
+    expect(mask.indexOf('class="boot-percent"')).toBeLessThan(mask.indexOf('class="boot-progress"'))
+    expect(mask.indexOf('class="boot-bytes"')).toBeGreaterThan(mask.indexOf('class="boot-progress"'))
+    expect(mask.indexOf('class="boot-rate"')).toBeGreaterThan(mask.indexOf('class="boot-bytes"'))
     expect(mask).toMatch(/<div class="boot-capacity" hidden><\/div>/)
-    // segment widths follow the weights of AWR-04 §10.1 (0.15, 0.10, 0.40, 0.30, 0.05)
-    const grow = Object.fromEntries([...html.matchAll(/\[data-seg="([a-z]+)"\] \{ flex-grow: (\d+); \}/g)].map((m) => [m[1], Number(m[2])]))
-    expect(grow).toEqual({ bundle: 15, world: 10, points: 40, warming: 30, reveal: 5 })
+    // the critical CSS scales the fill by --boot-p and stops the indeterminate slide under reduced motion
+    expect(html).toMatch(/\.boot-fill \{[^}]*transform: scaleX\(var\(--boot-p, 0\)\)/)
+    expect(html).toMatch(/prefers-reduced-motion: reduce\) \{ #boot-mask \.boot-progress\[data-state="indeterminate"\] > \.boot-fill \{ animation: none/)
   })
 
   it('mobile and iOS meta (AWR-04 §15.8.7), no hex colour in the critical CSS', () => {

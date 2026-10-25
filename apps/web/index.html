@@ -14,13 +14,13 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/brand/favicon-16.png" />
     <style>
       /* critical boot mask CSS (M15-FR-006; styles/boot.css is the full version): paints before JavaScript runs.
-         Colours are the g950 / g300 / g50 primitives of styles/theme.css written as OKLCH (no hex outside theme.css).
-         D2.1 (AWR-04 §15.4, §15.5; ADR-118, ADR-119): the version line (filled at build time by vite.config.ts
-         buildInfoPlugin, visible even when no script runs), the five-segment track (segment widths follow the weights
-         bundle 0.15, world 0.10, points 0.40, warming 0.30, reveal 0.05; 2 px gaps; each segment fills with --seg-p) and the
-         capacity line (written by the early boot module from GET /api/sandbox/v1/capacity). The track element .boot-track is the
-         first child of .boot-progress, so the D2 single-bar writers that scale `.boot-progress > i` by --boot-p keep working
-         until the segment writer (app/boot/progress.ts, M15) takes over. */
+         Colours are the g950 / g400 / g300 / g50 primitives of styles/theme.css written as OKLCH (no hex outside theme.css).
+         The version line is filled at build time (vite.config.ts buildInfoPlugin, visible even when no script runs); the
+         capacity line is written by the early boot module (GET /api/sandbox/v1/capacity).
+         Loading bar (v0.3.0; app/boot/loadMeter.ts): ONE bar with ONE fill. Until the first script knows the totals it is
+         indeterminate (data-state="indeterminate": a short sliding fill, static under reduced motion); then the fill scales by
+         --boot-p (0..1, never decreasing) and the readout shows the stage and percent above the bar, the loaded / total bytes,
+         the network throughput and the remaining time below it. role="progressbar" with aria-valuenow / aria-valuetext. */
       html, body { margin: 0; height: 100%; background: oklch(0.149 0.005 264.5); }
       #boot-mask { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 1rem; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -29,17 +29,22 @@
       #boot-mask .boot-badge { width: 480px; max-width: calc(100vw - 2rem); height: auto; }
       #boot-mask .boot-version { margin-top: -0.5rem; min-height: 16px; font-size: 11px; line-height: 16px; letter-spacing: 0.02em;
         font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
-      #boot-mask .boot-progress { width: 320px; max-width: calc(100vw - 2rem); height: 2px; }
-      #boot-mask .boot-progress > i { display: block; width: 100%; height: 100%; }
-      html #boot-mask .boot-progress > i.boot-track { display: flex; gap: 2px; }
-      #boot-mask .boot-track > i { display: block; flex: 0 1 0; height: 100%; background: oklch(1 0 0 / 0.06); }
-      #boot-mask .boot-track > i::after { content: ""; display: block; height: 100%; background: oklch(0.964 0.003 264.5);
-        transform-origin: left center; transform: scaleX(var(--seg-p, 0)); }
-      #boot-mask .boot-track > [data-seg="bundle"] { flex-grow: 15; }
-      #boot-mask .boot-track > [data-seg="world"] { flex-grow: 10; }
-      #boot-mask .boot-track > [data-seg="points"] { flex-grow: 40; }
-      #boot-mask .boot-track > [data-seg="warming"] { flex-grow: 30; }
-      #boot-mask .boot-track > [data-seg="reveal"] { flex-grow: 5; }
+      #boot-mask .boot-load { display: flex; flex-direction: column; gap: 8px; width: 360px; max-width: calc(100vw - 2rem); }
+      #boot-mask .boot-head, #boot-mask .boot-stats { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        font-variant-numeric: tabular-nums lining-nums; }
+      #boot-mask .boot-head { min-height: 18px; }
+      #boot-mask .boot-phase { min-width: 0; }
+      #boot-mask .boot-percent { flex: none; color: oklch(0.964 0.003 264.5); }
+      #boot-mask .boot-stats { min-height: 16px; font-size: 11px; line-height: 16px; color: oklch(0.619 0.015 262.4); white-space: nowrap; }
+      #boot-mask .boot-rate { text-align: right; }
+      #boot-mask .boot-progress { position: relative; height: 2px; overflow: hidden; border-radius: 1px; background: oklch(1 0 0 / 0.06); }
+      #boot-mask .boot-fill { display: block; width: 100%; height: 100%; background: oklch(0.964 0.003 264.5);
+        transform-origin: left center; transform: scaleX(var(--boot-p, 0)); }
+      #boot-mask .boot-progress[data-state="indeterminate"] > .boot-fill { width: 28%; opacity: 0.6; transform: translateX(-100%);
+        animation: boot-indeterminate 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+      @keyframes boot-indeterminate { to { transform: translateX(360%); } }
+      @media (prefers-reduced-motion: reduce) { #boot-mask .boot-progress[data-state="indeterminate"] > .boot-fill { animation: none; opacity: 0; } }
+      html:is([data-motion="reduced"], [data-motion="off"]) #boot-mask .boot-progress[data-state="indeterminate"] > .boot-fill { animation: none; opacity: 0; }
       #boot-mask .boot-capacity { min-height: 18px; max-width: calc(100vw - 2rem); text-align: center; font-variant-numeric: tabular-nums lining-nums; }
       #boot-mask .boot-capacity[hidden] { display: none; }
       #boot-mask .boot-reload { height: 32px; padding: 0 16px; border: 1px solid oklch(1 0 0 / 0.16); border-radius: 6px; background: transparent;
@@ -54,8 +59,11 @@
       data-fail-reload-en="Reload">
       <img class="boot-badge" src="/brand/anet-logo.svg" width="480" height="83" alt="ANet" />
       <div class="boot-version"></div>
-      <div class="boot-progress"><i class="boot-track"><i data-seg="bundle"></i><i data-seg="world"></i><i data-seg="points"></i><i data-seg="warming"></i><i data-seg="reveal"></i></i></div>
-      <div class="boot-phase">ANet Drone4D · World Runtime</div>
+      <div class="boot-load">
+        <div class="boot-head"><div class="boot-phase">ANet Drone4D · World Runtime</div><div class="boot-percent" aria-hidden="true"></div></div>
+        <div class="boot-progress" role="progressbar" aria-label="载入进度" aria-valuemin="0" aria-valuemax="100" data-state="indeterminate"><i class="boot-fill"></i></div>
+        <div class="boot-stats" aria-hidden="true"><span class="boot-bytes"></span><span class="boot-rate"></span></div>
+      </div>
       <div class="boot-capacity" hidden></div>
     </div>
     <div id="root"></div>

@@ -3,7 +3,7 @@
 // AWR_RELEASE=20261005-000000-abcdef0123 M15_DIST=<dir> node perf/m15/helpers/build-ui.mjs), FakeSource, no backend: the public
 // capacity, the identity and viewer-queue endpoints and the sandbox REST are page routes. Functional only (no timing
 // thresholds; the D2-AC performance parts belong to the M16 harness).
-//   1. version line: static text visible with JavaScript disabled, equal to build-info.json and __AWR_BUILD__; five segments
+//   1. version line: static text visible with JavaScript disabled, equal to build-info.json and __AWR_BUILD__; one loading bar (v0.3.0, formerly five segments)
 //      whose widths follow the weights (+-2 px); the capacity line for open, viewer full, sandbox full and failing answers,
 //      the mask cadence >= 5 s; "site updated" banner for another release, once, no automatic reload;
 //   2. power save (viewer, test thresholds): countdown, any input cancels, 8 px jitter does not, saving closes the link and
@@ -55,19 +55,19 @@ async function testBuild(page: Page): Promise<void> {
   test.skip(!(await isTestBuild(page)), 'needs a test build (VITE_AWR_TEST_SWITCHES=1)')
 }
 
-test('version line, five segments and the boot capacity line', async ({ page, context, browser }) => {
+test('version line, the single loading bar and the boot capacity line', async ({ page, context, browser }) => {
   // 1a. with JavaScript disabled the static line is there (D2-AC-40)
   const nojs = await browser.newContext({ javaScriptEnabled: false, baseURL: baseUrl(PORT) })
   const p0 = await nojs.newPage()
   await p0.goto('/world/shenzhen')
   await expect(p0.locator('#boot-mask .boot-version')).toHaveText(display)
   expect(await p0.locator('meta[name="awr-build"]').getAttribute('content')).toBe(`${BUILD.version}-${BUILD.channel}+${BUILD.commit}${BUILD.dirty ? '-dirty' : ''}`)
-  // 1b. segment widths by weight (bundle 15, world 10, points 40, warming 30, reveal 5; 2 px gaps)
-  const widths = await p0.locator('#boot-mask [data-seg]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width))
-  expect(widths).toHaveLength(5)
-  const total = widths.reduce((a, b) => a + b, 0)
-  const want = [0.15, 0.1, 0.4, 0.3, 0.05].map((w) => w * total)
-  for (let i = 0; i < 5; i++) expect(Math.abs(widths[i] - want[i])).toBeLessThanOrEqual(2)
+  // 1b. single loading bar (v0.3.0, replaces the D2.1 five-segment track): one progressbar, one fill, indeterminate before scripts
+  const bars = p0.locator('#boot-mask [role="progressbar"]')
+  await expect(bars).toHaveCount(1)
+  await expect(bars).toHaveAttribute('data-state', 'indeterminate')
+  await expect(p0.locator('#boot-mask .boot-progress > .boot-fill')).toHaveCount(1)
+  await expect(p0.locator('#boot-mask [data-seg]')).toHaveCount(0)
   await shot(p0, 'm15-d21-boot-nojs')
   await nojs.close()
 

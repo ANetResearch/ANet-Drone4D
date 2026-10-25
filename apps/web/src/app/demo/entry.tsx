@@ -17,6 +17,11 @@
 // (static text of index.html) copies the full build information on click or long press (lib/build is loaded on that click,
 // so it stays out of the static closure). Only modules of the landing group are imported statically: the landing chunk set
 // stays {index, landing, react, rolldown-runtime} plus the early module and its boot chunk (no three, no store).
+// v0.3.0 (single loading bar): the bar is one fill with a readout (app/boot/loadMeter.ts, a module without imports, so
+// it adds no chunk): this entry starts the page meter at once on application paths (Resource Timing, buffered, against the
+// build's boot manifest), the bar turns determinate and follows the application code by bytes, and the dictionary texts
+// of the readout (remaining time, accessible value) are added when app/i18n has loaded. The application continues the
+// same readout (app/boot/progress.ts), so there is never a second bar and the value never goes back.
 // D2.2-FX-landing: `t` of the shared app/i18n module (and its full bilingual dictionary) is only read on application
 // routes (the `else` branch below), so it is imported dynamically there instead of at module scope: a static top-level
 // import here would otherwise pull the whole dictionary into this always-loaded entry module, undoing the landing
@@ -24,55 +29,7 @@
 import '@/styles/index.css'
 import { renderLanding } from './Landing'
 import { clearReloadMark, fallbackTexts, importWithRetry, onAppLoadFailed } from './loadApp'
-
-const BUNDLE_WEIGHT = 0.15
-const WRITE_MIN_MS = 100
-
-/** bundle segment of the boot bar before the application runs; returns the stop function */
-function watchBundleInline(t: (key: string) => string): () => void {
-  const bar = document.querySelector<HTMLElement>('#boot-mask .boot-progress > i')
-  const seg = bar?.querySelector<HTMLElement>('[data-seg="bundle"]') ?? null
-  const phase = document.querySelector<HTMLElement>('#boot-mask .boot-phase')
-  if (!bar || typeof PerformanceObserver === 'undefined') return () => {}
-  if (phase) phase.textContent = t('boot.phase.bundle')
-  const done = new Set<string>()
-  let shown = 0
-  let last = 0
-  const path = (href: string): string => {
-    try {
-      return new URL(href, location.href).pathname
-    } catch {
-      return href
-    }
-  }
-  const update = (): void => {
-    const known = new Set<string>()
-    for (const l of document.querySelectorAll<HTMLLinkElement>('link[rel="modulepreload"]')) known.add(path(l.href))
-    if (known.size === 0) return
-    let n = 0
-    for (const k of known) if (done.has(k)) n++
-    const p = BUNDLE_WEIGHT * Math.min(1, n / known.size)
-    const now = performance.now()
-    if (p <= shown || now - last < WRITE_MIN_MS) return
-    shown = p
-    last = now
-    bar.style.setProperty('--boot-p', p.toFixed(4))
-    seg?.style.setProperty('--seg-p', (p / BUNDLE_WEIGHT).toFixed(4))
-  }
-  const take = (list: readonly PerformanceEntry[]): void => {
-    for (const e of list) if (/\.m?js(\?|$)/.test(e.name)) done.add(path(e.name))
-    update()
-  }
-  take(performance.getEntriesByType('resource'))
-  let obs: PerformanceObserver | null = null
-  try {
-    obs = new PerformanceObserver((l) => take(l.getEntries()))
-    obs.observe({ type: 'resource', buffered: true })
-  } catch {
-    obs = null
-  }
-  return () => obs?.disconnect()
-}
+import { CODE_WEIGHT, maskReadout, readoutTexts, startCodeProgress } from '@/app/boot/loadMeter'
 
 /** the version line copies the full build information (click, or the long press of touch screens) */
 function bindVersionCopy(t: (key: string) => string): void {
@@ -101,6 +58,7 @@ else {
   // watcher counts them from its first look (otherwise the three static chunks alone would read as a complete bundle)
   // (issue #9: retried with backoff; after the last failure one automatic reload, then an error line and a reload button)
   const app = importWithRetry(() => import('../../main'))
+  const stop = startCodeProgress()
   let tr: ((key: string) => string) | null = null
   const session = ((): Storage | null => {
     try {
@@ -113,10 +71,17 @@ else {
     const texts = tr ? { message: tr('boot.loadFailed'), reload: tr('boot.reload') } : fallbackTexts(navigator.language || 'zh', document.getElementById('boot-mask'))
     onAppLoadFailed(document, session, () => location.reload(), texts)
   })
+  void app.finally(stop).catch(() => undefined)
   void import('@/app/i18n').then(({ t }) => {
     tr = t
     bindVersionCopy(t)
-    const stop = watchBundleInline(t)
-    void app.finally(stop).catch(() => undefined)
+    const phase = document.querySelector<HTMLElement>('#boot-mask .boot-phase')
+    const readout = maskReadout()
+    // the application's writer owns the phase line once it runs; before that it names the code stage
+    if (readout && readout.shown < CODE_WEIGHT) {
+      if (phase) phase.textContent = t('boot.phase.bundle')
+      readout.stageText = t('boot.phase.bundle')
+    }
+    readout?.setTexts(readoutTexts(t))
   })
 }

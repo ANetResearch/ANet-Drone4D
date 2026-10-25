@@ -31,8 +31,21 @@ const STATIC_KEYS = [
   'capacity.etaExpected', 'capacity.etaExpectedUnknown',
 ]
 
-function landingI18nKeys(): string[] {
+/** the Event Lab entries of the demo build with VITE_AWR_LAB_PUBLIC=1 (LandingEventLab.tsx, the header link and the hero's
+ * third action): vite.config.ts adds them to the trimmed dictionary only in that build, so the build without the switch
+ * carries none of their texts (extension point 15, ADR-129) */
+const LAB_MEDIA_KEYS = ['lab-oblique', 'lab-junction', 'lab-thermal', 'lab-residential', 'lab-blocks']
+const LAB_POINTS = 3
+const LAB_STATIC_KEYS = ['landing.nav.lab', 'landing.nav.labViews', 'landing.lab.samples', 'landing.lab.title', 'landing.lab.sub',
+  'landing.lab.meta', 'landing.lab.open', 'landing.lab.sample', 'landing.lab.attribution']
+
+function landingI18nKeys(lab: boolean): string[] {
   const keys = new Set(STATIC_KEYS)
+  if (lab) {
+    for (const k of LAB_STATIC_KEYS) keys.add(k)
+    for (const m of LAB_MEDIA_KEYS) keys.add(`landing.media.${m}`)
+    for (let i = 1; i <= LAB_POINTS; i++) for (const f of ['title', 'body']) keys.add(`landing.lab.p${i}.${f}`)
+  }
   for (const s of STATUSES) keys.add(`landing.status.${s}`)
   for (const [id, n] of STORY_POINTS) {
     for (const f of ['eyebrow', 'title', 'body', 'alt']) keys.add(`landing.story.${id}.${f}`)
@@ -43,4 +56,6 @@ function landingI18nKeys(): string[] {
 }
 
 /** every i18n key the landing page's eager surface (and its capacity line) may read */
-export const LANDING_I18N_KEYS: readonly string[] = landingI18nKeys()
+export const LANDING_I18N_KEYS: readonly string[] = landingI18nKeys(false)
+/** the same with the Event Lab entries (demo build with VITE_AWR_LAB_PUBLIC=1) */
+export const LANDING_LAB_I18N_KEYS: readonly string[] = landingI18nKeys(true)

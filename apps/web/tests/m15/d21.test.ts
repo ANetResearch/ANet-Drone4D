@@ -1,5 +1,5 @@
 // D2.1 unit part of M15-AC-220 to AC-230 (AWR-04 §15.4 to §15.11; AWR-14 §20.26; D2-AC-40, 41, 43, 44, 45, 47, 48, 51, 52, 53):
-// the build line and diagnostics, the five-segment writer, the capacity texts, the power-save state machine and its
+// the build line and diagnostics, the single-bar writer, the capacity texts, the power-save state machine and its
 // thresholds, the jitter filter, the form factor rule, the dock fit, the bottom-sheet snaps, the shell rects, the quick
 // command state machine (<= 4 taps), the identity store (the pass phrase never stays anywhere), the sandbox park and
 // resume of the session port, the parked surface, the field legend bands and the readout sentence.
@@ -8,6 +8,7 @@ import { buildDisplay, buildShort, commitShort, diagnostics, type BuildInfo } fr
 import { FF, formFactorOf } from '@/lib/formFactor'
 import { capacityLine, etaShort, queueSides, sandboxQueueHint } from '@/app/i18n/capacity'
 import { ProgressWriter } from '@/app/boot/progress'
+import { LoadMeter, LoadReadout } from '@/app/boot/loadMeter'
 import { BootProgressModel } from '@/lib/bootProgress'
 import { JitterFilter, POWER_DEFAULTS, PowerMachine, idleThresholdS, thresholdsFrom } from '@/app/power/machine'
 import { QUICK_CLOSED, gotoAltitude, quickStep, type QuickModel } from '@/ui/mobile/quickModel'
@@ -51,37 +52,37 @@ describe('build information (D2-AC-40, M15-FR-223)', () => {
   })
 })
 
-describe('five-segment writer (D2-AC-41, M15-FR-224)', () => {
-  function bar() {
-    const segs = new Map<string, Map<string, string>>()
-    const make = (seg: string) => {
-      const props = new Map<string, string>()
-      segs.set(seg, props)
-      return { dataset: { seg }, style: { setProperty: (k: string, v: string) => props.set(k, v) } }
-    }
-    const els = ['bundle', 'world', 'points', 'warming', 'reveal'].map(make)
+describe('single-bar writer (v0.3.0; replaces the D2.1 five-segment track, D2-AC-41, M15-FR-224)', () => {
+  function els() {
     const props = new Map<string, string>()
-    const el = { style: { setProperty: (k: string, v: string) => props.set(k, v) }, querySelectorAll: () => els } as unknown as HTMLElement
-    return { el, segs, props }
+    const attrs = new Map<string, string>()
+    const text = (): { textContent: string } => ({ textContent: '' })
+    const fill = { style: { setProperty: (k: string, v: string) => props.set(k, v) } } as unknown as HTMLElement
+    const bar = { dataset: {} as Record<string, string>, getAttribute: (k: string) => attrs.get(k) ?? null, setAttribute: (k: string, v: string) => attrs.set(k, v) } as unknown as HTMLElement
+    return { props, attrs, fill, bar, percent: text() as unknown as HTMLElement, bytes: text() as unknown as HTMLElement, rate: text() as unknown as HTMLElement }
   }
-  it('writes --seg-p per segment, monotone, and fills every segment at the reveal', () => {
+  it('writes one monotone total on one fill, even when a later segment completes before an earlier one', () => {
     let now = 0
-    const b = bar()
-    const w = new ProgressWriter(b.el, null, new BootProgressModel(), () => now)
+    const e = els()
+    const w = new ProgressWriter(e.fill, null, new BootProgressModel(), () => now)
+    w.readout = new LoadReadout({ bar: e.bar, fill: e.fill, percent: e.percent, bytes: e.bytes, rate: e.rate }, new LoadMeter(null), () => now)
     w.model.report('bundle', 1)
-    w.model.report('points', 0.5)
+    w.model.report('world', 1)
+    w.model.reportWarm('shaders', 1) // warming runs while the points are still empty: the D2.1 track showed two bars here
     now = 1000
     w.flush()
-    expect(Number(b.segs.get('bundle')?.get('--seg-p'))).toBe(1)
-    expect(Number(b.segs.get('points')?.get('--seg-p'))).toBeCloseTo(0.5, 4)
-    expect(b.segs.get('world')?.get('--seg-p')).toBeUndefined()
-    expect(Number(b.props.get('--boot-p'))).toBeCloseTo(0.15 + 0.2, 4)
-    w.model.report('points', 0.3) // a smaller estimate never lowers a segment
+    expect(Number(e.props.get('--boot-p'))).toBeCloseTo(0.15 + 0.1 + 0.18, 4)
+    expect(e.attrs.get('aria-valuenow')).toBe('43')
+    expect(e.percent.textContent).toBe('43%')
+    expect((e.bar as unknown as { dataset: Record<string, string> }).dataset.state).toBe('determinate')
+    w.model.report('points', 0.3)
     now = 2000
     w.flush()
-    expect(w.segValue('points')).toBeCloseTo(0.5, 4)
+    expect(Number(e.props.get('--boot-p'))).toBeCloseTo(0.43 + 0.12, 4)
     w.complete()
-    for (const s of ['bundle', 'world', 'points', 'warming', 'reveal']) expect(Number(b.segs.get(s)?.get('--seg-p'))).toBe(1)
+    expect(e.props.get('--boot-p')).toBe('1.0000')
+    expect(e.attrs.get('aria-valuenow')).toBe('100')
+    for (let i = 1; i < w.samples.length; i++) expect(w.samples[i].p).toBeGreaterThanOrEqual(w.samples[i - 1].p)
   })
 })
 

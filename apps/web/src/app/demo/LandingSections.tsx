@@ -14,7 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { Icon } from '@/ui/icons/Icon'
 import type { IconKey } from '@/ui/icons/registry'
 import {
-  ANET_URL, API_DOCS_PATH, CITATIONS, MEDIA_FLIGHT, MEDIA_SHOTS, MEDIA_WIDE, type CapStatus, type Media,
+  ANET_URL, API_DOCS_PATH, CITATIONS, MEDIA_FLIGHT, MEDIA_SHOTS, MEDIA_WIDE, sectionIndex, type CapStatus, type Media,
 } from './LandingContent'
 
 const COPIED_MS = 1600
@@ -60,7 +60,9 @@ export function Section({ id, index, eyebrow, title, sub, children, ...rest }: {
 // considered but the app is already at its two-loop budget (ShimmerText, MatrixLoader; motion-lint MOT-03, ADR-029),
 // so this stays a plain static block rather than adding a third. onError retries the request once before falling
 // back to the browser's own broken-image presentation (the alt text stays readable either way).
-function Figure({ m, wide = false, sizes }: { m: Media; wide?: boolean; sizes: string }) {
+// V0.3.1: `frame` letterboxes an image of another aspect ratio (the 640x512 thermal frame) into a 16:9 box, so it lines up
+// with the 16:9 frame beside it.
+export function Figure({ m, wide = false, frame = false, sizes }: { m: Media; wide?: boolean; frame?: boolean; sizes: string }) {
   const t = useT()
   const text = t(`landing.media.${m.key}`)
   const [loaded, setLoaded] = React.useState(false)
@@ -73,9 +75,17 @@ function Figure({ m, wide = false, sizes }: { m: Media; wide?: boolean; sizes: s
   return (
     <figure className={cn('landing-reveal flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card', wide && 'md:col-span-2')}
       data-media={m.key}>
-      <img src={`/demo/${m.file}`} alt={text} width={m.w} height={m.h} sizes={sizes} loading="lazy" decoding="async"
-        data-media-loaded={loaded} onLoad={() => setLoaded(true)} onError={onError}
-        className="block h-auto w-full bg-muted" />
+      {frame ? (
+        <div className="relative aspect-video bg-muted">
+          <img src={`/demo/${m.file}`} alt={text} width={m.w} height={m.h} sizes={sizes} loading="lazy" decoding="async"
+            data-media-loaded={loaded} onLoad={() => setLoaded(true)} onError={onError}
+            className="absolute inset-0 block size-full object-contain" />
+        </div>
+      ) : (
+        <img src={`/demo/${m.file}`} alt={text} width={m.w} height={m.h} sizes={sizes} loading="lazy" decoding="async"
+          data-media-loaded={loaded} onLoad={() => setLoaded(true)} onError={onError}
+          className="block h-auto w-full bg-muted" />
+      )}
       <figcaption className="border-t border-border px-4 py-3 text-xs leading-relaxed text-pretty text-muted-foreground">{text}</figcaption>
     </figure>
   )
@@ -84,7 +94,7 @@ function Figure({ m, wide = false, sizes }: { m: Media; wide?: boolean; sizes: s
 export function Showcase() {
   const t = useT()
   return (
-    <Section id="showcase" index="02" eyebrow={t('landing.nav.showcase')} title={t('landing.media.title')} sub={t('landing.media.sub')}
+    <Section id="showcase" index={sectionIndex('showcase')} eyebrow={t('landing.nav.showcase')} title={t('landing.media.title')} sub={t('landing.media.sub')}
       data-landing-media="">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
         <Figure m={MEDIA_FLIGHT} wide sizes="(min-width: 1152px) 1104px, 100vw" />
@@ -145,7 +155,7 @@ function Citation() {
 export function OpenSource() {
   const t = useT()
   return (
-    <Section id="open-source" index="04" eyebrow={t('landing.nav.open')} title={t('landing.open.title')} sub={t('landing.open.sub')}
+    <Section id="open-source" index={sectionIndex('open-source')} eyebrow={t('landing.nav.open')} title={t('landing.open.title')} sub={t('landing.open.sub')}
       data-landing-open="">
       <div className="grid grid-cols-1 gap-10 xl:grid-cols-2 xl:gap-12">
         <div className="landing-reveal flex min-w-0 flex-col gap-6">

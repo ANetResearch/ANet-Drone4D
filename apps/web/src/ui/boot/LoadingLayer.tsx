@@ -4,14 +4,16 @@
 // warm after the reveal, so the warming segment is complete at once; the opened-world snapshot of M05 and the direct
 // M05 reports move world and points; reaching streaming completes the reveal segment. While a sandbox restarts in a new
 // world the card says "starting the sandbox in the new city" (boot.phase.sandbox, no weight) until the session is ready.
-// D2.1 (ADR-119; M15-FR-224): the bar is the segmented track of the boot mask (four segments here, widths by weight).
+// v0.3.0: the bar is the single bar of the boot mask (one fill, monotone total of the four segments) with the same
+// readout (app/boot/loadMeter.ts): stage and percent above, first-screen bytes, throughput and remaining time below.
 import * as React from 'react'
-import { useT } from '@/app/i18n'
+import { t as tr, useT } from '@/app/i18n'
 import { navigate } from '@/app/router/router'
 import { boot } from '@/app/boot/BootController'
 import { ProgressWriter } from '@/app/boot/progress'
 import { worldFloors } from '@/app/boot/progressSources'
-import { BOOT_WEIGHTS, BootProgressModel, SWITCH_SEGS, applyReport, onBootProgress } from '@/lib/bootProgress'
+import { LoadReadout, pageMeter, readoutTexts } from '@/app/boot/loadMeter'
+import { BootProgressModel, SWITCH_SEGS, applyReport, onBootProgress } from '@/lib/bootProgress'
 import { Button } from '@/ui/components/ui/button'
 import { Card } from '@/ui/components/ui/card'
 import { useSandbox } from '@/ui/sandbox/session'
@@ -24,15 +26,22 @@ function useRevealed(): boolean {
   return revealed
 }
 
-/** the bar and the phase line of one loading card (one model per card lifetime) */
+/** the bar, the phase line and the readout of one loading card (one model per card lifetime) */
 function LoadingBar({ sandboxStarting }: { sandboxStarting: boolean }) {
   const t = useT()
-  const bar = React.useRef<HTMLElement>(null)
+  const bar = React.useRef<HTMLDivElement>(null)
+  const fill = React.useRef<HTMLElement>(null)
   const phase = React.useRef<HTMLSpanElement>(null)
-  const writer = React.useRef<ProgressWriter | null>(null)
+  const percent = React.useRef<HTMLSpanElement>(null)
+  const bytes = React.useRef<HTMLSpanElement>(null)
+  const rate = React.useRef<HTMLSpanElement>(null)
   React.useEffect(() => {
-    const w = new ProgressWriter(bar.current, phase.current, new BootProgressModel(SWITCH_SEGS))
-    writer.current = w
+    const w = new ProgressWriter(fill.current, phase.current, new BootProgressModel(SWITCH_SEGS))
+    const readout = new LoadReadout({ bar: bar.current, fill: fill.current, percent: percent.current, bytes: bytes.current, rate: rate.current }, pageMeter())
+    readout.withCode = false
+    readout.setTexts(readoutTexts(tr))
+    readout.start()
+    w.readout = readout
     w.model.reportWarm('shaders', 1)
     w.model.reportWarm('ui', 1)
     const seed = worldFloors(worldStore.getState())
@@ -56,17 +65,23 @@ function LoadingBar({ sandboxStarting }: { sandboxStarting: boolean }) {
       off()
       offWorld()
       w.freeze()
-      writer.current = null
+      readout.stop()
     }
   }, [])
   return (
     <>
-      <div className="loading-progress" data-loading-progress="">
-        <i ref={bar}>
-          {SWITCH_SEGS.map((k) => <i key={k} data-seg={k} style={{ flexGrow: Math.round(BOOT_WEIGHTS[k] * 100) }} />)}
-        </i>
+      <div className="flex items-baseline justify-between gap-3 text-hud-sub tabular-nums">
+        <span ref={phase} className="min-w-0 text-muted-foreground" data-loading-phase="" />
+        <span ref={percent} className="shrink-0" aria-hidden="true" data-loading-percent="" />
       </div>
-      <span ref={phase} className="text-hud-sub text-muted-foreground" data-loading-phase="" />
+      <div ref={bar} className="loading-progress" data-loading-progress="" role="progressbar" aria-valuemin={0} aria-valuemax={100}
+        aria-label={t('boot.progress.label')}>
+        <i ref={fill} />
+      </div>
+      <div className="flex min-h-4 justify-between gap-3 whitespace-nowrap text-hud-cap text-muted-foreground tabular-nums" aria-hidden="true">
+        <span ref={bytes} data-loading-bytes="" />
+        <span ref={rate} data-loading-rate="" />
+      </div>
       {sandboxStarting ? <span className="text-hud-sub text-muted-foreground" data-loading-sandbox="">{t('boot.phase.sandbox')}</span> : null}
     </>
   )

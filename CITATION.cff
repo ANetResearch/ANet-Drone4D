@@ -18,7 +18,7 @@ authors:
   - name: "Agent Network Research"
     website: "https://anet0.com"
     email: "hi@anet0.com"
-version: "0.3.0"
+version: "0.3.1"
 repository-code: "https://github.com/ANetResearch/ANet-Drone4D"
 url: "https://github.com/ANetResearch/ANet-Drone4D"
 license-url: "https://github.com/ANetResearch/ANet-Drone4D/blob/main/LICENSE"

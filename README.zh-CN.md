@@ -312,7 +312,7 @@ Drone4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet
   title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.0},
+  version = {0.3.1},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```
