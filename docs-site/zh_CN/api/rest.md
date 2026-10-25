@@ -1,6 +1,6 @@
 # 开放接口
 
-ANet Drone4D 对外提供两组 HTTP 接口与一个实时协议：
+ANet4D 对外提供两组 HTTP 接口与一个实时协议：
 
 | 接口 | 前缀 | 监听 | 面向 |
 |---|---|---|---|
@@ -9,7 +9,7 @@ ANet Drone4D 对外提供两组 HTTP 接口与一个实时协议：
 | 实时协议 `awr.rt.v1` | WebSocket | 两个 api 均提供 | 状态流、命令调用、速度设定点与事件 |
 
 界面与接口同权：浏览器中的每个操作都对应同一套接口，经过相同的准入与安全检查。沙盒接口的 OpenAPI 3.1 文档由服务端在
-`/api/sandbox/v1/openapi.json` 提供，公开实例在 [`/sandbox/api`](https://drone4d.agentnetwork.org.cn/sandbox/api) 页面渲染并附可复制的示例。
+`/api/sandbox/v1/openapi.json` 提供，公开实例在 [`/sandbox/api`](https://anet4d.agentnetwork.org.cn/sandbox/api) 页面渲染并附可复制的示例。
 Python 程序建议使用 {doc}`sdk`，它处理排队、工作量证明、续期、节能恢复与二进制帧解码。
 
 ## 鉴权
@@ -64,7 +64,7 @@ Python 程序建议使用 {doc}`sdk`，它处理排队、工作量证明、续�
 （例如会话状态 `sandbox/session`、机群状态与单机感知），服务端按每个客户端的兴趣集与配额发送：机群以 32 字节的 Lite32 记录、焦点无人机以
 64 字节的 Full64 记录批量下发，结构化消息以 msgpack 编码。命令以 `call` 发起，依次返回受理、执行中与结果；速度控制在 `call` 之后经客户端数据通道
 以至多 50 Hz 发送设定点。字节布局见设计文档
-[docs/17 接口与实时协议规范](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/17-接口与实时协议规范.md)。
+{gh}`docs/17 接口与实时协议规范 </blob/main/docs/17-接口与实时协议规范.md>`。
 
 会话结束时连接以关闭码 4410 关闭；节能驻留时以关闭码 4430 断开，客户端恢复会话后重新订阅；切换底图时以 1012 断开，客户端按新世界重连。
 
@@ -73,7 +73,7 @@ Python 程序建议使用 {doc}`sdk`，它处理排队、工作量证明、续�
 下表由 `packages/contracts/rest/sandbox.openapi.snapshot.json` 在构建文档时生成。路径相对于前缀 `/api/sandbox/v1`；"优先级"中 P1 为可选能力，
 未部署的端点返回 404。
 
-```{drone4d-endpoints} packages/contracts/rest/sandbox.openapi.snapshot.json
+```{anet4d-endpoints} packages/contracts/rest/sandbox.openapi.snapshot.json
 :kind: sandbox
 ```
 
@@ -82,6 +82,6 @@ Python 程序建议使用 {doc}`sdk`，它处理排队、工作量证明、续�
 下表由 `packages/contracts/rest/openapi.snapshot.json` 生成。这些端点服务于本机共享展示（回环访问），除健康、就绪与版本信息外均需要令牌；
 公开实例以只读方式提供其中与观看相关的部分。
 
-```{drone4d-endpoints} packages/contracts/rest/openapi.snapshot.json
+```{anet4d-endpoints} packages/contracts/rest/openapi.snapshot.json
 :kind: runtime
 ```

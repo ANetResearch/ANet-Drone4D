@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools/sdk/drone4d/src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools/sdk/anet4d/src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "contracts"))
 from ctlib import errors, load
 
@@ -140,7 +140,7 @@ def _ck(w: int = 64, h: int = 48, seed: int = 5) -> np.ndarray:
 # ---------------------------------------------------------------- 黄金向量（API-FR-132、API-AC-100）
 
 def test_golden_vectors_host_and_sdk_roundtrip() -> None:
-    from drone4d import wire as sdk
+    from anet4d import wire as sdk
 
     from awr.agentsdk.env.obs_audit import ObsAudit
 

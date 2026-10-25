@@ -1,20 +1,20 @@
 <div align="center">
 
-<img src="docs/media/drone4d-banner.jpg" alt="ANet Drone4D banner: the 4D world runtime for multi-agent drones" width="100%" />
+<img src="docs/media/anet4d-banner.jpg" alt="ANet4D banner: simulation infrastructure for collaborative embodied agents" width="100%" />
 
-<h3>ANet Drone4D</h3>
+<h3>ANet4D</h3>
 
-ANet Drone4D is a real-world grounded 4D simulation platform for multi-agent drones. The Interactive Sandbox (V0.2) runs city-scale point-cloud digital twins, fleet simulation, swarm control and target perception on one simulation clock; its server needs no GPU, and the scene renders in the visitor's browser. The Event Lab (V0.3) adds mesh worlds, event tapes and an event-level observation benchmark; its sensor generation requires an NVIDIA GPU on the server.
+ANet4D is simulation infrastructure for collaborative embodied agents. ANet4D aims to be for collaborative embodied-agent research what NS-3 is for network research. Its scope covers multi-UAV teams, unmanned ground and surface vehicles (UGV, USV), ground robots, fixed sensors and software agents; the released versions implement drones as the first entity class on real-world 4D digital twins. The Interactive Sandbox (V0.2) runs city-scale point-cloud digital twins, fleet simulation, swarm control and target perception on one simulation clock; its server needs no GPU, and the scene renders in the visitor's browser. The Event Lab (V0.3) adds mesh worlds, event tapes with Gazebo Sim lockstep, mesh-rendered camera, thermal and LiDAR sensors and a benchmark runtime; its sensor generation requires an NVIDIA GPU on the server.
 
 [![Release](https://img.shields.io/github/v/release/ANetResearch/ANet-Drone4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/latest)
 [![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-Read%20the%20Docs%20layout-1f1f1f)](https://docs.agentnetwork.org.cn/drone4d/en/latest/)
-[![Live demo](https://img.shields.io/badge/live%20demo-drone4d.agentnetwork.org.cn-e0322d)](https://drone4d.agentnetwork.org.cn)
+[![Docs](https://img.shields.io/badge/docs-Read%20the%20Docs%20layout-1f1f1f)](https://docs.agentnetwork.org.cn/anet4d/en/latest/)
+[![Live demo](https://img.shields.io/badge/live%20demo-anet4d.agentnetwork.org.cn-e0322d)](https://anet4d.agentnetwork.org.cn)
 [![License](https://img.shields.io/badge/license-modified%20Apache--2.0-1f1f1f)](LICENSE)
 
-**[Live demo](https://drone4d.agentnetwork.org.cn)** · **[Documentation](https://docs.agentnetwork.org.cn/drone4d/en/latest/)** ·
-[Quick start](https://docs.agentnetwork.org.cn/drone4d/en/latest/intro/quickstart.html) ·
-[Open API](https://docs.agentnetwork.org.cn/drone4d/en/latest/api/rest.html) ·
+**[Live demo](https://anet4d.agentnetwork.org.cn)** · **[Documentation](https://docs.agentnetwork.org.cn/anet4d/en/latest/)** ·
+[Quick start](https://docs.agentnetwork.org.cn/anet4d/en/latest/intro/quickstart.html) ·
+[Open API](https://docs.agentnetwork.org.cn/anet4d/en/latest/api/rest.html) ·
 [Releases](https://github.com/ANetResearch/ANet-Drone4D/releases) · [ANet](https://github.com/ANetResearch/ANet)
 
 **English** · [简体中文](README.zh-CN.md)
@@ -44,7 +44,7 @@ ANet Drone4D is a real-world grounded 4D simulation platform for multi-agent dro
 | Mesh cameras and mesh LiDAR (Livox MID-360 pattern) | D3 (V0.3) | Server: NVIDIA GPU | Available |
 | FAST-LIVO2 reconstruction on simulated data, evaluated against mesh ground truth; data inspection in Rerun | D3 (V0.3) | Server: NVIDIA GPU | Available |
 
-Statuses reflect the published V0.2 and V0.3 releases and the [D3 design baseline](docs/05-D3-设计增补与决策记录.md).
+Statuses reflect the published V0.2 and V0.3 releases and the [D3 design baseline](docs/05-D3-设计增补与决策记录.md). These capabilities form the current foundation of ANet4D. The cross-entity collaborative experimentation platform, which places heterogeneous entities and agents in one world under one evaluation protocol, is the forward direction and is in concept design ([docs/06](docs/06-D4-协同实验平台概念设计.md)); it is not part of the released versions.
 
 ## Requirements
 
@@ -57,7 +57,7 @@ Statuses reflect the published V0.2 and V0.3 releases and the [D3 design baselin
 
 ## Quick start
 
-The **[live demo](https://drone4d.agentnetwork.org.cn)** requires no registration. It provides a read-only shared show and an isolated sandbox per visitor. To run the platform locally on Linux:
+The **[live demo](https://anet4d.agentnetwork.org.cn)** requires no registration. It provides a read-only shared show and an isolated sandbox per visitor. To run the platform locally on Linux:
 
 ```sh
 git clone https://github.com/ANetResearch/ANet-Drone4D.git && cd ANet-Drone4D
@@ -66,13 +66,14 @@ make demo-world   # generate ANet Synthetic City
 make run          # then open http://127.0.0.1:8000/world/synthcity
 ```
 
-The [Quick start](https://docs.agentnetwork.org.cn/drone4d/en/latest/intro/quickstart.html) guide covers every step with real output, including how to drive a sandbox session from the Python SDK.
+The [Quick start](https://docs.agentnetwork.org.cn/anet4d/en/latest/intro/quickstart.html) guide covers every step with real output, including how to drive a sandbox session from the Python SDK.
 
 ## Documentation
 
-- [Documentation site](https://docs.agentnetwork.org.cn/drone4d/en/latest/): introduction, topics, REST API and Python SDK reference.
+- [Documentation site](https://docs.agentnetwork.org.cn/anet4d/en/latest/): introduction, topics, REST API and Python SDK reference.
 - [Design documents](docs/): architecture, technology selection, product and UI requirements, data and protocol specifications, and acceptance reports.
-- [Live demo](https://drone4d.agentnetwork.org.cn) and its [interactive API reference](https://drone4d.agentnetwork.org.cn/sandbox/api).
+- [Live demo](https://anet4d.agentnetwork.org.cn) and its [interactive API reference](https://anet4d.agentnetwork.org.cn/sandbox/api).
+- Naming: since 2026-10-25 the project is named ANet4D ([ADR-223](docs/05-D3-设计增补与决策记录.md)); versions up to V0.3.1 were published as ANet Drone4D. Protocol and schema identifiers such as `drone4d.event.v1` keep the former name as legacy identifiers.
 
 ## Feature tour
 
@@ -134,7 +135,7 @@ Every visitor receives an isolated sandbox backed by a dedicated simulation core
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/landing-desktop.jpg" alt="The ANet Drone4D public demo landing page" /></td>
+<td width="50%"><img src="docs/media/landing-desktop.jpg" alt="The ANet4D public demo landing page" /></td>
 <td width="50%"><img src="docs/media/d2-mobile.jpg" alt="The shared show on two phones with the bottom tab bar" /></td>
 </tr>
 <tr>
@@ -170,8 +171,8 @@ Every visitor receives an isolated sandbox backed by a dedicated simulation core
 - **Browser.** Built on React and an imperative three.js engine, the client scopes state per world so switching cities never carries entities across worlds.
 - **Contracts first.** JSON Schemas generate both Python and TypeScript types, golden files keep implementations aligned, and a process supervisor enforces heartbeats, backoff, and circuit breaking.
 
-Details: [Architecture](https://docs.agentnetwork.org.cn/drone4d/en/latest/topics/architecture.html) ·
-[Worlds and data](https://docs.agentnetwork.org.cn/drone4d/en/latest/topics/worlds.html) ·
+Details: [Architecture](https://docs.agentnetwork.org.cn/anet4d/en/latest/topics/architecture.html) ·
+[Worlds and data](https://docs.agentnetwork.org.cn/anet4d/en/latest/topics/worlds.html) ·
 [Design documents](docs/).
 
 </details>
@@ -181,25 +182,25 @@ Details: [Architecture](https://docs.agentnetwork.org.cn/drone4d/en/latest/topic
 
 <br/>
 
-The sandbox exposes REST v1 at `/api/sandbox/v1` alongside the `awr.rt.v1` realtime protocol. The web interface and API share identical permissions, and all commands pass through the same admission and safety checks. Interactive OpenAPI documentation with copyable examples is available at [`/sandbox/api`](https://drone4d.agentnetwork.org.cn/sandbox/api). The single-file Python SDK ([`tools/sdk/awr_sandbox.py`](tools/sdk/awr_sandbox.py)) manages queuing, session renewal, resumption from energy-saving mode, and binary frame decoding:
+The sandbox exposes REST v1 at `/api/sandbox/v1` alongside the `awr.rt.v1` realtime protocol. The web interface and API share identical permissions, and all commands pass through the same admission and safety checks. Interactive OpenAPI documentation with copyable examples is available at [`/sandbox/api`](https://anet4d.agentnetwork.org.cn/sandbox/api). The single-file Python SDK ([`tools/sdk/awr_sandbox.py`](tools/sdk/awr_sandbox.py)) manages queuing, session renewal, resumption from energy-saving mode, and binary frame decoding:
 
 ```sh
 pip install "httpx>=0.24" "websockets>=12" "msgpack>=1.0"
-curl -O https://drone4d.agentnetwork.org.cn/sdk/awr_sandbox.py
+curl -O https://anet4d.agentnetwork.org.cn/sdk/awr_sandbox.py
 ```
 
 ```python
 from awr_sandbox import Sandbox
 
-sb = Sandbox("https://drone4d.agentnetwork.org.cn", timeout_s=30)
+sb = Sandbox("https://anet4d.agentnetwork.org.cn", timeout_s=30)
 with sb.create("synthcity", "t5_area_guard") as s:   # queues when the public host is full
     print(s.state()["state"])
     for msg in s.stream(["sandbox/session"], seconds=3):
         print(msg.topic, msg.data)
 ```
 
-Reference: [REST API](https://docs.agentnetwork.org.cn/drone4d/en/latest/api/rest.html) ·
-[Python SDK](https://docs.agentnetwork.org.cn/drone4d/en/latest/api/sdk.html) ·
+Reference: [REST API](https://docs.agentnetwork.org.cn/anet4d/en/latest/api/rest.html) ·
+[Python SDK](https://docs.agentnetwork.org.cn/anet4d/en/latest/api/sdk.html) ·
 [examples](tools/sdk/examples/).
 
 </details>
@@ -236,9 +237,10 @@ The vehicle catalogue includes the P600 digital twin in its MID-360 configuratio
 | V0.1 | Scene View: point-cloud digital twin, progressive loading, FleetSim with PX4-lite, realtime protocol, Mock ANet | Released |
 | V0.2 | Interactive Sandbox: targets and quantified perception, nests and relay watch, open API, phones and tablets, city monitoring shows; patch releases from `v0.2.1` | Released |
 | V0.3 | Event Lab: GLB mesh worlds, event tapes, Gazebo Sim lockstep, mesh cameras and LiDAR, FAST-LIVO2 evaluation, event-level observation benchmark | Released |
+| V0.3.2 | Renaming to ANet4D with the embodied-agent positioning; scene-target foundations (target appearance, activity and life bindings), experimental and disabled by default | Released |
 | V0.3.x | Increments on the V0.3 baseline, including the SITL physics tier and the 3DGS appearance layer | Planned |
 
-Later versions are in research and concept design and are not scheduled here. Progress is tracked in [GitHub milestones](https://github.com/ANetResearch/ANet-Drone4D/milestones) and the pinned [roadmap issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1). See [Roadmap](https://docs.agentnetwork.org.cn/drone4d/en/latest/project/roadmap.html) and the
+The cross-entity collaborative experimentation platform (phase D4) is in research and concept design and is not scheduled here; see the [concept design](docs/06-D4-协同实验平台概念设计.md). Progress is tracked in [GitHub milestones](https://github.com/ANetResearch/ANet-Drone4D/milestones) and the pinned [roadmap issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1). See [Roadmap](https://docs.agentnetwork.org.cn/anet4d/en/latest/project/roadmap.html) and the
 [D3 design](docs/05-D3-设计增补与决策记录.md).
 
 </details>
@@ -279,7 +281,7 @@ See [docs/15](docs/15-视觉设计规范与色卡.md) for the visual specificati
 
 <br/>
 
-Drone4D is part of the ANet ecosystem from Agent Network Research, alongside [ANet](https://github.com/ANetResearch/ANet), [ANetHub](https://github.com/ANetResearch/ANetHub), and [ANetCore](https://github.com/ANetResearch/ANetCore). Drones serve as the first class of physical agents: they publish capabilities, discover peers, delegate tasks, and verify outcomes against receipts. ANet operates as the collaboration plane rather than the flight control plane—delegated tasks translate into standard commands subject to the same admission and safety checks as manual operator inputs.
+ANet4D is part of the ANet ecosystem from Agent Network Research, alongside [ANet](https://github.com/ANetResearch/ANet), [ANetHub](https://github.com/ANetResearch/ANetHub), and [ANetCore](https://github.com/ANetResearch/ANetCore). Drones serve as the first class of physical agents: they publish capabilities, discover peers, delegate tasks, and verify outcomes against receipts. ANet operates as the collaboration plane rather than the flight control plane—delegated tasks translate into standard commands subject to the same admission and safety checks as manual operator inputs.
 
 </details>
 
@@ -288,7 +290,7 @@ Drone4D is part of the ANet ecosystem from Agent Network Research, alongside [AN
 - **Code.** Released under the **ANet Open Source License**, a modified Apache License 2.0 that permits commercial use subject to two conditions: operating a multi-tenant hosted simulation or digital twin service for unrelated parties requires written authorization, and all ANet logos and copyright notices must be retained. See [LICENSE](LICENSE) for full terms and [NOTICE](NOTICE) for the marks.
 - **UrbanScene3D.** The six city worlds are derived from UrbanScene3D and hosted on the public demo with authorization from the dataset rights holders (经数据集权利方授权使用). This repository does not distribute the raw dataset or World Packages built from it; see [NOTICE](NOTICE) for details.
 - **ANet Synthetic City.** Generated by this project from a fixed seed; it contains no third-party data, and its World Package and screenshots may be redistributed.
-- **Event Lab worlds (V0.3).** The mesh worlds `oryahovo-crop1` and `smalltown-01` are built from photogrammetry models by Mitko ([sketchfab.com/bg3d](https://sketchfab.com/bg3d)), published on Sketchfab under the [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/) license (CC-BY-4.0). The models were modified by metric scaling, levelling and derived layers; the authors do not endorse ANet Drone4D. Model titles and source links are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); neither the source models nor the World Packages built from them are distributed in this repository.
+- **Event Lab worlds (V0.3).** The mesh worlds `oryahovo-crop1` and `smalltown-01` are built from photogrammetry models by Mitko ([sketchfab.com/bg3d](https://sketchfab.com/bg3d)), published on Sketchfab under the [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/) license (CC-BY-4.0). The models were modified by metric scaling, levelling and derived layers; the authors do not endorse ANet4D. Model titles and source links are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); neither the source models nor the World Packages built from them are distributed in this repository.
 - **OpenStreetMap.** Registration evidence, anchors and road and walkway graphs of the Event Lab worlds are derived from OpenStreetMap data, (c) OpenStreetMap contributors, available under the [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/) (ODbL-1.0); published derived layers carry the same license and attribution.
 - **Elevation data.** Levelling and heights above mean sea level of the Event Lab worlds come from [Terrain Tiles on AWS](https://registry.opendata.aws/terrain-tiles/): SRTM terrain data courtesy of the U.S. Geological Survey; Europe terrain data produced using Copernicus data and information funded by the European Union - EU-DEM layers. The levelling check uses the [Copernicus DEM GLO-30](https://registry.opendata.aws/copernicus-dem/) for statistics only and does not redistribute it: produced using Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.
 - **Third-party components.** Listed with their licenses in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -306,21 +308,21 @@ Please cite UrbanScene3D (ECCV 2022) when using the six city worlds:
 }
 ```
 
-To cite Drone4D, use GitHub's "Cite this repository" feature ([CITATION.cff](CITATION.cff)) or the following BibTeX entry:
+To cite ANet4D, use GitHub's "Cite this repository" feature ([CITATION.cff](CITATION.cff)) or the following BibTeX entry:
 
 ```bibtex
-@software{anet_drone4d_2026,
-  title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
+@software{anet4d_2026,
+  title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.1},
+  version = {0.3.2},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```
 
 ## Acknowledgements
 
-Drone4D builds on [three.js](https://threejs.org), [React Three Fiber](https://github.com/pmndrs/react-three-fiber),
+ANet4D builds on [three.js](https://threejs.org), [React Three Fiber](https://github.com/pmndrs/react-three-fiber),
 [Potree](https://github.com/potree/potree), [zenoh](https://zenoh.io), [numba](https://numba.pydata.org),
 [PX4](https://github.com/PX4/PX4-Autopilot), [Prometheus](https://github.com/amov-lab/Prometheus), and UrbanScene3D.
 

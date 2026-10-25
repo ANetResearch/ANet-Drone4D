@@ -1,22 +1,38 @@
-# ANet Drone4D Documentation
+# ANet4D Documentation
 
-ANet Drone4D is a real-world grounded 4D World Runtime for autonomous multi-agent drones. It turns captured or reconstructed city
-point clouds into versioned Worlds, runs the environment field, the drone fleet and their agents on one server clock, and streams the
-result to any browser with WebGL2. The server needs no GPU.
+**ANet4D: simulation infrastructure for collaborative embodied agents.** ANet4D aims to be for collaborative embodied-agent research
+what NS-3 is for network research: a shared experimental base in which teams of embodied and software agents are studied in one world,
+on one clock and under one evaluation protocol. The intended scope covers multi-UAV fleets, unmanned ground vehicles (UGV), unmanned
+surface vessels (USV), ground robots, fixed sensors and software agents without a body.
 
-This documentation covers **0.2.0** (V0.2-demo, that is D2 and D2.1), released on 2026-10-13. The public instance runs at
-[drone4d.agentnetwork.org.cn](https://drone4d.agentnetwork.org.cn), and the source code is on
-[GitHub](https://github.com/ANetResearch/ANet-Drone4D).
+The current foundation is what V0.1 to V0.3 delivered:
+
+- **Real-world 4D digital twins.** Captured or reconstructed city point clouds and photogrammetric meshes become versioned Worlds that serve
+  physics, queries and display, with a 4D environment field (wind, visibility, precipitation) on the same simulation clock.
+- **Interactive Sandbox (V0.2).** One isolated simulation core per visitor with fleet simulation, targets and perception quantification,
+  nests and tasking, a REST interface and a Python SDK; the server needs no GPU and the scene renders in the browser.
+- **Event Lab (V0.3).** Event tapes compiled from declarative event specifications, Gazebo Sim lockstep as the high-fidelity physics tier,
+  mesh-rendered camera, thermal and LiDAR sensors, and a benchmark runtime with an agent SDK and baseline policies; sensor generation
+  requires an NVIDIA GPU on the server.
+
+The delivered entity type today is the drone (multirotor, fixed-wing and VTOL airframes). The forward direction is a cross-entity
+collaborative experimentation platform with declarative experiment specifications, replaceable collaboration algorithms and comparable
+evidence; see {doc}`project/roadmap`.
+
+This documentation covers **0.3.2** (V0.3.2 · ANet4D). The public instance runs at
+[anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn), and the source code is on {gh}`GitHub </>`. ANet4D was
+previously published as ANet Drone4D; the former site and documentation addresses redirect to the new ones, and a small set of legacy
+identifiers keeps the former name (see {doc}`project/faq`).
 
 ## Getting help
 
 When you run into a problem, look in this order:
 
 - Read the {doc}`project/faq` and the troubleshooting section of {doc}`intro/quickstart`.
-- Search or open an issue on [GitHub Issues](https://github.com/ANetResearch/ANet-Drone4D/issues), in English or Chinese.
+- Search or open an issue on {gh}`GitHub Issues </issues>`, in English or Chinese.
 - For changes that affect a contract (file formats, `awr.rt.v1`, the REST interface, reason codes), open an issue for discussion first; see
-  [CONTRIBUTING.md](https://github.com/ANetResearch/ANet-Drone4D/blob/main/CONTRIBUTING.md).
-- Report security issues to hi@anet0.com; see [SECURITY.md](https://github.com/ANetResearch/ANet-Drone4D/blob/main/SECURITY.md).
+  {gh}`CONTRIBUTING.md </blob/main/CONTRIBUTING.md>`.
+- Report security issues to hi@anet0.com; see {gh}`SECURITY.md </blob/main/SECURITY.md>`.
 
 ## First steps
 
@@ -76,7 +92,7 @@ guide/sdk-quickstart
 : The identity entry for internal staff: where it is and what it is for.
 
 {doc}`guide/sdk-quickstart`
-: The `drone4d` Python SDK of the Event Lab (V0.3, in development): install it, write an example agent and run a 3-drone episode on the high-fidelity and fast simulation tiers.
+: The `anet4d` Python SDK of the Event Lab (V0.3): install it, write an example agent and run a 3-drone episode on the high-fidelity and fast simulation tiers.
 
 ## Open interface
 
@@ -128,7 +144,7 @@ project/citation
 ```
 
 {doc}`project/roadmap`
-: What D1 and D2 delivered, the design and phases of D3, and the themes of later versions.
+: What V0.1 to V0.3 delivered, the scope of V0.3.2, and the forward direction of ANet4D (D4).
 
 {doc}`project/acceptance`
 : Results of the second D2 acceptance round, root causes of the failed items, and links to the full reports.
@@ -137,4 +153,4 @@ project/citation
 : Frequently asked questions.
 
 {doc}`project/citation`
-: Citing ANet Drone4D and UrbanScene3D, license and third-party notices.
+: Citing ANet4D and UrbanScene3D, license and third-party notices.

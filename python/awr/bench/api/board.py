@@ -31,7 +31,8 @@ from awr.bench.submissions import SubmissionStore
 
 router = APIRouter()
 
-PUBLIC_HOSTS = ("drone4d.agentnetwork.org.cn",)          # 公开站（emax）主机名：榜单接口一律 404（D3-AC-21、43）
+# 公开站（emax）主机名：榜单接口一律 404（D3-AC-21、43）。anet4d 为现用域名；drone4d 为旧域名，迁移期内只做 301 跳转，仍列入以防跳转配置缺失时漏放
+PUBLIC_HOSTS = ("anet4d.agentnetwork.org.cn", "drone4d.agentnetwork.org.cn")
 _ANON = frozenset({301, 302})
 _invited = require("invited")
 

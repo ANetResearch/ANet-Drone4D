@@ -10,7 +10,7 @@ Python 3.9 to 3.13 are supported; the dependencies are httpx, websockets and msg
 
 ```sh
 pip install "httpx>=0.24" "websockets>=12" "msgpack>=1.0"
-curl -O https://drone4d.agentnetwork.org.cn/sdk/awr_sandbox.py
+curl -O https://anet4d.agentnetwork.org.cn/sdk/awr_sandbox.py
 ```
 
 Inside the repository the file is `tools/sdk/awr_sandbox.py`, and the `.venv` created by `make setup` already contains the dependencies (see
@@ -21,7 +21,7 @@ Inside the repository the file is `tools/sdk/awr_sandbox.py`, and the `.venv` cr
 ```python
 from awr_sandbox import Sandbox
 
-sb = Sandbox("https://drone4d.agentnetwork.org.cn", timeout_s=30)
+sb = Sandbox("https://anet4d.agentnetwork.org.cn", timeout_s=30)
 with sb.create("synthcity", "t5_area_guard") as s:   # queues when full; solves the proof of work when required
     print(s.state()["state"])
     s.clock("speed", rate=5)                          # returns the granted rate when limited
@@ -139,5 +139,5 @@ command-line argument or the environment variable `AWR_SANDBOX_URL`, defaulting 
 | `scenario2_e2e.py` | End-to-end acceptance script for area guard and relay |
 
 ```sh
-python tools/sdk/examples/01_quickstart.py https://drone4d.agentnetwork.org.cn
+python tools/sdk/examples/01_quickstart.py https://anet4d.agentnetwork.org.cn
 ```

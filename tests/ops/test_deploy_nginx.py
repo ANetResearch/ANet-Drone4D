@@ -21,7 +21,19 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from nginx_conf import BOOTSTRAP, ROOT, SITE, Directive, eval_map, https_server, load, parse
+from nginx_conf import (
+    BOOTSTRAP,
+    DOMAIN,
+    LEGACY_DOMAIN,
+    LEGACY_SITE,
+    ROOT,
+    SITE,
+    Directive,
+    eval_map,
+    https_server,
+    load,
+    parse,
+)
 
 from awr.api.middleware import SECURITY_HEADERS
 from awr.api.public import prefix_of
@@ -69,7 +81,7 @@ def resolve(server: Directive, uri: str) -> Directive:
 
 
 def upstream(loc: Directive) -> str | None:
-    """proxy_pass 的 upstream 名（`http://drone4d_sandbox$uri` → `drone4d_sandbox`）。"""
+    """proxy_pass 的 upstream 名（`http://anet4d_sandbox$uri` → `anet4d_sandbox`）。"""
     pp = loc.find("proxy_pass")
     return re.match(r"http://([A-Za-z0-9_]+)", pp[0].args[0]).group(1) if pp else None
 
@@ -101,17 +113,17 @@ def test_regex_locations_with_braces_are_quoted():
 
 
 def test_zone_and_variable_names_are_prefixed(conf):
-    """只新增本站点：限流区、连接区、缓存区、upstream 与 map 变量都带 drone4d 前缀（不与其他站点冲突）。"""
+    """只新增本站点：限流区、连接区、缓存区、upstream 与 map 变量都带 anet4d 前缀（不与其他站点冲突）。"""
     for d in conf.find("limit_req_zone") + conf.find("limit_conn_zone"):
-        assert d.args[0] == "$drone4d_prefix", d.args          # 按地址前缀计（AWR-04 §11.5）
+        assert d.args[0] == "$anet4d_prefix", d.args          # 按地址前缀计（AWR-04 §11.5）
         zone = next(a for a in d.args if a.startswith("zone="))
-        assert zone.startswith("zone=drone4d_"), zone
+        assert zone.startswith("zone=anet4d_"), zone
     for d in conf.find("upstream"):
-        assert d.args[0].startswith("drone4d_")
+        assert d.args[0].startswith("anet4d_")
     for d in conf.find("map"):
-        assert d.args[1].startswith("$drone4d_")
+        assert d.args[1].startswith("$anet4d_")
     (pc,) = conf.find("proxy_cache_path")
-    assert any(a.startswith("keys_zone=drone4d_micro:") for a in pc.args)
+    assert any(a.startswith("keys_zone=anet4d_micro:") for a in pc.args)
 
 
 def test_every_referenced_zone_is_defined(conf, server):
@@ -132,8 +144,8 @@ def test_every_referenced_zone_is_defined(conf, server):
 
 def test_upstream_ports_match_public_profile(conf, public_profile):
     ups = {d.args[0]: d for d in conf.find("upstream")}
-    assert ups["drone4d_backend"].values("server")[0][0] == f"127.0.0.1:{public_profile['net']['port']}"
-    assert ups["drone4d_sandbox"].values("server")[0][0] == f"127.0.0.1:{public_profile['sandbox']['port']}"
+    assert ups["anet4d_backend"].values("server")[0][0] == f"127.0.0.1:{public_profile['net']['port']}"
+    assert ups["anet4d_sandbox"].values("server")[0][0] == f"127.0.0.1:{public_profile['sandbox']['port']}"
     assert all(u.find("keepalive") for u in ups.values())
 
 
@@ -141,34 +153,34 @@ def test_upstream_ports_match_public_profile(conf, public_profile):
 
 
 @pytest.mark.parametrize(("uri", "want"), [
-    ("/api/rt", "drone4d_backend"),
-    ("/api/auth/token", "drone4d_backend"),
-    ("/api/auth/identity", "drone4d_backend"),                         # R79 只在 show-api（唯一比对点）
-    ("/api/viewer/queue", "drone4d_backend"),                          # R81
-    ("/api/viewer/queue/vq-abcdefghij", "drone4d_backend"),            # R82、R83
-    ("/api/health", "drone4d_backend"),
-    ("/api/world/synthcity/query", "drone4d_backend"),
-    ("/api/sandbox/v1/sessions", "drone4d_sandbox"),
-    ("/api/sandbox/v1/sessions/sb-abcdefghij", "drone4d_sandbox"),
-    ("/api/sandbox/v1/sessions/sb-abcdefghij/rt", "drone4d_sandbox"),
-    ("/api/sandbox/v1/sessions/sb-abcdefghij/park", "drone4d_sandbox"),
-    ("/api/sandbox/v1/sessions/sb-abcdefghij/resume", "drone4d_sandbox"),
-    ("/api/sandbox/v1/queue/q-abcdefghij", "drone4d_sandbox"),
-    ("/api/sandbox/v1/capacity", "drone4d_sandbox"),
-    ("/api/sandbox/v1/openapi.json", "drone4d_sandbox"),
-    ("/worlds/unknown/world.json", "drone4d_backend"),                  # 白名单外：show-api 返回 404 305
-    ("/", "drone4d_backend"),
-    ("/world/shenzhen", "drone4d_backend"),
-    ("/worlds", "drone4d_backend"),                                    # World Hub 前端路由
-    ("/sandbox/api", "drone4d_backend"),
-    ("/assets/index-abc.js", "drone4d_backend"),
+    ("/api/rt", "anet4d_backend"),
+    ("/api/auth/token", "anet4d_backend"),
+    ("/api/auth/identity", "anet4d_backend"),                         # R79 只在 show-api（唯一比对点）
+    ("/api/viewer/queue", "anet4d_backend"),                          # R81
+    ("/api/viewer/queue/vq-abcdefghij", "anet4d_backend"),            # R82、R83
+    ("/api/health", "anet4d_backend"),
+    ("/api/world/synthcity/query", "anet4d_backend"),
+    ("/api/sandbox/v1/sessions", "anet4d_sandbox"),
+    ("/api/sandbox/v1/sessions/sb-abcdefghij", "anet4d_sandbox"),
+    ("/api/sandbox/v1/sessions/sb-abcdefghij/rt", "anet4d_sandbox"),
+    ("/api/sandbox/v1/sessions/sb-abcdefghij/park", "anet4d_sandbox"),
+    ("/api/sandbox/v1/sessions/sb-abcdefghij/resume", "anet4d_sandbox"),
+    ("/api/sandbox/v1/queue/q-abcdefghij", "anet4d_sandbox"),
+    ("/api/sandbox/v1/capacity", "anet4d_sandbox"),
+    ("/api/sandbox/v1/openapi.json", "anet4d_sandbox"),
+    ("/worlds/unknown/world.json", "anet4d_backend"),                  # 白名单外：show-api 返回 404 305
+    ("/", "anet4d_backend"),
+    ("/world/shenzhen", "anet4d_backend"),
+    ("/worlds", "anet4d_backend"),                                    # World Hub 前端路由
+    ("/sandbox/api", "anet4d_backend"),
+    ("/assets/index-abc.js", "anet4d_backend"),
 ])
 def test_proxy_routes(server, uri, want):
     assert upstream(resolve(server, uri)) == want, uri
 
 
 def test_websocket_locations(server):
-    for uri, zone in (("/api/rt", "drone4d_ws_v2"), ("/api/sandbox/v1/sessions/sb-abcdefghij/rt", "drone4d_sbws")):
+    for uri, zone in (("/api/rt", "anet4d_ws"), ("/api/sandbox/v1/sessions/sb-abcdefghij/rt", "anet4d_sbws")):
         loc = resolve(server, uri)
         assert loc.values("proxy_buffering") == [["off"]]
         assert loc.values("proxy_read_timeout") == [["3600s"]] and loc.values("proxy_send_timeout") == [["3600s"]]
@@ -180,12 +192,12 @@ def test_websocket_locations(server):
 def test_sandbox_create_is_rate_limited_by_prefix(server):
     loc = resolve(server, "/api/sandbox/v1/sessions")
     assert loc.args == ["=", "/api/sandbox/v1/sessions"]
-    assert loc.values("limit_req")[0][0] == "zone=drone4d_sb_create"
+    assert loc.values("limit_req")[0][0] == "zone=anet4d_sb_create"
 
 
 def test_identity_is_rate_limited(server):
     loc = resolve(server, "/api/auth/identity")
-    assert loc.values("limit_req")[0][0] == "zone=drone4d_identity"
+    assert loc.values("limit_req")[0][0] == "zone=anet4d_identity"
 
 
 @pytest.mark.parametrize("uri", ["/api/sandbox/v1/queue/q-abcdefghij", "/api/viewer/queue/vq-abcdefghij"])
@@ -217,7 +229,7 @@ def test_world_files_are_aliased(server, wid):
     f = resolve(server, f"/worlds/{wid}/visual/pointcloud/octree.bin")
     assert f.values("alias") == [[f"{WORLDS_ROOT}/$1/$2"]]
     assert f.values("max_ranges") == [["1"]]                         # 多区间按整体 200（与 show-api 相同）
-    assert headers(f)["cache-control"] == "$drone4d_world_cc"
+    assert headers(f)["cache-control"] == "$anet4d_world_cc"
 
 
 @pytest.mark.parametrize("uri", ["/worlds/synthcity/.status/x.json", "/worlds/.geo-cache/synthcity/a/manifest.json",
@@ -230,12 +242,12 @@ def test_hidden_paths_are_not_served(server, uri):
 def test_shared_env_only(server):
     loc = resolve(server, "/worlds/_shared/env/turb/box.awrv")
     assert loc.values("alias") == [[f"{WORLDS_ROOT}/_shared/$1"]]
-    assert upstream(resolve(server, "/worlds/_shared/other/x")) == "drone4d_backend"
+    assert upstream(resolve(server, "/worlds/_shared/other/x")) == "anet4d_backend"
 
 
 def test_world_cache_control_map_matches_show_api(conf):
-    assert eval_map(conf, "$arg_v", "$drone4d_world_cc", "") == "no-cache"
-    assert eval_map(conf, "$arg_v", "$drone4d_world_cc", "9e05c2364f58") == IMMUTABLE
+    assert eval_map(conf, "$arg_v", "$anet4d_world_cc", "") == "no-cache"
+    assert eval_map(conf, "$arg_v", "$anet4d_world_cc", "9e05c2364f58") == IMMUTABLE
 
 
 def test_world_dir_matches_env_example():
@@ -290,7 +302,7 @@ def test_capacity_microcache(server):
     行为用例见 test_nginx_site_e2e.py）。"""
     loc = resolve(server, CAP)
     assert loc.args == ["=", CAP]
-    assert loc.values("proxy_cache") == [["drone4d_micro"]]
+    assert loc.values("proxy_cache") == [["anet4d_micro"]]
     assert loc.values("proxy_cache_valid") == [["any", "1s"]]               # 任何回复（含 503 211、500、502、504）都缓存 1 s
     assert loc.values("proxy_cache_use_stale") == [["updating"]]             # 错误按 stale 时不入缓存，每个请求都回源
     assert loc.values("proxy_cache_background_update") == [["off"]]          # 后台刷新失败时访客一直拿到旧副本
@@ -316,7 +328,7 @@ def test_capacity_copy_is_visitor_independent(server):
     """共享副本只由 nginx 以自己的身份回源：规范路径（无查询参数）、不转发访客的请求头与请求体、只设 Host 与
     X-Forwarded-Proto；隐藏上游的 X-Request-Id 与 Set-Cookie；GET、HEAD 以外的方法 405 不回源。"""
     loc = resolve(server, CAP)
-    assert loc.values("proxy_pass") == [["http://drone4d_sandbox$uri"]]
+    assert loc.values("proxy_pass") == [["http://anet4d_sandbox$uri"]]
     assert loc.values("proxy_pass_request_headers") == [["off"]]
     assert loc.values("proxy_pass_request_body") == [["off"]]
     assert {a[0].lower(): a[1] for a in loc.values("proxy_set_header")} == {"host": "$host", "x-forwarded-proto": "$scheme",
@@ -325,7 +337,7 @@ def test_capacity_copy_is_visitor_independent(server):
     (cond,) = loc.find("if")
     assert cond.args == ["($request_method", "!~", "^(GET|HEAD)$", ")"], cond.args
     assert cond.values("return") == [["405"]]
-    assert ["X-Drone4d-Cache", "$upstream_cache_status", "always"] in loc.values("add_header")
+    assert ["X-ANet4D-Cache", "$upstream_cache_status", "always"] in loc.values("add_header")
 
 
 def test_location_proxy_set_header_is_deliberate(server):
@@ -381,7 +393,7 @@ def test_prefix_map_parity_with_prefix_of(conf):
     assert len(addrs) == 200
     keys_per_net: dict[str, set[str]] = {}
     for a in addrs:
-        key = eval_map(conf, "$remote_addr", "$drone4d_prefix", a, {"remote_addr": a})
+        key = eval_map(conf, "$remote_addr", "$anet4d_prefix", a, {"remote_addr": a})
         assert key, a                                        # 空键不计入 limit_req（等于不限流）
         want = prefix_of(a)
         if "." in key:                                        # IPv4 与 IPv4 映射地址：整个地址（/32）
@@ -396,5 +408,77 @@ def test_prefix_map_parity_with_prefix_of(conf):
     keys = set()
     for low in (0, 1, 0x10000, 0x1_0000_0000, 0xFFFF_0000_0000_0000, 0x0001_0000_0000_0005):
         a = str(ipaddress.IPv6Address(base + low))
-        keys.add(eval_map(conf, "$remote_addr", "$drone4d_prefix", a, {"remote_addr": a}))
+        keys.add(eval_map(conf, "$remote_addr", "$anet4d_prefix", a, {"remote_addr": a}))
     assert keys == {"2001:db8:1:0"}
+
+
+# ---------------------------------------------------------------- 新域名与旧域名跳转（产品更名为 ANet4D）
+
+HTTP_LEVEL = ("limit_req_zone", "limit_conn_zone", "proxy_cache_path", "upstream", "map")
+
+
+def _walk(d: Directive):
+    for c in d.block or []:
+        yield c
+        yield from _walk(c)
+
+
+def test_site_serves_new_domain_with_its_own_certificate(conf, server):
+    for s in conf.find("server"):
+        assert s.values("server_name") == [[DOMAIN]], s.values("server_name")
+    assert server.values("ssl_certificate") == [[f"/etc/letsencrypt/live/{DOMAIN}/fullchain.pem"]]
+    assert server.values("ssl_certificate_key") == [[f"/etc/letsencrypt/live/{DOMAIN}/privkey.pem"]]
+    assert server.values("ssl_session_cache") == [["shared:anet4d_ssl:10m"]]
+    boot = parse(BOOTSTRAP.read_text(encoding="utf-8"))
+    (bs,) = boot.find("server")
+    assert bs.values("server_name") == [[DOMAIN]] and not any(boot.find(n) for n in HTTP_LEVEL)
+
+
+def test_legacy_site_is_redirect_only():
+    """旧域名站点：不定义任何 http 层对象（共享区只在新站点文件中定义一次），80 保留 ACME、其余 301；443 沿用旧证书、全部 301。"""
+    legacy = load(LEGACY_SITE)
+    assert [d.name for d in legacy.block] == ["server", "server"], [d.name for d in legacy.block]
+    want = [["301", f"https://{DOMAIN}$request_uri"]]
+    s80 = next(s for s in legacy.find("server") if ["80"] in s.values("listen"))
+    s443 = https_server(legacy)
+    for s in (s80, s443):
+        assert s.values("server_name") == [[LEGACY_DOMAIN]]
+        assert not any(d.name in ("proxy_pass", "limit_req", "limit_conn", "ssl_session_cache", "proxy_cache") for d in _walk(s))
+    locs80 = {" ".join(d.args): d for d in s80.find("location")}
+    assert locs80["^~ /.well-known/acme-challenge/"].values("root") == [["/var/www/certbot"]]
+    assert locs80["/"].values("return") == want
+    assert [" ".join(d.args) for d in s443.find("location")] == ["/"]
+    assert s443.find("location")[0].values("return") == want
+    assert s443.values("ssl_certificate") == [[f"/etc/letsencrypt/live/{LEGACY_DOMAIN}/fullchain.pem"]]
+    assert s443.values("ssl_certificate_key") == [[f"/etc/letsencrypt/live/{LEGACY_DOMAIN}/privkey.pem"]]
+    assert HSTS in s443.values("add_header")
+
+
+def test_new_zone_names_do_not_reuse_legacy_names(conf):
+    """nginx 拒绝 reload 改变已有共享区的键或大小：新站点的区一律是新名字，与更名前站点文件（drone4d_* 前缀）互不相同。"""
+    names = set()
+    for d in conf.find("limit_req_zone") + conf.find("limit_conn_zone"):
+        names.add(next(a for a in d.args if a.startswith("zone=")).split("=")[1].split(":")[0])
+    (pc,) = conf.find("proxy_cache_path")
+    names.add(next(a for a in pc.args if a.startswith("keys_zone=")).split("=")[1].split(":")[0])
+    assert names and all(n.startswith("anet4d_") for n in names), names
+    assert pc.args[0] == "/var/lib/nginx/anet4d-micro"
+
+
+def test_site_and_legacy_can_be_enabled_together(conf):
+    """两个站点文件同时启用（emax 迁移后的 sites-enabled）：http 层对象没有重名，server_name 互不重叠。"""
+    both = parse(SITE.read_text(encoding="utf-8") + "\n" + LEGACY_SITE.read_text(encoding="utf-8"))
+    seen: dict[str, str] = {}
+    for d in both.block:
+        if d.name in ("upstream",):
+            key = d.args[0]
+        elif d.name == "map":
+            key = d.args[1]
+        elif d.name in ("limit_req_zone", "limit_conn_zone"):
+            key = next(a for a in d.args if a.startswith("zone=")).split(":")[0]
+        else:
+            continue
+        assert key not in seen, key
+        seen[key] = d.name
+    names = [tuple(s.values("server_name")[0]) for s in both.find("server")]
+    assert sorted(set(names)) == [(DOMAIN,), (LEGACY_DOMAIN,)] and len(names) == 4

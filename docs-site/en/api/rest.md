@@ -1,6 +1,6 @@
 # Open interface
 
-ANet Drone4D exposes two HTTP interfaces and one realtime protocol:
+ANet4D exposes two HTTP interfaces and one realtime protocol:
 
 | Interface | Prefix | Served by | For |
 |---|---|---|---|
@@ -10,7 +10,7 @@ ANet Drone4D exposes two HTTP interfaces and one realtime protocol:
 
 The interface and the API have the same rights: every action in the browser maps onto the same interface and passes the same admission and
 safety checks. The server provides the OpenAPI 3.1 document of the sandbox interface at `/api/sandbox/v1/openapi.json`, and the public
-instance renders it with copyable examples at [`/sandbox/api`](https://drone4d.agentnetwork.org.cn/sandbox/api). Python programs should use
+instance renders it with copyable examples at [`/sandbox/api`](https://anet4d.agentnetwork.org.cn/sandbox/api). Python programs should use
 the {doc}`sdk`, which handles queueing, proof of work, renewal, resume after power saving and decoding of binary frames.
 
 ## Authentication
@@ -70,7 +70,7 @@ per-drone perception), and the server sends data according to each client's inte
 the focused drone as 64-byte Full64 records in batches, with structured messages encoded as msgpack. Commands are issued as a `call` and
 return accepted, running and the result in turn; velocity control sends setpoints over the client data channel at up to 50 Hz after the
 `call`. The byte layouts are specified in the design document
-[docs/17 interface and realtime protocol](https://github.com/ANetResearch/ANet-Drone4D/blob/main/docs/17-接口与实时协议规范.md).
+{gh}`docs/17 interface and realtime protocol </blob/main/docs/17-接口与实时协议规范.md>`.
 
 The connection closes with code 4410 when the session ends; power-save parking disconnects with code 4430, and the client resubscribes after
 resuming the session; switching the world disconnects with 1012, and the client reconnects to the new world.
@@ -80,7 +80,7 @@ resuming the session; switching the world disconnects with 1012, and the client 
 The table below is generated from `packages/contracts/rest/sandbox.openapi.snapshot.json` when the documentation is built. Paths are relative
 to the prefix `/api/sandbox/v1`; under "Priority", P1 marks optional capabilities, and endpoints that are not deployed return 404.
 
-```{drone4d-endpoints} packages/contracts/rest/sandbox.openapi.snapshot.json
+```{anet4d-endpoints} packages/contracts/rest/sandbox.openapi.snapshot.json
 :kind: sandbox
 ```
 
@@ -90,6 +90,6 @@ The table below is generated from `packages/contracts/rest/openapi.snapshot.json
 access); apart from health, readiness and version information they require a token. The public instance serves the viewing-related subset
 read-only.
 
-```{drone4d-endpoints} packages/contracts/rest/openapi.snapshot.json
+```{anet4d-endpoints} packages/contracts/rest/openapi.snapshot.json
 :kind: runtime
 ```

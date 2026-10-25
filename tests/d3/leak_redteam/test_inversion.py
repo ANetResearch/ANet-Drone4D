@@ -55,7 +55,7 @@ from awr.sim.sensors import cbrng
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-SDK = ROOT / "tools/sdk/drone4d/src"
+SDK = ROOT / "tools/sdk/anet4d/src"
 sys.path.insert(0, str(HERE.parents[0] / "env"))
 
 _p = HERE.parents[0] / "env" / "conftest.py"

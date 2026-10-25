@@ -6,15 +6,15 @@
 |---|---|
 | 文档编号 | AWR-D4-S2 |
 | 标题 | S2 CoopSearch-Handoff（协同搜索、目标确认与跨平台交接）Suite 规格 |
-| 版本 | v0.2.1（2026-10-18 文档集集成同步：按 AWR-06 v0.3 §0.5 统一裁定 XR-14 补 §7 `G` 在 `fixed_set` 下的区间方法） |
+| 版本 | v0.2.2（2026-10-25 命名同步：按 AWR-06 v0.4 XR-24 与 ADR-D4-36，产品名改为 ANet4D，研究者可见的包名、命令行、SDK 路径与文档站路径改为 `anet4d`；草案契约标识与域分隔常量保持现写法，在 WP-D4-01 契约定稿时改为 `anet4d` 前缀；其余内容不变）；v0.2.1（2026-10-18 文档集集成同步：按 AWR-06 v0.3 §0.5 统一裁定 XR-14 补 §7 `G` 在 `fixed_set` 下的区间方法） |
 | 日期 | 2026-10-18（UTC） |
 | 修订记录 | v0.1（2026-10-18）：首版。v0.2（2026-10-18）：按评审意见 19 条逐条核实后修订，处理记录见 §18。主要变化：主指标收敛为单一 `u_cs`（跟踪权重 `w_t` 按实例声明，搜索场景 `w_t = 0`）；`c_k` 增最小有效窗口 `G_min` 与不可观测区间约束；交接增状态迁移表、语法校验与边界情形，合法性判据改为"要约方为当前持有方且令牌为其当前令牌"；报告配额改为每 Agent 独立额度；`d2` 起高价值目标数按实例抽样；锚点改为整数纳秒精确比对；高度层有界循环复用；网格族增观测适配层、载体时间区间映射、黄金运行与成榜最低条件；新增机巢与能量、X1 宿主接入、规模预算三组需求；通道、Suite 标识与基线标识按并行文档现行版本对齐；新增对并行文档的反馈（§17.2） |
 | 状态 | D4 设计评审稿。D4 处于深入调研与概念设计阶段，实现在 D3 封板（G0）之后启动；本文全部周次以"D3 封板后第 N 周"表述，数值标注"初值"者为待 pilot 校准的设计缺省，不是对现有代码或性能的断言 |
-| 上游 | [AWR-06 D4 协同实验平台概念设计](../../06-D4-协同实验平台概念设计.md) v0.2（§1.4、§1.7、§3.4、§4、§5、§6.7、§7.0、§7.2、§7.4、§8.3–§8.8、§9、§10；ADR-D4-03、11、12、14、15、16、17、21、22、23、24、26、33）；调研 [r02 协同问题族与标准问题库](../../research/d4/r02-协同问题族与标准问题库.md)（§2、§3.4、§3.6、§6、§7）、[r03 NS-2 经验与排行榜规则](../../research/d4/r03-NS-2经验与排行榜规则.md)、[n01 现有代码映射](../../research/d4/notes/n01-现有代码映射.md)、[n02 D3 评测子系统泛化](../../research/d4/notes/n02-D3评测子系统泛化.md)、[n03 外部模型讨论纪要](../../research/d4/notes/n03-外部模型讨论纪要.md)（§2.9、§3.4）；负责人前期稿 design-r1（`/data/projs/anet-drone-data/design-r1.md`）、design-r2（`/data/projs/anet-drone-data/design-r2.md`，§五 CoopSearch 行） |
+| 上游 | [AWR-06 ANet4D 协同模拟基础设施概念设计](../../06-D4-协同实验平台概念设计.md) v0.2（§1.4、§1.7、§3.4、§4、§5、§6.7、§7.0、§7.2、§7.4、§8.3–§8.8、§9、§10；ADR-D4-03、11、12、14、15、16、17、21、22、23、24、26、33）；调研 [r02 协同问题族与标准问题库](../../research/d4/r02-协同问题族与标准问题库.md)（§2、§3.4、§3.6、§6、§7）、[r03 NS-2 经验与排行榜规则](../../research/d4/r03-NS-2经验与排行榜规则.md)、[n01 现有代码映射](../../research/d4/notes/n01-现有代码映射.md)、[n02 D3 评测子系统泛化](../../research/d4/notes/n02-D3评测子系统泛化.md)、[n03 外部模型讨论纪要](../../research/d4/notes/n03-外部模型讨论纪要.md)（§2.9、§3.4）；负责人前期稿 design-r1（`/data/projs/anet-drone-data/design-r1.md`）、design-r2（`/data/projs/anet-drone-data/design-r2.md`，§五 CoopSearch 行） |
 | 并行文档 | [M28 实验内核](../../modules/M28-实验内核PRD.md)、[M29 交互网络](../../modules/M29-交互网络PRD.md)、[M30 协同接口与基线](../../modules/M30-协同接口与基线PRD.md)、[M31 基准套件](../../modules/M31-基准套件PRD.md)、[M32 评测与统计](../../modules/M32-评测与统计PRD.md)、[M33 Trace 与复现](../../modules/M33-Trace与复现PRD.md)、[M34 研究者 SDK 与命令行](../../modules/M34-研究者SDK与命令行PRD.md)、[S1](S1-TaskAlloc规格.md)、[S3](S3-InfoShare规格.md)、[X1](X1-RobustCoord协议.md)、[协作智能排行榜规格](../协作智能排行榜规格.md)（下称 LB）、[契约草案](../契约草案.md)（下称 CT）、[r04 首篇论文实验设计](../../research/d4/r04-首篇论文实验设计.md)（下称 PAPER）。并行文档的引用以章节主题表述，字段名以 CT 定稿为准 |
 | 标识 | Suite `suite_id = coopsearch-handoff`（与 M34 发布矩阵一致，满足 M31 R-M31-02 的模式），Python 包目录 `coopsearch_handoff`（M31 §7.1），Suite 级随机域前缀 `suite.coopsearch-handoff.`（M31 R-M31-98）；报告与消息 schema 沿用 `coopsearch.` 前缀（M30 消息表），评测器标识 `coopsearch@1` |
 | 编号体例 | 需求 `R-S2-yy`，验收 `AC-S2-yy`，风险 `RK-S2-yy`，待决 `Q-S2-yy`；工作包引用 AWR-06 的 `WP-D4-xx`，决策引用 `ADR-D4-xx`，平台验收引用 `AC-D4-xx`。AWR-06 §7.2 的 AC-S2-1 至 AC-S2-6 在本文以 AC-S2-01 至 AC-S2-06 承接，含义不变（§11 对照） |
-| 引用约定 | 代码路径相对仓库根 `/data/projs/anet-drone`。前缀 `py:` = `python/awr/`，`sdk:` = `tools/sdk/drone4d/src/drone4d/`，`ct:` = `packages/contracts/`。对现有代码的陈述以 2026-10-18 本稿核对的工作副本为准，引用以"文件 + 符号"为准；文献只引用调研报告已列条目并保留其核实标注 |
+| 引用约定 | 代码路径相对仓库根 `/data/projs/anet-drone`。前缀 `py:` = `python/awr/`，`sdk:` = `tools/sdk/anet4d/src/anet4d/`，`ct:` = `packages/contracts/`。对现有代码的陈述以 2026-10-18 本稿核对的工作副本为准，引用以"文件 + 符号"为准；文献只引用调研报告已列条目并保留其核实标注 |
 | 称谓 | 下一大版本统一称 D4；D3 指已在收尾封板的 v0.3.0 |
 
 ---
@@ -393,7 +393,7 @@ Episode 在 `horizon_s` 到达时终止；全部高价值目标已确认且（�
 | 首批事件 | `rendezvous_handoff` 类：`crop-handoff-001` 及 D3 P0b 交付的同类 dev/test 变体；`target_search` 类：D3 封板时若已交付则纳入（CF-05、Q-S2-01） |
 | 高价值目标 | 由转换规则从脚本演员中选取：`rendezvous_handoff` 取全部脚本人员演员（载体继承规则适用于登车者）；`target_search` 取事件 `search.target`。`K_d` 为背景人群与其余脚本演员；被登乘的车辆演员在登乘区间之外属 `K_d`，在登乘区间内按 §3.6 V1 的时间区间映射归属被载目标，任一时刻只属一类 |
 | 目标先验 | `rendezvous_handoff`：区域内均匀分量与以公开锚点为中心（σ = 30 m）的高斯分量混合，权重 0.5/0.5（初值）；`target_search`：事件 `search.prior` 原样 |
-| 世界与后端 | `oryahovo-crop1`、`MeshWorldQuery`、`KinematicTier`、`L1Model`，均只在 `hosts/hifi`（`drone4d[hifi]`）中装载 |
+| 世界与后端 | `oryahovo-crop1`、`MeshWorldQuery`、`KinematicTier`、`L1Model`，均只在 `hosts/hifi`（`anet4d[hifi]`）中装载 |
 | 物理档 | `kinematic`（排名档以 Q-D4-12 在 P1 门裁决）；`realistic` + `L2` 只做抽样审计 |
 | 事件模式 | 只 `exogenous`（CF-13） |
 | 运行模式 | P1 只开放 `closed_loop`；`algorithm_isolated` 在网格族路径跟随器与 `KinematicTier` 对拍完成后评估 |
@@ -666,7 +666,7 @@ w_t   = 0（实例 tracking = null，d0–d2）；0.5（d3 起）
 | EV-3 | 覆盖指标（`coverage_final`、`t90_s`、`redundancy`）两族统一以 1 Hz 降采样计算：每个整秒时刻取各传感器的位姿，对视域内栅格单元做一次向量化视线判定；`cs-planar` 的视线判定与内核 `PlanarWorld` 同一实现，网格族在 `hosts/hifi` 中以 `MeshWorldQuery` 求视线。`cs-planar` 另可按"障碍摘要 + 栅格边长"缓存格到格可见性表（实例包内 `cache/vis.npz`，以障碍集合摘要为键），平台位置量化到所在栅格单元中心后查表；缓存只是加速手段，与直接判定的结果差异须在 AC-S2-24 的对拍容差内，否则禁用缓存 |
 | EV-4 | `c_k` 在 100 ms 网格上计算；`τ_k`、`t_det,k`、交接时刻均取内核签发的整数纳秒时间 |
 | EV-5 | 子编队投影（`subset`）：`U_CS` 对子编队重算时只计该子编队的报告与检测（用于 `Δ_ind` 一致性检查与扩容收益诊断） |
-| EV-6 | 评测器不 import `awr.bench`、scipy、jsonschema、numba；网格族的后端依赖（open3d、zstandard）只在 `drone4d[hifi]` 中延迟导入 |
+| EV-6 | 评测器不 import `awr.bench`、scipy、jsonschema、numba；网格族的后端依赖（open3d、zstandard）只在 `anet4d[hifi]` 中延迟导入 |
 | EV-7 | 复杂度与预算：`d4_std` 下 300 s Episode 的采集次数为 `n · 10 Hz · 300 s`（`n64` 约 1.9 × 10⁵ 次），按 EV-3 以 1 Hz 降采样后覆盖判定次数降为 1/10；`tele`（`r_s = 150 m`、视场 20°）每次采集覆盖约 `π·150²·(20/360) / (r_s,wide/4)²` ≈ 70 个 7.5 m 栅格，与 `wide`（≈ 50 个）同量级。预算见下表，计入 AWR-06 §5.11 各规模的宿主预算 |
 
 | 规模（`cs-planar`，`d2`/`d3`，300 s，RM-8 单核） | 区域边长 | 评测栅格数（边长 7.5 m） | 评测器墙钟 | 传感器模型（内核侧，整 Episode） | AWR-06 §5.11 宿主预算 |
@@ -962,7 +962,7 @@ D3 SDK 的 `track_share` 以 `sight`/`claim`/`reported` 协议实现跟踪与接
 | AC-S2-15 | P1 | P1 | `d3` 档（`n8`）满足 PA-1 至 PA-7 与 §5.11 预算，或不满足者从 P1 交付范围删除并登记；生成实例全部满足不可观测区间起点晚于 `T_c`；延迟确认检验：对每个官方 `d3` 闭环基线构造其"延迟确认"变体（首次具备确认条件后推迟 `δ ∈ {20, 60} s` 再报告），变体的 `U_CS` 不显著高于原基线（配对差 95% CI 下界 ≤ 0）；`w_t ∈ {0.3, 0.7}` 敏感性结果写入 pilot 报告 | pilot 报告（WP-D4-51） | AC-D4-50 | R-S2-12 |
 | AC-S2-16 | P1 | P1 | `interactive` 场景集：同实例同种子下初态与外生驱动与 `exogenous` 逐位一致；警觉逃逸状态转移对构造用例正确；Δ 族在该场景集只报告总效应 | `test_interactive.py` | §8.5 | R-S2-62 |
 | AC-S2-17 | P1 | P1 | `track_share_cs@1` 在 `cs-planar` `d3` 与网格族上产生确认报告与合法交接；原 `track_share` 动作流与 D3 运行逐字节一致（legacy 回归） | `tests/d4/baselines/test_track_share_cs.py` | AC-D4-09 | R-S2-49 |
-| AC-S2-18 | P1 | P1 | 网格族：转换工具对 `crop-handoff-001` 两次转换的 `instance_sha256` 一致；磁带摘要校验通过；`L1Model` 输出与 D3 同种子同位姿下逐字节一致，适配层输出字段符合 §3.4 字段表（核心字段齐全、`ident` 与 `appearance` 存在性一致、`cov_xy` 与公式一致、无 `sig`）；证据解析与 D3 `resolve` 对拍一致；载体边界用例：`vehicle_C` 在 `t_board` 前的检测投票给车辆（`K_d`），之后投票给 `person_B` 对应目标，证据跨 `t_board` 的报告按多数规则裁决；黄金运行 GR-1、GR-2 的分量与期望一致；`holdout` 不满足 MC-1 至 MC-3 时登记为 `audit` | `tests/d4/suites/coopsearch/test_mesh.py`（`drone4d[hifi]` 环境） | AC-D4-22 旁证 | R-S2-53–57、60、73、74 |
+| AC-S2-18 | P1 | P1 | 网格族：转换工具对 `crop-handoff-001` 两次转换的 `instance_sha256` 一致；磁带摘要校验通过；`L1Model` 输出与 D3 同种子同位姿下逐字节一致，适配层输出字段符合 §3.4 字段表（核心字段齐全、`ident` 与 `appearance` 存在性一致、`cov_xy` 与公式一致、无 `sig`）；证据解析与 D3 `resolve` 对拍一致；载体边界用例：`vehicle_C` 在 `t_board` 前的检测投票给车辆（`K_d`），之后投票给 `person_B` 对应目标，证据跨 `t_board` 的报告按多数规则裁决；黄金运行 GR-1、GR-2 的分量与期望一致；`holdout` 不满足 MC-1 至 MC-3 时登记为 `audit` | `tests/d4/suites/coopsearch/test_mesh.py`（`anet4d[hifi]` 环境） | AC-D4-22 旁证 | R-S2-53–57、60、73、74 |
 | AC-S2-19 | P1 | P1 | 网格族安全判定与 `py:bench/eval/safety.py` 共享用例一致（构造穿越用例 `ranked_valid = false`）；legacy `found` 报告映射正确 | `test_mesh_safety.py` | — | R-S2-28、45 |
 | AC-S2-20 | P1 | P1 | 条目卡字段齐全（§10.6 R-S2-46）；`board.v2` 中 S2 场景集可浏览 | 前端回归（WP-D4-23） | AC-D4-15 | R-S2-46 |
 | AC-S2-21 | P1 | P1 | `Δ_perm` 的 `perm_struct` 只置换登记为 `world_state` 的字段，交互控制消息不被置换；合成策略上回收构造值 | `test_delta_perm_coopsearch.py` | AC-D4-26 | §7.5 |

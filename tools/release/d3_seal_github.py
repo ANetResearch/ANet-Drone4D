@@ -92,7 +92,7 @@ WP_EXTRA_REPORTS: dict[str, tuple[tuple[str, str], ...]] = {
 DOCS05_PATH = "docs/05-D3-设计增补与决策记录.md"
 D4_DOC_PATH = "docs/06-D4-协同实验平台概念设计.md"
 D4_SET_PATH = "docs/d4"
-DOCS_SITE = "https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/project/roadmap.html"
+DOCS_SITE = "https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/project/roadmap.html"
 # V0.3 发布文案的状态翻转（W-14）须在打标签前应用并删除该文件（文案评审记录 §9.2）；本脚本只核对，不应用
 PREPARED_COPY = "docs/impl/v0.3-release/copy.prepared.json"
 # 仓库 About 与 topics 的来源（C-51，用户 2026-10-22 确认，R-D3-71）：V0.3 About 草案见文案评审记录 §5 第 2 条，
@@ -476,7 +476,7 @@ def render_roadmap(cfg: Config, model: DocsModel, date: str, rows: dict[str, Any
     q = cfg.blob
     seal_acs = "阻塞 39 条、应交付 2 条"
     lines = [
-        "本 Issue 汇总 ANet Drone4D 的路线图。每个阶段对应一个 Milestone，每个工作包或待办对应一个 Issue；进度以 Milestone 的完成度为准。",
+        "本 Issue 汇总 ANet4D 的路线图。每个阶段对应一个 Milestone，每个工作包或待办对应一个 Issue；进度以 Milestone 的完成度为准。",
         "",
         f"### D3 封板（V0.3，`{cfg.tag}`）",
         "",
@@ -868,7 +868,7 @@ class GitHub:
                 ) -> tuple[int, Any]:
         url = path if path.startswith("http") else f"{API}/repos/{self.repo}{path}"
         headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
-                   "User-Agent": "drone4d-d3-seal"}
+                   "User-Agent": "anet4d-d3-seal"}
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
         data = json.dumps(body, ensure_ascii=False).encode() if body is not None else None

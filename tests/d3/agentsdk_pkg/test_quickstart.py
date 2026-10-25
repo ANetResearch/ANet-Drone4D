@@ -1,7 +1,7 @@
-"""快速上手示例在临时 venv 中经线协议运行（D3-AC-58：`pip install drone4d` 后按文档在 15 min 内以 `make(..., physics=...)` 运行示例
+"""快速上手示例在临时 venv 中经线协议运行（D3-AC-58：`pip install anet4d` 后按文档在 15 min 内以 `make(..., physics=...)` 运行示例
 Agent，同一 Agent 代码在各物理档与 L1、L2 上不改动；三个基线可运行，同一种子动作流逐字节一致）。
 
-Env 在本测试进程中构造（仓库环境，`awr`）；Agent 是 venv 中 `python -m drone4d.serve` 的独立进程（只装了 wheel，无 `awr`、
+Env 在本测试进程中构造（仓库环境，`awr`）；Agent 是 venv 中 `python -m anet4d.serve` 的独立进程（只装了 wheel，无 `awr`、
 无 `PYTHONPATH`），经 docs/sdk/examples/run_quickstart.py 的 `host_sockets` 接入，与文档第 4 节的套接字方式相同。
 
 - 运动学开发档（本机，合成世界与事件）：示例 Agent 的 L1 回合完成；动作全部通过 `bench/act.v1`；与源码树进程内运行的动作流、
@@ -58,7 +58,7 @@ def _workdir(tmp_path: Path) -> Path:
 
 
 def _remote(env, venv, sock_root: Path, work: Path, agent_args: list[str], logs: Path) -> tuple[dict, dict, list]:
-    """venv 中每架机一个 `python -m drone4d.serve` 进程接入 Env；→ (运行清单, 线协议统计, [(returncode, stderr)])。"""
+    """venv 中每架机一个 `python -m anet4d.serve` 进程接入 Env；→ (运行清单, 线协议统计, [(returncode, stderr)])。"""
     qs = _quickstart()
     procs: list[subprocess.Popen] = []
     logs.mkdir(parents=True, exist_ok=True)
@@ -66,7 +66,7 @@ def _remote(env, venv, sock_root: Path, work: Path, agent_args: list[str], logs:
     def launch(paths: dict[str, Path]) -> None:
         for u, p in paths.items():
             err = open(logs / f"{u}.stderr", "w", encoding="utf-8")    # noqa: SIM115  子进程继承句柄，随进程退出关闭
-            procs.append(subprocess.Popen([str(venv.python), "-m", "drone4d.serve", *agent_args, "--sock", str(p)], cwd=work,
+            procs.append(subprocess.Popen([str(venv.python), "-m", "anet4d.serve", *agent_args, "--sock", str(p)], cwd=work,
                                           env=clean_env(), stdout=subprocess.DEVNULL, stderr=err))
 
     try:
@@ -81,7 +81,7 @@ def _remote(env, venv, sock_root: Path, work: Path, agent_args: list[str], logs:
 
 
 def _local(env, factory) -> dict:
-    from drone4d.runner import run_episode
+    from anet4d.runner import run_episode
 
     return run_episode(env, lambda _u: factory())
 
@@ -196,7 +196,7 @@ def test_example_l2_from_clean_venv(clean_venv, synth_event, tmp_path: Path) -> 
 # ------------------------------------------------------------------ 三个基线：wheel 中的 --baseline
 @pytest.mark.parametrize("policy", ["static_guard", "coverage_scan", "track_share"])
 def test_baselines_from_wheel_match_source(clean_venv, synth_event, tmp_path: Path, policy: str) -> None:
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     from awr.agentsdk.env.core import BenchEnv
 
@@ -221,7 +221,7 @@ def test_example_realistic_crop_from_clean_venv(clean_venv, tmp_path: Path) -> N
     if not worlds or not events or not (Path(worlds) / "oryahovo-crop1").is_dir() or not (Path(events) / "crop-handoff-001" / "v1").is_dir():
         pytest.skip("[data] needs worlds/oryahovo-crop1 and the compiled crop-handoff-001 (set AWR_D3_SDK_WORLDS_ROOT, AWR_D3_SDK_EVENTS_ROOT)")
     pytest.importorskip("zmq")
-    from drone4d.local import make  # = drone4d.bench.make（d3-gz 镜像不含 httpx）
+    from anet4d.local import make  # = anet4d.bench.make（d3-gz 镜像不含 httpx）
 
     rs = json.loads((ROOT / "configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json").read_text(encoding="utf-8"))
     dur = float(os.environ.get("AWR_D3_SDK_REALISTIC_S", "30"))

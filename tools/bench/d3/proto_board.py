@@ -29,9 +29,9 @@ DISPLAY = {"static_guard": "Static guard", "coverage_scan": "Coverage scan", "tr
 
 
 def _one(job: dict) -> dict:
-    sys.path[:0] = [str(ROOT / "python"), str(ROOT / "tools/sdk/drone4d/src")]
-    from drone4d.baselines import BASELINES
-    from drone4d.runner import run_episode
+    sys.path[:0] = [str(ROOT / "python"), str(ROOT / "tools/sdk/anet4d/src")]
+    from anet4d.baselines import BASELINES
+    from anet4d.runner import run_episode
 
     from awr.agentsdk.env.core import BenchEnv, _open_world
     from awr.agentsdk.env.spec import EnvSpec

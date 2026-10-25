@@ -1,6 +1,6 @@
 // FX-WEB2 UI functional cases on a test build with FakeSource and mocked REST (no backend; `?viewport=off&reveal=shell`
 // like the other M15 specs):
-//   brand       page title and header lock-up say "ANet Drone4D" (ADR-056); About names the licence, the repository,
+//   brand       page title and header lock-up say "ANet4D" (ADR-056); About names the licence, the repository,
 //               the UrbanScene3D source with the D2 licence wording (ADR-109) and the copyright line (LICENSE 1b; M16-FR-006);
 //   timeline    the bar has the readout, the overview and detail tracks and the live rate table; markers of the M12
 //               track model show a hover tooltip; the context menu offers "add a bookmark here"; the Timeline tab has the
@@ -75,16 +75,16 @@ test('brand name, About content and the synthetic-source honesty badge', async (
   const w = watch(page)
   await page.setViewportSize({ width: 1920, height: 1080 })
   await open(page)
-  await expect(page.locator('[data-brand="lockup"]')).toContainText('ANet Drone4D')
+  await expect(page.locator('[data-brand="lockup"]')).toContainText('ANet4D')
   await expect(page.locator('[data-brand-avatar]')).toBeVisible()
-  expect(await page.title()).toContain('ANet Drone4D')
+  expect(await page.title()).toContain('ANet4D')
   await expect(page.locator('[data-badge="synthetic-source"]')).toBeVisible()
   await page.getByRole('menuitem', { name: '帮助' }).click()
   await page.getByRole('menuitem', { name: '关于' }).click()
   const about = page.locator('[data-about]')
   await expect(about).toBeVisible()
   await expect(about.locator('[data-brand="badge"]')).toBeVisible()
-  await expect(about.locator('[data-about-product]')).toHaveText('ANet Drone4D')
+  await expect(about.locator('[data-about-product]')).toHaveText('ANet4D')
   await expect(about.locator('[data-about-license]')).toContainText('ANet Open Source License')
   await expect(about.getByRole('link', { name: /ANetResearch\/ANet-Drone4D/ })).toHaveAttribute('href', 'https://github.com/ANetResearch/ANet-Drone4D')
   await expect(about.locator('[data-about-data]')).toContainText('UrbanScene3D')

@@ -180,7 +180,7 @@ def test_server_info_power_identity_and_health(power_stack) -> None:
     assert si["power"]["viewer_idle_s"] == 2 and si["power"]["presence_min_s"] == 1 and si["identity"] == {"tier": "public"}
     assert rtc.ops_errors(si) == []
     h = httpx.get(power_stack.base + "/api/health", timeout=5).json()
-    assert h["status"] == "ok" and set(h["build"]) == {"version", "channel", "release"} and h["build"]["version"] == "0.3.1"
+    assert h["status"] == "ok" and set(h["build"]) == {"version", "channel", "release"} and h["build"]["version"] == "0.3.2"
 
 
 def test_idle_viewer_is_reclaimed_with_518_and_4430(power_stack) -> None:
@@ -276,9 +276,9 @@ def ident_stack(tmp_path_factory):
     env = {k: str(v) for k, v in sf.env().items()}
     env.setdefault("AWR_IDENTITY_STATE_DIR", str(d / "identity"))
     env["AWR_IDENTITY_JSON"] = json.dumps({"delay_ms": 50, "jitter_ms": 5, "rps": 20, "burst": 20})
-    site = "https://drone4d.example.test"
+    site = "https://anet4d.example.test"
     with _env(**env):
-        s = fakesim.GwStack(n=1, access_mode="public", origins=[site], allowed_hosts_extra=["drone4d.example.test"],
+        s = fakesim.GwStack(n=1, access_mode="public", origins=[site], allowed_hosts_extra=["anet4d.example.test"],
                             admin_password=sf.secret, max_conns=64,
                             persist_dir=d / "persist", run_dir=d / "run")
     s.site = site

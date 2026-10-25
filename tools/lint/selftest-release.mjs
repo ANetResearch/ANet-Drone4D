@@ -179,6 +179,8 @@ expect('binary kinds', [binaryKind(ELF), binaryKind(Buffer.from('!<arch>\nxxxx',
     const v = 'v' + Math.random().toString(36).slice(2, 12) + 'Q7'
     writeFileSync(join(dir, 'svc.env'), `SVC_IMAGE_MODEL=public-model-id-001\nSVC_MODEL_ID="public-model-id-002"\nSVC_API_KEY=${v}xxxx\n`)
     expect('model ids are not secrets', localSecrets(dir).map((s) => s.key), ['SVC_API_KEY'])
+    writeFileSync(join(dir, 'ep.env'), `EP_URL=https://api.example.org\nEP_ENDPOINT=https://h.example.org:8443/v1\nEP_AUTH_URL=https://user:${v}@h.example.org\n`)
+    expect('plain endpoint urls are not secrets, urls with credentials are', localSecrets(dir).map((s) => s.key).sort(), ['EP_AUTH_URL', 'SVC_API_KEY'])
     expect('public key pattern', ['A_MODEL', 'MODEL', 'A_MODELS', 'A_MODEL_ID', 'A_MODEL_KEY', 'MODELKEY'].map((k) => PUBLIC_KEYS.test(k)), [true, true, true, true, false, false])
   } finally {
     rmSync(dir, { recursive: true, force: true })

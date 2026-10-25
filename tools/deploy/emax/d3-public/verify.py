@@ -49,7 +49,7 @@ sys.path.insert(0, str(HERE))
 import labctl  # noqa: E402
 
 SCHEMA = "awr.deploy.d3_public.verify.v1"
-DOMAIN = "drone4d.agentnetwork.org.cn"
+DOMAIN = "anet4d.agentnetwork.org.cn"   # 公开站点；旧域名 drone4d.agentnetwork.org.cn 只做 301
 MIB = 1 << 20
 RATE_BPS = 2 * MIB                 # limit_rate 2m（nginx 的 m 为 MiB）
 RATE_AFTER = 8 * MIB               # limit_rate_after 8m

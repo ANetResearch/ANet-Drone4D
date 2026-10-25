@@ -1,7 +1,7 @@
 {
-  "name": "ANet Drone4D",
-  "short_name": "Drone4D",
-  "description": "ANet Drone4D World Runtime: digital sand table of UAV swarms",
+  "name": "ANet4D",
+  "short_name": "ANet4D",
+  "description": "ANet4D: simulation infrastructure for collaborative embodied agents",
   "lang": "zh-CN",
   "start_url": "/world/synthcity?source=pwa",
   "scope": "/",

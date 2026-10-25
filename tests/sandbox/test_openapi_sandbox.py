@@ -34,7 +34,7 @@ def test_m17_routes_present_with_extensions() -> None:
         assert {"Shell", "Python"} <= langs, e.sb
         if "/sessions/{sid}" in e.path and not e.path.endswith("end-beacon"):
             assert op.get("security") == [{"bearerAuth": []}], e.sb
-    assert spec["openapi"] == "3.1.0" and spec["info"]["title"] == "ANet Drone4D Sandbox API"
+    assert spec["openapi"] == "3.1.0" and spec["info"]["title"] == "ANet4D Sandbox API"
 
 
 def test_not_mounted_on_show_api() -> None:

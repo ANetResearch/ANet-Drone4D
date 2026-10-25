@@ -3,7 +3,7 @@ import { canToggleVisibility, canWithdraw, DIGEST_RE, parseCmd, parseEnv } from 
 
 describe('submission form helpers', () => {
   it('parses the entry command', () => {
-    expect(parseCmd('python -m drone4d.serve my_pkg.agent:Agent')).toEqual(['python', '-m', 'drone4d.serve', 'my_pkg.agent:Agent'])
+    expect(parseCmd('python -m anet4d.serve my_pkg.agent:Agent')).toEqual(['python', '-m', 'anet4d.serve', 'my_pkg.agent:Agent'])
     expect(parseCmd('["python", "-m", "a b"]')).toEqual(['python', '-m', 'a b'])
     expect(parseCmd('[1, 2]')).toBeNull()
     expect(parseCmd('   ')).toBeNull()

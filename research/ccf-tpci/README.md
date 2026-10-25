@@ -76,3 +76,5 @@ none of it is flight-test data.
 `research/ccf-tpci/experiments/review_llm.py` sends the compiled text to an OpenAI-compatible endpoint for a simulated reviewer critique.
 The key is read from `REVIEW_API_KEY` (or `DEEPSEEK_API_KEY`) and never stored. Its output in `review/` was used only
 to find unclear passages; every number in the paper comes from `data/`.
+
+`m1geo_full` is stored as four ordered Parquet partitions under `data/m1geo_full/` to respect the repository’s 5 MB per-file limit. All 350,000 rows, values, column types and row order are preserved; `figures/style.py::load` accepts both single-file runs and partitioned runs. Reassembly was checked against the original with Arrow table equality (including metadata) and pandas frame equality.

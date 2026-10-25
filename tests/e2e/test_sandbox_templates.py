@@ -1,6 +1,6 @@
 """沙盒场景模板 T1–T6、世界锚点与共享展示剧本 S7（WP-13；AWR-04 §10.4、ADR-094、ADR-112；D2-AC-24、D2-AC-34 的模板部分）。
 
-G1（离线，≤ 10 s）：42 个模板与 S7 的 schema、生成器确定性与提交一致、几何与引用约束、ADR-094 的 S7 组成、M17 模板目录读取。
+G1（离线）：42 个基础模板、7 个 synthcity 目标系统模板与 S7 的 schema、生成器确定性与提交一致、几何与引用约束、ADR-094 的 S7 组成、M17 模板目录读取。
 needs_data：锚点在世界几何上复核（`tools/sandbox/anchors.py --check` 的同一判据）；synthcity 的 T1–T6 以批处理运行 60 s 无错误
 （slow）；七个世界全部 42 个模板只在 `AWR_E2E_FULL=1` 时运行（harness 用例）。已知的跨模块缺陷（AWR-V1 在 `follow_path` 中
 `POS_ERR_FAILSAFE`／`TILT_ERR_KILL`，d2-WP-13-to-M20-M21 第 1 条）按 xfail 记录，不掩盖其他错误。
@@ -25,6 +25,13 @@ import sbcommon as C
 
 from awr.datasets.scenarios.catalog import schema_errors
 
+SCENE_TARGET_TEMPLATE_IDS = (
+    "t7_target_appearance", "t8_scene_activity", "t9_scene_life", "t10_custom_life",
+    "t11_custom_life", "t12_life_all_classes", "t13_all_vehicle_types",
+)
+EXPECTED_TEMPLATES = {(w, t) for w in C.WORLDS for t in C.TEMPLATE_IDS} | {
+    ("synthcity", t) for t in SCENE_TARGET_TEMPLATE_IDS
+}
 TEMPLATES = sorted(C.SANDBOX.glob("*/t*.json"))
 CATALOG = json.loads((ROOT / "vehicles" / "catalog.json").read_text(encoding="utf-8"))
 MODEL_CAT = {m["id"]: m.get("category") for m in CATALOG.get("models") or CATALOG.get("items") or []}
@@ -44,7 +51,7 @@ def _s7() -> dict:
 # ---------------------------------------------------------------- 文件集合、schema 与生成器
 def test_template_set_complete() -> None:
     got = {(p.parent.name, p.stem) for p in TEMPLATES}
-    want = {(w, t) for w in C.WORLDS for t in C.TEMPLATE_IDS}
+    want = EXPECTED_TEMPLATES
     assert got == want, sorted(got ^ want)
     assert sorted(p.stem for p in C.ANCHORS.glob("*.json")) == sorted(C.WORLDS)
 
@@ -171,14 +178,24 @@ def test_s7_composition_adr094() -> None:
 
 
 def test_m17_template_catalog_reads_the_files() -> None:
-    """M17 池的模板目录（`TemplateCatalog`）直接读取本目录：每个世界 6 个，T5 推荐，组装出的 session.json 含全部配置段。"""
-    from awr.sandbox.templates import TemplateCatalog, build_session_config
+    """M17 池的模板目录（`TemplateCatalog`）直接读取本目录：缺省部署每个世界 6 个基础模板（实验目标模板不列出、按 id 不可取），
+    私有验收部署（experimental）synthcity 另有 7 个目标系统模板；T5 推荐，组装出的 session.json 含全部配置段。"""
+    from awr.sandbox.templates import TemplateCatalog, build_session_config, is_experimental_template
 
-    cat = TemplateCatalog(C.SANDBOX)
+    base = {(w, t) for w in C.WORLDS for t in C.TEMPLATE_IDS}
+    cat = TemplateCatalog(C.SANDBOX, experimental=False)
     items = cat.items(None, list(C.WORLDS))
-    assert len(items) == 42 and sum(1 for it in items if it["recommended"]) == 7
+    assert len(items) == len(base) == 42 and sum(1 for it in items if it["recommended"]) == 7
     for w in C.WORLDS:
         assert cat.ids(w) == sorted(C.TEMPLATE_IDS)
+    for tid in SCENE_TARGET_TEMPLATE_IDS:
+        assert cat.get("synthcity", tid) is None
+    lab = TemplateCatalog(C.SANDBOX, experimental=True)
+    assert len(lab.items(None, list(C.WORLDS))) == len(EXPECTED_TEMPLATES)
+    for w in C.WORLDS:
+        assert lab.ids(w) == sorted(t for world, t in EXPECTED_TEMPLATES if world == w)
+    assert {t for t in SCENE_TARGET_TEMPLATE_IDS if is_experimental_template(lab.get("synthcity", t) or {})} == set(SCENE_TARGET_TEMPLATE_IDS)
+    assert not any(is_experimental_template(cat.get(w, t) or {}) for w, t in base)
     t = cat.get("sanfrancisco", C.T5)
     cfg = build_session_config("sanfrancisco", template_id=C.T5, template=t, snapshot=None, calendar=None, acoustic_bg=None,
                                seed=3, limits={"vehicles_max": 12, "targets_max": 30, "nests_max": 4, "tasks_active_max": 6},

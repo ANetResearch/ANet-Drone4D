@@ -1,20 +1,20 @@
 <div align="center">
 
-<img src="docs/media/drone4d-banner.jpg" alt="ANet Drone4D 品牌图：面向多智能体无人机的四维世界运行时" width="100%" />
+<img src="docs/media/anet4d-banner.jpg" alt="ANet4D 品牌图：新一代具身智能体协同模拟基础设施" width="100%" />
 
-<h3>ANet Drone4D</h3>
+<h3>ANet4D</h3>
 
-ANet Drone4D 是以真实世界为基础的多智能体无人机四维仿真平台。交互沙盒（V0.2）在同一仿真时钟下运行城市级点云数字孪生、机群仿真、集群控制与目标感知，服务器无需 GPU，场景由访客浏览器渲染。事件沙盘（V0.3）引入网格世界、事件磁带与事件级观测基准，其传感器生成需要服务器配备 NVIDIA GPU。
+ANet4D 是新一代具身智能体协同模拟基础设施。ANet4D 的目标是成为具身智能体协同研究的标准实验基础设施，如同 NS-3 之于网络研究。其适用范围涵盖多无人机、无人车（UGV）、无人船（USV）、地面机器人、固定传感器与软件智能体；已发布版本以无人机作为首类实体，运行在以真实世界为基础的四维数字孪生之上。交互沙盒（V0.2）在同一仿真时钟下运行城市级点云数字孪生、机群仿真、集群控制与目标感知，服务器无需 GPU，场景由访客浏览器渲染。事件沙盘（V0.3）引入网格世界、事件磁带与 Gazebo Sim 锁步、基于网格渲染的相机、热成像与 LiDAR 传感器以及基准评测运行时，其传感器生成需要服务器配备 NVIDIA GPU。
 
 [![Release](https://img.shields.io/github/v/release/ANetResearch/ANet-Drone4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/latest)
 [![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-Read%20the%20Docs%20layout-1f1f1f)](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/)
-[![Live demo](https://img.shields.io/badge/live%20demo-drone4d.agentnetwork.org.cn-e0322d)](https://drone4d.agentnetwork.org.cn)
+[![Docs](https://img.shields.io/badge/docs-Read%20the%20Docs%20layout-1f1f1f)](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/)
+[![Live demo](https://img.shields.io/badge/live%20demo-anet4d.agentnetwork.org.cn-e0322d)](https://anet4d.agentnetwork.org.cn)
 [![License](https://img.shields.io/badge/license-modified%20Apache--2.0-1f1f1f)](LICENSE)
 
-**[在线演示](https://drone4d.agentnetwork.org.cn)** · **[文档](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/)** ·
-[快速开始](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/intro/quickstart.html) ·
-[开放接口](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/api/rest.html) ·
+**[在线演示](https://anet4d.agentnetwork.org.cn)** · **[文档](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/)** ·
+[快速开始](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/intro/quickstart.html) ·
+[开放接口](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/api/rest.html) ·
 [发布记录](https://github.com/ANetResearch/ANet-Drone4D/releases) · [ANet](https://github.com/ANetResearch/ANet)
 
 [English](README.md) · **简体中文**
@@ -44,7 +44,7 @@ ANet Drone4D 是以真实世界为基础的多智能体无人机四维仿真平�
 | 网格相机与网格 LiDAR（Livox MID-360 扫描模式） | D3（V0.3） | 服务器：NVIDIA GPU | 已交付 |
 | 以仿真数据驱动 FAST-LIVO2 重建并与网格真值对比评估；Rerun 数据检视 | D3（V0.3） | 服务器：NVIDIA GPU | 已交付 |
 
-状态反映已发布的 V0.2、V0.3 各版本与[D3 设计基线](docs/05-D3-设计增补与决策记录.md)。
+状态反映已发布的 V0.2、V0.3 各版本与[D3 设计基线](docs/05-D3-设计增补与决策记录.md)。上述能力构成 ANet4D 的现有基础。跨实体协同实验平台将异构实体与智能体置于同一世界、同一评测协议之下，是后续发展方向，目前处于概念设计阶段（[docs/06](docs/06-D4-协同实验平台概念设计.md)），不属于已发布版本。
 
 ## 运行环境
 
@@ -57,7 +57,7 @@ ANet Drone4D 是以真实世界为基础的多智能体无人机四维仿真平�
 
 ## 快速开始
 
-无需注册即可访问**[在线演示](https://drone4d.agentnetwork.org.cn)**，站点提供只读的共享展示以及为每位访客隔离的沙盒。在 Linux 上本地运行平台：
+无需注册即可访问**[在线演示](https://anet4d.agentnetwork.org.cn)**，站点提供只读的共享展示以及为每位访客隔离的沙盒。在 Linux 上本地运行平台：
 
 ```sh
 git clone https://github.com/ANetResearch/ANet-Drone4D.git && cd ANet-Drone4D
@@ -66,13 +66,14 @@ make demo-world   # 生成 ANet 合成城市
 make run          # 随后打开 http://127.0.0.1:8000/world/synthcity
 ```
 
-[快速开始](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/intro/quickstart.html)指南包含每一步的真实输出，并介绍如何通过 Python SDK 驱动沙盒会话。
+[快速开始](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/intro/quickstart.html)指南包含每一步的真实输出，并介绍如何通过 Python SDK 驱动沙盒会话。
 
 ## 文档
 
-- [文档站](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/)：入门、专题、REST 接口与 Python SDK 参考。
+- [文档站](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/)：入门、专题、REST 接口与 Python SDK 参考。
 - [设计文档](docs/)：系统架构、技术选型、产品与界面需求、数据与协议规范以及验收报告。
-- [在线演示](https://drone4d.agentnetwork.org.cn)及其[交互式接口文档](https://drone4d.agentnetwork.org.cn/sandbox/api)。
+- [在线演示](https://anet4d.agentnetwork.org.cn)及其[交互式接口文档](https://anet4d.agentnetwork.org.cn/sandbox/api)。
+- 命名：自 2026-10-25 起项目更名为 ANet4D（[ADR-223](docs/05-D3-设计增补与决策记录.md)），V0.3.1 及以前的版本以 ANet Drone4D 之名发布。`drone4d.event.v1` 等协议与模式标识沿用原名，作为遗留标识保留。
 
 ## 功能导览
 
@@ -134,7 +135,7 @@ FleetSim 将全部无人机组织为单一的数组结构体（SoA），在 250 
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/landing-desktop.jpg" alt="ANet Drone4D 公开演示站首页" /></td>
+<td width="50%"><img src="docs/media/landing-desktop.jpg" alt="ANet4D 公开演示站首页" /></td>
 <td width="50%"><img src="docs/media/d2-mobile.jpg" alt="两部手机上的共享展示与底部标签栏" /></td>
 </tr>
 <tr>
@@ -170,8 +171,8 @@ FleetSim 将全部无人机组织为单一的数组结构体（SoA），在 250 
 - **浏览器。** 客户端基于 React 与命令式 three.js 引擎构建，状态按世界隔离作用域，切换城市时不会产生跨世界的实体残留。
 - **契约先行。** 由 JSON Schema 统一生成 Python 与 TypeScript 类型定义，以基准文件（golden files）保持多端实现对齐，并通过进程监管器执行心跳检测、退避重试与熔断保护。
 
-详见：[架构](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/topics/architecture.html) ·
-[世界与数据](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/topics/worlds.html) ·
+详见：[架构](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/topics/architecture.html) ·
+[世界与数据](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/topics/worlds.html) ·
 [设计文档](docs/)。
 
 </details>
@@ -181,25 +182,25 @@ FleetSim 将全部无人机组织为单一的数组结构体（SoA），在 250 
 
 <br/>
 
-沙盒在 `/api/sandbox/v1` 暴露 REST v1 接口，并与 `awr.rt.v1` 实时协议配合使用。Web 界面与 API 共享完全一致的权限，所有指令均经过相同的准入与安全检查。附带可复制示例的交互式 OpenAPI 文档位于 [`/sandbox/api`](https://drone4d.agentnetwork.org.cn/sandbox/api)。单文件 Python SDK（[`tools/sdk/awr_sandbox.py`](tools/sdk/awr_sandbox.py)）内置排队等待、会话续期、从节能模式恢复以及二进制帧解码逻辑：
+沙盒在 `/api/sandbox/v1` 暴露 REST v1 接口，并与 `awr.rt.v1` 实时协议配合使用。Web 界面与 API 共享完全一致的权限，所有指令均经过相同的准入与安全检查。附带可复制示例的交互式 OpenAPI 文档位于 [`/sandbox/api`](https://anet4d.agentnetwork.org.cn/sandbox/api)。单文件 Python SDK（[`tools/sdk/awr_sandbox.py`](tools/sdk/awr_sandbox.py)）内置排队等待、会话续期、从节能模式恢复以及二进制帧解码逻辑：
 
 ```sh
 pip install "httpx>=0.24" "websockets>=12" "msgpack>=1.0"
-curl -O https://drone4d.agentnetwork.org.cn/sdk/awr_sandbox.py
+curl -O https://anet4d.agentnetwork.org.cn/sdk/awr_sandbox.py
 ```
 
 ```python
 from awr_sandbox import Sandbox
 
-sb = Sandbox("https://drone4d.agentnetwork.org.cn", timeout_s=30)
+sb = Sandbox("https://anet4d.agentnetwork.org.cn", timeout_s=30)
 with sb.create("synthcity", "t5_area_guard") as s:   # 公开站满载时自动排队
     print(s.state()["state"])
     for msg in s.stream(["sandbox/session"], seconds=3):
         print(msg.topic, msg.data)
 ```
 
-参考：[REST 接口](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/api/rest.html) ·
-[Python SDK](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/api/sdk.html) ·
+参考：[REST 接口](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/api/rest.html) ·
+[Python SDK](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/api/sdk.html) ·
 [示例](tools/sdk/examples/)。
 
 </details>
@@ -236,9 +237,10 @@ with sb.create("synthcity", "t5_area_guard") as s:   # 公开站满载时自动�
 | V0.1 | 三维场景视图：点云数字孪生、渐进加载、FleetSim 与 PX4-lite、实时协议、Mock ANet | 已发布 |
 | V0.2 | 交互沙盒：目标物与量化感知、机巢与接力监视、开放接口、手机与平板适配、城市模拟监测展示；自 `v0.2.1` 起为补丁版本 | 已发布 |
 | V0.3 | 事件沙盘：GLB 网格世界、事件磁带、Gazebo Sim 锁步、网格相机与 LiDAR、FAST-LIVO2 评估、事件级观测基准 | 已发布 |
+| V0.3.2 | 更名为 ANet4D 并确立具身智能体协同定位；场景目标基础能力（目标外观、活动与生命周期绑定），为实验功能，缺省关闭 | 已发布 |
 | V0.3.x | 在 V0.3 基线上的增量交付，包括 SITL 物理档与 3DGS 外观层 | 规划中 |
 
-后续版本处于调研与概念设计阶段，此处不作排期。进度以 [GitHub Milestone](https://github.com/ANetResearch/ANet-Drone4D/milestones) 与置顶的[路线图 Issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1) 为准。参见[版本路线](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/project/roadmap.html)与[D3 设计](docs/05-D3-设计增补与决策记录.md)。
+跨实体协同实验平台（D4 阶段）处于调研与概念设计阶段，此处不作排期，参见[概念设计](docs/06-D4-协同实验平台概念设计.md)。进度以 [GitHub Milestone](https://github.com/ANetResearch/ANet-Drone4D/milestones) 与置顶的[路线图 Issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1) 为准。参见[版本路线](https://docs.agentnetwork.org.cn/anet4d/zh-cn/latest/project/roadmap.html)与[D3 设计](docs/05-D3-设计增补与决策记录.md)。
 
 </details>
 
@@ -278,7 +280,7 @@ V0.2.0 依据 55 项验收标准（D2-AC-01 至 D2-AC-55）进行评估。第 2 
 
 <br/>
 
-Drone4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet](https://github.com/ANetResearch/ANet)、[ANetHub](https://github.com/ANetResearch/ANetHub) 及 [ANetCore](https://github.com/ANetResearch/ANetCore) 并列。无人机在此作为第一类物理智能体：发布自身能力、发现对等节点、委派任务并依据回执校验执行结果。ANet 作为协作面而非飞行控制面运行——委派的任务会被转换为标准控制指令，与人工操作员输入的指令一样接受同等的准入与安全检查。
+ANet4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet](https://github.com/ANetResearch/ANet)、[ANetHub](https://github.com/ANetResearch/ANetHub) 及 [ANetCore](https://github.com/ANetResearch/ANetCore) 并列。无人机在此作为第一类物理智能体：发布自身能力、发现对等节点、委派任务并依据回执校验执行结果。ANet 作为协作面而非飞行控制面运行——委派的任务会被转换为标准控制指令，与人工操作员输入的指令一样接受同等的准入与安全检查。
 
 </details>
 
@@ -287,7 +289,7 @@ Drone4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet
 - **代码。** 本项目以 **ANet Open Source License** 发布。该许可证基于 Apache License 2.0 修改，允许商业使用，但须满足两项条件：面向无关第三方运营多租户托管仿真或数字孪生服务须获得书面授权；必须保留所有 ANet 标识与版权声明。完整条款见 [LICENSE](LICENSE)，标识说明见 [NOTICE](NOTICE)。
 - **UrbanScene3D。** 六座城市世界衍生自 UrbanScene3D，在公开演示站经数据集权利方授权使用。本仓库不分发原始数据集及由其构建的世界包，详见 [NOTICE](NOTICE)。
 - **ANet 合成城市。** 由本项目以固定随机种子生成，不含第三方数据，世界包与截图可自由再分发。
-- **事件沙盘世界（V0.3）。** 网格世界 `oryahovo-crop1` 与 `smalltown-01` 由 Mitko（[sketchfab.com/bg3d](https://sketchfab.com/bg3d)）在 Sketchfab 上以[知识共享署名 4.0 国际](https://creativecommons.org/licenses/by/4.0/)许可（CC-BY-4.0）发布的摄影测量模型构建，经修改（米制标定、调平与派生图层）；原作者不为 ANet Drone4D 背书。模型标题与来源链接见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；本仓库不分发源模型及由其构建的世界包。
+- **事件沙盘世界（V0.3）。** 网格世界 `oryahovo-crop1` 与 `smalltown-01` 由 Mitko（[sketchfab.com/bg3d](https://sketchfab.com/bg3d)）在 Sketchfab 上以[知识共享署名 4.0 国际](https://creativecommons.org/licenses/by/4.0/)许可（CC-BY-4.0）发布的摄影测量模型构建，经修改（米制标定、调平与派生图层）；原作者不为 ANet4D 背书。模型标题与来源链接见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；本仓库不分发源模型及由其构建的世界包。
 - **OpenStreetMap。** 事件沙盘世界的配准证据、锚点与道路、步行路网由 OpenStreetMap 数据派生，(c) OpenStreetMap contributors，以 [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/)（ODbL-1.0）提供；对外发布的派生图层沿用同一许可与署名。
 - **高程数据。** 事件沙盘世界的调平与海拔高度取自 [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/)：SRTM terrain data courtesy of the U.S. Geological Survey；Europe terrain data produced using Copernicus data and information funded by the European Union - EU-DEM layers。调平核对使用 [Copernicus DEM GLO-30](https://registry.opendata.aws/copernicus-dem/)，只用于计算统计量，不再分发：Produced using Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.
 - **第三方组件。** 许可清单见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
@@ -305,21 +307,21 @@ Drone4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet
 }
 ```
 
-引用 Drone4D 请使用 GitHub 的 "Cite this repository" 功能（[CITATION.cff](CITATION.cff)）或以下 BibTeX 条目：
+引用 ANet4D 请使用 GitHub 的 "Cite this repository" 功能（[CITATION.cff](CITATION.cff)）或以下 BibTeX 条目：
 
 ```bibtex
-@software{anet_drone4d_2026,
-  title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
+@software{anet4d_2026,
+  title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.1},
+  version = {0.3.2},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```
 
 ## 致谢
 
-Drone4D 基于 [three.js](https://threejs.org)、[React Three Fiber](https://github.com/pmndrs/react-three-fiber)、[Potree](https://github.com/potree/potree)、[zenoh](https://zenoh.io)、[numba](https://numba.pydata.org)、[PX4](https://github.com/PX4/PX4-Autopilot)、[Prometheus](https://github.com/amov-lab/Prometheus) 与 UrbanScene3D 构建。
+ANet4D 基于 [three.js](https://threejs.org)、[React Three Fiber](https://github.com/pmndrs/react-three-fiber)、[Potree](https://github.com/potree/potree)、[zenoh](https://zenoh.io)、[numba](https://numba.pydata.org)、[PX4](https://github.com/PX4/PX4-Autopilot)、[Prometheus](https://github.com/amov-lab/Prometheus) 与 UrbanScene3D 构建。
 
 ## 参与贡献
 

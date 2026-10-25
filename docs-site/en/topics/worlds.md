@@ -2,7 +2,7 @@
 
 ## World Package v1
 
-The World is the core asset of ANet Drone4D: a versioned directory anchored to a place, serving physics and queries (geometry) as well as
+The World is the core asset of ANet4D: a versioned directory anchored to a place, serving physics and queries (geometry) as well as
 display (point cloud). `worldpkg` normalizes a raw point cloud (units, up axis, leveling, north, origin, normals, ground model, height above
 ground, classification) and writes it as World Package v1:
 
@@ -60,9 +60,9 @@ worlds (octree node counts and bounding boxes, manifest fields, one test camera 
 `UrbanScene3D-virtual_cities-sampled.7z` from the authors' [release page](https://github.com/Linxius/UrbanScene3D/releases/tag/v0.0.1) and
 verifies each sha256 against `configs/data.yaml`; read and accept the terms before use. The commercial permission in this project's license
 does not extend to the dataset; the authors' terms are quoted in section 4 of
-[THIRD_PARTY_NOTICES.md](https://github.com/ANetResearch/ANet-Drone4D/blob/main/THIRD_PARTY_NOTICES.md).
+{gh}`THIRD_PARTY_NOTICES.md </blob/main/THIRD_PARTY_NOTICES.md>`.
 
-**Used under authorization of the dataset rights holders.** The ANet Drone4D project has authorization from the rights holders of the
+**Used under authorization of the dataset rights holders.** The ANet4D project has authorization from the rights holders of the
 UrbanScene3D dataset to use world packages built from the six cities in the project's own deployments: since V0.2-demo the public instance
 offers the six cities together with the synthetic demo city, the deployment bundles include the six-city world packages, and project
 screenshots may show the six cities. The authorization is not passed on to users through this repository or its license: the repository

@@ -1,18 +1,28 @@
-{#- ANet Drone4D：在 sphinx_rtd_theme 的布局上增加 hreflang 备用链接与语言属性，其余沿用主题。 -#}
+{#- ANet4D：在 sphinx_rtd_theme 的布局上增加 hreflang 备用链接、侧栏标志的替代文字与产品字标，其余沿用主题。 -#}
 {% extends "!layout.html" %}
 {% block extrahead %}
   {{ super() }}
-  {%- for a in drone4d_alternates %}
+  {%- for a in anet4d_alternates %}
   <link rel="alternate" hreflang="{{ 'zh-CN' if a.code == 'zh_CN' else a.slug }}" href="{{ a.abs }}" />
   {%- endfor %}
   <meta name="theme-color" content="#111214" />
 {% endblock %}
 
+{#- 侧栏标题：Agent Network 标志（替代文字含产品名）与产品字标 ANet4D；搜索框沿用主题 -#}
+{% block sidebartitle %}
+  {%- set _root_doc = root_doc|default(master_doc) %}
+  <a href="{{ pathto(_root_doc) }}" aria-label="{{ project }} {{ '文档首页' if (language or '').startswith('zh') else 'documentation home' }}">
+    <img src="{{ logo_url|default(pathto('_static/' + (logo or ''), 1)) }}" class="logo" alt="Agent Network · {{ project }}"/>
+  </a>
+  <span class="anet4d-wordmark">{{ project }}</span>
+  {%- include "searchbox.html" %}
+{% endblock %}
+
 {#- 窄屏顶栏：左上角同样显示 Agent Network 标志 -#}
 {% block mobile_nav %}
   <i data-toggle="wy-nav-top" class="fa fa-bars" role="button" tabindex="0" aria-label="{{ '打开导航' if (language or '').startswith('zh') else 'Open navigation' }}"></i>
-  <a href="{{ pathto(master_doc) }}" class="drone4d-mobile-brand">
-    <img src="{{ pathto('_static/img/anet-logo.svg', 1) }}" alt="Agent Network" class="drone4d-mobile-logo" />
-    <span>Drone4D</span>
+  <a href="{{ pathto(master_doc) }}" class="anet4d-mobile-brand">
+    <img src="{{ pathto('_static/img/anet-logo.svg', 1) }}" alt="Agent Network" class="anet4d-mobile-logo" />
+    <span>{{ project }}</span>
   </a>
 {% endblock %}

@@ -378,7 +378,7 @@ def test_end_to_end_replay_through_run_job(synth_event, tmp_path: Path, monkeypa
     from awr.bench.runner import run_job
 
     w, ev = synth_event
-    sdk = Path(__file__).resolve().parents[3] / "tools/sdk/drone4d/src"
+    sdk = Path(__file__).resolve().parents[3] / "tools/sdk/anet4d/src"
     monkeypatch.setenv("FAKE_DOCKER_STATE", str(tmp_path / "docker-state"))
     sock = Path(tempfile.mkdtemp(prefix="d3p", dir="/tmp"))           # AF_UNIX 路径上限：套接字放短目录
     request.addfinalizer(lambda: shutil.rmtree(sock, ignore_errors=True))

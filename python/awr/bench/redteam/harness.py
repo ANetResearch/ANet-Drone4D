@@ -40,11 +40,11 @@ class RedteamRun:
 
 
 def baseline_launcher(name: str, sdk_src: Path | str, *, python: str = sys.executable) -> Callable[[Mapping], list]:
-    """→ `launch(hosts)`：每架机一个 `python -m drone4d.serve --baseline <name>` 子进程（SDK 源码目录经 PYTHONPATH 提供）。"""
+    """→ `launch(hosts)`：每架机一个 `python -m anet4d.serve --baseline <name>` 子进程（SDK 源码目录经 PYTHONPATH 提供）。"""
 
     def launch(hosts: Mapping) -> list[subprocess.Popen]:
         env = {**os.environ, "PYTHONPATH": f"{sdk_src}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"}
-        return [subprocess.Popen([python, "-m", "drone4d.serve", "--baseline", name, "--sock", str(h.path)], env=env)
+        return [subprocess.Popen([python, "-m", "anet4d.serve", "--baseline", name, "--sock", str(h.path)], env=env)
                 for h in hosts.values()]
 
     return launch

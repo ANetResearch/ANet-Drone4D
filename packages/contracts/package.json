@@ -1,6 +1,6 @@
 {
   "name": "@awr/contracts",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "description": "AWR 契约唯一真源（AWR-03 §5.10）；gen/ts 为生成物（tools/contracts/gen.mjs），提交入库，禁止手改",

@@ -49,7 +49,7 @@ from awr.sim.sensors import cbrng
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-SDK = ROOT / "tools/sdk/drone4d/src"
+SDK = ROOT / "tools/sdk/anet4d/src"
 sys.path.insert(0, str(HERE.parents[0] / "env"))
 
 _p = HERE.parents[0] / "env" / "conftest.py"
@@ -314,7 +314,7 @@ def test_l2_depth_ranked_run_has_zero_hits(synth_event, tmp_path: Path) -> None:
 
 
 def test_container_path_records_every_frame(synth_event, tmp_path: Path, monkeypatch, request) -> None:
-    """容器路径（`run_container_episode`，docker 替身按子进程启动 `drone4d.serve`）同样经白名单审计录制全部下发帧，检索 0 命中。"""
+    """容器路径（`run_container_episode`，docker 替身按子进程启动 `anet4d.serve`）同样经白名单审计录制全部下发帧，检索 0 命中。"""
     import shutil
     import tempfile
 
@@ -330,7 +330,7 @@ def test_container_path_records_every_frame(synth_event, tmp_path: Path, monkeyp
     docker.chmod(0o755)
     spec = _ranked_spec(synth_event, tmp_path / "run", "l1-container", obs_level="L1", fleet=L1_FLEET[:2], dur=8.0)
     run = record_container_episode(ProbedEnv(spec), tmp_path / "run", "d3-agent-py:dev", capture_dir=tmp_path / "capture",
-                                   cmd=["python", "-m", "drone4d.serve", "--baseline", "static_guard"], docker=str(docker), step_budget_s=30.0)
+                                   cmd=["python", "-m", "anet4d.serve", "--baseline", "static_guard"], docker=str(docker), step_budget_s=30.0)
     rep = leak_report(run)
     assert all(st["exit_code"] == 0 and st["protocol_errors"] == 0 for st in run.stats.values())
     assert run.capture.n_frames == run.capture.summary()["schema_checked"] == sum(1 for _ in read_capture(tmp_path / "capture")) >= 2 * 80

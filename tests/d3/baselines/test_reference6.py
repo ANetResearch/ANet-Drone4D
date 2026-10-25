@@ -16,9 +16,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parents[0] / "world"))
 sys.path.insert(0, str(HERE.parents[0] / "events"))
-sys.path.insert(0, str(ROOT / "tools" / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(ROOT / "tools" / "sdk" / "anet4d" / "src"))
 
-from drone4d.baselines import BASELINES, POLICIES, REFERENCE6, check_reference_spec, reference_run_spec  # noqa: E402
+from anet4d.baselines import BASELINES, POLICIES, REFERENCE6, check_reference_spec, reference_run_spec  # noqa: E402
 
 BASE_SPEC = ROOT / "configs/bench.d3/crop-handoff-001.l1-3uav.run_spec.json"
 R6_ORDER = ["hover1_plaza", "hover3_anchors", "lawn3_cover", "track3_nocomm", "track3_share", "track5_share"]
@@ -46,8 +46,8 @@ def test_registry_matches_r6_table() -> None:
 
 def test_baseline_observation_params() -> None:
     """构造参数：巡航高度（机队中心，按机分层并限制在包络内）、注视方式、跟踪高度；缺省与改动前一致。"""
-    from drone4d.baselines.static_guard import StaticGuard
-    from drone4d.baselines.track_share import TrackShare
+    from anet4d.baselines.static_guard import StaticGuard
+    from anet4d.baselines.track_share import TrackShare
 
     def ready(a, uav="uav-02", peers=("uav-01", "uav-03")):
         a.uav, a.peers, a.alt_range = uav, list(peers), (30.0, 120.0)
@@ -220,7 +220,7 @@ def test_added_references_deterministic(synth_event, tmp_path: Path, name: str) 
 
 @pytest.mark.parametrize("gaze", ["fixed", "sweep"])
 def test_hover_plaza_holds_zone_anchor(synth_event, tmp_path: Path, gaze: str) -> None:
-    from drone4d.baselines import HoverPlaza
+    from anet4d.baselines import HoverPlaza
 
     factory = BASELINES["hover1_plaza"] if gaze == "fixed" else HoverPlaza            # 参考行为 r6 设置（固定注视）
     _, ags = _run(synth_event, tmp_path / "h", "hover1_plaza", dur=60.0, factory=factory)

@@ -80,14 +80,14 @@ def test_readme_follows_the_section_structure(name):
     pos = [heads.index(h) for h in SECTIONS[name]]
     assert pos == sorted(pos), f"{name} 章节顺序不符合 §21.15.8：{heads}"
     # 标题为产品名，不使用口号式标语
-    assert "<h3>ANet Drone4D</h3>" in text
+    assert "<h3>ANet4D</h3>" in text
 
 
 @pytest.mark.parametrize("name", list(SECTIONS))
 def test_readme_positioning_separates_server_gpu_prerequisites(name):
     """一句话定位分别说明交互沙盒（服务器无需 GPU）与事件沙盘（传感器生成需要服务器 GPU），不以"无需 GPU"概括全部产品。"""
     text = _read(name)
-    head = text.split("<h3>ANet Drone4D</h3>", 1)[1].split("[![", 1)[0]
+    head = text.split("<h3>ANet4D</h3>", 1)[1].split("[![", 1)[0]
     assert NO_GPU[name] in head and GPU in head
     assert "Interactive Sandbox" in head or "交互沙盒" in head
     assert "Event Lab" in head or "事件沙盘" in head
@@ -119,17 +119,17 @@ def test_readme_requirements_state_both_server_profiles(name):
 
 
 def _bibtex_fields(text: str) -> tuple[str, str]:
-    m = re.search(r"@software\{anet_drone4d_2026,\s*title\s*=\s*\{(.+?)\},.*?version\s*=\s*\{(.+?)\}", text, re.S)
-    assert m, "缺少 Drone4D 的 BibTeX 条目"
+    m = re.search(r"@software\{anet4d_2026,\s*title\s*=\s*\{(.+?)\},.*?version\s*=\s*\{(.+?)\}", text, re.S)
+    assert m, "缺少 ANet4D 的 BibTeX 条目"
     return m.group(1), m.group(2)
 
 
 def test_citation_metadata_is_consistent():
-    """CITATION.cff、两份 README 与落地页（LandingContent.ts）的引用标题与版本逐字相同；产品名写 ANet Drone4D。"""
+    """CITATION.cff、两份 README 与落地页（LandingContent.ts）的引用标题与版本逐字相同；产品名写 ANet4D（ADR-223）。"""
     cff = _read("CITATION.cff")
     title = re.search(r'^title: "(.+)"$', cff, re.M).group(1)
     version = re.search(r'^version: "(.+)"$', cff, re.M).group(1)
-    assert title.startswith("ANet Drone4D: ")
+    assert title.startswith("ANet4D: ")
     for rel in ("README.md", "README.zh-CN.md", "apps/web/src/app/demo/LandingContent.ts"):
         assert _bibtex_fields(_read(rel)) == (title, version), rel
 
@@ -150,7 +150,7 @@ def test_d1_view_is_called_scene_view_in_the_ui():
 
 
 def test_public_demo_title_is_sentence_case():
-    assert _dict("en")["demo.product"] == "ANet Drone4D public demo"
+    assert _dict("en")["demo.product"] == "ANet4D public demo"
 
 
 def test_landing_roadmap_states_the_event_lab_gpu_prerequisite():
@@ -164,17 +164,23 @@ def test_landing_roadmap_states_the_event_lab_gpu_prerequisite():
 
 @pytest.mark.parametrize("rel", SURFACE)
 def test_no_major_version_two_naming(rel):
-    """CL-ALL-03：下一大版本称 D4；发布面不出现 Drone4D 2.0、Drone4D v2、2.0 版、二代、新一代 Drone4D、D3.5、D3 Plus。"""
+    """CL-ALL-03：下一大版本称 D4；发布面不出现 ANet4D 2.0、ANet4D v2（及旧名 Drone4D 的同类写法）、2.0 版、二代、新一代 ANet4D、D3.5、D3 Plus。"""
     text = _read(rel)
-    bad = re.findall(r"Drone4D\s*(?:2(?:\.0)?|v2)\b|2\.0\s*版|二代|新一代\s*Drone4D|\bD3\.5\b|\bD3 Plus\b", text, re.I)
+    bad = re.findall(r"(?:ANet4D|Drone4D)\s*(?:2(?:\.0)?|v2)\b|2\.0\s*版|二代|新一代\s*(?:ANet4D|Drone4D)|\bD3\.5\b|\bD3 Plus\b", text, re.I)
     assert bad == [], f"{rel}: {bad}"
 
 
 @pytest.mark.parametrize("rel", ["README.md", "README.zh-CN.md"])
-def test_repository_identifier_only_in_urls_and_code(rel):
-    """仓库标识 ANet-Drone4D 只出现在 URL、代码块与行内代码中（正文写 ANet Drone4D，§7.10 英文规则 5）。"""
+def test_retired_names_only_in_urls_code_and_former_name_notes(rel):
+    """产品名为 ANet4D（ADR-223）。旧名 ANet Drone4D、ANet-Drone4D、Drone4D 只出现在 URL（仓库地址 ANetResearch/ANet-Drone4D）、
+    代码块与行内代码中，或出现在注明其为旧名的句子里（与 copy-lint COPY-06 的口径相同）。"""
     text = _read(rel)
     text = re.sub(r"```.*?```", "", text, flags=re.S)
     text = re.sub(r"`[^`\n]+`", "", text)
     text = re.sub(r"https?://\S+", "", text)
-    assert "ANet-Drone4D" not in text
+    text = re.sub(r"(?:github\.com/)?ANetResearch/ANet-Drone4D\S*", "", text)
+    former = re.compile(r"formerly|former(?:ly)? (?:product )?name|previous(?:ly)? (?:product )?name|renamed|published (?:as|under)|legacy|"
+                        r"原名|旧名|曾用名|更名|改名|之名发布|遗留", re.I)
+    for line in text.splitlines():
+        if re.search(r"(?<![\w./@-])(?:ANet[ -])?Drone4D(?![\w/-]|\.\w)", line, re.I):
+            assert former.search(line), f"{rel}: retired product name outside a former-name note: {line.strip()[:160]}"

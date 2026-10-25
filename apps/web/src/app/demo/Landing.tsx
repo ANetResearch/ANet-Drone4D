@@ -239,7 +239,7 @@ export function Landing() {
             </div>
           </div>
           <div className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
-            <img src="/demo/drone4d-banner.jpg" alt={t('landing.heroAlt')} width={2400} height={900} fetchPriority="high" decoding="async"
+            <img src="/demo/anet4d-banner.jpg" alt={t('landing.heroAlt')} width={2400} height={900} fetchPriority="high" decoding="async"
               sizes="(min-width: 1152px) 1104px, 100vw"
               className="brand-enter block h-auto w-full rounded-lg border border-border" style={{ animationDelay: 'calc(var(--duration-stagger) * 4)' }} />
           </div>

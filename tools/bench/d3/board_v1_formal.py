@@ -59,7 +59,7 @@ evaluator，`job = <--job>`，op 为 `env` 与 `evaluate`）。
         --host-image d3-compile:b21 --agent-image d3-agent-py:b21 --gpu 3 [--board-version v1] [--lock-out configs/bench.d3/board-v1/lock.json]
     python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/b21 baselines --track std3-l2 --jobs 3
     python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/b21 submit --track std3-l2 --name relay-l2 \\
-        --image d3-example-relay-scan:b21 --cmd "python -m drone4d.serve relay_scan.agent:Agent" --team d3-research --owner b21
+        --image d3-example-relay-scan:b21 --cmd "python -m anet4d.serve relay_scan.agent:Agent" --team d3-research --owner b21
     python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/b21 board | seal-truth | report | rebuild-timing
     python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/k16 --board-version v1 seal-rescore --to v1.1     # root
     python tools/bench/d3/board_v1_formal.py --data-root /data/d3 --out out/k16 --board-version v1 rescore --to v1.1 --jobs 12
@@ -88,7 +88,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "tools/sdk/drone4d/src", ROOT / "python", Path(__file__).resolve().parent):
+for _p in (ROOT / "tools/sdk/anet4d/src", ROOT / "python", Path(__file__).resolve().parent):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

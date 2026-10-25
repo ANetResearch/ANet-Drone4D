@@ -1,0 +1,61 @@
+{
+  "design": {
+    "summary": "更新 driver-01 与 resident-03 的日常活动，其余演员保持原有行程。",
+    "assignments": [
+      {
+        "actor_id": "driver-01",
+        "visits": [
+          {
+            "facility_id": "parking-01",
+            "purpose": "停车办事",
+            "dwell_s": 30
+          },
+          {
+            "facility_id": "parking-06",
+            "purpose": "停车办事",
+            "dwell_s": 45
+          },
+          {
+            "facility_id": "parking-10",
+            "purpose": "停车办事",
+            "dwell_s": 35
+          }
+        ]
+      },
+      {
+        "actor_id": "resident-03",
+        "visits": [
+          {
+            "facility_id": "facility-02",
+            "purpose": "到办公楼办理事务",
+            "dwell_s": 90
+          },
+          {
+            "facility_id": "facility-03",
+            "purpose": "购物",
+            "dwell_s": 75
+          },
+          {
+            "facility_id": "facility-07",
+            "purpose": "下班回家休息",
+            "dwell_s": 120
+          }
+        ]
+      }
+    ]
+  },
+  "provider_usage": {
+    "requested_model": "deepseek-v4-pro",
+    "returned_model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 2862,
+      "completion_tokens": 286,
+      "total_tokens": 3148,
+      "prompt_tokens_details": {
+        "cached_tokens": 2048
+      }
+    },
+    "wall_s": 7.41,
+    "output_sha256": "b3e844800f3a614728c4e0ab11ca06d134991226057b0241c89539760f3f5b98"
+  }
+}

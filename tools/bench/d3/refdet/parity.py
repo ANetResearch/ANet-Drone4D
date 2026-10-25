@@ -6,7 +6,7 @@
 
 - `ref`（pytorch 镜像，CPU）：载入 `ref_det_v1.pt` 到 train.py 的网络（eval，BN 不折叠），对验证帧（段号 % 10 == 0，等间隔取
   `--frames` 帧）计算输出，写 `<out>/parity-ref.npz`（帧号、输入 uint8、torch 输出 float32）与 torch、numpy 版本；
-- `check`（d3-agent-py 镜像）：以 `drone4d.perception.ref_det.RefDet`（BN 已折叠的 npz）重算并比对，写 `<out>/parity.json`
+- `check`（d3-agent-py 镜像）：以 `anet4d.perception.ref_det.RefDet`（BN 已折叠的 npz）重算并比对，写 `<out>/parity.json`
   （最大绝对误差、逐帧误差、阈值 1e-3 判定、热图解码的检测是否一致）。
 
 用法：
@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-SDK = HERE.parents[2] / "sdk" / "drone4d" / "src"
+SDK = HERE.parents[2] / "sdk" / "anet4d" / "src"
 TOL = 1e-3
 
 
@@ -75,7 +75,7 @@ def ref(a: argparse.Namespace) -> int:
 
 def check_arrays(det, x: np.ndarray, y: np.ndarray) -> dict:
     """det：RefDet；x (N, 540, 960, 3) uint8；y (N, 6, 136, 240) torch 输出 → 比对摘要。"""
-    from drone4d.perception import ref_det as R
+    from anet4d.perception import ref_det as R
 
     errs, same_det = [], 0
     for j in range(len(x)):
@@ -104,7 +104,7 @@ def _decode(R, out: np.ndarray):
 
 def check(a: argparse.Namespace) -> int:
     sys.path.insert(0, str(SDK))
-    from drone4d.perception import ref_det as R
+    from anet4d.perception import ref_det as R
 
     z = np.load(a.ref)
     det = R.RefDet(a.weights) if a.weights else R.RefDet()

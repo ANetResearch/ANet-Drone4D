@@ -1,8 +1,9 @@
-ANet-Drone4D
+ANet4D
 Copyright (c) 2026 Agent Network Research (anet0.com)
 
-This product is licensed under the ANet Open Source License (ANet-Drone4D),
-a modified Apache License 2.0. See LICENSE.
+This product is licensed under the ANet Open Source License (ANet4D),
+a modified Apache License 2.0. See LICENSE. Versions up to 0.3.1 were
+published under the former name ANet-Drone4D.
 
 The ANet logo and the Agent Network Research avatar in
 apps/web/public/brand/ (with copies in docs/media/ for the README) are
@@ -18,11 +19,12 @@ Package built from it. UrbanScene3D (Lin et al., ECCV 2022,
 https://vcc.tech/UrbanScene3D) is made available by its authors for
 non-commercial use only and may not be redistributed.
 
-UrbanScene3D is used in ANet-Drone4D deployments under authorization of
+UrbanScene3D is used in ANet4D deployments under authorization of
 the dataset rights holders (经数据集权利方授权使用): the project's own
 deployments, including the public demo at
-https://drone4d.agentnetwork.org.cn and its deployment bundles, serve
-World Packages built from the six UrbanScene3D cities. The authorization
+https://anet4d.agentnetwork.org.cn (formerly drone4d.agentnetwork.org.cn,
+which redirects to it) and its deployment bundles, serve World Packages
+built from the six UrbanScene3D cities. The authorization
 covers the project's deployments only; it is not passed on by this
 repository or its license, and anyone who downloads the dataset (for
 example with `make fetch-data`) remains bound by the authors' terms.
@@ -64,7 +66,8 @@ layers (Terrain Tiles on AWS).
 
 native/gz/src/ contains files copied from or derived from gz-sim 8.15.0
 (Copyright (C) 2019 Open Source Robotics Foundation, Apache License 2.0).
-They keep the original copyright header and state the Drone4D modifications.
+They keep the original copyright header and state the changes in a
+"Drone4D modifications" paragraph (a legacy heading kept for these files).
 native/gz/models/x500_d4d/ derives from x500_base by Rudis Laboratories
 (BSD-3-Clause; the license file is kept in that directory).
 

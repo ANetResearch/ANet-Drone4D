@@ -43,7 +43,7 @@ SPEC_EXCLUDE = frozenset({"run_id", "experiment_id", "experiment", "seed", "seed
                           "retention", "priority"})
 IMAGE_KEYS = ("gz", "sensorsvc", "env", "agent")
 CAMERA_SENSOR_ID = "eo"                      # L1 标称相机的 sensor_id（`CameraModel.sensor_id`）
-# r6 §12.3 参考行（M26-FR-081，SDK `drone4d.baselines.REFERENCE6` 的行名）：相机覆盖允许用于这些参考行（ADR-217）
+# r6 §12.3 参考行（M26-FR-081，SDK `anet4d.baselines.REFERENCE6` 的行名）：相机覆盖允许用于这些参考行（ADR-217）
 REFERENCE_ROWS = frozenset({"hover1_plaza", "hover3_anchors", "lawn3_cover", "track3_nocomm", "track3_share", "track5_share"})
 
 

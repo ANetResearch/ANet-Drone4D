@@ -1,10 +1,33 @@
 # Frequently asked questions
 
+## Naming
+
+**What is the relation between ANet4D and ANet Drone4D?**
+They are the same project. From 0.3.2 the product is called ANet4D, simulation infrastructure for collaborative embodied agents; the
+former name ANet Drone4D is retired. The public site moved from `drone4d.agentnetwork.org.cn` to
+[anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn) and this documentation from `docs.agentnetwork.org.cn/drone4d/` to
+`docs.agentnetwork.org.cn/anet4d/`; the former addresses redirect permanently. The GitHub repository keeps the URL
+{gh}`github.com/ANetResearch/ANet-Drone4D </>` for now; GitHub redirects the former URL after a rename.
+
+**Why do some identifiers still contain `drone4d`?**
+Identifiers that are part of a protocol, a data contract or recorded data keep their former spelling, so that existing recordings, event
+tapes, submissions and installations stay valid and replays stay byte-identical. These legacy identifiers include the event specification
+`drone4d.event.v1`, the agent wire protocol `drone4d.bench.wire.v1`, schema identifiers inside the contracts package, channel names in
+recorded MCAP files, the native Gazebo plugin names and the server installation paths and unit names (for example the systemd unit
+`anet-drone4d`). They are identifiers, not product names.
+
+**I use the `drone4d` Python package. What changes?**
+The SDK package is now `anet4d` (wheel `anet4d-<version>-py3-none-any.whl`, `import anet4d`, `python -m anet4d.serve`). For one release `drone4d` remains a
+deprecated compatibility alias that re-exports `anet4d` and emits a `DeprecationWarning`; replace `drone4d` with `anet4d` in imports and
+commands. See {doc}`../guide/sdk-quickstart`.
+
 ## Runtime environment
 
 **Does the server need a GPU?**
-No. Physics, safety, missions, perception and environment are computed on the CPU; the point cloud, weather and interface are rendered in the
-visitor's browser. The public instance runs on a 4-core server without a GPU.
+Not for the Interactive Sandbox: physics, safety, missions, perception and environment are computed on the CPU, and the point cloud, weather
+and interface are rendered in the visitor's browser. The public instance runs on a 4-core server without a GPU. The Event Lab needs an
+NVIDIA GPU on the server for sensor generation (mesh cameras, thermal imaging and LiDAR); the public instance shows pre-rendered Event Lab
+samples only.
 
 **Which operating systems are supported?**
 The server supports x86-64 Linux only (verified on Ubuntu 22.04 and 24.04): the shared-memory state ring relies on the x86 memory order.
@@ -31,8 +54,9 @@ authorization this project holds for its own deployments is not passed on to use
 can be shared freely. See {doc}`../topics/worlds`.
 
 **Can I import my own point cloud?**
-In 0.2.0, ingest targets the built-in dataset and the synthetic city; import of arbitrary PLY or LAS point clouds is part of the V0.2 theme,
-and triangle mesh asset import is being implemented in D3. See {doc}`roadmap`.
+Point-cloud ingest targets the built-in dataset and the synthetic city; import of arbitrary PLY or LAS point clouds is part of the V0.2
+theme of the original design baseline. Since V0.3, photogrammetric GLB meshes can be imported as mesh worlds with metric scale, true north
+and leveling calibration. See {doc}`roadmap`.
 
 ## Shared show and sandbox
 
@@ -43,10 +67,8 @@ full, visitors queue and see their position and the estimated wait. You can keep
 **After switching the world, where did my targets and tasks go?**
 Switching the world restarts the simulation in the new world and loads that world's template of the same name; targets, nests, tasks and
 view settings of the previous world are not carried over, because coordinates and geometry differ between worlds. To keep a configuration,
-export a configuration snapshot first; it can be restored later in the original world. Known issue: in the 0.2.0 release currently serving
-the public instance, this isolation does not fully hold on every switching path, and entities or view settings from the previous world
-could remain visible after the switch; the defect is fixed in the development line and ships with the next release, see
-{doc}`../guide/sandbox`.
+export a configuration snapshot first; it can be restored later in the original world. In 0.2.0 this isolation did not hold on every
+switching path; the defect is fixed since 0.2.1, see {doc}`../guide/sandbox`.
 
 **The image is sparse or the frame rate is low. What can I do?**
 The quality controller lowers the point budget from the measured frame time to hold the frame rate. Without a hardware GPU, or with an
@@ -86,13 +108,13 @@ drive drones directly through velocity control and commands. All commands pass t
 real ANet network is planned for V1.0.
 
 **Can PX4 or a real drone be connected?**
-0.2.0 uses the built-in FleetSim (a PX4-style control cascade checked against PX4 SIH flight logs). PX4 SIH, SITL and a real P600 through
-Prometheus are planned for V0.2, V0.4 and V0.5 respectively, and the gz-sim lockstep tier and the SITL tier of D3 are being implemented.
-See {doc}`roadmap`.
+The Interactive Sandbox uses the built-in FleetSim (a PX4-style control cascade checked against PX4 SIH flight logs). The Event Lab adds the
+Gazebo Sim lockstep tier as the high-fidelity physics tier (V0.3). A PX4 SITL tier and a real P600 through Prometheus are not part of the
+released versions; see {doc}`roadmap`.
 
 ## Feedback
 
 **How do I report a problem?**
-Open an issue on [GitHub Issues](https://github.com/ANetResearch/ANet-Drone4D/issues) with the version line from the startup screen or
+Open an issue on {gh}`GitHub Issues </issues>` with the version line from the startup screen or
 `GET /api/health`, your browser and device, the steps to reproduce and the `request_id` of any error response. Report security issues to
 hi@anet0.com.

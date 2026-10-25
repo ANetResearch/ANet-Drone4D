@@ -64,8 +64,8 @@ function RouterOutlet() {
   React.useEffect(() => {
     boot.resolveGate('shell')
   }, [])
-  // page title: the product name "ANet Drone4D" (the ANetResearch/ANet-Drone4D repository), prefixed with the view; the
-  // public demo build names the demo site ("ANet Drone4D Public Demo", ADR-083)
+  // page title: the product name "ANet4D" (formerly ANet Drone4D; repository ANetResearch/ANet-Drone4D, legacy name),
+  // prefixed with the view; the public demo build names the demo site ("ANet4D public demo", ADR-083)
   // D2 (M15-FR-205; AWR-14 §20.2.3 rule 5): "<world> · my sandbox · product" on the sandbox, "open interface · product"
   const routeId = route?.route.id ?? null
   const viewWorld = route?.params.id ?? null

@@ -6,6 +6,7 @@ import { build, defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { LANDING_I18N_KEYS, LANDING_LAB_I18N_KEYS } from './src/app/demo/landingKeys.ts'
+import { PRODUCT_NAME, SITE_ORIGIN } from './src/lib/site.ts'
 
 // 公开演示构建（ADR-083；M15-FR-120；AWR-19 §3.7）：VITE_AWR_DEMO=public。默认构建不受影响；与测试开关互斥（生产包中不得
 // 残留演示以外的测试开关）。入口换成 src/app/demo/entry.tsx（"/" 为不加载 three 的落地页，其余路由按需加载应用），
@@ -19,7 +20,7 @@ if (DEMO && process.env.VITE_AWR_TEST_SWITCHES === '1') throw new Error('VITE_AW
 // keys) is no longer part of this group — Landing*.tsx reads its own virtual:awr-landing-i18n instead (landingI18nPlugin
 // below), so the full bilingual dictionary stays out of the landing chunk; the lazily loaded start Sheet still reads
 // app/i18n directly and gets it in its own chunk, the way it always has.
-const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\w*\.tsx?|app[\\/]lab-public[\\/]flags\.ts|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|sheet|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types|lucide-compat)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|testSwitches)\.ts)|vite[\\/]preload-helper|virtual:awr-landing-i18n/
+const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\w*\.tsx?|app[\\/]lab-public[\\/]flags\.ts|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|sheet|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types|lucide-compat)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|site|testSwitches)\.ts)|vite[\\/]preload-helper|virtual:awr-landing-i18n/
 const DEMO_MEDIA = ['demo-flight.webp', 'screenshot-hero.jpg', 'screenshot-streaming.jpg', 'screenshot-weather.jpg', 'screenshot-swarm.jpg',
   'screenshot-follow.jpg', 'screenshot-perf.jpg']
 
@@ -43,6 +44,30 @@ if (LAB_ONLY && process.env.VITE_AWR_TEST_SWITCHES === '1') throw new Error('VIT
 /** /lab/ 静态构建的 base（与 src/app/lab-public/flags.ts LAB_BASE 相同） */
 export const LAB_BASE_PATH = '/lab/'
 if (LAB_PUBLIC && !DEMO) throw new Error('VITE_AWR_LAB_PUBLIC=1 only applies to the public demo build (VITE_AWR_DEMO=public)')
+
+// 场景目标引擎的实验编排界面（m23/scene-target-foundations；tools/deploy/targetlab）：VITE_AWR_TARGET_LIFE=1 只用于私有验收部署。
+// 公开演示构建缺省（0）在构建期把生活群体生成器、行为预演与定制编排（含计费模型服务入口）的模块替换为空实现（TARGET_LIFE_STUBS），
+// 从词典剔除其文案键与实验模板名（stripTargetLifeKeys），产物中不含 /target-life/ 路由与模型服务名称（K9 与 k9-d3 扫描）。
+// 内部构建（未设 VITE_AWR_DEMO）不受影响；服务端路由另由 AWR_TARGET_LIFE_ENABLE 控制（缺省 404）。
+const TARGET_LIFE = envSwitch('VITE_AWR_TARGET_LIFE', process.env.VITE_AWR_TARGET_LIFE)
+if (TARGET_LIFE && !DEMO) throw new Error('VITE_AWR_TARGET_LIFE=1 only applies to the public demo build (internal builds always carry the target-life UI)')
+/** 公开演示构建中替换为空实现的实验编排模块（相对 src/ 的路径 → 替换源码；导出名与原模块相同） */
+export const TARGET_LIFE_STUBS: Readonly<Record<string, string>> = {
+  'ui/panels/targets/LifeBuilder.tsx': 'export function LifeBuilder(_props) { return null }\n',
+  'ui/panels/targets/BehaviorPreview.tsx': 'export function BehaviorPreview(_props) { return null }\n',
+  'ui/sandbox/lifeApi.ts': 'const off = () => Promise.reject(new Error("target life disabled"))\nexport const lifeApi = { rehearsal: off, scene: off, preview: off }\n',
+}
+export function targetLifeStub(file: string): string | null {
+  const f = file.split('\\').join('/')
+  for (const [rel, code] of Object.entries(TARGET_LIFE_STUBS)) if (f.endsWith(`/src/${rel}`)) return code
+  return null
+}
+/** 实验编排界面的文案键前缀与实验模板（T7–T13）的模板名键 */
+export const TARGET_LIFE_KEY_RE = /^(targets\.(lifeBuilder|lifeClass|lifeVehicle)\.|targets\.rehearsal\.(?!noRecipe$)|sandbox\.template\.t(7|8|9|1[0-3])_)/
+export function stripTargetLifeKeys(json: string): string {
+  const d = JSON.parse(json) as Record<string, unknown>
+  return JSON.stringify(Object.fromEntries(Object.entries(d).filter(([k]) => !TARGET_LIFE_KEY_RE.test(k))), null, 1)
+}
 
 /** D3 内部工作区的源码（只在内部构建）：任何公开构建（演示构建与 /lab/ 静态构建）都不得加载 */
 export const LAB_INTERNAL_RE = /[\\/]src[\\/](app[\\/]routes[\\/]lab[^\\/]*\.tsx$|app[\\/]routes[\\/]lab[\\/]|app[\\/]i18n[\\/]lab[\\/]|ui[\\/]lab[\\/]|stores[\\/]lab[\\/]|net[\\/]bench\.ts$)/
@@ -132,7 +157,10 @@ function labStripPlugin(): Plugin {
     },
     transform(code, id) {
       const file = id.split('?')[0]
-      if (/[\\/]src[\\/]app[\\/]i18n[\\/](zh-CN|en)\.json$/.test(file)) return { code: stripLabKeys(code), map: null }
+      if (/[\\/]src[\\/]app[\\/]i18n[\\/](zh-CN|en)\.json$/.test(file)) {
+        const out = stripLabKeys(code)
+        return { code: TARGET_LIFE ? out : stripTargetLifeKeys(out), map: null }
+      }
       if (/[\\/]src[\\/]styles[\\/]index\.css$/.test(file)) {
         const rel = (p: string): string => posix.relative(posix.dirname(file.split('\\').join('/')), posix.join(root.split('\\').join('/'), p))
         return { code: `${code}\n${LAB_TAILWIND_EXCLUDE.map((p) => `@source not "${rel(p)}";`).join('\n')}\n`, map: null }
@@ -156,6 +184,10 @@ function labStripPlugin(): Plugin {
       if (LAB_INTERNAL_RE.test(file)) this.error(`awr-lab-strip: D3 internal workspace module ${file} in a public demo build (extension point 15)`)
       if (ENGINE_ACTORS_RE.test(file)) this.error(`awr-lab-strip: D3 engine module ${file} in the demo build (extension point 15)`)
       if (LAB_PUBLIC_SRC_RE.test(file)) this.error(`awr-lab-strip: /lab/ public build module ${file} in the demo build (ADR-129)`)
+      if (!TARGET_LIFE) {
+        const stub = targetLifeStub(file)
+        if (stub !== null) return stub
+      }
       return null
     },
   }
@@ -255,6 +287,20 @@ function labPublicPlugin(): Plugin {
   }
 }
 
+// 公开演示站的社交分享元数据（v0.3.2 更名 ANet4D；站点 anet4d.agentnetwork.org.cn，lib/site.ts）：og:image 为落地页主图
+// public/demo/anet4d-banner.jpg（2400×900，绝对 URL），仅演示构建写入；默认构建与 /lab/ 静态构建不带站点域名。
+const DEMO_SOCIAL_META = [
+  ['property', 'og:type', 'website'],
+  ['property', 'og:site_name', PRODUCT_NAME],
+  ['property', 'og:title', `${PRODUCT_NAME} · Simulation infrastructure for collaborative embodied agents`],
+  ['property', 'og:description', `${PRODUCT_NAME}：新一代具身智能体协同模拟基础设施。${PRODUCT_NAME}: simulation infrastructure for collaborative embodied agents.`],
+  ['property', 'og:url', `${SITE_ORIGIN}/`],
+  ['property', 'og:image', `${SITE_ORIGIN}/demo/anet4d-banner.jpg`],
+  ['property', 'og:image:width', '2400'],
+  ['property', 'og:image:height', '900'],
+  ['name', 'twitter:card', 'summary_large_image'],
+].map(([attr, key, value]) => `    <meta ${attr}="${key}" content="${value}" />`).join('\n')
+
 function demoPlugin(): Plugin {
   let outDir = 'dist'
   let root = '.'
@@ -270,7 +316,7 @@ function demoPlugin(): Plugin {
       handler(html) {
         return html
           .replace('/src/main.tsx', '/src/app/demo/entry.tsx')
-          .replace('<title>ANet Drone4D</title>', '<title>ANet Drone4D · Public Demo</title>')
+          .replace('<title>ANet4D</title>', `<title>${PRODUCT_NAME} · Public Demo</title>\n${DEMO_SOCIAL_META}`)
           // "/" is the landing page: the boot mask of the app stays hidden there (painted before any script runs)
           .replace('</style>', '      html[data-landing] #boot-mask { display: none; }\n    </style>\n    <script>if (location.pathname === "/") document.documentElement.setAttribute("data-landing", "")</script>')
       },
@@ -669,6 +715,7 @@ const benchTarget = process.env.AWR_BENCH_TARGET ?? 'http://127.0.0.1:18650'
 // /assets/ 是 Vite 构建产物前缀，不作代理（AWR-03 §3.3、AWR-16 F-09、R2-42）；/worlds 本身是前端路由（World Hub，
 // M15-FR-003），因此 /worlds 只以正则匹配带子路径的数据请求。preview 显式使用同一张表（默认会继承 server.proxy）。
 const PROXY = {
+  '/api/sandbox': { target: `http://127.0.0.1:${8002 + 10 * offset}`, ws: true },
   '/api/bench': { target: benchTarget }, // 须在 /api 之前（前缀按声明序匹配）
   '/api': { target: apiTarget, ws: true },
   '^/worlds/.+': { target: apiTarget },

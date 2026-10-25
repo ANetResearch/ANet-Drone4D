@@ -4,7 +4,7 @@
 #   tools/deploy/emax/d3-public/nginx-check.sh [--out DIR] [-- <pytest 参数>]
 #
 #   需要 docker 与本地镜像：NGINX_CHECK_IMAGE（缺省 ubuntu:24.04；已装 nginx 的镜像不再 apt 安装）。仓库只读挂载，只有证据目录可写，
-#   容器退出即删除。步骤：labsite.py render 生成"D2 + /lab/"站点文件，与 D2 站点文件一起以自签证书 `nginx -t`；再以仓库 .venv 在
+#   容器退出即删除。步骤：labsite.py render 生成"D2 + /lab/"站点文件，与 D2 站点文件一起以自签证书 `nginx -t`（各自与旧域名跳转站点同时启用）；再以仓库 .venv 在
 #   容器内执行 tests/d3/deploy/test_d3_public_nginx_e2e.py（verify.py 全部站点检查、回滚与撤下 /lab/）与 test_d3_public_site.py。
 #   证据写到 --out（缺省 .cache/deploy/emax/d3-public/nginx-check/<UTC 时刻>/）：nginx-version.txt、nginx-t.log、pytest.log、junit.xml、
 #   d3-public-*.json 与汇总 nginx-check.json（awr.deploy.d3_public.nginx-check.v1）。
@@ -44,13 +44,19 @@ if ! command -v nginx >/dev/null || ! command -v rsync >/dev/null; then
     || { echo "nginx-check: 容器内 apt 安装失败（见 $OUT/apt.log）" >&2; exit 8; }
 fi
 nginx -v 2>&1 | tee "$OUT/nginx-version.txt"
-D=drone4d.agentnetwork.org.cn
-mkdir -p "/etc/letsencrypt/live/$D" /var/www/certbot
-openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -nodes -days 2 -subj "/CN=$D" \
-  -keyout "/etc/letsencrypt/live/$D/privkey.pem" -out "/etc/letsencrypt/live/$D/fullchain.pem" >/dev/null 2>&1 || exit 8
+D=anet4d.agentnetwork.org.cn
+L=drone4d.agentnetwork.org.cn   # 旧域名：跳转站点（只有 301 与 ACME），沿用自己的证书路径
+mkdir -p /var/www/certbot
+for h in "$D" "$L"; do
+  mkdir -p "/etc/letsencrypt/live/$h"
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:secp384r1 -nodes -days 2 -subj "/CN=$h" \
+    -keyout "/etc/letsencrypt/live/$h/privkey.pem" -out "/etc/letsencrypt/live/$h/fullchain.pem" >/dev/null 2>&1 || exit 8
+done
 : >"$OUT/nginx-t.log"
+# 公开站点文件与"公开站点 + /lab/"站点文件各自与旧域名跳转站点同时启用（emax 迁移后的 sites-enabled）
+cp "$ROOT/tools/deploy/emax/$L.conf" "/etc/nginx/sites-enabled/$L.conf"
 for f in "$ROOT/tools/deploy/emax/$D.conf" "$OUT/site.conf"; do
-  echo "==> nginx -t：$f" | tee -a "$OUT/nginx-t.log"
+  echo "==> nginx -t：$f（与 $L.conf 同时启用）" | tee -a "$OUT/nginx-t.log"
   cp "$f" "/etc/nginx/sites-enabled/$D.conf"
   nginx -t 2>&1 | tee -a "$OUT/nginx-t.log"
   [ "${PIPESTATUS[0]}" -eq 0 ] || exit 2

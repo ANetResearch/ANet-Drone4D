@@ -6,37 +6,10 @@ import json
 from pathlib import Path
 
 import pytest
+from d3_env_support import _run, _spec
 
-from awr.agentsdk.env.core import BenchEnv
-from awr.agentsdk.env.spec import DecisionCfg, EnvSpec, FleetEntry
+from awr.agentsdk.env.spec import DecisionCfg
 from awr.agentsdk.schemas import bench_validator
-
-FLEET = (FleetEntry("uav-01", (-10.0, 50.0, 0.0)), FleetEntry("uav-02", (10.0, 50.0, 0.0)))
-
-
-def _spec(synth_event, out: Path | None, seed: int = 5, dur: float = 30.0, **kw) -> EnvSpec:
-    w, ev = synth_event
-    return EnvSpec(f"t-{seed}", seed, w, ev, kw.pop("fleet", FLEET), physics="kinematic", duration_s=dur, out_dir=out, **kw)
-
-
-def _run(spec: EnvSpec, make_agent, check=None) -> dict:
-    env = BenchEnv(spec)
-    obs, infos = env.reset()
-    ags = {u: make_agent(u) for u in env.possible_agents}
-    for u, a in ags.items():
-        a.reset(infos[u]["config"])
-        if check:
-            check("config", u, infos[u]["config"])
-    while env.agents:
-        acts = {}
-        for u, o in obs.items():
-            if check:
-                check("obs", u, o)
-            acts[u] = ags[u].step(o["obs"], o["inbox"])
-        obs, *_ = env.step(acts)
-    m = env.close()
-    m["_env"] = env
-    return m
 
 
 def _valid(kind: str, _u: str, doc: dict) -> None:
@@ -46,7 +19,7 @@ def _valid(kind: str, _u: str, doc: dict) -> None:
 
 @pytest.mark.parametrize("policy", ["static_guard", "coverage_scan", "track_share"])
 def test_baselines_contracts_and_determinism(synth_event, tmp_path: Path, policy: str) -> None:
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     m1 = _run(_spec(synth_event, tmp_path / "a"), lambda u: BASELINES[policy](), _valid)
     m2 = _run(_spec(synth_event, tmp_path / "b"), lambda u: BASELINES[policy]())
@@ -132,7 +105,7 @@ def test_guard_acks(synth_event, tmp_path: Path) -> None:
 
 
 def test_l1_anonymous_and_link(synth_event, tmp_path: Path) -> None:
-    from drone4d.agent import act, gimbal_angles, nav_takeoff, out_msg
+    from anet4d.agent import act, gimbal_angles, nav_takeoff, out_msg
 
     def script(o):
         if o["k"] == 0:

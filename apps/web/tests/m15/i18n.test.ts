@@ -51,7 +51,7 @@ describe('dictionaries', () => {
     try {
       expect(t('panel.world.title')).toBe(zhTitle)
       expect(zhTitle).not.toBe('')
-      expect(t('brand.product')).toBe('ANet Drone4D')
+      expect(t('brand.product')).toBe('ANet4D')
     } finally {
       setLocale('zh-CN')
     }

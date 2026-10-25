@@ -9,7 +9,7 @@ from awr.runtime.config import load_runtime_config
 D3_PROCS = {"bench-api", "bench-scheduler", "geosvc", "lab-gateway", "rerun-proxy"}
 
 
-ENV = {"AWR_ORIGINS": "https://drone4d.example.org"}     # public 模式要求 origins
+ENV = {"AWR_ORIGINS": "https://anet4d.example.org"}     # public 模式要求 origins
 
 
 def _enabled(profile: str) -> set[str]:

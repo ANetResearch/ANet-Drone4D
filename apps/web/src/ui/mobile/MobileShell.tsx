@@ -11,6 +11,7 @@
 // NarrowShell: below 360 CSS px the "window too narrow" Empty replaces the shell and the viewport is suspended.
 import * as React from 'react'
 import { useT } from '@/app/i18n'
+import { boot } from '@/app/boot/BootController'
 import { fmt } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useFormFactor } from '@/lib/formFactor'
@@ -197,11 +198,14 @@ function PhoneBody() {
   React.useEffect(() => {
     commitRect(phoneRect(size.w, size.h, landscape, safeInsets(), banner), 'breakpoint')
   }, [size.w, size.h, landscape, banner])
-  // the canvas is covered by the other windows: suspend it there, resume on the viewport window (AWR-04 §15.8.3 item 1)
+  // Boot needs rendered frames even when a persisted phone tab covers the canvas.
+  // Suspend only after reveal (or an error); retry must resume initialization.
+  const [bootReady, setBootReady] = React.useState(() => boot.state === 'REVEALED' || boot.state === 'BOOT_ERROR')
+  React.useEffect(() => boot.subscribe((state) => setBootReady(state === 'REVEALED' || state === 'BOOT_ERROR')), [])
   React.useEffect(() => {
-    frameCap.suspend('phone-window', tab !== 'viewport')
+    frameCap.suspend('phone-window', bootReady && tab !== 'viewport')
     return () => frameCap.suspend('phone-window', false)
-  }, [tab])
+  }, [tab, bootReady])
   React.useEffect(() => {
     UX.layout.breakpoint = 'phone'
   }, [])

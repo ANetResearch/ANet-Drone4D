@@ -110,7 +110,7 @@ def test_public_profile_for_demo_site() -> None:
     with pytest.raises(ConfigError) as ei:
         load_runtime_config(profile="public", env={})
     assert ei.value.path == "net.origins"
-    env = {"AWR_ORIGINS": "https://drone4d.agentnetwork.org.cn"}
+    env = {"AWR_ORIGINS": "https://anet4d.agentnetwork.org.cn"}
     c = load_runtime_config(profile="public", env=env, world_fallback=True)
     assert c.access_mode == "public" and c.net.bind == "127.0.0.1" and c.port_effective == 18640
     assert c.rendezvous_effective == "tcp/127.0.0.1:18647" and c.cpu_pin_enabled is False
@@ -126,7 +126,7 @@ def test_public_profile_for_demo_site() -> None:
     assert c.proc("sandbox-api").env == {"AWR_CGROUP": "sandbox/ctl", "MALLOC_ARENA_MAX": "2"} and \
         c.proc("sandbox-api").start_after == ["sandbox-pool"]          # arena 上限（D2-FX-R2）
     assert c.net.trusted_proxies == ["127.0.0.1", "::1"]
-    assert "drone4d.agentnetwork.org.cn" in c.allowed_hosts
+    assert "anet4d.agentnetwork.org.cn" in c.allowed_hosts
     with pytest.raises(ConfigError) as ei:
         load_runtime_config(profile="public", env=env | {"AWR_BIND": "0.0.0.0"})
     assert ei.value.path == "net.bind"

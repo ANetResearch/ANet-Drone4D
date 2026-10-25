@@ -6,7 +6,7 @@
 |---|---|
 | 文档编号 | AWR-D4-S3 |
 | 标题 | S3 InfoShare 规格：受限通信下的分布式信息融合（Distributed Information Fusion under Constrained Communication） |
-| 版本 | v0.2.1（2026-10-18 文档集集成同步：按 AWR-06 v0.3 §0.5 统一裁定 XR-14 修订 §8.1 清单样例的 Holm 检验族名；按 XR-11 把 AWR-06 调度规则引用改为 SR-1 至 SR-8；按 XR-12 把实验配置样例中的进程内模块引用改为 `module:`） |
+| 版本 | v0.2.2（2026-10-25 命名同步：按 AWR-06 v0.4 XR-24 与 ADR-D4-36，产品名改为 ANet4D，研究者可见的包名、命令行、SDK 路径与文档站路径改为 `anet4d`；草案契约标识与域分隔常量保持现写法，在 WP-D4-01 契约定稿时改为 `anet4d` 前缀；其余内容不变）；v0.2.1（2026-10-18 文档集集成同步：按 AWR-06 v0.3 §0.5 统一裁定 XR-14 修订 §8.1 清单样例的 Holm 检验族名；按 XR-11 把 AWR-06 调度规则引用改为 SR-1 至 SR-8；按 XR-12 把实验配置样例中的进程内模块引用改为 `module:`） |
 | 日期 | 2026-10-18（UTC） |
 | 状态 | D4 设计评审稿（v0.2 按第一轮评审意见修订，处理记录见文末"评审处理记录"）。供负责人评审；不构成实现承诺。D4 处于深入调研与概念设计阶段，实现在 D3 封板之后启动，本文周次一律以"D3 封板后第 N 周"表述 |
 | 上游 | AWR-06 v0.2（`docs/06-D4-协同实验平台概念设计.md`）§4.2、§5.5、§6、§7.0、§7.3、§7.4、§8.3–§8.6、§9.1 方向 B 与方向 C、§10.2 WP-D4-15 与 WP-D4-17；ADR-D4-07、14、16、17、21、22、23、24 |
@@ -14,7 +14,7 @@
 | 并行文档 | M28 实验内核、M29 交互网络、M30 协同接口与基线、M31 基准套件、M32 评测与统计、M33 Trace 与复现、M34 研究者 SDK 与命令行（`docs/modules/`）；S1、S2、X1 规格（`docs/d4/suites/`）；协作智能排行榜规格（下称 LB）、契约草案（下称 CT）（`docs/d4/`）；r04 首篇论文实验设计。并行文档的引用以章节职责为准，字段名以 CT 定稿为准；v0.2 已对照 CT §4.2.3、§4.3.5、§4.4.2、§5.1 与 X1 §2.3、§5，M28、M29、M30、M31、M32 的引用条目逐条打开核实（§1.4 表 B） |
 | 适用范围 | Suite `infoshare` 1.x：问题族 IF 的场景族 `is-fixed`（P0，算法隔离模式）与 `is-active`（P1，闭环模式）；问题定义、外生注入、生成器与难度档、指标与评测器、基线、赛道与统计、接口、实例样例、验收 |
 | 体例 | 需求 `R-S3-yy`、验收 `AC-S3-yy`（两位序号，与 S1、S2、X1 规格一致）、风险 `RK-S3-yy`、待确认事项 `Q-S3-yy`；AC-S3-01 至 AC-S3-05 与 AWR-06 §7.3 的 AC-S3-1 至 AC-S3-5 同号对应，判据在本文细化（见 §15 第 6、11 条），AC-S3-06 起为本文新增；引用 AWR-06 的工作包 `WP-D4-xx`、决策 `ADR-D4-xx`、验收 `AC-D4-xx` 时保留 AWR-06 原编号 |
-| 引用约定 | 代码路径前缀沿用 AWR-06：`py:` = `python/awr/`，`sdk:` = `tools/sdk/drone4d/src/drone4d/`，`ct:` = `packages/contracts/`。`py:kernel/`、`py:interaction/`、`py:benchmarks/`、`py:coordination/`、`py:evaluation/` 为 D4 新包，仓库中尚不存在（已核对）；对现有代码的陈述均已打开文件核实（§1.4）。文献只引用调研报告中出现的条目并原样保留其核实标注 |
+| 引用约定 | 代码路径前缀沿用 AWR-06：`py:` = `python/awr/`，`sdk:` = `tools/sdk/anet4d/src/anet4d/`，`ct:` = `packages/contracts/`。`py:kernel/`、`py:interaction/`、`py:benchmarks/`、`py:coordination/`、`py:evaluation/` 为 D4 新包，仓库中尚不存在（已核对）；对现有代码的陈述均已打开文件核实（§1.4）。文献只引用调研报告中出现的条目并原样保留其核实标注 |
 | 数值约定 | 标注"初值""缺省""目标值"的数值为设计默认值或待 pilot 校准的目标，不是对实现性能的断言 |
 
 ---
@@ -1074,8 +1074,8 @@ outputs: {dir: runs/is-d2n8, trace_level: standard, report: [md, html]}
 ### 9.4 最小策略样例（草案接口）
 
 ```python
-from drone4d.coord import Policy, Decision, ReportRequest, SendRequest
-from drone4d.coord.kf import CVBank, ci_fuse, encode_estimates, report_estimates   # common/kf 的公开入口（草案）
+from anet4d.coord import Policy, Decision, ReportRequest, SendRequest
+from anet4d.coord.kf import CVBank, ci_fuse, encode_estimates, report_estimates   # common/kf 的公开入口（草案）
 
 class CiShare(Policy):
     def reset(self, ctx):

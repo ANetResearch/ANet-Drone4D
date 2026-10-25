@@ -73,7 +73,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-for _p in (ROOT / "python", ROOT / "tools/sdk/drone4d/src"):
+for _p in (ROOT / "python", ROOT / "tools/sdk/anet4d/src"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -498,7 +498,7 @@ def _retention(run_dir: Path, root: Path, mode: str) -> dict:
 def _env_run(job: Mapping, name: str, seed: int) -> dict:
     """正式配置的一个 Run（与 `determinism_official.run_one` 变体 a 同一循环：直接交付、参考策略在进程内、无背压注入）。"""
     do = _sibling("determinism_official")
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     from awr.agentsdk.env.core import BenchEnv
 

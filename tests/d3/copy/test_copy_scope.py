@@ -154,7 +154,7 @@ def test_rel09_reports_nothing_over_the_extended_scope():
 def test_openapi_kind_reads_summaries_descriptions_and_title():
     doc = {
         "components": {"schemas": {"TaskIn": {"properties": {"task_id": {"title": "Task Id", "type": "string"}}, "title": "TaskIn"}}},
-        "info": {"title": "ANet Drone4D Bench Api", "version": "1"},
+        "info": {"title": "ANet4D Bench Api", "version": "1"},
         "paths": {"/a": {"get": {"summary": "List Tasks", "description": "返回 `awesome_lidar` 字段。超快返回！"}},
                   "/b": {"get": {"summary": "List tasks", "description": "Reads `Gazebo sim` state."}}},
     }
@@ -165,7 +165,7 @@ def test_openapi_kind_reads_summaries_descriptions_and_title():
                      ("COPY-07", "info/title"), ("COPY-07", "info/title"), ("COPY-07", "paths//a/get/summary")]
     lines = raw.split("\n")
     t = next(f for f in got if f["anchor"] == "info/title")
-    assert '"title": "ANet Drone4D Bench Api"' in lines[t["line"] - 1], "info.title 定位到 schema title 所在行"
+    assert '"title": "ANet4D Bench Api"' in lines[t["line"] - 1], "info.title 定位到 schema title 所在行"
 
 
 def test_sentence_case_summaries():
@@ -214,7 +214,7 @@ def test_committed_openapi_summaries_are_sentence_case():
                if isinstance(o, dict) and title_case.match(o.get("summary") or "")]
         assert bad == [], f"{_rel(p)}: {bad}"
     bench = json.loads((CONTRACTS / "bench" / "openapi" / "bench.openapi.snapshot.json").read_text(encoding="utf-8"))
-    assert bench["info"]["title"] == "ANet Drone4D Event Lab API"
+    assert bench["info"]["title"] == "ANet4D Event Lab API"
 
 
 def test_live_sandbox_openapi_passes(tmp_path):

@@ -2,13 +2,13 @@
 """tools/bench/d3/refdet/step_wall.py：L2 基线在容器 `std` 资源档内的每步墙钟（D3-AC-58；M26-FR-126、FR-121）。
 
 正式评测的 L2 每步墙钟预算为 `max(0.5 s, τ × wall_ratio)`（τ = 0 时 0.5 s），自 OBS 帧最后一个字节写出起计（AWR-17 §18.9.6）。
-本工具把"一次真实 L2 运行的线协议帧"录下来，再以同一字节流驱动 `std` 档隔离容器中的 `drone4d.serve`，逐步测量 OBS 写完到
+本工具把"一次真实 L2 运行的线协议帧"录下来，再以同一字节流驱动 `std` 档隔离容器中的 `anet4d.serve`，逐步测量 OBS 写完到
 ACT 收齐的墙钟；Agent 的计算与观测内容无关于 Env 的物理档与渲染耗时，录放分离后可在无 GPU 的 Agent 容器中重复测量。
 
 子命令：
 - `capture`（d3-sensorsvc 镜像，EGL 渲染需 GPU）：以 run_spec 运行一次 L2 Env，Agent 进程内运行；每架机的 CONFIG 与逐步 OBS 按宿主侧
   `awr.agentsdk.wire.encode_frame` 编码后落盘，Agent 收到的是这些帧的解码结果（与容器内逐字节同一输入），其 ACT 按 Agent 侧
-  `drone4d.wire.encode_frame` 编码落盘作为期望值。输出 `<out>/<uav>/{config,obs,act}.bin` 与 `<out>/capture.json`。
+  `anet4d.wire.encode_frame` 编码落盘作为期望值。输出 `<out>/<uav>/{config,obs,act}.bin` 与 `<out>/capture.json`。
 - `replay`（d3-agent-py 镜像，只需 msgpack 与标准库）：每架机一个监听套接字（`<sock-root>/<uav>/agent.sock`），接受容器 Agent 的
   HELLO，下发录制的 CONFIG，然后各机以屏障锁步逐步下发 OBS（与 `run_remote_episode` 同序：同一步内各机并发计算），记录每步墙钟并比对
   ACT 字节与录制值；结束发 CLOSE。输出 `bench/step_wall.v1` 的单次重复记录。
@@ -44,7 +44,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-SDK = ROOT / "tools" / "sdk" / "drone4d" / "src"
+SDK = ROOT / "tools" / "sdk" / "anet4d" / "src"
 
 SCHEMA = "drone4d.bench.step_wall.v1"
 HDR = struct.Struct("<IBBH")
@@ -95,11 +95,11 @@ def stats(xs: list[float], budget_s: float | None = None) -> dict:
 def capture(a: argparse.Namespace) -> int:
     sys.path[:0] = [str(ROOT / "python"), str(SDK)]
     import msgpack
-    from drone4d.agent import DroneAgent
-    from drone4d.baselines import BASELINES
-    from drone4d.runner import run_episode
-    from drone4d.wire import T as AT
-    from drone4d.wire import encode_frame as agent_frame
+    from anet4d.agent import DroneAgent
+    from anet4d.baselines import BASELINES
+    from anet4d.runner import run_episode
+    from anet4d.wire import T as AT
+    from anet4d.wire import encode_frame as agent_frame
 
     from awr.agentsdk.env.core import BenchEnv
     from awr.agentsdk.env.spec import EnvSpec
@@ -327,7 +327,7 @@ def infer(a: argparse.Namespace) -> int:
     """单帧推理墙钟：逐帧 decode_small + detect；检测框高 ≥ IDENT_PX（交付分辨率）时加一次 decode_full（外观取色）。"""
     sys.path.insert(0, str(SDK))
     import msgpack
-    from drone4d.perception import ref_det as R
+    from anet4d.perception import ref_det as R
 
     det = R.RefDet()
     rows, n_det = [], 0

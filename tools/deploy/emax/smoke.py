@@ -32,7 +32,7 @@ class Client:
         self.timeout = timeout
 
     def call(self, method: str, path: str, body: dict | None = None, token: str | None = None) -> tuple[int, dict]:
-        headers = {"User-Agent": "anet-drone4d-install-smoke", "Accept": "application/json"}
+        headers = {"User-Agent": "anet4d-install-smoke", "Accept": "application/json"}
         if self.host:
             headers["Host"] = self.host
         if token:

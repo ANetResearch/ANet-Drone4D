@@ -3,7 +3,7 @@
 帧：`body_len u32le | type u8 | flags u8 (= 0) | version u16le (= 1) | msgpack body`（WS 无 `body_len`）。map 键为字符串，
 发送方按字段顺序写 map（dict 插入顺序），bytes 以 msgpack `bin` 携带；解码上限 `max_str_len` 4 KiB、`max_array_len` 2^20、
 `max_map_len` 4,096，各类型帧体有字节上限。违反时抛 `WireError(666, why)`。黄金向量见
-`packages/contracts/bench/golden/wire/*.hex`（SDK 侧 `drone4d.wire` 逐字节对拍）。
+`packages/contracts/bench/golden/wire/*.hex`（SDK 侧 `anet4d.wire` 逐字节对拍）。
 """
 
 from __future__ import annotations

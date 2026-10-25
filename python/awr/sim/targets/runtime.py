@@ -74,8 +74,13 @@ from .visual import visual_ok
 __all__ = ["BODIES_SESSION_MAX", "FleetEntry", "TargetQuantView", "TargetRuntime", "TargetView"]
 
 BODIES_SESSION_MAX = 64
-UNAWARE, SUSPICIOUS, REACTING, ALERTED, CALMING = (int(Awareness.UNAWARE), int(Awareness.SUSPICIOUS), int(Awareness.REACTING),
-                                                   int(Awareness.ALERTED), int(Awareness.CALMING))
+UNAWARE, SUSPICIOUS, REACTING, ALERTED, CALMING = (
+    int(Awareness.UNAWARE),
+    int(Awareness.SUSPICIOUS),
+    int(Awareness.REACTING),
+    int(Awareness.ALERTED),
+    int(Awareness.CALMING),
+)
 AW_NAMES = {int(a): a.name for a in Awareness}
 DECAY_PER_S = 0.01
 DISCOVER_DA = 0.2
@@ -139,27 +144,28 @@ def _exogenous(T: Any) -> bool:
 class TargetRuntime:
     def __init__(self) -> None:
         self.tab: Any = None
-        self.st: dict[int, Any] = {}        # row -> TState
+        self.st: dict[int, Any] = {}  # row -> TState
         self.world: Any = None
         self.profiles: Any = None
         self.los = LosCache()
         self.eff = EffCache()
         self.rev = 0
-        self.lights_fn: Any = None          # vid -> (nav, strobe)；缺省关闭（AWR-20 §4.4 第 2 条）
-        self.capture_fn: Any = None         # target id -> capture 对象（M19 提供时优先）
+        self.lights_fn: Any = None  # vid -> (nav, strobe)；缺省关闭（AWR-20 §4.4 第 2 条）
+        self.capture_fn: Any = None  # target id -> capture 对象（M19 提供时优先）
         self._env: TargetEnv | None = None
         self._bt: dict | None = None
-        self._ktab: tuple | None = None     # 运动核的路径点、驻留、区域拼接表与参数矩阵（按配置与区域对象的身份缓存）
-        self._ms_soa: np.ndarray | None = None   # 各识别物运动状态的行（MotionState._v 为其中一行的视图；按实体行号）
+        self._ktab: tuple | None = None  # 运动核的路径点、驻留、区域拼接表与参数矩阵（按配置与区域对象的身份缓存）
+        self._ms_soa: np.ndarray | None = None  # 各识别物运动状态的行（MotionState._v 为其中一行的视图；按实体行号）
         self._env_s = -1
         self._models: list[str] = []
         self._seed: int | None = None
         self.stats = {"calls": 0, "discovered": 0, "env_fallback": 0, "stage_ns": 0}
-        self.sink: Any = None               # 测试钩子：detail 载荷（bytes）的替代去向
+        self.sink: Any = None  # 测试钩子：detail 载荷（bytes）的替代去向
         self.last_detail: dict | None = None
         self._pub = None
         self._bus = None
-        self.events_log: list[tuple[str, dict]] = []   # 最近事件（测试与 SB-45 的 last_discovered 外的诊断，≤ 256）
+        self.events_log: list[tuple[str, dict]] = []  # 最近事件（测试与 SB-45 的 last_discovered 外的诊断，≤ 256）
+        self._life_worlds: dict[str, Any] = {}
         self.motion_source: MotionSource | None = None  # D3 扩展点 3（timeline 识别物的位置来源）
         self._src_off: set[str] = set()                 # 运动源本 tick 给出 enabled = false 的 timeline 识别物
         self._tl_track: list[tuple[int, dict[str, bytes]]] = []   # (stage t_ns, {timeline 识别物 id: 实现位置 "<i8" × 3，mm})
@@ -183,7 +189,19 @@ class TargetRuntime:
     def _timeline_step(self, T: Any, t_ns: int) -> None:
         """timeline 识别物的一步：取运动源的位姿写入 MotionState，不推进 `step_motion`、不取流 17、不应用行为覆盖。"""
         src = self.motion_source
-        p = src.pose(T.id, t_ns) if src is not None else None
+        if T.cfg.raw.get("life"):
+            life = self._life(T.cfg.raw)
+            life.advance(t_ns * 1e-9)
+            pos, yaw, vel, state = life.sample(T.cfg.raw["life"]["actor_id"])
+            p = pos, yaw, vel, True, state["hidden"]
+        elif T.cfg.raw.get("activity"):
+            from awr.sim.activities.plans import bound_plan
+
+            plan = bound_plan(T.cfg.raw, self.world)
+            pos, yaw, vel, _state = plan.sample(t_ns * 1e-9)
+            p = pos, yaw, vel, True, False
+        else:
+            p = src.pose(T.id, t_ns) if src is not None else None
         if p is None:
             T.ms.speed, T.ms.vz = 0.0, 0.0
             return
@@ -207,7 +225,7 @@ class TargetRuntime:
         if tab is not self.tab:
             self.tab = tab
             self._drop_all()
-            self._ms_soa = np.zeros((int(getattr(tab, "capacity", 32)), KM.MS_N))   # 各识别物运动状态的行（按实体行号）
+            self._ms_soa = np.zeros((int(getattr(tab, "capacity", 32)), KM.MS_N))  # 各识别物运动状态的行（按实体行号）
         w = getattr(ctx, "world", None)
         if w is not self.world:
             self.world = w
@@ -305,6 +323,36 @@ class TargetRuntime:
         if tot > BODIES_SESSION_MAX:
             raise TargetError(542, "sensitivity", "SESSION_BODY_LIMIT", value=tot, limit=BODIES_SESSION_MAX)
 
+    def _life(self, raw: dict):
+        from awr.sim.activities.bindings import bound_recipe
+        from awr.sim.activities.life import LifeWorld
+
+        doc, _spec = bound_recipe(raw, self.world)
+        key = raw["life"]["sha256"]
+        if key not in self._life_worlds:
+            self._life_worlds[key] = LifeWorld(doc)
+        return self._life_worlds[key]
+
+    def _place_activity_or_legacy(self, raw: dict):
+        if raw.get("life"):
+            from awr.sim.activities.bindings import bound_recipe
+
+            try:
+                doc, spec = bound_recipe(raw, self.world)
+                return np.array(doc["nodes"][spec["start"]]["pos"], float), None
+            except (ValueError, OSError, KeyError, TypeError) as exc:
+                raise TargetError(540, "life", "LIFE_NOT_ADMITTED", reason=str(exc)) from None
+        if not raw.get("activity"):
+            return place(raw, self.world)
+        from awr.sim.activities.plans import bound_plan
+
+        try:
+            plan = bound_plan(raw, self.world)
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            raise TargetError(540, "activity", "ACTIVITY_NOT_ADMITTED", reason=str(exc)) from None
+        # A verified ground surface may lie below a tree canopy. DSM highest-hit is not its ground.
+        return np.array(plan.doc["segments"][0]["p"], float), None
+
     def add(self, ctx: Any, d: dict) -> tuple[str, dict, list[str]]:
         """新增（M18-FR-001 至 FR-009、FR-019）：合并模板、校验、放置、加入实体表；返回 (id, cfg, warnings)。"""
         from awr.sim.core.entities import EntityLimitError
@@ -317,9 +365,30 @@ class TargetRuntime:
             d = {k: v for k, v in d.items() if k != "cfg_rev"}
         raw = merged_config(d)
         warnings = validate_config(raw)
+        # A shared recipe owns the whole interacting population. Mixed independent
+        # motion would create invisible blockers or non-reproducible interactions.
+        existing_refs = {(T.cfg.raw.get("life") or {}).get("sha256") for T in self.ordered()}
+        incoming_ref = (raw.get("life") or {}).get("sha256")
+        if (
+            existing_refs
+            and (incoming_ref is not None or any(v is not None for v in existing_refs))
+            and existing_refs != {incoming_ref}
+        ):
+            raise TargetError(110, "life", "REGENERATE_WHOLE_POPULATION")
+        if raw.get("life") and raw.get("id") != raw["life"]["actor_id"]:
+            raise TargetError(110, "life.actor_id", "EXPLICIT_ID_REQUIRED")
+        if raw.get("life") and not getattr(self, "_importing_life", False):
+            from awr.sim.activities.bindings import bound_recipe
+
+            try:
+                doc, _ = bound_recipe(raw, self.world)
+                if len(doc["actors"]) != 1:
+                    raise TargetError(110, "life", "IMPORT_COMPLETE_POPULATION")
+            except (ValueError, OSError, KeyError, TypeError) as exc:
+                raise TargetError(540, "life", "LIFE_NOT_ADMITTED", reason=str(exc)) from None
         tid = raw.pop("id", None)
         label = raw.pop("label", None)
-        pos0, region = place(raw, self.world)
+        pos0, region = self._place_activity_or_legacy(raw)
         self._check_body_limit(raw, None)
         cls = raw["class"]
         try:
@@ -348,6 +417,7 @@ class TargetRuntime:
         for T in self.st.values():
             T.ms.detach()
         self.st.clear()
+        self._life_worlds.clear()
 
     def _new_state(self, meta: Any, raw: dict, pos0: np.ndarray, region: np.ndarray | None) -> Any:
         from .behavior import TState
@@ -375,15 +445,22 @@ class TargetRuntime:
         if "id" in patch and patch["id"] != T.id:
             raise TargetError(110, "id", "ID_IMMUTABLE", value=patch["id"])
         cur = copy.deepcopy(T.cfg.raw)
+        if cur.get("life") and any(
+            k in patch for k in ("life", "motion", "pos", "enabled", "reaction_policy", "activity")
+        ):
+            raise TargetError(110, "life", "REGENERATE_WHOLE_POPULATION")
         newd = merge_patch(cur, {k: v for k, v in patch.items() if k not in ("id", "label")})
         raw = merged_config(newd)
         raw.pop("id", None)
         raw.pop("label", None)
         warnings = validate_config(raw)
-        geo_keys = ("pos", "motion", "alt_agl_m")
+        # Revalidate geometry binding even for an appearance/size edit.
+        if raw.get("activity") or raw.get("life"):
+            self._place_activity_or_legacy(raw)
+        geo_keys = ("pos", "motion", "alt_agl_m", "activity", "life")
         moved = any(k in patch for k in geo_keys)
         if moved:
-            pos0, region = place(raw, self.world)
+            pos0, region = self._place_activity_or_legacy(raw)
         else:
             pos0, region = None, T.ms.region
         self._check_body_limit(raw, T.id)
@@ -414,6 +491,8 @@ class TargetRuntime:
         T = self._by_id(tid)
         if T is None:
             raise TargetError(543, "id", "TARGET_NOT_FOUND", value=str(tid))
+        if T.cfg.raw.get("life"):
+            raise TargetError(110, "life", "REGENERATE_WHOLE_POPULATION")
         self.tab.remove(T.id)
         self._drop(T.row)
         self.rev += 1
@@ -435,6 +514,54 @@ class TargetRuntime:
         return out
 
     def import_targets(self, ctx: Any, items: list[dict]) -> list[dict]:
+        # Shared simulations must never admit a partial roster: missing visible
+        # entities would still block traffic in the recipe. Validate the whole batch
+        # before adding, and roll back this batch if entity allocation fails.
+        if any(isinstance(it, dict) and it.get("life") for it in (items or [])):
+            added = []
+            try:
+                from awr.sim.activities.bindings import bound_recipe
+
+                if not self.bind(ctx):
+                    raise TargetError(213, None, "TARGETS_NOT_READY")
+                refs, ids, expected, bodies = set(), set(), set(), 0
+                for it in items:
+                    raw = merged_config({k: v for k, v in it.items() if k != "cfg_rev"})
+                    validate_config(raw)
+                    if not raw.get("life") or raw.get("id") != raw["life"]["actor_id"]:
+                        raise TargetError(110, "life", "IMPORT_COMPLETE_POPULATION")
+                    doc, _ = bound_recipe(raw, self.world)
+                    refs.add(raw["life"]["sha256"])
+                    if raw["id"] in ids:
+                        raise TargetError(110, "id", "TARGET_ID_DUP")
+                    ids.add(raw["id"])
+                    expected.update(a["id"] for a in doc["actors"])
+                    bodies += sum(bool(b.get("enabled", True)) for b in raw.get("sensitivity", []))
+                if len(refs) != 1 or ids != expected or self.ids():
+                    raise TargetError(110, "life", "IMPORT_COMPLETE_POPULATION")
+                if len(items) > self.tab.limit:
+                    raise TargetError(505, "life", "SANDBOX_ENTITY_LIMIT", limit=self.tab.limit)
+                if bodies > BODIES_SESSION_MAX:
+                    raise TargetError(542, "sensitivity", "SESSION_BODY_LIMIT")
+                self._importing_life = True
+                for it in items:
+                    added.append(self.add(ctx, it)[0])  # noqa: PERF401 — retain each ID for partial-failure rollback
+                return []
+            except (TargetError, ValueError, OSError, KeyError, TypeError) as exc:
+                for tid in added:
+                    meta = self.tab.remove(tid)
+                    if meta:
+                        self._drop(meta.row)
+                self._life_worlds.clear()
+                return [
+                    {
+                        "section": "targets",
+                        "code": getattr(exc, "code", 540),
+                        "detail": getattr(exc, "detail", {"why": "LIFE_POPULATION_REJECTED", "reason": str(exc)}),
+                    }
+                ]
+            finally:
+                self._importing_life = False
         probs = []
         for i, it in enumerate(items or []):
             try:
@@ -453,11 +580,18 @@ class TargetRuntime:
     def view(self) -> TargetView:
         Ts = self.ordered()
         n = len(Ts)
-        return TargetView(n, np.array([T.target_no for T in Ts], np.uint16), np.array([_class_code(T.cfg.cls) for T in Ts], np.uint8),
-                          np.array([T.ms.pos for T in Ts], float).reshape(n, 3), np.array([T.ms.yaw for T in Ts], float),
-                          np.array([self._vel(T) for T in Ts], float).reshape(n, 3),
-                          np.array([T.cfg.size_lwh for T in Ts], float).reshape(n, 3),
-                          np.array([self._occlusion(T) for T in Ts], float), tuple(T.cfg for T in Ts), int(self.rev))
+        return TargetView(
+            n,
+            np.array([T.target_no for T in Ts], np.uint16),
+            np.array([_class_code(T.cfg.cls) for T in Ts], np.uint8),
+            np.array([T.ms.pos for T in Ts], float).reshape(n, 3),
+            np.array([T.ms.yaw for T in Ts], float),
+            np.array([self._vel(T) for T in Ts], float).reshape(n, 3),
+            np.array([T.cfg.size_lwh for T in Ts], float).reshape(n, 3),
+            np.array([self._occlusion(T) for T in Ts], float),
+            tuple(T.cfg for T in Ts),
+            int(self.rev),
+        )
 
     def config(self, tid: str) -> TargetConfig | None:
         T = self._by_id(tid)
@@ -467,18 +601,43 @@ class TargetRuntime:
         T = self._by_id(tid)
         if T is None:
             return None
-        return TargetState1(T.id, T.target_no, tuple(float(x) for x in T.ms.pos), float(T.ms.yaw), tuple(float(x) for x in self._vel(T)),
-                            float(T.ms.speed), is_moving(T.cfg.raw.get("motion"), T.ms.speed), AW_NAMES[T.aware], float(T.alert))
+        return TargetState1(
+            T.id,
+            T.target_no,
+            tuple(float(x) for x in T.ms.pos),
+            float(T.ms.yaw),
+            tuple(float(x) for x in self._vel(T)),
+            float(T.ms.speed),
+            is_moving(T.cfg.raw.get("motion"), T.ms.speed),
+            AW_NAMES[T.aware],
+            float(T.alert),
+        )
 
-    def keepout(self, tid: str, *, margin_m: float = DEFAULT_MARGIN_M, mode: str | None = None, conservative: bool = True,
-                moving_as_circle: bool = True) -> list[Volume]:
+    def keepout(
+        self,
+        tid: str,
+        *,
+        margin_m: float = DEFAULT_MARGIN_M,
+        mode: str | None = None,
+        conservative: bool = True,
+        moving_as_circle: bool = True,
+    ) -> list[Volume]:
         T = self._by_id(tid)
         if T is None:
             return []
         st = self.state1(tid)
         sigs = [signature_of(m, self.profiles) for m in self._models] or None
-        return keepout_volumes(T.cfg, st, mode or T.cfg.raw.get("criterion_mode", "geometric"), margin_m, conservative=conservative,
-                               moving_as_circle=moving_as_circle, models=sigs, env=None, cache=self.eff)
+        return keepout_volumes(
+            T.cfg,
+            st,
+            mode or T.cfg.raw.get("criterion_mode", "geometric"),
+            margin_m,
+            conservative=conservative,
+            moving_as_circle=moving_as_circle,
+            models=sigs,
+            env=None,
+            cache=self.eff,
+        )
 
     def sound_bands_now(self, tid: str, t_ns: int) -> np.ndarray | None:
         """识别物声源在 t 的 L_W[b]（未计权，24 带；关闭相位 −40 dB；M19 声阵列用）。"""
@@ -601,8 +760,17 @@ class TargetRuntime:
                     if nav or strobe:
                         sig = sig.with_lights(bool(nav), bool(strobe))
             no = getattr(e, "agent_no", None) if e is not None else None
-            out.append(FleetEntry(str(vid), int(no) if no is not None else int(s), int(s), mid, np.asarray(pos_all[s], float).copy(),
-                                  bool(armed[k]), sig))
+            out.append(
+                FleetEntry(
+                    str(vid),
+                    int(no) if no is not None else int(s),
+                    int(s),
+                    mid,
+                    np.asarray(pos_all[s], float).copy(),
+                    bool(armed[k]),
+                    sig,
+                )
+            )
         return out
 
     def quant_view(self, tid: str) -> TargetQuantView | None:
@@ -610,8 +778,19 @@ class TargetRuntime:
         T = self._by_id(tid)
         if T is None:
             return None
-        return TargetQuantView(T.id, int(T.target_no), T.cfg, np.asarray(T.ms.pos, float).copy(), float(T.ms.yaw), float(T.cfg.size_lwh[2]),
-                               float(T.alert), AW_NAMES[T.aware], dict(T.dwell), float(self.t_dwell(T)), int(T.rev))
+        return TargetQuantView(
+            T.id,
+            int(T.target_no),
+            T.cfg,
+            np.asarray(T.ms.pos, float).copy(),
+            float(T.ms.yaw),
+            float(T.cfg.size_lwh[2]),
+            float(T.alert),
+            AW_NAMES[T.aware],
+            dict(T.dwell),
+            float(self.t_dwell(T)),
+            int(T.rev),
+        )
 
     # ------------------------------------------------------------ stage
     def stage(self, S: Any, ctx: Any) -> None:
@@ -632,7 +811,11 @@ class TargetRuntime:
         nrm = cbrng.normal(seed, int(Stream.TARGETS_MOTION), nos, tick, np.array([CH_OMEGA, CH_SPEED]))
         uni = cbrng.uniform(seed, int(Stream.TARGETS_MOTION), nos, tick, np.array([CH_PAUSE, CH_PAUSE_LEN]))
         ids, P, _models, sigs = self.participants(S, ctx)
-        pos_of = {vid: (float(P[j, 0]), float(P[j, 1])) for j, vid in enumerate(ids)} if any(T.focus is not None for T in Ts) else {}
+        pos_of = (
+            {vid: (float(P[j, 0]), float(P[j, 1])) for j, vid in enumerate(ids)}
+            if any(T.focus is not None for T in Ts)
+            else {}
+        )
         env = self.env(ctx)
         world = self.world
         broadcasts: list[tuple[Any, tuple[float, float]]] = []
@@ -647,11 +830,11 @@ class TargetRuntime:
             if _timeline(T):
                 self._timeline_step(T, t_ns)
             elif T.aware == UNAWARE and not T.look_until > t_s:
-                ov, base = None, True        # TState.override 的首两条均不成立时的结果（无覆盖、原运动）
+                ov, base = None, True  # TState.override 的首两条均不成立时的结果（无覆盖、原运动）
             else:
                 ov, base = T.override(t_s, pos_of.get(T.focus) if T.focus else None, world)
                 if _exogenous(T):
-                    ov, base = None, True    # D3 扩展点 3：响应的计时照常推进，运动不被覆盖
+                    ov, base = None, True  # D3 扩展点 3：响应的计时照常推进，运动不被覆盖
             # 运动：静止、随机游走与路径三种模式在核内一次推进（`kernels_motion.step_all`，与 step_motion 逐位相同）；识别物之间的
             # 运动互不依赖，批量与逐个的结果相同。合成世界（无 DSM 栅格）与 numba 不可用时逐个调用 step_motion
             kp = ts[5] if kern is not None else None
@@ -659,14 +842,14 @@ class TargetRuntime:
                 pass
             elif kp is not None:
                 if ov is None and (kp[0] == KM.MODE_STATIC or not base) and T.ms.speed == 0.0:
-                    T.ms.vz = 0.0   # step_motion 的首个早退：静止且无行为覆盖，本步无事可做（不进核）
+                    T.ms.vz = 0.0  # step_motion 的首个早退：静止且无行为覆盖，本步无事可做（不进核）
                 else:
                     batch.append((k, T, ov, base))
             else:
                 step_motion(T.ms, T.cfg.raw, dt, t_s, world, nrm[k], uni[k], ov, base_active=base)
             sp = ts[6]
             if sp is not None and not T.emit_over:
-                per, ph0, duty = sp                                  # sound_phase 与 gate_on（同一相位，配置的浮点值预先取出）
+                per, ph0, duty = sp  # sound_phase 与 gate_on（同一相位，配置的浮点值预先取出）
                 ph = float((t_s - ph0) % per)
                 T.sound_on = duty >= 1.0 or (duty > 0.0 and ph < duty * per)
                 T.sound_phase = ph
@@ -676,7 +859,7 @@ class TargetRuntime:
                 if s is not None:
                     ph = sound_phase(s, t_s)
                     duty = float(s["duty"])
-                    T.sound_on = duty >= 1.0 or (duty > 0.0 and ph < duty * float(s["period_s"]))   # gate_on（同一相位）
+                    T.sound_on = duty >= 1.0 or (duty > 0.0 and ph < duty * float(s["period_s"]))  # gate_on（同一相位）
                     T.sound_phase = ph
                 else:
                     T.sound_on, T.sound_phase = False, 0.0
@@ -709,8 +892,18 @@ class TargetRuntime:
                 hits, deferred = self._evaluate(T, ids, P, sigs, env, t_ns, IN[s0:s1], meta)
             else:
                 m = cntl[k]
-                hits, deferred = self._evaluate_geo(T, ids, IN, s0, s1, meta, ordl[k][:m] if m else (),  # type: ignore[index]
-                                                    qql[k][:m] if m else (), r3l[s0] if m else None, idset)  # type: ignore[index]
+                hits, deferred = self._evaluate_geo(
+                    T,
+                    ids,
+                    IN,
+                    s0,
+                    s1,
+                    meta,
+                    ordl[k][:m] if m else (),  # type: ignore[index]
+                    qql[k][:m] if m else (),
+                    r3l[s0] if m else None,
+                    idset,
+                )  # type: ignore[index]
             if hits or deferred or T.aware != UNAWARE:
                 self._fsm(ctx, T, hits, deferred, t_s, dt, broadcasts)
             if T.aware == UNAWARE and T.alert > T.base_alert:
@@ -742,7 +935,9 @@ class TargetRuntime:
         if mode is not None:
             pv = _motion_params(T.ms, raw)
             cls, _m, _mode, turn_max, vmax, acc, alt, tau, v0, sig_v, pause_p = pv
-            loop = {"loop": KM.LOOP_LOOP, "pingpong": KM.LOOP_PINGPONG, "once": KM.LOOP_ONCE}.get(str(m.get("loop", "loop")), 3)
+            loop = {"loop": KM.LOOP_LOOP, "pingpong": KM.LOOP_PINGPONG, "once": KM.LOOP_ONCE}.get(
+                str(m.get("loop", "loop")), 3
+            )
             row = [0.0] * KM.PR_N
             row[KM.P_GROUND] = 1.0 if cls != "uav" else 0.0
             row[KM.P_UAV] = 1.0 if cls == "uav" else 0.0
@@ -757,14 +952,20 @@ class TargetRuntime:
         T._kp = (raw, out)
         return out
 
-    def _motion_batch(self, batch: list, kern: tuple[Any, bool], nrm: np.ndarray, uni: np.ndarray, dt: float, t_s: float) -> None:
+    def _motion_batch(
+        self, batch: list, kern: tuple[Any, bool], nrm: np.ndarray, uni: np.ndarray, dt: float, t_s: float
+    ) -> None:
         """核适用识别物的一步运动：打包 MotionState 与参数 → `kernels_motion.step_all` → 写回（字段与 step_motion 的结果逐位相同）。"""
         dsm, has_world = kern
         n = len(batch)
         # 路径点与区域多边形的拼接表（按配置与区域数组的身份缓存）
         tkey = [(T.cfg.raw, T.ms.region) for _k, T, _o, _b in batch]
         tc = self._ktab
-        if tc is None or len(tc[0]) != n or any(x[0] is not y[0] or x[1] is not y[1] for x, y in zip(tc[0], tkey, strict=True)):
+        if (
+            tc is None
+            or len(tc[0]) != n
+            or any(x[0] is not y[0] or x[1] is not y[1] for x, y in zip(tc[0], tkey, strict=True))
+        ):
             pts_l, dw_l, reg_l = [], [], []
             offs = []
             po = ro = 0
@@ -787,7 +988,14 @@ class TargetRuntime:
             REG = np.ascontiguousarray(np.concatenate(reg_l) if ro else np.zeros((1, 2)))
             tc = self._ktab = (tkey, PTS, DW, REG, offs, [list(self._kparams(T)[1]) for _k, T, _o, _b in batch])  # type: ignore[index]
             for row, (o0, o1, o2, o3, o4, o5) in zip(tc[5], offs, strict=True):
-                row[KM.P_POFF], row[KM.P_PN], row[KM.P_ROFF], row[KM.P_RN], row[KM.P_RCX], row[KM.P_RCY] = o0, o1, o2, o3, o4, o5
+                row[KM.P_POFF], row[KM.P_PN], row[KM.P_ROFF], row[KM.P_RN], row[KM.P_RCX], row[KM.P_RCY] = (
+                    o0,
+                    o1,
+                    o2,
+                    o3,
+                    o4,
+                    o5,
+                )
             self._ktab = (tkey, PTS, DW, REG, offs, np.array(tc[5], np.float64).reshape(n, KM.PR_N))
             tc = self._ktab
         _tk, PTS, DW, REG, _offs, PR = tc
@@ -797,7 +1005,7 @@ class TargetRuntime:
         if direct:
             MS = soa
             ROWS = np.array(rows, np.int64)
-        else:   # 运动状态不在表中（例如测试替换了 MotionState）：拼成临时表，核后写回各自的行
+        else:  # 运动状态不在表中（例如测试替换了 MotionState）：拼成临时表，核后写回各自的行
             MS = np.ascontiguousarray(np.array([T.ms._v for _k, T, _o, _b in batch], np.float64).reshape(n, KM.MS_N))
             ROWS = np.arange(n, dtype=np.int64)
         ovl = []
@@ -809,8 +1017,17 @@ class TargetRuntime:
             else:
                 kc = _OV_CODE.get(ov.kind, KM.OV_NONE)
                 pt = ov.point
-                ovl.append((float(kc), 1.0 if pt is not None else 0.0, float(pt[0]) if pt is not None else 0.0,
-                            float(pt[1]) if pt is not None else 0.0, float(ov.speed), 1.0 if ov.away else 0.0, float(ov.stop_within_m)))
+                ovl.append(
+                    (
+                        float(kc),
+                        1.0 if pt is not None else 0.0,
+                        float(pt[0]) if pt is not None else 0.0,
+                        float(pt[1]) if pt is not None else 0.0,
+                        float(ov.speed),
+                        1.0 if ov.away else 0.0,
+                        float(ov.stop_within_m),
+                    )
+                )
             ba.append(1 if base else 0)
             ks.append(k)
         OV = np.array(ovl, np.float64).reshape(n, KM.OV_N)
@@ -821,8 +1038,26 @@ class TargetRuntime:
             a, x0, y0, cell = dsm.a, dsm.x0, dsm.y0, dsm.cell
         else:
             a, x0, y0, cell = _NO_DSM, 0.0, 0.0, 1.0
-        KM.step_all(MS, ROWS, PR, OV, np.array(ba, np.int64), NZ, UN, PTS, DW, REG, a, x0, y0, cell, dsm is not None, has_world, float(dt),
-                    float(t_s))
+        KM.step_all(
+            MS,
+            ROWS,
+            PR,
+            OV,
+            np.array(ba, np.int64),
+            NZ,
+            UN,
+            PTS,
+            DW,
+            REG,
+            a,
+            x0,
+            y0,
+            cell,
+            dsm is not None,
+            has_world,
+            float(dt),
+            float(t_s),
+        )
         if not direct:
             for i, (_k, T, _o, _b) in enumerate(batch):
                 T.ms._v[:] = MS[i]
@@ -848,7 +1083,13 @@ class TargetRuntime:
         ts = getattr(T, "_ts", None)
         if ts is None or ts[0] != T.rev or ts[4] is not T.cfg:
             raw = T.cfg.raw
-            ts = (T.rev, bool(raw.get("enabled", True)), raw.get("sound"), raw.get("criterion_mode", "geometric") == "physical", T.cfg)
+            ts = (
+                T.rev,
+                bool(raw.get("enabled", True)),
+                raw.get("sound"),
+                raw.get("criterion_mode", "geometric") == "physical",
+                T.cfg,
+            )
             T._ts = ts
         return ts[1], ts[2]
 
@@ -888,9 +1129,19 @@ class TargetRuntime:
         ends = np.zeros(len(Ts), np.int64)
         for k, (s0, s1, _m) in rows.items():
             starts[k], ends[k] = s0, s1
-        self._bt = {"key": key, "tk": np.array(tk, np.int64), "shape": np.array(shp, np.int8), "r2": np.array(r) ** 2,
-                    "zmin": np.array(zmin), "zmax": np.array(zmax), "half": np.array(half), "off": np.array(off), "rows": rows,
-                    "starts": starts, "ends": ends}
+        self._bt = {
+            "key": key,
+            "tk": np.array(tk, np.int64),
+            "shape": np.array(shp, np.int8),
+            "r2": np.array(r) ** 2,
+            "zmin": np.array(zmin),
+            "zmax": np.array(zmax),
+            "half": np.array(half),
+            "off": np.array(off),
+            "rows": rows,
+            "starts": starts,
+            "ends": ends,
+        }
         return self._bt
 
     def _inside_all(self, Ts: list[Any], P: np.ndarray) -> tuple[np.ndarray, dict]:
@@ -911,13 +1162,24 @@ class TargetRuntime:
             M = soa[np.fromiter((T.row for T in Ts), np.int64, len(Ts))]
         else:
             M = np.array([T.ms._v for T in Ts], float).reshape(len(Ts), KM.MS_N)
-        pos = M[:, KM.S_X:KM.S_Z + 1]
+        pos = M[:, KM.S_X : KM.S_Z + 1]
         C = pos[bt["tk"]]
         if KM.HAVE_NUMBA:
             yaw = M[:, KM.S_YAW][bt["tk"]] + bt["off"]
             IN = np.empty((nb, nu), np.bool_)
             R3 = np.empty((nb, nu))
-            KM.inside_all(C, np.ascontiguousarray(P, np.float64), bt["shape"], bt["r2"], bt["zmin"], bt["zmax"], bt["half"], yaw, IN, R3)
+            KM.inside_all(
+                C,
+                np.ascontiguousarray(P, np.float64),
+                bt["shape"],
+                bt["r2"],
+                bt["zmin"],
+                bt["zmax"],
+                bt["half"],
+                yaw,
+                IN,
+                R3,
+            )
             return IN, bt["rows"], R3
         d = P[None, :, :] - C[:, None, :]
         rh2 = d[..., 0] ** 2 + d[..., 1] ** 2
@@ -935,8 +1197,19 @@ class TargetRuntime:
         R3 = np.linalg.norm(d, axis=2)
         return IN, bt["rows"], R3
 
-    def _evaluate_geo(self, T: Any, ids: list[str], IN: np.ndarray, s0: int, s1: int, meta: tuple, order: Any, qs: Any,
-                      r3: list | None, idset: set) -> tuple[dict[str, tuple], frozenset]:
+    def _evaluate_geo(
+        self,
+        T: Any,
+        ids: list[str],
+        IN: np.ndarray,
+        s0: int,
+        s1: int,
+        meta: tuple,
+        order: Any,
+        qs: Any,
+        r3: list | None,
+        idset: set,
+    ) -> tuple[dict[str, tuple], frozenset]:
         """geometric 判据（与 `_evaluate` 的 geometric 分支同一结果与次序）：每架机取首个包含它的敏感体（按体次序，同体内按参与者
         次序；`kernels_motion.geo_hits` 给出 order 与体序号 qs），命中信息为 (kind, vol_idx, 斜距)；驻留按参与者次序更新。逐对的
         Python 只在命中的机上执行（D2-FX-R2-sim 第 2 次）。"""
@@ -968,8 +1241,17 @@ class TargetRuntime:
                 hi.pop(vid, None)
         return hits, _NO_DEFER
 
-    def _evaluate(self, T: Any, ids: list[str], P: np.ndarray, sigs: list[VehicleSignature], env: TargetEnv, t_ns: int,
-                  ins: np.ndarray, meta: tuple) -> tuple[dict[str, dict], set[str]]:
+    def _evaluate(
+        self,
+        T: Any,
+        ids: list[str],
+        P: np.ndarray,
+        sigs: list[VehicleSignature],
+        env: TargetEnv,
+        t_ns: int,
+        ins: np.ndarray,
+        meta: tuple,
+    ) -> tuple[dict[str, dict], set[str]]:
         raw = T.cfg.raw
         bodies = raw.get("sensitivity") or []
         hits: dict[str, dict] = {}
@@ -982,7 +1264,7 @@ class TargetRuntime:
                 T.dwell.clear()
                 T.hit_info.clear()
             return hits, deferred
-        T.occ = (ins, ids, meta)       # occupied_by 在 detail 中按需展开
+        T.occ = (ins, ids, meta)  # occupied_by 在 detail 中按需展开
         T.inside_n = int(any_in.sum())
         pos = T.ms.pos
         d = P - pos[None, :]
@@ -999,42 +1281,73 @@ class TargetRuntime:
                 continue
             if kind == "visual":
                 top = np.array([pos[0], pos[1], pos[2] + 0.95 * h])
-                los = self.los.get_batch(P[cand], np.repeat(pos[None, :], len(cand), 0), np.full(len(cand), h), "M18", t_ns, "top")
+                los = self.los.get_batch(
+                    P[cand], np.repeat(pos[None, :], len(cand), 0), np.full(len(cand), h), "M18", t_ns, "top"
+                )
                 dz = P[cand, 2] - top[2]
                 rh = np.hypot(P[cand, 0] - pos[0], P[cand, 1] - pos[1])
                 elev = np.arctan2(dz, rh)
-                ok, ratio = visual_ok(r3[cand], elev, [sigs[j] for j in cand], env, float(raw.get("visual_theta0_arcmin", 1.0)), T.alert)
+                ok, ratio = visual_ok(
+                    r3[cand], elev, [sigs[j] for j in cand], env, float(raw.get("visual_theta0_arcmin", 1.0)), T.alert
+                )
                 for qq, j in enumerate(cand):
                     if los[qq].deferred:
                         deferred.add(ids[j])
                     elif los[qq].k_los > 0.5 and ok[qq]:
-                        hits[ids[j]] = {"kind": "visual", "vol_idx": vol_idx, "range_m": round(float(r3[j]), 2),
-                                        "margin_ratio": round(float(ratio[qq]), 3)}
+                        hits[ids[j]] = {
+                            "kind": "visual",
+                            "vol_idx": vol_idx,
+                            "range_m": round(float(r3[j]), 2),
+                            "margin_ratio": round(float(ratio[qq]), 3),
+                        }
             elif kind == "acoustic":
                 b = bodies[vol_idx]
                 lw = np.array([sigs[j].lw_bands() for j in cand])
-                thr = np.array([threshold_bands(env.l_bg_bands, sigs[j].masking_db(), float(raw.get("hearing_th_dba", 20.0)), T.alert,
-                                                float(raw.get("acoustic_adv_db", 0.0))) for j in cand])
+                thr = np.array(
+                    [
+                        threshold_bands(
+                            env.l_bg_bands,
+                            sigs[j].masking_db(),
+                            float(raw.get("hearing_th_dba", 20.0)),
+                            T.alert,
+                            float(raw.get("acoustic_adv_db", 0.0)),
+                        )
+                        for j in cand
+                    ]
+                )
                 az = np.arctan2(d[cand, 1], d[cand, 0])
                 dpsi = wrap_pi(az - (T.ms.yaw + math.radians(float(b.get("azimuth_offset_deg", 0.0)))))
                 g = float(b.get("gain_back_db", 0.0)) * (1.0 - np.cos(dpsi)) / 2.0
                 marg = acoustic_margin(lw, r3[cand], g, thr, band_adj_of(raw))
                 for qq, j in enumerate(cand):
                     if marg[qq] >= 0.0:
-                        hits[ids[j]] = {"kind": "acoustic", "vol_idx": vol_idx, "range_m": round(float(r3[j]), 2),
-                                        "margin_db": round(float(marg[qq]), 2)}
+                        hits[ids[j]] = {
+                            "kind": "acoustic",
+                            "vol_idx": vol_idx,
+                            "range_m": round(float(r3[j]), 2),
+                            "margin_db": round(float(marg[qq]), 2),
+                        }
             elif kind == "radar":
                 rx = radar_rx_of(raw)
                 if rx is None:
                     continue
                 b = bodies[vol_idx]
                 fov = radar_in_fov(rx, d[cand], T.ms.yaw + math.radians(float(b.get("azimuth_offset_deg", 0.0))))
-                snr = radar_snr_db(rx, np.array([sigs[j].rcs_m2 for j in cand]), r3[cand], gamma_rain_db_km(getattr(env, "rain_mmph", 0.0)))
+                snr = radar_snr_db(
+                    rx,
+                    np.array([sigs[j].rcs_m2 for j in cand]),
+                    r3[cand],
+                    gamma_rain_db_km(getattr(env, "rain_mmph", 0.0)),
+                )
                 marg = np.asarray(snr, float).reshape(-1) - float(rx["snr_req_db"])
                 for qq, j in enumerate(cand):
                     if fov[qq] and marg[qq] >= 0.0:
-                        hits[ids[j]] = {"kind": "radar", "vol_idx": vol_idx, "range_m": round(float(r3[j]), 2),
-                                        "margin_db": round(float(marg[qq]), 2)}
+                        hits[ids[j]] = {
+                            "kind": "radar",
+                            "vol_idx": vol_idx,
+                            "range_m": round(float(r3[j]), 2),
+                            "margin_db": round(float(marg[qq]), 2),
+                        }
         for vid in ids:
             if vid in hits:
                 T.dwell[vid] = T.dwell.get(vid, 0) + 1
@@ -1074,15 +1387,28 @@ class TargetRuntime:
         T.alert = min(1.0, T.alert + DISCOVER_DA)
         self.stats["discovered"] += 1
         mode = T.cfg.raw.get("criterion_mode", "geometric")
-        data: dict[str, Any] = {"target": T.id, "uav": vid, "kind": info.get("kind", "visual"), "mode": mode,
-                                "vol_idx": int(info.get("vol_idx", 0)), "range_m": float(info.get("range_m", 0.0)),
-                                "episode": int(T.episode), "count": int(T.disc_n)}
+        data: dict[str, Any] = {
+            "target": T.id,
+            "uav": vid,
+            "kind": info.get("kind", "visual"),
+            "mode": mode,
+            "vol_idx": int(info.get("vol_idx", 0)),
+            "range_m": float(info.get("range_m", 0.0)),
+            "episode": int(T.episode),
+            "count": int(T.disc_n),
+        }
         if "margin_ratio" in info:
             data["margin_ratio"] = info["margin_ratio"]
         if "margin_db" in info:
             data["margin_db"] = info["margin_db"]
-        T.last_disc = {"t_sim_ns": round(t_s * 1e9), "uav": vid, "kind": data["kind"], "range_m": data["range_m"],
-                       "margin_db": data.get("margin_db"), "margin_ratio": data.get("margin_ratio")}
+        T.last_disc = {
+            "t_sim_ns": round(t_s * 1e9),
+            "uav": vid,
+            "kind": data["kind"],
+            "range_m": data["range_m"],
+            "margin_db": data.get("margin_db"),
+            "margin_ratio": data.get("margin_ratio"),
+        }
         self._emit(ctx, "target.discovered", 3, t_s, data, uav=vid)
         if self.motion_source is not None and _timeline(T):
             self._tl_disc.append({"target": T.id, "uav": vid, "t_ms": round(t_s * 1e3), "criterion": mode, "kind": data["kind"],
@@ -1208,9 +1534,16 @@ class TargetRuntime:
                 T._kr_s = sec
             if getattr(T, "_static_rev", None) != T.rev:
                 raw = T.cfg.raw
-                T._static = (_class_code(T.cfg.cls), T.cfg.size_lwh, 1 if raw.get("criterion_mode") == "physical" else 0,
-                             1 if raw.get("enabled", True) else 0, sum(1 for b in raw.get("sensitivity") or [] if b.get("enabled", True)),
-                             (raw.get("motion") or {}).get("mode", "static"), raw.get("motion"), float(raw.get("occlusion", 0.0)))
+                T._static = (
+                    _class_code(T.cfg.cls),
+                    T.cfg.size_lwh,
+                    1 if raw.get("criterion_mode") == "physical" else 0,
+                    1 if raw.get("enabled", True) else 0,
+                    sum(1 for b in raw.get("sensitivity") or [] if b.get("enabled", True)),
+                    (raw.get("motion") or {}).get("mode", "static"),
+                    raw.get("motion"),
+                    float(raw.get("occlusion", 0.0)),
+                )
                 T._static_rev = T.rev
         st = [T._static for T in Ts]
         wkey = (id(c["tgt_cls"]), rows.tobytes(), tuple((T.id, T.target_no, T.rev) for T in Ts))
@@ -1226,7 +1559,7 @@ class TargetRuntime:
         it = []
         soa = self._ms_soa
         if soa is not None and all(T.ms._v.base is soa for T in Ts):
-            V = soa[rows].tolist()                        # 运动状态的行（同 MotionState 的字段值）
+            V = soa[rows].tolist()  # 运动状态的行（同 MotionState 的字段值）
         else:
             V = [T.ms._v.tolist() for T in Ts]
         sx, sy, sz, syaw, ssp, svz, sseg = KM.S_X, KM.S_Y, KM.S_Z, KM.S_YAW, KM.S_SPEED, KM.S_VZ, KM.S_SEG
@@ -1234,12 +1567,36 @@ class TargetRuntime:
             sp = v[ssp]
             yaw = v[syaw]
             base = float(x[7])
-            fl.append((v[sx], v[sy], v[sz], sp * math.cos(yaw), sp * math.sin(yaw), v[svz], yaw, sp,
-                       max(base, 0.8) if T.hidden else base, float(T.alert), float(T.keepout_r), float(T.sound_phase)))
+            fl.append(
+                (
+                    v[sx],
+                    v[sy],
+                    v[sz],
+                    sp * math.cos(yaw),
+                    sp * math.sin(yaw),
+                    v[svz],
+                    yaw,
+                    sp,
+                    max(base, 0.8) if T.hidden else base,
+                    float(T.alert),
+                    float(T.keepout_r),
+                    float(T.sound_phase),
+                )
+            )
             aw = T.aware
-            it.append((aw, 1 if (x[5] != "static" or sp > 0.1) else 0, 1 if T.inside_n > 0 else 0, 1 if T.sound_on else 0,
-                       1 if T.hidden else 0, 1 if aw in (REACTING, ALERTED, CALMING) else 0, T.disc_n, T.episode,
-                       int(v[sseg]) if x[5] == "path" else -1))
+            it.append(
+                (
+                    aw,
+                    1 if (x[5] != "static" or sp > 0.1) else 0,
+                    1 if T.inside_n > 0 else 0,
+                    1 if T.sound_on else 0,
+                    1 if T.hidden else 0,
+                    1 if aw in (REACTING, ALERTED, CALMING) else 0,
+                    T.disc_n,
+                    T.episode,
+                    int(v[sseg]) if x[5] == "path" else -1,
+                )
+            )
         F = np.array(fl, np.float64)
         I = np.array(it, np.int64)  # noqa: E741
         c["tgt_pos"][rows] = F[:, 0:3]
@@ -1280,8 +1637,15 @@ class TargetRuntime:
         cap = bool(c["tgt_captured"][T.row]) if "tgt_captured" in c else False
         sen = int(c["tgt_best_sensor"][T.row]) if "tgt_best_sensor" in c else 0
         uno = int(c["tgt_capture_uav_no"][T.row]) if "tgt_capture_uav_no" in c else 0xFFFF
-        return {"best_level": ("none", "D", "R", "I")[lv & 3], "captured": cap, "sensor": _SENSOR_NAMES.get(sen),
-                "uav": self._uav_id(uno), "n_eff": None, "n_req": None, "since_t_sim_ns": None}
+        return {
+            "best_level": ("none", "D", "R", "I")[lv & 3],
+            "captured": cap,
+            "sensor": _SENSOR_NAMES.get(sen),
+            "uav": self._uav_id(uno),
+            "n_eff": None,
+            "n_req": None,
+            "since_t_sim_ns": None,
+        }
 
     def _uav_id(self, agent_no: int) -> str | None:
         if agent_no == 0xFFFF:
@@ -1304,15 +1668,37 @@ class TargetRuntime:
         if vs is None or vs[0] != T.rev or vs[1] is not T.cfg:
             pre = []
             for i, b in enumerate(raw.get("sensitivity") or []):
-                pre.append((i, b.get("kind") in ("visual", "acoustic") or (b.get("kind") == "radar" and bool(radar_rx_of(raw))),
-                            {"idx": i, "kind": b["kind"], "shape": b["shape"], "radius_cfg_m": _c(b["radius_max_m"]), "radius_eff_m": None,
-                             "z_min_m": _c(b.get("z_min_m", 0.0)), "z_max_m": _c(b.get("z_max_m", 300.0)),
-                             "half_angle_deg": _c(b.get("half_angle_deg", 60.0)),
-                             "azimuth_offset_deg": _c(b.get("azimuth_offset_deg", 0.0)), "enabled": bool(b.get("enabled", True)),
-                             "occupied_by": None}))
+                pre.append(
+                    (
+                        i,
+                        b.get("kind") in ("visual", "acoustic")
+                        or (b.get("kind") == "radar" and bool(radar_rx_of(raw))),
+                        {
+                            "idx": i,
+                            "kind": b["kind"],
+                            "shape": b["shape"],
+                            "radius_cfg_m": _c(b["radius_max_m"]),
+                            "radius_eff_m": None,
+                            "z_min_m": _c(b.get("z_min_m", 0.0)),
+                            "z_max_m": _c(b.get("z_max_m", 300.0)),
+                            "half_angle_deg": _c(b.get("half_angle_deg", 60.0)),
+                            "azimuth_offset_deg": _c(b.get("azimuth_offset_deg", 0.0)),
+                            "enabled": bool(b.get("enabled", True)),
+                            "occupied_by": None,
+                        },
+                    )
+                )
             vs = T._dvol = (T.rev, T.cfg, pre)
-        ek = (T.rev, T.cfg, tuple(models), id(self.profiles), env.key(), env.profile, round(float(getattr(env, "rain_mmph", 0.0)), 1),
-              round(float(T.alert), 2))
+        ek = (
+            T.rev,
+            T.cfg,
+            tuple(models),
+            id(self.profiles),
+            env.key(),
+            env.profile,
+            round(float(getattr(env, "rain_mmph", 0.0)), 1),
+            round(float(T.alert), 2),
+        )
         em = getattr(T, "_deff", None)
         if em is None or em[0] != ek:
             sigs = [signature_of(m, self.profiles) for m in models]
@@ -1321,7 +1707,10 @@ class TargetRuntime:
                 eff = {}
                 if judged:
                     for m, sg in zip(models, sigs, strict=True):
-                        eff[m] = _c(effective_radius(T.cfg, i, sg, env, conservative=False, alertness=T.alert, cache=self.eff), 1)
+                        eff[m] = _c(
+                            effective_radius(T.cfg, i, sg, env, conservative=False, alertness=T.alert, cache=self.eff),
+                            1,
+                        )
                 effs.append(eff)
             em = T._deff = (ek, effs)
         vols = []
@@ -1335,27 +1724,57 @@ class TargetRuntime:
         if T.dwell:
             dd = T.dwell
             mx = max(dd.values())
-            vid = max(k for k, v in dd.items() if v == mx)       # 与 max(dwell, key=(计数, id)) 相同
+            vid = max(k for k, v in dd.items() if v == mx)  # 与 max(dwell, key=(计数, id)) 相同
             info = _hinfo(T.hit_info.get(vid))
-            dw = {"uav": vid, "kind": info.get("kind", "visual"), "t_s": _c(max(0, dd[vid] - 1) * 0.1, 1),
-                  "t_dwell_s": _c(self.t_dwell(T), 2)}
+            dw = {
+                "uav": vid,
+                "kind": info.get("kind", "visual"),
+                "t_s": _c(max(0, dd[vid] - 1) * 0.1, 1),
+                "t_dwell_s": _c(self.t_dwell(T), 2),
+            }
         s = effective_sound(raw.get("sound"), T.emit_over)
         snd = None
         if s is not None:
-            snd = {"on": bool(T.sound_on), "phase_s": _c(T.sound_phase, 2), "lw_dba_now": _c(float(s["lw_dba"]) - (0.0 if T.sound_on else 40.0), 1)}
+            snd = {
+                "on": bool(T.sound_on),
+                "phase_s": _c(T.sound_phase, 2),
+                "lw_dba_now": _c(float(s["lw_dba"]) - (0.0 if T.sound_on else 40.0), 1),
+            }
         moving = is_moving(raw.get("motion"), T.ms.speed)
         lab = self.tab.by_id[T.id].label if self.tab is not None and T.id in self.tab.by_id else T.id
-        d = {"id": T.id, "label": lab, "class": T.cfg.cls, "t_sim_ns": int(t_ns), "awareness": AW_NAMES[T.aware],
-             "alertness": _c(T.alert, 3), "criterion_mode": raw.get("criterion_mode", "geometric"),
-             "level_req": raw.get("level_req", "R"), "discovered_count": int(T.disc_n), "episode": int(T.episode),
-             "last_discovered": T.last_disc, "dwell": dw, "behavior": T.behavior_phase(t_s), "sensitivity": vols,
-             "inside_n": int(T.inside_n),
-             "keepout": {"radius_m": _c(T.keepout_r, 1), "margin_m": DEFAULT_MARGIN_M, "full_circle": bool(moving)},
-             "sound": snd,
-             "motion": {"mode": (raw.get("motion") or {}).get("mode", "static"), "speed_mps": _c(T.ms.speed, 2),
-                        "vz_mps": _c(T.ms.vz, 2),
-                        "path_idx": int(T.ms.seg) if (raw.get("motion") or {}).get("mode") == "path" else None},
-             "capture": self.capture_of(T), "cfg_rev": int(T.rev)}
+        d = {
+            "id": T.id,
+            "label": lab,
+            "class": T.cfg.cls,
+            "t_sim_ns": int(t_ns),
+            "awareness": AW_NAMES[T.aware],
+            "alertness": _c(T.alert, 3),
+            "criterion_mode": raw.get("criterion_mode", "geometric"),
+            "level_req": raw.get("level_req", "R"),
+            "discovered_count": int(T.disc_n),
+            "episode": int(T.episode),
+            "last_discovered": T.last_disc,
+            "dwell": dw,
+            "behavior": T.behavior_phase(t_s),
+            "sensitivity": vols,
+            "inside_n": int(T.inside_n),
+            "keepout": {"radius_m": _c(T.keepout_r, 1), "margin_m": DEFAULT_MARGIN_M, "full_circle": bool(moving)},
+            "sound": snd,
+            "motion": {
+                "mode": (raw.get("motion") or {}).get("mode", "static"),
+                "speed_mps": _c(T.ms.speed, 2),
+                "vz_mps": _c(T.ms.vz, 2),
+                "path_idx": int(T.ms.seg) if (raw.get("motion") or {}).get("mode") == "path" else None,
+            },
+            "capture": self.capture_of(T),
+            "cfg_rev": int(T.rev),
+        }
+        if raw.get("life"):
+            d["activity"] = self._life(raw).sample(raw["life"]["actor_id"])[3]
+        elif raw.get("activity"):
+            from awr.sim.activities.plans import bound_plan
+
+            d["activity"] = bound_plan(raw, self.world).sample(t_s)[3]
         if with_cfg:
             d["cfg"] = self.cfg_dict(T)
         return d
@@ -1400,7 +1819,9 @@ class TargetRuntime:
             self._pub = None
         return None
 
-    def suggested(self, ctx: Any, tid: str, model_id: str | None, light: str | None = None, bg: str | None = None) -> dict:
+    def suggested(
+        self, ctx: Any, tid: str, model_id: str | None, light: str | None = None, bg: str | None = None
+    ) -> dict:
         T = self._by_id(tid)
         if T is None:
             raise TargetError(543, "id", "TARGET_NOT_FOUND", value=str(tid))
@@ -1425,7 +1846,6 @@ _NO_DEFER: frozenset = frozenset()
 _OV_CODE = {"hold": KM.OV_HOLD, "look": KM.OV_LOOK, "move": KM.OV_MOVE}
 _OV_ZERO = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 _NO_DSM = np.zeros((1, 1), np.float32)
-
 
 
 def _hinfo(v: Any) -> dict:

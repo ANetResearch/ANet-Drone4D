@@ -1,0 +1,26 @@
+[
+  {
+    "id": "dog-small",
+    "file": "dog-small.glb",
+    "sha256": "16532034a9947d21f525b084a89195339e383cc1ca793e0a4390484120289aee",
+    "source": "https://www.innerscene.com/tools/library/3d-parts/small-dog-standing-ce18ca9c",
+    "license": "CC0-1.0",
+    "animation": "authored 16-pose deformation"
+  },
+  {
+    "id": "forklift",
+    "file": "forklift.glb",
+    "sha256": "e6faa144b0479cd422e8ea6dfc9795468384ae17bd45db58b67c2b2ba657ebaf",
+    "source": "https://www.innerscene.com/tools/library/3d-parts/electric-counterbalance-forklift-7acc0547",
+    "license": "CC0-1.0",
+    "animation": "static source"
+  },
+  {
+    "id": "quadcopter",
+    "file": "quadcopter.glb",
+    "sha256": "0d38b6f44eef969fe17f0c8a54d6747b7a0efb8a3b2e9ab875221d182a6dfb12",
+    "source": "https://www.innerscene.com/tools/library/3d-parts/quadcopter-with-flight-electronics-a25968c1",
+    "license": "CC0-1.0",
+    "animation": "static source"
+  }
+]

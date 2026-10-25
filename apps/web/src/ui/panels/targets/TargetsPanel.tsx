@@ -1,3 +1,6 @@
+import { LifeBuilder, type LifeBuilderInitial } from './LifeBuilder'
+import { CreateTargetDialog } from './CreateTargetDialog'
+import type { Target } from '@awr/contracts/types'
 // Targets list, the right rail's second entity (R-D2-07, R-D2-18; M15-FR-212; UX-FR-119, UX-FR-120, UX-FR-123;
 // AWR-14 §20.7.1, §20.7.2, §20.7.5): "targets n / 30" with "add" (class menu; places the target with a viewport click on
 // the ground, TARGET_PLACE) for the sandbox operator and a filter menu (class, awareness, best level, discovered only).
@@ -16,7 +19,9 @@ import { cn } from '@/lib/utils'
 import { targetsActions, useTargets, type TargetCallOutcome } from '@/stores/targets'
 import { useFleet } from '@/stores/fleet'
 import { useRt } from '@/ui/shell/RtContext'
-import { targetsModel } from '@/app/shell/engineD2'
+import { useConnView, isOnline } from '@/ui/shell/connView'
+import { APPEARANCE_ENABLED, targetsModel, type TargetCfg } from '@/app/shell/engineD2'
+import { prefs } from '@/stores/prefs'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
 import {
@@ -29,6 +34,7 @@ import { PanelEmpty } from '@/ui/brand'
 import { useSurface } from '@/app/shell/surface'
 import { useRedOwner } from '@/ui/notify/redFigures'
 import { sbSession } from '@/ui/sandbox/domain'
+import { lifeApi } from '@/ui/sandbox/lifeApi'
 import { entities, useEntities } from '@/ui/sandbox/entities'
 import { useSandbox } from '@/ui/sandbox/session'
 import { d2Tools, useD2Tool } from '@/ui/tools/d2Tools'
@@ -40,26 +46,47 @@ export const CLASS_ICON: Readonly<Record<TargetClass, IconKey>> = {
 }
 
 /** the sandbox's REST target list seeds the configurations of the target model once per session (operator) */
-export function useSeedTargetConfigs(enabled: boolean): void {
+export function useSeedTargetConfigs(enabled: boolean): number {
+  const [revision, bumpRevision] = React.useReducer((value: number) => value + 1, 0)
   const sid = useSandbox((s) => s.sid)
+  const epoch = useTargets((s) => s.epoch)
+  const rt = useRt()
+  useFleet((s) => s.rosterVersion)
+  const rosterIds = (rt.roster.targets?.() ?? []).map((item) => item.id).sort().join('|')
+  const online = useConnView((s) => isOnline(s.conn))
   React.useEffect(() => {
-    if (!enabled || !sid) return
+    if (!enabled || !sid || !online) return
     let live = true
-    void sbSession.targets().then((r) => {
-      if (!live) return
-      for (const c of r.items ?? []) if (c.id && !targetsModel.cfgs.has(c.id)) targetsModel.setConfig(c as Parameters<typeof targetsModel.setConfig>[0])
-    }, () => {
-      // the detail messages bring the configurations anyway (cfg_rev, every 10 s)
-    })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let attempts = 0
+    const seed = async () => {
+      attempts++
+      try {
+        const r = await sbSession.targets()
+        if (!live) return
+        for (const c of r.items ?? []) if (c.id && !targetsModel.cfgs.has(c.id)) targetsModel.setConfig(c as Parameters<typeof targetsModel.setConfig>[0])
+        // Mobile panels can hide the viewport/frame loop. REST configuration must still refresh the UI.
+        bumpRevision()
+        const life = r.items?.find((c) => c.life)?.life
+        if (life) void lifeApi.scene(life.sha256).then((scene) => {
+          if (live) { targetsModel.facilities = scene.facilities; targetsModel.detailVersion++ }
+        }, () => { /* scene details can be retried after reconnection */ })
+        if (!rosterIds || rosterIds.split('|').every((id) => targetsModel.cfgs.has(id))) return
+      } catch { /* REST may arrive before the sandbox query path is ready; retry below. */ }
+      if (live && attempts < 6) timer = setTimeout(() => { void seed() }, 3000)
+    }
+    void seed()
     return () => {
       live = false
+      clearTimeout(timer)
     }
-  }, [enabled, sid])
+  }, [enabled, sid, epoch, online, rosterIds])
+  return revision
 }
 
 /** the targets of the page: the store's TargetLite32 rows, else the roster entries and seeded configurations with the
  *  state of the detail messages (targetModel.itemsFromDetails) */
-export function useTargetList() {
+export function useTargetList(configRevision = 0) {
   const rt = useRt()
   const storeItems = useTargets((s) => s.items)
   const version = useTargets((s) => s.version)
@@ -72,7 +99,7 @@ export function useTargetList() {
   },
   // the target model and the roster are read with their versions
   // oxlint-disable-next-line react-hooks/exhaustive-deps
-  [storeItems, rt, rosterVersion, version, sid])
+  [storeItems, rt, rosterVersion, version, sid, configRevision])
 }
 
 /** one roster gate per page, reset with the sandbox session (ids recur across sessions and worlds) */
@@ -91,21 +118,23 @@ const rosterGate = {
 /** reason text of a refused target call, with the `why` of 540 to 544 when given */
 export function targetCallText(o: TargetCallOutcome): string {
   const why = typeof o.detail?.why === 'string' ? o.detail.why : null
-  return `${o.code ? reasonText(o.code).short : ''}${why ? ` (${sanitizeText(why, 32)})` : ''}`
+  const reason = typeof o.detail?.reason === 'string' ? sanitizeText(o.detail.reason, 160) : ''
+  return `${o.code ? reasonText(o.code).short : ''}${why ? ` (${sanitizeText(why, 32)})` : ''}${reason ? ` · ${reason}` : ''}`
 }
 
 /** place a target of a class with a viewport click (TARGET_PLACE); 540 keeps the tool with the reason */
-export function startPlaceTarget(cls: TargetClass, onCreated: (id: string) => void): void {
+export function startPlaceTarget(cls: TargetClass, onCreated: (id: string) => void, extra: Partial<TargetCfg> = {}): void {
+  prefs.setUi('mobileTab', 'viewport')
   targetsActions.setPlacing(cls)
   d2Tools.start('TARGET_PLACE', cls, ([p]) => {
     targetsActions.setPlacing(null)
-    void targetsActions.add(cls, [p[0], p[1], cls === 'uav' ? p[2] + 30 : null]).then((o) => {
+    void targetsActions.add(cls, [p[0], p[1], cls === 'uav' ? p[2] + 30 : null], extra).then((o) => {
       if (o.ok) {
         if (o.id) onCreated(o.id)
         return
       }
       notify('targets:place', 'warning', targetCallText(o))
-      if (o.code === 540) startPlaceTarget(cls, onCreated)
+      if (o.code === 540) startPlaceTarget(cls, onCreated, extra)
     })
   })
 }
@@ -143,20 +172,31 @@ export function TargetsPanel() {
   const surface = useSurface((s) => s.surface)
   // writes follow the session role (sandbox operator, or the D2.1 full-function identity on the shared show)
   const operator = useD2Write()
-  const items = useTargetList()
+  const configRevision = useSeedTargetConfigs(surface === 'sandbox')
+  const items = useTargetList(configRevision)
   const limit = useTargets((s) => s.max)
   const version = useTargets((s) => s.version)
-  useSeedTargetConfigs(surface === 'sandbox')
   const selected = useEntities((s) => s.target)
   const placing = useD2Tool((s) => (s.mode === 'TARGET_PLACE' ? s.subject : null))
   const red = useRedOwner('viewport')
+  const [creating, setCreating] = React.useState<Target['class'] | null>(null)
+  const [builder, setBuilder] = React.useState<{ revision: number; initial: LifeBuilderInitial } | null>(null)
   const [filter, setFilter] = React.useState<TargetFilter>(NO_FILTER)
   // the configurations of the model are read with the store version (motion modes of the rows)
   const rows = React.useMemo(() => filterRows(buildRows(items, (id) => targetsModel.cfgs.get(id)?.motion?.mode), filter),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [items, filter, version])
+    [items, filter, version, configRevision])
   if (surface === 'static' || surface === 'sandbox-gone') return <PanelEmpty brand={false} title={t('targets.static')} description={t('hint.staticBrowse')} />
   const full = items.length >= limit
+  const lifeActive = items.some((item) => !!targetsModel.cfgs.get(item.id)?.life)
+  const configsReady = (surface !== 'sandbox' || configRevision > 0) && items.every((item) => targetsModel.cfgs.has(item.id))
+  const adjustPopulation = () => {
+    const configs = items.map((item) => targetsModel.cfgs.get(item.id)).filter((cfg) => !!cfg)
+    const count = (cls: string) => configs.filter((cfg) => cfg.class === cls).length
+    const seed = items.map((item) => targetsModel.details.get(item.id)?.activity?.seed).find((value) => value !== undefined)
+    const vehicleTypes = [...new Set(configs.filter((cfg) => cfg.class === 'vehicle').map((cfg) => cfg.metadata?.vehicle_type ?? 'sedan'))]
+    setBuilder({ revision: (builder?.revision ?? 0) + 1, initial: { seed: seed ?? 20261022, people: count('person'), vehicles: count('vehicle'), extras: Object.fromEntries(['dog', 'uav', 'machine', 'object'].map((cls) => [cls, count(cls)])), vehicleTypes: vehicleTypes.length ? vehicleTypes : ['sedan'] } })
+  }
   return (
     <div className="flex min-h-0 flex-col gap-2" data-targets-panel="">
       <div className="flex items-center gap-1.5">
@@ -192,9 +232,9 @@ export function TargetsPanel() {
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-        {operator ? (
+        {operator && lifeActive ? <Button size="xs" variant="outline" disabled={!configsReady} onClick={adjustPopulation}>{t('targets.population.adjust')}</Button> : operator ? (
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button size="xs" variant="outline" disabled={full} data-targets-add="" />}>
+            <DropdownMenuTrigger render={<Button size="xs" variant="outline" disabled={full || !configsReady} data-targets-add="" />}>
               <Icon icon="plus" data-icon="inline-start" />
               {t('targets.add')}
             </DropdownMenuTrigger>
@@ -202,7 +242,7 @@ export function TargetsPanel() {
               <DropdownMenuGroup>
                 <DropdownMenuLabel>{t('targets.add.class')}</DropdownMenuLabel>
                 {TARGET_CLASSES.map((c) => (
-                  <DropdownMenuItem key={c} onClick={() => startPlaceTarget(c, (id) => entities.openTarget(id))} data-targets-add-class={c}>
+                  <DropdownMenuItem key={c} onClick={() => APPEARANCE_ENABLED ? setCreating(c) : startPlaceTarget(c, (id) => entities.openTarget(id))} data-targets-add-class={c}>
                     <Icon icon={CLASS_ICON[c]} />
                     {t(`target.class.${c}`)}
                   </DropdownMenuItem>
@@ -212,6 +252,10 @@ export function TargetsPanel() {
           </DropdownMenu>
         ) : null}
       </div>
+      <CreateTargetDialog cls={creating} close={() => setCreating(null)} place={(cls, patch) => startPlaceTarget(cls, (id) => entities.openTarget(id), patch as Partial<TargetCfg>)} />
+      {!configsReady && operator ? <p className="text-hud-sub text-muted-foreground">{t('targets.population.loading')}</p> : null}
+      {lifeActive && operator ? <p className="text-hud-sub text-muted-foreground">{t('targets.lifeEditingHint')}</p> : null}
+      {surface === 'sandbox' ? <LifeBuilder key={builder?.revision ?? 0} operator={operator} initial={builder?.initial} /> : null}
       {full && operator ? <p className="text-hud-sub text-muted-foreground" data-targets-full="">{reasonText(505).short}</p> : null}
       {placing ? (
         <p className="flex items-center gap-1.5 text-hud-sub" data-targets-placing={placing}>

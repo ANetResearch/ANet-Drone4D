@@ -2,7 +2,7 @@
 
 ## World Package v1
 
-World 是 ANet Drone4D 的核心资产：一个带版本、锚定在地点上的目录，同时服务于物理与查询（几何）和显示（点云）。`worldpkg` 把原始点云
+World 是 ANet4D 的核心资产：一个带版本、锚定在地点上的目录，同时服务于物理与查询（几何）和显示（点云）。`worldpkg` 把原始点云
 规范化（单位、上方向、调平、北向、原点、法线、地面模型、离地高度、分类）后写成 World Package v1：
 
 ```text
@@ -53,9 +53,9 @@ UrbanScene3D 点数据，也不包含由其生成的世界包、栅格或录制�
 （八叉树节点计数与包围盒、清单字段、一条测试相机路径），不含点数据。`make fetch-data` 从作者的
 [发布页](https://github.com/Linxius/UrbanScene3D/releases/tag/v0.0.1) 下载 `UrbanScene3D-virtual_cities-sampled.7z`，并按 `configs/data.yaml`
 逐个校验 sha256；使用前请阅读并接受其条款。本项目许可证中的商用许可不延及该数据集，作者条款原文见
-[THIRD_PARTY_NOTICES.md](https://github.com/ANetResearch/ANet-Drone4D/blob/main/THIRD_PARTY_NOTICES.md) 第 4 节。
+{gh}`THIRD_PARTY_NOTICES.md </blob/main/THIRD_PARTY_NOTICES.md>` 第 4 节。
 
-**经数据集权利方授权使用。** ANet Drone4D 项目已获得 UrbanScene3D 数据集权利方的授权，在本项目自己的部署中使用由六城构建的世界包：
+**经数据集权利方授权使用。** ANet4D 项目已获得 UrbanScene3D 数据集权利方的授权，在本项目自己的部署中使用由六城构建的世界包：
 V0.2-demo 起，公开实例与合成演示城市一并开放六城，部署包附带六城的世界包，项目的截图也可以使用六城画面。该授权不经由本仓库或其许可证转授给使用者：
 仓库仍不包含任何 UrbanScene3D 数据，自行下载时仍须遵守上述作者条款。
 

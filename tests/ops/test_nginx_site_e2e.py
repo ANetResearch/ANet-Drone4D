@@ -43,13 +43,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from nginx_conf import SITE
+from nginx_conf import DOMAIN, LEGACY_DOMAIN, LEGACY_SITE, SITE
 
 NGINX = shutil.which("nginx") or ("/usr/sbin/nginx" if os.path.exists("/usr/sbin/nginx") else None)
 pytestmark = pytest.mark.skipif(
     NGINX is None, reason="本机没有 nginx：用 make deploy-nginx-check（一次性 Ubuntu 24.04 容器，nginx 1.24）执行；emax 上直接执行")
 
-HOST = "drone4d.agentnetwork.org.cn"
+HOST = DOMAIN
 CAP = "/api/sandbox/v1/capacity"
 N_CLIENTS = 100                      # D2-AC-42：100 个并发客户端
 CACHE_STATUSES = {"HIT", "UPDATING", "EXPIRED", "MISS", "STALE"}
@@ -157,14 +157,15 @@ class Stub:
 def _adapt(site: str, tmp: Path, port: int, backend: int, sandbox: int) -> str:
     s = site.replace("127.0.0.1:18640", f"127.0.0.1:{backend}").replace("127.0.0.1:18641", f"127.0.0.1:{sandbox}")
     s = s.replace("/opt/anet-drone4d", str(tmp / "opt"))
-    s = s.replace("/var/lib/nginx/drone4d-micro", str(tmp / "micro"))
+    s = s.replace("/var/lib/nginx/anet4d-micro", str(tmp / "micro"))
     s = re.sub(r"^\s*listen 80;\n\s*listen \[::\]:80;\n", f"    listen 127.0.0.1:{_free_port()};\n", s, flags=re.M)
     s = re.sub(r"^\s*listen 443 ssl http2;\n\s*listen \[::\]:443 ssl http2;\n", f"    listen 127.0.0.1:{port};\n", s, flags=re.M)
     s = "\n".join(line for line in s.splitlines() if not line.lstrip().startswith("ssl_"))
     return s
 
 
-def _start(tmp: Path, backend: Stub, sandbox: Stub) -> tuple[subprocess.Popen, int]:
+def _start(tmp: Path, backend: Stub, sandbox: Stub, extra: str = "") -> tuple[subprocess.Popen, int]:
+    """`extra`：同一 http 块中另外加载的站点（与 emax 的 sites-enabled 相同，验证两个站点文件可以共存）。"""
     (tmp / "opt" / "var" / "worlds" / "synthcity").mkdir(parents=True)
     (tmp / "opt" / "var" / "worlds" / "synthcity" / "world.json").write_text('{"id": "synthcity", "contentVersion": "abc"}\n')
     (tmp / "opt" / "current" / "tools" / "sdk").mkdir(parents=True)
@@ -190,6 +191,7 @@ http {{
     uwsgi_temp_path {tmp}/uwsgi;
     scgi_temp_path {tmp}/scgi;
 {_adapt(SITE.read_text(encoding="utf-8"), tmp, port, backend.port, sandbox.port)}
+{extra}
 }}
 """
     (tmp / "nginx.conf").write_text(conf, encoding="utf-8")
@@ -321,7 +323,7 @@ def _swarm(port: int, seconds: float, *, n: int = N_CLIENTS, seed: int = 2026101
                    "origin": f"https://visitor-{k}.example", "x-awr-identity": f"visitor-{k}"}
             r = clients[k].request(method, CAP + q, headers=hdr)
             rec = {"k": k, "method": method, "status": r.status_code, "t_recv": time.time(),
-                   "cache": r.headers.get("x-drone4d-cache"), "cc": r.headers.get("cache-control"),
+                   "cache": r.headers.get("x-anet4d-cache"), "cc": r.headers.get("cache-control"),
                    "rid": r.headers.get("x-request-id"), "cookie": r.headers.get("set-cookie"), "len": len(r.content)}
             if method == "GET" and r.status_code in (200, 500, 503) and r.content:
                 with contextlib.suppress(ValueError, KeyError, TypeError):
@@ -407,14 +409,14 @@ def test_capacity_copy_is_visitor_independent(site):
     n0 = len(sandbox.cap)
     r = c.get(CAP + "?bust=1", headers={"x-request-id": "visitor-secret", "cookie": "sid=abc", "authorization": "Bearer x",
                                         "origin": "https://evil.example", "x-awr-identity": "x"})
-    assert r.status_code == 200 and r.headers.get("x-drone4d-cache") in ("EXPIRED", "MISS"), r.headers
+    assert r.status_code == 200 and r.headers.get("x-anet4d-cache") in ("EXPIRED", "MISS"), r.headers
     assert "x-request-id" not in r.headers and "set-cookie" not in r.headers, r.headers
     assert r.headers.get("cache-control") == "public, max-age=1"
     ((_, path, hdr),) = sandbox.cap[n0:]
     assert path == CAP and not set(VISITOR_HEADERS) & set(hdr), (path, hdr)
     assert "visitor-secret" not in r.text
     r2 = c.get(CAP, headers={"x-request-id": "other"})
-    assert r2.headers.get("x-drone4d-cache") == "HIT" and r2.content == r.content
+    assert r2.headers.get("x-anet4d-cache") == "HIT" and r2.content == r.content
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "DELETE"])
@@ -485,3 +487,63 @@ def test_capacity_upstream_down(fresh):
     assert doc["upstream_arrivals"] == 0, doc
     assert set(doc["status"]) <= {"200", "502"}, doc
     assert doc["status"].get("502", 0) >= 0.5 * doc["requests"], doc
+
+
+# ---------------------------------------------------------------- 旧域名永久跳转（产品更名为 ANet4D）
+
+
+def _adapt_legacy(site: str, tmp: Path, port80: int, port443: int) -> str:
+    """旧域名跳转站点改写为回环明文：80 与 443 各换一个回环端口，去掉 ssl_*，ACME 根换成临时目录；return 原样。"""
+    s = re.sub(r"^\s*listen 80;\n\s*listen \[::\]:80;\n", f"    listen 127.0.0.1:{port80};\n", site, flags=re.M)
+    s = re.sub(r"^\s*listen 443 ssl http2;\n\s*listen \[::\]:443 ssl http2;\n", f"    listen 127.0.0.1:{port443};\n", s, flags=re.M)
+    s = s.replace("/var/www/certbot", str(tmp / "certbot"))
+    return "\n".join(line for line in s.splitlines() if not line.lstrip().startswith("ssl_"))
+
+
+@pytest.fixture(scope="module")
+def legacy(tmp_path_factory):
+    """新站点与旧域名跳转站点加载在同一个 nginx 中（emax 迁移后的 sites-enabled）：两者共存时 nginx 能启动，即没有重复定义的
+    共享区、upstream 或 map 变量。"""
+    tmp = tmp_path_factory.mktemp("legacy")
+    (tmp / "certbot" / ".well-known" / "acme-challenge").mkdir(parents=True)
+    (tmp / "certbot" / ".well-known" / "acme-challenge" / "tok-123").write_text("tok-123.thumb\n")
+    p80, p443 = _free_port(), _free_port()
+    backend, sandbox = Stub("show-api"), Stub("sandbox-api")
+    proc, port = _start(tmp, backend, sandbox, extra=_adapt_legacy(LEGACY_SITE.read_text(encoding="utf-8"), tmp, p80, p443))
+    yield port, p80, p443, backend
+    _stop(proc)
+    backend.close()
+    sandbox.close()
+
+
+@pytest.mark.parametrize("uri", ["/", "/world/shenzhen", "/api/sandbox/v1/capacity", "/lab/?run=r-01&view=a%2Fb",
+                                 "/worlds/synthcity/world.json?v=abc"])
+def test_legacy_domain_redirects_permanently(legacy, uri):
+    """旧域名的 80 与 443 都以 301 跳到新域名的同一路径与查询串（$request_uri 保留原始编码），不回源。"""
+    import httpx
+
+    _, p80, p443, backend = legacy
+    n0 = len(backend.hits)
+    for p in (p80, p443):
+        r = httpx.get(f"http://127.0.0.1:{p}{uri}", headers={"host": LEGACY_DOMAIN}, follow_redirects=False, timeout=5)
+        assert r.status_code == 301, (p, uri, r.status_code)
+        assert r.headers["location"] == f"https://{DOMAIN}{uri}", r.headers
+    assert len(backend.hits) == n0
+
+
+def test_legacy_domain_keeps_acme_and_hsts(legacy):
+    import httpx
+
+    _, p80, p443, _ = legacy
+    r = httpx.get(f"http://127.0.0.1:{p80}/.well-known/acme-challenge/tok-123", headers={"host": LEGACY_DOMAIN}, timeout=5)
+    assert r.status_code == 200 and r.text == "tok-123.thumb\n"
+    r = httpx.get(f"http://127.0.0.1:{p443}/x", headers={"host": LEGACY_DOMAIN}, follow_redirects=False, timeout=5)
+    assert r.headers.get("strict-transport-security") == "max-age=31536000"
+
+
+def test_new_site_serves_alongside_legacy(legacy):
+    import httpx
+
+    port, _, _, _ = legacy
+    r = httpx.get(f"http://127.0.0.1:{port}/api/health", headers={"host": HOST}, timeout=5)
+    assert r.status_code == 200 and r.json()["upstream"] == "show-api" and r.json()["host"] == HOST

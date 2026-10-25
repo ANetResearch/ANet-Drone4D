@@ -16,16 +16,19 @@
 //           "loads in 2 s"); timeouts, retry intervals and countdowns ("超时 30 秒", "5 秒后重试") are parameters, not claims, and so
 //           are termination and failure deadlines in English ("Started runs terminate within 10 s", "could not open the recording
 //           within 10 s"; R-06 of the D3 copy review, W-06)
-//   COPY-06 product and proper-noun spelling: "ANet Drone4D" at first mention in a document, then "Drone4D"; the repository
-//           identifier ANet-Drone4D only in URLs and package names; official spellings (Gazebo Sim, Rerun, FAST-LIVO2, RotorPy,
-//           Livox MID-360, PX4, LiDAR, UrbanScene3D, FleetSim, GitHub)
+//   COPY-06 product and proper-noun spelling: the product name is "ANet4D" (ADR-223, V0.3.2); the retired names "ANet Drone4D",
+//           "ANet-Drone4D" and "Drone4D" are reported in copy unless the same sentence marks them as the former name ("formerly",
+//           "former name", "published as", "原名", "旧名", "更名" ...); URLs (github.com/ANetResearch/ANet-Drone4D), code and
+//           legacy identifiers next to a path or identifier character (drone4d.event.v1, Drone4DClock, anet-drone4d.service) are
+//           not copy; official spellings (ANet4D, Gazebo Sim, Rerun, FAST-LIVO2, RotorPy, Livox MID-360, PX4, LiDAR, UrbanScene3D,
+//           FleetSim, GitHub)
 //   COPY-07 English sentence case for titles, buttons, menus and other short labels ("Export dataset", not "Export Dataset");
 //           proper nouns, acronyms and units keep their spelling
 //   COPY-08 superlatives and unverifiable comparisons ("首创", "唯一", "最强", "业界领先", first-ever, industry-leading,
 //           state-of-the-art, best-in-class, world-class); comparisons with external work belong to the D3-AC-53 report
 //   COPY-09 slogan-style taglines: "X in, Y out", and short headings closed by a period ("从真实世界，到无人机集群。")
 //   COPY-10 delivery and term names (§7.10 term table): D1 "三维场景视图", D2 "交互沙盒", D3 "事件沙盘"; "沙盘" only in D3 copy
-//           (keys under lab.*); the next major version is D4, never "Drone4D 2.0"; physics tiers, observation and run states
+//           (keys under lab.*); the next major version is D4, never "ANet4D 2.0"; physics tiers, observation and run states
 //           use the table terms ("快速仿真", "每机私有观测", not "极速模式", "上帝视角", "跑起来了"); interface strings (dictionaries and
 //           HTML pages) never carry the delivery names D1 to D4 or D3.x (§7.10 usage rule 1, R-04 of the D3 copy review, W-01): the
 //           interface names the product and the version; README tables and documents are Markdown and are not checked for this
@@ -109,8 +112,8 @@ const TERMS = [
   [/极速模式/g, 'use 快速仿真 (physics tier)'], [/真实模式/g, 'use 高保真仿真（Gazebo Sim）'],
   [/以假乱真|电影级/g, 'use 照片级渲染（基于 GLB 网格）'], [/上帝视角|开天眼/g, 'use 每机私有观测 or 观测档 L1/L2'],
   [/跑起来了|挂了/g, 'use the run states 排队中、准备中、运行中、收尾中、评测中、已完成、失败、已取消'],
-  [/无人机小游戏|仿真神器/g, 'use the product name ANet Drone4D'], [/飞快|秒出图/g, 'state the number with its conditions'],
-  [/\b(?:ANet[ -])?Drone4D\s*2(?:\.0)?\b/gi, 'the next major version is D4 (research and concept design)'],
+  [/无人机小游戏|仿真神器/g, 'use the product name ANet4D'], [/飞快|秒出图/g, 'state the number with its conditions'],
+  [/\b(?:ANet[ -]?Drone4D|ANet[ -]?4D|Drone4D)\s*2(?:\.0)?\b/gi, 'the next major version is D4 (research and concept design)'],
   [/\bgod(?:'s)?[- ]?(?:eye )?(?:view|mode)\b/gi, 'use per-drone private observation'],
 ]
 
@@ -118,7 +121,7 @@ const DELIVERY_NAME = /(?<![\w.-])D[1-4](?:\.x)?(?![\w-])/g
 
 // ---- COPY-06 spellings ---------------------------------------------------------------------------------------------------------
 // [pattern, canonical forms]; a match that is not one of the canonical forms is reported. Lower-case forms adjacent to a path or
-// identifier character (. / _ -) are package or module names and are skipped (drone4d.serve, drone4d-camera).
+// identifier character (. / _ -) are package or module names and are skipped (anet4d.serve, drone4d.event.v1, drone4d-camera).
 const SPELLINGS = [
   [/(?<![\w./@-])gazebo\s+sim(?![\w-])/gi, ['Gazebo Sim']],
   [/(?<![\w./@-])fast[-_ ]?livo2?(?![\w])/gi, ['FAST-LIVO2', 'FAST-LIVO']],
@@ -131,10 +134,11 @@ const SPELLINGS = [
   [/(?<![\w./@-])github(?![\w/-]|\.\w)/gi, ['GitHub']],
   [/(?<![\w./@-])rerun(?![\w/-]|\.\w)/gi, ['Rerun', 'rerun']],
   [/(?<![\w./@-])(?:anet|ANET|Anet)(?![\w-])/g, ['ANet']],
-  [/(?<![\w./@-])drone\s?4d(?![\w/-]|\.\w)/gi, ['Drone4D']],
+  [/(?<![\w./@-])anet[ -]?4d(?![\w/-]|\.\w)/gi, ['ANet4D']],
 ]
-const REPO_ID = /(?<![\w./@-])ANet-Drone4D(?![\w/-]|\.\w)/g
-const PRODUCT = /(?<![\w./@-])(?:ANet[ -])?Drone4D(?![\w/-]|\.\w)/g
+// retired product names (V0.3.1 and earlier); a sentence that names them as the former name is not reported
+const RETIRED = /(?<![\w./@-])(?:ANet[ -])?drone\s?4d(?![\w/-]|\.\w)/gi
+const FORMER_NAME = /formerly|former(?:ly)? (?:product )?name|previous(?:ly)? (?:product )?name|renamed|published (?:as|under)|legacy|原名|旧名|曾用名|更名|改名|之名发布|遗留/i
 
 // ---- COPY-07 sentence case -----------------------------------------------------------------------------------------------------
 // multi-word proper nouns are masked before the word check; single words are matched case-sensitively
@@ -142,7 +146,7 @@ const PROPER_PHRASES = ['ANet Synthetic City', 'ANet Tower', 'Agent Network Rese
   'Interactive Sandbox', 'Scene View', 'World Package', 'World Runtime', 'Read the Docs', 'Mock ANet', 'ANet Open Source License',
   'Apache License', 'Python SDK', 'Livox MID-360', 'Web Viewer', 'Open API', 'ANet Graphite', 'Creative Commons', 'Open Data Commons',
   'OpenStreetMap', 'Johnson', 'Potree', 'Skyfall-GS', 'SuperSplat', 'ModelScope', 'Hugging Face', 'Docker Hub', 'Sandbox API']
-const PROPER_WORDS = new Set(['ANet', 'Drone4D', 'Gazebo', 'Rerun', 'RotorPy', 'Livox', 'Python', 'Linux', 'Windows', 'Chrome', 'Firefox',
+const PROPER_WORDS = new Set(['ANet', 'ANet4D', 'Drone4D', 'Gazebo', 'Rerun', 'RotorPy', 'Livox', 'Python', 'Linux', 'Windows', 'Chrome', 'Firefox',
   'Safari', 'Edge', 'Apple', 'Intel', 'Mac', 'Docker', 'Kubernetes', 'Ubuntu', 'English', 'Chinese', 'Shenzhen', 'Hong', 'Kong', 'Mock',
   'Johnson', 'Potree', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'January', 'February', 'March',
   'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'I', 'Hz', 'Pa', 'Celsius', 'Kelvin',
@@ -464,21 +468,17 @@ function numberHits(seg, add) {
   }
 }
 
-function nameHits(seg, add, state) {
+function nameHits(seg, add) {
   const t = seg.text
-  for (const m of t.matchAll(REPO_ID)) add('COPY-06', m.index, m[0], 'the repository identifier ANet-Drone4D is for URLs and package names only; write ANet Drone4D in copy')
+  for (const m of t.matchAll(RETIRED)) {
+    const [a, b] = sentences(t).find(([x, y]) => m.index >= x && m.index < y) ?? [0, t.length]
+    if (FORMER_NAME.test(t.slice(a, b))) continue
+    add('COPY-06', m.index, m[0], `"${m[0]}" is a retired product name; write ANet4D (a legacy identifier such as drone4d.event.v1 goes in code formatting)`)
+  }
   for (const [re, ok] of SPELLINGS) {
     for (const m of t.matchAll(re)) {
       if (ok.includes(m[0])) continue
       add('COPY-06', m.index, m[0], `"${m[0]}" is spelled ${ok[0]}`)
-    }
-  }
-  if (state && !state.productSeen) {
-    const m = PRODUCT.exec(t)
-    PRODUCT.lastIndex = 0
-    if (m) {
-      state.productSeen = true
-      if (m[0] === 'Drone4D') add('COPY-06', m.index, m[0], 'the first mention in a document is "ANet Drone4D"; "Drone4D" may follow')
     }
   }
 }
@@ -537,8 +537,6 @@ const RULE_FNS = [phraseHits, toneHits, ellipsisHits, glyphHits, numberHits, nam
 /** Run the rules over the segments of one file; returns findings { file, line, col, rule, match, anchor, msg }. */
 export function checkSegments(segs, { rules = RULES, allows = new Map() } = {}) {
   const out = []
-  // the first-mention rule applies to documents (Markdown, CITATION.cff, HTML), not to dictionary entries
-  const state = segs.length && segs[0].key === undefined ? { productSeen: false } : null
   const keys = new Set()
   for (const seg of segs) {
     const spans = []
@@ -555,7 +553,7 @@ export function checkSegments(segs, { rules = RULES, allows = new Map() } = {}) 
       keys.add(k)
       out.push({ file: seg.file, line, col, rule, match, anchor: seg.anchorAt(index), msg })
     }
-    for (const fn of RULE_FNS) fn(seg, add, state)
+    for (const fn of RULE_FNS) fn(seg, add)
   }
   return out.sort((a, b) => a.line - b.line || a.col - b.col)
 }

@@ -456,8 +456,8 @@ describe('/lab/replay page', () => {
       expect(v).not.toMatch(/[!！~～]|2\.0|Drone4D v2|封板/)
       expect(v.trim()).toBe(v)
     }
-    expect(zh['lab.replay.docTitle']).toBe('同步回放 · 事件沙盘 · ANet Drone4D')
-    expect(e['lab.replay.docTitle']).toBe('Synchronized replay · Event Lab · ANet Drone4D')
+    expect(zh['lab.replay.docTitle']).toBe('同步回放 · 事件沙盘 · ANet4D')
+    expect(e['lab.replay.docTitle']).toBe('Synchronized replay · Event Lab · ANet4D')
     // 页面与组件源码不含中文字面量（I18N-01：文案只在词典中）
     for (const f of ['ReplayPage.tsx', 'ReplayTile.tsx', 'SamplePackPanel.tsx', 'sync.ts', 'samplePack.ts']) {
       const src = readFileSync(join(WEB, 'src/ui/lab/replay', f), 'utf8').split('\n').filter((l) => !/^\s*(\/\/|\/\*\*|\*)/.test(l)).join('\n')

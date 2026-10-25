@@ -58,7 +58,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "python", ROOT / "tools/sdk/drone4d/src"):
+for _p in (ROOT / "python", ROOT / "tools/sdk/anet4d/src"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -413,7 +413,7 @@ def deliver_jpeg(srgb: np.ndarray, cm, *, seed: int, frame_index: int, t_mid_s: 
 
 def detect_jpeg(det, jpg: bytes) -> list[list[float]]:
     """ref_det_v1：→ [[类别号, 分数, x, y, w, h]]（交付分辨率像素，阈值 DET_THR_AP）。"""
-    from drone4d.perception.ref_det import W_IN, decode_small
+    from anet4d.perception.ref_det import W_IN, decode_small
 
     small, (fw, fh) = decode_small(jpg)
     sx, sy = fw / W_IN, fh / small.shape[0]
@@ -438,7 +438,7 @@ def _worker_init(views_dir: str, gs_dir: str, cam: dict) -> None:
 
     for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
         os.environ[k] = "1"
-    from drone4d.perception.ref_det import RefDet
+    from anet4d.perception.ref_det import RefDet
 
     _W.update(det=RefDet(), views=Path(views_dir), gs=Path(gs_dir), cm=camera_model(), cam=cam)
 
@@ -470,7 +470,7 @@ def eval_view(job: tuple[int, dict, list[str], int]) -> list[dict]:
 def main_eval(a: argparse.Namespace) -> int:
     from multiprocessing import get_context
 
-    from drone4d.perception.ref_det import VERSION, WEIGHTS, WEIGHTS_SHA256, RefDet
+    from anet4d.perception.ref_det import VERSION, WEIGHTS, WEIGHTS_SHA256, RefDet
 
     RefDet()                                                          # 缺省路径载入即校验定稿 sha256
     doc = json.loads((a.out / "views" / "views.json").read_text(encoding="utf-8"))

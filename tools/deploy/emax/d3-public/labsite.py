@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """tools/deploy/emax/d3-public/labsite.py：生成带 D3 公开只读样例的 emax 站点文件（扩展点 16；AWR-05 §7.9、AWR-17 §18.8.5；D3-AC-21）。
 
-公开站主构建保持 D2 标签构建（AWR-05 §7.9 实现约束 1、ADR-194 (5) ⑤）：D2 站点文件 `drone4d.agentnetwork.org.cn.conf` 不改，
+公开站主构建保持 D2 标签构建（AWR-05 §7.9 实现约束 1、ADR-194 (5) ⑤）：公开站点文件 `anet4d.agentnetwork.org.cn.conf`（下文仍称
+"D2 站点文件"）不改；旧域名的跳转站点 `drone4d.agentnetwork.org.cn.conf` 只有 301，不插入增补段。
 本脚本把 `lab-http.conf` 插入它的 "# ---- 80" 段之前（http 层：并发区与限速 map）、把 `lab-server.conf` 插入 443 server 的
 "# ---- 前端构建产物" 段之前（`/api/bench` 404、`/lab/`、`/lab-static/`），得到"D2 + /lab/"站点文件。回滚到 D2（撤下 `/lab/`）
 就是重新安装 D2 标签构建自带的站点文件，二者除插入的两段外逐字节相同（`check` 子命令与 tests/d3/deploy/test_d3_public_site.py
@@ -27,11 +28,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 EMAX = HERE.parent
-D2_SITE = EMAX / "drone4d.agentnetwork.org.cn.conf"
+D2_SITE = EMAX / "anet4d.agentnetwork.org.cn.conf"
 HTTP_PART = HERE / "lab-http.conf"
 SERVER_PART = HERE / "lab-server.conf"
-DOMAIN = "drone4d.agentnetwork.org.cn"
-SRV_ROOT = "/srv/drone4d"
+DOMAIN = "anet4d.agentnetwork.org.cn"
+LEGACY_DOMAIN = "drone4d.agentnetwork.org.cn"   # 旧域名：只做 301（drone4d.agentnetwork.org.cn.conf）
+SRV_ROOT = "/srv/drone4d"   # 遗留的服务器目录名（不随产品更名）
 
 #: 插入点（D2 站点文件中各恰好出现一次）
 HTTP_ANCHOR = re.compile(r"^# ---- 80：", re.M)
@@ -57,6 +59,8 @@ def render(base: str, http_part: str | None = None, server_part: str | None = No
     """D2 站点文件 + 两段增补 → "D2 + /lab/" 站点文件。base 已含增补时报错（不重复插入）。"""
     if BEGIN_HTTP.strip() in base or BEGIN_SERVER.strip() in base:
         raise SiteError("base 已经包含 d3-public 增补段：请以 D2 标签构建自带的站点文件为 base")
+    if "proxy_pass" not in base:
+        raise SiteError(f"base 不是公开站点文件（没有反向代理段）：旧域名 {LEGACY_DOMAIN} 的跳转站点不能作为 base，请用 {D2_SITE.name}")
     hp = http_part if http_part is not None else HTTP_PART.read_text(encoding="utf-8")
     sp = server_part if server_part is not None else SERVER_PART.read_text(encoding="utf-8")
     i = _one(HTTP_ANCHOR, base, "'# ---- 80' 段")
@@ -100,7 +104,7 @@ def localize(site: str, *, root: Path, show_port: int, sandbox_port: int, listen
     if opt_root is not None:
         s = s.replace("/opt/anet-drone4d", str(opt_root))
     if micro_dir is not None:
-        s = s.replace("/var/lib/nginx/drone4d-micro", str(micro_dir))
+        s = s.replace("/var/lib/nginx/anet4d-micro", str(micro_dir))
     s, n80 = re.subn(r"^\s*listen 80;\n\s*listen \[::\]:80;\n", "    listen 127.0.0.1:1;\n", s, flags=re.M)
     tls = " ssl" if cert else ""
     h2 = " http2" if http2 else ""

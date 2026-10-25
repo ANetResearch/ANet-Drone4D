@@ -232,15 +232,16 @@ expect('units bad', [checkName('speed_ms', undefined) !== null, checkName('delay
   expect('copy zh number with conditions', zh('单张 A40 上 720p 相机持续吞吐 ≥ 120 帧/s（RGB、深度，晴天档）。每个沙盒最多 12 架无人机。约 ~5 GB，间距 1~3 m。'), [])
   expect('copy menu ellipsis and truncation', dict({ 'menu.export': '导出数据集…', 'menu.replay': '进入回放…', 'lab.hint': '镜像摘要（sha256:…）。', 'menu.open': 'Open world…' }, 'zh'), [])
   expect('copy en clean', en([
-    '## Highlights', '', 'ANet Drone4D renders the world. Drone4D streams it with `a != b` and `Awesome!!` in code.',
+    '## Highlights', '', 'ANet4D renders the world. ANet4D streams it with `a != b`, `Drone4D` and `Awesome!!` in code.',
     '', '![Banner](docs/media/a.jpg)', '', '> [!NOTE]', '> Images are concept art.', '',
-    '```sh', 'echo "Super fast!"', '```', '', 'See https://github.com/ANetResearch/ANet-Drone4D and serve with drone4d.serve or drone4d-camera.',
+    '```sh', 'echo "Super fast!"', '```', '', 'See https://github.com/ANetResearch/ANet-Drone4D and serve with anet4d.serve, drone4d.event.v1, Drone4DClock or drone4d-camera.',
+    '', 'Versions up to V0.3.1 were published as ANet Drone4D. ANet4D was formerly named Drone4D.',
     '', 'Each sandbox supports up to 12 drones. Super-resolution uses a magic number. Request timed out after 30 s; retry.',
     '', 'Gazebo Sim, FAST-LIVO2, RotorPy, Livox MID-360, PX4, LiDAR, UrbanScene3D, FleetSim, GitHub and ANET_Q16 points.',
     '', 'Throughput is 120 fps at 720p RGB and depth on one A40 GPU (median of 3 runs).',
   ].join('\n')), [])
   expect('copy en labels', dict({ 'a.export': 'Export dataset', 'b.open': 'Open ANet Synthetic City', 'c.quote': 'No targets: add one under "Targets" first',
-    'd.version': 'ANet Drone4D · World Runtime {version}', 'e.menu': 'Export…' }, 'en'), [])
+    'd.version': 'ANet4D · World Runtime {version}', 'e.menu': 'Export…' }, 'en'), [])
   // W-06 (D3 copy review R-06): termination and failure deadlines are parameters, as "超时 30 秒" is in Chinese
   expect('copy en deadlines', en([
     'A queued run is cancelled immediately. A started run terminates within 10 s, and recordings written so far are retained for 14 days.',
@@ -249,29 +250,31 @@ expect('units bad', [checkName('speed_ms', undefined) !== null, checkName('delay
     '', 'Sessions are cancelled within 30 s of sign-out. The agent did not respond within 5 s.',
   ].join('\n')), [])
   expect('copy delivery names outside the interface', [...zh('| D3 | 事件沙盘 | 开发中 |\n\nD3.x 规划见路线图。'), ...en('Delivered in D2.')], [])
-  expect('copy allow directive', en('ANet Drone4D docs.\n\n<!-- copy-lint-allow COPY-08 quoted from the review checklist -->\nDo not write "the first benchmark".'), [])
+  expect('copy allow directive', en('ANet4D docs.\n\n<!-- copy-lint-allow COPY-08 quoted from the review checklist -->\nDo not write "the first benchmark".'), [])
   // misses: each of these must be reported
   expect('copy zh phrases', zh('超快渲染，秒出结果，黑科技，一键搞定。'), ['COPY-01', 'COPY-01', 'COPY-01', 'COPY-01'])
   expect('copy zh tone', zh('完成啦。太棒了！好的～'), ['COPY-02', 'COPY-02', 'COPY-02'])
   expect('copy zh ellipsis', zh('正在处理……请等待…然后刷新。'), ['COPY-03', 'COPY-03'])
   expect('copy glyphs', zh(`完成 ${String.fromCodePoint(0x1f600)} 状态 ${String.fromCodePoint(0x2705)}`), ['COPY-04', 'COPY-04'])
   expect('copy zh numbers', zh('渲染 120 帧/s。最多 1,000 架无人机。性能提升 40%。首帧 ≤ 5 s 即可完成加载。'), ['COPY-05', 'COPY-05', 'COPY-05', 'COPY-05'])
-  expect('copy en numbers', en('ANet Drone4D renders 240 fps. FleetSim runs up to 1,000 drones. It is 3x faster. The world loads in 2 s.'),
+  expect('copy en numbers', en('ANet4D renders 240 fps. FleetSim runs up to 1,000 drones. It is 3x faster. The world loads in 2 s.'),
     ['COPY-05', 'COPY-05', 'COPY-05', 'COPY-05'])
-  expect('copy names', en('ANet-Drone4D uses Fast-LIVO2, Rotorpy, Px4, Lidar, Gazebo sim and Drone 4D.'),
-    ['COPY-06', 'COPY-06', 'COPY-06', 'COPY-06', 'COPY-06', 'COPY-06', 'COPY-06'])
-  expect('copy first mention', en('Drone4D is a runtime. ANet Drone4D follows.'), ['COPY-06'])
-  expect('copy first mention not in dictionaries', dict({ a: 'Drone4D runs' }, 'en'), [])
-  expect('copy sentence case', dict({ 'x.export': 'Export Dataset', 'x.title': 'ANet Drone4D Public Demo', 'x.sentence': 'Export the dataset. Then Open it.' }, 'en'),
+  expect('copy names', en('ANet-Drone4D uses Fast-LIVO2, Rotorpy, Px4, Lidar, Gazebo sim, Anet 4D and Drone 4D.'),
+    ['COPY-06', 'COPY-06', 'COPY-06', 'COPY-06', 'COPY-06', 'COPY-06', 'COPY-06', 'COPY-06'])
+  // ADR-223: the retired names are reported in copy, also in dictionaries; a sentence that names the former name is not
+  expect('copy retired names', en('Drone4D is a runtime. ANet Drone4D follows.'), ['COPY-06', 'COPY-06'])
+  expect('copy retired names in dictionaries', dict({ a: 'Drone4D runs', b: 'ANet4D runs' }, 'en'), ['COPY-06@a'])
+  expect('copy former name', [...zh('自 V0.3.2 起项目更名为 ANet4D，V0.3.1 及以前以 ANet Drone4D 之名发布。'), ...en('ANet4D, formerly ANet Drone4D, runs.')], [])
+  expect('copy sentence case', dict({ 'x.export': 'Export Dataset', 'x.title': 'ANet4D Public Demo', 'x.sentence': 'Export the dataset. Then Open it.' }, 'en'),
     ['COPY-07@x.export', 'COPY-07@x.title', 'COPY-07@x.title'])
   expect('copy heading sentence case', en('## Feature Tour\n\n### Reality to world'), ['COPY-07'])
   expect('copy zh superlatives', zh('业界首创，唯一支持，性能最强，业界领先。'), ['COPY-08', 'COPY-08', 'COPY-08', 'COPY-08'])
-  expect('copy en superlatives', en('ANet Drone4D is the first open benchmark, industry-leading and state-of-the-art, best-in-class and world-class.'),
+  expect('copy en superlatives', en('ANet4D is the first open benchmark, industry-leading and state-of-the-art, best-in-class and world-class.'),
     ['COPY-08', 'COPY-08', 'COPY-08', 'COPY-08', 'COPY-08'])
-  expect('copy en banned words', en('ANet Drone4D is an awesome, blazing-fast, seamless, cutting-edge runtime.'), ['COPY-01', 'COPY-01', 'COPY-01', 'COPY-01'])
-  expect('copy slogans', [...en('<h3>Reality in, swarms out.</h3>\n\nANet Drone4D.'), ...zh('<h3>从真实世界，到无人机集群。</h3>')], ['COPY-09', 'COPY-09'])
-  expect('copy terms', zh('在数字沙盘中打开。D3 事件实验室，极速模式，上帝视角，ANet Drone4D 2.0 发布。'), ['COPY-10', 'COPY-10', 'COPY-10', 'COPY-10', 'COPY-10'])
-  expect('copy en deadline misses', en('ANet Drone4D is ready within 2 s. Runs complete within 5 s. The view does not stall and loads within 3 s. It stops and renders within 1 s.'),
+  expect('copy en banned words', en('ANet4D is an awesome, blazing-fast, seamless, cutting-edge runtime.'), ['COPY-01', 'COPY-01', 'COPY-01', 'COPY-01'])
+  expect('copy slogans', [...en('<h3>Reality in, swarms out.</h3>\n\nANet4D.'), ...zh('<h3>从真实世界，到无人机集群。</h3>')], ['COPY-09', 'COPY-09'])
+  expect('copy terms', zh('在数字沙盘中打开。D3 事件实验室，极速模式，上帝视角，ANet4D 2.0 发布。'), ['COPY-10', 'COPY-10', 'COPY-10', 'COPY-10', 'COPY-10'])
+  expect('copy en deadline misses', en('ANet4D is ready within 2 s. Runs complete within 5 s. The view does not stall and loads within 3 s. It stops and renders within 1 s.'),
     ['COPY-05', 'COPY-05', 'COPY-05', 'COPY-05'])
   // W-01 (R-04): delivery names D1 to D4 and D3.x are reported in interface strings; an acceptance number (D3-AC-14) is not one
   expect('copy delivery names in the interface', dict({ 'lab.login.title': 'D3 内部工作区登录', 'lab.budget': '（D2 点预算阶梯）', 'lab.plan': 'D3.x 规划',
@@ -282,11 +285,11 @@ expect('units bad', [checkName('speed_ms', undefined) !== null, checkName('delay
   expect('copy sandbox naming by key', dict({ 'jobs.open': '在沙盘中打开', 'lab.title': '事件沙盘' }, 'zh'), ['COPY-10@jobs.open'])
   expect('copy rule filter', copy('r.md', '超快，业界首创。', { lang: 'zh', rules: ['COPY-08'] }).map((x) => x.rule), ['COPY-08'])
   // CITATION.cff: software title and abstract are copy, URLs and third-party references are not
-  expect('copy cff', copy('CITATION.cff', 'cff-version: 1.2.0\ntitle: "ANet-Drone4D: A runtime"\nabstract: >-\n  ANet Drone4D is awesome.\nrepository-code: "https://github.com/ANetResearch/ANet-Drone4D"\nreferences:\n  - title: "Awesome!"\n',
+  expect('copy cff', copy('CITATION.cff', 'cff-version: 1.2.0\ntitle: "ANet-Drone4D: A runtime"\nabstract: >-\n  ANet4D is awesome.\nrepository-code: "https://github.com/ANetResearch/ANet-Drone4D"\nreferences:\n  - title: "Awesome!"\n',
     { lang: 'en', kind: 'cff' }).map((x) => x.rule), ['COPY-06', 'COPY-01'])
   // the register: an exception excuses its finding, a stale entry and a malformed entry are reported
-  const found = copy('README.md', 'ANet Drone4D is awesome.', { lang: 'en' })
-  const reg = { exceptions: [{ file: 'README.md', rule: 'COPY-01', match: 'awesome', anchor: 'ANet Drone4D is awesome.', reason: 'P-1 baseline' },
+  const found = copy('README.md', 'ANet4D is awesome.', { lang: 'en' })
+  const reg = { exceptions: [{ file: 'README.md', rule: 'COPY-01', match: 'awesome', anchor: 'ANet4D is awesome.', reason: 'P-1 baseline' },
     { file: 'README.md', rule: 'COPY-05', match: '1,000 drones', reason: 'rewritten since' }], allow: [{ file: 'README.md', rule: 'COPY-02', match: '!', reason: 'x' }] }
   const res = applyRegister(found, reg)
   expect('copy register', [res.reported.length, res.excused.length, res.problems.map((p) => p.rule).sort()], [0, 1, ['COPY-BL-01', 'COPY-BL-01', 'COPY-BL-02']])

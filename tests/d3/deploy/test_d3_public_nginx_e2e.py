@@ -41,7 +41,7 @@ pytestmark = pytest.mark.skipif(NGINX is None, reason="本机没有 nginx：用 
 labctl = load("labctl")
 labsite = load("labsite")
 verify = load("verify")
-HOST = "drone4d.agentnetwork.org.cn"
+HOST = "anet4d.agentnetwork.org.cn"
 EVIDENCE = os.environ.get("AWR_NGINX_EVIDENCE_DIR")
 
 

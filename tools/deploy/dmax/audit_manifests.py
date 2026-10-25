@@ -167,7 +167,7 @@ def _render_agents(tmp: Path) -> tuple[list[Launch], list[Finding]]:
     """Agent 隔离容器：两个 Run × 两架机，std 档 2 核、8 GB（ADR-178）。"""
     out = []
     for run in AUDIT_RUNS:
-        ac = AgentContainers(tmp / "agents" / run, run, list(AUDIT_UAVS), "d3-agent-py:dev", cmd=["python", "-m", "drone4d.serve"], cpus=2.0, mem_gb=8.0)
+        ac = AgentContainers(tmp / "agents" / run, run, list(AUDIT_UAVS), "d3-agent-py:dev", cmd=["python", "-m", "anet4d.serve"], cpus=2.0, mem_gb=8.0)
         out += [parse_docker_run(ac.argv(u, tmp / "agents" / run / "sock" / u), "python:agent-containers", component="agent", run=run)
                 for u in AUDIT_UAVS]
     return out, []

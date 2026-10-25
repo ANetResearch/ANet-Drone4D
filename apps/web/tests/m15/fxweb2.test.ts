@@ -277,10 +277,10 @@ describe('job log lines and brand', () => {
     expect(logLine('plain text')).toBe('plain text')
   })
 
-  it('names the product ANet Drone4D (ADR-056) and keeps World Runtime as the runtime name', () => {
-    expect(t('brand.product')).toBe('ANet Drone4D')
+  it('names the product ANet4D (ADR-056) and keeps World Runtime as the runtime name', () => {
+    expect(t('brand.product')).toBe('ANet4D')
     expect(t('brand.runtime')).toBe('World Runtime')
-    expect(t('about.version', { version: '0.1.0' })).toContain('ANet Drone4D')
+    expect(t('about.version', { version: '0.1.0' })).toContain('ANet4D')
     expect(t('about.copyright')).toContain('Agent Network Research')
   })
 })

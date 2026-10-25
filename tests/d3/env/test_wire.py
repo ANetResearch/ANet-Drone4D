@@ -17,7 +17,7 @@ from awr.agentsdk.wire import T, WireError, WireSocket, decode_body, encode_fram
 
 ROOT = Path(__file__).resolve().parents[3]
 GOLD = ROOT / "packages/contracts/bench/golden/wire"
-SDK = ROOT / "tools/sdk/drone4d/src"
+SDK = ROOT / "tools/sdk/anet4d/src"
 sys.path.insert(0, str(SDK))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -31,7 +31,7 @@ def _gold(name: str) -> bytes:
 
 
 def test_golden_vectors_host_and_sdk() -> None:
-    from drone4d import wire as sdk
+    from anet4d import wire as sdk
 
     hello = {"protocol": "drone4d.bench.wire.v1", "sdk_version": "1.0.0", "prefs": {"camera": "latest", "lidar": "all", "max_per_sensor": 4}}
     for enc in (encode_frame, sdk.encode_frame):
@@ -61,8 +61,8 @@ def test_frame_checks() -> None:
 
 
 def test_socket_agents_match_in_process(synth_event, tmp_path: Path) -> None:
-    from drone4d.baselines import BASELINES
-    from test_env import _run, _spec
+    from anet4d.baselines import BASELINES
+    from d3_env_support import _run, _spec
 
     from awr.agentsdk.env.core import BenchEnv
     from awr.agentsdk.env.remote import SocketAgentHost, run_remote_episode
@@ -72,7 +72,7 @@ def test_socket_agents_match_in_process(synth_event, tmp_path: Path) -> None:
     uavs = [f.uav for f in spec.fleet]
     hosts = {u: SocketAgentHost(u, tmp_path / "sock" / u / "agent.sock") for u in uavs}
     env_ = {**os.environ, "PYTHONPATH": f"{SDK}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"}
-    procs = [subprocess.Popen([sys.executable, "-m", "drone4d.serve", "--baseline", "track_share", "--sock", str(h.path)], env=env_)
+    procs = [subprocess.Popen([sys.executable, "-m", "anet4d.serve", "--baseline", "track_share", "--sock", str(h.path)], env=env_)
              for h in hosts.values()]
     try:
         for h in hosts.values():
@@ -120,8 +120,8 @@ def _fake_docker(tmp_path: Path, monkeypatch) -> str:
 
 
 def test_container_episode_matches_in_process(synth_event, tmp_path: Path, monkeypatch) -> None:
-    from drone4d.baselines import BASELINES
-    from test_env import _run, _spec
+    from anet4d.baselines import BASELINES
+    from d3_env_support import _run, _spec
 
     from awr.agentsdk.env.containers import run_container_episode
     from awr.agentsdk.env.core import BenchEnv
@@ -129,7 +129,7 @@ def test_container_episode_matches_in_process(synth_event, tmp_path: Path, monke
     docker = _fake_docker(tmp_path, monkeypatch)
     m0 = _run(_spec(synth_event, tmp_path / "local", dur=30.0), lambda u: BASELINES["static_guard"]())
     spec = _spec(synth_event, tmp_path / "ctr", dur=30.0)
-    m1, stats = run_container_episode(BenchEnv(spec), tmp_path / "ctr", "d3-agent-py:dev", cmd=["python", "-m", "drone4d.serve", "--baseline", "static_guard"],
+    m1, stats = run_container_episode(BenchEnv(spec), tmp_path / "ctr", "d3-agent-py:dev", cmd=["python", "-m", "anet4d.serve", "--baseline", "static_guard"],
                                       entry_env={"MY_FLAG": "1"}, step_budget_s=30.0, docker=docker)
     assert m1["pose_sha256"] == m0["pose_sha256"]
     assert all(s["exit_code"] == 0 and s["exited"] is None and s["timeouts"] == 0 for s in stats.values())
@@ -143,7 +143,7 @@ def test_container_episode_matches_in_process(synth_event, tmp_path: Path, monke
 
 
 def test_container_start_failure_and_env_keys(synth_event, tmp_path: Path, monkeypatch) -> None:
-    from test_env import _spec
+    from d3_env_support import _spec
 
     from awr.agentsdk.env.containers import AgentContainers, host_path, run_container_episode
     from awr.agentsdk.env.core import BenchEnv

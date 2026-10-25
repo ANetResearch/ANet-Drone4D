@@ -1,0 +1,209 @@
+{
+  "schema": "awr.sandbox.template.v1",
+  "template_id": "t8_scene_activity",
+  "world_id": "synthcity",
+  "name_zh": "T8 场景约束步行（实验）",
+  "summary_zh": "6 名行人按 seed 生成跨街区目的地与停留；受人行道和过街通道约束。车辆交通尚未接入。",
+  "first_feedback_zh": "选择行人：查看目的地、活动阶段与路线",
+  "recommended": false,
+  "calendar_default": {
+    "start_local": "10:00",
+    "tz": "Asia/Shanghai"
+  },
+  "acoustic_bg": "urban",
+  "env": {
+    "preset": "clear",
+    "overrides": {}
+  },
+  "seed": 20261022,
+  "camera": {
+    "center_enu_m": [
+      300,
+      -120,
+      0
+    ],
+    "range_m": 650,
+    "pitch_deg": -40,
+    "yaw_deg": 0
+  },
+  "anchors_ref": "scenarios/sandbox/anchors/synthcity.json",
+  "vehicles": [],
+  "nests": [],
+  "tasks": [],
+  "targets": [
+    {
+      "id": "walker-01",
+      "label": "步行居民 01",
+      "class": "person",
+      "pos": [
+        132.6,
+        -287.4,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.34131795167922974,
+        "w": 0.6017975807189941,
+        "h": 1.7666809558868408
+      },
+      "appearance": {
+        "asset_id": "human-1",
+        "geometry_sha256": "d4491b0e461d3ced14faa19808af5a3af47e6bcbaa3dacba5572dcfed9a5efc2"
+      },
+      "activity": {
+        "plan_id": "walker-01",
+        "sha256": "99b152f1397b371ede25e97083051aa6609e3ecc86edc08ea5613173365bee7c"
+      }
+    },
+    {
+      "id": "walker-02",
+      "label": "步行居民 02",
+      "class": "person",
+      "pos": [
+        223.4,
+        -287.4,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.27933183312416077,
+        "w": 0.4678380489349365,
+        "h": 1.499302625656128
+      },
+      "appearance": {
+        "asset_id": "human-3",
+        "geometry_sha256": "1637558e0c555a5c54da8f87b93f3d3d360f2a67d2ab93e412e8fa0ccefee051"
+      },
+      "activity": {
+        "plan_id": "walker-02",
+        "sha256": "ecf637972d56298c94a513c737a00862d816e757e114399a51147962e68fb90b"
+      }
+    },
+    {
+      "id": "walker-03",
+      "label": "步行居民 03",
+      "class": "person",
+      "pos": [
+        223.4,
+        -167.4,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.34131795167922974,
+        "w": 0.6017975807189941,
+        "h": 1.7666809558868408
+      },
+      "appearance": {
+        "asset_id": "human-1",
+        "geometry_sha256": "d4491b0e461d3ced14faa19808af5a3af47e6bcbaa3dacba5572dcfed9a5efc2"
+      },
+      "activity": {
+        "plan_id": "walker-03",
+        "sha256": "4235d010e24f25111c791778f0daacbd82cb8bca870c287167692d163600dd93"
+      }
+    },
+    {
+      "id": "walker-04",
+      "label": "步行居民 04",
+      "class": "person",
+      "pos": [
+        372.6,
+        -47.4,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.27933183312416077,
+        "w": 0.4678380489349365,
+        "h": 1.499302625656128
+      },
+      "appearance": {
+        "asset_id": "human-3",
+        "geometry_sha256": "1637558e0c555a5c54da8f87b93f3d3d360f2a67d2ab93e412e8fa0ccefee051"
+      },
+      "activity": {
+        "plan_id": "walker-04",
+        "sha256": "8411e943901ed9eb1ec33b27107ea4e6f6c1f09432f8b4b5961f233b67b10b23"
+      }
+    },
+    {
+      "id": "walker-05",
+      "label": "步行居民 05",
+      "class": "person",
+      "pos": [
+        256.6,
+        43.4,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.34131795167922974,
+        "w": 0.6017975807189941,
+        "h": 1.7666809558868408
+      },
+      "appearance": {
+        "asset_id": "human-1",
+        "geometry_sha256": "d4491b0e461d3ced14faa19808af5a3af47e6bcbaa3dacba5572dcfed9a5efc2"
+      },
+      "activity": {
+        "plan_id": "walker-05",
+        "sha256": "6eb7a04855fef26cd4fbd531b5aada61d1c40f7113ae9fd05393dc291219691b"
+      }
+    },
+    {
+      "id": "walker-06",
+      "label": "步行居民 06",
+      "class": "person",
+      "pos": [
+        372.6,
+        -192.6,
+        0.15
+      ],
+      "motion": {
+        "mode": "timeline"
+      },
+      "reaction_policy": "exogenous",
+      "sensitivity": [],
+      "sound": null,
+      "size_m": {
+        "l": 0.27933183312416077,
+        "w": 0.4678380489349365,
+        "h": 1.499302625656128
+      },
+      "appearance": {
+        "asset_id": "human-3",
+        "geometry_sha256": "1637558e0c555a5c54da8f87b93f3d3d360f2a67d2ab93e412e8fa0ccefee051"
+      },
+      "activity": {
+        "plan_id": "walker-06",
+        "sha256": "1426bd201f0aed85e127406c5ee4b747e5682e50d2c52005daf55912cddbbbec"
+      }
+    }
+  ]
+}

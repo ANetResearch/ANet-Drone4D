@@ -67,7 +67,7 @@ def test_camera_override_rules() -> None:
 
 
 def test_reference_rows_match_sdk_registry() -> None:
-    from drone4d.baselines import REFERENCE6
+    from anet4d.baselines import REFERENCE6
 
     assert set(REFERENCE6) == REFERENCE_ROWS
 
@@ -100,7 +100,7 @@ def test_run_spec_contract_accepts_override() -> None:
 
 # ------------------------------------------------------------------ Env 与评测（合成世界、运动学开发档）
 def test_env_and_evaluator_use_override(synth_event, tmp_path: Path) -> None:
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
     from test_env import _run, _spec
 
     from awr.agentsdk.env.core import _open_world

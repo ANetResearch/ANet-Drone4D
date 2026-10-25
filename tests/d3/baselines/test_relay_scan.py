@@ -24,7 +24,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-for _p in (ROOT / "tools" / "sdk" / "drone4d" / "src", ROOT / "tools" / "bench" / "d3" / "examples" / "relay_scan"):
+for _p in (ROOT / "tools" / "sdk" / "anet4d" / "src", ROOT / "tools" / "bench" / "d3" / "examples" / "relay_scan"):
     sys.path.insert(0, str(_p))
 
 from awr.agentsdk.env.camera import CameraModel  # noqa: E402
@@ -136,7 +136,7 @@ def test_scan_lanes_interleave_and_cover_the_area() -> None:
 
 
 def test_scan_follows_lanes_without_targets_and_differs_from_coverage_scan() -> None:
-    from drone4d.baselines import CoverageScan
+    from anet4d.baselines import CoverageScan
 
     cfg = _config("uav-02")
     ag = _agent(cfg)
@@ -215,6 +215,6 @@ def test_actions_valid_and_deterministic() -> None:
 def test_container_entry_and_image_files() -> None:
     d = ROOT / "tools" / "bench" / "d3" / "examples" / "relay_scan"
     df = (d / "Dockerfile").read_text(encoding="utf-8")
-    assert 'CMD ["python", "-m", "drone4d.serve", "relay_scan.agent:Agent"]' in df and "COPY relay_scan/ /opt/agent/relay_scan/" in df
+    assert 'CMD ["python", "-m", "anet4d.serve", "relay_scan.agent:Agent"]' in df and "COPY relay_scan/ /opt/agent/relay_scan/" in df
     mod, _, attr = "relay_scan.agent:Agent".partition(":")
     assert getattr(importlib.import_module(mod), attr).name == "relay_scan"

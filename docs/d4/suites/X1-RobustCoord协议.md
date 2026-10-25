@@ -7,7 +7,7 @@
 | 文档编号 | AWR-D4-X1 |
 | 标题 | X1 RobustCoord 扰动协议：施加于 S1 TaskAlloc、S2 CoopSearch-Handoff、S3 InfoShare 的横切鲁棒性评测协议。规定扰动族（节点静默失效、失联、成员变化、网络分区、链路退化、延迟尖峰、机巢断电、传感器退化）的语义与参数、强度档与实体数取整规则、`d = 0` 同子集运行、`stress` 划分、鲁棒性指标、统计口径与入榜规则 |
 | 协议标识 | `robustcoord@1`（本文冻结后的协议版本；参数或语义的任何改变须升为 `robustcoord@2`，见 §10.6） |
-| 版本 | v0.2.1（2026-10-18 文档集集成同步：按 AWR-06 v0.3 §0.5 统一裁定 XR-10 更正 §2 阶段表中的 `fault.inject` 种类；按 XR-11 把 AWR-06 调度规则 R-S1 至 R-S8 的引用改称 SR-1 至 SR-8；按 XR-12 把实验配置样例中的进程内模块引用改为 `module:`） |
+| 版本 | v0.2.2（2026-10-25 命名同步：按 AWR-06 v0.4 XR-24 与 ADR-D4-36，产品名改为 ANet4D，研究者可见的包名、命令行、SDK 路径与文档站路径改为 `anet4d`；草案契约标识与域分隔常量保持现写法，在 WP-D4-01 契约定稿时改为 `anet4d` 前缀；其余内容不变）；v0.2.1（2026-10-18 文档集集成同步：按 AWR-06 v0.3 §0.5 统一裁定 XR-10 更正 §2 阶段表中的 `fault.inject` 种类；按 XR-11 把 AWR-06 调度规则 R-S1 至 R-S8 的引用改称 SR-1 至 SR-8；按 XR-12 把实验配置样例中的进程内模块引用改为 `module:`） |
 | 日期 | 2026-10-18（UTC） |
 | 修订记录 | v0.1：初稿。v0.2：按评审意见修订 P 族分组、F/C/M 时间窗、`T_detect` 与 `T_recover` 判据、由策略决定的边界、M 族孪生运行、判定词、统计口径、工作量与性能预算、并行文档对齐项与若干事实更正；逐条处理结果见文末"评审处理记录" |
 | 状态 | D4 设计评审稿。D4 处于深入调研与概念设计阶段，D3 完整收尾并封板（G0）后才启动实现；本文全部阶段与周次以"D3 封板后第 N 周"表述，不含日历日期承诺；本文不构成实现承诺 |
@@ -15,7 +15,7 @@
 | 调研依据 | [r02](../../research/d4/r02-协同问题族与标准问题库.md) §1.2、§2、§6.4（X1 为横切扰动协议；CBBA 在分区与丢包下的不一致窗口）；[r03](../../research/d4/r03-NS-2经验与排行榜规则.md) §3.4、§3.6（R13–R15 标准故障模型与"压力"档，R21–R23 命名随机流）；[n01](../../research/d4/notes/n01-现有代码映射.md) §2.1 G-AE-4、§2.2、§5.4（成员变化与故障为一等事件、外生通信区、`fault_inject` 流建议）；[n02](../../research/d4/notes/n02-D3评测子系统泛化.md) §4.1（`stress` 划分）；[n03](../../research/d4/notes/n03-外部模型讨论纪要.md) §3.4（RobustCoord 协议定案：强度五档、`S_rob`、`L_deg`、`T_detect`、`T_recover`，故障与通信分别成曲线） |
 | 并行文档 | [M28 实验内核](../../modules/M28-实验内核PRD.md)、[M29 交互网络](../../modules/M29-交互网络PRD.md)、[M30 协同接口与基线](../../modules/M30-协同接口与基线PRD.md)、[M31 基准套件](../../modules/M31-基准套件PRD.md)、[M32 评测与统计](../../modules/M32-评测与统计PRD.md)、[M33 Trace 与复现](../../modules/M33-Trace与复现PRD.md)、[M34 研究者 SDK 与命令行](../../modules/M34-研究者SDK与命令行PRD.md)、[S1 规格](S1-TaskAlloc规格.md)、[S2 规格](S2-CoopSearch-Handoff规格.md)、[S3 规格](S3-InfoShare规格.md)、[排行榜规格](../协作智能排行榜规格.md)、[契约草案](../契约草案.md)、[r04 首篇论文实验设计](../../research/d4/r04-首篇论文实验设计.md) |
 | 编号约定 | 需求 `R-RC-yy`；验收 `AC-RC-yy`（AC-RC-01 至 AC-RC-04 与 AWR-06 §7.4 的 AC-RC-1 至 AC-RC-4 一一对应并细化，其余为本文新增）；风险 `RK-RC-yy`；待决 `Q-RC-yy`；扰动族代码 `F`、`C`、`M`、`P`、`L`、`J`、`H`、`S`（单个大写字母，与 M31 `PerturbationSpec.family` 一致）；工作包、决策、平台级验收引用 AWR-06 的 `WP-D4-xx`、`ADR-D4-xx`、`AC-D4-xx`；模块需求引用 `R-Mxx-yy` |
-| 引用约定 | 沿用 AWR-06：`py:` = `python/awr/`；`sdk:` = `tools/sdk/drone4d/src/drone4d/`；`ct:` = `packages/contracts/`。对代码的引用以"文件 + 符号"为准，行号可能漂移。本文涉及的新增路径（`py:kernel/`、`py:interaction/`、`py:benchmarks/`、`ct:suite/`）在撰写时均不存在，已核实 |
+| 引用约定 | 沿用 AWR-06：`py:` = `python/awr/`；`sdk:` = `tools/sdk/anet4d/src/anet4d/`；`ct:` = `packages/contracts/`。对代码的引用以"文件 + 符号"为准，行号可能漂移。本文涉及的新增路径（`py:kernel/`、`py:interaction/`、`py:benchmarks/`、`ct:suite/`）在撰写时均不存在，已核实 |
 | 数值约定 | 标注"初值""缺省"的数值为设计默认值或待 pilot 校准的目标，不是对现有代码性能的断言；通信类扰动的参数全部继承 `synthetic-stress` 标签（AWR-06 §6.2） |
 | 写作规范 | 中文、技术名词保留英文；企业级行文；不使用 emoji 与状态字形 |
 
@@ -512,7 +512,7 @@ X1 的成本不只在 Episode 墙钟：每个条目每个宿主有 378–558 个
 | 编号 | 需求 | 级别 | 阶段 | 验收 | 依据 |
 |---|---|---|---|---|---|
 | R-RC-63 | X1 实现满足上表的计划展开、单事件注入与墙钟增量预算；超出时先优化实现，不以放宽预算或减少 Episode 数的方式达标 | 必须 | P1 | AC-RC-21 | AWR-06 PA-6 |
-| R-RC-64 | X1 Episode 的 trace 级别、派生序列、存储与保留按上表执行；派生序列与 trace 的一致性可由 `drone4d bench verify` 检查 | 必须 | P1 | AC-RC-21 | AWR-06 §5.11、§8.10；R-M33-41 |
+| R-RC-64 | X1 Episode 的 trace 级别、派生序列、存储与保留按上表执行；派生序列与 trace 的一致性可由 `anet4d bench verify` 检查 | 必须 | P1 | AC-RC-21 | AWR-06 §5.11、§8.10；R-M33-41 |
 
 ---
 
@@ -804,7 +804,7 @@ T̃_recover^f  = 恢复与未恢复 Episode 的 Kaplan–Meier 中位数（按 q
 
 | 编号 | 需求 | 级别 | 阶段 | 验收 | 依据 |
 |---|---|---|---|---|---|
-| R-RC-58 | 研究分析接口：`drone4d bench report` 对 X1 运行输出每族的 `Ū_q` 曲线、F–C 差、三种重规划包装器的配对比较与 `T_detect`/`T_recover` 分布，供 E8 实验使用；该接口在 `dev` 与退役 `stress` 数据上可用 | 应当 | P1 | AC-RC-18 | AWR-06 §9.2 E8 |
+| R-RC-58 | 研究分析接口：`anet4d bench report` 对 X1 运行输出每族的 `Ū_q` 曲线、F–C 差、三种重规划包装器的配对比较与 `T_detect`/`T_recover` 分布，供 E8 实验使用；该接口在 `dev` 与退役 `stress` 数据上可用 | 应当 | P1 | AC-RC-18 | AWR-06 §9.2 E8 |
 
 ---
 

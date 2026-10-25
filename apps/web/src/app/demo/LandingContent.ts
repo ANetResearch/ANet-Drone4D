@@ -1,12 +1,14 @@
 // Static content of the public demo landing page (D2.2). Texts live in the i18n dictionaries under landing.*; this module
 // holds the structure: the chapters of the scroll narrative with the delivery status of each point (V0.1, V0.2 and V0.3
-// delivered; the 3DGS appearance layer and PX4 SITL with Gazebo in research, docs/impl/D3-交付总结.md), the captured media
+// delivered; the 3DGS appearance layer and PX4 SITL with Gazebo in research, docs/impl/D3-交付总结.md; the cross-entity
+// collaborative experimentation platform of ANet4D in concept design, docs/06), the captured media
 // with their intrinsic sizes and the citation entries. Keyword labels are the official spellings, the same in both locales.
 // V0.3.1: with VITE_AWR_LAB_PUBLIC=1 (lab-public/flags.ts LAB_PUBLIC; extension point 15, ADR-129) the page also shows the
 // Event Lab entries: the "event-lab" section (per-UAV camera frames of a public sample run, LAB_MEDIA), its navigation slot
 // and the links to the /lab/ static build. Without the switch nothing of it is reachable and the bundler drops it.
 import type { IconKey } from '@/ui/icons/registry'
 import { URBANSCENE_BIBTEX } from '@/lib/demo'
+import { REPO_URL } from '@/lib/site'
 import { LAB_PUBLIC, LAB_PUBLIC_ENTRY } from '@/app/lab-public/flags'
 
 export type CapStatus = 'available' | 'dev' | 'research'
@@ -31,7 +33,7 @@ export const STORY: readonly StoryChapter[] = [
   { id: 'perception', icon: 'mission.target', points: ['available', 'available', 'available'], image: 'perception', keywords: ['LiDAR', 'Simulation'] },
   { id: 'relay-agents', icon: 'agent.network', points: ['available', 'available', 'available'], image: 'relay-agents', keywords: ['Agent Swarm', 'Swarm Control'] },
   { id: 'sandbox', icon: 'sandbox.mine', points: ['available', 'available', 'available'], image: null, keywords: ['Simulation', 'Drone Swarm'] },
-  { id: 'roadmap', icon: 'sensor.lidar', points: ['available', 'available', 'research', 'research'], image: 'roadmap', keywords: ['Gazebo', 'LiDAR', '4D Reconstruction', '3DGS', 'PX4'] },
+  { id: 'roadmap', icon: 'sensor.lidar', points: ['available', 'available', 'research', 'research', 'research'], image: 'roadmap', keywords: ['Gazebo', 'LiDAR', '4D Reconstruction', '3DGS', 'PX4'] },
 ]
 
 export interface Media { file: string; key: string; w: number; h: number }
@@ -73,17 +75,18 @@ export const LAB_POINTS: readonly IconKey[] = ['sensor.camera', 'layer.mesh', 't
 export const LAB_WORLD_AUTHOR = { name: 'Mitko', url: 'https://sketchfab.com/bg3d' } as const
 export const LAB_WORLD_LICENSE = { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' } as const
 
-/** BibTeX of the software (README.md "Data and citation", CITATION.cff) */
-export const DRONE4D_BIBTEX = `@software{anet_drone4d_2026,
-  title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
+/** BibTeX of the software (README.md "Data and citation", CITATION.cff); the product was named ANet Drone4D up to V0.3.1,
+ * the repository keeps its legacy name until it is renamed (lib/site.ts) */
+export const ANET4D_BIBTEX = `@software{anet4d_2026,
+  title   = {ANet4D: Simulation Infrastructure for Collaborative Embodied Agents},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.1},
-  url     = {https://github.com/ANetResearch/ANet-Drone4D}
+  version = {0.3.2},
+  url     = {${REPO_URL}}
 }`
 
 export const CITATIONS: readonly { id: string; label: string; bibtex: string }[] = [
-  { id: 'drone4d', label: 'ANet Drone4D', bibtex: DRONE4D_BIBTEX },
+  { id: 'anet4d', label: 'ANet4D', bibtex: ANET4D_BIBTEX },
   { id: 'urbanscene3d', label: 'UrbanScene3D', bibtex: URBANSCENE_BIBTEX },
 ]
 

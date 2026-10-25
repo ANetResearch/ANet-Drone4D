@@ -26,8 +26,9 @@ D2 = "V0.2-demo"
 
 
 def test_contracts_version_1_1_0():
-    # D2.1 契约 1.2.0（只增，17 §17.20.8；D2-INT 合入）：layouts 未变，仍为 1.1.0
-    assert load("package.json")["version"] == "1.2.0" == CONTRACTS_VERSION
+    # D2.1 契约 1.2.0（只增，17 §17.20.8；D2-INT 合入）；1.3.0 只增识别物可选字段 appearance、activity、metadata、life 与
+    # target_detail 的 timeline、activity（m23 场景目标基础，AWR-17 §10.2 次版本规则）：layouts 未变，仍为 1.1.0
+    assert load("package.json")["version"] == "1.3.0" == CONTRACTS_VERSION
     assert load("rt/layouts.json")["version"] == "1.1.0"
 
 

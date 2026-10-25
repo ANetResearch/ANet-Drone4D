@@ -1,7 +1,10 @@
-# Contributing to ANet-Drone4D
+# Contributing to ANet4D
 
-Thanks for your interest! ANet-Drone4D is early (V0.1, the D1 release) and moving fast. It is a real-world grounded 4D
-world runtime: the browser shows the world, the server computes it, and the World is the core asset.
+ANet4D is simulation infrastructure for collaborative embodied agents. It is pre-1.0 (current release V0.3.2), and its
+interfaces may still change between minor versions. It is built on real-world grounded 4D worlds: the browser shows the
+world, the server computes it, and the World is the core asset. Versions up to V0.3.1 were published under the former
+name ANet Drone4D; protocol and schema identifiers such as `drone4d.event.v1` keep that name as legacy identifiers and
+are not renamed in contributions.
 
 ## Ground rules
 
@@ -113,7 +116,7 @@ CODEOWNERS. For example, M00 owns the `Makefile`, the lock files, `packages/cont
 
 ## Licensing of contributions
 
-ANet-Drone4D is released under the ANet Open Source License (ANet-Drone4D), a modified Apache License 2.0 (see
+ANet4D is released under the ANet Open Source License (ANet4D), a modified Apache License 2.0 (see
 [LICENSE](LICENSE)). By submitting a contribution you agree that it is provided under that License, including its
 contributor terms (LICENSE, condition 2): Agent Network Research may make the license stricter or more relaxed, and
 may use your contribution commercially, including in its hosted simulation and digital twin services and cloud

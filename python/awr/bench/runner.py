@@ -25,7 +25,7 @@ AGENT_IMAGE = "d3-agent-py:dev"
 
 def _agent(policy: dict, agent_image: str) -> tuple[str, list[str], dict[str, str]]:
     if policy.get("kind") == "reference":
-        return agent_image, ["python", "-m", "drone4d.serve", "--baseline", str(policy["name"])], {}
+        return agent_image, ["python", "-m", "anet4d.serve", "--baseline", str(policy["name"])], {}
     if policy.get("kind") == "image":
         e = policy.get("entry") or {}
         return str(policy["image_digest"]), [str(x) for x in e.get("cmd", [])], {str(k): str(v) for k, v in (e.get("env") or {}).items()}

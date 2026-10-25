@@ -1,0 +1,526 @@
+{
+  "recipe_sha256": "317c0299a5632e8fbf494405eb112ba1e24a4e0b0b496bf53ce51f589c04e738",
+  "world_id": "synthcity",
+  "world_content_version": "9e05c2364f58",
+  "seed": 81,
+  "generator": {
+    "compiler_sha256": "02c2628134aa5d6d8a0d725d272051e64dc3c8507077329473a681dbe04a3931",
+    "network_sha256": "3b84a72efa1375a83979aaaaa8008b5ab06fe3d7d9ba0fb82e5593e1ccca5077"
+  },
+  "classes": [
+    "person",
+    "vehicle"
+  ],
+  "provider_usage": {
+    "requested_model": "deepseek-v4-pro",
+    "returned_model": "deepseek-v4-pro",
+    "usage": {
+      "prompt_tokens": 2871,
+      "completion_tokens": 262,
+      "total_tokens": 3133,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    },
+    "wall_s": 6.514,
+    "output_sha256": "28d236c2626a7d0452a6ea660458d71d14077083a0cac704b9a0814d5883df67"
+  },
+  "audit": {
+    "version": "scene-life-1",
+    "seed": 81,
+    "ticks": 15000,
+    "event_sha256": "788b9e444f75239e41b112d02a3c7b47da6eeaf6ab26725a333c1ff514c64195",
+    "safety_interventions": 0,
+    "population_history": [
+      {
+        "t_s": 60.0,
+        "total": 16,
+        "moving": 12,
+        "visiting": 0,
+        "waiting": 4,
+        "stationary": 0
+      },
+      {
+        "t_s": 120.0,
+        "total": 16,
+        "moving": 13,
+        "visiting": 0,
+        "waiting": 3,
+        "stationary": 0
+      },
+      {
+        "t_s": 180.0,
+        "total": 16,
+        "moving": 6,
+        "visiting": 2,
+        "waiting": 8,
+        "stationary": 0
+      },
+      {
+        "t_s": 240.0,
+        "total": 16,
+        "moving": 8,
+        "visiting": 2,
+        "waiting": 6,
+        "stationary": 0
+      },
+      {
+        "t_s": 300.0,
+        "total": 16,
+        "moving": 10,
+        "visiting": 1,
+        "waiting": 5,
+        "stationary": 0
+      },
+      {
+        "t_s": 360.0,
+        "total": 16,
+        "moving": 13,
+        "visiting": 1,
+        "waiting": 2,
+        "stationary": 0
+      },
+      {
+        "t_s": 420.0,
+        "total": 16,
+        "moving": 7,
+        "visiting": 6,
+        "waiting": 3,
+        "stationary": 0
+      },
+      {
+        "t_s": 480.0,
+        "total": 16,
+        "moving": 6,
+        "visiting": 6,
+        "waiting": 4,
+        "stationary": 0
+      },
+      {
+        "t_s": 540.0,
+        "total": 16,
+        "moving": 7,
+        "visiting": 6,
+        "waiting": 3,
+        "stationary": 0
+      },
+      {
+        "t_s": 600.0,
+        "total": 16,
+        "moving": 7,
+        "visiting": 6,
+        "waiting": 3,
+        "stationary": 0
+      },
+      {
+        "t_s": 660.0,
+        "total": 16,
+        "moving": 10,
+        "visiting": 4,
+        "waiting": 2,
+        "stationary": 0
+      },
+      {
+        "t_s": 720.0,
+        "total": 16,
+        "moving": 10,
+        "visiting": 4,
+        "waiting": 2,
+        "stationary": 0
+      },
+      {
+        "t_s": 780.0,
+        "total": 16,
+        "moving": 7,
+        "visiting": 7,
+        "waiting": 2,
+        "stationary": 0
+      },
+      {
+        "t_s": 840.0,
+        "total": 16,
+        "moving": 10,
+        "visiting": 4,
+        "waiting": 2,
+        "stationary": 0
+      },
+      {
+        "t_s": 900.0,
+        "total": 16,
+        "moving": 11,
+        "visiting": 4,
+        "waiting": 1,
+        "stationary": 0
+      },
+      {
+        "t_s": 960.0,
+        "total": 16,
+        "moving": 7,
+        "visiting": 5,
+        "waiting": 4,
+        "stationary": 0
+      },
+      {
+        "t_s": 1020.0,
+        "total": 16,
+        "moving": 10,
+        "visiting": 5,
+        "waiting": 1,
+        "stationary": 0
+      },
+      {
+        "t_s": 1080.0,
+        "total": 16,
+        "moving": 8,
+        "visiting": 4,
+        "waiting": 4,
+        "stationary": 0
+      },
+      {
+        "t_s": 1140.0,
+        "total": 16,
+        "moving": 11,
+        "visiting": 4,
+        "waiting": 1,
+        "stationary": 0
+      },
+      {
+        "t_s": 1200.0,
+        "total": 16,
+        "moving": 8,
+        "visiting": 5,
+        "waiting": 3,
+        "stationary": 0
+      },
+      {
+        "t_s": 1260.0,
+        "total": 16,
+        "moving": 7,
+        "visiting": 6,
+        "waiting": 3,
+        "stationary": 0
+      },
+      {
+        "t_s": 1320.0,
+        "total": 16,
+        "moving": 11,
+        "visiting": 5,
+        "waiting": 0,
+        "stationary": 0
+      },
+      {
+        "t_s": 1380.0,
+        "total": 16,
+        "moving": 12,
+        "visiting": 4,
+        "waiting": 0,
+        "stationary": 0
+      },
+      {
+        "t_s": 1440.0,
+        "total": 16,
+        "moving": 11,
+        "visiting": 5,
+        "waiting": 0,
+        "stationary": 0
+      },
+      {
+        "t_s": 1500.0,
+        "total": 16,
+        "moving": 8,
+        "visiting": 8,
+        "waiting": 0,
+        "stationary": 0
+      }
+    ],
+    "min_clearance_m": 0.12850765842768708,
+    "min_swept_clearance_m": 0.12850765842768708,
+    "actors": {
+      "driver-01": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 3472.212,
+        "visits": 6,
+        "max_unplanned_wait_s": 0.8,
+        "max_no_progress_s": 21.3,
+        "reason_seconds": {
+          "junction right of way": 0.8,
+          "moving": 805.2,
+          "red signal": 219.9,
+          "停车办事": 474.1
+        }
+      },
+      "driver-02": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 2747.914,
+        "visits": 7,
+        "max_unplanned_wait_s": 34.0,
+        "max_no_progress_s": 96.0,
+        "reason_seconds": {
+          "junction right of way": 46.8,
+          "moving": 685.6,
+          "red signal": 263.3,
+          "yield before conflict": 27.5,
+          "停车办事": 476.8
+        }
+      },
+      "driver-03": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 3534.558,
+        "visits": 6,
+        "max_unplanned_wait_s": 13.5,
+        "max_no_progress_s": 43.5,
+        "reason_seconds": {
+          "downstream occupied": 4.7,
+          "junction right of way": 24.7,
+          "moving": 824.1,
+          "red signal": 331.1,
+          "yield before conflict": 3.4,
+          "停车办事": 312.0
+        }
+      },
+      "driver-04": {
+        "class": "vehicle",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 3071.83,
+        "visits": 6,
+        "max_unplanned_wait_s": 29.4,
+        "max_no_progress_s": 84.3,
+        "reason_seconds": {
+          "junction right of way": 73.9,
+          "moving": 708.1,
+          "red signal": 316.0,
+          "停车办事": 402.0
+        }
+      },
+      "resident-01": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1310.055,
+        "visits": 5,
+        "max_unplanned_wait_s": 1.3,
+        "max_no_progress_s": 41.8,
+        "reason_seconds": {
+          "align with corridor": 33.0,
+          "downstream occupied": 1.3,
+          "moving": 1122.8,
+          "red signal": 42.9,
+          "办理行政手续": 180.0,
+          "回家休息": 30.0,
+          "购买日用品": 90.0
+        }
+      },
+      "resident-02": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1378.505,
+        "visits": 5,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 33.3,
+        "reason_seconds": {
+          "align with corridor": 23.4,
+          "moving": 1118.3,
+          "red signal": 99.9,
+          "办理对公业务": 150.0,
+          "回家休息": 15.0,
+          "购买食材": 93.4
+        }
+      },
+      "resident-03": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1135.434,
+        "visits": 3,
+        "max_unplanned_wait_s": 5.7,
+        "max_no_progress_s": 43.5,
+        "reason_seconds": {
+          "align with corridor": 21.5,
+          "entrance occupied": 5.7,
+          "moving": 880.8,
+          "red signal": 167.9,
+          "居家休息": 135.0,
+          "工作/办事": 181.1,
+          "购物": 108.0
+        }
+      },
+      "resident-04": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1212.889,
+        "visits": 3,
+        "max_unplanned_wait_s": 3.2,
+        "max_no_progress_s": 44.2,
+        "reason_seconds": {
+          "align with corridor": 21.3,
+          "junction right of way": 3.6,
+          "moving": 898.7,
+          "red signal": 234.0,
+          "居家休息": 38.4,
+          "工作/办事": 224.0,
+          "购物": 80.0
+        }
+      },
+      "resident-05": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1224.088,
+        "visits": 4,
+        "max_unplanned_wait_s": 2.3,
+        "max_no_progress_s": 43.8,
+        "reason_seconds": {
+          "align with corridor": 22.0,
+          "downstream occupied": 2.1,
+          "junction right of way": 2.3,
+          "moving": 882.0,
+          "red signal": 126.2,
+          "yield before conflict": 1.0,
+          "居家休息": 134.0,
+          "工作/办事": 236.4,
+          "购物": 94.0
+        }
+      },
+      "resident-06": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1018.314,
+        "visits": 3,
+        "max_unplanned_wait_s": 40.0,
+        "max_no_progress_s": 40.2,
+        "reason_seconds": {
+          "align with corridor": 18.2,
+          "downstream occupied": 69.9,
+          "junction right of way": 3.9,
+          "moving": 880.5,
+          "red signal": 34.4,
+          "yield before conflict": 40.0,
+          "居家休息": 122.1,
+          "工作/办事": 226.0,
+          "购物": 105.0
+        }
+      },
+      "resident-07": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1093.089,
+        "visits": 3,
+        "max_unplanned_wait_s": 2.5,
+        "max_no_progress_s": 44.0,
+        "reason_seconds": {
+          "align with corridor": 18.1,
+          "downstream occupied": 2.5,
+          "moving": 885.9,
+          "red signal": 242.4,
+          "居家休息": 59.1,
+          "工作/办事": 227.0,
+          "购物": 65.0
+        }
+      },
+      "resident-08": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1189.251,
+        "visits": 3,
+        "max_unplanned_wait_s": 0.2,
+        "max_no_progress_s": 41.4,
+        "reason_seconds": {
+          "align with corridor": 23.5,
+          "junction right of way": 0.2,
+          "moving": 914.2,
+          "red signal": 135.1,
+          "居家休息": 125.0,
+          "工作/办事": 213.0,
+          "购物": 89.0
+        }
+      },
+      "resident-09": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1205.256,
+        "visits": 3,
+        "max_unplanned_wait_s": 0.1,
+        "max_no_progress_s": 43.5,
+        "reason_seconds": {
+          "align with corridor": 21.5,
+          "moving": 890.7,
+          "red signal": 163.7,
+          "yield before conflict": 0.1,
+          "居家休息": 131.0,
+          "工作/办事": 182.0,
+          "购物": 111.0
+        }
+      },
+      "resident-10": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1148.336,
+        "visits": 3,
+        "max_unplanned_wait_s": 0.0,
+        "max_no_progress_s": 45.5,
+        "reason_seconds": {
+          "align with corridor": 18.7,
+          "moving": 810.0,
+          "red signal": 288.1,
+          "居家休息": 83.1,
+          "工作/办事": 192.0,
+          "购物": 108.1
+        }
+      },
+      "resident-11": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1212.745,
+        "visits": 2,
+        "max_unplanned_wait_s": 41.3,
+        "max_no_progress_s": 41.6,
+        "reason_seconds": {
+          "align with corridor": 16.0,
+          "downstream occupied": 58.8,
+          "junction right of way": 4.1,
+          "moving": 1032.6,
+          "red signal": 129.8,
+          "yield before conflict": 0.7,
+          "工作/办事": 191.0,
+          "购物": 67.0
+        }
+      },
+      "resident-12": {
+        "class": "person",
+        "stationary": false,
+        "updates": 15000,
+        "distance_m": 1071.154,
+        "visits": 3,
+        "max_unplanned_wait_s": 1.0,
+        "max_no_progress_s": 41.4,
+        "reason_seconds": {
+          "align with corridor": 18.5,
+          "downstream occupied": 1.0,
+          "moving": 866.3,
+          "red signal": 194.7,
+          "居家休息": 136.4,
+          "工作/办事": 204.0,
+          "购物": 79.1
+        }
+      }
+    },
+    "admitted": true,
+    "failures": []
+  },
+  "verification_scope": "offline 1500-second population admission; not visual or real-world validation"
+}

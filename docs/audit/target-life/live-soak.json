@@ -1,0 +1,6486 @@
+{
+  "status": "passed",
+  "recipe_sha256": "935b67f4d87784ae538942c2e170d6396c1e49934211535a8814cff853cbe965",
+  "duration_s": 1500,
+  "targets": 27,
+  "max_clock_skew_s": 0.619,
+  "all_checkpoints_match_seed_replay": true,
+  "history": [
+    {
+      "checkpoint_s": 0,
+      "max_clock_skew_s": 0.133,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 0,
+          "phase": "departing",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "dog-02",
+          "updates": 1,
+          "phase": "orient",
+          "reason": "align with corridor",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "driver-01",
+          "updates": 2,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.1
+        },
+        {
+          "id": "driver-02",
+          "updates": 3,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.1
+        },
+        {
+          "id": "driver-03",
+          "updates": 5,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.2
+        },
+        {
+          "id": "driver-04",
+          "updates": 6,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.3
+        },
+        {
+          "id": "driver-05",
+          "updates": 7,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.4
+        },
+        {
+          "id": "driver-06",
+          "updates": 9,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.7
+        },
+        {
+          "id": "driver-07",
+          "updates": 11,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 1.0
+        },
+        {
+          "id": "machine-01",
+          "updates": 12,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-01",
+          "updates": 13,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 14,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 15,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 17,
+          "phase": "orient",
+          "reason": "align with corridor",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-02",
+          "updates": 18,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 1.6
+        },
+        {
+          "id": "resident-03",
+          "updates": 19,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.3
+        },
+        {
+          "id": "resident-04",
+          "updates": 20,
+          "phase": "orient",
+          "reason": "align with corridor",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-05",
+          "updates": 21,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 2.2
+        },
+        {
+          "id": "resident-06",
+          "updates": 22,
+          "phase": "orient",
+          "reason": "align with corridor",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-07",
+          "updates": 23,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 2.3
+        },
+        {
+          "id": "resident-08",
+          "updates": 24,
+          "phase": "orient",
+          "reason": "align with corridor",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-09",
+          "updates": 25,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.9
+        },
+        {
+          "id": "resident-10",
+          "updates": 26,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 1.1
+        },
+        {
+          "id": "resident-11",
+          "updates": 27,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 2.7
+        },
+        {
+          "id": "resident-12",
+          "updates": 28,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.1
+        },
+        {
+          "id": "uav-01",
+          "updates": 29,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 4.4
+        },
+        {
+          "id": "uav-02",
+          "updates": 30,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.2
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 60,
+      "max_clock_skew_s": 0.16,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 601,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 62.1
+        },
+        {
+          "id": "dog-02",
+          "updates": 607,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 58.5
+        },
+        {
+          "id": "driver-01",
+          "updates": 609,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 236.7
+        },
+        {
+          "id": "driver-02",
+          "updates": 611,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 242.2
+        },
+        {
+          "id": "driver-03",
+          "updates": 612,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 236.5
+        },
+        {
+          "id": "driver-04",
+          "updates": 613,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 258.7
+        },
+        {
+          "id": "driver-05",
+          "updates": 614,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 245.4
+        },
+        {
+          "id": "driver-06",
+          "updates": 615,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 246.5
+        },
+        {
+          "id": "driver-07",
+          "updates": 616,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 264.2
+        },
+        {
+          "id": "machine-01",
+          "updates": 617,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 29.1
+        },
+        {
+          "id": "object-01",
+          "updates": 618,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 619,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 620,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 621,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 73.8
+        },
+        {
+          "id": "resident-02",
+          "updates": 622,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 81.9
+        },
+        {
+          "id": "resident-03",
+          "updates": 623,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 24.2
+        },
+        {
+          "id": "resident-04",
+          "updates": 624,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 88.2
+        },
+        {
+          "id": "resident-05",
+          "updates": 625,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 24.2
+        },
+        {
+          "id": "resident-06",
+          "updates": 626,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 71.4
+        },
+        {
+          "id": "resident-07",
+          "updates": 628,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 79.2
+        },
+        {
+          "id": "resident-08",
+          "updates": 629,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 84.3
+        },
+        {
+          "id": "resident-09",
+          "updates": 630,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 88.4
+        },
+        {
+          "id": "resident-10",
+          "updates": 631,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 32.2
+        },
+        {
+          "id": "resident-11",
+          "updates": 632,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 78.3
+        },
+        {
+          "id": "resident-12",
+          "updates": 633,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 24.2
+        },
+        {
+          "id": "uav-01",
+          "updates": 634,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 169.4
+        },
+        {
+          "id": "uav-02",
+          "updates": 635,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 162.2
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 120,
+      "max_clock_skew_s": 0.16,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 1200,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 123.9
+        },
+        {
+          "id": "dog-02",
+          "updates": 1208,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 114.9
+        },
+        {
+          "id": "driver-01",
+          "updates": 1209,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 427.1
+        },
+        {
+          "id": "driver-02",
+          "updates": 1211,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 443.3
+        },
+        {
+          "id": "driver-03",
+          "updates": 1212,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 391.7
+        },
+        {
+          "id": "driver-04",
+          "updates": 1213,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 439.7
+        },
+        {
+          "id": "driver-05",
+          "updates": 1214,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 395.4
+        },
+        {
+          "id": "driver-06",
+          "updates": 1215,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 448.2
+        },
+        {
+          "id": "driver-07",
+          "updates": 1216,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 348.2
+        },
+        {
+          "id": "machine-01",
+          "updates": 1217,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 50.8
+        },
+        {
+          "id": "object-01",
+          "updates": 1218,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 1219,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 1220,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 1221,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 140.8
+        },
+        {
+          "id": "resident-02",
+          "updates": 1222,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 151.7
+        },
+        {
+          "id": "resident-03",
+          "updates": 1223,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 49.6
+        },
+        {
+          "id": "resident-04",
+          "updates": 1224,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 168.8
+        },
+        {
+          "id": "resident-05",
+          "updates": 1226,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 48.5
+        },
+        {
+          "id": "resident-06",
+          "updates": 1227,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 141.1
+        },
+        {
+          "id": "resident-07",
+          "updates": 1228,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 148.1
+        },
+        {
+          "id": "resident-08",
+          "updates": 1229,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 162.2
+        },
+        {
+          "id": "resident-09",
+          "updates": 1230,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 165.7
+        },
+        {
+          "id": "resident-10",
+          "updates": 1231,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 114.7
+        },
+        {
+          "id": "resident-11",
+          "updates": 1232,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 147.8
+        },
+        {
+          "id": "resident-12",
+          "updates": 1233,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 48.5
+        },
+        {
+          "id": "uav-01",
+          "updates": 1234,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 297.0
+        },
+        {
+          "id": "uav-02",
+          "updates": 1235,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 304.4
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 180,
+      "max_clock_skew_s": 0.16,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 1800,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 182.3
+        },
+        {
+          "id": "dog-02",
+          "updates": 1807,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 169.0
+        },
+        {
+          "id": "driver-01",
+          "updates": 1809,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 631.0
+        },
+        {
+          "id": "driver-02",
+          "updates": 1810,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 485.7
+        },
+        {
+          "id": "driver-03",
+          "updates": 1811,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 422.2
+        },
+        {
+          "id": "driver-04",
+          "updates": 1812,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 583.3
+        },
+        {
+          "id": "driver-05",
+          "updates": 1813,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 395.4
+        },
+        {
+          "id": "driver-06",
+          "updates": 1814,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 516.9
+        },
+        {
+          "id": "driver-07",
+          "updates": 1815,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 465.9
+        },
+        {
+          "id": "machine-01",
+          "updates": 1816,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 73.6
+        },
+        {
+          "id": "object-01",
+          "updates": 1817,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 1818,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 1819,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 1820,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 207.9
+        },
+        {
+          "id": "resident-02",
+          "updates": 1821,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 215.1
+        },
+        {
+          "id": "resident-03",
+          "updates": 1822,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 118.3
+        },
+        {
+          "id": "resident-04",
+          "updates": 1823,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 218.0
+        },
+        {
+          "id": "resident-05",
+          "updates": 1824,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 127.8
+        },
+        {
+          "id": "resident-06",
+          "updates": 1825,
+          "phase": "wait",
+          "reason": "downstream occupied",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 206.7
+        },
+        {
+          "id": "resident-07",
+          "updates": 1826,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 218.0
+        },
+        {
+          "id": "resident-08",
+          "updates": 1827,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 204.9
+        },
+        {
+          "id": "resident-09",
+          "updates": 1828,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 248.5
+        },
+        {
+          "id": "resident-10",
+          "updates": 1829,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 156.5
+        },
+        {
+          "id": "resident-11",
+          "updates": 1830,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 188.6
+        },
+        {
+          "id": "resident-12",
+          "updates": 1831,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 117.3
+        },
+        {
+          "id": "uav-01",
+          "updates": 1832,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 451.8
+        },
+        {
+          "id": "uav-02",
+          "updates": 1834,
+          "phase": "visit",
+          "reason": "悬停巡检",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 435.4
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 240,
+      "max_clock_skew_s": 0.16,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 2400,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 183.1
+        },
+        {
+          "id": "dog-02",
+          "updates": 2407,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 234.0
+        },
+        {
+          "id": "driver-01",
+          "updates": 2409,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 695.9
+        },
+        {
+          "id": "driver-02",
+          "updates": 2410,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 566.2
+        },
+        {
+          "id": "driver-03",
+          "updates": 2411,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 644.8
+        },
+        {
+          "id": "driver-04",
+          "updates": 2412,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 619.0
+        },
+        {
+          "id": "driver-05",
+          "updates": 2413,
+          "phase": "wait",
+          "reason": "junction right of way",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 429.0
+        },
+        {
+          "id": "driver-06",
+          "updates": 2414,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 772.1
+        },
+        {
+          "id": "driver-07",
+          "updates": 2415,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 603.4
+        },
+        {
+          "id": "machine-01",
+          "updates": 2416,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 102.6
+        },
+        {
+          "id": "object-01",
+          "updates": 2417,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 2418,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 2419,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 2420,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 211.4
+        },
+        {
+          "id": "resident-02",
+          "updates": 2421,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 277.3
+        },
+        {
+          "id": "resident-03",
+          "updates": 2422,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 168.7
+        },
+        {
+          "id": "resident-04",
+          "updates": 2423,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 243.4
+        },
+        {
+          "id": "resident-05",
+          "updates": 2424,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 209.8
+        },
+        {
+          "id": "resident-06",
+          "updates": 2425,
+          "phase": "wait",
+          "reason": "downstream occupied",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 232.1
+        },
+        {
+          "id": "resident-07",
+          "updates": 2426,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 242.3
+        },
+        {
+          "id": "resident-08",
+          "updates": 2427,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 268.2
+        },
+        {
+          "id": "resident-09",
+          "updates": 2428,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 295.8
+        },
+        {
+          "id": "resident-10",
+          "updates": 2429,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 230.3
+        },
+        {
+          "id": "resident-11",
+          "updates": 2430,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 212.9
+        },
+        {
+          "id": "resident-12",
+          "updates": 2431,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 191.0
+        },
+        {
+          "id": "uav-01",
+          "updates": 2433,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 607.4
+        },
+        {
+          "id": "uav-02",
+          "updates": 2434,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 558.9
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 300,
+      "max_clock_skew_s": 0.16,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 3000,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 183.1
+        },
+        {
+          "id": "dog-02",
+          "updates": 3006,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 285.1
+        },
+        {
+          "id": "driver-01",
+          "updates": 3008,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 790.3
+        },
+        {
+          "id": "driver-02",
+          "updates": 3009,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 606.9
+        },
+        {
+          "id": "driver-03",
+          "updates": 3011,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 864.1
+        },
+        {
+          "id": "driver-04",
+          "updates": 3012,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 830.9
+        },
+        {
+          "id": "driver-05",
+          "updates": 3013,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 514.7
+        },
+        {
+          "id": "driver-06",
+          "updates": 3014,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 988.4
+        },
+        {
+          "id": "driver-07",
+          "updates": 3015,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 666.8
+        },
+        {
+          "id": "machine-01",
+          "updates": 3016,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 123.2
+        },
+        {
+          "id": "object-01",
+          "updates": 3017,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 3018,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 3019,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 3020,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 211.4
+        },
+        {
+          "id": "resident-02",
+          "updates": 3021,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 313.8
+        },
+        {
+          "id": "resident-03",
+          "updates": 3022,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 225.7
+        },
+        {
+          "id": "resident-04",
+          "updates": 3023,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 303.8
+        },
+        {
+          "id": "resident-05",
+          "updates": 3024,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 262.5
+        },
+        {
+          "id": "resident-06",
+          "updates": 3025,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 278.8
+        },
+        {
+          "id": "resident-07",
+          "updates": 3026,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 296.7
+        },
+        {
+          "id": "resident-08",
+          "updates": 3027,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 325.1
+        },
+        {
+          "id": "resident-09",
+          "updates": 3028,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 328.0
+        },
+        {
+          "id": "resident-10",
+          "updates": 3029,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 276.7
+        },
+        {
+          "id": "resident-11",
+          "updates": 3030,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 264.9
+        },
+        {
+          "id": "resident-12",
+          "updates": 3031,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 262.5
+        },
+        {
+          "id": "uav-01",
+          "updates": 3032,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 722.7
+        },
+        {
+          "id": "uav-02",
+          "updates": 3033,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 674.2
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 360,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 3601,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 224.1
+        },
+        {
+          "id": "dog-02",
+          "updates": 3607,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 349.4
+        },
+        {
+          "id": "driver-01",
+          "updates": 3610,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 1035.8
+        },
+        {
+          "id": "driver-02",
+          "updates": 3611,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 626.7
+        },
+        {
+          "id": "driver-03",
+          "updates": 3612,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 1036.8
+        },
+        {
+          "id": "driver-04",
+          "updates": 3613,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 1036.6
+        },
+        {
+          "id": "driver-05",
+          "updates": 3614,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 623.9
+        },
+        {
+          "id": "driver-06",
+          "updates": 3615,
+          "phase": "visit",
+          "reason": "站点上下客",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1078.5
+        },
+        {
+          "id": "driver-07",
+          "updates": 3616,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 845.0
+        },
+        {
+          "id": "machine-01",
+          "updates": 3617,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 146.2
+        },
+        {
+          "id": "object-01",
+          "updates": 3618,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 3619,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 3620,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 3621,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 211.4
+        },
+        {
+          "id": "resident-02",
+          "updates": 3622,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 322.2
+        },
+        {
+          "id": "resident-03",
+          "updates": 3623,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 303.8
+        },
+        {
+          "id": "resident-04",
+          "updates": 3624,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 384.1
+        },
+        {
+          "id": "resident-05",
+          "updates": 3625,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 318.9
+        },
+        {
+          "id": "resident-06",
+          "updates": 3626,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 351.3
+        },
+        {
+          "id": "resident-07",
+          "updates": 3628,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 370.7
+        },
+        {
+          "id": "resident-08",
+          "updates": 3629,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 374.8
+        },
+        {
+          "id": "resident-09",
+          "updates": 3630,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 385.4
+        },
+        {
+          "id": "resident-10",
+          "updates": 3631,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 301.0
+        },
+        {
+          "id": "resident-11",
+          "updates": 3632,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 334.7
+        },
+        {
+          "id": "resident-12",
+          "updates": 3633,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 315.7
+        },
+        {
+          "id": "uav-01",
+          "updates": 3634,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 880.1
+        },
+        {
+          "id": "uav-02",
+          "updates": 3635,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 820.5
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 420,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 4200,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 285.9
+        },
+        {
+          "id": "dog-02",
+          "updates": 4207,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 411.1
+        },
+        {
+          "id": "driver-01",
+          "updates": 4209,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 1215.5
+        },
+        {
+          "id": "driver-02",
+          "updates": 4210,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 796.8
+        },
+        {
+          "id": "driver-03",
+          "updates": 4211,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1055.4
+        },
+        {
+          "id": "driver-04",
+          "updates": 4212,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1128.8
+        },
+        {
+          "id": "driver-05",
+          "updates": 4213,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 839.4
+        },
+        {
+          "id": "driver-06",
+          "updates": 4214,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1161.5
+        },
+        {
+          "id": "driver-07",
+          "updates": 4215,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 1044.2
+        },
+        {
+          "id": "machine-01",
+          "updates": 4216,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 175.1
+        },
+        {
+          "id": "object-01",
+          "updates": 4217,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 4218,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 4219,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 4220,
+          "phase": "wait",
+          "reason": "entrance occupied",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 211.4
+        },
+        {
+          "id": "resident-02",
+          "updates": 4221,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 392.4
+        },
+        {
+          "id": "resident-03",
+          "updates": 4222,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 361.1
+        },
+        {
+          "id": "resident-04",
+          "updates": 4223,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 453.4
+        },
+        {
+          "id": "resident-05",
+          "updates": 4224,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 401.7
+        },
+        {
+          "id": "resident-06",
+          "updates": 4225,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 419.4
+        },
+        {
+          "id": "resident-07",
+          "updates": 4226,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 385.2
+        },
+        {
+          "id": "resident-08",
+          "updates": 4227,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 397.9
+        },
+        {
+          "id": "resident-09",
+          "updates": 4229,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 444.3
+        },
+        {
+          "id": "resident-10",
+          "updates": 4230,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 356.1
+        },
+        {
+          "id": "resident-11",
+          "updates": 4231,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 407.0
+        },
+        {
+          "id": "resident-12",
+          "updates": 4232,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 382.7
+        },
+        {
+          "id": "uav-01",
+          "updates": 4233,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1029.9
+        },
+        {
+          "id": "uav-02",
+          "updates": 4234,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 975.7
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 480,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 4800,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 347.6
+        },
+        {
+          "id": "dog-02",
+          "updates": 4806,
+          "phase": "orient",
+          "reason": "align with corridor",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 433.0
+        },
+        {
+          "id": "driver-01",
+          "updates": 4808,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1254.2
+        },
+        {
+          "id": "driver-02",
+          "updates": 4810,
+          "phase": "wait",
+          "reason": "junction right of way",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 972.6
+        },
+        {
+          "id": "driver-03",
+          "updates": 4811,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1116.9
+        },
+        {
+          "id": "driver-04",
+          "updates": 4812,
+          "phase": "wait",
+          "reason": "junction right of way",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1162.4
+        },
+        {
+          "id": "driver-05",
+          "updates": 4813,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 991.7
+        },
+        {
+          "id": "driver-06",
+          "updates": 4814,
+          "phase": "wait",
+          "reason": "junction right of way",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1349.9
+        },
+        {
+          "id": "driver-07",
+          "updates": 4815,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1072.1
+        },
+        {
+          "id": "machine-01",
+          "updates": 4816,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 8,
+          "walked_m": 196.8
+        },
+        {
+          "id": "object-01",
+          "updates": 4817,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 4818,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 4819,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 4820,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 277.1
+        },
+        {
+          "id": "resident-02",
+          "updates": 4821,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 458.1
+        },
+        {
+          "id": "resident-03",
+          "updates": 4822,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 361.1
+        },
+        {
+          "id": "resident-04",
+          "updates": 4823,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 477.6
+        },
+        {
+          "id": "resident-05",
+          "updates": 4824,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 405.4
+        },
+        {
+          "id": "resident-06",
+          "updates": 4825,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 465.0
+        },
+        {
+          "id": "resident-07",
+          "updates": 4826,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 385.2
+        },
+        {
+          "id": "resident-08",
+          "updates": 4827,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 413.2
+        },
+        {
+          "id": "resident-09",
+          "updates": 4828,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 488.2
+        },
+        {
+          "id": "resident-10",
+          "updates": 4829,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 365.0
+        },
+        {
+          "id": "resident-11",
+          "updates": 4830,
+          "phase": "wait",
+          "reason": "downstream occupied",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 445.0
+        },
+        {
+          "id": "resident-12",
+          "updates": 4831,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 425.0
+        },
+        {
+          "id": "uav-01",
+          "updates": 4832,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1184.0
+        },
+        {
+          "id": "uav-02",
+          "updates": 4833,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1135.2
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 540,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 5400,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 413.6
+        },
+        {
+          "id": "dog-02",
+          "updates": 5408,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 494.3
+        },
+        {
+          "id": "driver-01",
+          "updates": 5410,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1295.2
+        },
+        {
+          "id": "driver-02",
+          "updates": 5411,
+          "phase": "wait",
+          "reason": "junction right of way",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 972.6
+        },
+        {
+          "id": "driver-03",
+          "updates": 5412,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1326.4
+        },
+        {
+          "id": "driver-04",
+          "updates": 5413,
+          "phase": "wait",
+          "reason": "junction right of way",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1162.4
+        },
+        {
+          "id": "driver-05",
+          "updates": 5414,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1034.8
+        },
+        {
+          "id": "driver-06",
+          "updates": 5415,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1483.8
+        },
+        {
+          "id": "driver-07",
+          "updates": 5416,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1225.2
+        },
+        {
+          "id": "machine-01",
+          "updates": 5417,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 9,
+          "walked_m": 218.7
+        },
+        {
+          "id": "object-01",
+          "updates": 5418,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 5419,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 5420,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 5421,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 319.3
+        },
+        {
+          "id": "resident-02",
+          "updates": 5422,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 528.8
+        },
+        {
+          "id": "resident-03",
+          "updates": 5423,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 361.1
+        },
+        {
+          "id": "resident-04",
+          "updates": 5424,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 517.2
+        },
+        {
+          "id": "resident-05",
+          "updates": 5425,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 405.4
+        },
+        {
+          "id": "resident-06",
+          "updates": 5426,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 489.0
+        },
+        {
+          "id": "resident-07",
+          "updates": 5427,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 385.2
+        },
+        {
+          "id": "resident-08",
+          "updates": 5428,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 494.7
+        },
+        {
+          "id": "resident-09",
+          "updates": 5429,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 493.4
+        },
+        {
+          "id": "resident-10",
+          "updates": 5430,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 367.0
+        },
+        {
+          "id": "resident-11",
+          "updates": 5431,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 476.5
+        },
+        {
+          "id": "resident-12",
+          "updates": 5432,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 438.7
+        },
+        {
+          "id": "uav-01",
+          "updates": 5433,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1347.5
+        },
+        {
+          "id": "uav-02",
+          "updates": 5434,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1235.4
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 600,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 6000,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 464.8
+        },
+        {
+          "id": "dog-02",
+          "updates": 6007,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 548.6
+        },
+        {
+          "id": "driver-01",
+          "updates": 6008,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1527.9
+        },
+        {
+          "id": "driver-02",
+          "updates": 6009,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1058.3
+        },
+        {
+          "id": "driver-03",
+          "updates": 6010,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1420.9
+        },
+        {
+          "id": "driver-04",
+          "updates": 6011,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1282.4
+        },
+        {
+          "id": "driver-05",
+          "updates": 6012,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1112.9
+        },
+        {
+          "id": "driver-06",
+          "updates": 6013,
+          "phase": "visit",
+          "reason": "站点上下客",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1675.3
+        },
+        {
+          "id": "driver-07",
+          "updates": 6014,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1424.6
+        },
+        {
+          "id": "machine-01",
+          "updates": 6015,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 10,
+          "walked_m": 247.5
+        },
+        {
+          "id": "object-01",
+          "updates": 6016,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 6017,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 6018,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 6019,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 360.8
+        },
+        {
+          "id": "resident-02",
+          "updates": 6020,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 600.7
+        },
+        {
+          "id": "resident-03",
+          "updates": 6021,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 377.5
+        },
+        {
+          "id": "resident-04",
+          "updates": 6022,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 541.6
+        },
+        {
+          "id": "resident-05",
+          "updates": 6023,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 405.4
+        },
+        {
+          "id": "resident-06",
+          "updates": 6024,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 532.5
+        },
+        {
+          "id": "resident-07",
+          "updates": 6025,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 385.2
+        },
+        {
+          "id": "resident-08",
+          "updates": 6026,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 528.0
+        },
+        {
+          "id": "resident-09",
+          "updates": 6027,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 493.4
+        },
+        {
+          "id": "resident-10",
+          "updates": 6028,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 449.8
+        },
+        {
+          "id": "resident-11",
+          "updates": 6029,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 545.8
+        },
+        {
+          "id": "resident-12",
+          "updates": 6030,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 469.4
+        },
+        {
+          "id": "uav-01",
+          "updates": 6031,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1502.3
+        },
+        {
+          "id": "uav-02",
+          "updates": 6032,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1385.4
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 660,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 6600,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 529.5
+        },
+        {
+          "id": "dog-02",
+          "updates": 6606,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 570.6
+        },
+        {
+          "id": "driver-01",
+          "updates": 6607,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1763.7
+        },
+        {
+          "id": "driver-02",
+          "updates": 6608,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1091.9
+        },
+        {
+          "id": "driver-03",
+          "updates": 6609,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1613.7
+        },
+        {
+          "id": "driver-04",
+          "updates": 6610,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1475.2
+        },
+        {
+          "id": "driver-05",
+          "updates": 6611,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1146.5
+        },
+        {
+          "id": "driver-06",
+          "updates": 6612,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1826.9
+        },
+        {
+          "id": "driver-07",
+          "updates": 6613,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1510.3
+        },
+        {
+          "id": "machine-01",
+          "updates": 6614,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 11,
+          "walked_m": 269.1
+        },
+        {
+          "id": "object-01",
+          "updates": 6615,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 6616,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 6617,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 6618,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 384.5
+        },
+        {
+          "id": "resident-02",
+          "updates": 6619,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 600.7
+        },
+        {
+          "id": "resident-03",
+          "updates": 6620,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 455.3
+        },
+        {
+          "id": "resident-04",
+          "updates": 6621,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 566.3
+        },
+        {
+          "id": "resident-05",
+          "updates": 6622,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 436.0
+        },
+        {
+          "id": "resident-06",
+          "updates": 6623,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 532.5
+        },
+        {
+          "id": "resident-07",
+          "updates": 6624,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 458.4
+        },
+        {
+          "id": "resident-08",
+          "updates": 6625,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 609.2
+        },
+        {
+          "id": "resident-09",
+          "updates": 6626,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 493.4
+        },
+        {
+          "id": "resident-10",
+          "updates": 6627,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 531.7
+        },
+        {
+          "id": "resident-11",
+          "updates": 6628,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 615.2
+        },
+        {
+          "id": "resident-12",
+          "updates": 6629,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 538.0
+        },
+        {
+          "id": "uav-01",
+          "updates": 6630,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1605.6
+        },
+        {
+          "id": "uav-02",
+          "updates": 6631,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1522.3
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 720,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 7200,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 538.9
+        },
+        {
+          "id": "dog-02",
+          "updates": 7206,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 634.2
+        },
+        {
+          "id": "driver-01",
+          "updates": 7207,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1849.3
+        },
+        {
+          "id": "driver-02",
+          "updates": 7208,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1308.0
+        },
+        {
+          "id": "driver-03",
+          "updates": 7209,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1647.3
+        },
+        {
+          "id": "driver-04",
+          "updates": 7210,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1508.8
+        },
+        {
+          "id": "driver-05",
+          "updates": 7211,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 1232.2
+        },
+        {
+          "id": "driver-06",
+          "updates": 7212,
+          "phase": "visit",
+          "reason": "站点上下客",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1914.5
+        },
+        {
+          "id": "driver-07",
+          "updates": 7213,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1647.1
+        },
+        {
+          "id": "machine-01",
+          "updates": 7214,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 12,
+          "walked_m": 292.1
+        },
+        {
+          "id": "object-01",
+          "updates": 7215,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 7216,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 7217,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 7218,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 456.8
+        },
+        {
+          "id": "resident-02",
+          "updates": 7219,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 600.7
+        },
+        {
+          "id": "resident-03",
+          "updates": 7220,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 507.6
+        },
+        {
+          "id": "resident-04",
+          "updates": 7221,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 648.3
+        },
+        {
+          "id": "resident-05",
+          "updates": 7222,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 522.2
+        },
+        {
+          "id": "resident-06",
+          "updates": 7223,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 563.4
+        },
+        {
+          "id": "resident-07",
+          "updates": 7224,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 484.0
+        },
+        {
+          "id": "resident-08",
+          "updates": 7225,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 688.1
+        },
+        {
+          "id": "resident-09",
+          "updates": 7226,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 566.4
+        },
+        {
+          "id": "resident-10",
+          "updates": 7227,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 596.7
+        },
+        {
+          "id": "resident-11",
+          "updates": 7228,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 682.1
+        },
+        {
+          "id": "resident-12",
+          "updates": 7229,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 611.5
+        },
+        {
+          "id": "uav-01",
+          "updates": 7230,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1761.0
+        },
+        {
+          "id": "uav-02",
+          "updates": 7231,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1641.3
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 780,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 7800,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 538.9
+        },
+        {
+          "id": "dog-02",
+          "updates": 7806,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 678.1
+        },
+        {
+          "id": "driver-01",
+          "updates": 7807,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1849.3
+        },
+        {
+          "id": "driver-02",
+          "updates": 7808,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1544.0
+        },
+        {
+          "id": "driver-03",
+          "updates": 7809,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1861.7
+        },
+        {
+          "id": "driver-04",
+          "updates": 7810,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1738.0
+        },
+        {
+          "id": "driver-05",
+          "updates": 7811,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 1387.8
+        },
+        {
+          "id": "driver-06",
+          "updates": 7812,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2070.2
+        },
+        {
+          "id": "driver-07",
+          "updates": 7813,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1749.5
+        },
+        {
+          "id": "machine-01",
+          "updates": 7814,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 13,
+          "walked_m": 320.4
+        },
+        {
+          "id": "object-01",
+          "updates": 7815,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 7816,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 7817,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 7818,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 477.5
+        },
+        {
+          "id": "resident-02",
+          "updates": 7819,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 600.7
+        },
+        {
+          "id": "resident-03",
+          "updates": 7820,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 507.6
+        },
+        {
+          "id": "resident-04",
+          "updates": 7821,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 723.9
+        },
+        {
+          "id": "resident-05",
+          "updates": 7822,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 596.8
+        },
+        {
+          "id": "resident-06",
+          "updates": 7823,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 619.3
+        },
+        {
+          "id": "resident-07",
+          "updates": 7824,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 534.7
+        },
+        {
+          "id": "resident-08",
+          "updates": 7825,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 734.9
+        },
+        {
+          "id": "resident-09",
+          "updates": 7826,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 645.0
+        },
+        {
+          "id": "resident-10",
+          "updates": 7827,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 596.7
+        },
+        {
+          "id": "resident-11",
+          "updates": 7828,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 737.4
+        },
+        {
+          "id": "resident-12",
+          "updates": 7829,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 651.7
+        },
+        {
+          "id": "uav-01",
+          "updates": 7830,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1888.6
+        },
+        {
+          "id": "uav-02",
+          "updates": 7831,
+          "phase": "visit",
+          "reason": "悬停巡检",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 1783.4
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 840,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 8400,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 577.4
+        },
+        {
+          "id": "dog-02",
+          "updates": 8406,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 741.7
+        },
+        {
+          "id": "driver-01",
+          "updates": 8407,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 2104.3
+        },
+        {
+          "id": "driver-02",
+          "updates": 8408,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1616.8
+        },
+        {
+          "id": "driver-03",
+          "updates": 8409,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 2084.6
+        },
+        {
+          "id": "driver-04",
+          "updates": 8410,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1913.7
+        },
+        {
+          "id": "driver-05",
+          "updates": 8411,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 1623.6
+        },
+        {
+          "id": "driver-06",
+          "updates": 8412,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2190.0
+        },
+        {
+          "id": "driver-07",
+          "updates": 8413,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1905.2
+        },
+        {
+          "id": "machine-01",
+          "updates": 8414,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 14,
+          "walked_m": 341.6
+        },
+        {
+          "id": "object-01",
+          "updates": 8415,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 8416,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 8417,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 8418,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 544.4
+        },
+        {
+          "id": "resident-02",
+          "updates": 8419,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 648.0
+        },
+        {
+          "id": "resident-03",
+          "updates": 8420,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 541.0
+        },
+        {
+          "id": "resident-04",
+          "updates": 8421,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 751.3
+        },
+        {
+          "id": "resident-05",
+          "updates": 8422,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 678.9
+        },
+        {
+          "id": "resident-06",
+          "updates": 8423,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 688.6
+        },
+        {
+          "id": "resident-07",
+          "updates": 8424,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 544.9
+        },
+        {
+          "id": "resident-08",
+          "updates": 8425,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 734.9
+        },
+        {
+          "id": "resident-09",
+          "updates": 8426,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 678.4
+        },
+        {
+          "id": "resident-10",
+          "updates": 8427,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 596.7
+        },
+        {
+          "id": "resident-11",
+          "updates": 8428,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 737.4
+        },
+        {
+          "id": "resident-12",
+          "updates": 8429,
+          "phase": "wait",
+          "reason": "junction right of way",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 726.2
+        },
+        {
+          "id": "uav-01",
+          "updates": 8430,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2052.1
+        },
+        {
+          "id": "uav-02",
+          "updates": 8432,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 1898.2
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 900,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 9000,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 643.4
+        },
+        {
+          "id": "dog-02",
+          "updates": 9006,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 801.6
+        },
+        {
+          "id": "driver-01",
+          "updates": 9007,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 2283.1
+        },
+        {
+          "id": "driver-02",
+          "updates": 9009,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1628.9
+        },
+        {
+          "id": "driver-03",
+          "updates": 9010,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2170.3
+        },
+        {
+          "id": "driver-04",
+          "updates": 9011,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1947.3
+        },
+        {
+          "id": "driver-05",
+          "updates": 9012,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 1709.3
+        },
+        {
+          "id": "driver-06",
+          "updates": 9013,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2410.9
+        },
+        {
+          "id": "driver-07",
+          "updates": 9014,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2137.9
+        },
+        {
+          "id": "machine-01",
+          "updates": 9015,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 15,
+          "walked_m": 367.5
+        },
+        {
+          "id": "object-01",
+          "updates": 9016,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 9017,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 9018,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 9019,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 614.0
+        },
+        {
+          "id": "resident-02",
+          "updates": 9020,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 720.6
+        },
+        {
+          "id": "resident-03",
+          "updates": 9021,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 619.0
+        },
+        {
+          "id": "resident-04",
+          "updates": 9022,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 829.7
+        },
+        {
+          "id": "resident-05",
+          "updates": 9023,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 762.4
+        },
+        {
+          "id": "resident-06",
+          "updates": 9024,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 733.7
+        },
+        {
+          "id": "resident-07",
+          "updates": 9025,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 621.9
+        },
+        {
+          "id": "resident-08",
+          "updates": 9026,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 734.9
+        },
+        {
+          "id": "resident-09",
+          "updates": 9027,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 756.9
+        },
+        {
+          "id": "resident-10",
+          "updates": 9028,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 599.4
+        },
+        {
+          "id": "resident-11",
+          "updates": 9029,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 1,
+          "walked_m": 737.4
+        },
+        {
+          "id": "resident-12",
+          "updates": 9030,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 731.5
+        },
+        {
+          "id": "uav-01",
+          "updates": 9031,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2207.8
+        },
+        {
+          "id": "uav-02",
+          "updates": 9032,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2055.0
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 960,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 9601,
+          "phase": "orient",
+          "reason": "align with corridor",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 659.8
+        },
+        {
+          "id": "dog-02",
+          "updates": 9607,
+          "phase": "visit",
+          "reason": "嗅闻与休息",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 859.4
+        },
+        {
+          "id": "driver-01",
+          "updates": 9608,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2285.9
+        },
+        {
+          "id": "driver-02",
+          "updates": 9609,
+          "phase": "wait",
+          "reason": "yield before conflict",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 1731.2
+        },
+        {
+          "id": "driver-03",
+          "updates": 9610,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2281.7
+        },
+        {
+          "id": "driver-04",
+          "updates": 9611,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2154.6
+        },
+        {
+          "id": "driver-05",
+          "updates": 9612,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 1742.3
+        },
+        {
+          "id": "driver-06",
+          "updates": 9613,
+          "phase": "visit",
+          "reason": "站点上下客",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2496.6
+        },
+        {
+          "id": "driver-07",
+          "updates": 9614,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2213.8
+        },
+        {
+          "id": "machine-01",
+          "updates": 9615,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 16,
+          "walked_m": 395.8
+        },
+        {
+          "id": "object-01",
+          "updates": 9616,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 9617,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 9618,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 9619,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 652.4
+        },
+        {
+          "id": "resident-02",
+          "updates": 9620,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 796.6
+        },
+        {
+          "id": "resident-03",
+          "updates": 9621,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 671.9
+        },
+        {
+          "id": "resident-04",
+          "updates": 9622,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 854.6
+        },
+        {
+          "id": "resident-05",
+          "updates": 9623,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 767.2
+        },
+        {
+          "id": "resident-06",
+          "updates": 9624,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 805.7
+        },
+        {
+          "id": "resident-07",
+          "updates": 9625,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 637.3
+        },
+        {
+          "id": "resident-08",
+          "updates": 9626,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 734.9
+        },
+        {
+          "id": "resident-09",
+          "updates": 9627,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 838.9
+        },
+        {
+          "id": "resident-10",
+          "updates": 9628,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 682.4
+        },
+        {
+          "id": "resident-11",
+          "updates": 9629,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 737.9
+        },
+        {
+          "id": "resident-12",
+          "updates": 9630,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 731.5
+        },
+        {
+          "id": "uav-01",
+          "updates": 9631,
+          "phase": "visit",
+          "reason": "悬停巡检",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2341.3
+        },
+        {
+          "id": "uav-02",
+          "updates": 9632,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2210.2
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 1020,
+      "max_clock_skew_s": 0.182,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 10201,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 721.0
+        },
+        {
+          "id": "dog-02",
+          "updates": 10206,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 886.8
+        },
+        {
+          "id": "driver-01",
+          "updates": 10207,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2471.9
+        },
+        {
+          "id": "driver-02",
+          "updates": 10209,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 1738.0
+        },
+        {
+          "id": "driver-03",
+          "updates": 10210,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2486.4
+        },
+        {
+          "id": "driver-04",
+          "updates": 10211,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2340.2
+        },
+        {
+          "id": "driver-05",
+          "updates": 10212,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 1830.4
+        },
+        {
+          "id": "driver-06",
+          "updates": 10213,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2572.1
+        },
+        {
+          "id": "driver-07",
+          "updates": 10214,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2313.3
+        },
+        {
+          "id": "machine-01",
+          "updates": 10215,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 17,
+          "walked_m": 414.7
+        },
+        {
+          "id": "object-01",
+          "updates": 10216,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 10217,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 10218,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 10219,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 652.4
+        },
+        {
+          "id": "resident-02",
+          "updates": 10220,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 836.7
+        },
+        {
+          "id": "resident-03",
+          "updates": 10221,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 749.4
+        },
+        {
+          "id": "resident-04",
+          "updates": 10222,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 935.8
+        },
+        {
+          "id": "resident-05",
+          "updates": 10223,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 792.7
+        },
+        {
+          "id": "resident-06",
+          "updates": 10224,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 825.2
+        },
+        {
+          "id": "resident-07",
+          "updates": 10225,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 713.6
+        },
+        {
+          "id": "resident-08",
+          "updates": 10226,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 793.6
+        },
+        {
+          "id": "resident-09",
+          "updates": 10227,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 855.1
+        },
+        {
+          "id": "resident-10",
+          "updates": 10228,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 713.6
+        },
+        {
+          "id": "resident-11",
+          "updates": 10229,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 805.2
+        },
+        {
+          "id": "resident-12",
+          "updates": 10230,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 731.5
+        },
+        {
+          "id": "uav-01",
+          "updates": 10231,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2472.0
+        },
+        {
+          "id": "uav-02",
+          "updates": 10232,
+          "phase": "visit",
+          "reason": "悬停巡检",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2355.7
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 1080,
+      "max_clock_skew_s": 0.256,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 10800,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 782.8
+        },
+        {
+          "id": "dog-02",
+          "updates": 10806,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 952.8
+        },
+        {
+          "id": "driver-01",
+          "updates": 10807,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2693.7
+        },
+        {
+          "id": "driver-02",
+          "updates": 10809,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 1828.1
+        },
+        {
+          "id": "driver-03",
+          "updates": 10810,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 4,
+          "walked_m": 2687.4
+        },
+        {
+          "id": "driver-04",
+          "updates": 10811,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2459.2
+        },
+        {
+          "id": "driver-05",
+          "updates": 10812,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 1830.4
+        },
+        {
+          "id": "driver-06",
+          "updates": 10813,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2764.5
+        },
+        {
+          "id": "driver-07",
+          "updates": 10814,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2517.6
+        },
+        {
+          "id": "machine-01",
+          "updates": 10815,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 18,
+          "walked_m": 442.9
+        },
+        {
+          "id": "object-01",
+          "updates": 10816,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 10817,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 10818,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 10819,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 654.7
+        },
+        {
+          "id": "resident-02",
+          "updates": 10823,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 909.8
+        },
+        {
+          "id": "resident-03",
+          "updates": 10829,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 794.2
+        },
+        {
+          "id": "resident-04",
+          "updates": 10832,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 995.5
+        },
+        {
+          "id": "resident-05",
+          "updates": 10833,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 877.1
+        },
+        {
+          "id": "resident-06",
+          "updates": 10834,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 825.2
+        },
+        {
+          "id": "resident-07",
+          "updates": 10835,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 755.1
+        },
+        {
+          "id": "resident-08",
+          "updates": 10836,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 872.9
+        },
+        {
+          "id": "resident-09",
+          "updates": 10837,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 855.1
+        },
+        {
+          "id": "resident-10",
+          "updates": 10838,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 747.0
+        },
+        {
+          "id": "resident-11",
+          "updates": 10839,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 854.2
+        },
+        {
+          "id": "resident-12",
+          "updates": 10840,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 758.8
+        },
+        {
+          "id": "uav-01",
+          "updates": 10841,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2632.0
+        },
+        {
+          "id": "uav-02",
+          "updates": 10842,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2461.8
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 1140,
+      "max_clock_skew_s": 0.619,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 11401,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 847.5
+        },
+        {
+          "id": "dog-02",
+          "updates": 11407,
+          "phase": "visit",
+          "reason": "嗅闻与休息",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1001.9
+        },
+        {
+          "id": "driver-01",
+          "updates": 11408,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2844.2
+        },
+        {
+          "id": "driver-02",
+          "updates": 11409,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2007.8
+        },
+        {
+          "id": "driver-03",
+          "updates": 11410,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2834.0
+        },
+        {
+          "id": "driver-04",
+          "updates": 11411,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2529.2
+        },
+        {
+          "id": "driver-05",
+          "updates": 11412,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 1930.8
+        },
+        {
+          "id": "driver-06",
+          "updates": 11413,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2979.6
+        },
+        {
+          "id": "driver-07",
+          "updates": 11414,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2652.1
+        },
+        {
+          "id": "machine-01",
+          "updates": 11417,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 19,
+          "walked_m": 471.2
+        },
+        {
+          "id": "object-01",
+          "updates": 11418,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 11419,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 11420,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 11421,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 722.2
+        },
+        {
+          "id": "resident-02",
+          "updates": 11422,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 940.4
+        },
+        {
+          "id": "resident-03",
+          "updates": 11423,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 865.9
+        },
+        {
+          "id": "resident-04",
+          "updates": 11424,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 995.5
+        },
+        {
+          "id": "resident-05",
+          "updates": 11425,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 962.2
+        },
+        {
+          "id": "resident-06",
+          "updates": 11426,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 825.2
+        },
+        {
+          "id": "resident-07",
+          "updates": 11429,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 822.3
+        },
+        {
+          "id": "resident-08",
+          "updates": 11436,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 905.3
+        },
+        {
+          "id": "resident-09",
+          "updates": 11437,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 925.9
+        },
+        {
+          "id": "resident-10",
+          "updates": 11438,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 821.2
+        },
+        {
+          "id": "resident-11",
+          "updates": 11439,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 917.6
+        },
+        {
+          "id": "resident-12",
+          "updates": 11440,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 835.6
+        },
+        {
+          "id": "uav-01",
+          "updates": 11441,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2787.3
+        },
+        {
+          "id": "uav-02",
+          "updates": 11442,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2598.3
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 1200,
+      "max_clock_skew_s": 0.619,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 12000,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 875.5
+        },
+        {
+          "id": "dog-02",
+          "updates": 12006,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1047.9
+        },
+        {
+          "id": "driver-01",
+          "updates": 12007,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2844.2
+        },
+        {
+          "id": "driver-02",
+          "updates": 12008,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2183.3
+        },
+        {
+          "id": "driver-03",
+          "updates": 12010,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2834.4
+        },
+        {
+          "id": "driver-04",
+          "updates": 12011,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2732.7
+        },
+        {
+          "id": "driver-05",
+          "updates": 12012,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 8,
+          "walked_m": 1969.7
+        },
+        {
+          "id": "driver-06",
+          "updates": 12013,
+          "phase": "wait",
+          "reason": "yield before conflict",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 3082.5
+        },
+        {
+          "id": "driver-07",
+          "updates": 12014,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2695.6
+        },
+        {
+          "id": "machine-01",
+          "updates": 12015,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 20,
+          "walked_m": 490.0
+        },
+        {
+          "id": "object-01",
+          "updates": 12016,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 12017,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 12018,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 12019,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 790.8
+        },
+        {
+          "id": "resident-02",
+          "updates": 12020,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 940.4
+        },
+        {
+          "id": "resident-03",
+          "updates": 12021,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 940.4
+        },
+        {
+          "id": "resident-04",
+          "updates": 12022,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 995.5
+        },
+        {
+          "id": "resident-05",
+          "updates": 12023,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 986.7
+        },
+        {
+          "id": "resident-06",
+          "updates": 12024,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 825.2
+        },
+        {
+          "id": "resident-07",
+          "updates": 12025,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 871.4
+        },
+        {
+          "id": "resident-08",
+          "updates": 12026,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 971.7
+        },
+        {
+          "id": "resident-09",
+          "updates": 12027,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1002.8
+        },
+        {
+          "id": "resident-10",
+          "updates": 12028,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 909.0
+        },
+        {
+          "id": "resident-11",
+          "updates": 12029,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 978.5
+        },
+        {
+          "id": "resident-12",
+          "updates": 12030,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 904.5
+        },
+        {
+          "id": "uav-01",
+          "updates": 12031,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2939.6
+        },
+        {
+          "id": "uav-02",
+          "updates": 12032,
+          "phase": "visit",
+          "reason": "悬停巡检",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 2711.8
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 1260,
+      "max_clock_skew_s": 0.619,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 12600,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 919.9
+        },
+        {
+          "id": "dog-02",
+          "updates": 12606,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1109.8
+        },
+        {
+          "id": "driver-01",
+          "updates": 12607,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2972.4
+        },
+        {
+          "id": "driver-02",
+          "updates": 12608,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2189.4
+        },
+        {
+          "id": "driver-03",
+          "updates": 12609,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 2966.7
+        },
+        {
+          "id": "driver-04",
+          "updates": 12610,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2805.6
+        },
+        {
+          "id": "driver-05",
+          "updates": 12611,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 8,
+          "walked_m": 2211.3
+        },
+        {
+          "id": "driver-06",
+          "updates": 12612,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 3122.7
+        },
+        {
+          "id": "driver-07",
+          "updates": 12613,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2834.1
+        },
+        {
+          "id": "machine-01",
+          "updates": 12614,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 21,
+          "walked_m": 518.3
+        },
+        {
+          "id": "object-01",
+          "updates": 12615,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 12616,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 12617,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 12618,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 863.6
+        },
+        {
+          "id": "resident-02",
+          "updates": 12619,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 940.4
+        },
+        {
+          "id": "resident-03",
+          "updates": 12620,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 986.7
+        },
+        {
+          "id": "resident-04",
+          "updates": 12621,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 995.5
+        },
+        {
+          "id": "resident-05",
+          "updates": 12622,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 986.7
+        },
+        {
+          "id": "resident-06",
+          "updates": 12623,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 884.8
+        },
+        {
+          "id": "resident-07",
+          "updates": 12624,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 895.6
+        },
+        {
+          "id": "resident-08",
+          "updates": 12625,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1046.3
+        },
+        {
+          "id": "resident-09",
+          "updates": 12626,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1048.3
+        },
+        {
+          "id": "resident-10",
+          "updates": 12627,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 955.9
+        },
+        {
+          "id": "resident-11",
+          "updates": 12628,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 1,
+          "walked_m": 1031.0
+        },
+        {
+          "id": "resident-12",
+          "updates": 12629,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 967.5
+        },
+        {
+          "id": "uav-01",
+          "updates": 12630,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 3102.7
+        },
+        {
+          "id": "uav-02",
+          "updates": 12631,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 2863.8
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 1320,
+      "max_clock_skew_s": 0.619,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 13200,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 984.9
+        },
+        {
+          "id": "dog-02",
+          "updates": 13206,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1162.4
+        },
+        {
+          "id": "driver-01",
+          "updates": 13207,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 3188.6
+        },
+        {
+          "id": "driver-02",
+          "updates": 13208,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2297.7
+        },
+        {
+          "id": "driver-03",
+          "updates": 13210,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 3176.5
+        },
+        {
+          "id": "driver-04",
+          "updates": 13211,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2918.1
+        },
+        {
+          "id": "driver-05",
+          "updates": 13212,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 8,
+          "walked_m": 2401.7
+        },
+        {
+          "id": "driver-06",
+          "updates": 13213,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 3306.8
+        },
+        {
+          "id": "driver-07",
+          "updates": 13214,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 2902.9
+        },
+        {
+          "id": "machine-01",
+          "updates": 13215,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 22,
+          "walked_m": 546.5
+        },
+        {
+          "id": "object-01",
+          "updates": 13216,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 13217,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 13218,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 13219,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 4,
+          "walked_m": 889.8
+        },
+        {
+          "id": "resident-02",
+          "updates": 13220,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 990.4
+        },
+        {
+          "id": "resident-03",
+          "updates": 13221,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 986.7
+        },
+        {
+          "id": "resident-04",
+          "updates": 13222,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1031.7
+        },
+        {
+          "id": "resident-05",
+          "updates": 13223,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1015.0
+        },
+        {
+          "id": "resident-06",
+          "updates": 13224,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 951.8
+        },
+        {
+          "id": "resident-07",
+          "updates": 13225,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 947.7
+        },
+        {
+          "id": "resident-08",
+          "updates": 13226,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1097.7
+        },
+        {
+          "id": "resident-09",
+          "updates": 13227,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1048.3
+        },
+        {
+          "id": "resident-10",
+          "updates": 13228,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1012.8
+        },
+        {
+          "id": "resident-11",
+          "updates": 13229,
+          "phase": "visit",
+          "reason": "购物",
+          "hidden": true,
+          "visits": 2,
+          "walked_m": 1077.2
+        },
+        {
+          "id": "resident-12",
+          "updates": 13230,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1020.2
+        },
+        {
+          "id": "uav-01",
+          "updates": 13231,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 3206.9
+        },
+        {
+          "id": "uav-02",
+          "updates": 13232,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 8,
+          "walked_m": 2979.7
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 1380,
+      "max_clock_skew_s": 0.619,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 13800,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1032.2
+        },
+        {
+          "id": "dog-02",
+          "updates": 13805,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1199.6
+        },
+        {
+          "id": "driver-01",
+          "updates": 13806,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 3399.1
+        },
+        {
+          "id": "driver-02",
+          "updates": 13808,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2485.1
+        },
+        {
+          "id": "driver-03",
+          "updates": 13811,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 5,
+          "walked_m": 3352.6
+        },
+        {
+          "id": "driver-04",
+          "updates": 13812,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 3122.2
+        },
+        {
+          "id": "driver-05",
+          "updates": 13813,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 9,
+          "walked_m": 2426.8
+        },
+        {
+          "id": "driver-06",
+          "updates": 13814,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 3366.3
+        },
+        {
+          "id": "driver-07",
+          "updates": 13815,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 3096.9
+        },
+        {
+          "id": "machine-01",
+          "updates": 13816,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 23,
+          "walked_m": 565.4
+        },
+        {
+          "id": "object-01",
+          "updates": 13817,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 13818,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 13819,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 13820,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 4,
+          "walked_m": 889.8
+        },
+        {
+          "id": "resident-02",
+          "updates": 13821,
+          "phase": "wait",
+          "reason": "red signal",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1056.3
+        },
+        {
+          "id": "resident-03",
+          "updates": 13822,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 989.5
+        },
+        {
+          "id": "resident-04",
+          "updates": 13823,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1114.0
+        },
+        {
+          "id": "resident-05",
+          "updates": 13824,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1105.4
+        },
+        {
+          "id": "resident-06",
+          "updates": 13825,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1018.3
+        },
+        {
+          "id": "resident-07",
+          "updates": 13826,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1021.7
+        },
+        {
+          "id": "resident-08",
+          "updates": 13827,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1097.7
+        },
+        {
+          "id": "resident-09",
+          "updates": 13828,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1065.9
+        },
+        {
+          "id": "resident-10",
+          "updates": 13829,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1099.1
+        },
+        {
+          "id": "resident-11",
+          "updates": 13830,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1089.8
+        },
+        {
+          "id": "resident-12",
+          "updates": 13831,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1071.2
+        },
+        {
+          "id": "uav-01",
+          "updates": 13832,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 3362.3
+        },
+        {
+          "id": "uav-02",
+          "updates": 13833,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 8,
+          "walked_m": 3122.2
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 1440,
+      "max_clock_skew_s": 0.619,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 14400,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 4,
+          "walked_m": 1043.9
+        },
+        {
+          "id": "dog-02",
+          "updates": 14405,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1263.7
+        },
+        {
+          "id": "driver-01",
+          "updates": 14406,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 3439.3
+        },
+        {
+          "id": "driver-02",
+          "updates": 14407,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 2701.0
+        },
+        {
+          "id": "driver-03",
+          "updates": 14409,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 3392.3
+        },
+        {
+          "id": "driver-04",
+          "updates": 14410,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 3244.1
+        },
+        {
+          "id": "driver-05",
+          "updates": 14411,
+          "phase": "wait",
+          "reason": "yield before conflict",
+          "hidden": false,
+          "visits": 9,
+          "walked_m": 2541.0
+        },
+        {
+          "id": "driver-06",
+          "updates": 14412,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 3516.8
+        },
+        {
+          "id": "driver-07",
+          "updates": 14413,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 3311.7
+        },
+        {
+          "id": "machine-01",
+          "updates": 14414,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 24,
+          "walked_m": 593.7
+        },
+        {
+          "id": "object-01",
+          "updates": 14415,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 14416,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 14417,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 14418,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 4,
+          "walked_m": 889.8
+        },
+        {
+          "id": "resident-02",
+          "updates": 14419,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1097.0
+        },
+        {
+          "id": "resident-03",
+          "updates": 14420,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1064.5
+        },
+        {
+          "id": "resident-04",
+          "updates": 14421,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1189.6
+        },
+        {
+          "id": "resident-05",
+          "updates": 14422,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1191.1
+        },
+        {
+          "id": "resident-06",
+          "updates": 14423,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1018.3
+        },
+        {
+          "id": "resident-07",
+          "updates": 14424,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1093.1
+        },
+        {
+          "id": "resident-08",
+          "updates": 14425,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1114.8
+        },
+        {
+          "id": "resident-09",
+          "updates": 14426,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1145.9
+        },
+        {
+          "id": "resident-10",
+          "updates": 14427,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1148.3
+        },
+        {
+          "id": "resident-11",
+          "updates": 14428,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1143.8
+        },
+        {
+          "id": "resident-12",
+          "updates": 14429,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1071.2
+        },
+        {
+          "id": "uav-01",
+          "updates": 14430,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 3484.6
+        },
+        {
+          "id": "uav-02",
+          "updates": 14431,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 8,
+          "walked_m": 3276.8
+        }
+      ]
+    },
+    {
+      "checkpoint_s": 1500,
+      "max_clock_skew_s": 0.619,
+      "actors": [
+        {
+          "id": "dog-01",
+          "updates": 15000,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 4,
+          "walked_m": 1043.9
+        },
+        {
+          "id": "dog-02",
+          "updates": 15005,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1314.9
+        },
+        {
+          "id": "driver-01",
+          "updates": 15006,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 3472.9
+        },
+        {
+          "id": "driver-02",
+          "updates": 15007,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 2747.9
+        },
+        {
+          "id": "driver-03",
+          "updates": 15008,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 6,
+          "walked_m": 3537.6
+        },
+        {
+          "id": "driver-04",
+          "updates": 15009,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 3284.7
+        },
+        {
+          "id": "driver-05",
+          "updates": 15010,
+          "phase": "visit",
+          "reason": "停车办事",
+          "hidden": false,
+          "visits": 10,
+          "walked_m": 2548.0
+        },
+        {
+          "id": "driver-06",
+          "updates": 15011,
+          "phase": "wait",
+          "reason": "junction right of way",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 3723.9
+        },
+        {
+          "id": "driver-07",
+          "updates": 15012,
+          "phase": "visit",
+          "reason": "停靠装卸/交付",
+          "hidden": false,
+          "visits": 8,
+          "walked_m": 3355.5
+        },
+        {
+          "id": "machine-01",
+          "updates": 15013,
+          "phase": "visit",
+          "reason": "装卸与设备检查",
+          "hidden": false,
+          "visits": 25,
+          "walked_m": 621.9
+        },
+        {
+          "id": "object-01",
+          "updates": 15014,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-02",
+          "updates": 15015,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "object-03",
+          "updates": 15016,
+          "phase": "stationary",
+          "reason": "固定安装的公共设施",
+          "hidden": false,
+          "visits": 0,
+          "walked_m": 0.0
+        },
+        {
+          "id": "resident-01",
+          "updates": 15017,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 4,
+          "walked_m": 889.8
+        },
+        {
+          "id": "resident-02",
+          "updates": 15018,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1173.7
+        },
+        {
+          "id": "resident-03",
+          "updates": 15019,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1138.1
+        },
+        {
+          "id": "resident-04",
+          "updates": 15020,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1212.9
+        },
+        {
+          "id": "resident-05",
+          "updates": 15021,
+          "phase": "visit",
+          "reason": "工作/办事",
+          "hidden": true,
+          "visits": 4,
+          "walked_m": 1224.1
+        },
+        {
+          "id": "resident-06",
+          "updates": 15022,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1018.3
+        },
+        {
+          "id": "resident-07",
+          "updates": 15023,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1093.1
+        },
+        {
+          "id": "resident-08",
+          "updates": 15024,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1191.8
+        },
+        {
+          "id": "resident-09",
+          "updates": 15025,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 3,
+          "walked_m": 1209.0
+        },
+        {
+          "id": "resident-10",
+          "updates": 15026,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1148.3
+        },
+        {
+          "id": "resident-11",
+          "updates": 15027,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 2,
+          "walked_m": 1216.1
+        },
+        {
+          "id": "resident-12",
+          "updates": 15028,
+          "phase": "visit",
+          "reason": "居家休息",
+          "hidden": true,
+          "visits": 3,
+          "walked_m": 1071.2
+        },
+        {
+          "id": "uav-01",
+          "updates": 15029,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 7,
+          "walked_m": 3644.6
+        },
+        {
+          "id": "uav-02",
+          "updates": 15030,
+          "phase": "travel",
+          "reason": "",
+          "hidden": false,
+          "visits": 8,
+          "walked_m": 3439.7
+        }
+      ]
+    }
+  ],
+  "scope": "Live 1500-second wall-time SDK run on the private targetlab deployment, no browser or keepalive, all 27 actors sampled each minute and matched against local same-version fixed-seed replay; not a rendered visual assessment.",
+  "date": "2026-10-22"
+}

@@ -13,7 +13,7 @@
 - `public_categories()`：公开模式追加的按客户端地址限流类别（`ratelimit.CATEGORIES` 的 public_api、auth、world_query）；
 - `prefix_of()`、`agg_prefix_of()`（D2，M11-FR-209；AWR-04 §11.5；17 §17.3.4）：限流与配额按地址前缀计——IPv4 /32、IPv6 /64
   （IPv4 映射的 IPv6 先还原为 IPv4），聚合前缀 IPv4 /24、IPv6 /48；不可解析的地址原样作为键。show-api 的公开类别与 WS 每地址
-  上限、sandbox-api 的公开路由与连接数都以前缀为键，同一 /64 内轮换 IPv6 地址不能绕过（D2-AC-23）。nginx 的 `$drone4d_prefix`
+  上限、sandbox-api 的公开路由与连接数都以前缀为键，同一 /64 内轮换 IPv6 地址不能绕过（D2-AC-23）。nginx 的 `$anet4d_prefix`
   只做粗粒度限流（M17 PRD §6.6.7），精确计数以本函数为准。
 """
 

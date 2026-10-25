@@ -21,7 +21,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import os
 import re
 import time
 from typing import Annotated, Any
@@ -43,7 +45,21 @@ sandbox_public_router = APIRouter(tags=["targets"])
 
 TID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 BUS_TIMEOUT_S = 1.5
-HTTP_OF = {110: 422, 105: 409, 111: 429, 115: 403, 116: 409, 213: 503, 505: 409, 520: 404, 540: 422, 541: 422, 542: 422, 543: 404, 544: 422}
+HTTP_OF = {
+    110: 422,
+    105: 409,
+    111: 429,
+    115: 403,
+    116: 409,
+    213: 503,
+    505: 409,
+    520: 404,
+    540: 422,
+    541: 422,
+    542: 422,
+    543: 404,
+    544: 422,
+}
 STATES = ("UNAWARE", "SUSPICIOUS", "REACTING", "ALERTED", "CALMING")
 CLASSES_JSON = (contracts_root() / "target" / "class_defaults.json").read_bytes()
 CLASSES_ETAG = '"' + hashlib.sha256(CLASSES_JSON).hexdigest() + '"'
@@ -108,8 +124,18 @@ async def _query(request: Request, op: str, args: dict) -> dict:
 async def _cmd(request: Request, p: ApiPrincipal, op: str, args: dict, cid: str) -> dict:
     gw = _gw(request)
     principal = gw.tokens.sign_principal(p.id, p.role, cid, conn_id=None, seat=gw.is_seat_holder(p.id))
-    msg = {"v": 1, "cid": cid, "op": op, "uav": None, "args": args, "principal": principal, "lease": None,
-           "t_wall_ns": time.time_ns(), "epoch_seen": gw.clock.global_epoch, "batch_id": None}
+    msg = {
+        "v": 1,
+        "cid": cid,
+        "op": op,
+        "uav": None,
+        "args": args,
+        "principal": principal,
+        "lease": None,
+        "t_wall_ns": time.time_ns(),
+        "epoch_seen": gw.clock.global_epoch,
+        "batch_id": None,
+    }
     rep = await _bus_call(request, bus_keys.ctl_cmd(gw.settings.producer), msg)
     if rep.get("status") == "rejected":
         _raise_for(int(rep.get("code") or 105), rep.get("detail"))
@@ -135,7 +161,9 @@ def _result(rep: dict) -> dict:
 
 # ------------------------------------------------------------------------------------------------ 会话路由
 @sandbox_router.get("/targets")
-async def sbx_list_targets(request: Request, _p: SbxViewer, cls: str | None = None, state: str | None = None) -> dict[str, Any]:
+async def sbx_list_targets(
+    request: Request, _p: SbxViewer, cls: str | None = None, state: str | None = None
+) -> dict[str, Any]:
     args: dict[str, Any] = {}
     c = request.query_params.get("class") or cls
     if c:
@@ -149,8 +177,12 @@ async def sbx_list_targets(request: Request, _p: SbxViewer, cls: str | None = No
 
 
 @sandbox_router.post("/targets", status_code=201)
-async def sbx_add_target(request: Request, p: SbxOperator, body: Annotated[dict[str, Any], Body()],
-                         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")) -> JSONResponse:
+async def sbx_add_target(
+    request: Request,
+    p: SbxOperator,
+    body: Annotated[dict[str, Any], Body()],
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> JSONResponse:
     if not isinstance(body, dict) or "class" not in body or "pos" not in body:
         raise ApiProblem(110, status=422, detail={"field": "class|pos", "why": "REQUIRED"})
     if body.get("id") is not None:
@@ -176,8 +208,9 @@ async def sbx_get_target(id: str, request: Request, _p: SbxViewer) -> dict[str, 
 
 
 @sandbox_router.patch("/targets/{id}")
-async def sbx_patch_target(id: str, request: Request, p: SbxOperator,
-                           body: Annotated[dict[str, Any], Body()]) -> dict[str, Any]:
+async def sbx_patch_target(
+    id: str, request: Request, p: SbxOperator, body: Annotated[dict[str, Any], Body()]
+) -> dict[str, Any]:
     _tid_ok(id)
     if not isinstance(body, dict):
         raise ApiProblem(110, status=422, detail={"field": "body", "why": "NOT_AN_OBJECT"})
@@ -189,8 +222,12 @@ async def sbx_patch_target(id: str, request: Request, p: SbxOperator,
 
 
 @sandbox_router.delete("/targets/{id}", status_code=204)
-async def sbx_remove_target(id: str, request: Request, p: SbxOperator,
-                            idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")) -> Response:
+async def sbx_remove_target(
+    id: str,
+    request: Request,
+    p: SbxOperator,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> Response:
     _tid_ok(id)
     await _cmd(request, p, "target/remove", {"id": id}, _cid("sb-tgt-rm", idempotency_key))
     return Response(status_code=204)
@@ -204,8 +241,14 @@ async def sbx_target_state(id: str, request: Request, _p: SbxViewer) -> dict[str
 
 
 @sandbox_router.get("/targets/{id}/suggested_radius")
-async def sbx_target_suggested(id: str, request: Request, _p: SbxViewer, model_id: str | None = None,
-                               light: str | None = None, bg: str | None = None) -> dict[str, Any]:
+async def sbx_target_suggested(
+    id: str,
+    request: Request,
+    _p: SbxViewer,
+    model_id: str | None = None,
+    light: str | None = None,
+    bg: str | None = None,
+) -> dict[str, Any]:
     _tid_ok(id)
     if light is not None and light not in ("day", "low", "night"):
         raise ApiProblem(110, status=422, detail={"field": "light", "allowed": ["day", "low", "night"]})
@@ -223,4 +266,85 @@ async def sbx_target_suggested(id: str, request: Request, _p: SbxViewer, model_i
 async def sbx_target_classes(request: Request) -> Response:
     if request.headers.get("if-none-match") in (CLASSES_ETAG, f"W/{CLASSES_ETAG}"):
         return Response(status_code=304, headers={"ETag": CLASSES_ETAG})
-    return Response(CLASSES_JSON, media_type="application/json", headers={"ETag": CLASSES_ETAG, "Cache-Control": "public, max-age=300"})
+    return Response(
+        CLASSES_JSON,
+        media_type="application/json",
+        headers={"ETag": CLASSES_ETAG, "Cache-Control": "public, max-age=300"},
+    )
+
+
+# Experimental scene target authoring; intentionally separate from target observations.
+async def _life_world_id(request: Request) -> str:
+    from .sandbox import _check, _pool
+
+    if os.environ.get("AWR_TARGET_LIFE_ENABLE") != "1":
+        raise ApiProblem(305, status=404)
+    record = _check(await _pool(request, "get", {"sid": request.path_params["sid"]})).get("result") or {}
+    world = record.get("world_id")
+    if not isinstance(world, str) or not re.fullmatch(r"[a-z0-9-]{1,63}", world):
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_WORLD_NOT_AVAILABLE"})
+    return world
+
+
+@sandbox_router.post("/target-life/preview")
+async def sbx_life_preview(request: Request, _p: SbxOperator, body: Annotated[dict[str, Any], Body()]):
+    """Compile and audit a proposed population, without modifying/pausing the session."""
+    from awr.runtime.target_authoring import target_authoring
+
+    world = await _life_world_id(request)
+    if set(body) - {"seed", "people", "vehicles", "prompt", "mode", "extras", "vehicle_types"}:
+        raise ApiProblem(110, status=422, detail={"why": "UNKNOWN_LIFE_FIELDS"})
+    people, vehicles = body.get("people", 12), body.get("vehicles", 4)
+    extras = body.get("extras") or {}
+    if not isinstance(extras, dict) or set(extras) - {"dog", "uav", "machine", "object"}:
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_EXTRA_CLASSES"})
+    counts = (people, vehicles, *extras.values())
+    if any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in counts) or not 1 <= sum(counts) <= 30:
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_POPULATION_LIMIT", "limit": 30})
+    mode = body.get("mode", "seed")
+    if mode not in ("seed", "deepseek"):
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_MODE"})
+
+    lock = getattr(request.app.state, "life_generation_lock", None)
+    if lock is None:
+        lock = asyncio.Lock()
+        request.app.state.life_generation_lock = lock
+    try:
+        async with lock:
+            return await target_authoring("preview", world, body)
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        # Never return provider headers, credentials or upstream response bodies.
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_PREVIEW_REJECTED", "reason": str(exc)[:240]}) from None
+
+
+@sandbox_router.get("/target-life/{sha256}/scene")
+async def sbx_life_scene(sha256: str, request: Request, _p: SbxViewer):
+    from awr.runtime.target_authoring import target_authoring
+
+    world = await _life_world_id(request)
+    try:
+        return await target_authoring("scene", world, {"sha256": sha256})
+    except (ValueError, OSError, KeyError, TypeError):
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_SCENE_NOT_AVAILABLE"}) from None
+
+
+@sandbox_router.post("/target-life/{sha256}/rehearsal")
+async def sbx_life_rehearsal(sha256: str, request: Request, _p: SbxOperator, body: Annotated[dict[str, Any], Body()]):
+    """Operator-only authoring evidence; never expose future trajectories as agent observations."""
+    from awr.runtime.target_authoring import target_authoring
+
+    world = await _life_world_id(request)
+    actor_id = body.get("actor_id")
+    if set(body) != {"actor_id"} or not isinstance(actor_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", actor_id):
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_REHEARSAL_ACTOR"})
+    if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_REHEARSAL_HASH"})
+    lock = getattr(request.app.state, "life_generation_lock", None)
+    if lock is None:
+        lock = asyncio.Lock()
+        request.app.state.life_generation_lock = lock
+    try:
+        async with lock:
+            return await target_authoring("rehearsal", world, {"sha256": sha256, "actor_id": actor_id})
+    except (ValueError, OSError, KeyError, TypeError):
+        raise ApiProblem(110, status=422, detail={"why": "LIFE_REHEARSAL_UNAVAILABLE"}) from None

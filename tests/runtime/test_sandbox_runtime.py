@@ -231,7 +231,7 @@ def test_sandbox_env_overrides_and_effective_config(tmp_path: Path) -> None:
 
 
 def test_supervisor_env_for_sandbox_layer(tmp_path: Path) -> None:
-    c = load_runtime_config(profile="public", env={"AWR_ORIGINS": "https://drone4d.agentnetwork.org.cn"})
+    c = load_runtime_config(profile="public", env={"AWR_ORIGINS": "https://anet4d.agentnetwork.org.cn"})
     env = procutil.sandbox_env(c, tmp_path)
     assert env["AWR_SANDBOX_STATE_DIR"] == "/opt/anet-drone4d/var/sandbox" and env["AWR_SANDBOX_PORT"] == "18641"
     assert env["AWR_SANDBOX_ENABLED"] == "1" and env["AWR_SANDBOX_WORLDS_ALLOW"] == ",".join(SEVEN)

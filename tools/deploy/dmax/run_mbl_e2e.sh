@@ -34,7 +34,7 @@ if [ -f "$ROOT/$CONFIG" ]; then CFG_ARG="--config $CONFIG"; else echo "note: $CO
 if ssh dmax "docker ps -q --filter name=^/$CNAME\$" | grep -q .; then echo "$CNAME is already running" >&2; exit 3; fi
 ssh dmax "mkdir -p $R"
 rsync -a --delete --exclude __pycache__ "$ROOT/python/" "dmax:$R/python/"
-rsync -a --mkpath --delete --exclude __pycache__ "$ROOT/tools/sdk/drone4d/src/" "dmax:$R/tools/sdk/drone4d/src/"
+rsync -a --mkpath --delete --exclude __pycache__ "$ROOT/tools/sdk/anet4d/src/" "dmax:$R/tools/sdk/anet4d/src/"
 rsync -a --mkpath --delete --exclude __pycache__ "$ROOT/tools/bench/d3/" "dmax:$R/tools/bench/d3/"
 rsync -a --mkpath --delete "$ROOT/configs/bench.d3/" "dmax:$R/configs/bench.d3/"
 rsync -a --mkpath --delete "$ROOT/configs/events.d3/" "dmax:$R/configs/events.d3/"

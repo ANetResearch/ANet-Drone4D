@@ -151,8 +151,9 @@ def test_public_site_access_is_404_even_with_a_valid_token(env) -> None:
     c, h, app = env["c"], env["h"], env["app"]
     _old, sa, _sb = env["ids"]
     ghost = _shape(c.get(f"{P}/no-such-route"))
-    for hdr in ({"Host": "drone4d.agentnetwork.org.cn"}, {"Host": "DRONE4D.agentnetwork.org.cn:443"},
-                {"X-Forwarded-Host": "drone4d.agentnetwork.org.cn, lab.internal"}):
+    for hdr in ({"Host": "anet4d.agentnetwork.org.cn"}, {"Host": "ANET4D.agentnetwork.org.cn:443"},
+                {"X-Forwarded-Host": "anet4d.agentnetwork.org.cn, lab.internal"},
+                {"Host": "drone4d.agentnetwork.org.cn"}, {"X-Forwarded-Host": "drone4d.agentnetwork.org.cn"}):   # 旧域名（迁移期 301）
         for path in _paths(sa):
             for who in ("ann", "rae"):
                 r = c.get(path, headers={**h[who], **hdr})
@@ -161,15 +162,19 @@ def test_public_site_access_is_404_even_with_a_valid_token(env) -> None:
     assert c.get(f"{P}/board", headers={**h["ann"], "Host": "lab.internal"}).status_code == 200       # 内部工作区入口照常
     app.state.settings.extra["public_hosts"] = ("demo.example",)                               # 部署可覆盖公开站主机名
     assert c.get(f"{P}/board", headers={**h["ann"], "Host": "demo.example"}).status_code == 404
-    assert c.get(f"{P}/board", headers={**h["ann"], "Host": "drone4d.agentnetwork.org.cn"}).status_code == 200
+    assert c.get(f"{P}/board", headers={**h["ann"], "Host": "anet4d.agentnetwork.org.cn"}).status_code == 200
 
 
 def test_public_site_nginx_never_forwards_to_bench_api() -> None:
-    """公开站（emax）站点文件不含 bench-api 上游（端口 18650）；`/api/bench/*` 落到 show-api，由其按未注册路由返回 404。"""
-    conf = (REPO / "tools" / "deploy" / "emax" / "drone4d.agentnetwork.org.cn.conf").read_text(encoding="utf-8")
-    code = "\n".join(ln.split("#", 1)[0] for ln in conf.splitlines())
-    assert "18650" not in code and "bench" not in code.lower().replace("/api/bench/", "")
-    assert "dmax" not in code.lower()
+    """公开站（emax）站点文件不含 bench-api 上游（端口 18650）；`/api/bench/*` 落到 show-api，由其按未注册路由返回 404。
+    现用域名 anet4d 的站点文件与旧域名 drone4d 的跳转站点文件（迁移期只做 301）都检查。"""
+    emax = REPO / "tools" / "deploy" / "emax"
+    confs = [p for p in (emax / "anet4d.agentnetwork.org.cn.conf", emax / "drone4d.agentnetwork.org.cn.conf") if p.exists()]
+    assert confs and confs[0].name.startswith("anet4d."), confs
+    for p in confs:
+        code = "\n".join(ln.split("#", 1)[0] for ln in p.read_text(encoding="utf-8").splitlines())
+        assert "18650" not in code and "bench" not in code.lower().replace("/api/bench/", ""), p.name
+        assert "dmax" not in code.lower(), p.name
 
 
 # ---- 撤回下线（24 h） ----------------------------------------------------------------------------------------------------------

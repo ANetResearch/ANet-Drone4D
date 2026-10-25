@@ -1,9 +1,9 @@
-"""ANet Drone4D 沙盒 Python SDK（单文件；M17-FR-056、FR-057；AWR-17 §17.13.1；M17 PRD §7.8）。
+"""ANet4D 沙盒 Python SDK（单文件；M17-FR-056、FR-057；AWR-17 §17.13.1；M17 PRD §7.8）。
 
 依赖：httpx >= 0.24、websockets >= 12（同步客户端）、msgpack >= 1.0；Python 3.9 至 3.13；不依赖 awr 包。
 
     from awr_sandbox import Sandbox
-    sb = Sandbox("https://drone4d.agentnetwork.org.cn")
+    sb = Sandbox("https://anet4d.agentnetwork.org.cn")
     with sb.create("synthcity", "t5_area_guard") as s:      # 满员时自动排队、长轮询并认领；需要时自动求解工作量证明
         print(s.state()["state"])
         s.clock("speed", rate=5)                             # 受限时返回授予值（警告 501），不抛异常

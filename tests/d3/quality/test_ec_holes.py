@@ -33,7 +33,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[0] / "world"))
 sys.path.insert(0, str(HERE.parents[0] / "events"))
 sys.path.insert(0, str(HERE.parents[0] / "env"))
-sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "drone4d" / "src"))
+sys.path.insert(0, str(HERE.parents[2] / "tools" / "sdk" / "anet4d" / "src"))
 
 GAP = 0.1                                                  # 补片与洞缘的缝（m）
 HUT = ((-55.0, -48.0), (45.0, 55.0), 6.0)                  # 小屋：世界 E 区间、N 区间、高度
@@ -268,7 +268,7 @@ def test_gate3_marks_in_hole_events(hole_event) -> None:
 def test_evaluation_excludes_in_hole_events(hole_event, tmp_path: Path) -> None:
     """端到端（D3-AC-04、M27-AC-020）：洞内两条注释从 EC、覆盖、AO、CE 的分母中剔除，在 `excluded[]` 中单列；室内时段的
     注释以 inside_building 单列；EU 的事件集不变。改写真值去掉洞内标记后复评，两条注释回到分母，其余量与 report 匹配不变。"""
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
     from test_env import _run
 
     from awr.agentsdk.env.core import _open_world

@@ -146,7 +146,7 @@ def test_mount_openapi_and_health(sbx: SbStack, monkeypatch: pytest.MonkeyPatch)
 
     c = httpx.Client(base_url=sbx.base, timeout=10)
     doc = c.get(f"{PFX}/openapi.json").json()
-    assert doc["openapi"].startswith("3.1") and doc["info"]["title"] == "ANet Drone4D Sandbox API"
+    assert doc["openapi"].startswith("3.1") and doc["info"]["title"] == "ANet4D Sandbox API"
     assert f"{PFX}/sessions/{{sid}}/rt" in doc["paths"] and f"{PFX}/openapi.json" in doc["paths"]
     assert "bearerAuth" in doc["components"]["securitySchemes"]
     rt_topics = {t["topic"] for t in doc["x-awr-realtime"]["topics"]}

@@ -1,6 +1,6 @@
 // About (M15-FR-110, FR-026; AWR-15 §4.2; AWR-14 §5.6 "关于"; M16-FR-006 honesty; LICENSE condition 1b): the full badge
-// at 320 px on the popover surface (never removed or altered), the product name "ANet Drone4D" (the ANetResearch/
-// ANet-Drone4D repository) with its version, the licence summary, the repository link, the data source and citation of
+// at 320 px on the popover surface (never removed or altered), the product name "ANet4D" (repository ANetResearch/
+// ANet-Drone4D, legacy name until renamed; lib/site.ts) with its version, the licence summary, the repository link, the data source and citation of
 // the built-in worlds (UrbanScene3D, used under authorization of the dataset rights holders with the ECCV 2022 BibTeX,
 // ADR-109; World Packages not in the repository), the fidelity statement
 // (simulated results, schematic coordinates), the copyright line and the component versions (contracts, world
@@ -21,13 +21,14 @@ import { overlays, useOverlays } from '@/ui/shell/overlays'
 import { useConnView } from '@/ui/shell/connView'
 import { useWorld } from '@/stores/world'
 import { DEMO_PUBLIC, URBANSCENE_BIBTEX } from '@/lib/demo'
+import { REPO_LABEL, REPO_URL } from '@/lib/site'
 import { useModalFrameCap } from './useModalFrameCap'
 import { BUILD, buildDisplay, copyText, diagnostics } from '@/lib/build'
 import { Button } from '@/ui/components/ui/button'
 import { notify } from '@/app/providers/ToastProvider'
 
 export const APP_VERSION = BUILD.version
-export const REPO_URL = 'https://github.com/ANetResearch/ANet-Drone4D'
+export { REPO_URL }
 export const DATASET_URL = 'https://vcc.tech/UrbanScene3D'
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -84,7 +85,7 @@ export function AboutContent({ showVersion = true }: { showVersion?: boolean }) 
           <span data-about-license="">{t('about.licenseSummary')}</span>
         </Row>
         <Row label={t('about.repo')}>
-          <ExtLink href={REPO_URL}>github.com/ANetResearch/ANet-Drone4D</ExtLink>
+          <ExtLink href={REPO_URL}>{REPO_LABEL}</ExtLink>
         </Row>
         <Row label={t('about.data')}>
           <span className="flex flex-col gap-1" data-about-data="">

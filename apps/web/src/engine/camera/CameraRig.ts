@@ -108,6 +108,9 @@ export class CameraRig {
   focusHold = false
   home: { position: [number, number, number]; target: [number, number, number]; fovDeg: number } | null = null
   readonly flight = new CameraFlight()
+  private trackedPoint: ((out: Float64Array) => boolean) | null = null
+  /** Overview-only inspection; manual camera input releases it. Never controls a drone. */
+  trackPoint(read: ((out: Float64Array) => boolean) | null): void { this.trackedPoint = read }
   private readonly tmpA = new Vector3()
   private readonly tmpB = new Vector3()
   private readonly enuA = new Float64Array(3)
@@ -229,6 +232,7 @@ export class CameraRig {
 
   /** any user input cancels a flight (and a pan releases the follow lock) */
   private userInput(): void {
+    this.trackedPoint = null
     if (this.flight.active) {
       this.flight.cancel()
       this.deps.onFlight?.('cancel', this.flight.reason)
@@ -323,6 +327,7 @@ export class CameraRig {
   private readonly touchP = new Vector3()
   /** a touch pan releases the follow lock like a mouse truck */
   private userInputPan(): void {
+    this.trackedPoint = null
     if (this.flight.active) {
       this.flight.cancel()
       this.deps.onFlight?.('cancel', this.flight.reason)
@@ -363,6 +368,7 @@ export class CameraRig {
 
   /** set eye and target (ENU) immediately */
   lookAtEnu(eye: ArrayLike<number>, target: ArrayLike<number>, transition = false): void {
+    this.trackedPoint = null
     enuToThree(eye[0], eye[1], eye[2], this.tmpA)
     enuToThree(target[0], target[1], target[2], this.tmpB)
     void this.controls.setLookAt(this.tmpA.x, this.tmpA.y, this.tmpA.z, this.tmpB.x, this.tmpB.y, this.tmpB.z, transition)
@@ -370,6 +376,7 @@ export class CameraRig {
 
   /** fly to eye and target (ENU); returns the duration in ms (0 for a cut) */
   flyTo(eye: ArrayLike<number>, target: ArrayLike<number>, reason: FlightReason, nowMs = performance.now(), dest: ((b: Float64Array) => boolean) | null = null): number {
+    this.trackedPoint = null
     const to = this.pose6
     const from = this.currentPose(new Float64Array(6))
     for (let i = 0; i < 3; i++) {
@@ -397,6 +404,7 @@ export class CameraRig {
       this.fpvView = api.sensorsOf(focusAgent).find((s) => s.kind === 0) ?? null
       if (!this.fpvView) return { ok: false, reason: 'no_camera_sensor' }
     }
+    this.trackedPoint = null
     const prev = this.mode
     const cur = this.currentPose(new Float64Array(6))
     if (prev === 'fpv' && m !== 'fpv') this.leaveFpv()
@@ -484,6 +492,7 @@ export class CameraRig {
   setFollowLock(on: boolean, focusAgent: number = this.focusAgent): boolean {
     if (this.mode !== 'orbit' && this.mode !== 'bird') return false
     if (on && focusAgent < 0) return false
+    this.trackedPoint = null
     this.followLock = on
     if (on) this.focusAgent = focusAgent
     // ADR-046 focus exception: the follow lock uses D_focus like third and fpv (FX2-R3; it was never switched on, so the
@@ -620,6 +629,7 @@ export class CameraRig {
   /** external driver (flight60): controller input off, no flights, no ground clamp; false hands the pose back */
   setDriven(on: boolean): void {
     if (this.driven === on) return
+    this.trackedPoint = null
     this.driven = on
     this.flight.cancel()
     this.applyModeConfig(this.mode)
@@ -664,7 +674,12 @@ export class CameraRig {
     }
     const flying = st === 1
     if (!flying) {
-      if (this.mode === 'third') this.updateThird(dtS)
+      if (this.trackedPoint) {
+        if (this.trackedPoint(this.enuA)) {
+          enuToThree(this.enuA[0], this.enuA[1], this.enuA[2], this.tmpA)
+          void this.controls.moveTo(this.tmpA.x, this.tmpA.y, this.tmpA.z, false)
+        } else this.trackedPoint = null
+      } else if (this.mode === 'third') this.updateThird(dtS)
       else if (this.followLock && this.focusAgent >= 0 && this.deps.focusPose?.(this.focusAgent, this.fPos, this.fQuat, this.fVel)) {
         enuToThree(this.fPos[0], this.fPos[1], this.fPos[2], this.tmpA)
         void this.controls.moveTo(this.tmpA.x, this.tmpA.y, this.tmpA.z, false)

@@ -129,6 +129,16 @@ describe('power-save state machine (D2-AC-44, 45, M15-FR-227)', () => {
     m.th = { ...POWER_DEFAULTS, viewerIdleS: 20, warnS: 5, quietS: 8, hiddenS: 3 }
     return m
   }
+  it('continuous world does not park during long reasoning, hidden tabs or page freeze', () => {
+    const m = new PowerMachine(0)
+    m.ctx = { role: 'sandbox', busy: false, internal: false, keepRunning: false, continuous: true }
+    m.visibility(false, 1_000)
+    expect(m.tick(1_500_000)).toBeNull()
+    expect(m.pageHide()).toBeNull()
+    expect(m.state).toBe('ACTIVE')
+    m.ctx.continuous = false
+    expect(m.tick(1_500_001)?.to).toBe('SAVING')
+  })
   it('quiet at quiet_s, warning at idle - warn, saving at idle; any input cancels', () => {
     const m = viewer(new PowerMachine(0))
     expect(m.tick(7_000)).toBeNull()

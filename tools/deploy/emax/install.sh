@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tools/deploy/emax/install.sh：在 emax（Ubuntu 24.04，x86-64，Python 3.12.3）上安装或更新 ANet Drone4D 公开演示站 V0.2-demo
+# tools/deploy/emax/install.sh：在 emax（Ubuntu 24.04，x86-64，Python 3.12.3）上安装或更新 ANet4D 公开站点（拓扑沿用 V0.2-demo）
 # （T4，AWR-19 §3.7；ADR-085、ADR-091、ADR-092、ADR-109、ADR-118、ADR-123；M17-FR-063、FR-064）。幂等：重复执行只补齐缺失的
 # 部分；安装、回滚与状态以 root 执行，--dry-run 在任何机器上以普通用户执行。
 #
@@ -36,7 +36,8 @@ PREFIX=/opt/anet-drone4d
 ETC=/etc/anet-drone4d
 SVC=anet-drone4d
 SVC_USER=awr
-DOMAIN=drone4d.agentnetwork.org.cn
+DOMAIN=anet4d.agentnetwork.org.cn          # 公开站点
+LEGACY_DOMAIN=drone4d.agentnetwork.org.cn  # 旧域名：nginx 站点文件只做 301（PREFIX、ETC、SVC 等服务器路径与单元名是沿用的遗留标识）
 PORT=18640
 SB_PORT=18641
 UV_VERSION=0.12.19
@@ -143,7 +144,8 @@ check_bundle() {  # 部署包完整性与形态（dry-run 与安装共用）
   else
     note "警告：前端没有 build-info.json（buildInfoPlugin 之前的构建）；启动屏不显示版本号" >&2
   fi
-  for f in anet-drone4d.service cgroup-exec.sh drone4d.agentnetwork.org.cn.conf env.example worldpack.py smoke.py; do
+  for f in anet-drone4d.service cgroup-exec.sh anet4d.agentnetwork.org.cn.conf anet4d.agentnetwork.org.cn.bootstrap.conf \
+           drone4d.agentnetwork.org.cn.conf env.example worldpack.py smoke.py; do
     [ -f "$BUNDLE/tools/deploy/emax/$f" ] || die "部署包缺少 tools/deploy/emax/$f"
   done
   [ -x "$BUNDLE/tools/deploy/emax/cgroup-exec.sh" ] || die "cgroup-exec.sh 没有可执行位（重新用 build-local.sh 打包）"
@@ -335,7 +337,7 @@ fi
 step "用户与目录"
 getent group "$SVC_USER" >/dev/null || groupadd --system "$SVC_USER"
 getent passwd "$SVC_USER" >/dev/null || useradd --system --gid "$SVC_USER" --home-dir "$PREFIX" --no-create-home \
-  --shell /usr/sbin/nologin --comment "ANet Drone4D public demo" "$SVC_USER"
+  --shell /usr/sbin/nologin --comment "ANet4D public site" "$SVC_USER"
 install -d -o root -g root -m 0755 "$PREFIX" "$PREFIX/releases" "$PREFIX/tools"
 install -d -o root -g root -m 0700 "$PREFIX/.uv-cache"
 # var 与 var/worlds 为 0751：nginx（www-data）以 alias 直出 /worlds/ 需要穿越这两级目录（只穿越、不可列目录）；世界目录
@@ -460,6 +462,14 @@ else
   if [ -n "$WA" ] && [ "$(echo "$WA" | tr ',' '\n' | grep -c .)" -lt 7 ]; then
     note "警告：$ETC/env 设置了 AWR_WORLDS_ALLOW=$WA（D1 只开放 synthcity）；ADR-109 起七个世界全部开放，请删除该行" >&2
   fi
+  # 域名迁移（产品更名为 ANet4D）：白名单缺少新域名时只在最前补上新域名，原有条目（含旧域名）保留，不删除也不改写
+  for kv in "AWR_ORIGINS https://$DOMAIN" "AWR_ALLOWED_HOSTS $DOMAIN"; do
+    k=${kv%% *}; v=${kv#* }; cur=$(env_get "$k")
+    if [ -n "$cur" ] && ! printf '%s\n' "$cur" | tr ',' '\n' | grep -qxF "$v"; then
+      set_env_kv "$k" "$v,$cur"
+      note "已在 $ETC/env 的 $k 最前补上 $v（原有条目保留）"
+    fi
+  done
 fi
 if [ "$ADMIN_SECRET" -eq 1 ]; then
   if [ ! -s "$ETC/admin.secret" ]; then
@@ -538,22 +548,25 @@ cat <<EOF
 完成：$SVC 运行发布 $REL（V${VERSION:-?}），show-api 只监听 127.0.0.1:$PORT，sandbox-api 只监听 127.0.0.1:$SB_PORT。
 以下 nginx 与证书步骤本脚本不会执行，请人工逐条执行（只新增本站点，不修改其他站点；详见 README.md）：
 
-  # 首次部署（尚无证书）：先启用只含 80 端口的引导站点，申请 ECDSA 证书
-  sudo install -m 0644 $DEST/tools/deploy/emax/drone4d.agentnetwork.org.cn.bootstrap.conf /etc/nginx/sites-available/$DOMAIN.conf
+  # 首次部署（新域名尚无证书）：先启用只含 80 端口的引导站点，申请 ECDSA 证书
+  sudo install -m 0644 $DEST/tools/deploy/emax/$DOMAIN.bootstrap.conf /etc/nginx/sites-available/$DOMAIN.conf
   sudo ln -sfn /etc/nginx/sites-available/$DOMAIN.conf /etc/nginx/sites-enabled/$DOMAIN.conf
   sudo nginx -t && sudo systemctl reload nginx
   sudo certbot certonly --webroot -w /var/www/certbot -d $DOMAIN --key-type ecdsa --elliptic-curve secp384r1
 
-  # 证书就绪后（以及站点文件有变化时，例如从 V0.1 升级到 V0.2-demo）：换成正式站点文件
-  sudo diff /etc/nginx/sites-available/$DOMAIN.conf $DEST/tools/deploy/emax/drone4d.agentnetwork.org.cn.conf
-  sudo install -m 0644 $DEST/tools/deploy/emax/drone4d.agentnetwork.org.cn.conf /etc/nginx/sites-available/$DOMAIN.conf
+  # 证书就绪后（以及站点文件有变化时）：换成正式站点文件；旧域名 $LEGACY_DOMAIN 换成只做 301 的跳转站点（同一次 reload）
+  sudo diff /etc/nginx/sites-available/$DOMAIN.conf $DEST/tools/deploy/emax/$DOMAIN.conf
+  sudo install -m 0644 $DEST/tools/deploy/emax/$DOMAIN.conf /etc/nginx/sites-available/$DOMAIN.conf
+  sudo install -m 0644 $DEST/tools/deploy/emax/$LEGACY_DOMAIN.conf /etc/nginx/sites-available/$LEGACY_DOMAIN.conf
   sudo nginx -t && sudo systemctl reload nginx
+  # 已上线 /lab/ 时改用 d3-public/labctl.py enable-site --base <新站点文件> 安装（见 d3-public/README.md），不要直接覆盖
 
   # 验证（README.md 第 2.4 节有完整清单）
   curl -sI https://$DOMAIN/ | head -1
   curl -s https://$DOMAIN/build-info.json
   curl -s https://$DOMAIN/api/sandbox/v1/capacity
   curl -s -o /dev/null -w '%{http_code}\n' https://$DOMAIN/worlds/shenzhen/world.json    # 200（ADR-109）
+  curl -sI https://$LEGACY_DOMAIN/world/shenzhen | grep -iE '^(HTTP|location)'             # 301 → https://$DOMAIN/world/shenzhen
 EOF
 case "$SMOKE_RC" in
   0) ;;

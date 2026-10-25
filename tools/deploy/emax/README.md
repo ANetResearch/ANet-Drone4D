@@ -1,6 +1,8 @@
-# emax 部署手册：ANet Drone4D 公开演示站 V0.2-demo
+# emax 部署手册：ANet4D 公开站点
 
-本目录是把 ANet Drone4D 的公开演示站部署到服务器 emax（`https://drone4d.agentnetwork.org.cn`）的全部材料，对应
+本目录是把 ANet4D（新一代具身智能体协同模拟基础设施）的公开站点部署到服务器 emax（`https://anet4d.agentnetwork.org.cn`）的
+全部材料；旧域名 `drone4d.agentnetwork.org.cn` 由跳转站点永久 301 到新域名（迁移步骤见 2.5，服务器上沿用的旧路径与单元名见
+第 7 节「遗留标识」）。站点拓扑沿用 V0.2-demo，对应
 [AWR-19 §3.7 T4 公开演示站](../../../docs/19-部署与运维说明书.md)、ADR-082 至 ADR-085 与 D2 的 ADR-091、ADR-092、ADR-109、
 ADR-118 至 ADR-123（[AWR-04](../../../docs/04-D2-设计增补与决策记录.md) §4.4、§4.7、§11.5、§15）。它是脚本目录，不是 Python 包，
 不被任何代码 import。
@@ -18,19 +20,20 @@ sandbox-api、每个沙盒一个 sim-core）；nginx 按路径把 `/api/sandbox/
 | `anet-drone4d.service` | systemd 单元（awr 用户，CPUQuota 250%、MemoryHigh 1.8G、MemoryMax 2G、Delegate=yes，经 `cgroup-exec.sh` 启动 supervisor） |
 | `cgroup-exec.sh` | 单元的 ExecStart 包装：在委派的 cgroup 下建立 `core/` 与 `sandbox/{ctl,plan,sb}` 并写入限值（AWR-04 §4.4.4；会话父组 `sandbox/sb/` 的 `cpu.max` = 沙盒组上限 − 控制面预留 0.22 核） |
 | `env.example` | `/etc/anet-drone4d/env` 的模板，列出全部可配置项；不含任何机密 |
-| `drone4d.agentnetwork.org.cn.conf` | nginx 站点文件：80 端口 ACME 与 301；443 端口 TLS、路径分流、`/worlds/` 直出、前缀限流、容量接口 1 s 微缓存、`/sdk/` |
-| `drone4d.agentnetwork.org.cn.bootstrap.conf` | 首次申请证书用的只含 80 端口的引导站点文件 |
+| `anet4d.agentnetwork.org.cn.conf` | 公开站点文件：80 端口 ACME 与 301；443 端口 TLS、路径分流、`/worlds/` 直出、前缀限流、容量接口 1 s 微缓存、`/sdk/`；本机全部 `anet4d_*` 共享区只在本文件定义 |
+| `anet4d.agentnetwork.org.cn.bootstrap.conf` | 新域名首次申请证书用的只含 80 端口的引导站点文件 |
+| `drone4d.agentnetwork.org.cn.conf` | 旧域名的跳转站点：80 端口保留 ACME（旧证书照常续期），其余与 443 端口全部 301 到 `https://anet4d.agentnetwork.org.cn$request_uri`；不定义任何共享区 |
 | `smoke.py` | 安装后的沙盒冒烟（创建 → READY → 结束），install.sh 调用 |
 | `sbctl.sh` | 沙盒池运维命令（状态、列表、结束、维护、接受开关、临时降容） |
 | `observe.py` | 线上观测（D2-AC-27）：72 h 服务判据（OOM、非预期重启、共享展示 RTF）、S7 七天统计（被发现、间隙按原因）与 emax 实测成本，见 5.7 |
-| `nginx-check.sh` | 开发机上用一次性 Ubuntu 24.04 容器 `nginx -t` 站点文件并跑 nginx 对拍与端到端用例（含 D2-AC-42 的容量微缓存），证据写到 `--out`（`make deploy-nginx-check`，见 2.4） |
+| `nginx-check.sh` | 开发机上用一次性 Ubuntu 24.04 容器 `nginx -t` 新站点、引导站点、跳转站点及"新站点 + 跳转站点"组合，并跑 nginx 对拍与端到端用例（含 D2-AC-42 的容量微缓存与旧域名 301），证据写到 `--out`（`make deploy-nginx-check`，见 2.4） |
 
 **硬性约束（每次操作前请再读一遍）：**
 
 1. **只新增本站点，不得修改其他站点的配置。** emax 上已经运行 ANet 生产服务与 nginx 1.24：不改 `nginx.conf`、
    不改、不删、不重命名 `sites-available` 与 `sites-enabled` 中的其他文件，不动其他站点的证书。本站点文件中的
-   `limit_req_zone`、`limit_conn_zone`、`proxy_cache_path`、`upstream`、`map` 变量与 SSL 会话缓存都带 `drone4d` 前缀，与其他站点
-   不冲突。`install.sh` 从不 reload nginx，也不调用 certbot：这两步一律由人工按下文逐条执行，执行前先 `nginx -t`。
+   `limit_req_zone`、`limit_conn_zone`、`proxy_cache_path`、`upstream`、`map` 变量与 SSL 会话缓存都带 `anet4d` 前缀，与其他站点
+   不冲突；旧域名的跳转站点不定义任何共享区。nginx 拒绝 reload 改变已有共享区的键或大小，因此以后改动任一区时一律换新名字。`install.sh` 从不 reload nginx，也不调用 certbot：这两步一律由人工按下文逐条执行，执行前先 `nginx -t`。
 2. **七个世界经授权开放。** synthcity 与 UrbanScene3D 六城（深圳、苏州、纽约、芝加哥、上海、旧金山）在公开站全部开放：六城经
    数据集权利方授权使用（ADR-109，R-D2-28）。世界包与派生缓存只经部署包上传（`build-local.sh` 的世界包目录），**不进入 git
    仓库**，也不要在服务器上 `make fetch-data` 或从开发机整体拷贝 `worlds/`。flight60 测试夹具（`dist/bench`）在 WP-13 评估前仍不随
@@ -52,7 +55,7 @@ sandbox-api、每个沙盒一个 sim-core）；nginx 按路径把 `/api/sandbox/
 | Python | 3.12（系统自带 3.12.3）与 venv 模块 | `python3.12 --version; sudo apt install python3.12-venv` |
 | 工具 | `rsync`、`curl`、`systemd` | `command -v rsync curl systemctl` |
 | 网络 | 首次安装与依赖变化时要能访问 PyPI（或镜像，见 6.3） | `curl -sI https://pypi.org/simple/ \| head -1` |
-| DNS | `drone4d.agentnetwork.org.cn` 已解析到 emax | `dig +short drone4d.agentnetwork.org.cn` |
+| DNS | `anet4d.agentnetwork.org.cn` 与旧域名 `drone4d.agentnetwork.org.cn` 均已解析到 emax | `dig +short anet4d.agentnetwork.org.cn drone4d.agentnetwork.org.cn` |
 | nginx 与 certbot | nginx 1.24 已在运行，certbot 已安装，webroot `/var/www/certbot` 已存在（证书为 ECDSA）；`/var/lib/nginx` 存在（容量接口微缓存目录建在其下） | `nginx -v; certbot --version; ls -d /var/www/certbot /var/lib/nginx` |
 | 端口 | 127.0.0.1:18640（show-api）、18641（sandbox-api）与 18647（进程间总线）未被占用；不开放新的公网端口 | `ss -ltn \| grep -E ':1864[017]'` |
 | 开发机 | 已 `make setup`（Node 22、`.venv`）；七个世界已构建且派生缓存可用（`make worlds`、`make demo-world`、`make geo-warm`、`make geo-check`） | `make deploy-pack` |
@@ -126,47 +129,53 @@ GeoParams、DERIVE_VERSION 一致，逐数组 sha256）与世界状态，失败�
 | `/etc/anet-drone4d/admin.secret` | awr，0600 | 内部身份口令（`--admin-secret-file`）或随机管理口令（`--admin-secret`） |
 | `/etc/systemd/system/anet-drone4d.service` | root | systemd 单元（每次安装覆盖） |
 | `/etc/systemd/system/anet-drone4d.service.d/limits.conf` | root | 可选的配额 drop-in（`--cpu-quota`、`--memory-high`；安装时保留） |
-| `/var/lib/nginx/drone4d-micro/` | www-data | 容量接口 1 s 微缓存（nginx 自动创建） |
+| `/var/lib/nginx/anet4d-micro/` | www-data | 容量接口 1 s 微缓存（nginx 自动创建；更名前的 `drone4d-micro/` 可在迁移后删除） |
 
 ### 2.3 nginx 与证书（人工执行）
 
 ```bash
-# 1) 首次部署：引导站点（只有 80 端口：ACME 校验，其余 503），申请 ECDSA 证书
-sudo install -m 0644 /opt/anet-drone4d/current/tools/deploy/emax/drone4d.agentnetwork.org.cn.bootstrap.conf \
-  /etc/nginx/sites-available/drone4d.agentnetwork.org.cn.conf
-sudo ln -sfn /etc/nginx/sites-available/drone4d.agentnetwork.org.cn.conf /etc/nginx/sites-enabled/drone4d.agentnetwork.org.cn.conf
+E=/opt/anet-drone4d/current/tools/deploy/emax
+A=/etc/nginx/sites-available; N=/etc/nginx/sites-enabled
+# 1) 首次部署：新域名的引导站点（只有 80 端口：ACME 校验，其余 503），申请 ECDSA 证书
+sudo install -m 0644 $E/anet4d.agentnetwork.org.cn.bootstrap.conf $A/anet4d.agentnetwork.org.cn.conf
+sudo ln -sfn $A/anet4d.agentnetwork.org.cn.conf $N/anet4d.agentnetwork.org.cn.conf
 sudo nginx -t && sudo systemctl reload nginx
-sudo certbot certonly --webroot -w /var/www/certbot -d drone4d.agentnetwork.org.cn --key-type ecdsa --elliptic-curve secp384r1
+sudo certbot certonly --webroot -w /var/www/certbot -d anet4d.agentnetwork.org.cn --key-type ecdsa --elliptic-curve secp384r1
 
-# 2) 正式站点（证书就绪后；从 V0.1 升级时同样执行这一步）
-sudo diff /etc/nginx/sites-available/drone4d.agentnetwork.org.cn.conf /opt/anet-drone4d/current/tools/deploy/emax/drone4d.agentnetwork.org.cn.conf
-sudo install -m 0644 /opt/anet-drone4d/current/tools/deploy/emax/drone4d.agentnetwork.org.cn.conf /etc/nginx/sites-available/drone4d.agentnetwork.org.cn.conf
+# 2) 正式站点（证书就绪后）；旧域名同时换成跳转站点，两者在同一次 reload 中生效
+sudo diff $A/anet4d.agentnetwork.org.cn.conf $E/anet4d.agentnetwork.org.cn.conf
+sudo install -m 0644 $E/anet4d.agentnetwork.org.cn.conf $A/anet4d.agentnetwork.org.cn.conf
+sudo install -m 0644 $E/drone4d.agentnetwork.org.cn.conf $A/drone4d.agentnetwork.org.cn.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+已上线 D3 公开只读样例（`/lab/`）时，第 2 步的正式站点改由 `d3-public/labctl.py enable-site --base $E/anet4d.agentnetwork.org.cn.conf`
+安装（它在同一文件中插入 `/lab/` 段并 `nginx -t` 后 reload，见 `d3-public/README.md`），不要直接覆盖。
 
 站点文件的要点：
 
 | 路径 | 去向 | 说明 |
 |---|---|---|
 | `/api/sandbox/**`（REST 与会话 WS `…/sessions/sb-…/rt`） | sandbox-api 127.0.0.1:18641 | 创建沙盒每地址前缀 2 次/min、突发 4；会话 WS 每前缀 4 条 |
-| `/api/sandbox/v1/capacity` | sandbox-api，1 s 微缓存 | 无论访客多少、上游回复什么（含池不可达的 503），到达 sandbox-api ≤ 1 次/s：任何回复缓存 1 s、HEAD 与 GET 共用一份、冷缓存时其余访客等锁；副本由 nginx 以自己的身份回源（不带访客的查询参数与请求头，不带 X-Request-Id 与 Set-Cookie）；GET、HEAD 以外 405；响应头 `X-Drone4d-Cache` |
+| `/api/sandbox/v1/capacity` | sandbox-api，1 s 微缓存 | 无论访客多少、上游回复什么（含池不可达的 503），到达 sandbox-api ≤ 1 次/s：任何回复缓存 1 s、HEAD 与 GET 共用一份、冷缓存时其余访客等锁；副本由 nginx 以自己的身份回源（不带访客的查询参数与请求头，不带 X-Request-Id 与 Set-Cookie）；GET、HEAD 以外 405；响应头 `X-ANet4D-Cache` |
 | 其余 `/api/**`、`/api/rt`、`/api/viewer/queue`、`/api/auth/identity` | show-api 127.0.0.1:18640 | 内部身份每前缀 0.5 次/s；观看排队与沙盒排队长轮询 ≤ 25 s |
 | `/worlds/<七个世界>/**`、`/worlds/_shared/env/**` | nginx 直出 `var/worlds` | Range、ETag、304、缓存头（`?v=` 时 immutable，否则 no-cache）与安全头同 show-api；以点开头的路径（`.geo-cache`、`.status` 等）404 |
 | `/sdk/**` | nginx 直出当前发布的 `tools/sdk/` | Python SDK 与示例 |
 | `/build-info.json`、`/manifest.webmanifest` | nginx 直出当前发布的前端，no-cache | 构建信息与 PWA 清单 |
 | 其余（前端、落地页媒体、SPA 回退） | show-api | — |
 
-限流与连接数都按地址前缀计（IPv4 /32、IPv6 /64，`$drone4d_prefix`），精确的配额与聚合前缀由池与两个 api 执行。`nginx -t` 失败时
-不要 reload，先看报错：最常见的是名字与其他站点重复（本文件已全部加 `drone4d` 前缀）、证书路径尚不存在（还在用引导站点之前
-就换了正式站点）、`/var/lib/nginx` 不存在（`proxy_cache_path` 的父目录）。证书续期沿用 certbot 已有的定时任务。
+限流与连接数都按地址前缀计（IPv4 /32、IPv6 /64，`$anet4d_prefix`），精确的配额与聚合前缀由池与两个 api 执行。`nginx -t` 失败时
+不要 reload，先看报错：最常见的是名字与其他站点重复（本文件已全部加 `anet4d` 前缀）、证书路径尚不存在（还在用引导站点之前
+就换了正式站点）、`/var/lib/nginx` 不存在（`proxy_cache_path` 的父目录）、同一共享区的键或大小变化（换新区名）。证书续期沿用
+certbot 已有的定时任务；旧域名的证书经跳转站点 80 端口的 ACME 路径照常续期。
 
 ### 2.4 验证
 
 ```bash
-D=https://drone4d.agentnetwork.org.cn
+D=https://anet4d.agentnetwork.org.cn
 curl -sI $D/ | head -1                                                          # HTTP/2 200（落地页）
 curl -s $D/build-info.json                                                      # 与 /opt/anet-drone4d/current/RELEASE 同一 release
-curl -s $D/api/sandbox/v1/capacity                                              # awr.capacity.v1；连续两次时第二次 X-Drone4d-Cache: HIT
+curl -s $D/api/sandbox/v1/capacity                                              # awr.capacity.v1；连续两次时第二次 X-ANet4D-Cache: HIT
 curl -sI $D/api/sandbox/v1/capacity | grep -ci '^x-request-id'                  # 0（共享副本不带单个请求的标识）
 curl -s -o /dev/null -w '%{http_code}\n' -X POST $D/api/sandbox/v1/capacity     # 405（不回源）
 curl -s -o /dev/null -w '%{http_code}\n' $D/worlds/shenzhen/world.json          # 200（ADR-109）
@@ -175,14 +184,16 @@ curl -s -o /dev/null -w '%{http_code}\n' $D/worlds/.geo-cache/                  
 curl -s -o /dev/null -w '%{http_code}\n' $D/sdk/awr_sandbox.py                  # 200
 curl -s -H 'content-type: application/json' -d '{"role":"operator"}' \
   -o /dev/null -w '%{http_code}\n' $D/api/auth/token                            # 403（匿名只签 viewer）
-curl -sI http://drone4d.agentnetwork.org.cn/ | head -1                          # 301
+curl -sI http://anet4d.agentnetwork.org.cn/ | head -1                           # 301（到 https）
+curl -sI https://drone4d.agentnetwork.org.cn/world/shenzhen?x=1 | grep -iE '^(HTTP|location)'   # 301，location 为新域名的同一路径与查询串
+curl -sI http://drone4d.agentnetwork.org.cn/ | grep -i '^location'              # https://anet4d.agentnetwork.org.cn/
 sudo bash /opt/anet-drone4d/current/tools/deploy/emax/install.sh --status         # 发布、cgroup 委派、两个 api 与容量
 ```
 
 再用桌面 Chrome 或 Edge 打开站点：启动屏显示版本号与五段进度条及容量行；落地页 → 「进入演示」→ 共享展示 S7；世界列表有七个
 世界；「开启我的沙盒」可在 synthcity 与六城创建。手机与平板浏览器打开同一地址，进入对应的移动布局。
 
-站点文件的 nginx 语义（`nginx -t`、`/worlds/` 直出与 show-api 的对拍、路径分流、创建限流、容量微缓存）在开发机上以
+站点文件的 nginx 语义（`nginx -t`、`/worlds/` 直出与 show-api 的对拍、路径分流、创建限流、容量微缓存、旧域名 301 与 ACME）在开发机上以
 `make deploy-nginx-check` 验证（一次性 Ubuntu 24.04 容器，nginx 1.24，与 emax 相同；本机不装 nginx，需要 docker、本地
 `ubuntu:24.04` 镜像与可访问的 Ubuntu 软件源）。容量微缓存即 D2-AC-42 的 nginx 子项：100 个并发客户端（各自的地址前缀，
 GET 与 HEAD 混合）持续 8 s，每个自然秒到达 sandbox-api ≤ 1 次；上游 503、500、慢（2.5 s，冷缓存）、卡住（> 读超时）与
@@ -190,13 +201,30 @@ GET 与 HEAD 混合）持续 8 s，每个自然秒到达 sandbox-api ≤ 1 次�
 `nginx-check.json`）；验收经 M16 harness 用例 `d21.nginx-site` 执行同一脚本。退出码：0 通过、1 用例失败、2 `nginx -t` 失败、
 8 缺少 docker、镜像或软件源。
 
+### 2.5 域名迁移（drone4d → anet4d）
+
+产品更名为 ANet4D 后，公开站点迁移到 `anet4d.agentnetwork.org.cn`，旧域名永久 301 到新域名的同一路径与查询串。迁移只涉及本站点
+的两个 nginx 站点文件、新域名的证书与 `env` 中的两个白名单，服务器路径、单元名与数据目录不变（第 7 节）：
+
+1. 确认两个域名都解析到 emax；按 2.3 第 1 步启用新域名的引导站点并申请证书（旧域名的正式站点在此期间照常服务）。
+2. 更新 `/etc/anet-drone4d/env`：`AWR_ORIGINS` 与 `AWR_ALLOWED_HOSTS` 把新域名列在最前，旧域名保留（只为回滚）。新版本的
+   `install.sh` 在白名单缺少新域名时会自动在最前补上，原有条目不变；手工修改后需重启服务。
+3. 安装新发布（2.2），再按 2.3 第 2 步同时换上新站点文件与旧域名的跳转站点（已上线 `/lab/` 时用 `labctl.py enable-site --base`）。
+4. 按 2.4 验证，并执行 `d3-public/verify.py`（缺省 `--base https://anet4d.agentnetwork.org.cn`）。
+
+新站点文件的共享区全部是新名字（`anet4d_*`），与更名前站点文件的 `drone4d_*` 区互不相同，因此切换只需 reload，不需要重启 nginx。
+回滚：把 `sites-available/drone4d.agentnetwork.org.cn.conf` 换回更名前发布自带的站点文件（`/opt/anet-drone4d/releases/<发布>/tools/deploy/emax/`
+或 `/srv/drone4d/.state/d2-site.conf` 的备份），删除 `sites-enabled/anet4d.agentnetwork.org.cn.conf` 的链接，`nginx -t` 后 reload；
+`env` 中保留的旧域名使回滚无需改动 `env`。
+
 ## 3 更新
 
 在开发机重新打包（2.1），上传部署包与世界包目录并执行同一条 `install.sh`（2.2）。新发布装在新的 `releases/<release>`，依赖没变时
 uv 直接复用缓存，numba 按新源码路径重新预热；世界包与派生缓存只在内容版本或派生键变化时才重新解包（`DERIVE_VERSION` 或几何参数
 变化时派生键变化，新条目随世界包目录上传）；切换后 90 s 内健康检查不过会自动切回上一发布。`/etc/anet-drone4d/env` 不会被覆盖：
 若安装时提示 `env.example` 有新增的键，按提示 `diff` 后手工合并；D1 时期若在 env 中写过 `AWR_WORLDS_ALLOW=synthcity`，安装时会
-提示删除。nginx 站点文件只有在本目录的站点文件变化时才需要按 2.3 第 2 步重新安装并 reload（从 V0.1 升级到 V0.2-demo 必须执行）。
+提示删除。nginx 站点文件只有在本目录的站点文件变化时才需要按 2.3 第 2 步重新安装并 reload（从 V0.1 升级到 V0.2-demo、从更名前的发布升级到
+ANet4D 均须执行，后者见 2.5）。
 
 ## 4 回滚
 
@@ -234,8 +262,8 @@ sudo systemctl restart anet-drone4d              # 重启：共享展示剧本�
 systemd-cgtop -1 | grep anet-drone4d             # CPU 与内存（单元上限 CPUQuota 250%、MemoryHigh 1.8G、MemoryMax 2G）
 cat /sys/fs/cgroup/system.slice/anet-drone4d.service/sandbox/cpu.max     # 沙盒组 CPU 上限（Q = 2.5 时 136000 100000）
 cat /sys/fs/cgroup/system.slice/anet-drone4d.service/sandbox/sb/cpu.max  # 会话父组 sandbox/sb/：沙盒组上限减控制面预留 0.22 核（AWR_CG_CTL_CPU_RESERVE；控制面不随会话限流停顿，D2-FX-R2）
-curl -s -H 'Host: drone4d.agentnetwork.org.cn' http://127.0.0.1:18640/api/health/ready
-curl -s -H 'Host: drone4d.agentnetwork.org.cn' http://127.0.0.1:18641/api/sandbox/v1/health
+curl -s -H 'Host: anet4d.agentnetwork.org.cn' http://127.0.0.1:18640/api/health/ready
+curl -s -H 'Host: anet4d.agentnetwork.org.cn' http://127.0.0.1:18641/api/sandbox/v1/health
 ```
 
 需要排查时可以临时在 `env` 的 `AWR_ORIGINS` 追加 `http://127.0.0.1:18640` 并重启，再经 `ssh -N -L 18640:127.0.0.1:18640 emax` 在
@@ -308,7 +336,7 @@ D2-AC-27 只能在 emax 上测：部署后 72 h 内 OOM 0、非预期重启 0、
 O=/opt/anet-drone4d/var/observe/$(date -u +%Y%m%dT%H%MZ)
 PY=/opt/anet-drone4d/current/.venv/bin/python                       # 发布的 .venv：进程内读取共享展示 StateRing
 OBS=/opt/anet-drone4d/current/tools/deploy/emax/observe.py
-sudo systemd-run --unit=drone4d-observe --collect -p Nice=10 $PY $OBS run --hours 168 --out "$O"   # 7 天（前 72 h 同时给出服务判据）
+sudo systemd-run --unit=anet4d-observe --collect -p Nice=10 $PY $OBS run --hours 168 --out "$O"   # 7 天（前 72 h 同时给出服务判据）
 sudo $PY $OBS mark "$O" --minutes 20 --note "手工重启"                # 维护窗口（窗口内的重启与 RTF 不计）
 sudo $PY $OBS report "$O" --hours 72                                 # 72 h 服务判据
 sudo $PY $OBS report "$O"                                            # 7 天（S7）
@@ -333,10 +361,25 @@ D2-AC-27 的证据与 N_max 冻结 ADR 的输入；观测不修改 `configs/runt
 ```bash
 sudo systemctl disable --now anet-drone4d
 sudo rm -rf /etc/systemd/system/anet-drone4d.service /etc/systemd/system/anet-drone4d.service.d && sudo systemctl daemon-reload
-sudo rm -f /etc/nginx/sites-enabled/drone4d.agentnetwork.org.cn.conf /etc/nginx/sites-available/drone4d.agentnetwork.org.cn.conf
+for h in anet4d drone4d; do sudo rm -f /etc/nginx/sites-enabled/$h.agentnetwork.org.cn.conf /etc/nginx/sites-available/$h.agentnetwork.org.cn.conf; done
 sudo nginx -t && sudo systemctl reload nginx
-sudo rm -rf /var/lib/nginx/drone4d-micro
-sudo certbot delete --cert-name drone4d.agentnetwork.org.cn        # 可选：删除本站点证书
+sudo rm -rf /var/lib/nginx/anet4d-micro /var/lib/nginx/drone4d-micro
+sudo certbot delete --cert-name anet4d.agentnetwork.org.cn         # 可选：删除本站点证书
+sudo certbot delete --cert-name drone4d.agentnetwork.org.cn        # 可选：删除旧域名证书（删除后旧域名不再提供 https 跳转）
 sudo rm -rf /opt/anet-drone4d /etc/anet-drone4d /dev/shm/awr ~/anet-drone4d-worlds
 sudo userdel awr; sudo groupdel awr 2>/dev/null || true             # 系统用户与同名组
 ```
+
+## 7 遗留标识
+
+产品更名为 ANet4D 后，以下服务器侧标识保持原名：它们是安装路径、systemd 单元、数据目录或协议与记录中的标识，改名会使已安装的
+发布、回滚目标、日志检索与已发布的记录失效。新的用户可见文字一律使用 ANet4D。
+
+| 遗留标识 | 位置 | 说明 |
+|---|---|---|
+| `/opt/anet-drone4d/`、`/etc/anet-drone4d/` | emax | 发布、`var/`（世界、沙盒、运行目录）与运行环境；站点文件的 alias 与 `install.sh` 依赖它们 |
+| `anet-drone4d.service`（含 `anet-drone4d.service.d/`） | emax systemd | 单元名；`journalctl -u anet-drone4d`、cgroup 路径 `system.slice/anet-drone4d.service` 同此 |
+| `/srv/drone4d/` | emax | D3 公开只读样例的发布根（`/lab/` 构建、`lab-static/` 版本目录、`.state/`、`bin/`） |
+| `anet-drone4d-<release>.tar.gz`、`~/anet-drone4d-worlds/` | 部署包与上传目录 | `build-local.sh` 与 `install.sh` 的约定名 |
+| `drone4d.agentnetwork.org.cn` 与其证书 `/etc/letsencrypt/live/drone4d.agentnetwork.org.cn/` | 跳转站点 | 只做 301 与 ACME；`env` 的两个白名单保留该域名，只为回滚 |
+| `drone4d.*` 形式的协议、契约与记录标识（如 `drone4d.event.v1`、`drone4d.lab_static_index.v1`） | 契约与数据 | 线协议与 schema 标识，与确定性与已发布记录相关，不随产品更名 |

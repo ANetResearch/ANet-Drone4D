@@ -1,11 +1,11 @@
 # 部署
 
-本页概述公开演示站 [drone4d.agentnetwork.org.cn](https://drone4d.agentnetwork.org.cn) 的部署套件与本文档站的发布方式。逐条命令、参数与故障处理
-以仓库中的 [tools/deploy/emax/README.md](https://github.com/ANetResearch/ANet-Drone4D/blob/main/tools/deploy/emax/README.md) 为准。
+本页概述公开演示站 [anet4d.agentnetwork.org.cn](https://anet4d.agentnetwork.org.cn) 的部署套件与本文档站的发布方式。逐条命令、参数与故障处理
+以仓库中的 {gh}`tools/deploy/emax/README.md </blob/main/tools/deploy/emax/README.md>` 为准。
 
 ## 拓扑
 
-一台 4 核、无 GPU 的 Ubuntu 24.04 服务器，与其他生产服务共用。一个 systemd 单元 `anet-drone4d`（系统用户 `awr`）承载两组进程：
+一台 4 核、无 GPU 的 Ubuntu 24.04 服务器，与其他生产服务共用。一个 systemd 单元 `anet-drone4d`（为兼容已有安装保留的遗留标识符；系统用户 `awr`）承载两组进程：
 
 | 组 | 进程 | 说明 |
 |---|---|---|
@@ -40,7 +40,8 @@ nginx 终止 TLS，并按路径分流：`/api/sandbox/` 转发给 sandbox-api，
 
 ## 约束
 
-- **只新增本站点。** 服务器上的其他站点、`nginx.conf` 与证书一律不改动；本站点的限流区、缓存区、upstream 与 map 变量都带 `drone4d` 前缀。
+- **只新增本站点。** 服务器上的其他站点、`nginx.conf` 与证书一律不改动；本站点的限流区、缓存区、upstream 与 map 变量都带本站点专用的前缀。
+- **原域名。** `drone4d.agentnetwork.org.cn` 以永久重定向（HTTP 301）指向 `anet4d.agentnetwork.org.cn` 的同一路径，已有链接与书签继续有效。
 - **世界包不入库。** 七个世界经授权开放（见 {doc}`worlds`），世界包只经部署包上传，不进入 git 仓库，也不在服务器上下载原始数据。
 - **机密不入库、不进包、不进日志。** 内部身份口令只由授权运维在服务器上以文件方式写入（`install.sh --admin-secret-file -` 从标准输入读取）；
   每次运行的签名密钥与沙盒池的密钥在服务器上自动生成。
@@ -58,13 +59,14 @@ nginx 终止 TLS，并按路径分流：`/api/sandbox/` 转发给 sandbox-api，
 
 ## 发布本文档站
 
-本文档站采用 Sphinx、sphinx-rtd-theme 与 Read the Docs 的目录布局，发布在 `https://docs.agentnetwork.org.cn/drone4d/` 下：
+本文档站采用 Sphinx、sphinx-rtd-theme 与 Read the Docs 的目录布局，发布在 `https://docs.agentnetwork.org.cn/anet4d/` 下：
 
 | 路径 | 内容 |
 |---|---|
-| `/drone4d/` | 根页：按浏览器语言跳转，中文到 `zh-cn`，其余到 `en` |
-| `/drone4d/en/latest/` | 英文文档 |
-| `/drone4d/zh-cn/latest/` | 中文文档 |
+| `/anet4d/` | 根页：按浏览器语言跳转，中文到 `zh-cn`，其余到 `en` |
+| `/anet4d/en/latest/` | 英文文档 |
+| `/anet4d/zh-cn/latest/` | 中文文档 |
+| `/drone4d/` | 原路径：每个文档页面对应一个静态跳转页，指向 `/anet4d/` 下的同一页面并保留锚点 |
 
 仓库根目录的 `.readthedocs.yaml` 使同一套源也可以由 Read the Docs 构建。自托管发布由两步完成：
 
@@ -73,6 +75,10 @@ make docs-site                        # 构建到 docs-site/_build/html/
 tools/deploy/docs/publish.sh          # 生成待发布目录与校验清单，并打印 rsync 命令
 ```
 
-`publish.sh` 只在本机准备 `.cache/deploy/docs/drone4d/` 并打印上传命令，不执行上传。上传目标为文档服务器上的
-`/var/www/docs.agentnetwork/public/drone4d/`（属主 `www-data`）；同步只作用于 `drone4d/` 子目录，不删除或改动该根目录中的任何其他内容，
+`publish.sh` 只在本机准备 `.cache/deploy/docs/anet4d/` 并打印上传命令，不执行上传。上传目标为文档服务器上的
+`/var/www/docs.agentnetwork/public/anet4d/`（属主 `www-data`）；同步只作用于该子目录，不删除或改动该根目录中的任何其他内容，
 也不需要修改 nginx 配置。
+
+`publish.sh` 在同一次运行中把原路径的跳转页生成到同级目录 `.cache/deploy/docs/drone4d/`（构建中的每个 HTML 页面对应一个跳转页），
+并打印把它们同步到 `/var/www/docs.agentnetwork/public/drone4d/` 的命令。跳转页带 `noindex` 与指向新地址的 canonical 链接；原路径不再提供样式、
+脚本、图片与搜索索引。

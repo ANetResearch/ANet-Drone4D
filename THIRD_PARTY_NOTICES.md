@@ -1,7 +1,8 @@
 # Third-Party Notices
 
-ANet-Drone4D is released under the ANet Open Source License (ANet-Drone4D), a modified Apache License 2.0
-([LICENSE](LICENSE)). This file lists what in this repository comes from, or follows, other people's work, and the terms
+ANet4D is released under the ANet Open Source License (ANet4D), a modified Apache License 2.0
+([LICENSE](LICENSE)). Versions up to V0.3.1 were published under the former name ANet Drone4D.
+This file lists what in this repository comes from, or follows, other people's work, and the terms
 that apply to it. Those terms are not changed by LICENSE ([LICENSE](LICENSE), condition 3).
 
 - **Section 1, included**: files in this repository that contain third-party material.
@@ -36,7 +37,7 @@ attribution, email hi@anet0.com.
 **Transitions.dev.** Its [terms](https://transitions.dev/terms.html) allow the transitions to be used and modified in
 personal and commercial projects and shipped to users as part of a product. They do not allow republishing the
 collection, or a substantial part of it, as a transition library, template pack or component kit. If you reuse the
-motion files above outside ANet-Drone4D, use them inside a product, not as a collection of their own. The
+motion files above outside ANet4D, use them inside a product, not as a collection of their own. The
 transitions-dev CLI and the Refine tool are MIT-licensed; neither is included here.
 
 **The P600 low-poly models** (`p600_lowpoly.glb`) are generated procedurally by `tools/vehicles/lowpoly.py` and do not
@@ -44,8 +45,9 @@ derive from the Prometheus mesh.
 
 **gz-sim fork.** The seven files in `native/gz/src/` listed above keep the original copyright header of gz-sim
 (Copyright (C) 2019 Open Source Robotics Foundation, Apache License 2.0) and state their changes in a "Drone4D
-modifications" paragraph under it (Apache License 2.0, Section 4(b)). `Common.cc`, `Common.hh`,
-`LeeVelocityController.cc`, `LeeVelocityController.hh` and `Parameters.hh` are copies in which only the namespace
+modifications" paragraph under it (Apache License 2.0, Section 4(b)); the heading, the `Drone4D*` file and class
+names and `drone4d_gz.proto` are legacy identifiers of the native plugin and keep the former name.
+`Common.cc`, `Common.hh`, `LeeVelocityController.cc`, `LeeVelocityController.hh` and `Parameters.hh` are copies in which only the namespace
 (`multicopter_control` to `d4d_multicopter_control`) and, in `LeeVelocityController.hh`, the include guard are renamed.
 `Drone4DVelocityControl.cc` and `Drone4DVelocityControl.hh` derive from `MulticopterVelocityControl.cc` and
 `MulticopterVelocityControl.hh`: commands come from the `D4dVelocityCmd` component written by `Drone4DClock` instead of
@@ -70,7 +72,7 @@ checked by REL-06 of `tools/lint/check-release.mjs`.
 | Multicopter control cascade and parameter defaults | `python/awr/sim/fleet/px4lite.py`, `python/awr/sim/fleet/kernels_l1.py`, `python/awr/sim/fleet/params_px4.py` | [PX4/PX4-Autopilot](https://github.com/PX4/PX4-Autopilot) v1.18 | BSD-3-Clause, Copyright (c) 2012 - 2025, PX4 Development Team | Position and attitude control structure, reimplemented in numpy; default parameter values |
 | P600 ground-station semantics and airframe geometry | `python/awr/sim/backends/prometheus/`, `vehicles/p600/params.yaml` | [amov-lab/Prometheus](https://github.com/amov-lab/Prometheus) | Apache-2.0 | Control-state enumeration and send guards; rotor positions from `p600.sdf` |
 | Chart visual language | `apps/web/src/ui/lf/`, `apps/web/src/styles/lf.css` | [larashero3-dotcom/lieflat-charts](https://github.com/larashero3-dotcom/lieflat-charts) at `eace082` | PolyForm Noncommercial 1.0.0 | The visual language only, no code; see the note below |
-| Agent collaboration: TSIR predicates, blackboard, capability registry, receipts | `python/awr/agent/` | [ANetResearch/ANet](https://github.com/ANetResearch/ANet), ANetCore v0.14.0 | Published by Agent Network Research, the producer of ANet-Drone4D | Ported to Python; part of ANet-Drone4D under [LICENSE](LICENSE) |
+| Agent collaboration: TSIR predicates, blackboard, capability registry, receipts | `python/awr/agent/` | [ANetResearch/ANet](https://github.com/ANetResearch/ANet), ANetCore v0.14.0 | Published by Agent Network Research, the producer of ANet4D | Ported to Python; part of ANet4D under [LICENSE](LICENSE) |
 
 **lieflat-charts.** The chart components in `apps/web/src/ui/lf/` are an independent React and TypeScript implementation
 of the lieflat visual language (hairline marks, rung bars, tick gauges, log-style tables, a streaming canvas line); what
@@ -89,7 +91,7 @@ finaliser (Appleby, public domain); colour vision deficiency simulation (Machado
 OKLab colour space (Ottosson, 2020); WCAG 2.x contrast ratios; CAPT concurrent assignment and planning of trajectories (Turpin,
 Michael and Kumar, 2014).
 
-The design research behind ANet-Drone4D studied many more projects (`docs/02-refs.md`, `docs/research/00-index.md`).
+The design research behind ANet4D studied many more projects (`docs/02-refs.md`, `docs/research/00-index.md`).
 Those reference repositories are not part of this repository, and their licenses vary, including GPL-3.0, AGPL-3.0 and
 non-commercial licenses. The table above lists the adaptations that source files name.
 
@@ -203,7 +205,7 @@ Inria 派生代码与光栅化器、FLUX.1 [dev] 只在内部研究镜像中使�
 
 ### UrbanScene3D
 
-ANet-Drone4D's built-in worlds (Shenzhen, Shanghai, New York, San Francisco, Suzhou, Chicago) are built on your machine
+ANet4D's built-in worlds (Shenzhen, Shanghai, New York, San Francisco, Suzhou, Chicago) are built on your machine
 from the sampled virtual-city point clouds of UrbanScene3D. **This repository contains no UrbanScene3D point data and no
 World Package, raster or recording built from it.** A few small test fixtures keep metadata of the worlds built from it,
 never points: octree node counts and bounding boxes and a 60 s test camera path for three cities
@@ -243,10 +245,10 @@ If you use it in research, cite:
 本仓库不包含这些数据的点，也不包含由其生成的 World Package、栅格与录制（少量测试夹具只保留八叉树计数、包围盒、清单字段与一条测试相机路径等元数据）；
 `make fetch-data` 从作者发布页下载，`make worlds` 在本机生成，生成物不入库。使用时请引用上面的论文。
 
-**Authorization for ANet-Drone4D deployments.** The ANet-Drone4D project has obtained authorization from the rights
+**Authorization for ANet4D deployments.** The ANet4D project has obtained authorization from the rights
 holders of the UrbanScene3D dataset to use World Packages built from it in the project's own deployments (decision
 recorded on 2026-10-05, AWR-04 R-D2-28 and ADR-109). Since V0.2-demo the public demo at
-https://drone4d.agentnetwork.org.cn serves all six UrbanScene3D cities next to the synthetic city: the deployment
+https://anet4d.agentnetwork.org.cn serves all six UrbanScene3D cities next to the synthetic city: the deployment
 bundle (`tools/deploy/emax/build-local.sh`) carries their World Packages and derived geometry caches to the server,
 and the README and product screenshots may show them. The authorization covers the project's own deployments only.
 It is not sublicensed by this repository or by [LICENSE](LICENSE): the repository still contains no UrbanScene3D
@@ -254,9 +256,9 @@ points and no World Package built from them (`worlds/` and `data/raw/` stay out 
 dataset yourself the authors' terms quoted above apply to you. The ECCV 2022 citation above is kept wherever the
 cities are shown (the About page of the application, this file and the README).
 
-中文：UrbanScene3D 经数据集权利方授权使用。ANet-Drone4D 项目已获得 UrbanScene3D 数据集权利方的授权（2026-10-05 记录，
+中文：UrbanScene3D 经数据集权利方授权使用。ANet4D 项目已获得 UrbanScene3D 数据集权利方的授权（2026-10-05 记录，
 AWR-04 R-D2-28、ADR-109），在本项目自己的部署中使用由六城构建的 World Package：V0.2-demo 起公开演示站
-（https://drone4d.agentnetwork.org.cn）与合成城市一并开放六城，部署包附带六城的世界包与派生几何缓存，README 与产品截图
+（https://anet4d.agentnetwork.org.cn）与合成城市一并开放六城，部署包附带六城的世界包与派生几何缓存，README 与产品截图
 可以使用六城画面。该授权只适用于本项目自己的部署，不经本仓库或 LICENSE 转授：仓库仍不包含任何 UrbanScene3D 点数据与由其
 生成的 World Package（`worlds/` 与 `data/raw/` 不入库），你自行下载该数据集时仍须遵守上面引用的作者条款。展示六城的地方
 （应用的关于页、本文件与 README）都保留上面的 ECCV 2022 引用。
@@ -279,7 +281,7 @@ derived from them (meshes, tiles, point clouds, rasters, rendered images, event 
 were modified by metric scaling, levelling, registration and derived layers. Where such material is published (the
 `/lab/` pages, public sample slices, datasets, `world_manifest.json`, the offline mode of `drone4d-camera`), it carries
 the model title, the author with a link, the source link, the license with a link and the statement
-"Modified: metric scaling, levelling and derived layers". The authors do not endorse ANet Drone4D.
+"Modified: metric scaling, levelling and derived layers". The authors do not endorse ANet4D.
 
 ### OpenStreetMap (ODbL)
 
@@ -321,6 +323,24 @@ The other public reference sets of `configs/refsets.d3/` are used the same way (
 Dok11 @dok11），源模型与世界包不入库，对外发布的派生制品保留作者、链接与许可，并注明"经修改（米制标定、调平、派生）"；
 OpenStreetMap 派生数据（配准证据、anchors、navgraph）单独标注 ODbL-1.0 与"OpenStreetMap contributors"；高程瓦片取自
 AWS Terrain Tiles（SRTM 与 EU-DEM），crop 调平交叉核对另用 Copernicus DEM GLO-30（只算 QA 统计量，不再分发）；MARS-LVIG 只作内部回归，不再分发。
+
+### Optional scene-target assets (not bundled)
+
+The optional target catalog in `packages/contracts/target/assets.catalog.json` records per-asset source URLs,
+CC0-1.0 license metadata, dimensions and content hashes. Model/texture binaries are not committed here.
+The native-view screenshots in `docs/audit/target-life/` depict these optional assets in the synthetic test scene.
+
+| Asset set | Source | License recorded by the source lock | Integration |
+|---|---|---|---|
+| 12 human appearances | [MakeHuman system assets](https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html) | CC0-1.0 | Existing ALE compiled meshes/textures, exported with source hash checks; sampled pose interpolation |
+| Seven vehicle types and six street objects | [Innerscene 3D parts](https://www.innerscene.com/tools/library/3d-parts/) (individual URLs in the catalog) | CC0-1.0 | Existing ALE compiled assets; physical plates and selected wheel-group animation authored for this integration |
+| Dog, forklift and quadcopter | Individual Innerscene URLs and SHA-256 values in `tools/deploy/targetlab/extra-assets.lock.json` | CC0-1.0 | Separate GLB export; the dog's 16-pose deformation is authored for this integration |
+
+`tools/deploy/targetlab/export_assets.py` currently requires an existing ALE asset directory, including its original
+lock files and attribution README; it does not download or bundle that directory. The exporter preserves those
+notices alongside the generated pack. `export_extra_assets.py` handles the separately locked GLB inputs. No ALE
+application source code is included. The living-population planner and conflict handling are implemented in this
+repository; they do not embed SUMO or another external traffic engine.
 
 ## 5. Brand assets
 
@@ -429,7 +449,7 @@ section 1.
 | lieflat-charts | PolyForm Noncommercial License 1.0.0 | https://polyformproject.org/licenses/noncommercial/1.0.0 |
 | openlidarviewer | GNU Affero General Public License v3.0 only | https://www.gnu.org/licenses/agpl-3.0.html |
 | WindNinja | Public domain statement of the Rocky Mountain Research Station | https://github.com/firelab/windninja/blob/master/LICENSE |
-| UrbanScene3D | Dataset terms quoted in section 4; ANet-Drone4D deployments use it under authorization of the rights holders | https://github.com/Linxius/UrbanScene3D |
+| UrbanScene3D | Dataset terms quoted in section 4; ANet4D deployments use it under authorization of the rights holders | https://github.com/Linxius/UrbanScene3D |
 | Sketchfab source models of the D3 worlds | Creative Commons Attribution 4.0 International (CC-BY-4.0) | https://creativecommons.org/licenses/by/4.0/legalcode |
 | OpenStreetMap data | Open Database License 1.0 (ODbL-1.0) | https://opendatacommons.org/licenses/odbl/1-0/ |
 | x500_base (PX4-gazebo-models) | BSD 3-Clause License, Copyright (c) 2022, Rudis Laboratories | `native/gz/models/x500_d4d/LICENSE` |

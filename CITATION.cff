@@ -1,28 +1,37 @@
 cff-version: 1.2.0
-message: "If you use ANet Drone4D in your research, please cite it using the metadata below."
+message: "If you use ANet4D in your research, please cite it using the metadata below."
 type: software
-title: "ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones"
+title: "ANet4D: Simulation Infrastructure for Collaborative Embodied Agents"
 abstract: >-
-  ANet Drone4D is a real-world grounded digital twin and multi-agent simulation
-  platform for drones. It follows one chain, Reality to Reconstruction to World
-  to Environment to Simulation to Agent: captured or reconstructed point clouds
-  become versioned World Packages with geometry queries, an environment field
-  adds wind, turbulence and visibility, a vectorised fleet simulator steps 1 to
+  ANet4D is simulation infrastructure for collaborative embodied agents. It aims
+  to be for collaborative embodied-agent research what NS-3 is for network
+  research; its scope covers multi-UAV teams, unmanned ground and surface
+  vehicles, ground robots, fixed sensors and software agents, and the released
+  versions implement drones as the first entity class. It follows one chain,
+  Reality to Reconstruction to World to Environment to Simulation to Agent:
+  captured or reconstructed point clouds and photogrammetry meshes become
+  versioned World Packages with geometry queries, an environment field adds
+  wind, turbulence and visibility, a vectorised fleet simulator steps 1 to
   1,000 drones on one shared 250 Hz clock (real time at 1,000 drones on 0.53
   CPU core of an 8-vCPU Xeon E5-2603 v4 machine, median of 3 runs), and the
   Interactive Sandbox gives each visitor an isolated simulation core while the
-  browser renders the world; its server needs no GPU. Drones are the first kind
-  of physical agent; they discover each other's capabilities and delegate tasks
-  through an in-process mock of the ANet network.
+  browser renders the world; its server needs no GPU. The Event Lab adds event
+  tapes, Gazebo Sim lockstep, mesh-rendered camera, thermal and LiDAR sensors
+  and a benchmark runtime; its sensor generation requires an NVIDIA GPU on the
+  server. Drones discover each other's capabilities and delegate tasks through
+  an in-process mock of the ANet network.
 authors:
   - name: "Agent Network Research"
     website: "https://anet0.com"
     email: "hi@anet0.com"
-version: "0.3.1"
+version: "0.3.2"
 repository-code: "https://github.com/ANetResearch/ANet-Drone4D"
-url: "https://github.com/ANetResearch/ANet-Drone4D"
+url: "https://anet4d.agentnetwork.org.cn"
 license-url: "https://github.com/ANetResearch/ANet-Drone4D/blob/main/LICENSE"
 keywords:
+  - embodied agents
+  - multi-agent collaboration
+  - simulation infrastructure
   - digital twin
   - multi-agent systems
   - drones

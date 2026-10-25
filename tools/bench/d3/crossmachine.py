@@ -52,7 +52,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "python", ROOT / "tools/sdk/drone4d/src", ROOT / "tests/d3/world", ROOT / "tests/d3/events"):
+for _p in (ROOT / "python", ROOT / "tools/sdk/anet4d/src", ROOT / "tests/d3/world", ROOT / "tests/d3/events"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -75,7 +75,7 @@ SCRATCH_DIRS = ("worlds", "tape-terrain", "tape-crop", "synth", "vt", "fast")   
 ISA_FLAGS = ("sse4_2", "avx", "avx2", "fma", "avx512f", "avx512dq", "avx512bw", "avx512vl", "avx512_vnni", "avx512_bf16", "amx_tile")
 # 代码快照摘要覆盖的路径（影响对拍项产物的全部代码、配置与测试夹具）；__pycache__ 与 .pyc 除外
 CODE_PATHS = ("python/awr", "tools/navsvc/src", "tools/navsvc/WASM_SHA256", "tools/navsvc/package.json", "tools/worldglb",
-              "tools/sdk/drone4d/src", "configs/worlds.d3", "configs/events.d3", "configs/bench.d3", "packages/contracts",
+              "tools/sdk/anet4d/src", "configs/worlds.d3", "configs/events.d3", "configs/bench.d3", "packages/contracts",
               "vehicles", "tests/d3/world", "tests/d3/events", "tools/bench/d3/crossmachine.py")
 
 
@@ -568,7 +568,7 @@ def _fast_pair(it: Item, make_spec: Callable[[str], object], make_agent, tmp: Pa
 def collect_fast_synth(synth: Path, tmp: Path) -> Item:
     """P07 用例同一场景：合成世界、test_compile 事件（lenient 编译）、2 架机 coverage_scan、20 s、种子 5。"""
     import test_compile as tc
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     from awr.agentsdk.env.spec import EnvSpec, FleetEntry
     from awr.sim.events.compile import CompileOptions, compile_event
@@ -599,7 +599,7 @@ def collect_fast_synth(synth: Path, tmp: Path) -> Item:
 
 def collect_fast_crop(worlds_root: Path, events_root: Path, tmp: Path) -> Item:
     """crop-handoff-001 L1 3 架机运行规格改为 `physics = fast`、30 s、种子 1，参考策略 track_share。"""
-    from drone4d.baselines import BASELINES
+    from anet4d.baselines import BASELINES
 
     from awr.agentsdk.env.spec import EnvSpec
 

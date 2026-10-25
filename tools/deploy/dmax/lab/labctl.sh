@@ -120,7 +120,7 @@ for r in $LAB_CAPTURE/dataset/*/runs/*; do
 done
 for w in $LAB_WORLDS/*/; do w=\${w%/}; [ -f \$w/world.json ] && [ ! -e $LAB_DATA/worlds/\$(basename \$w) ] && ln -s \$w $LAB_DATA/worlds/\$(basename \$w); done
 if [ ! -s $LAB_ROOT/tls/key.pem ]; then
-  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 825 -subj '/CN=$LAB_SERVER_NAME/O=ANet Drone4D D3 lab' \
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 825 -subj '/CN=$LAB_SERVER_NAME/O=ANet4D D3 lab' \
     -addext 'subjectAltName=IP:$LAB_BIND,DNS:$LAB_SERVER_NAME' -addext 'basicConstraints=critical,CA:TRUE' \
     -keyout $LAB_ROOT/tls/key.pem -out $LAB_ROOT/tls/cert.pem 2>/dev/null
 fi

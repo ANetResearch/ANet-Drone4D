@@ -59,6 +59,8 @@ export interface DiscoveredAlarm {
 }
 
 export interface TargetsState {
+  /** Configuration generation; changes on reset even when sid and target ids recur. */
+  epoch: number
   items: TargetItem[]
   count: number
   max: number
@@ -72,6 +74,7 @@ export interface TargetsState {
 }
 
 export const targetsStore = createAwrStore<TargetsState>('targets', () => ({
+  epoch: 0,
   items: [], count: 0, max: TARGETS_MAX, selected: null, detail: null, bodyView: 'configured', modelId: null, placing: null, alarms: [],
   version: 0,
 }))
@@ -184,7 +187,7 @@ export function resetTargetsWorld(): void {
   detailSub = null
   lastKey = ''
   const s = targetsStore.getState()
-  targetsStore.setState({ items: [], count: 0, selected: null, detail: null, placing: null, alarms: [], version: s.version + 1 })
+  targetsStore.setState({ items: [], count: 0, selected: null, detail: null, placing: null, alarms: [], epoch: s.epoch + 1, version: s.version + 1 })
 }
 onWorldReset('targets', resetTargetsWorld)
 

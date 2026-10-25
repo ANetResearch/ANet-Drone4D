@@ -6,12 +6,12 @@
 本机一个运行中的 World Runtime（共享展示，浏览器可访问）、一个本机沙盒控制面（sandbox-pool 与 sandbox-api），以及一段经开放接口
 完成"创建会话、添加无人机、读取状态、结束会话"的 Python 程序。
 
-下面每一段输出都来自 2026-10-13 在一台 8 核 x86-64 开发机（Ubuntu、Python 3.12.3、Node 22.12.0、无 GPU）上按本页步骤从
-`git clone` 开始的真实运行。为便于阅读，仓库路径统一写成 `~/ANet-Drone4D`，端口写成默认值（8000、8002、7447）；运行编号、
-进程号、会话编号与耗时会随机器不同。
+下面每一段输出都来自 2026-10-13 以 0.2.0 版本在一台 8 核 x86-64 开发机（Ubuntu、Python 3.12.3、Node 22.12.0、无 GPU）上按本页步骤从
+`git clone` 开始的真实运行。为便于阅读，仓库路径统一写成 `~/ANet4D`，端口写成默认值（8000、8002、7447）；运行编号、
+进程号、会话编号与耗时会随机器不同，版本行会随发布版本不同。
 
 :::{note}
-不想安装？[公开实例](https://drone4d.agentnetwork.org.cn)提供同一版本的共享展示与沙盒，见 {doc}`../guide/showcase`。环境要求、端口与
+不想安装？[公开实例](https://anet4d.agentnetwork.org.cn)提供同一版本的共享展示与沙盒，见 {doc}`../guide/showcase`。环境要求、端口与
 配置方式的完整说明见 {doc}`install`。
 :::
 
@@ -30,22 +30,22 @@
 
 ```sh
 cd ~
-git clone https://github.com/ANetResearch/ANet-Drone4D.git
-cd ANet-Drone4D
+git clone https://github.com/ANetResearch/ANet-Drone4D.git ANet4D
+cd ANet4D
 ```
 
 ```text
-Cloning into 'ANet-Drone4D'...
+Cloning into 'ANet4D'...
 Updating files: 100% (3245/3245), done.
 ```
 
-本次运行的工作树约 126 MB，克隆用时 5.8 s。仓库不包含任何点云、世界包或运行产物：`worlds/`、`data/raw/` 与 `runs/` 都在
+`git clone` 的第二个参数把工作目录命名为 `ANet4D`；GitHub 仓库目前仍沿用原名 ANet-Drone4D。本次运行的工作树约 126 MB，克隆用时 5.8 s。仓库不包含任何点云、世界包或运行产物：`worlds/`、`data/raw/` 与 `runs/` 都在
 `.gitignore` 中，由后续步骤在本机生成。
 
 `main` 分支是持续维护的分支；需要与已发布版本逐字节一致时，切到版本标签：
 
 ```sh
-git checkout v0.2.0
+git checkout v0.3.2
 ```
 
 ## 安装依赖：`make setup`
@@ -57,7 +57,7 @@ make setup
 ```text
 创建 .venv（python3.12）
 自举 uv 0.12.19
-cd ~/ANet-Drone4D && ~/ANet-Drone4D/.venv/bin/uv pip sync requirements.lock --python ~/ANet-Drone4D/.venv/bin/python
+cd ~/ANet4D && ~/ANet4D/.venv/bin/uv pip sync requirements.lock --python ~/ANet4D/.venv/bin/python
 Resolved 70 packages in 757ms
 Uninstalled 1 package in 118ms
 Installed 69 packages in 174ms
@@ -65,7 +65,7 @@ Installed 69 packages in 174ms
  + annotated-types==0.8.0
  ...
  + zstandard==0.25.0
-cd ~/ANet-Drone4D && ~/ANet-Drone4D/.venv/bin/pip install --quiet -e . --no-deps
+cd ~/ANet4D && ~/ANet4D/.venv/bin/pip install --quiet -e . --no-deps
 
 added 829 packages in 36s
 gen.py: up to date (layout_id 0x009600AE, contracts 1.2.0)
@@ -83,9 +83,9 @@ DOC-09  OK    端口空闲：[8000, 7447, 5173] 空闲
 DOC-10  OK    /dev/shm 可写且 ≥ 1 GiB：/dev/shm/awr free=31.4 GiB writable=True
 DOC-11  OK    残留运行目录：无
 DOC-12  OK    磁盘余量：free=18.7 GB
-DOC-14  WARN  原始数据：0 个 PLY（~/ANet-Drone4D/data/raw/urbanscene3d）
+DOC-14  WARN  原始数据：0 个 PLY（~/ANet4D/data/raw/urbanscene3d）
         修复：make fetch-data
-DOC-15  WARN  默认世界：~/ANet-Drone4D/worlds/shenzhen/world.json 尚未构建（make run 会自动构建）
+DOC-15  WARN  默认世界：~/ANet4D/worlds/shenzhen/world.json 尚未构建（make run 会自动构建）
         修复：make worlds
 M11-R1  OK    StateRing 自测：publish/attach/read_latest/header
 M11-R2  OK    zenoh 自环：query/reply 成功（35 ms）
@@ -160,13 +160,13 @@ make run
 DOC-01  OK    CPU 架构：x86_64
 ...
 awr doctor --quick: 通过（0.2 s）
-~/ANet-Drone4D/.venv/bin/python -m awr.sim.runtime.warm
+~/ANet4D/.venv/bin/python -m awr.sim.runtime.warm
 numba warmup s plugins=2.04 m08=0.34 m10_plan=0.06 m20_cover=0.01 m04_geom=0.06
 m10 numba warmup s 1.77
-[worldpkg] chicago: 原始数据缺失（~/ANet-Drone4D/data/raw/urbanscene3d/Chicago_sampled_5m.ply）；修复：make fetch-data
+[worldpkg] chicago: 原始数据缺失（~/ANet4D/data/raw/urbanscene3d/Chicago_sampled_5m.ply）；修复：make fetch-data
 ...
 [worldpkg] synthcity: up to date
-FAIL chicago       exit=4 0.0 s chicago: 原始数据缺失（~/ANet-Drone4D/data/raw/urbanscene3d/Chicago_sampled_5m.ply）；修复：make fetch-data
+FAIL chicago       exit=4 0.0 s chicago: 原始数据缺失（~/ANet4D/data/raw/urbanscene3d/Chicago_sampled_5m.ply）；修复：make fetch-data
 ...
 OK   synthcity     exit=0 cv=9e05c2364f58 0.0 s
 提示：原始数据缺失，运行 make fetch-data（无数据试用：make demo-world 生成合成演示城市 synthcity，ADR-077）
@@ -174,14 +174,14 @@ OK   synthcity     exit=0 cv=9e05c2364f58 0.0 s
 提示：默认世界为合成演示城市 synthcity（/world/synthcity，剧本 s0-synthcity-showcase）
 警告：部分世界构建失败（退出码 4），其余照常；详情见 worlds/.status/
 [synthcity] geo warm hit 0.02 s derive_sha8=d98119e8 empty=0.01633 pits_filled=1.0 mem_mib=6.5 grid25=[301, 301]
-cd ~/ANet-Drone4D && AWR_PROFILE=${AWR_PROFILE:-demo} exec ~/ANet-Drone4D/.venv/bin/python -m awr.runtime.supervisor
+cd ~/ANet4D && AWR_PROFILE=${AWR_PROFILE:-demo} exec ~/ANet4D/.venv/bin/python -m awr.runtime.supervisor
 提示：默认世界 shenzhen 未构建，回退到合成演示城市 synthcity（剧本 s0-synthcity-showcase；ADR-077）；有 UrbanScene3D 数据时运行 make fetch-data && make worlds
 READY run=r20261013-143216-2988 profile=demo world=synthcity access=loopback
   api      http://127.0.0.1:8000/world/synthcity
   bus      tcp/127.0.0.1:7447（namespace awr/synthcity/r20261013-143216-2988）
-  logs     ~/ANet-Drone4D/runs/r20261013-143216-2988/logs
+  logs     ~/ANet4D/runs/r20261013-143216-2988/logs
   ssh      ssh -N -L 8000:127.0.0.1:8000 <user>@<host>
-  admin    ~/ANet-Drone4D/runs/r20261013-143216-2988/admin.token
+  admin    ~/ANet4D/runs/r20261013-143216-2988/admin.token
 ```
 
 `make run` 在前台运行，按 Ctrl+C 或在另一个终端执行 `make stop` 停止。启动前它依次完成：
@@ -210,7 +210,7 @@ make status
 ```
 
 ```text
-~/ANet-Drone4D/.venv/bin/awr status
+~/ANet4D/.venv/bin/awr status
 run r20261013-143216-2988  supervisor pid 2305695
 ring  head=3231  t_sim_s=25.84  state=PLAYING  rate=1.0  epoch=1  segment=0  writer_pid=2305735  writer_age_ms=3.9  step_seq=6460  step_p99_us=3199  rtf=0.997  roster_version=9
 NAME           STATE    PID      RESTARTS  UPTIME_S  HB_AGE_MS  CPU%  RSS_MB
@@ -253,7 +253,7 @@ make stop
 ```
 
 ```text
-~/ANet-Drone4D/.venv/bin/awr stop
+~/ANet4D/.venv/bin/awr stop
 已停止 r20261013-143216-2988
 ```
 
@@ -268,14 +268,14 @@ AWR_PROFILE=sandbox make run
 
 ```text
 ...
-cd ~/ANet-Drone4D && AWR_PROFILE=${AWR_PROFILE:-demo} exec ~/ANet-Drone4D/.venv/bin/python -m awr.runtime.supervisor
+cd ~/ANet4D && AWR_PROFILE=${AWR_PROFILE:-demo} exec ~/ANet4D/.venv/bin/python -m awr.runtime.supervisor
 提示：默认世界 shenzhen 未构建，回退到合成演示城市 synthcity（剧本 s0-synthcity-showcase；ADR-077）；有 UrbanScene3D 数据时运行 make fetch-data && make worlds
 READY run=r20261013-144754-296c profile=sandbox world=synthcity access=loopback
   api      http://127.0.0.1:8000/world/synthcity
   bus      tcp/127.0.0.1:7447（namespace awr/synthcity/r20261013-144754-296c）
-  logs     ~/ANet-Drone4D/runs/r20261013-144754-296c/logs
+  logs     ~/ANet4D/runs/r20261013-144754-296c/logs
   ssh      ssh -N -L 8000:127.0.0.1:8000 <user>@<host>
-  admin    ~/ANet-Drone4D/runs/r20261013-144754-296c/admin.token
+  admin    ~/ANet4D/runs/r20261013-144754-296c/admin.token
 ```
 
 运行档 `sandbox` 在共享展示之外再启动沙盒控制面，`make status` 的进程表中多出三行：
@@ -383,7 +383,7 @@ make stop
 ```
 
 ```text
-~/ANet-Drone4D/.venv/bin/awr stop
+~/ANet4D/.venv/bin/awr stop
 已停止 r20261013-144754-296c
 ```
 
@@ -477,7 +477,7 @@ httpx.ReadTimeout: timed out
 World Runtime；一个本机沙盒控制面；以及一段经开放接口完成会话全生命周期的程序。每次运行的日志与生效配置都在 `runs/<run>/` 下：
 
 ```text
-~/ANet-Drone4D/runs/r20261013-144754-296c/
+~/ANet4D/runs/r20261013-144754-296c/
 ├── logs/                    # 每个进程一个日志文件：sim-core.log、api.log、sandbox-pool.log 等
 ├── effective-config.yaml    # 生效配置（机密已掩码）
 ├── admin.token              # 管理令牌（0600）

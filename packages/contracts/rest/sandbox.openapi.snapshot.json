@@ -17,7 +17,7 @@
     "description": "Design snapshot of /api/sandbox/v1 (AWR-17 §17.5, SB-00 to SB-68). Generated from tools/contracts/sandbox_api.py until the sandbox-api exports its live schema.",
     "title": "AWR sandbox REST v1",
     "version": "1",
-    "x-awr-contracts": "1.2.0",
+    "x-awr-contracts": "1.3.0",
     "x-awr-source": "design"
   },
   "openapi": "3.1.0",

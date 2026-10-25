@@ -2,7 +2,7 @@
 """tools/bench/d3/r6_ec.py：6 种参考策略 × 12 种子（L1）与 r6 §12.3 的 EC 对照（D3-AC-18；A10；M26-FR-081；docs/05 §24.5 F-02）。
 
 口径（`configs/bench.d3/ref6-l1.yaml`）：
-- 参考行由 `drone4d.baselines.REFERENCE6` 登记（r6 行名 → 策略类、机数、链路开关、r6 实测值）；每行的 run_spec 由基础规格经
+- 参考行由 `anet4d.baselines.REFERENCE6` 登记（r6 行名 → 策略类、机数、链路开关、r6 实测值）；每行的 run_spec 由基础规格经
   `reference_run_spec` 派生，配置可逐行指定起飞点（`pads`）；新增起飞点须机体投影 ±0.7 m 内网格高差 ≤ `pad_check.level_m`、离
   360 s 磁带中全部演员（含背景人群）的轨迹 ≥ `pad_check.clear_m`；
 - 每行 × 每个种子一个运行（`_job`，与 `proto_board._one` 同一 Env 与评测路径，保留参考行的 `policy.params`，产出 `<out>/runs/<行>-s<种子>/evaluation.json`）；
@@ -47,11 +47,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-for _p in (ROOT / "python", ROOT / "tools/sdk/drone4d/src"):
+for _p in (ROOT / "python", ROOT / "tools/sdk/anet4d/src"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from drone4d.baselines import REFERENCE6, check_reference_spec, reference_run_spec  # noqa: E402
+from anet4d.baselines import REFERENCE6, check_reference_spec, reference_run_spec  # noqa: E402
 
 SCHEMA = "drone4d.bench.r6_ec.v1"
 CONFIG_SCHEMA = "drone4d.bench.r6_ec_config.v1"
@@ -175,11 +175,11 @@ def _job(job: dict) -> dict:
     """单个（参考行, 种子）运行：与 `proto_board._one` 相同的 Env 与评测路径，但保留参考行规格的 `policy`（含 `params.baseline`，
     进入运行清单与运行哈希；`proto_board` 只保留策略名）。隔离容器方式由平台镜像以 `--baseline <r6 行>` 启动，观测设置由
     `BASELINES[<r6 行>]` 绑定。"""
-    for p in (ROOT / "python", ROOT / "tools/sdk/drone4d/src"):
+    for p in (ROOT / "python", ROOT / "tools/sdk/anet4d/src"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    from drone4d.baselines import BASELINES
-    from drone4d.runner import run_episode
+    from anet4d.baselines import BASELINES
+    from anet4d.runner import run_episode
 
     from awr.agentsdk.env.core import BenchEnv, _open_world
     from awr.agentsdk.env.spec import EnvSpec
@@ -262,7 +262,7 @@ _WORLDS: dict[tuple[str, bool], object] = {}
 
 def _reeval_one(job: dict) -> dict:
     """单个运行目录的重评：世界查询按运行清单判定正式运行（排名且 realistic 时不退回 DSM），每个进程按（世界、正式）缓存一份。"""
-    for p in (ROOT / "python", ROOT / "tools/sdk/drone4d/src"):
+    for p in (ROOT / "python", ROOT / "tools/sdk/anet4d/src"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
     from awr.agentsdk.env.core import _open_world

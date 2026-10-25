@@ -35,7 +35,7 @@ CLEAN = "sha256:" + "c" * 64
 VULN = "sha256:" + "d" * 64
 BIG = "sha256:" + "e" * 64
 EDGE = "sha256:" + "f" * 64
-ENTRY = {"cmd": ["python", "-m", "drone4d.serve", "--baseline", "track_share"]}
+ENTRY = {"cmd": ["python", "-m", "anet4d.serve", "--baseline", "track_share"]}
 NOW = dt.datetime(2026, 10, 18, 12, 0, tzinfo=dt.UTC)
 
 

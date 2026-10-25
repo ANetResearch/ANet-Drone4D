@@ -318,7 +318,7 @@ def create_app(settings: ApiSettings | None = None, *, bus: Any = None, ring_cls
             await ctx.stop()
 
     expose_openapi = s.profile not in ("demo", "public") and not s.is_public
-    app = FastAPI(title="ANet Drone4D World Runtime API", version="1", lifespan=lifespan,
+    app = FastAPI(title="ANet4D World Runtime API", version="1", lifespan=lifespan,
                   openapi_url="/api/openapi.json" if expose_openapi else None, docs_url=None, redoc_url=None)
     app.state.awr = ctx
     app.state.bus = None

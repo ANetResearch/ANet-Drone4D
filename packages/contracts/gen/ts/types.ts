@@ -2352,6 +2352,130 @@ export interface AppearanceLibV1Rule {
   shared_any_of?: string[]
 }
 /**
+ * Optional target asset catalog v1
+ *
+ * This interface was referenced by `AwrContracts`'s JSON-Schema
+ * via the `definition` "AssetsCatalog".
+ */
+export interface AssetsCatalog {
+  format: 'awr.target-assets.v1'
+  /**
+   * @minItems 1
+   */
+  assets: [
+    {
+      id: string
+      class: 'person' | 'vehicle' | 'dog' | 'uav' | 'machine' | 'object'
+      name_zh: string
+      name_en: string
+      license: string
+      source: string
+      source_geometry_sha256: string
+      source_texture_sha256: string
+      geometry_sha256: string
+      texture_sha256: string
+      vertices: number
+      triangles: number
+      poses: number
+      layout: {
+        p: {
+          offset: number
+          count: number
+        }
+        n: {
+          offset: number
+          count: number
+        }
+        uv: {
+          offset: number
+          count: number
+        }
+        c: {
+          offset: number
+          count: number
+        }
+        poses: {
+          offset: number
+          count: number
+        }
+        indices: {
+          offset: number
+          count: number
+        }
+      }
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      dimensions_m: [number, number, number, ...number[]]
+      stride_m: number
+      bytes: number
+      texture_bytes: number
+      wheels?: {
+        sha256: string
+        bytes: number
+        count: number
+        vertices: number
+      }
+    },
+    ...{
+      id: string
+      class: 'person' | 'vehicle' | 'dog' | 'uav' | 'machine' | 'object'
+      name_zh: string
+      name_en: string
+      license: string
+      source: string
+      source_geometry_sha256: string
+      source_texture_sha256: string
+      geometry_sha256: string
+      texture_sha256: string
+      vertices: number
+      triangles: number
+      poses: number
+      layout: {
+        p: {
+          offset: number
+          count: number
+        }
+        n: {
+          offset: number
+          count: number
+        }
+        uv: {
+          offset: number
+          count: number
+        }
+        c: {
+          offset: number
+          count: number
+        }
+        poses: {
+          offset: number
+          count: number
+        }
+        indices: {
+          offset: number
+          count: number
+        }
+      }
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      dimensions_m: [number, number, number, ...number[]]
+      stride_m: number
+      bytes: number
+      texture_bytes: number
+      wheels?: {
+        sha256: string
+        bytes: number
+        count: number
+        vertices: number
+      }
+    }[]
+  ]
+}
+/**
  * awr.bench.result.v1. AWR-18 §7.6 (fleet_ladder, bench_state, bench_cmd). records[].ipc is an optional addition (AWR-03 §5.11 rule 1) for the IPC benchmarks of M11 (tools/bench/ipc): a flat map of snake_case metric names with unit suffixes (AWR-03 §5.4, for example publish_p99_us, read_cpu_core, cmd_rtt_p99_ms, event_gaps, recover_max_ms) to numbers or null, so the M16 harness can aggregate them.
  *
  * This interface was referenced by `AwrContracts`'s JSON-Schema
@@ -3620,6 +3744,32 @@ export interface Target {
     sens_dbm?: number
     f_mhz?: number
     bw_mhz?: number
+  } | null
+  /**
+   * Optional immutable visual asset binding; null restores the original wireframe. Asset must match target class and the deployment catalog.
+   */
+  appearance?: {
+    asset_id: string
+    geometry_sha256: string
+  } | null
+  /**
+   * Experimental optional binding to a content-addressed scene-verified pedestrian activity plan. Requires timeline/exogenous.
+   */
+  activity?: {
+    plan_id: string
+    sha256: string
+  } | null
+  metadata?: {
+    role?: string
+    description?: string
+    plate_text?: string
+    plate_region?: string
+    vehicle_type?: 'sedan' | 'hatchback' | 'suv' | 'van' | 'pickup' | 'bus' | 'truck'
+  } | null
+  life?: {
+    recipe_id: string
+    actor_id: string
+    sha256: string
   } | null
 }
 /**
@@ -13285,7 +13435,7 @@ export interface TargetDetail {
     lw_dba_now?: number
   } | null
   motion?: {
-    mode?: 'static' | 'path' | 'random_walk'
+    mode?: 'static' | 'path' | 'random_walk' | 'timeline'
     speed_mps?: number
     vz_mps?: number
     path_idx?: number | null
@@ -13307,6 +13457,23 @@ export interface TargetDetail {
   } | null
   cfg_rev: number
   cfg?: Target
+  activity?: {
+    phase: 'walk' | 'orient' | 'rest' | 'wait' | 'complete' | 'departing' | 'travel' | 'arrived' | 'visit' | 'stationary'
+    destination: string
+    remaining_s: number
+    seed: number
+    walked_m: number
+    duration_s: number
+    visits: number
+    /**
+     * @maxItems 128
+     */
+    route_enu_m: [number, number, number, ...number[]][]
+    reason?: string
+    hidden?: boolean
+    updates?: number
+    max_unplanned_wait_s?: number
+  }
 }
 /**
  * SB-40

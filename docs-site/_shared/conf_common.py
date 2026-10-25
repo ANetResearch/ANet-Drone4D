@@ -1,13 +1,14 @@
-"""ANet Drone4D 文档站的公共 Sphinx 配置（en 与 zh_CN 两套源共用）。
+"""ANet4D 文档站的公共 Sphinx 配置（en 与 zh_CN 两套源共用）。
 
 每种语言的 conf.py 只做一件事：
 
     from conf_common import configure
     globals().update(configure("zh_CN"))
 
-URL 布局与 Read the Docs 一致：/drone4d/<lang>/latest/。语言目录名为 en 与 zh-cn（RTD 的语言代码），
+URL 布局与 Read the Docs 一致：/anet4d/<lang>/latest/；改名前的旧路径 /drone4d/ 由 tools/deploy/docs/publish.sh
+生成的逐页跳转页指向新路径。语言目录名为 en 与 zh-cn（RTD 的语言代码），
 源目录名为 en 与 zh_CN（Sphinx 的 language 代码）。两套源的文档名（docname）必须一一对应，
-语言切换浮层据此链接到另一语言的同一页面（drone4d_site 扩展在构建时校验）。
+语言切换浮层据此链接到另一语言的同一页面（anet4d_site 扩展在构建时校验）。
 """
 
 from __future__ import annotations
@@ -31,9 +32,13 @@ LANGUAGES = {
 }
 VERSIONS = ["latest"]
 CURRENT_VERSION = "latest"
-SITE_ROOT_URL = "https://docs.agentnetwork.org.cn/drone4d/"
-GITHUB_URL = "https://github.com/ANetResearch/ANet-Drone4D"
-DEMO_URL = "https://drone4d.agentnetwork.org.cn"
+PRODUCT = "ANet4D"
+SITE_ROOT_URL = "https://docs.agentnetwork.org.cn/anet4d/"
+# GitHub 仓库地址的唯一出处：仓库改名前保持旧地址（GitHub 对改名后的旧地址自动跳转）
+GITHUB_OWNER = "ANetResearch"
+GITHUB_REPO = "ANet-Drone4D"
+GITHUB_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
+DEMO_URL = "https://anet4d.agentnetwork.org.cn"
 
 
 def _release() -> str:
@@ -66,7 +71,7 @@ def configure(language: str) -> dict:
     on_rtd = os.environ.get("READTHEDOCS") == "True"
 
     cfg: dict = {}
-    cfg["project"] = "ANet Drone4D"
+    cfg["project"] = PRODUCT
     cfg["author"] = "Agent Network Research"
     cfg["copyright"] = "2026, Agent Network Research"
     cfg["release"] = release
@@ -77,12 +82,17 @@ def configure(language: str) -> dict:
     cfg["extensions"] = [
         "myst_parser",
         "sphinx_copybutton",
-        "drone4d_api",
-        "drone4d_site",
+        "sphinx.ext.extlinks",
+        "anet4d_api",
+        "anet4d_site",
     ]
     cfg["source_suffix"] = {".md": "markdown"}
     cfg["exclude_patterns"] = ["_build", "Thumbs.db", ".DS_Store"]
     cfg["templates_path"] = [str(SHARED / "_templates")]
+
+    # 仓库内链接一律写成 {gh}`标题 </blob/main/路径>`，仓库地址只在 GITHUB_URL 一处定义（仓库改名时只改这里）
+    cfg["extlinks"] = {"gh": (GITHUB_URL + "%s", None)}
+    cfg["extlinks_detect_hardcoded_links"] = False
 
     # MyST
     cfg["myst_enable_extensions"] = ["colon_fence", "deflist", "fieldlist", "attrs_inline", "attrs_block"]
@@ -112,13 +122,13 @@ def configure(language: str) -> dict:
         "version_selector": False,
         "language_selector": False,
     }
-    cfg["html_title"] = "ANet Drone4D " + ("文档" if zh else "Documentation")
-    cfg["html_short_title"] = "ANet Drone4D"
+    cfg["html_title"] = PRODUCT + (" 文档" if zh else " Documentation")
+    cfg["html_short_title"] = PRODUCT
     cfg["html_logo"] = str(SHARED / "_static" / "img" / "anet-logo.svg")
     cfg["html_favicon"] = str(SHARED / "_static" / "img" / "favicon-32.png")
     cfg["html_static_path"] = [str(SHARED / "_static")]
-    cfg["html_css_files"] = ["css/drone4d.css", "css/drone4d-icons.css"]
-    cfg["html_js_files"] = ["js/drone4d.js"]
+    cfg["html_css_files"] = ["css/anet4d.css", "css/anet4d-icons.css"]
+    cfg["html_js_files"] = ["js/anet4d.js"]
     cfg["html_show_sourcelink"] = False
     cfg["html_show_sphinx"] = True
     cfg["html_copy_source"] = False
@@ -128,22 +138,23 @@ def configure(language: str) -> dict:
     cfg["html_search_language"] = "zh" if zh else "en"
     cfg["html_context"] = {
         "display_github": True,
-        "github_user": "ANetResearch",
-        "github_repo": "ANet-Drone4D",
+        "github_user": GITHUB_OWNER,
+        "github_repo": GITHUB_REPO,
         "github_version": "main",
         "conf_py_path": f"/docs-site/{language}/",
-        "drone4d_languages": [(code, slug, name) for code, (slug, name) in LANGUAGES.items()],
-        "drone4d_current_language": language,
-        "drone4d_versions": VERSIONS,
-        "drone4d_current_version": CURRENT_VERSION,
-        "drone4d_github_url": GITHUB_URL,
-        "drone4d_demo_url": DEMO_URL,
-        "drone4d_on_rtd": on_rtd,
+        "anet4d_languages": [(code, slug, name) for code, (slug, name) in LANGUAGES.items()],
+        "anet4d_current_language": language,
+        "anet4d_versions": VERSIONS,
+        "anet4d_current_version": CURRENT_VERSION,
+        "anet4d_github_url": GITHUB_URL,
+        "anet4d_demo_url": DEMO_URL,
+        "anet4d_site_root_url": SITE_ROOT_URL,
+        "anet4d_on_rtd": on_rtd,
     }
 
     # 本站自有扩展的配置
-    cfg["drone4d_repo_root"] = str(REPO)
-    cfg["drone4d_site_root"] = str(SITE)
+    cfg["anet4d_repo_root"] = str(REPO)
+    cfg["anet4d_site_root"] = str(SITE)
 
     # 链接检查（make docs-site-linkcheck）：对外链接允许超时，结果写入 _build/linkcheck/<lang>/output.txt
     cfg["linkcheck_timeout"] = 20

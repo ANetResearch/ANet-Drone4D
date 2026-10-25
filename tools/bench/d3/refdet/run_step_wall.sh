@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 在 dmax 上测量 L2 基线在容器 `std` 资源档内的每步墙钟（D3-AC-58；M26-FR-126）与 ref_det_v1 定稿权重的 torch/numpy 比对（step_wall.py、parity.py）。
 # 用法（本机仓库根目录）：tools/bench/d3/refdet/run_step_wall.sh <阶段…>，阶段依次为
-#   sync      同步代码到 $W（python/、契约、机型传感器模型取 git HEAD；drone4d SDK 与本目录取工作树），不触碰他人目录；
+#   sync      同步代码到 $W（python/、契约、机型传感器模型取 git HEAD；anet4d SDK 与本目录取工作树），不触碰他人目录；
 #   build     以 tools/deploy/dmax/images/agent/Dockerfile 在 $W/build-agent 构建 d3-agent-py:$TAG（不改动共享的 d3-agent-py:dev）；
 #   capture   d3-sensorsvc 镜像（GPU=$GPU，EGL 渲染）录制一次 L2 运行的线协议帧（POLICY、SEED、PHYSICS、DURATION 可覆盖）；
 #   parity    pytorch 镜像（CPU）计算 torch 参考输出，再在 d3-agent-py:$TAG 中以 numpy 推理逐元素比对；
@@ -38,14 +38,14 @@ stage_sync() {
   rsync -a --mkpath --delete "$tmp/vehicles/sensor_models/" "dmax:$W/vehicles/sensor_models/"
   rsync -a --mkpath --delete "$tmp/configs/bench.d3/" "dmax:$W/configs/bench.d3/"
   rm -rf "$tmp"
-  rsync -a --mkpath --delete --exclude __pycache__ "$ROOT/tools/sdk/drone4d/src/" "dmax:$W/tools/sdk/drone4d/src/"
+  rsync -a --mkpath --delete --exclude __pycache__ "$ROOT/tools/sdk/anet4d/src/" "dmax:$W/tools/sdk/anet4d/src/"
   rsync -a --mkpath --delete --exclude __pycache__ "$ROOT/tools/bench/d3/refdet/" "dmax:$W/tools/bench/d3/refdet/"
 }
 
 stage_build() {
   ssh dmax "mkdir -p $W/build-agent/wheels && rm -f $W/build-agent/wheels/*.whl && cp $D/wheels-gz/msgpack-*cp312*.whl \
     $D/wheels-agent/numpy-*cp312*.whl $D/wheels-agent/pillow-*cp312*.whl $W/build-agent/wheels/"
-  rsync -a --delete --exclude __pycache__ --exclude bench "$ROOT/tools/sdk/drone4d/src/drone4d/" "dmax:$W/build-agent/drone4d/"
+  rsync -a --mkpath --delete --exclude __pycache__ --exclude /anet4d/bench "$ROOT/tools/sdk/anet4d/src/" "dmax:$W/build-agent/sdk/"
   rsync -a "$ROOT/tools/deploy/dmax/images/agent/Dockerfile" "dmax:$W/build-agent/"
   ssh dmax "cd $W/build-agent && docker build -q -t $IMG . >/dev/null && docker image inspect $IMG --format '{{.Id}} {{.Size}}'"
 }
@@ -83,7 +83,7 @@ stage_replay() {
           --out /out/rep-$r.json --raw /out/rep-$r.raw.json >/dev/null; \
       for u in $uavs; do for i in \$(seq 1 100); do [ -S \$S/\$u/agent.sock ] && break; sleep 0.1; done; done; \
       for u in $uavs; do docker run -d --name d3-a05-agent-\$u --label d3.component=agent $STD -v \$S/\$u:/run/drone4d \
-        -e DRONE4D_AGENT_SOCK=/run/drone4d/agent.sock $IMG python -m drone4d.serve --baseline $POLICY >/dev/null; done; \
+        -e DRONE4D_AGENT_SOCK=/run/drone4d/agent.sock $IMG python -m anet4d.serve --baseline $POLICY >/dev/null; done; \
       code=\$(docker wait d3-a05-driver); docker logs d3-a05-driver > $W/out/rep-$r.log 2>&1; \
       for u in $uavs; do docker wait d3-a05-agent-\$u >/dev/null || true; docker logs d3-a05-agent-\$u > $W/out/rep-$r-\$u.log 2>&1; \
         docker inspect d3-a05-agent-\$u --format '{{json .HostConfig}}' > $W/out/rep-$r-\$u.hostconfig.json; done; \

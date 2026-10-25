@@ -44,9 +44,13 @@ import { NumField, TextField } from '@/ui/sandbox/fields'
 import { sbSession } from '@/ui/sandbox/domain'
 import { entities, useEntities } from '@/ui/sandbox/entities'
 import { d2Tools, useD2Tool } from '@/ui/tools/d2Tools'
-import { CLASS_ICON, targetCallText } from './TargetsPanel'
+import { CLASS_ICON, targetCallText, useSeedTargetConfigs } from './TargetsPanel'
 import { labelOk, MAX_VOLUMES, newVolume, RANGES, sensitivityErrors } from './targetModel'
 import { QuantCard } from './QuantCard'
+import { AppearanceEditor } from './AppearanceEditor'
+import { ActivityCard } from './ActivityCard'
+import { CustomizationForm } from './CustomizationForm'
+import { APPEARANCE_ENABLED } from '@/app/shell/engineD2'
 
 function usePatch(id: string | null) {
   return React.useCallback(async (p: Partial<Target>): Promise<boolean> => {
@@ -342,15 +346,17 @@ export function TargetDetailPanel() {
   useTargets((s) => s.version)
   const detail = useDetail(id)
   const patch = usePatch(id)
+  const epoch = useTargets((s) => s.epoch)
+  useSeedTargetConfigs(sandbox)
   // the open detail page is the store's selection: its detail topic runs at 2 Hz and the layer highlights it
   React.useEffect(() => {
     targetsActions.select(id)
-  }, [id])
+  }, [id, epoch])
   const drawing = useD2Tool((s) => (s.mode === 'TARGET_PATH' || s.mode === 'TARGET_REGION' || s.mode === 'TARGET_MOVE' ? s.mode : null))
   const nPts = useD2Tool((s) => s.points.length)
   const [advanced, setAdvanced] = React.useState(false)
   // D2.1 (UX-FR-160): the "perception readout" tab next to the configuration
-  const [tab, setTab] = React.useState<'config' | 'quant'>('config')
+  const [tab, setTab] = React.useState<'identity' | 'config' | 'quant'>(APPEARANCE_ENABLED ? 'identity' : 'config')
   const back = (
     <Button size="xs" variant="ghost" onClick={() => entities.back()} data-target-back="">
       <Icon icon="chev.left" data-icon="inline-start" />{t('targets.back')}
@@ -382,8 +388,8 @@ export function TargetDetailPanel() {
         <span className="truncate font-medium">{sanitizeText(target.label ?? id, 32)}</span>
         {operator ? (
           <span className="ml-auto flex gap-1">
-            <Button size="xs" variant="outline" onClick={move} data-target-move="">{t('targets.move')}</Button>
-            <Button size="xs" variant="ghost" onClick={remove} data-target-remove="">{t('targets.remove')}</Button>
+            <Button size="xs" variant="outline" onClick={move} disabled={!!(target.activity || target.life)} data-target-move="">{t('targets.move')}</Button>
+            <Button size="xs" variant="ghost" onClick={remove} disabled={!!target.life} data-target-remove="">{t('targets.remove')}</Button>
           </span>
         ) : <Badge variant="outline" className="ml-auto">{t('role.shared')}</Badge>}
       </div>
@@ -397,12 +403,19 @@ export function TargetDetailPanel() {
         </p>
       ) : null}
       <LiveState id={id} />
-      <Tabs value={tab} onValueChange={(v) => setTab(v === 'quant' ? 'quant' : 'config')} className="min-w-0">
+      {target.life && operator ? <div className="rounded-md border p-2 text-hud-sub"><p>{t('targets.population.memberHint')}</p><Button size="sm" variant="outline" className="mt-2" onClick={() => entities.back()}>{t('targets.population.back')}</Button></div> : null}
+      {(target.activity || target.life) ? <ActivityCard activity={detail?.activity} /> : null}
+      <Tabs value={tab} onValueChange={(v) => setTab(v === 'identity' ? 'identity' : v === 'quant' ? 'quant' : 'config')} className="min-w-0">
         <TabsList variant="line" data-target-tabs={tab}>
+          {APPEARANCE_ENABLED ? <TabsTrigger value="identity" data-target-tab="identity">{t('targets.tab.identity')}</TabsTrigger> : null}
           <TabsTrigger value="config" data-target-tab="config">{t('targets.tab.config')}</TabsTrigger>
           <TabsTrigger value="quant" data-target-tab="quant">{t('quant.title')}</TabsTrigger>
         </TabsList>
         <TabsPanels className="min-w-0">
+          {APPEARANCE_ENABLED ? <TabsContent value="identity" className="flex min-w-0 flex-col gap-3">
+            <CustomizationForm key={`${id}:${target.cfg_rev ?? 0}`} cls={target.class} target={target} operator={operator} save={patch} />
+            <AppearanceEditor id={id} target={target} />
+          </TabsContent> : null}
           <TabsContent value="quant" className="min-w-0">
             <QuantCard targetId={id} targetLabel={sanitizeText(target.label ?? id, 32)} />
           </TabsContent>
@@ -412,16 +425,16 @@ export function TargetDetailPanel() {
           <TextField id="label" label={t('target.f.label')} value={target.label ?? detail?.label ?? id} readOnly={!operator} validate={labelOk} onCommit={(v) => patch({ label: v })} />
         </div>
         <Field orientation="horizontal" className="col-span-2">
-          <Switch checked={target.enabled !== false} disabled={!operator} id="tg-enabled" onCheckedChange={(on: boolean) => void patch({ enabled: on })} />
+          <Switch checked={target.enabled !== false} disabled={!operator || !!target.life} id="tg-enabled" onCheckedChange={(on: boolean) => void patch({ enabled: on })} />
           <FieldLabel htmlFor="tg-enabled" className="font-normal">{t('target.f.enabled')}</FieldLabel>
         </Field>
         {(['l', 'w', 'h'] as const).map((k) => (
-          <NumField key={k} id={`size-${k}`} label={t(`target.f.size.${k}`)} value={target.size_m?.[k]} unit="m" range={RANGES.size} readOnly={!operator}
+          <NumField key={k} id={`size-${k}`} label={t(`target.f.size.${k}`)} value={target.size_m?.[k]} unit="m" range={RANGES.size} readOnly={!operator || !!(target.activity || target.life)}
             onCommit={(v) => patch({ size_m: { l: target.size_m?.l ?? 0.5, w: target.size_m?.w ?? 0.5, h: target.size_m?.h ?? 0.5, [k]: v } })} />
         ))}
         <Field className="col-span-2">
           <FieldLabel className="text-hud-sub text-muted-foreground">{t('target.f.motion')}</FieldLabel>
-          <ToggleGroup spacing={0} size="sm" variant="outline" value={[m.mode]} disabled={!operator} aria-label={t('target.f.motion')} data-target-motion={m.mode}
+          <ToggleGroup spacing={0} size="sm" variant="outline" value={[m.mode]} disabled={!operator || !!(target.activity || target.life)} aria-label={t('target.f.motion')} data-target-motion={m.mode}
             onValueChange={(v: unknown[]) => {
               const mode = v[0]
               if (mode === 'static') void patch({ motion: { ...m, mode } })
@@ -433,7 +446,7 @@ export function TargetDetailPanel() {
             <ToggleGroupItem value="random_walk">{t('target.motion.random_walk')}</ToggleGroupItem>
           </ToggleGroup>
         </Field>
-        <NumField id="speed" label={t('target.f.speed')} value={m.speed_mps} unit="m/s" range={RANGES.speed} readOnly={!operator}
+        <NumField id="speed" label={t('target.f.speed')} value={m.speed_mps} unit="m/s" range={RANGES.speed} readOnly={!operator || !!(target.activity || target.life)}
           onCommit={(v) => patch({ motion: { ...m, speed_mps: v } })} />
         {m.mode === 'path' ? (
           <Field>
