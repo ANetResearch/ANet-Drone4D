@@ -4,7 +4,7 @@
 
 <h3>ANet Drone4D</h3>
 
-ANet Drone4D is a real-world grounded 4D simulation platform for multi-agent drones. The Interactive Sandbox (V0.2) runs city-scale point-cloud digital twins, fleet simulation, swarm control and target perception on one simulation clock; its server needs no GPU, and the scene renders in the visitor's browser. The Event Lab (V0.3, in development) adds mesh worlds, event tapes and an event-level observation benchmark; its sensor generation requires an NVIDIA GPU on the server.
+ANet Drone4D is a real-world grounded 4D simulation platform for multi-agent drones. The Interactive Sandbox (V0.2) runs city-scale point-cloud digital twins, fleet simulation, swarm control and target perception on one simulation clock; its server needs no GPU, and the scene renders in the visitor's browser. The Event Lab (V0.3) adds mesh worlds, event tapes and an event-level observation benchmark; its sensor generation requires an NVIDIA GPU on the server.
 
 [![Release](https://img.shields.io/github/v/release/ANetResearch/ANet-Drone4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/latest)
 [![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
@@ -40,11 +40,11 @@ ANet Drone4D is a real-world grounded 4D simulation platform for multi-agent dro
 | Interactive Sandbox: an isolated simulation core per visitor with up to 12 drones, 30 targets and 4 nests per session; desktop, tablet and phone layouts; REST v1 and Python SDK | D2 (V0.2) | Server: 4 CPU cores, no GPU | Available |
 | Target perception: six target classes across EO, night, LWIR, LiDAR, radar and acoustic sensors (Johnson criteria and TTPF) | D2 (V0.2) | Server: CPU only | Available |
 | Nests, greedy task allocation and 7x24 relay watch from stations outside each target's sensitivity range | D2 (V0.2) | Server: CPU only | Available |
-| Event Lab: GLB mesh worlds, event tapes and Gazebo Sim lockstep as the high-fidelity physics tier | D3 (V0.3) | Server: NVIDIA GPU | In development |
-| Mesh cameras and mesh LiDAR (Livox MID-360 pattern) | D3 (V0.3) | Server: NVIDIA GPU | In development |
-| FAST-LIVO2 reconstruction on simulated data, evaluated against mesh ground truth; data inspection in Rerun | D3 (V0.3) | Server: NVIDIA GPU | In development |
+| Event Lab: GLB mesh worlds, event tapes and Gazebo Sim lockstep as the high-fidelity physics tier | D3 (V0.3) | Server: NVIDIA GPU | Available |
+| Mesh cameras and mesh LiDAR (Livox MID-360 pattern) | D3 (V0.3) | Server: NVIDIA GPU | Available |
+| FAST-LIVO2 reconstruction on simulated data, evaluated against mesh ground truth; data inspection in Rerun | D3 (V0.3) | Server: NVIDIA GPU | Available |
 
-Statuses reflect the published V0.2 releases and the [D3 design baseline](docs/05-D3-设计增补与决策记录.md).
+Statuses reflect the published V0.2 and V0.3 releases and the [D3 design baseline](docs/05-D3-设计增补与决策记录.md).
 
 ## Requirements
 
@@ -52,7 +52,7 @@ Statuses reflect the published V0.2 releases and the [D3 design baseline](docs/0
 |---|---|
 | Browser | Desktop Chrome or Edge (latest two major versions) with WebGL2; WebGPU is optional. Tablet and phone browsers are supported with dedicated layouts. Frame rate and image quality depend on the device GPU. |
 | Server, Interactive Sandbox (V0.2) | Linux x86_64 with 4 CPU cores; no GPU. The public demo runs on such a host. |
-| Server, Event Lab (V0.3, in development) | Linux x86_64 with an NVIDIA GPU (EGL, driver ≥ 535, at least 8 GB of GPU memory) for sensor generation. |
+| Server, Event Lab (V0.3) | Linux x86_64 with an NVIDIA GPU (EGL, driver ≥ 535, at least 8 GB of GPU memory) for sensor generation. |
 | Toolchain | Python 3.12 and Node 22, installed by `make setup`. |
 
 ## Quick start
@@ -235,7 +235,7 @@ The vehicle catalogue includes the P600 digital twin in its MID-360 configuratio
 |---|---|---|
 | V0.1 | Scene View: point-cloud digital twin, progressive loading, FleetSim with PX4-lite, realtime protocol, Mock ANet | Released |
 | V0.2 | Interactive Sandbox: targets and quantified perception, nests and relay watch, open API, phones and tablets, city monitoring shows; patch releases from `v0.2.1` | Released |
-| V0.3 | Event Lab: GLB mesh worlds, event tapes, Gazebo Sim lockstep, mesh cameras and LiDAR, FAST-LIVO2 evaluation, event-level observation benchmark | In development |
+| V0.3 | Event Lab: GLB mesh worlds, event tapes, Gazebo Sim lockstep, mesh cameras and LiDAR, FAST-LIVO2 evaluation, event-level observation benchmark | Released |
 | V0.3.x | Increments on the V0.3 baseline, including the SITL physics tier and the 3DGS appearance layer | Planned |
 
 Later versions are in research and concept design and are not scheduled here. Progress is tracked in [GitHub milestones](https://github.com/ANetResearch/ANet-Drone4D/milestones) and the pinned [roadmap issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1). See [Roadmap](https://docs.agentnetwork.org.cn/drone4d/en/latest/project/roadmap.html) and the
@@ -313,7 +313,7 @@ To cite Drone4D, use GitHub's "Cite this repository" feature ([CITATION.cff](CIT
   title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.2.2},
+  version = {0.3.0},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```

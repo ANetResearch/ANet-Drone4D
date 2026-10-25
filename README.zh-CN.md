@@ -4,7 +4,7 @@
 
 <h3>ANet Drone4D</h3>
 
-ANet Drone4D 是以真实世界为基础的多智能体无人机四维仿真平台。交互沙盒（V0.2）在同一仿真时钟下运行城市级点云数字孪生、机群仿真、集群控制与目标感知，服务器无需 GPU，场景由访客浏览器渲染。事件沙盘（V0.3，开发中）引入网格世界、事件磁带与事件级观测基准，其传感器生成需要服务器配备 NVIDIA GPU。
+ANet Drone4D 是以真实世界为基础的多智能体无人机四维仿真平台。交互沙盒（V0.2）在同一仿真时钟下运行城市级点云数字孪生、机群仿真、集群控制与目标感知，服务器无需 GPU，场景由访客浏览器渲染。事件沙盘（V0.3）引入网格世界、事件磁带与事件级观测基准，其传感器生成需要服务器配备 NVIDIA GPU。
 
 [![Release](https://img.shields.io/github/v/release/ANetResearch/ANet-Drone4D?label=release&color=1f1f1f)](https://github.com/ANetResearch/ANet-Drone4D/releases/latest)
 [![CI](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ANetResearch/ANet-Drone4D/actions/workflows/ci.yml)
@@ -40,11 +40,11 @@ ANet Drone4D 是以真实世界为基础的多智能体无人机四维仿真平�
 | 交互沙盒：每位访客一个隔离的仿真核心，每个会话最多 12 架无人机、30 个目标物与 4 座机巢；桌面、平板与手机布局；REST v1 与 Python SDK | D2（V0.2） | 服务器：4 核 CPU，无需 GPU | 已交付 |
 | 目标感知：六类目标物，覆盖 EO、夜视、LWIR、LiDAR、雷达与声学传感器（Johnson 判据与 TTPF） | D2（V0.2） | 服务器：仅需 CPU | 已交付 |
 | 机巢、贪心任务分配与在目标物敏感范围外驻点执行的 7x24 接力监视 | D2（V0.2） | 服务器：仅需 CPU | 已交付 |
-| 事件沙盘：GLB 网格世界、事件磁带，以 Gazebo Sim 锁步作为高保真物理档 | D3（V0.3） | 服务器：NVIDIA GPU | 开发中 |
-| 网格相机与网格 LiDAR（Livox MID-360 扫描模式） | D3（V0.3） | 服务器：NVIDIA GPU | 开发中 |
-| 以仿真数据驱动 FAST-LIVO2 重建并与网格真值对比评估；Rerun 数据检视 | D3（V0.3） | 服务器：NVIDIA GPU | 开发中 |
+| 事件沙盘：GLB 网格世界、事件磁带，以 Gazebo Sim 锁步作为高保真物理档 | D3（V0.3） | 服务器：NVIDIA GPU | 已交付 |
+| 网格相机与网格 LiDAR（Livox MID-360 扫描模式） | D3（V0.3） | 服务器：NVIDIA GPU | 已交付 |
+| 以仿真数据驱动 FAST-LIVO2 重建并与网格真值对比评估；Rerun 数据检视 | D3（V0.3） | 服务器：NVIDIA GPU | 已交付 |
 
-状态反映已发布的 V0.2 各版本与[D3 设计基线](docs/05-D3-设计增补与决策记录.md)。
+状态反映已发布的 V0.2、V0.3 各版本与[D3 设计基线](docs/05-D3-设计增补与决策记录.md)。
 
 ## 运行环境
 
@@ -52,7 +52,7 @@ ANet Drone4D 是以真实世界为基础的多智能体无人机四维仿真平�
 |---|---|
 | 浏览器 | 桌面版 Chrome 或 Edge（最新两个大版本），支持 WebGL2；WebGPU 为可选。平板与手机浏览器使用专用布局。帧率与画质取决于设备 GPU。 |
 | 服务器：交互沙盒（V0.2） | Linux x86_64，4 核 CPU，无需 GPU；公开演示站即运行在此类主机上。 |
-| 服务器：事件沙盘（V0.3，开发中） | Linux x86_64，传感器生成需要 NVIDIA GPU（EGL，驱动 ≥ 535，显存不少于 8 GB）。 |
+| 服务器：事件沙盘（V0.3） | Linux x86_64，传感器生成需要 NVIDIA GPU（EGL，驱动 ≥ 535，显存不少于 8 GB）。 |
 | 工具链 | Python 3.12 与 Node 22，由 `make setup` 安装。 |
 
 ## 快速开始
@@ -235,7 +235,7 @@ with sb.create("synthcity", "t5_area_guard") as s:   # 公开站满载时自动�
 |---|---|---|
 | V0.1 | 三维场景视图：点云数字孪生、渐进加载、FleetSim 与 PX4-lite、实时协议、Mock ANet | 已发布 |
 | V0.2 | 交互沙盒：目标物与量化感知、机巢与接力监视、开放接口、手机与平板适配、城市模拟监测展示；自 `v0.2.1` 起为补丁版本 | 已发布 |
-| V0.3 | 事件沙盘：GLB 网格世界、事件磁带、Gazebo Sim 锁步、网格相机与 LiDAR、FAST-LIVO2 评估、事件级观测基准 | 开发中 |
+| V0.3 | 事件沙盘：GLB 网格世界、事件磁带、Gazebo Sim 锁步、网格相机与 LiDAR、FAST-LIVO2 评估、事件级观测基准 | 已发布 |
 | V0.3.x | 在 V0.3 基线上的增量交付，包括 SITL 物理档与 3DGS 外观层 | 规划中 |
 
 后续版本处于调研与概念设计阶段，此处不作排期。进度以 [GitHub Milestone](https://github.com/ANetResearch/ANet-Drone4D/milestones) 与置顶的[路线图 Issue](https://github.com/ANetResearch/ANet-Drone4D/issues/1) 为准。参见[版本路线](https://docs.agentnetwork.org.cn/drone4d/zh-cn/latest/project/roadmap.html)与[D3 设计](docs/05-D3-设计增补与决策记录.md)。
@@ -312,7 +312,7 @@ Drone4D 是 Agent Network Research 旗下 ANet 生态的组成部分，与 [ANet
   title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.2.2},
+  version = {0.3.0},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```
