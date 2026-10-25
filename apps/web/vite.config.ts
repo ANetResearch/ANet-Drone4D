@@ -5,7 +5,7 @@ import { dirname, posix, resolve } from 'node:path'
 import { build, defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { LANDING_I18N_KEYS } from './src/app/demo/landingKeys.ts'
+import { LANDING_I18N_KEYS, LANDING_LAB_I18N_KEYS } from './src/app/demo/landingKeys.ts'
 
 // 公开演示构建（ADR-083；M15-FR-120；AWR-19 §3.7）：VITE_AWR_DEMO=public。默认构建不受影响；与测试开关互斥（生产包中不得
 // 残留演示以外的测试开关）。入口换成 src/app/demo/entry.tsx（"/" 为不加载 three 的落地页，其余路由按需加载应用），
@@ -19,7 +19,7 @@ if (DEMO && process.env.VITE_AWR_TEST_SWITCHES === '1') throw new Error('VITE_AW
 // keys) is no longer part of this group — Landing*.tsx reads its own virtual:awr-landing-i18n instead (landingI18nPlugin
 // below), so the full bilingual dictionary stays out of the landing chunk; the lazily loaded start Sheet still reads
 // app/i18n directly and gets it in its own chunk, the way it always has.
-const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\w*\.tsx?|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|sheet|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types|lucide-compat)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|testSwitches)\.ts)|vite[\\/]preload-helper|virtual:awr-landing-i18n/
+const LANDING_MODULES = /[\\/]src[\\/](app[\\/]demo[\\/]Landing\w*\.tsx?|app[\\/]lab-public[\\/]flags\.ts|ui[\\/]components[\\/]ui[\\/](button|badge|card|separator|sheet|table|toggle-group|toggle)\.tsx|ui[\\/]icons[\\/](Icon|registry|custom|types|lucide-compat)\.tsx?|ui[\\/]brand[\\/]assets\.ts|ui[\\/]testing[\\/]uxProbe\.ts|lib[\\/](utils|demo|testSwitches)\.ts)|vite[\\/]preload-helper|virtual:awr-landing-i18n/
 const DEMO_MEDIA = ['demo-flight.webp', 'screenshot-hero.jpg', 'screenshot-streaming.jpg', 'screenshot-weather.jpg', 'screenshot-swarm.jpg',
   'screenshot-follow.jpg', 'screenshot-perf.jpg']
 
@@ -595,11 +595,15 @@ function landingI18nPlugin(): Plugin {
       if (id !== RESOLVED) return null
       const zh = JSON.parse(readFileSync(resolve(import.meta.dirname, 'src/app/i18n/zh-CN.json'), 'utf8')) as Record<string, string>
       const en = JSON.parse(readFileSync(resolve(import.meta.dirname, 'src/app/i18n/en.json'), 'utf8')) as Record<string, string>
-      return `export default ${JSON.stringify(landingI18nDict(zh, en))}\n`
+      // VITE_AWR_LAB_PUBLIC=1: the Event Lab entries of the landing page (landingKeys.ts LANDING_LAB_I18N_KEYS)
+      return `export default ${JSON.stringify(landingI18nDict(zh, en, LAB_PUBLIC ? LANDING_LAB_I18N_KEYS : LANDING_I18N_KEYS))}\n`
     },
   }
 }
-const BOOT_MODULES = /[\\/]src[\\/]app[\\/](boot[\\/]capacityText\.ts|i18n[\\/]plural\.ts)$|virtual:awr-boot-i18n/
+// v0.3.1: the page load meter of the single loading bar (app/boot/loadMeter.ts, no imports) sits in the same small chunk: the
+// demo entry starts it before the application chunk, and the application continues it (otherwise it would be bundled
+// into the shared ui chunk and the landing page would load the ui chunk)
+const BOOT_MODULES = /[\\/]src[\\/]app[\\/](boot[\\/](capacityText|loadMeter)\.ts|i18n[\\/]plural\.ts)$|virtual:awr-boot-i18n/
 // 早期模块内联（D2-FX-R2-web，D2-AC-41）：模块脚本要等 HTML 解析结束（domInteractive，被样式表与内联脚本阻塞，本机冷启动
 // 实测 0.3–1.1 s）才执行，而 vite 又把 index.html 里的全部模块脚本合成一个入口，因此 src/app/boot/early.ts 在构建时单独打成
 // IIFE（同一份 TS 源码、boot 文案与 capacityText，不另写逻辑），作为 <head> 里第一个内联经典脚本插在 charset 之后、样式表

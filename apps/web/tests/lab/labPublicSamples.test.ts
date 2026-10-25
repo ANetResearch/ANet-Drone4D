@@ -19,7 +19,7 @@ import { matchLabRoute } from '@/app/lab-public/router'
 import { parseStaticIndex, sampleFiles, type LabStaticIndex } from '@/app/lab-public/staticIndex'
 import { route } from '@/app/lab-public/samples/sample.route'
 import { PrivateViews } from '@/app/lab-public/samples/PrivateViews'
-import { clockText, inspectSource, parseSampleT, SampleRunPage } from '@/app/lab-public/samples/SampleRunPage'
+import { clockText, initialSampleT, inspectSource, parseSampleT, SAMPLE_AIRBORNE_MIN_S, SAMPLE_DEFAULT_T_S, SampleRunPage } from '@/app/lab-public/samples/SampleRunPage'
 import { eventOf, sampleDurationS } from '@/app/lab-public/samples/sampleData'
 import { sampleT, SAMPLE_DICTS } from '@/app/lab-public/samples/text'
 import { allowedRequest, blockedRequests, installStaticGuard } from '@/app/lab-public/samples/staticGuard'
@@ -426,6 +426,25 @@ describe('sample run page (AWR-14 §21.29.3)', () => {
     expect(parseSampleT('?t=12.5')).toBe(12.5)
     expect([parseSampleT(''), parseSampleT('?t=-1'), parseSampleT('?t=abc')]).toEqual([null, null, null])
     expect(clockText(125.04)).toBe('02:05.0')
+  })
+
+  it('opens at a meaningful airborne moment: ?t= first, then the earliest key-moment slice, then 20 s (V0.3.1)', () => {
+    const run = fullIndex().events[0]!.runs[0]!
+    // labctl 索引的切片窗口 17.5–27.5 s：打开在关键时刻起点，不在 0 s 的起降点
+    expect(initialSampleT('', run, sampleDurationS({ run }))).toEqual({ tS: 17.5, from: 'slice' })
+    // 查询参数优先，包括显式的 0 与超出已知时长的值（原有行为）
+    expect(initialSampleT('?t=3.5', run)).toEqual({ tS: 3.5, from: 'query' })
+    expect(initialSampleT('?t=0', run)).toEqual({ tS: 0, from: 'query' })
+    expect(initialSampleT('?t=abc', run)).toEqual({ tS: 17.5, from: 'slice' })
+    // 多个切片取最早的；起飞阶段（< 5 s）的切片不作为打开时刻
+    const s = (tFromS: number) => ({ ...run.slices[0]!, tFromS, tToS: tFromS + 10 })
+    expect(initialSampleT('', { slices: [s(120), s(42), s(2)] })).toEqual({ tS: 42, from: 'slice' })
+    expect(initialSampleT('', { slices: [s(0), s(SAMPLE_AIRBORNE_MIN_S - 0.1)] })).toEqual({ tS: SAMPLE_DEFAULT_T_S, from: 'default' })
+    // 无切片：缺省 20 s，已知时长更短时取时长
+    expect(SAMPLE_DEFAULT_T_S).toBe(20)
+    expect(initialSampleT('', { slices: [] })).toEqual({ tS: 20, from: 'default' })
+    expect(initialSampleT('', { slices: [] }, 12)).toEqual({ tS: 12, from: 'default' })
+    expect(initialSampleT('', { slices: [] }, 300)).toEqual({ tS: 20, from: 'default' })
   })
 
   it('renders the replay, private views, timeline and downloads without scores or non-static addresses', () => {

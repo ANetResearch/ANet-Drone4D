@@ -6,7 +6,8 @@
 #
 # 产物（缺省在 .cache/deploy/emax/）：
 #   anet-drone4d-<release>.tar.gz   代码与配置：python/、packages/contracts/、configs/、scenarios/、vehicles/、
-#                                   apps/web/dist/（VITE_AWR_DEMO=public 演示构建，含 build-info.json）、tools/deploy/、
+#                                   apps/web/dist/（VITE_AWR_DEMO=public VITE_AWR_LAB_PUBLIC=1 演示构建，含 build-info.json；落地页
+#                                   带"事件沙盘"入口与无人机视角样例，链接到 /lab/ 静态构建，ADR-129）、tools/deploy/、
 #                                   tools/sdk/（nginx /sdk/ 直出）、pyproject.toml、requirements.lock、许可与通知文件；
 #                                   顶层 RELEASE（构建信息，服务端经容量接口与 /api/health 公开）与 MANIFEST.sha256
 #   worlds/                         世界包目录（--worlds，缺省 all = public profile 的七个世界：synthcity 与 UrbanScene3D
@@ -38,7 +39,7 @@ while [ $# -gt 0 ]; do
     --with-world) WORLDS=synthcity ;;
     --skip-web) SKIP_WEB=1 ;;
     --out) OUT=$2; shift ;;
-    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) die "未知参数 $1（--worlds all|none|<id,…> | --with-world | --skip-web | --out DIR）" ;;
   esac
   shift
@@ -73,13 +74,16 @@ STAGE="$OUT/stage/$NAME"
 rm -rf "$OUT/stage"
 mkdir -p "$STAGE"
 export AWR_BUILD_CHANNEL=demo AWR_BUILD_SHA="$SHA" AWR_BUILD_DIRTY="$DIRTY" AWR_BUILD_TIME="$BUILT_AT" AWR_RELEASE="$REL"
-echo "发布 $REL：V$VERSION-demo · ${SHA:0:7}$([ "$DIRTY" = true ] && echo -dirty || true) · ${BUILT_AT:0:10}"
+# 演示构建显示"事件沙盘"入口（扩展点 15，ADR-129；apps/web/src/app/lab-public/flags.ts LAB_PUBLIC）：落地页的导航、主操作与
+# "事件沙盘 · 无人机视角"一节链接到 /lab/ 静态构建（整页跳转）。vite.config.ts 只允许它与 VITE_AWR_DEMO=public 同用
+WEB_ENV="VITE_AWR_DEMO=public VITE_AWR_LAB_PUBLIC=1"
+echo "发布 $REL：V$VERSION-demo · ${SHA:0:7}$([ "$DIRTY" = true ] && echo -dirty || true) · ${BUILT_AT:0:10} · $WEB_ENV"
 
 # ---- 1 前端演示构建（VITE_AWR_DEMO=public；持全局性能锁的共享锁，不打扰正在进行的性能用例，AWR-19 §7.5） ----------
 WEB_OUT="$STAGE/apps/web/dist"
 if [ "$SKIP_WEB" -eq 0 ]; then
   step "前端演示构建 → $WEB_OUT"
-  build() { (cd "$ROOT/apps/web" && VITE_AWR_DEMO=public npx vite build --outDir "$WEB_OUT" --emptyOutDir --logLevel warn); }
+  build() { (cd "$ROOT/apps/web" && VITE_AWR_DEMO=public VITE_AWR_LAB_PUBLIC=1 npx vite build --outDir "$WEB_OUT" --emptyOutDir --logLevel warn); }
   LOCK="${AWR_PERF_LOCK:-$ROOT/runs/.perf.lock}"
   if command -v flock >/dev/null && [ -z "${AWR_PERF_LOCK_HELD:-}" ]; then
     mkdir -p "$(dirname "$LOCK")"
@@ -96,6 +100,10 @@ node "$ROOT/apps/web/tests/m06/lint/prod-bundle-scan.mjs" "$WEB_OUT"
 grep -q 'data-landing' "$WEB_OUT/index.html" || die "dist/index.html 不是演示构建（缺少落地页标记）"
 [ ! -e "$WEB_OUT/bench" ] || die "演示构建不得包含 dist/bench（UrbanScene3D 城市的 flight60 夹具，ADR-109 第 5 条待评估）"
 [ -f "$WEB_OUT/demo/drone4d-banner.jpg" ] && [ -f "$WEB_OUT/demo/demo-flight.webp" ] || die "落地页媒体缺失（dist/demo）"
+for f in lab-oblique lab-junction lab-residential lab-blocks lab-thermal; do
+  [ -f "$WEB_OUT/demo/lab/$f.webp" ] || die "落地页"事件沙盘 · 无人机视角"媒体缺失（dist/demo/lab/$f.webp）"
+done
+grep -rqF 'data-landing-event-lab' "$WEB_OUT/assets" || die "演示构建缺少"事件沙盘"入口（VITE_AWR_LAB_PUBLIC=1 未生效）"
 "$PY" - "$WEB_OUT/build-info.json" "$REL" "$VERSION" <<'PY' || die "dist/build-info.json 缺失或与本次构建不符（buildInfoPlugin，ADR-118）"
 import json, sys
 b = json.load(open(sys.argv[1], encoding="utf-8"))
@@ -160,7 +168,7 @@ step "清单与打包"
   echo "dirty=$DIRTY"
   echo "built_at=$BUILT_AT"
   echo "git=$SHA$([ "$DIRTY" = true ] && echo -dirty || true)"
-  echo "web=VITE_AWR_DEMO=public"
+  echo "web=$WEB_ENV"
 } > "$STAGE/RELEASE"
 (cd "$STAGE" && find . -type f -print0 | sort -z | xargs -0 sha256sum > "$OUT/MANIFEST.tmp" && mv "$OUT/MANIFEST.tmp" MANIFEST.sha256)
 TAR="$OUT/$NAME.tar.gz"

@@ -313,7 +313,7 @@ To cite Drone4D, use GitHub's "Cite this repository" feature ([CITATION.cff](CIT
   title   = {ANet Drone4D: A Real-World Grounded 4D World Runtime for Autonomous Multi-Agent Drones},
   author  = {{Agent Network Research}},
   year    = {2026},
-  version = {0.3.0},
+  version = {0.3.1},
   url     = {https://github.com/ANetResearch/ANet-Drone4D}
 }
 ```

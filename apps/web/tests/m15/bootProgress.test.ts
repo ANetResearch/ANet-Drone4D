@@ -1,7 +1,7 @@
 // M15-FR-201 (R-D2-01; AWR-04 §10.1; AWR-14 §20.3; UX-FR-101, UX-FR-102; M15-AC-201 unit part): five weighted segments,
 // monotone per segment and in total, renormalised without the bundle segment (loading layer: 0.118 / 0.471 / 0.353 /
 // 0.059), reduced motion jumps between segment boundaries, the reveal is 1, the writer throttles to <= 10 Hz and skips
-// sub-pixel steps, the phase text follows the first incomplete segment (bytes on the points phase), the bundle fraction by
+// sub-pixel steps, the phase text follows the first incomplete segment (the bytes are shown by the readout), the bundle fraction by
 // bytes or by count, the floors of the gates and of the opened-world snapshot, and early reports reach the first sink.
 import { describe, expect, it } from 'vitest'
 import {
@@ -66,8 +66,9 @@ describe('BootProgressModel', () => {
     m.report('world', 1)
     expect(m.firstIncomplete()).toBe('points')
     expect(phaseText(m)).toBe('加载首屏点云')
+    // the bytes moved to the readout under the bar (app/boot/loadMeter.ts): the phase line names the stage only
     m.bytes = { received: 1.4 * 1024 * 1024, total: 3.2 * 1024 * 1024 }
-    expect(phaseText(m)).toBe('加载首屏点云 · 1.4 / 3.2 MB')
+    expect(phaseText(m)).toBe('加载首屏点云')
   })
 })
 

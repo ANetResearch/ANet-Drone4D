@@ -18,6 +18,9 @@
 // ./landing.en.json) instead of the shared app/i18n module, which otherwise put the full bilingual dictionary
 // (~230 KB raw) in this chunk; openSheet() syncs the shared app/i18n locale right before the sandbox Sheet (and the
 // full dictionary it needs) lazily loads, so the Sheet opens in the language chosen here.
+// V0.3.1 (extension point 15, ADR-129): with VITE_AWR_LAB_PUBLIC=1 the hero gets a third action (UAV view samples, a
+// full-page link to the /lab/ static build) and the "Event Lab · UAV camera views" section follows the story
+// (LandingEventLab); without the switch both are constant-false branches the bundler removes.
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { bootCapacityFetch, capacityLine, sandboxQueueHint, setLocale, useT, type CapacityLine, type Locale } from './LandingI18n'
@@ -26,7 +29,9 @@ import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
 import { Icon } from '@/ui/icons/Icon'
 import type { CapacityView } from '@/net/sandbox/client'
+import { LAB_PUBLIC, LAB_PUBLIC_ENTRY } from '@/app/lab-public/flags'
 import { buildVersion } from './LandingContent'
+import { EventLab } from './LandingEventLab'
 import { LandingHeader } from './LandingHeader'
 import { LandingFooter, OpenSource, Showcase } from './LandingSections'
 import { LandingStory } from './LandingStory'
@@ -202,7 +207,7 @@ export function Landing() {
               <p className="max-w-2xl text-base leading-relaxed text-pretty text-muted-foreground md:text-lg">{t('landing.tagline')}</p>
             </div>
             <div className="brand-enter mt-8 flex flex-col gap-4" style={{ animationDelay: 'calc(var(--duration-stagger) * 2)' }}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                 <Button nativeButton={false} render={<a href={DEMO_ENTRY} data-demo-launch="" />} className="h-11 w-full px-5 text-sm sm:w-auto">
                   <Icon icon="tl.play" data-icon="inline-start" />
                   {t('landing.launch')}
@@ -212,6 +217,13 @@ export function Landing() {
                   <Icon icon="sandbox.mine" data-icon="inline-start" />
                   {t('landing.sandbox.open')}
                 </Button>
+                {LAB_PUBLIC ? (
+                  <Button variant="outline" nativeButton={false} render={<a href={LAB_PUBLIC_ENTRY} data-landing-lab-entry="hero" />}
+                    className="h-11 w-full px-5 text-sm sm:w-auto dark:bg-card dark:hover:bg-muted">
+                    <Icon icon="sensor.camera" data-icon="inline-start" />
+                    {t('landing.lab.samples')}
+                  </Button>
+                ) : null}
               </div>
               <div className="flex min-h-5 flex-col gap-1.5">
                 {capacity.line ? (
@@ -234,6 +246,7 @@ export function Landing() {
         </section>
 
         <LandingStory />
+        {LAB_PUBLIC ? <EventLab /> : null}
         <Showcase />
         <section id="closing" className="scroll-mt-14 py-16 md:py-24" aria-labelledby="closing-title" data-landing-closing="">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">

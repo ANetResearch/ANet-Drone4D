@@ -90,7 +90,7 @@ def test_package_importable_from_python_dir(name: str) -> None:
 
 
 def test_awr_version_matches_pyproject() -> None:
-    """产品版本单一来源（ADR-118，AWR-04 §15.4.1）：pyproject.toml 与两份 package.json 相等，形如 X.Y.Z；V0.2-demo 为 0.2.0
+    """产品版本单一来源（ADR-118，AWR-04 §15.4.1）：pyproject.toml 与两份 package.json 相等，形如 X.Y.Z；V0.2-demo 为 0.2.0，V0.3.1 为 0.3.1
     （tools/lint/check-version.mjs 在 make lint 中做同一检查）。`awr.__version__` 同时是 World Package 的生成器版本（写入
     generator.version 并参与 contentVersion），M03 解耦之前保持 0.1.0，不随产品版本变化。"""
     import json
@@ -101,7 +101,7 @@ def test_awr_version_matches_pyproject() -> None:
     meta = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     web = json.loads((ROOT / "apps" / "web" / "package.json").read_text(encoding="utf-8"))["version"]
     top = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-    assert meta["project"]["version"] == web == top == "0.2.0"
+    assert meta["project"]["version"] == web == top == "0.3.1"
     assert re.fullmatch(r"\d+\.\d+\.\d+", web) and re.fullmatch(r"\d+\.\d+\.\d+", awr.__version__)
 
 

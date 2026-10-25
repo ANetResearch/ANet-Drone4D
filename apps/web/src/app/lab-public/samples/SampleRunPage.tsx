@@ -12,7 +12,8 @@
 //    跨策略比较（metrics 路径不读取）；
 // 2. lab 播放头（stores/lab/playhead）是唯一时间来源：本页每个动画帧推进播放头并驱动全部视频；数据检视面板经 labPlayheadPort 与
 //    播放头双向同步（§21.13）；
-// 3. 查询参数 `t`（仿真秒）为打开时的播放头时刻。
+// 3. 打开时的播放头时刻（initialSampleT）：查询参数 `t`（仿真秒）优先；否则取首个关键时刻（切片窗口围绕关键事件截取，
+//    tools/bench/d3/public_slice.py），再否则取 SAMPLE_DEFAULT_T_S。0 s 时各机仍在起降点，首帧不含有效画面（V0.3.1）。
 import * as React from 'react'
 import { Badge } from '@/ui/components/ui/badge'
 import { Button } from '@/ui/components/ui/button'
@@ -54,6 +55,21 @@ export function parseSampleT(search: string): number | null {
   if (v === null || v.trim() === '') return null
   const n = Number(v)
   return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+/** 没有查询参数与可用切片时的打开时刻（s）：起飞后已进入任务区的时刻 */
+export const SAMPLE_DEFAULT_T_S = 20
+/** 切片起点早于此时刻（s）时视为仍在起飞阶段，不作为打开时刻 */
+export const SAMPLE_AIRBORNE_MIN_S = 5
+
+/** 打开时的播放头时刻（s）与来源：查询参数 `t`；否则最早的、不早于 SAMPLE_AIRBORNE_MIN_S 的切片窗口起点（关键时刻）；
+ * 否则 SAMPLE_DEFAULT_T_S。`durationS` 已知（> 0）时缺省时刻不超过它；查询参数原样采用（与原有行为相同） */
+export function initialSampleT(search: string, run: Pick<LabStaticRun, 'slices'>, durationS = 0): { tS: number; from: 'query' | 'slice' | 'default' } {
+  const q = parseSampleT(search)
+  if (q !== null) return { tS: q, from: 'query' }
+  const starts = run.slices.map((s) => s.tFromS).filter((t) => Number.isFinite(t) && t >= SAMPLE_AIRBORNE_MIN_S)
+  if (starts.length) return { tS: Math.min(...starts), from: 'slice' }
+  return { tS: durationS > 0 ? Math.min(SAMPLE_DEFAULT_T_S, durationS) : SAMPLE_DEFAULT_T_S, from: 'default' }
 }
 
 /** 数据检视的静态来源：切片与底图（分发渠道副本优先，其次本站托管的文件，ADR-221；recording_id = run_id，AWR-17 §18.8.5 v1.6 注） */
@@ -107,10 +123,11 @@ function SampleRun({ index, run, back, t }: { index: LabStaticIndex; run: LabSta
   const [ctl, setCtl] = React.useState<InspectController | null>(null)
   const viewsRef = React.useRef<HTMLDivElement>(null)
 
-  // 播放头初值与时长（磁带、轨迹、切片窗口；视频时长在加载后由同步器回写的 onLoadedMetadata 扩展）
+  // 播放头初值与时长（磁带、轨迹、切片窗口；视频时长在加载后由同步器回写的 onLoadedMetadata 扩展）。初值见 initialSampleT
   React.useEffect(() => {
-    const t0 = typeof location === 'undefined' ? null : parseSampleT(location.search)
-    usePlayhead.setState({ tS: t0 ?? 0, playing: false, rate: 1, durationS: Math.max(t0 ?? 0, sampleDurationS({ run })) })
+    const d = sampleDurationS({ run })
+    const { tS } = initialSampleT(typeof location === 'undefined' ? '' : location.search, run, d)
+    usePlayhead.setState({ tS, playing: false, rate: 1, durationS: Math.max(tS, d) })
     return () => usePlayhead.getState().pause()
   }, [run])
   React.useEffect(() => {

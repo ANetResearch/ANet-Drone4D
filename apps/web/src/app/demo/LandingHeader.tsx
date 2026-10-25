@@ -2,6 +2,8 @@
 // action from 1280 CSS px up; below that (tablets 768-1279 and phones) a 44 px menu button opens a shadcn Sheet with the
 // same navigation, the language switch, both main actions and the repository links (touch targets >= 44 px). A section
 // link in the Sheet closes it first and scrolls once the close transition has finished (the modal scroll lock is gone).
+// V0.3.1: with VITE_AWR_LAB_PUBLIC=1 the navigation ends with "Event Lab", a full-page link to the /lab/ static build
+// (LAB_PUBLIC_ENTRY; not an application route), in the desktop bar and in the Sheet.
 import * as React from 'react'
 import { useT, type Locale } from './LandingI18n'
 import { DEMO_DOCS_URL, DEMO_ENTRY, DEMO_REPO_URL } from '@/lib/demo'
@@ -11,6 +13,7 @@ import { Button } from '@/ui/components/ui/button'
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/ui/components/ui/sheet'
 import { ToggleGroup, ToggleGroupItem } from '@/ui/components/ui/toggle-group'
 import { Icon } from '@/ui/icons/Icon'
+import { LAB_PUBLIC, LAB_PUBLIC_ENTRY } from '@/app/lab-public/flags'
 import { API_DOCS_PATH, NAV, NAV_KEY, scrollToSection, type NavId } from './LandingContent'
 
 export interface LandingHeaderProps {
@@ -70,6 +73,13 @@ export function LandingHeader({ locale, onLocale, onSandbox }: LandingHeaderProp
               {t(NAV_KEY[id])}
             </Button>
           ))}
+          {LAB_PUBLIC ? (
+            <Button variant="ghost" size="sm" className="h-8 px-3 text-sm text-muted-foreground hover:text-foreground" nativeButton={false}
+              render={<a href={LAB_PUBLIC_ENTRY} data-landing-lab-entry="nav" />}>
+              {t('landing.nav.lab')}
+              <Icon icon="chev.right" data-icon="inline-end" />
+            </Button>
+          ) : null}
         </nav>
         <div className="ml-auto hidden items-center gap-2 xl:flex">
           <LangSwitch locale={locale} onLocale={onLocale} />
@@ -104,6 +114,14 @@ export function LandingHeader({ locale, onLocale, onSandbox }: LandingHeaderProp
                 {t(NAV_KEY[id])}
               </a>
             ))}
+            {LAB_PUBLIC ? (
+              <a href={LAB_PUBLIC_ENTRY} data-landing-lab-entry="sheet"
+                className="flex min-h-12 items-center gap-3 rounded-md px-3 text-base text-foreground hover:bg-muted">
+                <Icon icon="tl.replay" className="size-4 text-muted-foreground" aria-hidden="true" />
+                <span className="min-w-0 flex-1">{t('landing.nav.lab')}</span>
+                <Icon icon="chev.right" className="size-4 text-muted-foreground" aria-hidden="true" />
+              </a>
+            ) : null}
           </nav>
           <div className="flex flex-col gap-3 border-t border-border px-4 py-4">
             <span className="text-xs text-muted-foreground">{t('landing.lang')}</span>

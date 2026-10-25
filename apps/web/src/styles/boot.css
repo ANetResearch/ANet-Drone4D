@@ -24,22 +24,23 @@
   }
   #boot-mask .boot-badge { width: 480px; max-width: calc(100vw - 2rem); height: auto; }
   #boot-mask .boot-phase { font: 500 0.75rem/1.125rem var(--font-sans); letter-spacing: 0.02em; min-height: 1.125rem; contain: layout paint; }
-  #boot-mask .boot-progress { width: 320px; height: 2px; background: var(--lf-track); contain: layout paint; }
   #boot-mask .boot-hint { font: 500 0.75rem/1.125rem var(--font-sans); color: var(--g300); min-height: 1.125rem; }
   @media (max-width: 1279px) { #boot-mask .boot-badge { width: 320px; } }
 }
-/* D2.1 five-segment progress track (R-D2-01, R-D2-30; AWR-04 §10.1, §15.5.2; ADR-119; M15-FR-201, FR-224; AWR-14 §20.26.2
-   rule 2): index.html inlines the critical rules (track flex with 2 px gaps, segment widths by weight, the fill as
-   `::after { transform: scaleX(var(--seg-p)) }`); app/boot/progress.ts writes `--seg-p` (0..1) on every segment. Done and
-   running segments fill with g50, segments not started show the track only (--lf-track); never red (an error freezes the
-   bar and changes the text). The fill only transitions transform (#33 of AWR-14 §20.15.4); reduced motion jumps. The
-   track itself is no longer scaled (D2 single bar), `--boot-p` stays a plain total for tests. */
-html #boot-mask .boot-progress { background: none; }
-html #boot-mask .boot-progress > i.boot-track { display: flex; gap: 2px; width: 100%; height: 100%; transform: none; }
-html #boot-mask .boot-track > i { background: var(--lf-track); }
-html #boot-mask .boot-track > i::after { background: var(--g50); transition: transform var(--duration-quick) var(--ease-smooth-out); }
-html:is([data-motion="reduced"], [data-motion="off"]) #boot-mask .boot-track > i::after { transition: none; }
-@media (prefers-reduced-motion: reduce) { html #boot-mask .boot-track > i::after { transition: none; } }
+/* Loading bar (v0.3.0; app/boot/loadMeter.ts; replaces the D2.1 five-segment track, whose segments filled out of order and
+   showed two separate bars): one track, one fill. index.html inlines the critical rules (layout, the fill as
+   `transform: scaleX(var(--boot-p))`, the indeterminate slide before the first script); this is the token version. The fill
+   is g50 on the --lf-track track and never red (an error freezes the bar and changes the text). Only transform transitions;
+   reduced motion jumps. Stage and percent sit above the bar, bytes, throughput and remaining time below it, all with
+   tabular figures and fixed line heights (no layout jump while the figures change). */
+html #boot-mask .boot-load { contain: layout paint; }
+html #boot-mask .boot-progress { background: var(--lf-track); }
+html #boot-mask .boot-fill { background: var(--g50); transition: transform var(--duration-quick) var(--ease-smooth-out); }
+html #boot-mask .boot-progress[data-state="indeterminate"] > .boot-fill { transition: none; }
+html #boot-mask .boot-percent { color: var(--g50); font: 500 0.75rem/1.125rem var(--font-sans); }
+html #boot-mask .boot-stats { color: var(--g400); font: 500 0.6875rem/1rem var(--font-sans); }
+html:is([data-motion="reduced"], [data-motion="off"]) #boot-mask .boot-fill { transition: none; }
+@media (prefers-reduced-motion: reduce) { html #boot-mask .boot-fill { transition: none; } }
 /* capacity line under the phase text (AWR-04 §15.5.1; AWR-14 §20.26.2 rule 3): fixed height (no layout jump), tabular
    digits, the "needs queue" mark drawn like an outline Badge (the mask paints before React, so no component here) */
 #boot-mask .boot-capacity { display: flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 1.25rem; color: var(--muted-foreground);
@@ -48,17 +49,14 @@ html:is([data-motion="reduced"], [data-motion="off"]) #boot-mask .boot-track > i
 #boot-mask .boot-capacity-badge { display: inline-flex; align-items: center; height: 1.125rem; padding: 0 0.375rem; border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 2px); color: var(--foreground); font-size: 0.6875rem; white-space: nowrap; }
 #boot-mask .boot-version { color: var(--muted-foreground); font-variant-numeric: tabular-nums lining-nums; cursor: copy; user-select: all; }
-/* the loading layer of a world switch, static browsing and the power-save resume use the same segmented track
-   (ui/boot/LoadingLayer.tsx, ui/power/PowerOverlay.tsx); segment widths are set inline by weight */
-.loading-progress { width: 100%; height: 2px; contain: layout paint; }
-.loading-progress > i { display: flex; gap: 2px; height: 100%; width: 100%; }
-.loading-progress > i > i { display: block; flex: 0 1 0; height: 100%; background: var(--lf-track); }
-.loading-progress > i > i::after {
-  content: ""; display: block; height: 100%; background: var(--g50); transform-origin: left center; transform: scaleX(var(--seg-p, 0));
+/* the loading card of a world switch and static browsing (ui/boot/LoadingLayer.tsx) uses the same single bar and readout */
+.loading-progress { position: relative; width: 100%; height: 2px; overflow: hidden; border-radius: 1px; background: var(--lf-track); contain: layout paint; }
+.loading-progress > i {
+  display: block; width: 100%; height: 100%; background: var(--g50); transform-origin: left center; transform: scaleX(var(--boot-p, 0));
   transition: transform var(--duration-quick) var(--ease-smooth-out);
 }
-html:is([data-motion="reduced"], [data-motion="off"]) .loading-progress > i > i::after { transition: none; }
-@media (prefers-reduced-motion: reduce) { .loading-progress > i > i::after { transition: none; } }
+html:is([data-motion="reduced"], [data-motion="off"]) .loading-progress > i { transition: none; }
+@media (prefers-reduced-motion: reduce) { .loading-progress > i { transition: none; } }
 @layer motion {
   /* brand entrance (AWR-15 §4.6): opacity + translateY(--distance-micro), --duration-fast, --ease-smooth-out */
   .brand-enter { animation: brand-enter var(--duration-fast) var(--ease-smooth-out) backwards; }

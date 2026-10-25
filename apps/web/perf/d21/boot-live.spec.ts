@@ -1,7 +1,7 @@
 // D2.1 boot screen on the real stack (WP-13b, M16; D2-AC-40 version line, D2-AC-41 five segments and the boot capacity line,
 // D2-AC-42 page side; R-D2-29, R-D2-30, R-D2-32; AWR-04 §15.4, §15.5, §15.6.5). Backend: perf/d21/live21.ts (tests/e2e/sbstack.py,
 // N_max = 1, RELEASE written from the build under test), the test build (D21_DIST) and the public demo build (D21_DEMO_DIST).
-//   1. version line: with JavaScript disabled the static line equals build-info.json; the meta tag; five segments by weight;
+//   1. version line: with JavaScript disabled the static line equals build-info.json; the meta tag; one loading bar (v0.3.0, formerly five segments by weight);
 //      the live capacity answer's `build` equals build-info.json field by field, so no "site updated" banner appears;
 //   2. "you may have to queue" while loading: with the only sandbox slot held, the boot line shows the sandbox queue text and
 //      the "开启沙盒需排队" badge before the reveal; requests while the mask is up are >= 5 s apart; after the reveal the start
@@ -43,7 +43,7 @@ test.afterAll(async () => {
   await live?.stop()
 })
 
-test('version line: static, equal to build-info.json, meta tag, five segments; the live capacity build matches', async ({ page, browser }) => {
+test('version line: static, equal to build-info.json, meta tag, one loading bar; the live capacity build matches', async ({ page, browser }) => {
   test.setTimeout(300_000)
   const b = buildInfo(TEST_DIST)
   const nojs = await browser.newContext({ javaScriptEnabled: false, baseURL: baseUrl(PORT), locale: 'zh-CN' })
@@ -51,10 +51,12 @@ test('version line: static, equal to build-info.json, meta tag, five segments; t
   await p0.goto('/world/synthcity')
   await expect(p0.locator('#boot-mask .boot-version')).toHaveText(display(b))
   expect(await p0.locator('meta[name="awr-build"]').getAttribute('content')).toBe(`${b.version}-${b.channel}+${b.commit}${b.dirty ? '-dirty' : ''}`)
-  const widths = await p0.locator('#boot-mask [data-seg]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width))
-  expect(widths).toHaveLength(5)
-  const total = widths.reduce((a, x) => a + x, 0)
-  ;[0.15, 0.1, 0.4, 0.3, 0.05].forEach((w, i) => expect(Math.abs(widths[i] - w * total)).toBeLessThanOrEqual(2))
+  // single loading bar (v0.3.0, replaces the D2.1 five-segment track): one progressbar, one fill, indeterminate before scripts
+  const bars = p0.locator('#boot-mask [role="progressbar"]')
+  await expect(bars).toHaveCount(1)
+  await expect(bars).toHaveAttribute('data-state', 'indeterminate')
+  await expect(p0.locator('#boot-mask .boot-progress > .boot-fill')).toHaveCount(1)
+  await expect(p0.locator('#boot-mask [data-seg]')).toHaveCount(0)
   await nojs.close()
 
   const w = watch(page)
