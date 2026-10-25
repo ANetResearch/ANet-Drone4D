@@ -55,7 +55,7 @@ WP_ISSUE = {
 REPORTS = [*(p for p, _ in sg.STAGE_REPORTS.values()), sg.SUMMARY_REPORT[0],
            *(p for v in sg.WP_EXTRA_REPORTS.values() for p, _ in v)]
 FORBIDDEN_D4 = re.compile(r"Drone4D\s*2(\.0)?\b|Drone4D\s*v2\b|2\.0\s*版|二代|新一代\s*Drone4D|D3\.5|D3\s*Plus", re.I)
-EMOJI = re.compile("[\U0001f300-\U0001faff☀-➿]")
+EMOJI = re.compile("[\U0001f300-\U0001faff\u2600-\u27bf]")
 
 
 @pytest.fixture(scope="module")

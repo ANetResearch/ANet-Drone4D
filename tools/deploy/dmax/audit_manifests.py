@@ -98,8 +98,8 @@ _BOARD_PREFLIGHT: dict[str, int | None] = {"d3-board-audit-pre": None, "d3-board
 SHELL_SITES: dict[str, tuple[Variant, ...]] = {
     f"{SCRIPT_ROOT}/bench_ctl.sh": (Variant("default", "bench", ("board", "list")),),
     f"{SCRIPT_ROOT}/run_d3_tests.sh": (                         # 主阶段绑定一张卡；gz 阶段与合并阶段在 CPU 池
-        Variant("default", "test", gpu_by_name={"d3-test-main": 2}),
-        Variant("gpu3", "test", (), {"GPU": "3", "TASK_ID": "audit"}, gpu_by_name={"d3-test-audit": 3}),
+        Variant("default", "test", (), {"HOST": "0"}, gpu_by_name={"d3-test-main": 2}),     # HOST=0：主机阶段在本机跑 pytest，渲染时不执行
+        Variant("gpu3", "test", (), {"GPU": "3", "TASK_ID": "audit", "HOST": "0"}, gpu_by_name={"d3-test-audit": 3}),
         Variant("multi-card", "test", (), {"GPU": "2,3"}, reject=True),
         Variant("all-cards", "test", (), {"GPU": "all"}, reject=True),
         Variant("foreign-card", "test", (), {"GPU": "0"}, reject=True),
@@ -129,6 +129,7 @@ SHELL_SITES: dict[str, tuple[Variant, ...]] = {
         Variant("no-materialize", "subworker", ("--once",), {"MATERIALIZE": "0"}),
         Variant("benchroot", "subworker", ("--once",), {"BENCH_ROOT": "benchroot"}),
     ),
+    f"{SCRIPT_ROOT}/images/agent/scan.sh": (Variant("default", "subworker", ("d3-agent-py:audit",)),),  # 提交扫描门复核（K18；CPU 池）
     f"{SCRIPT_ROOT}/images/trivy/build.sh": (Variant("default", "subworker"),),   # 构建后以 --version 自检一次（CPU 池）
     f"{SCRIPT_ROOT}/registry/regctl.sh": (Variant("up", "registry", ("up",)),),  # d3-registry 三个容器（CPU 池）
     f"{SCRIPT_ROOT}/lab/profile.sh": (Variant("up", None, ("up",)),),            # d3 profile 六个容器，组件取 d3.component 标签
@@ -350,7 +351,7 @@ def render_shell(script: Path, args: tuple[str, ...] = (), env: dict[str, str] |
                  ) -> tuple[int, list[list[str]], str]:
     """在记录桩下执行启动脚本 → (退出码, 发出的 docker 参数表列表（不含 docker 本身）, stderr 尾部)。
 
-    本机侧 PATH 前置桩目录（ssh、rsync、scp、docker）；ssh 桩把远端命令串交给只含 docker 桩、mkdir、cp 与 chown 空操作桩、
+    本机侧 PATH 前置桩目录（ssh、rsync、scp、docker）；ssh 桩把远端命令串交给只含 docker 桩、mkdir、cp、chown 与 chmod 空操作桩、
     stat 桩（输出 0）、id、head 与 tail（只读）的 PATH 下的 bash，
     远端命令串里的其他命令找不到即失败，不会在本机产生副作用。"""
     with tempfile.TemporaryDirectory(prefix="d3-manifest-") as td:
@@ -364,7 +365,7 @@ def render_shell(script: Path, args: tuple[str, ...] = (), env: dict[str, str] |
             _stub(loc / n, "#!/bin/sh\nexit 0\n")
         for d in (loc, rem):
             _stub(d / "docker", _DOCKER_STUB.format(py=py))
-        for n in ("mkdir", "cp", "chown"):
+        for n in ("mkdir", "cp", "chown", "chmod"):
             _stub(rem / n, "#!/bin/sh\nexit 0\n")
         _stub(rem / "stat", "#!/bin/sh\necho 0\n")              # `stat -c %g /var/run/docker.sock`（--group-add）：渲染时取 0
         for n in ("id", "head", "tail"):

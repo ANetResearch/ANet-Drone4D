@@ -21,7 +21,7 @@
       路径段中。真值文件：含 MCAP 真值通道前缀 `/eval/hidden/` 的文件，或路径中有 `truth` 段的文件。
   parity <dir_a> <dir_b>
       两棵产物树逐字节对拍（只在一侧的文件、内容不同的文件）。
-  d2-parity [--ref v0.2.1] [--work DIR]
+  d2-parity [--ref v0.2.2] [--work DIR]
       扩展点 15 的构建对拍（"开关缺省关闭时 D2 演示构建产物逐字节不变"，UX-AC-082）：`git archive <ref>` 与当前工作树的
       `apps/web`、`docs/media`、`packages/contracts` 分别放到 `<work>/ref` 与 `<work>/cur`（两棵树路径结构相同：rolldown
       的模块顺序与绝对路径的相对次序有关，两侧须同构），第三方包逐项链接本检出的 node_modules（两侧共用），工作区包
@@ -31,7 +31,7 @@
 用法：
     python tools/bench/d3/scan_public.py build .cache/deploy/emax/lab-dist --profile lab
     python tools/bench/d3/scan_public.py static /srv/drone4d/lab-static --test-ids configs/bench/test_ids.txt
-    python tools/bench/d3/scan_public.py d2-parity --ref v0.2.1
+    python tools/bench/d3/scan_public.py d2-parity --ref v0.2.2
 每个子命令可加 `--json <path>` 写出报告（`awr.d3.scan_public.report.v1`）；退出码 0 通过、1 有发现、2 参数错误或产物缺失。
 git 目录不在工作树内时（本仓库的外置 GIT_DIR），d2-parity 读取环境变量 GIT_DIR。
 """
@@ -414,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("a", type=Path)
     p.add_argument("b", type=Path)
     d = sub.add_parser("d2-parity", help="D2 标签构建与当前工作树演示构建（开关缺省关闭）对拍")
-    d.add_argument("--ref", default="v0.2.1")
+    d.add_argument("--ref", default="v0.2.2")              # 同 mk/deploy.mk D2_REF（ADR-209）
     d.add_argument("--work", type=Path, help="对拍工作目录（缺省临时目录，结束后删除）")
     d.add_argument("--keep", action="store_true", help="保留临时工作目录")
     for x in (b, s, p, d):

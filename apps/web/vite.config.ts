@@ -28,7 +28,8 @@ const DEMO_MEDIA = ['demo-flight.webp', 'screenshot-hero.jpg', 'screenshot-strea
 //   /lab-static/；内部工作区页面、bench 与实时客户端在构建期剔除（labPublicPlugin 的模块守卫），与演示构建、测试开关互斥。
 // - VITE_AWR_LAB_PUBLIC=1：D2 演示构建显示"事件沙盘"入口（链接到 /lab/ 静态构建，lab-public/flags.ts LAB_PUBLIC_ENTRY）。
 // 公开演示构建（VITE_AWR_DEMO=public）在任一开关下都不含内部工作区：labStripPlugin 在构建期把 D3 新增的内部模块（routes/lab*、
-// ui/lab、stores/lab、net/bench.ts、i18n/lab 分片与 lab.* 文案键）从路由表、词典与 Tailwind 候选扫描中剔除，开关为 0 时产物与
+// ui/lab、stores/lab、net/bench.ts、i18n/lab 分片与 lab.* 文案键）从路由表、词典与 Tailwind 候选扫描中剔除，并从契约原因码表剔除 D3
+// 新增的码（stripD3Reasons），开关为 0 时产物与
 // D2 标签构建逐字节一致（tools/bench/d3/scan_public.py d2-parity 对拍）。
 export function envSwitch(name: string, v: string | undefined): boolean {
   if (v === undefined || v === '' || v === '0') return false
@@ -97,6 +98,29 @@ export function stripEngineActors(code: string): string | null {
   return out === code ? null : out
 }
 
+/**
+ * D3 新增的原因码与关闭码（AWR-17 §18.12；reasons.json 的 d1 = V0.3）：原因码 600–699（世界、事件、物理、传感、Agent 与 bench 子区段）、
+ * Agent WS 关闭码 4460–4469。D2 演示构建不产生也不解释这些码，但契约生成物 gen/ts/reasons.ts 把它们与 D2 码放在同一张表里，
+ * 演示构建的 rt.worker 与 ui 两个 chunk 因此各大约 13 KB（K02 遗留，D3-AC-01 demo-parity）。演示构建在构建期从该模块剔除它们，
+ * 剩余文本与 D2 标签的生成物逐字节相同（tools/bench/d3/scan_public.py d2-parity 对拍）。
+ */
+export const CONTRACT_REASONS_RE = /[\\/]packages[\\/]contracts[\\/]gen[\\/]ts[\\/]reasons\.ts$/
+export const D3_REASON_CODES: readonly [number, number] = [600, 699]
+export const D3_WS_CLOSE_CODES: readonly [number, number] = [4460, 4469]
+const inRange = (n: number, [lo, hi]: readonly [number, number]): boolean => n >= lo && n <= hi
+
+/**
+ * 从 gen/ts/reasons.ts（tools/contracts/gen.mjs 的 genReasons 输出）去掉 D3 码：`Reason` 的 `  NAME: code,` 行、`REASONS` 的
+ * `  code: { code: code, … },` 行与 `WS_CLOSE` 单行对象中的 D3 关闭码；其余行与键序不变。返回 null 表示无需改写
+ */
+export function stripD3Reasons(code: string): string | null {
+  let out = code.replace(/^ {2}[A-Z][A-Z0-9_]*: (\d+),\r?\n/gm, (line, n: string) => (inRange(Number(n), D3_REASON_CODES) ? '' : line))
+  out = out.replace(/^ {2}(\d+): \{ code: \1, [^\n]*\},\r?\n/gm, (line, n: string) => (inRange(Number(n), D3_REASON_CODES) ? '' : line))
+  out = out.replace(/^(export const WS_CLOSE = \{ )([^}\n]*)( \} as const)/m, (_all, head: string, body: string, tail: string) =>
+    head + body.split(', ').filter((e) => !inRange(Number(e.split(': ')[1]), D3_WS_CLOSE_CODES)).join(', ') + tail)
+  return out === code ? null : out
+}
+
 function labStripPlugin(): Plugin {
   let root = '.'
   return {
@@ -112,6 +136,10 @@ function labStripPlugin(): Plugin {
       if (/[\\/]src[\\/]styles[\\/]index\.css$/.test(file)) {
         const rel = (p: string): string => posix.relative(posix.dirname(file.split('\\').join('/')), posix.join(root.split('\\').join('/'), p))
         return { code: `${code}\n${LAB_TAILWIND_EXCLUDE.map((p) => `@source not "${rel(p)}";`).join('\n')}\n`, map: null }
+      }
+      if (CONTRACT_REASONS_RE.test(file)) {
+        const s = stripD3Reasons(code)
+        return s === null ? null : { code: s, map: null }
       }
       if (/[\\/]src[\\/]engine[\\/]index\.ts$/.test(file)) {
         const s = stripEngineActors(code)
@@ -664,7 +692,8 @@ export default defineConfig({
     headers: COI_HEADERS,
     proxy: PROXY,
   },
-  worker: { format: 'es' },
+  // 演示构建的 Worker（rt.worker）单独打包，同样经 labStripPlugin（其中的契约原因码表剔除 D3 码，扩展点 15）
+  worker: { format: 'es', ...(DEMO ? { plugins: () => [labStripPlugin()] } : {}) },
   build: {
     target: 'es2023',
     rolldownOptions: {

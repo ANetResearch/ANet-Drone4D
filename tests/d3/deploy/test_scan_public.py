@@ -2,7 +2,7 @@
 
 纯函数用例只用临时目录；两个集成用例实际构建（需要本检出的 node_modules 与 git，缺失时跳过）：
 - `/lab/` 独立静态构建（VITE_AWR_LAB_ONLY=1）的产物按 lab 档扫描为 0，且不含 public/ 的 bench 夹具与模型；
-- 扩展点 15 的构建对拍：D2 标签 v0.2.1 与当前工作树的演示构建（开关缺省关闭）逐字节一致（UX-AC-082）。
+- 扩展点 15 的构建对拍：D2 标签（mk/deploy.mk 的 D2_REF，ADR-209 起为 v0.2.2）与当前工作树的演示构建（开关缺省关闭）逐字节一致（UX-AC-082）。
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -188,9 +189,16 @@ def _need_node() -> None:
         pytest.skip("[platform] node_modules/.bin/vite or node not available")
 
 
+def _d2_ref() -> str:
+    """mk/deploy.mk 的 D2_REF（make demo-parity 与回归门 demo-parity 步骤对拍的 D2 标签，唯一来源）"""
+    m = re.search(r"^D2_REF \?= (\S+)$", (ROOT / "mk" / "deploy.mk").read_text(encoding="utf-8"), re.M)
+    assert m, "mk/deploy.mk defines D2_REF"
+    return m.group(1)
+
+
 def _git_ok() -> bool:
     try:
-        subprocess.run(["git", "rev-parse", "v0.2.1^{commit}"], cwd=ROOT, check=True, capture_output=True)
+        subprocess.run(["git", "rev-parse", f"{_d2_ref()}^{{commit}}"], cwd=ROOT, check=True, capture_output=True)
         return True
     except (OSError, subprocess.CalledProcessError):
         return False
@@ -241,11 +249,11 @@ def test_parity_trees_resolve_workspace_packages_to_their_own_copy(tmp_path: Pat
 
 
 def test_d2_demo_build_parity(tmp_path: Path) -> None:
-    """扩展点 15：开关缺省关闭时 d3-dev 的演示构建与 D2 标签 v0.2.1 的演示构建逐字节一致（D3-AC-01，UX-AC-082）"""
+    """扩展点 15：开关缺省关闭时 d3-dev 的演示构建与 D2 标签（D2_REF）的演示构建逐字节一致（D3-AC-01，UX-AC-082）"""
     _need_node()
     if not _git_ok():
-        pytest.skip("[platform] git with tag v0.2.1 not reachable (export GIT_DIR for the external git directory)")
-    rep = sp.d2_parity("v0.2.1", tmp_path / "parity")
+        pytest.skip(f"[platform] git with tag {_d2_ref()} not reachable (export GIT_DIR for the external git directory)")
+    rep = sp.d2_parity(_d2_ref(), tmp_path / "parity")
     assert all(b["returncode"] == 0 for b in rep["builds"].values()), rep["builds"]
     assert rep["parity"]["ok"], {k: rep["parity"][k] for k in ("only_a", "only_b", "differ")}
     assert rep["parity"]["files_a"] > 20

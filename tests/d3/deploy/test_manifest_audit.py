@@ -63,14 +63,14 @@ def test_repo_manifests_have_no_errors(audit, report) -> None:
     errs = [f for f in report["findings"] if f["level"] == "error"]
     assert report["pass"] and not errs, errs
     assert report["schema"] == "awr.d3.manifest_audit.v1" and set(report["rules"]) == {"CM-00", *RULES}
-    # 每个登记变体都实际渲染：14 个脚本、22 个非拒绝变体，9 个拒绝变体 0 条。docker run 条数：run_d3_tests.sh 主阶段、gz 阶段与
+    # 每个登记变体都实际渲染：15 个脚本、23 个非拒绝变体，9 个拒绝变体 0 条（images/agent/scan.sh 为 K18 提交扫描门复核，K14 登记）。docker run 条数：run_d3_tests.sh 主阶段、gz 阶段与
     # 合并阶段 3 条；run_gz_perf.sh startup 与 gzcpu 两个阶段 2 条；run_subworker.sh 缺省与 benchroot 为 materialize 伴随容器 + subworker 2 条，MATERIALIZE=0 为 1 条；
     # registry/regctl.sh up 3 条（registry、authz、front）；lab/profile.sh up 6 条；scan_images.sh 6 个镜像各 2 条 + 汇总 1 条；
     # run_proto_board.sh 启动前核对 2 条（宿主依赖、世界派生缓存，K07）+ 榜单宿主 1 条；geo_cache.sh warm 为预生成、复核与网格查询打开 3 条；
     # images/gz/pylib.sh install 为离线安装与核对 2 条（K07）；其余各 1 条
     reg = tuple(f"sh:{k}[" for k in sorted(audit.SHELL_SITES))
     rs = {r["site"]: r for r in report["renders"] if r["site"].startswith(reg)}
-    assert len(rs) == 31
+    assert len(rs) == 32
     runs = {"run_d3_tests.sh": 3, "run_gz_perf.sh": 2, "run_subworker.sh[default]": 2, "run_subworker.sh[benchroot]": 2, "regctl.sh[up]": 3, "profile.sh[up]": 6,
             "scan_images.sh[default]": 13, "run_proto_board.sh": 3, "geo_cache.sh[warm]": 3, "pylib.sh[install]": 2}
     for site, r in rs.items():
