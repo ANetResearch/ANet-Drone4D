@@ -427,6 +427,67 @@ def test_rerun_platform_replaces_the_run_and_keeps_the_superseded_one(rescored) 
     assert res["runs"][0]["run_id"] == rid and res["runs"][0]["superseded"] == f"{rid}.superseded-1"
 
 
+def test_rerun_platform_replaces_a_submission_run_without_charging_gpu(formal, rescored) -> None:
+    from awr.bench.submissions import SubmissionStore
+
+    root, out = rescored["root"], rescored["tmp"] / "out-rerun-sub"
+    bdir = root / "boards" / "v1.1"
+    st = SubmissionStore(root / "submissions")
+    d = next(x for x in st.all() if x["image_digest"] == IMG["close"] and x["track"] == "std3-l2")
+    sid = d["submission_id"]
+    rid = f"{sid}-crop-search-102-k0r1"
+    old = next(r for r in load_rows(bdir) if r["run_id"] == rid)
+    gpu0, n0, lanes0 = list(d["_meta"].get("gpu", [])), len(load_rows(bdir)), {ln["lane"]: ln["runs"] for ln in d["result"]["lanes"]}
+    calls: list[dict] = []
+
+    def failing(rs, **kw):                                   # 第一次重跑失败：残留改名为 failed，评测行与 superseded 保持不变
+        calls.append(kw)
+        Path(kw["run_dir"]).mkdir(parents=True, exist_ok=True)
+        (Path(kw["run_dir"]) / "truth").mkdir(exist_ok=True)
+        (Path(kw["run_dir"]) / "truth" / "contacts.jsonl").write_text("")
+        raise RuntimeError(f"gz lost lockstep (seed {kw['seed']})")
+
+    with pytest.raises(F.FormalError) as ei:
+        F.rerun_platform(root, out, board_version="v1.1", run_ids=[rid], reason="first-tick timeout", n_boot=N_BOOT, eval_uid=None,
+                         run_job=failing, log=lambda m: None)
+    assert str(calls[0]["seed"]) not in str(ei.value) and "superseded run is kept" in str(ei.value)
+    runs = root / "dataset" / "crop-search-102" / "runs"
+    assert (runs / f"{rid}.superseded-1").is_dir() and (runs / f"{rid}.failed-1").is_dir() and not (runs / rid).exists()
+    assert len(load_rows(bdir)) == n0 and next(r for r in load_rows(bdir) if r["run_id"] == rid) == old
+
+    res = F.rerun_platform(root, out, board_version="v1.1", run_ids=[rid], reason="all agents timed out on the first tick (661)", n_boot=N_BOOT,
+                           eval_uid=None, log=lambda m: None)                       # 再次重跑：沿用 superseded-1，经 audited_run_job 运行
+    assert res["runs"][0]["kind"] == "submission" and res["runs"][0]["superseded"] == f"{rid}.superseded-1"
+    assert not (runs / f"{rid}.superseded-2").exists() and (runs / rid / "evaluation.json").is_file()
+    assert (root / "hidden" / "crop-search-102" / "truth" / "runs" / rid / "run_seed.json").is_file()
+    assert (root / "hidden" / "crop-search-102" / "truth" / "runs" / f"{rid}.failed-1" / "contacts.jsonl").is_file()   # 失败残留的真值也入隐藏区
+    rows = load_rows(bdir)
+    new = next(r for r in rows if r["run_id"] == rid)
+    assert len(rows) == n0 and sum(r["run_id"] == rid for r in rows) == 1
+    assert {k: v for k, v in new.items() if k != "evaluation"} == {k: v for k, v in old.items() if k != "evaluation"}
+    fake = [c for c in formal["fake"].calls if c["run_id"] == rid][-1]               # 提交方镜像、EvalStore 种子与种子承诺值（替身已核对承诺值）
+    assert fake["seed"] == calls[0]["seed"] and fake["seed_commit"] == calls[0]["seed_commit"] and fake["obs_level"] == "L2"
+    sup = [json.loads(x) for x in (bdir / "rows.superseded.jsonl").read_text().splitlines()]
+    assert sup[-1]["run_id"] == rid and sup[-1]["submission_id"] == sid
+    d2 = st.get(sid)
+    assert d2["_meta"].get("gpu", []) == gpu0                                        # GPU 用量不记入提交方（D3-AC-57 (d)）
+    assert [x["run_id"] for x in d2["_meta"]["platform_reruns"]] == [rid] and d2["_meta"]["platform_reruns"][0]["gpu_charged"] is False
+    for ln in d2["result"]["lanes"]:
+        assert ln["runs"]["platform_rerun"] == lanes0[ln["lane"]]["platform_rerun"] + 1
+    b2 = json.loads((bdir / "board.json").read_text())
+    e = next(x for x in b2["entries"] if x["entry_id"] == f"{d['_meta']['team']}/{sid}" and x["lane"] == "search")
+    ln = next(x for x in d2["result"]["lanes"] if x["lane"] == "search")
+    assert ln["metrics"] == e["metrics"] and all(res["publish"]["twice_identical"].values())   # 名次与点值由发布同步
+    rep = F.build_report(root, out, board_version="v1.1", n_boot=N_BOOT, eval_uid=os.getuid(), log=lambda m: None)
+    assert rep["passed"], [c for c in rep["checks"] if not c["passed"]]
+
+
+def test_rerun_platform_refuses_unknown_runs(rescored) -> None:
+    with pytest.raises(F.FormalError, match=r"not runs of v1\.1"):
+        F.rerun_platform(rescored["root"], rescored["tmp"] / "out-x", board_version="v1.1", run_ids=["v1-l2-nobody-crop-reid-101-k0r0"],
+                         reason="x", n_boot=N_BOOT, eval_uid=None, log=lambda m: None)
+
+
 def test_publish_lab_copies_board_artifacts_and_submissions_only(rescored, tmp_path: Path) -> None:
     root = rescored["root"]
     lab = tmp_path / "lab"

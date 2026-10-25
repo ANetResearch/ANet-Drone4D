@@ -40,9 +40,11 @@ FR-166、FR-177 至 FR-183；ADR-182、ADR-191、ADR-195；B21）。
    `boards/current` 指向重评版本，原版本只读保留。结果 `<out>/rescore-<重评版本>.json`：逐 Run 的评测是否改变（去掉 `evaluator_version`
    与 `inputs.truth_sha256` 后的规范 JSON 比较）、逐"分轨 × 赛道"的榜单条目与原版本是否逐字节一致；分量不变的赛道须逐字节一致，
    否则失败。可续跑：已是新评测器版本且原文件已另存的 Run 不重算。
-9. `rerun-platform`（K16，Evaluator 服务用户，需 GPU）：平台原因的运行按 D3-AC-57 (d) 重跑并替换：`--runs` 列出的基线 Run 的原运行目录与
-   隐藏区运行真值改名为 `<run_id>.superseded-<n>`，以同一种子（EvalStore）重新运行并评测、真值移入隐藏区，`rows.jsonl` 中该 Run 的评测行
-   移到 `rows.superseded.jsonl`（带原因）后追加新行，再发布两次核对；记录 `<out>/rerun-platform.json`。
+9. `rerun-platform`（K16，Evaluator 服务用户，需 GPU）：平台原因的运行按 D3-AC-57 (d) 重跑并替换：`--runs` 列出的基线 Run 或提交 Run 的
+   原运行目录与隐藏区运行真值改名为 `<run_id>.superseded-<n>`，以同一种子（EvalStore）与同一种子承诺值重新运行并评测、真值移入隐藏区，
+   `rows.jsonl` 中该 Run 的评测行移到 `rows.superseded.jsonl`（带原因）后追加新行，再发布两次核对；记录 `<out>/rerun-platform.json`。
+   提交 Run 以提交方镜像、与 subworker 相同的 Run 规格和墙钟上限运行，GPU 用量不记入提交方；提交文档 `_meta.platform_reruns` 记一条，
+   `result.lanes[].runs.platform_rerun` 加 1，名次与层级由发布时同步。提交须在本榜单版本上为 DONE。
 10. `publish-lab`（管理员）：把榜单版本的发布制品（`board.json`、`details.json`、`listing.json`、`rows.jsonl`）与其上榜提交的文档复制到实验室
    数据根（`--lab-root`，属主 `--lab-uid`），设置实验室的 `boards/current`；不复制 `config.json`（服务端评测配置）、EvalStore 与 `hidden/`，
    实验室只读展示，撤回由读取侧即时隐藏（`boardstore.entry_listed`）。记录 `<out>/publish-lab.json`。
@@ -1193,9 +1195,52 @@ def rescore_board(data_root: Path, out: Path, *, src: str, dst: str, jobs: int =
 
 
 # ------------------------------------------------------------------------------------------------------------------ 9 平台原因重跑（K16）
+def _rerun_submission_run(data_root: Path, cfg: dict, store: dict, d: dict, rid: str, *, docker: str, run_job=None) -> dict:
+    """提交 Run 的平台原因重跑（D3-AC-57 (d)：重跑且不计入提交方）：与 subworker `_evaluate_v1` 同一 Run 规格、策略（提交方镜像）、
+    种子与种子承诺值，在同一墙钟上限内运行，但不经 `guarded_run`，GPU 用量不记入提交方团队。→ {lane, physics}。"""
+    import awr.bench.subworker as sw
+    from awr.bench.submissions import WallLimitExceeded, run_duration_s, wall_limit, wall_limit_s
+    from awr.bench.subworker import seed_commit
+
+    policy = {"kind": "image", "image_digest": d["image_digest"], "entry": d["entry"]}
+    it = next((x for x in sw._v1_runs(cfg, d, policy) if x["run_id"] == rid), None)
+    if it is None:
+        raise FormalError(f"{rid} is not a run of submission {d['submission_id']} on {cfg['board_version']}")
+    seed = int(store["seeds"][it["lane"]][it["event"]][it["seed_index"]])
+    run_dir = Path(data_root) / "dataset" / it["event"] / "runs" / rid
+    rj = run_job or functools.partial(audited_run_job, data_root=str(data_root), test_events=sorted(_test_events(cfg)))
+    common = {"worlds_root": Path(cfg["worlds_root"]), "events_root": it["events_root"], "agent_image": cfg.get("agent_image", "d3-agent-py:dev"),
+              "docker": docker}
+    try:
+        with wall_limit(wall_limit_s(run_duration_s(it["rs"], it["events_root"]))):
+            rj(it["rs"], policy=policy, seed=seed, run_id=rid, run_dir=run_dir, physics=cfg["physics"], gz=cfg.get("gz") or None,
+               seed_commit=seed_commit(bytes.fromhex(store["k_eval"]), rid, seed), **common)
+    except (Exception, WallLimitExceeded) as e:              # 含墙钟上限（693）：不替换，原运行保留为 superseded
+        raise FormalError(f"rerun of {rid} failed: {E.redact(f'{type(e).__name__}: {e}', [seed])[:400]}; the superseded run is kept") from None
+    return {"lane": it["lane"], "physics": sw._run_physics(run_dir)}
+
+
+def _note_submission_rerun(subs, sid: str, *, rid: str, lane: str, superseded: str, reason: str, rows: list[dict]) -> None:
+    """提交文档的服务端记录：`_meta.platform_reruns` 追加一条（不经接口返回）；`result.lanes[].runs` 的平台重跑次数加 1（与 subworker
+    同一口径，计全部赛道），本赛道的有效与无效 Run 数按替换后的评测行重算；名次与点值由发布时的 `refresh_results` 刷新。"""
+    with subs.lock:
+        cur = subs.get(sid)
+        cur["_meta"].setdefault("platform_reruns", []).append({"run_id": rid, "superseded": superseded, "reason": reason, "utc": E.utc_now(),
+                                                               "gpu_charged": False})
+        mine = [r for r in rows if r.get("submission_id") == sid and r.get("lane") == lane]
+        for ln in (cur.get("result") or {}).get("lanes", []):
+            runs = ln.setdefault("runs", {})
+            runs["platform_rerun"] = int(runs.get("platform_rerun") or 0) + 1
+            if ln.get("lane") == lane and mine:
+                valid = sum(bool(r["evaluation"].get("ranked_valid")) for r in mine)
+                runs.update(total=len(mine), valid=valid, invalid=len(mine) - valid)
+        subs._put(cur)
+
+
 def rerun_platform(data_root: Path, out: Path, *, board_version: str, run_ids: list[str], reason: str, docker: str = "docker", n_boot: int = 10_000,
-                   runner=None, eval_uid: int | None = EVAL_UID, log=print) -> dict:
-    """平台原因的基线 Run 重跑并替换（模块文档第 9 条）。`runner(job)` 替换单个 Run 的执行（测试）。→ 摘要。"""
+                   runner=None, run_job=None, eval_uid: int | None = EVAL_UID, log=print) -> dict:
+    """平台原因的基线 Run 与提交 Run 重跑并替换（模块文档第 9 条）。`runner(job)` 替换单个基线 Run 的执行、`run_job` 替换提交 Run 的
+    `audited_run_job`（测试）。→ 摘要。"""
     from awr.bench.auth import AuditLog
     from awr.bench.boardstore import load_rows, publish, slim_evaluation
     from awr.bench.split import HiddenStore
@@ -1206,9 +1251,17 @@ def rerun_platform(data_root: Path, out: Path, *, board_version: str, run_ids: l
     bdir = _bv_dir(data_root, board_version)
     rows = load_rows(bdir)
     by_id = {r.get("run_id"): r for r in rows}
-    miss = [x for x in run_ids if x not in by_id or not by_id[x].get("baseline")]
+    miss = [x for x in run_ids if x not in by_id]
     if miss:
-        raise FormalError(f"{miss} are not baseline runs of {board_version}")
+        raise FormalError(f"{miss} are not runs of {board_version}")
+    subs = SubmissionStore(data_root / "submissions")
+    for rid in run_ids:                                       # 先全部核对再动手：提交须在本版本上 DONE
+        old = by_id[rid]
+        if not old.get("baseline"):
+            d = subs.get(str(old.get("submission_id")))
+            if d.get("state") != "DONE" or d["_meta"].get("board_version") != board_version:
+                raise FormalError(f"{rid}: submission {d['submission_id']} is {d.get('state')} on {d['_meta'].get('board_version')}, "
+                                  f"not DONE on {board_version}")
     hs = HiddenStore.for_root(data_root, AuditLog(data_root / "audit"))
     plan = {it["run_id"]: it for t in cfg["tracks"] for it in plan_baselines(cfg, track=t["track"])}
     if cfg.get("rescore"):                                    # 重评版本的基线 Run 沿用原版本的 run_id
@@ -1218,26 +1271,46 @@ def rerun_platform(data_root: Path, out: Path, *, board_version: str, run_ids: l
                 for it in plan.values()}
     done = []
     for rid in run_ids:
-        it, old = plan[rid], by_id[rid]
-        run_dir = data_root / "dataset" / it["event"] / "runs" / rid
-        n = 1 + len(list(run_dir.parent.glob(f"{rid}.superseded-*")))
-        if run_dir.exists():
-            run_dir.rename(run_dir.with_name(f"{rid}.superseded-{n}"))
-        td = hs.truth_dir(it["event"]) / "runs" / rid
-        if td.exists():
-            td.rename(td.with_name(f"{rid}.superseded-{n}"))
+        old = by_id[rid]
+        event = plan[rid]["event"] if old.get("baseline") else str(old["event"])
+        run_dir = data_root / "dataset" / event / "runs" / rid
+        td = hs.truth_dir(event) / "runs" / rid
         rec_p = out / "records" / f"{rid}.json"
-        if rec_p.exists():
-            rec_p.rename(rec_p.with_name(f"{rid}.superseded-{n}.json"))
-        job = _baseline_job(cfg, store, it, data_root=data_root, out=out, docker=docker)
-        (runner or _pool_baseline)(job)
-        rec = E.read_json(rec_p) if rec_p.exists() else {}
-        if rec.get("status") != "COMPLETED":
-            raise FormalError(f"rerun of {rid} did not complete ({rec.get('status', 'no record')}); the superseded run is kept")
+        n = len(list(run_dir.parent.glob(f"{rid}.superseded-*")))
+        if run_dir.exists():                                  # 原运行改名保留；不存在时为上次重跑失败后的再次重跑，沿用已有的 superseded
+            n += 1
+            run_dir.rename(run_dir.with_name(f"{rid}.superseded-{n}"))
+            if td.exists():
+                td.rename(td.with_name(f"{rid}.superseded-{n}"))
+            if rec_p.exists():
+                rec_p.rename(rec_p.with_name(f"{rid}.superseded-{n}.json"))
+        elif n == 0:
+            raise FormalError(f"{rid}: neither the run directory nor a superseded copy exists under {run_dir.parent}")
+        try:
+            if old.get("baseline"):
+                job = _baseline_job(cfg, store, plan[rid], data_root=data_root, out=out, docker=docker)
+                (runner or _pool_baseline)(job)
+                rec = E.read_json(rec_p) if rec_p.exists() else {}
+                if rec.get("status") != "COMPLETED":
+                    raise FormalError(f"rerun of {rid} did not complete ({rec.get('status', 'no record')}); the superseded run is kept")
+                physics = E.read_json(run_dir / "manifest.json").get("physics")
+            else:
+                physics = _rerun_submission_run(data_root, cfg, store, subs.get(old["submission_id"]), rid, docker=docker,
+                                                run_job=run_job)["physics"]
+        except FormalError:                                   # 失败重跑的残留（含运行真值）改名为 <run_id>.failed-<m>，评测行不变
+            m = 1 + len(list(run_dir.parent.glob(f"{rid}.failed-*")))
+            for q in (run_dir, td):
+                if q.exists():
+                    q.rename(q.with_name(f"{rid}.failed-{m}"))
+            if rec_p.exists():
+                rec_p.rename(rec_p.with_name(f"{rid}.failed-{m}.json"))
+            raise
         ev = E.read_json(run_dir / "evaluation.json")
         man = E.read_json(run_dir / "manifest.json")
-        new = {**old, "evaluation": slim_evaluation(ev, physics=man.get("physics"))}
-        done.append({"run_id": rid, "superseded": f"{rid}.superseded-{n}", "old": old["evaluation"]["components"], "new": new["evaluation"]["components"],
+        new = {k: v for k, v in old.items() if k != "termination"}
+        new["evaluation"] = slim_evaluation(ev, physics=physics)
+        done.append({"run_id": rid, "kind": "baseline" if old.get("baseline") else "submission", "submission_id": old.get("submission_id"),
+                     "superseded": f"{rid}.superseded-{n}", "old": old["evaluation"]["components"], "new": new["evaluation"]["components"],
                      "agents": {u: a.get("timeouts", 0) for u, a in (man.get("agents") or {}).items()}, "rerun_utc": E.utc_now()})
         with board_lock(bdir):
             cur = load_rows(bdir)
@@ -1249,9 +1322,11 @@ def rerun_platform(data_root: Path, out: Path, *, board_version: str, run_ids: l
             tmp = bdir / ".rows.jsonl.tmp"
             tmp.write_text("".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in [*keep, new]), encoding="utf-8")
             os.replace(tmp, bdir / "rows.jsonl")
+        if not old.get("baseline"):
+            _note_submission_rerun(subs, old["submission_id"], rid=rid, lane=old["lane"], superseded=f"{rid}.superseded-{n}", reason=reason,
+                                   rows=[*keep, new])
         log(f"[rerun-platform] {rid}: {done[-1]['old']} -> {done[-1]['new']}")
     seal_run_truth(data_root, board_version=board_version, eval_uid=eval_uid, log=log)
-    subs = SubmissionStore(data_root / "submissions")
     files = ("board.json", "details.json", "listing.json")
     with board_lock(bdir):
         publish(bdir, subs.board_view(), n_boot=n_boot)
@@ -1364,7 +1439,7 @@ def main(argv: list[str] | None = None) -> int:
     q = sub.add_parser("rescore", help="offline re-evaluation of --board-version into a new d3-score-2 board version")
     q.add_argument("--to", required=True, help="the new (rescore) board version")
     q.add_argument("--jobs", type=int, default=8)
-    w = sub.add_parser("rerun-platform", help="rerun baseline runs that failed for a platform cause and replace their rows")
+    w = sub.add_parser("rerun-platform", help="rerun baseline or submission runs that failed for a platform cause and replace their rows")
     w.add_argument("--runs", required=True, help="comma-separated run ids")
     w.add_argument("--reason", required=True)
     lab = sub.add_parser("publish-lab", help="copy published board artifacts and submission documents to the lab data root")
