@@ -12,7 +12,7 @@ sandbox-api、每个沙盒一个 sim-core）；nginx 按路径把 `/api/sandbox/
 
 | 文件 | 用途 |
 |---|---|
-| `build-local.sh` | 开发机：演示构建（含构建信息）、部署包、七个世界的世界包与派生缓存包 |
+| `build-local.sh` | 开发机：演示构建（`VITE_AWR_DEMO=public VITE_AWR_LAB_PUBLIC=1`，V0.3.1 起落地页含事件沙盘入口；含构建信息）、部署包、七个世界的世界包与派生缓存包 |
 | `worldpack.py` | 世界包的打包、校验与安装（内容寻址，build-local.sh 与 install.sh 调用） |
 | `install.sh` | emax 上以 root 执行：用户与目录、venv、numba 预热、世界包、env、内部身份口令、systemd 单元与配额、切换发布、健康检查、cgroup 委派报告、沙盒冒烟；`--rollback`、`--status`、`--secret-only`；`--dry-run` 在任何机器上本机模拟 |
 | `anet-drone4d.service` | systemd 单元（awr 用户，CPUQuota 250%、MemoryHigh 1.8G、MemoryMax 2G、Delegate=yes，经 `cgroup-exec.sh` 启动 supervisor） |
